@@ -1,0 +1,80 @@
+# {{PROJECT_NAME}}
+
+## 框架规则（不要修改此区域）
+
+**会话开始时必须执行：**
+1. 读取本文件了解项目上下文
+2. 运行 `source .claude/scripts/skill-preamble.sh` 检测当前工作位置
+3. 运行 `/status` 了解当前状态
+
+---
+
+### 角色定义
+
+| 角色 | 职责 | 工作位置 |
+|------|------|---------|
+| PM | 决策、确认、验收。不写代码 | 对话界面 |
+| 主 Orchestrator | 流程推进、文档维护、向 PM 呈交验收 | req 活跃时在 req worktree，否则在主仓 main |
+| Suborchestrator | 单 task owner：preflight、实现、自审、收口 | task worktree |
+| Execution Agent | 纯代码执行器，可被替换 | task worktree |
+
+### 状态转换受控入口
+
+**禁止直接编辑 task 文件的"状态"字段或 .req-meta.json 的"stage"字段。**
+
+- Req stage 推进/回退：`python3 .claude/scripts/req-transition.py <req-dir> --to <stage> [--rollback]`
+- Task 状态变更：`python3 .claude/scripts/task-transition.py <task-file> --to <status> [--note <text>]`
+
+Hook 会拦截直接编辑，但 **CLAUDE.md 规则是主要约束，hook 是补充检查**。即使绕过 hook（如通过 Bash），也必须遵守此规则。
+
+### 确认门
+
+- 每个 stage 结束时必须**显式询问 PM 是否进入下一 stage**
+- AI 不允许自动跨 stage
+- Stage 3（方案设计）：非 first req 时 PM 可选择跳过
+- Stage 4（设计系统）：DESIGN.md 有实质内容时自动跳过
+
+### 分支结构
+
+```
+main（主仓，永远不切分支）
+  └── req-NNN-<slug>（req worktree，从 main 创建）
+        └── task-NNN-<slug>（task worktree，从 req 分支创建）
+```
+
+- 不允许任何角色直接修改 main 分支上的代码文件
+- task worktree 里不能修改 docs/（文档改动走 req 分支）
+- req worktree 里不能修改 prototypes/（代码改动走 task 分支）
+
+### 文档引用原则
+
+- task 文件**只引用文档路径/锚点**，不复制原文
+- execution agent 必须直接读原始文件，不能只靠 task 描述里的摘要
+- 任何信息只在一个地方有真相源
+
+---
+
+## 项目背景
+
+{{PROJECT_BACKGROUND}}
+
+## 文档位置
+
+| 文档 | 路径 | 说明 |
+|------|------|------|
+| 产品说明 | docs/prd.md | 持续维护，产品当前状态 |
+| 项目背景 | docs/CONTEXT.md | 背景、约束、技术栈 |
+| 视觉规范 | docs/DESIGN.md | 颜色、字体、组件规范 |
+| 模块规格 | docs/modules/ | 按模块组织 |
+| 活跃需求 | requirements/active/ | 当前正在处理的 req |
+| 已关闭需求 | requirements/closed/ | 已完成或已取消的 req |
+
+## 当前状态
+
+运行 `/status` 查看当前 req/task 状态和下一步操作。
+
+## gstack
+
+Use `/browse` from gstack for all web browsing.
+
+可用 gstack skills：`/qa`, `/qa-only`, `/design-review`, `/review`, `/investigate`, `/design-consultation`, `/browse`, `/setup-browser-cookies`.

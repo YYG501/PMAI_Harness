@@ -1,0 +1,27 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(bash .claude/scripts/*)",
+      "Bash(python3 .claude/scripts/*)",
+      "Bash(git *)",
+      "Bash(npm *)",
+      "Bash(bun *)",
+      "Bash(lsof *)",
+      "Bash(kill *)",
+      "Skill(*)"
+    ]
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash .claude/scripts/check-branch.sh"
+          }
+        ]
+      }
+    ]
+  }
+}
