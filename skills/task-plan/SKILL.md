@@ -24,24 +24,40 @@ echo "SKILL: task-plan"
 读取以下文档（按优先级）：
 
 1. `$ACTIVE_REQ_DIR/analysis.md`（必需）
-2. `$ACTIVE_REQ_DIR/design.md`（如有）
+2. `$ACTIVE_REQ_DIR/solution.md`（如有）
 3. `$REPO_ROOT/docs/DESIGN.md`（设计系统）
 4. `$REPO_ROOT/docs/CONTEXT.md`（项目背景）
 5. `$REPO_ROOT/docs/prd.md`（已有 PRD）
 6. `$REPO_ROOT/docs/modules/*.md`（已有模块规格）
 
-### 步骤 2：更新模块规格
+### 步骤 2：生成模块规格
 
-根据分析和设计，为涉及的每个模块更新或创建 `docs/modules/<module>.md`：
+读取 `$REPO_ROOT/templates/module.md.tmpl`，为涉及的每个模块生成或更新 `docs/modules/<module>.md`：
 
-- 已有模块：更新受影响的部分
-- 新模块：创建新的模块规格文件
+**输入：**
+- `$ACTIVE_REQ_DIR/analysis.md`（必需）
+- `$ACTIVE_REQ_DIR/design.md`（如有）
+- `$REPO_ROOT/docs/DESIGN.md`（设计系统，重点读取可用组件清单和项目共享组件）
+- `$REPO_ROOT/docs/CONTEXT.md`（项目背景）
+- 已有模块规格（如有，作为修订输入）
 
-模块规格内容包括：接口定义、数据模型、依赖关系、约束条件。
+**生成要求：**
+- 按模板结构逐节填写，不跳过硬约束和验收标准
+- 功能清单表格按页面/区域分组，需求描述必须写动作+规则+限制，禁止"支持/优化/提升体验"
+- 实现指引 section：用 Glob 扫描项目已有页面和组件，填写推荐组件和参考页面，标注 DESIGN.md 中的组件规范
+- 交互状态覆盖表：每个页面/弹窗的 Loading/Empty/Error 处理
+- 已有模块：merge 新内容到现有 section，不覆盖未变更部分
+- 新模块：从模板完整生成
+
+### 步骤 2.5：PM 确认模块规格
+
+向 PM 展示每个模块规格的完整功能清单表格。PM 可以：
+- 确认 → 进入步骤 3（拆 task）
+- 要求修改 → 修改后重新展示
 
 ### 步骤 3：拆分 task
 
-根据 analysis.md 和 design.md 拆分成可执行的 task 列表。每个 task 应该：
+根据 analysis.md 和 solution.md 拆分成可执行的 task 列表。每个 task 应该：
 
 - **原子性**：一个 task 完成一个独立的功能单元
 - **可验收**：有明确的验收标准
