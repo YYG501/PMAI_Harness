@@ -46,6 +46,8 @@ main（主仓，永远不切分支）
 - task worktree 里不能修改 docs/（文档改动走 req 分支）
 - req worktree 里不能修改 prototypes/（代码改动走 task 分支）
 
+**唯一例外：** `/quick-fix` 可在 PM 明确审批的小改动场景下修改 main，但必须通过 `tmp-quick-*` worktree 隔离、PM 审批 diff、并由 `.claude/scripts/quick-fix.sh` 执行 ff-only 合并。AI 不允许绕过脚本直接写 main。
+
 ### 文档引用原则
 
 - task 文件**只引用文档路径/锚点**，不复制原文
@@ -72,6 +74,10 @@ main（主仓，永远不切分支）
 ## 当前状态
 
 运行 `/status` 查看当前 req/task 状态和下一步操作。
+
+## quick-fix
+
+可用 `/quick-fix "<一句话描述>"` 处理 PM 明确认定不需要完整 req 流程的小改动。
 
 ## gstack
 
