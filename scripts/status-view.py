@@ -7,6 +7,7 @@ import argparse
 import glob
 import json
 import re
+import subprocess
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
@@ -281,6 +282,37 @@ def render_manual_section(repo_root: Path) -> None:
     print()
 
 
+def render_quickfix_section(repo_root: Path) -> None:
+    """Render recent quick-fix commits if any exist."""
+    try:
+        result = subprocess.run(
+            [
+                "git",
+                "-C",
+                str(repo_root),
+                "log",
+                "--grep",
+                r"^\[quick-fix\]",
+                "--format=%h %ci %s",
+                "-3",
+            ],
+            check=False,
+            text=True,
+            capture_output=True,
+        )
+    except Exception:
+        return
+
+    lines = [line for line in result.stdout.splitlines() if line.strip()]
+    if not lines:
+        return
+
+    print("最近 quick-fix：")
+    for line in lines:
+        print(f"  {line}")
+    print()
+
+
 def render_status(repo_root: Path) -> None:
     """Render the full status view."""
     req_dir, meta = find_active_req(repo_root)
@@ -288,6 +320,7 @@ def render_status(repo_root: Path) -> None:
     if meta is None:
         print("📭 没有活跃的需求。运行 /new-req 开始一个新需求。")
         render_manual_section(repo_root)
+        render_quickfix_section(repo_root)
         return
 
     req_id = meta.get("id", "?")
@@ -329,6 +362,7 @@ def render_status(repo_root: Path) -> None:
 
     # Manual pending section (shown regardless of active req status)
     render_manual_section(repo_root)
+    render_quickfix_section(repo_root)
 
     # Next action
     next_action = suggest_next_action(meta, tasks)
