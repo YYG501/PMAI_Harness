@@ -11,6 +11,7 @@ SUITES=(
   test-close-req.sh
   test-cancel-req.sh
   test-status-view.sh
+  test-quick-fix.sh
 )
 
 TOTAL_PASS=0
