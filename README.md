@@ -7,3 +7,5 @@ PM AI 工作流框架的**生成器**仓库。
 旧仓（参考用，不复用流程）：`${LEGACY_REPO_ROOT}`
 
 当前状态：空仓，等需求输入。
+
+<!-- quick-fix smoke test line -->
