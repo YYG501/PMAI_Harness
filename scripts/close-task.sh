@@ -36,7 +36,7 @@ DOC_DIFF=$({
     | grep -v '^>' \
     | grep -v '^|.*文档位置.*文档原文.*实际实现' \
     | grep -v '^|.*---' \
-    | grep -v '^---$' \
+    | grep -v '^---' \
     | grep -v '无偏差' \
     | head -20
 } || true)
@@ -119,6 +119,19 @@ if [ -d "$TASK_WORKTREE" ]; then
     # task 分支和 req 分支完全一致，没有新提交。允许继续（可能是空 task 或已手动 merge）
     :
   fi
+fi
+
+# --- 检查 req worktree 是否 clean（有未提交改动会导致 merge 被 git 拒绝） ---
+REQ_UNCOMMITTED=$(git -C "$REQ_WORKTREE" status --porcelain 2>/dev/null || true)
+if [ -n "$REQ_UNCOMMITTED" ]; then
+  echo "❌ req worktree ($REQ_BRANCH) 有未提交改动，git 会拒绝 merge：" >&2
+  echo "$REQ_UNCOMMITTED" >&2
+  echo "" >&2
+  echo "请先在 req worktree 中提交：" >&2
+  echo "  cd $REQ_WORKTREE" >&2
+  echo "  git add -A && git commit -m \"chore: <描述>\"" >&2
+  echo "然后重新运行 /close-task。" >&2
+  exit 1
 fi
 
 # 执行 merge
