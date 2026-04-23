@@ -4,6 +4,9 @@
 # Example: bash create-task-worktree.sh requirements/active/req-001/tasks/task-001-auth-ui.md req-001-user-auth
 set -euo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$SCRIPT_DIR/_setup-deps.sh"
+
 usage() {
   echo "用法: bash create-task-worktree.sh <task-file> <req-branch>" >&2
   echo "例如: bash create-task-worktree.sh requirements/active/req-001/tasks/task-001-auth-ui.md req-001-user-auth" >&2
@@ -74,64 +77,12 @@ else
   fi
 fi
 
-# ======================================================
-# Symlink dependencies
-# ======================================================
-symlink_if_exists() {
-  local src="$1"
-  local dst="$2"
-  if [ -d "$src" ] && [ ! -e "$dst" ]; then
-    mkdir -p "$(dirname "$dst")"
-    ln -s "$src" "$dst"
-  fi
-}
-
-# Detect package manager and symlink dependency directories
-if [ -f "$REPO_ROOT/package.json" ]; then
-  symlink_if_exists "$REPO_ROOT/node_modules" "$WORKTREE_DIR/node_modules"
-fi
-
-if [ -f "$REPO_ROOT/Gemfile" ]; then
-  symlink_if_exists "$REPO_ROOT/vendor/bundle" "$WORKTREE_DIR/vendor/bundle"
-fi
-
-if [ -f "$REPO_ROOT/go.mod" ]; then
-  symlink_if_exists "$REPO_ROOT/vendor" "$WORKTREE_DIR/vendor"
-fi
-
-# Handle monorepo: symlink nested node_modules (max depth 4, skip worktrees and nested)
-if [ -f "$REPO_ROOT/package.json" ]; then
-  find "$REPO_ROOT" -maxdepth 4 -name "node_modules" -type d \
-    -not -path "*/.worktrees/*" \
-    -not -path "*/node_modules/*/node_modules" \
-    2>/dev/null | while read -r nm_path; do
-    REL="${nm_path#"$REPO_ROOT"/}"
-    TARGET="$WORKTREE_DIR/$REL"
-    if [ ! -e "$TARGET" ]; then
-      mkdir -p "$(dirname "$TARGET")"
-      ln -s "$nm_path" "$TARGET"
-    fi
-  done
-fi
+setup_dependency_symlinks "$REPO_ROOT" "$WORKTREE_DIR"
 
 # ======================================================
 # Port allocation
 # ======================================================
-# Base port: md5 hash of project path, mapped to range 3000-9999
-BASE_PORT=$(python3 -c "
-import hashlib, os
-project_path = os.path.realpath('$REPO_ROOT')
-h = int(hashlib.md5(project_path.encode()).hexdigest(), 16)
-print(3000 + (h % 7000))
-" 2>/dev/null || echo "3000")
-
-# Extract task number from filename (e.g., task-001-auth-ui -> 1)
-TASK_NUM=$(echo "$TASK_BASENAME" | grep -oE 'task-([0-9]+)' | grep -oE '[0-9]+' | sed 's/^0*//' || true)
-if [ -z "$TASK_NUM" ]; then
-  TASK_NUM=0
-fi
-
-DEV_PORT=$((BASE_PORT + TASK_NUM))
+DEV_PORT=$(derive_task_port "$REPO_ROOT" "$TASK_BASENAME")
 
 # ======================================================
 # Output: line 1 = worktree path, line 2 = port
