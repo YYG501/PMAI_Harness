@@ -17,6 +17,7 @@ usage() {
 测试/自动化可用环境变量:
   QUICK_FIX_COMMAND      在 worktree 内执行的命令
   QUICK_FIX_APPROVE=1    自动通过 diff 审批
+  QUICK_FIX_DECISION     自动审批决策：pass / redo / cancel
   QUICK_FIX_ASSUME_YES=1 自动确认 cleanup
 EOF
   exit 1
@@ -84,7 +85,35 @@ changed_files() {
     git diff --name-only
     git diff --cached --name-only
     git ls-files --others --exclude-standard
-  ) | sed '/^$/d' | sort -u
+  ) | sed '/^$/d' | sort -u | while IFS= read -r file; do
+    if is_dependency_symlink "$worktree" "$file"; then
+      continue
+    fi
+    echo "$file"
+  done
+}
+
+is_dependency_symlink() {
+  local worktree="$1"
+  local file="$2"
+  case "$file" in
+    node_modules|*/node_modules|vendor|vendor/bundle)
+      [ -L "$worktree/$file" ] && return 0
+      ;;
+  esac
+  return 1
+}
+
+unstage_dependency_symlinks() {
+  local worktree="$1"
+  (
+    cd "$worktree"
+    while IFS= read -r file; do
+      if is_dependency_symlink "$worktree" "$file"; then
+        git rm --cached -q -- "$file" 2>/dev/null || true
+      fi
+    done < <(git diff --cached --name-only)
+  )
 }
 
 is_redline_path() {
@@ -228,6 +257,17 @@ run_tsc_if_needed() {
 
 confirm_diff() {
   local worktree="$1"
+  case "${QUICK_FIX_DECISION:-}" in
+    pass|approve|yes|通过) return 0 ;;
+    redo|重做)
+      echo "已保留 worktree：$worktree" >&2
+      return 3
+      ;;
+    cancel|取消) return 4 ;;
+    "") ;;
+    *) echo "错误：未知 QUICK_FIX_DECISION=${QUICK_FIX_DECISION}" >&2; return 2 ;;
+  esac
+
   if [ "${QUICK_FIX_APPROVE:-}" = "1" ]; then
     return 0
   fi
@@ -326,7 +366,7 @@ cmd_cleanup() {
     if [ -d "$wt" ]; then
       count=$(git -C "$wt" status --porcelain 2>/dev/null | wc -l | tr -d ' ')
     fi
-    echo "  - $b（未提交改动: $count）"
+    echo "  - ${b}（未提交改动: ${count}）"
   done
 
   if [ "${QUICK_FIX_ASSUME_YES:-}" != "1" ]; then
@@ -388,6 +428,7 @@ commit_and_merge() {
   (
     cd "$worktree"
     git add -A
+    unstage_dependency_symlinks "$worktree"
     if git diff --cached --quiet; then
       echo "错误：没有检测到可提交改动。" >&2
       exit 1
@@ -435,10 +476,10 @@ commit_and_merge() {
   fi
 
   cat >&2 <<EOF
-merge 失败（rebase 冲突或 retry 失败）。worktree 保留在 $worktree。
+merge 失败（rebase 冲突或 retry 失败）。worktree 保留在 ${worktree}。
 可选：
-  1. 手工解决冲突：cd $worktree && git rebase --continue
-  2. 放弃本次 quick-fix：bash .claude/scripts/quick-fix.sh --cancel $branch
+  1. 手工解决冲突：cd ${worktree} && git rebase --continue
+  2. 放弃本次 quick-fix：bash .claude/scripts/quick-fix.sh --cancel ${branch}
 EOF
   return 1
 }

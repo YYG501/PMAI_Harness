@@ -11,7 +11,12 @@ SUITES=(
   test-close-req.sh
   test-cancel-req.sh
   test-status-view.sh
-  test-quick-fix.sh
+  quick-fix/test-happy-path.sh
+  quick-fix/test-tsc-gate.sh
+  quick-fix/test-concurrent-req.sh
+  quick-fix/test-redline-enforcement.sh
+  quick-fix/test-cleanup.sh
+  quick-fix/test-sanitize.sh
 )
 
 TOTAL_PASS=0
