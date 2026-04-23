@@ -201,6 +201,23 @@ PY
   fi
 fi
 
+# --- 6c. quick-fix 残留 worktree 提醒（非阻塞） ---
+if [ -d "$MAIN_REPO_ROOT/.worktrees" ]; then
+  _quickfix_leftovers=()
+  for _qf_wt in "$MAIN_REPO_ROOT"/.worktrees/tmp-quick-*; do
+    [ -d "$_qf_wt" ] || continue
+    _quickfix_leftovers+=("$_qf_wt")
+  done
+
+  if [ "${#_quickfix_leftovers[@]}" -gt 0 ]; then
+    echo "⚠️  检测到残留 quick-fix worktree："
+    for _qf_wt in "${_quickfix_leftovers[@]}"; do
+      echo "  - $_qf_wt"
+    done
+    echo "可运行 /quick-fix --cleanup 清理。"
+  fi
+fi
+
 # --- 7. 输出环境信息 ---
 echo "MAIN_REPO_ROOT: $MAIN_REPO_ROOT"
 echo "REPO_ROOT: $REPO_ROOT"
