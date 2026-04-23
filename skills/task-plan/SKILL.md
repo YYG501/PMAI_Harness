@@ -89,7 +89,7 @@ echo "SKILL: task-plan"
 - **验收标准**：可验证的 checklist
 - **依赖**：依赖的其他 task 或外部资源
 
-所有 task 初始状态为「待确认」。
+所有 task 初始状态为「待确认」。`executor` 默认填 `claude-code`，`executor_model` 留空（PM 在 /task-confirm 时可以交互式切换执行者，见 task 模板的 inline 提示）。**不做 routing**——不分析任务内容推测执行者。
 
 ### 步骤 6：向 PM 展示
 

@@ -2,6 +2,16 @@
 
 **状态：** 待确认
 **审查工具：** {{REVIEW_TOOLS}}
+**executor：** claude-code
+**executor_model：**
+<!--
+可选 executor：claude-code / codex / cursor-agent / manual
+model 留空 = 用 settings 默认
+claude-code 仅支持：opus / sonnet / haiku（Agent tool 枚举）
+cursor-agent：实验性，无沙箱，越界保护仅限 worktree 内
+放弃 manual：python3 .claude/scripts/task-transition.py <本文件> --cancel-manual
+暂缓 manual 提醒：python3 .claude/scripts/task-transition.py <本文件> --snooze-manual --days 3
+-->
 **分支：** task-{{TASK_NUMBER}}-{{TASK_SLUG}}
 **worktree：** （执行时由 create-task-worktree.sh 填写）
 **开发服务器：** （执行时填写）

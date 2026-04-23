@@ -4,10 +4,11 @@
 from __future__ import annotations
 
 import argparse
+import glob
 import json
 import re
 import sys
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 
 FIELD_RE = re.compile(r"^\*\*(.+?)：\*\*\s*(.*)$")
@@ -214,12 +215,79 @@ def suggest_next_action(
     return "运行 /status 查看详情"
 
 
+def render_manual_section(repo_root: Path) -> None:
+    """Render the Manual 等待中 section if there are pending manual tasks."""
+    pending_dir = repo_root / ".runs"
+    if not pending_dir.exists():
+        return
+
+    pattern = str(pending_dir / ".pending-manual-*.json")
+    files = glob.glob(pattern)
+    if not files:
+        return
+
+    now = datetime.now(timezone.utc)
+    items: list[dict] = []
+    for fp in files:
+        try:
+            data = json.load(open(fp, encoding="utf-8"))
+        except Exception:
+            continue
+        snoozed = data.get("snoozed_until")
+        if snoozed:
+            try:
+                s = datetime.fromisoformat(snoozed)
+                if s.tzinfo is None:
+                    s = s.replace(tzinfo=timezone.utc)
+                if s > now:
+                    continue  # still in snooze window
+            except Exception:
+                pass
+        items.append(data)
+
+    if not items:
+        return
+
+    print("Manual 等待中：")
+    for data in sorted(items, key=lambda d: d.get("started_at", "")):
+        task_id = data.get("task_id", "?")
+        started = data.get("started_at", "")
+        age_str = ""
+        if started:
+            try:
+                s = datetime.fromisoformat(started)
+                if s.tzinfo is None:
+                    s = s.replace(tzinfo=timezone.utc)
+                days = (now - s).days
+                hrs = int(((now - s).total_seconds() % 86400) // 3600)
+                age_str = f"等待 {days} 天 {hrs} 小时"
+            except Exception:
+                age_str = started
+        print(f"  {task_id}（{age_str}）")
+    print()
+    # Pick the first task_file for copy-paste templating
+    sample_task = items[0].get("task_file", "<task-file>")
+    sample_id = items[0].get("task_id", "task-NNN")
+    print("下一步：")
+    print(f"  完成手工实现后： /task-execute {sample_id}")
+    print(
+        f"  暂时不想管：     python3 .claude/scripts/task-transition.py "
+        f"{sample_task} --snooze-manual --days 3"
+    )
+    print(
+        f"  放弃该 task：    python3 .claude/scripts/task-transition.py "
+        f"{sample_task} --cancel-manual"
+    )
+    print()
+
+
 def render_status(repo_root: Path) -> None:
     """Render the full status view."""
     req_dir, meta = find_active_req(repo_root)
 
     if meta is None:
         print("📭 没有活跃的需求。运行 /new-req 开始一个新需求。")
+        render_manual_section(repo_root)
         return
 
     req_id = meta.get("id", "?")
@@ -258,6 +326,9 @@ def render_status(repo_root: Path) -> None:
 
             print(line)
         print()
+
+    # Manual pending section (shown regardless of active req status)
+    render_manual_section(repo_root)
 
     # Next action
     next_action = suggest_next_action(meta, tasks)

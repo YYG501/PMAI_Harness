@@ -14,13 +14,46 @@ FIELD_RE = re.compile(r"^\*\*(.+?)：\*\*\s*(.*)$")
 
 VALID_TRANSITIONS = {
     "待确认": ["执行中"],
-    "执行中": ["待验收"],
+    "执行中": ["待验收", "待确认"],  # 待确认 = --fail-execution / --cancel-manual 回退
     "待验收": ["已完成", "执行中"],  # 执行中 = PM 打回
     "已完成": [],
 }
 
+# `执行中 → 待确认` is only reachable via --fail-execution or --cancel-manual;
+# plain --to 待确认 from 执行中 is rejected.
+RESTRICTED_TRANSITIONS = {("执行中", "待确认")}
+
 SCRIPTS_DIR = Path(__file__).resolve().parent
 EVENTS_SCRIPT = SCRIPTS_DIR / "task-events.py"
+
+
+def find_main_repo_root() -> Path:
+    """Resolve real repo root (not a worktree)."""
+    try:
+        common = subprocess.check_output(
+            ["git", "rev-parse", "--git-common-dir"], text=True
+        ).strip()
+        if common and common != ".git":
+            return Path(common).resolve().parent
+    except Exception:
+        pass
+    try:
+        return Path(
+            subprocess.check_output(
+                ["git", "rev-parse", "--show-toplevel"], text=True
+            ).strip()
+        )
+    except Exception:
+        return Path.cwd()
+
+
+def pending_manual_path(task_file: Path) -> Path:
+    """Locate the .pending-manual-<task_id>.json file in main repo's .runs/."""
+    repo = find_main_repo_root()
+    task_id = task_file.stem
+    short_id_match = re.match(r"^(task-\d+)", task_id)
+    short_id = short_id_match.group(1) if short_id_match else task_id
+    return repo / ".runs" / f".pending-manual-{short_id}.json"
 
 
 def read_text(path: Path) -> str:
@@ -194,13 +227,125 @@ def append_event(task_file: Path, from_status: str, to_status: str, note: str | 
     subprocess.run(cmd, capture_output=True, text=True)
 
 
+def do_transition(
+    task_file: Path, current: str, target: str, note: str | None, via: str = "normal"
+) -> None:
+    """Execute the state transition and write event.
+
+    `via` controls precondition bypass:
+      - normal: full precondition check
+      - fail-execution: skips 待验收 precondition check (failure回退)
+      - cancel-manual: same as fail-execution
+    """
+    text = read_text(task_file)
+    if via == "normal":
+        check_preconditions(task_file, current, target, text, note)
+
+    new_text, count = update_field(text, "状态", target)
+    if count == 0:
+        print("Error: 无法更新状态字段。", file=sys.stderr)
+        sys.exit(1)
+    save_text(task_file, new_text)
+    append_event(task_file, current, target, note)
+
+
+def cmd_fail_execution(task_file: Path, reason: str) -> None:
+    """Handle --fail-execution: normalize failure fallback to 待确认."""
+    fields = read_fields(task_file)
+    current = fields.get("状态", "")
+    if current != "执行中":
+        print(
+            f"Error: --fail-execution requires current status to be 执行中, got {current}",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+
+    # Clean up any stale pending-manual marker
+    pf = pending_manual_path(task_file)
+    if pf.exists():
+        pf.unlink()
+
+    note = f"执行失败回退：{reason}"
+    do_transition(task_file, current, "待确认", note, via="fail-execution")
+    print(f"✅ 执行失败已回退：执行中 → 待确认（{reason}）")
+
+
+def cmd_cancel_manual(task_file: Path) -> None:
+    """Handle --cancel-manual: PM gives up on manual task."""
+    fields = read_fields(task_file)
+    current = fields.get("状态", "")
+    pf = pending_manual_path(task_file)
+    if current != "执行中":
+        print(
+            f"Error: --cancel-manual 要求当前状态为 执行中，实际 {current}",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+    if not pf.exists():
+        print(
+            f"Error: 找不到 manual 标记文件 {pf}。"
+            f"只有当前正在 manual 等待的 task 可以 cancel。",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+
+    pf.unlink()
+    do_transition(task_file, current, "待确认", "PM 放弃 manual", via="cancel-manual")
+    print(f"✅ Manual 放弃：标记已删除，状态回到 待确认")
+
+
+def cmd_snooze_manual(task_file: Path, days: int) -> None:
+    """Handle --snooze-manual --days N: suppress manual preamble reminder."""
+    from datetime import datetime, timedelta, timezone
+
+    pf = pending_manual_path(task_file)
+    if not pf.exists():
+        print(f"Error: 找不到 manual 标记文件 {pf}", file=sys.stderr)
+        sys.exit(1)
+
+    try:
+        data = json.loads(pf.read_text(encoding="utf-8"))
+    except Exception as exc:
+        print(f"Error: 无法解析 manual 标记文件：{exc}", file=sys.stderr)
+        sys.exit(1)
+
+    until = datetime.now(timezone.utc) + timedelta(days=days)
+    data["snoozed_until"] = until.isoformat()
+    pf.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+    print(f"✅ Manual 提醒暂缓 {days} 天（至 {until.date()}）")
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Task status transition")
     parser.add_argument("task_file", help="Path to task file")
-    parser.add_argument(
-        "--to", required=True, dest="target", help="Target status"
-    )
+    parser.add_argument("--to", dest="target", help="Target status (normal transition)")
     parser.add_argument("--note", help="Note (required for PM rejection)")
+    # Special-purpose flags
+    parser.add_argument(
+        "--fail-execution",
+        action="store_true",
+        help="Fail currently-executing task (执行中 → 待确认). Requires --reason.",
+    )
+    parser.add_argument(
+        "--reason",
+        help="Failure classification or description (used with --fail-execution)",
+    )
+    parser.add_argument(
+        "--cancel-manual",
+        action="store_true",
+        help="PM 放弃 manual task: delete pending marker + 转回待确认",
+    )
+    parser.add_argument(
+        "--snooze-manual",
+        action="store_true",
+        help="暂缓 manual 提醒 N 天，不改状态。与 --days 配合使用",
+    )
+    parser.add_argument(
+        "--days",
+        type=int,
+        default=3,
+        help="Days to snooze manual reminder (default 3)",
+    )
     args = parser.parse_args()
 
     task_file = Path(args.task_file).resolve()
@@ -208,7 +353,27 @@ def main() -> None:
         print(f"Error: task file not found: {task_file}", file=sys.stderr)
         sys.exit(1)
 
-    # Read current state
+    # Dispatch
+    if args.fail_execution:
+        if not args.reason:
+            print("Error: --fail-execution requires --reason", file=sys.stderr)
+            sys.exit(1)
+        cmd_fail_execution(task_file, args.reason)
+        return
+
+    if args.cancel_manual:
+        cmd_cancel_manual(task_file)
+        return
+
+    if args.snooze_manual:
+        cmd_snooze_manual(task_file, args.days)
+        return
+
+    # Normal transition
+    if not args.target:
+        print("Error: --to <status> required for normal transitions", file=sys.stderr)
+        sys.exit(1)
+
     fields = read_fields(task_file)
     current = fields.get("状态", "")
     if not current:
@@ -216,8 +381,6 @@ def main() -> None:
         sys.exit(1)
 
     target = args.target
-
-    # Validate transition
     valid = VALID_TRANSITIONS.get(current, [])
     if target not in valid:
         print(
@@ -227,21 +390,22 @@ def main() -> None:
         )
         sys.exit(1)
 
-    # Check preconditions
-    text = read_text(task_file)
-    check_preconditions(task_file, current, target, text, args.note)
-
-    # Execute transition
-    new_text, count = update_field(text, "状态", target)
-    if count == 0:
-        print("Error: 无法更新状态字段。", file=sys.stderr)
+    # Block restricted transitions from going through plain --to
+    if (current, target) in RESTRICTED_TRANSITIONS:
+        print(
+            f"Error: 非法状态转换: {current} → {target} 不能通过 --to 触发。"
+            f"请用 --fail-execution --reason <text> 或 --cancel-manual。",
+            file=sys.stderr,
+        )
         sys.exit(1)
 
-    save_text(task_file, new_text)
+    # Clean up manual marker on transition to 待确认 (decisive policy)
+    if target == "待确认":
+        pf = pending_manual_path(task_file)
+        if pf.exists():
+            pf.unlink()
 
-    # Append event
-    append_event(task_file, current, target, args.note)
-
+    do_transition(task_file, current, target, args.note)
     print(f"✅ Task 状态转换: {current} → {target}")
     if args.note:
         print(f"   备注: {args.note}")

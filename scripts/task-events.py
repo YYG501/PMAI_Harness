@@ -85,6 +85,17 @@ def cmd_append(args: argparse.Namespace) -> None:
         event["from"] = args.from_status
     if hasattr(args, "to_status") and args.to_status:
         event["to"] = args.to_status
+    # Free-form payload for executor events (execution_started/failed/completed etc)
+    if hasattr(args, "payload") and args.payload:
+        try:
+            payload = json.loads(args.payload)
+            if isinstance(payload, dict):
+                for k, v in payload.items():
+                    if k not in event:
+                        event[k] = v
+        except json.JSONDecodeError as exc:
+            print(f"Error: --payload must be valid JSON ({exc})", file=sys.stderr)
+            sys.exit(1)
 
     with ep.open("a", encoding="utf-8") as fh:
         fh.write(json.dumps(event, ensure_ascii=False) + "\n")
@@ -168,6 +179,10 @@ def main() -> None:
     p_append.add_argument("--note", help="Additional note")
     p_append.add_argument("--from-status", dest="from_status", help="From status")
     p_append.add_argument("--to-status", dest="to_status", help="To status")
+    p_append.add_argument(
+        "--payload",
+        help="Free-form JSON object merged into event (executor/model/exit_code etc)",
+    )
 
     # list
     p_list = sub.add_parser("list", help="List all events")

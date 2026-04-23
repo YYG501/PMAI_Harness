@@ -119,6 +119,10 @@ _PENDING_DIR="$MAIN_REPO_ROOT/.runs"
 if [ -d "$_PENDING_DIR" ]; then
   for _pf in "$_PENDING_DIR"/.pending-*; do
     [ -f "$_pf" ] || continue
+    # Skip manual pending files — they have their own aggregation block below
+    case "$(basename "$_pf")" in
+      .pending-manual-*) continue ;;
+    esac
     _skill_name=$(python3 -c "import json; print(json.load(open('$_pf')).get('skill','unknown'))" 2>/dev/null || echo "unknown")
     _started=$(python3 -c "import json; print(json.load(open('$_pf')).get('started_at',''))" 2>/dev/null || echo "")
 
@@ -141,6 +145,60 @@ except: print(0)
     echo "⚠️ 检测到上次 /$_skill_name 执行中断。运行 /status 查看当前状态。"
     rm -f "$_pf"
   done
+fi
+
+# --- 6b. Manual 任务等待汇总（非阻塞，汇总式，支持 snooze + 年龄降级） ---
+if [ -d "$_PENDING_DIR" ]; then
+  _manual_aggregate=$(python3 - "$_PENDING_DIR" <<'PY' 2>/dev/null || echo ""
+import glob
+import json
+import os
+import sys
+from datetime import datetime, timezone
+
+pending_dir = sys.argv[1]
+now = datetime.now(timezone.utc)
+total = 0
+old = 0
+for f in glob.glob(os.path.join(pending_dir, ".pending-manual-*.json")):
+    try:
+        data = json.load(open(f))
+    except Exception:
+        continue
+    snoozed = data.get("snoozed_until")
+    if snoozed:
+        try:
+            snooze_dt = datetime.fromisoformat(snoozed)
+            if snooze_dt.tzinfo is None:
+                snooze_dt = snooze_dt.replace(tzinfo=timezone.utc)
+            if snooze_dt > now:
+                continue
+        except Exception:
+            pass
+    total += 1
+    started = data.get("started_at", "")
+    if started:
+        try:
+            s = datetime.fromisoformat(started)
+            if s.tzinfo is None:
+                s = s.replace(tzinfo=timezone.utc)
+            age_days = (now - s).days
+            if age_days > 7:
+                old += 1
+        except Exception:
+            pass
+print(f"{total}\t{old}")
+PY
+  )
+  _manual_total=$(echo "$_manual_aggregate" | awk '{print $1}')
+  _manual_old=$(echo "$_manual_aggregate" | awk '{print $2}')
+  if [ -n "$_manual_total" ] && [ "$_manual_total" != "0" ] 2>/dev/null; then
+    if [ "${_manual_old:-0}" != "0" ] 2>/dev/null && [ "${_manual_old:-0}" -gt 0 ] 2>/dev/null; then
+      echo "⚠️  有 $_manual_total 个 manual task 等待中（$_manual_old 个超过 7 天）。运行 /status 查看详情。"
+    else
+      echo "ℹ️  有 $_manual_total 个 manual task 等待中。运行 /status 查看详情。"
+    fi
+  fi
 fi
 
 # --- 7. 输出环境信息 ---
