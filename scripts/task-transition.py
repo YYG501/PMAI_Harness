@@ -294,6 +294,18 @@ def cmd_cancel_manual(task_file: Path) -> None:
     print(f"✅ Manual 放弃：标记已删除，状态回到 待确认")
 
 
+def cmd_get_status(task_file: Path) -> None:
+    """Print the current task status field to stdout. Used by gate scripts
+    (check-branch.sh, exec-adapters/*.sh, /task-execute preamble) so no one
+    re-implements the regex."""
+    fields = read_fields(task_file)
+    current = fields.get("状态", "")
+    if not current:
+        print("Error: 无法读取 task 状态字段。", file=sys.stderr)
+        sys.exit(1)
+    print(current)
+
+
 def cmd_snooze_manual(task_file: Path, days: int) -> None:
     """Handle --snooze-manual --days N: suppress manual preamble reminder."""
     from datetime import datetime, timedelta, timezone
@@ -341,6 +353,11 @@ def main() -> None:
         help="暂缓 manual 提醒 N 天，不改状态。与 --days 配合使用",
     )
     parser.add_argument(
+        "--get-status",
+        action="store_true",
+        help="Print current task status to stdout (used by gate scripts).",
+    )
+    parser.add_argument(
         "--days",
         type=int,
         default=3,
@@ -367,6 +384,10 @@ def main() -> None:
 
     if args.snooze_manual:
         cmd_snooze_manual(task_file, args.days)
+        return
+
+    if args.get_status:
+        cmd_get_status(task_file)
         return
 
     # Normal transition

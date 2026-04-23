@@ -32,10 +32,13 @@
 - **I-CT4**：归档文件（.runs/\*.json、events/\*.jsonl）必须 commit 到 req 分支后，才能删除原件
 - **I-CT5**：只有在 merge 成功且归档已 commit 后，才能删除 task 分支和 task worktree
 - **I-CT6**：任何前置条件失败 → exit 1，不能 "跳过并继续"
+- **I-CT7**：**事件流必须证明状态机完整推进**。merge 前审计 `.runs/events/<task>.jsonl`：必须存在 `待确认→执行中`、`执行中→待验收`、`待验收→已完成` 三条 `status_changed` 事件，以及至少一条 `execution_started` 或 `execution_manual_completed`。任何一条缺失 → 拒绝 merge 并保留数据（对「agent 跳过状态机一口气写完多个 task」的结构性防御）。事件文件不存在一律视为违规（fail-closed）
+- **I-CT8**：**task 分支上每个 code commit 的时间戳必须晚于首次 `status_changed(*, 执行中)` 事件时间戳**。早于该时间的 commit 说明"先写代码再补流程"，拒绝 merge
 
 ### 守卫点
 - 状态检查：line ~22-27
 - 前置条件：line ~88-122
+- 事件流审计（I-CT7/I-CT8）：merge 执行前
 - Merge 验证：line ~131-135
 - 归档 commit：line ~140-170
 - 清理：只在 `MERGE_OK=true` 之后
@@ -103,6 +106,7 @@
 - **I-CB6**：task 文件的"状态"字段 和 .req-meta.json 的"stage"字段 禁止直接编辑（必须走 transition 脚本）
 - **I-CB7**：hook 失败或无法判断 → 默认拒绝（fail-closed），不放行
 - **I-CB8**：hook 本身不能修改任何文件（read-only 验证逻辑）
+- **I-CB10**：**task worktree 写入时，task 状态字段必须为「执行中」**。状态为「待确认/待验收/已完成」或字段读不到一律 deny。这是对 Claude 实例越权写 task 代码的结构性防御（hook 侧）。豁免范围：task 文件本身的写入（执行日志/自审记录/文档偏差 section 填写需要放行）+ `.runs/`/`.worktrees/` 运行时元数据
 
 ### 守卫点
 - 路径归一化：line ~39-102
@@ -112,6 +116,23 @@
 - Gate 2（不在这里，合并到 Gate 3）
 - Gate 3（main 白名单）：line ~197-230
 - Gate 4（worktree 作用域）：line ~232-250
+
+---
+
+## exec-adapters/*.sh （codex.sh / cursor-agent.sh）
+
+**目的**：调外部执行器（Codex、Cursor-Agent）跑 task 代码。Adapter 在独立进程中运行，Claude Code 的 PreToolUse hook 管不到其写操作——adapter 是「外部执行器越权」的唯一防御点。
+
+### 不变式
+
+- **I-AD1**：**adapter 启动前必须校验 task 状态 == 执行中**。非执行中直接 exit 1，不调用执行器。避免 Claude hook 盲区（Codex 在 workspace-write 下的 fs 操作不经 hook）
+- **I-AD2**：**adapter 退出后必须校验 worktree diff 范围**。task 分支上新增/修改的文件路径必须全部落在 task 文件 `执行范围` section 声明的 allowlist 内。越界 → 记 `execution_failed` 事件，返回非零 exit code，让 orchestrator 触发 `--fail-execution`
+- **I-AD3**：adapter 不得 `git add` / `git commit` / `git checkout`——改动保持 unstaged，commit 权归 orchestrator
+- **I-AD4**：adapter 前置/后置校验失败时必须追加 `execution_failed` 事件到事件流（便于事后审计与统计）
+
+### 守卫点
+- 启动前状态校验：adapter 第一段
+- 退出后 diff 校验：adapter 末尾，基于 `git -C $TASK_WORKTREE diff --name-only HEAD`
 
 ---
 

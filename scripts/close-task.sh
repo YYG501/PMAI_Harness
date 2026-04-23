@@ -25,7 +25,7 @@ fi
 # --- 校验状态 ---
 STATUS=$(grep -m1 '^\*\*状态：\*\*' "$TASK_FILE" | sed 's/\*\*状态：\*\* //')
 if [ "$STATUS" != "已完成" ]; then
-  echo "❌ task 状态为「$STATUS」，不是「已完成」。只有 PM 确认通过后才能关闭。" >&2
+  echo "❌ task 状态为「${STATUS}」，不是「已完成」。只有 PM 确认通过后才能关闭。" >&2
   exit 1
 fi
 
@@ -93,7 +93,7 @@ fi
 
 REQ_WORKTREE="$REPO_ROOT/.worktrees/$REQ_BRANCH"
 if [ ! -d "$REQ_WORKTREE" ]; then
-  echo "❌ req worktree 不存在: $REQ_WORKTREE。需要先恢复 req worktree 才能关闭 task。" >&2
+  echo "❌ req worktree 不存在: ${REQ_WORKTREE}。需要先恢复 req worktree 才能关闭 task。" >&2
   echo "   建议：bash $REPO_ROOT/.claude/scripts/create-req-worktree.sh $REQ_BRANCH" >&2
   exit 1
 fi
@@ -134,6 +134,20 @@ if [ -n "$REQ_UNCOMMITTED" ]; then
   exit 1
 fi
 
+# --- I-CT7 / I-CT8: 事件流与 commit 时间戳审计（merge 前强拦） ---
+AUDIT_SCRIPT="$REPO_ROOT/.claude/scripts/audit-task-events.py"
+if [ -f "$AUDIT_SCRIPT" ]; then
+  if ! python3 "$AUDIT_SCRIPT" \
+      --task-file "$TASK_FILE" \
+      --task-branch "$BRANCH" \
+      --req-branch "$REQ_BRANCH"; then
+    # audit-task-events.py 已打印违规详情，直接退出
+    exit 1
+  fi
+else
+  echo "⚠️ 找不到事件流审计脚本 ${AUDIT_SCRIPT}，跳过 I-CT7/I-CT8 校验。" >&2
+fi
+
 # 执行 merge
 cd "$REQ_WORKTREE"
 if ! git merge "$BRANCH" --no-edit -m "close: $TASK_TITLE" 2>&1; then
@@ -144,12 +158,12 @@ fi
 # 验证 merge 生效：req 分支的 HEAD 必须包含 task 分支的所有提交
 TASK_HEAD=$(git -C "$REPO_ROOT" rev-parse "$BRANCH" 2>/dev/null)
 if ! git merge-base --is-ancestor "$TASK_HEAD" HEAD 2>/dev/null; then
-  echo "❌ merge 声称成功但 $BRANCH 的提交未进入 $REQ_BRANCH。数据完整性校验失败。" >&2
+  echo "❌ merge 声称成功但 ${BRANCH} 的提交未进入 ${REQ_BRANCH}。数据完整性校验失败。" >&2
   exit 1
 fi
 
 MERGE_OK=true
-echo "🔀 已合并 $BRANCH → $REQ_BRANCH（已验证提交落地）"
+echo "🔀 已合并 ${BRANCH} → ${REQ_BRANCH}（已验证提交落地）"
 
 # --- 2.5. 在 req worktree 中归档 .runs/ 并 commit 到 req 分支 ---
 # 必须 commit，否则 close-req 清理 worktree 时归档文件会丢失
@@ -197,7 +211,7 @@ if [ "$MERGE_OK" = "true" ]; then
     # -d 失败（通常是因为分支未 merge 到 HEAD，因为 HEAD 是 main 不是 req）
     # merge 已验证过，强删
     if ! git -C "$REPO_ROOT" branch -D "$BRANCH" 2>&1; then
-      echo "❌ 无法删除分支 $BRANCH（-D 也失败）。请人工检查。" >&2
+      echo "❌ 无法删除分支 ${BRANCH}（-D 也失败）。请人工检查。" >&2
       exit 1
     fi
   fi

@@ -28,7 +28,7 @@ REQ_STAGE=$(python3 -c "import json; print(json.load(open('$REQ_META'))['stage']
 
 # --- 校验 stage ---
 if [ "$REQ_STAGE" != "7" ]; then
-  echo "❌ req 当前在 stage $REQ_STAGE，不是 stage 7。请先推进到 stage 7。" >&2
+  echo "❌ req 当前在 stage ${REQ_STAGE}，不是 stage 7。请先推进到 stage 7。" >&2
   exit 1
 fi
 
@@ -55,7 +55,7 @@ fi
 # 这样 merge 到 main 时会一次性带过去，不需要 merge 后再改动文件
 REQ_WORKTREE="$REPO_ROOT/.worktrees/$REQ_BRANCH"
 if [ ! -d "$REQ_WORKTREE" ]; then
-  echo "❌ req worktree 不存在: $REQ_WORKTREE。请先恢复 req worktree。" >&2
+  echo "❌ req worktree 不存在: ${REQ_WORKTREE}。请先恢复 req worktree。" >&2
   exit 1
 fi
 
@@ -126,7 +126,7 @@ if ! git merge "$REQ_BRANCH" --no-edit -m "close: $REQ_ID" 2>&1; then
   # closed/<req> 是 close-req 刚创建的，pre-close HEAD 里不存在。可以安全 rm -rf
   rm -rf "$REQ_WORKTREE/requirements/closed/$REQ_BASENAME"
   rmdir "$REQ_WORKTREE/requirements/closed" 2>/dev/null || true
-  echo "❌ merge $REQ_BRANCH → main 失败。req 分支已回滚到 $PRE_CLOSE_HEAD，请手动解决冲突后再运行 close-req。" >&2
+  echo "❌ merge ${REQ_BRANCH} → main 失败。req 分支已回滚到 ${PRE_CLOSE_HEAD}，请手动解决冲突后再运行 close-req。" >&2
   exit 1
 fi
 
@@ -155,7 +155,7 @@ fi
 # --- Step 4: 删除 req 分支（worktree 已清理，可以删分支） ---
 if ! git branch -d "$REQ_BRANCH" 2>/dev/null; then
   if ! git branch -D "$REQ_BRANCH" 2>&1; then
-    echo "❌ 无法删除分支 $REQ_BRANCH。请人工检查。" >&2
+    echo "❌ 无法删除分支 ${REQ_BRANCH}。请人工检查。" >&2
     exit 1
   fi
 fi

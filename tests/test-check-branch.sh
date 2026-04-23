@@ -264,6 +264,67 @@ test_outside_repo_tmp_allowed() {
 # Run all
 # ---------------------------------------------------------------
 
+# ---------------------------------------------------------------
+# I-CB10: Task status must be 执行中 to write code in task worktree
+# ---------------------------------------------------------------
+
+test_task_status_gate_rejects_when_pending() {
+  start_test "I-CB10 reject task worktree write when status=待确认"
+  fixture_setup
+
+  req_dir=$(fixture_create_req "req-001" "test" 6)
+  task=$(fixture_create_task "$req_dir" "010" "gate" "待确认" "/qa")
+  task_wt=$(fixture_create_task_worktree "$task" "req-001-test")
+
+  # Attempt to write a code file from inside the task worktree
+  cd "$task_wt"
+  capture_check "Write" "prototypes/sneak.ts" "" "" "console.log('leaked')"
+  if [ "$RC" = "2" ] && echo "$OUT" | grep -q "I-CB10"; then
+    pass_test
+  else
+    _fail "should deny code write when task status=待确认 (rc=$RC, out=$OUT)"
+  fi
+  fixture_teardown
+}
+
+test_task_status_gate_allows_when_executing() {
+  start_test "I-CB10 allow task worktree write when status=执行中"
+  fixture_setup
+
+  req_dir=$(fixture_create_req "req-001" "test" 6)
+  task=$(fixture_create_task "$req_dir" "011" "gate-ok" "执行中" "/qa")
+  task_wt=$(fixture_create_task_worktree "$task" "req-001-test")
+
+  cd "$task_wt"
+  capture_check "Write" "prototypes/legit.ts" "" "" "export {}"
+  if [ "$RC" = "0" ] && ! echo "$OUT" | grep -q '"deny"'; then
+    pass_test
+  else
+    _fail "should allow code write when task status=执行中 (rc=$RC, out=$OUT)"
+  fi
+  fixture_teardown
+}
+
+test_task_status_gate_allows_task_file_edit() {
+  start_test "I-CB10 allow editing task.md itself (執行日志/自审) even when not 执行中"
+  fixture_setup
+
+  req_dir=$(fixture_create_req "req-001" "test" 6)
+  task=$(fixture_create_task "$req_dir" "012" "gate-taskfile" "待验收" "/qa")
+  task_wt=$(fixture_create_task_worktree "$task" "req-001-test")
+
+  cd "$task_wt"
+  # 编辑 task 文件的非状态字段应放行（状态字段由 Gate 1 保护）
+  capture_check "Edit" "requirements/active/req-001-test/tasks/task-012-gate-taskfile.md" \
+    "## 执行日志" "## 执行日志\nnew entry" ""
+  if [ "$RC" = "0" ] && ! echo "$OUT" | grep -q '"deny"'; then
+    pass_test
+  else
+    _fail "should allow task file edit even when status!=执行中 (rc=$RC, out=$OUT)"
+  fi
+  fixture_teardown
+}
+
 test_main_rejects_src_write
 test_main_allows_claude_settings
 test_main_allows_requirements_active_brief
@@ -276,5 +337,8 @@ test_reject_direct_task_status_edit
 test_reject_direct_req_stage_edit
 test_outside_repo_non_tmp_denied
 test_outside_repo_tmp_allowed
+test_task_status_gate_rejects_when_pending
+test_task_status_gate_allows_when_executing
+test_task_status_gate_allows_task_file_edit
 
 report_results "check-branch"

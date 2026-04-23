@@ -182,9 +182,9 @@ fi
 
 if git show-ref --verify --quiet "refs/heads/$REQ_BRANCH" 2>/dev/null; then
   git branch -D "$REQ_BRANCH" 2>/dev/null || {
-    echo "⚠️ 无法删除 req 分支 $REQ_BRANCH，请人工检查。" >&2
+    echo "⚠️ 无法删除 req 分支 ${REQ_BRANCH}，请人工检查。" >&2
   }
   echo "🗑️ 已删除分支: $REQ_BRANCH"
 fi
 
-echo "✅ Req 已废弃: $REQ_ID（未 merge 到 main，cancelled 状态已记录）"
+echo "✅ Req 已废弃: ${REQ_ID}（未 merge 到 main，cancelled 状态已记录）"

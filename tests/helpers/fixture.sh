@@ -223,3 +223,21 @@ fixture_add_review_event() {
   mkdir -p "$(dirname "$events_file")"
   echo "{\"event\":\"review_completed\",\"timestamp\":\"2026-04-12T10:00:00+08:00\",\"task\":\"$task_stem\",\"tool\":\"$tool\",\"result\":\"$result\"}" >> "$events_file"
 }
+
+# Seed a full valid event stream that satisfies I-CT7 + I-CT8.
+# Timestamps chosen far in the past (2020-01-01...) so any test-time commit
+# is guaranteed to be later → I-CT8 passes.
+# Usage: fixture_seed_full_event_stream <task-file>
+fixture_seed_full_event_stream() {
+  local task_file="$1"
+  local task_stem
+  task_stem=$(basename "$task_file" .md)
+  local events_file="$FIXTURE_DIR/.runs/events/${task_stem}.jsonl"
+  mkdir -p "$(dirname "$events_file")"
+  {
+    echo "{\"event\":\"status_changed\",\"timestamp\":\"2020-01-01T00:00:00+00:00\",\"task\":\"$task_stem\",\"from\":\"待确认\",\"to\":\"执行中\"}"
+    echo "{\"event\":\"execution_started\",\"timestamp\":\"2020-01-01T00:01:00+00:00\",\"task\":\"$task_stem\",\"executor\":\"claude-code\"}"
+    echo "{\"event\":\"status_changed\",\"timestamp\":\"2020-01-01T00:10:00+00:00\",\"task\":\"$task_stem\",\"from\":\"执行中\",\"to\":\"待验收\"}"
+    echo "{\"event\":\"status_changed\",\"timestamp\":\"2020-01-01T00:20:00+00:00\",\"task\":\"$task_stem\",\"from\":\"待验收\",\"to\":\"已完成\"}"
+  } > "$events_file"
+}

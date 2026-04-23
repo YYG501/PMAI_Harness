@@ -34,7 +34,25 @@ description: |
 
 ### 步骤 3：实现代码（含 dispatch）
 
-**步骤 3 的流程：dispatch → 越界保护 → 零改动检查。** 失败路径统一走 `--fail-execution` 回退 + 诊断文案。
+**步骤 3 的流程：状态 gate → dispatch → 越界保护 → 零改动检查。** 失败路径统一走 `--fail-execution` 回退 + 诊断文案。
+
+#### 3.0 前置状态 gate（I-AD1 的入口侧对应物）
+
+在拿 lock、起 executor 之前，必须先校验 task 状态 == `执行中`。没经过 `/task-confirm` 的 task 不允许直接执行。这是针对「orchestrator 或 suborchestrator 绕过状态机直接调 /task-execute」的结构性防御。
+
+```bash
+CURRENT_STATUS=$(python3 "$MAIN_REPO_ROOT/.claude/scripts/task-transition.py" "$TASK_FILE" --get-status 2>/dev/null || echo "")
+if [ "$CURRENT_STATUS" != "执行中" ]; then
+  echo "❌ /task-execute 入口拒绝：task 状态为「${CURRENT_STATUS:-未知}」，不是「执行中」。" >&2
+  echo "" >&2
+  echo "正确流程：" >&2
+  echo "  1) /task-confirm $TASK_FILE   # PM 确认 task 后，执行此命令把状态从「待确认」转到「执行中」" >&2
+  echo "  2) /task-execute $TASK_FILE   # 当前命令" >&2
+  echo "" >&2
+  echo "不要跳过 /task-confirm。状态机（待确认→执行中→待验收→已完成）是数据完整性的前提，跳过会导致 close-task 事件流审计（I-CT7/I-CT8）拒绝 merge。" >&2
+  exit 1
+fi
+```
 
 #### 3a. Lock + manual 幂等重入
 

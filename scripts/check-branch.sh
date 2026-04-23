@@ -112,7 +112,7 @@ if [ "$SCOPE" = "__OUTSIDE_REPO__" ]; then
       exit 0
       ;;
     *)
-      reason="写仓库外的路径被拒绝：$FILE_PATH。业务改动必须在 req/task worktree 内进行。如需写临时文件请用 /tmp/ 或 /var/tmp/。"
+      reason="写仓库外的路径被拒绝：${FILE_PATH}。业务改动必须在 req/task worktree 内进行。如需写临时文件请用 /tmp/ 或 /var/tmp/。"
       reason_escaped=$(echo "$reason" | python3 -c "import sys,json; print(json.dumps(sys.stdin.read().strip())[1:-1])")
       printf '{"decision": "deny", "reason": "%s"}\n' "$reason_escaped"
       exit 2
@@ -291,7 +291,7 @@ if [ "$BRANCH" = "main" ] || [ "$BRANCH" = "master" ]; then
   esac
 
   if [ "$MAIN_WRITE_ALLOWED" != "true" ]; then
-    deny "main 分支写保护：不允许直接修改 $REL_PATH。业务代码和文档必须通过 req/task 分支操作。如需初始化新项目，请用 /init-project 创建新的业务项目仓。"
+    deny "main 分支写保护：不允许直接修改 ${REL_PATH}。业务代码和文档必须通过 req/task 分支操作。如需初始化新项目，请用 /init-project 创建新的业务项目仓。"
   fi
 fi
 
@@ -310,6 +310,40 @@ case "$BRANCH" in
     case "$REL_PATH" in
       prototypes/*)
         deny "req worktree 中不能编辑 prototypes/ 下的文件，代码改动请在 task 分支操作"
+        ;;
+    esac
+    ;;
+esac
+
+# ======================================================
+# GATE 5: Task 状态约束（I-CB10）
+# 只有 task 状态 == 执行中 才允许写 task worktree 下的代码。
+# 目的：防 agent 跳过 /task-confirm → task-transition → /task-execute 流程直接写代码。
+# ======================================================
+case "$BRANCH" in
+  task-*)
+    # 豁免：task 文件本身（填执行日志/自审记录/文档偏差）+ 运行时元数据
+    case "$REL_PATH" in
+      requirements/*/tasks/task-*.md)
+        # task 文件本身的写入：允许（gate 1 已经保护状态字段不被直改）
+        ;;
+      .runs/*|.worktrees/*|.dev-port)
+        # 运行时元数据：gitignore，放行
+        ;;
+      *)
+        # 其他路径（prototypes/ 代码、docs/ 等）：要求状态 == 执行中
+        # 定位 task 文件：task 文件存在于 task worktree 和 req worktree 里，不在主仓根
+        # 搜索顺序：优先 task 自己的 worktree → fallback 所有 worktree
+        TASK_FILE="$MAIN_REPO_ROOT/.worktrees/$BRANCH"
+        TASK_FILE=$(find "$MAIN_REPO_ROOT/.worktrees" -type f -path "*/tasks/${BRANCH}.md" 2>/dev/null | head -1)
+        if [ -z "$TASK_FILE" ] || [ ! -f "$TASK_FILE" ]; then
+          deny "I-CB10: 找不到 task 分支 ${BRANCH} 对应的 task 文件，无法校验状态。请通过 /task-confirm 正常创建。"
+        fi
+
+        TASK_STATUS=$(python3 "${MAIN_REPO_ROOT}/.claude/scripts/task-transition.py" "$TASK_FILE" --get-status 2>/dev/null || echo "")
+        if [ "$TASK_STATUS" != "执行中" ]; then
+          deny "I-CB10: task 状态为「${TASK_STATUS:-未知}」，不允许写 task worktree 代码。正确流程：1) /task-confirm 转「执行中」  2) /task-execute 启动执行器  3) 再改代码。若需补填 task 文件的执行日志/文档偏差/自审记录，只能改 task 文件本身。"
+        fi
         ;;
     esac
     ;;

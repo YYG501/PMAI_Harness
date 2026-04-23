@@ -8,10 +8,26 @@ source "$SCRIPT_DIR/helpers/fixture.sh"
 CLOSE_TASK="$FRAMEWORK_ROOT/scripts/close-task.sh"
 
 # Helper: mark a task as 已完成
+# The task file lives inside the req worktree and is tracked on the req branch.
+# The modification must be committed — otherwise close-task refuses merge on
+# "req worktree has uncommitted changes" (I-CT2 extension from the quick-fix).
 _mark_task_done() {
   local task_file="$1"
   sed -i.bak 's|^\*\*状态：\*\*.*|\*\*状态：\*\* 已完成|' "$task_file"
   rm -f "$task_file.bak"
+
+  # Locate enclosing req worktree and commit the status change
+  local wt_root="$(dirname "$task_file")"
+  while [ "$wt_root" != "/" ] && [ ! -d "$wt_root/.git" ] && [ ! -f "$wt_root/.git" ]; do
+    wt_root=$(dirname "$wt_root")
+  done
+  if [ -n "$wt_root" ] && { [ -d "$wt_root/.git" ] || [ -f "$wt_root/.git" ]; }; then
+    (
+      cd "$wt_root"
+      git add -A 2>/dev/null
+      git commit -q -m "mark task done" 2>/dev/null || true
+    )
+  fi
 }
 
 # Helper: clear 文档偏差 section (replace "无偏差" default)
@@ -272,7 +288,8 @@ test_happy_path_close_task() {
   # Create fake runtime files to exercise archive path
   mkdir -p "$FIXTURE_DIR/.runs/events"
   echo '{"task":"'"$task_stem"'"}' > "$FIXTURE_DIR/.runs/$task_stem.json"
-  echo '{"event":"started"}' > "$FIXTURE_DIR/.runs/events/$task_stem.jsonl"
+  # Seed a valid state-machine event stream (I-CT7 + I-CT8)
+  fixture_seed_full_event_stream "$task"
 
   if (cd "$FIXTURE_DIR" && bash "$CLOSE_TASK" "$task") >/tmp/out.$$ 2>/tmp/err.$$; then
     # Verify task branch deleted
@@ -331,6 +348,116 @@ test_happy_path_close_task() {
 }
 
 # =================================================
+# I-CT7: event stream file must exist (fail-closed)
+# =================================================
+test_reject_if_event_stream_missing() {
+  start_test "I-CT7 reject when .runs/events/<task>.jsonl does not exist"
+  fixture_setup
+
+  req_dir=$(fixture_create_req "req-001" "test" 6)
+  task=$(fixture_create_task "$req_dir" "101" "noevents" "待确认" "/qa")
+  task_wt=$(fixture_create_task_worktree "$task" "req-001-test")
+  (cd "$task_wt" && echo "x" > out.txt && git add -A && git commit -q -m "task: work")
+  _mark_task_done "$task"
+  # Intentionally do NOT seed events
+
+  if (cd "$FIXTURE_DIR" && bash "$CLOSE_TASK" "$task") >/tmp/out.$$ 2>/tmp/err.$$; then
+    _fail "should have rejected when event stream missing"
+    cat /tmp/err.$$ >&2
+  else
+    if grep -q "I-CT7" /tmp/err.$$; then
+      pass_test
+    else
+      _fail "stderr missing I-CT7 marker"
+      cat /tmp/err.$$ >&2
+    fi
+  fi
+  rm -f /tmp/out.$$ /tmp/err.$$
+  fixture_teardown
+}
+
+# =================================================
+# I-CT7: state-machine skipped (regression of 2026-04-22 1-hour event)
+# =================================================
+test_reject_if_state_machine_skipped() {
+  start_test "I-CT7 regression: status forced 已完成 but no status_changed events (2026-04-22 pattern)"
+  fixture_setup
+
+  req_dir=$(fixture_create_req "req-001" "test" 6)
+  task=$(fixture_create_task "$req_dir" "102" "bypass" "待确认" "/qa")
+  task_wt=$(fixture_create_task_worktree "$task" "req-001-test")
+  # Simulate agent writing code WITHOUT ever calling task-transition.py
+  (cd "$task_wt" && echo "leaked implementation" > leaked.ts && git add -A && git commit -q -m "seed: bring in task-001~004 code")
+  # Agent then manually forces status to 已完成 to try to close-task
+  _mark_task_done "$task"
+  # Events file only has unrelated noise (no status_changed, no execution_started)
+  mkdir -p "$FIXTURE_DIR/.runs/events"
+  local task_stem=$(basename "$task" .md)
+  echo '{"event":"review_completed","timestamp":"2020-01-01T00:00:00+00:00","task":"'"$task_stem"'","tool":"/qa","result":"pass"}' \
+    > "$FIXTURE_DIR/.runs/events/${task_stem}.jsonl"
+
+  if (cd "$FIXTURE_DIR" && bash "$CLOSE_TASK" "$task") >/tmp/out.$$ 2>/tmp/err.$$; then
+    _fail "should have rejected when state machine was skipped"
+    cat /tmp/err.$$ >&2
+  else
+    if grep -q "I-CT7" /tmp/err.$$; then
+      # Verify merge did NOT happen (task branch still exists, data preserved)
+      if git -C "$FIXTURE_DIR" show-ref --verify --quiet "refs/heads/${task_stem}"; then
+        pass_test
+      else
+        _fail "task branch was deleted despite audit rejection — data loss!"
+      fi
+    else
+      _fail "stderr missing I-CT7 marker"
+      cat /tmp/err.$$ >&2
+    fi
+  fi
+  rm -f /tmp/out.$$ /tmp/err.$$
+  fixture_teardown
+}
+
+# =================================================
+# I-CT8: commit timestamp predates transition-to-执行中
+# =================================================
+test_reject_if_commit_predates_execution() {
+  start_test "I-CT8 reject when task commit timestamp predates status_changed(→执行中)"
+  fixture_setup
+
+  req_dir=$(fixture_create_req "req-001" "test" 6)
+  task=$(fixture_create_task "$req_dir" "103" "timetravel" "待确认" "/qa")
+  task_wt=$(fixture_create_task_worktree "$task" "req-001-test")
+  local task_stem=$(basename "$task" .md)
+
+  # Commit at test-time (≈ now)
+  (cd "$task_wt" && echo "early" > early.ts && git add -A && git commit -q -m "task: early write")
+  _mark_task_done "$task"
+
+  # Seed events with transition to 执行中 happening FAR IN THE FUTURE (after our commit)
+  # This simulates "code was written before status ever advanced"
+  mkdir -p "$FIXTURE_DIR/.runs/events"
+  {
+    echo "{\"event\":\"status_changed\",\"timestamp\":\"2099-01-01T00:00:00+00:00\",\"task\":\"$task_stem\",\"from\":\"待确认\",\"to\":\"执行中\"}"
+    echo "{\"event\":\"execution_started\",\"timestamp\":\"2099-01-01T00:01:00+00:00\",\"task\":\"$task_stem\",\"executor\":\"claude-code\"}"
+    echo "{\"event\":\"status_changed\",\"timestamp\":\"2099-01-01T00:10:00+00:00\",\"task\":\"$task_stem\",\"from\":\"执行中\",\"to\":\"待验收\"}"
+    echo "{\"event\":\"status_changed\",\"timestamp\":\"2099-01-01T00:20:00+00:00\",\"task\":\"$task_stem\",\"from\":\"待验收\",\"to\":\"已完成\"}"
+  } > "$FIXTURE_DIR/.runs/events/${task_stem}.jsonl"
+
+  if (cd "$FIXTURE_DIR" && bash "$CLOSE_TASK" "$task") >/tmp/out.$$ 2>/tmp/err.$$; then
+    _fail "should have rejected when commit predates transition"
+    cat /tmp/err.$$ >&2
+  else
+    if grep -q "I-CT8" /tmp/err.$$; then
+      pass_test
+    else
+      _fail "stderr missing I-CT8 marker"
+      cat /tmp/err.$$ >&2
+    fi
+  fi
+  rm -f /tmp/out.$$ /tmp/err.$$
+  fixture_teardown
+}
+
+# =================================================
 # Run all tests
 # =================================================
 test_reject_if_status_not_done
@@ -340,6 +467,9 @@ test_reject_if_req_worktree_missing
 test_reject_if_task_worktree_dirty
 test_reject_on_merge_conflict
 test_reject_if_doc_diff_not_processed
+test_reject_if_event_stream_missing
+test_reject_if_state_machine_skipped
+test_reject_if_commit_predates_execution
 test_happy_path_close_task
 
 report_results "close-task"

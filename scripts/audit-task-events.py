@@ -1,0 +1,233 @@
+#!/usr/bin/env python3
+"""Audit task event stream and commit timeline before close-task merge.
+
+Enforces INVARIANTS.md I-CT7 and I-CT8:
+
+- I-CT7: Event stream must prove the full state-machine progression:
+    待确认→执行中, 执行中→待验收, 待验收→已完成 status_changed events,
+    plus at least one execution_started or execution_manual_completed.
+- I-CT8: Each code commit on the task branch must have a committer timestamp
+    strictly later than the earliest `status_changed(*, 执行中)` event.
+
+Exit codes:
+  0 = audit passed
+  1 = audit failed (violation printed to stderr)
+  2 = usage / file errors
+
+Usage:
+  audit-task-events.py --task-file <path> --task-branch <name> --req-branch <name>
+
+The caller (close-task.sh) is expected to hard-abort merge on non-zero exit.
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
+import re
+import subprocess
+import sys
+from datetime import datetime
+from pathlib import Path
+
+
+def find_main_repo_root() -> Path:
+    try:
+        common = subprocess.check_output(
+            ["git", "rev-parse", "--git-common-dir"], text=True
+        ).strip()
+        if common and common != ".git":
+            return Path(common).resolve().parent
+    except Exception:
+        pass
+    try:
+        return Path(
+            subprocess.check_output(
+                ["git", "rev-parse", "--show-toplevel"], text=True
+            ).strip()
+        )
+    except Exception:
+        return Path.cwd()
+
+
+def parse_iso(ts: str) -> datetime | None:
+    if not ts:
+        return None
+    try:
+        # Handle trailing Z
+        cleaned = ts.replace("Z", "+00:00")
+        return datetime.fromisoformat(cleaned)
+    except Exception:
+        return None
+
+
+def load_events(events_file: Path) -> list[dict]:
+    if not events_file.exists():
+        return []
+    out: list[dict] = []
+    with events_file.open(encoding="utf-8") as fh:
+        for line in fh:
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                out.append(json.loads(line))
+            except json.JSONDecodeError:
+                continue
+    return out
+
+
+def audit_ct7(events: list[dict]) -> list[str]:
+    """Return a list of violations (empty = pass)."""
+    violations: list[str] = []
+
+    # Required status_changed patterns
+    required_transitions = [
+        ("待确认", "执行中"),
+        ("执行中", "待验收"),
+        ("待验收", "已完成"),
+    ]
+    for frm, to in required_transitions:
+        hit = any(
+            e.get("event") == "status_changed"
+            and e.get("from") == frm
+            and e.get("to") == to
+            for e in events
+        )
+        if not hit:
+            violations.append(
+                f"I-CT7: 事件流缺少 status_changed({frm}→{to})"
+            )
+
+    # At least one execution event
+    exec_events = {"execution_started", "execution_manual_completed"}
+    if not any(e.get("event") in exec_events for e in events):
+        violations.append(
+            "I-CT7: 事件流缺少任何 execution_started / execution_manual_completed 事件"
+            "（说明执行器从未被触发，task 可能被跳过状态机直接写了代码）"
+        )
+
+    return violations
+
+
+def first_transition_to_executing_time(events: list[dict]) -> datetime | None:
+    """Return the earliest timestamp of status_changed(*, 执行中)."""
+    best: datetime | None = None
+    for e in events:
+        if e.get("event") != "status_changed":
+            continue
+        if e.get("to") != "执行中":
+            continue
+        ts = parse_iso(e.get("timestamp", ""))
+        if ts is None:
+            continue
+        if best is None or ts < best:
+            best = ts
+    return best
+
+
+def task_branch_commits(task_branch: str, req_branch: str) -> list[tuple[str, datetime, str]]:
+    """Return list of (sha, committer_time_aware, subject) for commits on task branch not on req branch."""
+    try:
+        out = subprocess.check_output(
+            [
+                "git",
+                "log",
+                "--format=%H|%cI|%s",
+                f"{req_branch}..{task_branch}",
+            ],
+            text=True,
+        )
+    except subprocess.CalledProcessError:
+        return []
+
+    commits: list[tuple[str, datetime, str]] = []
+    for line in out.strip().split("\n"):
+        if not line:
+            continue
+        parts = line.split("|", 2)
+        if len(parts) < 3:
+            continue
+        sha, ts_raw, subject = parts
+        ts = parse_iso(ts_raw)
+        if ts is None:
+            continue
+        commits.append((sha, ts, subject))
+    return commits
+
+
+def audit_ct8(
+    events: list[dict], task_branch: str, req_branch: str
+) -> list[str]:
+    """Verify every task-branch commit is timestamped after the first transition to 执行中."""
+    violations: list[str] = []
+
+    earliest = first_transition_to_executing_time(events)
+    commits = task_branch_commits(task_branch, req_branch)
+    if not commits:
+        # No commits unique to task branch — nothing to check
+        return violations
+
+    if earliest is None:
+        # I-CT7 already flags this. Don't double-report; keep I-CT8 silent when baseline missing.
+        return violations
+
+    for sha, ts, subject in commits:
+        if ts < earliest:
+            violations.append(
+                f"I-CT8: commit {sha[:8]} ({ts.isoformat()}) 早于首次 status_changed(*→执行中) "
+                f"({earliest.isoformat()})。说明代码在状态机推进前就已写入。subject: {subject}"
+            )
+    return violations
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description="Audit task event stream + commit timeline")
+    parser.add_argument("--task-file", required=True, help="Path to task file (for events lookup)")
+    parser.add_argument("--task-branch", required=True, help="Task branch name")
+    parser.add_argument("--req-branch", required=True, help="Req branch name")
+    args = parser.parse_args()
+
+    task_file = Path(args.task_file).resolve()
+    if not task_file.exists():
+        print(f"Error: task file not found: {task_file}", file=sys.stderr)
+        return 2
+
+    repo = find_main_repo_root()
+    task_stem = task_file.stem
+    events_file = repo / ".runs" / "events" / f"{task_stem}.jsonl"
+
+    events = load_events(events_file)
+
+    violations: list[str] = []
+
+    # I-CT7: event file must exist (fail-closed)
+    if not events_file.exists():
+        violations.append(
+            f"I-CT7: 事件流文件不存在: {events_file}。无法证明状态机被走过——"
+            "这是 fail-closed 设计（没有事件 = 违规，不是 = 无违规）。"
+        )
+    else:
+        violations.extend(audit_ct7(events))
+
+    # I-CT8
+    violations.extend(audit_ct8(events, args.task_branch, args.req_branch))
+
+    if violations:
+        print("❌ close-task 事件流审计失败：", file=sys.stderr)
+        for v in violations:
+            print(f"   - {v}", file=sys.stderr)
+        print("", file=sys.stderr)
+        print(
+            "数据已保留。人工检查后可：1) 补齐缺失事件再重跑 close-task；"
+            "2) 或 /cancel-req 放弃整个 req（代码不 merge 进 main）。",
+            file=sys.stderr,
+        )
+        return 1
+
+    print("✅ 事件流审计通过（I-CT7 + I-CT8）")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

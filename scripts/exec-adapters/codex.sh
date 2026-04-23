@@ -13,6 +13,12 @@ set -euo pipefail
 
 : "${TASK_WORKTREE:?TASK_WORKTREE required}"
 : "${PROMPT_FILE:?PROMPT_FILE required}"
+: "${TASK_FILE:?TASK_FILE required (for I-AD1/I-AD2 gate)}"
+: "${MAIN_REPO_ROOT:?MAIN_REPO_ROOT required (for I-AD1/I-AD2 gate)}"
+
+# I-AD1: 启动前状态 gate
+source "$(dirname "$0")/_gate.sh"
+adapter_precheck
 
 cd "$TASK_WORKTREE"
 PROMPT="$(cat "$PROMPT_FILE")"
@@ -20,9 +26,13 @@ PROMPT="$(cat "$PROMPT_FILE")"
 MODEL_ARGS=()
 [ -n "${EXECUTOR_MODEL:-}" ] && MODEL_ARGS=(--model "$EXECUTOR_MODEL")
 
+EXEC_EXIT=0
 if [ -z "${CLAUDE_PLUGIN_ROOT:-}" ]; then
   echo "codex.sh: CLAUDE_PLUGIN_ROOT not set; falling back to plain 'codex exec --sandbox workspace-write'" >&2
-  codex exec --sandbox workspace-write "${MODEL_ARGS[@]}" "$PROMPT"
+  codex exec --sandbox workspace-write "${MODEL_ARGS[@]}" "$PROMPT" || EXEC_EXIT=$?
 else
-  node "${CLAUDE_PLUGIN_ROOT}/scripts/codex-companion.mjs" task --write "${MODEL_ARGS[@]}" "$PROMPT"
+  node "${CLAUDE_PLUGIN_ROOT}/scripts/codex-companion.mjs" task --write "${MODEL_ARGS[@]}" "$PROMPT" || EXEC_EXIT=$?
 fi
+
+# I-AD2: 退出后越界校验
+adapter_postcheck "$EXEC_EXIT"
