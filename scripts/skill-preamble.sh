@@ -142,7 +142,7 @@ except: print(0)
       fi
     fi
 
-    echo "⚠️ 检测到上次 /$_skill_name 执行中断。运行 /status 查看当前状态。"
+    echo "⚠️ 检测到上次 /$_skill_name 执行中断。运行 /task-status 查看当前状态。"
     rm -f "$_pf"
   done
 fi
@@ -194,9 +194,9 @@ PY
   _manual_old=$(echo "$_manual_aggregate" | awk '{print $2}')
   if [ -n "$_manual_total" ] && [ "$_manual_total" != "0" ] 2>/dev/null; then
     if [ "${_manual_old:-0}" != "0" ] 2>/dev/null && [ "${_manual_old:-0}" -gt 0 ] 2>/dev/null; then
-      echo "⚠️  有 $_manual_total 个 manual task 等待中（$_manual_old 个超过 7 天）。运行 /status 查看详情。"
+      echo "⚠️  有 $_manual_total 个 manual task 等待中（$_manual_old 个超过 7 天）。运行 /task-status 查看详情。"
     else
-      echo "ℹ️  有 $_manual_total 个 manual task 等待中。运行 /status 查看详情。"
+      echo "ℹ️  有 $_manual_total 个 manual task 等待中。运行 /task-status 查看详情。"
     fi
   fi
 fi

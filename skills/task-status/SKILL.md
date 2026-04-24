@@ -1,10 +1,10 @@
 ---
-name: status
+name: task-status
 description: |
   全局状态总览：展示当前 req/task 状态、最后事件和下一步建议。
 ---
 
-# /status
+# /task-status
 
 ## When To Use
 
@@ -14,7 +14,7 @@ description: |
 
 ```bash
 source "$(git rev-parse --show-toplevel 2>/dev/null || echo .)/.claude/scripts/skill-preamble.sh"
-echo "SKILL: status"
+echo "SKILL: task-status"
 ```
 
 ## Workflow

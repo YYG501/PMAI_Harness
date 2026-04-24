@@ -213,7 +213,7 @@ def suggest_next_action(
     if stage == 7:
         return "Req 正在关闭中"
 
-    return "运行 /status 查看详情"
+    return "运行 /task-status 查看详情"
 
 
 def render_manual_section(repo_root: Path) -> None:

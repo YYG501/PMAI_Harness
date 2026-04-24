@@ -130,7 +130,7 @@ Suborchestrator 只做 orchestration：读 task 文件 + 调 /task-execute 让 d
 
 下一步（Suborchestrator 正在 <task-worktree> 自动推进）：
   tail -f .runs/execution-task-<id>-<executor>.log  （如需实时看执行日志）
-  /status                                            （查看所有 task）
+  /task-status                                            （查看所有 task）
 ```
 
 ## Rules

@@ -35,7 +35,7 @@ echo "SKILL: cancel-req"
 确认废弃？（Y/N）
 ```
 
-如果 PM 犹豫或不确定，建议 PM 运行 `/status` 先查看当前状态。
+如果 PM 犹豫或不确定，建议 PM 运行 `/task-status` 先查看当前状态。
 
 ### 步骤 2：执行废弃
 
