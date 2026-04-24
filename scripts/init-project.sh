@@ -85,6 +85,16 @@ for SKILL_DIR in "$FRAMEWORK_DIR/skills/"*/; do
 done
 echo "🛠️ Skills 已复制到 .claude/skills/"
 
+# --- f2. 复制 agents ---
+if [ -d "$FRAMEWORK_DIR/agents" ]; then
+  mkdir -p "$TARGET_DIR/.claude/agents"
+  for AGENT_FILE in "$FRAMEWORK_DIR/agents/"*.md; do
+    [ -f "$AGENT_FILE" ] || continue
+    cp "$AGENT_FILE" "$TARGET_DIR/.claude/agents/$(basename "$AGENT_FILE")"
+  done
+  echo "🤖 Agents 已复制到 .claude/agents/"
+fi
+
 # --- g. settings.json 已在模板复制时创建 ---
 
 # --- h. 创建目录结构 ---

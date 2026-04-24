@@ -36,7 +36,7 @@ echo "SKILL: task-plan"
 
 **输入：**
 - `$ACTIVE_REQ_DIR/analysis.md`（必需）
-- `$ACTIVE_REQ_DIR/design.md`（如有）
+- `$ACTIVE_REQ_DIR/solution.md`（如有）
 - `$REPO_ROOT/docs/DESIGN.md`（设计系统，重点读取可用组件清单和项目共享组件）
 - `$REPO_ROOT/docs/CONTEXT.md`（项目背景）
 - 已有模块规格（如有，作为修订输入）

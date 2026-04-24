@@ -6,6 +6,6 @@ PM AI 工作流框架的**生成器**仓库。
 
 旧仓（参考用，不复用流程）：`${LEGACY_REPO_ROOT}`
 
-当前状态：空仓，等需求输入。
+当前状态：v1 核心循环已形成实现骨架，包含 scripts / skills / templates / tests。当前重点是收口文档与流程一致性，保证生成器产出的 req/task 工作流可稳定初始化和回归验证。
 
 <!-- quick-fix smoke test line -->

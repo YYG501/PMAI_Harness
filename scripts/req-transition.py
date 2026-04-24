@@ -23,7 +23,7 @@ STAGE_NAMES = {
 STAGE_OUTPUT_FILES = {
     1: "brief.md",
     2: "analysis.md",
-    3: "design.md",
+    3: "solution.md",
     # stage 4 output is docs/DESIGN.md (checked separately)
     5: "task-plan.md",
 }

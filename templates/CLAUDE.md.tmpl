@@ -34,6 +34,17 @@ Hook 会拦截直接编辑，但 **CLAUDE.md 规则是主要约束，hook 是补
 - Stage 3（方案设计）：非 first req 时 PM 可选择跳过
 - Stage 4（设计系统）：DESIGN.md 有实质内容时自动跳过
 
+### Skill 完整性（流程不可用工具替代）
+
+工作流里标明"自动调用"或"不可跳过"的 skill（如 `/plan-ceo-review`、`/plan-eng-review`、`/office-hours` 等），**必须完整执行**，不能用任何其他手段替代。具体：
+
+- **禁止**用 `advisor()` 替代 skill。advisor 是补充视角，不是流程替代品
+- **禁止**用 `Agent` subagent（包括本项目自带的 `analysis-reviewer`）替代其他 skill。每个 subagent 只服务于它被显式指派的节点
+- **禁止**自写 ad hoc 评审 prompt 替代 skill。skill 里的结构化检查项（Error Map、Security、Observability 等）不是"可选节"，跳过等于丢失检查
+- **禁止**以"skill 太重和 PM 节奏冲突"为理由擅自简化。如果 skill 真的太重，正确做法是反馈给 PM 调整生成器里的 skill 定义，而不是运行时自行替换
+
+AI 擅自用工具替代 skill 是**流程违规**，即便产出看起来等价。被 PM 问到"你跑了 skill 吗"时，如实回答；若没跑，立即补跑，不找理由。
+
 ### 分支结构
 
 ```

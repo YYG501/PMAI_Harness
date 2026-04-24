@@ -281,11 +281,11 @@ test_reject_3_to_5_when_design_empty_non_first() {
   fixture_setup
   req_dir=$(fixture_create_req "req-001" "test" 3 false)
 
-  # 确保 stage 3 的前置输出 design.md 存在（不是 DESIGN.md；是 req 内的方案设计文档）
+  # 确保 stage 3 的前置输出 solution.md 存在（不是 DESIGN.md；是 req 内的方案设计文档）
   (
     cd "$FIXTURE_DIR/.worktrees/req-001-test"
-    echo "# Design" > "requirements/active/req-001-test/design.md"
-    git add -A && git commit -q -m "add design.md"
+    echo "# Solution" > "requirements/active/req-001-test/solution.md"
+    git add -A && git commit -q -m "add solution.md"
   )
 
   # docs/DESIGN.md 是空的（fixture_setup 用 touch 创建）
@@ -308,10 +308,10 @@ test_allow_3_to_5_when_design_populated() {
   fixture_setup
   req_dir=$(fixture_create_req "req-001" "test" 3 false)
 
-  # 在 req worktree 里补 design.md 和 docs/DESIGN.md 内容
+  # 在 req worktree 里补 solution.md 和 docs/DESIGN.md 内容
   (
     cd "$FIXTURE_DIR/.worktrees/req-001-test"
-    echo "# Design" > "requirements/active/req-001-test/design.md"
+    echo "# Solution" > "requirements/active/req-001-test/solution.md"
     cat > docs/DESIGN.md <<'EOF'
 # 设计系统
 
