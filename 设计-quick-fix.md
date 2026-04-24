@@ -306,7 +306,7 @@ abc1234 2026-04-23 15:10 [quick-fix] INDEX.md 更新 025 状态
 def5678 2026-04-23 14:30 [quick-fix] Button.tsx padding 16→24
 ```
 
-**`/status` 增强**：无活跃 req 时显示"最近 3 条 quick-fix"；有活跃 req 时作为附加 section 显示。
+**`/task-status` 增强**：无活跃 req 时显示"最近 3 条 quick-fix"；有活跃 req 时作为附加 section 显示。
 
 ### 7.4 入库 summary 文件（可选，默认关）
 

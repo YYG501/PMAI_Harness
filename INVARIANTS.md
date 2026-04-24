@@ -83,7 +83,7 @@
 - **I-CA3**：必须在所有 task 清理完成后才清理 req 本身
 - **I-CA4**：req 目录必须移到 requirements/closed/（保留记录），meta.status = cancelled
 - **I-CA5**：Cancel 失败留下的残留（worktree、分支）必须能重新运行脚本清理干净（幂等）
-- **I-CA6**：cancel 后 PM 能从 `/status` 看到这个 req 已 cancelled
+- **I-CA6**：cancel 后 PM 能从 `/task-status` 看到这个 req 已 cancelled
 
 ### 守卫点
 - task 清理循环：line ~31-57
