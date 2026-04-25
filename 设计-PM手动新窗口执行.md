@@ -214,6 +214,15 @@ fi
 - req 分支存在
 - `git worktree list | grep -q "$TASK_STEM"` 应该为 0（一 branch 一 worktree 强制）
 - ⚠️ **不再检查"已有待启动 task"** —— D0 并行允许累积多个待启动
+- **🆕 依赖前置检查**（2026-04-26 PM 决议主防线）：扫 task 文件「依赖」section 提取 `task-NNN`；扫同 req 下每个依赖 task 状态；任一非"已完成" → **拒绝创建 worktree**，主窗口直接报错：
+
+  ```
+  ❌ task-006 依赖 task-005，但 task-005 当前状态是「执行中」。
+     请先去 task-005 对应窗口完成验收 + close，然后重跑 /task-confirm。
+     （task-005 worktree: .worktrees/task-005-...，PM 可以去那个窗口验收）
+  ```
+
+  通过则继续步骤 4 创建 worktree + 步骤 5 输出启动指令
 
 **失败 fallback**：步骤 4 (create-task-worktree.sh) 失败 → 报错给 PM 不输出启动指令；步骤 5 本身只是 echo，不会失败。
 
@@ -287,7 +296,10 @@ WORKTREE_ABS="$REPO_ROOT/.worktrees/$TASK_STEM"
 cd "$WORKTREE_ABS"
 echo "已切换到 worktree: $WORKTREE_ABS"
 
-# 步骤 2.5：依赖前置 gate（2026-04-26 PM 决议加）
+# 步骤 2.5：依赖前置 gate（2026-04-26 PM 决议加 — 双层防御兜底层）
+# 主防线在 task-confirm 步骤 4 之前（详 §4.1 修订）；本层是 fail-closed 极端兜底
+# 防：(a) PM 手动跑 task-transition.py 强改状态绕过 task-confirm
+#     (b) 未来调用路径变化（其他入口绕过 task-confirm）
 # 读 task 文件「依赖」section，扫所有依赖 task 状态必须全 "已完成"
 DEPS=$(awk '/^## 依赖$/,/^## /' "$TASK_FILE" | grep -oE 'task-[0-9]{3}' | sort -u)
 if [ -n "$DEPS" ]; then
@@ -629,7 +641,7 @@ PM 同时 confirm task-005 和 task-006，但 task-006 实现依赖 task-005 已
 | **T11 中止意图识别（§4.5）**| PM 在主窗口任意输入触发 fail-execution | 输入 `放弃 task-005` / `取消 005` / `abort 这个`（task-005 唯一执行中时）→ 主 Claude 都识别并调 fail-execution；输入 `放弃` 无 task ID 且多 task 时 → 主 Claude 列出让 PM 选 |
 | **T12 兜底 reduce 触发（§4.4 兜底）**| 主 Claude preamble 摘要在 PM 误关新窗口场景生效 | task 状态 "待验收" + PM 关了新窗口 + 主窗口任意输入 → preamble 输出"📋 待验收 1 ⚠️ 请去对应新窗口"。**注：单窗口 lifecycle 后这是兜底场景测试，不是主路径** |
 | **T22 单窗口完整 lifecycle**（2026-04-26 修订）| 新窗口里完成 confirm 后所有步骤 | 新窗口 `/task-execute` → codex 跑完 → /task-submit 自审 → review → 转待验收 → **本窗口呈交 PM diff + review 摘要** → PM 通过 → /close-task → auto-chain 输出"关本窗口去主启下一个 task"。全程不切主窗口 |
-| **T23 依赖前置 gate**（2026-04-26 PM 决议）| task-execute 入口拒绝依赖未满足启动 | task-006 依赖 task-005，task-005 状态非"已完成" → `/task-execute task-006` exit 1 + 提示明确指引 PM 先 close task-005；task-005 已"已完成" → 通过；task 文件「依赖」字段为"无" → 直接通过 |
+| **T23 依赖前置 gate（双层）**（2026-04-26 PM 决议）| 验证两个层都拦：(a) **主防线**: task-confirm 在依赖未满足时拒绝创建 worktree（task-006 依赖 task-005 != 已完成 → /task-confirm task-006 exit 1 + 不建 worktree）；(b) **兜底层**: task-execute 入口绕过 task-confirm 直接调时也拦（手工 task-transition 强改 task-005 状态 → /task-execute task-006 步骤 2.5 exit 1）| 两层都通过+无依赖时通过+任一层拦截时给明确指引 |
 | **T13 多 task 摘要格式（§6 task-status）**| task-status 输出多 task 一行结论 | 3 执行中 + 2 待验收 → 输出 `📋 task 概览: 执行中 3 / 待验收 2` 第一行；详情按需展开 |
 | **T14 短 ID 模糊匹配（Pass 2 F2）**| `/task-execute task-005` 自动找唯一 task-005-*.md | 1 匹配 → 用 ✓；0 匹配 → 报错；多匹配 → 列出报错 |
 | **T15 FM7 transition 事务性回归**| append_event 失败时 task 文件状态字段必须回滚 | 模拟 `.runs/events/` 不可写 → `task-transition --to 执行中` 必须 exit 1 + 状态字段保持原值（不能写成功又静默丢事件） |
@@ -661,6 +673,7 @@ PM 同时 confirm task-005 和 task-006，但 task-006 实现依赖 task-005 已
 | 2026-04-26 | /plan-eng-review Section 1+3+Codex outside voice 完整跑完 | Section 1: D7 加测试改写 + 顺手修 FM7 + 11/13 v3.5 gap 消失结论。Section 3: 加 T11-T15。**Codex outside voice 找 5 critical + 4 high**：(C1) D6 扫错地方，(C2/C3) "preamble 顺手扫" 是假的，(C5) close-task req wt dirty 风险，(C6) PM 打回路径断，(C7) 中止意图识别落 CLAUDE.md.tmpl 而非 preamble，(C8) §7.2 串行心智残留，(C9) close-task auto-chain 升级阻塞，(C10) 测试缺 6 断言。**改动估算从 4-5 文件升到 8 个文件**——主要新增 skill-preamble.sh + status-view.py 修订支持"主窗口自动收口" |
 | 2026-04-26 | PM 提议改为单窗口完整 lifecycle（验收 + 打回 + close 都在新窗口里）| **重大流程简化**：(a) §3 架构图重画——新窗口跑完整 lifecycle；(b) §4.4 主窗口收口降级为兜底；(c) §6 task-submit 改为新窗口直接呈交 PM 验收；(d) §6 close-task auto-chain 文案改"关本窗口去主启下一个"（不再问"继续吗"）；(e) §7.10 PM 打回路径大幅简化——同窗口继续修，删除"新窗口已关 vs 还在"分裂；(f) §11 加 T22 单窗口完整 lifecycle 测试。trade-off：失去主窗口"批量验收"模式，PM 主动跑 /task-status 拉总览补偿 |
 | 2026-04-26 | PM 提议加依赖结构化（task-plan 拆分阶段考虑并行 + task-execute 入口检查依赖） | **§7.7 把"依赖 PM 自己判断"升级为"系统帮记录 + 校验"**：(a) §6 task-plan SKILL 加"## 执行顺序与并行性"输出（ASCII 依赖图 + 并行 lanes + 启动建议）；(b) §6 task-spec SKILL 写 task 文件时「依赖」字段填结构化 task ID 列表；(c) §4.2 task-execute 入口加步骤 2.5 依赖前置 gate（依赖未"已完成"则拒绝 + 明确指引）；(d) §6 task.md.tmpl 「依赖」字段加格式说明；(e) §11 加 T23 依赖 gate 测试。改动估算 8 → 11 文件 |
+| 2026-04-26 | PM 修正：依赖检查应在主 Agent 创建 worktree 时（task-confirm）做，task-execute 兜底 | **双层防御**：(a) **主防线** §4.1 task-confirm 步骤 4 创建 worktree 之前加依赖检查（fail-fast，主窗口直接报错，不浪费建 worktree）；(b) **兜底层** §4.2 步骤 2.5 保留（防 PM 手动 task-transition 强改状态 / 未来调用路径变化）。T23 升级为双层验证 |
 
 ---
 
