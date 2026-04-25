@@ -40,8 +40,9 @@ test_single_window_lifecycle() {
   task=$(fixture_create_task "$req_dir" "001" "lifecycle" "待确认" "(无)")
 
   # task-confirm simulation: dependency gate has no dependencies, create worktree, status remains 待确认.
-  create_out=$(cd "$FIXTURE_DIR/.worktrees/req-001-single" && bash "$CREATE_TASK_WORKTREE" "$task" "req-001-single")
-  task_wt=$(printf '%s\n' "$create_out" | sed -n '1p')
+  # Suppress create-task-worktree stdout (mixes git output); use known fixture path
+  (cd "$FIXTURE_DIR/.worktrees/req-001-single" && bash "$CREATE_TASK_WORKTREE" "$task" "req-001-single") >/dev/null 2>&1
+  task_wt="$FIXTURE_DIR/.worktrees/task-001-lifecycle"
   sed -i.bak "s|^\*\*worktree：\*\*.*|\*\*worktree：\*\* .worktrees/task-001-lifecycle|" "$task"
   rm -f "$task.bak"
   _commit_all_if_needed "$FIXTURE_DIR/.worktrees/req-001-single" "confirm task worktree"
@@ -58,6 +59,8 @@ test_single_window_lifecycle() {
   # task-execute simulation: status transition happens in the task worktree.
   (cd "$task_wt" && python3 "$TASK_TRANSITION" "$task_in_wt" --to 执行中 >/dev/null)
   (cd "$task_wt" && python3 "$TASK_EVENTS" append "$task_in_wt" --type execution_started --payload '{"executor":"manual"}' >/dev/null 2>&1)
+  # I-CT8 要求 commit 时间晚于首次 status_changed 事件 (commit 秒精度 vs event microsecond)
+  sleep 1
   echo "implemented in task branch" > "$task_wt/lifecycle.txt"
   _commit_all_if_needed "$task_wt" "implement lifecycle task"
 
@@ -74,7 +77,9 @@ test_single_window_lifecycle() {
     return
   fi
 
-  if ! git -C "$FIXTURE_DIR/.worktrees/req-001-single" log --oneline --all | grep -F -q "implement lifecycle task"; then
+  # 先存变量再 grep — 避免 grep -q SIGPIPE 在 set -uo pipefail 下退 141
+  req_log=$(git -C "$FIXTURE_DIR/.worktrees/req-001-single" log --oneline --all)
+  if ! echo "$req_log" | grep -F -q "implement lifecycle task"; then
     _fail "req branch does not contain task implementation commit"
     fixture_teardown
     return

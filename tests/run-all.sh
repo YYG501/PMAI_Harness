@@ -30,8 +30,7 @@ SUITES=(
   e2e/test-doc-update-failure-recovery.sh
   e2e/test-skip-doc-update-recovery.sh
   e2e/test-pushback-loop.sh
-  # TODO(v4 phase A4 followup): codex 捕获 git 输出 bug + lifecycle path，待修
-  #   e2e/v4_T22_single_window_lifecycle.sh
+  e2e/v4_T22_single_window_lifecycle.sh
 )
 
 TOTAL_PASS=0
