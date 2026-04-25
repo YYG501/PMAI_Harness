@@ -179,13 +179,13 @@ if [ "$PENDING_COUNT" -le 1 ]; then
 中止：关新窗口 + 回主告诉我 "放弃 ${TASK_SHORT_ID}"。
 EOF
 else
-  # 已有 N 个待启动 → 新窗口必须显式参数
+  # 已有 N 个待启动 → 新窗口推荐用短 ID（Pass 4 F1 修订：依赖 Pass 2 F2 短 ID 模糊匹配）
   cat <<EOF
 ✅ Task ${TASK_SHORT_ID} 准备就绪（worktree: .worktrees/${TASK_STEM}）。
 
-⚠️ 当前有 ${PENDING_COUNT} 个待启动 task，新窗口必须用显式参数：
+⚠️ 当前有 ${PENDING_COUNT} 个待启动 task，新窗口请用短 ID（依赖 task-execute 短 ID 模糊匹配）：
 
-  /task-execute ${TASK_FILE_ABS}
+  /task-execute ${TASK_SHORT_ID}
 
 执行方式: ${EXECUTOR}${MODEL:+ / $MODEL}
 
@@ -210,8 +210,22 @@ fi
 新窗口 Claude 跑 `/task-execute [<task-file>]`：
 
 ```bash
-# 步骤 1：定位 task 文件（无参数 → 自动找；有参数 → 用参数）
+# 步骤 1：定位 task 文件（无参数 → 自动找；短 ID → 模糊匹配；有完整路径 → 直用）
 TASK_FILE="${1:-}"
+
+# Pass 2 修订 F2：短 ID 模糊匹配
+if [ -n "$TASK_FILE" ] && [[ "$TASK_FILE" =~ ^task-[0-9]{3}$ ]]; then
+  REPO_ROOT=$(git rev-parse --show-toplevel)
+  MATCHES=$(find "$REPO_ROOT/requirements/active" -name "${TASK_FILE}-*.md")
+  COUNT=$(echo "$MATCHES" | grep -c .)
+  case "$COUNT" in
+    1) TASK_FILE="$MATCHES"; echo "🎯 短 ID 匹配: $TASK_FILE" ;;
+    0) echo "❌ 找不到 $TASK_FILE-*.md。建议: /task-status 看可用 task"; exit 1 ;;
+    *) echo "⚠️ 短 ID $TASK_FILE 匹配多个，请显式完整路径："
+       echo "$MATCHES" | sed 's/^/  \/task-execute /'
+       exit 1 ;;
+  esac
+fi
 
 if [ -z "$TASK_FILE" ]; then
   # D6 无参数模式：扫主仓 active req 找唯一 "待启动" task
@@ -228,7 +242,10 @@ if [ -z "$TASK_FILE" ]; then
 
   case "$COUNT" in
     0) echo "❌ 没有待启动的 task。请先在主窗口 /task-confirm <task-file>"; exit 1 ;;
-    1) TASK_FILE="$CANDIDATES"; echo "自动选定: $TASK_FILE" ;;
+    1) TASK_FILE="$CANDIDATES"
+       # Pass 1 修订 #2：诊断行立即打印（在 transition 之前），给 PM progress feedback
+       echo "🎯 自动选定: $TASK_FILE"
+       echo "    (D6 无参数模式：扫到唯一待启动 task)" ;;
     *) echo "⚠️ 有 $COUNT 个待启动 task，请显式参数："
        echo "$CANDIDATES" | sed 's/^/  \/task-execute /'
        exit 1 ;;
@@ -258,7 +275,13 @@ case "$STATUS" in
     echo "task 已在执行中，继续（重试场景）。"
     ;;
   *)
-    echo "task 状态是 '$STATUS'，不能 /task-execute。请检查。"
+    # Pass 2 修订 F1：错误退出推断意图给 next-step 提示
+    echo "❌ task 状态是 '$STATUS'，不能 /task-execute。"
+    case "$STATUS" in
+      "已完成")  echo "   建议: /close-task $TASK_STEM 或 /task-status 看全局" ;;
+      "待验收")  echo "   建议: 回主窗口告诉主 Claude 验收（这个 task 已经跑完了）" ;;
+      *)         echo "   建议: /task-status 看当前所有 task 状态" ;;
+    esac
     exit 1
     ;;
 esac
@@ -305,15 +328,28 @@ PM 同意 → 主 Claude 拉 diff + review report + 呈交 → PM 通过/打回�
 
 **这套机制完全是 v1 现有行为**——不需要新代码。唯一需要确认的：`task-status` SKILL / `skill-preamble.sh` 是否已经能识别"待验收"task 并主动提示？如果没有，加一段提示文案即可（不是新功能）。
 
-### 4.5 中止 task
+### 4.5 中止 task（Pass 4 F2 修订：意图识别，PM 不背模板）
 
-PM 想中止 → 关新窗口（无副作用，state 仍在 "执行中"）→ 回主窗口说"放弃 task-005" → 主 Claude 调：
+PM 想中止 → 关新窗口（无副作用，state 仍在 "执行中"）→ 回主窗口用**任何自然语句**表达放弃意图。
+
+**主 Claude preamble 意图识别规则**：扫到 PM 输入含**关键词**且**有 task ID 上下文**时，触发中止流程。
+
+示例 PM 输入（全部识别）：
+- "放弃 task-005"
+- "取消 005"
+- "abort 这个"（在 task-005 是唯一 "执行中" 时）
+- "我把新窗口关了，不要那个 task 了"
+- "cancel task-005-superset"
+
+主 Claude 识别后调：
 
 ```bash
 python3 .claude/scripts/task-transition.py "$TASK_FILE" --fail-execution --reason "aborted_by_pm"
 ```
 
 task 回到 "待确认"，worktree 保留供 PM 检查 dirty diff。**不需要 task-recover.sh / PGID 树杀**——新窗口里的 codex 进程会被 PM 关窗口 + OS 信号自然清理。
+
+**歧义处理**：如果 PM 输入只有"放弃"无 task ID 且当前有多个 "执行中" task，主 Claude 列出后问 PM 哪个；如果只有 1 个 "执行中"，直接对它操作（默认）。
 
 ---
 
@@ -349,7 +385,7 @@ task 回到 "待确认"，worktree 保留供 PM 检查 dirty diff。**不需要 
 | `skills/task-confirm/SKILL.md` | **改**：步骤 5 删 spawn subagent，改输出启动指令；步骤 5 不调 task-transition |
 | `skills/task-execute/SKILL.md` | **改**：入口加 status check + transition --to 执行中（v1 现状是 task-confirm 转，现在转给 task-execute） |
 | `skills/task-submit/SKILL.md` | **不改**（v1 现有逻辑直接复用） |
-| `skills/task-status/SKILL.md` | **微改**：扫到 "待确认" 但 worktree 已建的 task，提示 "等待 PM 在新窗口启动"；扫到 "待验收" task 提示 "可呈交验收" |
+| `skills/task-status/SKILL.md` | **微改**：扫到 "待确认" 但 worktree 已建的 task，提示 "等待 PM 在新窗口启动"；扫到 "待验收" task 提示 "可呈交验收"。**多 task 摘要格式样例**（Pass 4 F3 修订）：第一行结论 `📋 task 概览: 执行中 N1 / 待验收 N2 / 待启动 N3 / 已完成 N4`；详情按需展开（PM 问哪个再深入）|
 | `skills/close-task` / `cancel-req` | **不改** |
 | `templates/CLAUDE.md.tmpl` 角色表 | **改第 18 行**：`Suborchestrator | 单 task owner ...` → `新窗口 Claude | PM 在新窗口启动的 Claude 实例，跑单 task；位置在 task worktree 里` |
 | `templates/CLAUDE.md.tmpl` 工作流文案 | **改**：解释"PM 手动开新窗口"模式，加"中止流程" |
@@ -559,3 +595,55 @@ PM 同时 confirm task-005 和 task-006，但 task-006 实现依赖 task-005 已
 - `scripts/` 下全部脚本
 - `.claude/hooks/` 不存在或不动
 - v1 现有事件流 / I-CT7/I-CT8 审计完全沿用
+
+---
+
+## /plan-devex-review 报告（2026-04-25）
+
+**Mode**：DX POLISH，**incremental scope**（PM 决议）—— 只跑适用 pass，跳 Pass 5/6/7/8（不适用 PM 单人 workflow 场景）。
+**Persona**：PM 自己（admin console4 项目主用户，已熟 v1）。
+**Magical moment**：A 候选——`/task-execute` 无参数自动找 + 自动 cd worktree。
+
+### DX 评分
+
+| Dimension | 初评 | 修订后 |
+|---|---|---|
+| Pass 1 Getting Started | 6/10 | **7/10**（修订 #2 诊断行；拒绝 #1/#3）|
+| Pass 2 API/CLI Design | 7/10 | **9/10**（F1 next-step + F2 短 ID 模糊匹配）|
+| Pass 3 Error Messages | skipped | — |
+| Pass 4 Documentation | 5/10 | **9/10**（F1 短 ID 文案 + F2 意图识别 + F3 status 摘要格式）|
+| Pass 5 Upgrade | skipped | — |
+| Pass 6 Dev Env | skipped | — |
+| Pass 7 Community | n/a | — |
+| Pass 8 DX Measurement | n/a | — |
+| **Overall** | **6/10** | **8.3/10**（适用 pass 平均）|
+
+**TTHW**：~30s PM 操作（不含 codex 跑）→ 修订后 ~20s（短 ID + 诊断行降低不确定）。Champion tier ✓。
+
+### 落地修订汇总
+
+| Pass | Finding | 落地位置 |
+|---|---|---|
+| 1 #2 | task-execute 第一秒打印诊断行 | §4.2 case 1) |
+| 2 F1 | 错误退出推断意图给 next-step | §4.2 case "*" |
+| 2 F2 | 短 ID 模糊匹配 (`/task-execute task-005`) | §4.2 步骤 1 新分支 |
+| 4 F1 | 多候选输出改用短 ID 格式 | §4.1 else 分支 |
+| 4 F2 | 中止意图识别（PM 不背模板）| §4.5 改写 |
+| 4 F3 | task-status 多 task 摘要格式样例 | §6 task-status 行 |
+
+**拒绝**：Pass 1 #1（IDE-specific 启动文案）、Pass 1 #3（macOS pbcopy 自动复制）—— PM 决议保持 plan 简洁。
+
+### GSTACK REVIEW REPORT
+
+| Review | Trigger | Why | Runs | Status | Findings |
+|--------|---------|-----|------|--------|----------|
+| CEO Review | `/plan-ceo-review` | Scope & strategy | 0 | skipped | (PM 决议) |
+| Codex Review | `/codex review` | Independent 2nd opinion | 0 | — | — |
+| Eng Review | `/plan-eng-review` | Architecture & tests (required) | 0 | NOT RUN | v4 plan 是从 v3.5 重构，eng review 价值待 PM 决定 |
+| Design Review | `/plan-design-review` | UI/UX gaps | 0 | skipped | no UI scope |
+| DX Review | `/plan-devex-review` | DevEx gaps | 1 (本轮) | issues_resolved | 7 finding，6 落地 plan + 2 拒绝 |
+
+- **CODEX:** n/a（本轮无 codex voice，PM 选 incremental scope）
+- **CROSS-MODEL:** n/a
+- **UNRESOLVED:** 0（PM 已对每条 finding 决议）
+- **VERDICT:** **DX CLEAR (incremental)** — Pass 1/2/4 评分 7.5+，落地 6 条修订，plan 主体已优化。**Eng Review 仍 NOT RUN**（v4 plan 重大改写未过 eng review 验证；建议 implement 前补一次 /plan-eng-review）
