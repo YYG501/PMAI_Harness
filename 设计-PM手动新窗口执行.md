@@ -60,7 +60,12 @@ v3.5 plan 大部分章节（事件流 / scan-task-done / wakeup / hook / Superse
 
 ## 3. 新架构概览
 
+> **2026-04-26 sync 备注**：stage 5/6 重设计已 ship（commits `90997a3`/`a6d33ab`/`dfd5f5f`/`f9d9e3a`），引入 `/task-spec` 作为 stage 6 入口 + `doc-update` 大改 + `task-execute` 末尾"PM 反馈分流" + `close-task` 末尾"auto-chain 提示下一个 task"。本方案在 stage 5/6 ship 之后接入，**不重复这些工作**。完整 stage 6 入口序列见下图。
+
 ```
+PM ─[/task-spec task-005]──▶ 主 Claude（在 req worktree）
+       │ (stage 5/6 新 skill：单 task 详细文档生成器，PM 看后改 task 文件)
+       │
 PM ─[/task-confirm task-005-superset.md]─▶ 主 Claude（在 req worktree）
                                               │
                                               │ 1. 解析 task 文件
@@ -378,22 +383,32 @@ task 回到 "待确认"，worktree 保留供 PM 检查 dirty diff。**不需要 
 
 ---
 
-## 6. 各 skill 改动总览
+## 6. 各 skill 改动总览（2026-04-26 已 align stage 5/6 ship 后现状）
 
-| Skill | 改动 |
-|---|---|
-| `skills/task-confirm/SKILL.md` | **改**：步骤 5 删 spawn subagent，改输出启动指令；步骤 5 不调 task-transition |
-| `skills/task-execute/SKILL.md` | **改**：入口加 status check + transition --to 执行中（v1 现状是 task-confirm 转，现在转给 task-execute） |
-| `skills/task-submit/SKILL.md` | **不改**（v1 现有逻辑直接复用） |
-| `skills/task-status/SKILL.md` | **微改**：扫到 "待确认" 但 worktree 已建的 task，提示 "等待 PM 在新窗口启动"；扫到 "待验收" task 提示 "可呈交验收"。**多 task 摘要格式样例**（Pass 4 F3 修订）：第一行结论 `📋 task 概览: 执行中 N1 / 待验收 N2 / 待启动 N3 / 已完成 N4`；详情按需展开（PM 问哪个再深入）|
-| `skills/close-task` / `cancel-req` | **不改** |
-| `templates/CLAUDE.md.tmpl` 角色表 | **改第 18 行**：`Suborchestrator | 单 task owner ...` → `新窗口 Claude | PM 在新窗口启动的 Claude 实例，跑单 task；位置在 task worktree 里` |
-| `templates/CLAUDE.md.tmpl` 工作流文案 | **改**：解释"PM 手动开新窗口"模式，加"中止流程" |
+| Skill | 改动 | stage 5/6 drift 备注 |
+|---|---|---|
+| `skills/task-spec/SKILL.md` | **不动** | 🆕 stage 5/6 新增 skill；v4 入口在它之后接管，无修改 |
+| `skills/task-confirm/SKILL.md` | **改**：步骤 5 删 spawn subagent，改输出启动指令；步骤 5 不调 task-transition | 仓库现状未变（0 commits since v4 plan 创建）|
+| `skills/task-execute/SKILL.md` | **改**：入口加 status check + transition --to 执行中 + 自动 cd worktree（v1 现状是 task-confirm 转，现在转给 task-execute） | stage 5/6 已加末尾"PM 反馈分流策略"段（重新进入打回场景）；v4 改的是入口 step 1-3，**与分流段不冲突**（不同时机），共存 |
+| `skills/task-submit/SKILL.md` | **不改**（v1 + stage 5/6 现有逻辑直接复用） | stage 5/6 加了"提示分流策略"段，v4 不动 |
+| `skills/task-status/SKILL.md` | **微改**：扫到 "待确认" 但 worktree 已建的 task，提示 "等待 PM 在新窗口启动"；扫到 "待验收" task 提示 "可呈交验收"。**多 task 摘要格式样例**（Pass 4 F3 修订）：第一行结论 `📋 task 概览: 执行中 N1 / 待验收 N2 / 待启动 N3 / 已完成 N4`；详情按需展开 | 仓库现状未变 |
+| `skills/close-task/SKILL.md` | **不改** | stage 5/6 已加 `--skip-doc-update` flag + 末尾 auto-chain "下一个 task 是 task-NNN，继续吗？(Y/n)"。⚠️ **D0 并行 caveat**：auto-chain 假设串行（一次一个 next task），并行场景下若有多个待启动 task，文案会让 PM 困惑；建议 stage 5/6 后续加并行感知（不是 v4 责任，登记进 TODOS） |
+| `skills/doc-update/SKILL.md` | **不动** | 🆕 stage 5/6 大改 (+163 行)，被 close-task 内部调用；v4 不接触 |
+| `skills/cancel-req` | **不改** | 仓库现状未变 |
+| `templates/CLAUDE.md.tmpl` 角色表 | **改第 18 行**：`Suborchestrator | 单 task owner ...` → `新窗口 Claude | PM 在新窗口启动的 Claude 实例，跑单 task；位置在 task worktree 里` | 仓库现状未变 |
+| `templates/CLAUDE.md.tmpl` 工作流文案 | **改**：解释"PM 手动开新窗口"模式，加"中止流程"，加 `/task-spec → /task-confirm → ...` 完整 stage 6 入口序列说明 | stage 5/6 入口序列要写明 |
 
 **不动**：
 - `scripts/exec-adapters/`（v1 现有 codex.sh / cursor-agent.sh / manual.sh / _gate.sh 全部保留）
-- `scripts/create-task-worktree.sh` / `task-transition.py` / `check-branch.sh`（v1 现状全保留）
+- `scripts/create-task-worktree.sh` / `task-transition.py` / `check-branch.sh`（v1 现状全保留——D7 修 task-transition.py 是单独 invariant 改动，不算 skill 改动）
 - `.claude/hooks/`（不引入新 hook）
+
+**stage 5/6 ship 后实际改动估算重新评估**：
+- v4 plan **直接改的 skill**：3 个（task-confirm 重写步骤 5 / task-execute 入口加 transition + cd / task-status 微改 + 文案）
+- v4 plan **不动但要协同的 skill**：4 个（task-spec / task-submit / close-task / doc-update —— 都是 stage 5/6 已 ship 内容，v4 在它们之外做事）
+- v4 plan **invariant 改动**：1 个（D7 删 task-transition.py:141 check_serial_constraint + 改 INVARIANTS.md I-TT2 文案）
+- 模板改动：1 个（CLAUDE.md.tmpl 角色表 + 工作流文案）
+- 测试新增：~5-7 条 `tests/v4_T*.sh`（**目录约定 align**：现有已有 `tests/e2e/*.sh` 框架，v4 简单单元测试放 `tests/v4_T*.sh`，复杂端到端放 `tests/e2e/v4_*.sh`）
 
 ---
 
@@ -511,8 +526,9 @@ PM 同时 confirm task-005 和 task-006，但 task-006 实现依赖 task-005 已
 | T7 | task-confirm 同 branch worktree 冲突拦截 | 已存在 `.worktrees/task-005-foo/` → 跑 `/task-confirm requirements/.../task-005-foo.md` → 步骤 4 前置检查拒绝 |
 | T8 | adapter 越界写入检测（v1 现有 I-AD2 沿用） | 跑 task 时 prompt 引导写别 task worktree → adapter 后置校验失败 |
 | T9 | 并行场景：3 task 同时执行 + close 顺序 | 启 3 个 "执行中" → 全部转 "待验收" → 一个一个 close-task；后 close 的 merge 走 fast-forward 或 merge commit |
+| T10 | close-task auto-chain 在并行场景的文案适应性 | 多个 待启动 task → close-task 末尾 auto-chain 文案是否清晰（不强制让 PM 串行，至少不暗示串行）。预期：发现需要 stage 5/6 改文案，登记 TODO |
 
-测试用 v1 现有 plain bash + `tests/helpers/`，命名 `tests/v4_T<N>_<slug>.sh`。
+测试用 v1 现有 plain bash + `tests/helpers/`：简单单元测试放 `tests/v4_T<N>_<slug>.sh`，复杂端到端放 `tests/e2e/v4_<slug>.sh`（align stage 5/6 已建的 `tests/e2e/` 目录约定）。
 
 ---
 
@@ -529,6 +545,7 @@ PM 同时 confirm task-005 和 task-006，但 task-006 实现依赖 task-005 已
 | 2026-04-25 | PM 反思："是不是开窗口的事情让用户自己来做就好" | **v4 出现，本文档** |
 | 2026-04-25 | PM 提议简化新窗口操作（自动找唯一 task + 自动 cd） | D6 加入；新窗口操作缩到 2 步 |
 | 2026-04-25 | PM 选 A：v4 改成并行原生（不需要 v3 复杂度） | D0 改并行，D7 放宽 I-TT2，§3 加并行场景流，§7 加并行 fallback，§11 加 T6/T9 |
+| 2026-04-26 | PM 触发 /plan-eng-review，发现 stage 5/6 ship 已 drift v4 假设的"v1 现状" | sync v4 plan §3 入口加 `/task-spec`；§6 改动表加 stage 5/6 备注（task-execute 末尾分流段共存、close-task auto-chain 并行 caveat、新 skill task-spec/doc-update 标"不动但要协同"）；§11 加 T10 + 测试目录约定 align tests/e2e/ |
 
 ---
 
