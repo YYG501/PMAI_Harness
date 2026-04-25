@@ -6,9 +6,15 @@ description: |
 
 # /close-task
 
+### 执行位置（v4 单窗口 lifecycle）
+
+- `/close-task` 现在在 task worktree 的新窗口里运行。
+- 当前 `cwd` 通常是 task worktree。
+- `close-task.sh` 脚本会自行处理 cd 到 main repo，PM 无需关心目录切换。
+
 ## When To Use
 
-- Orchestrator 在 PM 通过验收后调用
+- 新窗口在 PM 通过验收后调用
 - Task 状态必须为「已完成」
 
 ## Preamble
@@ -84,8 +90,8 @@ bash .claude/scripts/close-task.sh "<task-file-absolute-path>"
 Task 已关闭：<task-title>
 
 下一步：
-- 如有下一个待确认 task，运行 /task-confirm 启动
-- 如所有 task 已完成，运行 /req-stage-gate 推进到 stage 7
+- 如有下一个待启动 task，关闭本窗口，去主窗口运行 /task-spec → /task-confirm
+- 如所有 task 已完成，去主窗口运行 /req-stage-gate 推进到 stage 7
 ```
 
 ## Rules
@@ -99,18 +105,19 @@ Task 已关闭：<task-title>
 
 After close-task completes (full close or half-close), agent checks `task-plan.md`:
 
-- If there are tasks not yet started (not present in `tasks/` directory OR status is 「待确认」), output:
+- If `PENDING > 0`, output:
 
   ```text
-  下一个 task 是 task-NNN: [title]（所属模块: [...]）
-  继续吗？(Y/n)
+  ✅ task-NNN 已 close（本窗口已结束）。
+  关掉本窗口，去主窗口启下一个 task：建议 task-XXX（title，所属模块: [...]）。
+  在主窗口跑 /task-spec task-XXX → /task-confirm tasks/task-XXX-*.md
   ```
 
-  - PM inputs Y (or just Enter): prompt PM to run `/task-spec task-NNN`。
-  - PM inputs n: output `已停止 stage 6 子循环；可手动运行 /task-spec <task-id> 继续`。
+  D0 并行下不能在当前 task worktree 窗口直接启动下一个 task；下一个 task 必须回主窗口走 `/task-spec` → `/task-confirm`。
 
-- If all tasks in `task-plan.md` are started/completed (closed or half-closed), output:
+- If `PENDING == 0`, output:
 
   ```text
-  stage 6 所有 task 已 close（含半 close）。可运行 /req-stage-gate 推进 stage 7。
+  ✅ task-NNN 已 close。
+  本 req 所有 task 已 close（含半 close）。可在主窗口运行 /req-stage-gate 推进 stage 7。
   ```

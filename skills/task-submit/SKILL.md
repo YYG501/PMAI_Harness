@@ -8,7 +8,7 @@ description: |
 
 ## When To Use
 
-- Orchestrator 在 task 状态变为「待验收」后调用
+- 新窗口在 task 状态变为「待验收」后调用，直接向 PM 呈交验收并处理通过/打回
 
 ## Preamble
 
@@ -83,6 +83,25 @@ echo "SKILL: task-submit"
 ═══════════════════════════════════════
 ```
 
+### 步骤 3.5：在本窗口直接呈交 PM 验收（v4 单窗口 lifecycle）
+
+进入「待验收」后，不提示 PM 回主窗口。当前新窗口直接汇总验收包并等待 PM 决策。
+
+必须补充三类信息：
+
+1. **Diff 摘要**：从 req 分支到当前 HEAD。
+   ```bash
+   git diff --stat <req-branch>..HEAD
+   ```
+2. **review_completed 事件结论**：列出每个审查工具及结果，例如 `/review pass, /qa pass, /design-review pass`。
+3. **PM 决策入口**：明确让 PM 在本窗口选择通过或打回。
+
+输出格式：
+
+```text
+Diff: N 文件 +X -Y 行 / review: <工具列表> 结论 → PM 通过/打回？
+```
+
 ### 步骤 4：等待 PM 决策
 
 **PM 说"通过"：**
@@ -91,7 +110,11 @@ echo "SKILL: task-submit"
 python3 .claude/scripts/task-transition.py "<task-file>" --to 已完成
 ```
 
-然后提示 orchestrator 运行 `/close-task`。
+然后在本窗口直接运行：
+
+```text
+/close-task
+```
 
 **PM 说"打回"：**
 
@@ -108,13 +131,13 @@ python3 .claude/scripts/task-transition.py "<task-file>" --to 已完成
    python3 .claude/scripts/task-transition.py "<task-file>" --to 执行中 --note "PM 打回：<反馈摘要>"
    ```
 
-3. 输出给 PM：
+3. 输出给 PM，并继续在本窗口修复：
 
    ```text
    task-execute 收到打回后，会先按 DX RU3 分流策略判断本次反馈是「行为修订」还是「Bug 修复」，并明确告知你判断结果。如判断错误，回复 "wrong" 切换分流。（分流策略权威定义见 skills/task-execute/SKILL.md §PM 反馈分流策略）
    ```
 
-4. 提示 suborchestrator 重新进入 task worktree 修复。
+4. 应用 stage 5/6 PM 反馈分流策略（引用 `skills/task-execute/SKILL.md §PM 反馈分流策略`），然后继续修复并重新走自审与验收。
 
 ## Rules
 
@@ -122,3 +145,4 @@ python3 .claude/scripts/task-transition.py "<task-file>" --to 已完成
 - PM 的反馈原话记录，不要改写
 - 打回时 --note 参数必须提供，否则 task-transition.py 会拒绝
 - UI 类 task 的 dev server 应该还在运行，确认 URL 可访问
+- v4 单窗口 lifecycle：验收、通过 close、打回修复都在当前 task worktree 新窗口完成

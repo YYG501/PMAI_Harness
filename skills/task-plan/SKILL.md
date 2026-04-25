@@ -121,22 +121,58 @@ echo "SKILL: task-plan"
 必含内容：
 
 - task 标题列表：`id` / `title` / `所属模块` / `所属模块章节` / 一句话 summary / order / risk。
-- 执行顺序：按 PM 最容易连续验收的顺序排列，标明必要依赖。
+- `## 执行顺序与并行性`：硬性要求，和 task 列表 / 风险平级。
 - 风险：只写会影响拆分、验收或并行的真实风险；命中反模式 D 或单模块超过 3 个 task 时写明权衡。
 - **变更记录** section：固定放在文末，供 PM 中途新增、修改、删除 task 时手写记录。
 - **反模式自检声明**：显式写一段“已按步骤 3.2 的 5 条反模式自检过，命中情况说明”。
 
+### task-plan.md 必须包含的章节 — `## 执行顺序与并行性`
+
+这一节是 `task-plan.md` 的硬性要求，必须包含：
+
+1. **ASCII 依赖图**：表达依赖、并行和 join 点。
+   ```text
+   task-001 → {task-002, task-003} 并行 → task-005 joins
+               task-004 独立
+   ```
+2. **并行 lanes 分组**：用 Lane A / B / C 标明哪些 task 必须 sequential，哪些 independent。
+   ```markdown
+   - Lane A（sequential）: task-001 → task-002 → task-005
+   - Lane B（independent after task-001）: task-003
+   - Lane C（independent）: task-004
+   ```
+3. **PM 启动建议**：写清哪些 task 可同时启动，以及推荐拓扑序。
+   ```markdown
+   - 先启动：task-001
+   - task-001 close 后可同时启动：task-002, task-003, task-004
+   - 最后启动：task-005（等待 task-002 和 task-003 close）
+   ```
+
 `task-plan.md` 的列表建议格式：
 
-```markdown
+````markdown
 | id | title | 所属模块 | 所属模块章节 | summary | order | risk |
 |----|-------|----------|--------------|---------|-------|------|
 | task-001 | 登录主流程 | 账号模块 | 登录与会话 | 用户完成账号密码登录并看到错误反馈 | 1 | 无 |
 
+## 执行顺序与并行性
+
+```text
+task-001 → {task-002, task-003} 并行 → task-004 joins
+```
+
+- Lane A（sequential）: task-001 → task-002 → task-004
+- Lane B（independent after task-001）: task-003
+
+PM 启动建议：
+- 先启动 task-001。
+- task-001 close 后，可同时启动 task-002 和 task-003。
+- task-004 等 task-002/task-003 close 后再启动。
+
 ## 变更记录
 
 - （暂无）
-```
+````
 
 ### 步骤 5：PM 确认 task-plan.md → /req-stage-gate advances to stage 6
 

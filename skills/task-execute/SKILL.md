@@ -8,9 +8,102 @@ description: |
 
 ## When To Use
 
-- Suborchestrator 在 task worktree 中读取此 skill 并执行
+- PM 在 task worktree 新窗口中调用；也可由执行器 adapter 进入同一流程
 
 ## Workflow
+
+### 入口前置（v4 修订）
+
+#### 入口步骤 1：定位 task 文件
+
+支持三种参数模式：
+
+1. **完整路径**：参数是可读的 `*.md` 文件时，直接作为 `TASK_FILE`。
+2. **短 ID**：参数匹配 `^task-[0-9]{3}$` 时，在主仓 active req 下模糊匹配：
+   ```bash
+   MATCHES=$(find requirements/active -name "${ARG}-*.md" -type f 2>/dev/null)
+   ```
+   - 唯一匹配：使用该文件。
+   - 0 个或多个匹配：报错退出，并提示 PM 传完整 task 文件路径。
+3. **无参数**：自动扫描主仓和 `.worktrees/req-*/requirements/active`，找出所有同时满足下列条件的 task：
+   - 状态为「待确认」。
+   - 对应 `.worktrees/<task-stem>` 已存在。
+
+无参数模式：
+
+- 唯一匹配：自动选定。
+- 0 个匹配：报错，提示 PM 先在主窗口运行 `/task-confirm <task-file>`。
+- 多个匹配：报错，列出候选短 ID，提示 PM 改跑 `/task-execute task-NNN`。
+
+定位成功后第一时间输出进度反馈：
+
+```bash
+echo "🎯 自动选定: $TASK_FILE"
+```
+
+#### 入口步骤 2：自动 cd 到 task worktree
+
+从 task 文件 stem 推导 task worktree：
+
+```bash
+TASK_STEM=$(basename "$TASK_FILE" .md)
+TASK_WORKTREE="$MAIN_REPO_ROOT/.worktrees/$TASK_STEM"
+```
+
+如果当前目录不是 `$TASK_WORKTREE`，自动执行：
+
+```bash
+cd "$TASK_WORKTREE"
+```
+
+如 worktree 不存在，报错退出并提示 PM 回主窗口重跑 `/task-confirm $TASK_FILE`。
+
+#### 入口步骤 2.5：依赖前置 gate（v4 兜底层）
+
+这是防止 PM 手动用 `task-transition.py` 强改状态、绕过 `/task-confirm` 的兜底层。逻辑必须与 `/task-confirm` 的「步骤 4-pre：依赖前置检查」一致：
+
+1. 解析 `## 依赖` section，只提取 `task-NNN` 模式。
+2. 在同 req 下查找每个依赖 task。
+3. 读取依赖 task 状态。
+4. 任一依赖状态不是「已完成」时：
+   - `exit 1`
+   - 直接报错给 PM：
+     ```text
+     ❌ task-NNN 依赖未完成：task-MMM 当前状态为「<status>」。
+     请先 close 依赖 task，再重新运行 /task-confirm <task-file>。
+     ```
+   - 不进入执行，不修改当前 task 状态。
+5. 全部依赖均为「已完成」时，通过 gate。
+
+依赖解析规则：
+
+```bash
+DEPENDENCIES=$(awk '
+  /^## 依赖/{flag=1; next}
+  /^## / && flag{flag=0}
+  flag{print}
+' "$TASK_FILE" | grep -Eo 'task-[0-9]{3}' | sort -u)
+```
+
+#### 入口步骤 3：检查状态 + transition
+
+读取当前 task 状态：
+
+```bash
+CURRENT_STATUS=$(python3 "$MAIN_REPO_ROOT/.claude/scripts/task-transition.py" "$TASK_FILE" --get-status 2>/dev/null || echo "")
+```
+
+状态处理：
+
+- 「待确认」：转换为「执行中」后继续。
+  ```bash
+  # D7 后无 serial 阻塞；并行约束由依赖 gate 和 worktree 隔离承担。
+  python3 "$MAIN_REPO_ROOT/.claude/scripts/task-transition.py" "$TASK_FILE" --to 执行中
+  ```
+- 「执行中」：允许重试或打回后续跑，不重复 transition。
+- 「已完成」：错误退出，提示 `该 task 已完成；如需收尾，请在本窗口运行 /close-task`。
+- 「待验收」：错误退出，提示 `该 task 已待验收；请在本窗口验收并运行 /task-submit 或 /close-task`。
+- 其他状态：错误退出，展示当前状态，并提示 PM 回主窗口用 `/task-status` 查看。
 
 ### 步骤 1：读取 task 文件
 
@@ -36,20 +129,16 @@ description: |
 
 **步骤 3 的流程：状态 gate → dispatch → 越界保护 → 零改动检查。** 失败路径统一走 `--fail-execution` 回退 + 诊断文案。
 
-#### 3.0 前置状态 gate（I-AD1 的入口侧对应物）
+#### 3.0 前置状态 gate（由入口前置完成）
 
-在拿 lock、起 executor 之前，必须先校验 task 状态 == `执行中`。没经过 `/task-confirm` 的 task 不允许直接执行。这是针对「orchestrator 或 suborchestrator 绕过状态机直接调 /task-execute」的结构性防御。
+入口前置已经完成「待确认 → 执行中」transition，或确认当前状态为「执行中」重试。进入实现阶段前仍保留轻量断言：状态必须是「执行中」。如果不是，说明入口前置没有成功完成，立即拒绝继续。
 
 ```bash
 CURRENT_STATUS=$(python3 "$MAIN_REPO_ROOT/.claude/scripts/task-transition.py" "$TASK_FILE" --get-status 2>/dev/null || echo "")
 if [ "$CURRENT_STATUS" != "执行中" ]; then
   echo "❌ /task-execute 入口拒绝：task 状态为「${CURRENT_STATUS:-未知}」，不是「执行中」。" >&2
   echo "" >&2
-  echo "正确流程：" >&2
-  echo "  1) /task-confirm $TASK_FILE   # PM 确认 task 后，执行此命令把状态从「待确认」转到「执行中」" >&2
-  echo "  2) /task-execute $TASK_FILE   # 当前命令" >&2
-  echo "" >&2
-  echo "不要跳过 /task-confirm。状态机（待确认→执行中→待验收→已完成）是数据完整性的前提，跳过会导致 close-task 事件流审计（I-CT7/I-CT8）拒绝 merge。" >&2
+  echo "请回到入口前置步骤处理状态，或在主窗口运行 /task-status 查看下一步。" >&2
   exit 1
 fi
 ```

@@ -30,19 +30,41 @@ python3 .claude/scripts/status-view.py
 2. 扫描 `requirements/active/` 找活跃 req
 3. 读取 req 的 stage 和 task 状态
 4. 读取执行中 task 的最后事件
-5. 输出格式化状态总览
+5. 统计多 task 摘要：执行中 / 待验收 / 待启动 / 已完成
+6. 输出格式化状态总览
 
 ### 步骤 2：展示结果
 
-将 status-view.py 的输出直接展示给 PM。输出格式示例：
+将 status-view.py 的输出展示给 PM。多 task 摘要第一行必须使用：
+
+```text
+📋 task 概览: 执行中 N1 / 待验收 N2 / 待启动 N3 / 已完成 N4
+```
+
+其中「待启动」指状态为「待确认」且 worktree 已建的 task。
+
+逐 task 提示规则：
+
+- 扫到「待确认」状态且 worktree 已建的 task，输出：
+  ```text
+  等待 PM 在新窗口启动（跑 /task-execute task-NNN）
+  ```
+- 扫到「待验收」状态 task，输出：
+  ```text
+  请去对应新窗口验收（task 在该 worktree 里跑过完整 review）
+  ```
+
+输出格式示例：
 
 ```
 当前 Req：req-002-review-system（stage 6 - task 执行）
+📋 task 概览: 执行中 1 / 待验收 1 / 待启动 1 / 已完成 1
 Task 状态：
   ✅ task-001 数据模型 — 已完成
   🔄 task-002 API 接口 — 执行中（最后活动：自审 - /qa pass）
-  ⏳ task-003 前端组件 — 待确认
-下一步：等待 task-002 自审完成后验收
+  🧾 task-003 前端组件 — 待验收：请去对应新窗口验收（task 在该 worktree 里跑过完整 review）
+  ⏳ task-004 导出入口 — 待确认：等待 PM 在新窗口启动（跑 /task-execute task-004）
+下一步：处理待验收 task，或启动待启动 task
 ```
 
 如果没有活跃 req：

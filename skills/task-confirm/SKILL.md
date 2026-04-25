@@ -1,7 +1,7 @@
 ---
 name: task-confirm
 description: |
-  PM 确认启动一个 task：展示摘要、创建 worktree、转换状态为执行中。
+  PM 确认启动一个 task：展示摘要、校验依赖、创建 worktree，并输出新窗口启动指令。
 ---
 
 # /task-confirm
@@ -72,6 +72,34 @@ model（留空=用默认，claude-code 仅支持 opus/sonnet/haiku）：
 
 确认无误后问：`确认启动此 task？（Y/N）`
 
+### 步骤 4-pre：依赖前置检查（v4 主防线）
+
+在创建 worktree 之前，必须先检查 task 文件的 `## 依赖` section：
+
+1. 解析 `## 依赖` section，只提取 `task-NNN` 模式的结构化依赖 ID。
+2. 在同一个 req 的 task 目录中，为每个依赖 ID 查找对应 `task-NNN-*.md`。
+3. 读取每个依赖 task 的状态。
+4. 任一依赖状态不是「已完成」时：
+   - `exit 1`
+   - 主窗口直接报错给 PM：
+     ```text
+     ❌ task-NNN 依赖未完成：task-MMM 当前状态为「<status>」。
+     请先 close 依赖 task，再重新运行 /task-confirm <task-file>。
+     ```
+   - 不创建 worktree，不修改 task 状态。
+5. 全部依赖均为「已完成」时，通过检查，继续步骤 4。
+
+依赖解析规则：
+
+```bash
+# 仅机器解析 task-NNN；"无" 或空 section 表示无依赖。
+DEPENDENCIES=$(awk '
+  /^## 依赖/{flag=1; next}
+  /^## / && flag{flag=0}
+  flag{print}
+' "<task-file>" | grep -Eo 'task-[0-9]{3}' | sort -u)
+```
+
 ### 步骤 4：创建 task worktree（若未存在）
 
 从 `.req-meta.json` 读取 req 分支名，检测 worktree 未存在时创建（失败重试场景直接跳过）：
@@ -86,51 +114,48 @@ fi
 - `**worktree：**` → worktree 路径
 - `**开发服务器：**` → `http://localhost:<port>`
 
-### 步骤 5：Spawn Suborchestrator（带 model + hard constraint，spawn ack 后才转状态）
+### 步骤 5：输出新窗口启动指令（v4 单窗口 lifecycle）
 
-**关键：状态保持「待确认」直到 spawn 成功 ack。**
+`/task-confirm` 只负责确认、依赖 gate 和创建 worktree；不启动 agent，不调用 `task-transition.py`。task 状态保持「待确认」，直到 PM 在新窗口运行 `/task-execute` 后由入口前置逻辑转换为「执行中」。
 
-Spawn payload：
-- model 参数：若 `EXECUTOR=claude-code` 且 `MODEL` 非空，传给 Agent tool 的 `model` 参数（opus/sonnet/haiku）
-- prompt 含：task 文件路径、`resolved_executor`、`resolved_model`、以及 hard constraint：
+检测 `PENDING_COUNT`：
 
+- 范围：主仓 active req 下所有状态为「待确认」且 worktree 已建的 task。
+- 计数依据：task 文件状态为「待确认」，且 `.worktrees/<task-stem>` 已存在。
+
+输出规则：
+
+```text
+已创建 task worktree：<task-worktree>
+Task 状态保持「待确认」。
 ```
-【硬约束】当前 task 的 executor = <EXECUTOR>。当 executor != claude-code 时，
-Suborchestrator 只做 orchestration：读 task 文件 + 调 /task-execute 让 dispatch 处理。
-禁止直接写业务代码。
+
+- `PENDING_COUNT <= 1` 时，提示 PM 在新窗口进入 worktree 后运行：
+  ```text
+  /task-execute
+  ```
+
+- `PENDING_COUNT > 1` 时，必须显式带短 ID，避免新窗口误选：
+  ```text
+  /task-execute task-NNN
+  ```
+
+中止流程：
+
+```text
+如果决定放弃：关闭新窗口，回主窗口告诉我「放弃 task-NNN」。
+状态仍为「待确认」，未进入执行阶段。
 ```
-
-**spawn 后处理**：
-
-- 若 Agent tool 调用抛错：
-  ```bash
-  python3 .claude/scripts/task-events.py append "<task-file>" \
-    --type suborch_spawn_failed --payload "{\"reason\":\"<error_text>\"}"
-  ```
-  告知 PM：
-  ```
-  Suborchestrator 启动失败：<reason>
-  状态保持「待确认」，未进入执行阶段。
-  可能原因：executor_model=<model> 当前订阅不含、或 Agent tool 暂不可用。
-  修复后重跑 /task-confirm。
-  ```
-  退出 skill，**不转状态**。
-
-- 若 spawn 成功 ack：
-  ```bash
-  python3 .claude/scripts/task-events.py append "<task-file>" \
-    --type suborch_spawn_started --payload "{\"executor\":\"$EXECUTOR\",\"model\":\"$MODEL\"}"
-  python3 .claude/scripts/task-transition.py "<task-file>" --to 执行中
-  ```
 
 ### 步骤 6：给 PM 可复制命令输出
 
 ```
-已启动 Task-<id>，执行方式：<EXECUTOR>[ / <MODEL>]
+已准备 Task-<id>，执行方式：<EXECUTOR>[ / <MODEL>]
 
-下一步（Suborchestrator 正在 <task-worktree> 自动推进）：
-  tail -f .runs/execution-task-<id>-<executor>.log  （如需实时看执行日志）
-  /task-status                                            （查看所有 task）
+下一步：
+  1. 打开新窗口，进入 <task-worktree>
+  2. 运行上方给出的 /task-execute 命令
+  3. /task-status 查看所有 task
 ```
 
 ## Rules
@@ -138,4 +163,4 @@ Suborchestrator 只做 orchestration：读 task 文件 + 调 /task-execute 让 d
 - 必须在 req worktree 中执行（WORKTREE_TYPE 应为 req）
 - task 文件路径如果是相对路径，基于当前 req worktree 解析
 - 状态转换必须通过 task-transition.py，不能手动改状态字段
-- v1 串行模式：同一 req 下只能有一个 task 在执行中或待验收
+- /task-confirm 不转换为「执行中」；转换发生在 /task-execute 入口前置
