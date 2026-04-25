@@ -40,9 +40,64 @@
 
 ---
 
-## v3.5: Superset MCP 启独立 Claude 执行 task（serial）
+## v4: PM 手动开新窗口执行 task（并行原生）
 
-**Status (2026-04-25):** 🟢 **Plan 收敛完成**，未实施。详见 `设计-Superset独立Claude执行.md`。
+**Status (2026-04-25):** 🟢 **Plan 收敛完成 + 并行优先决议**，未实施。详见 `设计-PM手动新窗口执行.md`。
+
+**What:** `/task-confirm` 不调任何 MCP / 不 spawn 任何东西，**只输出极简启动指令给 PM**。PM 在新窗口启 Claude → 输 `/task-execute`（无参数自动找唯一待启动 task；多候选时显式参数）→ SKILL 自动 cd worktree + 转执行中 + 跑 codex + 走 v1 现有 /task-submit。PM 跑完回主窗口任意输入触发 preamble 扫描自动呈交"待验收"。**支持并行**：PM 想多 task 同时跑就开多个新窗口，每窗口独立 Claude 实例，git worktree 天然隔离。
+
+**Why:**
+- 解决 v1 subagent 短命载体问题（2026-04-22 / 2026-04-24 事件根因）
+- 极简：协调责任还给 PM 大脑，AI 不自动协调多进程
+- 并行复杂度归零：无 reducer / 无 mutex / 无 hook / 无 sentinel / 无 PGID 树杀（v3 plan 担心的全部消失）
+- IDE-agnostic 完全本地（不依赖 Superset MCP / SaaS）
+- 改动量约 4-5 文件 + 1 invariant 修改
+
+**关键决策:**
+- D0 ✅ **并行原生**（PM 决定开几个新窗口）
+- D1 ❌ 不依赖 Superset MCP / IDE 接口
+- D2 task-confirm 不转状态；task-execute 转
+- D3 完成检测靠 PM 主动告知 + preamble 顺手扫
+- D4 中止：PM 关窗口 + 回主告诉
+- D5 不调 ScheduleWakeup
+- D6 task-execute 无参数自动找唯一；多候选显式参数
+- D7 **放宽 I-TT2**：同 req 多 task 同时执行允许
+
+**关键文件改动估算:**
+- 改：`skills/task-confirm/SKILL.md`（步骤 5 改输出 echo + 不转状态 + 多候选检测）
+- 改：`skills/task-execute/SKILL.md`（无参数模式 + 自动 cd worktree + 入口 transition）
+- 改：`skills/task-status/SKILL.md`（多 task 摘要 + "待验收"/"待启动"提示）
+- 改：`templates/CLAUDE.md.tmpl`（角色表 + 工作流文案 + 并行说明）
+- 改：`scripts/task-transition.py`（删除 check_serial_constraint 或改 no-op，I-TT2 放宽）
+- 改：`INVARIANTS.md`（更新 I-TT2 描述）
+- 新建：~5-7 条 `tests/v4_T*.sh`
+
+**Phase A 第一步（A0）：**
+- 修 invariant：放宽 I-TT2，单测同 req 多 task 同时执行允许
+
+**v1 现有 bug（不阻塞 v4，但建议修）：**
+- FM6 v1 codex 非 0 退出后是否自动调 fail-execution？需查
+- FM7 v1 task-transition.py:211 append_event 子进程返回码被忽略 → I-CT7 fail-closed 不彻底
+- FM8 v1 命名清理 task_short_id / task_stem
+
+**下次接任者要知道:**
+- 读 `设计-PM手动新窗口执行.md`，重点 §3 架构 + §4.1/§4.2 改动 + §11 测试 + §13 风险
+- v3.5 plan 已 deprecated，但章节复用源仍有价值（autoplan eng review 13 gap 分析）
+- v4 哲学："协调责任还给 PM 大脑，AI 不自动协调多进程"
+
+---
+
+## v3.5 (DEPRECATED 2026-04-25): Superset MCP 启独立 Claude 执行 task（serial）
+
+**🚨 已被 v4（PM 手动开新窗口 + 并行原生）取代。** 详见 `设计-Superset独立Claude执行.md` 顶部 deprecated banner。
+
+文档保留作章节复用源（autoplan eng review 13 critical/high gap 分析），如果未来又要做"AI 自动启动独立 Claude"方向可作起点。
+
+---
+
+### v3.5 原文（保留供溯源）
+
+**Status (2026-04-25):** 🟢 **Plan 收敛完成**，未实施（已被 v4 取代）。详见 `设计-Superset独立Claude执行.md`。
 
 **What:** `/task-confirm` 通过 Superset MCP `start_agent_session_with_prompt` 启动独立持久 Claude 终端 pane，cwd 绑定 task worktree。新 Claude 自己同步跑 codex（`Bash run_in_background + Monitor`）。完成后 append 事件到 `.runs/events/<task>.jsonl`。主 Claude 用 ScheduleWakeup adaptive + UserPromptSubmit hook 扫事件流收口。
 
@@ -165,3 +220,54 @@
 - PM 提到"并行"指的可能只是"一次同意多个 task 让它们在后台跑"，不是"多 Claude 实例"——确认 use case 再动手
 - 和 v2 的架构抉择是动手前的**硬前置**，不要在未定 north star 的情况下先写 v3 代码（已定 v3 优先，v2 降级）
 - **Plan 阶段刻意不创建的文件**：`/task-abort` skill / `codex-bg.sh` / `scan-task-done.sh` / hook / 11 条 v3_T*.sh 测试 —— 全部登记在 §10.1 TODO，开工时按表执行
+
+---
+
+## DX backlog (来自 plan-devex-review 2026-04-25)
+
+来源：`设计-stage5-6-task循环.md` 的 plan-devex-review 产出。这些 friction 不在该 plan scope 内，作为后续独立改进点。
+
+### Discover stage (新 PM 第一次接触框架)
+- **D1**：README.md 极简，没说"如何 init project"——PM 第一次看 README 不知道下一步
+- **D2**：缺 stage 1-7 流程图——PM 不知道整个流程长什么样
+- **D3**：缺 skill 命令汇总（cancel-req / close-req / quick-fix / ...）——PM 要 ls skills/ 才能看到全集
+
+### Install stage
+- **I1**：gstack 是硬依赖但 README 没提——PM 第一次跑 init-project 才知道要装 gstack
+- **I2**：init-project.sh 必须在框架仓里跑（不是业务项目里），容易搞错位置
+
+### Hello World stage (PM 第一个 req 跑通的 TTHW)
+- **HW1**：要走 stage 1-4 才到 task-plan 阶段——TTHW 几小时（office-hours 六问拖时间）
+- **HW2**：新设计在 stage 5 进一步切（先 task-plan.md，后 task-spec），意味着更多 round trip 才"看到第一个 task 跑通"
+- **HW3**：PM 走第一个 req 时大概率没用过 stage 5/6 任何一次，每个新 skill 的语义需边走边学
+
+### Debug stage
+- **DB1**：错误信息用 INVARIANTS 编号（I-CT7 / I-CT8 等），对 PM 不友好——失败时不知道是哪一步漏了
+
+### Upgrade（独立子设计）
+- **UP**：现有 v1 项目（ExampleConsumerB 等）升级到 stage 5/6 重设计 v2 的完整路径
+  - sync skills/templates 脚本
+  - 进行中 req 按当前 stage 提供继续路径
+  - 旧 module 规格 lazy migration（doc-update 时自动 reorganize）
+  - **依赖**：本 plan（设计-stage5-6-task循环.md）实施完毕；ExampleConsumerB req-001 有阶段性结论后再启动
+
+---
+
+## Eng backlog (来自 plan-eng-review 2026-04-25)
+
+来源：`设计-stage5-6-task循环.md` 的 plan-eng-review 产出。本 plan scope 外，作为后续改进点。
+
+### A2: 多 req 并行 merge module 规格的 markdown conflict
+- **What**: 多 req 同时 stage 6 时，doc-update 沉淀同一 module 规格会在 git merge 时撞 markdown 表格 + 编号需求列表的 conflict
+- **Why**: 当前决议 (D) Defer——PM 单人多 req 并行频率低，先 ship 撞了再说
+- **可能解法**：
+  - 加功能稳定 id（推翻 Q5 决议）
+  - 文件锁串行化（限制同 module 并行）
+  - 自定义 merge driver 处理表格行
+- **触发条件**：撞上 2+ 次后启动设计
+
+### C-fix1: doc-update 长期拆分
+- **What**: doc-update 现在身兼 "对账模式"（处理文档偏差）+ "沉淀模式"（merge 功能清单）
+- **Why**: 两件事概念不同、code path 不同（已经在 §1.5/1.6 分流，但越加越多）。如果以后还要加第三种（比如沉淀 user story 进 user-flow.md），doc-update 会变成超大 skill
+- **可能解法**：拆成 doc-deviation（处理偏差）+ doc-sink（沉淀），各自独立 SKILL.md
+- **触发条件**：plan-eng-review 发现 doc-update 加任何新职责时启动

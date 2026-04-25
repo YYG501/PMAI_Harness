@@ -1,6 +1,20 @@
 <!-- /autoplan restore point: <LOCAL_GSTACK_HOME>/projects/PM-AI-Workflow/main-autoplan-restore-20260425-195948.md -->
 # 设计：Superset MCP 启独立 Claude 执行 task
 
+> ## ⚠️ DEPRECATED（2026-04-25）
+>
+> 本方案被 **`设计-PM手动新窗口执行.md`** (v4) 取代。原因：
+> - PM 反思："开窗口的事让用户自己来做就好"——AI 不需要自动 spawn 任何东西
+> - v4 极简：`task-confirm` 只输出 echo 启动指令，PM 在新窗口启 Claude 输 `/task-execute`（无参数自动找）
+> - **v4 + 简化 = 天然支持并行**——PM 决定开几个新窗口；git worktree 隔离；无 reducer / 无 mutex / 无 hook / 无 sentinel / 无 PGID 树杀
+> - 改动面：v3.5 ~5-7 文件 + 13 critical/high gap → v4 ~4-5 文件 + 1 invariant 修改
+> - 不依赖 Superset MCP（IDE-agnostic）
+> - 完全本地，无 SaaS round-trip
+>
+> **本文档保留**：作为决策溯源（autoplan eng review 13 gap 分析仍有参考价值）和章节复用源（v4 §7 部分 fallback 思路从这里来）。如果未来又要做"AI 自动启动独立 Claude"方向，本文档可作起点。
+>
+> ---
+
 > **状态**：2026-04-25 PM 决议方案 + autoplan eng review 修订；**未实施**。
 > **取代**：`设计-并行任务执行.md`（v3 并行方案，已 deprecated；少量章节被本方案复用）。
 > **不并行**：当前方案 serial 单线，多 task 不同时跑。未来若要并行，可在本方案上叠加 `max_parallel` 配额（v3 plan 的并行加固清单 G5/G6/G14 仍然适用）。
