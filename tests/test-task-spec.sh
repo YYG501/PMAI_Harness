@@ -233,6 +233,61 @@ test_template_regression() {
 }
 
 # -----------------------------------------------------------------
+# Scenario 8: 产物预览 section 在 task.md.tmpl 中
+# -----------------------------------------------------------------
+
+test_artifact_preview_template_section() {
+  start_test "task-spec 产物预览 section: template has it between 用户使用流程 and 功能清单"
+
+  _assert_contains "$TASK_TEMPLATE" "## 产物预览（按 task 类型生成，由 /task-spec 自动填写）" "artifact preview section header" || return
+  _assert_contains "$TASK_TEMPLATE" "UI task" "UI task rule in template comment" || return
+  _assert_contains "$TASK_TEMPLATE" "ASCII 线框图" "ASCII wireframe rule" || return
+  _assert_contains "$TASK_TEMPLATE" "bullet 树形大纲" "bullet outline rule" || return
+  _assert_contains "$TASK_TEMPLATE" "信息层级低自由度" "creative freedom boundary" || return
+
+  # 顺序检查：产物预览 在 用户使用流程 之后、功能清单 之前
+  local user_flow_line
+  local preview_line
+  local function_list_line
+  user_flow_line=$(grep -n "^## 用户使用流程" "$TASK_TEMPLATE" | head -1 | cut -d: -f1)
+  preview_line=$(grep -n "^## 产物预览" "$TASK_TEMPLATE" | head -1 | cut -d: -f1)
+  function_list_line=$(grep -n "^## 功能清单" "$TASK_TEMPLATE" | head -1 | cut -d: -f1)
+
+  if [[ -z "$user_flow_line" || -z "$preview_line" || -z "$function_list_line" ]]; then
+    _fail "section ordering check: missing one of 用户使用流程/产物预览/功能清单"
+    return
+  fi
+
+  if (( preview_line <= user_flow_line || preview_line >= function_list_line )); then
+    _fail "section ordering: 产物预览 must be between 用户使用流程 ($user_flow_line) and 功能清单 ($function_list_line), got $preview_line"
+    return
+  fi
+
+  pass_test
+}
+
+# -----------------------------------------------------------------
+# Scenario 9: SKILL.md 含 task 类型判定 + 生成规则
+# -----------------------------------------------------------------
+
+test_artifact_preview_skill_logic() {
+  start_test "task-spec SKILL.md: 步骤 6.5 含 task 类型判定 + UI 线框图 + 大纲生成规则"
+
+  _assert_contains "$TASK_SPEC_SKILL" "### 步骤 6.5：根据 task 类型生成产物预览" "step 6.5 header" || return
+  _assert_contains "$TASK_SPEC_SKILL" "/design-review" "UI task detection by review tool" || return
+  _assert_contains "$TASK_SPEC_SKILL" "ASCII 线框图" "UI artifact format" || return
+  _assert_contains "$TASK_SPEC_SKILL" "bullet 树形大纲" "doc artifact format" || return
+  _assert_contains "$TASK_SPEC_SKILL" "无（基础设施 task）" "infra task skip in step 6" || return
+  _assert_contains "$TASK_SPEC_SKILL" "信息层级（哪个先看哪个后看）→ **低自由度**" "creative freedom boundary in skill" || return
+  _assert_contains "$TASK_SPEC_SKILL" "视觉细节（卡片样式 / 间距 / 颜色 / 微交互）→ **高自由度**" "visual detail freedom boundary" || return
+
+  # 基础设施 task 简化路径含产物预览处理
+  _assert_contains "$TASK_SPEC_SKILL" '`产物预览` 填 `无（基础设施 task）`' "infra task fills artifact preview as 无" || return
+
+  pass_test
+}
+
+# -----------------------------------------------------------------
 # Run
 # -----------------------------------------------------------------
 
@@ -243,5 +298,7 @@ test_plan_tasks_diff_prompt
 test_pm_feedback_annotation
 test_infrastructure_no_module_merge_message
 test_template_regression
+test_artifact_preview_template_section
+test_artifact_preview_skill_logic
 
 report_results "task-spec"
