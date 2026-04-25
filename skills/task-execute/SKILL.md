@@ -312,6 +312,26 @@ EOM
 - 不动的文件不要碰
 - **禁止 git add / git commit**（commit 由 step 10 统一做）
 
+### PM 反馈分流策略（共享权威源）
+
+当 task-submit 打回后重新进入 task-execute，agent MUST：
+
+1. Read the new PM feedback appended to task 文件「PM 反馈」section。
+2. Classify feedback as ONE of:
+   - **行为修订**（behavior/rule change）: PM wants different functionality, logic, or rules。
+   - **Bug 修复**（bug/prototype deviation）: existing functionality is described correctly in task.md but implementation missed it。
+3. Output exactly this one-liner BEFORE doing any work:
+   `本次反馈识别为 [行为修订 / Bug 修复]，准备 [改 task.md + 重做 / 只改代码]。如判断错误请回复 "wrong"`
+4. Wait for PM to either proceed (any input other than `wrong`) or say `wrong`:
+   - PM says `wrong`: flip the classification and output the updated one-liner, wait again。
+   - PM proceeds: execute the classified path。
+5. Paths:
+   - **行为修订 path**: Modify task 文件「功能清单」/「用户使用流程」/「实现指引」sections → notify PM what changed → get PM 二次确认 → re-execute based on revised task.md。
+   - **Bug 修复 path**: Fix code only. Do NOT modify task.md. Proceed directly to fix。
+6. Classification signal guide (non-exhaustive):
+   - 行为修订 signals: `should`, `instead`, `add feature`, `change behavior`, `before/after`, `priority order`。
+   - Bug 修复 signals: `missing`, `forgot`, `not showing`, `broken`, `step N didn't happen`。
+
 ### 步骤 4：启动 dev server（UI 类 task）
 
 如果是 UI 类 task：

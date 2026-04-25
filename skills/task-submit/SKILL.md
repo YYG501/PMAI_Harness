@@ -108,7 +108,13 @@ python3 .claude/scripts/task-transition.py "<task-file>" --to 已完成
    python3 .claude/scripts/task-transition.py "<task-file>" --to 执行中 --note "PM 打回：<反馈摘要>"
    ```
 
-3. 提示 suborchestrator 重新进入 task worktree 修复。
+3. 输出给 PM：
+
+   ```text
+   task-execute 收到打回后，会先按 DX RU3 分流策略判断本次反馈是「行为修订」还是「Bug 修复」，并明确告知你判断结果。如判断错误，回复 "wrong" 切换分流。（分流策略权威定义见 skills/task-execute/SKILL.md §PM 反馈分流策略）
+   ```
+
+4. 提示 suborchestrator 重新进入 task worktree 修复。
 
 ## Rules
 

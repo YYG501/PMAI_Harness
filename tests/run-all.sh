@@ -7,6 +7,7 @@ SUITES=(
   test-check-branch.sh
   test-task-transition.sh
   test-task-spec.sh
+  test-task-pm-feedback.sh
   test-task-plan.sh
   test-doc-update.sh
   test-req-stage-gate.sh
@@ -23,6 +24,8 @@ SUITES=(
   quick-fix/test-sanitize.sh
   e2e/test-full-task-loop.sh
   e2e/test-doc-update-failure-recovery.sh
+  e2e/test-skip-doc-update-recovery.sh
+  e2e/test-pushback-loop.sh
 )
 
 TOTAL_PASS=0

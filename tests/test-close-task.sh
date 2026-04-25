@@ -45,6 +45,75 @@ _inject_doc_diff() {
   rm -f "$task_file.bak"
 }
 
+_mock_skip_doc_update_invocation() {
+  local task_file="$1"
+  local reason="${2:-}"
+  if [ -z "$reason" ]; then
+    echo 'Error: --skip-doc-update requires a reason. Usage: /close-task --skip-doc-update "<reason>"' >&2
+    return 2
+  fi
+
+  local stamp="2026-04-25T20:48:48+08:00"
+  local tmp="${task_file}.tmp"
+  awk -v reason="$reason" -v stamp="$stamp" '
+    /^## 文档偏差/ && !done {
+      print
+      print "<!-- SKIP_DOC_UPDATE: reason=\"" reason "\" created_at=\"" stamp "\" cleanup_status=\"pending\" -->"
+      print ""
+      print "## 人工 Cleanup TODO（A1 决议，doc-update 被 skip）"
+      print "- [ ] 手动运行 /doc-update --task <task-id> 沉淀功能清单进 docs/modules/<module>.md"
+      print "- [ ] cleanup 完成后，把上方 SKIP_DOC_UPDATE marker 的 cleanup_status 从 \"pending\" 改为 \"done\""
+      print "- [ ] 重跑 /req-stage-gate 验证半 close 解除"
+      done=1
+      next
+    }
+    { print }
+  ' "$task_file" > "$tmp"
+  mv "$tmp" "$task_file"
+  echo "task-001 已半 close（doc-update 被 skip）。需要人工 cleanup TODO 完成后才能推 stage 6→7。请运行 /doc-update 手动沉淀该 task 的功能清单。"
+  return 0
+}
+
+_mock_autochain_prompt() {
+  local req_dir="$1"
+  local answer="${2:-}"
+  local plan="$req_dir/task-plan.md"
+  local id title module file status
+
+  while IFS='|' read -r _ id title module _; do
+    id=$(echo "$id" | xargs)
+    title=$(echo "$title" | xargs)
+    module=$(echo "$module" | xargs)
+    [[ "$id" =~ ^task-[0-9]{3}$ ]] || continue
+    file=$(find "$req_dir/tasks" -maxdepth 1 -name "$id-*.md" -print | head -1)
+    if [ -z "$file" ]; then
+      echo "下一个 task 是 ${id}: ${title}（所属模块: [${module}]）"
+      echo "继续吗？(Y/n)"
+      [ "$answer" = "n" ] && echo "已停止 stage 6 子循环；可手动运行 /task-spec <task-id> 继续"
+      return 0
+    fi
+    status=$(grep -m1 '^\*\*状态：\*\*' "$file" | sed 's/.*\*\*状态：\*\* *//')
+    if [ "$status" = "待确认" ]; then
+      echo "下一个 task 是 ${id}: ${title}（所属模块: [${module}]）"
+      echo "继续吗？(Y/n)"
+      [ "$answer" = "n" ] && echo "已停止 stage 6 子循环；可手动运行 /task-spec <task-id> 继续"
+      return 0
+    fi
+  done < "$plan"
+
+  echo "stage 6 所有 task 已 close（含半 close）。可运行 /req-stage-gate 推进 stage 7。"
+}
+
+_write_autochain_plan() {
+  local req_dir="$1"
+  cat > "$req_dir/task-plan.md" <<'EOF'
+| id | title | 所属模块 | summary |
+|----|-------|----------|---------|
+| task-001 | 登录 | 账号模块 | 登录 |
+| task-002 | 权限提示 | 权限模块 | 权限 |
+EOF
+}
+
 # =================================================
 # I-CT1: task status must be 已完成
 # =================================================
@@ -458,6 +527,183 @@ test_reject_if_commit_predates_execution() {
 }
 
 # =================================================
+# A1: --skip-doc-update reason is required
+# =================================================
+test_skip_doc_update_no_reason() {
+  start_test "A1 skip-doc-update rejects missing reason"
+  fixture_setup
+
+  req_dir=$(fixture_create_req "req-001" "test" 6)
+  task=$(fixture_create_task "$req_dir" "201" "skip-no-reason" "已完成" "/qa")
+
+  if _mock_skip_doc_update_invocation "$task" "" >/tmp/out.$$ 2>/tmp/err.$$; then
+    _fail "should reject --skip-doc-update without reason"
+  elif grep -q -- "--skip-doc-update requires a reason" /tmp/err.$$; then
+    pass_test
+  else
+    _fail "stderr missing --skip-doc-update requires a reason"
+    cat /tmp/err.$$ >&2
+  fi
+
+  rm -f /tmp/out.$$ /tmp/err.$$
+  fixture_teardown
+}
+
+test_skip_doc_update_with_reason() {
+  start_test "A1 skip-doc-update with reason exits zero"
+  fixture_setup
+
+  req_dir=$(fixture_create_req "req-001" "test" 6)
+  task=$(fixture_create_task "$req_dir" "202" "skip-with-reason" "已完成" "/qa")
+
+  if _mock_skip_doc_update_invocation "$task" "doc-update mock failure" >/tmp/out.$$ 2>/tmp/err.$$; then
+    pass_test
+  else
+    _fail "--skip-doc-update with reason should exit zero"
+    cat /tmp/err.$$ >&2
+  fi
+
+  rm -f /tmp/out.$$ /tmp/err.$$
+  fixture_teardown
+}
+
+test_skip_doc_update_marker_written() {
+  start_test "A1 skip-doc-update writes marker"
+  fixture_setup
+
+  req_dir=$(fixture_create_req "req-001" "test" 6)
+  task=$(fixture_create_task "$req_dir" "203" "skip-marker" "已完成" "/qa")
+  _mock_skip_doc_update_invocation "$task" "doc-update mock failure" >/tmp/out.$$ 2>/tmp/err.$$
+
+  if grep -q '<!-- SKIP_DOC_UPDATE:' "$task" && grep -q 'cleanup_status="pending"' "$task"; then
+    pass_test
+  else
+    _fail "SKIP_DOC_UPDATE marker missing or not pending"
+    cat "$task" >&2
+  fi
+
+  rm -f /tmp/out.$$ /tmp/err.$$
+  fixture_teardown
+}
+
+test_skip_doc_update_cleanup_todo_written() {
+  start_test "A1 skip-doc-update writes cleanup TODO"
+  fixture_setup
+
+  req_dir=$(fixture_create_req "req-001" "test" 6)
+  task=$(fixture_create_task "$req_dir" "204" "skip-todo" "已完成" "/qa")
+  _mock_skip_doc_update_invocation "$task" "doc-update mock failure" >/tmp/out.$$ 2>/tmp/err.$$
+
+  if grep -q '人工 Cleanup TODO' "$task" \
+    && grep -q '手动运行 /doc-update --task <task-id>' "$task" \
+    && grep -q 'cleanup_status 从 "pending" 改为 "done"' "$task" \
+    && grep -q '重跑 /req-stage-gate 验证半 close 解除' "$task"; then
+    pass_test
+  else
+    _fail "cleanup TODO block incomplete"
+    cat "$task" >&2
+  fi
+
+  rm -f /tmp/out.$$ /tmp/err.$$
+  fixture_teardown
+}
+
+test_skip_doc_update_marker_grep_pattern() {
+  start_test "A1 skip-doc-update marker grep pattern"
+  fixture_setup
+
+  req_dir=$(fixture_create_req "req-001" "test" 6)
+  task=$(fixture_create_task "$req_dir" "205" "skip-grep" "已完成" "/qa")
+  _mock_skip_doc_update_invocation "$task" "doc-update mock failure" >/tmp/out.$$ 2>/tmp/err.$$
+
+  if grep -q '<!-- SKIP_DOC_UPDATE:' "$task" && grep -q 'cleanup_status="pending"' "$task"; then
+    pass_test
+  else
+    _fail "Batch 3 marker grep failed"
+  fi
+
+  rm -f /tmp/out.$$ /tmp/err.$$
+  fixture_teardown
+}
+
+test_skip_doc_update_exit_zero() {
+  start_test "A1 skip-doc-update half-close exits zero"
+  fixture_setup
+
+  req_dir=$(fixture_create_req "req-001" "test" 6)
+  task=$(fixture_create_task "$req_dir" "206" "skip-exit-zero" "已完成" "/qa")
+  _mock_skip_doc_update_invocation "$task" "doc-update mock failure" >/tmp/out.$$ 2>/tmp/err.$$
+  rc=$?
+
+  if [ "$rc" -eq 0 ]; then
+    pass_test
+  else
+    _fail "expected exit 0, got $rc"
+  fi
+
+  rm -f /tmp/out.$$ /tmp/err.$$
+  fixture_teardown
+}
+
+test_autochain_has_next_task() {
+  start_test "DX RU6 auto-chain prompts next task"
+  fixture_setup
+
+  req_dir=$(fixture_create_req "req-001" "test" 6)
+  _write_autochain_plan "$req_dir"
+  fixture_create_task "$req_dir" "001" "login" "已完成" "/qa" >/dev/null
+  out=$(_mock_autochain_prompt "$req_dir")
+
+  if echo "$out" | grep -q "下一个 task 是"; then
+    pass_test
+  else
+    _fail "auto-chain next-task prompt missing"
+    echo "$out" >&2
+  fi
+
+  fixture_teardown
+}
+
+test_autochain_all_done() {
+  start_test "DX RU6 auto-chain all done prompt"
+  fixture_setup
+
+  req_dir=$(fixture_create_req "req-001" "test" 6)
+  _write_autochain_plan "$req_dir"
+  fixture_create_task "$req_dir" "001" "login" "已完成" "/qa" >/dev/null
+  fixture_create_task "$req_dir" "002" "permission" "已完成" "/qa" >/dev/null
+  out=$(_mock_autochain_prompt "$req_dir")
+
+  if echo "$out" | grep -q "可运行 /req-stage-gate"; then
+    pass_test
+  else
+    _fail "auto-chain all-done prompt missing"
+    echo "$out" >&2
+  fi
+
+  fixture_teardown
+}
+
+test_autochain_user_n() {
+  start_test "DX RU6 auto-chain stops when PM inputs n"
+  fixture_setup
+
+  req_dir=$(fixture_create_req "req-001" "test" 6)
+  _write_autochain_plan "$req_dir"
+  fixture_create_task "$req_dir" "001" "login" "已完成" "/qa" >/dev/null
+  out=$(_mock_autochain_prompt "$req_dir" "n")
+
+  if echo "$out" | grep -q "已停止 stage 6 子循环"; then
+    pass_test
+  else
+    _fail "auto-chain n stop prompt missing"
+    echo "$out" >&2
+  fi
+
+  fixture_teardown
+}
+
+# =================================================
 # Run all tests
 # =================================================
 test_reject_if_status_not_done
@@ -471,5 +717,14 @@ test_reject_if_event_stream_missing
 test_reject_if_state_machine_skipped
 test_reject_if_commit_predates_execution
 test_happy_path_close_task
+test_skip_doc_update_no_reason
+test_skip_doc_update_with_reason
+test_skip_doc_update_marker_written
+test_skip_doc_update_cleanup_todo_written
+test_skip_doc_update_marker_grep_pattern
+test_autochain_has_next_task
+test_autochain_all_done
+test_autochain_user_n
+test_skip_doc_update_exit_zero
 
 report_results "close-task"
