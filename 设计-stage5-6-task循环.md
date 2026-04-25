@@ -538,15 +538,17 @@ doc-update 在沉淀 task-N 的功能清单时，逐条对比 module 规格现�
 
 ### DX Implementation Checklist（fixes 落地核对）
 
-- [ ] task-plan.md 顶部附"基础设施"判定规则提示（RU1）
-- [ ] `/task-spec` 在易错点条目后注明 `(来自 task-XXX 的 PM 反馈)`（RU2）
-- [ ] `/task-execute` + `/task-submit` 处理 PM 反馈时按"行为修订 vs bug"分流，agent 一句话告知判断（RU3）
-- [ ] `/doc-update` 沉淀新增条目时输出 summary line + diff link（RU4）
-- [ ] `/task-spec` 和 stage 6 子循环开头校验 task-plan.md ↔ tasks/ 一致（RU5）
-- [ ] `/close-task` 末尾轻量 auto-chain：完成后自动提示下一个 task，PM 一键继续（RU6）
-- [ ] `/task-spec` 生成基础设施 task 时明确告知"本 task 不触发 module merge"（RU7）
-- [ ] `/doc-update` 失败一律阻塞 close-task；错误信息含文件 / failure 类型 / 续跑路径（DB2）
-- [ ] Upgrade path 子设计写入 TODOS.md（UP）
+- [x] task-plan.md 顶部附"基础设施"判定规则提示（RU1）— Batch 2 (a6d33ab)
+- [x] `/task-spec` 在易错点条目后注明 `(来自 task-XXX 的 PM 反馈)`（RU2）— Batch 1 (90997a3)
+- [x] `/task-execute` + `/task-submit` 处理 PM 反馈时按"行为修订 vs bug"分流，agent 一句话告知判断（RU3）— Batch 3 (dfd5f5f)
+- [x] `/doc-update` 沉淀新增条目时输出 summary line + diff link（RU4）— Batch 2 (a6d33ab)
+- [x] `/task-spec` 和 stage 6 子循环开头校验 task-plan.md ↔ tasks/ 一致（RU5）— Batch 1 (90997a3)
+- [x] `/close-task` 末尾轻量 auto-chain：完成后自动提示下一个 task，PM 一键继续（RU6）— Batch 3 (dfd5f5f)
+- [x] `/task-spec` 生成基础设施 task 时明确告知"本 task 不触发 module merge"（RU7）— Batch 1 (90997a3)
+- [x] `/doc-update` 失败一律阻塞 close-task；错误信息含文件 / failure 类型 / 续跑路径（DB2）— Batch 2 (a6d33ab)
+- [x] Upgrade path 子设计写入 TODOS.md（UP）— commit 55015a9 时已加进 TODOS.md（DX backlog）
+
+**Batch 3 衍生一致性 fix（dfd5f5f）**：req-stage-gate C2 半 close 检测精确化为 grep `<!-- SKIP_DOC_UPDATE:` AND `cleanup_status="pending"` 同时存在；cleanup 描述改为"改 status='done'"（保留 marker 作 audit trail）。
 
 ### 12 个 P2（已迁移 TODOS.md，本 plan 不解决）
 
