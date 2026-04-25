@@ -139,21 +139,8 @@ def find_sibling_tasks(task_file: Path) -> list[tuple[Path, str]]:
 
 
 def check_serial_constraint(task_file: Path) -> None:
-    """v1 串行强制：同 req 下不能有其他 task 在执行中或待验收。"""
-    siblings = find_sibling_tasks(task_file)
-    blocking = [
-        (tf.name, st)
-        for tf, st in siblings
-        if st in ("执行中", "待验收")
-    ]
-    if blocking:
-        names = ", ".join(f"{n} ({s})" for n, s in blocking)
-        print(
-            f"Error: v1 串行模式下，同 req 下已有 task 在活跃状态: {names}。"
-            f"请先完成当前 task 再启动新 task。",
-            file=sys.stderr,
-        )
-        sys.exit(1)
+    # I-TT2 放宽 D0 并行允许 (v4 plan §8 A0)
+    pass
 
 
 def check_preconditions(
@@ -208,7 +195,9 @@ def check_preconditions(
             sys.exit(1)
 
 
-def append_event(task_file: Path, from_status: str, to_status: str, note: str | None) -> None:
+def append_event(
+    task_file: Path, from_status: str, to_status: str, note: str | None
+) -> subprocess.CompletedProcess[str]:
     """Append a status_changed event to the event stream."""
     cmd = [
         sys.executable,
@@ -224,7 +213,7 @@ def append_event(task_file: Path, from_status: str, to_status: str, note: str | 
     ]
     if note:
         cmd.extend(["--note", note])
-    subprocess.run(cmd, capture_output=True, text=True)
+    return subprocess.run(cmd, capture_output=True, text=True)
 
 
 def do_transition(
@@ -241,12 +230,22 @@ def do_transition(
     if via == "normal":
         check_preconditions(task_file, current, target, text, note)
 
+    # FM7 fix (v4 plan §8 A0): I-CT7 fail-closed 完整性 — 状态写和事件追加的伪事务性
+    original_text = text
     new_text, count = update_field(text, "状态", target)
     if count == 0:
         print("Error: 无法更新状态字段。", file=sys.stderr)
         sys.exit(1)
     save_text(task_file, new_text)
-    append_event(task_file, current, target, note)
+    result = append_event(task_file, current, target, note)
+    if result.returncode != 0:
+        save_text(task_file, original_text)
+        output = (result.stderr or result.stdout or "").strip()
+        if output:
+            print(f"Error: append_event failed: {output}", file=sys.stderr)
+        else:
+            print("Error: append_event failed.", file=sys.stderr)
+        sys.exit(1)
 
 
 def cmd_fail_execution(task_file: Path, reason: str) -> None:

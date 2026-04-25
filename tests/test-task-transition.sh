@@ -109,11 +109,11 @@ test_reject_skip_transition() {
 }
 
 # -----------------------------------------------------------------
-# I-TT2: serial constraint
+# I-TT2 (放宽后): D0 并行允许同 req 多 task 同时执行/待验收
 # -----------------------------------------------------------------
 
-test_reject_parallel_active_task() {
-  start_test "I-TT2 reject 待确认→执行中 when sibling is 执行中"
+test_reject_parallel_active_task_now_allowed() {
+  start_test "I-TT2 accept 待确认→执行中 when sibling is 执行中"
   fixture_setup
   req_dir=$(fixture_create_req "req-001" "test" 6)
   # sibling already active
@@ -121,30 +121,25 @@ test_reject_parallel_active_task() {
   task=$(fixture_create_task "$req_dir" "002" "new" "待确认")
 
   if _run_transition "$task" --to 执行中 >/tmp/out.$$ 2>/tmp/err.$$; then
-    _fail "should reject when another task active"
+    pass_test
   else
-    if grep -q "串行" /tmp/err.$$; then
-      pass_test
-    else
-      _fail "stderr missing 串行 message"
-      cat /tmp/err.$$ >&2
-    fi
+    _fail "should accept when another task active after I-TT2 relaxed (v4 D0)"
   fi
   rm -f /tmp/out.$$ /tmp/err.$$
   fixture_teardown
 }
 
-test_reject_parallel_pending_review_sibling() {
-  start_test "I-TT2 reject when sibling is 待验收"
+test_reject_parallel_pending_review_sibling_now_allowed() {
+  start_test "I-TT2 accept when sibling is 待验收"
   fixture_setup
   req_dir=$(fixture_create_req "req-001" "test" 6)
   fixture_create_task "$req_dir" "001" "review" "待验收" >/dev/null
   task=$(fixture_create_task "$req_dir" "002" "new" "待确认")
 
   if _run_transition "$task" --to 执行中 >/tmp/out.$$ 2>/tmp/err.$$; then
-    _fail "should reject when sibling is 待验收"
-  else
     pass_test
+  else
+    _fail "should accept when sibling is 待验收 after I-TT2 relaxed (v4 D0)"
   fi
   rm -f /tmp/out.$$ /tmp/err.$$
   fixture_teardown
@@ -379,8 +374,8 @@ test_happy_path_start_to_review() {
 test_reject_reverse_transition
 test_reject_from_done
 test_reject_skip_transition
-test_reject_parallel_active_task
-test_reject_parallel_pending_review_sibling
+test_reject_parallel_active_task_now_allowed
+test_reject_parallel_pending_review_sibling_now_allowed
 test_reject_empty_doc_diff
 test_reject_empty_self_review
 test_reject_missing_review_event
