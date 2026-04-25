@@ -57,7 +57,27 @@
 - Q6 ✅ `create_workspace` 自动 adopt 已有外部 worktree（四级查找第 3 级）
 
 **Phase A 第一步硬前置：**
-- A0 spike：`mcp__superset__create_workspace({branchName: "test"})` 返回的 worktree path 是否 = 我们 `.worktrees/<branch>/` 约定。不一致 → 改路径约定（影响面大）
+- A0 spike：`mcp__superset__create_workspace({branchName: "test"})` 返回的 worktree path 是否 = 我们 `.worktrees/<branch>/` 约定。不一致 → **不能改 .worktrees 内部约定**（FM9）—— 引入 path adapter 层
+
+**autoplan eng review 待修 high/medium gap（Phase A 启动前必修）：**
+- **FM4** stale 检测：scan-task-done 把 `execution_crashed` 改名 `execution_stale`，需要新 Claude 跑 codex 期间每 60s append `heartbeat` 事件，scan 用 `last_heartbeat` 判 stale 而非 elapsed
+- **FM6 验证**：plan §4.6 已加 "execution_failed → fail-execution"，但需新增 T(execution_failed → 待确认) 测试
+- **FM7 task-transition.py 事务性**：`update_field` 写状态字段成功但 `append_event` 失败时，必须恢复旧状态字段或退出非 0；当前代码忽略 append 子进程返回码（task-transition.py:211），违反 I-CT7 fail-closed
+- **FM8 命名清理**：plan 还有少量地方（§3 架构图 / §10 矩阵）混用 task-005 / task-005-superset-integration，需通读
+- **FM9 path adapter**：A0 失败分支不要改 `.worktrees/<branch>/` 约定（影响 check-branch / close-task / status-view 全链路），改写"引入 Superset workspace path adapter 保持框架内部不变"
+- **FM12 spike**：新 Claude pane 启动后跑 `claude mcp list` 确认 codex / 其他 MCP server 是否真的可用；如果 worktree settings.json 不继承主仓 MCP 配置，需要 task-confirm 启动前 `cp` 一份
+- **F9 (subagent) settings 安全**：`superset.device_id` / `project_id` 放 `.claude/settings.local.json`（gitignored）不要 commit；plan §5.2 settings.json.tmpl 改对应位置
+- **F14 (subagent) 多项目 device_id 冲突**：scan-task-done 输出含 `workspaceId` 帮 PM 区分多 pane；`/task-status` 显示 superset workspace pane title 提示
+- **F15 (subagent) 命名 cosmetic**：settings 字段从 `parallel_tasks.*` 重命名 `task_execution.*`（D0 是 serial）
+
+**autoplan eng review 新增测试（Phase A 完工前必绿）：**
+- T15 task-confirm 5a/5b/5c/5d 任一失败的 rollback（fail-execution 调用 + worktree/workspace 状态）
+- T16 双 reducer 单 reduced 事件（wakeup + hook 同秒触发，flock 互斥验证）
+- T17 scan-task-done 解析真实 task-events.py 产出（schema 兼容回归）
+- T18 task_short_id vs task_stem 主键一致性
+- T19 stale heartbeat recovery（FM4 落地后）
+- T20 close-task archives superset workspace mapping（FM10 + §7.7）
+- T21 A0 mismatch 不破坏 .worktrees 内部 layout（FM9）
 
 **关键文件改动估算：**
 - 新建：`scripts/scan-task-done.sh`、`.claude/hooks/task-done-check.sh`、6-9 条 `tests/v3_T*.sh`
