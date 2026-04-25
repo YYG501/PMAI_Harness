@@ -40,7 +40,46 @@
 
 ---
 
-## v3: 取消 Suborchestrator subagent，Map-Reduce 并行执行架构
+## v3.5: Superset MCP 启独立 Claude 执行 task（serial）
+
+**Status (2026-04-25):** 🟢 **Plan 收敛完成**，未实施。详见 `设计-Superset独立Claude执行.md`。
+
+**What:** `/task-confirm` 通过 Superset MCP `start_agent_session_with_prompt` 启动独立持久 Claude 终端 pane，cwd 绑定 task worktree。新 Claude 自己同步跑 codex（`Bash run_in_background + Monitor`）。完成后 append 事件到 `.runs/events/<task>.jsonl`。主 Claude 用 ScheduleWakeup adaptive + UserPromptSubmit hook 扫事件流收口。
+
+**Why:** 解决 v1 subagent 短命载体问题（2026-04-22 / 2026-04-24 事件根因），同时保持 v3 改动量的 40%（serial 不并行，删 mutex / boot epoch / PGID 树杀 / `/task-abort`）。
+
+**关键决策:**
+- D0 暂不并行（serial 单线）
+- D1 接受 Superset SaaS 隐私边界（只传 workspaceId / prompt / agent 类型；task 内容/代码 diff/codex 输出全在本地）
+- D2 选 B：保留我们 `create-task-worktree.sh`，Superset 通过 adoption 路径接管已有 worktree
+- Q1 ✅ Superset 启的 Claude 是持久 REPL（`claude --permission-mode acceptEdits`）
+- Q3 ❌ 无完成通知 → 自建 sentinel/事件流（复用 v3 §2.2/§2.4/§2.6）
+- Q6 ✅ `create_workspace` 自动 adopt 已有外部 worktree（四级查找第 3 级）
+
+**Phase A 第一步硬前置：**
+- A0 spike：`mcp__superset__create_workspace({branchName: "test"})` 返回的 worktree path 是否 = 我们 `.worktrees/<branch>/` 约定。不一致 → 改路径约定（影响面大）
+
+**关键文件改动估算：**
+- 新建：`scripts/scan-task-done.sh`、`.claude/hooks/task-done-check.sh`、6-9 条 `tests/v3_T*.sh`
+- 改动：`skills/task-confirm/SKILL.md` 步骤 5、`skills/task-execute/SKILL.md`、`templates/CLAUDE.md.tmpl` 角色表、`templates/settings.json.tmpl`
+- 删除（vs v3）：`codex-bg.sh`、`/task-abort` skill、PGID 树杀、mutex、boot epoch、max_parallel
+
+**下次接任者要知道:**
+- 读 `设计-Superset独立Claude执行.md`，重点 §2 决策快照 + §8 实现顺序 + §10 v3 复用矩阵
+- v3 plan (`设计-并行任务执行.md`) 已 deprecated 但保留作章节复用源
+- A0 spike 必须先做（验证 Superset `resolveWorktreePath` 与我们路径约定一致性）
+
+---
+
+## v3 (DEPRECATED 2026-04-25): 取消 Suborchestrator subagent，Map-Reduce 并行执行架构
+
+**🚨 已被 v3.5（Superset MCP 方案）取代。** 文档保留作章节复用源（事件流 / scan-task-done / wakeup / hook 边界）和决策溯源。如果未来要做并行，G1-G15 加固清单和 T1-T11 测试可在 v3.5 上叠加。
+
+详 `设计-并行任务执行.md` 顶部 deprecated banner。
+
+---
+
+### v3 原文（保留供历史溯源）
 
 **What:** 从"每个 task spawn 一个 Claude Agent subagent 做 suborchestrator"改成"主 Orchestrator 直接承担 + 并行后台执行 worker"。
 
