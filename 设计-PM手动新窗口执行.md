@@ -233,16 +233,25 @@ if [ -n "$TASK_FILE" ] && [[ "$TASK_FILE" =~ ^task-[0-9]{3}$ ]]; then
 fi
 
 if [ -z "$TASK_FILE" ]; then
-  # D6 无参数模式：扫主仓 active req 找唯一 "待启动" task
+  # D6 无参数模式（Codex C1 修订：active req 通常在 req worktree 不在主仓）
+  # 必须扫两个位置：主仓 requirements/active + .worktrees/req-*/requirements/active
   REPO_ROOT=$(git rev-parse --show-toplevel)
-  cd "$REPO_ROOT"
+  MAIN_REPO_ROOT=$(git -C "$REPO_ROOT" rev-parse --git-common-dir | xargs dirname 2>/dev/null \
+                    || echo "$REPO_ROOT")
+  cd "$MAIN_REPO_ROOT"
 
-  CANDIDATES=$(find requirements/active -name 'task-*.md' \
-    -exec grep -l '^状态：待确认$' {} \; \
-    | while read f; do
-        stem=$(basename "$f" .md)
-        [ -d ".worktrees/$stem" ] && echo "$f"
-      done)
+  # 扫两个位置（参考 status-view.py:131 模型）
+  ACTIVE_PATHS=("requirements/active")
+  for wt in .worktrees/req-*; do
+    [ -d "$wt/requirements/active" ] && ACTIVE_PATHS+=("$wt/requirements/active")
+  done
+
+  CANDIDATES=$(for p in "${ACTIVE_PATHS[@]}"; do
+    find "$p" -name 'task-*.md' -exec grep -l '^\*\*状态：\*\* 待确认$' {} \; 2>/dev/null
+  done | while read f; do
+    stem=$(basename "$f" .md)
+    [ -d "$MAIN_REPO_ROOT/.worktrees/$stem" ] && echo "$f"
+  done | sort -u)
   COUNT=$(echo "$CANDIDATES" | grep -c .)
 
   case "$COUNT" in
@@ -316,28 +325,43 @@ PM 在新窗口跑完 `/task-execute`（或 task-execute SKILL 自动接续到 /
 - task-transition.py --to 待验收
 - 提示 "请回主窗口告诉主 Claude"
 
-### 4.4 主 Claude 收口机制（preamble 顺手扫）
+### 4.4 主 Claude 收口机制（Codex C2/C3 修订：需要新增 preamble 行为）
 
-**完全不引入 hook / wakeup / sentinel**。靠 SKILL preamble 已有的 `/task-status` 扫描行为：
+**重要修订（2026-04-26 Codex outside voice）**：原 plan 写"靠 v1 现有 preamble 顺手扫"，但 cross-ref `scripts/skill-preamble.sh` 实际只输出环境信息和 quick-fix 提醒，**不会自动跑 status-view.py**。"PM 任意输入触发收口"建立在不存在的行为上。**v4 必须新增 preamble 调用**。
 
-PM 在主窗口任意输入 → 主 Claude 处理首条消息前，preamble 跑：
+**修订设计**：
+
+修改 `scripts/skill-preamble.sh` 末尾段（约 line 220 前后）增加：
+
 ```bash
-source .claude/scripts/skill-preamble.sh
-# preamble 末尾自动跑 task-status 扫描
+# v4 新增：preamble 输出 task-status 摘要（仅当有 active req 时）
+# Codex C3 修订：扫两个位置（主仓 + .worktrees/req-*）
+if [ -n "$ACTIVE_REQ" ] || ls "$MAIN_REPO_ROOT"/.worktrees/req-* >/dev/null 2>&1; then
+  python3 "$MAIN_REPO_ROOT/.claude/scripts/status-view.py" --summary 2>/dev/null || true
+  # status-view --summary 输出格式（详 §6 task-status SKILL 微改）：
+  #   📋 task 概览: 执行中 N1 / 待验收 N2 / 待启动 N3
+  #   ⚠️ N2 个 task 待验收，需要呈交（运行 /task-status 看详情）
+fi
 ```
 
-`task-status` 扫到任何 "待验收" task → 主 Claude 在响应里附加：
-> 检测到 task-005 已转 "待验收"。是否要我拉 diff 呈交验收？
+**还需要修 `scripts/skill-preamble.sh:78` `_find_active_req_in $MAIN_REPO_ROOT`**（Codex C3）：扩展扫 `.worktrees/req-*` 找 active req，否则主窗口（cwd 在主仓）的 ACTIVE_REQ/ACTIVE_TASK 仍然空。
 
-PM 同意 → 主 Claude 拉 diff + review report + 呈交 → PM 通过/打回。
+**还需要给 `scripts/status-view.py` 加 `--summary` 模式**：输出一行结论（详 §6 修订）。
 
-**这套机制完全是 v1 现有行为**——不需要新代码。唯一需要确认的：`task-status` SKILL / `skill-preamble.sh` 是否已经能识别"待验收"task 并主动提示？如果没有，加一段提示文案即可（不是新功能）。
+**机制保证**：PM 在主窗口任意输入触发 Claude 调任何 SKILL 时，preamble 就跑（这是 SKILL 调用 hook 行为，每次 SKILL 触发必跑）。
 
-### 4.5 中止 task（Pass 4 F2 修订：意图识别，PM 不背模板）
+**fallback**：PM 如果不调 SKILL 而是纯聊天（preamble 不跑），主 Claude 仍可由 PM 显式跑 `/task-status` 触发完整扫描。
+
+### 4.5 中止 task（Codex C7 修订：意图识别落 CLAUDE.md.tmpl 而非 preamble）
 
 PM 想中止 → 关新窗口（无副作用，state 仍在 "执行中"）→ 回主窗口用**任何自然语句**表达放弃意图。
 
-**主 Claude preamble 意图识别规则**：扫到 PM 输入含**关键词**且**有 task ID 上下文**时，触发中止流程。
+**实现位置（C7 修订）**：原 plan 写"主 Claude preamble 意图识别"——错。shell preamble 拿不到用户原话。正确位置：
+
+- **CLAUDE.md.tmpl 行为规则段**：明确"PM 输入含关键词 + 有 task ID 上下文 → 主 Claude 主动调 task-transition --fail-execution"
+- 这是**主 Claude 自身的对话行为约定**，不是脚本能做的
+
+**关键词触发规则**（写进 CLAUDE.md.tmpl）：扫 PM 输入含 `放弃 / 取消 / abort / cancel`，且能从上下文推断 task（最近一次 /task-confirm 提到的 task ID，或 active "执行中" task 唯一时直接绑定）→ 触发中止。
 
 示例 PM 输入（全部识别）：
 - "放弃 task-005"
@@ -392,7 +416,7 @@ task 回到 "待确认"，worktree 保留供 PM 检查 dirty diff。**不需要 
 | `skills/task-execute/SKILL.md` | **改**：入口加 status check + transition --to 执行中 + 自动 cd worktree（v1 现状是 task-confirm 转，现在转给 task-execute） | stage 5/6 已加末尾"PM 反馈分流策略"段（重新进入打回场景）；v4 改的是入口 step 1-3，**与分流段不冲突**（不同时机），共存 |
 | `skills/task-submit/SKILL.md` | **不改**（v1 + stage 5/6 现有逻辑直接复用） | stage 5/6 加了"提示分流策略"段，v4 不动 |
 | `skills/task-status/SKILL.md` | **微改**：扫到 "待确认" 但 worktree 已建的 task，提示 "等待 PM 在新窗口启动"；扫到 "待验收" task 提示 "可呈交验收"。**多 task 摘要格式样例**（Pass 4 F3 修订）：第一行结论 `📋 task 概览: 执行中 N1 / 待验收 N2 / 待启动 N3 / 已完成 N4`；详情按需展开 | 仓库现状未变 |
-| `skills/close-task/SKILL.md` | **不改** | stage 5/6 已加 `--skip-doc-update` flag + 末尾 auto-chain "下一个 task 是 task-NNN，继续吗？(Y/n)"。⚠️ **D0 并行 caveat**：auto-chain 假设串行（一次一个 next task），并行场景下若有多个待启动 task，文案会让 PM 困惑；建议 stage 5/6 后续加并行感知（不是 v4 责任，登记进 TODOS） |
+| `skills/close-task/SKILL.md` | **改**（Codex C9 升级为阻塞）| stage 5/6 已加 `--skip-doc-update` + 末尾 auto-chain "下一个 task 是 task-NNN，继续吗？(Y/n)" 假设串行。**v4 D0 并行下这个提示直接误导 PM**——v4 必须改 close-task auto-chain 为并行感知文案：扫所有 待启动 task，若 >1 列出全部 task 让 PM 选；若 0 输出"无待启动 task"。这是入口流冲突不是 stage 5/6 后续优化 |
 | `skills/doc-update/SKILL.md` | **不动** | 🆕 stage 5/6 大改 (+163 行)，被 close-task 内部调用；v4 不接触 |
 | `skills/cancel-req` | **不改** | 仓库现状未变 |
 | `templates/CLAUDE.md.tmpl` 角色表 | **改第 18 行**：`Suborchestrator | 单 task owner ...` → `新窗口 Claude | PM 在新窗口启动的 Claude 实例，跑单 task；位置在 task worktree 里` | 仓库现状未变 |
@@ -403,12 +427,18 @@ task 回到 "待确认"，worktree 保留供 PM 检查 dirty diff。**不需要 
 - `scripts/create-task-worktree.sh` / `task-transition.py` / `check-branch.sh`（v1 现状全保留——D7 修 task-transition.py 是单独 invariant 改动，不算 skill 改动）
 - `.claude/hooks/`（不引入新 hook）
 
-**stage 5/6 ship 后实际改动估算重新评估**：
-- v4 plan **直接改的 skill**：3 个（task-confirm 重写步骤 5 / task-execute 入口加 transition + cd / task-status 微改 + 文案）
-- v4 plan **不动但要协同的 skill**：4 个（task-spec / task-submit / close-task / doc-update —— 都是 stage 5/6 已 ship 内容，v4 在它们之外做事）
-- v4 plan **invariant 改动**：1 个（D7 删 task-transition.py:141 check_serial_constraint + 改 INVARIANTS.md I-TT2 文案）
-- 模板改动：1 个（CLAUDE.md.tmpl 角色表 + 工作流文案）
-- 测试新增：~5-7 条 `tests/v4_T*.sh`（**目录约定 align**：现有已有 `tests/e2e/*.sh` 框架，v4 简单单元测试放 `tests/v4_T*.sh`，复杂端到端放 `tests/e2e/v4_*.sh`）
+**stage 5/6 ship 后实际改动估算（2026-04-26 Codex outside voice 后修订）**：
+- v4 plan **直接改的 skill**：4 个（task-confirm 重写步骤 5 / task-execute 入口加 transition + cd + 扫双位置 / task-status 加 --summary 模式 + 多 task 摘要 / **close-task auto-chain 改并行感知**）
+- v4 plan **不动但要协同的 skill**：3 个（task-spec / task-submit / doc-update —— stage 5/6 已 ship 内容，v4 不动；task-submit 打回流程文案需补 §7.10 链接）
+- v4 plan **改动的 scripts**：3 个
+  - `task-transition.py`（D7 删 check_serial_constraint + 顺手修 FM7 事务性）
+  - **`skill-preamble.sh`**（C2/C3 修订：扩展 `_find_active_req_in` 扫 .worktrees/req-* + 末尾加 status-view --summary 调用）
+  - **`status-view.py`**（C2 修订：加 `--summary` 模式输出一行结论）
+- v4 plan **invariant 改动**：1 个（INVARIANTS.md I-TT2 + I-CT7 文档化 FM7 fix）
+- 模板改动：1 个（CLAUDE.md.tmpl 角色表 + 工作流文案 + 中止意图识别规则 + task 文件真相源规则）
+- 测试新增：~10 条（T11-T15 + Codex C10 6 条新断言）
+
+**总改动面**：**8 个文件改动 + ~10 测试**（vs 原估算 4-5 文件 + 5-7 测试）。增量主要来自 Codex outside voice 发现的 plan 隐含假设需要新代码支持。
 
 ---
 
@@ -420,17 +450,42 @@ task 回到 "待确认"，worktree 保留供 PM 检查 dirty diff。**不需要 
 - 下次 PM 在主窗口任意输入，preamble 扫到 → 主 Claude 提示 "task-X 已 confirm 但未启动，需要继续吗？"
 - PM 选继续 → 主 Claude 重复输出启动指令；PM 选放弃 → 主 Claude 删 worktree + 状态保持 "待确认"（或 PM 决定 cancel）
 
-### 7.2 PM 在新窗口跑了但中途关窗口
+### 7.2 PM 在新窗口跑了但中途关窗口（Codex C8 修订：D7 后无 serial 阻塞）
 
-- task 状态停在 "执行中"，I-TT2 serial 阻塞同 req 其他 task
+- task 状态停在 "执行中"。**D7 放宽 I-TT2 后不阻塞 sibling**，但会污染 status / 验收队列
 - PM 回主窗口说 "放弃 task-X" → 主 Claude 调 `task-transition --fail-execution --reason aborted_by_pm` → 回 "待确认"
 - worktree 保留供 PM 检查 dirty diff（参考 v3.5 §7.6 task-recover 思路，但**不需要新脚本**——直接调 task-transition）
+- 故障可见性：abandoned `执行中` task 会被 §4.4 主窗口 preamble 摘要持续提示，PM 不会忘掉它
 
 ### 7.3 PM 跑完没回主窗口
 
 - task 状态在 "待验收"，无负面影响
-- 下次 PM 任意输入主 Claude，preamble 扫到 → 提示验收
+- 下次 PM 任意输入触发 SKILL → preamble §4.4 修订摘要扫到待验收 → 主 Claude 提示验收
 - 完全等价于 v1 现状下 PM 走完 /task-submit 不及时回主窗口的场景
+
+### 7.10 PM 打回后再启动路径（Codex C6 修订）
+
+stage 5/6 task-submit 打回后转 `待验收 → 执行中` 并提示 "suborchestrator 重新进入"。**v4 没有常驻 suborchestrator**，路径需明确：
+
+- 打回触发：PM 在新窗口跑 /task-submit 后选打回（或主窗口验收时打回）→ task 状态转 `执行中` + task 文件「PM 反馈」section 追加 PM 反馈
+- **再启动**（v4 决议）：PM 选两种之一：
+  - **A 当前新窗口保留**：如果新窗口还在（PM 没关），新窗口的 Claude 重新读 task 文件 + 应用 stage 5/6 的"PM 反馈分流策略"（行为修订 vs Bug 修复）→ 继续修
+  - **B 重开新窗口**：如果 PM 已关新窗口，跑 `/task-execute task-XXX`（显式参数；状态已是 "执行中"，task-execute 入口检测到不再 transition，直接进 stage 5/6 PM 反馈分流流程）
+
+主窗口在打回后输出明确文案（写进 task-submit SKILL 改动）：
+> task-005 已打回 → "执行中"。请回新窗口（或新开 `/task-execute task-005`）继续修。
+
+### 7.11 task 文件真相源 + close-task dirty req wt（Codex C4/C5 修订）
+
+**问题**：task 文件存在两处副本——req worktree 里的（`requirements/active/<req>/tasks/task-NNN.md`）和 task worktree 里的（task worktree 是从 req 分支切出来的，自然包含同一个 task 文件）。`/task-execute` 改状态字段（"待确认"→"执行中"）时改哪份？
+
+**v4 决议**：
+- **task 状态字段写入**：必须在 **task worktree** 里改（因为 task-execute SKILL 步骤 2 已经 `cd $WORKTREE_ABS`），改后 commit 到 task 分支
+- **req worktree 里的 task 文件副本**：不动；它会在 close-task merge 时通过 git merge 自然 sync（task 分支的 task 文件改动 merge 进 req 分支）
+- **check-branch.sh:337 跨 worktree find 行为**：保留（v1 现状）；状态分裂只在"transition 中途崩"场景出现，I-CT7 事件流审计兜底
+
+**close-task dirty req wt（Codex C5）**：close-task.sh:124 检查 req worktree clean。若 PM 在 req worktree 里手动改了 task 文件（不该这么做但可能发生）→ close-task 拒绝。
+- v4 决议：保留 v1 拒绝行为（fail-closed 正确）；CLAUDE.md.tmpl 加规则"task worktree 启动后不要在 req worktree 编辑同 task 的 task 文件"
 
 ### 7.4 PM 在新窗口跑 /task-execute 但状态不是"待确认"
 
@@ -472,15 +527,14 @@ PM 同时 confirm task-005 和 task-006，但 task-006 实现依赖 task-005 已
 
 | Phase | 内容 | 验收 |
 |---|---|---|
-| **A0** | **修 invariant：放宽 I-TT2**（`scripts/task-transition.py` `check_serial_constraint` 删除 / 改成 no-op；`INVARIANTS.md` 更新 I-TT2 描述）| 单元测试：同 req 已有"执行中" task 时，第二个 transition --to 执行中 不再被拒绝；test-task-transition.sh 相关 case 调整 |
-| A1 | `skills/task-confirm/SKILL.md` 步骤 5 改输出 + 不转状态 + 多候选检测 | 手工测试：跑 /task-confirm 看到对应启动指令（单候选 vs 多候选）；status 仍 "待确认" |
-| A2 | `skills/task-execute/SKILL.md` 入口：无参数找唯一 + 自动 cd + transition | 手工测试：新窗口任意 cwd 跑 `/task-execute`，自动找到 task 并 cd；多候选时报错列出 |
-| A3 | `skills/task-status/SKILL.md` 加多 task 摘要 + "待验收" / "待启动" 提示文案 | 手工测试：扫到对应状态有提示，能区分 1 个 vs N 个 |
-| A4 | `templates/CLAUDE.md.tmpl` 角色表 + 工作流文案改写 + 并行说明 | 手工 review |
-| A5 | 测试套（详 §11） | T1-T7 全绿 |
-| A6 | 业务项目升级（admin console4） | 业务项目能成功跑新流程 + 并行场景演练 |
+| **A0** | **修 invariant + 顺手修 FM7** —— (1) `scripts/task-transition.py` 删除 `check_serial_constraint` (line 141-156) 或改 no-op；(2) `INVARIANTS.md` 更新 I-TT2 描述；(3) 改写 `tests/test-task-transition.sh:112-138` 两个 case 反向；(4) 顺手修 FM7 transition 事务性 + T15 反例 | 测试全绿 |
+| **A1** | **新增 preamble 行为支持主窗口收口**（Codex C2/C3）—— (1) `scripts/skill-preamble.sh:78` `_find_active_req_in` 扩展扫 `.worktrees/req-*`；(2) `scripts/skill-preamble.sh` 末尾加 status-view --summary 调用；(3) `scripts/status-view.py` 加 `--summary` 模式 | T16/T19 通过 |
+| **A2** | **改 4 个 skill** —— task-confirm 步骤 5 重写 / task-execute 入口加 transition + cd + 扫双位置 + 短 ID 模糊匹配 + next-step / task-status 加 --summary + 多 task 摘要 / **close-task auto-chain 改并行感知**（Codex C9）| T1-T5 + T13-T14 通过 |
+| **A3** | `templates/CLAUDE.md.tmpl` 改写 —— 角色表 + 工作流文案 + 中止意图识别规则 + task 文件真相源规则 | 手工 review |
+| **A4** | 新增 `tests/v4_T*.sh` 6-7 条单元 + `tests/e2e/v4_*.sh` 端到端 | T1-T21 全绿 |
+| **A5** | 业务项目升级（admin console4） | 业务项目跑新流程 |
 
-**预计改动**：约 4-5 个文件 / 0 新建脚本 / 0 新建 hook / 1 个 invariant 修改（I-TT2）。
+**预计改动**（2026-04-26 Codex outside voice 后修订）：8 个文件改动（4 skill + 3 scripts + 1 模板）+ 1 invariant 文档化 + ~10 测试新增。
 
 ---
 
@@ -527,6 +581,17 @@ PM 同时 confirm task-005 和 task-006，但 task-006 实现依赖 task-005 已
 | T8 | adapter 越界写入检测（v1 现有 I-AD2 沿用） | 跑 task 时 prompt 引导写别 task worktree → adapter 后置校验失败 |
 | T9 | 并行场景：3 task 同时执行 + close 顺序 | 启 3 个 "执行中" → 全部转 "待验收" → 一个一个 close-task；后 close 的 merge 走 fast-forward 或 merge commit |
 | T10 | close-task auto-chain 在并行场景的文案适应性 | 多个 待启动 task → close-task 末尾 auto-chain 文案是否清晰（不强制让 PM 串行，至少不暗示串行）。预期：发现需要 stage 5/6 改文案，登记 TODO |
+| **T11 中止意图识别（§4.5）**| PM 任意输入触发主 Claude 调 `task-transition --fail-execution` | 输入 `放弃 task-005` / `取消 005` / `abort 这个`（task-005 唯一执行中时）→ 主 Claude 都识别并调 fail-execution；输入 `放弃` 无 task ID 且多 task 时 → 主 Claude 列出让 PM 选 |
+| **T12 reduce 触发（§4.4）**| 主 Claude preamble 扫待验收触发呈交 | task 状态 "待验收" + PM 任意输入（包括 "完成了" / "接下来"）→ 主 Claude 检测 + 提示验收 |
+| **T13 多 task 摘要格式（§6 task-status）**| task-status 输出多 task 一行结论 | 3 执行中 + 2 待验收 → 输出 `📋 task 概览: 执行中 3 / 待验收 2` 第一行；详情按需展开 |
+| **T14 短 ID 模糊匹配（Pass 2 F2）**| `/task-execute task-005` 自动找唯一 task-005-*.md | 1 匹配 → 用 ✓；0 匹配 → 报错；多匹配 → 列出报错 |
+| **T15 FM7 transition 事务性回归**| append_event 失败时 task 文件状态字段必须回滚 | 模拟 `.runs/events/` 不可写 → `task-transition --to 执行中` 必须 exit 1 + 状态字段保持原值（不能写成功又静默丢事件） |
+| **T16 主仓无参数 /task-execute 能发现 req worktree task**（Codex C1）| `/task-execute` 在主仓 cwd 跑 → 扫到 `.worktrees/req-*/requirements/active/...` 下 task | active req 在 req worktree 时，无参数模式 happy path 可走 |
+| **T17 task copy / req copy 状态一致**（Codex C4）| transition 后 task worktree 与 req worktree 里的 task 文件状态字段一致 | 防止状态分裂导致 I-CB10 误判 |
+| **T18 I-CB10 在 v4 transition 后允许写**（Codex C10）| task-execute 转 "执行中" 后，新窗口 Claude 可写 task worktree | check-branch.sh 状态字段读取与 task-transition 写入时序正确 |
+| **T19 主窗口 task-status 多待验收不 dump 全 diff**（Codex C10）| 5 个待验收 task → /task-status 输出 `📋 概览` 一行 + 5 个 task 摘要，**不**自动拉全 diff | context 不撑爆；PM 显式问哪个再深入 |
+| **T20 PM 打回后 /task-execute 可重入**（Codex C6）| 打回后 task 状态 "执行中" + PM 反馈 section 有内容 → /task-execute 不阻塞，进入 stage 5/6 PM 反馈分流流程 | §7.10 路径可走 |
+| **T21 close-task 不因 req worktree dirty 卡死**（Codex C5）| 跑完 task → close-task 时 req worktree 应 clean（v4 不在 req worktree 写 task 状态）| §7.11 决议落实 |
 
 测试用 v1 现有 plain bash + `tests/helpers/`：简单单元测试放 `tests/v4_T<N>_<slug>.sh`，复杂端到端放 `tests/e2e/v4_<slug>.sh`（align stage 5/6 已建的 `tests/e2e/` 目录约定）。
 
@@ -546,6 +611,7 @@ PM 同时 confirm task-005 和 task-006，但 task-006 实现依赖 task-005 已
 | 2026-04-25 | PM 提议简化新窗口操作（自动找唯一 task + 自动 cd） | D6 加入；新窗口操作缩到 2 步 |
 | 2026-04-25 | PM 选 A：v4 改成并行原生（不需要 v3 复杂度） | D0 改并行，D7 放宽 I-TT2，§3 加并行场景流，§7 加并行 fallback，§11 加 T6/T9 |
 | 2026-04-26 | PM 触发 /plan-eng-review，发现 stage 5/6 ship 已 drift v4 假设的"v1 现状" | sync v4 plan §3 入口加 `/task-spec`；§6 改动表加 stage 5/6 备注（task-execute 末尾分流段共存、close-task auto-chain 并行 caveat、新 skill task-spec/doc-update 标"不动但要协同"）；§11 加 T10 + 测试目录约定 align tests/e2e/ |
+| 2026-04-26 | /plan-eng-review Section 1+3+Codex outside voice 完整跑完 | Section 1: D7 加测试改写 + 顺手修 FM7 + 11/13 v3.5 gap 消失结论。Section 3: 加 T11-T15。**Codex outside voice 找 5 critical + 4 high**：(C1) D6 扫错地方，(C2/C3) "preamble 顺手扫" 是假的，(C5) close-task req wt dirty 风险，(C6) PM 打回路径断，(C7) 中止意图识别落 CLAUDE.md.tmpl 而非 preamble，(C8) §7.2 串行心智残留，(C9) close-task auto-chain 升级阻塞，(C10) 测试缺 6 断言。**改动估算从 4-5 文件升到 8 个文件**——主要新增 skill-preamble.sh + status-view.py 修订支持"主窗口自动收口" |
 
 ---
 
@@ -572,13 +638,15 @@ PM 同时 confirm task-005 和 task-006，但 task-006 实现依赖 task-005 已
 - 缓解：启动指令模板提供两种：CLI（`claude`）+ "在你的 IDE 里开新 Claude tab"
 - PM 自己根据 IDE 选
 
-### 13.5 仍然存在的 v1 现有 bug（不阻塞本方案）
+### 13.5 v3.5 13 critical/high gap 在 v4 里的命运（2026-04-26 eng review 复核）
 
-这些是 v1 现有问题，本方案不引入也不修复。建议另起 issue 跟踪：
+**11/13 gap 在 v4 设计层面消失**（因 v4 删 Superset MCP / 无 reducer / 无 sentinel / PM 自启窗口）：FM1（启动序列）/ FM2（events 接口）/ FM3（reducer mutex）/ FM4（crashed 误判）/ FM5（PM 关 pane 卡死）/ FM6（execution_failed 流程）/ FM8（命名）/ FM9（path adapter）/ FM10（close-task superset 清理）/ FM11（prompt 注入）/ FM12（MCP inheritance）/ FM13（自跑 review I-TT3）
 
-- FM6 v1: codex 非 0 退出后 task-execute 是否自动调 `task-transition --fail-execution`？需查 v1 现状
-- FM7 v1: `task-transition.py` `update_field` 写状态字段成功但 `append_event` 失败时不回滚（task-transition.py:211 忽略 append 子进程返回码），违反 I-CT7 fail-closed
-- FM8 v1: 命名清理（task_short_id / task_stem）
+**1 个 v1 现有 bug，本轮顺手一并修**（2026-04-26 eng review 决议）：
+- **FM7 v1 transition 非事务性**: `task-transition.py:211` `append_event` 子进程返回码被忽略——状态字段写成功但事件追加失败时不回滚，违反 I-CT7 fail-closed。
+- **修订位置**：§8 A0 phase 步骤 (4) — 借 D7 改 task-transition.py 时一并修；T15 反例测试覆盖。
+
+**0 个 v4 新引入的 critical gap** —— 主要因为 v4 把"AI 自动协调"的复杂度还给 PM 大脑，gap 来源被砍。
 
 ### 13.6 并行特有风险（D0）
 
@@ -650,17 +718,17 @@ PM 同时 confirm task-005 和 task-006，但 task-006 实现依赖 task-005 已
 
 **拒绝**：Pass 1 #1（IDE-specific 启动文案）、Pass 1 #3（macOS pbcopy 自动复制）—— PM 决议保持 plan 简洁。
 
-### GSTACK REVIEW REPORT
+### GSTACK REVIEW REPORT (2026-04-26 更新)
 
 | Review | Trigger | Why | Runs | Status | Findings |
 |--------|---------|-----|------|--------|----------|
 | CEO Review | `/plan-ceo-review` | Scope & strategy | 0 | skipped | (PM 决议) |
-| Codex Review | `/codex review` | Independent 2nd opinion | 0 | — | — |
-| Eng Review | `/plan-eng-review` | Architecture & tests (required) | 0 | NOT RUN | v4 plan 是从 v3.5 重构，eng review 价值待 PM 决定 |
+| Codex Review | `/codex review` (eng outside voice) | Independent 2nd opinion | 1 (本轮 eng review Section 4) | issues_found | 10 finding (5 critical + 4 high + 1 medium) — Codex 直接读源码发现 plan 假设和实际代码 drift |
+| Eng Review | `/plan-eng-review` | Architecture & tests (required) | 1 (本轮) | issues_resolved | Section 1: D7 测试改写 + FM7 顺手修 + 11/13 v3.5 gap 消失. Section 3: 加 T11-T15. Codex outside voice: 加 T16-T21 + 8 处 plan 主体修订 |
 | Design Review | `/plan-design-review` | UI/UX gaps | 0 | skipped | no UI scope |
-| DX Review | `/plan-devex-review` | DevEx gaps | 1 (本轮) | issues_resolved | 7 finding，6 落地 plan + 2 拒绝 |
+| DX Review | `/plan-devex-review` | DevEx gaps | 1 (2026-04-25) | issues_resolved | 7 finding，6 落地 plan + 2 拒绝 |
 
-- **CODEX:** n/a（本轮无 codex voice，PM 选 incremental scope）
-- **CROSS-MODEL:** n/a
-- **UNRESOLVED:** 0（PM 已对每条 finding 决议）
-- **VERDICT:** **DX CLEAR (incremental)** — Pass 1/2/4 评分 7.5+，落地 6 条修订，plan 主体已优化。**Eng Review 仍 NOT RUN**（v4 plan 重大改写未过 eng review 验证；建议 implement 前补一次 /plan-eng-review）
+- **CODEX:** Codex 找 10 finding，全部 PM 决议接纳 → plan 主体修订（§4.1 D6 扫双位置 / §4.4 preamble 新增 status-view 调用 / §4.5 中止意图识别落 CLAUDE.md.tmpl / §6 close-task auto-chain 升级阻塞 / §7.2 D7 心智一致性 / §7.10 PM 打回路径 / §7.11 task 文件真相源 + close-task dirty req wt / §11 加 T16-T21 6 个新断言）
+- **CROSS-MODEL:** Section 1+3 (Claude) 漏掉 Codex 找的 5 critical + 4 high。这次 cross-model 增量价值极高——证明 plan-only review 不读源码会漏掉关键假设错误
+- **UNRESOLVED:** 0（PM 已对所有 finding 决议）
+- **VERDICT:** **CLEARED with revisions** —— DX (8.3/10) + Eng (issues resolved) 都已过；plan 主体已修 8 处接纳 Codex critical/high。**改动估算从 4-5 文件升到 8 个文件**（新增 skill-preamble.sh / status-view.py 修订支持主窗口自动收口），Phase A 实施前需充分理解新增 scope
