@@ -15,7 +15,7 @@
 |------|------|---------|
 | PM | 决策、确认、验收。不写代码 | 对话界面 |
 | 主 Orchestrator | 流程推进、文档维护、向 PM 呈交验收 | req 活跃时在 req worktree，否则在主仓 main |
-| Suborchestrator | 单 task owner：preflight、实现、自审、收口 | task worktree |
+| 新窗口 Claude | PM 在新窗口启动的 Claude 实例，跑单 task；位置在 task worktree 里 |
 | Execution Agent | 纯代码执行器，可被替换 | task worktree |
 
 ### 状态转换受控入口
@@ -26,6 +26,34 @@
 - Task 状态变更：`python3 .claude/scripts/task-transition.py <task-file> --to <status> [--note <text>]`
 
 Hook 会拦截直接编辑，但 **CLAUDE.md 规则是主要约束，hook 是补充检查**。即使绕过 hook（如通过 Bash），也必须遵守此规则。
+
+### v4 工作流入口序列 (PM 手动开新窗口)
+
+stage 6 task 子循环完整入口:
+1. PM (主窗口): /task-spec task-NNN — 生成 task 详细文档, PM 看 + 改
+2. PM (主窗口): /task-confirm tasks/task-NNN-*.md — 主 Claude 检查依赖 + 创建 worktree + 输出启动指令
+3. PM 在新窗口启动 Claude (terminal/IDE 任选)
+4. PM (新窗口): /task-execute (无参数自动找; 多候选用 task-NNN 短 ID)
+5. 新 Claude 自动 cd worktree + 转执行中 + 跑 codex + 自动接续 /task-submit
+6. PM (新窗口): 看 diff/review 摘要 → 通过/打回
+7. 通过 → 新窗口跑 /close-task → "关本窗口去主启下一个 task"
+
+### 中止 task 意图识别
+
+PM 想中止 active 的 task：
+- 关掉对应新窗口 (无副作用，task 状态留在执行中)
+- 回主窗口用任何自然语句表达放弃，例如：
+  - "放弃 task-005"
+  - "取消 005"
+  - "abort 这个" (task-005 是唯一执行中时, 推断绑定)
+- 主 Claude 识别意图 + 调 task-transition --fail-execution → task 回 待确认
+- worktree 保留供 PM 检查 dirty diff
+
+### task 文件真相源 (单窗口 lifecycle 修订)
+
+- task 状态字段写入必须在 task worktree 里改 (task-execute 步骤 2 已自动 cd)
+- 改后 commit 到 task 分支, close-task merge 到 req 分支自然 sync
+- PM 不要在 req worktree 里手动改 task 文件 (会让 close-task dirty 检查拒绝 merge)
 
 ### 确认门
 
