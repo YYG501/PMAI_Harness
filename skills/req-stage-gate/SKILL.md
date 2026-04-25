@@ -146,14 +146,14 @@ python3 .claude/scripts/req-transition.py "$ACTIVE_REQ_DIR" --to 5
 python3 .claude/scripts/req-transition.py "$ACTIVE_REQ_DIR" --to 5
 ```
 
-### Stage 5 → 6（task 拆分 → task 执行）
+### Stage 5 → 6（task 规划 → task 执行）
 
-1. 检查 `task-plan.md` 存在
-2. 检查 task 文件已创建
-3. **gstack 质量审阅**（task-plan.md + task 文件生成后）：
-   - **first req**：自动运行 `/plan-eng-review` 审阅 task-plan.md（工程视角：架构、拆分合理性、依赖）
-   - **后续 req**：建议 PM "要不要跑 /plan-eng-review？"，PM 可跳过
-4. 确认门（只给绝对路径 + 一句话摘要，不贴全文；eng-review 发现直接贴 chat）："Task 拆分完成，是否进入执行阶段？"
+1. 检查 `task-plan.md` 存在。
+2. 检查 `task-plan.md` 包含 task 标题列表和 `## 变更记录` section。
+3. **gstack 质量审阅**（只审阅 task-plan.md；具体 task 文件由 stage 6 的 `/task-spec` 逐个生成）：
+   - **first req**：自动运行 `/plan-eng-review` 审阅 task-plan.md（工程视角：架构、拆分合理性、依赖）。
+   - **后续 req**：建议 PM "要不要跑 /plan-eng-review？"，PM 可跳过。
+4. 确认门（只给绝对路径 + 一句话摘要，不贴全文；eng-review 发现直接贴 chat）："Task 规划完成，是否进入执行阶段？"
 
 推进：
 ```bash
@@ -162,9 +162,38 @@ python3 .claude/scripts/req-transition.py "$ACTIVE_REQ_DIR" --to 6
 
 ### Stage 6 → 7（task 执行 → req close）
 
-1. 检查所有 task 状态为「已完成」
-2. 如果有未完成的 task，列出并提示 PM
-3. 全部完成后，确认门："所有 task 已完成，是否关闭此需求？"
+1. Read `task-plan.md`, extract task id list, and exclude ids marked deleted in the `## 变更记录` section.
+   - 变更记录 exclusion algorithm：解析 task-plan.md 文末 `## 变更记录`（如果存在），找到包含关键词 `删除` 的条目，从条目中提取 `task-001` / `task-002` 这类 task-id，并从 verification list 排除。
+2. For each id verify:
+   - `tasks/task-NNN-*.md` file exists。
+   - task status is `「已完成」`。
+   - task branch has been merged to req branch（等价于 `/close-task` 已跑完）。
+   - task worktree has been cleaned up。
+   - C2 half-close detection（CRITICAL）：如果 task 的 `## 文档偏差` section 含 `skip-doc-update` reason marker，说明曾用 `close-task --skip-doc-update` 半关闭；NOT treated as complete close，必须阻塞推进并列出 cleanup TODOs。
+3. All satisfied → confirmation gate: "所有 task 已完成并关闭，是否关闭此需求？"
+4. Not satisfied → list which tasks are missing which steps。
+
+缺失项输出格式：
+
+```text
+Stage 6 → 7 blocked: 以下 task 尚未完整关闭
+
+- task-001:
+  - missing task file: 请运行 /task-spec task-001 或从 task-plan.md 删除该条
+- task-002:
+  - status is 待验收: 请完成 /task-submit 并通过验收
+  - task branch not merged to req branch: 请运行 /close-task
+- task-003:
+  - task worktree still exists: 请确认 /close-task 清理完成
+- task-004:
+  - half-close detected: 文档偏差 section 包含 skip-doc-update reason marker；请完成 cleanup TODO，清除 marker 后重跑 /req-stage-gate
+```
+
+边界情况：
+
+- task in task-plan.md but task file not yet generated → judgment fails，prompt PM to run `/task-spec <task-id>` or remove it from `task-plan.md`。
+- Infrastructure tasks → same close requirement；doc-update 会 auto-skips module merge，但仍必须完成 `/close-task` 的 branch merge 和 worktree cleanup。
+- task 文件存在但不在 task-plan.md，且未在 `## 变更记录` 中说明 → 不作为关闭条件来源；提示 PM 校验是否需要补回 task-plan.md 或删除孤儿 task 文件。
 
 推进：
 ```bash
