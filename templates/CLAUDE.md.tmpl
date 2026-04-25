@@ -45,6 +45,22 @@ Hook 会拦截直接编辑，但 **CLAUDE.md 规则是主要约束，hook 是补
 
 AI 擅自用工具替代 skill 是**流程违规**，即便产出看起来等价。被 PM 问到"你跑了 skill 吗"时，如实回答；若没跑，立即补跑，不找理由。
 
+### Subagent 使用边界
+
+Subagent（`Agent` 工具 spawn）是**短命、无状态、独立 context** 的子进程，**适合**：
+
+- 第二视角评审（如 `analysis-reviewer`，跑完 PASS/FAIL 即退）
+- 大范围 read-only 探索（多关键字 grep + 文件读，避免污染主 context）
+- 可并行的独立查询（多个 subagent 同时跑互不依赖的检索）
+
+**不适合**（结构性误用，已发生过 2 次事件）：
+
+- **长跑协调**：subagent turn 结束被回收，但被它启动的外部进程（codex 等）继续跑——"项目经理下班，工人还在加班"，没人收口。2026-04-22 / 2026-04-24 两次事件根因
+- **跨 turn 状态持有**：subagent 的 context 不持久，不能用它"等通知再处理"
+- **Skill 替代品**：见上节"Skill 完整性"
+
+判断标准：**subagent 必须在单次 turn 内能完整跑完**（典型 < 5 分钟，且不依赖被它启动的后台进程的输出）。否则换载体——主 Orchestrator + `ScheduleWakeup` / hook 轮询 / 后台进程 sentinel。
+
 ### 分支结构
 
 ```
