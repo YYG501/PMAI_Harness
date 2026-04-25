@@ -588,7 +588,7 @@ PM 同时 confirm task-005 和 task-006，但 task-006 实现依赖 task-005 已
 | **A1** | **新增 preamble 行为支持主窗口收口**（Codex C2/C3）—— (1) `scripts/skill-preamble.sh:78` `_find_active_req_in` 扩展扫 `.worktrees/req-*`；(2) `scripts/skill-preamble.sh` 末尾加 status-view --summary 调用；(3) `scripts/status-view.py` 加 `--summary` 模式 | T16/T19 通过 |
 | **A2** | **改 6 个 skill** —— task-confirm 步骤 5 重写 / task-execute 入口加 transition + cd + 扫双位置 + 短 ID 模糊匹配 + next-step + **依赖前置 gate** / task-status 加 --summary + 多 task 摘要 / **task-submit 改本窗口呈交验收** / **close-task 改本窗口跑 + auto-chain 文案** / **task-plan 加并行规划输出** / **task-spec 加依赖结构化** | T1-T5 + T13-T14 + T22 + T23 通过 |
 | **A3** | 模板改写 —— `templates/CLAUDE.md.tmpl`（角色表 + 工作流文案 + 中止意图识别规则 + task 文件真相源规则）；`templates/task.md.tmpl`（依赖字段格式说明） | 手工 review |
-| **A4** | 新增 `tests/v4_T*.sh` 单元 + `tests/e2e/v4_*.sh` 端到端 ~11 条 | T13/T14/T16 已通过；**T22/T23 codex 写有 bug，已暂从 run-all.sh 注释，待 followup PR 修**；其他 T 项是 SKILL 行为难自动测，留 manual QA |
+| **A4** | 新增 `tests/v4_T*.sh` 单元 + `tests/e2e/v4_*.sh` 端到端 ~11 条 | T13/T14/T16/T22/T23 全部通过 (159 全套 passed)；其他 T 项是 SKILL 行为难自动测，留 manual QA |
 | **A5** | 业务项目升级（admin console4） | 业务项目跑新流程 |
 
 **预计改动**（2026-04-26 Codex outside voice 后修订）：8 个文件改动（4 skill + 3 scripts + 1 模板）+ 1 invariant 文档化 + ~10 测试新增。
