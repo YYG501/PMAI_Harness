@@ -82,18 +82,27 @@
 - PM 那边的 AI 检查到这个现象，推断是"suborch subagent 过早退出是个框架问题"并上报
 - PM 提出"未来要做并行"，方向 A（主会话独占）直接被否决
 
+**Status (2026-04-25):** 🟡 **Plan 收敛完成，实施暂停往后放**。设计文档 `设计-并行任务执行.md` 已可作为 Phase A 输入，但 PM 决定先不动手。Phase A kickoff 时按 §10.1 TODO-A1~A11 逐条跑，无需重新讨论方向。
+
 **Depends on / blocked by:**
 - ~~north star 抉择~~ ✅ **2026-04-24 PM 选 (a) 并行优先**（v2 降级），尽管 /autoplan 6 路声音反对
 - ~~`ScheduleWakeup` 在业务项目里是否可用~~ ✅ **2026-04-24 POC 通过**（见 `设计-并行任务执行.md` §9.1）
+- ~~Q3 task_timeout 阈值~~ ✅ 10/30，详 §10 Q3
+- ~~Q5 ScheduleWakeup 频率~~ ✅ adaptive 5/20，详 §10 Q5 + §2.6
+- ~~Q6 subagent 使用边界文档~~ ✅ 已落 templates/CLAUDE.md.tmpl
 - **未解决**：3 个 codex 并发的 token 成本和主机资源开销仍需实跑测
 - **未解决**：hook 在 Linux/WSL 的稳定性（macOS 已验证）
-- **加固硬约束**：实施中必须落地 G1-G12 共 12 条加固（见 `设计-并行任务执行.md` §11），覆盖 /autoplan 6 路评审的 critical issues（shell injection、mutex、PID boot-epoch、FSM、hook 边界、DX 透明度）
+- **未解决**：admin console4 实际迁移动作（runtime 兜底已加，执行时机由 PM 定）
+- **加固硬约束**：实施中必须落地 G1-G15 共 15 条加固（见 `设计-并行任务执行.md` §11），覆盖 /autoplan + plan-eng-review 全部 critical issues
+- **测试硬约束**：Phase A 完工前 T1-T11 必须全绿（§11.5）
 
 **下次接任者要知道:**
-- 当前 suborch spawn 在 `skills/task-confirm/SKILL.md` 步骤 5
-- 当前 codex adapter 在 `scripts/exec-adapters/codex.sh`，**同步阻塞**模式
+- **从哪里恢复**：读 `设计-并行任务执行.md`，重点 §10.1 (Phase A todo) + §11 G1-G15 + §11.5 T1-T11。无需重新评审 north star/Q3/Q5/Q6
+- 当前 suborch spawn 在 `skills/task-confirm/SKILL.md` 步骤 5（v3 启动后由 TODO-A7 重写）
+- 当前 codex adapter 在 `scripts/exec-adapters/codex.sh`，**同步阻塞**模式（v3 后并存 codex-bg.sh）
 - Suborchestrator 的"项目经理"职责在 v1/v2 里是抽象角色——实现绑到 subagent 上只是当前选择，取消它不会伤害"职责"本身，只是换载体
-- Sentinel 文件命名约定要定：`.runs/task-NNN.done.json`（新）vs `.runs/execution-task-NNN-*.log`（已有），不要混淆
-- Subagent 机制本身在别处还要用（`analysis-reviewer` 等），不要把 subagent 当问题——问题是"拿 subagent 当长跑 orchestrator"这个具体误用
+- 完成信号已决定：合并到 `.runs/events/<task>.jsonl` 单一事件流，**不**建 `.done.json` / `.processed`（事件类型 `execution_completed_bg` / `execution_failed_bg` / `execution_crashed_bg` / `execution_aborted` / `reduced_bg`）
+- Subagent 机制本身在别处还要用（`analysis-reviewer` 等），不要把 subagent 当问题——问题是"拿 subagent 当长跑 orchestrator"这个具体误用；规则已落 templates/CLAUDE.md.tmpl
 - PM 提到"并行"指的可能只是"一次同意多个 task 让它们在后台跑"，不是"多 Claude 实例"——确认 use case 再动手
-- 和 v2 的架构抉择是动手前的**硬前置**，不要在未定 north star 的情况下先写 v3 代码
+- 和 v2 的架构抉择是动手前的**硬前置**，不要在未定 north star 的情况下先写 v3 代码（已定 v3 优先，v2 降级）
+- **Plan 阶段刻意不创建的文件**：`/task-abort` skill / `codex-bg.sh` / `scan-task-done.sh` / hook / 11 条 v3_T*.sh 测试 —— 全部登记在 §10.1 TODO，开工时按表执行
