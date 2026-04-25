@@ -287,6 +287,30 @@ WORKTREE_ABS="$REPO_ROOT/.worktrees/$TASK_STEM"
 cd "$WORKTREE_ABS"
 echo "已切换到 worktree: $WORKTREE_ABS"
 
+# 步骤 2.5：依赖前置 gate（2026-04-26 PM 决议加）
+# 读 task 文件「依赖」section，扫所有依赖 task 状态必须全 "已完成"
+DEPS=$(awk '/^## 依赖$/,/^## /' "$TASK_FILE" | grep -oE 'task-[0-9]{3}' | sort -u)
+if [ -n "$DEPS" ]; then
+  for dep_id in $DEPS; do
+    # active 找不到就找 closed
+    dep_file=$(find "$REPO_ROOT/requirements/active" -name "${dep_id}-*.md" 2>/dev/null | head -1)
+    [ -z "$dep_file" ] && \
+      dep_file=$(find "$REPO_ROOT/requirements/closed" -name "${dep_id}-*.md" 2>/dev/null | head -1)
+    [ -z "$dep_file" ] && {
+      echo "❌ 依赖 $dep_id 找不到对应 task 文件，请检查 task 文件「依赖」字段拼写"
+      exit 1
+    }
+    dep_status=$(grep '^\*\*状态：\*\*' "$dep_file" | sed 's/^\*\*状态：\*\* //')
+    if [ "$dep_status" != "已完成" ]; then
+      echo "❌ $TASK_STEM 依赖 $dep_id，但 $dep_id 当前状态是「$dep_status」"
+      echo "   请先去 $dep_id 对应的窗口完成验收 + close，然后重跑本命令"
+      echo "   （如想跳过依赖检查强制启动，请改 task 文件「依赖」字段后重跑）"
+      exit 1
+    fi
+  done
+  echo "✅ 依赖检查通过：$DEPS 全部已完成"
+fi
+
 # 步骤 3：检查状态 + 转 "执行中"
 STATUS=$(grep '^状态：' "$TASK_FILE" | awk -F'：' '{print $2}' | xargs)
 case "$STATUS" in
@@ -427,9 +451,11 @@ task 回到 "待确认"，worktree 保留供 PM 检查 dirty diff。**不需要 
 
 | Skill | 改动 | stage 5/6 drift 备注 |
 |---|---|---|
-| `skills/task-spec/SKILL.md` | **不动** | 🆕 stage 5/6 新增 skill；v4 入口在它之后接管，无修改 |
+| `skills/task-spec/SKILL.md` | **改**（2026-04-26 PM 决议加依赖结构化）| 🆕 stage 5/6 新增 skill；v4 入口在它之后接管。**v4 增量改动**：写 task 文件时「依赖」字段填**结构化** task ID 列表（而非"无"或文字描述），格式 `- task-NNN (一句话说明为什么依赖)`。无依赖时仍写"无" |
+| `skills/task-plan/SKILL.md` | **改**（2026-04-26 PM 决议加并行规划）| stage 5/6 大改 (+183 行)，已半文字讨论顺序/并行。**v4 增量改动**：要求 `task-plan.md` 必须包含一节"## 执行顺序与并行性"，输出 ASCII 依赖图 + 并行 lanes 分组 + PM 启动建议（哪些可同时启） |
+| `templates/task.md.tmpl` | **微改**（依赖字段格式说明）| 现状 `## 依赖\n无`。v4 改：在「依赖」字段上方加注释说明结构化格式（`- task-NNN (说明)`），让 task-spec 写时有 reference |
 | `skills/task-confirm/SKILL.md` | **改**：步骤 5 删 spawn subagent，改输出启动指令；步骤 5 不调 task-transition | 仓库现状未变（0 commits since v4 plan 创建）|
-| `skills/task-execute/SKILL.md` | **改**：入口加 status check + transition --to 执行中 + 自动 cd worktree（v1 现状是 task-confirm 转，现在转给 task-execute） | stage 5/6 已加末尾"PM 反馈分流策略"段（重新进入打回场景）；v4 改的是入口 step 1-3，**与分流段不冲突**（不同时机），共存 |
+| `skills/task-execute/SKILL.md` | **改**：入口加 status check + transition --to 执行中 + 自动 cd worktree + **步骤 2.5 依赖前置 gate**（详 §4.2 修订） | stage 5/6 已加末尾"PM 反馈分流策略"段；v4 改的是入口 step 1-3 + 新加 2.5 依赖检查；**与分流段不冲突** |
 | `skills/task-submit/SKILL.md` | **改**（2026-04-26 单窗口 lifecycle 修订）| stage 5/6 现有 SKILL：转 待验收 后提示 "回主窗口告诉主 Claude"。**v4 改为：在本窗口（task worktree）直接拉 diff + review 摘要呈交 PM 验收**。PM 通过 → 本窗口跑 /close-task；PM 打回 → 本窗口直接转 执行中 + PM 反馈写 task 文件 → 应用 stage 5/6 PM 反馈分流策略继续修。**不再"回主窗口"**——主窗口降级为兜底（详 §4.4） |
 | `skills/task-status/SKILL.md` | **微改**：(a) 加 `--summary` 模式（一行结论 `📋 task 概览: 执行中 N1 / 待验收 N2 / 待启动 N3`，给 §4.4 preamble 调用）；(b) 完整模式（无参数）扫到 "待确认" + worktree 已建 → 提示 "等待 PM 在新窗口启动"；扫到 "待验收" → 提示 "请去对应新窗口验收（task 在该 worktree 里跑过完整 review）" | 仓库现状未变 |
 | `skills/close-task/SKILL.md` | **改**（2026-04-26 单窗口 lifecycle 修订 + Codex C9）| stage 5/6 已加 `--skip-doc-update` + 末尾 auto-chain "下一个 task 是 task-NNN，继续吗？(Y/n)"。**v4 修改要点**：(a) close-task 在新窗口里跑（cwd 是 task worktree，脚本自己处理 cd 到 main repo 跑 merge）；(b) **末尾 auto-chain 文案改为明确指引**："✅ task-005 已 close。**关掉本窗口**（task 已结束）→ 去主窗口启下一个 task：建议下一个是 task-006（[title]），可以跑 /task-spec task-006 → /task-confirm tasks/task-006-*.md"。**不再问"继续吗"**（暗示在本窗口继续，但其实做不到——本窗口已经是 task-005 worktree） |
@@ -443,18 +469,18 @@ task 回到 "待确认"，worktree 保留供 PM 检查 dirty diff。**不需要 
 - `scripts/create-task-worktree.sh` / `task-transition.py` / `check-branch.sh`（v1 现状全保留——D7 修 task-transition.py 是单独 invariant 改动，不算 skill 改动）
 - `.claude/hooks/`（不引入新 hook）
 
-**stage 5/6 ship 后实际改动估算（2026-04-26 Codex outside voice 后修订）**：
-- v4 plan **直接改的 skill**：4 个（task-confirm 重写步骤 5 / task-execute 入口加 transition + cd + 扫双位置 / task-status 加 --summary 模式 + 多 task 摘要 / **close-task auto-chain 改并行感知**）
-- v4 plan **不动但要协同的 skill**：3 个（task-spec / task-submit / doc-update —— stage 5/6 已 ship 内容，v4 不动；task-submit 打回流程文案需补 §7.10 链接）
+**stage 5/6 ship 后实际改动估算（2026-04-26 多次修订汇总）**：
+- v4 plan **直接改的 skill**：6 个（task-confirm 重写步骤 5 / task-execute 入口加 transition + cd + 扫双位置 + **依赖前置 gate** / task-status 加 --summary 模式 + 多 task 摘要 / task-submit **改新窗口直接呈交验收** / **close-task 改新窗口跑 + auto-chain 文案** / **task-plan 加并行规划** / **task-spec 加依赖结构化**）
+- v4 plan **不动的 skill**：1 个（doc-update —— stage 5/6 已 ship，v4 不动）
 - v4 plan **改动的 scripts**：3 个
   - `task-transition.py`（D7 删 check_serial_constraint + 顺手修 FM7 事务性）
   - **`skill-preamble.sh`**（C2/C3 修订：扩展 `_find_active_req_in` 扫 .worktrees/req-* + 末尾加 status-view --summary 调用）
   - **`status-view.py`**（C2 修订：加 `--summary` 模式输出一行结论）
 - v4 plan **invariant 改动**：1 个（INVARIANTS.md I-TT2 + I-CT7 文档化 FM7 fix）
-- 模板改动：1 个（CLAUDE.md.tmpl 角色表 + 工作流文案 + 中止意图识别规则 + task 文件真相源规则）
-- 测试新增：~10 条（T11-T15 + Codex C10 6 条新断言）
+- 模板改动：2 个（CLAUDE.md.tmpl 角色表 + 工作流文案 + 中止意图识别规则 + task 文件真相源规则；task.md.tmpl 依赖字段格式说明）
+- 测试新增：~11 条（T11-T15 + Codex C10 6 条新断言 + T22 单窗口 lifecycle + T23 依赖 gate）
 
-**总改动面**：**8 个文件改动 + ~10 测试**（vs 原估算 4-5 文件 + 5-7 测试）。增量主要来自 Codex outside voice 发现的 plan 隐含假设需要新代码支持。
+**总改动面**：**11 个文件改动 + ~11 测试**（vs 原估算 4-5 文件 + 5-7 测试）。增量来自三处：(1) Codex outside voice 发现的 plan 隐含假设需新代码支持；(2) PM 单窗口 lifecycle 决议（task-submit/close-task 改流程）；(3) PM 依赖结构化决议（task-plan/task-spec/task-execute 依赖 gate）。
 
 ---
 
@@ -548,9 +574,9 @@ PM 同时 confirm task-005 和 task-006，但 task-006 实现依赖 task-005 已
 |---|---|---|
 | **A0** | **修 invariant + 顺手修 FM7** —— (1) `scripts/task-transition.py` 删除 `check_serial_constraint` (line 141-156) 或改 no-op；(2) `INVARIANTS.md` 更新 I-TT2 描述；(3) 改写 `tests/test-task-transition.sh:112-138` 两个 case 反向；(4) 顺手修 FM7 transition 事务性 + T15 反例 | 测试全绿 |
 | **A1** | **新增 preamble 行为支持主窗口收口**（Codex C2/C3）—— (1) `scripts/skill-preamble.sh:78` `_find_active_req_in` 扩展扫 `.worktrees/req-*`；(2) `scripts/skill-preamble.sh` 末尾加 status-view --summary 调用；(3) `scripts/status-view.py` 加 `--summary` 模式 | T16/T19 通过 |
-| **A2** | **改 4 个 skill** —— task-confirm 步骤 5 重写 / task-execute 入口加 transition + cd + 扫双位置 + 短 ID 模糊匹配 + next-step / task-status 加 --summary + 多 task 摘要 / **close-task auto-chain 改并行感知**（Codex C9）| T1-T5 + T13-T14 通过 |
-| **A3** | `templates/CLAUDE.md.tmpl` 改写 —— 角色表 + 工作流文案 + 中止意图识别规则 + task 文件真相源规则 | 手工 review |
-| **A4** | 新增 `tests/v4_T*.sh` 6-7 条单元 + `tests/e2e/v4_*.sh` 端到端 | T1-T21 全绿 |
+| **A2** | **改 6 个 skill** —— task-confirm 步骤 5 重写 / task-execute 入口加 transition + cd + 扫双位置 + 短 ID 模糊匹配 + next-step + **依赖前置 gate** / task-status 加 --summary + 多 task 摘要 / **task-submit 改本窗口呈交验收** / **close-task 改本窗口跑 + auto-chain 文案** / **task-plan 加并行规划输出** / **task-spec 加依赖结构化** | T1-T5 + T13-T14 + T22 + T23 通过 |
+| **A3** | 模板改写 —— `templates/CLAUDE.md.tmpl`（角色表 + 工作流文案 + 中止意图识别规则 + task 文件真相源规则）；`templates/task.md.tmpl`（依赖字段格式说明） | 手工 review |
+| **A4** | 新增 `tests/v4_T*.sh` 单元 + `tests/e2e/v4_*.sh` 端到端 ~11 条 | T1-T23 全绿 |
 | **A5** | 业务项目升级（admin console4） | 业务项目跑新流程 |
 
 **预计改动**（2026-04-26 Codex outside voice 后修订）：8 个文件改动（4 skill + 3 scripts + 1 模板）+ 1 invariant 文档化 + ~10 测试新增。
@@ -603,6 +629,7 @@ PM 同时 confirm task-005 和 task-006，但 task-006 实现依赖 task-005 已
 | **T11 中止意图识别（§4.5）**| PM 在主窗口任意输入触发 fail-execution | 输入 `放弃 task-005` / `取消 005` / `abort 这个`（task-005 唯一执行中时）→ 主 Claude 都识别并调 fail-execution；输入 `放弃` 无 task ID 且多 task 时 → 主 Claude 列出让 PM 选 |
 | **T12 兜底 reduce 触发（§4.4 兜底）**| 主 Claude preamble 摘要在 PM 误关新窗口场景生效 | task 状态 "待验收" + PM 关了新窗口 + 主窗口任意输入 → preamble 输出"📋 待验收 1 ⚠️ 请去对应新窗口"。**注：单窗口 lifecycle 后这是兜底场景测试，不是主路径** |
 | **T22 单窗口完整 lifecycle**（2026-04-26 修订）| 新窗口里完成 confirm 后所有步骤 | 新窗口 `/task-execute` → codex 跑完 → /task-submit 自审 → review → 转待验收 → **本窗口呈交 PM diff + review 摘要** → PM 通过 → /close-task → auto-chain 输出"关本窗口去主启下一个 task"。全程不切主窗口 |
+| **T23 依赖前置 gate**（2026-04-26 PM 决议）| task-execute 入口拒绝依赖未满足启动 | task-006 依赖 task-005，task-005 状态非"已完成" → `/task-execute task-006` exit 1 + 提示明确指引 PM 先 close task-005；task-005 已"已完成" → 通过；task 文件「依赖」字段为"无" → 直接通过 |
 | **T13 多 task 摘要格式（§6 task-status）**| task-status 输出多 task 一行结论 | 3 执行中 + 2 待验收 → 输出 `📋 task 概览: 执行中 3 / 待验收 2` 第一行；详情按需展开 |
 | **T14 短 ID 模糊匹配（Pass 2 F2）**| `/task-execute task-005` 自动找唯一 task-005-*.md | 1 匹配 → 用 ✓；0 匹配 → 报错；多匹配 → 列出报错 |
 | **T15 FM7 transition 事务性回归**| append_event 失败时 task 文件状态字段必须回滚 | 模拟 `.runs/events/` 不可写 → `task-transition --to 执行中` 必须 exit 1 + 状态字段保持原值（不能写成功又静默丢事件） |
@@ -633,6 +660,7 @@ PM 同时 confirm task-005 和 task-006，但 task-006 实现依赖 task-005 已
 | 2026-04-26 | PM 触发 /plan-eng-review，发现 stage 5/6 ship 已 drift v4 假设的"v1 现状" | sync v4 plan §3 入口加 `/task-spec`；§6 改动表加 stage 5/6 备注（task-execute 末尾分流段共存、close-task auto-chain 并行 caveat、新 skill task-spec/doc-update 标"不动但要协同"）；§11 加 T10 + 测试目录约定 align tests/e2e/ |
 | 2026-04-26 | /plan-eng-review Section 1+3+Codex outside voice 完整跑完 | Section 1: D7 加测试改写 + 顺手修 FM7 + 11/13 v3.5 gap 消失结论。Section 3: 加 T11-T15。**Codex outside voice 找 5 critical + 4 high**：(C1) D6 扫错地方，(C2/C3) "preamble 顺手扫" 是假的，(C5) close-task req wt dirty 风险，(C6) PM 打回路径断，(C7) 中止意图识别落 CLAUDE.md.tmpl 而非 preamble，(C8) §7.2 串行心智残留，(C9) close-task auto-chain 升级阻塞，(C10) 测试缺 6 断言。**改动估算从 4-5 文件升到 8 个文件**——主要新增 skill-preamble.sh + status-view.py 修订支持"主窗口自动收口" |
 | 2026-04-26 | PM 提议改为单窗口完整 lifecycle（验收 + 打回 + close 都在新窗口里）| **重大流程简化**：(a) §3 架构图重画——新窗口跑完整 lifecycle；(b) §4.4 主窗口收口降级为兜底；(c) §6 task-submit 改为新窗口直接呈交 PM 验收；(d) §6 close-task auto-chain 文案改"关本窗口去主启下一个"（不再问"继续吗"）；(e) §7.10 PM 打回路径大幅简化——同窗口继续修，删除"新窗口已关 vs 还在"分裂；(f) §11 加 T22 单窗口完整 lifecycle 测试。trade-off：失去主窗口"批量验收"模式，PM 主动跑 /task-status 拉总览补偿 |
+| 2026-04-26 | PM 提议加依赖结构化（task-plan 拆分阶段考虑并行 + task-execute 入口检查依赖） | **§7.7 把"依赖 PM 自己判断"升级为"系统帮记录 + 校验"**：(a) §6 task-plan SKILL 加"## 执行顺序与并行性"输出（ASCII 依赖图 + 并行 lanes + 启动建议）；(b) §6 task-spec SKILL 写 task 文件时「依赖」字段填结构化 task ID 列表；(c) §4.2 task-execute 入口加步骤 2.5 依赖前置 gate（依赖未"已完成"则拒绝 + 明确指引）；(d) §6 task.md.tmpl 「依赖」字段加格式说明；(e) §11 加 T23 依赖 gate 测试。改动估算 8 → 11 文件 |
 
 ---
 
