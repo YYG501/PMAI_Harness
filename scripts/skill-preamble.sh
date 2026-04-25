@@ -80,7 +80,13 @@ _find_active_req_in() {
 if [ "$WORKTREE_TYPE" != "main" ]; then
   _find_active_req_in "$CURRENT_WORKTREE_ROOT" || _find_active_req_in "$MAIN_REPO_ROOT"
 else
-  _find_active_req_in "$MAIN_REPO_ROOT"
+  # v4 A1 修订: main 分支扫主仓 + .worktrees/req-* (Codex C3)
+  _find_active_req_in "$MAIN_REPO_ROOT" || {
+    for _req_wt in "$MAIN_REPO_ROOT"/.worktrees/req-*; do
+      [ -d "$_req_wt" ] || continue
+      _find_active_req_in "$_req_wt" && break
+    done
+  }
 fi
 
 # --- 5. 读取活跃 task ---
@@ -225,6 +231,12 @@ echo "BRANCH: $BRANCH"
 echo "WORKTREE_TYPE: $WORKTREE_TYPE"
 [ -n "$ACTIVE_REQ" ] && echo "ACTIVE_REQ: $ACTIVE_REQ (stage $ACTIVE_REQ_STAGE)"
 [ -n "$ACTIVE_TASK" ] && echo "ACTIVE_TASK: $ACTIVE_TASK ($ACTIVE_TASK_STATUS)"
+
+# v4 A1 修订: 主窗口兜底收口 — preamble 输出 task 概览摘要 (Codex C2)
+# 单窗口 lifecycle 下作为兜底 (主路径在新窗口完成验收 + close)
+if [ -n "$ACTIVE_REQ" ] || ls "$MAIN_REPO_ROOT"/.worktrees/req-* >/dev/null 2>&1; then
+  python3 "$MAIN_REPO_ROOT/.claude/scripts/status-view.py" --summary 2>/dev/null || true
+fi
 
 export MAIN_REPO_ROOT REPO_ROOT CURRENT_WORKTREE_ROOT BRANCH WORKTREE_TYPE
 export ACTIVE_REQ ACTIVE_REQ_STAGE ACTIVE_REQ_DIR ACTIVE_TASK ACTIVE_TASK_STATUS

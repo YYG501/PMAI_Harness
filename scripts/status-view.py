@@ -184,6 +184,72 @@ def list_tasks(req_dir: Path) -> list[tuple[Path, dict[str, str]]]:
     return result
 
 
+def _task_worktree_exists(repo_root: Path, task_stem: str) -> bool:
+    worktrees_dir = repo_root / ".worktrees"
+    if not worktrees_dir.exists():
+        return False
+    exact = worktrees_dir / task_stem
+    if exact.is_dir():
+        return True
+    return any(
+        wt.is_dir() and wt.name.startswith(f"{task_stem}-")
+        for wt in worktrees_dir.iterdir()
+    )
+
+
+def _iter_summary_tasks(repo_root: Path) -> list[Path]:
+    active_roots = [repo_root / "requirements" / "active"]
+    worktrees_dir = repo_root / ".worktrees"
+    if worktrees_dir.exists():
+        active_roots.extend(
+            wt / "requirements" / "active"
+            for wt in sorted(worktrees_dir.glob("req-*"))
+            if wt.is_dir()
+        )
+
+    task_files: list[Path] = []
+    for active_root in active_roots:
+        task_files.extend(sorted(active_root.glob("*/tasks/task-*.md")))
+    return task_files
+
+
+def render_summary(repo_root: Path) -> None:
+    """Render a one-line task overview for preamble output."""
+    counts = {"执行中": 0, "待验收": 0, "待启动": 0}
+    seen_stems: set[str] = set()
+
+    for task_file in _iter_summary_tasks(repo_root):
+        task_stem = task_file.stem
+        if task_stem in seen_stems:
+            continue
+        seen_stems.add(task_stem)
+
+        fields = read_task_fields(task_file)
+        status = fields.get("状态", "")
+        if status == "执行中":
+            counts["执行中"] += 1
+        elif status == "待验收":
+            counts["待验收"] += 1
+        elif status == "待确认" and _task_worktree_exists(repo_root, task_stem):
+            counts["待启动"] += 1
+
+    if not any(counts.values()):
+        print("📋 暂无 active task")
+        return
+
+    print(
+        "📋 task 概览: "
+        f"执行中 {counts['执行中']} / "
+        f"待验收 {counts['待验收']} / "
+        f"待启动 {counts['待启动']}"
+    )
+    if counts["待验收"] > 0:
+        print(
+            f"⚠️ {counts['待验收']} 个 task 待验收，"
+            "请去对应新窗口验收（或 /task-status 看详情）"
+        )
+
+
 def suggest_next_action(
     meta: dict, tasks: list[tuple[Path, dict[str, str]]]
 ) -> str:
@@ -377,12 +443,19 @@ def main() -> None:
         default=None,
         help="Repository root (auto-detected if omitted)",
     )
+    parser.add_argument(
+        "--summary", action="store_true", help="Print one-line task overview"
+    )
     args = parser.parse_args()
 
     if args.repo_root:
         repo_root = Path(args.repo_root)
     else:
         repo_root = find_repo_root()
+
+    if args.summary:
+        render_summary(repo_root)
+        return
 
     render_status(repo_root)
 
