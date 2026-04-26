@@ -184,6 +184,80 @@ def list_tasks(req_dir: Path) -> list[tuple[Path, dict[str, str]]]:
     return result
 
 
+_PLAN_ROW_RE = re.compile(r"^\|[^|]*?(task-\d{3,})[^|]*\|\s*([^|]*?)\s*\|")
+
+
+def read_task_plan_ids(req_dir: Path) -> list[tuple[str, str]]:
+    """Parse task-plan.md and return [(task_id, title), ...] from the planning table.
+
+    Limits parsing to the region BEFORE the first '## ' heading to avoid
+    matching task ids mentioned in '## 变更记录' / '## 执行顺序与并行性' /
+    other narrative sections. Returns [] if file missing.
+    """
+    plan_file = req_dir / "task-plan.md"
+    if not plan_file.exists():
+        return []
+
+    content = plan_file.read_text(encoding="utf-8")
+    head = content.split("\n## ", 1)[0]
+
+    results: list[tuple[str, str]] = []
+    seen: set[str] = set()
+    for line in head.splitlines():
+        match = _PLAN_ROW_RE.match(line)
+        if not match:
+            continue
+        task_id = match.group(1).strip()
+        title = match.group(2).strip()
+        if task_id in seen:
+            continue
+        seen.add(task_id)
+        results.append((task_id, title))
+    return results
+
+
+def discarded_task_ids(req_dir: Path) -> set[str]:
+    """Return the set of task ids that have been discarded (moved to tasks/discarded/)."""
+    discarded_dir = req_dir / "tasks" / "discarded"
+    if not discarded_dir.exists():
+        return set()
+    ids: set[str] = set()
+    for f in discarded_dir.glob("task-*.md"):
+        match = re.match(r"(task-\d{3,})", f.stem)
+        if match:
+            ids.add(match.group(1))
+    return ids
+
+
+def specced_task_ids(tasks: list[tuple[Path, dict[str, str]]]) -> set[str]:
+    """Return the set of task ids that have been spec'd (have a tasks/<id>*.md file)."""
+    ids: set[str] = set()
+    for task_file, _ in tasks:
+        match = re.match(r"(task-\d{3,})", task_file.stem)
+        if match:
+            ids.add(match.group(1))
+    return ids
+
+
+def pending_spec_task_ids(
+    req_dir: Path, tasks: list[tuple[Path, dict[str, str]]]
+) -> list[tuple[str, str]]:
+    """Return task ids planned in task-plan.md but not yet spec'd (and not discarded).
+
+    Returned in plan order so the next-action hint can pick the first one.
+    """
+    planned = read_task_plan_ids(req_dir)
+    if not planned:
+        return []
+    discarded = discarded_task_ids(req_dir)
+    specced = specced_task_ids(tasks)
+    return [
+        (tid, title)
+        for tid, title in planned
+        if tid not in specced and tid not in discarded
+    ]
+
+
 def _task_worktree_exists(repo_root: Path, task_stem: str) -> bool:
     worktrees_dir = repo_root / ".worktrees"
     if not worktrees_dir.exists():
@@ -197,7 +271,8 @@ def _task_worktree_exists(repo_root: Path, task_stem: str) -> bool:
     )
 
 
-def _iter_summary_tasks(repo_root: Path) -> list[Path]:
+def _iter_active_req_dirs(repo_root: Path) -> list[Path]:
+    """Return all active req directories (deduped by basename) across main and worktrees."""
     active_roots = [repo_root / "requirements" / "active"]
     worktrees_dir = repo_root / ".worktrees"
     if worktrees_dir.exists():
@@ -207,15 +282,31 @@ def _iter_summary_tasks(repo_root: Path) -> list[Path]:
             if wt.is_dir()
         )
 
-    task_files: list[Path] = []
+    seen: set[str] = set()
+    req_dirs: list[Path] = []
     for active_root in active_roots:
-        task_files.extend(sorted(active_root.glob("*/tasks/task-*.md")))
+        if not active_root.exists():
+            continue
+        for req_dir in sorted(active_root.iterdir()):
+            if not req_dir.is_dir() or req_dir.name in seen:
+                continue
+            seen.add(req_dir.name)
+            req_dirs.append(req_dir)
+    return req_dirs
+
+
+def _iter_summary_tasks(repo_root: Path) -> list[Path]:
+    task_files: list[Path] = []
+    for req_dir in _iter_active_req_dirs(repo_root):
+        tasks_dir = req_dir / "tasks"
+        if tasks_dir.exists():
+            task_files.extend(sorted(tasks_dir.glob("task-*.md")))
     return task_files
 
 
 def render_summary(repo_root: Path) -> None:
     """Render a one-line task overview for preamble output."""
-    counts = {"执行中": 0, "待验收": 0, "待启动": 0}
+    counts = {"执行中": 0, "待验收": 0, "待启动": 0, "待 spec": 0}
     seen_stems: set[str] = set()
 
     for task_file in _iter_summary_tasks(repo_root):
@@ -233,6 +324,11 @@ def render_summary(repo_root: Path) -> None:
         elif status == "待确认" and _task_worktree_exists(repo_root, task_stem):
             counts["待启动"] += 1
 
+    # 待 spec：plan 里规划但 tasks/ 下没文件 (扫所有 active req 的 task-plan.md)
+    for req_dir in _iter_active_req_dirs(repo_root):
+        tasks = list_tasks(req_dir)
+        counts["待 spec"] += len(pending_spec_task_ids(req_dir, tasks))
+
     if not any(counts.values()):
         print("📋 暂无 active task")
         return
@@ -241,7 +337,8 @@ def render_summary(repo_root: Path) -> None:
         "📋 task 概览: "
         f"执行中 {counts['执行中']} / "
         f"待验收 {counts['待验收']} / "
-        f"待启动 {counts['待启动']}"
+        f"待启动 {counts['待启动']} / "
+        f"待 spec {counts['待 spec']}"
     )
     if counts["待验收"] > 0:
         print(
@@ -251,7 +348,7 @@ def render_summary(repo_root: Path) -> None:
 
 
 def suggest_next_action(
-    meta: dict, tasks: list[tuple[Path, dict[str, str]]]
+    meta: dict, tasks: list[tuple[Path, dict[str, str]]], req_dir: Path | None = None
 ) -> str:
     """Suggest what PM should do next."""
     stage = meta.get("stage", 0)
@@ -260,7 +357,7 @@ def suggest_next_action(
         return f"继续 stage {stage}（{STAGE_NAMES.get(stage, '?')}）的工作"
 
     if stage == 6:
-        # Check task statuses
+        # Check task statuses on already-spec'd tasks
         for task_file, fields in tasks:
             status = fields.get("状态", "")
             name = task_file.stem
@@ -271,10 +368,20 @@ def suggest_next_action(
             if status == "待确认":
                 return f"确认启动 {name}：运行 /task-confirm"
 
-        # All tasks done
+        # All spec'd tasks are 已完成 — but plan may still have un-spec'd entries.
+        # Cross-reference task-plan.md to avoid the "已完成 1 / 待启动 0 → all done"
+        # trap when only task-001 has been spec'd from a 4-task plan.
         all_done = all(f.get("状态") == "已完成" for _, f in tasks)
-        if all_done and tasks:
-            return "所有 task 已完成，运行 /close-req 关闭需求"
+        if not (all_done and tasks):
+            return "运行 /task-status 查看详情"
+
+        pending = pending_spec_task_ids(req_dir, tasks) if req_dir else []
+        if pending:
+            next_id, next_title = pending[0]
+            tail = f"（还有 {len(pending)} 个未 spec）" if len(pending) > 1 else ""
+            return f"task-plan 里还有未 spec 的 task：先运行 /task-spec {next_id}{tail}"
+
+        return "所有 task 已完成，运行 /close-req 关闭需求"
 
     if stage == 7:
         return "Req 正在关闭中"
@@ -401,7 +508,8 @@ def render_status(repo_root: Path) -> None:
 
     # List tasks
     tasks = list_tasks(req_dir)
-    if tasks:
+    pending_spec = pending_spec_task_ids(req_dir, tasks) if stage == 6 else []
+    if tasks or pending_spec:
         print("Task 状态：")
         for task_file, fields in tasks:
             status = fields.get("状态", "?")
@@ -424,6 +532,10 @@ def render_status(repo_root: Path) -> None:
                     line += f"（最后活动：{last_event}）"
 
             print(line)
+
+        for task_id, title in pending_spec:
+            display = title or task_id
+            print(f"  📝 {task_id}: {display} — 待 spec")
         print()
 
     # Manual pending section (shown regardless of active req status)
@@ -431,7 +543,7 @@ def render_status(repo_root: Path) -> None:
     render_quickfix_section(repo_root)
 
     # Next action
-    next_action = suggest_next_action(meta, tasks)
+    next_action = suggest_next_action(meta, tasks, req_dir)
     print(f"下一步：{next_action}")
 
 
