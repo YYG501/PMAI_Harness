@@ -24,6 +24,7 @@
 
 - Req stage 推进/回退：`python3 .claude/scripts/req-transition.py <req-dir> --to <stage> [--rollback]`
 - Task 状态变更：`python3 .claude/scripts/task-transition.py <task-file> --to <status> [--note <text>]`
+- Task 废弃（含清理 worktree+分支）：`python3 .claude/scripts/task-transition.py <task-file> --discard --reason "<一句话>"`（源状态 ∈ {待确认, 执行中, 待验收}；已完成不可——开新 task revert 或 `/cancel-req`）
 
 Hook 会拦截直接编辑，但 **CLAUDE.md 规则是主要约束，hook 是补充检查**。即使绕过 hook（如通过 Bash），也必须遵守此规则。
 

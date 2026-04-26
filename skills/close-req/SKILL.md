@@ -31,10 +31,20 @@ echo "SKILL: close-req"
 [从 brief.md 提取]
 
 ## 完成的 task
-| Task | 状态 | 摘要 |
-|------|------|------|
-| task-001-xxx | 已完成 | [从执行日志提取] |
-| task-002-xxx | 已完成 | [从执行日志提取] |
+| Task | 摘要 |
+|------|------|
+| task-001-xxx | [从执行日志提取] |
+| task-003-xxx | [从执行日志提取] |
+
+<!-- 仅当 tasks/discarded/ 下有文件时输出本段 -->
+<details>
+<summary>已废弃 task（N 个）</summary>
+
+| Task | 废弃理由 |
+|------|----------|
+| task-002-xxx | [从该 task 文件的「废弃理由」section 摘要] |
+
+</details>
 
 ## 文档变更
 [列出本次 req 修改过的文档]
@@ -42,6 +52,11 @@ echo "SKILL: close-req"
 ## 遗留问题
 [如有未解决的问题或后续建议]
 ```
+
+**生成规则：**
+- 遍历 `tasks/*.md` 填「完成的 task」表（这里只剩已完成态，因为 stage 7 guardrail 要求所有未关闭 task 都收尾）。
+- 遍历 `tasks/discarded/*.md` 填废弃栏；为空时整个 `<details>` 块省略。
+- 已废弃 task 编号断号是合规信号，不要为「整理顺序」而改号。
 
 ### 步骤 2：更新 PRD
 

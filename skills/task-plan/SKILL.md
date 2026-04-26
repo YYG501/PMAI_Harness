@@ -185,6 +185,32 @@ PM 启动建议：
 
 进入 stage 6 后，具体 task 文档由 stage 6 的 `/task-spec <task-id>` 按 `task-plan.md` 逐个生成。
 
+### 步骤 6（中途重新拆分）：stage 6 发现拆分需要重做
+
+stage 6 task 子循环里，有时跑到 task-NNN 才发现 task 拆分本身有问题，需要废弃当前拆分回 stage 5 重拆。流程：
+
+1. **逐个 discard 待废弃 task**（任何开放态都可以）：
+
+   ```bash
+   python3 .claude/scripts/task-transition.py <task-file> --discard --reason "<一句话>"
+   ```
+
+   每次 discard 自动：移文件到 `tasks/discarded/`、改状态为「已废弃」、追加 `## 废弃理由` section、清理对应 task worktree + 分支、commit 到 req 分支。
+
+   边界：
+   - **`已完成` task 不能 discard**（代码已合入 req 分支）。如需撤销已完成 task 的改动，开新 task 做 revert，或用 `/cancel-req` 整体取消 req。
+   - 任何带 worktree / 未提交改动 / 未合并 commit 的 task，discard 会一并丢弃，confirm prompt 会列出具体丢什么。
+
+2. **回退 stage**（discard 完所有要废弃的 task 后，guardrail 自然放行）：
+
+   ```bash
+   python3 .claude/scripts/req-transition.py <req-dir> --to 5 --rollback
+   ```
+
+3. **重新拆分**：按步骤 3-4 重新写 `task-plan.md`。**新增 task 的编号往后接，不复用已废弃 task 的编号**——`closed/<req>/tasks/discarded/` 里看到 002，主目录里 003 起步，编号断号本身是「这里发生过重拆」的信号。
+
+4. **task-plan.md 变更记录** section 写一条变更说明（哪些 task 废弃、为什么、新拆分的逻辑差异）。
+
 ## Rules
 
 - task 编号三位数，从 001 开始，格式 `task-001`。

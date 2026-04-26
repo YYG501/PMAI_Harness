@@ -17,11 +17,15 @@ VALID_TRANSITIONS = {
     "执行中": ["待验收", "待确认"],  # 待确认 = --fail-execution / --cancel-manual 回退
     "待验收": ["已完成", "执行中"],  # 执行中 = PM 打回
     "已完成": [],
+    "已废弃": [],  # 终态：从 {待确认, 执行中, 待验收} 经 --discard 进入；不可回流
 }
 
 # `执行中 → 待确认` is only reachable via --fail-execution or --cancel-manual;
 # plain --to 待确认 from 执行中 is rejected.
 RESTRICTED_TRANSITIONS = {("执行中", "待确认")}
+
+# 状态可经 --discard 转入「已废弃」的允许集合
+DISCARDABLE_FROM = {"待确认", "执行中", "待验收"}
 
 SCRIPTS_DIR = Path(__file__).resolve().parent
 EVENTS_SCRIPT = SCRIPTS_DIR / "task-events.py"
@@ -293,6 +297,236 @@ def cmd_cancel_manual(task_file: Path) -> None:
     print(f"✅ Manual 放弃：标记已删除，状态回到 待确认")
 
 
+def _now_iso() -> str:
+    from datetime import datetime, timezone
+    return datetime.now(timezone.utc).isoformat()
+
+
+def cmd_discard(task_file: Path, reason: str, yes: bool) -> None:
+    """Handle --discard: PM 废弃 task。
+
+    流程（fail-closed 顺序）：
+      1. 校验源状态 ∈ DISCARDABLE_FROM；已完成显式引导
+      2. confirm prompt（除 --yes）展示要丢的 worktree / 分支 / uncommitted / unmerged
+      3. git mv tasks/<f>.md tasks/discarded/<f>.md（在 req worktree 内）
+      4. 在新位置改状态字段为「已废弃」+ 追加 `## 废弃理由` section
+      5. append_event status_changed
+      6. git worktree remove --force <task-worktree>
+      7. git branch -D <task-branch>
+      8. git add -A && commit 到 req 分支
+    """
+    fields = read_fields(task_file)
+    current = fields.get("状态", "")
+
+    if current == "已完成":
+        print(
+            "Error: 已完成 task 不能 discard。代码已合并到 req 分支，"
+            "如需撤销请新开 task revert，或用 /cancel-req 整体取消 req。",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+    if current not in DISCARDABLE_FROM:
+        print(
+            f"Error: 当前状态「{current}」不可 discard。"
+            f"合法源状态: {', '.join(sorted(DISCARDABLE_FROM))}",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+
+    if not reason or not reason.strip():
+        print("Error: --discard 必须提供 --reason \"<一句话>\"", file=sys.stderr)
+        sys.exit(1)
+    reason = reason.strip()
+
+    # 推断分支名（与 create-task-worktree.sh 一致：文件 stem，加 task- 前缀如未带）
+    task_id = task_file.stem
+    branch = task_id if task_id.startswith("task-") else f"task-{task_id}"
+
+    repo_root = find_main_repo_root()
+    try:
+        req_worktree_root = Path(
+            subprocess.check_output(
+                ["git", "-C", str(task_file.parent), "rev-parse", "--show-toplevel"],
+                text=True,
+            ).strip()
+        )
+    except Exception as exc:
+        print(f"Error: 无法定位 req worktree: {exc}", file=sys.stderr)
+        sys.exit(1)
+
+    # 防呆：禁止在 task worktree 内调 --discard（commit 会落到 task 分支）
+    if req_worktree_root == (repo_root / ".worktrees" / branch).resolve() or \
+       req_worktree_root.name == branch:
+        print(
+            f"Error: 检测到当前在 task worktree ({branch}) 内调用 --discard。"
+            f"请回到 req worktree 或主仓再执行，避免 commit 落到 task 分支。",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+
+    task_worktree = repo_root / ".worktrees" / branch
+    has_worktree = task_worktree.exists()
+    has_branch = (
+        subprocess.run(
+            ["git", "-C", str(repo_root), "show-ref", "--verify", "--quiet",
+             f"refs/heads/{branch}"],
+            capture_output=True,
+        ).returncode
+        == 0
+    )
+
+    # 收集要丢的（informational）
+    uncommitted = 0
+    unmerged = 0
+    if has_worktree:
+        try:
+            out = subprocess.check_output(
+                ["git", "-C", str(task_worktree), "status", "--porcelain"],
+                text=True,
+            )
+            uncommitted = len([l for l in out.splitlines() if l.strip()])
+        except Exception:
+            pass
+    if has_branch:
+        meta_file = task_file.parent.parent / ".req-meta.json"
+        if meta_file.exists():
+            try:
+                req_branch = json.loads(meta_file.read_text(encoding="utf-8")).get("branch", "")
+                if req_branch:
+                    out = subprocess.check_output(
+                        ["git", "-C", str(repo_root), "rev-list", "--count",
+                         f"{req_branch}..{branch}"],
+                        text=True, stderr=subprocess.DEVNULL,
+                    )
+                    unmerged = int(out.strip() or "0")
+            except Exception:
+                pass
+
+    # 展示 + confirm
+    print(f"将废弃 task: {task_file.name}")
+    print(f"  当前状态: {current}")
+    print(f"  废弃理由: {reason}")
+    print(f"  task 分支: {branch} ({'存在' if has_branch else '不存在'})")
+    if has_worktree:
+        try:
+            wt_disp = task_worktree.relative_to(repo_root)
+        except ValueError:
+            wt_disp = task_worktree
+        print(f"  task worktree: {wt_disp}")
+        print(f"  未提交改动: {uncommitted} 项 (将随 worktree --force 一并丢弃)")
+    else:
+        print(f"  task worktree: 无")
+    if has_branch and unmerged > 0:
+        print(f"  未合并 commit: {unmerged} 个 (将随 branch -D 一并丢弃)")
+
+    if not yes:
+        try:
+            answer = input("确认废弃？输入 yes 继续: ").strip().lower()
+        except EOFError:
+            answer = ""
+        if answer != "yes":
+            print("已取消。", file=sys.stderr)
+            sys.exit(1)
+
+    # 1. git mv 到 discarded/
+    discarded_dir = task_file.parent / "discarded"
+    discarded_dir.mkdir(exist_ok=True)
+    new_task_file = discarded_dir / task_file.name
+
+    try:
+        rel_from = task_file.relative_to(req_worktree_root)
+        rel_to = new_task_file.relative_to(req_worktree_root)
+    except ValueError as exc:
+        print(f"Error: task 文件不在 req worktree 内: {exc}", file=sys.stderr)
+        sys.exit(1)
+
+    mv_result = subprocess.run(
+        ["git", "-C", str(req_worktree_root), "mv", str(rel_from), str(rel_to)],
+        capture_output=True, text=True,
+    )
+    if mv_result.returncode != 0:
+        print(f"Error: git mv 失败: {mv_result.stderr.strip()}", file=sys.stderr)
+        sys.exit(1)
+
+    # 2. 改状态字段 + 追加废弃理由 section（在新位置）
+    text = read_text(new_task_file)
+    new_text, count = update_field(text, "状态", "已废弃")
+    if count == 0:
+        # 回滚 git mv
+        subprocess.run(
+            ["git", "-C", str(req_worktree_root), "mv", str(rel_to), str(rel_from)],
+            capture_output=True,
+        )
+        print("Error: 无法更新状态字段。", file=sys.stderr)
+        sys.exit(1)
+
+    discard_section = (
+        f"\n\n---\n\n## 废弃理由\n\n"
+        f"**时间：** {_now_iso()}\n"
+        f"**理由：** {reason}\n"
+    )
+    new_text = new_text.rstrip() + discard_section
+    save_text(new_task_file, new_text)
+
+    # 3. append_event（事件流位置由 task stem 决定，文件移动后不变）
+    result = append_event(new_task_file, current, "已废弃", f"discard: {reason}")
+    if result.returncode != 0:
+        output = (result.stderr or result.stdout or "").strip()
+        print(f"⚠️ 事件追加失败（继续）: {output}", file=sys.stderr)
+
+    # 4. 清理 task worktree
+    if has_worktree:
+        wt_result = subprocess.run(
+            ["git", "-C", str(repo_root), "worktree", "remove", "--force",
+             str(task_worktree)],
+            capture_output=True, text=True,
+        )
+        if wt_result.returncode != 0:
+            import shutil
+            try:
+                shutil.rmtree(task_worktree)
+            except Exception:
+                pass
+            subprocess.run(
+                ["git", "-C", str(repo_root), "worktree", "prune"],
+                capture_output=True,
+            )
+
+    # 5. 删 task 分支
+    if has_branch:
+        br_result = subprocess.run(
+            ["git", "-C", str(repo_root), "branch", "-D", branch],
+            capture_output=True, text=True,
+        )
+        if br_result.returncode != 0:
+            print(
+                f"⚠️ 删除 task 分支 {branch} 失败（继续）: {br_result.stderr.strip()}",
+                file=sys.stderr,
+            )
+
+    # 6. commit 到 req 分支
+    subprocess.run(
+        ["git", "-C", str(req_worktree_root), "add", "-A"],
+        capture_output=True,
+    )
+    commit_msg = f"discard: {task_id} — {reason}"
+    commit_result = subprocess.run(
+        ["git", "-C", str(req_worktree_root), "commit", "-m", commit_msg],
+        capture_output=True, text=True,
+    )
+    if commit_result.returncode != 0:
+        err = commit_result.stderr.strip() or commit_result.stdout.strip()
+        print(f"⚠️ commit 失败（请手动 commit）: {err}", file=sys.stderr)
+
+    print(f"⏭ Task 已废弃: {task_id}")
+    print(f"   理由: {reason}")
+    print(f"   归档到: tasks/discarded/{task_file.name}")
+    if has_worktree:
+        print(f"   worktree 已清理: {task_worktree.name}")
+    if has_branch:
+        print(f"   分支已删: {branch}")
+
+
 def cmd_get_status(task_file: Path) -> None:
     """Print the current task status field to stdout. Used by gate scripts
     (check-branch.sh, exec-adapters/*.sh, /task-execute preamble) so no one
@@ -347,6 +581,18 @@ def main() -> None:
         help="PM 放弃 manual task: delete pending marker + 转回待确认",
     )
     parser.add_argument(
+        "--discard",
+        action="store_true",
+        help="废弃 task：移到 tasks/discarded/、清理 worktree+分支、commit。"
+             "源状态 ∈ {待确认, 执行中, 待验收}；已完成不可。需 --reason，"
+             "非交互场景加 --yes 跳过 confirm。",
+    )
+    parser.add_argument(
+        "--yes",
+        action="store_true",
+        help="跳过 --discard 的 confirm prompt（用于自动化场景）",
+    )
+    parser.add_argument(
         "--snooze-manual",
         action="store_true",
         help="暂缓 manual 提醒 N 天，不改状态。与 --days 配合使用",
@@ -379,6 +625,13 @@ def main() -> None:
 
     if args.cancel_manual:
         cmd_cancel_manual(task_file)
+        return
+
+    if args.discard:
+        if not args.reason:
+            print("Error: --discard requires --reason \"<一句话>\"", file=sys.stderr)
+            sys.exit(1)
+        cmd_discard(task_file, args.reason, args.yes)
         return
 
     if args.snooze_manual:

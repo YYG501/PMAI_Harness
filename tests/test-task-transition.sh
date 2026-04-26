@@ -368,6 +368,207 @@ test_happy_path_start_to_review() {
 }
 
 # -----------------------------------------------------------------
+# I-DISCARD: --discard 路径
+# -----------------------------------------------------------------
+
+test_discard_from_pending() {
+  start_test "I-DISCARD discard 待确认 task (no worktree)"
+  fixture_setup
+  req_dir=$(fixture_create_req "req-001" "test" 6)
+  task=$(fixture_create_task "$req_dir" "002" "demo" "待确认")
+  task_basename=$(basename "$task")
+
+  if _run_transition "$task" --discard --reason "拆分有误" --yes >/tmp/out.$$ 2>/tmp/err.$$; then
+    if [ -f "$req_dir/tasks/discarded/$task_basename" ] && [ ! -f "$task" ]; then
+      pass_test
+    else
+      _fail "task 文件未正确移动"
+      ls -la "$req_dir/tasks/" "$req_dir/tasks/discarded/" >&2 2>&1 || true
+    fi
+  else
+    _fail "discard 失败"
+    cat /tmp/err.$$ >&2
+  fi
+  rm -f /tmp/out.$$ /tmp/err.$$
+  fixture_teardown
+}
+
+test_discard_from_executing_with_worktree() {
+  start_test "I-DISCARD discard 执行中 task + clean worktree+branch"
+  fixture_setup
+  req_dir=$(fixture_create_req "req-001" "test" 6)
+  task=$(fixture_create_task "$req_dir" "002" "demo" "执行中")
+  task_basename=$(basename "$task")
+  task_branch="task-002-demo"
+  task_wt=$(fixture_create_task_worktree "$task" "req-001-test")
+
+  # task_wt 是 fixture 创建后返回的绝对路径
+  if _run_transition "$task" --discard --reason "试错重做" --yes >/tmp/out.$$ 2>/tmp/err.$$; then
+    moved=ok
+    [ -f "$req_dir/tasks/discarded/$task_basename" ] || moved="not-moved"
+    [ -f "$task" ] && moved="orig-still-exists"
+
+    wt_cleared=ok
+    [ -d "$task_wt" ] && wt_cleared="worktree-still-exists"
+
+    branch_cleared=ok
+    if (cd "$FIXTURE_DIR" && git show-ref --verify --quiet "refs/heads/$task_branch") 2>/dev/null; then
+      branch_cleared="branch-still-exists"
+    fi
+
+    if [ "$moved" = ok ] && [ "$wt_cleared" = ok ] && [ "$branch_cleared" = ok ]; then
+      pass_test
+    else
+      _fail "moved=$moved wt=$wt_cleared branch=$branch_cleared"
+      cat /tmp/err.$$ >&2
+    fi
+  else
+    _fail "discard 失败"
+    cat /tmp/err.$$ >&2
+  fi
+  rm -f /tmp/out.$$ /tmp/err.$$
+  fixture_teardown
+}
+
+test_discard_from_pending_review() {
+  start_test "I-DISCARD discard 待验收 task"
+  fixture_setup
+  req_dir=$(fixture_create_req "req-001" "test" 6)
+  task=$(fixture_create_task "$req_dir" "002" "demo" "待验收")
+  task_basename=$(basename "$task")
+
+  if _run_transition "$task" --discard --reason "需求改了" --yes >/tmp/out.$$ 2>/tmp/err.$$; then
+    if [ -f "$req_dir/tasks/discarded/$task_basename" ]; then
+      pass_test
+    else
+      _fail "task 未归档"
+    fi
+  else
+    _fail "discard 失败"
+    cat /tmp/err.$$ >&2
+  fi
+  rm -f /tmp/out.$$ /tmp/err.$$
+  fixture_teardown
+}
+
+test_discard_done_rejected_with_guidance() {
+  start_test "I-DISCARD reject 已完成 with revert/cancel-req guidance"
+  fixture_setup
+  req_dir=$(fixture_create_req "req-001" "test" 6)
+  task=$(fixture_create_task "$req_dir" "002" "demo" "已完成")
+
+  if _run_transition "$task" --discard --reason "x" --yes >/tmp/out.$$ 2>/tmp/err.$$; then
+    _fail "should reject discard from 已完成"
+  else
+    if grep -q "已完成 task 不能 discard" /tmp/err.$$ && grep -q "cancel-req" /tmp/err.$$; then
+      pass_test
+    else
+      _fail "stderr 未出现引导文案"
+      cat /tmp/err.$$ >&2
+    fi
+  fi
+  rm -f /tmp/out.$$ /tmp/err.$$
+  fixture_teardown
+}
+
+test_discard_missing_reason() {
+  start_test "I-DISCARD reject without --reason"
+  fixture_setup
+  req_dir=$(fixture_create_req "req-001" "test" 6)
+  task=$(fixture_create_task "$req_dir" "002" "demo" "待确认")
+
+  if _run_transition "$task" --discard --yes >/tmp/out.$$ 2>/tmp/err.$$; then
+    _fail "should reject discard without --reason"
+  else
+    if grep -qi "reason" /tmp/err.$$; then
+      pass_test
+    else
+      _fail "stderr missing reason message"
+      cat /tmp/err.$$ >&2
+    fi
+  fi
+  rm -f /tmp/out.$$ /tmp/err.$$
+  fixture_teardown
+}
+
+test_discard_aborts_on_eof_without_yes() {
+  start_test "I-DISCARD aborts on EOF when --yes not passed"
+  fixture_setup
+  req_dir=$(fixture_create_req "req-001" "test" 6)
+  task=$(fixture_create_task "$req_dir" "002" "demo" "待确认")
+  task_basename=$(basename "$task")
+
+  if (cd "$FIXTURE_DIR" && python3 "$TASK_TRANSITION" "$task" --discard --reason "x" </dev/null) >/tmp/out.$$ 2>/tmp/err.$$; then
+    _fail "should abort on EOF"
+  else
+    if grep -q "已取消" /tmp/err.$$; then
+      # 文件不应该被移动
+      if [ -f "$task" ] && [ ! -f "$req_dir/tasks/discarded/$task_basename" ]; then
+        pass_test
+      else
+        _fail "abort 后文件被错误移动"
+      fi
+    else
+      _fail "stderr missing 已取消"
+      cat /tmp/err.$$ >&2
+    fi
+  fi
+  rm -f /tmp/out.$$ /tmp/err.$$
+  fixture_teardown
+}
+
+test_discard_unblocks_stage6_rollback() {
+  start_test "I-DISCARD post-discard, req-transition --rollback to stage 5 passes"
+  fixture_setup
+  req_dir=$(fixture_create_req "req-001" "test" 6)
+  fixture_create_task "$req_dir" "001" "done" "已完成" >/dev/null
+  task2=$(fixture_create_task "$req_dir" "002" "todo" "待确认")
+
+  if ! _run_transition "$task2" --discard --reason "重拆" --yes >/tmp/out.$$ 2>/tmp/err.$$; then
+    _fail "discard 失败"
+    cat /tmp/err.$$ >&2
+    rm -f /tmp/out.$$ /tmp/err.$$
+    fixture_teardown
+    return
+  fi
+
+  REQ_TRANSITION="$FRAMEWORK_ROOT/scripts/req-transition.py"
+  if (cd "$FIXTURE_DIR" && python3 "$REQ_TRANSITION" "$req_dir" --to 5 --rollback) >/tmp/out.$$ 2>/tmp/err.$$; then
+    pass_test
+  else
+    _fail "rollback 应放行"
+    cat /tmp/err.$$ >&2
+  fi
+  rm -f /tmp/out.$$ /tmp/err.$$
+  fixture_teardown
+}
+
+test_discard_appends_reason_section() {
+  start_test "I-DISCARD task 文件含 状态=已废弃 + 废弃理由 section"
+  fixture_setup
+  req_dir=$(fixture_create_req "req-001" "test" 6)
+  task=$(fixture_create_task "$req_dir" "002" "demo" "待确认")
+  task_basename=$(basename "$task")
+
+  if _run_transition "$task" --discard --reason "拆得不对" --yes >/tmp/out.$$ 2>/tmp/err.$$; then
+    new_path="$req_dir/tasks/discarded/$task_basename"
+    if grep -q '^\*\*状态：\*\* 已废弃' "$new_path" && \
+       grep -q '^## 废弃理由' "$new_path" && \
+       grep -q '拆得不对' "$new_path"; then
+      pass_test
+    else
+      _fail "task 文件内容缺字段或 section"
+      cat "$new_path" >&2
+    fi
+  else
+    _fail "discard 失败"
+    cat /tmp/err.$$ >&2
+  fi
+  rm -f /tmp/out.$$ /tmp/err.$$
+  fixture_teardown
+}
+
+# -----------------------------------------------------------------
 # Run
 # -----------------------------------------------------------------
 
@@ -384,5 +585,13 @@ test_allow_empty_review_tool
 test_reject_reject_without_note
 test_allow_reject_with_note
 test_happy_path_start_to_review
+test_discard_from_pending
+test_discard_from_executing_with_worktree
+test_discard_from_pending_review
+test_discard_done_rejected_with_guidance
+test_discard_missing_reason
+test_discard_aborts_on_eof_without_yes
+test_discard_unblocks_stage6_rollback
+test_discard_appends_reason_section
 
 report_results "task-transition"
