@@ -14,6 +14,7 @@ SUITES=(
   test-req-transition.sh
   test-close-task.sh
   test-close-req.sh
+  test-cleanup-pending.sh
   test-cancel-req.sh
   test-status-view.sh
   v4_T13_status_summary.sh

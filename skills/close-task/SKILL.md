@@ -77,10 +77,10 @@ bash .claude/scripts/close-task.sh "<task-file-absolute-path>"
 2. 检查文档偏差（二次检查，有未处理偏差会阻塞）
 3. 归档 `.runs/` 到 req 目录的 `tasks/_archived/`
 4. merge task 分支到 req 分支
-5. 删除 task 分支
-6. 清理 task worktree
-7. 杀掉 dev server 进程
-8. 清理 `.runs/` 原件
+5. 把 task worktree + branch 写入 `.runs/pending-cleanup.json`（不立即删，避免父进程 cwd dangling）
+6. 杀掉 dev server 进程
+7. 清理 `.runs/` 原件
+8. 提示 PM：回主仓后跑 `bash scripts/cleanup-pending-worktrees.sh` 完成清理
 
 ### 步骤 3：确认结果
 
@@ -88,6 +88,9 @@ bash .claude/scripts/close-task.sh "<task-file-absolute-path>"
 
 ```
 Task 已关闭：<task-title>
+
+worktree 和 branch 待清理。请退出当前会话，回主仓后跑：
+  bash scripts/cleanup-pending-worktrees.sh
 
 下一步：
 - 如有下一个待启动 task，关闭本窗口，去主窗口运行 /task-spec → /task-confirm
@@ -98,8 +101,8 @@ Task 已关闭：<task-title>
 
 - 必须在 task 状态为「已完成」时才能关闭
 - 文档偏差必须在关闭前处理（close-task.sh 会做二次检查）
-- 不要手动执行 merge/删分支/清 worktree，全部由 close-task.sh 处理
-- 关闭后 orchestrator 回到 req worktree 继续工作
+- 不要手动执行 merge/删分支/清 worktree，全部由 close-task.sh 和 cleanup-pending-worktrees.sh 处理
+- 关闭后 orchestrator 回到 req worktree 继续工作；worktree/branch 的实际删除由 PM 在主仓 cwd 跑 cleanup 完成（避免 close 删自己脚下目录导致 Stop hook posix_spawn ENOENT）
 
 ## 末尾轻量 auto-chain（DX RU6）
 

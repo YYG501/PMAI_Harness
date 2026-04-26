@@ -8,6 +8,7 @@ source "$SCRIPT_DIR/helpers/assert.sh"
 source "$SCRIPT_DIR/helpers/fixture.sh"
 
 CANCEL_REQ="$FRAMEWORK_ROOT/scripts/cancel-req.sh"
+CLEANUP_PENDING="$FRAMEWORK_ROOT/scripts/cleanup-pending-worktrees.sh"
 
 # cancel-req.sh expects the req-dir to live under the MAIN repo's requirements/active/.
 # Fixture creates it inside the req worktree. We mirror it to main so the script
@@ -46,14 +47,18 @@ test_cancel_happy_path() {
   cd "$FIXTURE_DIR"
   bash "$CANCEL_REQ" "$req_dir" >/dev/null 2>&1
 
+  # Cancel 后 worktree/branch 推迟到 cleanup（防止 dangling cwd）。
+  # 跑 cleanup 完成清理，再断言已删。
+  bash "$CLEANUP_PENDING" >/dev/null 2>&1
+
   # Worktree removed
   if [ -d "$FIXTURE_DIR/.worktrees/req-001-test" ]; then
-    _fail "req worktree should be gone"
+    _fail "req worktree should be gone after cleanup"
     fixture_teardown; return
   fi
   # Branch removed
   if git -C "$FIXTURE_DIR" branch --list req-001-test | grep -q .; then
-    _fail "req branch should be deleted"
+    _fail "req branch should be deleted after cleanup"
     fixture_teardown; return
   fi
   # Dir moved to closed/
@@ -128,14 +133,17 @@ test_cancel_cleans_active_task() {
   cd "$FIXTURE_DIR"
   bash "$CANCEL_REQ" "$req_dir" >/dev/null 2>&1
 
+  # Cancel 后清理推迟到 cleanup
+  bash "$CLEANUP_PENDING" >/dev/null 2>&1
+
   # task worktree gone
   if [ -d "$task_wt" ]; then
-    _fail "task worktree should be removed"
+    _fail "task worktree should be removed after cleanup"
     fixture_teardown; return
   fi
   # task branch gone
   if git -C "$FIXTURE_DIR" branch --list "task-001-impl" | grep -q .; then
-    _fail "task branch should be deleted"
+    _fail "task branch should be deleted after cleanup"
     fixture_teardown; return
   fi
   pass_test
@@ -247,14 +255,17 @@ test_cancel_cleans_tasks_when_req_not_on_main() {
     fixture_teardown; return
   fi
 
+  # Cancel 后清理推迟到 cleanup
+  bash "$CLEANUP_PENDING" >/dev/null 2>&1
+
   # task worktree/分支 必须清掉
   if [ -d "$task_wt" ]; then
-    _fail "task worktree left behind: $task_wt"
+    _fail "task worktree left behind after cleanup: $task_wt"
     rm -f /tmp/out.$$ /tmp/err.$$
     fixture_teardown; return
   fi
   if git -C "$FIXTURE_DIR" branch --list "task-001-impl" | grep -q .; then
-    _fail "task branch left behind"
+    _fail "task branch left behind after cleanup"
     rm -f /tmp/out.$$ /tmp/err.$$
     fixture_teardown; return
   fi

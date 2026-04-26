@@ -90,16 +90,19 @@ bash .claude/scripts/close-req.sh "$ACTIVE_REQ_DIR"
 1. 校验 stage 为 7
 2. 校验所有 task 已关闭
 3. cd 到主仓，merge req 分支到 main
-4. 删除 req 分支
-5. 清理 req worktree
-6. 移动 req 目录到 `requirements/closed/`
-7. 更新 req 状态为 closed
+4. 把 req worktree + branch 写入 `.runs/pending-cleanup.json`（不立即删，避免父进程 cwd dangling）
+5. 移动 req 目录到 `requirements/closed/`（在 req 分支上 commit 后随 merge 落地）
+6. 更新 req 状态为 closed
+7. 提示 PM：回主仓后跑 `bash scripts/cleanup-pending-worktrees.sh` 完成清理
 
 ### 步骤 6：确认结果
 
 ```
 Req 已关闭：req-NNN-<slug>
 当前位置：主仓 main 分支
+
+worktree 和 branch 待清理。请退出当前会话，回主仓后跑：
+  bash scripts/cleanup-pending-worktrees.sh
 
 运行 /new-req 开始下一个需求。
 ```
@@ -110,3 +113,4 @@ Req 已关闭：req-NNN-<slug>
 - close-req.sh 会自动 cd 到主仓执行 merge，不需要手动切换
 - merge 到 main 后不可回退（stage 7 是终态）
 - req 目录移到 closed/ 后保留完整记录
+- worktree/branch 的实际删除由 PM 在主仓 cwd 跑 `cleanup-pending-worktrees.sh` 完成（避免 close 删自己脚下目录导致 Stop hook posix_spawn ENOENT）

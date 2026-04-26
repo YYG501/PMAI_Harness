@@ -142,24 +142,38 @@ fi
 
 echo "🔀 已合并 $REQ_BRANCH → main（已验证提交落地）"
 
-# --- Step 3: 清理 worktree（必须先于删分支，git 不允许删除 checkout 中的分支） ---
-if [ -d "$REQ_WORKTREE" ]; then
-  if ! git worktree remove "$REQ_WORKTREE" 2>/dev/null; then
-    echo "⚠️ worktree remove 失败，回退到 rm -rf + worktree prune" >&2
-    rm -rf "$REQ_WORKTREE"
-    git worktree prune 2>/dev/null || true
-  fi
-  echo "🧹 已清理 worktree: $REQ_WORKTREE"
-fi
-
-# --- Step 4: 删除 req 分支（worktree 已清理，可以删分支） ---
-if ! git branch -d "$REQ_BRANCH" 2>/dev/null; then
-  if ! git branch -D "$REQ_BRANCH" 2>&1; then
-    echo "❌ 无法删除分支 ${REQ_BRANCH}。请人工检查。" >&2
-    exit 1
-  fi
-fi
-echo "🗑️ 已删除分支: $REQ_BRANCH"
+# --- Step 3: 标记 worktree + branch 为待清理（不立即删除） ---
+# 原因：PM 可能在被关闭的 req worktree 内（cwd = .worktrees/<req-branch>）
+# 执行 close。立即删除会让 Claude Code 父进程的 cwd 变成 dangling，下一次
+# Stop hook 的 posix_spawn 报 ENOENT。改为推迟到 cleanup-pending-worktrees.sh
+# 在主仓 cwd 的会话里统一执行。
+PENDING_FILE="$REPO_ROOT/.runs/pending-cleanup.json"
+mkdir -p "$REPO_ROOT/.runs"
+python3 - "$PENDING_FILE" "$REQ_BRANCH" "$REQ_WORKTREE" "$REQ_DIR" <<'PY'
+import json, os, sys, datetime
+pending_file, branch, worktree, req_dir = sys.argv[1:5]
+entries = []
+if os.path.exists(pending_file):
+    with open(pending_file) as f:
+        try:
+            entries = json.load(f)
+        except json.JSONDecodeError:
+            entries = []
+entries = [e for e in entries if e.get("branch") != branch]
+entries.append({
+    "kind": "req",
+    "branch": branch,
+    "worktree": worktree,
+    "req_dir": req_dir,
+    "queued_at": datetime.datetime.now().astimezone().isoformat(timespec="seconds"),
+})
+with open(pending_file, "w") as f:
+    json.dump(entries, f, indent=2, ensure_ascii=False)
+PY
+echo "🕓 worktree 和 branch 已标记为待清理: $REQ_BRANCH"
 
 echo "✅ Req 已关闭: $REQ_ID"
 echo "📍 当前位置: 主仓 main 分支"
+echo ""
+echo "📋 worktree 和 branch 待清理。请退出当前会话，回主仓 ($REPO_ROOT) 执行："
+echo "   bash scripts/cleanup-pending-worktrees.sh"

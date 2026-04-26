@@ -282,17 +282,32 @@ test_happy_path_close_req() {
       return
     fi
 
-    # Verify req branch is deleted
-    if git -C "$FIXTURE_DIR" show-ref --verify --quiet "refs/heads/req-001-test"; then
-      _fail "req branch should be deleted"
+    # close 不再立即删 worktree/branch（避免父进程 cwd dangling）。
+    # 改为写 .runs/pending-cleanup.json，由 cleanup-pending-worktrees.sh 兜底。
+    pending_file="$FIXTURE_DIR/.runs/pending-cleanup.json"
+    if [ ! -f "$pending_file" ]; then
+      _fail "expected pending-cleanup.json to be written"
+      rm -f /tmp/out.$$ /tmp/err.$$
+      fixture_teardown
+      return
+    fi
+    queued_branch=$(python3 -c "import json; entries=json.load(open('$pending_file')); print(next((e['branch'] for e in entries if e['branch']=='req-001-test'), ''))")
+    if [ "$queued_branch" != "req-001-test" ]; then
+      _fail "pending-cleanup.json should contain branch=req-001-test, got '$queued_branch'"
       rm -f /tmp/out.$$ /tmp/err.$$
       fixture_teardown
       return
     fi
 
-    # Verify req worktree removed
-    if [ -d "$FIXTURE_DIR/.worktrees/req-001-test" ]; then
-      _fail "req worktree should be removed"
+    # Verify req branch + worktree still present (cleanup deferred)
+    if ! git -C "$FIXTURE_DIR" show-ref --verify --quiet "refs/heads/req-001-test"; then
+      _fail "req branch should remain (cleanup deferred); was deleted"
+      rm -f /tmp/out.$$ /tmp/err.$$
+      fixture_teardown
+      return
+    fi
+    if [ ! -d "$FIXTURE_DIR/.worktrees/req-001-test" ]; then
+      _fail "req worktree should remain (cleanup deferred); was removed"
       rm -f /tmp/out.$$ /tmp/err.$$
       fixture_teardown
       return

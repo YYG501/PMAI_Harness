@@ -151,40 +151,66 @@ else
   echo "ℹ️ 没有新改动需要 commit（可能已经处于 cancelled 状态）"
 fi
 
-# --- Step 4: 清理 task worktree/分支（commit 已落盘，现在可以安全清理）---
+# --- Step 4: 标记 task worktree/分支为待清理 + 杀 dev server + 删 .runs/ 原件 ---
+# 不立即删 worktree/branch：PM 可能在某个 task/req worktree 内调用 cancel-req，
+# 立即删除会让 Claude Code 父进程 cwd 变成 dangling，触发 Stop hook 的
+# posix_spawn ENOENT。改为写 pending，由 cleanup-pending-worktrees.sh 在主仓 cwd 兜底清理。
+PENDING_FILE="$REPO_ROOT/.runs/pending-cleanup.json"
+mkdir -p "$REPO_ROOT/.runs"
+
+QUEUE_PENDING_PY=$(mktemp)
+trap 'rm -f "$QUEUE_PENDING_PY"' EXIT
+cat > "$QUEUE_PENDING_PY" <<'PY'
+import json, os, sys, datetime
+pending_file, kind, branch, worktree, ref = sys.argv[1:6]
+entries = []
+if os.path.exists(pending_file):
+    with open(pending_file) as f:
+        try:
+            entries = json.load(f)
+        except json.JSONDecodeError:
+            entries = []
+entries = [e for e in entries if e.get("branch") != branch]
+entry = {
+    "kind": kind,
+    "branch": branch,
+    "worktree": worktree,
+    "queued_at": datetime.datetime.now().astimezone().isoformat(timespec="seconds"),
+}
+if kind == "task":
+    entry["task_file"] = ref
+elif kind == "req":
+    entry["req_dir"] = ref
+entries.append(entry)
+with open(pending_file, "w") as f:
+    json.dump(entries, f, indent=2, ensure_ascii=False)
+PY
+
 for i in "${!TASK_BRANCHES[@]}"; do
   TASK_BRANCH="${TASK_BRANCHES[$i]}"
   TASK_STEM="${TASK_STEMS[$i]}"
   PORT="${TASK_PORTS[$i]}"
 
-  # 杀 dev server
+  # 杀 dev server（不影响 cwd，立即做）
   if [ "$PORT" != "0" ] && [ "$PORT" -gt 0 ] 2>/dev/null; then
     lsof -ti :"$PORT" 2>/dev/null | xargs kill 2>/dev/null || true
   fi
 
   TASK_WT="$REPO_ROOT/.worktrees/$TASK_BRANCH"
-  if [ -d "$TASK_WT" ]; then
-    git worktree remove "$TASK_WT" --force 2>/dev/null || rm -rf "$TASK_WT"
-    echo "🧹 清理 task worktree: $TASK_BRANCH"
-  fi
-  git branch -D "$TASK_BRANCH" 2>/dev/null || true
+  python3 "$QUEUE_PENDING_PY" "$PENDING_FILE" task "$TASK_BRANCH" "$TASK_WT" "$TASK_STEM"
+  echo "🕓 标记待清理 task: $TASK_BRANCH"
 
+  # .runs/ 原件可以立即删（不在 worktree 内）
   rm -f "$REPO_ROOT/.runs/$TASK_STEM.json" 2>/dev/null
   rm -f "$REPO_ROOT/.runs/events/$TASK_STEM.jsonl" 2>/dev/null
 done
 
-# --- Step 5: 清理 req worktree/分支 ---
+# --- Step 5: 标记 req worktree/分支为待清理 ---
 REQ_WORKTREE="$REPO_ROOT/.worktrees/$REQ_BRANCH"
-if [ -d "$REQ_WORKTREE" ]; then
-  git worktree remove "$REQ_WORKTREE" --force 2>/dev/null || rm -rf "$REQ_WORKTREE"
-  echo "🧹 清理 req worktree: $REQ_BRANCH"
-fi
-
-if git show-ref --verify --quiet "refs/heads/$REQ_BRANCH" 2>/dev/null; then
-  git branch -D "$REQ_BRANCH" 2>/dev/null || {
-    echo "⚠️ 无法删除 req 分支 ${REQ_BRANCH}，请人工检查。" >&2
-  }
-  echo "🗑️ 已删除分支: $REQ_BRANCH"
-fi
+python3 "$QUEUE_PENDING_PY" "$PENDING_FILE" req "$REQ_BRANCH" "$REQ_WORKTREE" "$REQ_DIR"
+echo "🕓 标记待清理 req: $REQ_BRANCH"
 
 echo "✅ Req 已废弃: ${REQ_ID}（未 merge 到 main，cancelled 状态已记录）"
+echo ""
+echo "📋 worktree 和 branch 待清理。请退出当前会话，回主仓 ($REPO_ROOT) 执行："
+echo "   bash scripts/cleanup-pending-worktrees.sh"
