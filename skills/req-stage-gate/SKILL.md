@@ -24,39 +24,12 @@ echo "SKILL: req-stage-gate"
 ### Stage 1 → 2（感受问题 → 需求分析）
 
 1. 检查 `brief.md` 存在且有内容
-2. 读取 `brief.md` + `docs/CONTEXT.md` + `docs/prd.md`
-3. 做第一性原理分析：问题本质、用户真实需求、可行方案
-4. 写 `analysis.md` 到 req 目录
+2. **调用 `/req-analysis`**
+   - skill 内部完成：读 brief + CONTEXT、第一性原理 4 层分析、写 analysis.md（含 10 章 + `## 未决问题` section）、循环调 analysis-reviewer 直到 PASS
+   - skill 返回 = 契约保证 analysis.md 已经过 reviewer PASS。**orchestrator 不重复调 reviewer**
+3. **未决问题闸门（Stage 2 → 3 推进的硬约束）：**
 
-   **analysis.md 必须包含的固定 section：**
-   - `## 未决问题`（二级标题，逐题编号）——把 stage 2 分析过程中暴露出的、**必须由 PM 回答**的业务决定/政策/优先级问题全部列进来。每题格式：`### Q1: <问题标题>` + 题干 + 候选答案（如有）+ `**PM 回答：**`（初始留空占位）
-   - 如果分析过程中**确实没有任何**需要 PM 回答的问题，该 section 下写一行 `（本 req 无未决问题）`——必须显式声明，不能省略 section
-
-5. **强制调用 analysis-reviewer 做独立评审（硬规则，不可跳过）：**
-
-   写完 analysis.md 初稿后，**必须**调用 Agent 工具，subagent_type 为 `analysis-reviewer`。这是第二视角独立评审，补 advisor 关闭后的盲点。
-
-   调用示例：
-   ```
-   Agent(
-     subagent_type="analysis-reviewer",
-     description="Stage 2 analysis 独立评审",
-     prompt="请评审以下 analysis.md：\n\n- analysis.md 绝对路径：$ACTIVE_REQ_DIR/analysis.md\n- brief.md 绝对路径：$ACTIVE_REQ_DIR/brief.md\n- docs/CONTEXT.md 绝对路径（如存在）：$REPO_ROOT/docs/CONTEXT.md\n\n按 agent 定义里的 4 条角度（摊隐藏业务决定 / 拆正交轴 / 边界清晰 / 未决问题完备）逐条评审，按规定格式输出。"
-   )
-   ```
-
-   reviewer 返回评审报告后：
-   - **NEEDS_REVISION** → 主线 AI 把报告贴在 chat 给 PM 看，然后**按 reviewer 给的"具体修改动作"修改 analysis.md**，修改完回到步骤 5 重新调 reviewer。循环直到 PASS
-   - **PASS** → 把评审报告贴在 chat 给 PM 看（让 PM 知道评过），然后进入步骤 6 未决问题闸门
-
-   **不允许的反模式**：
-   - 跳过这一步直接去步骤 6（硬规则违反）
-   - 把 reviewer 的 NEEDS_REVISION 结果藏起来不给 PM 看
-   - 在 reviewer 未 PASS 的状态下开放 stage 3 推进选项
-
-6. **未决问题闸门（Stage 2 → 3 推进的硬约束）：**
-
-   在 analysis-reviewer 返回 PASS 后才进入这一步。grep `## 未决问题` section 下的 `**PM 回答：**` 条目：
+   grep `## 未决问题` section 下的 `**PM 回答：**` 条目：
    - **若存在任何 `**PM 回答：**` 后面为空** → 确认门进入"答题模式"：
      ```
      📝 analysis.md 已写入：`$ACTIVE_REQ_DIR/analysis.md`
@@ -81,10 +54,10 @@ echo "SKILL: req-stage-gate"
      ```
      （first req 不显示 C 选项）
 
-7. **PM 回答未决问题的处理：**
+4. **PM 回答未决问题的处理：**
    - PM 选 A 后，逐题展示问题，PM 每回答一题，把答案写回 analysis.md 对应 `**PM 回答：**` 后面
-   - 所有问题答完 → 重新 grep 验证 → 解锁推进选项 → 回到步骤 6 的"推进模式"
-   - PM 在答题过程中临时想改 analysis 某段 → 允许中途切到 B（修改 analysis），改完后**必须回到步骤 5 重新调一次 analysis-reviewer**（analysis 改了就重评），再走步骤 6 闸门
+   - 所有问题答完 → 重新 grep 验证 → 解锁推进选项 → 回到步骤 3 的"推进模式"
+   - PM 在答题过程中临时想改 analysis 某段 → 允许中途切到 B（修改 analysis）→ 改完后**回到步骤 2 重调 /req-analysis**（analysis 改了 reviewer 必须重评，由 skill 内部循环保证），再走步骤 3 闸门
 
 推进命令（确认进入 stage 3 后才执行）：
 ```bash
@@ -94,14 +67,16 @@ python3 .claude/scripts/req-transition.py "$ACTIVE_REQ_DIR" --to 2
 ### Stage 2 → 3（需求分析 → 方案设计）
 
 PM 选择进入 stage 3 时：
-1. 读取 `analysis.md`，做系统分层、模块边界设计
-2. 写 `solution.md` 到 req 目录
-3. **自动调用 `/plan-ceo-review`** 审阅 solution.md（所有 req 都自动运行，不可跳过）
-4. **确认门**：只给绝对路径（`$ACTIVE_REQ_DIR/solution.md`）+ 一句话摘要；**review 发现直接贴在 chat**（review 是讨论，不是文档产出）。问 PM：
-   - PM 确认 → 推进到下一 stage
-   - PM 提修改意见 → 修改 solution.md → 回到步骤 3 重新 review → 再次确认
 
-PM 选择跳过 stage 3 时：
+1. **调用 `/req-solution`**
+   - skill 内部完成：Discovery 缺口提问（如有）、写 solution.md（含 10 章 + Mermaid + 7.2 各模块说明）
+   - skill 返回时 solution.md 已落盘
+2. **自动调用 `/plan-ceo-review`** 审阅 solution.md（所有 req 都自动运行，不可跳过；review 是讨论性的，不属于子 skill）
+3. **确认门**：只给绝对路径（`$ACTIVE_REQ_DIR/solution.md`）+ 一句话摘要；**review 发现直接贴在 chat**（review 是讨论，不是文档产出）。问 PM：
+   - PM 确认 → 推进到下一 stage
+   - PM 提修改意见 → 回步骤 1 重调 `/req-solution`（让 skill 改 solution.md）→ 再 review → 再次确认
+
+PM 选择跳过 stage 3 时（不调 /req-solution）：
 ```bash
 python3 .claude/scripts/req-transition.py "$ACTIVE_REQ_DIR" --to 5 --skip-stage 3
 ```
