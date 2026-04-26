@@ -14,3 +14,4 @@
 
 # Local session state
 .context/
+.runs/
