@@ -245,11 +245,12 @@
 - **DB1**：错误信息用 INVARIANTS 编号（I-CT7 / I-CT8 等），对 PM 不友好——失败时不知道是哪一步漏了
 
 ### Upgrade（独立子设计）
-- **UP**：现有 v1 项目（ExampleConsumerB 等）升级到 stage 5/6 重设计 v2 的完整路径
-  - sync skills/templates 脚本
-  - 进行中 req 按当前 stage 提供继续路径
-  - 旧 module 规格 lazy migration（doc-update 时自动 reorganize）
-  - **依赖**：本 plan（设计-stage5-6-task循环.md）实施完毕；ExampleConsumerB req-001 有阶段性结论后再启动
+- **UP**：框架同步方案 — 设计完成，待实施
+  - 设计文档：`设计-框架同步.md`（v1 定稿 2026-04-26）
+  - 触发实战：4-26 手动同步生成器 → AC4 main (commit `d0aa6c1`)，暴露 6 痛点
+  - 范围：S1 sync 脚本 + manifest / S2 worktree impact 报告 / S3 module lazy migration
+  - **不覆盖**：ExampleConsumerB 这种 v1 项目首次迁移（结构差异大，单独再开 req 做一次性迁移脚本）
+  - **下一步**：按设计 §12 phase P1→P4 实施
 
 ---
 
