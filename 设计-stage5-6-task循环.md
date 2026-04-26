@@ -611,6 +611,44 @@ D1/D2/D3 (Discover) / I1/I2 (Install) / HW1/HW2/HW3 (Hello World TTHW) / DB1 (IN
 
 ---
 
+## Stage 5/6 默认 review 决议（2026-04-26）
+
+落地后的微调：把"建议 PM 跑 review"升级为"默认必跑"，避免 PM 凭手感跳过 review 导致拆分/单 task 设计的偏差只能等 task 验收时撞出来。
+
+### Stage 5 → 6（task-plan.md 完成后）
+
+- **从**：first req 自动跑 `/plan-eng-review`；后续 req 建议 PM 跑（可跳）
+- **到**：所有 req 默认自动跑 `/plan-eng-review` 审阅 `task-plan.md`，不区分 first / 后续
+- review 发现贴 chat（讨论性，不写盘）
+- PM 提修改意见 → 回 `/task-plan` 改 `task-plan.md` → 重跑 review → 再次确认门
+- 落点：`skills/req-stage-gate/SKILL.md` Stage 5 → 6 段
+
+### Stage 6（task-spec 单 task 文档完成后，PM 确认前）
+
+- **从**：`/task-spec` 步骤 7 写完直接进步骤 8 PM 确认门，无 review
+- **到**：`/task-spec` 在 PM 确认门前插入默认 review 步骤
+  - **业务模块 task** → 自动跑 `/plan-eng-review` + `/plan-design-review`
+  - **基础设施 task** → 只跑 `/plan-eng-review`（无 UI 内容，跳过 design-review）
+- review 发现贴 chat；PM 选项：
+  - 改 task 文件 → 改完重跑对应 review（eng 改了重跑 eng，design 改了重跑 design）
+  - 忽略发现继续 → 直接进 PM 确认门
+- 步骤 9 摘要里显式列出 review 状态：`eng [PASS/有发现已处理/PM 忽略]，design [PASS/有发现已处理/PM 忽略/跳过(基础设施)]`
+- Rule 硬约束：review 不可静默跳过，PM 只能在看到发现后选择"忽略发现继续"
+- 落点：`skills/task-spec/SKILL.md` 步骤 8（新增）+ Rules 一条
+
+### 与原 §改动清单 的关系
+
+不改原 11 条改动清单的编号，作为追加决议——本决议只动两个 SKILL.md，不改模板、不改其他 skill。
+
+### 不引入的东西
+
+- ❌ 不新增 review skill（直接复用 gstack 的 `/plan-eng-review` / `/plan-design-review`）
+- ❌ 不把 review 发现写入 task 文档（review 是讨论，不是文档产出，避免文档臃肿）
+- ❌ 不引入"review PASS / FAIL"的硬阻塞——PM 是单人决策者，看到发现后有权选择忽略
+- ❌ 不对基础设施 task 跑 design-review（无 UI 可审）
+
+---
+
 ## GSTACK REVIEW REPORT
 
 | Review | Trigger | Why | Runs | Status | Findings |

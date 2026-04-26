@@ -125,10 +125,12 @@ python3 .claude/scripts/req-transition.py "$ACTIVE_REQ_DIR" --to 5
 
 1. 检查 `task-plan.md` 存在。
 2. 检查 `task-plan.md` 包含 task 标题列表和 `## 变更记录` section。
-3. **gstack 质量审阅**（只审阅 task-plan.md；具体 task 文件由 stage 6 的 `/task-spec` 逐个生成）：
-   - **first req**：自动运行 `/plan-eng-review` 审阅 task-plan.md（工程视角：架构、拆分合理性、依赖）。
-   - **后续 req**：建议 PM "要不要跑 /plan-eng-review？"，PM 可跳过。
+3. **自动调用 `/plan-eng-review`** 审阅 `task-plan.md`（工程视角：架构、拆分合理性、依赖）。
+   - 所有 req 默认运行，不区分 first / 后续；review 是讨论性的，发现直接贴 chat，不写盘。
+   - 只审阅 task-plan.md；具体 task 文件由 stage 6 的 `/task-spec` 逐个生成并各自走 review。
 4. 确认门（只给绝对路径 + 一句话摘要，不贴全文；eng-review 发现直接贴 chat）："Task 规划完成，是否进入执行阶段？"
+   - PM 确认 → 推进 stage 6。
+   - PM 提修改意见 → 回 `/task-plan` 改 `task-plan.md` → 重跑 `/plan-eng-review` → 再次确认。
 
 推进：
 ```bash

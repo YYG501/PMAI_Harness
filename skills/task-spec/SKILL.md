@@ -189,9 +189,24 @@ PM 未选择前不生成新文件。
 
 <!-- TODO Batch 2: depends on task-plan SKILL change -->
 
-### 步骤 8：展示生成结果并等待 PM 确认
+### 步骤 8：默认 review（task-spec 写完后，PM 确认前）
 
-生成后只向 PM 展示摘要和文件路径，不直接进入执行：
+按 task 类型默认跑 review，发现直接贴 chat（讨论性，不写盘）：
+
+- **业务模块 task** → 自动调用 `/plan-eng-review` + `/plan-design-review`，审阅刚生成的 `tasks/task-NNN-*.md`。
+- **基础设施 task** → 只调用 `/plan-eng-review`，跳过 `/plan-design-review`（无 UI 内容可审）。
+
+review 处理规则：
+
+- review 发现存在 → 在 chat 中直接呈现 eng / design 视角的发现清单。
+- PM 选择回去改 → 修改 `tasks/task-NNN-*.md` → 按本步骤规则重跑对应 review（eng 改了重跑 eng，design 改了重跑 design）→ 再走步骤 9。
+- PM 选择忽略 review 发现继续 → 直接进步骤 9。
+
+review 是讨论性的，不属于子 skill；不写盘、不入未决问题闸门。
+
+### 步骤 9：展示生成结果并等待 PM 确认
+
+review 走完（或 PM 选择忽略发现）后，只向 PM 展示摘要和文件路径，不直接进入执行：
 
 ```
 已生成 task 详细文档：<绝对路径>
@@ -203,6 +218,7 @@ PM 未选择前不生成新文件。
 - 用户使用流程：[场景数 / 基础设施 task 为无]
 - 功能清单：[三级功能数 / 基础设施 task 为无]
 - 易错点来源：[N 条 PM 反馈 / 无]
+- review：eng [PASS/有发现已处理/PM 忽略]，design [PASS/有发现已处理/PM 忽略/跳过(基础设施)]
 
 A) 确认，下一步执行 /task-confirm <task-file>
 B) 我要修改 task 文档
@@ -221,3 +237,4 @@ PM 选择 A 后，才提示并推动 `/task-confirm <task-file>`；PM 未确认�
 - 只有 PM 确认生成结果后，才推动 `/task-confirm`。
 - 基础设施 task 必须明确说明：`本 task 不触发 module 规格 merge（按 Q1 决议）`。
 - 业务模块 task 的功能清单必须能被后续 doc-update 按「所属模块章节 + 三级功能名」匹配。
+- 业务模块 task 默认跑 `/plan-eng-review` + `/plan-design-review`；基础设施 task 只跑 `/plan-eng-review`。review 不可静默跳过，PM 可在看到发现后选择"忽略发现继续"。
