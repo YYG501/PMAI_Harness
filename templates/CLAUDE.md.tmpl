@@ -126,7 +126,7 @@ main（主仓，永远不切分支）
 - task worktree 里不能修改 docs/（文档改动走 req 分支）
 - req worktree 里不能修改 prototypes/（代码改动走 task 分支）
 
-**唯一例外：** `/quick-fix` 可在 PM 明确审批的小改动场景下修改 main，但必须通过 `tmp-quick-*` worktree 隔离、PM 审批 diff、并由 `.claude/scripts/quick-fix.sh` 执行 ff-only 合并。AI 不允许绕过脚本直接写 main。
+**唯一例外：** `/quick-fix` 可在 PM 明确审批的小改动场景下修改 main 或 active req 分支，但必须通过 `tmp-quick-*` worktree 隔离、PM 审批 diff、并由 `.claude/scripts/quick-fix.sh` 执行 ff-only 合并。base 分支由启动位置自动推断（主仓 main → main / `req-*` worktree → 该 req 分支 / task worktree → 拒绝）。AI 不允许绕过脚本直接写 main 或 req 分支。
 
 ### 文档引用原则
 

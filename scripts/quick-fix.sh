@@ -63,19 +63,55 @@ current_branch() {
   git -C "$1" branch --show-current 2>/dev/null || true
 }
 
-ensure_main_repo() {
+# 设全局 BASE_BRANCH + BASE_WORKTREE，决定 quick-fix 改的目标分支与合并工作树。
+# 三种合法启动位置：
+#   1) 主仓根 + branch=main          → BASE_BRANCH=main、BASE_WORKTREE=repo_root（main mode）
+#   2) req-* worktree（任意分支）    → BASE_BRANCH=该 worktree 当前分支、BASE_WORKTREE=该 worktree（req mode）
+#   3) task-* worktree               → 拒绝（task 阶段走 /task-execute）
+ensure_quickfix_root() {
   local repo_root="$1"
   local current_root branch
   current_root=$(git rev-parse --show-toplevel 2>/dev/null || true)
-  branch=$(current_branch "$repo_root")
-  if [ "$(realpath_m "$current_root")" != "$(realpath_m "$repo_root")" ]; then
-    echo "错误：/quick-fix 必须从主仓根目录启动，不能在 req/task worktree 中启动。" >&2
+  if [ -z "$current_root" ]; then
+    echo "错误：/quick-fix 必须从 git 仓库内启动。" >&2
     exit 1
   fi
-  if [ "$branch" != "main" ]; then
-    echo "错误：/quick-fix 必须从 main 分支启动，当前分支: ${branch:-unknown}" >&2
+  branch=$(current_branch "$current_root")
+  if [ -z "$branch" ]; then
+    echo "错误：无法识别当前分支（HEAD detached？）。" >&2
     exit 1
   fi
+
+  if [ "$(realpath_m "$current_root")" = "$(realpath_m "$repo_root")" ]; then
+    # 主仓根
+    if [ "$branch" != "main" ]; then
+      echo "错误：在主仓根但当前分支不是 main：$branch" >&2
+      exit 1
+    fi
+    BASE_BRANCH="main"
+    BASE_WORKTREE="$repo_root"
+    return 0
+  fi
+
+  # 在 worktree 内（current_root != repo_root）
+  case "$branch" in
+    req-*)
+      BASE_BRANCH="$branch"
+      BASE_WORKTREE="$current_root"
+      ;;
+    task-*)
+      echo "错误：/quick-fix 不能在 task worktree 内启动（task 阶段走 /task-execute）。" >&2
+      exit 1
+      ;;
+    main)
+      echo "错误：在 worktree 内但分支是 main，配置异常。" >&2
+      exit 1
+      ;;
+    *)
+      echo "错误：/quick-fix 只能从 main 分支或 req-* worktree 启动，当前分支：$branch" >&2
+      exit 1
+      ;;
+  esac
 }
 
 changed_files() {
@@ -146,7 +182,7 @@ check_redlines() {
 }
 
 check_preflight_redlines() {
-  local repo_root="$1"
+  local check_root="$1"  # main mode 传主仓根，req mode 传 req worktree
   local bad=()
   local line status file
   while IFS= read -r line; do
@@ -158,10 +194,10 @@ check_preflight_redlines() {
     if is_redline_path "$file"; then
       bad+=("$file")
     fi
-  done < <(git -C "$repo_root" status --porcelain)
+  done < <(git -C "$check_root" status --porcelain)
 
   if [ "${#bad[@]}" -gt 0 ]; then
-    echo "错误：主仓当前已有红线路径改动，/quick-fix 拒绝启动：" >&2
+    echo "错误：base worktree ($check_root) 当前已有红线路径改动，/quick-fix 拒绝启动：" >&2
     printf '  - %s\n' "${bad[@]}" >&2
     return 1
   fi
@@ -424,6 +460,8 @@ commit_and_merge() {
   local worktree="$2"
   local branch="$3"
   local desc="$4"
+  local base_branch="$5"     # main mode: "main"; req mode: "req-NNN-*"
+  local base_worktree="$6"   # main mode: repo_root; req mode: req worktree path
 
   (
     cd "$worktree"
@@ -447,36 +485,40 @@ commit_and_merge() {
     git commit -m "[quick-fix] $desc" \
       -m "目标: $files" \
       -m "变更: $insertions$deletions" \
-      -m "临时分支: $branch"
+      -m "临时分支: $branch" \
+      -m "base 分支: $base_branch"
 
     local change_sha
     change_sha=$(git rev-parse --short HEAD)
     git commit --allow-empty -m "[quick-fix-log] $change_sha $desc"
   )
 
-  if git -C "$repo_root" merge --ff-only "$branch"; then
-    cleanup_branch "$repo_root" "$branch" false
-    echo "quick-fix 已合并：$branch"
+  if git -C "$base_worktree" merge --ff-only "$branch"; then
+    # force=true: merge 已成功，repo_root 的 HEAD（main）可能不含 tmp 分支（req mode 时），
+    # 此时 `branch -d` 的 merged-into-HEAD 检查会误判，直接 -D
+    cleanup_branch "$repo_root" "$branch" true
+    echo "quick-fix 已合并到 ${base_branch}：${branch}"
     return 0
   fi
 
-  echo "ff-only merge 失败，尝试在 worktree 内 rebase main 后重试..." >&2
+  echo "ff-only merge 失败（target=${base_branch}），尝试在 tmp worktree 内 rebase ${base_branch} 后重试..." >&2
   if (
     cd "$worktree"
-    git branch -D _tmp_main >/dev/null 2>&1 || true
-    git fetch . main:_tmp_main
-    git rebase _tmp_main
-    git branch -D _tmp_main >/dev/null 2>&1 || true
+    git branch -D _tmp_base >/dev/null 2>&1 || true
+    git fetch . "$base_branch":_tmp_base
+    git rebase _tmp_base
+    git branch -D _tmp_base >/dev/null 2>&1 || true
   ); then
-    if git -C "$repo_root" merge --ff-only "$branch"; then
-      cleanup_branch "$repo_root" "$branch" false
-      echo "quick-fix rebase 后已合并：$branch"
+    if git -C "$base_worktree" merge --ff-only "$branch"; then
+      cleanup_branch "$repo_root" "$branch" true
+      echo "quick-fix rebase 后已合并到 ${base_branch}：${branch}"
       return 0
     fi
   fi
 
   cat >&2 <<EOF
 merge 失败（rebase 冲突或 retry 失败）。worktree 保留在 ${worktree}。
+base 分支：${base_branch}（位于 ${base_worktree}）
 可选：
   1. 手工解决冲突：cd ${worktree} && git rebase --continue
   2. 放弃本次 quick-fix：bash .claude/scripts/quick-fix.sh --cancel ${branch}
@@ -496,13 +538,14 @@ cmd_main() {
     exit 1
   fi
 
-  ensure_main_repo "$repo_root"
-  check_preflight_redlines "$repo_root"
+  # 设置 BASE_BRANCH / BASE_WORKTREE（全局）
+  ensure_quickfix_root "$repo_root"
+  check_preflight_redlines "$BASE_WORKTREE"
   warn_active_reqs "$repo_root"
   warn_leftovers "$repo_root"
 
-  local main_head ts branch worktree worktree_parent
-  main_head=$(git -C "$repo_root" rev-parse main)
+  local base_head ts branch worktree worktree_parent
+  base_head=$(git -C "$repo_root" rev-parse "$BASE_BRANCH")
   ts="$(date +%Y%m%d-%H%M%S)-$$"
   branch="tmp-quick-$ts"
   worktree_parent=$(realpath_m "$repo_root/.worktrees")
@@ -513,10 +556,11 @@ cmd_main() {
   esac
 
   mkdir -p "$worktree_parent"
-  git -C "$repo_root" worktree add -b "$branch" "$worktree" main
+  git -C "$repo_root" worktree add -b "$branch" "$worktree" "$BASE_BRANCH"
   setup_dependency_symlinks "$repo_root" "$worktree"
 
-  echo "MAIN_HEAD: $main_head"
+  echo "BASE_BRANCH: $BASE_BRANCH"
+  echo "BASE_HEAD: $base_head"
   echo "BRANCH: $branch"
   echo "WORKTREE: $worktree"
 
@@ -576,7 +620,7 @@ cmd_main() {
     *) return "$decision_rc" ;;
   esac
 
-  commit_and_merge "$repo_root" "$worktree" "$branch" "$desc"
+  commit_and_merge "$repo_root" "$worktree" "$branch" "$desc" "$BASE_BRANCH" "$BASE_WORKTREE"
 }
 
 main() {
