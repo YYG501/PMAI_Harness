@@ -129,10 +129,12 @@
 - **I-AD2**：**adapter 退出后必须校验 worktree diff 范围**。task 分支上新增/修改的文件路径必须全部落在 task 文件 `执行范围` section 声明的 allowlist 内。越界 → 记 `execution_failed` 事件，返回非零 exit code，让 orchestrator 触发 `--fail-execution`
 - **I-AD3**：adapter 不得 `git add` / `git commit` / `git checkout`——改动保持 unstaged，commit 权归 orchestrator
 - **I-AD4**：adapter 前置/后置校验失败时必须追加 `execution_failed` 事件到事件流（便于事后审计与统计）
+- **I-AD5**：**dispatch 前 task worktree 必须 clean**（无 untracked、无未 commit 改动）。dirty 时由上层（task-execute）hard exit 1，**不**进 adapter、**不** rollback、**不** `--fail-execution`，把处理权交还 PM。理由：codex / cursor-agent 的 stop 是软停，已派发的 sandbox shell 子进程会延迟落盘可能覆盖手改；失败回滚基线是 HEAD，未 commit 改动会被 git restore 清掉。事故案例：2026-04-27 PM 手改字段后 codex 后续延迟落盘把字段写回，working tree 没 commit 没法 git diff 找回
 
 ### 守卫点
 - 启动前状态校验：adapter 第一段
 - 退出后 diff 校验：adapter 末尾，基于 `git -C $TASK_WORKTREE diff --name-only HEAD`
+- Dispatch 前 working tree clean：task-execute SKILL.md 步骤 3b 开头（pre-dispatch checkpoint gate）
 
 ---
 

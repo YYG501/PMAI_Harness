@@ -227,6 +227,30 @@ fi
 
 ```bash
 if [ -z "${MANUAL_RESUME:-}" ]; then
+  # I-AD5: Pre-dispatch checkpoint gate — task worktree 必须 clean
+  # Why: codex / cursor-agent 的 stop 是软停，已派发的 sandbox shell 子进程会延迟落盘
+  #      可能覆盖手改但没 commit 的文件；失败回滚基线是 HEAD，未 commit 改动会被 restore 清掉。
+  # 故意不走 adapter 失败路径（不 rollback、不 --fail-execution），处理权交还 PM。
+  DIRTY=$(git -C "$TASK_WORKTREE" status --porcelain 2>/dev/null)
+  if [ -n "$DIRTY" ]; then
+    echo "" >&2
+    echo "❌ /task-execute 拒绝 dispatch：task worktree 有未 commit 改动（I-AD5）。" >&2
+    echo "" >&2
+    echo "原因：codex / cursor-agent 的 stop 是软停，已派发的 sandbox shell 子进程会延迟落盘，" >&2
+    echo "可能覆盖你刚手改但没 commit 的文件。失败回滚基线是 HEAD，未 commit 的手改会被 restore 清掉。" >&2
+    echo "" >&2
+    echo "task worktree: $TASK_WORKTREE" >&2
+    echo "现状：" >&2
+    git -C "$TASK_WORKTREE" status --short >&2
+    echo "" >&2
+    echo "处理（任选一种后重跑 /task-execute）：" >&2
+    echo "  保留改动：cd \"$TASK_WORKTREE\" && git add -A && git commit -m 'pre-execute checkpoint: <一句话>'" >&2
+    echo "  丢弃改动：cd \"$TASK_WORKTREE\" && git restore . && git clean -fd" >&2
+    echo "" >&2
+    echo "注意：本次 task 状态保留为「执行中」，不回退、不 rollback worktree。" >&2
+    exit 1
+  fi
+
   # Resolve executor + model
   RESOLVED=$(python3 "$MAIN_REPO_ROOT/.claude/scripts/resolve-executor.py" "$TASK_FILE")
   EXECUTOR=$(echo "$RESOLVED" | jq -r .executor)
@@ -236,7 +260,7 @@ if [ -z "${MANUAL_RESUME:-}" ]; then
   PROMPT_FILE=$(mktemp)
   python3 "$MAIN_REPO_ROOT/.claude/scripts/build-execution-prompt.py" "$TASK_FILE" > "$PROMPT_FILE"
 
-  # Baseline SHA
+  # Baseline SHA（I-AD5 保证此时 working tree == HEAD）
   BASELINE_SHA=$(git -C "$TASK_WORKTREE" rev-parse HEAD)
 
   # Event

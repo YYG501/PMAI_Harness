@@ -91,6 +91,14 @@ Subagent（`Agent` 工具 spawn）是**短命、无状态、独立 context** 的
 
 判断标准：**subagent 必须在单次 turn 内能完整跑完**（典型 < 5 分钟，且不依赖被它启动的后台进程的输出）。否则换载体——主 Orchestrator + `ScheduleWakeup` / hook 轮询 / 后台进程 sentinel。
 
+### 外部执行器调用前置（Pre-dispatch checkpoint）
+
+调 codex / cursor-agent 这类外部执行器前，task worktree 的 working tree **必须干净**（无 untracked、无未 commit 改动）。`/task-execute` 步骤 3b 开头有硬 gate（INVARIANTS I-AD5），dirty 直接 exit 1，不进 adapter、不 rollback、不打回 task 状态——处理权交还 PM。
+
+**Why**：执行器（codex / cursor-agent）的 stop 是软停——已派发的 sandbox shell 子进程会延迟落盘，可能覆盖你刚手改但没 commit 的文件。失败回滚的基线是 HEAD，未 commit 的手改会一并被 git restore 清掉。事故案例：2026-04-27 PM 手改字段后 codex 后续延迟落盘把字段写回，working tree 没 commit 没法 git diff 找回。
+
+**操作纪律**：PM 反馈打回后想手改一两处再让执行器接着跑，先在 task worktree 里 commit checkpoint（`git -C <task-worktree> commit -am "pre-execute checkpoint: <一句话>"`）再 `/task-execute`。不要带着 dirty 改动直接 dispatch。
+
 ### 分支结构
 
 ```
