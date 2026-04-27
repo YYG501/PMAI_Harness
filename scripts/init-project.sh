@@ -50,6 +50,7 @@ for TMPL in "$FRAMEWORK_DIR/templates/"*.tmpl; do
     req-prd.md)       DEST="$TARGET_DIR/templates/req-prd.md.tmpl" ;;
     task.md)          DEST="$TARGET_DIR/templates/task.md.tmpl" ;;
     settings.json)    DEST="$TARGET_DIR/.claude/settings.json" ;;
+    lark-publish.json) DEST="$TARGET_DIR/templates/lark-publish.json.tmpl" ;;
     gitignore)        DEST="$TARGET_DIR/.gitignore" ;;
     *)             continue ;;
   esac
@@ -70,7 +71,7 @@ for SCRIPT in "$FRAMEWORK_DIR/scripts/"*; do
     init-project.sh) continue ;;
     *.ref)           continue ;;
   esac
-  cp "$SCRIPT" "$TARGET_DIR/.claude/scripts/$BASENAME"
+  cp -Rp "$SCRIPT" "$TARGET_DIR/.claude/scripts/$BASENAME"
 done
 chmod +x "$TARGET_DIR/.claude/scripts/"*.sh 2>/dev/null || true
 echo "🔧 脚本已复制到 .claude/scripts/"

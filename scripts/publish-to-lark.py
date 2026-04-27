@@ -1,0 +1,439 @@
+#!/usr/bin/env python3
+"""publish-to-lark: 把本地 markdown 发布到飞书云文档，自动合并表格相同内容 cell。
+
+由 prd-writing 等 skill 调用，PM 也可手动运行。详细行为见
+skills/publish-to-lark/SKILL.md。
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
+import os
+import re
+import subprocess
+import sys
+from datetime import datetime
+from pathlib import Path
+
+MIN_LARK_CLI_VERSION = (1, 0, 14)
+CONFIG_PATH = Path(".claude/lark-publish.json")
+
+
+# ---------- 输出 ----------
+
+def die(msg: str, code: int = 1) -> None:
+    print(f"ERROR: {msg}", file=sys.stderr)
+    sys.exit(code)
+
+
+def warn(msg: str) -> None:
+    print(f"WARN: {msg}", file=sys.stderr)
+
+
+def info(msg: str) -> None:
+    print(msg)
+
+
+# ---------- 子进程 ----------
+
+def run(cmd: list[str], check: bool = True):
+    try:
+        res = subprocess.run(cmd, capture_output=True, text=True)
+    except FileNotFoundError:
+        die(f"命令未找到: {cmd[0]}")
+    if check and res.returncode != 0:
+        raise subprocess.CalledProcessError(res.returncode, cmd, res.stdout, res.stderr)
+    return res
+
+
+# ---------- Preflight ----------
+
+def parse_version(s: str):
+    m = re.search(r"(\d+)\.(\d+)\.(\d+)", s)
+    if not m:
+        return None
+    return tuple(int(x) for x in m.groups())
+
+
+def preflight(target_kind: str | None, config_present: bool, args_complete: bool) -> None:
+    # 1. lark-cli 在 PATH + 2. 版本检查
+    res = run(["lark-cli", "--version"], check=False)
+    combined = (res.stdout or "") + (res.stderr or "")
+    if res.returncode != 0 and not parse_version(combined):
+        die("lark-cli 未安装或不可用。安装方式见 https://github.com/larksuite/lark-cli")
+    ver = parse_version(combined)
+    if not ver:
+        die(f"无法解析 lark-cli 版本输出: {combined!r}")
+    if ver < MIN_LARK_CLI_VERSION:
+        ver_s = ".".join(str(x) for x in ver)
+        min_s = ".".join(str(x) for x in MIN_LARK_CLI_VERSION)
+        die(f"lark-cli 版本 {ver_s} 低于最低要求 {min_s}；请升级")
+
+    # 3. 登录态
+    res = run(["lark-cli", "auth", "status"], check=False)
+    if res.returncode != 0:
+        detail = (res.stderr or res.stdout or "").strip()
+        die(f"飞书 CLI 未登录。运行 lark-cli auth login（详见 lark-shared skill）。详情: {detail}")
+
+    # 4. scope 检查
+    scopes = ["docx:document"]
+    if target_kind == "wiki":
+        scopes.append("wiki:wiki:readonly")
+    elif target_kind == "folder":
+        scopes.append("drive:drive")
+    res = run(["lark-cli", "auth", "check", "--scopes", ",".join(scopes)], check=False)
+    if res.returncode != 0:
+        detail = (res.stderr or res.stdout or "").strip()
+        die(f"缺少 scope: {','.join(scopes)}。"
+            f"请在飞书开放平台为 app 申请 scope 后重新 lark-cli auth login。详情: {detail}")
+
+    # 5. 配置或参数
+    if not (config_present or args_complete):
+        die("配置缺失。复制 templates/lark-publish.json.tmpl 到 .claude/lark-publish.json 并填 token；"
+            "或手动传 --target-token + --target-kind + --title")
+
+
+# ---------- Frontmatter ----------
+
+FRONTMATTER_RE = re.compile(r"\A---\n(.*?)\n---\n?(.*)\Z", re.DOTALL)
+
+
+def parse_frontmatter(text: str):
+    m = FRONTMATTER_RE.match(text)
+    if not m:
+        return {}, text
+    fm: dict[str, str] = {}
+    for line in m.group(1).splitlines():
+        line = line.rstrip()
+        if not line or line.lstrip().startswith("#") or ":" not in line:
+            continue
+        k, v = line.split(":", 1)
+        fm[k.strip()] = v.strip()
+    return fm, m.group(2)
+
+
+def write_frontmatter(path: Path, fm: dict, body: str) -> None:
+    lines = ["---"]
+    for k, v in fm.items():
+        lines.append(f"{k}: {v}")
+    lines.append("---")
+    text = "\n".join(lines) + "\n" + (body if body.startswith("\n") else "\n" + body)
+    path.write_text(text, encoding="utf-8")
+
+
+# ---------- 配置 / 目标解析 ----------
+
+def load_config():
+    if not CONFIG_PATH.exists():
+        return None
+    try:
+        return json.loads(CONFIG_PATH.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as e:
+        die(f"{CONFIG_PATH} JSON 解析失败: {e}")
+
+
+def render_title(template: str, fm: dict, filename: str) -> str:
+    ctx = {**fm, "filename": filename}
+    keys = re.findall(r"\{(\w+)\}", template)
+    missing = [k for k in keys if k not in ctx or not ctx[k]]
+    if missing:
+        die(f"title_template {template!r} 占位符 {missing} 在 markdown frontmatter 中缺失；"
+            f"请补 frontmatter 或手动 --title")
+    return template.format(**{k: ctx[k] for k in keys})
+
+
+def resolve_target(args, fm: dict, filename: str) -> dict:
+    config = load_config()
+
+    if args.target_token and args.target_kind:
+        kind, token = args.target_kind, args.target_token
+    elif args.type and config:
+        defaults = (config.get("default_targets") or {}).get(args.type)
+        if not defaults:
+            die(f"配置 .claude/lark-publish.json 中没有 type='{args.type}' 的条目")
+        kind, token = defaults["kind"], defaults["token"]
+        if "REPLACE_WITH" in str(token):
+            die(f"type='{args.type}' 的 token 还是模板占位符 {token}，请编辑 {CONFIG_PATH}")
+    else:
+        die("无法决定目标位置：用 --type + 配置文件，或同时传 --target-token + --target-kind")
+
+    if args.title:
+        title = args.title
+    elif args.type and config:
+        tpl = (config.get("default_targets") or {}).get(args.type, {}).get("title_template", "{filename}")
+        title = render_title(tpl, fm, filename)
+    else:
+        title = filename
+
+    return {"kind": kind, "token": token, "title": title}
+
+
+# ---------- 发布 ----------
+
+def build_doc_url(doc_id: str) -> str:
+    host = os.environ.get("LARK_DOCS_HOST", "feishu.cn")
+    return f"https://{host}/docx/{doc_id}"
+
+
+def publish_first_time(markdown_path: Path, target: dict):
+    cmd = ["lark-cli", "docs", "+create",
+           "--title", target["title"],
+           "--markdown", f"@{markdown_path}"]
+    if target["kind"] == "wiki":
+        cmd.extend(["--wiki-node", target["token"]])
+    elif target["kind"] == "folder":
+        cmd.extend(["--folder-token", target["token"]])
+    else:
+        die(f"未知 target.kind: {target['kind']}（应为 wiki 或 folder）")
+
+    info(f"创建飞书文档: title={target['title']!r} kind={target['kind']}")
+    try:
+        res = run(cmd)
+    except subprocess.CalledProcessError as e:
+        die(f"lark-cli docs +create 失败: {e.stderr}")
+
+    try:
+        data = json.loads(res.stdout)
+    except json.JSONDecodeError:
+        die(f"lark-cli docs +create 返回非 JSON: {res.stdout[:300]}")
+
+    doc_id = (
+        (data.get("data", {}).get("document", {}) or {}).get("document_id")
+        or (data.get("document", {}) or {}).get("document_id")
+        or data.get("document_id")
+    )
+    if not doc_id:
+        die(f"无法从 lark-cli docs +create 返回提取 document_id: {data}")
+
+    url = build_doc_url(doc_id)
+    info(f"文档已创建: {url}")
+    return doc_id, url
+
+
+def publish_overwrite(markdown_path: Path, doc_id: str):
+    info(f"覆盖飞书文档: doc_id={doc_id}")
+    cmd = ["lark-cli", "docs", "+update",
+           "--doc", doc_id,
+           "--markdown", f"@{markdown_path}",
+           "--mode", "overwrite"]
+    try:
+        run(cmd)
+    except subprocess.CalledProcessError as e:
+        die(f"lark-cli docs +update 失败: {e.stderr}")
+    return doc_id, build_doc_url(doc_id)
+
+
+# ---------- Cell 合并 ----------
+
+def lark_api(method: str, path: str, params: dict | None = None, data: dict | None = None):
+    cmd = ["lark-cli", "api", method, path]
+    if params:
+        cmd.extend(["--params", json.dumps(params)])
+    if data:
+        cmd.extend(["--data", json.dumps(data)])
+    res = run(cmd, check=False)
+    if res.returncode != 0:
+        raise RuntimeError(f"lark-cli api {method} {path} failed: {(res.stderr or res.stdout).strip()}")
+    try:
+        return json.loads(res.stdout)
+    except json.JSONDecodeError:
+        raise RuntimeError(f"lark-cli api {method} {path} 返回非 JSON: {res.stdout[:200]}")
+
+
+def get_all_blocks(doc_id: str) -> list[dict]:
+    blocks: list[dict] = []
+    page_token = None
+    while True:
+        params: dict = {"page_size": 500}
+        if page_token:
+            params["page_token"] = page_token
+        resp = lark_api("GET", f"/open-apis/docx/v1/documents/{doc_id}/blocks", params=params)
+        items = (resp.get("data") or {}).get("items") or []
+        blocks.extend(items)
+        page_token = (resp.get("data") or {}).get("page_token")
+        if not page_token:
+            break
+    return blocks
+
+
+TEXT_CONTAINERS = (
+    "text", "heading1", "heading2", "heading3", "heading4", "heading5",
+    "heading6", "heading7", "heading8", "heading9", "bullet", "ordered",
+    "code", "quote", "todo", "callout",
+)
+
+
+def cell_text(block: dict, blocks_by_id: dict) -> str:
+    parts: list[str] = []
+    for key in TEXT_CONTAINERS:
+        sec = block.get(key)
+        if sec and "elements" in sec:
+            for elem in sec["elements"]:
+                tr = elem.get("text_run")
+                if tr:
+                    parts.append(tr.get("content", ""))
+    for child_id in block.get("children", []) or []:
+        child = blocks_by_id.get(child_id)
+        if child:
+            parts.append(cell_text(child, blocks_by_id))
+    return "".join(parts).strip()
+
+
+def find_merge_ranges(grid: list[list[str]], existing: set):
+    ranges: list[dict] = []
+    if not grid:
+        return ranges
+    rows = len(grid)
+    cols = len(grid[0]) if rows else 0
+    for col in range(cols):
+        run_start = 0
+        while run_start < rows:
+            if (run_start, col) in existing:
+                run_start += 1
+                continue
+            content = grid[run_start][col]
+            if not content:
+                run_start += 1
+                continue
+            run_end = run_start + 1
+            while (run_end < rows
+                   and grid[run_end][col] == content
+                   and (run_end, col) not in existing):
+                run_end += 1
+            if run_end - run_start > 1:
+                ranges.append({
+                    "row_start_index": run_start,
+                    "row_end_index": run_end,
+                    "column_start_index": col,
+                    "column_end_index": col + 1,
+                })
+            run_start = run_end
+    return ranges
+
+
+def merge_cells_for_doc(doc_id: str):
+    try:
+        blocks = get_all_blocks(doc_id)
+    except RuntimeError as e:
+        warn(f"拉 block 列表失败: {e}；跳过合并步骤")
+        return 0, 0
+
+    blocks_by_id = {b["block_id"]: b for b in blocks}
+    table_blocks = [b for b in blocks if "table" in b]
+
+    success = 0
+    failure = 0
+
+    for table in table_blocks:
+        prop = (table.get("table") or {}).get("property") or {}
+        cells = (table.get("table") or {}).get("cells") or []
+        rows = prop.get("row_size", 0)
+        cols = prop.get("column_size", 0)
+        if rows < 2 or cols < 1 or len(cells) < rows * cols:
+            continue
+
+        existing: set = set()
+        for m in (prop.get("merge_info") or []):
+            r0 = m.get("row_index", 0)
+            c0 = m.get("column_index", 0)
+            rs = m.get("row_span", 1) or 1
+            cs = m.get("col_span", 1) or 1
+            for r in range(r0, r0 + rs):
+                for c in range(c0, c0 + cs):
+                    existing.add((r, c))
+
+        grid: list[list[str]] = []
+        for r in range(rows):
+            row: list[str] = []
+            for c in range(cols):
+                cell_id = cells[r * cols + c]
+                cell_block = blocks_by_id.get(cell_id)
+                row.append(cell_text(cell_block, blocks_by_id) if cell_block else "")
+            grid.append(row)
+
+        for rng in find_merge_ranges(grid, existing):
+            try:
+                lark_api("PATCH",
+                         f"/open-apis/docx/v1/documents/{doc_id}/blocks/{table['block_id']}",
+                         data={"merge_table_cells": rng})
+                success += 1
+            except RuntimeError as e:
+                failure += 1
+                warn(f"merge_table_cells 失败 table={table['block_id']} range={rng}: {e}")
+
+    return success, failure
+
+
+# ---------- Main ----------
+
+def main() -> None:
+    ap = argparse.ArgumentParser(prog="publish-to-lark",
+                                 description="把本地 markdown 发布到飞书云文档")
+    ap.add_argument("markdown", help="markdown 文件路径")
+    ap.add_argument("--type", help="文档类型 (prd/task-spec/analysis/other)")
+    ap.add_argument("--target-token", help="覆盖目标 token (wiki node 或 folder)")
+    ap.add_argument("--target-kind", choices=["wiki", "folder"], help="目标位置类型")
+    ap.add_argument("--title", help="覆盖标题")
+    ap.add_argument("--no-merge-cells", action="store_true", help="跳过表格合并")
+    args = ap.parse_args()
+
+    md_path = Path(args.markdown).resolve()
+    if not md_path.exists():
+        die(f"markdown 文件不存在: {md_path}")
+
+    text = md_path.read_text(encoding="utf-8")
+    fm, body = parse_frontmatter(text)
+    filename = md_path.stem
+    existing_doc_id = fm.get("lark_doc_id")
+
+    args_complete = bool(args.target_token and args.target_kind and args.title)
+    config_present = CONFIG_PATH.exists()
+
+    target_kind_for_scope = args.target_kind
+    if not target_kind_for_scope and args.type and config_present:
+        cfg = load_config()
+        target_kind_for_scope = ((cfg.get("default_targets") or {}).get(args.type) or {}).get("kind")
+    if not target_kind_for_scope and existing_doc_id:
+        target_kind_for_scope = "wiki"  # 覆盖路径，scope 至少包含 docx
+
+    preflight(target_kind_for_scope, config_present, args_complete or bool(existing_doc_id))
+
+    if existing_doc_id:
+        info(f"检测到 frontmatter 中 lark_doc_id={existing_doc_id}，走覆盖路径")
+        doc_id, url = publish_overwrite(md_path, existing_doc_id)
+        first_time = False
+    else:
+        target = resolve_target(args, fm, filename)
+        doc_id, url = publish_first_time(md_path, target)
+        first_time = True
+
+    if args.no_merge_cells:
+        info("跳过表格合并（--no-merge-cells）")
+        merge_s, merge_f = 0, 0
+    else:
+        info("扫描表格 cell 合并...")
+        merge_s, merge_f = merge_cells_for_doc(doc_id)
+
+    fm_written = False
+    if first_time:
+        new_fm = dict(fm)
+        new_fm["lark_doc_id"] = doc_id
+        new_fm["lark_doc_url"] = url
+        new_fm["lark_published_at"] = datetime.now().astimezone().isoformat(timespec="seconds")
+        try:
+            write_frontmatter(md_path, new_fm, body)
+            fm_written = True
+        except OSError as e:
+            warn(f"frontmatter 回写失败: {e}；飞书侧文档已发布，URL={url}，请手动回填")
+
+    info("")
+    info("飞书文档已发布")
+    info(f"URL: {url}")
+    info(f"合并 cell: 成功 {merge_s} 处 / 失败 {merge_f} 处")
+    if first_time:
+        info(f"本地 frontmatter: {'已回填' if fm_written else '回填失败 — 见上方警告'}")
+
+
+if __name__ == "__main__":
+    main()
