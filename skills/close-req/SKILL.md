@@ -58,12 +58,18 @@ echo "SKILL: close-req"
 - 遍历 `tasks/discarded/*.md` 填废弃栏；为空时整个 `<details>` 块省略。
 - 已废弃 task 编号断号是合规信号，不要为「整理顺序」而改号。
 
-### 步骤 2：更新 PRD
+### 步骤 2a：产出 req 级 PRD（必做）
 
-检查本次 req 是否对产品功能有变化。如果有：
-- 调用 `/prd-writing` 更新 `docs/prd.md`
+调用 `/prd-writing` 产出 `$ACTIVE_REQ_DIR/prd.md`（req 级 PRD，本 req 范围一次性产物，定稿后不再修订）。
 
-如果无变化（如纯重构或 bugfix），跳过。
+**这一步无条件做**——req 级 PRD 描述的是"本 req 范围内做了什么、为谁做、怎么验收"，不管 req 性质是产品功能、文档基础设施还是重构，本 req 都有自己的范围需要规格化。如果 PM 明确说本 req 不需要 req 级 PRD（例如极小的 hotfix），需要在 close-report.md「文档变更」section 显式记录跳过理由。
+
+### 步骤 2b：增量同步项目主 PRD（按需）
+
+判断本 req 是否对产品功能有变化（新增模块 / 已有模块扩展 / 角色变更 / 路线推进）。
+
+- **有变化**：调用 `/project-prd-update`，从步骤 2a 产出的 req 级 PRD 增量并入 `docs/prd.md`。
+- **无变化**（纯文档基础设施 / 纯重构 / 纯 bugfix）：跳过，并在 close-report.md「文档变更」section 写一行说明（如"本 req 是文档基础设施增强，未改产品功能，docs/prd.md 不更新"）。
 
 ### 步骤 3：推进状态
 

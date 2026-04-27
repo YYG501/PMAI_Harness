@@ -120,7 +120,8 @@ main（主仓，永远不切分支）
 
 | 文档 | 路径 | 说明 |
 |------|------|------|
-| 产品说明 | docs/prd.md | 持续维护，产品当前状态 |
+| 项目主 PRD | docs/prd.md | 持续维护，产品当前累积状态；由 `/project-prd-update` 在 close-req 时增量更新 |
+| Req 级 PRD | requirements/active/&lt;req&gt;/prd.md | 单 req 范围一次性产出；由 `/prd-writing` 在 close-req 时产出，定稿后不修订 |
 | 项目背景 | docs/CONTEXT.md | 背景、约束、技术栈 |
 | 视觉规范 | docs/DESIGN.md | 颜色、字体、组件规范 |
 | 模块规格 | docs/modules/ | 按模块组织 |

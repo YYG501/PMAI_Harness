@@ -1,32 +1,33 @@
 ---
 name: prd-writing
-description: Use in Stage 6 to draft, revise, or finalize a prd.md after all modules have been analyzed, specified, and the prototype behavior is stable enough to reflect final scope. Produces a 9-chapter PRD with user stories, functional requirements table, and acceptance criteria for external delivery or downstream development. Always trigger when the user says 'prd', 'PRD', '写需求文档', or wants to generate a final spec from confirmed prototype behavior. Do NOT use as the pre-task module working spec before implementation — use module-spec-writing instead. For complex top-level cross-system planning, use solution-design instead.
+description: Use in Stage 6 (close-req) to draft, revise, or finalize the req-level prd.md after all tasks are closed and the prototype behavior reflects final scope of this req. Produces a 9-chapter PRD with user stories, functional requirements table, and acceptance criteria — scoped to the current req only, written once and frozen. Always trigger when the user says 'prd', 'PRD', '写需求文档', or wants to generate the req's final spec. Do NOT use for the project-level cumulative PRD (`docs/prd.md`) — that is updated by `/project-prd-update`. Do NOT use as the pre-task module working spec before implementation.
 ---
 
-# PRD Writing
+# PRD Writing（req 级）
 
 ## When To Use
 
-- 所有模块都已完成并验收，最终原型已经基本稳定，准备输出最终 `prd.md`。
-- 需要把 `analysis.md`、`solution.md`（如有）、`docs/modules/*.md`、已确认原型收敛成一份可交付、可复核的 `prd.md`。
-- 这一步是阶段 6：交付规格化，不替代实现前的模块工作规格。
+- 当前 req 的所有 task 已关闭，原型行为已稳定，准备输出本 req 范围的 `prd.md`。
+- 由 `/close-req` 在 stage 6 调用；产出落在当前 req 目录（`$ACTIVE_REQ_DIR/prd.md`）。
+- 这一步是 req 级交付规格化：本 req 范围内"做了什么、为谁做、怎么验收"的一次性产物，定稿后不再修订。
+- **不替代项目主 PRD**：`docs/prd.md` 是累积视图，由 `/project-prd-update` 在 close-req 时增量同步。
+- **不替代实现前的工作规格**：task 级实施方案在 task 文件里，模块级 spec（如有）在 `docs/modules/`。
 
 ## Required Inputs
 
-1. `docs/input.md`
-2. `docs/analysis.md`
-3. （可选）`docs/solution.md` — 如有，读取对应模块的 `7.2 各模块功能说明` 章节，吸收原型中最终确认的字段取舍和功能边界
-4. `docs/modules/*.md`（至少读取当前项目已交付模块对应的规格）
-5. （可选）`docs/prd_input.md`（补充说明，如有）
-6. （可选）`docs/glossary.md`（名词表，如有）
-7. （可选）`prototypes/<项目名>/` 原型代码 — 原型已定稿时，读取页面代码获取最终的字段布局、交互细节、组件用法，作为功能需求表格的权威来源
+1. `$ACTIVE_REQ_DIR/brief.md`（必需，stage 1 产出）
+2. `$ACTIVE_REQ_DIR/analysis.md`（必需，stage 2 产出）
+3. `$ACTIVE_REQ_DIR/solution.md`（如存在，stage 3 产出 — 读取 `7.2 各模块功能说明` 吸收功能边界）
+4. `$ACTIVE_REQ_DIR/tasks/*.md`（已关闭 task — 读取实际交付的字段、交互、规则）
+5. （可选）`$REPO_ROOT/docs/CONTEXT.md`、`$REPO_ROOT/docs/DESIGN.md`、`$REPO_ROOT/docs/glossary.md`
+6. （可选）`$REPO_ROOT/prototypes/` 原型代码 — 原型已定稿时，读取相关页面文件，提取最终字段布局、交互细节、组件用法，作为功能需求表格的权威来源
 
 ## Workflow
 
-1. 读取 `docs/analysis.md`、`docs/modules/*.md`，以及 `docs/solution.md` 对应模块章节（如有），拆出"已确认决策"和"待确认决策"；有待确认项则先编号提问，确认后再写 PRD。
-2. 如果 `prototypes/<项目名>/` 存在已定稿的原型代码，读取相关页面文件，提取最终确认的字段、交互方式、组件选择等细节，作为功能需求表格的依据。
-3. 按下方"PRD 结构"生成完整 `docs/prd.md`，语言风格对齐下方"写作规则"与"few-shots"。
-4. 在对话中请求用户确认 PRD；确认后写入文件，并提醒执行 `prd:` 提交。
+1. 读取 `$ACTIVE_REQ_DIR/brief.md`、`analysis.md`、`solution.md`（如有）和 `tasks/*.md`，拆出"已确认决策"和"待确认决策"；有待确认项则先编号提问，确认后再写 PRD。
+2. 如果 `prototypes/` 存在已定稿的原型代码，读取相关页面文件，提取最终确认的字段、交互方式、组件选择等细节，作为功能需求表格的依据。
+3. 按下方"PRD 结构"生成完整 `$ACTIVE_REQ_DIR/prd.md`（骨架见 `templates/req-prd.md.tmpl`），语言风格对齐下方"写作规则"与"few-shots"。
+4. 在对话中请求 PM 确认 PRD；确认后写入文件。控制权交回 `/close-req`，由其判断是否调 `/project-prd-update` 同步项目主 PRD。
 
 ---
 
@@ -302,20 +303,20 @@ bullet list，每条一句。来源：`input.md` 的 Out of Scope 与 `analysis.
 
 ## 阶段 6 边界：交付规格化
 
-- 允许产出：`docs/prd.md`
-- 允许动作：基于定稿原型与分析文档生成字段级 PRD
-- 禁止顺手推进：不要在写 PRD 的同时反向改范围边界
-- 退出条件：PRD 经过 PM 质检并定稿
+- 允许产出：`$ACTIVE_REQ_DIR/prd.md`
+- 允许动作：基于定稿原型 + brief / analysis / solution / 已关闭 task 生成 req 级字段级 PRD
+- 禁止顺手推进：不要在写 PRD 的同时反向改范围边界；不要顺手改项目主 PRD（`docs/prd.md`）——那是 `/project-prd-update` 的职责
+- 退出条件：PRD 经过 PM 质检并定稿；控制权交回 `/close-req`
 
 ## 阶段 6 结束模板
 
 ```md
-## 阶段 6 完成 — [项目标题]
+## 阶段 6 完成 — [req 标题]
 
-**产出：** `docs/prd.md`
-**未做：** 未继续扩大范围，未修改已定稿的 analysis.md / solution.md / module-spec
+**产出：** `$ACTIVE_REQ_DIR/prd.md`（req 级，本 req 范围一次性产出）
+**未做：** 未扩大范围、未改 analysis.md / solution.md / task spec、未动 docs/prd.md（项目主 PRD 由 close-req 后调 /project-prd-update 同步）
 
-**当前状态：** PRD 初稿完成，可选做质检或直接定稿。
+**当前状态：** req 级 PRD 初稿完成，可选做质检或直接定稿。
 
 **建议：** 选 A，质检成本低，能在定稿前发现遗漏的边界情况。
 
@@ -329,8 +330,8 @@ C) 打回修订——有需要修改的地方，先改再定稿
 prd-writing 产出初稿后，定稿前可运行以下 prompt 做一轮质检：
 
 ```
-你现在是一个资深产品总监，正在用挑剔的眼光审查一份 PRD 草稿。
-读取 docs/prd.md 和 docs/analysis.md，然后找出：
+你现在是一个资深产品总监，正在用挑剔的眼光审查一份 req 级 PRD 草稿。
+读取 $ACTIVE_REQ_DIR/prd.md 和 $ACTIVE_REQ_DIR/analysis.md，然后找出：
 1. 逻辑矛盾或自相冲突的地方
 2. 遗漏的边界情况（error state、empty state、权限边界、异常流）
 3. 验收标准模糊、无法测量的条目

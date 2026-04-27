@@ -43,13 +43,14 @@ for TMPL in "$FRAMEWORK_DIR/templates/"*.tmpl; do
   BASENAME=$(basename "$TMPL" .tmpl)
   # 确定目标位置
   case "$BASENAME" in
-    CLAUDE.md)     DEST="$TARGET_DIR/CLAUDE.md" ;;
-    CONTEXT.md)    DEST="$TARGET_DIR/docs/CONTEXT.md" ;;
-    DESIGN.md)     DEST="$TARGET_DIR/docs/DESIGN.md" ;;
-    prd.md)        DEST="$TARGET_DIR/docs/prd.md" ;;
-    task.md)       DEST="$TARGET_DIR/templates/task.md.tmpl" ;;
-    settings.json) DEST="$TARGET_DIR/.claude/settings.json" ;;
-    gitignore)     DEST="$TARGET_DIR/.gitignore" ;;
+    CLAUDE.md)        DEST="$TARGET_DIR/CLAUDE.md" ;;
+    CONTEXT.md)       DEST="$TARGET_DIR/docs/CONTEXT.md" ;;
+    DESIGN.md)        DEST="$TARGET_DIR/docs/DESIGN.md" ;;
+    project-prd.md)   DEST="$TARGET_DIR/docs/prd.md" ;;
+    req-prd.md)       DEST="$TARGET_DIR/templates/req-prd.md.tmpl" ;;
+    task.md)          DEST="$TARGET_DIR/templates/task.md.tmpl" ;;
+    settings.json)    DEST="$TARGET_DIR/.claude/settings.json" ;;
+    gitignore)        DEST="$TARGET_DIR/.gitignore" ;;
     *)             continue ;;
   esac
 
