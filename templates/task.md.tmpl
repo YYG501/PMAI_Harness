@@ -176,6 +176,8 @@ cursor-agent：实验性，无沙箱，越界保护仅限 worktree 内
 
 > 每个审查工具跑完后，通过 task-events.py 追加 review_completed 事件到事件流：
 > `python3 .claude/scripts/task-events.py append <本文件> --type review_completed --tool /qa --result pass`
+>
+> （注：plan 阶段的 `/plan-eng-review` / `/plan-design-review` 用 `--type plan_review_completed`，由 /task-spec 步骤 8 负责追加；task-confirm 步骤 1.5 校验，I-PR1。）
 
 ### 自审 1 - [YYYY-MM-DD HH:MM]
 **工具：** /qa, /design-review

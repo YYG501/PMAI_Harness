@@ -91,6 +91,21 @@ Subagent（`Agent` 工具 spawn）是**短命、无状态、独立 context** 的
 
 判断标准：**subagent 必须在单次 turn 内能完整跑完**（典型 < 5 分钟，且不依赖被它启动的后台进程的输出）。否则换载体——主 Orchestrator + `ScheduleWakeup` / hook 轮询 / 后台进程 sentinel。
 
+### Task plan review 强制（I-PR1）
+
+每个 task 在 `/task-confirm` 启动前**必须**经过 plan review，事件流（`.runs/events/<task-stem>.jsonl`）需含 `plan_review_completed` 事件覆盖必需集，否则 task-confirm 步骤 1.5 hard gate 拒绝创建 worktree。
+
+| task 类型（按 `所属模块` 字段） | 必需 plan review |
+|---|---|
+| `基础设施` | `/plan-eng-review` |
+| 业务模块（其他值） | `/plan-eng-review` + `/plan-design-review` |
+
+跑 review 的入口：`/task-spec` 步骤 8（task 文档生成后接续跑）。重做 task 文档后必须重跑对应 review。
+
+**禁止假执行**：append `plan_review_completed` 事件**只能**在真发起 review skill 调用并看到输出后立即做（I-PR2）。"AI 凭记忆/凭文档对照模拟 review"是流程违规。
+
+**Critical 发现必须 PM 显式回应**（I-PR3）：要么采纳改 task 重跑 review，要么明示"理解 X，不改，理由 Y"。不允许默默跳过、不允许 --force。
+
 ### 外部执行器调用前置（Pre-dispatch checkpoint）
 
 调 codex / cursor-agent 这类外部执行器前，task worktree 的 working tree **必须干净**（无 untracked、无未 commit 改动）。`/task-execute` 步骤 3b 开头有硬 gate（INVARIANTS I-AD5），dirty 直接 exit 1，不进 adapter、不 rollback、不打回 task 状态——处理权交还 PM。

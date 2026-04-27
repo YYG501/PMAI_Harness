@@ -112,6 +112,51 @@ def cmd_list(args: argparse.Namespace) -> None:
     print(ep.read_text(encoding="utf-8"), end="")
 
 
+def cmd_check_plan_reviews(args: argparse.Namespace) -> None:
+    """Check if plan_review_completed events cover required plan review tools.
+
+    Required set is derived from the task file's 「所属模块」 field:
+      - "基础设施"  → {/plan-eng-review}
+      - otherwise   → {/plan-eng-review, /plan-design-review}
+
+    Used by /task-confirm as a hard gate (I-PR1/I-PR2).
+    """
+    task_file = Path(args.task_file)
+    if not task_file.exists():
+        print(f"Error: task file not found: {task_file}", file=sys.stderr)
+        sys.exit(1)
+
+    fields = read_task_fields(task_file)
+    module = fields.get("所属模块", "").strip()
+
+    if module == "基础设施":
+        required = {"/plan-eng-review"}
+    else:
+        required = {"/plan-eng-review", "/plan-design-review"}
+
+    ep = events_path(task_file)
+    completed: set[str] = set()
+    if ep.exists():
+        for line in ep.read_text(encoding="utf-8").strip().split("\n"):
+            if not line:
+                continue
+            try:
+                ev = json.loads(line)
+                if ev.get("event") == "plan_review_completed":
+                    tool = ev.get("tool", "")
+                    if tool:
+                        completed.add(tool)
+            except json.JSONDecodeError:
+                continue
+
+    missing = required - completed
+    if missing:
+        print(f"FAIL: missing plan reviews for: {', '.join(sorted(missing))}")
+        sys.exit(1)
+    print(f"PASS: all {len(required)} plan review tools completed")
+    sys.exit(0)
+
+
 def cmd_check_reviews(args: argparse.Namespace) -> None:
     """Check if review_completed events cover all required review tools."""
     task_file = Path(args.task_file)
@@ -192,6 +237,13 @@ def main() -> None:
     p_check = sub.add_parser("check-reviews", help="Check review coverage")
     p_check.add_argument("task_file", help="Path to task file")
 
+    # check-plan-reviews
+    p_plan = sub.add_parser(
+        "check-plan-reviews",
+        help="Check plan review coverage (used by /task-confirm gate)",
+    )
+    p_plan.add_argument("task_file", help="Path to task file")
+
     args = parser.parse_args()
     if args.command == "append":
         cmd_append(args)
@@ -199,6 +251,8 @@ def main() -> None:
         cmd_list(args)
     elif args.command == "check-reviews":
         cmd_check_reviews(args)
+    elif args.command == "check-plan-reviews":
+        cmd_check_plan_reviews(args)
 
 
 if __name__ == "__main__":

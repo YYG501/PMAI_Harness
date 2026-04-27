@@ -23,6 +23,31 @@ echo "SKILL: task-confirm"
 
 读取 PM 指定的 task 文件，提取关键信息。
 
+### 步骤 1.5：plan review 完整性 gate（I-PR1，硬 gate）
+
+在展示摘要、依赖检查、创建 worktree **之前**，必须先验证 plan review 已跑完且事件流有记录：
+
+```bash
+python3 .claude/scripts/task-events.py check-plan-reviews "<task-file>"
+```
+
+判定规则（脚本内置，按 task 文件 `所属模块` 字段）：
+
+- **基础设施 task**：必需 `/plan-eng-review`
+- **业务模块 task**：必需 `/plan-eng-review` + `/plan-design-review`
+
+任一必需 plan review 缺失 → exit 1，直接报错给 PM：
+
+```text
+❌ task-NNN plan review 未完成（I-PR1 拒绝启动）：
+缺失：/plan-eng-review, /plan-design-review
+
+请回主窗口跑 /task-spec task-NNN，按步骤 8 真发起 plan review，
+确认 review 输出后 append plan_review_completed 事件，再重跑 /task-confirm。
+```
+
+不创建 worktree、不修改 task 状态。**不允许 --force 跳过**——这是硬约束，对应 PM 全局规则"不留 FORCE 逃生舱"。
+
 ### 步骤 2：展示 task 摘要（默认压单行，非默认展开）
 
 先解析 executor + model：
@@ -175,3 +200,4 @@ echo "  claude --add-dir \"$MAIN_REPO_ROOT\""
 - 状态转换必须通过 task-transition.py，不能手动改状态字段
 - /task-confirm 不转换为「执行中」；转换发生在 /task-execute 入口前置
 - 输出给 PM 的 `claude --add-dir <path>` 必须是展开后的绝对路径（不能是 `$MAIN_REPO_ROOT` 字面量），让 PM 能直接复制粘贴执行
+- 步骤 1.5 plan review gate 是硬约束（I-PR1），不可跳过；不缺事件不允许 confirm

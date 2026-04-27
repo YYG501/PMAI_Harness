@@ -189,20 +189,35 @@ PM 未选择前不生成新文件。
 
 <!-- TODO Batch 2: depends on task-plan SKILL change -->
 
-### 步骤 8：默认 review（task-spec 写完后，PM 确认前）
+### 步骤 8：默认 plan review（task-spec 写完后，PM 确认前）
 
-按 task 类型默认跑 review，发现直接贴 chat（讨论性，不写盘）：
+按 task 类型跑 plan review，跑完写事件流（task-confirm 步骤 1.5 hard gate I-PR1 校验）：
 
-- **业务模块 task** → 自动调用 `/plan-eng-review` + `/plan-design-review`，审阅刚生成的 `tasks/task-NNN-*.md`。
-- **基础设施 task** → 只调用 `/plan-eng-review`，跳过 `/plan-design-review`（无 UI 内容可审）。
+- **业务模块 task**：跑 `/plan-eng-review` + `/plan-design-review`
+- **基础设施 task**：仅跑 `/plan-eng-review`，跳过 design（无 UI 内容可审）
 
-review 处理规则：
+#### 8.1 真跑 review（不可省、不可"凭记忆"）
 
-- review 发现存在 → 在 chat 中直接呈现 eng / design 视角的发现清单。
-- PM 选择回去改 → 修改 `tasks/task-NNN-*.md` → 按本步骤规则重跑对应 review（eng 改了重跑 eng，design 改了重跑 design）→ 再走步骤 9。
-- PM 选择忽略 review 发现继续 → 直接进步骤 9。
+逐个调用 review skill，审阅范围 = 刚生成的 `tasks/task-NNN-*.md`。每个 review 跑完**立即**append 事件：
 
-review 是讨论性的，不属于子 skill；不写盘、不入未决问题闸门。
+```bash
+python3 .claude/scripts/task-events.py append "<task-file>" \
+  --type plan_review_completed \
+  --tool /plan-eng-review \
+  --result pass \
+  --payload "{\"finding_count\": <发现条数>, \"finding_summary\": \"<一句话摘要>\"}"
+```
+
+每个 review 一条事件。**禁止**先 append 后跑、跳过 review 直接 append 或凭文档对照模拟（违反"skill 必须实际调用，不能凭记忆模拟"）。
+
+#### 8.2 PM 决策 review 发现（无逃生口）
+
+review 输出贴 chat 后 PM 二选一：
+
+- **A) 采纳，改 task** → 修改 `tasks/task-NNN-*.md` → 重跑对应 review（eng 改了重跑 eng，design 改了重跑 design）→ 重跑后再 append 一条 `plan_review_completed`（最后一条为准）
+- **B) 看完决定不改** → 在 chat 里**显式回应每条 critical 发现**（"理解 X，决定不改，理由 Y"）→ 进步骤 9
+
+不允许 PM 默默跳过 critical 发现、也不允许 AI 替 PM 默默忽略。事件流里必须有 `plan_review_completed` 覆盖必需集，否则 task-confirm 拒绝启动。
 
 ### 步骤 9：展示生成结果并等待 PM 确认
 
@@ -237,4 +252,6 @@ PM 选择 A 后，才提示并推动 `/task-confirm <task-file>`；PM 未确认�
 - 只有 PM 确认生成结果后，才推动 `/task-confirm`。
 - 基础设施 task 必须明确说明：`本 task 不触发 module 规格 merge（按 Q1 决议）`。
 - 业务模块 task 的功能清单必须能被后续 doc-update 按「所属模块章节 + 三级功能名」匹配。
-- 业务模块 task 默认跑 `/plan-eng-review` + `/plan-design-review`；基础设施 task 只跑 `/plan-eng-review`。review 不可静默跳过，PM 可在看到发现后选择"忽略发现继续"。
+- 业务模块 task 必须跑 `/plan-eng-review` + `/plan-design-review`；基础设施 task 必须跑 `/plan-eng-review`。每个 review 跑完立即 append `plan_review_completed` 事件（步骤 8.1）。事件流不齐 → task-confirm 步骤 1.5 拒绝启动（I-PR1）。
+- review 不可"凭记忆模拟"——必须真发起 skill 调用并看到工具输出后才 append 事件。
+- review 发现的 critical 项 PM 必须显式回应（采纳改 task / 不改并说明理由），不允许默默跳过。

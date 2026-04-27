@@ -138,6 +138,28 @@
 
 ---
 
+## skills/task-spec + task-confirm（plan review 强制）
+
+**目的**：每个 task 在 dispatch 执行前必须经过架构 review 与（业务 task 的）设计 review，发现的 critical 项必须由 PM 显式回应。事件流是单一真相源，task-confirm 据此 hard gate。
+
+### 不变式
+
+- **I-PR1**：**task-confirm 启动前必须验证 plan_review_completed 事件覆盖必需集**。必需集按 task 文件 `所属模块` 字段判定：
+  - `所属模块 == 基础设施` → 必需 `{/plan-eng-review}`
+  - 否则（业务模块 task）→ 必需 `{/plan-eng-review, /plan-design-review}`
+  
+  缺失任一必需事件 → task-confirm exit 1，**不创建 worktree、不允许 --force 跳过**。
+- **I-PR2**：plan review 跑完必须在事件流 append `plan_review_completed` 事件，由 task-spec 步骤 8 负责。事件 append 必须发生在 review skill 实际调用并看到输出之后——禁止"先 append 后跑"或"跳过 review 直接 append"（违反"skill 必须实际调用，不能凭记忆模拟"）。
+- **I-PR3**：review 发现的 critical 项必须由 PM 显式回应（采纳改 task 重跑 review / 不改并说明理由）。不允许 PM 默默跳过、也不允许 AI 替 PM 默默忽略——对应 PM 全局规则"不留 FORCE 逃生舱"。
+
+### 守卫点
+
+- 事件 append：task-spec SKILL.md 步骤 8.1（review 跑完立即 append）
+- 事件覆盖校验：task-confirm SKILL.md 步骤 1.5 调用 `task-events.py check-plan-reviews`
+- 必需集判定：task-events.py `cmd_check_plan_reviews`，按 `所属模块` 字段分流
+
+---
+
 ## task-transition.py
 
 **目的**：Task 状态转换的单一入口。
