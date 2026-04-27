@@ -123,18 +123,26 @@ fi
 - 范围：主仓 active req 下所有状态为「待确认」且 worktree 已建的 task。
 - 计数依据：task 文件状态为「待确认」，且 `.worktrees/<task-stem>` 已存在。
 
-输出规则：
+启动模式（关键）：
 
-```text
-已创建 task worktree：<task-worktree>
-Task 状态保持「待确认」。
+PM 在新终端窗口里**保持在当前 req worktree 目录**（不进 task worktree），用 `claude --add-dir $MAIN_REPO_ROOT` 启动新 Claude 会话。`--add-dir` 把主仓根加进 Bash 沙盒，让后续 `/task-execute` 入口能持久 cd 进 task worktree。如果不加 `--add-dir`，cd 会被 Claude Code 沙盒 reset，task-execute 失败。
+
+输出规则（必须把 `$MAIN_REPO_ROOT` 展开成 PM 可直接复制的绝对路径）：
+
+```bash
+echo "已创建 task worktree：$TASK_WORKTREE"
+echo "Task 状态保持「待确认」。"
+echo ""
+echo "在新终端窗口里（保持在 req worktree 当前目录）运行："
+echo "  claude --add-dir \"$MAIN_REPO_ROOT\""
 ```
 
-- `PENDING_COUNT <= 1` 时，提示 PM 在新窗口进入 worktree 后运行：
+进会话后跑：
+
+- `PENDING_COUNT <= 1`：
   ```text
   /task-execute
   ```
-
 - `PENDING_COUNT > 1` 时，必须显式带短 ID，避免新窗口误选：
   ```text
   /task-execute task-NNN
@@ -153,9 +161,11 @@ Task 状态保持「待确认」。
 已准备 Task-<id>，执行方式：<EXECUTOR>[ / <MODEL>]
 
 下一步：
-  1. 打开新窗口，进入 <task-worktree>
-  2. 运行上方给出的 /task-execute 命令
-  3. /task-status 查看所有 task
+  1. 打开新终端窗口，保持在当前 req worktree 目录（不要 cd 走）
+  2. 启动 Claude（关键：必须加 --add-dir 主仓根，否则 task-execute 切不到 task worktree）：
+       claude --add-dir <主仓根绝对路径>
+  3. 进会话后跑 /task-execute（PENDING_COUNT > 1 时带短 ID：/task-execute task-NNN）
+  4. /task-status 查看所有 task
 ```
 
 ## Rules
@@ -164,3 +174,4 @@ Task 状态保持「待确认」。
 - task 文件路径如果是相对路径，基于当前 req worktree 解析
 - 状态转换必须通过 task-transition.py，不能手动改状态字段
 - /task-confirm 不转换为「执行中」；转换发生在 /task-execute 入口前置
+- 输出给 PM 的 `claude --add-dir <path>` 必须是展开后的绝对路径（不能是 `$MAIN_REPO_ROOT` 字面量），让 PM 能直接复制粘贴执行

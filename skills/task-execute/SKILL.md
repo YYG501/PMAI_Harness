@@ -8,7 +8,11 @@ description: |
 
 ## When To Use
 
-- PM 在 task worktree 新窗口中调用；也可由执行器 adapter 进入同一流程
+- PM 在新 Claude 会话中调用；也可由执行器 adapter 进入同一流程
+- 启动 Claude 的方式（关键，否则下面的「自动 cd 到 task worktree」失效）：
+  - 推荐：在 req worktree 目录用 `claude --add-dir <主仓根绝对路径>` 启动。launch dir = req worktree（PM 心智自然），`--add-dir` 把主仓根加进 Bash 沙盒，task worktree（位于 `.worktrees/` 下）也在沙盒内，cd 能持久化
+  - 备选：在主仓根用 `claude` 启动。task worktree 是 launch dir 子目录，天然在沙盒内
+  - **禁止**：在 req worktree 用裸 `claude`（不加 --add-dir）启动。task worktree 不在 launch dir 子树，cd 会被 Claude Code 沙盒 reset，整个流程失败
 
 ## Workflow
 
@@ -41,7 +45,7 @@ description: |
 echo "🎯 自动选定: $TASK_FILE"
 ```
 
-#### 入口步骤 2：自动 cd 到 task worktree
+#### 入口步骤 2：自动 cd 到 task worktree（含沙盒边界自检）
 
 从 task 文件 stem 推导 task worktree：
 
@@ -50,13 +54,41 @@ TASK_STEM=$(basename "$TASK_FILE" .md)
 TASK_WORKTREE="$MAIN_REPO_ROOT/.worktrees/$TASK_STEM"
 ```
 
-如果当前目录不是 `$TASK_WORKTREE`，自动执行：
+如 worktree 不存在，报错退出并提示 PM 回主窗口重跑 `/task-confirm $TASK_FILE`。
+
+执行 cd 并立刻验证生效（避免 Claude Code 沙盒静默 reset 后续命令落到错误目录）。
+
+**关键：必须分两次 Bash 工具调用做这件事，单次合并会失效。**
+
+理由：单次 Bash 调用里 `cd` 在调用内永远生效（用 `pwd` 立刻看是切到的目标），Claude Code 的沙盒 reset 发生在**调用结束后**——所以单次 `cd && pwd && check` 永远 pass。要捕获 reset，必须独立第二次调用，让 reset 有机会落到 cwd 上再 pwd。
+
+第 1 次调用（cd）：
 
 ```bash
 cd "$TASK_WORKTREE"
 ```
 
-如 worktree 不存在，报错退出并提示 PM 回主窗口重跑 `/task-confirm $TASK_FILE`。
+观察这次调用的输出：如果出现 `Shell cwd was reset to <launch-dir>`，立即按下面 hard fail 路径报错。
+
+第 2 次调用（独立验证）：
+
+```bash
+EXPECTED_CANONICAL=$(cd "$TASK_WORKTREE" 2>/dev/null && pwd -P)
+ACTUAL=$(pwd -P)
+if [ "$ACTUAL" != "$EXPECTED_CANONICAL" ]; then
+  echo "❌ task-execute 启动失败：cd 后 cwd 是 $ACTUAL，期望 $EXPECTED_CANONICAL" >&2
+  echo "" >&2
+  echo "原因：当前 Claude 会话的 launch dir 不在主仓子树内，且启动时未带 --add-dir，cd 被沙盒 reset。" >&2
+  echo "" >&2
+  echo "修复：关闭本会话，在新终端窗口（保持在当前 req worktree 目录）用以下命令重启 Claude：" >&2
+  echo "  claude --add-dir \"$MAIN_REPO_ROOT\"" >&2
+  echo "" >&2
+  echo "进新会话后再跑 /task-execute $(basename "$TASK_FILE" .md)。" >&2
+  exit 1
+fi
+```
+
+注意：`pwd -P` 解析 macOS 上 `/tmp` ↔ `/private/tmp` 这类符号链接，避免 canonical 路径不一致导致误判。`EXPECTED_CANONICAL` 在子 shell 里算（子 shell 不受沙盒 reset 影响），代表 task worktree 的真实绝对路径。
 
 #### 入口步骤 2.5：依赖前置 gate（v4 兜底层）
 
