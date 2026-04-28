@@ -449,6 +449,121 @@ EOF
 }
 
 # ======================================================================
+# Adapter shim tests (no real codex / cursor-agent binary needed)
+# Regression for: bash 3.2 + set -u + 空 EXECUTOR_MODEL → "${MODEL_ARGS[@]}"
+# unbound variable → adapter 在调到 CLI 前就 exit 1
+# ======================================================================
+
+# Build a fake CLI shim under $SANDBOX/shim/<name> that records args and exits 0.
+# Caller pre-pends $SANDBOX/shim to PATH.
+_make_cli_shim() {
+  local name="$1"
+  mkdir -p "$SANDBOX/shim"
+  cat > "$SANDBOX/shim/$name" <<EOF
+#!/usr/bin/env bash
+printf '%s\n' "\$@" > "$SANDBOX/.shim-args"
+exit 0
+EOF
+  chmod +x "$SANDBOX/shim/$name"
+}
+
+# Run an adapter with $EXECUTOR_MODEL set or empty.
+# Leaves the shim's received args (one per line) at $SANDBOX/.shim-args if
+# adapter actually reached the CLI call. Adapter exit code is intentionally
+# ignored — these tests cover only "did adapter reach the CLI?", not e2e.
+# Sub-shell wraps the call so the parent shell's cwd stays valid across tests.
+_run_adapter_with_shim() {
+  local adapter="$1" cli_name="$2" model_value="$3"
+  local task="$SANDBOX/requirements/active/req-001-test/tasks/task-001-shim.md"
+  write_task_file "$task" "${adapter%%.sh}" "$model_value"
+  (cd "$SANDBOX" && python3 .claude/scripts/task-transition.py "$task" --to 执行中 >/dev/null 2>&1)
+
+  local prompt_file="$SANDBOX/.prompt"
+  echo "test prompt" > "$prompt_file"
+
+  _make_cli_shim "$cli_name"
+
+  (
+    cd "$SANDBOX"
+    # Force codex.sh's plain-`codex` fallback path — that's where the original
+    # "${MODEL_ARGS[@]}"-on-empty-array bug lived.
+    unset CLAUDE_PLUGIN_ROOT
+    PATH="$SANDBOX/shim:$PATH" \
+    MAIN_REPO_ROOT="$SANDBOX" \
+    TASK_FILE="$task" \
+    TASK_WORKTREE="$SANDBOX" \
+    PROMPT_FILE="$prompt_file" \
+    EXECUTOR_MODEL="$model_value" \
+      bash "$FRAMEWORK_ROOT/scripts/exec-adapters/$adapter" \
+      >"$SANDBOX/.adapter-stdout" 2>"$SANDBOX/.adapter-stderr" || true
+  )
+}
+
+# When the original bug fires, adapter dies in `set -u` at the array expansion
+# *before* reaching the CLI shim, so .shim-args never gets written. That is the
+# regression signal we test for.
+_assert_shim_invoked_without_model_flag() {
+  if ! [ -f "$SANDBOX/.shim-args" ]; then
+    fail_test "shim never invoked → adapter died before CLI. stderr=$(cat "$SANDBOX/.adapter-stderr")"
+    return
+  fi
+  if grep -q '^--model$' "$SANDBOX/.shim-args"; then
+    fail_test "shim received --model unexpectedly: $(tr '\n' ' ' < "$SANDBOX/.shim-args")"
+  else
+    pass_test
+  fi
+}
+
+_assert_shim_received_model() {
+  local expected="$1"
+  if ! [ -f "$SANDBOX/.shim-args" ]; then
+    fail_test "shim never invoked. stderr=$(cat "$SANDBOX/.adapter-stderr")"
+    return
+  fi
+  if grep -q '^--model$' "$SANDBOX/.shim-args" && grep -q "^${expected}$" "$SANDBOX/.shim-args"; then
+    pass_test
+  else
+    fail_test "shim args missing --model $expected: $(tr '\n' ' ' < "$SANDBOX/.shim-args")"
+  fi
+}
+
+test_codex_adapter_empty_model_reaches_cli() {
+  start_test "codex.sh: EXECUTOR_MODEL='' 时 adapter 仍能调到 codex CLI（不 unbound 死掉）"
+  make_sandbox
+  write_settings_json "$SANDBOX"
+  _run_adapter_with_shim codex.sh codex ""
+  _assert_shim_invoked_without_model_flag
+  teardown_sandbox
+}
+
+test_codex_adapter_filled_model_passes_through() {
+  start_test "codex.sh: EXECUTOR_MODEL='gpt-test' 透传 --model gpt-test 到 codex CLI"
+  make_sandbox
+  write_settings_json "$SANDBOX"
+  _run_adapter_with_shim codex.sh codex "gpt-test"
+  _assert_shim_received_model "gpt-test"
+  teardown_sandbox
+}
+
+test_cursor_agent_adapter_empty_model_reaches_cli() {
+  start_test "cursor-agent.sh: EXECUTOR_MODEL='' 时 adapter 仍能调到 cursor-agent CLI"
+  make_sandbox
+  write_settings_json "$SANDBOX"
+  _run_adapter_with_shim cursor-agent.sh cursor-agent ""
+  _assert_shim_invoked_without_model_flag
+  teardown_sandbox
+}
+
+test_cursor_agent_adapter_filled_model_passes_through() {
+  start_test "cursor-agent.sh: EXECUTOR_MODEL='gemini-test' 透传 --model gemini-test"
+  make_sandbox
+  write_settings_json "$SANDBOX"
+  _run_adapter_with_shim cursor-agent.sh cursor-agent "gemini-test"
+  _assert_shim_received_model "gemini-test"
+  teardown_sandbox
+}
+
+# ======================================================================
 # Live adapter tests (SKIP_LIVE_TESTS gated)
 # ======================================================================
 
@@ -493,6 +608,11 @@ test_manual_adapter_writes_pending
 test_status_view_shows_manual
 test_status_view_respects_snooze
 test_preamble_aggregates_manual
+
+test_codex_adapter_empty_model_reaches_cli
+test_codex_adapter_filled_model_passes_through
+test_cursor_agent_adapter_empty_model_reaches_cli
+test_cursor_agent_adapter_filled_model_passes_through
 
 test_codex_adapter_live
 
