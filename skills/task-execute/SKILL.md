@@ -14,6 +14,27 @@ description: |
   - 备选：在主仓根用 `claude` 启动。task worktree 是 launch dir 子目录，天然在沙盒内
   - **禁止**：在 req worktree 用裸 `claude`（不加 --add-dir）启动。task worktree 不在 launch dir 子树，cd 会被 Claude Code 沙盒 reset，整个流程失败
 
+## 拆两文件约定（必读）
+
+本 skill 处理拆两文件的 task 产物（PM-VIEW-RULES §二）：
+- **PM 视图主文件**（`.md`）：📌 任务卡 / 🎯 关键产品决策 / 📐 产物预览 / 📋 功能清单 / 🚦 跨功能产品规则 / 📦 范围 / ✅ 验收清单 / 📁 历史档案（执行日志、PM 反馈）
+- **工程合同**（`.engineering.md`）：§1 元信息扩展（executor / model）/ §2 状态转换说明 / §3 启动前必读（agent 必读文件清单）/ §4 功能清单工程版 / §5 实现指引 / §6 易错点 / §7 plan-review 沉淀 / §8 视觉细则 / §9 工程层验收清单 / §10 文档偏差 / §11 自审记录
+
+execute 阶段 agent 启动时**必须把工程合同内容显式 inject 到执行 prompt**。不依赖 markdown 折叠语义、不依赖 PM 主动打开。
+
+具体读写分工：
+| 内容 | 读 / 写位置 |
+|---|---|
+| 任务描述 / 验收清单 / 用户场景 / 功能行为 | 读 PM 视图主文件 |
+| 启动前必读清单 | 读工程合同 §3 |
+| 实现指引 / 易错点 / V1-V26 review 沉淀 | 读工程合同 §5/§6/§7 |
+| 视觉规范细则（像素 / 颜色） | 读工程合同 §8 |
+| 工程层验收清单（grep / 单测） | 读工程合同 §9 |
+| 写执行日志 | 写入 PM 视图主文件「📁 历史档案 → 执行日志」 |
+| 写文档偏差（工程层） | 写入工程合同 §10 |
+| 写自审记录 | 写入工程合同 §11 |
+| 写 PM 反馈（task-submit 打回时）| 写入 PM 视图主文件「📁 历史档案 → PM 反馈」 |
+
 ## Workflow
 
 ### 入口前置（v4 修订）
@@ -137,25 +158,55 @@ CURRENT_STATUS=$(python3 "$MAIN_REPO_ROOT/.claude/scripts/task-transition.py" "$
 - 「待验收」：错误退出，提示 `该 task 已待验收；请在本窗口验收并运行 /task-submit 或 /close-task`。
 - 其他状态：错误退出，展示当前状态，并提示 PM 回主窗口用 `/task-status` 查看。
 
-### 步骤 1：读取 task 文件
+### 步骤 1：读取 task 两文件（成对校验）
 
-读取 task 文件（使用绝对路径到主仓的 req 目录）。提取：
-- 任务描述
-- 执行范围
-- 验收标准
-- 推荐 review 工具列表（步骤 7 用作 PM 自跑推荐清单的种子；不是 AI 要自跑的工具）
-- 启动前必读文档
+1. 校验工程合同成对存在（兼容旧格式 task）：
+   ```bash
+   ENG_FILE="${TASK_FILE%.md}.engineering.md"
+   if [ ! -f "$ENG_FILE" ]; then
+     echo "⚠️  工程合同缺失（旧格式 task，按单文件兼容模式继续）：$ENG_FILE" >&2
+     HAS_ENG=false
+   else
+     HAS_ENG=true
+   fi
+   ```
+   - `HAS_ENG=true`：按下文 §2 / §3 分别从两文件读取
+   - `HAS_ENG=false`：兼容模式——所有内容从主文件 (`$TASK_FILE`) 读取（旧模板的「启动前必读」/「实现指引」/「易错点」等都在主文件中）
+
+2. 从 **PM 视图主文件**（`$TASK_FILE`）提取（业务行为层）：
+   - 「📌 任务卡」→ 任务描述
+   - 「🎯 关键产品决策」→ PM 已拍板的产品选择
+   - 「📋 功能清单」→ 功能行为、数据规则、角色权限（**硬约束**）
+   - 「🚦 跨功能产品规则」→ admin 视角的统一规则
+   - 「📦 范围」→ 改 / 不改
+   - 「✅ 验收清单」→ PM 走查主路径
+
+3. 从 **工程合同**（`$ENG_FILE`，仅当 `HAS_ENG=true`）提取（实现细节层）：
+   - 「§1 元信息扩展」→ executor / model / 推荐 review 工具
+   - 「§3 启动前必读」→ 必读文件路径列表（步骤 2 用）
+   - 「§4 功能清单工程版」→ 实现层细节（字段名 / props / reducer action）
+   - 「§5 实现指引」→ 组件复用 / 关键算法 / vitest stub 限制 / dev console 信号规范
+   - 「§6 易错点 / 禁止项」→ 反向约束清单
+   - 「§7 plan-review 沉淀」→ V1-V26 决策（如有）
+   - 「§8 视觉规范细则」→ 像素值 / 颜色码 / a11y 要求
+   - 「§9 工程层验收清单」→ grep / 单测 / 引用稳定性等自审条目
+
+   **兼容模式**（`HAS_ENG=false`）：跳过本步，从主文件读「启动前必读」/「实现指引」/「易错点」等旧 section（旧模板这些 section 都在主文件中）。
 
 ### 步骤 2：读取必读文档
 
-按「启动前必读」列表，逐个读取文档内容。理解：
+按工程合同「§3 启动前必读」列表，逐个读取文档内容。理解：
 - 模块规格中的**功能清单（硬约束）**：功能行为、数据规则、角色权限必须严格遵循
 - 模块规格中的**实现指引（软指引）**：推荐组件、DESIGN.md 对齐、交互状态覆盖，可在设计系统框架内自由发挥
 - 设计系统规范（DESIGN.md）
 - 项目背景（CONTEXT.md）
+- 已发布的项目主 PRD（docs/prd.md）
 - 参考源码（如列表中有已有页面/组件源码，理解其组件结构和布局模式）
+- 同模块已完成 task 的 PM 视图 + 工程合同（**两文件都读**，复用经验、避免重复）
 
 **硬软分离原则：** 功能清单定义"做什么"（不可偏离），实现指引建议"怎么做"（可灵活调整）。在满足功能行为和设计系统约束的前提下，追求最好的视觉效果和交互体验。
+
+**两文件读完后**：agent 内部把 PM 视图（功能行为）+ 工程合同（实现约束）合并理解为完整的执行指令，开始步骤 3 实现。
 
 ### 步骤 3：实现代码（含 dispatch）
 
@@ -463,20 +514,28 @@ EOM
 
 ### PM 反馈分流策略（共享权威源）
 
+> 本节是 task-execute 内的"本次打回"分流（行为修订 vs Bug 修复），与 `PM-VIEW-RULES §9.4` 的"历史 PM 反馈三类分流"（正向规则 / 反向约束 / 决策记录）是不同维度：
+> - 本节 = 当前 task 被打回时，agent 怎么处理本次反馈
+> - PM-VIEW-RULES §9.4 = task-spec 抽取**已完成 task** 的历史 PM 反馈用于新 task 时怎么分类
+
 当 task-submit 打回后重新进入 task-execute，agent MUST：
 
-1. Read the new PM feedback appended to task 文件「PM 反馈」section。
+1. Read the new PM feedback appended to **PM 视图主文件**「📁 历史档案 → PM 反馈」section（不是工程合同；PM 反馈一律写主文件）。
 2. Classify feedback as ONE of:
    - **行为修订**（behavior/rule change）: PM wants different functionality, logic, or rules。
-   - **Bug 修复**（bug/prototype deviation）: existing functionality is described correctly in task.md but implementation missed it。
+   - **Bug 修复**（bug/prototype deviation）: existing functionality is described correctly in PM 视图 / 工程合同 but implementation missed it。
 3. Output exactly this one-liner BEFORE doing any work:
-   `本次反馈识别为 [行为修订 / Bug 修复]，准备 [改 task.md + 重做 / 只改代码]。如判断错误请回复 "wrong"`
+   `本次反馈识别为 [行为修订 / Bug 修复]，准备 [改 task PM 视图 / 工程合同 + 重做 / 只改代码]。如判断错误请回复 "wrong"`
 4. Wait for PM to either proceed (any input other than `wrong`) or say `wrong`:
    - PM says `wrong`: flip the classification and output the updated one-liner, wait again。
    - PM proceeds: execute the classified path。
 5. Paths:
-   - **行为修订 path**: Modify task 文件「功能清单」/「用户使用流程」/「实现指引」sections → notify PM what changed → get PM 二次确认 → re-execute based on revised task.md。
-   - **Bug 修复 path**: Fix code only. Do NOT modify task.md. Proceed directly to fix。
+   - **行为修订 path**: 按改动性质决定改哪个文件：
+     - 业务功能 / 验收点 / 跨功能规则变化 → 改 PM 视图主文件的「📋 功能清单」/「🚦 跨功能产品规则」/「✅ 验收清单」
+     - 实现细节 / 易错点 / 视觉规范变化 → 改工程合同的「§4 功能清单工程版」/「§6 易错点」/「§8 视觉细则」
+     - 关键产品决策反转 → 改 PM 视图主文件的「🎯 关键产品决策」（备选方案列标注"已被 PM 反馈推翻"）
+     → notify PM what changed → get PM 二次确认 → re-execute based on revised files。
+   - **Bug 修复 path**: Fix code only. Do NOT modify either file. Proceed directly to fix。
 6. Classification signal guide (non-exhaustive):
    - 行为修订 signals: `should`, `instead`, `add feature`, `change behavior`, `before/after`, `priority order`。
    - Bug 修复 signals: `missing`, `forgot`, `not showing`, `broken`, `step N didn't happen`。
@@ -490,12 +549,14 @@ EOM
 
 非 UI 类 task 跳过此步骤。
 
-### 步骤 5：写执行日志
+### 步骤 5：写执行日志（PM 视图主文件）
 
-在 task 文件的「执行日志」section 填写：
+**兼容模式（`HAS_ENG=false`，旧格式 task）**：写入主文件 `## 执行日志` section（旧版 section 名）。
+
+**新格式（`HAS_ENG=true`）**：写入 **PM 视图主文件**（`$TASK_FILE`）的「📁 历史档案 → 执行日志」section：
 
 ```markdown
-### 执行报告 - [YYYY-MM-DD HH:MM]
+#### 执行报告 - [YYYY-MM-DD HH:MM]
 **改动摘要：** [简述做了什么]
 **新建文件：** [文件列表]
 **修改文件：** [文件列表]
@@ -506,7 +567,10 @@ EOM
 
 ### 步骤 6：写文档偏差
 
-在 task 文件的「文档偏差」section：
+**兼容模式（`HAS_ENG=false`，旧格式 task）**：写入主文件 `## 文档偏差` section（旧版 section 名）。
+
+**新格式（`HAS_ENG=true`）**：写入 **工程合同**（`$ENG_FILE`）的「§10 文档偏差」表：
+
 - 如果实现与文档描述一致：写「无偏差」
 - 如果有偏差：填写偏差表格
 
@@ -515,6 +579,8 @@ EOM
 |----------|----------|----------|
 | docs/modules/auth.md 第 15 行 | 使用 JWT 认证 | 改用 Session 认证（因 XX 原因） |
 ```
+
+业务行为偏差（PM 视角能看出的偏差）也可以记录在 PM 视图主文件「📁 历史档案」内一段说明；工程合同 §10 主要承载实现层偏差（字段命名 / 接口签名 / 组件路径与文档不一致等）。
 
 ### 步骤 7：输出"推荐 review 工具"区块（不自动调任何 review）
 

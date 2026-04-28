@@ -1,7 +1,7 @@
 ---
 name: task-plan
 description: |
-  Stage 5：读取分析和设计文档，拆分 task 规划并写 task-plan.md；不生成具体 task 文档。
+  Stage 5：读取上游 stage 文档 + 项目级文档 + 原型代码，拆分 task 规划。按 templates/task-plan.md.tmpl 生成 task-plan.md（PM 视图），按 templates/task-plan.engineering.md.tmpl 生成 task-plan.engineering.md（工程合同）。不生成具体 task 文档。
 ---
 
 # /task-plan
@@ -10,6 +10,14 @@ description: |
 
 - Orchestrator 在 stage 5 调用（由 `/req-stage-gate` 触发）
 
+## PM 视图规则（必读）
+
+本 skill 生成的文档须遵守 `skills/_shared/PM-VIEW-RULES.md`。
+特别注意：
+- **§三 PM 视图写作规则**（明确指代 / 正向描述 / 禁工程词 / 禁像素颜色 / 禁反向约束）
+- **§七 章节顺序约束**（按 `templates/task-plan.md.tmpl` + `templates/task-plan.engineering.md.tmpl`）
+- **§九 输入流约束**（必读上游 stage 文档 + 项目级文档；输入清单见下方 Required Inputs）
+
 ## Preamble
 
 ```bash
@@ -17,22 +25,49 @@ source "$(git rev-parse --show-toplevel 2>/dev/null || echo .)/.claude/scripts/s
 echo "SKILL: task-plan"
 ```
 
+## Required Inputs
+
+按 `PM-VIEW-RULES.md §9.1` 表格执行。
+
+### 写 task-plan.md（PM 视图）必读
+
+**上游 stage 文档**：
+- `$ACTIVE_REQ_DIR/brief.md`
+- `$ACTIVE_REQ_DIR/analysis.md`
+- `$ACTIVE_REQ_DIR/solution.md`（PM 视图）
+
+**项目级文档**（仓库存在则**必读**）：
+- `$REPO_ROOT/docs/CONTEXT.md`
+- `$REPO_ROOT/docs/DESIGN.md`
+- `$REPO_ROOT/docs/prd.md`
+- `$REPO_ROOT/docs/modules/*.md`
+- `$REPO_ROOT/prototypes/`（按相关性扫现有页面 / 组件，反向校验 + 判断哪些能力已存在）
+
+**不读**：`solution.engineering.md`（防止工程内容渗透 PM 视图链路）
+
+### 写 task-plan.engineering.md（工程合同）补充输入
+
+- 上游 `solution.engineering.md`（如有，作为反模式自检 / 共享数据 / 接口约束的依据）
+
 ## Workflow
 
-### 步骤 1：读取输入文档
+### 步骤 0：读 PM-VIEW-RULES.md（强制）
 
-读取以下文档（按优先级）：
+打开 `skills/_shared/PM-VIEW-RULES.md`，重点理解 §三 / §七 / §九。
 
-1. `$ACTIVE_REQ_DIR/analysis.md`（必需）
-2. `$ACTIVE_REQ_DIR/solution.md`（如有）
-3. `$REPO_ROOT/docs/DESIGN.md`（设计系统）
-4. `$REPO_ROOT/docs/CONTEXT.md`（项目背景）
-5. `$REPO_ROOT/docs/prd.md`（已有 PRD）
-6. `$REPO_ROOT/docs/modules/*.md`（已有模块规格，仅作为已有事实输入，不在本 skill 中生成或更新）
+### 步骤 1：读取所有必读输入
 
-### 步骤 3：拆分 task
+按上方 Required Inputs 列出的文件**逐一读取**：
+- 上游 stage 文档（brief / analysis / solution PM 视图）
+- 项目级文档（CONTEXT / DESIGN / prd / modules / prototypes）
 
-根据 analysis.md 和 solution.md 拆分成 `task-plan.md` 的 task 标题列表。
+**特别注意**：
+- 项目级文档列为"必读"——AI 不得以"觉得不必要"为由跳过
+- `prototypes/` 必读（PM-VIEW-RULES §9.3）：
+  - 判断哪些能力已存在（影响 task 拆分粒度，避免重复创建）
+  - 反向校验上游文档：原型已删除 / 砍掉的工程概念不引入 task 拆分
+
+### 步骤 2：拆分 task
 
 > **颗粒度核心规则**：一个 task = PM 能在一次原型 demo 里完整验收的功能单元。
 >
@@ -40,9 +75,9 @@ echo "SKILL: task-plan"
 >
 > **基础设施 task**：一个 task 对应一类完整可用的基础设施能力，例如项目脚手架、共用组件库、auth context、API client、构建配置。
 >
-> **端到端切片原则**：task MUST 按 user story 端到端切（前端 + 后端 + 数据层捆绑）；technical layering cuts are FORBIDDEN，不允许拆成“先数据层、再 UI、再联调”。
+> **端到端切片原则**：task MUST 按 user story 端到端切（前端 + 后端 + 数据层捆绑）；technical layering cuts are FORBIDDEN，不允许拆成"先数据层、再 UI、再联调"。
 
-#### 3.1 基本原则
+#### 2.1 基本原则
 
 > **DX RU1 固定提示：业务模块 / 基础设施判定硬规则**
 >
@@ -51,20 +86,20 @@ echo "SKILL: task-plan"
 > 3. 只有产出不在任何业务页面/流程上直接可见，才允许标 `基础设施`。
 > 4. 基础设施 task 验收后不沉淀进 `docs/modules/<module>.md`；如需长期记录，由 PM 决定是否写入 `docs/CONTEXT.md` / `docs/DESIGN.md`。
 >
-> 基础设施识别示例：项目脚手架、共用 Button/Modal 组件库、API client、auth context、构建配置。反例：登录页的“会话管理 hook”服务于登录流程，应归登录页/账号模块。
+> 基础设施识别示例：项目脚手架、共用 Button/Modal 组件库、API client、auth context、构建配置。反例：登录页的"会话管理 hook"服务于登录流程，应归登录页/账号模块。
 
 - **原子性**：一个 task 完成一个独立的功能单元。
-- **可验收**：有明确的、端到端可验证的验收依据（不是“代码结构变好”这种过程性标准）。
+- **可验收**：有明确的、端到端可验证的验收依据（不是"代码结构变好"这种过程性标准）。
 - **有序性**：task 之间有合理的执行顺序。
 - **可归属**：每个业务功能 task 必须可归属到一个模块章节，并在 `task-plan.md` 中写清 `所属模块`；基础设施 task 必须符合上方硬规则。
 
-#### 3.2 反模式（必须避免）
+#### 2.2 反模式（必须避免）
 
 每次拆完先按下面 5 条反照一遍，命中任何一条就合并或重构该 task：
 
 **反模式 A：纯重构前置 task**
 
-> 例：为了后续 task 并行改同一大文件不冲突，先加一个“拆文件 + 引入 reducer”的纯结构 task。
+> 例：为了后续 task 并行改同一大文件不冲突，先加一个"拆文件 + 引入 reducer"的纯结构 task。
 
 - 问题：纯重构 task 没有业务验收点，却要跑完整 `/review + submit + close` 流程。
 - 判断：如果后续 task 是串行执行的，merge 冲突不存在，前置重构的理由就不成立，合并进第一个相关 functional task。
@@ -72,7 +107,7 @@ echo "SKILL: task-plan"
 
 **反模式 B：横切质量 task**
 
-> 例：把所有 UI 改造 task 的 a11y、1280px 响应式、埋点、i18n 剥出来最后统一做一个“质量收尾 task”。
+> 例：把所有 UI 改造 task 的 a11y、1280px 响应式、埋点、i18n 剥出来最后统一做一个"质量收尾 task"。
 
 - 问题：前面 UI task 会在没有这些质量维度的状态下过 `/qa` 和 `/design-review`，等于 review 半成品。
 - 判断：a11y / 响应式 / performance / 埋点 / i18n 等跨所有 UI 的质量维度必须写进每个 UI task 的验收依据，不允许独立成 task。
@@ -81,127 +116,116 @@ echo "SKILL: task-plan"
 
 > 例：task A 定义纯函数签名，task B 改 Mock 数据以匹配签名。单独跑 A 只能用 stub 验证，单独跑 B 没有函数可调。
 
-- 判断启发式：“单独跑完 A 后，能端到端验证到业务价值吗？”如果不能，合并 A 和 B。
+- 判断启发式："单独跑完 A 后，能端到端验证到业务价值吗？"如果不能，合并 A 和 B。
 - 典型共生对：纯函数层 + 对应 Mock/fixture；数据库 schema migration + ORM model 更新；新组件 + 首个调用方。
 
 **反模式 D：同文件串行多 task（软约束）**
 
 > 例：task 006/007/008 都改同一个详情页文件且串行，只为验收维度清晰就拆 3 个 task。
 
-- 判断：同文件 + 串行的 task，必须在 task-plan.md 的“风险”里显式写出“拆多个 vs 合并”的成本权衡结论。
+- 判断：同文件 + 串行的 task，必须在 `task-plan.engineering.md` §1 反模式自检里显式写出"拆多个 vs 合并"的成本权衡结论。
 - 没写权衡理由而拆多个的，默认合并。
 
 **反模式 E：业务功能 task 没有模块归属**
 
-> 例：task “实现产品访问管理列表页” 标 `所属模块: 基础设施`。
+> 例：task "实现产品访问管理列表页" 标 `所属模块: 基础设施`。
 
 - 问题：业务功能不沉淀进 module 规格，living doc 会残缺。
 - 判断逻辑：产出在任何业务页面/流程上直接可见，就必须归到对应业务模块；标 `基础设施` 只能用于真正横切且不可直接由业务页面验收的能力。
 - 典型错误示例：登录流程、列表筛选、批量导出、权限提示、详情页状态展示都不是基础设施。
 
-#### 3.3 task 数量启发式
+#### 2.3 task 数量启发式
 
-- 单 req 总 task 数 > 7 时，立即回头按 3.2 审查。不是硬上限，但经验上超过 7 往往踩中反模式 A/B/C。
+- 单 req 总 task 数 > 7 时，立即回头按 2.2 审查。不是硬上限，但经验上超过 7 往往踩中反模式 A/B/C。
 - 单模块软上限 = 3 tasks。单个模块被拆成超过 3 个 task 时，必须回头审查是否把同一页面区域或同一 user story 链条拆得过细。
 
-#### 3.4 拆分后自检清单
+#### 2.4 拆分后自检清单
 
-给每个 task 问以下 5 个问题，任何一个答“是”或“不满足”就返回 3.2 处理：
+给每个 task 问以下 5 个问题，任何一个答"是"或"不满足"就返回 2.2 处理：
 
-1. [ ] 这个 task 的验收依据是否只有“代码结构变好/重构完成”这种过程性描述？（反模式 A）
+1. [ ] 这个 task 的验收依据是否只有"代码结构变好/重构完成"这种过程性描述？（反模式 A）
 2. [ ] 这个 task 描述的工作是否应该是其他某个 task 的验收标准的一部分？（反模式 B）
 3. [ ] 这个 task 单独跑完后，能不能独立端到端验证到业务价值？（反模式 C）
-4. [ ] 这个 task 和另一个 task 改同一文件且串行，task-plan 里是否写了成本权衡结论？（反模式 D）
+4. [ ] 这个 task 和另一个 task 改同一文件且串行，是否在 `task-plan.engineering.md` 里写了成本权衡结论？（反模式 D）
 5. [ ] 所有 task 的模块归属是否满足硬规则？业务功能 task 是否真的归到了业务模块章节，而不是图省事标成 `基础设施`？（反模式 E）
 
-### 步骤 4：写 task-plan.md
+### 步骤 3：写 task-plan.md（PM 视图）
 
-在 req 目录写 `task-plan.md`。内容只包含 task 标题列表，不生成具体 task 文档。
+按 `templates/task-plan.md.tmpl` 生成 `$ACTIVE_REQ_DIR/task-plan.md`：
 
-必含内容：
+**章节顺序**（强制，由 PM-VIEW-RULES §七锁定）：
+1. 📌 拆分摘要
+2. 一、Task 列表
+3. 二、执行顺序与并行性
+4. 三、风险
+5. 📁 历史档案（变更记录）
 
-- task 标题列表：`id` / `title` / `所属模块` / `所属模块章节` / 一句话 summary / order / risk。
-- `## 执行顺序与并行性`：硬性要求，和 task 列表 / 风险平级。
-- 风险：只写会影响拆分、验收或并行的真实风险；命中反模式 D 或单模块超过 3 个 task 时写明权衡。
-- **变更记录** section：固定放在文末，供 PM 中途新增、修改、删除 task 时手写记录。
-- **反模式自检声明**：显式写一段“已按步骤 3.2 的 5 条反模式自检过，命中情况说明”。
+**写作约束**（违反将由 `check-doc-pm-view.py` 报错）：
+- 每个名词带完整指代前缀
+- 不出现像素值 / 颜色码 / 工程词（reducer / dispatch 等）
+- 不出现反向约束（"禁止 X / 不允许 Y"）→ 进 task-plan.engineering.md
+- task 列表 summary 一句话讲清交付物，不写实现细节
 
-### task-plan.md 必须包含的章节 — `## 执行顺序与并行性`
+### 步骤 4：写 task-plan.engineering.md（工程合同）
 
-这一节是 `task-plan.md` 的硬性要求，必须包含：
+按 `templates/task-plan.engineering.md.tmpl` 生成 `$ACTIVE_REQ_DIR/task-plan.engineering.md`：
 
-1. **ASCII 依赖图**：表达依赖、并行和 join 点。
-   ```text
-   task-001 → {task-002, task-003} 并行 → task-005 joins
-               task-004 独立
-   ```
-2. **并行 lanes 分组**：用 Lane A / B / C 标明哪些 task 必须 sequential，哪些 independent。
-   ```markdown
-   - Lane A（sequential）: task-001 → task-002 → task-005
-   - Lane B（independent after task-001）: task-003
-   - Lane C（independent）: task-004
-   ```
-3. **PM 启动建议**：写清哪些 task 可同时启动，以及推荐拓扑序。
-   ```markdown
-   - 先启动：task-001
-   - task-001 close 后可同时启动：task-002, task-003, task-004
-   - 最后启动：task-005（等待 task-002 和 task-003 close）
-   ```
+**章节顺序**：
+1. 反模式自检声明（按 §2.2 五条逐条勾选 + 命中处理结论）
+2. stage 6 task-spec 验收 GAP 清单
+3. 模块规格状态
+4. 拆分依据 / 原型代码现状分析
+5. 共享数据 / 接口的 task 间约束
+6. autoplan 修订点 / 决策表
+7. 工程层验收清单（task-plan 自身的）
+8. 变更记录（工程合同侧）
 
-`task-plan.md` 的列表建议格式：
+**特别说明**：
+- §1 反模式自检声明必须**显式列出**对 §2.2 五条反模式的逐条判定结果（"未命中" / "命中（已处理）"），不允许笼统写"已自检通过"
+- §2 验收 GAP 清单需要 stage 6 task-spec 接住每条 GAP（编号 G1, G2, ...）
+- §4 拆分依据需要标注本 req 涉及的现有原型代码 + 处理方式（复用 / 扩展 / 重写 / 不动）
 
-````markdown
-| id | title | 所属模块 | 所属模块章节 | summary | order | risk |
-|----|-------|----------|--------------|---------|-------|------|
-| task-001 | 登录主流程 | 账号模块 | 登录与会话 | 用户完成账号密码登录并看到错误反馈 | 1 | 无 |
+### 步骤 5：自检（按 PM-VIEW-RULES §八 8 项）
 
-## 执行顺序与并行性
+写完后对 `task-plan.md` 逐条检查：
+- [ ] 章节顺序符合 templates/task-plan.md.tmpl
+- [ ] 所有名词带完整指代前缀
+- [ ] 无像素值 / 颜色码 / Emoji 视觉
+- [ ] 无反向约束
+- [ ] 无组件实现名
+- [ ] 无设计意图解释
+- [ ] 抽象动词都搭配具体效果
 
-```text
-task-001 → {task-002, task-003} 并行 → task-004 joins
-```
+任一项未通过 → 修复后重新自检。
 
-- Lane A（sequential）: task-001 → task-002 → task-004
-- Lane B（independent after task-001）: task-003
+### 步骤 6：skill 结束 → /req-stage-gate 接手
 
-PM 启动建议：
-- 先启动 task-001。
-- task-001 close 后，可同时启动 task-002 和 task-003。
-- task-004 等 task-002/task-003 close 后再启动。
-
-## 变更记录
-
-- （暂无）
-````
-
-### 步骤 5：skill 结束 → /req-stage-gate 接手
-
-写完 `task-plan.md` → skill 退出。向 PM 展示一句话摘要 + 文件绝对路径（不贴全文）。
+写完两文件 → skill 退出。向 PM 展示一句话摘要 + 两文件绝对路径（不贴全文）。
 
 控制权交回 `/req-stage-gate`，由它：
-
 - 输出"推荐 review 工具"区块（`/plan-eng-review` `/plan-design-review` `/autoplan` 等，PM 自选自跑，I-RV1）
 - 走推进确认门
 
-**禁止**：skill 内部不得自动调任何 review 工具。PM 要求修改 → 改完 `task-plan.md` 重新走 stage-gate 流程。
+**禁止**：skill 内部不得自动调任何 review 工具。PM 要求修改 → 改完两文件重新走 stage-gate 流程。
 
-进入 stage 6 后，具体 task 文档由 stage 6 的 `/task-spec <task-id>` 按 `task-plan.md` 逐个生成。
+进入 stage 6 后，具体 task 文档由 stage 6 的 `/task-spec <task-id>` 按 task-plan.md 逐个生成。
 
-### 步骤 6（中途重新拆分）：stage 6 发现拆分需要重做
+### 步骤 7（中途重新拆分）：stage 6 发现拆分需要重做
 
 stage 6 task 子循环里，有时跑到 task-NNN 才发现 task 拆分本身有问题，需要废弃当前拆分回 stage 5 重拆。流程：
 
 1. **逐个 discard 待废弃 task**（任何开放态都可以）：
 
    ```bash
-   python3 .claude/scripts/task-transition.py <task-file> --discard --reason "<一句话>"
+   python3 .claude/scripts/task-transition.py <task-pm-view-file> --discard --reason "<一句话>"
    ```
 
    每次 discard 自动：移文件到 `tasks/discarded/`、改状态为「已废弃」、追加 `## 废弃理由` section、清理对应 task worktree + 分支、commit 到 req 分支。
 
    边界：
-   - **`已完成` task 不能 discard**（代码已合入 req 分支）。如需撤销已完成 task 的改动，开新 task 做 revert，或用 `/cancel-req` 整体取消 req。
-   - 任何带 worktree / 未提交改动 / 未合并 commit 的 task，discard 会一并丢弃，confirm prompt 会列出具体丢什么。
+   - **`已完成` task 不能 discard**（代码已合入 req 分支）。
+   - 任何带 worktree / 未提交改动 / 未合并 commit 的 task，discard 会一并丢弃。
+   - **拆两文件的处理**：discard 同时归档主文件 + .engineering.md（成对处理）。
 
 2. **回退 stage**（discard 完所有要废弃的 task 后，guardrail 自然放行）：
 
@@ -209,16 +233,25 @@ stage 6 task 子循环里，有时跑到 task-NNN 才发现 task 拆分本身有
    python3 .claude/scripts/req-transition.py <req-dir> --to 5 --rollback
    ```
 
-3. **重新拆分**：按步骤 3-4 重新写 `task-plan.md`。**新增 task 的编号往后接，不复用已废弃 task 的编号**——`closed/<req>/tasks/discarded/` 里看到 002，主目录里 003 起步，编号断号本身是「这里发生过重拆」的信号。
+3. **重新拆分**：按步骤 2-3 重新写 task-plan.md + task-plan.engineering.md。**新增 task 的编号往后接，不复用已废弃 task 的编号**。
 
-4. **task-plan.md 变更记录** section 写一条变更说明（哪些 task 废弃、为什么、新拆分的逻辑差异）。
+4. **task-plan.md 变更记录** section + **task-plan.engineering.md §8 变更记录** 各写一条变更说明。
+
+## 硬禁止项
+
+- ❌ skill 内部走推进确认门
+- ❌ skill 内部自动调任何 review 工具（I-RV1）
+- ❌ skill 内部调 req-transition.py
+- ❌ 自动生成 tasks/task-NNN-*.md（这是 stage 6 task-spec 的事）
+- ❌ 在 task-plan.md（PM 视图）中嵌入工程内容（反模式自检全文 / 模块规格状态 / 拆分依据论证）→ 这些必须进 task-plan.engineering.md
+- ❌ 跳过项目级文档的"必读"（CONTEXT / DESIGN / prd / modules / prototypes）
 
 ## Rules
 
 - task 编号三位数，从 001 开始，格式 `task-001`。
-- Stage 5 只写 `task-plan.md`，不创建 `tasks/task-NNN-*.md`。
+- Stage 5 只写 task-plan.md + task-plan.engineering.md，**不**创建 `tasks/task-NNN-*.md`（也不创建 .engineering.md）。
 - 不在本 skill 中创建或更新 `docs/modules/*.md`；模块规格由 task 验收后的 `/doc-update` 沉淀。
-- task-plan.md 写在 req 目录下（req worktree 中）。
-- 拆完 task 必须跑步骤 3.4 自检；任何一条命中就返回 3.2 合并或重构，不能直接进入步骤 4。
-- task 总数超过 7 时，必须在 task-plan.md 里显式列出每个 task 的存在理由。
-- 单模块超过 3 个 task 时，必须在 task-plan.md 风险列或风险 section 写明为什么不合并。
+- 两文件成对生成，写在 req 目录下（req worktree 中）。
+- 拆完 task 必须跑步骤 2.4 自检；任何一条命中就返回 2.2 合并或重构，不能直接进入步骤 3。
+- task 总数超过 7 时，必须在 task-plan.engineering.md §1 反模式自检里显式列出每个 task 的存在理由。
+- 单模块超过 3 个 task 时，必须在 task-plan.md 风险列或 task-plan.engineering.md §1 写明为什么不合并。

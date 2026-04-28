@@ -8,7 +8,16 @@ description: |
 
 ## When To Use
 
-- PM 调用，参数是 task 文件路径（如 `/task-confirm tasks/task-001-login-ui.md`）
+- PM 调用，参数是 task **PM 视图主文件**路径（如 `/task-confirm tasks/task-001-login-ui.md`）
+- 工程合同（`tasks/task-001-login-ui.engineering.md`）由 task-spec 同时生成，与主文件成对
+
+## 拆两文件约定（必读）
+
+本 skill 处理拆两文件的 task 产物（PM-VIEW-RULES §二）：
+- **PM 视图主文件**（`.md`）：PM 决策、功能清单、范围、验收清单 — 本 skill 主要读取与展示对象
+- **工程合同**（`.engineering.md`）：实现细节、易错点、plan-review 沉淀、启动前必读 — 本 skill 仅做"成对存在"校验，不解析内容
+
+confirm 阶段**强校验**：两文件必须成对存在；缺工程合同 = error，提示 PM 先回 `/task-spec` 重新生成。
 
 ## Preamble
 
@@ -19,9 +28,23 @@ echo "SKILL: task-confirm"
 
 ## Workflow
 
-### 步骤 1：读取 task 文件
+### 步骤 1：读取 task 文件（成对校验）
 
-读取 PM 指定的 task 文件，提取关键信息。
+1. 读取 PM 指定的**主文件**（PM 视图，`.md`），从「📌 任务卡」+「✅ 验收清单」+「📦 范围」提取关键信息（用于步骤 2 摘要）。
+
+2. **成对存在校验**：检查同目录同 slug 的 `<task-file-stem>.engineering.md` 是否存在。
+   - **存在**（PR 2 之后生成的新 task 应有此文件）→ 后续 executor / model / 审查工具字段从工程合同 §1 读取
+   - **不存在**（兼容 PR 1 之前的旧格式 task）→ 输出 warning 并按单文件兼容模式继续：
+     ```bash
+     ENG_FILE="${TASK_FILE%.md}.engineering.md"
+     if [ ! -f "$ENG_FILE" ]; then
+       echo "⚠️  工程合同缺失（旧格式 task，按单文件兼容模式继续）：$ENG_FILE"
+       HAS_ENG=false
+     else
+       HAS_ENG=true
+     fi
+     ```
+     兼容模式下从主文件 (`$TASK_FILE`) 读取 executor / model 字段（旧模板这些字段在主文件顶部）。
 
 ### 步骤 1.5：plan review 推荐摘要（informational，不阻塞）
 

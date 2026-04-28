@@ -17,6 +17,16 @@ description: |
 - 新窗口在 PM 通过验收后调用
 - Task 状态必须为「已完成」
 
+## 拆两文件约定（必读）
+
+本 skill 处理拆两文件的 task 产物（PM-VIEW-RULES §二）：
+- **PM 视图主文件**：`task-NNN-<slug>.md`（PM 决策、功能清单、验收清单、历史档案）
+- **工程合同**：`task-NNN-<slug>.engineering.md`（实现细节、易错点、plan-review 沉淀、文档偏差工程层、自审记录）
+
+close-task 阶段：
+- **文档偏差检查跨两文件**：PM 视图的执行日志 + 工程合同的 §10 文档偏差表都要读
+- **归档时成对处理**：PM 视图 + 工程合同必须一起归档 / merge / 清理，不允许只动一份
+
 ## Preamble
 
 ```bash
@@ -57,12 +67,22 @@ On valid invocation:
 
 ## Workflow
 
-### 步骤 1：检查文档偏差
+### 步骤 1：检查文档偏差（跨两文件 / 兼容旧格式）
 
-读取 task 文件的「文档偏差」section：
+兼容性判断：
+```bash
+ENG_FILE="${TASK_FILE%.md}.engineering.md"
+[ -f "$ENG_FILE" ] && HAS_ENG=true || HAS_ENG=false
+```
 
-- **有偏差记录**：先调用 `/doc-update` 处理偏差，等 `/doc-update` 完成后再继续
-- **无偏差 / 偏差已处理**：继续下一步
+读取偏差记录：
+
+1. **PM 视图主文件** 的 `## 📁 历史档案` 区域（新格式）或 `## 文档偏差` section（旧格式）— PM 走查时记录的偏差
+2. **工程合同** 的 `## 10. 文档偏差` 表（仅 `HAS_ENG=true`）— agent 在执行中发现的工程层偏差
+
+判断：
+- **任一处有偏差记录**：先调用 `/doc-update` 处理偏差（doc-update 会按相同兼容模式读两文件 / 单文件并按规则沉淀），等 `/doc-update` 完成后再继续
+- **所有偏差源都无偏差 / 偏差已处理**：继续下一步
 
 ### 步骤 2：执行关闭
 
@@ -100,9 +120,12 @@ worktree 和 branch 待清理。请退出当前会话，回主仓后跑：
 ## Rules
 
 - 必须在 task 状态为「已完成」时才能关闭
-- 文档偏差必须在关闭前处理（close-task.sh 会做二次检查）
+- 文档偏差必须在关闭前处理（close-task.sh 会做二次检查；偏差检查跨 PM 视图主文件 + 工程合同两处）
+- **PM 视图主文件 + 工程合同必须成对处理**：归档 / merge / 清理时两文件一起动，不允许只动一份
 - 不要手动执行 merge/删分支/清 worktree，全部由 close-task.sh 和 cleanup-pending-worktrees.sh 处理
 - 关闭后 orchestrator 回到 req worktree 继续工作；worktree/branch 的实际删除由 PM 在主仓 cwd 跑 cleanup 完成（避免 close 删自己脚下目录导致 Stop hook posix_spawn ENOENT）
+
+> **注**：`close-task.sh` 脚本在 PR 3 阶段会改造为按"主文件 + .engineering.md"成对归档；当前 PR 2 阶段脚本仍按单文件处理，工程合同需要 PM 在 close 后手动确认归档（或等 PR 3）。
 
 ## 末尾轻量 auto-chain（DX RU6）
 

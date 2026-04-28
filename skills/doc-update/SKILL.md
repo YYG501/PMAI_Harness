@@ -9,37 +9,62 @@ description: Use when task 已完成、PM 已通过验收、需要在 close-task
 
 `/doc-update` 支持两种调用模式：
 
-1. **对账模式（reconciliation mode）**：task 文件的「文档偏差」section 有内容（不是“无偏差”），需要在合并前更新原始文档。
-2. **沉淀模式（settlement mode）**：由 `/close-task` 在 task 验收通过后调用，把业务 task 的「功能清单」增量沉淀进 `docs/modules/<module>.md`。
+1. **对账模式（reconciliation mode）**：task 文件的偏差记录有内容（不是"无偏差"），需要在合并前更新原始文档。偏差记录跨两处：PM 视图主文件 `## 📁 历史档案` + 工程合同 `## 10. 文档偏差` 表。
+2. **沉淀模式（settlement mode）**：由 `/close-task` 在 task 验收通过后调用，把 PM 视图 task 的「📋 功能清单」增量沉淀进 `docs/modules/<module>.md`。
 
-<!-- TODO Batch 3: depends on close-task --skip-doc-update flag -->
+## 拆两文件约定（必读）
+
+本 skill 处理拆两文件的 task 产物（PM-VIEW-RULES §二）：
+- **PM 视图主文件**（`.md`）：「📋 功能清单」/「📁 历史档案」/「📌 任务卡」中的 `**所属模块**` `**所属模块章节**` 字段
+- **工程合同**（`.engineering.md`）：「§10 文档偏差」/「§4 功能清单工程版」/「§1 元信息扩展」
+
+**沉淀模式**只读 **PM 视图主文件**的「📋 功能清单」沉淀进 module spec。**禁止**把工程合同 §4 功能清单工程版（含字段名 / props / reducer action 等工程层细节）沉淀进 `docs/modules/<module>.md`——这些细节只在 task 工程合同内保留。
+
+**对账模式**：跨两文件读取偏差记录（PM 视图历史档案 + 工程合同 §10），分别对账到对应原始文档。
 
 ## Required Inputs
 
-1. task 文件路径。
-2. 对账模式：偏差涉及的原始文档（docs/solution.md、docs/DESIGN.md、docs/modules/*.md 等）。
-3. 沉淀模式：task 文件顶部字段 `**所属模块：**`、`**所属模块章节：**`，以及 task 文件的 `## 功能清单` section。
+1. task PM 视图主文件路径（PM 调用时传入的）。
+2. **必须存在的成对工程合同**：`<task-stem>.engineering.md`，缺则报错并 `exit 1`。
+3. 对账模式：偏差涉及的原始文档（docs/solution.md、docs/DESIGN.md、docs/modules/*.md 等）。
+4. 沉淀模式：从 PM 视图主文件读取 `**所属模块**` / `**所属模块章节**` 字段（在「📌 任务卡」表格中）+ `## 📋 功能清单` section。
 
 ## Workflow
 
-### 步骤 1：读取 task 文档
+### 步骤 1：读取 task 两文件
 
-读取 task 文件头部字段和正文 section：
+1. 工程合同存在性校验（兼容旧格式）：
+   ```bash
+   ENG_FILE="${TASK_FILE%.md}.engineering.md"
+   if [ ! -f "$ENG_FILE" ]; then
+     echo "⚠️  工程合同缺失（旧格式 task，按单文件兼容模式继续）：$ENG_FILE"
+     HAS_ENG=false
+   else
+     HAS_ENG=true
+   fi
+   ```
 
-- `**所属模块：**`
-- `**所属模块章节：**`
-- `## 功能清单`
-- `## 文档偏差`
+   - `HAS_ENG=false`：兼容模式——偏差检查只读主文件 `## 文档偏差` section；沉淀模式从主文件 `**所属模块：**` `**所属模块章节：**` 头部字段（旧版用 `：**` 不是表格）+ `## 功能清单` section
 
-如果 `**所属模块：**` = `基础设施`，按 Q1 + Q4 boundary table 判定为基础设施 task：跳过模块规格沉淀，返回 success。输出：
+2. 从 **PM 视图主文件**读取：
+   - 「📌 任务卡」表格中的 `**所属模块**` / `**所属模块章节**` 字段
+   - `## 📋 功能清单` section（沉淀模式用）
+   - `## 📁 历史档案` 中的偏差记录（对账模式用，PM 走查时记录的偏差）
 
-```text
-基础设施 task：跳过 docs/modules 沉淀，继续 close-task。
-```
+3. 从 **工程合同**读取：
+   - `## 10. 文档偏差` 表（对账模式用，agent 在执行中发现的工程层偏差）
+
+4. 如果 `**所属模块**` = `基础设施`，按 Q1 + Q4 boundary table 判定为基础设施 task：跳过模块规格沉淀，返回 success。输出：
+
+   ```text
+   基础设施 task：跳过 docs/modules 沉淀，继续 close-task。
+   ```
 
 ### 步骤 1.5：判断是否涉及模块规格功能清单（对账模式保留）
 
-检查「文档偏差」条目中是否有指向 `docs/modules/<module>.md` 功能清单表格的偏差：
+跨两处偏差源检查是否有指向 `docs/modules/<module>.md` 功能清单表格的偏差：
+- PM 视图主文件「📁 历史档案」中的偏差记录
+- 工程合同 §10 文档偏差表
 
 - **有模块规格偏差**：进入步骤 1.6
 - **无模块规格偏差**：跳到步骤 2
@@ -64,13 +89,15 @@ E. 向 PM 展示对账结果，逐条确认后执行
 
 #### 1.7.1 复合 key 匹配
 
-每条功能用 composite key 匹配：
+每条功能用 composite key 匹配（**只读 PM 视图主文件**，不读工程合同）：
 
-- `belonging module chapter`：取自 task.md header field `**所属模块章节：**`
-- `level-3 feature name`：取自 task `## 功能清单` 内 section header `### N · name`
+- `belonging module chapter`：取自 PM 视图主文件「📌 任务卡」表格的 `**所属模块章节**` 字段
+- `level-3 feature name`：取自 PM 视图 `## 📋 功能清单` 内 section header `### N · 功能名`
 - 在 module spec 中定位 `### [module chapter]`，再查找其下 `#### N · [feature name]`
 
-跨模块 task 的 `**所属模块章节：**` 必须使用 `模块A:章节X, 模块B:章节Y` 格式。沉淀时按每个 `模块:章节` 组合分别匹配对应 `docs/modules/<module>.md`。
+跨模块 task 的 `**所属模块章节**` 必须使用 `模块A:章节X, 模块B:章节Y` 格式。沉淀时按每个 `模块:章节` 组合分别匹配对应 `docs/modules/<module>.md`。
+
+**禁止**沉淀工程合同 §4 功能清单工程版（含字段名 / props / reducer action 等工程层细节）——这些只在 task 工程合同内保留，不进入 module spec。
 
 #### 1.7.2 四种情况处理逻辑
 
