@@ -269,6 +269,37 @@ test_classify_exit_99_unknown() {
   rm -f "$log"
 }
 
+test_classify_cli_arg_echo_not_sandbox() {
+  start_test "classify: log 仅含 '--sandbox workspace-write' CLI 回显 → unknown（不假阳性）"
+  log=$(mktemp)
+  cat > "$log" <<'EOF'
+codex.sh: CLAUDE_PLUGIN_ROOT not set; falling back to plain 'codex exec --sandbox workspace-write'
+codex exec --sandbox workspace-write --model gpt-test "test prompt"
+some unrelated stack trace here
+EOF
+  out=$(bash "$FRAMEWORK_ROOT/scripts/classify-failure.sh" 99 "$log")
+  [ "$out" = "unknown" ] && pass_test || fail_test "expected unknown, got $out"
+  rm -f "$log"
+}
+
+test_classify_real_sandbox_denied() {
+  start_test "classify: log 含真实 'sandbox denied' 错误 → sandbox_denied"
+  log=$(mktemp)
+  echo "Error: sandbox denied write to /Users/foo/bar.txt" > "$log"
+  out=$(bash "$FRAMEWORK_ROOT/scripts/classify-failure.sh" 99 "$log")
+  [ "$out" = "sandbox_denied" ] && pass_test || fail_test "expected sandbox_denied, got $out"
+  rm -f "$log"
+}
+
+test_classify_permission_denied_is_sandbox() {
+  start_test "classify: log 含 'permission denied' → sandbox_denied"
+  log=$(mktemp)
+  echo "open(/Users/foo/bar.txt): permission denied" > "$log"
+  out=$(bash "$FRAMEWORK_ROOT/scripts/classify-failure.sh" 99 "$log")
+  [ "$out" = "sandbox_denied" ] && pass_test || fail_test "expected sandbox_denied, got $out"
+  rm -f "$log"
+}
+
 # ======================================================================
 # task-transition.py new flags
 # ======================================================================
@@ -597,6 +628,9 @@ test_prompt_allowlist_extracted
 test_classify_exit_10
 test_classify_exit_99_log_scan
 test_classify_exit_99_unknown
+test_classify_cli_arg_echo_not_sandbox
+test_classify_real_sandbox_denied
+test_classify_permission_denied_is_sandbox
 
 test_fail_execution_requires_reason
 test_fail_execution_happy

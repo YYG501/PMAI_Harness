@@ -27,9 +27,13 @@ case "$EXIT_CODE" in
   12) echo "network"; exit 0 ;;
 esac
 
-# Fallback: scan log for keywords
+# Fallback: scan log for keywords.
+# 原则：exit 10/11/12 是精准信号；这里是兜底分类，宁可漏判（落 unknown）
+# 也别假阳性。所以关键词必须是"真错误短语"，不能是 CLI 参数名（"sandbox" /
+# "workspace-write" 单独出现几乎一定是 `--sandbox workspace-write` 命令行回显，
+# 不是错误本体）。
 if [ -n "$LOG_PATH" ] && [ -f "$LOG_PATH" ]; then
-  if grep -qiE "sandbox|permission denied|workspace-write" "$LOG_PATH"; then
+  if grep -qiE "sandbox[[:space:]]+(denied|violation|error|blocked|rejected)|(denied|blocked|rejected)[[:space:]]+by[[:space:]]+sandbox|permission denied|operation not permitted|EACCES" "$LOG_PATH"; then
     echo "sandbox_denied"
     exit 0
   fi
