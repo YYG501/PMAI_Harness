@@ -16,7 +16,7 @@ description: |
 本 skill 生成的文档须遵守 `skills/_shared/PM-VIEW-RULES.md`。
 特别注意：
 - **§三 PM 视图写作规则**（明确指代 / 正向描述 / 禁工程词 / 禁像素颜色 / 禁反向约束）
-- **§五 功能清单格式**（强制三列表 + 数字编号列表）
+- **§五 功能清单格式**（标题 + 角色限定一句话 + 业务规则编号 + 字段口径独立表；业务规则只说 what，禁 how/why/字段口径混入）
 - **§六 关键产品决策格式**
 - **§七 章节顺序约束**（按 `templates/task.md.tmpl` + `templates/task.engineering.md.tmpl`）
 - **§九 输入流约束**（必读上游 stage 文档 + 项目级文档；输入清单见下方 Required Inputs）
@@ -201,7 +201,7 @@ echo "SKILL: task-spec"
 - 不出现像素值 / 颜色码 / Emoji 视觉（§3.2）→ 进 task.engineering.md §8
 - 不出现反向约束（"禁止 / 不允许"，§3.4）→ 进 task.engineering.md §6
 - 不出现工程词（reducer / dispatch / props / hook / TS 类型签名）→ 进 task.engineering.md §4
-- 功能清单遵守 §五格式（N · 功能名 + 三列表 + 数字编号列表）
+- 功能清单遵守 §五格式（N · 功能名 + 「使用角色」一句 + 业务规则编号 + 字段口径独立表；§5.2 / §5.3 写作约束）
 
 **模板替换**：
 - `{{TASK_NUMBER}}` → 三位数编号

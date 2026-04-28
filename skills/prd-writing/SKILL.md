@@ -18,7 +18,7 @@ description: Use in Stage 6 (close-req) to draft, revise, or finalize the req-le
 本 skill 产出 `prd.md`（最终交付的产品规格），须遵守 `skills/_shared/PM-VIEW-RULES.md`。
 特别注意：
 - §三 PM 视图写作规则（明确指代 / 正向描述 / 禁工程词 / 禁像素颜色 / 禁反向约束）
-- §五 功能清单格式（强制三列表 + 数字编号列表）
+- §五 功能清单格式（标题 + 角色限定一句话 + 业务规则编号 + 字段口径独立表；业务规则只说 what，禁 how/why/字段口径混入）
 - §四 文档级严格度对照表（prd.md 行）
 - §九 输入流约束（**所有项目级文档全部必读**：brief / analysis / solution（PM 视图）/ tasks（PM 视图）/ docs/CONTEXT.md / docs/DESIGN.md / docs/prd.md / docs/modules/\*.md / prototypes/；不接受任何 .engineering.md 输入）
 
