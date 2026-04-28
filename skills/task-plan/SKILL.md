@@ -198,6 +198,21 @@ echo "SKILL: task-plan"
 
 任一项未通过 → 修复后重新自检。
 
+### 步骤 5.5：自动跑启发式 lint
+
+人工自检之后，调用 `check-doc-pm-view.py` 做机器校验作为兜底：
+
+```bash
+python3 "$REPO_ROOT/.claude/scripts/check-doc-pm-view.py" "$ACTIVE_REQ_DIR/task-plan.md"
+```
+
+处理输出：
+- **0 errors + 0 warnings**：进入步骤 6 退出 skill
+- **有 warnings**：向 PM 展示，PM 决定是否修
+- **有 errors**：修复后重跑 lint；连续 3 次仍有 error 时停下询问 PM
+
+工程合同 (`task-plan.engineering.md`) 不跑 lint（脚本自动跳过 `.engineering.md`）。
+
 ### 步骤 6：skill 结束 → /req-stage-gate 接手
 
 写完两文件 → skill 退出。向 PM 展示一句话摘要 + 两文件绝对路径（不贴全文）。

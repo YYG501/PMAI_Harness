@@ -240,6 +240,23 @@ echo "SKILL: task-spec"
 
 任一项未通过 → 修复后重新自检。
 
+### 步骤 10.5：自动跑启发式 lint
+
+人工自检之后，调用 `check-doc-pm-view.py` 做机器校验作为兜底：
+
+```bash
+python3 "$REPO_ROOT/.claude/scripts/check-doc-pm-view.py" \
+  "$ACTIVE_REQ_DIR/tasks/task-NNN-<slug>.md"
+```
+
+处理输出：
+- **0 errors + 0 warnings**：进入步骤 11
+- **有 warnings**：向 PM 展示，PM 决定是否修
+- **有 errors**：逐条修复后回到步骤 8 重写违规章节，再重跑 lint；连续 3 次 lint 仍有 error 时停下询问 PM
+- 进入步骤 11 时若仍有未修复 errors，必须**显式告知** PM 哪几条未修 + 一句话原因
+
+工程合同 (`task-NNN-<slug>.engineering.md`) 不跑 lint（脚本自动跳过 `.engineering.md`）。
+
 ### 步骤 11：输出"推荐 review 工具"区块（不自动调任何 review）
 
 按 task 类型给出推荐清单。**AI 不得自动调用任何 review skill**（I-RV1）。

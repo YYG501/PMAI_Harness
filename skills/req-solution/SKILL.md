@@ -166,6 +166,24 @@ echo "SKILL: req-solution"
 
 任一项未通过 → 修复后重新自检。
 
+### 步骤 5.5：自动跑启发式 lint
+
+人工自检之后，调用 `check-doc-pm-view.py` 做机器校验作为兜底：
+
+```bash
+python3 "$REPO_ROOT/.claude/scripts/check-doc-pm-view.py" "$ACTIVE_REQ_DIR/solution.md"
+```
+
+处理输出：
+
+- **0 errors + 0 warnings**：可以进入步骤 6 退出 skill
+- **有 warnings**：向 PM 展示 warnings，PM 决定是否修
+- **有 errors**：逐条修复后回到步骤 3 重写违规章节，再重跑 lint；连续 3 次 lint 仍有 error 时停下询问 PM（避免无限循环）
+
+lint 不强制阻塞，但 errors 留着进入步骤 6 的，必须在向 PM 展示文件路径时**显式告知**有几个未修复 errors + 一句话原因。
+
+工程合同 (`solution.engineering.md`) 不跑 lint（lint 脚本会自动跳过 `.engineering.md`）。
+
 ### 步骤 6：skill 结束
 
 写完两文件 → skill 退出。控制权交回 `/req-stage-gate`，由它输出推荐 review 区块 + 走确认门。
