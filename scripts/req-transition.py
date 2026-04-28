@@ -98,26 +98,36 @@ def check_design_md_has_content(req_dir: Path) -> bool:
 
 
 def check_all_tasks_closed(req_dir: Path) -> tuple[bool, list[str]]:
-    """Check if all tasks in req are closed or cancelled."""
+    """Check if all tasks in req are closed or cancelled.
+    Tolerates both old paragraph format (**状态：** 值) and new task-card
+    table format (| **状态** | 值 |). Skips engineering files (.engineering.md)
+    so each task is only counted once via its PM-view main file.
+    """
     tasks_dir = req_dir / "tasks"
     if not tasks_dir.exists():
         return True, []
 
     import re
-    field_re = re.compile(r"^\*\*状态：\*\*\s*(.*)$")
+    field_re_old = re.compile(r"^\*\*状态：\*\*\s*(.*)$")
+    field_re_new = re.compile(r"^\|\s*\*\*状态\*\*\s*\|\s*(.*?)\s*\|.*$")
     open_tasks = []
 
     for tf in sorted(tasks_dir.glob("task-*.md")):
+        # Skip the engineering companion file (PR 2 拆两文件约定)
+        if tf.name.endswith(".engineering.md"):
+            continue
+        status = None
         with tf.open(encoding="utf-8") as fh:
             for idx, line in enumerate(fh):
-                if idx >= 20:
+                if idx >= 40:
                     break
-                m = field_re.match(line.strip())
+                stripped = line.strip()
+                m = field_re_old.match(stripped) or field_re_new.match(stripped)
                 if m:
                     status = m.group(1).strip()
-                    if status in ("待确认", "执行中", "待验收"):
-                        open_tasks.append(f"{tf.name} ({status})")
                     break
+        if status and status in ("待确认", "执行中", "待验收"):
+            open_tasks.append(f"{tf.name} ({status})")
 
     return len(open_tasks) == 0, open_tasks
 

@@ -22,24 +22,67 @@ if [ ! -f "$TASK_FILE" ]; then
   exit 1
 fi
 
+# --- 提取 task 元信息字段（兼容旧段落格式 + 新任务卡表格格式） ---
+extract_task_field() {
+  local file="$1"
+  local field="$2"
+  local val
+  # 旧格式：**字段：** 值
+  val=$(grep -m1 "^\*\*${field}：\*\*" "$file" 2>/dev/null \
+    | sed -E "s/^\*\*${field}：\*\* +//; s/[ 	]+$//" || true)
+  if [ -n "$val" ]; then
+    echo "$val"
+    return 0
+  fi
+  # 新格式：| **字段** | 值 |
+  val=$(grep -m1 "^|[ 	]*\*\*${field}\*\*[ 	]*|" "$file" 2>/dev/null \
+    | sed -E "s/^\|[ 	]*\*\*${field}\*\*[ 	]*\|[ 	]*//; s/[ 	]*\|[ 	]*$//; s/[ 	]+$//" || true)
+  echo "$val"
+}
+
+# --- 工程合同成对存在（PR 2 拆两文件约定，兼容旧格式 task） ---
+ENG_FILE="${TASK_FILE%.md}.engineering.md"
+if [ -f "$ENG_FILE" ]; then
+  HAS_ENG=true
+else
+  HAS_ENG=false
+  echo "⚠️  工程合同缺失（旧格式 task，按单文件兼容模式继续）：$ENG_FILE" >&2
+fi
+
 # --- 校验状态 ---
-STATUS=$(grep -m1 '^\*\*状态：\*\*' "$TASK_FILE" | sed 's/\*\*状态：\*\* //')
+STATUS=$(extract_task_field "$TASK_FILE" "状态")
 if [ "$STATUS" != "已完成" ]; then
   echo "❌ task 状态为「${STATUS}」，不是「已完成」。只有 PM 确认通过后才能关闭。" >&2
   exit 1
 fi
 
-# --- 检查文档偏差是否已处理 ---
-DOC_DIFF=$({
-  sed -n '/^## 文档偏差/,/^## /{/^## 文档偏差/d;/^## /d;p;}' "$TASK_FILE" \
+# --- 检查文档偏差是否已处理（跨两文件 / 兼容旧格式） ---
+collect_diff_section() {
+  local file="$1"
+  local heading="$2"
+  sed -n "/^${heading}/,/^## /{/^${heading}/d;/^## /d;p;}" "$file" \
     | grep -v '^$' \
     | grep -v '^>' \
+    | grep -v '^<!--' \
     | grep -v '^|.*文档位置.*文档原文.*实际实现' \
     | grep -v '^|.*---' \
     | grep -v '^---' \
     | grep -v '无偏差' \
-    | head -20
-} || true)
+    | head -20 || true
+}
+
+DOC_DIFF=""
+if [ "$HAS_ENG" = "true" ]; then
+  # 新格式：偏差主要在工程合同 §10；PM 走查偏差也可能在主文件 📁 历史档案
+  DOC_DIFF=$(collect_diff_section "$ENG_FILE" "## 10\\. 文档偏差")
+  if [ -z "$DOC_DIFF" ]; then
+    # 兼容性 fallback：主文件 ## 文档偏差（旧格式 section 残留）
+    DOC_DIFF=$(collect_diff_section "$TASK_FILE" "## 文档偏差")
+  fi
+else
+  # 旧格式：偏差在主文件 ## 文档偏差
+  DOC_DIFF=$(collect_diff_section "$TASK_FILE" "## 文档偏差")
+fi
 
 if [ -n "$DOC_DIFF" ]; then
   echo "⚠️ 检测到未处理的文档偏差。请先运行 /doc-update 处理偏差后再关闭 task。" >&2
@@ -50,7 +93,7 @@ if [ -n "$DOC_DIFF" ]; then
 fi
 
 # --- 提取分支名 ---
-BRANCH=$(grep -m1 '^\*\*分支：\*\*' "$TASK_FILE" | sed 's/\*\*分支：\*\* //' | sed 's/ .*//')
+BRANCH=$(extract_task_field "$TASK_FILE" "分支" | sed 's/[ 	].*//')
 if [ -z "$BRANCH" ]; then
   echo "⚠️ task 文件中未找到分支名，跳过分支操作。" >&2
 fi
@@ -230,8 +273,12 @@ PY
   echo "🕓 worktree 和 branch 已标记为待清理: $BRANCH"
 fi
 
-# --- 5. 杀 dev server ---
-PORT=$(grep -m1 '^\*\*开发服务器：\*\*' "$TASK_FILE" | grep -oE '[0-9]+' | tail -1 || true)
+# --- 5. 杀 dev server（兼容字段名 "开发服务器" / "dev server"） ---
+DEV_SERVER=$(extract_task_field "$TASK_FILE" "开发服务器")
+if [ -z "$DEV_SERVER" ]; then
+  DEV_SERVER=$(extract_task_field "$TASK_FILE" "dev server")
+fi
+PORT=$(echo "$DEV_SERVER" | grep -oE '[0-9]+' | tail -1 || true)
 if [ -n "$PORT" ] && [ "$PORT" -gt 0 ] 2>/dev/null; then
   PIDS=$(lsof -ti :"$PORT" 2>/dev/null || true)
   if [ -n "$PIDS" ]; then

@@ -11,6 +11,16 @@ description: |
 
 - Orchestrator 在 stage 1→2 调用（由 `/req-stage-gate` 触发）
 
+## PM 视图规则（必读）
+
+本 skill 产出 `analysis.md`，须遵守 `skills/_shared/PM-VIEW-RULES.md`。
+特别注意：
+- §三 PM 视图写作规则（明确指代 / 正向描述 / 禁工程词 / 禁像素颜色 / 禁反向约束）
+- §四 文档级严格度对照表（analysis.md 行）
+- §九 输入流约束（必读 brief.md + 项目级文档 + prototypes/，不接受任何 .engineering.md 输入）
+
+`analysis.md` 不拆文件（PM-VIEW-RULES §二）。
+
 ## Preamble
 
 ```bash

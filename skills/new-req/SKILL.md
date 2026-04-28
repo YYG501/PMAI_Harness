@@ -10,6 +10,16 @@ description: |
 
 - PM 在业务项目中调用，参数是需求描述（如 `/new-req "实现用户登录"`）
 
+## PM 视图规则（必读）
+
+本 skill 间接产出 `brief.md`（通过 /office-hours），须遵守 `skills/_shared/PM-VIEW-RULES.md`。
+特别注意：
+- §三 PM 视图写作规则（明确指代 / 正向描述 / 禁工程词 / 禁像素颜色 / 禁反向约束）
+- §四 文档级严格度对照表（brief.md 行）
+- §九 输入流约束（brief.md 是后续所有 stage 的源头，不接受任何上游 .engineering.md 输入）
+
+`brief.md` 不拆文件（PM-VIEW-RULES §二）。
+
 ## Preamble
 
 ```bash

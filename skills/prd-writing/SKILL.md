@@ -13,13 +13,32 @@ description: Use in Stage 6 (close-req) to draft, revise, or finalize the req-le
 - **不替代项目主 PRD**：`docs/prd.md` 是累积视图，由 `/project-prd-update` 在 close-req 时增量同步。
 - **不替代实现前的工作规格**：task 级实施方案在 task 文件里，模块级 spec（如有）在 `docs/modules/`。
 
+## PM 视图规则（必读）
+
+本 skill 产出 `prd.md`（最终交付的产品规格），须遵守 `skills/_shared/PM-VIEW-RULES.md`。
+特别注意：
+- §三 PM 视图写作规则（明确指代 / 正向描述 / 禁工程词 / 禁像素颜色 / 禁反向约束）
+- §五 功能清单格式（强制三列表 + 数字编号列表）
+- §四 文档级严格度对照表（prd.md 行）
+- §九 输入流约束（**所有项目级文档全部必读**：brief / analysis / solution（PM 视图）/ tasks（PM 视图）/ docs/CONTEXT.md / docs/DESIGN.md / docs/prd.md / docs/modules/\*.md / prototypes/；不接受任何 .engineering.md 输入）
+
+`prd.md` 不拆文件（PM-VIEW-RULES §二），是 PM 视图链路的最终交付层。
+
+prd-writing 历史上自带的写作规则（§186 禁用清单 / §266 UI 元素指代规则 / §289 抽象动词使用规则）现已统一搬到 `PM-VIEW-RULES.md` §三作为单一真相源；本 skill 内的同名章节保留作为本文位置参照，但权威以共享规则为准。
+
 ## Required Inputs
 
-1. `$ACTIVE_REQ_DIR/brief.md`（必需，stage 1 产出）
-2. `$ACTIVE_REQ_DIR/analysis.md`（必需，stage 2 产出）
-3. `$ACTIVE_REQ_DIR/solution.md`（如存在，stage 3 产出 — 读取 `7.2 各模块功能说明` 吸收功能边界）
-4. `$ACTIVE_REQ_DIR/tasks/*.md`（已关闭 task — 读取实际交付的字段、交互、规则）
-5. （可选）`$REPO_ROOT/docs/CONTEXT.md`、`$REPO_ROOT/docs/DESIGN.md`、`$REPO_ROOT/docs/glossary.md`
+按 `PM-VIEW-RULES.md §9.1` 表格，所有项目级文档**仓库存在则必读**（不再标"如存在"）：
+
+1. `$ACTIVE_REQ_DIR/brief.md`（必读，stage 1 产出）
+2. `$ACTIVE_REQ_DIR/analysis.md`（必读，stage 2 产出）
+3. `$ACTIVE_REQ_DIR/solution.md`（PM 视图，必读 — 读取关键产品决策 / 交付物清单 / 验收标准等）
+4. `$ACTIVE_REQ_DIR/tasks/*.md`（**仅 PM 视图主文件**；不读 .engineering.md — 已关闭 task 的实际交付字段、交互、规则）
+5. `$REPO_ROOT/docs/CONTEXT.md`（必读，项目背景）
+6. `$REPO_ROOT/docs/DESIGN.md`（必读，视觉规范）
+7. `$REPO_ROOT/docs/prd.md`（必读，已发布的项目主 PRD 作为基线）
+8. `$REPO_ROOT/docs/modules/*.md`（必读，已沉淀的模块规格作为权威基线）
+9. `$REPO_ROOT/prototypes/`（必读，反向校验所有上游描述 — PM-VIEW-RULES §9.3）
 6. （可选）`$REPO_ROOT/prototypes/` 原型代码 — 原型已定稿时，读取相关页面文件，提取最终字段布局、交互细节、组件用法，作为功能需求表格的权威来源
 
 ## Workflow

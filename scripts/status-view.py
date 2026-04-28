@@ -12,7 +12,22 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
+# 兼容两种 task 元信息格式（同 task-transition.py）：
+#   旧版（段落）：**字段：** 值
+#   新版（任务卡表格）：| **字段** | 值 |
 FIELD_RE = re.compile(r"^\*\*(.+?)：\*\*\s*(.*)$")
+FIELD_RE_NEW = re.compile(r"^\|\s*\*\*(.+?)\*\*\s*\|\s*(.*?)\s*\|.*$")
+
+
+def _parse_field_line(line: str) -> tuple[str, str] | None:
+    stripped = line.strip()
+    m = FIELD_RE.match(stripped)
+    if m:
+        return m.group(1).strip(), m.group(2).strip()
+    m = FIELD_RE_NEW.match(stripped)
+    if m:
+        return m.group(1).strip(), m.group(2).strip()
+    return None
 STAGE_NAMES = {
     1: "感受问题",
     2: "需求分析",
@@ -78,15 +93,18 @@ def find_current_branch() -> str:
 
 
 def read_task_fields(task_file: Path) -> dict[str, str]:
-    """Read **field：** value pairs from task file header."""
+    """Read field-value pairs from task file header. Tolerates both
+    old paragraph format (**字段：** 值) and new task-card table format
+    (| **字段** | 值 |). Reads first 40 lines."""
     fields: dict[str, str] = {}
     with task_file.open(encoding="utf-8") as fh:
         for idx, line in enumerate(fh):
             if idx >= 40:
                 break
-            match = FIELD_RE.match(line.strip())
-            if match:
-                fields[match.group(1).strip()] = match.group(2).strip()
+            parsed = _parse_field_line(line)
+            if parsed:
+                name, value = parsed
+                fields[name] = value
     return fields
 
 

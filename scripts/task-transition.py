@@ -10,7 +10,28 @@ import subprocess
 import sys
 from pathlib import Path
 
-FIELD_RE = re.compile(r"^\*\*(.+?)：\*\*\s*(.*)$")
+# 兼容两种 task 元信息格式：
+#   旧版（段落）：**字段：** 值
+#   新版（任务卡表格）：| **字段** | 值 |
+FIELD_RE_OLD = re.compile(r"^\*\*(.+?)：\*\*\s*(.*)$")
+FIELD_RE_NEW = re.compile(r"^\|\s*\*\*(.+?)\*\*\s*\|\s*(.*?)\s*\|.*$")
+
+
+def _parse_field_line(line: str) -> tuple[str, str] | None:
+    """Try both old paragraph format and new task-card table format.
+    Return (field_name, value) or None."""
+    stripped = line.strip()
+    m = FIELD_RE_OLD.match(stripped)
+    if m:
+        return m.group(1).strip(), m.group(2).strip()
+    m = FIELD_RE_NEW.match(stripped)
+    if m:
+        return m.group(1).strip(), m.group(2).strip()
+    return None
+
+
+# Backward compatibility alias for any callers that reference FIELD_RE directly
+FIELD_RE = FIELD_RE_OLD
 
 VALID_TRANSITIONS = {
     "待确认": ["执行中"],
@@ -69,22 +90,42 @@ def save_text(path: Path, text: str) -> None:
 
 
 def read_fields(task_file: Path) -> dict[str, str]:
+    """Read task header fields. Tolerates both formats:
+      - Old paragraph: **字段：** 值
+      - New task-card table: | **字段** | 值 |
+
+    Reads the first 40 lines to cover both layouts (new format puts the
+    task-card table around line 13-22 after the title and intro block).
+    """
     fields: dict[str, str] = {}
     with task_file.open(encoding="utf-8") as fh:
         for idx, line in enumerate(fh):
             if idx >= 40:
                 break
-            match = FIELD_RE.match(line.strip())
-            if match:
-                fields[match.group(1).strip()] = match.group(2).strip()
+            parsed = _parse_field_line(line)
+            if parsed:
+                name, value = parsed
+                fields[name] = value
     return fields
 
 
 def update_field(text: str, field: str, value: str) -> tuple[str, int]:
-    pattern = re.compile(
+    """Replace a header field's value. Tries old paragraph format first,
+    then falls back to new task-card table format. Returns (new_text, count)."""
+    # Old paragraph format: **字段：** 值
+    pattern_old = re.compile(
         rf"(^[ \t]*\*\*{re.escape(field)}：\*\*\s*).*$", re.MULTILINE
     )
-    return pattern.subn(rf"\g<1>{value}", text, count=1)
+    text_new, count = pattern_old.subn(rf"\g<1>{value}", text, count=1)
+    if count > 0:
+        return text_new, count
+
+    # New task-card table format: | **字段** | 值 |
+    pattern_new = re.compile(
+        rf"(^\|\s*\*\*{re.escape(field)}\*\*\s*\|\s*).+?(\s*\|.*)$",
+        re.MULTILINE,
+    )
+    return pattern_new.subn(rf"\g<1>{value}\g<2>", text, count=1)
 
 
 def has_section_content(text: str, section_name: str) -> bool:
@@ -439,6 +480,37 @@ def cmd_discard(task_file: Path, reason: str, yes: bool) -> None:
     if mv_result.returncode != 0:
         print(f"Error: git mv 失败: {mv_result.stderr.strip()}", file=sys.stderr)
         sys.exit(1)
+
+    # 1.5. 成对处理工程合同（如存在）— PR 2 拆两文件约定
+    eng_file = task_file.with_suffix(".engineering.md") \
+        if task_file.suffix == ".md" else None
+    if eng_file and eng_file.exists():
+        new_eng_file = discarded_dir / eng_file.name
+        try:
+            eng_rel_from = eng_file.relative_to(req_worktree_root)
+            eng_rel_to = new_eng_file.relative_to(req_worktree_root)
+        except ValueError:
+            eng_rel_from = eng_rel_to = None
+
+        if eng_rel_from and eng_rel_to:
+            eng_mv = subprocess.run(
+                ["git", "-C", str(req_worktree_root), "mv",
+                 str(eng_rel_from), str(eng_rel_to)],
+                capture_output=True, text=True,
+            )
+            if eng_mv.returncode != 0:
+                # 尝试回滚主文件 mv
+                subprocess.run(
+                    ["git", "-C", str(req_worktree_root), "mv",
+                     str(rel_to), str(rel_from)],
+                    capture_output=True,
+                )
+                print(
+                    f"Error: 工程合同 git mv 失败（已回滚主文件 mv）: "
+                    f"{eng_mv.stderr.strip()}",
+                    file=sys.stderr,
+                )
+                sys.exit(1)
 
     # 2. 改状态字段 + 追加废弃理由 section（在新位置）
     text = read_text(new_task_file)
