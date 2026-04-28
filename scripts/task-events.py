@@ -112,14 +112,36 @@ def cmd_list(args: argparse.Namespace) -> None:
     print(ep.read_text(encoding="utf-8"), end="")
 
 
+NO_REVIEW_SENTINELS = {"", "(无)", "无", "(none)", "none", "-", "n/a", "N/A"}
+
+
+def _collect_completed(task_file: Path, event_type: str) -> set[str]:
+    ep = events_path(task_file)
+    completed: set[str] = set()
+    if not ep.exists():
+        return completed
+    for line in ep.read_text(encoding="utf-8").strip().split("\n"):
+        if not line:
+            continue
+        try:
+            ev = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if ev.get("event") == event_type:
+            tool = ev.get("tool", "")
+            if tool:
+                completed.add(tool)
+    return completed
+
+
 def cmd_check_plan_reviews(args: argparse.Namespace) -> None:
-    """Check if plan_review_completed events cover required plan review tools.
+    """Show plan_review status (informational, always exit 0).
 
-    Required set is derived from the task file's 「所属模块」 field:
-      - "基础设施"  → {/plan-eng-review}
-      - otherwise   → {/plan-eng-review, /plan-design-review}
-
-    Used by /task-confirm as a hard gate (I-PR1/I-PR2).
+    Plan reviews are PM-driven recommendations; this command lists the
+    recommended set (by 「所属模块」) and which ones already have
+    `plan_review_completed` events on record. It does not gate any
+    transition — kept as a query interface for status views and skill
+    summaries.
     """
     task_file = Path(args.task_file)
     if not task_file.exists():
@@ -130,85 +152,63 @@ def cmd_check_plan_reviews(args: argparse.Namespace) -> None:
     module = fields.get("所属模块", "").strip()
 
     if module == "基础设施":
-        required = {"/plan-eng-review"}
+        recommended = ["/plan-eng-review"]
     else:
-        required = {"/plan-eng-review", "/plan-design-review"}
+        recommended = ["/plan-eng-review", "/plan-design-review"]
 
-    ep = events_path(task_file)
-    completed: set[str] = set()
-    if ep.exists():
-        for line in ep.read_text(encoding="utf-8").strip().split("\n"):
-            if not line:
-                continue
-            try:
-                ev = json.loads(line)
-                if ev.get("event") == "plan_review_completed":
-                    tool = ev.get("tool", "")
-                    if tool:
-                        completed.add(tool)
-            except json.JSONDecodeError:
-                continue
+    completed = _collect_completed(task_file, "plan_review_completed")
+    ran = [t for t in recommended if t in completed]
+    pending = [t for t in recommended if t not in completed]
+    extra = sorted(completed - set(recommended))
 
-    missing = required - completed
-    if missing:
-        print(f"FAIL: missing plan reviews for: {', '.join(sorted(missing))}")
-        sys.exit(1)
-    print(f"PASS: all {len(required)} plan review tools completed")
+    print(f"recommended: {', '.join(recommended)}")
+    print(f"ran: {', '.join(ran) if ran else '(none)'}")
+    print(f"pending: {', '.join(pending) if pending else '(none)'}")
+    if extra:
+        print(f"extra: {', '.join(extra)}")
     sys.exit(0)
 
 
 def cmd_check_reviews(args: argparse.Namespace) -> None:
-    """Check if review_completed events cover all required review tools."""
+    """Show post-execute review status (informational, always exit 0).
+
+    Recommended tools come from the task file's 「审查工具」 field
+    (now semantically "推荐 review 工具"). PM runs them manually and
+    pastes results back; AI appends `review_completed` events as an
+    audit trail. This command never gates a transition.
+    """
     task_file = Path(args.task_file)
     if not task_file.exists():
         print(f"Error: task file not found: {task_file}", file=sys.stderr)
         sys.exit(1)
 
-    # Read required tools from task file
     fields = read_task_fields(task_file)
     tools_str = fields.get("审查工具", "").strip()
 
-    # Sentinel values meaning "no review required"
-    NO_REVIEW_SENTINELS = {"", "(无)", "无", "(none)", "none", "-", "n/a", "N/A"}
-
     if tools_str in NO_REVIEW_SENTINELS:
-        print("PASS: no review tools required (sentinel value)")
+        print("recommended: (none)")
         sys.exit(0)
 
-    # Filter out sentinel values from the parsed list
-    required = {
+    recommended = [
         t.strip()
         for t in tools_str.split(",")
         if t.strip() and t.strip() not in NO_REVIEW_SENTINELS
-    }
-
-    if not required:
-        print("PASS: no review tools required (all values were sentinels)")
+    ]
+    if not recommended:
+        print("recommended: (none)")
         sys.exit(0)
 
-    # Read completed reviews from event stream
-    ep = events_path(task_file)
-    completed: set[str] = set()
-    if ep.exists():
-        for line in ep.read_text(encoding="utf-8").strip().split("\n"):
-            if not line:
-                continue
-            try:
-                ev = json.loads(line)
-                if ev.get("event") == "review_completed":
-                    tool = ev.get("tool", "")
-                    if tool:
-                        completed.add(tool)
-            except json.JSONDecodeError:
-                continue
+    completed = _collect_completed(task_file, "review_completed")
+    ran = [t for t in recommended if t in completed]
+    pending = [t for t in recommended if t not in completed]
+    extra = sorted(completed - set(recommended))
 
-    missing = required - completed
-    if missing:
-        print(f"FAIL: missing reviews for: {', '.join(sorted(missing))}")
-        sys.exit(1)
-    else:
-        print(f"PASS: all {len(required)} review tools completed")
-        sys.exit(0)
+    print(f"recommended: {', '.join(recommended)}")
+    print(f"ran: {', '.join(ran) if ran else '(none)'}")
+    print(f"pending: {', '.join(pending) if pending else '(none)'}")
+    if extra:
+        print(f"extra: {', '.join(extra)}")
+    sys.exit(0)
 
 
 def main() -> None:
@@ -233,14 +233,17 @@ def main() -> None:
     p_list = sub.add_parser("list", help="List all events")
     p_list.add_argument("task_file", help="Path to task file")
 
-    # check-reviews
-    p_check = sub.add_parser("check-reviews", help="Check review coverage")
+    # check-reviews (informational; never exits non-zero)
+    p_check = sub.add_parser(
+        "check-reviews",
+        help="Show recommended/ran/pending review tools (informational)",
+    )
     p_check.add_argument("task_file", help="Path to task file")
 
-    # check-plan-reviews
+    # check-plan-reviews (informational; never exits non-zero)
     p_plan = sub.add_parser(
         "check-plan-reviews",
-        help="Check plan review coverage (used by /task-confirm gate)",
+        help="Show recommended/ran/pending plan review tools (informational)",
     )
     p_plan.add_argument("task_file", help="Path to task file")
 

@@ -189,16 +189,37 @@ PM 未选择前不生成新文件。
 
 <!-- TODO Batch 2: depends on task-plan SKILL change -->
 
-### 步骤 8：默认 plan review（task-spec 写完后，PM 确认前）
+### 步骤 8：输出"推荐 review 工具"区块（不自动调任何 review）
 
-按 task 类型跑 plan review，跑完写事件流（task-confirm 步骤 1.5 hard gate I-PR1 校验）：
+按 task 类型给出推荐清单。**AI 不得自动调用任何 review skill**（I-RV1）——这是 PM 自跑的工具，AI 替跑容易"假执行"。
 
-- **业务模块 task**：跑 `/plan-eng-review` + `/plan-design-review`
-- **基础设施 task**：仅跑 `/plan-eng-review`，跳过 design（无 UI 内容可审）
+业务模块 task 推荐区块：
 
-#### 8.1 真跑 review（不可省、不可"凭记忆"）
+```
+✅ task 文件已生成：<绝对路径>
 
-逐个调用 review skill，审阅范围 = 刚生成的 `tasks/task-NNN-*.md`。每个 review 跑完**立即**append 事件：
+可选 review（PM 自行选跑，跑完贴结论我帮你 append 事件）：
+  /plan-eng-review     — 架构、数据流、边界、依赖合理性
+  /plan-design-review  — 交互与视觉层问题、UI 完整性
+  /autoplan            — 上述两个的批量打包
+
+跑哪几个由你决定，全跳也可以。
+```
+
+基础设施 task 推荐区块（去掉 design）：
+
+```
+✅ task 文件已生成：<绝对路径>
+
+可选 review（PM 自行选跑，跑完贴结论我帮你 append 事件）：
+  /plan-eng-review     — 脚手架/共用能力的设计合理性
+
+跑哪几个由你决定，全跳也可以。
+```
+
+#### 8.1 PM 跑完 review 后的事件 append（机械记录，I-RV2）
+
+PM 在 chat 里报告"跑了 /plan-eng-review，pass，发现 N 条"之类结论后，AI 调以下命令记录事件作为审计痕迹：
 
 ```bash
 python3 .claude/scripts/task-events.py append "<task-file>" \
@@ -208,20 +229,19 @@ python3 .claude/scripts/task-events.py append "<task-file>" \
   --payload "{\"finding_count\": <发现条数>, \"finding_summary\": \"<一句话摘要>\"}"
 ```
 
-每个 review 一条事件。**禁止**先 append 后跑、跳过 review 直接 append 或凭文档对照模拟（违反"skill 必须实际调用，不能凭记忆模拟"）。
+**禁止**（I-RV3）：先 append 后跑、跳过 PM 直接 append、凭文档对照模拟出 review 结论。append 必须发生在 PM 明确报告结果之后。
 
-#### 8.2 PM 决策 review 发现（无逃生口）
+#### 8.2 PM 跑了 review 后的修改决策（仅当 PM 选择跑了）
 
-review 输出贴 chat 后 PM 二选一：
+PM 跑完 review 决定采纳发现：
 
-- **A) 采纳，改 task** → 修改 `tasks/task-NNN-*.md` → 重跑对应 review（eng 改了重跑 eng，design 改了重跑 design）→ 重跑后再 append 一条 `plan_review_completed`（最后一条为准）
-- **B) 看完决定不改** → 在 chat 里**显式回应每条 critical 发现**（"理解 X，决定不改，理由 Y"）→ 进步骤 9
+- 修改 `tasks/task-NNN-*.md` → 提示 PM 是否要重新跑对应 review → 跑完再 append 事件（最后一条为准）
 
-不允许 PM 默默跳过 critical 发现、也不允许 AI 替 PM 默默忽略。事件流里必须有 `plan_review_completed` 覆盖必需集，否则 task-confirm 拒绝启动。
+PM 看完不改 / 不跑 review：直接进步骤 9。事件流缺事件不阻塞推进（I-RV2，task-confirm 不再 hard gate）。
 
 ### 步骤 9：展示生成结果并等待 PM 确认
 
-review 走完（或 PM 选择忽略发现）后，只向 PM 展示摘要和文件路径，不直接进入执行：
+向 PM 展示摘要和文件路径，不直接进入执行：
 
 ```
 已生成 task 详细文档：<绝对路径>
@@ -233,7 +253,7 @@ review 走完（或 PM 选择忽略发现）后，只向 PM 展示摘要和文�
 - 用户使用流程：[场景数 / 基础设施 task 为无]
 - 功能清单：[三级功能数 / 基础设施 task 为无]
 - 易错点来源：[N 条 PM 反馈 / 无]
-- review：eng [PASS/有发现已处理/PM 忽略]，design [PASS/有发现已处理/PM 忽略/跳过(基础设施)]
+- review：[PM 已跑 /plan-eng-review pass / 未跑 /plan-design-review / 全跳]
 
 A) 确认，下一步执行 /task-confirm <task-file>
 B) 我要修改 task 文档
@@ -252,6 +272,6 @@ PM 选择 A 后，才提示并推动 `/task-confirm <task-file>`；PM 未确认�
 - 只有 PM 确认生成结果后，才推动 `/task-confirm`。
 - 基础设施 task 必须明确说明：`本 task 不触发 module 规格 merge（按 Q1 决议）`。
 - 业务模块 task 的功能清单必须能被后续 doc-update 按「所属模块章节 + 三级功能名」匹配。
-- 业务模块 task 必须跑 `/plan-eng-review` + `/plan-design-review`；基础设施 task 必须跑 `/plan-eng-review`。每个 review 跑完立即 append `plan_review_completed` 事件（步骤 8.1）。事件流不齐 → task-confirm 步骤 1.5 拒绝启动（I-PR1）。
-- review 不可"凭记忆模拟"——必须真发起 skill 调用并看到工具输出后才 append 事件。
-- review 发现的 critical 项 PM 必须显式回应（采纳改 task / 不改并说明理由），不允许默默跳过。
+- AI 不得自动调任何 plan review skill（I-RV1）；只在步骤 8 输出推荐清单，PM 自跑。
+- PM 报告 review 结论后才 append `plan_review_completed` 事件（I-RV3）；禁止"先 append 后跑"或凭文档对照模拟。
+- 事件流仅作审计记录（I-RV2），缺事件不阻止 task-confirm 启动；review 发现是否采纳由 PM 自行决定。

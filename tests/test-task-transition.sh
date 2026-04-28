@@ -194,22 +194,24 @@ test_reject_empty_self_review() {
   fixture_teardown
 }
 
-test_reject_missing_review_event() {
-  start_test "I-TT3 reject 执行中→待验收 when /qa event missing"
+test_allow_missing_review_event() {
+  start_test "I-RV2 allow 执行中→待验收 even when review_completed event missing"
   fixture_setup
   req_dir=$(fixture_create_req "req-001" "test" 6)
   task=$(fixture_create_task "$req_dir" "001" "demo" "执行中" "/qa")
-  # Do NOT add the /qa review_completed event
+  # Do NOT add the /qa review_completed event — review 是 PM 自跑推荐项，
+  # 缺事件不阻止转待验收（撤销旧 I-TT3 第 3 条 / I-PR1）
 
   if _run_transition "$task" --to 待验收 >/tmp/out.$$ 2>/tmp/err.$$; then
-    _fail "should reject when review event missing"
-  else
-    if grep -qE "(missing|review|审查)" /tmp/err.$$; then
+    if grep -q '^\*\*状态：\*\* 待验收' "$task"; then
       pass_test
     else
-      _fail "stderr missing review message"
-      cat /tmp/err.$$ >&2
+      _fail "status not updated to 待验收"
+      cat "$task" >&2
     fi
+  else
+    _fail "should allow even when review event missing (I-RV2 informational only)"
+    cat /tmp/err.$$ >&2
   fi
   rm -f /tmp/out.$$ /tmp/err.$$
   fixture_teardown
@@ -579,7 +581,7 @@ test_reject_parallel_active_task_now_allowed
 test_reject_parallel_pending_review_sibling_now_allowed
 test_reject_empty_doc_diff
 test_reject_empty_self_review
-test_reject_missing_review_event
+test_allow_missing_review_event
 test_allow_sentinel_review_tool
 test_allow_empty_review_tool
 test_reject_reject_without_note

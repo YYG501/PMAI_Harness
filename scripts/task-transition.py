@@ -178,16 +178,8 @@ def check_preconditions(
             )
             sys.exit(1)
 
-        # 3. 审查工具校验（通过事件流）
-        result = subprocess.run(
-            [sys.executable, str(EVENTS_SCRIPT), "check-reviews", str(task_file)],
-            capture_output=True,
-            text=True,
-        )
-        if result.returncode != 0:
-            output = (result.stdout or result.stderr or "").strip()
-            print(f"Error: {output}", file=sys.stderr)
-            sys.exit(1)
+        # review 工具改为 PM 自跑推荐项；事件流仍可能含 review_completed
+        # 作为审计记录，但不再做覆盖校验。
 
     elif current == "待验收" and target == "执行中":
         # PM 打回需要 note

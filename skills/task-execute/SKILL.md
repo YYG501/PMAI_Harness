@@ -143,7 +143,7 @@ CURRENT_STATUS=$(python3 "$MAIN_REPO_ROOT/.claude/scripts/task-transition.py" "$
 - 任务描述
 - 执行范围
 - 验收标准
-- 审查工具列表
+- 推荐 review 工具列表（步骤 7 用作 PM 自跑推荐清单的种子；不是 AI 要自跑的工具）
 - 启动前必读文档
 
 ### 步骤 2：读取必读文档
@@ -516,56 +516,72 @@ EOM
 | docs/modules/auth.md 第 15 行 | 使用 JWT 认证 | 改用 Session 认证（因 XX 原因） |
 ```
 
-### 步骤 7：自审（gstack 质量 gate）
+### 步骤 7：输出"推荐 review 工具"区块（不自动调任何 review）
 
-自审链路按以下顺序运行 gstack skill：
+实现完毕、执行日志和文档偏差填好后，AI **不得自动调用任何 review skill**（I-RV1）—— 这是 PM 自跑的工具，AI 替跑容易"假执行"（尤其 `/qa` `/design-review` 依赖 browse 看真实页面，不是文档对照）。
 
-**7a. /review（代码审查，所有 task）**
-- 运行 `/review`，审查 task 分支 vs req 分支的 diff
-- **suborchestrator 自行处理所有发现，不 Ask PM**
-- mechanical issues 自动修，critical issues 自行修复并记录到自审记录
-- 追加事件：
-  ```bash
-  python3 .claude/scripts/task-events.py append "<task-file>" --type review_completed --tool "/review" --result "<pass|fail>"
-  ```
+输出推荐区块给 PM：
 
-**7b. /qa（功能测试，仅 UI task）**
-- 如果审查工具字段包含 `/qa`：
-  - 运行 `/qa`，测试 dev server URL
-  - 发现 bug 自行修复（atomic commit）
-  - 追加事件
+```
+✅ 实现完毕：<改动文件数> 文件，dev server: http://localhost:<port>
 
-**7c. /design-review（视觉审查，仅 UI task）**
-- 如果审查工具字段包含 `/design-review`：
-  - 运行 `/design-review`，对照 DESIGN.md 检查视觉一致性
-  - 发现问题自行修复
-  - 追加事件
+可选 review（PM 自行选跑，跑完贴结论我帮你记自审记录 + append 事件）：
+  /review              — 代码审查 task 分支 vs req 分支的 diff
 
-### 步骤 8：写自审记录
+  # 以下仅 UI task：
+  /qa                  — 功能测试 dev server（需 browse）
+  /design-review       — 对照 DESIGN.md 检查视觉一致性（需 browse）
 
-在 task 文件的「自审记录」section 填写每个工具的审查结果，包括发现的问题和处理方式：
-
-```markdown
-### 自审 1 - [YYYY-MM-DD HH:MM]
-**工具：** /review
-**结果：** pass（2 个 mechanical issue 已自动修复）
-**详细发现：** 
-- F-001: 变量命名不一致 → 已修复
-- F-002: 缺少 null check → 已修复
-**遗留问题：** 无
+跑哪几个由你决定，全跳也可以。跑完后进步骤 10 commit + 转待验收。
 ```
 
-### 步骤 9：修复自审发现的问题
+UI task 判定参考 task 文件「推荐 review 工具」字段（含 `/qa` 或 `/design-review`）或 task 描述涉及前端/页面/组件。
 
-如果自审发现了无法自动修复的问题：
-1. 手动修复代码
-2. 重新跑对应的审查工具
+#### 7.1 PM 跑完 review 后：写自审记录 + append 事件（I-RV2）
+
+PM 在 chat 里报告"跑了 /review，pass，发现 2 个 mechanical issue 已自动修"等结论后，AI：
+
+1. 在 task 文件「自审记录」section 追加一条（保留 PM 原话或转写）：
+
+   ```markdown
+   ### 自审 N - [YYYY-MM-DD HH:MM]
+   **工具：** /review
+   **结果：** pass（2 个 mechanical issue 已修复）
+   **详细发现：**
+   - F-001: 变量命名不一致 → 已修复
+   - F-002: 缺少 null check → 已修复
+   **遗留问题：** 无
+   ```
+
+2. append `review_completed` 事件作为审计痕迹：
+
+   ```bash
+   python3 .claude/scripts/task-events.py append "<task-file>" \
+     --type review_completed --tool "/review" --result "<pass|fail>"
+   ```
+
+**禁止**（I-RV3）：先 append 后跑、跳过 PM 直接 append、AI 替 PM 跑 review 然后伪造结论。append 必须发生在 PM 明确报告结果之后。
+
+#### 7.2 修复 PM 跑 review 发现的问题（如有）
+
+PM 跑 review 后反馈"还有 X 需要修"：
+1. AI 在 task worktree 内修复（不 commit，commit 由步骤 10 统一做）
+2. 提示 PM 是否重新跑对应 review → PM 重跑后再 append 一条事件
 3. 更新自审记录
-4. 追加新的 review_completed 事件
+
+#### 7.3 不跑 review 直接进 commit
+
+PM 决定全跳或不再跑 → 直接进步骤 10。事件流缺 `review_completed` 不阻止「执行中→待验收」转换（I-RV2，task-transition 不再 hard gate）。
+
+### 步骤 8：（已合并入步骤 7.1，保留编号便于历史引用）
+
+> 自审记录现在由步骤 7.1 在 PM 跑完 review 后机械填写。如 PM 全跳 review，自审记录至少需要一条 `**结果：** PM 选择不跑 review` 之类的 placeholder（task-transition 仍校验 section 非空）。
+
+### 步骤 9：（已合并入步骤 7.2）
 
 ### 步骤 10：Commit + 提交待验收
 
-**所有审查工具通过后，先 commit 再转状态。** Adapter 执行路径和 claude-code inline 路径在此处统一 commit（之前 worktree 一直是 unstaged）。
+**PM 跑完想跑的 review（或决定不跑）后，先 commit 再转状态。** Adapter 执行路径和 claude-code inline 路径在此处统一 commit。
 
 ```bash
 cd "$TASK_WORKTREE"
@@ -583,10 +599,9 @@ python3 .claude/scripts/task-transition.py "$TASK_FILE" --to 待验收
 
 脚本会自动校验：
 - 文档偏差 section 已填
-- 自审记录 section 有内容
-- 所有审查工具都有 review_completed 事件
+- 自审记录 section 有内容（PM 不跑 review 时也需至少一条 placeholder 行）
 
-Dev server 保持运行（PM 验收时需要访问）。
+Review 事件流不再做覆盖校验（I-RV2）。Dev server 保持运行（PM 验收时需要访问）。
 
 ## Rules
 
@@ -594,5 +609,7 @@ Dev server 保持运行（PM 验收时需要访问）。
 - 代码改动在 task worktree 中进行
 - 文档（docs/）不在 task worktree 中修改（hook 会拦截）
 - 文档偏差记录到 task 文件，由 `/doc-update` 在 close-task 前处理
-- 每个审查工具必须有对应的 review_completed 事件，否则无法转为待验收
+- AI 不得自动调任何 review 工具（`/review` `/qa` `/design-review` 等，I-RV1）；只在步骤 7 输出推荐清单
+- PM 报告 review 结论后才 append `review_completed` 事件（I-RV3）；禁止 AI 替 PM 跑或凭记忆模拟
+- 事件流缺 review_completed 不阻止「执行中→待验收」转换（I-RV2）
 - dev server 在 task-execute 结束后保持运行，直到 close-task 时杀掉

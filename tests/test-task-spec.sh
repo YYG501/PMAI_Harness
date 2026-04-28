@@ -209,7 +209,7 @@ test_template_regression() {
   _assert_contains "$TASK_TEMPLATE" "## 执行范围" "task scope section preserved" || return
   _assert_contains "$TASK_TEMPLATE" "## 执行日志（agent 填写，不要删除历史记录）" "task execution log preserved" || return
   _assert_contains "$TASK_TEMPLATE" "## 文档偏差（execution agent 填写，只记录事实，不判断是否需要修改）" "task doc diff preserved" || return
-  _assert_contains "$TASK_TEMPLATE" "## 自审记录（suborchestrator 填写，每次审查追加一条，不删历史）" "task self-review preserved" || return
+  _assert_contains "$TASK_TEMPLATE" "## 自审记录（PM 跑完 review 后由 orchestrator 机械追加，不删历史）" "task self-review preserved" || return
   _assert_contains "$TASK_TEMPLATE" "## PM 反馈（orchestrator 代为追加，agent 重跑前必读）" "task PM feedback preserved" || return
 
   _assert_contains "$MODULE_TEMPLATE" "## 摘要" "module summary preserved" || return

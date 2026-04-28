@@ -29,13 +29,13 @@ echo "SKILL: req-solution"
 |---|---|---|
 | 写 solution.md | ✅ | ❌ |
 | Discovery 缺口提问 | ✅（写文档前的小 Q&A） | ❌ |
-| 调 /plan-ceo-review | ❌ | ✅（review 是讨论性的，结果贴 chat） |
+| 输出"推荐 review 工具"区块 | ❌ | ✅（列推荐，不自动调任何 review） |
 | 走推进确认门 | ❌ | ✅ |
 | 调 req-transition.py | ❌ | ✅ |
 
-**退出契约**：本 skill 返回时，`$ACTIVE_REQ_DIR/solution.md` 已经过 PM 简单确认（Discovery 阶段缺口已答）。orchestrator 接手跑 /plan-ceo-review + 走确认门。
+**退出契约**：本 skill 返回时，`$ACTIVE_REQ_DIR/solution.md` 已经过 PM 简单确认（Discovery 阶段缺口已答）。orchestrator 接手输出推荐 review 区块 + 走确认门。
 
-> **注意**：stage 3 没有 reviewer 硬循环（不像 stage 2 的 analysis-reviewer），review 由 orchestrator 调 /plan-ceo-review 处理。stage 3 也没有"未决问题闸门"硬规则——但 Discovery 阶段如果 PM 没回答关键缺口，不要硬写方案。
+> **注意**：stage 3 没有 reviewer 硬循环（不像 stage 2 的 analysis-reviewer），所有 review 工具由 PM 在 orchestrator 输出推荐清单后自行选跑（I-RV1）。stage 3 也没有"未决问题闸门"硬规则——但 Discovery 阶段如果 PM 没回答关键缺口，不要硬写方案。
 
 ## Required Inputs
 
@@ -71,12 +71,12 @@ echo "SKILL: req-solution"
 
 ### 步骤 2：skill 结束
 
-写完 solution.md → skill 退出。控制权交回 `/req-stage-gate`，由它跑 /plan-ceo-review + 走确认门。
+写完 solution.md → skill 退出。控制权交回 `/req-stage-gate`，由它输出推荐 review 区块 + 走确认门。
 
 ### 硬禁止项
 
 - ❌ skill 内部走推进确认门（A 进 stage 4 / B 修改）
-- ❌ skill 内部调 /plan-ceo-review（review 在 orchestrator）
+- ❌ skill 内部自动调任何 review 工具（review 由 orchestrator 列推荐、PM 自跑，I-RV1）
 - ❌ skill 内部调 req-transition.py
 - ❌ 自动产出 task-plan.md / 模块规格 / 原型代码
 
@@ -260,7 +260,7 @@ bullet list，分两类写：
 
 三条都满足的模块，优先做。只满足第一条的，也要优先做。
 
-**可选工具**：solution.md 完成后，可用 `/plan-eng-review` 检查架构、`/plan-design-review` 检查交互与视觉层问题。这些是 PM 在 stage 3 期间可手动触发的辅助工具，不是 skill 内部强制流程。
+**可选 review 工具**：solution.md 完成后，orchestrator (req-stage-gate) 会列出推荐清单（`/plan-ceo-review` `/plan-eng-review` `/plan-design-review` `/autoplan` 等）让 PM 自选自跑——本 skill 不调用任何 review。
 
 ---
 
@@ -269,4 +269,5 @@ bullet list，分两类写：
 - **允许产出**：`$ACTIVE_REQ_DIR/solution.md`
 - **允许动作**：模块划分、系统边界、分期计划、优先级排序、Discovery 缺口提问
 - **禁止顺手推进**：不要自动开始 task 拆分，不要直接创建原型页面，不要走推进确认门
-- **退出条件**：solution.md 已写、Discovery 缺口已答完。控制权交回 /req-stage-gate（由它跑 /plan-ceo-review + 走确认门）
+- **禁止自动调 review**（I-RV1）：所有 `/plan-*-review` 工具由 orchestrator 列推荐、PM 自跑；skill 内部不得调用
+- **退出条件**：solution.md 已写、Discovery 缺口已答完。控制权交回 /req-stage-gate（由它列推荐 review + 走确认门）

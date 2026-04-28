@@ -174,14 +174,16 @@ PM 启动建议：
 - （暂无）
 ````
 
-### 步骤 5：PM 确认 task-plan.md → /req-stage-gate advances to stage 6
+### 步骤 5：skill 结束 → /req-stage-gate 接手
 
-向 PM 展示 `task-plan.md` 摘要，列出所有 task 的 id、标题、所属模块、顺序和主要风险。
+写完 `task-plan.md` → skill 退出。向 PM 展示一句话摘要 + 文件绝对路径（不贴全文）。
 
-确认门：
+控制权交回 `/req-stage-gate`，由它：
 
-- PM 确认 → `/req-stage-gate` 推进到 stage 6。
-- PM 要求修改 → 修改 `task-plan.md` 后重新展示。
+- 输出"推荐 review 工具"区块（`/plan-eng-review` `/plan-design-review` `/autoplan` 等，PM 自选自跑，I-RV1）
+- 走推进确认门
+
+**禁止**：skill 内部不得自动调任何 review 工具。PM 要求修改 → 改完 `task-plan.md` 重新走 stage-gate 流程。
 
 进入 stage 6 后，具体 task 文档由 stage 6 的 `/task-spec <task-id>` 按 `task-plan.md` 逐个生成。
 

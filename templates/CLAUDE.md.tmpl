@@ -65,13 +65,13 @@ PM 想中止 active 的 task：
 
 ### Skill 完整性（流程不可用工具替代）
 
-工作流里标明"自动调用"或"不可跳过"的 skill（如 `/plan-ceo-review`、`/plan-eng-review`、`/office-hours` 等），**必须完整执行**，不能用任何其他手段替代。具体：
+工作流里标明"必须完整执行"的 skill（如 `/req-analysis`、`/req-solution`、`/task-spec`、`/task-execute`、`/office-hours` 等），**不能用任何其他手段替代**。具体：
 
 - **禁止**用 `advisor()` 替代 skill。advisor 是补充视角，不是流程替代品
 - **禁止**用 `Agent` subagent（包括本项目自带的 `analysis-reviewer`）替代其他 skill。每个 subagent 只服务于它被显式指派的节点
 - **禁止**自写 ad hoc 评审 prompt 替代 skill。skill 里的结构化检查项（Error Map、Security、Observability 等）不是"可选节"，跳过等于丢失检查
 - **禁止**以"skill 太重和 PM 节奏冲突"为理由擅自简化。如果 skill 真的太重，正确做法是反馈给 PM 调整生成器里的 skill 定义，而不是运行时自行替换
-- **禁止**凭记忆 / 凭规范文档手工对照来代替 skill 调用（"假执行"）。skill 工作流里要求用 browse / 实际渲染 / 文件读取等工具的步骤必须真的发起；transcript 里没有 Skill 工具的实际调用 = 没跑。视觉 / 交互类 skill（`/design-review`、`/qa`）尤其危险，运行时状态（hover、展开态、动画）心算不出来，只能跑出来才知道
+- **禁止 AI 自跑 review 工具**（I-RV1）：`/plan-ceo-review` `/plan-eng-review` `/plan-design-review` `/plan-devex-review` `/review` `/qa` `/design-review` `/autoplan` 等所有 review 类 skill **由 PM 自跑**。AI 在产物生成后只列推荐清单，不替 PM 调用——尤其 `/qa` `/design-review` 依赖 browse 看真实页面，AI 自跑容易"假执行"（声称跑了但只手工对照文档）
 
 AI 擅自用工具替代 skill 或假执行是**流程违规**，即便产出看起来等价。被 PM 问到"你跑了 skill 吗"时，如实回答；若没跑，立即补跑，不找理由。
 
@@ -91,20 +91,22 @@ Subagent（`Agent` 工具 spawn）是**短命、无状态、独立 context** 的
 
 判断标准：**subagent 必须在单次 turn 内能完整跑完**（典型 < 5 分钟，且不依赖被它启动的后台进程的输出）。否则换载体——主 Orchestrator + `ScheduleWakeup` / hook 轮询 / 后台进程 sentinel。
 
-### Task plan review 强制（I-PR1）
+### Review 工具：AI 列推荐，PM 自跑（I-RV1/I-RV2/I-RV3）
 
-每个 task 在 `/task-confirm` 启动前**必须**经过 plan review，事件流（`.runs/events/<task-stem>.jsonl`）需含 `plan_review_completed` 事件覆盖必需集，否则 task-confirm 步骤 1.5 hard gate 拒绝创建 worktree。
+所有 review 类 skill 一律由 PM 手动调用。AI 在 4 个产物生成后输出"推荐 review 工具"区块，PM 自选自跑：
 
-| task 类型（按 `所属模块` 字段） | 必需 plan review |
+| 产物 | 推荐 review 工具（默认清单） |
 |---|---|
-| `基础设施` | `/plan-eng-review` |
-| 业务模块（其他值） | `/plan-eng-review` + `/plan-design-review` |
+| solution.md（stage 2→3 写完）| `/plan-ceo-review` `/plan-eng-review` `/plan-design-review` `/autoplan` |
+| task-plan.md（stage 5 写完）| `/plan-eng-review` `/plan-design-review` `/autoplan` |
+| task 文件（task-spec 步骤 8 写完）| 业务 task: `/plan-eng-review` `/plan-design-review` ；基础设施 task: `/plan-eng-review` |
+| task 实现完毕（task-execute 步骤 7）| `/review` ；UI task 加 `/qa` `/design-review` |
 
-跑 review 的入口：`/task-spec` 步骤 8（task 文档生成后接续跑）。重做 task 文档后必须重跑对应 review。
+PM 跑完任一 review 后报告结论 → AI 调 `task-events.py append --type [plan_]review_completed --tool <name> --result <pass|fail>` 机械记录事件作为审计痕迹（I-RV2）。事件流**不当任何状态机硬 gate**：缺事件不阻止 task-confirm 启动、不阻止「执行中→待验收」转换。
 
-**禁止假执行**：append `plan_review_completed` 事件**只能**在真发起 review skill 调用并看到输出后立即做（I-PR2）。"AI 凭记忆/凭文档对照模拟 review"是流程违规。
+**禁止假执行**（I-RV3）：append 事件**只能**在 PM 明确报告 review 结果之后做。AI 不得"先 append 后跑"、不得"跳过 PM 直接 append"、不得凭文档对照模拟出 review 结论。"AI 凭记忆/凭规范文档手工对照来代替 PM 跑 review"是流程违规。
 
-**Critical 发现必须 PM 显式回应**（I-PR3）：要么采纳改 task 重跑 review，要么明示"理解 X，不改，理由 Y"。不允许默默跳过、不允许 --force。
+PM 看完 review 决策（采纳改 task 还是不改）由 PM 自决，AI 不替 PM 决策。
 
 ### 外部执行器调用前置（Pre-dispatch checkpoint）
 

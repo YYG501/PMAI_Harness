@@ -71,10 +71,24 @@ PM 选择进入 stage 3 时：
 1. **调用 `/req-solution`**
    - skill 内部完成：Discovery 缺口提问（如有）、写 solution.md（含 10 章 + Mermaid + 7.2 各模块说明）
    - skill 返回时 solution.md 已落盘
-2. **自动调用 `/plan-ceo-review`** 审阅 solution.md（所有 req 都自动运行，不可跳过；review 是讨论性的，不属于子 skill）
-3. **确认门**：只给绝对路径（`$ACTIVE_REQ_DIR/solution.md`）+ 一句话摘要；**review 发现直接贴在 chat**（review 是讨论，不是文档产出）。问 PM：
+2. **输出"推荐 review 工具"区块给 PM**（不自动调任何 review）：
+
+   ```
+   ✅ solution.md 已写入：$ACTIVE_REQ_DIR/solution.md
+
+   可选 review（PM 自行选跑，跑完把结论贴回这里我帮你 append 事件）：
+     /plan-ceo-review     — 战略：范围与产品野心
+     /plan-eng-review     — 架构、数据流、边界
+     /plan-design-review  — 交互与视觉层问题
+     /autoplan            — 上述 plan-* 的批量打包
+
+   跑哪几个由你决定，全跳也可以。
+   ```
+
+   PM 跑完任一 review 后报告结论 → AI 调 `task-events.py append` 记 `plan_review_completed`（task 文件不存在时此处可省略，仅做口述确认）；事件流仅作审计记录，不当 gate（I-RV1/I-RV2）。
+3. **确认门**：只给绝对路径（`$ACTIVE_REQ_DIR/solution.md`）+ 一句话摘要；review 结果（如有）直接贴 chat。问 PM：
    - PM 确认 → 推进到下一 stage
-   - PM 提修改意见 → 回步骤 1 重调 `/req-solution`（让 skill 改 solution.md）→ 再 review → 再次确认
+   - PM 提修改意见 → 回步骤 1 重调 `/req-solution`（让 skill 改 solution.md）→ 改完后重新输出推荐区块（PM 可决定要不要再跑一遍 review）→ 再次确认
 
 PM 选择跳过 stage 3 时（不调 /req-solution）：
 ```bash
@@ -125,12 +139,23 @@ python3 .claude/scripts/req-transition.py "$ACTIVE_REQ_DIR" --to 5
 
 1. 检查 `task-plan.md` 存在。
 2. 检查 `task-plan.md` 包含 task 标题列表和 `## 变更记录` section。
-3. **自动调用 `/plan-eng-review`** 审阅 `task-plan.md`（工程视角：架构、拆分合理性、依赖）。
-   - 所有 req 默认运行，不区分 first / 后续；review 是讨论性的，发现直接贴 chat，不写盘。
-   - 只审阅 task-plan.md；具体 task 文件由 stage 6 的 `/task-spec` 逐个生成并各自走 review。
-4. 确认门（只给绝对路径 + 一句话摘要，不贴全文；eng-review 发现直接贴 chat）："Task 规划完成，是否进入执行阶段？"
+3. **输出"推荐 review 工具"区块给 PM**（不自动调任何 review）：
+
+   ```
+   ✅ task-plan.md 已写入：$ACTIVE_REQ_DIR/task-plan.md
+
+   可选 review（PM 自行选跑，跑完贴结论）：
+     /plan-eng-review     — 拆分合理性、依赖、并行性
+     /plan-design-review  — UI task 划分是否完整
+     /autoplan            — 上述 plan-* 的批量打包
+
+   跑哪几个由你决定，全跳也可以。具体 task 文件在 stage 6 的 /task-spec 阶段还会再次推荐 review。
+   ```
+4. 确认门（只给绝对路径 + 一句话摘要，不贴全文；review 结果（如有）直接贴 chat）："Task 规划完成，是否进入执行阶段？"
    - PM 确认 → 推进 stage 6。
-   - PM 提修改意见 → 回 `/task-plan` 改 `task-plan.md` → 重跑 `/plan-eng-review` → 再次确认。
+   - PM 提修改意见 → 回 `/task-plan` 改 `task-plan.md` → 改完后重新输出推荐区块 → 再次确认。
+
+> stage 5→6 只审阅 `task-plan.md`；具体 task 文件由 stage 6 的 `/task-spec` 逐个生成，写完后由 task-spec 步骤 8 再次输出推荐 review 区块。
 
 推进：
 ```bash
@@ -192,7 +217,8 @@ python3 .claude/scripts/req-transition.py "$ACTIVE_REQ_DIR" --to 7
   A) 确认，进入 stage <N+1>
   B) 我要修改（请说明改哪里）
   ```
-- **例外**：`/plan-ceo-review`、`/plan-eng-review` 等 review 工具的发现允许直接贴在 chat——review 是讨论内容，不是文档产出
+- **review 工具一律 PM 自跑**（I-RV1）：stage-gate 在产物写完后只输出推荐清单，不自动调任何 `/plan-*-review` / `/review` / `/qa` / `/design-review`。PM 跑完任一 review 后口述结论，AI 调 `task-events.py append` 机械记录事件作为审计痕迹；事件流不当 gate
+- review 结果（PM 跑完贴回 chat 的）允许直接贴 chat——review 是讨论内容，不是文档产出
 - **未决问题闸门（硬规则）**：任何 stage 的产出文档如果含有"需要 PM 回答"的未决项，确认门必须先让 PM 答完再开放推进选项。不允许并列给出"直接推进"和"回答问题"两个选项让 PM 选——这会让 PM 绕过未回答的问题。目前最严格落地在 Stage 1→2（analysis.md 的 `## 未决问题` section），其他 stage 如有类似未决产出应比照处理
 - 推进命令只能用 `req-transition.py`，不能手动改 `.req-meta.json`
 - Stage 4 的 DESIGN.md 内容检测由 `req-transition.py` 自动处理

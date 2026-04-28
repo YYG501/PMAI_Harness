@@ -138,25 +138,25 @@
 
 ---
 
-## skills/task-spec + task-confirm（plan review 强制）
+## review 工具（推荐而非强制）
 
-**目的**：每个 task 在 dispatch 执行前必须经过架构 review 与（业务 task 的）设计 review，发现的 critical 项必须由 PM 显式回应。事件流是单一真相源，task-confirm 据此 hard gate。
+**目的**：所有 review 工具（`/plan-eng-review` `/plan-design-review` `/plan-ceo-review` `/plan-devex-review` `/review` `/qa` `/design-review` 等 gstack skill）一律由 PM 手动调用；AI 只在产物生成后列出推荐清单，不替 PM 跑。事故背景：AI 自跑容易"假执行"——尤其依赖 browse 的 `/qa` `/design-review`，曾出现声称跑了但只手工对照文档的伪审查（参见 memory `feedback_skill_must_actually_invoke.md`）。
 
 ### 不变式
 
-- **I-PR1**：**task-confirm 启动前必须验证 plan_review_completed 事件覆盖必需集**。必需集按 task 文件 `所属模块` 字段判定：
-  - `所属模块 == 基础设施` → 必需 `{/plan-eng-review}`
-  - 否则（业务模块 task）→ 必需 `{/plan-eng-review, /plan-design-review}`
-  
-  缺失任一必需事件 → task-confirm exit 1，**不创建 worktree、不允许 --force 跳过**。
-- **I-PR2**：plan review 跑完必须在事件流 append `plan_review_completed` 事件，由 task-spec 步骤 8 负责。事件 append 必须发生在 review skill 实际调用并看到输出之后——禁止"先 append 后跑"或"跳过 review 直接 append"（违反"skill 必须实际调用，不能凭记忆模拟"）。
-- **I-PR3**：review 发现的 critical 项必须由 PM 显式回应（采纳改 task 重跑 review / 不改并说明理由）。不允许 PM 默默跳过、也不允许 AI 替 PM 默默忽略——对应 PM 全局规则"不留 FORCE 逃生舱"。
+- **I-RV1**：AI 在产物生成（solution.md / task-plan.md / task 文件 / task 实现完毕）后必须输出"推荐 review 工具"区块，但不得自动调用。区块内容应说明：哪些工具可选、各自查什么、跑哪几个由 PM 决定、全跳也允许。
+- **I-RV2**：`review_completed` / `plan_review_completed` 事件由 PM 跑完后口述结论、AI 机械 append，作为审计记录。**事件流不当任何状态机硬 gate**：缺事件不阻止 task-confirm 启动、不阻止「执行中→待验收」转换。
+- **I-RV3**：AI 不得"先 append 后跑"或"跳过 PM 直接 append"事件（违反"skill 必须实际调用，不能凭记忆模拟"）。append 必须发生在 PM 明确报告 review 结果之后。
 
 ### 守卫点
 
-- 事件 append：task-spec SKILL.md 步骤 8.1（review 跑完立即 append）
-- 事件覆盖校验：task-confirm SKILL.md 步骤 1.5 调用 `task-events.py check-plan-reviews`
-- 必需集判定：task-events.py `cmd_check_plan_reviews`，按 `所属模块` 字段分流
+- 推荐区块：
+  - solution.md：req-solution SKILL.md 退出契约 + Rules
+  - task-plan.md：task-plan SKILL.md 步骤 5
+  - task 文件：task-spec SKILL.md 步骤 8（写完 task 文件后）
+  - task 实现完毕：task-execute SKILL.md 步骤 7
+- 事件 append：PM 报告结果后 AI 调 `task-events.py append --type review_completed/plan_review_completed --tool <name> --result <pass|fail>`
+- 查询接口：`task-events.py check-reviews|check-plan-reviews`（informational，永远 exit 0）
 
 ---
 
@@ -171,8 +171,7 @@
 - **I-TT3**：执行中→待验收 必须满足：
   - 文档偏差 section 已填（或"无偏差"）
   - 自审记录 section 有内容
-  - 事件流中 `review_completed` 事件覆盖审查工具字段列出的所有工具
-  - 哨兵值（`(无)`、`无`、空等）当作"无需审查"，不要求对应事件
+  - review 事件流不再做覆盖校验（review 工具改为 PM 自跑推荐项；见 §review 工具）
 - **I-TT4**：待验收→执行中 必须提供 --note 参数（PM 打回必须有反馈）
 - **I-TT5**：状态字段的写入必须成功才算转换成功。写入失败必须 exit 1 且不追加事件
 - **I-TT6**：每次转换必须在事件流追加 status_changed 事件

@@ -4,6 +4,10 @@
 **所属模块章节：** [一级章节名 / 跨模块时按 "模块A:章节X, 模块B:章节Y" 格式]（业务模块 task 必填，基础设施 task 留空）
 **状态：** 待确认
 **审查工具：** {{REVIEW_TOOLS}}
+<!-- 「审查工具」字段语义：推荐 PM 在 task-execute 步骤 7 自跑的工具（I-RV1）。
+     AI 不得自动调用本字段列出的任何 skill；PM 跑完后报告结果，AI 才 append review_completed 事件作为审计记录。
+     产物预览判定（UI/纯文档/其他）仍参考本字段含 /design-review 或 /qa 作为 UI 信号。
+     哨兵值 (无)/无/空/N/A 都表示无推荐。 -->
 **executor：** claude-code
 **executor_model：**
 <!--
@@ -172,20 +176,26 @@ cursor-agent：实验性，无沙箱，越界保护仅限 worktree 内
 
 ---
 
-## 自审记录（suborchestrator 填写，每次审查追加一条，不删历史）
+## 自审记录（PM 跑完 review 后由 orchestrator 机械追加，不删历史）
 
-> 每个审查工具跑完后，通过 task-events.py 追加 review_completed 事件到事件流：
+> Review 工具一律由 PM 自跑（I-RV1）。AI 不得自动调用 `/review` `/qa` `/design-review` 等。
+> PM 在 chat 报告结论后，AI 在本 section 追加一条记录（保留 PM 原话或转写），并 append 事件作为审计：
+>
 > `python3 .claude/scripts/task-events.py append <本文件> --type review_completed --tool /qa --result pass`
 >
-> （注：plan 阶段的 `/plan-eng-review` / `/plan-design-review` 用 `--type plan_review_completed`，由 /task-spec 步骤 8 负责追加；task-confirm 步骤 1.5 校验，I-PR1。）
+> 事件流仅作审计记录，不当 task-transition gate（I-RV2）。
+> PM 全跳 review：本 section 至少留一条 `**结果：** PM 选择不跑 review` placeholder（task-transition 仍校验 section 非空）。
+>
+> （注：plan 阶段的 `/plan-eng-review` / `/plan-design-review` 用 `--type plan_review_completed`，由 /task-spec 步骤 8 在 PM 报告结论后追加；不当 task-confirm gate。）
 
 ### 自审 1 - [YYYY-MM-DD HH:MM]
 **工具：** /qa, /design-review
-**结果：** 通过 / 发现 N 个问题
+**结果：** PM 报告：通过 / 发现 N 个问题 / 选择不跑 review
 
 **详细发现：**
 - F-001: [文件:行号] [问题描述] → [修复方式] ✅已修复
 - 或：未发现问题
+- 或：N/A（PM 未跑此工具）
 
 **遗留问题：** 无 / [列出]
 

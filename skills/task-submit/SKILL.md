@@ -25,8 +25,13 @@ echo "SKILL: task-submit"
 
 ### 步骤 2：判断 task 类型
 
-- **UI 类**：审查工具包含 `/design-review` 或 task 描述涉及前端/页面/组件
-- **非 UI 类**：其他 task
+按以下任一信号判定为 UI 类（任一命中即 UI）：
+
+- task 描述涉及前端/页面/组件/界面/UI/view/component
+- 「推荐 review 工具」字段含 `/design-review` 或 `/qa`
+- 「产物预览」section 含 ASCII 线框图（不是「无」或大纲）
+
+其余视为非 UI 类。
 
 ### 步骤 3：组装验收信息
 
@@ -93,7 +98,7 @@ echo "SKILL: task-submit"
    ```bash
    git diff --stat <req-branch>..HEAD
    ```
-2. **review_completed 事件结论**：列出每个审查工具及结果，例如 `/review pass, /qa pass, /design-review pass`。
+2. **PM 已跑的 review（如有）**：列出 task-execute 阶段 PM 实际跑过并 append 到事件流的工具及结论，例如 `/review pass, /qa pass`；PM 全跳时写 `（PM 选择不跑 review）`。事件流缺事件不阻塞验收（I-RV2）。
 3. **PM 决策入口**：明确让 PM 在本窗口选择通过或打回。
 
 输出格式：
