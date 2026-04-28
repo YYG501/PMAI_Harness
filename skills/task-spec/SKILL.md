@@ -221,7 +221,7 @@ echo "SKILL: task-spec"
 **§3 启动前必读**应包含：
 1. `solution.md` §X 的相关章节
 2. `solution.engineering.md` §Y 的相关章节
-3. `task-plan.md` 风险条目 + `task-plan.engineering.md` §1 反模式 / §2 验收 GAP
+3. `task-plan.md` §三 风险条目 + §四 自检与状态摘要（反模式 / 验收 GAP）
 4. 项目级文档（CONTEXT / DESIGN / 当前模块 spec）
 5. 同模块已完成 task 的 PM 视图 + 工程合同
 6. 涉及的现有 prototype 文件路径

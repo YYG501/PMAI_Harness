@@ -1,7 +1,7 @@
 ---
 name: task-plan
 description: |
-  Stage 5：读取上游 stage 文档 + 项目级文档 + 原型代码，拆分 task 规划。按 templates/task-plan.md.tmpl 生成 task-plan.md（PM 视图），按 templates/task-plan.engineering.md.tmpl 生成 task-plan.engineering.md（工程合同）。不生成具体 task 文档。
+  Stage 5：读取上游 stage 文档 + 项目级文档 + 原型代码，拆分 task 规划。按 templates/task-plan.md.tmpl 生成单一文件 task-plan.md（PM 视图 + 末尾轻量自检与状态摘要）。不生成具体 task 文档，不生成工程合同分文件。
 ---
 
 # /task-plan
@@ -15,8 +15,10 @@ description: |
 本 skill 生成的文档须遵守 `skills/_shared/PM-VIEW-RULES.md`。
 特别注意：
 - **§三 PM 视图写作规则**（明确指代 / 正向描述 / 禁工程词 / 禁像素颜色 / 禁反向约束）
-- **§七 章节顺序约束**（按 `templates/task-plan.md.tmpl` + `templates/task-plan.engineering.md.tmpl`）
+- **§七 章节顺序约束**（按 `templates/task-plan.md.tmpl`）
 - **§九 输入流约束**（必读上游 stage 文档 + 项目级文档；输入清单见下方 Required Inputs）
+
+> task-plan **不拆双文件**。它的"工程合同"成分（反模式自检结论 / 验收 GAP 索引 / 模块规格状态）压成末尾轻量"自检与状态摘要"节，附在 PM 视图末。详细论证 / autoplan 决策 / 共享数据约束等不需要长期存档，跑时输出即可。
 
 ## Preamble
 
@@ -28,8 +30,6 @@ echo "SKILL: task-plan"
 ## Required Inputs
 
 按 `PM-VIEW-RULES.md §9.1` 表格执行。
-
-### 写 task-plan.md（PM 视图）必读
 
 **上游 stage 文档**：
 - `$ACTIVE_REQ_DIR/brief.md`
@@ -44,10 +44,6 @@ echo "SKILL: task-plan"
 - `$REPO_ROOT/prototypes/`（按相关性扫现有页面 / 组件，反向校验 + 判断哪些能力已存在）
 
 **不读**：`solution.engineering.md`（防止工程内容渗透 PM 视图链路）
-
-### 写 task-plan.engineering.md（工程合同）补充输入
-
-- 上游 `solution.engineering.md`（如有，作为反模式自检 / 共享数据 / 接口约束的依据）
 
 ## Workflow
 
@@ -123,7 +119,7 @@ echo "SKILL: task-plan"
 
 > 例：task 006/007/008 都改同一个详情页文件且串行，只为验收维度清晰就拆 3 个 task。
 
-- 判断：同文件 + 串行的 task，必须在 `task-plan.engineering.md` §1 反模式自检里显式写出"拆多个 vs 合并"的成本权衡结论。
+- 判断：同文件 + 串行的 task，必须在 `task-plan.md` §四 自检与状态摘要的反模式 D 行里显式写出"拆多个 vs 合并"的成本权衡结论。
 - 没写权衡理由而拆多个的，默认合并。
 
 **反模式 E：业务功能 task 没有模块归属**
@@ -146,10 +142,10 @@ echo "SKILL: task-plan"
 1. [ ] 这个 task 的验收依据是否只有"代码结构变好/重构完成"这种过程性描述？（反模式 A）
 2. [ ] 这个 task 描述的工作是否应该是其他某个 task 的验收标准的一部分？（反模式 B）
 3. [ ] 这个 task 单独跑完后，能不能独立端到端验证到业务价值？（反模式 C）
-4. [ ] 这个 task 和另一个 task 改同一文件且串行，是否在 `task-plan.engineering.md` 里写了成本权衡结论？（反模式 D）
+4. [ ] 这个 task 和另一个 task 改同一文件且串行，是否在 `task-plan.md` §四 自检与状态摘要里写了成本权衡结论？（反模式 D）
 5. [ ] 所有 task 的模块归属是否满足硬规则？业务功能 task 是否真的归到了业务模块章节，而不是图省事标成 `基础设施`？（反模式 E）
 
-### 步骤 3：写 task-plan.md（PM 视图）
+### 步骤 3：写 task-plan.md
 
 按 `templates/task-plan.md.tmpl` 生成 `$ACTIVE_REQ_DIR/task-plan.md`：
 
@@ -158,34 +154,21 @@ echo "SKILL: task-plan"
 2. 一、Task 列表
 3. 二、执行顺序与并行性
 4. 三、风险
-5. 📁 历史档案（变更记录）
+5. 四、自检与状态摘要（反模式自检 5 条 + 验收 GAP 清单 + 模块规格状态）
+6. 📁 历史档案（变更记录）
 
 **写作约束**（违反将由 `check-doc-pm-view.py` 报错）：
 - 每个名词带完整指代前缀
 - 不出现像素值 / 颜色码 / 工程词（reducer / dispatch 等）
-- 不出现反向约束（"禁止 X / 不允许 Y"）→ 进 task-plan.engineering.md
+- 不出现反向约束（"禁止 X / 不允许 Y"）
 - task 列表 summary 一句话讲清交付物，不写实现细节
 
-### 步骤 4：写 task-plan.engineering.md（工程合同）
+**§四 自检与状态摘要填写要点**：
+- §4.1 反模式 5 条逐条勾选"未命中 / 命中（已处理）"，命中时一句话说明合并 / 重构结论。**5 条全 PASS 才能进入 stage 6**。
+- §4.2 验收 GAP 清单：从 `solution.md` 「验收标准」逐条审视，编号 G1, G2, ...，由 stage 6 task-spec 按编号接住。无 GAP 时显式写"无 GAP"。
+- §4.3 模块规格状态：列出本 req 涉及的每个业务模块的当前规格状态（已存在-完整 / 已存在-待补 / 不存在-待创建），影响 task-spec 步骤 4 判断。
 
-按 `templates/task-plan.engineering.md.tmpl` 生成 `$ACTIVE_REQ_DIR/task-plan.engineering.md`：
-
-**章节顺序**：
-1. 反模式自检声明（按 §2.2 五条逐条勾选 + 命中处理结论）
-2. stage 6 task-spec 验收 GAP 清单
-3. 模块规格状态
-4. 拆分依据 / 原型代码现状分析
-5. 共享数据 / 接口的 task 间约束
-6. autoplan 修订点 / 决策表
-7. 工程层验收清单（task-plan 自身的）
-8. 变更记录（工程合同侧）
-
-**特别说明**：
-- §1 反模式自检声明必须**显式列出**对 §2.2 五条反模式的逐条判定结果（"未命中" / "命中（已处理）"），不允许笼统写"已自检通过"
-- §2 验收 GAP 清单需要 stage 6 task-spec 接住每条 GAP（编号 G1, G2, ...）
-- §4 拆分依据需要标注本 req 涉及的现有原型代码 + 处理方式（复用 / 扩展 / 重写 / 不动）
-
-### 步骤 5：自检（按 PM-VIEW-RULES §八 8 项）
+### 步骤 4：自检（按 PM-VIEW-RULES §八 8 项）
 
 写完后对 `task-plan.md` 逐条检查：
 - [ ] 章节顺序符合 templates/task-plan.md.tmpl
@@ -195,10 +178,11 @@ echo "SKILL: task-plan"
 - [ ] 无组件实现名
 - [ ] 无设计意图解释
 - [ ] 抽象动词都搭配具体效果
+- [ ] §四 自检与状态摘要的反模式 5 条已逐条标注
 
 任一项未通过 → 修复后重新自检。
 
-### 步骤 5.5：自动跑启发式 lint
+### 步骤 4.5：自动跑启发式 lint
 
 人工自检之后，调用 `check-doc-pm-view.py` 做机器校验作为兜底：
 
@@ -207,25 +191,23 @@ python3 "$REPO_ROOT/.claude/scripts/check-doc-pm-view.py" "$ACTIVE_REQ_DIR/task-
 ```
 
 处理输出：
-- **0 errors + 0 warnings**：进入步骤 6 退出 skill
+- **0 errors + 0 warnings**：进入步骤 5 退出 skill
 - **有 warnings**：向 PM 展示，PM 决定是否修
 - **有 errors**：修复后重跑 lint；连续 3 次仍有 error 时停下询问 PM
 
-工程合同 (`task-plan.engineering.md`) 不跑 lint（脚本自动跳过 `.engineering.md`）。
+### 步骤 5：skill 结束 → /req-stage-gate 接手
 
-### 步骤 6：skill 结束 → /req-stage-gate 接手
-
-写完两文件 → skill 退出。向 PM 展示一句话摘要 + 两文件绝对路径（不贴全文）。
+写完 task-plan.md → skill 退出。向 PM 展示一句话摘要 + 文件绝对路径（不贴全文）。
 
 控制权交回 `/req-stage-gate`，由它：
 - 输出"推荐 review 工具"区块（`/plan-eng-review` `/plan-design-review` `/autoplan` 等，PM 自选自跑，I-RV1）
 - 走推进确认门
 
-**禁止**：skill 内部不得自动调任何 review 工具。PM 要求修改 → 改完两文件重新走 stage-gate 流程。
+**禁止**：skill 内部不得自动调任何 review 工具。PM 要求修改 → 改完 task-plan.md 重新走 stage-gate 流程。
 
 进入 stage 6 后，具体 task 文档由 stage 6 的 `/task-spec <task-id>` 按 task-plan.md 逐个生成。
 
-### 步骤 7（中途重新拆分）：stage 6 发现拆分需要重做
+### 步骤 6（中途重新拆分）：stage 6 发现拆分需要重做
 
 stage 6 task 子循环里，有时跑到 task-NNN 才发现 task 拆分本身有问题，需要废弃当前拆分回 stage 5 重拆。流程：
 
@@ -240,7 +222,7 @@ stage 6 task 子循环里，有时跑到 task-NNN 才发现 task 拆分本身有
    边界：
    - **`已完成` task 不能 discard**（代码已合入 req 分支）。
    - 任何带 worktree / 未提交改动 / 未合并 commit 的 task，discard 会一并丢弃。
-   - **拆两文件的处理**：discard 同时归档主文件 + .engineering.md（成对处理）。
+   - **task 拆两文件**：discard 同时归档主文件 + .engineering.md（成对处理）。
 
 2. **回退 stage**（discard 完所有要废弃的 task 后，guardrail 自然放行）：
 
@@ -248,9 +230,9 @@ stage 6 task 子循环里，有时跑到 task-NNN 才发现 task 拆分本身有
    python3 .claude/scripts/req-transition.py <req-dir> --to 5 --rollback
    ```
 
-3. **重新拆分**：按步骤 2-3 重新写 task-plan.md + task-plan.engineering.md。**新增 task 的编号往后接，不复用已废弃 task 的编号**。
+3. **重新拆分**：按步骤 2-3 重新写 task-plan.md。**新增 task 的编号往后接，不复用已废弃 task 的编号**。
 
-4. **task-plan.md 变更记录** section + **task-plan.engineering.md §8 变更记录** 各写一条变更说明。
+4. **task-plan.md 变更记录** section 写一条变更说明。
 
 ## 硬禁止项
 
@@ -258,15 +240,15 @@ stage 6 task 子循环里，有时跑到 task-NNN 才发现 task 拆分本身有
 - ❌ skill 内部自动调任何 review 工具（I-RV1）
 - ❌ skill 内部调 req-transition.py
 - ❌ 自动生成 tasks/task-NNN-*.md（这是 stage 6 task-spec 的事）
-- ❌ 在 task-plan.md（PM 视图）中嵌入工程内容（反模式自检全文 / 模块规格状态 / 拆分依据论证）→ 这些必须进 task-plan.engineering.md
+- ❌ 生成 task-plan.engineering.md 之类的工程合同分文件（task-plan 单文件，自检结论压在 §四）
+- ❌ §四 自检与状态摘要里堆论证全文 / 拆分依据论证 / autoplan 决策表（这些是过程产物，跑时输出，不长期存档）
 - ❌ 跳过项目级文档的"必读"（CONTEXT / DESIGN / prd / modules / prototypes）
 
 ## Rules
 
 - task 编号三位数，从 001 开始，格式 `task-001`。
-- Stage 5 只写 task-plan.md + task-plan.engineering.md，**不**创建 `tasks/task-NNN-*.md`（也不创建 .engineering.md）。
+- Stage 5 只写 task-plan.md（单文件）。**不**创建 `tasks/task-NNN-*.md`（也不创建 .engineering.md）。
 - 不在本 skill 中创建或更新 `docs/modules/*.md`；模块规格由 task 验收后的 `/doc-update` 沉淀。
-- 两文件成对生成，写在 req 目录下（req worktree 中）。
 - 拆完 task 必须跑步骤 2.4 自检；任何一条命中就返回 2.2 合并或重构，不能直接进入步骤 3。
-- task 总数超过 7 时，必须在 task-plan.engineering.md §1 反模式自检里显式列出每个 task 的存在理由。
-- 单模块超过 3 个 task 时，必须在 task-plan.md 风险列或 task-plan.engineering.md §1 写明为什么不合并。
+- task 总数超过 7 时，必须在 task-plan.md §四 自检与状态摘要的"结论"行里显式列出每个 task 的存在理由。
+- 单模块超过 3 个 task 时，必须在 task-plan.md §三 风险列或 §四 自检与状态摘要里写明为什么不合并。

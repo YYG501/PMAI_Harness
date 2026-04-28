@@ -39,7 +39,7 @@ PM 创建 / 审核 / 验收时直接看的内容。回答 PM 关心的问题：
 
 ## 二、拆文件约定
 
-`solution.md` / `task-plan.md` / `task-NNN-*.md` 三类文档拆成两个文件：
+`solution.md` / `task-NNN-*.md` 两类文档拆成两个文件：
 
 | 文件 | 内容 | 命名 |
 |---|---|---|
@@ -52,7 +52,9 @@ PM 创建 / 审核 / 验收时直接看的内容。回答 PM 关心的问题：
 - 两文件成对出现 — `task-transition.py` / `req-transition.py` 校验，缺工程合同 = error
 - agent 启动时由 `task-execute` 显式 inject 工程合同内容到 prompt，不依赖 PM 主动打开
 
-`brief.md` / `analysis.md` / `prd.md` **不拆文件**（这三类本身没有工程合同层，PM 视图即全部）。
+`brief.md` / `analysis.md` / `task-plan.md` / `prd.md` **不拆文件**：
+- `brief.md` / `analysis.md` / `prd.md`：本身没有工程合同层，PM 视图即全部
+- `task-plan.md`：自检结论 / 验收 GAP 索引 / 模块规格状态压成末尾轻量"自检与状态摘要"节附在 PM 视图末，没有独立工程合同需要长期存档
 
 ---
 
@@ -182,7 +184,7 @@ PM 视图用正向句式：
 | `analysis.md` | ✅ 允许 + 指代前缀 | ❌ 禁用 | ❌ 禁用 | ❌ 禁用 |
 | `prd.md` | ✅ 允许 + 指代前缀 | ❌ 禁用 | ❌ 禁用 | ❌ 禁用 |
 | `solution.md`（PM 视图）| ✅ 允许 + 指代前缀 | ❌ 禁用 | ❌ 禁用 | ❌ 禁用 |
-| `task-plan.md`（PM 视图）| ✅ 允许 + 指代前缀 | ❌ 禁用 | ❌ 禁用 | ❌ 禁用 |
+| `task-plan.md`（单文件）| ✅ 允许 + 指代前缀 | ❌ 禁用 | ❌ 禁用 | ❌ 禁用 |
 | `tasks/task-NNN.md`（PM 视图）| ✅ 允许 + 指代前缀 | ❌ 禁用 | ❌ 禁用 | ❌ 禁用 |
 | `*.engineering.md` | ✅ 全部允许 | ✅ 全部允许 | ✅ 全部允许 | ✅ 全部允许 |
 
@@ -252,16 +254,19 @@ PM 视图用正向句式：
 11. 📁 历史档案（变更记录）
 ```
 
-### `task-plan.md` PM 视图章节顺序
+### `task-plan.md` 章节顺序（单文件）
 
 ```
 1. 📌 拆分摘要
 2. 一、Task 列表
 3. 二、执行顺序与并行性
 4. 三、风险
+5. 四、自检与状态摘要（反模式自检 5 条 + 验收 GAP 清单 + 模块规格状态）
 ---
-4. 📁 历史档案（变更记录）
+6. 📁 历史档案（变更记录）
 ```
+
+`task-plan.md` 不拆双文件——§四 是 task-plan 自身的轻量自检结论 + task-spec / doc-update 会消费的状态索引，不是 PM 阅读层内容也不需要独立文件存档。
 
 ### `tasks/task-NNN.md` PM 视图章节顺序
 
@@ -317,7 +322,7 @@ PM 视图文档之间互相喂入时**只读对方的 PM 视图层**（即主文
 | `req-analysis` → `analysis.md` | brief.md | docs/CONTEXT.md / docs/DESIGN.md / docs/prd.md / docs/modules/\*.md / prototypes/ | 任何 .engineering.md |
 | `req-solution` → `solution.md`（PM 视图）| brief.md / analysis.md | docs/CONTEXT.md / docs/DESIGN.md / docs/prd.md / docs/modules/\*.md / prototypes/ | 任何 .engineering.md |
 | `req-solution` → `solution.engineering.md` | analysis.md / 上游 .engineering.md（如有）| docs/DESIGN.md / docs/prd.md / docs/modules/\*.md / prototypes/ | — |
-| `task-plan` → `task-plan.md`（PM 视图）| brief.md / analysis.md / solution.md（PM 视图）| docs/CONTEXT.md / docs/DESIGN.md / docs/prd.md / docs/modules/\*.md / prototypes/ | solution.engineering.md |
+| `task-plan` → `task-plan.md`（单文件）| brief.md / analysis.md / solution.md（PM 视图）| docs/CONTEXT.md / docs/DESIGN.md / docs/prd.md / docs/modules/\*.md / prototypes/ | solution.engineering.md |
 | `task-spec` → `task-NNN.md`（PM 视图）| brief.md / analysis.md / task-plan.md / solution.md（PM 视图）/ 同模块已完成 task 的 PM 视图 | docs/CONTEXT.md / docs/DESIGN.md / docs/prd.md / docs/modules/<module>.md / prototypes/ | solution.engineering.md / 任何 .engineering.md |
 | `task-spec` → `task-NNN.engineering.md` | analysis.md / solution.engineering.md（按章节匹配）/ 同模块已完成 task 的 .engineering.md（如有）| docs/DESIGN.md / docs/prd.md / docs/modules/<module>.md / prototypes/ | — |
 | `prd-writing` → `prd.md` | brief.md / analysis.md / solution.md（PM 视图）/ tasks/\*.md（PM 视图）| docs/CONTEXT.md / docs/DESIGN.md / docs/prd.md / docs/modules/\*.md / prototypes/（反向校验） | 任何 .engineering.md |
@@ -387,9 +392,9 @@ solution.md（PM 视图）─────┬────► solution.engineering
    │  + DESIGN / modules / │       │（task-execute / task-confirm 时读）
    │    prototypes 反向校验│       │
    ▼                       │       │
-task-plan.md（PM 视图）─────│────► task-plan.engineering.md
-   │                       │       △
+task-plan.md（单文件）      │       │
    │  + prototypes 反向校验│       │
+   │  + 末尾自检与状态摘要 │       │
    ▼                       │       │
 task-NNN.md（PM 视图）──────┘       │
    △                                │
