@@ -300,6 +300,10 @@ if [ -z "${MANUAL_RESUME:-}" ]; then
     EXECUTOR_MODEL="$EXECUTOR_MODEL" \
       bash "$ADAPTER" > "$LOG_PATH" 2>&1
     EXIT_CODE=$?
+    # 超 10 分钟会被 Bash tool timeout。如果遇上，改用：
+    #   bash .claude/scripts/run-bg.sh "$LOG_PATH" bash "$ADAPTER"
+    # 然后 Claude 用 Monitor `until [ -f "$LOG_PATH.exit" ]; do sleep 60; done`
+    # 等 EXIT_FILE 出现后 cat 拿 exit code。这是逃生路径，不是默认模式。
 
     if [ "$EXIT_CODE" -ne 0 ]; then
       CLASSIFICATION=$(bash "$MAIN_REPO_ROOT/.claude/scripts/classify-failure.sh" "$EXIT_CODE" "$LOG_PATH")

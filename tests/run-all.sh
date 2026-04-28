@@ -18,6 +18,7 @@ SUITES=(
   test-cancel-req.sh
   test-status-view.sh
   test-setup-deps.sh
+  test-run-bg.sh
   v4_T13_status_summary.sh
   v4_T14_taskexec_short_id.sh
   v4_T16_taskexec_double_scan.sh
