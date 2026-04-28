@@ -24,7 +24,7 @@ EXEC_EXIT=0
 cursor-agent -p --force --trust \
   --workspace "$TASK_WORKTREE" \
   --output-format text \
-  "${MODEL_ARGS[@]}" \
+  ${MODEL_ARGS[@]+"${MODEL_ARGS[@]}"} \
   "$PROMPT" || EXEC_EXIT=$?
 
 # I-AD2: 退出后越界校验（cursor-agent 无 sandbox，这层是唯一边界防护）

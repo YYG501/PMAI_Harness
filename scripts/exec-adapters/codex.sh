@@ -29,9 +29,9 @@ MODEL_ARGS=()
 EXEC_EXIT=0
 if [ -z "${CLAUDE_PLUGIN_ROOT:-}" ]; then
   echo "codex.sh: CLAUDE_PLUGIN_ROOT not set; falling back to plain 'codex exec --sandbox workspace-write'" >&2
-  codex exec --sandbox workspace-write "${MODEL_ARGS[@]}" "$PROMPT" || EXEC_EXIT=$?
+  codex exec --sandbox workspace-write ${MODEL_ARGS[@]+"${MODEL_ARGS[@]}"} "$PROMPT" || EXEC_EXIT=$?
 else
-  node "${CLAUDE_PLUGIN_ROOT}/scripts/codex-companion.mjs" task --write "${MODEL_ARGS[@]}" "$PROMPT" || EXEC_EXIT=$?
+  node "${CLAUDE_PLUGIN_ROOT}/scripts/codex-companion.mjs" task --write ${MODEL_ARGS[@]+"${MODEL_ARGS[@]}"} "$PROMPT" || EXEC_EXIT=$?
 fi
 
 # I-AD2: 退出后越界校验
