@@ -6,10 +6,12 @@
 #     若 src 存在且 dst 不存在，则 mkdir -p dst 的父目录，再 ln -s src dst。
 #
 #   setup_dependency_symlinks <repo_root> <worktree_dir>
-#     根据 repo_root 根的包管理配置给 worktree_dir 装 symlink：
-#       package.json → node_modules（含 monorepo 递归 max-depth 4）
-#       Gemfile      → vendor/bundle
-#       go.mod       → vendor
+#     根据 repo_root 的包管理配置给 worktree_dir 装 symlink：
+#       package.json → 同目录 node_modules（任意深度，prune 构建产物 / .git /
+#                      .worktrees / 已存在 node_modules；覆盖根级、monorepo、
+#                      子目录项目如 prototypes/）
+#       Gemfile      → vendor/bundle（仅根级）
+#       go.mod       → vendor（仅根级）
 #
 #   derive_task_port <repo_root> <task_basename>
 #     基于 repo_root 的 realpath hash 推导基础端口（3000-9999），+ task_num 后 echo。
@@ -27,10 +29,7 @@ setup_dependency_symlinks() {
   local repo_root="$1"
   local worktree_dir="$2"
 
-  if [ -f "$repo_root/package.json" ]; then
-    symlink_if_exists "$repo_root/node_modules" "$worktree_dir/node_modules"
-  fi
-
+  # Ruby / Go：根级守门保留（这两个生态约定项目根有 Gemfile/go.mod）
   if [ -f "$repo_root/Gemfile" ]; then
     symlink_if_exists "$repo_root/vendor/bundle" "$worktree_dir/vendor/bundle"
   fi
@@ -39,20 +38,28 @@ setup_dependency_symlinks() {
     symlink_if_exists "$repo_root/vendor" "$worktree_dir/vendor"
   fi
 
-  # Monorepo 递归 symlink：max-depth 4，跳过 worktrees 和嵌套 node_modules
-  if [ -f "$repo_root/package.json" ]; then
-    find "$repo_root" -maxdepth 4 -name "node_modules" -type d \
-      -not -path "*/.worktrees/*" \
-      -not -path "*/node_modules/*/node_modules" \
-      2>/dev/null | while read -r nm_path; do
-      local rel="${nm_path#"$repo_root"/}"
-      local target="$worktree_dir/$rel"
-      if [ ! -e "$target" ]; then
-        mkdir -p "$(dirname "$target")"
-        ln -s "$nm_path" "$target"
-      fi
-    done
-  fi
+  # Node：对仓库里**任意深度**的 package.json 都尝试 link 同目录 node_modules。
+  # 不再用"根有 package.json"作为前置——常见模式如 prototypes/、apps/web/、
+  # packages/foo/ 等子目录项目，根没有 package.json 也要覆盖（否则 codex /
+  # cursor-agent 在 task worktree 跑测试时全找不到依赖）。
+  # 用 prune 跳过会引发无谓递归或返回脏数据的目录（.git / .worktrees / 已存在
+  # 的 node_modules / 构建输出 / venv）。
+  find "$repo_root" \
+    \( -name .git -o -name .worktrees -o -name node_modules \
+       -o -name .next -o -name dist -o -name build -o -name .venv \) -prune \
+    -o -type f -name package.json -print 2>/dev/null | while read -r pkg; do
+    local pkg_dir="${pkg%/package.json}"
+    local src="$pkg_dir/node_modules"
+    local rel="${pkg_dir#"$repo_root"}"
+    rel="${rel#/}"
+    local dst
+    if [ -z "$rel" ]; then
+      dst="$worktree_dir/node_modules"
+    else
+      dst="$worktree_dir/$rel/node_modules"
+    fi
+    symlink_if_exists "$src" "$dst"
+  done
 }
 
 derive_base_port() {
