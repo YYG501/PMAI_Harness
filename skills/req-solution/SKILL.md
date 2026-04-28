@@ -22,6 +22,7 @@ description: |
 - **§六 关键产品决策格式**（solution.md 必填章节）
 - **§七 章节顺序约束**（按 `templates/solution.md.tmpl` 锁定的 11 章 PM 视图 + `templates/solution.engineering.md.tmpl` 的 10 章工程合同）
 - **§九 输入流约束**（必读上游 stage 文档 + 项目级文档；输入清单见下方 Required Inputs）
+- **§9.6 双文件 lazy sync**：首次生成两文件 + hash；PM 中途修改只动 PM 视图；stage-gate gate 通过时调本 skill 的 reconcile 模式做对齐
 
 ## Preamble
 
@@ -44,6 +45,16 @@ echo "SKILL: req-solution"
 **退出契约**：本 skill 返回时，`solution.md` + `solution.engineering.md` 两文件都已经过 PM 简单确认（Discovery 阶段缺口已答）。orchestrator 接手输出推荐 review 区块 + 走确认门。
 
 > **注意**：stage 3 没有 reviewer 硬循环（不像 stage 2 的 analysis-reviewer）。stage 3 的 Discovery 阶段如果 PM 没回答关键缺口，不要硬写方案。
+
+## 调用模式（PM-VIEW-RULES §9.6）
+
+本 skill 有三种调用模式，由 stage-gate / 当前文件状态决定（步骤 1.5 显式判别）：
+
+| 模式 | 触发条件 | 走哪些步骤 |
+|---|---|---|
+| **首次生成** | `solution.md` 不存在 | 步骤 0–6（完整流程）|
+| **修改回流** | stage-gate 在确认门后 PM 选 B（修改）调入 | 步骤 0 / 3 / 5 / 5.5 / 6（**只**改 PM 视图，**不动**工程合同；hash 自然 stale）|
+| **reconcile** | stage-gate 在 PM 选 A 之后、`req-transition.py --to 3` 之前调入，且 prompt 显式说 "reconcile 模式" | 跳到步骤 R（仅 reconcile 工程合同，不改 PM 视图）|
 
 ## Required Inputs
 
@@ -74,7 +85,7 @@ echo "SKILL: req-solution"
 
 ### 步骤 0：读 PM-VIEW-RULES.md（强制）
 
-打开 `skills/_shared/PM-VIEW-RULES.md`，重点理解 §三 / §六 / §七 / §九。
+打开 `skills/_shared/PM-VIEW-RULES.md`，重点理解 §三 / §六 / §七 / §九（含 §9.6 双文件 lazy sync）。
 
 ### 步骤 1：读取所有必读输入
 
@@ -87,6 +98,29 @@ echo "SKILL: req-solution"
 - `prototypes/` 是反向校验源（PM-VIEW-RULES §9.3）：
   - 如发现原型与上游文档（analysis）描述不一致 → PM 视图以原型为准
   - 原型已删除 / 砍掉的工程概念（如 V4.1 的 `includeDescendants`）→ 不引入 PM 视图，归到工程合同的反向约束
+
+### 步骤 1.5：判别调用模式
+
+按上方"调用模式"表判别：
+
+```bash
+SOLUTION_PM="$ACTIVE_REQ_DIR/solution.md"
+SOLUTION_ENG="$ACTIVE_REQ_DIR/solution.engineering.md"
+
+if [ ! -f "$SOLUTION_PM" ]; then
+  MODE=first-gen
+elif grep -q '<已由 stage-gate 显式声明 reconcile>' /dev/null; then
+  # stage-gate 在 prompt 里显式说 "reconcile 模式" → 走步骤 R
+  MODE=reconcile
+else
+  MODE=revise
+fi
+```
+
+> 实际判别由 AI 读 stage-gate 调用本 skill 时给的 prompt：
+> - prompt 含 "reconcile 模式" 字样 → MODE=reconcile → 跳步骤 R
+> - prompt 含 "PM 在确认门提了修改：…" → MODE=revise → 走步骤 3 / 5 / 5.5 / 6（只改 PM 视图）
+> - 否则 + `solution.md` 不存在 → MODE=first-gen → 走完整流程
 
 ### 步骤 2：Discovery（补问缺口）
 
@@ -133,6 +167,8 @@ echo "SKILL: req-solution"
 
 ### 步骤 4：写 solution.engineering.md（工程合同）
 
+> **仅 first-gen 模式执行**。revise 模式跳过本步骤（不动工程合同，hash 自然 stale）。reconcile 模式走步骤 R。
+
 按 `templates/solution.engineering.md.tmpl` 生成 `$ACTIVE_REQ_DIR/solution.engineering.md`：
 
 **章节顺序**（按模板锁定）：
@@ -150,6 +186,15 @@ echo "SKILL: req-solution"
 **写作约束**：
 - 允许所有工程内容（TS 类型 / 字段名 / 像素 / 颜色 / 反向约束 / autoplan 输出原文等）
 - 唯一原则：不重复 PM 视图已有的功能行为描述
+
+**hash 写入**（PM-VIEW-RULES §9.6.2）：
+
+```bash
+PM_VIEW_HASH=$(shasum -a 256 "$ACTIVE_REQ_DIR/solution.md" | cut -c1-12)
+# 写入工程合同顶部模板占位 {{PM_VIEW_HASH}} → 替换为 $PM_VIEW_HASH
+```
+
+写完后核对工程合同顶部 `<!-- synced_pm_view_hash: <12 字符> -->` 注释存在且与 PM 视图实际 hash 一致。
 
 ### 步骤 5：自检（按 PM-VIEW-RULES §八 8 项）
 
@@ -186,7 +231,46 @@ lint 不强制阻塞，但 errors 留着进入步骤 6 的，必须在向 PM 展
 
 ### 步骤 6：skill 结束
 
-写完两文件 → skill 退出。控制权交回 `/req-stage-gate`，由它输出推荐 review 区块 + 走确认门。
+- **first-gen 模式**：写完两文件 + hash → skill 退出。
+- **revise 模式**：只改了 PM 视图（工程合同 hash 现为 stale）→ skill 退出，告知 stage-gate "PM 视图已修订，工程合同保持 stale，等待 gate 通过时 reconcile"。
+
+控制权交回 `/req-stage-gate`，由它输出推荐 review 区块 + 走确认门。
+
+---
+
+### 步骤 R：reconcile 模式（被 stage-gate 在 PM 选 A 之后调入）
+
+**调用前置条件**：stage-gate prompt 显式说 "reconcile 模式"。
+
+按 PM-VIEW-RULES §9.6.4 执行：
+
+1. **算 hash**：
+   ```bash
+   PM_VIEW_HASH_NOW=$(shasum -a 256 "$ACTIVE_REQ_DIR/solution.md" | cut -c1-12)
+   ```
+2. **读工程合同顶部 `synced_pm_view_hash`**：
+   ```bash
+   PM_VIEW_HASH_OLD=$(grep -oE 'synced_pm_view_hash: [a-f0-9]{12}' "$ACTIVE_REQ_DIR/solution.engineering.md" | awk '{print $2}')
+   ```
+3. **一致** → no-op，输出 "reconcile: no-op（PM 视图未变）"，结束
+4. **不一致** → 进入派生流程：
+   a. **再读必读输入**：`analysis.md` + 上游 `.engineering.md`（如有）+ `docs/DESIGN.md` / `docs/prd.md` / `docs/modules/*.md` / `prototypes/`
+   b. **比对 PM 视图 diff**：用 `git diff` 看 PM 视图自上次 hash 以来变了哪些章节（如果文件未提交则用 chat 上下文里 PM 描述的修改范围）
+   c. **重派生 PM 视图驱动章节**（PM-VIEW-RULES §9.6.3）：§1 数据结构 / §2 派生状态 / §3 组件路径 / §4 mock / §5 算法 / §6 易错点（PM 视图反向条目派生部分）/ §10 工程层验收清单
+   d. **不动独立来源章节**：§7 plan-review 沉淀 / §8 autoplan 输出 / §9 a11y/视口/视觉（DESIGN.md 派生部分）；如发现独立章节里引用的功能名 / 章节号已被 PM 视图修改，**只改引用、不改主体**
+   e. **更新 hash**：把工程合同顶部 `synced_pm_view_hash` 改为 `$PM_VIEW_HASH_NOW`
+   f. **追加变更记录**：在工程合同末尾追加 `<!-- reconcile <YYYY-MM-DD HH:MM>: <旧 hash> → <新 hash>; 变更范围: <一行说明> -->`；同步在 `solution.md` 末尾「📁 历史档案」加一行 `<YYYY-MM-DD> reconcile：solution.engineering.md 已对齐 PM 视图（<旧 hash> → <新 hash>）`
+5. **自检**（PM-VIEW-RULES §9.6.6）：hash 12 字符 / 与 PM 视图一致 / PM 视图驱动章节无旧概念残留 / 独立来源章节未被误改
+6. **输出 reconcile 完成信号**：
+   ```
+   ✅ solution.engineering.md reconcile 完成
+   - hash: <旧> → <新>
+   - 变更章节：[列出更新的 §]
+   - 独立来源章节未动：§7 / §8 / §9
+   ```
+7. skill 退出，控制权回 stage-gate（由 stage-gate 跑 `req-transition.py --to 3`）
+
+**硬约束**：reconcile 模式禁止改 PM 视图主文件内容（除「📁 历史档案」append 一行外）。
 
 ## 硬禁止项
 
@@ -196,6 +280,9 @@ lint 不强制阻塞，但 errors 留着进入步骤 6 的，必须在向 PM 展
 - ❌ 自动产出 task-plan.md / 模块规格 / 原型代码
 - ❌ 在 solution.md 中嵌入工程内容（reducer / 字段 schema / 像素 / 反向约束）→ 这些必须进 solution.engineering.md
 - ❌ 跳过项目级文档的"必读"（CONTEXT / DESIGN / prd / modules / prototypes）
+- ❌ revise 模式（PM 在确认门提修改后调入）顺手重写工程合同 → 必须保持 stale，等 gate 通过后由 reconcile 模式统一对齐
+- ❌ reconcile 模式动 PM 视图主文件内容（仅允许在「📁 历史档案」append 一行 reconcile 记录）
+- ❌ 任何模式下手动改工程合同顶部 `synced_pm_view_hash`
 
 ---
 
@@ -244,8 +331,12 @@ PM 视图章节顺序见 `templates/solution.md.tmpl`（由 PM-VIEW-RULES §七�
 
 - **允许产出**：
   - `$ACTIVE_REQ_DIR/solution.md`（PM 视图）
-  - `$ACTIVE_REQ_DIR/solution.engineering.md`（工程合同）
-- **允许动作**：模块划分、系统边界、分期计划、优先级排序、Discovery 缺口提问
+  - `$ACTIVE_REQ_DIR/solution.engineering.md`（工程合同，含 `synced_pm_view_hash` 注释）
+- **允许动作**：模块划分、系统边界、分期计划、优先级排序、Discovery 缺口提问、reconcile（gate 后调入时）
 - **禁止顺手推进**：不要自动开始 task 拆分，不要直接创建原型页面，不要走推进确认门
 - **禁止自动调 review**（I-RV1）：所有 `/plan-*-review` 工具由 orchestrator 列推荐、PM 自跑
-- **退出条件**：两文件都已写、Discovery 缺口已答完。控制权交回 /req-stage-gate
+- **退出条件**：
+  - first-gen：两文件已写 + hash 已写、Discovery 缺口已答完
+  - revise：PM 视图已修订（工程合同保持 stale）
+  - reconcile：工程合同已与 PM 视图对齐、hash 已刷新
+  控制权交回 /req-stage-gate

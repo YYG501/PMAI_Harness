@@ -21,6 +21,7 @@ description: |
 - **§七 章节顺序约束**（按 `templates/task.md.tmpl` + `templates/task.engineering.md.tmpl`）
 - **§九 输入流约束**（必读上游 stage 文档 + 项目级文档；输入清单见下方 Required Inputs）
 - **§9.4 PM 反馈三类分流**（正向规则 → 跨功能产品规则 / 反向约束 → 工程合同 §6 / 决策记录 → 关键产品决策）
+- **§9.6 双文件 lazy sync**：首次生成两文件 + hash；PM 在步骤 12 选 B 修改时只动 PM 视图、工程合同保持 stale；PM 选 A 后由步骤 12.5 reconcile 同步
 
 ## Preamble
 
@@ -63,7 +64,20 @@ echo "SKILL: task-spec"
 
 ### 步骤 0：读 PM-VIEW-RULES.md（强制）
 
-打开 `skills/_shared/PM-VIEW-RULES.md`，重点理解 §三 / §五 / §六 / §七 / §九。
+打开 `skills/_shared/PM-VIEW-RULES.md`，重点理解 §三 / §五 / §六 / §七 / §九（含 §9.6 双文件 lazy sync）。
+
+### 步骤 0.5：判别调用模式
+
+| 模式 | 触发条件 | 走哪些步骤 |
+|---|---|---|
+| **first-gen** | `tasks/task-NNN-<slug>.md` 不存在 | 步骤 1–12（完整流程）|
+| **revise** | task PM 视图已存在；PM 之前选过 B 现在再次进入 | 步骤 1 / 3 / 5 / 6 / 8 / 10 / 10.5 / 11 / 12（**只**改 PM 视图，**不动**工程合同；hash 自然 stale）|
+| **reconcile** | 步骤 12 PM 选 A 后由本 skill 自身在步骤 12.5 自动进入 | 仅步骤 12.5（不改 PM 视图，对齐工程合同）|
+
+实际判别：
+- 先扫文件存在性 → 决定 first-gen vs 已存在
+- 已存在 + 当前调用是 stage 6 PM 重新进入：MODE=revise（步骤 9 写工程合同被跳过；hash 留 stale）
+- 步骤 12 PM 选 A → 进入步骤 12.5（reconcile，仅 inline 执行）
 
 ### 步骤 1：校验 task-plan.md ↔ tasks/ 一致性
 
@@ -199,6 +213,8 @@ echo "SKILL: task-spec"
 
 ### 步骤 9：写 task-NNN-<slug>.engineering.md（工程合同）
 
+> **仅 first-gen 模式执行**。revise 模式跳过本步骤（不动工程合同，hash 自然 stale，等步骤 12.5 reconcile）。
+
 按 `templates/task.engineering.md.tmpl` 生成 `$ACTIVE_REQ_DIR/tasks/task-NNN-<slug>.engineering.md`：
 
 **章节顺序**（按模板锁定）：
@@ -217,6 +233,15 @@ echo "SKILL: task-spec"
 **写作约束**：
 - 允许所有工程内容（TS 类型 / 字段名 / 像素 / 颜色 / 反向约束 / V1-V26 review 沉淀等）
 - 唯一原则：不重复 PM 视图已有的功能行为描述
+
+**hash 写入**（PM-VIEW-RULES §9.6.2）：
+
+```bash
+PM_VIEW_HASH=$(shasum -a 256 "$ACTIVE_REQ_DIR/tasks/task-NNN-<slug>.md" | cut -c1-12)
+# 写入工程合同顶部模板占位 {{PM_VIEW_HASH}} → 替换为 $PM_VIEW_HASH
+```
+
+写完后核对工程合同顶部 `<!-- synced_pm_view_hash: <12 字符> -->` 注释存在且与 PM 视图实际 hash 一致。
 
 **§3 启动前必读**应包含：
 1. `solution.md` §X 的相关章节
@@ -320,7 +345,7 @@ PM 看完不改 / 不跑 review：直接进步骤 12。事件流缺事件不阻�
 ```
 已生成 task 详细文档：
   PM 视图：<绝对路径>
-  工程合同：<绝对路径>
+  工程合同：<绝对路径>（hash: <前 12 字符>，可能 stale 等待 reconcile）
 
 摘要：
 - Task: task-NNN-<slug>
@@ -330,12 +355,55 @@ PM 看完不改 / 不跑 review：直接进步骤 12。事件流缺事件不阻�
 - PM 反馈分流：[正向规则 X 条 / 反向约束 Y 条 / 决策记录 Z 条 / 无]
 - review：[PM 已跑 /plan-eng-review pass / 未跑 /plan-design-review / 全跳]
 
-A) 确认，下一步执行 /task-confirm <task-pm-view-file>
-B) 我要修改 task 文档（指出改 PM 视图还是工程合同）
+A) 确认，进入步骤 12.5 同步工程合同后推动 /task-confirm <task-pm-view-file>
+B) 我要修改 task 文档（PM 视图改 / 工程合同独立来源章节改）
 C) 放弃本次生成（两文件一起删）
 ```
 
-PM 选择 A 后，才提示并推动 `/task-confirm <task-pm-view-file>`；PM 未确认前不得进入执行。
+PM 选 A → 进入步骤 12.5 reconcile → 完成后推 /task-confirm。
+PM 选 B → 进入"修改回流"分支：
+- 改 PM 视图内容 → 重写 PM 视图主文件，**不动工程合同**（hash 留 stale），自检 + lint 后回到步骤 12 重新等 PM 确认
+- 改工程合同独立来源章节（§7 plan-review 沉淀 / §11 自审记录）→ 直接改对应章节，**不更新 hash**，回到步骤 12
+
+PM 未确认前不得进入执行。
+
+### 步骤 12.5：reconcile 工程合同（PM 选 A 后内联执行）
+
+**触发**：步骤 12 PM 选 A。本步骤由 task-spec 自身内联执行，**不另调 skill**。
+
+按 PM-VIEW-RULES §9.6.4 执行：
+
+1. **算 hash**：
+   ```bash
+   PM_VIEW="$ACTIVE_REQ_DIR/tasks/task-NNN-<slug>.md"
+   ENG="$ACTIVE_REQ_DIR/tasks/task-NNN-<slug>.engineering.md"
+   PM_VIEW_HASH_NOW=$(shasum -a 256 "$PM_VIEW" | cut -c1-12)
+   PM_VIEW_HASH_OLD=$(grep -oE 'synced_pm_view_hash: [a-f0-9]{12}' "$ENG" | awk '{print $2}')
+   ```
+2. **一致** → 输出 `reconcile: no-op（PM 视图未变）`，进入步骤 13
+3. **不一致** → 进入派生流程：
+   a. 再读必读输入：`analysis.md` / `solution.engineering.md`（按章节匹配）/ 同模块已完成 task 的 `.engineering.md` / `docs/DESIGN.md` / `docs/modules/<module>.md` / `prototypes/`
+   b. 比对 PM 视图 diff（`git diff` 或 chat 上下文中 PM 报告的修改范围）
+   c. 重派生 PM 视图驱动章节（PM-VIEW-RULES §9.6.3）：§3 启动前必读 / §4 功能清单工程版 / §5 实现指引 / §6 易错点（PM 反馈反向部分）/ §8 视觉规范（PM 视图像素/颜色派生部分）/ §9 工程层验收清单
+   d. 不动独立来源章节：§7 plan-review 沉淀 / §10 文档偏差 / §11 自审记录；如发现独立章节里引用的功能名 / 章节号已被 PM 视图修改，**只改引用、不改主体**
+   e. 把工程合同顶部 `synced_pm_view_hash` 改为 `$PM_VIEW_HASH_NOW`
+   f. 在工程合同末尾追加 `<!-- reconcile <YYYY-MM-DD HH:MM>: <旧 hash> → <新 hash>; 变更范围: <一行说明> -->`；同步在 PM 视图主文件末尾「📁 历史档案」加一行 `<YYYY-MM-DD> reconcile：工程合同已对齐 PM 视图（<旧 hash> → <新 hash>）`
+4. 自检（PM-VIEW-RULES §9.6.6）
+5. 输出 reconcile 完成信号：
+   ```
+   ✅ task-NNN-<slug>.engineering.md reconcile 完成
+   - hash: <旧> → <新>
+   - 变更章节：[列出更新的 §]
+   - 独立来源章节未动：§7 / §10 / §11
+   ```
+
+### 步骤 13：推动 /task-confirm
+
+reconcile 完成后才推：
+
+```
+✅ 双文件已对齐，下一步运行 /task-confirm <task-pm-view-file>
+```
 
 ## Rules
 
@@ -353,3 +421,6 @@ PM 选择 A 后，才提示并推动 `/task-confirm <task-pm-view-file>`；PM �
 - 事件流仅作审计记录（I-RV2），缺事件不阻止 task-confirm 启动；review 发现是否采纳由 PM 自行决定。
 - **PM 反馈分流强制**：抽取同模块已完成 task 的 PM 反馈时，必须按 PM-VIEW-RULES §9.4 分三类分别写入；禁止整段搬到工程合同「实现指引」。
 - **跳过项目级文档"必读"被禁止**：CONTEXT / DESIGN / prd / modules / prototypes 仓库存在则必读，AI 不得跳过。
+- **lazy sync 强制**（PM-VIEW-RULES §9.6）：PM 在步骤 12 选 B 修改 PM 视图时，**禁止顺手重写工程合同**（hash 必须留 stale）；只有步骤 12 选 A 后的步骤 12.5 才能重写工程合同 PM 视图驱动章节。
+- **reconcile 边界**：步骤 12.5 禁止动 PM 视图主文件内容（仅允许在「📁 历史档案」append 一行 reconcile 记录）；禁止动工程合同独立来源章节（§7 / §10 / §11）的主体。
+- **hash 不得手动改**：任何模式下不允许手动编辑工程合同顶部 `synced_pm_view_hash`，只能由步骤 9（首生成）或步骤 12.5（reconcile）写入。

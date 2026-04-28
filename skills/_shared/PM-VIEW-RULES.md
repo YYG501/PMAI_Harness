@@ -387,30 +387,105 @@ brief.md（PM 视图，不拆）
 analysis.md（PM 视图，不拆）
    │
    ▼
-solution.md（PM 视图）─────┬────► solution.engineering.md
-   │                       │       △
-   │  + DESIGN / modules / │       │（task-execute / task-confirm 时读）
-   │    prototypes 反向校验│       │
-   ▼                       │       │
-task-plan.md（单文件）      │       │
-   │  + prototypes 反向校验│       │
-   │  + 末尾自检与状态摘要 │       │
-   ▼                       │       │
-task-NNN.md（PM 视图）──────┘       │
-   △                                │
-   │  + 同模块 PM 反馈分三类         │
-   │  + prototypes 反向校验          │
-   │                                 │
-   ▼                                 │
-task-NNN.engineering.md ◄────────────┘
+solution.md（PM 视图）─────┬─lazy sync─► solution.engineering.md
+   │                       │              △
+   │  + DESIGN / modules / │              │（task-execute / task-confirm 时读，
+   │    prototypes 反向校验│              │  允许 stale，gate 时 reconcile）
+   ▼                       │              │
+task-plan.md（单文件）      │              │
+   │  + prototypes 反向校验│              │
+   │  + 末尾自检与状态摘要 │              │
+   ▼                       │              │
+task-NNN.md（PM 视图）──────┘              │
+   △                                      │
+   │  + 同模块 PM 反馈分三类               │
+   │  + prototypes 反向校验                │
+   │                                      │
+   ▼                                      │
+task-NNN.engineering.md ◄──lazy sync──────┘
    △
-   │（按章节匹配 solution.engineering.md）
+   │（按章节匹配 solution.engineering.md，
+   │  reconcile 由 task-spec 步骤 12.5 触发）
 
 prd.md（PM 视图，不拆，最终交付）
    △
    │  ← 读 brief / analysis / solution（PM 视图）/ tasks（PM 视图）
    │  ← prototypes 反向校验
 ```
+
+---
+
+### 9.6 双文件 lazy sync（reconcile 契约）
+
+适用文档：`solution.md` ↔ `solution.engineering.md` / `tasks/task-NNN-*.md` ↔ `tasks/task-NNN-*.engineering.md`。
+
+#### 9.6.1 总原则
+
+PM 在 stage 内反复改 PM 视图时，工程合同**不立即同步**。工程合同允许暂时落后于 PM 视图（"已知 stale"），由 gate 通过时的 **reconcile 步骤**统一对齐。
+
+| 时机 | 行为 |
+|---|---|
+| 首次生成（skill 第一次产 PM 视图）| 同时写 PM 视图 + 工程合同；工程合同顶部写入当时 PM 视图的 hash |
+| 中途 PM 改 PM 视图 | 只改 PM 视图主文件；**不动**工程合同；hash 自然变 stale |
+| 中途 PM 提交独立工程层信息（review 沉淀 / autoplan 输出 / 视觉规范补充）| 立即写入工程合同对应章节（§7 / §8 / §9 等"独立来源"章节）；**不更新** hash（PM 视图未动）|
+| gate 通过的瞬间 | 触发 reconcile：比对 hash → stale 则重派生工程合同里"PM 视图驱动"的章节 → 更新 hash → 才允许 `req-transition.py` / 推 `/task-confirm` |
+| read-side（task-execute / task-confirm / 中段 review）| 容忍读到 stale 工程合同；不阻塞、不 warn |
+
+#### 9.6.2 hash 标记格式
+
+工程合同顶部元信息块下方插入 HTML 注释：
+
+```markdown
+<!-- synced_pm_view_hash: <12 字符> -->
+```
+
+计算方式（PM 视图主文件全文）：
+
+```bash
+shasum -a 256 <pm-view-file> | cut -c1-12
+```
+
+首次生成时填入计算结果。reconcile 完成后用最新 PM 视图重算并覆盖旧 hash。**不允许**手动改 hash；不允许 PM 改 PM 视图时顺手刷 hash。
+
+#### 9.6.3 章节分类（哪些归 reconcile，哪些不归）
+
+工程合同的章节分两类：
+
+**PM 视图驱动章节**（reconcile 时按需重派生）：
+- `solution.engineering.md`：§1 数据结构 / §2 派生状态 / §3 组件路径 / §4 mock / §5 算法 / §6 易错点（PM 视图反向条目派生部分）/ §10 工程层验收清单
+- `task.engineering.md`：§3 启动前必读 / §4 功能清单工程版 / §5 实现指引 / §6 易错点（PM 反馈反向部分）/ §8 视觉规范（PM 视图像素/颜色派生部分）/ §9 工程层验收清单
+
+**独立来源章节**（reconcile 不动，由各自来源直接写入）：
+- `solution.engineering.md`：§7 plan-review 沉淀 / §8 autoplan 输出 / §9 a11y/视口/视觉（DESIGN.md 派生部分）
+- `task.engineering.md`：§7 plan-review 沉淀 / §10 文档偏差（execution agent 写）/ §11 自审记录（PM 跑 review 后 append）
+
+#### 9.6.4 reconcile 步骤（标准动作）
+
+skill 在 reconcile 模式下执行：
+
+1. 计算 PM 视图当前 hash：`shasum -a 256 <pm-view-file> | cut -c1-12`
+2. 读工程合同顶部 `synced_pm_view_hash`
+3. **一致** → no-op，结束
+4. **不一致** → 进入更新流程：
+   a. 用 PM 视图最新内容 + 上游产物（`analysis.md` / 上游 `.engineering.md` / `docs/modules/*.md` / `prototypes/`）重派生**PM 视图驱动章节**的内容
+   b. 不动**独立来源章节**（§7 / §8 等）；如发现独立来源章节的引用与新 PM 视图脱节（章节编号变了 / 功能名变了），同步修引用，但不重派生主体
+   c. 把工程合同顶部 `synced_pm_view_hash` 改为最新 hash
+   d. PM 视图主文件「📁 历史档案」/ 工程合同末尾追加一行：`<YYYY-MM-DD HH:MM> reconcile：<旧 hash> → <新 hash>`，并简述变更范围
+5. 输出"reconcile 完成"信号，把控制权交回调用方（stage-gate / task-spec 步骤 12.5）
+
+#### 9.6.5 read-side 容忍 stale
+
+- `task-execute` 启动 agent 时读到的工程合同**可能是 stale 版本**（PM 视图已改但还没到 gate）。这是允许的——因为 PM 视图未到 gate 意味着 task 还没 confirm，agent 还没启动。task-execute 走到时必然已经过 reconcile。
+- 中段 PM 跑 `/plan-eng-review`（stage 3 阶段）/ `/qa`（stage 6 阶段）看到的工程合同也允许是 stale。PM 在 chat 报告 review 发现后，AI 按 9.6.1 表格行为：纯 PM 视图层修订写 PM 视图、纯工程层沉淀写工程合同 §7。
+- **禁止**：read-side 在读取前自动跑 reconcile（会破坏"gate 才同步"语义）。
+
+#### 9.6.6 自检（生成 / reconcile 后）
+
+工程合同写完或 reconcile 完成后自检：
+- [ ] 顶部 `<!-- synced_pm_view_hash: ... -->` 注释存在且 12 字符
+- [ ] hash 与 PM 视图主文件 `shasum -a 256 | cut -c1-12` 一致
+- [ ] PM 视图驱动章节没有出现"已被 PM 视图删除"的旧概念
+- [ ] 独立来源章节（§7 / §8）未被 reconcile 误改
 
 ---
 

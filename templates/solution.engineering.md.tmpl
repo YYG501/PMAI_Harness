@@ -10,6 +10,11 @@
 - 创建日期：{{CREATED_DATE}}
 - 当前 stage：3（方案设计 - 工程合同）
 
+<!-- synced_pm_view_hash: {{PM_VIEW_HASH}} -->
+<!-- 生成与维护规则见 skills/_shared/PM-VIEW-RULES.md §9.6（双文件 lazy sync）。
+     PM 视图改动时本 hash 不立即更新，gate 通过时由 reconcile 步骤刷新。
+     hash 计算：shasum -a 256 solution.md | cut -c1-12 -->
+
 ---
 
 ## 1. 数据结构定义

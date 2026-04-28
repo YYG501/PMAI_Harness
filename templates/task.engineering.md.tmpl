@@ -9,6 +9,11 @@
 - 关联文件：`task-{{TASK_NUMBER}}-{{TASK_SLUG}}.md`（同目录）
 - 创建时间：{{CREATED_DATE}}
 
+<!-- synced_pm_view_hash: {{PM_VIEW_HASH}} -->
+<!-- 生成与维护规则见 skills/_shared/PM-VIEW-RULES.md §9.6（双文件 lazy sync）。
+     PM 视图改动时本 hash 不立即更新，PM 在 task-spec 步骤 12 选 A 后由 reconcile 步骤刷新。
+     hash 计算：shasum -a 256 task-NNN-<slug>.md | cut -c1-12 -->
+
 ---
 
 ## 1. 元信息扩展（agent 用）
