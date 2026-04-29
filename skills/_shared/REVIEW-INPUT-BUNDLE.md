@@ -137,23 +137,23 @@ bundle 是派生 artifact，**不**保留 review 结果；下一轮重跑脚本�
 
 ---
 
-## 六、当前未挂入的 skill 流程
+## 六、Skill 流程挂入与配套脚本
 
-本工具目前**只是命令行工具**，没有挂入 task-confirm / task-spec 等 skill 自动调用：
+### 已挂入
 
-- task-confirm 摘要里**没有**自动提示 PM 跑 bundle
-- task-spec 落档时**不**自动生成 bundle
+- **`task-confirm`** 步骤 2 默认态摘要附「推荐 review-input bundle 命令」三条（design / eng / dx），PM 复制即跑
+- **`task-spec`** 步骤 11.0 落档完成时机械跑一次 build-review-input.py 派生 bundle（业务模块 task：eng + design / 基础设施 task：仅 eng）；步骤 11.1 / 11.2 推荐区块附 bundle 路径
+- **`task-spec`** 步骤 12.5 reconcile 流程末尾追加重新派生 bundle（避免 PM 改完后 bundle stale）
+- **`scripts/finalize-review.py`** review 跑完后 AI 调用收尾：increment runs cell + replace status / findings / UNRESOLVED / VERDICT + recompute synced_pm_view_hash
+- **`<repo>/.claude/review-conventions.json`**（可选）per-project override REVIEW_CONVENTIONS：替换 design / eng / dx 任一类型的章节关键词 / 项目级文档清单，或加新 review 类型
 
-这是有意保守的范围：先验证 bundle 本身有效，再决定要不要写进 skill。
-PM 或 AI 现阶段需手动调用脚本。
+### 仍未做
 
-下一步候选（视使用感受决定）：
+- `scripts/sediment-review.py` —— 吃 review 自然语言输出 + bundle 路径，按 source anchor 自动追加 decision 到源文件。当前靠 AI 在 chat 协助分流（U-list → PM 一次确认 → AI Edit），实测 2 个样本（example-consumer-app task-003 design / eng）都 work；脚本化 ROI 待 2-3 个新样本观察后决定。**风险**：review 输出格式不稳定，机械解析需 LLM 二次结构化（额外 token + 不稳定）。
 
-1. 在 `task-confirm` 步骤 1.5 摘要里附「review 命令清单」段落，输出三条
-   `python3 .claude/scripts/build-review-input.py ... --review {design,eng,dx}`
-2. 在 `task-spec` 落档完成后自动跑一次 design / eng bundle 生成，bundle
-   路径写进 task PM 视图末尾 GSTACK REVIEW REPORT 节
-3. 把 `REVIEW_CONVENTIONS` 从脚本内 dict 提到独立 yaml/json 配置，让
-   PM 能 per-project override
-4. 加 `scripts/sediment-review.py`：吃 review 输出文本 + bundle 路径，按
-   source anchor 自动追加 decision 到对应源文件（当前靠 PM / AI 手工分流）
+### 配套脚本一览
+
+| 脚本 | 时机 | 作用 |
+|---|---|---|
+| `build-review-input.py <task-file> --review {design,eng,dx}` | task-spec 落档时 + reconcile 后 + PM 改完源文件后 | 派生 bundle 到 `.runs/review-input-<task>-<review>.md` |
+| `finalize-review.py <pm-view> --review ... --status ... --findings ... [--unresolved N --verdict TEXT]` | review 跑完 / decision 全部分流写回后 | 更新 GSTACK REVIEW REPORT 表 + 重算 synced_pm_view_hash |

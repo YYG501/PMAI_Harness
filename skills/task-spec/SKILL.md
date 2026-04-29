@@ -282,39 +282,65 @@ python3 "$REPO_ROOT/.claude/scripts/check-doc-pm-view.py" \
 
 工程合同 (`task-NNN-<slug>.engineering.md`) 不跑 lint（脚本自动跳过 `.engineering.md`）。
 
-### 步骤 11：输出"推荐 review 工具"区块（不自动调任何 review）
+### 步骤 11：输出"推荐 review 工具"区块（不自动调任何 review）+ 派生 review-input bundle
 
 按 task 类型给出推荐清单。**AI 不得自动调用任何 review skill**（I-RV1）。
 
-业务模块 task 推荐区块：
+#### 11.0 派生 review-input bundle（落档完成后机械执行）
+
+两文件刚写完，PM 视图 / 工程合同状态相对稳定。AI **机械跑**一次 build-review-input.py，把推荐 review 类型的 bundle 都派生到 `.runs/`，PM 跑 review skill 时直接拿路径用，不用现场拼参数。
+
+业务模块 task：
+
+```bash
+python3 .claude/scripts/build-review-input.py "<task-pm-view-file>" --review eng     2>/dev/null
+python3 .claude/scripts/build-review-input.py "<task-pm-view-file>" --review design  2>/dev/null
+```
+
+基础设施 task（去掉 design）：
+
+```bash
+python3 .claude/scripts/build-review-input.py "<task-pm-view-file>" --review eng 2>/dev/null
+```
+
+每条命令输出 stdout 一行 bundle 绝对路径；AI 收下后塞进步骤 11 推荐区块输出。**bundle 是派生 artifact**，PM 改 PM 视图 / 工程合同后**会 stale**——见步骤 11.1 重生策略。
+
+#### 11.1 推荐区块（业务模块 task）
 
 ```
 ✅ task 文件已生成：
   PM 视图：<task-pm-view-path>
   工程合同：<task-engineering-path>
 
-可选 review（PM 自行选跑，跑完贴结论我帮你 append 事件）：
+review-input bundle（派生 artifact，已为你拼好；PM 视图 / 工程合同改动后请重跑 build-review-input.py 派生新 bundle）：
+  Eng：    .runs/review-input-<task>-eng.md
+  Design： .runs/review-input-<task>-design.md
+
+可选 review（PM 在主窗口对 bundle 跑，跑完贴结论我帮你 append 事件）：
   /plan-eng-review     — 架构、数据流、边界、依赖合理性
   /plan-design-review  — 交互与视觉层问题、UI 完整性
   /autoplan            — 上述两个的批量打包
 
-跑哪几个由你决定，全跳也可以。
+跑哪几个由你决定，全跳也可以。详细 bundle 约定见 skills/_shared/REVIEW-INPUT-BUNDLE.md。
 ```
 
-基础设施 task 推荐区块（去掉 design）：
+#### 11.2 推荐区块（基础设施 task，去掉 design）
 
 ```
 ✅ task 文件已生成：
   PM 视图：<task-pm-view-path>
   工程合同：<task-engineering-path>
 
-可选 review（PM 自行选跑，跑完贴结论我帮你 append 事件）：
+review-input bundle：
+  Eng： .runs/review-input-<task>-eng.md
+
+可选 review（PM 在主窗口对 bundle 跑，跑完贴结论我帮你 append 事件）：
   /plan-eng-review     — 脚手架/共用能力的设计合理性
 
 跑哪几个由你决定，全跳也可以。
 ```
 
-#### 11.1 PM 跑完 review 后的事件 append（机械记录，I-RV2）
+#### 11.3 PM 跑完 review 后的事件 append（机械记录，I-RV2）
 
 PM 在 chat 里报告"跑了 /plan-eng-review，pass，发现 N 条"之类结论后，AI 调以下命令记录事件作为审计痕迹：
 
@@ -330,7 +356,7 @@ python3 .claude/scripts/task-events.py append "<task-pm-view-file>" \
 
 **禁止**（I-RV3）：先 append 后跑、跳过 PM 直接 append、凭文档对照模拟出 review 结论。append 必须发生在 PM 明确报告结果之后。
 
-#### 11.2 PM 跑了 review 后的修改决策（仅当 PM 选择跑了）
+#### 11.4 PM 跑了 review 后的修改决策（仅当 PM 选择跑了）
 
 PM 跑完 review 决定采纳发现：
 
@@ -389,12 +415,14 @@ PM 未确认前不得进入执行。
    e. 把工程合同顶部 `synced_pm_view_hash` 改为 `$PM_VIEW_HASH_NOW`
    f. 在工程合同末尾追加 `<!-- reconcile <YYYY-MM-DD HH:MM>: <旧 hash> → <新 hash>; 变更范围: <一行说明> -->`；同步在 PM 视图主文件末尾「📁 历史档案」加一行 `<YYYY-MM-DD> reconcile：工程合同已对齐 PM 视图（<旧 hash> → <新 hash>）`
 4. 自检（PM-VIEW-RULES §9.6.6）
-5. 输出 reconcile 完成信号：
+5. **重新派生 review-input bundle**：reconcile 后 PM 视图 / 工程合同都更新了，旧 bundle 已 stale；重跑步骤 11.0 的 build-review-input.py 把 `.runs/review-input-<task>-{eng,design}.md` 都刷一遍（业务模块 task 跑两个 / 基础设施 task 跑 eng）
+6. 输出 reconcile 完成信号：
    ```
    ✅ task-NNN-<slug>.engineering.md reconcile 完成
    - hash: <旧> → <新>
    - 变更章节：[列出更新的 §]
    - 独立来源章节未动：§7 / §10 / §11
+   - review-input bundle 已重派生：.runs/review-input-<task>-{eng,design}.md
    ```
 
 ### 步骤 13：推动 /task-confirm

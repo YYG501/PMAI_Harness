@@ -27,7 +27,12 @@ import subprocess
 import sys
 from pathlib import Path
 
-REVIEW_CONVENTIONS: dict[str, dict] = {
+import json
+
+# Default convention 内置；项目可在 `<repo-root>/.claude/review-conventions.json`
+# 覆盖任意 review 类型 / 加新类型（per-project override）。脚本 merge 顺序：
+# default ← override（同 key shallow merge；新 key 直接加）。
+DEFAULT_REVIEW_CONVENTIONS: dict[str, dict] = {
     "design": {
         "purpose": "/plan-design-review 输入 — IA + 视觉 token + 动效 全覆盖",
         "pm_view": "*",
@@ -58,6 +63,31 @@ REVIEW_CONVENTIONS: dict[str, dict] = {
         "engineering_section_keywords": ["实现指引"],
     },
 }
+
+
+def load_review_conventions(repo: Path) -> dict[str, dict]:
+    """Load default conventions; merge per-project override if present.
+
+    Override location: <repo-root>/.claude/review-conventions.json
+    Schema: same as DEFAULT_REVIEW_CONVENTIONS — top-level dict keyed by
+    review type. Override entry replaces matching default entry wholesale
+    (no field-level merge — keeps semantics simple).
+    """
+    conventions = {k: dict(v) for k, v in DEFAULT_REVIEW_CONVENTIONS.items()}
+    override_path = repo / ".claude" / "review-conventions.json"
+    if override_path.is_file():
+        try:
+            override = json.loads(override_path.read_text(encoding="utf-8"))
+            if isinstance(override, dict):
+                for key, value in override.items():
+                    if isinstance(value, dict):
+                        conventions[key] = value
+        except json.JSONDecodeError as exc:
+            print(
+                f"⚠️  review-conventions.json 解析失败，回退到默认约定：{exc}",
+                file=sys.stderr,
+            )
+    return conventions
 
 
 def find_repo_root() -> Path:
@@ -182,9 +212,16 @@ def build_bundle(pm_view_path: Path, review: str) -> tuple[str, list[str]]:
     if pm_view_path.name.endswith(".engineering.md"):
         sys.exit("Error: pass PM-view file (.md), not .engineering.md")
 
-    conv = REVIEW_CONVENTIONS[review]
-    eng_view_path = pm_view_path.with_name(pm_view_path.stem + ".engineering.md")
     repo = find_repo_root()
+    conventions = load_review_conventions(repo)
+    if review not in conventions:
+        sys.exit(
+            f"Error: review type '{review}' not in conventions; "
+            f"known: {sorted(conventions.keys())}. "
+            f"Add it to <repo>/.claude/review-conventions.json or use a default."
+        )
+    conv = conventions[review]
+    eng_view_path = pm_view_path.with_name(pm_view_path.stem + ".engineering.md")
 
     warnings: list[str] = []
 
@@ -251,6 +288,8 @@ def build_bundle(pm_view_path: Path, review: str) -> tuple[str, list[str]]:
 
 
 def main() -> None:
+    repo = find_repo_root()
+    available_reviews = sorted(load_review_conventions(repo).keys())
     parser = argparse.ArgumentParser(
         description="Build a review input bundle for a task (PM 视图 + 工程视图按约定章节 + 项目级文档)"
     )
@@ -258,8 +297,8 @@ def main() -> None:
     parser.add_argument(
         "--review",
         required=True,
-        choices=sorted(REVIEW_CONVENTIONS.keys()),
-        help="Review 类型（决定按哪套约定拼章节）",
+        choices=available_reviews,
+        help=f"Review 类型（{', '.join(available_reviews)}；可在 <repo>/.claude/review-conventions.json 加自定义类型）",
     )
     parser.add_argument(
         "--out",
@@ -271,7 +310,6 @@ def main() -> None:
     pm_view = Path(args.task_file).resolve()
     bundle_text, warnings = build_bundle(pm_view, args.review)
 
-    repo = find_repo_root()
     out = (
         Path(args.out).resolve()
         if args.out
