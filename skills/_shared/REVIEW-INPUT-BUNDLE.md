@@ -85,7 +85,20 @@ python3 .claude/scripts/build-review-input.py \
 
 或者直接在 chat 里拖文件 / 用 `@<path>` 引用。
 
-### 4.3 review 跑完后（按 source anchor 沉淀回源文件）
+### 4.3 review 跑完后（默认流程：U-list → PM 一次确认 → AI 按 anchor 自动写回）
+
+**这是 default 行为，AI 不再每条问"要不要落"**：
+
+1. **AI 整理 U-list**：把 review 输出里**需要 PM 决定**的项目（taste call / 二选一 / 视觉权重判断）提取成「U1-Un」列表，**每项必带推荐 + 理由**；机械修订项（明确推论 / token 算术 / 显然错误）AI 不问，直接归入"自动写回"清单
+2. **AI 一次性向 PM 出 U-list**：表格形式，每项 ≤ 1 行；PM 回「默认全选」或者点出要改的项即可
+3. **PM 确认后 AI 直接写回**，不再问任何后续：
+   - U-list 项 → 按 anchor 路由（kind = pm-view / engineering / project-doc）到对应源文件章节
+   - 自动写回项（机械修订 + 状态 / 文案 / token 漂移修复）→ 同样按 anchor 路由
+   - reconcile hash → 用最新 PM 视图 `shasum -a 256 | cut -c1-12` 重算并写回工程合同顶部 `<!-- synced_pm_view_hash: ... -->`
+   - GSTACK REVIEW REPORT 节 → 追加本轮 runs / status / decisions / unresolved（PM 视图末）
+4. **AI 写完一次性汇报**：列改动 stat、anchor 落点、未触达的项；不要分多轮追问
+
+#### Anchor 路由参考
 
 bundle 每个章节前面都有一行 source anchor：
 
