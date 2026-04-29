@@ -165,8 +165,14 @@ deny() {
 # ======================================================
 case "$REL_PATH" in
   requirements/*/tasks/task-*.md)
+    # 用 _lib.task_parser.parse_status_from_text 检测状态字段
+    # 双兼容 v1（**状态：**）+ v2（| **状态** |）
+    SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+    source "$SCRIPT_DIR/_lib/_setup-pythonpath.sh"
+
     STATUS_MODIFIED=$(echo "$INPUT" | python3 -c "
-import sys, json, re
+import sys, json
+from _lib.task_parser import parse_status_from_text
 
 data = json.load(sys.stdin)
 ti = data.get('tool_input', data)
@@ -175,32 +181,25 @@ new = ti.get('new_string', '')
 content = ti.get('content', '')
 file_path = ti.get('file_path', '')
 
-pat = r'\*\*状态：\*\*'
-val_pat = r'\*\*状态：\*\*\s*(\S+)'
-
 # Edit tool: check if old_string or new_string touches status
 if old or new:
-    old_has = bool(re.search(pat, old))
-    new_has = bool(re.search(pat, new))
-    if old_has or new_has:
-        old_match = re.search(val_pat, old)
-        new_match = re.search(val_pat, new)
-        if old_match and new_match and old_match.group(1) != new_match.group(1):
-            print('DENY')
-            sys.exit(0)
-        elif old_has != new_has:
+    old_status = parse_status_from_text(old)
+    new_status = parse_status_from_text(new)
+    if old_status is not None or new_status is not None:
+        # 任一边有状态字段
+        if old_status != new_status:
             print('DENY')
             sys.exit(0)
 
-# Write tool: check if content has status field and file exists with different status
+# Write tool: content vs existing file
 if content and not old:
-    proposed = re.search(val_pat, content)
+    proposed = parse_status_from_text(content)
     if proposed:
         try:
             with open(file_path, 'r', encoding='utf-8') as f:
                 existing_content = f.read()
-            existing = re.search(val_pat, existing_content)
-            if existing and proposed.group(1) != existing.group(1):
+            existing = parse_status_from_text(existing_content)
+            if existing and proposed != existing:
                 print('DENY')
                 sys.exit(0)
         except FileNotFoundError:

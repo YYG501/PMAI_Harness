@@ -7,6 +7,10 @@ set -euo pipefail
 
 REQ_DIR="${1:?用法: close-req.sh <req-dir>}"
 
+# --- Setup PYTHONPATH for _lib.task_parser ---
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$SCRIPT_DIR/_lib/_setup-pythonpath.sh"
+
 # --- 找到主仓根目录 ---
 GIT_COMMON=$(git rev-parse --git-common-dir 2>/dev/null || echo "")
 if [ -n "$GIT_COMMON" ] && [ "$GIT_COMMON" != ".git" ]; then
@@ -33,12 +37,23 @@ if [ "$REQ_STAGE" != "7" ]; then
 fi
 
 # --- 校验所有 task 已关闭 ---
+# 用 _lib.task_parser.get_task_status 双兼容 v1/v2 格式
 TASKS_DIR="$REQ_DIR/tasks"
 if [ -d "$TASKS_DIR" ]; then
-  OPEN_TASKS=$(find "$TASKS_DIR" -maxdepth 1 -name "task-*.md" -exec grep -l '^\*\*状态：\*\* \(待确认\|执行中\|待验收\)' {} \; 2>/dev/null || true)
+  OPEN_TASKS=""
+  for TF in "$TASKS_DIR"/task-*.md; do
+    [ -f "$TF" ] || continue
+    case "$TF" in *.engineering.md) continue;; esac
+    STATUS=$(python3 -m _lib.task_parser get_status "$TF" 2>/dev/null || echo "")
+    case "$STATUS" in
+      待确认|执行中|待验收)
+        OPEN_TASKS="${OPEN_TASKS}${TF}"$'\n'
+        ;;
+    esac
+  done
   if [ -n "$OPEN_TASKS" ]; then
     echo "❌ 以下 task 尚未关闭：" >&2
-    echo "$OPEN_TASKS" >&2
+    printf "%s" "$OPEN_TASKS" >&2
     exit 1
   fi
 fi

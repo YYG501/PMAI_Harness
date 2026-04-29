@@ -14,6 +14,10 @@ set -euo pipefail
 
 REQ_DIR="${1:?用法: cancel-req.sh <req-dir>}"
 
+# --- Setup PYTHONPATH for _lib.task_parser ---
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$SCRIPT_DIR/_lib/_setup-pythonpath.sh"
+
 # --- 找到主仓根目录 ---
 GIT_COMMON=$(git rev-parse --git-common-dir 2>/dev/null || echo "")
 if [ -n "$GIT_COMMON" ] && [ "$GIT_COMMON" != ".git" ]; then
@@ -50,10 +54,21 @@ SRC_TASKS_DIR="$REQ_DIR/tasks"
 if [ -d "$SRC_TASKS_DIR" ]; then
   for TASK_FILE in "$SRC_TASKS_DIR"/task-*.md; do
     [ -f "$TASK_FILE" ] || continue
-    TASK_BRANCH=$(grep -m1 '^\*\*分支：\*\*' "$TASK_FILE" | sed 's/\*\*分支：\*\* //' | sed 's/ .*//' || true)
+    case "$TASK_FILE" in *.engineering.md) continue;; esac
+    # 用 _lib.task_parser 双兼容 v1/v2 取分支 + 端口（从 dev_server / 开发服务器 字段）
+    TASK_BRANCH=$(python3 -m _lib.task_parser get_branch "$TASK_FILE" 2>/dev/null || echo "")
     [ -z "$TASK_BRANCH" ] && continue
     TASK_STEM=$(basename "$TASK_FILE" .md)
-    PORT=$(grep -m1 '^\*\*开发服务器：\*\*' "$TASK_FILE" | grep -oE '[0-9]+' | tail -1 || true)
+    PORT=$(python3 -m _lib.task_parser get_meta "$TASK_FILE" 2>/dev/null | python3 -c "
+import sys, json, re
+try:
+    d = json.load(sys.stdin)
+except Exception:
+    d = {}
+v = d.get('dev_server') or ''
+m = re.search(r'\d+', v)
+print(m.group() if m else '0')
+" 2>/dev/null || echo "0")
     TASK_BRANCHES+=("$TASK_BRANCH")
     TASK_STEMS+=("$TASK_STEM")
     TASK_PORTS+=("${PORT:-0}")

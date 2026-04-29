@@ -20,22 +20,17 @@ import subprocess
 import sys
 from pathlib import Path
 
-FIELD_RE = re.compile(r"^\*\*(.+?)：\*\*\s*(.*)$")
+# 让 _lib 可以 import（build-execution-prompt.py 自身在 scripts/，_lib 是同级子目录）
+_SCRIPTS_DIR = str(Path(__file__).resolve().parent)
+if _SCRIPTS_DIR not in sys.path:
+    sys.path.insert(0, _SCRIPTS_DIR)
 
-
-def read_frontmatter_fields(text: str) -> dict[str, str]:
-    fields: dict[str, str] = {}
-    for idx, line in enumerate(text.splitlines()):
-        if idx >= 40:
-            break
-        m = FIELD_RE.match(line.strip())
-        if m:
-            fields[m.group(1).strip()] = m.group(2).strip()
-    return fields
+from _lib.task_parser import get_task_meta, engineering_path
 
 
 def derive_eng_path(pm_view: Path) -> Path:
-    return pm_view.with_suffix(".engineering.md")
+    """保留向后兼容名称——内部委托到 task_parser.engineering_path。"""
+    return engineering_path(pm_view)
 
 
 def git_show_toplevel(worktree: Path) -> str:
@@ -63,10 +58,13 @@ def task_id_from_filename(pm_view: Path) -> str:
 
 def build_prompt(pm_view: Path) -> str:
     text = pm_view.read_text(encoding="utf-8")
-    fields = read_frontmatter_fields(text)
+    # 用 _lib.task_parser 双兼容 v1/v2 读字段（替换原 read_frontmatter_fields）
+    meta = get_task_meta(pm_view)
 
-    worktree_field = fields.get("worktree", "").strip()
-    if worktree_field and worktree_field not in ("（执行时由 create-task-worktree.sh 填写）",):
+    worktree_field = (meta.get("worktree") or "").strip()
+    if worktree_field and worktree_field not in (
+        "（执行时由 create-task-worktree.sh 填写）",
+    ):
         worktree = Path(worktree_field).expanduser()
     else:
         worktree = pm_view.parent.parent.parent
