@@ -215,30 +215,90 @@ test_resolver_claude_code_model_invalid() {
 # build-execution-prompt.py tests
 # ======================================================================
 
-test_prompt_has_six_sections() {
-  start_test "prompt: all 6 sections present"
+test_prompt_envelope_legacy_singlefile() {
+  start_test "prompt: 旧单文件 task → 信封含 PM 视图路径 + 退化指令 + git ban"
   make_sandbox
   write_task_file "$SANDBOX/task.md" "codex" ""
   out=$(cd "$SANDBOX" && python3 .claude/scripts/build-execution-prompt.py task.md)
   missing=""
-  grep -q "执行上下文" <<< "$out" || missing="$missing 元信息"
-  grep -q "启动前必读" <<< "$out" || missing="$missing 必读"
-  grep -q "允许写入" <<< "$out" || missing="$missing 允许"
-  grep -q "禁止写入" <<< "$out" || missing="$missing 禁止"
-  grep -q "未处理的 PM 反馈" <<< "$out" || missing="$missing 反馈"
-  grep -q "验收标准" <<< "$out" || missing="$missing 验收"
-  grep -q "写回职责" <<< "$out" || missing="$missing 写回"
+  grep -q "执行上下文" <<< "$out" || missing="$missing 上下文"
+  grep -q "执行指令" <<< "$out" || missing="$missing 指令"
+  grep -q "PM 视图（业务真相）" <<< "$out" || missing="$missing PM路径"
+  grep -q "工程合同：（不存在" <<< "$out" || missing="$missing 退化提示"
+  # 只匹配 basename：mktemp 路径在 macOS 上 /var → /private/var symlink，全路径 grep 不稳
+  grep -qE "/task\.md\b" <<< "$out" || missing="$missing 文件路径"
   grep -q "禁止.*git.*commit" <<< "$out" || missing="$missing git-ban"
-  if [ -z "$missing" ]; then pass_test; else fail_test "missing sections:$missing"; fi
+  if [ -z "$missing" ]; then pass_test; else fail_test "missing in envelope:$missing"; fi
   teardown_sandbox
 }
 
-test_prompt_allowlist_extracted() {
-  start_test "prompt: allowlist extracted from 执行范围"
+test_prompt_envelope_two_files() {
+  start_test "prompt: 新两文件 task → 信封同时引用 PM 视图 + 工程合同 + 工程合同指令"
+  make_sandbox
+  write_task_file "$SANDBOX/task-001-foo.md" "codex" ""
+  cat > "$SANDBOX/task-001-foo.engineering.md" <<'EOF'
+# Task 001 Engineering: foo
+
+## 1. 元信息扩展（agent 用）
+
+**executor：** codex
+**executor_model：**
+**审查工具：** /review
+
+## 3. 启动前必读
+
+1. docs/CONTEXT.md
+EOF
+  out=$(cd "$SANDBOX" && python3 .claude/scripts/build-execution-prompt.py task-001-foo.md)
+  missing=""
+  grep -q "PM 视图（业务真相）" <<< "$out" || missing="$missing PM路径"
+  grep -q "工程合同（实现真相）" <<< "$out" || missing="$missing eng路径"
+  # 只匹配 basename：mktemp 路径在 macOS 上 /var → /private/var symlink，全路径 grep 不稳
+  grep -qE "/task-001-foo\.md\b" <<< "$out" || missing="$missing PM文件名"
+  grep -qE "/task-001-foo\.engineering\.md\b" <<< "$out" || missing="$missing eng文件名"
+  grep -q "工程合同 §3.*启动前必读" <<< "$out" || missing="$missing eng指令"
+  grep -q "task: task-001" <<< "$out" || missing="$missing taskID"
+  # 退化提示在新格式下不应出现
+  if grep -q "工程合同：（不存在" <<< "$out"; then missing="$missing 误判旧格式"; fi
+  if [ -z "$missing" ]; then pass_test; else fail_test "missing/wrong in envelope:$missing"; fi
+  teardown_sandbox
+}
+
+test_prompt_envelope_no_section_splice() {
+  start_test "prompt: 信封不再 splice section 内容（hello.txt 不应出现在信封里）"
   make_sandbox
   write_task_file "$SANDBOX/task.md" "codex" ""
   out=$(cd "$SANDBOX" && python3 .claude/scripts/build-execution-prompt.py task.md)
-  if grep -q "hello.txt" <<< "$out"; then pass_test; else fail_test "hello.txt not in allowlist"; fi
+  # write_task_file 在 task.md 里写了 "hello.txt"（执行范围 + 验收标准）
+  # 信封改造后不再 inject 这些 section，所以 hello.txt 不应该出现
+  if grep -q "hello.txt" <<< "$out"; then
+    fail_test "信封仍在 splice section 内容（hello.txt 出现在输出）"
+  else
+    pass_test
+  fi
+  teardown_sandbox
+}
+
+test_resolver_reads_engineering_contract() {
+  start_test "resolver: 优先读 .engineering.md §1 的 executor 字段"
+  make_sandbox
+  write_settings_json "$SANDBOX"
+  # PM 视图字段写 cursor-agent，工程合同写 codex —— 应取工程合同的值
+  write_task_file "$SANDBOX/task-001-foo.md" "cursor-agent" ""
+  cat > "$SANDBOX/task-001-foo.engineering.md" <<'EOF'
+# Task 001 Engineering
+
+## 1. 元信息扩展
+
+**executor：** codex
+**executor_model：**
+EOF
+  out=$(cd "$SANDBOX" && python3 .claude/scripts/resolve-executor.py task-001-foo.md)
+  if _has_field "$out" executor codex; then
+    pass_test
+  else
+    fail_test "expected codex (from eng contract), got: $out"
+  fi
   teardown_sandbox
 }
 
@@ -622,8 +682,10 @@ test_resolver_invalid_executor
 test_resolver_claude_code_model_valid
 test_resolver_claude_code_model_invalid
 
-test_prompt_has_six_sections
-test_prompt_allowlist_extracted
+test_prompt_envelope_legacy_singlefile
+test_prompt_envelope_two_files
+test_prompt_envelope_no_section_splice
+test_resolver_reads_engineering_contract
 
 test_classify_exit_10
 test_classify_exit_99_log_scan

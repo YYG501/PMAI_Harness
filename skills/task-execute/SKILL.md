@@ -249,12 +249,8 @@ if [ -f "$PENDING_FILE" ]; then
   echo "  先跑 preflight，通过后直接进入自审阶段（step 4）。"
   echo ""
 
-  # Preflight: 检查 worktree 改动是否超出 allowlist
-  # 调 build-execution-prompt.py 不可行（不提供 allowlist），这里直接跟 task 文件解析
-  ALLOWLIST=$(python3 "$MAIN_REPO_ROOT/.claude/scripts/parse-task-scope.py" "$TASK_FILE" 2>/dev/null || true)
-  # 简化版：只检查文件是否在 allowlist（详细实现见批次 7 的完整脚本，这里用宽松策略）
-  CHANGED=$(git -C "$TASK_WORKTREE" diff --name-only "$BASELINE_SHA" HEAD 2>/dev/null || \
-            git -C "$TASK_WORKTREE" status --porcelain | awk '{print $2}')
+  # Preflight：scope 越界校验由 _gate.sh adapter_postcheck 在 dispatch 路径承担；
+  # manual resume 路径不经 adapter，scope 校验降级为「PM 自负责」+ 下面的执行日志检查兜底。
 
   # 检查执行日志和文档偏差 section 已填
   if ! grep -q '^### 执行报告' "$TASK_FILE"; then

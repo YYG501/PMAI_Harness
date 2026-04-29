@@ -1,6 +1,10 @@
 #!/usr/bin/env python3
 """Resolve executor + model for a task.
 
+Field source (新两文件格式 → 旧单文件格式 fallback):
+  - 优先读 <task>.engineering.md §1（**executor：** / **executor_model：**）
+  - eng 文件不存在 → 退化读 PM 视图（旧 req-001 / req-002 / 单文件 task 兼容）
+
 Inheritance chain (2 layers):
   executor: task field → settings.json executor.default → "claude-code"
   model:    task field → settings.json executor.models[<executor>] → null
@@ -55,6 +59,11 @@ def read_task_fields(task_file: Path) -> dict[str, str]:
     return fields
 
 
+def derive_eng_path(pm_view: Path) -> Path:
+    """<task>.md → <task>.engineering.md."""
+    return pm_view.with_suffix(".engineering.md")
+
+
 def load_settings(repo_root: Path) -> dict:
     settings_file = repo_root / ".claude" / "settings.json"
     if not settings_file.exists():
@@ -71,7 +80,9 @@ def die(msg: str, code: int = 1) -> None:
 
 
 def resolve(task_file: Path) -> dict:
-    fields = read_task_fields(task_file)
+    eng_path = derive_eng_path(task_file)
+    field_source = eng_path if eng_path.exists() else task_file
+    fields = read_task_fields(field_source)
     repo_root = find_repo_root()
     settings = load_settings(repo_root)
     exec_cfg = settings.get("executor", {})
