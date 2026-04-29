@@ -349,8 +349,14 @@ if [ -z "${MANUAL_RESUME:-}" ]; then
     EXIT_CODE=$?
     # 超 10 分钟会被 Bash tool timeout。如果遇上，改用：
     #   bash .claude/scripts/run-bg.sh "$LOG_PATH" bash "$ADAPTER"
-    # 然后 Claude 用 Monitor `until [ -f "$LOG_PATH.exit" ]; do sleep 60; done`
-    # 等 EXIT_FILE 出现后 cat 拿 exit code。这是逃生路径，不是默认模式。
+    # 然后 Claude 用 **Bash run_in_background**（不是 Monitor —— Monitor 默认 5min 超时
+    # 会被静默 cut）起一个 waiter，同时兜「正常退」和「卡死」两条信号：
+    #   until [ -f "$LOG_PATH.exit" ] || [ -f "$LOG_PATH.stall" ]; do sleep 60; done
+    #   if [ -f "$LOG_PATH.stall" ]; then echo "STALLED at $(cat "$LOG_PATH.stall")"
+    #   else echo "exit_code=$(cat "$LOG_PATH.exit")"; fi
+    # run-bg.sh 自带 watchdog（默认 180s 无 log 增长 → 写 .stall，不杀子进程）。
+    # waiter 输出 STALLED → 进程仍在跑，处理权交 PM（杀 / 等 / 转 manual）。
+    # 这是逃生路径，不是默认模式。
 
     if [ "$EXIT_CODE" -ne 0 ]; then
       CLASSIFICATION=$(bash "$MAIN_REPO_ROOT/.claude/scripts/classify-failure.sh" "$EXIT_CODE" "$LOG_PATH")

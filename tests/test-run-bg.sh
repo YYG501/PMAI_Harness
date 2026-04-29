@@ -8,6 +8,9 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 FRAMEWORK_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 RUN_BG="$FRAMEWORK_ROOT/scripts/run-bg.sh"
 
+# 默认关 watchdog，避免 60s sleep 残留后台进程；stall 测试自己开
+export RUN_BG_STALL_SECONDS=0
+
 PASS=0
 FAIL=0
 FAILURES=()
@@ -108,10 +111,89 @@ test_returns_immediately() {
   rm -rf "$sandbox"
 }
 
+test_no_stall_on_active_log() {
+  start_test "run-bg.sh: cmd 在写 log → watchdog 不写 STALL_FILE"
+  local sandbox; sandbox=$(mktemp -d "${TMPDIR:-/tmp}/runbg.XXXXXX")
+  local log="$sandbox/log"
+  # 每 0.3s 写一行，跑 2s；阈值 1s，watchdog 不应触发
+  RUN_BG_STALL_SECONDS=1 RUN_BG_WATCHDOG_INTERVAL=1 \
+    bash "$RUN_BG" "$log" bash -c '
+      for i in 1 2 3 4 5 6; do echo "tick $i"; sleep 0.3; done
+    ' >/dev/null
+  wait_for_exit_file "$log.exit"
+  # 给 watchdog 多一轮检查时间（cmd 退出后 watchdog 立刻看到 EXIT_FILE 退）
+  sleep 1.5
+  if [ ! -f "$log.stall" ] && [ "$(cat "$log.exit")" = "0" ]; then
+    pass_test
+  else
+    fail_test "STALL_FILE 不应存在（exit=$(cat "$log.exit" 2>/dev/null), stall=$([ -f "$log.stall" ] && echo yes || echo no)）"
+  fi
+  rm -rf "$sandbox"
+}
+
+test_stall_detected_when_log_quiet() {
+  start_test "run-bg.sh: log 不增长超过阈值 → 写 STALL_FILE（且不杀 cmd）"
+  local sandbox; sandbox=$(mktemp -d "${TMPDIR:-/tmp}/runbg.XXXXXX")
+  local log="$sandbox/log"
+  # cmd 写一行就静默 sleep 5s；阈值 2s，watchdog 周期 1s
+  RUN_BG_STALL_SECONDS=2 RUN_BG_WATCHDOG_INTERVAL=1 \
+    bash "$RUN_BG" "$log" bash -c '
+      echo "started"; sleep 5; echo "done"
+    ' >/dev/null
+  # 等 stall 文件出现（最多 5s）
+  local i=0
+  while [ ! -f "$log.stall" ] && [ "$i" -lt 50 ]; do
+    sleep 0.1; i=$((i + 1))
+  done
+  if [ ! -f "$log.stall" ]; then
+    fail_test "STALL_FILE 未出现"
+    rm -rf "$sandbox"
+    return
+  fi
+  # 验证 cmd 没被杀（EXIT_FILE 此刻不应存在，stall 不杀进程）
+  if [ -f "$log.exit" ]; then
+    fail_test "STALL 时 EXIT_FILE 已存在（watchdog 不应杀 cmd）"
+    rm -rf "$sandbox"
+    return
+  fi
+  # 等 cmd 自然完成
+  wait_for_exit_file "$log.exit"
+  if [ "$(cat "$log.exit")" = "0" ]; then
+    # 验证 STALL_FILE 内容是 ISO-8601 时间戳
+    if grep -qE '^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$' "$log.stall"; then
+      pass_test
+    else
+      fail_test "STALL_FILE 内容不是 ISO-8601: $(cat "$log.stall")"
+    fi
+  else
+    fail_test "cmd 自然退出 code 应为 0，实际 $(cat "$log.exit")"
+  fi
+  rm -rf "$sandbox"
+}
+
+test_watchdog_disabled_by_env() {
+  start_test "run-bg.sh: RUN_BG_STALL_SECONDS=0 → 永不写 STALL_FILE"
+  local sandbox; sandbox=$(mktemp -d "${TMPDIR:-/tmp}/runbg.XXXXXX")
+  local log="$sandbox/log"
+  RUN_BG_STALL_SECONDS=0 RUN_BG_WATCHDOG_INTERVAL=1 \
+    bash "$RUN_BG" "$log" bash -c 'sleep 2' >/dev/null
+  sleep 2.5  # 跨过假想的 stall 阈值
+  wait_for_exit_file "$log.exit"
+  if [ ! -f "$log.stall" ]; then
+    pass_test
+  else
+    fail_test "STALL_FILE 不应存在（watchdog 已关）"
+  fi
+  rm -rf "$sandbox"
+}
+
 echo "▶ Running test-run-bg.sh"
 echo "─────────────────────────────────────────"
 test_happy_path
 test_nonzero_exit
 test_atomic_exit_file
 test_returns_immediately
+test_no_stall_on_active_log
+test_stall_detected_when_log_quiet
+test_watchdog_disabled_by_env
 report_results
