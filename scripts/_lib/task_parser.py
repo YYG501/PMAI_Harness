@@ -157,11 +157,16 @@ def read_section(
 
 
 def _extract_section(text: str, heading_re: re.Pattern) -> Optional[str]:
+    """提取 section 内容。终结条件：下一个 ## heading 或 markdown horizontal rule（---）。
+
+    fixture 里 section 用 `---` 作为分隔符（PM 视图惯例），所以 `---` 也算 section 边界。
+    """
     m = heading_re.search(text)
     if not m:
         return None
     start = m.end()
-    next_m = re.search(r"^##\s+", text[start:], re.MULTILINE)
+    # 终结：下一个 ## heading 或 ---（horizontal rule）
+    next_m = re.search(r"^(##\s+|-{3,}\s*$)", text[start:], re.MULTILINE)
     end = start + next_m.start() if next_m else len(text)
     return text[start:end].strip()
 

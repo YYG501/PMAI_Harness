@@ -10,6 +10,13 @@ import subprocess
 import sys
 from pathlib import Path
 
+# 让 _lib 可以 import（task-transition.py 自身在 scripts/，_lib 是同级子目录）
+_SCRIPTS_DIR = str(Path(__file__).resolve().parent)
+if _SCRIPTS_DIR not in sys.path:
+    sys.path.insert(0, _SCRIPTS_DIR)
+
+from _lib.task_parser import read_section, has_meaningful_content
+
 # 兼容两种 task 元信息格式：
 #   旧版（段落）：**字段：** 值
 #   新版（任务卡表格）：| **字段** | 值 |
@@ -198,21 +205,36 @@ def check_preconditions(
         check_serial_constraint(task_file)
 
     elif current == "执行中" and target == "待验收":
-        # 1. 文档偏差 section 已填
-        if not has_section_content(text, "文档偏差"):
-            # Check for "无偏差"
-            doc_section = re.search(
-                r"^## 文档偏差.*?(?=^## |\Z)", text, re.MULTILINE | re.DOTALL
-            )
-            if doc_section and "无偏差" not in doc_section.group():
-                print(
-                    "Error: 文档偏差 section 未填写。请填写文档偏差或写'无偏差'。",
-                    file=sys.stderr,
-                )
-                sys.exit(1)
+        # 修复 P0-1：用 _lib.task_parser.read_section 跨文件查找。
+        # 新格式（v2）：section 在 task.engineering.md 的 §10 / §11
+        # 旧格式（v1）：section 在 PM 视图（task.md）
+        # parser 自动按"工程合同优先 → PM 视图 fallback"查找。
 
-        # 2. 自审记录 section 有内容
-        if not has_section_content(text, "自审记录"):
+        # 1. 文档偏差 section
+        found, content = read_section(task_file, "文档偏差")
+        if not found:
+            print(
+                "Error: 文档偏差 section 未找到（PM 视图与工程合同均无此 section）。",
+                file=sys.stderr,
+            )
+            sys.exit(1)
+        # 允许"无偏差"或有实质内容
+        if not has_meaningful_content(content) and "无偏差" not in (content or ""):
+            print(
+                "Error: 文档偏差 section 未填写。请填写文档偏差或写'无偏差'。",
+                file=sys.stderr,
+            )
+            sys.exit(1)
+
+        # 2. 自审记录 section
+        found, content = read_section(task_file, "自审记录")
+        if not found:
+            print(
+                "Error: 自审记录 section 未找到（PM 视图与工程合同均无此 section）。",
+                file=sys.stderr,
+            )
+            sys.exit(1)
+        if not has_meaningful_content(content):
             print(
                 "Error: 自审记录 section 为空。请至少完成一次自审并记录结果。",
                 file=sys.stderr,

@@ -254,6 +254,37 @@ class TestSectionEdgeCases(unittest.TestCase):
             found, content = read_section(pm, "文档偏差")
             self.assertFalse(found)  # 当前是预期行为，模板要求 `## N. <name>`
 
+    def test_section_terminated_by_horizontal_rule(self):
+        """fixture 里用 `---` 作 section 分隔符——content 应在 `---` 处截断。"""
+        with tempfile.TemporaryDirectory() as d:
+            pm = Path(d) / "task-001-test.md"
+            pm.write_text(
+                "# Task\n\n"
+                "## 文档偏差\n无偏差\n\n---\n\n"
+                "## 自审记录\nfilled\n"
+            )
+
+            found, content = read_section(pm, "文档偏差")
+            self.assertTrue(found)
+            self.assertIn("无偏差", content)
+            self.assertNotIn("自审", content)
+            self.assertNotIn("---", content)  # 截断在 --- 之前
+
+    def test_empty_section_terminated_by_hr_returns_empty(self):
+        """空 section 后接 `---` → content strip 后为空 → has_meaningful_content False。"""
+        with tempfile.TemporaryDirectory() as d:
+            pm = Path(d) / "task-001-test.md"
+            pm.write_text(
+                "# Task\n\n"
+                "## 文档偏差\n\n\n---\n\n"
+                "## 自审记录\nfilled\n"
+            )
+
+            found, content = read_section(pm, "文档偏差")
+            self.assertTrue(found)
+            self.assertEqual(content, "")  # strip 后为空
+            self.assertFalse(has_meaningful_content(content))
+
 
 class TestCLIExitCodes(unittest.TestCase):
     """spot-check #2: CLI 入口的 exit code 校验。"""
