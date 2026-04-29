@@ -272,3 +272,49 @@
 - **Why**: 两件事概念不同、code path 不同（已经在 §1.5/1.6 分流，但越加越多）。如果以后还要加第三种（比如沉淀 user story 进 user-flow.md），doc-update 会变成超大 skill
 - **可能解法**：拆成 doc-deviation（处理偏差）+ doc-sink（沉淀），各自独立 SKILL.md
 - **触发条件**：plan-eng-review 发现 doc-update 加任何新职责时启动
+
+---
+
+## v3.5 探测档延迟决策（来自 plan-eng-review 2026-04-29 / 阶段 4.5）
+
+来源：`实施计划-实现程度与格式对齐.md` 阶段 4.5（项目级工程结构约束 — 探测档）。完整档功能延后做，先看探测档跑过 1-2 个真实 req 的实证再决定。
+
+### TD-1: 探测档 → 完整档（compare + restructure-suggest）
+- **What**: 在探测档基础上加 `scripts/compare-structure-to-intent.py`（生成改造建议报告）+ `skills/restructure-suggest/SKILL.md`（PM 主动调用重做对比）
+- **Why**: 探测档让 detect 自动写 CLAUDE.md，但**不主动给改造建议**。已有项目结构与 PM 意图错配时（如 ExampleConsumerApp system 风格 + PM 想做原型），目前只能 PM 自己读 CLAUDE.md auto-detected 段判断是否需要改造
+- **Pros**: PM 看到具体"砍 framework/page/Template / 保留 components/ui"等可执行建议；改造作为普通 req 走完整流程
+- **Cons**: +1 天工程；首次手填或手动 compare 的成本可能就够了（YAGNI）；启发式生成"改造建议"可能误判
+- **Context**: ExampleConsumerApp 与 AI 对话已经手动得出过类似建议（"砍 framework/page/Template / framework/hooks / framework/context / modules/pages/ / modules/*/lib/store"，"保留 components/ui / framework/layout / app/ / framework/config"）—— 那次对话证明这件事**可以人工做**，但是否值得自动化要看 PM 第二次第三次想用时的痛感
+- **触发条件**: 探测档跑过 ≥ 1 个真实 req 后，PM 实际撞到"想知道现状 vs 意图差距"的需求
+- **Depends on**: 阶段 4.5 探测档已上线 + 至少 1 个真实 req 用过新流程
+
+### TD-2: 旧 req（已 confirmed task）应对 5.0 新增 CLAUDE.md「工程结构约束」段
+- **What**: 当前兼容档让旧 task 跳过项目级工程结构约束读取。新决策：让旧 task 也按字段级 hash 同步新约束
+- **Why**: 5.0 上线后，旧 req 的 task-execute 不读 CLAUDE.md「工程结构约束」段——AI 实现时按旧 prompt 走，可能仍抽 Template。但旧 task 已经跑了一半，强制同步可能破坏已 confirmed 契约
+- **Pros**: 全项目一致；旧 task 也享受工程结构约束
+- **Cons**: 字段级 stale 可能频繁触发；PM 要为旧 task 做 ack-stale 决策（PM 心智上升）
+- **Context**: 类似 v3 阶段 8.3 字段级 stale 的设计，但作用对象是 CLAUDE.md「工程结构约束」段而不是 solution.md「本轮实现程度」字段
+- **触发条件**: 探测档跑过且发现"旧 task 实现跟新 task 工程结构差异明显"
+- **Depends on**: 阶段 4.5 + 阶段 8.3 字段级 stale 机制都已上线
+
+### TD-3: 多 prototype-root 项目（monorepo / 多产品仓）增强
+- **What**: 当前 detect 仅识别**第一个** prototype-root（`prototypes/src/` 或 `src/`）。未来支持 monorepo / 多产品仓——按 `apps/<app>/src/` 或类似路径分别管理
+- **Why**: PM-AI-Workflow 当前服务的项目大多是单仓单原型（如 ExampleConsumerApp），但未来可能服务 monorepo
+- **Pros**: 支持复杂仓库结构
+- **Cons**: 复杂度上升（每个 app 一份 CLAUDE.md「工程结构约束」段？还是一份全局段配多 root？）；当前 PM 单仓单原型已够
+- **Context**: 阶段 4.5.1 detect schema 的 `scan_roots_default` 已列 `apps/*/src/`，但只取第一个命中的根。增强方向是返回多个 root 让 PM 选
+- **触发条件**: PM-AI-Workflow 实际服务过 monorepo 项目
+- **Depends on**: 阶段 4.5 已上线
+
+### TD-4: detect 信号 schema 加版本号 + migration 脚本
+- **What**: 当前 schema 用 `schema_version: 1` 字段标版本，但**没有 migration 脚本**——schema 演进时旧项目 CLAUDE.md auto-detected 段不会自动升级
+- **Why**: schema 在 v1 阶段尚稳定，但若未来加新信号（如检测 `services/` 层 / `react-query` 用法等），旧 CLAUDE.md auto-detected 段会和新 schema 不匹配
+- **Pros**: 未来 schema 演进有明确 migration 路径
+- **Cons**: 现在还在 v1，未来 v2 才需要——典型 YAGNI；写一份 migration 脚本约 0.5 天
+- **Context**: 类似 v3 阶段 1 的 fixture v1/v2 双轨思路
+- **触发条件**: 实际触发 schema_version: 2（schema 加新信号或改信号语义）
+- **Depends on**: schema 真有第二个版本
+
+---
+
+**注**：TD-5（DESIGN.md vs CLAUDE.md「工程结构约束」边界文档）已直接落到 CLAUDE.md.tmpl 段顶部注释（阶段 4.5.3），不进 TODOS。
