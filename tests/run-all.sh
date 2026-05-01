@@ -6,6 +6,7 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 SUITES=(
   test-check-branch.sh
   test-task-transition.sh
+  test-fixture-v2.sh
   test-task-spec.sh
   test-task-pm-feedback.sh
   test-task-plan.sh

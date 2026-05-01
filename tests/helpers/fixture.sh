@@ -111,7 +111,17 @@ EOF
   echo "$req_dir"
 }
 
-# Create a fake task in a req's tasks/ dir AND commit it to the req branch
+# Create a fake task in a req's tasks/ dir AND commit it to the req branch.
+#
+# 双轨：
+#   fixture_create_task    = v1 单文件（旧格式，inline `**字段：**`）
+#   fixture_create_task_v2 = v2 双文件（PM 视图表格 + .engineering.md 工程合同）
+#
+# 默认 fixture_create_task = v1（保持现有 15 个 suite 不回归）。
+# 新写测试用 v2，验证 parser 在生产真实格式上的行为。
+# v1/v2 双轨保留至双模式上线后统一清理（见 TODOS.md / 设计-新两文件格式对齐 Q3）。
+
+# v1 单文件 fixture（旧格式）
 # Usage: fixture_create_task <req-dir> <task-num> <name> <status> [review_tools]
 fixture_create_task() {
   local req_dir="$1"
@@ -183,6 +193,179 @@ EOF
       cd "$req_worktree_root"
       git add -A 2>/dev/null
       git commit -q -m "create $task_slug" 2>/dev/null || true
+    )
+  fi
+
+  echo "$task_file"
+}
+
+# v2 双文件 fixture（PM 视图表格 + .engineering.md 工程合同）
+# Usage: fixture_create_task_v2 <req-dir> <task-num> <name> <status> [review_tools] [module]
+fixture_create_task_v2() {
+  local req_dir="$1"
+  local task_num="$2"
+  local name="$3"
+  local status="${4:-待确认}"
+  local review_tools="${5:-/qa}"
+  local module="${6:-基础设施}"
+  local task_slug="task-${task_num}-${name}"
+  local task_file="$req_dir/tasks/${task_slug}.md"
+  local eng_file="$req_dir/tasks/${task_slug}.engineering.md"
+
+  # req_dir 在某个 req worktree 里。找到 worktree 根
+  local req_worktree_root="$req_dir"
+  while [ "$req_worktree_root" != "/" ] && [ ! -d "$req_worktree_root/.git" ] && [ ! -f "$req_worktree_root/.git" ]; do
+    req_worktree_root=$(dirname "$req_worktree_root")
+  done
+
+  # PM 视图（表格元字段；section 用 --- 分隔）
+  cat >"$task_file" <<EOF
+# Task $task_num: $name
+
+> 本文件是 PM 视图。工程实现细节见 [\`${task_slug}.engineering.md\`](./${task_slug}.engineering.md)。
+
+---
+
+## 📌 任务卡
+
+| | |
+|---|---|
+| **状态** | $status |
+| **所属模块** | $module |
+| **所属模块章节** |  |
+| **dev server** |  |
+| **worktree** |  |
+| **创建时间** | 2026-04-12 |
+| **分支** | $task_slug |
+
+**依赖**：
+- 无
+
+**做什么**：Test task
+
+---
+
+## 🎯 关键产品决策
+
+本 task 无关键产品决策（fixture）。
+
+---
+
+## 📐 产物预览
+
+无（基础设施 task）
+
+---
+
+## 📋 功能清单
+
+无（基础设施 task）
+
+---
+
+## 📦 范围
+
+**改**
+- test.txt
+
+**不改**
+- 其他全部
+
+---
+
+## ✅ 验收清单（PM 走查）
+
+### 主路径
+- [ ] 完成
+
+---
+
+## 📁 历史档案（验收时打开看最新一轮）
+
+### 执行日志（agent 填写，不要删除历史记录）
+
+无
+
+---
+
+### PM 反馈（orchestrator 代为追加，agent 重跑前必读）
+
+无
+EOF
+
+  # 工程合同（§10 文档偏差 / §11 自审记录 是 parser read_section 的目标）
+  cat >"$eng_file" <<EOF
+# Task $task_num Engineering: $name
+
+> 本文件是工程合同。PM 视图见 [\`${task_slug}.md\`](./${task_slug}.md)。
+
+- 关联文件：\`${task_slug}.md\`
+- 创建时间：2026-04-12
+
+<!-- synced_pm_view_hash: deadbeefcafe -->
+
+---
+
+## 1. 元信息扩展
+
+**executor：** claude-code
+**executor_model：**
+**审查工具：** $review_tools
+
+---
+
+## 3. 启动前必读
+
+1. docs/modules/test.md
+
+---
+
+## 4. 功能清单工程版
+
+无（fixture）
+
+---
+
+## 5. 实现指引
+
+无（fixture）
+
+---
+
+## 6. 易错点 / 禁止项
+
+| # | 禁止行为 | 后果 / 理由 | 来源 |
+|---|---|---|---|
+
+---
+
+## 9. 工程层验收清单
+
+- [ ] 完成
+
+---
+
+## 10. 文档偏差
+
+无偏差
+
+---
+
+## 11. 自审记录
+
+### 自审 1 - 2026-04-12 10:00
+**工具：** $review_tools
+**结果：** pass
+**详细发现：** 无
+**遗留问题：** 无
+EOF
+
+  # Commit both files to req branch so task worktree sees them
+  if [ -n "$req_worktree_root" ] && [ -d "$req_worktree_root/.git" ] || [ -f "$req_worktree_root/.git" ]; then
+    (
+      cd "$req_worktree_root"
+      git add -A 2>/dev/null
+      git commit -q -m "create $task_slug (v2)" 2>/dev/null || true
     )
   fi
 

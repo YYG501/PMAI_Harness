@@ -5,19 +5,22 @@
 
 ---
 
-## 当前位置（2026-04-29）
+## 当前位置（2026-05-01）
 
-阶段 **1+2 完成**，5 commits 落 main：
+阶段 **1+2+3a 完成**：
 
 ```
-88bcc6e  fix(parser-migrate): 4 处剩余解析点迁移到 _lib.task_parser
-dc848d9  fix(task-transition): 用 read_section 跨文件查找替换旧 regex
-2c9ec03  feat(parser): shared task parser v1/v2 双兼容 + 25 单测覆盖
-97f8d61  docs(plan): v3.5 实施计划与设计文档族 + 四轮 review 沉淀
-d131557  feat(task-execute): run-bg.sh watchdog + stall 检测协议升级
+（本次新增）
+            feat(fixture-v2): 双文件 v2 fixture + 7 smoke 测试
+（前序，已落 main）
+88bcc6e     fix(parser-migrate): 4 处剩余解析点迁移到 _lib.task_parser
+dc848d9     fix(task-transition): 用 read_section 跨文件查找替换旧 regex
+2c9ec03     feat(parser): shared task parser v1/v2 双兼容 + 25 单测覆盖
+97f8d61     docs(plan): v3.5 实施计划与设计文档族 + 四轮 review 沉淀
+d131557     feat(task-execute): run-bg.sh watchdog + stall 检测协议升级
 ```
 
-**修复 4 个 P0/P1 bug** + 建立 parser 基础设施 + **27 单测**就位。工作区干净。
+**修复 4 个 P0/P1 bug** + parser 基础设施 + v2 fixture + 总测试 **177 通过 / 21 baseline 失败**（与 3a 改动无关）。
 
 | Bug | 状态 |
 |---|---|
@@ -29,36 +32,33 @@ d131557  feat(task-execute): run-bg.sh watchdog + stall 检测协议升级
 
 ---
 
-## 下一步：阶段 3（fixture v2 重写）
+## 下一步：阶段 3b（21 条 baseline 失败修复）
 
-详见：`实施计划-实现程度与格式对齐.md` 阶段 3 + `设计-新两文件格式对齐.md` §四 4.3
+⚠️ **STATUS 之前对阶段 3 框架描述有误**。实查后：5 个失败 suite **没一个调用 fixture**，21 条失败本质是 **test grep 字符串 vs SKILL.md / 模板内容漂移**。3a（fixture v2）单独完成、独立无副作用，已落本次 commit。3b 是单独的逐条修复工作，与 fixture 无关。
 
-预期工作：
-- `tests/helpers/fixture.sh` 加 `make_task_v2`（生成 PM 视图 + .engineering.md 工程合同双文件）
-- 保留 `make_task_v1` 作 parser 双兼容性测试
-- 改 5 个 baseline 失败 suite 用 v2 fixture
-- 修复 P1-7（fixture 与新模板对齐）
+### 3a 已完成
+- `fixture_create_task_v2`（双文件，PM 视图表格 + `.engineering.md` §10/§11）
+- 旧 `fixture_create_task` 保留作 v1（双轨直到双模式上线后清理；见 TODOS Q3）
+- `tests/test-fixture-v2.sh` 7 条 smoke：detect_format / get_status / get_branch / read_section §10+§11 / task-transition 端到端 → 全绿
+- 注册到 `run-all.sh`
 
-**估时**：plan 0.5 天 / 实测预期 ~15-30 分钟（按阶段 1+2 的 ~16-30x 加速）
+### 3b 待做（5 个 suite × 21 条失败）
+
+每条要二选：**test 字符串过期**（更新 test）/ **SKILL 真丢规格**（回退或补回 SKILL）。**禁止用 grep 改 SKILL 把真规格删了**。
+
+| Suite | 失败数 | 表面失败模式 |
+|---|---|---|
+| `test-task-spec.sh` | 8 | 找不到「用户使用流程」/「步骤 6.5」等 section；找不到旧字段 `**所属模块：**`（已改 v2 表格） |
+| `test-task-plan.sh` | 7 | 步骤号偏移（`步骤 3` → 现在是 `步骤 2`，多了 step 0）|
+| `test-doc-update.sh` | 3 | 找旧 inline 字段 `**所属模块：**` / `**所属模块章节：**`；找不到 Batch 3 TODO marker |
+| `test-task-pm-feedback.sh` | 1 | 找不到 `改 task.md`（措辞已变） |
+| `e2e/test-full-task-loop.sh` | 2 | 措辞漂移（`Stage 5 只写 task-plan.md` 等）|
+
+**新窗口验证基线**：`bash tests/run-all.sh` → 应看到 177 / 21（如不一致先排查）。
+
+**估时**：1-2 小时，逐条决策，不能批量 sed。
 
 ---
-
-## 5 个 baseline 失败 suite（已知，留给阶段 3）
-
-这些与阶段 1+2 改动无关，是 fixture vs skill 模板版本错配：
-
-- `tests/test-task-spec.sh`
-- `tests/test-task-pm-feedback.sh`
-- `tests/test-task-plan.sh`
-- `tests/test-doc-update.sh`
-- `tests/e2e/test-full-task-loop.sh`
-
-**新窗口验证 baseline**：
-```bash
-git stash --include-untracked  # 暂存当前 wip
-bash tests/test-task-spec.sh  # 应该同样失败 → 确认是 baseline
-git stash pop
-```
 
 ---
 
@@ -122,7 +122,8 @@ AI 收到后应该：
 |---|---|---|---|
 | 阶段 1 | 1 天 | ~30 分钟 | ~16x |
 | 阶段 2 | 0.5-1 天 | ~10 分钟 | ~30x |
-| 阶段 3 | 0.5 天 | 预期 15-30 分钟 | ~10-30x |
+| 阶段 3a | — | ~20 分钟 | — |
+| 阶段 3b | 0.5 天 | 预期 1-2 小时 | ~3-4x |
 
 加速原因：
 - plan 详细到 API 签名 + 单测用例 + diff 草案
@@ -139,7 +140,8 @@ AI 收到后应该：
 |---|---|---|
 | 1 | parser + task-transition 迁移 | ✅ 完成 |
 | 2 | 4 处剩余解析点迁移 | ✅ 完成 |
-| 3 | fixture v2 重写 | ⏸ 下一步 |
+| 3a | fixture v2（make_task_v2 + 7 smoke）| ✅ 完成 |
+| 3b | 21 条 baseline 失败逐条修 | ⏸ 下一步 |
 | 4 | worktree 文档同步（git show 绕 index）| ⏸ |
 | 4.5 | 项目级工程结构约束（探测档）| ⏸ |
 | 5 | 实现程度三阶段流程 | ⏸ |
