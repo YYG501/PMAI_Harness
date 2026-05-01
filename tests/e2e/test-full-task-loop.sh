@@ -76,7 +76,9 @@ test_task_spec_reads_task_plan_contract() {
 
   _assert_contains "$TASK_SPEC_SKILL" '读取 `$ACTIVE_REQ_DIR/task-plan.md` 中的 task id 列表' "task-spec reads plan ids" || return
   _assert_contains "$TASK_SPEC_SKILL" '从 `task-plan.md` 中定位参数指定的 `<task-id>`' "task-spec locates requested id" || return
-  _assert_contains "$TASK_SPEC_SKILL" '用于从 `task-plan.md` 中的单行 task 生成一个完整的 `tasks/task-NNN-<slug>.md`' "task-spec generates one task" || return
+  # v3.5 双文件改造：从一行 task 生成 PM 视图 + 工程合同两文件
+  _assert_contains "$TASK_SPEC_SKILL" '用于从 `task-plan.md` 中的单行 task 生成完整的 `tasks/task-NNN-<slug>.md`' "task-spec generates pm view" || return
+  _assert_contains "$TASK_SPEC_SKILL" '`tasks/task-NNN-<slug>.engineering.md`（工程合同）' "task-spec generates engineering contract" || return
 
   pass_test
 }
@@ -111,9 +113,9 @@ test_doc_update_four_situations_with_mock_fixture() {
 test_end_to_end_flow_description_complete() {
   start_test "e2e contract: Stage 5/6 flow description is complete"
 
-  _assert_contains "$TASK_PLAN_SKILL" 'Stage 5 只写 `task-plan.md`' "stage 5 only plan" || return
+  _assert_contains "$TASK_PLAN_SKILL" '不生成具体 task 文档' "stage 5 only plan, not task docs" || return
   _assert_contains "$TASK_PLAN_SKILL" '具体 task 文档由 stage 6 的 `/task-spec <task-id>`' "stage 6 task-spec handoff" || return
-  _assert_contains "$TASK_SPEC_SKILL" "一次只生成一个 task 文件" "one task at a time" || return
+  _assert_contains "$TASK_SPEC_SKILL" "一次只生成一个 task 的两个文件" "one task at a time (dual-file)" || return
   _assert_contains "$DOC_UPDATE_SKILL" '沉淀模式由 `/close-task` 在 task acceptance 后调用' "close-task calls settlement" || return
   _assert_contains "$DOC_UPDATE_SKILL" '允许继续运行 `close-task.sh` 的后续 merge / cleanup' "close-task continues after doc-update" || return
   _assert_contains "$REQ_STAGE_GATE_SKILL" "task branch has been merged to req branch" "gate checks merge" || return

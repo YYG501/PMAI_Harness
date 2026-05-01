@@ -58,7 +58,7 @@ test_task_execute_has_wrong_rejection() {
 test_task_execute_has_behavior_path() {
   start_test "task-execute has behavior revision path"
   _assert_contains "$TASK_EXECUTE_SKILL" "行为修订" "behavior classification" || return
-  _assert_contains "$TASK_EXECUTE_SKILL" "改 task.md" "behavior task rewrite action" || return
+  _assert_contains "$TASK_EXECUTE_SKILL" "改 task PM 视图" "behavior task rewrite action" || return
   pass_test
 }
 

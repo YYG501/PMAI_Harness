@@ -6,6 +6,7 @@ source "$SCRIPT_DIR/helpers/assert.sh"
 source "$SCRIPT_DIR/helpers/fixture.sh"
 
 TASK_TEMPLATE="$FRAMEWORK_ROOT/templates/task.md.tmpl"
+TASK_ENG_TEMPLATE="$FRAMEWORK_ROOT/templates/task.engineering.md.tmpl"
 MODULE_TEMPLATE="$FRAMEWORK_ROOT/templates/module.md.tmpl"
 DESIGN_TEMPLATE="$FRAMEWORK_ROOT/templates/DESIGN.md.tmpl"
 TASK_SPEC_SKILL="$FRAMEWORK_ROOT/skills/task-spec/SKILL.md"
@@ -80,18 +81,19 @@ EOF
 # -----------------------------------------------------------------
 
 test_business_task_contract() {
-  start_test "task-spec business task: 用户使用流程/功能清单/实现指引/用例数据"
+  start_test "task-spec business task: PM 视图 (📋 功能清单) + 工程合同 (§5 实现指引)"
 
-  _assert_contains "$TASK_TEMPLATE" "## 用户使用流程（业务模块 task 必填，即验收依据）" "business task user flow section" || return
-  _assert_contains "$TASK_TEMPLATE" "## 功能清单（业务模块 task 必填）" "business task function list section" || return
-  _assert_contains "$TASK_TEMPLATE" "### 1 · [三级功能名]" "three-level function block" || return
-  _assert_contains "$TASK_TEMPLATE" "| 二级功能 | 三级功能 | 使用角色 |" "three-column function table" || return
-  _assert_contains "$TASK_TEMPLATE" "## 实现指引" "implementation guide section" || return
-  _assert_contains "$TASK_TEMPLATE" "- **组件复用**" "component reuse bullet" || return
-  _assert_contains "$TASK_TEMPLATE" "- **状态覆盖**" "state coverage bullet" || return
-  _assert_contains "$TASK_TEMPLATE" "- **关键逻辑**" "key logic bullet" || return
-  _assert_contains "$TASK_TEMPLATE" "- **易错点 / 禁止项**" "pitfall bullet" || return
-  _assert_contains "$TASK_SPEC_SKILL" "用例数据" "solution use-case data handling" || return
+  # PM 视图 (task.md.tmpl)：v3.5 后用 emoji 前缀 + 三列表
+  _assert_contains "$TASK_TEMPLATE" "## 📋 功能清单" "PM 视图 功能清单 section" || return
+  _assert_contains "$TASK_TEMPLATE" "### 1 · [产品视角的功能名 — 必须含指代前缀]" "三级功能名 head" || return
+  _assert_contains "$TASK_TEMPLATE" "| 二级功能 | 三级功能 | 使用角色 |" "三列表 header" || return
+
+  # 工程合同 (task.engineering.md.tmpl)：§5 实现指引 + 子项
+  _assert_contains "$TASK_ENG_TEMPLATE" "## 5. 实现指引" "工程合同 实现指引 section" || return
+  _assert_contains "$TASK_ENG_TEMPLATE" "### 5.1 组件复用" "组件复用 子节" || return
+  _assert_contains "$TASK_ENG_TEMPLATE" "### 5.2 状态覆盖" "状态覆盖 子节" || return
+  _assert_contains "$TASK_ENG_TEMPLATE" "### 5.3 关键逻辑" "关键逻辑 子节" || return
+  _assert_contains "$TASK_ENG_TEMPLATE" "## 6. 易错点 / 禁止项" "易错点 / 禁止项 section" || return
 
   pass_test
 }
@@ -106,25 +108,17 @@ test_infrastructure_task_contract() {
   _assert_contains "$TASK_SPEC_SKILL" '如果 `所属模块` 为 `基础设施`' "infrastructure branch" || return
   _assert_contains "$TASK_SPEC_SKILL" '`用户使用流程` 填 `无（基础设施 task）`' "infra user flow skip" || return
   _assert_contains "$TASK_SPEC_SKILL" '`功能清单` 填 `无（基础设施 task）`' "infra function list skip" || return
-  _assert_contains "$TASK_SPEC_SKILL" '`验收标准` 必须填写可验证条件' "infra acceptance required" || return
-  _assert_contains "$TASK_TEMPLATE" "基础设施 task 必填" "template acceptance comment" || return
+  _assert_contains "$TASK_SPEC_SKILL" '`验收清单` 必须填写可验证条件' "infra acceptance required" || return
+  _assert_contains "$TASK_TEMPLATE" "基础设施 task" "template infra reference" || return
 
   pass_test
 }
 
 # -----------------------------------------------------------------
-# Scenario 3: cross-module chapter format
+# Scenario 3: (已删除) cross-module 章节格式
+# 职责迁到 doc-update SKILL（doc-update/SKILL.md `模块A:章节X, 模块B:章节Y`）。
+# task-spec 只产出 `所属模块章节` 字段本身（test_template_regression 已覆盖）。
 # -----------------------------------------------------------------
-
-test_cross_module_format() {
-  start_test "task-spec cross-module 所属模块章节 format"
-
-  _assert_contains "$TASK_TEMPLATE" "模块A:章节X, 模块B:章节Y" "template cross-module format" || return
-  _assert_contains "$TASK_SPEC_SKILL" "模块A:章节X, 模块B:章节Y" "skill cross-module format" || return
-  _assert_contains "$TASK_SPEC_SKILL" '跨模块 task 的 `所属模块章节` 使用' "skill cross-module rule" || return
-
-  pass_test
-}
 
 # -----------------------------------------------------------------
 # Scenario 4: task-plan vs tasks/ validation prompt
@@ -153,8 +147,7 @@ test_plan_tasks_diff_prompt() {
   fi
 
   _assert_contains "$TASK_SPEC_SKILL" "task-plan.md ↔ tasks/" "consistency validation heading" || { rm -rf "$fake"; return; }
-  _assert_contains "$TASK_SPEC_SKILL" "请选择处理方式" "PM prompt on diff" || { rm -rf "$fake"; return; }
-  _assert_contains "$TASK_SPEC_SKILL" "A) 保留 task-plan.md，删除多余 task 文件" "keep plan option" || { rm -rf "$fake"; return; }
+  _assert_contains "$TASK_SPEC_SKILL" "选择处理路径" "PM prompt on diff" || { rm -rf "$fake"; return; }
 
   rm -rf "$fake"
   pass_test
@@ -165,7 +158,7 @@ test_plan_tasks_diff_prompt() {
 # -----------------------------------------------------------------
 
 test_pm_feedback_annotation() {
-  start_test "task-spec annotates 易错点 with source task PM feedback"
+  start_test "task-spec collects same-module 已完成 task PM 反馈，按 PM-VIEW-RULES §9.4 三类分流"
 
   local fake
   fake=$(_make_fake_req)
@@ -176,8 +169,13 @@ test_pm_feedback_annotation() {
     return
   fi
 
+  # 数据源：状态为「已完成」且所属模块与当前 task 有交集
   _assert_contains "$TASK_SPEC_SKILL" "状态为「已完成」且所属模块与当前 task 有交集" "completed same-module feedback source" || { rm -rf "$fake"; return; }
-  _assert_contains "$TASK_SPEC_SKILL" "（来自 task-XXX 的 PM 反馈）" "feedback source annotation" || { rm -rf "$fake"; return; }
+  # 三类分流（v3.5 设计：不再做 source annotation 整段搬，改按 PM-VIEW-RULES §9.4 分流）
+  _assert_contains "$TASK_SPEC_SKILL" "PM-VIEW-RULES §9.4" "三类分流标准引用" || { rm -rf "$fake"; return; }
+  _assert_contains "$TASK_SPEC_SKILL" "正向规则" "正向规则类目" || { rm -rf "$fake"; return; }
+  _assert_contains "$TASK_SPEC_SKILL" "反向约束" "反向约束类目" || { rm -rf "$fake"; return; }
+  _assert_contains "$TASK_SPEC_SKILL" "决策记录" "决策记录类目" || { rm -rf "$fake"; return; }
 
   rm -rf "$fake"
   pass_test
@@ -202,15 +200,17 @@ test_infrastructure_no_module_merge_message() {
 test_template_regression() {
   start_test "template regression: task/module/DESIGN completeness"
 
-  _assert_contains "$TASK_TEMPLATE" "**所属模块：**" "task module field" || return
-  _assert_contains "$TASK_TEMPLATE" "**所属模块章节：**" "task module chapter field" || return
-  _assert_contains "$TASK_TEMPLATE" "## 启动前必读（按顺序，读完再执行）" "task startup section preserved" || return
-  _assert_contains "$TASK_TEMPLATE" "## 任务描述" "task description section preserved" || return
-  _assert_contains "$TASK_TEMPLATE" "## 执行范围" "task scope section preserved" || return
-  _assert_contains "$TASK_TEMPLATE" "## 执行日志（agent 填写，不要删除历史记录）" "task execution log preserved" || return
-  _assert_contains "$TASK_TEMPLATE" "## 文档偏差（execution agent 填写，只记录事实，不判断是否需要修改）" "task doc diff preserved" || return
-  _assert_contains "$TASK_TEMPLATE" "## 自审记录（PM 跑完 review 后由 orchestrator 机械追加，不删历史）" "task self-review preserved" || return
-  _assert_contains "$TASK_TEMPLATE" "## PM 反馈（orchestrator 代为追加，agent 重跑前必读）" "task PM feedback preserved" || return
+  # task.md.tmpl (PM 视图，v3.5 后元字段在「📌 任务卡」表格内；工程章节迁到 .engineering.md)
+  _assert_contains "$TASK_TEMPLATE" "| **所属模块** |" "task module field (table row)" || return
+  _assert_contains "$TASK_TEMPLATE" "| **所属模块章节** |" "task module chapter field (table row)" || return
+  _assert_contains "$TASK_TEMPLATE" "## 📌 任务卡" "task card section preserved" || return
+  _assert_contains "$TASK_TEMPLATE" "## 📦 范围" "task scope section preserved" || return
+  _assert_contains "$TASK_TEMPLATE" "### 执行日志" "task execution log preserved" || return
+  _assert_contains "$TASK_TEMPLATE" "### PM 反馈" "task PM feedback preserved" || return
+  # 启动前必读 / 文档偏差 / 自审记录 已迁到 task.engineering.md.tmpl §3 / §10 / §11
+  _assert_contains "$TASK_ENG_TEMPLATE" "## 3. 启动前必读" "engineering startup section" || return
+  _assert_contains "$TASK_ENG_TEMPLATE" "## 10. 文档偏差" "engineering doc diff section" || return
+  _assert_contains "$TASK_ENG_TEMPLATE" "## 11. 自审记录" "engineering self-review section" || return
 
   _assert_contains "$MODULE_TEMPLATE" "## 摘要" "module summary preserved" || return
   _assert_contains "$MODULE_TEMPLATE" "## 一、模块定位" "module positioning preserved" || return
@@ -237,29 +237,28 @@ test_template_regression() {
 # -----------------------------------------------------------------
 
 test_artifact_preview_template_section() {
-  start_test "task-spec 产物预览 section: template has it between 用户使用流程 and 功能清单"
+  start_test "task-spec 产物预览 section: template has 📐 产物预览 between 关键产品决策 and 功能清单"
 
-  _assert_contains "$TASK_TEMPLATE" "## 产物预览（按 task 类型生成，由 /task-spec 自动填写）" "artifact preview section header" || return
+  _assert_contains "$TASK_TEMPLATE" "## 📐 产物预览" "artifact preview section header" || return
   _assert_contains "$TASK_TEMPLATE" "UI task" "UI task rule in template comment" || return
   _assert_contains "$TASK_TEMPLATE" "ASCII 线框图" "ASCII wireframe rule" || return
   _assert_contains "$TASK_TEMPLATE" "bullet 树形大纲" "bullet outline rule" || return
-  _assert_contains "$TASK_TEMPLATE" "信息层级低自由度" "creative freedom boundary" || return
 
-  # 顺序检查：产物预览 在 用户使用流程 之后、功能清单 之前
-  local user_flow_line
+  # 顺序检查：📐 产物预览 在 🎯 关键产品决策 之后、📋 功能清单 之前
+  local decision_line
   local preview_line
   local function_list_line
-  user_flow_line=$(grep -n "^## 用户使用流程" "$TASK_TEMPLATE" | head -1 | cut -d: -f1)
-  preview_line=$(grep -n "^## 产物预览" "$TASK_TEMPLATE" | head -1 | cut -d: -f1)
-  function_list_line=$(grep -n "^## 功能清单" "$TASK_TEMPLATE" | head -1 | cut -d: -f1)
+  decision_line=$(grep -n "^## 🎯 关键产品决策" "$TASK_TEMPLATE" | head -1 | cut -d: -f1)
+  preview_line=$(grep -n "^## 📐 产物预览" "$TASK_TEMPLATE" | head -1 | cut -d: -f1)
+  function_list_line=$(grep -n "^## 📋 功能清单" "$TASK_TEMPLATE" | head -1 | cut -d: -f1)
 
-  if [[ -z "$user_flow_line" || -z "$preview_line" || -z "$function_list_line" ]]; then
-    _fail "section ordering check: missing one of 用户使用流程/产物预览/功能清单"
+  if [[ -z "$decision_line" || -z "$preview_line" || -z "$function_list_line" ]]; then
+    _fail "section ordering check: missing one of 🎯 关键产品决策 / 📐 产物预览 / 📋 功能清单"
     return
   fi
 
-  if (( preview_line <= user_flow_line || preview_line >= function_list_line )); then
-    _fail "section ordering: 产物预览 must be between 用户使用流程 ($user_flow_line) and 功能清单 ($function_list_line), got $preview_line"
+  if (( preview_line <= decision_line || preview_line >= function_list_line )); then
+    _fail "section ordering: 📐 产物预览 must be between 🎯 关键产品决策 ($decision_line) and 📋 功能清单 ($function_list_line), got $preview_line"
     return
   fi
 
@@ -271,15 +270,13 @@ test_artifact_preview_template_section() {
 # -----------------------------------------------------------------
 
 test_artifact_preview_skill_logic() {
-  start_test "task-spec SKILL.md: 步骤 6.5 含 task 类型判定 + UI 线框图 + 大纲生成规则"
+  start_test "task-spec SKILL.md: 步骤 7 含 task 类型判定 + UI 线框图 + 大纲生成规则"
 
-  _assert_contains "$TASK_SPEC_SKILL" "### 步骤 6.5：根据 task 类型生成产物预览" "step 6.5 header" || return
+  _assert_contains "$TASK_SPEC_SKILL" "### 步骤 7：生成产物预览" "step 7 header" || return
   _assert_contains "$TASK_SPEC_SKILL" "/design-review" "UI task detection by review tool" || return
   _assert_contains "$TASK_SPEC_SKILL" "ASCII 线框图" "UI artifact format" || return
   _assert_contains "$TASK_SPEC_SKILL" "bullet 树形大纲" "doc artifact format" || return
-  _assert_contains "$TASK_SPEC_SKILL" "无（基础设施 task）" "infra task skip in step 6" || return
-  _assert_contains "$TASK_SPEC_SKILL" "信息层级（哪个先看哪个后看）→ **低自由度**" "creative freedom boundary in skill" || return
-  _assert_contains "$TASK_SPEC_SKILL" "视觉细节（卡片样式 / 间距 / 颜色 / 微交互）→ **高自由度**" "visual detail freedom boundary" || return
+  _assert_contains "$TASK_SPEC_SKILL" "无（基础设施 task）" "infra task skip in step 7" || return
 
   # 基础设施 task 简化路径含产物预览处理
   _assert_contains "$TASK_SPEC_SKILL" '`产物预览` 填 `无（基础设施 task）`' "infra task fills artifact preview as 无" || return
@@ -293,7 +290,6 @@ test_artifact_preview_skill_logic() {
 
 test_business_task_contract
 test_infrastructure_task_contract
-test_cross_module_format
 test_plan_tasks_diff_prompt
 test_pm_feedback_annotation
 test_infrastructure_no_module_merge_message

@@ -58,9 +58,9 @@ test_composite_key_matching() {
 
   _assert_contains "$DOC_UPDATE_SKILL" "composite key" "composite key term" || return
   _assert_contains "$DOC_UPDATE_SKILL" "belonging module chapter" "belonging module chapter key" || return
-  _assert_contains "$DOC_UPDATE_SKILL" 'task.md header field `**所属模块章节：**`' "task header field" || return
+  _assert_contains "$DOC_UPDATE_SKILL" '`**所属模块章节**` 字段' "task header field (table format)" || return
   _assert_contains "$DOC_UPDATE_SKILL" "level-3 feature name" "level-3 feature key" || return
-  _assert_contains "$DOC_UPDATE_SKILL" 'section header `### N · name`' "task feature header" || return
+  _assert_contains "$DOC_UPDATE_SKILL" 'section header `### N · 功能名`' "task feature header" || return
   _assert_contains "$DOC_UPDATE_SKILL" '在 module spec 中定位 `### [module chapter]`，再查找其下 `#### N · [feature name]`' "module lookup" || return
 
   pass_test
@@ -103,20 +103,15 @@ test_summary_line_and_diff_link() {
 test_infrastructure_skip() {
   start_test "doc-update infrastructure task skip detection"
 
-  _assert_contains "$DOC_UPDATE_SKILL" '如果 `**所属模块：**` = `基础设施`' "infrastructure header detection" || return
+  _assert_contains "$DOC_UPDATE_SKILL" '如果 `**所属模块**` = `基础设施`' "infrastructure header detection (v2 table)" || return
   _assert_contains "$DOC_UPDATE_SKILL" "跳过模块规格沉淀，返回 success" "infra skip success" || return
   _assert_contains "$DOC_UPDATE_SKILL" "基础设施 task：跳过 docs/modules 沉淀，继续 close-task" "infra skip output" || return
 
   pass_test
 }
 
-test_batch3_todo_comment() {
-  start_test "doc-update has Batch 3 skip-doc-update TODO marker"
-
-  _assert_contains "$DOC_UPDATE_SKILL" "<!-- TODO Batch 3: depends on close-task --skip-doc-update flag -->" "Batch 3 TODO comment" || return
-
-  pass_test
-}
+# Batch 3 (close-task --skip-doc-update flag) 已实现，TODO marker 已清理。
+# 验证 flag 真存在改放在 close-task 测试里更合适，这里不再断言历史 TODO。
 
 test_call_modes_and_reconciliation_preserved
 test_settlement_four_situations
@@ -125,6 +120,5 @@ test_multimodule_atomic_merge
 test_failure_blocks_close_task
 test_summary_line_and_diff_link
 test_infrastructure_skip
-test_batch3_todo_comment
 
 report_results "doc-update"
