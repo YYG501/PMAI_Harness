@@ -7,11 +7,12 @@
 
 ## 当前位置（2026-05-01）
 
-阶段 **1 + 2 + 3 + 4 + 4.5a 完成**，全测试套件 0 失败：
+阶段 **1 + 2 + 3 + 4 + 4.5a + 4.5b 完成**，全测试套件 0 失败：
 
 ```
 （本次新增）
-            feat(structure-schema): 工程结构约束 schema + derive 派生 + CLAUDE.md.tmpl 加段（4.5a 框架）
+            feat(detect-structure): 5 档判定 + framework 第三档 + git ls-files 扫描（4.5b）
+790c659     feat(structure-schema): 工程结构约束 schema + derive 派生 + CLAUDE.md.tmpl 加段（4.5a 框架）
 092eb72     feat(sync-req-docs): worktree 文档同步（git show 绕 index）+ check-task-scope implicit deny
 （前序，已落 main）
 dc85ba3     test(baseline-21): 21 条 test 字符串对齐 v3.5 SKILL/template 演化
@@ -25,7 +26,8 @@ d131557     feat(task-execute): run-bg.sh watchdog + stall 检测协议升级
 
 修复 4 个 P0/P1 bug + parser 基础设施 + v2 fixture + test/SKILL 全对齐 +
 worktree 文档同步（git show 绕 index）+ check-task-scope implicit deny +
-工程结构约束 schema 框架（4.5a）。总测试 **218 通过 / 0 失败**。
+工程结构约束 schema 框架（4.5a）+ detect 5 档判定（4.5b）。
+总测试 **224 通过 / 0 失败**。
 
 | Bug | 状态 |
 |---|---|
@@ -37,9 +39,20 @@ worktree 文档同步（git show 绕 index）+ check-task-scope implicit deny +
 
 ---
 
-## 下一步：阶段 4.5b（detect-project-structure.py + framework 第三档）
+## 下一步：阶段 4.5c（init-project / task-spec SKILL 接入）
 
-详见：`实施计划-实现程度与格式对齐.md` 阶段 4.5（行 153 起）；4.5 整体已拆 a/b/c。
+详见：`实施计划-实现程度与格式对齐.md` 阶段 4.5.2 + 4.5.4。
+
+### 阶段 4.5b 已完成（detect 五档判定）
+- `scripts/detect-project-structure.py`：用 `git ls-files` 取 tracked 文件（性能 + 自动排除 .gitignore），fnmatch 命中 schema signals → 输出 5 档判定 + 置信度 + signal 证据
+- 判定规则（`compute_judgment`）：
+  - system signal ≥ 2 + prototype-friendly = 0 → **system**
+  - system + prototype-friendly 共存 → **hybrid**
+  - 仅 prototype-friendly 命中 → **prototype**
+  - scan_roots 下无任何 ts/tsx → **framework**（生成器 / 工具仓）
+  - 其余 → **unknown**
+- brace 展开（`*.{ts,tsx}` → `*.ts` + `*.tsx`）手动实现，fnmatch 不带 brace
+- 6 条 E2E 测试：`tests/test-detect-project-structure.sh`，含本仓自检（PM-AI-Workflow 判 `framework` 0.7）
 
 ### 阶段 4.5a 已完成（schema 框架）
 - `templates/工程结构约束.schema.json`（plan 用 yaml；改 json 是为了保 zero-dep——PyYAML 不在 stdlib，结构等价）
@@ -64,15 +77,19 @@ worktree 文档同步（git show 绕 index）+ check-task-scope implicit deny +
 2. shell 字符串里 `$VAR` 直接接中文括号 `）` 时，多字节字节落入变量名扩展 → 用 `${VAR}` 显式 brace 包围
 3. `task-events.py find_repo_root` 用 cwd 探测，跨主仓调用必须 `cd "$WORKTREE"` 包住
 
-### 4.5b/c 待做
+### 4.5c 待做
 
-| 子阶段 | 内容 | 估时 |
-|---|---|---|
-| **4.5b detect** | `scripts/detect-project-structure.py`（用 `git ls-files` 而不是 `pathlib.glob` 防大仓性能）+ framework 第三档（PM-AI-Workflow 这种生成器 / 纯工具仓不走 prototype/system 二元）+ 5 E2E 测试 | ~45 分钟 |
-| **4.5c 接入** | `init-project` SKILL 改造（新项目 / 已有项目 / framework 三分支）+ `task-spec` §5 双源读取（项目级 + req 级冲突阻断 critical T13） | ~60 分钟 |
-| **4.5d 延期** | T15/T16 LLM eval（外部 judge 跑 36k 行场景）记 TODOS，等 judge 就绪再跑 | 不做 |
+`init-project` SKILL 三分支 + `task-spec` §5 双源读取：
 
-**估时**：plan 4.5 整段 0.5-1 天，已落 4.5a；剩 4.5b/c 预期 ~1.5-2 小时。
+- `init-project` 改造（新项目分支：询问 PM prototype/system；已有项目分支：调 detect → 按置信度自动写或提示复核；framework 分支：写 N/A 不约束）
+- `task-spec` SKILL §5 拼接：项目级（CLAUDE.md「工程结构约束」）+ req 级（solution.md 实现程度字段）双源 → 冲突阻断（critical T13）
+- 测试：T13（双源冲突阻断）+ T11/T12（auto-detected 标行为）
+
+**估时**：~60 分钟。
+
+### 4.5d 延期
+
+T15/T16 LLM eval（外部 judge 跑 36k 行场景验证）记 TODOS，等 judge 环境就绪再跑——本机没法直接运行。
 
 ---
 
@@ -142,7 +159,8 @@ AI 收到后应该：
 | 阶段 3b | 0.5 天 | ~30 分钟 | ~16x |
 | 阶段 4 | 0.5 天 | ~45 分钟 | ~10x |
 | 阶段 4.5a | — | ~30 分钟 | — |
-| 阶段 4.5b/c | 0.5-1 天 | 预期 ~1.5-2 小时 | ~3-5x |
+| 阶段 4.5b | — | ~25 分钟 | — |
+| 阶段 4.5c | 0.5 天 | 预期 ~60 分钟 | ~4x |
 
 加速原因：
 - plan 详细到 API 签名 + 单测用例 + diff 草案
@@ -163,8 +181,8 @@ AI 收到后应该：
 | 3b | 21 条 baseline test 字符串对齐 v3.5 演化 | ✅ 完成 |
 | 4 | worktree 文档同步（git show 绕 index）| ✅ 完成 |
 | 4.5a | 工程结构约束 schema + 派生 + CLAUDE.md.tmpl 段 | ✅ 完成 |
-| 4.5b | detect-project-structure.py + framework 第三档 | ⏸ 下一步 |
-| 4.5c | init-project / task-spec SKILL 接入双源 | ⏸ |
+| 4.5b | detect-project-structure.py + framework 第三档 | ✅ 完成 |
+| 4.5c | init-project / task-spec SKILL 接入双源 | ⏸ 下一步 |
 | 5 | 实现程度三阶段流程 | ⏸ |
 | 6 | task-plan 按字段拆（Python 决策表）| ⏸ |
 | 7 | task-spec 双源改造 | ⏸ |
