@@ -7,11 +7,12 @@
 
 ## 当前位置（2026-05-01）
 
-阶段 **1 + 2 + 3 + 4 + 4.5a + 4.5b 完成**，全测试套件 0 失败：
+阶段 **1 + 2 + 3 + 4 + 4.5（全段）完成**，全测试套件 0 失败：
 
 ```
 （本次新增）
-            feat(detect-structure): 5 档判定 + framework 第三档 + git ls-files 扫描（4.5b）
+            feat(structure-inject): inject + init-project 接 intent + task-spec §5 双源（4.5c）
+9255782     feat(detect-structure): 5 档判定 + framework 第三档 + git ls-files 扫描（4.5b）
 790c659     feat(structure-schema): 工程结构约束 schema + derive 派生 + CLAUDE.md.tmpl 加段（4.5a 框架）
 092eb72     feat(sync-req-docs): worktree 文档同步（git show 绕 index）+ check-task-scope implicit deny
 （前序，已落 main）
@@ -26,8 +27,9 @@ d131557     feat(task-execute): run-bg.sh watchdog + stall 检测协议升级
 
 修复 4 个 P0/P1 bug + parser 基础设施 + v2 fixture + test/SKILL 全对齐 +
 worktree 文档同步（git show 绕 index）+ check-task-scope implicit deny +
-工程结构约束 schema 框架（4.5a）+ detect 5 档判定（4.5b）。
-总测试 **224 通过 / 0 失败**。
+工程结构约束 schema 框架（4.5a）+ detect 5 档判定（4.5b）+
+inject 注入 + init-project 4th arg + task-spec §5 双源拼接（4.5c）。
+总测试 **233 通过 / 0 失败**。
 
 | Bug | 状态 |
 |---|---|
@@ -39,9 +41,16 @@ worktree 文档同步（git show 绕 index）+ check-task-scope implicit deny +
 
 ---
 
-## 下一步：阶段 4.5c（init-project / task-spec SKILL 接入）
+## 下一步：阶段 5（实现程度三阶段流程）
 
-详见：`实施计划-实现程度与格式对齐.md` 阶段 4.5.2 + 4.5.4。
+详见：`实施计划-实现程度与格式对齐.md` 阶段 5（行 394 起）。
+
+### 阶段 4.5c 已完成（inject + init-project + task-spec 接入）
+- `scripts/inject-structure-segment.py`：把工程结构约束段注入 CLAUDE.md，按 PM 选定的 intent（prototype / system / framework / unknown）写入对应内容；含 auto-detected 标，placeholder 已替换后二次 inject 拒绝（保护手填）
+- `scripts/init-project.sh`：加 4th 参数 `<project-intent>`（合法值 prototype/system/framework/unknown），模板复制后调用 inject 自动写入「工程结构约束」段
+- `skills/init-project/SKILL.md`：步骤 1 加询问「项目意图」（4 项信息）+ 步骤 2 改成 4 参数调用 + framework 档说明
+- `skills/task-spec/SKILL.md`：步骤 9 内加 §5 双源拼接子段：A 层项目级（CLAUDE.md「## 工程结构约束」）+ B 层 req 级（solution.md「本轮实现程度」）+ 5×2 双源冲突表（critical T13：项目级 prototype + req 级完整系统 → 阻断）+ framework 档跳过 + 缺段 fallback 不阻断
+- 9 条新测试：`tests/test-inject-structure.sh`（T11a/b/c inject 行为 + T12 PM 手填保护 + T13a/b/c 双源规则 + 2 接入校验）
 
 ### 阶段 4.5b 已完成（detect 五档判定）
 - `scripts/detect-project-structure.py`：用 `git ls-files` 取 tracked 文件（性能 + 自动排除 .gitignore），fnmatch 命中 schema signals → 输出 5 档判定 + 置信度 + signal 证据
@@ -77,17 +86,7 @@ worktree 文档同步（git show 绕 index）+ check-task-scope implicit deny +
 2. shell 字符串里 `$VAR` 直接接中文括号 `）` 时，多字节字节落入变量名扩展 → 用 `${VAR}` 显式 brace 包围
 3. `task-events.py find_repo_root` 用 cwd 探测，跨主仓调用必须 `cd "$WORKTREE"` 包住
 
-### 4.5c 待做
-
-`init-project` SKILL 三分支 + `task-spec` §5 双源读取：
-
-- `init-project` 改造（新项目分支：询问 PM prototype/system；已有项目分支：调 detect → 按置信度自动写或提示复核；framework 分支：写 N/A 不约束）
-- `task-spec` SKILL §5 拼接：项目级（CLAUDE.md「工程结构约束」）+ req 级（solution.md 实现程度字段）双源 → 冲突阻断（critical T13）
-- 测试：T13（双源冲突阻断）+ T11/T12（auto-detected 标行为）
-
-**估时**：~60 分钟。
-
-### 4.5d 延期
+### 4.5d 延期（不阻塞主线）
 
 T15/T16 LLM eval（外部 judge 跑 36k 行场景验证）记 TODOS，等 judge 环境就绪再跑——本机没法直接运行。
 
@@ -160,7 +159,7 @@ AI 收到后应该：
 | 阶段 4 | 0.5 天 | ~45 分钟 | ~10x |
 | 阶段 4.5a | — | ~30 分钟 | — |
 | 阶段 4.5b | — | ~25 分钟 | — |
-| 阶段 4.5c | 0.5 天 | 预期 ~60 分钟 | ~4x |
+| 阶段 4.5c | 0.5 天 | ~40 分钟 | ~6x |
 
 加速原因：
 - plan 详细到 API 签名 + 单测用例 + diff 草案
@@ -182,7 +181,7 @@ AI 收到后应该：
 | 4 | worktree 文档同步（git show 绕 index）| ✅ 完成 |
 | 4.5a | 工程结构约束 schema + 派生 + CLAUDE.md.tmpl 段 | ✅ 完成 |
 | 4.5b | detect-project-structure.py + framework 第三档 | ✅ 完成 |
-| 4.5c | init-project / task-spec SKILL 接入双源 | ⏸ 下一步 |
+| 4.5c | inject + init-project intent + task-spec §5 双源 | ✅ 完成 |
 | 5 | 实现程度三阶段流程 | ⏸ |
 | 6 | task-plan 按字段拆（Python 决策表）| ⏸ |
 | 7 | task-spec 双源改造 | ⏸ |

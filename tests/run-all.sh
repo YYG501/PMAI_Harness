@@ -11,6 +11,7 @@ SUITES=(
   test-check-task-scope.sh
   test-structure-schema.sh
   test-detect-project-structure.sh
+  test-inject-structure.sh
   test-task-spec.sh
   test-task-pm-feedback.sh
   test-task-plan.sh

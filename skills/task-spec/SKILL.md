@@ -251,6 +251,57 @@ PM_VIEW_HASH=$(shasum -a 256 "$ACTIVE_REQ_DIR/tasks/task-NNN-<slug>.md" | cut -c
 5. 同模块已完成 task 的 PM 视图 + 工程合同
 6. 涉及的现有 prototype 文件路径
 
+#### §5 实现指引：双源拼接（项目级 + req 级，4.5c）
+
+§5 实现指引由**两层约束**拼接而成：
+
+**A 层 项目级（来自 CLAUDE.md「## 工程结构约束」段）**
+
+读 `$REPO_ROOT/CLAUDE.md` 的 `## 工程结构约束` section：
+
+| 段内容 | 当前 task 应做 |
+|---|---|
+| `prototype` 档（auto-detected: prototype 标）| 不抽 Template / hook / context；每页 self-contained 写死假数据；视觉一致靠 DESIGN.md + components/ui |
+| `system` 档（auto-detected: system 标）| 该抽就抽；store / hook / context 是 required signal |
+| `framework` 档（auto-detected: framework 标）| §5 跳过项目级约束（写 N/A — 工具仓不约束代码组织）|
+| 段不存在 / placeholder 未替换（`{{STRUCTURE_CONSTRAINTS}}`）| **A4 fallback**：警告 PM "项目级约束缺失，建议跑 init-project 或 detect-project-structure 先补"，但不阻断；按 unknown 档继续 |
+| 无 auto-detected 标（PM 手填）| 按 PM 手填段执行，不假设档位 |
+
+**B 层 req 级（来自 solution.md「本轮实现程度」结构化字段）**
+
+读 `$ACTIVE_REQ_DIR/solution.md` 的「本轮实现程度」字段（如 `prototype` / `prototype+demo data` / `production-grade`）。req 级表达本轮 req 的内容深度倾向。
+
+**双源冲突检测（critical T13，A3 优先级）**
+
+| 项目级 | req 级 | 行为 |
+|---|---|---|
+| prototype | prototype | ✅ 通过 |
+| system | prototype | ✅ 通过（系统项目允许某 req 简化）|
+| system | system | ✅ 通过 |
+| **prototype** | **完整系统**（含 store / Template / hook / context 这几个工程概念之一）| ❌ **阻断**：输出 "本项目工程结构是原型档，不能在 req 级独自做完整系统。要么改 CLAUDE.md（升级整个项目），要么改 solution.md（降级本 req）"；要求 PM 二选一后才生成工程合同 |
+| framework | 任意 | 跳过双源校验，§5 写 N/A |
+| 缺段（旧项目兼容）| 任意 | fallback 不阻断，按 req 级单源生成 + 警告 |
+
+**拼接结果写入工程合同 §5（实现指引）**：
+
+```markdown
+## 5. 实现指引
+
+### 工程结构约束（项目级，硬约束）
+
+[CLAUDE.md「## 工程结构约束」段；{prototype-root} 已替换为实际值]
+
+### 本轮实现程度（req 级，内容深度）
+
+[solution.md「本轮实现程度」字段表]
+
+### 具体实现要求
+
+[按上述两层约束生成 task 级 actionable 指引；遵守项目级硬约束 + req 级深度]
+```
+
+如步骤 12 PM 选 B（修订 PM 视图）：本步骤跳过；步骤 12.5 reconcile 时按当前两源重新拼接。
+
 ### 步骤 10：自检（按 PM-VIEW-RULES §八 8 项）
 
 写完后对 PM 视图主文件逐条检查：

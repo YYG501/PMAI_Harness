@@ -1,13 +1,23 @@
 #!/usr/bin/env bash
 # init-project.sh — 创建新业务项目
-# 用法: bash scripts/init-project.sh <project-name> <target-dir> <background>
+# 用法: bash scripts/init-project.sh <project-name> <target-dir> <background> [<project-intent>]
+#   project-intent: prototype | system | framework | unknown（默认 unknown）
 # 必须从框架仓库根目录运行
 
 set -euo pipefail
 
-PROJECT_NAME="${1:?用法: init-project.sh <project-name> <target-dir> <background>}"
-TARGET_DIR="${2:?用法: init-project.sh <project-name> <target-dir> <background>}"
+PROJECT_NAME="${1:?用法: init-project.sh <project-name> <target-dir> <background> [<project-intent>]}"
+TARGET_DIR="${2:?用法: init-project.sh <project-name> <target-dir> <background> [<project-intent>]}"
 BACKGROUND="${3:-}"
+PROJECT_INTENT="${4:-unknown}"
+
+case "$PROJECT_INTENT" in
+  prototype|system|framework|unknown) ;;
+  *)
+    echo "❌ project-intent 非法: $PROJECT_INTENT（必须 ∈ prototype/system/framework/unknown）" >&2
+    exit 2
+    ;;
+esac
 
 FRAMEWORK_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 
@@ -61,6 +71,14 @@ for TMPL in "$FRAMEWORK_DIR/templates/"*.tmpl; do
       "$TMPL" > "$DEST"
 done
 echo "📋 模板已复制并替换占位符"
+
+# --- d2. 注入工程结构约束段（4.5c）---
+python3 "$FRAMEWORK_DIR/scripts/inject-structure-segment.py" \
+  "$TARGET_DIR/CLAUDE.md" "$PROJECT_INTENT" \
+  --framework-root "$FRAMEWORK_DIR" \
+  || {
+    echo "⚠️  工程结构约束注入失败（项目仍可用，PM 后续可手动跑 detect-project-structure.py）" >&2
+  }
 
 # --- e. 复制脚本 ---
 mkdir -p "$TARGET_DIR/.claude/scripts"
