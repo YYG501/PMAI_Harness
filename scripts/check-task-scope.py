@@ -75,6 +75,27 @@ def matches_any(path: str, patterns: list[str]) -> bool:
     return False
 
 
+# Sync 白名单内的路径不应由 task commit 修改（它们是 sync-req-docs.sh
+# 从 req 分支拉来的，task 改它们 = 跨分支偷渡需求/项目级文档）。
+# implicit_deny 优先级高于 allowlist——即便 allowlist 显式命中也拒。
+PROJECT_LEVEL_FILES = {"DESIGN.md", "CLAUDE.md"}
+REQ_DIR_PREFIX = "requirements/active/"
+
+
+def implicit_deny_reason(path: str, task_stem: str) -> str | None:
+    """返回 deny 原因（命中 sync 白名单且不是自己的 task 文件）；否则 None。"""
+    if path in PROJECT_LEVEL_FILES:
+        return f"项目级文档（sync-req-docs 同步源，task 不得 commit）"
+    if path.startswith(REQ_DIR_PREFIX):
+        # 自己的 task PM 视图 / 工程合同 允许
+        own_pm = f"tasks/{task_stem}.md"
+        own_eng = f"tasks/{task_stem}.engineering.md"
+        if path.endswith(own_pm) or path.endswith(own_eng):
+            return None
+        return "req 目录内非本 task 文件（sync-req-docs 同步源，task 不得 commit）"
+    return None
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Check task allowlist vs changed paths")
     parser.add_argument("task_file", help="Path to task file")
@@ -123,8 +144,15 @@ def main() -> int:
         )
         return 1
 
+    task_stem = task_file.stem
+
     violations: list[str] = []
     for p in paths:
+        # Implicit deny（sync 白名单：项目级 + 同 req 其他文档）优先于 allowlist
+        idr = implicit_deny_reason(p, task_stem)
+        if idr is not None:
+            violations.append(f"{p}（{idr}）")
+            continue
         # Explicit deny list short-circuits
         if matches_any(p, deny):
             violations.append(f"{p}（命中 denylist）")

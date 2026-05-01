@@ -111,6 +111,22 @@ fi
 
 注意：`pwd -P` 解析 macOS 上 `/tmp` ↔ `/private/tmp` 这类符号链接，避免 canonical 路径不一致导致误判。`EXPECTED_CANONICAL` 在子 shell 里算（子 shell 不受沙盒 reset 影响），代表 task worktree 的真实绝对路径。
 
+#### 入口步骤 2.4：从 req 分支同步需求与项目级文档
+
+`scripts/sync-req-docs.sh` 用 `git show <req-branch>:<path> > <dest>` 把 `DESIGN.md` / `CLAUDE.md` 与 `requirements/active/<req-id>/` 全部从 req 分支拉到 task worktree（不写 `.git/index.lock`，多 worktree 并发安全；同步目标在 worktree 显示为 untracked / modified，由 `check-task-scope.py` 阻断 commit）。
+
+`create-task-worktree.sh` 末尾已经做过一次 sync，本步是兜底——防止 worktree 创建后、execute 启动前 PM 又改了 req 文档。
+
+```bash
+REQ_BRANCH=$(python3 -m _lib.task_parser get_branch "$TASK_FILE" \
+  | sed 's/^task-/req-/' )  # 占位演示；实际从 task 文件元数据 / req 元数据推导
+# 推荐用法（依赖 .req-meta.json 或主仓 worktree 列表反查）：
+REQ_BRANCH=$(git -C "$MAIN_REPO_ROOT" branch --contains HEAD --format='%(refname:short)' | grep '^req-' | head -1)
+bash "$MAIN_REPO_ROOT/scripts/sync-req-docs.sh" "$TASK_WORKTREE" "$REQ_BRANCH" "$TASK_FILE"
+```
+
+失败不阻断启动——sync 是 best-effort，task-execute 后续会基于 worktree 当前文件执行；但若 PM 在 chat 显示同步失败需要回 req worktree 修复时，提示 PM 再重跑 `/task-execute`。
+
 #### 入口步骤 2.5：依赖前置 gate（v4 兜底层）
 
 这是防止 PM 手动用 `task-transition.py` 强改状态、绕过 `/task-confirm` 的兜底层。逻辑必须与 `/task-confirm` 的「步骤 4-pre：依赖前置检查」一致：

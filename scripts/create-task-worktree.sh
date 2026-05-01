@@ -80,6 +80,16 @@ fi
 setup_dependency_symlinks "$REPO_ROOT" "$WORKTREE_DIR"
 
 # ======================================================
+# 同步 req 分支文档到 task worktree（git show 绕 index）
+# 失败不阻断 worktree 创建（缺文件可由 task-execute 启动时再 sync）
+# ======================================================
+TASK_FILE_ABS="$TASK_FILE"
+if [[ "$TASK_FILE_ABS" != /* ]]; then
+  TASK_FILE_ABS="$REPO_ROOT/$TASK_FILE"
+fi
+bash "$SCRIPT_DIR/sync-req-docs.sh" "$WORKTREE_DIR" "$REQ_BRANCH" "$TASK_FILE_ABS" >&2 || true
+
+# ======================================================
 # Port allocation
 # ======================================================
 DEV_PORT=$(derive_task_port "$REPO_ROOT" "$TASK_BASENAME")

@@ -7,13 +7,14 @@
 
 ## 当前位置（2026-05-01）
 
-阶段 **1 + 2 + 3 完成**，全测试套件 0 失败：
+阶段 **1 + 2 + 3 + 4 完成**，全测试套件 0 失败：
 
 ```
 （本次新增）
-            test(baseline-21): 21 条 test 字符串对齐 v3.5 SKILL/template 演化
-74dc53f     feat(fixture-v2): 双文件 v2 fixture + 7 smoke 测试
+            feat(sync-req-docs): worktree 文档同步（git show 绕 index）+ check-task-scope implicit deny
 （前序，已落 main）
+dc85ba3     test(baseline-21): 21 条 test 字符串对齐 v3.5 SKILL/template 演化
+74dc53f     feat(fixture-v2): 双文件 v2 fixture + 7 smoke 测试
 88bcc6e     fix(parser-migrate): 4 处剩余解析点迁移到 _lib.task_parser
 dc848d9     fix(task-transition): 用 read_section 跨文件查找替换旧 regex
 2c9ec03     feat(parser): shared task parser v1/v2 双兼容 + 25 单测覆盖
@@ -21,8 +22,9 @@ dc848d9     fix(task-transition): 用 read_section 跨文件查找替换旧 rege
 d131557     feat(task-execute): run-bg.sh watchdog + stall 检测协议升级
 ```
 
-**修复 4 个 P0/P1 bug** + parser 基础设施 + v2 fixture + test/SKILL 全部对齐。
-总测试 **196 通过 / 0 失败**。
+修复 4 个 P0/P1 bug + parser 基础设施 + v2 fixture + test/SKILL 全对齐 +
+worktree 文档同步（git show 绕 index）+ check-task-scope implicit deny。
+总测试 **209 通过 / 0 失败**。
 
 | Bug | 状态 |
 |---|---|
@@ -34,26 +36,29 @@ d131557     feat(task-execute): run-bg.sh watchdog + stall 检测协议升级
 
 ---
 
-## 下一步：阶段 4（块 0 worktree 文档同步 / git show 绕 index）
+## 下一步：阶段 4.5（项目级工程结构约束探测档）
 
-详见：`实施计划-实现程度与格式对齐.md` 阶段 4（行 94-150）
+详见：`实施计划-实现程度与格式对齐.md` 阶段 4.5（行 153 起）
 
-### 阶段 3 已完成（全部）
-- **3a**：`fixture_create_task_v2`（双文件，PM 视图表格 + `.engineering.md` §10/§11）+ 7 条 smoke 测试 → commit `74dc53f`
-- **3b**：21 条 test 字符串逐条对齐 v3.5 SKILL/template 演化（5 个 suite）；删 2 条已废弃 test（cross-module 格式职责迁出 task-spec、Batch 3 TODO 已实现）；test_pm_feedback_annotation 重写为 PM-VIEW-RULES §9.4 三类分流验证
+### 阶段 4 已完成（全部）
+- `scripts/sync-req-docs.sh`：`git show <req-branch>:<path> > <dest>` 同步项目级文件 + req 目录递归 → 不写 `.git/index.lock`，多 worktree 并发安全；append `req_docs_synced` 事件含 `file_count` / `hash` / `req_branch`
+- `scripts/create-task-worktree.sh` 末尾调用 sync（首次同步）
+- `skills/task-execute/SKILL.md` 加入口步骤 2.4（启动前兜底再 sync 一次，防止 worktree 创建后 PM 又改 req 文档）
+- `scripts/check-task-scope.py` 加 `implicit_deny`：项目级 `DESIGN.md` / `CLAUDE.md` 永远拒；req 目录内非自己 task 的文件永远拒；自己的 PM 视图 / 工程合同允许（即使 allowlist 不命中也能 commit 自己）
+- 新增测试：`tests/test-sync-req-docs.sh`（6 条）+ `tests/test-check-task-scope.sh`（7 条）
 
-**3b 关键事实**（避免下次错框）：5 个失败 suite 没一个调用 fixture；21 条全是 SKILL.md / 模板演化（v3.5 双文件改造、step 0 新增、字段 v1→v2 表格化、术语对齐）后 test grep 没跟上。无 1 条是 SKILL 回归。
+**新窗口验证基线**：`bash tests/run-all.sh` → 应看到 209 / 0。
 
-**新窗口验证基线**：`bash tests/run-all.sh` → 应看到 196 / 0。
+**实施中的坑**：
+1. 数组 + `set -u` 在 macOS bash 3.x 下空数组触发 unbound → 改成换行分隔字符串积累
+2. shell 字符串里 `$VAR` 直接接中文括号 `）` 时，多字节字节落入变量名扩展 → 用 `${VAR}` 显式 brace 包围
+3. `task-events.py find_repo_root` 用 cwd 探测，跨主仓调用必须 `cd "$WORKTREE"` 包住
 
-### 阶段 4 待做
+### 阶段 4.5 待做
 
-`scripts/sync-req-docs.sh`（用 `git show <branch>:<path> > <dest>` 绕 index）：
-1. PROJECT_FILES = `DESIGN.md` `CLAUDE.md`（项目级）
-2. 递归同步 `requirements/active/<req-id>/` 到 task worktree
-3. 配套：`create-task-worktree.sh` 末尾调用 / `task-execute/SKILL.md` 启动前调用 / `check-task-scope.py` 阻断 commit / `audit-task-events.py` 加 `req_docs_synced` 事件
+项目级工程结构约束（探测档）：req 级实现程度字段过滤功能内容，但阻止不了 AI 抽 Template/hook/context 这些工程结构抽象。需双层约束（项目级 + req 级）。
 
-**估时**：plan 0.5 天 / 实测预期 ~30-60 分钟。
+**估时**：plan 0.5 天。
 
 ---
 
@@ -121,7 +126,8 @@ AI 收到后应该：
 | 阶段 2 | 0.5-1 天 | ~10 分钟 | ~30x |
 | 阶段 3a | — | ~20 分钟 | — |
 | 阶段 3b | 0.5 天 | ~30 分钟 | ~16x |
-| 阶段 4 | 0.5 天 | 预期 30-60 分钟 | ~6-12x |
+| 阶段 4 | 0.5 天 | ~45 分钟 | ~10x |
+| 阶段 4.5 | 0.5 天 | 预期 — | — |
 
 加速原因：
 - plan 详细到 API 签名 + 单测用例 + diff 草案
@@ -140,8 +146,8 @@ AI 收到后应该：
 | 2 | 4 处剩余解析点迁移 | ✅ 完成 |
 | 3a | fixture v2（make_task_v2 + 7 smoke）| ✅ 完成 |
 | 3b | 21 条 baseline test 字符串对齐 v3.5 演化 | ✅ 完成 |
-| 4 | worktree 文档同步（git show 绕 index）| ⏸ |
-| 4.5 | 项目级工程结构约束（探测档）| ⏸ |
+| 4 | worktree 文档同步（git show 绕 index）| ✅ 完成 |
+| 4.5 | 项目级工程结构约束（探测档）| ⏸ 下一步 |
 | 5 | 实现程度三阶段流程 | ⏸ |
 | 6 | task-plan 按字段拆（Python 决策表）| ⏸ |
 | 7 | task-spec 双源改造 | ⏸ |
