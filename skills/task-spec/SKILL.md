@@ -277,7 +277,11 @@ PM_VIEW_HASH=$(shasum -a 256 "$ACTIVE_REQ_DIR/tasks/task-NNN-<slug>.md" | cut -c
 
 **合并语义（无机械冲突阻断）**
 
-PM 已经在 close-req 步骤 2c 决定过「这个 req 的深度变更要不要同步到项目级」（见 close-req SKILL）。task-spec **不再做项目级 vs req 级的冲突检测**——任何组合都按 prose 合并直接拼到工程合同 §5；冲突由 PM 在 close-req 时自决。
+task-spec **不再做项目级 vs req 级的冲突检测**——任何组合都按 prose 合并直接拼到工程合同 §5。冲突场景（如项目级 prototype + req 级要做完整系统）由 PM 在多个时机自决：
+- task-execute 看代码 / 看原型时：发现实际实现需要调整时，按业务层偏差路径走（task PM 视图「📁 历史档案 → 业务层偏差」 + close-task → /doc-update）
+- close-req 步骤 2c：决定 req 级深度变更**是否同步到项目级 CLAUDE.md**（影响后续 req）
+
+task-spec 只如实合并不阻断；冲突的处理在 task-execute / close-req / close-task 等下游环节，不在 task-spec。
 
 **拼接结果写入工程合同 §5**：
 

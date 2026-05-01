@@ -26,7 +26,9 @@ description: Use when task 已完成、PM 已通过验收、需要在 close-task
 
 1. task PM 视图主文件路径（PM 调用时传入的）。
 2. **必须存在的成对工程合同**：`<task-stem>.engineering.md`，缺则报错并 `exit 1`。
-3. 对账模式：偏差涉及的原始文档（docs/solution.md、docs/DESIGN.md、docs/modules/*.md 等）。
+3. 对账模式：偏差涉及的原始文档。**支持任何 req / 项目级文档**：
+   - 项目级：`docs/CONTEXT.md` / `docs/DESIGN.md` / `docs/prd.md` / `docs/modules/*.md` / `CLAUDE.md`
+   - req 级：`requirements/active/<req>/brief.md` / `analysis.md` / `solution.md` / `solution.engineering.md`
 4. 沉淀模式：从 PM 视图主文件读取 `**所属模块**` / `**所属模块章节**` 字段（在「📌 任务卡」表格中）+ `## 📋 功能清单` section。
 
 ## Workflow
@@ -49,10 +51,10 @@ description: Use when task 已完成、PM 已通过验收、需要在 close-task
 2. 从 **PM 视图主文件**读取：
    - 「📌 任务卡」表格中的 `**所属模块**` / `**所属模块章节**` 字段
    - `## 📋 功能清单` section（沉淀模式用）
-   - `## 📁 历史档案` 中的偏差记录（对账模式用，PM 走查时记录的偏差）
+   - `## 📁 历史档案 → 业务层偏差` 表（对账模式用，task 实证发现 req / 项目级文档需修订处；指向 brief / analysis / solution PM 视图 / prd / module 规格）
 
 3. 从 **工程合同**读取：
-   - `## 10. 文档偏差` 表（对账模式用，agent 在执行中发现的工程层偏差）
+   - `## 10. 文档偏差` 表（对账模式用，agent 在执行中发现的工程层偏差，指向 solution.engineering / DESIGN / module / CONTEXT 等）
 
 4. 如果 `**所属模块**` = `基础设施`，按 Q1 + Q4 boundary table 判定为基础设施 task：跳过模块规格沉淀，返回 success。输出：
 
@@ -60,14 +62,15 @@ description: Use when task 已完成、PM 已通过验收、需要在 close-task
    基础设施 task：跳过 docs/modules 沉淀，继续 close-task。
    ```
 
-### 步骤 1.5：判断是否涉及模块规格功能清单（对账模式保留）
+### 步骤 1.5：分流偏差（对账模式）
 
-跨两处偏差源检查是否有指向 `docs/modules/<module>.md` 功能清单表格的偏差：
-- PM 视图主文件「📁 历史档案」中的偏差记录
-- 工程合同 §10 文档偏差表
+跨两处偏差源（PM 视图「📁 历史档案 → 业务层偏差」+ 工程合同 §10）扫描所有偏差，按文档类型分流：
 
-- **有模块规格偏差**：进入步骤 1.6
-- **无模块规格偏差**：跳到步骤 2
+| 偏差指向 | 进入步骤 | 处理模式 |
+|---|---|---|
+| `docs/modules/<module>.md` 功能清单表格 | 1.6 | 模块规格对账（行级精确）|
+| 其他 req / 项目级文档（brief / analysis / solution PM 视图 / prd / DESIGN / CONTEXT / CLAUDE / solution.engineering）| 步骤 2 | 通用对账（按行读原文 + 生成 Edit + PM 逐条确认）|
+| 无任何偏差 | 跳到 步骤 1.7 | 仅做沉淀模式 |
 
 ### 步骤 1.6：模块规格对账（对账模式保留）
 

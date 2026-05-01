@@ -148,6 +148,12 @@ PM 视图：[执行日志中的偏差或"无"]
 2. **PM 已跑的 review（如有）**：列出 task-execute 阶段 PM 实际跑过并 append 到事件流的工具及结论，例如 `/review pass, /qa pass`；PM 全跳时写 `（PM 选择不跑 review）`。事件流缺事件不阻塞验收（I-RV2）。
 3. **PM 决策入口**：明确让 PM 在本窗口选择通过或打回。
 
+**走查时引导 PM 反推 req / 项目级文档偏差**：
+
+PM 看原型 / 看 diff 时，如果发现 brief / analysis / solution（PM 视图）/ prd / module 规格 等上游文档**写错或需修订**，提醒 PM 在 task PM 视图「📁 历史档案 → 业务层偏差」表填一行（默认空时多数 task 不需要填）。close-task 调 /doc-update 时会扫这段 + 工程合同 §10，呈交 PM 逐条确认改原文。
+
+不要让 PM 把这种偏差只在对话里说而不落到表里——会丢。
+
 输出格式：
 
 ```text

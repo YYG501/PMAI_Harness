@@ -131,6 +131,23 @@ def main() -> int:
         print("✅ 无变更文件，scope 校验通过", file=sys.stderr)
         return 0
 
+    task_stem = task_file.stem
+
+    # Implicit deny（sync 白名单：项目级 + 同 req 其他文档）必须优先于 allowlist
+    # empty 检查——否则 task 改了 DESIGN.md/CLAUDE.md 但 allowlist 缺失时会先报
+    # "allowlist 未声明"而漏报"sync 白名单 deny"，错误信息不准。
+    implicit_violations: list[str] = []
+    for p in paths:
+        idr = implicit_deny_reason(p, task_stem)
+        if idr is not None:
+            implicit_violations.append(f"{p}（{idr}）")
+
+    if implicit_violations:
+        print("❌ 越界文件（命中 sync 白名单 implicit deny）：", file=sys.stderr)
+        for v in implicit_violations:
+            print(f"   - {v}", file=sys.stderr)
+        return 1
+
     if not allow:
         if args.allow_empty:
             print(
@@ -144,15 +161,8 @@ def main() -> int:
         )
         return 1
 
-    task_stem = task_file.stem
-
     violations: list[str] = []
     for p in paths:
-        # Implicit deny（sync 白名单：项目级 + 同 req 其他文档）优先于 allowlist
-        idr = implicit_deny_reason(p, task_stem)
-        if idr is not None:
-            violations.append(f"{p}（{idr}）")
-            continue
         # Explicit deny list short-circuits
         if matches_any(p, deny):
             violations.append(f"{p}（命中 denylist）")

@@ -585,20 +585,43 @@ EOM
 
 ### 步骤 6：写文档偏差
 
-**兼容模式（`HAS_ENG=false`，旧格式 task）**：写入主文件 `## 文档偏差` section（旧版 section 名）。
+**两层分工**（PM-VIEW-RULES 双文件原则）：
 
-**新格式（`HAS_ENG=true`）**：写入 **工程合同**（`$ENG_FILE`）的「§10 文档偏差」表：
+| 偏差类型 | 写入位置 | 处理路径 |
+|---|---|---|
+| **工程层偏差**（字段命名 / 接口签名 / 组件路径 / 模块依赖与文档不一致） | 工程合同 §10 文档偏差表 | close-task → /doc-update 对账模式 |
+| **业务层偏差**（task 实证推翻或修订 req / 项目级文档的产品决策、需求描述、模块功能规格） | PM 视图「📁 历史档案 → 业务层偏差」表 | close-task → /doc-update 对账模式 |
 
-- 如果实现与文档描述一致：写「无偏差」
-- 如果有偏差：填写偏差表格
+**兼容模式（`HAS_ENG=false`，旧格式 task）**：所有偏差写入主文件 `## 文档偏差` section（旧版）。
+
+**新格式（`HAS_ENG=true`）— 工程合同 §10**：
 
 ```markdown
 | 文档位置 | 文档原文 | 实际实现 |
 |----------|----------|----------|
 | docs/modules/auth.md 第 15 行 | 使用 JWT 认证 | 改用 Session 认证（因 XX 原因） |
+| solution.engineering.md §3.2 | 用户表 user_id 是 INTEGER | 改 BIGINT（兼容大型租户）|
 ```
 
-业务行为偏差（PM 视角能看出的偏差）也可以记录在 PM 视图主文件「📁 历史档案」内一段说明；工程合同 §10 主要承载实现层偏差（字段命名 / 接口签名 / 组件路径与文档不一致等）。
+文档位置可以指向 **任何文档**：`docs/modules/<module>.md` / `solution.engineering.md` / `docs/DESIGN.md` / `docs/CONTEXT.md` 等。doc-update 对账模式按行精确读原文 + 生成 Edit 操作 + PM 逐条确认。
+
+**新格式（`HAS_ENG=true`）— PM 视图「📁 历史档案 → 业务层偏差」**：
+
+实证发现 brief / analysis / solution（PM 视图）/ prd / module 规格 内容需修订时填这里：
+
+```markdown
+| 文档位置 | 文档原文 | 实证发现 | 建议改法 |
+|---|---|---|---|
+| solution.md §🎯 决策 #2 | 选用方案 A | 实证 demo 后用户路径走不通 | 改方案 B（理由：...）|
+| brief.md「角色定义」段 | 三角色：admin/ops/user | 实证发现还有 readonly 角色 | 加 readonly 角色定义 |
+| docs/modules/account.md ### 1.2 使用角色 | "管理员一类角色" | 实证发现要拆"超管"+"普通管" | 拆两类角色描述 |
+```
+
+**默认值**：两段都写「无偏差」/「无」（多数 task 没偏差）。
+
+**判断口诀**：
+- 改的是「字段名 / 接口 / 组件路径 / 文件结构」→ 工程层 § 10
+- 改的是「业务规则 / 产品决策 / 需求描述 / 角色定义」→ 业务层 历史档案
 
 ### 步骤 7：输出"推荐 review 工具"区块（不自动调任何 review）
 

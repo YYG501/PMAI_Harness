@@ -30,7 +30,7 @@ test_call_modes_and_reconciliation_preserved() {
 
   _assert_contains "$DOC_UPDATE_SKILL" "对账模式（reconciliation mode）" "reconciliation call mode" || return
   _assert_contains "$DOC_UPDATE_SKILL" "沉淀模式（settlement mode）" "settlement call mode" || return
-  _assert_contains "$DOC_UPDATE_SKILL" "### 步骤 1.5：判断是否涉及模块规格功能清单（对账模式保留）" "step 1.5 preserved" || return
+  _assert_contains "$DOC_UPDATE_SKILL" "### 步骤 1.5：分流偏差（对账模式）" "step 1.5 dispatch (4.5e: extended scope)" || return
   _assert_contains "$DOC_UPDATE_SKILL" "### 步骤 1.6：模块规格对账（对账模式保留）" "step 1.6 preserved" || return
   _assert_contains "$DOC_UPDATE_SKILL" "对账仍遵循最小修改原则" "old reconciliation behavior preserved" || return
 

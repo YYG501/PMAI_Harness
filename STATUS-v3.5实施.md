@@ -7,11 +7,12 @@
 
 ## 当前位置（2026-05-01）
 
-阶段 **1 + 2 + 3 + 4 + 4.5（全段，含 d 修订）完成**，全测试套件 0 失败：
+阶段 **1 + 2 + 3 + 4 + 4.5（含 d 修订 + e patch）完成**，阶段 5/6/7/8/9 全部废弃 / 跳过。全测试套件 0 失败：
 
 ```
 （本次新增）
-            feat(structure): 4.5d.3 + 4.5d.4 req 级深度变更段 + task-spec §5 prose 合并
+            fix(v3.5): 4.5e 业务偏差反推 + P1/P2/P4 回归 patch
+750adea     feat(structure): 4.5d.3 + 4.5d.4 req 级深度变更段 + task-spec §5 prose 合并
 cc352d9     feat(structure): 4.5d.2 派生模板 prose 段 + custom 档（PM 自由编辑）
 f85a03f     refactor(structure): 4.5d.1 删除 framework 档（YAGNI，PM 否决）
 6cfc0af     feat(structure-inject): inject + init-project 接 intent + task-spec §5 双源（4.5c）
@@ -32,8 +33,9 @@ d131557     feat(task-execute): run-bg.sh watchdog + stall 检测协议升级
 worktree 文档同步（git show 绕 index）+ check-task-scope implicit deny +
 工程结构约束 schema 框架（4.5a）+ detect 4 档判定（4.5b/d.1）+
 inject 注入 + init-project 4 选项（含 custom）+ task-spec §5 prose 合并（4.5c/d.1/d.4）+
-派生模板 prose 深度指引（4.5d.2）+ req 级深度变更段（4.5d.3）+ close-req 同步提示（4.5d.3）。
-总测试 **254 通过 / 0 失败**。
+派生模板 prose 深度指引（4.5d.2）+ req 级深度变更段（4.5d.3）+ close-req 同步提示（4.5d.3）+
+业务层偏差反推（4.5e）+ P1/P2/P4 回归 patch。
+总测试 **265 通过 / 0 失败**。
 
 | Bug | 状态 |
 |---|---|
@@ -45,13 +47,7 @@ inject 注入 + init-project 4 选项（含 custom）+ task-spec §5 prose 合�
 
 ---
 
-## 下一步：阶段 6（task-plan 按字段拆 task — 整段废弃方向）→ 阶段 7（task-spec 改造）
-
-⚠️ plan 阶段 6（derive-task-types.py）已被 PM 否决（task 拆分由 PM 决定，不机械算）。阶段 7.1（PM 视图永远 PRD 等级）已在阶段 4.5c 的 task-spec SKILL §5 文档里隐含锁定；7.2 / 7.3 已被 4.5d.4 prose 合并实现。
-
-**阶段 5/6/7 实质上已被 4.5d 整体替代**。下一步应该是阶段 8（格式统一前置 + 校验 + stale）或阶段 9（PM 可见度 / dashboard）。
-
-## 下一步：阶段 4.5d 已完成 → 阶段 8 / 阶段 9（需 PM 决定优先级）
+## v3.5 plan 落地全景
 
 PM 修正 v3.5 plan 阶段 5/6 设计方向后，三层结构为：
 - **项目级**（CLAUDE.md「## 工程结构约束」）：prototype/system/custom/unknown 四档；prototype/system 派生模板含代码组织 + 实现深度 prose 指引；custom 是 PM 自由编辑骨架。**不强制 enum 字段表**——AI 读自然语言段落做实现指引
@@ -92,7 +88,20 @@ PM 修正 v3.5 plan 阶段 5/6 设计方向后，三层结构为：
 
 ### 4.5d 全段完成（d.1/d.2/d.3/d.4 全部）
 
-整段 4.5（探测档）+ 4.5d 修订（PM 否决 8 字段方向后重做）已闭合。下一步根据 PM 决定走阶段 8 / 阶段 9 / 别的优先级。
+整段 4.5（探测档）+ 4.5d 修订（PM 否决 8 字段方向后重做）已闭合。
+
+### 4.5e 已完成（业务偏差反推 + 回归 patch）
+
+PM 在 4.5d 收尾后回归审查，发现 4 个问题（P1 task-spec §5 措辞误导 / P2 check-task-scope implicit deny 顺序 / P3 sync 静默覆盖 / P4 STATUS 文档结构）+ 一个机制漏洞（task 实证发现 req / 项目级文档需修订时无结构化反推入口）。
+
+修复（不含 P3 — PM 决定不修，靠纪律走 req worktree 改 req 文档）：
+- **业务偏差反推**：`task.md.tmpl` 加「📁 历史档案 → 业务层偏差」表（默认「无」）；task-execute SKILL 步骤 6 加两层分工 + 多文档示例 + 判断口诀；doc-update SKILL Required Inputs 范围扩到 brief/analysis/solution PM 视图/prd；doc-update 步骤 1.5 改为按文档类型分流；task-submit 引导 PM 走查时填业务层偏差段
+- **P1**：task-spec §5「冲突由 close-req 自决」改成「task-execute / close-req 等多个时机自决」（措辞精确化）
+- **P2**：check-task-scope.py implicit deny 检查提到 allowlist empty 检查前（错误信息精确化）
+- **P4**：STATUS 删两个并列「## 下一步」section + 阶段 8/9 标跳过 + 加 v3.5 收尾段
+
+测试：新增 test-business-deviation.sh 10 条 + test-check-task-scope.sh 加 1 条（P2 优先级覆盖）。
+run-all：254 → 265，0 失败。
 
 ### 阶段 4.5c 已完成（inject + init-project + task-spec 接入）
 - `scripts/inject-structure-segment.py`：把工程结构约束段注入 CLAUDE.md，按 PM 选定的 intent（prototype / system / framework / unknown）写入对应内容；含 auto-detected 标，placeholder 已替换后二次 inject 拒绝（保护手填）
@@ -213,6 +222,7 @@ AI 收到后应该：
 | 阶段 4.5d.2 | — | ~50 分钟 | — |
 | 阶段 4.5d.3 | — | ~25 分钟 | — |
 | 阶段 4.5d.4 | — | ~20 分钟 | — |
+| 阶段 4.5e | — | ~70 分钟 | — |
 
 加速原因：
 - plan 详细到 API 签名 + 单测用例 + diff 草案
@@ -239,8 +249,9 @@ AI 收到后应该：
 | 4.5d.2 | 派生模板加 prose 深度指引 + custom 档 | ✅ 完成 |
 | 4.5d.3 | req 级「实现深度变更」段（自由文本）+ close-req 同步 | ✅ 完成 |
 | 4.5d.4 | task-spec §5 双源 → prose 合并（删冲突阻断）| ✅ 完成 |
+| 4.5e | 业务偏差反推 + P1/P2/P4 回归 patch | ✅ 完成 |
 | 5 | 实现程度三阶段流程 | ❌ 废弃（PM 否决 8 字段表，已被 4.5d 整体替代）|
 | 6 | task-plan 按字段拆（Python 决策表）| ❌ 废弃（PM 自主拆 task）|
 | 7 | task-spec 双源改造 | ❌ 废弃（已被 4.5d.4 实现）|
-| 8 | 格式统一前置 + 校验 + stale | ⏸ 待 PM 决定优先级 |
-| 9 | PM 可见度（req-status + STATUS.md）| ⏸ 待 PM 决定优先级 |
+| 8 | 格式统一前置 + 校验 + stale | ❌ 跳过（4.5d 后边际价值低；防漂移对象已不存在）|
+| 9 | PM 可见度（req-status + STATUS.md）| ❌ 跳过（PM 自有追踪能力，dashboard 低频；现 /task-status 已合格）|

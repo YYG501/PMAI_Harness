@@ -14,6 +14,7 @@ SUITES=(
   test-inject-structure.sh
   test-depth-change-section.sh
   test-task-spec-prose-merge.sh
+  test-business-deviation.sh
   test-task-spec.sh
   test-task-pm-feedback.sh
   test-task-plan.sh

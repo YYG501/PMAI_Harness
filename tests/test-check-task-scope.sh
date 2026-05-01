@@ -171,6 +171,39 @@ test_normal_code_path_allowlist_works() {
   rm -rf "$tmp"
 }
 
+test_implicit_deny_priority_over_empty_allowlist() {
+  start_test "implicit deny 优先于 allowlist empty 检查（P2 修复）"
+  local tmp=$(mktemp -d)
+  local task="$tmp/task-001-test.md"
+  # task 不声明 allowlist + 改了 DESIGN.md（双重场景）
+  cat > "$task" <<'HEADER'
+# Task 001: Test
+**状态：** 执行中
+**分支：** task-001-test
+
+## 执行范围
+
+## 验收标准
+- [ ] 完成
+HEADER
+
+  rc=$(_run_checker "$task" "DESIGN.md")
+  if [ "$rc" != "1" ]; then
+    _fail "应 exit 1，得 exit=$rc"
+    rm -rf "$tmp"
+    return
+  fi
+  # 错误信息应是 implicit deny 而不是 allowlist 未声明
+  if ! grep -q "项目级文档" /tmp/scope.err; then
+    _fail "错误信息应为 implicit deny（项目级文档），但被 allowlist empty 检查抢先"
+    cat /tmp/scope.err >&2
+    rm -rf "$tmp"
+    return
+  fi
+  pass_test
+  rm -rf "$tmp"
+}
+
 # -----------------------------------------------------------------
 # Run
 # -----------------------------------------------------------------
@@ -182,5 +215,6 @@ test_implicit_deny_brief_md
 test_own_task_pm_view_allowed
 test_own_engineering_contract_allowed
 test_normal_code_path_allowlist_works
+test_implicit_deny_priority_over_empty_allowlist
 
 report_results "check-task-scope"
