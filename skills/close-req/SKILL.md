@@ -71,6 +71,26 @@ echo "SKILL: close-req"
 - **有变化**：调用 `/project-prd-update`，从步骤 2a 产出的 req 级 PRD 增量并入 `docs/prd.md`。
 - **无变化**（纯文档基础设施 / 纯重构 / 纯 bugfix）：跳过，并在 close-report.md「文档变更」section 写一行说明（如"本 req 是文档基础设施增强，未改产品功能，docs/prd.md 不更新"）。
 
+### 步骤 2c：检查 req 级实现深度变更，提示 PM 是否同步项目级（4.5d.3）
+
+读 `$ACTIVE_REQ_DIR/solution.md` 的 `## 🔧 本轮实现深度变更` section。
+
+- 内容是「无变更」/ 留空 / section 不存在（旧 req 兼容）→ 跳过本步
+- 内容含变更描述 → 向 PM 呈交两段：
+  1. **req 级变更内容**（solution.md `## 🔧 本轮实现深度变更` 原文）
+  2. **项目级当前**：`$REPO_ROOT/CLAUDE.md` 的 `## 工程结构约束` section（auto-detected 标 + 派生内容）
+
+  问 PM：
+
+  > 本 req 改了项目代码架构。是否把变更同步到项目级 `CLAUDE.md`「## 工程结构约束」段（让后续 req 默认按新深度走）？
+  > - **[Y] 同步**：PM 手改 `$REPO_ROOT/CLAUDE.md`「## 工程结构约束」段，删 auto-detected 标后视为手填，框架不再覆盖
+  > - **[N] 不同步**：本 req 是一次性升级 / 试验，不影响后续 req 默认深度（项目级保持原档）
+
+  - PM 选 **Y**：AI 不替 PM 改项目级（手改 = PM 决策落地，AI 不抢）；提示 PM「请手改 `$REPO_ROOT/CLAUDE.md`，按本 req 升级写新版本」+ 等 PM 改完确认后再继续步骤 3
+  - PM 选 **N**：不动，本步骤结束
+
+**Why 不让 AI 自动改项目级**：项目级深度变更影响所有后续 req，是 PM 长期决策；AI 自动覆盖容易把试验性升级当成永久升级。让 PM 手改，PM 心智更明确「我在改全局规则」。
+
 ### 步骤 3：推进状态
 
 ```bash

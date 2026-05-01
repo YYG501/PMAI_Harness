@@ -12,6 +12,8 @@ SUITES=(
   test-structure-schema.sh
   test-detect-project-structure.sh
   test-inject-structure.sh
+  test-depth-change-section.sh
+  test-task-spec-prose-merge.sh
   test-task-spec.sh
   test-task-pm-feedback.sh
   test-task-plan.sh

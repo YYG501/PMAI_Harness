@@ -251,54 +251,58 @@ PM_VIEW_HASH=$(shasum -a 256 "$ACTIVE_REQ_DIR/tasks/task-NNN-<slug>.md" | cut -c
 5. 同模块已完成 task 的 PM 视图 + 工程合同
 6. 涉及的现有 prototype 文件路径
 
-#### §5 实现指引：双源拼接（项目级 + req 级，4.5c）
+#### §5 实现指引：项目级 + req 级 prose 合并（4.5d.4 修订）
 
-§5 实现指引由**两层约束**拼接而成：
+§5 实现指引由两层 prose 段落合并而成（**不是 enum 字段，不机械冲突阻断**）：
 
-**A 层 项目级（来自 CLAUDE.md「## 工程结构约束」段）**
+**A 层 项目级（CLAUDE.md「## 工程结构约束」段）**
 
-读 `$REPO_ROOT/CLAUDE.md` 的 `## 工程结构约束` section：
+读 `$REPO_ROOT/CLAUDE.md` 的 `## 工程结构约束` section（含 auto-detected 标的内容 = init-project 注入；删 auto-detected 标后视为 PM 手填，框架不再覆盖）。
 
-| 段内容 | 当前 task 应做 |
+四档行为：
+
+| 段内容 | A 层取值 |
 |---|---|
-| `prototype` 档（auto-detected: prototype 标）| 不抽 Template / hook / context；每页 self-contained 写死假数据；视觉一致靠 DESIGN.md + components/ui |
-| `system` 档（auto-detected: system 标）| 该抽就抽；store / hook / context 是 required signal |
-| 段不存在 / placeholder 未替换（`{{STRUCTURE_CONSTRAINTS}}`）/ unknown 档 | **A4 fallback**：警告 PM "项目级约束缺失或未定，建议跑 init-project 或 detect-project-structure 先补"，但不阻断；按通用约束继续 |
-| 无 auto-detected 标（PM 手填）| 按 PM 手填段执行，不假设档位 |
+| `prototype` 档（auto-detected: prototype 标）| prototype 派生模板：代码组织约束 + 实现深度 prose 指引（数据层 / 权限 / API / 测试 / 边界态 / 多端 / 演示路径）|
+| `system` 档（auto-detected: system 标）| 同上 system 档 |
+| `custom` 档（auto-detected: custom 标 / PM 手填骨架）| PM 自由编辑的 prose 段落（按当前内容采用） |
+| `unknown` 档 / 段不存在 / placeholder 未替换 | **fallback**：警告 PM「项目级约束缺失或未定，建议跑 init-project 或 detect-project-structure 先补」，但不阻断；A 层取空，按 B 层单源生成 |
 
-**B 层 req 级（来自 solution.md「本轮实现程度」结构化字段）**
+**B 层 req 级覆盖（solution.md「## 🔧 本轮实现深度变更」段）**
 
-读 `$ACTIVE_REQ_DIR/solution.md` 的「本轮实现程度」字段（如 `prototype` / `prototype+demo data` / `production-grade`）。req 级表达本轮 req 的内容深度倾向。
+读 `$ACTIVE_REQ_DIR/solution.md` 的 `## 🔧 本轮实现深度变更` section：
 
-**双源冲突检测（critical T13，A3 优先级）**
+- 内容是「无变更」/ 留空 / section 不存在 → B 层取空，§5 按 A 层单源生成
+- 内容含变更描述（自由文本）→ B 层取该 prose 段，作为对 A 层的覆盖项
 
-| 项目级 | req 级 | 行为 |
-|---|---|---|
-| prototype | prototype | ✅ 通过 |
-| system | prototype | ✅ 通过（系统项目允许某 req 简化）|
-| system | system | ✅ 通过 |
-| **prototype** | **完整系统**（含 store / Template / hook / context 这几个工程概念之一）| ❌ **阻断**：输出 "本项目工程结构是原型档，不能在 req 级独自做完整系统。要么改 CLAUDE.md（升级整个项目），要么改 solution.md（降级本 req）"；要求 PM 二选一后才生成工程合同 |
-| 缺段（旧项目兼容）| 任意 | fallback 不阻断，按 req 级单源生成 + 警告 |
+**合并语义（无机械冲突阻断）**
 
-**拼接结果写入工程合同 §5（实现指引）**：
+PM 已经在 close-req 步骤 2c 决定过「这个 req 的深度变更要不要同步到项目级」（见 close-req SKILL）。task-spec **不再做项目级 vs req 级的冲突检测**——任何组合都按 prose 合并直接拼到工程合同 §5；冲突由 PM 在 close-req 时自决。
+
+**拼接结果写入工程合同 §5**：
 
 ```markdown
 ## 5. 实现指引
 
-### 工程结构约束（项目级，硬约束）
+### 工程结构约束（项目级，A 层）
 
-[CLAUDE.md「## 工程结构约束」段；{prototype-root} 已替换为实际值]
+[CLAUDE.md「## 工程结构约束」段全文；{prototype-root} 已替换为实际值。
+A 层缺失时本节写「项目级未定 — A 层缺失，按 req 级单源生成」]
 
-### 本轮实现程度（req 级，内容深度）
+### 本轮实现深度变更（req 级，B 层）
 
-[solution.md「本轮实现程度」字段表]
+[solution.md「## 🔧 本轮实现深度变更」section 原文。
+B 层为「无变更」时本节写「无变更（沿用 A 层）」]
 
 ### 具体实现要求
 
-[按上述两层约束生成 task 级 actionable 指引；遵守项目级硬约束 + req 级深度]
+[基于 A + B 合并的有效深度生成 task 级 actionable 指引：
+ - A 层是项目默认风格（prose 段落）
+ - B 层 prose 描述本 req 的覆盖项（如有）
+ - AI 在 task-execute 写代码时按 B 层覆盖 + A 层兜底执行]
 ```
 
-如步骤 12 PM 选 B（修订 PM 视图）：本步骤跳过；步骤 12.5 reconcile 时按当前两源重新拼接。
+如步骤 12 PM 选 B（修订 PM 视图）：本步骤跳过；步骤 12.5 reconcile 时按当前 A + B 重新拼接。
 
 ### 步骤 10：自检（按 PM-VIEW-RULES §八 8 项）
 

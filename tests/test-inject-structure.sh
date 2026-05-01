@@ -216,31 +216,32 @@ PM_HANDFILLED
 # T13: task-spec SKILL §5 含双源冲突阻断规则
 # -----------------------------------------------------------------
 
-test_t13_task_spec_has_dual_source_rule() {
-  start_test "T13a: task-spec SKILL §5 拼接含项目级 + req 级双源说明"
-  if ! grep -q "双源拼接" "$TASK_SPEC_SKILL"; then
-    _fail "task-spec SKILL 应有「双源拼接」规则段（4.5c 注入）"
+test_t13_task_spec_has_prose_merge_rule() {
+  start_test "T13a: task-spec SKILL §5 含 A 层项目级 + B 层 req 级 prose 合并说明（4.5d.4）"
+  if ! grep -q "prose 合并\|prose 段落合并" "$TASK_SPEC_SKILL"; then
+    _fail "task-spec SKILL 应说明 A + B 是 prose 合并（不是 enum）"
     return
   fi
   if ! grep -q "工程结构约束" "$TASK_SPEC_SKILL"; then
-    _fail "task-spec SKILL 应引用 CLAUDE.md「工程结构约束」段"
+    _fail "task-spec SKILL 应引用 CLAUDE.md「工程结构约束」段（A 层）"
     return
   fi
-  if ! grep -q "本轮实现程度" "$TASK_SPEC_SKILL"; then
-    _fail "task-spec SKILL 应引用 solution.md「本轮实现程度」字段"
+  if ! grep -q "本轮实现深度变更" "$TASK_SPEC_SKILL"; then
+    _fail "task-spec SKILL 应引用 solution.md「本轮实现深度变更」段（B 层）"
     return
   fi
   pass_test
 }
 
-test_t13b_task_spec_blocks_prototype_with_full_system() {
-  start_test "T13b: task-spec SKILL 含 prototype + 完整系统的双源冲突阻断规则"
-  if ! grep -q "完整系统" "$TASK_SPEC_SKILL"; then
-    _fail "task-spec SKILL 应描述「完整系统」的 req 级判定"
+test_t13b_task_spec_no_conflict_blocking() {
+  start_test "T13b: task-spec SKILL 已移除双源机械冲突阻断（4.5d.4：冲突由 PM 在 close-req 自决）"
+  # 不再有「阻断 + PM 二选一」机械冲突表
+  if grep -q "改 CLAUDE.md.*改 solution.md\|改 solution.md.*改 CLAUDE.md" "$TASK_SPEC_SKILL"; then
+    _fail "task-spec SKILL 不应再有「冲突阻断 → PM 改 CLAUDE.md / solution.md 二选一」机械规则"
     return
   fi
-  if ! grep -q "改 CLAUDE.md" "$TASK_SPEC_SKILL" || ! grep -q "改 solution.md" "$TASK_SPEC_SKILL"; then
-    _fail "冲突时应给 PM 二选一指引（改 CLAUDE.md 升级 / 改 solution.md 降级）"
+  if ! grep -q "不再做项目级 vs req 级的冲突检测\|无机械冲突阻断" "$TASK_SPEC_SKILL"; then
+    _fail "task-spec SKILL 应明确说明已移除冲突阻断"
     return
   fi
   pass_test
@@ -311,8 +312,8 @@ test_t11d_inject_unknown_writes_placeholder
 test_t11e_inject_custom_writes_skeleton
 test_t11f_inject_prototype_includes_depth_prose
 test_t12_pm_handfilled_segment_not_overwritten
-test_t13_task_spec_has_dual_source_rule
-test_t13b_task_spec_blocks_prototype_with_full_system
+test_t13_task_spec_has_prose_merge_rule
+test_t13b_task_spec_no_conflict_blocking
 test_t13c_task_spec_no_framework_branch
 test_init_project_skill_asks_intent
 test_init_project_sh_accepts_intent_arg

@@ -7,11 +7,12 @@
 
 ## 当前位置（2026-05-01）
 
-阶段 **1 + 2 + 3 + 4 + 4.5a/b/c/d.1/d.2 完成**，全测试套件 0 失败：
+阶段 **1 + 2 + 3 + 4 + 4.5（全段，含 d 修订）完成**，全测试套件 0 失败：
 
 ```
 （本次新增）
-            feat(structure): 4.5d.2 派生模板 prose 段 + custom 档（PM 自由编辑）
+            feat(structure): 4.5d.3 + 4.5d.4 req 级深度变更段 + task-spec §5 prose 合并
+cc352d9     feat(structure): 4.5d.2 派生模板 prose 段 + custom 档（PM 自由编辑）
 f85a03f     refactor(structure): 4.5d.1 删除 framework 档（YAGNI，PM 否决）
 6cfc0af     feat(structure-inject): inject + init-project 接 intent + task-spec §5 双源（4.5c）
 9255782     feat(detect-structure): 5 档判定 + git ls-files 扫描（4.5b）
@@ -30,9 +31,9 @@ d131557     feat(task-execute): run-bg.sh watchdog + stall 检测协议升级
 修复 4 个 P0/P1 bug + parser 基础设施 + v2 fixture + test/SKILL 全对齐 +
 worktree 文档同步（git show 绕 index）+ check-task-scope implicit deny +
 工程结构约束 schema 框架（4.5a）+ detect 4 档判定（4.5b/d.1）+
-inject 注入 + init-project 4 选项（含 custom）+ task-spec §5 双源拼接（4.5c/d.1）+
-派生模板 prose 深度指引（4.5d.2）。
-总测试 **239 通过 / 0 失败**。
+inject 注入 + init-project 4 选项（含 custom）+ task-spec §5 prose 合并（4.5c/d.1/d.4）+
+派生模板 prose 深度指引（4.5d.2）+ req 级深度变更段（4.5d.3）+ close-req 同步提示（4.5d.3）。
+总测试 **254 通过 / 0 失败**。
 
 | Bug | 状态 |
 |---|---|
@@ -44,7 +45,13 @@ inject 注入 + init-project 4 选项（含 custom）+ task-spec §5 双源拼�
 
 ---
 
-## 下一步：阶段 4.5d.3（req 级「实现深度变更」段）
+## 下一步：阶段 6（task-plan 按字段拆 task — 整段废弃方向）→ 阶段 7（task-spec 改造）
+
+⚠️ plan 阶段 6（derive-task-types.py）已被 PM 否决（task 拆分由 PM 决定，不机械算）。阶段 7.1（PM 视图永远 PRD 等级）已在阶段 4.5c 的 task-spec SKILL §5 文档里隐含锁定；7.2 / 7.3 已被 4.5d.4 prose 合并实现。
+
+**阶段 5/6/7 实质上已被 4.5d 整体替代**。下一步应该是阶段 8（格式统一前置 + 校验 + stale）或阶段 9（PM 可见度 / dashboard）。
+
+## 下一步：阶段 4.5d 已完成 → 阶段 8 / 阶段 9（需 PM 决定优先级）
 
 PM 修正 v3.5 plan 阶段 5/6 设计方向后，三层结构为：
 - **项目级**（CLAUDE.md「## 工程结构约束」）：prototype/system/custom/unknown 四档；prototype/system 派生模板含代码组织 + 实现深度 prose 指引；custom 是 PM 自由编辑骨架。**不强制 enum 字段表**——AI 读自然语言段落做实现指引
@@ -52,6 +59,21 @@ PM 修正 v3.5 plan 阶段 5/6 设计方向后，三层结构为：
 - **task 级**：PM 在 task-plan 自己拆，文档永远 PRD 等级；工程合同 §5 按合并后深度生成实现指引
 
 ⚠️ 之前 plan 阶段 5/6 的 8 字段表 + derive-task-types.py 设计**整体废弃**（PM 否决：8 维度不通用 + 强制结构化破坏 PM-DX 渐进精神）。改用 prose 段落 + 三档 + custom 兜底。
+
+### 阶段 4.5d.3 已完成（req 级「实现深度变更」段 + close-req 同步提示）
+- `templates/solution.md.tmpl`：在「✅ 验收标准」与「📁 历史档案」之间加 `## 🔧 本轮实现深度变更` section，默认填「无变更」（自由文本，不是字段表）
+- `skills/req-solution/SKILL.md`：步骤 3 章节顺序加「11. 🔧 本轮实现深度变更」+ 何时填指引（99% req 都填「无变更」）
+- `skills/close-req/SKILL.md`：加步骤 2c：检查 req 级深度变更段，非「无变更」时呈交两段（req 级原文 + 项目级当前）+ 给 PM Y/N 选择是否同步项目级；AI **不自动改**项目级 CLAUDE.md（手改 = PM 长期决策落地，AI 不抢）
+- 9 条新测试：`tests/test-depth-change-section.sh`（模板 section 存在 + 默认无变更 + 注释含规则；req-solution SKILL 章节顺序 + 何时填指引；close-req 步骤 2c + 跳过条件 + Y/N 选择 + 不自动改项目级）
+
+### 阶段 4.5d.4 已完成（task-spec §5 双源 → prose 合并）
+- `skills/task-spec/SKILL.md` 步骤 9 §5 子段重写：
+  - A 层 4 档行为表（prototype/system/custom/unknown，custom 是 4.5d.2 新加）
+  - B 层 三态行为：「无变更」/ 留空 / 含变更（自由文本，不是 enum）
+  - **删除原 5×2 双源冲突表 + 阻断逻辑**：冲突已由 PM 在 close-req 步骤 2c 决定，task-spec 不再做机械检测
+  - 拼接结果模板三段：「工程结构约束（A 层）」+「本轮实现深度变更（B 层）」+「具体实现要求」
+- 6 条新测试：`tests/test-task-spec-prose-merge.sh`（4 档行为 + B 层三态 + 不冲突阻断 + fallback 不阻断 + 三段拼接模板 + PM 手填路径）
+- 同步修订 inject-structure 测试（T13a 改成 prose 合并断言；T13b 改成无冲突阻断断言）
 
 ### 阶段 4.5d.2 已完成（prose 派生模板 + custom 档）
 - `scripts/derive-structure-templates.py`：加 `DEPTH_GUIDANCE`（prototype/system 各 7 条 prose 深度指引：数据层 / 权限 / API 契约 / 测试 / 边界态 / 多端 / 演示路径）；`render_template` 输出三段：代码组织 + 实现深度指引 + 约定；新增 `_render_custom_template` 派生 PM 自由编辑骨架
@@ -68,12 +90,9 @@ PM 修正 v3.5 plan 阶段 5/6 设计方向后，三层结构为：
 - 6 文件清理 + 测试调整：detect / inject / init-project / task-spec / CLAUDE.md.tmpl / 测试 framework 引用全删，本仓自检从 framework 改判 unknown
 - 测试：detect 6/6（test_framework_project → test_non_product_repo_falls_to_unknown；test_self_repo_is_framework → test_self_repo_is_unknown）；inject 10/10（T11b inject framework 改成「拒绝 framework intent」）
 
-### 4.5d 后续待做
+### 4.5d 全段完成（d.1/d.2/d.3/d.4 全部）
 
-| 子段 | 内容 | 估时 |
-|---|---|---|
-| **4.5d.3** | req 级「实现深度变更」段（自由文本，不是字段表）+ close-req 同步提示 | ~30-45 分钟 |
-| **4.5d.4** | task-spec §5 双源单源化（删冲突阻断 + 改成 prose 合并覆盖语义）| ~20-30 分钟 |
+整段 4.5（探测档）+ 4.5d 修订（PM 否决 8 字段方向后重做）已闭合。下一步根据 PM 决定走阶段 8 / 阶段 9 / 别的优先级。
 
 ### 阶段 4.5c 已完成（inject + init-project + task-spec 接入）
 - `scripts/inject-structure-segment.py`：把工程结构约束段注入 CLAUDE.md，按 PM 选定的 intent（prototype / system / framework / unknown）写入对应内容；含 auto-detected 标，placeholder 已替换后二次 inject 拒绝（保护手填）
@@ -192,6 +211,8 @@ AI 收到后应该：
 | 阶段 4.5c | 0.5 天 | ~40 分钟 | ~6x |
 | 阶段 4.5d.1 | — | ~25 分钟 | — |
 | 阶段 4.5d.2 | — | ~50 分钟 | — |
+| 阶段 4.5d.3 | — | ~25 分钟 | — |
+| 阶段 4.5d.4 | — | ~20 分钟 | — |
 
 加速原因：
 - plan 详细到 API 签名 + 单测用例 + diff 草案
@@ -216,10 +237,10 @@ AI 收到后应该：
 | 4.5c | inject + init-project intent + task-spec §5 双源 | ✅ 完成 |
 | 4.5d.1 | 删 framework 档（YAGNI，PM 否决）| ✅ 完成 |
 | 4.5d.2 | 派生模板加 prose 深度指引 + custom 档 | ✅ 完成 |
-| 4.5d.3 | req 级「实现深度变更」段（自由文本）+ close-req 同步 | ⏸ 下一步 |
-| 4.5d.4 | task-spec §5 双源 → 单源 prose 合并 | ⏸ |
-| 5 | 实现程度三阶段流程 | ⏸ |
-| 6 | task-plan 按字段拆（Python 决策表）| ⏸ |
-| 7 | task-spec 双源改造 | ⏸ |
-| 8 | 格式统一前置 + 校验 + stale | ⏸ |
-| 9 | PM 可见度（req-status + STATUS.md）| ⏸ |
+| 4.5d.3 | req 级「实现深度变更」段（自由文本）+ close-req 同步 | ✅ 完成 |
+| 4.5d.4 | task-spec §5 双源 → prose 合并（删冲突阻断）| ✅ 完成 |
+| 5 | 实现程度三阶段流程 | ❌ 废弃（PM 否决 8 字段表，已被 4.5d 整体替代）|
+| 6 | task-plan 按字段拆（Python 决策表）| ❌ 废弃（PM 自主拆 task）|
+| 7 | task-spec 双源改造 | ❌ 废弃（已被 4.5d.4 实现）|
+| 8 | 格式统一前置 + 校验 + stale | ⏸ 待 PM 决定优先级 |
+| 9 | PM 可见度（req-status + STATUS.md）| ⏸ 待 PM 决定优先级 |
