@@ -9,6 +9,7 @@ SUITES=(
   test-fixture-v2.sh
   test-sync-req-docs.sh
   test-check-task-scope.sh
+  test-structure-schema.sh
   test-task-spec.sh
   test-task-pm-feedback.sh
   test-task-plan.sh

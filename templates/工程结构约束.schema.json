@@ -1,0 +1,88 @@
+{
+  "$comment": "单一 source of truth — 派生 detect 信号 + 两份模板（4.5a）。Plan 原指定 yaml；改 json 是为了保 zero-dep（PyYAML 不在 stdlib）。结构等价。",
+  "schema_version": 1,
+  "signals": {
+    "template_abstraction": {
+      "globs": [
+        "**/framework/page/*Template*.{ts,tsx}",
+        "**/framework/templates/**/*.{ts,tsx}",
+        "**/page-templates/*.{ts,tsx}"
+      ],
+      "implies": "system",
+      "prototype_action": "forbid",
+      "system_action": "required",
+      "summary": "Page Template 抽象（多页共享 props 接口）"
+    },
+    "hook_abstraction": {
+      "globs": [
+        "**/framework/hooks/**/*.{ts,tsx}",
+        "**/lib/hooks/**/*.{ts,tsx}"
+      ],
+      "implies": "system",
+      "prototype_action": "forbid",
+      "system_action": "required",
+      "summary": "可复用 hook 抽象（业务行为脱离单页）"
+    },
+    "context_state": {
+      "globs": [
+        "**/framework/context/**/*.{ts,tsx}",
+        "**/contexts/**/*.{ts,tsx}"
+      ],
+      "implies": "system",
+      "prototype_action": "forbid",
+      "system_action": "required",
+      "summary": "Context-based 跨页面状态"
+    },
+    "pages_middle_layer": {
+      "globs": [
+        "**/modules/*/pages/**/*.{ts,tsx}"
+      ],
+      "implies": "system",
+      "prototype_action": "forbid",
+      "system_action": "required",
+      "summary": "modules/<m>/pages 中间层（路由与页面解耦）"
+    },
+    "domain_store": {
+      "globs": [
+        "**/modules/*/lib/store*.{ts,tsx}",
+        "**/lib/stores/**/*.{ts,tsx}"
+      ],
+      "implies": "system",
+      "prototype_action": "forbid",
+      "system_action": "required",
+      "summary": "领域 store / state container"
+    },
+    "components_ui": {
+      "globs": [
+        "**/components/ui/**/*.{ts,tsx}"
+      ],
+      "implies": "prototype-friendly",
+      "prototype_action": "keep",
+      "system_action": "keep",
+      "summary": "shadcn primitive UI（token 来自 DESIGN.md）"
+    },
+    "framework_layout": {
+      "globs": [
+        "**/framework/layout/*.{ts,tsx}"
+      ],
+      "implies": "prototype-friendly",
+      "prototype_action": "keep",
+      "system_action": "keep",
+      "summary": "壳子布局复用（真实多页共用）"
+    }
+  },
+  "scan_excludes": [
+    "**/node_modules/**",
+    "**/.next/**",
+    "**/dist/**",
+    "**/build/**",
+    "**/.git/**",
+    "**/coverage/**",
+    "**/.gstack/**"
+  ],
+  "scan_roots_default": [
+    "src/",
+    "prototypes/src/",
+    "apps/*/src/"
+  ]
+}
