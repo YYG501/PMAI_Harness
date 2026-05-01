@@ -23,7 +23,6 @@ description: |
 4. **项目意图**（工程结构约束）：
    - `prototype` — 原型档：每页 self-contained，不抽 Template / hook / context；视觉一致性靠 DESIGN.md + components/ui
    - `system` — 系统档：抽 Template / hook / context-state / pages 中间层 / domain store；多页协作 + 长尾分叉控制
-   - `framework` — 生成器 / 工具仓 / 纯 CLI：本段不约束代码组织（写「N/A」）
    - `unknown` — PM 暂不决定，留 placeholder 让 PM 后续跑 `python3 .claude/scripts/detect-project-structure.py` 看推荐再选
 
 如果 PM 只给了部分信息，逐个追问缺失项。**意图字段必填**——没意图就走 unknown 兜底，不要默认猜。

@@ -144,10 +144,10 @@ test_claude_tmpl_has_placeholder() {
   pass_test
 }
 
-test_claude_tmpl_documents_framework_branch() {
-  start_test "CLAUDE.md.tmpl placeholder 注释提到 framework 第三档"
-  if ! grep -q "framework" "$CLAUDE_TMPL"; then
-    _fail "CLAUDE.md.tmpl 工程结构约束 placeholder 应说明 framework 档行为"
+test_claude_tmpl_documents_unknown_branch() {
+  start_test "CLAUDE.md.tmpl placeholder 注释提到 unknown 兜底档（4.5d.1: framework 已删）"
+  if ! grep -q "unknown 档" "$CLAUDE_TMPL"; then
+    _fail "CLAUDE.md.tmpl 工程结构约束 placeholder 应说明 unknown 档行为"
     return
   fi
   pass_test
@@ -165,6 +165,6 @@ test_check_mode_passes_for_synced
 test_check_mode_detects_drift
 test_invalid_schema_rejected
 test_claude_tmpl_has_placeholder
-test_claude_tmpl_documents_framework_branch
+test_claude_tmpl_documents_unknown_branch
 
 report_results "structure-schema"

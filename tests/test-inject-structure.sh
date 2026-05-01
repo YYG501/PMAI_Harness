@@ -53,24 +53,41 @@ test_t11_inject_prototype_writes_marker() {
   rm -rf "$tmp"
 }
 
-test_t11b_inject_framework_writes_na() {
-  start_test "T11b: inject framework → 段落写 N/A + auto-detected 标"
+test_t11b_inject_framework_intent_rejected() {
+  start_test "T11b: framework 档已删除，inject 应拒绝该 intent（exit 2）"
   local tmp; tmp=$(mktemp -d)
   local md="$tmp/CLAUDE.md"
   _copy_tmpl_with_placeholder "$md"
 
-  if ! python3 "$INJECT" "$md" framework --framework-root "$REPO_ROOT" >/dev/null 2>&1; then
-    _fail "inject framework 退出非 0"
+  rc=0
+  python3 "$INJECT" "$md" framework --framework-root "$REPO_ROOT" >/dev/null 2>&1 || rc=$?
+  if [ "$rc" == "0" ]; then
+    _fail "framework 档已删除，inject 不应接受这个 intent"
     rm -rf "$tmp"
     return
   fi
-  if ! grep -q "auto-detected: framework" "$md"; then
-    _fail "CLAUDE.md 应含 auto-detected: framework 标"
+  pass_test
+  rm -rf "$tmp"
+}
+
+test_t11d_inject_unknown_writes_placeholder() {
+  start_test "T11d: inject unknown → 段落含 auto-detected: unknown + 提示 PM 跑 detect"
+  local tmp; tmp=$(mktemp -d)
+  local md="$tmp/CLAUDE.md"
+  _copy_tmpl_with_placeholder "$md"
+
+  if ! python3 "$INJECT" "$md" unknown --framework-root "$REPO_ROOT" >/dev/null 2>&1; then
+    _fail "inject unknown 退出非 0"
     rm -rf "$tmp"
     return
   fi
-  if ! grep -q "N/A — framework" "$md"; then
-    _fail "framework 档应写 N/A"
+  if ! grep -q "auto-detected: unknown" "$md"; then
+    _fail "CLAUDE.md 应含 auto-detected: unknown 标"
+    rm -rf "$tmp"
+    return
+  fi
+  if ! grep -q "detect-project-structure.py" "$md"; then
+    _fail "unknown 档应提示 PM 跑 detect"
     rm -rf "$tmp"
     return
   fi
@@ -178,10 +195,11 @@ test_t13b_task_spec_blocks_prototype_with_full_system() {
   pass_test
 }
 
-test_t13c_task_spec_framework_path_skips() {
-  start_test "T13c: framework 档跳过双源校验（写 N/A）"
-  if ! grep -E "framework.*跳过|跳过.*framework" "$TASK_SPEC_SKILL" >/dev/null; then
-    _fail "task-spec SKILL 应说明 framework 档跳过校验"
+test_t13c_task_spec_no_framework_branch() {
+  start_test "T13c: task-spec SKILL §5 已移除 framework 档分支"
+  # 在 §5 双源拼接段（步骤 9 内）应该不再出现 framework 档处理
+  if grep -E "framework 档|framework.*跳过|跳过.*framework" "$TASK_SPEC_SKILL" >/dev/null; then
+    _fail "task-spec SKILL 应已移除 framework 档分支（4.5d.1 删除）"
     return
   fi
   pass_test
@@ -197,9 +215,15 @@ test_init_project_skill_asks_intent() {
     _fail "init-project SKILL 应询问 PM「项目意图」"
     return
   fi
-  if ! grep -q "prototype.*system.*framework" "$INIT_PROJECT_SKILL" \
-     && ! grep -q "framework.*工具仓\|N/A" "$INIT_PROJECT_SKILL"; then
-    _fail "init-project SKILL 应列出 prototype / system / framework 三个意图选项"
+  # 应只列出 prototype / system / unknown 三选项（4.5d.1 删除 framework）
+  for opt in "prototype" "system" "unknown"; do
+    if ! grep -q "\`$opt\`" "$INIT_PROJECT_SKILL"; then
+      _fail "init-project SKILL 应含 \`$opt\` 选项"
+      return
+    fi
+  done
+  if grep -q "\`framework\`" "$INIT_PROJECT_SKILL"; then
+    _fail "init-project SKILL 不应再含 framework 选项（4.5d.1 删除）"
     return
   fi
   pass_test
@@ -212,9 +236,13 @@ test_init_project_sh_accepts_intent_arg() {
     _fail "init-project.sh 用法应含 project-intent"
     return
   fi
-  # 应有 case 校验
-  if ! grep -q 'prototype|system|framework|unknown' "$INIT_PROJECT_SH"; then
-    _fail "init-project.sh 应校验 intent ∈ {prototype/system/framework/unknown}"
+  # 应有 case 校验（4.5d.1 删除 framework，只剩 3 档）
+  if ! grep -q 'prototype|system|unknown' "$INIT_PROJECT_SH"; then
+    _fail "init-project.sh 应校验 intent ∈ {prototype/system/unknown}"
+    return
+  fi
+  if grep -q 'framework|unknown\|prototype|system|framework' "$INIT_PROJECT_SH"; then
+    _fail "init-project.sh case 校验不应再含 framework"
     return
   fi
   pass_test
@@ -225,12 +253,13 @@ test_init_project_sh_accepts_intent_arg() {
 # -----------------------------------------------------------------
 
 test_t11_inject_prototype_writes_marker
-test_t11b_inject_framework_writes_na
+test_t11b_inject_framework_intent_rejected
 test_t11c_inject_idempotent_blocks_second_call
+test_t11d_inject_unknown_writes_placeholder
 test_t12_pm_handfilled_segment_not_overwritten
 test_t13_task_spec_has_dual_source_rule
 test_t13b_task_spec_blocks_prototype_with_full_system
-test_t13c_task_spec_framework_path_skips
+test_t13c_task_spec_no_framework_branch
 test_init_project_skill_asks_intent
 test_init_project_sh_accepts_intent_arg
 

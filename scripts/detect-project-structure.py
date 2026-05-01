@@ -1,20 +1,19 @@
 #!/usr/bin/env python3
-"""探测项目工程结构：prototype / system / hybrid / framework / unknown。
+"""探测项目工程结构：prototype / system / hybrid / unknown。
 
 读 templates/工程结构约束.schema.json，扫描项目（**用 `git ls-files` 取
 tracked 列表**避免 pathlib.glob 在大仓 IO 退化），按 signal globs 做
 fnmatch 命中，输出多维度报告 + 总判定 + 置信度 + 实际证据。
 
-第五档 framework 是本项目（PM-AI-Workflow）这种生成器 / 纯工具仓的兜底
-档：scan_roots（src/ / prototypes/src/ / apps/*/src/）下完全没 ts/tsx
-文件 → 判 framework，不走 prototype/system 二元约束。
-
 判定规则：
     system_signals_hit ≥ 2 + prototype-friendly_signals_hit == 0  → system
     system_signals_hit ≥ 1 + prototype-friendly_signals_hit ≥ 1  → hybrid
     system_signals_hit == 0 + prototype-friendly_signals_hit ≥ 1 → prototype
-    scan_roots 下无任何 ts/tsx 文件                              → framework
-    其余                                                          → unknown
+    其余（含 scan_roots 下无 ts/tsx 文件）                          → unknown
+
+注：detect 不为「生成器仓 / 纯工具仓」开特殊档——本框架的服务对象是 PM
+单人业务仓，非业务仓不应跑 init-project 流程，detect 在这种仓上判 unknown
+是预期行为（让 PM 自己判断要不要继续）。
 
 置信度：根据 hit 数 + 反向 signal 缺失情况线性叠加（详见
 `compute_judgment`）。
@@ -41,7 +40,7 @@ from typing import Optional
 REPO_ROOT_DEFAULT = Path(__file__).resolve().parent.parent
 SCHEMA_REL = "templates/工程结构约束.schema.json"
 
-VALID_JUDGMENTS = ("prototype", "system", "hybrid", "framework", "unknown")
+VALID_JUDGMENTS = ("prototype", "system", "hybrid", "unknown")
 
 
 def git_ls_files(repo: Path) -> list[str]:
@@ -163,10 +162,6 @@ def compute_judgment(
         1 for r in signal_results.values()
         if r["present"] and r["implies"] == "prototype-friendly"
     )
-
-    # framework 第三档：scan_roots 下完全没 ts/tsx → 不是产品代码仓
-    if len(ts_under_roots) == 0 and sys_hits == 0 and proto_hits == 0:
-        return ("framework", 0.7, "scan_roots 下无 ts/tsx 文件——生成器/工具仓")
 
     if sys_hits >= 2 and proto_hits == 0:
         # 强 system 信号且无 prototype-friendly 反向：高置信

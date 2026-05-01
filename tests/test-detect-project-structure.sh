@@ -124,8 +124,8 @@ test_hybrid_project() {
   rm -rf "$repo"
 }
 
-test_framework_project() {
-  start_test "framework 项目：scan_roots 下无 ts/tsx（生成器仓）"
+test_non_product_repo_falls_to_unknown() {
+  start_test "非产品仓（scan_roots 下无 ts/tsx）→ unknown，让 PM 自决"
   local repo
   repo=$(_make_repo)
   _commit_file "$repo" "scripts/foo.py"
@@ -135,8 +135,8 @@ test_framework_project() {
 
   local result
   result=$(_detect_judgment "$repo")
-  if [[ "$result" != "framework "* ]]; then
-    _fail "expected 'framework'，得：$result"
+  if [[ "$result" != "unknown "* ]]; then
+    _fail "expected 'unknown'，得：$result"
     rm -rf "$repo"
     return
   fi
@@ -164,13 +164,13 @@ test_unknown_project() {
   rm -rf "$repo"
 }
 
-test_self_repo_is_framework() {
-  start_test "self check: PM-AI-Workflow 本仓判 framework"
+test_self_repo_is_unknown() {
+  start_test "self check: PM-AI-Workflow 本仓判 unknown（非产品仓，本不该跑 detect）"
   local result
   result=$(python3 "$DETECT" --json 2>/dev/null \
     | python3 -c "import json,sys; d=json.load(sys.stdin); print(d['judgment'])")
-  if [ "$result" != "framework" ]; then
-    _fail "本仓应判 framework（无 src/、纯生成器仓），得：$result"
+  if [ "$result" != "unknown" ]; then
+    _fail "本仓 (生成器源头) 应判 unknown，得：$result"
     return
   fi
   pass_test
@@ -183,8 +183,8 @@ test_self_repo_is_framework() {
 test_prototype_project
 test_system_project
 test_hybrid_project
-test_framework_project
+test_non_product_repo_falls_to_unknown
 test_unknown_project
-test_self_repo_is_framework
+test_self_repo_is_unknown
 
 report_results "detect-project-structure"

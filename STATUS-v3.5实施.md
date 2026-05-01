@@ -7,12 +7,13 @@
 
 ## 当前位置（2026-05-01）
 
-阶段 **1 + 2 + 3 + 4 + 4.5（全段）完成**，全测试套件 0 失败：
+阶段 **1 + 2 + 3 + 4 + 4.5a/b/c/d.1 完成**，全测试套件 0 失败：
 
 ```
 （本次新增）
-            feat(structure-inject): inject + init-project 接 intent + task-spec §5 双源（4.5c）
-9255782     feat(detect-structure): 5 档判定 + framework 第三档 + git ls-files 扫描（4.5b）
+            refactor(structure): 4.5d.1 删除 framework 档（YAGNI，PM 否决）
+6cfc0af     feat(structure-inject): inject + init-project 接 intent + task-spec §5 双源（4.5c）
+9255782     feat(detect-structure): 5 档判定 + git ls-files 扫描（4.5b）
 790c659     feat(structure-schema): 工程结构约束 schema + derive 派生 + CLAUDE.md.tmpl 加段（4.5a 框架）
 092eb72     feat(sync-req-docs): worktree 文档同步（git show 绕 index）+ check-task-scope implicit deny
 （前序，已落 main）
@@ -27,9 +28,9 @@ d131557     feat(task-execute): run-bg.sh watchdog + stall 检测协议升级
 
 修复 4 个 P0/P1 bug + parser 基础设施 + v2 fixture + test/SKILL 全对齐 +
 worktree 文档同步（git show 绕 index）+ check-task-scope implicit deny +
-工程结构约束 schema 框架（4.5a）+ detect 5 档判定（4.5b）+
-inject 注入 + init-project 4th arg + task-spec §5 双源拼接（4.5c）。
-总测试 **233 通过 / 0 失败**。
+工程结构约束 schema 框架（4.5a）+ detect 4 档判定（4.5b/d.1）+
+inject 注入 + init-project 3 选项 + task-spec §5 双源拼接（4.5c/d.1）。
+总测试 **234 通过 / 0 失败**。
 
 | Bug | 状态 |
 |---|---|
@@ -41,9 +42,25 @@ inject 注入 + init-project 4th arg + task-spec §5 双源拼接（4.5c）。
 
 ---
 
-## 下一步：阶段 5（实现程度三阶段流程）
+## 下一步：阶段 4.5d.2（custom 档 + 7 维度深度配置扩展）
 
-详见：`实施计划-实现程度与格式对齐.md` 阶段 5（行 394 起）。
+PM 修正 v3.5 plan 阶段 5/6 设计方向后，阶段 5/6/7 整体重构为三层结构：
+- **项目级**（CLAUDE.md「## 工程结构约束」）：完整深度默认配置（代码组织 + 数据 + 权限 + 测试 + 边界 + 接口 + 多端 + 路径 7 维度）
+- **req 级**（solution.md「本轮实现深度变更」）：默认空，仅在 req 改造代码架构时显式列出变更项；close-req 同步项目级
+- **task 级**：PM 在 task-plan 自己拆，文档永远 PRD 等级；工程合同 §5 按合并后深度生成实现指引
+
+### 阶段 4.5d.1 已完成（删 framework 档）
+- 「framework」是探测兜底档，PM 不会选用（本框架目标是 PM 单人业务工具，非 framework 项目仓）
+- 6 文件清理 + 测试调整：detect / inject / init-project / task-spec / CLAUDE.md.tmpl / 测试 framework 引用全删，本仓自检从 framework 改判 unknown
+- 测试：detect 6/6（test_framework_project → test_non_product_repo_falls_to_unknown；test_self_repo_is_framework → test_self_repo_is_unknown）；inject 10/10（T11b inject framework 改成「拒绝 framework intent」）
+
+### 4.5d 后续待做
+
+| 子段 | 内容 | 估时 |
+|---|---|---|
+| **4.5d.2** | custom 档 + 7 维度深度配置扩展（schema + 派生模板 + inject）| ~60-90 分钟 |
+| **4.5d.3** | req 级「实现深度变更」段（solution.md.tmpl + req-solution + close-req 同步）| ~45 分钟 |
+| **4.5d.4** | task-spec §5 双源单源化（删冲突阻断 + 改成项目级 + req 级覆盖合并）| ~30 分钟 |
 
 ### 阶段 4.5c 已完成（inject + init-project + task-spec 接入）
 - `scripts/inject-structure-segment.py`：把工程结构约束段注入 CLAUDE.md，按 PM 选定的 intent（prototype / system / framework / unknown）写入对应内容；含 auto-detected 标，placeholder 已替换后二次 inject 拒绝（保护手填）
@@ -160,6 +177,7 @@ AI 收到后应该：
 | 阶段 4.5a | — | ~30 分钟 | — |
 | 阶段 4.5b | — | ~25 分钟 | — |
 | 阶段 4.5c | 0.5 天 | ~40 分钟 | ~6x |
+| 阶段 4.5d.1 | — | ~25 分钟 | — |
 
 加速原因：
 - plan 详细到 API 签名 + 单测用例 + diff 草案
@@ -182,6 +200,10 @@ AI 收到后应该：
 | 4.5a | 工程结构约束 schema + 派生 + CLAUDE.md.tmpl 段 | ✅ 完成 |
 | 4.5b | detect-project-structure.py + framework 第三档 | ✅ 完成 |
 | 4.5c | inject + init-project intent + task-spec §5 双源 | ✅ 完成 |
+| 4.5d.1 | 删 framework 档（YAGNI，PM 否决）| ✅ 完成 |
+| 4.5d.2 | 加 custom 档 + 7 维度深度配置扩展 | ⏸ 下一步 |
+| 4.5d.3 | req 级「实现深度变更」段 + close-req 同步 | ⏸ |
+| 4.5d.4 | task-spec §5 双源 → 单源（删冲突阻断）| ⏸ |
 | 5 | 实现程度三阶段流程 | ⏸ |
 | 6 | task-plan 按字段拆（Python 决策表）| ⏸ |
 | 7 | task-spec 双源改造 | ⏸ |

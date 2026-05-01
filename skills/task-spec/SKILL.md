@@ -263,8 +263,7 @@ PM_VIEW_HASH=$(shasum -a 256 "$ACTIVE_REQ_DIR/tasks/task-NNN-<slug>.md" | cut -c
 |---|---|
 | `prototype` 档（auto-detected: prototype 标）| 不抽 Template / hook / context；每页 self-contained 写死假数据；视觉一致靠 DESIGN.md + components/ui |
 | `system` 档（auto-detected: system 标）| 该抽就抽；store / hook / context 是 required signal |
-| `framework` 档（auto-detected: framework 标）| §5 跳过项目级约束（写 N/A — 工具仓不约束代码组织）|
-| 段不存在 / placeholder 未替换（`{{STRUCTURE_CONSTRAINTS}}`）| **A4 fallback**：警告 PM "项目级约束缺失，建议跑 init-project 或 detect-project-structure 先补"，但不阻断；按 unknown 档继续 |
+| 段不存在 / placeholder 未替换（`{{STRUCTURE_CONSTRAINTS}}`）/ unknown 档 | **A4 fallback**：警告 PM "项目级约束缺失或未定，建议跑 init-project 或 detect-project-structure 先补"，但不阻断；按通用约束继续 |
 | 无 auto-detected 标（PM 手填）| 按 PM 手填段执行，不假设档位 |
 
 **B 层 req 级（来自 solution.md「本轮实现程度」结构化字段）**
@@ -279,7 +278,6 @@ PM_VIEW_HASH=$(shasum -a 256 "$ACTIVE_REQ_DIR/tasks/task-NNN-<slug>.md" | cut -c
 | system | prototype | ✅ 通过（系统项目允许某 req 简化）|
 | system | system | ✅ 通过 |
 | **prototype** | **完整系统**（含 store / Template / hook / context 这几个工程概念之一）| ❌ **阻断**：输出 "本项目工程结构是原型档，不能在 req 级独自做完整系统。要么改 CLAUDE.md（升级整个项目），要么改 solution.md（降级本 req）"；要求 PM 二选一后才生成工程合同 |
-| framework | 任意 | 跳过双源校验，§5 写 N/A |
 | 缺段（旧项目兼容）| 任意 | fallback 不阻断，按 req 级单源生成 + 警告 |
 
 **拼接结果写入工程合同 §5（实现指引）**：

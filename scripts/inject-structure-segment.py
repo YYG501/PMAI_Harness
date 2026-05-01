@@ -6,10 +6,9 @@
     prototype  → 派生自 templates/工程结构约束-prototype.md，去掉 AUTO-GENERATED
                  顶部 marker，包一层 auto-detected marker
     system     → 同上 system
-    framework  → 「N/A — framework 项目」+ auto-detected marker
     unknown    → 占位提示 PM 跑 detect 或手动选
 
-CLAUDE.md「## 工程结构约束」section 顶部已有 placeholder 注释解释三档行为
+CLAUDE.md「## 工程结构约束」section 顶部已有 placeholder 注释解释档位行为
 （templates/CLAUDE.md.tmpl）；本脚本仅替换 `{{STRUCTURE_CONSTRAINTS}}` 的具体内容。
 
 用法：
@@ -27,7 +26,7 @@ import argparse
 import sys
 from pathlib import Path
 
-VALID_INTENTS = {"prototype", "system", "framework", "unknown"}
+VALID_INTENTS = {"prototype", "system", "unknown"}
 PLACEHOLDER = "{{STRUCTURE_CONSTRAINTS}}"
 AUTO_DETECTED_OPEN = "<!-- auto-detected: {intent} — PM 可改。删除本注释行后视为 PM 手填，框架不再覆盖。 -->"
 
@@ -55,14 +54,11 @@ def load_template(framework_root: Path, mode: str) -> str:
 
 def render_segment(intent: str, framework_root: Path) -> str:
     marker = AUTO_DETECTED_OPEN.format(intent=intent)
-    if intent == "framework":
-        body = "N/A — framework 项目（生成器 / 工具仓），本段不约束代码组织。"
-        return f"{marker}\n\n{body}"
     if intent == "unknown":
         body = (
             "_待 PM 决定项目意图_。可选路径：\n"
             "- 运行 `python3 .claude/scripts/detect-project-structure.py` 看探测推荐\n"
-            "- 或手动选 prototype / system / framework，重跑 init"
+            "- 或手动选 prototype / system，重跑 init"
         )
         return f"{marker}\n\n{body}"
     if intent in {"prototype", "system"}:
@@ -77,7 +73,7 @@ def main() -> int:
     parser.add_argument(
         "intent",
         choices=sorted(VALID_INTENTS),
-        help="项目意图：prototype / system / framework / unknown",
+        help="项目意图：prototype / system / unknown",
     )
     parser.add_argument(
         "--framework-root",
