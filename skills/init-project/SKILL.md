@@ -21,8 +21,9 @@ description: |
 2. **目标目录**（项目创建位置的绝对路径，如 `/Users/xxx/Projects/my-app`）
 3. **项目背景**（一段话描述项目目的和上下文）
 4. **项目意图**（工程结构约束）：
-   - `prototype` — 原型档：每页 self-contained，不抽 Template / hook / context；视觉一致性靠 DESIGN.md + components/ui
-   - `system` — 系统档：抽 Template / hook / context-state / pages 中间层 / domain store；多页协作 + 长尾分叉控制
+   - `prototype` — 原型档：每页 self-contained，不抽 Template / hook / context；mock 数据 / 不做权限 / 不写测试 / 仅主路径；视觉靠 DESIGN.md + components/ui
+   - `system` — 系统档：抽 Template / hook / context-state / pages 中间层 / domain store；真实持久化 / 完整权限矩阵 / 完整测试 / 全路径
+   - `custom` — 自定义档：PM 自由编辑，不预设深度；用 `prototype/system` 都不贴合（如混合档：真实数据 + 简化权限）时选这个
    - `unknown` — PM 暂不决定，留 placeholder 让 PM 后续跑 `python3 .claude/scripts/detect-project-structure.py` 看推荐再选
 
 如果 PM 只给了部分信息，逐个追问缺失项。**意图字段必填**——没意图就走 unknown 兜底，不要默认猜。

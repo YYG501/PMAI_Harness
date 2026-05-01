@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # init-project.sh — 创建新业务项目
 # 用法: bash scripts/init-project.sh <project-name> <target-dir> <background> [<project-intent>]
-#   project-intent: prototype | system | unknown（默认 unknown）
+#   project-intent: prototype | system | custom | unknown（默认 unknown）
 # 必须从框架仓库根目录运行
 
 set -euo pipefail
@@ -12,9 +12,9 @@ BACKGROUND="${3:-}"
 PROJECT_INTENT="${4:-unknown}"
 
 case "$PROJECT_INTENT" in
-  prototype|system|unknown) ;;
+  prototype|system|custom|unknown) ;;
   *)
-    echo "❌ project-intent 非法: $PROJECT_INTENT（必须 ∈ prototype/system/unknown）" >&2
+    echo "❌ project-intent 非法: $PROJECT_INTENT（必须 ∈ prototype/system/custom/unknown）" >&2
     exit 2
     ;;
 esac

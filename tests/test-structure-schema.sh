@@ -16,6 +16,7 @@ SCHEMA="$REPO_ROOT/templates/工程结构约束.schema.json"
 DERIVE="$REPO_ROOT/scripts/derive-structure-templates.py"
 PROTO_TMPL="$REPO_ROOT/templates/工程结构约束-prototype.md"
 SYS_TMPL="$REPO_ROOT/templates/工程结构约束-system.md"
+CUSTOM_TMPL="$REPO_ROOT/templates/工程结构约束-custom.md"
 CLAUDE_TMPL="$REPO_ROOT/templates/CLAUDE.md.tmpl"
 
 test_schema_exists() {
@@ -41,26 +42,63 @@ test_derive_script_exists() {
 }
 
 test_both_templates_derived() {
-  start_test "两份派生模板都存在"
-  if [ ! -f "$PROTO_TMPL" ]; then
-    _fail "prototype 模板不存在: $PROTO_TMPL"
-    return
-  fi
-  if [ ! -f "$SYS_TMPL" ]; then
-    _fail "system 模板不存在: $SYS_TMPL"
-    return
-  fi
+  start_test "三份派生模板都存在（prototype / system / custom）"
+  for tmpl in "$PROTO_TMPL" "$SYS_TMPL" "$CUSTOM_TMPL"; do
+    if [ ! -f "$tmpl" ]; then
+      _fail "派生模板不存在: $tmpl"
+      return
+    fi
+  done
   pass_test
 }
 
 test_templates_have_auto_generated_marker() {
   start_test "派生模板含 AUTO-GENERATED marker（防 PM 手改）"
-  if ! grep -q "AUTO-GENERATED FROM" "$PROTO_TMPL"; then
-    _fail "prototype 模板缺 AUTO-GENERATED marker"
+  for tmpl in "$PROTO_TMPL" "$SYS_TMPL" "$CUSTOM_TMPL"; do
+    if ! grep -q "AUTO-GENERATED FROM" "$tmpl"; then
+      _fail "$tmpl 缺 AUTO-GENERATED marker"
+      return
+    fi
+  done
+  pass_test
+}
+
+test_prototype_template_has_depth_prose() {
+  start_test "prototype 模板含「实现深度指引」prose 段（4.5d.2）"
+  if ! grep -q "实现深度指引" "$PROTO_TMPL"; then
+    _fail "prototype 模板缺「实现深度指引」section"
     return
   fi
-  if ! grep -q "AUTO-GENERATED FROM" "$SYS_TMPL"; then
-    _fail "system 模板缺 AUTO-GENERATED marker"
+  for label in "数据层" "权限层" "API 契约" "测试" "边界态" "多端覆盖" "演示路径"; do
+    if ! grep -q "$label" "$PROTO_TMPL"; then
+      _fail "prototype 模板缺「$label」prose"
+      return
+    fi
+  done
+  pass_test
+}
+
+test_system_template_has_depth_prose() {
+  start_test "system 模板含「实现深度指引」prose 段（4.5d.2）"
+  if ! grep -q "实现深度指引" "$SYS_TMPL"; then
+    _fail "system 模板缺「实现深度指引」section"
+    return
+  fi
+  pass_test
+}
+
+test_custom_template_has_pm_fill_skeleton() {
+  start_test "custom 模板含 PM 自由编辑骨架（无预设深度，4.5d.2）"
+  if ! grep -q "_PM 填_" "$CUSTOM_TMPL"; then
+    _fail "custom 模板应含「_PM 填_」骨架提示"
+    return
+  fi
+  if ! grep -q "代码组织" "$CUSTOM_TMPL"; then
+    _fail "custom 模板应含「代码组织」section"
+    return
+  fi
+  if ! grep -q "实现深度指引" "$CUSTOM_TMPL"; then
+    _fail "custom 模板应含「实现深度指引」section"
     return
   fi
   pass_test
@@ -161,6 +199,9 @@ test_schema_exists
 test_derive_script_exists
 test_both_templates_derived
 test_templates_have_auto_generated_marker
+test_prototype_template_has_depth_prose
+test_system_template_has_depth_prose
+test_custom_template_has_pm_fill_skeleton
 test_check_mode_passes_for_synced
 test_check_mode_detects_drift
 test_invalid_schema_rejected

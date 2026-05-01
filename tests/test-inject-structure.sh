@@ -70,6 +70,57 @@ test_t11b_inject_framework_intent_rejected() {
   rm -rf "$tmp"
 }
 
+test_t11e_inject_custom_writes_skeleton() {
+  start_test "T11e: inject custom → 段落含 PM 自由编辑骨架（4.5d.2 新增）"
+  local tmp; tmp=$(mktemp -d)
+  local md="$tmp/CLAUDE.md"
+  _copy_tmpl_with_placeholder "$md"
+
+  if ! python3 "$INJECT" "$md" custom --framework-root "$REPO_ROOT" >/dev/null 2>&1; then
+    _fail "inject custom 退出非 0"
+    rm -rf "$tmp"
+    return
+  fi
+  if ! grep -q "auto-detected: custom" "$md"; then
+    _fail "CLAUDE.md 应含 auto-detected: custom 标"
+    rm -rf "$tmp"
+    return
+  fi
+  if ! grep -q "_PM 填_" "$md"; then
+    _fail "custom 档应留 PM 自由编辑骨架（_PM 填_ 提示）"
+    rm -rf "$tmp"
+    return
+  fi
+  pass_test
+  rm -rf "$tmp"
+}
+
+test_t11f_inject_prototype_includes_depth_prose() {
+  start_test "T11f: inject prototype → 段落含「实现深度指引」prose 段（4.5d.2 新增）"
+  local tmp; tmp=$(mktemp -d)
+  local md="$tmp/CLAUDE.md"
+  _copy_tmpl_with_placeholder "$md"
+
+  python3 "$INJECT" "$md" prototype --framework-root "$REPO_ROOT" >/dev/null 2>&1
+  if ! grep -q "实现深度指引" "$md"; then
+    _fail "prototype 档应含「实现深度指引」节"
+    rm -rf "$tmp"
+    return
+  fi
+  if ! grep -q "数据层" "$md"; then
+    _fail "prototype 档应含「数据层」prose 描述"
+    rm -rf "$tmp"
+    return
+  fi
+  if ! grep -q "权限层" "$md"; then
+    _fail "prototype 档应含「权限层」prose 描述"
+    rm -rf "$tmp"
+    return
+  fi
+  pass_test
+  rm -rf "$tmp"
+}
+
 test_t11d_inject_unknown_writes_placeholder() {
   start_test "T11d: inject unknown → 段落含 auto-detected: unknown + 提示 PM 跑 detect"
   local tmp; tmp=$(mktemp -d)
@@ -215,8 +266,8 @@ test_init_project_skill_asks_intent() {
     _fail "init-project SKILL 应询问 PM「项目意图」"
     return
   fi
-  # 应只列出 prototype / system / unknown 三选项（4.5d.1 删除 framework）
-  for opt in "prototype" "system" "unknown"; do
+  # 应列出 prototype / system / custom / unknown 四选项
+  for opt in "prototype" "system" "custom" "unknown"; do
     if ! grep -q "\`$opt\`" "$INIT_PROJECT_SKILL"; then
       _fail "init-project SKILL 应含 \`$opt\` 选项"
       return
@@ -236,13 +287,14 @@ test_init_project_sh_accepts_intent_arg() {
     _fail "init-project.sh 用法应含 project-intent"
     return
   fi
-  # 应有 case 校验（4.5d.1 删除 framework，只剩 3 档）
-  if ! grep -q 'prototype|system|unknown' "$INIT_PROJECT_SH"; then
-    _fail "init-project.sh 应校验 intent ∈ {prototype/system/unknown}"
+  # 应有 case 校验（4.5d.2：4 档 prototype/system/custom/unknown）
+  if ! grep -q 'prototype|system|custom|unknown' "$INIT_PROJECT_SH"; then
+    _fail "init-project.sh 应校验 intent ∈ {prototype/system/custom/unknown}"
     return
   fi
-  if grep -q 'framework|unknown\|prototype|system|framework' "$INIT_PROJECT_SH"; then
-    _fail "init-project.sh case 校验不应再含 framework"
+  # 注意：--framework-root 参数（指框架仓库根目录）保留，跟 framework 档无关
+  if grep -E '\|framework\||framework\)|=\\?"framework\\?"' "$INIT_PROJECT_SH" >/dev/null; then
+    _fail "init-project.sh case 校验不应再含 framework 档"
     return
   fi
   pass_test
@@ -256,6 +308,8 @@ test_t11_inject_prototype_writes_marker
 test_t11b_inject_framework_intent_rejected
 test_t11c_inject_idempotent_blocks_second_call
 test_t11d_inject_unknown_writes_placeholder
+test_t11e_inject_custom_writes_skeleton
+test_t11f_inject_prototype_includes_depth_prose
 test_t12_pm_handfilled_segment_not_overwritten
 test_t13_task_spec_has_dual_source_rule
 test_t13b_task_spec_blocks_prototype_with_full_system

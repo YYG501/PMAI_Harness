@@ -6,6 +6,7 @@
     prototype  → 派生自 templates/工程结构约束-prototype.md，去掉 AUTO-GENERATED
                  顶部 marker，包一层 auto-detected marker
     system     → 同上 system
+    custom     → 同上 custom（PM 自由编辑骨架，深度 prose 留空让 PM 写）
     unknown    → 占位提示 PM 跑 detect 或手动选
 
 CLAUDE.md「## 工程结构约束」section 顶部已有 placeholder 注释解释档位行为
@@ -26,29 +27,34 @@ import argparse
 import sys
 from pathlib import Path
 
-VALID_INTENTS = {"prototype", "system", "unknown"}
+VALID_INTENTS = {"prototype", "system", "custom", "unknown"}
 PLACEHOLDER = "{{STRUCTURE_CONSTRAINTS}}"
 AUTO_DETECTED_OPEN = "<!-- auto-detected: {intent} — PM 可改。删除本注释行后视为 PM 手填，框架不再覆盖。 -->"
 
 
 def load_template(framework_root: Path, mode: str) -> str:
-    """读派生模板，去掉 AUTO-GENERATED 顶部 marker（避免双重 marker）。"""
+    """读派生模板，去掉 AUTO-GENERATED 顶部 marker 块（避免与 inject 自加的
+    auto-detected marker 重复）。
+
+    drop 规则：连续吞开头的 HTML 注释行 + 紧随的第一个空行。这对
+    prototype / system / custom 三档模板都成立（每档前两行都是 <!-- --> 注释）。
+    """
     path = framework_root / "templates" / f"工程结构约束-{mode}.md"
     if not path.exists():
         print(f"❌ 模板不存在: {path}", file=sys.stderr)
         sys.exit(2)
     text = path.read_text(encoding="utf-8")
-    # 去掉 AUTO-GENERATED 的 2 行标头（保留正文）
     lines = text.splitlines()
     drop = 0
-    for line in lines[:3]:
-        if line.startswith("<!--") and "AUTO-GENERATED" in line:
+    for line in lines:
+        stripped = line.strip()
+        if stripped.startswith("<!--"):
             drop += 1
-        elif line.startswith("<!--") and "schema" in line:
-            drop += 1
-        elif drop > 0 and line.strip() == "":
+            continue
+        if stripped == "":
             drop += 1
             break
+        break
     return "\n".join(lines[drop:]).lstrip()
 
 
@@ -58,10 +64,10 @@ def render_segment(intent: str, framework_root: Path) -> str:
         body = (
             "_待 PM 决定项目意图_。可选路径：\n"
             "- 运行 `python3 .claude/scripts/detect-project-structure.py` 看探测推荐\n"
-            "- 或手动选 prototype / system，重跑 init"
+            "- 或手动选 prototype / system / custom，重跑 init"
         )
         return f"{marker}\n\n{body}"
-    if intent in {"prototype", "system"}:
+    if intent in {"prototype", "system", "custom"}:
         body = load_template(framework_root, intent)
         return f"{marker}\n\n{body}"
     raise ValueError(f"unreachable intent: {intent}")
@@ -73,7 +79,7 @@ def main() -> int:
     parser.add_argument(
         "intent",
         choices=sorted(VALID_INTENTS),
-        help="项目意图：prototype / system / unknown",
+        help="项目意图：prototype / system / custom / unknown",
     )
     parser.add_argument(
         "--framework-root",
