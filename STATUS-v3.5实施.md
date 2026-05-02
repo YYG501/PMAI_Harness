@@ -153,13 +153,13 @@ run-all：265 → 269（+10 - 6 = +4），0 失败。
 **4.5a 范围严格收口**：不动 detect / init-project / task-spec SKILL（留给 4.5b/c）。
 
 ### 阶段 4 已完成（全部）
-- `scripts/sync-req-docs.sh`：`git show <req-branch>:<path> > <dest>` 同步项目级文件 + req 目录递归 → 不写 `.git/index.lock`，多 worktree 并发安全；append `req_docs_synced` 事件含 `file_count` / `hash` / `req_branch`
-- `scripts/create-task-worktree.sh` 末尾调用 sync（首次同步）
-- `skills/task-execute/SKILL.md` 加入口步骤 2.4（启动前兜底再 sync 一次，防止 worktree 创建后 PM 又改 req 文档）
+- ~~`scripts/sync-req-docs.sh`~~：**4.5f 已废弃**（被 `check-req-doc-drift.sh` + `apply-req-doc.sh` 替代，PM 看 diff 决定）。原行为：`git show <req-branch>:<path> > <dest>` 自动批量覆盖。
+- ~~`scripts/create-task-worktree.sh` 末尾调用 sync~~：**4.5f 已删**（fork 时 worktree == req 分支，drift = 0，无需预 sync）
+- `skills/task-execute/SKILL.md` 入口步骤 2.4（**4.5f 已重写为 drift 检测 + PM 决策**）
 - `scripts/check-task-scope.py` 加 `implicit_deny`：项目级 `DESIGN.md` / `CLAUDE.md` 永远拒；req 目录内非自己 task 的文件永远拒；自己的 PM 视图 / 工程合同允许（即使 allowlist 不命中也能 commit 自己）
-- 新增测试：`tests/test-sync-req-docs.sh`（6 条）+ `tests/test-check-task-scope.sh`（7 条）
+- 新增测试：~~`tests/test-sync-req-docs.sh`（6 条）~~（4.5f 删）+ `tests/test-check-task-scope.sh`（7 条）
 
-**新窗口验证基线**：`bash tests/run-all.sh` → 应看到 209 / 0。
+**阶段 4 完成时基线** 209/0；**当前最新基线** 见顶部当前位置（269/0，含 4.5d/e/f）。
 
 **实施中的坑**：
 1. 数组 + `set -u` 在 macOS bash 3.x 下空数组触发 unbound → 改成换行分隔字符串积累
@@ -216,15 +216,14 @@ V2 regex 会匹配只含空格的 cell（`| **状态** | |`），strip 后返回
 
 ## 新窗口续接命令
 
-PM 在新窗口第一条消息：
+**v3.5 实施阶段已全部收口**（1 + 2 + 3 + 4 + 4.5a-f；5/6/7/8/9 废弃/跳过）。新窗口续接关注的是 v3.5 之外的工作：
 
-> 继续 PM-AI-Workflow v3.5 实施。读 STATUS-v3.5实施.md 看当前进度，下一步阶段 3。
+> 继续 PM-AI-Workflow。读 STATUS-v3.5实施.md 确认 v3.5 已收口（269/0），告诉我下一步要做什么。
 
 AI 收到后应该：
-1. 读本文件
-2. 读 `实施计划-实现程度与格式对齐.md` 阶段 3 段
-3. 读 `设计-新两文件格式对齐.md` §四 4.3
-4. 等 PM 确认开始（不擅自动手）
+1. 读本文件确认所有阶段状态
+2. 等 PM 给具体方向（v4 计划 / 生成器迁出验证 / review / 文档收口 等）
+3. 不擅自启新阶段
 
 ---
 
