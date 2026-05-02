@@ -7,7 +7,7 @@ SUITES=(
   test-check-branch.sh
   test-task-transition.sh
   test-fixture-v2.sh
-  test-sync-req-docs.sh
+  test-check-req-doc-drift.sh
   test-check-task-scope.sh
   test-structure-schema.sh
   test-detect-project-structure.sh

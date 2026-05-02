@@ -111,21 +111,57 @@ fi
 
 注意：`pwd -P` 解析 macOS 上 `/tmp` ↔ `/private/tmp` 这类符号链接，避免 canonical 路径不一致导致误判。`EXPECTED_CANONICAL` 在子 shell 里算（子 shell 不受沙盒 reset 影响），代表 task worktree 的真实绝对路径。
 
-#### 入口步骤 2.4：从 req 分支同步需求与项目级文档
+#### 入口步骤 2.4：检测 req 文档 drift + PM 决定是否拉取（4.5f 改造）
 
-`scripts/sync-req-docs.sh` 用 `git show <req-branch>:<path> > <dest>` 把 `DESIGN.md` / `CLAUDE.md` 与 `requirements/active/<req-id>/` 全部从 req 分支拉到 task worktree（不写 `.git/index.lock`，多 worktree 并发安全；同步目标在 worktree 显示为 untracked / modified，由 `check-task-scope.py` 阻断 commit）。
+`scripts/check-req-doc-drift.sh` 列出 task worktree 与 req 分支之间「项目级 DESIGN.md / CLAUDE.md + requirements/active/<req-id>/」范围内 hash 不一致的文件。**纯只读** —— 不写 worktree 任何文件、不写 `.git/index.lock`。task own 的两文件（PM 视图 + 工程合同）不在 drift 范围（task 自决）。
 
-`create-task-worktree.sh` 末尾已经做过一次 sync，本步是兜底——防止 worktree 创建后、execute 启动前 PM 又改了 req 文档。
+> 4.5f 取代 sync-req-docs.sh 静默批量覆盖：旧机制会偷偷盖掉 worktree 上 task agent 已经做的合法本地改动；新机制让 PM 看 diff 后逐文件决定。fresh fork 通常无 drift，PM 体验是 1 行「✓」直接通过。
 
 ```bash
-REQ_BRANCH=$(python3 -m _lib.task_parser get_branch "$TASK_FILE" \
-  | sed 's/^task-/req-/' )  # 占位演示；实际从 task 文件元数据 / req 元数据推导
-# 推荐用法（依赖 .req-meta.json 或主仓 worktree 列表反查）：
 REQ_BRANCH=$(git -C "$MAIN_REPO_ROOT" branch --contains HEAD --format='%(refname:short)' | grep '^req-' | head -1)
-bash "$MAIN_REPO_ROOT/scripts/sync-req-docs.sh" "$TASK_WORKTREE" "$REQ_BRANCH" "$TASK_FILE"
+DRIFT_JSON=$(bash "$MAIN_REPO_ROOT/scripts/check-req-doc-drift.sh" \
+  "$TASK_WORKTREE" "$REQ_BRANCH" "$TASK_FILE")
+DRIFT_COUNT=$(echo "$DRIFT_JSON" | python3 -c 'import json,sys;print(json.load(sys.stdin)["drift_count"])')
 ```
 
-失败不阻断启动——sync 是 best-effort，task-execute 后续会基于 worktree 当前文件执行；但若 PM 在 chat 显示同步失败需要回 req worktree 修复时，提示 PM 再重跑 `/task-execute`。
+**drift_count = 0**：直接通过，进步骤 2.5（无需打扰 PM）。
+
+**drift_count > 0**：把候选清单呈交 PM，按下面交互处理：
+
+```
+⚠ ${REQ_BRANCH} 上有 N 个文件比 task worktree 新：
+  - <path 1>
+  - <path 2>
+  ...
+
+是否拉过来？[Y 逐文件看 diff / N 全部跳过 / A 全部采用 req 版本]
+```
+
+PM 选项处理：
+
+| 选 | 行为 |
+|---|---|
+| `N` | 不动 worktree，task-execute 继续。task 内执行基于当前 worktree 文件。 |
+| `A` | 对清单内每个 file 调 `apply-req-doc.sh`，跳过 diff 询问，全部覆盖。 |
+| `Y` | 逐文件循环：先 `git diff --no-index <worktree path> <(git show <branch>:<path>)` 给 PM 看，再问 `[A 采用 req 版本 / B 保留 worktree 版本 / C 跳过这个文件]`。 |
+
+逐文件 `Y` 流程伪码：
+
+```bash
+echo "$DRIFT_JSON" | python3 -c 'import json,sys;[print(f["path"]) for f in json.load(sys.stdin)["files"]]' | \
+while IFS= read -r path; do
+  # 让 PM 看 diff（worktree 现状 vs req 分支版本）
+  git -C "$TASK_WORKTREE" diff --no-index --color=always \
+    "$path" <(git -C "$TASK_WORKTREE" show "${REQ_BRANCH}:${path}") || true
+
+  # 问 PM 三选项 [A / B / C]
+  # A → bash $MAIN_REPO_ROOT/scripts/apply-req-doc.sh "$TASK_WORKTREE" "$REQ_BRANCH" "$path" "$TASK_FILE"
+  # B → 不动
+  # C → 不动，下一文件
+done
+```
+
+**失败容忍**：drift 检测脚本异常 → 不阻断启动，task-execute 继续（同 sync-req-docs 历史 best-effort 行为）。check-task-scope.py 的 implicit deny 仍然兜底拦截 task 误 commit 项目级 / 兄弟 task 文件。
 
 #### 入口步骤 2.5：依赖前置 gate（v4 兜底层）
 

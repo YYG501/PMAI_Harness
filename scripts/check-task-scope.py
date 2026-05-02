@@ -75,24 +75,24 @@ def matches_any(path: str, patterns: list[str]) -> bool:
     return False
 
 
-# Sync 白名单内的路径不应由 task commit 修改（它们是 sync-req-docs.sh
-# 从 req 分支拉来的，task 改它们 = 跨分支偷渡需求/项目级文档）。
-# implicit_deny 优先级高于 allowlist——即便 allowlist 显式命中也拒。
+# 项目级 / 兄弟 task 文件不应由 task commit 修改（PM 在 req worktree 维护，
+# task worktree 通过 4.5f drift 检测 + apply-req-doc 单文件 PM 决策拉取，
+# 不走 task commit）。implicit_deny 优先级高于 allowlist——即便 allowlist 显式命中也拒。
 PROJECT_LEVEL_FILES = {"DESIGN.md", "CLAUDE.md"}
 REQ_DIR_PREFIX = "requirements/active/"
 
 
 def implicit_deny_reason(path: str, task_stem: str) -> str | None:
-    """返回 deny 原因（命中 sync 白名单且不是自己的 task 文件）；否则 None。"""
+    """返回 deny 原因（命中保留路径且不是自己的 task 文件）；否则 None。"""
     if path in PROJECT_LEVEL_FILES:
-        return f"项目级文档（sync-req-docs 同步源，task 不得 commit）"
+        return f"项目级文档（PM 在 req worktree 维护，task 不得 commit）"
     if path.startswith(REQ_DIR_PREFIX):
         # 自己的 task PM 视图 / 工程合同 允许
         own_pm = f"tasks/{task_stem}.md"
         own_eng = f"tasks/{task_stem}.engineering.md"
         if path.endswith(own_pm) or path.endswith(own_eng):
             return None
-        return "req 目录内非本 task 文件（sync-req-docs 同步源，task 不得 commit）"
+        return "req 目录内非本 task 文件（PM 在 req worktree 维护，task 不得 commit）"
     return None
 
 

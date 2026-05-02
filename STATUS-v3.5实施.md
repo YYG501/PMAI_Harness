@@ -5,12 +5,13 @@
 
 ---
 
-## 当前位置（2026-05-01）
+## 当前位置（2026-05-02）
 
-阶段 **1 + 2 + 3 + 4 + 4.5（含 d 修订 + e patch）完成**，阶段 5/6/7/8/9 全部废弃 / 跳过。全测试套件 0 失败：
+阶段 **1 + 2 + 3 + 4 + 4.5（含 d 修订 + e patch + f sync 改造）完成**，阶段 5/6/7/8/9 全部废弃 / 跳过。全测试套件 0 失败（269 / 0）：
 
 ```
 （本次新增）
+            feat(sync-rework): 4.5f drift+apply 替代静默 sync
             fix(v3.5): 4.5e 业务偏差反推 + P1/P2/P4 回归 patch
 750adea     feat(structure): 4.5d.3 + 4.5d.4 req 级深度变更段 + task-spec §5 prose 合并
 cc352d9     feat(structure): 4.5d.2 派生模板 prose 段 + custom 档（PM 自由编辑）
@@ -34,8 +35,9 @@ worktree 文档同步（git show 绕 index）+ check-task-scope implicit deny +
 工程结构约束 schema 框架（4.5a）+ detect 4 档判定（4.5b/d.1）+
 inject 注入 + init-project 4 选项（含 custom）+ task-spec §5 prose 合并（4.5c/d.1/d.4）+
 派生模板 prose 深度指引（4.5d.2）+ req 级深度变更段（4.5d.3）+ close-req 同步提示（4.5d.3）+
-业务层偏差反推（4.5e）+ P1/P2/P4 回归 patch。
-总测试 **265 通过 / 0 失败**。
+业务层偏差反推（4.5e）+ P1/P2/P4 回归 patch +
+sync 改造（4.5f：drift 检测 + PM 看 diff + apply 单文件 PM 决策）。
+总测试 **269 通过 / 0 失败**。
 
 | Bug | 状态 |
 |---|---|
@@ -94,7 +96,7 @@ PM 修正 v3.5 plan 阶段 5/6 设计方向后，三层结构为：
 
 PM 在 4.5d 收尾后回归审查，发现 4 个问题（P1 task-spec §5 措辞误导 / P2 check-task-scope implicit deny 顺序 / P3 sync 静默覆盖 / P4 STATUS 文档结构）+ 一个机制漏洞（task 实证发现 req / 项目级文档需修订时无结构化反推入口）。
 
-修复（不含 P3 — PM 决定不修，靠纪律走 req worktree 改 req 文档）：
+修复（P3 当时决议不修；2026-05-02 在 4.5f 重新决策为「drift+apply」走向，见下）：
 - **业务偏差反推**：`task.md.tmpl` 加「📁 历史档案 → 业务层偏差」表（默认「无」）；task-execute SKILL 步骤 6 加两层分工 + 多文档示例 + 判断口诀；doc-update SKILL Required Inputs 范围扩到 brief/analysis/solution PM 视图/prd；doc-update 步骤 1.5 改为按文档类型分流；task-submit 引导 PM 走查时填业务层偏差段
 - **P1**：task-spec §5「冲突由 close-req 自决」改成「task-execute / close-req 等多个时机自决」（措辞精确化）
 - **P2**：check-task-scope.py implicit deny 检查提到 allowlist empty 检查前（错误信息精确化）
@@ -102,6 +104,26 @@ PM 在 4.5d 收尾后回归审查，发现 4 个问题（P1 task-spec §5 措辞
 
 测试：新增 test-business-deviation.sh 10 条 + test-check-task-scope.sh 加 1 条（P2 优先级覆盖）。
 run-all：254 → 265，0 失败。
+
+### 4.5f 已完成（sync 改造：drift 检测 + PM 看 diff + apply 单文件）
+
+PM 在 4.5e 收尾后回头质疑 P3「sync 静默覆盖」决议。原 `sync-req-docs.sh` 在 task-execute 启动时 + create-task-worktree 末尾自动批量覆盖项目级 + req 目录下所有文件，会偷偷盖掉 worktree 上 task agent 已经做的合法本地改动；PM 走「具体情况具体处理」路径取代 sync。
+
+改造（取代旧 sync 机制，不是 augment）：
+- **新增** `scripts/check-req-doc-drift.sh`：扫 sync 范围，对比 worktree 当前 hash vs req 分支 hash，跳过 task own 两文件，输出 JSON `{"drift_count": N, "files": [{"path", "worktree_hash", "req_hash"}]}`，stderr 给人读的清单；纯只读，不写 worktree 不写 .git/index.lock 不 emit 事件
+- **新增** `scripts/apply-req-doc.sh`：单文件 `git show <branch>:<path> > <dest>`，append `req_doc_applied` 事件含 path / before_hash / after_hash / req_branch
+- **task-execute SKILL 入口步骤 2.4 重写**：跑 check-drift → drift_count=0 直接通过 → drift_count>0 呈交 PM `[Y 逐文件看 diff / N 全跳 / A 全采用]`；选 Y 走逐文件 `[A 采用 / B 保留 / C 跳过]` 三选项；自然语言交互（同 4.5d.3 close-req 步骤 2c 模式）
+- **删除** `scripts/sync-req-docs.sh` + `tests/test-sync-req-docs.sh` + `create-task-worktree.sh` 末尾的 sync 调用（fork 时 worktree == req 分支，drift = 0，无需预 sync）
+- **保留** `scripts/check-task-scope.py` implicit deny（只是注释里把「sync-req-docs 同步源」改成「PM 在 req worktree 维护」语义）
+
+设计决议（已落实）：
+- D1 = task-execute 启动时检测（同旧 sync 触发点）
+- D2 = 逐文件三选项（A 采用 / B 保留 / C 跳过）
+- D3 = task own 两文件不在 drift 检测范围（task 自决，永不被 req 推送）
+- D4 = create-task-worktree 不再调 sync（fork 时本来就一致）
+
+测试：新增 `tests/test-check-req-doc-drift.sh` 10 条（无 drift / 项目级 drift / req 目录 drift / 跳过 own PM 视图 / 跳过 own 工程合同 / 兄弟 task drift / JSON 格式 / apply 单文件写入 + 事件 / apply 事件 payload 完整 / drift 纯只读）。
+run-all：265 → 269（+10 - 6 = +4），0 失败。
 
 ### 阶段 4.5c 已完成（inject + init-project + task-spec 接入）
 - `scripts/inject-structure-segment.py`：把工程结构约束段注入 CLAUDE.md，按 PM 选定的 intent（prototype / system / framework / unknown）写入对应内容；含 auto-detected 标，placeholder 已替换后二次 inject 拒绝（保护手填）
@@ -223,6 +245,7 @@ AI 收到后应该：
 | 阶段 4.5d.3 | — | ~25 分钟 | — |
 | 阶段 4.5d.4 | — | ~20 分钟 | — |
 | 阶段 4.5e | — | ~70 分钟 | — |
+| 阶段 4.5f | — | ~40 分钟 | — |
 
 加速原因：
 - plan 详细到 API 签名 + 单测用例 + diff 草案
@@ -250,6 +273,7 @@ AI 收到后应该：
 | 4.5d.3 | req 级「实现深度变更」段（自由文本）+ close-req 同步 | ✅ 完成 |
 | 4.5d.4 | task-spec §5 双源 → prose 合并（删冲突阻断）| ✅ 完成 |
 | 4.5e | 业务偏差反推 + P1/P2/P4 回归 patch | ✅ 完成 |
+| 4.5f | sync 改造：drift 检测 + PM 看 diff + apply 单文件 | ✅ 完成 |
 | 5 | 实现程度三阶段流程 | ❌ 废弃（PM 否决 8 字段表，已被 4.5d 整体替代）|
 | 6 | task-plan 按字段拆（Python 决策表）| ❌ 废弃（PM 自主拆 task）|
 | 7 | task-spec 双源改造 | ❌ 废弃（已被 4.5d.4 实现）|

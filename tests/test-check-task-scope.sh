@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
 # check-task-scope.py 越界校验测试
 #
-# 重点覆盖阶段 4 新增的 implicit_deny：sync 白名单内的路径（项目级
-# DESIGN.md / CLAUDE.md，以及 req 目录内别人的 task 文件）即使被显式
-# 列入 allowlist 也必须 deny——它们是 sync-req-docs.sh 的同步源。
+# 重点覆盖阶段 4 新增的 implicit_deny：项目级路径（DESIGN.md / CLAUDE.md）
+# 与 req 目录内别人的 task 文件，即使被显式列入 allowlist 也必须 deny——
+# PM 在 req worktree 统一维护它们，task worktree 通过 4.5f drift+apply
+# 单文件 PM 决策拉取，不走 task commit 路径。
 set -uo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
