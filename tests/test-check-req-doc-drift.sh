@@ -273,6 +273,30 @@ test_apply_event_payload_complete() {
   fixture_teardown
 }
 
+test_drift_stderr_clean_when_no_drift() {
+  start_test "stderr 在无 drift 时输出干净 ✓ 行（不报 integer expression error）"
+  fixture_setup
+  req_dir=$(fixture_create_req "req-001" "test" 6)
+  task=$(fixture_create_task_v2 "$req_dir" "001" "demo" "执行中")
+  task_wt=$(fixture_create_task_worktree "$task" "req-001-test")
+
+  bash "$DRIFT_SCRIPT" "$task_wt" "req-001-test" "$task" >/dev/null 2>/tmp/drift.err
+  if grep -q "integer expression expected" /tmp/drift.err; then
+    _fail "stderr 含 'integer expression expected' bash 错误"
+    cat /tmp/drift.err >&2
+    fixture_teardown
+    return
+  fi
+  if ! grep -q "无 drift" /tmp/drift.err; then
+    _fail "stderr 应有「无 drift」摘要，实际 stderr："
+    cat /tmp/drift.err >&2
+    fixture_teardown
+    return
+  fi
+  pass_test
+  fixture_teardown
+}
+
 test_drift_does_not_modify_worktree() {
   start_test "drift 检测纯只读：不写 worktree 任何文件"
   fixture_setup
@@ -310,6 +334,7 @@ test_drift_includes_sibling_task
 test_drift_stdout_is_json
 test_apply_writes_file_and_event
 test_apply_event_payload_complete
+test_drift_stderr_clean_when_no_drift
 test_drift_does_not_modify_worktree
 
 report_results "check-req-doc-drift"

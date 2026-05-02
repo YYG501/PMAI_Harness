@@ -91,10 +91,12 @@ print(json.dumps({"drift_count": len(files), "files": files}))
 PY
 
 # stderr 给人读的摘要
-DRIFT_COUNT=$(printf "%s" "$DRIFT_RECORDS" | grep -c '^' || echo 0)
-if [ "$DRIFT_COUNT" -eq 0 ]; then
+# `grep -c` 没匹配时 exit=1 会触发 `|| echo 0` 多输出一行 → DRIFT_COUNT 变 "0\n0"
+# 走 if/else 直接判断 records 是否为空，避开陷阱
+if [ -z "$DRIFT_RECORDS" ]; then
   echo "✓ check-req-doc-drift: 无 drift（worktree 与 ${REQ_BRANCH} 一致）" >&2
 else
+  DRIFT_COUNT=$(printf "%s" "$DRIFT_RECORDS" | grep -c '^')
   echo "⚠ check-req-doc-drift: ${DRIFT_COUNT} 个文件在 ${REQ_BRANCH} 上变了：" >&2
   while IFS= read -r line; do
     [ -z "$line" ] && continue
