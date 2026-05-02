@@ -5,7 +5,7 @@
 
 > 视觉 token / 颜色 / 间距 / 字号 → 见 DESIGN.md，本段管代码组织 + 实现深度指引。
 
-**原型根目录**：`{prototype-root}`
+**原型根目录（PM 必填）**：`<改成实际路径，例：prototypes/ 或 src/ 或 apps/web/src/>`
 
 ### 代码组织
 
