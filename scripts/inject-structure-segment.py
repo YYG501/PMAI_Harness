@@ -24,8 +24,29 @@ CLAUDE.md「## 工程结构约束」section 顶部已有 placeholder 注释解�
 from __future__ import annotations
 
 import argparse
+import subprocess
 import sys
 from pathlib import Path
+
+
+def _detect_framework_root() -> Path:
+    """优先 git rev-parse 找仓根；fallback 适配两种 layout：
+      - 生成器仓：scripts/inject-structure-segment.py
+      - 业务仓：.claude/scripts/inject-structure-segment.py（同步后路径）
+    """
+    try:
+        out = subprocess.check_output(
+            ["git", "rev-parse", "--show-toplevel"],
+            cwd=Path(__file__).resolve().parent,
+            text=True,
+            stderr=subprocess.DEVNULL,
+        ).strip()
+        if out:
+            return Path(out)
+    except Exception:
+        pass
+    return Path(__file__).resolve().parent.parent
+
 
 VALID_INTENTS = {"prototype", "system", "custom", "unknown"}
 PLACEHOLDER = "{{STRUCTURE_CONSTRAINTS}}"
@@ -84,7 +105,7 @@ def main() -> int:
     parser.add_argument(
         "--framework-root",
         type=Path,
-        default=Path(__file__).resolve().parent.parent,
+        default=_detect_framework_root(),
         help="框架仓库根目录（默认本仓）",
     )
     args = parser.parse_args()

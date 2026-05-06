@@ -37,7 +37,26 @@ import sys
 from pathlib import Path
 from typing import Optional
 
-REPO_ROOT_DEFAULT = Path(__file__).resolve().parent.parent
+def _detect_repo_root() -> Path:
+    """优先 git rev-parse 找仓根；fallback 适配两种 layout：
+      - 生成器仓：scripts/detect-project-structure.py
+      - 业务仓：.claude/scripts/detect-project-structure.py（同步后路径）
+    """
+    try:
+        out = subprocess.check_output(
+            ["git", "rev-parse", "--show-toplevel"],
+            cwd=Path(__file__).resolve().parent,
+            text=True,
+            stderr=subprocess.DEVNULL,
+        ).strip()
+        if out:
+            return Path(out)
+    except Exception:
+        pass
+    return Path(__file__).resolve().parent.parent
+
+
+REPO_ROOT_DEFAULT = _detect_repo_root()
 SCHEMA_REL = "templates/工程结构约束.schema.json"
 
 VALID_JUDGMENTS = ("prototype", "system", "hybrid", "unknown")
