@@ -24,10 +24,30 @@ echo "SKILL: req-stage-gate"
 ### Stage 1 → 2（感受问题 → 需求分析）
 
 1. 检查 `brief.md` 存在且有内容
-2. **调用 `/req-analysis`**
-   - skill 内部完成：读 brief + CONTEXT、第一性原理 4 层分析、写 analysis.md（含 10 章 + `## 未决问题` section）、循环调 analysis-reviewer 直到 PASS
-   - skill 返回 = 契约保证 analysis.md 已经过 reviewer PASS。**orchestrator 不重复调 reviewer**
-3. **未决问题闸门（Stage 2 → 3 推进的硬约束）：**
+2. **brief 二次确认门**（新对话首次进入 worktree 时的入口闸）：
+
+   `/new-req` 在主对话写完 brief.md 后就 handoff 退场，PM 在 worktree 内新对话里第一次跑 `/req-stage-gate` 时，先做一次 brief 二次确认——给 PM 重新审视 brief.md 的机会，再启动重的 `/req-analysis`。
+
+   AI 重新读一遍 `brief.md`，给一句话摘要 + A/B 闸门：
+
+   ```
+   📝 brief.md：`$ACTIVE_REQ_DIR/brief.md`
+
+   一句话摘要：[新对话重新读出来的核心内容，一行]
+
+   A) 确认，进入 stage 2（调用 /req-analysis）
+   B) 我要修改（说明改哪里）
+   ```
+
+   - PM 选 A → 继续步骤 3 调 `/req-analysis`
+   - PM 选 B → 按 PM 指示改 `brief.md`，改完回到本步骤重新出 A/B
+   - **brief.md 修改完只输出"已改完，请确认"的二次摘要 + A/B**，不贴全文（参见本文末 `Rules` 的"确认门只给路径 + 一句话摘要"规则）
+
+3. **调用 `/req-analysis`**
+   - skill 内部完成：读 brief + CONTEXT、第一性原理 4 层分析、写 analysis.md（含 10 章 + `## 未决问题` section）、调 analysis-reviewer 一次后把报告原文贴 chat，让 PM 三选一（AI 改 / PM 自改 / 接受现状）
+   - skill 返回 = **PM 已看过 reviewer 报告原文 + 已显式做出处理决定**；返回值带 `review_outcome ∈ {PASS, ACCEPTED_WITH_ISSUES}`
+   - **orchestrator 不重调 reviewer**；如 `review_outcome=ACCEPTED_WITH_ISSUES`，stage-gate 在最终推进确认门加一行知会："⚠️ analysis 评审 NEEDS_REVISION，PM 已显式接受继续推进"——但**不阻塞**推进
+4. **未决问题闸门（Stage 2 → 3 推进的硬约束）：**
 
    grep `## 未决问题` section 下的 `**PM 回答：**` 条目：
    - **若存在任何 `**PM 回答：**` 后面为空** → 确认门进入"答题模式"：
@@ -47,6 +67,7 @@ echo "SKILL: req-stage-gate"
      📝 analysis.md 已写入：`$ACTIVE_REQ_DIR/analysis.md`
 
      一句话摘要：[本次分析的核心结论，一行]
+     [若 review_outcome=ACCEPTED_WITH_ISSUES，加一行：⚠️ analysis 评审 NEEDS_REVISION，PM 已显式接受继续推进]
 
      A) 确认，进入 stage 3（方案设计）
      B) 我要修改（说明改哪里）
@@ -54,10 +75,10 @@ echo "SKILL: req-stage-gate"
      ```
      （first req 不显示 C 选项）
 
-4. **PM 回答未决问题的处理：**
+5. **PM 回答未决问题的处理：**
    - PM 选 A 后，逐题展示问题，PM 每回答一题，把答案写回 analysis.md 对应 `**PM 回答：**` 后面
-   - 所有问题答完 → 重新 grep 验证 → 解锁推进选项 → 回到步骤 3 的"推进模式"
-   - PM 在答题过程中临时想改 analysis 某段 → 允许中途切到 B（修改 analysis）→ 改完后**回到步骤 2 重调 /req-analysis**（analysis 改了 reviewer 必须重评，由 skill 内部循环保证），再走步骤 3 闸门
+   - 所有问题答完 → 重新 grep 验证 → 解锁推进选项 → 回到步骤 4 的"推进模式"
+   - PM 在答题过程中临时想改 analysis 某段 → 允许中途切到 B（修改 analysis）→ 改完后**回到步骤 3 重调 /req-analysis**（analysis 改过，reviewer 必须重跑一次；由 /req-analysis 步骤 4-5 的"调一次 + 三选一"机制保证），再走步骤 4 闸门
 
 推进命令（确认进入 stage 3 后才执行）：
 ```bash
@@ -104,14 +125,38 @@ stage-gate 在 stage 2→3 PM 已确认 solution.md，进入 reconcile：
 完成后输出 "reconcile 完成"信号，控制权回 stage-gate
 ```
 
-skill 返回 reconcile 完成 / no-op 后，stage-gate 跑 `req-transition.py --to 3`。
+skill 返回 reconcile 完成 / no-op 后，stage-gate 跑步骤 3.6 行数 lint，再跑 `req-transition.py --to 3`。
 
-PM 选择跳过 stage 3 时（不调 /req-solution，也不跑 reconcile）：
+3.6 **行数 lint**（v2 文档输出深度指引硬约束）：
+
+```bash
+python3 .claude/scripts/check-engineering-doc-size.py --req-dir "$ACTIVE_REQ_DIR"
+```
+
+- **退出 0** → 直接进推进；
+- **退出 1（有文件超限）** → stage-gate **不直接硬阻塞**，而是给 PM 选项：
+
+  ```
+  ⚠️ solution.engineering.md 超过原型档行数上限（实测 N 行 / 上限 300 行）
+  超限通常意味着 AI 重抄了 PM 视图内容（参见 lint 输出的修法）。
+
+  A) 调 /req-solution（reconcile 模式）让 AI 裁剪重写超限段落（推荐）
+  B) PM 自己改文件后回来选 A/C
+  C) 接受超限，强制推进（请说明理由，记到 `[OVERRIDE-DOCSIZE]` 注释里）
+
+  请选 A / B / C：
+  ```
+
+  - PM 选 A → 调 /req-solution（reconcile 模式）+ prompt 含 "lint 报超限：N 行；按强制引用规则裁剪 §X / §Y" → 完成后回来重跑 lint（最多 3 次循环，仍超限时停下问 PM）
+  - PM 选 B → 等 PM 改完，回 3.6 重跑 lint
+  - PM 选 C → 在 `solution.engineering.md` 末尾追加 `<!-- OVERRIDE-DOCSIZE: <YYYY-MM-DD> reason: <PM 理由> -->`，记入 `req-meta.json` 的 `overrides` 字段后放行
+
+PM 选择跳过 stage 3 时（不调 /req-solution，也不跑 reconcile / lint）：
 ```bash
 python3 .claude/scripts/req-transition.py "$ACTIVE_REQ_DIR" --to 5 --skip-stage 3
 ```
 
-正常推进（reconcile 完成后）：
+正常推进（reconcile + lint 完成后）：
 ```bash
 python3 .claude/scripts/req-transition.py "$ACTIVE_REQ_DIR" --to 3
 ```

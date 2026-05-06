@@ -20,7 +20,7 @@ description: |
 特别注意：
 - **§三 PM 视图写作规则**（明确指代 / 正向描述 / 禁工程词 / 禁像素颜色 / 禁反向约束）
 - **§六 关键产品决策格式**（solution.md 必填章节）
-- **§七 章节顺序约束**（按 `templates/solution.md.tmpl` 锁定的 11 章 PM 视图 + `templates/solution.engineering.md.tmpl` 的 10 章工程合同）
+- **§七 章节顺序约束**（按 `templates/solution.md.tmpl` 锁定的 13 章 PM 视图 + `templates/solution.engineering.md.tmpl` 的 10 章工程合同）
 - **§九 输入流约束**（必读上游 stage 文档 + 项目级文档；输入清单见下方 Required Inputs）
 - **§9.6 双文件 lazy sync**：首次生成两文件 + hash；PM 中途修改只动 PM 视图；stage-gate gate 通过时调本 skill 的 reconcile 模式做对齐
 
@@ -44,7 +44,7 @@ echo "SKILL: req-solution"
 
 **退出契约**：本 skill 返回时，`solution.md` + `solution.engineering.md` 两文件都已经过 PM 简单确认（Discovery 阶段缺口已答）。orchestrator 接手输出推荐 review 区块 + 走确认门。
 
-> **注意**：stage 3 没有 reviewer 硬循环（不像 stage 2 的 analysis-reviewer）。stage 3 的 Discovery 阶段如果 PM 没回答关键缺口，不要硬写方案。
+> **注意**：stage 3 没有强制 reviewer（不像 stage 2 的 analysis-reviewer）。stage 3 的 review 走 PM 自跑模式（/plan-ceo-review 等，由 stage-gate 输出推荐区块）。Discovery 阶段如果 PM 没回答关键缺口，不要硬写方案。
 
 ## 调用模式（PM-VIEW-RULES §9.6）
 
@@ -147,17 +147,18 @@ fi
 
 **章节顺序**（强制，由 PM-VIEW-RULES §七锁定）：
 1. 📌 方案摘要
-2. 🎯 关键产品决策（**必填章节**，按 PM-VIEW-RULES §六格式）
-3. 📦 交付物清单
-4. 📐 数据模型与状态（PM 视角）
-5. 🧩 模块职责与边界
-6. 🖼 页面 UI 骨架
-7. 📋 规格文档变更范围
-8. 🔄 task 拆分预估
-9. 🚧 风险与未决事项
-10. ✅ 验收标准
-11. 🔧 本轮实现深度变更（默认「无变更」，沿用项目级 CLAUDE.md「## 工程结构约束」；仅在本 req 改造代码架构时显式列变更项，自由文本）
-12. 📁 历史档案（变更记录）
+2. 📖 术语表（**必填章节**；无新增业务术语时写一行说明，不允许整章缺失）
+3. 🎯 关键产品决策（**必填章节**，按 PM-VIEW-RULES §六格式）
+4. 📦 交付物清单
+5. 📐 数据模型与状态（PM 视角）
+6. 🧩 模块职责与边界
+7. 🖼 页面 UI 骨架
+8. 📋 规格文档变更范围
+9. 🔄 task 拆分预估
+10. 🚧 风险与未决事项
+11. ✅ 验收标准
+12. 🔧 本轮实现深度变更（默认「无变更」，沿用项目级 CLAUDE.md「## 工程结构约束」；仅在本 req 改造代码架构时显式列变更项，自由文本）
+13. 📁 历史档案（变更记录）
 
 **「本轮实现深度变更」何时填**：
 - 99% 的 req 都填「无变更」（本 req 沿用项目级深度配置）
@@ -196,6 +197,9 @@ fi
 **写作约束**：
 - 允许所有工程内容（TS 类型 / 字段名 / 像素 / 颜色 / 反向约束 / autoplan 输出原文等）
 - 唯一原则：不重复 PM 视图已有的功能行为描述
+- **强制引用规则**：solution.md 已写过的内容（产品行为 / 用户场景 / 弹窗规范 / 验收标准 / 模块职责文字描述）→ 写"参见 solution.md §X.Y"，**禁止重抄**
+- **章节深度按档位裁剪**：读 CLAUDE.md「工程结构约束」段的「文档输出深度指引」（由 `templates/工程结构约束-{档位}.md` 注入），按档位决定各章节展开深度
+- **目标行数**：原型档下 ≤300 行（由 `scripts/check-engineering-doc-size.py` 在 stage 闸门校验，超限 stage-gate 报错）；custom/system 档不预设上限
 
 **hash 写入**（PM-VIEW-RULES §9.6.2）：
 
@@ -218,6 +222,8 @@ PM_VIEW_HASH=$(shasum -a 256 "$ACTIVE_REQ_DIR/solution.md" | cut -c1-12)
 - [ ] 无设计意图解释（"避免 X" / "防止 Y"）
 - [ ] 抽象动词都搭配具体效果
 - [ ] 「关键产品决策」节已填（不允许空表）
+- [ ] 「术语表」节已填或写了「本 req 无新增业务术语」（不允许整章缺失）；正文中出现 ≥2 次的业务专名都已录入（除非属于通用词或工程词）
+- [ ] §🖼 UI 骨架代码块内的每个字都是 admin / 用户在屏幕上实际看见的字（PM-VIEW-RULES §3.10）：无默认值标注 / 无文档元注释 / 无设计意图词 / 无释义型括号 / 无折叠藏默认值；解释、注释、口径已剥离到骨架下方「关键交互说明」段
 
 任一项未通过 → 修复后重新自检。
 

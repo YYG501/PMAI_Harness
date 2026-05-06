@@ -46,6 +46,34 @@ echo "SKILL: task-confirm"
      ```
      兼容模式下从主文件 (`$TASK_FILE`) 读取 executor / model 字段（旧模板这些字段在主文件顶部）。
 
+### 步骤 1.4：行数 lint（v2 文档输出深度指引硬约束）
+
+工程合同存在时（`HAS_ENG=true`），跑 lint 校验 `.engineering.md` 行数：
+
+```bash
+python3 .claude/scripts/check-engineering-doc-size.py "$ENG_FILE"
+```
+
+- **退出 0** → 进步骤 1.5；
+- **退出 1（超限）** → 给 PM 选项：
+
+  ```
+  ⚠️ <task-file-stem>.engineering.md 超过原型档行数上限（实测 N 行 / 上限 200 行）
+  超限通常意味着工程合同重抄了 PM 视图内容（参见 lint 输出的修法）。
+
+  A) 回 /task-spec 让 AI 裁剪重写超限段落（推荐——按强制引用规则）
+  B) PM 自己改文件后回 /task-confirm
+  C) 接受超限，强制推进（请说明理由，记到 `[OVERRIDE-DOCSIZE]` 注释里）
+
+  请选 A / B / C：
+  ```
+
+  - PM 选 A → 让 PM 在主窗口调 /task-spec（revise 模式）让 AI 裁剪 → 改完后重跑 /task-confirm
+  - PM 选 B → 等 PM 改完，回 /task-confirm
+  - PM 选 C → 在 `<engineering-file>` 末尾追加 `<!-- OVERRIDE-DOCSIZE: <YYYY-MM-DD> reason: <PM 理由> -->`，进步骤 1.5
+
+**档位非 prototype**：lint 自动跳过（v2 §五.4 决策）；步骤 1.4 直接通过到 1.5。
+
 ### 步骤 1.5：plan review 推荐摘要（informational，不阻塞）
 
 可选：调 `task-events.py check-plan-reviews <task-file>` 拿到推荐 / 已跑 / 未跑列表，附在步骤 2 摘要里给 PM 看。脚本永远 exit 0，缺 review 不阻止 confirm（I-RV2，撤销旧 I-PR1 hard gate）。如果 PM 想跑，提示回 `/task-spec` 流程或在主窗口手动调 review；跑完贴结论由 AI append `plan_review_completed` 事件。
