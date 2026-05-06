@@ -1,5 +1,7 @@
 <!-- /autoplan restore point: <LOCAL_GSTACK_HOME>/projects/PM-AI-Workflow/main-autoplan-restore-20260426-120923.md -->
 
+> ⚠️ **历史文档（2026-05-06 部分内容已被覆盖）**：本文档记录的是 v3.5 阶段的初始改造决定，其中"reviewer 内部循环到 PASS"的设计已在 2026-05-06 改为"reviewer 一轮一停 + PM 三选一决策"模式。最新设计以 `skills/req-analysis/SKILL.md` + `memory/project_stage2_reviewer.md` 为准；本文档作为历史记录保留，未决问题闸门、双 skill 切分、orchestrator 职责等其他部分仍生效。
+
 # Stage 2 / Stage 3 独立 skill 改造计划
 
 ## Context

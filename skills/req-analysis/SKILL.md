@@ -2,7 +2,8 @@
 name: req-analysis
 description: |
   Stage 2：读 brief.md 做第一性原理批判性分析，写 analysis.md（10 章固定结构 + ## 未决问题 section），
-  内部循环调 analysis-reviewer 直到 PASS。由 /req-stage-gate 在 stage 1→2 时调用。
+  调 analysis-reviewer 一次后把报告原文贴 chat，让 PM 三选一决定下一步（AI 按反馈改 / PM 自改 / 接受现状）。
+  由 /req-stage-gate 在 stage 1→2 时调用。
 ---
 
 # /req-analysis
@@ -35,14 +36,23 @@ echo "SKILL: req-analysis"
 | 维度 | 本 skill 负责 | orchestrator (req-stage-gate) 负责 |
 |---|---|---|
 | 写 analysis.md | ✅ | ❌ |
-| 调 analysis-reviewer + 循环到 PASS | ✅（完整内部循环） | ❌（不重复调） |
-| 展示 reviewer 报告给 PM | ✅（NEEDS_REVISION + PASS 都贴 chat） | ❌ |
-| 改 analysis.md（reviewer 反馈后） | ✅ | ❌ |
+| 调 analysis-reviewer | ✅（一次/轮） | ❌（不重复调） |
+| 展示 reviewer 报告原文给 PM | ✅（PASS / NEEDS_REVISION 都必须贴完整原文） | ❌ |
+| 收 PM 三选一决策（A/B/C） | ✅ | ❌ |
+| 改 analysis.md（A：AI 按反馈改 / B：PM 自改） | ✅ | ❌ |
+| PM 改后重跑 reviewer（A/B 后必跑 1 次） | ✅ | ❌ |
 | 走未决问题闸门（PM 答题） | ❌ | ✅ |
 | 走推进确认门 | ❌ | ✅ |
 | 调 req-transition.py | ❌ | ✅ |
 
-**退出契约**：本 skill 返回时，`$ACTIVE_REQ_DIR/analysis.md` 已经过 analysis-reviewer PASS。orchestrator 信任此契约，不再重调 reviewer。
+**退出契约**：本 skill 返回时——
+- `$ACTIVE_REQ_DIR/analysis.md` 已写盘
+- analysis-reviewer 至少跑过一次，最近一次报告原文已贴 chat
+- PM 已显式做出 A/B/C 决策；返回值带 `review_outcome ∈ {PASS, ACCEPTED_WITH_ISSUES}`
+  - `PASS`：最近一次 reviewer 返回 PASS（PM 选 A/B 修改后重评通过，或一开始就 PASS）
+  - `ACCEPTED_WITH_ISSUES`：最近一次 reviewer 返回 NEEDS_REVISION，PM 选 C 接受现状继续
+
+**不再保证 reviewer 最终 PASS**——把"是否够好"的判断权还给 PM，避免 AI 自循环不收敛或藏报告。orchestrator 信任此契约的"PM 已知悉"语义，不重调 reviewer。
 
 ## Role（角色设定）
 
@@ -124,9 +134,9 @@ echo "SKILL: req-analysis"
 
 按下方 §Analysis Structure 的 10 章固定结构 + `## 未决问题` section 落盘。即使有未决项也必须先写首版，不得只停留在对话。
 
-### 步骤 4：强制调 analysis-reviewer
+### 步骤 4：强制调 analysis-reviewer（每轮一次）
 
-写完 analysis.md 初稿后，**必须**调 Agent 工具，subagent_type 为 `analysis-reviewer`：
+写完 analysis.md 初稿后（或 PM 选 A/B 改完后），**必须**调 Agent 工具，subagent_type 为 `analysis-reviewer`：
 
 ```
 Agent(
@@ -136,20 +146,56 @@ Agent(
 )
 ```
 
-### 步骤 5：reviewer 循环（完整内部跑完）
+### 步骤 5：贴 reviewer 报告原文 + PM 三选一决策门
 
-- **NEEDS_REVISION** → 把报告贴 chat 给 PM 看 → 按 reviewer 给的"具体修改动作"修改 analysis.md → 回步骤 4 重调 reviewer
-- **PASS** → 把 PASS 报告贴 chat 给 PM 看（让 PM 知道评过）→ skill 结束，控制权交回 /req-stage-gate
+reviewer 返回后，**先把 reviewer 报告完整原文贴回 chat**（PASS 与 NEEDS_REVISION 都贴；不允许转述、摘要、隐藏，也不允许只说"reviewer 说 NEEDS_REVISION"就开始改）。
+
+格式：
+
+```
+🔍 analysis-reviewer 第 N 轮报告（完整原文）
+===
+<把 sub-agent 返回的整段评审原文原封不动贴在这里>
+===
+```
+
+然后给 PM 三选一闸门：
+
+**5.1 若 reviewer 返回 PASS**：
+
+```
+A) 确认结果，结束 skill 进入下一步（stage-gate 接管）
+B) 我想再改 analysis.md（说明改哪里 → AI 改 → 重跑 reviewer）
+C) 跳过后续审视，直接结束（与 A 等价；保留只为兼容三选一格式）
+```
+
+PM 选 A/C → 本 skill 退出，返回 `review_outcome=PASS`
+PM 选 B → AI 按 PM 描述改 analysis.md → 回步骤 4 重跑 reviewer
+
+**5.2 若 reviewer 返回 NEEDS_REVISION**（**当前累计循环轮数 ≥ 3 时，必须额外提示「已第 N 轮 NEEDS_REVISION，建议考虑选 C 接受现状或选 B 自改」**）：
+
+```
+A) AI 按 reviewer 反馈改 analysis.md，改完会自动再跑一次 reviewer（再回到本闸门）
+B) 我自己改 analysis.md（告诉我改完了，AI 会再跑一次 reviewer）
+C) 接受现状，结束 skill 不再追评（review_outcome=ACCEPTED_WITH_ISSUES，stage-gate 会知会一声但不阻塞推进）
+```
+
+PM 选 A → AI 按 reviewer 给的「具体修改动作」改 analysis.md → 回步骤 4 重跑 reviewer
+PM 选 B → 等 PM 改完通知（"改完了"）→ 回步骤 4 重跑 reviewer
+PM 选 C → 本 skill 退出，返回 `review_outcome=ACCEPTED_WITH_ISSUES`
+
+**没有自动循环**：每轮 reviewer 跑完都必须停下让 PM 决策；不允许 AI 自己连跑多轮 reviewer 不让 PM 看到中间报告。
 
 ### 步骤 6（硬禁止项）
 
 本 skill **绝对不允许**：
 
-- ❌ 展示推进选项（A 进 stage 3 / B 修改 / C 跳到 stage 5）
-- ❌ 展示未决问题答题模式（grep `**PM 回答：**` + 逐题答）
+- ❌ 展示推进选项（A 进 stage 3 / B 修改 / C 跳到 stage 5）——那是 stage-gate 的职责
+- ❌ 展示未决问题答题模式（grep `**PM 回答：**` + 逐题答）——那是 stage-gate 的职责
 - ❌ 调 `req-transition.py`
-- ❌ 跳过 reviewer 循环（"快速通道"、"简单 req 跳过 reviewer" 等借口都禁止）
-- ❌ 把 reviewer NEEDS_REVISION 结果藏起来不给 PM 看
+- ❌ 跳过 reviewer（"快速通道"、"简单 req 跳过 reviewer"等借口都禁止；PM 想跳过的合法路径只有「步骤 5 选 C」）
+- ❌ 把 reviewer 报告**转述、摘要、节选**给 PM 看——必须贴完整原文，且格式必须可识别为"reviewer 原文"
+- ❌ 自动连跑两轮 reviewer 不停下让 PM 决策（哪怕第 1 轮 NEEDS_REVISION 第 2 轮 PASS 也不行）
 - ❌ 提供"带假设前进"逃生舱（即"PM 不答未决问题就标 [假设: ...] 继续"——这违反新仓未决问题闸门硬规则）
 
 ## Analysis Structure
@@ -236,11 +282,13 @@ Agent(
 - **过度批判**：为了批判而批判，阻碍正常推进；批判的目的是找到更好方案，而非否定一切
 - **摘要式跳过**：把待确认问题收进摘要只提数量，而不逐一展示让 PM 作答
 - **跳过 reviewer**：写完 analysis.md 直接结束 skill，不调 analysis-reviewer
+- **转述 reviewer 报告**：用"reviewer 觉得…"代替原文贴 chat
+- **AI 自动连跑 reviewer**：第 1 轮没让 PM 看就直接改 analysis.md 跑第 2 轮
 
 ## 阶段 2 边界
 
 - **允许产出**：`$ACTIVE_REQ_DIR/analysis.md`
-- **允许动作**：基于 brief.md / CONTEXT.md 做第一性原理分析、提出未决问题、调 analysis-reviewer 并循环
+- **允许动作**：基于 brief.md / CONTEXT.md 做第一性原理分析、提出未决问题、调 analysis-reviewer 一轮一停
 - **禁止顺手推进**：不要自动产出 `solution.md`、`task-plan.md`，不要直接进入原型实现
-- **禁止逃生舱**：没有"带假设前进"模式；reviewer 必须 PASS 才能退出
-- **退出条件**：analysis.md 已写、analysis-reviewer 返回 PASS。控制权交回 /req-stage-gate
+- **禁止逃生舱**：没有"带假设前进"模式；想绕开 reviewer 的合法路径只有「步骤 5 选 C 显式接受现状」
+- **退出条件**：analysis.md 已写、reviewer 至少跑过一次且报告原文已贴 chat、PM 已显式选了 A/B/C 且最终选择是 A 或 C（B 会回到步骤 4）。控制权交回 /req-stage-gate，附带 `review_outcome` 字段
