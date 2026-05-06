@@ -52,21 +52,21 @@ test_solution_tmpl_section_explains_when_to_fill() {
 }
 
 test_req_solution_skill_lists_section_in_order() {
-  start_test "req-solution SKILL 步骤 3 章节顺序含「11. 🔧 本轮实现深度变更」"
+  start_test "req-solution SKILL 步骤 3 章节顺序含「12. 🔧 本轮实现深度变更」"
   if ! grep -q "本轮实现深度变更" "$REQ_SOLUTION_SKILL"; then
     _fail "req-solution SKILL 缺「本轮实现深度变更」引用"
     return
   fi
-  # 11 在 12 历史档案 之前
-  local line11 line12
-  line11=$(grep -n "11\..*本轮实现深度变更" "$REQ_SOLUTION_SKILL" | head -1 | cut -d: -f1)
-  line12=$(grep -n "12\..*历史档案" "$REQ_SOLUTION_SKILL" | head -1 | cut -d: -f1)
-  if [ -z "$line11" ] || [ -z "$line12" ]; then
-    _fail "req-solution SKILL 章节列表缺 11 或 12"
+  # 12 在 13 历史档案 之前
+  local line_depth line_history
+  line_depth=$(grep -n "12\..*本轮实现深度变更" "$REQ_SOLUTION_SKILL" | head -1 | cut -d: -f1)
+  line_history=$(grep -n "13\..*历史档案" "$REQ_SOLUTION_SKILL" | head -1 | cut -d: -f1)
+  if [ -z "$line_depth" ] || [ -z "$line_history" ]; then
+    _fail "req-solution SKILL 章节列表缺 12 或 13"
     return
   fi
-  if (( line11 >= line12 )); then
-    _fail "11. 本轮实现深度变更 应在 12. 历史档案 之前"
+  if (( line_depth >= line_history )); then
+    _fail "12. 本轮实现深度变更 应在 13. 历史档案 之前"
     return
   fi
   pass_test

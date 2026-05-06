@@ -14,8 +14,10 @@
 
   Warnings（启发式）：
     - 反向约束词（"禁止" / "不允许" / "禁用"）
+    - §🖼 UI 骨架代码块内括号注释（建议人工判定是合法标识型还是非法释义型）
 
 跳过区域：HTML 注释（<!-- -->）/ markdown 代码块（``` ```）
+**例外**：§🖼 UI 骨架的代码块内仍然扫描"骨架内括号注释"规则（PM-VIEW-RULES §3.10）
 
 用法:
   python3 scripts/check-doc-pm-view.py <doc-file>
@@ -60,10 +62,18 @@ FORBIDDEN_PATTERNS = {
     ),
 }
 
+# UI skeleton paren annotation: full-width brackets inside §🖼 fenced code blocks
+# (PM-VIEW-RULES §3.10) — warning only; PM/AI judges legitimate (CSV/分钟) vs.
+# illegitimate (基于 X / 多 Y 场景).
+UI_PAREN_PATTERN = re.compile(r"（[^）\n]{2,}）")
+UI_HEADING_PATTERN = re.compile(r"^##\s+🖼")
+ANY_H2_PATTERN = re.compile(r"^##\s+")
+
 # ---- Required sections by document type ----
 REQUIRED_SECTIONS = {
     "solution": [
         "方案摘要",
+        "术语表",
         "关键产品决策",
         "交付物清单",
         "数据模型与状态",
@@ -118,6 +128,7 @@ def lint(path: Path) -> tuple[list[str], list[str]]:
     # Iterate lines, skip HTML comments and code blocks
     in_html_comment = False
     in_code_block = False
+    in_ui_section = False  # tracks §🖼 页面 UI 骨架 section for §3.10 paren rule
     for ln, line in enumerate(lines, 1):
         # HTML comment tracking (multi-line aware)
         if in_html_comment:
@@ -131,11 +142,25 @@ def lint(path: Path) -> tuple[list[str], list[str]]:
             # Inline comment — skip the commented portion
             line = re.sub(r"<!--.*?-->", "", line)
 
+        # §🖼 section tracking (only outside code blocks; ## headings never appear inside)
+        if not in_code_block and ANY_H2_PATTERN.match(line):
+            in_ui_section = bool(UI_HEADING_PATTERN.match(line))
+
         # Code block tracking
         if line.strip().startswith("```"):
             in_code_block = not in_code_block
             continue
         if in_code_block:
+            # Inside a fenced block, skip global rules — but still apply the
+            # §3.10 paren rule when within §🖼 (UI skeleton boxes live here).
+            if in_ui_section:
+                for m in UI_PAREN_PATTERN.finditer(line):
+                    snippet = line.strip()
+                    if len(snippet) > 80:
+                        snippet = snippet[:80] + "..."
+                    warnings.append(
+                        f"L{ln}: §🖼 骨架代码块内括号注释（PM-VIEW-RULES §3.10：人工判合法标识型 vs 非法释义型）: '{m.group(0)}' — {snippet}"
+                    )
             continue
 
         for key, (pattern, desc, severity) in FORBIDDEN_PATTERNS.items():
