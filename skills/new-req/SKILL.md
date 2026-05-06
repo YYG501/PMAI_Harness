@@ -76,21 +76,6 @@ cd 到返回的 worktree 路径。
 }
 ```
 
-**3c. 提示 PM 切换 IDE 到 worktree 目录**：
-
-```
-📁 Req worktree 已创建：<worktree-path>
-
-请在 IDE 中打开此目录，这样你可以直接查看和编辑 req 文档：
-  cursor <worktree-path>
-  或
-  code <worktree-path>
-
-后续所有 stage 的文档产出都在这个目录里。
-```
-
-如果 PM 同意，帮 PM 执行 `cursor <worktree-path>` 或 `code <worktree-path>`。
-
 ### 步骤 4：Stage 1 — 调用 /office-hours 产出 brief.md
 
 调用 `/office-hours`（gstack skill），用六问追问帮 PM 深挖需求：
@@ -105,24 +90,32 @@ cd 到返回的 worktree 路径。
 
 `brief.md` 是 stage 1 的唯一真相源，后续所有 stage 只读 brief.md。
 
-### 步骤 6：确认门
+### 步骤 6：Handoff（结束本对话，让 PM 在 worktree 新对话里继续）
 
-brief.md 写好后，**只给 PM 一句话变更摘要 + 文件绝对路径**，不贴全文。IDE 已经挂在 worktree 上，PM 会自己去看文件。
+brief.md 写好后，**当前主对话不再继续 stage 2**。`/new-req` 的职责到此为止——req 全过程从这里搬到 worktree 内的独立 Claude 对话，让每个 req 拿到干净的 context。
 
-格式：
+输出 handoff 块（**不出 A/B**，不在主对话里调 `/req-stage-gate`）：
 
 ```
 📝 brief.md 已写入：`<绝对路径>`
 
-一句话摘要：[本次 brief 的核心内容或最新一次改动的要点，一行]
+一句话摘要：[本次 brief 的核心内容，一行]
 
-A) 确认，进入 stage 2
-B) 我要修改（请说明改哪里）
+—— 主对话到此为止 ——
+
+下一步（PM 自己执行）：
+  1. 打开新终端窗口
+  2. 运行：
+       cd <worktree 绝对路径>
+       claude
+  3. 在新 Claude 对话里跑：
+       /req-stage-gate
+     （新对话会重新读 brief.md 给二次确认门，确认后进入 stage 2）
 ```
 
-**规则：确认门只给路径 + 一句话摘要，不贴全文。** 例外：review 类产出（CEO review、eng review 的发现）允许直接贴在 chat，因为那是讨论内容不是文档产出。
-
-PM 确认后，调用 `/req-stage-gate` 推进到 stage 2。
+**规则**：
+- 主对话不输出 A/B；A/B 由新对话里的 `/req-stage-gate` 负责。
+- 输出只给路径 + 一句话摘要，不贴 brief 全文。需要时让新对话的 Claude 把 brief.md 读回 chat。
 
 ## Rules
 
