@@ -80,11 +80,11 @@ def find_main_repo_root() -> Path:
 
 
 def pending_manual_path(task_file: Path) -> Path:
-    """Locate the .pending-manual-<task_id>.json file in main repo's .runs/."""
+    """Locate the .pending-manual-<short_id>.json file in main repo's .runs/."""
     repo = find_main_repo_root()
-    task_id = task_file.stem
-    short_id_match = re.match(r"^(task-\d+)", task_id)
-    short_id = short_id_match.group(1) if short_id_match else task_id
+    task_stem = task_file.stem
+    short_id_match = re.match(r"^(task-\d+)", task_stem)
+    short_id = short_id_match.group(1) if short_id_match else task_stem
     return repo / ".runs" / f".pending-manual-{short_id}.json"
 
 
@@ -394,8 +394,8 @@ def cmd_discard(task_file: Path, reason: str, yes: bool) -> None:
     reason = reason.strip()
 
     # 推断分支名（与 create-task-worktree.sh 一致：文件 stem，加 task- 前缀如未带）
-    task_id = task_file.stem
-    branch = task_id if task_id.startswith("task-") else f"task-{task_id}"
+    task_stem = task_file.stem
+    branch = task_stem if task_stem.startswith("task-") else f"task-{task_stem}"
 
     repo_root = find_main_repo_root()
     try:
@@ -595,7 +595,7 @@ def cmd_discard(task_file: Path, reason: str, yes: bool) -> None:
         ["git", "-C", str(req_worktree_root), "add", "-A"],
         capture_output=True,
     )
-    commit_msg = f"discard: {task_id} — {reason}"
+    commit_msg = f"discard: {task_stem} — {reason}"
     commit_result = subprocess.run(
         ["git", "-C", str(req_worktree_root), "commit", "-m", commit_msg],
         capture_output=True, text=True,
@@ -604,7 +604,7 @@ def cmd_discard(task_file: Path, reason: str, yes: bool) -> None:
         err = commit_result.stderr.strip() or commit_result.stdout.strip()
         print(f"⚠️ commit 失败（请手动 commit）: {err}", file=sys.stderr)
 
-    print(f"⏭ Task 已废弃: {task_id}")
+    print(f"⏭ Task 已废弃: {task_stem}")
     print(f"   理由: {reason}")
     print(f"   归档到: tasks/discarded/{task_file.name}")
     if has_worktree:

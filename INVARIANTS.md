@@ -211,6 +211,22 @@
 
 ---
 
+---
+
+## 命名约定（2026-05-06 FM8 清理后）
+
+代码中涉及 task 标识的三个层级，含义不同，不可互换：
+
+| 概念 | 形式 | 用途 | 推荐变量名 |
+|---|---|---|---|
+| **task_stem** | `task-001-do-something` | 完整文件名 stem（含描述）；用作目录名、worktree branch、commit message | `task_stem` / `TASK_STEM` |
+| **short_id** | `task-001` | 仅 task-NNN 部分；用作 PM CLI 简写、`.pending-manual-<id>.json` 文件名、PM 提示文案 | `short_id` / `TASK_SHORT_ID` |
+| **task_id**（JSON 字段名） | 同 short_id | 仅在 `.pending-manual-*.json` schema 里出现；保留向后兼容 | 不在新代码引入，仅 JSON schema |
+
+**反模式**：把 `task_file.stem`（=stem 含义）起名 `task_id` —— v1 时期遗留，2026-05-06 已清理。新代码应用 `task_stem`，不要复用 `task_id`。
+
+---
+
 ## 修复策略
 
 基于上述不变式，修复原则：
