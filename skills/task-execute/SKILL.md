@@ -746,6 +746,120 @@ python3 .claude/scripts/task-transition.py "$TASK_FILE" --to 待验收
 
 Review 事件流不再做覆盖校验（I-RV2）。Dev server 保持运行（PM 验收时需要访问）。
 
+**Commit 后不退出 skill** —— 直接进步骤 11 呈交验收（v4 单窗口 lifecycle 自动衔接，2026-05-07 合并 task-submit 步骤 3/3.5/4）。
+
+### 步骤 11：呈交 PM 验收（合并自 task-submit）
+
+> 默认路径：commit + 转「待验收」后**自动**呈交，PM 不需手动敲 `/task-submit`。
+> 兜底入口：PM 在异常情况（窗口被关 / context 丢失 / 重启 IDE）下仍可手动跑 `/task-submit`，逻辑等价。
+
+#### 11.1 组装验收信息包
+
+读两文件：
+- PM 视图主文件（`.md`）：「📌 任务卡」/「📐 产物预览」/「✅ 验收清单」/「📁 历史档案」最新执行日志 / 业务层偏差表
+- 工程合同（`.engineering.md`）：§1 推荐 review 工具 / §9 工程层验收清单 / §10 文档偏差 / §11 自审记录
+
+收集 diff：
+```bash
+REQ_BRANCH=$(jq -r '.req_branch // empty' .req-meta.json 2>/dev/null \
+  || git symbolic-ref --short HEAD | sed -E 's/^task-[0-9]+-/req-/' \
+  || echo "main")
+git diff --stat "$REQ_BRANCH"..HEAD
+```
+
+PM 已跑的 review（事件流）：
+```bash
+python3 .claude/scripts/task-events.py list "$TASK_FILE" --type review_completed
+```
+- 有事件 → 列出工具及结论（如 `/review pass, /qa pass`）
+- 无事件 → 写"（PM 选择不跑 review）"
+
+判断 task 类型（UI / 非 UI），按 task-submit §步骤 2 同样信号判定（任一命中即 UI）：
+- task 描述涉及前端/页面/组件/界面/UI/view/component
+- 工程合同 §1「推荐 review 工具」字段含 `/design-review` 或 `/qa`
+- PM 视图「📐 产物预览」section 含 ASCII 线框图
+
+#### 11.2 输出验收信息块
+
+**UI 类 task**（含 dev server 走查指引 + 多视角链接，AI 按 task 描述推断具体路径与 query params）：
+
+```
+═══════════════════════════════════════
+📋 Task 验收：task-NNN-<slug>
+═══════════════════════════════════════
+
+🌐 走查链接（dev server 持续在 :<port>，PM 可在浏览器走查任意视角）：
+  • <视角 1 描述>: http://localhost:<port>/<path>?<params>
+  • <视角 2 描述>: http://localhost:<port>/<path>?<params>
+  ...
+
+📝 改动摘要：
+[最新执行日志「**改动摘要：**」一行]
+
+📊 Diff 摘要（vs <REQ_BRANCH>）：
+[git diff --stat 输出]
+
+🔍 review 已跑：
+[/review pass, /qa pass / 或 "PM 选择不跑 review"]
+
+🔍 自审结果：
+[工程合同 §11 最新一条要点]
+
+✅ 验收清单（PM 主路径走查）：
+- [ ] 条件 1
+- [ ] 条件 2
+[逐条来自 PM 视图 §✅ 验收清单]
+
+📄 文档偏差：
+PM 视图：[历史档案中的偏差或"无"]
+工程合同：[§10 内容或"无偏差"]
+
+请走查后回复：通过 / 打回（附反馈）
+═══════════════════════════════════════
+```
+
+**非 UI 类 task**：去掉「走查链接」段，加「📂 代码变更」段（关键 diff / 测试结果摘要），其余结构同上。
+
+#### 11.3 走查时引导 PM 反推上游文档偏差
+
+PM 看原型 / 看 diff 时若发现 brief / analysis / solution（PM 视图）/ prd / module 规格等上游文档写错，提醒 PM 在 task PM 视图「📁 历史档案 → 业务层偏差」表填一行（默认空，多数 task 不填）。close-task 调 `/doc-update` 时会扫这段 + 工程合同 §10，逐条确认改原文。
+
+不要让 PM 只在对话里说偏差而不落表 —— 会丢。
+
+### 步骤 12：等待 PM 决策
+
+**PM 说"通过"**：
+```bash
+python3 .claude/scripts/task-transition.py "$TASK_FILE" --to 已完成
+```
+
+然后**直接调用** `/close-task`（在本窗口继续；不要让 PM 手动敲）。
+
+**PM 说"打回"**：
+
+1. 记录 PM 反馈到 PM 视图主文件「📁 历史档案 → PM 反馈」（**禁止**写入工程合同）：
+   ```markdown
+   ### 反馈 N - [YYYY-MM-DD]
+   **问题描述：** [PM 原话]
+   **要求修改：** [具体修改要求]
+   **分类（PM-VIEW-RULES §9.4）**：[正向规则 / 反向约束 / 决策记录]
+   **处理结果：** 待处理
+   ```
+
+   分类规则（参 PM-VIEW-RULES §9.4）：
+   - 正向规则（"统一用 X" / "全文用 Y"）→ 后续 task 同步入「跨功能产品规则」
+   - 反向约束（"禁用 X" / "不要 Y"）→ 后续 task 同步入工程合同 §6 易错点 / 禁止项
+   - 决策记录（"二审改 X" / "重做为 Y"）→ 后续 task 同步入「关键产品决策」备选方案列
+
+2. 转回执行中：
+   ```bash
+   python3 .claude/scripts/task-transition.py "$TASK_FILE" --to 执行中 --note "PM 打回：<反馈摘要>"
+   ```
+
+3. 应用 §PM 反馈分流策略（步骤 3 上方）判断"行为修订" vs "Bug 修复"，告知 PM 判断结果。判断错误 → PM 回复 "wrong" 切换分流。
+
+4. 继续修复并重新走步骤 5-12（执行日志 / 自审 / commit / 呈交）。
+
 ## Rules
 
 - task 文件用绝对路径读写（task worktree 中的路径和主仓路径不同）
@@ -756,3 +870,5 @@ Review 事件流不再做覆盖校验（I-RV2）。Dev server 保持运行（PM 
 - PM 报告 review 结论后才 append `review_completed` 事件（I-RV3）；禁止 AI 替 PM 跑或凭记忆模拟
 - 事件流缺 review_completed 不阻止「执行中→待验收」转换（I-RV2）
 - dev server 在 task-execute 结束后保持运行，直到 close-task 时杀掉
+- **commit + 转待验收 → 自动进步骤 11 呈交验收**（默认路径，PM 不手动敲 `/task-submit`）；PM 通过后 AI 在本窗口继续调 `/close-task`
+- task-submit 仍存在但仅作 PM 手动兜底入口（重启窗口 / context 丢失 / 异常退出后重新呈交）

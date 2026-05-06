@@ -2,13 +2,21 @@
 name: task-submit
 description: |
   向 PM 呈交 task 验收信息包，根据 task 类型调整展示内容，等待 PM 决策。
+  **默认路径不再被 PM 直接调用**——task-execute 步骤 11/12 已合并本 skill 的呈交+决策逻辑（2026-05-07）。
+  本 skill 现在的角色是 PM 手动兜底入口：窗口被关 / context 丢失 / IDE 重启后想重新呈交时使用。
 ---
 
 # /task-submit
 
 ## When To Use
 
-- 新窗口在 task 状态变为「待验收」后调用，直接向 PM 呈交验收并处理通过/打回
+- **默认路径**（推荐）：不需要 PM 手动调；task-execute commit + 转「待验收」后**自动**进入步骤 11/12 呈交+决策。
+- **兜底入口**（PM 手动）：异常情况下使用——
+  - 新窗口被关后 PM 重新打开窗口想看验收信息
+  - task-execute 异常退出但 task 已转「待验收」
+  - PM 想重新审视一次验收信息包
+
+> 默认路径与本 skill 逻辑等价；切口在 task-execute 步骤 10 commit 之后是否退出 skill。
 
 ## 拆两文件约定（必读）
 
