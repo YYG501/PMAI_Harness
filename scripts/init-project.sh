@@ -21,6 +21,24 @@ esac
 
 FRAMEWORK_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 
+# --- 0. 位置 sanity check（DX I2）---
+# 该脚本只能在框架仓内运行；在业务仓里跑会拷错路径
+# 判定：FRAMEWORK_DIR 必须含 templates/CLAUDE.md.tmpl + skills/init-project + scripts/inject-structure-segment.py
+MISSING=""
+[ -f "$FRAMEWORK_DIR/templates/CLAUDE.md.tmpl" ] || MISSING="$MISSING templates/CLAUDE.md.tmpl"
+[ -d "$FRAMEWORK_DIR/skills/init-project" ] || MISSING="$MISSING skills/init-project/"
+[ -f "$FRAMEWORK_DIR/scripts/inject-structure-segment.py" ] || MISSING="$MISSING scripts/inject-structure-segment.py"
+if [ -n "$MISSING" ]; then
+  echo "❌ 该脚本必须在框架仓（PM-AI-Workflow）根目录运行。" >&2
+  echo "   检测到缺失的标志文件：$MISSING" >&2
+  echo "   推断当前 FRAMEWORK_DIR=$FRAMEWORK_DIR 不是框架仓。" >&2
+  echo "" >&2
+  echo "   解决方法：" >&2
+  echo "     cd /path/to/PM-AI-Workflow" >&2
+  echo "     bash scripts/init-project.sh <project-name> <target-dir> <background> [<intent>]" >&2
+  exit 2
+fi
+
 # --- a. 检测 gstack ---
 if ! command -v gstack &>/dev/null; then
   # 检查 gstack skill 目录
