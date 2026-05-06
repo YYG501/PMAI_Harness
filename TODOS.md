@@ -42,7 +42,33 @@
 
 ## v4: PM 手动开新窗口执行 task（并行原生）
 
-**Status (2026-04-25):** 🟢 **Plan 收敛完成 + 并行优先决议**，未实施。详见 `设计-PM手动新窗口执行.md`。
+**Status (2026-05-06):** ✅ **已实施完成**。A0 → A4 全部落地，159 测试全绿。设计源 `设计-PM手动新窗口执行.md`。
+
+**实施 commit 链：**
+- `2e6cfec` v4 A0：放宽 I-TT2 + 顺手修 FM7 transition 事务性
+- `d5f8769` v4 A1：preamble 兜底收口行为 + status-view --summary
+- `5b96c7a` v4 A2：6 个 SKILL 改写实施 v4 工作流核心
+- `8ebebeb` v4 A3+A4：模板改写 + 6 测试新增（T22/T23 暂禁）
+- `88182cd` v4 A4：T23 dependency gate test 修复
+- `d760174` v4 A4：T22 e2e lifecycle test 修复
+- `5a39159` v4 plan §8 A4 status — T22/T23 全修通过，159 测试全绿
+
+**v4 后续加固（已落 main）：**
+- `1cf1571` --add-dir 扩沙盒解决跨 worktree cd
+- `3738d92` task-execute I-AD5 pre-dispatch checkpoint
+- `a0a3427` task-confirm I-PR1 plan review hard gate
+- `0496e9e` review-bundle A+B+D+E 框架挂入
+- `d131557` task-execute run-bg.sh watchdog + stall 检测
+
+**当前形态校验入口：**
+- `skills/task-confirm/SKILL.md:153` 步骤 5「输出新窗口启动指令（v4 单窗口 lifecycle）」
+- `skills/task-execute/SKILL.md:53` 无参数模式自动扫描待启动 task
+- `scripts/task-transition.py:193` `check_serial_constraint` no-op
+- `INVARIANTS.md:170` I-TT2「D0 并行允许（v4 plan §8 A0 修订）」
+
+---
+
+### v4 原 plan 段（保留作设计溯源）
 
 **What:** `/task-confirm` 不调任何 MCP / 不 spawn 任何东西，**只输出极简启动指令给 PM**。PM 在新窗口启 Claude → 输 `/task-execute`（无参数自动找唯一待启动 task；多候选时显式参数）→ SKILL 自动 cd worktree + 转执行中 + 跑 codex + 走 v1 现有 /task-submit。PM 跑完回主窗口任意输入触发 preamble 扫描自动呈交"待验收"。**支持并行**：PM 想多 task 同时跑就开多个新窗口，每窗口独立 Claude 实例，git worktree 天然隔离。
 
