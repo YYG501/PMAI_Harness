@@ -101,10 +101,10 @@
 **Phase A 第一步（A0）：**
 - 修 invariant：放宽 I-TT2，单测同 req 多 task 同时执行允许
 
-**v1 现有 bug（不阻塞 v4，但建议修）：**
-- FM6 v1 codex 非 0 退出后是否自动调 fail-execution？需查
-- FM7 v1 task-transition.py:211 append_event 子进程返回码被忽略 → I-CT7 fail-closed 不彻底
-- FM8 v1 命名清理 task_short_id / task_stem
+**v1 现有 bug（全部已修）：**
+- ✅ FM6：v4 实施时一并修了。task-execute SKILL.md:413-422 已有 EXIT_CODE!=0 → classify-failure → execution_failed event → fail-execution 完整路径（2026-05-06 调研确认）
+- ✅ FM7：commit `2e6cfec` v4 A0 顺手修复 transition 事务性
+- ✅ FM8：commit `758f7ed` 命名清理（task_stem / short_id / JSON task_id 三层语义边界 → INVARIANTS 命名约定段）
 
 **下次接任者要知道:**
 - 读 `设计-PM手动新窗口执行.md`，重点 §3 架构 + §4.1/§4.2 改动 + §11 测试 + §13 风险
