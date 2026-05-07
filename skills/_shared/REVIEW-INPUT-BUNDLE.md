@@ -132,7 +132,7 @@ bundle 是派生 artifact，**不**保留 review 结果；下一轮重跑脚本�
   `scripts/build-review-input.py` 调用；不允许 AI 手动 Edit / Write 派生文件。
 - **review 结论回写**走源文件（PM 视图 + `.engineering.md`），不写 bundle。
 - 如果发现脚本约定的章节命名和当前模板不一致（脚本输出 ⚠️），先回头修
-  `templates/task.md.tmpl` / `task.engineering.md.tmpl` 的章节命名 / 修
+  `$REPO_ROOT/templates/task.md.tmpl` / `task.engineering.md.tmpl` 的章节命名 / 修
   `REVIEW_CONVENTIONS` 关键词，不要绕路。
 
 ---

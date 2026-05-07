@@ -1,7 +1,7 @@
 ---
 name: task-plan
 description: |
-  Stage 5：读取上游 stage 文档 + 项目级文档 + 原型代码，拆分 task 规划。按 templates/task-plan.md.tmpl 生成单一文件 task-plan.md（PM 视图 + 末尾轻量自检与状态摘要）。不生成具体 task 文档，不生成工程合同分文件。
+  Stage 5：读取上游 stage 文档 + 项目级文档 + 原型代码，拆分 task 规划。按 $REPO_ROOT/templates/task-plan.md.tmpl 生成单一文件 task-plan.md（PM 视图 + 末尾轻量自检与状态摘要）。不生成具体 task 文档，不生成工程合同分文件。
 ---
 
 # /task-plan
@@ -15,7 +15,7 @@ description: |
 本 skill 生成的文档须遵守 `skills/_shared/PM-VIEW-RULES.md`。
 特别注意：
 - **§三 PM 视图写作规则**（明确指代 / 正向描述 / 禁工程词 / 禁像素颜色 / 禁反向约束）
-- **§七 章节顺序约束**（按 `templates/task-plan.md.tmpl`）
+- **§七 章节顺序约束**（按 `$REPO_ROOT/templates/task-plan.md.tmpl`）
 - **§九 输入流约束**（必读上游 stage 文档 + 项目级文档；输入清单见下方 Required Inputs）
 
 > task-plan **不拆双文件**。它的"工程合同"成分（反模式自检结论 / 验收 GAP 索引 / 模块规格状态）压成末尾轻量"自检与状态摘要"节，附在 PM 视图末。详细论证 / autoplan 决策 / 共享数据约束等不需要长期存档，跑时输出即可。
@@ -147,7 +147,7 @@ echo "SKILL: task-plan"
 
 ### 步骤 3：写 task-plan.md
 
-按 `templates/task-plan.md.tmpl` 生成 `$ACTIVE_REQ_DIR/task-plan.md`：
+按 `$REPO_ROOT/templates/task-plan.md.tmpl` 生成 `$ACTIVE_REQ_DIR/task-plan.md`：
 
 **章节顺序**（强制，由 PM-VIEW-RULES §七锁定）：
 1. 📌 拆分摘要
@@ -171,7 +171,7 @@ echo "SKILL: task-plan"
 ### 步骤 4：自检（按 PM-VIEW-RULES §八 8 项）
 
 写完后对 `task-plan.md` 逐条检查：
-- [ ] 章节顺序符合 templates/task-plan.md.tmpl
+- [ ] 章节顺序符合 $REPO_ROOT/templates/task-plan.md.tmpl
 - [ ] 所有名词带完整指代前缀
 - [ ] 无像素值 / 颜色码 / Emoji 视觉
 - [ ] 无反向约束

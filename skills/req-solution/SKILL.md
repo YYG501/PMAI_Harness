@@ -1,7 +1,7 @@
 ---
 name: req-solution
 description: |
-  Stage 3：读 brief.md / analysis.md + 项目级文档 + 原型代码，按 templates/solution.md.tmpl 生成 solution.md（PM 视图），按 templates/solution.engineering.md.tmpl 生成 solution.engineering.md（工程合同）。
+  Stage 3：读 brief.md / analysis.md + 项目级文档 + 原型代码，按 $REPO_ROOT/templates/solution.md.tmpl 生成 solution.md（PM 视图），按 $REPO_ROOT/templates/solution.engineering.md.tmpl 生成 solution.engineering.md（工程合同）。
   由 /req-stage-gate 在 stage 2→3 时调用；review 与推进交回调度 skill。
 ---
 
@@ -20,7 +20,7 @@ description: |
 特别注意：
 - **§三 PM 视图写作规则**（明确指代 / 正向描述 / 禁工程词 / 禁像素颜色 / 禁反向约束）
 - **§六 关键产品决策格式**（solution.md 必填章节）
-- **§七 章节顺序约束**（按 `templates/solution.md.tmpl` 锁定的 13 章 PM 视图 + `templates/solution.engineering.md.tmpl` 的 10 章工程合同）
+- **§七 章节顺序约束**（按 `$REPO_ROOT/templates/solution.md.tmpl` 锁定的 13 章 PM 视图 + `$REPO_ROOT/templates/solution.engineering.md.tmpl` 的 10 章工程合同）
 - **§九 输入流约束**（必读上游 stage 文档 + 项目级文档；输入清单见下方 Required Inputs）
 - **§9.6 双文件 lazy sync**：首次生成两文件 + hash；PM 中途修改只动 PM 视图；stage-gate gate 通过时调本 skill 的 reconcile 模式做对齐
 
@@ -143,7 +143,7 @@ fi
 
 ### 步骤 3：写 solution.md（PM 视图）
 
-按 `templates/solution.md.tmpl` 生成 `$ACTIVE_REQ_DIR/solution.md`：
+按 `$REPO_ROOT/templates/solution.md.tmpl` 生成 `$ACTIVE_REQ_DIR/solution.md`：
 
 **章节顺序**（强制，由 PM-VIEW-RULES §七锁定）：
 1. 📌 方案摘要
@@ -180,7 +180,7 @@ fi
 
 > **仅 first-gen 模式执行**。revise 模式跳过本步骤（不动工程合同，hash 自然 stale）。reconcile 模式走步骤 R。
 
-按 `templates/solution.engineering.md.tmpl` 生成 `$ACTIVE_REQ_DIR/solution.engineering.md`：
+按 `$REPO_ROOT/templates/solution.engineering.md.tmpl` 生成 `$ACTIVE_REQ_DIR/solution.engineering.md`：
 
 **章节顺序**（按模板锁定）：
 1. 数据结构定义
@@ -198,7 +198,7 @@ fi
 - 允许所有工程内容（TS 类型 / 字段名 / 像素 / 颜色 / 反向约束 / autoplan 输出原文等）
 - 唯一原则：不重复 PM 视图已有的功能行为描述
 - **强制引用规则**：solution.md 已写过的内容（产品行为 / 用户场景 / 弹窗规范 / 验收标准 / 模块职责文字描述）→ 写"参见 solution.md §X.Y"，**禁止重抄**
-- **章节深度按档位裁剪**：读 CLAUDE.md「工程结构约束」段的「文档输出深度指引」（由 `templates/工程结构约束-{档位}.md` 注入），按档位决定各章节展开深度
+- **章节深度按档位裁剪**：读 CLAUDE.md「工程结构约束」段的「文档输出深度指引」（由 `$REPO_ROOT/templates/工程结构约束-{档位}.md` 注入），按档位决定各章节展开深度
 - **目标行数**：原型档下 ≤300 行（由 `scripts/check-engineering-doc-size.py` 在 stage 闸门校验，超限 stage-gate 报错）；custom/system 档不预设上限
 
 **hash 写入**（PM-VIEW-RULES §9.6.2）：
@@ -214,7 +214,7 @@ PM_VIEW_HASH=$(shasum -a 256 "$ACTIVE_REQ_DIR/solution.md" | cut -c1-12)
 
 写完后逐条检查 solution.md：
 
-- [ ] 章节顺序符合 templates/solution.md.tmpl
+- [ ] 章节顺序符合 $REPO_ROOT/templates/solution.md.tmpl
 - [ ] 所有名词带完整指代前缀
 - [ ] 无像素值 / 颜色码 / Emoji 视觉
 - [ ] 无反向约束（"禁止 / 不允许"）
@@ -304,8 +304,8 @@ lint 不强制阻塞，但 errors 留着进入步骤 6 的，必须在向 PM 展
 
 ## 文档结构
 
-PM 视图章节顺序见 `templates/solution.md.tmpl`（由 PM-VIEW-RULES §七锁定）。
-工程合同章节顺序见 `templates/solution.engineering.md.tmpl`。
+PM 视图章节顺序见 `$REPO_ROOT/templates/solution.md.tmpl`（由 PM-VIEW-RULES §七锁定）。
+工程合同章节顺序见 `$REPO_ROOT/templates/solution.engineering.md.tmpl`。
 
 本 skill **不在内部维护章节定义**——所有章节约束的单一真相源是模板文件 + PM-VIEW-RULES。
 
@@ -327,7 +327,7 @@ PM 视图章节顺序见 `templates/solution.md.tmpl`（由 PM-VIEW-RULES §七�
 
 读取 `.claude/skills/req-solution/references/few-shots.md` 获取各章节完整示例。
 
-> 注：references/few-shots.md 当前是 PRD 风格章节示例。PR 2/3 阶段会更新为新模板章节示例（"📌 方案摘要" / "🎯 关键产品决策" / 等）。在更新前，引用 few-shots 仅作语言风格参考，章节结构以 templates/solution.md.tmpl 为准。
+> 注：references/few-shots.md 当前是 PRD 风格章节示例。PR 2/3 阶段会更新为新模板章节示例（"📌 方案摘要" / "🎯 关键产品决策" / 等）。在更新前，引用 few-shots 仅作语言风格参考，章节结构以 $REPO_ROOT/templates/solution.md.tmpl 为准。
 
 ---
 

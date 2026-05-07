@@ -25,7 +25,7 @@ echo "SKILL: project-prd-update"
 ## Required Inputs
 
 1. `$ACTIVE_REQ_DIR/prd.md`（必需，req 级 prd，由 `/prd-writing` 产出）
-2. `$REPO_ROOT/docs/prd.md`（必需，项目主 PRD，模板见 `templates/project-prd.md.tmpl`）
+2. `$REPO_ROOT/docs/prd.md`（必需，项目主 PRD，模板见 `$REPO_ROOT/templates/project-prd.md.tmpl`）
 3. `$ACTIVE_REQ_DIR/.req-meta.json`（用于取 req id / name / 关闭日期作为产品路线时间戳）
 
 ## Workflow

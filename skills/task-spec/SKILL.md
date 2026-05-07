@@ -1,7 +1,7 @@
 ---
 name: task-spec
 description: |
-  Stage 6：按 task-plan.md 为单个 task 同时生成 PM 视图（templates/task.md.tmpl）+ 工程合同（templates/task.engineering.md.tmpl）两文件，等待 PM 确认后再进入 /task-confirm。
+  Stage 6：按 task-plan.md 为单个 task 同时生成 PM 视图（$REPO_ROOT/templates/task.md.tmpl）+ 工程合同（$REPO_ROOT/templates/task.engineering.md.tmpl）两文件，等待 PM 确认后再进入 /task-confirm。
 ---
 
 # /task-spec
@@ -18,7 +18,7 @@ description: |
 - **§三 PM 视图写作规则**（明确指代 / 正向描述 / 禁工程词 / 禁像素颜色 / 禁反向约束）
 - **§五 功能清单格式**（标题 + 角色限定一句话 + 业务规则编号 + 字段口径独立表；业务规则只说 what，禁 how/why/字段口径混入）
 - **§六 关键产品决策格式**
-- **§七 章节顺序约束**（按 `templates/task.md.tmpl` + `templates/task.engineering.md.tmpl`）
+- **§七 章节顺序约束**（按 `$REPO_ROOT/templates/task.md.tmpl` + `$REPO_ROOT/templates/task.engineering.md.tmpl`）
 - **§九 输入流约束**（必读上游 stage 文档 + 项目级文档；输入清单见下方 Required Inputs）
 - **§9.4 PM 反馈三类分流**（正向规则 → 跨功能产品规则 / 反向约束 → 工程合同 §6 / 决策记录 → 关键产品决策）
 - **§9.6 双文件 lazy sync**：首次生成两文件 + hash；PM 在步骤 12 选 B 修改时只动 PM 视图、工程合同保持 stale；PM 选 A 后由步骤 12.5 reconcile 同步
@@ -138,7 +138,7 @@ echo "SKILL: task-spec"
 > - 顶部 frontmatter / 元信息段落（旧格式 v1：`**状态：** 已完成` 等历史段落）
 > - 任务卡表格的字段布局
 >
-> 旧 task 是 v1 历史格式，新 task 必须按 `templates/task.md.tmpl` 的 v2 布局
+> 旧 task 是 v1 历史格式，新 task 必须按 `$REPO_ROOT/templates/task.md.tmpl` 的 v2 布局
 > 生成（任务卡表格里 `| **状态** | 待确认 |`，标题下方不加 frontmatter 段落）。
 > 把旧格式当参考会导致生成 blockquote frontmatter 等假执行产物，被步骤 10.6 严格字段校验挡回重写。
 
@@ -193,7 +193,7 @@ echo "SKILL: task-spec"
 
 ### 步骤 8：写 task-NNN-<slug>.md（PM 视图）
 
-按 `templates/task.md.tmpl` 生成 `$ACTIVE_REQ_DIR/tasks/task-NNN-<slug>.md`：
+按 `$REPO_ROOT/templates/task.md.tmpl` 生成 `$ACTIVE_REQ_DIR/tasks/task-NNN-<slug>.md`：
 
 **章节顺序**（强制，由 PM-VIEW-RULES §七锁定）：
 1. 📌 任务卡（10 秒理解）
@@ -224,7 +224,7 @@ echo "SKILL: task-spec"
 
 > **仅 first-gen 模式执行**。revise 模式跳过本步骤（不动工程合同，hash 自然 stale，等步骤 12.5 reconcile）。
 
-按 `templates/task.engineering.md.tmpl` 生成 `$ACTIVE_REQ_DIR/tasks/task-NNN-<slug>.engineering.md`：
+按 `$REPO_ROOT/templates/task.engineering.md.tmpl` 生成 `$ACTIVE_REQ_DIR/tasks/task-NNN-<slug>.engineering.md`：
 
 **章节顺序**（按模板锁定）：
 1. 元信息扩展（executor / model）
@@ -320,7 +320,7 @@ B 层为「无变更」时本节写「无变更（沿用 A 层）」]
 ### 步骤 10：自检（按 PM-VIEW-RULES §八 8 项）
 
 写完后对 PM 视图主文件逐条检查：
-- [ ] 章节顺序符合 templates/task.md.tmpl
+- [ ] 章节顺序符合 $REPO_ROOT/templates/task.md.tmpl
 - [ ] 所有名词带完整指代前缀
 - [ ] 无像素值 / 颜色码 / Emoji 视觉
 - [ ] 无反向约束

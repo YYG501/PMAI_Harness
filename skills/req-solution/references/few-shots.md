@@ -1,9 +1,9 @@
 # Few-shots：solution.md（PM 视图）章节示例
 
-> 以下示例对应 `templates/solution.md.tmpl` 锁定的 PM 视图章节顺序（由 PM-VIEW-RULES §七强制）。
+> 以下示例对应 `$REPO_ROOT/templates/solution.md.tmpl` 锁定的 PM 视图章节顺序（由 PM-VIEW-RULES §七强制）。
 >
 > 示例案例：admin-console 项目「业务意图映射导览」req（实际产出过的真实案例）。
-> 工程合同（`solution.engineering.md`）的章节示例由 templates/solution.engineering.md.tmpl 内嵌注释提供，本文件不重复。
+> 工程合同（`solution.engineering.md`）的章节示例由 $REPO_ROOT/templates/solution.engineering.md.tmpl 内嵌注释提供，本文件不重复。
 
 ---
 
