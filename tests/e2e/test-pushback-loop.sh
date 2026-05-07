@@ -23,8 +23,18 @@ _assert_contains() {
     return 0
   fi
   _fail "$desc: missing '$text'"
-  sed -n '1,460p' "$file" >&2
   return 1
+}
+
+_assert_missing() {
+  local file="$1"
+  local text="$2"
+  local desc="$3"
+  if _contains "$file" "$text"; then
+    _fail "$desc: should not contain '$text'"
+    return 1
+  fi
+  return 0
 }
 
 _append_pm_feedback() {
@@ -41,16 +51,22 @@ _append_pm_feedback() {
 EOF
 }
 
+# Contract: task-submit 把反馈循环交给 task-execute 按反馈循环规则处理；不再有分流/wrong 翻转
 test_pushback_loop_contract() {
-  start_test "e2e pushback: task-submit hands off to task-execute triage"
+  start_test "e2e pushback: task-submit hands off to task-execute 反馈循环规则"
 
-  _assert_contains "$TASK_SUBMIT_SKILL" "DX RU3 分流策略" "DX RU3 handoff message" || return
-  _assert_contains "$TASK_EXECUTE_SKILL" "本次反馈识别为" "classification one-liner" || return
-  _assert_contains "$TASK_EXECUTE_SKILL" 'PM says `wrong`: flip the classification' "wrong branch flip" || return
+  _assert_contains "$TASK_SUBMIT_SKILL" "反馈循环规则" "feedback-loop handoff message" || return
+  _assert_contains "$TASK_EXECUTE_SKILL" "### 反馈循环规则" "task-execute owns 反馈循环规则" || return
+  _assert_contains "$TASK_EXECUTE_SKILL" "文档对齐预告" "文档对齐预告 field present" || return
+
+  _assert_missing "$TASK_SUBMIT_SKILL" "DX RU3" "no legacy DX RU3 reference" || return
+  _assert_missing "$TASK_EXECUTE_SKILL" "本次反馈识别为" "no legacy classification one-liner" || return
+  _assert_missing "$TASK_EXECUTE_SKILL" "flip the classification" "no legacy wrong-flip" || return
 
   pass_test
 }
 
+# Behavioral: 反馈 append 到 task md + 状态回执行中 (这两个动作不变)
 test_pushback_loop_behavioral_fixture() {
   start_test "e2e pushback: feedback append and status transition simulation"
   fixture_setup
@@ -60,7 +76,7 @@ test_pushback_loop_behavioral_fixture() {
 
   _append_pm_feedback "$task" "1" "should change behavior before showing result" "改成先校验权限再显示结果"
   if ! grep -q "should change behavior" "$task"; then
-    _fail "behavior revision feedback missing"
+    _fail "behavior-style feedback missing"
     fixture_teardown
     return
   fi
@@ -75,13 +91,14 @@ test_pushback_loop_behavioral_fixture() {
 
   _append_pm_feedback "$task" "2" "missing step 3，漏了错误态提示" "补上漏掉的错误态"
   if ! grep -q "missing step 3" "$task" || ! grep -q "漏了" "$task"; then
-    _fail "bug-type feedback missing"
+    _fail "second feedback round missing"
     fixture_teardown
     return
   fi
 
-  _assert_contains "$TASK_EXECUTE_SKILL" "wrong" "PM wrong rejection keyword" || { fixture_teardown; return; }
-  _assert_contains "$TASK_EXECUTE_SKILL" "flip the classification" "switch classification on wrong" || { fixture_teardown; return; }
+  # 反馈循环规则: 多轮反馈用"后覆盖前"作为冲突解决（无须 wrong/翻转）
+  _assert_contains "$TASK_EXECUTE_SKILL" "后覆盖前" "conflict-resolution rule documented" || { fixture_teardown; return; }
+  _assert_contains "$TASK_EXECUTE_SKILL" "实现歧义阻塞" "ambiguity gate documented" || { fixture_teardown; return; }
 
   fixture_teardown
   pass_test
