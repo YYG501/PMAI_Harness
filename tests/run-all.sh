@@ -22,12 +22,14 @@ SUITES=(
   test-req-stage-gate.sh
   test-req-transition.sh
   test-close-task.sh
+  test-close-task-design-feedback.sh
   test-close-req.sh
   test-cleanup-pending.sh
   test-cancel-req.sh
   test-status-view.sh
   test-setup-deps.sh
   test-run-bg.sh
+  test-pre-commit-hook.sh
   v4_T13_status_summary.sh
   v4_T14_taskexec_short_id.sh
   v4_T16_taskexec_double_scan.sh

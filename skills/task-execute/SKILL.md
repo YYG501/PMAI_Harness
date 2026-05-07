@@ -247,6 +247,31 @@ CURRENT_STATUS=$(python3 "$MAIN_REPO_ROOT/.claude/scripts/task-transition.py" "$
 
 ### 步骤 2：读取必读文档
 
+#### 2.0 项目级 DESIGN.md 强制 echo（不依赖 §3 列表 / 不依赖 LLM 选择性 Read）
+
+UI task 漏读 / 浅读 DESIGN.md 是 task-001 反复迭代踩坑的根因（Read tool 触发与否取决于 LLM 自觉，489 行内容进 context 后细节又会被冲淡）。本子步骤用 Bash `cat` 把 DESIGN.md 全文无条件 echo 到 transcript，**保证内容进入 working context**——比依赖 Read tool 自觉触发硬。冗余于 §3 启动前必读列表也无害。
+
+```bash
+DESIGN_MD="$TASK_WORKTREE/docs/DESIGN.md"
+if [ -f "$DESIGN_MD" ]; then
+  echo "════════════════════════════════════════════════════════════════"
+  echo "项目级设计系统（docs/DESIGN.md）— task-execute 步骤 2.0 强制 echo"
+  echo "（视觉规范单一来源；UI / 视觉类 task 必须遵循；非 UI task 可作为辅助参考）"
+  echo "════════════════════════════════════════════════════════════════"
+  cat "$DESIGN_MD"
+  echo "════════════════════════════════════════════════════════════════"
+  echo "END docs/DESIGN.md"
+  echo "════════════════════════════════════════════════════════════════"
+else
+  echo "ℹ️  $TASK_WORKTREE/docs/DESIGN.md 不存在（项目尚未建立 DESIGN.md），跳过 echo"
+  echo "    建议 PM 后续建立 DESIGN.md 作为项目级视觉规范单一来源（gstack /design-consultation 可生成）"
+fi
+```
+
+不做 echo 后语义校验（grep token 命中 / 自检清单）——那是 task-execute 步骤 5 的事。本子步骤只保证内容到位。
+
+#### 2.1 按 §3 启动前必读列表读其他文档
+
 按工程合同「§3 启动前必读」列表，逐个读取文档内容。理解：
 - 模块规格中的**功能清单（硬约束）**：功能行为、数据规则、角色权限必须严格遵循
 - 模块规格中的**实现指引（软指引）**：推荐组件、DESIGN.md 对齐、交互状态覆盖，可在设计系统框架内自由发挥
