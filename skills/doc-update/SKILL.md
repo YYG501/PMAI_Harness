@@ -33,6 +33,28 @@ description: Use when task 已完成、PM 已通过验收、需要在 close-task
 
 ## Workflow
 
+### 步骤 0.5：沉淀风险判断（AI 主动做）
+
+进入沉淀逻辑前，先判断本次 sediment 会不会让目标 module spec 进入「v1+v2 杂交」状态：
+
+- 同 req 内还有其他未 close task 改这份 module spec？
+- 本 task 改动是结构性升级（v2 重做 / 重新分章 / 章节边界调整），不是 incremental 修补？
+- 改动跨多个章节，特别是相邻章节？
+
+任一命中 → 主动跟 PM 提议：
+
+> 「本次单 task sediment 会让 [spec 文件名] 进入 v1+v2 杂交状态。
+> 本 task 影响 [§X-Y]；同 req 的 task-NNN 也会改 [§A-B]，task-MMM 改 [§C-D]。
+> 建议走 `--skip-doc-update` half-close，由 close-req 阶段聚合所有 SKIP marker 后统一 rewrite。
+> 要 incremental sediment（接受杂交风险），还是 half-close（推迟到 req 末）？」
+
+提议时**必须附具体证据**（本 task 影响章节 + 同 req 其他 task 已声明的章节范围）。证据需要你 grep `requirements/active/<req-id>/tasks/*.md` 里 `**所属模块章节**` 字段拿到。
+
+PM 选 incremental → 继续步骤 1。
+PM 选 half-close → 退出 doc-update（exit 1），让 close-task 走 `--skip-doc-update` 分支。
+
+**为什么是判断而非阈值**：「结构性升级 vs incremental 修补」「改动跨多个章节」都依赖你结合 task PM 视图 + 现行 module spec 上下文判断；不要套固定行数 / 章节数阈值，会误伤或漏报。
+
 ### 步骤 1：读取 task 两文件
 
 1. 工程合同存在性校验（兼容旧格式）：
