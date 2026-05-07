@@ -571,6 +571,100 @@ test_discard_appends_reason_section() {
 }
 
 # -----------------------------------------------------------------
+# --validate-fields-only （task-spec 步骤 10.6 机器兜底）
+# -----------------------------------------------------------------
+
+test_validate_fields_only_passes_paragraph_format() {
+  start_test "I-VFO1 段落格式 + 合法状态值 → 退出 0"
+  fixture_setup
+  req_dir=$(fixture_create_req "req-001" "test" 6)
+  task=$(fixture_create_task "$req_dir" "001" "demo" "待确认")
+
+  if _run_transition "$task" --validate-fields-only >/tmp/out.$$ 2>/tmp/err.$$; then
+    if grep -q "字段校验通过" /tmp/out.$$; then
+      pass_test
+    else
+      _fail "stdout 缺通过提示"
+      cat /tmp/out.$$ /tmp/err.$$ >&2
+    fi
+  else
+    _fail "应通过但失败了"
+    cat /tmp/err.$$ >&2
+  fi
+  rm -f /tmp/out.$$ /tmp/err.$$
+  fixture_teardown
+}
+
+test_validate_fields_only_passes_table_format() {
+  start_test "I-VFO2 任务卡表格格式 + 合法状态值 → 退出 0"
+  fixture_setup
+  req_dir=$(fixture_create_req "req-001" "test" 6)
+  task=$(fixture_create_task_v2 "$req_dir" "001" "demo" "待确认")
+
+  if _run_transition "$task" --validate-fields-only >/tmp/out.$$ 2>/tmp/err.$$; then
+    pass_test
+  else
+    _fail "v2 表格格式应通过校验"
+    cat /tmp/err.$$ >&2
+  fi
+  rm -f /tmp/out.$$ /tmp/err.$$
+  fixture_teardown
+}
+
+test_validate_fields_only_rejects_blockquote() {
+  start_test "I-VFO3 blockquote frontmatter (> 状态：...) → 退出 1"
+  fixture_setup
+  req_dir=$(fixture_create_req "req-001" "test" 6)
+  task=$(fixture_create_task "$req_dir" "001" "demo" "待确认")
+
+  # 把段落格式改成 blockquote（模拟 task-spec 假执行的产物）
+  python3 - "$task" <<'PY'
+import sys
+p = sys.argv[1]
+text = open(p, encoding="utf-8").read()
+text = text.replace("**状态：** 待确认", "> 状态：「待启动」")
+open(p, "w", encoding="utf-8").write(text)
+PY
+
+  if _run_transition "$task" --validate-fields-only >/tmp/out.$$ 2>/tmp/err.$$; then
+    _fail "blockquote frontmatter 不该通过校验"
+  else
+    if grep -q "无法在 task 文件前 40 行解析出「状态」字段" /tmp/err.$$; then
+      pass_test
+    else
+      _fail "stderr 缺预期诊断"
+      cat /tmp/err.$$ >&2
+    fi
+  fi
+  rm -f /tmp/out.$$ /tmp/err.$$
+  fixture_teardown
+}
+
+test_validate_fields_only_rejects_derived_label() {
+  start_test "I-VFO4 派生显示标签「待启动」作为状态值 → 退出 1"
+  fixture_setup
+  req_dir=$(fixture_create_req "req-001" "test" 6)
+  task=$(fixture_create_task "$req_dir" "001" "demo" "待确认")
+
+  # 用合法格式但非法值（status-view 派生标签）
+  _force_status "$task" "待启动"
+
+  if _run_transition "$task" --validate-fields-only >/tmp/out.$$ 2>/tmp/err.$$; then
+    _fail "派生显示标签不该作为合法状态值通过"
+  else
+    if grep -q "状态字段值「待启动」非法" /tmp/err.$$ && \
+       grep -q "派生显示标签" /tmp/err.$$; then
+      pass_test
+    else
+      _fail "stderr 缺合法 5 态枚举或派生标签提示"
+      cat /tmp/err.$$ >&2
+    fi
+  fi
+  rm -f /tmp/out.$$ /tmp/err.$$
+  fixture_teardown
+}
+
+# -----------------------------------------------------------------
 # Run
 # -----------------------------------------------------------------
 
@@ -595,5 +689,9 @@ test_discard_missing_reason
 test_discard_aborts_on_eof_without_yes
 test_discard_unblocks_stage6_rollback
 test_discard_appends_reason_section
+test_validate_fields_only_passes_paragraph_format
+test_validate_fields_only_passes_table_format
+test_validate_fields_only_rejects_blockquote
+test_validate_fields_only_rejects_derived_label
 
 report_results "task-transition"

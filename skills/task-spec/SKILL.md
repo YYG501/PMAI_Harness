@@ -133,6 +133,15 @@ echo "SKILL: task-spec"
 
 扫描 `tasks/task-*.md` 中状态为「已完成」且所属模块与当前 task 有交集的文件，从其 `## PM 反馈` section 抽取条目。
 
+> ⚠️ **closed/ 旧 task 读取边界**：扫描 `requirements/closed/**/tasks/*.md` 时，
+> **只读 `## PM 反馈` 段**抽反馈条目。**不读**旧 task 文件的：
+> - 顶部 frontmatter / 元信息段落（旧格式 v1：`**状态：** 已完成` 等历史段落）
+> - 任务卡表格的字段布局
+>
+> 旧 task 是 v1 历史格式，新 task 必须按 `templates/task.md.tmpl` 的 v2 布局
+> 生成（任务卡表格里 `| **状态** | 待确认 |`，标题下方不加 frontmatter 段落）。
+> 把旧格式当参考会导致生成 blockquote frontmatter 等假执行产物，被步骤 10.6 严格字段校验挡回重写。
+
 每条反馈按特征分类（参见 PM-VIEW-RULES §9.4 表）：
 
 | 反馈类型 | 识别特征 | 写入位置 |
@@ -338,6 +347,29 @@ python3 "$REPO_ROOT/.claude/scripts/check-doc-pm-view.py" \
 - 进入步骤 11 时若仍有未修复 errors，必须**显式告知** PM 哪几条未修 + 一句话原因
 
 工程合同 (`task-NNN-<slug>.engineering.md`) 不跑 lint（脚本自动跳过 `.engineering.md`）。
+
+### 步骤 10.6：严格字段校验（防止假执行产物进入 /task-execute）
+
+启发式 lint 只查写作风格，不解析 task 文件的状态 / 元信息字段格式。
+本步骤跑 task-transition.py 的字段解析校验作为机器兜底，挡住 blockquote
+frontmatter（`> 状态：「待启动」`）/ 派生显示标签 / 中文引号 / 非法状态值
+等"AI 没按模板生成"的产物：
+
+```bash
+python3 "$REPO_ROOT/.claude/scripts/task-transition.py" \
+  "$ACTIVE_REQ_DIR/tasks/task-NNN-<slug>.md" \
+  --validate-fields-only
+```
+
+处理输出：
+- 退出 0（"✅ 字段校验通过"）→ 进入步骤 11
+- 退出 1 → 按 stderr 提示**回到步骤 8 重写 task 文件头部**（任务卡表格里
+  `| **状态** | 待确认 |` 是唯一合法格式；标题下方不写任何 frontmatter
+  段落；状态值必须是合法 5 态之一）。重写后回到步骤 10 重新自检 + 10.5
+  + 10.6 全跑一遍。**禁止**：手改字段值绕过校验、跳过本步骤直推
+  /task-confirm。
+
+工程合同 (`task-NNN-<slug>.engineering.md`) 不跑本校验（工程合同没有状态字段）。
 
 ### 步骤 11：输出"推荐 review 工具"区块（不自动调任何 review）+ 派生 review-input bundle
 

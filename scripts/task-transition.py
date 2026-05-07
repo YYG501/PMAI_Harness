@@ -625,6 +625,42 @@ def cmd_get_status(task_file: Path) -> None:
     print(current)
 
 
+def cmd_validate_fields_only(task_file: Path) -> None:
+    """Strict header-fields validation. Used by task-spec / task-confirm post-write
+    gate so a malformed task file can't reach /task-execute.
+
+    Checks:
+      1. 状态 字段能被 _parse_field_line 解析（段落或任务卡表格格式之一）
+      2. 状态值 ∈ VALID_TRANSITIONS keys（5 合法态）
+
+    Exit 0 on pass; exit 1 with diagnostic on fail. Used by `task-spec` step 10.6
+    to fail-close when AI writes blockquote frontmatter / illegal status values
+    (e.g. "「待启动」", "PENDING") that survive heuristic lint."""
+    fields = read_fields(task_file)
+    current = fields.get("状态", "")
+    if not current:
+        print(
+            "Error: 无法在 task 文件前 40 行解析出「状态」字段。\n"
+            "  合法格式二选一：\n"
+            "    段落：  **状态：** <值>\n"
+            "    表格：  | **状态** | <值> |\n"
+            "  禁止 blockquote (`> 状态：...`) 或自创格式。",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+    valid_states = sorted(VALID_TRANSITIONS.keys())
+    if current not in VALID_TRANSITIONS:
+        print(
+            f"Error: 状态字段值「{current}」非法。\n"
+            f"  合法 5 态：{' / '.join(valid_states)}\n"
+            f"  常见误用：「待启动」是 status-view.py 的派生显示标签，"
+            f"不是状态字段存储值。",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+    print(f"✅ 字段校验通过：状态 = {current}")
+
+
 def cmd_snooze_manual(task_file: Path, days: int) -> None:
     """Handle --snooze-manual --days N: suppress manual preamble reminder."""
     from datetime import datetime, timedelta, timezone
@@ -689,6 +725,12 @@ def main() -> None:
         help="Print current task status to stdout (used by gate scripts).",
     )
     parser.add_argument(
+        "--validate-fields-only",
+        action="store_true",
+        help="Strict header-fields validation: 状态 字段可解析 + 值在合法 5 态。"
+             "task-spec 写完后跑，挡住 blockquote / 派生标签等自创格式。",
+    )
+    parser.add_argument(
         "--days",
         type=int,
         default=3,
@@ -726,6 +768,10 @@ def main() -> None:
 
     if args.get_status:
         cmd_get_status(task_file)
+        return
+
+    if args.validate_fields_only:
+        cmd_validate_fields_only(task_file)
         return
 
     # Normal transition
