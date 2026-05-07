@@ -310,3 +310,22 @@ AI 收到后应该：
 - TD-X1 task-spec revise 触发条件门（git log 比对跳过过期数据）
 - TD-X2 docs/modules/* INDEX 索引化
 - TD-X3 实测 transcript 二次审视
+
+**实测验证**（req-003 task-001 revise 模式按新 §9.1 模拟读取，2026-05-07）：
+
+| 阶段 | 行数 | 备注 |
+|---|---|---|
+| 步骤 0 PM-VIEW-RULES | 715 | |
+| 步骤 1 task-plan.md | 208 | |
+| 步骤 3 task-001.md 主文件 | 402 | |
+| 步骤 6 solution.md 章节 grep（8 命中段）| ~240 | |
+| 步骤 5 task-002 `## PM 反馈` 段 | **0** | task-002 无该段（数据问题，与本次改动无关）|
+| 步骤 3 DESIGN.md 章节 grep | **0** | 关键词不命中通用章节 → 触发 §9.1.2 fallback 读「页面模板/动效/间距」|
+| 步骤 3 CONTEXT.md + prd.md | 114 | |
+| 步骤 3 当前模块（functions-v4.1 + functions） | 604 | |
+| 步骤 3 prototypes products/[id] grep（26 命中段）| ~150 | |
+| 步骤 3 prototypes products/page grep（40 命中段）| ~150 | |
+| 步骤 8 task.md.tmpl | 264 | |
+| **合计**（不含 §9.1.2 fallback）| **~2847** | **省 65%（设计预估 45%，实测优于预期）**|
+
+实测发现 §9.1.1 缺"grep 不命中 fallback"机制 → 已 patch 加 §9.1.2 段（PM-VIEW-RULES + 设计文档同步）

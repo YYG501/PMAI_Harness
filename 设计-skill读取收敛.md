@@ -447,6 +447,14 @@ revise 子集中的步骤 3 / 5 / 6 全部按 `PM-VIEW-RULES.md §9.3.1` / `§9.
    - `prd-writing` **不读** `## PM 反馈` 段（PM 反馈是 task 级反馈条目，PRD 级关心的是最终交付的功能 / 决策 / 验收）；prd-writing 读 task PM 视图的 `^## (📋 功能清单|🎯 关键产品决策|✅ 验收清单)` 三段是另一个目的（抽功能需求），与 §9.4 PM 反馈分流读法**不同读法 / 不同来源段**，不冲突
 7. **closed/ 旧 task 读取边界**：扫描 `requirements/closed/**/tasks/*.md` 时，**只读 `## PM 反馈` 段**抽反馈条目；**不读**顶部 frontmatter / 元信息段落 / 任务卡表格的字段布局（v1 历史格式，新 task 按 v2 模板生成；混读会触发 task-spec 步骤 10.6 字段校验拦截重写）
 
+8. **§9.1.1 grep 不命中 fallback**（防"0 行读"丢失视觉一致性引用）：当 task 关键词 grep 不命中文件章节时按 fallback 读：
+   - `docs/DESIGN.md`：读「页面模板」+「动效规范」+「间距系统」三个通用章节（约 100-150 行）
+   - `solution.engineering.md`：读 §1 数据结构 + §2 派生状态 + §6 易错点（约 200 行）
+   - `tasks/task-*.md`（prd-writing 三章节遍历）：追问 PM 该 task 是否真无可写入 PRD 的内容
+   - 同模块 `task-*.md` `## PM 反馈` 段：0 命中 = 无反馈，跳过即可（不 fallback）
+
+   **理由**：grep 不命中 ≠ 内容真不需要。DESIGN 章节按通用规则命名（颜色 / 字体 / 间距 / 模板 / 动效），不会按 task 业务关键词命名 — 但通用模板 / 动效会被 PM 视图章节稀疏引用。预设 fallback 章节把判断收敛到设计期，避免每次都追问 PM。
+
 ---
 
 ## 附录 A：实测数据来源
