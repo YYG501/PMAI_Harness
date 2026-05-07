@@ -1,0 +1,25 @@
+#!/usr/bin/env bash
+# pre-commit hook (PM-AI-Workflow)
+# 由 init-project.sh / install-hooks.sh 安装到 .git/hooks/pre-commit。
+# 唯一职责：拦截绕过 task-transition.py 的 task 状态字段直改。
+# 检测逻辑全在 .claude/scripts/check-status-direct-edit.py。
+#
+# 绕过：git commit --no-verify（git 内置；hook 不会被调到）。
+
+set -e
+
+# 找仓根（worktree 也能处理）
+REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null)"
+if [ -z "$REPO_ROOT" ]; then
+  exit 0  # 不在 git 仓里？让 git 自己处理
+fi
+
+CHECKER="$REPO_ROOT/.claude/scripts/check-status-direct-edit.py"
+if [ ! -f "$CHECKER" ]; then
+  # 检测脚本缺失：fail-open（不阻塞 commit）但留 stderr 提示
+  echo "⚠️  pre-commit: $CHECKER 缺失，跳过 task 状态字段直改检测。" >&2
+  echo "    如需补回：bash .claude/scripts/install-hooks.sh" >&2
+  exit 0
+fi
+
+python3 "$CHECKER"

@@ -161,6 +161,20 @@ print(3000 + (h % 7000))
 echo "$BASE_PORT" > .dev-port
 echo "🔌 基础端口: $BASE_PORT"
 
+# --- k2. 复制 git-hooks 模板 ---
+mkdir -p "$TARGET_DIR/templates/git-hooks"
+for HOOK_TMPL in "$FRAMEWORK_DIR/templates/git-hooks/"*.tmpl; do
+  [ -f "$HOOK_TMPL" ] || continue
+  cp "$HOOK_TMPL" "$TARGET_DIR/templates/git-hooks/$(basename "$HOOK_TMPL")"
+done
+
+# --- k3. 安装 pre-commit hook（拦截非法 task 状态字段直改）---
+if bash "$FRAMEWORK_DIR/scripts/install-hooks.sh" 2>&1 | sed 's/^/   /'; then
+  echo "🪝 git hooks 已安装"
+else
+  echo "⚠️  git hooks 安装失败（项目仍可用，PM 后续可手动跑 .claude/scripts/install-hooks.sh）" >&2
+fi
+
 # --- l. 初始 commit ---
 git add -A
 git commit -m "init: $PROJECT_NAME" >/dev/null 2>&1

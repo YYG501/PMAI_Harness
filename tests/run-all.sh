@@ -31,6 +31,7 @@ SUITES=(
   test-status-view.sh
   test-setup-deps.sh
   test-run-bg.sh
+  test-pre-commit-hook.sh
   v4_T13_status_summary.sh
   v4_T14_taskexec_short_id.sh
   v4_T16_taskexec_double_scan.sh
