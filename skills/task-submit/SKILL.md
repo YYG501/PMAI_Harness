@@ -220,4 +220,4 @@ python3 .claude/scripts/task-transition.py "<task-file>" --to 已完成
 - PM 的反馈原话记录，不要改写
 - 打回时 --note 参数必须提供，否则 task-transition.py 会拒绝
 - UI 类 task 的 dev server 应该还在运行，确认 URL 可访问
-- v4 单窗口 lifecycle：验收、通过 close、打回修复都在当前 task worktree 新窗口完成
+- 验收 / 打回修复在当前 task worktree 窗口完成；PM 通过验收后转「已完成」，并提示 PM 切到 req 窗口跑 `/close-task task-NNN`（v4.5：close-task 不能在 task 窗口跑）
