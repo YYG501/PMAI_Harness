@@ -23,6 +23,7 @@ SUITES=(
   test-req-transition.sh
   test-close-task.sh
   test-close-task-design-feedback.sh
+  test-close-task-alignment.sh
   test-close-req.sh
   test-cleanup-pending.sh
   test-cancel-req.sh

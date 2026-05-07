@@ -1,7 +1,7 @@
 ---
 name: close-task
 description: |
-  Task 关闭：检查文档偏差、归档运行时数据、merge 分支、清理 worktree。
+  Task 关闭：对齐 task 文档与原型、检查文档偏差、归档运行时数据、merge 分支、清理 worktree。
 ---
 
 # /close-task
@@ -67,6 +67,85 @@ On valid invocation:
 6. Exit with code 0 (close-task itself succeeded; doc-update was intentionally skipped)。
 
 ## Workflow
+
+### 步骤 0：task 文档 ↔ 原型对齐（v4.5 新增）
+
+**目的**：PM 验收通过 ≠ task md 自动跟原型代码一致。多轮 PM 反馈下，§📐 产物预览（ASCII）/ §📋 功能清单 经常落后于实际原型实现。close-task 前补齐对账，避免 task md 进入 req 分支后跟代码不符。
+
+**执行位置**：cwd 在 req worktree（agent 跨进 task worktree 读代码 + 写 task md，全部用 `git -C $TASK_WORKTREE` 或绝对路径）。
+
+#### 0.1 加载对照源
+
+agent 读两边内容：
+
+- **task PM 视图主文件**（在 task worktree 里）：
+  - `## 📐 产物预览`（ASCII / 原型示意）
+  - `## 📋 功能清单`（业务规则逐条）
+  - `## ✅ 验收清单`（PM 走查清单）
+- **task 改动的代码文件**（task md §📦 范围 → 改 字段列出的路径）：
+  - 全文 Read（不超过 3 个文件就全读；多文件时按对齐相关性分批读）
+
+```bash
+TASK_WORKTREE="$REPO_ROOT/.worktrees/$TASK_BRANCH"
+TASK_PM_VIEW="$TASK_WORKTREE/<task-md 相对路径>"
+# 改动文件清单从 §📦 范围 → 改 提取
+```
+
+#### 0.2 语义对齐扫描
+
+agent 对每条 §📐 / §📋 / §✅ 描述，跟实际代码做语义比对，输出**不一致项**（每项一行，附 task md 行号 + 代码 file:line）。
+
+输出格式：
+
+```text
+对齐扫描（共 N 处差异）：
+
+1. task md §📋 #3 描述：「...」
+   代码 path/file.tsx:LXX 实际：「...」
+   建议：[改 task md 对齐代码 / 改代码对齐 task md]
+
+2. ...
+```
+
+**N = 0 → 直接进步骤 1**，本步骤跳过。
+
+#### 0.3 PM 三选一决议（每条逐条）
+
+呈交 PM（AskUserQuestion 或 prose），每条三选一：
+
+- **Y**：改 task md 对齐实际原型（最常见——原型迭代过、md 没跟上）
+  - agent 用 Edit 改 `$TASK_PM_VIEW`，改后展示 git diff，PM 满意进下一条
+- **R**：改代码对齐 task md（少见——原型实现偏离了 task md 契约）
+  - agent **不能自己改代码**。提示 PM：「这条对齐意味着回退原型。建议关闭 close-task，回 task 窗口跑 /task-execute 重做后再 close。确认要在 close-task 阶段直接改代码吗？」
+  - PM 坚持要在本阶段改 → 视为退出 close-task 流程，agent 输出"请回 task 窗口重做"并 exit
+- **skip**：本条不重要忽略（agent 不动 task md，进下一条）
+
+#### 0.4 patch 后 commit 到 task 分支
+
+所有 Y 项 patch 完成后，统一在 task worktree 里 commit：
+
+```bash
+git -C "$TASK_WORKTREE" add "<task-md 相对路径>"
+git -C "$TASK_WORKTREE" commit -m "task-NNN close-prep: PM 视图与原型对齐"
+```
+
+理由：task md 改动在 task 分支落地后，步骤 2 的 merge 会自然带进 req 分支作为最终历史。
+
+#### 0.5 fail-fast 与边界
+
+- **N = 0 或全 skip**：close-task **不阻塞**（PM 决策权，不强制对齐）。
+- **PM 选 R 但又要在本阶段改代码**：agent 输出"请回 task 窗口跑 /task-execute"并 exit；不让 close-task 蜕变成 mini task-execute。
+- **patch 失败 / git commit 失败**：close-task 阻塞，提示 PM 人工修复后重跑。
+
+**与步骤 1 / 1.5 的边界**：
+
+| 步骤 | 性质 | 对照源 |
+|---|---|---|
+| **0**（本节）| task md 描述 ↔ 原型代码 | task md §📐 §📋 §✅ vs 实际改动文件 |
+| 1 | task 实证发现的项目级文档偏差 | task md §历史档案/§10 vs brief/analysis/solution/module spec |
+| 1.5 | PM 反馈中的视觉规范沉淀 | task md PM 反馈分类=视觉规范 vs docs/DESIGN.md |
+
+性质不同，串行处理不合并。
 
 ### 步骤 1：检查文档偏差（跨两文件 / 兼容旧格式）
 
@@ -206,6 +285,8 @@ git commit -m "docs(DESIGN): 沉淀 task-NNN 反馈 — [摘要]"
 
 - 必须在 task 状态为「已完成」时才能关闭
 - 必须在 req worktree cwd 内运行（v4.5）；不在则 fail-fast
+- **步骤 0 对齐**：N=0 或全 skip 不阻塞 close-task（PM 决策权）；PM 选 R 但要在本阶段改代码 → agent 拒绝并提示回 task-execute（不让 close-task 蜕变成 mini task-execute）
+- 步骤 0 patch 必须 commit 到 task 分支（在 task worktree 内做），随步骤 2 merge 自然进 req 分支
 - 文档偏差必须在关闭前处理（close-task.sh 会做二次检查；偏差检查跨 PM 视图主文件 + 工程合同两处）
 - **PM 视图主文件 + 工程合同必须成对处理**：归档 / merge / 清理时两文件一起动，不允许只动一份
 - 不要手动执行 merge/删分支/清 worktree，全部由 close-task.sh 处理
