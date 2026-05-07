@@ -119,7 +119,7 @@ brief.md 写好后，**当前主对话不再继续 stage 2**。`/new-req` 的职
 
 ## Rules
 
-- 一次只能有一个 active req（如果已有 active req，提示 PM 先关闭或取消）
+- 允许多个 active req 并行（每个 req 一个 worktree、一条分支、一份 .req-meta.json，互不干扰）。已有 active req 时不要拦截，正常创建即可
 - slug 从需求描述自动生成，不需要问 PM
 - brief.md 用 PM 的原话整理，不要过度改写或添加 PM 没说的内容
 - 引导问题是辅助，PM 如果已经描述清楚了就直接写 brief，不必逐个追问

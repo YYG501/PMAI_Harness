@@ -44,12 +44,12 @@ execute 阶段 agent 启动时**必须把工程合同内容显式 inject 到执�
 支持三种参数模式：
 
 1. **完整路径**：参数是可读的 `*.md` 文件时，直接作为 `TASK_FILE`。
-2. **短 ID**：参数匹配 `^task-[0-9]{3}$` 时，在主仓 active req 下模糊匹配：
+2. **短 ID**：参数匹配 `^task-[0-9]{3}$` 时，在所有 active req 下模糊匹配（含主仓 + 所有 `.worktrees/req-*/requirements/active`）：
    ```bash
-   MATCHES=$(find requirements/active -name "${ARG}-*.md" -type f 2>/dev/null)
+   MATCHES=$(find requirements/active "$MAIN_REPO_ROOT"/.worktrees/req-*/requirements/active -name "${ARG}-*.md" -type f 2>/dev/null | sort -u)
    ```
    - 唯一匹配：使用该文件。
-   - 0 个或多个匹配：报错退出，并提示 PM 传完整 task 文件路径。
+   - 0 个或多个匹配：报错退出，并提示 PM 传完整 task 文件路径（多 active req 并行时短 ID 可能在多个 req 里冲突）。
 3. **无参数**：自动扫描主仓和 `.worktrees/req-*/requirements/active`，找出所有同时满足下列条件的 task：
    - 状态为「待确认」。
    - 对应 `.worktrees/<task-stem>` 已存在。

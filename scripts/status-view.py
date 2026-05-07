@@ -146,47 +146,83 @@ def _read_active_from(active_dir: Path) -> tuple[Path | None, dict | None]:
     return None, None
 
 
-def find_active_req(repo_root: Path) -> tuple[Path | None, dict | None]:
-    """Find the active requirement directory and its metadata.
+def _collect_active_from(active_dir: Path) -> list[tuple[Path, dict]]:
+    """Return all status=active reqs in a single requirements/active/ dir."""
+    if not active_dir.exists():
+        return []
+    found: list[tuple[Path, dict]] = []
+    for req_dir in sorted(active_dir.iterdir()):
+        meta_file = req_dir / ".req-meta.json"
+        if not meta_file.exists():
+            continue
+        try:
+            meta = json.loads(meta_file.read_text(encoding="utf-8"))
+        except Exception:
+            continue
+        if meta.get("status") == "active":
+            found.append((req_dir, meta))
+    return found
 
-    Active req state lives in the req worktree until close, not on main.
-    Resolution order:
-      1. If current worktree is a req/task worktree, read from there.
-      2. Otherwise scan every req worktree under <repo_root>/.worktrees/req-*/
-      3. Fall back to <repo_root>/requirements/active/ (for closed/archived reqs).
+
+def find_all_active_reqs(repo_root: Path) -> list[tuple[Path, dict]]:
+    """Return every active req visible from the current cwd.
+
+    - In a req/task worktree, the current worktree is authoritative (cwd 唯一定 req)
+      and the result has at most one entry.
+    - On main, scan the main repo + every .worktrees/req-* worktree; multiple
+      active reqs may co-exist.
+    Results are deduplicated by req id (basename).
     """
     current_wt = find_current_worktree_root()
     current_branch = find_current_branch()
 
-    # 1. If we're on a req branch, the current worktree is authoritative
     if current_branch.startswith("req-"):
-        found = _read_active_from(current_wt / "requirements" / "active")
-        if found[0]:
-            return found
+        local = _collect_active_from(current_wt / "requirements" / "active")
+        if local:
+            return local
 
-    # 1b. If we're on a task branch, walk up to its parent req worktree
     if current_branch.startswith("task-"):
-        # Task worktree is at <repo>/.worktrees/task-*/, its parent req is at
-        # <repo>/.worktrees/req-*/ — we don't know the name directly so scan all.
         worktrees_dir = repo_root / ".worktrees"
         if worktrees_dir.exists():
             for wt in sorted(worktrees_dir.iterdir()):
                 if wt.name.startswith("req-"):
-                    found = _read_active_from(wt / "requirements" / "active")
-                    if found[0]:
-                        return found
+                    local = _collect_active_from(wt / "requirements" / "active")
+                    if local:
+                        return local
 
-    # 2. Scan all req worktrees
+    seen: set[str] = set()
+    results: list[tuple[Path, dict]] = []
+    for req_dir, meta in _collect_active_from(repo_root / "requirements" / "active"):
+        if req_dir.name in seen:
+            continue
+        seen.add(req_dir.name)
+        results.append((req_dir, meta))
+
     worktrees_dir = repo_root / ".worktrees"
     if worktrees_dir.exists():
         for wt in sorted(worktrees_dir.iterdir()):
-            if wt.name.startswith("req-") and wt.is_dir():
-                found = _read_active_from(wt / "requirements" / "active")
-                if found[0]:
-                    return found
+            if not (wt.name.startswith("req-") and wt.is_dir()):
+                continue
+            for req_dir, meta in _collect_active_from(wt / "requirements" / "active"):
+                if req_dir.name in seen:
+                    continue
+                seen.add(req_dir.name)
+                results.append((req_dir, meta))
 
-    # 3. Fallback: main repo's active/ (mostly empty in normal flow)
-    return _read_active_from(repo_root / "requirements" / "active")
+    return results
+
+
+def find_active_req(repo_root: Path) -> tuple[Path | None, dict | None]:
+    """Backward-compat single-active accessor.
+
+    Returns the first active req from find_all_active_reqs (None when zero).
+    Callers that need to handle multi-active should call find_all_active_reqs
+    directly.
+    """
+    found = find_all_active_reqs(repo_root)
+    if not found:
+        return None, None
+    return found[0]
 
 
 def list_tasks(req_dir: Path) -> list[tuple[Path, dict[str, str]]]:
@@ -504,27 +540,19 @@ def render_quickfix_section(repo_root: Path) -> None:
     print()
 
 
-def render_status(repo_root: Path) -> None:
-    """Render the full status view."""
-    req_dir, meta = find_active_req(repo_root)
-
-    if meta is None:
-        print("📭 没有活跃的需求。运行 /new-req 开始一个新需求。")
-        render_manual_section(repo_root)
-        render_quickfix_section(repo_root)
-        return
-
+def _render_single_req(req_dir: Path, meta: dict, repo_root: Path) -> None:
+    """Render a single req's stage + task list + next-action."""
     req_id = meta.get("id", "?")
     req_name = meta.get("name", "?")
     stage = meta.get("stage", 0)
     stage_name = STAGE_NAMES.get(stage, "?")
     is_first = meta.get("is_first_req", False)
 
-    print(f"当前 Req：{req_id}（{req_name}）")
+    print(f"Req：{req_id}（{req_name}）")
     print(f"Stage：{stage} - {stage_name}" + (" [first req]" if is_first else ""))
+    print(f"Worktree：{req_dir.parent.parent.parent}")
     print()
 
-    # List tasks
     tasks = list_tasks(req_dir)
     pending_spec = pending_spec_task_ids(req_dir, tasks) if stage == 6 else []
     if tasks or pending_spec:
@@ -534,7 +562,6 @@ def render_status(repo_root: Path) -> None:
             icon = STATUS_ICONS.get(status, "❓")
             name = task_file.stem
 
-            # Get title from first line
             try:
                 title = task_file.read_text(encoding="utf-8").split("\n")[0]
                 title = title.replace("# ", "").strip()
@@ -543,7 +570,6 @@ def render_status(repo_root: Path) -> None:
 
             line = f"  {icon} {title} — {status}"
 
-            # Show last event for 执行中 tasks
             if status == "执行中":
                 last_event = get_last_event(repo_root, task_file.stem)
                 if last_event:
@@ -556,13 +582,81 @@ def render_status(repo_root: Path) -> None:
             print(f"  📝 {task_id}: {display} — 待 spec")
         print()
 
-    # Manual pending section (shown regardless of active req status)
-    render_manual_section(repo_root)
-    render_quickfix_section(repo_root)
-
-    # Next action
     next_action = suggest_next_action(meta, tasks, req_dir)
     print(f"下一步：{next_action}")
+
+
+def render_status(repo_root: Path) -> None:
+    """Render the full status view."""
+    active = find_all_active_reqs(repo_root)
+
+    if not active:
+        print("📭 没有活跃的需求。运行 /new-req 开始一个新需求。")
+        render_manual_section(repo_root)
+        render_quickfix_section(repo_root)
+        return
+
+    if len(active) == 1:
+        req_dir, meta = active[0]
+        # 单 active 保持旧文案"当前 Req"
+        req_id = meta.get("id", "?")
+        req_name = meta.get("name", "?")
+        stage = meta.get("stage", 0)
+        stage_name = STAGE_NAMES.get(stage, "?")
+        is_first = meta.get("is_first_req", False)
+
+        print(f"当前 Req：{req_id}（{req_name}）")
+        print(f"Stage：{stage} - {stage_name}" + (" [first req]" if is_first else ""))
+        print()
+
+        tasks = list_tasks(req_dir)
+        pending_spec = pending_spec_task_ids(req_dir, tasks) if stage == 6 else []
+        if tasks or pending_spec:
+            print("Task 状态：")
+            for task_file, fields in tasks:
+                status = fields.get("状态", "?")
+                icon = STATUS_ICONS.get(status, "❓")
+                name = task_file.stem
+
+                try:
+                    title = task_file.read_text(encoding="utf-8").split("\n")[0]
+                    title = title.replace("# ", "").strip()
+                except Exception:
+                    title = name
+
+                line = f"  {icon} {title} — {status}"
+
+                if status == "执行中":
+                    last_event = get_last_event(repo_root, task_file.stem)
+                    if last_event:
+                        line += f"（最后活动：{last_event}）"
+
+                print(line)
+
+            for task_id, title in pending_spec:
+                display = title or task_id
+                print(f"  📝 {task_id}: {display} — 待 spec")
+            print()
+
+        render_manual_section(repo_root)
+        render_quickfix_section(repo_root)
+
+        next_action = suggest_next_action(meta, tasks, req_dir)
+        print(f"下一步：{next_action}")
+        return
+
+    # 多 active：列出每个 req 的细节，独立渲染 next-action
+    print(f"📚 {len(active)} 个 active req 并行：")
+    print()
+    for idx, (req_dir, meta) in enumerate(active):
+        if idx > 0:
+            print("─" * 60)
+        _render_single_req(req_dir, meta, repo_root)
+        print()
+
+    render_manual_section(repo_root)
+    render_quickfix_section(repo_root)
+    print("提示：操作具体 req 请先 cd 进对应 worktree 再跑 skill；主仓视角不默选某个 req。")
 
 
 def main() -> None:

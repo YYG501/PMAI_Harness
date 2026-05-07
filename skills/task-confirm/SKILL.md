@@ -184,7 +184,7 @@ fi
 
 检测 `PENDING_COUNT`：
 
-- 范围：主仓 active req 下所有状态为「待确认」且 worktree 已建的 task。
+- 范围：当前 req worktree（task-confirm 必须在 req worktree 里跑，cwd 唯一确定 req）下所有状态为「待确认」且 worktree 已建的 task。
 - 计数依据：task 文件状态为「待确认」，且 `.worktrees/<task-stem>` 已存在。
 
 启动模式（关键）：
