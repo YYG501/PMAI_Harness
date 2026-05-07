@@ -209,10 +209,10 @@ python3 .claude/scripts/task-transition.py "<task-file>" --to 已完成
 3. 输出给 PM，并继续在本窗口修复：
 
    ```text
-   task-execute 收到打回后，会先按 DX RU3 分流策略判断本次反馈是「行为修订」还是「Bug 修复」，并明确告知你判断结果。如判断错误，回复 "wrong" 切换分流。（分流策略权威定义见 skills/task-execute/SKILL.md §PM 反馈分流策略）
+   收到打回。本轮按反馈循环规则只改原型代码，task md 业务字段对齐统一交给 close-task §0 batch 处理。如反馈描述模糊到无法实施，会用 AskUserQuestion 问澄清细节。（规则权威定义见 skills/task-execute/SKILL.md §反馈循环规则）
    ```
 
-4. 应用 stage 5/6 PM 反馈分流策略（引用 `skills/task-execute/SKILL.md §PM 反馈分流策略`），然后继续修复并重新走自审与验收。
+4. 应用反馈循环规则（权威定义见 `skills/task-execute/SKILL.md §反馈循环规则`）：本轮 AI 只改原型代码 + 在执行报告写「文档对齐预告」，不动 task md 业务字段；继续修复并重新走自审与验收。
 
 ## Rules
 

@@ -594,33 +594,36 @@ EOM
 - 不动的文件不要碰
 - **禁止 git add / git commit**（commit 由 step 10 统一做）
 
-### PM 反馈分流策略（共享权威源）
+### 反馈循环规则（task-submit 打回后重新进入）
 
-> 本节是 task-execute 内的"本次打回"分流（行为修订 vs Bug 修复），与 `PM-VIEW-RULES §9.4` 的"历史 PM 反馈三类分流"（正向规则 / 反向约束 / 决策记录）是不同维度：
-> - 本节 = 当前 task 被打回时，agent 怎么处理本次反馈
-> - PM-VIEW-RULES §9.4 = task-spec 抽取**已完成 task** 的历史 PM 反馈用于新 task 时怎么分类
+> **设计原则**：反馈循环只动原型代码，task md 业务字段（§🎯/§📐/§📋/§🚦/§✅）和工程合同业务相关段的对齐**统一交给 close-task §0 batch 处理**。
+>
+> 理由：反馈循环里很多改动会被后续反馈推翻，每轮跟着改文档是空转；原型迭代要保留灵活性；close-task batch 模式 PM 一次决议 diff 比每轮二次确认效率高。
 
 当 task-submit 打回后重新进入 task-execute，agent MUST：
 
-1. Read the new PM feedback appended to **PM 视图主文件**「📁 历史档案 → PM 反馈」section（不是工程合同；PM 反馈一律写主文件）。
-2. Classify feedback as ONE of:
-   - **行为修订**（behavior/rule change）: PM wants different functionality, logic, or rules。
-   - **Bug 修复**（bug/prototype deviation）: existing functionality is described correctly in PM 视图 / 工程合同 but implementation missed it。
-3. Output exactly this one-liner BEFORE doing any work:
-   `本次反馈识别为 [行为修订 / Bug 修复]，准备 [改 task PM 视图 / 工程合同 + 重做 / 只改代码]。如判断错误请回复 "wrong"`
-4. Wait for PM to either proceed (any input other than `wrong`) or say `wrong`:
-   - PM says `wrong`: flip the classification and output the updated one-liner, wait again。
-   - PM proceeds: execute the classified path。
-5. Paths:
-   - **行为修订 path**: 按改动性质决定改哪个文件：
-     - 业务功能 / 验收点 / 跨功能规则变化 → 改 PM 视图主文件的「📋 功能清单」/「🚦 跨功能产品规则」/「✅ 验收清单」
-     - 实现细节 / 易错点 / 视觉规范变化 → 改工程合同的「§4 功能清单工程版」/「§6 易错点」/「§8 视觉细则」
-     - 关键产品决策反转 → 改 PM 视图主文件的「🎯 关键产品决策」（备选方案列标注"已被 PM 反馈推翻"）
-     → notify PM what changed → get PM 二次确认 → re-execute based on revised files。
-   - **Bug 修复 path**: Fix code only. Do NOT modify either file. Proceed directly to fix。
-6. Classification signal guide (non-exhaustive):
-   - 行为修订 signals: `should`, `instead`, `add feature`, `change behavior`, `before/after`, `priority order`。
-   - Bug 修复 signals: `missing`, `forgot`, `not showing`, `broken`, `step N didn't happen`。
+1. **读最新反馈**：从 PM 视图主文件「📁 历史档案 → PM 反馈」section 读最新一条（PM 反馈一律写主文件，不写工程合同）。
+
+2. **明确执行参照系**（这是反馈循环里 AI 决策的依据）：
+   - 当前原型代码（task worktree 实际状态）
+   - 「📁 历史档案 → PM 反馈」按时间倒序（最新一条最权威）
+   - **不**以 task md 的 §🎯/§📐/§📋/§🚦/§✅ 业务字段为参照——这些字段在反馈循环中**故意不跟**，等 close-task §0 统一对齐。
+
+3. **多轮反馈冲突解决**：默认"后覆盖前"。新反馈与旧反馈矛盾时，按新的来；除非 PM 在新反馈中明确说"保留旧规则"或"回退到第 N 轮"。
+
+4. **本轮 AI 只做这两件事**：
+   - 改原型代码（按反馈实施）
+   - 在步骤 5 执行报告里 append `**文档对齐预告：**` 字段，列出本轮原型改动可能影响 task md 哪些段（给 close-task §0 当对齐线索）
+
+5. **本轮 AI 明确不做的事**：
+   - **不改** task md 的 §🎯/§📐/§📋/§🚦/§✅ 业务字段
+   - **不改** 工程合同的 §4/§6/§8 业务相关段
+   - **不分类**反馈为"行为修订/Bug 修复"，不暴露内部分类标签给 PM
+   - **不为**"我准备改哪些文件"做二次确认
+
+6. **AI 何时主动问 PM**：仅当**实现歧义阻塞**时（PM 反馈描述模糊到无法实施，例如"两列怎么合"），用 AskUserQuestion 问澄清细节。**不问**"文档要怎么改"——文档对齐不是反馈循环的事。
+
+7. **PM 反馈本身的记录**：依然按步骤 12「PM 说"打回"」path 把反馈记入「📁 历史档案 → PM 反馈」并按 PM-VIEW-RULES §9.4 三类分类（正向规则/反向约束/决策记录）。这是给后续 task-spec 抽取**已完成 task** 的历史反馈用的，跟本轮反馈处理是不同维度，保留。
 
 ### 步骤 4：启动 dev server（UI 类 task）
 
@@ -642,10 +645,19 @@ EOM
 **改动摘要：** [简述做了什么]
 **新建文件：** [文件列表]
 **修改文件：** [文件列表]
+**文档对齐预告：** [本轮原型改动可能影响 task md 哪些业务字段；首次实现 / 无影响填"无"]
+- §📋 字段口径表 第 3-4 行 → 合并为 1 行（举例）
+- §📐 产物预览 Tab 2 列结构 → 删 2 列加 1 列（举例）
+- §🎯 决策 #N → 反转为方案 B（举例）
 **验收标准完成情况：**
 - [x] 条件 1 — 已实现
 - [x] 条件 2 — 已实现
 ```
+
+**「文档对齐预告」字段说明**：
+- 反馈循环里 AI 改原型代码时同步写——成本低，给 close-task §0 当对齐线索
+- 不要求精确，列段名 + 改动方向即可（PM 在 close-task 会看 diff 决议）
+- 反馈循环规则禁止 AI 直接改 §🎯/§📐/§📋/§🚦/§✅ 正文，**只在这里预告**
 
 ### 步骤 6：写文档偏差
 
@@ -893,9 +905,9 @@ python3 .claude/scripts/task-transition.py "$TASK_FILE" --to 已完成
    python3 .claude/scripts/task-transition.py "$TASK_FILE" --to 执行中 --note "PM 打回：<反馈摘要>"
    ```
 
-3. 应用 §PM 反馈分流策略（步骤 3 上方）判断"行为修订" vs "Bug 修复"，告知 PM 判断结果。判断错误 → PM 回复 "wrong" 切换分流。
+3. 应用 §反馈循环规则（实现前必做下方）：按规则只改原型代码，不动 task md 业务字段；步骤 5 执行报告里写「文档对齐预告」。文档对齐统一交给 close-task §0。
 
-4. 继续修复并重新走步骤 5-12（执行日志 / 自审 / commit / 呈交）。
+4. 继续修复并重新走步骤 5-12（执行日志含文档对齐预告 / 自审 / commit / 呈交）。
 
 ## Rules
 

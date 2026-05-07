@@ -70,7 +70,7 @@ On valid invocation:
 
 ### 步骤 0：task 文档 ↔ 原型对齐（v4.5 新增）
 
-**目的**：PM 验收通过 ≠ task md 自动跟原型代码一致。多轮 PM 反馈下，§📐 产物预览（ASCII）/ §📋 功能清单 经常落后于实际原型实现。close-task 前补齐对账，避免 task md 进入 req 分支后跟代码不符。
+**目的**：PM 验收通过 ≠ task md 自动跟原型代码一致。task-execute 反馈循环故意只改原型代码，task md 业务字段（§🎯/§📐/§📋/§✅）在反馈循环里不跟——所有对齐工作集中到本步骤 batch 处理。close-task 前补齐对账，避免 task md 进入 req 分支后跟代码不符。
 
 **执行位置**：cwd 在 req worktree（agent 跨进 task worktree 读代码 + 写 task md，全部用 `git -C $TASK_WORKTREE` 或绝对路径）。
 
@@ -79,9 +79,11 @@ On valid invocation:
 agent 读两边内容：
 
 - **task PM 视图主文件**（在 task worktree 里）：
+  - `## 🎯 关键产品决策`（决策反转 / 备选方案推翻情况）
   - `## 📐 产物预览`（ASCII / 原型示意）
   - `## 📋 功能清单`（业务规则逐条）
   - `## ✅ 验收清单`（PM 走查清单）
+  - `## 📁 历史档案 → 执行日志`：所有执行报告的「**文档对齐预告**」字段汇总（task-execute 反馈循环里 AI 已经预告会变的段，作为对齐线索，**优先扫描这些**）
 - **task 改动的代码文件**（task md §📦 范围 → 改 字段列出的路径）：
   - 全文 Read（不超过 3 个文件就全读；多文件时按对齐相关性分批读）
 
@@ -93,7 +95,11 @@ TASK_PM_VIEW="$TASK_WORKTREE/<task-md 相对路径>"
 
 #### 0.2 语义对齐扫描
 
-agent 对每条 §📐 / §📋 / §✅ 描述，跟实际代码做语义比对，输出**不一致项**（每项一行，附 task md 行号 + 代码 file:line）。
+agent 对每条 §🎯 / §📐 / §📋 / §✅ 描述，跟实际代码做语义比对，输出**不一致项**（每项一行，附 task md 行号 + 代码 file:line）。
+
+**扫描优先级**：
+1. **优先**：执行日志「文档对齐预告」字段提到的所有段（这些是 AI 反馈循环里已经预告会变的，命中率高）
+2. **覆盖**：四个段全量扫一遍兜底（防止预告遗漏 / 反馈中提到但未预告的段）
 
 输出格式：
 
@@ -141,7 +147,7 @@ git -C "$TASK_WORKTREE" commit -m "task-NNN close-prep: PM 视图与原型对齐
 
 | 步骤 | 性质 | 对照源 |
 |---|---|---|
-| **0**（本节）| task md 描述 ↔ 原型代码 | task md §📐 §📋 §✅ vs 实际改动文件 |
+| **0**（本节）| task md 描述 ↔ 原型代码 | task md §🎯 §📐 §📋 §✅ + 执行日志「文档对齐预告」 vs 实际改动文件 |
 | 1 | task 实证发现的项目级文档偏差 | task md §历史档案/§10 vs brief/analysis/solution/module spec |
 | 1.5 | PM 反馈中的视觉规范沉淀 | task md PM 反馈分类=视觉规范 vs docs/DESIGN.md |
 
