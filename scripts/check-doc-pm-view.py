@@ -9,15 +9,19 @@
     - 像素值（如 24px / 420px）
     - 颜色码（如 #C9CDD4）
     - Tailwind 类（如 w-14 / py-5）
-    - 工程词（reducer / dispatch / props / hook / useState 等）
+    - 工程词 / 中英混杂业务词（reducer / dispatch / props / hook / useState
+      / admin / scope / CRUD / active / pending / null / undefined / schema
+      / topContent / kebab / segmented control / event.stopPropagation 等；§3.8）
+    - 反引号代码引用（`useState` / `getXxx()` / `field.attribute` 等；§3.8）
+    - 数学符号（⊊ ⊆ ∩ ∪ 等；§3.8）
     - 必填章节缺失
 
   Warnings（启发式）：
     - 反向约束词（"禁止" / "不允许" / "禁用"）
-    - §🖼 UI 骨架代码块内括号注释（建议人工判定是合法标识型还是非法释义型）
+    - UI 骨架代码块内括号注释（§🖼 页面 UI 骨架 / §📐 产物预览；建议人工判定是合法标识型还是非法释义型）
 
 跳过区域：HTML 注释（<!-- -->）/ markdown 代码块（``` ```）
-**例外**：§🖼 UI 骨架的代码块内仍然扫描"骨架内括号注释"规则（PM-VIEW-RULES §3.10）
+**例外**：UI 骨架（§🖼 / §📐）的代码块内仍然扫描"骨架内括号注释"规则（PM-VIEW-RULES §3.10）
 
 用法:
   python3 scripts/check-doc-pm-view.py <doc-file>
@@ -49,10 +53,31 @@ FORBIDDEN_PATTERNS = {
     ),
     "engineering_term": (
         re.compile(
-            r"\b(?:reducer|dispatch|useState|useReducer|useMemo|useEffect|"
-            r"useCallback|useRef|React\.memo|discriminated\s+union)\b"
+            r"\b(?:"
+            # React hooks / 状态机词（原有）
+            r"reducer|dispatch|useState|useReducer|useMemo|useEffect|"
+            r"useCallback|useRef|React\.memo|discriminated\s+union|"
+            # 中英混杂业务词（§3.8 中英混杂业务词）
+            r"admin|scope|CRUD|"
+            # 中英混杂状态字面量（§3.8 中英混杂状态字面量）
+            r"active|pending|null|undefined|"
+            # 数据结构 / 实现词（§3.8 中英混杂数据结构 / 实现词）
+            r"schema|props|hook|topContent|kebab|segmented\s+control|"
+            # 事件 / 方法引用（§3.2 组件实现名）
+            r"event\.stopPropagation"
+            r")\b"
         ),
-        "工程词",
+        "工程词 / 中英混杂业务词（§3.8）",
+        "error",
+    ),
+    "backtick_code_ref": (
+        re.compile(r"`[^`\n]+`"),
+        "反引号代码引用（§3.8：反引号包裹的代码 / 字段 / API 名一律不出现在 PM 视图）",
+        "error",
+    ),
+    "math_set_notation": (
+        re.compile(r"[⊊⊆⊇⊋∩∪]"),
+        "数学符号（§3.8：用业务语言替换，如「两者交集」/「完全包含且至少少一个」）",
         "error",
     ),
     "reverse_constraint": (
@@ -62,11 +87,14 @@ FORBIDDEN_PATTERNS = {
     ),
 }
 
-# UI skeleton paren annotation: full-width brackets inside §🖼 fenced code blocks
-# (PM-VIEW-RULES §3.10) — warning only; PM/AI judges legitimate (CSV/分钟) vs.
-# illegitimate (基于 X / 多 Y 场景).
+# UI skeleton paren annotation: full-width brackets inside UI skeleton fenced
+# code blocks (PM-VIEW-RULES §3.10) — warning only; PM/AI judges legitimate
+# (CSV/分钟) vs. illegitimate (基于 X / 多 Y 场景).
+# UI 骨架 section heading 涵盖：
+#   - solution.md 的 `## 🖼 页面 UI 骨架`
+#   - tasks/task-NNN.md 的 `## 📐 产物预览`
 UI_PAREN_PATTERN = re.compile(r"（[^）\n]{2,}）")
-UI_HEADING_PATTERN = re.compile(r"^##\s+🖼")
+UI_HEADING_PATTERN = re.compile(r"^##\s+(?:🖼|📐)")
 ANY_H2_PATTERN = re.compile(r"^##\s+")
 
 # ---- Required sections by document type ----
