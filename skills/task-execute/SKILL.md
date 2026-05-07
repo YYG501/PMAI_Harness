@@ -206,8 +206,8 @@ CURRENT_STATUS=$(python3 "$MAIN_REPO_ROOT/.claude/scripts/task-transition.py" "$
   python3 "$MAIN_REPO_ROOT/.claude/scripts/task-transition.py" "$TASK_FILE" --to 执行中
   ```
 - 「执行中」：允许重试或打回后续跑，不重复 transition。
-- 「已完成」：错误退出，提示 `该 task 已完成；如需收尾，请在本窗口运行 /close-task`。
-- 「待验收」：错误退出，提示 `该 task 已待验收；请在本窗口验收并运行 /task-submit 或 /close-task`。
+- 「已完成」：错误退出，提示 `该 task 已完成；如需收尾，请关闭本窗口，切到 req 窗口运行 /close-task task-NNN`。
+- 「待验收」：错误退出，提示 `该 task 已待验收；请在本窗口验收，PM 通过后关本窗口切到 req 窗口运行 /close-task task-NNN`。
 - 其他状态：错误退出，展示当前状态，并提示 PM 回主窗口用 `/task-status` 查看。
 
 ### 步骤 1：读取 task 两文件（成对校验）
@@ -858,7 +858,16 @@ PM 看原型 / 看 diff 时若发现 brief / analysis / solution（PM 视图）/
 python3 .claude/scripts/task-transition.py "$TASK_FILE" --to 已完成
 ```
 
-然后**直接调用** `/close-task`（在本窗口继续；不要让 PM 手动敲）。
+然后输出（不要在本窗口跑 /close-task；v4.5 close-task 必须在 req 窗口跑）：
+
+```text
+✅ task-NNN 状态已转「已完成」。
+
+下一步：关闭本（task）窗口，切到 req 窗口运行：
+  /close-task task-NNN
+
+理由：close-task 会删本窗口的 task worktree，必须在 req 窗口（不会"删自己脚下"）执行。
+```
 
 **PM 说"打回"**：
 
@@ -895,5 +904,5 @@ python3 .claude/scripts/task-transition.py "$TASK_FILE" --to 已完成
 - PM 报告 review 结论后才 append `review_completed` 事件（I-RV3）；禁止 AI 替 PM 跑或凭记忆模拟
 - 事件流缺 review_completed 不阻止「执行中→待验收」转换（I-RV2）
 - dev server 在 task-execute 结束后保持运行，直到 close-task 时杀掉
-- **commit + 转待验收 → 自动进步骤 11 呈交验收**（默认路径，PM 不手动敲 `/task-submit`）；PM 通过后 AI 在本窗口继续调 `/close-task`
+- **commit + 转待验收 → 自动进步骤 11 呈交验收**（默认路径，PM 不手动敲 `/task-submit`）；PM 通过后 AI 转「已完成」并提示 PM 切到 req 窗口跑 `/close-task task-NNN`（v4.5：close-task 不能在 task 窗口跑）
 - task-submit 仍存在但仅作 PM 手动兜底入口（重启窗口 / context 丢失 / 异常退出后重新呈交）

@@ -71,9 +71,9 @@ test_single_window_lifecycle() {
   (cd "$task_wt" && python3 "$TASK_TRANSITION" "$task_in_wt" --to 已完成 >/dev/null)
   _commit_all_if_needed "$task_wt" "accept lifecycle task"
 
-  # close 在 task worktree 内执行（这是单窗口工作流的核心场景）。
-  # 不再立即删 worktree —— 改为写 pending；删除推迟到 cleanup 在主仓 cwd 执行。
-  if ! (cd "$task_wt" && bash "$CLOSE_TASK" "$task_in_wt") >/tmp/v4_t22_close.out.$$ 2>/tmp/v4_t22_close.err.$$; then
+  # v4.5：close 在 req worktree 内执行（PM 关 task 窗口后切到 req 窗口）。
+  # 一步关完：merge → 归档 → 删 task worktree → 删 task branch。
+  if ! (cd "$FIXTURE_DIR/.worktrees/req-001-single" && bash "$CLOSE_TASK" "$task_in_wt") >/tmp/v4_t22_close.out.$$ 2>/tmp/v4_t22_close.err.$$; then
     _fail "close-task failed"
     cat /tmp/v4_t22_close.err.$$ >&2
     fixture_teardown
@@ -95,46 +95,30 @@ test_single_window_lifecycle() {
     return
   fi
 
-  # close 完成后 worktree 应仍在（删除推迟）+ pending-cleanup.json 应有 entry
-  if [ ! -d "$FIXTURE_DIR/.worktrees/task-001-lifecycle" ]; then
-    _fail "task worktree should remain after close (cleanup deferred)"
-    fixture_teardown
-    return
-  fi
-  pending_file="$FIXTURE_DIR/.runs/pending-cleanup.json"
-  if [ ! -f "$pending_file" ]; then
-    _fail "expected pending-cleanup.json after close"
-    fixture_teardown
-    return
-  fi
-  queued=$(python3 -c "import json; print(any(e.get('branch')=='task-001-lifecycle' for e in json.load(open('$pending_file'))))")
-  if [ "$queued" != "True" ]; then
-    _fail "pending-cleanup.json missing task-001-lifecycle entry"
-    fixture_teardown
-    return
-  fi
-
-  # 模拟 PM 回主仓后跑 cleanup（cwd=主仓 → 不会撞到 dangling-cwd 问题）
-  if ! (cd "$FIXTURE_DIR" && bash "$CLEANUP_PENDING") >/tmp/v4_t22_cleanup.out.$$ 2>/tmp/v4_t22_cleanup.err.$$; then
-    _fail "cleanup-pending failed"
-    cat /tmp/v4_t22_cleanup.out.$$ >&2
-    cat /tmp/v4_t22_cleanup.err.$$ >&2
-    fixture_teardown
-    return
-  fi
-
+  # v4.5：close 完成后 task worktree + branch 应已被直接删除（一步关完）
   if [ -d "$FIXTURE_DIR/.worktrees/task-001-lifecycle" ]; then
-    _fail "task worktree should be removed by cleanup-pending"
+    _fail "task worktree should be removed after close (v4.5 一步关完)"
     fixture_teardown
     return
   fi
   if git -C "$FIXTURE_DIR" show-ref --verify --quiet "refs/heads/task-001-lifecycle"; then
-    _fail "task branch should be deleted by cleanup-pending"
+    _fail "task branch should be deleted after close (v4.5 一步关完)"
     fixture_teardown
     return
   fi
 
-  rm -f /tmp/v4_t22_close.out.$$ /tmp/v4_t22_close.err.$$ /tmp/v4_t22_cleanup.out.$$ /tmp/v4_t22_cleanup.err.$$
+  # v4.5：pending-cleanup.json 不该有当前 task 的 entry
+  pending_file="$FIXTURE_DIR/.runs/pending-cleanup.json"
+  if [ -f "$pending_file" ]; then
+    queued=$(python3 -c "import json; print(any(e.get('branch')=='task-001-lifecycle' for e in json.load(open('$pending_file'))))")
+    if [ "$queued" = "True" ]; then
+      _fail "pending-cleanup.json should NOT have task-001-lifecycle entry (v4.5: deleted directly)"
+      fixture_teardown
+      return
+    fi
+  fi
+
+  rm -f /tmp/v4_t22_close.out.$$ /tmp/v4_t22_close.err.$$
   pass_test
   fixture_teardown
 }

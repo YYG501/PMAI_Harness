@@ -125,7 +125,7 @@ test_reject_if_status_not_done() {
   task=$(fixture_create_task "$req_dir" "001" "demo" "执行中" "/qa")
   fixture_create_task_worktree "$task" "req-001-test" >/dev/null
 
-  if (cd "$FIXTURE_DIR" && bash "$CLOSE_TASK" "$task") >/tmp/out.$$ 2>/tmp/err.$$; then
+  if (cd "$FIXTURE_DIR/.worktrees/req-001-test" && bash "$CLOSE_TASK" "$task") >/tmp/out.$$ 2>/tmp/err.$$; then
     _fail "should have rejected when status is 执行中"
   else
     if grep -q "已完成" /tmp/err.$$; then
@@ -151,7 +151,7 @@ test_reject_if_status_pending_review() {
   task=$(fixture_create_task "$req_dir" "002" "review" "待验收" "/qa")
   fixture_create_task_worktree "$task" "req-001-test" >/dev/null
 
-  if (cd "$FIXTURE_DIR" && bash "$CLOSE_TASK" "$task") >/tmp/out.$$ 2>/tmp/err.$$; then
+  if (cd "$FIXTURE_DIR/.worktrees/req-001-test" && bash "$CLOSE_TASK" "$task") >/tmp/out.$$ 2>/tmp/err.$$; then
     _fail "should have rejected when status is 待验收"
   else
     pass_test
@@ -173,7 +173,7 @@ test_reject_if_task_branch_missing() {
   # Do NOT create worktree/branch for this task
   _mark_task_done "$task"
 
-  if (cd "$FIXTURE_DIR" && bash "$CLOSE_TASK" "$task") >/tmp/out.$$ 2>/tmp/err.$$; then
+  if (cd "$FIXTURE_DIR/.worktrees/req-001-test" && bash "$CLOSE_TASK" "$task") >/tmp/out.$$ 2>/tmp/err.$$; then
     _fail "should reject when task branch missing"
   else
     if grep -q "分支" /tmp/err.$$; then
@@ -211,7 +211,8 @@ test_reject_if_req_worktree_missing() {
   git -C "$FIXTURE_DIR" worktree remove "$FIXTURE_DIR/.worktrees/req-001-test" --force 2>/dev/null || \
     rm -rf "$FIXTURE_DIR/.worktrees/req-001-test"
 
-  # 用 task worktree 里的 task 文件路径（req worktree 已删）
+  # req worktree 已删：v4.5 下脚本会先报 "req worktree 不存在"（早于 cwd 校验）
+  # 此处用主仓 cwd（req worktree 不存在，无法 cd 到它）
   if (cd "$FIXTURE_DIR" && bash "$CLOSE_TASK" "$task_in_wt") >/tmp/out.$$ 2>/tmp/err.$$; then
     _fail "should reject when req worktree missing"
   else
@@ -242,7 +243,7 @@ test_reject_if_task_worktree_dirty() {
   # Create uncommitted file in task worktree
   echo "dirty work" > "$task_wt/uncommitted.txt"
 
-  if (cd "$FIXTURE_DIR" && bash "$CLOSE_TASK" "$task") >/tmp/out.$$ 2>/tmp/err.$$; then
+  if (cd "$FIXTURE_DIR/.worktrees/req-001-test" && bash "$CLOSE_TASK" "$task") >/tmp/out.$$ 2>/tmp/err.$$; then
     _fail "should reject when task worktree is dirty"
   else
     if grep -q "未提交" /tmp/err.$$; then
@@ -286,7 +287,7 @@ test_reject_on_merge_conflict() {
 
   _mark_task_done "$task"
 
-  if (cd "$FIXTURE_DIR" && bash "$CLOSE_TASK" "$task") >/tmp/out.$$ 2>/tmp/err.$$; then
+  if (cd "$FIXTURE_DIR/.worktrees/req-001-test" && bash "$CLOSE_TASK" "$task") >/tmp/out.$$ 2>/tmp/err.$$; then
     _fail "should reject on merge conflict"
   else
     # Either merge fails or ancestor check fails — either way we exit non-zero
@@ -317,7 +318,7 @@ test_reject_if_doc_diff_not_processed() {
   _mark_task_done "$task"
   _inject_doc_diff "$task"
 
-  if (cd "$FIXTURE_DIR" && bash "$CLOSE_TASK" "$task") >/tmp/out.$$ 2>/tmp/err.$$; then
+  if (cd "$FIXTURE_DIR/.worktrees/req-001-test" && bash "$CLOSE_TASK" "$task") >/tmp/out.$$ 2>/tmp/err.$$; then
     _fail "should reject when doc diff present"
   else
     if grep -q "文档偏差" /tmp/err.$$; then
@@ -360,33 +361,29 @@ test_happy_path_close_task() {
   # Seed a valid state-machine event stream (I-CT7 + I-CT8)
   fixture_seed_full_event_stream "$task"
 
-  if (cd "$FIXTURE_DIR" && bash "$CLOSE_TASK" "$task") >/tmp/out.$$ 2>/tmp/err.$$; then
-    # close 不再立即删 worktree/branch（避免父进程 cwd dangling）。
-    # 改为写 .runs/pending-cleanup.json，由 cleanup-pending-worktrees.sh 兜底。
+  if (cd "$FIXTURE_DIR/.worktrees/req-001-test" && bash "$CLOSE_TASK" "$task") >/tmp/out.$$ 2>/tmp/err.$$; then
+    # v4.5：close-task 跑在 req worktree → 直接删 task worktree + branch（一步关完）。
+    # 不再走 .runs/pending-cleanup.json 中转。
     pending_file="$FIXTURE_DIR/.runs/pending-cleanup.json"
-    if [ ! -f "$pending_file" ]; then
-      _fail "expected pending-cleanup.json to be written"
-      rm -f /tmp/out.$$ /tmp/err.$$
-      fixture_teardown
-      return
-    fi
-    queued_branch=$(python3 -c "import json; entries=json.load(open('$pending_file')); print(next((e['branch'] for e in entries if e['branch']=='$task_stem'), ''))")
-    if [ "$queued_branch" != "$task_stem" ]; then
-      _fail "pending-cleanup.json should contain branch=$task_stem, got '$queued_branch'"
-      rm -f /tmp/out.$$ /tmp/err.$$
-      fixture_teardown
-      return
+    if [ -f "$pending_file" ]; then
+      queued_branch=$(python3 -c "import json; entries=json.load(open('$pending_file')); print(next((e['branch'] for e in entries if e['branch']=='$task_stem'), ''))")
+      if [ "$queued_branch" = "$task_stem" ]; then
+        _fail "pending-cleanup.json should NOT contain branch=$task_stem (v4.5: deleted directly)"
+        rm -f /tmp/out.$$ /tmp/err.$$
+        fixture_teardown
+        return
+      fi
     fi
 
-    # Verify task branch + worktree still present (cleanup deferred)
-    if ! git -C "$FIXTURE_DIR" show-ref --verify --quiet "refs/heads/$task_stem"; then
-      _fail "task branch should remain (cleanup deferred); was deleted"
+    # Verify task branch + worktree have been deleted (v4.5 一步关完)
+    if git -C "$FIXTURE_DIR" show-ref --verify --quiet "refs/heads/$task_stem"; then
+      _fail "task branch should have been deleted (v4.5); still exists"
       rm -f /tmp/out.$$ /tmp/err.$$
       fixture_teardown
       return
     fi
-    if [ ! -d "$FIXTURE_DIR/.worktrees/$task_stem" ]; then
-      _fail "task worktree should remain (cleanup deferred); was removed"
+    if [ -d "$FIXTURE_DIR/.worktrees/$task_stem" ]; then
+      _fail "task worktree should have been removed (v4.5); still exists"
       rm -f /tmp/out.$$ /tmp/err.$$
       fixture_teardown
       return
@@ -445,7 +442,7 @@ test_reject_if_event_stream_missing() {
   _mark_task_done "$task"
   # Intentionally do NOT seed events
 
-  if (cd "$FIXTURE_DIR" && bash "$CLOSE_TASK" "$task") >/tmp/out.$$ 2>/tmp/err.$$; then
+  if (cd "$FIXTURE_DIR/.worktrees/req-001-test" && bash "$CLOSE_TASK" "$task") >/tmp/out.$$ 2>/tmp/err.$$; then
     _fail "should have rejected when event stream missing"
     cat /tmp/err.$$ >&2
   else
@@ -480,7 +477,7 @@ test_reject_if_state_machine_skipped() {
   echo '{"event":"review_completed","timestamp":"2020-01-01T00:00:00+00:00","task":"'"$task_stem"'","tool":"/qa","result":"pass"}' \
     > "$FIXTURE_DIR/.runs/events/${task_stem}.jsonl"
 
-  if (cd "$FIXTURE_DIR" && bash "$CLOSE_TASK" "$task") >/tmp/out.$$ 2>/tmp/err.$$; then
+  if (cd "$FIXTURE_DIR/.worktrees/req-001-test" && bash "$CLOSE_TASK" "$task") >/tmp/out.$$ 2>/tmp/err.$$; then
     _fail "should have rejected when state machine was skipped"
     cat /tmp/err.$$ >&2
   else
@@ -526,7 +523,7 @@ test_reject_if_commit_predates_execution() {
     echo "{\"event\":\"status_changed\",\"timestamp\":\"2099-01-01T00:20:00+00:00\",\"task\":\"$task_stem\",\"from\":\"待验收\",\"to\":\"已完成\"}"
   } > "$FIXTURE_DIR/.runs/events/${task_stem}.jsonl"
 
-  if (cd "$FIXTURE_DIR" && bash "$CLOSE_TASK" "$task") >/tmp/out.$$ 2>/tmp/err.$$; then
+  if (cd "$FIXTURE_DIR/.worktrees/req-001-test" && bash "$CLOSE_TASK" "$task") >/tmp/out.$$ 2>/tmp/err.$$; then
     _fail "should have rejected when commit predates transition"
     cat /tmp/err.$$ >&2
   else

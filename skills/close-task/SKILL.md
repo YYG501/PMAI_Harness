@@ -6,15 +6,16 @@ description: |
 
 # /close-task
 
-### 执行位置（v4 单窗口 lifecycle）
+### 执行位置（v4.5 req worktree 集中关闭）
 
-- `/close-task` 现在在 task worktree 的新窗口里运行。
-- 当前 `cwd` 通常是 task worktree。
-- `close-task.sh` 脚本会自行处理 cd 到 main repo，PM 无需关心目录切换。
+- `/close-task` 在 **req worktree** cwd 内运行（不在 task worktree，也不在主仓）。
+- task worktree 验收通过后，PM 关掉 task 窗口，切到 req 窗口跑 `/close-task task-NNN`。
+- `close-task.sh` 在 req worktree cwd 校验 fail-fast；不在 req worktree 直接 exit 1。
+- merge → 删 task worktree → 删 task branch 一气呵成；不再走 `pending-cleanup.json` 中转。
 
 ## When To Use
 
-- 新窗口在 PM 通过验收后调用
+- 在 **req 窗口**（cwd = req worktree）调用，PM 通过验收后
 - Task 状态必须为「已完成」
 
 ## 拆两文件约定（必读）
@@ -154,21 +155,22 @@ Read 本 task PM 视图主文件的 PM 反馈 section，提取候选：
 
 ### 步骤 2：执行关闭
 
-调用 close-task.sh：
+调用 close-task.sh（cwd 必须是 req worktree）：
 
 ```bash
 bash .claude/scripts/close-task.sh "<task-file-absolute-path>"
 ```
 
 脚本自动执行：
-1. 校验 task 状态为「已完成」
-2. 检查文档偏差（二次检查，有未处理偏差会阻塞）
-3. 归档 `.runs/` 到 req 目录的 `tasks/_archived/`
-4. merge task 分支到 req 分支
-5. 把 task worktree + branch 写入 `.runs/pending-cleanup.json`（不立即删，避免父进程 cwd dangling）
-6. 杀掉 dev server 进程
-7. 清理 `.runs/` 原件
-8. 提示 PM：回主仓后跑 `bash scripts/cleanup-pending-worktrees.sh` 完成清理
+1. 校验 cwd 在 req worktree 内（不在则 fail-fast）
+2. 校验 task 状态为「已完成」
+3. 检查文档偏差（二次检查，有未处理偏差会阻塞）
+4. merge task 分支 → req 分支
+5. 归档 `.runs/` 到 req worktree 的 `tasks/_archived/` 并 commit 到 req 分支
+6. **直接删** task worktree + task branch（一步关完）
+7. 杀掉 dev server 进程
+8. 清理 `.runs/` 原件
+9. 追加 `task_closed` 事件
 
 ### 步骤 3：确认结果
 
@@ -177,20 +179,16 @@ bash .claude/scripts/close-task.sh "<task-file-absolute-path>"
 ```
 Task 已关闭：<task-title>
 
-worktree 和 branch 待清理。请退出当前会话，回主仓后跑：
-  bash scripts/cleanup-pending-worktrees.sh
-
-下一步：
-- 如有下一个待启动 task，关闭本窗口，去主窗口运行 /task-spec → /task-confirm
-- 如所有 task 已完成，去主窗口运行 /req-stage-gate 推进到 stage 7
+下一步（在 req 窗口继续）：
+- 如有下一个待启动 task，运行 /task-spec task-XXX → /task-confirm
+- 如所有 task 已完成，运行 /req-stage-gate 推进到 stage 7
 ```
 
 **额外提示（仅当步骤 1.5 patch 过 DESIGN.md 时）：**
 
-如果步骤 1.5 沉淀了视觉规范反馈（PM 选 Y-rule 至少 1 条），主仓 working tree 里的 `docs/DESIGN.md` 处于 uncommitted 状态。close-task.sh 不 auto commit 设计 SoT。回主仓后追加：
+如果步骤 1.5 沉淀了视觉规范反馈（PM 选 Y-rule 至少 1 条），req worktree 里的 `docs/DESIGN.md` 处于 uncommitted 状态。close-task.sh 不 auto commit 设计 SoT。close-task 完成后追加（仍在 req 窗口）：
 
 ```bash
-cd "$MAIN_REPO_ROOT"
 git diff docs/DESIGN.md  # PM 二次审 diff
 git add docs/DESIGN.md
 git commit -m "docs(DESIGN): 沉淀 task-NNN 反馈 — [摘要]"
@@ -200,37 +198,36 @@ git commit -m "docs(DESIGN): 沉淀 task-NNN 反馈 — [摘要]"
 
 ```
 ⚠️ 步骤 1.5 沉淀了 K 条视觉规范反馈到 docs/DESIGN.md（uncommitted）。
-回主仓清理 worktree 后，请审 git diff docs/DESIGN.md 并自己 commit。
+请在本（req）窗口审 git diff docs/DESIGN.md 并 commit。
 建议 commit message: docs(DESIGN): 沉淀 task-NNN 反馈 — [一行摘要]
 ```
 
 ## Rules
 
 - 必须在 task 状态为「已完成」时才能关闭
+- 必须在 req worktree cwd 内运行（v4.5）；不在则 fail-fast
 - 文档偏差必须在关闭前处理（close-task.sh 会做二次检查；偏差检查跨 PM 视图主文件 + 工程合同两处）
 - **PM 视图主文件 + 工程合同必须成对处理**：归档 / merge / 清理时两文件一起动，不允许只动一份
-- 不要手动执行 merge/删分支/清 worktree，全部由 close-task.sh 和 cleanup-pending-worktrees.sh 处理
-- 关闭后 orchestrator 回到 req worktree 继续工作；worktree/branch 的实际删除由 PM 在主仓 cwd 跑 cleanup 完成（避免 close 删自己脚下目录导致 Stop hook posix_spawn ENOENT）
+- 不要手动执行 merge/删分支/清 worktree，全部由 close-task.sh 处理
+- close-task.sh 一步关完：merge → 归档 → 删 worktree → 删 branch；不再走 `.runs/pending-cleanup.json` 中转
 
 > **注**：`close-task.sh` 脚本在 PR 3 阶段会改造为按"主文件 + .engineering.md"成对归档；当前 PR 2 阶段脚本仍按单文件处理，工程合同需要 PM 在 close 后手动确认归档（或等 PR 3）。
 
 ## 末尾轻量 auto-chain（DX RU6）
 
-After close-task completes (full close or half-close), agent checks `task-plan.md`:
+close-task 完成后（full close 或 half-close），agent 检查 `task-plan.md`：
 
 - If `PENDING > 0`, output:
 
   ```text
-  ✅ task-NNN 已 close（本窗口已结束）。
-  关掉本窗口，去主窗口启下一个 task：建议 task-XXX（title，所属模块: [...]）。
-  在主窗口跑 /task-spec task-XXX → /task-confirm tasks/task-XXX-*.md
+  ✅ task-NNN 已 close。
+  下一个待启动：task-XXX（title，所属模块: [...]）。
+  在本（req）窗口直接跑 /task-spec task-XXX → /task-confirm
   ```
-
-  D0 并行下不能在当前 task worktree 窗口直接启动下一个 task；下一个 task 必须回主窗口走 `/task-spec` → `/task-confirm`。
 
 - If `PENDING == 0`, output:
 
   ```text
   ✅ task-NNN 已 close。
-  本 req 所有 task 已 close（含半 close）。可在主窗口运行 /req-stage-gate 推进 stage 7。
+  本 req 所有 task 已 close（含半 close）。在本（req）窗口运行 /req-stage-gate 推进 stage 7。
   ```

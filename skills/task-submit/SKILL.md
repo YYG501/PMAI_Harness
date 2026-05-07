@@ -176,10 +176,13 @@ Diff: N 文件 +X -Y 行 / review: <工具列表> 结论 → PM 通过/打回？
 python3 .claude/scripts/task-transition.py "<task-file>" --to 已完成
 ```
 
-然后在本窗口直接运行：
+然后提示 PM 切到 req 窗口（v4.5：close-task 必须在 req worktree 跑，不能在 task 窗口）：
 
 ```text
-/close-task
+✅ task-NNN 状态已转「已完成」。
+
+请关闭本（task）窗口，切到 req 窗口运行：
+  /close-task task-NNN
 ```
 
 **PM 说"打回"：**

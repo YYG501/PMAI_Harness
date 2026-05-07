@@ -141,6 +141,19 @@ if [ ! -d "$REQ_WORKTREE" ]; then
   exit 1
 fi
 
+# --- v4.5 cwd 校验：close-task 必须在 req worktree 内跑（不能在 task worktree 或主仓） ---
+# 改造背景：v4 让 close-task 跑在 task worktree → 不能删自己脚下 → 要 pending-cleanup 中转。
+# v4.5 改回 req worktree 跑 → 直接删 task worktree + branch，一步关完。
+CALLER_PWD="$(pwd -P 2>/dev/null || echo "")"
+REQ_WT_REAL="$(cd "$REQ_WORKTREE" && pwd -P)"
+if [ "$CALLER_PWD" != "$REQ_WT_REAL" ] && [[ "$CALLER_PWD" != "$REQ_WT_REAL"/* ]]; then
+  echo "❌ /close-task 必须在 req worktree cwd 内运行（v4.5）。" >&2
+  echo "   当前 cwd: $CALLER_PWD" >&2
+  echo "   期望:     $REQ_WT_REAL" >&2
+  echo "   请关闭当前 task 窗口，切到 req 窗口（cwd = ${REQ_WT_REAL}）后重新运行 /close-task。" >&2
+  exit 1
+fi
+
 # --- 检查 task worktree 是否 clean（防止 worktree remove --force 静默丢失未提交改动） ---
 TASK_WORKTREE="$REPO_ROOT/.worktrees/$BRANCH"
 if [ -d "$TASK_WORKTREE" ]; then
@@ -238,39 +251,27 @@ if [ ${#ARCHIVED_FILES[@]} -gt 0 ]; then
   echo "✅ 归档已 commit 到 $REQ_BRANCH"
 fi
 
-# --- 3. 标记 worktree + branch 为待清理（不立即删除） ---
-# 原因：PM 经常在被关闭的 task worktree 内（cwd = .worktrees/<branch>）执行
-# close。立即删除会让 Claude Code 父进程的 cwd 变成 dangling，下一次 Stop hook
-# 的 posix_spawn 报 ENOENT。改为推迟到 cleanup-pending-worktrees.sh 在主仓
-# cwd 的会话里统一执行。
-QUEUED_PENDING=false
+# --- 3. 直接删 task worktree + branch（v4.5：cwd 在 req worktree，不删自己脚下） ---
 if [ "$MERGE_OK" = "true" ]; then
-  PENDING_FILE="$REPO_ROOT/.runs/pending-cleanup.json"
-  mkdir -p "$REPO_ROOT/.runs"
-  python3 - "$PENDING_FILE" "$BRANCH" "$TASK_WORKTREE" "$TASK_FILE" <<'PY'
-import json, os, sys, datetime
-pending_file, branch, worktree, task_file = sys.argv[1:5]
-entries = []
-if os.path.exists(pending_file):
-    with open(pending_file) as f:
-        try:
-            entries = json.load(f)
-        except json.JSONDecodeError:
-            entries = []
-# 去重：同一个 branch 已在列表里就不重复加
-entries = [e for e in entries if e.get("branch") != branch]
-entries.append({
-    "kind": "task",
-    "branch": branch,
-    "worktree": worktree,
-    "task_file": task_file,
-    "queued_at": datetime.datetime.now().astimezone().isoformat(timespec="seconds"),
-})
-with open(pending_file, "w") as f:
-    json.dump(entries, f, indent=2, ensure_ascii=False)
-PY
-  QUEUED_PENDING=true
-  echo "🕓 worktree 和 branch 已标记为待清理: $BRANCH"
+  if [ -d "$TASK_WORKTREE" ]; then
+    if git -C "$REPO_ROOT" worktree remove "$TASK_WORKTREE" 2>/dev/null; then
+      echo "🧹 已删 task worktree: $TASK_WORKTREE"
+    else
+      # 回退：rm -rf + worktree prune
+      rm -rf "$TASK_WORKTREE"
+      git -C "$REPO_ROOT" worktree prune 2>/dev/null || true
+      echo "🧹 已强制清理 task worktree: $TASK_WORKTREE"
+    fi
+  fi
+
+  if git -C "$REPO_ROOT" show-ref --verify --quiet "refs/heads/$BRANCH" 2>/dev/null; then
+    if git -C "$REPO_ROOT" branch -D "$BRANCH" >/dev/null 2>&1; then
+      echo "🧹 已删 task branch: $BRANCH"
+    else
+      echo "❌ 删 task branch $BRANCH 失败。请人工检查。" >&2
+      exit 1
+    fi
+  fi
 fi
 
 # --- 5. 杀 dev server（兼容字段名 "开发服务器" / "dev server"） ---
@@ -297,8 +298,3 @@ if [ -f "$EVENTS_SCRIPT" ]; then
 fi
 
 echo "✅ Task 已关闭: $TASK_TITLE"
-if [ "$QUEUED_PENDING" = "true" ]; then
-  echo ""
-  echo "📋 worktree 和 branch 待清理。请退出当前会话，回主仓 ($REPO_ROOT) 执行："
-  echo "   bash scripts/cleanup-pending-worktrees.sh"
-fi
