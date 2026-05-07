@@ -24,12 +24,17 @@ description: Use when task 已完成、PM 已通过验收、需要在 close-task
 
 ## Required Inputs
 
-1. task PM 视图主文件路径（PM 调用时传入的）。
-2. **必须存在的成对工程合同**：`<task-stem>.engineering.md`，缺则报错并 `exit 1`。
-3. 对账模式：偏差涉及的原始文档。**支持任何 req / 项目级文档**：
+按 `PM-VIEW-RULES.md §9.1` 中 **Stage 7.2 doc-update** 段执行：
+
+1. 🟢 task PM 视图主文件（PM 调用时传入）
+2. 🟢 **必须存在的成对工程合同**：`<task-stem>.engineering.md`，缺则报错并 `exit 1`
+3. 🟢 `docs/modules/<本 task 模块>.md`（沉淀目标）
+4. 🟢 工程合同 §10 文档偏差表
+5. 🟢 **task worktree 改动代码**（步骤 1.6 模块规格对账，逐行核对实际实现是否匹配——不读代码就不能对账；读法同 Stage 7.1 close-task：≤3 文件全读，多文件分批）
+6. 🟡 偏差涉及的原文（前后 5 行）。**支持任何 req / 项目级文档**：
    - 项目级：`docs/CONTEXT.md` / `docs/DESIGN.md` / `docs/prd.md` / `docs/modules/*.md` / `CLAUDE.md`
    - req 级：`requirements/active/<req>/brief.md` / `analysis.md` / `solution.md` / `solution.engineering.md`
-4. 沉淀模式：从 PM 视图主文件读取 `**所属模块**` / `**所属模块章节**` 字段（在「📌 任务卡」表格中）+ `## 📋 功能清单` section。
+7. 沉淀模式：从 PM 视图主文件读取 `**所属模块**` / `**所属模块章节**` 字段（在「📌 任务卡」表格中）+ `## 📋 功能清单` section
 
 ## Workflow
 

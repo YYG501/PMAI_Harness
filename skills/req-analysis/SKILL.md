@@ -78,9 +78,11 @@ echo "SKILL: req-analysis"
 
 ## Required Inputs
 
-1. `$ACTIVE_REQ_DIR/brief.md`（必需，stage 1 产出）
-2. `$REPO_ROOT/docs/CONTEXT.md`（如存在）
-3. `$REPO_ROOT/docs/prd.md`（如存在）
+按 `PM-VIEW-RULES.md §9.1` 中 **Stage 2 req-analysis** 段执行：
+
+- 🟢 `$ACTIVE_REQ_DIR/brief.md`
+- 🟢 `$REPO_ROOT/docs/CONTEXT.md`（如存在）
+- 🟢 `$REPO_ROOT/docs/prd.md`（如存在 → **必读**——分析新需求必须基于已有产品规格基线，避免重复设计 / 与已有功能冲突）
 
 ## First Principles Analysis（第一性原理分析框架）
 

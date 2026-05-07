@@ -29,21 +29,11 @@ echo "SKILL: task-plan"
 
 ## Required Inputs
 
-按 `PM-VIEW-RULES.md §9.1` 表格执行。
+按 `PM-VIEW-RULES.md §9.1` 中 **Stage 5 task-plan** 段执行。
 
-**上游 stage 文档**：
-- `$ACTIVE_REQ_DIR/brief.md`
-- `$ACTIVE_REQ_DIR/analysis.md`
-- `$ACTIVE_REQ_DIR/solution.md`（PM 视图）
-
-**项目级文档**（仓库存在则**必读**）：
-- `$REPO_ROOT/docs/CONTEXT.md`
-- `$REPO_ROOT/docs/DESIGN.md`
-- `$REPO_ROOT/docs/prd.md`
-- `$REPO_ROOT/docs/modules/*.md`
-- `$REPO_ROOT/prototypes/`（按相关性扫现有页面 / 组件，反向校验 + 判断哪些能力已存在）
-
-**不读**：`solution.engineering.md`（防止工程内容渗透 PM 视图链路）
+特别遵守：
+- §9.3.1 prototype 读取强约束（>500 行禁整文件 Read）
+- §9.7 跨 skill 共享原则（特别 brief / DESIGN 改 ⚪ 按需，不强制全文必读）
 
 ## Workflow
 

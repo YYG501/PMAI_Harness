@@ -32,33 +32,12 @@ echo "SKILL: task-spec"
 
 ## Required Inputs
 
-按 `PM-VIEW-RULES.md §9.1` 表格执行。
+按 `PM-VIEW-RULES.md §9.1` 中 **Stage 6 task-spec** 段执行（first-gen / revise / reconcile 三模式 + PM 视图 / 工程合同两文件分别列）。
 
-### 写 task-NNN-<slug>.md（PM 视图）必读
-
-**上游 stage 文档**：
-- `$ACTIVE_REQ_DIR/brief.md`
-- `$ACTIVE_REQ_DIR/analysis.md`
-- `$ACTIVE_REQ_DIR/task-plan.md`（取本 task 元数据）
-- `$ACTIVE_REQ_DIR/solution.md`（PM 视图，按"所属模块 / 功能 / task 标题关键词"匹配章节）
-- 同模块已完成 task 的 PM 视图文件（`tasks/task-*.md`）
-
-**项目级文档**（仓库存在则**必读**）：
-- `$REPO_ROOT/docs/CONTEXT.md`
-- `$REPO_ROOT/docs/DESIGN.md`
-- `$REPO_ROOT/docs/prd.md`
-- `$REPO_ROOT/docs/modules/<module>.md`（当前 task 所属模块）
-- `$REPO_ROOT/prototypes/`（按相关性扫现有页面 / 组件，反向校验 + 判断已存在能力）
-
-**不读**：`solution.engineering.md` / 任何 `.engineering.md`（防止工程内容渗透 PM 视图）
-
-### 写 task-NNN-<slug>.engineering.md（工程合同）补充输入
-
-- `$ACTIVE_REQ_DIR/analysis.md`
-- `$ACTIVE_REQ_DIR/solution.engineering.md`（按章节匹配，写入对应工程合同章节）
-- 同模块已完成 task 的 `.engineering.md`（如有）
-- `$REPO_ROOT/docs/DESIGN.md` / `docs/prd.md` / `docs/modules/<module>.md`
-- `$REPO_ROOT/prototypes/`
+特别遵守：
+- §9.1.1 章节匹配强约束（solution.md / solution.engineering.md / 同模块 task `## PM 反馈` 段 / DESIGN.md 章节 grep）
+- §9.3.1 prototype 读取强约束（>500 行禁整文件 Read）
+- §9.7 跨 skill 共享原则（特别是原则 6 PM 反馈四类分流 + 原则 7 closed/ 旧 task 读取边界）
 
 ## Workflow
 
@@ -71,7 +50,7 @@ echo "SKILL: task-spec"
 | 模式 | 触发条件 | 走哪些步骤 |
 |---|---|---|
 | **first-gen** | `tasks/task-NNN-<slug>.md` 不存在 | 步骤 1–12（完整流程）|
-| **revise** | task PM 视图已存在；PM 之前选过 B 现在再次进入 | 步骤 1 / 3 / 5 / 6 / 8 / 10 / 10.5 / 11 / 12（**只**改 PM 视图，**不动**工程合同；hash 自然 stale）|
+| **revise** | task PM 视图已存在；PM 之前选过 B 现在再次进入 | 步骤 1 / 3 / 5 / 6 / 8 / 10 / 10.5 / 11 / 12（**只**改 PM 视图，**不动**工程合同；hash 自然 stale）。<br>**步骤 3 / 5 / 6 全部按 PM-VIEW-RULES §9.3.1 / §9.1.1 grep 强约束执行**——不允许 AI 在 revise 模式下"觉得 revise 是改 PM 视图"绕过 grep 走整文件读 |
 | **reconcile** | 步骤 12 PM 选 A 后由本 skill 自身在步骤 12.5 自动进入 | 仅步骤 12.5（不改 PM 视图，对齐工程合同）|
 
 实际判别：
@@ -129,9 +108,28 @@ echo "SKILL: task-spec"
 
 ### 步骤 5：收集同模块已完成 task 的 PM 反馈，按三类分流
 
-**核心改动**：不再整段搬到「实现指引-易错点」。按 PM-VIEW-RULES §9.4 分三类：
+**核心改动**：不再整段搬到「实现指引-易错点」。按 PM-VIEW-RULES §9.4 分三类。
 
-扫描 `tasks/task-*.md` 中状态为「已完成」且所属模块与当前 task 有交集的文件，从其 `## PM 反馈` section 抽取条目。
+扫描状态为「已完成」且所属模块与当前 task 有交集的 task 文件，从其 `## PM 反馈` section 抽取条目。
+
+**读法**（按 PM-VIEW-RULES §9.1.1 章节匹配强约束）：
+
+```bash
+# 1. 找同模块、状态为「已完成」的 task 文件（grep 任务卡表格行）
+for f in tasks/task-*.md; do
+  grep -qE "^\| \*\*状态\*\* \| 已完成" "$f" || continue
+  grep -qE "^\| \*\*所属模块\*\* \| .*<本模块名>" "$f" || continue
+  echo "$f"
+done
+
+# 2. 只读 ## PM 反馈 段，不整文件 Read
+for f in $TASKS_WITH_FEEDBACK; do
+  grep -nE "^## PM 反馈" "$f"  # 命中 section header 行号
+  # 按命中行 + 下一个 ^## header 之间的区间局部 Read
+done
+```
+
+**禁止整文件 Read 同模块 task 文件**——只读 `## PM 反馈` 段（§9.1.1 强约束）。
 
 > ⚠️ **closed/ 旧 task 读取边界**：扫描 `requirements/closed/**/tasks/*.md` 时，
 > **只读 `## PM 反馈` 段**抽反馈条目。**不读**旧 task 文件的：
@@ -156,7 +154,14 @@ echo "SKILL: task-spec"
 
 ### 步骤 6：拉取相关 solution 内容并按视图分流
 
-读取 `solution.md`（PM 视图）和 `solution.engineering.md`（工程合同），按"所属模块 / 功能 / task 标题关键词"匹配相关章节。
+读法（按 PM-VIEW-RULES §9.1.1 章节匹配强约束）：
+
+- **`solution.md`（PM 视图）**：
+  - **first-gen 模式**：整文件 Read（§9.1.1 逃生口——顶端核心产物，需要全局视野）
+  - **revise 模式**：`grep -nE "^### .*(<task-标题关键词>|<模块名>)" solution.md` 命中相关章节后 offset/limit 局部读
+- **`solution.engineering.md`（工程合同）**：按 §9.1.1 章节匹配 grep + 局部读，**任何模式都不整文件 Read**
+
+按"所属模块 / 功能 / task 标题关键词"匹配相关章节。
 
 分流规则：
 

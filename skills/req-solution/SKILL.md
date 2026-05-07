@@ -58,28 +58,11 @@ echo "SKILL: req-solution"
 
 ## Required Inputs
 
-按 `PM-VIEW-RULES.md §9.1` 表格执行。
+按 `PM-VIEW-RULES.md §9.1` 中 **Stage 4 req-solution** 段执行（first-gen / revise / reconcile 三模式 + PM 视图 / 工程合同两文件分别列）。
 
-### 写 solution.md（PM 视图）必读
-
-**上游 stage 文档**：
-- `$ACTIVE_REQ_DIR/brief.md`
-- `$ACTIVE_REQ_DIR/analysis.md`
-
-**项目级文档**（仓库存在则**必读**）：
-- `$REPO_ROOT/docs/CONTEXT.md`
-- `$REPO_ROOT/docs/DESIGN.md`
-- `$REPO_ROOT/docs/prd.md`
-- `$REPO_ROOT/docs/modules/*.md`
-- `$REPO_ROOT/prototypes/`（按相关性扫现有页面 / 组件，做反向校验）
-
-**不读**：任何 `.engineering.md`（防止工程内容渗透 PM 视图）
-
-### 写 solution.engineering.md（工程合同）必读
-
-- `$ACTIVE_REQ_DIR/analysis.md`
-- `$REPO_ROOT/docs/DESIGN.md` / `docs/prd.md` / `docs/modules/*.md` / `prototypes/`
-- 上游 `.engineering.md`（如有）
+特别遵守：
+- §9.3.1 prototype 读取强约束（>500 行禁整文件 Read）
+- §9.7 跨 skill 共享原则原则 1（PM 视图链路不读 .engineering.md）
 
 ## Workflow
 

@@ -28,17 +28,12 @@ prd-writing 历史上自带的写作规则（§186 禁用清单 / §266 UI 元�
 
 ## Required Inputs
 
-按 `PM-VIEW-RULES.md §9.1` 表格，所有项目级文档**仓库存在则必读**（不再标"如存在"）：
+按 `PM-VIEW-RULES.md §9.1` 中 **Stage 7.4 prd-writing** 段执行。
 
-1. `$ACTIVE_REQ_DIR/brief.md`（必读，stage 1 产出）
-2. `$ACTIVE_REQ_DIR/analysis.md`（必读，stage 2 产出）
-3. `$ACTIVE_REQ_DIR/solution.md`（PM 视图，必读 — 读取关键产品决策 / 交付物清单 / 验收标准等）
-4. `$ACTIVE_REQ_DIR/tasks/*.md`（**仅 PM 视图主文件**；不读 .engineering.md — 已关闭 task 的实际交付字段、交互、规则）
-5. `$REPO_ROOT/docs/CONTEXT.md`（必读，项目背景）
-6. `$REPO_ROOT/docs/DESIGN.md`（必读，视觉规范）
-7. `$REPO_ROOT/docs/prd.md`（必读，已发布的项目主 PRD 作为基线）
-8. `$REPO_ROOT/docs/modules/*.md`（必读，已沉淀的模块规格作为权威基线）
-9. `$REPO_ROOT/prototypes/`（必读，反向校验所有上游描述 — PM-VIEW-RULES §9.3；原型已定稿时，读取相关页面文件，提取最终字段布局、交互细节、组件用法，作为 §6.2 功能需求表格的权威来源）
+特别遵守：
+- §9.1.1 章节匹配强约束——`tasks/task-*.md` 遍历时只读 §📋 / §🎯 / §✅ 三段（任务卡 / 历史档案 / PM 反馈对 PRD 价值低，禁整文件 Read）
+- §9.3.1 prototype 读取强约束（>500 行禁整文件 Read，反向校验场景）
+- §9.7 跨 skill 共享原则（特别原则 6：prd-writing 不读 PM 反馈段，与 task-spec / close-task 分流读法不同）
 
 ## Workflow
 

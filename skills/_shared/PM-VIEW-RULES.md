@@ -514,27 +514,170 @@ PM 视图用正向句式：
 
 本节约束各 skill 写文档前**读哪些上游产物**，以及**怎么读**——避免工程化内容沿 stage 链路渗透到 PM 视图。
 
-### 9.1 PM 视图链路只读 PM 视图层
+### 9.1 各 skill 必读输入清单（全 stage 权威表）
 
-PM 视图文档之间互相喂入时**只读对方的 PM 视图层**（即主文件），**不读** `*.engineering.md`。
+本表是框架内"哪个 skill 该读什么"的**单一权威来源**。各 SKILL.md 的"必读输入"段引用本表（"按 §9.1 中本 skill 对应行/段执行"），不再独立维护。
 
-**统一原则**：仓库中存在的项目级权威产物（`docs/CONTEXT.md` / `docs/DESIGN.md` / `docs/prd.md` / `docs/modules/*.md` / `prototypes/`）一律**必读**——AI 不得以"觉得不必要"为由跳过。
+**核心约束**：
+- PM 视图文档之间互相喂入时**只读对方的 PM 视图层**（即主文件），**不读** `*.engineering.md`
+- 项目级权威产物按本表等级读，AI 不得以"觉得不必要"为由跳过 🟢 必读项
 
-下表分两列展示：左列是上游 **stage 文档**（brief → analysis → solution → task-plan → tasks 的链路），右列是 **项目级文档**（已沉淀的权威基线）。
+**等级图例**：
+- 🟢 全文必读
+- 🟡 章节 grep（按 §9.1.1 / §9.3.1 强约束执行）
+- ⚪ 按需 lazy（写不出来回查）
+- ❌ 显式不读
 
-| Skill → 产物 | 上游 stage 文档（必读）| 项目级文档（必读，仓库存在则读）| 不读 |
-|---|---|---|---|
-| `req-analysis` → `analysis.md` | brief.md | docs/CONTEXT.md / docs/DESIGN.md / docs/prd.md / docs/modules/\*.md / prototypes/ | 任何 .engineering.md |
-| `req-solution` → `solution.md`（PM 视图）| brief.md / analysis.md | docs/CONTEXT.md / docs/DESIGN.md / docs/prd.md / docs/modules/\*.md / prototypes/ | 任何 .engineering.md |
-| `req-solution` → `solution.engineering.md` | analysis.md / 上游 .engineering.md（如有）| docs/DESIGN.md / docs/prd.md / docs/modules/\*.md / prototypes/ | — |
-| `task-plan` → `task-plan.md`（单文件）| brief.md / analysis.md / solution.md（PM 视图）| docs/CONTEXT.md / docs/DESIGN.md / docs/prd.md / docs/modules/\*.md / prototypes/ | solution.engineering.md |
-| `task-spec` → `task-NNN.md`（PM 视图）| brief.md / analysis.md / task-plan.md / solution.md（PM 视图）/ 同模块已完成 task 的 PM 视图 | docs/CONTEXT.md / docs/DESIGN.md / docs/prd.md / docs/modules/<module>.md / prototypes/ | solution.engineering.md / 任何 .engineering.md |
-| `task-spec` → `task-NNN.engineering.md` | analysis.md / solution.engineering.md（按章节匹配）/ 同模块已完成 task 的 .engineering.md（如有）| docs/DESIGN.md / docs/prd.md / docs/modules/<module>.md / prototypes/ | — |
-| `prd-writing` → `prd.md` | brief.md / analysis.md / solution.md（PM 视图）/ tasks/\*.md（PM 视图）| docs/CONTEXT.md / docs/DESIGN.md / docs/prd.md / docs/modules/\*.md / prototypes/（反向校验） | 任何 .engineering.md |
+#### Stage 0：项目初始化
+- `init-project`：PM 输入（项目名 / 目录），无大文件
+- `new-req`：PM-VIEW-RULES §四 brief 严格度行 🟢
+
+#### Stage 2：req-analysis
+- 🟢 `brief.md`
+- 🟢 `docs/CONTEXT.md`（如存在）
+- 🟢 `docs/prd.md`（如存在 → **必读**——分析新需求必须基于已有产品规格基线，避免重复设计 / 与已有功能冲突）
+
+#### Stage 3：req-stage-gate
+- 仅 `$ACTIVE_REQ_STAGE` 元数据 + advisor 调用，无大文件读
+
+#### Stage 4：req-solution
+
+**first-gen / PM 视图**
+- 🟢 `PM-VIEW-RULES.md`（步骤 0，仅 1 次/会话）
+- 🟢 `brief.md` / `analysis.md`
+- 🟢 `docs/CONTEXT.md` / `docs/DESIGN.md` / `docs/prd.md`
+- 🟢 `docs/modules/INDEX.md` + 全部 `docs/modules/*.md`
+- 🟡 `prototypes/<相关页面>`（§9.3.1）
+- ❌ 任何 `.engineering.md`
+
+**first-gen / 工程合同**
+- 🟢 `analysis.md` / `docs/DESIGN.md` / `docs/modules/<本 req 涉及模块>.md`
+- 🟡 `prototypes/<相关页面>`（§9.3.1）
+- ⚪ 上游 `.engineering.md`
+
+**revise（PM 视图）**
+- 🟢 `solution.md` 主文件 + chat 中 PM 修改要求
+- ⚪ 其他全部按需
+
+**reconcile**
+- 🟢 `solution.md` + `solution.engineering.md` hash + `git diff`
+- 🟡 hash 不一致才扩大读：`analysis.md` / `DESIGN.md` / 当前模块 / `prototypes/<相关>`（§9.3.1）
+
+#### Stage 5：task-plan
+- 🟢 `PM-VIEW-RULES.md`（步骤 0）
+- 🟢 `analysis.md` / `solution.md`（PM 视图）
+- ⚪ `brief.md`（按需——已被 analysis / solution 消化两层；偶尔回查初衷）
+- 🟢 `docs/CONTEXT.md` / `docs/prd.md`
+- ⚪ `docs/DESIGN.md`（按需——视觉决策不影响 task 拆分粒度，仅在拆边界涉及视觉差异时回查）
+- 🟢 `docs/modules/INDEX.md` + 全部 `docs/modules/*.md`
+- 🟡 `prototypes/<相关页面>`（§9.3.1）
+- ❌ `solution.engineering.md` / 任何 `.engineering.md`
+
+#### Stage 6：task-spec
+
+**first-gen / PM 视图**
+- 🟢 `PM-VIEW-RULES.md`（步骤 0，不重读）
+- 🟢 `task-plan.md`（取本 task 行 + 自检与状态摘要）
+- 🟢 `solution.md` PM 视图（**first-gen 整文件读，§9.1.1 逃生口**）
+- 🟢 `docs/CONTEXT.md` / `docs/prd.md` / `docs/modules/<本 task 模块>.md`
+- 🟡 `docs/DESIGN.md`（按 task 涉及功能 grep 相关章节，§9.1.1）—— PM 视图禁像素颜色，仅引用产品级视觉决策稀疏
+- 🟡 同模块已完成 `task-*.md` 仅 grep `## PM 反馈` 段（§9.1.1）
+- 🟡 `prototypes/<相关页面>`（§9.3.1）
+- ⚪ `brief.md` / `analysis.md`
+- ❌ 任何 `.engineering.md`
+
+**first-gen / 工程合同**
+- 🟢 `docs/DESIGN.md` / `docs/modules/<本 task 模块>.md`
+- 🟡 `analysis.md` 工程层段 / `solution.engineering.md` 章节匹配（§9.1.1）
+- 🟡 `prototypes/<相关页面>`（§9.3.1）
+- ⚪ 同模块已完成 `task-*.engineering.md`
+
+**revise / PM 视图（痛点场景）**
+- 🟢 `task-NNN.md` 主文件 + chat 中 PM 修改要求
+- 🟡 `solution.md` 章节 grep（§9.1.1 revise 模式）
+- 🟡 同模块 `task-*.md` `## PM 反馈` 段（§9.1.1）
+- 🟡 `prototypes/<相关页面>`（§9.3.1）
+- 🟢 `docs/CONTEXT.md` / `docs/prd.md` / `docs/modules/<本 task 模块>.md`
+- 🟡 `docs/DESIGN.md`（同 first-gen，按 task 涉及功能 grep，§9.1.1）
+- ⚪ `brief.md` / `analysis.md`
+- ❌ 任何 `.engineering.md`
+
+**reconcile**：见步骤 12.5 reconcile 派生流程
+
+#### Stage 6.5：task-confirm
+- 🟢 本 task 两文件（成对校验）
+- 🟢 依赖 task 状态
+
+#### Stage 6.6：task-execute
+- 🟢 本 task 两文件（PM 视图 + 工程合同）
+- 🟢 工程合同 §3 启动前必读列表（逐个读）
+- 🟢 `docs/DESIGN.md`（**强制 cat 全文**——task-001 反模式 evidence，视觉一致性护身符）
+- 🟢 `docs/modules/<本 task 模块>.md`
+- 🟢 `prototypes/<相关页面>`（**实现参考，不应用 §9.3.1**，全文 Read——写新页面"长一样"需要全局结构感）
+
+#### Stage 6.7：task-submit
+- 🟢 本 task 两文件
+
+#### Stage 7.1：close-task
+- 🟢 本 task 两文件
+- 🟢 task worktree 改动代码（≤3 文件全读，多文件分批）
+- 🟢 `docs/DESIGN.md`（步骤 1.5 视觉规范类 PM 反馈第四类反推沉淀，参见 §9.4）
+
+#### Stage 7.2：doc-update
+- 🟢 本 task PM 视图主文件
+- 🟢 `docs/modules/<本 task 模块>.md`
+- 🟢 工程合同 §10 文档偏差表
+- 🟢 task worktree 改动代码（步骤 1.6 模块规格对账，逐行核对实际实现是否匹配——不读代码就不能对账；读法同 Stage 7.1 close-task）
+- 🟡 偏差涉及的原文（前后 5 行）
+
+#### Stage 7.3：close-req
+- 🟡 `solution.md` §📌 方案摘要（步骤 1 close-report 需求概述源；**不读 brief.md**——brief 是 stage 1 初稿，close-req 时已被 7 个 stage 演化推翻）
+- 🟢 `tasks/*.md` 遍历摘要
+- 🟡 `solution.md` §🔧 实现深度变更段（步骤 2c 项目级同步判定）
+- 🟡 `$REPO_ROOT/CLAUDE.md` 「## 工程结构约束」段（步骤 2c 比对项）
+- 🟡 `tasks/discarded/*.md` 摘要
+
+#### Stage 7.4：prd-writing
+- 🟢 `brief.md` / `analysis.md` / `solution.md`
+- 🟡 `tasks/task-*.md` 遍历——`grep -nE "^## (📋 功能清单|🎯 关键产品决策|✅ 验收清单)" tasks/*.md` 命中三段后局部读（§9.1.1）。任务卡 / 历史档案 / PM 反馈对 PRD 价值低，不读
+- 🟢 `docs/CONTEXT.md` / `docs/DESIGN.md` / `docs/prd.md` / `docs/modules/INDEX.md`
+- 🟢 `docs/modules/<本 req 涉及模块>.md`
+- 🟡 `prototypes/<相关页面>`(§9.3.1)
+- ⚪ 其他 `docs/modules/*.md`
+- ❌ 任何 `.engineering.md`
+
+#### Stage 7.5：project-prd-update
+- 🟢 本 req `prd.md`
+- 🟢 `docs/prd.md`
+
+#### 轻量 skill（不进 §9.1 主表）
+
+以下 skill 没有 PM 视图链路职责，SKILL.md "必读输入" 段独立维护，不引用本表：
+
+| skill | 必读 |
+|---|---|
+| `cancel-req` | 仅 req 元数据 |
+| `task-status` | 仅 stage / task 状态 + 最后事件 |
+| `publish-to-lark` | 仅参数指定的目标文档 |
+| `quick-fix` | 🟢 参数指定文档 / ⚪ 关联文档 |
+
+#### 9.1.1 "按章节匹配" 操作语义（强约束）
+
+§9.1 表中标 🟡 "章节 grep" 的文件 → **禁止** 整文件 Read。读法：
+
+1. `grep -nE "^### .*(<关键词1>|<关键词2>)" <文件>` 命中相关章节标题
+2. 按命中行号 + 下一个同级或更高级 header 之间的区间 offset/limit Read
+3. 关键词从当前 task 标题 / 所属模块 / 功能名提取
+
+适用：`solution.engineering.md` / 同模块 `task-*.md`（`## PM 反馈` 段）/ `docs/DESIGN.md`（task-spec PM 视图）/ `tasks/task-*.md`（prd-writing 三章节遍历）。
+
+**solution.md（PM 视图）特殊**——逃生口：
+- **first-gen 模式**：整文件读（顶端核心产物，需要全局视野）
+- **revise 模式**：按 §🎯 / §📦 / §✅ 章节 grep 局部读
 
 **理由 1**：PM 视图文档若读了 .engineering.md，工程内容会被沿链路复制下去——当前 task spec 把 solution §五派生状态规则（代码层）等内容搬到自身实现指引就是因为不分层读。
 
-**理由 2**：项目级文档列为"应读"时 AI 容易跳过，导致 skill 闭门造车。所有产出 PM 视图的 skill 都应该把已沉淀的项目级产物作为基线，避免重复设计或与已有规格冲突。
+**理由 2**：项目级文档列为"应读"时 AI 容易跳过，导致 skill 闭门造车。本表用 🟢/🟡/⚪/❌ 等级明确化，避免 AI 按"觉得不必要"自由裁量。
 
 ### 9.2 工程合同的喂入时机
 
@@ -565,6 +708,21 @@ PM 视图链路（§9.1 表格中的"必读"和"应读"）一律不读 .engineer
 **避坑**：原型里有但上游文档没写的"工程概念"（如 V4.1 里的 `includeDescendants`、"含子"复选框），属于工程层细节——
 - 不要把它们引入 PM 视图当作功能要求
 - 如果原型已砍掉、PM 决策不再支持，必须在工程合同的反向约束里显式标注
+
+#### 9.3.1 prototype 读取强约束（>500 行禁止整文件 Read）
+
+prototype 文件 > 500 行 → **禁止** 整文件 Read。读法：
+
+1. 先列**上游工程概念清单**（从 brief / analysis / solution / task-plan 中提取字段名 / 控件名 / 状态名 / 操作名）
+2. 对每个概念在 prototype 范围内 grep：`grep -nE "<概念>" prototypes/<相关文件>`
+3. **grep 命中**：Read offset = 命中行 -10, limit = 30
+4. **grep 不命中**：列出已搜关键词清单 + 追问 PM「这个概念是否真不存在于原型里」。**禁止** AI 自行判定为"已砍掉"——可能是 false negative（关键词中英文不一致："额度" vs "quota" vs "allocation"；控件用 className 而非语义命名；概念名拆词等）。判断留给 PM。
+
+例外：< 500 行的小 prototype 文件可全文 Read。
+
+**理由**：原型 page.tsx 经常 2000+ 行，整文件 Read 浪费 90% 上下文。grep 命中段直接局部读；grep 不命中**不能**机械判为"原型已砍掉"——这种判断是 prose-as-judgment，需要 PM 拍板。
+
+**例外 — task-execute**：task-execute 步骤 2.1 的 prototype 读法是「参考已有组件结构与布局模式」（写新页面"长一样"），属于**实现参考**而非反向校验，需要全局结构感 → 保留整文件读，**不应用本节约束**。
 
 ### 9.4 PM 反馈的四类分流（task-spec 读前三类 + close-task 读第四类）
 
@@ -699,6 +857,33 @@ skill 在 reconcile 模式下执行：
 - [ ] hash 与 PM 视图主文件 `shasum -a 256 | cut -c1-12` 一致
 - [ ] PM 视图驱动章节没有出现"已被 PM 视图删除"的旧概念
 - [ ] 独立来源章节（§7 / §8）未被 reconcile 误改
+
+### 9.7 跨 skill 共享原则
+
+1. **`.engineering.md` 仅工程合同链路读**：PM 视图 skill（req-analysis / req-solution PM / task-plan / task-spec PM / prd-writing）一律 ❌ 不读任何 `.engineering.md`（§9.1 / §9.2）
+
+2. **`docs/DESIGN.md` 在 PM 视图链路保留必读但分级**（按 §9.1 各 skill 行）：
+   - `req-solution` PM 视图 / 工程合同：🟢 全文必读（方案设计需视觉规范基线）
+   - `task-spec` PM 视图（first-gen + revise）：🟡 章节 grep（按 task 涉及功能 grep 相关章节，§9.1.1）
+   - `task-spec` 工程合同：🟢 全文必读
+   - `task-plan`：⚪ 按需（视觉决策不影响 task 拆分粒度）
+   - `task-execute`：🟢 强制 cat 全文（视觉一致性护身符）
+   - `close-task`：🟢 全文必读（PM 反馈第四类反推沉淀目标）
+   - `prd-writing`：🟢 全文必读
+   - **不可整体砍**：DESIGN 是 PM 反馈第四类（视觉规范）沉淀地（§9.4），不同 skill 按不同强度引用
+
+3. **`prototypes/` 反向校验场景按 §9.3.1 grep 强约束**：仅 task-execute 例外（实现参考全文读）
+
+4. **章节匹配场景按 §9.1.1 grep 强约束**：solution.md 在 first-gen 整文件读 / revise grep
+
+5. **`PM-VIEW-RULES.md` 步骤 0 读 1 次/会话，后续步骤不重读**
+
+6. **PM 反馈四类分流的读取分工**（§9.4）：
+   - `task-spec` 读"同模块已完成 task 的 PM 反馈"前三类（正向规则 / 反向约束 / 决策记录）→ 落到当前 task 对应章节
+   - `close-task` 步骤 1.5 读"本 task 的 PM 反馈"第四类（视觉规范）→ 反推沉淀到 `docs/DESIGN.md`
+   - `prd-writing` **不读** `## PM 反馈` 段；prd-writing 读 task PM 视图的 `^## (📋 功能清单|🎯 关键产品决策|✅ 验收清单)` 三段是另一个目的（抽功能需求），与 §9.4 PM 反馈分流读法**不同读法 / 不同来源段**，不冲突
+
+7. **closed/ 旧 task 读取边界**：扫描 `requirements/closed/**/tasks/*.md` 时，**只读 `## PM 反馈` 段**抽反馈条目；**不读**顶部 frontmatter / 元信息段落 / 任务卡表格的字段布局（v1 历史格式，新 task 按 v2 模板生成；混读会触发 task-spec 步骤 10.6 字段校验拦截重写）
 
 ---
 
