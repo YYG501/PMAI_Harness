@@ -28,7 +28,7 @@ echo "SKILL: close-req"
 # Req Close Report: req-NNN-<slug>
 
 ## 需求概述
-[从 brief.md 提取]
+[从 solution.md §📌 方案摘要提取，**不读 brief.md**——brief 是 stage 1 初稿，到 close-req 时已被 7 个 stage 演化，用它写关闭报告会反映已被推翻的初衷]
 
 ## 完成的 task
 | Task | 摘要 |
