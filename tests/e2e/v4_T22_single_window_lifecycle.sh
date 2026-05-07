@@ -40,22 +40,20 @@ test_single_window_lifecycle() {
   req_dir=$(fixture_create_req "req-001" "single" 6)
   task=$(fixture_create_task "$req_dir" "001" "lifecycle" "待确认" "(无)")
 
-  # task-confirm simulation: dependency gate has no dependencies, create worktree, status remains 待确认.
-  # Suppress create-task-worktree stdout (mixes git output); use known fixture path
+  # task-confirm simulation: dependency gate has no dependencies, create worktree.
+  # v4.5：create-task-worktree.sh 自动把 task md 从 req 分支移走（task 分支独家）。
+  # 不在 confirm 阶段更新 worktree 字段以免 task 分支多出"代码先于状态机"commit
+  # 触发 I-CT8（worktree 字段由 task-execute 启动时回填）。
   (cd "$FIXTURE_DIR/.worktrees/req-001-single" && bash "$CREATE_TASK_WORKTREE" "$task" "req-001-single") >/dev/null 2>&1
   task_wt="$FIXTURE_DIR/.worktrees/task-001-lifecycle"
-  sed -i.bak "s|^\*\*worktree：\*\*.*|\*\*worktree：\*\* .worktrees/task-001-lifecycle|" "$task"
-  rm -f "$task.bak"
-  _commit_all_if_needed "$FIXTURE_DIR/.worktrees/req-001-single" "confirm task worktree"
+  task_in_wt=$(_copy_task_path_to_task_worktree "$req_dir" "$task_wt" "$task")
 
-  status=$(python3 "$TASK_TRANSITION" "$task" --get-status)
+  status=$(python3 "$TASK_TRANSITION" "$task_in_wt" --get-status)
   if [ "$status" != "待确认" ]; then
     _fail "task-confirm simulation should keep 待确认, got $status"
     fixture_teardown
     return
   fi
-
-  task_in_wt=$(_copy_task_path_to_task_worktree "$req_dir" "$task_wt" "$task")
 
   # task-execute simulation: status transition happens in the task worktree.
   (cd "$task_wt" && python3 "$TASK_TRANSITION" "$task_in_wt" --to 执行中 >/dev/null)

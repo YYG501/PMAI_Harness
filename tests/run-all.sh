@@ -24,6 +24,7 @@ SUITES=(
   test-close-task.sh
   test-close-task-design-feedback.sh
   test-close-task-alignment.sh
+  test-task-md-ownership.sh
   test-close-req.sh
   test-cleanup-pending.sh
   test-cancel-req.sh

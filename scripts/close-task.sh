@@ -204,8 +204,31 @@ else
   echo "⚠️ 找不到事件流审计脚本 ${AUDIT_SCRIPT}，跳过 I-CT7/I-CT8 校验。" >&2
 fi
 
-# 执行 merge
+# --- v4.5：防 task md modify/delete 冲突 ---
+# req 分支在 task-confirm 时删了 task md（task 分支独家所有），但 task 分支还在改它。
+# merge 时 git 报 modify/delete 冲突。先把 task md 从 task 分支 checkout 出来 + add，
+# 让 req 分支"先认回"它，merge 时 task 分支再 merge 进来就无冲突。
 cd "$REQ_WORKTREE"
+TASK_FILE_REL=$(echo "$TASK_FILE" | sed -E "s|^.*\.worktrees/[^/]+/||")
+ENG_FILE_REL=$(echo "$ENG_FILE" | sed -E "s|^.*\.worktrees/[^/]+/||")
+# 仅当 req 分支当前不存在该路径时才"认回"（v4.5 fork 时已删；旧格式未删时跳过）
+RECLAIMED=()
+if ! git ls-files --error-unmatch "$TASK_FILE_REL" >/dev/null 2>&1; then
+  if git show "$BRANCH:$TASK_FILE_REL" >/dev/null 2>&1; then
+    git checkout "$BRANCH" -- "$TASK_FILE_REL" 2>/dev/null && RECLAIMED+=("$TASK_FILE_REL")
+  fi
+fi
+if [ "$HAS_ENG" = "true" ] && ! git ls-files --error-unmatch "$ENG_FILE_REL" >/dev/null 2>&1; then
+  if git show "$BRANCH:$ENG_FILE_REL" >/dev/null 2>&1; then
+    git checkout "$BRANCH" -- "$ENG_FILE_REL" 2>/dev/null && RECLAIMED+=("$ENG_FILE_REL")
+  fi
+fi
+if [ ${#RECLAIMED[@]} -gt 0 ]; then
+  git add "${RECLAIMED[@]}"
+  git commit -q -m "close-prep: reclaim task md from $BRANCH (v4.5 merge prep)"
+fi
+
+# 执行 merge
 if ! git merge "$BRANCH" --no-edit -m "close: $TASK_TITLE" 2>&1; then
   echo "❌ merge $BRANCH → $REQ_BRANCH 失败。请手动解决冲突后再运行 close-task。" >&2
   exit 1

@@ -174,9 +174,15 @@ if [ ! -d "<expected-worktree-path>" ]; then
 fi
 ```
 
-脚本输出两行：第一行是 worktree 路径，第二行是端口号。更新 task 文件：
+脚本输出两行：第一行是 worktree 路径，第二行是端口号。
+
+**v4.5 行为**：脚本 fork task 分支后**自动把 task md（PM 视图主文件 + 工程合同）从 req 分支删除并 commit**——task md 在 task 分支独家所有，避免 v4 时代两份共存导致的路径解析赌博。close-task 时 merge 会自动"认回" task md 进入 req 分支作为最终历史档案。
+
+更新 task 文件（**注意：在 task worktree 内的副本里改，不在 req 分支**）：
 - `**worktree：**` → worktree 路径
 - `**开发服务器：**` → `http://localhost:<port>`
+
+> 这两个字段的更新通常推迟到 task-execute 启动时由 agent 回填，避免 task-confirm 阶段在 task 分支多出"代码先于状态机"的 commit 触发 I-CT8。
 
 ### 步骤 5：输出新窗口启动指令（v4 单窗口 lifecycle）
 

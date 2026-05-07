@@ -84,6 +84,45 @@ setup_dependency_symlinks "$REPO_ROOT" "$WORKTREE_DIR"
 # req 分支后续变更。
 
 # ======================================================
+# v4.5：把 task md 从 req 分支移走，task 分支独家所有
+# ======================================================
+# 改造背景：v4 task md 双份共存（req 分支 placeholder + task 分支真本）
+# 导致 close-task 路径解析赌博。v4.5 改成 task md 只在 task 分支存在；
+# req 分支 task-plan.md 仅记 task row。close-task merge 时 task md 自然
+# 跟着 task 分支 commit 进入 req 分支作为最终历史档案。
+#
+# 注：task-spec 阶段（task-confirm 之前）task md 仍在 req 分支，无歧义。
+# fork 之后才移走。
+ABS_TASK_FILE=$(cd "$(dirname "$TASK_FILE")" && pwd -P)/$(basename "$TASK_FILE")
+REQ_WT="$REPO_ROOT/.worktrees/$REQ_BRANCH"
+if [ -d "$REQ_WT" ]; then
+  REQ_WT_REAL=$(cd "$REQ_WT" && pwd -P)
+  if [[ "$ABS_TASK_FILE" == "$REQ_WT_REAL"/* ]]; then
+    REL_PATH="${ABS_TASK_FILE#${REQ_WT_REAL}/}"
+    ENG_REL="${REL_PATH%.md}.engineering.md"
+
+    TO_RM=()
+    if [ -f "$REQ_WT_REAL/$REL_PATH" ]; then
+      TO_RM+=("$REL_PATH")
+    fi
+    if [ -f "$REQ_WT_REAL/$ENG_REL" ]; then
+      TO_RM+=("$ENG_REL")
+    fi
+
+    if [ ${#TO_RM[@]} -gt 0 ]; then
+      (
+        cd "$REQ_WT_REAL"
+        git rm -q "${TO_RM[@]}" 2>/dev/null || true
+        # commit 仅当真有 staged 改动
+        if ! git diff --cached --quiet 2>/dev/null; then
+          git commit -q -m "task-${TASK_BASENAME#task-}: move task md to task branch (v4.5)"
+        fi
+      )
+    fi
+  fi
+fi
+
+# ======================================================
 # Port allocation
 # ======================================================
 DEV_PORT=$(derive_task_port "$REPO_ROOT" "$TASK_BASENAME")
