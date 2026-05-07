@@ -278,3 +278,35 @@ AI 收到后应该：
 | 7 | task-spec 双源改造 | ❌ 废弃（已被 4.5d.4 实现）|
 | 8 | 格式统一前置 + 校验 + stale | ❌ 跳过（4.5d 后边际价值低；防漂移对象已不存在）|
 | 9 | PM 可见度（req-status + STATUS.md）| ❌ 跳过（PM 自有追踪能力，dashboard 低频；现 /task-status 已合格）|
+
+---
+
+## 后续改进：skill 读取收敛（2026-05-07，commit da2174e / 5b3f255 / be47fca）
+
+**触发**：PM 跑 /task-spec task-001 revise 报"为啥这么久"——实测一次读 ~8000 行写 ~100 行，读写比 50:1。
+
+**设计文档**：`设计-skill读取收敛.md`（3 轮 review 全过）
+
+**落地动作**（按 P0/P1/P2/§4.4 四档）：
+
+| 档 | Commit | 改动 |
+|---|---|---|
+| Commit 1 | da2174e | 设计文档 + close-req SKILL.md 步骤 1 模板 brief→solution.md §📌 |
+| P0 | 5b3f255 | task.md.tmpl 反例区 + task-spec/SKILL.md 步骤 8 写头部前 6 项 checklist（消除 lint round-trip）|
+| P1+P2+§4.4 | be47fca | PM-VIEW-RULES §9.1 全 stage 19 skill 权威表 + §9.1.1（章节匹配 grep）+ §9.3.1（prototype grep）+ §9.7（7 条共享原则）+ 8 个 SKILL.md 引用 §9.1 |
+
+**收敛覆盖**：
+- task-spec revise（痛点）：~8008 → ~4400 行（**省 45%**）
+- task-spec first-gen：~7600 → ~4300（省 43%）
+- task-plan：~10500 → ~7940（省 24%）
+- prd-writing：~12000 → ~7500（省 38%）
+- req-solution first-gen：~9500 → ~7650（省 19%）
+- task-execute：不变（实现参考全文读，§9.3.1 不应用）
+- doc-update：补 worktree 代码必读（修步骤 1.6 模块规格对账缺读 bug）
+
+**测试**：308 单测 0 失败（之前 269，本次 + 4.5f sync 改造合并后 308）
+
+**延迟项**（已记 TODOS.md）：
+- TD-X1 task-spec revise 触发条件门（git log 比对跳过过期数据）
+- TD-X2 docs/modules/* INDEX 索引化
+- TD-X3 实测 transcript 二次审视

@@ -341,6 +341,33 @@
 - **触发条件**: 实际触发 schema_version: 2（schema 加新信号或改信号语义）
 - **Depends on**: schema 真有第二个版本
 
+### TD-X1: task-spec revise 触发条件门（步骤 5/6 用 git log 比对跳过过期数据）
+- **What**: revise 模式步骤 5/6 当前按 §9.1.1 grep 强约束执行；进一步收敛——加触发条件门：自上次 task PM 视图最后一次 commit 以来，同模块 task 是否有新 close 事件 / solution.md 是否有 commit。无变更则整段跳过
+- **Why**: revise 痛点场景已 8008 → 4400（省 45%）；TD-X1 上线可再省 ~300 行（同模块 task PM 反馈段 + solution 章节 grep 在大多数 revise 场景没新内容）
+- **Pros**: revise 更轻量；触发机制可机器判（git log）
+- **Cons**: 触发条件机制要落地（mtime 不可靠必须 git log）；增加 revise 判别复杂度
+- **Context**: 设计-skill读取收敛.md §3 不做项理由；reconcile 已用 hash 收敛过可借鉴
+- **触发条件**: 实测 transcript 显示 P0+P1+P2+§4.4 落地后 revise 仍超 5000 行
+- **Depends on**: 设计-skill读取收敛.md 全部落地（已 commit be47fca）
+
+### TD-X2: docs/modules/* INDEX 索引化（first-gen 阶段 modules 全文必读 → INDEX + 涉及模块）
+- **What**: 当前 §9.1 让 req-solution / task-plan / prd-writing 必读全部 modules/*.md。砍成"INDEX.md 必读 + 本 req 涉及模块全文 + 其他 grep 按需"
+- **Why**: req-003 实测 modules 总 ~4900 行，拆 task / 写 PRD 实际只用涉及模块 + 索引。砍后 req-solution / task-plan / prd-writing 各省 ~3000 行
+- **Pros**: 大头节省；"全局复用判断"靠 INDEX + grep 也能覆盖
+- **Cons**: 依赖 INDEX 完整性（如果 INDEX 没及时更新会漏掉新模块）
+- **Context**: 设计-skill读取收敛.md §3.1 R3 已记
+- **触发条件**: INDEX 完整性机制落地后（如 INDEX hash 比对 / 写入时机自动更新）
+- **Depends on**: INDEX 维护机制
+
+### TD-X3: 基于实测 transcript 二次审视激进收敛
+- **What**: 跑一次真实 task-spec revise（在 req-003 worktree），抓 transcript 验证实际节省。若 < 30%，再考虑激进收敛（砍 DESIGN / brief / analysis 必读）
+- **Why**: 设计文档算账估 45%，但 AI 实际行为可能偏离（grep 关键词选错 / 偶尔补 offset 续读 / lint round-trip 仍触发）
+- **Pros**: 数据驱动决策，不靠估算
+- **Cons**: 要真跑一次，耗 PM 时间
+- **Context**: 设计-skill读取收敛.md §5.2 实测验证段
+- **触发条件**: P0+P1+P2+§4.4 上线后第一个真实 task-spec revise
+- **Depends on**: 已 commit be47fca
+
 ---
 
 **注**：TD-5（DESIGN.md vs CLAUDE.md「工程结构约束」边界文档）已直接落到 CLAUDE.md.tmpl 段顶部注释（阶段 4.5.3），不进 TODOS。
