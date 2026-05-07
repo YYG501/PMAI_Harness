@@ -83,10 +83,13 @@ EOF
 test_business_task_contract() {
   start_test "task-spec business task: PM 视图 (📋 功能清单) + 工程合同 (§5 实现指引)"
 
-  # PM 视图 (task.md.tmpl)：v3.5 后用 emoji 前缀 + 三列表
+  # PM 视图 (task.md.tmpl)：v3.5 后用 emoji 前缀；功能清单走 §5.1 格式（4 列表格 + 续行 rowspan + 需求描述列内联编号）
   _assert_contains "$TASK_TEMPLATE" "## 📋 功能清单" "PM 视图 功能清单 section" || return
-  _assert_contains "$TASK_TEMPLATE" "### 1 · [产品视角的功能名 — 必须含指代前缀]" "三级功能名 head" || return
-  _assert_contains "$TASK_TEMPLATE" "| 二级功能 | 三级功能 | 使用角色 |" "三列表 header" || return
+  _assert_contains "$TASK_TEMPLATE" "### 1 · [产品视角的功能名 — 必须含完整指代前缀]" "三级功能名 head" || return
+  _assert_contains "$TASK_TEMPLATE" "> **使用角色**：" "section 级使用角色 blockquote（§5.1）" || return
+  _assert_contains "$TASK_TEMPLATE" "| 二级功能 | 三级功能 | 使用角色 | 需求描述 |" "4 列表格 header（§5.1）" || return
+  _assert_missing "$TASK_TEMPLATE" "**业务规则**：" "task 模板不再用 4 块结构 业务规则 heading（§5.1）" || return
+  _assert_missing "$TASK_TEMPLATE" "**字段口径**（仅当" "task 模板不再用字段口径独立表（§5.1）" || return
 
   # 工程合同 (task.engineering.md.tmpl)：§5 实现指引 + 子项
   _assert_contains "$TASK_ENG_TEMPLATE" "## 5. 实现指引" "工程合同 实现指引 section" || return
@@ -217,7 +220,10 @@ test_template_regression() {
   _assert_contains "$MODULE_TEMPLATE" "## 二、Scope In / Scope Out" "module scope preserved" || return
   _assert_contains "$MODULE_TEMPLATE" "## 三、功能清单（硬约束）" "module function list" || return
   _assert_contains "$MODULE_TEMPLATE" "#### 1 · [三级功能名]" "module three-level function block" || return
-  _assert_contains "$MODULE_TEMPLATE" "| 二级功能 | 三级功能 | 使用角色 |" "module three-column table" || return
+  _assert_contains "$MODULE_TEMPLATE" "> **使用角色**：" "module section 级使用角色 blockquote（§5.1）" || return
+  _assert_contains "$MODULE_TEMPLATE" "| 二级功能 | 三级功能 | 使用角色 | 需求描述 |" "module 4 列表格 header（§5.1）" || return
+  _assert_missing "$MODULE_TEMPLATE" "**业务规则**：" "module 模板不再用 4 块结构 业务规则 heading（§5.1）" || return
+  _assert_missing "$MODULE_TEMPLATE" "**字段口径**（仅当" "module 模板不再用字段口径独立表（§5.1）" || return
   _assert_contains "$MODULE_TEMPLATE" "## 五、硬约束" "module hard constraints preserved" || return
   _assert_contains "$MODULE_TEMPLATE" "## 七、验收标准" "module acceptance preserved" || return
   _assert_contains "$MODULE_TEMPLATE" "## 八、跨模块依赖与占位策略" "module dependencies preserved" || return
