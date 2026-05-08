@@ -143,6 +143,7 @@ bash scripts/init-project.sh \
 |---|---|
 | [`CLAUDE.md`](./CLAUDE.md) | 项目章程（生成器的） |
 | [`STATUS-v3.5实施.md`](./STATUS-v3.5实施.md) | 当前进度（v3.5 全部收口；新窗口续接入口） |
+| [`DX-AUDIT-续接.md`](./DX-AUDIT-续接.md) | DX 审计待办（4/9 完成，5 项 P0 续接清单） |
 | [`INVARIANTS.md`](./INVARIANTS.md) | 框架不变量清单（I-CT / I-TT / I-AD 等编号约束） |
 | [`TODOS.md`](./TODOS.md) | 待决项 / 延迟决策（v2/v4/UP/DX/Eng/TD-1~4） |
 | [`框架同步-SOP.md`](./框架同步-SOP.md) | 生成器 → 业务仓 hotfix 同步流程 |
