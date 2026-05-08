@@ -103,17 +103,28 @@ cd 到返回的 worktree 路径。
 }
 ```
 
-### 步骤 4：Stage 1 — 调用 /office-hours 产出 brief.md
+### 步骤 4：Stage 1 — 产出 brief.md（由 PM 主导）
 
-调用 `/office-hours`（gstack skill），用六问追问帮 PM 深挖需求：
-1. 需求真实性：有没有真实用户在痛苦？
-2. Status quo：他们现在怎么解决？
-3. Desperate specificity：谁最急迫需要？
-4. 最窄楔子：能不能再砍一半范围？
-5. 观察证据：你亲眼见过吗？
-6. Future-fit：3 年后还有意义吗？
+**关键原则**：brief 阶段如何引导思考**由 PM 自己决定**，AI 不主动调用任何工具、不预读项目文档/历史 req。AI 在此步骤只做两件事：(1) 提示 PM 三条候选路径，(2) 等 PM 选择后整理产出为 `brief.md`。
 
-`/office-hours` 完成后，将其产出的 design doc 内容**复制到** req 目录的 `brief.md`。
+输出提示给 PM（不要替 PM 选）：
+
+```
+brief.md 还没写。你可以选任何方式产出，我帮你整理成符合 PM-VIEW-RULES 的格式：
+
+1. 自跑 /office-hours（gstack skill）做六问深挖思考 — 跑完把产出贴回来我整理
+2. 直接口述需求要点（几句话也行）— 我按 PM-VIEW-RULES 结构化成 brief
+3. 自己写完整 brief.md — 我只做格式校验
+
+也可以混合（先跑 1 拿到产出，再补充几句让我合并）。等你说就行。
+```
+
+**等 PM 主动告诉**采用哪种路径或直接给内容。**禁止**：
+- AI 主动调用 `/office-hours` 或任何 review/research skill — `/office-hours` 是 gstack 通用产品发现工具（含 builder/startup 模式选择 + telemetry + gbrain context queries），适合 PM 自主使用，不适合 AI 替 PM 跑
+- 在 PM 给出方向前去读 `requirements/closed/req-*` 的 brief / 项目级 docs / brief 历史 — RAG 噪声，PM 需要时自己会让你读
+- 自作主张提"我先了解一下背景再问你" — 破坏对话节奏
+
+PM 给出 brief 内容后，AI 按 PM-VIEW-RULES（特别是 §三写作规则、§四 brief.md 严格度行）整理成 `brief.md`，写入 req 目录。
 
 `brief.md` 是 stage 1 的唯一真相源，后续所有 stage 只读 brief.md。
 
@@ -149,4 +160,5 @@ brief.md 写好后，**当前主对话不再继续 stage 2**。`/new-req` 的职
 - 允许多个 active req 并行（每个 req 一个 worktree、一条分支、一份 .req-meta.json，互不干扰）。已有 active req 时不要拦截，正常创建即可
 - slug 从需求描述自动生成，不需要问 PM
 - brief.md 用 PM 的原话整理，不要过度改写或添加 PM 没说的内容
-- 引导问题是辅助，PM 如果已经描述清楚了就直接写 brief，不必逐个追问
+- brief 引导路径由 PM 选（步骤 4）；AI 不主动调 `/office-hours`、不预读历史 req / 项目 docs
+- PM 直接描述清楚就直接写 brief；PM 选六问引导就提示 PM 自跑 `/office-hours` 后贴产出回来
