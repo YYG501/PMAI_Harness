@@ -14,10 +14,15 @@
       / topContent / kebab / segmented control / event.stopPropagation 等；§3.8）
     - 反引号代码引用（`useState` / `getXxx()` / `field.attribute` 等；§3.8）
     - 数学符号（⊊ ⊆ ∩ ∪ 等；§3.8）
+    - URL 参数字面量（如 tab=pools&view=dept；§3.8 反引号代码引用泛化）
     - 必填章节缺失
 
   Warnings（启发式）：
-    - 反向约束词（"禁止" / "不允许" / "禁用"）
+    - 显式反向约束词（"禁止" / "不允许" / "禁用"）
+    - 隐式反向句式（"不出现 / 不展示 / 不通过 / 无任何 / 没有...入口" 等；§3.4）
+    - UI 排版中文词（"第一行 / 第二行 / 两列 / 三项简化形态" 等；§5.2）
+    - 中英混杂业务词（breakdown / mock / self-contained 等；§3.8）
+    - 设计意图括号（（避免...） / （防止...） / （为了...）；§3.2）
     - UI 骨架代码块内括号注释（§🖼 页面 UI 骨架 / §📐 产物预览；建议人工判定是合法标识型还是非法释义型）
 
 跳过区域：HTML 注释（<!-- -->）/ markdown 代码块（``` ```）
@@ -82,8 +87,56 @@ FORBIDDEN_PATTERNS = {
     ),
     "reverse_constraint": (
         re.compile(r"(禁止|不允许|不准|禁用|不得)"),
-        "反向约束词（建议改为正向描述或挪到工程合同）",
+        "反向约束词（§3.4：建议改为正向描述或挪到工程合同）",
         "warning",
+    ),
+    "implicit_reverse": (
+        re.compile(
+            r"(?:"
+            # 显式动词反向
+            r"不出现|不展示|不通过|不保留|不再保留|不再展示|不再持有|"
+            # "无任何 / 没有任何"
+            r"无任何|没有任何|"
+            # "没有 X 入口/按钮/操作/菜单/跳转/提示"
+            r"没有[^，。；,;.\n]{0,12}(?:入口|按钮|操作|菜单|跳转|提示|内容|功能|展示)"
+            r")"
+        ),
+        "隐式反向句式（§3.4：建议改正向描述或挪到工程合同——'没有 X' / '不出现 X' 等于 '禁止 X' 的软化版）",
+        "warning",
+    ),
+    "ui_layout_word": (
+        re.compile(
+            r"(?:"
+            # 第 N 行 / 第 N 列
+            r"第\s*[一二三四五六七八九十1234567890]+\s*[行列]|"
+            # N 行紧凑/展示/结构/形态/布局
+            r"[两三四五]\s*[行列](?:紧凑|展示|结构|形态|布局)|"
+            # N 项 简化/展示/结构/形态
+            r"[两三四五六]\s*项(?:简化|展示|结构|形态)|"
+            # "三项" 后接「：」/「，」描述（含义为"三个段"）
+            r"[两三四五六]\s*项[：，；]"
+            r")"
+        ),
+        "UI 排版中文词（§5.2：'换 UI 还成立'判别——行号/列数/项数属 layout 描述，应在「📐 产物预览」骨架体现而不是 §📋 文字）",
+        "warning",
+    ),
+    "mid_english_business_word": (
+        re.compile(
+            r"\b(?:breakdown|mock|self[-\s]?contained)\b",
+            re.IGNORECASE,
+        ),
+        "中英混杂业务词（§3.8：breakdown→明细 / mock→模拟 / self-contained→各自独立）",
+        "warning",
+    ),
+    "design_intent_paren": (
+        re.compile(r"（\s*(?:避免|防止|确保|为了|以防|快速识别|更可信|无意义|更好地|防范)"),
+        "设计意图括号（§3.2：解释'为什么'移到「🎯 关键产品决策」共同理由或工程合同；PM 视图只描述系统行为）",
+        "warning",
+    ),
+    "url_param_literal": (
+        re.compile(r"\b[a-z][a-z0-9_]*=[a-z0-9_-]+(?:&[a-z][a-z0-9_]*=[a-z0-9_-]+)+\b"),
+        "URL 参数字面量（§3.8：query string 是工程层细节，PM 视图只描述跳转结果——'详情页直接打开 X 视图'）",
+        "error",
     ),
 }
 
@@ -96,6 +149,20 @@ FORBIDDEN_PATTERNS = {
 UI_PAREN_PATTERN = re.compile(r"（[^）\n]{2,}）")
 UI_HEADING_PATTERN = re.compile(r"^##\s+(?:🖼|📐)")
 ANY_H2_PATTERN = re.compile(r"^##\s+")
+
+# History archive sections are metadata logs (reconcile hash entries / 变更记录 /
+# auto-generated reconcile entries) — exempt from PM 视图 content rules. Pattern
+# 涵盖 §📁 历史档案 / 变更记录 顶层节及其内嵌内容。
+HISTORY_HEADING_PATTERN = re.compile(r"^##\s+(?:📁\s*)?(?:历史档案|变更记录)")
+
+# §📦 范围 / §✅ 验收清单 sections allow reverse phrasing as natural form:
+#   - §📦 范围: scope-change description (e.g., "本 task 移除 X / 不再保留 Y")
+#     intrinsically describes what's removed, not 反向约束 of system behavior.
+#   - §✅ 验收清单: verification list naturally uses "verify X doesn't appear"
+#     (e.g., "不出现英文字段名" / "不出现「至 YYYY-MM-DD」"). PM 走查 friendly form.
+# Skip implicit_reverse / reverse_constraint within these sections only;
+# other rules (反引号 / 工程词 / mid-English 等) still apply.
+REVERSE_EXEMPT_HEADING_PATTERN = re.compile(r"^##\s+(?:📦\s*范围|✅\s*验收清单)")
 
 # ---- Required sections by document type ----
 REQUIRED_SECTIONS = {
@@ -157,6 +224,8 @@ def lint(path: Path) -> tuple[list[str], list[str]]:
     in_html_comment = False
     in_code_block = False
     in_ui_section = False  # tracks §🖼 页面 UI 骨架 section for §3.10 paren rule
+    in_history_section = False  # tracks §📁 历史档案 / 变更记录 — exempt all rules
+    in_reverse_exempt_section = False  # tracks §📦 范围 / §✅ 验收清单 — exempt reverse rules
     for ln, line in enumerate(lines, 1):
         # HTML comment tracking (multi-line aware)
         if in_html_comment:
@@ -170,9 +239,11 @@ def lint(path: Path) -> tuple[list[str], list[str]]:
             # Inline comment — skip the commented portion
             line = re.sub(r"<!--.*?-->", "", line)
 
-        # §🖼 section tracking (only outside code blocks; ## headings never appear inside)
+        # Section tracking (only outside code blocks; ## headings never appear inside)
         if not in_code_block and ANY_H2_PATTERN.match(line):
             in_ui_section = bool(UI_HEADING_PATTERN.match(line))
+            in_history_section = bool(HISTORY_HEADING_PATTERN.match(line))
+            in_reverse_exempt_section = bool(REVERSE_EXEMPT_HEADING_PATTERN.match(line))
 
         # Code block tracking
         if line.strip().startswith("```"):
@@ -191,7 +262,15 @@ def lint(path: Path) -> tuple[list[str], list[str]]:
                     )
             continue
 
+        # 历史档案 section is metadata (reconcile log / 变更记录) — exempt from all rules
+        if in_history_section:
+            continue
+
         for key, (pattern, desc, severity) in FORBIDDEN_PATTERNS.items():
+            # §📦 范围 / §✅ 验收清单 allow reverse phrasing as natural form
+            # (scope-change describes 移除 / 验收 describes 不出现 X)
+            if in_reverse_exempt_section and key in ("reverse_constraint", "implicit_reverse"):
+                continue
             for m in pattern.finditer(line):
                 snippet = line.strip()
                 if len(snippet) > 80:

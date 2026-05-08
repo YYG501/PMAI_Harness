@@ -142,7 +142,7 @@ bundle 是派生 artifact，**不**保留 review 结果；下一轮重跑脚本�
 ### 已挂入
 
 - **`task-confirm`** 步骤 2 默认态摘要附「推荐 review-input bundle 命令」三条（design / eng / dx），PM 复制即跑
-- **`task-spec`** 步骤 11.0 落档完成时机械跑一次 build-review-input.py 派生 bundle（业务模块 task：eng + design / 基础设施 task：仅 eng）；步骤 11.1 / 11.2 推荐区块附 bundle 路径
+- **`task-spec`** 步骤 11.0 落档完成时机械跑一次 build-review-input.py 派生 bundle（业务模块 task：eng + design / 基础设施 task：仅 eng）；bundle 路径 + 可选 review 列表统一在步骤 12 确认门一次输出（不在步骤 11 单独复读）
 - **`task-spec`** 步骤 12.5 reconcile 流程末尾追加重新派生 bundle（避免 PM 改完后 bundle stale）
 - **`scripts/finalize-review.py`** review 跑完后 AI 调用收尾：increment runs cell + replace status / findings / UNRESOLVED / VERDICT + recompute synced_pm_view_hash
 - **`<repo>/.claude/review-conventions.json`**（可选）per-project override REVIEW_CONVENTIONS：替换 design / eng / dx 任一类型的章节关键词 / 项目级文档清单，或加新 review 类型

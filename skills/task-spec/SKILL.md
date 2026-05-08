@@ -335,20 +335,30 @@ B 层为「无变更」时本节写「无变更（沿用 A 层）」]
 
 ### 步骤 10：自检（按 PM-VIEW-RULES §八 11 项）
 
-写完后对 PM 视图主文件逐条检查：
-- [ ] 章节顺序符合 $REPO_ROOT/templates/task.md.tmpl
-- [ ] 所有名词带完整指代前缀（§3.1）
-- [ ] 无像素值 / 颜色码 / Emoji 视觉（§3.2）
-- [ ] 无反向约束（§3.4）
-- [ ] 无组件实现名（§3.2）
-- [ ] 无设计意图解释（§3.2）
-- [ ] 抽象动词都搭配具体效果（§3.5）
-- [ ] 功能清单符合 4 列表格 + 续行 rowspan + 需求描述列内联编号（§5.1）
-- [ ] 无反引号代码引用 / 中英混杂业务词 / 数学符号（§3.8）
-- [ ] UI 骨架代码块（§📐 产物预览）内只有屏幕字（§3.10 五类反例：默认值标注 / 文档元注释 / 设计意图 / 字段口径解释 / 折叠藏默认值）
-- [ ] 需求描述列编号项过「换 UI 还成立」简则（§5.2）
+**核心原则**：自检不是打勾——同一个 brain 既写又勾会盲。机器能抓的违例由步骤 10.5 lint 兜底；本步只查 lint 抓不到的语义判断。
 
-任一项未通过 → 修复后重新自检。**重点**：§3.8 反引号、§3.10 UI 骨架元注释、§5.2 业务规则混 UI 排版是 v3.5 实证发现的高频违例区，逐条过。
+#### 10.A 机器抓不到的语义判断（必查）
+
+逐条过：
+- [ ] 章节顺序符合 $REPO_ROOT/templates/task.md.tmpl
+- [ ] 所有名词带完整指代前缀（§3.1）——单字"状态 / 列表 / 树 / 弹窗 / 操作 / 按钮"前面必须有完整指代前缀
+- [ ] 抽象动词都搭配具体效果（§3.5）——"更新 X" / "保存后生效" 必须紧跟具体内容 / 对谁生效
+- [ ] 功能清单符合 4 列表格 + 续行 rowspan + 需求描述列内联编号（§5.1）；§5.2 字段定义内联在编号项里，不另起独立表
+- [ ] **§5.2 "换 UI 还成立"判别**：每条需求描述编号项套到不同 UI 实现上还成立吗？不成立 → UI 描述，移到 §📐 产物预览或工程合同
+- [ ] **§3.10 UI 骨架代码块内只有屏幕字**——5 类反例对照（默认值标注「席位（独占，固定）」/ 文档元注释「（新增·简化版）」/ 设计意图「（已吊销，弱化）」/ 字段口径解释「（多证场景下出现）」/ 折叠藏默认值「[▸ 高级配置]」）
+- [ ] 骨架宽度 ≤ 80 字符（标准 viewport 适配；ASCII 框图模式硬约束——超出说明内容用了完整业务名而紧凑行场景不合适，改用维度简称与 task-001 池行 convention 对齐）
+
+#### 10.B v3.5 实证高频违例区（步骤 10.5 lint 会抓，但 AI 写时主动避免）
+
+| 违例类型 | 反例 | 正例 |
+|---|---|---|
+| 隐式反向（§3.4）| "行末**没有**跳转入口" / "**不出现**任何按钮" / "**不通过**抽共享组件" | 描述系统提供什么 / 管理员通过哪个入口处理；删除"没有/不出现"句 |
+| UI 排版中文词（§5.2）| "**两行紧凑形态**：**第一行**展示...**第二行**展示..." / "不展示**两列**" / "**三项**简化形态" | 列字段名（"许可证名 / 编号 / 状态 / 有效期 / 多维度数字"），让 §📐 骨架展示 layout |
+| 中英混杂业务词（§3.8）| "行展开 **breakdown**" / "**mock** 数据" / "页面 **self-contained**" | 明细 / 模拟数据 / 各自独立 |
+| URL 参数字面量（§3.8）| "URL 带 **tab=pools&view=dept** 查询参数" | "详情页直接定位到 Tab 1 额度分配视图、部门视角"——描述跳转结果而不是 query string |
+| 设计意图括号（§3.2）| "（**避免**在不可分配状态证上保留无意义入口；**为了保持一致体验**...）" | 共同理由移到 §🎯 关键产品决策 共同理由行；工程取舍移到工程合同 |
+
+**步骤 10.5 lint 输出处理**：每条 warning 必须**显式判定**——要么修，要么在 chat 里给 PM 一句话理由（"这条 warning 的反例是 X，本文档场景是 Y，因此不构成违规"）。**禁止**：默默 ack warning 进 step 12。
 
 ### 步骤 10.5：自动跑启发式 lint
 
@@ -361,7 +371,7 @@ python3 "$REPO_ROOT/.claude/scripts/check-doc-pm-view.py" \
 
 处理输出：
 - **0 errors + 0 warnings**：进入步骤 11
-- **有 warnings**：向 PM 展示，PM 决定是否修
+- **有 warnings**：每条**显式判定**——要么修，要么在 chat 里给 PM 一句话理由（"这条 warning 反例是 X，本文档场景是 Y，因此不构成违规"）。**禁止**默默 ack 进 step 12。常见合理 warning（§📦 范围 / §✅ 验收 描述 X 不出现 / §📋 编号项描述当前数据未触发某规则）已在 lint section 豁免；剩下的都是真违规候选，逐条判
 - **有 errors**：逐条修复后回到步骤 8 重写违规章节，再重跑 lint；连续 3 次 lint 仍有 error 时停下询问 PM
 - 进入步骤 11 时若仍有未修复 errors，必须**显式告知** PM 哪几条未修 + 一句话原因
 
@@ -390,9 +400,9 @@ python3 "$REPO_ROOT/.claude/scripts/task-transition.py" \
 
 工程合同 (`task-NNN-<slug>.engineering.md`) 不跑本校验（工程合同没有状态字段）。
 
-### 步骤 11：输出"推荐 review 工具"区块（不自动调任何 review）+ 派生 review-input bundle
+### 步骤 11：派生 review-input bundle + 处理 PM review 反馈
 
-按 task 类型给出推荐清单。**AI 不得自动调用任何 review skill**（I-RV1）。
+机械派生 bundle，**不**单独向 chat 输出"task 已生成"区块（合并到步骤 12）。**AI 不得自动调用任何 review skill**（I-RV1）。
 
 #### 11.0 派生 review-input bundle（落档完成后机械执行）
 
@@ -411,44 +421,11 @@ python3 .claude/scripts/build-review-input.py "<task-pm-view-file>" --review des
 python3 .claude/scripts/build-review-input.py "<task-pm-view-file>" --review eng 2>/dev/null
 ```
 
-每条命令输出 stdout 一行 bundle 绝对路径；AI 收下后塞进步骤 11 推荐区块输出。**bundle 是派生 artifact**，PM 改 PM 视图 / 工程合同后**会 stale**——见步骤 11.1 重生策略。
+每条命令输出 stdout 一行 bundle 绝对路径；AI 收下后塞进步骤 12 确认门一并输出。**bundle 是派生 artifact**，PM 改 PM 视图 / 工程合同后**会 stale**，需重跑 build-review-input.py 重派生。
 
-#### 11.1 推荐区块（业务模块 task）
+bundle 派生本身**不向 chat 输出**"task 已生成"区块——bundle 路径 + 可选 review 命令统一在步骤 12 确认门里一次给出，避免与步骤 12 摘要叠成重复复读墙（feedback_confirmation_gates.md）。
 
-```
-✅ task 文件已生成：
-  PM 视图：<task-pm-view-path>
-  工程合同：<task-engineering-path>
-
-review-input bundle（派生 artifact，已为你拼好；PM 视图 / 工程合同改动后请重跑 build-review-input.py 派生新 bundle）：
-  Eng：    .runs/review-input-<task>-eng.md
-  Design： .runs/review-input-<task>-design.md
-
-可选 review（PM 在主窗口对 bundle 跑，跑完贴结论我帮你 append 事件）：
-  /plan-eng-review     — 架构、数据流、边界、依赖合理性
-  /plan-design-review  — 交互与视觉层问题、UI 完整性
-  /autoplan            — 上述两个的批量打包
-
-跑哪几个由你决定，全跳也可以。详细 bundle 约定见 skills/_shared/REVIEW-INPUT-BUNDLE.md。
-```
-
-#### 11.2 推荐区块（基础设施 task，去掉 design）
-
-```
-✅ task 文件已生成：
-  PM 视图：<task-pm-view-path>
-  工程合同：<task-engineering-path>
-
-review-input bundle：
-  Eng： .runs/review-input-<task>-eng.md
-
-可选 review（PM 在主窗口对 bundle 跑，跑完贴结论我帮你 append 事件）：
-  /plan-eng-review     — 脚手架/共用能力的设计合理性
-
-跑哪几个由你决定，全跳也可以。
-```
-
-#### 11.3 PM 跑完 review 后的事件 append（机械记录，I-RV2）
+#### 11.1 PM 跑完 review 后的事件 append（机械记录，I-RV2）
 
 PM 在 chat 里报告"跑了 /plan-eng-review，pass，发现 N 条"之类结论后，AI 调以下命令记录事件作为审计痕迹：
 
@@ -464,7 +441,7 @@ python3 .claude/scripts/task-events.py append "<task-pm-view-file>" \
 
 **禁止**（I-RV3）：先 append 后跑、跳过 PM 直接 append、凭文档对照模拟出 review 结论。append 必须发生在 PM 明确报告结果之后。
 
-#### 11.4 PM 跑了 review 后的修改决策（仅当 PM 选择跑了）
+#### 11.2 PM 跑了 review 后的修改决策（仅当 PM 选择跑了）
 
 PM 跑完 review 决定采纳发现：
 
@@ -474,25 +451,54 @@ PM 看完不改 / 不跑 review：直接进步骤 12。事件流缺事件不阻�
 
 ### 步骤 12：展示生成结果并等待 PM 确认
 
-向 PM 展示摘要和两文件路径，不直接进入执行：
+向 PM 一次输出确认门，遵守 `feedback_confirmation_gates.md`（路径 + 一句话摘要 + A/B/C；不复读 PM 视图全文）。
+
+**业务模块 task**（输出模板）：
 
 ```
 已生成 task 详细文档：
   PM 视图：<绝对路径>
-  工程合同：<绝对路径>（hash: <前 12 字符>，可能 stale 等待 reconcile）
+  工程合同：<绝对路径>
 
-摘要：
-- Task: task-NNN-<slug>
-- 所属模块：[模块]
-- 所属模块章节：[章节]
-- 用户使用流程 / 功能清单：[N 个场景 / N 节] / 基础设施 task 为无
-- PM 反馈分流：[正向规则 X 条 / 反向约束 Y 条 / 决策记录 Z 条 / 无]
-- review：[PM 已跑 /plan-eng-review pass / 未跑 /plan-design-review / 全跳]
+摘要：<所属模块> / 功能 N 节 / PM 反馈分流 X 条 / <关键决策一句或「本 task 无新决策」>
 
-A) 确认，进入步骤 12.5 同步工程合同后推动 /task-confirm <task-pm-view-file>
-B) 我要修改 task 文档（PM 视图改 / 工程合同独立来源章节改）
-C) 放弃本次生成（两文件一起删）
+review bundle：.runs/review-input-<task>-{eng,design}.md
+可选 review：
+  /plan-eng-review     — 架构 / 数据流 / 边界 / 依赖合理性
+  /plan-design-review  — 交互 / 视觉层问题 / UI 完整性
+  /autoplan            — 两者批量打包
+
+A) 确认 / B) 修改 / C) 放弃
 ```
+
+**基础设施 task**（去掉 design bundle / design review）：
+
+```
+已生成 task 详细文档：
+  PM 视图：<绝对路径>
+  工程合同：<绝对路径>
+
+摘要：基础设施 / <一句话作用>
+
+review bundle：.runs/review-input-<task>-eng.md
+可选 review：
+  /plan-eng-review — 脚手架 / 共用能力的设计合理性
+
+A) 确认 / B) 修改 / C) 放弃
+```
+
+> 工程合同的 hash 状态（`synced_pm_view_hash` 是否与 PM 视图最新值一致 / 是否需要 reconcile）由步骤 12.5 内部处理，**不向 PM 暴露**。PM 选 A 后 AI 自动 reconcile 同步。
+
+**摘要写作约束**：
+- 一行内写完，不展开成多行 bullet
+- 字段全部派生于 PM 视图任务卡 / 功能清单 / 关键决策段，不引入新内容
+- 「PM 反馈分流 X 条」是步骤 5 三类抽取后的总条数；为 0 时写「无 PM 反馈承接」
+- 「关键决策」无新决策时直接写「本 task 无新决策」，不再列 D-编号清单
+
+**A/B/C 含义**（PM 已知，不在每次输出里复读细节）：
+- A = 确认 → 步骤 12.5 reconcile → 推 /task-confirm
+- B = 修改（PM 视图 / 工程合同独立来源章节）
+- C = 放弃（两文件一起删）
 
 PM 选 A → 进入步骤 12.5 reconcile → 完成后推 /task-confirm。
 PM 选 B → 进入"修改回流"分支：
@@ -552,7 +558,7 @@ reconcile 完成后才推：
 - 只有 PM 确认生成结果后，才推动 `/task-confirm`。
 - 基础设施 task 必须明确说明：`本 task 不触发 module 规格 merge（按 Q1 决议）`。
 - 业务模块 task 的功能清单必须能被后续 doc-update 按「所属模块章节 + 三级功能名」匹配。
-- AI 不得自动调任何 plan review skill（I-RV1）；只在步骤 11 输出推荐清单，PM 自跑。
+- AI 不得自动调任何 plan review skill（I-RV1）；只在步骤 12 确认门给出可选 review 命令清单，PM 自跑。
 - PM 报告 review 结论后才 append `plan_review_completed` 事件（I-RV3）；禁止"先 append 后跑"或凭文档对照模拟。
 - 事件流仅作审计记录（I-RV2），缺事件不阻止 task-confirm 启动；review 发现是否采纳由 PM 自行决定。
 - **PM 反馈分流强制**：抽取同模块已完成 task 的 PM 反馈时，必须按 PM-VIEW-RULES §9.4 分三类分别写入；禁止整段搬到工程合同「实现指引」。
