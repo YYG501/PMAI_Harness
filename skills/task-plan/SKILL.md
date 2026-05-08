@@ -18,7 +18,7 @@ description: |
 - **§七 章节顺序约束**（按 `$REPO_ROOT/templates/task-plan.md.tmpl`）
 - **§九 输入流约束**（必读上游 stage 文档 + 项目级文档；输入清单见下方 Required Inputs）
 
-> task-plan **不拆双文件**。它的"工程合同"成分（反模式自检结论 / 验收 GAP 索引 / 模块规格状态）压成末尾轻量"自检与状态摘要"节，附在 PM 视图末。详细论证 / autoplan 决策 / 共享数据约束等不需要长期存档，跑时输出即可。
+> 「工程合同」成分（反模式自检结论 / 验收 GAP 索引 / 模块规格状态）压在末尾 §四 自检与状态摘要节。详细论证 / autoplan 决策不长期存档，跑时输出即可。
 
 ## Preamble
 
@@ -57,6 +57,8 @@ echo "SKILL: task-plan"
 
 > **颗粒度核心规则**：一个 task = PM 能在一次原型 demo 里完整验收的功能单元。
 >
+> **验收硬约束**：必须能在原型上演示一段业务流程才算端到端验收。PM 走查代码结构 / 文档可读性 / 契约合理性 **不算**端到端验收。文档型产物（模块规格文档 / functions.md / 字段口径契约 / 范围裁剪规则）天然不满足本约束 → **不立 task**，由业务 task close 后 `/doc-update` 流程沉淀对应章节。跨 task 共享口径决策应在 stage 3-4（analysis / solution）定死，stage 5 不为此立 task。
+>
 > **业务模块 task**：一个 task 对应 1-N 条紧密相关的功能清单条目；紧密相关指同一个 user story 链条，或同一个页面区域可一次性 demo。不同 user story 链条即使在同一页面，也要拆成不同 task。
 >
 > **基础设施 task**：一个 task 对应一类完整可用的基础设施能力，例如项目脚手架、共用组件库、auth context、API client、构建配置。
@@ -69,27 +71,25 @@ echo "SKILL: task-plan"
 >
 > 1. 每个 task 必须显式声明 `所属模块`，只能是一个或多个业务模块，或 `基础设施`。
 > 2. 产出在任何业务页面/流程上直接可见时，必须归到对应业务模块。
-> 3. 只有产出不在任何业务页面/流程上直接可见，才允许标 `基础设施`。
+> 3. 只有产出不在任何业务页面/流程上直接可见，且不是文档型规格（模块规格文档 / functions.md / 字段口径契约 / 范围裁剪规则），才允许标 `基础设施`。
 > 4. 基础设施 task 验收后不沉淀进 `docs/modules/<module>.md`；如需长期记录，由 PM 决定是否写入 `docs/CONTEXT.md` / `docs/DESIGN.md`。
 >
 > 基础设施识别示例：项目脚手架、共用 Button/Modal 组件库、API client、auth context、构建配置。反例：登录页的"会话管理 hook"服务于登录流程，应归登录页/账号模块。
-
-- **原子性**：一个 task 完成一个独立的功能单元。
-- **可验收**：有明确的、端到端可验证的验收依据（不是"代码结构变好"这种过程性标准）。
-- **有序性**：task 之间有合理的执行顺序。
-- **可归属**：每个业务功能 task 必须可归属到一个模块章节，并在 `task-plan.md` 中写清 `所属模块`；基础设施 task 必须符合上方硬规则。
 
 #### 2.2 反模式（必须避免）
 
 每次拆完先按下面 5 条反照一遍，命中任何一条就合并或重构该 task：
 
-**反模式 A：纯重构前置 task**
+**反模式 A：纯前置 task（重构 / 文档 / 规格 / 契约）**
 
-> 例：为了后续 task 并行改同一大文件不冲突，先加一个"拆文件 + 引入 reducer"的纯结构 task。
+> 例 1：为了后续 task 并行改同一大文件不冲突，先加一个"拆文件 + 引入 reducer"的纯结构 task。
+> 例 2：为了让后续多个页面 task 共享字段口径与范围裁剪规则，先单独一个"写模块规格文档"task，文档写完后页面 task 才启动。
+> 例 2 变体（同样错）：把"覆盖多平台的规格文档"塞进第一个页面 task，让该 task 同时承担"页面 + 跨平台规格"两件事。
 
-- 问题：纯重构 task 没有业务验收点，却要跑完整 `/review + submit + close` 流程。
-- 判断：如果后续 task 是串行执行的，merge 冲突不存在，前置重构的理由就不成立，合并进第一个相关 functional task。
-- 如果后续 task 必须并行且冲突无法避免，优先调整方案或执行顺序，最后才考虑前置重构，并且必须明确它带有端到端行为验证点。
+- 问题：纯前置 task 不满足颗粒度核心规则的验收硬约束（无法在原型上演示业务流程），却要跑完整 `/review + submit + close` 流程。
+- 判断：
+  - **重构类前置**：后续 task 串行执行时 merge 冲突不存在，前置理由不成立，合并进首个相关业务 task。仅当后续 task 必须并行且冲突无法避免，才考虑前置，并且必须带端到端行为验证点。
+  - **文档 / 规格 / 契约类前置**：不立 task。由各业务 task close 后的 `/doc-update` 沉淀对应章节（颗粒度核心规则已说明）。
 
 **反模式 B：横切质量 task**
 
@@ -117,7 +117,7 @@ echo "SKILL: task-plan"
 > 例：task "实现产品访问管理列表页" 标 `所属模块: 基础设施`。
 
 - 问题：业务功能不沉淀进 module 规格，living doc 会残缺。
-- 判断逻辑：产出在任何业务页面/流程上直接可见，就必须归到对应业务模块；标 `基础设施` 只能用于真正横切且不可直接由业务页面验收的能力。
+- 判断：见 DX RU1（业务模块 / 基础设施判定硬规则）。
 - 典型错误示例：登录流程、列表筛选、批量导出、权限提示、详情页状态展示都不是基础设施。
 
 #### 2.3 task 数量启发式
@@ -131,7 +131,9 @@ echo "SKILL: task-plan"
 
 1. [ ] 这个 task 的验收依据是否只有"代码结构变好/重构完成"这种过程性描述？（反模式 A）
 2. [ ] 这个 task 描述的工作是否应该是其他某个 task 的验收标准的一部分？（反模式 B）
-3. [ ] 这个 task 单独跑完后，能不能独立端到端验证到业务价值？（反模式 C）
+3. [ ] 这个 task 单独跑完后，能不能由 PM 通过原型 demo 验到业务行为？（反模式 A/C）
+   - PM 走查代码结构 / 文档可读性 / 契约合理性 不算独立验证
+   - 必须能在原型上演示一段业务流程才算
 4. [ ] 这个 task 和另一个 task 改同一文件且串行，是否在 `task-plan.md` §四 自检与状态摘要里写了成本权衡结论？（反模式 D）
 5. [ ] 所有 task 的模块归属是否满足硬规则？业务功能 task 是否真的归到了业务模块章节，而不是图省事标成 `基础设施`？（反模式 E）
 
@@ -168,7 +170,6 @@ echo "SKILL: task-plan"
 - [ ] 无组件实现名
 - [ ] 无设计意图解释
 - [ ] 抽象动词都搭配具体效果
-- [ ] §四 自检与状态摘要的反模式 5 条已逐条标注
 
 任一项未通过 → 修复后重新自检。
 
@@ -199,30 +200,14 @@ python3 "$REPO_ROOT/.claude/scripts/check-doc-pm-view.py" "$ACTIVE_REQ_DIR/task-
 
 ### 步骤 6（中途重新拆分）：stage 6 发现拆分需要重做
 
-stage 6 task 子循环里，有时跑到 task-NNN 才发现 task 拆分本身有问题，需要废弃当前拆分回 stage 5 重拆。流程：
+stage 6 task 子循环里，有时跑到 task-NNN 才发现 task 拆分本身有问题，需要废弃当前拆分回 stage 5 重拆。
 
-1. **逐个 discard 待废弃 task**（任何开放态都可以）：
+被 stage-gate 重新触发本 skill 时（PM 已通过 task-transition / req-transition 完成 discard + rollback），按步骤 1-3 重新写 task-plan.md，遵守两条约束：
 
-   ```bash
-   python3 .claude/scripts/task-transition.py <task-pm-view-file> --discard --reason "<一句话>"
-   ```
+- 新增 task 编号**往后接**，不复用已废弃 task 编号
+- 在 task-plan.md §历史档案 变更记录里追加一条变更说明（写明本次重拆替代了哪些已废弃 task）
 
-   每次 discard 自动：移文件到 `tasks/discarded/`、改状态为「已废弃」、追加 `## 废弃理由` section、清理对应 task worktree + 分支、commit 到 req 分支。
-
-   边界：
-   - **`已完成` task 不能 discard**（代码已合入 req 分支）。
-   - 任何带 worktree / 未提交改动 / 未合并 commit 的 task，discard 会一并丢弃。
-   - **task 拆两文件**：discard 同时归档主文件 + .engineering.md（成对处理）。
-
-2. **回退 stage**（discard 完所有要废弃的 task 后，guardrail 自然放行）：
-
-   ```bash
-   python3 .claude/scripts/req-transition.py <req-dir> --to 5 --rollback
-   ```
-
-3. **重新拆分**：按步骤 2-3 重新写 task-plan.md。**新增 task 的编号往后接，不复用已废弃 task 的编号**。
-
-4. **task-plan.md 变更记录** section 写一条变更说明。
+discard / rollback 的具体操作流程见 `task-transition` 与 `req-stage-gate` skill，不在本 skill 复述。
 
 ## 硬禁止项
 
@@ -237,8 +222,6 @@ stage 6 task 子循环里，有时跑到 task-NNN 才发现 task 拆分本身有
 ## Rules
 
 - task 编号三位数，从 001 开始，格式 `task-001`。
-- Stage 5 只写 task-plan.md（单文件）。**不**创建 `tasks/task-NNN-*.md`（也不创建 .engineering.md）。
-- 不在本 skill 中创建或更新 `docs/modules/*.md`；模块规格由 task 验收后的 `/doc-update` 沉淀。
 - 拆完 task 必须跑步骤 2.4 自检；任何一条命中就返回 2.2 合并或重构，不能直接进入步骤 3。
 - task 总数超过 7 时，必须在 task-plan.md §四 自检与状态摘要的"结论"行里显式列出每个 task 的存在理由。
-- 单模块超过 3 个 task 时，必须在 task-plan.md §三 风险列或 §四 自检与状态摘要里写明为什么不合并。
+- 单模块超过 3 个 task 时，必须在 task-plan.md §四 自检与状态摘要里写明为什么不合并。

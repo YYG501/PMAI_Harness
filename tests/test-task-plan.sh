@@ -57,10 +57,10 @@ test_step31_attributable_and_ru1() {
   _assert_contains "$TASK_PLAN_SKILL" "#### 2.1 基本原则" "step 2.1 heading" || return
   _assert_contains "$TASK_PLAN_SKILL" "DX RU1 固定提示" "DX RU1 callout" || return
   _assert_contains "$TASK_PLAN_SKILL" "产出在任何业务页面/流程上直接可见时，必须归到对应业务模块" "business hard rule" || return
-  _assert_contains "$TASK_PLAN_SKILL" '只有产出不在任何业务页面/流程上直接可见，才允许标 `基础设施`' "infra hard rule" || return
+  _assert_contains "$TASK_PLAN_SKILL" '且不是文档型规格' "infra hard rule excludes doc-spec" || return
+  _assert_contains "$TASK_PLAN_SKILL" '才允许标 `基础设施`' "infra hard rule keyword" || return
   _assert_contains "$TASK_PLAN_SKILL" "基础设施识别示例：项目脚手架、共用 Button/Modal 组件库、API client、auth context、构建配置" "infra examples" || return
-  _assert_contains "$TASK_PLAN_SKILL" "可归属" "attributable principle" || return
-  _assert_contains "$TASK_PLAN_SKILL" '每个业务功能 task 必须可归属到一个模块章节' "module chapter attribution" || return
+  _assert_contains "$TASK_PLAN_SKILL" '每个 task 必须显式声明 `所属模块`' "module chapter attribution (DX RU1 #1)" || return
 
   pass_test
 }
@@ -70,7 +70,7 @@ test_step32_antipattern_e() {
 
   _assert_contains "$TASK_PLAN_SKILL" "#### 2.2 反模式（必须避免）" "step 2.2 heading" || return
   _assert_contains "$TASK_PLAN_SKILL" "反模式 E：业务功能 task 没有模块归属" "anti-pattern E heading" || return
-  _assert_contains "$TASK_PLAN_SKILL" "判断逻辑：产出在任何业务页面/流程上直接可见" "anti-pattern E judgment" || return
+  _assert_contains "$TASK_PLAN_SKILL" "判断：见 DX RU1" "anti-pattern E judgment cross-ref" || return
   _assert_contains "$TASK_PLAN_SKILL" "典型错误示例：登录流程、列表筛选、批量导出、权限提示、详情页状态展示都不是基础设施" "anti-pattern E examples" || return
 
   pass_test

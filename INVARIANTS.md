@@ -6,6 +6,26 @@
 
 ---
 
+## 主索引（速查）
+
+按字母前缀分组，共 60 条不变量。详细定义见下方对应 section。
+
+| 前缀 | 出处 section | 范围 | 一句话主旨 |
+|---|---|---|---|
+| **I-G** (1-5) | [通用](#通用不变式所有脚本共享) | 全局 | 半完成防御 / 错误吞掉禁止 / 前置条件 / 归档 commit / 写检查 |
+| **I-CT** (1-8) | [close-task.sh](#close-tasksh) | task close 流程 | 状态/前置/merge/归档顺序 + 事件流证明状态机推进（CT7-8） |
+| **I-CR** (1-9) | [close-req.sh](#close-reqsh) | req close 流程 | stage 7 / task 全闭 / merge main 顺序 + ancestor 验证 |
+| **I-CA** (1-6) | [cancel-req.sh](#cancel-reqsh) | req 废弃流程 | 不 merge main / 全 task 先清 / 幂等 |
+| **I-CB** (1-8, 10) | [check-branch.sh](#check-branchsh) | PreToolUse hook | 路径归一化 / 白名单 / fail-closed / read-only + task 状态硬 gate（CB10） |
+| **I-AD** (1-5) | [exec-adapters](#exec-adaptersshcodexsh--cursor-agentsh) | 外部执行器 | 启动前状态校验 / diff 范围 / clean dispatch（AD5） |
+| **I-RV** (1-3) | [review 工具](#review-工具推荐而非强制) | review 推荐 | AI 不自跑 / 事件不当 gate / 不 fake append |
+| **I-TT** (1-3,5-7) | [task-transition.py](#task-transitionpy) | task 状态转换 | 2 主转换 + 1 失败回退 / D0 并行 / 原子性 |
+| **I-RT** (1-8) | [req-transition.py](#req-transitionpy) | req stage 转换 | 逐级推进 / stage 3-4 可跳 / stage 7 不可回退 |
+
+> **已废弃**：~~I-TT4~~（打回不切状态，详见 §I-TT1）；~~I-PR1~~（旧 plan-review hard gate，被 I-RV2 撤销）。
+
+---
+
 ## 通用不变式（所有脚本共享）
 
 - **I-G1**：任何多步操作，中间任一步失败都不能留下"半完成状态"。要么完全成功，要么可以安全重试

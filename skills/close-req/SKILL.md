@@ -100,18 +100,58 @@ echo "SKILL: close-req"
 - 步骤 1.5 是 v2 重做场景的**主路径**（多 task 半 close）；**单 req 内无 SKIP marker → 步骤 1.5 silent skip 进 2a**
 - 不要在本步骤直接修改任何 task md 内容——marker 状态由 doc-update SKILL 在 rewrite/patch 完成时回写
 
-### 步骤 2a：产出 req 级 PRD（必做）
+### 步骤 2a：产出 req 级 PRD（按 doc-update 覆盖度判断）
 
-调用 `/prd-writing` 产出 `$ACTIVE_REQ_DIR/prd.md`（req 级 PRD，本 req 范围一次性产物，定稿后不再修订）。
+#### 2a.1 自动检测 doc-update 覆盖度
 
-**这一步无条件做**——req 级 PRD 描述的是"本 req 范围内做了什么、为谁做、怎么验收"，不管 req 性质是产品功能、文档基础设施还是重构，本 req 都有自己的范围需要规格化。如果 PM 明确说本 req 不需要 req 级 PRD（例如极小的 hotfix），需要在 close-report.md「文档变更」section 显式记录跳过理由。
+调用前先检测本 req 周期内 task doc-update 是否已经把规格沉淀完整：
 
-### 步骤 2b：增量同步项目主 PRD（按需）
+```bash
+# 1. req 分支周期内改过 docs/prd.md 与 docs/modules/*/functions.md 的 commits
+COVERAGE_COMMITS=$(git -C "$REPO_ROOT" log --oneline \
+  $(git merge-base "$REQ_BRANCH" main).."$REQ_BRANCH" \
+  -- 'docs/prd.md' 'docs/modules/' 2>/dev/null | wc -l | tr -d ' ')
 
-判断本 req 是否对产品功能有变化（新增模块 / 已有模块扩展 / 角色变更 / 路线推进）。
+# 2. 本 req 各 task 的 SKIP_DOC_UPDATE marker 数（cleanup_status="pending" 还在的）
+SKIP_PENDING=$(grep -l 'cleanup_status="pending"' "$ACTIVE_REQ_DIR/tasks/"*.md 2>/dev/null | wc -l | tr -d ' ')
+TASK_COUNT=$(ls "$ACTIVE_REQ_DIR/tasks/"*.md 2>/dev/null | grep -v engineering | wc -l | tr -d ' ')
 
-- **有变化**：调用 `/project-prd-update`，从步骤 2a 产出的 req 级 PRD 增量并入 `docs/prd.md`。
-- **无变化**（纯文档基础设施 / 纯重构 / 纯 bugfix）：跳过，并在 close-report.md「文档变更」section 写一行说明（如"本 req 是文档基础设施增强，未改产品功能，docs/prd.md 不更新"）。
+echo "doc-update 覆盖：$COVERAGE_COMMITS commits 改过 docs/{prd.md, modules/}"
+echo "task SKIP marker pending: $SKIP_PENDING / $TASK_COUNT"
+```
+
+#### 2a.2 按覆盖度走默认路径
+
+| 检测结果 | 默认推荐 | 含义 |
+|---|---|---|
+| `COVERAGE_COMMITS >= TASK_COUNT` 且 `SKIP_PENDING == 0` | **默认 B（跳过）** | 全部 task 都 doc-update 沉淀进 docs/prd.md / modules，再写一份 req 级 prd.md 是冗余 |
+| `COVERAGE_COMMITS > 0` 但有 SKIP_PENDING | **默认 C（部分跳过 + 补差）** | 部分 task 已沉淀，未沉淀的需要在 req 级 prd.md 补 |
+| `COVERAGE_COMMITS == 0` | **默认 A（必跑）** | 没有 task 把内容沉淀进项目级文档，req 级 prd.md 是唯一规格记录 |
+
+向 PM 呈交检测结果 + 三选项（带默认推荐）：
+
+```
+📊 doc-update 覆盖度检测：
+  - req 周期内 docs/prd.md + docs/modules/ 累计 X commits
+  - task SKIP marker pending: Y / N
+  - 默认推荐：[A/B/C]（理由：...）
+
+A) 跑 /prd-writing（写完整 req 级 prd.md）
+B) 跳过（已被 task doc-update 覆盖；自动在 close-report.md 写"req 级 PRD 已通过 task doc-update 沉淀"）
+C) 跑 /prd-writing 但只补差（输入 prompt 含"docs/prd.md 已包含 X，重点写未沉淀的 Y/Z"）
+```
+
+PM 默认接受推荐时直接跑该路径；PM 显式选择其他选项时按所选执行。**任何选项都不需要 PM 写理由**——A/B/C 都是合规路径，差异在产物详细度，不需要决策成本。
+
+### 步骤 2b：增量同步项目主 PRD（按 step 2a 决议链推进）
+
+| step 2a 决议 | step 2b 默认行为 |
+|---|---|
+| **A**（写完整 req 级 prd.md） | 调 `/project-prd-update` 把 req 级 prd.md 增量并入 `docs/prd.md` |
+| **B**（跳过 step 2a） | 默认跳过 step 2b（task doc-update 已经直接改 docs/prd.md，再调 /project-prd-update 是 no-op）；在 close-report 写"项目主 PRD 已通过 task doc-update 直接同步" |
+| **C**（补差模式） | 调 `/project-prd-update`，输入 prompt 含"step 2a 仅补 Y/Z 部分，请只 reconcile 这两部分" |
+
+同样不需要 PM 写跳过理由——决议链由 step 2a 自动推导。
 
 ### 步骤 2c：检查 req 级实现深度变更，提示 PM 是否同步项目级（4.5d.3）
 
