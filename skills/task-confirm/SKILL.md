@@ -13,7 +13,7 @@ description: |
 
 ## 拆两文件约定（必读）
 
-本 skill 处理拆两文件的 task 产物（PM-VIEW-RULES §二）：
+本 skill 处理拆两文件的 task 产物（`_shared/PM-VIEW-RULES.md` §二）：
 - **PM 视图主文件**（`.md`）：PM 决策、功能清单、范围、验收清单 — 本 skill 主要读取与展示对象
 - **工程合同**（`.engineering.md`）：实现细节、易错点、plan-review 沉淀、启动前必读 — 本 skill 仅做"成对存在"校验，不解析内容
 

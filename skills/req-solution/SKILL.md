@@ -16,13 +16,11 @@ description: |
 
 ## PM 视图规则（必读）
 
-本 skill 生成的文档须遵守 `skills/_shared/PM-VIEW-RULES.md`。
-特别注意：
-- **§三 PM 视图写作规则**（明确指代 / 正向描述 / 禁工程词 / 禁像素颜色 / 禁反向约束）
-- **§六 关键产品决策格式**（solution.md 必填章节）
-- **§七 章节顺序约束**（按 `$REPO_ROOT/templates/solution.md.tmpl` 锁定的 13 章 PM 视图 + `$REPO_ROOT/templates/solution.engineering.md.tmpl` 的 10 章工程合同）
-- **§九 输入流约束**（必读上游 stage 文档 + 项目级文档；输入清单见下方 Required Inputs）
-- **§9.6 双文件 lazy sync**：首次生成两文件 + hash；PM 中途修改只动 PM 视图；stage-gate gate 通过时调本 skill 的 reconcile 模式做对齐
+本 skill 生成的文档须遵守 `skills/_shared/PM-VIEW-RULES.md`（主索引）。具体读以下子文件：
+- `_shared/pm-view/writing-rules.md`（§三 写作规则：明确指代 / 正向描述 / 禁工程词 / 禁像素颜色 / 禁反向约束）
+- `_shared/PM-VIEW-RULES.md` §六（关键产品决策格式 — solution.md 必填章节）
+- `_shared/pm-view/section-order.md`（§七 章节顺序：按 `$REPO_ROOT/templates/solution.md.tmpl` 锁定 13 章 PM 视图 + `solution.engineering.md.tmpl` 10 章工程合同）
+- `_shared/pm-view/input-flow.md` §9.1 / §9.6（输入流 + 双文件 lazy sync — 首次生成两文件 + hash；PM 中途修改只动 PM 视图；stage-gate gate 通过时调本 skill 的 reconcile 模式对齐）
 
 ## Preamble
 
@@ -46,7 +44,7 @@ echo "SKILL: req-solution"
 
 > **注意**：stage 3 没有强制 reviewer（不像 stage 2 的 analysis-reviewer）。stage 3 的 review 走 PM 自跑模式（/plan-ceo-review 等，由 stage-gate 输出推荐区块）。Discovery 阶段如果 PM 没回答关键缺口，不要硬写方案。
 
-## 调用模式（PM-VIEW-RULES §9.6）
+## 调用模式（_shared/pm-view/input-flow.md §9.6）
 
 本 skill 有三种调用模式，由 stage-gate / 当前文件状态决定（步骤 1.5 显式判别）：
 
@@ -58,17 +56,21 @@ echo "SKILL: req-solution"
 
 ## Required Inputs
 
-按 `PM-VIEW-RULES.md §9.1` 中 **Stage 4 req-solution** 段执行（first-gen / revise / reconcile 三模式 + PM 视图 / 工程合同两文件分别列）。
+按 `_shared/pm-view/input-flow.md` 中 **Stage 4 req-solution** 段执行（first-gen / revise / reconcile 三模式 + PM 视图 / 工程合同两文件分别列）。
 
 特别遵守：
-- §9.3.1 prototype 读取强约束（>500 行禁整文件 Read）
-- §9.7 跨 skill 共享原则原则 1（PM 视图链路不读 .engineering.md）
+- `input-flow.md` §9.3.1 prototype 读取强约束（>500 行禁整文件 Read）
+- `_shared/pm-view/cross-skill.md` 第 1 条（PM 视图链路不读 .engineering.md）
 
 ## Workflow
 
-### 步骤 0：读 PM-VIEW-RULES.md（强制）
+### 步骤 0：读 PM 视图规则子文件（强制）
 
-打开 `skills/_shared/PM-VIEW-RULES.md`，重点理解 §三 / §六 / §七 / §九（含 §9.6 双文件 lazy sync）。
+打开以下子文件（一次会话只读 1 次，跨步骤不重读）：
+- `skills/_shared/pm-view/writing-rules.md`（§三 写作规则）
+- `skills/_shared/PM-VIEW-RULES.md` §六（关键产品决策格式）
+- `skills/_shared/pm-view/section-order.md`（§七 章节顺序）
+- `skills/_shared/pm-view/input-flow.md`（§九 输入流，含 §9.6 双文件 lazy sync）
 
 ### 步骤 1：读取所有必读输入
 
@@ -193,7 +195,7 @@ PM_VIEW_HASH=$(shasum -a 256 "$ACTIVE_REQ_DIR/solution.md" | cut -c1-12)
 
 写完后核对工程合同顶部 `<!-- synced_pm_view_hash: <12 字符> -->` 注释存在且与 PM 视图实际 hash 一致。
 
-### 步骤 5：自检（按 PM-VIEW-RULES §八 8 项）
+### 步骤 5：自检（按 `_shared/pm-view/checklist.md` §八 12 项）
 
 写完后逐条检查 solution.md：
 

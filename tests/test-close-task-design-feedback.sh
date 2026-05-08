@@ -15,7 +15,7 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 source "$SCRIPT_DIR/helpers/assert.sh"
 
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
-PM_VIEW_RULES="$REPO_ROOT/skills/_shared/PM-VIEW-RULES.md"
+PM_VIEW_RULES="$REPO_ROOT/skills/_shared/pm-view/input-flow.md"
 TASK_TMPL="$REPO_ROOT/templates/task.md.tmpl"
 CLOSE_TASK_SKILL="$REPO_ROOT/skills/close-task/SKILL.md"
 
@@ -40,7 +40,7 @@ test_pm_view_rules_design_consumer_is_close_task() {
   start_test "PM-VIEW-RULES §9.4 视觉规范的消费者是 close-task"
   # 提取 §9.4 section
   local section
-  section=$(awk '/^### 9.4/{flag=1; next} /^### /{flag=0} flag' "$PM_VIEW_RULES")
+  section=$(awk '/^## 9.4/{flag=1; next} /^## /{flag=0} flag' "$PM_VIEW_RULES")
   if ! echo "$section" | grep -q "视觉规范.*close-task\|close-task.*视觉规范"; then
     if ! echo "$section" | grep -q "视觉规范"; then
       _fail "§9.4 缺视觉规范行"
@@ -58,7 +58,7 @@ test_pm_view_rules_design_consumer_is_close_task() {
 test_pm_view_rules_design_target_is_design_md() {
   start_test "PM-VIEW-RULES §9.4 视觉规范写入位置是 docs/DESIGN.md"
   local section
-  section=$(awk '/^### 9.4/{flag=1; next} /^### /{flag=0} flag' "$PM_VIEW_RULES")
+  section=$(awk '/^## 9.4/{flag=1; next} /^## /{flag=0} flag' "$PM_VIEW_RULES")
   if ! echo "$section" | grep -q "DESIGN\.md\|docs/DESIGN"; then
     _fail "§9.4 视觉规范条目应指向 docs/DESIGN.md"
     return
@@ -69,7 +69,7 @@ test_pm_view_rules_design_target_is_design_md() {
 test_pm_view_rules_forbids_into_negative_constraint() {
   start_test "PM-VIEW-RULES §9.4 含禁止「视觉规范塞反向约束」反模式"
   local section
-  section=$(awk '/^### 9.4/{flag=1; next} /^### /{flag=0} flag' "$PM_VIEW_RULES")
+  section=$(awk '/^## 9.4/{flag=1; next} /^## /{flag=0} flag' "$PM_VIEW_RULES")
   if ! echo "$section" | grep -q "视觉规范.*反向约束\|塞.*反向约束\|塞到.*易错点"; then
     _fail "§9.4 应禁止把视觉规范类反馈塞到反向约束 / 工程合同 §6 易错点"
     return

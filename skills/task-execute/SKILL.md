@@ -16,7 +16,7 @@ description: |
 
 ## 拆两文件约定（必读）
 
-本 skill 处理拆两文件的 task 产物（PM-VIEW-RULES §二）：
+本 skill 处理拆两文件的 task 产物（`_shared/PM-VIEW-RULES.md` §二）：
 - **PM 视图主文件**（`.md`）：📌 任务卡 / 🎯 关键产品决策 / 📐 产物预览 / 📋 功能清单 / 🚦 跨功能产品规则 / 📦 范围 / ✅ 验收清单 / 📁 历史档案（执行日志、PM 反馈）
 - **工程合同**（`.engineering.md`）：§1 元信息扩展（executor / model）/ §2 状态转换说明 / §3 启动前必读（agent 必读文件清单）/ §4 功能清单工程版 / §5 实现指引 / §6 易错点 / §7 plan-review 沉淀 / §8 视觉细则 / §9 工程层验收清单 / §10 文档偏差 / §11 自审记录
 
@@ -280,7 +280,7 @@ fi
 - 参考源码（如列表中有已有页面/组件源码，理解其组件结构和布局模式）
 - 同模块已完成 task 的 PM 视图 + 工程合同（**两文件都读**，复用经验、避免重复）
 
-> **prototype 读取例外**（PM-VIEW-RULES §9.3.1）：task-execute 步骤 2.1 读 prototype 是**实现参考**（写新页面"长一样"），需要全局结构感 → **保留全文 Read**，**不应用** §9.3.1 反向校验 grep 强约束。
+> **prototype 读取例外**（`_shared/pm-view/input-flow.md` §9.3.1）：task-execute 步骤 2.1 读 prototype 是**实现参考**（写新页面"长一样"），需要全局结构感 → **保留全文 Read**，**不应用** §9.3.1 反向校验 grep 强约束。
 > §9.3.1 仅适用于反向校验场景（req-solution / task-plan / task-spec / prd-writing 读 prototype 时反向校验上游文档描述）。task-execute 是写代码，不是反向校验。
 
 **硬软分离原则：** 功能清单定义"做什么"（不可偏离），实现指引建议"怎么做"（可灵活调整）。在满足功能行为和设计系统约束的前提下，追求最好的视觉效果和交互体验。
@@ -305,293 +305,16 @@ if [ "$CURRENT_STATUS" != "执行中" ]; then
 fi
 ```
 
-#### 3a. Lock + manual 幂等重入
+#### 3a-3e + claude-code 主流程：详见 `references/executor-dispatch.md`
 
-```bash
-TASK_ID=$(basename "$TASK_FILE" .md | sed -E 's/^(task-[0-9]+).*/\1/')
-LOCK_DIR="$MAIN_REPO_ROOT/.runs/.lock-${TASK_ID}"
+完整 dispatch / 越界保护 / 回滚函数 / 诊断文案 / claude-code 执行者主流程见 [`references/executor-dispatch.md`](./references/executor-dispatch.md)：
 
-if ! mkdir "$LOCK_DIR" 2>/dev/null; then
-  echo "❌ 另一个 /task-execute 正在运行 Task-${TASK_ID}。如确定没有，手动删除 $LOCK_DIR 后重试。" >&2
-  exit 1
-fi
-trap 'rmdir "$LOCK_DIR" 2>/dev/null || true' EXIT
-
-PENDING_FILE="$MAIN_REPO_ROOT/.runs/.pending-manual-${TASK_ID}.json"
-
-if [ -f "$PENDING_FILE" ]; then
-  BASELINE_SHA=$(jq -r .baseline_sha "$PENDING_FILE")
-  STARTED_AT=$(jq -r .started_at "$PENDING_FILE")
-
-  echo "✓ 检测到 Task-${TASK_ID} 的 manual 续跑标记（since $STARTED_AT）。"
-  echo "  将保留 $TASK_WORKTREE 的现有改动，不会重新调用任何执行器。"
-  echo "  先跑 preflight，通过后直接进入自审阶段（step 4）。"
-  echo ""
-
-  # Preflight：scope 越界校验由 _gate.sh adapter_postcheck 在 dispatch 路径承担；
-  # manual resume 路径不经 adapter，scope 校验降级为「PM 自负责」+ 下面的执行日志检查兜底。
-
-  # 检查执行日志和文档偏差 section 已填
-  if ! grep -q '^### 执行报告' "$TASK_FILE"; then
-    echo "⚠️ 请先在 task 文件「执行日志」section 记录你做了什么（见模板 ### 执行报告 格式），再重跑 /task-execute。"
-    echo "  pending 标记保留。"
-    exit 1
-  fi
-
-  # 通过 → 删标记，追加事件，进 step 4
-  rm -f "$PENDING_FILE"
-  python3 "$MAIN_REPO_ROOT/.claude/scripts/task-events.py" append "$TASK_FILE" \
-    --type execution_manual_completed
-  # 跳到 step 4（不 exec adapter，不记 execution_started）
-  MANUAL_RESUME=1
-fi
-```
-
-若 `MANUAL_RESUME=1`，跳过 3b/3c/3d 直接进 step 4。
-
-#### 3b. 正常 dispatch
-
-```bash
-if [ -z "${MANUAL_RESUME:-}" ]; then
-  # I-AD5: Pre-dispatch checkpoint gate — task worktree 必须 clean
-  # Why: codex / cursor-agent 的 stop 是软停，已派发的 sandbox shell 子进程会延迟落盘
-  #      可能覆盖手改但没 commit 的文件；失败回滚基线是 HEAD，未 commit 改动会被 restore 清掉。
-  # 故意不走 adapter 失败路径（不 rollback、不 --fail-execution），处理权交还 PM。
-  DIRTY=$(git -C "$TASK_WORKTREE" status --porcelain 2>/dev/null)
-  if [ -n "$DIRTY" ]; then
-    echo "" >&2
-    echo "❌ /task-execute 拒绝 dispatch：task worktree 有未 commit 改动（I-AD5）。" >&2
-    echo "" >&2
-    echo "原因：codex / cursor-agent 的 stop 是软停，已派发的 sandbox shell 子进程会延迟落盘，" >&2
-    echo "可能覆盖你刚手改但没 commit 的文件。失败回滚基线是 HEAD，未 commit 的手改会被 restore 清掉。" >&2
-    echo "" >&2
-    echo "task worktree: $TASK_WORKTREE" >&2
-    echo "现状：" >&2
-    git -C "$TASK_WORKTREE" status --short >&2
-    echo "" >&2
-    echo "处理（任选一种后重跑 /task-execute）：" >&2
-    echo "  保留改动：cd \"$TASK_WORKTREE\" && git add -A && git commit -m 'pre-execute checkpoint: <一句话>'" >&2
-    echo "  丢弃改动：cd \"$TASK_WORKTREE\" && git restore . && git clean -fd" >&2
-    echo "" >&2
-    echo "注意：本次 task 状态保留为「执行中」，不回退、不 rollback worktree。" >&2
-    exit 1
-  fi
-
-  # Resolve executor + model
-  RESOLVED=$(python3 "$MAIN_REPO_ROOT/.claude/scripts/resolve-executor.py" "$TASK_FILE")
-  EXECUTOR=$(echo "$RESOLVED" | jq -r .executor)
-  EXECUTOR_MODEL=$(echo "$RESOLVED" | jq -r '.model // ""')
-
-  # Build prompt
-  PROMPT_FILE=$(mktemp)
-  python3 "$MAIN_REPO_ROOT/.claude/scripts/build-execution-prompt.py" "$TASK_FILE" > "$PROMPT_FILE"
-
-  # Baseline SHA（I-AD5 保证此时 working tree == HEAD）
-  BASELINE_SHA=$(git -C "$TASK_WORKTREE" rev-parse HEAD)
-
-  # Event
-  python3 "$MAIN_REPO_ROOT/.claude/scripts/task-events.py" append "$TASK_FILE" \
-    --type execution_started \
-    --payload "{\"executor\":\"$EXECUTOR\",\"model\":\"$EXECUTOR_MODEL\",\"baseline_sha\":\"$BASELINE_SHA\"}"
-
-  LOG_PATH="$MAIN_REPO_ROOT/.runs/execution-${TASK_ID}-${EXECUTOR}.log"
-  mkdir -p "$MAIN_REPO_ROOT/.runs"
-
-  # Dispatch
-  if [ "$EXECUTOR" = "claude-code" ]; then
-    # 走下面「claude-code 执行者的主流程」——当前 Claude 实例自己实现
-    # Prompt 已写到 $PROMPT_FILE，Claude 应读它理解执行边界
-    echo "✓ executor=claude-code，当前 Claude 实例继续执行。Prompt: $PROMPT_FILE"
-  elif [ "$EXECUTOR" = "manual" ]; then
-    MAIN_REPO_ROOT="$MAIN_REPO_ROOT" \
-    TASK_FILE="$TASK_FILE" \
-    TASK_WORKTREE="$TASK_WORKTREE" \
-    PROMPT_FILE="$PROMPT_FILE" \
-    EXECUTOR_MODEL="$EXECUTOR_MODEL" \
-      bash "$MAIN_REPO_ROOT/.claude/scripts/exec-adapters/manual.sh"
-    exit 0  # manual 已写 pending，skill 结束
-  else
-    # codex / cursor-agent
-    ADAPTER="$MAIN_REPO_ROOT/.claude/scripts/exec-adapters/${EXECUTOR}.sh"
-    if [ ! -x "$ADAPTER" ]; then
-      echo "❌ 找不到 adapter: $ADAPTER" >&2
-      python3 "$MAIN_REPO_ROOT/.claude/scripts/task-transition.py" "$TASK_FILE" \
-        --fail-execution --reason "adapter_missing"
-      exit 1
-    fi
-    MAIN_REPO_ROOT="$MAIN_REPO_ROOT" \
-    TASK_FILE="$TASK_FILE" \
-    TASK_WORKTREE="$TASK_WORKTREE" \
-    PROMPT_FILE="$PROMPT_FILE" \
-    EXECUTOR_MODEL="$EXECUTOR_MODEL" \
-      bash "$ADAPTER" > "$LOG_PATH" 2>&1
-    EXIT_CODE=$?
-    # 超 10 分钟会被 Bash tool timeout。如果遇上，改用：
-    #   bash .claude/scripts/run-bg.sh "$LOG_PATH" bash "$ADAPTER"
-    # 然后 Claude 用 **Bash run_in_background**（不是 Monitor —— Monitor 默认 5min 超时
-    # 会被静默 cut）起一个 waiter，同时兜「正常退」和「卡死」两条信号：
-    #   until [ -f "$LOG_PATH.exit" ] || [ -f "$LOG_PATH.stall" ]; do sleep 60; done
-    #   if [ -f "$LOG_PATH.stall" ]; then echo "STALLED at $(cat "$LOG_PATH.stall")"
-    #   else echo "exit_code=$(cat "$LOG_PATH.exit")"; fi
-    # run-bg.sh 自带 watchdog（默认 180s 无 log 增长 → 写 .stall，不杀子进程）。
-    # waiter 输出 STALLED → 进程仍在跑，处理权交 PM（杀 / 等 / 转 manual）。
-    # 这是逃生路径，不是默认模式。
-
-    if [ "$EXIT_CODE" -ne 0 ]; then
-      CLASSIFICATION=$(bash "$MAIN_REPO_ROOT/.claude/scripts/classify-failure.sh" "$EXIT_CODE" "$LOG_PATH")
-      rollback_worktree "$BASELINE_SHA"  # 见 3c 回滚函数
-      python3 "$MAIN_REPO_ROOT/.claude/scripts/task-events.py" append "$TASK_FILE" \
-        --type execution_failed \
-        --payload "{\"executor\":\"$EXECUTOR\",\"model\":\"$EXECUTOR_MODEL\",\"exit_code\":$EXIT_CODE,\"classification\":\"$CLASSIFICATION\",\"log_path\":\"$LOG_PATH\"}"
-      python3 "$MAIN_REPO_ROOT/.claude/scripts/task-transition.py" "$TASK_FILE" \
-        --fail-execution --reason "$CLASSIFICATION"
-      output_diagnostic "$CLASSIFICATION" "$EXECUTOR" "$LOG_PATH" "$TASK_FILE"
-      exit 0
-    fi
-  fi
-fi
-```
-
-#### 3c. 越界写保护 + 回滚函数
-
-```bash
-# 回滚函数（失败路径或越界时调用）
-rollback_worktree() {
-  local baseline="$1"
-  cd "$TASK_WORKTREE"
-  # Tracked changes: restore from baseline
-  git status --porcelain -z | \
-    while IFS= read -r -d '' line; do
-      local status="${line:0:2}"
-      local path="${line:3}"
-      case "$status" in
-        "??")  rm -rf "$path" ;;                                   # untracked
-        *)     git restore --source="$baseline" --worktree --staged -- "$path" ;;
-      esac
-    done
-}
-
-if [ -z "${MANUAL_RESUME:-}" ]; then
-  # 越界检查：收集改动、分类、按 allowlist 过滤
-  cd "$TASK_WORKTREE"
-  BAD_FILES=""
-  while IFS= read -r path; do
-    [ -z "$path" ] && continue
-    # gitignore matched → skip (生成物)
-    if git check-ignore -q "$path" 2>/dev/null; then continue; fi
-    # Check against task allowlist (implementation detail: parse-task-scope.py or inline)
-    # MVP: allow anything not under docs/ unless explicitly listed in task's 执行范围
-    if [[ "$path" == docs/* ]]; then
-      # docs/ must be explicitly in task allowlist
-      if ! grep -qE "^\s*-\s*(新建|修改)：.*$path" "$TASK_FILE"; then
-        BAD_FILES="$BAD_FILES $path"
-      fi
-    fi
-  done < <(git status --porcelain | awk '{print $2}')
-
-  if [ -n "$BAD_FILES" ]; then
-    rollback_worktree "$BASELINE_SHA"
-    python3 "$MAIN_REPO_ROOT/.claude/scripts/task-events.py" append "$TASK_FILE" \
-      --type execution_failed \
-      --payload "{\"reason\":\"boundary_violation\",\"bad_files\":\"$BAD_FILES\"}"
-    python3 "$MAIN_REPO_ROOT/.claude/scripts/task-transition.py" "$TASK_FILE" \
-      --fail-execution --reason "boundary_violation"
-    output_diagnostic "boundary_violation" "$EXECUTOR" "$LOG_PATH" "$TASK_FILE"
-    exit 0
-  fi
-
-  # 3d. 零改动检查
-  CHANGE_COUNT=$(git status --porcelain | wc -l | tr -d ' ')
-  if [ "$CHANGE_COUNT" -eq 0 ]; then
-    python3 "$MAIN_REPO_ROOT/.claude/scripts/task-events.py" append "$TASK_FILE" \
-      --type execution_failed \
-      --payload "{\"reason\":\"no_changes\"}"
-    python3 "$MAIN_REPO_ROOT/.claude/scripts/task-transition.py" "$TASK_FILE" \
-      --fail-execution --reason "no_changes"
-    output_diagnostic "no_changes" "$EXECUTOR" "$LOG_PATH" "$TASK_FILE"
-    exit 0
-  fi
-
-  python3 "$MAIN_REPO_ROOT/.claude/scripts/task-events.py" append "$TASK_FILE" \
-    --type execution_completed \
-    --payload "{\"executor\":\"$EXECUTOR\",\"model\":\"$EXECUTOR_MODEL\"}"
-fi
-```
-
-#### 3e. 诊断文案函数
-
-```bash
-output_diagnostic() {
-  local classification="$1" executor="$2" log="$3" task="$4"
-  local stage="adapter 启动"
-  local suggest=""
-  case "$classification" in
-    sandbox_denied)
-      stage="adapter 启动"
-      suggest="检查 ~/.codex/config.toml 的 sandbox_mode（应为 workspace-write），或改用 executor=cursor-agent / manual"
-      ;;
-    model_not_found)
-      stage="执行器启动"
-      suggest="检查 task 文件 **executor_model：** 字段，或清空让 settings 默认生效"
-      ;;
-    network)
-      stage="执行中"
-      suggest="网络 / rate limit 问题，稍等重试，或换执行者"
-      ;;
-    boundary_violation)
-      stage="执行后越界检查"
-      suggest="检查 task 「执行范围」字段，确认允许写入清单是否漏列了合法路径"
-      ;;
-    no_changes)
-      stage="执行完成"
-      suggest="执行器退 0 但 worktree 无改动。可能 prompt 被误解为"只分析"——检查 build-execution-prompt 输出"
-      ;;
-    *)
-      suggest="查看日志诊断"
-      ;;
-  esac
-
-  cat <<EOM
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Task 执行失败，已回退到「待确认」。
-
-执行者：$executor
-失败阶段：$stage
-分类：$classification
-日志：$log
-
-下一步可直接选一项：
-1. 同执行者重试（修根因后）：
-   $suggest
-   /task-confirm $task
-
-2. 改用其它执行者：
-   编辑 $task，修改 **executor：** 字段后
-   /task-confirm $task
-
-3. 搁置：
-   /task-status 查看其它待办
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-EOM
-}
-```
-
----
-
-**claude-code 执行者的主流程**（当 executor=claude-code 走这里，当前 Claude 实例执行）：
-
-**实现前必做（UI 类 task）：**
-- 读 `$PROMPT_FILE` 获取完整执行契约（允许/禁止写入、验收标准、写回职责）
-- 用 Glob 扫描项目中的页面和组件目录，了解已有哪些组件和页面
-- 如果要实现的功能与已有页面类似（如列表页、表单页），先读取该页面源码，复用其布局和组件
-- 优先 import 已有组件，不要重写功能相同的组件
-- 遵循已有代码的样式模式和目录约定
-
-- 新建文件按执行范围创建
-- 修改文件按执行范围修改
-- 不动的文件不要碰
-- **禁止 git add / git commit**（commit 由 step 10 统一做）
+- 3a. Lock + manual 幂等重入
+- 3b. 正常 dispatch（含 I-AD5 pre-dispatch checkpoint gate / executor 解析 / adapter 调用 / 失败分类 + 回滚）
+- 3c. 越界写保护 + `rollback_worktree` 函数
+- 3d. 零改动检查（`CHANGE_COUNT == 0` → fail-execution）
+- 3e. `output_diagnostic` 诊断文案函数（按 classification 给修复指引）
+- claude-code 执行者主流程（实现前必做：读 PROMPT_FILE / 扫已有组件 / 复用 / 禁 git commit）
 
 ### 反馈循环规则（task-submit 打回后重新进入）
 
@@ -622,7 +345,7 @@ EOM
 
 6. **AI 何时主动问 PM**：仅当**实现歧义阻塞**时（PM 反馈描述模糊到无法实施，例如"两列怎么合"），用 AskUserQuestion 问澄清细节。**不问**"文档要怎么改"——文档对齐不是反馈循环的事。
 
-7. **PM 反馈本身的记录**：依然按步骤 12「PM 说"打回"」path 把反馈记入「📁 历史档案 → PM 反馈」并按 PM-VIEW-RULES §9.4 三类分类（正向规则/反向约束/决策记录）。这是给后续 task-spec 抽取**已完成 task** 的历史反馈用的，跟本轮反馈处理是不同维度，保留。
+7. **PM 反馈本身的记录**：依然按步骤 12「PM 说"打回"」path 把反馈记入「📁 历史档案 → PM 反馈」并按 `_shared/pm-view/input-flow.md` §9.4 三类分类（正向规则/反向约束/决策记录）。这是给后续 task-spec 抽取**已完成 task** 的历史反馈用的，跟本轮反馈处理是不同维度，保留。
 
 ### 步骤 4：启动 dev server（UI 类 task）
 
@@ -660,7 +383,7 @@ EOM
 
 ### 步骤 6：写文档偏差
 
-**两层分工**（PM-VIEW-RULES 双文件原则）：
+**两层分工**（`_shared/PM-VIEW-RULES.md` §二 双文件原则）：
 
 | 偏差类型 | 写入位置 | 处理路径 |
 |---|---|---|
@@ -748,82 +471,10 @@ Dev server 保持运行（PM 验收时需要访问）。
 > 默认路径：commit 后**自动**呈交，PM 不需手动敲 `/task-submit`。task 状态全程「执行中」，commit 不切状态。
 > 兜底入口：PM 在异常情况（窗口被关 / context 丢失 / 重启 IDE）下仍可手动跑 `/task-submit`，逻辑等价。
 
-#### 11.1 组装验收信息包
-
-读两文件：
-- PM 视图主文件（`.md`）：「📌 任务卡」/「📐 产物预览」/「✅ 验收清单」/「📁 历史档案」最新执行日志 / 业务层偏差表
-- 工程合同（`.engineering.md`）：§1 推荐 review 工具 / §9 工程层验收清单 / §10 文档偏差 / §11 自审记录
-
-收集 diff：
-```bash
-REQ_BRANCH=$(jq -r '.req_branch // empty' .req-meta.json 2>/dev/null \
-  || git symbolic-ref --short HEAD | sed -E 's/^task-[0-9]+-/req-/' \
-  || echo "main")
-git diff --stat "$REQ_BRANCH"..HEAD
-```
-
-读事件流的 review_completed 条目（PM 在验收期间已跑过 review 时才有）：
-```bash
-python3 .claude/scripts/task-events.py list "$TASK_FILE" --type review_completed
-```
-- 有事件 → 自审结果末尾追加 PM 已跑的工具及结论（如 `/review pass`）
-- 无事件 → 不在主体显示，仅末尾「⚙️ 可选深度审查」提示存在性
-
-判断 task 类型（UI / 非 UI），按 task-submit §步骤 2 同样信号判定（任一命中即 UI）：
-- task 描述涉及前端/页面/组件/界面/UI/view/component
-- 工程合同 §1「推荐 review 工具」字段含 `/design-review` 或 `/qa`
-- PM 视图「📐 产物预览」section 含 ASCII 线框图
-
-#### 11.2 输出验收信息块
-
-**UI 类 task**（含 dev server 走查指引 + 多视角链接，AI 按 task 描述推断具体路径与 query params）：
-
-```
-═══════════════════════════════════════
-📋 Task 验收：task-NNN-<slug>
-═══════════════════════════════════════
-
-🌐 走查链接（dev server 持续在 :<port>，PM 可在浏览器走查任意视角）：
-  • <视角 1 描述>: http://localhost:<port>/<path>?<params>
-  • <视角 2 描述>: http://localhost:<port>/<path>?<params>
-  ...
-
-📝 改动摘要：
-[最新执行日志「**改动摘要：**」一行]
-
-📊 Diff 摘要（vs <REQ_BRANCH>）：
-[git diff --stat 输出]
-
-🔍 自审结果：
-[工程合同 §11 最新一条要点；如 PM 已跑 review，附 review_completed 事件结论]
-
-✅ 验收清单（PM 主路径走查）：
-- [ ] 条件 1
-- [ ] 条件 2
-[逐条来自 PM 视图 §✅ 验收清单]
-
-📄 文档偏差：
-PM 视图：[历史档案中的偏差或"无"]
-工程合同：[§10 内容或"无偏差"]
-
-请走查后回复：通过 / 打回（附反馈）
-
-──────────────────────────────────────
-⚙️ 可选深度审查（PM 自取所需，非必跑）：
-  /review              — 代码审查 task 分支 vs req 分支的 diff
-  /qa                  — 功能测试 dev server（需 browse；UI task 推荐）
-  /design-review       — 对照 DESIGN.md 检查视觉一致性（需 browse；UI task 推荐）
-跑完贴结论我会机械追加自审记录 + append 事件（I-RV3）。
-═══════════════════════════════════════
-```
-
-**非 UI 类 task**：去掉「走查链接」段，加「📂 代码变更」段（关键 diff / 测试结果摘要），「⚙️ 可选深度审查」区块只列 `/review`（不含 `/qa` `/design-review`），其余结构同上。
-
-#### 11.3 走查时引导 PM 反推上游文档偏差
-
-PM 看原型 / 看 diff 时若发现 brief / analysis / solution（PM 视图）/ prd / module 规格等上游文档写错，提醒 PM 在 task PM 视图「📁 历史档案 → 业务层偏差」表填一行（默认空，多数 task 不填）。close-task 调 `/doc-update` 时会扫这段 + 工程合同 §10，逐条确认改原文。
-
-不要让 PM 只在对话里说偏差而不落表 —— 会丢。
+详见 [`references/acceptance-handoff.md`](./references/acceptance-handoff.md)：
+- 11.1 组装验收信息包（读两文件 + diff + review_completed 事件 + UI/非 UI 判定）
+- 11.2 输出验收信息块（UI 类 / 非 UI 类两种模板，含可选深度审查辅助提示）
+- 11.3 走查时引导 PM 反推上游文档偏差（reverse-flow 到「📁 历史档案 → 业务层偏差」表）
 
 ### 步骤 12：等待 PM 决策
 
@@ -854,11 +505,11 @@ python3 .claude/scripts/task-transition.py "$TASK_FILE" --to 已完成
    ### 反馈 N - [YYYY-MM-DD]
    **问题描述：** [PM 原话]
    **要求修改：** [具体修改要求]
-   **分类（PM-VIEW-RULES §9.4）**：[正向规则 / 反向约束 / 决策记录]
+   **分类（`_shared/pm-view/input-flow.md` §9.4）**：[正向规则 / 反向约束 / 决策记录]
    **处理结果：** 待处理
    ```
 
-   分类规则（参 PM-VIEW-RULES §9.4）：
+   分类规则（参 `_shared/pm-view/input-flow.md` §9.4）：
    - 正向规则（"统一用 X" / "全文用 Y"）→ 后续 task 同步入「跨功能产品规则」
    - 反向约束（"禁用 X" / "不要 Y"）→ 后续 task 同步入工程合同 §6 易错点 / 禁止项
    - 决策记录（"二审改 X" / "重做为 Y"）→ 后续 task 同步入「关键产品决策」备选方案列
@@ -871,30 +522,7 @@ python3 .claude/scripts/task-transition.py "$TASK_FILE" --to 已完成
 
 ### 附录：PM 验收阶段跑 review（旁路 — 非必经）
 
-PM 在验收期间任意时刻可自跑 `/review` `/qa` `/design-review` 等 review 工具。AI 仍**不得**自行调用（I-RV1）—— 这条规则覆盖整个 task 生命周期，不限于实现阶段。
-
-**PM 报告 review 结论后**（chat 里说"跑了 /review，pass，2 个 mechanical issue 已修"等），AI 机械执行：
-
-1. 在工程合同 §11 自审记录追加一条（保留 PM 原话或转写）：
-   ```markdown
-   ### 自审 N - [YYYY-MM-DD HH:MM]
-   **工具：** /review
-   **结果：** pass（2 个 mechanical issue 已修复）
-   **详细发现：**
-   - F-001: 变量命名不一致 → 已修复
-   - F-002: 缺少 null check → 已修复
-   **遗留问题：** 无
-   ```
-
-2. append `review_completed` 事件作为审计痕迹（I-RV2）：
-   ```bash
-   python3 .claude/scripts/task-events.py append "<task-file>" \
-     --type review_completed --tool "/review" --result "<pass|fail>"
-   ```
-
-**PM 跑完 review 后反馈"还有 X 需要修"**：和步骤 12 PM 打回路径一致 —— 写反馈到 PM 视图历史档案、修代码、追加 fix commit、重新呈交。
-
-**禁止**（I-RV3）：先 append 后跑、跳过 PM 直接 append、AI 替 PM 跑 review 然后伪造结论。append 必须发生在 PM 明确报告结果之后。
+PM 在验收期间任意时刻可自跑 `/review` `/qa` `/design-review` 等 review 工具；AI 仍**不得**自行调用（I-RV1）。PM 报告结论后 AI 机械执行：在工程合同 §11 追加自审记录 + append `review_completed` 事件（I-RV2）。详见 [`references/review-bypass.md`](./references/review-bypass.md)。
 
 ## Rules
 

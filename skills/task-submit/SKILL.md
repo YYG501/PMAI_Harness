@@ -23,7 +23,7 @@ description: |
 
 ## 拆两文件约定（必读）
 
-本 skill 处理拆两文件的 task 产物（PM-VIEW-RULES §二）：
+本 skill 处理拆两文件的 task 产物（`_shared/PM-VIEW-RULES.md` §二）：
 - **PM 视图主文件**（`.md`）：✅ 验收清单（PM 走查）/ 📁 历史档案（执行日志、PM 反馈）
 - **工程合同**（`.engineering.md`）：§9 工程层验收清单（agent 自动化校验）/ §10 文档偏差表 / §11 自审记录
 
@@ -211,11 +211,11 @@ python3 .claude/scripts/task-transition.py "<task-file>" --to 已完成
    ### 反馈 N - [YYYY-MM-DD]
    **问题描述：** [PM 的原话]
    **要求修改：** [具体修改要求]
-   **分类（PM-VIEW-RULES §9.4）**：[正向规则 / 反向约束 / 决策记录]
+   **分类（`_shared/pm-view/input-flow.md` §9.4）**：[正向规则 / 反向约束 / 决策记录]
    **处理结果：** 待处理
    ```
 
-   分类规则（参 PM-VIEW-RULES §9.4）：
+   分类规则（参 `_shared/pm-view/input-flow.md` §9.4）：
    - 正向规则（"统一用 X" / "全文用 Y"）→ 后续 task 同步入「跨功能产品规则」
    - 反向约束（"禁用 X" / "不要 Y"）→ 后续 task 同步入工程合同 §6 易错点 / 禁止项
    - 决策记录（"二审改 X" / "重做为 Y"）→ 后续 task 同步入「关键产品决策」备选方案列

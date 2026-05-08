@@ -14,7 +14,7 @@ description: Use when task 已完成、PM 已通过验收、需要在 close-task
 
 ## 拆两文件约定（必读）
 
-本 skill 处理拆两文件的 task 产物（PM-VIEW-RULES §二）：
+本 skill 处理拆两文件的 task 产物（`_shared/PM-VIEW-RULES.md` §二）：
 - **PM 视图主文件**（`.md`）：「📋 功能清单」/「📁 历史档案」/「📌 任务卡」中的 `**所属模块**` `**所属模块章节**` 字段
 - **工程合同**（`.engineering.md`）：「§10 文档偏差」/「§4 功能清单工程版」/「§1 元信息扩展」
 
@@ -24,7 +24,7 @@ description: Use when task 已完成、PM 已通过验收、需要在 close-task
 
 ## Required Inputs
 
-按 `PM-VIEW-RULES.md §9.1` 中 **Stage 7.2 doc-update** 段执行：
+按 `_shared/pm-view/input-flow.md` 中 **Stage 7.2 doc-update** 段执行：
 
 1. 🟢 task PM 视图主文件（PM 调用时传入）
 2. 🟢 **必须存在的成对工程合同**：`<task-stem>.engineering.md`，缺则报错并 `exit 1`
@@ -185,7 +185,7 @@ E. 向 PM 展示对账结果，逐条确认后执行
 
 **禁止**沉淀工程合同 §4 功能清单工程版（含字段名 / props / reducer action 等工程层细节）——这些只在 task 工程合同内保留，不进入 module spec。
 
-**功能块内容范围**（PM-VIEW-RULES §5.1：4 列表格 + 续行 rowspan + 需求描述列内联编号）：
+**功能块内容范围**（`_shared/PM-VIEW-RULES.md` §5.1：4 列表格 + 续行 rowspan + 需求描述列内联编号）：
 
 ADD / MODIFY 操作时，整个 H4 功能块按下述结构复制 / 对账：
 
@@ -196,7 +196,7 @@ ADD / MODIFY 操作时，整个 H4 功能块按下述结构复制 / 对账：
 
 不复制 task PM 视图的 `📐 产物预览` / `🚦 跨功能产品规则` / `✅ 验收清单` 等其它 section——这些是 task 局部内容，不进 module spec。
 
-字段定义、计算口径、边界规则等都内联在需求描述列的编号项里，**不存在独立的「字段口径」表块**——见到这种独立表说明 task 用了已被废弃的格式，按 PM-VIEW-RULES §5.1 + §5.5 提示 PM 先修 task。
+字段定义、计算口径、边界规则等都内联在需求描述列的编号项里，**不存在独立的「字段口径」表块**——见到这种独立表说明 task 用了已被废弃的格式，按 `_shared/PM-VIEW-RULES.md` §5.1 + §5.5 提示 PM 先修 task。
 
 旧格式兼容（task 仍含 3 列表 `| 二级功能 | 三级功能 | 使用角色 |` + 表外数字编号 / 4 块结构）：保留原样照搬到 module，不强制转新格式；后续 task 用新格式时按上述结构复制。两格式可在同一 module spec 内并存。
 

@@ -14,13 +14,12 @@ description: |
 
 ## PM 视图规则（必读）
 
-本 skill 产出 `analysis.md`，须遵守 `skills/_shared/PM-VIEW-RULES.md`。
-特别注意：
-- §三 PM 视图写作规则（明确指代 / 正向描述 / 禁工程词 / 禁像素颜色 / 禁反向约束）
-- §四 文档级严格度对照表（analysis.md 行）
-- §九 输入流约束（必读 brief.md + 项目级文档 + prototypes/，不接受任何 .engineering.md 输入）
+本 skill 产出 `analysis.md`，须遵守 `skills/_shared/PM-VIEW-RULES.md`（主索引）。具体读以下子文件：
+- `_shared/pm-view/writing-rules.md`（§三 写作规则：明确指代 / 正向描述 / 禁工程词 / 禁像素颜色 / 禁反向约束）
+- `_shared/pm-view/doc-strictness.md`（§四 严格度对照表 — analysis.md 行）
+- `_shared/pm-view/input-flow.md`（§九 输入流；必读 brief.md + 项目级文档 + prototypes/，不接受任何 .engineering.md 输入）
 
-`analysis.md` 不拆文件（PM-VIEW-RULES §二）。
+`analysis.md` 不拆文件（主文件 §二）。
 
 ## Preamble
 
@@ -78,7 +77,7 @@ echo "SKILL: req-analysis"
 
 ## Required Inputs
 
-按 `PM-VIEW-RULES.md §9.1` 中 **Stage 2 req-analysis** 段执行：
+按 `_shared/pm-view/input-flow.md` 中 **Stage 2 req-analysis** 段执行：
 
 - 🟢 `$ACTIVE_REQ_DIR/brief.md`
 - 🟢 `$REPO_ROOT/docs/CONTEXT.md`（如存在）

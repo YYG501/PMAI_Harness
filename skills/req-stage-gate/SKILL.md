@@ -116,7 +116,7 @@ PM 选择进入 stage 3 时：
    - PM 确认 → 进入 **3.5 reconcile 步骤**，再推进
    - PM 提修改意见 → 回步骤 1 调 `/req-solution`（**revise 模式**：prompt 含 "PM 在确认门提了修改：…"；skill 只改 PM 视图、不动工程合同、hash 留 stale）→ 改完后重新输出推荐区块（PM 可决定要不要再跑一遍 review）→ 再次确认
 
-3.5 **reconcile 步骤**（PM-VIEW-RULES §9.6，PM 选确认后、`req-transition.py` 之前必跑）：
+3.5 **reconcile 步骤**（`_shared/pm-view/input-flow.md` §9.6，PM 选确认后、`req-transition.py` 之前必跑）：
 
 调用 `/req-solution` 进入 **reconcile 模式**：
 
@@ -284,7 +284,7 @@ python3 .claude/scripts/req-transition.py "$ACTIVE_REQ_DIR" --to 7
   B) 我要修改（请说明改哪里）
   ```
 - **review 工具一律 PM 自跑**（I-RV1）：stage-gate 在产物写完后只输出推荐清单，不自动调任何 `/plan-*-review` / `/review` / `/qa` / `/design-review`。PM 跑完任一 review 后口述结论，AI 调 `task-events.py append` 机械记录事件作为审计痕迹；事件流不当 gate
-- **stage 2→3 双文件 reconcile**（PM-VIEW-RULES §9.6）：PM 选确认后、`req-transition.py --to 3` 之前必跑 `/req-solution`（reconcile 模式）对齐 `solution.engineering.md`；revise 模式时只改 PM 视图、工程合同保持 stale
+- **stage 2→3 双文件 reconcile**（`_shared/pm-view/input-flow.md` §9.6）：PM 选确认后、`req-transition.py --to 3` 之前必跑 `/req-solution`（reconcile 模式）对齐 `solution.engineering.md`；revise 模式时只改 PM 视图、工程合同保持 stale
 - review 结果（PM 跑完贴回 chat 的）允许直接贴 chat——review 是讨论内容，不是文档产出
 - **未决问题闸门（硬规则）**：任何 stage 的产出文档如果含有"需要 PM 回答"的未决项，确认门必须先让 PM 答完再开放推进选项。不允许并列给出"直接推进"和"回答问题"两个选项让 PM 选——这会让 PM 绕过未回答的问题。目前最严格落地在 Stage 1→2（analysis.md 的 `## 未决问题` section），其他 stage 如有类似未决产出应比照处理
 - 推进命令只能用 `req-transition.py`，不能手动改 `.req-meta.json`

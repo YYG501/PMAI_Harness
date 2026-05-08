@@ -174,8 +174,8 @@ test_pm_feedback_annotation() {
 
   # 数据源：状态为「已完成」且所属模块与当前 task 有交集
   _assert_contains "$TASK_SPEC_SKILL" "状态为「已完成」且所属模块与当前 task 有交集" "completed same-module feedback source" || { rm -rf "$fake"; return; }
-  # 三类分流（v3.5 设计：不再做 source annotation 整段搬，改按 PM-VIEW-RULES §9.4 分流）
-  _assert_contains "$TASK_SPEC_SKILL" "PM-VIEW-RULES §9.4" "三类分流标准引用" || { rm -rf "$fake"; return; }
+  # 三类分流（v3.5 设计：不再做 source annotation 整段搬，改按 input-flow.md §9.4 分流）
+  _assert_contains "$TASK_SPEC_SKILL" "§9.4" "三类分流标准引用" || { rm -rf "$fake"; return; }
   _assert_contains "$TASK_SPEC_SKILL" "正向规则" "正向规则类目" || { rm -rf "$fake"; return; }
   _assert_contains "$TASK_SPEC_SKILL" "反向约束" "反向约束类目" || { rm -rf "$fake"; return; }
   _assert_contains "$TASK_SPEC_SKILL" "决策记录" "决策记录类目" || { rm -rf "$fake"; return; }

@@ -13,15 +13,14 @@ description: |
 
 ## PM 视图规则（必读）
 
-本 skill 生成的文档须遵守 `skills/_shared/PM-VIEW-RULES.md`。
-特别注意：
-- **§三 PM 视图写作规则**（明确指代 / 正向描述 / 禁工程词 / 禁像素颜色 / 禁反向约束）
-- **§五 功能清单格式**（标题 + 角色限定一句话 + 业务规则编号 + 字段口径独立表；业务规则只说 what，禁 how/why/字段口径混入）
-- **§六 关键产品决策格式**
-- **§七 章节顺序约束**（按 `$REPO_ROOT/templates/task.md.tmpl` + `$REPO_ROOT/templates/task.engineering.md.tmpl`）
-- **§九 输入流约束**（必读上游 stage 文档 + 项目级文档；输入清单见下方 Required Inputs）
-- **§9.4 PM 反馈三类分流**（正向规则 → 跨功能产品规则 / 反向约束 → 工程合同 §6 / 决策记录 → 关键产品决策）
-- **§9.6 双文件 lazy sync**：首次生成两文件 + hash；PM 在步骤 12 选 B 修改时只动 PM 视图、工程合同保持 stale；PM 选 A 后由步骤 12.5 reconcile 同步
+本 skill 生成的文档须遵守 `skills/_shared/PM-VIEW-RULES.md`（主索引）。具体读以下子文件：
+- `_shared/pm-view/writing-rules.md`（§三 写作规则：明确指代 / 正向描述 / 禁工程词 / 禁像素颜色 / 禁反向约束）
+- `_shared/PM-VIEW-RULES.md` §五（功能清单格式：4 列表格 + 续行 rowspan + 需求描述列内联编号；业务规则只说 what，禁 how/why/字段口径混入）
+- `_shared/PM-VIEW-RULES.md` §六（关键产品决策格式）
+- `_shared/pm-view/section-order.md`（§七 章节顺序：按 `$REPO_ROOT/templates/task.md.tmpl` + `task.engineering.md.tmpl`）
+- `_shared/pm-view/input-flow.md`（§九 输入流；含 §9.4 PM 反馈四类分流 + §9.6 双文件 lazy sync）
+  - §9.4：正向规则 → 跨功能产品规则 / 反向约束 → 工程合同 §6 / 决策记录 → 关键产品决策（视觉规范由 close-task 沉淀 DESIGN.md，本 skill 不消费）
+  - §9.6：首次生成两文件 + hash；PM 在步骤 12 选 B 修改时只动 PM 视图、工程合同保持 stale；PM 选 A 后由步骤 12.5 reconcile 同步
 
 ## Preamble
 
@@ -32,25 +31,29 @@ echo "SKILL: task-spec"
 
 ## Required Inputs
 
-按 `PM-VIEW-RULES.md §9.1` 中 **Stage 6 task-spec** 段执行（first-gen / revise / reconcile 三模式 + PM 视图 / 工程合同两文件分别列）。
+按 `_shared/pm-view/input-flow.md` 中 **Stage 6 task-spec** 段执行（first-gen / revise / reconcile 三模式 + PM 视图 / 工程合同两文件分别列）。
 
 特别遵守：
-- §9.1.1 章节匹配强约束（solution.md / solution.engineering.md / 同模块 task `## PM 反馈` 段 / DESIGN.md 章节 grep）
-- §9.3.1 prototype 读取强约束（>500 行禁整文件 Read）
-- §9.7 跨 skill 共享原则（特别是原则 6 PM 反馈四类分流 + 原则 7 closed/ 旧 task 读取边界）
+- `input-flow.md` §9.1.1 章节匹配强约束（solution.md / solution.engineering.md / 同模块 task `## PM 反馈` 段 / DESIGN.md 章节 grep）
+- `input-flow.md` §9.3.1 prototype 读取强约束（>500 行禁整文件 Read）
+- `_shared/pm-view/cross-skill.md`（特别第 6 条 PM 反馈四类分流 + 第 7 条 closed/ 旧 task 读取边界）
 
 ## Workflow
 
-### 步骤 0：读 PM-VIEW-RULES.md（强制）
+### 步骤 0：读 PM 视图规则子文件（强制）
 
-打开 `skills/_shared/PM-VIEW-RULES.md`，重点理解 §三 / §五 / §六 / §七 / §九（含 §9.6 双文件 lazy sync）。
+打开（一次会话只读 1 次，跨步骤不重读）：
+- `skills/_shared/pm-view/writing-rules.md`（§三）
+- `skills/_shared/PM-VIEW-RULES.md` §五 / §六（功能清单格式 + 关键产品决策格式）
+- `skills/_shared/pm-view/section-order.md`（§七）
+- `skills/_shared/pm-view/input-flow.md`（§九，含 §9.6 双文件 lazy sync）
 
 ### 步骤 0.5：判别调用模式
 
 | 模式 | 触发条件 | 走哪些步骤 |
 |---|---|---|
 | **first-gen** | `tasks/task-NNN-<slug>.md` 不存在 | 步骤 1–12（完整流程）|
-| **revise** | task PM 视图已存在；PM 之前选过 B 现在再次进入 | 步骤 1 / 3 / 5 / 6 / 8 / 10 / 10.5 / 11 / 12（**只**改 PM 视图，**不动**工程合同；hash 自然 stale）。<br>**步骤 3 / 5 / 6 全部按 PM-VIEW-RULES §9.3.1 / §9.1.1 grep 强约束执行**——不允许 AI 在 revise 模式下"觉得 revise 是改 PM 视图"绕过 grep 走整文件读 |
+| **revise** | task PM 视图已存在；PM 之前选过 B 现在再次进入 | 步骤 1 / 3 / 5 / 6 / 8 / 10 / 10.5 / 11 / 12（**只**改 PM 视图，**不动**工程合同；hash 自然 stale）。<br>**步骤 3 / 5 / 6 全部按 `_shared/pm-view/input-flow.md` §9.3.1 / §9.1.1 grep 强约束执行**——不允许 AI 在 revise 模式下"觉得 revise 是改 PM 视图"绕过 grep 走整文件读 |
 | **reconcile** | 步骤 12 PM 选 A 后由本 skill 自身在步骤 12.5 自动进入 | 仅步骤 12.5（不改 PM 视图，对齐工程合同）|
 
 实际判别：
@@ -84,7 +87,7 @@ echo "SKILL: task-spec"
 
 **特别注意**：
 - 项目级文档列为"必读"——AI 不得以"觉得不必要"为由跳过
-- `prototypes/` 必读（PM-VIEW-RULES §9.3）：
+- `prototypes/` 必读（input-flow.md §9.3）：
   - 判断当前 task 涉及的现有页面 / 组件 / 已落地能力
   - 反向校验上游文档：原型已删除 / 砍掉的工程概念不引入 PM 视图
 
@@ -108,11 +111,11 @@ echo "SKILL: task-spec"
 
 ### 步骤 5：收集同模块已完成 task 的 PM 反馈，按三类分流
 
-**核心改动**：不再整段搬到「实现指引-易错点」。按 PM-VIEW-RULES §9.4 分三类。
+**核心改动**：不再整段搬到「实现指引-易错点」。按 `_shared/pm-view/input-flow.md` §9.4 分三类。
 
 扫描状态为「已完成」且所属模块与当前 task 有交集的 task 文件，从其 `## PM 反馈` section 抽取条目。
 
-**读法**（按 PM-VIEW-RULES §9.1.1 章节匹配强约束）：
+**读法**（按 `input-flow.md` §9.1.1 章节匹配强约束）：
 
 ```bash
 # 1. 找同模块、状态为「已完成」的 task 文件（grep 任务卡表格行）
@@ -140,7 +143,7 @@ done
 > 生成（任务卡表格里 `| **状态** | 待确认 |`，标题下方不加 frontmatter 段落）。
 > 把旧格式当参考会导致生成 blockquote frontmatter 等假执行产物，被步骤 10.6 严格字段校验挡回重写。
 
-每条反馈按特征分类（参见 PM-VIEW-RULES §9.4 表）：
+每条反馈按特征分类（参见 `input-flow.md` §9.4 表）：
 
 | 反馈类型 | 识别特征 | 写入位置 |
 |---|---|---|
@@ -154,7 +157,7 @@ done
 
 ### 步骤 6：拉取相关 solution 内容并按视图分流
 
-读法（按 PM-VIEW-RULES §9.1.1 章节匹配强约束）：
+读法（按 `input-flow.md` §9.1.1 章节匹配强约束）：
 
 - **`solution.md`（PM 视图）**：
   - **first-gen 模式**：整文件 Read（§9.1.1 逃生口——顶端核心产物，需要全局视野）
@@ -202,7 +205,7 @@ done
 
 按 `$REPO_ROOT/templates/task.md.tmpl` 生成 `$ACTIVE_REQ_DIR/tasks/task-NNN-<slug>.md`：
 
-**章节顺序**（强制，由 PM-VIEW-RULES §七锁定）：
+**章节顺序**（强制，由 `_shared/pm-view/section-order.md` §七锁定）：
 1. 📌 任务卡（10 秒理解）
 2. 🎯 关键产品决策
 3. 📐 产物预览
@@ -278,62 +281,16 @@ PM_VIEW_HASH=$(shasum -a 256 "$ACTIVE_REQ_DIR/tasks/task-NNN-<slug>.md" | cut -c
 
 #### §5 实现指引：项目级 + req 级 prose 合并（4.5d.4 修订）
 
-§5 实现指引由两层 prose 段落合并而成（**不是 enum 字段，不机械冲突阻断**）：
+详见 [`references/engineering-impl-prose-merge.md`](./references/engineering-impl-prose-merge.md)：
 
-**A 层 项目级（CLAUDE.md「## 工程结构约束」段）**
+- **A 层** 项目级（`CLAUDE.md` 「## 工程结构约束」段）：四档行为（prototype / system / custom / unknown）
+- **B 层** req 级覆盖（`solution.md` 「## 🔧 本轮实现深度变更」段）：无变更 / 有变更
+- **合并语义**：prose 直接拼，不做机械冲突阻断；冲突由 task-execute / close-req / close-task 下游处理
+- **拼接结果模板**：工程合同 §5 由「工程结构约束（A 层）」+「本轮实现深度变更（B 层）」+「具体实现要求」三段构成
 
-读 `$REPO_ROOT/CLAUDE.md` 的 `## 工程结构约束` section（含 auto-detected 标的内容 = init-project 注入；删 auto-detected 标后视为 PM 手填，框架不再覆盖）。
+如步骤 12 PM 选 B（修订 PM 视图）：本子步骤跳过；步骤 12.5 reconcile 时按当前 A + B 重新拼接。
 
-四档行为：
-
-| 段内容 | A 层取值 |
-|---|---|
-| `prototype` 档（auto-detected: prototype 标）| prototype 派生模板：代码组织约束 + 实现深度 prose 指引（数据层 / 权限 / API / 测试 / 边界态 / 多端 / 演示路径）|
-| `system` 档（auto-detected: system 标）| 同上 system 档 |
-| `custom` 档（auto-detected: custom 标 / PM 手填骨架）| PM 自由编辑的 prose 段落（按当前内容采用） |
-| `unknown` 档 / 段不存在 / placeholder 未替换 | **fallback**：警告 PM「项目级约束缺失或未定，建议跑 init-project 或 detect-project-structure 先补」，但不阻断；A 层取空，按 B 层单源生成 |
-
-**B 层 req 级覆盖（solution.md「## 🔧 本轮实现深度变更」段）**
-
-读 `$ACTIVE_REQ_DIR/solution.md` 的 `## 🔧 本轮实现深度变更` section：
-
-- 内容是「无变更」/ 留空 / section 不存在 → B 层取空，§5 按 A 层单源生成
-- 内容含变更描述（自由文本）→ B 层取该 prose 段，作为对 A 层的覆盖项
-
-**合并语义（无机械冲突阻断）**
-
-task-spec **不再做项目级 vs req 级的冲突检测**——任何组合都按 prose 合并直接拼到工程合同 §5。冲突场景（如项目级 prototype + req 级要做完整系统）由 PM 在多个时机自决：
-- task-execute 看代码 / 看原型时：发现实际实现需要调整时，按业务层偏差路径走（task PM 视图「📁 历史档案 → 业务层偏差」 + close-task → /doc-update）
-- close-req 步骤 2c：决定 req 级深度变更**是否同步到项目级 CLAUDE.md**（影响后续 req）
-
-task-spec 只如实合并不阻断；冲突的处理在 task-execute / close-req / close-task 等下游环节，不在 task-spec。
-
-**拼接结果写入工程合同 §5**：
-
-```markdown
-## 5. 实现指引
-
-### 工程结构约束（项目级，A 层）
-
-[CLAUDE.md「## 工程结构约束」段全文；{prototype-root} 已替换为实际值。
-A 层缺失时本节写「项目级未定 — A 层缺失，按 req 级单源生成」]
-
-### 本轮实现深度变更（req 级，B 层）
-
-[solution.md「## 🔧 本轮实现深度变更」section 原文。
-B 层为「无变更」时本节写「无变更（沿用 A 层）」]
-
-### 具体实现要求
-
-[基于 A + B 合并的有效深度生成 task 级 actionable 指引：
- - A 层是项目默认风格（prose 段落）
- - B 层 prose 描述本 req 的覆盖项（如有）
- - AI 在 task-execute 写代码时按 B 层覆盖 + A 层兜底执行]
-```
-
-如步骤 12 PM 选 B（修订 PM 视图）：本步骤跳过；步骤 12.5 reconcile 时按当前 A + B 重新拼接。
-
-### 步骤 10：自检（按 PM-VIEW-RULES §八 11 项）
+### 步骤 10：自检（按 `_shared/pm-view/checklist.md` §八 12 项）
 
 **核心原则**：自检不是打勾——同一个 brain 既写又勾会盲。机器能抓的违例由步骤 10.5 lint 兜底；本步只查 lint 抓不到的语义判断。
 
@@ -511,7 +468,7 @@ PM 未确认前不得进入执行。
 
 **触发**：步骤 12 PM 选 A。本步骤由 task-spec 自身内联执行，**不另调 skill**。
 
-按 PM-VIEW-RULES §9.6.4 执行：
+按 `input-flow.md` §9.6.4 执行：
 
 1. **算 hash**：
    ```bash
@@ -561,8 +518,8 @@ reconcile 完成后才推：
 - AI 不得自动调任何 plan review skill（I-RV1）；只在步骤 12 确认门给出可选 review 命令清单，PM 自跑。
 - PM 报告 review 结论后才 append `plan_review_completed` 事件（I-RV3）；禁止"先 append 后跑"或凭文档对照模拟。
 - 事件流仅作审计记录（I-RV2），缺事件不阻止 task-confirm 启动；review 发现是否采纳由 PM 自行决定。
-- **PM 反馈分流强制**：抽取同模块已完成 task 的 PM 反馈时，必须按 PM-VIEW-RULES §9.4 分三类分别写入；禁止整段搬到工程合同「实现指引」。
+- **PM 反馈分流强制**：抽取同模块已完成 task 的 PM 反馈时，必须按 `_shared/pm-view/input-flow.md` §9.4 分三类分别写入；禁止整段搬到工程合同「实现指引」。
 - **跳过项目级文档"必读"被禁止**：CONTEXT / DESIGN / prd / modules / prototypes 仓库存在则必读，AI 不得跳过。
-- **lazy sync 强制**（PM-VIEW-RULES §9.6）：PM 在步骤 12 选 B 修改 PM 视图时，**禁止顺手重写工程合同**（hash 必须留 stale）；只有步骤 12 选 A 后的步骤 12.5 才能重写工程合同 PM 视图驱动章节。
+- **lazy sync 强制**（`input-flow.md` §9.6）：PM 在步骤 12 选 B 修改 PM 视图时，**禁止顺手重写工程合同**（hash 必须留 stale）；只有步骤 12 选 A 后的步骤 12.5 才能重写工程合同 PM 视图驱动章节。
 - **reconcile 边界**：步骤 12.5 禁止动 PM 视图主文件内容（仅允许在「📁 历史档案」append 一行 reconcile 记录）；禁止动工程合同独立来源章节（§7 / §10 / §11）的主体。
 - **hash 不得手动改**：任何模式下不允许手动编辑工程合同顶部 `synced_pm_view_hash`，只能由步骤 9（首生成）或步骤 12.5（reconcile）写入。

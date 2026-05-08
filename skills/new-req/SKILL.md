@@ -12,13 +12,12 @@ description: |
 
 ## PM 视图规则（必读）
 
-本 skill 产出 `brief.md`（PM 主导引导路径，AI 不主动调外部工具；详见步骤 4），须遵守 `skills/_shared/PM-VIEW-RULES.md`。
-特别注意：
-- §三 PM 视图写作规则（明确指代 / 正向描述 / 禁工程词 / 禁像素颜色 / 禁反向约束）
-- §四 文档级严格度对照表（brief.md 行）
-- §九 输入流约束（brief.md 是后续所有 stage 的源头，不接受任何上游 .engineering.md 输入）
+本 skill 产出 `brief.md`（PM 主导引导路径，AI 不主动调外部工具；详见步骤 4），须遵守 `skills/_shared/PM-VIEW-RULES.md`（主索引）。具体读以下子文件：
+- `_shared/pm-view/writing-rules.md`（§三 写作规则：明确指代 / 正向描述 / 禁工程词 / 禁像素颜色 / 禁反向约束）
+- `_shared/pm-view/doc-strictness.md`（§四 严格度对照表 — brief.md 行）
+- `_shared/pm-view/input-flow.md`（§九 输入流；brief.md 是后续所有 stage 的源头，不接受任何上游 .engineering.md 输入）
 
-`brief.md` 不拆文件（PM-VIEW-RULES §二）。
+`brief.md` 不拆文件（主文件 §二）。
 
 ## Preamble
 
@@ -110,7 +109,7 @@ cd 到返回的 worktree 路径。
 输出提示给 PM（不要替 PM 选）：
 
 ```
-brief.md 还没写。你可以选任何方式产出，我帮你整理成符合 PM-VIEW-RULES 的格式：
+brief.md 还没写。你可以选任何方式产出，我帮你整理成符合 PM 视图写作规则的格式：
 
 1. 自跑 /office-hours（gstack skill）做六问深挖思考 — 跑完把产出贴回来我整理
 2. 给我说说需求要点 — 我会做缺口分析、补问 1-3 题、出 brief 草稿、走二次确认
@@ -135,7 +134,7 @@ PM 选 2 或直接开始描述需求时，AI 走以下流程：
 
 2. **补问缺口**：用 AskUserQuestion 一次性问**只缺的那几个**（一般 1-3 个，最多 4 个），**不要机械问全六题**。每个问题给 2-4 个候选选项 + 选项描述，让 PM 快速选 + 可补充自由文本。
 
-3. **出 brief 草稿**：拿到答案后，AI 按 PM-VIEW-RULES（§三写作规则、§四 brief.md 严格度行）拼一版 brief 草稿**展示给 PM**（不贴 chat 看的，用 Write 写到 `brief.md` 文件，给 PM 路径让他看）。
+3. **出 brief 草稿**：拿到答案后，AI 按 `_shared/pm-view/writing-rules.md` §三 + `_shared/pm-view/doc-strictness.md` §四 brief.md 行拼一版 brief 草稿**展示给 PM**（不贴 chat 看的，用 Write 写到 `brief.md` 文件，给 PM 路径让他看）。
 
 4. **二次确认门**：
    ```

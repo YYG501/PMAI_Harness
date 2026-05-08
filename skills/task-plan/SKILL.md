@@ -12,11 +12,10 @@ description: |
 
 ## PM 视图规则（必读）
 
-本 skill 生成的文档须遵守 `skills/_shared/PM-VIEW-RULES.md`。
-特别注意：
-- **§三 PM 视图写作规则**（明确指代 / 正向描述 / 禁工程词 / 禁像素颜色 / 禁反向约束）
-- **§七 章节顺序约束**（按 `$REPO_ROOT/templates/task-plan.md.tmpl`）
-- **§九 输入流约束**（必读上游 stage 文档 + 项目级文档；输入清单见下方 Required Inputs）
+本 skill 生成的文档须遵守 `skills/_shared/PM-VIEW-RULES.md`（主索引）。具体读以下子文件：
+- `_shared/pm-view/writing-rules.md`（§三 写作规则：明确指代 / 正向描述 / 禁工程词 / 禁像素颜色 / 禁反向约束）
+- `_shared/pm-view/section-order.md`（§七 章节顺序：按 `$REPO_ROOT/templates/task-plan.md.tmpl`）
+- `_shared/pm-view/input-flow.md`（§九 输入流：上游 stage 文档 + 项目级文档；输入清单见下方 Required Inputs）
 
 > 「工程合同」成分（反模式自检结论 / 验收 GAP 索引 / 模块规格状态）压在末尾 §四 自检与状态摘要节。详细论证 / autoplan 决策不长期存档，跑时输出即可。
 
@@ -29,17 +28,20 @@ echo "SKILL: task-plan"
 
 ## Required Inputs
 
-按 `PM-VIEW-RULES.md §9.1` 中 **Stage 5 task-plan** 段执行。
+按 `_shared/pm-view/input-flow.md` 中 **Stage 5 task-plan** 段执行。
 
 特别遵守：
-- §9.3.1 prototype 读取强约束（>500 行禁整文件 Read）
-- §9.7 跨 skill 共享原则（特别 brief / DESIGN 改 ⚪ 按需，不强制全文必读）
+- `input-flow.md` §9.3.1 prototype 读取强约束（>500 行禁整文件 Read）
+- `_shared/pm-view/cross-skill.md`（特别 brief / DESIGN 改 ⚪ 按需，不强制全文必读）
 
 ## Workflow
 
-### 步骤 0：读 PM-VIEW-RULES.md（强制）
+### 步骤 0：读 PM 视图规则子文件（强制）
 
-打开 `skills/_shared/PM-VIEW-RULES.md`，重点理解 §三 / §七 / §九。
+打开（一次会话只读 1 次）：
+- `skills/_shared/pm-view/writing-rules.md`（§三）
+- `skills/_shared/pm-view/section-order.md`（§七）
+- `skills/_shared/pm-view/input-flow.md`（§九）
 
 ### 步骤 1：读取所有必读输入
 
@@ -49,7 +51,7 @@ echo "SKILL: task-plan"
 
 **特别注意**：
 - 项目级文档列为"必读"——AI 不得以"觉得不必要"为由跳过
-- `prototypes/` 必读（PM-VIEW-RULES §9.3）：
+- `prototypes/` 必读（input-flow.md §9.3）：
   - 判断哪些能力已存在（影响 task 拆分粒度，避免重复创建）
   - 反向校验上游文档：原型已删除 / 砍掉的工程概念不引入 task 拆分
 
@@ -141,7 +143,7 @@ echo "SKILL: task-plan"
 
 按 `$REPO_ROOT/templates/task-plan.md.tmpl` 生成 `$ACTIVE_REQ_DIR/task-plan.md`：
 
-**章节顺序**（强制，由 PM-VIEW-RULES §七锁定）：
+**章节顺序**（强制，由 `_shared/pm-view/section-order.md` §七锁定）：
 1. 📌 拆分摘要
 2. 一、Task 列表
 3. 二、执行顺序与并行性
@@ -160,7 +162,7 @@ echo "SKILL: task-plan"
 - §4.2 验收 GAP 清单：从 `solution.md` 「验收标准」逐条审视，编号 G1, G2, ...，由 stage 6 task-spec 按编号接住。无 GAP 时显式写"无 GAP"。
 - §4.3 模块规格状态：列出本 req 涉及的每个业务模块的当前规格状态（已存在-完整 / 已存在-待补 / 不存在-待创建），影响 task-spec 步骤 4 判断。
 
-### 步骤 4：自检（按 PM-VIEW-RULES §八 8 项）
+### 步骤 4：自检（按 `_shared/pm-view/checklist.md` §八 12 项）
 
 写完后对 `task-plan.md` 逐条检查：
 - [ ] 章节顺序符合 $REPO_ROOT/templates/task-plan.md.tmpl

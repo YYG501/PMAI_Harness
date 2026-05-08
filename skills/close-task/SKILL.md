@@ -20,7 +20,7 @@ description: |
 
 ## 拆两文件约定（必读）
 
-本 skill 处理拆两文件的 task 产物（PM-VIEW-RULES §二）：
+本 skill 处理拆两文件的 task 产物（`_shared/PM-VIEW-RULES.md` §二）：
 - **PM 视图主文件**：`task-NNN-<slug>.md`（PM 决策、功能清单、验收清单、历史档案）
 - **工程合同**：`task-NNN-<slug>.engineering.md`（实现细节、易错点、plan-review 沉淀、文档偏差工程层、自审记录）
 
@@ -170,7 +170,7 @@ ENG_FILE="${TASK_FILE%.md}.engineering.md"
 - **任一处有偏差记录**：先调用 `/doc-update` 处理偏差（doc-update 会按相同兼容模式读两文件 / 单文件并按规则沉淀），等 `/doc-update` 完成后再继续
 - **所有偏差源都无偏差 / 偏差已处理**：继续下一步
 
-### 步骤 1.5：视觉规范反馈反推 DESIGN.md（PM-VIEW-RULES §9.4 第四类）
+### 步骤 1.5：视觉规范反馈反推 DESIGN.md（`_shared/pm-view/input-flow.md` §9.4 第四类）
 
 扫本 task PM 视图的 `## 📁 历史档案 → ### PM 反馈` 区域，对**分类=「视觉规范」**的条目逐条沉淀到 `$REPO_ROOT/docs/DESIGN.md`，避免视觉规范反馈进 task-local sink（task-001 R6 9 项视觉问题修了但没沉淀的反模式）。
 
