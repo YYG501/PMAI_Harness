@@ -15,9 +15,14 @@ description: |
 ```bash
 source "$(git rev-parse --show-toplevel 2>/dev/null || echo .)/.claude/scripts/skill-preamble.sh"
 echo "SKILL: req-stage-gate"
+
+# worktree 残留检测（informational，不阻塞推进；有问题仅打印警告供 PM 处理）
+python3 "$REPO_ROOT/.claude/scripts/check-worktree-residue.py" || true
 ```
 
 读取 `$ACTIVE_REQ_STAGE` 确定当前 stage。
+
+如果 worktree 残留检测报警，先把警告原文展示给 PM 一句话说明（"发现 N 个 worktree 残留/冲突，已贴上方"），PM 可选择立刻清理或继续推进。不当 gate（参见 I-RT5 的范围）。
 
 ## Stage 过渡逻辑
 
