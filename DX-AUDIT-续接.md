@@ -7,7 +7,7 @@
 
 ## 当前位置（2026-05-08）
 
-**起因**：`/gstack-devex-review` 对 PM-AI-Workflow 框架做了一轮活体 DX 审计，综合分 5.4/10（静态）→ 4.7/10（含 ExampleConsumerApp 活体证据下调）。本次会话已收口 4/9 项 P0。
+**起因**：`/gstack-devex-review` 对 PM-AI-Workflow 框架做了一轮活体 DX 审计，综合分 5.4/10（静态）→ 4.7/10（含 ExampleConsumerApp 活体证据下调）。本次会话已收口 6/9 项 P0。
 
 **评分基线**（P0/P1 完成后再次跑 /devex-review 用作对比）：
 
@@ -25,6 +25,7 @@
 **已完成 commit**（生成器仓）：
 
 ```
+ea2dc82 refactor(skills): PM-VIEW-RULES + 三个超大 SKILL.md 按消费方拆 references
 8affee9 fix(audit): CT7 旧规范三步式兼容 + CT8 chore commit 豁免
 3a4a98a refactor(scripts): worktree 物理路径解析抽 _lib/worktree.sh helper
 38313a9 feat(skills): task-plan 反模式扩容 + close-req 覆盖度判断 + INVARIANTS 主索引
@@ -38,8 +39,8 @@
 | P0-4 | INVARIANTS.md 加 60 编号速查主索引 | [完成] | 38313a9 |
 | P0-5 | close-req 步骤 2a/2b 加 doc-update 覆盖度自动判断 | [完成] | 38313a9 |
 | P0-8 | scripts/check-worktree-residue.py + req-stage-gate 集成 | [完成] | 95dca9e |
-| P0-1 | PM-VIEW-RULES.md 943 行按消费方拆分 | 待办 | — |
-| P0-2 | 巨型 SKILL.md 拆 references/（task-execute 911/prd-writing 756/task-spec 568）| 待办 | — |
+| P0-1 | PM-VIEW-RULES.md 943→278（主索引）+ 6 个子文件，12 skill 引用 | [完成] | ea2dc82 |
+| P0-2 | task-execute 911→539 / prd-writing 756→315 / task-spec 568→525 拆 references/ | [完成] | ea2dc82 |
 | F-1 | prd-writing 484 行 PM 反馈逐条消化 | 待办 | — |
 | P0-6 | /skill-improve skill 雏形（与 F-1 一起做）| 待办 | — |
 | P0-7 | task-spec 早期截断（防 task 双轮废，先设计后实施）| 待办 | — |
