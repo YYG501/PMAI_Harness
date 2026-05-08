@@ -78,26 +78,35 @@ def load_events(events_file: Path) -> list[dict]:
     return out
 
 
+def _has_transition(events: list[dict], frm: str, to: str) -> bool:
+    return any(
+        e.get("event") == "status_changed"
+        and e.get("from") == frm
+        and e.get("to") == to
+        for e in events
+    )
+
+
 def audit_ct7(events: list[dict]) -> list[str]:
     """Return a list of violations (empty = pass)."""
     violations: list[str] = []
 
-    # Required status_changed patterns
-    required_transitions = [
-        ("待确认", "执行中"),
-        ("执行中", "已完成"),
-    ]
-    for frm, to in required_transitions:
-        hit = any(
-            e.get("event") == "status_changed"
-            and e.get("from") == frm
-            and e.get("to") == to
-            for e in events
+    # 入口转换强制：待确认→执行中
+    if not _has_transition(events, "待确认", "执行中"):
+        violations.append("I-CT7: 事件流缺少 status_changed(待确认→执行中)")
+
+    # 收口转换：接受两种合法路径
+    #   1) 直接式（当前规范）：执行中→已完成
+    #   2) 三步式（旧规范，2026-05-08 收敛之前）：执行中→待验收 + 待验收→已完成
+    direct = _has_transition(events, "执行中", "已完成")
+    legacy = _has_transition(events, "执行中", "待验收") and _has_transition(
+        events, "待验收", "已完成"
+    )
+    if not (direct or legacy):
+        violations.append(
+            "I-CT7: 事件流缺少收口转换 status_changed(执行中→已完成) "
+            "或旧规范三步式 status_changed(执行中→待验收) + status_changed(待验收→已完成)"
         )
-        if not hit:
-            violations.append(
-                f"I-CT7: 事件流缺少 status_changed({frm}→{to})"
-            )
 
     # At least one execution event
     exec_events = {"execution_started", "execution_manual_completed"}
@@ -206,6 +215,10 @@ def audit_ct8(
         if ts < earliest:
             if commit_only_touches_task_docs(sha, task_stem, repo_root):
                 # A1 hotfix: 纯 task md / engineering 元信息 commit 豁免
+                continue
+            # A2 hotfix: chore(...) / chore: ... commit 豁免——task-confirm 时
+            # PM 同步框架带进来的 commit 不是 task 代码，时间戳早于 *→执行中合理。
+            if re.match(r"^chore[(:]", subject):
                 continue
             violations.append(
                 f"I-CT8: commit {sha[:8]} ({ts.isoformat()}) 早于首次 status_changed(*→执行中) "
