@@ -7,7 +7,20 @@
 
 ## 当前位置（2026-05-08）
 
-**起因**：`/gstack-devex-review` 对 PM-AI-Workflow 框架做了一轮活体 DX 审计，综合分 4.7/10。本次会话已收口 4/9 项 P0。
+**起因**：`/gstack-devex-review` 对 PM-AI-Workflow 框架做了一轮活体 DX 审计，综合分 5.4/10（静态）→ 4.7/10（含 ExampleConsumerApp 活体证据下调）。本次会话已收口 4/9 项 P0。
+
+**评分基线**（P0/P1 完成后再次跑 /devex-review 用作对比）：
+
+| 维度 | 静态 | 活体 |
+|---|---|---|
+| Getting Started | 6 | 5 |
+| Skill 人体工学 | 7 | 5 |
+| 错误恢复 | 5 | 4 |
+| 文档可发现性 | 4 | 4 |
+| 升级路径 | 5 | 5 |
+| 环境与依赖 | 6 | 6 |
+| AI 执行可预测性 | 5 | 4 |
+| **综合** | **5.4** | **4.7** |
 
 **已完成 commit**（生成器仓）：
 
@@ -30,6 +43,14 @@
 | F-1 | prd-writing 484 行 PM 反馈逐条消化 | 待办 | — |
 | P0-6 | /skill-improve skill 雏形（与 F-1 一起做）| 待办 | — |
 | P0-7 | task-spec 早期截断（防 task 双轮废，先设计后实施）| 待办 | — |
+
+### P1 待办（次优先，P0 全完成后再做）
+
+| # | 项目 | 工作量 | 备注 |
+|---|---|---|---|
+| P1-4 | task-plan 内部「硬禁止项 vs Rules」合并成单一"硬约束"节 | 30 分钟 | 当前两节没有功能分工；改名会影响其他 skill 的 cross-ref，要批量更新 |
+| P1-5 | req-stage-gate SKILL.md(290 行) 减负，按 stage 边界拆 references/stage-{N}-{N+1}.md | 0.5 天 | 主 SKILL 只留路由 + 通用规则；每次跑 stage transition 不用整体加载 290 行 |
+| P1-6 | STATUS-v3.5实施.md 改名 RUNTIME.md 或 STATE.md，明确"运维入口"职责 | 30 分钟 | README/CLAUDE/STATUS 三处状态边界模糊；STATUS 当前自封"新窗口续接入口"= 运维职责 |
 
 ---
 
@@ -108,6 +129,44 @@ python3 .claude/scripts/check-worktree-residue.py
 - 与工程合同 .acceptance section 做 lint 对齐，不一致则不放行进 stage 6
 
 **做法**：先在生成器仓写设计文档（`docs/design/task-spec-早期截断.md` 或类似），PM 走查后再实施。
+
+---
+
+## 横向原则：防御性指令反模式（P0/P1 共同根因）
+
+> 「凭防御性指令对抗 AI 不可靠」 — 跨多个 skill 的根因观察，**不是单独任务**，但每次做 P0/P1 改造时都应该按这个方向校准。
+
+**症状**：skill 文档里散见大量 prose 防御性指令——"禁止 X / 不允许 Y / 不要简化 / 必须实跑 / 机械执行 / 不要凭印象"。这些是 AI 漏判后追加的补丁。当框架增长到 6700 行 skill 内容仍然要靠 prose 防御 AI 偷懒，说明规则没沉淀进**可校验的脚本/lint**。
+
+**典型例子**：
+- `skills/req-stage-gate/SKILL.md:284`「未决问题闸门（硬规则）」凭 prose 强制——本应由 lint 检测 `## 未决问题` section 下的 `**PM 回答：**` 是否全部填了内容
+- `skills/new-req/SKILL.md:34-61`「事实来源是 git 分支」+ 22 行 bash + "禁止：仅扫 closed/ 不扫 active/ 与 git 分支"——本应封装到 `scripts/_lib/req-num-resolver.sh`，SKILL 只调一行：`NEW_NUM=$(bash .claude/scripts/_lib/req-num-resolver.sh)`
+
+**修复方向**：每条 prose 防御性指令问一句"**能不能写成脚本检查 + 失败时报错？**" — 能就把 prose 替换成 lint 调用。
+
+**具体 P0/P1 入口**：
+- 做 P0-2（巨型 SKILL.md 拆 references/）时，把同一个 skill 里的"硬塞 bash 警告段"识别出来，封装到 `scripts/_lib/`
+- 做 P0-1（PM-VIEW-RULES 拆分）时，§八自检清单里的"逐条人工 check" 项能否改成 `check-doc-pm-view.py` 自动校验？已有的扩展即可
+- 做 P1-5（req-stage-gate 减负）时，「未决问题闸门」凭 grep 验证 → 抽到 `scripts/check-open-questions.py`
+
+---
+
+## 业务仓侧（ExampleConsumerApp）应做的清理
+
+**这些不是生成器仓改动，但 PM 知情后可以一次性清理**：
+
+### 1. worktree 残留清理
+```bash
+cd ${CONSUMER_REPO_ROOT}
+python3 .claude/scripts/check-worktree-residue.py
+# 报：编号冲突 task-001 / task-003 + 3 个孤儿 task worktree（req-001 残留）
+# 逐个跑：git worktree remove .worktrees/<name>
+```
+
+### 2. 业务仓根目录归档（与 P0-3 同款问题）
+- `ExampleConsumerApp/PROTOTYPE_CLEANUP.md`（255 行）和 `prd-writing-skill-feedback.md`（484 行）散在根目录
+- 建议建 `ExampleConsumerApp/feedback/` 或 `ExampleConsumerApp/docs/archive/` 归档
+- prd-writing-skill-feedback.md 在 F-1 消化后归档到生成器仓 `skill-feedback/prd-writing-2026-04-27.md`，业务仓本地可删
 
 ---
 
