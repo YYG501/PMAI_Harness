@@ -113,18 +113,46 @@ cd 到返回的 worktree 路径。
 brief.md 还没写。你可以选任何方式产出，我帮你整理成符合 PM-VIEW-RULES 的格式：
 
 1. 自跑 /office-hours（gstack skill）做六问深挖思考 — 跑完把产出贴回来我整理
-2. 直接口述需求要点（几句话也行）— 我按 PM-VIEW-RULES 结构化成 brief
+2. 给我说说需求要点 — 我会做缺口分析、补问 1-3 题、出 brief 草稿、走二次确认
 3. 自己写完整 brief.md — 我只做格式校验
 
 也可以混合（先跑 1 拿到产出，再补充几句让我合并）。等你说就行。
 ```
 
-**等 PM 主动告诉**采用哪种路径或直接给内容。**禁止**：
+**等 PM 主动告诉**采用哪种路径或直接给内容。
+
+#### 选项 2 的内部流程（AI 自带轻量引导，**不调用 /office-hours**）
+
+PM 选 2 或直接开始描述需求时，AI 走以下流程：
+
+1. **缺口分析**：AI 把 PM 已说的信息对照六个核心维度，判断哪些已答、哪些缺：
+   - 需求真实性：有没有真实用户在痛苦
+   - Status quo：他们现在怎么解决
+   - Desperate specificity：谁最急迫需要
+   - 最窄楔子：能不能再砍一半范围
+   - 观察证据：你亲眼见过吗
+   - Future-fit：3 年后还有意义吗
+
+2. **补问缺口**：用 AskUserQuestion 一次性问**只缺的那几个**（一般 1-3 个，最多 4 个），**不要机械问全六题**。每个问题给 2-4 个候选选项 + 选项描述，让 PM 快速选 + 可补充自由文本。
+
+3. **出 brief 草稿**：拿到答案后，AI 按 PM-VIEW-RULES（§三写作规则、§四 brief.md 严格度行）拼一版 brief 草稿**展示给 PM**（不贴 chat 看的，用 Write 写到 `brief.md` 文件，给 PM 路径让他看）。
+
+4. **二次确认门**：
+   ```
+   📝 brief.md 草稿已写入：<绝对路径>
+   一句话摘要：<一行>
+
+   A) 确认（进入步骤 5 handoff）
+   B) 我要修改（说明改哪里）
+   ```
+
+5. PM 选 A → 进步骤 5 handoff；PM 选 B → 按 PM 指示改 brief.md，改完回到 4 重新出二确（不贴全文，参 Rules "确认门只给路径+一句话摘要"）。
+
+**禁止**：
 - AI 主动调用 `/office-hours` 或任何 review/research skill — `/office-hours` 是 gstack 通用产品发现工具（含 builder/startup 模式选择 + telemetry + gbrain context queries），适合 PM 自主使用，不适合 AI 替 PM 跑
 - 在 PM 给出方向前去读 `requirements/closed/req-*` 的 brief / 项目级 docs / brief 历史 — RAG 噪声，PM 需要时自己会让你读
 - 自作主张提"我先了解一下背景再问你" — 破坏对话节奏
-
-PM 给出 brief 内容后，AI 按 PM-VIEW-RULES（特别是 §三写作规则、§四 brief.md 严格度行）整理成 `brief.md`，写入 req 目录。
+- 选项 2 里**机械问全六题** — 必须先做缺口分析再只问缺的，避免重复 PM 已经说的
 
 `brief.md` 是 stage 1 的唯一真相源，后续所有 stage 只读 brief.md。
 
@@ -161,4 +189,5 @@ brief.md 写好后，**当前主对话不再继续 stage 2**。`/new-req` 的职
 - slug 从需求描述自动生成，不需要问 PM
 - brief.md 用 PM 的原话整理，不要过度改写或添加 PM 没说的内容
 - brief 引导路径由 PM 选（步骤 4）；AI 不主动调 `/office-hours`、不预读历史 req / 项目 docs
-- PM 直接描述清楚就直接写 brief；PM 选六问引导就提示 PM 自跑 `/office-hours` 后贴产出回来
+- 选项 2（PM 给信息 + AI 引导）：AI 必须先做缺口分析再补问，不机械问全六题；走 brief 草稿 + 二次确认门
+- 选项 1（PM 自跑 office-hours）：AI 只提示 PM 自己跑，不替 PM 调 skill
