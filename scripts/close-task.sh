@@ -17,6 +17,10 @@ fi
 
 EVENTS_SCRIPT="$REPO_ROOT/.claude/scripts/task-events.py"
 
+# 加载 worktree 解析 helper（branch ↔ 物理路径，问 git，不假设 .worktrees/）
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$SCRIPT_DIR/_lib/worktree.sh"
+
 if [ ! -f "$TASK_FILE" ]; then
   echo "❌ task 文件不存在: $TASK_FILE" >&2
   exit 1
@@ -134,10 +138,10 @@ if [ -z "$REQ_BRANCH" ]; then
   exit 1
 fi
 
-REQ_WORKTREE="$REPO_ROOT/.worktrees/$REQ_BRANCH"
-if [ ! -d "$REQ_WORKTREE" ]; then
-  echo "❌ req worktree 不存在: ${REQ_WORKTREE}。需要先恢复 req worktree 才能关闭 task。" >&2
-  echo "   建议：bash $REPO_ROOT/.claude/scripts/create-req-worktree.sh $REQ_BRANCH" >&2
+REQ_WORKTREE=$(resolve_worktree_path "$REQ_BRANCH" "$REPO_ROOT" || true)
+if [ -z "$REQ_WORKTREE" ] || [ ! -d "$REQ_WORKTREE" ]; then
+  echo "❌ req worktree 不存在（git worktree list 中找不到分支 ${REQ_BRANCH}）。需要先恢复 req worktree 才能关闭 task。" >&2
+  echo "   建议：bash ${REPO_ROOT}/.claude/scripts/create-req-worktree.sh ${REQ_BRANCH}" >&2
   exit 1
 fi
 
@@ -155,8 +159,8 @@ if [ "$CALLER_PWD" != "$REQ_WT_REAL" ] && [[ "$CALLER_PWD" != "$REQ_WT_REAL"/* ]
 fi
 
 # --- 检查 task worktree 是否 clean（防止 worktree remove --force 静默丢失未提交改动） ---
-TASK_WORKTREE="$REPO_ROOT/.worktrees/$BRANCH"
-if [ -d "$TASK_WORKTREE" ]; then
+TASK_WORKTREE=$(resolve_worktree_path "$BRANCH" "$REPO_ROOT" || true)
+if [ -n "$TASK_WORKTREE" ] && [ -d "$TASK_WORKTREE" ]; then
   UNCOMMITTED=$(git -C "$TASK_WORKTREE" status --porcelain 2>/dev/null || true)
   if [ -n "$UNCOMMITTED" ]; then
     echo "❌ task worktree 有未提交改动，不能关闭（worktree remove --force 会丢失数据）：" >&2
@@ -209,8 +213,19 @@ fi
 # merge 时 git 报 modify/delete 冲突。先把 task md 从 task 分支 checkout 出来 + add，
 # 让 req 分支"先认回"它，merge 时 task 分支再 merge 进来就无冲突。
 cd "$REQ_WORKTREE"
-TASK_FILE_REL=$(echo "$TASK_FILE" | sed -E "s|^.*\.worktrees/[^/]+/||")
-ENG_FILE_REL=$(echo "$ENG_FILE" | sed -E "s|^.*\.worktrees/[^/]+/||")
+# 相对路径 = 从 task worktree 根剥前缀（worktree 共享同 repo，path 相对仓根有效）。
+# TASK_WORKTREE 已由 git worktree list 解析，不假设物理位置。
+_strip_wt_prefix() {
+  local abs="$1" wt="$2"
+  if [ -n "$wt" ] && [[ "$abs" == "$wt"/* ]]; then
+    printf '%s\n' "${abs#${wt}/}"
+  else
+    # fallback：保留旧 sed 兼容（task worktree 解析失败 / 路径形如 .worktrees/<branch>/...）
+    echo "$abs" | sed -E "s|^.*\.worktrees/[^/]+/||"
+  fi
+}
+TASK_FILE_REL=$(_strip_wt_prefix "$TASK_FILE" "$TASK_WORKTREE")
+ENG_FILE_REL=$(_strip_wt_prefix "$ENG_FILE" "$TASK_WORKTREE")
 # 仅当 req 分支当前不存在该路径时才"认回"（v4.5 fork 时已删；旧格式未删时跳过）
 RECLAIMED=()
 if ! git ls-files --error-unmatch "$TASK_FILE_REL" >/dev/null 2>&1; then

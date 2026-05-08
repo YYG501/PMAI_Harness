@@ -6,6 +6,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/_setup-deps.sh"
+source "$SCRIPT_DIR/_lib/worktree.sh"
 
 usage() {
   echo "用法: bash create-task-worktree.sh <task-file> <req-branch>" >&2
@@ -56,7 +57,7 @@ else
   BRANCH="task-${TASK_BASENAME}"
 fi
 
-WORKTREE_DIR="${REPO_ROOT}/.worktrees/${BRANCH}"
+WORKTREE_DIR="${PM_AI_WORKTREE_BASE:-${REPO_ROOT}/.worktrees}/${BRANCH}"
 
 # --- Validate req branch exists ---
 if ! git -C "$REPO_ROOT" show-ref --verify --quiet "refs/heads/$REQ_BRANCH" 2>/dev/null; then
@@ -65,8 +66,11 @@ if ! git -C "$REPO_ROOT" show-ref --verify --quiet "refs/heads/$REQ_BRANCH" 2>/d
 fi
 
 # --- Create worktree (idempotent) ---
-if [ -d "$WORKTREE_DIR" ] && [ -e "$WORKTREE_DIR/.git" ]; then
-  : # Already exists, skip creation
+# 先问 git：branch 是否已 attached 任何 worktree（不假设在 .worktrees/）。
+EXISTING_WT=$(resolve_worktree_path "$BRANCH" "$REPO_ROOT" || true)
+if [ -n "$EXISTING_WT" ] && [ -d "$EXISTING_WT" ]; then
+  # 已存在 worktree（可能在 .worktrees/、conductor 路径、或自定义位置），直接复用。
+  WORKTREE_DIR="$EXISTING_WT"
 else
   mkdir -p "$(dirname "$WORKTREE_DIR")"
 
@@ -94,8 +98,8 @@ setup_dependency_symlinks "$REPO_ROOT" "$WORKTREE_DIR"
 # 注：task-spec 阶段（task-confirm 之前）task md 仍在 req 分支，无歧义。
 # fork 之后才移走。
 ABS_TASK_FILE=$(cd "$(dirname "$TASK_FILE")" && pwd -P)/$(basename "$TASK_FILE")
-REQ_WT="$REPO_ROOT/.worktrees/$REQ_BRANCH"
-if [ -d "$REQ_WT" ]; then
+REQ_WT=$(resolve_worktree_path "$REQ_BRANCH" "$REPO_ROOT" || true)
+if [ -n "$REQ_WT" ] && [ -d "$REQ_WT" ]; then
   REQ_WT_REAL=$(cd "$REQ_WT" && pwd -P)
   if [[ "$ABS_TASK_FILE" == "$REQ_WT_REAL"/* ]]; then
     REL_PATH="${ABS_TASK_FILE#${REQ_WT_REAL}/}"

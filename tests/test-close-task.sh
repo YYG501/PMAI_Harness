@@ -834,6 +834,58 @@ test_autochain_user_n() {
 }
 
 # =================================================
+# Conductor-style: req worktree NOT in <main-repo>/.worktrees/
+# 验证 close-task 通过 git worktree list 解析（不假设 .worktrees/ 物理路径）
+# =================================================
+test_happy_path_conductor_worktree_path() {
+  start_test "happy path: close-task works when req worktree is outside .worktrees/ (conductor-style)"
+  fixture_setup
+
+  req_dir=$(fixture_create_req "req-001" "test" 6)
+  task=$(fixture_create_task "$req_dir" "009" "conductor" "待确认" "/qa")
+  task_wt=$(fixture_create_task_worktree "$task" "req-001-test")
+  task_stem=$(basename "$task" .md)
+
+  (
+    cd "$task_wt"
+    echo "task output" > output.txt
+    git add output.txt
+    git commit -q -m "task: add output"
+  )
+
+  mkdir -p "$FIXTURE_DIR/.runs/events"
+  echo '{"task":"'"$task_stem"'"}' > "$FIXTURE_DIR/.runs/$task_stem.json"
+  fixture_seed_full_event_stream "$task"
+
+  # 把 req worktree 挪出 .worktrees/，模拟 conductor 把 worktree 放在 ~/.superset/worktrees/
+  conductor_base=$(mktemp -d -t conductor-style-XXXXXX)
+  conductor_path="$conductor_base/req-001-test"
+  git -C "$FIXTURE_DIR" worktree move "$FIXTURE_DIR/.worktrees/req-001-test" "$conductor_path"
+
+  # move 后 task md 在新路径
+  task_after_move="$conductor_path/requirements/active/req-001-test/tasks/$task_stem.md"
+  _mark_task_done "$task_after_move"
+
+  if (cd "$conductor_path" && bash "$CLOSE_TASK" "$task_after_move") >/tmp/out.$$ 2>/tmp/err.$$; then
+    if git -C "$FIXTURE_DIR" show-ref --verify --quiet "refs/heads/$task_stem"; then
+      _fail "task branch should be deleted; still exists"
+    elif [ -d "$FIXTURE_DIR/.worktrees/$task_stem" ] || [ -d "$task_wt" ]; then
+      _fail "task worktree should be removed; still exists"
+    else
+      pass_test
+    fi
+  else
+    _fail "close-task failed when req worktree is at conductor-style path"
+    echo "--- stderr ---" >&2
+    cat /tmp/err.$$ >&2
+  fi
+
+  rm -rf "$conductor_base"
+  rm -f /tmp/out.$$ /tmp/err.$$
+  fixture_teardown
+}
+
+# =================================================
 # Run all tests
 # =================================================
 test_reject_if_status_not_done
@@ -858,5 +910,6 @@ test_autochain_has_next_task
 test_autochain_all_done
 test_autochain_user_n
 test_skip_doc_update_exit_zero
+test_happy_path_conductor_worktree_path
 
 report_results "close-task"

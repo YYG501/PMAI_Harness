@@ -10,6 +10,7 @@ REQ_DIR="${1:?用法: close-req.sh <req-dir>}"
 # --- Setup PYTHONPATH for _lib.task_parser ---
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/_lib/_setup-pythonpath.sh"
+source "$SCRIPT_DIR/_lib/worktree.sh"
 
 # --- 找到主仓根目录 ---
 GIT_COMMON=$(git rev-parse --git-common-dir 2>/dev/null || echo "")
@@ -68,9 +69,9 @@ fi
 
 # --- Step 1: 在 req worktree 中先完成"归档到 closed/ + meta 改 closed"并 commit ---
 # 这样 merge 到 main 时会一次性带过去，不需要 merge 后再改动文件
-REQ_WORKTREE="$REPO_ROOT/.worktrees/$REQ_BRANCH"
-if [ ! -d "$REQ_WORKTREE" ]; then
-  echo "❌ req worktree 不存在: ${REQ_WORKTREE}。请先恢复 req worktree。" >&2
+REQ_WORKTREE=$(resolve_worktree_path "$REQ_BRANCH" "$REPO_ROOT" || true)
+if [ -z "$REQ_WORKTREE" ] || [ ! -d "$REQ_WORKTREE" ]; then
+  echo "❌ req worktree 不存在（git worktree list 中找不到分支 ${REQ_BRANCH}）。请先恢复 req worktree。" >&2
   exit 1
 fi
 

@@ -48,11 +48,14 @@ else
   BRANCH="req-${REQ_ID}"
 fi
 
-WORKTREE_DIR="${REPO_ROOT}/.worktrees/${BRANCH}"
+WORKTREE_DIR="${PM_AI_WORKTREE_BASE:-${REPO_ROOT}/.worktrees}/${BRANCH}"
 
-# --- Idempotent: if worktree already exists, just output path ---
-if [ -d "$WORKTREE_DIR" ] && [ -e "$WORKTREE_DIR/.git" ]; then
-  echo "$WORKTREE_DIR"
+# --- Idempotent: 先问 git，branch 是否已 attached worktree（不假设在 .worktrees/） ---
+SCRIPT_DIR_RW="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$SCRIPT_DIR_RW/_lib/worktree.sh"
+EXISTING_WT=$(resolve_worktree_path "$BRANCH" "$REPO_ROOT" || true)
+if [ -n "$EXISTING_WT" ] && [ -d "$EXISTING_WT" ]; then
+  echo "$EXISTING_WT"
   exit 0
 fi
 

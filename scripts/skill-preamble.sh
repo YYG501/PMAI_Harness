@@ -22,6 +22,12 @@
 #       多: ACTIVE_REQ 留空（不要默选第一个），输出列出所有候选
 #         skill 自己判断 ACTIVE_REQ_COUNT，决定报错或让 PM 进具体 worktree
 
+# --- 0. 加载 worktree 解析 helper（branch ↔ 物理路径，问 git，不假设 .worktrees/） ---
+_PREAMBLE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+if [ -f "$_PREAMBLE_DIR/_lib/worktree.sh" ]; then
+  source "$_PREAMBLE_DIR/_lib/worktree.sh"
+fi
+
 # --- 1. 检测当前分支 ---
 BRANCH=$(git branch --show-current 2>/dev/null || echo "unknown")
 
@@ -105,10 +111,18 @@ if [ "$WORKTREE_TYPE" != "main" ]; then
   fi
 else
   _collect_active_reqs_in "$MAIN_REPO_ROOT"
-  for _req_wt in "$MAIN_REPO_ROOT"/.worktrees/req-*; do
-    [ -d "$_req_wt" ] || continue
-    _collect_active_reqs_in "$_req_wt"
-  done
+  # 通过 git worktree list 遍历所有 attached 的 req-* worktree（不假设在 .worktrees/）
+  if command -v list_worktrees_by_branch_prefix >/dev/null 2>&1; then
+    while IFS=$'\t' read -r _wt_branch _wt_path; do
+      [ -n "$_wt_path" ] && [ -d "$_wt_path" ] && _collect_active_reqs_in "$_wt_path"
+    done < <(list_worktrees_by_branch_prefix "req-" "$MAIN_REPO_ROOT" 2>/dev/null)
+  else
+    # fallback：helper 不可用时退回旧 glob
+    for _req_wt in "$MAIN_REPO_ROOT"/.worktrees/req-*; do
+      [ -d "$_req_wt" ] || continue
+      _collect_active_reqs_in "$_req_wt"
+    done
+  fi
 fi
 
 ACTIVE_REQ_COUNT="${#_ACTIVE_REQ_IDS[@]}"

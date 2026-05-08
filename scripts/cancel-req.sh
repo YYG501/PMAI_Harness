@@ -17,6 +17,7 @@ REQ_DIR="${1:?用法: cancel-req.sh <req-dir>}"
 # --- Setup PYTHONPATH for _lib.task_parser ---
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/_lib/_setup-pythonpath.sh"
+source "$SCRIPT_DIR/_lib/worktree.sh"
 
 # --- 找到主仓根目录 ---
 GIT_COMMON=$(git rev-parse --git-common-dir 2>/dev/null || echo "")
@@ -211,7 +212,11 @@ for i in "${!TASK_BRANCHES[@]}"; do
     lsof -ti :"$PORT" 2>/dev/null | xargs kill 2>/dev/null || true
   fi
 
-  TASK_WT="$REPO_ROOT/.worktrees/$TASK_BRANCH"
+  TASK_WT=$(resolve_worktree_path "$TASK_BRANCH" "$REPO_ROOT" || true)
+  if [ -z "$TASK_WT" ]; then
+    # 没找到对应 worktree（可能已被手动删除）。pending-cleanup 会按 branch 处理。
+    TASK_WT="$REPO_ROOT/.worktrees/$TASK_BRANCH"
+  fi
   python3 "$QUEUE_PENDING_PY" "$PENDING_FILE" task "$TASK_BRANCH" "$TASK_WT" "$TASK_STEM"
   echo "🕓 标记待清理 task: $TASK_BRANCH"
 
@@ -221,7 +226,10 @@ for i in "${!TASK_BRANCHES[@]}"; do
 done
 
 # --- Step 5: 标记 req worktree/分支为待清理 ---
-REQ_WORKTREE="$REPO_ROOT/.worktrees/$REQ_BRANCH"
+REQ_WORKTREE=$(resolve_worktree_path "$REQ_BRANCH" "$REPO_ROOT" || true)
+if [ -z "$REQ_WORKTREE" ]; then
+  REQ_WORKTREE="$REPO_ROOT/.worktrees/$REQ_BRANCH"
+fi
 python3 "$QUEUE_PENDING_PY" "$PENDING_FILE" req "$REQ_BRANCH" "$REQ_WORKTREE" "$REQ_DIR"
 echo "🕓 标记待清理 req: $REQ_BRANCH"
 

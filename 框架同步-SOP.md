@@ -1,11 +1,11 @@
 # 框架同步 SOP（手动操作手册）
 
-**性质**：hotfix 阶段过渡用。等 `设计-框架同步.md` §5 sync 脚本实施完成后，本文档撤销，改用脚本。
+**性质**：hotfix 阶段过渡用。等 `docs/archive/design/设计-框架同步.md` §5 sync 脚本实施完成后，本文档撤销，改用脚本。
 
 **适用对象**：PM 把 PM-AI-Workflow 生成器仓的 `scripts/` `skills/` 同步到下游消费项目（example-consumer-app / ExampleConsumerB 等）。
 
 **关联文档**：
-- `设计-框架同步.md`（v1 定稿 2026-04-26，853 行）：完整 sync 机制设计（manifest + 脚本 + worktree 报告）
+- `docs/archive/design/设计-框架同步.md`（v1 定稿 2026-04-26，853 行）：完整 sync 机制设计（manifest + 脚本 + worktree 报告）
 - `TODOS.md` §UP「框架同步方案」：实施跟踪（标"设计完成，待实施"）
 
 ---
@@ -20,7 +20,7 @@
 
 不需要同步的场景：
 
-- PM-AI-Workflow 改动只在 `tests/` / `设计-*.md` / `STATUS-*.md` / `TODOS.md` —— 这些不下发
+- PM-AI-Workflow 改动只在 `tests/` / `docs/archive/design/设计-*.md` / `STATUS-*.md` / `TODOS.md` —— 这些不下发
 - PM-AI-Workflow 在改 `INVARIANTS.md` / `README.md` / `CLAUDE.md` —— 这些是生成器自身文档，不同步
 
 ---
@@ -36,7 +36,7 @@ scripts/             →      .claude/scripts/
 skills/              →      .claude/skills/
 ```
 
-> 未来 manifest（设计-框架同步.md §4.2）会扩展到 `templates/` `agents/`，本 SOP 暂不覆盖。
+> 未来 manifest（docs/archive/design/设计-框架同步.md §4.2）会扩展到 `templates/` `agents/`，本 SOP 暂不覆盖。
 
 ### 2.2 必同步分支
 
@@ -54,10 +54,48 @@ skills/              →      .claude/skills/
 
 ## 3. 标准操作步骤
 
+### 步骤 0：前置检查 + 列消费仓 worktree 清单（**强制**）
+
+**0a. 双方 working-dir clean 检查**
+
+```bash
+# 生成器侧
+cd /path/to/PM-AI-Workflow
+git status --short    # 必须空。有未 commit 改动 = sync 出去的是 unauthorized 内容，停手。
+
+# 消费仓侧
+cd /path/to/consumer
+git status --short    # 必须空。有未 commit 改动 = rsync 会静默覆盖本地工作，停手。
+```
+
+任一不空 → 先 commit / stash 再回来。
+
+**0b. 列消费仓所有 worktree 清单**
+
+```bash
+cd /path/to/consumer
+git worktree list --porcelain | grep -E '^worktree |^branch '
+```
+
+记下输出，这是步骤 6（多分支应用）要遍历的 *完整* 目标清单。**不要假设 worktree 都在 `.worktrees/`**——conductor / superset / codex 路径下的 worktree 必须显式扫到，否则该 req 分支拿不到 sync。
+
+> 例子：本仓 `git worktree list --porcelain` 可能输出 `worktree ~/.superset/worktrees/abc/req-003-foo`——这条必须出现在步骤 6 的目标清单里。
+
 ### 步骤 1：看上次同步时点
+
+**1a. 优先按 trailer 查**（精确）
 
 ```bash
 # 在消费仓里看
+git log -1 --grep='^Generator-HEAD:' --format='%h %ai %s%n%b' .claude/scripts/
+# 输出例最末一行：Generator-HEAD: bb0491e
+```
+
+trailer 是步骤 5 commit 模板新增的锚点。grep 不到就 fallback 到 1b。
+
+**1b. fallback：按 commit message 反推**（旧仓兼容）
+
+```bash
 git log --format='%h %ai %s' .claude/scripts/ | grep '同步框架' | head -1
 # 输出例：d9df3f8 2026-05-07 16:24:58 +0800 chore: 同步框架 — ...
 ```
@@ -68,31 +106,66 @@ git log --format='%h %ai %s' .claude/scripts/ | grep '同步框架' | head -1
 
 ```bash
 cd /path/to/PM-AI-Workflow
-git log --since='<上次 sync 时间>' --format='%h %ai %s' main
+# 用 path 限定，只列影响 sync 的 commit；hash..HEAD 用步骤 1 拿到的上次 generator HEAD
+git log <上次 generator HEAD>..HEAD --format='%h %ai %s' -- scripts/ skills/
 ```
 
-筛掉只动 `tests/` `设计-*.md` 等不下发文件的 commit。剩下的就是这次要同步的 commits 清单。
+`-- scripts/ skills/` 限定路径直接过滤掉只动 `tests/` `docs/archive/design/设计-*.md` 等不下发文件的 commit，**比 `--since=` 时间过滤更精确**——不会因为时区 / 时间戳跳变把无关 commit 带进来，也不会漏过去很久前但仍在 sync 范围的 commit。
+
+> fallback：步骤 1 走 1b 没拿到精确 hash → 改用 `--since='<上次 sync 时间>' -- scripts/ skills/`，仍然记得加 path 限定。
 
 ### 步骤 3：rsync 同步内容
+
+**3a. dry-run 先看变更清单**（**必跑**）
 
 ```bash
 SRC=/path/to/PM-AI-Workflow
 DST=/path/to/consumer  # 可以是消费仓主目录或 worktree
 
+rsync -a --dry-run -iv "$SRC/scripts/" "$DST/.claude/scripts/"
+rsync -a --dry-run -iv "$SRC/skills/"  "$DST/.claude/skills/"
+```
+
+`-iv` 输出每个文件的变更标记：
+
+- `>f.st....` = 文件内容会被覆盖
+- `>f+++++++` = **新文件**（重点关注，对应坑 §4.7：跨文件依赖原子性）
+- `cd+++++++` = **新目录**（对应坑 §4.3）
+- 没有输出 = 无变更
+
+PM 看一眼变更清单，跟步骤 2 列的 commits 对得上 → 进入 3b。**新文件 / 新目录数量异常高**（如步骤 2 只显示 3 commit 但 dry-run 列 50 个新文件）→ 停手排查，可能 path 配错或消费仓没初始化过 `.claude/`。
+
+**3b. 实跑**
+
+```bash
 rsync -a "$SRC/scripts/" "$DST/.claude/scripts/"
 rsync -a "$SRC/skills/"  "$DST/.claude/skills/"
 ```
 
 `-a` 保留属性 + 递归。**不加** `--delete`：消费侧未来可能有 `.framework-overrides` 类本地配置，留余地。
 
-### 步骤 4：diff verify 100% 一致
+### 步骤 4：diff verify（**强制 + 方向校验**）
+
+**4a. 内容一致性**（不可跳过）
 
 ```bash
 diff -rq "$SRC/scripts/" "$DST/.claude/scripts/" 2>&1 | grep -v 'Common'
 diff -rq "$SRC/skills/"  "$DST/.claude/skills/"  2>&1 | grep -v 'Common'
 ```
 
-**两条命令输出都为空** = 100% 一致 = sync 内容正确。
+**两条命令输出都为空** = 100% 一致 = sync 内容正确。**有任一行输出 → 立即停手排查**。
+
+**4b. 方向 sanity check**（防 4.1 看反陷阱）
+
+rsync 之前在消费仓里的文件如果**比 generator 还新**，要么消费侧有未上推的本地改动，要么 trade study 出错（消费仓应该是接收方，不是 source）。先比时间：
+
+```bash
+# 比对消费仓最近 .claude/scripts/ commit 时间 vs generator main 最近 scripts/ commit 时间
+git -C "$DST" log -1 --format='%ai' -- .claude/scripts/
+git -C "$SRC" log -1 --format='%ai' -- scripts/
+```
+
+generator 时间应**晚于或等于**消费仓时间。如果消费仓更晚 → 停手，先排查为什么消费侧有更新（4.1 实战教训：差点把消费仓老版本误判为"独有内容"放弃 sync）。
 
 ### 步骤 5：commit
 
@@ -100,6 +173,9 @@ diff -rq "$SRC/skills/"  "$DST/.claude/skills/"  2>&1 | grep -v 'Common'
 cd "$DST"
 git add .claude/scripts/ .claude/skills/
 git status --short  # 检查改动文件数 + untracked 目录（如新增 references/）
+
+# 拿 generator 当前 HEAD（步骤 5 模板末尾的 trailer 用）
+GEN_HEAD=$(git -C "$SRC" rev-parse --short HEAD)
 
 git commit -m "chore: 同步框架 — <一行摘要>
 
@@ -113,29 +189,58 @@ git commit -m "chore: 同步框架 — <一行摘要>
 - ...
 
 至此 .claude/scripts + .claude/skills 与 PM-AI-Workflow main 主仓内容 100% 一致。
+
+Generator-HEAD: $GEN_HEAD
 "
+```
+
+> `Generator-HEAD:` trailer 是步骤 1a 的锚点。**必填**——下次 sync 直接 grep 这个 trailer 拿上次同步点，不用再脑算 / 反推。
+
+### 步骤 5.5：sync 后冒烟（**强制**）
+
+rsync + commit 完不代表 sync 成功。如果本次涵盖**新文件**（例如新 helper `_lib/xxx.sh` 或新 skill 子目录），其它脚本会 source / import 它——必须验脚本能 source 不崩，否则消费仓在下次 close-task / task-execute 才发现，已经晚了。
+
+```bash
+cd "$DST"
+
+# 5.5a. skill-preamble（所有 skill 入口都 source 它，最敏感）
+bash .claude/scripts/skill-preamble.sh </dev/null && echo OK || echo FAIL
+# 期望：OK 或 preamble 输出（无 source / unbound variable / not found 错误）
+
+# 5.5b. 关键写入端脚本 syntax check（不真跑，只验语法 + source 可达）
+for s in close-task.sh close-req.sh cancel-req.sh create-task-worktree.sh create-req-worktree.sh quick-fix.sh; do
+  bash -n .claude/scripts/$s && echo "✓ $s" || echo "✗ $s SYNTAX ERROR"
+done
+```
+
+任一 FAIL / SYNTAX ERROR → **revert commit** 排查后再来：
+
+```bash
+git reset --hard HEAD~1   # 退回 sync 前
 ```
 
 ### 步骤 6：多分支应用
 
-main 分支同步完后，每个 active req 分支重复步骤 3-5：
+main 分支同步完后，遍历**步骤 0b 的 worktree 清单**，对每个 active req 分支重复步骤 3-5.5：
 
-**req 分支已有 worktree**（如 .superset / .codex 路径下）：直接在 worktree 里跑步骤 3-5。
+**req 分支已有 worktree**（步骤 0b 列出的——可能在 `.worktrees/`、`.superset/`、`.codex/` 或自定义路径）：cd 到那个具体路径跑步骤 3-5.5。**不要假设 `<consumer>/.worktrees/<req>`**。
 
-**req 分支没 worktree**：
+**req 分支在 0b 清单里没出现**（可能历史 worktree 已删但分支还在）：
 
 ```bash
 cd /path/to/consumer
 git worktree add .worktrees/<req-name>-temp-sync <req-branch>
-# 在 .worktrees/<req-name>-temp-sync 里跑步骤 3-5
+# 在 .worktrees/<req-name>-temp-sync 里跑步骤 3-5.5
 git worktree remove .worktrees/<req-name>-temp-sync
 ```
+
+> 每个分支跑完步骤 5.5 冒烟都要过；任一分支冒烟失败必须 revert 该分支的 sync commit。
 
 ---
 
 ## 4. 常见坑（来自 2026-05-08 实战）
 
-### 4.1 不要把 diff `+`/`-` 看反
+### 4.1 不要把 diff `+`/`-` 看反（已硬卡入步骤 4b）
 
 `diff -rq` 显示 "Files X and Y differ"，看具体 diff 时：
 
@@ -160,7 +265,7 @@ PM-AI-Workflow 偶尔加新子目录（如 `skills/task-spec/references/`）。
 
 `rsync -a` 自动 cover 新目录。但 `git status` 会显示 `??` 而不是 `M`，PM 容易忽略。**记得 `git add .claude/` 时把 untracked 一起加**。
 
-### 4.4 worktree 在哪不固定
+### 4.4 worktree 在哪不固定（已硬卡入步骤 0b）
 
 req 分支的 worktree 可能在：
 
@@ -182,6 +287,21 @@ req 分支的 worktree 可能在：
 ### 4.6 临时 worktree 记得删
 
 给 req 分支建的 `.worktrees/<req>-temp-sync` 临时 worktree，sync commit 完了一定要删（`git worktree remove`），否则 worktree list 越积越多。
+
+### 4.7 跨文件依赖必须一起拷（原子性）
+
+如果一次 sync 包含**新建的共享层**（例如 `scripts/_lib/xxx.sh` helper、`skills/_shared/yyy.md` 共享段），所有 source / import 它的脚本必须一起拷过去。**不能挑文件 sync**——挑了就崩。
+
+识别方式：步骤 3a dry-run 输出里出现 `>f+++++++ scripts/_lib/...` 或 `cd+++++++ skills/_shared/...` → 把整个 `_lib/` `_shared/` 目录 + 所有调用方一起进。
+
+**实战例子（2026-05-08 worktree 路径重构）**：
+
+- 新文件 `scripts/_lib/worktree.sh`（helper 提供 `resolve_worktree_path` / `list_worktrees_by_branch_prefix`）
+- 7 个调用方 `scripts/{close-task, close-req, cancel-req, create-task-worktree, create-req-worktree, quick-fix, skill-preamble}.sh`
+
+如果 PM 心想"我只 sync 改动文件"漏拷 helper，consumer 下次 close-task 一跑 `source _lib/worktree.sh` 立即崩——步骤 5.5 冒烟就是为这个 case 设计。
+
+→ 步骤 3 默认是整目录 rsync，本节当作"看见新 helper 时多看一眼调用方都拷到了没"。
 
 ---
 
@@ -210,15 +330,15 @@ req 分支的 worktree 可能在：
 
 ### 5.2 2026-04-26 example-consumer-app sync（历史参考）
 
-详见 `设计-框架同步.md` §1，6 痛点（P1-P6）当时由那次实战暴露。
+详见 `docs/archive/design/设计-框架同步.md` §1，6 痛点（P1-P6）当时由那次实战暴露。
 
 ---
 
 ## 6. 何时撤销本 SOP
 
-`设计-框架同步.md` §5 `scripts/sync-to-consumer.sh` 实施完成后：
+`docs/archive/design/设计-框架同步.md` §5 `scripts/sync-to-consumer.sh` 实施完成后：
 
-- 本 SOP 移到 `设计-框架同步.md` 末尾作为"附录：手动 SOP（已废弃）"
+- 本 SOP 移到 `docs/archive/design/设计-框架同步.md` 末尾作为"附录：手动 SOP（已废弃）"
 - TODOS.md 把"框架同步方案"标记为"已实施"
 - 单独的 `框架同步-SOP.md` 可删
 

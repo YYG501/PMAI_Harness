@@ -4,6 +4,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/_setup-deps.sh"
+source "$SCRIPT_DIR/_lib/worktree.sh"
 
 usage() {
   cat >&2 <<'EOF'
@@ -208,21 +209,30 @@ warn_active_reqs() {
   local found=()
   local meta req_dir status id
   shopt -s nullglob
-  for meta in "$repo_root"/requirements/active/req-*/.req-meta.json "$repo_root"/.worktrees/req-*/requirements/active/req-*/.req-meta.json; do
-    status=$(python3 - "$meta" <<'PY' 2>/dev/null || true
+  # 主仓 + 所有 attached 的 req worktree（不假设在 .worktrees/，问 git）
+  local _wt_paths=("$repo_root")
+  while IFS=$'\t' read -r _wt_branch _wt_path; do
+    [ -n "$_wt_path" ] && _wt_paths+=("$_wt_path")
+  done < <(list_worktrees_by_branch_prefix "req-" "$repo_root" 2>/dev/null)
+  local _wt
+  for _wt in "${_wt_paths[@]}"; do
+    [ -d "$_wt" ] || continue
+    for meta in "$_wt"/requirements/active/req-*/.req-meta.json; do
+      status=$(python3 - "$meta" <<'PY' 2>/dev/null || true
 import json, sys
 print(json.load(open(sys.argv[1], encoding="utf-8")).get("status", ""))
 PY
 )
-    if [ "$status" = "active" ]; then
-      id=$(python3 - "$meta" <<'PY' 2>/dev/null || true
+      if [ "$status" = "active" ]; then
+        id=$(python3 - "$meta" <<'PY' 2>/dev/null || true
 import json, sys
 print(json.load(open(sys.argv[1], encoding="utf-8")).get("id", "unknown"))
 PY
 )
-      req_dir=$(dirname "$meta")
-      found+=("$id ($req_dir)")
-    fi
+        req_dir=$(dirname "$meta")
+        found+=("$id ($req_dir)")
+      fi
+    done
   done
   shopt -u nullglob
 
