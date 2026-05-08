@@ -46,7 +46,7 @@ test_settlement_four_situations() {
   _assert_contains "$DOC_UPDATE_SKILL" "Content identical" "SKIP situation" || return
   _assert_contains "$DOC_UPDATE_SKILL" "**SKIP**：不写入" "SKIP handling" || return
   _assert_contains "$DOC_UPDATE_SKILL" "Content different" "MODIFY situation" || return
-  _assert_contains "$DOC_UPDATE_SKILL" "**MODIFY**：展示 diff，PM confirms each item" "MODIFY handling" || return
+  _assert_contains "$DOC_UPDATE_SKILL" "**MODIFY**：进位置清单审核门（步骤 3-6）" "MODIFY handling" || return
   _assert_contains "$DOC_UPDATE_SKILL" "Item in module spec but NOT in task list" "LEAVE UNCHANGED situation" || return
   _assert_contains "$DOC_UPDATE_SKILL" "**LEAVE UNCHANGED**：保留，不删除" "LEAVE handling" || return
 
@@ -61,7 +61,9 @@ test_composite_key_matching() {
   _assert_contains "$DOC_UPDATE_SKILL" '`**所属模块章节**` 字段' "task header field (table format)" || return
   _assert_contains "$DOC_UPDATE_SKILL" "level-3 feature name" "level-3 feature key" || return
   _assert_contains "$DOC_UPDATE_SKILL" 'section header `### N · 功能名`' "task feature header" || return
-  _assert_contains "$DOC_UPDATE_SKILL" '在 module spec 中定位 `### [module chapter]`，再查找其下 `#### N · [feature name]`' "module lookup" || return
+  _assert_contains "$DOC_UPDATE_SKILL" '在 module spec 中定位 `### [module chapter]`' "module lookup chapter" || return
+  _assert_contains "$DOC_UPDATE_SKILL" '`#### N · [feature name]`' "module lookup feature" || return
+  _assert_contains "$DOC_UPDATE_SKILL" '建议不读全文' "module lookup discourages full-read" || return
 
   pass_test
 }

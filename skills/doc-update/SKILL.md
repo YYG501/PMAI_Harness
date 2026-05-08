@@ -36,6 +36,60 @@ description: Use when task 已完成、PM 已通过验收、需要在 close-task
    - req 级：`requirements/active/<req>/brief.md` / `analysis.md` / `solution.md` / `solution.engineering.md`
 7. 沉淀模式：从 PM 视图主文件读取 `**所属模块**` / `**所属模块章节**` 字段（在「📌 任务卡」表格中）+ `## 📋 功能清单` section
 
+## 位置定位原则（必读）
+
+doc-update 涉及的长期文档（`docs/modules/*.md` / `solution.md` / `solution.engineering.md` / `docs/DESIGN.md` / `docs/CONTEXT.md` / `docs/prd.md`）通常几千行。**建议优先走"多重 grep + 章节级局部读"**——保险性 ≥ 全读，且系统化、可重复；不到必要时不 Read 全文。
+
+**为什么不读全文更保险**：
+- grep 系统化：关键字命中 = 100% 不漏
+- AI 全文注意力扫描概率化：几千行长文上漏看是真实风险
+- 几千行 token 中只有改动位置周边 ±50 行真正进入起草决策，其余 99% 是被读但没用的 token
+
+**唯一例外**：步骤 8 rewrite mode 整段重写场景。
+
+### A. 找位置（保险机制）
+
+#### A.1 反转 task：5 重 grep
+
+被反转的决策（如 `D15` / `行展开 ▸/▾`）通常已被多处长期文档沉淀过。从 task PM 视图主文件 §🎯 关键产品决策 / §业务层偏差 提取关键字后，跑 5 套 grep：
+
+1. **D 项编号**：`grep -rn 'D15\|D19' requirements/active/<req>/ docs/`
+2. **章节锚点**：`grep -rn '§1A\|§3\.8\|§5\.3' requirements/active/<req>/ docs/`
+3. **反转术语**：`grep -rn '行展开\|▸/▾' requirements/active/<req>/ docs/`
+4. **同义词**（task md §业务层偏差表里 PM 写的术语）：按表逐个 grep
+5. **章节级扫描兜底**：每个目标长期文档跑 `grep -n '^### \|^#### '` 列章节目录，肉眼复核有无可疑命中
+
+→ 5 套结果合并去重 → 位置清单（每条含 `file:line` + 章节锚点）
+
+#### A.2 沉淀模式（非反转 / 增量沉淀）
+
+task md §所属模块章节字段直接给章节锚点：
+
+```bash
+grep -n '^### <module chapter>' docs/modules/<module>.md
+```
+
+一击即中，连多重都不用。
+
+### B. 起草改动：Read 章节级局部范围
+
+定位到每处命中后，Read 命中所在的章节级范围（章节标题行 → 下一个同级标题前）：
+
+```bash
+# 例：grep 定位到 §3.8 在 line 301，下一个 ^### 在 line 350
+# Read line 301-349
+```
+
+通常每处 30-100 行。**避免以"看周边上下文"为名 Read 全文**——章节范围已经包含起草所需的全部上下文（原文风格 / 段落完整性 / 字段口径）；除非你判断本次确实需要跨章节才能起草，否则不读全文。
+
+### C. 失败兜底
+
+如果 5 重 grep 都没命中但 task md 明示某文档需要改 → 报错并停下，让 PM 决定：
+- 是 task md 关键字遗漏（PM 补关键字后重试）
+- 是 task md 误判该文档需要改（PM 改 task md 后重试）
+
+**避免在没有命中时直接 Read 全文 fallback**——这会让"位置定位原则"形同虚设；先回到 PM 决策（可能是关键字遗漏）再走下一步。
+
 ## Workflow
 
 ### 步骤 0.5：沉淀风险判断（AI 主动做）
@@ -101,7 +155,9 @@ PM 选 half-close → 退出 doc-update（exit 1），让 close-task 走 `--skip
 
 ### 步骤 1.6：模块规格对账（对账模式保留）
 
-A. 读取偏差涉及的模块规格全文（`docs/modules/<module>.md`）
+A. 按"位置定位原则"找位置 + Read 章节范围（**建议不读全文**）：
+   - 偏差指向章节明确 → `grep -n '^### <chapter>' docs/modules/<module>.md` 拿章节起始行 + Read 章节范围（到下一个 `^### ` 之前）
+   - 偏差需要先定位 → 跑反转 task 5 重 grep（位置定位原则 §A.1）或字段名 grep
 B. 读取最终实现的代码（task worktree 的关键文件）
 C. 对照功能清单表格，逐行核对实际实现是否匹配
 D. 生成修改方案（行级别精确操作）：
@@ -123,7 +179,7 @@ E. 向 PM 展示对账结果，逐条确认后执行
 
 - `belonging module chapter`：取自 PM 视图主文件「📌 任务卡」表格的 `**所属模块章节**` 字段
 - `level-3 feature name`：取自 PM 视图 `## 📋 功能清单` 内 section header `### N · 功能名`
-- 在 module spec 中定位 `### [module chapter]`，再查找其下 `#### N · [feature name]`
+- 在 module spec 中定位 `### [module chapter]`：先 `grep -n '^### [module chapter]' docs/modules/<module>.md` 拿起始行号，Read 该章节起到下一个 `^### ` 之间的范围（**建议不读全文**），再在范围内查找 `#### N · [feature name]`
 
 跨模块 task 的 `**所属模块章节**` 必须使用 `模块A:章节X, 模块B:章节Y` 格式。沉淀时按每个 `模块:章节` 组合分别匹配对应 `docs/modules/<module>.md`。
 
@@ -152,10 +208,10 @@ ADD / MODIFY 操作时，整个 H4 功能块按下述结构复制 / 对账：
 |------|------|
 | Item in task list but NOT in module spec | **ADD**：静默执行，PM 已在 task acceptance 中确认；完成后输出 summary line |
 | Content identical | **SKIP**：不写入 |
-| Content different | **MODIFY**：展示 diff，PM confirms each item 后再修改 |
+| Content different | **MODIFY**：进位置清单审核门（步骤 3-6）；PM 审清单后落盘，PM 在 IDE 审实际改动 |
 | Item in module spec but NOT in task list | **LEAVE UNCHANGED**：保留，不删除 |
 
-ADD/SKIP/LEAVE UNCHANGED 不打断 PM；只有 MODIFY 需要展示 diff 并逐条确认。
+ADD/SKIP/LEAVE UNCHANGED 不打断 PM；只有 MODIFY 进位置清单审核门。
 
 #### 1.7.3 多模块 atomic merge（A3）
 
@@ -179,45 +235,115 @@ ADD/SKIP/LEAVE UNCHANGED 不打断 PM；只有 MODIFY 需要展示 diff 并逐�
 
 ### 步骤 2：读取原文（对账模式）
 
-对每条偏差，读取对应文档的原文上下文（前后各 5 行），理解：
+对每条偏差，**先按"位置定位原则"找位置**（grep 偏差关键字 / 章节标题 / 字段名 拿命中行号），再 Read 命中所在章节级范围（**建议不读全文**）。理解：
 
 - 原文的语言风格（中文/英文、正式/口语、用词习惯）
 - 原文的格式（markdown 表格、列表、段落）
 - 原文的信息密度（简洁还是详细）
 
-### 步骤 3：生成修改方案（对账模式）
+### 步骤 3：生成位置清单 + 精简 before/after（对账模式）
 
-对每条偏差生成精确的 Edit 操作，向 PM 展示：
+对每条偏差 **AI 内部起草** 完整 old_string/new_string，但**主对话只展示位置清单 + 1-3 行精简 before/after**——不贴完整 diff 文本：
 
 ```text
-文档修改方案（共 N 处）
+计划改动 N 处（PM 请审核）：
 
-修改 1/N:
-  文件: docs/solution.md
-  行号: 592
-  原文: "用户列表显示 10 个字段（姓名、邮箱、角色...）"
-  改为: "用户列表显示 8 个字段（姓名、邮箱、角色...，移除了 X 和 Y）"
-  原因: [来自文档偏差记录]
+1. <file>:<line>（§<chapter>）
+   旧：<1-2 行原状摘要>
+   新：<1-2 行新状摘要>
 
-PM 请逐条确认：全部通过 / 逐条批注 / 全部驳回
+2. <file>:<line>（§<chapter>）
+   加：<1-2 行新增摘要>
+   （或：删：<1-2 行删除摘要> / 旧→新：<对照>）
+
+...
+
+PM 选择：全部通过 / 删除条 K / 调整条 K 范围 / 全部驳回
 ```
 
-### 步骤 4：等 PM 确认（对账模式）
+样例：
 
-- PM 说“全部通过” → 执行所有修改。
-- PM 对某条有意见 → 按 PM 意见调整后重新展示。
-- PM 说“不改” → 跳过该偏差；若沉淀模式仍需执行，不得跳过沉淀。
+```text
+计划改动 7 处（PM 请审核）：
 
-### 步骤 5：执行修改
+1. docs/modules/<module>/functions-v4.1.md §1A
+   旧：行展开 ▸/▾ 章节（H4 表 + 实现指引 ~50 行）
+   新：行点击跳转章节（H4 表 + task-003 反转历史 blockquote）
 
-执行对账模式或沉淀模式的已确认修改：
+2. requirements/active/<req>/solution.md §🎯 D15
+   加：⚠️ task-003 PM 验收后反转 marker（保留原决策划掉）
 
-- 对账模式：用 Edit 工具逐条修改（不用 Write），只改偏差涉及的具体行。
-- 沉淀模式：按 1.7 的复合 key 和 atomic merge 规则更新 `docs/modules/*.md`。
+3. requirements/active/<req>/solution.md §🎯 D19
+   加：⚠️ task-003 反转后适用范围缩窄说明（仅详情页 Tab 1 池树内部）
 
-### 步骤 6：完成
+4. requirements/active/<req>/solution.engineering.md §3.8
+   加：列表页扩展 D15 部分整段标作废 marker
 
-修改完成后返回给 orchestrator，允许继续运行 `close-task.sh` 的后续 merge / cleanup。
+5. requirements/active/<req>/solution.engineering.md §5.3
+   加：多维度紧凑展示渲染列表页部分作废说明
+
+6. requirements/active/<req>/solution.engineering.md §10.4
+   加：验收清单行展开走查项作废 + D16 跳转走查项标已落地
+
+7. requirements/active/<req>/tasks/task-NNN-*.md §所属模块章节
+   旧：产品列表页 - 行展开明细
+   新：产品列表页 - 行点击跳转
+```
+
+**精简 before/after 的取材**：
+- 改动方向（旧→新 / 加 / 删 / 标作废）
+- 关键内容关键词（如"反转 marker" / "适用范围缩窄"），不是完整段落
+- 每条 ≤ 3 行；超过表示这处改动是结构性重写，应当回到步骤 0.5 评估是否走半 close
+
+**为什么不贴完整 diff**：
+- 主对话贴 N 处完整 diff 是 doc-update token 主要来源
+- 精简 before/after 已足以让 PM 识别改动方向 + 决策"通过 / 调整 / 驳回"
+- 完整行级细节由 PM 在落盘后选择性核对（步骤 6 可选环节）
+
+**AI 内部仍要起草完整 old_string/new_string**——只是主对话只贴摘要；步骤 5 调 Edit 工具落盘时用完整内容。
+
+### 步骤 4：等 PM 审核位置清单（对账模式）
+
+- PM 说"全部通过" → 进步骤 5 落盘
+- PM 说"删除条 K" / "驳回条 K" → 从清单移除该条，**重新展示更新后的清单**让 PM 复核
+- PM 说"调整条 K 范围"（如"K 只标作废不要删整段"） → AI 按反馈调整内部草稿，**重新展示该条的动作摘要**，PM 确认后进步骤 5
+- PM 说"全部驳回" → 跳过对账模式；若沉淀模式仍需执行，不得跳过沉淀
+
+### 步骤 5：执行修改 + 输出位置摘要
+
+执行已审核通过的修改：
+
+- 对账模式：用 Edit 工具逐条修改（不用 Write），只改偏差涉及的具体行
+- 沉淀模式：按 1.7 的复合 key 和 atomic merge 规则更新 `docs/modules/*.md`
+
+落盘完成后**输出位置摘要**（不贴 diff 文本）：
+
+```text
+已改 N 处：
+- <file> §<chapter>
+- <file> §<chapter>
+...
+```
+
+PM 在步骤 4 已审过 before/after，**默认无需再审**——直接进入 close-task 后续。如需核对实际行级改动：跑 `git diff` 或在 IDE 看 source control diff（步骤 6 可选环节）。
+
+### 步骤 6：可选核对 + 不满意时局部二次 patch
+
+**默认路径**：步骤 4 PM 已审过 before/after，落盘即视为完成——直接返回 orchestrator，继续 close-task 后续 merge / cleanup。**步骤 6 默认 silent skip**，AI 不强制提示 PM 去 IDE 审。
+
+**触发条件**：仅当 PM 主动核对（自己跑 `git diff` / 在 IDE 看 source control diff）发现某处实际改动跟步骤 4 展示的 before/after 不一致 / 摘要简化漏了细节，PM 在对话里指出（如「§3.8 那段改回去」/「§1A 缺一句 X」）。
+
+**触发后流程（局部二次 patch）**：
+- Read 对应文件那一段（命中行 ±30 行，不重读全文）
+- 起草新的 old_string/new_string + Edit 落盘
+- **不重新走步骤 3-4 完整审议**（已审通过位置的局部精修，不是新增改动）
+- 落盘后输出"已修订 <file> §<chapter>"
+
+**回到步骤 3 的边界**：PM 反馈实质是"增加新位置"（如"§5.5 也要标作废"）→ 属于步骤 3 范围，把新位置加入清单 + 重审
+
+**循环上限**：同条 3 轮内未对齐 → AI 主动停下问 PM「是否升级处理：task md 是否需要补充信息 / 反转关键字是否齐全」
+
+无 PM 触发时（默认）：返回 orchestrator，允许继续运行 `close-task.sh` 的后续 merge / cleanup。
 
 ### 步骤 8：rewrite mode（close-req 触发的多 task 聚合重写）
 

@@ -102,7 +102,7 @@ test_doc_update_four_situations_with_mock_fixture() {
   _assert_contains "$DOC_UPDATE_SKILL" "Content identical" "SKIP contract" || { rm -rf "$fake"; return; }
   _assert_contains "$DOC_UPDATE_SKILL" "Content different" "MODIFY contract" || { rm -rf "$fake"; return; }
   _assert_contains "$DOC_UPDATE_SKILL" "Item in module spec but NOT in task list" "LEAVE contract" || { rm -rf "$fake"; return; }
-  _assert_contains "$DOC_UPDATE_SKILL" "ADD/SKIP/LEAVE UNCHANGED 不打断 PM；只有 MODIFY 需要展示 diff 并逐条确认" "PM interaction contract" || { rm -rf "$fake"; return; }
+  _assert_contains "$DOC_UPDATE_SKILL" "ADD/SKIP/LEAVE UNCHANGED 不打断 PM；只有 MODIFY 进位置清单审核门" "PM interaction contract" || { rm -rf "$fake"; return; }
 
   rm -rf "$fake"
   pass_test
