@@ -156,10 +156,40 @@ def task_branch_commits(task_branch: str, req_branch: str) -> list[tuple[str, da
     return commits
 
 
+def commit_only_touches_task_docs(sha: str, task_stem: str, repo_root: Path) -> bool:
+    """A1 hotfix: True if commit only modifies the task md / engineering md.
+
+    Allows task-confirm 阶段元信息 commit (切 executor / sync from task-confirm /
+    create-task-worktree 的 task md 移动等) to bypass I-CT8 timestamp check.
+
+    Returns False on git error or empty file list (fail-closed).
+    """
+    try:
+        out = subprocess.check_output(
+            ["git", "-C", str(repo_root), "show", "--name-only", "--format=", sha],
+            text=True,
+        )
+    except subprocess.CalledProcessError:
+        return False
+    files = [f.strip() for f in out.split("\n") if f.strip()]
+    if not files:
+        return False
+    allowed_basenames = {f"{task_stem}.md", f"{task_stem}.engineering.md"}
+    return all(Path(f).name in allowed_basenames for f in files)
+
+
 def audit_ct8(
-    events: list[dict], task_branch: str, req_branch: str
+    events: list[dict],
+    task_branch: str,
+    req_branch: str,
+    task_stem: str,
+    repo_root: Path,
 ) -> list[str]:
-    """Verify every task-branch commit is timestamped after the first transition to 执行中."""
+    """Verify every task-branch commit is timestamped after the first transition to 执行中.
+
+    A1 hotfix: commits whose only file changes are the task's own md / engineering.md
+    are exempted (task-confirm metadata commits are legitimate before *→执行中).
+    """
     violations: list[str] = []
 
     earliest = first_transition_to_executing_time(events)
@@ -174,6 +204,9 @@ def audit_ct8(
 
     for sha, ts, subject in commits:
         if ts < earliest:
+            if commit_only_touches_task_docs(sha, task_stem, repo_root):
+                # A1 hotfix: 纯 task md / engineering 元信息 commit 豁免
+                continue
             violations.append(
                 f"I-CT8: commit {sha[:8]} ({ts.isoformat()}) 早于首次 status_changed(*→执行中) "
                 f"({earliest.isoformat()})。说明代码在状态机推进前就已写入。subject: {subject}"
@@ -211,7 +244,7 @@ def main() -> int:
         violations.extend(audit_ct7(events))
 
     # I-CT8
-    violations.extend(audit_ct8(events, args.task_branch, args.req_branch))
+    violations.extend(audit_ct8(events, args.task_branch, args.req_branch, task_stem, repo))
 
     if violations:
         print("❌ close-task 事件流审计失败：", file=sys.stderr)

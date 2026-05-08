@@ -134,6 +134,14 @@ model（留空=用默认，claude-code 仅支持 opus/sonnet/haiku）：
 - 重新调 `resolve-executor.py` 验证（若 exit 非 0，把 stderr 人话错误原样转给 PM，让 PM 改；改正前不继续）
 - 重新打印摘要
 
+> **双向 commit 行为说明（task-002 实证 / 22146458 case）**：sed 改完 task md 字段后，task-confirm 实际会产生**两个孪生 commit**（差几秒）：
+> - `task-NNN: switch executor to <X> (per PM at task-confirm)` — 在 **task 分支**
+> - `task-NNN: switch executor to <X> (sync from task-confirm)` — 在 **req 分支**
+>
+> 这两个 commit 都是元信息（仅改 executor / executor_model / 开发服务器 / port 字段，不改 src/ 代码）。它们的时间戳会早于事件流首次 `*→执行中` 事件（因为 task-execute 此时还没启动）。
+>
+> close-task.sh 的 I-CT8 audit 通过 `commit_only_touches_task_docs()`（A1 hotfix，见 `scripts/audit-task-events.py`）豁免它们：commit 改动文件全部是 `task-NNN.md` / `task-NNN.engineering.md` → skip I-CT8 时间戳检查。Phase 2（A2）落地后改用 commit subject prefix 豁免，本节描述会同步更新。
+
 确认无误后问：`确认启动此 task？（Y/N）`
 
 ### 步骤 4-pre：依赖前置检查（v4 主防线）

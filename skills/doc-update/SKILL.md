@@ -219,6 +219,36 @@ PM 请逐条确认：全部通过 / 逐条批注 / 全部驳回
 
 修改完成后返回给 orchestrator，允许继续运行 `close-task.sh` 的后续 merge / cleanup。
 
+### 步骤 8：rewrite mode（close-req 触发的多 task 聚合重写）
+
+**触发条件**：close-req 在步骤 1.5 扫到 ≥2 个同目标文档的 `SKIP_DOC_UPDATE` marker，调 doc-update rewrite mode（v2 重做场景默认走这条）。
+
+**输入**：
+- 目标文档路径（如 `docs/modules/<module>/functions-v4.1.md`）
+- 多个 task 的 SKIP marker reason + §12 cleanup TODO + PM 视图业务层偏差表 + 工程合同 §10 偏差表
+- 受影响章节范围（聚合所有 task 的 §16-21 等指向，确认 rewrite 边界）
+
+**流程**：
+
+1. 读目标文档全文 + 所有相关 task 的 PM 视图功能清单 + 偏差表
+2. AI 起草新版整段（替换原章节，保持目录结构 / 表格风格 / 锚点 ID 不变）
+3. PM 审 diff（默认逐章节批准；PM 可主动选 "all-at-once" 跳过逐章节）
+4. 写入目标文档 → 把所有相关 task 的 SKIP marker `cleanup_status` 改为 `"done"` → §12 cleanup TODO 对应项标 `[x]`
+
+**PM 拒绝处理**：
+
+- PM 拒绝任一章节的 rewrite → exit 1，让 close-req 步骤 1.5 决定是 retry 还是降级 patch mode 或 skip
+- 不在 rewrite mode 内做"半重写"——要么全章节通过，要么退回让 close-req 重新拍
+
+**与对账模式（步骤 1.5/1.6/2-5）的边界**：
+
+| 模式 | 触发 | 适用场景 |
+|---|---|---|
+| 对账模式 | task close-task 阶段，单 task 偏差 | 文档原文跟实际实现不一致，需按行精确替换 |
+| rewrite mode（本步骤） | req close-req 阶段，多 task SKIP marker 聚合 | v2 重做场景，多 task 改同 module spec，整段重写比按行 patch 简洁 |
+
+**为什么不在对账模式里做**：对账模式按行精确替换，多 task 跨章节累积时 patch 顺序冲突难解；rewrite 整段写比按行打补丁更稳。
+
 ## Failure Handling（DB2）
 
 ALL failures block close-task。失败时必须停止并返回错误报告；PM 修复 underlying issue 后，重新运行 `/close-task`，`/close-task` 会 auto-resumes doc-update，从上次失败的 task 重新执行沉淀/对账。

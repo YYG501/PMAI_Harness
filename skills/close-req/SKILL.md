@@ -58,6 +58,48 @@ echo "SKILL: close-req"
 - 遍历 `tasks/discarded/*.md` 填废弃栏；为空时整个 `<details>` 块省略。
 - 已废弃 task 编号断号是合规信号，不要为「整理顺序」而改号。
 
+### 步骤 1.5：扫描半 close cleanup TODO（v2 重做场景必经）
+
+**目的**：闭合 task 半 close 的设计意图——`SKIP_DOC_UPDATE` marker 显式声明"由 close-req 阶段聚合所有 SKIP marker 后统一 rewrite"（doc-update SKILL 步骤 0.5），但 close-req 历史上没读这些 marker，导致 marker 永远 `cleanup_status="pending"`、cleanup TODO 永远没人扫。本步骤把这个闭环补上。
+
+**流程**：
+
+1. 遍历 `tasks/*.engineering.md`（兼容旧格式：`tasks/*.md` 含 `## 文档偏差` section），找所有 §10 含
+   ```html
+   <!-- SKIP_DOC_UPDATE: ... cleanup_status="pending" -->
+   ```
+   marker 的 task。
+
+2. **预筛跨 req 推迟项**：marker reason 含 `"等下游 req"` / `"下游 req 处理"` / `"inter-req"` 等关键词时 → silent skip 这条 marker（保留 pending 状态），打印一行 `task-NNN 标 inter-req 推迟，跳过`。
+
+3. 对剩下每个 marker，提取：
+   - marker reason
+   - 同 task §12 cleanup TODO 清单（pending 项）
+   - PM 视图「📁 历史档案 → 业务层偏差」表
+   - 工程合同 §10 偏差表
+
+4. **按目标文档分组**：同一份 `docs/modules/<module>.md` / `docs/DESIGN.md` / `docs/prd.md` 的多 task 偏差并到一起。
+
+5. 聚合后呈交 PM，按目标文档逐份决议（AskUserQuestion 或 prose）：
+
+   | 决议 | 触发条件 | 行为 |
+   |---|---|---|
+   | **rewrite**（默认） | 同目标文档 ≥2 task 改 | 调 doc-update SKILL 步骤 8 rewrite mode |
+   | **patch** | 单 task 改单文档 | 调现有 doc-update 对账模式（步骤 1.5/1.6/2-5）|
+   | **skip** | 本 req 不沉淀，留到下游 req | marker `cleanup_status` 保持 `pending`，append inter-req 备注 `<!-- DEFERRED_TO_REQ: req-NNN reason="..." -->` |
+
+6. 完成处理后：
+   - rewrite / patch 决议 → 把对应 task §10 marker 的 `cleanup_status` 改为 `"done"` + §12 cleanup TODO 对应项标 `[x]`
+   - skip 决议 → 不动 marker
+
+7. 全部 marker 处理完毕后才进步骤 2a `/prd-writing`（这时 module spec 已经统一沉淀，prd-writing 输入干净）。
+
+**PM 拒绝处理**：PM 决议过程中拒绝任一 rewrite / patch（不接受 AI 草稿）→ close-req 中止，下次重跑 close-req 时回到步骤 1.5 重新决议。不要尝试"半重写"。
+
+**边界**：
+- 步骤 1.5 是 v2 重做场景的**主路径**（多 task 半 close）；**单 req 内无 SKIP marker → 步骤 1.5 silent skip 进 2a**
+- 不要在本步骤直接修改任何 task md 内容——marker 状态由 doc-update SKILL 在 rewrite/patch 完成时回写
+
 ### 步骤 2a：产出 req 级 PRD（必做）
 
 调用 `/prd-writing` 产出 `$ACTIVE_REQ_DIR/prd.md`（req 级 PRD，本 req 范围一次性产物，定稿后不再修订）。

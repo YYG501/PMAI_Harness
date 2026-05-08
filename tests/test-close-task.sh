@@ -539,6 +539,149 @@ test_reject_if_commit_predates_execution() {
 }
 
 # =================================================
+# I-CT8 A1 hotfix: file-name allowlist exemption for metadata commits
+# =================================================
+test_ct8_exempts_engineering_md_only_commit() {
+  start_test "I-CT8 A1 exempt: commit only modifies engineering.md (executor switch case)"
+  fixture_setup
+
+  req_dir=$(fixture_create_req "req-001" "test" 6)
+  task=$(fixture_create_task "$req_dir" "104" "exec-switch" "待确认" "/qa")
+  task_wt=$(fixture_create_task_worktree "$task" "req-001-test")
+  local task_stem=$(basename "$task" .md)
+
+  # Simulate task-confirm step 3: 改 engineering.md executor 字段并 commit (early commit before state machine moves)
+  local eng_file="${task%.md}.engineering.md"
+  if [ ! -f "$eng_file" ]; then
+    # v1 task fixture 没建 engineering.md，建一个最小可用的
+    cat > "$eng_file" <<EOF
+# Task ${task_stem} engineering
+
+## 1. 元信息
+
+**executor：** claude-code
+**executor_model：**
+EOF
+  fi
+  # Copy the engineering.md into task worktree at correct relative path
+  local rel_path=$(echo "$eng_file" | sed -E "s|^${FIXTURE_DIR}/||")
+  mkdir -p "$task_wt/$(dirname "$rel_path")"
+  cp "$eng_file" "$task_wt/$rel_path"
+  (cd "$task_wt" && \
+    sed -i.bak 's/\*\*executor：\*\* claude-code/\*\*executor：\*\* codex/' "$rel_path" && \
+    rm -f "$rel_path.bak" && \
+    git add "$rel_path" && \
+    git commit -q -m "${task_stem}: switch executor to codex (per PM at task-confirm)")
+  _mark_task_done "$task"
+
+  # Seed events with transition to 执行中 happening AFTER the commit
+  # (simulates real task-confirm sequence: meta commit → later *→执行中)
+  mkdir -p "$FIXTURE_DIR/.runs/events"
+  {
+    echo "{\"event\":\"status_changed\",\"timestamp\":\"2099-01-01T00:00:00+00:00\",\"task\":\"$task_stem\",\"from\":\"待确认\",\"to\":\"执行中\"}"
+    echo "{\"event\":\"execution_started\",\"timestamp\":\"2099-01-01T00:01:00+00:00\",\"task\":\"$task_stem\",\"executor\":\"codex\"}"
+    echo "{\"event\":\"status_changed\",\"timestamp\":\"2099-01-01T00:10:00+00:00\",\"task\":\"$task_stem\",\"from\":\"执行中\",\"to\":\"待验收\"}"
+    echo "{\"event\":\"status_changed\",\"timestamp\":\"2099-01-01T00:20:00+00:00\",\"task\":\"$task_stem\",\"from\":\"待验收\",\"to\":\"已完成\"}"
+  } > "$FIXTURE_DIR/.runs/events/${task_stem}.jsonl"
+
+  # Run audit-task-events.py directly (skip full close-task path which has other checks)
+  local audit_out
+  if audit_out=$(cd "$FIXTURE_DIR" && python3 "$FRAMEWORK_ROOT/scripts/audit-task-events.py" \
+        --task-file "$task" \
+        --task-branch "$task_stem" \
+        --req-branch "req-001-test" 2>&1); then
+    pass_test
+  else
+    _fail "I-CT8 should exempt engineering.md-only commit, but rejected"
+    echo "$audit_out" >&2
+  fi
+  fixture_teardown
+}
+
+test_ct8_exempts_task_md_only_commit() {
+  start_test "I-CT8 A1 exempt: commit only modifies task md (status field update)"
+  fixture_setup
+
+  req_dir=$(fixture_create_req "req-001" "test" 6)
+  task=$(fixture_create_task "$req_dir" "105" "status-flip" "待确认" "/qa")
+  task_wt=$(fixture_create_task_worktree "$task" "req-001-test")
+  local task_stem=$(basename "$task" .md)
+
+  # Copy task md into worktree and commit a status-field-only change
+  local rel_task=$(echo "$task" | sed -E "s|^${FIXTURE_DIR}/||")
+  mkdir -p "$task_wt/$(dirname "$rel_task")"
+  cp "$task" "$task_wt/$rel_task"
+  (cd "$task_wt" && \
+    echo "" >> "$rel_task" && \
+    git add "$rel_task" && \
+    git commit -q -m "${task_stem}: bump task md (metadata)")
+  _mark_task_done "$task"
+
+  mkdir -p "$FIXTURE_DIR/.runs/events"
+  {
+    echo "{\"event\":\"status_changed\",\"timestamp\":\"2099-01-01T00:00:00+00:00\",\"task\":\"$task_stem\",\"from\":\"待确认\",\"to\":\"执行中\"}"
+    echo "{\"event\":\"execution_started\",\"timestamp\":\"2099-01-01T00:01:00+00:00\",\"task\":\"$task_stem\",\"executor\":\"claude-code\"}"
+    echo "{\"event\":\"status_changed\",\"timestamp\":\"2099-01-01T00:10:00+00:00\",\"task\":\"$task_stem\",\"from\":\"执行中\",\"to\":\"待验收\"}"
+    echo "{\"event\":\"status_changed\",\"timestamp\":\"2099-01-01T00:20:00+00:00\",\"task\":\"$task_stem\",\"from\":\"待验收\",\"to\":\"已完成\"}"
+  } > "$FIXTURE_DIR/.runs/events/${task_stem}.jsonl"
+
+  local audit_out
+  if audit_out=$(cd "$FIXTURE_DIR" && python3 "$FRAMEWORK_ROOT/scripts/audit-task-events.py" \
+        --task-file "$task" \
+        --task-branch "$task_stem" \
+        --req-branch "req-001-test" 2>&1); then
+    pass_test
+  else
+    _fail "I-CT8 should exempt task md only commit, but rejected"
+    echo "$audit_out" >&2
+  fi
+  fixture_teardown
+}
+
+test_ct8_does_not_exempt_mixed_commit() {
+  start_test "I-CT8 A1 NOT exempt: commit mixes task md + code file (preserves original intent)"
+  fixture_setup
+
+  req_dir=$(fixture_create_req "req-001" "test" 6)
+  task=$(fixture_create_task "$req_dir" "106" "mixed" "待确认" "/qa")
+  task_wt=$(fixture_create_task_worktree "$task" "req-001-test")
+  local task_stem=$(basename "$task" .md)
+
+  # Mixed commit: task md (worktree already has it from req fork) + a non-task source file
+  local rel_task="requirements/active/req-001-test/tasks/${task_stem}.md"
+  (cd "$task_wt" && \
+    echo "trailing change for mixed test" >> "$rel_task" && \
+    mkdir -p src && \
+    echo "function leak() {}" > src/leak.js && \
+    git add "$rel_task" src/leak.js && \
+    git commit -q -m "${task_stem}: mixed metadata + code (should not exempt)")
+  _mark_task_done "$task"
+
+  mkdir -p "$FIXTURE_DIR/.runs/events"
+  {
+    echo "{\"event\":\"status_changed\",\"timestamp\":\"2099-01-01T00:00:00+00:00\",\"task\":\"$task_stem\",\"from\":\"待确认\",\"to\":\"执行中\"}"
+    echo "{\"event\":\"execution_started\",\"timestamp\":\"2099-01-01T00:01:00+00:00\",\"task\":\"$task_stem\",\"executor\":\"claude-code\"}"
+    echo "{\"event\":\"status_changed\",\"timestamp\":\"2099-01-01T00:10:00+00:00\",\"task\":\"$task_stem\",\"from\":\"执行中\",\"to\":\"待验收\"}"
+    echo "{\"event\":\"status_changed\",\"timestamp\":\"2099-01-01T00:20:00+00:00\",\"task\":\"$task_stem\",\"from\":\"待验收\",\"to\":\"已完成\"}"
+  } > "$FIXTURE_DIR/.runs/events/${task_stem}.jsonl"
+
+  local audit_out
+  if audit_out=$(cd "$FIXTURE_DIR" && python3 "$FRAMEWORK_ROOT/scripts/audit-task-events.py" \
+        --task-file "$task" \
+        --task-branch "$task_stem" \
+        --req-branch "req-001-test" 2>&1); then
+    _fail "I-CT8 should reject mixed commit, but passed"
+    echo "$audit_out" >&2
+  elif echo "$audit_out" | grep -q "I-CT8"; then
+    pass_test
+  else
+    _fail "I-CT8 should reject mixed commit with I-CT8 marker"
+    echo "$audit_out" >&2
+  fi
+  fixture_teardown
+}
+
+# =================================================
 # A1: --skip-doc-update reason is required
 # =================================================
 test_skip_doc_update_no_reason() {
@@ -728,6 +871,9 @@ test_reject_if_doc_diff_not_processed
 test_reject_if_event_stream_missing
 test_reject_if_state_machine_skipped
 test_reject_if_commit_predates_execution
+test_ct8_exempts_engineering_md_only_commit
+test_ct8_exempts_task_md_only_commit
+test_ct8_does_not_exempt_mixed_commit
 test_happy_path_close_task
 test_skip_doc_update_no_reason
 test_skip_doc_update_with_reason
