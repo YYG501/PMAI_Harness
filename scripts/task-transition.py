@@ -42,10 +42,9 @@ FIELD_RE = FIELD_RE_OLD
 
 VALID_TRANSITIONS = {
     "待确认": ["执行中"],
-    "执行中": ["待验收", "待确认"],  # 待确认 = --fail-execution / --cancel-manual 回退
-    "待验收": ["已完成", "执行中"],  # 执行中 = PM 打回
+    "执行中": ["已完成", "待确认"],  # 待确认 = --fail-execution / --cancel-manual 回退
     "已完成": [],
-    "已废弃": [],  # 终态：从 {待确认, 执行中, 待验收} 经 --discard 进入；不可回流
+    "已废弃": [],  # 终态：从 {待确认, 执行中} 经 --discard 进入；不可回流
 }
 
 # `执行中 → 待确认` is only reachable via --fail-execution or --cancel-manual;
@@ -53,7 +52,7 @@ VALID_TRANSITIONS = {
 RESTRICTED_TRANSITIONS = {("执行中", "待确认")}
 
 # 状态可经 --discard 转入「已废弃」的允许集合
-DISCARDABLE_FROM = {"待确认", "执行中", "待验收"}
+DISCARDABLE_FROM = {"待确认", "执行中"}
 
 SCRIPTS_DIR = Path(__file__).resolve().parent
 EVENTS_SCRIPT = SCRIPTS_DIR / "task-events.py"
@@ -204,7 +203,9 @@ def check_preconditions(
         # v1 串行强制
         check_serial_constraint(task_file)
 
-    elif current == "执行中" and target == "待验收":
+    elif current == "执行中" and target == "已完成":
+        # 「待验收」状态已合并到「执行中」（2026-05-08）：commit + 呈交 + PM 验收
+        # 全程 task 状态保持「执行中」；PM 通过呈交块时统一在此 transition 校验。
         # 修复 P0-1：用 _lib.task_parser.read_section 跨文件查找。
         # 新格式（v2）：section 在 task.engineering.md 的 §10 / §11
         # 旧格式（v1）：section 在 PM 视图（task.md）
@@ -244,15 +245,6 @@ def check_preconditions(
         # review 工具改为 PM 自跑推荐项；事件流仍可能含 review_completed
         # 作为审计记录，但不再做覆盖校验。
 
-    elif current == "待验收" and target == "执行中":
-        # PM 打回需要 note
-        if not note:
-            print(
-                "Error: PM 打回必须提供反馈。使用 --note 参数。",
-                file=sys.stderr,
-            )
-            sys.exit(1)
-
 
 def append_event(
     task_file: Path, from_status: str, to_status: str, note: str | None
@@ -282,7 +274,7 @@ def do_transition(
 
     `via` controls precondition bypass:
       - normal: full precondition check
-      - fail-execution: skips 待验收 precondition check (failure回退)
+      - fail-execution: skips 已完成 precondition check (failure回退到待确认)
       - cancel-manual: same as fail-execution
     """
     text = read_text(task_file)
@@ -631,7 +623,7 @@ def cmd_validate_fields_only(task_file: Path) -> None:
 
     Checks:
       1. 状态 字段能被 _parse_field_line 解析（段落或任务卡表格格式之一）
-      2. 状态值 ∈ VALID_TRANSITIONS keys（5 合法态）
+      2. 状态值 ∈ VALID_TRANSITIONS keys（4 合法态）
 
     Exit 0 on pass; exit 1 with diagnostic on fail. Used by `task-spec` step 10.6
     to fail-close when AI writes blockquote frontmatter / illegal status values
@@ -652,7 +644,7 @@ def cmd_validate_fields_only(task_file: Path) -> None:
     if current not in VALID_TRANSITIONS:
         print(
             f"Error: 状态字段值「{current}」非法。\n"
-            f"  合法 5 态：{' / '.join(valid_states)}\n"
+            f"  合法 4 态：{' / '.join(valid_states)}\n"
             f"  常见误用：「待启动」是 status-view.py 的派生显示标签，"
             f"不是状态字段存储值。",
             file=sys.stderr,
@@ -706,7 +698,7 @@ def main() -> None:
         "--discard",
         action="store_true",
         help="废弃 task：移到 tasks/discarded/、清理 worktree+分支、commit。"
-             "源状态 ∈ {待确认, 执行中, 待验收}；已完成不可。需 --reason，"
+             "源状态 ∈ {待确认, 执行中}；已完成不可。需 --reason，"
              "非交互场景加 --yes 跳过 confirm。",
     )
     parser.add_argument(
@@ -727,7 +719,7 @@ def main() -> None:
     parser.add_argument(
         "--validate-fields-only",
         action="store_true",
-        help="Strict header-fields validation: 状态 字段可解析 + 值在合法 5 态。"
+        help="Strict header-fields validation: 状态 字段可解析 + 值在合法 4 态。"
              "task-spec 写完后跑，挡住 blockquote / 派生标签等自创格式。",
     )
     parser.add_argument(

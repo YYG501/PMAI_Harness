@@ -2,11 +2,11 @@
 
 ## v2: 状态物化到 worktree 生命周期
 
-**What:** 把 task 状态从「markdown 字段」升级为「文件系统约束」。具体：
+**What:** 把 task 状态从「markdown 字段」升级为「文件系统约束」。具体（2026-05-08「待验收」合并入「执行中」后简化）：
 - `/task-confirm`（待确认→执行中）才 `git worktree add`
-- `/task-submit`（执行中→待验收）立即 `git worktree lock` 或 `chmod -R a-w`
-- PM 打回（待验收→执行中）unlock
-- `/close-task`（待验收→已完成）`git worktree remove`
+- 注：「执行中」覆盖 AI 实现期 + PM 验收期；commit 不切状态；如要在 PM 验收期 lock，需在 commit 后用文件标记区分「实现完毕等 PM」vs「PM 打回等 AI」
+- PM 打回不切状态（task 仍是「执行中」），AI 续修；如有 lock 需 unlock
+- `/close-task`（已完成 → 删 worktree）`git worktree remove`
 
 **Why:** v1 的防御链（check-branch.sh 状态 gate、adapter 层 gate、/task-execute 入口校验）都依赖 agent 读 task 文件的状态字段并尊重它。如果 agent 不读 task 文件、只按 orchestrator 给的 prompt 盲干，状态字段对它就是摆设。物化后，agent 想跳过状态机就**物理上没地方写代码**——worktree 不存在或只读。
 
@@ -70,7 +70,7 @@
 
 ### v4 原 plan 段（保留作设计溯源）
 
-**What:** `/task-confirm` 不调任何 MCP / 不 spawn 任何东西，**只输出极简启动指令给 PM**。PM 在新窗口启 Claude → 输 `/task-execute`（无参数自动找唯一待启动 task；多候选时显式参数）→ SKILL 自动 cd worktree + 转执行中 + 跑 codex + 走 v1 现有 /task-submit。PM 跑完回主窗口任意输入触发 preamble 扫描自动呈交"待验收"。**支持并行**：PM 想多 task 同时跑就开多个新窗口，每窗口独立 Claude 实例，git worktree 天然隔离。
+**What:** `/task-confirm` 不调任何 MCP / 不 spawn 任何东西，**只输出极简启动指令给 PM**。PM 在新窗口启 Claude → 输 `/task-execute`（无参数自动找唯一待启动 task；多候选时显式参数）→ SKILL 自动 cd worktree + 转执行中 + 跑 codex + commit + 直接呈交验收信息块（task 状态全程「执行中」，2026-05-08 「待验收」合并入「执行中」）。PM 在 task 窗口验收：通过 → 转「已完成」，打回 → 不切状态写反馈 + AI 续修 + 追加 fix commit。**支持并行**：PM 想多 task 同时跑就开多个新窗口，每窗口独立 Claude 实例，git worktree 天然隔离。
 
 **Why:**
 - 解决 v1 subagent 短命载体问题（2026-04-22 / 2026-04-24 事件根因）
@@ -92,7 +92,7 @@
 **关键文件改动估算:**
 - 改：`skills/task-confirm/SKILL.md`（步骤 5 改输出 echo + 不转状态 + 多候选检测）
 - 改：`skills/task-execute/SKILL.md`（无参数模式 + 自动 cd worktree + 入口 transition）
-- 改：`skills/task-status/SKILL.md`（多 task 摘要 + "待验收"/"待启动"提示）
+- 改：`skills/task-status/SKILL.md`（多 task 摘要 + "执行中"/"待启动"提示）
 - 改：`templates/CLAUDE.md.tmpl`（角色表 + 工作流文案 + 并行说明）
 - 改：`scripts/task-transition.py`（删除 check_serial_constraint 或改 no-op，I-TT2 放宽）
 - 改：`INVARIANTS.md`（更新 I-TT2 描述）

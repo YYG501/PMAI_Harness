@@ -130,13 +130,13 @@ if [ -n "$ACTIVE_REQ_DIR" ]; then
     for _tf in "$_tasks_dir"/task-*.md; do
       [ -f "$_tf" ] || continue
       _st=$(grep -m1 '^\*\*状态：\*\*' "$_tf" 2>/dev/null | sed 's/\*\*状态：\*\* //' || true)
-      if [ "$_st" = "执行中" ] || [ "$_st" = "待验收" ]; then
+      if [ "$_st" = "执行中" ]; then
         ACTIVE_TASK=$(basename "$_tf" .md)
         ACTIVE_TASK_STATUS="$_st"
         break
       fi
     done
-    # 如果没有执行中/待验收的，找待确认的
+    # 如果没有执行中的，找待确认的
     if [ -z "$ACTIVE_TASK" ]; then
       for _tf in "$_tasks_dir"/task-*.md; do
         [ -f "$_tf" ] || continue

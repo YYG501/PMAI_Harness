@@ -40,7 +40,6 @@ STAGE_NAMES = {
 STATUS_ICONS = {
     "待确认": "⏳",
     "执行中": "🔄",
-    "待验收": "📋",
     "已完成": "✅",
 }
 
@@ -360,7 +359,7 @@ def _iter_summary_tasks(repo_root: Path) -> list[Path]:
 
 def render_summary(repo_root: Path) -> None:
     """Render a one-line task overview for preamble output."""
-    counts = {"执行中": 0, "待验收": 0, "待启动": 0, "待 spec": 0}
+    counts = {"执行中": 0, "待启动": 0, "待 spec": 0}
     seen_stems: set[str] = set()
 
     for task_file in _iter_summary_tasks(repo_root):
@@ -373,8 +372,6 @@ def render_summary(repo_root: Path) -> None:
         status = fields.get("状态", "")
         if status == "执行中":
             counts["执行中"] += 1
-        elif status == "待验收":
-            counts["待验收"] += 1
         elif status == "待确认" and _task_worktree_exists(repo_root, task_stem):
             counts["待启动"] += 1
 
@@ -390,15 +387,9 @@ def render_summary(repo_root: Path) -> None:
     print(
         "📋 task 概览: "
         f"执行中 {counts['执行中']} / "
-        f"待验收 {counts['待验收']} / "
         f"待启动 {counts['待启动']} / "
         f"待 spec {counts['待 spec']}"
     )
-    if counts["待验收"] > 0:
-        print(
-            f"⚠️ {counts['待验收']} 个 task 待验收，"
-            "请去对应新窗口验收（或 /task-status 看详情）"
-        )
 
 
 def suggest_next_action(
@@ -415,10 +406,8 @@ def suggest_next_action(
         for task_file, fields in tasks:
             status = fields.get("状态", "")
             name = task_file.stem
-            if status == "待验收":
-                return f"验收 {name}：运行 /task-submit"
             if status == "执行中":
-                return f"等待 {name} 完成实现和自审"
+                return f"执行中 {name}：实现 / 等待呈交 / PM 验收（可在 task 窗口跑 /task-submit 重新看呈交块）"
             if status == "待确认":
                 return f"确认启动 {name}：运行 /task-confirm"
 

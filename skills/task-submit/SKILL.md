@@ -4,19 +4,22 @@ description: |
   向 PM 呈交 task 验收信息包，根据 task 类型调整展示内容，等待 PM 决策。
   **默认路径不再被 PM 直接调用**——task-execute 步骤 11/12 已合并本 skill 的呈交+决策逻辑（2026-05-07）。
   本 skill 现在的角色是 PM 手动兜底入口：窗口被关 / context 丢失 / IDE 重启后想重新呈交时使用。
+  task 状态全程是「执行中」（2026-05-08「待验收」已合并到「执行中」），commit 不切状态，PM 通过呈交块时统一转「已完成」。
 ---
 
 # /task-submit
 
 ## When To Use
 
-- **默认路径**（推荐）：不需要 PM 手动调；task-execute commit + 转「待验收」后**自动**进入步骤 11/12 呈交+决策。
+- **默认路径**（推荐）：不需要 PM 手动调；task-execute commit 后**自动**进入步骤 11/12 呈交+决策（commit 不切状态）。
 - **兜底入口**（PM 手动）：异常情况下使用——
   - 新窗口被关后 PM 重新打开窗口想看验收信息
-  - task-execute 异常退出但 task 已转「待验收」
+  - task-execute 已 commit 但 chat 中呈交块丢失
   - PM 想重新审视一次验收信息包
+  - PM 在「执行中」期间已跑过若干 review，想刷新呈交块看最新自审/事件流
 
 > 默认路径与本 skill 逻辑等价；切口在 task-execute 步骤 10 commit 之后是否退出 skill。
+> 状态前置：task 必须处于「执行中」（commit 已发生，已组装过呈交块）。「已完成」/「待确认」状态不应进入此 skill。
 
 ## 拆两文件约定（必读）
 
@@ -94,7 +97,7 @@ echo "SKILL: task-submit"
 [从 PM 视图主文件「📁 历史档案 → 执行日志」最新一轮提取]
 
 🔍 自审结果：
-[从工程合同 §11「自审记录」最新一条提取]
+[从工程合同 §11「自审记录」最新一条提取；如 PM 已跑 review，附 review_completed 事件结论]
 
 ✅ 验收清单（PM 主路径走查）：
 - [ ] 条件 1
@@ -109,6 +112,13 @@ PM 视图：[历史档案中的偏差或"无"]
 [从工程合同 §9 工程层验收清单提取]
 
 请验收：通过 / 打回（附反馈）
+
+──────────────────────────────────────
+⚙️ 可选深度审查（PM 自取所需，非必跑）：
+  /review              — 代码审查 task 分支 vs req 分支的 diff
+  /qa                  — 功能测试 dev server（需 browse；UI task 推荐）
+  /design-review       — 对照 DESIGN.md 检查视觉一致性（需 browse；UI task 推荐）
+跑完贴结论我会机械追加自审记录 + append 事件（I-RV3）。
 ═══════════════════════════════════════
 ```
 
@@ -126,7 +136,7 @@ PM 视图：[历史档案中的偏差或"无"]
 [关键 diff 摘要或测试结果]
 
 🔍 自审结果：
-[从工程合同 §11 自审记录提取]
+[从工程合同 §11 自审记录提取；如 PM 已跑 review，附 review_completed 事件结论]
 
 ✅ 验收清单（PM 主路径走查）：
 - [ ] 条件 1
@@ -140,12 +150,17 @@ PM 视图：[执行日志中的偏差或"无"]
 [从工程合同 §9 提取]
 
 请验收：通过 / 打回（附反馈）
+
+──────────────────────────────────────
+⚙️ 可选深度审查（PM 自取所需，非必跑）：
+  /review              — 代码审查 task 分支 vs req 分支的 diff
+跑完贴结论我会机械追加自审记录 + append 事件（I-RV3）。
 ═══════════════════════════════════════
 ```
 
 ### 步骤 3.5：在本窗口直接呈交 PM 验收（v4 单窗口 lifecycle）
 
-进入「待验收」后，不提示 PM 回主窗口。当前新窗口直接汇总验收包并等待 PM 决策。
+commit 完成后（task 状态仍是「执行中」），不提示 PM 回主窗口。当前新窗口直接汇总验收包并等待 PM 决策。
 
 必须补充三类信息：
 
@@ -153,7 +168,7 @@ PM 视图：[执行日志中的偏差或"无"]
    ```bash
    git diff --stat <req-branch>..HEAD
    ```
-2. **PM 已跑的 review（如有）**：列出 task-execute 阶段 PM 实际跑过并 append 到事件流的工具及结论，例如 `/review pass, /qa pass`；PM 全跳时写 `（PM 选择不跑 review）`。事件流缺事件不阻塞验收（I-RV2）。
+2. **PM 已跑的 review（如有，仅在事件流非空时显示）**：读 `task-events.py list --type review_completed`；有事件就在「🔍 自审结果」末尾追加（如 `/review pass`），无事件不显示——默认路径下 PM 还没决定跑不跑，不预设"PM 选择不跑"的描述。事件流缺事件不阻塞验收（I-RV2）。
 3. **PM 决策入口**：明确让 PM 在本窗口选择通过或打回。
 
 **走查时引导 PM 反推 req / 项目级文档偏差**：
@@ -165,7 +180,7 @@ PM 看原型 / 看 diff 时，如果发现 brief / analysis / solution（PM 视�
 输出格式：
 
 ```text
-Diff: N 文件 +X -Y 行 / review: <工具列表> 结论 → PM 通过/打回？
+Diff: N 文件 +X -Y 行 → PM 通过/打回？
 ```
 
 ### 步骤 4：等待 PM 决策
@@ -175,6 +190,8 @@ Diff: N 文件 +X -Y 行 / review: <工具列表> 结论 → PM 通过/打回？
 ```bash
 python3 .claude/scripts/task-transition.py "<task-file>" --to 已完成
 ```
+
+`task-transition.py` 在「执行中→已完成」入口校验文档偏差 + 自审记录非空（I-TT3）。
 
 然后提示 PM 切到 req 窗口（v4.5：close-task 必须在 req worktree 跑，不能在 task 窗口）：
 
@@ -186,6 +203,8 @@ python3 .claude/scripts/task-transition.py "<task-file>" --to 已完成
 ```
 
 **PM 说"打回"：**
+
+> 打回**不切状态** — task 全程是「执行中」，AI 直接基于反馈继续修，不再走 `--to 执行中` 回退（该 transition 在 2026-05-08 删除，I-TT4 废弃）。
 
 1. 记录 PM 反馈到 **PM 视图主文件**的「📁 历史档案 → PM 反馈」section（**禁止**写入工程合同）：
    ```markdown
@@ -201,23 +220,21 @@ python3 .claude/scripts/task-transition.py "<task-file>" --to 已完成
    - 反向约束（"禁用 X" / "不要 Y"）→ 后续 task 同步入工程合同 §6 易错点 / 禁止项
    - 决策记录（"二审改 X" / "重做为 Y"）→ 后续 task 同步入「关键产品决策」备选方案列
 
-2. 转换状态回执行中：
-   ```bash
-   python3 .claude/scripts/task-transition.py "<task-file>" --to 执行中 --note "PM 打回：<反馈摘要>"
-   ```
-
-3. 输出给 PM，并继续在本窗口修复：
+2. 输出给 PM，并继续在本窗口修复：
 
    ```text
    收到打回。本轮按反馈循环规则只改原型代码，task md 业务字段对齐统一交给 close-task §0 batch 处理。如反馈描述模糊到无法实施，会用 AskUserQuestion 问澄清细节。（规则权威定义见 skills/task-execute/SKILL.md §反馈循环规则）
    ```
 
-4. 应用反馈循环规则（权威定义见 `skills/task-execute/SKILL.md §反馈循环规则`）：本轮 AI 只改原型代码 + 在执行报告写「文档对齐预告」，不动 task md 业务字段；继续修复并重新走自审与验收。
+3. 应用反馈循环规则（权威定义见 `skills/task-execute/SKILL.md §反馈循环规则`）：本轮 AI 只改原型代码 + 在执行报告写「文档对齐预告」，不动 task md 业务字段。
+
+4. 修复完毕后**追加 fix commit**（保留主 commit + fix commit 的 diff 历史；commit message 模板：`task-NNN fixup: <一句话>`）；重新呈交（重新走步骤 3-4）。
 
 ## Rules
 
 - 验收信息从 task 文件各 section 提取，不要编造内容
 - PM 的反馈原话记录，不要改写
-- 打回时 --note 参数必须提供，否则 task-transition.py 会拒绝
+- 打回**不走 transition**（task 状态保持「执行中」），仅写反馈到 PM 视图历史档案 + AI 修代码 + 追加 fix commit
 - UI 类 task 的 dev server 应该还在运行，确认 URL 可访问
 - 验收 / 打回修复在当前 task worktree 窗口完成；PM 通过验收后转「已完成」，并提示 PM 切到 req 窗口跑 `/close-task task-NNN`（v4.5：close-task 不能在 task 窗口跑）
+- 推荐 review 仅作验收信息块末尾的「⚙️ 可选深度审查」辅助提示，PM 自取所需；AI 不得自动跑（I-RV1）；PM 报告结果后才 append 事件（I-RV3）

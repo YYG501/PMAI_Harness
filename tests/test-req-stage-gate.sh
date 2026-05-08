@@ -70,7 +70,7 @@ EOF
   cat > "$dir/tasks/task-004-api-client.md" <<'EOF'
 # Task 004: API client
 
-**状态：** 待验收
+**状态：** 执行中
 **分支：** task-004-api-client
 **worktree：** .worktrees/task-004-api-client
 
@@ -191,7 +191,7 @@ test_boundary_cases_and_output_format() {
   fake=$(_make_fake_req_for_gate)
   report=$(_mock_gate_missing_report "$fake")
 
-  if ! echo "$report" | grep -F -q "task-004: status is 待验收"; then
+  if ! echo "$report" | grep -F -q "task-004: status is 执行中"; then
     _fail "mock report should include unfinished infrastructure task"
     echo "$report" >&2
     rm -rf "$fake"

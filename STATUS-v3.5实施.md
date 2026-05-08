@@ -5,7 +5,17 @@
 
 ---
 
-## 当前位置（2026-05-02）
+## 当前位置（2026-05-08）
+
+**最近一次改造（2026-05-08）**：状态机收敛 — 合并「待验收」入「执行中」 + 推荐 review 移到验收信息块末尾。
+- task 状态从 5 态 → 4 态（待确认 / 执行中 / 已完成 / 已废弃；删「待验收」）
+- 合法 transition 从 6 → 3（待确认→执行中、执行中→已完成、执行中→待确认 受限）
+- PM 打回**不切状态**：写反馈到 PM 视图历史档案 + AI 续修 + 追加 fix commit
+- 推荐 review 不再是 commit 前必经步骤；改作呈交块末尾「⚙️ 可选深度审查」辅助提示
+- 影响范围：INVARIANTS.md（I-CB10 / I-CT7 / I-RV1-2 / I-TT1-4 / I-CA2）+ task-transition.py / audit-task-events.py / status-view.py / close-req.sh / req-transition.py / skill-preamble.sh + skills/{task-execute,task-submit,task-status,task-spec,req-stage-gate} + 8 个 test 文件 + fixture.sh
+- 测试 311 / 0 通过
+
+---
 
 阶段 **1 + 2 + 3 + 4 + 4.5（含 d 修订 + e patch + f sync 改造）完成**，阶段 5/6/7/8/9 全部废弃 / 跳过。全测试套件 0 失败（269 / 0）：
 

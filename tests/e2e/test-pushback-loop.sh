@@ -66,13 +66,14 @@ test_pushback_loop_contract() {
   pass_test
 }
 
-# Behavioral: 反馈 append 到 task md + 状态回执行中 (这两个动作不变)
+# Behavioral: 反馈 append 到 task md，状态保持「执行中」不切（2026-05-08 「待验收」合并入「执行中」 — PM 打回不再走 transition）
 test_pushback_loop_behavioral_fixture() {
-  start_test "e2e pushback: feedback append and status transition simulation"
+  start_test "e2e pushback: feedback append, status remains 执行中 (no transition)"
   fixture_setup
 
   req_dir=$(fixture_create_req "req-001" "test" 6)
-  task=$(fixture_create_task "$req_dir" "401" "pushback" "待验收" "/qa")
+  # commit 后 PM 验收期间 task 状态仍是「执行中」
+  task=$(fixture_create_task "$req_dir" "401" "pushback" "执行中" "/qa")
 
   _append_pm_feedback "$task" "1" "should change behavior before showing result" "改成先校验权限再显示结果"
   if ! grep -q "should change behavior" "$task"; then
@@ -81,10 +82,9 @@ test_pushback_loop_behavioral_fixture() {
     return
   fi
 
-  sed -i.bak 's|^\*\*状态：\*\*.*|\*\*状态：\*\* 执行中|' "$task"
-  rm -f "$task.bak"
+  # 验证打回后状态保持「执行中」（不再走 --to 执行中 transition；I-TT4 已废弃）
   if ! grep -q '^\*\*状态：\*\* 执行中' "$task"; then
-    _fail "task status should transition back to 执行中"
+    _fail "task status should remain 执行中 during pushback (no transition)"
     fixture_teardown
     return
   fi

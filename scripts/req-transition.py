@@ -126,7 +126,7 @@ def check_all_tasks_closed(req_dir: Path) -> tuple[bool, list[str]]:
                 if m:
                     status = m.group(1).strip()
                     break
-        if status and status in ("待确认", "执行中", "待验收"):
+        if status and status in ("待确认", "执行中"):
             open_tasks.append(f"{tf.name} ({status})")
 
     return len(open_tasks) == 0, open_tasks

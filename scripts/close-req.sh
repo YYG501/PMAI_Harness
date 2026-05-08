@@ -46,7 +46,7 @@ if [ -d "$TASKS_DIR" ]; then
     case "$TF" in *.engineering.md) continue;; esac
     STATUS=$(python3 -m _lib.task_parser get_status "$TF" 2>/dev/null || echo "")
     case "$STATUS" in
-      待确认|执行中|待验收)
+      待确认|执行中)
         OPEN_TASKS="${OPEN_TASKS}${TF}"$'\n'
         ;;
     esac

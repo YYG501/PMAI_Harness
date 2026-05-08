@@ -205,9 +205,8 @@ CURRENT_STATUS=$(python3 "$MAIN_REPO_ROOT/.claude/scripts/task-transition.py" "$
   # D7 后无 serial 阻塞；并行约束由依赖 gate 和 worktree 隔离承担。
   python3 "$MAIN_REPO_ROOT/.claude/scripts/task-transition.py" "$TASK_FILE" --to 执行中
   ```
-- 「执行中」：允许重试或打回后续跑，不重复 transition。
+- 「执行中」：允许重试或 PM 打回后续跑，不重复 transition。包括：commit 后已呈交但 PM 还没决策的场景（task 状态仍是「执行中」）— 此时如想重新看呈交块跑 `/task-submit`。
 - 「已完成」：错误退出，提示 `该 task 已完成；如需收尾，请关闭本窗口，切到 req 窗口运行 /close-task task-NNN`。
-- 「待验收」：错误退出，提示 `该 task 已待验收；请在本窗口验收，PM 通过后关本窗口切到 req 窗口运行 /close-task task-NNN`。
 - 其他状态：错误退出，展示当前状态，并提示 PM 回主窗口用 `/task-status` 查看。
 
 ### 步骤 1：读取 task 两文件（成对校验）
@@ -699,72 +698,35 @@ EOM
 - 改的是「字段名 / 接口 / 组件路径 / 文件结构」→ 工程层 § 10
 - 改的是「业务规则 / 产品决策 / 需求描述 / 角色定义」→ 业务层 历史档案
 
-### 步骤 7：输出"推荐 review 工具"区块（不自动调任何 review）
+### 步骤 7：写 commit 前 AI 自审 placeholder
 
-实现完毕、执行日志和文档偏差填好后，AI **不得自动调用任何 review skill**（I-RV1）—— 这是 PM 自跑的工具，AI 替跑容易"假执行"（尤其 `/qa` `/design-review` 依赖 browse 看真实页面，不是文档对照）。
+实现完毕、执行日志和文档偏差填好后，**不再主动列推荐 review 工具区块**（2026-05-08 收口：推荐 review 改作步骤 11 验收信息块末尾的辅助提示，不当 commit 前必经步骤）。
 
-输出推荐区块给 PM：
+AI 在「自审记录」section 追加一条 commit 前 placeholder（提供 task-transition.py「执行中→已完成」校验所需的 has_meaningful_content 非空内容）：
 
-```
-✅ 实现完毕：<改动文件数> 文件，dev server: http://localhost:<port>
-
-可选 review（PM 自行选跑，跑完贴结论我帮你记自审记录 + append 事件）：
-  /review              — 代码审查 task 分支 vs req 分支的 diff
-
-  # 以下仅 UI task：
-  /qa                  — 功能测试 dev server（需 browse）
-  /design-review       — 对照 DESIGN.md 检查视觉一致性（需 browse）
-
-跑哪几个由你决定，全跳也可以。跑完后进步骤 10 commit + 转待验收。
+```markdown
+### 自审 1 - [YYYY-MM-DD HH:MM]
+**工具：** AI 阶段自审（commit 前机械检查）
+**结果：** pass
+**详细发现：**
+- 改动文件 N 个；执行日志已写；文档偏差已填；dev server 持续在 :PORT
+- 验收阶段如需深度审查，PM 可自行调用 /review、/qa、/design-review（自审记录会追加条目）
+**遗留问题：** 无
 ```
 
-UI task 判定参考 task 文件「推荐 review 工具」字段（含 `/qa` 或 `/design-review`）或 task 描述涉及前端/页面/组件。
+**关键约束**：「**详细发现：**」下面**必须有至少一行不带 `**xxx：**` 前缀的实质文字**（散文或 bullet 都行）。task-transition.py 的 has_meaningful_content 会过滤掉 `**工具：** **结果：** **详细发现：** **遗留问题：**` 等纯前缀行——只有不带这些前缀的行才会被算非空。
 
-#### 7.1 PM 跑完 review 后：写自审记录 + append 事件（I-RV2）
+**仍然适用**（I-RV1 / I-RV3）：AI 不得自动调用任何 review skill（`/review` `/qa` `/design-review`），即使是"机械检查"也不要伪装成跑了 review。本 placeholder 只是声明"AI 阶段已结束、PM 可以接手"，不冒名 review。
 
-PM 在 chat 里报告"跑了 /review，pass，发现 2 个 mechanical issue 已自动修"等结论后，AI：
+### 步骤 8：（保留编号便于历史引用 — 原"自审记录由步骤 7.1 写"逻辑已并入步骤 7 的 placeholder，PM 验收阶段后续追加条目走步骤 12 后的"附录：PM 验收阶段跑 review 旁路"）
 
-1. 在 task 文件「自审记录」section 追加一条（保留 PM 原话或转写）：
+### 步骤 9：（保留编号便于历史引用）
 
-   ```markdown
-   ### 自审 N - [YYYY-MM-DD HH:MM]
-   **工具：** /review
-   **结果：** pass（2 个 mechanical issue 已修复）
-   **详细发现：**
-   - F-001: 变量命名不一致 → 已修复
-   - F-002: 缺少 null check → 已修复
-   **遗留问题：** 无
-   ```
+### 步骤 10：Commit（不切状态）
 
-2. append `review_completed` 事件作为审计痕迹：
+**实现完毕 + 文档偏差填好 + 自审 placeholder 写好 → 直接 commit。**
 
-   ```bash
-   python3 .claude/scripts/task-events.py append "<task-file>" \
-     --type review_completed --tool "/review" --result "<pass|fail>"
-   ```
-
-**禁止**（I-RV3）：先 append 后跑、跳过 PM 直接 append、AI 替 PM 跑 review 然后伪造结论。append 必须发生在 PM 明确报告结果之后。
-
-#### 7.2 修复 PM 跑 review 发现的问题（如有）
-
-PM 跑 review 后反馈"还有 X 需要修"：
-1. AI 在 task worktree 内修复（不 commit，commit 由步骤 10 统一做）
-2. 提示 PM 是否重新跑对应 review → PM 重跑后再 append 一条事件
-3. 更新自审记录
-
-#### 7.3 不跑 review 直接进 commit
-
-PM 决定全跳或不再跑 → 直接进步骤 10。事件流缺 `review_completed` 不阻止「执行中→待验收」转换（I-RV2，task-transition 不再 hard gate）。
-
-### 步骤 8：（已合并入步骤 7.1，保留编号便于历史引用）
-
-> 自审记录现在由步骤 7.1 在 PM 跑完 review 后机械填写。如 PM 全跳 review，自审记录至少需要一条 `**结果：** PM 选择不跑 review` 之类的 placeholder（task-transition 仍校验 section 非空）。
-
-### 步骤 9：（已合并入步骤 7.2）
-
-### 步骤 10：Commit + 提交待验收
-
-**PM 跑完想跑的 review（或决定不跑）后，先 commit 再转状态。** Adapter 执行路径和 claude-code inline 路径在此处统一 commit。
+task 状态在 commit 前后**全程保持「执行中」**——不再转「待验收」。PM 验收期间 task 状态仍是「执行中」（I-CB10 写入豁免范围覆盖：PM 打回反馈后 AI 继续修代码不被拦截），PM 通过呈交块时再统一转「已完成」。
 
 ```bash
 cd "$TASK_WORKTREE"
@@ -775,22 +737,15 @@ SUMMARY=$(awk '/^### 执行报告/{flag=1} flag && /^\*\*改动摘要/{sub(/\*\*
 
 git add -A
 git commit -m "task-${TASK_ID}: ${SUMMARY}"
-
-# 转待验收
-python3 .claude/scripts/task-transition.py "$TASK_FILE" --to 待验收
 ```
 
-脚本会自动校验：
-- 文档偏差 section 已填
-- 自审记录 section 有内容（PM 不跑 review 时也需至少一条 placeholder 行）
+Dev server 保持运行（PM 验收时需要访问）。
 
-Review 事件流不再做覆盖校验（I-RV2）。Dev server 保持运行（PM 验收时需要访问）。
-
-**Commit 后不退出 skill** —— 直接进步骤 11 呈交验收（v4 单窗口 lifecycle 自动衔接，2026-05-07 合并 task-submit 步骤 3/3.5/4）。
+**Commit 后不退出 skill** —— 直接进步骤 11 呈交验收（v4 单窗口 lifecycle）。
 
 ### 步骤 11：呈交 PM 验收（合并自 task-submit）
 
-> 默认路径：commit + 转「待验收」后**自动**呈交，PM 不需手动敲 `/task-submit`。
+> 默认路径：commit 后**自动**呈交，PM 不需手动敲 `/task-submit`。task 状态全程「执行中」，commit 不切状态。
 > 兜底入口：PM 在异常情况（窗口被关 / context 丢失 / 重启 IDE）下仍可手动跑 `/task-submit`，逻辑等价。
 
 #### 11.1 组装验收信息包
@@ -807,12 +762,12 @@ REQ_BRANCH=$(jq -r '.req_branch // empty' .req-meta.json 2>/dev/null \
 git diff --stat "$REQ_BRANCH"..HEAD
 ```
 
-PM 已跑的 review（事件流）：
+读事件流的 review_completed 条目（PM 在验收期间已跑过 review 时才有）：
 ```bash
 python3 .claude/scripts/task-events.py list "$TASK_FILE" --type review_completed
 ```
-- 有事件 → 列出工具及结论（如 `/review pass, /qa pass`）
-- 无事件 → 写"（PM 选择不跑 review）"
+- 有事件 → 自审结果末尾追加 PM 已跑的工具及结论（如 `/review pass`）
+- 无事件 → 不在主体显示，仅末尾「⚙️ 可选深度审查」提示存在性
 
 判断 task 类型（UI / 非 UI），按 task-submit §步骤 2 同样信号判定（任一命中即 UI）：
 - task 描述涉及前端/页面/组件/界面/UI/view/component
@@ -839,11 +794,8 @@ python3 .claude/scripts/task-events.py list "$TASK_FILE" --type review_completed
 📊 Diff 摘要（vs <REQ_BRANCH>）：
 [git diff --stat 输出]
 
-🔍 review 已跑：
-[/review pass, /qa pass / 或 "PM 选择不跑 review"]
-
 🔍 自审结果：
-[工程合同 §11 最新一条要点]
+[工程合同 §11 最新一条要点；如 PM 已跑 review，附 review_completed 事件结论]
 
 ✅ 验收清单（PM 主路径走查）：
 - [ ] 条件 1
@@ -855,10 +807,17 @@ PM 视图：[历史档案中的偏差或"无"]
 工程合同：[§10 内容或"无偏差"]
 
 请走查后回复：通过 / 打回（附反馈）
+
+──────────────────────────────────────
+⚙️ 可选深度审查（PM 自取所需，非必跑）：
+  /review              — 代码审查 task 分支 vs req 分支的 diff
+  /qa                  — 功能测试 dev server（需 browse；UI task 推荐）
+  /design-review       — 对照 DESIGN.md 检查视觉一致性（需 browse；UI task 推荐）
+跑完贴结论我会机械追加自审记录 + append 事件（I-RV3）。
 ═══════════════════════════════════════
 ```
 
-**非 UI 类 task**：去掉「走查链接」段，加「📂 代码变更」段（关键 diff / 测试结果摘要），其余结构同上。
+**非 UI 类 task**：去掉「走查链接」段，加「📂 代码变更」段（关键 diff / 测试结果摘要），「⚙️ 可选深度审查」区块只列 `/review`（不含 `/qa` `/design-review`），其余结构同上。
 
 #### 11.3 走查时引导 PM 反推上游文档偏差
 
@@ -873,6 +832,8 @@ PM 看原型 / 看 diff 时若发现 brief / analysis / solution（PM 视图）/
 python3 .claude/scripts/task-transition.py "$TASK_FILE" --to 已完成
 ```
 
+`task-transition.py` 在「执行中→已完成」入口校验文档偏差 + 自审记录非空（I-TT3）；不通过会拒绝转换，PM 需先补齐再喊通过。
+
 然后输出（不要在本窗口跑 /close-task；v4.5 close-task 必须在 req 窗口跑）：
 
 ```text
@@ -885,6 +846,8 @@ python3 .claude/scripts/task-transition.py "$TASK_FILE" --to 已完成
 ```
 
 **PM 说"打回"**：
+
+> 打回**不切状态** — task 全程是「执行中」，AI 直接基于反馈继续修，不再走 `task-transition --to 执行中` 的回退（该 transition 在 2026-05-08 删除，I-TT4 废弃）。
 
 1. 记录 PM 反馈到 PM 视图主文件「📁 历史档案 → PM 反馈」（**禁止**写入工程合同）：
    ```markdown
@@ -900,14 +863,38 @@ python3 .claude/scripts/task-transition.py "$TASK_FILE" --to 已完成
    - 反向约束（"禁用 X" / "不要 Y"）→ 后续 task 同步入工程合同 §6 易错点 / 禁止项
    - 决策记录（"二审改 X" / "重做为 Y"）→ 后续 task 同步入「关键产品决策」备选方案列
 
-2. 转回执行中：
-   ```bash
-   python3 .claude/scripts/task-transition.py "$TASK_FILE" --to 执行中 --note "PM 打回：<反馈摘要>"
+2. 应用 §反馈循环规则（实现前必做下方）：按规则只改原型代码，不动 task md 业务字段；步骤 5 执行报告里写「文档对齐预告」。文档对齐统一交给 close-task §0。
+
+3. 修复完毕后**追加 fix commit**（保留主 commit + fix commit 的 diff 历史，close-task merge 时统一进 req 分支；commit message 模板：`task-NNN fixup: <一句话>`）。
+
+4. 重新呈交（重新走步骤 11/12），等待 PM 通过/再打回。
+
+### 附录：PM 验收阶段跑 review（旁路 — 非必经）
+
+PM 在验收期间任意时刻可自跑 `/review` `/qa` `/design-review` 等 review 工具。AI 仍**不得**自行调用（I-RV1）—— 这条规则覆盖整个 task 生命周期，不限于实现阶段。
+
+**PM 报告 review 结论后**（chat 里说"跑了 /review，pass，2 个 mechanical issue 已修"等），AI 机械执行：
+
+1. 在工程合同 §11 自审记录追加一条（保留 PM 原话或转写）：
+   ```markdown
+   ### 自审 N - [YYYY-MM-DD HH:MM]
+   **工具：** /review
+   **结果：** pass（2 个 mechanical issue 已修复）
+   **详细发现：**
+   - F-001: 变量命名不一致 → 已修复
+   - F-002: 缺少 null check → 已修复
+   **遗留问题：** 无
    ```
 
-3. 应用 §反馈循环规则（实现前必做下方）：按规则只改原型代码，不动 task md 业务字段；步骤 5 执行报告里写「文档对齐预告」。文档对齐统一交给 close-task §0。
+2. append `review_completed` 事件作为审计痕迹（I-RV2）：
+   ```bash
+   python3 .claude/scripts/task-events.py append "<task-file>" \
+     --type review_completed --tool "/review" --result "<pass|fail>"
+   ```
 
-4. 继续修复并重新走步骤 5-12（执行日志含文档对齐预告 / 自审 / commit / 呈交）。
+**PM 跑完 review 后反馈"还有 X 需要修"**：和步骤 12 PM 打回路径一致 —— 写反馈到 PM 视图历史档案、修代码、追加 fix commit、重新呈交。
+
+**禁止**（I-RV3）：先 append 后跑、跳过 PM 直接 append、AI 替 PM 跑 review 然后伪造结论。append 必须发生在 PM 明确报告结果之后。
 
 ## Rules
 
@@ -915,9 +902,10 @@ python3 .claude/scripts/task-transition.py "$TASK_FILE" --to 已完成
 - 代码改动在 task worktree 中进行
 - 文档（docs/）不在 task worktree 中修改（hook 会拦截）
 - 文档偏差记录到 task 文件，由 `/doc-update` 在 close-task 前处理
-- AI 不得自动调任何 review 工具（`/review` `/qa` `/design-review` 等，I-RV1）；只在步骤 7 输出推荐清单
+- AI 不得自动调任何 review 工具（`/review` `/qa` `/design-review` 等，I-RV1）；推荐 review 仅作步骤 11 验收信息块末尾「⚙️ 可选深度审查」辅助提示，PM 自取所需
 - PM 报告 review 结论后才 append `review_completed` 事件（I-RV3）；禁止 AI 替 PM 跑或凭记忆模拟
-- 事件流缺 review_completed 不阻止「执行中→待验收」转换（I-RV2）
+- 事件流缺 review_completed 不阻止「执行中→已完成」转换（I-RV2）
 - dev server 在 task-execute 结束后保持运行，直到 close-task 时杀掉
-- **commit + 转待验收 → 自动进步骤 11 呈交验收**（默认路径，PM 不手动敲 `/task-submit`）；PM 通过后 AI 转「已完成」并提示 PM 切到 req 窗口跑 `/close-task task-NNN`（v4.5：close-task 不能在 task 窗口跑）
+- **commit 不切状态 → 自动进步骤 11 呈交验收**（task 状态全程「执行中」直到 PM 通过；默认路径，PM 不手动敲 `/task-submit`）；PM 通过后 AI 转「已完成」并提示 PM 切到 req 窗口跑 `/close-task task-NNN`（v4.5：close-task 不能在 task 窗口跑）
+- PM 打回不切状态：写反馈到 PM 视图历史档案 → AI 修代码 → 追加 fix commit → 重新呈交（不再走 `--to 执行中` transition）
 - task-submit 仍存在但仅作 PM 手动兜底入口（重启窗口 / context 丢失 / 异常退出后重新呈交）

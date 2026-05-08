@@ -310,7 +310,7 @@ test_task_status_gate_allows_task_file_edit() {
   fixture_setup
 
   req_dir=$(fixture_create_req "req-001" "test" 6)
-  task=$(fixture_create_task "$req_dir" "012" "gate-taskfile" "待验收" "/qa")
+  task=$(fixture_create_task "$req_dir" "012" "gate-taskfile" "已完成" "/qa")
   task_wt=$(fixture_create_task_worktree "$task" "req-001-test")
 
   cd "$task_wt"

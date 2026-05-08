@@ -32,7 +32,7 @@
 - **I-CT4**：归档文件（.runs/\*.json、events/\*.jsonl）必须 commit 到 req 分支后，才能删除原件
 - **I-CT5**：只有在 merge 成功且归档已 commit 后，才能删除 task 分支和 task worktree
 - **I-CT6**：任何前置条件失败 → exit 1，不能 "跳过并继续"
-- **I-CT7**：**事件流必须证明状态机完整推进**。merge 前审计 `.runs/events/<task>.jsonl`：必须存在 `待确认→执行中`、`执行中→待验收`、`待验收→已完成` 三条 `status_changed` 事件，以及至少一条 `execution_started` 或 `execution_manual_completed`。任何一条缺失 → 拒绝 merge 并保留数据（对「agent 跳过状态机一口气写完多个 task」的结构性防御）。事件文件不存在一律视为违规（fail-closed）
+- **I-CT7**：**事件流必须证明状态机完整推进**。merge 前审计 `.runs/events/<task>.jsonl`：必须存在 `待确认→执行中`、`执行中→已完成` 两条 `status_changed` 事件，以及至少一条 `execution_started` 或 `execution_manual_completed`。任何一条缺失 → 拒绝 merge 并保留数据（对「agent 跳过状态机一口气写完多个 task」的结构性防御）。事件文件不存在一律视为违规（fail-closed）
 - **I-CT8**：**task 分支上每个 code commit 的时间戳必须晚于首次 `status_changed(*, 执行中)` 事件时间戳**。早于该时间的 commit 说明"先写代码再补流程"，拒绝 merge
 
 ### 守卫点
@@ -79,7 +79,7 @@
 ### 不变式
 
 - **I-CA1**：cancel 不 merge 到 main，main 零污染
-- **I-CA2**：req 下所有活跃 task（执行中/待验收）的 worktree 和分支必须清理
+- **I-CA2**：req 下所有活跃 task（执行中）的 worktree 和分支必须清理
 - **I-CA3**：必须在所有 task 清理完成后才清理 req 本身
 - **I-CA4**：req 目录必须移到 requirements/closed/（保留记录），meta.status = cancelled
 - **I-CA5**：Cancel 失败留下的残留（worktree、分支）必须能重新运行脚本清理干净（幂等）
@@ -106,7 +106,7 @@
 - **I-CB6**：task 文件的"状态"字段 和 .req-meta.json 的"stage"字段 禁止直接编辑（必须走 transition 脚本）
 - **I-CB7**：hook 失败或无法判断 → 默认拒绝（fail-closed），不放行
 - **I-CB8**：hook 本身不能修改任何文件（read-only 验证逻辑）
-- **I-CB10**：**task worktree 写入时，task 状态字段必须为「执行中」**。状态为「待确认/待验收/已完成」或字段读不到一律 deny。这是对 Claude 实例越权写 task 代码的结构性防御（hook 侧）。豁免范围：task 文件本身的写入（执行日志/自审记录/文档偏差 section 填写需要放行）+ `.runs/`/`.worktrees/` 运行时元数据
+- **I-CB10**：**task worktree 写入时，task 状态字段必须为「执行中」**。状态为「待确认/已完成」或字段读不到一律 deny。这是对 Claude 实例越权写 task 代码的结构性防御（hook 侧）。豁免范围：task 文件本身的写入（执行日志/自审记录/文档偏差 section 填写需要放行）+ `.runs/`/`.worktrees/` 运行时元数据。注：「执行中」覆盖 AI 实现期 + PM 验收期 — 验收期 AI 收 PM 打回反馈仍可写代码（task 状态全程不切，PM 通过才转「已完成」）
 
 ### 守卫点
 - 路径归一化：line ~39-102
@@ -144,8 +144,8 @@
 
 ### 不变式
 
-- **I-RV1**：AI 在产物生成（solution.md / task-plan.md / task 文件 / task 实现完毕）后必须输出"推荐 review 工具"区块，但不得自动调用。区块内容应说明：哪些工具可选、各自查什么、跑哪几个由 PM 决定、全跳也允许。
-- **I-RV2**：`review_completed` / `plan_review_completed` 事件由 PM 跑完后口述结论、AI 机械 append，作为审计记录。**事件流不当任何状态机硬 gate**：缺事件不阻止 task-confirm 启动、不阻止「执行中→待验收」转换。
+- **I-RV1**：AI 在产物生成（solution.md / task-plan.md / task 文件）后必须输出"推荐 review 工具"区块，但不得自动调用——这三处 review 是 PM 在产物生成后的常规检视入口。**task 实现完毕的呈交验收块例外**：推荐 review 仅作为验收信息块**末尾**的辅助提示（"⚙️ 可选深度审查"），PM 自取所需，不再是 commit 前必经步骤——PM 可直接通过/打回，也可任意时刻自跑 `/review` `/qa` `/design-review`。
+- **I-RV2**：`review_completed` / `plan_review_completed` 事件由 PM 跑完后口述结论、AI 机械 append，作为审计记录。**事件流不当任何状态机硬 gate**：缺事件不阻止 task-confirm 启动、不阻止「执行中→已完成」转换。
 - **I-RV3**：AI 不得"先 append 后跑"或"跳过 PM 直接 append"事件（违反"skill 必须实际调用，不能凭记忆模拟"）。append 必须发生在 PM 明确报告 review 结果之后。
 
 ### 守卫点
@@ -154,7 +154,7 @@
   - solution.md：req-solution SKILL.md 退出契约 + Rules
   - task-plan.md：task-plan SKILL.md 步骤 5
   - task 文件：task-spec SKILL.md 步骤 8（写完 task 文件后）
-  - task 实现完毕：task-execute SKILL.md 步骤 7
+  - task 实现完毕：task-execute SKILL.md 步骤 11 验收信息块末尾「⚙️ 可选深度审查」（不是必经步骤；PM 自取所需）
 - 事件 append：PM 报告结果后 AI 调 `task-events.py append --type review_completed/plan_review_completed --tool <name> --result <pass|fail>`
 - 查询接口：`task-events.py check-reviews|check-plan-reviews`（informational，永远 exit 0）
 
@@ -166,13 +166,18 @@
 
 ### 不变式
 
-- **I-TT1**：只允许 4 种合法转换：待确认→执行中、执行中→待验收、待验收→已完成、待验收→执行中
-- **I-TT2**：~~v1 串行强制~~ **D0 并行允许（v4 plan §8 A0 修订）**：同 req 下允许多个 task 同时处于执行中/待验收。原 serial 校验已 no-op 化保留 hook 在 task-transition.py:check_serial_constraint，未来如需恢复可恢复
-- **I-TT3**：执行中→待验收 必须满足：
+- **I-TT1**：只允许 2 种主合法转换 + 1 种受限失败回退：
+  - 待确认→执行中（task-confirm 启动）
+  - 执行中→已完成（PM 验收通过；触发 §review/§task-transition 校验）
+  - 执行中→待确认（受限：仅 --fail-execution / --cancel-manual 路径，普通 --to 拒绝）
+
+  **打回不切状态**：PM 打回时 task 留在「执行中」，AI 收反馈直接继续修，不再走 transition。
+- **I-TT2**：~~v1 串行强制~~ **D0 并行允许（v4 plan §8 A0 修订）**：同 req 下允许多个 task 同时处于执行中。原 serial 校验已 no-op 化保留 hook 在 task-transition.py:check_serial_constraint，未来如需恢复可恢复
+- **I-TT3**：执行中→已完成 必须满足：
   - 文档偏差 section 已填（或"无偏差"）
-  - 自审记录 section 有内容
-  - review 事件流不再做覆盖校验（review 工具改为 PM 自跑推荐项；见 §review 工具）
-- **I-TT4**：待验收→执行中 必须提供 --note 参数（PM 打回必须有反馈）
+  - 自审记录 section 有内容（commit 前 AI 写的 placeholder + PM 验收阶段任意时刻可补的 review 条目均算）
+  - review 事件流不做覆盖校验（review 工具改为 PM 自跑推荐项；见 §review 工具）
+- ~~**I-TT4**~~：（已废弃 — 不再有打回 transition；PM 打回直接写反馈到 PM 视图历史档案，task 状态保持「执行中」）
 - **I-TT5**：状态字段的写入必须成功才算转换成功。写入失败必须 exit 1 且不追加事件
 - **I-TT6**：每次转换必须在事件流追加 status_changed 事件
 - **I-TT7**：转换失败时 task 文件状态字段必须保持原值（原子性）

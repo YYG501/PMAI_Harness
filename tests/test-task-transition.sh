@@ -109,7 +109,8 @@ test_reject_skip_transition() {
 }
 
 # -----------------------------------------------------------------
-# I-TT2 (放宽后): D0 并行允许同 req 多 task 同时执行/待验收
+# I-TT2 (放宽后): D0 并行允许同 req 多 task 同时执行
+# （2026-05-08: 「待验收」已合并到「执行中」 — sibling 在 commit 后呈交期间仍是「执行中」）
 # -----------------------------------------------------------------
 
 test_reject_parallel_active_task_now_allowed() {
@@ -129,28 +130,12 @@ test_reject_parallel_active_task_now_allowed() {
   fixture_teardown
 }
 
-test_reject_parallel_pending_review_sibling_now_allowed() {
-  start_test "I-TT2 accept when sibling is 待验收"
-  fixture_setup
-  req_dir=$(fixture_create_req "req-001" "test" 6)
-  fixture_create_task "$req_dir" "001" "review" "待验收" >/dev/null
-  task=$(fixture_create_task "$req_dir" "002" "new" "待确认")
-
-  if _run_transition "$task" --to 执行中 >/tmp/out.$$ 2>/tmp/err.$$; then
-    pass_test
-  else
-    _fail "should accept when sibling is 待验收 after I-TT2 relaxed (v4 D0)"
-  fi
-  rm -f /tmp/out.$$ /tmp/err.$$
-  fixture_teardown
-}
-
 # -----------------------------------------------------------------
-# I-TT3: 执行中 → 待验收 preconditions
+# I-TT3: 执行中 → 已完成 preconditions（PM 通过呈交块）
 # -----------------------------------------------------------------
 
 test_reject_empty_doc_diff() {
-  start_test "I-TT3 reject 执行中→待验收 when 文档偏差 empty"
+  start_test "I-TT3 reject 执行中→已完成 when 文档偏差 empty"
   fixture_setup
   req_dir=$(fixture_create_req "req-001" "test" 6)
   task=$(fixture_create_task "$req_dir" "001" "demo" "执行中")
@@ -158,7 +143,7 @@ test_reject_empty_doc_diff() {
   # Review tool already satisfied by event
   fixture_add_review_event "$task" "/qa"
 
-  if _run_transition "$task" --to 待验收 >/tmp/out.$$ 2>/tmp/err.$$; then
+  if _run_transition "$task" --to 已完成 >/tmp/out.$$ 2>/tmp/err.$$; then
     _fail "should reject when 文档偏差 is empty"
   else
     if grep -q "文档偏差" /tmp/err.$$; then
@@ -173,14 +158,14 @@ test_reject_empty_doc_diff() {
 }
 
 test_reject_empty_self_review() {
-  start_test "I-TT3 reject 执行中→待验收 when 自审记录 empty"
+  start_test "I-TT3 reject 执行中→已完成 when 自审记录 empty"
   fixture_setup
   req_dir=$(fixture_create_req "req-001" "test" 6)
   task=$(fixture_create_task "$req_dir" "001" "demo" "执行中")
   _clear_self_review "$task"
   fixture_add_review_event "$task" "/qa"
 
-  if _run_transition "$task" --to 待验收 >/tmp/out.$$ 2>/tmp/err.$$; then
+  if _run_transition "$task" --to 已完成 >/tmp/out.$$ 2>/tmp/err.$$; then
     _fail "should reject when 自审记录 is empty"
   else
     if grep -q "自审" /tmp/err.$$; then
@@ -195,18 +180,18 @@ test_reject_empty_self_review() {
 }
 
 test_allow_missing_review_event() {
-  start_test "I-RV2 allow 执行中→待验收 even when review_completed event missing"
+  start_test "I-RV2 allow 执行中→已完成 even when review_completed event missing"
   fixture_setup
   req_dir=$(fixture_create_req "req-001" "test" 6)
   task=$(fixture_create_task "$req_dir" "001" "demo" "执行中" "/qa")
   # Do NOT add the /qa review_completed event — review 是 PM 自跑推荐项，
-  # 缺事件不阻止转待验收（撤销旧 I-TT3 第 3 条 / I-PR1）
+  # 缺事件不阻止转「已完成」（I-RV2）
 
-  if _run_transition "$task" --to 待验收 >/tmp/out.$$ 2>/tmp/err.$$; then
-    if grep -q '^\*\*状态：\*\* 待验收' "$task"; then
+  if _run_transition "$task" --to 已完成 >/tmp/out.$$ 2>/tmp/err.$$; then
+    if grep -q '^\*\*状态：\*\* 已完成' "$task"; then
       pass_test
     else
-      _fail "status not updated to 待验收"
+      _fail "status not updated to 已完成"
       cat "$task" >&2
     fi
   else
@@ -218,15 +203,15 @@ test_allow_missing_review_event() {
 }
 
 test_allow_sentinel_review_tool() {
-  start_test "I-TT3 allow 执行中→待验收 when 审查工具 is (无)"
+  start_test "I-TT3 allow 执行中→已完成 when 审查工具 is (无)"
   fixture_setup
   req_dir=$(fixture_create_req "req-001" "test" 6)
   task=$(fixture_create_task "$req_dir" "001" "demo" "执行中" "/qa")
   _set_review_tools "$task" "(无)"
   # No review event needed
 
-  if _run_transition "$task" --to 待验收 >/tmp/out.$$ 2>/tmp/err.$$; then
-    if grep -q "待验收" "$task"; then
+  if _run_transition "$task" --to 已完成 >/tmp/out.$$ 2>/tmp/err.$$; then
+    if grep -q "已完成" "$task"; then
       pass_test
     else
       _fail "status not updated"
@@ -241,13 +226,13 @@ test_allow_sentinel_review_tool() {
 }
 
 test_allow_empty_review_tool() {
-  start_test "I-TT3 allow 执行中→待验收 when 审查工具 empty"
+  start_test "I-TT3 allow 执行中→已完成 when 审查工具 empty"
   fixture_setup
   req_dir=$(fixture_create_req "req-001" "test" 6)
   task=$(fixture_create_task "$req_dir" "001" "demo" "执行中" "/qa")
   _set_review_tools "$task" ""
 
-  if _run_transition "$task" --to 待验收 >/tmp/out.$$ 2>/tmp/err.$$; then
+  if _run_transition "$task" --to 已完成 >/tmp/out.$$ 2>/tmp/err.$$; then
     pass_test
   else
     _fail "should allow when review tool empty"
@@ -258,44 +243,25 @@ test_allow_empty_review_tool() {
 }
 
 # -----------------------------------------------------------------
-# I-TT4: 待验收 → 执行中 requires --note
+# I-TT4 已废弃（2026-05-08）：PM 打回不再走 transition；任务保持「执行中」
+# 验证 --to 执行中 from 执行中 被合法转换表拒绝
 # -----------------------------------------------------------------
 
-test_reject_reject_without_note() {
-  start_test "I-TT4 reject 待验收→执行中 without --note"
+test_reject_self_loop_executing() {
+  start_test "I-TT1 reject 执行中→执行中 (self-loop after I-TT4 废弃)"
   fixture_setup
   req_dir=$(fixture_create_req "req-001" "test" 6)
-  task=$(fixture_create_task "$req_dir" "001" "demo" "待验收")
+  task=$(fixture_create_task "$req_dir" "001" "demo" "执行中")
 
-  if _run_transition "$task" --to 执行中 >/tmp/out.$$ 2>/tmp/err.$$; then
-    _fail "should reject reject-without-note"
+  if _run_transition "$task" --to 执行中 --note "PM 打回（旧路径）" >/tmp/out.$$ 2>/tmp/err.$$; then
+    _fail "should reject self-loop transition (PM 打回不切状态)"
   else
-    if grep -qE "(note|反馈)" /tmp/err.$$; then
+    if grep -q "非法状态转换" /tmp/err.$$; then
       pass_test
     else
-      _fail "stderr missing note message"
+      _fail "stderr missing 非法状态转换 message"
       cat /tmp/err.$$ >&2
     fi
-  fi
-  rm -f /tmp/out.$$ /tmp/err.$$
-  fixture_teardown
-}
-
-test_allow_reject_with_note() {
-  start_test "I-TT4 allow 待验收→执行中 with --note"
-  fixture_setup
-  req_dir=$(fixture_create_req "req-001" "test" 6)
-  task=$(fixture_create_task "$req_dir" "001" "demo" "待验收")
-
-  if _run_transition "$task" --to 执行中 --note "需要修复 X" >/tmp/out.$$ 2>/tmp/err.$$; then
-    if grep -q "执行中" "$task"; then
-      pass_test
-    else
-      _fail "status not updated"
-    fi
-  else
-    _fail "should accept with --note"
-    cat /tmp/err.$$ >&2
   fi
   rm -f /tmp/out.$$ /tmp/err.$$
   fixture_teardown
@@ -305,8 +271,8 @@ test_allow_reject_with_note() {
 # Happy path
 # -----------------------------------------------------------------
 
-test_happy_path_start_to_review() {
-  start_test "happy path: 待确认→执行中→待验收 with events"
+test_happy_path_start_to_done() {
+  start_test "happy path: 待确认→执行中→已完成 with events"
   fixture_setup
   req_dir=$(fixture_create_req "req-001" "test" 6)
   task=$(fixture_create_task "$req_dir" "001" "demo" "待确认" "/qa")
@@ -330,24 +296,25 @@ test_happy_path_start_to_review() {
     return
   fi
 
-  # 2. Add review event, then 执行中 → 待验收
+  # 2. Add review event (optional in new flow, but kept here to verify it doesn't block),
+  #    then 执行中 → 已完成
   fixture_add_review_event "$task" "/qa"
-  if ! _run_transition "$task" --to 待验收 >/tmp/out.$$ 2>/tmp/err.$$; then
-    _fail "执行中→待验收 failed"
+  if ! _run_transition "$task" --to 已完成 >/tmp/out.$$ 2>/tmp/err.$$; then
+    _fail "执行中→已完成 failed"
     cat /tmp/err.$$ >&2
     rm -f /tmp/out.$$ /tmp/err.$$
     fixture_teardown
     return
   fi
 
-  if ! grep -q '^\*\*状态：\*\* 待验收' "$task"; then
-    _fail "status not set to 待验收"
+  if ! grep -q '^\*\*状态：\*\* 已完成' "$task"; then
+    _fail "status not set to 已完成"
     rm -f /tmp/out.$$ /tmp/err.$$
     fixture_teardown
     return
   fi
 
-  # Events stream should contain 2 status_changed events
+  # Events stream should contain 2 status_changed events (待确认→执行中、执行中→已完成)
   if [ ! -f "$events_file" ]; then
     _fail "events file not created: $events_file"
     rm -f /tmp/out.$$ /tmp/err.$$
@@ -432,11 +399,12 @@ test_discard_from_executing_with_worktree() {
   fixture_teardown
 }
 
-test_discard_from_pending_review() {
-  start_test "I-DISCARD discard 待验收 task"
+test_discard_from_executing_post_commit() {
+  start_test "I-DISCARD discard 执行中 task (commit 后呈交期间)"
   fixture_setup
   req_dir=$(fixture_create_req "req-001" "test" 6)
-  task=$(fixture_create_task "$req_dir" "002" "demo" "待验收")
+  # commit 后呈交期间 task 状态仍是「执行中」（2026-05-08「待验收」合并入「执行中」）
+  task=$(fixture_create_task "$req_dir" "002" "demo" "执行中")
   task_basename=$(basename "$task")
 
   if _run_transition "$task" --discard --reason "需求改了" --yes >/tmp/out.$$ 2>/tmp/err.$$; then
@@ -656,7 +624,7 @@ test_validate_fields_only_rejects_derived_label() {
        grep -q "派生显示标签" /tmp/err.$$; then
       pass_test
     else
-      _fail "stderr 缺合法 5 态枚举或派生标签提示"
+      _fail "stderr 缺合法 4 态枚举或派生标签提示"
       cat /tmp/err.$$ >&2
     fi
   fi
@@ -672,18 +640,16 @@ test_reject_reverse_transition
 test_reject_from_done
 test_reject_skip_transition
 test_reject_parallel_active_task_now_allowed
-test_reject_parallel_pending_review_sibling_now_allowed
 test_reject_empty_doc_diff
 test_reject_empty_self_review
 test_allow_missing_review_event
 test_allow_sentinel_review_tool
 test_allow_empty_review_tool
-test_reject_reject_without_note
-test_allow_reject_with_note
-test_happy_path_start_to_review
+test_reject_self_loop_executing
+test_happy_path_start_to_done
 test_discard_from_pending
 test_discard_from_executing_with_worktree
-test_discard_from_pending_review
+test_discard_from_executing_post_commit
 test_discard_done_rejected_with_guidance
 test_discard_missing_reason
 test_discard_aborts_on_eof_without_yes

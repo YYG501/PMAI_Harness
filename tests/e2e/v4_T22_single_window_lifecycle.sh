@@ -63,8 +63,7 @@ test_single_window_lifecycle() {
   echo "implemented in task branch" > "$task_wt/lifecycle.txt"
   _commit_all_if_needed "$task_wt" "implement lifecycle task"
 
-  # task-submit simulation: no review required, transition to 待验收, then PM accepts to 已完成.
-  (cd "$task_wt" && python3 "$TASK_TRANSITION" "$task_in_wt" --to 待验收 >/dev/null)
+  # task-submit simulation: 2026-05-08 后 commit 不切状态，PM 通过呈交块时直接 执行中→已完成
   _commit_all_if_needed "$task_wt" "submit lifecycle task"
   (cd "$task_wt" && python3 "$TASK_TRANSITION" "$task_in_wt" --to 已完成 >/dev/null)
   _commit_all_if_needed "$task_wt" "accept lifecycle task"

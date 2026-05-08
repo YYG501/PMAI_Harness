@@ -244,7 +244,7 @@ Stage 6 → 7 blocked: 以下 task 尚未完整关闭
 - task-001:
   - missing task file: 请运行 /task-spec task-001 或从 task-plan.md 删除该条
 - task-002:
-  - status is 待验收: 请完成 /task-submit 并通过验收
+  - status is 执行中: 请在 task 窗口完成 PM 验收（task-submit 呈交块）+ /close-task
   - task branch not merged to req branch: 请运行 /close-task
 - task-003:
   - task worktree still exists: 请确认 /close-task 清理完成

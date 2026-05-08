@@ -420,7 +420,6 @@ fixture_seed_full_event_stream() {
   {
     echo "{\"event\":\"status_changed\",\"timestamp\":\"2020-01-01T00:00:00+00:00\",\"task\":\"$task_stem\",\"from\":\"待确认\",\"to\":\"执行中\"}"
     echo "{\"event\":\"execution_started\",\"timestamp\":\"2020-01-01T00:01:00+00:00\",\"task\":\"$task_stem\",\"executor\":\"claude-code\"}"
-    echo "{\"event\":\"status_changed\",\"timestamp\":\"2020-01-01T00:10:00+00:00\",\"task\":\"$task_stem\",\"from\":\"执行中\",\"to\":\"待验收\"}"
-    echo "{\"event\":\"status_changed\",\"timestamp\":\"2020-01-01T00:20:00+00:00\",\"task\":\"$task_stem\",\"from\":\"待验收\",\"to\":\"已完成\"}"
+    echo "{\"event\":\"status_changed\",\"timestamp\":\"2020-01-01T00:20:00+00:00\",\"task\":\"$task_stem\",\"from\":\"执行中\",\"to\":\"已完成\"}"
   } > "$events_file"
 }

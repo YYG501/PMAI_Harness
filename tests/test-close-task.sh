@@ -141,27 +141,6 @@ test_reject_if_status_not_done() {
 }
 
 # =================================================
-# I-CT1: status 待验收 also rejected
-# =================================================
-test_reject_if_status_pending_review() {
-  start_test "I-CT1 reject when task status is 待验收"
-  fixture_setup
-
-  req_dir=$(fixture_create_req "req-001" "test" 6)
-  task=$(fixture_create_task "$req_dir" "002" "review" "待验收" "/qa")
-  fixture_create_task_worktree "$task" "req-001-test" >/dev/null
-
-  if (cd "$FIXTURE_DIR/.worktrees/req-001-test" && bash "$CLOSE_TASK" "$task") >/tmp/out.$$ 2>/tmp/err.$$; then
-    _fail "should have rejected when status is 待验收"
-  else
-    pass_test
-  fi
-
-  rm -f /tmp/out.$$ /tmp/err.$$
-  fixture_teardown
-}
-
-# =================================================
 # I-CT2: task branch does not exist → reject
 # =================================================
 test_reject_if_task_branch_missing() {
@@ -519,8 +498,7 @@ test_reject_if_commit_predates_execution() {
   {
     echo "{\"event\":\"status_changed\",\"timestamp\":\"2099-01-01T00:00:00+00:00\",\"task\":\"$task_stem\",\"from\":\"待确认\",\"to\":\"执行中\"}"
     echo "{\"event\":\"execution_started\",\"timestamp\":\"2099-01-01T00:01:00+00:00\",\"task\":\"$task_stem\",\"executor\":\"claude-code\"}"
-    echo "{\"event\":\"status_changed\",\"timestamp\":\"2099-01-01T00:10:00+00:00\",\"task\":\"$task_stem\",\"from\":\"执行中\",\"to\":\"待验收\"}"
-    echo "{\"event\":\"status_changed\",\"timestamp\":\"2099-01-01T00:20:00+00:00\",\"task\":\"$task_stem\",\"from\":\"待验收\",\"to\":\"已完成\"}"
+    echo "{\"event\":\"status_changed\",\"timestamp\":\"2099-01-01T00:20:00+00:00\",\"task\":\"$task_stem\",\"from\":\"执行中\",\"to\":\"已完成\"}"
   } > "$FIXTURE_DIR/.runs/events/${task_stem}.jsonl"
 
   if (cd "$FIXTURE_DIR/.worktrees/req-001-test" && bash "$CLOSE_TASK" "$task") >/tmp/out.$$ 2>/tmp/err.$$; then
@@ -580,8 +558,7 @@ EOF
   {
     echo "{\"event\":\"status_changed\",\"timestamp\":\"2099-01-01T00:00:00+00:00\",\"task\":\"$task_stem\",\"from\":\"待确认\",\"to\":\"执行中\"}"
     echo "{\"event\":\"execution_started\",\"timestamp\":\"2099-01-01T00:01:00+00:00\",\"task\":\"$task_stem\",\"executor\":\"codex\"}"
-    echo "{\"event\":\"status_changed\",\"timestamp\":\"2099-01-01T00:10:00+00:00\",\"task\":\"$task_stem\",\"from\":\"执行中\",\"to\":\"待验收\"}"
-    echo "{\"event\":\"status_changed\",\"timestamp\":\"2099-01-01T00:20:00+00:00\",\"task\":\"$task_stem\",\"from\":\"待验收\",\"to\":\"已完成\"}"
+    echo "{\"event\":\"status_changed\",\"timestamp\":\"2099-01-01T00:20:00+00:00\",\"task\":\"$task_stem\",\"from\":\"执行中\",\"to\":\"已完成\"}"
   } > "$FIXTURE_DIR/.runs/events/${task_stem}.jsonl"
 
   # Run audit-task-events.py directly (skip full close-task path which has other checks)
@@ -621,8 +598,7 @@ test_ct8_exempts_task_md_only_commit() {
   {
     echo "{\"event\":\"status_changed\",\"timestamp\":\"2099-01-01T00:00:00+00:00\",\"task\":\"$task_stem\",\"from\":\"待确认\",\"to\":\"执行中\"}"
     echo "{\"event\":\"execution_started\",\"timestamp\":\"2099-01-01T00:01:00+00:00\",\"task\":\"$task_stem\",\"executor\":\"claude-code\"}"
-    echo "{\"event\":\"status_changed\",\"timestamp\":\"2099-01-01T00:10:00+00:00\",\"task\":\"$task_stem\",\"from\":\"执行中\",\"to\":\"待验收\"}"
-    echo "{\"event\":\"status_changed\",\"timestamp\":\"2099-01-01T00:20:00+00:00\",\"task\":\"$task_stem\",\"from\":\"待验收\",\"to\":\"已完成\"}"
+    echo "{\"event\":\"status_changed\",\"timestamp\":\"2099-01-01T00:20:00+00:00\",\"task\":\"$task_stem\",\"from\":\"执行中\",\"to\":\"已完成\"}"
   } > "$FIXTURE_DIR/.runs/events/${task_stem}.jsonl"
 
   local audit_out
@@ -661,8 +637,7 @@ test_ct8_does_not_exempt_mixed_commit() {
   {
     echo "{\"event\":\"status_changed\",\"timestamp\":\"2099-01-01T00:00:00+00:00\",\"task\":\"$task_stem\",\"from\":\"待确认\",\"to\":\"执行中\"}"
     echo "{\"event\":\"execution_started\",\"timestamp\":\"2099-01-01T00:01:00+00:00\",\"task\":\"$task_stem\",\"executor\":\"claude-code\"}"
-    echo "{\"event\":\"status_changed\",\"timestamp\":\"2099-01-01T00:10:00+00:00\",\"task\":\"$task_stem\",\"from\":\"执行中\",\"to\":\"待验收\"}"
-    echo "{\"event\":\"status_changed\",\"timestamp\":\"2099-01-01T00:20:00+00:00\",\"task\":\"$task_stem\",\"from\":\"待验收\",\"to\":\"已完成\"}"
+    echo "{\"event\":\"status_changed\",\"timestamp\":\"2099-01-01T00:20:00+00:00\",\"task\":\"$task_stem\",\"from\":\"执行中\",\"to\":\"已完成\"}"
   } > "$FIXTURE_DIR/.runs/events/${task_stem}.jsonl"
 
   local audit_out
@@ -862,7 +837,6 @@ test_autochain_user_n() {
 # Run all tests
 # =================================================
 test_reject_if_status_not_done
-test_reject_if_status_pending_review
 test_reject_if_task_branch_missing
 test_reject_if_req_worktree_missing
 test_reject_if_task_worktree_dirty

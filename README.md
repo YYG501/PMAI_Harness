@@ -68,10 +68,12 @@ bash scripts/init-project.sh \
 /task-confirm     → PM 同意启动一个 task → 输出新窗口启动指令
   ↓ （PM 开新窗口）
 /task-execute     → 在新窗口里跑 codex 执行 task
-  ↓
-/task-submit      → task agent 自报"待验收"
-  ↓ （PM 在主窗口）
-/close-task       → 验收通过 → 已完成
+  ↓ （task 状态全程「执行中」 — commit 不切状态）
+/task-submit      → task agent commit + 呈交验收信息块
+  ↓ （PM 在 task 窗口决策：通过 / 打回；打回不切状态，AI 直接修代码）
+                  → PM 通过 → 转「已完成」
+  ↓ （PM 在 req 窗口）
+/close-task       → 归档 runtime + 删 task worktree
   ↓
 /close-req        → 整个 req 收尾，并入主分支
 ```
@@ -107,8 +109,8 @@ bash scripts/init-project.sh \
 |---|---|
 | `/task-confirm` | PM 同意启动 task → 输出新窗口启动指令（不调任何 agent） |
 | `/task-execute` | **新窗口里运行**：自动 cd worktree + 跑 codex |
-| `/task-submit` | task agent 自报"待验收" |
-| `/task-status` | 多 task 状态总览（待启动 / 执行中 / 待验收） |
+| `/task-submit` | task agent 呈交验收信息块（兜底；默认由 task-execute 自动呈交） |
+| `/task-status` | 多 task 状态总览（待启动 / 执行中 / 已完成） |
 | `/close-task` | PM 验收通过 → 已完成 + 归档 runtime |
 
 ### 收尾 req
