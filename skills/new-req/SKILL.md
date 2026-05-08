@@ -12,7 +12,7 @@ description: |
 
 ## PM 视图规则（必读）
 
-本 skill 间接产出 `brief.md`（通过 /office-hours），须遵守 `skills/_shared/PM-VIEW-RULES.md`。
+本 skill 产出 `brief.md`（PM 主导引导路径，AI 不主动调外部工具；详见步骤 4），须遵守 `skills/_shared/PM-VIEW-RULES.md`。
 特别注意：
 - §三 PM 视图写作规则（明确指代 / 正向描述 / 禁工程词 / 禁像素颜色 / 禁反向约束）
 - §四 文档级严格度对照表（brief.md 行）
@@ -128,7 +128,7 @@ PM 给出 brief 内容后，AI 按 PM-VIEW-RULES（特别是 §三写作规则�
 
 `brief.md` 是 stage 1 的唯一真相源，后续所有 stage 只读 brief.md。
 
-### 步骤 6：Handoff（结束本对话，让 PM 在 worktree 新对话里继续）
+### 步骤 5：Handoff（结束本对话，让 PM 在 worktree 新对话里继续）
 
 brief.md 写好后，**当前主对话不再继续 stage 2**。`/new-req` 的职责到此为止——req 全过程从这里搬到 worktree 内的独立 Claude 对话，让每个 req 拿到干净的 context。
 
