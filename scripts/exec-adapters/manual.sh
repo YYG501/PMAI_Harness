@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# manual adapter. See 设计-执行者可选.md §4.5
+# manual adapter. See docs/archive/design/设计-执行者可选.md §4.5
 #
 # Writes .pending-manual-<task>.json to $MAIN_REPO_ROOT/.runs/ (NOT relative path,
 # so observability layers see it regardless of cwd), then exits 0.

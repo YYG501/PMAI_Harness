@@ -216,11 +216,11 @@ V2 regex 会匹配只含空格的 cell（`| **状态** | |`），strip 后返回
 |---|---|---|
 | 1 | 本文件 `STATUS-v3.5实施.md` | 当前进度（你现在读的）|
 | 2 | `CLAUDE.md` | 项目章程 |
-| 3 | `实施计划-实现程度与格式对齐.md` | 9 阶段计划（v3.5 / 7.3-10.2 天 / 含四轮 review 沉淀）|
-| 4 | `阶段1-动手plan-parser-task-transition迁移.md` | 阶段 1 已完成（参考实施风格）|
-| 5 | `设计-新两文件格式对齐.md` | 阶段 1-3 设计源 |
+| 3 | `docs/archive/design/实施计划-实现程度与格式对齐.md` | 9 阶段计划（v3.5 / 7.3-10.2 天 / 含四轮 review 沉淀）|
+| 4 | `docs/archive/design/阶段1-动手plan-parser-task-transition迁移.md` | 阶段 1 已完成（参考实施风格）|
+| 5 | `docs/archive/design/设计-新两文件格式对齐.md` | 阶段 1-3 设计源 |
 | 6 | `TODOS.md` | 4 项 v3.5 延迟决策（TD-1/2/3/4）|
-| 7（废弃，不用读）| `设计-原型与系统双模式.md` / `实施计划-双模式与格式对齐.md` | 历史决策审计，不复用 |
+| 7（废弃，不用读）| `docs/archive/design/设计-原型与系统双模式.md` / `docs/archive/design/实施计划-双模式与格式对齐.md` | 历史决策审计，不复用 |
 
 ---
 
@@ -295,7 +295,7 @@ AI 收到后应该：
 
 **触发**：PM 跑 /task-spec task-001 revise 报"为啥这么久"——实测一次读 ~8000 行写 ~100 行，读写比 50:1。
 
-**设计文档**：`设计-skill读取收敛.md`（3 轮 review 全过）
+**设计文档**：`docs/archive/design/设计-skill读取收敛.md`（3 轮 review 全过）
 
 **落地动作**（按 P0/P1/P2/§4.4 四档）：
 

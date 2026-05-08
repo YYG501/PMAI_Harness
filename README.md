@@ -145,7 +145,9 @@ bash scripts/init-project.sh \
 | [`STATUS-v3.5实施.md`](./STATUS-v3.5实施.md) | 当前进度（v3.5 全部收口；新窗口续接入口） |
 | [`INVARIANTS.md`](./INVARIANTS.md) | 框架不变量清单（I-CT / I-TT / I-AD 等编号约束） |
 | [`TODOS.md`](./TODOS.md) | 待决项 / 延迟决策（v2/v4/UP/DX/Eng/TD-1~4） |
-| [`需求.md`](./需求.md) / [`设计.md`](./设计.md) | 历史决策档案（不再活跃） |
+| [`框架同步-SOP.md`](./框架同步-SOP.md) | 生成器 → 业务仓 hotfix 同步流程 |
+| [`需求.md`](./需求.md) / [`设计.md`](./设计.md) | v0 原始档案（不再活跃） |
+| [`docs/archive/design/`](./docs/archive/design/) | 历史设计文档（21 份，2026-04~05 阶段决策档案；v3.5 收口后归档） |
 
 ---
 

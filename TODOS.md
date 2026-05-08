@@ -42,7 +42,7 @@
 
 ## v4: PM 手动开新窗口执行 task（并行原生）
 
-**Status (2026-05-06):** ✅ **已实施完成**。A0 → A4 全部落地，159 测试全绿。设计源 `设计-PM手动新窗口执行.md`。
+**Status (2026-05-06):** ✅ **已实施完成**。A0 → A4 全部落地，159 测试全绿。设计源 `docs/archive/design/设计-PM手动新窗口执行.md`。
 
 **实施 commit 链：**
 - `2e6cfec` v4 A0：放宽 I-TT2 + 顺手修 FM7 transition 事务性
@@ -107,7 +107,7 @@
 - ✅ FM8：commit `758f7ed` 命名清理（task_stem / short_id / JSON task_id 三层语义边界 → INVARIANTS 命名约定段）
 
 **下次接任者要知道:**
-- 读 `设计-PM手动新窗口执行.md`，重点 §3 架构 + §4.1/§4.2 改动 + §11 测试 + §13 风险
+- 读 `docs/archive/design/设计-PM手动新窗口执行.md`，重点 §3 架构 + §4.1/§4.2 改动 + §11 测试 + §13 风险
 - v3.5 plan 已 deprecated，但章节复用源仍有价值（autoplan eng review 13 gap 分析）
 - v4 哲学："协调责任还给 PM 大脑，AI 不自动协调多进程"
 
@@ -115,7 +115,7 @@
 
 ## v3.5 (DEPRECATED 2026-04-25): Superset MCP 启独立 Claude 执行 task（serial）
 
-**🚨 已被 v4（PM 手动开新窗口 + 并行原生）取代。** 详见 `设计-Superset独立Claude执行.md` 顶部 deprecated banner。
+**🚨 已被 v4（PM 手动开新窗口 + 并行原生）取代。** 详见 `docs/archive/design/设计-Superset独立Claude执行.md` 顶部 deprecated banner。
 
 文档保留作章节复用源（autoplan eng review 13 critical/high gap 分析），如果未来又要做"AI 自动启动独立 Claude"方向可作起点。
 
@@ -123,7 +123,7 @@
 
 ### v3.5 原文（保留供溯源）
 
-**Status (2026-04-25):** 🟢 **Plan 收敛完成**，未实施（已被 v4 取代）。详见 `设计-Superset独立Claude执行.md`。
+**Status (2026-04-25):** 🟢 **Plan 收敛完成**，未实施（已被 v4 取代）。详见 `docs/archive/design/设计-Superset独立Claude执行.md`。
 
 **What:** `/task-confirm` 通过 Superset MCP `start_agent_session_with_prompt` 启动独立持久 Claude 终端 pane，cwd 绑定 task worktree。新 Claude 自己同步跑 codex（`Bash run_in_background + Monitor`）。完成后 append 事件到 `.runs/events/<task>.jsonl`。主 Claude 用 ScheduleWakeup adaptive + UserPromptSubmit hook 扫事件流收口。
 
@@ -166,8 +166,8 @@
 - 删除（vs v3）：`codex-bg.sh`、`/task-abort` skill、PGID 树杀、mutex、boot epoch、max_parallel
 
 **下次接任者要知道:**
-- 读 `设计-Superset独立Claude执行.md`，重点 §2 决策快照 + §8 实现顺序 + §10 v3 复用矩阵
-- v3 plan (`设计-并行任务执行.md`) 已 deprecated 但保留作章节复用源
+- 读 `docs/archive/design/设计-Superset独立Claude执行.md`，重点 §2 决策快照 + §8 实现顺序 + §10 v3 复用矩阵
+- v3 plan (`docs/archive/design/设计-并行任务执行.md`) 已 deprecated 但保留作章节复用源
 - A0 spike 必须先做（验证 Superset `resolveWorktreePath` 与我们路径约定一致性）
 
 ---
@@ -176,7 +176,7 @@
 
 **🚨 已被 v3.5（Superset MCP 方案）取代。** 文档保留作章节复用源（事件流 / scan-task-done / wakeup / hook 边界）和决策溯源。如果未来要做并行，G1-G15 加固清单和 T1-T11 测试可在 v3.5 上叠加。
 
-详 `设计-并行任务执行.md` 顶部 deprecated banner。
+详 `docs/archive/design/设计-并行任务执行.md` 顶部 deprecated banner。
 
 ---
 
@@ -222,22 +222,22 @@
 - PM 那边的 AI 检查到这个现象，推断是"suborch subagent 过早退出是个框架问题"并上报
 - PM 提出"未来要做并行"，方向 A（主会话独占）直接被否决
 
-**Status (2026-04-25):** 🟡 **Plan 收敛完成，实施暂停往后放**。设计文档 `设计-并行任务执行.md` 已可作为 Phase A 输入，但 PM 决定先不动手。Phase A kickoff 时按 §10.1 TODO-A1~A11 逐条跑，无需重新讨论方向。
+**Status (2026-04-25):** 🟡 **Plan 收敛完成，实施暂停往后放**。设计文档 `docs/archive/design/设计-并行任务执行.md` 已可作为 Phase A 输入，但 PM 决定先不动手。Phase A kickoff 时按 §10.1 TODO-A1~A11 逐条跑，无需重新讨论方向。
 
 **Depends on / blocked by:**
 - ~~north star 抉择~~ ✅ **2026-04-24 PM 选 (a) 并行优先**（v2 降级），尽管 /autoplan 6 路声音反对
-- ~~`ScheduleWakeup` 在业务项目里是否可用~~ ✅ **2026-04-24 POC 通过**（见 `设计-并行任务执行.md` §9.1）
+- ~~`ScheduleWakeup` 在业务项目里是否可用~~ ✅ **2026-04-24 POC 通过**（见 `docs/archive/design/设计-并行任务执行.md` §9.1）
 - ~~Q3 task_timeout 阈值~~ ✅ 10/30，详 §10 Q3
 - ~~Q5 ScheduleWakeup 频率~~ ✅ adaptive 5/20，详 §10 Q5 + §2.6
 - ~~Q6 subagent 使用边界文档~~ ✅ 已落 templates/CLAUDE.md.tmpl
 - **未解决**：3 个 codex 并发的 token 成本和主机资源开销仍需实跑测
 - **未解决**：hook 在 Linux/WSL 的稳定性（macOS 已验证）
 - **未解决**：admin console4 实际迁移动作（runtime 兜底已加，执行时机由 PM 定）
-- **加固硬约束**：实施中必须落地 G1-G15 共 15 条加固（见 `设计-并行任务执行.md` §11），覆盖 /autoplan + plan-eng-review 全部 critical issues
+- **加固硬约束**：实施中必须落地 G1-G15 共 15 条加固（见 `docs/archive/design/设计-并行任务执行.md` §11），覆盖 /autoplan + plan-eng-review 全部 critical issues
 - **测试硬约束**：Phase A 完工前 T1-T11 必须全绿（§11.5）
 
 **下次接任者要知道:**
-- **从哪里恢复**：读 `设计-并行任务执行.md`，重点 §10.1 (Phase A todo) + §11 G1-G15 + §11.5 T1-T11。无需重新评审 north star/Q3/Q5/Q6
+- **从哪里恢复**：读 `docs/archive/design/设计-并行任务执行.md`，重点 §10.1 (Phase A todo) + §11 G1-G15 + §11.5 T1-T11。无需重新评审 north star/Q3/Q5/Q6
 - 当前 suborch spawn 在 `skills/task-confirm/SKILL.md` 步骤 5（v3 启动后由 TODO-A7 重写）
 - 当前 codex adapter 在 `scripts/exec-adapters/codex.sh`，**同步阻塞**模式（v3 后并存 codex-bg.sh）
 - Suborchestrator 的"项目经理"职责在 v1/v2 里是抽象角色——实现绑到 subagent 上只是当前选择，取消它不会伤害"职责"本身，只是换载体
@@ -251,7 +251,7 @@
 
 ## DX backlog (来自 plan-devex-review 2026-04-25)
 
-来源：`设计-stage5-6-task循环.md` 的 plan-devex-review 产出。这些 friction 不在该 plan scope 内，作为后续独立改进点。
+来源：`docs/archive/design/设计-stage5-6-task循环.md` 的 plan-devex-review 产出。这些 friction 不在该 plan scope 内，作为后续独立改进点。
 
 ### Discover stage (新 PM 第一次接触框架)
 - **D1**：README.md 极简，没说"如何 init project"——PM 第一次看 README 不知道下一步
@@ -272,7 +272,7 @@
 
 ### Upgrade（独立子设计）
 - **UP**：框架同步方案 — 设计完成，待实施
-  - 设计文档：`设计-框架同步.md`（v1 定稿 2026-04-26）
+  - 设计文档：`docs/archive/design/设计-框架同步.md`（v1 定稿 2026-04-26）
   - 触发实战：4-26 手动同步生成器 → AC4 main (commit `d0aa6c1`)，暴露 6 痛点
   - 范围：S1 sync 脚本 + manifest / S2 worktree impact 报告 / S3 module lazy migration
   - **不覆盖**：ExampleConsumerB 这种 v1 项目首次迁移（结构差异大，单独再开 req 做一次性迁移脚本）
@@ -282,7 +282,7 @@
 
 ## Eng backlog (来自 plan-eng-review 2026-04-25)
 
-来源：`设计-stage5-6-task循环.md` 的 plan-eng-review 产出。本 plan scope 外，作为后续改进点。
+来源：`docs/archive/design/设计-stage5-6-task循环.md` 的 plan-eng-review 产出。本 plan scope 外，作为后续改进点。
 
 ### A2: 多 req 并行 merge module 规格的 markdown conflict
 - **What**: 多 req 同时 stage 6 时，doc-update 沉淀同一 module 规格会在 git merge 时撞 markdown 表格 + 编号需求列表的 conflict
@@ -303,7 +303,7 @@
 
 ## v3.5 探测档延迟决策（来自 plan-eng-review 2026-04-29 / 阶段 4.5）
 
-来源：`实施计划-实现程度与格式对齐.md` 阶段 4.5（项目级工程结构约束 — 探测档）。完整档功能延后做，先看探测档跑过 1-2 个真实 req 的实证再决定。
+来源：`docs/archive/design/实施计划-实现程度与格式对齐.md` 阶段 4.5（项目级工程结构约束 — 探测档）。完整档功能延后做，先看探测档跑过 1-2 个真实 req 的实证再决定。
 
 ### TD-1: 探测档 → 完整档（compare + restructure-suggest）
 - **What**: 在探测档基础上加 `scripts/compare-structure-to-intent.py`（生成改造建议报告）+ `skills/restructure-suggest/SKILL.md`（PM 主动调用重做对比）
@@ -346,16 +346,16 @@
 - **Why**: revise 痛点场景已 8008 → 4400（省 45%）；TD-X1 上线可再省 ~300 行（同模块 task PM 反馈段 + solution 章节 grep 在大多数 revise 场景没新内容）
 - **Pros**: revise 更轻量；触发机制可机器判（git log）
 - **Cons**: 触发条件机制要落地（mtime 不可靠必须 git log）；增加 revise 判别复杂度
-- **Context**: 设计-skill读取收敛.md §3 不做项理由；reconcile 已用 hash 收敛过可借鉴
+- **Context**: docs/archive/design/设计-skill读取收敛.md §3 不做项理由；reconcile 已用 hash 收敛过可借鉴
 - **触发条件**: 实测 transcript 显示 P0+P1+P2+§4.4 落地后 revise 仍超 5000 行
-- **Depends on**: 设计-skill读取收敛.md 全部落地（已 commit be47fca）
+- **Depends on**: docs/archive/design/设计-skill读取收敛.md 全部落地（已 commit be47fca）
 
 ### TD-X2: docs/modules/* INDEX 索引化（first-gen 阶段 modules 全文必读 → INDEX + 涉及模块）
 - **What**: 当前 §9.1 让 req-solution / task-plan / prd-writing 必读全部 modules/*.md。砍成"INDEX.md 必读 + 本 req 涉及模块全文 + 其他 grep 按需"
 - **Why**: req-003 实测 modules 总 ~4900 行，拆 task / 写 PRD 实际只用涉及模块 + 索引。砍后 req-solution / task-plan / prd-writing 各省 ~3000 行
 - **Pros**: 大头节省；"全局复用判断"靠 INDEX + grep 也能覆盖
 - **Cons**: 依赖 INDEX 完整性（如果 INDEX 没及时更新会漏掉新模块）
-- **Context**: 设计-skill读取收敛.md §3.1 R3 已记
+- **Context**: docs/archive/design/设计-skill读取收敛.md §3.1 R3 已记
 - **触发条件**: INDEX 完整性机制落地后（如 INDEX hash 比对 / 写入时机自动更新）
 - **Depends on**: INDEX 维护机制
 
@@ -364,7 +364,7 @@
 - **Why**: 设计文档算账估 45%，但 AI 实际行为可能偏离（grep 关键词选错 / 偶尔补 offset 续读 / lint round-trip 仍触发）
 - **Pros**: 数据驱动决策，不靠估算
 - **Cons**: 要真跑一次，耗 PM 时间
-- **Context**: 设计-skill读取收敛.md §5.2 实测验证段
+- **Context**: docs/archive/design/设计-skill读取收敛.md §5.2 实测验证段
 - **触发条件**: P0+P1+P2+§4.4 上线后第一个真实 task-spec revise
 - **Depends on**: 已 commit be47fca
 
