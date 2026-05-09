@@ -108,6 +108,15 @@ PM 选择进入 stage 3 时：
 1. **调用 `/req-solution`**
    - skill 内部完成：Discovery 缺口提问（如有）、写 solution.md（含 10 章 + Mermaid + 7.2 各模块说明）、跑 lint 并让 PM 在 skill 内完成所有 warning 决策
    - skill 返回时 solution.md 已落盘、所有 warnings 已 PM 处理完毕（详见 `req-solution/SKILL.md` 步骤 5.5：warnings 在 skill 内闭环，**不**传递给 stage-gate 二次显示）
+
+1.5 **review 触发前 reconcile**（输出推荐 review 区块**前**必跑，PM 不感知；`_shared/pm-view/input-flow.md` §9.6.1 / §9.6.5 review 触发行为）：
+
+调用 `/req-solution`（reconcile 模式）：比对 `solution.md` 当前 hash 与 `solution.engineering.md` 顶部 `synced_pm_view_hash` →
+- 一致 → no-op，立即进入步骤 2
+- stale → 重派生 PM 视图驱动章节、刷新 hash、追加变更记录 → 完成后进入步骤 2
+
+理由：步骤 2 给 PM 看的"推荐 review"区块默认 PM 会跑 `/plan-eng-review` 等 review skill，review 必须双读 PM 视图 + 工程合同两文件已同步状态（input-flow §9.1 stage 4 review 模式）。stale 工程合同会让 review 出噪声 finding（例如找出"已被 PM 视图删除的旧概念"）。
+
 2. **输出确认门**（一份完整模板，把产物落地 / 摘要 / 可选 review / 确认问句拼成单次输出；不分两轮发）：
 
    ```
@@ -138,21 +147,21 @@ PM 选择进入 stage 3 时：
    PM 跑完任一 review 后报告结论 → AI 调 `task-events.py append` 记 `plan_review_completed`（task 文件不存在时此处可省略，仅做口述确认）；事件流仅作审计记录，不当 gate（I-RV1/I-RV2）。
 
 3. **PM 回答的内部分流**（chat 不列 A/B 选项；按 PM 自然语言意图）：
-   - PM 说「OK / 通过 / 没问题 / 定了」等 → 走"确认"分支：进入 3.5 reconcile + 3.6 行数 lint（PM 看不到这两步，AI 内部默默跑），再 `req-transition.py --to 3`
-   - PM 提具体修改意见 → 走"修改"分支：回步骤 1 调 `/req-solution`（**revise 模式**：prompt 含 "PM 在确认门提了修改：…"；skill 只改 PM 视图、不动工程合同、hash 留 stale）→ 改完后重新输出步骤 2 完整模板（PM 可决定要不要再跑一遍 review）→ 再次询问
+   - PM 说「OK / 通过 / 没问题 / 定了」等 → 走"确认"分支：进入 3.5 reconcile safety net + 3.6 行数 lint（PM 看不到这两步，AI 内部默默跑），再 `req-transition.py --to 3`
+   - PM 提具体修改意见 → 走"修改"分支：回步骤 1 调 `/req-solution`（**revise 模式**：prompt 含 "PM 在确认门提了修改：…"；skill 只改 PM 视图、不动工程合同、hash 留 stale）→ 自动回到步骤 1.5（review 触发前 reconcile，hash 自然 stale）→ 重新输出步骤 2 完整模板（PM 可决定要不要再跑一遍 review，此时双文件已对齐）→ 再次询问
    - PM 说「放弃这个 req / 不做了」 → 走"放弃"分支：提示 PM 跑 `/cancel-req`（**chat 模板里不主动列出此选项**，PM 主动提才走）
 
-3.5 **reconcile 步骤**（`_shared/pm-view/input-flow.md` §9.6，PM 选确认后、`req-transition.py` 之前必跑）：
+3.5 **reconcile safety net**（`_shared/pm-view/input-flow.md` §9.6 gate-pass 兜底；正常情况下应是 no-op，因为步骤 1.5 已对齐）：
 
 调用 `/req-solution` 进入 **reconcile 模式**：
 
 ```
 /req-solution（reconcile 模式）
 
-stage-gate 在 stage 2→3 PM 已确认 solution.md，进入 reconcile：
+stage-gate 在 stage 2→3 PM 已确认 solution.md，gate-pass 兜底 reconcile：
 - 比对 solution.md 当前 hash 与 solution.engineering.md 顶部 synced_pm_view_hash
-- 不一致 → 重派生 PM 视图驱动章节、刷新 hash、追加变更记录
-- 一致 → no-op
+- 一致 → no-op（预期路径：步骤 1.5 已对齐）
+- 不一致 → 重派生 PM 视图驱动章节、刷新 hash、追加变更记录（异常路径：1.5 后 PM 又改了 PM 视图但跳过了 1.5 重跑）
 完成后输出 "reconcile 完成"信号，控制权回 stage-gate
 ```
 
@@ -339,7 +348,10 @@ python3 .claude/scripts/req-transition.py "$ACTIVE_REQ_DIR" --to 7
   - **不主动列"放弃 req"选项**（PM 真要放弃直接说「放弃这个 req / cancel」，AI 提示走 `/cancel-req`）
 - **PM chat 输出禁工程黑话**（与 `task-spec/SKILL.md` 步骤 12 上方禁词清单等价）：所有 stage 的确认门 / lint 弹窗 / 任何给 PM 看的 chat 文本里**严禁**出现 `hash` / 12 位 hash 值 / `synced_pm_view_hash` / `reconcile` / `reconcile 模式` / `stale` / `行数 lint` / `步骤 N.M` 内部编号 / `lazy sync` / `MODE=revise` 等内部状态机术语；解释段也禁出现 `.engineering.md` 文件名（路径行除外）。这些都是 AI 内部记账，PM 没有动作可做
 - **review 工具一律 PM 自跑**（I-RV1）：stage-gate 在产物写完后只输出推荐清单，不自动调任何 `/plan-*-review` / `/review` / `/qa` / `/design-review`。PM 跑完任一 review 后口述结论，AI 调 `task-events.py append` 机械记录事件作为审计痕迹；事件流不当 gate
-- **stage 2→3 双文件 reconcile**（`_shared/pm-view/input-flow.md` §9.6）：PM 选确认后、`req-transition.py --to 3` 之前必跑 `/req-solution`（reconcile 模式）对齐 `solution.engineering.md`；revise 模式时只改 PM 视图、工程合同保持 stale。**这一步 PM 看不到**（AI 内部默默跑），完成后直接推进，不发"reconcile 完成"通知
+- **stage 2→3 双文件 reconcile**（`_shared/pm-view/input-flow.md` §9.6 / §9.6.5）：双触发点——
+  - **review 触发前**（步骤 1.5，必跑）：每次 /req-solution 写完 solution.md 后、向 PM 输出"推荐 review"区块**前**先调 reconcile，确保 PM 跑 review 时双文件已同步（input-flow §9.6.1 review 触发行）；revise 后回到步骤 2 同样走 1.5
+  - **gate-pass 兜底**（步骤 3.5，正常 no-op）：PM 选确认后、`req-transition.py --to 3` 之前再跑一次作为 safety net；revise 模式时只改 PM 视图、工程合同保持 stale，下一次步骤 1.5 / 3.5 时再 reconcile
+  **两步 PM 都看不到**（AI 内部默默跑），不发"reconcile 完成"通知
 - review 结果（PM 跑完贴回 chat 的）允许直接贴 chat——review 是讨论内容，不是文档产出
 - **未决问题闸门（硬规则）**：任何 stage 的产出文档如果含有"需要 PM 回答"的未决项，确认门必须先让 PM 答完再开放推进选项。不允许并列给出"直接推进"和"回答问题"两个选项让 PM 选——这会让 PM 绕过未回答的问题。机器校验由 `scripts/check-open-questions.py` 承担：扫 `## 未决问题` section 下的 `**PM 回答：**` 占位，任一未填 → 退出 1。目前最严格落地在 Stage 1→2（analysis.md），其他 stage 如有类似未决产出 section 直接复用本脚本
 - 推进命令只能用 `req-transition.py`，不能手动改 `.req-meta.json`

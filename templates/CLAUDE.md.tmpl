@@ -108,6 +108,51 @@ PM 跑完任一 review 后报告结论 → AI 调 `task-events.py append --type 
 
 PM 看完 review 决策（采纳改 task 还是不改）由 PM 自决，AI 不替 PM 决策。
 
+### Review skill 触发时的评审对象推断（PM 不带参数时 AI 自己推）
+
+PM 在 chat 里直接 invoke 任何 review skill 时（`/plan-*-review` / `/qa` / `/review` / `/design-review` / `/autoplan` / `/cso` 等 gstack skill），**默认不需要带文件路径参数**。AI 按 worktree 状态自动推断评审对象：
+
+```
+1. 取当前分支：
+   git branch --show-current
+
+2. 取当前 stage（仅当分支属于 req/task 工作流）：
+   jq -r .stage .req-meta.json 2>/dev/null
+
+3. 按 (分支类型, stage) 推断评审对象：
+
+   分支 = req-NNN-<slug>：
+     stage 2  → requirements/active/<req>/analysis.md
+     stage 3  → requirements/active/<req>/solution.md（按顶部「📂 文档结构」段双读）
+     stage 5  → requirements/active/<req>/task-plan.md
+     stage 6  → 当前在 spec 的 task PM 视图主文件（按顶部「📂 文档结构」段双读）；多个 task 在 spec 时 PM 须指定 task-NNN
+
+   分支 = task-NNN-<slug>：
+     默认评审本 task 两文件（按顶部「📂 文档结构」段双读）
+
+   分支 = main / 其他：
+     无法推断 → 走 fallback 单行问 PM
+```
+
+**fallback**——推断失败（PM 在 main 分支 / `.req-meta.json` 缺失 / stage 与 review 类型对不上 / 同 stage 多个候选 task）：
+
+> AI 单行问："你想 review 哪个文件？"
+
+不列冲突点、不给 A/B/C 选项菜单、不列多路径分析。一个 disambiguating question，等 PM 答完直接执行。
+
+**PM 显式覆盖**：PM 传文件路径（如 `/plan-eng-review path/to/file.md`）→ 用 PM 给的，跳过推断。
+
+**为什么 AI 推而不是让 PM 显式带路径**：PM 在哪个 worktree 跑 review，目标文件就是该 worktree 当前 stage 的产物——这是项目内置约定。让 PM 重复"你已经站在哪个 worktree"的信息是 UX 噪声；推断失败再问，比"每次都问"成本低。
+
+**与 I-RV1 的关系**：本节不破坏 I-RV1（AI 不自跑 review）。这里讲的是 **PM 主动 invoke review 时，AI 怎么解析参数**；不是 AI 主动触发。AI 仍然不得在产物生成后自动调 review。
+
+**禁止反模式**（2026-05-09 PM 实测复现）：PM 触发 skill 但参数 / 意图模糊时——
+- ❌ 用一段伪精细分析（列冲突点 + A/B/C 三条路径）代替单行问意图
+- ❌ 自创"PM 自跑 = PM 应该去另一个会话独立跑"的虚构路径（不存在另起会话；slash command 永远是 Claude 当前会话执行）
+- ❌ 跑"裁剪版 skill"（违反 §Skill 完整性）
+
+第一反应是单行 disambiguating question，明确后直接执行或退出，**不写多段分析**。
+
 ### 外部执行器调用前置（Pre-dispatch checkpoint）
 
 调 codex / cursor-agent 这类外部执行器前，task worktree 的 working tree **必须干净**（无 untracked、无未 commit 改动）。`/task-execute` 步骤 3b 开头有硬 gate（INVARIANTS I-AD5），dirty 直接 exit 1，不进 adapter、不 rollback、不打回 task 状态——处理权交还 PM。

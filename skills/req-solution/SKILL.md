@@ -20,7 +20,7 @@ description: |
 - `_shared/pm-view/writing-rules.md`（§三 写作规则：明确指代 / 正向描述 / 禁工程词 / 禁像素颜色 / 禁反向约束）
 - `_shared/PM-VIEW-RULES.md` §六（关键产品决策格式 — solution.md 必填章节）
 - `_shared/pm-view/section-order.md`（§七 章节顺序：按 `$REPO_ROOT/templates/solution.md.tmpl` 锁定 13 章 PM 视图 + `solution.engineering.md.tmpl` 10 章工程合同）
-- `_shared/pm-view/input-flow.md` §9.1 / §9.6（输入流 + 双文件 lazy sync — 首次生成两文件 + hash；PM 中途修改只动 PM 视图；stage-gate gate 通过时调本 skill 的 reconcile 模式对齐）
+- `_shared/pm-view/input-flow.md` §9.1 / §9.6（输入流 + 双文件 lazy sync — 首次生成两文件 + hash；PM 中途修改只动 PM 视图；stage-gate 双触发点调本 skill reconcile 模式：review 触发前自动 reconcile §9.6.5 B / gate-pass 兜底 reconcile §9.6.1 表格）
 
 ## Preamble
 
@@ -52,7 +52,7 @@ echo "SKILL: req-solution"
 |---|---|---|
 | **首次生成** | `solution.md` 不存在 | 步骤 0–6（完整流程）|
 | **修改回流** | stage-gate 在确认门后 PM 选 B（修改）调入 | 步骤 0 / 3 / 5 / 5.5 / 6（**只**改 PM 视图，**不动**工程合同；hash 自然 stale）|
-| **reconcile** | stage-gate 在 PM 选 A 之后、`req-transition.py --to 3` 之前调入，且 prompt 显式说 "reconcile 模式" | 跳到步骤 R（仅 reconcile 工程合同，不改 PM 视图）|
+| **reconcile** | stage-gate 在两个时机调入，prompt 显式说 "reconcile 模式"：①步骤 1.5（review 触发前 / 每次 /req-solution 写完之后、输出推荐 review 区块前必跑）②步骤 3.5（gate-pass 兜底，PM 选 A 之后、`req-transition.py --to 3` 之前） | 跳到步骤 R（仅 reconcile 工程合同，不改 PM 视图）|
 
 ## Required Inputs
 
@@ -233,9 +233,9 @@ lint 不强制阻塞，但 errors 留着进入步骤 6 的，必须在向 PM 展
 ### 步骤 6：skill 结束
 
 - **first-gen 模式**：写完两文件 + hash → skill 退出。
-- **revise 模式**：只改了 PM 视图（工程合同 hash 现为 stale）→ skill 退出，告知 stage-gate "PM 视图已修订，工程合同保持 stale，等待 gate 通过时 reconcile"。
+- **revise 模式**：只改了 PM 视图（工程合同 hash 现为 stale）→ skill 退出，告知 stage-gate "PM 视图已修订，工程合同保持 stale，等待 stage-gate 步骤 1.5 review 触发前自动 reconcile"。
 
-控制权交回 `/req-stage-gate`，由它输出推荐 review 区块 + 走确认门。
+控制权交回 `/req-stage-gate`，由它在步骤 1.5 自动调本 skill reconcile 模式同步两文件，再输出推荐 review 区块 + 走确认门。
 
 ---
 

@@ -2,12 +2,16 @@
 """Finalize a review run on a task: update PM view's GSTACK REVIEW REPORT
 section and recompute engineering.md `synced_pm_view_hash`.
 
-Why: review-input bundle 跑完后两件机械劳动重复出现：
+Why: review 跑完后两件机械劳动重复出现：
 1. shasum 重算 PM 视图 hash → 写工程合同顶部 `<!-- synced_pm_view_hash: ... -->`
 2. 解析 PM 视图末尾 GSTACK REVIEW REPORT 表，increment runs / 替换 status /
    replace findings / update verdict 行
 
 本脚本一次完成。AI 在 chat 协助分流写完源文件后调本脚本收尾。
+
+> 历史变更（2026-05-09）：旧版本配套 `build-review-input.py` 派生 review-input
+> bundle 喂给 review skill；该脚本已删除。review skill 现按 PM 视图主文件
+> 顶部「📂 文档结构」段跨双文件读全，无需 bundle 中间层。本脚本不受影响。
 
 Usage:
   finalize-review.py <pm-view-file>

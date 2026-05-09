@@ -102,15 +102,9 @@ Task: task-NNN-<slug>
 执行方式: claude-code（默认）
 推荐 review 工具（PM 自跑）: /qa, /design-review
 plan review: 已跑 X / 未跑 Y（可选信息）
-
-推荐 review-input bundle 命令（PM 在主窗口跑，把 .runs/* 路径喂给 gstack review skill）:
-  python3 .claude/scripts/build-review-input.py <task-file> --review design
-  python3 .claude/scripts/build-review-input.py <task-file> --review eng
-  python3 .claude/scripts/build-review-input.py <task-file> --review dx
-（bundle 派生 PM 视图 + 工程视图相关章节 + 项目级文档；review 输出沉淀按 source anchor 路由回源文件）
 ```
 
-`<task-file>` 用 task PM 视图主文件路径（相对当前 req worktree）。bundle 写到 `.runs/review-input-<task>-<review>.md`。详细约定见 `skills/_shared/REVIEW-INPUT-BUNDLE.md`。
+review skill（`/qa` / `/design-review` / `/plan-*-review` 等）进入时按 task PM 视图主文件顶部「📂 文档结构」段（参见 `templates/task.md.tmpl`）跨双文件读全——不需要预派生 bundle、不需要带路径参数，PM 直接 `/qa` 等命令运行即可。
 
 **非默认态展开两行**：
 

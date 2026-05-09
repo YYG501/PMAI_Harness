@@ -20,7 +20,7 @@ description: |
 - `_shared/pm-view/section-order.md`（§七 章节顺序：按 `$REPO_ROOT/templates/task.md.tmpl` + `task.engineering.md.tmpl`）
 - `_shared/pm-view/input-flow.md`（§九 输入流；含 §9.4 PM 反馈四类分流 + §9.6 双文件 lazy sync）
   - §9.4：正向规则 → 跨功能产品规则 / 反向约束 → 工程合同 §6 / 决策记录 → 关键产品决策（视觉规范由 close-task 沉淀 DESIGN.md，本 skill 不消费）
-  - §9.6：首次生成两文件 + hash；PM 在步骤 12 选 B 修改时只动 PM 视图、工程合同保持 stale；PM 选 A 后由步骤 12.5 reconcile 同步
+  - §9.6：首次生成两文件 + hash；PM 在步骤 12 选 B 修改时只动 PM 视图、工程合同保持 stale；revise 回流必经步骤 11.0 A（review 触发前自动 reconcile，确保 PM 看到的"推荐 review"区块对应双文件已同步）；PM 选 A 确认后由步骤 12.5 reconcile 兜底同步
 
 ## Preamble
 
@@ -357,30 +357,21 @@ python3 "$REPO_ROOT/.claude/scripts/task-transition.py" \
 
 工程合同 (`task-NNN-<slug>.engineering.md`) 不跑本校验（工程合同没有状态字段）。
 
-### 步骤 11：派生 review-input bundle + 处理 PM review 反馈
+### 步骤 11：review 触发前 reconcile + 处理 PM review 反馈
 
-机械派生 bundle，**不**单独向 chat 输出"task 已生成"区块（合并到步骤 12）。**AI 不得自动调用任何 review skill**（I-RV1）。
+**不**单独向 chat 输出"task 已生成"区块（合并到步骤 12）。**AI 不得自动调用任何 review skill**（I-RV1）。
 
-#### 11.0 派生 review-input bundle（落档完成后机械执行）
+#### 11.0 review 触发前 reconcile（落档完成后机械执行，PM 不感知）
 
-两文件刚写完，PM 视图 / 工程合同状态相对稳定。AI **机械跑**一次 build-review-input.py，把推荐 review 类型的 bundle 都派生到 `.runs/`，PM 跑 review skill 时直接拿路径用，不用现场拼参数。
+按 `_shared/pm-view/input-flow.md` §9.6.1 / §9.6.5 review 触发行为：
 
-业务模块 task：
+比对本 task PM 视图主文件当前 hash 与工程合同顶部 `synced_pm_view_hash`：
+- **一致**（first-gen 刚写完两文件、或上一轮 revise 后已 reconcile）→ no-op，进入步骤 12
+- **stale**（步骤 12 修改分支回流、PM 视图被改但工程合同没动）→ inline 调步骤 12.5 reconcile 同步两文件 → 再进入步骤 12
 
-```bash
-python3 .claude/scripts/build-review-input.py "<task-pm-view-file>" --review eng     2>/dev/null
-python3 .claude/scripts/build-review-input.py "<task-pm-view-file>" --review design  2>/dev/null
-```
+理由：步骤 12 给 PM 看的"可选 review"区块默认 PM 会跑 `/plan-eng-review` 等 review skill；review skill 进入时按 PM 视图主文件顶部「📂 文档结构」段双读 PM 视图 + 工程合同（参见 `templates/task.md.tmpl` 头部），必须双文件已同步状态。stale 工程合同会让 review 找出"已被 PM 视图删除的旧概念"产生噪声 finding。
 
-基础设施 task（去掉 design）：
-
-```bash
-python3 .claude/scripts/build-review-input.py "<task-pm-view-file>" --review eng 2>/dev/null
-```
-
-每条命令输出 stdout 一行 bundle 绝对路径；AI 收下后塞进步骤 12 确认门一并输出。**bundle 是派生 artifact**，PM 改 PM 视图 / 工程合同后**会 stale**，需重跑 build-review-input.py 重派生。
-
-bundle 派生本身**不向 chat 输出**"task 已生成"区块——bundle 路径 + 可选 review 命令统一在步骤 12 确认门里一次给出，避免与步骤 12 摘要叠成重复复读墙（feedback_confirmation_gates.md）。
+> **历史变更**（2026-05-09 起）：旧版本步骤 11.0 还会跑 `build-review-input.py` 派生 bundle 文件喂给 review skill；现已废止——bundle 是基于"review skill 只读单文件"的错误诊断做出的 workaround，实际 Claude 执行 review 时会按 PM 视图顶部「📂 文档结构」段跟踪文件引用读全。靠 PM 视图自描述更简单可靠，删 bundle 这一中间层。
 
 #### 11.1 PM 跑完 review 后的事件 append（机械记录，I-RV2）
 
@@ -419,8 +410,7 @@ PM 看完不改 / 不跑 review：直接进步骤 12。事件流缺事件不阻�
 
 摘要：<所属模块> / 功能 N 节 / PM 反馈分流 X 条 / <关键决策一句或「本 task 无新决策」>
 
-review bundle：.runs/review-input-<task>-{eng,design}.md
-可选 review：
+可选 review（你自跑，跑完贴结论我帮你 append 事件）：
   /plan-eng-review     — 架构 / 数据流 / 边界 / 依赖合理性
   /plan-design-review  — 交互 / 视觉层问题 / UI 完整性
   /autoplan            — 两者批量打包
@@ -428,7 +418,7 @@ review bundle：.runs/review-input-<task>-{eng,design}.md
 确认整份 task 内容吗？没问题我就推 /task-confirm；还有要改的地方直接说。
 ```
 
-**基础设施 task**（去掉 design bundle / design review）：
+**基础设施 task**（去掉 design review）：
 
 ```
 已生成 task 详细文档：
@@ -437,12 +427,13 @@ review bundle：.runs/review-input-<task>-{eng,design}.md
 
 摘要：基础设施 / <一句话作用>
 
-review bundle：.runs/review-input-<task>-eng.md
-可选 review：
+可选 review（你自跑，跑完贴结论我帮你 append 事件）：
   /plan-eng-review — 脚手架 / 共用能力的设计合理性
 
 确认整份 task 内容吗？没问题我就推 /task-confirm；还有要改的地方直接说。
 ```
+
+> **PM 跑 review 时不需要带 bundle 路径参数**——直接 `/plan-eng-review` 等命令运行即可，review skill 进入后会按 PM 视图主文件顶部「📂 文档结构」段（参见 `templates/task.md.tmpl`）自动跨双文件读全。
 
 **🚫 步骤 12 / 12.5 期间 chat 输出禁词清单（硬约束）**
 
@@ -482,12 +473,12 @@ review bundle：.runs/review-input-<task>-eng.md
 
 **PM 回答的内部分流**（chat 不再列 A/B/C 选项；按 PM 自然语言意图分流）：
 - PM 说「OK / 没问题 / 确认 / 通过」等 → 走"确认"分支：进入步骤 12.5 内部对齐 → 推 /task-confirm
-- PM 说具体修改意见 → 走"修改"分支：按反馈改 PM 视图主文件，**不动工程合同**（hash 留 stale），自检 + lint 后回到步骤 12 重新询问
+- PM 说具体修改意见 → 走"修改"分支：按反馈改 PM 视图主文件，**不动工程合同**（hash 留 stale），自检 + lint 后**回到步骤 11.0**（检测到 stale 自动 reconcile）→ 再回步骤 12 重新询问。理由：PM 在新一轮步骤 12 看到的"可选 review"区块对应的双文件必须已同步——review skill 进入时按 PM 视图顶部「📂 文档结构」段双读两文件（input-flow §9.6.1 review 触发行）
 - PM 说「不要这个 task / 删了 / 放弃」等放弃意图 → 走"放弃"分支：两份文档一起删，并提示 PM 同步从 `task-plan.md` 删条目（**chat 模板里不主动列出此选项**，PM 主动提才走）
 
 "修改"分支细分（按 PM 反馈触达的章节）：
-- 改 PM 视图内容 → 重写 PM 视图主文件，**不动工程合同**（hash 留 stale），自检 + lint 后回到步骤 12 重新询问
-- 改工程合同独立来源章节（§7 plan-review 沉淀 / §11 自审记录）→ 直接改对应章节，**不更新 hash**，回到步骤 12
+- 改 PM 视图内容 → 重写 PM 视图主文件，**不动工程合同**（hash 留 stale），自检 + lint 后**回到步骤 11.0**（检测到 stale 自动 reconcile）→ 再回步骤 12 重新询问
+- 改工程合同独立来源章节（§7 plan-review 沉淀 / §11 自审记录）→ 直接改对应章节，**不更新 hash**（独立章节非 PM 视图驱动），自检后直接回步骤 12 重新询问（无需经过步骤 11.0——hash 仍一致，review skill 进入时双读两文件即可读到新 §7/§11 内容）
 
 > **"修改"分支回流的 chat 输出模板**（必须使用 PM 视图语言，禁词清单见步骤 12 上方）：
 >
@@ -523,8 +514,7 @@ PM 未确认前不得进入执行。
    e. 把工程合同顶部 `synced_pm_view_hash` 改为 `$PM_VIEW_HASH_NOW`
    f. 在工程合同末尾追加 `<!-- reconcile <YYYY-MM-DD HH:MM>: <旧 hash> → <新 hash>; 变更范围: <一行说明> -->`；同步在 PM 视图主文件末尾「📁 历史档案」加一行 `<YYYY-MM-DD> reconcile：工程合同已对齐 PM 视图（<旧 hash> → <新 hash>）`
 4. 自检（PM-VIEW-RULES §9.6.6）
-5. **重新派生 review-input bundle**：reconcile 后 PM 视图 / 工程合同都更新了，旧 bundle 已 stale；重跑步骤 11.0 的 build-review-input.py 把 `.runs/review-input-<task>-{eng,design}.md` 都刷一遍（业务模块 task 跑两个 / 基础设施 task 跑 eng）
-6. 输出 reconcile 完成信号（**仅 AI 内部日志**，不发给 PM；步骤 12 / 12.5 chat 禁词清单同样适用）：
+5. 输出 reconcile 完成信号（**仅 AI 内部日志**，不发给 PM；步骤 12 / 12.5 chat 禁词清单同样适用）：
    ```
    reconcile 完成 - hash: <旧> → <新>; 变更章节: [列出 §]; 独立来源未动: §7 / §10 / §11
    ```
@@ -580,7 +570,7 @@ auto_commit_docs "$REQ_WORKTREE" \
 - 事件流仅作审计记录（I-RV2），缺事件不阻止 task-confirm 启动；review 发现是否采纳由 PM 自行决定。
 - **PM 反馈分流强制**：抽取同模块已完成 task 的 PM 反馈时，必须按 `_shared/pm-view/input-flow.md` §9.4 分三类分别写入；禁止整段搬到工程合同「实现指引」。
 - **跳过项目级文档"必读"被禁止**：CONTEXT / DESIGN / prd / modules / prototypes 仓库存在则必读，AI 不得跳过。
-- **lazy sync 强制**（`input-flow.md` §9.6）：PM 在步骤 12 选 B 修改 PM 视图时，**禁止顺手重写工程合同**（hash 必须留 stale）；只有步骤 12 选 A 后的步骤 12.5 才能重写工程合同 PM 视图驱动章节。
+- **lazy sync 强制**（`input-flow.md` §9.6）：PM 在步骤 12 选 B 修改 PM 视图时，**禁止顺手重写工程合同**（hash 必须留 stale）；工程合同 PM 视图驱动章节的重写只发生在两个 reconcile 触发点——步骤 11.0 A（review 触发前自动 reconcile，§9.6.5 B）/ 步骤 12.5（PM 选 A 后 gate-pass 兜底，§9.6.1 表格"gate 通过"行）。
 - **reconcile 边界**：步骤 12.5 禁止动 PM 视图主文件内容（仅允许在「📁 历史档案」append 一行 reconcile 记录）；禁止动工程合同独立来源章节（§7 / §10 / §11）的主体。
 - **hash 不得手动改**：任何模式下不允许手动编辑工程合同顶部 `synced_pm_view_hash`，只能由步骤 9（首生成）或步骤 12.5（reconcile）写入。
 - **PM chat 输出禁词（步骤 12 / 12.5 / B 修改回流）**：`hash` / 12 位 hash 值 / `reconcile` / `stale` / `步骤 12.5` / `lazy sync` / 任何工程合同同步状态描述都不准出现在 PM 看的 chat 文字里。完整禁词清单 + 反面示例见步骤 12 模板上方。违反 = AI 错；规则修复优先于 PM 自行容忍。
