@@ -211,7 +211,9 @@ stage 6 task 子循环里，有时跑到 task-NNN 才发现 task 拆分本身有
 
 discard / rollback 的具体操作流程见 `task-transition` 与 `req-stage-gate` skill，不在本 skill 复述。
 
-## 硬禁止项
+## Rules
+
+**禁止项**：
 
 - ❌ skill 内部走推进确认门
 - ❌ skill 内部自动调任何 review 工具（I-RV1）
@@ -221,7 +223,7 @@ discard / rollback 的具体操作流程见 `task-transition` 与 `req-stage-gat
 - ❌ §四 自检与状态摘要里堆论证全文 / 拆分依据论证 / autoplan 决策表（这些是过程产物，跑时输出，不长期存档）
 - ❌ 跳过项目级文档的"必读"（CONTEXT / DESIGN / prd / modules / prototypes）
 
-## Rules
+**正向约束**：
 
 - task 编号三位数，从 001 开始，格式 `task-001`。
 - 拆完 task 必须跑步骤 2.4 自检；任何一条命中就返回 2.2 合并或重构，不能直接进入步骤 3。

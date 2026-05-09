@@ -273,7 +273,9 @@ lint 不强制阻塞，但 errors 留着进入步骤 6 的，必须在向 PM 展
 
 **硬约束**：reconcile 模式禁止改 PM 视图主文件内容（除「📁 历史档案」append 一行外）。
 
-## 硬禁止项
+## Rules
+
+**禁止项**：
 
 - ❌ skill 内部走推进确认门（A 进 stage 4 / B 修改）
 - ❌ skill 内部自动调任何 review 工具（review 由 orchestrator 列推荐、PM 自跑，I-RV1）
