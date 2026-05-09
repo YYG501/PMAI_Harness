@@ -5,6 +5,8 @@ set -uo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 SUITES=(
   test-check-branch.sh
+  test-req-num-resolver.sh
+  test-check-open-questions.sh
   test-task-transition.sh
   test-fixture-v2.sh
   test-check-req-doc-drift.sh

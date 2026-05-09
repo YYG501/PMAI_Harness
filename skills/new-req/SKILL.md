@@ -28,42 +28,22 @@ echo "SKILL: new-req"
 
 ## Workflow
 
-### 步骤 1：确定 req 编号
+### 步骤 1：确定 req 编号 + 判断是否 first req
 
-**关键**：必须扫**三个来源**取最大值，不能凭印象只扫文件目录。**事实来源是 git 分支**——active req 都在自己分支上，main 分支视角下 `requirements/active/` 通常是空的（active req 没 merge 回 main），只看目录会漏号导致撞号。
-
-机械执行下面命令（不要简化、不要跳步）：
+调用 helper（封装了"扫三来源取 max"逻辑：closed 目录 / active 目录 / git 分支；事实来源是 git 分支，单独扫 closed/ 会被 active req 在自己分支上的事实骗到）：
 
 ```bash
-# 1. closed req 目录（main 分支可见 — 已 merge 的归档）
-CLOSED_NUMS=$(ls -d "$REPO_ROOT/requirements/closed/req-"* 2>/dev/null \
-  | sed -E 's|.*/req-([0-9]+)-.*|\1|' | sort -n)
-
-# 2. active req 目录（main 分支视角下通常空，但兜底扫一下）
-ACTIVE_NUMS=$(ls -d "$REPO_ROOT/requirements/active/req-"* 2>/dev/null \
-  | sed -E 's|.*/req-([0-9]+)-.*|\1|' | sort -n)
-
-# 3. git 所有 req-NNN-* 分支（**主要来源** — 包括其他 worktree 里的 active req）
-BRANCH_NUMS=$(git -C "$REPO_ROOT" for-each-ref --format='%(refname:short)' \
-  'refs/heads/req-*' 2>/dev/null \
-  | sed -E 's|.*req-([0-9]+)-.*|\1|' | grep -E '^[0-9]+$' | sort -n)
-
-# 取三者最大值 + 1（任一都没有 → 001）
-MAX=$(printf '%s\n' $CLOSED_NUMS $ACTIVE_NUMS $BRANCH_NUMS | grep -v '^$' | sort -n | tail -1)
-NEW_NUM=$(printf '%03d' $((${MAX:-0} + 1)))
+NEW_NUM=$(bash "$REPO_ROOT/.claude/scripts/_lib/req-num-resolver.sh" next "$REPO_ROOT")
 echo "下一个可用编号：req-$NEW_NUM"
+
+if bash "$REPO_ROOT/.claude/scripts/_lib/req-num-resolver.sh" first "$REPO_ROOT"; then
+  IS_FIRST_REQ=true
+else
+  IS_FIRST_REQ=false
+fi
 ```
 
-**禁止**：
-- 仅扫 `closed/` 不扫 `active/` 与 git 分支 — 错过 active req 的占号必然撞号
-- 凭"我看到 closed 里最大是 002 所以新号 003"印象 — 必须实跑命令
-- 跳过 git 分支扫描 — 这是主要来源（active req 占号唯一可靠依据）
-
-### 步骤 2：判断是否 first req
-
-`is_first_req = (CLOSED_NUMS、ACTIVE_NUMS、BRANCH_NUMS 三者全空)`。
-
-任一非空都不是 first req。**不能仅看 closed/**——同样会被 active req 在自己分支上的事实骗到。
+helper 同时保证 `requirements/closed/` / `requirements/active/` / `git refs/heads/req-*` 三来源全扫——AI 调一行命令即可，不再凭印象判断。helper 自身见 `scripts/_lib/req-num-resolver.sh`。
 
 ### 步骤 3：先创建 worktree，再在 worktree 里创建 req 目录
 

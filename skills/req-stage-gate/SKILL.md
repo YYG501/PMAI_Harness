@@ -54,8 +54,13 @@ python3 "$REPO_ROOT/.claude/scripts/check-worktree-residue.py" || true
    - **orchestrator 不重调 reviewer**；如 `review_outcome=ACCEPTED_WITH_ISSUES`，stage-gate 在最终推进确认门加一行知会："⚠️ analysis 评审 NEEDS_REVISION，PM 已显式接受继续推进"——但**不阻塞**推进
 4. **未决问题闸门（Stage 2 → 3 推进的硬约束）：**
 
-   grep `## 未决问题` section 下的 `**PM 回答：**` 条目：
-   - **若存在任何 `**PM 回答：**` 后面为空** → 确认门进入"答题模式"：
+   调用 lint 脚本：
+
+   ```bash
+   python3 .claude/scripts/check-open-questions.py "$ACTIVE_REQ_DIR/analysis.md"
+   ```
+
+   - **退出码 1**（有未答）→ 确认门进入"答题模式"，stdout 给出未答题号 + 行号：
      ```
      📝 analysis.md 已写入：`$ACTIVE_REQ_DIR/analysis.md`
 
@@ -67,7 +72,7 @@ python3 "$REPO_ROOT/.claude/scripts/check-worktree-residue.py" || true
      B) 修改 analysis（说明改哪里）
      ```
      **不允许**提供"直接进 stage 3"的选项——这是硬规则，没有例外也没有 FORCE 逃生舱
-   - **若全部 `**PM 回答：**` 都已有内容**（或 section 明确写"本 req 无未决问题"）→ 确认门进入"推进模式"：
+   - **退出码 0**（全部已答 / section 写"本 req 无未决问题" / section 不存在）→ 确认门进入"推进模式"：
      ```
      📝 analysis.md 已写入：`$ACTIVE_REQ_DIR/analysis.md`
 
@@ -82,7 +87,7 @@ python3 "$REPO_ROOT/.claude/scripts/check-worktree-residue.py" || true
 
 5. **PM 回答未决问题的处理：**
    - PM 选 A 后，逐题展示问题，PM 每回答一题，把答案写回 analysis.md 对应 `**PM 回答：**` 后面
-   - 所有问题答完 → 重新 grep 验证 → 解锁推进选项 → 回到步骤 4 的"推进模式"
+   - 所有问题答完 → 重跑 `check-open-questions.py` 验证（退出码 0）→ 解锁推进选项 → 回到步骤 4 的"推进模式"
    - PM 在答题过程中临时想改 analysis 某段 → 允许中途切到 B（修改 analysis）→ 改完后**回到步骤 3 重调 /req-analysis**（analysis 改过，reviewer 必须重跑一次；由 /req-analysis 步骤 4-5 的"调一次 + 三选一"机制保证），再走步骤 4 闸门
 
 推进命令（确认进入 stage 3 后才执行）：
@@ -286,7 +291,7 @@ python3 .claude/scripts/req-transition.py "$ACTIVE_REQ_DIR" --to 7
 - **review 工具一律 PM 自跑**（I-RV1）：stage-gate 在产物写完后只输出推荐清单，不自动调任何 `/plan-*-review` / `/review` / `/qa` / `/design-review`。PM 跑完任一 review 后口述结论，AI 调 `task-events.py append` 机械记录事件作为审计痕迹；事件流不当 gate
 - **stage 2→3 双文件 reconcile**（`_shared/pm-view/input-flow.md` §9.6）：PM 选确认后、`req-transition.py --to 3` 之前必跑 `/req-solution`（reconcile 模式）对齐 `solution.engineering.md`；revise 模式时只改 PM 视图、工程合同保持 stale
 - review 结果（PM 跑完贴回 chat 的）允许直接贴 chat——review 是讨论内容，不是文档产出
-- **未决问题闸门（硬规则）**：任何 stage 的产出文档如果含有"需要 PM 回答"的未决项，确认门必须先让 PM 答完再开放推进选项。不允许并列给出"直接推进"和"回答问题"两个选项让 PM 选——这会让 PM 绕过未回答的问题。目前最严格落地在 Stage 1→2（analysis.md 的 `## 未决问题` section），其他 stage 如有类似未决产出应比照处理
+- **未决问题闸门（硬规则）**：任何 stage 的产出文档如果含有"需要 PM 回答"的未决项，确认门必须先让 PM 答完再开放推进选项。不允许并列给出"直接推进"和"回答问题"两个选项让 PM 选——这会让 PM 绕过未回答的问题。机器校验由 `scripts/check-open-questions.py` 承担：扫 `## 未决问题` section 下的 `**PM 回答：**` 占位，任一未填 → 退出 1。目前最严格落地在 Stage 1→2（analysis.md），其他 stage 如有类似未决产出 section 直接复用本脚本
 - 推进命令只能用 `req-transition.py`，不能手动改 `.req-meta.json`
 - Stage 4 的 DESIGN.md 内容检测由 `req-transition.py` 自动处理
 - 回退场景：PM 说要回到之前的 stage 时，使用 `--rollback` 参数
