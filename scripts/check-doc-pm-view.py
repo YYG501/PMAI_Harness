@@ -309,6 +309,11 @@ def main() -> int:
     path = Path(args.file)
     if not path.exists():
         print(f"❌ 文件不存在: {path}", file=sys.stderr)
+        print(
+            "   修复：检查路径拼写；PM 视图文件应位于 "
+            "$ACTIVE_REQ_DIR/{solution.md,task-plan.md,tasks/task-NNN-*.md}。",
+            file=sys.stderr,
+        )
         return 2
 
     if is_engineering_file(path):

@@ -1,20 +1,67 @@
 #!/usr/bin/env bash
 # init-project.sh — 创建新业务项目
-# 用法: bash scripts/init-project.sh <project-name> <target-dir> <background> [<project-intent>]
-#   project-intent: prototype | system | custom | unknown（默认 unknown）
 # 必须从框架仓库根目录运行
+# 跑 `--help` / `-h` 看完整用法 + 期望时间
 
 set -euo pipefail
 
-PROJECT_NAME="${1:?用法: init-project.sh <project-name> <target-dir> <background> [<project-intent>]}"
-TARGET_DIR="${2:?用法: init-project.sh <project-name> <target-dir> <background> [<project-intent>]}"
+# ---------- --help / 零参数引导 ----------
+_print_help() {
+  cat <<HELP
+用法:
+  bash scripts/init-project.sh <project-name> <target-dir> <background> [<project-intent>]
+
+参数:
+  <project-name>      业务项目名（也是 git 仓的名字）
+  <target-dir>        业务项目落地路径（不能已存在）
+  <background>        一句话项目背景（写进生成的 CLAUDE.md）
+  <project-intent>    工程结构意图（默认 unknown）：
+                        prototype  Next.js 单页原型 / Demo 仓
+                        system     完整业务系统（多模块、有后端契约）
+                        custom     PM 自由编辑骨架
+                        unknown    探测兜底档（先 init，跑通后再分类）
+
+期望时间:
+  init-project 自身 ~10 秒（拷贝 + git init + commit）。
+  跑通后到落第一个 brief.md ~10-30 分钟（取决于 PM 思考速度）。
+  完整 TTHW（init → 第一个 brief.md 落档）<= 30 分钟。
+
+例子:
+  bash scripts/init-project.sh \\
+    ExampleConsumerApp \\
+    ${CONSUMER_REPO_ROOT} \\
+    "B 端 admin console 重构" \\
+    prototype
+
+成功后:
+  cd <target-dir>
+  /new-req         # 起第一个需求
+HELP
+}
+
+if [ "${1:-}" = "--help" ] || [ "${1:-}" = "-h" ]; then
+  _print_help
+  exit 0
+fi
+
+if [ $# -lt 2 ]; then
+  echo "❌ 缺少必填参数（至少需要 <project-name> 和 <target-dir>）" >&2
+  echo "" >&2
+  _print_help >&2
+  exit 2
+fi
+
+PROJECT_NAME="$1"
+TARGET_DIR="$2"
 BACKGROUND="${3:-}"
 PROJECT_INTENT="${4:-unknown}"
 
 case "$PROJECT_INTENT" in
   prototype|system|custom|unknown) ;;
   *)
-    echo "❌ project-intent 非法: $PROJECT_INTENT（必须 ∈ prototype/system/custom/unknown）" >&2
+    echo "❌ project-intent 非法: ${PROJECT_INTENT}（必须 ∈ prototype/system/custom/unknown）" >&2
+    echo "   修复：参数 4 必须是 prototype / system / custom / unknown 之一；不传走默认 unknown。" >&2
+    echo "        跑 'bash scripts/init-project.sh --help' 看完整说明。" >&2
     exit 2
     ;;
 esac

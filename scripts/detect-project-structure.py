@@ -251,6 +251,12 @@ def main() -> int:
     schema = load_schema(schema_path)
     if schema is None:
         print(f"❌ schema 不可读: {schema_path}", file=sys.stderr)
+        print(
+            "   修复：检查路径；schema 默认位于 "
+            f"<repo>/{SCHEMA_REL}（init-project 自动拷贝）。"
+            "缺失说明 init-project 没跑过或框架仓不完整，参考 README §快速开始。",
+            file=sys.stderr,
+        )
         return 1
 
     result = detect(repo, schema)

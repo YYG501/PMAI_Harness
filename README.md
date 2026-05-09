@@ -33,12 +33,16 @@ PM AI 工作流框架的**生成器**仓库。
 
 ## 快速开始
 
+> **TTHW 期望**：从 init-project 跑通到落第一个 `brief.md` 草稿 ≤ 30 分钟。
+> init-project 自身 ~10 秒（拷贝 + git init + commit）；其余时间是 PM 思考第一个需求。
+
 ### 1. 初始化新业务项目
 
 **必须在本仓（PM-AI-Workflow）根目录运行**。生成器自身不能用作业务项目仓。
 
 ```bash
 cd ${REPO_ROOT}
+bash scripts/init-project.sh --help          # 看完整用法 + 参数 + 例子
 bash scripts/init-project.sh \
   <project-name> \
   <target-dir> \
@@ -57,6 +61,8 @@ bash scripts/init-project.sh \
   - `unknown` — 探测兜底档（先 init，跑通后再分类）
 
 成功后业务仓已 `git init` 并完成首个 commit，下一步在业务仓里运行 `/new-req` 启动第一个需求。
+
+> **5 分钟你会看到**：业务仓目录已建（`.claude/scripts/` `.claude/skills/` `.claude/agents/` `templates/` `CLAUDE.md` `requirements/` 等）+ 一个 init commit；终端打印「下一步：cd <target> && /new-req」。
 
 ### 2. PM 在业务仓里的日常循环
 

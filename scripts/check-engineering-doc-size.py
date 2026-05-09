@@ -55,6 +55,11 @@ def find_repo_root() -> Path:
             return cur
         cur = cur.parent
     print("Error: 找不到仓根（无 git 也无 CLAUDE.md）", file=sys.stderr)
+    print(
+        "  修复：在业务仓根目录（含 CLAUDE.md）跑本脚本；"
+        "或显式传 --req-dir 指向 $ACTIVE_REQ_DIR。",
+        file=sys.stderr,
+    )
     sys.exit(2)
 
 
@@ -152,6 +157,11 @@ def main() -> int:
         req_dir = Path(args.req_dir).resolve()
         if not req_dir.is_dir():
             print(f"Error: --req-dir 不存在: {req_dir}", file=sys.stderr)
+            print(
+                "  修复：检查路径拼写；"
+                "active req 目录应在 requirements/active/req-NNN-<slug>/。",
+                file=sys.stderr,
+            )
             return 2
         targets.extend(find_eng_files(req_dir))
     for p in args.paths:

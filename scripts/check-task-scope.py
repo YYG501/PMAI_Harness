@@ -114,6 +114,12 @@ def main() -> int:
     task_file = Path(args.task_file)
     if not task_file.exists():
         print(f"Error: task file not found: {task_file}", file=sys.stderr)
+        print(
+            "  修复：检查路径拼写；task 文件应位于 "
+            "$ACTIVE_REQ_DIR/tasks/task-NNN-<slug>.md。"
+            "若 task 还没生成，先在 req worktree 跑 /task-spec <task-id>。",
+            file=sys.stderr,
+        )
         return 2
 
     text = task_file.read_text(encoding="utf-8")
