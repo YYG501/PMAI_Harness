@@ -7,7 +7,7 @@
 
 ## 当前位置（2026-05-08）
 
-**起因**：`/gstack-devex-review` 对 PM-AI-Workflow 框架做了一轮活体 DX 审计，综合分 5.4/10（静态）→ 4.7/10（含 ExampleConsumerApp 活体证据下调）。本次会话已收口 8/9 项 P0（F-1 + P0-6 一起做完）。
+**起因**：`/gstack-devex-review` 对 PM-AI-Workflow 框架做了一轮活体 DX 审计，综合分 5.4/10（静态）→ 4.7/10（含 ExampleConsumerApp 活体证据下调）。本次会话已收口 8/9 P0 + 2 横向入口；P0-7 设计后 PM 判为不必要实施；P1-4 / P1-5 / P1-6 待办（P1-5 PM 判为不必要拆）。
 
 **评分基线**（P0/P1 完成后再次跑 /devex-review 用作对比）：
 
@@ -25,6 +25,8 @@
 **已完成 commit**（生成器仓）：
 
 ```
+0579198 refactor(scripts): 防御性指令反模式 — req 编号扫描 / 未决问题闸门 抽脚本
+922c052 design(p0-7): 重写设计稿 — PM 纠偏后真根因 + 新方向（PM 判为不必要实施）
 34b1d4d feat(skills): /skill-improve 雏形 + 消化 prd-writing 反馈 3 项 gap
 ea2dc82 refactor(skills): PM-VIEW-RULES + 三个超大 SKILL.md 按消费方拆 references
 8affee9 fix(audit): CT7 旧规范三步式兼容 + CT8 chore commit 豁免
@@ -44,14 +46,16 @@ ea2dc82 refactor(skills): PM-VIEW-RULES + 三个超大 SKILL.md 按消费方拆 
 | P0-2 | task-execute 911→539 / prd-writing 756→315 / task-spec 568→525 拆 references/ | [完成] | ea2dc82 |
 | F-1 | prd-writing 484 行 PM 反馈逐条消化（6 项已落地 + 1 项超出 + 3 项 gap 全补） | [完成] | 34b1d4d |
 | P0-6 | /skill-improve skill 雏形 + 反馈归档约定（skill-feedback/）| [完成] | 34b1d4d |
-| P0-7 | task-spec 早期截断（防 task 双轮废，先设计后实施）| 待办 | — |
+| P0-7 | task-spec 早期截断（防 task 双轮废）| [设计后判为不实施] | 922c052（设计档案）|
+| 横向 1 | new-req:34-61 req 编号 → scripts/_lib/req-num-resolver.sh | [完成] | 0579198 |
+| 横向 2 | req-stage-gate:284 未决问题闸门 → scripts/check-open-questions.py | [完成] | 0579198 |
 
 ### P1 待办（次优先，P0 全完成后再做）
 
 | # | 项目 | 工作量 | 备注 |
 |---|---|---|---|
 | P1-4 | task-plan 内部「硬禁止项 vs Rules」合并成单一"硬约束"节 | 30 分钟 | 当前两节没有功能分工；改名会影响其他 skill 的 cross-ref，要批量更新 |
-| P1-5 | req-stage-gate SKILL.md(290 行) 减负，按 stage 边界拆 references/stage-{N}-{N+1}.md | 0.5 天 | 主 SKILL 只留路由 + 通用规则；每次跑 stage transition 不用整体加载 290 行 |
+| ~~P1-5~~ | ~~req-stage-gate SKILL.md(290 行) 减负~~ | ~~0.5 天~~ | **PM 判为不必要拆**（295 行单文件可读，跨文件跳转成本 > 减负收益）|
 | P1-6 | STATUS-v3.5实施.md 改名 RUNTIME.md 或 STATE.md，明确"运维入口"职责 | 30 分钟 | README/CLAUDE/STATUS 三处状态边界模糊；STATUS 当前自封"新窗口续接入口"= 运维职责 |
 
 ---
