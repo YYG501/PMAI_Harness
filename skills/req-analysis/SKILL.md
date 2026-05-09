@@ -73,7 +73,7 @@ echo "SKILL: req-analysis"
 2. 每个假设都需要证据：不允许"业界通常这样做"作为唯一理由
 3. 量化优于定性：尽可能用数据、频率、影响面支撑判断
 4. 敢于说不：当需求本身不合理时，明确指出并给出替代建议
-5. 透明化不确定性：对不掌握的信息，标注为"假设"或"待确认"，绝不伪装为确定结论
+5. 透明化不确定性：对不掌握的信息，标注为"假设"或"待执行"，绝不伪装为确定结论
 
 ## Required Inputs
 
@@ -160,30 +160,36 @@ reviewer 返回后，**先把 reviewer 报告完整原文贴回 chat**（PASS �
 ===
 ```
 
-然后给 PM 三选一闸门：
+然后给 PM 对话式闸门（v2 风格，不列 A/B/C 字母）：
 
 **5.1 若 reviewer 返回 PASS**：
 
 ```
-A) 确认结果，结束 skill 进入下一步（stage-gate 接管）
-B) 我想再改 analysis.md（说明改哪里 → AI 改 → 重跑 reviewer）
-C) 跳过后续审视，直接结束（与 A 等价；保留只为兼容三选一格式）
+✅ 评审通过
+
+——这份 analysis 就这样定吗？OK 我结束本步骤交接给下一步；想再改的说哪里。
 ```
 
-PM 选 A/C → 本 skill 退出，返回 `review_outcome=PASS`
-PM 选 B → AI 按 PM 描述改 analysis.md → 回步骤 4 重跑 reviewer
+**PM 回答的内部分流**：
+- PM 说「OK / 通过 / 没问题 / 定了」等 → 本 skill 退出，返回 `review_outcome=PASS`
+- PM 提具体修改 → AI 按 PM 描述改 analysis.md → 回步骤 4 重跑 reviewer
 
-**5.2 若 reviewer 返回 NEEDS_REVISION**（**当前累计循环轮数 ≥ 3 时，必须额外提示「已第 N 轮 NEEDS_REVISION，建议考虑选 C 接受现状或选 B 自改」**）：
+**5.2 若 reviewer 返回 NEEDS_REVISION**（**当前累计循环轮数 ≥ 3 时，必须在第二行额外加一句提示**）：
 
 ```
-A) AI 按 reviewer 反馈改 analysis.md，改完会自动再跑一次 reviewer（再回到本闸门）
-B) 我自己改 analysis.md（告诉我改完了，AI 会再跑一次 reviewer）
-C) 接受现状，结束 skill 不再追评（review_outcome=ACCEPTED_WITH_ISSUES，stage-gate 会知会一声但不阻塞推进）
+⚠️ 评审反馈了改进建议（详见上方报告）
+[若已第 ≥3 轮 NEEDS_REVISION，加一行：这是第 <N> 轮反馈，反复改不一定有效，可以考虑接受现状或自己改。]
+
+要怎么处理？
+ - 我按反馈改 analysis（改完我自己再跑一次评审）
+ - 你想自己改（改完告诉我，我再跑评审）
+ - 接受现状不改（评审会标"可以继续但有待改进"，下一步会知会一声但不阻塞）
 ```
 
-PM 选 A → AI 按 reviewer 给的「具体修改动作」改 analysis.md → 回步骤 4 重跑 reviewer
-PM 选 B → 等 PM 改完通知（"改完了"）→ 回步骤 4 重跑 reviewer
-PM 选 C → 本 skill 退出，返回 `review_outcome=ACCEPTED_WITH_ISSUES`
+**PM 回答的内部分流**：
+- PM 说「我改 / 你改 / AI 改」等 → AI 按 reviewer 给的「具体修改动作」改 analysis.md → 回步骤 4 重跑 reviewer
+- PM 说「我自己改 / 我来改 / 我改完了」等 → 等 PM 改完通知（"改完了"）→ 回步骤 4 重跑 reviewer
+- PM 说「接受现状 / 不改了 / 就这样」等 → 本 skill 退出，返回 `review_outcome=ACCEPTED_WITH_ISSUES`
 
 **没有自动循环**：每轮 reviewer 跑完都必须停下让 PM 决策；不允许 AI 自己连跑多轮 reviewer 不让 PM 看到中间报告。
 
@@ -194,7 +200,7 @@ PM 选 C → 本 skill 退出，返回 `review_outcome=ACCEPTED_WITH_ISSUES`
 - ❌ 展示推进选项（A 进 stage 3 / B 修改 / C 跳到 stage 5）——那是 stage-gate 的职责
 - ❌ 展示未决问题答题模式（grep `**PM 回答：**` + 逐题答）——那是 stage-gate 的职责
 - ❌ 调 `req-transition.py`
-- ❌ 跳过 reviewer（"快速通道"、"简单 req 跳过 reviewer"等借口都禁止；PM 想跳过的合法路径只有「步骤 5 选 C」）
+- ❌ 跳过 reviewer（"快速通道"、"简单 req 跳过 reviewer"等借口都禁止；PM 想跳过的合法路径只有"接受现状不改"分支）
 - ❌ 把 reviewer 报告**转述、摘要、节选**给 PM 看——必须贴完整原文，且格式必须可识别为"reviewer 原文"
 - ❌ 自动连跑两轮 reviewer 不停下让 PM 决策（哪怕第 1 轮 NEEDS_REVISION 第 2 轮 PASS 也不行）
 - ❌ 提供"带假设前进"逃生舱（即"PM 不答未决问题就标 [假设: ...] 继续"——这违反新仓未决问题闸门硬规则）
@@ -207,7 +213,7 @@ PM 选 C → 本 skill 退出，返回 `review_outcome=ACCEPTED_WITH_ISSUES`
 2. **现状总结（As-Is）**：当前系统 / 交互 / 数据的实际状态
 3. **合理性审视（Should）**：合理性评分 + 合理之处 + 值得商榷之处 + 🔍 第一性原理视角
 4. **可行性论证（Can）**：技术 / 资源 / 时间可行性 + 关键瓶颈
-5. **关键决策确认**：表格（决策项 / 状态：已确认/待确认 / 说明）
+5. **关键决策确认**：表格（决策项 / 状态：已确认/待执行 / 说明）
 6. **风险与代价分析**：表格（维度 / 做 / 不做 / 做错）
 7. **拟采取方案**：推荐方案（基于第一性原理推导）+ 备选方案 + 取舍理由
 8. **范围边界**：In Scope / Out of Scope
@@ -264,9 +270,9 @@ PM 选 C → 本 skill 退出，返回 `review_outcome=ACCEPTED_WITH_ISSUES`
 ## Output Rules
 
 - 输出必须可直接服务后续 stage（solution.md / task-plan.md / 原型实现）
-- 不确定项必须显式标注"假设 / 待确认"，不得隐式猜测
+- 不确定项必须显式标注"假设 / 待执行"，不得隐式猜测
 - 关键问题必须放进 `## 未决问题` section，不能只散在正文里
-- 待确认问题必须**逐一列出完整问题与候选答案**，引导 PM 以编号作答；严禁以摘要形式（如"有 N 个待确认问题"）替代展示
+- 待执行问题必须**逐一列出完整问题与候选答案**，引导 PM 以编号作答；严禁以摘要形式（如"有 N 个待执行问题"）替代展示
 - **批判性原则**：每个需求至少指出一个"值得商榷之处"——找不到说明分析不深
 - **第一性原理原则**：推荐方案必须包含"为什么这是从基本事实出发的最优解"的简要论证
 - **代价透明原则**：每个方案必须明确列出代价（开发成本 / 系统复杂度 / 维护负担），不能只说好处
@@ -281,7 +287,7 @@ PM 选 C → 本 skill 退出，返回 `review_outcome=ACCEPTED_WITH_ISSUES`
 - **伪第一性原理**：名义上从零思考，实际只是换个说法复述原需求
 - **批判流于表面**：只说"值得商榷"但不给出具体替代建议
 - **过度批判**：为了批判而批判，阻碍正常推进；批判的目的是找到更好方案，而非否定一切
-- **摘要式跳过**：把待确认问题收进摘要只提数量，而不逐一展示让 PM 作答
+- **摘要式跳过**：把待执行问题收进摘要只提数量，而不逐一展示让 PM 作答
 - **跳过 reviewer**：写完 analysis.md 直接结束 skill，不调 analysis-reviewer
 - **转述 reviewer 报告**：用"reviewer 觉得…"代替原文贴 chat
 - **AI 自动连跑 reviewer**：第 1 轮没让 PM 看就直接改 analysis.md 跑第 2 轮

@@ -52,7 +52,7 @@
 - **I-CT4**：归档文件（.runs/\*.json、events/\*.jsonl）必须 commit 到 req 分支后，才能删除原件
 - **I-CT5**：只有在 merge 成功且归档已 commit 后，才能删除 task 分支和 task worktree
 - **I-CT6**：任何前置条件失败 → exit 1，不能 "跳过并继续"
-- **I-CT7**：**事件流必须证明状态机完整推进**。merge 前审计 `.runs/events/<task>.jsonl`：必须存在 `待确认→执行中`、`执行中→已完成` 两条 `status_changed` 事件，以及至少一条 `execution_started` 或 `execution_manual_completed`。任何一条缺失 → 拒绝 merge 并保留数据（对「agent 跳过状态机一口气写完多个 task」的结构性防御）。事件文件不存在一律视为违规（fail-closed）
+- **I-CT7**：**事件流必须证明状态机完整推进**。merge 前审计 `.runs/events/<task>.jsonl`：必须存在 `待执行→执行中`、`执行中→已完成` 两条 `status_changed` 事件，以及至少一条 `execution_started` 或 `execution_manual_completed`。任何一条缺失 → 拒绝 merge 并保留数据（对「agent 跳过状态机一口气写完多个 task」的结构性防御）。事件文件不存在一律视为违规（fail-closed）
 - **I-CT8**：**task 分支上每个 code commit 的时间戳必须晚于首次 `status_changed(*, 执行中)` 事件时间戳**。早于该时间的 commit 说明"先写代码再补流程"，拒绝 merge
 
 ### 守卫点
@@ -126,7 +126,7 @@
 - **I-CB6**：task 文件的"状态"字段 和 .req-meta.json 的"stage"字段 禁止直接编辑（必须走 transition 脚本）
 - **I-CB7**：hook 失败或无法判断 → 默认拒绝（fail-closed），不放行
 - **I-CB8**：hook 本身不能修改任何文件（read-only 验证逻辑）
-- **I-CB10**：**task worktree 写入时，task 状态字段必须为「执行中」**。状态为「待确认/已完成」或字段读不到一律 deny。这是对 Claude 实例越权写 task 代码的结构性防御（hook 侧）。豁免范围：task 文件本身的写入（执行日志/自审记录/文档偏差 section 填写需要放行）+ `.runs/`/`.worktrees/` 运行时元数据。注：「执行中」覆盖 AI 实现期 + PM 验收期 — 验收期 AI 收 PM 打回反馈仍可写代码（task 状态全程不切，PM 通过才转「已完成」）
+- **I-CB10**：**task worktree 写入时，task 状态字段必须为「执行中」**。状态为「待执行/已完成」或字段读不到一律 deny。这是对 Claude 实例越权写 task 代码的结构性防御（hook 侧）。豁免范围：task 文件本身的写入（执行日志/自审记录/文档偏差 section 填写需要放行）+ `.runs/`/`.worktrees/` 运行时元数据。注：「执行中」覆盖 AI 实现期 + PM 验收期 — 验收期 AI 收 PM 打回反馈仍可写代码（task 状态全程不切，PM 通过才转「已完成」）
 
 ### 守卫点
 - 路径归一化：line ~39-102
@@ -187,9 +187,9 @@
 ### 不变式
 
 - **I-TT1**：只允许 2 种主合法转换 + 1 种受限失败回退：
-  - 待确认→执行中（task-confirm 启动）
+  - 待执行→执行中（task-confirm 启动）
   - 执行中→已完成（PM 验收通过；触发 §review/§task-transition 校验）
-  - 执行中→待确认（受限：仅 --fail-execution / --cancel-manual 路径，普通 --to 拒绝）
+  - 执行中→待执行（受限：仅 --fail-execution / --cancel-manual 路径，普通 --to 拒绝）
 
   **打回不切状态**：PM 打回时 task 留在「执行中」，AI 收反馈直接继续修，不再走 transition。
 - **I-TT2**：~~v1 串行强制~~ **D0 并行允许（v4 plan §8 A0 修订）**：同 req 下允许多个 task 同时处于执行中。原 serial 校验已 no-op 化保留 hook 在 task-transition.py:check_serial_constraint，未来如需恢复可恢复
@@ -217,10 +217,8 @@
 
 ### 不变式
 
-- **I-RT1**：正向转换必须逐级推进（不能跨级，除非明确 skip-stage）
-- **I-RT2**：Stage 3 和 4 可跳过，但规则不同：
-  - Stage 3：非首次 req + PM 显式决定
-  - Stage 4：DESIGN.md 已有内容时问 PM
+- **I-RT1**：正向转换必须逐级推进（不能跨级，除非 stage 4 自动跳过）
+- **I-RT2**：所有 req 默认都必须经过 stage 3（方案设计）；只有 stage 4 在 `docs/DESIGN.md` 已有实质内容时可由 `req-transition.py --to 5` 自动跳过
 - **I-RT3**：每个 stage 正向推进时必须验证前一 stage 的产出文件存在
 - **I-RT4**：Stage 7 不可回退（merge 到 main 不可逆）
 - **I-RT5**：Stage 6 回退必须校验所有 task 已关闭/取消（有活跃 task 时禁止回退）

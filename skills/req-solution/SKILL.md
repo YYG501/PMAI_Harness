@@ -223,7 +223,7 @@ python3 "$REPO_ROOT/.claude/scripts/check-doc-pm-view.py" "$ACTIVE_REQ_DIR/solut
 处理输出：
 
 - **0 errors + 0 warnings**：可以进入步骤 6 退出 skill
-- **有 warnings**：向 PM 展示 warnings，PM 决定是否修
+- **有 warnings**：向 PM 展示 warnings + 让 PM 决策（每条要么"AI 改"要么"PM 判定为合法保留"），决策完毕后视为闭环——**warnings 状态归零**，**不**传递给 stage-gate 做二次显示。理由：PM 几秒前刚做的决策，stage-gate 再显示一遍是冗余且容易用内部术语包装（"骨架 / 合法屏幕字"等）让 PM 困惑
 - **有 errors**：逐条修复后回到步骤 3 重写违规章节，再重跑 lint；连续 3 次 lint 仍有 error 时停下询问 PM（避免无限循环）
 
 lint 不强制阻塞，但 errors 留着进入步骤 6 的，必须在向 PM 展示文件路径时**显式告知**有几个未修复 errors + 一句话原因。

@@ -93,7 +93,7 @@ _mock_autochain_prompt() {
       return 0
     fi
     status=$(grep -m1 '^\*\*状态：\*\*' "$file" | sed 's/.*\*\*状态：\*\* *//')
-    if [ "$status" = "待确认" ]; then
+    if [ "$status" = "待执行" ]; then
       echo "下一个 task 是 ${id}: ${title}（所属模块: [${module}]）"
       echo "继续吗？(Y/n)"
       [ "$answer" = "n" ] && echo "已停止 stage 6 子循环；可手动运行 /task-spec <task-id> 继续"
@@ -148,7 +148,7 @@ test_reject_if_task_branch_missing() {
   fixture_setup
 
   req_dir=$(fixture_create_req "req-001" "test" 6)
-  task=$(fixture_create_task "$req_dir" "003" "nobranch" "待确认" "/qa")
+  task=$(fixture_create_task "$req_dir" "003" "nobranch" "待执行" "/qa")
   # Do NOT create worktree/branch for this task
   _mark_task_done "$task"
 
@@ -175,7 +175,7 @@ test_reject_if_req_worktree_missing() {
   fixture_setup
 
   req_dir=$(fixture_create_req "req-001" "test" 6)
-  task=$(fixture_create_task "$req_dir" "004" "noreqwt" "待确认" "/qa")
+  task=$(fixture_create_task "$req_dir" "004" "noreqwt" "待执行" "/qa")
   task_wt=$(fixture_create_task_worktree "$task" "req-001-test")
   _mark_task_done "$task"
 
@@ -215,7 +215,7 @@ test_reject_if_task_worktree_dirty() {
   fixture_setup
 
   req_dir=$(fixture_create_req "req-001" "test" 6)
-  task=$(fixture_create_task "$req_dir" "005" "dirty" "待确认" "/qa")
+  task=$(fixture_create_task "$req_dir" "005" "dirty" "待执行" "/qa")
   task_wt=$(fixture_create_task_worktree "$task" "req-001-test")
   _mark_task_done "$task"
 
@@ -245,7 +245,7 @@ test_reject_on_merge_conflict() {
   fixture_setup
 
   req_dir=$(fixture_create_req "req-001" "test" 6)
-  task=$(fixture_create_task "$req_dir" "006" "conflict" "待确认" "/qa")
+  task=$(fixture_create_task "$req_dir" "006" "conflict" "待执行" "/qa")
   task_wt=$(fixture_create_task_worktree "$task" "req-001-test")
 
   # Create conflicting file in req worktree
@@ -291,7 +291,7 @@ test_reject_if_doc_diff_not_processed() {
   fixture_setup
 
   req_dir=$(fixture_create_req "req-001" "test" 6)
-  task=$(fixture_create_task "$req_dir" "007" "docdiff" "待确认" "/qa")
+  task=$(fixture_create_task "$req_dir" "007" "docdiff" "待执行" "/qa")
   fixture_create_task_worktree "$task" "req-001-test" >/dev/null
 
   _mark_task_done "$task"
@@ -320,7 +320,7 @@ test_happy_path_close_task() {
   fixture_setup
 
   req_dir=$(fixture_create_req "req-001" "test" 6)
-  task=$(fixture_create_task "$req_dir" "008" "happy" "待确认" "/qa")
+  task=$(fixture_create_task "$req_dir" "008" "happy" "待执行" "/qa")
   task_wt=$(fixture_create_task_worktree "$task" "req-001-test")
   task_stem=$(basename "$task" .md)
 
@@ -415,7 +415,7 @@ test_reject_if_event_stream_missing() {
   fixture_setup
 
   req_dir=$(fixture_create_req "req-001" "test" 6)
-  task=$(fixture_create_task "$req_dir" "101" "noevents" "待确认" "/qa")
+  task=$(fixture_create_task "$req_dir" "101" "noevents" "待执行" "/qa")
   task_wt=$(fixture_create_task_worktree "$task" "req-001-test")
   (cd "$task_wt" && echo "x" > out.txt && git add -A && git commit -q -m "task: work")
   _mark_task_done "$task"
@@ -444,7 +444,7 @@ test_reject_if_state_machine_skipped() {
   fixture_setup
 
   req_dir=$(fixture_create_req "req-001" "test" 6)
-  task=$(fixture_create_task "$req_dir" "102" "bypass" "待确认" "/qa")
+  task=$(fixture_create_task "$req_dir" "102" "bypass" "待执行" "/qa")
   task_wt=$(fixture_create_task_worktree "$task" "req-001-test")
   # Simulate agent writing code WITHOUT ever calling task-transition.py
   (cd "$task_wt" && echo "leaked implementation" > leaked.ts && git add -A && git commit -q -m "seed: bring in task-001~004 code")
@@ -484,7 +484,7 @@ test_reject_if_commit_predates_execution() {
   fixture_setup
 
   req_dir=$(fixture_create_req "req-001" "test" 6)
-  task=$(fixture_create_task "$req_dir" "103" "timetravel" "待确认" "/qa")
+  task=$(fixture_create_task "$req_dir" "103" "timetravel" "待执行" "/qa")
   task_wt=$(fixture_create_task_worktree "$task" "req-001-test")
   local task_stem=$(basename "$task" .md)
 
@@ -496,7 +496,7 @@ test_reject_if_commit_predates_execution() {
   # This simulates "code was written before status ever advanced"
   mkdir -p "$FIXTURE_DIR/.runs/events"
   {
-    echo "{\"event\":\"status_changed\",\"timestamp\":\"2099-01-01T00:00:00+00:00\",\"task\":\"$task_stem\",\"from\":\"待确认\",\"to\":\"执行中\"}"
+    echo "{\"event\":\"status_changed\",\"timestamp\":\"2099-01-01T00:00:00+00:00\",\"task\":\"$task_stem\",\"from\":\"待执行\",\"to\":\"执行中\"}"
     echo "{\"event\":\"execution_started\",\"timestamp\":\"2099-01-01T00:01:00+00:00\",\"task\":\"$task_stem\",\"executor\":\"claude-code\"}"
     echo "{\"event\":\"status_changed\",\"timestamp\":\"2099-01-01T00:20:00+00:00\",\"task\":\"$task_stem\",\"from\":\"执行中\",\"to\":\"已完成\"}"
   } > "$FIXTURE_DIR/.runs/events/${task_stem}.jsonl"
@@ -524,7 +524,7 @@ test_ct8_exempts_engineering_md_only_commit() {
   fixture_setup
 
   req_dir=$(fixture_create_req "req-001" "test" 6)
-  task=$(fixture_create_task "$req_dir" "104" "exec-switch" "待确认" "/qa")
+  task=$(fixture_create_task "$req_dir" "104" "exec-switch" "待执行" "/qa")
   task_wt=$(fixture_create_task_worktree "$task" "req-001-test")
   local task_stem=$(basename "$task" .md)
 
@@ -556,7 +556,7 @@ EOF
   # (simulates real task-confirm sequence: meta commit → later *→执行中)
   mkdir -p "$FIXTURE_DIR/.runs/events"
   {
-    echo "{\"event\":\"status_changed\",\"timestamp\":\"2099-01-01T00:00:00+00:00\",\"task\":\"$task_stem\",\"from\":\"待确认\",\"to\":\"执行中\"}"
+    echo "{\"event\":\"status_changed\",\"timestamp\":\"2099-01-01T00:00:00+00:00\",\"task\":\"$task_stem\",\"from\":\"待执行\",\"to\":\"执行中\"}"
     echo "{\"event\":\"execution_started\",\"timestamp\":\"2099-01-01T00:01:00+00:00\",\"task\":\"$task_stem\",\"executor\":\"codex\"}"
     echo "{\"event\":\"status_changed\",\"timestamp\":\"2099-01-01T00:20:00+00:00\",\"task\":\"$task_stem\",\"from\":\"执行中\",\"to\":\"已完成\"}"
   } > "$FIXTURE_DIR/.runs/events/${task_stem}.jsonl"
@@ -580,7 +580,7 @@ test_ct8_exempts_task_md_only_commit() {
   fixture_setup
 
   req_dir=$(fixture_create_req "req-001" "test" 6)
-  task=$(fixture_create_task "$req_dir" "105" "status-flip" "待确认" "/qa")
+  task=$(fixture_create_task "$req_dir" "105" "status-flip" "待执行" "/qa")
   task_wt=$(fixture_create_task_worktree "$task" "req-001-test")
   local task_stem=$(basename "$task" .md)
 
@@ -596,7 +596,7 @@ test_ct8_exempts_task_md_only_commit() {
 
   mkdir -p "$FIXTURE_DIR/.runs/events"
   {
-    echo "{\"event\":\"status_changed\",\"timestamp\":\"2099-01-01T00:00:00+00:00\",\"task\":\"$task_stem\",\"from\":\"待确认\",\"to\":\"执行中\"}"
+    echo "{\"event\":\"status_changed\",\"timestamp\":\"2099-01-01T00:00:00+00:00\",\"task\":\"$task_stem\",\"from\":\"待执行\",\"to\":\"执行中\"}"
     echo "{\"event\":\"execution_started\",\"timestamp\":\"2099-01-01T00:01:00+00:00\",\"task\":\"$task_stem\",\"executor\":\"claude-code\"}"
     echo "{\"event\":\"status_changed\",\"timestamp\":\"2099-01-01T00:20:00+00:00\",\"task\":\"$task_stem\",\"from\":\"执行中\",\"to\":\"已完成\"}"
   } > "$FIXTURE_DIR/.runs/events/${task_stem}.jsonl"
@@ -619,7 +619,7 @@ test_ct8_does_not_exempt_mixed_commit() {
   fixture_setup
 
   req_dir=$(fixture_create_req "req-001" "test" 6)
-  task=$(fixture_create_task "$req_dir" "106" "mixed" "待确认" "/qa")
+  task=$(fixture_create_task "$req_dir" "106" "mixed" "待执行" "/qa")
   task_wt=$(fixture_create_task_worktree "$task" "req-001-test")
   local task_stem=$(basename "$task" .md)
 
@@ -635,7 +635,7 @@ test_ct8_does_not_exempt_mixed_commit() {
 
   mkdir -p "$FIXTURE_DIR/.runs/events"
   {
-    echo "{\"event\":\"status_changed\",\"timestamp\":\"2099-01-01T00:00:00+00:00\",\"task\":\"$task_stem\",\"from\":\"待确认\",\"to\":\"执行中\"}"
+    echo "{\"event\":\"status_changed\",\"timestamp\":\"2099-01-01T00:00:00+00:00\",\"task\":\"$task_stem\",\"from\":\"待执行\",\"to\":\"执行中\"}"
     echo "{\"event\":\"execution_started\",\"timestamp\":\"2099-01-01T00:01:00+00:00\",\"task\":\"$task_stem\",\"executor\":\"claude-code\"}"
     echo "{\"event\":\"status_changed\",\"timestamp\":\"2099-01-01T00:20:00+00:00\",\"task\":\"$task_stem\",\"from\":\"执行中\",\"to\":\"已完成\"}"
   } > "$FIXTURE_DIR/.runs/events/${task_stem}.jsonl"
@@ -842,7 +842,7 @@ test_happy_path_conductor_worktree_path() {
   fixture_setup
 
   req_dir=$(fixture_create_req "req-001" "test" 6)
-  task=$(fixture_create_task "$req_dir" "009" "conductor" "待确认" "/qa")
+  task=$(fixture_create_task "$req_dir" "009" "conductor" "待执行" "/qa")
   task_wt=$(fixture_create_task_worktree "$task" "req-001-test")
   task_stem=$(basename "$task" .md)
 

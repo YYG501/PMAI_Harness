@@ -36,7 +36,7 @@ prd-writing 历史上自带的写作规则（§186 禁用清单 / §266 UI 元�
 
 ## Workflow
 
-1. 读取 `$ACTIVE_REQ_DIR/brief.md`、`analysis.md`、`solution.md`（如有）和 `tasks/*.md`，拆出"已确认决策"和"待确认决策"；有待确认项则先编号提问，确认后再写 PRD。
+1. 读取 `$ACTIVE_REQ_DIR/brief.md`、`analysis.md`、`solution.md`（如有）和 `tasks/*.md`，拆出"已确认决策"和"待执行决策"；有待执行项则先编号提问，确认后再写 PRD。
 2. 如果 `prototypes/` 存在已定稿的原型代码，读取相关页面文件，提取最终确认的字段、交互方式、组件选择等细节，作为功能需求表格的**权威依据**。读取后必须用原型实际行为**反向校验** task / module-spec 文档的描述：若文档与原型不一致，**以原型为准**写入 PRD，并在对应章节末尾备注"task 文档此处与原型不一致，以原型为准"，让研发评审时同步修正 task 文档；不允许仅复制 task 文档原话而不验证原型行为。
 3. 按下方"PRD 结构"生成完整 `$ACTIVE_REQ_DIR/prd.md`（骨架见 `$REPO_ROOT/templates/req-prd.md.tmpl`），语言风格对齐下方"写作规则"与"few-shots"。
 4. 在对话中请求 PM 确认 PRD；确认后写入文件。控制权交回 `/close-req`，由其判断是否调 `/project-prd-update` 同步项目主 PRD。

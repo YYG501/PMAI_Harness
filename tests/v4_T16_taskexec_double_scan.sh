@@ -23,7 +23,7 @@ _scan_pending_start_tasks() {
     [ -n "$task_file" ] || continue
     status=$(grep -m1 '^\*\*状态：\*\*' "$task_file" | sed 's/.*\*\*状态：\*\* *//')
     stem=$(basename "$task_file" .md)
-    if [ "$status" = "待确认" ] && [ -d ".worktrees/$stem" ]; then
+    if [ "$status" = "待执行" ] && [ -d ".worktrees/$stem" ]; then
       echo "$task_file"
     fi
   done
@@ -33,7 +33,7 @@ test_scan_main_repo_active_req() {
   start_test "task-execute no-arg scan sees main repo active req"
   sandbox=$(mktemp -d "${TMPDIR:-/tmp}/pmaidoublescan.XXXXXX")
   mkdir -p "$sandbox/.worktrees/task-001-main"
-  _make_task "$sandbox/requirements/active/req-001/tasks/task-001-main.md" "待确认"
+  _make_task "$sandbox/requirements/active/req-001/tasks/task-001-main.md" "待执行"
 
   out=$(cd "$sandbox" && _scan_pending_start_tasks)
   if [ "$out" = "requirements/active/req-001/tasks/task-001-main.md" ]; then
@@ -48,7 +48,7 @@ test_scan_req_worktree_active_req() {
   start_test "task-execute no-arg scan sees req worktree active req"
   sandbox=$(mktemp -d "${TMPDIR:-/tmp}/pmaidoublescan.XXXXXX")
   mkdir -p "$sandbox/.worktrees/task-002-wt"
-  _make_task "$sandbox/.worktrees/req-001-feature/requirements/active/req-001/tasks/task-002-wt.md" "待确认"
+  _make_task "$sandbox/.worktrees/req-001-feature/requirements/active/req-001/tasks/task-002-wt.md" "待执行"
 
   out=$(cd "$sandbox" && _scan_pending_start_tasks)
   if [ "$out" = ".worktrees/req-001-feature/requirements/active/req-001/tasks/task-002-wt.md" ]; then

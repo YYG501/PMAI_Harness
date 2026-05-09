@@ -124,32 +124,39 @@ echo "task SKIP marker pending: $SKIP_PENDING / $TASK_COUNT"
 
 | 检测结果 | 默认推荐 | 含义 |
 |---|---|---|
-| `COVERAGE_COMMITS >= TASK_COUNT` 且 `SKIP_PENDING == 0` | **默认 B（跳过）** | 全部 task 都 doc-update 沉淀进 docs/prd.md / modules，再写一份 req 级 prd.md 是冗余 |
-| `COVERAGE_COMMITS > 0` 但有 SKIP_PENDING | **默认 C（部分跳过 + 补差）** | 部分 task 已沉淀，未沉淀的需要在 req 级 prd.md 补 |
-| `COVERAGE_COMMITS == 0` | **默认 A（必跑）** | 没有 task 把内容沉淀进项目级文档，req 级 prd.md 是唯一规格记录 |
+| `COVERAGE_COMMITS >= TASK_COUNT` 且 `SKIP_PENDING == 0` | **默认"跳过 PRD"** | 全部 task 都 doc-update 沉淀进 docs/prd.md / modules，再写一份 req 级 prd.md 是冗余 |
+| `COVERAGE_COMMITS > 0` 但有 SKIP_PENDING | **默认"补差"** | 部分 task 已沉淀，未沉淀的需要在 req 级 prd.md 补 |
+| `COVERAGE_COMMITS == 0` | **默认"完整 PRD"** | 没有 task 把内容沉淀进项目级文档，req 级 prd.md 是唯一规格记录 |
 
-向 PM 呈交检测结果 + 三选项（带默认推荐）：
+向 PM 呈交检测结果 + 对话式三选项（不列字母）：
 
 ```
-📊 doc-update 覆盖度检测：
-  - req 周期内 docs/prd.md + docs/modules/ 累计 X commits
-  - task SKIP marker pending: Y / N
-  - 默认推荐：[A/B/C]（理由：...）
+📊 doc-update 覆盖度检测
+   - 这次需求里 docs/prd.md + docs/modules/ 累计被改了 X 次
+   - 还有 Y 条 task 标了"跳过文档沉淀"未补
+   - 默认推荐：<完整 PRD / 补差 / 跳过 PRD>（理由：…）
 
-A) 跑 /prd-writing（写完整 req 级 prd.md）
-B) 跳过（已被 task doc-update 覆盖；自动在 close-report.md 写"req 级 PRD 已通过 task doc-update 沉淀"）
-C) 跑 /prd-writing 但只补差（输入 prompt 含"docs/prd.md 已包含 X，重点写未沉淀的 Y/Z"）
+要怎么办？
+ - 跑 /prd-writing 写一份完整 req 级 prd.md
+ - 跑 /prd-writing 只补还没沉淀的部分（推荐"补差"时默认）
+ - 跳过这步（已经沉淀过了，再写一份是冗余；自动在 close-report.md 标一句话）
 ```
 
-PM 默认接受推荐时直接跑该路径；PM 显式选择其他选项时按所选执行。**任何选项都不需要 PM 写理由**——A/B/C 都是合规路径，差异在产物详细度，不需要决策成本。
+**PM 回答的内部分流 + 内部决议代号映射**（决议代号给 step 2b 用）：
+- PM 说「完整 / 全写 / 完整 PRD」等 → 内部决议 `A` → 跑 /prd-writing 写完整 req 级 prd.md
+- PM 说「跳过 / 不写 / 已经沉淀」等 → 内部决议 `B` → 跳过；自动在 close-report.md 写"req 级 PRD 已通过 task doc-update 沉淀"
+- PM 说「补差 / 只补 / 补未沉淀」等 → 内部决议 `C` → 跑 /prd-writing 但 prompt 含"docs/prd.md 已包含 X，重点写未沉淀的 Y/Z"
+- PM 直接说「OK / 按推荐 / 默认」 → 走默认推荐对应的分支
+
+**任何分支都不需要 PM 写理由**——三个分支都是合规路径，差异只在产物详细度。
 
 ### 步骤 2b：增量同步项目主 PRD（按 step 2a 决议链推进）
 
 | step 2a 决议 | step 2b 默认行为 |
 |---|---|
-| **A**（写完整 req 级 prd.md） | 调 `/project-prd-update` 把 req 级 prd.md 增量并入 `docs/prd.md` |
+| **A**（完整 req 级 prd.md） | 调 `/project-prd-update` 把 req 级 prd.md 增量并入 `docs/prd.md` |
 | **B**（跳过 step 2a） | 默认跳过 step 2b（task doc-update 已经直接改 docs/prd.md，再调 /project-prd-update 是 no-op）；在 close-report 写"项目主 PRD 已通过 task doc-update 直接同步" |
-| **C**（补差模式） | 调 `/project-prd-update`，输入 prompt 含"step 2a 仅补 Y/Z 部分，请只 reconcile 这两部分" |
+| **C**（补差） | 调 `/project-prd-update`，输入 prompt 含"step 2a 仅补 Y/Z 部分，请只 reconcile 这两部分" |
 
 同样不需要 PM 写跳过理由——决议链由 step 2a 自动推导。
 

@@ -57,7 +57,7 @@ EOF
   cat > "$FIXTURE_DIR/requirements/active/req-001-test/tasks/task-001-t.md" <<'EOF'
 # Task 001
 
-**状态：** 待确认
+**状态：** 待执行
 EOF
   (cd "$FIXTURE_DIR" && git add -A && git commit -q -m "seed req/task on main")
 

@@ -3,8 +3,8 @@
 Single source of truth for reading task metadata from PM view (task.md) and
 optionally engineering contract (task.engineering.md).
 
-V1 format (legacy):  **状态：** 待确认  / **分支：** task-001-xxx
-V2 format (current): | **状态** | 待确认 |  / | **分支** | task-001-xxx |
+V1 format (legacy):  **状态：** 待执行  / **分支：** task-001-xxx
+V2 format (current): | **状态** | 待执行 |  / | **分支** | task-001-xxx |
 
 Sections like "文档偏差" / "自审记录" exist in PM view (v1) or engineering
 contract §10/§11 (v2). read_section auto-discovers across both files.
@@ -42,10 +42,10 @@ def engineering_path(pm_view: Path) -> Path:
 # Field parsing (v1 + v2 双兼容)
 # ============================================================================
 
-# v1: **状态：** 待确认
+# v1: **状态：** 待执行
 V1_FIELD_RE = re.compile(r"^\*\*(.+?)：\*\*\s*(.+?)\s*$", re.MULTILINE)
 
-# v2: | **状态** | 待确认 |
+# v2: | **状态** | 待执行 |
 V2_FIELD_RE = re.compile(
     r"^\|\s*\*\*(.+?)\*\*\s*\|\s*([^\|]+?)\s*\|\s*$",
     re.MULTILINE,

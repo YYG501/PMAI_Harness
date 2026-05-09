@@ -21,7 +21,7 @@ test_v2_creates_dual_files() {
   start_test "v2 fixture creates PM view + engineering contract"
   fixture_setup
   req_dir=$(fixture_create_req "req-001" "test" 6)
-  task=$(fixture_create_task_v2 "$req_dir" "001" "demo" "待确认")
+  task=$(fixture_create_task_v2 "$req_dir" "001" "demo" "待执行")
 
   if [ ! -f "$task" ]; then
     _fail "PM view file missing: $task"
@@ -46,7 +46,7 @@ test_v2_detect_format() {
   start_test "parser detect_format → v2"
   fixture_setup
   req_dir=$(fixture_create_req "req-001" "test" 6)
-  task=$(fixture_create_task_v2 "$req_dir" "001" "demo" "待确认")
+  task=$(fixture_create_task_v2 "$req_dir" "001" "demo" "待执行")
 
   local fmt
   fmt=$(_parser detect_format "$task")
@@ -84,7 +84,7 @@ test_v2_parser_reads_branch() {
   start_test "parser get_branch reads v2 table"
   fixture_setup
   req_dir=$(fixture_create_req "req-001" "test" 6)
-  task=$(fixture_create_task_v2 "$req_dir" "001" "demo" "待确认")
+  task=$(fixture_create_task_v2 "$req_dir" "001" "demo" "待执行")
 
   local branch
   branch=$(_parser get_branch "$task")
@@ -105,7 +105,7 @@ test_v2_read_section_finds_engineering_doc_diff() {
   start_test "parser read_section finds §10 文档偏差 in engineering"
   fixture_setup
   req_dir=$(fixture_create_req "req-001" "test" 6)
-  task=$(fixture_create_task_v2 "$req_dir" "001" "demo" "待确认")
+  task=$(fixture_create_task_v2 "$req_dir" "001" "demo" "待执行")
 
   local content
   content=$(_parser read_section "$task" "文档偏差")
@@ -128,7 +128,7 @@ test_v2_read_section_finds_engineering_self_review() {
   start_test "parser read_section finds §11 自审记录 in engineering"
   fixture_setup
   req_dir=$(fixture_create_req "req-001" "test" 6)
-  task=$(fixture_create_task_v2 "$req_dir" "001" "demo" "待确认")
+  task=$(fixture_create_task_v2 "$req_dir" "001" "demo" "待执行")
 
   local content
   content=$(_parser read_section "$task" "自审记录")
@@ -152,10 +152,10 @@ test_v2_read_section_finds_engineering_self_review() {
 # -----------------------------------------------------------------
 
 test_v2_task_transition_accepts_legal() {
-  start_test "task-transition accepts v2 待确认→执行中"
+  start_test "task-transition accepts v2 待执行→执行中"
   fixture_setup
   req_dir=$(fixture_create_req "req-001" "test" 6)
-  task=$(fixture_create_task_v2 "$req_dir" "001" "demo" "待确认")
+  task=$(fixture_create_task_v2 "$req_dir" "001" "demo" "待执行")
 
   if (cd "$FIXTURE_DIR" && python3 "$TASK_TRANSITION" "$task" --to 执行中) >/tmp/out.$$ 2>/tmp/err.$$; then
     local status

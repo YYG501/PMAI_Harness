@@ -82,7 +82,7 @@ test_happy_path_removes_worktree_branch_and_file() {
   fixture_setup
 
   req_dir=$(fixture_create_req "req-001" "test" 6)
-  task=$(fixture_create_task "$req_dir" "001" "happy" "待确认" "(无)")
+  task=$(fixture_create_task "$req_dir" "001" "happy" "待执行" "(无)")
   task_wt=$(fixture_create_task_worktree "$task" "req-001-test")
   task_branch="task-001-happy"
 
@@ -129,7 +129,7 @@ test_reject_when_cwd_inside_pending_worktree() {
   fixture_setup
 
   req_dir=$(fixture_create_req "req-001" "test" 6)
-  task=$(fixture_create_task "$req_dir" "002" "trap" "待确认" "(无)")
+  task=$(fixture_create_task "$req_dir" "002" "trap" "待执行" "(无)")
   task_wt=$(fixture_create_task_worktree "$task" "req-001-test")
 
   _write_pending_task_entry "task-002-trap" "$task_wt"
@@ -162,7 +162,7 @@ test_partial_worktree_already_gone() {
   fixture_setup
 
   req_dir=$(fixture_create_req "req-001" "test" 6)
-  task=$(fixture_create_task "$req_dir" "003" "stale" "待确认" "(无)")
+  task=$(fixture_create_task "$req_dir" "003" "stale" "待执行" "(无)")
   task_wt=$(fixture_create_task_worktree "$task" "req-001-test")
   task_branch="task-003-stale"
 
@@ -199,7 +199,7 @@ test_dry_run_does_not_remove() {
   fixture_setup
 
   req_dir=$(fixture_create_req "req-001" "test" 6)
-  task=$(fixture_create_task "$req_dir" "004" "dryrun" "待确认" "(无)")
+  task=$(fixture_create_task "$req_dir" "004" "dryrun" "待执行" "(无)")
   task_wt=$(fixture_create_task_worktree "$task" "req-001-test")
   task_branch="task-004-dryrun"
 

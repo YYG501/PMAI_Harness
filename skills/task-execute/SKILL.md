@@ -51,7 +51,7 @@ execute 阶段 agent 启动时**必须把工程合同内容显式 inject 到执�
    - 唯一匹配：使用该文件。
    - 0 个或多个匹配：报错退出，并提示 PM 传完整 task 文件路径（多 active req 并行时短 ID 可能在多个 req 里冲突）。
 3. **无参数**：自动扫描主仓和 `.worktrees/req-*/requirements/active`，找出所有同时满足下列条件的 task：
-   - 状态为「待确认」。
+   - 状态为「待执行」。
    - 对应 `.worktrees/<task-stem>` 已存在。
 
 无参数模式：
@@ -200,7 +200,7 @@ CURRENT_STATUS=$(python3 "$MAIN_REPO_ROOT/.claude/scripts/task-transition.py" "$
 
 状态处理：
 
-- 「待确认」：转换为「执行中」后继续。
+- 「待执行」：转换为「执行中」后继续。
   ```bash
   # D7 后无 serial 阻塞；并行约束由依赖 gate 和 worktree 隔离承担。
   python3 "$MAIN_REPO_ROOT/.claude/scripts/task-transition.py" "$TASK_FILE" --to 执行中
@@ -293,7 +293,7 @@ fi
 
 #### 3.0 前置状态 gate（由入口前置完成）
 
-入口前置已经完成「待确认 → 执行中」transition，或确认当前状态为「执行中」重试。进入实现阶段前仍保留轻量断言：状态必须是「执行中」。如果不是，说明入口前置没有成功完成，立即拒绝继续。
+入口前置已经完成「待执行 → 执行中」transition，或确认当前状态为「执行中」重试。进入实现阶段前仍保留轻量断言：状态必须是「执行中」。如果不是，说明入口前置没有成功完成，立即拒绝继续。
 
 ```bash
 CURRENT_STATUS=$(python3 "$MAIN_REPO_ROOT/.claude/scripts/task-transition.py" "$TASK_FILE" --get-status 2>/dev/null || echo "")

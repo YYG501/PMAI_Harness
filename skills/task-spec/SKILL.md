@@ -140,7 +140,7 @@ done
 > - 任务卡表格的字段布局
 >
 > 旧 task 是 v1 历史格式，新 task 必须按 `$REPO_ROOT/templates/task.md.tmpl` 的 v2 布局
-> 生成（任务卡表格里 `| **状态** | 待确认 |`，标题下方不加 frontmatter 段落）。
+> 生成（任务卡表格里 `| **状态** | 待执行 |`，标题下方不加 frontmatter 段落）。
 > 把旧格式当参考会导致生成 blockquote frontmatter 等假执行产物，被步骤 10.6 严格字段校验挡回重写。
 
 每条反馈按特征分类（参见 `input-flow.md` §9.4 表）：
@@ -225,8 +225,8 @@ done
 **写头部前必查 6 项**（错一项 step 10.6 字段校验会拦截重写，浪费一次 round-trip）：
 
 - [ ] 标题 `# Task NNN: ...` 下方**无** frontmatter 段（无 `**Req：**` / `**状态：**` / `**创建日期：**` 等）
-- [ ] 状态字段在 `## 📌 任务卡` 表格里（`| **状态** | 待确认 |`）
-- [ ] 状态值是 4 态之一：待确认 / 执行中 / 已完成 / 已废弃（**不要**写"待启动"/"待执行"——是 status-view.py 派生显示标签；「待验收」于 2026-05-08 合并入「执行中」）
+- [ ] 状态字段在 `## 📌 任务卡` 表格里（`| **状态** | 待执行 |`）
+- [ ] 状态值是 4 态之一：待执行 / 执行中 / 已完成 / 已废弃（**不要**写"待启动"/"待执行"——是 status-view.py 派生显示标签；「待验收」于 2026-05-08 合并入「执行中」）
 - [ ] 不用中文引号（`「」` / `『』`），不用 blockquote 包字段
 - [ ] 依赖列表是结构化 `- task-NNN (说明)`，**不是**自然语言"依赖 task-2 和 task-3"
 - [ ] **依据**：`closed/` 下旧 task 是 v1 历史格式，**不参考**（first-gen 首次写无 v1 干扰，本项可跳）
@@ -350,7 +350,7 @@ python3 "$REPO_ROOT/.claude/scripts/task-transition.py" \
 处理输出：
 - 退出 0（"✅ 字段校验通过"）→ 进入步骤 11
 - 退出 1 → 按 stderr 提示**回到步骤 8 重写 task 文件头部**（任务卡表格里
-  `| **状态** | 待确认 |` 是唯一合法格式；标题下方不写任何 frontmatter
+  `| **状态** | 待执行 |` 是唯一合法格式；标题下方不写任何 frontmatter
   段落；状态值必须是合法 5 态之一）。重写后回到步骤 10 重新自检 + 10.5
   + 10.6 全跑一遍。**禁止**：手改字段值绕过校验、跳过本步骤直推
   /task-confirm。
@@ -425,7 +425,7 @@ review bundle：.runs/review-input-<task>-{eng,design}.md
   /plan-design-review  — 交互 / 视觉层问题 / UI 完整性
   /autoplan            — 两者批量打包
 
-A) 确认 / B) 修改 / C) 放弃
+确认整份 task 内容吗？没问题我就推 /task-confirm；还有要改的地方直接说。
 ```
 
 **基础设施 task**（去掉 design bundle / design review）：
@@ -441,10 +441,38 @@ review bundle：.runs/review-input-<task>-eng.md
 可选 review：
   /plan-eng-review — 脚手架 / 共用能力的设计合理性
 
-A) 确认 / B) 修改 / C) 放弃
+确认整份 task 内容吗？没问题我就推 /task-confirm；还有要改的地方直接说。
 ```
 
-> 工程合同的 hash 状态（`synced_pm_view_hash` 是否与 PM 视图最新值一致 / 是否需要 reconcile）由步骤 12.5 内部处理，**不向 PM 暴露**。PM 选 A 后 AI 自动 reconcile 同步。
+**🚫 步骤 12 / 12.5 期间 chat 输出禁词清单（硬约束）**
+
+下列词只能出现在 SKILL 内部 / 文件注释 / commit message / `.engineering.md`，**严禁**写进 PM 在 chat 上看到的任何文字（包括确认门、B 修改回流、reconcile 完成提示）：
+
+| ❌ 禁词 | 为什么禁 |
+|---|---|
+| `hash` / `synced_pm_view_hash` / 任何 12 位 hash 值（如 `43c64be9cf78`） | PM 不关心校验机制，也无从判断"stale ↔ 当前"差异 |
+| `reconcile` / `reconcile 模式` / `reconcile 同步` | 工程黑话，PM 没有动作可做 |
+| `stale` / `留 stale` / `保持 stale` | 同上，且容易让 PM 误以为出错了 |
+| `步骤 12.5` / `步骤 9.6` / 任何 `步骤 N.M` 内部编号 | SKILL 内部锚点，PM 看不到 SKILL 文档 |
+| `工程合同` / `.engineering.md` 路径出现在解释段（路径行除外）| PM 视图主文件才是 PM 的世界；工程合同存在但不解释 |
+| `lazy sync` / `MODE=revise` / `first-gen` 等模式名 | 内部状态机命名 |
+
+**反面示例（用户 2026-05-09 反馈的真实输出）：**
+
+```
+✘ 工程合同 hash 留 stale（43c64be9cf78 ↔ 当前 49612001e65e），
+  等 PM 选 A 后由 reconcile（步骤 12.5）同步。
+```
+
+**正面示例（PM 视图语言 + 对话式询问）：**
+
+```
+✓ 已按你的反馈更新：启用弹窗文案改成"……"。
+
+改完了，整份 task 内容你看 OK 吗？OK 我就推 /task-confirm；还有要改的继续说。
+```
+
+工程合同的同步状态完全由 AI 内部跟踪、PM 说 OK 后自动处理，不需要也不应该让 PM 知道它的存在或状态。
 
 **摘要写作约束**：
 - 一行内写完，不展开成多行 bullet
@@ -452,15 +480,24 @@ A) 确认 / B) 修改 / C) 放弃
 - 「PM 反馈分流 X 条」是步骤 5 三类抽取后的总条数；为 0 时写「无 PM 反馈承接」
 - 「关键决策」无新决策时直接写「本 task 无新决策」，不再列 D-编号清单
 
-**A/B/C 含义**（PM 已知，不在每次输出里复读细节）：
-- A = 确认 → 步骤 12.5 reconcile → 推 /task-confirm
-- B = 修改（PM 视图 / 工程合同独立来源章节）
-- C = 放弃（两文件一起删）
+**PM 回答的内部分流**（chat 不再列 A/B/C 选项；按 PM 自然语言意图分流）：
+- PM 说「OK / 没问题 / 确认 / 通过」等 → 走"确认"分支：进入步骤 12.5 内部对齐 → 推 /task-confirm
+- PM 说具体修改意见 → 走"修改"分支：按反馈改 PM 视图主文件，**不动工程合同**（hash 留 stale），自检 + lint 后回到步骤 12 重新询问
+- PM 说「不要这个 task / 删了 / 放弃」等放弃意图 → 走"放弃"分支：两份文档一起删，并提示 PM 同步从 `task-plan.md` 删条目（**chat 模板里不主动列出此选项**，PM 主动提才走）
 
-PM 选 A → 进入步骤 12.5 reconcile → 完成后推 /task-confirm。
-PM 选 B → 进入"修改回流"分支：
-- 改 PM 视图内容 → 重写 PM 视图主文件，**不动工程合同**（hash 留 stale），自检 + lint 后回到步骤 12 重新等 PM 确认
+"修改"分支细分（按 PM 反馈触达的章节）：
+- 改 PM 视图内容 → 重写 PM 视图主文件，**不动工程合同**（hash 留 stale），自检 + lint 后回到步骤 12 重新询问
 - 改工程合同独立来源章节（§7 plan-review 沉淀 / §11 自审记录）→ 直接改对应章节，**不更新 hash**，回到步骤 12
+
+> **"修改"分支回流的 chat 输出模板**（必须使用 PM 视图语言，禁词清单见步骤 12 上方）：
+>
+> ```
+> ✓ 已按你的反馈更新：<一行说明 PM 视图层面的变化>
+>
+> 改完了，整份 task 内容你看 OK 吗？OK 我就推 /task-confirm；还有要改的继续说。
+> ```
+>
+> 不写"工程合同保持 stale"、"hash 未刷新"、"等 reconcile"——这些是 AI 内部记账，PM 选 A 后才执行，PM 在 B 循环里看不到也不需要知道。
 
 PM 未确认前不得进入执行。
 
@@ -477,7 +514,7 @@ PM 未确认前不得进入执行。
    PM_VIEW_HASH_NOW=$(shasum -a 256 "$PM_VIEW" | cut -c1-12)
    PM_VIEW_HASH_OLD=$(grep -oE 'synced_pm_view_hash: [a-f0-9]{12}' "$ENG" | awk '{print $2}')
    ```
-2. **一致** → 输出 `reconcile: no-op（PM 视图未变）`，进入步骤 13
+2. **一致** → 输出 `reconcile: no-op（PM 视图未变）`，进入步骤 12.6
 3. **不一致** → 进入派生流程：
    a. 再读必读输入：`analysis.md` / `solution.engineering.md`（按章节匹配）/ 同模块已完成 task 的 `.engineering.md` / `docs/DESIGN.md` / `docs/modules/<module>.md` / `prototypes/`
    b. 比对 PM 视图 diff（`git diff` 或 chat 上下文中 PM 报告的修改范围）
@@ -487,18 +524,41 @@ PM 未确认前不得进入执行。
    f. 在工程合同末尾追加 `<!-- reconcile <YYYY-MM-DD HH:MM>: <旧 hash> → <新 hash>; 变更范围: <一行说明> -->`；同步在 PM 视图主文件末尾「📁 历史档案」加一行 `<YYYY-MM-DD> reconcile：工程合同已对齐 PM 视图（<旧 hash> → <新 hash>）`
 4. 自检（PM-VIEW-RULES §9.6.6）
 5. **重新派生 review-input bundle**：reconcile 后 PM 视图 / 工程合同都更新了，旧 bundle 已 stale；重跑步骤 11.0 的 build-review-input.py 把 `.runs/review-input-<task>-{eng,design}.md` 都刷一遍（业务模块 task 跑两个 / 基础设施 task 跑 eng）
-6. 输出 reconcile 完成信号：
+6. 输出 reconcile 完成信号（**仅 AI 内部日志**，不发给 PM；步骤 12 / 12.5 chat 禁词清单同样适用）：
    ```
-   ✅ task-NNN-<slug>.engineering.md reconcile 完成
-   - hash: <旧> → <新>
-   - 变更章节：[列出更新的 §]
-   - 独立来源章节未动：§7 / §10 / §11
-   - review-input bundle 已重派生：.runs/review-input-<task>-{eng,design}.md
+   reconcile 完成 - hash: <旧> → <新>; 变更章节: [列出 §]; 独立来源未动: §7 / §10 / §11
    ```
+   进入步骤 12.6。
+
+### 步骤 12.6：落盘 task md 到 req 分支（强制 commit，PM 不感知）
+
+**触发**：步骤 12.5 退出（无论 no-op 还是 reconcile 完成）。
+**目的**：保证 task-confirm 后续通过 `git worktree add` fork task 分支时，从 req 分支 HEAD 拿到的就是 PM 确认终态——而不是 working tree 里飘的 stale 版本（INVARIANTS.md I-DC1 / 事故案例：2026-05-09 task-005 三个状态变更弹窗文案偏差，因 4 轮 revise + 1 次 reconcile 全部停在 working tree 没 commit，task-confirm fork 拿到 first-gen v1）。
+
+```bash
+SCRIPT_DIR="$REPO_ROOT/.claude/scripts"
+source "$SCRIPT_DIR/_lib/dirty-check.sh"
+
+PM_VIEW="$ACTIVE_REQ_DIR/tasks/task-NNN-<slug>.md"
+ENG="$ACTIVE_REQ_DIR/tasks/task-NNN-<slug>.engineering.md"
+HASH=$(shasum -a 256 "$PM_VIEW" | cut -c1-12)
+
+auto_commit_docs "$REQ_WORKTREE" \
+  "task-NNN-<slug>: spec sealed (hash $HASH)" \
+  "$PM_VIEW" "$ENG"
+```
+
+**约束**：
+- pathspec 严格限定为本 task 的两文件，不卷入其他 working tree 改动
+- `auto_commit_docs` 在两文件与 HEAD 一致时静默 noop（first-gen 后 PM 一句"OK"直接进 12.5/12.6 时也安全）
+- commit 消息固定模板，PM 看不到（只在 git log）
+- commit 失败（hooks 拦 / 签名问题）→ 不进入步骤 13，把错误原文给 PM，让 PM 处理后回 /task-spec
+
+**禁止**：在 chat 里输出 commit hash / "已 commit" / commit message 等（步骤 12 chat 禁词清单同样适用——commit 是 AI 内部记账，PM 视角永远只看到"task 内容已对齐，可以推 /task-confirm"）。
 
 ### 步骤 13：推动 /task-confirm
 
-reconcile 完成后才推：
+落盘完成后才推：
 
 ```
 ✅ 双文件已对齐，下一步运行 /task-confirm <task-pm-view-file>
@@ -523,3 +583,6 @@ reconcile 完成后才推：
 - **lazy sync 强制**（`input-flow.md` §9.6）：PM 在步骤 12 选 B 修改 PM 视图时，**禁止顺手重写工程合同**（hash 必须留 stale）；只有步骤 12 选 A 后的步骤 12.5 才能重写工程合同 PM 视图驱动章节。
 - **reconcile 边界**：步骤 12.5 禁止动 PM 视图主文件内容（仅允许在「📁 历史档案」append 一行 reconcile 记录）；禁止动工程合同独立来源章节（§7 / §10 / §11）的主体。
 - **hash 不得手动改**：任何模式下不允许手动编辑工程合同顶部 `synced_pm_view_hash`，只能由步骤 9（首生成）或步骤 12.5（reconcile）写入。
+- **PM chat 输出禁词（步骤 12 / 12.5 / B 修改回流）**：`hash` / 12 位 hash 值 / `reconcile` / `stale` / `步骤 12.5` / `lazy sync` / 任何工程合同同步状态描述都不准出现在 PM 看的 chat 文字里。完整禁词清单 + 反面示例见步骤 12 模板上方。违反 = AI 错；规则修复优先于 PM 自行容忍。
+- **强制 12.6 落盘（INVARIANTS.md I-DC1）**：步骤 12.5 退出后必须跑步骤 12.6 把 task md 两文件 commit 到 req 分支；不允许跳 12.6 直接进步骤 13。理由：task-confirm 通过 `git worktree add -b ... <REQ_BRANCH>` fork 时取的是 HEAD commit 而非 working tree，未 commit 的 task md 修订会被 fork 到 task 分支时丢失（事故案例：2026-05-09 task-005）。pathspec 严格限定本 task 两文件，不卷入其他 working tree 改动。
+- **commit 边界禁词**：步骤 12.6 的 commit 是 AI 内部记账，PM chat 输出禁词清单追加：`commit` / `已落盘` / `git log` / commit hash / commit message——这些都不准出现在 PM 看的 chat 文字里。

@@ -70,7 +70,7 @@ write_task_file() {
   cat > "$path" <<EOF
 # Task 001: smoke
 
-**状态：** 待确认
+**状态：** 待执行
 **审查工具：** /review
 **executor：** $executor
 **executor_model：** $model
@@ -380,23 +380,23 @@ test_fail_execution_requires_reason() {
 }
 
 test_fail_execution_happy() {
-  start_test "task-transition --fail-execution --reason → 待确认 + event"
+  start_test "task-transition --fail-execution --reason → 待执行 + event"
   make_sandbox
   write_task_file "$SANDBOX/task.md" "codex" ""
   cd "$SANDBOX" && python3 .claude/scripts/task-transition.py task.md --to 执行中 >/dev/null 2>&1
   python3 .claude/scripts/task-transition.py task.md --fail-execution --reason "sandbox_denied" >/dev/null 2>&1
   status=$(grep '^\*\*状态：\*\*' task.md | sed 's/.*：\*\* //')
-  [ "$status" = "待确认" ] && pass_test || fail_test "status is $status, expected 待确认"
+  [ "$status" = "待执行" ] && pass_test || fail_test "status is $status, expected 待执行"
   teardown_sandbox
 }
 
 test_plain_to_pending_from_executing_rejected() {
-  start_test "task-transition --to 待确认 from 执行中 → rejected (use --fail-execution)"
+  start_test "task-transition --to 待执行 from 执行中 → rejected (use --fail-execution)"
   make_sandbox
   write_task_file "$SANDBOX/task.md" "codex" ""
   cd "$SANDBOX" && python3 .claude/scripts/task-transition.py task.md --to 执行中 >/dev/null 2>&1
-  if python3 .claude/scripts/task-transition.py task.md --to 待确认 2>/tmp/err.$$; then
-    fail_test "should reject plain --to 待确认 from 执行中"
+  if python3 .claude/scripts/task-transition.py task.md --to 待执行 2>/tmp/err.$$; then
+    fail_test "should reject plain --to 待执行 from 执行中"
   else
     grep -q "非法状态转换" /tmp/err.$$ && pass_test || fail_test "wrong error: $(cat /tmp/err.$$)"
   fi
@@ -405,7 +405,7 @@ test_plain_to_pending_from_executing_rejected() {
 }
 
 test_cancel_manual_happy() {
-  start_test "task-transition --cancel-manual: remove marker + back to 待确认"
+  start_test "task-transition --cancel-manual: remove marker + back to 待执行"
   make_sandbox
   # Use proper task filename so pending_manual_path() extracts task-001
   tf="$SANDBOX/task-001-smoke.md"
@@ -417,7 +417,7 @@ test_cancel_manual_happy() {
 EOF
   python3 .claude/scripts/task-transition.py "$tf" --cancel-manual >/tmp/out.$$ 2>/tmp/err.$$
   status=$(grep '^\*\*状态：\*\*' "$tf" | sed 's/.*：\*\* //')
-  if [ "$status" = "待确认" ] && [ ! -f "$SANDBOX/.runs/.pending-manual-task-001.json" ]; then
+  if [ "$status" = "待执行" ] && [ ! -f "$SANDBOX/.runs/.pending-manual-task-001.json" ]; then
     pass_test
   else
     fail_test "status=$status, marker=$(test -f "$SANDBOX/.runs/.pending-manual-task-001.json" && echo yes || echo no), err=$(cat /tmp/err.$$)"

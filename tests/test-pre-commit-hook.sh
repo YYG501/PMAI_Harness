@@ -72,7 +72,7 @@ test_newly_added_task_passes() {
   # fixture_create_task 自己会在 req worktree 里 commit。
   # 该 commit 包含 newly-added task — 应该被 hook 放行。
   req_dir=$(fixture_create_req "req-001" "test" 6)
-  if task=$(fixture_create_task "$req_dir" "001" "demo" "待确认" 2>/tmp/err.$$); then
+  if task=$(fixture_create_task "$req_dir" "001" "demo" "待执行" 2>/tmp/err.$$); then
     if [ -f "$task" ]; then
       pass_test
     else
@@ -97,7 +97,7 @@ test_legal_transition_passes() {
   _install_hook
 
   req_dir=$(fixture_create_req "req-001" "test" 6)
-  task=$(fixture_create_task "$req_dir" "001" "demo" "待确认")
+  task=$(fixture_create_task "$req_dir" "001" "demo" "待执行")
   req_wt=$(dirname "$(dirname "$(dirname "$task")")")
 
   # 在 req worktree 里跑 task-transition.py 推进状态
@@ -130,7 +130,7 @@ test_direct_edit_rejected() {
   _install_hook
 
   req_dir=$(fixture_create_req "req-001" "test" 6)
-  task=$(fixture_create_task "$req_dir" "001" "demo" "待确认")
+  task=$(fixture_create_task "$req_dir" "001" "demo" "待执行")
   req_wt=$(dirname "$(dirname "$(dirname "$task")")")
 
   # 直改文件（不留事件痕迹）
@@ -162,7 +162,7 @@ test_other_section_edit_passes() {
   _install_hook
 
   req_dir=$(fixture_create_req "req-001" "test" 6)
-  task=$(fixture_create_task "$req_dir" "001" "demo" "待确认")
+  task=$(fixture_create_task "$req_dir" "001" "demo" "待执行")
   req_wt=$(dirname "$(dirname "$(dirname "$task")")")
 
   # 改 PM 反馈段，状态不动
@@ -194,7 +194,7 @@ test_no_verify_bypasses() {
   _install_hook
 
   req_dir=$(fixture_create_req "req-001" "test" 6)
-  task=$(fixture_create_task "$req_dir" "001" "demo" "待确认")
+  task=$(fixture_create_task "$req_dir" "001" "demo" "待执行")
   req_wt=$(dirname "$(dirname "$(dirname "$task")")")
 
   _sed_force_status "$task" "执行中"

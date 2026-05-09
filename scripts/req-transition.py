@@ -126,16 +126,15 @@ def check_all_tasks_closed(req_dir: Path) -> tuple[bool, list[str]]:
                 if m:
                     status = m.group(1).strip()
                     break
-        if status and status in ("待确认", "执行中"):
+        if status and status in ("待执行", "执行中"):
             open_tasks.append(f"{tf.name} ({status})")
 
     return len(open_tasks) == 0, open_tasks
 
 
-def validate_forward(meta: dict, target: int, skip_stage: int | None, req_dir: Path) -> None:
+def validate_forward(meta: dict, target: int, req_dir: Path) -> None:
     """Validate a forward stage transition."""
     current = meta["stage"]
-    is_first = meta.get("is_first_req", False)
 
     if target <= current:
         print(f"Error: target stage {target} is not forward from current stage {current}. Use --rollback for backward transitions.", file=sys.stderr)
@@ -145,22 +144,9 @@ def validate_forward(meta: dict, target: int, skip_stage: int | None, req_dir: P
         print(f"Error: invalid stage {target}. Max is 7.", file=sys.stderr)
         sys.exit(1)
 
-    # Check sequential (allow skip of stage 3 and 4)
     expected_next = current + 1
 
-    # Handle skip
-    if skip_stage == 3:
-        if is_first:
-            print("Error: first req cannot skip stage 3.", file=sys.stderr)
-            sys.exit(1)
-        if current == 2 and target == 4:
-            expected_next = 4  # Allow 2 -> 4
-        elif current == 2 and target > 4:
-            print(f"Error: can only advance one stage at a time (current: {current}, target: {target}).", file=sys.stderr)
-            sys.exit(1)
-
     # Stage 4 auto-skip: 只有 DESIGN.md 有实质内容时才能跳过 stage 4
-    # is_first 标记不是跳过的依据——即便是后续 req，DESIGN.md 空也必须先过 stage 4 补齐
     if expected_next == 4 and target == 5:
         if check_design_md_has_content(req_dir):
             expected_next = 5  # Allow 3 -> 5 (skip 4)
@@ -172,7 +158,7 @@ def validate_forward(meta: dict, target: int, skip_stage: int | None, req_dir: P
             )
             sys.exit(1)
 
-    if target != expected_next and skip_stage is None:
+    if target != expected_next:
         print(f"Error: must advance to stage {expected_next} from {current} (got {target}).", file=sys.stderr)
         sys.exit(1)
 
@@ -214,7 +200,6 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Req stage transition")
     parser.add_argument("req_dir", help="Path to req directory")
     parser.add_argument("--to", type=int, required=True, dest="target", help="Target stage number")
-    parser.add_argument("--skip-stage", type=int, dest="skip_stage", help="Stage to skip (e.g., 3)")
     parser.add_argument("--rollback", action="store_true", help="Allow backward transition")
     args = parser.parse_args()
 
@@ -226,7 +211,7 @@ def main() -> None:
         validate_rollback(meta, args.target, req_dir)
         direction = "rollback"
     else:
-        validate_forward(meta, args.target, args.skip_stage, req_dir)
+        validate_forward(meta, args.target, req_dir)
         direction = "forward"
 
     # Execute transition

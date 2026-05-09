@@ -192,59 +192,75 @@ fi
 
 > 这两个字段的更新通常推迟到 task-execute 启动时由 agent 回填，避免 task-confirm 阶段在 task 分支多出"代码先于状态机"的 commit 触发 I-CT8。
 
-### 步骤 5：输出新窗口启动指令（v4 单窗口 lifecycle）
+### 步骤 5：检测 PENDING_COUNT（决定步骤 6 的命令分支）
 
-`/task-confirm` 只负责确认、依赖 gate 和创建 worktree；不启动 agent，不调用 `task-transition.py`。task 状态保持「待确认」，直到 PM 在新窗口运行 `/task-execute` 后由入口前置逻辑转换为「执行中」。
+`/task-confirm` 只负责确认、依赖 gate 和创建 worktree；不启动 agent，不调用 `task-transition.py`。task 状态保持「待执行」，直到 PM 在新窗口运行 `/task-execute` 后由入口前置逻辑转换为「执行中」。
 
 检测 `PENDING_COUNT`：
 
-- 范围：当前 req worktree（task-confirm 必须在 req worktree 里跑，cwd 唯一确定 req）下所有状态为「待确认」且 worktree 已建的 task。
-- 计数依据：task 文件状态为「待确认」，且 `.worktrees/<task-stem>` 已存在。
+- 范围：当前 req worktree（task-confirm 必须在 req worktree 里跑，cwd 唯一确定 req）下所有状态为「待执行」且 worktree 已建的 task。
+- 计数依据：task 文件状态为「待执行」，且 `.worktrees/<task-stem>` 已存在。
 
 启动模式（关键）：
 
 PM 在新终端窗口里**保持在当前 req worktree 目录**（不进 task worktree），用 `claude --add-dir $MAIN_REPO_ROOT` 启动新 Claude 会话。`--add-dir` 把主仓根加进 Bash 沙盒，让后续 `/task-execute` 入口能持久 cd 进 task worktree。如果不加 `--add-dir`，cd 会被 Claude Code 沙盒 reset，task-execute 失败。
 
-输出规则（必须把 `$MAIN_REPO_ROOT` 展开成 PM 可直接复制的绝对路径）：
-
-```bash
-echo "已创建 task worktree：$TASK_WORKTREE"
-echo "Task 状态保持「待确认」。"
-echo ""
-echo "在新终端窗口里（保持在 req worktree 当前目录）运行："
-echo "  claude --add-dir \"$MAIN_REPO_ROOT\""
-```
-
-进会话后跑：
-
-- `PENDING_COUNT <= 1`：
-  ```text
-  /task-execute
-  ```
-- `PENDING_COUNT > 1` 时，必须显式带短 ID，避免新窗口误选：
-  ```text
-  /task-execute task-NNN
-  ```
-
-中止流程：
-
-```text
-如果决定放弃：关闭新窗口，回主窗口告诉我「放弃 task-NNN」。
-状态仍为「待确认」，未进入执行阶段。
-```
-
 ### 步骤 6：给 PM 可复制命令输出
 
-```
-已准备 Task-<id>，执行方式：<EXECUTOR>[ / <MODEL>]
+**输出模板**（`$MAIN_REPO_ROOT` 必须展开成 PM 可直接复制的绝对路径；最后 `/task-execute` 那行按 PENDING_COUNT 选一条）：
 
-下一步：
-  1. 打开新终端窗口，保持在当前 req worktree 目录（不要 cd 走）
-  2. 启动 Claude（关键：必须加 --add-dir 主仓根，否则 task-execute 切不到 task worktree）：
-       claude --add-dir <主仓根绝对路径>
-  3. 进会话后跑 /task-execute（PENDING_COUNT > 1 时带短 ID：/task-execute task-NNN）
-  4. /task-status 查看所有 task
 ```
+已准备 Task-<id>
+
+📂 worktree
+   <TASK_WORKTREE 绝对路径>
+
+🚀 执行方式（当前 ▶ <EXECUTOR>[ / <MODEL>]）
+   ▶ <EXECUTOR>[ / <MODEL>]                       ← 当前选这个
+     <executor 2> / <默认 model>
+     <executor 3> / <默认 model>
+     <executor 4>（说明，如 manual = PM 自己写代码）
+
+   想换说一声（例：「换 claude-code sonnet」）；不换就直接看下一步。
+
+▶️ 下一步——开新终端窗口，保持当前 req worktree 目录（别 cd 走）：
+
+   claude --add-dir <主仓根绝对路径>
+   /task-execute                  ← PENDING_COUNT == 1
+   /task-execute task-<id>        ← PENDING_COUNT > 1（必须带短 ID 避免新窗口误选）
+
+主窗口随时跑 /task-status 看 task 进度。
+```
+
+**执行方式列表渲染规则**（必须列全 4 项，按当前 → 其余字母序）：
+
+1. **当前选的那个置顶**，行首 `▶ ` 标记，后面接 `<EXECUTOR> / <MODEL>` 全名
+2. **其余 3 个按字母序列出**（`claude-code` → `codex` → `cursor-agent` → `manual` 中除当前外的 3 个）
+3. 每个 executor 的展示规则：
+   - `claude-code / sonnet`（默认 model = `sonnet`；后括号附`也可换 opus / haiku`只在第一次出现 claude-code 时加）
+   - `codex / auto`（默认 `auto`）
+   - `cursor-agent / auto`（默认 `auto`）
+   - `manual（你自己写代码，task-execute 不派发 agent）`
+4. 4 行执行方式块结束后，固定一行**反悔提示**：`想换说一声（例：「换 claude-code sonnet」）；不换就直接看下一步。`
+
+**实际渲染示例**（当前 = `codex / auto`）：
+
+```
+🚀 执行方式（当前 ▶ codex / auto）
+   ▶ codex / auto
+     claude-code / sonnet（也可换 opus / haiku）
+     cursor-agent / auto
+     manual（你自己写代码，task-execute 不派发 agent）
+
+   想换说一声（例：「换 claude-code sonnet」）；不换就直接看下一步。
+```
+
+**模板要点**：
+- 标题块用 emoji 锚点（📂 worktree / 🚀 执行方式 / ▶️ 下一步）让 PM 视线快速分段
+- worktree 路径独立成段、缩进展示，不再跟"已准备 Task-X"挤同一行
+- 执行方式必须**列全**，PM 看到所有可选才能判断要不要换；"想换告诉我"只列一个当前选很难触发 PM 的反悔意识
+- `/task-execute` 那行根据 PENDING_COUNT 输出**其中一条**（不要把两条都贴给 PM 让他选；AI 算 PENDING_COUNT 后直接选）
+- **不输出**"如果决定放弃……"中止流程——PM 真要放弃直接说「放弃 task-NNN」即可，不在主路径列出避免噪音
 
 ## Rules
 
@@ -253,4 +269,5 @@ echo "  claude --add-dir \"$MAIN_REPO_ROOT\""
 - 状态转换必须通过 task-transition.py，不能手动改状态字段
 - /task-confirm 不转换为「执行中」；转换发生在 /task-execute 入口前置
 - 输出给 PM 的 `claude --add-dir <path>` 必须是展开后的绝对路径（不能是 `$MAIN_REPO_ROOT` 字面量），让 PM 能直接复制粘贴执行
+- 步骤 6 输出：执行方式块**必须列全 4 项**（claude-code / codex / cursor-agent / manual），▶ 标当前选，紧跟反悔提示；worktree 路径用 📂 emoji 标段；下一步命令用 ▶️ emoji 标段。不主动列"如果决定放弃……"中止流程，PM 真要放弃直接说「放弃 task-NNN」
 - plan review 是 PM 自跑推荐项（I-RV1/I-RV2），不当 confirm gate；步骤 1.5 仅做 informational 摘要

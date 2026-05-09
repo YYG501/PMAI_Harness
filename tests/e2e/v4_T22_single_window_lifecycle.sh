@@ -38,7 +38,7 @@ test_single_window_lifecycle() {
   fixture_setup
 
   req_dir=$(fixture_create_req "req-001" "single" 6)
-  task=$(fixture_create_task "$req_dir" "001" "lifecycle" "待确认" "(无)")
+  task=$(fixture_create_task "$req_dir" "001" "lifecycle" "待执行" "(无)")
 
   # task-confirm simulation: dependency gate has no dependencies, create worktree.
   # v4.5：create-task-worktree.sh 自动把 task md 从 req 分支移走（task 分支独家）。
@@ -49,8 +49,8 @@ test_single_window_lifecycle() {
   task_in_wt=$(_copy_task_path_to_task_worktree "$req_dir" "$task_wt" "$task")
 
   status=$(python3 "$TASK_TRANSITION" "$task_in_wt" --get-status)
-  if [ "$status" != "待确认" ]; then
-    _fail "task-confirm simulation should keep 待确认, got $status"
+  if [ "$status" != "待执行" ]; then
+    _fail "task-confirm simulation should keep 待执行, got $status"
     fixture_teardown
     return
   fi

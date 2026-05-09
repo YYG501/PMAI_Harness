@@ -66,7 +66,7 @@ _setup_dependency_fixture() {
   fixture_setup
   REQ_DIR=$(fixture_create_req "req-001" "deps" 6)
   DEP_TASK=$(fixture_create_task "$REQ_DIR" "001" "base" "执行中")
-  TARGET_TASK=$(fixture_create_task "$REQ_DIR" "002" "dependent" "待确认")
+  TARGET_TASK=$(fixture_create_task "$REQ_DIR" "002" "dependent" "待执行")
   _write_deps "$TARGET_TASK" "- task-001 (基础能力)"
   export REQ_DIR DEP_TASK TARGET_TASK
 }

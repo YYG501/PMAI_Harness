@@ -15,7 +15,7 @@ test_summary_counts_active_tasks() {
   # 「待验收」于 2026-05-08 合并入「执行中」 — commit 后呈交期间仍是「执行中」
   fixture_create_task "$req_dir" "001" "running" "执行中" >/dev/null
   fixture_create_task "$req_dir" "002" "review" "执行中" >/dev/null
-  pending_task=$(fixture_create_task "$req_dir" "003" "ready" "待确认")
+  pending_task=$(fixture_create_task "$req_dir" "003" "ready" "待执行")
   fixture_create_task "$req_dir" "004" "done" "已完成" >/dev/null
 
   mkdir -p "$FIXTURE_DIR/.worktrees/task-003-ready"

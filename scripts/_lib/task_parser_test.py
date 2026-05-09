@@ -28,7 +28,7 @@ from _lib.task_parser import (
 
 V1_TASK_MD = """# Task 001: Test
 
-**状态：** 待确认
+**状态：** 待执行
 **分支：** task-001-test
 **worktree：** /path/to/wt
 **创建时间：** 2026-04-29
@@ -44,7 +44,7 @@ V2_TASK_MD = """# Task 001: Test
 
 | | |
 |---|---|
-| **状态** | 待确认 |
+| **状态** | 待执行 |
 | **分支** | task-001-test |
 | **worktree** | /path/to/wt |
 | **创建时间** | 2026-04-29 |
@@ -95,13 +95,13 @@ class TestStatusParsing(unittest.TestCase):
         with tempfile.TemporaryDirectory() as d:
             pm = Path(d) / "task-001-test.md"
             pm.write_text(V2_TASK_MD)
-            self.assertEqual(get_task_status(pm), "待确认")
+            self.assertEqual(get_task_status(pm), "待执行")
 
     def test_v1_status(self):
         with tempfile.TemporaryDirectory() as d:
             pm = Path(d) / "task-001-test.md"
             pm.write_text(V1_TASK_MD)
-            self.assertEqual(get_task_status(pm), "待确认")
+            self.assertEqual(get_task_status(pm), "待执行")
 
 
 class TestBranchParsing(unittest.TestCase):
@@ -200,7 +200,7 @@ class TestV2FieldBoundaries(unittest.TestCase):
 
     def test_fullwidth_pipe_not_supported(self):
         """中文管道符 ｜ 不支持，返回 None（约束已文档化）。"""
-        text = "｜ **状态** ｜ 待确认 ｜"
+        text = "｜ **状态** ｜ 待执行 ｜"
         self.assertIsNone(parse_status_from_text(text))
 
 
@@ -214,8 +214,8 @@ class TestExceptionPaths(unittest.TestCase):
 
     def test_duplicate_field_returns_first_match(self):
         """字段重复时返回第一次匹配。"""
-        text = "**状态：** 待确认\n**状态：** 执行中"
-        self.assertEqual(parse_status_from_text(text), "待确认")
+        text = "**状态：** 待执行\n**状态：** 执行中"
+        self.assertEqual(parse_status_from_text(text), "待执行")
 
 
 class TestSectionEdgeCases(unittest.TestCase):
@@ -300,7 +300,7 @@ class TestCLIExitCodes(unittest.TestCase):
                 env=_CLI_ENV,
             )
             self.assertEqual(result.returncode, 0)
-            self.assertEqual(result.stdout.strip(), "待确认")
+            self.assertEqual(result.stdout.strip(), "待执行")
 
     def test_cli_read_section_not_found_exit3(self):
         with tempfile.TemporaryDirectory() as d:

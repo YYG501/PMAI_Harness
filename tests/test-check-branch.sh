@@ -194,11 +194,11 @@ test_reject_direct_task_status_edit() {
   start_test "I-CB6 reject direct edit to task 状态 field"
   fixture_setup
   req_dir=$(fixture_create_req "req-001" "test" 3)
-  task_file=$(fixture_create_task "$req_dir" "001" "impl" "待确认")
+  task_file=$(fixture_create_task "$req_dir" "001" "impl" "待执行")
 
   cd "$FIXTURE_DIR/.worktrees/req-001-test"
-  # Edit: 把状态从 待确认 改成 执行中
-  old='**状态：** 待确认'
+  # Edit: 把状态从 待执行 改成 执行中
+  old='**状态：** 待执行'
   new='**状态：** 执行中'
   capture_check "Edit" "$task_file" "$old" "$new" ""
   if [ "$RC" = "2" ] && echo "$OUT" | grep -q '"deny"' && echo "$OUT" | grep -q "task-transition"; then
@@ -269,11 +269,11 @@ test_outside_repo_tmp_allowed() {
 # ---------------------------------------------------------------
 
 test_task_status_gate_rejects_when_pending() {
-  start_test "I-CB10 reject task worktree write when status=待确认"
+  start_test "I-CB10 reject task worktree write when status=待执行"
   fixture_setup
 
   req_dir=$(fixture_create_req "req-001" "test" 6)
-  task=$(fixture_create_task "$req_dir" "010" "gate" "待确认" "/qa")
+  task=$(fixture_create_task "$req_dir" "010" "gate" "待执行" "/qa")
   task_wt=$(fixture_create_task_worktree "$task" "req-001-test")
 
   # Attempt to write a code file from inside the task worktree
@@ -282,7 +282,7 @@ test_task_status_gate_rejects_when_pending() {
   if [ "$RC" = "2" ] && echo "$OUT" | grep -q "I-CB10"; then
     pass_test
   else
-    _fail "should deny code write when task status=待确认 (rc=$RC, out=$OUT)"
+    _fail "should deny code write when task status=待执行 (rc=$RC, out=$OUT)"
   fi
   fixture_teardown
 }

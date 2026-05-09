@@ -4,7 +4,7 @@
 Enforces INVARIANTS.md I-CT7 and I-CT8:
 
 - I-CT7: Event stream must prove the full state-machine progression:
-    待确认→执行中, 执行中→已完成 status_changed events,
+    待执行→执行中, 执行中→已完成 status_changed events,
     plus at least one execution_started or execution_manual_completed.
     （2026-05-08: 「待验收」已合并到「执行中」 — commit 不切状态，PM 通过呈交块时直接转「已完成」）
 - I-CT8: Each code commit on the task branch must have a committer timestamp
@@ -91,9 +91,9 @@ def audit_ct7(events: list[dict]) -> list[str]:
     """Return a list of violations (empty = pass)."""
     violations: list[str] = []
 
-    # 入口转换强制：待确认→执行中
-    if not _has_transition(events, "待确认", "执行中"):
-        violations.append("I-CT7: 事件流缺少 status_changed(待确认→执行中)")
+    # 入口转换强制：待执行→执行中
+    if not _has_transition(events, "待执行", "执行中"):
+        violations.append("I-CT7: 事件流缺少 status_changed(待执行→执行中)")
 
     # 收口转换：接受两种合法路径
     #   1) 直接式（当前规范）：执行中→已完成

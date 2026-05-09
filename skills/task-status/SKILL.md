@@ -41,11 +41,11 @@ python3 .claude/scripts/status-view.py
 📋 task 概览: 执行中 N1 / 待启动 N2 / 已完成 N3
 ```
 
-其中「待启动」指状态为「待确认」且 worktree 已建的 task；「执行中」覆盖 AI 实现期 + PM 验收期（commit 不切状态，PM 通过呈交块时直接转「已完成」）。
+其中「待启动」指状态为「待执行」且 worktree 已建的 task；「执行中」覆盖 AI 实现期 + PM 验收期（commit 不切状态，PM 通过呈交块时直接转「已完成」）。
 
 逐 task 提示规则：
 
-- 扫到「待确认」状态且 worktree 已建的 task，输出：
+- 扫到「待执行」状态且 worktree 已建的 task，输出：
   ```text
   等待 PM 在新窗口启动（跑 /task-execute task-NNN）
   ```
@@ -63,7 +63,7 @@ Task 状态：
   ✅ task-001 数据模型 — 已完成
   🔄 task-002 API 接口 — 执行中（实现中，最后活动：自审 - /qa pass）
   🔄 task-003 前端组件 — 执行中（已 commit 待 PM 验收，可跑 /task-submit 看呈交块）
-  ⏳ task-004 导出入口 — 待确认：等待 PM 在新窗口启动（跑 /task-execute task-004）
+  ⏳ task-004 导出入口 — 待执行：等待 PM 在新窗口启动（跑 /task-execute task-004）
 下一步：处理执行中 task，或启动待启动 task
 ```
 

@@ -33,20 +33,21 @@ python3 "$REPO_ROOT/.claude/scripts/check-worktree-residue.py" || true
 
    `/new-req` 在主对话写完 brief.md 后就 handoff 退场，PM 在 worktree 内新对话里第一次跑 `/req-stage-gate` 时，先做一次 brief 二次确认——给 PM 重新审视 brief.md 的机会，再启动重的 `/req-analysis`。
 
-   AI 重新读一遍 `brief.md`，给一句话摘要 + A/B 闸门：
+   AI 重新读一遍 `brief.md`，给一句话摘要 + 对话式确认（v2 风格）：
 
    ```
-   📝 brief.md：`$ACTIVE_REQ_DIR/brief.md`
+   ✅ brief.md
+      <$ACTIVE_REQ_DIR/brief.md 绝对路径>
 
-   一句话摘要：[新对话重新读出来的核心内容，一行]
+   📋 一句话摘要
+      <新对话重新读出来的核心内容，一行>
 
-   A) 确认，进入 stage 2（调用 /req-analysis）
-   B) 我要修改（说明改哪里）
+   ——这份 brief 就这样定吗？OK 我开始做需求分析；想改的说哪里。
    ```
 
-   - PM 选 A → 继续步骤 3 调 `/req-analysis`
-   - PM 选 B → 按 PM 指示改 `brief.md`，改完回到本步骤重新出 A/B
-   - **brief.md 修改完只输出"已改完，请确认"的二次摘要 + A/B**，不贴全文（参见本文末 `Rules` 的"确认门只给路径 + 一句话摘要"规则）
+   **PM 回答的内部分流**（不列 A/B 字母）：
+   - PM 说「OK / 通过 / 没问题 / 定了」等 → 继续步骤 3 调 `/req-analysis`
+   - PM 提具体修改 → 按 PM 指示改 `brief.md`，改完后**只输出"已改完"二次摘要**（同一份模板，"一句话摘要"段填新内容），不贴全文
 
 3. **调用 `/req-analysis`**
    - skill 内部完成：读 brief + CONTEXT、第一性原理 4 层分析、写 analysis.md（含 10 章 + `## 未决问题` section）、调 analysis-reviewer 一次后把报告原文贴 chat，让 PM 三选一（AI 改 / PM 自改 / 接受现状）
@@ -62,33 +63,38 @@ python3 "$REPO_ROOT/.claude/scripts/check-worktree-residue.py" || true
 
    - **退出码 1**（有未答）→ 确认门进入"答题模式"，stdout 给出未答题号 + 行号：
      ```
-     📝 analysis.md 已写入：`$ACTIVE_REQ_DIR/analysis.md`
+     ✅ analysis.md 已写入
+        <$ACTIVE_REQ_DIR/analysis.md 绝对路径>
 
-     一句话摘要：[本次分析的核心结论，一行]
+     📋 一句话摘要
+        <本次分析的核心结论，一行>
 
-     ⚠️ 本 analysis 有 N 个未决问题需要 PM 先回答，stage 3 暂不开放。
+     ⚠️ 这份 analysis 留了 <N> 个未决问题需要你先回答——推进到下一步前必须先答完，不能跳过。
 
-     A) 逐题回答（推荐，我会把答案写回 analysis.md 的 §未决问题）
-     B) 修改 analysis（说明改哪里）
+     要怎么处理？
+      - 我逐题问你（推荐，答完我把答案写回 analysis.md）
+      - 你想先改 analysis 某段（说哪里）
      ```
-     **不允许**提供"直接进 stage 3"的选项——这是硬规则，没有例外也没有 FORCE 逃生舱
+     **不允许**提供"直接推进"选项——这是硬规则，没有例外也没有 FORCE 逃生舱
    - **退出码 0**（全部已答 / section 写"本 req 无未决问题" / section 不存在）→ 确认门进入"推进模式"：
      ```
-     📝 analysis.md 已写入：`$ACTIVE_REQ_DIR/analysis.md`
+     ✅ analysis.md 已写入
+        <$ACTIVE_REQ_DIR/analysis.md 绝对路径>
 
-     一句话摘要：[本次分析的核心结论，一行]
-     [若 review_outcome=ACCEPTED_WITH_ISSUES，加一行：⚠️ analysis 评审 NEEDS_REVISION，PM 已显式接受继续推进]
+     📋 一句话摘要
+        <本次分析的核心结论，一行>
 
-     A) 确认，进入 stage 3（方案设计）
-     B) 我要修改（说明改哪里）
-     C) 跳过 stage 3 直接到 stage 5（后续 req 可选，first req 不建议）
+     [若 review_outcome=ACCEPTED_WITH_ISSUES 加一行：]
+     ⚠️ 这份 analysis 评审标了"可以继续但有待改进"，你之前显式接受了，继续推进。
+
+     ——这份 analysis 就这样定吗？OK 我推进到方案设计；想改的说哪里。
      ```
-     （first req 不显示 C 选项）
+     （所有 req 默认都走方案设计阶段，不再提供"跳过"选项）
 
-5. **PM 回答未决问题的处理：**
-   - PM 选 A 后，逐题展示问题，PM 每回答一题，把答案写回 analysis.md 对应 `**PM 回答：**` 后面
+5. **PM 回答未决问题的处理**：
+   - PM 选"逐题问你"分支后，逐题展示问题，PM 每回答一题，把答案写回 analysis.md 对应 `**PM 回答：**` 后面
    - 所有问题答完 → 重跑 `check-open-questions.py` 验证（退出码 0）→ 解锁推进选项 → 回到步骤 4 的"推进模式"
-   - PM 在答题过程中临时想改 analysis 某段 → 允许中途切到 B（修改 analysis）→ 改完后**回到步骤 3 重调 /req-analysis**（analysis 改过，reviewer 必须重跑一次；由 /req-analysis 步骤 4-5 的"调一次 + 三选一"机制保证），再走步骤 4 闸门
+   - PM 在答题过程中临时想改 analysis 某段 → 允许中途切到"改 analysis"分支 → 改完后**回到步骤 3 重调 /req-analysis**（analysis 改过，reviewer 必须重跑一次；由 /req-analysis 步骤 4-5 的"调一次 + 三选一"机制保证），再走步骤 4 闸门
 
 推进命令（确认进入 stage 3 后才执行）：
 ```bash
@@ -100,26 +106,41 @@ python3 .claude/scripts/req-transition.py "$ACTIVE_REQ_DIR" --to 2
 PM 选择进入 stage 3 时：
 
 1. **调用 `/req-solution`**
-   - skill 内部完成：Discovery 缺口提问（如有）、写 solution.md（含 10 章 + Mermaid + 7.2 各模块说明）
-   - skill 返回时 solution.md 已落盘
-2. **输出"推荐 review 工具"区块给 PM**（不自动调任何 review）：
+   - skill 内部完成：Discovery 缺口提问（如有）、写 solution.md（含 10 章 + Mermaid + 7.2 各模块说明）、跑 lint 并让 PM 在 skill 内完成所有 warning 决策
+   - skill 返回时 solution.md 已落盘、所有 warnings 已 PM 处理完毕（详见 `req-solution/SKILL.md` 步骤 5.5：warnings 在 skill 内闭环，**不**传递给 stage-gate 二次显示）
+2. **输出确认门**（一份完整模板，把产物落地 / 摘要 / 可选 review / 确认问句拼成单次输出；不分两轮发）：
 
    ```
-   ✅ solution.md 已写入：$ACTIVE_REQ_DIR/solution.md
+   ✅ solution.md 已写入
+      <$ACTIVE_REQ_DIR/solution.md 绝对路径>
 
-   可选 review（PM 自行选跑，跑完把结论贴回这里我帮你 append 事件）：
-     /plan-ceo-review     — 战略：范围与产品野心
-     /plan-eng-review     — 架构、数据流、边界
-     /plan-design-review  — 交互与视觉层问题
-     /autoplan            — 上述 plan-* 的批量打包
+   📋 一句话摘要
+      <一行核心决策摘要——本次方案的关键选择 / 重做范围 / 决策数 等>
 
-   跑哪几个由你决定，全跳也可以。
+   📊 可选 review（你自跑，跑完贴结论我帮你 append 事件）
+      /plan-ceo-review     — 战略：范围与产品野心
+      /plan-eng-review     — 架构、数据流、边界
+      /plan-design-review  — 交互与视觉层问题
+      /autoplan            — 上述 plan-* 的批量打包
+
+      跑哪几个你定，全跳也行。
+
+   ——这份方案就这样定吗？OK 我就把方案设计阶段定下来，进入下一步（设计系统建立）；想改的地方说哪里。
    ```
+
+   **模板要点**：
+   - 三段标题用 emoji 锚点（✅ / 📋 / 📊）让 PM 视线快速分段
+   - 路径独立缩进，不挤标题行
+   - **不显示** `.engineering.md` 文件名 / hash 值 / "reconcile 同步" / "行数 lint" / "进入 stage 3"等工程黑话（PM 视角只关心 PM 视图主文件 + 下一阶段名称；详见 `task-spec/SKILL.md` 步骤 12 上方禁词清单，本闸门同样适用）
+   - **禁止再加 ⚠️ lint 待办 / lint warnings 摘要等"传话块"**：lint 处理已在 /req-solution 内闭环，PM 在 stage-gate 不需要再看一遍自己几秒前的决策（这种二次显示用了 PM 不熟悉的内部术语—"骨架 / 合法屏幕字 / 退出时已确认的处理方式"—只会让 PM 困惑而无 actionable 内容）
+   - 确认问句对话式：「这份方案就这样定吗？OK 我就……；想改的说哪里。」不列 A/B 字母选项也不列"放弃"
 
    PM 跑完任一 review 后报告结论 → AI 调 `task-events.py append` 记 `plan_review_completed`（task 文件不存在时此处可省略，仅做口述确认）；事件流仅作审计记录，不当 gate（I-RV1/I-RV2）。
-3. **确认门**：只给绝对路径（`$ACTIVE_REQ_DIR/solution.md`）+ 一句话摘要；review 结果（如有）直接贴 chat。问 PM：
-   - PM 确认 → 进入 **3.5 reconcile 步骤**，再推进
-   - PM 提修改意见 → 回步骤 1 调 `/req-solution`（**revise 模式**：prompt 含 "PM 在确认门提了修改：…"；skill 只改 PM 视图、不动工程合同、hash 留 stale）→ 改完后重新输出推荐区块（PM 可决定要不要再跑一遍 review）→ 再次确认
+
+3. **PM 回答的内部分流**（chat 不列 A/B 选项；按 PM 自然语言意图）：
+   - PM 说「OK / 通过 / 没问题 / 定了」等 → 走"确认"分支：进入 3.5 reconcile + 3.6 行数 lint（PM 看不到这两步，AI 内部默默跑），再 `req-transition.py --to 3`
+   - PM 提具体修改意见 → 走"修改"分支：回步骤 1 调 `/req-solution`（**revise 模式**：prompt 含 "PM 在确认门提了修改：…"；skill 只改 PM 视图、不动工程合同、hash 留 stale）→ 改完后重新输出步骤 2 完整模板（PM 可决定要不要再跑一遍 review）→ 再次询问
+   - PM 说「放弃这个 req / 不做了」 → 走"放弃"分支：提示 PM 跑 `/cancel-req`（**chat 模板里不主动列出此选项**，PM 主动提才走）
 
 3.5 **reconcile 步骤**（`_shared/pm-view/input-flow.md` §9.6，PM 选确认后、`req-transition.py` 之前必跑）：
 
@@ -137,36 +158,34 @@ stage-gate 在 stage 2→3 PM 已确认 solution.md，进入 reconcile：
 
 skill 返回 reconcile 完成 / no-op 后，stage-gate 跑步骤 3.6 行数 lint，再跑 `req-transition.py --to 3`。
 
-3.6 **行数 lint**（v2 文档输出深度指引硬约束）：
+3.6 **行数 lint**（v2 文档输出深度指引硬约束；PM 看不到这一步，除非 lint 报超限需要决策）：
 
 ```bash
 python3 .claude/scripts/check-engineering-doc-size.py --req-dir "$ACTIVE_REQ_DIR"
 ```
 
 - **退出 0** → 直接进推进；
-- **退出 1（有文件超限）** → stage-gate **不直接硬阻塞**，而是给 PM 选项：
+- **退出 1（有文件超限）** → stage-gate **不直接硬阻塞**，给 PM 一个对话式弹窗（不列 A/B/C 字母）：
 
   ```
-  ⚠️ solution.engineering.md 超过原型档行数上限（实测 N 行 / 上限 300 行）
-  超限通常意味着 AI 重抄了 PM 视图内容（参见 lint 输出的修法）。
+  ⚠️ 工程版方案文档超出长度上限（实测 <N> 行 / 上限 300 行）
 
-  A) 调 /req-solution（reconcile 模式）让 AI 裁剪重写超限段落（推荐）
-  B) PM 自己改文件后回来选 A/C
-  C) 接受超限，强制推进（请说明理由，记到 `[OVERRIDE-DOCSIZE]` 注释里）
+  超限通常是 AI 把 PM 视图内容重抄到工程版了——把这部分压回引用通常就修好。
 
-  请选 A / B / C：
+  要怎么办？
+   - 让我裁剪重写超限段落（推荐）
+   - 你自己改完，告诉我让我再 lint 一次
+   - 接受超限直接推进（说一下理由，我记到文件注释里作存档）
+
+  你选哪种？
   ```
 
-  - PM 选 A → 调 /req-solution（reconcile 模式）+ prompt 含 "lint 报超限：N 行；按强制引用规则裁剪 §X / §Y" → 完成后回来重跑 lint（最多 3 次循环，仍超限时停下问 PM）
-  - PM 选 B → 等 PM 改完，回 3.6 重跑 lint
-  - PM 选 C → 在 `solution.engineering.md` 末尾追加 `<!-- OVERRIDE-DOCSIZE: <YYYY-MM-DD> reason: <PM 理由> -->`，记入 `req-meta.json` 的 `overrides` 字段后放行
+  **PM 回答的内部分流**（按自然语言意图，不列字母）：
+   - PM 说「裁剪 / 让你改 / 推荐那个」等 → 调 /req-solution（reconcile 模式）+ prompt 含 "lint 报超限：N 行；按强制引用规则裁剪 §X / §Y" → 完成后回来重跑 lint（最多 3 次循环，仍超限时停下问 PM）
+   - PM 说「我改完了 / 我自己改 / 改好了再 lint」 → 等 PM 改完，回 3.6 重跑 lint
+   - PM 说「接受超限 / 强制推进，理由是 X」 → 在 `solution.engineering.md` 末尾追加 `<!-- OVERRIDE-DOCSIZE: <YYYY-MM-DD> reason: <PM 理由> -->`，记入 `req-meta.json` 的 `overrides` 字段后放行
 
-PM 选择跳过 stage 3 时（不调 /req-solution，也不跑 reconcile / lint）：
-```bash
-python3 .claude/scripts/req-transition.py "$ACTIVE_REQ_DIR" --to 5 --skip-stage 3
-```
-
-正常推进（reconcile + lint 完成后）：
+推进（reconcile + lint 完成后）：
 ```bash
 python3 .claude/scripts/req-transition.py "$ACTIVE_REQ_DIR" --to 3
 ```
@@ -174,13 +193,23 @@ python3 .claude/scripts/req-transition.py "$ACTIVE_REQ_DIR" --to 3
 ### Stage 3 → 4（方案设计 → 设计系统建立）
 
 1. 检查 `docs/DESIGN.md` 是否已有实质内容
-2. **已有内容**：**问 PM** "设计系统已有，这次需要更新吗？"
-   - PM 说不用 → 跳到 stage 5
+2. **已有内容**：对话式问 PM：
+
+   ```
+   🎨 设计系统已存在（docs/DESIGN.md 有内容）
+
+   这次需要更新设计系统吗？
+    - 不用，直接跳到 task 规划
+    - 要更新（说一下哪里要改）
+   ```
+
+   - PM 说「不用 / 不需要 / 跳过」 → 直接推进到 stage 5
      ```bash
      python3 .claude/scripts/req-transition.py "$ACTIVE_REQ_DIR" --to 5
      ```
-   - PM 说要更新 → 进入 stage 4
-3. **无内容（空骨架）**：进入 stage 4
+   - PM 提具体修改意图 → 进入 stage 4
+
+3. **无内容（空骨架）**：直接进入 stage 4，无需问 PM
 
 推进到 stage 4：
 ```bash
@@ -190,7 +219,14 @@ python3 .claude/scripts/req-transition.py "$ACTIVE_REQ_DIR" --to 4
 ### Stage 4（设计系统建立）
 
 1. 调用 `/design-consultation`（gstack skill）建立 `docs/DESIGN.md`
-2. PM 确认设计系统后，确认门："设计系统已建立，是否进入 task 规划？"
+2. PM 确认设计系统后，对话式确认门：
+
+   ```
+   ✅ 设计系统已建立
+      docs/DESIGN.md
+
+   ——设计系统就这样定吗？OK 我推进到 task 规划；想改的说哪里。
+   ```
 
 推进：
 ```bash
@@ -210,21 +246,28 @@ python3 .claude/scripts/req-transition.py "$ACTIVE_REQ_DIR" --to 5
 
 1. 检查 `task-plan.md` 存在。
 2. 检查 `task-plan.md` 包含 task 标题列表和 `## 变更记录` section。
-3. **输出"推荐 review 工具"区块给 PM**（不自动调任何 review）：
+3. **输出确认门**（一份完整模板，对齐 stage 2→3 风格）：
 
    ```
-   ✅ task-plan.md 已写入：$ACTIVE_REQ_DIR/task-plan.md
+   ✅ task-plan.md 已写入
+      <$ACTIVE_REQ_DIR/task-plan.md 绝对路径>
 
-   可选 review（PM 自行选跑，跑完贴结论）：
-     /plan-eng-review     — 拆分合理性、依赖、并行性
-     /plan-design-review  — UI task 划分是否完整
-     /autoplan            — 上述 plan-* 的批量打包
+   📋 一句话摘要
+      <共 N 个 task；业务模块 X 个 + 基础设施 Y 个；最长依赖链 …>
 
-   跑哪几个由你决定，全跳也可以。具体 task 文件在 stage 6 的 /task-spec 阶段还会再次推荐 review。
+   📊 可选 review（你自跑，跑完贴结论我帮你 append 事件）
+      /plan-eng-review     — 拆分合理性、依赖、并行性
+      /plan-design-review  — UI task 划分是否完整
+      /autoplan            — 上述 plan-* 的批量打包
+
+      跑哪几个你定，全跳也行。具体 task 文件在下一阶段（task 执行）的 /task-spec 还会再推荐一次。
+
+   ——这份 task 规划就这样定吗？OK 我推进到 task 执行阶段；想改的说哪里。
    ```
-4. 确认门（只给绝对路径 + 一句话摘要，不贴全文；review 结果（如有）直接贴 chat）："Task 规划完成，是否进入执行阶段？"
-   - PM 确认 → 推进 stage 6。
-   - PM 提修改意见 → 回 `/task-plan` 改 `task-plan.md` → 改完后重新输出推荐区块 → 再次确认。
+
+4. **PM 回答的内部分流**（不列字母）：
+   - PM 说「OK / 通过 / 没问题 / 定了」等 → 推进 stage 6
+   - PM 提具体修改意见 → 回 `/task-plan` 改 `task-plan.md` → 改完后重新输出步骤 3 完整模板 → 再次询问
 
 > stage 5→6 只审阅 `task-plan.md`；具体 task 文件由 stage 6 的 `/task-spec` 逐个生成，写完后由 task-spec 步骤 8 再次输出推荐 review 区块。
 
@@ -243,7 +286,17 @@ python3 .claude/scripts/req-transition.py "$ACTIVE_REQ_DIR" --to 6
    - task branch has been merged to req branch（等价于 `/close-task` 已跑完）。
    - task worktree has been cleaned up。
    - C2 half-close detection（CRITICAL）：如果 task 的 `## 文档偏差` section 同时含 `<!-- SKIP_DOC_UPDATE:` 字符串 AND `cleanup_status="pending"` 字符串（即 close-task 写入的 SKIP_DOC_UPDATE marker 且 cleanup 尚未完成），说明曾用 `close-task --skip-doc-update` 半关闭且 PM 还没补做沉淀；NOT treated as complete close，必须阻塞推进并列出 cleanup TODOs。`cleanup_status="done"` 视为已 cleanup（marker 保留作 audit trail），不阻塞。
-3. All satisfied → confirmation gate: "所有 task 已完成并关闭，是否关闭此需求？"
+3. All satisfied → 对话式确认门：
+
+   ```
+   ✅ 所有 task 已完成并关闭
+
+   📋 一句话摘要
+      <N 个 task 全部 close、worktree 全部清理>
+
+   ——这个需求就关闭吗？OK 我推进到关闭流程；想再开新 task 说一声。
+   ```
+
 4. Not satisfied → list which tasks are missing which steps。
 
 缺失项输出格式：
@@ -279,17 +332,14 @@ python3 .claude/scripts/req-transition.py "$ACTIVE_REQ_DIR" --to 7
 
 - 每个 stage 结束必须显式问 PM 确认，不能自动跳过确认门
 - **确认门只给绝对路径 + 一句话变更摘要，不贴文档全文。** PM 的 IDE 已经挂在 worktree 上，文件在左侧目录树里可见，不需要把内容贴回 chat
-- **确认门格式**：
-  ```
-  📝 <filename> 已写入：`$ACTIVE_REQ_DIR/<filename>`
-
-  一句话摘要：[最新变更或核心内容，一行]
-
-  A) 确认，进入 stage <N+1>
-  B) 我要修改（请说明改哪里）
-  ```
+- **确认门标准格式**（v2，对话式；stage 2→3 已落地见上方步骤 2 模板，其他 stage 后续逐步对齐）：
+  - emoji 锚点分段（✅ 路径 / 📋 摘要 / 📊 可选 review；条件块 ⚠️ lint 待办）
+  - 路径独立缩进，不挤标题行
+  - 文末用对话式问句结尾（如「这份方案就这样定吗？OK 我就……；想改的说哪里。」），**不列 A/B 字母选项**
+  - **不主动列"放弃 req"选项**（PM 真要放弃直接说「放弃这个 req / cancel」，AI 提示走 `/cancel-req`）
+- **PM chat 输出禁工程黑话**（与 `task-spec/SKILL.md` 步骤 12 上方禁词清单等价）：所有 stage 的确认门 / lint 弹窗 / 任何给 PM 看的 chat 文本里**严禁**出现 `hash` / 12 位 hash 值 / `synced_pm_view_hash` / `reconcile` / `reconcile 模式` / `stale` / `行数 lint` / `步骤 N.M` 内部编号 / `lazy sync` / `MODE=revise` 等内部状态机术语；解释段也禁出现 `.engineering.md` 文件名（路径行除外）。这些都是 AI 内部记账，PM 没有动作可做
 - **review 工具一律 PM 自跑**（I-RV1）：stage-gate 在产物写完后只输出推荐清单，不自动调任何 `/plan-*-review` / `/review` / `/qa` / `/design-review`。PM 跑完任一 review 后口述结论，AI 调 `task-events.py append` 机械记录事件作为审计痕迹；事件流不当 gate
-- **stage 2→3 双文件 reconcile**（`_shared/pm-view/input-flow.md` §9.6）：PM 选确认后、`req-transition.py --to 3` 之前必跑 `/req-solution`（reconcile 模式）对齐 `solution.engineering.md`；revise 模式时只改 PM 视图、工程合同保持 stale
+- **stage 2→3 双文件 reconcile**（`_shared/pm-view/input-flow.md` §9.6）：PM 选确认后、`req-transition.py --to 3` 之前必跑 `/req-solution`（reconcile 模式）对齐 `solution.engineering.md`；revise 模式时只改 PM 视图、工程合同保持 stale。**这一步 PM 看不到**（AI 内部默默跑），完成后直接推进，不发"reconcile 完成"通知
 - review 结果（PM 跑完贴回 chat 的）允许直接贴 chat——review 是讨论内容，不是文档产出
 - **未决问题闸门（硬规则）**：任何 stage 的产出文档如果含有"需要 PM 回答"的未决项，确认门必须先让 PM 答完再开放推进选项。不允许并列给出"直接推进"和"回答问题"两个选项让 PM 选——这会让 PM 绕过未回答的问题。机器校验由 `scripts/check-open-questions.py` 承担：扫 `## 未决问题` section 下的 `**PM 回答：**` 占位，任一未填 → 退出 1。目前最严格落地在 Stage 1→2（analysis.md），其他 stage 如有类似未决产出 section 直接复用本脚本
 - 推进命令只能用 `req-transition.py`，不能手动改 `.req-meta.json`

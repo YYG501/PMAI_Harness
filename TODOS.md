@@ -3,7 +3,7 @@
 ## v2: 状态物化到 worktree 生命周期
 
 **What:** 把 task 状态从「markdown 字段」升级为「文件系统约束」。具体（2026-05-08「待验收」合并入「执行中」后简化）：
-- `/task-confirm`（待确认→执行中）才 `git worktree add`
+- `/task-confirm`（待执行→执行中）才 `git worktree add`
 - 注：「执行中」覆盖 AI 实现期 + PM 验收期；commit 不切状态；如要在 PM 验收期 lock，需在 commit 后用文件标记区分「实现完毕等 PM」vs「PM 打回等 AI」
 - PM 打回不切状态（task 仍是「执行中」），AI 续修；如有 lock 需 unlock
 - `/close-task`（已完成 → 删 worktree）`git worktree remove`
@@ -24,7 +24,7 @@
 **Context（2026-04-22 事件复盘）:**
 - 19:18–20:16 约 1 小时，某 Codex suborchestrator 一口气实现 task-001→006
 - task-005 commit `chore: bring in task-001~004 code` 和 task-006 `seed: 集成 task-001~005 全部实现`说明**worktree 边界被当场折断**
-- 所有 task 状态字段停在"待确认"，PM 未见验收信息
+- 所有 task 状态字段停在"待执行"，PM 未见验收信息
 - 这次用 v1 的 adapter gate + close-task 事件流审计（I-CT7/I-CT8）兜底；数据还不足支撑架构大改，先观察
 
 **Depends on / blocked by:**
@@ -34,7 +34,7 @@
 
 **下次接任者要知道:**
 - 当前 worktree lifecycle：`create-task-worktree.sh` 在 `/task-confirm` 时建
-- serial 约束（I-TT2）只在 `task-transition.py` 的 `待确认→执行中` 时校验——不走 transition 就没校验
+- serial 约束（I-TT2）只在 `task-transition.py` 的 `待执行→执行中` 时校验——不走 transition 就没校验
 - `git worktree lock` 是 git 自带功能，会拦 `git worktree remove` 但不会拦 fs-level 写入；真实约束力需 POC
 - chmod 方案和 lock 方案的 tradeoff 要考虑
 
@@ -142,7 +142,7 @@
 
 **autoplan eng review 待修 high/medium gap（Phase A 启动前必修）：**
 - **FM4** stale 检测：scan-task-done 把 `execution_crashed` 改名 `execution_stale`，需要新 Claude 跑 codex 期间每 60s append `heartbeat` 事件，scan 用 `last_heartbeat` 判 stale 而非 elapsed
-- **FM6 验证**：plan §4.6 已加 "execution_failed → fail-execution"，但需新增 T(execution_failed → 待确认) 测试
+- **FM6 验证**：plan §4.6 已加 "execution_failed → fail-execution"，但需新增 T(execution_failed → 待执行) 测试
 - **FM7 task-transition.py 事务性**：`update_field` 写状态字段成功但 `append_event` 失败时，必须恢复旧状态字段或退出非 0；当前代码忽略 append 子进程返回码（task-transition.py:211），违反 I-CT7 fail-closed
 - **FM8 命名清理**：plan 还有少量地方（§3 架构图 / §10 矩阵）混用 task-005 / task-005-superset-integration，需通读
 - **FM9 path adapter**：A0 失败分支不要改 `.worktrees/<branch>/` 约定（影响 check-branch / close-task / status-view 全链路），改写"引入 Superset workspace path adapter 保持框架内部不变"

@@ -10,7 +10,7 @@ _make_sandbox() {
   cat > "$SANDBOX/requirements/active/req-001/tasks/task-005-foo.md" <<'EOF'
 # Task 005: foo
 
-**状态：** 待确认
+**状态：** 待执行
 EOF
   export SANDBOX
 }
@@ -70,7 +70,7 @@ test_short_id_multi_match() {
   cat > "$SANDBOX/requirements/active/req-001/tasks/task-005-bar.md" <<'EOF'
 # Task 005: bar
 
-**状态：** 待确认
+**状态：** 待执行
 EOF
 
   out=$(cd "$SANDBOX" && _resolve_short_id "task-005" 2>&1)

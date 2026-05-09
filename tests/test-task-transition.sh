@@ -59,12 +59,12 @@ _run_transition() {
 # -----------------------------------------------------------------
 
 test_reject_reverse_transition() {
-  start_test "I-TT1 reject 执行中→待确认 (reverse)"
+  start_test "I-TT1 reject 执行中→待执行 (reverse)"
   fixture_setup
   req_dir=$(fixture_create_req "req-001" "test" 6)
   task=$(fixture_create_task "$req_dir" "001" "demo" "执行中")
 
-  if _run_transition "$task" --to 待确认 >/tmp/out.$$ 2>/tmp/err.$$; then
+  if _run_transition "$task" --to 待执行 >/tmp/out.$$ 2>/tmp/err.$$; then
     _fail "should reject reverse transition"
   else
     if grep -q "非法状态转换" /tmp/err.$$; then
@@ -94,10 +94,10 @@ test_reject_from_done() {
 }
 
 test_reject_skip_transition() {
-  start_test "I-TT1 reject 待确认→已完成 (skip)"
+  start_test "I-TT1 reject 待执行→已完成 (skip)"
   fixture_setup
   req_dir=$(fixture_create_req "req-001" "test" 6)
-  task=$(fixture_create_task "$req_dir" "001" "demo" "待确认")
+  task=$(fixture_create_task "$req_dir" "001" "demo" "待执行")
 
   if _run_transition "$task" --to 已完成 >/tmp/out.$$ 2>/tmp/err.$$; then
     _fail "should reject skip transition"
@@ -114,12 +114,12 @@ test_reject_skip_transition() {
 # -----------------------------------------------------------------
 
 test_reject_parallel_active_task_now_allowed() {
-  start_test "I-TT2 accept 待确认→执行中 when sibling is 执行中"
+  start_test "I-TT2 accept 待执行→执行中 when sibling is 执行中"
   fixture_setup
   req_dir=$(fixture_create_req "req-001" "test" 6)
   # sibling already active
   fixture_create_task "$req_dir" "001" "running" "执行中" >/dev/null
-  task=$(fixture_create_task "$req_dir" "002" "new" "待确认")
+  task=$(fixture_create_task "$req_dir" "002" "new" "待执行")
 
   if _run_transition "$task" --to 执行中 >/tmp/out.$$ 2>/tmp/err.$$; then
     pass_test
@@ -272,16 +272,16 @@ test_reject_self_loop_executing() {
 # -----------------------------------------------------------------
 
 test_happy_path_start_to_done() {
-  start_test "happy path: 待确认→执行中→已完成 with events"
+  start_test "happy path: 待执行→执行中→已完成 with events"
   fixture_setup
   req_dir=$(fixture_create_req "req-001" "test" 6)
-  task=$(fixture_create_task "$req_dir" "001" "demo" "待确认" "/qa")
+  task=$(fixture_create_task "$req_dir" "001" "demo" "待执行" "/qa")
   task_stem=$(basename "$task" .md)
   events_file="$FIXTURE_DIR/.runs/events/${task_stem}.jsonl"
 
-  # 1. 待确认 → 执行中 (no sibling, should pass)
+  # 1. 待执行 → 执行中 (no sibling, should pass)
   if ! _run_transition "$task" --to 执行中 >/tmp/out.$$ 2>/tmp/err.$$; then
-    _fail "待确认→执行中 failed"
+    _fail "待执行→执行中 failed"
     cat /tmp/err.$$ >&2
     rm -f /tmp/out.$$ /tmp/err.$$
     fixture_teardown
@@ -314,7 +314,7 @@ test_happy_path_start_to_done() {
     return
   fi
 
-  # Events stream should contain 2 status_changed events (待确认→执行中、执行中→已完成)
+  # Events stream should contain 2 status_changed events (待执行→执行中、执行中→已完成)
   if [ ! -f "$events_file" ]; then
     _fail "events file not created: $events_file"
     rm -f /tmp/out.$$ /tmp/err.$$
@@ -341,10 +341,10 @@ test_happy_path_start_to_done() {
 # -----------------------------------------------------------------
 
 test_discard_from_pending() {
-  start_test "I-DISCARD discard 待确认 task (no worktree)"
+  start_test "I-DISCARD discard 待执行 task (no worktree)"
   fixture_setup
   req_dir=$(fixture_create_req "req-001" "test" 6)
-  task=$(fixture_create_task "$req_dir" "002" "demo" "待确认")
+  task=$(fixture_create_task "$req_dir" "002" "demo" "待执行")
   task_basename=$(basename "$task")
 
   if _run_transition "$task" --discard --reason "拆分有误" --yes >/tmp/out.$$ 2>/tmp/err.$$; then
@@ -445,7 +445,7 @@ test_discard_missing_reason() {
   start_test "I-DISCARD reject without --reason"
   fixture_setup
   req_dir=$(fixture_create_req "req-001" "test" 6)
-  task=$(fixture_create_task "$req_dir" "002" "demo" "待确认")
+  task=$(fixture_create_task "$req_dir" "002" "demo" "待执行")
 
   if _run_transition "$task" --discard --yes >/tmp/out.$$ 2>/tmp/err.$$; then
     _fail "should reject discard without --reason"
@@ -465,7 +465,7 @@ test_discard_aborts_on_eof_without_yes() {
   start_test "I-DISCARD aborts on EOF when --yes not passed"
   fixture_setup
   req_dir=$(fixture_create_req "req-001" "test" 6)
-  task=$(fixture_create_task "$req_dir" "002" "demo" "待确认")
+  task=$(fixture_create_task "$req_dir" "002" "demo" "待执行")
   task_basename=$(basename "$task")
 
   if (cd "$FIXTURE_DIR" && python3 "$TASK_TRANSITION" "$task" --discard --reason "x" </dev/null) >/tmp/out.$$ 2>/tmp/err.$$; then
@@ -492,7 +492,7 @@ test_discard_unblocks_stage6_rollback() {
   fixture_setup
   req_dir=$(fixture_create_req "req-001" "test" 6)
   fixture_create_task "$req_dir" "001" "done" "已完成" >/dev/null
-  task2=$(fixture_create_task "$req_dir" "002" "todo" "待确认")
+  task2=$(fixture_create_task "$req_dir" "002" "todo" "待执行")
 
   if ! _run_transition "$task2" --discard --reason "重拆" --yes >/tmp/out.$$ 2>/tmp/err.$$; then
     _fail "discard 失败"
@@ -517,7 +517,7 @@ test_discard_appends_reason_section() {
   start_test "I-DISCARD task 文件含 状态=已废弃 + 废弃理由 section"
   fixture_setup
   req_dir=$(fixture_create_req "req-001" "test" 6)
-  task=$(fixture_create_task "$req_dir" "002" "demo" "待确认")
+  task=$(fixture_create_task "$req_dir" "002" "demo" "待执行")
   task_basename=$(basename "$task")
 
   if _run_transition "$task" --discard --reason "拆得不对" --yes >/tmp/out.$$ 2>/tmp/err.$$; then
@@ -546,7 +546,7 @@ test_validate_fields_only_passes_paragraph_format() {
   start_test "I-VFO1 段落格式 + 合法状态值 → 退出 0"
   fixture_setup
   req_dir=$(fixture_create_req "req-001" "test" 6)
-  task=$(fixture_create_task "$req_dir" "001" "demo" "待确认")
+  task=$(fixture_create_task "$req_dir" "001" "demo" "待执行")
 
   if _run_transition "$task" --validate-fields-only >/tmp/out.$$ 2>/tmp/err.$$; then
     if grep -q "字段校验通过" /tmp/out.$$; then
@@ -567,7 +567,7 @@ test_validate_fields_only_passes_table_format() {
   start_test "I-VFO2 任务卡表格格式 + 合法状态值 → 退出 0"
   fixture_setup
   req_dir=$(fixture_create_req "req-001" "test" 6)
-  task=$(fixture_create_task_v2 "$req_dir" "001" "demo" "待确认")
+  task=$(fixture_create_task_v2 "$req_dir" "001" "demo" "待执行")
 
   if _run_transition "$task" --validate-fields-only >/tmp/out.$$ 2>/tmp/err.$$; then
     pass_test
@@ -583,14 +583,14 @@ test_validate_fields_only_rejects_blockquote() {
   start_test "I-VFO3 blockquote frontmatter (> 状态：...) → 退出 1"
   fixture_setup
   req_dir=$(fixture_create_req "req-001" "test" 6)
-  task=$(fixture_create_task "$req_dir" "001" "demo" "待确认")
+  task=$(fixture_create_task "$req_dir" "001" "demo" "待执行")
 
   # 把段落格式改成 blockquote（模拟 task-spec 假执行的产物）
   python3 - "$task" <<'PY'
 import sys
 p = sys.argv[1]
 text = open(p, encoding="utf-8").read()
-text = text.replace("**状态：** 待确认", "> 状态：「待启动」")
+text = text.replace("**状态：** 待执行", "> 状态：「待启动」")
 open(p, "w", encoding="utf-8").write(text)
 PY
 
@@ -612,7 +612,7 @@ test_validate_fields_only_rejects_derived_label() {
   start_test "I-VFO4 派生显示标签「待启动」作为状态值 → 退出 1"
   fixture_setup
   req_dir=$(fixture_create_req "req-001" "test" 6)
-  task=$(fixture_create_task "$req_dir" "001" "demo" "待确认")
+  task=$(fixture_create_task "$req_dir" "001" "demo" "待执行")
 
   # 用合法格式但非法值（status-view 派生标签）
   _force_status "$task" "待启动"

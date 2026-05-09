@@ -41,18 +41,18 @@ def _parse_field_line(line: str) -> tuple[str, str] | None:
 FIELD_RE = FIELD_RE_OLD
 
 VALID_TRANSITIONS = {
-    "待确认": ["执行中"],
-    "执行中": ["已完成", "待确认"],  # 待确认 = --fail-execution / --cancel-manual 回退
+    "待执行": ["执行中"],
+    "执行中": ["已完成", "待执行"],  # 待执行 = --fail-execution / --cancel-manual 回退
     "已完成": [],
-    "已废弃": [],  # 终态：从 {待确认, 执行中} 经 --discard 进入；不可回流
+    "已废弃": [],  # 终态：从 {待执行, 执行中} 经 --discard 进入；不可回流
 }
 
-# `执行中 → 待确认` is only reachable via --fail-execution or --cancel-manual;
-# plain --to 待确认 from 执行中 is rejected.
-RESTRICTED_TRANSITIONS = {("执行中", "待确认")}
+# `执行中 → 待执行` is only reachable via --fail-execution or --cancel-manual;
+# plain --to 待执行 from 执行中 is rejected.
+RESTRICTED_TRANSITIONS = {("执行中", "待执行")}
 
 # 状态可经 --discard 转入「已废弃」的允许集合
-DISCARDABLE_FROM = {"待确认", "执行中"}
+DISCARDABLE_FROM = {"待执行", "执行中"}
 
 SCRIPTS_DIR = Path(__file__).resolve().parent
 EVENTS_SCRIPT = SCRIPTS_DIR / "task-events.py"
@@ -199,7 +199,7 @@ def check_preconditions(
 ) -> None:
     """Check preconditions for a state transition."""
 
-    if current == "待确认" and target == "执行中":
+    if current == "待执行" and target == "执行中":
         # v1 串行强制
         check_serial_constraint(task_file)
 
@@ -274,7 +274,7 @@ def do_transition(
 
     `via` controls precondition bypass:
       - normal: full precondition check
-      - fail-execution: skips 已完成 precondition check (failure回退到待确认)
+      - fail-execution: skips 已完成 precondition check (failure回退到待执行)
       - cancel-manual: same as fail-execution
     """
     text = read_text(task_file)
@@ -300,7 +300,7 @@ def do_transition(
 
 
 def cmd_fail_execution(task_file: Path, reason: str) -> None:
-    """Handle --fail-execution: normalize failure fallback to 待确认."""
+    """Handle --fail-execution: normalize failure fallback to 待执行."""
     fields = read_fields(task_file)
     current = fields.get("状态", "")
     if current != "执行中":
@@ -316,8 +316,8 @@ def cmd_fail_execution(task_file: Path, reason: str) -> None:
         pf.unlink()
 
     note = f"执行失败回退：{reason}"
-    do_transition(task_file, current, "待确认", note, via="fail-execution")
-    print(f"✅ 执行失败已回退：执行中 → 待确认（{reason}）")
+    do_transition(task_file, current, "待执行", note, via="fail-execution")
+    print(f"✅ 执行失败已回退：执行中 → 待执行（{reason}）")
 
 
 def cmd_cancel_manual(task_file: Path) -> None:
@@ -340,8 +340,8 @@ def cmd_cancel_manual(task_file: Path) -> None:
         sys.exit(1)
 
     pf.unlink()
-    do_transition(task_file, current, "待确认", "PM 放弃 manual", via="cancel-manual")
-    print(f"✅ Manual 放弃：标记已删除，状态回到 待确认")
+    do_transition(task_file, current, "待执行", "PM 放弃 manual", via="cancel-manual")
+    print(f"✅ Manual 放弃：标记已删除，状态回到 待执行")
 
 
 def _now_iso() -> str:
@@ -683,7 +683,7 @@ def main() -> None:
     parser.add_argument(
         "--fail-execution",
         action="store_true",
-        help="Fail currently-executing task (执行中 → 待确认). Requires --reason.",
+        help="Fail currently-executing task (执行中 → 待执行). Requires --reason.",
     )
     parser.add_argument(
         "--reason",
@@ -692,13 +692,13 @@ def main() -> None:
     parser.add_argument(
         "--cancel-manual",
         action="store_true",
-        help="PM 放弃 manual task: delete pending marker + 转回待确认",
+        help="PM 放弃 manual task: delete pending marker + 转回待执行",
     )
     parser.add_argument(
         "--discard",
         action="store_true",
         help="废弃 task：移到 tasks/discarded/、清理 worktree+分支、commit。"
-             "源状态 ∈ {待确认, 执行中}；已完成不可。需 --reason，"
+             "源状态 ∈ {待执行, 执行中}；已完成不可。需 --reason，"
              "非交互场景加 --yes 跳过 confirm。",
     )
     parser.add_argument(
@@ -802,8 +802,8 @@ def main() -> None:
         )
         sys.exit(1)
 
-    # Clean up manual marker on transition to 待确认 (decisive policy)
-    if target == "待确认":
+    # Clean up manual marker on transition to 待执行 (decisive policy)
+    if target == "待执行":
         pf = pending_manual_path(task_file)
         if pf.exists():
             pf.unlink()

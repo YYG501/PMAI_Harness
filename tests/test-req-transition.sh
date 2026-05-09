@@ -303,6 +303,31 @@ test_reject_3_to_5_when_design_empty_non_first() {
   fixture_teardown
 }
 
+test_reject_2_to_4_skip_stage3_non_first() {
+  start_test "I-RT2 reject 2→4 (skip stage 3) for non-first req — stage 3 不再可跳"
+  fixture_setup
+  req_dir=$(fixture_create_req "req-001" "test" 2 false)
+  # 制造 stage 2 的产出文件 analysis.md（前置条件）
+  (
+    cd "$FIXTURE_DIR/.worktrees/req-001-test"
+    echo "# Analysis" > "requirements/active/req-001-test/analysis.md"
+    git add -A && git commit -q -m "add analysis.md"
+  )
+
+  if _run_req "$req_dir" --to 4 >/tmp/out.$$ 2>/tmp/err.$$; then
+    _fail "should reject 2→4 (stage 3 不可跳)"
+  else
+    if grep -qE "(advance|stage)" /tmp/err.$$; then
+      pass_test
+    else
+      _fail "stderr missing stage-advance message"
+      cat /tmp/err.$$ >&2
+    fi
+  fi
+  rm -f /tmp/out.$$ /tmp/err.$$
+  fixture_teardown
+}
+
 test_allow_3_to_5_when_design_populated() {
   start_test "I-RT4 allow 3→5 when DESIGN.md has content"
   fixture_setup
@@ -355,6 +380,7 @@ test_reject_rollback_target_ge_current
 test_reject_rollback_target_greater
 test_happy_path_1_to_2
 test_reject_3_to_5_when_design_empty_non_first
+test_reject_2_to_4_skip_stage3_non_first
 test_allow_3_to_5_when_design_populated
 
 report_results "req-transition"

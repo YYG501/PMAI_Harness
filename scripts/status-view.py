@@ -38,7 +38,7 @@ STAGE_NAMES = {
     7: "req close",
 }
 STATUS_ICONS = {
-    "待确认": "⏳",
+    "待执行": "⏳",
     "执行中": "🔄",
     "已完成": "✅",
 }
@@ -372,7 +372,7 @@ def render_summary(repo_root: Path) -> None:
         status = fields.get("状态", "")
         if status == "执行中":
             counts["执行中"] += 1
-        elif status == "待确认" and _task_worktree_exists(repo_root, task_stem):
+        elif status == "待执行" and _task_worktree_exists(repo_root, task_stem):
             counts["待启动"] += 1
 
     # 待 spec：plan 里规划但 tasks/ 下没文件 (扫所有 active req 的 task-plan.md)
@@ -408,7 +408,7 @@ def suggest_next_action(
             name = task_file.stem
             if status == "执行中":
                 return f"执行中 {name}：实现 / 等待呈交 / PM 验收（可在 task 窗口跑 /task-submit 重新看呈交块）"
-            if status == "待确认":
+            if status == "待执行":
                 return f"确认启动 {name}：运行 /task-confirm"
 
         # All spec'd tasks are 已完成 — but plan may still have un-spec'd entries.

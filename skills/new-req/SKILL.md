@@ -116,16 +116,20 @@ PM 选 2 或直接开始描述需求时，AI 走以下流程：
 
 3. **出 brief 草稿**：拿到答案后，AI 按 `_shared/pm-view/writing-rules.md` §三 + `_shared/pm-view/doc-strictness.md` §四 brief.md 行拼一版 brief 草稿**展示给 PM**（不贴 chat 看的，用 Write 写到 `brief.md` 文件，给 PM 路径让他看）。
 
-4. **二次确认门**：
+4. **二次确认门**（v2 对话式）：
    ```
-   📝 brief.md 草稿已写入：<绝对路径>
-   一句话摘要：<一行>
+   ✅ brief.md 草稿已写入
+      <绝对路径>
 
-   A) 确认（进入步骤 5 handoff）
-   B) 我要修改（说明改哪里）
+   📋 一句话摘要
+      <一行>
+
+   ——这份 brief 就这样定吗？OK 我把工作交接到 worktree 新对话；想改的说哪里。
    ```
 
-5. PM 选 A → 进步骤 5 handoff；PM 选 B → 按 PM 指示改 brief.md，改完回到 4 重新出二确（不贴全文，参 Rules "确认门只给路径+一句话摘要"）。
+5. **PM 回答的内部分流**（不列字母）：
+   - PM 说「OK / 通过 / 没问题 / 定了」等 → 进步骤 5 handoff
+   - PM 提具体修改 → 按 PM 指示改 brief.md，改完回到步骤 4 重新出二确（不贴全文，参 Rules "确认门只给路径+一句话摘要"）
 
 **禁止**：
 - AI 主动调用 `/office-hours` 或任何 review/research skill — `/office-hours` 是 gstack 通用产品发现工具（含 builder/startup 模式选择 + telemetry + gbrain context queries），适合 PM 自主使用，不适合 AI 替 PM 跑

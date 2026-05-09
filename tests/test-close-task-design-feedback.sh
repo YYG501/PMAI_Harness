@@ -188,8 +188,8 @@ test_close_task_step_1_5_three_options() {
     _fail "步骤 1.5 应有 Y-task-note 选项"
     return
   fi
-  if ! echo "$section" | grep -q '\*\*N\*\*\|选项.*N\b'; then
-    _fail "步骤 1.5 应有 N 选项（AI 误分类时改正）"
+  if ! echo "$section" | grep -q '\*\*N\*\*\|选项.*N\b\|`N`\|分类 `N`'; then
+    _fail "步骤 1.5 应有 N 内部分类标签（AI 误分类时改正）"
     return
   fi
   pass_test

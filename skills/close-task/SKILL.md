@@ -115,16 +115,21 @@ agent 对每条 §🎯 / §📐 / §📋 / §✅ 描述，跟实际代码做语�
 
 **N = 0 → 直接进步骤 1**，本步骤跳过。
 
-#### 0.3 PM 三选一决议（每条逐条）
+#### 0.3 PM 决议（每条逐条问，对话式）
 
-呈交 PM（AskUserQuestion 或 prose），每条三选一：
+每条差异呈交 PM 后问（AskUserQuestion 或 prose；不列字母，按 PM 自然语言意图分流）：
 
-- **Y**：改 task md 对齐实际原型（最常见——原型迭代过、md 没跟上）
-  - agent 用 Edit 改 `$TASK_PM_VIEW`，改后展示 git diff，PM 满意进下一条
-- **R**：改代码对齐 task md（少见——原型实现偏离了 task md 契约）
-  - agent **不能自己改代码**。提示 PM：「这条对齐意味着回退原型。建议关闭 close-task，回 task 窗口跑 /task-execute 重做后再 close。确认要在 close-task 阶段直接改代码吗？」
-  - PM 坚持要在本阶段改 → 视为退出 close-task 流程，agent 输出"请回 task 窗口重做"并 exit
-- **skip**：本条不重要忽略（agent 不动 task md，进下一条）
+```
+要怎么对齐这条？
+ - 改 task md 对齐实际原型（最常见——原型迭代过、md 没跟上）
+ - 改代码对齐 task md（少见——原型实现偏离了契约，需要回 task 窗口重做）
+ - 这条不重要，跳过
+```
+
+**PM 回答的内部分流**：
+- PM 说「改 md / md 对齐 / 改 task 文档」等 → AI 用 Edit 改 `$TASK_PM_VIEW`，改后展示 git diff，PM 满意进下一条
+- PM 说「改代码 / 回退原型」等 → AI **不能自己改代码**。提示 PM：「这条对齐要回退原型。建议先关掉 close-task，回 task 窗口跑 /task-execute 重做后再 close。还是确认要在 close-task 阶段直接改代码？」 → PM 坚持要在本阶段改 → 视为退出 close-task 流程，AI 输出"请回 task 窗口重做"并 exit
+- PM 说「跳过 / 算了 / 不重要」等 → AI 不动 task md，进下一条
 
 #### 0.4 patch 后 commit 到 task 分支
 
@@ -139,8 +144,8 @@ git -C "$TASK_WORKTREE" commit -m "task-NNN close-prep: PM 视图与原型对齐
 
 #### 0.5 fail-fast 与边界
 
-- **N = 0 或全 skip**：close-task **不阻塞**（PM 决策权，不强制对齐）。
-- **PM 选 R 但又要在本阶段改代码**：agent 输出"请回 task 窗口跑 /task-execute"并 exit；不让 close-task 蜕变成 mini task-execute。
+- **N = 0 或全部跳过**：close-task **不阻塞**（PM 决策权，不强制对齐）。
+- **PM 选"改代码"但又要在本阶段改**：agent 输出"请回 task 窗口跑 /task-execute"并 exit；不让 close-task 蜕变成 mini task-execute。
 - **patch 失败 / git commit 失败**：close-task 阻塞，提示 PM 人工修复后重跑。
 
 **与步骤 1 / 1.5 的边界**：
@@ -211,27 +216,35 @@ Read 本 task PM 视图主文件的 PM 反馈 section，提取候选：
 [draft markdown 全文]
 ```
 
-#### 1.5.4 PM 三选一决策（每条逐条问）
+#### 1.5.4 PM 决策（每条逐条问，对话式）
 
-呈交 PM 一个三选一（AskUserQuestion 或 prose）：
+呈交 PM 一个对话式问句（AskUserQuestion 或 prose；不列字母代号）：
 
-- **Y-rule**：内容正确 + 应作项目级长期规范 → AI 用 Edit patch `docs/DESIGN.md`（不 commit）
-- **Y-task-note**：本 task 特殊不作通用规则 → 保留在 task PM 反馈，标处理结果「task-only」
-- **N**：AI 误分类（业务/流程反馈被错标视觉规范）→ 改 task PM 反馈的分类字段为正确类型，按该类型原规则走
+```
+这条反馈要怎么处理？
+ - 沉淀进 DESIGN.md（这是项目级长期规范，应该写进设计系统里 → AI patch DESIGN.md，不 commit，等你审 diff）
+ - 只在本 task 备注（这条是本 task 特殊情况，不通用 → 保留在 task PM 反馈里，标"task-only"）
+ - 我分类错了（这其实不是视觉规范 → 改回正确分类按那条规则走）
+```
+
+**PM 回答的内部分流 + 内部分类映射**：
+- PM 说「沉淀 / 写进 DESIGN / 项目级」等 → 内部记账分类 `Y-rule` → AI 用 Edit patch `docs/DESIGN.md`（不 commit）
+- PM 说「task 备注 / 只本 task / task-only」等 → 内部记账分类 `Y-task-note` → 保留在 task PM 反馈，标处理结果「task-only」
+- PM 说「分类错了 / 不是视觉 / 重分类」等 → 内部记账分类 `N` → 改 task PM 反馈的分类字段为正确类型，按该类型原规则走
 
 **禁止**：silent commit `docs/DESIGN.md`。设计 SoT 改动必须 PM 显式审 diff。commit 由 PM 在 close-task 完成后自己跑（commit message 模板：`docs(DESIGN): 沉淀 task-NNN 反馈 — [摘要]`）。
 
-#### 1.5.5 Y-rule patch 后的二次确认
+#### 1.5.5 沉淀 DESIGN.md 后的二次确认
 
-每条 Y-rule patch 完成后：
+每条选了"沉淀进 DESIGN.md"的 patch 完成后：
 
 1. AI 输出 `git -C $REPO_ROOT diff docs/DESIGN.md` 让 PM 看
 2. PM 满意 → AI 用 Edit 把本条 PM 反馈的「处理结果」改为「已处理」+ 备注「已沉淀 DESIGN.md §X.Y」
-3. PM 要求修改 → AI 重 patch 重 diff，循环到 PM 满意（无循环上限，但 3 次还无法对齐时 AI 主动停下问 PM 是否改成 Y-task-note 或 N）
+3. PM 要求修改 → AI 重 patch 重 diff，循环到 PM 满意（无循环上限，但 3 次还无法对齐时 AI 主动停下问 PM 是否改成"只在本 task 备注"或"分类错了"）
 
 #### 1.5.6 完成后进步骤 2
 
-所有 N 条视觉规范反馈处理完毕（标 Y-rule / Y-task-note / N），DESIGN.md 改动**未 commit**（步骤 3 提示 PM 自己 commit），进入步骤 2。
+所有 N 条视觉规范反馈处理完毕（每条都标了 `Y-rule` / `Y-task-note` / `N` 三个分类之一作为内部记账），DESIGN.md 改动**未 commit**（步骤 3 提示 PM 自己 commit），进入步骤 2。
 
 **与步骤 1 文档偏差检查的边界**：
 - 步骤 1 处理"客观文档偏差"（字段名错 / 流程描述错）→ `/doc-update` 对账
@@ -271,7 +284,7 @@ Task 已关闭：<task-title>
 
 **额外提示（仅当步骤 1.5 patch 过 DESIGN.md 时）：**
 
-如果步骤 1.5 沉淀了视觉规范反馈（PM 选 Y-rule 至少 1 条），req worktree 里的 `docs/DESIGN.md` 处于 uncommitted 状态。close-task.sh 不 auto commit 设计 SoT。close-task 完成后追加（仍在 req 窗口）：
+如果步骤 1.5 沉淀了视觉规范反馈（PM 选"沉淀进 DESIGN.md"至少 1 条），req worktree 里的 `docs/DESIGN.md` 处于 uncommitted 状态。close-task.sh 不 auto commit 设计 SoT。close-task 完成后追加（仍在 req 窗口）：
 
 ```bash
 git diff docs/DESIGN.md  # PM 二次审 diff
