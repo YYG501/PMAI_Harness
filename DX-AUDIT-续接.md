@@ -7,7 +7,7 @@
 
 ## 当前位置（2026-05-08）
 
-**起因**：`/gstack-devex-review` 对 PM-AI-Workflow 框架做了一轮活体 DX 审计，综合分 5.4/10（静态）→ 4.7/10（含 ExampleConsumerApp 活体证据下调）。本次会话已收口 6/9 项 P0。
+**起因**：`/gstack-devex-review` 对 PM-AI-Workflow 框架做了一轮活体 DX 审计，综合分 5.4/10（静态）→ 4.7/10（含 ExampleConsumerApp 活体证据下调）。本次会话已收口 8/9 项 P0（F-1 + P0-6 一起做完）。
 
 **评分基线**（P0/P1 完成后再次跑 /devex-review 用作对比）：
 
@@ -25,6 +25,7 @@
 **已完成 commit**（生成器仓）：
 
 ```
+34b1d4d feat(skills): /skill-improve 雏形 + 消化 prd-writing 反馈 3 项 gap
 ea2dc82 refactor(skills): PM-VIEW-RULES + 三个超大 SKILL.md 按消费方拆 references
 8affee9 fix(audit): CT7 旧规范三步式兼容 + CT8 chore commit 豁免
 3a4a98a refactor(scripts): worktree 物理路径解析抽 _lib/worktree.sh helper
@@ -41,8 +42,8 @@ ea2dc82 refactor(skills): PM-VIEW-RULES + 三个超大 SKILL.md 按消费方拆 
 | P0-8 | scripts/check-worktree-residue.py + req-stage-gate 集成 | [完成] | 95dca9e |
 | P0-1 | PM-VIEW-RULES.md 943→278（主索引）+ 6 个子文件，12 skill 引用 | [完成] | ea2dc82 |
 | P0-2 | task-execute 911→539 / prd-writing 756→315 / task-spec 568→525 拆 references/ | [完成] | ea2dc82 |
-| F-1 | prd-writing 484 行 PM 反馈逐条消化 | 待办 | — |
-| P0-6 | /skill-improve skill 雏形（与 F-1 一起做）| 待办 | — |
+| F-1 | prd-writing 484 行 PM 反馈逐条消化（6 项已落地 + 1 项超出 + 3 项 gap 全补） | [完成] | 34b1d4d |
+| P0-6 | /skill-improve skill 雏形 + 反馈归档约定（skill-feedback/）| [完成] | 34b1d4d |
 | P0-7 | task-spec 早期截断（防 task 双轮废，先设计后实施）| 待办 | — |
 
 ### P1 待办（次优先，P0 全完成后再做）
