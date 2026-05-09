@@ -143,11 +143,12 @@ bash scripts/init-project.sh \
 |---|---|
 | [`CLAUDE.md`](./CLAUDE.md) | 项目章程（生成器的） |
 | [`RUNTIME.md`](./RUNTIME.md) | 项目运行时状态（当前进度 / 已知坑 / 新窗口续接入口）|
+| [`CHANGELOG.md`](./CHANGELOG.md) | 影响业务仓的改动记录（按 commit 时间倒序；业务仓 sync 前看顶部）|
 | [`docs/archive/DX-AUDIT-2026-05-08.md`](./docs/archive/DX-AUDIT-2026-05-08.md) | 2026-05-08 DX 审计档案（已收尾，保留作历史）|
 | [`INVARIANTS.md`](./INVARIANTS.md) | 框架不变量清单（I-CT / I-TT / I-AD 等编号约束） |
 | [`TODOS.md`](./TODOS.md) | 待决项 / 延迟决策（v2/v4/UP/DX/Eng/TD-1~4） |
 | [`框架同步-SOP.md`](./框架同步-SOP.md) | 生成器 → 业务仓 hotfix 同步流程 |
-| [`需求.md`](./需求.md) / [`设计.md`](./设计.md) | v0 原始档案（不再活跃） |
+| [`docs/archive/v0/`](./docs/archive/v0/) | v0 原始档案（需求.md / 设计.md / 需求-v0-原始草稿.md；不再活跃，归档保留作历史）|
 | [`docs/archive/design/`](./docs/archive/design/) | 历史设计文档（21 份，2026-04~05 阶段决策档案；v3.5 收口后归档） |
 
 ---
