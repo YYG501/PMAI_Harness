@@ -281,12 +281,17 @@ def cell_text(block: dict, blocks_by_id: dict) -> str:
 
 
 def find_merge_ranges(grid: list[list[str]], existing: set):
+    """前 N-1 列（leading cols）的合并范围。非空 cell 吸收下方相同内容 cell + 下方空 cell（续行 rowspan 效果）。
+    最后一列（需求描述）走 find_desc_group_ranges，不在此处理。"""
     ranges: list[dict] = []
     if not grid:
         return ranges
     rows = len(grid)
     cols = len(grid[0]) if rows else 0
-    for col in range(cols):
+    if cols < 1:
+        return ranges
+    leading_cols = cols - 1
+    for col in range(leading_cols):
         run_start = 0
         while run_start < rows:
             if (run_start, col) in existing:
@@ -298,8 +303,8 @@ def find_merge_ranges(grid: list[list[str]], existing: set):
                 continue
             run_end = run_start + 1
             while (run_end < rows
-                   and grid[run_end][col] == content
-                   and (run_end, col) not in existing):
+                   and (run_end, col) not in existing
+                   and (grid[run_end][col] == content or grid[run_end][col] == "")):
                 run_end += 1
             if run_end - run_start > 1:
                 ranges.append({
@@ -310,6 +315,157 @@ def find_merge_ranges(grid: list[list[str]], existing: set):
                 })
             run_start = run_end
     return ranges
+
+
+def find_desc_group_ranges(grid: list[list[str]], existing: set):
+    """末列（需求描述）的合并范围。row group = 锚点行（任一前 N-1 列非空）+ 下方所有续行（前 N-1 列全空）。
+    单行 group 不合并；多行 group 才合并，需要先把内容合并到锚点 cell。"""
+    ranges: list[dict] = []
+    if not grid:
+        return ranges
+    rows = len(grid)
+    cols = len(grid[0]) if rows else 0
+    if cols < 2 or rows < 2:
+        return ranges
+    desc_col = cols - 1
+
+    def is_continuation(r: int) -> bool:
+        return all(grid[r][c] == "" for c in range(desc_col))
+
+    group_start = 0
+    for r in range(1, rows):
+        if not is_continuation(r):
+            if r - group_start > 1:
+                ranges.append({
+                    "row_start_index": group_start,
+                    "row_end_index": r,
+                    "column_start_index": desc_col,
+                    "column_end_index": desc_col + 1,
+                })
+            group_start = r
+    if rows - group_start > 1:
+        ranges.append({
+            "row_start_index": group_start,
+            "row_end_index": rows,
+            "column_start_index": desc_col,
+            "column_end_index": desc_col + 1,
+        })
+    # 过滤掉与已有 merge_info 冲突的 range
+    return [
+        rng for rng in ranges
+        if not any(
+            (r, rng["column_start_index"]) in existing
+            for r in range(rng["row_start_index"], rng["row_end_index"])
+        )
+    ]
+
+
+# block_type 整数 → 类型特定字段名映射（Feishu docx block schema）
+BLOCK_TYPE_TO_KEY: dict[int, str] = {
+    2: "text",
+    3: "heading1", 4: "heading2", 5: "heading3", 6: "heading4",
+    7: "heading5", 8: "heading6", 9: "heading7", 10: "heading8",
+    11: "heading9", 12: "bullet", 13: "ordered", 14: "code",
+    15: "quote", 17: "todo", 19: "callout",
+}
+
+
+def block_to_creation_spec(block: dict) -> dict | None:
+    """把读取到的 block 反序列化为 POST /children 接受的 creation spec。
+    保留 block_type + 对应类型的内容字段（含 elements 富文本格式）；剥掉 block_id / parent_id / children。"""
+    bt = block.get("block_type")
+    if not bt:
+        return None
+    key = BLOCK_TYPE_TO_KEY.get(bt)
+    if not key or key not in block:
+        return None
+    return {"block_type": bt, key: block[key]}
+
+
+def get_cell_child_specs(cell_block: dict, blocks_by_id: dict) -> list[tuple[str, dict]]:
+    """返回 cell 内所有可重建的子 block：(child_id, creation_spec)。"""
+    out: list[tuple[str, dict]] = []
+    for child_id in cell_block.get("children", []) or []:
+        child = blocks_by_id.get(child_id)
+        if not child:
+            continue
+        spec = block_to_creation_spec(child)
+        if spec is not None:
+            out.append((child_id, spec))
+    return out
+
+
+def merge_desc_group_with_content(
+    doc_id: str,
+    table_block_id: str,
+    cells_array: list,
+    cols: int,
+    blocks_by_id: dict,
+    rng: dict,
+) -> bool:
+    """把 desc col row group 的非锚点 cell 的内容拷贝到锚点 cell，清空原 cell，再 merge。"""
+    start = rng["row_start_index"]
+    end = rng["row_end_index"]
+    desc_col = rng["column_start_index"]
+
+    anchor_cell_id = cells_array[start * cols + desc_col]
+    anchor_cell = blocks_by_id.get(anchor_cell_id)
+    if not anchor_cell:
+        warn(f"找不到锚点 cell block: {anchor_cell_id}")
+        return False
+
+    # 1) 一次性收集所有非锚点 cell 的 child specs（含富文本 elements）
+    all_specs: list[dict] = []
+    cells_to_clear: list[tuple[str, int]] = []  # (cell_id, child_count)
+    for r in range(start + 1, end):
+        non_anchor_id = cells_array[r * cols + desc_col]
+        non_anchor_cell = blocks_by_id.get(non_anchor_id)
+        if not non_anchor_cell:
+            continue
+        child_specs = get_cell_child_specs(non_anchor_cell, blocks_by_id)
+        if not child_specs:
+            continue
+        all_specs.extend(spec for _, spec in child_specs)
+        cells_to_clear.append((non_anchor_id, len(non_anchor_cell.get("children", []) or [])))
+
+    # 2) 锚点 cell 末尾追加所有非锚点的 children 拷贝（一次 POST）
+    if all_specs:
+        anchor_child_count = len(anchor_cell.get("children", []) or [])
+        try:
+            lark_api(
+                "POST",
+                f"/open-apis/docx/v1/documents/{doc_id}/blocks/{anchor_cell_id}/children",
+                data={"children": all_specs, "index": anchor_child_count},
+            )
+        except RuntimeError as e:
+            warn(f"拷贝 children 到锚点 cell 失败: {e}；跳过本 group merge")
+            return False
+
+        # 3) 清空非锚点 cell 的 children（Feishu batch_delete = POST + start_index/end_index）
+        for cell_id, count in cells_to_clear:
+            if count == 0:
+                continue
+            try:
+                lark_api(
+                    "POST",
+                    f"/open-apis/docx/v1/documents/{doc_id}/blocks/{cell_id}/children/batch_delete",
+                    data={"start_index": 0, "end_index": count},
+                )
+            except RuntimeError as e:
+                warn(f"清空原 cell children 失败 cell={cell_id}: {e}；锚点已含拷贝，继续 merge")
+
+    # 4) merge_table_cells
+    try:
+        lark_api(
+            "PATCH",
+            f"/open-apis/docx/v1/documents/{doc_id}/blocks/{table_block_id}",
+            data={"merge_table_cells": rng},
+        )
+    except RuntimeError as e:
+        warn(f"merge_table_cells（需求描述列）失败 range={rng}: {e}")
+        return False
+
+    return True
 
 
 def merge_cells_for_doc(doc_id: str):
@@ -352,6 +508,7 @@ def merge_cells_for_doc(doc_id: str):
                 row.append(cell_text(cell_block, blocks_by_id) if cell_block else "")
             grid.append(row)
 
+        # 前 N-1 列：直接 merge_table_cells 即可（空 cell 会被吸收，不丢内容）
         for rng in find_merge_ranges(grid, existing):
             try:
                 lark_api("PATCH",
@@ -361,6 +518,17 @@ def merge_cells_for_doc(doc_id: str):
             except RuntimeError as e:
                 failure += 1
                 warn(f"merge_table_cells 失败 table={table['block_id']} range={rng}: {e}")
+
+        # 末列（需求描述）：续行 row group 需要先把 children 拷贝到锚点 cell 再 merge
+        cells_array = (table.get("table") or {}).get("cells") or []
+        for rng in find_desc_group_ranges(grid, existing):
+            ok = merge_desc_group_with_content(
+                doc_id, table["block_id"], cells_array, cols, blocks_by_id, rng,
+            )
+            if ok:
+                success += 1
+            else:
+                failure += 1
 
     return success, failure
 

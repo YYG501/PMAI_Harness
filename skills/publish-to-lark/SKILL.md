@@ -108,16 +108,22 @@ lark-cli docs +update \
   --mode overwrite
 ```
 
-### 步骤 4：自动合并表格相同内容 cell（默认开启）
+### 步骤 4：自动合并表格 cell（默认开启）
 
-发布完成后，扫描文档中所有 table 块：
+发布完成后，扫描文档中所有 table 块。合并按"前 N-1 列（leading）"和"末列（需求描述）"分两段处理：
 
 1. `GET /open-apis/docx/v1/documents/:doc_id/blocks` 拉所有 block
-2. 找出所有 `table` block
-3. 对每个 table 的每一列：扫描连续多行内容**完全相同**的范围（空字符串不参与）
-4. 对每个范围调 `PATCH /open-apis/docx/v1/documents/:doc_id/blocks/:block_id` with `merge_table_cells` 子请求
+2. 找出所有 `table` block；构建 `grid[row][col]` 文本矩阵；提取已有 `merge_info` 的 cell 集合作为跳过名单
+3. **前 N-1 列合并**（leading 列 rowspan）：对每一列从上到下扫描，遇非空 anchor 后吸收**下方所有相同内容 cell + 下方所有空 cell**，直到遇到下一个非空异内容或表格末尾。range > 1 行才合并。空 cell 是"续行 rowspan 标记"，参与合并到上方非空 cell。
+4. **末列合并**（需求描述列内容拷贝合并）：扫描续行 row group——anchor 行（任一前 N-1 列非空）+ 下方所有续行（前 N-1 列全空）。group 多行时：
+   - 把每个非锚点 cell 的 children blocks 反序列化为 creation spec（保留 `block_type` + `text/heading/code` 等字段，含 `elements` 富文本格式）
+   - `POST /blocks/:anchor_cell_id/children` body `{"children": [...specs...], "index": <锚点当前 children 数量>}` 一次性追加所有非锚点的 child blocks 拷贝到锚点 cell 末尾
+   - `POST /blocks/:non_anchor_cell_id/children/batch_delete` body `{"start_index": 0, "end_index": <非锚点 children 数量>}` 清空原 cell 的 children（Feishu batch_delete 是 POST + 索引区间，不是 DELETE + ID 列表）
+   - `PATCH /blocks/:table_id` with `merge_table_cells` 合并 cells
 5. 跳过已存在 `merge_info` 的 cell（避免重复合并）
 6. 失败 fail-soft：单次合并失败不阻塞其它合并，最后输出失败计数
+
+**为什么末列要拷贝内容再合并**：Feishu `merge_table_cells` API 只设置 cell 边界 row_span / col_span，被合并的非锚点 cell 内容会被遮蔽不显示。需求描述列的多行（"1. xxx" / "2. yyy" / ...）属内容不同的合并，必须先把非锚点的 children blocks 复制到锚点 cell（保留 `**bold**` / `` `code` `` 等富文本格式），再 merge，才能在飞书侧看到完整的多行编号列表。
 
 ### 步骤 5：回填飞书 URL 到 markdown
 
@@ -148,7 +154,8 @@ URL: https://xxx.feishu.cn/docx/doxcnxxxxxx
 
 - **单向同步**：本地 markdown 是 source of truth；飞书侧的修改下次发布会被覆盖
 - **合并是 fail-soft**：合并失败不阻塞主发布，只输出警告
-- **merge cell 判定**：相邻多行同列内容必须**完全相同**才合并；空字符串不参与
+- **merge cell 判定（前 N-1 列）**：非空 anchor 吸收下方相同内容 cell + 下方空 cell（续行 rowspan 语义）；range > 1 行才合并
+- **merge cell 判定（末列 / 需求描述）**：识别续行 row group（前 N-1 列全空的连续行），先把非锚点 cell 的 children blocks 拷贝到锚点 cell，删原 cell children，再 merge_table_cells；保留富文本格式
 - **frontmatter 回填**仅首次发布执行；覆盖发布不动 frontmatter
 - **不修改正文**：除 frontmatter 外，本 skill 不改 markdown 任何内容
 - **不做 wiki/folder 切换**：首次发布的目标位置一旦定下，覆盖发布只能在同位置；要换位置必须删 frontmatter 中的 `lark_doc_id` 后重新首次发布
