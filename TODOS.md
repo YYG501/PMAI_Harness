@@ -280,6 +280,32 @@
 
 ---
 
+## Quick-fix 修订实战验证（来自 plan-eng-review 2026-05-10）
+
+来源：`~/.gstack/projects/PM-AI-Workflow/quickfix-revision-main-design-20260509-175049.md` §6.3 实战验证清单。SKILL 改完后必跑 3 场景验证 rule 真的在生效。
+
+### QF-V1: main 分支 quick-fix 改 prototypes 偏差扫描区块输出
+- **场景**：在主仓 main 跑 `/quick-fix "改 foo 一行"`（target = `prototypes/.../foo.tsx`）
+- **预期**：AI commit 前输出偏差扫描区块（按 SKILL.md §3.5.3 标准模板）；扫 docs/modules + docs/prd + docs/DESIGN；按 §3.5.2 概念分类判定相关性
+- **失败信号**：没输出区块 / 输出但格式偏离模板 / 没扫 docs/*
+- **截止**：2026-05-17
+
+### QF-V2: req 分支 quick-fix 改 docs/** 应被拒绝
+- **场景**：在某个 active req 的 worktree 跑 `/quick-fix "改 modules/...md"`（target = `docs/modules/某模块.md`）
+- **预期**：AI **拒绝执行**，引导 PM 改用 main quick-fix 或留给 close-req → `/doc-update`
+- **失败信号**：AI 直接改了 / 跑通了 commit
+- **截止**：2026-05-17
+
+### QF-V3: req 分支 quick-fix 改 solution 决策性内容应引导 rollback
+- **场景**：在某个 active req 的 worktree 跑 `/quick-fix "改 solution 决策 X"`（target = `requirements/active/<req>/solution.md` §🎯 关键产品决策）
+- **预期**：AI **拒绝**（决策性修订）+ 引导 PM 走 stage 3 revise（`/req-solution`）；如 PM 答"我只是改 typo"，AI 走 short-circuit 轻量路径
+- **失败信号**：AI 直接改了决策性内容 / 让 PM 答了分类后还是走 quick-fix
+- **截止**：2026-05-17
+
+3 场景任一失败 → SKILL 需要修订（不是 AI 训练问题，是 rule 表达不清）。
+
+---
+
 ## Eng backlog (来自 plan-eng-review 2026-04-25)
 
 来源：`docs/archive/design/设计-stage5-6-task循环.md` 的 plan-eng-review 产出。本 plan scope 外，作为后续改进点。

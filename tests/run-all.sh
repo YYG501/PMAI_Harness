@@ -34,10 +34,12 @@ SUITES=(
   test-setup-deps.sh
   test-run-bg.sh
   test-pre-commit-hook.sh
+  test-pre-dispatch-doc-gate.sh
   v4_T13_status_summary.sh
   v4_T14_taskexec_short_id.sh
   v4_T16_taskexec_double_scan.sh
   v4_T23_dependency_gate.sh
+  test-quick-fix-skill.sh
   quick-fix/test-happy-path.sh
   quick-fix/test-tsc-gate.sh
   quick-fix/test-concurrent-req.sh
