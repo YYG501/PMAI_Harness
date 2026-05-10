@@ -228,14 +228,42 @@ python3 "$REPO_ROOT/.claude/scripts/check-doc-pm-view.py" "$ACTIVE_REQ_DIR/solut
 
 lint 不强制阻塞，但 errors 留着进入步骤 6 的，必须在向 PM 展示文件路径时**显式告知**有几个未修复 errors + 一句话原因。
 
+**🚫 lint 处理后退出禁词清单（硬约束，task-spec/SKILL.md 步骤 12 同款）**
+
+PM 在 lint 弹窗里逐条做完 warnings 决策后，skill 视为闭环——退出时**不**复述 warnings 数量 / 处置方式 / "不阻塞"等任何 PM 几秒前刚看过的内部状态。下列复述属违例：
+
+| ❌ 违例文案（用户 2026-05-10 反馈实例） | 为什么禁 |
+|---|---|
+| `6 warnings 全部是骨架内合法标识型后缀（"（自定义）"...），不阻塞` | warnings / "不阻塞" 是 lint 内部状态词，PM 视图无此概念；PM 决策后已闭环，复述 = 噪音 |
+| `lint 已通过 / lint 决策完毕 / lint 闭环` | "lint" 本身就是 PM 不需要知道的工程概念 |
+| `控制权回 stage-gate` | skill-to-skill 内部 handoff，PM chat 不出现 |
+
+**正面**：lint 处理完毕后，skill 直接进入步骤 6 退出，**不向 PM 输出任何关于 lint / warnings / 控制权的话**。stage-gate 接管后才输出步骤 2 模板（已包含路径 + 变更要点 + review 推荐 + 确认问句）。
+
 工程合同 (`solution.engineering.md`) 不跑 lint（lint 脚本会自动跳过 `.engineering.md`）。
 
 ### 步骤 6：skill 结束
 
 - **first-gen 模式**：写完两文件 + hash → skill 退出。
-- **revise 模式**：只改了 PM 视图（工程合同 hash 现为 stale）→ skill 退出，告知 stage-gate "PM 视图已修订，工程合同保持 stale，等待 stage-gate 步骤 1.5 review 触发前自动 reconcile"。
+- **revise 模式**：只改了 PM 视图（工程合同 hash 现为 stale）→ skill 退出。
 
 控制权交回 `/req-stage-gate`，由它在步骤 1.5 自动调本 skill reconcile 模式同步两文件，再输出推荐 review 区块 + 走确认门。
+
+**🚫 退出时 PM chat 禁词清单（硬约束，与 task-spec/SKILL.md 步骤 12 同款）**
+
+revise 模式 skill 退出时是 skill-to-skill handoff（控制权回 stage-gate），**任何 PM-facing 描述都不发**——尤其下列内部状态词严禁出现在 PM chat 里：
+
+| ❌ 违例文案（用户 2026-05-10 反馈实例） | 正面替代 |
+|---|---|
+| `solution.md revise 完成` | 不输出（skill 静默退出；stage-gate 步骤 2 才告诉 PM "✅ solution.md 已更新"） |
+| `✅ solution.md 已 revise` | 改成"已更新"或"已修订"（"revise" = AI 内部模式名） |
+| `⚠️ solution.engineering.md 保持 stale（hash 8ae980b1e908 与 PM 视图当前不一致）` | 整段删除（hash / stale / .engineering.md 都是 AI 内部记账） |
+| `等下方确认门后由 reconcile 模式统一对齐` | 整段删除（reconcile 模式 = AI 内部状态，PM 选确认后默默执行即可） |
+| `控制权回 stage-gate` | 整段删除（skill-to-skill handoff 是后台行为） |
+
+**正面**：revise 模式处理完毕后直接进入步骤 6 静默退出。stage-gate 接管后输出步骤 2 完整模板（路径 + 变更要点有序列表 + review 推荐 + 对话式确认问句），所有 PM-facing 文字由 stage-gate 模板统一负责。
+
+> **"修改"分支回流的 chat 输出由 stage-gate 步骤 2 模板承担**——本 skill 不直接发任何 PM chat 文案。任何"已 revise" / "工程合同 stale" / "等 reconcile" / "X warnings 全部是…" 等内部状态描述都属违例（参见 `task-spec/SKILL.md` 步骤 12 上方禁词清单同款约束）。
 
 ---
 

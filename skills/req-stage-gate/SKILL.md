@@ -117,14 +117,20 @@ PM 选择进入 stage 3 时：
 
 理由：步骤 2 给 PM 看的"推荐 review"区块默认 PM 会跑 `/plan-eng-review` 等 review skill，review 必须双读 PM 视图 + 工程合同两文件已同步状态（input-flow §9.1 stage 4 review 模式）。stale 工程合同会让 review 出噪声 finding（例如找出"已被 PM 视图删除的旧概念"）。
 
-2. **输出确认门**（一份完整模板，把产物落地 / 摘要 / 可选 review / 确认问句拼成单次输出；不分两轮发）：
+2. **输出确认门**（一份完整模板，把产物落地 / 变更要点 / 可选 review / 确认问句拼成单次输出；不分两轮发）：
 
    ```
-   ✅ solution.md 已写入
+   ✅ solution.md 已更新
       <$ACTIVE_REQ_DIR/solution.md 绝对路径>
 
-   📋 一句话摘要
-      <一行核心决策摘要——本次方案的关键选择 / 重做范围 / 决策数 等>
+   📋 本次变更要点
+      1. <变更点 1，一行业务语言，例：核心命题改为 X 挂在 (Y, Z) 关系上>
+      2. <变更点 2，例：术语表去掉实现词>
+      3. <变更点 3，例：UI 骨架按 N 个页面重写>
+      4. <变更点 4，例：新增决策 D10 / D11>
+      5. <变更点 5，例：新增风险 R4 / R5>
+      6. <变更点 6，例：新增验收走查 N 项>
+      （≤ 2 个变更点时可压成 1-2 行；≥ 3 个用有序列表分条；每条只描述业务面变化，不出现"reconcile"/"hash"/"warnings"等内部词）
 
    📊 可选 review（你自跑，跑完贴结论我帮你 append 事件）
       /plan-ceo-review     — 战略：范围与产品野心
@@ -140,9 +146,23 @@ PM 选择进入 stage 3 时：
    **模板要点**：
    - 三段标题用 emoji 锚点（✅ / 📋 / 📊）让 PM 视线快速分段
    - 路径独立缩进，不挤标题行
-   - **不显示** `.engineering.md` 文件名 / hash 值 / "reconcile 同步" / "行数 lint" / "进入 stage 3"等工程黑话（PM 视角只关心 PM 视图主文件 + 下一阶段名称；详见 `task-spec/SKILL.md` 步骤 12 上方禁词清单，本闸门同样适用）
+   - **变更要点用有序列表分条**：solution 变更天然多面（决策 / UI / 风险 / 验收 等），单行装不下；≥ 3 个变更点强制用有序列表，每条聚焦一个业务面变化
+   - **不显示** `.engineering.md` 文件名 / hash 值 / "reconcile 同步" / "行数 lint" / "进入 stage 3" / "warnings" / "已 revise" 等工程黑话（PM 视角只关心 PM 视图主文件 + 下一阶段名称；详见 `task-spec/SKILL.md` 步骤 12 上方禁词清单，本闸门同样适用）
    - **禁止再加 ⚠️ lint 待办 / lint warnings 摘要等"传话块"**：lint 处理已在 /req-solution 内闭环，PM 在 stage-gate 不需要再看一遍自己几秒前的决策（这种二次显示用了 PM 不熟悉的内部术语—"骨架 / 合法屏幕字 / 退出时已确认的处理方式"—只会让 PM 困惑而无 actionable 内容）
-   - 确认问句对话式：「这份方案就这样定吗？OK 我就……；想改的说哪里。」不列 A/B 字母选项也不列"放弃"
+   - **禁止把 /req-solution 的退出信号复读到 PM chat**：revise 模式下 skill 退出时给的"PM 视图已修订 / 工程合同保持 stale / 等 reconcile"等是 AI-internal handoff，stage-gate 接到后默默走步骤 1.5 即可，不在 chat 提一句
+   - 确认问句对话式：「这份方案就这样定吗？OK 我就……；想改的说哪里。」**不列 A/B 字母选项**也不列"放弃"
+   - **反面示例**（用户 2026-05-10 反馈的真实违例）：
+     ```
+     ✘ ✅ solution.md 已 revise（"已 revise" → "已更新"）
+     ✘ ⚠️ solution.engineering.md 保持 stale（hash 8ae980b1e908 与 PM 视图当前不一致），等下方确认门后由 reconcile 模式统一对齐
+        （整段都是 AI 内部记账，PM 视角整段删除）
+     ✘ 一句话摘要：基于 Q3=B 修订 + Q4 答案扩展 + Q6→A2 + ... 解决了 X / Y / Z / U / V / W ...
+        （单行塞 6 个变更点 → 改有序列表分条）
+     ✘ 6 warnings 全部是骨架内合法标识型后缀（"（自定义）"...）
+        （warnings 处理已在 /req-solution 内闭环，PM 看不到"warnings"概念）
+     ✘ A) 确认（进入 reconcile + 行数 lint，再推进 stage 3） / B) 我要修改 solution
+        （A/B 字母选项 + 工程黑话；改对话式问句）
+     ```
 
    PM 跑完任一 review 后报告结论 → AI 调 `task-events.py append` 记 `plan_review_completed`（task 文件不存在时此处可省略，仅做口述确认）；事件流仅作审计记录，不当 gate（I-RV1/I-RV2）。
 
@@ -346,7 +366,9 @@ python3 .claude/scripts/req-transition.py "$ACTIVE_REQ_DIR" --to 7
   - 路径独立缩进，不挤标题行
   - 文末用对话式问句结尾（如「这份方案就这样定吗？OK 我就……；想改的说哪里。」），**不列 A/B 字母选项**
   - **不主动列"放弃 req"选项**（PM 真要放弃直接说「放弃这个 req / cancel」，AI 提示走 `/cancel-req`）
-- **PM chat 输出禁工程黑话**（与 `task-spec/SKILL.md` 步骤 12 上方禁词清单等价）：所有 stage 的确认门 / lint 弹窗 / 任何给 PM 看的 chat 文本里**严禁**出现 `hash` / 12 位 hash 值 / `synced_pm_view_hash` / `reconcile` / `reconcile 模式` / `stale` / `行数 lint` / `步骤 N.M` 内部编号 / `lazy sync` / `MODE=revise` 等内部状态机术语；解释段也禁出现 `.engineering.md` 文件名（路径行除外）。这些都是 AI 内部记账，PM 没有动作可做
+- **PM chat 输出禁工程黑话**（与 `task-spec/SKILL.md` 步骤 12 上方禁词清单等价）：所有 stage 的确认门 / lint 弹窗 / 任何给 PM 看的 chat 文本里**严禁**出现 `hash` / 12 位 hash 值 / `synced_pm_view_hash` / `reconcile` / `reconcile 模式` / `stale` / `行数 lint` / `lint warnings` / `X warnings` / `已 revise` / `revise 完成` / `步骤 N.M` 内部编号 / `lazy sync` / `MODE=revise` 等内部状态机术语；解释段也禁出现 `.engineering.md` 文件名（路径行除外）。这些都是 AI 内部记账，PM 没有动作可做。**用"已更新"/"已修订"替代"已 revise"，用"格式自检通过"替代"X warnings 全部是…"，用"等下方确认后统一同步"替代"由 reconcile 模式统一对齐"**
+- **/req-solution 退出信号属 AI-internal**：revise 模式下 skill 退出时返回的"PM 视图已修订 / 工程合同保持 stale / 等待 stage-gate 步骤 1.5 review 触发前自动 reconcile"等文案是 skill-to-skill handoff，stage-gate 接到后**默默**走步骤 1.5 reconcile + 输出步骤 2 模板，**不把退出信号原文复读到 PM chat**
+- **摘要 ≥ 3 个变更点用有序列表分条**：所有 stage 的 📋 摘要段，当变更点超过 2 个时强制用有序列表（`1.` / `2.` / ...）分条展示，每条一行业务语言；不允许塞成单行长串
 - **review 工具一律 PM 自跑**（I-RV1）：stage-gate 在产物写完后只输出推荐清单，不自动调任何 `/plan-*-review` / `/review` / `/qa` / `/design-review`。PM 跑完任一 review 后口述结论，AI 调 `task-events.py append` 机械记录事件作为审计痕迹；事件流不当 gate
 - **stage 2→3 双文件 reconcile**（`_shared/pm-view/input-flow.md` §9.6 / §9.6.5）：双触发点——
   - **review 触发前**（步骤 1.5，必跑）：每次 /req-solution 写完 solution.md 后、向 PM 输出"推荐 review"区块**前**先调 reconcile，确保 PM 跑 review 时双文件已同步（input-flow §9.6.1 review 触发行）；revise 后回到步骤 2 同样走 1.5
