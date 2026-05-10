@@ -12,3 +12,5 @@
 **当前状态**：v3.5 实施全部收口（阶段 1 + 2 + 3 + 4 + 4.5a-f；5/6/7/8/9 废弃/跳过）。生成器骨架（scripts / skills / templates / tests）齐全，269 单测 0 失败。下一步重点是端到端验证（拿生成器跑通真实项目）+ 后续基于实证决定 TODOS 里的 TD-1/2/3/4 探测档延迟项。
 
 **v3.5 实施进度 / 当前位置**：见 [`RUNTIME.md`](./RUNTIME.md)（运行时状态 / 新窗口续接入口；进度跟踪 + 已知坑 + 下一步指针）。
+
+**主仓改完后同步到目标项目**：用 `bash scripts/sync-to-project.sh <project-dir>`（默认 dry-run）。范围 + 防呆 + 故障处理见 [`docs/framework-sync-sop.md`](./docs/framework-sync-sop.md)。
