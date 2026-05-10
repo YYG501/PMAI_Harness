@@ -92,7 +92,7 @@ cd "<WORKTREE>"
 
 **short-circuit 例外**：当改动仅触及"叙述/格式类"（§📁 历史档案 / typo / 引用更新），AI 可输出简化版扫描区块（§3.5.3 简化版），不让 PM 答"决策性 vs 轻量"分类提问。
 
-**三条 invariant 越界时拒绝执行**（详见 §3.5.2）：
+**三条 invariant 越界时拒绝执行**（详见 §3.5.1 req 分支表的"不改"行）：
 - active req 阶段产物（brief / analysis / solution / task-plan）的决策性修订 → 引导 PM 走 `req-transition.py --rollback` 或 stage 3 revise
 - active task 产出 → 引导 PM 走 `/task-execute` / `/task-submit` / `/close-task`
 - 在 req 分支跑 quick-fix 改 `docs/**` → 引导 PM 改用 main quick-fix 或留给 close-req → `/doc-update`
@@ -141,7 +141,7 @@ bash .claude/scripts/quick-fix.sh --snapshot
 |---|---|
 | `prototypes/**` | `docs/modules/*.md`（项目级模块规格描述的功能形态）/ `docs/prd.md`（项目级 PRD）/ `docs/DESIGN.md`（视觉规范——涉及视觉时） |
 | `docs/CONTEXT/DESIGN/modules/prd.md` | `prototypes/**`（原型是否已反映新文档——反向同步）/ 文档间交叉引用 |
-| `requirements/closed/<closed-req>/**` | 这是历史快照（引用更新 / 错别字）；通常不外溢。改"产品决策记录"= 改写历史，PM 要明确意图 |
+| `requirements/closed/<closed-req>/**`（含其内 tasks/） | 这是历史快照（引用更新 / 错别字 / 反映后续 req 变化）；通常不外溢。改"产品决策记录"= 改写历史，PM 要明确意图。**改完必须在被改文件末尾追加 visible §📝 后期修订记录 section**（详见 §3.5.2）|
 | `templates/` / `.claude/scripts/` / `.claude/skills/` | §Rules 已禁止；走单独 PR 不走 quick-fix |
 | **其他 target**（表外） | **按 §3.5.2 概念分类自己推断**——表外不是"无需扫"，是"AI 用概念判断" |
 
@@ -277,4 +277,4 @@ quick-fix commit 前 AI 必须按以下模板输出区块给 PM 看：
 - 如果 ff-only/rebase 失败，保留 worktree，按脚本提示让 PM 决定手工处理或 `--cancel`
 - req mode 下 base 分支由启动位置自动推断；不允许手动改 base（避免 PM 在 req-A worktree 跑了 quick-fix 却合到 req-B 分支）
 - **quick-fix commit 前必跑「偏差扫描」步骤**（参见 §Drift Scan Reference 节）；AI 按 §3.5.3 模板输出区块给 PM 看；不得跳过；PM 审批仍是 `通过 / 重做 / 取消` 三选，不加新选项分散决策
-- **三条 invariant 越界时拒绝执行 quick-fix**（详见 §Drift Scan Reference §3.5.2）：active req 阶段产物决策性修订 → 走 stage-rollback；active task 产出 → 走 task 流程；req 分支不改 docs/**
+- **三条 invariant 越界时拒绝执行 quick-fix**（详见 §Drift Scan Reference §3.5.1 req 分支表）：active req 阶段产物决策性修订 → 走 stage-rollback；active task 产出 → 走 task 流程；req 分支不改 docs/**
