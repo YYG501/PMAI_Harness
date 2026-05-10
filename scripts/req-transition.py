@@ -132,6 +132,71 @@ def check_all_tasks_closed(req_dir: Path) -> tuple[bool, list[str]]:
     return len(open_tasks) == 0, open_tasks
 
 
+def seal_req_docs_before_transition(req_dir: Path, current: int, target: int) -> None:
+    """I-DC1 pre-transition gate：把 req worktree 里 active req 范围内的未 commit
+    文档改动自动 commit。覆盖 brief / analysis / solution / DESIGN / task-plan / tasks/。
+    range 严格限定避免卷入主仓其他改动。
+
+    rationale: stage 5→6 之后会触发 task-confirm 通过 git worktree add fork
+    task 分支；working tree 飘的文档不会被 fork 带走。这道 gate 保证每次 stage
+    切换都把当前 stage 的产出落盘，下游消费拿到的就是 PM 看过的版本。
+    """
+    import subprocess
+
+    worktree_root = req_dir.parent.parent.parent
+    if not (worktree_root / ".git").exists() and not (worktree_root / ".git").is_file():
+        # req_dir 不在 git worktree 内（测试 fixture 等场景）→ 跳过
+        return
+
+    rel_req = req_dir.relative_to(worktree_root)
+    pathspecs = [str(rel_req)]
+    design_md = worktree_root / "docs" / "DESIGN.md"
+    if design_md.exists():
+        pathspecs.append("docs/DESIGN.md")
+
+    try:
+        status_out = subprocess.run(
+            ["git", "-C", str(worktree_root), "status", "--porcelain", "--", *pathspecs],
+            capture_output=True, text=True, check=True,
+        ).stdout.strip()
+    except subprocess.CalledProcessError:
+        return
+
+    if not status_out:
+        return
+
+    dirty_files = [line[3:] if len(line) > 3 else line for line in status_out.splitlines()]
+    print(
+        f"⚠️ I-DC1 pre-transition gate: stage {current}→{target} 检测到 active req 范围内未 commit 文档改动，自动落盘：",
+        file=sys.stderr,
+    )
+    for f in dirty_files:
+        print(f"   - {f}", file=sys.stderr)
+
+    try:
+        subprocess.run(
+            ["git", "-C", str(worktree_root), "add", "--", *pathspecs],
+            check=True, capture_output=True,
+        )
+        diff_check = subprocess.run(
+            ["git", "-C", str(worktree_root), "diff", "--cached", "--quiet"],
+        )
+        if diff_check.returncode == 0:
+            return
+        commit_msg = f"req: stage {current}→{target} seal docs"
+        subprocess.run(
+            ["git", "-C", str(worktree_root), "commit", "-q", "-m", commit_msg],
+            check=True, capture_output=True,
+        )
+    except subprocess.CalledProcessError as e:
+        stderr = e.stderr.decode("utf-8", errors="replace") if isinstance(e.stderr, bytes) else (e.stderr or "")
+        print(
+            f"❌ I-DC1: pre-transition auto-commit 失败，拒绝推进 stage。请人工处理后重跑。\n   {stderr}",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+
+
 def validate_forward(meta: dict, target: int, req_dir: Path) -> None:
     """Validate a forward stage transition."""
     current = meta["stage"]
@@ -213,6 +278,7 @@ def main() -> None:
     else:
         validate_forward(meta, args.target, req_dir)
         direction = "forward"
+        seal_req_docs_before_transition(req_dir, current, args.target)
 
     # Execute transition
     meta["stage"] = args.target

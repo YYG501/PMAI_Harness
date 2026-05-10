@@ -18,6 +18,7 @@
 | **I-CA** (1-6) | [cancel-req.sh](#cancel-reqsh) | req 废弃流程 | 不 merge main / 全 task 先清 / 幂等 |
 | **I-CB** (1-8, 10) | [check-branch.sh](#check-branchsh) | PreToolUse hook | 路径归一化 / 白名单 / fail-closed / read-only + task 状态硬 gate（CB10） |
 | **I-AD** (1-5) | [exec-adapters](#exec-adaptersshcodexsh--cursor-agentsh) | 外部执行器 | 启动前状态校验 / diff 范围 / clean dispatch（AD5） |
+| **I-DC** (1) | [文档落盘 gate](#文档落盘-gateidc1) | task-spec / task-confirm / req-transition | dispatch 前 working tree 文档必须 clean（auto-commit 兜底） |
 | **I-RV** (1-3) | [review 工具](#review-工具推荐而非强制) | review 推荐 | AI 不自跑 / 事件不当 gate / 不 fake append |
 | **I-TT** (1-3,5-7) | [task-transition.py](#task-transitionpy) | task 状态转换 | 2 主转换 + 1 失败回退 / D0 并行 / 原子性 |
 | **I-RT** (1-8) | [req-transition.py](#req-transitionpy) | req stage 转换 | 逐级推进 / stage 3-4 可跳 / stage 7 不可回退 |
@@ -155,6 +156,28 @@
 - 启动前状态校验：adapter 第一段
 - 退出后 diff 校验：adapter 末尾，基于 `git -C $TASK_WORKTREE diff --name-only HEAD`
 - Dispatch 前 working tree clean：task-execute SKILL.md 步骤 3b 开头（pre-dispatch checkpoint gate）
+
+---
+
+## 文档落盘 gate（I-DC1）
+
+**目的**：把 I-AD5 的"dispatch 前 working tree 必须 clean"原则推广到**文档级 dispatch 边界**——凡是把 PM 写的文档从 working tree fork / merge / transition 给下游消费的地方，都要保证文档已 commit 到对应分支。事故背景：2026-05-09 task-005（ExampleConsumerApp）三个状态变更弹窗 + 导入弹窗的文案与 PM 视图终态偏差——根因是 task-spec 在 req worktree 跑了 4 轮 revise + 1 次 reconcile，全部停在 working tree 没 commit；task-confirm 通过 `git worktree add -b ... <REQ_BRANCH>` fork 时取的是 req 分支 HEAD commit（first-gen v1），把 PM 改了 4 次的版本完全跳过，executor 按 v1 实施。memory `feedback_codex_pre_dispatch_checkpoint.md` 总结的"事后 commit 救不回延迟落盘"是普适原则，不止 codex dispatch 适用。
+
+### 不变式
+
+- **I-DC1**：**文档级 dispatch 边界（git worktree fork / req-transition stage 切换）之前，working tree 内对应文档必须落盘到 git 分支**。三道防线，任一触发即视为 I-DC1 被守住：
+  1. **task-spec 步骤 12.6**（首道防线，PM 不感知）：reconcile 出口处由 skill 自身把 task md 两文件（PM 视图主文件 + 工程合同）commit 到 req 分支。
+  2. **create-task-worktree.sh pre-fork gate**（兜底）：fork 前检查 req 分支 working tree 中本 task 两文件是否 dirty，dirty 时 auto-commit + stderr 警告（pathspec 严格限定本 task 范围，不卷入其他改动）。task-confirm SKILL 必须把警告原文转给 PM 一句话说明。
+  3. **req-transition.py pre-transition gate**（兜底）：forward 推进时把 active req 范围内（`requirements/active/<req>/` + `docs/DESIGN.md`）的未 commit 改动 auto-commit，commit 失败则 exit 1 拒绝推进。rollback 不触发（不是 dispatch）。
+
+  原则：auto-commit pathspec **永远精确限定**到本次 dispatch 涉及的文档范围；从不 `git add -A`，避免把 PM 在 working tree 里飘的其他改动（譬如手改的 prototype 代码）误捆进文档 commit。
+
+### 守卫点
+
+- task-spec 步骤 12.6：`skills/task-spec/SKILL.md`（reconcile 出口处调 `auto_commit_docs`）
+- create-task-worktree pre-fork gate：`scripts/create-task-worktree.sh`（"I-DC1 Pre-fork dirty gate" 段）
+- req-transition pre-transition gate：`scripts/req-transition.py` `seal_req_docs_before_transition`
+- 共享 helper：`scripts/_lib/dirty-check.sh`（`list_doc_dirty` / `auto_commit_docs`）
 
 ---
 

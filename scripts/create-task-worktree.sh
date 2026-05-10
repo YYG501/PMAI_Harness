@@ -7,6 +7,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/_setup-deps.sh"
 source "$SCRIPT_DIR/_lib/worktree.sh"
+source "$SCRIPT_DIR/_lib/dirty-check.sh"
 
 usage() {
   echo "用法: bash create-task-worktree.sh <task-file> <req-branch>" >&2
@@ -63,6 +64,34 @@ WORKTREE_DIR="${PM_AI_WORKTREE_BASE:-${REPO_ROOT}/.worktrees}/${BRANCH}"
 if ! git -C "$REPO_ROOT" show-ref --verify --quiet "refs/heads/$REQ_BRANCH" 2>/dev/null; then
   echo "错误：req 分支不存在: $REQ_BRANCH" >&2
   exit 1
+fi
+
+# --- I-DC1 Pre-fork dirty gate ---
+# `git worktree add -b ... "$REQ_BRANCH"` 取 req 分支 HEAD commit 而非 working tree。
+# 任何停在 req worktree working tree 里没 commit 的 task md 改动（task-spec 多轮
+# revise / reconcile 应该已被 12.6 落盘，但仍兜底一道）会被 fork 漏掉，导致 task
+# 分支拿到 stale 文档。此处 auto-commit 限定本 task 两文件范围。
+ABS_TASK_FILE_PRE=$(cd "$(dirname "$TASK_FILE")" && pwd -P)/$(basename "$TASK_FILE")
+ENG_FILE_PRE="${ABS_TASK_FILE_PRE%.md}.engineering.md"
+REQ_WT_PRE=$(resolve_worktree_path "$REQ_BRANCH" "$REPO_ROOT" || true)
+if [ -n "$REQ_WT_PRE" ] && [ -d "$REQ_WT_PRE" ]; then
+  REQ_WT_PRE_REAL=$(cd "$REQ_WT_PRE" && pwd -P)
+  if [[ "$ABS_TASK_FILE_PRE" == "$REQ_WT_PRE_REAL"/* ]]; then
+    REL_PM_VIEW="${ABS_TASK_FILE_PRE#${REQ_WT_PRE_REAL}/}"
+    REL_ENG="${ENG_FILE_PRE#${REQ_WT_PRE_REAL}/}"
+    PRE_FORK_DIRTY=$(list_doc_dirty "$REQ_WT_PRE_REAL" "$REL_PM_VIEW" "$REL_ENG" || true)
+    if [ -n "$PRE_FORK_DIRTY" ]; then
+      echo "⚠️ I-DC1 pre-fork gate: 检测到 task md 在 req 分支未 commit，自动落盘后再 fork：" >&2
+      echo "$PRE_FORK_DIRTY" | sed 's/^/   - /' >&2
+      HASH_PRE=$([ -f "$REQ_WT_PRE_REAL/$REL_PM_VIEW" ] && shasum -a 256 "$REQ_WT_PRE_REAL/$REL_PM_VIEW" | cut -c1-12 || echo "unknown")
+      if ! auto_commit_docs "$REQ_WT_PRE_REAL" \
+          "${TASK_BASENAME}: spec sealed before fork (hash $HASH_PRE)" \
+          "$REL_PM_VIEW" "$REL_ENG"; then
+        echo "❌ I-DC1: pre-fork auto-commit 失败，拒绝 fork。请人工处理 req worktree 后重跑 /task-confirm。" >&2
+        exit 1
+      fi
+    fi
+  fi
 fi
 
 # --- Create worktree (idempotent) ---

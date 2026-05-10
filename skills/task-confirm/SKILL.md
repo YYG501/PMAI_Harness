@@ -180,6 +180,8 @@ fi
 
 **v4.5 行为**：脚本 fork task 分支后**自动把 task md（PM 视图主文件 + 工程合同）从 req 分支删除并 commit**——task md 在 task 分支独家所有，避免 v4 时代两份共存导致的路径解析赌博。close-task 时 merge 会自动"认回" task md 进入 req 分支作为最终历史档案。
 
+**I-DC1 pre-fork gate**：`create-task-worktree.sh` 在 fork 之前会先检查 req 分支 working tree 里本 task 的 PM 视图主文件 + 工程合同是否 dirty——dirty 时**自动 commit** 后再 fork（pathspec 只覆盖本 task 两文件，不卷入其他改动）。这是兜底防线；正常情况 task-spec 步骤 12.6 应该已经把 task md 落盘到 req 分支，gate 触发说明 task-spec 流程被绕过或失败。脚本 stderr 输出 "⚠️ I-DC1 pre-fork gate" 警告时，AI 必须把警告原文转给 PM 看一句话说明（不当 gate，但要让 PM 知道走过 fallback 路径）。
+
 更新 task 文件（**注意：在 task worktree 内的副本里改，不在 req 分支**）：
 - `**worktree：**` → worktree 路径
 - `**开发服务器：**` → `http://localhost:<port>`
