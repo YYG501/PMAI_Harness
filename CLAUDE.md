@@ -13,4 +13,4 @@
 
 **v3.5 实施进度 / 当前位置**：见 [`RUNTIME.md`](./RUNTIME.md)（运行时状态 / 新窗口续接入口；进度跟踪 + 已知坑 + 下一步指针）。
 
-**主仓改完后同步到目标项目**：用 `bash scripts/sync-to-project.sh <project-dir>`（默认 dry-run）。范围 + 防呆 + 故障处理见 [`docs/framework-sync-sop.md`](./docs/framework-sync-sop.md)。
+**主仓改完后同步到目标项目**：手动 SOP 见 [`框架同步-SOP.md`](./框架同步-SOP.md)（hotfix 阶段过渡，框架结构稳定后改自动化）。

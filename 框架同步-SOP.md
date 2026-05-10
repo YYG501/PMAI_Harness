@@ -27,16 +27,20 @@
 
 ## 2. 同步范围
 
-### 2.1 必同步路径
+### 2.1 必同步路径（4 块缺一不可）
 
 ```
 PM-AI-Workflow              example-consumer-app
 ─────────────────────       ───────────────────────
 scripts/             →      .claude/scripts/
 skills/              →      .claude/skills/
+templates/           →      templates/
+agents/              →      .claude/agents/
 ```
 
-> 未来 manifest（docs/archive/design/设计-框架同步.md §4.2）会扩展到 `templates/` `agents/`，本 SOP 暂不覆盖。
+**4 块缺一不可**——只 sync `scripts/skills` 漏掉 `templates/` 会让模板源（如 `templates/CLAUDE.md.tmpl` / `templates/工程结构约束-*.md`）滞后；漏 `agents/` 会让自定义 subagent 不下发。判定"对齐"的唯一标准是 4 块的 `diff -rq` 全部零差异，参见 §4.8。
+
+> 历史注：v0 SOP 只 cover `scripts/skills`，注"未来 manifest 扩展到 templates/agents"。2026-05-10 example-consumer-app sync 实战把 templates 漏掉了，本节扩展到 4 块。完整 manifest 设计仍见 `docs/archive/design/设计-框架同步.md` §4.2。
 
 ### 2.2 必同步分支
 
@@ -116,15 +120,19 @@ git log <上次 generator HEAD>..HEAD --format='%h %ai %s' -- scripts/ skills/
 
 ### 步骤 3：rsync 同步内容
 
-**3a. dry-run 先看变更清单**（**必跑**）
+**3a. dry-run 先看变更清单**（**必跑、4 块都要**）
 
 ```bash
 SRC=/path/to/PM-AI-Workflow
 DST=/path/to/consumer  # 可以是消费仓主目录或 worktree
 
-rsync -a --dry-run -iv "$SRC/scripts/" "$DST/.claude/scripts/"
-rsync -a --dry-run -iv "$SRC/skills/"  "$DST/.claude/skills/"
+rsync -anc -iv --exclude='init-project/' "$SRC/skills/"    "$DST/.claude/skills/"
+rsync -anc -iv --exclude='init-project.sh' "$SRC/scripts/" "$DST/.claude/scripts/"
+rsync -anc -iv "$SRC/templates/"                           "$DST/templates/"
+rsync -anc -iv "$SRC/agents/"                              "$DST/.claude/agents/"
 ```
+
+`-c`（checksum）替代默认 mtime+size，避免"timestamp 不同但内容一致"的误报。
 
 `-iv` 输出每个文件的变更标记：
 
@@ -135,25 +143,33 @@ rsync -a --dry-run -iv "$SRC/skills/"  "$DST/.claude/skills/"
 
 PM 看一眼变更清单，跟步骤 2 列的 commits 对得上 → 进入 3b。**新文件 / 新目录数量异常高**（如步骤 2 只显示 3 commit 但 dry-run 列 50 个新文件）→ 停手排查，可能 path 配错或消费仓没初始化过 `.claude/`。
 
-**3b. 实跑**
+**3b. 实跑**（4 块都要）
 
 ```bash
-rsync -a "$SRC/scripts/" "$DST/.claude/scripts/"
-rsync -a "$SRC/skills/"  "$DST/.claude/skills/"
+rsync -ac --exclude='init-project/'    "$SRC/skills/"    "$DST/.claude/skills/"
+rsync -ac --exclude='init-project.sh'  "$SRC/scripts/"   "$DST/.claude/scripts/"
+rsync -ac                              "$SRC/templates/" "$DST/templates/"
+rsync -ac                              "$SRC/agents/"    "$DST/.claude/agents/"
 ```
 
-`-a` 保留属性 + 递归。**不加** `--delete`：消费侧未来可能有 `.framework-overrides` 类本地配置，留余地。
+`-a` 保留属性 + 递归；`-c` 按 content checksum 比较（与 dry-run 对齐）。**不加** `--delete`：消费侧未来可能有 `.framework-overrides` 类本地配置，留余地。
+
+`init-project` skill 和 `init-project.sh` 仅生成器仓使用，必须 `--exclude`。
+
+仅在确认要清掉 dst 多余 framework 残留（如旧版本删除的废弃文件）时才加 `--delete`。
 
 ### 步骤 4：diff verify（**强制 + 方向校验**）
 
-**4a. 内容一致性**（不可跳过）
+**4a. 内容一致性**（不可跳过、4 块都要）
 
 ```bash
-diff -rq "$SRC/scripts/" "$DST/.claude/scripts/" 2>&1 | grep -v 'Common'
-diff -rq "$SRC/skills/"  "$DST/.claude/skills/"  2>&1 | grep -v 'Common'
+diff -rq "$SRC/skills/"    "$DST/.claude/skills/"    2>&1 | grep -v -E "^(Common|Only.*: init-project)"
+diff -rq "$SRC/scripts/"   "$DST/.claude/scripts/"   2>&1 | grep -v -E "^(Common|Only.*: init-project\.sh)"
+diff -rq "$SRC/templates/" "$DST/templates/"         2>&1 | grep -v 'Common'
+diff -rq "$SRC/agents/"    "$DST/.claude/agents/"    2>&1 | grep -v 'Common'
 ```
 
-**两条命令输出都为空** = 100% 一致 = sync 内容正确。**有任一行输出 → 立即停手排查**。
+**4 条命令输出全为空** = 100% 一致 = sync 内容正确。**任一行有输出 → 立即停手排查**（参见 §4.8——只 diff 1-2 块就声称对齐是这次实战的主要踩坑）。
 
 **4b. 方向 sanity check**（防 4.1 看反陷阱）
 
@@ -303,6 +319,27 @@ req 分支的 worktree 可能在：
 
 → 步骤 3 默认是整目录 rsync，本节当作"看见新 helper 时多看一眼调用方都拷到了没"。
 
+### 4.8 别只 diff `scripts/skills` 就声称对齐（已硬卡入步骤 4a）
+
+判定"对齐"的唯一标准是 §2.1 4 块（scripts + skills + templates + agents）的 `diff -rq` **全部零差异**。只 diff 1-2 块就声称对齐是 2026-05-10 sync 的主要踩坑：
+
+- 第二轮 sync 后只 diff 了 `scripts/skills`，得到"零差异"，声称"main 完全对齐"
+- PM 让"复查"才发现 `templates/` 还差 5 个模板源文件（`CLAUDE.md.tmpl` / `module.md.tmpl` / `solution.md.tmpl` / `task-plan.md.tmpl` / `task.md.tmpl`）
+- 这 5 个文件的内容差异跨多次主仓 commit 累积，但因为不在范围扫描内，从来没被注意到
+
+固定改法：步骤 4a 的 4 条 `diff -rq` 命令一次性都跑，**任意一条非空就不算对齐**。
+
+### 4.9 sync 工具 ≠ init-project.sh
+
+不要在已 init 的项目上跑 `init-project.sh`：
+
+- `init-project.sh` 是 init 时一次性占位符替换 + 创建目录骨架（替换 `{{PROJECT_NAME}}` / `{{PROJECT_BACKGROUND}}` 等）
+- 已 init 项目的 `CLAUDE.md` / `docs/CONTEXT.md` / `docs/DESIGN.md` / `docs/prd.md` 是落地业务实例，**PM 已经写了业务背景**——再跑 init 会被空模板覆盖
+
+sync（本 SOP）只动 framework 资产（4 块），不动业务实例。
+
+附带：`init-project.sh` 自身有 bug——line 182 `cp "$SKILL_DIR"*` 用 glob 不递归子目录，导致 `references/` 子文件漏拷。新项目 init 后通常需要手工补 `references/` 子目录。这个 bug 本身要修生成器，不是本 SOP 范围。
+
 ---
 
 ## 5. 实战记录
@@ -331,6 +368,29 @@ req 分支的 worktree 可能在：
 ### 5.2 2026-04-26 example-consumer-app sync（历史参考）
 
 详见 `docs/archive/design/设计-框架同步.md` §1，6 痛点（P1-P6）当时由那次实战暴露。
+
+### 5.3 2026-05-10 example-consumer-app sync
+
+**触发**：prd-writing skill 大改（二级=动作组 / 三级=动作子项 + reorg pass + lint 兜底）后同步给 example-consumer-app。
+
+**范围**：
+- 涵盖 PM-AI-Workflow main 自上次 sync 以来 7 个 commit（含 prd-writing 改造、PM-VIEW v2 闸门、bundle 中间层删除、quick-fix 复审、I-DC1 文档落盘 gate 等）
+- 同步分支：暂时只 main（其他 4 个 worktree 待后续 merge）
+
+**成果**：
+- main: `e87b812` + `2395e7a` + `6f96e61` 三个 commit 累积同步
+  - `e87b812`：本次 prd-writing 直接改动 8 个文件（第一轮）
+  - `2395e7a`：补 28 个之前历史 commits 漏同步的 framework 文件（第二轮）
+  - `6f96e61`：补 5 个 templates 模板文件（PM 复查时发现的漏网之鱼）
+
+**统计**：
+- 改动文件：skills 14 个 SKILL.md + scripts 11 个 + templates 5 个 = 30 个；新增 1 + 删除 2
+- 改动行数：+860 -802（含 bundle 中间层删除）
+
+**踩到的坑**：
+- 一次同步只拷当前直接改动 8 个文件（漏掉 28 个累积），见 §4.5 反面教训
+- 第二轮声称"对齐"但只 diff `scripts/skills`，漏 templates 5 个文件，见 §4.8（新增）
+- 这次开了一段弯路：写了简化版 sync 工具 + 重复 SOP 文档，复查发现已有完整 SOP 设计未实施 + 旧 SOP 文档存在，最后撤回工具 + 把发现合并回本 SOP（§4.8 / §4.9 + §2.1 范围扩展 + §3 步骤 4 块化）
 
 ---
 
