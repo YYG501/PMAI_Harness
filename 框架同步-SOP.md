@@ -87,24 +87,48 @@ git worktree list --porcelain | grep -E '^worktree |^branch '
 
 ### 步骤 1：看上次同步时点
 
-**1a. 优先按 trailer 查**（精确）
+**1a. 优先读 lockfile**（精确，按 [`docs/archive/design/设计-框架同步.md`](docs/archive/design/设计-框架同步.md) §5.3 主锚点）
 
 ```bash
-# 在消费仓里看
-git log -1 --grep='^Generator-HEAD:' --format='%h %ai %s%n%b' .claude/scripts/
-# 输出例最末一行：Generator-HEAD: bb0491e
+# 在消费仓根读 lockfile（git tracked，不会因 commit message 操作丢失）
+cd /path/to/consumer
+python3 -c "import json; print(json.load(open('.framework-sync-state.json'))['last_synced']['generator_sha'])"
+# 输出例：76abc71
 ```
 
-trailer 是步骤 5 commit 模板新增的锚点。grep 不到就 fallback 到 1b。
+`.framework-sync-state.json` schema:
+```json
+{
+  "schema_version": 1,
+  "last_synced": {
+    "generator_sha": "<生成器 commit sha>",
+    "generator_repo": "PM-AI-Workflow",
+    "synced_at": "<ISO 8601 时间戳>",
+    "manifest_schema": 1
+  }
+}
+```
 
-**1b. fallback：按 commit message 反推**（旧仓兼容）
+每次 sync 完成后必须更新 `generator_sha` + `synced_at`（步骤 5 模板）。
+
+**1a-fallback：trailer 查**（lockfile 缺失或损坏时用）
+
+```bash
+# 在消费仓里看（path 限定到 lockfile，避免 trailer 漂到无关 commit）
+git log -1 --grep='^Generator-HEAD:' --format='%h %ai %s%n%b' .framework-sync-state.json
+# 输出例最末一行：Generator-HEAD: 76abc71
+```
+
+trailer 是步骤 5 commit 模板辅锚点（人类可读副本）。
+
+**1b. fallback：按 commit message 反推**（v0 旧仓兼容；lockfile + trailer 都没建立时用）
 
 ```bash
 git log --format='%h %ai %s' .claude/scripts/ | grep '同步框架' | head -1
 # 输出例：d9df3f8 2026-05-07 16:24:58 +0800 chore: 同步框架 — ...
 ```
 
-记下 hash 跟时间。
+记下 hash 跟时间。建议同时跑 1a-fallback 验证。
 
 ### 步骤 2：看 PM-AI-Workflow 主仓累积变更
 
@@ -187,12 +211,26 @@ generator 时间应**晚于或等于**消费仓时间。如果消费仓更晚 �
 
 ```bash
 cd "$DST"
-git add .claude/scripts/ .claude/skills/
+git add .claude/scripts/ .claude/skills/ .claude/agents/ templates/
 git status --short  # 检查改动文件数 + untracked 目录（如新增 references/）
 
-# 拿 generator 当前 HEAD（步骤 5 模板末尾的 trailer 用）
+# 5a. 更新 lockfile（主锚点，按设计 §5.3）
 GEN_HEAD=$(git -C "$SRC" rev-parse --short HEAD)
+SYNCED_AT=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+cat > .framework-sync-state.json <<JSON
+{
+  "schema_version": 1,
+  "last_synced": {
+    "generator_sha": "$GEN_HEAD",
+    "generator_repo": "PM-AI-Workflow",
+    "synced_at": "$SYNCED_AT",
+    "manifest_schema": 1
+  }
+}
+JSON
+git add .framework-sync-state.json
 
+# 5b. commit 含 lockfile 改动 + trailer 副本
 git commit -m "chore: 同步框架 — <一行摘要>
 
 涵盖 PM-AI-Workflow 主仓 commits（自上次 sync <hash>）:
@@ -204,13 +242,18 @@ git commit -m "chore: 同步框架 — <一行摘要>
 - <主要文件 + 一行说明>
 - ...
 
-至此 .claude/scripts + .claude/skills 与 PM-AI-Workflow main 主仓内容 100% 一致。
+至此 .claude/scripts + .claude/skills + templates + .claude/agents 与
+PM-AI-Workflow main 主仓内容 100% 一致。
 
 Generator-HEAD: $GEN_HEAD
 "
 ```
 
-> `Generator-HEAD:` trailer 是步骤 1a 的锚点。**必填**——下次 sync 直接 grep 这个 trailer 拿上次同步点，不用再脑算 / 反推。
+> 双锚点机制（按设计 §5.3）：
+> - **`.framework-sync-state.json` lockfile**（主）：git tracked，不会因 commit 操作丢失。**必更新**。
+> - **`Generator-HEAD: $GEN_HEAD` trailer**（辅）：人类可读副本，让 PM 直接看 commit 就知道 anchor。**必填**。
+>
+> 单凭 trailer 不够：若 sync commit 没改 `.claude/` `templates/` `agents/`（如 empty commit / 锚点补丁），路径限定的 trailer grep 会漏掉它。lockfile path 限定能稳定命中。
 
 ### 步骤 5.5：sync 后冒烟（**强制**）
 
@@ -391,6 +434,7 @@ sync（本 SOP）只动 framework 资产（4 块），不动业务实例。
 - 一次同步只拷当前直接改动 8 个文件（漏掉 28 个累积），见 §4.5 反面教训
 - 第二轮声称"对齐"但只 diff `scripts/skills`，漏 templates 5 个文件，见 §4.8（新增）
 - 这次开了一段弯路：写了简化版 sync 工具 + 重复 SOP 文档，复查发现已有完整 SOP 设计未实施 + 旧 SOP 文档存在，最后撤回工具 + 把发现合并回本 SOP（§4.8 / §4.9 + §2.1 范围扩展 + §3 步骤 4 块化）
+- 事后按本 SOP 复查，5 个 sync commit 漏写 `Generator-HEAD` trailer，下次 sync 步骤 1a grep 会拿到过时锚点 `edb7fc6`（5-09 那次 sync）。按设计 §5.3 主锚点机制，example-consumer-app main 补 commit `2b50d2e`：创建 `.framework-sync-state.json`（`generator_sha = 76abc71`） + 写 trailer。同时更新本 SOP §1a 改用 lockfile 优先 + §5 commit 模板加 lockfile 自动更新（双锚点机制：lockfile 主、trailer 辅）落地。
 
 ---
 
