@@ -230,15 +230,17 @@ def publish_first_time(markdown_path: Path, target: dict):
     except json.JSONDecodeError:
         die(f"lark-cli docs +create 返回非 JSON: {res.stdout[:300]}")
 
+    inner = data.get("data") or {}
     doc_id = (
-        (data.get("data", {}).get("document", {}) or {}).get("document_id")
-        or (data.get("document", {}) or {}).get("document_id")
+        inner.get("doc_id")                                          # ≥1.0.27
+        or (inner.get("document") or {}).get("document_id")         # 旧版嵌套
+        or (data.get("document") or {}).get("document_id")
         or data.get("document_id")
     )
     if not doc_id:
-        die(f"无法从 lark-cli docs +create 返回提取 document_id: {data}")
+        die(f"无法从 lark-cli docs +create 返回提取 doc_id: {data}")
 
-    url = build_doc_url(doc_id)
+    url = inner.get("doc_url") or build_doc_url(doc_id)
     info(f"文档已创建: {url}")
     return doc_id, url
 
