@@ -59,12 +59,12 @@ description: 把本地 markdown 文档发布到飞书云文档，发布后自动
 | `lark-cli` 在 PATH | `lark-cli 未安装。安装方式见 https://github.com/larksuite/lark-cli` |
 | `lark-cli --version` ≥ `1.0.14` | `lark-cli 版本 <实际值> 低于最低要求 1.0.14；请升级` |
 | `lark-cli auth status` 已登录 | `飞书 CLI 未登录。运行 lark-cli auth login（详见 lark-shared skill）` |
-| `lark-cli auth check --scopes` 关键 scope 已授权 | `缺少 scope: <list>；请在飞书开放平台为 app 申请 scope 后重新 lark-cli auth login` |
+| `lark-cli auth check --scope` 关键 scope 已授权 | `缺少 scope: <list>；请在飞书开放平台为 app 申请 scope 后重新 lark-cli auth login` |
 | `.claude/lark-publish.json` 存在 或 命令行参数齐全 | `配置缺失。复制 $REPO_ROOT/templates/lark-publish.json.tmpl 到 .claude/lark-publish.json 并填 token；或手动传 --target-token + --target-kind + --title` |
 
-**版本基线说明：** 1.0.14 是当前已验证的工作版本。lark-cli 后续如发版引入 breaking change，更新本文件并 bump 此版本号。
+**版本基线说明：** 1.0.27 是当前已验证的工作版本（1.0.27 把 scope 名称从粗粒度改为细粒度）。lark-cli 后续如发版引入 breaking change，更新本文件并 bump 此版本号。
 
-**关键 scope：** 发布到 wiki 时 `docx:document` + `wiki:wiki:readonly`；发布到 folder 时 `docx:document` + `drive:drive`；合并 cell 还需 `docx:document`。脚本按目标位置类型动态决定要检查的 scope 列表。
+**关键 scope（lark-cli ≥1.0.27 精确名称）：** 发布到 wiki 时 `docx:document:write_only` + `wiki:node:retrieve`；发布到 folder 时 `docx:document:write_only` + `drive:file:upload`；合并 cell 还需 `docx:document:write_only`。脚本按目标位置类型动态决定要检查的 scope 列表。
 
 ## Workflow
 

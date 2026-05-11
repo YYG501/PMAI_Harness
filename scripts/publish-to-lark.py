@@ -16,7 +16,7 @@ import sys
 from datetime import datetime
 from pathlib import Path
 
-MIN_LARK_CLI_VERSION = (1, 0, 14)
+MIN_LARK_CLI_VERSION = (1, 0, 27)
 CONFIG_PATH = Path(".claude/lark-publish.json")
 
 
@@ -76,12 +76,12 @@ def preflight(target_kind: str | None, config_present: bool, args_complete: bool
         detail = (res.stderr or res.stdout or "").strip()
         die(f"飞书 CLI 未登录。运行 lark-cli auth login（详见 lark-shared skill）。详情: {detail}")
 
-    # 4. scope 检查
-    scopes = ["docx:document"]
+    # 4. scope 检查（lark-cli ≥1.0.27 使用精确子 scope 名称）
+    scopes = ["docx:document:write_only"]
     if target_kind == "wiki":
-        scopes.append("wiki:wiki:readonly")
+        scopes.append("wiki:node:retrieve")
     elif target_kind == "folder":
-        scopes.append("drive:drive")
+        scopes.append("drive:file:upload")
     res = run(["lark-cli", "auth", "check", "--scope", " ".join(scopes)], check=False)
     if res.returncode != 0:
         detail = (res.stderr or res.stdout or "").strip()
