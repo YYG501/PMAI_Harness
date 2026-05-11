@@ -2,20 +2,27 @@
 name: close-task
 description: |
   Task 关闭：对齐 task 文档与原型、检查文档偏差、归档运行时数据、merge 分支、清理 worktree。
+  分两个 phase：task 窗口内 prepare（对齐 + 偏差处理 + commit）→ req 窗口 finalize（merge + 删 task worktree/branch）。
 ---
 
 # /close-task
 
-### 执行位置（v4.5 req worktree 集中关闭）
+## 两阶段调用（必读）
 
-- `/close-task` 在 **req worktree** cwd 内运行（不在 task worktree，也不在主仓）。
-- task worktree 验收通过后，PM 关掉 task 窗口，切到 req 窗口跑 `/close-task task-NNN`。
-- `close-task.sh` 在 req worktree cwd 校验 fail-fast；不在 req worktree 直接 exit 1。
-- merge → 删 task worktree → 删 task branch 一气呵成；不再走 `pending-cleanup.json` 中转。
+`/close-task` 设计为两阶段调用，AI 根据 cwd 自动判断当前阶段：
+
+- **Phase 1**（cwd 在 task worktree 内）：task md 对齐 / 偏差处理 / DESIGN.md 沉淀 / commit / 登记 marker
+- **Phase 2**（cwd 在 req worktree 内）：merge → req、归档 .runs/、删 task worktree+branch、auto-chain
+
+PM 体感：
+1. 在 task 窗口验收通过后运行 `/close-task` → AI 走 Phase 1 → 提示切到 req 窗口
+2. PM 切到 req 窗口
+3. 在 req 窗口运行 `/close-task` → AI 走 Phase 2 → 完全关闭 + auto-chain
 
 ## When To Use
 
-- 在 **req 窗口**（cwd = req worktree）调用，PM 通过验收后
+- 在 task 窗口验收通过后调用（启动 Phase 1）
+- 切到 req 窗口后再次调用（执行 Phase 2）
 - Task 状态必须为「已完成」
 
 ## 拆两文件约定（必读）
@@ -35,7 +42,30 @@ source "$(git rev-parse --show-toplevel 2>/dev/null || echo .)/.claude/scripts/s
 echo "SKILL: close-task"
 ```
 
+## Phase 自动判断（入口）
+
+AI 进入 skill 时先检测 cwd 决定走 Phase 1 还是 Phase 2：
+
+```bash
+REPO_ROOT="$(cd "$(git rev-parse --git-common-dir 2>/dev/null)/.." && pwd)"
+CURRENT_WT="$(git rev-parse --show-toplevel)"
+PENDING_MARKER="$REPO_ROOT/.runs/pending-close-task.json"
+```
+
+分流逻辑：
+
+| cwd 位置 | marker 状态 | 走向 |
+|---|---|---|
+| task worktree 内（`.worktrees/task-*`） | 不存在 | **Phase 1**（正常对齐/偏差/commit 流程，结束时写 marker） |
+| task worktree 内（同一 task） | 已存在 | **Phase 1 短路**（直接告知"已 ready，请切到 req 窗口"） |
+| req worktree 内（`.worktrees/req-*`） | 存在 | **Phase 2**（merge + delete + 清 marker） |
+| req worktree 内 | 不存在 | **报错**："没有待 finalize 的 task。请先在 task 窗口运行 /close-task" |
+| 主仓或其他位置 | - | **报错**："请在 task 窗口或 req 窗口运行 /close-task" |
+
 ## --skip-doc-update flag（A1 紧急逃生舱）
+
+（在 Phase 1 内使用——PM 主动 skip 步骤 1 的 doc-update 调用，写 marker 留待后续人工沉淀）
+
 
 PM activates by calling close-task with `--skip-doc-update` flag。
 
@@ -66,13 +96,13 @@ On valid invocation:
    ```
 6. Exit with code 0 (close-task itself succeeded; doc-update was intentionally skipped)。
 
-## Workflow
+## Phase 1：在 task worktree 内执行
 
-### 步骤 0：task 文档 ↔ 原型对齐（v4.5 新增）
+### 步骤 0：task 文档 ↔ 原型对齐
 
 **目的**：PM 验收通过 ≠ task md 自动跟原型代码一致。task-execute 反馈循环故意只改原型代码，task md 业务字段（§🎯/§📐/§📋/§✅）在反馈循环里不跟——所有对齐工作集中到本步骤 batch 处理。close-task 前补齐对账，避免 task md 进入 req 分支后跟代码不符。
 
-**执行位置**：cwd 在 req worktree（agent 跨进 task worktree 读代码 + 写 task md，全部用 `git -C $TASK_WORKTREE` 或绝对路径）。
+**执行位置**：cwd 已在 task worktree（agent 直接读代码 + 写 task md，无需跨 worktree）。
 
 #### 0.1 加载对照源
 
@@ -133,14 +163,14 @@ agent 对每条 §🎯 / §📐 / §📋 / §✅ 描述，跟实际代码做语�
 
 #### 0.4 patch 后 commit 到 task 分支
 
-所有 Y 项 patch 完成后，统一在 task worktree 里 commit：
+所有 Y 项 patch 完成后，统一 commit（cwd 已在 task worktree；保留 `-C "$TASK_WORKTREE"` 作为显式分支标注，提醒落在 task 分支不是 req 分支）：
 
 ```bash
 git -C "$TASK_WORKTREE" add "<task-md 相对路径>"
 git -C "$TASK_WORKTREE" commit -m "task-NNN close-prep: PM 视图与原型对齐"
 ```
 
-理由：task md 改动在 task 分支落地后，步骤 2 的 merge 会自然带进 req 分支作为最终历史。
+理由：task md 改动在 task 分支落地后，Phase 2 的 merge 会自然带进 req 分支作为最终历史。
 
 #### 0.5 fail-fast 与边界
 
@@ -251,83 +281,144 @@ Read 本 task PM 视图主文件的 PM 反馈 section，提取候选：
 - 步骤 1.5 处理"主观视觉规范沉淀"（PM 判断哪些反馈应作项目级长期规范）→ AI 起草 + PM 三选一
 - 性质不同，串行处理不合并
 
-### 步骤 2：执行关闭
+### 步骤 2：Phase 1 收尾：登记 finalize marker，提示 PM 切窗口
 
-调用 close-task.sh（cwd 必须是 req worktree）：
+#### 2.1 兜底 commit 检查
+
+phase 1 步骤 0 / 1 / 1.5 应该已经把改动 commit 完。这里二次检查，确保 task worktree 干净（除 docs/DESIGN.md，那个等 PM 二次审 diff 后手 commit）：
 
 ```bash
-bash .claude/scripts/close-task.sh "<task-file-absolute-path>"
+UNCOMMITTED=$(git status --porcelain | grep -v 'docs/DESIGN.md' || true)
+if [ -n "$UNCOMMITTED" ]; then
+  echo "❌ task worktree 有未 commit 改动（不含 DESIGN.md）："
+  echo "$UNCOMMITTED"
+  echo "请检查 step 0 / 1 是否漏 commit。"
+  exit 1
+fi
 ```
 
-脚本自动执行：
-1. 校验 cwd 在 req worktree 内（不在则 fail-fast）
+#### 2.2 写 marker
+
+写 `$REPO_ROOT/.runs/pending-close-task.json`（marker 落主仓的 `.runs/`，因为 task worktree 会被 phase 2 删）：
+
+```bash
+mkdir -p "$REPO_ROOT/.runs"
+python3 - "$PENDING_MARKER" "$TASK_FILE_ABS" "$TASK_BRANCH" "$TASK_WORKTREE" "$REQ_BRANCH" "$REQ_WORKTREE" <<'PY'
+import json, sys, datetime
+marker, task_file, t_branch, t_wt, r_branch, r_wt = sys.argv[1:7]
+entry = {
+    "task_file_abs": task_file,
+    "task_branch": t_branch,
+    "task_worktree": t_wt,
+    "req_branch": r_branch,
+    "req_worktree": r_wt,
+    "ready_at": datetime.datetime.now().astimezone().isoformat(timespec="seconds"),
+}
+with open(marker, "w") as f:
+    json.dump(entry, f, indent=2, ensure_ascii=False)
+PY
+```
+
+#### 2.3 输出切窗口指示
+
+AI 向 PM 输出结束语，task 窗口工作到此结束：
+
+```
+✅ task-NNN 文档已对齐 / 偏差已处理 / 改动已 commit，已登记待 finalize marker。
+
+请切到 req 窗口（cwd = req worktree），再次运行：
+
+  /close-task
+
+AI 会自动走 Phase 2 完成 merge + 删 task worktree/branch + auto-chain。
+```
+
+**如果步骤 1.5 patch 过 DESIGN.md**（uncommitted 状态），追加提示：
+
+```
+⚠️ 步骤 1.5 沉淀了 K 条视觉规范反馈到 docs/DESIGN.md（uncommitted）。
+等 Phase 2 完成 task close 后，请在 req 窗口审 git diff docs/DESIGN.md 并 commit。
+建议 commit message: docs(DESIGN): 沉淀 task-NNN 反馈 — [一行摘要]
+```
+
+**Phase 1 短路场景**：进入 skill 时检测到 marker 已存在（之前调过一次但 PM 没切窗口），跳过步骤 0 / 1 / 1.5 / 2.1 / 2.2，直接输出 2.3 切窗口指示。不要重复对齐 / 重复 commit。
+
+## Phase 2：在 req worktree 内执行
+
+### 步骤 P2.1：读 marker
+
+```bash
+if [ ! -f "$PENDING_MARKER" ]; then
+  echo "❌ 没有待 finalize 的 task。"
+  echo "   请先在 task 窗口运行 /close-task"
+  exit 1
+fi
+
+TASK_FILE_ABS=$(python3 -c "import json; print(json.load(open('$PENDING_MARKER'))['task_file_abs'])")
+```
+
+### 步骤 P2.2：调 close-task.sh
+
+```bash
+bash .claude/scripts/close-task.sh "$TASK_FILE_ABS"
+```
+
+脚本自动：
+1. 校验 cwd 在 req worktree 内（防御性二次校验）
 2. 校验 task 状态为「已完成」
 3. 检查文档偏差（二次检查，有未处理偏差会阻塞）
 4. merge task 分支 → req 分支
 5. 归档 `.runs/` 到 req worktree 的 `tasks/_archived/` 并 commit 到 req 分支
-6. **直接删** task worktree + task branch（一步关完）
+6. **直接删** task worktree + task branch
 7. 杀掉 dev server 进程
 8. 清理 `.runs/` 原件
 9. 追加 `task_closed` 事件
 
-### 步骤 3：确认结果
-
-脚本成功后，提示：
-
-```
-Task 已关闭：<task-title>
-
-下一步（在 req 窗口继续）：
-- 如有下一个待启动 task，运行 /task-spec task-XXX → /task-confirm
-- 如所有 task 已完成，运行 /req-stage-gate 推进到 stage 7
-```
-
-**额外提示（仅当步骤 1.5 patch 过 DESIGN.md 时）：**
-
-如果步骤 1.5 沉淀了视觉规范反馈（PM 选"沉淀进 DESIGN.md"至少 1 条），req worktree 里的 `docs/DESIGN.md` 处于 uncommitted 状态。close-task.sh 不 auto commit 设计 SoT。close-task 完成后追加（仍在 req 窗口）：
+### 步骤 P2.3：清 marker
 
 ```bash
-git diff docs/DESIGN.md  # PM 二次审 diff
-git add docs/DESIGN.md
-git commit -m "docs(DESIGN): 沉淀 task-NNN 反馈 — [摘要]"
+rm -f "$PENDING_MARKER"
 ```
 
-提示模板：
+### 步骤 P2.4：确认 + auto-chain
 
-```
-⚠️ 步骤 1.5 沉淀了 K 条视觉规范反馈到 docs/DESIGN.md（uncommitted）。
-请在本（req）窗口审 git diff docs/DESIGN.md 并 commit。
-建议 commit message: docs(DESIGN): 沉淀 task-NNN 反馈 — [一行摘要]
-```
+脚本成功后，检查 `task-plan.md` 决定 auto-chain 提示：
 
-## Rules
+- 若 `PENDING > 0`：
 
-- 必须在 task 状态为「已完成」时才能关闭
-- 必须在 req worktree cwd 内运行（v4.5）；不在则 fail-fast
-- **步骤 0 对齐**：N=0 或全 skip 不阻塞 close-task（PM 决策权）；PM 选 R 但要在本阶段改代码 → agent 拒绝并提示回 task-execute（不让 close-task 蜕变成 mini task-execute）
-- 步骤 0 patch 必须 commit 到 task 分支（在 task worktree 内做），随步骤 2 merge 自然进 req 分支
-- 文档偏差必须在关闭前处理（close-task.sh 会做二次检查；偏差检查跨 PM 视图主文件 + 工程合同两处）
-- **PM 视图主文件 + 工程合同必须成对处理**：归档 / merge / 清理时两文件一起动，不允许只动一份
-- 不要手动执行 merge/删分支/清 worktree，全部由 close-task.sh 处理
-- close-task.sh 一步关完：merge → 归档 → 删 worktree → 删 branch；不再走 `.runs/pending-cleanup.json` 中转
-
-> **注**：`close-task.sh` 脚本在 PR 3 阶段会改造为按"主文件 + .engineering.md"成对归档；当前 PR 2 阶段脚本仍按单文件处理，工程合同需要 PM 在 close 后手动确认归档（或等 PR 3）。
-
-## 末尾轻量 auto-chain（DX RU6）
-
-close-task 完成后（full close 或 half-close），agent 检查 `task-plan.md`：
-
-- If `PENDING > 0`, output:
-
-  ```text
+  ```
   ✅ task-NNN 已 close。
   下一个待启动：task-XXX（title，所属模块: [...]）。
   在本（req）窗口直接跑 /task-spec task-XXX → /task-confirm
   ```
 
-- If `PENDING == 0`, output:
+- 若 `PENDING == 0`：
 
-  ```text
+  ```
   ✅ task-NNN 已 close。
   本 req 所有 task 已 close（含半 close）。在本（req）窗口运行 /req-stage-gate 推进 stage 7。
   ```
+
+**额外提示（仅当 Phase 1 步骤 1.5 patch 过 DESIGN.md 时）**：
+
+```
+⚠️ docs/DESIGN.md uncommitted（K 条视觉规范沉淀）。
+请审 git diff docs/DESIGN.md 后在本（req）窗口 commit：
+  git add docs/DESIGN.md && git commit -m "docs(DESIGN): 沉淀 task-NNN 反馈 — [摘要]"
+```
+
+## Rules
+
+- Phase 1 必须在 task worktree 内执行；Phase 2 必须在 req worktree 内执行
+- Phase 间通过 `$REPO_ROOT/.runs/pending-close-task.json` 衔接（marker 落主仓，因 task worktree 会被 phase 2 删）
+- Phase 1 进入时若 marker 已存在 → 短路（直接告知"已 ready，请切窗口"），不重复对齐
+- Phase 2 进入时若 marker 不存在 → 报错（避免误触）
+- 必须在 task 状态为「已完成」时才能关闭
+- **步骤 0 对齐**：N=0 或全 skip 不阻塞 close-task（PM 决策权）；PM 选 R 但要在本阶段改代码 → agent 拒绝并提示回 task-execute（不让 close-task 蜕变成 mini task-execute）
+- 步骤 0 patch 必须 commit 到 task 分支（cwd 已在 task worktree），随 Phase 2 merge 自然进 req 分支
+- 文档偏差必须在 Phase 1 处理（close-task.sh 会做二次检查；偏差检查跨 PM 视图主文件 + 工程合同两处）
+- **PM 视图主文件 + 工程合同必须成对处理**：归档 / merge / 清理时两文件一起动，不允许只动一份
+- 不要手动执行 merge/删分支/清 worktree，全部由 close-task.sh 处理
+- close-task.sh 一步关完 phase 2：merge → 归档 → 删 worktree → 删 branch；不走 pending-cleanup 中转
+
+> **注**：`close-task.sh` 脚本在 PR 3 阶段会改造为按"主文件 + .engineering.md"成对归档；当前 PR 2 阶段脚本仍按单文件处理，工程合同需要 PM 在 close 后手动确认归档（或等 PR 3）。

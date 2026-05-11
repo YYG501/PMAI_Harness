@@ -207,15 +207,14 @@ test_close_task_step_1_5_forbids_silent_commit() {
 }
 
 test_close_task_step_3_hints_design_md_commit() {
-  start_test "close-task 步骤 3 含 DESIGN.md commit hint（步骤 1.5 patch 过时）"
-  local section
-  section=$(awk '/^### 步骤 3/{flag=1; next} /^### /{flag=0} /^## /{flag=0} flag' "$CLOSE_TASK_SKILL")
-  if ! echo "$section" | grep -q "docs/DESIGN.md\|DESIGN.md.*commit"; then
-    _fail "步骤 3 应提示 PM 在主仓 commit docs/DESIGN.md（步骤 1.5 沉淀过时）"
+  start_test "close-task SKILL 含 DESIGN.md commit hint（步骤 1.5 patch 过时）"
+  # 两 phase 改造后 hint 落在 Phase 2 收尾段（无固定步骤号），改 grep 整个 SKILL
+  if ! grep -q "docs/DESIGN.md" "$CLOSE_TASK_SKILL"; then
+    _fail "SKILL 应提示 PM commit docs/DESIGN.md（步骤 1.5 沉淀过时）"
     return
   fi
-  if ! echo "$section" | grep -q 'docs(DESIGN)\|docs(DESIGN'; then
-    _fail "步骤 3 应给 commit message 模板（docs(DESIGN): ...）"
+  if ! grep -q 'docs(DESIGN)' "$CLOSE_TASK_SKILL"; then
+    _fail "SKILL 应给 commit message 模板（docs(DESIGN): ...）"
     return
   fi
   pass_test

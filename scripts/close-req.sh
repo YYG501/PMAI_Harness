@@ -1,9 +1,14 @@
 #!/usr/bin/env bash
-# close-req.sh — Req 关闭：在 req 分支完成收尾 → merge 到 main → 清理
-# 用法: bash .claude/scripts/close-req.sh <req-dir>
-# 前置条件：该 req 下所有 task 必须已关闭
+# close-req.sh — Req 关闭：在 req 分支完成收尾 → merge 到 main → 删 worktree/branch
+# 用法: bash scripts/close-req.sh <req-dir>
+# 前置条件：
+#   1. 在主仓 cwd（不在 req worktree 内）运行
+#   2. 该 req 下所有 task 已关闭，stage = 7
 
 set -euo pipefail
+
+# 在任何 cd 之前记录调用方的 cwd
+CALLER_CWD="$(pwd -P 2>/dev/null || echo "")"
 
 REQ_DIR="${1:?用法: close-req.sh <req-dir>}"
 
@@ -73,6 +78,22 @@ REQ_WORKTREE=$(resolve_worktree_path "$REQ_BRANCH" "$REPO_ROOT" || true)
 if [ -z "$REQ_WORKTREE" ] || [ ! -d "$REQ_WORKTREE" ]; then
   echo "❌ req worktree 不存在（git worktree list 中找不到分支 ${REQ_BRANCH}）。请先恢复 req worktree。" >&2
   exit 1
+fi
+
+# --- 校验：调用方 cwd 不能在 req worktree 内 ---
+# 原因：删 worktree 前 Claude Code 父进程 cwd 必须不在其内，否则 Stop hook posix_spawn ENOENT
+REQ_WORKTREE_REAL="$(cd "$REQ_WORKTREE" 2>/dev/null && pwd -P || echo "$REQ_WORKTREE")"
+if [ -n "$CALLER_CWD" ] && [ -n "$REQ_WORKTREE_REAL" ]; then
+  if [ "$CALLER_CWD" = "$REQ_WORKTREE_REAL" ] || \
+     printf '%s/' "$CALLER_CWD" | grep -qF "${REQ_WORKTREE_REAL}/"; then
+    echo "❌ 当前 cwd 在 req worktree 内，不能直接删除。" >&2
+    echo "   当前 cwd: $CALLER_CWD" >&2
+    echo "   req worktree: $REQ_WORKTREE_REAL" >&2
+    echo "" >&2
+    echo "   请切到主仓窗口（cwd = $REPO_ROOT），再跑：" >&2
+    echo "   bash scripts/close-req.sh $REQ_DIR" >&2
+    exit 1
+  fi
 fi
 
 REQ_BASENAME=$(basename "$REQ_DIR")
@@ -158,38 +179,24 @@ fi
 
 echo "🔀 已合并 $REQ_BRANCH → main（已验证提交落地）"
 
-# --- Step 3: 标记 worktree + branch 为待清理（不立即删除） ---
-# 原因：PM 可能在被关闭的 req worktree 内（cwd = .worktrees/<req-branch>）
-# 执行 close。立即删除会让 Claude Code 父进程的 cwd 变成 dangling，下一次
-# Stop hook 的 posix_spawn 报 ENOENT。改为推迟到 cleanup-pending-worktrees.sh
-# 在主仓 cwd 的会话里统一执行。
-PENDING_FILE="$REPO_ROOT/.runs/pending-cleanup.json"
-mkdir -p "$REPO_ROOT/.runs"
-python3 - "$PENDING_FILE" "$REQ_BRANCH" "$REQ_WORKTREE" "$REQ_DIR" <<'PY'
-import json, os, sys, datetime
-pending_file, branch, worktree, req_dir = sys.argv[1:5]
-entries = []
-if os.path.exists(pending_file):
-    with open(pending_file) as f:
-        try:
-            entries = json.load(f)
-        except json.JSONDecodeError:
-            entries = []
-entries = [e for e in entries if e.get("branch") != branch]
-entries.append({
-    "kind": "req",
-    "branch": branch,
-    "worktree": worktree,
-    "req_dir": req_dir,
-    "queued_at": datetime.datetime.now().astimezone().isoformat(timespec="seconds"),
-})
-with open(pending_file, "w") as f:
-    json.dump(entries, f, indent=2, ensure_ascii=False)
-PY
-echo "🕓 worktree 和 branch 已标记为待清理: $REQ_BRANCH"
+# --- Step 3: 直接删 req worktree + branch ---
+# 此时调用方 cwd 已校验不在 req worktree 内（上方 cwd check），可以安全删除
+cd "$REPO_ROOT"
 
-echo "✅ Req 已关闭: $REQ_ID"
+if [ -d "$REQ_WORKTREE" ]; then
+  git worktree remove "$REQ_WORKTREE" 2>/dev/null || {
+    rm -rf "$REQ_WORKTREE"
+    git worktree prune 2>/dev/null || true
+  }
+  echo "🗑  worktree 已删除: $REQ_WORKTREE"
+fi
+
+if git show-ref --verify --quiet "refs/heads/$REQ_BRANCH" 2>/dev/null; then
+  git branch -D "$REQ_BRANCH" 2>/dev/null && echo "🗑  branch 已删除: $REQ_BRANCH"
+fi
+
+echo ""
+echo "✅ Req 已完全关闭: $REQ_ID"
 echo "📍 当前位置: 主仓 main 分支"
 echo ""
-echo "📋 worktree 和 branch 待清理。请退出当前会话，回主仓 ($REPO_ROOT) 执行："
-echo "   bash scripts/cleanup-pending-worktrees.sh"
+echo "运行 /new-req 开始下一个需求。"

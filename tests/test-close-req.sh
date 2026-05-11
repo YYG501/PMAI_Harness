@@ -282,32 +282,15 @@ test_happy_path_close_req() {
       return
     fi
 
-    # close 不再立即删 worktree/branch（避免父进程 cwd dangling）。
-    # 改为写 .runs/pending-cleanup.json，由 cleanup-pending-worktrees.sh 兜底。
-    pending_file="$FIXTURE_DIR/.runs/pending-cleanup.json"
-    if [ ! -f "$pending_file" ]; then
-      _fail "expected pending-cleanup.json to be written"
+    # close-req.sh 在 cwd=主仓时直接删 worktree + branch（无 pending-cleanup 中转）
+    if git -C "$FIXTURE_DIR" show-ref --verify --quiet "refs/heads/req-001-test"; then
+      _fail "req branch should be deleted by close-req.sh"
       rm -f /tmp/out.$$ /tmp/err.$$
       fixture_teardown
       return
     fi
-    queued_branch=$(python3 -c "import json; entries=json.load(open('$pending_file')); print(next((e['branch'] for e in entries if e['branch']=='req-001-test'), ''))")
-    if [ "$queued_branch" != "req-001-test" ]; then
-      _fail "pending-cleanup.json should contain branch=req-001-test, got '$queued_branch'"
-      rm -f /tmp/out.$$ /tmp/err.$$
-      fixture_teardown
-      return
-    fi
-
-    # Verify req branch + worktree still present (cleanup deferred)
-    if ! git -C "$FIXTURE_DIR" show-ref --verify --quiet "refs/heads/req-001-test"; then
-      _fail "req branch should remain (cleanup deferred); was deleted"
-      rm -f /tmp/out.$$ /tmp/err.$$
-      fixture_teardown
-      return
-    fi
-    if [ ! -d "$FIXTURE_DIR/.worktrees/req-001-test" ]; then
-      _fail "req worktree should remain (cleanup deferred); was removed"
+    if [ -d "$FIXTURE_DIR/.worktrees/req-001-test" ]; then
+      _fail "req worktree should be removed by close-req.sh"
       rm -f /tmp/out.$$ /tmp/err.$$
       fixture_teardown
       return
@@ -415,12 +398,38 @@ test_merge_failure_rolls_back_req_branch() {
 }
 
 # =================================================
+# I-CR10: reject when cwd is inside the req worktree
+# =================================================
+test_reject_when_cwd_inside_req_worktree() {
+  start_test "I-CR10 reject when cwd is inside req worktree"
+  fixture_setup
+
+  req_dir=$(fixture_create_req "req-001" "test" 7)
+  req_wt="$FIXTURE_DIR/.worktrees/req-001-test"
+
+  if (cd "$req_wt" && bash "$CLOSE_REQ" "$req_dir") >/tmp/out.$$ 2>/tmp/err.$$; then
+    _fail "should reject when cwd is inside req worktree"
+  else
+    if grep -qE "(cwd 在 req worktree|切到主仓窗口)" /tmp/err.$$; then
+      pass_test
+    else
+      _fail "stderr missing cwd-in-worktree message"
+      cat /tmp/err.$$ >&2
+    fi
+  fi
+
+  rm -f /tmp/out.$$ /tmp/err.$$
+  fixture_teardown
+}
+
+# =================================================
 # Run all tests
 # =================================================
 test_reject_if_stage_not_7
 test_reject_if_open_tasks_exist
 test_reject_if_req_branch_missing
 test_reject_if_req_worktree_missing
+test_reject_when_cwd_inside_req_worktree
 test_reject_on_merge_conflict_no_partial_state
 test_archive_committed_before_merge
 test_happy_path_close_req

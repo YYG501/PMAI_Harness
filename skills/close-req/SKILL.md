@@ -11,6 +11,18 @@ description: |
 - Orchestrator 在 stage 7 调用
 - 所有 task 必须已关闭
 
+## 两阶段调用（必读）
+
+`/close-req` 设计为两阶段调用，AI 根据 cwd 自动判断当前阶段：
+
+- **Phase 1**（cwd 在 req worktree 内）：写 close-report、PRD、commit、登记待 finalize marker
+- **Phase 2**（cwd 在主仓，不在任何 worktree 内）：merge → main、删 worktree/branch、清 marker
+
+PM 体感：
+1. 在 req 窗口运行 `/close-req` → AI 走 Phase 1 → 提示切到主仓窗口
+2. PM 切到主仓窗口
+3. 在主仓窗口运行 `/close-req` → AI 走 Phase 2 → 完全关闭
+
 ## Preamble
 
 ```bash
@@ -18,7 +30,26 @@ source "$(git rev-parse --show-toplevel 2>/dev/null || echo .)/.claude/scripts/s
 echo "SKILL: close-req"
 ```
 
-## Workflow
+## Phase 自动判断（入口）
+
+AI 进入 skill 时先检测 cwd 决定走 Phase 1 还是 Phase 2：
+
+```bash
+REPO_ROOT="$(cd "$(git rev-parse --git-common-dir 2>/dev/null)/.." && pwd)"
+CURRENT_WT="$(git rev-parse --show-toplevel)"
+PENDING_MARKER="$REPO_ROOT/.runs/pending-close-req.json"
+```
+
+分流逻辑：
+
+| cwd 位置 | marker 状态 | 走向 |
+|---|---|---|
+| req worktree 内 | 不存在 | **Phase 1**（正常文档/commit 流程，结束时写 marker） |
+| req worktree 内 | 已存在 | **Phase 1 短路**（直接告知"已 ready，请切到主仓窗口"） |
+| 主仓（== REPO_ROOT） | 存在 | **Phase 2**（merge + delete + 清 marker） |
+| 主仓（== REPO_ROOT） | 不存在 | **报错**："没有待 finalize 的 req。如要新启动 close-req，请进 req worktree 调用" |
+
+## Phase 1：在 req worktree 内执行
 
 ### 步骤 1：写 close-report.md
 
@@ -195,37 +226,88 @@ git add -A
 git commit -m "close: req-NNN-<slug>"
 ```
 
-### 步骤 5：执行关闭
+### 步骤 5：登记 finalize marker，提示 PM 切窗口
+
+写 `$REPO_ROOT/.runs/pending-close-req.json`（marker 落在主仓的 `.runs/`，因为 req worktree 会被 phase 2 删掉）：
 
 ```bash
-bash .claude/scripts/close-req.sh "$ACTIVE_REQ_DIR"
+mkdir -p "$REPO_ROOT/.runs"
+python3 - "$PENDING_MARKER" "$ACTIVE_REQ_DIR" "$REQ_BRANCH" "$REQ_WORKTREE" <<'PY'
+import json, sys, datetime
+marker, req_dir, branch, worktree = sys.argv[1:5]
+entry = {
+    "req_dir_abs": req_dir,
+    "branch": branch,
+    "worktree": worktree,
+    "ready_at": datetime.datetime.now().astimezone().isoformat(timespec="seconds"),
+}
+with open(marker, "w") as f:
+    json.dump(entry, f, indent=2, ensure_ascii=False)
+PY
 ```
 
-脚本自动执行：
-1. 校验 stage 为 7
-2. 校验所有 task 已关闭
-3. cd 到主仓，merge req 分支到 main
-4. 把 req worktree + branch 写入 `.runs/pending-cleanup.json`（不立即删，避免父进程 cwd dangling）
-5. 移动 req 目录到 `requirements/closed/`（在 req 分支上 commit 后随 merge 落地）
-6. 更新 req 状态为 closed
-7. 提示 PM：回主仓后跑 `bash scripts/cleanup-pending-worktrees.sh` 完成清理
-
-### 步骤 6：确认结果
+AI 向 PM 输出结束语，req 窗口工作到此结束：
 
 ```
-Req 已关闭：req-NNN-<slug>
-当前位置：主仓 main 分支
+✅ Req 文档已 commit，stage = 7，已登记待 finalize marker。
 
-worktree 和 branch 待清理。请退出当前会话，回主仓后跑：
-  bash scripts/cleanup-pending-worktrees.sh
+请切到主仓窗口（cwd = 主仓根目录），再次运行：
+
+  /close-req
+
+AI 会自动走 Phase 2 完成 merge + 删 worktree/branch。
+```
+
+**Phase 1 短路场景**：进入 skill 时检测到 marker 已存在（之前调过一次但 PM 没切窗口），跳过步骤 1-4，直接输出上方结束语。不要重复写文档或重复 commit。
+
+## Phase 2：在主仓内执行
+
+### 步骤 P2.1：读 marker 并校验
+
+```bash
+if [ ! -f "$PENDING_MARKER" ]; then
+  echo "❌ 没有待 finalize 的 req。"
+  echo "   如要启动 close-req，请进 req worktree 后调用 /close-req"
+  exit 1
+fi
+
+REQ_DIR_ABS=$(python3 -c "import json; print(json.load(open('$PENDING_MARKER'))['req_dir_abs'])")
+```
+
+### 步骤 P2.2：调 close-req.sh
+
+```bash
+bash scripts/close-req.sh "$REQ_DIR_ABS"
+```
+
+脚本自动：
+1. 二次校验 cwd 不在 req worktree 内（防御性）
+2. 校验 stage = 7 + 所有 task 已关闭
+3. 在 req 分支移动目录到 `requirements/closed/` + 更新 meta + commit
+4. merge req 分支 → main
+5. 直接删 req worktree + req branch
+
+### 步骤 P2.3：清 marker
+
+```bash
+rm -f "$PENDING_MARKER"
+```
+
+### 步骤 P2.4：确认结果
+
+```
+✅ Req 已完全关闭：<req-id>
+📍 当前位置：主仓 main 分支
 
 运行 /new-req 开始下一个需求。
 ```
 
 ## Rules
 
-- 必须在 req worktree 中执行（先 commit，再调用 close-req.sh）
-- close-req.sh 会自动 cd 到主仓执行 merge，不需要手动切换
+- Phase 1 必须在 req worktree 内执行；Phase 2 必须在主仓内执行
+- Phase 间通过 `$REPO_ROOT/.runs/pending-close-req.json` 衔接（marker 落主仓，因 req worktree 会被 phase 2 删）
+- Phase 1 进入时若 marker 已存在 → 短路（直接告知"已 ready，请切窗口"），不重复写文档
+- Phase 2 进入时若 marker 不存在 → 报错（避免误触）
 - merge 到 main 后不可回退（stage 7 是终态）
 - req 目录移到 closed/ 后保留完整记录
-- worktree/branch 的实际删除由 PM 在主仓 cwd 跑 `cleanup-pending-worktrees.sh` 完成（避免 close 删自己脚下目录导致 Stop hook posix_spawn ENOENT）
+- close-req.sh 直接删 worktree + branch（无 pending-cleanup.json 中转）
