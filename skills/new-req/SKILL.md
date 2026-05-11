@@ -116,19 +116,21 @@ PM 选 2 或直接开始描述需求时，AI 走以下流程：
 
 3. **出 brief 草稿**：拿到答案后，AI 按 `_shared/pm-view/writing-rules.md` §三 + `_shared/pm-view/doc-strictness.md` §四 brief.md 行拼一版 brief 草稿**展示给 PM**（不贴 chat 看的，用 Write 写到 `brief.md` 文件，给 PM 路径让他看）。
 
-4. **二次确认门**（v2 对话式）：
+4. **二次确认门**（v3 书面体）：
    ```
-   ✅ brief.md 草稿已写入
+   Stage 1（感受问题）— brief 待确认
+
+   ✅ brief.md
       <绝对路径>
 
    📋 一句话摘要
       <一行>
 
-   ——这份 brief 就这样定吗？OK 我把工作交接到 worktree 新对话；想改的说哪里。
+   这版 brief 内容是否可以定稿？如还有需要调整的内容，请直接说；确认后我会将其 commit 至对应分支，并将后续工作切换至 worktree 的新对话，继续推进 Stage 2。
    ```
 
 5. **PM 回答的内部分流**（不列字母）：
-   - PM 说「OK / 通过 / 没问题 / 定了」等 → 进步骤 5 handoff
+   - PM 说「OK / 通过 / 没问题 / 定了」等 → 进步骤 4.5 commit + 步骤 5 handoff
    - PM 提具体修改 → 按 PM 指示改 brief.md，改完回到步骤 4 重新出二确（不贴全文，参 Rules "确认门只给路径+一句话摘要"）
 
 **禁止**：
@@ -139,32 +141,40 @@ PM 选 2 或直接开始描述需求时，AI 走以下流程：
 
 `brief.md` 是 stage 1 的唯一真相源，后续所有 stage 只读 brief.md。
 
+### 步骤 4.5：commit stage 1 brief（PM 二确通过后自动执行）
+
+PM 在步骤 4 二确门说 OK 后、进入步骤 5 handoff 之前，AI **必须** commit 一次，避免后续 PM 想 `git worktree remove` 时撞 dirty tree（参 INVARIANTS I-AD5 / I-DC1：dispatch 前 working tree 必须 clean）。
+
+```bash
+cd <worktree 绝对路径>
+git add brief.md .req-meta.json tasks/
+git commit -m "stage 1 brief: req-NNN-<slug>"
+```
+
+commit 范围只包含 brief.md + .req-meta.json + 空 tasks/ 骨架；其他文件不卷入。commit 完成后进入步骤 5 handoff。
+
 ### 步骤 5：Handoff（结束本对话，让 PM 在 worktree 新对话里继续）
 
-brief.md 写好后，**当前主对话不再继续 stage 2**。`/new-req` 的职责到此为止——req 全过程从这里搬到 worktree 内的独立 Claude 对话，让每个 req 拿到干净的 context。
+brief.md 已 commit 后，**当前主对话不再继续 stage 2**。`/new-req` 的职责到此为止——req 全过程从这里搬到 worktree 内的独立 Claude 对话，让每个 req 拿到干净的 context。
 
 输出 handoff 块（**不出 A/B**，不在主对话里调 `/req-stage-gate`）：
 
 ```
-📝 brief.md 已写入：`<绝对路径>`
+✅ brief 已 commit 至分支 req-NNN-<slug>（<short-hash>）
 
-一句话摘要：[本次 brief 的核心内容，一行]
-
-—— 主对话到此为止 ——
-
-下一步（PM 自己执行）：
+下一步在新窗口继续：
   1. 打开新终端窗口
   2. 运行：
        cd <worktree 绝对路径>
        claude
-  3. 在新 Claude 对话里跑：
+  3. 在新 Claude 对话里运行：
        /req-stage-gate
-     （新对话会重新读 brief.md 给二次确认门，确认后进入 stage 2）
+     （新对话会重新读 brief.md 给二次确认门，确认后进入 Stage 2）
 ```
 
 **规则**：
 - 主对话不输出 A/B；A/B 由新对话里的 `/req-stage-gate` 负责。
-- 输出只给路径 + 一句话摘要，不贴 brief 全文。需要时让新对话的 Claude 把 brief.md 读回 chat。
+- 输出只给 commit 信息 + 切窗口指令，不贴 brief 全文。需要时让新对话的 Claude 把 brief.md 读回 chat。
 
 ## Rules
 
@@ -174,3 +184,4 @@ brief.md 写好后，**当前主对话不再继续 stage 2**。`/new-req` 的职
 - brief 引导路径由 PM 选（步骤 4）；AI 不主动调 `/office-hours`、不预读历史 req / 项目 docs
 - 选项 2（PM 给信息 + AI 引导）：AI 必须先做缺口分析再补问，不机械问全六题；走 brief 草稿 + 二次确认门
 - 选项 1（PM 自跑 office-hours）：AI 只提示 PM 自己跑，不替 PM 调 skill
+- PM 在步骤 4 二确通过后，AI 必须先跑步骤 4.5 commit（pathspec 限于 brief.md + .req-meta.json + tasks/ 骨架）再进步骤 5 handoff——保证后续 PM `git worktree remove` 时 working tree 已 clean，并符合 I-AD5/I-DC1 "dispatch 前 working tree 必须 clean"

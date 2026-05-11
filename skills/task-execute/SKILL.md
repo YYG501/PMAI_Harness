@@ -129,23 +129,26 @@ DRIFT_COUNT=$(echo "$DRIFT_JSON" | python3 -c 'import json,sys;print(json.load(s
 **drift_count > 0**：把候选清单呈交 PM，按下面交互处理：
 
 ```
-⚠ ${REQ_BRANCH} 上有 N 个文件比 task worktree 新：
+⚠️ 检测到 ${REQ_BRANCH} 上有 N 个文件比 task worktree 新：
   - <path 1>
   - <path 2>
   ...
 
-是否拉过来？[Y 逐文件看 diff / N 全部跳过 / A 全部采用 req 版本]
+请选择处理方式：
+ - 逐文件看 diff（推荐，每个文件单独决定采用 req 版本 / 保留 worktree 版本 / 跳过）
+ - 全部跳过（task 内执行基于当前 worktree 文件）
+ - 全部采用 req 版本（无需逐个 diff）
 ```
 
-PM 选项处理：
+PM 选项处理（按自然语言意图分流，不列字母）：
 
-| 选 | 行为 |
+| PM 表达 | 行为 |
 |---|---|
-| `N` | 不动 worktree，task-execute 继续。task 内执行基于当前 worktree 文件。 |
-| `A` | 对清单内每个 file 调 `apply-req-doc.sh`，跳过 diff 询问，全部覆盖。 |
-| `Y` | 逐文件循环：先 `git diff --no-index <worktree path> <(git show <branch>:<path>)` 给 PM 看，再问 `[A 采用 req 版本 / B 保留 worktree 版本 / C 跳过这个文件]`。 |
+| 「全部跳过 / 不动 / 用现有的」 | 不动 worktree，task-execute 继续。task 内执行基于当前 worktree 文件。 |
+| 「全部采用 / 全部覆盖 / 用 req 版本」 | 对清单内每个 file 调 `apply-req-doc.sh`，跳过 diff 询问，全部覆盖。 |
+| 「逐个看 / 一个个来 / 逐文件」 | 逐文件循环：先 `git diff --no-index <worktree path> <(git show <branch>:<path>)` 给 PM 看，再问下面分流问。 |
 
-逐文件 `Y` 流程伪码：
+逐文件循环流程伪码：
 
 ```bash
 echo "$DRIFT_JSON" | python3 -c 'import json,sys;[print(f["path"]) for f in json.load(sys.stdin)["files"]]' | \
@@ -154,10 +157,16 @@ while IFS= read -r path; do
   git -C "$TASK_WORKTREE" diff --no-index --color=always \
     "$path" <(git -C "$TASK_WORKTREE" show "${REQ_BRANCH}:${path}") || true
 
-  # 问 PM 三选项 [A / B / C]
-  # A → bash $MAIN_REPO_ROOT/scripts/apply-req-doc.sh "$TASK_WORKTREE" "$REQ_BRANCH" "$path" "$TASK_FILE"
-  # B → 不动
-  # C → 不动，下一文件
+  # 问 PM 三选项（按自然语言意图，不列字母）
+  cat <<EOF
+请选择此文件的处理方式：
+ - 采用 req 版本
+ - 保留 worktree 版本
+ - 跳过此文件
+EOF
+  # 「采用 req 版本」  → bash $MAIN_REPO_ROOT/scripts/apply-req-doc.sh "$TASK_WORKTREE" "$REQ_BRANCH" "$path" "$TASK_FILE"
+  # 「保留 worktree」 → 不动
+  # 「跳过」          → 不动，下一文件
 done
 ```
 

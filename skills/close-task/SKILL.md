@@ -251,10 +251,10 @@ Read 本 task PM 视图主文件的 PM 反馈 section，提取候选：
 呈交 PM 一个对话式问句（AskUserQuestion 或 prose；不列字母代号）：
 
 ```
-这条反馈要怎么处理？
- - 沉淀进 DESIGN.md（这是项目级长期规范，应该写进设计系统里 → AI patch DESIGN.md，不 commit，等你审 diff）
- - 只在本 task 备注（这条是本 task 特殊情况，不通用 → 保留在 task PM 反馈里，标"task-only"）
- - 我分类错了（这其实不是视觉规范 → 改回正确分类按那条规则走）
+请选择此条反馈的处理方式：
+ - 沉淀进 DESIGN.md（项目级长期规范 → AI patch DESIGN.md，不 commit，等你审 diff）
+ - 只在本 task 备注（本 task 特殊情况，不通用 → 保留在 task PM 反馈，标 "task-only"）
+ - 我分类错了（其实不是视觉规范 → 改回正确分类按那条规则走）
 ```
 
 **PM 回答的内部分流 + 内部分类映射**：
@@ -387,16 +387,18 @@ rm -f "$PENDING_MARKER"
 - 若 `PENDING > 0`：
 
   ```
-  ✅ task-NNN 已 close。
-  下一个待启动：task-XXX（title，所属模块: [...]）。
-  在本（req）窗口直接跑 /task-spec task-XXX → /task-confirm
+  Stage 6（task 执行）— task-NNN 已关闭
+
+  下一步：task-XXX（<title>，所属模块: [...]）
+  在本（req）窗口运行：/task-spec task-XXX → /task-confirm
   ```
 
 - 若 `PENDING == 0`：
 
   ```
-  ✅ task-NNN 已 close。
-  本 req 所有 task 已 close（含半 close）。在本（req）窗口运行 /req-stage-gate 推进 stage 7。
+  Stage 6（task 执行）— task-NNN 已关闭，本 req 全部 task 已关闭
+
+  下一步：在本（req）窗口运行 /req-stage-gate 推进至 Stage 7（req 关闭）。
   ```
 
 **额外提示（仅当 Phase 1 步骤 1.5 patch 过 DESIGN.md 时）**：

@@ -33,16 +33,18 @@ python3 "$REPO_ROOT/.claude/scripts/check-worktree-residue.py" || true
 
    `/new-req` 在主对话写完 brief.md 后就 handoff 退场，PM 在 worktree 内新对话里第一次跑 `/req-stage-gate` 时，先做一次 brief 二次确认——给 PM 重新审视 brief.md 的机会，再启动重的 `/req-analysis`。
 
-   AI 重新读一遍 `brief.md`，给一句话摘要 + 对话式确认（v2 风格）：
+   AI 重新读一遍 `brief.md`，给一句话摘要 + 对话式确认（v3 书面体）：
 
    ```
+   Stage 1（感受问题）— brief 二次确认
+
    ✅ brief.md
       <$ACTIVE_REQ_DIR/brief.md 绝对路径>
 
    📋 一句话摘要
       <新对话重新读出来的核心内容，一行>
 
-   ——这份 brief 就这样定吗？OK 我开始做需求分析；想改的说哪里。
+   进入 Stage 2 前再确认一次：这版 brief 内容是否可以定稿？如需调整请直接说；确认后我会推进到需求分析（Stage 2）。
    ```
 
    **PM 回答的内部分流**（不列 A/B 字母）：
@@ -63,31 +65,35 @@ python3 "$REPO_ROOT/.claude/scripts/check-worktree-residue.py" || true
 
    - **退出码 1**（有未答）→ 确认门进入"答题模式"，stdout 给出未答题号 + 行号：
      ```
-     ✅ analysis.md 已写入
+     Stage 2（需求分析）— analysis 含未决问题
+
+     ✅ analysis.md
         <$ACTIVE_REQ_DIR/analysis.md 绝对路径>
 
      📋 一句话摘要
         <本次分析的核心结论，一行>
 
-     ⚠️ 这份 analysis 留了 <N> 个未决问题需要你先回答——推进到下一步前必须先答完，不能跳过。
+     ⚠️ 留了 <N> 个未决问题需要先回答，推进前必须答完。
 
-     要怎么处理？
-      - 我逐题问你（推荐，答完我把答案写回 analysis.md）
-      - 你想先改 analysis 某段（说哪里）
+     请选择处理方式：
+      - 我逐题问你（推荐，答完写回 analysis.md）
+      - 你想先改 analysis 某段（请说哪里）
      ```
      **不允许**提供"直接推进"选项——这是硬规则，没有例外也没有 FORCE 逃生舱
    - **退出码 0**（全部已答 / section 写"本 req 无未决问题" / section 不存在）→ 确认门进入"推进模式"：
      ```
-     ✅ analysis.md 已写入
+     Stage 2（需求分析）— analysis 待确认
+
+     ✅ analysis.md
         <$ACTIVE_REQ_DIR/analysis.md 绝对路径>
 
      📋 一句话摘要
         <本次分析的核心结论，一行>
 
      [若 review_outcome=ACCEPTED_WITH_ISSUES 加一行：]
-     ⚠️ 这份 analysis 评审标了"可以继续但有待改进"，你之前显式接受了，继续推进。
+     ⚠️ analysis 评审标了"可以继续但有待改进"，你之前显式接受了，继续推进。
 
-     ——这份 analysis 就这样定吗？OK 我推进到方案设计；想改的说哪里。
+     这版 analysis 内容是否可以定稿？如还有需要调整的内容，请直接说；确认后我会推进到方案设计（Stage 3）。
      ```
      （所有 req 默认都走方案设计阶段，不再提供"跳过"选项）
 
@@ -120,6 +126,8 @@ PM 选择进入 stage 3 时：
 2. **输出确认门**（一份完整模板，把产物落地 / 变更要点 / 可选 review / 确认问句拼成单次输出；不分两轮发）：
 
    ```
+   Stage 3（方案设计）— solution 待确认
+
    ✅ solution.md 已更新
       <$ACTIVE_REQ_DIR/solution.md 绝对路径>
 
@@ -140,18 +148,19 @@ PM 选择进入 stage 3 时：
 
       跑哪几个你定，全跳也行。
 
-   ——这份方案就这样定吗？OK 我就把方案设计阶段定下来，进入下一步（设计系统建立）；想改的地方说哪里。
+   这版 solution 内容是否可以定稿？如还有需要调整的内容，请直接说；确认后我会推进到设计系统建立（Stage 4）。
    ```
 
-   **模板要点**：
+   **模板要点**（v3 书面体）：
+   - **顶部 stage 标记**：`Stage N（中文名）— <产物> <状态>` 独占首行（例 `Stage 3（方案设计）— solution 待确认`），PM 一眼知道当前位置
    - 三段标题用 emoji 锚点（✅ / 📋 / 📊）让 PM 视线快速分段
    - 路径独立缩进，不挤标题行
    - **变更要点用有序列表分条**：solution 变更天然多面（决策 / UI / 风险 / 验收 等），单行装不下；≥ 3 个变更点强制用有序列表，每条聚焦一个业务面变化
    - **不显示** `.engineering.md` 文件名 / hash 值 / "reconcile 同步" / "行数 lint" / "进入 stage 3" / "warnings" / "已 revise" 等工程黑话（PM 视角只关心 PM 视图主文件 + 下一阶段名称；详见 `task-spec/SKILL.md` 步骤 12 上方禁词清单，本闸门同样适用）
    - **禁止再加 ⚠️ lint 待办 / lint warnings 摘要等"传话块"**：lint 处理已在 /req-solution 内闭环，PM 在 stage-gate 不需要再看一遍自己几秒前的决策（这种二次显示用了 PM 不熟悉的内部术语—"骨架 / 合法屏幕字 / 退出时已确认的处理方式"—只会让 PM 困惑而无 actionable 内容）
    - **禁止把 /req-solution 的退出信号复读到 PM chat**：revise 模式下 skill 退出时给的"PM 视图已修订 / 工程合同保持 stale / 等 reconcile"等是 AI-internal handoff，stage-gate 接到后默默走步骤 1.5 即可，不在 chat 提一句
-   - 确认问句对话式：「这份方案就这样定吗？OK 我就……；想改的说哪里。」**不列 A/B 字母选项**也不列"放弃"
-   - **反面示例**（用户 2026-05-10 反馈的真实违例）：
+   - **末段确认问句独占末段**：统一句式「这版 X 内容是否可以定稿？如还有需要调整的内容，请直接说；确认后我会推进到 <下一阶段名>（Stage N）。」**不列 A/B 字母选项**、**不列"放弃"**、**不在问句后追加 brief/solution 预览或动作复述**
+   - **反面示例**：
      ```
      ✘ ✅ solution.md 已 revise（"已 revise" → "已更新"）
      ✘ ⚠️ solution.engineering.md 保持 stale（hash 8ae980b1e908 与 PM 视图当前不一致），等下方确认门后由 reconcile 模式统一对齐
@@ -162,6 +171,10 @@ PM 选择进入 stage 3 时：
         （warnings 处理已在 /req-solution 内闭环，PM 看不到"warnings"概念）
      ✘ A) 确认（进入 reconcile + 行数 lint，再推进 stage 3） / B) 我要修改 solution
         （A/B 字母选项 + 工程黑话；改对话式问句）
+     ✘ ——这份方案就这样定吗？OK 我就把方案设计阶段定下来，进入下一步（设计系统建立）；想改的地方说哪里。
+        （v2 旧句式：破折号开头 + "OK 我..."把示范回答嵌入动作 + 三要素挤一句。改 v3：「这版 solution 内容是否可以定稿？如还有需要调整的内容，请直接说；确认后我会推进到设计系统建立（Stage 4）。」）
+     ✘ 〔确认问句之后〕另起一段贴 brief/solution 核心内容预览
+        （确认门只给路径 + 摘要，问句后不追加任何东西。需要看全文 PM 自己打开文件 / 让新对话读回 chat）
      ```
 
    PM 跑完任一 review 后报告结论 → AI 调 `task-events.py append` 记 `plan_review_completed`（task 文件不存在时此处可省略，仅做口述确认）；事件流仅作审计记录，不当 gate（I-RV1/I-RV2）。
@@ -225,11 +238,14 @@ python3 .claude/scripts/req-transition.py "$ACTIVE_REQ_DIR" --to 3
 2. **已有内容**：对话式问 PM：
 
    ```
-   🎨 设计系统已存在（docs/DESIGN.md 有内容）
+   Stage 4（设计系统）— 已存在，是否更新？
 
-   这次需要更新设计系统吗？
-    - 不用，直接跳到 task 规划
-    - 要更新（说一下哪里要改）
+   🎨 docs/DESIGN.md
+      <绝对路径>
+
+   本次是否需要更新设计系统？
+    - 不需要 → 直接进入 task 规划（Stage 5）
+    - 需要 → 请说明哪里要改
    ```
 
    - PM 说「不用 / 不需要 / 跳过」 → 直接推进到 stage 5
@@ -251,10 +267,12 @@ python3 .claude/scripts/req-transition.py "$ACTIVE_REQ_DIR" --to 4
 2. PM 确认设计系统后，对话式确认门：
 
    ```
-   ✅ 设计系统已建立
-      docs/DESIGN.md
+   Stage 4（设计系统）— DESIGN.md 待确认
 
-   ——设计系统就这样定吗？OK 我推进到 task 规划；想改的说哪里。
+   ✅ docs/DESIGN.md
+      <绝对路径>
+
+   这版设计系统内容是否可以定稿？如还有需要调整的内容，请直接说；确认后我会推进到 task 规划（Stage 5）。
    ```
 
 推进：
@@ -278,7 +296,9 @@ python3 .claude/scripts/req-transition.py "$ACTIVE_REQ_DIR" --to 5
 3. **输出确认门**（一份完整模板，对齐 stage 2→3 风格）：
 
    ```
-   ✅ task-plan.md 已写入
+   Stage 5（task 规划）— task-plan 待确认
+
+   ✅ task-plan.md
       <$ACTIVE_REQ_DIR/task-plan.md 绝对路径>
 
    📋 一句话摘要
@@ -291,7 +311,7 @@ python3 .claude/scripts/req-transition.py "$ACTIVE_REQ_DIR" --to 5
 
       跑哪几个你定，全跳也行。具体 task 文件在下一阶段（task 执行）的 /task-spec 还会再推荐一次。
 
-   ——这份 task 规划就这样定吗？OK 我推进到 task 执行阶段；想改的说哪里。
+   这版 task 规划内容是否可以定稿？如还有需要调整的内容，请直接说；确认后我会推进到 task 执行（Stage 6）。
    ```
 
 4. **PM 回答的内部分流**（不列字母）：
@@ -318,12 +338,12 @@ python3 .claude/scripts/req-transition.py "$ACTIVE_REQ_DIR" --to 6
 3. All satisfied → 对话式确认门：
 
    ```
-   ✅ 所有 task 已完成并关闭
+   Stage 6（task 执行）— 全部 task 已完成
 
-   📋 一句话摘要
+   ✅ 状态
       <N 个 task 全部 close、worktree 全部清理>
 
-   ——这个需求就关闭吗？OK 我推进到关闭流程；想再开新 task 说一声。
+   是否确认关闭此需求？如还需开启新的 task，请直接说；确认后我会启动关闭流程（Stage 7）。
    ```
 
 4. Not satisfied → list which tasks are missing which steps。
@@ -361,10 +381,12 @@ python3 .claude/scripts/req-transition.py "$ACTIVE_REQ_DIR" --to 7
 
 - 每个 stage 结束必须显式问 PM 确认，不能自动跳过确认门
 - **确认门只给绝对路径 + 一句话变更摘要，不贴文档全文。** PM 的 IDE 已经挂在 worktree 上，文件在左侧目录树里可见，不需要把内容贴回 chat
-- **确认门标准格式**（v2，对话式；stage 2→3 已落地见上方步骤 2 模板，其他 stage 后续逐步对齐）：
+- **确认门标准格式**（v3 书面体；2026-05-11 全 stage 对齐完毕）：
+  - **顶部 stage 标记独占首行**：`Stage N（中文名）— <产物> <状态>`（例 `Stage 3（方案设计）— solution 待确认`、`Stage 4（设计系统）— DESIGN.md 待确认`）
   - emoji 锚点分段（✅ 路径 / 📋 摘要 / 📊 可选 review；条件块 ⚠️ lint 待办）
   - 路径独立缩进，不挤标题行
-  - 文末用对话式问句结尾（如「这份方案就这样定吗？OK 我就……；想改的说哪里。」），**不列 A/B 字母选项**
+  - **末段确认问句独占末段**，统一句式：「这版 X 内容是否可以定稿？如还有需要调整的内容，请直接说；确认后我会推进到 <下一阶段名>（Stage N）。」（关闭门变体：「是否确认关闭此需求？如还需开启新的 task，请直接说；确认后我会启动关闭流程（Stage 7）。」）
+  - **禁**：A/B 字母选项；"——"破折号开头；"OK 我..."把示范回答嵌入动作描述；问句后追加 brief/solution 预览或动作复述
   - **不主动列"放弃 req"选项**（PM 真要放弃直接说「放弃这个 req / cancel」，AI 提示走 `/cancel-req`）
 - **PM chat 输出禁工程黑话**（与 `task-spec/SKILL.md` 步骤 12 上方禁词清单等价）：所有 stage 的确认门 / lint 弹窗 / 任何给 PM 看的 chat 文本里**严禁**出现 `hash` / 12 位 hash 值 / `synced_pm_view_hash` / `reconcile` / `reconcile 模式` / `stale` / `行数 lint` / `lint warnings` / `X warnings` / `已 revise` / `revise 完成` / `步骤 N.M` 内部编号 / `lazy sync` / `MODE=revise` 等内部状态机术语；解释段也禁出现 `.engineering.md` 文件名（路径行除外）。这些都是 AI 内部记账，PM 没有动作可做。**用"已更新"/"已修订"替代"已 revise"，用"格式自检通过"替代"X warnings 全部是…"，用"等下方确认后统一同步"替代"由 reconcile 模式统一对齐"**
 - **/req-solution 退出信号属 AI-internal**：revise 模式下 skill 退出时返回的"PM 视图已修订 / 工程合同保持 stale / 等待 stage-gate 步骤 1.5 review 触发前自动 reconcile"等文案是 skill-to-skill handoff，stage-gate 接到后**默默**走步骤 1.5 reconcile + 输出步骤 2 模板，**不把退出信号原文复读到 PM chat**

@@ -404,33 +404,43 @@ PM 看完不改 / 不跑 review：直接进步骤 12。事件流缺事件不阻�
 **业务模块 task**（输出模板）：
 
 ```
-已生成 task 详细文档：
-  PM 视图：<绝对路径>
-  工程合同：<绝对路径>
+Stage 6（task 执行）— task-NNN <slug> 待确认
 
-摘要：<所属模块> / 功能 N 节 / PM 反馈分流 X 条 / <关键决策一句或「本 task 无新决策」>
+✅ task 详细文档
+   PM 视图：<绝对路径>
+   工程合同：<绝对路径>
 
-可选 review（你自跑，跑完贴结论我帮你 append 事件）：
-  /plan-eng-review     — 架构 / 数据流 / 边界 / 依赖合理性
-  /plan-design-review  — 交互 / 视觉层问题 / UI 完整性
-  /autoplan            — 两者批量打包
+📋 摘要
+   <所属模块> / 功能 N 节 / PM 反馈分流 X 条 / <关键决策一句或「本 task 无新决策」>
 
-确认整份 task 内容吗？没问题我就推 /task-confirm；还有要改的地方直接说。
+📊 可选 review（你自跑，跑完贴结论我帮你 append 事件）
+   /plan-eng-review     — 架构 / 数据流 / 边界 / 依赖合理性
+   /plan-design-review  — 交互 / 视觉层问题 / UI 完整性
+   /autoplan            — 两者批量打包
+
+   跑哪几个你定，全跳也行。
+
+这版 task 内容是否可以定稿？如还有需要调整的内容，请直接说；确认后我会推进到 /task-confirm 启动 task worktree。
 ```
 
 **基础设施 task**（去掉 design review）：
 
 ```
-已生成 task 详细文档：
-  PM 视图：<绝对路径>
-  工程合同：<绝对路径>
+Stage 6（task 执行）— task-NNN <slug> 待确认（基础设施）
 
-摘要：基础设施 / <一句话作用>
+✅ task 详细文档
+   PM 视图：<绝对路径>
+   工程合同：<绝对路径>
 
-可选 review（你自跑，跑完贴结论我帮你 append 事件）：
-  /plan-eng-review — 脚手架 / 共用能力的设计合理性
+📋 摘要
+   基础设施 / <一句话作用>
 
-确认整份 task 内容吗？没问题我就推 /task-confirm；还有要改的地方直接说。
+📊 可选 review（你自跑，跑完贴结论我帮你 append 事件）
+   /plan-eng-review — 脚手架 / 共用能力的设计合理性
+
+   跑不跑你定。
+
+这版 task 内容是否可以定稿？如还有需要调整的内容，请直接说；确认后我会推进到 /task-confirm 启动 task worktree。
 ```
 
 > **PM 跑 review 时不需要带 bundle 路径参数**——直接 `/plan-eng-review` 等命令运行即可，review skill 进入后会按 PM 视图主文件顶部「📂 文档结构」段（参见 `templates/task.md.tmpl`）自动跨双文件读全。
@@ -460,7 +470,7 @@ PM 看完不改 / 不跑 review：直接进步骤 12。事件流缺事件不阻�
 ```
 ✓ 已按你的反馈更新：启用弹窗文案改成"……"。
 
-改完了，整份 task 内容你看 OK 吗？OK 我就推 /task-confirm；还有要改的继续说。
+这版 task 内容是否可以定稿？如还有需要调整的内容，请直接说；确认后我会推进到 /task-confirm 启动 task worktree。
 ```
 
 工程合同的同步状态完全由 AI 内部跟踪、PM 说 OK 后自动处理，不需要也不应该让 PM 知道它的存在或状态。
@@ -485,7 +495,7 @@ PM 看完不改 / 不跑 review：直接进步骤 12。事件流缺事件不阻�
 > ```
 > ✓ 已按你的反馈更新：<一行说明 PM 视图层面的变化>
 >
-> 改完了，整份 task 内容你看 OK 吗？OK 我就推 /task-confirm；还有要改的继续说。
+> 这版 task 内容是否可以定稿？如还有需要调整的内容，请直接说；确认后我会推进到 /task-confirm 启动 task worktree。
 > ```
 >
 > 不写"工程合同保持 stale"、"hash 未刷新"、"等 reconcile"——这些是 AI 内部记账，PM 选 A 后才执行，PM 在 B 循环里看不到也不需要知道。

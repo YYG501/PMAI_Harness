@@ -58,19 +58,20 @@ python3 .claude/scripts/check-engineering-doc-size.py "$ENG_FILE"
 - **退出 1（超限）** → 给 PM 选项：
 
   ```
-  ⚠️ <task-file-stem>.engineering.md 超过原型档行数上限（实测 N 行 / 上限 200 行）
-  超限通常意味着工程合同重抄了 PM 视图内容（参见 lint 输出的修法）。
+  ⚠️ 工程合同档超出长度上限（实测 <N> 行 / 上限 200 行）
 
-  A) 回 /task-spec 让 AI 裁剪重写超限段落（推荐——按强制引用规则）
-  B) PM 自己改文件后回 /task-confirm
-  C) 接受超限，强制推进（请说明理由，记到 `[OVERRIDE-DOCSIZE]` 注释里）
+  通常是 PM 视图内容被重抄进工程合同——把这部分压回引用通常就修好。
 
-  请选 A / B / C：
+  请选择处理方式：
+   - 让我裁剪重写超限段落（推荐——按强制引用规则）
+   - 你自己改完，告诉我让我再检查一次
+   - 接受超限直接推进（请说明理由，我记到文件注释里作存档）
   ```
 
-  - PM 选 A → 让 PM 在主窗口调 /task-spec（revise 模式）让 AI 裁剪 → 改完后重跑 /task-confirm
-  - PM 选 B → 等 PM 改完，回 /task-confirm
-  - PM 选 C → 在 `<engineering-file>` 末尾追加 `<!-- OVERRIDE-DOCSIZE: <YYYY-MM-DD> reason: <PM 理由> -->`，进步骤 1.5
+  **PM 回答的内部分流**（按自然语言意图，不列字母）：
+  - PM 说「裁剪 / 让你改 / 推荐那个」等 → 让 PM 在主窗口调 /task-spec（revise 模式）让 AI 裁剪 → 改完后重跑 /task-confirm
+  - PM 说「我改完了 / 我自己改 / 改好了再 lint」 → 等 PM 改完，回 /task-confirm
+  - PM 说「接受超限 / 强制推进，理由是 X」 → 在 `<engineering-file>` 末尾追加 `<!-- OVERRIDE-DOCSIZE: <YYYY-MM-DD> reason: <PM 理由> -->`，进步骤 1.5
 
 **档位非 prototype**：lint 自动跳过（v2 §五.4 决策）；步骤 1.4 直接通过到 1.5。
 
@@ -136,7 +137,7 @@ model（留空=用默认，claude-code 仅支持 opus/sonnet/haiku）：
 >
 > close-task.sh 的 I-CT8 audit 通过 `commit_only_touches_task_docs()`（A1 hotfix，见 `scripts/audit-task-events.py`）豁免它们：commit 改动文件全部是 `task-NNN.md` / `task-NNN.engineering.md` → skip I-CT8 时间戳检查。Phase 2（A2）落地后改用 commit subject prefix 豁免，本节描述会同步更新。
 
-确认无误后问：`确认启动此 task？（Y/N）`
+确认无误后问：`是否确认启动此 task？如需调整执行方式（例：换 claude-code sonnet），请直接说；确认后我会创建 task worktree 并输出启动命令。`
 
 ### 步骤 4-pre：依赖前置检查（v4 主防线）
 

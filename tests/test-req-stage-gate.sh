@@ -120,9 +120,9 @@ test_stage67_steps_replaced() {
 
   _assert_contains "$REQ_STAGE_GATE_SKILL" 'Read `task-plan.md`, extract task id list' "step 1 reads task-plan" || return
   _assert_contains "$REQ_STAGE_GATE_SKILL" "For each id verify" "step 2 verify each id" || return
-  _assert_contains "$REQ_STAGE_GATE_SKILL" "All satisfied → 对话式确认门" "new confirmation gate (v2 dialog style)" || return
-  _assert_contains "$REQ_STAGE_GATE_SKILL" "所有 task 已完成并关闭" "gate output mentions completion" || return
-  _assert_contains "$REQ_STAGE_GATE_SKILL" "这个需求就关闭吗" "gate uses dialog phrasing" || return
+  _assert_contains "$REQ_STAGE_GATE_SKILL" "All satisfied → 对话式确认门" "new confirmation gate (v3 dialog style)" || return
+  _assert_contains "$REQ_STAGE_GATE_SKILL" "Stage 6（task 执行）— 全部 task 已完成" "gate uses v3 stage marker" || return
+  _assert_contains "$REQ_STAGE_GATE_SKILL" "是否确认关闭此需求" "gate uses v3 close phrasing" || return
   _assert_contains "$REQ_STAGE_GATE_SKILL" "Not satisfied → list which tasks are missing which steps" "missing output" || return
 
   pass_test
