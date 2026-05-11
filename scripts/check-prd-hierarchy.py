@@ -155,61 +155,71 @@ def is_violation(cell_value: str) -> tuple[bool, list[str]]:
 # 类 2 — 描述风格违规（全篇扫描）
 # ============================================================================
 
-VISUAL_PATTERNS: list[tuple[str, str]] = [
-    (r"#[0-9A-Fa-f]{6}\b", "颜色 hex 码"),
-    (r"视觉弱化", "视觉描述「视觉弱化」"),
-    (r"警示图标", "视觉描述「警示图标」"),
-    (r"\bdestructive\b", "工程词「destructive」"),
-    (r"\bwarning\b", "工程词「warning」"),
-    (r"主色填充", "视觉描述「主色填充」"),
-    (r"加粗加红", "视觉描述「加粗加红」"),
-    (r"\bBadge\b", "视觉部件「Badge」"),
-    (r"ghost 按钮", "按钮变体「ghost 按钮」"),
-    (r"明文按钮", "按钮变体「明文按钮」"),
-    (r"紧凑形态", "形态描述「紧凑形态」"),
-    (r"简化形态", "形态描述「简化形态」"),
+# Pattern 格式: (regex, reason, hint)
+# - reason: 违规类型简短说明
+# - hint: 具体改写建议(空字符串 = 删)
+
+VISUAL_PATTERNS: list[tuple[str, str, str]] = [
+    (r"#[0-9A-Fa-f]{6}\b", "颜色 hex 码", "删(颜色由 DESIGN.md 决定)"),
+    (r"视觉弱化", "视觉描述", '改写为"只展示段头,不展示操作按钮"等行为约束'),
+    (r"警示图标", "视觉描述", "删图标颜色,保留破坏性等级(轻/中/重档)"),
+    (r"\bdestructive\b", "工程词", '改写为"重档"'),
+    (r"\bwarning\b", "工程词", '改写为"中档"'),
+    (r"主色填充", "视觉描述", "删(视觉细节)"),
+    (r"加粗加红", "视觉描述", '改写为"需视觉强调"或删'),
+    (r"\bBadge\b", "视觉部件", '改写为"标识"或删'),
+    (r"ghost 按钮", "按钮变体", "删 ghost 修饰,直接 [按钮名]"),
+    (r"明文按钮", "按钮变体", "删 明文 修饰,直接 [按钮名]"),
+    (r"紧凑形态", "形态描述", "删(PM 补图)"),
+    (r"简化形态", "形态描述", "删(PM 补图)"),
 ]
 
-URL_PATTERNS: list[tuple[str, str]] = [
-    (r"\?view=", "URL 参数「?view=」"),
-    (r"\?tab=", "URL 参数「?tab=」"),
-    (r"&license=", "URL 参数「&license=」"),
-    (r"<\w+Id>", "路由占位符（如 <licenseId>）"),
-    (r"[▾▸↔▼▶]", "图标 Unicode 字符"),
+URL_PATTERNS: list[tuple[str, str, str]] = [
+    (r"\?view=", "URL 参数", "删(实现层,改写业务行为)"),
+    (r"\?tab=", "URL 参数", "删(实现层,改写业务行为)"),
+    (r"&license=", "URL 参数", "删(实现层)"),
+    (r"<\w+Id>", "路由占位符", "删(实现层)"),
+    (r"[▾▸↔▼▶]", "图标 Unicode 字符", '改写为"段头支持折叠展开"等业务行为'),
 ]
 
-PUNCT_PATTERNS: list[tuple[str, str]] = [
-    (r"「", "中文方角引号「（应改 ASCII 双引号）"),
-    (r"」", "中文方角引号」（应改 ASCII 双引号）"),
-    (r" · ", "中点 ·（应改顿号、）"),
+PUNCT_PATTERNS: list[tuple[str, str, str]] = [
+    (r"「", "中文方角引号", '改用 ASCII 双引号 "..."'),
+    (r"」", "中文方角引号", '改用 ASCII 双引号 "..."'),
+    (r" · ", "中点 ·", "改用顿号、"),
 ]
 
-NEG_PATTERNS: list[tuple[str, str]] = [
-    (r"无\s*⋮", "否定式「无 ⋮」"),
-    (r"不再有", "否定式「不再有」"),
-    (r"不再展示", "否定式「不再展示」"),
-    (r"不再拆", "否定式「不再拆」"),
-    (r"不再渲染", "否定式「不再渲染」"),
-    (r"不是\s*destructive", "否定式「不是 destructive」"),
+NEG_PATTERNS: list[tuple[str, str, str]] = [
+    (r"无\s*⋮", "否定式(暴露否决方案)", "删,直接描述当前方案"),
+    (r"不再有", "否定式(暴露旧方案)", "删,直接描述当前"),
+    (r"不再展示", "否定式", "删(不写就是不展示)"),
+    (r"不再拆", "否定式", '改写为"为单一合并区块"等正面描述'),
+    (r"不再渲染", "否定式", "删,直接描述当前"),
+    (r"不是\s*destructive", "否定式", "删(视觉细节本身就该删)"),
 ]
 
-JARGON_PATTERNS: list[tuple[str, str]] = [
-    (r"触发(?:弹窗|对应弹窗|开通弹窗|二次确认|分配弹窗|调整弹窗)", "工程黑话「触发 X」"),
-    (r"锚定", "工程黑话「锚定」"),
-    (r"池行末", "位置词「池行末」"),
-    (r"顶部右(?:侧|上)", "位置词「顶部右侧/右上」"),
-    (r"focus trap", "工程黑话「focus trap」"),
-    (r"\bloading\b", "工程黑话「loading」"),
-    (r"\bdisabled\b", "工程黑话「disabled」"),
-    (r"\bremove\b", "工程黑话「remove」"),
-    (r"池树", "工程黑话「池树」"),
-    (r"账本", "工程黑话「账本」"),
-    (r"跟随失效", "工程黑话「跟随失效」"),
-    (r"同口径", "工程黑话「同口径」"),
-    (r"漂移", "工程黑话「漂移」"),
+JARGON_PATTERNS: list[tuple[str, str, str]] = [
+    (r"触发(?:弹窗|对应弹窗|开通弹窗|二次确认|分配弹窗|调整弹窗)", "工程黑话", '改写为"点击后打开 X"'),
+    (r"锚定", "工程黑话", '改写为"定位到"'),
+    (r"池行末", "位置工程词", '改写为"每一行额度池"'),
+    (r"顶部右(?:侧|上)", "位置工程词", '改写为"页面顶部"或具体业务对象'),
+    (r"focus trap", "工程黑话", '改写为"焦点收敛在弹窗内"'),
+    (r"\bloading\b", "工程黑话", '改写为"加载中..."或"校验中..."'),
+    (r"\bdisabled\b", "工程黑话", '改写为"置灰"或"不可点"'),
+    (r"\bremove\b", "工程黑话(英文)", '改写为"删除"'),
+    (r"池树", "工程黑话", "删,具体说明展示什么"),
+    (r"账本", "工程黑话", '改写为"记录"/"数字"/"累计数字"'),
+    (r"跟随失效", "抽象动作短语", '改写为"一并失效"/"连带失效"'),
+    (r"同口径", "工程黑话", '改写为"数字一致"'),
+    (r"漂移", "工程黑话", '改写为"不一致"'),
+    (r"由.{1,10}承载", "工程黑话(由X承载)", '改写为"X 包含"或"由 X 提供"'),
+    (r"完整使用全貌", "抽象表达", '改写为"完整使用情况"'),
+    (r"一步可达", "工程黑话", '改写为"点击 [详情] 即可查看"或删'),
+    (r"不承载", "工程黑话", '改写为"只用于"(如"详情只用于查看")'),
+    (r"绕过.{1,10}中介", "抽象表达", '改写为"不走 X 这一层"'),
+    (r"想\S{1,20}请走", "PM 指令视角", '改写为业务行为视角("X 需通过 Y 操作")'),
 ]
 
-ALL_STYLE_PATTERNS: list[tuple[str, list[tuple[str, str]]]] = [
+ALL_STYLE_PATTERNS: list[tuple[str, list[tuple[str, str, str]]]] = [
     ("视觉细节", VISUAL_PATTERNS),
     ("URL/技术细节", URL_PATTERNS),
     ("排版分隔符", PUNCT_PATTERNS),
@@ -225,13 +235,14 @@ def check_style(lines: list[str]) -> list[dict]:
         if line.startswith("---"):
             continue
         for category, patterns in ALL_STYLE_PATTERNS:
-            for pattern, reason in patterns:
+            for pattern, reason, hint in patterns:
                 for m in re.finditer(pattern, line):
                     violations.append({
                         "line": line_idx + 1,
                         "category": category,
                         "value": m.group(0),
                         "reason": reason,
+                        "hint": hint,
                         "context": line[:80] + ("..." if len(line) > 80 else ""),
                     })
     return violations
@@ -285,13 +296,13 @@ def scan(path: Path) -> int:
     has_violations = bool(section_violations) or bool(style_violations)
 
     if section_violations:
-        print(f"━━━ 类 1 — §六 功能需求层级违规：{len(section_violations)} 处去重命名 ━━━")
+        print(f"━━━ 类 1 — §六 功能需求层级违规:{len(section_violations)} 处去重命名 ━━━")
         print()
         for v in section_violations:
             hits_str = " | ".join(v["hits"])
-            print(f"  L{v['line']:>4}  {v['level']}：「{v['value']}」  ← {hits_str}")
+            print(f'  L{v["line"]:>4}  {v["level"]}: "{v["value"]}"  ← {hits_str}')
         print()
-        print("修正方向（详见 skills/prd-writing/SKILL.md「层级划分原则」）：")
+        print("修正方向 (详见 skills/prd-writing/SKILL.md「层级划分原则」):")
         print("  · 二级功能 = 用户动作组（列表 / 搜索 / 筛选 / 操作 / 创建 / 导入 / 详情）")
         print("  · 三级功能 = 动作子项，命名以动词锚定（分配 / 调整 / 撤销 / 启用 / 吊销 / 查看）")
         print("  · 角色视角差异 / UI 视图切换 / UI 形态规则 / 弹窗实现细节 → 写进需求描述列编号项")
@@ -310,16 +321,17 @@ def scan(path: Path) -> int:
             print()
             print(f"  [{category}] {len(items)} 处")
             for v in items[:20]:
-                print(f"    L{v['line']:>4}  「{v['value']}」  ← {v['reason']}")
+                print(f'    L{v["line"]:>4}  "{v["value"]}"  ← {v["reason"]}')
+                print(f"          → {v['hint']}")
             if len(items) > 20:
-                print(f"    （… 还有 {len(items) - 20} 处同类违规未展示）")
+                print(f"    (... 还有 {len(items) - 20} 处同类违规未展示)")
         print()
-        print("修正方向（详见 skills/prd-writing/references/writing-rules.md「描述风格规则」）：")
-        print("  · 视觉细节 → 删（DESIGN.md 范畴，PM 自己补图）")
-        print("  · URL/技术细节 → 删（实现层，PRD 写业务行为）")
-        print("  · 排版分隔符 → 「」改 \"...\"，· 改顿号、")
-        print("  · 否定式 → 直接描述当前方案，不暴露否决过的设计")
-        print("  · 工程黑话 → 业务自然语言（生僻描述词 = 工程黑话）")
+        print("修正方向 (详见 skills/_shared/pm-view/writing-rules.md §3.12 描述风格规则):")
+        print("  · 视觉细节 → 删 (DESIGN.md 范畴,PM 自己补图)")
+        print("  · URL/技术细节 → 删 (实现层,PRD 写业务行为)")
+        print('  · 排版分隔符 → 「」改 "...",· 改顿号、')
+        print("  · 否定式 → 直接描述当前方案,不暴露否决过的设计")
+        print("  · 工程黑话 → 业务自然语言 (生僻描述词 = 工程黑话)")
         print()
 
     if has_violations:

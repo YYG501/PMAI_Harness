@@ -16,9 +16,10 @@ description: Use in Stage 6 (close-req) to draft, revise, or finalize the req-le
 ## PM 视图规则（必读）
 
 本 skill 产出 `prd.md`（最终交付的产品规格），须遵守 `skills/_shared/PM-VIEW-RULES.md`（主索引）。具体读以下子文件：
-- `_shared/pm-view/writing-rules.md`（§三 写作规则：明确指代 / 正向描述 / 禁工程词 / 禁像素颜色 / 禁反向约束）
+- `_shared/pm-view/writing-rules.md`（§三 写作规则：含 §3.1-§3.11 通用规则 + **§3.12 描述风格规则**：6 类违规 + 生僻描述词 framework + PM 视角原则 + 流程式步骤 + 精简原则 + 引号风格统一）
 - `_shared/PM-VIEW-RULES.md` §五（功能清单格式：4 列表格 + 续行 rowspan + 需求描述列内联编号；业务规则只说 what，禁 how/why/字段口径混入）
 - `_shared/pm-view/doc-strictness.md`（§四 严格度对照表 — prd.md 行）
+- `_shared/pm-view/cross-skill.md`（§9.7 跨 skill 共享原则,§3.12 描述风格规则跨 skill 适用）
 - `_shared/pm-view/input-flow.md`（§九 输入流；**所有项目级文档全部必读**：brief / analysis / solution（PM 视图）/ tasks（PM 视图）/ docs/CONTEXT.md / docs/DESIGN.md / docs/prd.md / docs/modules/\*.md / prototypes/；不接受任何 .engineering.md 输入）
 
 `prd.md` 不拆文件（主文件 §二），是 PM 视图链路的最终交付层。
@@ -331,14 +332,17 @@ prd-writing 历史上自带的写作规则（§186 禁用清单 / §266 UI 元�
 - **UI 元素指代规则 + 引号风格统一**（按钮名 `[...]` / 状态名+字段名+卡片名+提示文案 `"..."` / 禁 `「」`）
 - **cross-reference 处理**（PRD 内禁用 §6.X 跳转，仅可引用外部 DESIGN.md 等）
 - **抽象动词使用规则**（更新 / 保存 / 立即更新 / 执行 X 必须搭配具体效果）
-- **描述风格规则**（req-003 PRD 修订经验沉淀）：
-  - 判定 framework：**生僻描述词 = 工程黑话**（读 PRD 时是否需要二次理解，需要 → fail）
-  - 6 类违规：视觉细节越界 / URL 路由 / 排版分隔符 / 否定式描述（暴露否决方案）/ 工程黑话（触发 / 锚定 / 池行末 / 账本 / 跟随失效 / 同口径 等）/ 抽象学院派命名（凝练 4-6 字短语）
-  - **描述视角**：业务行为，不下指令（"想清空请走 X" → "清空 X 通过 Y 操作"）
-  - **流程式步骤**：先 X → 再 Y → 然后 Z → 最后 W；流程概述与字段细节分条
-  - **精简原则**：删可推导信息 / 技术细节括号 / 冗余说明 / 长复合句拆条 / 冗长错误文案 / 举例细节
 
-`writing-rules.md` 按上述大纲展开，含每条的反例/正例对照表与触发场景说明。
+**§3.12 描述风格规则**（已搬到 `_shared/pm-view/writing-rules.md` 作为权威单一真相源，PM 视图必读段已要求加载）:
+  - 判定 framework：**生僻描述词 = 工程黑话**（读 PRD 时是否需要二次理解，需要 → fail）
+  - 6 类违规：视觉细节越界 / URL 路由 / 排版分隔符 / 否定式描述 / 工程黑话 / 抽象学院派命名
+  - 描述视角：业务行为，不下指令
+  - 流程式步骤：先 X → 再 Y → 然后 Z；流程概述与字段细节分条
+  - 精简原则：删可推导信息 / 技术细节括号 / 冗余说明 / 长复合句拆条 / 冗长错误文案 / 举例细节
+  - UI 元素指代与引号风格统一（按钮 `[...]` / 文案 `"..."` / 禁 `「」`）
+  - 「如何补新规则」5 步反馈循环 SOP — 未来 PM 复审发现新违规词时按此流程补
+
+`references/writing-rules.md` 不再展开 §3.12（权威以共享为准）；前面的 L1-L6 + 9 类禁用清单 + UI 元素指代 + cross-reference + 抽象动词 五段仍在 references/ 展开,含每条的反例/正例对照表与触发场景说明。
 
 ---
 

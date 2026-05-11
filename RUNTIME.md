@@ -10,9 +10,18 @@
 
 ---
 
-## 当前位置（2026-05-08）
+## 当前位置（2026-05-11）
 
-**最近一次改造（2026-05-08）**：状态机收敛 — 合并「待验收」入「执行中」 + 推荐 review 移到验收信息块末尾。
+**最近一次改造（2026-05-11）**: prd-writing 描述风格规则 sink + lint 类 2 全篇扫描 + 回归测试 fixture 落地。
+
+- 6 类描述风格规则 (视觉细节 / URL 路由 / 排版分隔符 / 否定式 / 工程黑话 / 抽象学院派命名) 沉淀到 `_shared/pm-view/writing-rules.md §3.12`(权威单一真相源,跨 skill 复用 prd-writing / task-spec / publish-to-lark 等)
+- `_shared/pm-view/writing-rules.md` 顶部加「如何补新规则」5 步反馈循环 SOP — 未来 PM 复审发现新违规词时按此流程补
+- lint `scripts/check-prd-hierarchy.py` 加类 2 全篇扫描 (50+ pattern + 具体改写 hint),抓视觉细节 / URL / 排版分隔符 / 否定式 / 工程黑话 + "承载"/"全貌"/"一步可达"/"绕过 X 中介"/"不承载"/"想 X 请走 Y" 等 PM 复审最后阶段指出但当时词典没收录的违规词
+- 回归测试 `scripts/tests/violations.md + clean.md + run-tests.sh` 持久化, 4 个测试 (5 类全触发 / clean 通过 / hint 输出 / 链回 _shared 路径) 全过
+- ROI 回测: 跑新 lint 在 req-003 修订完成后归档 PRD (708a2b4) 抓出 4 处违规漏改 — PM 当时手改有遗漏, 新 lint 现在能机械抓住 → sink 有效证据
+- 影响范围: `_shared/pm-view/writing-rules.md` + cross-skill.md + `scripts/check-prd-hierarchy.py` + `scripts/tests/` 新建 + `skills/prd-writing/SKILL.md` + `skills/prd-writing/references/writing-rules.md` (清理) + `skills/prd-writing/references/few-shots.md` (修订前后对照)
+
+**前一次改造（2026-05-08）**：状态机收敛 — 合并「待验收」入「执行中」 + 推荐 review 移到验收信息块末尾。
 - task 状态从 5 态 → 4 态（待执行 / 执行中 / 已完成 / 已废弃；删「待验收」）
 - 合法 transition 从 6 → 3（待执行→执行中、执行中→已完成、执行中→待执行 受限）
 - PM 打回**不切状态**：写反馈到 PM 视图历史档案 + AI 续修 + 追加 fix commit

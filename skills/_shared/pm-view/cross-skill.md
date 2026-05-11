@@ -2,6 +2,8 @@
 
 > 本文件是 [`PM-VIEW-RULES.md`](../PM-VIEW-RULES.md) §9.7 的物理拆分。配套阅读：[`input-flow.md`](./input-flow.md)（§9.1 - §9.6 输入流约束 / 双文件 lazy sync 等）。下文中 §9.X 引用一律指向 `input-flow.md`。
 
+**描述风格规则跨 skill 适用范围**：[`writing-rules.md`](./writing-rules.md) §3.12「描述风格规则」适用于所有 PM 视图产出（PRD / task spec / 飞书发布前文案 / brief / analysis / solution），由 `scripts/check-prd-hierarchy.py` lint 类 2 全篇兜底机械违规。新违规词按 writing-rules.md 顶部「如何补新规则」5 步反馈循环 SOP 补入。
+
 1. **`.engineering.md` 仅工程合同链路读**：PM 视图 skill（req-analysis / req-solution PM / task-plan / task-spec PM / prd-writing）一律 ❌ 不读任何 `.engineering.md`（§9.1 / §9.2）
 
 2. **`docs/DESIGN.md` 在 PM 视图链路保留必读但分级**（按 §9.1 各 skill 行）：
