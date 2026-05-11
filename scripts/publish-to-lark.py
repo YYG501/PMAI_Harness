@@ -429,6 +429,57 @@ def get_cell_child_specs(cell_block: dict, blocks_by_id: dict) -> list[tuple[str
     return out
 
 
+def merge_leading_with_clear(
+    doc_id: str,
+    table_block_id: str,
+    cells_array: list,
+    cols: int,
+    blocks_by_id: dict,
+    rng: dict,
+) -> bool:
+    """前 N-1 列合并:清空非锚点 cell children + merge_table_cells。
+
+    飞书 merge_table_cells API 只设 row_span / col_span,被合并的非锚点 cell 内容仍存在,
+    渲染时会叠加显示在锚点 cell。必须先 batch_delete 非锚点 cell 的 children,再 merge。
+
+    与 merge_desc_group_with_content 区别:前 N-1 列锚点已有内容(且非锚点是相同 / 空),
+    不需要拷贝 children 到锚点,直接清空非锚点即可。
+    """
+    start = rng["row_start_index"]
+    end = rng["row_end_index"]
+    col = rng["column_start_index"]
+
+    # 1) 清空非锚点 cell 的 children (避免渲染叠加)
+    for r in range(start + 1, end):
+        non_anchor_id = cells_array[r * cols + col]
+        non_anchor_cell = blocks_by_id.get(non_anchor_id)
+        if not non_anchor_cell:
+            continue
+        count = len(non_anchor_cell.get("children", []) or [])
+        if count == 0:
+            continue
+        try:
+            lark_api(
+                "POST",
+                f"/open-apis/docx/v1/documents/{doc_id}/blocks/{non_anchor_id}/children/batch_delete",
+                data={"start_index": 0, "end_index": count},
+            )
+        except RuntimeError as e:
+            warn(f"清空 leading cell children 失败 cell={non_anchor_id}: {e};继续 merge")
+
+    # 2) merge_table_cells
+    try:
+        lark_api(
+            "PATCH",
+            f"/open-apis/docx/v1/documents/{doc_id}/blocks/{table_block_id}",
+            data={"merge_table_cells": rng},
+        )
+        return True
+    except RuntimeError as e:
+        warn(f"merge_table_cells (leading) 失败 range={rng}: {e}")
+        return False
+
+
 def merge_desc_group_with_content(
     doc_id: str,
     table_block_id: str,
@@ -542,19 +593,19 @@ def merge_cells_for_doc(doc_id: str):
                 row.append(cell_text(cell_block, blocks_by_id) if cell_block else "")
             grid.append(row)
 
-        # 前 N-1 列：直接 merge_table_cells 即可（空 cell 会被吸收，不丢内容）
+        # 前 N-1 列:必须先清空非锚点 cell children, 再 merge_table_cells
+        # 否则飞书 docx 渲染时 rowspan 内所有非锚点 cell 内容会叠加显示在锚点 cell
+        cells_array = (table.get("table") or {}).get("cells") or []
         for rng in find_merge_ranges(grid, existing):
-            try:
-                lark_api("PATCH",
-                         f"/open-apis/docx/v1/documents/{doc_id}/blocks/{table['block_id']}",
-                         data={"merge_table_cells": rng})
+            ok = merge_leading_with_clear(
+                doc_id, table["block_id"], cells_array, cols, blocks_by_id, rng,
+            )
+            if ok:
                 success += 1
-            except RuntimeError as e:
+            else:
                 failure += 1
-                warn(f"merge_table_cells 失败 table={table['block_id']} range={rng}: {e}")
 
         # 末列（需求描述）：续行 row group 需要先把 children 拷贝到锚点 cell 再 merge
-        cells_array = (table.get("table") or {}).get("cells") or []
         for rng in find_desc_group_ranges(grid, existing):
             ok = merge_desc_group_with_content(
                 doc_id, table["block_id"], cells_array, cols, blocks_by_id, rng,
