@@ -270,6 +270,15 @@ bash .claude/scripts/skill-preamble.sh </dev/null && echo OK || echo FAIL
 for s in close-task.sh close-req.sh cancel-req.sh create-task-worktree.sh create-req-worktree.sh quick-fix.sh; do
   bash -n .claude/scripts/$s && echo "✓ $s" || echo "✗ $s SYNTAX ERROR"
 done
+
+# 5.5c. 配置文件 init 状态检查（lark-publish.json 等需 PM 手工 init 的）
+echo "━━━ 配置文件 init 检查 ━━━"
+if [ ! -f .claude/lark-publish.json ] && [ -f templates/lark-publish.json.tmpl ]; then
+  echo "⚠️  .claude/lark-publish.json 不存在,publish-to-lark 会 fail。"
+  echo "    init: cp templates/lark-publish.json.tmpl .claude/lark-publish.json"
+  echo "    然后编辑 .claude/lark-publish.json 把 REPLACE_WITH_*_TOKEN 替换为真实 token。"
+fi
+# 未来若有别的需 init 的配置文件,继续加 if-not-exist 提示。
 ```
 
 任一 FAIL / SYNTAX ERROR → **revert commit** 排查后再来：
@@ -277,6 +286,8 @@ done
 ```bash
 git reset --hard HEAD~1   # 退回 sync 前
 ```
+
+**5.5c 配置 init 不阻塞 sync 完成**（PM 可选择稍后 init），但 sync 时**必须提醒 PM** 哪些配置文件还要手工 init,避免 PM 真要发布时才发现配置缺失。
 
 ### 步骤 6：多分支应用
 

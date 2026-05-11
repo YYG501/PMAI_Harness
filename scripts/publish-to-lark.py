@@ -90,8 +90,38 @@ def preflight(target_kind: str | None, config_present: bool, args_complete: bool
 
     # 5. 配置或参数
     if not (config_present or args_complete):
-        die("配置缺失。复制 templates/lark-publish.json.tmpl 到 .claude/lark-publish.json 并填 token；"
-            "或手动传 --target-token + --target-kind + --title")
+        # 检测 templates/lark-publish.json.tmpl 是否存在,如果有 → 提供具体的 init 命令
+        tmpl_candidates = [
+            Path(".claude/templates/lark-publish.json.tmpl"),
+            Path("templates/lark-publish.json.tmpl"),
+        ]
+        tmpl_path = next((p for p in tmpl_candidates if p.exists()), None)
+
+        if tmpl_path:
+            print("━━━ 配置缺失 ━━━", file=sys.stderr)
+            print(f"  .claude/lark-publish.json 不存在,但模板 {tmpl_path} 已就位。", file=sys.stderr)
+            print(f"  init 命令:", file=sys.stderr)
+            print(f"    cp {tmpl_path} .claude/lark-publish.json", file=sys.stderr)
+            print(f"    # 然后编辑 .claude/lark-publish.json,把 REPLACE_WITH_*_TOKEN 替换为真实 token", file=sys.stderr)
+            print(f"  自动 cp 模板 (token 仍为占位符,需 PM 编辑填) ? [y/N] ", file=sys.stderr, end="")
+            sys.stderr.flush()
+            try:
+                ans = input().strip().lower()
+            except EOFError:
+                ans = ""
+            if ans in ("y", "yes"):
+                Path(".claude").mkdir(exist_ok=True)
+                import shutil
+                shutil.copy(tmpl_path, ".claude/lark-publish.json")
+                print(f"  ✓ 已 cp {tmpl_path} → .claude/lark-publish.json", file=sys.stderr)
+                print(f"  ⚠️  下一步: 编辑 .claude/lark-publish.json 把 REPLACE_WITH_*_TOKEN 替换为真实", file=sys.stderr)
+                print(f"     wiki node token / folder token,然后重新跑 publish-to-lark。", file=sys.stderr)
+                die("init 完成。请编辑配置文件填 token 后重新跑。", code=2)
+            else:
+                die("已取消 init。请手工 cp 模板 + 填 token,或传 --target-token + --target-kind + --title。")
+        else:
+            die("配置缺失。复制 templates/lark-publish.json.tmpl 到 .claude/lark-publish.json 并填 token; "
+                "或手动传 --target-token + --target-kind + --title")
 
 
 # ---------- Frontmatter ----------
