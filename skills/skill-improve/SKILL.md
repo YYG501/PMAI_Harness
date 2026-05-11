@@ -8,8 +8,13 @@ description: |
 
 ## When To Use
 
-- PM 调用，参数是 skill 名 + 反馈文件路径（如 `/skill-improve prd-writing skill-feedback/prd-writing-2026-04-27.md`）
-- 或 PM 已写好反馈但还没归档（如 `ExampleConsumerApp/<skill>-skill-feedback.md`）：参数给反馈文件路径，本 skill 自动归档到生成器仓 `skill-feedback/<skill-name>-<YYYY-MM-DD>.md`
+**模式 A（显式反馈文件）**：PM 已写好反馈文件，显式调用：
+- `/skill-improve prd-writing skill-feedback/prd-writing-2026-04-27.md`
+- 或反馈文件在业务仓（如 `ExampleConsumerApp/<skill>-skill-feedback.md`），参数给路径，本 skill 自动归档
+
+**模式 B（会话内直接反馈）**：PM 在会话里直接说某 skill 有问题（"这里不对"、"这个 skill 应该…"、"每次跑 X skill 都会出现…"），AI 主动识别并走本 skill 流程，无需 PM 先写反馈文件。
+
+> AI 触发判据：PM 指出的问题明确指向某个 skill 的行为 / 输出 / 流程设计，且不是当前 task 的 ad-hoc 修复。
 
 ## 关键设计
 
@@ -23,11 +28,22 @@ description: |
 
 ### 步骤 1：接收反馈源 + 定位目标 skill
 
-读参数：
-- 第一参数：skill 名（如 `prd-writing`）→ 定位 `skills/<skill-name>/`
-- 第二参数：反馈文件路径（绝对路径或相对路径）→ 全文 Read
+**模式 A**（有反馈文件）：
+- 第一参数：skill 名 → 定位 `skills/<skill-name>/`
+- 第二参数：反馈文件路径 → 全文 Read
+- 如果反馈文件不在生成器仓 `skill-feedback/` 下，先复制到 `skill-feedback/<skill-name>-<反馈日期>.md`
 
-如果反馈文件不在生成器仓 `skill-feedback/` 下（例如 PM 在业务仓写的），本步骤先复制到生成器仓 `skill-feedback/<skill-name>-<反馈日期>.md`（日期取反馈文件 frontmatter 创建时间或文件 mtime；优先用反馈文件里写的日期）。
+**模式 B**（会话内直接反馈）：
+1. AI 先从会话上下文里提取 PM 反馈，整理成结构化条目，向 PM 确认：
+
+   ```
+   我识别到以下 [skill-name] 反馈，走 /skill-improve 消化，请确认：
+   1. [反馈条目一]
+   2. [反馈条目二]
+   （如有遗漏或理解偏差请补充）
+   ```
+
+2. PM 确认后，以此为反馈内容走步骤 2-7；归档时 AI 用整理的条目生成反馈文件（不要求 PM 事先手写）。
 
 ### 步骤 2：读 skill 现状（SKILL.md + 全部 references）
 
@@ -147,3 +163,4 @@ PM 反馈来源：skill-feedback/<skill-name>-<YYYY-MM-DD>.md
 - references/ 必读，不只读主 SKILL.md
 - 归档文件必须带消化对账表 + commit hash 状态注释
 - 跨 skill 反馈识别归位，不硬塞错误 skill
+- 模式 B：AI 必须先整理反馈条目向 PM 确认，不能直接跳到步骤 2（防止 AI 误读会话上下文）
