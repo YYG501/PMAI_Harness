@@ -82,11 +82,11 @@ def preflight(target_kind: str | None, config_present: bool, args_complete: bool
         scopes.append("wiki:wiki:readonly")
     elif target_kind == "folder":
         scopes.append("drive:drive")
-    res = run(["lark-cli", "auth", "check", "--scopes", ",".join(scopes)], check=False)
+    res = run(["lark-cli", "auth", "check", "--scope", " ".join(scopes)], check=False)
     if res.returncode != 0:
         detail = (res.stderr or res.stdout or "").strip()
-        die(f"缺少 scope: {','.join(scopes)}。"
-            f"请在飞书开放平台为 app 申请 scope 后重新 lark-cli auth login。详情: {detail}")
+        warn(f"auth check 报告缺少 scope: {','.join(scopes)}（可能是 CLI 升级后 token metadata 未刷新的误报）；"
+             f"将继续执行，由实际 API 调用兜底。如真正缺权限请跑 lark-cli auth login --scope \"{' '.join(scopes)}\"。详情: {detail}")
 
     # 5. 配置或参数
     if not (config_present or args_complete):
@@ -207,9 +207,10 @@ def build_doc_url(doc_id: str) -> str:
 
 
 def publish_first_time(markdown_path: Path, target: dict):
+    # lark-cli 对 @<绝对路径> 的 markdown 处理有 bug,改用 @./<文件名> + cwd=父目录绕过
     cmd = ["lark-cli", "docs", "+create",
            "--title", target["title"],
-           "--markdown", f"@{markdown_path}"]
+           "--markdown", f"@./{markdown_path.name}"]
     if target["kind"] == "wiki":
         cmd.extend(["--wiki-node", target["token"]])
     elif target["kind"] == "folder":
@@ -219,7 +220,8 @@ def publish_first_time(markdown_path: Path, target: dict):
 
     info(f"创建飞书文档: title={target['title']!r} kind={target['kind']}")
     try:
-        res = run(cmd)
+        res = subprocess.run(cmd, cwd=str(markdown_path.parent),
+                             capture_output=True, text=True, check=True)
     except subprocess.CalledProcessError as e:
         die(f"lark-cli docs +create 失败: {e.stderr}")
 
@@ -243,12 +245,14 @@ def publish_first_time(markdown_path: Path, target: dict):
 
 def publish_overwrite(markdown_path: Path, doc_id: str):
     info(f"覆盖飞书文档: doc_id={doc_id}")
+    # lark-cli 对 @<绝对路径> 的 markdown 处理有 bug,改用 @./<文件名> + cwd=父目录绕过
     cmd = ["lark-cli", "docs", "+update",
            "--doc", doc_id,
-           "--markdown", f"@{markdown_path}",
+           "--markdown", f"@./{markdown_path.name}",
            "--mode", "overwrite"]
     try:
-        run(cmd)
+        subprocess.run(cmd, cwd=str(markdown_path.parent),
+                       capture_output=True, text=True, check=True)
     except subprocess.CalledProcessError as e:
         die(f"lark-cli docs +update 失败: {e.stderr}")
     return doc_id, build_doc_url(doc_id)
