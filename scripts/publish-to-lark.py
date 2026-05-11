@@ -462,7 +462,7 @@ def merge_leading_with_clear(
             continue
         try:
             lark_api(
-                "POST",
+                "DELETE",
                 f"/open-apis/docx/v1/documents/{doc_id}/blocks/{non_anchor_id}/children/batch_delete",
                 data={"start_index": 0, "end_index": count},
             )
@@ -528,13 +528,13 @@ def merge_desc_group_with_content(
             warn(f"拷贝 children 到锚点 cell 失败: {e}；跳过本 group merge")
             return False
 
-        # 3) 清空非锚点 cell 的 children（Feishu batch_delete = POST + start_index/end_index）
+        # 3) 清空非锚点 cell 的 children（Feishu batch_delete = DELETE + start_index/end_index）
         for cell_id, count in cells_to_clear:
             if count == 0:
                 continue
             try:
                 lark_api(
-                    "POST",
+                    "DELETE",
                     f"/open-apis/docx/v1/documents/{doc_id}/blocks/{cell_id}/children/batch_delete",
                     data={"start_index": 0, "end_index": count},
                 )
