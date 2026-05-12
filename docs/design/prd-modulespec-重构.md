@@ -2745,4 +2745,700 @@ D1 把 §12.1 anchor 从 "token 经济" 改成 "时延 + 注意力切换"。**�
 3. round 5 通过 → 进 Phase C 实施（按 §16.5 改动清单分 PR）
 4. round 5 仍 critical → v4 设计循环
 
+---
+
+## 十七、D13 v3' MVP 详设计稿（2026-05-12）
+
+> **版本**：v3' MVP 详稿（基于 §十六 outline 展开）。
+> **关系**：§十四 v3 全集作废仅作归档；本节是要 ship 的设计。
+> **写作密度**：比 §十四 减半——每任务=问题+设计+关键决策+实施清单；不写 worked example（PM 不读，AI 实现时按 §十四 v3 已有的算法但裁简）。
+> **状态**：待 PM 拍 + round 5 autoplan 验。
+
+### 17.0 v3' 总图 + D1 痛点显式回锚
+
+**§12.1 痛点重述（D1 拍板后）**：
+
+> **真痛**：每次 close-task 等 doc-update 跑完 + PM 审 diff 拖沓；连续 task 节奏被打断；PM 注意力切换成本高。token 数字只是症状，不是病因。
+
+**v3' 设计原则**（D1 downstream）：
+
+1. **rewrite-only 仍正确**：close-task 不写 modulespec = 让 PM 在 close-task 不被 doc-update 打断；close-req 一次集中审 = 把"审 diff"的注意力税合并到一处
+2. **rewrite diff 审 PM 心理负担最小化**：merge 函数冲突门必须最少（W3 砍 5 类 → 1 类）；schema 字段必须最少（W7 砍 12 → 4）；modulespec 视觉不被机器元数据污染（W8 sidecar）
+3. **不为低频 case 建基础设施**：multi-worktree race / module rename / part-commit / quickfix realtime 都进 v4 候选不进 v3'
+4. **工程鲁棒性边界仅保留 critical**：W4 隔离 worktree（CR-2 修复）+ W5 边界锁死 + W6 stale 检测——这些是 close-req 失败不留半状态的工程地板，不可妥协
+
+**9 任务对 D1 痛点贡献矩阵**：
+
+| 任务 | 对 (b)+(c) 时延+注意力痛点贡献 | 对 D13 工程地板贡献 |
+|---|---|---|
+| W1 task→module 脚本 | 中（rewrite 输入构造前提） | 中 |
+| W2 topo order 约定 | 低（确定性顺序） | 高 |
+| W3 merge 函数 + 1 类 CONFLICT | **高**（决定 PM 审 rewrite diff 体验） | 高 |
+| W4 隔离 temp worktree | 低 | **高**（close-req 失败安全） |
+| W5 close-req 边界 | 低 | **高**（mutation 顺序锁死） |
+| W6 stale checkpoint 二层 | 低 | 中 |
+| W7 quickfix schema 4 字段 | **高**（每次 quickfix PM 填表注意力税） | 中 |
+| W8 sidecar feature_id | **高**（modulespec 视觉纯净） | 低 |
+| W9 fixture + 多 worktree 单行 | 低 | 中（fixture）/ 高（单行替代 V16/V17） |
+
+**总投入**：~10-12h 工程 + ~5h v3' 详设计 review + round 5 autoplan ~3h = ~18-20h（vs v3 估 40-60h）。
+
+**总收益**（PM 主观估）：每 req close 体感从"零散 N 次小审 + 时延等"变"一次集中审 + 期间静默"；按一年 50 req 估，PM 每次省 5-15 分钟注意力 → 一年省 4-12 小时 PM 工时 + 不可量化的"连续 task 节奏"工作流体感升级。
+
+### 17.1 Foundation — W1 + W2
+
+#### 17.1.1 W1 — task→module 映射脚本（简化版）
+
+**接口**：
+
+```bash
+scripts/req-module-impact.py <req-id> [--include-quickfix] [--format json|md]
+```
+
+**输入**：
+- `<req-id>`：active 或 closed
+- `--include-quickfix`：是否合并 quickfix metadata（默认 false，rewrite mode 调用时 true）
+
+**输出**（JSON）：
+
+```json
+{
+  "req": "R-2026-001",
+  "tasks": [
+    {"task": "T1", "modules": ["module-log", "module-filter"]}
+  ],
+  "quickfixes": [
+    {"commit": "<sha>", "modules": ["module-log"]}
+  ],
+  "modules_touched": {
+    "module-log": {"tasks": ["T1"], "quickfixes": ["<sha>"]},
+    "module-filter": {"tasks": ["T1"], "quickfixes": []}
+  }
+}
+```
+
+**数据源**（顺序不可变）：
+1. task：`requirements/.../tasks/T*.md` 的 frontmatter `module_impact:` 字段
+2. quickfix：`requirements/active/<req>/quickfix-log.jsonl` 的 `module` 字段
+3. **不跑 diff 反推**：信号噪声大；缺字段就脚本退非零 + 报告缺哪个 task/quickfix（PM 补完再跑）
+
+**vs §14.1.1 V1 砍掉什么**：
+
+- 砍 `--since <commit>` 参数（rewrite 总是从 req base 起，不需要切片）
+- 砍 `source: "task-spec module_impact field"` 这种 source 字段（PM 不读）
+- 砍 alias 解析（W8 sidecar 走，本脚本只输出 raw module 名）
+
+**实施清单**：
+1. `scripts/req-module-impact.py` 新建（≤80 行 Python）
+2. `tests/scripts/test-req-module-impact.py` 覆盖：正常 / 缺 module_impact / 多 module / 含 quickfix
+3. W3/W5/W9 在内部 import 用
+
+#### 17.1.2 W2 — 全局时间序约定
+
+**约定（一行）**：
+
+> rewrite mode 输入合并按 `git log --topo-order req-branch` 顺序应用；wall clock / `committer time` 不参与。
+
+**实操**：在 W1 输出基础上，rewrite mode 通过 `git log --topo-order --pretty=format:"%H %s"` 列 req 分支 commits，按拓扑顺序匹配 `[task-close]` / `[quick-fix]` commits，组装 patch 序列。
+
+**vs §14.1.2 V2 砍掉什么**：
+
+- 砍 `scripts/req-event-order.py` 单独脚本（W1 内部用 git log 直接拿，不必新脚本）
+- 砍"并行 commit 不可比 → 进 V16/V17 step 0.5" 跨 reference（v3' 不做 step 0.5，已 merge 进 req 分支后顺序就唯一确定）
+
+**实施清单**：
+1. `skills/doc-update/SKILL.md` §8 加一句话约定
+2. `INVARIANTS.md` I-CR13：rewrite 输入合并按 `git log --topo-order` 顺序
+3. W1 脚本输出列表本来就按 topo order
+
+### 17.2 W3 — merge 函数（大砍版 + 1 类 CONFLICT）
+
+#### 17.2.1 公式
+
+> **merge** `M(base, [patch_1, patch_2, ...]) → new_modulespec`
+
+```
+M(base, patches):
+  state = base_features  # dict: feature_anchor → feature payload
+
+  for patch in patches (already topo-ordered, W2):
+    for (op, anchor, payload) in patch.entries:
+      apply(state, op, anchor, payload)
+
+  return assemble(state)  # render back to modulespec markdown
+```
+
+**`apply(state, op, anchor, payload)`** —— 操作只剩 3 类：
+
+```
+match op:
+  case add:
+    if anchor in state:
+      → "你想新加 X 但 X 已存在" 进统一询问门
+    else:
+      state[anchor] = payload
+
+  case modify:
+    if anchor not in state:
+      → CONFLICT_REFERENCE_MISSING 进统一询问门
+    else:
+      state[anchor] = three_way_merge(state[anchor], payload)
+
+  case remove:
+    if anchor not in state:
+      → CONFLICT_REFERENCE_MISSING 进统一询问门
+    else:
+      del state[anchor]
+```
+
+**砍掉的 v3 op**：
+- `behavior-only` → 改用 `modify` + `payload` 只填 `behavior` 字段
+- `null` → 不是 op，是过滤逻辑（quickfix `module=null` 不进 patches list）
+
+#### 17.2.2 三方字段 patch — `three_way_merge`
+
+**关键改进**（vs §14.2 V3）：避免"任何字段值变化都触发冲突"误报。
+
+每个 patch entry 字段写法：
+
+```json
+{
+  "anchor": "列表筛选",
+  "op": "modify",
+  "payload": {
+    "fields": {
+      "sort_default": {
+        "expected_old": "时间倒序",
+        "new": "时间正序"
+      },
+      "behavior": {
+        "expected_old": null,           // patch 来源没填这个字段
+        "new": null
+      }
+    }
+  }
+}
+```
+
+**`three_way_merge(state_value, patch_value)`** —— 字段级：
+
+```
+three_way_merge(current, patch):
+  result = current.copy()
+  for field, change in patch.fields:
+    if change.new is None:
+      continue                          # patch 没填这个字段，不动
+    if current[field] == change.expected_old:
+      result[field] = change.new        # 正常修改
+    elif current[field] == change.new:
+      continue                          # 已经是新值（前一个 patch 改过），idempotent
+    else:
+      → CONFLICT_REFERENCE_MISSING（field-level）
+        "本 patch 期望 {field} 是 {expected_old}，但实际是 {current}，进询问门"
+  return result
+```
+
+**核心语义**：
+- 正常修改（`current == expected_old`）→ 静默应用，不打扰 PM
+- 重复应用同一个 patch（`current == new`）→ idempotent，跳过
+- 第三种值（`current` 既非 `expected_old` 也非 `new`）→ 真冲突，进门
+
+vs v3 §14.2.1 `merge_payload`："old 非 null 且 new 不同就触发 CONFLICT" 把"PM 视图说改排序倒→正"这种正常 modify 误报成冲突。v3' 用 `expected_old` 把"PM 视图描述的 base 状态" + "本 patch 的新值"双轨表达，让 merge 函数知道"什么是正常 modify"。
+
+**`expected_old` 从哪来**？task-spec / quick-fix 生成 patch 时 AI 注入：读当前 modulespec → 把要改字段的当前值填进 `expected_old`，PM 视图描述新值填 `new`。PM 不需要填 `expected_old`（AI 自动读 base）。
+
+#### 17.2.3 唯一询问门：`CONFLICT_REFERENCE_MISSING`
+
+**触发**：
+- `modify` / `remove` 时 anchor 不在 state（feature 找不到）
+- `add` 时 anchor 已在 state（feature 已存在还想加）
+- `three_way_merge` 时字段值是第三种（不是 expected_old 也不是 new）
+
+**统一询问门**（PM 看到的是 3 个选项，不是 5 种 CONFLICT 类型表）：
+
+```
+检测到 patch 跟当前 modulespec 对不上：
+  feature anchor "列表筛选"，字段 sort_default
+  本 patch 期望旧值：时间倒序
+  当前 base 值：时间随机（被别的 req 改过）
+  本 patch 新值：时间正序
+
+PM 选：
+  (a) 用 patch 新值（覆盖 base 当前）
+  (b) 保留 base 当前（skip 本 patch entry）
+  (c) PM 调（自己写一个第三方）
+```
+
+**不再有的**（v3 §14.2.1 砍掉）：
+- CONFLICT_ADD_EXISTING / CONFLICT_MODIFY_MISSING / CONFLICT_REMOVE_MISSING / CONFLICT_BEHAVIOR_MISSING / CONFLICT_FIELD_CHANGE 五类 → 全部归 `CONFLICT_REFERENCE_MISSING`
+- 每类 3-4 个选项 → 统一 3 选项 (a/b/c)
+- v3 worked examples A-E（100 行）→ v3' 不写 worked example
+
+#### 17.2.4 关键决策
+
+- **不要 feature_id 入门检测**：W8 sidecar 持 feature_id，但 W3 merge 函数操作单元是 `anchor`（H3 标题文本）。W8 sidecar 用于 anchor 改名时把"列表筛选" → "列表过滤" 映射到同一个 feature_id，避免误报 add/remove 一对组合。本节 merge 函数 PM 视角只看 anchor。
+- **idempotent 是核心**：W7 quickfix metadata 不立即写 modulespec（§16.3），但 rewrite 重跑（PM 决策修后 retry）时同一个 patch 不能产生不同结果——`current == new` 路径保证 idempotent。
+- **询问门 PM 决策不写回 metadata**：PM 在 close-req rewrite 时选 (a)/(b)/(c)，决策应用进当次 rewrite 输出，不改 task PM 视图 / quickfix-log。下次 close-req（不会有，本 req 已 close）或后续 req 同样路径会再走，但因为本 req 已 close 后 modulespec 状态变了，下次 patch 不会撞同冲突。
+
+#### 17.2.5 实施清单
+
+1. `scripts/merge-modulespec.py` 新建 — `M(base_path, patches_json) → new_modulespec_text`
+2. `skills/doc-update/SKILL.md` §8 改：调 W3 merge；遇 `CONFLICT_REFERENCE_MISSING` 暂停，PM 答题，决策应用
+3. `skills/task-spec/SKILL.md` 加："PM 视图生成 patch 时 AI 自动读 base 当前值填 `expected_old`"
+4. `skills/quick-fix/SKILL.md` 同上（quickfix metadata 含 patch 时 AI 读 base）
+5. `tests/merge/test-three-way.py` 覆盖：normal modify / idempotent / 真冲突 (三种值) / add-existing / modify-missing / remove-missing
+
+### 17.3 W4 + W5 + W6 — 隔离 worktree + close-req 边界
+
+#### 17.3.1 W4 — 隔离 temp worktree/branch 内 rewrite
+
+**问题**（继 §14.3.1 V6）：rewrite 写 modulespec 文件 + 可能产生 untracked / event log 半写。`git reset --hard` 救不全。
+
+**设计**（不变 §14.3.1）：rewrite 全程在隔离 temp worktree + temp branch，成功 → ff merge 回 req worktree；失败 → `git worktree remove --force` 一刀切。
+
+**精确流程**：
+
+```bash
+# close-req step 2（rewrite 包裹）：
+
+# 1. 创建 temp
+TMP="$REPO_ROOT/.tmp/close-req-rewrite-$REQ-$(date +%s)"
+git worktree add -b "close-req-rewrite/$REQ-$(date +%s)" "$TMP" "$REQ_BRANCH"
+
+# 2. 在 temp 内跑 rewrite
+cd "$TMP"
+python scripts/merge-modulespec.py docs/modules/<module>.md patches.json > new-modulespec.md
+# PM 审 diff（per-module，但不分批 commit—— v3' 砍 V8 part-commit）
+# PM accept all 才 commit；reject any → exit 1（V8 砍后的简化）
+
+# 3. 成功路径
+cd "$TMP" && git add docs/modules/ && git commit -m "doc-update rewrite for $REQ"
+cd "$REQ_WORKTREE" && git merge --ff-only "close-req-rewrite/$REQ-..."
+git worktree remove "$TMP" --force
+git branch -D "close-req-rewrite/$REQ-..."
+# 继续 close-req step 3+
+
+# 4. 失败 / 取消 / PM reject 任一 module
+cd "$REQ_WORKTREE"
+git worktree remove "$TMP" --force
+git branch -D "close-req-rewrite/$REQ-..."
+exit 1  # req 保留 active/、stage=7、worktree 干净
+```
+
+**关键决策**：
+- temp branch 命名前缀 `close-req-rewrite/` 固定 → 残留扫描可枚举（W6 用）
+- temp worktree 路径用 `.tmp/`（项目内不污染 home）
+- ff merge 强制不 merge commit；如 ff 不成（req worktree 期间被改）→ 报错让 PM 处理（应该不会发生，I-CR10 dirty gate 保证）
+
+**实施清单**：
+1. `scripts/close-req-rewrite-isolated.sh` 新建（流程脚本）
+2. `scripts/close-req.sh` step 2 调用此脚本
+3. `tests/close-req/test-rewrite-isolation.sh`：rewrite 中断 → temp worktree 删干净 + req worktree 不动
+
+#### 17.3.2 W5 — close-req mutation 边界
+
+**完整 close-req 流程（v3' 精确化，替代 §14.3.2 V7）**：
+
+```
+[阶段 P — pre-mutation read-only]
+  step 0    入口 dirty gate：req worktree git status --porcelain 必须空
+  step 0.5  main diff 提示（v3' I-CR16）：
+            git fetch origin main &&
+            git diff "$REQ_BASE..origin/main" -- docs/modules/ |
+            非空 → 提示 PM "main 上 modulespec 有改动: <list modules>。
+                             (a) pull main 先合 (b) 继续 close（rewrite 时按本 req base） (c) abort"
+            （没有 V16 三分类、没有 V17、没有 git ref 锁）
+
+[阶段 Q — mutation]
+  step 1    写 close-report.md（commit 到 req 分支）
+  step 1.5  CHECKPOINT：
+            git rev-parse HEAD > .runs/close-req-checkpoint
+            echo "{ts,head,req,phase:pre-rewrite}" >> events/close-req.jsonl
+  step 2    W4 隔离 rewrite
+            成功 → checkpoint phase: post-rewrite
+            失败 → req 留 stage=7、close-report 已 commit、modulespec 未变
+  step 3    实现深度变更检查
+  step 4    active → closed/ 移动 + commit
+  step 5    merge req → main + push
+  step 6    清理 .runs/close-req-checkpoint
+```
+
+**关键决策**：
+- step 0.5 用 `git diff` 行级 diff 提示，不跑 V3 公式三方合并、不分类 A/B/C、不 AI 提议合并方案。PM 决定 pull / 继续 / abort 三选即可。
+- step 1 close-report 先 commit 是必要：rewrite 失败时 PM 看 close-report 知道这次准备 rewrite 什么，下次 retry 直接进 step 1.5（skip step 1）
+- 砍 V8 part-commit：PM 在 W4 内审到任一 module reject → 整体 abort → close-req 失败回 active/。**v3' 不允许半合并状态**。
+
+**实施清单**：
+1. `scripts/close-req.sh` 重排步骤（dirty gate + main diff 提示 + checkpoint + W4 调用 + retry 入口）
+2. `skills/close-req/SKILL.md` 步骤改写
+3. `INVARIANTS.md`：
+   - I-CR10：close-req step 0 dirty gate
+   - I-CR11：rewrite 必须在 temp worktree（W4）
+   - I-CR13：rewrite 输入按 git topo order
+   - I-CR15：close-req step 1 后失败保留 active/、stage 不进 closed/
+   - I-CR16：close-req step 0.5 main diff 提示门
+4. `tests/close-req/test-mutation-boundary.sh` 覆盖每个失败时机的状态保证
+
+#### 17.3.3 W6 — stale checkpoint 二层验证
+
+**问题**（继 §14.3.4 V9 简化）：checkpoint 文件存在不等于"真的上次失败 retry"——cancel-req 后 / reset 后可能残留。
+
+**v3' 二层验证**（砍 v3 三层的 mismatched-stage）：
+
+```python
+def detect_stale_checkpoint():
+    cp = read('.runs/close-req-checkpoint')
+    if not cp:
+        return None
+
+    # 验证 1：req 匹配
+    if cp.req != current_req_id():
+        return ('cross-req-stale', cp)  # 自动清理 + 继续
+
+    # 验证 2：HEAD 可达性
+    if not git_is_ancestor(cp.head, current_branch_head()):
+        return ('orphaned', cp)         # 自动清理 + 继续 + audit
+
+    return ('valid-retry', cp)          # PM 选 retry / abort
+```
+
+**处理映射**：
+
+| 检测 | 入口动作 |
+|---|---|
+| None | 正常 close-req |
+| valid-retry | "上次 close-req 在 phase=<X> 中断，retry / abort（清理）" |
+| cross-req-stale | 自动清理 + 一行 audit + 继续 |
+| orphaned | 自动清理 + 一行 audit + 继续 |
+
+**砍**：v3 §14.3.4 的 mismatched-stage（"checkpoint 存在但 req 不在 stage=7"）—— 罕见 + 让 PM 介入比静默清理累。如果真碰到，按 cross-req-stale 处理（清掉 + 继续）。
+
+**实施清单**：
+1. `scripts/close-req.sh` 入口加 `detect_stale_checkpoint` 函数
+2. `scripts/cancel-req.sh`（如存在）配套清理 `.runs/close-req-checkpoint`
+3. `tests/close-req/test-stale-checkpoint.sh` 覆盖 3 种结果
+
+### 17.4 W7 + W8 — quickfix schema 4 字段 + feature_id sidecar
+
+#### 17.4.1 W7 — quickfix-log.jsonl schema 最小集
+
+**问题**（继 §14.4.2 V11 大砍）：v3 schema 12 字段每次 quickfix PM 填表，注意力税爆。D1 痛点是时延+注意力 → schema 必须最小。
+
+**v3' schema（每行 4 字段必填 + 2 字段自动）**：
+
+```json
+{
+  "ts": "2026-05-12T10:23:00Z",            // 自动（commit time）
+  "commit": "<quick-fix commit sha>",        // 自动
+  "module": "module-log",                    // PM 选（base 现有 module 列表，可选 null = 纯文案）
+  "feature_anchor": "列表筛选",                // PM 选（base 现有 feature anchor 列表，或新建）
+  "change_type": "modify",                   // PM 选 add/modify/remove
+  "needs_modulespec_update": true            // PM 拍 true/false
+}
+```
+
+**字段说明**：
+
+| 字段 | PM 工作 | AI 工作 |
+|---|---|---|
+| ts / commit | — | 自动注入 |
+| module | 选（下拉，含 null 选项） | 列 base 现有 modules |
+| feature_anchor | 选或写 | 列本 module 现有 anchors（含 "新建 feature" 选项） |
+| change_type | 选 add/modify/remove | 默认推 modify |
+| needs_modulespec_update | 拍 true/false | 默认推 true if module≠null else false |
+
+**砍掉的 v3 12+ 字段**：
+
+| 砍的字段 | 砍理由 |
+|---|---|
+| `schema_version` | v3' 是初版，未来加再说；现在没有跨版本兼容压力 |
+| `summary` (free text) | commit message 已有；jsonl 不重复 |
+| `feature_id` | W8 sidecar 走 |
+| `change_kind` / `modulespec_patch` | rewrite 时由 AI 生成 patch（读 base + summary + diff），不让 PM 填 |
+| `target_origin_req` | W8 sidecar 持，PM 不必填 |
+| `recorded_in_req` | 隐含 = quickfix 所在 req（active req） |
+| `supersedes` | 罕见；rewrite 时 AI 检测连续改同 feature |
+| `affected_paths` | git diff 自带，jsonl 不重复 |
+| `confirmed_by` / `confirmed_at` | PM 单人单 commit time 已包含 |
+| `applied` | v3' quickfix 不实时写 modulespec，无 applied 概念 |
+
+**rewrite mode 怎么消费**（doc-update §8 改）：
+
+```
+for qf in quickfix_log where needs_modulespec_update=true:
+  # AI 读 quickfix commit diff 推断 patch:
+  diff = git_show(qf.commit, '--', 'prototypes/')
+  summary = git_show(qf.commit, '--format=%B', '--no-patch')
+  patch = ai_infer_patch(
+    module=qf.module,
+    feature_anchor=qf.feature_anchor,
+    change_type=qf.change_type,
+    diff=diff,
+    summary=summary,
+    base_modulespec=read('docs/modules/<module>.md')
+  )
+  # patch 跟 task PM 视图 patch 同等地位进 W3 merge
+```
+
+**关键决策**：
+- AI 推断 patch 而不是 PM 填 → 让 PM 工作流"快快做完 quickfix" 而不是"填表 5 字段每次"。AI 偶尔推错 → 在 W3 merge 阶段进 `CONFLICT_REFERENCE_MISSING` 询问门，PM 看到时再修正。
+- `needs_modulespec_update` 让 PM 显式拍：纯文案改 quickfix（如改个按钮文字）PM 选 false，不进 rewrite；产品决策类 quickfix（改默认排序）选 true，进 rewrite。**这一个字段把 PM 意图直接表达，无需 AI 检测 V12 红色信号词**。
+
+**实施清单**：
+1. `templates/quickfix-log.schema.json` 写最小集（4 必填）
+2. `skills/quick-fix/SKILL.md` step 4 commit 前加 4 字段 inline 表单（AI 推默认值 PM 拍 OK）
+3. `scripts/lint-quickfix-log.py` 4 必填 lint，commit hook
+4. `tests/quick-fix/test-schema-minimal.py` 覆盖：必填校验 / module=null 合法 / needs=false 合法
+
+#### 17.4.2 W8 — `.feature-index.json` sidecar
+
+**问题**（继 §14.4.1 V10 + §14.6.4 C4.4 改 sidecar）：feature_id + origin_req + last_modified 是 AI 维护的元数据，PM 不读。注入 modulespec HTML 注释让 PM 视图变机器索引载体。
+
+**v3' 设计**：sidecar 文件 `docs/modules/.feature-index.json` 持元数据，modulespec 文件保持纯人读。
+
+**schema**：
+
+```json
+{
+  "schema_version": "v1",
+  "features": {
+    "module-log": {
+      "列表筛选": {
+        "feature_id": "a3f2c8",           // stable hash（首次 add 时算，永不重算）
+        "origin_req": "R-2025-098",        // 首次 add 时的 req
+        "last_modified_req": "R-2026-001", // 最近改的 req
+        "last_modified_at": "2026-05-12T10:23:00Z"
+      },
+      "导出 CSV": {
+        "feature_id": "5d8e21",
+        "origin_req": "R-2026-001",
+        "last_modified_req": "R-2026-001",
+        "last_modified_at": "2026-05-12T14:05:00Z"
+      }
+    }
+  }
+}
+```
+
+**索引键**：`module-name + feature_anchor`（H3 标题文本）→ 元数据。
+
+**feature_id 算法**：
+
+```
+feature_id = blake2b(canonical_module + '/' + normalize(feature_anchor))[:12]
+  首次 add 时算并写入 sidecar；后续 anchor 改名时 sidecar 保持原 id（key 改名）
+```
+
+**anchor 改名怎么办**：sidecar 内 key 同步改名（W3 rewrite 时如果 PM 在询问门选"PM 调"改了 anchor → sidecar key 跟着改，feature_id 不变）。无需 alias 表（V4 砍）：H3 anchor 是 source of truth + sidecar key 同步即可。
+
+**AI 怎么用 sidecar**：
+- W1 task→module 映射：不用 sidecar
+- W3 merge 函数：不用 sidecar（操作 anchor 文本）
+- close-req rewrite 输出新 modulespec：sidecar 同步更新（add → 新 entry / modify → last_modified_* 更新 / remove → delete entry + 一行 `requirements/closed/<req>/feature-removal.log` audit）
+- quickfix metadata 填表：AI 列 base 现有 anchor 时读 sidecar（按 module 过滤），不重复扫 modulespec H3
+- 历史归因：PM 想问 "这个 feature 是哪个 req 加的" → `jq` sidecar
+
+**关键决策**：
+- sidecar `.gitignore` 不忽略：进版本控制，跟 modulespec 一起 commit
+- modulespec 文件不再有 HTML 注释 `<!-- feature_id ... -->`：PM 看 diff 清爽
+- sidecar PM 不读：但可看（机器友好 + 偶尔查询）
+
+**实施清单**：
+1. `templates/feature-index.schema.json` 新建
+2. `scripts/update-feature-index.py` 新建：rewrite 后调用，diff sidecar
+3. `skills/doc-update/SKILL.md` §8 rewrite 输出后调
+4. `skills/quick-fix/SKILL.md` 4 字段表单 anchor 选项从 sidecar 读
+5. `tests/sidecar/test-feature-index.py` 覆盖：add/modify/remove/rename anchor 同步
+
+### 17.5 W9 — 横切（3 fixture + 多 worktree 单行替代）
+
+#### 17.5.1 三 fixture 详定
+
+**取舍**（vs §14.5.2 V15 11 fixture）：v3' 砍到 3 个核心 e2e fixture。其余 8 个 fixture 进 round 5 autoplan 通过后再补。
+
+**fixture 目录结构**：
+
+```
+tests/fixtures/d13-v3prime/
+├── case-01-rewrite-success/
+│   ├── README.md
+│   ├── input/
+│   │   ├── base-modulespec/docs/modules/module-log.md
+│   │   ├── feature-index.json (W8 sidecar)
+│   │   ├── req-meta.json
+│   │   ├── tasks/T1.md (含 module_impact)
+│   │   ├── tasks/T2.md
+│   │   └── quickfix-log.jsonl (2 条 needs_modulespec_update=true)
+│   ├── expected-output/
+│   │   ├── new-modulespec/docs/modules/module-log.md
+│   │   ├── new-feature-index.json
+│   │   └── audit.md
+│   └── run.sh
+├── case-02-rewrite-fail-retry/
+└── case-03-no-residue/
+```
+
+**3 个 fixture 各覆盖**：
+
+| # | 场景 | 验证什么 |
+|---|---|---|
+| 01 | 成功 happy path（2 task + 2 quickfix，正常 modify + 1 add，无冲突）| W1 模块映射 / W2 topo order / W3 公式 + 3 类 op / W4 隔离 worktree ff merge / W7 schema 消费 / W8 sidecar 同步 |
+| 02 | rewrite 中途 PM reject 一个 module → 整体 abort → retry 成功 | W4 失败 force 清理 / W5 close-report 已 commit 但 modulespec 未变 / W6 checkpoint phase=pre-rewrite valid-retry / retry skip step 1 |
+| 03 | rewrite 全程无残留（kill -9 模拟）| W4 temp worktree 强制清理 / 主 worktree 不动 / `.runs/close-req-checkpoint` 三层验证后清掉 |
+
+**fixture 形态**：每个 case 是小型 git 仓 fixture（pre-built），`run.sh` 跑 `close-req` + 比较 expected-output。
+
+**run.sh 模板**：
+
+```bash
+#!/bin/bash
+set -euo pipefail
+cd "$(dirname "$0")"
+
+# setup
+rm -rf .work && cp -r input .work
+cd .work && git init -q && git add . && git commit -q -m "fixture init"
+
+# trigger close-req
+bash ../../scripts/close-req.sh <req-id> --non-interactive --auto-accept
+
+# diff against expected
+diff -r docs/modules/ ../expected-output/new-modulespec/docs/modules/
+diff feature-index.json ../expected-output/new-feature-index.json
+```
+
+**砍掉的 v3 fixture**（8 个进 v4 候选）：
+- case-04 PM 部分接受 → V8 砍了
+- case-05 change_type=remove e2e → 包含在 case-01 的扩展
+- case-06 老 quickfix downgrade → 一次性脚本测试，不必 fixture
+- case-07/08/09 多 worktree A/B/C → V16/V17 砍了
+- case-10 quickfix 实时写 → C4.2 砍了
+- case-11 quickfix 改历史 req 产物 → C4.4 砍 HTML 注释方案后无需 fixture
+
+#### 17.5.2 多 worktree 单行替代（V16/V17 砍后）
+
+**替代 §14.7 整节**：
+
+```bash
+# close-req step 0.5（W5 已含，本节是它的实现细节）：
+
+git fetch origin main
+REMOTE_DIFF=$(git diff "$REQ_BASE..origin/main" -- docs/modules/)
+
+if [ -n "$REMOTE_DIFF" ]; then
+  echo "⚠️ main 上 modulespec 有改动："
+  git diff "$REQ_BASE..origin/main" -- docs/modules/ --name-only
+  echo ""
+  echo "PM 选："
+  echo "  (a) pull main 先合 (推荐 if 关联 req)"
+  echo "  (b) 继续 close（rewrite 按本 req base，merge 时可能冲突 PM 解）"
+  echo "  (c) abort（先去研究 main 改了啥）"
+  read -p "选 a/b/c: " CHOICE
+  case "$CHOICE" in
+    a) git pull origin main; exit 0 ;;
+    b) ;; # 继续
+    c) exit 1 ;;
+  esac
+fi
+```
+
+**vs v3 §14.7 整套砍掉的**：
+- step 0.5 三分类 A/B/C → 砍
+- AI 三方 merge 算法 → 砍（PM 自己看 diff 一行决策即可）
+- AI 冲突分类器（functional / cosmetic / 语义） → 砍
+- AI 提议 2-3 合并方案 → 砍
+- close-task step 0.5 / V17 全套 → 砍
+- git ref `refs/locks/close-req-active` 锁 → 砍
+- audit 模板 `step-0-5-audit.template.md` → 砍
+- I-CR17 / I-CR18 / I-CT9 invariant → 砍
+
+**关键决策**：
+- 单 PM 工作流 + 多 worktree 真冲突时 PM 已经记得自己在干什么（不像团队场景 PM 不知道同事改了 main）；让 PM 看 git diff 一眼即可决策，框架不替 PM 想
+- 真发生 (b) 后 merge 冲突 → PM 用熟悉的 git merge 工具解（不必 framework 给 AI 助理合并）；如果 PM 体感真痛 → round 5 autoplan 后补 V16 强化版
+
+**实施清单**：
+1. `scripts/close-req.sh` step 0.5 实现（≤30 行）
+2. `INVARIANTS.md` I-CR16：close-req step 0.5 main diff 提示门
+3. `tests/close-req/test-step05-main-diff.sh` 覆盖：empty diff（自动跳过）/ 非空 diff PM 选 a/b/c
+
+### 17.6 改动清单（替代 §16.5 简表）
+
+| # | 文件 / skill | 操作 | 关联任务 |
+|---|---|---|---|
+| **vp-01** | `scripts/req-module-impact.py` | 新建（≤80 行） | W1 |
+| **vp-02** | `scripts/merge-modulespec.py` | 新建（W3 公式实现） | W3 |
+| **vp-03** | `scripts/close-req-rewrite-isolated.sh` | 新建（W4 流程） | W4 |
+| **vp-04** | `scripts/close-req.sh` | 重排：dirty gate + step 0.5 main diff + checkpoint + W4 调 + retry 入口 + stale 二层验证 | W5+W6 |
+| **vp-05** | `scripts/cancel-req.sh` | 清理 `.runs/close-req-checkpoint` | W6 |
+| **vp-06** | `scripts/lint-quickfix-log.py` | 新建（W7 schema 4 必填 lint） | W7 |
+| **vp-07** | `scripts/update-feature-index.py` | 新建（W8 sidecar 同步） | W8 |
+| **vp-08** | `skills/doc-update/SKILL.md` | §8 改：调 W3 merge + temp worktree（W4） + topo order（W2） + sidecar 同步（W8） + quickfix patch AI 推断（W7） | W3+W4+W2+W7+W8 |
+| **vp-09** | `skills/quick-fix/SKILL.md` | step 4 commit 前加 4 字段表单（AI 推默认值 PM 拍）；砍 v2 自由文本 log；不写 modulespec | W7 |
+| **vp-10** | `skills/task-spec/SKILL.md` | 加：生成 PM 视图 patch 时 AI 读 base 填 `expected_old`；保持 module_impact frontmatter（不砍 lint 但降级 warn） | W3 |
+| **vp-11** | `skills/task-execute/SKILL.md` | 步骤 2.1：维持 D13 主流程（task 不写 modulespec）；砍 §14.6.2 C4.2 snapshot 读路径（v3' 直接读 docs/modules/） | — |
+| **vp-12** | `skills/close-task/SKILL.md` | 维持 v2：merge + 归档，不调 doc-update；不加 step 0.5（V17 砍） | — |
+| **vp-13** | `skills/close-req/SKILL.md` | 步骤改写（按 W5 流程） | W5 |
+| **vp-14** | `skills/req-stage-gate/SKILL.md` | 简化 stage 6→7 gate：砍 half-close detection（v2 已砍，v3' 不变） | — |
+| **vp-15** | `templates/quickfix-log.schema.json` | 新建（W7 4 字段） | W7 |
+| **vp-16** | `templates/feature-index.schema.json` | 新建（W8 sidecar） | W8 |
+| **vp-17** | `INVARIANTS.md` | 加 I-CR10 / I-CR11 / I-CR12 / I-CR13 / I-CR15 / I-CR16 / I-QF1（共 7 条新增；I-CT2 不变） | 全 |
+| **vp-18** | `tests/fixtures/d13-v3prime/` | 3 个 e2e fixture 目录 | W9 |
+| **vp-19** | `tests/scripts/test-req-module-impact.py` | W1 单测 | W1 |
+| **vp-20** | `tests/merge/test-three-way.py` | W3 单测 | W3 |
+| **vp-21** | `tests/close-req/test-rewrite-isolation.sh` | W4 测试 | W4 |
+| **vp-22** | `tests/close-req/test-mutation-boundary.sh` | W5 测试 | W5 |
+| **vp-23** | `tests/close-req/test-stale-checkpoint.sh` | W6 测试 | W6 |
+| **vp-24** | `tests/quick-fix/test-schema-minimal.py` | W7 单测 | W7 |
+| **vp-25** | `tests/sidecar/test-feature-index.py` | W8 单测 | W8 |
+
+**总计 25 项**（vs v3 §14.8 36 项，砍 11 项；其中大多数是合并 + 砍掉 v3 的过度工程）。
+
+### 17.7 INVARIANTS（替代 §16.4 表）
+
+| INVARIANT | 守卫点 | 内容 |
+|---|---|---|
+| **I-CR10** | `close-req.sh:enter` | close-req step 0 入口 dirty gate：req worktree `git status --porcelain` 必须空 |
+| **I-CR11** | `close-req.sh:step2` | rewrite 必须在 temp worktree（W4 流程），失败 `git worktree remove --force` 清理 |
+| **I-CR12** | `close-req.sh:enter` | stale checkpoint 二层验证（req + HEAD 可达性）；mismatched-stage 砍 |
+| **I-CR13** | `doc-update/SKILL.md:§8` | rewrite 输入合并按 `git log --topo-order` 顺序 |
+| **I-CR15** | `close-req.sh:step1+` | close-req step 1 后任何失败保留 active/、stage 不进 closed/、close-report 已 commit 可 retry |
+| **I-CR16** | `close-req.sh:step0.5` | close-req step 0.5 main diff 提示门：远端 docs/modules/ 有改动必须显式让 PM 选 a/b/c |
+| **I-CT2** | `task-execute / close-task` | （不变）task worktree clean / 分支存在 / req 分支存在 / req worktree 存在 |
+| **I-QF1** | `close-req.sh:enter` | 老 quickfix（无 v3' schema） > 5 → 提示 PM 走一次性 `scripts/quickfix-backfill.sh` |
+
+**共 8 条**（vs v3 §14.9 17 条，砍 9 条）。
+
+### 17.8 pre-flight（替代 §16.6）
+
+**产品层 pre-flight 先**（必跑，未过不进工程实施）：
+
+| # | check | 通过标准 |
+|---|---|---|
+| **P1** | **N 分布统计**：adminconsole4 近 10 个 closed req 统计 task 数 + quickfix 数 | 50% req 有 N≥2 task or quickfix → D13 大方向成立；若 N=1 占 >70% → 触发 reconsider（D13 主流程对单 task req 仍有 close-task 不打断 + 集中审 close-req 价值，但收益降） |
+| **P2** | **PM 注意力 break-even**：对一个真实 req 主观计时——D13 路径（close-task 静默，close-req 一次集中审）vs 旧 settlement 路径（每 task close 都审 diff）。PM 主观打分两种工作流 | D13 路径主观分 ≥ 旧路径 → 通过 |
+| **P3** | **PM 痛点二次确认**：跑 P1+P2 后，问 PM "(b)+(c) 时延+注意力 是 D13 该解的真痛吗？还是用了几次发现痛在别处" | PM 主观确认 (b)+(c)；如改答其他 → 重新 design |
+| **P4** | **W7 4 字段填表体感**：跑两个真实 quickfix 走 v3' 4 字段表单。PM 主观评 "填表注意力税" | ≤ 30 秒 / quickfix → 通过；超 → reconsider 字段数 |
+
+**工程层 pre-flight 后**（P1-P4 通过才跑）：
+
+| # | check | 通过标准 |
+|---|---|---|
+| **E1** | grep 测试套件：`grep -rn "settlement\|对账\|SKIP_DOC_UPDATE\|cleanup_status\|half-close\|skip-doc-update" tests/ scripts/tests/` | 列出受影响测试 → 估算改动量 |
+| **E2** | W4 isolation kill 模拟：手动 `kill -9` rewrite 中间 → 验 temp worktree 清理路径 | temp worktree 删干净 + req worktree 不动 |
+| **E3** | W7 schema lint 测试：4 必填 / null 合法 / 多字段拒绝 | 全 pass |
+| **E4** | W8 sidecar 同步测试：add/modify/remove/anchor rename | 全 pass |
+
+**特别约定**：P1+P2+P3 通过的判定门 **不是 AI 决，是 PM 主观决**。AI 输出数据，PM 看完拍。这是为了避免 v3 那种"AI 把 round 3 评审反馈过度形式化"再发生——本节产品层 pre-flight 必须 PM 亲手过。
+
+### 17.9 v3' 完成后
+
+1. **PM 拍 §十七**（如需微调按本对话再补）
+2. **跑 round 5 autoplan** 验 v3'（focal：D1 时延+注意力痛点是否真锚定 / W3 1 类 CONFLICT 询问门 PM 体验 / W7 4 字段 + AI 推断 patch 路径 / I-CR16 单行 main diff 提示是否足够替代 V16/V17）
+3. **跑 P1-P4 产品层 pre-flight**：N 分布 + break-even + 痛点确认 + 填表体感
+4. P1-P4 通过 → E1-E4 工程层 pre-flight
+5. 全过 → Phase C 实施（按 §17.6 25 项分 PR；推荐顺序：vp-01/02（W1+W3） → vp-15/16（schema） → vp-03/04（close-req 流程） → vp-08/09（skill 改） → vp-18 fixture → vp-17 INVARIANTS）
+6. 任一 pre-flight 失败 → v4 设计回合
+
+
+
 
