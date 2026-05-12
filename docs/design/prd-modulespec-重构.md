@@ -1,7 +1,8 @@
+<!-- /autoplan restore point: <LOCAL_GSTACK_HOME>/projects/PM-AI-Workflow/main-autoplan-restore-20260512-145959.md -->
 # PRD / modulespec 体系重构
 
-> 状态：v1 方案 + autoplan 评审 + v1.1 stage 术语修正 + Q1-Q4 全部已拍 + D4/D8/D10/A2 AI 自决 / **§十二 D13 rewrite-only modulespec 维护方案待 PM review**
-> 日期：2026-05-11（v1 / autoplan / v1.1 同日迭代）
+> 状态：v1 方案 + autoplan 评审 + v1.1 stage 术语修正 + Q1-Q4 全部已拍 + D4/D8/D10/A2 AI 自决 + D13 v2 round 3 review / **§十四 D13 v3 设计稿已写入，待 PM review + round 4 autoplan**
+> 日期：2026-05-11/12（v1 / autoplan / v1.1 / D13 v2-v3 连续迭代）
 > 起因：adminconsole4 实操中发现当前三层文档体系（req-prd / modulespec / project-prd）有概念混淆 + project-prd 在 PM 实际工作流中没人看
 > 触发对话：见本文末尾"对话关键节点"
 > autoplan 评审完整 plan：`<LOCAL_CLAUDE_HOME>/plans/hashed-waddling-hummingbird.md`（含 D1-D12 决策清单 + 三视角独立 finding）
@@ -754,7 +755,7 @@ T10 req A merge main → X+A vs X' → git 冲突
 
 | Task | 描述 | 依赖 |
 |---|---|---|
-| **V16** | 多 req 并行 modulespec 演进策略（PM 待拍方向，4 个候选见下表）；含 active req 期间感知其他 req close 的机制 + close-req 时 base 选择策略 + 合并冲突解决约定 | V1 + V3 + V7 |
+| **V16** | 多 req 并行 modulespec 演进策略（PM 已拍方向 (e)，close-time detection + AI 助理合并）；含 active req 期间感知其他 req close 的机制 + close-req 时 base 选择策略 + 合并冲突解决约定 | V1 + V3 + V7 |
 | **V17** | 同 req 内 task 过程中的并行盲点（task A2 起来后 task A1 close 不可见 / task A1 起来后 quickfix 改 modulespec / task worktree 跟 req 分支漂移）；同根 V16，不同表现层 | V1 + V3 |
 
 **V16 / V17 方向**：PM 2026-05-11 拍板方向 **(e) Close-time detection + AI 助理合并**（a/b/c/d 作废）。详见 §13.11 + §14.7。
@@ -800,23 +801,22 @@ T10 req A merge main → X+A vs X' → git 冲突
 
 ### 13.8 续接说明（下次新对话从这里 boot）
 
-**当前状态**：D13 方向已定（rewrite-only），v2 写完跑过 round 3 autoplan，发现 4 critical + 6 high + 多 worktree 并行新维度（V16/V17）+ **quickfix 实际意图被 PM 在 2026-05-11 末尾澄清（§13.10），推翻 §13.7 假设**。PM 拍板进入 v3 设计回合，v3 还没动笔。
+**当前状态（2026-05-12 更新）**：D13 方向已定（rewrite-only），v2 写完跑过 round 3 autoplan，发现 4 critical + 6 high + 多 worktree 并行新维度（V16/V17）+ **quickfix 实际意图被 PM 在 2026-05-11 末尾澄清（§13.10），推翻 §13.7 假设**。PM 拍板进入 v3 设计回合；§14 已写入 v3 设计稿，下一步是 PM review + round 4 autoplan。
 
-**v3 任务清单**：V1-V17 + C4 新设计（见 §13.4 + §13.10），按依赖关系排序，总工作量 18-29 小时。
+**v3 任务清单**：V1-V17 + C4 新设计（见 §13.4 + §13.10 + §14），按依赖关系排序，总工作量 18-29 小时。
 
 **下次开新对话的 boot 顺序**：
-1. 先读 `docs/design/prd-modulespec-重构.md` §十二 v2（D13 当前方案）+ §十三 v3 任务清单 + **§13.10 quickfix 实际意图 + §13.11 V16/V17 方向 (e)**（这两个是 D13 边界根基的重新校准）
+1. 先读 `docs/design/prd-modulespec-重构.md` §十二 v2（D13 当前方案）+ §十三 v3 任务清单 + **§13.10 quickfix 实际意图 + §13.11 V16/V17 方向 (e)** + **§十四 v3 设计稿**（§13.10 / §13.11 是 D13 边界根基的重新校准，§14 是当前落稿）
 2. 跟 PM 对齐：
-   - **§13.10 quickfix 真实意图是否记录准确**（先确认）
-   - **§13.11 方向 (e) 工作流是否对**（特别是 step 0.5 三分类 A/B/C 粒度 + close-task 是否也做）
-   - V3 起手是先写设计稿（推荐）还是先做 V1/V2 Foundation
-3. 进入 v3 设计实战
+   - **§14.6 quickfix 重定位落地是否符合 §13.10 四点真实意图**
+   - **§14.7 方向 (e) 工作流是否对**（特别是 step 0.5 三分类 A/B/C 粒度 + close-task 也做）
+   - §14 是否可以进入 round 4 autoplan，还是先局部重写某节
+3. 若 PM 放行，跑 round 4 autoplan；若发现 critical，进入 v4 设计循环；若通过，再进 Phase C 实施
 
 **起手点候选**：
-- **§13.10 quickfix 重定位确认**：必先做，因为它可能颠覆 C1/C3/D13 边界 → **推荐第一步**
-- **V3（merge 函数公式 + 5 worked example）**：C1 核心，最难、写完反推 V1/V2/V4 契约
-- V1（task→module 映射脚本）：Foundation，所有 v3 task 依赖
-- V16/V17（多 worktree 并行策略）：先选方向再写
+- **§14 自检 + PM review**：推荐第一步，因为 v3 草稿已写完，先抓矛盾再 autoplan
+- **round 4 autoplan**：覆盖 §14 全套，重点看 V3 merge 公式 / V6 temp worktree / §14.7 step 0.5 / C4.2 snapshot
+- **Phase C 实施准备**：若 round 4 通过，再按 §14.8 v3-01 → v3-36 拆 PR
 
 **关键事实备查**（避免下次重新摸现状）：
 - rewrite mode 已存在于 `skills/doc-update/SKILL.md` §8，当前是 fallback（≥2 SKIP marker 才触发）；D13 = 升 default
@@ -881,10 +881,10 @@ PM 提示后发现：多 req 并行（V16）只是同根问题的一种表现层
 | **C4.4** | quickfix 改历史 req 产物的归因机制：modulespec 行级 / feature 级标注"来源 req"；quickfix 改时记录 `target_origin_req` 让审计可追溯 | C4.1 |
 | **C4.5** | PM 在 active req 中"记录"quickfix 改动的 UX：quickfix log 是结构化记录，但 PM 在 active req PM 视图里看得到吗？还是只能去 quickfix-log.jsonl 里翻？设计入口 | C4.1 |
 
-**待 PM 在下次新对话确认的关键点**：
-- §13.10 4 点理解是否准确（特别是"产品决策 vs 小修补"+"改之前 req 产物"+"挂载到当前 active req"）
-- 如准确，§13.7 正式作废，C1/C3/D13 都要按本节重审
-- 工作量再加 3-5 小时（已计入 §13.5 C4）
+**v3 落点**：
+- §13.10 4 点已作为 C4 进入 §14.6（特别是"产品决策 vs 小修补"+"改之前 req 产物"+"挂载到当前 active req"）
+- §13.7 已正式作废，C1/C3/D13 都按本节重审
+- 工作量增加 3-5 小时（已计入 §13.5 C4）
 
 ### 13.11 V16/V17 方向 (e) — Close-time detection + AI 助理合并（2026-05-11 PM 拍板）
 
@@ -963,10 +963,10 @@ close-task 流程新增 step 0.5：
 
 **工作量增量**：估 4-6 小时（在原 V16+V17 4-6 小时基础上**替换**而非追加；(e) 实现重于 (a) 但合并设计后总量可控）
 
-**下次新对话要做的**：
-- 确认 (e) 工作流细节是否对（特别是 step 0.5 三分类 A/B/C 是不是 PM 想要的粒度）
-- 决定 close-task 是否也要 step 0.5（或者只在 close-req 做）
-- 跟 §13.10 quickfix 实时写 modulespec 协调（quickfix 写完后 close-req 怎么检测）
+**v3 落点**：
+- §14.7 已采用 (e) 工作流，step 0.5 三分类 A/B/C 作为 V16/V17 共用检测模型
+- close-task 也做 step 0.5（见 §14.7.3），不只 close-req 做
+- quickfix 实时写 modulespec 的协调写入 §14.7.4（step 0.5 是 patch 域合并，step 2 rewrite 是应用域合并）
 
 ---
 
@@ -2062,7 +2062,7 @@ quick-fix skill 步骤：
 - **task 期间 PM 在 task worktree 内修 modulespec 是反模式**：禁止。所有 modulespec 改动只在 req worktree（quickfix）或 close-req rewrite。`INVARIANTS.md` 新 I-TT2：task worktree 内 docs/modules/ 不允许被修改（hook 检测）。
 
 **实施清单**：
-1. `scripts/task-worktree-start.sh` 加 snapshot 复制
+1. `scripts/create-task-worktree.sh` 加 snapshot 复制
 2. `templates/task-snapshot.schema.json` 新建
 3. `skills/task-execute/SKILL.md` 步骤 2.1 D13 模式：明确读 snapshot 路径
 4. `skills/quick-fix/SKILL.md` 单 commit + 写 modulespec 步骤
@@ -2206,7 +2206,7 @@ for qf in quickfix_log where applied == true:
 
 **PM 入口**：
 
-- `skills/req-status/SKILL.md`（已有的 req 状态查询 skill）增加"显示 quickfix-summary.md 内容"section
+- `scripts/status-view.py` / `skills/task-status/SKILL.md`（现有 req/task 状态查询入口）增加"显示 quickfix-summary.md 内容"section
 - close-req gate 在 step 0 前显示一个"请审 quickfix summary"提示，PM 浏览后确认
 
 **关键决策**：
@@ -2218,7 +2218,7 @@ for qf in quickfix_log where applied == true:
 1. `scripts/render-quickfix-summary.py` 新建（jsonl → md）
 2. `skills/quick-fix/SKILL.md` step 4 后调用渲染
 3. `skills/close-req/SKILL.md` step 0 前调用渲染 + 显示
-4. `skills/req-status/SKILL.md`（如存在）加 quickfix summary section
+4. `scripts/status-view.py` / `skills/task-status/SKILL.md` 加 quickfix summary section
 5. `INVARIANTS.md` 新 I-QF2：quickfix-summary.md 是 derived，PM 修改无效（rebuild from jsonl）
 
 ---
@@ -2433,7 +2433,7 @@ step 0.5 是 **patch 域的合并**（把 main 改动跟本 req 累积合一）�
 | v3-08 | `scripts/step-0-5-detect.py` | 新建（V16/V17 公共算法） | V16, V17 |
 | v3-09 | `scripts/acquire-close-req-lock.sh` / `release-close-req-lock.sh` | 新建（git ref 锁） | V16 |
 | v3-10 | `scripts/measure-rewrite-tokens.py` | 新建（pre-flight） | V14 |
-| v3-11 | `scripts/task-worktree-start.sh` | 加 modulespec snapshot 复制 | C4.2 |
+| v3-11 | `scripts/create-task-worktree.sh` | 加 modulespec snapshot 复制 | C4.2 |
 | v3-12 | `scripts/close-req.sh` | 重排：dirty gate / step 0.5 / 拿锁 / temp worktree rewrite / 三层 checkpoint 验证 / part-commit | V6, V7, V8, V9, V16, V12, V13 |
 | v3-13 | `scripts/close-task.sh` | 加 step 0.5 | V17 |
 | v3-14 | `scripts/cancel-req.sh` | 清理 close-req checkpoint + 释放锁 | V9 |
@@ -2444,7 +2444,7 @@ step 0.5 是 **patch 域的合并**（把 main 改动跟本 req 累积合一）�
 | v3-19 | `skills/close-req/SKILL.md` | 加 step 0.5 描述 + 决策门 UX + part-commit + downgrade gate + V12 | V16, V8, V13, V12 |
 | v3-20 | `skills/close-task/SKILL.md` | 加 step 0.5 | V17 |
 | v3-21 | `skills/quickfix-backfill/SKILL.md` | 新建 | V13 |
-| v3-22 | `skills/req-status/SKILL.md` | 显示 quickfix-summary section | C4.5 |
+| v3-22 | `scripts/status-view.py` / `skills/task-status/SKILL.md` | 显示 quickfix-summary section | C4.5 |
 | v3-23 | `templates/MODULE_TEMPLATE.md` | feature 块加 feature_id / origin_req / last_modified 注释 | V10, C4.4 |
 | v3-24 | `templates/task.template.md` | frontmatter 加 module_impact | V5 |
 | v3-25 | `templates/.req-meta.schema.json` | 加 module_aliases | V4 |
@@ -2498,3 +2498,251 @@ D13 v3 动手前必须先做（含 v2 §12.8 残留）：
 1. 跑 **round 4 autoplan** 验 v3（焦点：V3 公式覆盖度 + V6 temp worktree 残留 + step 0.5 三分类边界 + C4.2 snapshot 一致性 + 多 worktree 锁 race）
 2. 通过后进 Phase C 实施（按改动清单 v3-01 → v3-36 顺序，分 PR）
 3. round 4 仍有 critical → v4 设计循环
+
+---
+
+## 十五、Round 4 autoplan 评审结论（2026-05-12）
+
+> **范围**：评 §十四 D13 v3 设计稿。
+> **方法**：Codex 对抗视角 + Claude subagent 独立战略视角并行评审（CEO 阶段）。
+> **关键发现**：两个独立 voice 高度一致 — 7/7 critical/high dimensions confirmed。v3 严重偏离 §12.1 token 痛点。
+
+### 15.1 CEO 共识表（7/7 confirmed，0 disagreements）
+
+| # | 维度 | Claude 视角 | Codex 视角 | 共识 |
+|---|---|---|---|---|
+| 1 | 是否锚定 §12.1 token 痛点？ | NO（F1：17 主任务里只 V14 直接服务痛点） | NO（#1：从"减 N 次 token"漂成"建 modulespec 事务系统"） | **CONFIRMED — v3 drifted, must re-anchor** |
+| 2 | scope 标定合理？ | NO（F7：18-29h 工程税 / ~$15 年节省） | NO（#2：30 分钟/req 节省要 36-58 req 才回本，还可能被 quickfix 填表吃回去） | **CONFIRMED — over-engineered for single PM** |
+| 3 | 替代方案充分探索？ | NO（F9：settlement+batch 未回看，能拿 80% 节省 / 20% 复杂度） | NO（#3：必须给 batch-settlement 一节） | **CONFIRMED — dismissed by inertia** |
+| 4 | §14.6 quickfix 实时写 modulespec 矛盾 §12.1？ | YES 矛盾（F11：每次 quickfix=1 次 modulespec 写入，N=0 task 5 quickfix 比 D13 砍之前更多写） | YES 矛盾（#4：N 次 doc-update → 1 次 close-req rewrite 的目标被 quickfix 后门吃掉） | **CONFIRMED — internal contradiction** |
+| 5 | §14.7 V16/V17 step 0.5 + 锁对单 PM 合适？ | NO（F12：纯过度工程，1 年触发 <5 次） | NO（#5：把低频竞态产品化，§14.7.5 自己承认罕见还加锁脚本） | **CONFIRMED — cut V17, simplify V16** |
+| 6 | V10 feature_id hash 注入 modulespec 文本？ | NO（F13：modulespec 每 feature 顶 4 行机器元数据） | NO（#6+#7：sidecar 替代；hash 不稳跟 immutable 自相矛盾） | **CONFIRMED — move to sidecar** |
+| 7 | V3 merge 函数 5 类 CONFLICT 门？ | NO（F3：典型 AI 过度形式化，砍到 1 类） | NO（#8+#9：把正常修改误判冲突；砍到 2 类） | **CONFIRMED — over-formalized** |
+
+### 15.2 详细 finding 全表
+
+**Claude subagent（13 findings）**：
+
+| # | 严重度 | 章节 | 一句话 |
+|---|---|---|---|
+| F1 | critical | §14.0 | 17 主任务里仅 V14 直接服务 §12.1 痛点；其他 16 个解 v3 自己引入的子问题 |
+| F2 | high | §14.0 | 4 条隐含 premise 全脆弱（N≥5/req / 多 worktree 常发生 / rename 真问题 / PM 读 hash） |
+| F3 | critical | §14.2.1 | V3 merge 5 类 CONFLICT 门是 AI 过度形式化；PM 不读公式，要的是 10 分钟审完 rewrite |
+| F4 | high | §14.4.1 | V10 feature_id hash + canonical normalize 中文标点折叠歧义会偶发漂移 |
+| F5 | high | §14.7 | V16/V17 + git ref 锁对单 PM 是基础设施级 over-engineering |
+| F6 | medium | §14.3.3 | V8 part-commit 三选门 99% 时间 PM 是 accept all，多 audit 模板纯表演 |
+| F7 | critical | §14.8 | 17 任务 / 36 改动 / 17 invariant / 18-29h 工时 vs 单 PM 一年 ~$15 token 节省 |
+| F8 | high | §14.10 | pre-flight 顺序倒置：先工程层验证再产品层验证 → 应反过来 |
+| F9 | high | §十二/§十四 | settlement+batch 替代方案被 §十二 v2 一笔带过 v3 完全没回看 |
+| F10 | critical | §13.7→§13.10→§14.6 | quickfix 重定位仓促反转，PM 原话只表达行为期望，AI 拆成 4 点意图盖整章 |
+| F11 | critical | §14.6 | quickfix 实时写 modulespec 与 §12.1 直接矛盾（quickfix N 次 = 后门吃 D13 收益） |
+| F12 | critical | §14.7 | step 0.5 + git ref 锁对单 PM 是 over-engineering |
+| F13 | high | §14.4.1+§14.6.4 | feature_id / origin_req / last_modified HTML 注释让 modulespec 每 feature 顶 4 行机器元数据 |
+
+**Codex（10 findings）**：
+
+| # | 严重度 | 章节 | 一句话 |
+|---|---|---|---|
+| 1 | critical | §14.0/§14.8 | v3 漂移成事务系统；V14 应变硬闸门，未实测前不允许实施 V1-V17 |
+| 2 | critical | §14.8/§14.9 | 18-29h 对单 PM 不成比例；每 req 净省 30 分钟也要 36-58 req 回本 |
+| 3 | high | §14.5.1 | V14 提了 break-even 但未评估 settlement+batch 替代（可拿 80% 节省 / 20% 复杂度） |
+| 4 | critical | §14.6 | quickfix 实时写 modulespec 正面冲突 §12.1；要么改名（不再叫 rewrite-only）要么默认 decision log |
+| 5 | high | §14.7/§14.7.5 | step 0.5+git ref lock 把低频竞态产品化；改成 close-req 时检测 main 前进+fail+让 PM 重试 |
+| 6 | high | §14.4.1/§14.6.4 | feature_id/origin_req hash 注释污染 modulespec 文本；改 sidecar `.index.json` |
+| 7 | medium | §14.4.1 | hash 算法跟 "feature_id 不可变" 自相矛盾；用生成式 ID 不要假装 anchor hash 稳定 |
+| 8 | critical | §14.2.1/§14.7.2 | V3 merge 把正常修改误判冲突；应是三方字段 patch（expected_old/new/current） |
+| 9 | high | §14.2/§14.7 | 5 类 CONFLICT_* gate 形式化过度；收敛到 2 类（破坏性需 PM / 字段补充自动合并） |
+| 10 | medium | §14.6.1/§14.6.5 | quickfix schema 把轻量修正变成小型 PRD；保留 summary/module/needs_update 三字段 |
+
+### 15.3 verdict（两 voice 一致）
+
+**v3 不可全量 ship，必须 scope reduction 到 MVP。**
+
+候选 v3' MVP（两 voice 各自提的，高度重合）：
+
+| 任务 | 保留？ | 简化方向 |
+|---|---|---|
+| V1（task→module 脚本） | ✅ | 简化版（merge 输入必要） |
+| V2（topo order） | ✅ | 简化（一行约定，不要单独脚本） |
+| V3（merge 函数） | ✅ 大砍 | 5 类 CONFLICT → 1-2 类；砍 worked example A-E |
+| V4（module rename） | ❌ | 缓 v4 |
+| V5（module_impact 强 lint） | ✅ 降级 | warn 不阻断 dispatch |
+| V6（temp worktree 隔离） | ✅ | 保留（C2 critical 修复） |
+| V7（mutation 边界） | ✅ | 保留（dirty gate + checkpoint） |
+| V8（part-commit） | ❌ | 砍，reject any module → 整体 abort |
+| V9（stale checkpoint） | ✅ 降级 | 二层验证（HEAD 可达 + req 一致），砍 mismatched-stage |
+| V10（feature_id hash） | ✅ 改 sidecar | `.feature-index.json`，不进 modulespec 正文 |
+| V11（schema 12 字段） | ✅ 大砍 | 砍到 4 字段（module/feature_anchor/change_type/needs_modulespec_update） |
+| V12（V12 二次验证） | ❌ | 砍（红色信号词噪声多于信号） |
+| V13（downgrade + /quickfix-backfill） | ✅ 降级 | 一次性脚本，不必新 skill |
+| V14（token break-even） | ✅✅ 核心 | 升硬闸门：未实测前不允许实施 |
+| V15（11 fixture） | ✅ 大砍 | 砍到 3 fixture（success/fail-retry/no-residue） |
+| V16（多 req 并行） | ✅ 大砍 | 单行 fetch+提示替代 step 0.5 三分类 |
+| V17（同 req 跨 task） | ❌ | 砍 |
+| C4.1（schema 扩展） | ✅ 大砍 | 砍到 4 字段（见 V11） |
+| C4.2（snapshot lock） | ❌ | 砍（quickfix 不实时写 modulespec） |
+| C4.3（applied/unapplied） | ❌ | 砍（C4.2 砍了自然消失） |
+| C4.4（origin_req 归因） | ✅ 改 sidecar | 同 V10 |
+| C4.5（quickfix-summary.md） | ❌ | 砍（jsonl 已够） |
+
+**v3' = ~9 任务 / 估 ~10 工时**（vs v3 17 任务 / 18-29 工时）。
+
+### 15.4 Decision Audit Trail（CEO Phase 部分）
+
+| # | Phase | Decision | Classification | Principle | Rationale |
+|---|---|---|---|---|---|
+| 1 | CEO P0.5 | 跑 Claude subagent + Codex 双 voice（独立审 plan file） | Mechanical | P6 | 标准 dual voice |
+| 2 | CEO 整轮 | 不静默 auto-decide，全部 critical findings surface 给 PM | User Challenge | — | 两 voice 一致挑战 PM §13.10/§13.11 拍板的方向（quickfix 实时写 / V17 close-task step 0.5）→ surface |
+| 3 | CEO 整轮 | 暂停其余 phase 直 PM 处理 premise gate | Mechanical | — | 当 v3 整体 anchor 被两 voice 一致挑战，继续跑 Eng/DX phase 等于评一个不该实施的设计 |
+| 4 | CEO premise gate | **D1 痛点重定位：(b)+(c) 时延+注意力**（不是 token 经济） | **User Decision** | — | PM 2026-05-12 拍板：§12.1"token 浪费"的字面表述被 AI 帮助修辞过；真痛是每次 close-task 等 doc-update 跑完+审 diff 拖沓 +连续 task 节奏被打断 |
+| 5 | CEO premise gate | **D2 v3 方向：v3' MVP 9 任务 / ±10h** | **User Decision** | — | PM 2026-05-12 拍板：按 §15.3 表 scope reduction；v4 设计稿写完后跑 round 5 autoplan 验 |
+
+### 15.5 D1 痛点重定位的 downstream 影响
+
+D1 把 §12.1 anchor 从 "token 经济" 改成 "时延 + 注意力切换"。**影响 v3' MVP 设计**：
+
+| 任务 | v3 原假设 | D1 后调整 |
+|---|---|---|
+| V14（break-even） | token 经济计算 | 改"PM 注意力 break-even"——单次集中审 rewrite vs N 次零散审 settlement 的认知负担；token 数字降为次要参考 |
+| V3（merge 函数） | 公式确定性给 token 节省正当性 | 改"PM 审 rewrite diff 时心理负担"——同字段冲突门必须降到最少（PM 一次集中审，门多 = 心理负担大） |
+| V11（schema） | 字段全为了 AI 准确消费 | 改"PM 填 quickfix metadata 的注意力税"——字段必须最小，每多一个就是 PM 一次 quickfix 多一道填表 |
+| V6/V7（隔离边界） | 工程鲁棒性 | 不变（D13 主流程仍是 close-task 不写 modulespec、close-req 一次性） |
+| 整体路线 | rewrite-only | rewrite-only 仍合理（一次集中处理 vs 多次零散打断）；batch-settlement 替代方案不再优于 rewrite 因为 batch 仍是"零散多 diff"的 PM 视角 |
+
+**关键洞察**：D1 让 "rewrite vs settlement" 的取舍逆转——
+- 之前（按 token 痛点）：rewrite 比 settlement 节省，但 break-even 要 N≥2，N=1 反而贵
+- 现在（按时延+注意力痛点）：rewrite 不论 N 都更优（PM 工作流体感"一次集中"vs"N 次打断"）；token 数字成本可承受
+
+→ **D13 rewrite-only 方向其实更合新痛点定位**。v3 走偏在"5 类 CONFLICT 门 + 实时写 modulespec + multi-worktree 全套"这种自我引入的副复杂度，不在 D13 大方向。
+
+---
+
+## 十六、D13 v3' MVP 设计（2026-05-12 PM 拍板）
+
+> **状态**：基于 D1+D2 拍板 + §15.3 表。9 任务 / ±10h 估。本节只写 outline + 关键决策；v4 设计稿按本 outline 展开。
+> **替换关系**：§十四 v3 全集作废（仅作历史归档保留），实施按本节 + 后续展开稿。
+> **下一步**：PM 拍 outline 后展开各任务 → 跑 round 5 autoplan 验 → Phase C 实施。
+
+### 16.1 v3' MVP 9 任务清单
+
+**Foundation（保留 §14.1）**
+
+| 任务 | 描述 | 调整 |
+|---|---|---|
+| **W1**（旧 V1） | task→module 映射脚本 | 简化版：直接读 task md frontmatter `module_impact`，不交叉验证 diff |
+| **W2**（旧 V2 简化） | 全局时间序定义 | **一行约定**（"按 git topo order 应用 patch"）；不要单独脚本 `req-event-order.py`，需要时 W1 内部 `git log --topo-order` |
+
+**C1 核心 — merge 函数（大砍版）**
+
+| 任务 | 描述 | 调整 |
+|---|---|---|
+| **W3**（旧 V3 大砍） | merge 函数 + 1 类 CONFLICT 门 | 砍 5 类→ 1 类：`CONFLICT_REFERENCE_MISSING`（"PM 视图说改 X，但 base 里没 X"），统一询问门：(a) 改成新建 (b) 选其他 feature (c) skip。砍 `case behavior-only`（用 modify 覆盖）+ `case null`（过滤逻辑非 merge case）。砍 worked example A-E 共 100 行（AI 自我说服式写作）。merge_payload 改成三方字段 patch：`expected_old/new/current`，只有 current 已被改成第三值才真冲突 |
+
+**C2 — 隔离 worktree + 边界（保留核心）**
+
+| 任务 | 描述 | 调整 |
+|---|---|---|
+| **W4**（旧 V6） | 隔离 temp worktree/branch 内 rewrite | 不变（CR-2 critical 修复，工程必要） |
+| **W5**（旧 V7） | close-req mutation 边界 | 保留：dirty gate + checkpoint 在 step 1.5；砍 part-commit（V8 砍） |
+| **W6**（旧 V9 降级） | stale checkpoint 检测 | 二层验证（HEAD 可达 + req 一致），砍 mismatched-stage（罕见且让 PM 介入比静默清理累） |
+
+**C3 — schema 完整化（最小集）**
+
+| 任务 | 描述 | 调整 |
+|---|---|---|
+| **W7**（旧 V11+C4.1 大砍） | quickfix-log schema 最小集 | 砍 12 字段到 **4 字段**：`module / feature_anchor / change_type / needs_modulespec_update`。砍 feature_id（W8 走 sidecar）/ target_origin_req / recorded_in_req / modulespec_patch / supersedes / applied / affected_paths / confirmed_by/at（PM 单人审计无价值）。注意 V13 老 quickfix downgrade 也大砍——quickfix-backfill 改成一次性脚本不必新 skill |
+| **W8**（旧 V10+C4.4 改 sidecar） | feature_id + origin_req sidecar | 不进 modulespec 正文。`docs/modules/.feature-index.json` 存（feature_anchor → feature_id + origin_req + last_modified_at）。AI rewrite 时读 sidecar 对齐；PM 看 modulespec git diff 是干净的产品语言。砍 modulespec H3 下 4 行 HTML 注释 |
+
+**横切**
+
+| 任务 | 描述 | 调整 |
+|---|---|---|
+| **W9**（旧 V15 大砍 + 多 worktree 单行替代） | 测试 fixture + 多 req 警告 | fixture 砍 11 → 3（success / fail-retry / no-residue end-to-end）。多 worktree 整套（V16/V17/git ref 锁/step 0.5 三分类/AI 助理合并）砍成 **一行 close-req 入口检测**：`git fetch origin && git diff <req-base>..origin/main -- docs/modules/` 非空 → 提示 PM "main 上 modulespec 有改动，要先 pull 还是继续 close？"；PM 决策即可，无锁、无三分类、无 audit。close-task 不做（V17 砍） |
+
+**总计**：9 任务（W1-W9）。估 ~10-12h 工程实施 + ~5h v4 设计稿展开 + round 5 autoplan ~3h = ~18-20h。
+
+### 16.2 砍掉的 v3 任务（vs §14.0）
+
+| 砍 | 理由 |
+|---|---|
+| V4（module rename） | §14.2.3 自承认低频；进 v4 候选 |
+| V5（dispatch gate 阻断） | 降级 warn 不阻断（W7 已含 lint 但只 warn） |
+| V8（part-commit 三选门） | 99% PM accept all；reject 一个 → 整体 abort 简单 |
+| V12（红色信号词二次验证） | 噪声多于信号；PM 在 rewrite diff 自审够了 |
+| V17（close-task step 0.5） | 单 PM 同 req 跨 worktree 罕见；rare race 不该建基础设施 |
+| C4.2（snapshot lock） | quickfix 不实时写 modulespec，无 snapshot 需要 |
+| C4.3（applied/unapplied drift） | C4.2 砍后自然消失 |
+| C4.5（quickfix-summary.md） | jsonl 已够；PM 想看 `cat quickfix-log.jsonl \| jq` 即可 |
+| §14.7.5（git ref 锁） | 单 PM 不需基础设施级锁 |
+
+### 16.3 quickfix 行为变化（vs §14.6 / §13.10）
+
+**§13.10 PM 原话回看**：
+
+> "我 quickfix 修改的时候，实际上就是想要修改原型，同时修改 modulespec，甚至我修改的还可能是之前某个 req 的产物，我需要你帮我同时在 req 中记录。"
+
+**v3 AI 解读**：拆 4 点意图 → 整章 C4.1-C4.5（实时写 + snapshot + drift + 归因 + summary）。
+
+**v3' 重解读**（两 voice 一致建议）：PM 表达的是**期望**（quickfix 别让 modulespec 永远落后），不是**机制要求**（每次实时写）。最简落地：
+
+| PM 期望 | v3 机制 | v3' 机制 |
+|---|---|---|
+| "quickfix 别让 modulespec 落后" | quickfix 实时写 modulespec | quickfix 写结构化 metadata（W7 4 字段）→ close-req rewrite 时统一消费，与 task PM 视图同等地位 |
+| "可能改的是之前某个 req 的产物" | C4.4 origin_req HTML 注释 + target_origin_req 字段 | W8 sidecar 存归因；W7 metadata 可选 free-text "改的是哪 feature"（PM 视图友好） |
+| "我需要你帮我同时在 req 中记录" | C4.5 quickfix-summary.md derived view | jsonl 本身就在 `requirements/active/<req>/`；PM 想看就 grep |
+
+**净效果**：v3' 仍满足 PM §13.10 意图（quickfix 不让 modulespec 落后），但不引入 quickfix→modulespec 直写带来的所有 snapshot / drift / applied 区分子问题。
+
+### 16.4 INVARIANT 收敛（vs §14.9 17 条）
+
+砍到 **8 条**：
+
+| INVARIANT | 内容 | v3 来源 |
+|---|---|---|
+| I-CR10 | close-req step 0 dirty gate | 保留 |
+| I-CR11 | rewrite 必须在 temp worktree（W4） | 保留 |
+| I-CR12 | stale checkpoint 二层验证（HEAD + req） | 降级（去掉 mismatched-stage） |
+| I-CR13 | rewrite 输入按 git topo order | 保留 |
+| I-CR15 | close-req step 1 后任何失败保留 active/、stage 不进 closed/ | 保留 |
+| I-CR16 | close-req 入口 main diff 非空 → 提示 PM（替代 V16/V17 全套） | 新简化 |
+| I-CT2 | task worktree clean / 分支存在（原有，v1 描述错误已修） | 不变 |
+| I-QF1 | 老 quickfix 数量超阈值 → 走一次性 backfill 脚本 | 降级（不必新 skill） |
+
+砍掉：I-CR14（V6 已含）、I-CR17（V16 step 0.5 砍）、I-CR18（git ref 锁砍）、I-CT9（V17 砍）、I-TT2（C4.2 snapshot 砍）、I-FT1（feature_id 改 sidecar）、I-TS1（V5 降级 warn）、I-QF2（C4.5 砍）、I-CR16-old（part-commit 砍）。
+
+### 16.5 改动清单收敛（vs §14.8 36 项）
+
+收到 **~15 项**：
+
+| 类别 | 项目 |
+|---|---|
+| 脚本（新建） | W1（req-module-impact.py 简化版）、W4（隔离 temp worktree 脚本）、W7（quickfix-log schema lint） |
+| skill（改） | doc-update §8 rewrite mode + W3 1 类 CONFLICT、quick-fix skill 加 4 字段 metadata + 调 doc-update settlement（不是直写 modulespec）、close-req 加 dirty gate + checkpoint + main diff 提示、close-task 维持现 D13 主流程不写 modulespec |
+| skill（砍） | task-execute snapshot 读改回常规 git checkout、req-stage-gate half-close 检测砍 |
+| 模板 | quickfix-log v3' minimal schema、feature-index.json sidecar |
+| 测试 | 3 个核心 fixture（success / fail-retry / no-residue） |
+| INVARIANT | INVARIANTS.md 加 I-CR10-16 + I-QF1（按 §16.4） |
+
+### 16.6 pre-flight 重排（vs §14.10）
+
+**产品层 pre-flight 先**（F8 修复）：
+
+1. [ ] **N 分布统计**：adminconsole4 历史 10 个 req 平均 task 数 / quickfix 数。若 N=1 占 >50% → 触发 D13 整体 reconsider（rewrite-only 假设 N≥2 才合理；但 D1 时延+注意力痛点下 N=1 也仍有 close-task 不打断意义）
+2. [ ] **PM 注意力 break-even（替代 token break-even）**：对一个真实 req 主观计时——D13 模式（task close 静默，close-req 一次集中审）vs 旧 settlement 模式（每 task close 都审 diff），PM 主观工作流体感打分。决定 W3/W4/W5 是否值得做
+3. [ ] **PM 痛点二次确认**：跑一次后端到端再问 PM "(b)+(c) 还是真痛点吗，还是用了几次发现痛在别处"
+4. [ ] **§13.10 quickfix 期望确认**：跑一两个 quickfix 走 v3' "metadata 不实时写 modulespec" 路径，PM 主观体感 OK 吗
+
+**工程层 pre-flight 后**（继续 §14.10 部分）：
+
+5. [ ] **grep 测试套件**：见 §14.10
+6. [ ] **W4 isolation 模拟**：rewrite 中断 → temp worktree 清理验证
+7. [ ] **W7 schema lint 测试**：4 字段必填 / null 字段拒绝
+
+### 16.7 v3' 完成后
+
+1. PM 拍 §十六 outline 后，按 W1-W9 展开详设计稿（每任务一节，类似 §十四 但密度减半）
+2. 跑 **round 5 autoplan** 验 v3'（focal：D1 痛点是否真锚定 / W3 1 类 CONFLICT 是否够 / W7 4 字段 schema 是否够 / I-CR16 单行替代是否足）
+3. round 5 通过 → 进 Phase C 实施（按 §16.5 改动清单分 PR）
+4. round 5 仍 critical → v4 设计循环
+
+
