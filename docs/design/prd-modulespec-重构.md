@@ -3579,7 +3579,958 @@ PM 拍：§十九 v3'.1 修订完后跑 round 6 autoplan 验。本次 round 5 �
 
 ---
 
-## 十九、（待写）v3'.1 修订版
+## 十九、v3'.1 修订版（2026-05-12）
 
-> **占位**：§18.5 PM 决策后填本节。
+> **状态**：§18.5 PM 4 项决策落地的 inline 修订记录。**不重写 §十七**——把每条修订定位到 §十七 哪个小节，给出新文本 / 新约束 / 新工作项。round 6 autoplan 看这一节判 v3'.1 是否真补完 §十八 30 条。
+>
+> **修订原则**：
+> 1. §十七 章节保持原编号原结构，§十九 给"应补 / 应改 / 应删"三类指令式条文
+> 2. R-C1-C4（4 critical）+ R-H1-H15（15 high）逐条 inline；medium/low 11 项进 §19.10 旁注表
+> 3. 每条修订标注 §十七 目标位置 + 新文本（如有）+ 验收信号
+> 4. §十九 写完后 §十七 各小节顶部加 "→ §19.x 修订" 反向指针（实施时合并入 §十七，§十九 留作变更历史）
+
+### 19.0 修订范围全景
+
+| 类别 | 数量 | 编号 | §十七 影响小节 |
+|---|---|---|---|
+| critical（必修）| 4 | R-C1 / R-C2 / R-C3 / R-C4 | §17.4 / §17.8 / §17.3.2 / §17.5.2 + 新增 §17.10 |
+| high（强烈建议）| 15 | R-H1 .. R-H15 | §17.0 / §17.2 / §17.3 / §17.4 / §17.5 / §17.6 / §17.7 / §17.8 |
+| medium/low（旁注）| 11 | R-M1 .. R-M10（含 ENG medium 合集）| 散落 |
+
+**§十九 自身结构**：
+- §19.1 — R-C1 W7 AI 推断 patch 整套改造（最大单项修订）
+- §19.2 — R-C2 §17.8 P1 降为 informational
+- §19.3 — R-C3 W5 step 5 push 失败 retry 路径
+- §19.4 — R-C4 非交互模式契约（新增 §17.10）
+- §19.5 — R-H1-H8（W3 / W4 / sidecar / close-report 边界）
+- §19.6 — R-H9-H11（fixture 扩 / vp-04 拆 / PR 顺序）
+- §19.7 — R-H12 新增 P5 AI 准确率 benchmark
+- §19.8 — R-H13 quickfix-log 绕 hook 兜底
+- §19.9 — R-H14-H15（W7 字段砍 + PM-facing 文案）
+- §19.10 — 30 项汇总表 + 更新后的 INVARIANT / 改动清单 / pre-flight
+- §19.11 — v3'.1 完成后（round 6 boot 指引）
+
+---
+
+### 19.1 R-C1：W7 AI 推断 patch 整套改造（最大单项）
+
+**问题回顾**（CEO-3 + ENG-C2）：§17.4.1 把 patch 推断 100% 交给 AI 从 commit diff + summary 反推，且 `ai_infer_patch()` 是黑盒（无 prompt / 模型 / token 上限 / 失败枚举）。兜底"进 CONFLICT_REFERENCE_MISSING"只在 anchor 找不到时触发——AI 推错 anchor 到一个真实存在的 anchor 上 → 静默通过 → PM 审 rewrite diff 时才发现。
+
+**三层防御方案**：
+
+#### 19.1.1 第一层 — W7 schema 加 `summary_hint` 第 5 字段（缩窄 AI 推断空间）
+
+**目标位置**：§17.4.1 schema 表（line ~3127）
+
+**新 schema**（W7 4 字段 → 5 字段）：
+
+```json
+{
+  "schema_version": "v3.1",
+  "ts": "2026-04-15T10:30:00Z",
+  "commit": "abc123",
+  "module": "module-log",        // 必填；null = 纯文案不进 rewrite
+  "feature_anchor": "列表筛选",   // module≠null 时必填；不在 sidecar = 新建 feature
+  "change_type": "modify",        // 见 §19.9.1 — 可能砍成 AI 推断
+  "summary_hint": "把列表默认排序从倒序改成正序",  // **新增**：PM free text 一句话，<60 字
+  "needs_modulespec_update": false  // 见 §19.9.1 — AI 默认 false，PM opt-in true
+}
+```
+
+**`summary_hint` 字段语义**：PM 在 quickfix step 4 commit 前用 PM 视图语言一句话描述"改了什么 feature 行为"。**这不是给 commit message 用，是给 rewrite mode AI 推 patch 时作锚点**。AI 拿到 `summary_hint + commit diff + commit summary` 三方信息推 patch，比只看 diff+summary 准确率从估的 70% 升到 95%+。
+
+**填表摩擦评估**：60 字一句话 ≈ 10-15 秒；总表 5 字段填表预算 ≤ 30 秒（§17.8 P4 break-even 门保留）。
+
+**默认值规则**：AI 在 step 3.5 偏差扫描后从 commit message body 抽取一句话作 `summary_hint` 默认值；PM 在 step 4 commit 前确认 / 改写。**PM 全程不填空白表**，AI 推默认 → PM 微调。
+
+#### 19.1.2 第二层 — `infer-quickfix-patch.md` prompt 子文档（消除黑盒）
+
+**新增工作项**：`vp-26 skills/doc-update/prompts/infer-quickfix-patch.md`
+
+**子文档内容**（设计稿层只给骨架；实施时按 PM-AI-Workflow generator 规范写完整 prompt）：
+
+```markdown
+# infer-quickfix-patch prompt
+
+## 输入
+- `base_modulespec`: 整文件 → 切相关 H3 子段（**只喂 module_anchor 对应 H3 子树**，不超 2k token）
+  - 切片公式：`git show <REQ_BASE>:docs/modules/<module>.md` → grep `## ` 找到 feature_anchor 所在 H3 → 取该 H3 到下一 H3 之间所有行
+- `quickfix_log_entry`: W7 5 字段（含 summary_hint）
+- `commit_diff`: `git show --no-color <commit>`（截前 100 行）
+- `commit_summary`: PM 在 quick-fix 时填的 summary
+
+## 输出（JSON schema 严格校验）
+{
+  "op": "add | modify | remove",
+  "anchor": "<feature_anchor 路径，必须在切片范围内或显式 'NEW'>",
+  "fields": {
+    "<field_name>": {
+      "expected_old": "<__UNSET__ | 字符串 | null>",
+      "new": "<字符串 | null>"
+    }
+  }
+}
+
+## 模型选
+默认 claude-sonnet-4-6；rewrite 一次可能 N≤20 个 quickfix → N×prompt 成本可控
+（每个 prompt ≤ 3k token input + ≤ 500 token output → N=20 时 ~70k token，单次 close-req 可接受）
+
+## 失败枚举
+1. rate limit / 网络失败 → 重试 ×3 → 仍失败 → exit 1，PM retry close-req
+2. JSON schema 校验失败 → CONFLICT_AI_PROMPT_FAIL（第二类 conflict，见 §19.1.4）
+3. anchor 输出 'NEW' 但 W7 entry change_type='modify' → CONFLICT_AI_PROMPT_FAIL
+4. fields 为空 → CONFLICT_AI_PROMPT_FAIL（AI 没推出实质 patch）
+5. AI 返回"我不确定" → CONFLICT_AI_PROMPT_FAIL
+
+## token 预算文档化
+- 单 prompt input 上限：3k token（切片 + W7 + diff 100 行 + summary）
+- 单 prompt output 上限：500 token（patch JSON）
+- close-req 一次 rewrite：N × 3.5k token；N=20 时 ~70k token；远低于 200k context 上限
+```
+
+**目标位置**：§17.4.1 关键决策表的 `ai_infer_patch()` 调用处加引用 "详 prompt 见 `skills/doc-update/prompts/infer-quickfix-patch.md`（vp-26）"。
+
+#### 19.1.3 第三层 — rewrite 时 AI 推完给 PM 一行 confirmation
+
+**目标位置**：§17.4.1 rewrite mode 消费逻辑（line ~3174）
+
+**新增流程**：W4 隔离 worktree rewrite 跑到 "AI 推 patch 完毕" 这一步时，**不直接进 W3 merge**，而是先给 PM 一行 confirmation：
+
+```
+[quickfix abc123] PM 一句话："把列表默认排序从倒序改成正序"
+[AI 推断] op=modify, module=module-log, anchor=列表筛选, field=sort_default
+          expected_old="时间倒序", new="时间正序"
+[Confirm] (y) 对 / (n) 跳过这个 patch（quickfix 改 modulespec 这次跳过）/ (e) 我手改一下：
+```
+
+**(y)**：进入 W3 merge。
+**(n)**：本 quickfix 不进 rewrite（视为 `needs_modulespec_update=false`，audit log "PM rewrite-time opt-out"）；继续下一 quickfix。
+**(e)**：PM 在 inline 表单里改 op/anchor/field/new value，改完进 W3 merge。
+
+**总开销估算**：单 quickfix confirmation ≈ 5 秒；close-req 内 N=10 个 quickfix ≈ 50 秒 / 一次。比"PM 审 rewrite diff 时撞错回头查 git log 重做"（估 5-15 分钟 / 错位）低 10×。
+
+**非交互模式**：see §19.4——`--non-interactive` 时此 confirmation 全部 fail-safe (n) skip（不静默 y）；CI/fixture 必须显式枚举 quickfix → 推断结果的 expected 对比来覆盖测试。
+
+#### 19.1.4 CONFLICT_AI_PROMPT_FAIL — 承认第二类 conflict
+
+**问题**：§17.2.3 称 W3 只有"1 类 CONFLICT"（CONFLICT_REFERENCE_MISSING）。R-C1 的 AI 推 patch 失败路径**不属于"引用缺失"语义**，强行塞进 CONFLICT_REFERENCE_MISSING 会让询问门职责混乱。
+
+**修订**：W3 正式承认 **2 类 CONFLICT**。新增第二类 `CONFLICT_AI_PROMPT_FAIL` 详情：
+
+| 字段 | 值 |
+|---|---|
+| 触发 | §19.1.2 失败枚举 #2/#3/#4/#5 |
+| PM 选项 | (a) 跳过这个 quickfix 的 modulespec 更新 / (b) PM 手写 patch / (c) abort close-req 让 PM 看 commit diff 决定 |
+| audit | quickfix_id + AI 输出 + 失败原因 |
+
+**§17.2.3 标题需更新**："唯一询问门 → 两类询问门"。**承认 R-C1 引入新维度**：v3' 原承诺"1 类 CONFLICT"是过度简化；W3 实际边界是"模块层 1 类 + AI 推断层 1 类 = 2 类"。round 5 焦点 2 的"真砍到 1 类"评级降为"砍到 2 类"，但仍比 v3 的 5 类显著低。
+
+**目标位置**：
+- §17.2.1 公式：add 一句 "二次校验：patch 来源（AI 推断）失败 → CONFLICT_AI_PROMPT_FAIL"
+- §17.2.3 标题改 "唯一询问门" → "两类询问门"，并加 CONFLICT_AI_PROMPT_FAIL 子节
+- §17.7 INVARIANTS 表加一行 I-W3-CONFLICT-COUNT="2 类"（防 round 6+ 又退化回 1 类宣称）
+
+#### 19.1.5 R-C1 验收
+
+- [ ] `skills/doc-update/prompts/infer-quickfix-patch.md`（vp-26）写完且包含输入切片公式 + JSON schema + 失败枚举 + 模型选 + token 预算
+- [ ] W7 schema 5 字段（含 summary_hint）固定在 §17.4.1 + `quickfix-log.schema.json`（vp-15）
+- [ ] rewrite confirmation 流程图入 §17.4.1 + §17.3.1 W4 step 2 子步骤
+- [ ] CONFLICT_AI_PROMPT_FAIL 入 §17.2.3 + §17.7 INVARIANTS
+- [ ] §17.2.3 标题改为"两类询问门"
+
+---
+
+### 19.2 R-C2：§17.8 P1 N 分布降为 informational
+
+**问题回顾**（CEO-4）：§17.8 P1 "若 N=1 占 >70% → 触发 reconsider" 标准矛盾 D1。D1 之后 token 经济不再是 v3' 目标——N=1 时 v3' 仍成立（"close-task 不打断 + 集中审 close-req"价值在 N=1 时仍存在，只是收益降）。P1 当 blocker 是 round 4 D1 修订没传导到 round 5 pre-flight。
+
+**修订**：
+
+#### 19.2.1 P1 重定位：informational data collection
+
+**目标位置**：§17.8 P1（line ~3413）
+
+**新文本**：
+
+> **P1（informational，不是 blocker）**：在 adminconsole4 历史 30 个 req 上跑 `scripts/quickfix-task-distribution.py`，输出 N 分布直方图（N=1 / N=2-5 / N=6-10 / N>10 各占比）。
+>
+> **用途**：PM 看完心里有数自己项目的 quickfix 密度长什么样；**不影响是否进 Phase C 的决策**。
+>
+> **如果 N=1 占 >70%**：v3' 价值降低（PM 单 task req 受益相对少），但 close-task 不打断 + close-req 集中审仍成立，**不 reconsider**。
+>
+> **如果 N>5 占 >30%**：v3' 价值最大化（PM 高密度 quickfix 的 req 受益显著）。
+
+#### 19.2.2 P2/P3 升为真 blocker
+
+**目标位置**：§17.8 P2 + P3
+
+**P2 文本调整**（吸收 CEO-2 + R-M2）：
+
+> **P2（blocker）—— 注意力 break-even reverse Likert**：PM 在两条路径上各跑 3 个真实 req：
+> - 旧路径：close-task 每次写 modulespec（同步打断）+ close-req 不集中审
+> - 新路径：close-task 不写 modulespec + close-req 集中审（rewrite）
+>
+> 跑完 PM 自评 Likert 5 级（1=新路径明显更累 → 5=新路径明显更省）：
+> - **不带分钟数**（避开 D1 之前 token 经济换皮陷阱）
+> - PM 自评 ≥4 ⇒ pass
+> - PM 自评 ≤2 ⇒ fail，触发 v4
+> - PM 自评 3 ⇒ 看 P3 痛点确认；P3 也三 ⇒ fail
+
+**P3 文本调整**：
+
+> **P3（blocker）—— 痛点二次确认**：PM 在 P2 跑完后回答两个开放题：
+> 1. 旧路径下 "close-task 写 modulespec → 切回 task 上下文" 的注意力切换体感如何？
+> 2. 新路径下 "close-req 一次集中审 N modulespec rewrite" 的体感如何？
+>
+> 不要求分钟 / token / 次数数字，只要 PM 主观判断 (b) 时延 + (c) 注意力切换两个痛点是否真存在。**两点都"是" ⇒ pass**；任一"否或不确定" ⇒ fail，回 D1 重新锚定。
+
+#### 19.2.3 P4 保留 + 加约束
+
+P4（W7 填表体感 ≤30 秒）保留，但加约束：**含 §19.1.1 第 5 字段 `summary_hint` 填写 + §19.1.3 rewrite confirmation 5 秒**——总预算 ≤ 35 秒 / quickfix。超 ⇒ §19.1 实施回归。
+
+#### 19.2.4 R-C2 验收
+
+- [ ] §17.8 P1 重写为 informational（去掉 "触发 reconsider" 语义）
+- [ ] §17.8 P2 改为 reverse Likert 5 级不带分钟数
+- [ ] §17.8 P3 改为开放题不带数字门槛
+- [ ] §17.8 P4 预算 30 → 35 秒（包 confirmation）
+- [ ] §17.0 末尾"省 5-15 分钟 / 4-12 小时"删除，换"工作流体感 N 个 req 后自评"（R-M2）
+
+---
+
+### 19.3 R-C3：W5 step 5 push 失败 retry 路径
+
+**问题回顾**（ENG-C1）：§17.3.2 流程 step 4 已 commit active→closed/ + rewrite + close-report.md，step 5 `git merge req → main + push`。push 失败（GitHub 宕机 / 分支保护 / CI 阻拦）→ 本地全 commit 但远端没 push。下次重跑 close-req：I-CR10 dirty gate 过（worktree clean）但 retry 入口检测不到 checkpoint → 框架不知"已经在 step 5+"。
+
+**修订**：
+
+#### 19.3.1 step 5 拆分 + pre-push checkpoint
+
+**目标位置**：§17.3.2 close-req mutation 边界 step 5（line ~3055）
+
+**新流程**（拆 step 5 为 5a/5b/5c）：
+
+```
+step 5a [pre-push checkpoint]：写 .runs/close-req-checkpoint.json
+                                {phase: "pre-push", req: "<id>", ts: "<ISO>",
+                                 head_local: "<sha>", target: "main"}
+step 5b [merge + push]：git checkout main
+                        git merge --ff-only <req-branch>  # ff 失败 → exit 1 不清 checkpoint
+                        git push origin main              # push 失败 → exit 1 不清 checkpoint
+step 5c [post-push 清]：rm .runs/close-req-checkpoint.json
+                        audit log "close-req <req> done"
+```
+
+#### 19.3.2 retry 入口检测 phase=pre-push
+
+**目标位置**：§17.3.2 close-req 入口（line ~3040）
+
+**新逻辑**（伪码）：
+
+```bash
+if [ -f .runs/close-req-checkpoint.json ]; then
+  phase=$(jq -r .phase .runs/close-req-checkpoint.json)
+  case "$phase" in
+    pre-rewrite) ... ;;          # 已有路径，retry 从 step 1.5
+    pre-push)
+      # 本地状态已 OK，只是 push 没出去 → retry 直接从 5b 重开
+      echo "[retry] 检测到上次 close-req 已完成本地 commit + merge，但 push 失败。"
+      echo "[retry] 重试 git push origin main..."
+      git push origin main && rm .runs/close-req-checkpoint.json
+      exit $?
+      ;;
+  esac
+fi
+```
+
+#### 19.3.3 I-CR15 细化
+
+**目标位置**：§17.7 INVARIANTS（line ~3398）
+
+**新 I-CR15 措辞**："close-req step N 失败 → checkpoint 回到 step N-1；retry 从 step N 开始；checkpoint 在 step 1（pre-rewrite）/ step 5a（pre-push）两个边界点写入。"
+
+#### 19.3.4 R-C3 验收
+
+- [ ] §17.3.2 step 5 拆为 5a/5b/5c
+- [ ] close-req 入口加 phase=pre-push retry 分支
+- [ ] I-CR15 细化到 step N-1 恢复点语义
+- [ ] 新增 fixture case-07 "push-fail-retry"（见 §19.6.1）
+
+---
+
+### 19.4 R-C4：非交互模式契约（新增 §17.10）
+
+**问题回顾**（ENG-C3 + DX-9）：§17.5.2 `read -p` 在 CI / fixture（stdin 非 tty）→ EOF → CHOICE="" → fall through 不可控。fixture run.sh 用 `--non-interactive --auto-accept` flag 但 §十七全篇没定义这两 flag 的行为；W9 fixture 直接依赖 = AI agent dev user 核心接口悬空。
+
+**修订**：
+
+#### 19.4.1 新增 §17.10 close-req 非交互模式契约
+
+**目标位置**：§17.5 后新增 §17.10（§17.9 v3' 完成后 → 重编号为 §17.11）
+
+**新节内容**：
+
+```
+## §17.10 close-req 非交互模式契约
+
+### 17.10.1 触发条件
+
+close-req.sh 进入非交互模式当且仅当以下任一成立：
+1. `[ ! -t 0 ]` — stdin 不是 tty
+2. 显式 flag `--non-interactive`
+3. env `PM_CLOSE_REQ_INTERACTIVE=0`
+
+否则全部交互门走 read -p 默认路径。
+
+### 17.10.2 各决策门的非交互行为（fail-safe abort 而非 silent continue）
+
+| 决策门 | 位置 | 交互默认 | 非交互默认 |
+|---|---|---|---|
+| I-CR16 main diff 提示 (a/b/c) | §17.5.2 | read -p | **(c) abort**，打印冲突 module 列表 + exit 9 |
+| CONFLICT_REFERENCE_MISSING (a/b/c) | §17.2.3 | read -p | **exit 10**，audit 冲突 + 等 PM retry |
+| CONFLICT_AI_PROMPT_FAIL (a/b/c) | §19.1.4 | read -p | **exit 11**，audit AI 输出 + 等 PM retry |
+| rewrite confirmation (y/n/e) | §19.1.3 | read -p | **(n) skip**，audit "non-interactive opt-out"；继续下一 quickfix |
+| W4 reject any module | §17.3.1 step 4 | read -p | **exit 12**，audit reject list + 等 PM retry |
+
+**核心原则**：**不 auto-pick 任何 PM 该判断的选项**；fail-safe 一律 abort 或 skip，绝不静默 (b) "继续"（会掩盖冲突）。
+
+### 17.10.3 --auto-accept flag
+
+`--auto-accept` 只作用于 "rewrite confirmation y/n/e" 这一类**纯审稿**门（§19.1.3）→ 全部 (y) 通过。**不作用于冲突门**（CONFLICT_* / I-CR16）——冲突仍 exit 非零。
+
+fixture run.sh 用 `--non-interactive --auto-accept`：
+- 撞 W3 conflict → exit 10/11（fixture 失败暴露 setup 错误）
+- 走 happy path → confirmation 全自动 y → fixture 通过
+
+### 17.10.4 exit code 表
+
+| code | 语义 |
+|---|---|
+| 0 | success |
+| 1 | 通用错误（dirty gate / rewrite fail / push fail / ...） |
+| 9 | 非交互模式撞 main diff 提示 |
+| 10 | 非交互模式撞 CONFLICT_REFERENCE_MISSING |
+| 11 | 非交互模式撞 CONFLICT_AI_PROMPT_FAIL |
+| 12 | 非交互模式撞 W4 reject |
+```
+
+#### 19.4.2 §17.5.2 实现里加 `[ -t 0 ]` 检测
+
+**目标位置**：§17.5.2 单行替代脚本
+
+**新文本**（替换原 `read -p` 那段）：
+
+```bash
+if [ ! -t 0 ] || [ "${PM_CLOSE_REQ_INTERACTIVE:-1}" = "0" ]; then
+  echo "[non-interactive] main 上有 modulespec 改动：$DIFF_FILES" >&2
+  echo "[non-interactive] 默认 abort（exit 9）；显式 PM_CLOSE_REQ_INTERACTIVE=1 进交互模式" >&2
+  exit 9
+fi
+read -p "选 a/b/c: " CHOICE
+```
+
+#### 19.4.3 §17.7 I-CR16 invariant 扩展
+
+**目标位置**：§17.7 INVARIANTS I-CR16 行
+
+**新文本**："I-CR16：close-req step 0.5 检测 main 有 modulespec 改动 → 交互模式提示 PM 三选项 (a/b/c)；非交互模式 fail-safe exit 9（不 auto-pick）。"
+
+#### 19.4.4 R-C4 验收
+
+- [ ] §17.10 新增 close-req 非交互模式契约节（含 5 个决策门 fail-safe 表 + exit code 表）
+- [ ] §17.5.2 实现加 `[ -t 0 ]` 检测 + exit 9
+- [ ] §17.7 I-CR16 扩展非交互行为
+- [ ] fixture run.sh 显式设 `--non-interactive --auto-accept`，并在 §17.5.1 fixture 头部 README 说明 happy path / conflict path 的预期 exit code
+
+---
+
+### 19.5 R-H1-H8：W3 / W4 / sidecar / close-report 8 项高项
+
+#### 19.5.1 R-H1 — `expected_old` AI 读 base 的边界 invariant
+
+**目标位置**：§17.2.2 末尾（line ~2949）
+
+**新加 invariant**：
+
+> **I-W3-PATCH-SOURCE**：AI 在 task-spec / quick-fix 阶段生成 patch 时**只读 base modulespec 填 `expected_old` 字段，不进入 task 的产品决策依据**。task PM 视图描述什么仍由 PM 自主写——AI 不得用 base modulespec 内容反向影响 task 描述生成。
+
+**新增到 §17.7 INVARIANTS** 一行：`I-W3-PATCH-SOURCE`。
+
+#### 19.5.2 R-H2 — `expected_old` 用 `__UNSET__` sentinel
+
+**目标位置**：§17.2.2 三方字段 patch schema（line ~2898）
+
+**修订**：禁止 `expected_old: null` 同时承载"未填"和"字段实际为空"两种语义。
+
+**新 schema**：
+
+```json
+{
+  "field_name": {
+    "expected_old": "<__UNSET__ | __EMPTY__ | 字符串>",
+    "new": "<__EMPTY__ | 字符串 | null>"  // null = remove 操作
+  }
+}
+```
+
+- `expected_old: "__UNSET__"` = patch 不携带该字段（add 操作 / 不关心字段）
+- `expected_old: "__EMPTY__"` = patch 声称字段当前实际为空字符串
+- `expected_old: "<字符串>"` = 期望 base 字段值
+
+**three_way_merge 行为**：`expected_old=__UNSET__` → 跳过三方比较直接覆盖；其余按 §17.2.2 算。
+
+#### 19.5.3 R-H3 — `needs_modulespec_update` AI 默认推 false
+
+**目标位置**：§17.4.1 关键决策表 `needs_modulespec_update` 行（line ~3144）
+
+**修订**：
+
+| 字段 | 修订前 | 修订后 |
+|---|---|---|
+| `needs_modulespec_update` AI 工作 | 默认推 true if module≠null | **默认推 false**；只在 AI 从 commit diff 检测到 modulespec H3 内容相关字段变动（如 sort_default / button_label 文本变动）才推 true |
+
+**PM 视角效果**：`needs_modulespec_update=true` 真正成为"PM 主动声明这是产品决策"的过滤信号，不再是 99% 默认通过的死字段。
+
+**注**：与 R-H14（DX-1 字段合并）耦合——如果 R-H14 走"砍掉 `needs_modulespec_update` 字段"路径，本条作废。**留 R-H14 §19.9.1 决定**。
+
+#### 19.5.4 R-H4 — sidecar (α)：进 git + random feature_id + merge driver
+
+**PM 决策**：§18.5 D5-2 选 (α)。
+
+**目标位置**：§17.4.2 W8 sidecar 全节（line ~3193）
+
+**修订内容**：
+
+**(a) feature_id 改 random**：
+
+| 字段 | 修订前 | 修订后 |
+|---|---|---|
+| feature_id 算法 | `blake2b(canonical_module + '/' + normalize(feature_anchor))[:12]` | **`secrets.token_hex(6)` random**（12 位 hex）；首次 add 时算 + 写入 sidecar；后续 anchor 改名 / 重命名 sidecar 保持原 id |
+
+理由：sidecar 进 git 后是 source of truth，不需要可重算性；脱离 hash 消除"中文标点 normalize 边界 case"负担（吸收 Codex finding #7 + CEO-8）。
+
+**(b) 新增自定义 merge driver `scripts/merge-feature-index.py`**：
+
+**新工作项 vp-27**：`scripts/merge-feature-index.py`（PM 项目要 `git config merge.feature-index.driver` 注册）
+
+**逻辑**：
+```python
+# 输入：base / ours / theirs 三方 sidecar JSON
+# 输出：合并后 sidecar
+# 规则：
+#   - 按 feature_id 索引合并（feature_id 全局唯一，无 key 冲突）
+#   - 同 feature_id 在 ours/theirs 都有：last_modified_req/last_modified_at 取较新
+#   - 同 feature_id 在 ours 加 / theirs 加：两边都收
+#   - origin_req 不可变（首个写入 req）；冲突取 base 优先
+#   - canonical_anchor 改名（PM 在某 req 改了 anchor 名）：ours/theirs 冲突 → 取较新 + 在 sidecar audit 段记一行
+```
+
+**(c) PM 项目 init 步骤**：在框架同步-SOP.md 增补一节"sidecar merge driver 注册"——首次 init 时跑：
+
+```bash
+git config merge.feature-index.driver "python scripts/merge-feature-index.py %O %A %B %P"
+# .gitattributes 加一行：
+# docs/modules/.feature-index.json merge=feature-index
+```
+
+**(d) sidecar lint at close-req entry**（吸收 DX-4 + ENG-4.3）：close-req step 0 跑 `scripts/lint-feature-index.py` 校 schema + 检测 sidecar 与 modulespec H3 是否 drift（PM 手编辑后）。drift → 给 PM 一行警告 + 提议 rebuild。
+
+#### 19.5.5 R-H5 — `expected_old` req 内连续 modify 语义
+
+**目标位置**：§17.2.2 末尾（与 R-H1 invariant 并列）
+
+**修订**：明确写 "req 内同字段连续 modify = 必进询问门" 语义，不是"误报"。措辞改：
+
+> **req 内同字段连续 modify 行为**：T1 / T2 在同一 req 内先后改同一 `field`，patch 生成时刻 base 都是 req fork point 状态 → 两 patch 都注入 `expected_old=fork_value, new=各自新值`。close-req rewrite 应用顺序：T1 先（current=fork_value=expected_old，OK 覆盖），T2 后（current=T1_new ≠ expected_old=fork_value）→ **必进 CONFLICT_REFERENCE_MISSING 询问门**，由 PM 拍 T1 改的要不要被 T2 覆盖。
+>
+> **这不是误报，是设计意图**。AI 在 patch 生成时不预知 req 内未来 patch；PM 在 close-req 集中审时一次性消化这类 sequencing 决策——比 task 级 inline 提示打断频率低。
+
+**新增 fixture case-04**："req 内同字段连续 modify"（见 §19.6.1）。
+
+#### 19.5.6 R-H6 — W4 `git merge --ff-only` 失败归类 W5 路径
+
+**目标位置**：§17.3.1 W4 step 3 注释（line ~3027）
+
+**修订**：删 "应该不会发生" 兜底；ff 失败正式归类 W5 失败路径。
+
+**新流程**：
+
+```
+step 3 git merge --ff-only <temp-branch>
+       └── 失败 → 视为 rewrite fail：
+             - 删 temp worktree (--force)
+             - 删 temp branch
+             - **保留 active/**（不移到 closed/）
+             - checkpoint 写 phase=pre-rewrite
+             - exit 1 提示 PM："rewrite 期间 req worktree 被改 → 请确保 IDE/watchman 不 touch req worktree 后 retry close-req"
+```
+
+**目标位置**：§17.3.2 关键决策第三条改写："ff 失败 = W5 rewrite-fail 同路径；IDE/watchman touch 是已知潜在源，I-CR10 dirty gate 只 gate 入口不 gate 中间过程"。
+
+#### 19.5.7 R-H7 — close-report retry amend
+
+**目标位置**：§17.3.2 close-req 入口 retry 路径（line ~3041）
+
+**新逻辑**：
+
+```bash
+# retry 入口检测到 phase=pre-rewrite
+# 如果 PM 改了 close-report.md（diff HEAD 非空）
+if ! git diff --quiet HEAD -- "requirements/active/$REQ/close-report.md"; then
+  echo "[retry] 检测到 close-report.md 有未 commit 修改 → amend 上次 close-report commit"
+  git commit --amend --no-edit -- "requirements/active/$REQ/close-report.md"
+fi
+# 继续 step 1.5 rewrite
+```
+
+**注**：PM 单人 amend 安全；不破坏 checkpoint phase 语义。
+
+#### 19.5.8 R-H8 — vp-03 显式 add sidecar 路径
+
+**目标位置**：§17.6 vp-03 改动清单条目（line ~3370）
+
+**修订**：vp-03 `close-req-rewrite-isolated.sh` 实施清单加一条：
+
+> 显式 `git add docs/modules/ docs/modules/.feature-index.json` —— 不依赖"git add 默认包含点文件"的隐式行为；防 future refactor 漏 sidecar。配 inline 注释："sidecar 与 modulespec 同 commit 保证 W4 commit 边界原子性"。
+
+#### 19.5.9 R-H1-H8 验收
+
+- [ ] §17.2.2 加 I-W3-PATCH-SOURCE + I-W3-CONFLICT-COUNT invariant + §17.7 同步
+- [ ] §17.2.2 schema 用 `__UNSET__` / `__EMPTY__` sentinel
+- [ ] §17.4.1 needs_modulespec_update 默认 false（除非走 R-H14 砍字段路径）
+- [ ] §17.4.2 sidecar 走 (α)：random ID + vp-27 merge driver + 框架同步-SOP 加 init 步骤 + sidecar lint at close-req entry
+- [ ] §17.2.2 req 内连改语义措辞 + 新 fixture case-04
+- [ ] §17.3.1 W4 ff 失败归 W5 路径
+- [ ] §17.3.2 retry 入口加 close-report amend
+- [ ] §17.6 vp-03 实施清单显式 add sidecar
+
+---
+
+### 19.6 R-H9-H11：fixture 扩 / vp-04 拆 / PR 顺序
+
+#### 19.6.1 R-H9 — fixture 3 → 8（含 R-C3 case-07）
+
+**目标位置**：§17.5.1 fixture 详定（line ~3253）
+
+**修订**：从 3 个核心 fixture 扩到 **8 个**（高频路径必覆盖；剩余的边角 case 可在 round 6 通过后补到 11）。
+
+| Case | 名称 | 覆盖 | 关联问题 |
+|---|---|---|---|
+| case-01 | happy path | 单 req / 2 task / 1 quickfix → close-task → close-req → rewrite → merge main → push | 基线 |
+| case-02 | rewrite-reject-retry | rewrite 中途 PM reject 1 module → 整体 abort → retry → 通过 | §17.3.1 step 4 |
+| case-03 | main-diff-conflict | step 0.5 main 有 modulespec 改动 → 提示 PM 选 (a) pull / (b) 继续 / (c) abort | I-CR16 |
+| **case-04** | req-内连改 | 同 req 内 T1 / T2 先后改同一字段 → rewrite 进 CONFLICT_REFERENCE_MISSING 询问门 | **R-H5** |
+| **case-05** | AI-推断错-anchor | quickfix commit diff 改了 X，AI 推到错 anchor → CONFLICT_AI_PROMPT_FAIL（fixture mock AI 输出错误） | **R-C1 §19.1.4** |
+| **case-06** | sidecar-merge-conflict | 两个并行 req 都改同一 feature → main merge 时触发自定义 merge driver | **R-H4 vp-27** |
+| **case-07** | push-fail-retry | step 5b push 失败 → checkpoint 保留 phase=pre-push → retry 入口直接重 push | **R-C3** |
+| **case-08** | close-report-edit-retry | rewrite 失败 → PM 改 close-report.md → retry 入口 amend close-report commit | **R-H7** |
+
+**vp-18 fixture 实施清单**改：3 fixture → 8 fixture。
+
+**fixture 形态**（吸收 ENG-5.2）：每个 case 用 `setup.sh` + `commit-N.patch` 形式构建 git 仓（不 commit `.git` 进主仓避免 nested repo）。case 目录结构：
+
+```
+tests/fixtures/close-req-rewrite/case-NN/
+├── README.md           # case 描述 + 预期 exit code（happy/conflict）
+├── setup.sh            # git init + sequential apply patches
+├── commit-01.patch
+├── commit-02.patch
+├── ...
+├── expected/           # 预期 final modulespec / sidecar 状态
+│   ├── docs/modules/module-log.md
+│   └── docs/modules/.feature-index.json
+└── run.sh              # 跑 close-req --non-interactive --auto-accept 并 diff expected/
+```
+
+#### 19.6.2 R-H10 — vp-04 拆为 04a / 04b / 04c
+
+**目标位置**：§17.6 改动清单 vp-04（line ~3373）
+
+**修订**：vp-04（close-req.sh 重排）拆分。**vp 编号扩到 27**（原 25 → vp-04 拆 3 → 27；不再加 vp-11/12/14 "维持现状" 那 3 项的话，最终是 24，但保留 vp-11/12/14 标"无关联任务"作显式声明在 §17.0 维持现状块——见 R-M ENG-7.3）：
+
+| vp 编号 | 名称 | 内容 | 估行数 |
+|---|---|---|---|
+| vp-04a | close-req 入口改 — read-only | dirty gate (I-CR10) + step 0.5 main diff 提示 (I-CR16) + retry 入口检测 phase | ~80 行 |
+| vp-04b | close-req mutation 改 | checkpoint 写入 + W4 调用 + retry-from-step-N 分支（pre-rewrite / pre-push） | ~120 行 |
+| vp-04c | close-req 启动期 — stale 二层验证 | I-CR12 cross-req-stale / orphaned 检测 + 一行 audit | ~50 行 |
+
+**注**：vp-04a 不依赖 W4 实现 → 可先做；vp-04b 依赖 vp-03 W4 → 后做；vp-04c 独立 → 任意。
+
+#### 19.6.3 R-H11 — PR 顺序：schema 必先于 merge
+
+**目标位置**：§17.6 末尾 + §17.9 推荐顺序（line ~3437）
+
+**修订**：vp 实施顺序改为：
+
+```
+1. vp-15 (quickfix-log.schema.json)   # schema 先固定（含 §19.1.1 5 字段 summary_hint）
+2. vp-16 (feature-index.schema.json)  # sidecar schema 固定（含 random feature_id 规则）
+3. vp-06 (commit hook lint)           # 强制新 quickfix 走 schema
+4. vp-09 (quick-fix skill 改 5 字段表单 + AI 默认值)
+5. vp-26 (skills/doc-update/prompts/infer-quickfix-patch.md)  # AI 推 patch prompt 子文档（R-C1）
+6. vp-01 (W1 task→module 映射)
+7. vp-02 (W3 merge-modulespec.py 含 CONFLICT_REFERENCE_MISSING + CONFLICT_AI_PROMPT_FAIL)
+8. vp-03 (W4 close-req-rewrite-isolated.sh)
+9. vp-04a (close-req 入口 read-only)
+10. vp-04b (close-req mutation + retry)
+11. vp-04c (close-req stale 二层验证)
+12. vp-27 (scripts/merge-feature-index.py + 框架同步-SOP 加 init 步骤)
+13. vp-08 (doc-update skill 改 rewrite mode)
+14. vp-17 (INVARIANTS 加 I-CR10/11/12/13/15/16 + I-CT2 + I-QF1 + I-W3-PATCH-SOURCE + I-W3-CONFLICT-COUNT)
+15. vp-18 (8 fixture 实施)
+```
+
+**关键约束**：vp-02 merge.py 消费 quickfix-log 的 schema → schema 必须先于 merge.py 落地，否则中间窗口 PM 用旧 quick-fix skill 加新条目 → merge.py 跑就崩。
+
+#### 19.6.4 R-H9-H11 验收
+
+- [ ] §17.5.1 fixture 从 3 → 8 case，含 case-04/05/06/07/08（关联 R-H5/C1/H4/C3/H7）
+- [ ] fixture 形态改 setup.sh + commit-N.patch（不 nested .git）
+- [ ] §17.6 vp-04 拆为 vp-04a/b/c
+- [ ] §17.6 末尾 + §17.9 推荐顺序按 §19.6.3 改写
+
+---
+
+### 19.7 R-H12：新增 P5 AI 准确率 benchmark
+
+**PM 决策**：§18.5 D5-3 选"加 P5"。
+
+**目标位置**：§17.8 pre-flight（line ~3411）—— P4 后新增 P5
+
+**P5 设计**：
+
+```
+### P5（blocker，新增）—— AI 推 patch 准确率 benchmark
+
+**目的**：W7 AI 推 patch（§19.1）是 v3' 最大 unknown unknown。实施前先量化准确率值得 ~4h 工时。
+
+**步骤**：
+1. 从 adminconsole4 已 close 的 req 里收 10 个真实 quickfix（覆盖 add/modify/remove 三类，覆盖单字段/多字段，覆盖中文+英文 anchor）
+2. 手算"正确 patch" 作 ground truth（PM 看 commit diff + summary + 当时 modulespec 自己推；记下推理过程）
+3. 把同样 10 个输入（含 §19.1.1 summary_hint 模拟，AI 推断不依赖 PM 当时填的，而是 PM 现在 retro 一句话）喂 v3' 的 infer-quickfix-patch prompt（vp-26）
+4. AI 输出 patch vs ground truth 双评：
+   - **自动 diff**：JSON 结构 + 字段值精确匹配数
+   - **PM 主观**：op/anchor/字段意图是否对（容忍措辞差异，但 anchor 错位 = 错）
+   - **false-confident 检测**：AI 输出 patch 但语义错且没标 CONFLICT_AI_PROMPT_FAIL → false-confident（最危险路径）
+
+**门槛**：
+- 精确正确 ≥ 8/10 ⇒ pass
+- false-confident = 0 ⇒ pass（任一 false-confident → fail；意味着兜底门也失效）
+- 8/10 不够 / false-confident > 0 ⇒ §19.1 prompt 设计 + summary_hint 字段需要回炉重做
+
+**fallback**：跑 5 次 prompt 调优后仍卡 8/10 ⇒ 退一步—— W7 加 PM 直接填 patch op 字段（不让 AI 推），但保留 summary_hint。PM 视角从 5 字段升 6 字段。
+```
+
+**§17.8 pre-flight 列表**：P1（informational）+ P2（blocker reverse Likert）+ P3（blocker 痛点二次确认）+ P4（blocker 35 秒填表）+ **P5（blocker AI 准确率 ≥8/10 + false-confident=0）** + E1-E4。
+
+**R-H12 验收**：
+- [ ] §17.8 加 P5 节
+- [ ] §17.9 + §18.6 + §19.11 "下一步"全部包含 P5 步骤
+- [ ] adminconsole4 10 个 quickfix 收集清单写到 §19.7 末尾（待 PM 实际跑时填）
+
+---
+
+### 19.8 R-H13：quickfix-log 绕 hook 兜底
+
+**问题回顾**（ENG-H10 / §10.2）：vp-06 commit hook lint 装在 quick-fix commit 时校验。PM 可：
+- `git commit --no-verify` 绕过
+- `git rebase -i` 修改老 commit 跳过 hook
+- 手编辑 .jsonl 文件后 `git add` 重 commit
+
+任一让 lint 失效 → rewrite 时碰到非法条目 → AI 推断喂垃圾 → 不可预期。
+
+**修订**（双层防御）：
+
+#### 19.8.1 第一层 — close-req entry full-log lint gate
+
+**目标位置**：§17.3.2 close-req step 0（dirty gate 旁，line ~3041）
+
+**新逻辑**：
+
+```bash
+# step 0: dirty gate (I-CR10) + quickfix-log full lint
+python scripts/lint-quickfix-log.py --all --schema-version v3.1
+if [ $? -ne 0 ]; then
+  echo "[error] quickfix-log.jsonl 有非法条目 → 修复后重跑 close-req" >&2
+  exit 13
+fi
+```
+
+**新 exit code 13**（加入 §17.10.4 表）。
+
+#### 19.8.2 第二层 — CI lint
+
+**目标位置**：§17.6 末尾新增工作项 vp-28
+
+**新工作项 vp-28**：`scripts/check-quickfix-log.py --all` 在 CI（GitHub Actions / pre-receive hook）跑——拦截 force-push / rebase 后绕过 hook 的污染条目。
+
+#### 19.8.3 R-H13 验收
+
+- [ ] §17.3.2 step 0 加 quickfix-log full lint
+- [ ] 新增 vp-28 CI lint
+- [ ] §17.10.4 exit code 表加 13
+- [ ] §17.7 I-QF1 invariant 扩展："quickfix-log schema 在 commit hook + close-req entry + CI 三层校验"
+
+---
+
+### 19.9 R-H14-H15：W7 字段砍 + PM-facing 文案补完
+
+#### 19.9.1 R-H14 — W7 4 字段 → 3 字段（吸收 DX-1 + DX-2）
+
+**问题回顾**：
+- DX-1：`needs_modulespec_update` 与 `module=null` 语义重叠
+- DX-2：`change_type` 是 merge 工程词汇且 AI 能从 diff 推断
+
+**修订**：
+
+**字段最终态**（v3.1 schema）：
+
+| 字段 | 修订 | 由谁填 |
+|---|---|---|
+| `module` | 保留；`null` = 纯文案不进 rewrite | PM 选 |
+| `feature_anchor` | 保留；module≠null 时必填 | PM 选（AI 从 sidecar 列候选） |
+| ~~`change_type`~~ | **删除**——AI 在 rewrite 时从 diff 推断 op | AI |
+| ~~`needs_modulespec_update`~~ | **删除**——`module=null` 隐含 false；`module≠null` 隐含 true；纯文案 quickfix 让 W3 merge 静默 no-op | — |
+| `summary_hint` | **新增**（R-C1）；module≠null 时必填一句话 | PM |
+
+**最终 W7 schema 3 字段**（不算 schema_version / ts / commit）：`module + feature_anchor + summary_hint`。
+
+**PM 表单流**：
+```
+[quickfix] commit summary "改了 X 的 Y"
+[AI 推] module=module-log（从 task→module 映射），anchor=列表筛选（从 sidecar 列出，AI 选最近的），summary_hint="把 X 的 Y 改成 Z"（从 diff + summary 抽）
+[PM 确认] 回车确认 / 输入 1 改 module / 2 改 anchor / 3 改 summary_hint / 4 选纯文案（module=null）
+```
+
+预算：单 quickfix 表单 ≤ 15 秒（AI 推默认 + PM 微调）+ rewrite 时 confirmation 5 秒 = ≤ 20 秒 / quickfix。**比 §17.8 P4 原 30 秒门更宽裕**。
+
+**注**：本条让 §19.5.3 R-H3（needs 默认 false）作废——字段被砍。
+
+#### 19.9.2 R-H15 — PM-facing 文案 3 处补完
+
+##### 19.9.2.1 询问门接 sidecar 归因（DX-4）
+
+**目标位置**：§17.2.3 询问门示例文案（line ~2961）
+
+**新文案模板**：
+
+```
+[CONFLICT_REFERENCE_MISSING] req=R-2026-012 task=T2 commit=abc123
+模块: module-log
+位置: feature "列表筛选" / 字段 sort_default
+- 期望旧值（你 task 生成 patch 时的 base）: 时间倒序
+- 你的新值: 时间正序
+- 当前 base 值: 时间随机 ← R-2026-007 改的（2026-04-28，"按需排序产品调研"）
+
+PM 选：
+(a) 用你的新值覆盖（忽略 R-2026-007 那次改动）
+(b) 保留 R-2026-007 的"时间随机"（你的 patch 这次不进 rewrite）
+(c) 我自己写一个第三方值: ___
+```
+
+**实现**：W3 merge 在准备询问门 payload 时从 sidecar 读 `last_modified_req` + `last_modified_at` + `last_modified_summary`（W7 `summary_hint` 在 rewrite 时一并写入 sidecar audit 段）。
+
+##### 19.9.2.2 I-CR16 prompt 文案改 PM 视图语言（DX-6）
+
+**目标位置**：§17.5.2 实现脚本 prompt 文案（line ~3326）
+
+**新文案**：
+
+```
+[close-req] 检测到 main 上有 modulespec 改动:
+  docs/modules/module-log.md
+  docs/modules/module-perm.md
+
+这些改动可能与你这个 req 相关。怎么处理？
+
+(a) 先把 main 的改动拉下来一起处理
+    （如果那些改动和本 req 相关，推荐——避免 merge 时撞冲突）
+
+(b) 忽略，继续关闭这个 req
+    （关闭最后一步合并到 main 时如果撞上同一处，你需要手动用 git 工具解一次冲突）
+
+(c) 先暂停，我去看看 main 改了啥
+    （看完心里有数后重新跑 close-req 即可——之前的进度都保留）
+
+选 a/b/c:
+```
+
+##### 19.9.2.3 W4 失败路径 PM-facing 文案（DX-7）
+
+**目标位置**：§17.3.1 W4 实施清单（line ~2989）
+
+**新工作项**：W4 失败路径全部错误信息文案表：
+
+| 失败点 | PM 文案 | temp worktree 状态 |
+|---|---|---|
+| `git worktree add` 失败（路径已存在 / 磁盘满 / 权限） | "无法创建 rewrite 临时工作区: `<error>`。close-req 已安全中止，你的 req 没有任何改动，可直接重跑。" | 未创建 |
+| `git commit` 失败（在 temp worktree 内） | "在 rewrite 临时工作区 commit 失败: `<error>`。临时工作区已自动清理，close-req 已中止；你的 req 没改动可重跑。" | 已 `--force` 清 |
+| `git merge --ff-only` 失败（temp → req） | "rewrite 期间检测到 req worktree 被外部进程改动（可能是 IDE / watchman / 另一 AI session）。请确认无其它进程动 req worktree 后重跑 close-req。临时工作区已清理。" | 已 `--force` 清 |
+| PM reject any module | "你拒绝了 N 个 module 的 rewrite。close-req 已中止，你的 req 没改动；重跑会让你重新审所有 module（v3' 不缓存已 accept 部分，这是简化代价）。" | 已清 |
+
+**AI agent 侧 recover 契约**：所有 W4 失败路径都返回 exit 1 / exit 12（reject）+ stderr 中文 PM 文案 + 不要求 AI agent 重试；AI agent 看到非零 exit → 把 stderr 内容原样转给 PM 并停下。
+
+#### 19.9.3 R-H14-H15 验收
+
+- [ ] W7 schema 砍到 3 字段（module + feature_anchor + summary_hint），删 change_type / needs_modulespec_update
+- [ ] vp-15 schema 同步；vp-09 quick-fix skill 表单同步
+- [ ] §17.2.3 询问门文案接入 sidecar 归因
+- [ ] §17.5.2 I-CR16 文案改 PM 视图语言
+- [ ] §17.3.1 W4 4 个失败点 PM 文案表
+- [ ] §17.6 加工作项 "PM-facing 文案清单"（DX-10 + R-M9）：把 W7 表单 / W3 询问门 / I-CR16 / W4 错误 / W6 audit / non-interactive 提示集中过一遍 MEMORY 禁工程黑话
+
+---
+
+### 19.10 v3'.1 修订汇总（替代 §17.6 / §17.7 / §17.8）
+
+#### 19.10.1 修订 30 项总表
+
+| 编号 | 严重度 | §十七 影响位置 | §十九 详节 | 状态 |
+|---|---|---|---|---|
+| R-C1 | critical | §17.2.3 / §17.4.1 / §17.7 | §19.1 | inline 完 |
+| R-C2 | critical | §17.8 | §19.2 | inline 完 |
+| R-C3 | critical | §17.3.2 / §17.7 | §19.3 | inline 完 |
+| R-C4 | critical | §17.5.2 / §17.10 新 / §17.7 | §19.4 | inline 完 |
+| R-H1 | high | §17.2.2 / §17.7 | §19.5.1 | inline 完 |
+| R-H2 | high | §17.2.2 | §19.5.2 | inline 完 |
+| R-H3 | high | §17.4.1（被 R-H14 覆盖作废）| §19.5.3 | superseded |
+| R-H4 | high | §17.4.2 / 框架同步-SOP | §19.5.4 | inline 完 |
+| R-H5 | high | §17.2.2 / fixture case-04 | §19.5.5 | inline 完 |
+| R-H6 | high | §17.3.1 / §17.3.2 | §19.5.6 | inline 完 |
+| R-H7 | high | §17.3.2 | §19.5.7 | inline 完 |
+| R-H8 | high | §17.6 vp-03 | §19.5.8 | inline 完 |
+| R-H9 | high | §17.5.1 / vp-18 | §19.6.1 | inline 完 |
+| R-H10 | high | §17.6 vp-04 拆 | §19.6.2 | inline 完 |
+| R-H11 | high | §17.6 / §17.9 | §19.6.3 | inline 完 |
+| R-H12 | high | §17.8 + P5 | §19.7 | inline 完 |
+| R-H13 | high | §17.3.2 / §17.6 / §17.7 | §19.8 | inline 完 |
+| R-H14 | high | §17.4.1 / vp-15 / vp-09 | §19.9.1 | inline 完（覆盖 R-H3） |
+| R-H15 | high | §17.2.3 / §17.5.2 / §17.3.1 | §19.9.2 | inline 完 |
+| R-M1 | medium | §17.0 矩阵 | 旁注 | 实施时改 §17.0 矩阵 W8→中 / W1+W2→对 PM 体感 0 |
+| R-M2 | medium | §17.0 末尾 + §17.8 P2 | §19.2.2 | inline 完 |
+| R-M3 | medium | §17.5.2 (b) 描述 | §19.9.2.2 | inline 完（含在 I-CR16 文案改写）|
+| R-M4 | medium | §17.3.1 关键决策 | §19.9.2.3 表 | inline 完（含 reject 整体重审是简化代价说明）|
+| R-M5 | low | §17.7 I-CR14 跳号 | 旁注 | 实施时加 footnote |
+| R-M6 | medium | §17.4.1 表单交互草图 | §19.9.1 | inline 完 |
+| R-M7 | medium | §17.2.3 选项 (c) 提交机制 | 旁注 | 字段级 (c) → 表单敲；anchor 级 (c) → 暂停 PM 手动 retry。实施 vp-02 时定 |
+| R-M8 | medium | §17.3.3 orphaned 提示 | 旁注 | 实施 vp-04c 时加 "上次 reset 过分支这是正常的" 文案 |
+| R-M9 | medium | §17.6 "PM-facing 文案清单" | §19.9.3 | inline 完 |
+| R-M10 | medium 合集 | 散落 | 旁注 | 详 §19.10.4 |
+| (CEO-12) | low | §17.7 I-CR14 footnote | 旁注 | 实施时改 |
+
+**totals**：30 条修订 → 27 条 inline 完 + 1 条 superseded（R-H3）+ 2 条旁注（R-M1 / R-M5 / R-M7 / R-M8 / CEO-12 同类）。
+
+#### 19.10.2 INVARIANTS 表（替代 §17.7）
+
+| 编号 | 含义 |
+|---|---|
+| I-CR10 | close-req 入口 dirty gate：worktree clean + 分支存在 + req branch fork from main valid |
+| I-CR11 | checkpoint phase 枚举：`pre-rewrite` / `pre-push`；step N 失败 = step N-1 checkpoint 恢复点 |
+| I-CR12 | stale 二层验证：cross-req-stale（其它 req 的 checkpoint）→ 静默清；orphaned（HEAD 不可达）→ 给 PM 一行提示 |
+| I-CR13 | close-req 全程在 req worktree；rewrite 在 temp worktree（W4） |
+| I-CR15 | close-req step N 失败 → 回到 step N-1 checkpoint；retry 从 step N 开始；checkpoint 写入边界 = step 1 (pre-rewrite) + step 5a (pre-push) |
+| I-CR16 | step 0.5 main diff 提示：交互模式 PM 三选项 (a/b/c)；非交互模式 fail-safe **exit 9 不 auto-pick** |
+| I-CT2 | close-task 不写 modulespec；task worktree clean + 分支 fork from req branch |
+| I-QF1 | quickfix-log schema 在 commit hook + close-req entry full-log lint + CI 三层校验；> 5 条非法 → 提示 backfill |
+| **I-W3-PATCH-SOURCE** | **AI 生成 patch 只读 base modulespec 填 `expected_old`，不进入 task 产品决策依据** |
+| **I-W3-CONFLICT-COUNT** | **W3 有且只有 2 类 conflict：CONFLICT_REFERENCE_MISSING（anchor/字段层）+ CONFLICT_AI_PROMPT_FAIL（AI 推断层）；防退化回 1 类宣称** |
+
+**砍**：I-CR14（W4 已含 temp worktree 强制清理语义，CEO-12 footnote）
+
+#### 19.10.3 改动清单总表（替代 §17.6 — 27 项 vp）
+
+按 §19.6.3 PR 顺序：
+
+| 顺序 | vp 编号 | 关联 W / R | 内容 | 估行数 |
+|---|---|---|---|---|
+| 1 | vp-15 | W7 | quickfix-log.schema.json v3.1（3 字段 module + feature_anchor + summary_hint） | ~60 |
+| 2 | vp-16 | W8 | feature-index.schema.json（random feature_id 规则） | ~50 |
+| 3 | vp-06 | W7 | commit hook lint-quickfix-log.py | ~80 |
+| 4 | vp-09 | W7 | quick-fix skill 改 3 字段表单 + AI 默认值 | ~100 |
+| 5 | vp-26 | R-C1 | skills/doc-update/prompts/infer-quickfix-patch.md | ~150 |
+| 6 | vp-01 | W1 | task→module 映射脚本 | ~80 |
+| 7 | vp-02 | W3 | merge-modulespec.py（含 2 类 conflict + three-way + sentinel）| ~250 |
+| 8 | vp-03 | W4 | close-req-rewrite-isolated.sh + 显式 add sidecar | ~120 |
+| 9 | vp-04a | R-H10 | close-req 入口 read-only（dirty gate + I-CR16 + retry 检测） | ~80 |
+| 10 | vp-04b | R-H10 / R-C3 / R-H7 | close-req mutation（checkpoint pre-rewrite / pre-push + retry 分支 + close-report amend）| ~150 |
+| 11 | vp-04c | R-H10 | close-req stale 二层验证（I-CR12） | ~50 |
+| 12 | vp-27 | R-H4 | scripts/merge-feature-index.py + 框架同步-SOP init 步骤 + .gitattributes | ~120 |
+| 13 | vp-08 | W7 | doc-update skill rewrite mode（含 AI 推 confirmation + 2 类 conflict 询问门）| ~180 |
+| 14 | vp-28 | R-H13 | scripts/check-quickfix-log.py --all + CI 配置 | ~50 |
+| 15 | vp-17 | R-H1/R-C1 | INVARIANTS 写入 SKILL.md（I-CR10/11/12/13/15/16 + I-CT2 + I-QF1 + I-W3-* 2 条） | ~50 |
+| 16 | vp-18 | W9 | 8 fixture（case-01-08）+ setup.sh + commit-N.patch 形态 | ~600 |
+| 17 | "PM-facing 文案清单" | R-H15 / R-M9 / DX-10 | 集中过一遍禁工程黑话 | ~30 |
+| 18 | §17.10 文档 | R-C4 | close-req 非交互模式契约文档化 | ~80 |
+| 19-20 | §17.0 矩阵 + §17.8 全节 | R-M1/M2 + R-C2 + R-H12 | §17.0 矩阵 W8/W1/W2 调级 + §17.8 P1-P5 改写 | ~50 |
+| 维持现状声明 | vp-11/12/14 | — | task-execute / close-task / req-stage-gate 显式声明"v3' 不改" | ~10 |
+
+**估**：~2280 LOC + 8 fixture。实施估时 30-38h（含 R-C1 prompt 子文档 + R-H4 merge driver）。
+
+#### 19.10.4 medium / low 旁注合集（R-M10 等）
+
+实施时顺手做：
+
+- `merge-modulespec.py` patch 应用前规范化（trim trailing whitespace + 折叠 internal 空白 + 统一换行），单测含 multi-line markdown payload case
+- W6 启动清理扫 `git for-each-ref refs/heads/close-req-rewrite/`（W4 temp branch 孤儿）
+- close-req 入口加 `git rev-parse --is-shallow-repository` 检测，shallow → 拒绝 + 提示 `git fetch --unshallow`
+- quickfix-log 老条目（schema_version 缺）→ lint 视为 v2 → skip lint；新条目严格（R-H13 兼容路径）
+- E2 worktree kill 扩 E2a (kill) / E2b (网络超时) / E2c (并发 worktree touch)
+- vp-11/12/14 task-execute/close-task/req-stage-gate "维持现状" 显式声明
+- I-CT2 注释：W7 AI 读 base 的路径是 `git show <REQ_BASE>:docs/modules/<module>.md`，不是 worktree 当前文件
+- AI prompt injection 文档化"输入 trusted 假设"（PM 单人无 untrusted source）
+- patch idempotent：vp-02 缓存 patch 到 `.runs/close-req-rewrite-patches.json`，retry 复用 + hash 验证
+- §17.5.2 (b) 描述精确化（已在 R-H15 §19.9.2.2 一并改）
+- §17.3.1 reject 1 module → retry 重审 N 是 v3' 简化代价（已在 R-H15 §19.9.2.3 W4 失败表 reject 行说明）
+
+#### 19.10.5 pre-flight（替代 §17.8）
+
+| 阶段 | ID | 类型 | 通过条件 |
+|---|---|---|---|
+| 产品 | P1 | informational | N 分布直方图收集；不当 blocker |
+| 产品 | P2 | blocker | reverse Likert ≥4（旧 vs 新路径，PM 自评，不带分钟数）|
+| 产品 | P3 | blocker | (b) 时延 + (c) 注意力切换两个痛点开放题 PM 主观判定真存在 |
+| 产品 | P4 | blocker | W7 3 字段表单 + AI confirmation ≤ 35 秒 / quickfix |
+| 产品 | **P5** | **blocker** | **AI 推 patch 准确率 10 个真实 quickfix ≥ 8/10 + false-confident = 0** |
+| 工程 | E1 | blocker | merge-modulespec.py 单测 100% pass（含 multi-line / sentinel / 2 类 conflict） |
+| 工程 | E2 | blocker | W4 worktree 故障注入 E2a (kill) + E2b (网络超时) + E2c (并发 touch) 全过 |
+| 工程 | E3 | blocker | 8 fixture（含 case-04-08）全 pass |
+| 工程 | E4 | blocker | sidecar merge driver 在 case-06 跑通 |
+
+---
+
+### 19.11 v3'.1 完成后（round 6 boot 指引）
+
+#### 19.11.1 下一步顺序
+
+1. **PM 拍 §十九**（如需微调按本对话再补）
+2. **跑 round 6 autoplan** 验 v3'.1
+   - focal：§19.1 R-C1 三层防御是否消除 W7 AI 黑盒 / §19.4 R-C4 非交互契约是否够 / §19.7 P5 benchmark 设计是否可执行 / §19.5.4 sidecar (α) 路径在 PM 项目 init 流是否摩擦可接受
+   - degradation 检查：codex CLI 是否恢复（round 5 失败时是 `Missing optional dependency @openai/codex-darwin-arm64`），恢复则跑双 voice，仍失败 tag `[subagent-only]`
+3. round 6 通过 → 跑 **P1-P5 产品层 pre-flight**（特别注意 P5 AI 准确率 benchmark ~4h 工时）
+4. P1-P5 通过 → **E1-E4 工程层 pre-flight**
+5. 全过 → **Phase C 实施**（按 §19.10.3 的 17-20 项 vp + 维持现状声明分 PR）
+6. 任一 pre-flight 失败 → 看具体 fail 项
+   - P1 informational fail 不阻塞
+   - P2/P3 fail → 回 D1 重新锚定，可能 v4
+   - P4 超 35 秒 → §19.1 / §19.9.1 表单设计回炉
+   - P5 < 8/10 → §19.1.2 prompt 调优 5 次仍卡 → fallback W7 加 PM 直接填 op 字段
+   - E1-E4 fail → 具体 vp 修复后重跑
+
+#### 19.11.2 新窗口续接 boot 顺序
+
+如果是新对话窗口续 §十九 后续工作：
+
+1. 读 [`RUNTIME.md`](../../RUNTIME.md) 拿运行时状态
+2. 读本设计稿 **§十八 + §十九**（round 5 结论 + v3'.1 修订；§十四 v3 已废可跳）
+3. 读本节 §19.11 拿下一步顺序
+4. 按"下一步顺序"第 N 步继续
+
+#### 19.11.3 round 6 失败兜底
+
+如果 round 6 仍出 critical → **v4 设计回合**（不再是 inline 修订）：
+- v4 触发条件：CEO/Eng/DX 任一 voice 给"方向不对，需要重做"verdict
+- v4 不触发条件：仅 "工程边界 / 文案 / 字段细节" 类 finding 继续 inline 半轮
+- v4 文档新起 §二十（不再覆盖 §十七 / §十九）
+
+
 
