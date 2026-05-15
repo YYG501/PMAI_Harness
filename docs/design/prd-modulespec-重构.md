@@ -3439,6 +3439,147 @@ fi
 5. 全过 → Phase C 实施（按 §17.6 25 项分 PR；推荐顺序：vp-01/02（W1+W3） → vp-15/16（schema） → vp-03/04（close-req 流程） → vp-08/09（skill 改） → vp-18 fixture → vp-17 INVARIANTS）
 6. 任一 pre-flight 失败 → v4 设计回合
 
+---
 
+## 十八、round 5 autoplan 结论（2026-05-12）
 
+> **状态**：round 5 autoplan 完成（degradation：codex CLI 在本环境失效 → tag `[subagent-only]`，只跑 Claude subagent；Phase 2 design 因无 UI 跳过）。本节是 CEO + Eng + DX 三 voice 评审结论合并。**v3' 详设计 §十七 待 PM 决策修订路径**。
+
+### 18.0 三 voice verdict 合并
+
+| Voice | 总判定 | 关键定性 | 修订估时 |
+|---|---|---|---|
+| **CEO（独立战略）** | wrong-cutting，不是 over-cutting | 方向全对（W3 一类 / sidecar / 单行 main diff），但 W7 把 patch 推断 100% 交给 AI = 回到 round 3 之前"AI 自由心证"老路；P1 没传导 D1 修订 | ~1h 文档微调（8 项 minor tweak） |
+| **Eng（资深工程）** | 当前 70% 完成度，不可直接 ship | 大方向正确，但工程边界（错误恢复 / 非交互 / AI 黑盒 / sidecar 事务性）远没收口；3 critical 卡点 + sidecar 方案可能要 v3.1 设计回合 | ~2-3 天设计修订 + 30-38h 实施（vs 原估 18-20h） |
+| **DX（PM + AI agent 双 dev user）** | 需要修订才能进 Phase C | 方向对，但摩擦从"门数量"转移到"字段语义"和"文案黑话"；4 high + 1 结构缺口（非交互模式契约） | 在 §17.6 增补"PM-facing 文案清单"工作项 |
+
+**三方共识**：v3' 不需要 v4 重做，但必须做半轮 §十七 inline 修订才能进 Phase C。
+
+**三方分歧**：修订深度——CEO 1h vs Eng 2-3 天 + 可能 v3.1。最大分歧在 sidecar 方案（详 §18.2 项 4）。
+
+### 18.1 CEO 评审结论（8 项修订）
+
+CEO 站位：独立战略视角，无 round 1-3 记忆。focal 4 焦点（D1 / W3 / W7 / I-CR16）逐条裁定。
+
+| ID | 严重度 | 位置 | 问题 | 建议 |
+|---|---|---|---|---|
+| CEO-1 | medium | §17.0 矩阵 | W8 sidecar 对 (b)+(c) 痛点贡献评级"高"溢价（diff 干净 5% 是审美收益，不是注意力核心）；W1/W2 对 PM 体感实际 = 0 但矩阵给"中" | 矩阵 W8 降到"中"；明示 W1/W2 = 工程地板对 PM 体感 0 |
+| CEO-2 | medium | §17.0 末尾 / §17.8 P2 | "省 5-15 分钟 / 4-12 小时" 是 D1 之前 token 经济同样陷阱换皮（落到时间数字） | 换"工作流体感 N 个 req 后自评"；P2 break-even 改"reverse Likert：旧路径多打断 + 累 vs 新路径"，不带分钟数 |
+| CEO-3 | **critical** | §17.4.1 | AI 推断 patch 是 v3' 最大隐性 regression（反向打脸"AI 临场判断 pattern 沉淀"memory）；兜底只在 anchor 找不到 / 字段第三值时触发，AI 推错 anchor 到一个真实 anchor 上 → 静默通过 → PM 审 rewrite diff 才发现 | (a) rewrite 时 AI 推完给 PM **一行 confirmation**：`本 quickfix 推断改的是 module-log/列表筛选 的 sort_default，对吗？(y/n/调)`；或 (b) W7 schema 加第 5 字段 `summary_hint`（PM free text 一句话），缩窄 AI 推断空间 |
+| CEO-4 | **critical** | §17.8 P1 | P1 "N=1 占 >70% → reconsider" 标准矛盾 D1（D1 之后 token 经济不是 v3' 目标） | P1 降为 informational data collection，不当 blocker；真正 blocker 是 P2（注意力 break-even）+ P3（痛点二次确认） |
+| CEO-5 | high | §17.2.2 | `expected_old` 来源 = AI 生成 patch 时读 base modulespec → task 在偷偷读 modulespec → 违反"task 不读 modulespec"主流程 | §17.2.2 末尾加 invariant："AI 读 base 只为填 `expected_old`，不进入 task 产品决策依据" |
+| CEO-6 | high | §17.2.2 | `expected_old=null` 语义模糊（"未填" vs "字段当前 = 空"两种语义），AI 实现时 50% 概率踩坑 | 用 `__UNSET__` sentinel 或独立 `present: false` 字段，禁止 null 同时承载两种语义 |
+| CEO-7 | high | §17.4.1 表格 | `needs_modulespec_update` AI 默认 true（module≠null 时），PM 永远改不动默认值 → 字段失效 | (a) AI 默认推 false，PM 显式 opt-in true；或 (b) 直接砍此字段，纯文案 quickfix 让 W3 merge 静默 no-op |
+| CEO-8 | high | §17.4.2 | `feature_id` 仍是 hash（blake2b），既然 sidecar 已存 stable id 还要 hash 算干什么 | 改 `f"f_{counter:06x}"` 或 `secrets.token_hex(6)`，完全脱离 hash（Codex finding #7 没真正吸收） |
+| CEO-9 | medium | §17.5.2 (b) | "继续 close（rewrite 按本 req base，merge 时可能冲突 PM 解）" PM 可能以为后面会自动合上 | 精确化："继续 close，本 req rewrite 按 `$REQ_BASE` 算；step 5 `git merge main` 时 PM 用熟悉 git 工具解冲突" |
+| CEO-10 | medium | §17.3.2 | W4 reject 1 module → 整体 abort → retry 重审 N module 是 PM attention 重复税；§17.3.2 决策没明示这是 v3' 简化代价 | (a) 接受这个代价 + 决策处明示；或 (b) 加 .runs/close-req-accepted-cache 跳过已 accept 的 module |
+| CEO-11 | medium | §17.6 顺序 | vp-02 merge.py 早于 vp-15 schema 实施 | schema 必须最先：`vp-15/16 → vp-01 → vp-02 → vp-03/04 → vp-08/09 → vp-18 → vp-17` |
+| CEO-12 | low | §17.7 | I-CR14 跳号未注释 | 末尾 footnote "I-CR14 砍（W4 已含 temp worktree 强制清理）" |
+
+**注**：CEO 给的 "8 项修订" 实际拆细后是 12 条（critical 2 + high 4 + medium 5 + low 1）。
+
+### 18.2 Eng 评审结论（25 项工程发现 / 10 类）
+
+Eng 站位：senior 工程师，10 个 focal area 逐节挑实施可行性 + 错误恢复 + 边界条件。**总增量估算 ~700 LOC / ~6.5-8.5 task；v3' 18-20h → 实际 30-38h（仍在 v3 估 40-60h 下沿）**。
+
+#### 18.2.1 critical 卡点（3 项 — v3' shippability 三大门槛）
+
+| ID | 位置 | 问题 | 修复 |
+|---|---|---|---|
+| ENG-C1 | §17.3.2 step 5 | `git merge req → main + push` 失败后**半状态**：本地 close-report.md + rewrite + active→closed/ 全 commit 但 push 没发出去；下次 retry 入口检测不到 phase（步骤间无 checkpoint）→ 框架不知"已经在 step 5+" | step 5 前写 phase=`pre-push` checkpoint；push 失败 exit 1 **不**清 checkpoint；入口检测 phase=pre-push → 走 retry 路径从 push 重开；I-CR15 细化到 "step N 失败 = step N-1 checkpoint 恢复" |
+| ENG-C2 | §17.4.1 AI patch 推断 | 完全黑盒：prompt 在哪个 skill / 哪个章节？哪个模型？base_modulespec 整文件还是子串？token 上限？JSON schema？rate limit 失败枚举？目前只说"进 CONFLICT_REFERENCE_MISSING"但 prompt 失败 ≠ 内容冲突 | 加 `skills/doc-update/prompts/infer-quickfix-patch.md` 子文档（prompt 模板 + schema + 失败枚举 + 模型选）；输入只切相关 H3 子段；JSON schema 严格校验失败 → **CONFLICT_AI_PROMPT_FAIL（第 2 类 conflict，承认 W3 不再是真正 1 类）** |
+| ENG-C3 | §17.5.2 | `read -p` 在 CI / fixture（stdin 非 tty）→ EOF → CHOICE="" → fall through 不可控；fixture 03 用 `--non-interactive --auto-accept` flag 但实现里没读 | 检测 `[ -t 0 ]` 非交互 → fail-safe 默认 **(c) abort**，不默认 (b)（继续=静默蒙混）；或读 env `PM_AUTO_CLOSE_REQ=continue|abort`；fixture run.sh 显式设此 env |
+
+#### 18.2.2 high 项（11 项）
+
+| ID | 位置 | 问题 | 修复 / 复杂度 |
+|---|---|---|---|
+| ENG-H1 | §17.2.2 | `expected_old` 生成时机 vs 消费时机的时间差 race：T1+T2 同 req 内连改同字段必进询问门，§17.2.2 措辞暗示"误报"但实际是设计意图 | 措辞明确"req 内同字段连续 modify = 必进询问门"；或 W3 每个 patch 应用前重算 `expected_old = current_state[field]`，patch 退化为 `(op, anchor, new_value)`。+ 1 fixture case-04。~30 LOC + 0.5 task |
+| ENG-H2 | §17.3.1 W4 | `git merge --ff-only` 失败路径未定义；I-CR10 dirty gate 只 gate 入口，step 1-3 期间 IDE / watchman / 其它 AI session touch req worktree 都可能让 ff 失败 | ff 失败归类为 W5 "rewrite 失败"（保留 active/、清 temp、phase=pre-rewrite、PM retry）；~15 LOC + 0.1 task |
+| ENG-H3 | §17.3.2 close-report | retry 时 PM 改了 close-report.md 内容 → 当前流程不知该 amend 还是新 commit | retry 入口 `git diff HEAD -- close-report.md` 非空 → amend 上次（PM 单人 amend 安全）；~15 LOC + 0.2 task |
+| ENG-H4 | §17.4.2 sidecar | **跨分支 merge 必发冲突**：每个 req close 都改 `last_modified_at` 同 key，每对并行 req 必撞 git 文本冲突 | 4 个候选：(a) union driver（JSON 不 line-oriented，可能坏语法）/ (b) 自定义 merge driver `scripts/merge-feature-index.py`（PM 项目要 init）/ **(c) sidecar 不进 git，rewrite 时从 git log 重建**（推荐，sidecar = 缓存非源）/ (d) 只 main 维护（跨 req 不工作）。**与 CEO-8 random ID 耦合**：(c) → feature_id 必须 deterministic（破 CEO random ID）；进 git → random ID OK 但要解决冲突。**两条耦合需要重新设计** |
+| ENG-H5 | §17.4.2 / §17.3.1 step 3 | sidecar 与 modulespec 同 commit 事务性依赖隐式 `git add docs/modules/` 包含点文件 | vp-03 显式 `git add docs/modules/ docs/modules/.feature-index.json` + 注释；~3 LOC + 0.05 task |
+| ENG-H6 | §17.5.1 | **3 fixture 严重不足**：缺 AI patch 推错 anchor / req 内同字段连改 / sidecar merge 冲突 / push-fail retry / close-report 二次编辑 / ff-only 失败 / shallow clone / quickfix-log 老条目 = 8 个高频 case 都没 fixture | 扩到至少 7 fixture（case-04 至 case-10）；每 fixture ≈ 0.3 task → +2 task；**v3' 18-20h 不含这部分，实际 +6h** |
+| ENG-H7 | §17.6 | vp-04 一项塞了 dirty gate + step 0.5 main diff + checkpoint + W4 调用 + retry 入口 + stale 二层验证 = 6 个独立关注点（200-400 行 diff，超 reviewer 注意力极限） | 拆 vp-04a（dirty gate + main diff，read-only）/ vp-04b（checkpoint + W4 + retry，mutation）/ vp-04c（stale 二层验证，启动期）。0 净增 task |
+| ENG-H8 | §17.6 / §17.9 推荐顺序 | vp-02 merge.py 早于 vp-15 schema → 中间窗口 PM 用旧 quick-fix skill 加新条目，schema 不固定 → merge.py 跑就崩 | 顺序改 `vp-15/16 → vp-06 lint hook → vp-09 skill 改 4 字段表单 → vp-01/02 → vp-03/04abc → vp-08 → vp-17 → vp-18`。0 净增 task |
+| ENG-H9 | §17.8 | AI patch 推断准确率没有 pre-flight benchmark，是 v3' 最大 unknown unknown | **新增 P5**：收集 10 个 adminconsole4 真实 quickfix → 手算 ground truth → v3' AI prompt 同输入 → ≥ 8/10 正确 + 0 false-confident 才进 E 阶段；~4h 工时不需要新代码 |
+| ENG-H10 | §10 安全 | quickfix-log.jsonl 可被 `git commit --no-verify` / `git rebase -i` / 手编辑后 add 绕 hook | pre-receive hook（如有 remote）+ close-req entry full-log lint 双层；`scripts/check-quickfix-log.py --all` 在 CI 跑；~15 LOC + 0.2 task |
+| ENG-H11 | §17.6 vp-04 | （并入 H7）| — |
+
+#### 18.2.3 medium / low 项（11 项 — 详 transcript 工程评审）
+
+idempotent AI 输出变体（ENG-1.2，建议 patch 缓存到 .runs/）/ 多行 markdown 字段粒度（ENG-1.3，规范化或粗粒度替换）/ W4 temp branch 孤儿累积（ENG-2.2，W6 启动清理）/ shallow clone 拒绝（ENG-2.4，5 LOC）/ quickfix-log 老条目兼容（ENG-3.2，lint 宽容）/ close-req lint gate（ENG-3.3，10 LOC）/ sidecar PM 手编辑 drift（ENG-4.3，与 H4 合并）/ fixture pre-built `.git` 形态污染（ENG-5.2，改 setup.sh + patch 流）/ origin/main force-push 假设（ENG-6.2，文档化）/ vp-11/12/14 "无关联任务" 稀释复杂度（ENG-7.3，移出 25 项清单）/ I-CT2 与 W7 AI 读 base 路径耦合（ENG-8.2，明确 `git show <REQ_BASE>:`）/ E2 kill 模拟 vs 真实并发（ENG-9.2，扩 E2a/b/c）/ AI prompt injection（ENG-10.3，文档化输入 trusted 假设）
+
+### 18.3 DX 评审结论（10 项 / 4 high + 1 结构缺口）
+
+DX 站位：framework 两类 dev user — PM 单人 + AI agent；剔除 CEO/Eng 已覆盖。
+
+| ID | 严重度 | 位置 | 问题 | 建议 |
+|---|---|---|---|---|
+| DX-1 | high | §17.4.1 | `needs_modulespec_update` 与 `module=null` 语义重叠（同一意图两条表达路径）；AI 默认值规则把两字段绑死 → 实际 `needs` 在 `module≠null` 时几乎没独立信息量 | 合并为单决策树：`module=null` 时表单隐藏 `needs` 字段；PM 每次只做一个判断 |
+| DX-2 | high | §17.4.1 | `change_type: add/modify/remove` 是 merge 函数的工程词汇（违反"PM chat 禁工程黑话"memory）；且 AI 已 git_show diff 完全能推断 add/modify/remove | 由 AI 从 diff 推断，PM 表单去掉；或保留作为 PM 兜底纠错时换 PM 视图措辞（"新功能 / 改了现有功能 / 删功能"）+ 标"AI 已猜 X 不对再改"。**实际表单可砍到 3 字段** |
+| DX-3 | medium | §17.4.1 / vp-09 | W7 "inline 表单"形态未定义（4 个 read -p 顺序问？一次性 4 行让 PM 改？）；AI 推默认值延迟是否阻塞 PM 未说 | 补 W7 表单交互草图（推默认值后 4 行展示 + "回车确认/输入序号改某行"）；明确 AI 推断是否异步（建议先让 PM commit，AI 后台补 metadata）。**否则 P4 ≤30 秒门无从测试** |
+| DX-4 | high | §17.2.3 | 询问门给 PM 的上下文不足：没说"当前 base 值"是哪个 req 改的、为什么改成那样 → PM 没法理性做 a/b/c；W8 sidecar 恰好持 `last_modified_req` 数据源没用上 | 询问门文案接 W8 sidecar，把"当前 base 值"扩成 "当前 base 值：时间随机（R-2026-007 改的，2026-04 ...）" |
+| DX-5 | medium | §17.2.3-4 | 选项 (c) "PM 自己写一个第三方"没定义 PM 怎么"写"（read -p 里敲字符串？anchor 层冲突 (c) 是什么？） | 字段级 (c) → 表单直接敲新值；anchor 级 (c) → 暂停 close-req PM 去手动看 modulespec 再 retry，或砍 anchor 级 (c) 只留 a/b |
+| DX-6 | high | §17.3.2 / §17.5.2 | I-CR16 三选项文案黑话："先合" "rewrite 按本 req base" "merge 时可能冲突 PM 解" PM 看不懂；framework 只甩 `--name-only` 列表，没"要不要紧"的信号 | 文案改 PM 视图语言（详 §18.4 修订模板）；括号里把"重新跑 close-req 即可"等回到流程指引补上 |
+| DX-7 | high | §17.3.1 | W4 worktree 失败 / ff merge 失败错误信息**完全没设计 PM-facing 文案**（"理论上不会发生"不是不设计理由）；AI agent 侧 recover 契约未定义 | §17.3.1 补"W4 失败路径文案"：枚举 worktree add / merge --ff-only / commit 三个失败点，每个一句 PM 能照做的话；明确 temp worktree 每种失败下是否已清理 |
+| DX-8 | medium | §17.3.3 | "一行 audit"对 PM 不透明：自动清理了什么、PM 要不要管没说；orphaned（HEAD 不可达）尤其值得 PM 注意 | 区分两者：cross-req-stale 静默 + audit OK；orphaned 给 PM 一行可见提示（"检测到上次 close-req 检查点指向已不存在提交，已清理 —— 如果你最近 reset 过分支这是正常的"） |
+| DX-9 | medium（**结构缺口**） | §17.5.1 / §17.3 | fixture run.sh 用 `--non-interactive --auto-accept` 但 §十七全篇没定义这两 flag 的行为；W9 fixture 直接依赖 = AI agent dev user 核心接口悬空 | 补一节 "close-req 非交互模式契约"：明确每个 PM 决策门的非交互行为（建议：撞 W3 冲突直接 exit 非零打印冲突，不 auto-pick；`--auto-accept` 只作用于"PM 审 diff accept all"）|
+| DX-10 | low（综合）| §十七全篇 | "门变少但每个门更难答"是否净改善取决于 P4 实测；§十七 9 节里只有 2 处给示例文案且都有黑话问题 | 在 §17.6 增补一项工作项 "PM-facing 文案清单"——把 W7 表单 / W3 询问门 / I-CR16 prompt / W4/W6 错误提示集中过一遍 MEMORY 的"禁工程黑话"规则 |
+
+### 18.4 合并修订清单（去重 + 严重度排序）
+
+**critical（必修，4 项 — 三方共识）**
+
+| 编号 | 引用 | 一句话 | 修订方案（推荐） |
+|---|---|---|---|
+| R-C1 | CEO-3 + ENG-C2 | W7 AI 推 patch = 黑盒 + 无 PM 确认 | 双管齐下：(a) 加 `skills/doc-update/prompts/infer-quickfix-patch.md` 子文档（ENG-C2）+ (b) W7 schema 加第 5 字段 `summary_hint`（PM free text 一句话）+ (c) rewrite 时 AI 推完给 PM 一行 confirmation。承认 W3 不再是真"1 类"，加 CONFLICT_AI_PROMPT_FAIL 第二类 |
+| R-C2 | CEO-4 | §17.8 P1 N 分布矛盾 D1 | P1 降为 informational data collection，不当 blocker；P2/P3 当 blocker |
+| R-C3 | ENG-C1 | W5 step 5 push 失败半状态 | step 5 前写 phase=pre-push checkpoint；push 失败不清；retry 从 push 重开；I-CR15 细化 |
+| R-C4 | ENG-C3 + DX-9 | `read -p` 非交互 = CI/fixture 必废 | `[ -t 0 ]` 检测 → fail-safe (c) abort；新增 §17.x "非交互模式契约"节 |
+
+**high（强烈建议，15 项）**
+
+R-H1 CEO-5 §17.2.2 加 invariant "AI 读 base 只为填 expected_old" / R-H2 CEO-6 expected_old null 改 `__UNSET__` sentinel / R-H3 CEO-7 needs_modulespec_update 默认改 false / R-H4 CEO-8 + ENG-H4 sidecar 方案 + feature_id（**耦合，需独立决策**：要么 sidecar 进 git + custom merge driver + random ID，要么 sidecar build-output + 重建 + deterministic ID）/ R-H5 ENG-H1 expected_old req 内连改语义 + fixture / R-H6 ENG-H2 W4 ff-only 失败归类 W5 路径 / R-H7 ENG-H3 close-report retry amend / R-H8 ENG-H5 vp-03 显式 add sidecar / R-H9 ENG-H6 fixture 3 → 7+ / R-H10 ENG-H7 vp-04 拆 04a/b/c / R-H11 ENG-H8 PR 顺序 schema 先于 merge / R-H12 ENG-H9 新增 P5 AI 准确率 benchmark / R-H13 ENG-H10 quickfix-log 绕 hook 兜底 / R-H14 DX-1 + DX-2 W7 4 字段砍到 3（needs/change_type 重叠或工程词汇）/ R-H15 DX-4 + DX-6 + DX-7 PM-facing 文案补完（询问门接 sidecar 归因 / I-CR16 黑话 / W4 失败文案）
+
+**medium / low（11 项）**
+
+R-M1 CEO-1 §17.0 矩阵 W8 降级 + W1/W2 标 0 / R-M2 CEO-2 §17.0 末尾 + P2 改"工作流体感 N 个 req 自评" / R-M3 CEO-9 §17.5.2 (b) 描述精确化 / R-M4 CEO-10 §17.3.2 明示 reject 1 → retry 重审 N 是 v3' 简化代价 / R-M5 CEO-12 §17.7 I-CR14 footnote / R-M6 DX-3 W7 表单交互草图 / R-M7 DX-5 选项 (c) 提交机制 / R-M8 DX-8 orphaned 给 PM 一行提示 / R-M9 DX-10 §17.6 加 "PM-facing 文案清单" 工作项 / R-M10 ENG medium 项合集（idempotent 缓存 / multi-line 字段 / 孤儿 branch / shallow / 老条目 / lint gate / fixture .git 形态 / force-push 假设 / I-CT2 base 路径 / E2 扩 a/b/c / vp-11/12/14 移出 25 项）
+
+**总合**：4 critical + 15 high + 11 medium/low = 30 条（vs autoplan summary"~33" 接近，差 3 条是 CEO/Eng/DX 重叠去重后的）
+
+### 18.5 Final Gate — PM 决策（2026-05-12 已拍）
+
+**三方共识结论**：v3' 不需要 v4 重做，但 **不可直接进 Phase C 实施**，必须先做半轮 §十七 inline 修订。
+
+#### D5-1 修订范围 → **全做**（R-C1-C4 + R-H1-H15）
+
+PM 拍：4 critical + 15 high 全在 §十九 v3'.1 修订版里做 inline 修订；medium/low 11 项放进 §17.6 改动清单旁注，实施时顺手做。估 6-10h 设计工作。
+
+#### D5-2 sidecar 方案 → **(α) 进 git + random ID + merge driver**
+
+PM 拍：sidecar 进版本控制（保留 source of truth 语义）+ feature_id 用 random（脱离 hash，CEO-8 吸收 Codex finding #7）+ 自定义 `scripts/merge-feature-index.py` merge driver 解决并行 req 冲突（ENG-H4 (b) 路径）。PM 项目要 `git config merge.feature-index.driver` 注册，初始化步骤进 §17.6 + 框架同步-SOP。
+
+#### D5-3 P5 AI 准确率 benchmark → **加 P5**
+
+PM 拍：在 P1-P4 后加 P5 pre-flight，~4h 工时无需写代码；W7 AI 推 patch 是 v3' 最大 unknown unknown，实施前先量化准确率值得。门槛：≥ 8/10 正确 + 0 false-confident 才进 E 阶段。
+
+#### D5-4 round 6 autoplan → **跑**
+
+PM 拍：§十九 v3'.1 修订完后跑 round 6 autoplan 验。本次 round 5 暴露 4 critical 说明 v3→v3' 转换漏了不少边界；半轮修订 30 条幅度不小，第三方验有价值。估 ~3h autoplan。
+
+### 18.6 下一步（按 PM 拍板顺序）
+
+1. **写 §十九 v3'.1 修订版**：4 critical + 15 high 逐条 inline 修订（不是另起设计稿，是补 §十七 各小节边界）；估 6-10h
+2. **跑 round 6 autoplan**：focal 验 v3'.1 是否真补完 §18 30 条；degradation 检查 codex CLI 是否恢复
+3. round 6 通过 → 跑 P1-P5 产品/工程 pre-flight（含新增 P5 AI 准确率 benchmark）
+4. P1-P5 全过 → E1-E4 工程 pre-flight
+5. 全过 → Phase C 实施（按 §17.6 + R-H10/H11 调整后顺序：vp-15/16 schema → vp-06 lint hook → vp-09 skill → vp-01/02 → vp-03/04abc → vp-08 → vp-17 → vp-18 fixture）
+6. 任一 pre-flight 失败 → v4 设计回合（v3.5 失败兜底）
+
+---
+
+## 十九、（待写）v3'.1 修订版
+
+> **占位**：§18.5 PM 决策后填本节。
 
