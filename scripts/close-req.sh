@@ -98,6 +98,35 @@ fi
 
 REQ_BASENAME=$(basename "$REQ_DIR")
 cd "$REQ_WORKTREE"
+REL_ACTIVE="requirements/active/$REQ_BASENAME"
+REL_CLOSED="requirements/closed/$REQ_BASENAME"
+
+# close-req 只允许归档当前 req 目录。req worktree 里如果漂着其他未提交改动，
+# 直接 git add -A 会把无关代码/文档静默带进 main。
+REQ_STATUS=$(git status --porcelain --untracked-files=all 2>/dev/null || true)
+UNRELATED_DIRTY=""
+if [ -n "$REQ_STATUS" ]; then
+  while IFS= read -r line; do
+    [ -n "$line" ] || continue
+    path="${line:3}"
+    case "$path" in
+      *" -> "*) path="${path##* -> }" ;;
+    esac
+    case "$path" in
+      "$REL_ACTIVE"/*) ;;
+      *)
+        UNRELATED_DIRTY="${UNRELATED_DIRTY}${line}"$'\n'
+        ;;
+    esac
+  done <<< "$REQ_STATUS"
+fi
+if [ -n "$UNRELATED_DIRTY" ]; then
+  echo "❌ req worktree 有当前 req 目录外的未提交改动，close-req 不会静默带入 main：" >&2
+  printf "%s" "$UNRELATED_DIRTY" >&2
+  echo "" >&2
+  echo "请先提交、移走或清理这些改动后再运行 close-req。" >&2
+  exit 1
+fi
 
 # 记录 pre-close HEAD：如果后面 merge 失败，把 req 分支 reset 回这个点，避免 req 卡在半关闭状态
 PRE_CLOSE_HEAD=$(git rev-parse HEAD 2>/dev/null)
@@ -108,16 +137,16 @@ fi
 
 # 1a. 在 req worktree 中移动 requirements/active/<req> 到 requirements/closed/<req>
 mkdir -p "$REQ_WORKTREE/requirements/closed"
-if [ -d "$REQ_WORKTREE/requirements/active/$REQ_BASENAME" ]; then
-  git mv "requirements/active/$REQ_BASENAME" "requirements/closed/$REQ_BASENAME" 2>&1 || {
+if [ -d "$REQ_WORKTREE/$REL_ACTIVE" ]; then
+  git mv "$REL_ACTIVE" "$REL_CLOSED" 2>&1 || {
     echo "❌ 在 req worktree 中移动目录失败。请人工检查。" >&2
     exit 1
   }
-  echo "📦 在 req 分支上移动到 closed/: requirements/closed/$REQ_BASENAME"
+  echo "📦 在 req 分支上移动到 closed/: $REL_CLOSED"
 fi
 
 # 1b. 更新 meta 为 closed
-NEW_META="$REQ_WORKTREE/requirements/closed/$REQ_BASENAME/.req-meta.json"
+NEW_META="$REQ_WORKTREE/$REL_CLOSED/.req-meta.json"
 if [ -f "$NEW_META" ]; then
   python3 -c "
 import json
@@ -133,7 +162,7 @@ with open('$NEW_META', 'w') as f:
 fi
 
 # 1c. commit 这些改动到 req 分支
-git add -A
+git add -A -- "$REL_CLOSED"
 if ! git commit -m "close: archive $REQ_ID to closed/" 2>&1; then
   echo "❌ 提交归档改动到 req 分支失败（可能是 git 身份未配置或 hook 拒绝）。" >&2
   exit 1

@@ -101,6 +101,18 @@ test_business_task_contract() {
   pass_test
 }
 
+test_task_templates_use_four_state_machine() {
+  start_test "task templates use current 4-state task status machine"
+
+  _assert_contains "$TASK_TEMPLATE" "合法状态值（4 态）：待执行 / 执行中 / 已完成 / 已废弃" "PM 视图模板 4 态说明" || return
+  _assert_contains "$TASK_TEMPLATE" "| **状态** | 待执行 |" "PM 视图模板默认待执行" || return
+  _assert_missing "$TASK_TEMPLATE" "待确认 / 执行中 / 待验收" "PM 视图模板不含旧 5 态说明" || return
+  _assert_missing "$TASK_ENG_TEMPLATE" "待确认" "工程合同模板不含旧状态 待确认" || return
+  _assert_missing "$TASK_ENG_TEMPLATE" "待验收" "工程合同模板不含旧状态 待验收" || return
+
+  pass_test
+}
+
 # -----------------------------------------------------------------
 # Scenario 2: infrastructure task simplified path
 # -----------------------------------------------------------------
@@ -295,6 +307,7 @@ test_artifact_preview_skill_logic() {
 # -----------------------------------------------------------------
 
 test_business_task_contract
+test_task_templates_use_four_state_machine
 test_infrastructure_task_contract
 test_plan_tasks_diff_prompt
 test_pm_feedback_annotation

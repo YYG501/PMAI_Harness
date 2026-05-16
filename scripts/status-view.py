@@ -232,6 +232,8 @@ def list_tasks(req_dir: Path) -> list[tuple[Path, dict[str, str]]]:
 
     result = []
     for task_file in sorted(tasks_dir.glob("task-*.md")):
+        if task_file.name.endswith(".engineering.md"):
+            continue
         fields = read_task_fields(task_file)
         result.append((task_file, fields))
     return result
@@ -353,7 +355,10 @@ def _iter_summary_tasks(repo_root: Path) -> list[Path]:
     for req_dir in _iter_active_req_dirs(repo_root):
         tasks_dir = req_dir / "tasks"
         if tasks_dir.exists():
-            task_files.extend(sorted(tasks_dir.glob("task-*.md")))
+            task_files.extend(
+                f for f in sorted(tasks_dir.glob("task-*.md"))
+                if not f.name.endswith(".engineering.md")
+            )
     return task_files
 
 

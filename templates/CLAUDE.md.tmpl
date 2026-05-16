@@ -24,7 +24,7 @@
 
 - Req stage 推进/回退：`python3 .claude/scripts/req-transition.py <req-dir> --to <stage> [--rollback]`
 - Task 状态变更：`python3 .claude/scripts/task-transition.py <task-file> --to <status> [--note <text>]`
-- Task 废弃（含清理 worktree+分支）：`python3 .claude/scripts/task-transition.py <task-file> --discard --reason "<一句话>"`（源状态 ∈ {待确认, 执行中, 待验收}；已完成不可——开新 task revert 或 `/cancel-req`）
+- Task 废弃（含清理 worktree+分支）：`python3 .claude/scripts/task-transition.py <task-file> --discard --reason "<一句话>"`（源状态 ∈ {待执行, 执行中}；已完成不可——开新 task revert 或 `/cancel-req`）
 
 Hook 会拦截直接编辑，但 **CLAUDE.md 规则是主要约束，hook 是补充检查**。即使绕过 hook（如通过 Bash），也必须遵守此规则。
 
@@ -47,7 +47,7 @@ PM 想中止 active 的 task：
   - "放弃 task-005"
   - "取消 005"
   - "abort 这个" (task-005 是唯一执行中时, 推断绑定)
-- 主 Claude 识别意图 + 调 task-transition --fail-execution → task 回 待确认
+- 主 Claude 识别意图 + 调 task-transition --fail-execution → task 回 待执行
 - worktree 保留供 PM 检查 dirty diff
 
 ### task 文件真相源 (单窗口 lifecycle 修订)
@@ -102,7 +102,7 @@ Subagent（`Agent` 工具 spawn）是**短命、无状态、独立 context** 的
 | task 文件（task-spec 步骤 8 写完）| 业务 task: `/plan-eng-review` `/plan-design-review` ；基础设施 task: `/plan-eng-review` |
 | task 实现完毕（task-execute 步骤 7）| `/review` ；UI task 加 `/qa` `/design-review` |
 
-PM 跑完任一 review 后报告结论 → AI 调 `task-events.py append --type [plan_]review_completed --tool <name> --result <pass|fail>` 机械记录事件作为审计痕迹（I-RV2）。事件流**不当任何状态机硬 gate**：缺事件不阻止 task-confirm 启动、不阻止「执行中→待验收」转换。
+PM 跑完任一 review 后报告结论 → AI 调 `task-events.py append --type [plan_]review_completed --tool <name> --result <pass|fail>` 机械记录事件作为审计痕迹（I-RV2）。事件流**不当任何状态机硬 gate**：缺事件不阻止 task-confirm 启动、不阻止「执行中→已完成」转换。
 
 **禁止假执行**（I-RV3）：append 事件**只能**在 PM 明确报告 review 结果之后做。AI 不得"先 append 后跑"、不得"跳过 PM 直接 append"、不得凭文档对照模拟出 review 结论。"AI 凭记忆/凭规范文档手工对照来代替 PM 跑 review"是流程违规。
 

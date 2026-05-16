@@ -422,6 +422,42 @@ test_reject_when_cwd_inside_req_worktree() {
   fixture_teardown
 }
 
+test_reject_if_req_worktree_has_unrelated_dirty_changes() {
+  start_test "I-CR11 reject unrelated dirty changes in req worktree"
+  fixture_setup
+
+  req_dir=$(fixture_create_req "req-001" "test" 7)
+  req_wt="$FIXTURE_DIR/.worktrees/req-001-test"
+  mkdir -p "$req_wt/prototypes"
+  echo "leak" > "$req_wt/prototypes/unrelated.txt"
+
+  if (cd "$FIXTURE_DIR" && bash "$CLOSE_REQ" "$req_dir") >/tmp/out.$$ 2>/tmp/err.$$; then
+    _fail "should reject unrelated dirty file instead of committing it"
+    rm -f /tmp/out.$$ /tmp/err.$$
+    fixture_teardown
+    return
+  fi
+
+  if ! grep -q "当前 req 目录外" /tmp/err.$$; then
+    _fail "stderr missing unrelated dirty guidance"
+    cat /tmp/err.$$ >&2
+    rm -f /tmp/out.$$ /tmp/err.$$
+    fixture_teardown
+    return
+  fi
+
+  if git -C "$FIXTURE_DIR" show main:prototypes/unrelated.txt >/dev/null 2>&1; then
+    _fail "unrelated dirty file leaked into main"
+    rm -f /tmp/out.$$ /tmp/err.$$
+    fixture_teardown
+    return
+  fi
+
+  pass_test
+  rm -f /tmp/out.$$ /tmp/err.$$
+  fixture_teardown
+}
+
 # =================================================
 # Run all tests
 # =================================================
@@ -430,6 +466,7 @@ test_reject_if_open_tasks_exist
 test_reject_if_req_branch_missing
 test_reject_if_req_worktree_missing
 test_reject_when_cwd_inside_req_worktree
+test_reject_if_req_worktree_has_unrelated_dirty_changes
 test_reject_on_merge_conflict_no_partial_state
 test_archive_committed_before_merge
 test_happy_path_close_req

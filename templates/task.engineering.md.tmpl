@@ -41,16 +41,16 @@ cursor-agent：实验性，无沙箱，越界保护仅限 worktree 内
 
 | 状态 | 谁行动 | 做什么 |
 |------|--------|--------|
-| `待确认` | orchestrator | 停止，向 PM 展示 task 摘要和验收标准，等 PM 确认。可只读代码（preflight），不得写代码 |
-| `执行中` | suborchestrator | 在 task worktree 中实现 + 自审。读启动前必读文档，实现代码，跑审查工具，修复问题 |
-| `待验收` | orchestrator → PM | 向 PM 呈交：验收地址/证据 + 改动摘要 + 自审结果 + 验收标准对照，等 PM 显式通过/打回 |
+| `待执行` | orchestrator | 等 PM 通过 `/task-confirm` 创建 worktree；可只读代码（preflight），不得写代码 |
+| `执行中` | task window / execution agent | 在 task worktree 中实现 + 自审；呈交和 PM 验收期间仍保持此状态 |
 | `已完成` | — | PM 已通过，不再修改 |
 | `已废弃` | — | PM 决定不做。文件已 `git mv` 到 `tasks/discarded/`，task worktree + 分支已清理 |
 
 **状态转换（受控入口）：**
-`待确认` →(PM 确认)→ `执行中` →(自审通过)→ `待验收` →(PM 通过)→ `已完成`
-PM 打回 → 回到 `执行中`
-`{待确认, 执行中, 待验收}` →(PM 废弃)→ `已废弃`（专用入口 `--discard`，不走 `--to`）
+`待执行` →(PM 在 task 窗口启动 `/task-execute`)→ `执行中` →(PM 通过呈交块)→ `已完成`
+PM 打回 → 保持 `执行中`
+执行失败 / 放弃 manual → `待执行`
+`{待执行, 执行中}` →(PM 废弃)→ `已废弃`（专用入口 `--discard`，不走 `--to`）
 `已完成` 不可废弃（代码已合入 req 分支）；如需撤销，开新 task revert 或 `/cancel-req` 整体取消
 
 **禁止直接编辑 PM 视图文件的状态字段。使用：**

@@ -61,20 +61,15 @@ for s in "${SUITES[@]}"; do
   echo ""
   echo "▶ Running $s"
   echo "─────────────────────────────────────────"
-  if bash "$SCRIPT_DIR/$s"; then
-    # Parse summary line from output
-    out=$(bash "$SCRIPT_DIR/$s" 2>&1)
-    p=$(echo "$out" | awk '/Passed:/ {print $2}' | tail -1)
-    f=$(echo "$out" | awk '/Failed:/ {print $2}' | tail -1)
-    TOTAL_PASS=$((TOTAL_PASS + ${p:-0}))
-    TOTAL_FAIL=$((TOTAL_FAIL + ${f:-0}))
-  else
+  out=$(bash "$SCRIPT_DIR/$s" 2>&1)
+  rc=$?
+  printf "%s\n" "$out"
+  p=$(echo "$out" | awk '/Passed:/ {print $2}' | tail -1)
+  f=$(echo "$out" | awk '/Failed:/ {print $2}' | tail -1)
+  TOTAL_PASS=$((TOTAL_PASS + ${p:-0}))
+  TOTAL_FAIL=$((TOTAL_FAIL + ${f:-0}))
+  if [ "$rc" -ne 0 ]; then
     FAILED_SUITES+=("$s")
-    out=$(bash "$SCRIPT_DIR/$s" 2>&1 || true)
-    p=$(echo "$out" | awk '/Passed:/ {print $2}' | tail -1)
-    f=$(echo "$out" | awk '/Failed:/ {print $2}' | tail -1)
-    TOTAL_PASS=$((TOTAL_PASS + ${p:-0}))
-    TOTAL_FAIL=$((TOTAL_FAIL + ${f:-0}))
   fi
 done
 

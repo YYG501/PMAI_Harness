@@ -171,6 +171,33 @@ test_stage6_all_planned_specced_and_done_claims_all_done() {
   fixture_teardown
 }
 
+test_stage6_v2_engineering_file_not_counted_as_task() {
+  start_test "S-PLAN2b stage 6: v2 engineering companion is not counted as a task"
+  fixture_setup
+
+  req_dir=$(fixture_create_req "req-001" "test" 6)
+  _write_task_plan "req-001-test" \
+    "task-001" "双文件任务"
+  fixture_create_task_v2 "$req_dir" "001" "dualfile" "已完成" "/qa" >/dev/null
+  (cd "$FIXTURE_DIR/.worktrees/req-001-test" && git add -A && git commit -q -m "add v2 task")
+
+  out=$(_run_status "$FIXTURE_DIR")
+  if echo "$out" | grep -q "Engineering"; then
+    _fail "engineering companion should not appear in task status. Output:"
+    echo "$out" >&2
+    fixture_teardown
+    return
+  fi
+  if ! echo "$out" | grep -q "所有 task 已完成"; then
+    _fail "v2 completed task should allow close-req hint. Output:"
+    echo "$out" >&2
+    fixture_teardown
+    return
+  fi
+  pass_test
+  fixture_teardown
+}
+
 test_stage6_no_plan_file_falls_back_to_legacy() {
   start_test "S-PLAN3 stage 6: no task-plan.md → original behavior (all done if specced all done)"
   fixture_setup
@@ -263,6 +290,7 @@ test_status_from_req_worktree
 test_status_from_task_worktree
 test_stage6_partial_spec_does_not_claim_all_done
 test_stage6_all_planned_specced_and_done_claims_all_done
+test_stage6_v2_engineering_file_not_counted_as_task
 test_stage6_no_plan_file_falls_back_to_legacy
 test_stage6_discarded_task_is_excluded_from_pending
 test_stage6_does_not_match_task_id_in_change_log
