@@ -1,0 +1,482 @@
+# modulespec 维护方案 (D13 final)
+
+> **状态**：当前活跃方案，~2h 实施
+> **日期**：2026-05-16
+> **决策路径**：v2 → v3 → v3' → v3'.1 → v3.2 → v3.3 全绕一圈后回到 v2 §12.2 最初方向。各版本历史见 `docs/design/prd-modulespec-重构.md` 归档；v3.3 + autoplan round 6 + ExampleConsumerApp dogfood scan 见 git history (`git log docs/design/modulespec-重写方案.md`)。
+> **前身**：[`prd-modulespec-重构.md`](./prd-modulespec-重构.md) §12（v2 原始方案，本版直接落地）
+
+---
+
+## §0 原始痛点（PM + AI 共写，后续 review **不可反向修改**）
+
+> ⚠️ 任何后续 review / autoplan / dual voice 都**不能**给本节加东西、不能重新定义痛点。
+> 若 review 出现"新发现的痛点" → 走另一个 D-* 设计文档（开新条目），或 PM 主动决策更新 §0 并重置版本号。
+>
+> 模板说明：见 [`_TEMPLATE-design-doc.md`](./_TEMPLATE-design-doc.md) + memory `feedback_design_pain_guard.md`
+
+### §0.1 痛点
+
+每个 task close 都跑一遍 doc-update 把功能清单沉淀进 modulespec.md → **N 次 doc-update × 单次完整成本** = 真实 token 浪费 + PM 时间重复 + AI 工作重复。
+
+PM 原话（2026-05-11，`prd-modulespec-重构.md` §12.1）：
+
+> 不是 modulespec 有陈旧痕迹，而是 **token 浪费**。浪费来源 = N 次 doc-update × 单次完整成本（skill 指令加载 + modulespec 读 + PM 视图读 + AI 推理 + 写回）。
+
+### §0.2 触发场景
+
+| # | 场景 | 实证证据 |
+|---|---|---|
+| 1 | 单 req 多 task 改同一 feature / 同一 modulespec 段 | ExampleConsumerApp req-003 task-002 + task-003 都改 `functions-v4.1.md`（commits `789b964` + `b90dd1e`）|
+| 2 | 前 task 完成后执行后续 task 时发现前 task 产出有问题 → quickfix 或新 task 修改 | req-003 D15 反转（task-003 commit `b90dd1e` "D15 反转沉淀 — module §1A 替换为行点击跳转"）|
+| 3 | task-plan 时本身拆出来的两 task 就是针对同一 module 不同章节 | `[ASSUMED]` — PM 2026-05-16 陈述，未在消费仓挖到具体 commit |
+| 4 | 启动成本累计：即使"无偏差 no-op"也付完整 doc-update 启动成本 | ExampleConsumerApp dogfood scan 2026-05-16：3 req 21 task ≈ 19 次 doc-update SKILL 启动（含 req-002 task-001 "无偏差" no-op 那种）|
+
+### §0.3 根因
+
+`skills/close-task/SKILL.md` Phase 1 步骤 1 默认调 `/doc-update` settlement mode → 每 task 启动一次完整 doc-update SKILL 流程 → **启动成本 × task 数累加**。
+
+启动成本 = SKILL 指令重载 (~K token) + modulespec 全文读 (几千行) + AI 推断 + PM 看 chat 输出。即使 task 偏差表是"无偏差"也付完整成本。
+
+### §0.4 不解决什么（显式列衍生场景 / 假设场景）
+
+| # | 衍生 / 假设场景 | 为什么不在 §0 范围 |
+|---|---|---|
+| 1 | 多 req 并行修改同一 modulespec | PM 单人天然单写者，ExampleConsumerApp 5 月时间窗 0 次撞车 |
+| 2 | v2 重做时整文件 DEPRECATED 路径（req-003 case）| 异常场景 PM 手动决议即可（已在 close-report 留痕），不需固化进 SKILL |
+| 3 | v1+v2 章节杂交 | 是衍生场景；半 close 机制（`--skip-doc-update`）已存在覆盖；不在 §0 核心范围 |
+| 4 | modulespec 字段级精确 patch 保留 PM 措辞神圣度 | GSD 实证整段重写也没事，过虑（dual voice + GSD 参照双重确认）|
+| 5 | close-req 并发锁 / 入口锁 | PM 单人不存在并发场景 |
+| 6 | modulespec frontmatter `last_modified_req` metadata | 解决不了"v2 重做时真相源迁移"问题（req-003 真实需求），属误诊 |
+
+→ **review 中任何 finding 指向以上场景的，默认 DEFER**（除非 PM 显式接受拉进 §0 并重置版本号）
+
+---
+
+---
+
+## §1 方向（D13 v2 §12.2 原文）
+
+```
+stage 6（task 执行期间）
+  ├ task A close → 只 merge + 归档，不写 modulespec
+  ├ task B close → 同上
+  ├ quickfix    → 改原型 / 写结构化 metadata；docs/modules/* 不直接改
+  └ ... 所有 task 完成
+
+stage 7（close-req 内部）
+  └ 必跑 doc-update rewrite mode
+       输入 = 持久 modulespec + 本 req 所有 task PM 视图 + quickfix metadata
+       按模块聚合 → 整段 rewrite docs/modules/<module>.md
+       PM 审 diff（逐章节）
+```
+
+**N 次合并成 1 次**：close-task 不动 modulespec，等 close-req 末统一 rewrite。
+
+---
+
+## §2 关键问题与答案
+
+### Q：同 req 内后续 task 读到未更新的 modulespec，会不会设计时误解？
+
+**A：不会**（部分被现有机制覆盖）。
+
+`skills/task-execute/SKILL.md:290` 步骤 2.1 已经实现：
+
+> 同模块已完成 task 的 PM 视图 + 工程合同（**两文件都读**，复用经验、避免重复）
+
+→ 后续 task 不只读旧 modulespec，**还读同模块前面 task 的 PM 视图（含功能清单 + 业务偏差表）**。前 task 改了什么会自动落进后续 task 的视野。
+
+→ 不需要新建 overlay 文件 / patch JSON / sidecar JSON 等中间表达。
+
+### Q：如果 PM 想在 task close 时立刻看到 modulespec 怎么变（incremental sediment small-batch feedback）？
+
+**A：等 close-req 末统一看，不留逃生舱**。
+
+理由：ExampleConsumerApp 实证 5 月时间窗里 PM 0 次"task close 时想立刻看 sediment"场景；保留 override flag (`--doc-update-now`) 是"以防万一"的过度设计 → 代码维护两条路径 + §2/§4 措辞冲突。删 override 后实现路径唯一，文档自洽。
+
+哪天真需要"立刻看"再加回来不迟（参考 [[ai-临场判断要-pattern-沉淀-不要机械化]]：YAGNI 直到实证触发）。
+
+---
+
+## §3 改 2 件事（vp-1 / vp-2 / vp-3）
+
+| vp | 改什么 | 估时 |
+|---|---|---|
+| vp-1 | `skills/close-task/SKILL.md`：Phase 1 步骤 1 改成"不调 doc-update（永久；删 `--skip-doc-update` flag 整套 + 不加 `--doc-update-now` override）"，保留步骤 0 task md ↔ 原型对齐（polish-3） | 0.5h |
+| vp-2 | `skills/close-req/SKILL.md` 步骤 1.5：触发条件从"≥2 SKIP marker"改为"任何 task 关闭都默认聚合 rewrite"，单 task req 也调 doc-update rewrite mode；保留 PM 决议三选项 (rewrite/patch/skip)，默认 rewrite | 0.5h |
+| vp-3 | 测试 + 文档同步（D13 v2 §12.3 砍掉机制清单，见 §5）| 1h |
+| **总** | | **~2h** |
+
+`skills/task-execute/SKILL.md:290` overlay 读取**不需要新做**（已实现）。
+
+---
+
+## §4 砍掉的机制（沿用 v2 §12.3）
+
+| 机制 | 位置 | 砍掉影响 |
+|---|---|---|
+| settlement mode | `skills/doc-update/SKILL.md` §1.7 | doc-update 不再被 close-task 调用 |
+| 对账模式 | `skills/doc-update/SKILL.md` §1.5 / §1.6 | task close 时不再做行级对账 |
+| 半关闭机制 | `skills/close-task/SKILL.md` `--skip-doc-update` flag | 整套砍（flag + reason + SKIP marker + cleanup_status + 人工 TODO 写入逻辑）|
+| req-stage-gate 半关闭检测 | `skills/req-stage-gate/SKILL.md:308-344` | 简化 stage 6→7 gate 为"所有 task 已完成 + merged + worktree cleaned" |
+| close-task 调 doc-update | `skills/close-task/SKILL.md` 步骤 2 | 直接 merge + 归档 |
+| doc-update §0.5 沉淀风险判断 | `skills/doc-update/SKILL.md` | settlement 砍后无意义 |
+
+doc-update 保留：
+- **§8 rewrite mode** —— 升为 close-req 默认调用路径
+- **§1.7.3 多模块 atomic merge** —— rewrite mode 也依赖
+
+---
+
+## §5 实证支撑（ExampleConsumerApp dogfood, 2026-05-16 扫）
+
+| req | task 数 | 真跑 sediment | 撞同 modulespec | 真重复 patch |
+|---|---|---|---|---|
+| req-001 | 2 | 2（T1/T2）| NO（不同文件）| 0 |
+| req-002 | 2 | 1（T1 无偏差 no-op）| YES 但 T1 没事干 | 0 |
+| req-003 | 5 | 3（T1/T2 走 SKIP，T3/T4/T5 sediment）| T2+T3 撞同文件，T2 SKIP 了 | 几乎无 |
+
+虽然真重复 patch 频率比 PM 原话夸张程度低，但**启动成本累计是真的**：
+- 3 req 共 21 task → 至少 ~19 次 doc-update 启动（不算 SKIP 那 2 次）
+- 每次启动 = SKILL 指令几 K token + modulespec 全文几千行 + AI 推 + PM 看 chat 输出
+- 即使是"无偏差 no-op"也付完整启动成本
+
+**v2 §12.2 方向直接打掉这 ~19 次启动 → 合并成 3 次（每 req close 1 次 rewrite）**。
+
+---
+
+## §6 决策路径（绕一圈的教训）
+
+| 版本 | 估时 | 关键问题 |
+|---|---|---|
+| v1 | — | 推倒 |
+| v2 §12.2 | ~2h（本版回归） | 最简正解 |
+| v3 §十四 | 14-21h | round 3 autoplan 给 v2 加 V1-V16 任务清单（V17/quickfix/多 req 并行新维度），漂移 |
+| v3' §十七 | 9-10h | 砍到 MVP outline |
+| v3'.1 §十九 | 30-38h | round 5 autoplan 加 30 修订项（merge driver / feature_id / sidecar JSON / 三方字段 patch + sentinel），暴胀 |
+| v3.2 | 12-15h | PM 根因质疑 → 砍并发机制，但仍保留 patch JSON / uniqueness 校验等 |
+| v3.3 | 3-4h | 发现 doc-update SKILL 已实现 80%，缩到 vp-A/B/C/D，但 vp-B 仓库已实现、vp-C/D 缺实证 |
+| **D13 final（本版）** | **~2h** | 回归 v2 §12.2 原始 outline；vp-3 测试 + 文档同步 |
+
+**根因教训**：
+
+1. autoplan 评审 agent 默认不读现有 SKILL 实现，会持续给设计加东西。前 5 轮 autoplan 全部漂移。第 6 轮在 prompt 强制 pre-read SKILL 后 Codex 自己 grep 抓出 vp-B 已实现，证明这个 pattern 是关键。
+2. PM 根因质疑（"难道不是因为 X 吗" / "这个情况很特殊不要当真相"）是回归正确方向的最快路径，比任何 review 都管用。
+3. v2 §12.2 最初 outline 已经够了。中间所有版本的"新发现"（v1+v2 杂交 / 并行并发 / 多 req 锁 / 整文件 DEPRECATED）要么是衍生场景，要么是特例，**不在 PM 原始痛点核心**。
+
+---
+
+## §7 实施顺序
+
+1. **vp-1 先**（close-task SKILL 改默认）—— 与 close-req 解耦，可独立测
+2. **vp-2 跟上**（close-req SKILL 触发条件调整）
+3. **vp-3 收尾**（测试 + 文档同步 + 砍机制清单）
+
+完成后跑一遍真实 req（ExampleConsumerApp 下次 req 或本仓自己的 req），验证：
+- close-task 不再触发 doc-update（token 节省可观测）
+- close-req 末走 rewrite mode（PM 一次审完整段 diff）
+- task-execute 读 overlay（SKILL.md:290 行为不变）
+
+---
+
+**End of D13 final 方案**
+
+---
+
+## §X Review Findings — /autoplan Round 7 (2026-05-16, §0 痛点锁机制首次实战)
+
+> **新机制实战结果**：Round 6 strong HOLD → Round 7 **minor adjust**。dual voice 高度 consensus，0 个 finding 试图重新定义 §0 痛点，0 个 finding 提议把 §0.4 拉回 scope，0 个 finding 加新 vp。所有 ACCEPT 都是 vp-3 内部 polish。
+
+### CODEX SAYS (CEO — strategy challenge)
+
+| # | Severity | Finding | PAIN_LINK | EVIDENCE | 决议 |
+|---|---|---|---|---|---|
+| 1 | High | vp-2 砍 SKIP marker 后，现有 close-req 步骤 1.5 marker-only 输入 → 无扫描对象。需改输入源为"遍历所有已关闭 task PM 视图 + engineering，按所属模块/章节/偏差表聚合" | §0.2.4 | `close-req/SKILL.md:98-132` marker-only + §3 vp-2 + §4 砍 marker | ACCEPT |
+| 2 | High | doc-update §8 trigger contract 仍绑定"≥2 SKIP marker + cleanup_status 改 done"，close-req 默认 rewrite 后需同步改 §8 为 "req-level aggregation mode"，支持 1 个或 N 个 task、无 marker | §0.2.1 + §0.2.2 | `doc-update/SKILL.md:348-363` | ACCEPT |
+| 3 | Medium | vp-1 文案"只 merge + 归档"易误删 close-task 步骤 0 的 task md ↔ 原型对齐；§2 Q1 的安全性正依赖后续 task 读取前 task PM 视图。保留步骤 0，只移除默认 doc-update | §0.2.2 | `close-task/SKILL.md:101-187` + `task-execute/SKILL.md:280-300` | ACCEPT |
+| 4 | Medium | close-req 步骤 2a PRD 覆盖度算法 (`COVERAGE_COMMITS >= TASK_COUNT`) 假设 per-task doc-update commits，改成每 req 一次 rewrite 后会失真，可能重新制造 close 阶段重复写 PRD | §0.2.4 | `close-req/SKILL.md:136-160` per-task 覆盖判断 | ACCEPT |
+| 5 | Medium | §2 保留 `--doc-update-now` override，§4 又写"settlement mode 砍掉"——实现口径冲突。PM 二选一 | NONE | §2:91-95 vs §4:116-117 自相矛盾 | PM_DECIDE |
+| 6 | Low | 不需要为了 close-req 默认 rewrite 追加并发锁 / frontmatter metadata / sidecar JSON / 字段级 patch（§0.4 已显式列） | §0.4.4 / §0.4.5 / §0.4.6 | ASSUMED — 当前方案未加 | DEFER |
+
+**Codex bottom line**: minor adjust（方向可继续，先补 close-req/doc-update 新输入契约再动代码）
+
+### CLAUDE SUBAGENT (CEO — strategic independence)
+
+| # | Severity | Finding | PAIN_LINK | EVIDENCE | 决议 |
+|---|---|---|---|---|---|
+| F1 | Medium | vp-2 触发条件"任何 task 关闭都聚合 rewrite"，但 SKIP marker 是 `--skip-doc-update` 时才写；vp-1 默认不调 doc-update 后根本没人写 SKIP marker → step 1.5 marker 扫描会扫到 0。需换"按 tasks/*.md 列表 + module 字段聚合" | §0.2 (执行机制 gap) | `close-req/SKILL.md:97-103` + `close-task/SKILL.md:78-97` | ACCEPT（vp-2 描述需明确）|
+| F2 | High | doc-update §8 rewrite trigger 文档未同步 vp-2 改动，会出现 close-req 想调但 §8 自检"为啥 0 个 SKIP marker"的失配 | §0.2 | `doc-update/SKILL.md:348-350` | ACCEPT（vp-3 含 §8 trigger 改写）|
+| F3 | Medium | vp-1 砍 close-task 步骤 1 调 doc-update，但 doc-update §0.5 和"对账模式" 仍是 task 实证发现项目级文档（brief/solution/prd）需修订的入口。§4 措辞"§0.5 settlement 砍后无意义"只在 settlement context 下成立，对账模式仍需类似判断 | §0.2 | `doc-update/SKILL.md:12-14` + §4 措辞含糊 | ACCEPT（vp-3 说明对账模式保留）|
+| F4 | Low | §2 Q1 答案依赖 task-execute SKILL.md:290。跨 req 边界情况未覆盖 — 下游 req 的 task-execute 不会读上游 req 已 close 的 task PM 视图（已归档），只能读 module spec。close-req 末统一 rewrite 后 gap 自动消失。仅风险标注 | NONE | `task-execute/SKILL.md:290` verified | DEFER（close-req 末 rewrite 后无 gap）|
+| F5 | Low | `--doc-update-now` override 增加 PM 心智负担，但 §0.1 是 token 浪费，override 是小众场景。是否保留 | NONE | §2 Q2 | PM_DECIDE |
+| F6 | Low | §5 实证表显示 PM 痛点定量上**主要是启动成本累计**（19 次→3 次），不是重复 patch。方案已诚实承认 | §0.2.4 | §5 实证表 | ACCEPT（已诚实标注，无需改）|
+
+**Claude subagent bottom line**: minor adjust → ship（vp-3 文档同步阶段补 2 件具体事：F1+F2 + F3，不增加新 vp，不破坏 ~2h 估时）
+
+### CEO DUAL VOICES — CONSENSUS TABLE (Round 7)
+
+```
+═══════════════════════════════════════════════════════════════════════════
+  Dimension                              Claude  Codex  Consensus
+  ──────────────────────────────────────  ───────  ──────  ─────────
+  1. §0 痛点定义合理?                     ✓       ✓      CONFIRMED (不挑战)
+  2. §0.4 排除列表合理?                   ✓       ✓      CONFIRMED (不拉回)
+  3. §1 方向 (D13 v2 §12.2) 正确?         ✓       ✓      CONFIRMED
+  4. 实施清单 (vp-1/2/3) 完整?            ⚠️       ⚠️      CONFIRMED 需要 vp-3 polish
+  5. 砍机制清单 (§4) 合理?                ⚠️       ⚠️      CONFIRMED 对账模式不要误砍
+  6. 估时 ~2h 现实?                       ✓       ✓      CONFIRMED (polish 在 vp-3 范围内)
+═══════════════════════════════════════════════════════════════════════════
+两 voice 6/6 维度强 CONSENSUS：minor adjust → ship
+0 个 finding 重新定义痛点 / 拉回 §0.4 / 加新 vp / 加复杂度
+所有 ACCEPT 都是 vp-3 内部文档 polish（不破坏估时）
+```
+
+### vp-3 Polish 落地清单（来自 dual voice 5 项共识）
+
+实施 vp-3 时必须落地以下 5 项（不增加 vp 数量，~1h 内完成）：
+
+| # | 来源 | 改什么 |
+|---|---|---|
+| polish-1 | Codex F1 + Claude F1 | close-req 步骤 1.5 输入源：marker 扫描 → "遍历 tasks/*.md 按 module 字段聚合" |
+| polish-2 | Codex F2 + Claude F2 | doc-update SKILL.md §8 trigger 描述：去掉"≥2 SKIP marker"前置，改为"close-req 默认调用的 req-level aggregation mode" |
+| polish-3 | Codex F3 + Claude F3 | 明确"对账模式保留" + close-task 步骤 0 task md ↔ 原型对齐保留 + vp-1 只移除默认 doc-update 调用 |
+| polish-4 | Codex F4 | close-req 步骤 2a 覆盖度 metric 口径：从 per-task commits → "本次 close-req rewrite 已覆盖的目标文档/模块" |
+| polish-5 | ~~Codex F5 + Claude F5~~ | **PM 已决：删 override**（2026-05-16）。§2 Q2 已改"等 close-req 末统一看，不留逃生舱"；vp-1 描述同步 |
+
+---
+
+## §Y 决议日志
+
+| 日期 | 决议 | 影响 |
+|---|---|---|
+| 2026-05-16 | Round 7 dual voice minor adjust → vp-3 内补 5 项 polish | 估时不变 ~2h |
+| 2026-05-16 | polish-5：PM 决定**删 override**（实证 0 次需求 + YAGNI）| §2 Q2 + vp-1 描述已同步 |
+
+---
+
+## §0 痛点锁机制实战验证
+
+**Round 6 vs Round 7 对比**（同一仓库，同一方案文档，同 dual voice 模型）：
+
+| 维度 | Round 6（无 §0 锁）| Round 7（§0 锁 + PAIN_LINK filter）|
+|---|---|---|
+| Finding 总数 | 6 (Claude) + 7 (Codex) = 13 | 6 (Claude) + 6 (Codex) = 12 |
+| Critical/High finding | 4 critical/high | 0 critical / 2 high (全是 vp-3 polish) |
+| ACCEPT 数 | 全部 — 需加 N 个 vp | 5 polish 项（无新 vp）|
+| DEFER 数 | 几乎 0 | 4 项（含 §0.4 + ASSUMED + 跨 req 边界 OK 这种）|
+| Bottom line | **HOLD**（pre-dogfood 先）| **minor adjust → ship** |
+| PM 心智成本 | 高（要决策 6 选项 / 重新评估方向）| 低（5 个 polish 项明确含在 vp-3）|
+| 评审 ROI | 拉回原始方向（绕一圈完成）| 直接挖出 5 个真实执行 gap |
+
+→ **§0 痛点锁机制 + PAIN_LINK filter + EVIDENCE 字段**首次实战**显著有效**。
+
+→ 教训沉淀已在 `memory/feedback_design_pain_guard.md`，下次新 D-* 设计任务起手自动生效。
+
+---
+
+---
+
+## §X.2 Eng Phase Dual Voices (Round 7, 2026-05-16)
+
+### CODEX SAYS (Eng — architecture challenge)
+
+| # | Severity | Finding | PAIN_LINK | EVIDENCE | 决议 |
+|---|---|---|---|---|---|
+| E-Codex-1 | High | vp-1 只改 SKILL 文案不够：`scripts/close-task.sh:63-94` 仍然在脚本层二次检查文档偏差，有偏差就要求先 `/doc-update` → N 次启动成本回来。vp-1 必须同步删除脚本层文档偏差阻塞检查 | §0.2.4 | `skills/close-task/SKILL.md:366-370` + `scripts/close-task.sh:63-94` | ACCEPT |
+| E-Codex-2 | High | vp-2 新输入源不能只写"按 module 字段聚合 tasks/*.md"，必须同时读 PM 视图主文件 + `.engineering.md` + 业务层偏差表 + 工程合同 §10，否则工程层偏差和 DESIGN/CONTEXT/solution 等非 modulespec 偏差会丢 | §0.2.2 | 方案 §X polish-1 vs `skills/doc-update/SKILL.md:132-139` + `skills/close-req/SKILL.md:106-112` | ACCEPT |
+| E-Codex-3 | High | `quick-fix metadata` 在方案 §1 是 rewrite 输入的一部分，但 vp-2 / polish-1 没写**怎么收集**。后 task/quickfix 改前 task 是 §0.2.2 锁定场景，不纳入聚合会漏关键事实源 | §0.2.2 | 方案 §1 line 63-69 + `skills/quick-fix/SKILL.md:152-157,189-202` | ACCEPT |
+| E-Codex-4 | Medium | close-report 现在在 close-req 步骤 1 先写，rewrite 在步骤 1.5 之后才发生 → close-report `## 文档变更`段会漏 rewrite 产生的 docs/modules 变更。vp-2 需规定 close-report 延后到 rewrite 后 OR step 1.5 后回填 | §0.2.4 | `skills/close-req/SKILL.md:54-82` vs `92-126` | ACCEPT |
+| E-Codex-5 | Medium | 测试牵连要列明确删/改清单：`test-close-task.sh:660-765` A1 组 / `test-req-stage-gate.sh:167-187` half-close 组 / `e2e/test-skip-doc-update-recovery.sh` 整文件 / `test-doc-update.sh:28-54` settlement / `e2e/test-full-task-loop.sh:117-118` settlement 断言 | §0.2.4 | 5 个测试文件具体行号 | ACCEPT |
+| E-Codex-6 | Medium | doc-update §8 不能只改 trigger，还要改**输出/副作用契约**：去掉 marker cleanup，改成"按目标文档产出 rewrite diff + 返回覆盖目标文档/模块清单"。这个返回值正好供 close-req step 2a 替代 `COVERAGE_COMMITS/SKIP_PENDING` | §0.2.4 | `skills/doc-update/SKILL.md:348-363` + `skills/close-req/SKILL.md:136-160` | ACCEPT |
+
+**Codex Eng bottom line**: minor adjust，能进实施。风险不在方向，在接力契约（无 marker / 无 per-task doc-update 后的输入源、输出源、测试删除面）。
+
+### CLAUDE SUBAGENT (Eng — independent review)
+
+| # | Severity | Finding | PAIN_LINK | EVIDENCE | 决议 |
+|---|---|---|---|---|---|
+| E-Claude-1 | High | 测试同步必须显式：`test-close-task.sh:660-674` + `e2e/test-skip-doc-update-recovery.sh` + `test-req-stage-gate.sh:67,109,168` + `run-all.sh:51` 全套要 delete/edit | §0.2.4 | 4 个测试文件具体行号 | ACCEPT |
+| E-Claude-2 | High | `req-stage-gate/SKILL.md:300-344` C2 half-close detection 阻塞推进 → vp-3 必须落到具体行号删 C2 整段 + 简化 verify 列表 | §0.2.4 | `req-stage-gate/SKILL.md` Stage 6→7 step 2 C2 + 方案 §4 表第 4 行 | ACCEPT |
+| E-Claude-3 | High | doc-update §0.5 沉淀风险判断 `exit 1` 提议 PM 走 `--skip-doc-update`（line 107-113），flag 砍后此分支不存在 → SKILL 内部矛盾。整段 §0.5 需删/改 | §0.2.1 | `doc-update/SKILL.md:95-115` | ACCEPT |
+| E-Claude-4 | Medium | vp-1/vp-2/vp-3 接力契约缺 close-req → doc-update 调用签名定义。close-req step 1.5 按"任何 task 关闭都聚合"调，但 doc-update §8 输入清单仍写"多个 task 的 SKIP marker reason" | §0.2.1 + §0.2.2 | `close-req/SKILL.md:97-132` + `doc-update/SKILL.md:348-376` | ACCEPT |
+| E-Claude-5 | Medium | close-req step 1.5 表保留 patch / skip 决议，skip 分支写 `DEFERRED_TO_REQ` 备注 → 砍 SKIP marker 后这条 inter-req 推迟路径会成新的半 close。vp-3 须明确：砍 skip 分支只留 rewrite/patch，或定义新 deferred 表达 | §0.2.2 | `close-req/SKILL.md:104,118-120,124` | PM_DECIDE |
+| E-Claude-6 | Low | `test-doc-update.sh:115` + `test-task-spec.sh:122` 注释指向 SKIP flag 历史标记，删 flag 后同步删/改。纯文档卫生 | NONE | 2 个测试文件 line 115/122 | DEFER |
+| E-Claude-7 | Medium | `close-task/SKILL.md` 步骤 1 / 步骤 2.1（line 191-206 + 287）仍把"检查文档偏差"称为默认核心动作。vp-1 改后步骤 1 调 doc-update 行为消失，但**条件触发的对账（PM 视图历史档案有偏差时）保留还是统一推到 close-req**？方案 §3 vp-1 没明确 | §0.2.1 | `close-task/SKILL.md:191-206,287` + 方案 §3 vp-1 | PM_DECIDE |
+
+**Claude Eng bottom line**: minor adjust → ship。vp-3 必须从 "5 项 polish 文档同步" 扩到 **5 polish + 3 个 hard 实施项**（E-Claude-1 测试删除 + E-Claude-2 req-stage-gate C2 删 + E-Claude-3 doc-update §0.5 同步）。估时 ~2h → **2.5-3h**。
+
+### ENG DUAL VOICES — CONSENSUS TABLE (Round 7)
+
+```
+═══════════════════════════════════════════════════════════════════════════
+  Dimension                              Claude  Codex  Consensus
+  ──────────────────────────────────────  ───────  ──────  ─────────
+  1. SKILL 文档改动可行?                  ✓       ✓      CONFIRMED
+  2. 脚本层 (close-task.sh) 同步?          —       ⚠️      Codex 独家 — 关键 gap
+  3. 测试删除清单完整?                    ⚠️       ⚠️      CONFIRMED 共识
+  4. 接力契约清晰?                        ⚠️       ⚠️      CONFIRMED 需补
+  5. doc-update §8 改造 (trigger+输出契约)? ⚠️       ⚠️      CONFIRMED
+  6. quick-fix metadata 收集路径?         —       ⚠️      Codex 独家 — §0.2.2 漏
+  7. req-stage-gate C2 同步?              ⚠️       —      Claude 独家 — §4 漏行号
+  8. doc-update §0.5 内部矛盾?            ⚠️       —      Claude 独家 — flag 砍后悬空
+═══════════════════════════════════════════════════════════════════════════
+两 voice 8/8 维度全部捕获关键 gap（独家覆盖互补）
+Bottom line consensus: minor adjust → ship
+0 finding 重新定义 §0 / 拉回 §0.4 / 加新 vp / 加复杂度
+所有 ACCEPT 都是 vp-3 内部 polish + 实施 gap 补齐
+```
+
+### vp-3 Polish 扩展清单（CEO 5 项 + Eng 6 项 + 共识 2 项整合）
+
+| # | 来源 | 改什么 | 类型 |
+|---|---|---|---|
+| polish-1 | CEO Codex+Claude F1 + Eng Claude E2 | close-req 步骤 1.5 输入源：marker 扫描 → 按 module 字段聚合 tasks/*.md | doc + impl |
+| polish-2 | CEO Codex F2 + Eng Codex E6 | doc-update §8 trigger 描述去 "≥2 SKIP marker"; **同步改输出契约**："返回 rewrite diff + 覆盖目标文档/模块清单" | doc + impl |
+| polish-3 | CEO Codex F3 + Eng Claude E7 | 保留 close-task 步骤 0 task↔原型对齐 + 对账模式；明确"条件触发对账"何去何从（PM_DECIDE）| doc + PM_DECIDE |
+| polish-4 | CEO Codex F4 + Eng Codex E6 | close-req 步骤 2a PRD 覆盖度 metric：用 §8 返回的覆盖清单替代 `COVERAGE_COMMITS/SKIP_PENDING` | doc + impl |
+| polish-5 | ~~PM 已决~~ | ~~删 override~~ | DONE |
+| polish-6 | Eng Codex E1 | **`scripts/close-task.sh:63-94` 同步删脚本层文档偏差阻塞检查**（关键 gap，SKILL 改了不动脚本 = 失败）| impl HARD |
+| polish-7 | Eng Codex E2 | vp-2 输入源同时读 PM 视图主文件 + `.engineering.md` + 业务层偏差表 + 工程合同 §10（不只 module 字段） | doc + impl |
+| polish-8 | Eng Codex E3 | quick-fix metadata 收集机制：从 `tmp-quick-*` worktree commit message 或 `[quick-fix]` 关键字 grep 出 → 聚合进 rewrite 输入 | impl |
+| polish-9 | Eng Codex E4 | close-report 写入时机：从 step 1 移到 step 1.5 之后（或回填 `## 文档变更`段）| doc |
+| polish-10 | Eng Codex E5 + Claude E1 | 测试删除清单具体行号：`test-close-task.sh:660-765` A1 / `e2e/test-skip-doc-update-recovery.sh` 整文件 / `test-req-stage-gate.sh:67,109,168,187` / `test-doc-update.sh:28-54,115` / `e2e/test-full-task-loop.sh:117-118` / `run-all.sh:51` / `test-task-spec.sh:122` | impl HARD |
+| polish-11 | Eng Claude E2 | req-stage-gate/SKILL.md C2 half-close detection 整段删 + 简化 verify 列表 | doc + impl HARD |
+| polish-12 | Eng Claude E3 | doc-update §0.5 沉淀风险判断整段删（因 `exit 1 → --skip-doc-update` 分支不存在）| doc HARD |
+| polish-13 | Eng Claude E5 | close-req step 1.5 **砍掉 skip 分支**（PM 已决 2026-05-16，只留 rewrite / patch）| doc + impl |
+
+### 估时再调整
+
+- 原 ~2h (CEO phase 5 polish)
+- + Eng phase 8 个真实 implementation gap (polish-6 到 polish-13)
+- + 2 个 PM_DECIDE (polish-3 / polish-13)
+- → **~3-3.5h**（仍可接受，无新方向，无 §0.4 拉回，无新 vp）
+
+### 待 PM 决策
+
+| 决策项 | 选项 |
+|---|---|
+| polish-3 PM_DECIDE | 条件触发对账 (有偏差时调) 是保留在 close-task 还是统一推到 close-req？ |
+| polish-13 PM_DECIDE | close-req step 1.5 skip 分支 (DEFERRED_TO_REQ inter-req 推迟) 砍掉只留 rewrite/patch，还是定义新 deferred 表达？ |
+
+---
+
+---
+
+## §X.3 DX Phase Dual Voices (Round 7, 2026-05-16)
+
+### CODEX SAYS (DX — developer experience challenge)
+
+| # | Severity | Finding | PAIN_LINK | EVIDENCE | 决议 |
+|---|---|---|---|---|---|
+| DX-Codex-1 | High | PM 心智模型要在 `/close-task` 输出层反转：Phase 1 结束语不能再说"偏差已处理"，要明确"本 task 不更新 modulespec; close-req 末统一 rewrite" | §0.impl | `close-task/SKILL.md:205,327` 当前措辞 + 方案 §1 line 73,91-105 | ACCEPT |
+| DX-Codex-2 | High | 旧 SKIP marker 一次性迁移规则缺失：ExampleConsumerApp 已有 T1/T2 SKIP，砍半关闭机制后旧 pending marker 变成无人负责历史债。close-req 第一次升级后要把旧 marker 当聚合输入消费 + 写明完成状态 | §0.impl | 方案 §5 line 135-140（实证表）+ §4 line 118-123（砍 marker）+ `close-req/SKILL.md:92-124` | ACCEPT |
+| DX-Codex-3 | Medium | 旧 flag (`--skip-doc-update` / `--doc-update-now`) 残留调用需要 tombstone error：失败 + 提示"已废弃；请正常 close-task" | §0.impl | 方案 §2 line 91-105 + `close-task/SKILL.md:65-97` + `test-close-task.sh:660-765` | ACCEPT |
+| DX-Codex-4 | Medium | **跨 skill 入口文档要同步改**："PM 反馈后 close-task → /doc-update" 的旧引导仍在 `task-submit/SKILL.md:176` / `task-execute/SKILL.md:399-400` / `references/acceptance-handoff.md:78` → PM 会被教育走错路径 | §0.impl | 4 个文件具体行 + 方案 §1 line 57-73 | ACCEPT |
+| DX-Codex-5 | Low | 改过的 SKILL/脚本段顶部加 "why breadcrumb" 注释指向 `D13 final / 2026-05-16 / §0.1 token 启动成本`。半年后 `git blame` 看不到 why → 又一轮 v3→v3.3 绕圈风险 | §0.impl | 方案 §3 line 101-107 + §6 line 169-177（决策路径只在 plan/git history）| ACCEPT |
+
+**Codex DX bottom line**: minor adjust → 可实施。重点：PM 入口心智 + 旧 marker 迁移 + 旧 flag 报错 + **跨 skill 文案** + blame 可解释性 一次收干净。
+
+### CLAUDE SUBAGENT (DX — independent review)
+
+| # | Severity | Finding | PAIN_LINK | EVIDENCE | 决议 |
+|---|---|---|---|---|---|
+| DX-Claude-1 | High | 删 flag 后 PM/AI 习惯性带 flag 调用必须 **fail loud**（exit non-zero + 明确 "flag removed in D13, doc-update now batched at close-req"）| §0.impl | `close-task/SKILL.md:66-97` + vp-3 polish 无 error contract | ACCEPT |
+| DX-Claude-2 | High | ExampleConsumerApp 已有 3 个旧 SKIP marker (cleanup_status="pending")；vp-2 改输入源后旧 marker 不再被扫但残留在 task md 制造 PM 困惑。需 vp-3 加 migration note | §0.impl | RUNTIME.md L24 + SKILL.md:78-91 + polish-1 未提旧 marker | ACCEPT |
+| DX-Claude-3 | Medium | 默认行为反转是 PM 心智模型大改，但 CLAUDE.md 没提 modulespec sediment 时机，RUNTIME.md L20 只一句话带过。新窗口 PM 第二天回来 close-task 看不到 sediment 会怀疑 "skill 坏了" | §0.impl | CLAUDE.md 无 sediment 时机 + RUNTIME.md L19-24 + close-task SKILL.md:14-26 | ACCEPT |
+| DX-Claude-4 | Medium | vp-3 改 5+ SKILL.md + 测试，但方案 §3/§4/§7 没列 CHANGELOG / commit message 模板。后续 PM `git blame` 看不到 why → 又一轮 v3→v3.3 绕圈 | §0.impl | §3 vp-3 描述 + §Y 决议日志无 commit hash | ACCEPT |
+
+**Claude DX bottom line**: minor adjust → ship。
+
+### DX DUAL VOICES — CONSENSUS TABLE (Round 7)
+
+```
+═══════════════════════════════════════════════════════════════════════════
+  Dimension                              Claude  Codex  Consensus
+  ──────────────────────────────────────  ───────  ──────  ─────────
+  1. PM mental model 反转 (输出层)?       ⚠️       ⚠️      CONFIRMED
+  2. 旧 SKIP marker upgrade path?         ⚠️       ⚠️      CONFIRMED
+  3. 旧 flag tombstone error?             ⚠️       ⚠️      CONFIRMED
+  4. 跨 skill 入口文档同步?               —        ⚠️      Codex 独家 — 关键
+  5. why breadcrumb traceability?         ⚠️       ⚠️      CONFIRMED
+═══════════════════════════════════════════════════════════════════════════
+两 voice 5/5 维度强 CONSENSUS：minor adjust → ship
+Codex 独家发现 #4 跨 skill 文档同步是高价值 finding（PM 被旧引导教育走错路径）
+0 finding 重新定义 §0 / 拉回 §0.4 / 加新 vp / 加复杂度
+```
+
+### vp-3 Polish 最终扩展清单（CEO 5 + Eng 8 + DX 5 = 18 项，去重整合）
+
+| # | 来源 | 改什么 | 类型 |
+|---|---|---|---|
+| polish-1 | CEO + Eng 共识 | close-req 步骤 1.5 输入源改聚合 tasks/*.md (按 module 字段 + PM 视图 + .engineering.md + 业务偏差 + 工程合同 §10) | doc + impl |
+| polish-2 | CEO + Eng 共识 | doc-update §8 trigger 描述 + **输出契约**（返回 rewrite diff + 覆盖目标文档/模块清单 → 供 close-req step 2a metric）| doc + impl |
+| polish-3 | CEO + Eng 共识 | 保留 close-task 步骤 0；条件触发对账**统一推到 close-req 聚合**（PM 已决 2026-05-16）| doc + impl |
+| polish-4 | CEO 独家 | close-req step 2a PRD 覆盖度 metric 用 §8 返回清单 | doc + impl |
+| polish-5 | ~~PM 已决~~ | ~~删 override~~ | DONE |
+| polish-6 | Eng Codex 独家 | **`scripts/close-task.sh:63-94` 同步删脚本层文档偏差阻塞检查**（关键 gap）| impl HARD |
+| polish-7 | Eng Codex E2 | vp-2 输入源同时读 4 处偏差源（与 polish-1 合并）| doc + impl |
+| polish-8 | Eng Codex E3 | quick-fix metadata 收集机制设计 | impl |
+| polish-9 | Eng Codex E4 | close-report 写入时机改 step 1.5 之后 | doc |
+| polish-10 | Eng 共识 | 测试删除清单具体行号（7 个测试文件）| impl HARD |
+| polish-11 | Eng Claude 独家 | req-stage-gate/SKILL.md C2 half-close detection 整段删 | doc + impl HARD |
+| polish-12 | Eng Claude 独家 | doc-update §0.5 沉淀风险判断整段删（因 exit 1 → skip 分支不存在）| doc HARD |
+| polish-13 | Eng Claude E5 | close-req step 1.5 **砍掉 skip 分支**（PM 已决 2026-05-16，只留 rewrite / patch）| doc + impl |
+| polish-14 | DX 共识 | PM 心智模型反转：close-task 输出层 + RUNTIME.md / CLAUDE.md sediment 时机说明 | doc |
+| polish-15 | DX 共识 | 旧 SKIP marker 一次性迁移规则（ExampleConsumerApp 已有 3 个 pending/done marker）| doc + impl |
+| polish-16 | DX 共识 | 旧 flag tombstone error 文案 | impl |
+| polish-17 | DX Codex 独家 | **跨 skill 文档同步**：task-submit:176 + task-execute:399-400 + references/acceptance-handoff.md:78 改新口径 | doc |
+| polish-18 | DX 共识 | SKILL/脚本段顶部 why breadcrumb 注释 + vp-3 commit message "D13 final" tag + §Y 回填 commit hash | doc + impl |
+
+### 估时最终调整
+
+- 原 ~2h (CEO 5 polish)
+- + Eng 8 项 hard impl gap → ~3-3.5h
+- + DX 5 项 polish → **~3.5-4h**
+- 仍无新 vp / 无 §0.4 拉回 / 无方向改变
+
+### 待 PM 决策（合并自 3 phase） — **已全部决定**
+
+| # | 决策项 | PM 决议（2026-05-16） |
+|---|---|---|
+| polish-3 | 条件触发对账 | **统一推到 close-req 聚合**。任何偏差不在 close-task 阶段处理，与 D13 "close-task 不调 doc-update" 清洁性一致 |
+| polish-13 | close-req step 1.5 skip 分支 | **砍掉 skip 分支**。只留 rewrite / patch 两个决议路径。inter-req 推迟是 §0.4.1 拉回风险，不做 |
+| polish-5 | --doc-update-now override | **删**（2026-05-16 已决） |
+
+---
+
+---
+
+## §Z Phase 4 Final Approval Gate (2026-05-16)
+
+### 全部 PM 决议
+
+| # | 决议项 | PM 已决 |
+|---|---|---|
+| polish-3 | 条件触发对账 → 统一推到 close-req 聚合 | ✓ |
+| polish-5 | --doc-update-now override → 删 | ✓ |
+| polish-13 | close-req step 1.5 skip 分支 → 砍 | ✓ |
+
+### 最终 ship 决议
+
+**APPROVED as MINOR ADJUST** —— D13 final 方向锁定，估时 ~3.5-4h，18 项 polish 全部归到 vp-1/vp-2/vp-3 内落地，**无新 vp**。
+
+vp-3 实施清单含：
+- 5 polish (doc + impl) + 8 polish (含 4 HARD: scripts/close-task.sh + req-stage-gate C2 + doc-update §0.5 + 测试清单) + 5 polish (DX 端: mental model + migration + tombstone + 跨 skill + breadcrumb)
+- 2 PM_DECIDE 落地（polish-3 推 close-req / polish-13 砍 skip）
+
+下一步：起 vp-1（与 close-req 解耦，可独立测）→ vp-2 → vp-3。
+
+### autoplan Round 7 verdict
+
+- **Status**: APPROVED (minor adjust)
+- **Phase 1 CEO**: COMPLETE (dual voice strong consensus minor adjust)
+- **Phase 3 Eng**: COMPLETE (dual voice 8 hard impl polish)
+- **Phase 3.5 DX**: COMPLETE (dual voice 5 polish; Codex 独家跨 skill 文档同步)
+- **Phase 4 Final Gate**: COMPLETE (PM 3 决议全部 align with recommendation)
+- **§0 锁机制实证结果**: **完全成功** — 0 critical / 0 加 vp / 0 拉回 §0.4 / 0 改方向 / **抓出 15 项真实 implementation polish**
+- **Restore point**: `<LOCAL_GSTACK_HOME>/projects/PM-AI-Workflow/main-autoplan-restore-20260516-173438.md`
+
+---
+
+**End of /autoplan Round 7 (FULL CYCLE, APPROVED)**
+

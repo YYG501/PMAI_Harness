@@ -1,0 +1,15 @@
+{
+  "patches": [
+    {
+      "intent": "新增 promo_code 与 promo_discount_bps 两个相关字段（插在 price 之后、## 业务规则 之前）",
+      "old": "### price\n- 套餐价格必填\n- 单位：分（整数）\n- 根据 plan + period 自动计算\n\n## 业务规则",
+      "new": "### price\n- 套餐价格必填\n- 单位：分（整数）\n- 根据 plan + period 自动计算\n\n### promo_code\n- 促销码可选\n- 字符串\n\n### promo_discount_bps\n- 促销折扣可选（基点，整数）\n- 范围：0 到 10000\n- 与 promo_code 一起出现\n\n## 业务规则"
+    },
+    {
+      "intent": "业务规则末尾追加一条：promo_code 与 yearly 不叠加",
+      "old": "- enterprise 套餐需销售审核后才能开通\n- 升级套餐立即生效，降级套餐在下一周期生效",
+      "new": "- enterprise 套餐需销售审核后才能开通\n- 升级套餐立即生效，降级套餐在下一周期生效\n- promo_code 与 yearly 8 折优惠不叠加，按更优的算"
+    }
+  ],
+  "summary_for_pm": "新增 promo_code（可选、字符串）+ promo_discount_bps（可选、0-10000 基点、与 promo_code 配对）两个字段；业务规则末尾补一条'promo 与 yearly 不叠加，取更优'。"
+}

@@ -1,0 +1,15 @@
+{
+  "patches": [
+    {
+      "intent": "channel 字段取值中删除 legacy_inapp",
+      "old": "- 渠道必填\n- 取值：email / sms / wechat / legacy_inapp\n- 默认 email",
+      "new": "- 渠道必填\n- 取值：email / sms / wechat\n- 默认 email"
+    },
+    {
+      "intent": "业务规则中删除 legacy_inapp 兼容那条",
+      "old": "- urgent 优先级通知必须立即发送，不进队列\n- legacy_inapp 渠道仅保留兼容老客户端，新接入禁用\n- 同一 recipient 5 分钟内同模板限 1 次",
+      "new": "- urgent 优先级通知必须立即发送，不进队列\n- 同一 recipient 5 分钟内同模板限 1 次"
+    }
+  ],
+  "summary_for_pm": "channel 字段取值中去掉 legacy_inapp；业务规则中相应的兼容说明同步删除。"
+}

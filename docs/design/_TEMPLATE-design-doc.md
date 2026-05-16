@@ -1,0 +1,97 @@
+<!--
+# 本仓 D-* 设计文档模板
+#
+# 用法：
+#   cp docs/design/_TEMPLATE-design-doc.md docs/design/<your-design>.md
+#   把所有 <尖括号占位符> 填掉
+#   §0 必须跟 PM 共写后锁定（不允许后续 review 反向修改）
+#
+# 为什么有这个模板：见 memory feedback_design_pain_guard.md
+# D13 的教训：5 轮 autoplan 把 ~2h 方案放大成 30h+，根因是没锁住 §0 痛点
+-->
+
+# <设计标题> (<v0>)
+
+> **状态**：草稿 / 待 PM 共写 §0
+> **日期**：<YYYY-MM-DD>
+> **作者**：PM + AI
+
+---
+
+## §0 原始痛点（PM + AI 共写，后续 review **不可反向修改**）
+
+> ⚠️ 任何后续 review / autoplan / dual voice 都**不能**给本节加东西、不能重新定义痛点。
+> 如果 review 中出现"新发现的痛点"，要么走另一个 D-* 设计文档（开新条目，不污染本文档），
+> 要么 PM 主动决策更新 §0 并重置版本号（v0 → v1）。
+
+### §0.1 痛点（1-3 句）
+
+<例：每个 task close 都跑一遍 doc-update 把功能清单沉淀进 modulespec.md，N 次 doc-update × N 次完整成本（指令重载 + spec 全文读 + AI 推 + PM 审）= 真实 token 浪费>
+
+### §0.2 触发场景（每条要能回答"PM 实际遇到过吗 / 在哪个 req"）
+
+| # | 场景描述 | 实证证据（消费仓 req / commit / 截图）|
+|---|---|---|
+| 1 | <例：单 req 多 task 改同一 feature> | <例：ExampleConsumerApp req-003 task-002 / task-003 改同一 functions-v4.1.md> |
+| 2 | <例：后一 task 改前一 task 产出> | <例：req-003 D15 反转 (task-003 commit b90dd1e)> |
+| 3 | ... | ... |
+
+**没填实证证据的场景标 `[ASSUMED]`，后续过滤时优先 DEFER**。
+
+### §0.3 根因（解决什么底层 mechanism）
+
+<例：close-task 默认调 doc-update settlement → 每 task 启动一次完整 doc-update SKILL 流程 → 启动成本 × task 数累加>
+
+### §0.4 不解决什么（显式列衍生场景 / 假设场景，防 review 把这些拉进来）
+
+| # | 衍生 / 假设场景 | 为什么不在 §0 范围 |
+|---|---|---|
+| 1 | <例：多 req 并行修改同一 modulespec> | PM 单人天然单写者，5 月时间窗 0 次撞车 |
+| 2 | <例：v2 重做时整文件 DEPRECATED 路径> | 异常场景，PM 手动决议即可，不需固化进 SKILL |
+| 3 | ... | ... |
+
+→ **review 中任何 finding 指向以上场景的，默认 DEFER**（除非 PM 显式接受拉进 §0）
+
+---
+
+## §1 - §N 方案主体
+
+<按方案需要展开。常见结构：>
+
+- §1 方案概述（一句话 + 简图）
+- §2 与现有机制的关系（哪些保留 / 哪些改 / 哪些砍）
+- §3 实施清单（vp-1 / vp-2 / ... + 估时）
+- §4 砍掉的机制清单（显式列，防止后续被 review 加回来）
+- §5 风险与待验
+- §6 实证支撑（消费仓数据 / dogfood incident）
+- §7 决策路径（如果有多版迭代历史）
+
+---
+
+## §X Review Findings（autoplan / dual voice 输出落这里）
+
+> 每条 finding 必须按下表格式。**PAIN_LINK = NONE 且 EVIDENCE = ASSUMED 的 finding 默认 [DEFER]**，不进方案主体。
+
+### Round N — <YYYY-MM-DD> — <reviewer voice>
+
+| # | Severity | Finding 摘要 | PAIN_LINK | EVIDENCE | 决议 |
+|---|---|---|---|---|---|
+| F1 | Critical | <例：vp-B 已实现 close-req SKILL:92-132> | §0.1 (token 浪费根因) | `skills/close-req/SKILL.md:92` grep | **ACCEPT** — 砍 vp-B |
+| F2 | High | <例：建议加 patch JSON schema 防 AI 改坏措辞> | NONE | ASSUMED | **DEFER** — §0.4.2 已声明不解决 |
+| F3 | Medium | <例：建议加 close-req 入口锁> | NONE | ASSUMED (0 次撞车) | **DEFER** — §0.4.1 已声明不解决 |
+| ... | ... | ... | ... | ... | ... |
+
+**汇总**：ACCEPT N 条 / DEFER M 条 / 待 PM 决策 K 条
+
+---
+
+## §Y 决议日志（PM 与 AI 共审后写）
+
+| 日期 | 决议 | 影响 |
+|---|---|---|
+| YYYY-MM-DD | ACCEPT F1 → 砍 vp-B | 实施估时 -1h |
+| YYYY-MM-DD | DEFER F2/F3 | 不在本方案范围 |
+
+---
+
+**End of <设计标题> v<N>**

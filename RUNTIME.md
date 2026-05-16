@@ -10,9 +10,27 @@
 
 ---
 
-## 当前位置（2026-05-11）
+## 当前位置（2026-05-16）
 
-**最近一次改造（2026-05-11）**: prd-writing 描述风格规则 sink + lint 类 2 全篇扫描 + 回归测试 fixture 落地。
+**最近活动（2026-05-16）**: D13 modulespec 维护方案定稿 = **回归 v2 §12.2 原始方向**，~2h 实施。绕了 v3 → v3' → v3'.1 → v3.2 → v3.3 五版后由 PM 根因质疑（"我们最开始是为什么讨论这个问题"）拉回原点。
+
+- 方案文档：`docs/design/modulespec-重写方案.md`（D13 final，152 行 self-contained）
+- 归档参考：`docs/design/prd-modulespec-重构.md`（v2-v3.2 完整决策路径，§十七/十八/十九 已标作废）
+- **核心改动 ~2h**：
+  - vp-1 (0.5h): `skills/close-task/SKILL.md` Phase 1 默认不调 doc-update，只 merge + 归档；删 `--skip-doc-update` flag 整套 + 不加 `--doc-update-now` override（PM 已决 2026-05-16）
+  - vp-2 (0.5h): `skills/close-req/SKILL.md` 步骤 1.5 触发条件改为"任何 task 关闭都默认聚合 rewrite"（不再要求 ≥2 SKIP marker）
+  - vp-3 (1h): 测试 + 文档同步 + 砍 v2 §12.3 机制清单（settlement mode / 对账模式 / 半关闭机制 / cleanup_status / 人工 TODO 等）
+- **task-execute overlay 已实现**：`skills/task-execute/SKILL.md:290` 步骤 2.1 已经读"同模块已完成 task 的 PM 视图 + 工程合同"，回答了"后续 task 读到旧 spec 误解吗"这个担心
+- ExampleConsumerApp dogfood 实证：3 req 21 task ≈ 19 次 doc-update 启动成本 → 合并成 3 次（每 req close 1 次 rewrite）
+- 教训沉淀（已写 memory）：
+  - autoplan / codex CEO prompt 必须前缀强制读现有 SKILL 全文（[[autoplan-codex-评审必须前缀强制读现有-skill]]）
+  - 设计连续绕弯时，PM 根因质疑 > 任何 review；评审工具默认加东西不砍东西
+
+**下一步**：起 vp-1（与 close-req 解耦，可独立测）→ vp-2 → vp-3，约 2h 落地。
+
+---
+
+**前一次改造（2026-05-11）**: prd-writing 描述风格规则 sink + lint 类 2 全篇扫描 + 回归测试 fixture 落地。
 
 - 6 类描述风格规则 (视觉细节 / URL 路由 / 排版分隔符 / 否定式 / 工程黑话 / 抽象学院派命名) 沉淀到 `_shared/pm-view/writing-rules.md §3.12`(权威单一真相源,跨 skill 复用 prd-writing / task-spec / publish-to-lark 等)
 - `_shared/pm-view/writing-rules.md` 顶部加「如何补新规则」5 步反馈循环 SOP — 未来 PM 复审发现新违规词时按此流程补

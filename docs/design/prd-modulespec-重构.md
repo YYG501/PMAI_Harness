@@ -1,4 +1,22 @@
 <!-- /autoplan restore point: <LOCAL_GSTACK_HOME>/projects/PM-AI-Workflow/main-autoplan-restore-20260512-145959.md -->
+
+> ⚠️ **本文档已归档为决策档案（2026-05-15）**
+>
+> **当前活跃方案**：[`modulespec-重写方案.md`](./modulespec-重写方案.md)（D13 v3.2）
+>
+> 本文档记录了 D13 设计从 v2 → v3 → v3' → v3'.1 的完整决策路径（§十四 – §十九），包含 4 轮 autoplan / 30 修订项 / 28 vp 项的全部历史信息。**实施请以 `modulespec-重写方案.md` 为准，不要按本文档实施**。
+>
+> 主要差异：v3.2 砍掉 v3'/v3'.1 的并发机制（merge driver / sidecar JSON / feature_id 锚 / 三方字段 patch + sentinel / 两类 conflict / fixture case-04+06），实施面积从 ~30h 缩到 ~12-15h。砍掉原因见 `modulespec-重写方案.md` §1.2。
+>
+> 本文档中下列章节内容**已作废**（保留只为追溯决策路径）：
+> - §十七 W1-W9（v3' MVP 任务清单）→ 被 v3.2 §6 重做
+> - §十八（round 5 autoplan 结论的并发相关 finding）→ 整个并发场景被 cut
+> - §十九（v3'.1 inline 修订 30 项中 R-C1/C2/C3 + R-H1-H4 等并发相关项）→ 整个并发场景被 cut
+>
+> 仍然有效（被 v3.2 沿用）：§十六 modulespec frontmatter / W6 PM 审 diff 流程 / W7 quickfix-log 反向校验思路。
+
+---
+
 # PRD / modulespec 体系重构
 
 > 状态：v1 方案 + autoplan 评审 + v1.1 stage 术语修正 + Q1-Q4 全部已拍 + D4/D8/D10/A2 AI 自决 + D13 v2 round 3 review / **§十四 D13 v3 设计稿已写入，待 PM review + round 4 autoplan**
@@ -2747,7 +2765,7 @@ D1 把 §12.1 anchor 从 "token 经济" 改成 "时延 + 注意力切换"。**�
 
 ---
 
-## 十七、D13 v3' MVP 详设计稿（2026-05-12）
+## 十七、~~D13 v3' MVP 详设计稿~~（2026-05-12）【已被 v3.2 取代，作废保留】
 
 > **版本**：v3' MVP 详稿（基于 §十六 outline 展开）。
 > **关系**：§十四 v3 全集作废仅作归档；本节是要 ship 的设计。
@@ -3441,7 +3459,7 @@ fi
 
 ---
 
-## 十八、round 5 autoplan 结论（2026-05-12）
+## 十八、~~round 5 autoplan 结论~~（2026-05-12）【并发相关 finding 作废，保留为决策档案】
 
 > **状态**：round 5 autoplan 完成（degradation：codex CLI 在本环境失效 → tag `[subagent-only]`，只跑 Claude subagent；Phase 2 design 因无 UI 跳过）。本节是 CEO + Eng + DX 三 voice 评审结论合并。**v3' 详设计 §十七 待 PM 决策修订路径**。
 
@@ -3579,7 +3597,7 @@ PM 拍：§十九 v3'.1 修订完后跑 round 6 autoplan 验。本次 round 5 �
 
 ---
 
-## 十九、v3'.1 修订版（2026-05-12）
+## 十九、~~v3'.1 修订版~~（2026-05-12）【已被 v3.2 取代，作废保留 — 见 [modulespec-重写方案.md](./modulespec-重写方案.md)】
 
 > **状态**：§18.5 PM 4 项决策落地的 inline 修订记录。**不重写 §十七**——把每条修订定位到 §十七 哪个小节，给出新文本 / 新约束 / 新工作项。round 6 autoplan 看这一节判 v3'.1 是否真补完 §十八 30 条。
 >
