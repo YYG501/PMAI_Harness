@@ -12,21 +12,42 @@
 
 ## 当前位置（2026-05-16）
 
-**最近活动（2026-05-16）**: D13 modulespec 维护方案定稿 = **回归 v2 §12.2 原始方向**，~2h 实施。绕了 v3 → v3' → v3'.1 → v3.2 → v3.3 五版后由 PM 根因质疑（"我们最开始是为什么讨论这个问题"）拉回原点。
+**最近活动（2026-05-16）**: D13 modulespec 维护方案 **全部落地** ✓（vp-1 + vp-2 + vp-3 + autoplan round 7 + §0 PAIN_LINK 锁机制首次实战成功）。绕了 v3 → v3' → v3'.1 → v3.2 → v3.3 五版后由 PM 根因质疑拉回 v2 §12.2 原始方向，实际实施 ~1.5h（含 5 次 run-all 验证）。
 
-- 方案文档：`docs/design/modulespec-重写方案.md`（D13 final，152 行 self-contained）
+- **测试基线**：350/0（D13 前） → **340/0**（D13 后，净删 10 个测试全部正常归因：A1 skip-doc-update 6 个 + I-CT6 doc-diff 阻塞 1 个 + req-stage-gate half-close detection 1 个 + e2e/test-skip-doc-update-recovery.sh 2 个）
+- 方案文档：`docs/design/modulespec-重写方案.md`（D13 final，含 §0 锁 + autoplan round 7 三 phase dual voice + 18 polish 整合 + 3 PM 决议 + autoplan ABORT 历史）
 - 归档参考：`docs/design/prd-modulespec-重构.md`（v2-v3.2 完整决策路径，§十七/十八/十九 已标作废）
-- **核心改动 ~2h**：
-  - vp-1 (0.5h): `skills/close-task/SKILL.md` Phase 1 默认不调 doc-update，只 merge + 归档；删 `--skip-doc-update` flag 整套 + 不加 `--doc-update-now` override（PM 已决 2026-05-16）
-  - vp-2 (0.5h): `skills/close-req/SKILL.md` 步骤 1.5 触发条件改为"任何 task 关闭都默认聚合 rewrite"（不再要求 ≥2 SKIP marker）
-  - vp-3 (1h): 测试 + 文档同步 + 砍 v2 §12.3 机制清单（settlement mode / 对账模式 / 半关闭机制 / cleanup_status / 人工 TODO 等）
-- **task-execute overlay 已实现**：`skills/task-execute/SKILL.md:290` 步骤 2.1 已经读"同模块已完成 task 的 PM 视图 + 工程合同"，回答了"后续 task 读到旧 spec 误解吗"这个担心
-- ExampleConsumerApp dogfood 实证：3 req 21 task ≈ 19 次 doc-update 启动成本 → 合并成 3 次（每 req close 1 次 rewrite）
-- 教训沉淀（已写 memory）：
-  - autoplan / codex CEO prompt 必须前缀强制读现有 SKILL 全文（[[autoplan-codex-评审必须前缀强制读现有-skill]]）
-  - 设计连续绕弯时，PM 根因质疑 > 任何 review；评审工具默认加东西不砍东西
+- 设计模板：`docs/design/_TEMPLATE-design-doc.md`（D-* 设计任务起手模板，§0 PAIN_LINK + EVIDENCE + §0.4 显式排除列表）
 
-**下一步**：起 vp-1（与 close-req 解耦，可独立测）→ vp-2 → vp-3，约 2h 落地。
+**4 个 commit（已落地）**：
+| commit | 内容 |
+|---|---|
+| `b85e35c` | docs(d13): final 方案定稿 + autoplan round 7 (CEO+Eng+DX) + §0 痛点锁机制首次实战 |
+| `c6d15d2` | feat(d13-vp-1): close-task 永不调 doc-update + 删 `--skip-doc-update` flag 整套 |
+| `133c32d` | feat(d13-vp-2): close-req 步骤 1.5 输入源改聚合（4 处偏差源合一） + 砍 skip 分支 |
+| `9f4389b` | feat(d13-vp-3): 跨 skill 文档同步（task-submit / task-execute / acceptance-handoff） + polish 全套收尾 |
+
+**18 polish 落地状态**（含 2 PM_DECIDE）：
+- close-req 主体 (polish-1/2/7/13/15)、close-req 边界 (polish-3/4/8/9) → vp-2
+- close-task 主体 (polish-5/14/16/18)、脚本层 (polish-6) → vp-1
+- 跨 SKILL 同步 (polish-10/11/12/17) → vp-3
+
+**砍掉的机制清单（D13 final 已完整落地）**：settlement mode / 对账模式（作为 close-task 默认入口）/ `--skip-doc-update` flag 整套 / SKIP_DOC_UPDATE marker / cleanup_status / 人工 Cleanup TODO 写入逻辑 / doc-update §0.5 沉淀风险判断 / req-stage-gate C2 half-close detection。
+
+**task-execute overlay 不动**：`skills/task-execute/SKILL.md:290` 已读"同模块已完成 task 的 PM 视图 + 工程合同"，回答了"后续 task 读到旧 spec 误解吗"的担心。
+
+**ExampleConsumerApp dogfood 实证基线**：3 req 21 task ≈ 19 次 doc-update 启动成本 → D13 final 合并成 3 次（每 req close 1 次 rewrite）。下次跑真实 req 验证可观测。
+
+**教训沉淀（已写 memory）**：
+- [[autoplan-codex-评审必须前缀强制读现有-skill]] — 否则评审 agent 只看设计文档加东西
+- [[d-设计任务必须-0-痛点锁-finding-pain_link-字段]] — 18 polish 实战证明 §0 锁机制有效
+- D13 final 教训：设计连续绕弯时，PM 根因质疑 > 任何 review；评审工具默认加东西不砍东西
+
+**下一步**：去消费仓 `${CONSUMER_REPO_ROOT}` 跑下一个真实 req（req-004），验证：
+- close-task 不再触发 doc-update（token 节省可观测）
+- close-req 末走 rewrite mode（PM 一次审完整段 diff）
+- task-execute 读 overlay（SKILL.md:290 行为不变）
+- 旧 SKIP marker 残留（req-003 task-001/002）由 close-req 步骤 1.5 rewrite 时 cleanup_status 改 done，不再阻塞 stage 6→7
 
 ---
 
