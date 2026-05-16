@@ -51,7 +51,11 @@ PENDING_MARKER="$REPO_ROOT/.runs/pending-close-req.json"
 
 ## Phase 1：在 req worktree 内执行
 
-### 步骤 1：写 close-report.md
+### 步骤 1：写 close-report.md 初稿（`## 文档变更` 段留 placeholder，步骤 1.5 后回填）
+
+<!-- WHY breadcrumb: D13 final 下 step 1.5 才发生 modulespec rewrite。
+     close-report 的「文档变更」段必须在 step 1.5 之后填，否则会漏 rewrite 改动。
+     polish-9（Eng Codex E4）。 -->
 
 在 req 目录写 `close-report.md`，内容包括：
 
@@ -78,7 +82,8 @@ PENDING_MARKER="$REPO_ROOT/.runs/pending-close-req.json"
 </details>
 
 ## 文档变更
-[列出本次 req 修改过的文档]
+<!-- placeholder：本段在步骤 1.5 完成后回填（含 rewrite 覆盖的 docs/modules/* + docs/prd.md 等）。
+     如果步骤 1.5 silent skipped（无业务偏差），本段写"本 req 无项目级文档变更"。 -->
 
 ## 遗留问题
 [如有未解决的问题或后续建议]
@@ -88,76 +93,77 @@ PENDING_MARKER="$REPO_ROOT/.runs/pending-close-req.json"
 - 遍历 `tasks/*.md` 填「完成的 task」表（这里只剩已完成态，因为 stage 7 guardrail 要求所有未关闭 task 都收尾）。
 - 遍历 `tasks/discarded/*.md` 填废弃栏；为空时整个 `<details>` 块省略。
 - 已废弃 task 编号断号是合规信号，不要为「整理顺序」而改号。
+- **`## 文档变更` 段写 placeholder 注释 + 留空**，等步骤 1.5 完成后用 doc-update §8 返回的 `REWRITE_COVERED_FILES` 清单回填。
 
-### 步骤 1.5：扫描半 close cleanup TODO（v2 重做场景必经）
+### 步骤 1.5：聚合所有 closed task 偏差，按目标文档统一沉淀（D13 final, 2026-05-16）
 
-**目的**：闭合 task 半 close 的设计意图——`SKIP_DOC_UPDATE` marker 显式声明"由 close-req 阶段聚合所有 SKIP marker 后统一 rewrite"（doc-update SKILL 步骤 0.5），但 close-req 历史上没读这些 marker，导致 marker 永远 `cleanup_status="pending"`、cleanup TODO 永远没人扫。本步骤把这个闭环补上。
+<!-- WHY breadcrumb: D13 final 把 modulespec 沉淀从 close-task per-task 推到这一步聚合。
+     输入源不再是 SKIP_DOC_UPDATE marker（close-task vp-1 后永远不写 marker），
+     改为遍历所有 closed task 直接收集偏差。详见
+     docs/design/modulespec-重写方案.md §0.1 + §1 + §3 vp-2 + polish-1/7/13/15。 -->
+
+**目的**：D13 final 下 close-task 永不调 doc-update（不写 modulespec），所有 task 的偏差与功能清单累积到本步骤一次性沉淀。N 次 doc-update 启动成本合并成本 step 一次（§0.1 痛点）。
+
+**输入源**（遍历所有 closed task，4 处合一）：
+
+1. **PM 视图主文件** `tasks/*.md` 头部「📌 任务卡」表格的 `**所属模块**` / `**所属模块章节**` 字段 → 决定 sediment 进哪份 `docs/modules/<module>.md`
+2. **PM 视图主文件** `## 📋 功能清单` → 沉淀进 module spec 的功能合同
+3. **PM 视图主文件** `## 📁 历史档案 → 业务层偏差` 表 → 指向 brief / analysis / solution PM 视图 / prd / module 规格 的偏差对账
+4. **工程合同** `tasks/*.engineering.md` `## 10. 文档偏差` 表（仅 `HAS_ENG=true`）→ 指向 solution.engineering / DESIGN / CONTEXT / module 等工程层偏差对账
 
 **流程**：
 
-1. 遍历 `tasks/*.engineering.md`（兼容旧格式：`tasks/*.md` 含 `## 文档偏差` section），找所有 §10 含
-   ```html
-   <!-- SKIP_DOC_UPDATE: ... cleanup_status="pending" -->
-   ```
-   marker 的 task。
-
-2. **预筛跨 req 推迟项**：marker reason 含 `"等下游 req"` / `"下游 req 处理"` / `"inter-req"` 等关键词时 → silent skip 这条 marker（保留 pending 状态），打印一行 `task-NNN 标 inter-req 推迟，跳过`。
-
-3. 对剩下每个 marker，提取：
-   - marker reason
-   - 同 task §12 cleanup TODO 清单（pending 项）
-   - PM 视图「📁 历史档案 → 业务层偏差」表
-   - 工程合同 §10 偏差表
-
-4. **按目标文档分组**：同一份 `docs/modules/<module>.md` / `docs/DESIGN.md` / `docs/prd.md` 的多 task 偏差并到一起。
-
-5. 聚合后呈交 PM，按目标文档逐份决议（AskUserQuestion 或 prose）：
+1. 遍历 `tasks/*.md`（过滤 `*.engineering.md`）和成对的 `.engineering.md`；提取每 task 的 4 处输入。
+2. **按目标文档分组**：同一份 `docs/modules/<module>.md` / `docs/DESIGN.md` / `docs/prd.md` / `docs/CONTEXT.md` / `solution.md` / `solution.engineering.md` 的多 task 偏差并到一起。基础设施 task（`所属模块=基础设施`）跳过 module sediment，但其偏差表仍走对账。
+3. 聚合后呈交 PM，按目标文档逐份决议（AskUserQuestion 或 prose；**两选项**，skip 分支 D13 final 已砍）：
 
    | 决议 | 触发条件 | 行为 |
    |---|---|---|
-   | **rewrite**（默认） | 同目标文档 ≥2 task 改 | 调 doc-update SKILL 步骤 8 rewrite mode |
-   | **patch** | 单 task 改单文档 | 调现有 doc-update 对账模式（步骤 1.5/1.6/2-5）|
-   | **skip** | 本 req 不沉淀，留到下游 req | marker `cleanup_status` 保持 `pending`，append inter-req 备注 `<!-- DEFERRED_TO_REQ: req-NNN reason="..." -->` |
+   | **rewrite**（默认 / D13 final 主路径） | 任何 closed task 改某目标文档 → 默认 rewrite | 调 doc-update SKILL 步骤 8 rewrite mode（req-level aggregation contract，不要求 ≥2 SKIP marker）|
+   | **patch** | PM 显式选 + 单 task 单文档单段 | 调现有 doc-update 对账模式（步骤 1.5/1.6/2-5）|
 
-6. 完成处理后：
-   - rewrite / patch 决议 → 把对应 task §10 marker 的 `cleanup_status` 改为 `"done"` + §12 cleanup TODO 对应项标 `[x]`
-   - skip 决议 → 不动 marker
+4. PM 决议后，doc-update SKILL §8 返回 `{覆盖的目标文档清单, 覆盖的模块清单}`（polish-2 输出契约），供步骤 2a 作 metric。
+5. **回填 close-report.md `## 文档变更` 段**（polish-9）：把 `REWRITE_COVERED_FILES` 写进步骤 1 初稿留的 placeholder。
+6. 全部目标文档处理完毕后进步骤 2a。
 
-7. 全部 marker 处理完毕后才进步骤 2a `/prd-writing`（这时 module spec 已经统一沉淀，prd-writing 输入干净）。
+**quickfix 历史改动处理**（polish-8）：
+
+`/quick-fix` 改 `docs/modules/*.md` 是**旁路**（不走 close-task → close-req 流程），但 modulespec 当前文件状态已包含 quickfix 改动（git working tree）。步骤 1.5 调 doc-update §8 rewrite mode 时，**输入是「当前 modulespec 全文 + 本 req 各 task 偏差」**，quickfix 改动天然包含在 baseline 里 → 不需要额外收集机制。如果 PM 想审 quickfix 历史 → 看 `git log --grep '\[quick-fix\]' -- docs/modules/`，与 rewrite 流程解耦。
 
 **PM 拒绝处理**：PM 决议过程中拒绝任一 rewrite / patch（不接受 AI 草稿）→ close-req 中止，下次重跑 close-req 时回到步骤 1.5 重新决议。不要尝试"半重写"。
 
 **边界**：
-- 步骤 1.5 是 v2 重做场景的**主路径**（多 task 半 close）；**单 req 内无 SKIP marker → 步骤 1.5 silent skip 进 2a**
-- 不要在本步骤直接修改任何 task md 内容——marker 状态由 doc-update SKILL 在 rewrite/patch 完成时回写
 
-### 步骤 2a：产出 req 级 PRD（按 doc-update 覆盖度判断）
+- 步骤 1.5 是 D13 final 下 close-req 的**主路径**（每 req 必跑一次）
+- **本 req 内全部 closed task 偏差表都是「无偏差」且无功能清单变化** → silent skip 进步骤 2a（仅在「基础设施 task 单 req」之类的纯非业务 req 出现）
+- ~~inter-req 推迟 / DEFERRED_TO_REQ skip 分支~~ → D13 final 已砍（polish-13，§0.4.1 多 req 并行不在范围）
+- 旧 SKIP marker 兼容（polish-15）：消费仓若有旧 `<!-- SKIP_DOC_UPDATE: ... cleanup_status=... -->` 残留（D13 final 前写的），本步骤遇到时**等同普通偏差源处理**（一次性消费掉，rewrite 决议时 `cleanup_status` 改 `done` 留作 audit trail；不再阻塞 stage 6→7 推进）
 
-#### 2a.1 自动检测 doc-update 覆盖度
+### 步骤 2a：产出 req 级 PRD（按步骤 1.5 实际 rewrite 覆盖判断）
 
-调用前先检测本 req 周期内 task doc-update 是否已经把规格沉淀完整：
+#### 2a.1 用步骤 1.5 rewrite 覆盖清单作 metric（D13 final, polish-4）
 
-```bash
-# 1. req 分支周期内改过 docs/prd.md 与 docs/modules/*/functions.md 的 commits
-COVERAGE_COMMITS=$(git -C "$REPO_ROOT" log --oneline \
-  $(git merge-base "$REQ_BRANCH" main).."$REQ_BRANCH" \
-  -- 'docs/prd.md' 'docs/modules/' 2>/dev/null | wc -l | tr -d ' ')
+<!-- WHY breadcrumb: D13 final 把每 task doc-update commits 数（COVERAGE_COMMITS）
+     这个 per-task metric 砍掉，改用步骤 1.5 实际 rewrite 的目标文档 / 模块清单。
+     close-task 不再调 doc-update 后，COVERAGE_COMMITS 永远 0 会让旧 metric 误判。
+     详见 docs/design/modulespec-重写方案.md §3 polish-4。 -->
 
-# 2. 本 req 各 task 的 SKIP_DOC_UPDATE marker 数（cleanup_status="pending" 还在的）
-SKIP_PENDING=$(grep -l 'cleanup_status="pending"' "$ACTIVE_REQ_DIR/tasks/"*.md 2>/dev/null | wc -l | tr -d ' ')
-TASK_COUNT=$(ls "$ACTIVE_REQ_DIR/tasks/"*.md 2>/dev/null | grep -v engineering | wc -l | tr -d ' ')
+读步骤 1.5 doc-update §8 返回的覆盖清单（polish-2 输出契约）：
 
-echo "doc-update 覆盖：$COVERAGE_COMMITS commits 改过 docs/{prd.md, modules/}"
-echo "task SKIP marker pending: $SKIP_PENDING / $TASK_COUNT"
+```text
+REWRITE_COVERED_FILES   # 步骤 1.5 rewrite 覆盖的目标文档（含 docs/prd.md / docs/modules/* / 等）
+REWRITE_COVERED_MODULES # 覆盖的模块名清单（PM 视图「所属模块」字段汇总）
+TASK_COUNT              # 本 req 所有 closed task 数（不含基础设施 task）
+MODULE_TASKS_DONE       # 「所属模块」非「基础设施」且步骤 1.5 rewrite 已覆盖的 task 数
 ```
 
 #### 2a.2 按覆盖度走默认路径
 
 | 检测结果 | 默认推荐 | 含义 |
 |---|---|---|
-| `COVERAGE_COMMITS >= TASK_COUNT` 且 `SKIP_PENDING == 0` | **默认"跳过 PRD"** | 全部 task 都 doc-update 沉淀进 docs/prd.md / modules，再写一份 req 级 prd.md 是冗余 |
-| `COVERAGE_COMMITS > 0` 但有 SKIP_PENDING | **默认"补差"** | 部分 task 已沉淀，未沉淀的需要在 req 级 prd.md 补 |
-| `COVERAGE_COMMITS == 0` | **默认"完整 PRD"** | 没有 task 把内容沉淀进项目级文档，req 级 prd.md 是唯一规格记录 |
+| `MODULE_TASKS_DONE == TASK_COUNT` 且 `docs/prd.md ∈ REWRITE_COVERED_FILES` | **默认"跳过 PRD"** | 全部业务 task 都 rewrite 沉淀进 docs/prd.md / modules，再写一份 req 级 prd.md 是冗余 |
+| `MODULE_TASKS_DONE > 0 但 < TASK_COUNT` 或 `docs/prd.md ∉ REWRITE_COVERED_FILES` | **默认"补差"** | 部分 task 已沉淀，未沉淀的需要在 req 级 prd.md 补 |
+| `REWRITE_COVERED_FILES == ∅` | **默认"完整 PRD"** | 步骤 1.5 silent skipped（无任何业务偏差），req 级 prd.md 是唯一规格记录 |
 
 向 PM 呈交检测结果 + 对话式三选项（不列字母）：
 
