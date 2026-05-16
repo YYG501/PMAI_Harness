@@ -13,7 +13,15 @@
 > - v2 修订重点保留：重排代码层 P0 / 修过满表述 / 修技术细节
 
 **Changelog**：
-- v3（本版，2026-05-16）：autoplan 评审反馈精简版（reader map + errata banner + §7.2 重写）
+- **v3.8（本版，2026-05-17）：codex review 落 6 finding 修订 — (1) §10.3 加 STALE banner + 删除"砍 I-DC1/I-AD5"误判句（v3.4 RV1 推翻）；(2) Reader Map "下周做什么"入口由 §7.2+§8 改指 §10.7；(3) §1.4 GSD hook 描述按 gsd-ref 实物纠正（12 脚本含 1 worker helper，事件含 statusLine/SessionStart/PreToolUse/PostToolUse，Gemini AfterTool）；(4) Context Monitor `AfterTool` → `PostToolUse`（Claude Code 主入口）；(5) Codex hook adapter 前提更新（codex-cli 0.130.0 `hooks` 已 `stable`，PAIN_LINK 弱暂停）；(6) skill 数 21 → 20（filesystem 实测）+ manifest 起手要求"从 filesystem 生成不手填"**
+- **v3.7（2026-05-17）：补全 §10.7 漏项 — 之前只列 8 actionable + 5 暂停 + 10 废弃 = 23 项，对照 §2 矩阵原 28 项 + autoplan 新增发现漏 9 项。补全后总表：8 actionable + 1 已部分实施 + 5 暂停（PAIN 弱）+ 10 等触发条件 + 10 废弃 = 34 项**
+- **v3.6（2026-05-17）：(1) 文档从 archive/ 移回 docs/ 作为事实来源；(2) §10.7 重写 — 去掉 Wave / P1/P2/P3 分组，直接平铺 8 个可借鉴项 + 总体优先级排序（1-8 名）；(3) 每项内容补全（目标 / PAIN_LINK / EVIDENCE / 工作量 / 实施要点 / 启动条件 / 风险）**
+- **v3.5（2026-05-17）：(1) 新增 Wave 5.0c ADR 格式（grep verify GSD `docs/adr/` 10+ ADR，PMAI 此文档自身 1476 行散落决策即反例）；(2) 新增 §10.7 ROI 优先级最终整理 — 按 ROI 重排 P1/P2/P3，取代以前按 Wave 编号排序；(3) 推荐启动顺序明确：P1 3 项 ≤ 2 天独立可立即做**
+- **v3.4（2026-05-17）：v3.3 后 PM 要求复审划分合理性，落 5 finding。关键修订：(1) Wave 5.1 根因错位 — "借 STATE.md 砍 I-DC1" 是误判，集中 mutation 入口解 state 字段一致性，不解 markdown 文档落盘；(2) Wave 5.1 工作量 1-2 天 → 3-5 天；(3) Wave 1 4 项从"🟡 保留"改为 ⏸️ 暂停（按 §0 痛点锁原则）；(4) Wave 5.2 优先级 🔴 高 → 🟡 中；(5) Wave 3 拆分 — Context Monitor + extract-learnings 提升，Read Injection 保持暂停**
+- **v3.3（2026-05-17）：PM 拍板 D-v32-1=B → 3 项真痛点借鉴（#2 mutation 入口 / #3 lark-adapter / #4 SKILL 5 段骨架）作为 Wave 5 加入；Wave 1-2 保留原计划，Wave 3 ⏸️ 暂停 / Wave 4 ❌ 废弃。Wave 1.5/2 的"扩范围"标记回退（合并到 Wave 5 #4 一起做）**
+- **v3.2（2026-05-16）：autoplan round 2 + PM pin 真痛点 → frame 转向"踩坑驱动"。新增 §10「痛点驱动借鉴对照」作为最新权威结论。前 §1-§9 内容降级为"研究素材"，Wave 1-4 排序不再推进，按 §10 判断重新决策**
+- v3.1（2026-05-16）：Wave 1 开工前 PM 审核 + grep 现状落 5 finding（§3.2/§3.3/§3.4/§3.11/§8.5/§8.8 修订）。**关键发现**：§3.3 与现有 `agents/analysis-reviewer.md` 输出契约冲突；§3.4 与 `input-flow.md §9.1` 重叠；GATES.md 工作量低估 50%
+- v3（2026-05-16）：autoplan 评审反馈精简版（reader map + errata banner + §7.2 重写）
 - v2（2026-05-16）：codex 第二轮评审反馈修订（重排优先级 / 修过满表述）
 - v1（2026-05-16）：首版
 
@@ -21,12 +29,14 @@
 
 ## §0.4 Reader Map（v3 新增）
 
-**900+ 行文档，30 秒找到你要看的章节：**
+**1300+ 行文档，30 秒找到你要看的章节：**
 
 | 你的问题 | 跳哪节 |
 |---|---|
+| **看最新权威结论（v3.2 痛点驱动重新对齐 — 推荐起手）** | **§10** ⭐ |
 | 这是什么、为什么写 | §0.1 / §0.2 |
-| **下周做什么**（最高频问题） | **§7.2（已重写为 3 步队列）+ §8 errata 必看** |
+| **下周做什么**（最高频问题） | **§10.7 ROI 排序起手清单（v3.6 最终决策视图）⭐** |
+| §7.2 / §8 errata / §8.x finding | 历史审查材料，**最终结论已并入 §10.7**；只在追溯决策由来时查 |
 | 某项设计为什么排 P0/P1/P2 | §2 矩阵 |
 | 想落地某项 P0/P1 | §3.x（**先看 §8.5 errata index 看是否 BLOCKED**）|
 | 想知道某项 P2 何时触发 | §6 触发条件 |
@@ -46,7 +56,7 @@
 | 维度 | PM-AI-Workflow | GSD |
 |---|---|---|
 | 服务对象 | **PM 单人产品工作** | **工程团队 AI 编码** |
-| 规模 | 21 skill / 1 subagent / 340 测试 | 67 命令 / 33 subagent / 500+ 测试 / npm 包 / 4 国语言 |
+| 规模 | 20 skill / 1 subagent / 340 测试 | 67 命令 / 33 subagent / 500+ 测试 / npm 包 / 4 国语言 |
 | 哲学 | 小而紧（CLAUDE.md 明说"不是团队 SOP / CI 平台"）| 大而全 |
 | 状态机 | 7 stage + 4 task 状态 | 6 phase + wave 并行 |
 | 隔离 | git worktree per req/task；req 内多 task 已支持并行 | git worktree per phase 可选；multi-workstream 并行 |
@@ -140,7 +150,7 @@ Orchestrator 把 marker 当 agent 输出的约定段落消费，**不依赖语�
 
 ### 1.4 防御层
 
-**12 个 hook** 分四类（PreToolUse / PostToolUse / SessionStart / AfterTool），大部分 advisory（不阻断），只有 commit validator 是 fail-closed。
+**`hooks/` 下 12 个脚本**（含 1 个 worker helper `gsd-check-update-worker.js`），注册事件包含 `statusLine` / `SessionStart` / `PreToolUse` / `PostToolUse`（Claude Code），Gemini 用 `AfterTool` 替代 `PostToolUse`。大部分 advisory（不阻断），只有 commit validator 是 fail-closed。
 
 **Read Injection Scanner**（`hooks/gsd-read-injection-scanner.js`）三层防御：
 1. 11 条标准 prompt injection pattern
@@ -324,7 +334,7 @@ HARD_CAP = 600   # 拒绝合入
 # 4. 不一致 fail（列出未登记的脚本）
 ```
 
-**工作量**：半天（首次扫 + 登记 ≈ 40 个脚本里大概 12-15 个是写盘脚本）
+**工作量**：~~半天~~ → **延后实施**（按 §8.8 Q1=d 决议"等真实实施时再写 schema"——D4=A 决定代码层后做，schema 重写跟实施一起做更准。本节内容作为**未来实施备忘**，触发条件见 §6 触发条件表）
 
 ---
 
@@ -453,9 +463,9 @@ python3 scripts/check-inventory-drift.py || exit 1
 
 ### §3.2 P0-补充 #2 — GATES.md 分类索引
 
-**目标**：60 条 I-* 不变量按 GSD 4 类 gate 归档。
+> 🟡 **v3.1 修正**：v3 估时 1h 偏乐观。grep 现状 `INVARIANTS.md`：11 类前缀（I-G/I-CT/I-CR/I-CA/I-CB/I-AD/I-DC/I-RV/I-TT/I-RT + 已废弃 I-PR），自称 60 条但实际唯一编号 ~72；且 GATES.md 范围**不止 I-* 60 条**——现有运行时机制（analysis-reviewer 三选一、未决问题闸门、Stage 1→2 review）属 Revision/Escalation Gate 但**不在 INVARIANTS.md 里**，需一并登记。**重估工作量 1.5-2h**。
 
-（内容同 v1，未改）
+**目标**：把 INVARIANTS.md 60 条 I-* + 运行时 review/escalation 机制按 GSD 4 类 gate 归档。
 
 **新建** `GATES.md`（与 `INVARIANTS.md` 平级）：
 
@@ -486,56 +496,81 @@ python3 scripts/check-inventory-drift.py || exit 1
 
 ### §3.3 P0-补充 #4 — Completion Marker
 
-**目标**：subagent 输出 fail-closed 判断。
+> 🔴 **v3.1 重写**（覆盖 v2/v1 方案）：grep 现状 `agents/analysis-reviewer.md:78-119` 已有完整输出契约（`**总体判断**：PASS / NEEDS_REVISION` + 4 评审角度 + `## 给主线 AI 的下一步建议`），且 `skills/req-analysis/SKILL.md:152,204` 强制贴原文+禁转述。引入 GSD 风格 `## REVIEW COMPLETE` 会产生**两套结尾段冲突**。改成"对齐已有契约 + lint 校验"。
 
-**v2 修正**：v1 写的 `grep "$REVIEWER_OUTPUT"` 是伪代码——subagent 输出不会落盘成文件。改成**契约层 + lint 层**：
+**目标**：把 agent 现有自由输出契约**固化成机械可校验的模板**，方便后续新增 agent 时复用同套契约。
 
 **改动**：
 
-`agents/analysis-reviewer.md` 末尾固定 section 模板：
+**A. `agents/analysis-reviewer.md`** —— **不加新模板**。现状 line 82-119 的输出格式已是契约（包含 `**总体判断**：PASS / NEEDS_REVISION` + `## 给主线 AI 的下一步建议`），仅在文件**顶部 frontmatter 后**加一行注释作为 lint 锚点：
 ```markdown
----
-## REVIEW COMPLETE
-
-**Verdict**: <PASS | NEEDS_REVISION | ACCEPTED_WITH_ISSUES>
-**Issues**: <数量>
-**Top concerns** (≤ 3 项):
-1. ...
+<!-- completion-marker: 总体判断 / 给主线 AI 的下一步建议 -->
 ```
 
-`skills/req-analysis/SKILL.md` 调 reviewer 的步骤改成：
-> "调 analysis-reviewer 后，验证 chat 输出末尾含 `## REVIEW COMPLETE` 段落。若缺失，提醒 reviewer 补一次完整输出（不重跑评审，只补结尾段）。PM 看到 verdict 后做三选一处理。"
+**B. `skills/req-analysis/SKILL.md`** —— **不改流程**。现状 line 138-205 已强制贴原文+按 verdict 三选一。仅在步骤 4 末尾加一行验证：
+> "若 reviewer 输出**缺失 `**总体判断**：` 行或 `## 给主线 AI 的下一步建议` 段**，提醒 reviewer 按 agent 输出契约补全（不重跑评审，只补缺失段）。"
 
-`scripts/lint-agent-files.py`（新建）：
+**C. `scripts/lint-agent-files.py`（新建）**：
 ```python
-# 扫 agents/*.md，断言每个 agent 文件末尾含 marker 模板
-# 模板格式：## REVIEW COMPLETE / ## VERIFICATION COMPLETE 等
+# 扫 agents/*.md：
+# 1. 提取 frontmatter 后的 <!-- completion-marker: ... --> 注释
+# 2. 按注释列出的 section 名校验文档中"输出格式"段是否含这些 section
+# 3. 缺失 fail，列出 agent 名 + 缺失 section
 ```
 
-`tests/test-agent-files.sh`（新建）调上面脚本。
+**D. `tests/test-agent-files.sh`（新建）** 调 lint 脚本。
 
-**工作量**：30 分钟
+**为何不引入 GSD `## REVIEW COMPLETE`**：
+- 现状 PM 已看完整原文做三选一，机械检测段落价值低
+- 双套模板会让 reviewer 输出冗余（"## 给主线 AI 的下一步建议" + "## REVIEW COMPLETE"）
+- 现有契约本身已经"fail-closed"——缺 verdict 行就是错误输出
+
+**工作量**：30 分钟（实施内容变了但量不变）
 
 ---
 
 ### §3.4 P0-补充 #5 — Artifact 角色分工表
 
+> 🟡 **v3.1 修正**（默认采用选项 a）：grep 现状 `skills/_shared/pm-view/input-flow.md:7-9` 已是 §9.1 "各 skill 必读输入清单（全 stage 权威表）"——本质就是"哪个 skill 读哪些 artifact"的**单一权威源**。直接在顶部加新表会触发**双源漂移** + input-flow.md 从 386 → 430+ 行（接近未来 SKILL size 警告线）。
+>
+> **三选项**（推荐 a）：
+> - **a) 在 §9.1 现有表加"❌ 明确不消费"子列** —— 复用单一权威源，不增长文件结构 ✅ 推荐
+> - b) 新建 `skills/_shared/pm-view/artifact-roles.md` 独立文件，与 §9.1 互引
+> - c) 照原方案加 input-flow.md 顶部（不推荐，触发 size 问题）
+
 **目标**：明确每份文档"谁消费 / 谁明确不消费"，挡 AI 读过程档案污染上下文。
 
-**改动**：`skills/_shared/pm-view/input-flow.md` 顶部加表：
+> 🔍 **autoplan round 2 修正（grep 现状）**：第一轮审核漏了一步 grep。实地 `grep -n "❌" skills/_shared/pm-view/input-flow.md` 显示**现有已有 6 处 ❌ marker**（line 19/41/69/82/98/147），全部针对 `.engineering.md` 排除。
+> 所以 v3.1 §3.4 原表述 "现有 §9.1 只列 🟢/🟡/⚪ 三档" **不准确** —— ❌ pattern 已存在，缺的是**业务文档类**反向约束（brief / analysis / solution 在何 skill 不该读）。
+>
+> **Wave 1 #3 实施 done-definition**（避免实施时分歧）：
+> - **不是新增一列**，而是**扩展现有 ❌ pattern**——每个 stage 段补"❌ 业务文档类：xxx"行
+> - 每个 skill 段必须至少有一个 ❌ 行 OR 显式 `❌ 无（本 skill 是入口）` 标记
+> - 已存在的 `❌ 任何 .engineering.md` 保留不动，新增 ❌ 与之并列
 
-| Artifact | 写入方 | 消费方（AI 应读） | **明确不消费**（AI 不应读） |
-|---|---|---|---|
-| `brief.md` | new-req | req-analysis | task-execute / close-task |
-| `analysis.md` | req-analysis | req-solution | task-execute（用 solution 代替） |
-| `solution.md` | req-solution | task-plan / task-spec / task-execute | close-task |
-| `task-plan.md` | task-plan | task-spec | task-execute |
-| `tasks/task-NNN-*.md` PM 视图 | task-spec | task-execute / task-submit / close-task | 其他 task |
-| `tasks/task-NNN-*.engineering.md` | task-spec | task-execute / close-task | PM chat |
-| `.runs/events/<task>.jsonl` | task-transition / 各 skill | close-task（审计 I-CT7） | **PM chat（过程噪音）** |
-| `历史档案 / 执行日志` 段 | task-execute | close-task / 故障排查 | **task-execute 下次执行（污染）** |
+**核心增量是"业务文档类 ❌"维度**——现有 ❌ 只覆盖工程合同读取边界，缺业务文档（brief/analysis/solution/.runs）在下游 skill 的明确不读项。
+
+**改动（选项 a 默认方案）**：
+
+`skills/_shared/pm-view/input-flow.md` §9.1 现有按 stage 列的清单中，每个 skill 段末加一行 `❌ 明确不读：`（与现有 ❌ `.engineering.md` 行并列），覆盖以下高优先级业务文档类反向约束：
+
+| skill | ❌ 明确不读项（v3.1 新增反向约束） |
+|---|---|
+| `task-execute` | `brief.md`（用 solution.md 代替）/ `analysis.md`（同）/ 上一轮 `历史档案 段` |
+| `close-task` | `brief.md` / `analysis.md` / `solution.md`（已在 task spec 沉淀）|
+| `req-solution`（PM 视图）| 任何 `.engineering.md`（line 41 已有，保留）|
+| `task-plan` | 任何 `.engineering.md`（line 69 已有，保留）|
+| PM chat 渲染 | `.runs/events/<task>.jsonl`（过程噪音）|
+
+**为何不照搬原表**：
+- 现有 §9.1 是"按 skill 视角"的完整清单（line 21-130），覆盖 7 个 stage
+- 原方案按 artifact 视角列 8 行——信息量小于现有按 skill 表，且与现有表互不引用容易漂移
+- 真正缺的是"❌ 明确不读"反向列，不是再来一张正向表
 
 **工作量**：1 小时
+
+**Wave 2 依赖更新**（替代 §8.8 原 Wave 1→2 描述）：
+- Wave 2 P0-#1 `<required_reading>` XML 块**真实依赖** = §9.1 表加完"❌ 明确不读"列后，把每个 skill 步骤 0 的隐式约束**显式化**为 XML 块（不需要重新发明 Artifact 表）
 
 ---
 
@@ -606,13 +641,13 @@ python3 scripts/check-inventory-drift.py || exit 1
 | 1 | `scripts/check-prompt-injection.py` —— 移植 GSD 规则（11 条标准 + 4 条压缩存活 + Unicode），advisory 模式（不阻断），脚本可独立跑 | 1 天 |
 | 2 | `tests/fixtures/injection-samples/` —— 写 ~10 个含 injection pattern 的文档样本 + `tests/test-prompt-injection.sh` | 0.5 天 |
 | 3a | Claude hook adapter `.claude/hooks/claude-pm-injection-scanner.js` —— 包装步骤 1 脚本，按 Claude hook schema 注册 PostToolUse Read | 0.5 天 |
-| 3b | Codex hook adapter（如 Codex 提供 hook 机制）—— 同上但按 Codex schema | 待 Codex 提供（暂跳过）|
+| 3b | Codex hook adapter —— 同上但按 Codex schema（codex-cli 0.130.0 `features list` 中 `hooks` 已 `stable=true`）| 已可适配，当前因 PAIN_LINK 弱暂停 |
 
 **误报排除清单**：`requirements/active/` + `docs/` + `prototypes/` + `skills/_shared/anti-patterns/` 本身（防自伤）
 
 **Hook 行为**：severity HIGH → 弹警告到 chat（advisory，不阻断 Read）。
 
-**工作量**：1-2 天（不含 Codex adapter）
+**工作量**：1-2 天（不含 Codex adapter；Codex hooks 已 `stable`，需另适配 schema，PAIN_LINK 弱暂停）
 
 ---
 
@@ -703,7 +738,7 @@ LEARNINGS.md（业务仓产出，模板放 templates/）
 
 ```javascript
 // .claude/hooks/pm-context-monitor.js
-// AfterTool 钩子读 context usage：
+// PostToolUse 钩子读 context usage（Claude Code 是 PMAI 主入口；Gemini 走 AfterTool 时需另注册 adapter）：
 // 50%: "📊 上下文已用 50%，建议本 req 结束后开新会话"
 // 70%: "⚠️ 上下文 70%，建议立即走 close-req 然后开新会话"
 ```
@@ -714,12 +749,14 @@ LEARNINGS.md（业务仓产出，模板放 templates/）
 
 ### §3.11 P1-#12 — Subagent 类型白名单
 
-（内容同 v1，未改）
+> 🟢 **v3.1 修正**：grep 现状 `cross-skill.md` 30 行 7 条规则，方向兼容；但 `skills/_shared/anti-patterns/` **目录不存在**（Wave 4 才建）。配套 anti-pattern 文件**延后到 Wave 4**，cross-skill.md 加 TODO 注释指向。
 
-**新增约束**（写进 `_shared/pm-view/cross-skill.md`）：
+**新增约束**（写进 `_shared/pm-view/cross-skill.md` 第 8 条规则）：
 > "PM 视图 skill 内禁止 spawn Explore / general-purpose subagent 做'调研后写 PM 文档'。spawn subagent 只能用于'只读侦察'（找文件位置、grep 关键词），不能让它产出 PM 视图文档。"
+>
+> `<!-- TODO Wave 4: 配套 anti-pattern 沉淀进 _shared/anti-patterns/universal.md -->`
 
-配套写一条 anti-pattern 进 `_shared/anti-patterns/universal.md`。
+**Wave 4 待补**：anti-pattern 文件创建时把以上 TODO 解开，把规则的"反例形式"沉淀进 universal.md。
 
 **工作量**：30 分钟
 
@@ -765,7 +802,7 @@ GSD 有 4 国语言 README + npm 包发布。PMAI 是私人工具，永不需要
 
 GSD 用 `.planning/config.json` + "Absent = Enabled" 让用户开关 workflow.research / workflow.verifier 等。
 
-**不抄理由**：PMAI 21 skill 硬编码 + 简单容易演进。"想全局关掉某机制"诉求一次都没出现过。等真出现再说。
+**不抄理由**：PMAI 20 skill 硬编码 + 简单容易演进。"想全局关掉某机制"诉求一次都没出现过。等真出现再说。
 
 ### 4.5 Workstream 多工作流并行（v2 修正）
 
@@ -831,23 +868,33 @@ P2 列表（§2 #13-#22）按"什么实证事件出现就实施"组织：
 
 ## §7 结论与下一步
 
-### 7.1 v2 核心 5 件（重排：框架自守层 > 文档层）
+### 7.1 v3.1 核心清单（按 §8.8 D4=A + D6=B 重写）
 
-v1 把"思维模型 + anti-patterns + required_reading"列为核心，v2 修正——**框架自守代码层更值得首推**，文档层作为补充：
+> ⚠️ **v3.1 重写**（覆盖 v2 / v1 排序）：v2 把"代码层 P0 框架自守"放前 5 件，但 **§8.8 D4=A 决"prompt 层先做，代码层延后"** + **D6=B 决"Evidence-first DEFER"** → v2 5 件中 4 件需调整。
 
-| 优先 | 项 | 类型 | 为什么是核心 |
-|---|---|---|---|
-| 1 | **Mutation Registry**（P0-#24）| 代码层契约 | 显式登记所有写盘脚本，挡新脚本绕过 INVARIANTS |
-| 2 | **Inventory drift 全覆盖测试**（P0-#26）| 代码层自守 | 防 skill / script / template / agent 任意一处忘了同步 |
-| 3 | **SKILL size budget lint**（P0-#23）| 代码层自守 | 防 4 个已超阈值 skill 继续膨胀 |
-| 4 | **task-status 补 blocking reasons**（P0-#25）| 代码层观测 | PM 一眼看到下一步 + 阻塞原因 |
-| 5 | **Evidence-first 呈交块**（P1-#27）| skill 契约 | 挡 AI"我做了"含糊表述，明确分离 verified / claimed / unverified |
+**新 v3.1 核心 5 件（prompt 层为主，可立即开工）**：
 
-**补充层（也值得做，但优先级在以上之后）**：
-- `<required_reading>` 结构化加载（P0-#1）—— prompt contract，不能机械保证
-- Read Injection Scanner（P1-#6）—— 三步走（scripts → fixture → hook adapter）
-- Thinking Models + Anti-Patterns（P1-#7 / #8）—— memory 沉淀
+| 优先 | 项 | 类型 | Wave | 工作量 |
+|---|---|---|---|---|
+| 1 | **Completion Marker**（P0-#4）| agent 契约 + lint | Wave 1 | 30min |
+| 2 | **GATES.md 4 类归类**（P0-#2）| 文档分类 | Wave 1 | 1.5-2h |
+| 3 | **Artifact 角色分工 §9.1 反向列**（P0-#5）| skill 契约 | Wave 1 | 1h |
+| 4 | **Subagent 类型白名单**（P1-#12）| 跨 skill 约束 | Wave 1 | 30min |
+| 5 | **`<required_reading>` XML 块**（P0-#1）| prompt 结构化 | Wave 2 | 0.5d |
+
+**Wave 3 也值得做（独立 hook + 命令）**：
+- Context Monitor（P1-#11）—— 50%/70% 警告
 - `/extract-learnings`（P1-#10）—— PM 显式触发
+- Read Injection Scanner（P1-#6）—— 三步走
+
+**延后到代码层 Wave（按 D4=A + Q1=d 等真实实施触发）**：
+- Mutation Registry（P0-#24）—— ⛔ BLOCKED 待 §8.5 errata schema 重写
+- Inventory drift 全覆盖（P0-#26）—— ⚠️ NEEDS REVISION
+- SKILL size budget lint（P0-#23）—— v2 唯一无 finding 的代码层项，可单独提前
+- task-status blocking reasons（P0-#25）—— ⚠️ NEEDS REVISION
+
+**整节 DEFER（按 D6=B）**：
+- Evidence-first 呈交块（P1-#27）—— 见 §3.5 DEFER banner
 
 ### 7.2 下一步动作（v3 重写：3 步队列，先决策清账再实施）
 
@@ -894,23 +941,33 @@ v1 把"思维模型 + anti-patterns + required_reading"列为核心，v2 修正�
 
 **v3 关键变化**：**没有"本周做 P0"了**——所有"开工"都先经过步骤 1 决策清账。原 v2 §7.2 "本周做 P0-代码层 4 项" 已被 §8.2 证伪（Mutation/status-view/Inventory/required_reading 都 BLOCKED 或 NEEDS REVISION）。
 
-### 7.3 验证标准（v2 修正：可观测，不写机械保证）
+### 7.3 验证标准（v3.1 修正：按 D4=A / D5=A+Q1=d / D6=B 同步剔除延后项）
 
-P0 + P1 完成后，下次新 Claude 会话开始时应满足**可观测**指标（不写"机械保证"）：
+> ⚠️ **v3.1 修正**：v2 验证表混入 Mutation Registry / Inventory drift / status-view blocking / Evidence-first 等已被 D4/D5/D6 决议延后或 DEFER 的项。本表只保留 **Wave 1+2+3 完成后真实可验证的指标**。
 
-| 项 | 可观测的方式 |
-|---|---|
-| 所有 SKILL.md 含 `<required_reading>` 块 | ✅ `bash tests/test-skill-structure.sh` 通过 |
-| 高风险 skill 启动后输出"已读：X / Y / Z" | 🟡 PM 在 chat 看到回显 |
-| 所有 reviewer subagent 输出含 Completion Marker 模板 | ✅ `bash tests/test-agent-files.sh` 通过 |
-| 任何 `Read` 工具读到 injection pattern 弹警告 | 🟡 PM 在 chat 看到 advisory（不阻断）|
-| 所有写盘脚本登记进 `MUTATIONS.md` | ✅ `bash tests/test-mutation-registry.sh` 通过 |
-| Inventory drift 测试覆盖 5 类 entity | ✅ `bash tests/test-inventory-drift.sh` 通过 |
-| SKILL.md 行数 ≤ 400 或有豁免声明 | ✅ `bash tests/test-skill-size.sh` 通过 |
-| `/task-status` 输出含 next-action + blocking reasons | 🟡 PM 看输出 |
-| `/extract-learnings` 仅 PM 显式触发（不自动跑）| ✅ `INVARIANTS.md` I-RV4 + PM 验证 |
-| `/close-req` 完成后呈交块含 LEARNINGS 推荐 | 🟡 PM 在 chat 看到 |
-| 任何 context 用量 ≥ 50% 收到提醒 | 🟡 PM 在 chat 看到 |
+**Wave 1+2+3 完成后**（约 4-5 天 CC）的可观测指标：
+
+| 项 | 可观测的方式 | Wave |
+|---|---|---|
+| 所有 `agents/*.md` 含 `<!-- completion-marker: ... -->` 注释 + 对应 section | ✅ `bash tests/test-agent-files.sh` 通过 | 1 |
+| `GATES.md` 存在且覆盖 INVARIANTS.md 60 条 + 4-5 条运行时 gate | ✅ 文件存在 + 人工抽查 | 1 |
+| `input-flow.md §9.1` 每个 skill 段含 `❌ 明确不读` 反向列 | 🟡 PM 抽查 + grep `❌ 明确不读` | 1 |
+| `cross-skill.md` 含 Subagent 类型白名单第 8 条 | 🟡 PM 抽查 | 1 |
+| 所有 PM 视图 SKILL.md 步骤 0 含 `<required_reading>` XML 块 | ✅ `bash tests/test-skill-structure.sh` 通过 | 2 |
+| 任何 `Read` 工具读到 injection pattern 弹警告 | 🟡 PM 在 chat 看到 advisory（不阻断）| 3 |
+| `/extract-learnings` 仅 PM 显式触发（不自动跑）| 🟡 `INVARIANTS.md` I-RV4 + PM 验证（**非自动化测试**）| 3 |
+| `/close-req` 完成后呈交块含 LEARNINGS 推荐 | 🟡 PM 在 chat 看到 | 3 |
+| 任何 context 用量 ≥ 50% 收到提醒 | 🟡 PM 在 chat 看到 | 3 |
+
+**Wave 4 完成后**（按合并方案选定再补）：
+| `_shared/thinking/` 与 `_shared/anti-patterns/` 单 owner 不重叠 | 🟡 PM 抽查 + grep 互引 | 4 |
+
+**已 DEFER / 延后到代码层 Wave 的项（不在本表）**：
+- ~~MUTATIONS.md 登记~~ → §3.0.2 延后到真实实施
+- ~~Inventory drift 测试覆盖 5 类 entity~~ → §3.0.4 延后
+- ~~`/task-status` 含 blocking reasons~~ → §3.0.3 延后
+- ~~SKILL.md 行数 ≤ 400~~ → §3.0.1 单独可提前（4 个已超阈值 skill 有豁免计划）
+- ~~`/close-req` 呈交块含 verified/claimed/unverified 分流~~ → §3.5 整节 DEFER（D6=B）
 
 **图例**：✅ = 自动化测试可证；🟡 = 运行时可观测但不可自动证明
 
@@ -1054,24 +1111,30 @@ P0 + P1 完成后，下次新 Claude 会话开始时应满足**可观测**指标
 
 | §3 段 | 状态 | 被哪些 finding 命中 | 阻塞建议 |
 |---|---|---|---|
-| §3.0.1（SKILL size budget lint） | ✅ 可实施 | 无 critical finding | 可直接做 |
-| §3.0.2（Mutation Registry） | ⛔ BLOCKED | §8.2 Codex-F1（事件契约写反）+ §8.2 Subagent-F1（脚本数低估 12→25+）| 必须先重写 schema + 实地 grep 真实脚本清单 |
-| §3.0.3（task-status blocking） | ⚠️ NEEDS REVISION | §8.2 Codex-F3 + §8.2 Subagent-F4（改签名破坏 2 个 renderer / 与 audit-events 职责重叠）| 改 dataclass + 同步 renderer + blocking_reason 来源限定 |
-| §3.0.4（Inventory drift） | ⚠️ NEEDS REVISION | §8.2 Codex-F5 + §8.2 Subagent-F1（与 run-all curated suite 冲突 / lint 误伤）| 缩成"公共实体清单" + 加 allow-list |
-| §3.1（required_reading） | ⚠️ NEEDS REVISION | §8.2 Codex-F2（覆盖范围矛盾，21 skill vs 6 改动）| 加 `skill_structure.yml` manifest 限定 lint 范围 |
-| §3.2（GATES.md） | ✅ 可实施 | 无 finding | 可直接做 |
-| §3.3（Completion Marker） | ✅ 可实施 | 无 finding | 可直接做 |
-| §3.4（Artifact 角色分工表） | ✅ 可实施 | 无 finding | 可直接做 |
-| §3.5（Evidence-first 呈交块） | ⛔ BLOCKED | §8.1 S-F4 + §8.2 S-F2（无执行端 enforcement → 名实分离更危险）| 必须先做 `verification_emitted` 事件 + lint，否则不实施 |
-| §3.6（Read Injection Scanner） | ✅ 可实施 | 仅 §8.2 S-F5 提醒 §7.3 应升 ✅（不阻塞实施）| 可直接做 |
-| §3.7（_shared/thinking/） | ⚠️ NEEDS REVISION | §8.2 Codex-F4 + §8.2 Subagent-F3（抽象边界泄漏，与 §3.8 重叠）| 二选一：合并 thinking + anti-patterns 到同一文件（按生命周期阶段），或砍 anti-patterns 目录 |
+| §3.0.1（SKILL size budget lint） | ✅ 可实施 | 无 critical finding | 可直接做（按 D4=A 仍延后到代码层 Wave，除非单独提前）|
+| §3.0.2（Mutation Registry） | ⛔ BLOCKED + 🕓 延后 | §8.2 Codex-F1 + Subagent-F1 + **v3.1 Q1=d 决议等真实实施时再写** | schema 重写跟实施一起做更准 |
+| §3.0.3（task-status blocking） | ⚠️ NEEDS REVISION + 🕓 延后 | §8.2 Codex-F3 + Subagent-F4 + v3.1 Q1=d | 同上 |
+| §3.0.4（Inventory drift） | ⚠️ NEEDS REVISION + 🕓 延后 | §8.2 Codex-F5 + Subagent-F1 + v3.1 Q1=d | 同上 |
+| §3.1（required_reading） | ⚠️ NEEDS REVISION | §8.2 Codex-F2 + **v3.1 Finding-5（Wave 1→2 依赖描述）** | 真实依赖 = §3.4 选项 a 落地后把 §9.1 表"显式化"为 XML，非"重新发明 Artifact 表" |
+| §3.2（GATES.md） | ✅ 可实施（v3.1 工作量 1h→1.5-2h）| **v3.1 Finding-3**：60 条 I-* + 4-5 条运行时 gate，11 类前缀，工作量低估 50% | 可直接做但留 buffer |
+| §3.3（Completion Marker） | ✅ 可实施（v3.1 **方案重写**）| **v3.1 Finding-1**：与 `agents/analysis-reviewer.md:78-119` 已有契约冲突 | 不引入 GSD marker；改对齐已有 `**总体判断**` + `## 给主线 AI 的下一步建议` |
+| §3.4（Artifact 角色分工表） | ✅ 可实施（v3.1 **默认选项 a**）| **v3.1 Finding-2**：与 `input-flow.md §9.1` 重叠 | 选 a 在 §9.1 加"❌ 明确不读"列，避免双源 |
+| §3.5（Evidence-first 呈交块） | ⛔ BLOCKED + 🚫 DEFER | §8.1 S-F4 + §8.2 S-F2 + **§8.8 D6=B 整节 DEFER** | 不实施；§3.5 内容作为备忘留存 |
+| §3.6（Read Injection Scanner） | ✅ 可实施 | 仅 §8.2 S-F5 提 §7.3 应升 ✅ | 可直接做 |
+| §3.7（_shared/thinking/） | ⚠️ NEEDS REVISION | §8.2 Codex-F4 + Subagent-F3（抽象边界泄漏，与 §3.8 重叠）| Wave 4：合并或唯一 owner |
 | §3.8（_shared/anti-patterns/） | ⚠️ NEEDS REVISION | 同上 | 同上 |
-| §3.9（questioning-discipline） | ⚠️ NEEDS REVISION | §8.2 Codex-F4（§2/§3.7/§3.8/§7.2 四处入口）| owner 唯一化 |
-| §3.10（/extract-learnings） | ✅ 可实施 | 仅 §8.2 S-F5 提 §7.3 标 ✅ 但靠 PM 验证不是自动测试 | 可直接做（注意 §7.3 标 🟡 而非 ✅）|
-| §3.11（Context Monitor） | ✅ 可实施 | 无 finding | 可直接做 |
-| §3.12（Subagent 类型白名单） | ✅ 可实施 | 无 finding | 可直接做 |
+| §3.9（`/extract-learnings`） | ✅ 可实施 | 仅 §8.2 S-F5 提 §7.3 标 🟡 而非 ✅ | 可直接做 |
+| §3.10（Context Monitor） | ✅ 可实施 | 无 finding | 可直接做 |
+| §3.11（Subagent 类型白名单） | ✅ 可实施（v3.1 anti-pattern 延后 Wave 4）| **v3.1 Finding-4**：`_shared/anti-patterns/` 目录不存在 | cross-skill.md 加约束 + TODO 注释，Wave 4 补 anti-pattern |
 
-**汇总**：16 个 §3.x 子节中 — 7 个 ✅ 可直接做 / 6 个 ⚠️ NEEDS REVISION / 2 个 ⛔ BLOCKED / 1 个 ⚠️ 与已 BLOCKED 联动。**PM 决策前可立即开工的只有 7 项**（不到一半）。
+**汇总（v3.1 修订）**：15 个 §3.x 子节中 —
+- **7 个 ✅ 可立即开工**（§3.0.1 / §3.2 / §3.3 / §3.4 / §3.6 / §3.9 / §3.10 / §3.11）—— 注：§3.0.1 按 D4=A 仍延后到代码层 Wave
+- **3 个 🕓 延后到代码层 Wave**（§3.0.2 / §3.0.3 / §3.0.4，按 Q1=d）
+- **2 个 ⚠️ NEEDS REVISION 等 Wave 4 决策**（§3.7 / §3.8）
+- **1 个 ⚠️ Wave 2 依赖更新**（§3.1）
+- **1 个 🚫 DEFER**（§3.5）
+
+**v3 原表 bug**：§8.5 错位标 §3.9=questioning / §3.10=extract / §3.11=Context / §3.12=Subagent，实际编号 §3.9=extract / §3.10=Context / §3.11=Subagent（无 §3.12）。v3.1 已修复。
 
 ### §8.6 Decision Audit Trail（auto-decided 部分）
 
@@ -1156,20 +1219,35 @@ P0 + P1 完成后，下次新 Claude 会话开始时应满足**可观测**指标
 
 按 dependency + 工作量 + ROI 排成 4 个 Wave：
 
-**Wave 1：纯文档基础（半天，3-4h）—— 不依赖任何已有改动**
+**Wave 1：纯文档基础（v3.1 重估 3.5-4.5h）—— 不依赖任何已有改动**
+
+> 🟡 **v3.1 修订**：grep 现状后落 5 finding（详见 §3.2/§3.3/§3.4/§3.11 顶部 banner + §8.5 errata index）。原 v3 估 3-4h 偏乐观，主要是 GATES.md 工作量被低估 + §3.3/§3.4 实施方案需重写。
+
+| 顺序 | 项 | v3 估时 | v3.1 估时 | 备注 |
+|---|---|---|---|---|
+| 1 | P0-#4 Completion Marker | 30min | 30min | **方案重写**：对齐 `agents/analysis-reviewer.md` 已有契约，不引入 GSD `## REVIEW COMPLETE`（详 §3.3 banner）|
+| 2 | P0-#2 GATES.md 4 类归类 | 1h | **1.5-2h** | 60 条 I-* + 4-5 条运行时 gate；11 类前缀（详 §3.2 banner）|
+| 3 | P0-#5 Artifact 表 | 1h | 1h | **默认选项 a**：在 §9.1 现有表加"❌ 明确不读"列，避免与 input-flow.md 双源（详 §3.4 banner）|
+| 4 | P1-#12 Subagent 类型白名单 | 30min | 30min | cross-skill.md 加第 8 条 + TODO 注释；anti-pattern 配套延后 Wave 4（详 §3.11 banner）|
+
+**Wave 1.5：skill_structure.yml manifest 设计（autoplan round 2 新增，2-3h）—— Wave 2 真正 prereq**
+
+> 🔍 **autoplan round 2 发现的 SPOF**：v3.1 §3.1 banner 写"加 `skill_structure.yml` manifest 限定 lint 范围"，但 grep 验证：
+> - `find . -name 'skill_structure.yml'` → 无输出
+> - `scripts/lint-skill-structure.py` → missing
+> - `tests/test-skill-structure.sh` → missing
+>
+> manifest 完全不存在，又是 Wave 2 lint 实施的硬依赖。**不能合并进 Wave 2 的 0.5 天估时**——manifest 设计本身要决定：哪些 skill 标 `pm_view`、哪些标 `requires_required_reading`、`requires_read_echo` 阈值如何定。设计错 = Wave 2 lint 误伤或漏扫。
 
 | 顺序 | 项 | 工作量 | 备注 |
 |---|---|---|---|
-| 1 | P0-#4 Completion Marker（agent 文件契约 + lint）| 30min | 独立小项，先做练手 |
-| 2 | P0-#2 GATES.md 4 类归类 | 1h | 把 60 条 I-* 按 Pre-flight/Revision/Escalation/Abort 归类 |
-| 3 | P0-#5 Artifact 角色分工表 | 1h | **prompt 层基础**——决定哪些文件给谁消费 |
-| 4 | P1-#12 Subagent 类型白名单 | 30min | 独立约束，写进 cross-skill.md |
+| 4.5 | `skill_structure.yml` manifest 设计 | 2-3h | 列出 20 skill 的分类：`pm_view: bool` / `requires_required_reading: bool` / `requires_read_echo: bool` / `risk_level: high/normal`；PM 一句话确认分类是否对（首版从 `find skills -maxdepth 2 -name SKILL.md` 生成，不手填）|
 
-**Wave 2：required_reading（半天）—— 依赖 Wave 1 Artifact 表**
+**Wave 2：required_reading（半天）—— 依赖 Wave 1 #3 选项 a + Wave 1.5 manifest 落地**
 
 | 顺序 | 项 | 工作量 | 备注 |
 |---|---|---|---|
-| 5 | P0-#1 `<required_reading>` XML 块 | 0.5 天 | 需先做 P0-#5 Artifact 表才知道每个 SKILL 该读啥；含 skill_structure.yml manifest（按 §8.2 errata） |
+| 5 | P0-#1 `<required_reading>` XML 块 | 0.5 天 | **v3.1 依赖修正 + autoplan round 2 修正**：依赖 Wave 1 #3（§9.1 加 ❌ 列）+ Wave 1.5（manifest）双前置；本步把现有"必读输入"显式化为 XML（不是重新发明 Artifact 表），lint 按 manifest 执行（按 §8.2 Codex-F2 errata）|
 
 **Wave 3：独立 hook + 命令（2-3 天）—— 不依赖前面 Wave**
 
@@ -1185,16 +1263,412 @@ P0 + P1 完成后，下次新 Claude 会话开始时应满足**可观测**指标
 |---|---|---|---|
 | 9 | P1-#7/#8/#9 thinking + anti-patterns + questioning 合并 | 3-4 天 | **需先解决 §3.7/§3.8 NEEDS REVISION**（按 §8.2 Codex-F4/Subagent-F3 二选一：合并到 5 个生命周期文件 vs 保留两目录 + owner 唯一化）|
 
-**总工作量**：约 6-8 天 CC（Wave 1+2 = 1 天可立即启动；Wave 3 ≈ 2-3 天；Wave 4 ≈ 3-4 天）
+**总工作量**：约 6-8 天 CC（**autoplan round 2 修正**：Wave 1 = 3.5-4.5h；**Wave 1.5 manifest = 2-3h（新增 SPOF prereq）**；Wave 1+1.5+2 ≈ 1.5 天可启动；**Wave 3/4 估时不再承诺**——按 codex F1 建议等 Wave 1+2 落地后重估）
 
-**关键依赖**：
-- Wave 2 (P0-#1) 依赖 Wave 1 (P0-#5)
+**关键依赖（autoplan round 2 修正）**：
+- Wave 2 (P0-#1) **真实依赖** = Wave 1 #3 选项 a + **Wave 1.5 manifest 双前置**
 - Wave 4 (P1-#7/#8/#9) 依赖**先做架构决策**（5 件套合并方案）
-- Wave 3 各项独立，可并行或穿插 Wave 1/2
+- Wave 3 各项独立，可并行或穿插 Wave 1/1.5/2
+- **承诺边界**：只承诺 Wave 1+1.5+2 估时（共 ~1.5 天）；Wave 3/4 复盘后重估
 
 ---
 
-**End of GSD 借鉴分析 v3**
+## §9 v3.1 修订 changelog（2026-05-16 PM 审核 + grep 现状）
+
+**触发**：PM 在 Wave 1 开工前要求审核 v3 方案。AI 按 memory `feedback_autoplan_preread_existing_skill` 教训，先 grep `agents/` / `skills/_shared/pm-view/` / `INVARIANTS.md` 现状，再对照 v3 落地方案逐项审。
+
+**5 个 finding（带 PAIN_LINK + EVIDENCE）**：
+
+| # | Severity | Finding | EVIDENCE | 落地 |
+|---|---|---|---|---|
+| F1 | 🔴 HIGH | §3.3 与 `agents/analysis-reviewer.md:78-119` 已有输出契约冲突 | grep agents/ 现状 + req-analysis SKILL.md:152,204 已强制贴原文 | §3.3 整段重写，不引入 GSD marker |
+| F2 | 🟠 MED | §3.4 与 `input-flow.md §9.1` 双源 | input-flow.md:7-9 已是单一权威源 + 文件 386 行接近 size 警告 | §3.4 默认选项 a：在 §9.1 加"❌ 明确不读"列 |
+| F3 | 🟠 MED | §3.2 GATES.md 工作量低估 50% | INVARIANTS.md 11 类前缀 + 不止 60 条；含非 I-* 运行时 gate | §3.2 工作量 1h → 1.5-2h |
+| F4 | 🟡 LOW | §3.11 配套 anti-pattern 文件不存在 | `_shared/anti-patterns/` 目录未建（Wave 4 才建）| §3.11 配套延后 + cross-skill.md 加 TODO |
+| F5 | 🟠 MED | Wave 1→2 依赖描述不准确 | §9.1 已是 required_reading 等价物 | §8.8 Wave 1→2 依赖重写 |
+
+**"已决未同步"3 处补修**：
+
+| # | 决议 | 矛盾位置 | 落地 |
+|---|---|---|---|
+| 1 | D4=A（prompt 层先做）+ D6=B（Evidence DEFER）| §7.1 "v2 核心 5 件" 含 4 代码层 + 1 Evidence | §7.1 重写为 v3.1 核心清单（Wave 1+2 5 件）|
+| 2 | Q1=d（schema 等真实实施再写）| §7.3 验证表含 MUTATIONS / Inventory drift / status-view blocking 标 ✅ | §7.3 重写为 Wave 1+2+3 完成后可观测项 |
+| 3 | Q1=d | §3.0.2 工作量"半天"假设立即做 | §3.0.2 工作量改为"延后实施" |
+
+**附带修复**：§8.5 errata index 表 §3.9/§3.10/§3.11/§3.12 编号错位（v3 bug，实际 §3.9=extract / §3.10=Context / §3.11=Subagent，无 §3.12）。
+
+**v3.1 净改动**：约 100 行新增（10 处 Edit）+ §9 changelog（本节 ≈ 40 行）。
+
+---
+
+**End of GSD 借鉴分析 v3.1**
+
+---
+
+## §10 痛点驱动借鉴对照（v3.2，autoplan round 2 后）
+
+> **本节是 v3.2 最新权威结论**。前 §1-§9 是按"GSD 6 维度全面分析"组织的研究素材，方向是伪需求驱动；本节按 PM 真痛点（消费仓踩坑修复 vs GSD 原始设计）重新对齐。
+>
+> **frame 转变**：
+> - 之前：GSD 有 X，看 PMAI 能不能借 → 28 项矩阵 + Wave 1-4
+> - 现在：PMAI 踩了 Y 坑修了补丁，看 GSD 在类似场景的原始设计是否更优 → 5 个具体对照
+
+### §10.1 起源
+
+PM 真需求（原话）："我目前在消费仓中遇到的很多问题，都是因为我的框架的一些设计不合理，踩坑了……我们解决这些坑的方式，可能有两种情况，第一是没有找到最好的方案，第二是我们只修了一个小问题，但是背后其实是整个框架设计有问题。"
+
+→ **不是"全面研究 GSD"，而是"我的补丁治标还是治本，GSD 设计层有没有更优解"**。
+
+### §10.2 5 个真痛点 vs 文档已记录借鉴 — 速查表
+
+| # | 真痛点（已修 commit）| 文档对应借鉴项（§2 / §3）| 覆盖度 | 状态 |
+|---|---|---|---|---|
+| 1 | D13 modulespec 重写 / autoplan review 把 2h 放大到 30h+<br/>(commits: b85e35c → 17fa007) | §2 P1-#7 thinking models（Wave 4）+ §5 承认 GSD 有 `scope-reduction-prohibition` | ⚠️ 方向反 | 🟢 **不需借鉴** — PMAI §0 痛点锁已自解 |
+| 2 | I-DC1 文档落盘 3 道防线 / task-005 文案偏差事故<br/>(commit: 3c27a33) | **无**（§1.1 / §5 提到 STATE.md 单一权威源思想但**未列入借鉴矩阵**）| ❌ 遗漏 | 🔴 **真漏 — 应补借鉴** |
+| 3 | publish-to-lark 4 连 fix / lark-cli 1.0.27 升级<br/>(commits: 3474d64, 1dc080a, 2896e2c, 3b91ced) | §4.1 明确拒绝 SDK 双实现 + §2 P0-#24 mutation registry（对照不严格）| ❌ 无替代 | 🔴 **真漏 — 应补借鉴** |
+| 4 | close-task / close-req 对称化重构<br/>(commits: 9e9316f + e5a56c0 + 133c32d) | §2 P0-#1 `<required_reading>` XML 块（GSD 5 段骨架借了 1 段）| 🟡 借了但太窄 | 🟡 **扩展借鉴范围** |
+| 5 | PM-VIEW-RULES + 3 个超大 SKILL.md 拆 references<br/>(commit: ea2dc82) | §2 P0-#23 SKILL size budget lint（Wave 代码层延后）| ✅ 对得上 | ✅ **保持现状** |
+
+**覆盖统计**：
+- ✅ 1 项对得上（#5）
+- 🟡 1 项借了但太窄（#4）
+- 🔴 2 项真漏，文档完全没对应借鉴方案（#2 / #3）
+- 🟢 1 项不需借鉴（#1，PMAI 自解）
+
+**关键洞察**：文档审了 2 轮 + Wave 1-4 排好，**但真正能治本的 2 个借鉴方向（#2 STATE.md 思想 / #3 外部 API adapter 层）完全不在 Wave 任何位置**。Wave 1-4 全是"GSD 看着重要"的边角料（GATES.md 分类、Subagent 白名单、anti-pattern 文件），不是 PMAI 最痛的方向。
+
+### §10.3 详细判断（actionable 3 项）
+
+> ⚠️ **STALE 警告**：本节为 v3.2 推导历史，**最终结论以 §10.6 RV1 + §10.7 #8 为准**。下文 #2 末尾"如果借鉴成立，可以砍掉 I-DC1 / I-AD5 三道防线"已在 v3.4 RV1 被推翻——mutation 入口只解 state 字段一致性，**不解 I-DC1 markdown 落盘问题**，三道防线必须保留。本节保留仅为审计推导链；落地前请直接看 §10.7。
+
+#### 🔴 #2 STATE.md 单一权威源思想（真漏，应借鉴）
+
+**痛点**：`scripts/req-transition.py` + `task-transition.py` + `close-task.sh` 等都按"扫文件系统 + 多步写"实现状态变更，**没有 atomic CAS**。task-005 文案偏差事故的根因正是"task 文档/状态/事件流"三者不是原子写。
+
+**现修方式**：I-DC1 + I-AD5 + 三道防线（task-spec 12.6 / task-confirm fork / req-transition），每道防线 grep + auto-commit 兜底——**3 层 invariant 防一个根因**。
+
+**GSD 设计**（grep 现状验证）：
+- 唯一 state 文件 `STATE.md`
+- 写盘走 SDK CLI（禁止直接 Write/Edit STATE.md，反模式 #15）
+- 文件锁 + atomic CAS + 4 层读取优先级
+- 任何 mutation 必须经 mutation registry 登记
+
+**根因对比**：
+- PMAI：state 分散在 .req-meta.json / task.md 状态字段 / events.jsonl / worktree 物理状态，**任意两个之间都可能 drift**
+- GSD：state 集中 STATE.md，原子写从根上不存在 drift
+
+**借鉴建议**（轻量版，不是抄 STATE.md 文件本身）：
+- 不引入新 STATE.md 文件（PMAI 现有 4 处 state 改造成本高）
+- **借鉴的是"集中 mutation 入口 + 原子写"思想** → 把所有 state mutation 走 `_lib/mutation_lib.py`（已部分存在），强制原子 commit + audit hook
+- 工作量预估：1-2 天（合并现有 transition 脚本的 mutation 路径）
+- ~~如果借鉴成立，可以**砍掉 I-DC1 / I-AD5 三道防线**（从设计层规避）~~ **❌ v3.4 RV1 已推翻**：mutation 入口只解 state 字段一致性（task 状态/events.jsonl drift），**不解 I-DC1 markdown 文档落盘问题**（后者是 git working tree + 编辑时机问题）。**I-DC1 / I-AD5 三道防线必须保留**。详见 §10.6 RV1 + §10.7 #8 "🔴 关键警告"。
+
+#### 🔴 #3 外部 API adapter 层（真漏，应借鉴）
+
+**痛点**：lark-cli 1.0.27 升级一次 → publish-to-lark 4 个连环 fix。每升一次都要 patch 多个调用点。
+
+**现修方式**：每个调用点单独 fix。无 adapter 层。
+
+**GSD 设计**（grep 现状验证）：
+- GSD 用 SDK 双实现（TS + CJS）—— §4.1 PMAI 已明确拒绝（理由：包发布成本太高）
+- 但 GSD ADR-3524 `lint-shared-module-handsync.cjs` 思想可借：**单一外部依赖入口 + 接口契约 lint**
+
+**借鉴建议**（轻量版，不抄双实现）：
+- 把所有 lark-cli 调用集中到 `scripts/_lib/lark_adapter.py`（已部分存在，需强化）
+- 加 `tests/test-lark-adapter.sh` 校验：所有 publish/sheet/wiki 类操作只走 adapter，禁止直接 `subprocess.run(["lark-cli", ...])`
+- lark-cli 升级时只改 adapter 一处
+- 工作量预估：0.5-1 天
+
+#### 🟡 #4 skill template / skill 同构原则（借鉴范围太窄）
+
+**痛点**：close-task vs close-req 设计不对称，反复差异维护。
+
+**现修方式**：commit 9e9316f 重构为"统一两 phase 模式"——**事后对齐**而非**起手就同构**。
+
+**GSD 设计**（grep 现状验证）：
+- 每个 workflow.md 用统一 XML 5 段骨架：`<purpose>` / `<philosophy>` / `<required_reading>` / `<process>` / `<success_criteria>`
+- 强制所有 workflow 同构
+
+**文档已借**：§2 P0-#1 借了 `<required_reading>` 一段（5 段中的 1 段）
+
+**借鉴扩展建议**：
+- 把 P0-#1 从"只加 `<required_reading>` 块"扩展为"强制 SKILL.md 5 段骨架"
+- 配套 `scripts/lint-skill-structure.py`（v3.1 已规划，但只 lint 1 段）扩到 5 段都校验
+- 对应到 `skill_structure.yml` manifest（Wave 1.5）—— 每个 skill 标注哪些段必须有
+- 工作量预估：原 P0-#1 0.5 天 → 扩展后 1 天
+
+### §10.4 对原 §2 矩阵 / Wave 1-4 排序的影响
+
+**应废 / 应保留**：
+
+| 原 Wave 项 | 处理 (v3.4) | 理由 |
+|---|---|---|
+| Wave 1 #1 Completion Marker | ⏸️ **暂停** (v3.4 改) | 按 §0 痛点锁：PAIN_LINK 弱关联 = 默认 DEFER |
+| Wave 1 #2 GATES.md 分类 | ⏸️ **暂停** (v3.4 改) | 同上 — 无害但 ROI 不正 |
+| Wave 1 #3 Artifact §9.1 反向列 | ⏸️ **暂停** (v3.4 改) | 同上 |
+| Wave 1 #4 Subagent 白名单 | ⏸️ **暂停** (v3.4 改) | 同上 |
+| Wave 1.5 skill_structure.yml | 🟡 保留原计划 | v3.3 PM 决策：扩范围动作合并到 Wave 5.3 一起做 |
+| Wave 2 `<required_reading>` | 🟡 保留原计划 | v3.3 PM 决策：扩范围动作合并到 Wave 5.3 一起做 |
+| Wave 3 拆分 (v3.4 改)| — | v3.4 拆分：Context Monitor / extract-learnings 提升 / Read Injection 保持暂停 |
+|   └─ Context Monitor | 🟢 **提升 Wave 5.0a** | 真 PAIN_LINK 强 — PM 每个长会话都遇到 |
+|   └─ `/extract-learnings` | 🟢 **提升 Wave 5.0b** | 真 PAIN_LINK 强 — D13 那种"总结教训"手动做过 |
+|   └─ Read Injection Scanner | ⏸️ **保持暂停** | PM 单人场景几乎不触发 |
+| Wave 4 thinking/anti-patterns/questioning | ❌ **废弃** | #1 已 PMAI 自解，不需 GSD |
+| **Wave 5 痛点驱动新增 (v3.3 + v3.4 修订)** | 🔴 **新增** | PM 拍板 D-v32-1=B 后入计划 — 详见 §10.5 |
+
+**v3.4 工作量重算**：
+- ~~Wave 1~~（4 项暂停）: 0
+- Wave 1.5 manifest: 2-3h
+- Wave 2 required_reading: 0.5d
+- **Wave 5.0a Context Monitor**: 0.5d
+- **Wave 5.0b /extract-learnings**: 1d
+- **Wave 5.1 mutation 入口（v3.4 工作量重估）**: 3-5 天
+- Wave 5.2 lark-adapter: 0.5-1d
+- Wave 5.3 SKILL 5 段骨架: 1d
+- **合计**：~6.5-9 天（vs v3.3 的 4.5-5.5 天；增加因 Wave 5.1 重估 + Wave 5.0 提升）
+
+### §10.5 Wave 5 痛点驱动新增（PM 决策 D-v32-1=B，2026-05-17）
+
+**D-v32-1 PM 拍板**：✅ **B — 保留原 Wave 1-2 + 3 项真痛点借鉴作为 Wave 5 补充**
+
+未选 A（重排）理由：Wave 1-2 边角项保留无害，工作量小（1.5 天）；未选 C（先 smoke test）理由：3 项一起规划，方便统一排期。
+
+**Wave 5 详细清单（v3.4 修订）**：
+
+| Wave 5 # | 项 | 工作量 | 优先级 | 启动条件 / 真实收益 |
+|---|---|---|---|---|
+| **5.0a (v3.4 提升)** | 🆕 **Context Monitor**（50%/70% 警告 hook）| 0.5 天 | 🟡 中 | 独立 hook；解 PM 长会话 context 爆痛点 |
+| **5.0b (v3.4 提升)** | 🆕 **`/extract-learnings` 命令**（PM 显式触发）| 1 天 | 🟡 中 | 独立 skill；解 D13 那种总结手动做痛点 |
+| **5.0c (v3.5 新增)** | 🆕 **ADR 格式 + `docs/adr/`**（试写 ADR-0001 = D13 决策追溯）| 0.5 天 | 🔴 高 | 独立目录；**即时 evidence — 本文档 1476 行决策散落即反例**；GSD `docs/adr/` 10+ ADR verify 通过 |
+| **5.1 (v3.4 修订)** | 🆕 **集中 mutation 入口 + 原子写**（借 GSD STATE.md 思想轻量版）| **3-5 天**（v3.4 重估） | 🔴 高 | 独立；**v3.4 根因修正**：解 state 字段一致性（task 状态 / events.jsonl drift），**不解 I-DC1 markdown 落盘** — 后者是 git working tree + 编辑时机问题，本项无法砍 I-DC1 三道防线 |
+| **5.2 (v3.4 修订)** | 🆕 **lark-adapter 单一入口 + lint**（借 GSD ADR-3524 思想，不抄 SDK 双实现）| 0.5-1 天 | 🟡 中（v3.4 降级）| 独立；lark-cli 升级频率低（≈ 一年 1-2 次）→ ROI 真实但不紧急 |
+| 5.3 | 🆕 **SKILL 5 段骨架**（合并 Wave 1.5 + Wave 2 扩范围）| 1 天 | 🟡 中 | 依赖 Wave 1.5 + Wave 2 已完成；PMAI 现有 6 段结构已 80% 对齐 GSD 5 段，**实质是显式化已有结构 + lint manifest**，不是引入 XML 重写 |
+
+**Wave 5 实施顺序建议（v3.4）**：
+1. **Wave 5.0a + 5.0b 可任一时间穿插** — 独立小项
+2. **Wave 5.1 + 5.2 可并行** — 都是独立模块改造
+3. **Wave 5.3 排在 Wave 1.5+2 之后** — 5 段骨架需要先有 manifest + required_reading 基础
+
+**回头看条件**：
+- Wave 5.1 落地后：观察 state drift 类事故是否消失（**不包括 I-DC1 markdown 类事故，那需要另外的解**）
+- Wave 5.2 落地后：观察下次 lark-cli 升级是不是只改 adapter 一处
+- Wave 5.3 落地后：观察新 skill 创建时是不是天然同构
+
+**v3.4 下一步**：PM 排期。建议优先级：
+- **第一档（小投入高 ROI，可立即穿插）**：Wave 5.0a Context Monitor（0.5d）+ Wave 5.0b extract-learnings（1d）
+- **第二档（中投入解真痛点）**：Wave 5.2 lark-adapter（0.5-1d）+ Wave 5.3 SKILL 5 段骨架（1d，需 Wave 1.5/2 先做）
+- **第三档（重投入需先 PoC 验证）**：Wave 5.1 mutation 入口（3-5d）— 建议先用 1 天做 PoC，确认根因诊断后再投入剩余工作量
+
+---
+
+### §10.6 v3.4 复审 Finding 简表（2026-05-17）
+
+| # | Severity | Finding | PAIN_LINK | EVIDENCE | 落地位置 |
+|---|---|---|---|---|---|
+| RV1 | 🔴 Critical | Wave 5.1 根因诊断错位 — "借 STATE.md 砍 I-DC1" 是误判 | I-DC1 真痛点 = task-005 文案偏差事故；GSD STATE.md 解 state mutation；两个不同问题 | `INVARIANTS.md I-DC1` 定义 + GSD `STATE.md + atomic CAS` 架构；I-DC1 防 markdown 编辑 + dispatch 时机，不是 state 字段写 | §10.5 5.1 "真实收益" 列已修正 |
+| RV2 | 🟠 High | Wave 5.1 工作量 1-2 天严重低估 | D13 同模式 "2h 评估 → 30h 实施" | 涉及 ≥ 6 个核心脚本（task-transition / req-transition / close-task/req / audit-task-events / _lib/）+ GSD STATE.md 是多年沉淀 | §10.5 5.1 工作量 → 3-5 天 |
+| RV3 | 🟠 High | Wave 1 4 项"🟡 保留"逻辑不一致 | §0 痛点锁原则：PAIN_LINK 弱关联 = 默认 DEFER | §10.4 自己写"跟真痛点关联弱"+ memory `feedback_design_pain_guard` | §10.4 表 → 4 项改 ⏸️ 暂停 |
+| RV4 | 🟡 Medium | Wave 5.2 优先级过高 | lark-cli 升级频率低（一年 1-2 次） | 上次 1.0.27 升级到现在已几个月无事；adapter 也要维护 | §10.5 5.2 优先级 🔴 → 🟡 |
+| RV5 | 🟡 Medium | Wave 3 一刀切暂停过度 | Context Monitor + extract-learnings 有真 PAIN_LINK | PM 每个长会话遇到 context 爆 + D13 总结手动做过 | Wave 3 拆分：5.0a + 5.0b 提升 / Read Injection 保持暂停 |
+
+**v3.4 净改动**：约 +50 行（changelog 1 行 + §10.4 表更新 + §10.5 修订 + §10.6 新增）。文档总 ~1500 行。
+
+**v3.4 后状态**：所有 Wave 划分按"§0 痛点锁 + 真根因"对齐，无两可态。Wave 5.1 启动前需做 1 天 PoC 验证根因诊断。
+
+---
+
+## §10.7 可借鉴项总体优先级排序（v3.6，2026-05-17）
+
+> **本节是 v3.6 最终决策视图**。去掉 Wave / P1/P2/P3 分组（按 PM 要求），直接平铺所有可借鉴项 + 按 ROI 排 1-8 名。
+>
+> **看本节就够，不需要翻 §10.4 / §10.5 / §10.6**。
+>
+> 排序依据：PAIN_LINK 强度 + 工作量小 + 独立无依赖 + 启动风险低 → 综合 ROI。
+
+### 可借鉴项总表（按优先级排序）
+
+| 排名 | 项 | 工作量 | PAIN_LINK | 启动条件 | 风险 |
+|---|---|---|---|---|---|
+| 1 | **ADR 格式 + `docs/adr/`** | 0.5 天 | 🔴 强 — 本文档自身 1500+ 行决策散落即反例 | 独立，立即可启动 | 低 |
+| 2 | **Context Monitor hook**（50%/70% 警告）| 0.5 天 | 🔴 强 — PM 每个长会话都遇到 context 爆 | 独立 hook | 低 |
+| 3 | **lark-adapter 单一入口 + lint** | 0.5-1 天 | 🟢 中 — lark-cli 升级 4 连 fix 历史；频率 1-2 次/年 | 独立 | 低 |
+| 4 | **`/extract-learnings` 命令** | 1 天 | 🟢 中 — D13 那种总结手动做过 | 独立 skill | 低 |
+| 5 | **`skill_structure.yml` manifest** | 2-3 小时 | 🟢 中 — v3.1 §8.2 揭示 skill 总数 ≠ 6 skill lint 范围矛盾（当前 20 skill）| 独立 | 低 |
+| 6 | **`<required_reading>` XML 块显式化** | 0.5 天 | 🟢 中 — 防御性必读规则散落难统一 | 依赖 #5 | 低 |
+| 7 | **SKILL 5 段骨架**（强制 skill 同构）| 1 天 | 🟢 中 — close-task/close-req 对称化是事后补丁 | 依赖 #5 + #6 | 低-中 |
+| 8 | **集中 mutation 入口 + 原子写** | 1d PoC + 2-4d 实施 | 🟢 中 — state drift 类事故 | 建议 #1-#5 落地后再启动 | 🔴 高 |
+
+---
+
+### 每项详细
+
+#### 1. ADR 格式 + `docs/adr/`
+
+- **目标**：建立重大设计决策的标准 anchor，让 future-self 接续不用 grep 半天
+- **EVIDENCE**：GSD `docs/adr/` 10+ ADR（grep verify `0001-dispatch-policy-module.md` 等），编号清晰 + 模块化
+- **实施要点**：
+  - 建 `docs/adr/` 目录 + ADR 模板（背景 / 决策 / 后果 / 状态）
+  - 试写 ADR-0001：D13 modulespec 维护方案
+  - 顶部 README 加 ADR 索引
+- **风险点**：低 — 不动现有代码
+
+#### 2. Context Monitor hook
+
+- **目标**：PM 长会话避免 context 爆掉后才发现
+- **EVIDENCE**：GSD `hooks/` 含 context monitor 35%/25% 双阈值机制；本对话即是 PM 痛点证据
+- **实施要点**：
+  - `.claude/hooks/pm-context-monitor.js` PostToolUse 钩子读 context usage（Claude Code 是主入口；Gemini 入口才用 `AfterTool` adapter）
+  - 50% 提醒"建议本 req 结束后开新会话"
+  - 70% 警告"立即走 close-req 然后开新会话"
+  - 简化版（无自动 record）
+- **风险点**：低 — 仅 advisory 不阻断
+
+#### 3. lark-adapter 单一入口 + lint
+
+- **目标**：lark-cli 升级时只改 adapter 一处，不再 N 个调用点连环 fix
+- **EVIDENCE**：commits 3474d64 / 1dc080a / 2896e2c / 3b91ced 一次升级 4 连 fix；GSD ADR-3524 `lint-shared-module-handsync.cjs` 思想
+- **实施要点**：
+  - 集中所有 lark-cli 调用到 `scripts/_lib/lark_adapter.py`（已部分存在，需强化）
+  - `tests/test-lark-adapter.sh` 校验禁止直接 `subprocess.run(["lark-cli", ...])`
+  - **不抄 GSD SDK 双实现**（§4.1 已决拒绝）
+- **风险点**：低 — adapter 本身要维护，但比 N 处 patch 好
+
+#### 4. `/extract-learnings` 命令
+
+- **目标**：把每 req 的 Decision / Pattern / Surprise 3 类经验沉淀
+- **EVIDENCE**：memory `feedback_design_pain_guard` 等 16 条 memory 都是手动沉淀的结果
+- **实施要点**：
+  - 新建 `skills/extract-learnings/SKILL.md` + `scripts/extract-learnings.sh`
+  - **非 auto-trigger**（按 §8.8 D6 反对精致谎言原则）— PM 显式输入"沉淀经验"才执行
+  - `close-req` 完成时**列推荐**，不自动跑
+  - 输出到业务仓 `LEARNINGS.md`
+  - `INVARIANTS.md` 加 I-RV4 约束
+- **风险点**：低 — PM 显式触发
+
+#### 5. `skill_structure.yml` manifest
+
+- **目标**：建立 20 skill 分类基础，为后续 lint / 同构提供依据
+- **EVIDENCE**：grep `find skill_structure.yml` = 无输出（不存在）；v3.1 §3.1 banner 已规划；现状 `find skills -maxdepth 2 -name SKILL.md` = 20
+- **实施要点**：
+  - 新建 `skill_structure.yml`：`pm_view: bool` / `requires_required_reading: bool` / `requires_read_echo: bool` / `risk_level: high/normal`
+  - PM 一句话确认分类是否对
+- **风险点**：低 — 仅配置文件
+
+#### 6. `<required_reading>` XML 块显式化
+
+- **目标**：把现有 SKILL.md 步骤 0 隐式必读改成结构化 XML 块，便于 lint
+- **EVIDENCE**：GSD workflow.md `<required_reading>` 已是 prompt contract；memory `feedback_skill_reading_convergence` 揭示规则散落
+- **实施要点**：
+  - lint 按 #5 manifest 范围执行（不一刀切 20 skill）
+  - 现状 `input-flow.md §9.1` 已是单一权威源，本步只是显式化为 XML
+- **风险点**：低
+
+#### 7. SKILL 5 段骨架
+
+- **目标**：所有 skill 同构（不再像 close-task/close-req 那样事后对齐），防新 skill 不对称
+- **EVIDENCE**：close-task/close-req 对称化重构 commits（9e9316f / e5a56c0 / 133c32d）是事后对齐；GSD 5 段 XML 骨架强制同构；PMAI 现有 6 段结构已 80% 对齐
+- **实施要点**：
+  - 不是引入 XML 重写（PMAI SKILL 中文段落式），是**显式化已有结构**
+  - 把现有"必读输入 / 步骤 / 硬约束 / 出口条件"统一映射到 5 段
+  - `scripts/lint-skill-structure.py` 扩到 5 段都校验
+  - 按 #5 manifest 限定范围
+- **风险点**：低-中 — 20 skill 都要加注，内容不动
+
+#### 8. 集中 mutation 入口 + 原子写
+
+- **目标**：把分散在 task-transition / req-transition / close-task / close-req / events 等的 state mutation 集中到统一入口
+- **EVIDENCE**：GSD STATE.md 集中 state + 文件锁 atomic CAS + 4 层读取优先级
+- **🔴 关键警告（v3.4 RV1 已落）**：
+  - 真实收益 = **state 字段一致性**（task 状态 / events.jsonl drift）
+  - **不解 I-DC1 markdown 文档落盘问题**——后者是 git working tree + 编辑时机问题，本项**不能砍 I-DC1 三道防线**
+  - 之前 v3.2 §10.3 #2 写"可砍 I-DC1 三道防线"是误判
+- **实施要点**：
+  - **PoC（1 天）**：选 task-transition.py 一个 mutation 路径，改成走 `_lib/mutation_lib.py` + 加 audit hook，验证 (a) 是否真能简化代码 (b) 是否破坏现有 60+ I-* invariant 任何一条
+  - **实施（2-4 天）**：PoC 通过后，扩展到 req-transition / close-task / close-req 全部 mutation
+- **风险点**：🔴 高 — 涉及 ≥ 6 个核心脚本 + 60+ invariant 联动；GSD STATE.md 是多年沉淀，PMAI 1-2 天 grok 是 D13 同模式 trap
+
+---
+
+### ✅ 已部分实施（治标，lint 机制延后）
+
+| 项 | 现状 | 待补 |
+|---|---|---|
+| SKILL size budget lint（§2 #23）| ea2dc82 commit 已拆 references 治标（task-spec 588 / task-execute 548 / doc-update 442） | lint 机制（≤400 警告 / ≤600 hard cap） |
+
+### ⏸️ 暂停（不主动推进，PAIN_LINK 弱关联）
+
+| 项 | 原因 |
+|---|---|
+| Completion Marker（agent 输出契约，§2 #4）| PAIN_LINK 弱关联；现 analysis-reviewer 已有契约 |
+| GATES.md 4 类归类（§2 #2）| 无害但 ROI 不正 |
+| Artifact §9.1 反向列（§2 #5）| 与现有 ❌ pattern 重叠 |
+| Subagent 类型白名单（§2 #12）| 防御性约束，PM 单人场景未触发 |
+| Read Injection Scanner（§2 #6）| PM 单人场景几乎不触发 |
+
+### 🕓 等触发条件再启动（P2 触发式 + Q1=d 延后）
+
+| 项 | 触发条件 |
+|---|---|
+| `/health` 命令 + `--repair`（§2 P2 #13）| `check-worktree-residue.py` 误报 ≥ 3 次 |
+| Revision Loop 二次 review + 停滞检测（§2 P2 #14）| reviewer 改完 analysis 出现质量回退；与 #1 ADR 互补，先看 #1 效果 |
+| CHANGELOG 4-section + Reverted 标记（§2 P2 #15）| 撤回上版决策时（类似 D13 v3→v2）|
+| solution-reviewer subagent（§2 P2 #17）| solution 出现"PM 验收时才发现结构问题" |
+| plan-checker subagent（§2 P2 #18）| task 拆分反模式发生时 |
+| 并行 task `files_modified` + 冲突 lint（§2 P2 #19）| 并行 task 撞同文件 |
+| PROJECT-STATE.md（§2 P2 #21）| 跨 req 决策重复发生 |
+| Query registry（§2 P2 #28）| 新脚本读 state 第 3 次重复 parse 逻辑 |
+| task-status blocking reasons（§2 P0 #25）| Q1=d 决议等真实实施时再写 schema |
+| Inventory drift 全覆盖测试（§2 P0 #26）| Q1=d 决议等真实实施时再写 schema |
+
+### ❌ 废弃（明确不做）
+
+| 项 | 原因 |
+|---|---|
+| thinking + anti-patterns + questioning 合并 | PMAI §0 痛点锁已自解 review 膨胀 |
+| Evidence-first 呈交块（verified/claimed/unverified）| §8.8 D6=B — 无 enforcement = 精致谎言载体 |
+| GSD SDK 双实现 + TypeScript + npm 包发布 | §4.1 — PMAI 单人无诉求 |
+| MVP / Spike / Spec / UI / Secure 阶段变体 | §4.2 — 触发条件未满足 |
+| 多语言 README + npm 分发 | §4.3 — 永不需要 |
+| 67 命令式可配置（pmai.config.json）| §4.4 — PM 现 0 次诉求 |
+| multi-workstream 多工作流并行 | §4.5 — PM 单人单业务 |
+| Ambiguity 评分 4 维度 / SPIDR PM 版 | §8.8 D7 — analysis-reviewer + memory 已覆盖 |
+| Absent=Enabled 配置模式 | §8.8 D7 — PM 现 0 次诉求 |
+| 触发式 UI/Secure checklist | §8.8 D7 — PM 不主管 UI/Secure |
+
+---
+
+### 总工作量表
+
+| 范围 | 项数 | 工作量 |
+|---|---|---|
+| 可借鉴项 #1-#5 (独立可立即做) | 5 项 | **3-3.5 天** |
+| 可借鉴项 #6-#7 (依赖 #5 串行) | 2 项 | 1.5 天 |
+| 可借鉴项 #8 (高风险，建议 #1-#5 后) | 1 项 | 1d PoC + 2-4d 实施 |
+| ✅ 已部分实施 | 1 项 | lint 延后 |
+| ⏸️ 暂停（PAIN 弱）| 5 项 | 0 |
+| 🕓 等触发条件 | 10 项 | 0 |
+| ❌ 废弃 | 10+ 项 | 0 |
+| **全部启动合计** | 8 项 | **~6-9 天 CC** |
+
+---
+
+### 启动建议
+
+**马上开 #1 ADR 格式 + 试写 D13 ADR-0001**：
+- 0.5 天独立投入
+- 立即收益（这个文档自身能 archive 干净）
+- 验证 ADR 模式对 PMAI 是否真有效
+- 不动现有代码，零风险
+
+**推荐节奏**：
+- 第一周：#1 + #2 + #3 + #4 + #5（独立项，3-3.5 天）
+- 第二周：#6 + #7（依赖 #5 串行，1.5 天）
+- 第三周：根据前两周结果决定是否启动 #8 PoC
+
+---
+
+**End of GSD 借鉴分析 v3.7**
+
 
 
 
