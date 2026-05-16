@@ -112,8 +112,8 @@ test_infrastructure_skip() {
   pass_test
 }
 
-# Batch 3 (close-task --skip-doc-update flag) 已实现，TODO marker 已清理。
-# 验证 flag 真存在改放在 close-task 测试里更合适，这里不再断言历史 TODO。
+# Batch 3 (close-task --skip-doc-update flag) 历史标记，flag 已于 D13 final (2026-05-16) 整套废弃 (polish-10)。
+# 详见 docs/design/modulespec-重写方案.md §3 vp-1。
 
 test_call_modes_and_reconciliation_preserved
 test_settlement_four_situations

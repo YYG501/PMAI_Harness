@@ -334,7 +334,12 @@ python3 .claude/scripts/req-transition.py "$ACTIVE_REQ_DIR" --to 6
    - task status is `「已完成」`。
    - task branch has been merged to req branch（等价于 `/close-task` 已跑完）。
    - task worktree has been cleaned up。
-   - C2 half-close detection（CRITICAL）：如果 task 的 `## 文档偏差` section 同时含 `<!-- SKIP_DOC_UPDATE:` 字符串 AND `cleanup_status="pending"` 字符串（即 close-task 写入的 SKIP_DOC_UPDATE marker 且 cleanup 尚未完成），说明曾用 `close-task --skip-doc-update` 半关闭且 PM 还没补做沉淀；NOT treated as complete close，必须阻塞推进并列出 cleanup TODOs。`cleanup_status="done"` 视为已 cleanup（marker 保留作 audit trail），不阻塞。
+   - <!-- C2 half-close detection 已删（D13 final, 2026-05-16, polish-11）：
+        D13 final 后 close-task 永不写 SKIP_DOC_UPDATE marker（--skip-doc-update flag 整套废弃），
+        本检测永远 false，纯死代码。Stage 6→7 简化为「merged + worktree cleaned」即可推进；
+        旧 marker 残留（D13 final 前消费仓写的）由 close-req 步骤 1.5 rewrite 时 cleanup_status 改 done，
+        本步骤不再扫 marker 不再阻塞。详见 docs/design/modulespec-重写方案.md §3 vp-2 + polish-11 -->
+
 3. All satisfied → 对话式确认门：
 
    ```
@@ -360,8 +365,7 @@ Stage 6 → 7 blocked: 以下 task 尚未完整关闭
   - task branch not merged to req branch: 请运行 /close-task
 - task-003:
   - task worktree still exists: 请确认 /close-task 清理完成
-- task-004:
-  - half-close detected: 文档偏差 section 含 SKIP_DOC_UPDATE marker 且 cleanup_status="pending"；请完成 cleanup TODO（手动跑 /doc-update 沉淀功能清单），将 marker 的 cleanup_status 改为 "done"，再重跑 /req-stage-gate
+<!-- task-004 half-close 错误消息已删（D13 final polish-11，C2 detection 已废弃） -->
 ```
 
 边界情况：

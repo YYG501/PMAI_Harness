@@ -164,27 +164,9 @@ test_change_log_exclusion_algorithm() {
   pass_test
 }
 
-test_half_close_detection_behavior() {
-  start_test "req-stage-gate CRITICAL: half-close skip-doc-update marker blocks advancement"
-
-  local fake report
-  fake=$(_make_fake_req_for_gate)
-  report=$(_mock_gate_missing_report "$fake")
-
-  if ! echo "$report" | grep -F -q "task-002: half-close detected"; then
-    _fail "half-close marker was not identified"
-    echo "$report" >&2
-    rm -rf "$fake"
-    return
-  fi
-
-  _assert_contains "$REQ_STAGE_GATE_SKILL" "C2 half-close detection（CRITICAL）" "half-close documented" || { rm -rf "$fake"; return; }
-  _assert_contains "$REQ_STAGE_GATE_SKILL" "NOT treated as complete close" "half-close blocks" || { rm -rf "$fake"; return; }
-  _assert_contains "$REQ_STAGE_GATE_SKILL" "cleanup TODOs" "cleanup TODO output" || { rm -rf "$fake"; return; }
-
-  rm -rf "$fake"
-  pass_test
-}
+# test_half_close_detection_behavior 已删（D13 final, 2026-05-16, polish-10/11）
+# C2 half-close detection 在 req-stage-gate SKILL 已废弃（close-task vp-1 后永不写 marker）。
+# 详见 docs/design/modulespec-重写方案.md §3 vp-2 + polish-11。
 
 test_boundary_cases_and_output_format() {
   start_test "req-stage-gate boundary cases and missing-step output format"
@@ -228,7 +210,7 @@ test_stage56_consistency() {
 test_stage67_steps_replaced
 test_closed_task_verification_contract
 test_change_log_exclusion_algorithm
-test_half_close_detection_behavior
+# test_half_close_detection_behavior 已删（D13 final polish-11，C2 detection 已废弃）
 test_boundary_cases_and_output_format
 test_stage56_consistency
 

@@ -173,7 +173,7 @@ commit 完成后（task 状态仍是「执行中」），不提示 PM 回主窗�
 
 **走查时引导 PM 反推 req / 项目级文档偏差**：
 
-PM 看原型 / 看 diff 时，如果发现 brief / analysis / solution（PM 视图）/ prd / module 规格 等上游文档**写错或需修订**，提醒 PM 在 task PM 视图「📁 历史档案 → 业务层偏差」表填一行（默认空时多数 task 不需要填）。close-task 调 /doc-update 时会扫这段 + 工程合同 §10，呈交 PM 逐条确认改原文。
+PM 看原型 / 看 diff 时，如果发现 brief / analysis / solution（PM 视图）/ prd / module 规格 等上游文档**写错或需修订**，提醒 PM 在 task PM 视图「📁 历史档案 → 业务层偏差」表填一行（默认空时多数 task 不需要填）。**close-req 步骤 1.5** 会聚合本 req 所有 closed task 的这段 + 工程合同 §10，按目标文档调 doc-update rewrite mode 一次性沉淀（D13 final, 2026-05-16）。
 
 不要让 PM 把这种偏差只在对话里说而不落到表里——会丢。
 
