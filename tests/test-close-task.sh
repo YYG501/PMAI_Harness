@@ -45,34 +45,8 @@ _inject_doc_diff() {
   rm -f "$task_file.bak"
 }
 
-_mock_skip_doc_update_invocation() {
-  local task_file="$1"
-  local reason="${2:-}"
-  if [ -z "$reason" ]; then
-    echo 'Error: --skip-doc-update requires a reason. Usage: /close-task --skip-doc-update "<reason>"' >&2
-    return 2
-  fi
-
-  local stamp="2026-04-25T20:48:48+08:00"
-  local tmp="${task_file}.tmp"
-  awk -v reason="$reason" -v stamp="$stamp" '
-    /^## 文档偏差/ && !done {
-      print
-      print "<!-- SKIP_DOC_UPDATE: reason=\"" reason "\" created_at=\"" stamp "\" cleanup_status=\"pending\" -->"
-      print ""
-      print "## 人工 Cleanup TODO（A1 决议，doc-update 被 skip）"
-      print "- [ ] 手动运行 /doc-update --task <task-id> 沉淀功能清单进 docs/modules/<module>.md"
-      print "- [ ] cleanup 完成后，把上方 SKIP_DOC_UPDATE marker 的 cleanup_status 从 \"pending\" 改为 \"done\""
-      print "- [ ] 重跑 /req-stage-gate 验证半 close 解除"
-      done=1
-      next
-    }
-    { print }
-  ' "$task_file" > "$tmp"
-  mv "$tmp" "$task_file"
-  echo "task-001 已半 close（doc-update 被 skip）。需要人工 cleanup TODO 完成后才能推 stage 6→7。请运行 /doc-update 手动沉淀该 task 的功能清单。"
-  return 0
-}
+# _mock_skip_doc_update_invocation helper 已删（D13 final, 2026-05-16, polish-10）
+# 原 A1 半 close 路径整套已废弃，详见 docs/design/modulespec-重写方案.md §3 vp-1。
 
 _mock_autochain_prompt() {
   local req_dir="$1"
@@ -284,33 +258,11 @@ test_reject_on_merge_conflict() {
 }
 
 # =================================================
-# I-CT6: 文档偏差 not processed → reject
+# I-CT6: 文档偏差 阻塞测试已删（D13 final, 2026-05-16, polish-6）
+# 原 close-task.sh:63-94 文档偏差阻塞检查整段已删；
+# close-task 不再 reject 含偏差的 task，偏差留给 close-req 聚合处理。
+# 详见 docs/design/modulespec-重写方案.md §3 vp-1 + polish-6。
 # =================================================
-test_reject_if_doc_diff_not_processed() {
-  start_test "I-CT6 reject when 文档偏差 section has content"
-  fixture_setup
-
-  req_dir=$(fixture_create_req "req-001" "test" 6)
-  task=$(fixture_create_task "$req_dir" "007" "docdiff" "待执行" "/qa")
-  fixture_create_task_worktree "$task" "req-001-test" >/dev/null
-
-  _mark_task_done "$task"
-  _inject_doc_diff "$task"
-
-  if (cd "$FIXTURE_DIR/.worktrees/req-001-test" && bash "$CLOSE_TASK" "$task") >/tmp/out.$$ 2>/tmp/err.$$; then
-    _fail "should reject when doc diff present"
-  else
-    if grep -q "文档偏差" /tmp/err.$$; then
-      pass_test
-    else
-      _fail "stderr missing doc-diff message"
-      cat /tmp/err.$$ >&2
-    fi
-  fi
-
-  rm -f /tmp/out.$$ /tmp/err.$$
-  fixture_teardown
-}
 
 # =================================================
 # Happy path: full close succeeds; archive committed, branch/worktree deleted
@@ -657,123 +609,11 @@ test_ct8_does_not_exempt_mixed_commit() {
 }
 
 # =================================================
-# A1: --skip-doc-update reason is required
+# A1 skip-doc-update 测试组已删（D13 final, 2026-05-16, polish-10）
+# 原 6 测试覆盖 --skip-doc-update flag 行为，flag 已废弃。
+# 详见 docs/design/modulespec-重写方案.md §3 vp-1 + §X.2 polish-10。
+# 替代覆盖：tombstone error 路径由 close-task SKILL.md 顶部 §"旧 flag tombstone" 说明（暂无运行时 fixture）。
 # =================================================
-test_skip_doc_update_no_reason() {
-  start_test "A1 skip-doc-update rejects missing reason"
-  fixture_setup
-
-  req_dir=$(fixture_create_req "req-001" "test" 6)
-  task=$(fixture_create_task "$req_dir" "201" "skip-no-reason" "已完成" "/qa")
-
-  if _mock_skip_doc_update_invocation "$task" "" >/tmp/out.$$ 2>/tmp/err.$$; then
-    _fail "should reject --skip-doc-update without reason"
-  elif grep -q -- "--skip-doc-update requires a reason" /tmp/err.$$; then
-    pass_test
-  else
-    _fail "stderr missing --skip-doc-update requires a reason"
-    cat /tmp/err.$$ >&2
-  fi
-
-  rm -f /tmp/out.$$ /tmp/err.$$
-  fixture_teardown
-}
-
-test_skip_doc_update_with_reason() {
-  start_test "A1 skip-doc-update with reason exits zero"
-  fixture_setup
-
-  req_dir=$(fixture_create_req "req-001" "test" 6)
-  task=$(fixture_create_task "$req_dir" "202" "skip-with-reason" "已完成" "/qa")
-
-  if _mock_skip_doc_update_invocation "$task" "doc-update mock failure" >/tmp/out.$$ 2>/tmp/err.$$; then
-    pass_test
-  else
-    _fail "--skip-doc-update with reason should exit zero"
-    cat /tmp/err.$$ >&2
-  fi
-
-  rm -f /tmp/out.$$ /tmp/err.$$
-  fixture_teardown
-}
-
-test_skip_doc_update_marker_written() {
-  start_test "A1 skip-doc-update writes marker"
-  fixture_setup
-
-  req_dir=$(fixture_create_req "req-001" "test" 6)
-  task=$(fixture_create_task "$req_dir" "203" "skip-marker" "已完成" "/qa")
-  _mock_skip_doc_update_invocation "$task" "doc-update mock failure" >/tmp/out.$$ 2>/tmp/err.$$
-
-  if grep -q '<!-- SKIP_DOC_UPDATE:' "$task" && grep -q 'cleanup_status="pending"' "$task"; then
-    pass_test
-  else
-    _fail "SKIP_DOC_UPDATE marker missing or not pending"
-    cat "$task" >&2
-  fi
-
-  rm -f /tmp/out.$$ /tmp/err.$$
-  fixture_teardown
-}
-
-test_skip_doc_update_cleanup_todo_written() {
-  start_test "A1 skip-doc-update writes cleanup TODO"
-  fixture_setup
-
-  req_dir=$(fixture_create_req "req-001" "test" 6)
-  task=$(fixture_create_task "$req_dir" "204" "skip-todo" "已完成" "/qa")
-  _mock_skip_doc_update_invocation "$task" "doc-update mock failure" >/tmp/out.$$ 2>/tmp/err.$$
-
-  if grep -q '人工 Cleanup TODO' "$task" \
-    && grep -q '手动运行 /doc-update --task <task-id>' "$task" \
-    && grep -q 'cleanup_status 从 "pending" 改为 "done"' "$task" \
-    && grep -q '重跑 /req-stage-gate 验证半 close 解除' "$task"; then
-    pass_test
-  else
-    _fail "cleanup TODO block incomplete"
-    cat "$task" >&2
-  fi
-
-  rm -f /tmp/out.$$ /tmp/err.$$
-  fixture_teardown
-}
-
-test_skip_doc_update_marker_grep_pattern() {
-  start_test "A1 skip-doc-update marker grep pattern"
-  fixture_setup
-
-  req_dir=$(fixture_create_req "req-001" "test" 6)
-  task=$(fixture_create_task "$req_dir" "205" "skip-grep" "已完成" "/qa")
-  _mock_skip_doc_update_invocation "$task" "doc-update mock failure" >/tmp/out.$$ 2>/tmp/err.$$
-
-  if grep -q '<!-- SKIP_DOC_UPDATE:' "$task" && grep -q 'cleanup_status="pending"' "$task"; then
-    pass_test
-  else
-    _fail "Batch 3 marker grep failed"
-  fi
-
-  rm -f /tmp/out.$$ /tmp/err.$$
-  fixture_teardown
-}
-
-test_skip_doc_update_exit_zero() {
-  start_test "A1 skip-doc-update half-close exits zero"
-  fixture_setup
-
-  req_dir=$(fixture_create_req "req-001" "test" 6)
-  task=$(fixture_create_task "$req_dir" "206" "skip-exit-zero" "已完成" "/qa")
-  _mock_skip_doc_update_invocation "$task" "doc-update mock failure" >/tmp/out.$$ 2>/tmp/err.$$
-  rc=$?
-
-  if [ "$rc" -eq 0 ]; then
-    pass_test
-  else
-    _fail "expected exit 0, got $rc"
-  fi
-
-  rm -f /tmp/out.$$ /tmp/err.$$
-  fixture_teardown
-}
 
 test_autochain_has_next_task() {
   start_test "DX RU6 auto-chain prompts next task"
@@ -893,7 +733,7 @@ test_reject_if_task_branch_missing
 test_reject_if_req_worktree_missing
 test_reject_if_task_worktree_dirty
 test_reject_on_merge_conflict
-test_reject_if_doc_diff_not_processed
+# test_reject_if_doc_diff_not_processed 已删（D13 final polish-6）
 test_reject_if_event_stream_missing
 test_reject_if_state_machine_skipped
 test_reject_if_commit_predates_execution
@@ -901,15 +741,10 @@ test_ct8_exempts_engineering_md_only_commit
 test_ct8_exempts_task_md_only_commit
 test_ct8_does_not_exempt_mixed_commit
 test_happy_path_close_task
-test_skip_doc_update_no_reason
-test_skip_doc_update_with_reason
-test_skip_doc_update_marker_written
-test_skip_doc_update_cleanup_todo_written
-test_skip_doc_update_marker_grep_pattern
+# test_skip_doc_update_* 6 个测试已删（D13 final polish-10, --skip-doc-update flag 废弃）
 test_autochain_has_next_task
 test_autochain_all_done
 test_autochain_user_n
-test_skip_doc_update_exit_zero
 test_happy_path_conductor_worktree_path
 
 report_results "close-task"

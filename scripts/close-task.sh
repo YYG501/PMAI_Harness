@@ -60,41 +60,11 @@ if [ "$STATUS" != "已完成" ]; then
   exit 1
 fi
 
-# --- 检查文档偏差是否已处理（跨两文件 / 兼容旧格式） ---
-collect_diff_section() {
-  local file="$1"
-  local heading="$2"
-  sed -n "/^${heading}/,/^## /{/^${heading}/d;/^## /d;p;}" "$file" \
-    | grep -v '^$' \
-    | grep -v '^>' \
-    | grep -v '^<!--' \
-    | grep -v '^|.*文档位置.*文档原文.*实际实现' \
-    | grep -v '^|.*---' \
-    | grep -v '^---' \
-    | grep -v '无偏差' \
-    | head -20 || true
-}
-
-DOC_DIFF=""
-if [ "$HAS_ENG" = "true" ]; then
-  # 新格式：偏差主要在工程合同 §10；PM 走查偏差也可能在主文件 📁 历史档案
-  DOC_DIFF=$(collect_diff_section "$ENG_FILE" "## 10\\. 文档偏差")
-  if [ -z "$DOC_DIFF" ]; then
-    # 兼容性 fallback：主文件 ## 文档偏差（旧格式 section 残留）
-    DOC_DIFF=$(collect_diff_section "$TASK_FILE" "## 文档偏差")
-  fi
-else
-  # 旧格式：偏差在主文件 ## 文档偏差
-  DOC_DIFF=$(collect_diff_section "$TASK_FILE" "## 文档偏差")
-fi
-
-if [ -n "$DOC_DIFF" ]; then
-  echo "⚠️ 检测到未处理的文档偏差。请先运行 /doc-update 处理偏差后再关闭 task。" >&2
-  echo "" >&2
-  echo "文档偏差内容：" >&2
-  echo "$DOC_DIFF" >&2
-  exit 1
-fi
+# --- 偏差记录留作 close-req 聚合输入（D13 final, 2026-05-16, polish-6） ---
+# 不在 close-task 阶段调 /doc-update（避免 N 次启动成本累加，§0.1 痛点）。
+# 偏差原样保留在 task 文件，由 close-req 步骤 1.5 聚合处理。
+# 详见 docs/design/modulespec-重写方案.md §0.1 + §1 + §3 vp-1。
+# 历史 collect_diff_section helper + DOC_DIFF 阻塞 block 已删。
 
 # --- 提取分支名 ---
 BRANCH=$(extract_task_field "$TASK_FILE" "分支" | sed 's/[ 	].*//')

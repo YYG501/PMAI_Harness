@@ -48,7 +48,7 @@ SUITES=(
   quick-fix/test-sanitize.sh
   e2e/test-full-task-loop.sh
   e2e/test-doc-update-failure-recovery.sh
-  e2e/test-skip-doc-update-recovery.sh
+  # e2e/test-skip-doc-update-recovery.sh 已删（D13 final polish-10, --skip-doc-update flag 废弃）
   e2e/test-pushback-loop.sh
   e2e/v4_T22_single_window_lifecycle.sh
 )

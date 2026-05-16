@@ -62,39 +62,33 @@ PENDING_MARKER="$REPO_ROOT/.runs/pending-close-task.json"
 | req worktree 内 | 不存在 | **报错**："没有待 finalize 的 task。请先在 task 窗口运行 /close-task" |
 | 主仓或其他位置 | - | **报错**："请在 task 窗口或 req 窗口运行 /close-task" |
 
-## --skip-doc-update flag（A1 紧急逃生舱）
+## 改造说明（D13 final, 2026-05-16, §0.1 token 启动成本）
 
-（在 Phase 1 内使用——PM 主动 skip 步骤 1 的 doc-update 调用，写 marker 留待后续人工沉淀）
+<!-- WHY breadcrumb: D13 final 改造把 modulespec 沉淀从 close-task per-task 推到 close-req 末聚合。
+     详见 docs/design/modulespec-重写方案.md。任何"为什么 close-task 不调 doc-update"
+     的疑问先读那份方案 §0.1 + §1 + §3 vp-1。-->
 
+**默认行为反转**：close-task **不调** `/doc-update`（任何模式都不调）。task close 只 merge + 归档，
+**不动 docs/modules/*.md**。modulespec 维护推迟到 close-req 末统一 rewrite（doc-update §8 rewrite mode）。
 
-PM activates by calling close-task with `--skip-doc-update` flag。
+**台 PM 心智模型注脚**（防误判）：
 
-Reason is REQUIRED。If PM does not provide reason, refuse with exit non-zero and message:
+- 你跑完 `/close-task` 看不到 modulespec 变化 = **正常**（D13 设计，不是 bug）
+- 沉淀在 `/close-req` 末批量发生，你那时一次审完整段 diff
+- 这是为节省 N 次 doc-update 启动 token 成本（详见 §0.1）
+
+### 旧 flag tombstone
+
+旧版本支持的 `--skip-doc-update` / `--doc-update-now` flag **已于 D13 final 废弃**。
+PM/AI 如带这两个 flag 调用 close-task：
 
 ```text
-Error: --skip-doc-update requires a reason. Usage: /close-task --skip-doc-update "<reason>"
+Error: --skip-doc-update / --doc-update-now 已废弃（D13 final, 2026-05-16）。
+       close-task 不再调 doc-update；正常 close-task 即可，modulespec 由 close-req 末统一 rewrite。
+       详见 docs/design/modulespec-重写方案.md。
 ```
 
-On valid invocation:
-
-1. Skip the `/doc-update` call entirely。
-2. Write into task 文件「文档偏差」section this EXACT marker (on one line):
-   ```html
-   <!-- SKIP_DOC_UPDATE: reason="<PM-provided reason>" created_at="<ISO 8601 timestamp>" cleanup_status="pending" -->
-   ```
-3. Immediately after marker, append this cleanup TODO block:
-   ```markdown
-   ## 人工 Cleanup TODO（A1 决议，doc-update 被 skip）
-   - [ ] 手动运行 /doc-update --task <task-id> 沉淀功能清单进 docs/modules/<module>.md
-   - [ ] cleanup 完成后，把上方 SKIP_DOC_UPDATE marker 的 cleanup_status 从 "pending" 改为 "done"
-   - [ ] 重跑 /req-stage-gate 验证半 close 解除
-   ```
-4. Continue all other close steps (merge branch, clean worktree, state machine update)。
-5. Output at end:
-   ```text
-   task-NNN 已半 close（doc-update 被 skip）。需要人工 cleanup TODO 完成后才能推 stage 6→7。请运行 /doc-update 手动沉淀该 task 的功能清单。
-   ```
-6. Exit with code 0 (close-task itself succeeded; doc-update was intentionally skipped)。
+→ 必须 exit non-zero（fail loud）；不要 silent ignore。
 
 ## Phase 1：在 task worktree 内执行
 
@@ -188,22 +182,27 @@ git -C "$TASK_WORKTREE" commit -m "task-NNN close-prep: PM 视图与原型对齐
 
 性质不同，串行处理不合并。
 
-### 步骤 1：检查文档偏差（跨两文件 / 兼容旧格式）
+### 步骤 1：偏差记录留作 close-req 聚合输入（D13 final, 不调 doc-update）
 
-兼容性判断：
+**D13 final 改造**：close-task **不调** `/doc-update`。偏差记录（PM 视图历史档案 + 工程合同 §10）原样保留在 task 文件里，由 close-req 步骤 1.5 聚合处理（按目标文档 rewrite OR patch）。
+
+兼容性判断（仅用于校验偏差段是否存在 / 格式是否正确，不再触发 /doc-update）：
+
 ```bash
 ENG_FILE="${TASK_FILE%.md}.engineering.md"
 [ -f "$ENG_FILE" ] && HAS_ENG=true || HAS_ENG=false
 ```
 
-读取偏差记录：
+校验（这一步必跑，是 close-req 聚合的输入约束）：
 
-1. **PM 视图主文件** 的 `## 📁 历史档案` 区域（新格式）或 `## 文档偏差` section（旧格式）— PM 走查时记录的偏差
-2. **工程合同** 的 `## 10. 文档偏差` 表（仅 `HAS_ENG=true`）— agent 在执行中发现的工程层偏差
+1. **PM 视图主文件** `## 📁 历史档案` 含 `### 业务层偏差` 段（即使是「无偏差」也要存在该段）
+2. **工程合同** `## 10. 文档偏差` 表（仅 `HAS_ENG=true`；同样允许「无偏差」）
 
 判断：
-- **任一处有偏差记录**：先调用 `/doc-update` 处理偏差（doc-update 会按相同兼容模式读两文件 / 单文件并按规则沉淀），等 `/doc-update` 完成后再继续
-- **所有偏差源都无偏差 / 偏差已处理**：继续下一步
+- **段缺失** → 报错让 PM 补段头（即使填「无偏差」）；不能省段，否则 close-req 聚合会找不到锚点
+- **段存在（含「无偏差」或具体表内容）** → 继续下一步，**不调 /doc-update**
+
+> **为什么不在这里调 /doc-update**：见本文件顶部「改造说明（D13 final）」。简言之，per-task 调 doc-update 是 N 次启动成本累加的根源（§0.1 痛点）；推迟到 close-req 末统一 rewrite。
 
 ### 步骤 1.5：视觉规范反馈反推 DESIGN.md（`_shared/pm-view/input-flow.md` §9.4 第四类）
 
