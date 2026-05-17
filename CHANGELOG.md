@@ -2,7 +2,7 @@
 
 PM-AI-Workflow 生成器仓的演进记录。本文件**只记影响下游业务仓的改动**——
 `scripts/` / `skills/` / `templates/` / `agents/` / `INVARIANTS.md` / `CLAUDE.md.tmpl`
-等同步到业务仓的内容；不记 `tests/` / `docs/archive/` / `RUNTIME.md` / `TODOS.md`
+等同步到业务仓的内容；不记 `tests/` / `docs/归档/` / `RUNTIME.md` / `TODOS.md`
 等仅生成器仓内部用的文件。
 
 > **入口**：业务仓续 active req 或起新 req 前，先看顶部"已发布版本"段确认是否需要
@@ -64,7 +64,7 @@ PM-AI-Workflow 生成器仓的演进记录。本文件**只记影响下游业务
 - `3a4a98a` refactor(scripts): worktree 物理路径解析抽 `_lib/worktree.sh` helper
 - `38313a9` feat(skills): task-plan 反模式扩容 + close-req 覆盖度判断 + INVARIANTS 主索引（60 条不变量速查）
 - `95dca9e` feat(scripts): worktree 残留检测脚本 + 集成 req-stage-gate
-- `2560cb8` refactor(docs): 归档 21 份历史设计档案到 docs/archive/design/
+- `2560cb8` refactor(docs): 归档 21 份历史设计档案到 docs/归档/完成/
 
 **业务仓需注意**：
 
@@ -99,4 +99,4 @@ PM-AI-Workflow 生成器仓的演进记录。本文件**只记影响下游业务
 - `RUNTIME.md` — 当前运行时状态 / 续接入口
 - `框架同步-SOP.md` — 生成器 → 业务仓 hotfix 同步流程
 - `INVARIANTS.md` — 框架不变量清单
-- `docs/archive/DX-AUDIT-2026-05-08.md` — 2026-05-08 DX 审计档案
+- `docs/归档/完成/DX-AUDIT-2026-05-08.md` — 2026-05-08 DX 审计档案

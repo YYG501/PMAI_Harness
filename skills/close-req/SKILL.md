@@ -100,7 +100,7 @@ PENDING_MARKER="$REPO_ROOT/.runs/pending-close-req.json"
 <!-- WHY breadcrumb: D13 final 把 modulespec 沉淀从 close-task per-task 推到这一步聚合。
      输入源不再是 SKIP_DOC_UPDATE marker（close-task vp-1 后永远不写 marker），
      改为遍历所有 closed task 直接收集偏差。详见
-     docs/design/modulespec-重写方案.md §0.1 + §1 + §3 vp-2 + polish-1/7/13/15。 -->
+     docs/归档/完成/D13-modulespec/主方案.md §0.1 + §1 + §3 vp-2 + polish-1/7/13/15。 -->
 
 **目的**：D13 final 下 close-task 永不调 doc-update（不写 modulespec），所有 task 的偏差与功能清单累积到本步骤一次性沉淀。N 次 doc-update 启动成本合并成本 step 一次（§0.1 痛点）。
 
@@ -146,7 +146,7 @@ PENDING_MARKER="$REPO_ROOT/.runs/pending-close-req.json"
 <!-- WHY breadcrumb: D13 final 把每 task doc-update commits 数（COVERAGE_COMMITS）
      这个 per-task metric 砍掉，改用步骤 1.5 实际 rewrite 的目标文档 / 模块清单。
      close-task 不再调 doc-update 后，COVERAGE_COMMITS 永远 0 会让旧 metric 误判。
-     详见 docs/design/modulespec-重写方案.md §3 polish-4。 -->
+     详见 docs/归档/完成/D13-modulespec/主方案.md §3 polish-4。 -->
 
 读步骤 1.5 doc-update §8 返回的覆盖清单（polish-2 输出契约）：
 

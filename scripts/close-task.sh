@@ -63,7 +63,7 @@ fi
 # --- 偏差记录留作 close-req 聚合输入（D13 final, 2026-05-16, polish-6） ---
 # 不在 close-task 阶段调 /doc-update（避免 N 次启动成本累加，§0.1 痛点）。
 # 偏差原样保留在 task 文件，由 close-req 步骤 1.5 聚合处理。
-# 详见 docs/design/modulespec-重写方案.md §0.1 + §1 + §3 vp-1。
+# 详见 docs/归档/完成/D13-modulespec/主方案.md §0.1 + §1 + §3 vp-1。
 # 历史 collect_diff_section helper + DOC_DIFF 阻塞 block 已删。
 
 # --- 提取分支名 ---

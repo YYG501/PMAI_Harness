@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# codex adapter. See docs/archive/design/设计-执行者可选.md §4.2
+# codex adapter. See docs/归档/完成/设计-执行者可选.md §4.2
 #
 # Inputs (env vars):
 #   TASK_FILE, TASK_WORKTREE, PROMPT_FILE, EXECUTOR_MODEL, MAIN_REPO_ROOT

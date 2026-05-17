@@ -65,7 +65,7 @@ PENDING_MARKER="$REPO_ROOT/.runs/pending-close-task.json"
 ## 改造说明（D13 final, 2026-05-16, §0.1 token 启动成本）
 
 <!-- WHY breadcrumb: D13 final 改造把 modulespec 沉淀从 close-task per-task 推到 close-req 末聚合。
-     详见 docs/design/modulespec-重写方案.md。任何"为什么 close-task 不调 doc-update"
+     详见 docs/归档/完成/D13-modulespec/主方案.md。任何"为什么 close-task 不调 doc-update"
      的疑问先读那份方案 §0.1 + §1 + §3 vp-1。-->
 
 **默认行为反转**：close-task **不调** `/doc-update`（任何模式都不调）。task close 只 merge + 归档，
@@ -85,7 +85,7 @@ PM/AI 如带这两个 flag 调用 close-task：
 ```text
 Error: --skip-doc-update / --doc-update-now 已废弃（D13 final, 2026-05-16）。
        close-task 不再调 doc-update；正常 close-task 即可，modulespec 由 close-req 末统一 rewrite。
-       详见 docs/design/modulespec-重写方案.md。
+       详见 docs/归档/完成/D13-modulespec/主方案.md。
 ```
 
 → 必须 exit non-zero（fail loud）；不要 silent ignore。

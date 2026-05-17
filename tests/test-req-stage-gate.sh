@@ -166,7 +166,7 @@ test_change_log_exclusion_algorithm() {
 
 # test_half_close_detection_behavior 已删（D13 final, 2026-05-16, polish-10/11）
 # C2 half-close detection 在 req-stage-gate SKILL 已废弃（close-task vp-1 后永不写 marker）。
-# 详见 docs/design/modulespec-重写方案.md §3 vp-2 + polish-11。
+# 详见 docs/归档/完成/D13-modulespec/主方案.md §3 vp-2 + polish-11。
 
 test_boundary_cases_and_output_format() {
   start_test "req-stage-gate boundary cases and missing-step output format"

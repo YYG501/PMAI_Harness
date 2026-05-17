@@ -1,11 +1,11 @@
 # 框架同步 SOP（手动操作手册）
 
-**性质**：hotfix 阶段过渡用。等 `docs/archive/design/设计-框架同步.md` §5 sync 脚本实施完成后，本文档撤销，改用脚本。
+**性质**：hotfix 阶段过渡用。等 `docs/归档/完成/设计-框架同步.md` §5 sync 脚本实施完成后，本文档撤销，改用脚本。
 
 **适用对象**：PM 把 PM-AI-Workflow 生成器仓的 `scripts/` `skills/` 同步到下游消费项目（example-consumer-app / ExampleConsumerB 等）。
 
 **关联文档**：
-- `docs/archive/design/设计-框架同步.md`（v1 定稿 2026-04-26，853 行）：完整 sync 机制设计（manifest + 脚本 + worktree 报告）
+- `docs/归档/完成/设计-框架同步.md`（v1 定稿 2026-04-26，853 行）：完整 sync 机制设计（manifest + 脚本 + worktree 报告）
 - `TODOS.md` §UP「框架同步方案」：实施跟踪（标"设计完成，待实施"）
 
 ---
@@ -20,7 +20,7 @@
 
 不需要同步的场景：
 
-- PM-AI-Workflow 改动只在 `tests/` / `docs/archive/design/设计-*.md` / `STATUS-*.md` / `TODOS.md` —— 这些不下发
+- PM-AI-Workflow 改动只在 `tests/` / `docs/归档/完成/设计-*.md` / `STATUS-*.md` / `TODOS.md` —— 这些不下发
 - PM-AI-Workflow 在改 `INVARIANTS.md` / `README.md` / `CLAUDE.md` —— 这些是生成器自身文档，不同步
 
 ---
@@ -40,7 +40,7 @@ agents/              →      .claude/agents/
 
 **4 块缺一不可**——只 sync `scripts/skills` 漏掉 `templates/` 会让模板源（如 `templates/CLAUDE.md.tmpl` / `templates/工程结构约束-*.md`）滞后；漏 `agents/` 会让自定义 subagent 不下发。判定"对齐"的唯一标准是 4 块的 `diff -rq` 全部零差异，参见 §4.8。
 
-> 历史注：v0 SOP 只 cover `scripts/skills`，注"未来 manifest 扩展到 templates/agents"。2026-05-10 example-consumer-app sync 实战把 templates 漏掉了，本节扩展到 4 块。完整 manifest 设计仍见 `docs/archive/design/设计-框架同步.md` §4.2。
+> 历史注：v0 SOP 只 cover `scripts/skills`，注"未来 manifest 扩展到 templates/agents"。2026-05-10 example-consumer-app sync 实战把 templates 漏掉了，本节扩展到 4 块。完整 manifest 设计仍见 `docs/归档/完成/设计-框架同步.md` §4.2。
 
 ### 2.2 必同步分支
 
@@ -87,7 +87,7 @@ git worktree list --porcelain | grep -E '^worktree |^branch '
 
 ### 步骤 1：看上次同步时点
 
-**1a. 优先读 lockfile**（精确，按 [`docs/archive/design/设计-框架同步.md`](docs/archive/design/设计-框架同步.md) §5.3 主锚点）
+**1a. 优先读 lockfile**（精确，按 [`docs/归档/完成/设计-框架同步.md`](docs/归档/完成/设计-框架同步.md) §5.3 主锚点）
 
 ```bash
 # 在消费仓根读 lockfile（git tracked，不会因 commit message 操作丢失）
@@ -138,7 +138,7 @@ cd /path/to/PM-AI-Workflow
 git log <上次 generator HEAD>..HEAD --format='%h %ai %s' -- scripts/ skills/
 ```
 
-`-- scripts/ skills/` 限定路径直接过滤掉只动 `tests/` `docs/archive/design/设计-*.md` 等不下发文件的 commit，**比 `--since=` 时间过滤更精确**——不会因为时区 / 时间戳跳变把无关 commit 带进来，也不会漏过去很久前但仍在 sync 范围的 commit。
+`-- scripts/ skills/` 限定路径直接过滤掉只动 `tests/` `docs/归档/完成/设计-*.md` 等不下发文件的 commit，**比 `--since=` 时间过滤更精确**——不会因为时区 / 时间戳跳变把无关 commit 带进来，也不会漏过去很久前但仍在 sync 范围的 commit。
 
 > fallback：步骤 1 走 1b 没拿到精确 hash → 改用 `--since='<上次 sync 时间>' -- scripts/ skills/`，仍然记得加 path 限定。
 
@@ -421,7 +421,7 @@ sync（本 SOP）只动 framework 资产（4 块），不动业务实例。
 
 ### 5.2 2026-04-26 example-consumer-app sync（历史参考）
 
-详见 `docs/archive/design/设计-框架同步.md` §1，6 痛点（P1-P6）当时由那次实战暴露。
+详见 `docs/归档/完成/设计-框架同步.md` §1，6 痛点（P1-P6）当时由那次实战暴露。
 
 ### 5.3 2026-05-10 example-consumer-app sync
 
@@ -451,9 +451,9 @@ sync（本 SOP）只动 framework 资产（4 块），不动业务实例。
 
 ## 6. 何时撤销本 SOP
 
-`docs/archive/design/设计-框架同步.md` §5 `scripts/sync-to-consumer.sh` 实施完成后：
+`docs/归档/完成/设计-框架同步.md` §5 `scripts/sync-to-consumer.sh` 实施完成后：
 
-- 本 SOP 移到 `docs/archive/design/设计-框架同步.md` 末尾作为"附录：手动 SOP（已废弃）"
+- 本 SOP 移到 `docs/归档/完成/设计-框架同步.md` 末尾作为"附录：手动 SOP（已废弃）"
 - TODOS.md 把"框架同步方案"标记为"已实施"
 - 单独的 `框架同步-SOP.md` 可删
 

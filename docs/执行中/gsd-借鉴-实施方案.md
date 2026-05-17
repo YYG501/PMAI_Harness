@@ -4,14 +4,14 @@
 > **状态**：待执行 / PM 已逐项判定锁定 + autoplan v2 Eng/DX 实施细节修订
 > **日期**：2026-05-17
 > **作者**：PM + AI
-> **来源**：从 `docs/archive/gsd-借鉴分析.md` v3.10 §10.7 抽取；v1 PM 1-1 判定；v2 autoplan Phase 1+3+3.5 落实施细节
+> **来源**：从 `docs/归档/完成/gsd-借鉴-研究分析.md` v3.10 §10.7 抽取；v1 PM 1-1 判定；v2 autoplan Phase 1+3+3.5 落实施细节
 > **服务对象**：主仓 framework 开发者（PM + AI）；不进消费仓同步 SOP
 
 ---
 
 **Changelog**：
 - **v2（本版，2026-05-17）：autoplan 评审落实施细节** —— Phase 1 CEO dual voices (codex+claude subagent) 7/8 维度 CONFIRMED user challenge，PM 选 Y（接受 #1 缩 + #2 #3 保持重版）；Phase 3 Eng dual voices 9/10 维度 CONFIRMED 实施细节修订；Phase 3.5 DX single voice 落 5 细节 finding。Final Gate PM 选 A（接受全部默认 + Choice 1 lark-adapter functional API）。主要变动：(1) #1 ADR 从 c (1.5-2d) → b 极简版 (1-2h)：D13 + INDEX，触发式补，命名 `ADR-D13.md` 复用 D 编号不另起 ADR-NNNN；(2) #2 lark-adapter API 锁 functional + module-level，**必须封装 cwd workaround**，lint 扫三类 pattern，加 fixture shim；(3) #3 范围改为「扩展 `_lib/task_parser.py` → 升格为 `_lib/state.py`」（避免双权威源），**status-view.py 必须反向 import dogfood**，错误契约 strict/tolerant 分模式，加 `__main__ doctor`；(4) 总工作量 2.5-4d → ~1-1.5d。
-- **v1（2026-05-17）：PM 1-1 判定后从 docs/archive/gsd-借鉴分析.md v3.10 §10.7 抽取**
+- **v1（2026-05-17）：PM 1-1 判定后从 docs/归档/完成/gsd-借鉴-研究分析.md v3.10 §10.7 抽取**
 
 ---
 
@@ -19,7 +19,7 @@
 
 ### §0.1 这份文档存在的原因
 
-`docs/archive/gsd-借鉴分析.md` 是研究分析（1683 行 / v3.10 / 10 轮迭代 / 含 28 项原始候选 + 7 项 §10.7 落选项推导链）。研究阶段已完成，但研究文档太长不适合直接当"下一步做什么"的执行依据。
+`docs/归档/完成/gsd-借鉴-研究分析.md` 是研究分析（1683 行 / v3.10 / 10 轮迭代 / 含 28 项原始候选 + 7 项 §10.7 落选项推导链）。研究阶段已完成，但研究文档太长不适合直接当"下一步做什么"的执行依据。
 
 本文档是抽取后的纯实施清单——3 项要做的、按什么节奏做、不做的那 4 项是什么 + 为什么不做。
 
@@ -27,7 +27,7 @@
 
 | # | 痛点 | EVIDENCE（实证）|
 |---|---|---|
-| 1 | 框架决策散落、格式不统一 | `docs/design/` 5 份 + `docs/archive/design/` 21 份 + RUNTIME.md 394 行 + TODOS.md 399 行；查 D13 "为什么砍 stage 5/6/7/8/9" 要翻 3 处 |
+| 1 | 框架决策散落、格式不统一 | `docs/设计/` 5 份 + `docs/归档/完成/` 21 份 + RUNTIME.md 394 行 + TODOS.md 399 行；查 D13 "为什么砍 stage 5/6/7/8/9" 要翻 3 处 |
 | 2 | lark-cli 未来出现第二个调用脚本时会重复 4 连 fix 历史 | 现状 16 处 lark-cli 调用全在 `scripts/publish-to-lark.py`；PM 确认会写第二个（weekly report / memory sync 等） |
 | 3 | AI 跨 skill 读 state 不一致 | autoplan v2 修正：实际 4 个 Python script + 1 段 jq 读 `.req-meta.json`（不是"10 skill 各自 grep"）；`status-view.py` 输出是 PM 视觉格式不是 AI 解析；schema 变多处都要改 |
 
@@ -45,21 +45,21 @@
 
 ## §1 实施清单（3 项）
 
-### 实施 #1: ADR 格式 + `docs/adr/`（b 极简版）
+### 实施 #1: ADR 格式 + `docs/`（b 极简版）
 
 **目标**：建立框架决策的标准 anchor + 解决"格式不统一"（PM 拍板的真痛点）
 
 **v2 修订**（CEO consensus + DX finding）：
 - 不批量回填 D1-D15（D2-D14 EVIDENCE 不硬，跟 archive 21 份同等触发式补）
 - 命名 **`ADR-D13.md`** 直接复用 D 编号（不另起 ADR-NNNN 编号体系 + 避免「ADR 编号 ≠ D 编号」的 future-self trap）
-- 索引文件统一名 **`docs/adr/INDEX.md`**（不要 DECISIONS.md vs README.md 混用）
+- 索引文件统一名 **`docs/决策-索引.md`**（不要 DECISIONS.md vs README.md 混用）
 - INDEX 顶部明写「archive/design/ 21 份未回填，查不到时去 archive grep」（DX finding 5）
 
 **实施清单（~1-2h）**：
-- 建 `docs/adr/` 目录
-- 写 `docs/adr/ADR-TEMPLATE.md`（4 段：背景 / 决策 / 后果 / 状态）
-- 写 `docs/adr/ADR-D13.md` = D13 modulespec 维护方案（源材料：`docs/design/modulespec-重写方案.md` + `docs/design/prd-modulespec-重构.md` + `docs/design/d13-验证脚本.md` + RUNTIME.md D13 段）
-- 写 `docs/adr/INDEX.md`：
+- 建 `docs/` 目录
+- 写 `docs/设计/_模板-决策.md`（4 段：背景 / 决策 / 后果 / 状态）
+- 写 `docs/归档/完成/D13-modulespec/决策.md` = D13 modulespec 维护方案（源材料：`docs/归档/完成/D13-modulespec/主方案.md` + `docs/归档/完成/D13-modulespec/决策路径-v2到v3.2.md` + `docs/归档/完成/D13-modulespec/验证脚本.md` + RUNTIME.md D13 段）
+- 写 `docs/决策-索引.md`：
   - 已有 ADR 列表（按 D 编号排序）
   - 顶部说明「archive/design/ 21 份未回填，触发式补；查不到去 archive grep」
 - 触发式补 D1-D12 / D14-D15：PM 某次查不到决策根因时为那条补一份 ADR
@@ -97,7 +97,7 @@
 - 跑回归（重点：JSON shape 兼容 + cell merge 顺序）
 
 **不做**：
-- 不抄 GSD SDK 双实现（`docs/archive/gsd-借鉴分析.md` §4.1 已决拒绝）
+- 不抄 GSD SDK 双实现（`docs/归档/完成/gsd-借鉴-研究分析.md` §4.1 已决拒绝）
 - 不抽 publish 业务层（`publish_doc/publish_sheet` 大而全 functional API 现在是过早抽象）
 
 **风险**：低（adapter 多一层间接，但有 lint + fixture 锁住未来不退化）

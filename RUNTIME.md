@@ -15,9 +15,9 @@
 **最近活动（2026-05-16）**: D13 modulespec 维护方案 **全部落地** ✓（vp-1 + vp-2 + vp-3 + autoplan round 7 + §0 PAIN_LINK 锁机制首次实战成功）。绕了 v3 → v3' → v3'.1 → v3.2 → v3.3 五版后由 PM 根因质疑拉回 v2 §12.2 原始方向，实际实施 ~1.5h（含 5 次 run-all 验证）。
 
 - **测试基线**：350/0（D13 前） → **340/0**（D13 后，净删 10 个测试全部正常归因：A1 skip-doc-update 6 个 + I-CT6 doc-diff 阻塞 1 个 + req-stage-gate half-close detection 1 个 + e2e/test-skip-doc-update-recovery.sh 2 个）
-- 方案文档：`docs/design/modulespec-重写方案.md`（D13 final，含 §0 锁 + autoplan round 7 三 phase dual voice + 18 polish 整合 + 3 PM 决议 + autoplan ABORT 历史）
-- 归档参考：`docs/design/prd-modulespec-重构.md`（v2-v3.2 完整决策路径，§十七/十八/十九 已标作废）
-- 设计模板：`docs/design/_TEMPLATE-design-doc.md`（D-* 设计任务起手模板，§0 PAIN_LINK + EVIDENCE + §0.4 显式排除列表）
+- 方案文档：`docs/归档/完成/D13-modulespec/主方案.md`（D13 final，含 §0 锁 + autoplan round 7 三 phase dual voice + 18 polish 整合 + 3 PM 决议 + autoplan ABORT 历史）
+- 归档参考：`docs/归档/完成/D13-modulespec/决策路径-v2到v3.2.md`（v2-v3.2 完整决策路径，§十七/十八/十九 已标作废）
+- 设计模板：`docs/设计/_模板-方案.md`（D-* 设计任务起手模板，§0 PAIN_LINK + EVIDENCE + §0.4 显式排除列表）
 
 **4 个 commit（已落地）**：
 | commit | 内容 |
@@ -269,11 +269,11 @@ V2 regex 会匹配只含空格的 cell（`| **状态** | |`），strip 后返回
 |---|---|---|
 | 1 | 本文件 `RUNTIME.md` | 当前进度（你现在读的）|
 | 2 | `CLAUDE.md` | 项目章程 |
-| 3 | `docs/archive/design/实施计划-实现程度与格式对齐.md` | 9 阶段计划（v3.5 / 7.3-10.2 天 / 含四轮 review 沉淀）|
-| 4 | `docs/archive/design/阶段1-动手plan-parser-task-transition迁移.md` | 阶段 1 已完成（参考实施风格）|
-| 5 | `docs/archive/design/设计-新两文件格式对齐.md` | 阶段 1-3 设计源 |
+| 3 | `docs/归档/完成/实施计划-实现程度与格式对齐.md` | 9 阶段计划（v3.5 / 7.3-10.2 天 / 含四轮 review 沉淀）|
+| 4 | `docs/归档/完成/阶段1-动手plan-parser-task-transition迁移.md` | 阶段 1 已完成（参考实施风格）|
+| 5 | `docs/归档/完成/设计-新两文件格式对齐.md` | 阶段 1-3 设计源 |
 | 6 | `TODOS.md` | 4 项 v3.5 延迟决策（TD-1/2/3/4）|
-| 7（废弃，不用读）| `docs/archive/design/设计-原型与系统双模式.md` / `docs/archive/design/实施计划-双模式与格式对齐.md` | 历史决策审计，不复用 |
+| 7（废弃，不用读）| `docs/归档/完成/设计-原型与系统双模式.md` / `docs/归档/废弃/实施计划-双模式与格式对齐.md` | 历史决策审计，不复用 |
 
 ---
 
@@ -348,7 +348,7 @@ AI 收到后应该：
 
 **触发**：PM 跑 /task-spec task-001 revise 报"为啥这么久"——实测一次读 ~8000 行写 ~100 行，读写比 50:1。
 
-**设计文档**：`docs/archive/design/设计-skill读取收敛.md`（3 轮 review 全过）
+**设计文档**：`docs/归档/完成/设计-skill读取收敛.md`（3 轮 review 全过）
 
 **落地动作**（按 P0/P1/P2/§4.4 四档）：
 

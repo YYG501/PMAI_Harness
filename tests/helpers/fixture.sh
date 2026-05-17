@@ -119,7 +119,7 @@ EOF
 #
 # 默认 fixture_create_task = v1（保持现有 15 个 suite 不回归）。
 # 新写测试用 v2，验证 parser 在生产真实格式上的行为。
-# v1/v2 双轨保留至双模式上线后统一清理（见 TODOS.md / docs/archive/design/设计-新两文件格式对齐.md Q3）。
+# v1/v2 双轨保留至双模式上线后统一清理（见 TODOS.md / docs/归档/完成/设计-新两文件格式对齐.md Q3）。
 
 # v1 单文件 fixture（旧格式）
 # Usage: fixture_create_task <req-dir> <task-num> <name> <status> [review_tools]
