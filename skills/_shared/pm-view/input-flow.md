@@ -11,6 +11,7 @@
 **核心约束**：
 - PM 视图文档之间互相喂入时**只读对方的 PM 视图层**（即主文件），**不读** `*.engineering.md`
 - 项目级权威产物按本表等级读，AI 不得以"觉得不必要"为由跳过 🟢 必读项
+- 凡涉及 **task 元数据 / `.req-meta.json` / `.runs/events/<task>.jsonl` 事件流**的读取一律走 `_lib/state.py`（CLI 入口 `python3 -m _lib.state <fn>`，包括 `get_status` / `read_req_meta` / `list_active_reqs` / `get_overall_state` 等）；不在本表中重复列，本表只管 **markdown 内容**读取。绕过 state.py 自己 jq / grep / json.load 会与 `status-view` / `skill-preamble` 出现真相源漂移
 
 **等级图例**：
 - 🟢 全文必读

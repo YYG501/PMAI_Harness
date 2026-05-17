@@ -1,33 +1,33 @@
 #!/usr/bin/env python3
-"""Global status overview for PM AI Workflow."""
+"""Global status overview for PM AI Workflow — 纯 render 层。
+
+扫描 / parse / 聚合逻辑全部走 `_lib.state.get_overall_state()`（v3 §1 #2
+要求；否则 status-view 与 skill-preamble 双轨复现"AI 各自 grep raw / PM
+看视觉视图"的真相源漂移）。
+
+本文件只做：
+- 选用 active req 渲染策略（0 个 / 1 个 / 多个）
+- 单 req 的字段格式（stage 名 / icon / 下一步建议）
+- pending manual + quick-fix 段
+"""
 
 from __future__ import annotations
 
 import argparse
 import glob
 import json
-import re
 import subprocess
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
-# 兼容两种 task 元信息格式（同 task-transition.py）：
-#   旧版（段落）：**字段：** 值
-#   新版（任务卡表格）：| **字段** | 值 |
-FIELD_RE = re.compile(r"^\*\*(.+?)：\*\*\s*(.*)$")
-FIELD_RE_NEW = re.compile(r"^\|\s*\*\*(.+?)\*\*\s*\|\s*(.*?)\s*\|.*$")
+# 让 _lib 可以 import（status-view.py 自身在 scripts/，_lib 是同级子目录）
+_SCRIPTS_DIR = str(Path(__file__).resolve().parent)
+if _SCRIPTS_DIR not in sys.path:
+    sys.path.insert(0, _SCRIPTS_DIR)
 
+from _lib.state import get_overall_state  # noqa: E402
 
-def _parse_field_line(line: str) -> tuple[str, str] | None:
-    stripped = line.strip()
-    m = FIELD_RE.match(stripped)
-    if m:
-        return m.group(1).strip(), m.group(2).strip()
-    m = FIELD_RE_NEW.match(stripped)
-    if m:
-        return m.group(1).strip(), m.group(2).strip()
-    return None
 STAGE_NAMES = {
     1: "感受问题",
     2: "需求分析",
@@ -46,8 +46,6 @@ STATUS_ICONS = {
 
 def find_repo_root() -> Path:
     """Find the real repo root (not a worktree)."""
-    import subprocess
-
     try:
         common = subprocess.check_output(
             ["git", "rev-parse", "--git-common-dir"], text=True
@@ -66,251 +64,16 @@ def find_repo_root() -> Path:
         return Path.cwd()
 
 
-def find_current_worktree_root() -> Path:
-    """Find the current worktree root (may differ from repo root)."""
-    import subprocess
-
-    try:
-        return Path(
-            subprocess.check_output(
-                ["git", "rev-parse", "--show-toplevel"], text=True
-            ).strip()
-        )
-    except Exception:
-        return Path.cwd()
-
-
-def find_current_branch() -> str:
-    import subprocess
-
-    try:
-        return subprocess.check_output(
-            ["git", "branch", "--show-current"], text=True
-        ).strip()
-    except Exception:
-        return ""
-
-
-def read_task_fields(task_file: Path) -> dict[str, str]:
-    """Read field-value pairs from task file header. Tolerates both
-    old paragraph format (**字段：** 值) and new task-card table format
-    (| **字段** | 值 |). Reads first 40 lines."""
-    fields: dict[str, str] = {}
-    with task_file.open(encoding="utf-8") as fh:
-        for idx, line in enumerate(fh):
-            if idx >= 40:
-                break
-            parsed = _parse_field_line(line)
-            if parsed:
-                name, value = parsed
-                fields[name] = value
-    return fields
-
-
-def get_last_event(repo_root: Path, task_stem: str) -> str | None:
-    """Get the last event from the task's event stream."""
-    events_file = repo_root / ".runs" / "events" / f"{task_stem}.jsonl"
-    if not events_file.exists():
+def _format_last_event(ev: dict | None) -> str | None:
+    """事件 dict → 单行人话描述。无事件返回 None。"""
+    if not ev:
         return None
-    try:
-        lines = events_file.read_text(encoding="utf-8").strip().split("\n")
-        if lines and lines[-1]:
-            event = json.loads(lines[-1])
-            etype = event.get("event", "")
-            if etype == "review_completed":
-                tool = event.get("tool", "")
-                result = event.get("result", "")
-                return f"自审 - {tool} {result}"
-            elif etype == "status_changed":
-                return f"状态变更 → {event.get('to', '')}"
-            else:
-                return etype
-    except Exception:
-        pass
-    return None
-
-
-def _read_active_from(active_dir: Path) -> tuple[Path | None, dict | None]:
-    if not active_dir.exists():
-        return None, None
-    for req_dir in sorted(active_dir.iterdir()):
-        meta_file = req_dir / ".req-meta.json"
-        if meta_file.exists():
-            try:
-                meta = json.loads(meta_file.read_text(encoding="utf-8"))
-                if meta.get("status") == "active":
-                    return req_dir, meta
-            except Exception:
-                continue
-    return None, None
-
-
-def _collect_active_from(active_dir: Path) -> list[tuple[Path, dict]]:
-    """Return all status=active reqs in a single requirements/active/ dir."""
-    if not active_dir.exists():
-        return []
-    found: list[tuple[Path, dict]] = []
-    for req_dir in sorted(active_dir.iterdir()):
-        meta_file = req_dir / ".req-meta.json"
-        if not meta_file.exists():
-            continue
-        try:
-            meta = json.loads(meta_file.read_text(encoding="utf-8"))
-        except Exception:
-            continue
-        if meta.get("status") == "active":
-            found.append((req_dir, meta))
-    return found
-
-
-def find_all_active_reqs(repo_root: Path) -> list[tuple[Path, dict]]:
-    """Return every active req visible from the current cwd.
-
-    - In a req/task worktree, the current worktree is authoritative (cwd 唯一定 req)
-      and the result has at most one entry.
-    - On main, scan the main repo + every .worktrees/req-* worktree; multiple
-      active reqs may co-exist.
-    Results are deduplicated by req id (basename).
-    """
-    current_wt = find_current_worktree_root()
-    current_branch = find_current_branch()
-
-    if current_branch.startswith("req-"):
-        local = _collect_active_from(current_wt / "requirements" / "active")
-        if local:
-            return local
-
-    if current_branch.startswith("task-"):
-        worktrees_dir = repo_root / ".worktrees"
-        if worktrees_dir.exists():
-            for wt in sorted(worktrees_dir.iterdir()):
-                if wt.name.startswith("req-"):
-                    local = _collect_active_from(wt / "requirements" / "active")
-                    if local:
-                        return local
-
-    seen: set[str] = set()
-    results: list[tuple[Path, dict]] = []
-    for req_dir, meta in _collect_active_from(repo_root / "requirements" / "active"):
-        if req_dir.name in seen:
-            continue
-        seen.add(req_dir.name)
-        results.append((req_dir, meta))
-
-    worktrees_dir = repo_root / ".worktrees"
-    if worktrees_dir.exists():
-        for wt in sorted(worktrees_dir.iterdir()):
-            if not (wt.name.startswith("req-") and wt.is_dir()):
-                continue
-            for req_dir, meta in _collect_active_from(wt / "requirements" / "active"):
-                if req_dir.name in seen:
-                    continue
-                seen.add(req_dir.name)
-                results.append((req_dir, meta))
-
-    return results
-
-
-def find_active_req(repo_root: Path) -> tuple[Path | None, dict | None]:
-    """Backward-compat single-active accessor.
-
-    Returns the first active req from find_all_active_reqs (None when zero).
-    Callers that need to handle multi-active should call find_all_active_reqs
-    directly.
-    """
-    found = find_all_active_reqs(repo_root)
-    if not found:
-        return None, None
-    return found[0]
-
-
-def list_tasks(req_dir: Path) -> list[tuple[Path, dict[str, str]]]:
-    """List all task files in a req directory with their fields."""
-    tasks_dir = req_dir / "tasks"
-    if not tasks_dir.exists():
-        return []
-
-    result = []
-    for task_file in sorted(tasks_dir.glob("task-*.md")):
-        if task_file.name.endswith(".engineering.md"):
-            continue
-        fields = read_task_fields(task_file)
-        result.append((task_file, fields))
-    return result
-
-
-_PLAN_ROW_RE = re.compile(r"^\|[^|]*?(task-\d{3,})[^|]*\|\s*([^|]*?)\s*\|")
-
-
-def read_task_plan_ids(req_dir: Path) -> list[tuple[str, str]]:
-    """Parse task-plan.md and return [(task_id, title), ...] from the planning table.
-
-    Limits parsing to the region BEFORE the first '## ' heading to avoid
-    matching task ids mentioned in '## 变更记录' / '## 执行顺序与并行性' /
-    other narrative sections. Returns [] if file missing.
-    """
-    plan_file = req_dir / "task-plan.md"
-    if not plan_file.exists():
-        return []
-
-    content = plan_file.read_text(encoding="utf-8")
-    head = content.split("\n## ", 1)[0]
-
-    results: list[tuple[str, str]] = []
-    seen: set[str] = set()
-    for line in head.splitlines():
-        match = _PLAN_ROW_RE.match(line)
-        if not match:
-            continue
-        task_id = match.group(1).strip()
-        title = match.group(2).strip()
-        if task_id in seen:
-            continue
-        seen.add(task_id)
-        results.append((task_id, title))
-    return results
-
-
-def discarded_task_ids(req_dir: Path) -> set[str]:
-    """Return the set of task ids that have been discarded (moved to tasks/discarded/)."""
-    discarded_dir = req_dir / "tasks" / "discarded"
-    if not discarded_dir.exists():
-        return set()
-    ids: set[str] = set()
-    for f in discarded_dir.glob("task-*.md"):
-        match = re.match(r"(task-\d{3,})", f.stem)
-        if match:
-            ids.add(match.group(1))
-    return ids
-
-
-def specced_task_ids(tasks: list[tuple[Path, dict[str, str]]]) -> set[str]:
-    """Return the set of task ids that have been spec'd (have a tasks/<id>*.md file)."""
-    ids: set[str] = set()
-    for task_file, _ in tasks:
-        match = re.match(r"(task-\d{3,})", task_file.stem)
-        if match:
-            ids.add(match.group(1))
-    return ids
-
-
-def pending_spec_task_ids(
-    req_dir: Path, tasks: list[tuple[Path, dict[str, str]]]
-) -> list[tuple[str, str]]:
-    """Return task ids planned in task-plan.md but not yet spec'd (and not discarded).
-
-    Returned in plan order so the next-action hint can pick the first one.
-    """
-    planned = read_task_plan_ids(req_dir)
-    if not planned:
-        return []
-    discarded = discarded_task_ids(req_dir)
-    specced = specced_task_ids(tasks)
-    return [
-        (tid, title)
-        for tid, title in planned
-        if tid not in specced and tid not in discarded
-    ]
+    etype = ev.get("event", "")
+    if etype == "review_completed":
+        return f"自审 - {ev.get('tool', '')} {ev.get('result', '')}"
+    if etype == "status_changed":
+        return f"状态变更 → {ev.get('to', '')}"
+    return etype
 
 
 def _task_worktree_exists(repo_root: Path, task_stem: str) -> bool:
@@ -326,64 +89,23 @@ def _task_worktree_exists(repo_root: Path, task_stem: str) -> bool:
     )
 
 
-def _iter_active_req_dirs(repo_root: Path) -> list[Path]:
-    """Return all active req directories (deduped by basename) across main and worktrees."""
-    active_roots = [repo_root / "requirements" / "active"]
-    worktrees_dir = repo_root / ".worktrees"
-    if worktrees_dir.exists():
-        active_roots.extend(
-            wt / "requirements" / "active"
-            for wt in sorted(worktrees_dir.glob("req-*"))
-            if wt.is_dir()
-        )
-
-    seen: set[str] = set()
-    req_dirs: list[Path] = []
-    for active_root in active_roots:
-        if not active_root.exists():
-            continue
-        for req_dir in sorted(active_root.iterdir()):
-            if not req_dir.is_dir() or req_dir.name in seen:
-                continue
-            seen.add(req_dir.name)
-            req_dirs.append(req_dir)
-    return req_dirs
-
-
-def _iter_summary_tasks(repo_root: Path) -> list[Path]:
-    task_files: list[Path] = []
-    for req_dir in _iter_active_req_dirs(repo_root):
-        tasks_dir = req_dir / "tasks"
-        if tasks_dir.exists():
-            task_files.extend(
-                f for f in sorted(tasks_dir.glob("task-*.md"))
-                if not f.name.endswith(".engineering.md")
-            )
-    return task_files
-
-
-def render_summary(repo_root: Path) -> None:
-    """Render a one-line task overview for preamble output."""
+def render_summary(state: dict, repo_root: Path) -> None:
+    """One-line task overview for preamble output."""
     counts = {"执行中": 0, "待启动": 0, "待 spec": 0}
     seen_stems: set[str] = set()
 
-    for task_file in _iter_summary_tasks(repo_root):
-        task_stem = task_file.stem
-        if task_stem in seen_stems:
-            continue
-        seen_stems.add(task_stem)
-
-        fields = read_task_fields(task_file)
-        status = fields.get("状态", "")
-        if status == "执行中":
-            counts["执行中"] += 1
-        elif status == "待执行" and _task_worktree_exists(repo_root, task_stem):
-            counts["待启动"] += 1
-
-    # 待 spec：plan 里规划但 tasks/ 下没文件 (扫所有 active req 的 task-plan.md)
-    for req_dir in _iter_active_req_dirs(repo_root):
-        tasks = list_tasks(req_dir)
-        counts["待 spec"] += len(pending_spec_task_ids(req_dir, tasks))
+    for req in state["active_reqs"]:
+        for t in req["tasks"]:
+            stem = t["path"].stem
+            if stem in seen_stems:
+                continue
+            seen_stems.add(stem)
+            status = (t["meta"] or {}).get("status", "")
+            if status == "执行中":
+                counts["执行中"] += 1
+            elif status == "待执行" and _task_worktree_exists(repo_root, stem):
+                counts["待启动"] += 1
+        counts["待 spec"] += len(req["pending_spec"])
 
     if not any(counts.values()):
         print("📋 暂无 active task")
@@ -397,35 +119,33 @@ def render_summary(repo_root: Path) -> None:
     )
 
 
-def suggest_next_action(
-    meta: dict, tasks: list[tuple[Path, dict[str, str]]], req_dir: Path | None = None
-) -> str:
-    """Suggest what PM should do next."""
+def suggest_next_action(req_view: dict) -> str:
+    """Suggest what PM should do next。req_view 是 state['active_reqs'][i]。"""
+    meta = req_view["meta"]
     stage = meta.get("stage", 0)
+    tasks = req_view["tasks"]
 
     if stage <= 5:
         return f"继续 stage {stage}（{STAGE_NAMES.get(stage, '?')}）的工作"
 
     if stage == 6:
-        # Check task statuses on already-spec'd tasks
-        for task_file, fields in tasks:
-            status = fields.get("状态", "")
-            name = task_file.stem
+        for t in tasks:
+            status = (t["meta"] or {}).get("status", "")
+            name = t["path"].stem
             if status == "执行中":
                 return f"执行中 {name}：实现 / 等待呈交 / PM 验收（可在 task 窗口跑 /task-submit 重新看呈交块）"
             if status == "待执行":
                 return f"确认启动 {name}：运行 /task-confirm"
 
-        # All spec'd tasks are 已完成 — but plan may still have un-spec'd entries.
-        # Cross-reference task-plan.md to avoid the "已完成 1 / 待启动 0 → all done"
-        # trap when only task-001 has been spec'd from a 4-task plan.
-        all_done = all(f.get("状态") == "已完成" for _, f in tasks)
-        if not (all_done and tasks):
+        all_done = bool(tasks) and all(
+            (t["meta"] or {}).get("status") == "已完成" for t in tasks
+        )
+        if not all_done:
             return "运行 /task-status 查看详情"
 
-        pending = pending_spec_task_ids(req_dir, tasks) if req_dir else []
+        pending = req_view["pending_spec"]
         if pending:
-            next_id, next_title = pending[0]
+            next_id = pending[0]["id"]
             tail = f"（还有 {len(pending)} 个未 spec）" if len(pending) > 1 else ""
             return f"task-plan 里还有未 spec 的 task：先运行 /task-spec {next_id}{tail}"
 
@@ -438,7 +158,6 @@ def suggest_next_action(
 
 
 def render_manual_section(repo_root: Path) -> None:
-    """Render the Manual 等待中 section if there are pending manual tasks."""
     pending_dir = repo_root / ".runs"
     if not pending_dir.exists():
         return
@@ -462,7 +181,7 @@ def render_manual_section(repo_root: Path) -> None:
                 if s.tzinfo is None:
                     s = s.replace(tzinfo=timezone.utc)
                 if s > now:
-                    continue  # still in snooze window
+                    continue
             except Exception:
                 pass
         items.append(data)
@@ -487,7 +206,6 @@ def render_manual_section(repo_root: Path) -> None:
                 age_str = started
         print(f"  {task_id}（{age_str}）")
     print()
-    # Pick the first task_file for copy-paste templating
     sample_task = items[0].get("task_file", "<task-file>")
     sample_id = items[0].get("task_id", "task-NNN")
     print("下一步：")
@@ -504,7 +222,6 @@ def render_manual_section(repo_root: Path) -> None:
 
 
 def render_quickfix_section(repo_root: Path) -> None:
-    """Render recent quick-fix commits if any exist."""
     try:
         result = subprocess.run(
             [
@@ -534,55 +251,55 @@ def render_quickfix_section(repo_root: Path) -> None:
     print()
 
 
-def _render_single_req(req_dir: Path, meta: dict, repo_root: Path) -> None:
-    """Render a single req's stage + task list + next-action."""
+def _render_task_lines(req_view: dict) -> None:
+    """渲染 req_view 下 spec 过的 task + pending_spec。"""
+    for t in req_view["tasks"]:
+        meta = t["meta"] or {}
+        status = meta.get("status", "?")
+        icon = STATUS_ICONS.get(status, "❓")
+
+        try:
+            title = t["path"].read_text(encoding="utf-8").split("\n")[0]
+            title = title.replace("# ", "").strip()
+        except Exception:
+            title = t["path"].stem
+
+        line = f"  {icon} {title} — {status}"
+        if status == "执行中":
+            last_event = _format_last_event(t.get("last_event"))
+            if last_event:
+                line += f"（最后活动：{last_event}）"
+        print(line)
+
+    for p in req_view["pending_spec"]:
+        display = p.get("title") or p["id"]
+        print(f"  📝 {p['id']}: {display} — 待 spec")
+
+
+def _render_single_req(req_view: dict) -> None:
+    meta = req_view["meta"]
     req_id = meta.get("id", "?")
     req_name = meta.get("name", "?")
     stage = meta.get("stage", 0)
     stage_name = STAGE_NAMES.get(stage, "?")
     is_first = meta.get("is_first_req", False)
+    req_dir = req_view["req_dir"]
 
     print(f"Req：{req_id}（{req_name}）")
     print(f"Stage：{stage} - {stage_name}" + (" [first req]" if is_first else ""))
     print(f"Worktree：{req_dir.parent.parent.parent}")
     print()
 
-    tasks = list_tasks(req_dir)
-    pending_spec = pending_spec_task_ids(req_dir, tasks) if stage == 6 else []
-    if tasks or pending_spec:
+    if req_view["tasks"] or req_view["pending_spec"]:
         print("Task 状态：")
-        for task_file, fields in tasks:
-            status = fields.get("状态", "?")
-            icon = STATUS_ICONS.get(status, "❓")
-            name = task_file.stem
-
-            try:
-                title = task_file.read_text(encoding="utf-8").split("\n")[0]
-                title = title.replace("# ", "").strip()
-            except Exception:
-                title = name
-
-            line = f"  {icon} {title} — {status}"
-
-            if status == "执行中":
-                last_event = get_last_event(repo_root, task_file.stem)
-                if last_event:
-                    line += f"（最后活动：{last_event}）"
-
-            print(line)
-
-        for task_id, title in pending_spec:
-            display = title or task_id
-            print(f"  📝 {task_id}: {display} — 待 spec")
+        _render_task_lines(req_view)
         print()
 
-    next_action = suggest_next_action(meta, tasks, req_dir)
-    print(f"下一步：{next_action}")
+    print(f"下一步：{suggest_next_action(req_view)}")
 
 
-def render_status(repo_root: Path) -> None:
-    """Render the full status view."""
-    active = find_all_active_reqs(repo_root)
+def render_status(state: dict, repo_root: Path) -> None:
+    active = state["active_reqs"]
 
     if not active:
         print("📭 没有活跃的需求。运行 /new-req 开始一个新需求。")
@@ -591,8 +308,8 @@ def render_status(repo_root: Path) -> None:
         return
 
     if len(active) == 1:
-        req_dir, meta = active[0]
-        # 单 active 保持旧文案"当前 Req"
+        req_view = active[0]
+        meta = req_view["meta"]
         req_id = meta.get("id", "?")
         req_name = meta.get("name", "?")
         stage = meta.get("stage", 0)
@@ -603,49 +320,23 @@ def render_status(repo_root: Path) -> None:
         print(f"Stage：{stage} - {stage_name}" + (" [first req]" if is_first else ""))
         print()
 
-        tasks = list_tasks(req_dir)
-        pending_spec = pending_spec_task_ids(req_dir, tasks) if stage == 6 else []
-        if tasks or pending_spec:
+        if req_view["tasks"] or req_view["pending_spec"]:
             print("Task 状态：")
-            for task_file, fields in tasks:
-                status = fields.get("状态", "?")
-                icon = STATUS_ICONS.get(status, "❓")
-                name = task_file.stem
-
-                try:
-                    title = task_file.read_text(encoding="utf-8").split("\n")[0]
-                    title = title.replace("# ", "").strip()
-                except Exception:
-                    title = name
-
-                line = f"  {icon} {title} — {status}"
-
-                if status == "执行中":
-                    last_event = get_last_event(repo_root, task_file.stem)
-                    if last_event:
-                        line += f"（最后活动：{last_event}）"
-
-                print(line)
-
-            for task_id, title in pending_spec:
-                display = title or task_id
-                print(f"  📝 {task_id}: {display} — 待 spec")
+            _render_task_lines(req_view)
             print()
 
         render_manual_section(repo_root)
         render_quickfix_section(repo_root)
 
-        next_action = suggest_next_action(meta, tasks, req_dir)
-        print(f"下一步：{next_action}")
+        print(f"下一步：{suggest_next_action(req_view)}")
         return
 
-    # 多 active：列出每个 req 的细节，独立渲染 next-action
     print(f"📚 {len(active)} 个 active req 并行：")
     print()
-    for idx, (req_dir, meta) in enumerate(active):
+    for idx, req_view in enumerate(active):
         if idx > 0:
             print("─" * 60)
-        _render_single_req(req_dir, meta, repo_root)
+        _render_single_req(req_view)
         print()
 
     render_manual_section(repo_root)
@@ -671,11 +362,13 @@ def main() -> None:
     else:
         repo_root = find_repo_root()
 
+    state = get_overall_state(repo_root, cwd=Path.cwd(), strict=False)
+
     if args.summary:
-        render_summary(repo_root)
+        render_summary(state, repo_root)
         return
 
-    render_status(repo_root)
+    render_status(state, repo_root)
 
 
 if __name__ == "__main__":

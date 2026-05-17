@@ -165,14 +165,14 @@ deny() {
 # ======================================================
 case "$REL_PATH" in
   requirements/*/tasks/task-*.md)
-    # 用 _lib.task_parser.parse_status_from_text 检测状态字段
+    # 用 _lib.state.parse_status_from_text 检测状态字段
     # 双兼容 v1（**状态：**）+ v2（| **状态** |）
     SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
     source "$SCRIPT_DIR/_lib/_setup-pythonpath.sh"
 
     STATUS_MODIFIED=$(echo "$INPUT" | python3 -c "
 import sys, json
-from _lib.task_parser import parse_status_from_text
+from _lib.state import parse_status_from_text
 
 data = json.load(sys.stdin)
 ti = data.get('tool_input', data)

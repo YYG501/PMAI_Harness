@@ -15,7 +15,7 @@ _SCRIPTS_DIR = str(Path(__file__).resolve().parent)
 if _SCRIPTS_DIR not in sys.path:
     sys.path.insert(0, _SCRIPTS_DIR)
 
-from _lib.task_parser import read_section, has_meaningful_content
+from _lib.state import read_section, has_meaningful_content
 
 # 兼容两种 task 元信息格式：
 #   旧版（段落）：**字段：** 值
@@ -206,7 +206,7 @@ def check_preconditions(
     elif current == "执行中" and target == "已完成":
         # 「待验收」状态已合并到「执行中」（2026-05-08）：commit + 呈交 + PM 验收
         # 全程 task 状态保持「执行中」；PM 通过呈交块时统一在此 transition 校验。
-        # 修复 P0-1：用 _lib.task_parser.read_section 跨文件查找。
+        # 修复 P0-1：用 _lib.state.read_section 跨文件查找。
         # 新格式（v2）：section 在 task.engineering.md 的 §10 / §11
         # 旧格式（v1）：section 在 PM 视图（task.md）
         # parser 自动按"工程合同优先 → PM 视图 fallback"查找。
@@ -435,19 +435,20 @@ def cmd_discard(task_file: Path, reason: str, yes: bool) -> None:
         except Exception:
             pass
     if has_branch:
-        meta_file = task_file.parent.parent / ".req-meta.json"
-        if meta_file.exists():
-            try:
-                req_branch = json.loads(meta_file.read_text(encoding="utf-8")).get("branch", "")
-                if req_branch:
-                    out = subprocess.check_output(
-                        ["git", "-C", str(repo_root), "rev-list", "--count",
-                         f"{req_branch}..{branch}"],
-                        text=True, stderr=subprocess.DEVNULL,
-                    )
-                    unmerged = int(out.strip() or "0")
-            except Exception:
-                pass
+        # 走 state.read_req_meta（v3 §1 #2 实施：跨 skill 读统一走 _lib.state）
+        from _lib.state import read_req_meta as _read_req_meta
+        try:
+            meta = _read_req_meta(task_file.parent.parent, strict=False) or {}
+            req_branch = meta.get("branch", "")
+            if req_branch:
+                out = subprocess.check_output(
+                    ["git", "-C", str(repo_root), "rev-list", "--count",
+                     f"{req_branch}..{branch}"],
+                    text=True, stderr=subprocess.DEVNULL,
+                )
+                unmerged = int(out.strip() or "0")
+        except Exception:
+            pass
 
     # 展示 + confirm
     print(f"将废弃 task: {task_file.name}")

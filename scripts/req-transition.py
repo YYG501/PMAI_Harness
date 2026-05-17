@@ -9,6 +9,13 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
+# 让 _lib 可以 import（req-transition.py 自身在 scripts/，_lib 是同级子目录）
+_SCRIPTS_DIR = str(Path(__file__).resolve().parent)
+if _SCRIPTS_DIR not in sys.path:
+    sys.path.insert(0, _SCRIPTS_DIR)
+
+from _lib.state import read_req_meta, StateReadError  # noqa: E402
+
 STAGE_NAMES = {
     1: "感受问题",
     2: "需求分析",
@@ -34,11 +41,11 @@ def now_iso() -> str:
 
 
 def load_meta(req_dir: Path) -> dict:
-    meta_file = req_dir / ".req-meta.json"
-    if not meta_file.exists():
-        print(f"Error: .req-meta.json not found in {req_dir}", file=sys.stderr)
+    try:
+        return read_req_meta(req_dir, strict=True)
+    except StateReadError as e:
+        print(f"Error: {e.reason}: {e.path}", file=sys.stderr)
         sys.exit(1)
-    return json.loads(meta_file.read_text(encoding="utf-8"))
 
 
 def save_meta(req_dir: Path, meta: dict) -> None:

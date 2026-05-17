@@ -25,11 +25,11 @@ _SCRIPTS_DIR = str(Path(__file__).resolve().parent)
 if _SCRIPTS_DIR not in sys.path:
     sys.path.insert(0, _SCRIPTS_DIR)
 
-from _lib.task_parser import get_task_meta, engineering_path
+from _lib.state import get_task_meta, engineering_path
 
 
 def derive_eng_path(pm_view: Path) -> Path:
-    """保留向后兼容名称——内部委托到 task_parser.engineering_path。"""
+    """保留向后兼容名称——内部委托到 state.engineering_path。"""
     return engineering_path(pm_view)
 
 
@@ -58,7 +58,7 @@ def task_id_from_filename(pm_view: Path) -> str:
 
 def build_prompt(pm_view: Path) -> str:
     text = pm_view.read_text(encoding="utf-8")
-    # 用 _lib.task_parser 双兼容 v1/v2 读字段（替换原 read_frontmatter_fields）
+    # 用 _lib.state 双兼容 v1/v2 读字段（替换原 read_frontmatter_fields）
     meta = get_task_meta(pm_view)
 
     worktree_field = (meta.get("worktree") or "").strip()

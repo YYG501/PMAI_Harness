@@ -12,7 +12,7 @@ CALLER_CWD="$(pwd -P 2>/dev/null || echo "")"
 
 REQ_DIR="${1:?用法: close-req.sh <req-dir>}"
 
-# --- Setup PYTHONPATH for _lib.task_parser ---
+# --- Setup PYTHONPATH for _lib.state ---
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/_lib/_setup-pythonpath.sh"
 source "$SCRIPT_DIR/_lib/worktree.sh"
@@ -31,10 +31,11 @@ if [ ! -f "$REQ_META" ]; then
   exit 1
 fi
 
-# --- 读取 req 信息 ---
-REQ_BRANCH=$(python3 -c "import json; print(json.load(open('$REQ_META'))['branch'])" 2>/dev/null)
-REQ_ID=$(python3 -c "import json; print(json.load(open('$REQ_META'))['id'])" 2>/dev/null)
-REQ_STAGE=$(python3 -c "import json; print(json.load(open('$REQ_META'))['stage'])" 2>/dev/null)
+# --- 读取 req 信息（走 _lib.state.read_req_meta CLI；单次读全部字段）---
+REQ_META_JSON=$(python3 -m _lib.state read_req_meta "$REQ_DIR" 2>/dev/null || echo "{}")
+REQ_BRANCH=$(printf '%s' "$REQ_META_JSON" | python3 -c "import sys,json; print(json.load(sys.stdin).get('branch',''))")
+REQ_ID=$(printf '%s' "$REQ_META_JSON" | python3 -c "import sys,json; print(json.load(sys.stdin).get('id',''))")
+REQ_STAGE=$(printf '%s' "$REQ_META_JSON" | python3 -c "import sys,json; print(json.load(sys.stdin).get('stage',''))")
 
 # --- 校验 stage ---
 if [ "$REQ_STAGE" != "7" ]; then
@@ -43,14 +44,14 @@ if [ "$REQ_STAGE" != "7" ]; then
 fi
 
 # --- 校验所有 task 已关闭 ---
-# 用 _lib.task_parser.get_task_status 双兼容 v1/v2 格式
+# 用 _lib.state.get_task_status 双兼容 v1/v2 格式
 TASKS_DIR="$REQ_DIR/tasks"
 if [ -d "$TASKS_DIR" ]; then
   OPEN_TASKS=""
   for TF in "$TASKS_DIR"/task-*.md; do
     [ -f "$TF" ] || continue
     case "$TF" in *.engineering.md) continue;; esac
-    STATUS=$(python3 -m _lib.task_parser get_status "$TF" 2>/dev/null || echo "")
+    STATUS=$(python3 -m _lib.state get_status "$TF" 2>/dev/null || echo "")
     case "$STATUS" in
       待执行|执行中)
         OPEN_TASKS="${OPEN_TASKS}${TF}"$'\n'

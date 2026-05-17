@@ -8,10 +8,10 @@
 - PM 视图主文件（`.md`）：「📌 任务卡」/「📐 产物预览」/「✅ 验收清单」/「📁 历史档案」最新执行日志 / 业务层偏差表
 - 工程合同（`.engineering.md`）：§1 推荐 review 工具 / §9 工程层验收清单 / §10 文档偏差 / §11 自审记录
 
-收集 diff：
+收集 diff（req 分支从当前 task 分支名推导；底层 req 元数据若需细读走 `_lib.state read_req_meta "$ACTIVE_REQ_DIR"`，不要再 jq `.req-meta.json`）：
 ```bash
-REQ_BRANCH=$(jq -r '.req_branch // empty' .req-meta.json 2>/dev/null \
-  || git symbolic-ref --short HEAD | sed -E 's/^task-[0-9]+-/req-/' \
+REQ_BRANCH=$(git symbolic-ref --short HEAD 2>/dev/null \
+  | sed -E 's/^task-[0-9]+-/req-/' \
   || echo "main")
 git diff --stat "$REQ_BRANCH"..HEAD
 ```

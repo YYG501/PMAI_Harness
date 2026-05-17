@@ -14,7 +14,7 @@ set -euo pipefail
 
 REQ_DIR="${1:?用法: cancel-req.sh <req-dir>}"
 
-# --- Setup PYTHONPATH for _lib.task_parser ---
+# --- Setup PYTHONPATH for _lib.state ---
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/_lib/_setup-pythonpath.sh"
 source "$SCRIPT_DIR/_lib/worktree.sh"
@@ -33,8 +33,10 @@ if [ ! -f "$REQ_META" ]; then
   exit 1
 fi
 
-REQ_BRANCH=$(python3 -c "import json; print(json.load(open('$REQ_META'))['branch'])" 2>/dev/null)
-REQ_ID=$(python3 -c "import json; print(json.load(open('$REQ_META'))['id'])" 2>/dev/null)
+# 走 _lib.state.read_req_meta CLI（与 close-req.sh 统一）
+REQ_META_JSON=$(python3 -m _lib.state read_req_meta "$REQ_DIR" 2>/dev/null || echo "{}")
+REQ_BRANCH=$(printf '%s' "$REQ_META_JSON" | python3 -c "import sys,json; print(json.load(sys.stdin).get('branch',''))")
+REQ_ID=$(printf '%s' "$REQ_META_JSON" | python3 -c "import sys,json; print(json.load(sys.stdin).get('id',''))")
 REQ_BASENAME=$(basename "$REQ_DIR")
 
 if [ -z "$REQ_BRANCH" ] || [ -z "$REQ_ID" ]; then
@@ -56,11 +58,11 @@ if [ -d "$SRC_TASKS_DIR" ]; then
   for TASK_FILE in "$SRC_TASKS_DIR"/task-*.md; do
     [ -f "$TASK_FILE" ] || continue
     case "$TASK_FILE" in *.engineering.md) continue;; esac
-    # 用 _lib.task_parser 双兼容 v1/v2 取分支 + 端口（从 dev_server / 开发服务器 字段）
-    TASK_BRANCH=$(python3 -m _lib.task_parser get_branch "$TASK_FILE" 2>/dev/null || echo "")
+    # 用 _lib.state 双兼容 v1/v2 取分支 + 端口（从 dev_server / 开发服务器 字段）
+    TASK_BRANCH=$(python3 -m _lib.state get_branch "$TASK_FILE" 2>/dev/null || echo "")
     [ -z "$TASK_BRANCH" ] && continue
     TASK_STEM=$(basename "$TASK_FILE" .md)
-    PORT=$(python3 -m _lib.task_parser get_meta "$TASK_FILE" 2>/dev/null | python3 -c "
+    PORT=$(python3 -m _lib.state get_meta "$TASK_FILE" 2>/dev/null | python3 -c "
 import sys, json, re
 try:
     d = json.load(sys.stdin)

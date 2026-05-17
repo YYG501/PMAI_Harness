@@ -5,7 +5,7 @@
 # 调用方约定：
 #   SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 #   source "$SCRIPT_DIR/_lib/_setup-pythonpath.sh"
-#   STATUS=$(python3 -m _lib.task_parser get_status "$task_file")
+#   STATUS=$(python3 -m _lib.state get_status "$task_file")
 
 # scripts/ 目录 = _lib/_setup-pythonpath.sh 的祖父目录
 _SCRIPTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"

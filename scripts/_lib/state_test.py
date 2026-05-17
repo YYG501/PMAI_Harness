@@ -1,19 +1,20 @@
-"""task_parser 双兼容单测。
+"""state（前 task_parser）双兼容单测。
 
 运行：
     cd ${REPO_ROOT}
-    PYTHONPATH=scripts python3 -m unittest scripts._lib.task_parser_test -v
+    PYTHONPATH=scripts python3 -m unittest scripts._lib.state_test -v
 
-11 原测试 + 8 spot-check 补充 = 19 条。
+19 原测试（task_parser 时代）+ state 扩展 API 单测（末尾段）。
 """
 
+import json
 import os
 import subprocess
 import tempfile
 import unittest
 from pathlib import Path
 
-from _lib.task_parser import (
+from _lib.state import (
     detect_format,
     get_task_status,
     get_task_branch,
@@ -21,6 +22,16 @@ from _lib.task_parser import (
     parse_status_from_text,
     read_section,
     has_meaningful_content,
+    read_req_meta,
+    read_task_meta,
+    read_task_status,
+    read_task_events,
+    read_task_plan,
+    list_tasks,
+    list_active_reqs,
+    get_overall_state,
+    discarded_task_ids,
+    StateReadError,
 )
 
 
@@ -294,7 +305,7 @@ class TestCLIExitCodes(unittest.TestCase):
             pm = Path(d) / "task-001-test.md"
             pm.write_text(V2_TASK_MD)
             result = subprocess.run(
-                ["python3", "-m", "_lib.task_parser", "get_status", str(pm)],
+                ["python3", "-m", "_lib.state", "get_status", str(pm)],
                 capture_output=True,
                 text=True,
                 env=_CLI_ENV,
@@ -310,7 +321,7 @@ class TestCLIExitCodes(unittest.TestCase):
                 [
                     "python3",
                     "-m",
-                    "_lib.task_parser",
+                    "_lib.state",
                     "read_section",
                     str(pm),
                     "不存在的_section",
@@ -326,7 +337,7 @@ class TestCLIExitCodes(unittest.TestCase):
             [
                 "python3",
                 "-m",
-                "_lib.task_parser",
+                "_lib.state",
                 "get_status",
                 "/nonexistent/task.md",
             ],
@@ -335,6 +346,230 @@ class TestCLIExitCodes(unittest.TestCase):
             env=_CLI_ENV,
         )
         self.assertEqual(result.returncode, 1)
+
+
+# ============================================================================
+# state 扩展 API 单测（v3 §1 #2 实施）
+# ============================================================================
+
+
+REQ_META_OK = {
+    "id": "req-001", "name": "demo", "branch": "req-001-demo",
+    "stage": 6, "status": "active",
+}
+
+
+def _make_req(repo: Path, req_id: str, status: str = "active",
+              stage: int = 6) -> Path:
+    """Create active req fixture under repo/requirements/active/<req_id>/"""
+    req_dir = repo / "requirements" / "active" / req_id
+    (req_dir / "tasks").mkdir(parents=True)
+    meta = {**REQ_META_OK, "id": req_id, "name": req_id,
+            "branch": f"{req_id}-demo", "stage": stage, "status": status}
+    (req_dir / ".req-meta.json").write_text(
+        json.dumps(meta, ensure_ascii=False, indent=2), encoding="utf-8")
+    return req_dir
+
+
+class TestReadReqMeta(unittest.TestCase):
+    def test_strict_missing_raises(self):
+        with self.assertRaises(StateReadError):
+            read_req_meta(Path("/nonexistent/req"), strict=True)
+
+    def test_tolerant_missing_returns_none(self):
+        self.assertIsNone(read_req_meta(Path("/nonexistent/req"), strict=False))
+
+    def test_corrupt_strict_raises(self):
+        with tempfile.TemporaryDirectory() as d:
+            req = Path(d) / "req-001"
+            req.mkdir()
+            (req / ".req-meta.json").write_text("{not json", encoding="utf-8")
+            with self.assertRaises(StateReadError):
+                read_req_meta(req, strict=True)
+
+    def test_corrupt_tolerant_returns_none(self):
+        with tempfile.TemporaryDirectory() as d:
+            req = Path(d) / "req-001"
+            req.mkdir()
+            (req / ".req-meta.json").write_text("{not json", encoding="utf-8")
+            self.assertIsNone(read_req_meta(req, strict=False))
+
+    def test_happy_returns_dict(self):
+        with tempfile.TemporaryDirectory() as d:
+            req = _make_req(Path(d), "req-001")
+            meta = read_req_meta(req)
+            self.assertEqual(meta["id"], "req-001")
+            self.assertEqual(meta["status"], "active")
+
+
+class TestReadTaskMetaStatus(unittest.TestCase):
+    def test_strict_missing_raises(self):
+        with self.assertRaises(StateReadError):
+            read_task_meta(Path("/nonexistent/task.md"), strict=True)
+
+    def test_tolerant_missing_returns_none(self):
+        self.assertIsNone(read_task_meta(Path("/nope.md"), strict=False))
+        self.assertIsNone(read_task_status(Path("/nope.md"), strict=False))
+
+
+class TestReadTaskEvents(unittest.TestCase):
+    def test_missing_returns_empty(self):
+        with tempfile.TemporaryDirectory() as d:
+            self.assertEqual(read_task_events(Path(d), "task-001"), [])
+
+    def test_skip_bad_json_lines(self):
+        with tempfile.TemporaryDirectory() as d:
+            events_dir = Path(d) / ".runs" / "events"
+            events_dir.mkdir(parents=True)
+            (events_dir / "task-001.jsonl").write_text(
+                '{"event":"a"}\n{not json}\n{"event":"b"}\n',
+                encoding="utf-8")
+            evs = read_task_events(Path(d), "task-001")
+            self.assertEqual([e["event"] for e in evs], ["a", "b"])
+
+    def test_tail_returns_last_n(self):
+        with tempfile.TemporaryDirectory() as d:
+            events_dir = Path(d) / ".runs" / "events"
+            events_dir.mkdir(parents=True)
+            (events_dir / "task-001.jsonl").write_text(
+                '{"event":"a"}\n{"event":"b"}\n{"event":"c"}\n',
+                encoding="utf-8")
+            self.assertEqual(
+                [e["event"] for e in read_task_events(Path(d), "task-001", tail=2)],
+                ["b", "c"])
+
+
+class TestReadTaskPlan(unittest.TestCase):
+    def test_missing_returns_none(self):
+        with tempfile.TemporaryDirectory() as d:
+            req = Path(d) / "req-001"
+            req.mkdir()
+            self.assertIsNone(read_task_plan(req))
+
+    def test_parses_planning_table(self):
+        with tempfile.TemporaryDirectory() as d:
+            req = Path(d) / "req-001"
+            req.mkdir()
+            (req / "task-plan.md").write_text(
+                "# Plan\n"
+                "| ID | 标题 |\n"
+                "|---|---|\n"
+                "| task-001 | 一 |\n"
+                "| task-002 | 二 |\n"
+                "\n## 变更记录\n"
+                "| task-003 | 不应被解析 |\n",
+                encoding="utf-8")
+            plan = read_task_plan(req)
+            ids = [t["id"] for t in plan["tasks"]]
+            self.assertEqual(ids, ["task-001", "task-002"])
+
+
+class TestListTasks(unittest.TestCase):
+    def test_skips_engineering_md(self):
+        with tempfile.TemporaryDirectory() as d:
+            req = _make_req(Path(d), "req-001")
+            (req / "tasks" / "task-001-demo.md").write_text(
+                "# Task 001\n\n| **状态** | 执行中 |\n| **分支** | task-001-demo |\n",
+                encoding="utf-8")
+            (req / "tasks" / "task-001-demo.engineering.md").write_text(
+                "engineering only\n", encoding="utf-8")
+            tasks = list_tasks(req)
+            self.assertEqual(len(tasks), 1)
+            self.assertEqual(tasks[0]["id"], "task-001")
+
+    def test_missing_tasks_dir_returns_empty(self):
+        with tempfile.TemporaryDirectory() as d:
+            self.assertEqual(list_tasks(Path(d) / "no-such-req"), [])
+
+
+class TestDiscardedTaskIds(unittest.TestCase):
+    def test_picks_up_discarded_dir(self):
+        with tempfile.TemporaryDirectory() as d:
+            req = _make_req(Path(d), "req-001")
+            (req / "tasks" / "discarded").mkdir()
+            (req / "tasks" / "discarded" / "task-002-old.md").write_text("x")
+            self.assertEqual(discarded_task_ids(req), {"task-002"})
+
+
+class TestListActiveReqsTolerantAggregation(unittest.TestCase):
+    def test_corrupt_meta_emits_warning_not_raise(self):
+        with tempfile.TemporaryDirectory() as d:
+            repo = Path(d)
+            _make_req(repo, "req-001")
+            bad = repo / "requirements" / "active" / "req-bad"
+            (bad).mkdir(parents=True)
+            (bad / ".req-meta.json").write_text("{not json", encoding="utf-8")
+            out = list_active_reqs(repo)
+            ids = [i["meta"]["id"] for i in out["items"]]
+            self.assertEqual(ids, ["req-001"])
+            self.assertEqual(len(out["warnings"]), 1)
+
+    def test_strict_aggregation_raises_on_corrupt(self):
+        with tempfile.TemporaryDirectory() as d:
+            repo = Path(d)
+            bad = repo / "requirements" / "active" / "req-bad"
+            bad.mkdir(parents=True)
+            (bad / ".req-meta.json").write_text("{not json", encoding="utf-8")
+            with self.assertRaises(StateReadError):
+                list_active_reqs(repo, strict=True)
+
+    def test_skip_non_active_status(self):
+        with tempfile.TemporaryDirectory() as d:
+            repo = Path(d)
+            _make_req(repo, "req-001", status="closed")
+            _make_req(repo, "req-002", status="active")
+            ids = [i["meta"]["id"]
+                   for i in list_active_reqs(repo)["items"]]
+            self.assertEqual(ids, ["req-002"])
+
+
+class TestGetOverallState(unittest.TestCase):
+    def test_pending_spec_diff(self):
+        with tempfile.TemporaryDirectory() as d:
+            repo = Path(d)
+            req = _make_req(repo, "req-001")
+            (req / "task-plan.md").write_text(
+                "| ID | 标题 |\n|---|---|\n"
+                "| task-001 | 一 |\n| task-002 | 二 |\n| task-003 | 三 |\n",
+                encoding="utf-8")
+            # spec 了 task-001
+            (req / "tasks" / "task-001-demo.md").write_text(
+                "# Task\n\n| **状态** | 已完成 |\n", encoding="utf-8")
+            # discard 了 task-003
+            (req / "tasks" / "discarded").mkdir()
+            (req / "tasks" / "discarded" / "task-003-old.md").write_text("x")
+            state = get_overall_state(repo)
+            self.assertEqual(len(state["active_reqs"]), 1)
+            r = state["active_reqs"][0]
+            self.assertEqual(len(r["tasks"]), 1)
+            self.assertEqual(
+                [p["id"] for p in r["pending_spec"]], ["task-002"])
+            self.assertEqual(r["discarded_ids"], ["task-003"])
+
+    def test_tolerant_no_active_returns_empty(self):
+        with tempfile.TemporaryDirectory() as d:
+            state = get_overall_state(Path(d))
+            self.assertEqual(state["active_reqs"], [])
+            self.assertEqual(state["warnings"], [])
+
+
+class TestCLINewSubcommands(unittest.TestCase):
+    def test_cli_read_req_meta_strict_missing_exit1(self):
+        result = subprocess.run(
+            ["python3", "-m", "_lib.state",
+             "read_req_meta", "/nonexistent/req"],
+            capture_output=True, text=True, env=_CLI_ENV)
+        self.assertEqual(result.returncode, 1)
+
+    def test_cli_list_active_reqs_empty_repo(self):
+        with tempfile.TemporaryDirectory() as d:
+            result = subprocess.run(
+                ["python3", "-m", "_lib.state", "list_active_reqs", d],
+                capture_output=True, text=True, env=_CLI_ENV)
+            self.assertEqual(result.returncode, 0)
+            payload = json.loads(result.stdout)
+            self.assertEqual(payload["items"], [])
+            self.assertEqual(payload["warnings"], [])
 
 
 if __name__ == "__main__":

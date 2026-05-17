@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Smoke test: fixture_create_task_v2 与 parser / task-transition 端到端协作。
+# Smoke test: fixture_create_task_v2 与 state / task-transition 端到端协作。
 # 不引入新 review gate；仅验证新 fixture 被现有解析层接受。
 set -uo pipefail
 
@@ -10,7 +10,7 @@ source "$SCRIPT_DIR/helpers/fixture.sh"
 TASK_TRANSITION="$FRAMEWORK_ROOT/scripts/task-transition.py"
 
 _parser() {
-  PYTHONPATH="$FRAMEWORK_ROOT/scripts" python3 -m _lib.task_parser "$@"
+  PYTHONPATH="$FRAMEWORK_ROOT/scripts" python3 -m _lib.state "$@"
 }
 
 # -----------------------------------------------------------------
