@@ -523,6 +523,81 @@ class TestListActiveReqsTolerantAggregation(unittest.TestCase):
             self.assertEqual(ids, ["req-002"])
 
 
+def _git(repo: Path, *args: str) -> str:
+    """run git -C <repo> <args>，返回 stdout（仅在 unit test setup 内使用）。"""
+    return subprocess.check_output(
+        ["git", "-C", str(repo), *args],
+        text=True, stderr=subprocess.DEVNULL,
+    ).strip()
+
+
+def _init_repo_with_worktrees(root: Path) -> tuple[Path, Path, Path]:
+    """建一个 main 仓 + 2 个 req worktree（req-001 / req-002）+ 1 个 task worktree（task-001 fork req-001）。
+
+    返回 (main, req001_wt, task001_wt)。
+    """
+    main = root / "main"
+    main.mkdir()
+    _git(main, "init", "-q")
+    _git(main, "config", "user.email", "t@e")
+    _git(main, "config", "user.name", "t")
+    (main / "seed.md").write_text("seed")
+    _git(main, "add", ".")
+    _git(main, "commit", "-q", "-m", "seed")
+
+    wt_root = root / "wts"
+    wt_root.mkdir()
+    req001_wt = wt_root / "req-001-demo"
+    req002_wt = wt_root / "req-002-other"
+    task001_wt = wt_root / "task-001-demo"
+    _git(main, "worktree", "add", "-q", "-b", "req-001-demo", str(req001_wt))
+    _git(main, "worktree", "add", "-q", "-b", "req-002-other", str(req002_wt))
+    _git(main, "worktree", "add", "-q", "-b", "task-001-demo", str(task001_wt))
+
+    # 在两个 req worktree 各放 active req（同名 id 模拟两 req 并行）
+    _make_req(req001_wt, "req-001")
+    _make_req(req002_wt, "req-002")
+    return main, req001_wt, task001_wt
+
+
+class TestListActiveReqsCwdAndWorktrees(unittest.TestCase):
+    """v3 §1 #2 清单显式覆盖: multi active / task worktree cwd / 跨 worktree 去重。"""
+
+    def test_multi_active_across_worktrees_deduped(self):
+        with tempfile.TemporaryDirectory() as d:
+            main, _r1, _t1 = _init_repo_with_worktrees(Path(d))
+            out = list_active_reqs(main)
+            ids = sorted(i["meta"]["id"] for i in out["items"])
+            self.assertEqual(ids, ["req-001", "req-002"])
+
+    def test_cwd_in_req_worktree_returns_only_that_req(self):
+        with tempfile.TemporaryDirectory() as d:
+            main, r1, _t1 = _init_repo_with_worktrees(Path(d))
+            out = list_active_reqs(main, cwd=r1)
+            ids = [i["meta"]["id"] for i in out["items"]]
+            self.assertEqual(ids, ["req-001"])  # cwd 唯一定 req，不要被 req-002 干扰
+
+    def test_cwd_in_task_worktree_finds_sibling_reqs(self):
+        with tempfile.TemporaryDirectory() as d:
+            main, _r1, t1 = _init_repo_with_worktrees(Path(d))
+            out = list_active_reqs(main, cwd=t1)
+            ids = sorted(i["meta"]["id"] for i in out["items"])
+            # task worktree 自身 active/ 为空 → 从兄弟 req worktree 拿，应该看到两个 req
+            self.assertEqual(ids, ["req-001", "req-002"])
+
+    def test_main_repo_active_dedupes_against_worktree(self):
+        """主仓 + req worktree 都暴露同 id 时，basename 去重只保留一份。"""
+        with tempfile.TemporaryDirectory() as d:
+            main, r1, _t1 = _init_repo_with_worktrees(Path(d))
+            # main 也放一份 req-001（实际场景：用户先在 main 写 brief 然后 fork worktree）
+            _make_req(main, "req-001")
+            out = list_active_reqs(main)
+            ids_count = {i["meta"]["id"]: 0 for i in out["items"]}
+            for i in out["items"]:
+                ids_count[i["meta"]["id"]] += 1
+            self.assertEqual(ids_count.get("req-001"), 1)
+
+
 class TestGetOverallState(unittest.TestCase):
     def test_pending_spec_diff(self):
         with tempfile.TemporaryDirectory() as d:

@@ -11,6 +11,7 @@ SUITES=(
   test-fixture-v2.sh
   test-lark-adapter.sh
   test-lark-cli-lint.sh
+  test-publish-to-lark-e2e.sh
   test-check-req-doc-drift.sh
   test-check-task-scope.sh
   test-structure-schema.sh
