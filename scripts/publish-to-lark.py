@@ -3,6 +3,10 @@
 
 由 prd-writing 等 skill 调用，PM 也可手动运行。详细行为见
 skills/publish-to-lark/SKILL.md。
+
+所有 `lark-cli` 子进程调用走 `scripts/_lib/lark_adapter.py`（v3 §1 #1 实施）；
+本文件保留业务编排：parse_frontmatter / target resolution / 表格 merge_cells。
+不要再直接 spawn `lark-cli` —— lint 会拦截。
 """
 
 from __future__ import annotations
@@ -11,12 +15,26 @@ import argparse
 import json
 import os
 import re
-import subprocess
 import sys
 from datetime import datetime
 from pathlib import Path
 
-MIN_LARK_CLI_VERSION = (1, 0, 27)
+# 让 _lib 可以 import（publish-to-lark.py 自身在 scripts/，_lib 是同级子目录）
+_SCRIPTS_DIR = str(Path(__file__).resolve().parent)
+if _SCRIPTS_DIR not in sys.path:
+    sys.path.insert(0, _SCRIPTS_DIR)
+
+from _lib.lark_adapter import (  # noqa: E402
+    MIN_LARK_CLI_VERSION,
+    LarkAdapterError,
+    api_json,
+    auth_check,
+    auth_status,
+    docs_create_from_markdown,
+    docs_update_from_markdown,
+    version,
+)
+
 CONFIG_PATH = Path(".claude/lark-publish.json")
 
 
@@ -35,45 +53,24 @@ def info(msg: str) -> None:
     print(msg)
 
 
-# ---------- 子进程 ----------
-
-def run(cmd: list[str], check: bool = True):
-    try:
-        res = subprocess.run(cmd, capture_output=True, text=True)
-    except FileNotFoundError:
-        die(f"命令未找到: {cmd[0]}")
-    if check and res.returncode != 0:
-        raise subprocess.CalledProcessError(res.returncode, cmd, res.stdout, res.stderr)
-    return res
-
-
 # ---------- Preflight ----------
-
-def parse_version(s: str):
-    m = re.search(r"(\d+)\.(\d+)\.(\d+)", s)
-    if not m:
-        return None
-    return tuple(int(x) for x in m.groups())
-
 
 def preflight(target_kind: str | None, config_present: bool, args_complete: bool) -> None:
     # 1. lark-cli 在 PATH + 2. 版本检查
-    res = run(["lark-cli", "--version"], check=False)
-    combined = (res.stdout or "") + (res.stderr or "")
-    if res.returncode != 0 and not parse_version(combined):
+    try:
+        ver = version()
+    except LarkAdapterError as e:
         die("lark-cli 未安装或不可用。安装方式见 https://github.com/larksuite/lark-cli")
-    ver = parse_version(combined)
     if not ver:
-        die(f"无法解析 lark-cli 版本输出: {combined!r}")
+        die("无法解析 lark-cli 版本输出")
     if ver < MIN_LARK_CLI_VERSION:
         ver_s = ".".join(str(x) for x in ver)
         min_s = ".".join(str(x) for x in MIN_LARK_CLI_VERSION)
         die(f"lark-cli 版本 {ver_s} 低于最低要求 {min_s}；请升级")
 
     # 3. 登录态
-    res = run(["lark-cli", "auth", "status"], check=False)
-    if res.returncode != 0:
-        detail = (res.stderr or res.stdout or "").strip()
+    ok, detail = auth_status()
+    if not ok:
         die(f"飞书 CLI 未登录。运行 lark-cli auth login（详见 lark-shared skill）。详情: {detail}")
 
     # 4. scope 检查（lark-cli ≥1.0.27 使用精确子 scope 名称）
@@ -82,9 +79,8 @@ def preflight(target_kind: str | None, config_present: bool, args_complete: bool
         scopes.append("wiki:node:retrieve")
     elif target_kind == "folder":
         scopes.append("drive:file:upload")
-    res = run(["lark-cli", "auth", "check", "--scope", " ".join(scopes)], check=False)
-    if res.returncode != 0:
-        detail = (res.stderr or res.stdout or "").strip()
+    ok, detail = auth_check(scopes)
+    if not ok:
         warn(f"auth check 报告缺少 scope: {','.join(scopes)}（可能是 CLI 升级后 token metadata 未刷新的误报）；"
              f"将继续执行，由实际 API 调用兜底。如真正缺权限请跑 lark-cli auth login --scope \"{' '.join(scopes)}\"。详情: {detail}")
 
@@ -207,28 +203,15 @@ def build_doc_url(doc_id: str) -> str:
 
 
 def publish_first_time(markdown_path: Path, target: dict):
-    # lark-cli 对 @<绝对路径> 的 markdown 处理有 bug,改用 @./<文件名> + cwd=父目录绕过
-    cmd = ["lark-cli", "docs", "+create",
-           "--title", target["title"],
-           "--markdown", f"@./{markdown_path.name}"]
-    if target["kind"] == "wiki":
-        cmd.extend(["--wiki-node", target["token"]])
-    elif target["kind"] == "folder":
-        cmd.extend(["--folder-token", target["token"]])
-    else:
-        die(f"未知 target.kind: {target['kind']}（应为 wiki 或 folder）")
-
     info(f"创建飞书文档: title={target['title']!r} kind={target['kind']}")
     try:
-        res = subprocess.run(cmd, cwd=str(markdown_path.parent),
-                             capture_output=True, text=True, check=True)
-    except subprocess.CalledProcessError as e:
-        die(f"lark-cli docs +create 失败: {e.stderr}")
-
-    try:
-        data = json.loads(res.stdout)
-    except json.JSONDecodeError:
-        die(f"lark-cli docs +create 返回非 JSON: {res.stdout[:300]}")
+        data = docs_create_from_markdown(
+            markdown_path,
+            title=target["title"],
+            target={"kind": target["kind"], "token": target["token"]},
+        )
+    except LarkAdapterError as e:
+        die(f"lark-cli docs +create 失败: {e.detail}")
 
     inner = data.get("data") or {}
     doc_id = (
@@ -247,34 +230,20 @@ def publish_first_time(markdown_path: Path, target: dict):
 
 def publish_overwrite(markdown_path: Path, doc_id: str):
     info(f"覆盖飞书文档: doc_id={doc_id}")
-    # lark-cli 对 @<绝对路径> 的 markdown 处理有 bug,改用 @./<文件名> + cwd=父目录绕过
-    cmd = ["lark-cli", "docs", "+update",
-           "--doc", doc_id,
-           "--markdown", f"@./{markdown_path.name}",
-           "--mode", "overwrite"]
     try:
-        subprocess.run(cmd, cwd=str(markdown_path.parent),
-                       capture_output=True, text=True, check=True)
-    except subprocess.CalledProcessError as e:
-        die(f"lark-cli docs +update 失败: {e.stderr}")
+        docs_update_from_markdown(markdown_path, doc_id=doc_id, mode="overwrite")
+    except LarkAdapterError as e:
+        die(f"lark-cli docs +update 失败: {e.detail}")
     return doc_id, build_doc_url(doc_id)
 
 
 # ---------- Cell 合并 ----------
 
 def lark_api(method: str, path: str, params: dict | None = None, data: dict | None = None):
-    cmd = ["lark-cli", "api", method, path]
-    if params:
-        cmd.extend(["--params", json.dumps(params)])
-    if data:
-        cmd.extend(["--data", json.dumps(data)])
-    res = run(cmd, check=False)
-    if res.returncode != 0:
-        raise RuntimeError(f"lark-cli api {method} {path} failed: {(res.stderr or res.stdout).strip()}")
     try:
-        return json.loads(res.stdout)
-    except json.JSONDecodeError:
-        raise RuntimeError(f"lark-cli api {method} {path} 返回非 JSON: {res.stdout[:200]}")
+        return api_json(method, path, params=params, data=data)
+    except LarkAdapterError as e:
+        raise RuntimeError(f"lark-cli api {method} {path} failed: {e.detail}") from e
 
 
 def get_all_blocks(doc_id: str) -> list[dict]:
