@@ -1,16 +1,17 @@
 <!-- /autoplan restore point: <LOCAL_GSTACK_HOME>/projects/PM-AI-Workflow/main-autoplan-restore-20260517-214638.md -->
-# GSD 借鉴 — 实施方案 (v2)
+# GSD 借鉴 — 实施方案 (v3)
 
-> **状态**：待执行 / PM 已逐项判定锁定 + autoplan v2 Eng/DX 实施细节修订
+> **状态**：待执行 / PM 已逐项判定锁定 + autoplan v2 Eng/DX 实施细节修订 + v3 砍「决策」独立类别
 > **日期**：2026-05-17
 > **作者**：PM + AI
-> **来源**：从 `docs/归档/完成/gsd-借鉴-研究分析.md` v3.10 §10.7 抽取；v1 PM 1-1 判定；v2 autoplan Phase 1+3+3.5 落实施细节
+> **来源**：从 `docs/归档/完成/gsd-借鉴-研究分析.md` v3.10 §10.7 抽取；v1 PM 1-1 判定；v2 autoplan Phase 1+3+3.5 落实施细节；v3 砍「决策」独立类别
 > **服务对象**：主仓 framework 开发者（PM + AI）；不进消费仓同步 SOP
 
 ---
 
 **Changelog**：
-- **v2（本版，2026-05-17）：autoplan 评审落实施细节** —— Phase 1 CEO dual voices (codex+claude subagent) 7/8 维度 CONFIRMED user challenge，PM 选 Y（接受 #1 缩 + #2 #3 保持重版）；Phase 3 Eng dual voices 9/10 维度 CONFIRMED 实施细节修订；Phase 3.5 DX single voice 落 5 细节 finding。Final Gate PM 选 A（接受全部默认 + Choice 1 lark-adapter functional API）。主要变动：(1) #1 决策 从 c (1.5-2d) → b 极简版 (1-2h)：D13 + INDEX，触发式补，命名 `modulespec-维护决策.md` 复用 D 编号不另起 决策编号；(2) #2 lark-adapter API 锁 functional + module-level，**必须封装 cwd workaround**，lint 扫三类 pattern，加 fixture shim；(3) #3 范围改为「扩展 `_lib/task_parser.py` → 升格为 `_lib/state.py`」（避免双权威源），**status-view.py 必须反向 import dogfood**，错误契约 strict/tolerant 分模式，加 `__main__ doctor`；(4) 总工作量 2.5-4d → ~1-1.5d。
+- **v3（本版，2026-05-17）：砍「决策」独立类别** —— PM 反馈"5 个相关位置太乱 + ADR 是 PMAI 自创方言"。砍 docs/决策-索引.md + docs/设计/_模板-决策.md + docs/归档/完成/modulespec-维护/决策.md（独特"触发重新评估条件"3 条已 merge 进同目录主方案.md §Y 决议日志段）。下一步实施清单 3 项 → 2 项（原 #1 ADR 决策记录格式整段砍：已通过文档目录整理 + 主方案 §Y 决议日志段解决，不再需要单独"决策"文件类别）。框架决策散落痛点已通过本 session commits 82a329a/ac2abcd 文档目录整理 + 主方案模板 §Y 段解决。
+- **v2（2026-05-17）：autoplan 评审落实施细节** —— Phase 1 CEO dual voices (codex+claude subagent) 7/8 维度 CONFIRMED user challenge，PM 选 Y（接受 #1 缩 + #2 #3 保持重版）；Phase 3 Eng dual voices 9/10 维度 CONFIRMED 实施细节修订；Phase 3.5 DX single voice 落 5 细节 finding。Final Gate PM 选 A（接受全部默认 + Choice 1 lark-adapter functional API）。
 - **v1（2026-05-17）：PM 1-1 判定后从 docs/归档/完成/gsd-借鉴-研究分析.md v3.10 §10.7 抽取**
 
 ---
@@ -21,59 +22,31 @@
 
 `docs/归档/完成/gsd-借鉴-研究分析.md` 是研究分析（1683 行 / v3.10 / 10 轮迭代 / 含 28 项原始候选 + 7 项 §10.7 落选项推导链）。研究阶段已完成，但研究文档太长不适合直接当"下一步做什么"的执行依据。
 
-本文档是抽取后的纯实施清单——3 项要做的、按什么节奏做、不做的那 4 项是什么 + 为什么不做。
+本文档是抽取后的纯实施清单——2 项要做的、按什么节奏做、不做的那 4+ 项是什么 + 为什么不做。
 
-### §0.2 真痛点（按 `_TEMPLATE-design-doc.md` §0 痛点锁原则）
+### §0.2 真痛点（按 `_模板-方案.md` §0 痛点锁原则）
 
 | # | 痛点 | EVIDENCE（实证）|
 |---|---|---|
-| 1 | 框架决策散落、格式不统一 | `docs/设计/` 5 份 + `docs/归档/完成/` 21 份 + RUNTIME.md 394 行 + TODOS.md 399 行；查 D13 "为什么砍 stage 5/6/7/8/9" 要翻 3 处 |
-| 2 | lark-cli 未来出现第二个调用脚本时会重复 4 连 fix 历史 | 现状 16 处 lark-cli 调用全在 `scripts/publish-to-lark.py`；PM 确认会写第二个（weekly report / memory sync 等） |
-| 3 | AI 跨 skill 读 state 不一致 | autoplan v2 修正：实际 4 个 Python script + 1 段 jq 读 `.req-meta.json`（不是"10 skill 各自 grep"）；`status-view.py` 输出是 PM 视觉格式不是 AI 解析；schema 变多处都要改 |
+| 1 | lark-cli 未来出现第二个调用脚本时会重复 4 连 fix 历史 | 现状 16 处 lark-cli 调用全在 `scripts/publish-to-lark.py`；PM 确认会写第二个（weekly report / memory sync 等） |
+| 2 | AI 跨 skill 读 state 不一致 | autoplan v2 修正：实际 4 个 Python script + 1 段 jq 读 `.req-meta.json`（不是"10 skill 各自 grep"）；`status-view.py` 输出是 PM 视觉格式不是 AI 解析；schema 变多处都要改 |
+
+> **v3 已解痛点**：原痛点「框架决策散落、格式不统一」已通过本 session commits 82a329a + ac2abcd 文档目录整理（按生命周期分 设计/执行中/归档[完成/废弃]）+ `_模板-方案.md` §Y 决议日志段解决；不再需要独立"决策"文件类别。
 
 ### §0.3 不解决什么（防 review 把这些拉进来）
 
 | # | 衍生场景 | 为什么不在 §0 范围 |
 |---|---|---|
-| 1 | "把所有 GSD 67 命令 33 agent 都评估一遍" | 已在研究阶段砍掉 14 项废弃 + 5 项暂停 + 12 项等触发；本实施阶段只做 §10.7 锁定的 3 项 |
+| 1 | "把所有 GSD 67 命令 33 agent 都评估一遍" | 已在研究阶段砍掉 14 项废弃 + 5 项暂停 + 12 项等触发；本实施阶段只做 §10.7 锁定的 2 项 |
 | 2 | "改造 SKILL.md 格式" | 跟 Claude Code 官方标准无冲突但是 PMAI 自创"方言"，违反 memory `feedback_gstack_keep_official`；之前 commit be47fca 落地的 PM-VIEW-RULES §9.1 单一权威源方案已是当前可行最优 |
-| 3 | "集中 mutation 入口（写层统一）" | 现状 `/task-status` + I-DC1/I-AD5 三道防线已够；真痛点在读层（本文档 #3 覆盖）不在写层；PMAI 1-2 天 grok mutation_lib 是 D13 同模式 trap |
-| 4 | "把决策回填扩到 docs/归档/完成/ 27 份历史档" | 触发条件式补：PM 某次查不到决策根因时再为那个决策补一份 |
-| 5 | "决策全套回填历史 D1-D15"（v2 新增「不解决」）| autoplan v2 CEO consensus：D2-D14 EVIDENCE 不硬，6 个月后大部分没人查；只做 modulespec-维护 + 索引 + 触发式补 |
+| 3 | "集中 mutation 入口（写层统一）" | 现状 `/task-status` + I-DC1/I-AD5 三道防线已够；真痛点在读层（本文档 #2 覆盖）不在写层；PMAI 1-2 天 grok mutation_lib 是 D13 同模式 trap |
+| 4 | "建独立『决策』文件类别 / 索引 / 模板"（v3 新增「不解决」）| 5 个相关位置太乱 + ADR 是 PMAI 自创方言；`_模板-方案.md` §Y 决议日志段已能记决策；不强求文件级独立 |
 
 ---
 
-## §1 实施清单（3 项）
+## §1 实施清单（2 项）
 
-### 实施 #1: 决策记录格式（b 极简版）
-
-**目标**：建立框架决策的标准 anchor + 解决"格式不统一"（PM 拍板的真痛点）
-
-**v2 修订**（CEO consensus + DX finding）：
-- 不批量回填历史决策（D2-D14 EVIDENCE 不硬，跟 docs/归档/完成/ 27 份历史档同等触发式补）
-- 命名 **`<主题>/决策.md`**（主题名子目录，跟主方案/验证脚本同目录组装；如 `modulespec-维护/决策.md`）
-- 索引文件统一名 **`docs/决策-索引.md`**
-- 索引顶部明写「docs/归档/完成/ 27 份历史档未批量回填，查不到时去归档 grep」（DX finding 5）
-
-**实施清单（~1-2h）**：
-- 建 `docs/设计/` `docs/执行中/` `docs/归档/完成/<主题>/` `docs/归档/废弃/` 目录骨架
-- 写 `docs/设计/_模板-决策.md`（4 段：背景 / 决策 / 后果 / 状态）
-- 写 `docs/归档/完成/modulespec-维护/决策.md`（源材料：同目录的 `主方案.md` + `决策路径-v2到v3.2.md` + `验证脚本.md` + RUNTIME.md modulespec 维护段）
-- 写 `docs/决策-索引.md`：已落地决策列表 + 顶部说明「历史档触发式补」
-- 触发式补历史决策：PM 某次查不到决策根因时为那条补一份决策记录
-
-**跟现有 `_模板-方案.md` 的关系**：
-- 方案（现有）：大改 / 多 vp / 需要 §0 痛点锁 → 完整 §0-§7 结构
-- 决策（新模板）：单点决策 / 记录"为什么砍了 X / 选 A 不选 B" → 1 页 4 段
-- 并存，按规模选
-
-**范围**：只给主仓；不进 framework 同步 SOP，不进消费仓
-
-**风险**：低（不动现有代码）
-
----
-
-### 实施 #2: lark-adapter 单一入口 + lint（b 方案 + autoplan v2 实施细节）
+### 实施 #1: lark-adapter 单一入口 + lint（b 方案 + autoplan v2 实施细节）
 
 **目标**：未来出现第二个调 lark-cli 的脚本（PM 确认会写：weekly report / memory sync / 等）时不重复 4 连 fix 历史
 
@@ -102,7 +75,7 @@
 
 ---
 
-### 实施 #3: 读层 `_lib/state.py`（v2 重大修订：扩展 task_parser，不新建）
+### 实施 #2: 读层 `_lib/state.py`（v2 重大修订：扩展 task_parser，不新建）
 
 **目标**：让 AI 跨 skill 用统一接口读 state；当前是"PM 看 `/task-status` 视觉视图，AI 各 skill 各自 grep raw state"双轨制
 
@@ -130,7 +103,7 @@
 - **active req 探测算法统一**：现 `status-view.py:200` 只扫 `.worktrees/req-*`，`skill-preamble.sh:112` 用 `git worktree list` helper 优先；两套不统一会导致 main / req / task 窗口看到不同 active req → state.py 必须采用 worktree-list 语义，让 preamble + status-view 共用
 - 加 `python -m _lib.state doctor <req>` 子命令：打印当前文件 vs 期望 schema diff（DX finding 4）
 
-**实施清单（~0.5d，比原 1d 缩半）**：
+**实施清单（~0.5d）**：
 - 把 `_lib/task_parser.py` 扩展并 rename 为 `_lib/state.py`
 - 把 `status-view.py:133-211` 的 `_collect_active_from / find_all_active_reqs` lift-and-shift 到 state.py
 - status-view.py 改成纯 render 层（消费 `state.get_overall_state()`）
@@ -147,17 +120,16 @@
 
 ---
 
-## §2 启动建议（修订后节奏）
+## §2 启动建议
 
 | 阶段 | 任务 | 估时 | 类型 |
 |---|---|---|---|
-| 1 | #1 决策 极简（D13 + INDEX + TEMPLATE）| ~1-2h | 文档 |
-| 2 | #3 state.py（扩 task_parser + dogfood status-view）| ~0.5d | 代码 |
-| 3 | #2 lark-adapter + lint + fixture | ~0.5-0.7d | 代码 |
+| 1 | #2 state.py（扩 task_parser + dogfood status-view）| ~0.5d | 代码 |
+| 2 | #1 lark-adapter + lint + fixture | ~0.5-0.7d | 代码 |
 
-**总计 ~1-1.5d CC**
+**总计 ~1-1.2d CC**
 
-**推荐起手**：先做 #1（最独立、最轻、立即收益），然后 #3（架构改造）→ #2（代码重构）。每个阶段独立 commit。
+**推荐起手**：先做 #2 state.py（架构改造影响更广，fresh context 干），然后 #1 lark-adapter。每个阶段独立 commit。
 
 ---
 
@@ -170,8 +142,8 @@
 | `skill_structure.yml` manifest | 跟 commit be47fca 落地的 PM-VIEW-RULES §9.1 单一权威源方案冲突；触发双源漂移 |
 | `<required_reading>` XML 块显式化 | 违反"单一权威源"原则；散到 20 SKILL.md = 把 §9.1 内容散回各文件 |
 | SKILL 5 段骨架（强制 skill 同构） | Claude Code 标准之上长 PMAI"方言"；违反 memory `feedback_gstack_keep_official` |
-| 集中 mutation 入口（写层 mutation_lib） | 现状 `/task-status` + 三道防线已够；真痛点在读层（本文档 #3 覆盖）|
-| 决策 全套回填 D1-D15（v2 砍）| autoplan v2 CEO consensus：D2-D14 EVIDENCE 不硬；只做 D13 + INDEX + 触发式补 |
+| 集中 mutation 入口（写层 mutation_lib） | 现状 `/task-status` + 三道防线已够；真痛点在读层（本文档 #2 覆盖）|
+| 独立「决策」文件类别 / 索引 / 模板（v3 砍）| 5 个相关位置太乱 + ADR 是 PMAI 自创方言；`_模板-方案.md` §Y 决议日志段已能记决策；不强求文件级独立 |
 
 ### ⏸️ 挪等触发（暂不做）
 
@@ -187,36 +159,35 @@
 | 节点 | 决策 |
 |---|---|
 | v3.10 PM 1-1 判定 | 主表 7 项 → 3 项；4 项砍 + 1 项 DEFER；新增 #3 读层 state_reader |
-| v1 抽取 | 从 archive/gsd-借鉴分析.md §10.7 抽出 #1 c + #2 b + #3 b 三项 |
+| v1 抽取 | 从 archive/gsd-借鉴分析.md §10.7 抽出 #1 c (ADR) + #2 b (lark-adapter) + #3 b (state_reader) 三项 |
 | v2 autoplan Phase 1 CEO | dual voices 7/8 维度 CONFIRMED user challenge；PM 选 Y（接受 #1 缩 + #2 #3 保持重版） |
 | v2 autoplan Phase 3 Eng | dual voices 9/10 维度 CONFIRMED 实施细节：#3 改"扩 task_parser 不新建"；#2 必须封装 cwd workaround；#3 工作量 1d → 0.5d |
-| v2 autoplan Phase 3.5 DX | single voice 5 finding：命名 modulespec-维护决策 复用 D 编号；INDEX 单文件；docstring 完备度；§9.1 加表头 |
+| v2 autoplan Phase 3.5 DX | single voice 5 finding：命名约定 / INDEX 单文件 / docstring 完备度 / §9.1 加表头 |
 | v2 Final Gate | PM 选 A：接受全部默认 + #2 API 选 functional + module-level |
+| **v3（本版）** | PM "好乱啊" → 砍「决策」独立类别（5 个相关位置太多）；实施 3 项 → 2 项 |
 
 ---
 
 ## §5 不变量约束（实施时需保持）
 
-- 不动 I-DC1 / I-AD5 三道防线（即使做 #3 state.py 也不碰）
+- 不动 I-DC1 / I-AD5 三道防线（即使做 #2 state.py 也不碰）
 - 不抄 GSD SDK 双实现（archive §4.1 已决）
-- 决策 不进 framework 同步 SOP（只主仓用）
 - state.py 是 read-only lib，不引入 mutation 路径
-- 所有改动按 `框架同步-SOP.md` 流程同步到消费仓（如 #2 lark-adapter 改动）；决策记录不同步
+- 所有改动按 `框架同步-SOP.md` 流程同步到消费仓（#1 lark-adapter 改动需要同步；#2 state.py 由消费仓决定）
 
 ---
 
-## §6 Cross-Phase Themes（autoplan v2 新增）
+## §6 Cross-Phase Themes（autoplan v2 沉淀）
 
 两个独立 reviewer 在不同 phase 多次命中的共识：
 
 1. **「不重新发明，扩展现有」**（Phase 3 Eng + DX 共识）
    - state.py 扩 task_parser（不新建 state_reader）
-   - 决策 编号复用 D（不另起 决策编号）
-   - INDEX 单文件（不要 DECISIONS / README 双名）
+   - v3 砍「决策」独立类别（用方案模板 §Y 段，不另建文件类）
 
 2. **「显式化已有 workaround」**（Phase 3 Eng + DX 共识）
    - cwd workaround 必须封装进 adapter 强制
-   - archive 不批量回填要写明（INDEX 顶部）
+   - 历史归档不批量回填要写明
    - docstring 边界（None 3 种语义 + 异常）必须 explicit
 
 3. **「dogfood」**（Phase 3 Eng critical）
@@ -224,4 +195,4 @@
 
 ---
 
-**End of GSD 借鉴 — 实施方案 v2**
+**End of GSD 借鉴 — 实施方案 v3**
