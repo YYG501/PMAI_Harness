@@ -15,8 +15,8 @@
 **最近活动（2026-05-16）**: D13 modulespec 维护方案 **全部落地** ✓（vp-1 + vp-2 + vp-3 + autoplan round 7 + §0 PAIN_LINK 锁机制首次实战成功）。绕了 v3 → v3' → v3'.1 → v3.2 → v3.3 五版后由 PM 根因质疑拉回 v2 §12.2 原始方向，实际实施 ~1.5h（含 5 次 run-all 验证）。
 
 - **测试基线**：350/0（D13 前） → **340/0**（D13 后，净删 10 个测试全部正常归因：A1 skip-doc-update 6 个 + I-CT6 doc-diff 阻塞 1 个 + req-stage-gate half-close detection 1 个 + e2e/test-skip-doc-update-recovery.sh 2 个）
-- 方案文档：`docs/归档/完成/D13-modulespec/主方案.md`（D13 final，含 §0 锁 + autoplan round 7 三 phase dual voice + 18 polish 整合 + 3 PM 决议 + autoplan ABORT 历史）
-- 归档参考：`docs/归档/完成/D13-modulespec/决策路径-v2到v3.2.md`（v2-v3.2 完整决策路径，§十七/十八/十九 已标作废）
+- 方案文档：`docs/归档/完成/modulespec-维护/主方案.md`（D13 final，含 §0 锁 + autoplan round 7 三 phase dual voice + 18 polish 整合 + 3 PM 决议 + autoplan ABORT 历史）
+- 归档参考：`docs/归档/完成/modulespec-维护/决策路径-v2到v3.2.md`（v2-v3.2 完整决策路径，§十七/十八/十九 已标作废）
 - 设计模板：`docs/设计/_模板-方案.md`（D-* 设计任务起手模板，§0 PAIN_LINK + EVIDENCE + §0.4 显式排除列表）
 
 **4 个 commit（已落地）**：

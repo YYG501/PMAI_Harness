@@ -10,7 +10,7 @@
 ---
 
 **Changelog**：
-- **v2（本版，2026-05-17）：autoplan 评审落实施细节** —— Phase 1 CEO dual voices (codex+claude subagent) 7/8 维度 CONFIRMED user challenge，PM 选 Y（接受 #1 缩 + #2 #3 保持重版）；Phase 3 Eng dual voices 9/10 维度 CONFIRMED 实施细节修订；Phase 3.5 DX single voice 落 5 细节 finding。Final Gate PM 选 A（接受全部默认 + Choice 1 lark-adapter functional API）。主要变动：(1) #1 ADR 从 c (1.5-2d) → b 极简版 (1-2h)：D13 + INDEX，触发式补，命名 `ADR-D13.md` 复用 D 编号不另起 ADR-NNNN；(2) #2 lark-adapter API 锁 functional + module-level，**必须封装 cwd workaround**，lint 扫三类 pattern，加 fixture shim；(3) #3 范围改为「扩展 `_lib/task_parser.py` → 升格为 `_lib/state.py`」（避免双权威源），**status-view.py 必须反向 import dogfood**，错误契约 strict/tolerant 分模式，加 `__main__ doctor`；(4) 总工作量 2.5-4d → ~1-1.5d。
+- **v2（本版，2026-05-17）：autoplan 评审落实施细节** —— Phase 1 CEO dual voices (codex+claude subagent) 7/8 维度 CONFIRMED user challenge，PM 选 Y（接受 #1 缩 + #2 #3 保持重版）；Phase 3 Eng dual voices 9/10 维度 CONFIRMED 实施细节修订；Phase 3.5 DX single voice 落 5 细节 finding。Final Gate PM 选 A（接受全部默认 + Choice 1 lark-adapter functional API）。主要变动：(1) #1 决策 从 c (1.5-2d) → b 极简版 (1-2h)：D13 + INDEX，触发式补，命名 `modulespec-维护决策.md` 复用 D 编号不另起 决策编号；(2) #2 lark-adapter API 锁 functional + module-level，**必须封装 cwd workaround**，lint 扫三类 pattern，加 fixture shim；(3) #3 范围改为「扩展 `_lib/task_parser.py` → 升格为 `_lib/state.py`」（避免双权威源），**status-view.py 必须反向 import dogfood**，错误契约 strict/tolerant 分模式，加 `__main__ doctor`；(4) 总工作量 2.5-4d → ~1-1.5d。
 - **v1（2026-05-17）：PM 1-1 判定后从 docs/归档/完成/gsd-借鉴-研究分析.md v3.10 §10.7 抽取**
 
 ---
@@ -38,35 +38,33 @@
 | 1 | "把所有 GSD 67 命令 33 agent 都评估一遍" | 已在研究阶段砍掉 14 项废弃 + 5 项暂停 + 12 项等触发；本实施阶段只做 §10.7 锁定的 3 项 |
 | 2 | "改造 SKILL.md 格式" | 跟 Claude Code 官方标准无冲突但是 PMAI 自创"方言"，违反 memory `feedback_gstack_keep_official`；之前 commit be47fca 落地的 PM-VIEW-RULES §9.1 单一权威源方案已是当前可行最优 |
 | 3 | "集中 mutation 入口（写层统一）" | 现状 `/task-status` + I-DC1/I-AD5 三道防线已够；真痛点在读层（本文档 #3 覆盖）不在写层；PMAI 1-2 天 grok mutation_lib 是 D13 同模式 trap |
-| 4 | "把决策回填扩到 archive/design/ 21 份废稿" | 触发条件式补：PM 某次查不到决策根因时再为那个决策补 ADR |
-| 5 | "ADR 全套回填 D1-D15"（v2 新增「不解决」）| autoplan v2 CEO consensus：D2-D14 EVIDENCE 不硬，6 个月后大部分没人查；只做 D13 + INDEX + 触发式补 |
+| 4 | "把决策回填扩到 docs/归档/完成/ 27 份历史档" | 触发条件式补：PM 某次查不到决策根因时再为那个决策补一份 |
+| 5 | "决策全套回填历史 D1-D15"（v2 新增「不解决」）| autoplan v2 CEO consensus：D2-D14 EVIDENCE 不硬，6 个月后大部分没人查；只做 modulespec-维护 + 索引 + 触发式补 |
 
 ---
 
 ## §1 实施清单（3 项）
 
-### 实施 #1: ADR 格式 + `docs/`（b 极简版）
+### 实施 #1: 决策记录格式（b 极简版）
 
 **目标**：建立框架决策的标准 anchor + 解决"格式不统一"（PM 拍板的真痛点）
 
 **v2 修订**（CEO consensus + DX finding）：
-- 不批量回填 D1-D15（D2-D14 EVIDENCE 不硬，跟 archive 21 份同等触发式补）
-- 命名 **`ADR-D13.md`** 直接复用 D 编号（不另起 ADR-NNNN 编号体系 + 避免「ADR 编号 ≠ D 编号」的 future-self trap）
-- 索引文件统一名 **`docs/决策-索引.md`**（不要 DECISIONS.md vs README.md 混用）
-- INDEX 顶部明写「archive/design/ 21 份未回填，查不到时去 archive grep」（DX finding 5）
+- 不批量回填历史决策（D2-D14 EVIDENCE 不硬，跟 docs/归档/完成/ 27 份历史档同等触发式补）
+- 命名 **`<主题>/决策.md`**（主题名子目录，跟主方案/验证脚本同目录组装；如 `modulespec-维护/决策.md`）
+- 索引文件统一名 **`docs/决策-索引.md`**
+- 索引顶部明写「docs/归档/完成/ 27 份历史档未批量回填，查不到时去归档 grep」（DX finding 5）
 
 **实施清单（~1-2h）**：
-- 建 `docs/` 目录
+- 建 `docs/设计/` `docs/执行中/` `docs/归档/完成/<主题>/` `docs/归档/废弃/` 目录骨架
 - 写 `docs/设计/_模板-决策.md`（4 段：背景 / 决策 / 后果 / 状态）
-- 写 `docs/归档/完成/D13-modulespec/决策.md` = D13 modulespec 维护方案（源材料：`docs/归档/完成/D13-modulespec/主方案.md` + `docs/归档/完成/D13-modulespec/决策路径-v2到v3.2.md` + `docs/归档/完成/D13-modulespec/验证脚本.md` + RUNTIME.md D13 段）
-- 写 `docs/决策-索引.md`：
-  - 已有 ADR 列表（按 D 编号排序）
-  - 顶部说明「archive/design/ 21 份未回填，触发式补；查不到去 archive grep」
-- 触发式补 D1-D12 / D14-D15：PM 某次查不到决策根因时为那条补一份 ADR
+- 写 `docs/归档/完成/modulespec-维护/决策.md`（源材料：同目录的 `主方案.md` + `决策路径-v2到v3.2.md` + `验证脚本.md` + RUNTIME.md modulespec 维护段）
+- 写 `docs/决策-索引.md`：已落地决策列表 + 顶部说明「历史档触发式补」
+- 触发式补历史决策：PM 某次查不到决策根因时为那条补一份决策记录
 
-**跟现有 `_TEMPLATE-design-doc.md` 的关系**：
-- D-* 设计文档（现有）：大改 / 多 vp / 需要 §0 痛点锁 → 完整 §0-§7 结构
-- ADR（新建）：单点决策 / 记录"为什么砍了 X / 选 A 不选 B" → 1 页 4 段
+**跟现有 `_模板-方案.md` 的关系**：
+- 方案（现有）：大改 / 多 vp / 需要 §0 痛点锁 → 完整 §0-§7 结构
+- 决策（新模板）：单点决策 / 记录"为什么砍了 X / 选 A 不选 B" → 1 页 4 段
 - 并存，按规模选
 
 **范围**：只给主仓；不进 framework 同步 SOP，不进消费仓
@@ -153,7 +151,7 @@
 
 | 阶段 | 任务 | 估时 | 类型 |
 |---|---|---|---|
-| 1 | #1 ADR 极简（D13 + INDEX + TEMPLATE）| ~1-2h | 文档 |
+| 1 | #1 决策 极简（D13 + INDEX + TEMPLATE）| ~1-2h | 文档 |
 | 2 | #3 state.py（扩 task_parser + dogfood status-view）| ~0.5d | 代码 |
 | 3 | #2 lark-adapter + lint + fixture | ~0.5-0.7d | 代码 |
 
@@ -173,7 +171,7 @@
 | `<required_reading>` XML 块显式化 | 违反"单一权威源"原则；散到 20 SKILL.md = 把 §9.1 内容散回各文件 |
 | SKILL 5 段骨架（强制 skill 同构） | Claude Code 标准之上长 PMAI"方言"；违反 memory `feedback_gstack_keep_official` |
 | 集中 mutation 入口（写层 mutation_lib） | 现状 `/task-status` + 三道防线已够；真痛点在读层（本文档 #3 覆盖）|
-| ADR 全套回填 D1-D15（v2 砍）| autoplan v2 CEO consensus：D2-D14 EVIDENCE 不硬；只做 D13 + INDEX + 触发式补 |
+| 决策 全套回填 D1-D15（v2 砍）| autoplan v2 CEO consensus：D2-D14 EVIDENCE 不硬；只做 D13 + INDEX + 触发式补 |
 
 ### ⏸️ 挪等触发（暂不做）
 
@@ -192,7 +190,7 @@
 | v1 抽取 | 从 archive/gsd-借鉴分析.md §10.7 抽出 #1 c + #2 b + #3 b 三项 |
 | v2 autoplan Phase 1 CEO | dual voices 7/8 维度 CONFIRMED user challenge；PM 选 Y（接受 #1 缩 + #2 #3 保持重版） |
 | v2 autoplan Phase 3 Eng | dual voices 9/10 维度 CONFIRMED 实施细节：#3 改"扩 task_parser 不新建"；#2 必须封装 cwd workaround；#3 工作量 1d → 0.5d |
-| v2 autoplan Phase 3.5 DX | single voice 5 finding：命名 ADR-D13 复用 D 编号；INDEX 单文件；docstring 完备度；§9.1 加表头 |
+| v2 autoplan Phase 3.5 DX | single voice 5 finding：命名 modulespec-维护决策 复用 D 编号；INDEX 单文件；docstring 完备度；§9.1 加表头 |
 | v2 Final Gate | PM 选 A：接受全部默认 + #2 API 选 functional + module-level |
 
 ---
@@ -201,9 +199,9 @@
 
 - 不动 I-DC1 / I-AD5 三道防线（即使做 #3 state.py 也不碰）
 - 不抄 GSD SDK 双实现（archive §4.1 已决）
-- ADR 不进 framework 同步 SOP（只主仓用）
+- 决策 不进 framework 同步 SOP（只主仓用）
 - state.py 是 read-only lib，不引入 mutation 路径
-- 所有改动按 `框架同步-SOP.md` 流程同步到消费仓（如 #2 lark-adapter 改动）；ADR 不同步
+- 所有改动按 `框架同步-SOP.md` 流程同步到消费仓（如 #2 lark-adapter 改动）；决策记录不同步
 
 ---
 
@@ -213,7 +211,7 @@
 
 1. **「不重新发明，扩展现有」**（Phase 3 Eng + DX 共识）
    - state.py 扩 task_parser（不新建 state_reader）
-   - ADR 编号复用 D（不另起 ADR-NNNN）
+   - 决策 编号复用 D（不另起 决策编号）
    - INDEX 单文件（不要 DECISIONS / README 双名）
 
 2. **「显式化已有 workaround」**（Phase 3 Eng + DX 共识）

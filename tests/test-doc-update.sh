@@ -113,7 +113,7 @@ test_infrastructure_skip() {
 }
 
 # Batch 3 (close-task --skip-doc-update flag) 历史标记，flag 已于 D13 final (2026-05-16) 整套废弃 (polish-10)。
-# 详见 docs/归档/完成/D13-modulespec/主方案.md §3 vp-1。
+# 详见 docs/归档/完成/modulespec-维护/主方案.md §3 vp-1。
 
 test_call_modes_and_reconciliation_preserved
 test_settlement_four_situations

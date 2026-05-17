@@ -46,7 +46,7 @@ _inject_doc_diff() {
 }
 
 # _mock_skip_doc_update_invocation helper 已删（D13 final, 2026-05-16, polish-10）
-# 原 A1 半 close 路径整套已废弃，详见 docs/归档/完成/D13-modulespec/主方案.md §3 vp-1。
+# 原 A1 半 close 路径整套已废弃，详见 docs/归档/完成/modulespec-维护/主方案.md §3 vp-1。
 
 _mock_autochain_prompt() {
   local req_dir="$1"
@@ -261,7 +261,7 @@ test_reject_on_merge_conflict() {
 # I-CT6: 文档偏差 阻塞测试已删（D13 final, 2026-05-16, polish-6）
 # 原 close-task.sh:63-94 文档偏差阻塞检查整段已删；
 # close-task 不再 reject 含偏差的 task，偏差留给 close-req 聚合处理。
-# 详见 docs/归档/完成/D13-modulespec/主方案.md §3 vp-1 + polish-6。
+# 详见 docs/归档/完成/modulespec-维护/主方案.md §3 vp-1 + polish-6。
 # =================================================
 
 # =================================================
@@ -611,7 +611,7 @@ test_ct8_does_not_exempt_mixed_commit() {
 # =================================================
 # A1 skip-doc-update 测试组已删（D13 final, 2026-05-16, polish-10）
 # 原 6 测试覆盖 --skip-doc-update flag 行为，flag 已废弃。
-# 详见 docs/归档/完成/D13-modulespec/主方案.md §3 vp-1 + §X.2 polish-10。
+# 详见 docs/归档/完成/modulespec-维护/主方案.md §3 vp-1 + §X.2 polish-10。
 # 替代覆盖：tombstone error 路径由 close-task SKILL.md 顶部 §"旧 flag tombstone" 说明（暂无运行时 fixture）。
 # =================================================
 

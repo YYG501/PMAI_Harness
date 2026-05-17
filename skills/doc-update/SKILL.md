@@ -98,7 +98,7 @@ grep -n '^### <module chapter>' docs/modules/<module>.md
      原 §0.5 提议 PM 走 --skip-doc-update half-close 的分支已不存在
      （flag 整套废弃）。所有 sediment 在 close-req 步骤 1.5 聚合一次性完成，
      不需要 per-task "v1+v2 杂交风险" 判断（多 task 同 module 是聚合 rewrite 的默认场景）。
-     详见 docs/归档/完成/D13-modulespec/主方案.md §3 vp-1 + polish-12。 -->
+     详见 docs/归档/完成/modulespec-维护/主方案.md §3 vp-1 + polish-12。 -->
 
 步骤 0.5 历史目的：进入 settlement 前判断 v1+v2 杂交风险 → 提议 PM 走半 close。
 
@@ -343,7 +343,7 @@ PM 在步骤 4 已审过 before/after，**默认无需再审**——直接进入
      不再要求 ≥2 SKIP marker（marker 整套已废弃）；任何 close-req 步骤 1.5 聚合都默认调本步骤。
      polish-2 输出契约：返回 REWRITE_COVERED_FILES + REWRITE_COVERED_MODULES，
      供 close-req 步骤 2a 替代 COVERAGE_COMMITS / SKIP_PENDING metric。
-     详见 docs/归档/完成/D13-modulespec/主方案.md §3 vp-2 + polish-2。 -->
+     详见 docs/归档/完成/modulespec-维护/主方案.md §3 vp-2 + polish-2。 -->
 
 **触发条件**：close-req 步骤 1.5 聚合各 closed task 偏差后，对每个目标文档默认调用 rewrite mode（PM 显式选 patch 时走对账模式）。**不要求** ≥2 SKIP marker（SKIP marker 整套已废弃，D13 final, 2026-05-16）。
 

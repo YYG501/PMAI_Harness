@@ -338,7 +338,7 @@ python3 .claude/scripts/req-transition.py "$ACTIVE_REQ_DIR" --to 6
         D13 final 后 close-task 永不写 SKIP_DOC_UPDATE marker（--skip-doc-update flag 整套废弃），
         本检测永远 false，纯死代码。Stage 6→7 简化为「merged + worktree cleaned」即可推进；
         旧 marker 残留（D13 final 前消费仓写的）由 close-req 步骤 1.5 rewrite 时 cleanup_status 改 done，
-        本步骤不再扫 marker 不再阻塞。详见 docs/归档/完成/D13-modulespec/主方案.md §3 vp-2 + polish-11 -->
+        本步骤不再扫 marker 不再阻塞。详见 docs/归档/完成/modulespec-维护/主方案.md §3 vp-2 + polish-11 -->
 
 3. All satisfied → 对话式确认门：
 
