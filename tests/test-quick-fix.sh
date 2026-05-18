@@ -52,7 +52,7 @@ test_redline_task_file() {
   # 直接在 main 上建一个 active req + task 文件（用于 red-line 事后 diff 检查）
   mkdir -p "$FIXTURE_DIR/requirements/active/req-001-test/tasks"
   cat > "$FIXTURE_DIR/requirements/active/req-001-test/.req-meta.json" <<EOF
-{"id":"req-001","name":"test","branch":"req-001-test","stage":5,"stage_history":[],"is_first_req":true,"status":"active"}
+{"id":"req-001","name":"test","branch":"req-001-test","stage":5,"stage_history":[],"status":"active"}
 EOF
   cat > "$FIXTURE_DIR/requirements/active/req-001-test/tasks/task-001-t.md" <<'EOF'
 # Task 001

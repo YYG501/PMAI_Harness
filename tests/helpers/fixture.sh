@@ -65,12 +65,11 @@ fixture_teardown() {
 }
 
 # Create a fake active req with meta at given stage
-# Usage: fixture_create_req <req-id> <name> <stage> [is_first_req]
+# Usage: fixture_create_req <req-id> <name> <stage>
 fixture_create_req() {
   local req_id="$1"
   local name="$2"
   local stage="${3:-1}"
-  local is_first="${4:-true}"
   local req_branch="$req_id-$name"
 
   # Create req worktree on new branch (from main)
@@ -92,7 +91,6 @@ fixture_create_req() {
   "worktree": ".worktrees/$req_branch",
   "stage": $stage,
   "stage_history": [{"stage": 1, "entered_at": "2026-04-12T10:00:00+08:00"}],
-  "is_first_req": $is_first,
   "status": "active"
 }
 EOF

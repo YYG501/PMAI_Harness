@@ -28,7 +28,7 @@ echo "SKILL: new-req"
 
 ## Workflow
 
-### 步骤 1：确定 req 编号 + 判断是否 first req
+### 步骤 1：确定 req 编号
 
 调用 helper（封装了"扫三来源取 max"逻辑：closed 目录 / active 目录 / git 分支；事实来源是 git 分支，单独扫 closed/ 会被 active req 在自己分支上的事实骗到）：
 
@@ -36,11 +36,6 @@ echo "SKILL: new-req"
 NEW_NUM=$(bash "$REPO_ROOT/.claude/scripts/_lib/req-num-resolver.sh" next "$REPO_ROOT")
 echo "下一个可用编号：req-$NEW_NUM"
 
-if bash "$REPO_ROOT/.claude/scripts/_lib/req-num-resolver.sh" first "$REPO_ROOT"; then
-  IS_FIRST_REQ=true
-else
-  IS_FIRST_REQ=false
-fi
 ```
 
 helper 同时保证 `requirements/closed/` / `requirements/active/` / `git refs/heads/req-*` 三来源全扫——AI 调一行命令即可，不再凭印象判断。helper 自身见 `scripts/_lib/req-num-resolver.sh`。
@@ -77,7 +72,6 @@ cd 到返回的 worktree 路径。
   "stage_history": [
     {"stage": 1, "entered_at": "<ISO-8601>"}
   ],
-  "is_first_req": true/false,
   "status": "active"
 }
 ```

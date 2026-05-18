@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# req-num-resolver.sh — req 编号 / first-req 判定 helper
+# req-num-resolver.sh — req 编号 helper（v5 vp-6 砍 is_first_req）
 #
 # 关键：必须扫**三个来源**取最大值，不能凭印象只扫文件目录。
 # **事实来源是 git 分支**——active req 都在自己分支上，main 分支视角下
@@ -16,12 +16,10 @@
 #
 # 暴露函数：
 #   next_req_num <repo-root>           # 输出下一个可用编号 NNN（3 位 0 padding）
-#   is_first_req <repo-root>           # 退出码 0=是 / 1=否（任一来源非空就不是）
 #   list_req_nums <repo-root>          # 输出所有已占编号（去重 sorted）
 #
 # 直接执行（用作 CLI）：
 #   bash scripts/_lib/req-num-resolver.sh next [repo-root]    → echo "001"
-#   bash scripts/_lib/req-num-resolver.sh first [repo-root]   → exit 0/1（不打印）
 #   bash scripts/_lib/req-num-resolver.sh list [repo-root]    → echo "001\n002\n..."
 #
 # repo-root 不传时取 git rev-parse --show-toplevel。
@@ -53,15 +51,6 @@ next_req_num() {
   printf '%03d\n' $((${max:-0} + 1))
 }
 
-# is_first_req <repo-root>
-# 退出码 0=first req（三来源全空）/ 1=非 first req
-is_first_req() {
-  local repo_root="${1:?repo-root required}"
-  local count
-  count=$(_scan_req_nums "$repo_root" | wc -l | tr -d ' ')
-  [ "$count" -eq 0 ]
-}
-
 # list_req_nums <repo-root>
 # 输出所有已占编号（去重 + 数字升序）
 list_req_nums() {
@@ -81,8 +70,7 @@ if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
 
   case "$cmd" in
     next)  next_req_num "$repo_root" ;;
-    first) is_first_req "$repo_root"; exit $? ;;
     list)  list_req_nums "$repo_root" ;;
-    *)     echo "Usage: $0 {next|first|list} [repo-root]" >&2; exit 2 ;;
+    *)     echo "Usage: $0 {next|list} [repo-root]" >&2; exit 2 ;;
   esac
 fi

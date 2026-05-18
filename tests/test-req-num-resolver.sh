@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 # Tests for scripts/_lib/req-num-resolver.sh
 #
-# 验证 next / first / list 三个子命令在以下场景的正确性：
-# - 空仓（无任何 req）→ next=001, first=true
-# - 只有 closed → next=N+1, first=false
-# - 只有 active → next=N+1, first=false
-# - 只有 git 分支 req-NNN-* → next=N+1, first=false（这是 v3.5 重点）
+# 验证 next / list 子命令在以下场景的正确性（v5 vp-6 砍 first）：
+# - 空仓（无任何 req）→ next=001
+# - 只有 closed → next=N+1
+# - 只有 active → next=N+1
+# - 只有 git 分支 req-NNN-* → next=N+1（这是 v3.5 重点）
 # - 三来源混合 → next=max+1
 # - 三来源相同编号 → 去重
 set -uo pipefail
@@ -49,7 +49,7 @@ _add_branch_req() {
 # Scenario 1: 空仓
 # -----------------------------------------------------------------
 test_empty_repo() {
-  start_test "空仓 → next=001, first 退出 0（true）"
+  start_test "空仓 → next=001"
   local repo
   repo=$(_make_fake_repo)
 
@@ -57,9 +57,6 @@ test_empty_repo() {
   next=$(bash "$RESOLVER" next "$repo")
   assert_equal "001" "$next" "next on empty repo" || { rm -rf "$repo"; return; }
 
-  bash "$RESOLVER" first "$repo"
-  local first_rc=$?
-  assert_equal "0" "$first_rc" "first on empty repo (0=true)" || { rm -rf "$repo"; return; }
 
   rm -rf "$repo"
   pass_test
@@ -69,7 +66,7 @@ test_empty_repo() {
 # Scenario 2: 只有 closed
 # -----------------------------------------------------------------
 test_only_closed() {
-  start_test "只 closed/req-002, req-005 → next=006, first=false"
+  start_test "只 closed/req-002, req-005 → next=006"
   local repo
   repo=$(_make_fake_repo)
   _add_closed_req "$repo" "002"
@@ -79,9 +76,6 @@ test_only_closed() {
   next=$(bash "$RESOLVER" next "$repo")
   assert_equal "006" "$next" "next with closed only" || { rm -rf "$repo"; return; }
 
-  bash "$RESOLVER" first "$repo"
-  local first_rc=$?
-  assert_equal "1" "$first_rc" "first=false when closed exists" || { rm -rf "$repo"; return; }
 
   rm -rf "$repo"
   pass_test
@@ -91,7 +85,7 @@ test_only_closed() {
 # Scenario 3: 只有 active
 # -----------------------------------------------------------------
 test_only_active() {
-  start_test "只 active/req-003 → next=004, first=false"
+  start_test "只 active/req-003 → next=004"
   local repo
   repo=$(_make_fake_repo)
   _add_active_req "$repo" "003"
@@ -100,9 +94,6 @@ test_only_active() {
   next=$(bash "$RESOLVER" next "$repo")
   assert_equal "004" "$next" "next with active only" || { rm -rf "$repo"; return; }
 
-  bash "$RESOLVER" first "$repo"
-  local first_rc=$?
-  assert_equal "1" "$first_rc" "first=false when active exists" || { rm -rf "$repo"; return; }
 
   rm -rf "$repo"
   pass_test
@@ -113,7 +104,7 @@ test_only_active() {
 # 这是 v3.5 重点修复场景：之前光扫目录会漏号导致撞号
 # -----------------------------------------------------------------
 test_only_branch() {
-  start_test "只 git 分支 req-007-foo（目录都空）→ next=008, first=false"
+  start_test "只 git 分支 req-007-foo（目录都空）→ next=008"
   local repo
   repo=$(_make_fake_repo)
   _add_branch_req "$repo" "007" "foo"
@@ -122,9 +113,6 @@ test_only_branch() {
   next=$(bash "$RESOLVER" next "$repo")
   assert_equal "008" "$next" "next with branch only (key v3.5 case)" || { rm -rf "$repo"; return; }
 
-  bash "$RESOLVER" first "$repo"
-  local first_rc=$?
-  assert_equal "1" "$first_rc" "first=false when branch exists (no dir)" || { rm -rf "$repo"; return; }
 
   rm -rf "$repo"
   pass_test
@@ -177,7 +165,7 @@ test_list_dedup_sort() {
 # Scenario 7: source 模式（不直接调 CLI）
 # -----------------------------------------------------------------
 test_source_mode() {
-  start_test "source 模式：next_req_num / is_first_req / list_req_nums 函数"
+  start_test "source 模式：next_req_num / list_req_nums 函数（v5 vp-6 砍 is_first_req）"
   local repo
   repo=$(_make_fake_repo)
   _add_closed_req "$repo" "004"
@@ -187,8 +175,10 @@ test_source_mode() {
   local n; n=$(next_req_num "$repo")
   assert_equal "005" "$n" "next_req_num function" || { rm -rf "$repo"; return; }
 
-  if is_first_req "$repo"; then
-    _fail "is_first_req should return 1 (false) when closed exists"
+  # is_first_req 函数已删（v5 vp-6），不再测；list_req_nums 仍可调
+  local nums; nums=$(list_req_nums "$repo")
+  if [[ "$nums" != *"004"* ]]; then
+    _fail "list_req_nums should contain 004"
     rm -rf "$repo"; return
   fi
 

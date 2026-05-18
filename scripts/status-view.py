@@ -282,11 +282,10 @@ def _render_single_req(req_view: dict) -> None:
     req_name = meta.get("name", "?")
     stage = meta.get("stage", 0)
     stage_name = STAGE_NAMES.get(stage, "?")
-    is_first = meta.get("is_first_req", False)
     req_dir = req_view["req_dir"]
 
     print(f"Req：{req_id}（{req_name}）")
-    print(f"Stage：{stage} - {stage_name}" + (" [first req]" if is_first else ""))
+    print(f"Stage：{stage} - {stage_name}")
     print(f"Worktree：{req_dir.parent.parent.parent}")
     print()
 
@@ -314,10 +313,8 @@ def render_status(state: dict, repo_root: Path) -> None:
         req_name = meta.get("name", "?")
         stage = meta.get("stage", 0)
         stage_name = STAGE_NAMES.get(stage, "?")
-        is_first = meta.get("is_first_req", False)
-
         print(f"当前 Req：{req_id}（{req_name}）")
-        print(f"Stage：{stage} - {stage_name}" + (" [first req]" if is_first else ""))
+        print(f"Stage：{stage} - {stage_name}")
         print()
 
         if req_view["tasks"] or req_view["pending_spec"]:
