@@ -23,3 +23,18 @@ if [ ! -f "$CHECKER" ]; then
 fi
 
 python3 "$CHECKER"
+
+# v5 attachments large file warn (>10MB) — fail-open，仅警告
+STAGED_LARGE=$(git diff --cached --name-only --diff-filter=AM \
+  | grep -E "/attachments/" \
+  | while read -r f; do
+      [ -f "$f" ] || continue
+      size=$(stat -f%z "$f" 2>/dev/null || stat -c%s "$f" 2>/dev/null || echo 0)
+      [ "$size" -gt 10485760 ] && echo "$f ($(($size / 1024 / 1024))MB)"
+    done)
+if [ -n "$STAGED_LARGE" ]; then
+  echo "⚠️  pre-commit: attachments/ 内有 >10MB 文件即将 commit：" >&2
+  echo "$STAGED_LARGE" | sed 's/^/    /' >&2
+  echo "   建议：外部引用（PM 自负失联风险），或确认要 commit（继续）。" >&2
+  # 不 block commit；仅 warn
+fi
