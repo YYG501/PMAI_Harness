@@ -12,7 +12,14 @@
 
 ## 当前位置（2026-05-18）
 
-**最近活动（2026-05-18）**: **PRD 体系收敛 v5 + attachments 全部落地** ✓（vp-0 → vp-4 → vp-4b → vp-3 → vp-2 → vp-1a → vp-1 → vp-5 → vp-7 → vp-6 + attachments = 11 个 commit）。设计 v0 → v1 → v2 → v3 → v4 → v5 五版迭代，autoplan dual voice review 33 finding（21 ACCEPT + D1-D5 PM 决议）后单次实施完成。
+**最近活动（2026-05-18 晚）**: **reconcile/lint hotfix**（消费仓 ExampleConsumerApp req-007 stage 3 跑出来的 hash 自指 bug）—— 2 处 framework 设计漏洞从根本修掉：
+- **Bug 2（reconcile 自指）**：req-solution/SKILL.md 步骤 R + task-spec/SKILL.md 步骤 12.5 + _shared/pm-view/input-flow.md §9.6.4 三处指令历史上都让 AI 同时写 PM 视图 + 工程合同两个视图的 reconcile 元数据。hash 基于 PM 视图全文算，写回就让 hash 失效 → 死循环。修法：reconcile 元数据**只写工程合同**，PM 视图禁动一个字节；权威定义 + 两个 skill + 两个模板（solution.md / task.md）同步落地反模式段
+- **Bug 1（lint 偷改）**：lint 步骤缺 hash 不变性硬约束 → AI "代码合法 / 反引号要清" 内在 prior 凌驾 PM "全部保留" 决策。修法：req-solution 5.5 / task-spec 10.5 加 PRE/POST hash 自检，PM 决策 0 项修时 hash 必须等
+- **守护测试**：新增 `tests/test-reconcile-pm-view-immutability.sh`（6 测试：4 静态 lint + 1 模板约束 + 1 端到端 hash 稳定性 fixture）；写入 run-all.sh
+- **memory 沉淀**：[[feedback-reconcile-no-self-reference]] + [[feedback-pm-decision-is-binding-contract]]
+- **测试基线**：368/0 → **374/0**
+
+**最近活动（2026-05-18 上午）**: **PRD 体系收敛 v5 + attachments 全部落地** ✓（vp-0 → vp-4 → vp-4b → vp-3 → vp-2 → vp-1a → vp-1 → vp-5 → vp-7 → vp-6 + attachments = 11 个 commit）。设计 v0 → v1 → v2 → v3 → v4 → v5 五版迭代，autoplan dual voice review 33 finding（21 ACCEPT + D1-D5 PM 决议）后单次实施完成。
 
 - **测试基线**：340/0（D13 后） → **368/0**（v5 后；vp-4b 加 28 测试基线相关项）
 - 方案文档：`docs/设计/PRD-体系收敛.md`（v5，含完整 §X autoplan dual voice review）

@@ -255,6 +255,13 @@
 
 ### 变更记录
 
+<!-- 变更记录用途约束（必读，违反 = 触发 hash 自指 bug）：
+- ✅ 只记 **PM 主动语义变更**（改方案 / 换路线 / 删功能 / 重大调整 / review 反馈后回写）
+- ❌ AI 维护性动作（lint normalize / reconcile / hash 对齐）**禁止**写入此表 ——
+     这些应只写工程合同（solution.engineering.md 末尾 reconcile 注释行）。
+- 原因：hash 基于本 PM 视图全文计算。任何写入都会让 hash 失效，下一步 reconcile
+        发现不一致再追加 → 自指死循环（2026-05-18 req-007 stage 3 事故）。 -->
+
 | 日期 | 变更内容 | 负责人 |
 |---|---|---|
 | {{CREATED_DATE}} | 初稿 | {{AUTHOR}} |

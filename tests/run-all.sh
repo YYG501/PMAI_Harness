@@ -38,6 +38,7 @@ SUITES=(
   test-run-bg.sh
   test-pre-commit-hook.sh
   test-pre-dispatch-doc-gate.sh
+  test-reconcile-pm-view-immutability.sh
   v4_T13_status_summary.sh
   v4_T14_taskexec_short_id.sh
   v4_T16_taskexec_double_scan.sh

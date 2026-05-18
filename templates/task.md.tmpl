@@ -228,6 +228,14 @@ ASCII 框图代码块内硬约束（PM-VIEW-RULES §3.10：只允许"屏幕上�
 
 > 工程实现细节（启动前必读 / 实现指引 / 易错点 / plan-review 沉淀 / 工程层验收）见 [`task-{{TASK_NUMBER}}-{{TASK_SLUG}}.engineering.md`](./task-{{TASK_NUMBER}}-{{TASK_SLUG}}.engineering.md)
 
+<!-- 本段允许写入：
+- ✅ 执行日志（agent 在 task-execute 自动写）
+- ✅ PM 反馈（PM 在 close-task / review 后手动写）
+- ❌ AI 维护性动作（reconcile / hash 对齐）**禁止**写入 ——
+     这些只写工程合同（task.engineering.md 末尾 reconcile 注释行）。
+- 原因：hash 基于本 PM 视图全文计算，AI 写入会自指死循环
+       （详见 _shared/pm-view/input-flow.md §9.6.4 反模式段）。 -->
+
 ### 执行日志（agent 填写，不要删除历史记录）
 
 #### 执行报告 - [YYYY-MM-DD HH:MM]

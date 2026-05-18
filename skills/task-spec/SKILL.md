@@ -354,6 +354,7 @@ PM_VIEW_HASH=$(shasum -a 256 "$ACTIVE_REQ_DIR/tasks/task-NNN-<slug>.md" | cut -c
 人工自检之后，调用 `check-doc-pm-view.py` 做机器校验作为兜底：
 
 ```bash
+PRE_LINT_HASH=$(shasum -a 256 "$ACTIVE_REQ_DIR/tasks/task-NNN-<slug>.md" | cut -c1-12)
 python3 "$REPO_ROOT/.claude/scripts/check-doc-pm-view.py" \
   "$ACTIVE_REQ_DIR/tasks/task-NNN-<slug>.md"
 ```
@@ -365,6 +366,19 @@ python3 "$REPO_ROOT/.claude/scripts/check-doc-pm-view.py" \
 - 进入步骤 11 时若仍有未修复 errors，必须**显式告知** PM 哪几条未修 + 一句话原因
 
 工程合同 (`task-NNN-<slug>.engineering.md`) 不跑 lint（脚本自动跳过 `.engineering.md`）。
+
+**🔒 hash 不变性硬约束（PM 决策 = binding contract，与 req-solution 步骤 5.5 同款）**
+
+PM 在 warnings 弹窗逐条决策后，退出步骤 10.5 之前**必须**算一次 hash 自检：
+
+```bash
+POST_LINT_HASH=$(shasum -a 256 "$ACTIVE_REQ_DIR/tasks/task-NNN-<slug>.md" | cut -c1-12)
+```
+
+- **PM 全部判定保留（0 项修）** → `POST_LINT_HASH` 必须 == `PRE_LINT_HASH`。不等 = AI 偷改了 PM 决策保留的内容（违例）→ `git checkout` 还原 PM 视图 → 重新跑一次 lint 自检 hash → 仍违例则停下告知 PM。
+- **PM 有部分项选修** → 本步骤所有 task 文件修改**必须严格对应 PM 决策"修"清单**，不允许"顺手 normalize"任何 PM 没同意改的内容（包括去反引号、合并空行、统一术语大小写等）。AI 内在的"代码合法 / 风格统一"压力**不能凌驾 PM 决策**。
+
+历史教训见 req-solution 步骤 5.5 同条约束（2026-05-18 req-007 stage 3 事故）。
 
 ### 步骤 10.6：严格字段校验（防止假执行产物进入 /task-execute）
 
@@ -554,7 +568,7 @@ PM 未确认前不得进入执行。
    c. 重派生 PM 视图驱动章节（PM-VIEW-RULES §9.6.3）：§3 启动前必读 / §4 功能清单工程版 / §5 实现指引 / §6 易错点（PM 反馈反向部分）/ §8 视觉规范（PM 视图像素/颜色派生部分）/ §9 工程层验收清单
    d. 不动独立来源章节：§7 plan-review 沉淀 / §10 文档偏差 / §11 自审记录；如发现独立章节里引用的功能名 / 章节号已被 PM 视图修改，**只改引用、不改主体**
    e. 把工程合同顶部 `synced_pm_view_hash` 改为 `$PM_VIEW_HASH_NOW`
-   f. 在工程合同末尾追加 `<!-- reconcile <YYYY-MM-DD HH:MM>: <旧 hash> → <新 hash>; 变更范围: <一行说明> -->`；同步在 PM 视图主文件末尾「📁 历史档案」加一行 `<YYYY-MM-DD> reconcile：工程合同已对齐 PM 视图（<旧 hash> → <新 hash>）`
+   f. **仅**在工程合同末尾追加 `<!-- reconcile <YYYY-MM-DD HH:MM>: <旧 hash> → <新 hash>; 变更范围: <一行说明> -->`。**禁止动 PM 视图主文件一个字节**（包括「📁 历史档案」表）——hash 基于 PM 视图全文算，加一行就让 hash 失效形成自指死循环（详见 `_shared/pm-view/input-flow.md` §9.6.4 反模式段）。退出前自检 `shasum -a 256 "$PM_VIEW" | cut -c1-12` == `$PM_VIEW_HASH_NOW`
 4. 自检（PM-VIEW-RULES §9.6.6）
 5. 输出 reconcile 完成信号（**仅 AI 内部日志**，不发给 PM；步骤 12 / 12.5 chat 禁词清单同样适用）：
    ```

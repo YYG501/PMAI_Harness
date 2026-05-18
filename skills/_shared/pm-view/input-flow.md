@@ -373,8 +373,16 @@ skill 在 reconcile 模式下执行：
    a. 用 PM 视图最新内容 + 上游产物（`analysis.md` / 上游 `.engineering.md` / `docs/modules/*.md` / `prototypes/`）重派生**PM 视图驱动章节**的内容
    b. 不动**独立来源章节**（§7 / §8 等）；如发现独立来源章节的引用与新 PM 视图脱节（章节编号变了 / 功能名变了），同步修引用，但不重派生主体
    c. 把工程合同顶部 `synced_pm_view_hash` 改为最新 hash
-   d. PM 视图主文件「📁 历史档案」/ 工程合同末尾追加一行：`<YYYY-MM-DD HH:MM> reconcile：<旧 hash> → <新 hash>`，并简述变更范围
+   d. **仅**在工程合同末尾追加一行：`<!-- reconcile <YYYY-MM-DD HH:MM>: <旧 hash> → <新 hash>; 变更范围: <一行说明> -->`
 5. 输出"reconcile 完成"信号，把控制权交回调用方（stage-gate / task-spec 步骤 12.5）
+
+> **❌ 反模式：reconcile 不允许动 PM 视图主文件（任何字节）**
+>
+> hash 基于 PM 视图主文件全文计算。reconcile 是技术维护动作（PM 不感知），若顺手在 PM 视图末尾「📁 历史档案」追加一行 reconcile 记录，会自身让 hash 失效，下次比对又发现不一致再追加 → **自指死循环**。
+>
+> 历史教训（2026-05-18 req-007 stage 3）：旧版本指令同时让 reconcile 写两个视图，结果 AI 改 PM 视图 → hash 变 → 再 reconcile → 再加一行 → 再变 hash。PM 第一时间发现"我没改过为什么 hash 不一致"。
+>
+> 元数据日志只写工程合同视图：PM 不看，hash 计算也不基于它，无副作用。PM 视图「📁 历史档案」表只供 **PM 主动语义变更**（改方案 / 换路线）记录，**AI 任何模式均禁止往该表写入**。
 
 ### 9.6.5 read-side 行为分类
 

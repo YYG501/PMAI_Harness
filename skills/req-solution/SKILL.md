@@ -249,6 +249,7 @@ PM_VIEW_HASH=$(shasum -a 256 "$ACTIVE_REQ_DIR/solution.md" | cut -c1-12)
 人工自检之后，调用 `check-doc-pm-view.py` 做机器校验作为兜底：
 
 ```bash
+PRE_LINT_HASH=$(shasum -a 256 "$ACTIVE_REQ_DIR/solution.md" | cut -c1-12)
 python3 "$REPO_ROOT/.claude/scripts/check-doc-pm-view.py" "$ACTIVE_REQ_DIR/solution.md"
 ```
 
@@ -259,6 +260,19 @@ python3 "$REPO_ROOT/.claude/scripts/check-doc-pm-view.py" "$ACTIVE_REQ_DIR/solut
 - **有 errors**：逐条修复后回到步骤 3 重写违规章节，再重跑 lint；连续 3 次 lint 仍有 error 时停下询问 PM（避免无限循环）
 
 lint 不强制阻塞，但 errors 留着进入步骤 6 的，必须在向 PM 展示文件路径时**显式告知**有几个未修复 errors + 一句话原因。
+
+**🔒 hash 不变性硬约束（PM 决策 = binding contract）**
+
+PM 在 warnings 弹窗逐条决策后，退出步骤 5.5 之前**必须**算一次 hash 自检：
+
+```bash
+POST_LINT_HASH=$(shasum -a 256 "$ACTIVE_REQ_DIR/solution.md" | cut -c1-12)
+```
+
+- **PM 全部选"保留"（0 项 AI 改）** → `POST_LINT_HASH` 必须 == `PRE_LINT_HASH`。不等 = AI 偷改了 PM 决策保留的内容（违例）→ `git checkout "$ACTIVE_REQ_DIR/solution.md"` 还原 → 重新跑一次 lint 自检 hash → 仍违例则停下告知 PM。
+- **PM 有部分选"AI 改"** → 本步骤所有 solution.md 修改**必须严格对应 PM 决策"AI 改"清单**，不允许"顺手 normalize"任何 PM 没同意改的内容（包括去反引号、去标点、合并空行、统一英文术语大小写、规范换行等）。AI 内在的"代码合法 / 风格统一"压力**不能凌驾 PM 决策**。
+
+历史教训（2026-05-18 req-007 stage 3）：PM 在 25 warnings 全部选"保留"，AI 仍把反引号去掉，理由"lint 合规"——这违背 PM 决策；下游 reconcile 自指叠加形成连环 bug。本硬约束就是为此立的。
 
 **🚫 lint 处理后退出禁词清单（硬约束，task-spec/SKILL.md 步骤 12 同款）**
 
@@ -320,7 +334,7 @@ revise 模式 skill 退出时是 skill-to-skill handoff（控制权回 stage-gat
    c. **重派生 PM 视图驱动章节**（PM-VIEW-RULES §9.6.3）：§1 数据结构 / §2 派生状态 / §3 组件路径 / §4 mock / §5 算法 / §6 易错点（PM 视图反向条目派生部分）/ §10 工程层验收清单
    d. **不动独立来源章节**：§7 plan-review 沉淀 / §8 autoplan 输出 / §9 a11y/视口/视觉（DESIGN.md 派生部分）；如发现独立章节里引用的功能名 / 章节号已被 PM 视图修改，**只改引用、不改主体**
    e. **更新 hash**：把工程合同顶部 `synced_pm_view_hash` 改为 `$PM_VIEW_HASH_NOW`
-   f. **追加变更记录**：在工程合同末尾追加 `<!-- reconcile <YYYY-MM-DD HH:MM>: <旧 hash> → <新 hash>; 变更范围: <一行说明> -->`；同步在 `solution.md` 末尾「📁 历史档案」加一行 `<YYYY-MM-DD> reconcile：solution.engineering.md 已对齐 PM 视图（<旧 hash> → <新 hash>）`
+   f. **追加变更记录**：**仅**在工程合同末尾追加 `<!-- reconcile <YYYY-MM-DD HH:MM>: <旧 hash> → <新 hash>; 变更范围: <一行说明> -->`。**禁止动 `solution.md` 一个字节**（包括「📁 历史档案」表）——hash 基于 PM 视图全文算，加一行就让 hash 失效形成自指死循环（详见 `_shared/pm-view/input-flow.md` §9.6.4 反模式段）
 5. **自检**（PM-VIEW-RULES §9.6.6）：hash 12 字符 / 与 PM 视图一致 / PM 视图驱动章节无旧概念残留 / 独立来源章节未被误改
 6. **输出 reconcile 完成信号**：
    ```
@@ -331,7 +345,7 @@ revise 模式 skill 退出时是 skill-to-skill handoff（控制权回 stage-gat
    ```
 7. skill 退出，控制权回 stage-gate（由 stage-gate 跑 `req-transition.py --to 3`）
 
-**硬约束**：reconcile 模式禁止改 PM 视图主文件内容（除「📁 历史档案」append 一行外）。
+**硬约束**：reconcile 模式**禁止改 PM 视图主文件一个字节**（包括「📁 历史档案」表 / 末尾空行 / 任何修饰）。reconcile 是技术维护动作，PM 不感知，所有元数据日志都写工程合同。退出前必须自检 `shasum -a 256 "$ACTIVE_REQ_DIR/solution.md" | cut -c1-12` == `$PM_VIEW_HASH_NOW`；不等 = 违例。
 
 ## Rules
 
@@ -344,7 +358,7 @@ revise 模式 skill 退出时是 skill-to-skill handoff（控制权回 stage-gat
 - ❌ 在 solution.md 中嵌入工程内容（reducer / 字段 schema / 像素 / 反向约束）→ 这些必须进 solution.engineering.md
 - ❌ 跳过项目级文档的"必读"（CONTEXT / DESIGN / prd / modules / prototypes）
 - ❌ revise 模式（PM 在确认门提修改后调入）顺手重写工程合同 → 必须保持 stale，等 gate 通过后由 reconcile 模式统一对齐
-- ❌ reconcile 模式动 PM 视图主文件内容（仅允许在「📁 历史档案」append 一行 reconcile 记录）
+- ❌ reconcile 模式动 PM 视图主文件**任何字节**（包括「📁 历史档案」表 / 末尾空行）—— hash 自指会死循环，所有元数据日志写工程合同
 - ❌ 任何模式下手动改工程合同顶部 `synced_pm_view_hash`
 
 ---
