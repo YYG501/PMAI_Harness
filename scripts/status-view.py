@@ -26,7 +26,7 @@ _SCRIPTS_DIR = str(Path(__file__).resolve().parent)
 if _SCRIPTS_DIR not in sys.path:
     sys.path.insert(0, _SCRIPTS_DIR)
 
-from _lib.state import get_overall_state  # noqa: E402
+from _lib.state import get_overall_state, get_timeline_state, list_tasks  # noqa: E402
 
 STAGE_NAMES = {
     1: "感受问题",
@@ -344,6 +344,90 @@ def render_status(state: dict, repo_root: Path) -> None:
     print("提示：操作具体 req 请先 cd 进对应 worktree 再跑 skill；主仓视角不默选某个 req。")
 
 
+def render_timeline(timeline_state: dict, repo_root: Path) -> None:
+    """Render --timeline 全局视图（vp-7）。"""
+    active = timeline_state["active"]
+    closed = timeline_state["closed"]
+    cancelled = timeline_state["cancelled"]
+    total_archived = timeline_state["total_archived"]
+    truncated = timeline_state["truncated"]
+    milestone_only = timeline_state["milestone_only"]
+
+    print()
+    title = "📅 项目时间线"
+    if milestone_only:
+        title += "（仅里程碑 ⭐）"
+    print(title)
+    print()
+
+    # Active
+    print("═══ Active ═══")
+    if not active:
+        print("  （无进行中需求）")
+    else:
+        for item in active:
+            meta = item["meta"]
+            req_id = meta.get("id", item["req_dir"].name)
+            req_name = meta.get("name", "")
+            stage = meta.get("stage", 0)
+            stage_name = STAGE_NAMES.get(stage, "?")
+            ms = " ⭐" if item.get("is_milestone") else ""
+            tasks = list_tasks(item["req_dir"])
+            print(f"🔄{ms} {req_id} · {req_name}（Stage {stage} {stage_name}）")
+            if tasks:
+                done = sum(1 for t in tasks if t.get("meta", {}).get("status") == "已完成")
+                print(f"   ↳ {done}/{len(tasks)} tasks")
+            else:
+                print("   ↳ 0/0 tasks")
+
+    print()
+
+    # Closed
+    shown_total = len(closed) + len(cancelled)
+    if shown_total == 0 and total_archived > 0:
+        print(f"═══ Closed/Cancelled（过滤后无匹配，共 {total_archived} 条 archived）═══")
+    else:
+        label = f"═══ Closed（显示 {len(closed)} / 总 {total_archived - len(cancelled)}）═══"
+        print(label)
+    if not closed:
+        if total_archived == 0:
+            print("  （无已关闭需求）")
+    else:
+        for item in closed:
+            meta = item["meta"]
+            req_id = meta.get("id", item["req_dir"].name)
+            req_name = meta.get("name", "")
+            ms = " ⭐" if item.get("is_milestone") else ""
+            cd = item.get("close_date")
+            date_str = cd.strftime("%Y-%m-%d") if cd else "?"
+            tasks = list_tasks(item["req_dir"])
+            task_count_str = f"{len(tasks)} tasks" if tasks else "0 tasks"
+            print(f"✅{ms} {req_id} · {req_name}（关闭 {date_str} · {task_count_str}）")
+
+    print()
+
+    # Cancelled
+    if cancelled or any(i for i in [] if False):  # placeholder
+        print(f"═══ Cancelled（显示 {len(cancelled)}）═══")
+        for item in cancelled:
+            meta = item["meta"]
+            req_id = meta.get("id", item["req_dir"].name)
+            req_name = meta.get("name", "")
+            cd = item.get("close_date")
+            date_str = cd.strftime("%Y-%m-%d") if cd else "?"
+            print(f"❌ {req_id} · {req_name}（取消 {date_str}）")
+        print()
+
+    if truncated > 0:
+        print(f"...还有 {truncated} 条 archived 未显示，用 --since YYYY-MM-DD 或 --all 看全部")
+        print()
+
+    print("──")
+    print("过滤参数：--since YYYY-MM-DD | --module <name> | --milestone | --all（取消 limit）")
+    if timeline_state["warnings"]:
+        print(f"⚠️  {len(timeline_state['warnings'])} warnings（meta 解析问题）")
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="PM AI Workflow Status View")
     parser.add_argument(
@@ -355,12 +439,31 @@ def main() -> None:
     parser.add_argument(
         "--summary", action="store_true", help="Print one-line task overview"
     )
+    parser.add_argument(
+        "--timeline", action="store_true",
+        help="全局时间线视图：active + closed + cancelled 全量按时间倒序（vp-7）"
+    )
+    parser.add_argument("--since", default=None, help="(timeline) 仅显示关闭时间 >= YYYY-MM-DD 的 archived")
+    parser.add_argument("--module", default=None, help="(timeline) 仅显示涉及该 module 的 req")
+    parser.add_argument("--milestone", action="store_true", help="(timeline) 仅显示 CONTEXT 路线节标 ⭐ 的 req")
+    parser.add_argument("--limit", type=int, default=20, help="(timeline) archived 总数限制 (默认 20)")
+    parser.add_argument("--all", action="store_true", help="(timeline) 取消 limit，显示全部 archived")
     args = parser.parse_args()
 
     if args.repo_root:
         repo_root = Path(args.repo_root)
     else:
         repo_root = find_repo_root()
+
+    if args.timeline:
+        limit = None if args.all else args.limit
+        timeline_state = get_timeline_state(
+            repo_root, cwd=Path.cwd(), strict=False,
+            since=args.since, module=args.module,
+            milestone_only=args.milestone, limit=limit,
+        )
+        render_timeline(timeline_state, repo_root)
+        return
 
     state = get_overall_state(repo_root, cwd=Path.cwd(), strict=False)
 

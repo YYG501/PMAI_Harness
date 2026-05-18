@@ -603,6 +603,223 @@ def get_overall_state(
 
 
 # ============================================================================
+# Archived reqs (closed / cancelled) + Timeline (vp-7)
+# ============================================================================
+
+
+def _collect_archived_from(
+    closed_dir: Path, warnings: list[dict]
+) -> list[tuple[Path, dict]]:
+    """扫 requirements/closed/ 目录，按 meta.status 区分 closed / cancelled。"""
+    if not closed_dir.exists():
+        return []
+    found: list[tuple[Path, dict]] = []
+    for req_dir in sorted(closed_dir.iterdir()):
+        if not req_dir.is_dir():
+            continue
+        meta_file = req_dir / ".req-meta.json"
+        if not meta_file.exists():
+            continue
+        try:
+            meta = json.loads(meta_file.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError) as e:
+            warnings.append({"path": str(meta_file), "reason": str(e)})
+            continue
+        if meta.get("status") in ("closed", "cancelled"):
+            found.append((req_dir, meta))
+    return found
+
+
+def list_closed_reqs(repo_root: Path, strict: bool = False) -> dict:
+    """扫 requirements/closed/ 拿 status='closed' 的 req（不含 cancelled）。"""
+    warnings: list[dict] = []
+    items: list[dict] = []
+    for req_dir, meta in _collect_archived_from(
+        repo_root / "requirements" / "closed", warnings
+    ):
+        if meta.get("status") == "closed":
+            items.append({"req_dir": req_dir, "meta": meta})
+    if strict and warnings:
+        w = warnings[0]
+        raise StateReadError(Path(w["path"]), w["reason"])
+    return {"items": items, "warnings": warnings}
+
+
+def list_cancelled_reqs(repo_root: Path, strict: bool = False) -> dict:
+    """扫 requirements/closed/ 拿 status='cancelled' 的 req。"""
+    warnings: list[dict] = []
+    items: list[dict] = []
+    for req_dir, meta in _collect_archived_from(
+        repo_root / "requirements" / "closed", warnings
+    ):
+        if meta.get("status") == "cancelled":
+            items.append({"req_dir": req_dir, "meta": meta})
+    if strict and warnings:
+        w = warnings[0]
+        raise StateReadError(Path(w["path"]), w["reason"])
+    return {"items": items, "warnings": warnings}
+
+
+def _get_close_date(meta: dict):
+    """从 meta 拿 close / cancel 时间，fallback stage_history 最后项。"""
+    from datetime import datetime
+    for key in ("closed_at", "cancelled_at"):
+        if meta.get(key):
+            try:
+                return datetime.fromisoformat(
+                    meta[key].replace("Z", "+00:00")
+                ).replace(tzinfo=None)
+            except Exception:
+                pass
+    history = meta.get("stage_history", [])
+    if history:
+        last = history[-1]
+        if last.get("entered_at"):
+            try:
+                return datetime.fromisoformat(
+                    last["entered_at"].replace("Z", "+00:00")
+                ).replace(tzinfo=None)
+            except Exception:
+                pass
+    return None
+
+
+def _load_milestone_set(repo_root: Path) -> set:
+    """从 docs/CONTEXT.md ## 产品路线 节扫 ⭐ 标记的 req ID。
+
+    模式：- ⭐ YYYY-MM-DD · <name>（关联 req-NNN）
+    """
+    context_path = repo_root / "docs" / "CONTEXT.md"
+    if not context_path.exists():
+        return set()
+    try:
+        content = context_path.read_text(encoding="utf-8")
+    except OSError:
+        return set()
+    return set(re.findall(r"⭐.*?关联\s*(req-\d+)", content))
+
+
+def get_timeline_state(
+    repo_root: Path,
+    cwd: Optional[Path] = None,
+    strict: bool = False,
+    since: Optional[str] = None,
+    module: Optional[str] = None,
+    milestone_only: bool = False,
+    limit: Optional[int] = 20,
+) -> dict:
+    """全局 req 时间线视图（active + closed + cancelled）。
+
+    参数:
+        since: ISO date YYYY-MM-DD; 仅返回 close/cancel 时间 >= since 的 archived
+        module: 仅返回涉及该 module 的 req（meta.modules / meta.name 包含）
+        milestone_only: 仅返回 CONTEXT 产品路线节标 ⭐ 的 req
+        limit: archived (closed + cancelled) 总数限制（None = 无上限）
+
+    返回:
+      {
+        "active": [...],
+        "closed": [...],   # 时间倒序
+        "cancelled": [...],# 时间倒序
+        "total_archived": int,  # 过滤前总数
+        "truncated": int,       # 被 limit 截断的数量
+        "milestone_only": bool,
+        "warnings": [...],
+      }
+    每个 item: {req_dir, meta, is_milestone, close_date (datetime or None)}
+    """
+    from datetime import datetime
+
+    warnings: list[dict] = []
+
+    # active
+    active_result = list_active_reqs(repo_root, cwd, strict=False)
+    warnings.extend(active_result.get("warnings", []))
+    active_items = active_result["items"]
+
+    # closed + cancelled
+    closed_result = list_closed_reqs(repo_root, strict=False)
+    warnings.extend(closed_result.get("warnings", []))
+    closed_items = closed_result["items"]
+
+    cancelled_result = list_cancelled_reqs(repo_root, strict=False)
+    warnings.extend(cancelled_result.get("warnings", []))
+    cancelled_items = cancelled_result["items"]
+
+    milestone_set = _load_milestone_set(repo_root)
+
+    def enrich(item):
+        meta = item["meta"]
+        req_id = meta.get("id", item["req_dir"].name.split("-", 2)[0] + "-" + item["req_dir"].name.split("-", 2)[1] if "-" in item["req_dir"].name else item["req_dir"].name)
+        item["is_milestone"] = req_id in milestone_set
+        item["close_date"] = _get_close_date(meta)
+        return item
+
+    active_items = [enrich(i) for i in active_items]
+    closed_items = [enrich(i) for i in closed_items]
+    cancelled_items = [enrich(i) for i in cancelled_items]
+
+    # 过滤 since
+    if since:
+        try:
+            since_date = datetime.fromisoformat(since)
+        except ValueError as e:
+            raise ValueError(f"--since 必须是 ISO 日期 YYYY-MM-DD: {e}")
+        closed_items = [
+            i for i in closed_items
+            if i.get("close_date") and i["close_date"] >= since_date
+        ]
+        cancelled_items = [
+            i for i in cancelled_items
+            if i.get("close_date") and i["close_date"] >= since_date
+        ]
+
+    # 过滤 module（meta.name 含 module 关键词或 meta.modules 列表含）
+    if module:
+        def match_module(item):
+            meta = item["meta"]
+            modules_list = meta.get("modules", [])
+            if module in modules_list:
+                return True
+            if module.lower() in meta.get("name", "").lower():
+                return True
+            return False
+        closed_items = [i for i in closed_items if match_module(i)]
+        cancelled_items = [i for i in cancelled_items if match_module(i)]
+        active_items = [i for i in active_items if match_module(i)]
+
+    # 过滤 milestone
+    if milestone_only:
+        closed_items = [i for i in closed_items if i.get("is_milestone")]
+        cancelled_items = [i for i in cancelled_items if i.get("is_milestone")]
+        active_items = [i for i in active_items if i.get("is_milestone")]
+
+    # 时间倒序
+    closed_items.sort(key=lambda i: i.get("close_date") or datetime.min, reverse=True)
+    cancelled_items.sort(key=lambda i: i.get("close_date") or datetime.min, reverse=True)
+
+    # limit (split 80/20 closed/cancelled)
+    total_archived = len(closed_items) + len(cancelled_items)
+    truncated = 0
+    if limit is not None and limit > 0 and total_archived > limit:
+        c_limit = min(len(closed_items), int(limit * 0.8) or 1)
+        x_limit = max(0, limit - c_limit)
+        truncated = total_archived - (c_limit + x_limit)
+        closed_items = closed_items[:c_limit]
+        cancelled_items = cancelled_items[:x_limit]
+
+    return {
+        "active": active_items,
+        "closed": closed_items,
+        "cancelled": cancelled_items,
+        "total_archived": total_archived,
+        "truncated": truncated,
+        "milestone_only": milestone_only,
+        "warnings": warnings,
+    }
+
+
+# ============================================================================
 # CLI entry (供 bash 调用)
 # ============================================================================
 
