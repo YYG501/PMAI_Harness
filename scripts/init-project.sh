@@ -221,6 +221,17 @@ print(3000 + (h % 7000))
 echo "$BASE_PORT" > .dev-port
 echo "🔌 基础端口: $BASE_PORT"
 
+# --- k1. 复制 Claude Code hooks（项目根 hooks/，跟 .claude/settings.json 注册联动）---
+if [ -d "$FRAMEWORK_DIR/hooks" ]; then
+  mkdir -p "$TARGET_DIR/hooks"
+  for HOOK_FILE in "$FRAMEWORK_DIR/hooks/"*.cjs "$FRAMEWORK_DIR/hooks/"*.js "$FRAMEWORK_DIR/hooks/"*.sh; do
+    [ -f "$HOOK_FILE" ] || continue
+    cp "$HOOK_FILE" "$TARGET_DIR/hooks/$(basename "$HOOK_FILE")"
+    chmod +x "$TARGET_DIR/hooks/$(basename "$HOOK_FILE")" 2>/dev/null || true
+  done
+  echo "🪝 Claude Code hooks 已复制到 hooks/"
+fi
+
 # --- k2. 复制 git-hooks 模板 ---
 mkdir -p "$TARGET_DIR/templates/git-hooks"
 for HOOK_TMPL in "$FRAMEWORK_DIR/templates/git-hooks/"*.tmpl; do

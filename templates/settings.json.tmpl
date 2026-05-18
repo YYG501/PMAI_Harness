@@ -22,6 +22,18 @@
           }
         ]
       }
+    ],
+    "UserPromptSubmit": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$CLAUDE_PROJECT_DIR/hooks/review-skill-guard.cjs\"",
+            "timeout": 5
+          }
+        ]
+      }
     ]
   },
   "executor": {
