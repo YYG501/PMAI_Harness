@@ -82,7 +82,7 @@ PENDING_MARKER="$REPO_ROOT/.runs/pending-close-req.json"
 </details>
 
 ## 文档变更
-<!-- placeholder：本段在步骤 1.5 完成后回填（含 rewrite 覆盖的 docs/modules/* + docs/prd.md 等）。
+<!-- placeholder：本段在步骤 1.5 完成后回填（含 rewrite 覆盖的 docs/modules/* + docs/DESIGN.md + docs/CONTEXT.md 等；docs/prd.md 已砍，不在 rewrite 范围）。
      如果步骤 1.5 silent skipped（无业务偏差），本段写"本 req 无项目级文档变更"。 -->
 
 ## 遗留问题
@@ -114,7 +114,7 @@ PENDING_MARKER="$REPO_ROOT/.runs/pending-close-req.json"
 **流程**：
 
 1. 遍历 `tasks/*.md`（过滤 `*.engineering.md`）和成对的 `.engineering.md`；提取每 task 的 4 处输入。
-2. **按目标文档分组**：同一份 `docs/modules/<module>.md` / `docs/DESIGN.md` / `docs/prd.md` / `docs/CONTEXT.md` / `solution.md` / `solution.engineering.md` 的多 task 偏差并到一起。基础设施 task（`所属模块=基础设施`）跳过 module sediment，但其偏差表仍走对账。
+2. **按目标文档分组**：同一份 `docs/modules/<module>.md` / `docs/DESIGN.md` / `docs/CONTEXT.md` / `solution.md` / `solution.engineering.md` 的多 task 偏差并到一起（**v5 vp-1 后 `docs/prd.md` 不在范围**）。基础设施 task（`所属模块=基础设施`）跳过 module sediment，但其偏差表仍走对账。
 3. 聚合后呈交 PM，按目标文档逐份决议（AskUserQuestion 或 prose；**两选项**，skip 分支 D13 final 已砍）：
 
    | 决议 | 触发条件 | 行为 |
@@ -158,63 +158,34 @@ PENDING_MARKER="$REPO_ROOT/.runs/pending-close-req.json"
 - ~~inter-req 推迟 / DEFERRED_TO_REQ skip 分支~~ → D13 final 已砍（polish-13，§0.4.1 多 req 并行不在范围）
 - 旧 SKIP marker 兼容（polish-15）：消费仓若有旧 `<!-- SKIP_DOC_UPDATE: ... cleanup_status=... -->` 残留（D13 final 前写的），本步骤遇到时**等同普通偏差源处理**（一次性消费掉，rewrite 决议时 `cleanup_status` 改 `done` 留作 audit trail；不再阻塞 stage 6→7 推进）
 
-### 步骤 2a：产出 req 级 PRD（按步骤 1.5 实际 rewrite 覆盖判断）
+### 步骤 2a：产出 req 级 PRD（PM 主导，v5 vp-2 决议）
 
-#### 2a.1 用步骤 1.5 rewrite 覆盖清单作 metric（D13 final, polish-4）
+> **D 决议（v5 §2 vp-2，2026-05-18）**：原 D13 final 覆盖度算法（`MODULE_TASKS_DONE == TASK_COUNT && docs/prd.md ∈ REWRITE_COVERED_FILES`）整段砍掉。PM 视角下「req 级 PRD」是评审材料（给研发评审），是否产出由 **PM 显式决定**，0 或 1 份/req，不再算覆盖度。
 
-<!-- WHY breadcrumb: D13 final 把每 task doc-update commits 数（COVERAGE_COMMITS）
-     这个 per-task metric 砍掉，改用步骤 1.5 实际 rewrite 的目标文档 / 模块清单。
-     close-task 不再调 doc-update 后，COVERAGE_COMMITS 永远 0 会让旧 metric 误判。
-     详见 docs/归档/完成/modulespec-维护/主方案.md §3 polish-4。 -->
-
-读步骤 1.5 doc-update §8 返回的覆盖清单（polish-2 输出契约）：
-
-```text
-REWRITE_COVERED_FILES   # 步骤 1.5 rewrite 覆盖的目标文档（含 docs/prd.md / docs/modules/* / 等）
-REWRITE_COVERED_MODULES # 覆盖的模块名清单（PM 视图「所属模块」字段汇总）
-TASK_COUNT              # 本 req 所有 closed task 数（不含基础设施 task）
-MODULE_TASKS_DONE       # 「所属模块」非「基础设施」且步骤 1.5 rewrite 已覆盖的 task 数
-```
-
-#### 2a.2 按覆盖度走默认路径
-
-| 检测结果 | 默认推荐 | 含义 |
-|---|---|---|
-| `MODULE_TASKS_DONE == TASK_COUNT` 且 `docs/prd.md ∈ REWRITE_COVERED_FILES` | **默认"跳过 PRD"** | 全部业务 task 都 rewrite 沉淀进 docs/prd.md / modules，再写一份 req 级 prd.md 是冗余 |
-| `MODULE_TASKS_DONE > 0 但 < TASK_COUNT` 或 `docs/prd.md ∉ REWRITE_COVERED_FILES` | **默认"补差"** | 部分 task 已沉淀，未沉淀的需要在 req 级 prd.md 补 |
-| `REWRITE_COVERED_FILES == ∅` | **默认"完整 PRD"** | 步骤 1.5 silent skipped（无任何业务偏差），req 级 prd.md 是唯一规格记录 |
-
-向 PM 呈交检测结果 + 对话式三选项（不列字母）：
+直接对话式问 PM：
 
 ```
-📊 doc-update 覆盖度检测
-   - 这次需求里 docs/prd.md + docs/modules/ 累计被改了 X 次
-   - 还有 Y 条 task 标了"跳过文档沉淀"未补
-   - 默认推荐：<完整 PRD / 补差 / 跳过 PRD>（理由：…）
+📝 req close 阶段。要不要给研发评审写一份 req 级 PRD？
 
-要怎么办？
- - 跑 /prd-writing 写一份完整 req 级 prd.md
- - 跑 /prd-writing 只补还没沉淀的部分（推荐"补差"时默认）
- - 跳过这步（已经沉淀过了，再写一份是冗余；自动在 close-report.md 标一句话）
+- 要 → 跑 /prd-writing，对话式确认输入后产出 req 级 PRD
+- 不要 → 跳过这步；close-report.md 自动记一句"本 req 未产出 req 级 PRD"
 ```
 
-**PM 回答的内部分流 + 内部决议代号映射**（决议代号给 step 2b 用）：
-- PM 说「完整 / 全写 / 完整 PRD」等 → 内部决议 `A` → 跑 /prd-writing 写完整 req 级 prd.md
-- PM 说「跳过 / 不写 / 已经沉淀」等 → 内部决议 `B` → 跳过；自动在 close-report.md 写"req 级 PRD 已通过 task doc-update 沉淀"
-- PM 说「补差 / 只补 / 补未沉淀」等 → 内部决议 `C` → 跑 /prd-writing 但 prompt 含"docs/prd.md 已包含 X，重点写未沉淀的 Y/Z"
-- PM 直接说「OK / 按推荐 / 默认」 → 走默认推荐对应的分支
+**PM 回答的内部分流**：
+- PM 说「要 / 写一份 / OK」等 → 跑 `/prd-writing`（详见 §2 vp-5 改造后的灵活模式：对话式确认输入清单 + 产物路径）
+- PM 说「不要 / 跳过 / 没必要」等 → 跳过；AI 在 close-report.md 写"本 req 未产出 req 级 PRD（PM 决定）"
 
-**任何分支都不需要 PM 写理由**——三个分支都是合规路径，差异只在产物详细度。
+**任何分支都不需要 PM 写理由** —— PM 主导决策，不要 AI 二次质疑。
 
-### 步骤 2b：增量同步项目主 PRD（按 step 2a 决议链推进）
+> **历史**：v5 之前 §2a 用覆盖度算法（`MODULE_TASKS_DONE == TASK_COUNT` 等）做三选一推荐（完整 / 补差 / 跳过 PRD），与 PM 主导原则冲突（autoplan CEO F4 / DX D2 共识）。v5 vp-2 砍此算法。
 
-| step 2a 决议 | step 2b 默认行为 |
-|---|---|
-| **A**（完整 req 级 prd.md） | 调 `/project-prd-update` 把 req 级 prd.md 增量并入 `docs/prd.md` |
-| **B**（跳过 step 2a） | 默认跳过 step 2b（task doc-update 已经直接改 docs/prd.md，再调 /project-prd-update 是 no-op）；在 close-report 写"项目主 PRD 已通过 task doc-update 直接同步" |
-| **C**（补差） | 调 `/project-prd-update`，输入 prompt 含"step 2a 仅补 Y/Z 部分，请只 reconcile 这两部分" |
+### 步骤 2b：~~增量同步项目主 PRD~~（v5 vp-2 + vp-1 砍）
 
-同样不需要 PM 写跳过理由——决议链由 step 2a 自动推导。
+> **v5 §4 砍掉清单 #3 / #4**：项目主 PRD `docs/prd.md` 已砍（vp-1 实施），`/project-prd-update` skill 已砍。本步骤 D13 final 时的「链式同步项目主 PRD」逻辑整段废弃。
+
+req 级 PRD 是单 req 评审材料（PM 决定是否产出），定稿后不修订 / 不并入项目主 PRD（因为项目主 PRD 已经不存在了）。
+
+→ 跳到 §2c。
 
 ### 步骤 2c：检查 req 级实现深度变更，提示 PM 是否同步项目级（4.5d.3）
 
