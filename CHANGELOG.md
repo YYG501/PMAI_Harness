@@ -1,8 +1,8 @@
 # CHANGELOG
 
 PM-AI-Workflow 生成器仓的演进记录。本文件**只记影响下游业务仓的改动**——
-`scripts/` / `skills/` / `templates/` / `agents/` / `INVARIANTS.md` / `CLAUDE.md.tmpl`
-等同步到业务仓的内容；不记 `tests/` / `docs/归档/` / `RUNTIME.md` / `TODOS.md`
+`scripts/` / `skills/` / `templates/` / `agents/` / `hooks/` 等同步到业务仓的内容；
+不记 `tests/` / `docs/归档/` / `RUNTIME.md` / `TODOS.md` / `INVARIANTS.md`
 等仅生成器仓内部用的文件。
 
 > **入口**：业务仓续 active req 或起新 req 前，先看顶部"已发布版本"段确认是否需要
