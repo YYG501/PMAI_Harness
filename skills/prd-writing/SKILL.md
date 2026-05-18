@@ -1,6 +1,6 @@
 ---
 name: prd-writing
-description: Use in Stage 6 (close-req) to draft, revise, or finalize the req-level prd.md after all tasks are closed and the prototype behavior reflects final scope of this req. Produces a 9-chapter PRD by default (11 chapters when the scope is identity/permission/RBAC/account/org and the two专属章节"数据权限范围"+"角色权限清单" are inserted after §六) with user stories, functional requirements table, and acceptance criteria — scoped to the current req only, written once and frozen. Always trigger when the user says 'prd', 'PRD', '写需求文档', or wants to generate the req's final spec. Do NOT use for the project-level cumulative PRD (`docs/prd.md`) — that is updated by `/project-prd-update`. Do NOT use as the pre-task module working spec before implementation.
+description: Use in Stage 6 (close-req) to draft, revise, or finalize the req-level prd.md after all tasks are closed and the prototype behavior reflects final scope of this req. Produces a 9-chapter PRD by default (11 chapters when the scope is identity/permission/RBAC/account/org and the two专属章节"数据权限范围"+"角色权限清单" are inserted after §六) with user stories, functional requirements table, and acceptance criteria — scoped to the current req only, written once and frozen. Always trigger when the user says 'prd', 'PRD', '写需求文档', or wants to generate the req's final spec. Do NOT use as the pre-task module working spec before implementation.
 ---
 
 # PRD Writing（req 级）
@@ -10,7 +10,6 @@ description: Use in Stage 6 (close-req) to draft, revise, or finalize the req-le
 - 当前 req 的所有 task 已关闭，原型行为已稳定，准备输出本 req 范围的 `prd.md`。
 - 由 `/close-req` 在 stage 6 调用；产出落在当前 req 目录（`$ACTIVE_REQ_DIR/prd.md`）。
 - 这一步是 req 级交付规格化：本 req 范围内"做了什么、为谁做、怎么验收"的一次性产物，定稿后不再修订。
-- **不替代项目主 PRD**：`docs/prd.md` 是累积视图，由 `/project-prd-update` 在 close-req 时增量同步。
 - **不替代实现前的工作规格**：task 级实施方案在 task 文件里，模块级 spec（如有）在 `docs/modules/`。
 
 ## PM 视图规则（必读）
@@ -20,7 +19,7 @@ description: Use in Stage 6 (close-req) to draft, revise, or finalize the req-le
 - `_shared/PM-VIEW-RULES.md` §五（功能清单格式：4 列表格 + 续行 rowspan + 需求描述列内联编号；业务规则只说 what，禁 how/why/字段口径混入）
 - `_shared/pm-view/doc-strictness.md`（§四 严格度对照表 — prd.md 行）
 - `_shared/pm-view/cross-skill.md`（§9.7 跨 skill 共享原则,§3.12 描述风格规则跨 skill 适用）
-- `_shared/pm-view/input-flow.md`（§九 输入流；**所有项目级文档全部必读**：brief / analysis / solution（PM 视图）/ tasks（PM 视图）/ docs/CONTEXT.md / docs/DESIGN.md / docs/prd.md / docs/modules/\*.md / prototypes/；不接受任何 .engineering.md 输入）
+- `_shared/pm-view/input-flow.md`（§九 输入流；**所有项目级文档全部必读**：brief / analysis / solution（PM 视图）/ tasks（PM 视图）/ docs/CONTEXT.md / docs/DESIGN.md / docs/modules/INDEX.md / docs/modules/\*.md / prototypes/；不接受任何 .engineering.md 输入）
 
 `prd.md` 不拆文件（主文件 §二），是 PM 视图链路的最终交付层。
 
@@ -99,7 +98,7 @@ prd-writing 历史上自带的写作规则（§186 禁用清单 / §266 UI 元�
    
    lint 是 mechanical check，不依赖 AI 内化规则；和步骤 2.5 的 PM 确认门构成"事前主动门槛 + 事后被动兜底"的双层保护。
 
-4. 在对话中请求 PM 确认 PRD；确认后写入文件。控制权交回 `/close-req`，由其判断是否调 `/project-prd-update` 同步项目主 PRD。
+4. 在对话中请求 PM 确认 PRD；确认后写入文件。控制权交回 `/close-req`（不再调 /project-prd-update，v5 已砍项目主 PRD）。
 
 ---
 
@@ -365,7 +364,7 @@ prd-writing 历史上自带的写作规则（§186 禁用清单 / §266 UI 元�
 
 - 允许产出：`$ACTIVE_REQ_DIR/prd.md`
 - 允许动作：基于定稿原型 + brief / analysis / solution / 已关闭 task 生成 req 级字段级 PRD
-- 禁止顺手推进：不要在写 PRD 的同时反向改范围边界；不要顺手改项目主 PRD（`docs/prd.md`）——那是 `/project-prd-update` 的职责
+- 禁止顺手推进：不要在写 PRD 的同时反向改范围边界
 - 退出条件：PRD 经过 PM 质检并定稿；控制权交回 `/close-req`
 
 ## 阶段 6 结束模板
@@ -374,7 +373,7 @@ prd-writing 历史上自带的写作规则（§186 禁用清单 / §266 UI 元�
 ## 阶段 6 完成 — [req 标题]
 
 **产出：** `$ACTIVE_REQ_DIR/prd.md`（req 级，本 req 范围一次性产出）
-**未做：** 未扩大范围、未改 analysis.md / solution.md / task spec、未动 docs/prd.md（项目主 PRD 由 close-req 后调 /project-prd-update 同步）
+**未做：** 未扩大范围、未改 analysis.md / solution.md / task spec
 
 **当前状态：** req 级 PRD 初稿完成，可选做质检或直接定稿。
 

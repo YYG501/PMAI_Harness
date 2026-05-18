@@ -8,7 +8,7 @@ description: 把本地 markdown 文档发布到飞书云文档，发布后自动
 ## When To Use
 
 - 由 prd-writing 在 stage 6 结束模板调用（D 选项），用于发布 req 级 PRD
-- 未来可被 task-spec / analysis / project-prd-update 等其它 skill 复用
+- 未来可被 task-spec / analysis 等其它 skill 复用
 - PM 手动调用：`/publish-to-lark <markdown 路径> [--type <type>] [--target-token <token>] [--title <title>]`
 
 ## Required Inputs

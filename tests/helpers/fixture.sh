@@ -35,7 +35,6 @@ fixture_setup() {
   # Minimal docs skeleton
   touch "$FIXTURE_DIR/docs/CONTEXT.md"
   touch "$FIXTURE_DIR/docs/DESIGN.md"
-  touch "$FIXTURE_DIR/docs/prd.md"
   echo "# Fixture Project" > "$FIXTURE_DIR/CLAUDE.md"
   echo ".runs/" > "$FIXTURE_DIR/.gitignore"
   echo ".worktrees/" >> "$FIXTURE_DIR/.gitignore"

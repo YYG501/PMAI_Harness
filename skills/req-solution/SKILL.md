@@ -296,7 +296,7 @@ revise 模式 skill 退出时是 skill-to-skill handoff（控制权回 stage-gat
    ```
 3. **一致** → no-op，输出 "reconcile: no-op（PM 视图未变）"，结束
 4. **不一致** → 进入派生流程：
-   a. **再读必读输入**：`analysis.md` + 上游 `.engineering.md`（如有）+ `docs/DESIGN.md` / `docs/prd.md` / `docs/modules/*.md` / `prototypes/`
+   a. **再读必读输入**：`analysis.md` + 上游 `.engineering.md`（如有）+ `docs/DESIGN.md` / `docs/modules/INDEX.md` / `docs/modules/*.md` / `prototypes/`
    b. **比对 PM 视图 diff**：用 `git diff` 看 PM 视图自上次 hash 以来变了哪些章节（如果文件未提交则用 chat 上下文里 PM 描述的修改范围）
    c. **重派生 PM 视图驱动章节**（PM-VIEW-RULES §9.6.3）：§1 数据结构 / §2 派生状态 / §3 组件路径 / §4 mock / §5 算法 / §6 易错点（PM 视图反向条目派生部分）/ §10 工程层验收清单
    d. **不动独立来源章节**：§7 plan-review 沉淀 / §8 autoplan 输出 / §9 a11y/视口/视觉（DESIGN.md 派生部分）；如发现独立章节里引用的功能名 / 章节号已被 PM 视图修改，**只改引用、不改主体**

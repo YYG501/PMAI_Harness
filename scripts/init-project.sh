@@ -122,7 +122,6 @@ for TMPL in "$FRAMEWORK_DIR/templates/"*.tmpl; do
     CONTEXT.md)             DEST="$TARGET_DIR/docs/CONTEXT.md" ;;
     DESIGN.md)              DEST="$TARGET_DIR/docs/DESIGN.md" ;;
     modules-INDEX.md)       DEST="$TARGET_DIR/docs/modules/INDEX.md" ;;
-    project-prd.md)         DEST="$TARGET_DIR/docs/prd.md" ;;
     req-prd.md)             DEST="$TARGET_DIR/templates/req-prd.md.tmpl" ;;
     task.md)                DEST="$TARGET_DIR/templates/task.md.tmpl" ;;
     task.engineering.md)    DEST="$TARGET_DIR/templates/task.engineering.md.tmpl" ;;

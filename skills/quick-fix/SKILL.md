@@ -139,7 +139,7 @@ bash .claude/scripts/quick-fix.sh --snapshot
 
 | 改对象 | 同时要考虑 |
 |---|---|
-| `prototypes/**` | `docs/modules/*.md`（项目级模块规格描述的功能形态）/ `docs/prd.md`（项目级 PRD）/ `docs/DESIGN.md`（视觉规范——涉及视觉时） |
+| `prototypes/**` | `docs/modules/*.md`（项目级模块规格描述的功能形态）/ `docs/modules/INDEX.md`（模块用途索引）/ `docs/DESIGN.md`（视觉规范——涉及视觉时） |
 | `docs/CONTEXT/DESIGN/modules/prd.md` | `prototypes/**`（原型是否已反映新文档——反向同步）/ 文档间交叉引用 |
 | `requirements/closed/<closed-req>/**`（含其内 tasks/） | 这是历史快照（引用更新 / 错别字 / 反映后续 req 变化）；通常不外溢。改"产品决策记录"= 改写历史，PM 要明确意图。**改完必须在被改文件末尾追加 visible §📝 后期修订记录 section**（详见 §3.5.2）|
 | `templates/` / `.claude/scripts/` / `.claude/skills/` | §Rules 已禁止；走单独 PR 不走 quick-fix |

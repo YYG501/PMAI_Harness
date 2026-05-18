@@ -81,7 +81,7 @@ echo "SKILL: req-analysis"
 
 - 🟢 `$ACTIVE_REQ_DIR/brief.md`
 - 🟢 `$REPO_ROOT/docs/CONTEXT.md`（如存在）
-- 🟢 `$REPO_ROOT/docs/prd.md`（如存在 → **必读**——分析新需求必须基于已有产品规格基线，避免重复设计 / 与已有功能冲突）
+- 🟢 `$REPO_ROOT/docs/modules/INDEX.md`（如存在 → **必读**——分析新需求必须基于已有模块用途索引，避免重复设计 / 与已有功能冲突）
 
 ## First Principles Analysis（第一性原理分析框架）
 
@@ -125,7 +125,7 @@ echo "SKILL: req-analysis"
 
 ### 步骤 1：读输入文档建立基线
 
-读 `$ACTIVE_REQ_DIR/brief.md`，及 `docs/CONTEXT.md` / `docs/prd.md`（若存在）。
+读 `$ACTIVE_REQ_DIR/brief.md`，及 `docs/CONTEXT.md` / `docs/modules/INDEX.md`（若存在）。
 
 ### 步骤 2：执行第一性原理 4 层（内部推理）
 

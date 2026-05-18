@@ -91,8 +91,9 @@ test_task_execute_judgment_rule() {
 }
 
 test_doc_update_required_inputs_extended() {
-  start_test "doc-update Required Inputs 范围扩到 brief / analysis / prd"
-  for doc in "brief\\.md" "analysis\\.md" "solution\\.md" "prd\\.md"; do
+  start_test "doc-update Required Inputs 范围扩到 brief / analysis / solution / INDEX（v5 vp-1 砍 prd 后）"
+  # v5 vp-1 砍 docs/prd.md 后，prd 不再是 doc-update 输入；改成 docs/modules/INDEX.md
+  for doc in "brief\\.md" "analysis\\.md" "solution\\.md" "INDEX\\.md"; do
     if ! grep -q "$doc" "$DOC_UPDATE_SKILL"; then
       _fail "doc-update Required Inputs 应含 $doc"
       return

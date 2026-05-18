@@ -32,13 +32,13 @@ description: Use when task 已完成、PM 已通过验收、需要在 close-task
 4. 🟢 工程合同 §10 文档偏差表
 5. 🟢 **task worktree 改动代码**（步骤 1.6 模块规格对账，逐行核对实际实现是否匹配——不读代码就不能对账；读法同 Stage 7.1 close-task：≤3 文件全读，多文件分批）
 6. 🟡 偏差涉及的原文（前后 5 行）。**支持任何 req / 项目级文档**：
-   - 项目级：`docs/CONTEXT.md` / `docs/DESIGN.md` / `docs/prd.md` / `docs/modules/*.md` / `CLAUDE.md`
+   - 项目级：`docs/CONTEXT.md` / `docs/DESIGN.md` / `docs/modules/INDEX.md` / `docs/modules/*.md` / `CLAUDE.md`
    - req 级：`requirements/active/<req>/brief.md` / `analysis.md` / `solution.md` / `solution.engineering.md`
 7. 沉淀模式：从 PM 视图主文件读取 `**所属模块**` / `**所属模块章节**` 字段（在「📌 任务卡」表格中）+ `## 📋 功能清单` section
 
 ## 位置定位原则（必读）
 
-doc-update 涉及的长期文档（`docs/modules/*.md` / `solution.md` / `solution.engineering.md` / `docs/DESIGN.md` / `docs/CONTEXT.md` / `docs/prd.md`）通常几千行。**建议优先走"多重 grep + 章节级局部读"**——保险性 ≥ 全读，且系统化、可重复；不到必要时不 Read 全文。
+doc-update 涉及的长期文档（`docs/modules/*.md` / `solution.md` / `solution.engineering.md` / `docs/DESIGN.md` / `docs/CONTEXT.md`）通常几千行。**建议优先走"多重 grep + 章节级局部读"**——保险性 ≥ 全读，且系统化、可重复；不到必要时不 Read 全文。
 
 **为什么不读全文更保险**：
 - grep 系统化：关键字命中 = 100% 不漏
