@@ -10,9 +10,42 @@
 
 ---
 
-## 当前位置（2026-05-16）
+## 当前位置（2026-05-18）
 
-**最近活动（2026-05-16）**: D13 modulespec 维护方案 **全部落地** ✓（vp-1 + vp-2 + vp-3 + autoplan round 7 + §0 PAIN_LINK 锁机制首次实战成功）。绕了 v3 → v3' → v3'.1 → v3.2 → v3.3 五版后由 PM 根因质疑拉回 v2 §12.2 原始方向，实际实施 ~1.5h（含 5 次 run-all 验证）。
+**最近活动（2026-05-18）**: **PRD 体系收敛 v5 + attachments 全部落地** ✓（vp-0 → vp-4 → vp-4b → vp-3 → vp-2 → vp-1a → vp-1 → vp-5 → vp-7 → vp-6 + attachments = 11 个 commit）。设计 v0 → v1 → v2 → v3 → v4 → v5 五版迭代，autoplan dual voice review 33 finding（21 ACCEPT + D1-D5 PM 决议）后单次实施完成。
+
+- **测试基线**：340/0（D13 后） → **368/0**（v5 后；vp-4b 加 28 测试基线相关项）
+- 方案文档：`docs/设计/PRD-体系收敛.md`（v5，含完整 §X autoplan dual voice review）
+- 配套设计：`docs/设计/attachments-机制.md`（v0，独立机制）
+- 关键决议：D1（vp-1a 独立迁移）/ D2（CONTEXT 6 节全强制）/ D3（一次性 + 精简模式）/ D4（业务词催补不给 toggle）/ D5（vp-0 一次性重写 input-flow）
+
+**11 个 commit（已落地）**：
+| commit | 内容 |
+|---|---|
+| `4e8e63d` | design: v5 + attachments v0 设计文档 baseline |
+| `2c6c327` | feat(vp-0): 一次性重写 input-flow.md |
+| `f4eb57c` | feat(vp-4): CONTEXT.md 6 节模板重构 + migrate-context-v4.py |
+| `e3ec797` | feat(vp-4b): Stage 3 CONTEXT 检查门 + 业务词催补 hooks |
+| `0b8bfaa` | feat(vp-3): docs/modules/INDEX.md 新增 + 维护链路 |
+| `1d3505b` | feat(vp-2): close-req §2a/§2b 改 PM 主导 |
+| `fbec85b` | feat(vp-1a): migrate-prd.py 消费仓 prd 迁移 |
+| `73b98a8` | feat(vp-1): 砍 docs/prd.md + project-prd-update 全机制 |
+| `82d8090` | feat(vp-5): /prd-writing 灵活化（对话式确认输入）|
+| `4bd03af` | feat(vp-7): status-view --timeline 全局 req 视图 |
+| `fccbed4` | feat(vp-6): 清理 first req 残留（11 处 + 测试调整）|
+| `65329d0` | feat(attachments): 独立机制实施完成 |
+
+**v5 体系产物（关键文件）**：
+- 新增脚本：`scripts/check-context-sections.py` / `scripts/_lib/term-detector.py` / `scripts/check-index-lint.py` / `scripts/migrate-context-v4.py` / `scripts/migrate-prd.py`
+- 新增模板：`templates/modules-INDEX.md.tmpl`
+- 新增 _shared：`skills/_shared/term-detector/SKILL.md` + whitelist.json
+- 重构 templates：`CONTEXT.md.tmpl`（6 节）/ `CLAUDE.md.tmpl`（文档位置表）/ `solution.md.tmpl` + `task.md.tmpl`（attachments section）
+- status-view 扩展：`--timeline` / `--since` / `--module` / `--milestone` / `--limit` / `--all`
+- 删除：`templates/project-prd.md.tmpl` + `skills/project-prd-update/`
+
+**砍掉的机制清单（v5 §4 全 26 项已完整落地）**：项目主 PRD 整套（文件 + 模板 + skill + close-req §2b + 覆盖度算法 + rewrite 范围）+ CONTEXT 约束/风险节 + /prd-writing close-req 硬约束 + is_first_req 全套（字段 + resolver first 子命令 + status-view 装饰）+ DESIGN.md.tmpl first req 残留文案 + init-project CONTEXT 卡住 + 业务词催补 toggle + CONTEXT 渐进式 / 软提示 + INDEX 作为 §1.5 主 rewrite 目标 + 多 vp 各自改 input-flow。
+
+**关于历史 D13 modulespec 维护方案**（2026-05-16 落地）：见 `docs/归档/完成/modulespec-维护/主方案.md`。本 v5 与 D13 兼容共存（v5 §2.3 INDEX derived refresh 显式不污染 D13 REWRITE_COVERED_FILES metric）。
 
 - **测试基线**：350/0（D13 前） → **340/0**（D13 后，净删 10 个测试全部正常归因：A1 skip-doc-update 6 个 + I-CT6 doc-diff 阻塞 1 个 + req-stage-gate half-close detection 1 个 + e2e/test-skip-doc-update-recovery.sh 2 个）
 - 方案文档：`docs/归档/完成/modulespec-维护/主方案.md`（D13 final，含 §0 锁 + autoplan round 7 三 phase dual voice + 18 polish 整合 + 3 PM 决议 + autoplan ABORT 历史）
