@@ -24,6 +24,42 @@ python3 "$REPO_ROOT/.claude/scripts/check-worktree-residue.py" || true
 
 如果 worktree 残留检测报警，先把警告原文展示给 PM 一句话说明（"发现 N 个 worktree 残留/冲突，已贴上方"），PM 可选择立刻清理或继续推进。不当 gate（参见 I-RT5 的范围）。
 
+## 续跑模式（默认行为）
+
+PM 在 worktree 里**只需要敲一次** `/req-stage-gate`，之后 stage-gate 一路带 PM 走完所有 stage 推进。每个 stage 转换块的 `req-transition.py --to N` 成功后，**默认不退出**，立即续到下一 stage 的入口逻辑。
+
+**2 个退出条件**（撞到任一退出本次 stage-gate 调用）：
+
+| 条件 | 说明 |
+|---|---|
+| 推进到 stage 6（task 执行）成功 | task 循环由 `/task-spec` `/task-execute` `/close-task` 等独立 skill 承担，不属于 stage-gate 推进范围 |
+| 推进到 stage 7 后调完 `/close-req` | req 关闭流程结束 |
+
+**不是退出条件 / 不要写规则的几种情况**（chat 天然行为，写到 SKILL.md 反成噪声）：
+
+- **PM 在确认门不答** → AI 就显示着确认门等 PM 下次输入；这是 chat 天然行为，不需要识别"喊停关键词"也不需要发"已暂停"通知
+- **PM 关掉 claude 窗口几天后回来** → 新 chat session 自然不在 stage-gate 流程里；PM 重新敲 `/req-stage-gate`，stage-gate 从 `.req-meta.json` 当前 stage 续走
+- **闸门挂起等 PM**（未决问题闸门、CONTEXT 6 节强制门、reviewer NEEDS_REVISION 三选一、行数 lint 超限对话）→ 挂着等 PM 答，不算"退出"也不算"暂停"——就是等
+
+**核心边界（PM gatekeeper 没破）**：
+
+- 每个 stage 的**确认门 / 闸门**都在原位，PM 没被任何自动化绕过
+- 续跑只是把"PM 答 OK 推进 → 下一 stage 第一步"这条路径接通，省掉 PM 重敲 `/req-stage-gate` 的仪式
+- PM 答 OK 类（OK / 通过 / 没问题 / 定了） → 走推进 + 续跑；PM 答修改类 → 走原修改分支；PM 不答 → AI 等
+
+**PM chat 输出格式**：
+
+推进到下一 stage 时**不发独立的"已推进"通知**（避免每个 stage 之间多一段噪声）；直接进入下一 stage 的第一个动作 / 闸门 / 确认门。退出时（仅 2 种）的话术：
+
+```
+✅ Stage 已推进 N → N+1（<下一阶段中文名>）
+
+[根据退出条件二选一：]
+进入 task 执行阶段。后续 task 流程走 /task-spec → /task-execute → /close-task。
+[或]
+已关闭此需求。
+```
+
 ## Stage 过渡逻辑
 
 ### Stage 1 → 2（感受问题 → 需求分析）
@@ -106,6 +142,8 @@ python3 "$REPO_ROOT/.claude/scripts/check-worktree-residue.py" || true
 ```bash
 python3 .claude/scripts/req-transition.py "$ACTIVE_REQ_DIR" --to 2
 ```
+
+推进成功后**续到 Stage 2 → 3 入口**（默认续跑，参见上文「续跑模式」）。
 
 ### Stage 2 → 3（需求分析 → 方案设计）
 
@@ -232,6 +270,8 @@ python3 .claude/scripts/check-engineering-doc-size.py --req-dir "$ACTIVE_REQ_DIR
 python3 .claude/scripts/req-transition.py "$ACTIVE_REQ_DIR" --to 3
 ```
 
+推进成功后**续到 Stage 3 → 4 入口**（CONTEXT 6 节强制门 → DESIGN.md 检查门）。
+
 ### Stage 3 → 4（方案设计 → 设计系统建立）
 
 **步骤 0：CONTEXT 6 节强制门**（v5 新增，D2/D3 决议）
@@ -298,10 +338,11 @@ PM 答「混合 / 部分简部分详」→ 各节 PM 临场决定
     - 需要 → 请说明哪里要改
    ```
 
-   - PM 说「不用 / 不需要 / 跳过」 → 直接推进到 stage 5
+   - PM 说「不用 / 不需要 / 跳过」 → 直接推进到 stage 5（跳过 stage 4）
      ```bash
      python3 .claude/scripts/req-transition.py "$ACTIVE_REQ_DIR" --to 5
      ```
+     推进成功后**续到 Stage 5 → 6 入口**（task-plan 已存在则直接进确认门；否则调 `/task-plan`）。
    - PM 提具体修改意图 → 进入 stage 4
 
 3. **无内容（空骨架）**：直接进入 stage 4，无需问 PM
@@ -310,6 +351,8 @@ PM 答「混合 / 部分简部分详」→ 各节 PM 临场决定
 ```bash
 python3 .claude/scripts/req-transition.py "$ACTIVE_REQ_DIR" --to 4
 ```
+
+推进成功后**续到 Stage 4 入口**（调 `/design-consultation` 写 DESIGN.md，写完出 stage 4 确认门）。
 
 ### Stage 4（设计系统建立）
 
@@ -330,6 +373,8 @@ python3 .claude/scripts/req-transition.py "$ACTIVE_REQ_DIR" --to 4
 python3 .claude/scripts/req-transition.py "$ACTIVE_REQ_DIR" --to 5
 ```
 
+推进成功后**续到 Stage 4 → 5 入口**（调 `/task-plan`）。
+
 ### Stage 4 → 5（→ 模块规格 + task 拆分）
 
 调用 `/task-plan` 执行 stage 5 工作。
@@ -338,6 +383,8 @@ python3 .claude/scripts/req-transition.py "$ACTIVE_REQ_DIR" --to 5
 ```bash
 python3 .claude/scripts/req-transition.py "$ACTIVE_REQ_DIR" --to 5
 ```
+
+推进成功后**续到 Stage 5 → 6 入口**（task-plan 写完后进确认门）。
 
 ### Stage 5 → 6（task 规划 → task 执行）
 
@@ -374,6 +421,8 @@ python3 .claude/scripts/req-transition.py "$ACTIVE_REQ_DIR" --to 5
 ```bash
 python3 .claude/scripts/req-transition.py "$ACTIVE_REQ_DIR" --to 6
 ```
+
+推进成功后**stage-gate 退出**（续跑模式 2 条退出条件之一：「推进到 stage 6 成功」）。后续 task 执行由 `/task-spec` `/task-execute` `/close-task` 独立 skill 承担，不属于 stage-gate 推进范围。退出话术按上文「续跑模式 / PM chat 输出格式」。
 
 ### Stage 6 → 7（task 执行 → req close）
 
@@ -429,10 +478,13 @@ Stage 6 → 7 blocked: 以下 task 尚未完整关闭
 python3 .claude/scripts/req-transition.py "$ACTIVE_REQ_DIR" --to 7
 ```
 
-然后调用 `/close-req`。
+然后调用 `/close-req`。**`/close-req` 跑完即 stage-gate 退出**（续跑模式 2 条退出条件之一：「推进到 stage 7 后调完 `/close-req`」）。
 
 ## Rules
 
+- **续跑模式是默认行为**（参见上文「续跑模式」整节）：`req-transition.py --to N` 成功后默认续到下一 stage 入口，PM 一次 `/req-stage-gate` 启动后无需再敲命令直到撞退出条件。**退出条件只有 2 条**（推进到 stage 6 / 推进到 stage 7 后调完 close-req），不允许在 stage 之间插入"PM 请再跑一次 /req-stage-gate" 这种 handoff 文案——这种文案是 v3.5 之前的旧行为，本规则上线后视为违例
+- **stage 之间不发独立"已推进"通知**：续跑到下一 stage 时直接进入第一个动作 / 闸门 / 确认门，不在中间发"✅ Stage 已推进 N→N+1。下一步进入 stage M→M+1"这种过渡段（旧 chat 让 PM 体感"我又要敲一次"，且续跑模式下根本不需要敲命令）。只在 stage-gate **退出**时按上文「PM chat 输出格式」发一次终止通知
+- **不写 PM 喊停识别**：PM 在确认门不答就是停（chat 天然行为），不要在 SKILL.md 加"喊停关键词识别"、不要发"已暂停"通知。PM 关窗口几天后回来重敲 `/req-stage-gate` 自然从当前 stage 续走，不需要"暂停态"概念
 - 每个 stage 结束必须显式问 PM 确认，不能自动跳过确认门
 - **确认门只给绝对路径 + 一句话变更摘要，不贴文档全文。** PM 的 IDE 已经挂在 worktree 上，文件在左侧目录树里可见，不需要把内容贴回 chat
 - **确认门标准格式**（v3 书面体；2026-05-11 全 stage 对齐完毕）：

@@ -210,6 +210,9 @@ brief.md 已 commit 后，**当前主对话不再继续 stage 2**。`/new-req` �
   3. 在新 Claude 对话里运行：
        /req-stage-gate
      （新对话会重新读 brief.md 给二次确认门，确认后进入 Stage 2）
+
+**敲这一次就够了**——stage-gate 续跑模式会一路带你走到 Stage 6（task 执行）才退出。
+中途不答确认门就是停，下次回来重新敲 /req-stage-gate 自动从当前 stage 续走。
 ```
 
 **规则**：
