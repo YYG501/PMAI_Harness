@@ -124,7 +124,26 @@ PENDING_MARKER="$REPO_ROOT/.runs/pending-close-req.json"
 
 4. PM 决议后，doc-update SKILL §8 返回 `{覆盖的目标文档清单, 覆盖的模块清单}`（polish-2 输出契约），供步骤 2a 作 metric。
 5. **回填 close-report.md `## 文档变更` 段**（polish-9）：把 `REWRITE_COVERED_FILES` 写进步骤 1 初稿留的 placeholder。
-6. 全部目标文档处理完毕后进步骤 2a。
+6. **INDEX.md derived refresh**（v5 vp-3，独立于 REWRITE_COVERED_FILES metric）：
+
+   主 rewrite 完成后，单独刷新 `docs/modules/INDEX.md`。**不进** REWRITE_COVERED_FILES（避免污染 §2a metric）：
+
+   ```bash
+   # 1. AI 归纳：读本 req 涉及的 docs/modules/<m>.md 的 §摘要 + §一模块定位 + §三一级章节标题，提炼用途（≤30 字）
+   # 2. patch docs/modules/INDEX.md（新模块插入新行；已存在且本 req 改过规格的更新简介；未改动的不动）
+   # 3. lint 校验
+   python3 "$REPO_ROOT/.claude/scripts/check-index-lint.py" "$REPO_ROOT" --exit-code || {
+     # lint 失败 → AI 二次重写
+     # 仍失败 → 输出空 diff 跳过本次 INDEX 刷新（不阻塞 close-req 整体）
+     echo "⚠️ INDEX lint 二次重写仍失败，跳过本次 INDEX 刷新"
+   }
+   # 4. PM 审 diff：git diff docs/modules/INDEX.md
+   # PM reject → AI 重新归纳；2 次仍 reject → 空 diff 跳过（同上）
+   ```
+
+   独立输出字段：`{"index_refreshed": true|false, "index_lint_passed": true|false}`，写入 step 1.5 返回但**不进** REWRITE_COVERED_FILES。
+
+7. 全部目标文档处理完毕（含 INDEX derived refresh）后进步骤 2a。
 
 **quickfix 历史改动处理**（polish-8）：
 
@@ -222,6 +241,24 @@ MODULE_TASKS_DONE       # 「所属模块」非「基础设施」且步骤 1.5 r
 ```bash
 python3 .claude/scripts/req-transition.py "$ACTIVE_REQ_DIR" --to 7
 ```
+
+### 步骤 3.5：里程碑追加询问（v5 vp-3）
+
+问 PM 是否把本 req 加入 `docs/CONTEXT.md ## 产品路线`：
+
+```
+📝 本次 req 刚 close。要不要加进 `docs/CONTEXT.md` 产品路线？
+- 是：追加 `YYYY-MM-DD · <req-name>（关联 <req-id>）`，要标 ⭐ 吗（标了能用 `status-view --milestone` 筛）
+- 否：不动路线（默认）
+```
+
+PM 答「是 + ⭐」/「是 不标 ⭐」/「否」三选：
+
+- 「是 + ⭐」→ AI patch `docs/CONTEXT.md` `## 产品路线` `### 已完成` 段追加 `- ⭐ YYYY-MM-DD · <req-name>（关联 <req-id>）`
+- 「是 不标 ⭐」→ 同上但不加 ⭐
+- 「否 / 默认 / 不动」→ 不 patch，进步骤 4
+
+不追问理由（PM 主观判断，autoplan 不进 §0）。
 
 ### 步骤 4：commit 所有改动
 
