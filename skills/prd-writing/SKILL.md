@@ -1,16 +1,62 @@
 ---
 name: prd-writing
-description: Use in Stage 6 (close-req) to draft, revise, or finalize the req-level prd.md after all tasks are closed and the prototype behavior reflects final scope of this req. Produces a 9-chapter PRD by default (11 chapters when the scope is identity/permission/RBAC/account/org and the two专属章节"数据权限范围"+"角色权限清单" are inserted after §六) with user stories, functional requirements table, and acceptance criteria — scoped to the current req only, written once and frozen. Always trigger when the user says 'prd', 'PRD', '写需求文档', or wants to generate the req's final spec. Do NOT use as the pre-task module working spec before implementation.
+description: |
+  Generate a PRD (PM 评审材料给研发). Two modes (v5 vp-5 灵活化, D1 决议):
+  (a) req 级 PRD — by /close-req when PM explicitly says "要写 req 级 PRD"; output to $ACTIVE_REQ_DIR/prd.md (单 req 一次性产出，定稿不修订);
+  (b) 独立 PRD (跨模块评审 PRD) — when PM says "写一份独立 PRD / 给这几个模块写评审 PRD / 不绑当前 req"; output path PM specifies (常见 docs/独立PRD/<slug>.md).
+  Always trigger when the user says 'prd', 'PRD', '写需求文档', '写评审 PRD', '给某模块写 PRD',
+  or wants to generate the req's final spec / cross-module review material.
+  Skill 开场对话式确认输入清单 + 产物路径 (覆盖 req 级 / 独立 / 补差 / 跨模块所有写 PRD 场景),
+  PM 主导每次写哪部分; do NOT use as the pre-task module working spec before implementation.
 ---
 
-# PRD Writing（req 级）
+# PRD Writing（灵活模式，v5 vp-5）
 
 ## When To Use
 
-- 当前 req 的所有 task 已关闭，原型行为已稳定，准备输出本 req 范围的 `prd.md`。
-- 由 `/close-req` 在 stage 6 调用；产出落在当前 req 目录（`$ACTIVE_REQ_DIR/prd.md`）。
-- 这一步是 req 级交付规格化：本 req 范围内"做了什么、为谁做、怎么验收"的一次性产物，定稿后不再修订。
+- **场景 A — req 级 PRD**：由 `/close-req` 在 stage 7 调用；PM 在 close-req §2a 答"要写一份 req 级 PRD"时触发，产出落在 `$ACTIVE_REQ_DIR/prd.md`；定稿不修订。
+- **场景 B — 独立 PRD（跨模块评审）**：PM 主动调用本 skill 并在 prompt 里说"独立 PRD" / "给 X / Y 模块写一份评审 PRD" / "不绑当前 req"；产物路径由 PM 在 prompt 指定（如 `docs/独立PRD/<slug>.md`）。
+- **场景 C — 补差**：PM 已有 PRD 但想补充某部分（如新增加模块、refine 某节）；同 A 入口，对话时 PM 说"只补 X 部分"。
 - **不替代实现前的工作规格**：task 级实施方案在 task 文件里，模块级 spec（如有）在 `docs/modules/`。
+
+## 开场对话式确认（v5 vp-5 灵活化 — 步骤 0，所有场景必走）
+
+调用时（不管 PM 直接调还是 close-req 派进来），AI **第一件事**是与 PM 对话确认：
+
+```
+📝 准备写 PRD。我需要先和你对齐三件事：
+
+1. 写哪部分？
+   - req 级（当前 req 的完整 PRD，含 9-11 章）
+   - 独立（跨模块评审，告诉我覆盖哪几个模块）
+   - 补差（已有 PRD，补充某节 / 某模块）
+
+2. 我准备读这些文件：
+   - <按下方"输入推荐表"列出建议清单>
+   要加 / 减文件吗？
+
+3. 产物想放哪？
+   - req 级 → $ACTIVE_REQ_DIR/prd.md（默认）
+   - 独立 → docs/独立PRD/<slug>.md（默认）/ 你指定路径
+   - 补差 → 现有 PRD 同路径覆盖
+
+回我「OK」或「改」+ 具体修改。
+```
+
+**输入推荐表**：
+
+| 场景 | 推荐输入 |
+|---|---|
+| req 级 PRD | $ACTIVE_REQ_DIR/brief.md / analysis.md / solution.md（PM 视图） + tasks/*.md（仅 §📋/§🎯/§✅）+ docs/CONTEXT.md + docs/DESIGN.md + docs/modules/INDEX.md + 涉及模块的 docs/modules/<m>.md + prototypes/<相关页> |
+| 独立 PRD（PM 指定模块清单 X/Y/Z） | docs/CONTEXT.md + docs/DESIGN.md + docs/modules/INDEX.md + docs/modules/X.md + docs/modules/Y.md + docs/modules/Z.md + prototypes/<相关页>（如有）;**不读** req 上下文（brief/analysis/solution/tasks），因为不绑 req |
+| 补差 | 现有 PRD + 补差范围相关的 module / solution / task spec 子集 |
+
+PM 答「改」 → 调整推荐清单 / 产物路径 → 再确认 → OK 后进入实际写作（步骤 1）。
+
+**禁止**：
+- 不询问 PM 直接按"req 级 默认 9-11 章"硬写（违反灵活模式）
+- 当 PM 在 prompt 里明确说"独立 PRD"或"覆盖 X/Y 模块"时仍按 req 级流程跑（要识别独立模式跳过 req 上下文必读）
+- 推荐清单僵化（PM 选独立 PRD 后仍读 brief/analysis 等 req 级输入）
 
 ## PM 视图规则（必读）
 
