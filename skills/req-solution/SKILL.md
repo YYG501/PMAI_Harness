@@ -161,6 +161,19 @@ fi
 - 不出现工程词（reducer / dispatch / props / hook / TS 类型签名）→ 这些进 solution.engineering.md
 - 数据模型用业务语言（"许可证状态" / "已开通用户数"），不写 schema / Record / discriminated union
 
+### 步骤 3.5：业务词催补 hook（v5 vp-4b）
+
+写 solution.md PM 视图后，调 detector 检测未登记业务词 / 角色：
+
+```bash
+python3 "$REPO_ROOT/.claude/scripts/_lib/term-detector.py" \
+  "$ACTIVE_REQ_DIR/solution.md" "$REPO_ROOT" --req-dir "$ACTIVE_REQ_DIR"
+```
+
+按返回处理（详见 `skills/_shared/term-detector/SKILL.md`）：≥3 新词多词批量；<3 单词；新角色独立话术；全空 silent。PM 拒绝 → 追加 `.term-skip.json`；PM 同意 → patch `$REPO_ROOT/docs/CONTEXT.md`。
+
+**禁止**：写 `solution.engineering.md`（步骤 4）前不调 detector（工程合同允许技术词）。
+
 ### 步骤 4：写 solution.engineering.md（工程合同）
 
 > **仅 first-gen 模式执行**。revise 模式跳过本步骤（不动工程合同，hash 自然 stale）。reconcile 模式走步骤 R。

@@ -239,6 +239,19 @@ done
 - `{{CREATED_DATE}}` → 当前日期 YYYY-MM-DD
 - `{{REQ_ID}}` / `{{REQ_SLUG}}` → 来自当前 req 元数据
 
+### 步骤 8.5：业务词催补 hook（v5 vp-4b）
+
+写 task-NNN-<slug>.md PM 视图后，调 detector 检测未登记业务词 / 角色（**仅扫 PM 视图主文件 `.md`，不扫 `.engineering.md`**）：
+
+```bash
+python3 "$REPO_ROOT/.claude/scripts/_lib/term-detector.py" \
+  "$ACTIVE_REQ_DIR/tasks/task-NNN-<slug>.md" "$REPO_ROOT" --req-dir "$ACTIVE_REQ_DIR"
+```
+
+按返回处理（详见 `skills/_shared/term-detector/SKILL.md`）：≥3 新词多词批量；<3 单词；新角色独立话术；全空 silent。PM 拒绝 → 追加 `.term-skip.json`；PM 同意 → patch `$REPO_ROOT/docs/CONTEXT.md`。
+
+**禁止**：步骤 9 写 `.engineering.md` 不调 detector（工程合同允许技术词）。
+
 ### 步骤 9：写 task-NNN-<slug>.engineering.md（工程合同）
 
 > **仅 first-gen 模式执行**。revise 模式跳过本步骤（不动工程合同，hash 自然 stale，等步骤 12.5 reconcile）。

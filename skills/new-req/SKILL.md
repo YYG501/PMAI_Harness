@@ -141,6 +141,33 @@ PM 选 2 或直接开始描述需求时，AI 走以下流程：
 
 `brief.md` 是 stage 1 的唯一真相源，后续所有 stage 只读 brief.md。
 
+### 步骤 4.3：业务词催补 hook（v5 vp-4b）
+
+写 brief 草稿后 / PM 二确前，调 `scripts/_lib/term-detector.py` 检测未登记的业务词 / 角色（含**X**加粗 / 「X」中文引号 / 双引号短词）：
+
+```bash
+python3 "$REPO_ROOT/.claude/scripts/_lib/term-detector.py" \
+  "$ACTIVE_REQ_DIR/brief.md" "$REPO_ROOT" --req-dir "$ACTIVE_REQ_DIR"
+```
+
+按返回 JSON 处理（详见 `skills/_shared/term-detector/SKILL.md`）：
+- `new_terms` ≥3 → 多词批量话术（一次问"全加 / 挑几个 / 全跳过"）
+- `new_terms` <3 + `new_roles` → 单词话术 + 新角色话术
+- 全空（new_terms + new_roles 都 0）→ silent，无需打断 PM
+
+PM 拒绝某词 → 追加 `$ACTIVE_REQ_DIR/.term-skip.json`：
+```bash
+python3 -c "
+import json, os
+p = os.environ['ACTIVE_REQ_DIR'] + '/.term-skip.json'
+data = json.load(open(p)) if os.path.exists(p) else {'skipped_terms': [], 'skipped_roles': []}
+data['skipped_terms'].append('<被拒词>')
+json.dump(data, open(p, 'w'), ensure_ascii=False, indent=2)
+"
+```
+
+PM 同意补 → AI 起草定义 + PM 确认 → AI patch `$REPO_ROOT/docs/CONTEXT.md` `## 业务术语表` 表追加一行（≤30 字）/ `## 用户画像` 表追加一行（角色名 / 描述 / 关键诉求）。
+
 ### 步骤 4.5：commit stage 1 brief（PM 二确通过后自动执行）
 
 PM 在步骤 4 二确门说 OK 后、进入步骤 5 handoff 之前，AI **必须** commit 一次，避免后续 PM 想 `git worktree remove` 时撞 dirty tree（参 INVARIANTS I-AD5 / I-DC1：dispatch 前 working tree 必须 clean）。

@@ -234,6 +234,56 @@ python3 .claude/scripts/req-transition.py "$ACTIVE_REQ_DIR" --to 3
 
 ### Stage 3 → 4（方案设计 → 设计系统建立）
 
+**步骤 0：CONTEXT 6 节强制门**（v5 新增，D2/D3 决议）
+
+solution 定稿后，**先检查** `docs/CONTEXT.md` 6 节是否全填（项目名 / 产品定位 / 用户画像 / 产品路线 / 技术栈 / 业务术语表）。空骨架卡 stage 4。
+
+```bash
+CONTEXT_STATE=$(python3 "$REPO_ROOT/.claude/scripts/check-context-sections.py" "$REPO_ROOT")
+ALL_FILLED=$(echo "$CONTEXT_STATE" | python3 -c "import sys, json; print(json.load(sys.stdin)['all_filled'])")
+EMPTY=$(echo "$CONTEXT_STATE" | python3 -c "import sys, json; print(','.join(json.load(sys.stdin)['empty_sections']))")
+```
+
+**分支 A（CONTEXT 全填 + 本 req 无业务词催补触发 → silent skip）**：
+
+- 检查 `$ACTIVE_REQ_DIR/.term-skip.json` 是否存在且非空（说明本 req 业务词催补已触发过）
+- 检查本 req `brief.md` / `analysis.md` / `solution.md` 是否含「📖 新业务词」标记（grep 痕迹）
+- 全 false → silent skip CONTEXT 问询，直接进 DESIGN 检查门
+
+**分支 B（CONTEXT 全填 + 本 req 有业务词催补痕迹 / PM 可能想更新）**：
+
+```
+📝 CONTEXT 各节都有内容了。本次 req 有没有让你想改某节？没有就直接进 stage 4。
+```
+
+- PM 说「没有 / 不改 / OK」 → 进 DESIGN 检查门
+- PM 提改动 → 引导填，完成后再进 DESIGN 检查门
+
+**分支 C（CONTEXT 有空节 → 强制门，引导填）**：
+
+先问 PM 选模式（开场必问）：
+```
+📝 solution 定稿了。检查 docs/CONTEXT.md —— 有 <N> 节空着（<empty_sections>），本次都要填一遍（产品级语境基线，AI 后续 req 必读）。
+
+想填详细版（按完整规范）还是最简版（1 句话 / 1 角色 / 1 条术语 起手）？最简版几分钟搞定，可以下次 stage 3 后再补全。
+```
+
+PM 答「最简 / 简版 / 快」→ 走精简模式（每节 1 条起手即接受）
+PM 答「详细 / 完整 / 详版」→ 走详细模式（按 v5 §2.2 表格长度规范）
+PM 答「混合 / 部分简部分详」→ 各节 PM 临场决定
+
+然后按节依次问。引导话术参考 `docs/设计/PRD-体系收敛.md` §2.6 全文（产品定位 / 用户画像 / 产品路线 / 技术栈 / 业务术语表 各两版）。
+
+**禁逃生舱**（D2/D4 锁定，MEMORY 第 2「不留 FORCE」）：
+- 不给「暂跳过」「不重要」「以后再说」选项
+- PM 真不知道写啥 → AI 给精简模式默认值（如产品定位 "工具型应用，给单人 PM 用，无长期硬约束"），PM 微调或直接接受
+
+填完后再次跑 `check-context-sections.py` 验证全填，再进 DESIGN 检查门。
+
+---
+
+**步骤 1：DESIGN.md 检查门**（v5 前已有逻辑）
+
 1. 检查 `docs/DESIGN.md` 是否已有实质内容
 2. **已有内容**：对话式问 PM：
 
