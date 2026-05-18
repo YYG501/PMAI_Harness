@@ -204,13 +204,15 @@ main（主仓，永远不切分支）
 
 | 文档 | 路径 | 说明 |
 |------|------|------|
-| 项目主 PRD | docs/prd.md | 持续维护，产品当前累积状态；由 `/project-prd-update` 在 close-req 时增量更新 |
-| Req 级 PRD | requirements/active/&lt;req&gt;/prd.md | 单 req 范围一次性产出；由 `/prd-writing` 在 close-req 时产出，定稿后不修订 |
-| 项目背景 | docs/CONTEXT.md | 背景、约束、技术栈 |
+| 项目背景 | docs/CONTEXT.md | 6 节：项目名 / 产品定位 / 用户画像 / 产品路线 / 技术栈 / 业务术语表；stage 3 后强制门 |
+| 模块索引 | docs/modules/INDEX.md | 每个模块一句话用途（≤30 字）；close-req §1.5 之后 derived refresh |
+| 模块规格 | docs/modules/ | 按模块组织（事实源）|
 | 视觉规范 | docs/DESIGN.md | 颜色、字体、组件规范 |
-| 模块规格 | docs/modules/ | 按模块组织 |
+| Req 级 PRD（可选） | requirements/active/&lt;req&gt;/prd.md | 单 req PM 评审材料；PM 在 close-req 显式选择是否产出；由 `/prd-writing` 对话式生成 |
+| 独立 PRD（可选） | PM prompt 指定路径 | 跨模块评审材料，PM 主动调 `/prd-writing` 并说明范围 |
 | 活跃需求 | requirements/active/ | 当前正在处理的 req（允许多个 active 并行，每个 req 一个 worktree） |
 | 已关闭需求 | requirements/closed/ | 已完成或已取消的 req |
+| 附件目录（可选）| requirements/active/&lt;req&gt;/attachments/ | PM 上传材料（PDF/截图/SDK）；untrusted input，AI 仅作 evidence |
 
 ## 当前状态
 
