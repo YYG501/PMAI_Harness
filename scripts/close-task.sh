@@ -129,11 +129,22 @@ if [ "$CALLER_PWD" != "$REQ_WT_REAL" ] && [[ "$CALLER_PWD" != "$REQ_WT_REAL"/* ]
 fi
 
 # --- 检查 task worktree 是否 clean（防止 worktree remove --force 静默丢失未提交改动） ---
+# docs/DESIGN.md 例外：close-task skill §1.5 沉淀视觉规范反馈到 DESIGN.md 时不 commit
+# （PM 在 req 窗口审 diff 再 commit），§2.1 / §P2.4 都明确允许此文件 uncommitted。
+# 若 task worktree 里 DESIGN.md 真有 uncommitted（AI patch 走错 worktree 的容错）→
+# 先把改动 carry 到 req worktree（保留 PM 在 req 审 diff 的语义），再做 clean 检查。
 TASK_WORKTREE=$(resolve_worktree_path "$BRANCH" "$REPO_ROOT" || true)
 if [ -n "$TASK_WORKTREE" ] && [ -d "$TASK_WORKTREE" ]; then
-  UNCOMMITTED=$(git -C "$TASK_WORKTREE" status --porcelain 2>/dev/null || true)
+  if [ -f "$TASK_WORKTREE/docs/DESIGN.md" ]; then
+    DESIGN_STATUS=$(git -C "$TASK_WORKTREE" status --porcelain docs/DESIGN.md 2>/dev/null || true)
+    if [ -n "$DESIGN_STATUS" ]; then
+      cp "$TASK_WORKTREE/docs/DESIGN.md" "$REQ_WORKTREE/docs/DESIGN.md"
+      echo "📋 task worktree 中 docs/DESIGN.md uncommitted，已 carry 到 req worktree（防 rm -rf 丢失；PM 在 req 窗口审 diff + commit）"
+    fi
+  fi
+  UNCOMMITTED=$(git -C "$TASK_WORKTREE" status --porcelain 2>/dev/null | grep -v 'docs/DESIGN.md' || true)
   if [ -n "$UNCOMMITTED" ]; then
-    echo "❌ task worktree 有未提交改动，不能关闭（worktree remove --force 会丢失数据）：" >&2
+    echo "❌ task worktree 有未提交改动（不含 docs/DESIGN.md），不能关闭（worktree remove --force 会丢失数据）：" >&2
     echo "$UNCOMMITTED" >&2
     echo "" >&2
     echo "请先在 task worktree 中提交：" >&2
@@ -152,9 +163,11 @@ if [ -n "$TASK_WORKTREE" ] && [ -d "$TASK_WORKTREE" ]; then
 fi
 
 # --- 检查 req worktree 是否 clean（有未提交改动会导致 merge 被 git 拒绝） ---
-REQ_UNCOMMITTED=$(git -C "$REQ_WORKTREE" status --porcelain 2>/dev/null || true)
+# docs/DESIGN.md 例外：close-task skill §P2.4 明确"DESIGN.md uncommitted 等 PM 在 req 窗口审 diff + commit"，
+# 也是上面 carry 步骤的落点。merge 不会动 DESIGN.md（task 分支不 commit 它），working tree dirty 不阻塞 merge。
+REQ_UNCOMMITTED=$(git -C "$REQ_WORKTREE" status --porcelain 2>/dev/null | grep -v 'docs/DESIGN.md' || true)
 if [ -n "$REQ_UNCOMMITTED" ]; then
-  echo "❌ req worktree ($REQ_BRANCH) 有未提交改动，git 会拒绝 merge：" >&2
+  echo "❌ req worktree ($REQ_BRANCH) 有未提交改动（不含 docs/DESIGN.md），git 会拒绝 merge：" >&2
   echo "$REQ_UNCOMMITTED" >&2
   echo "" >&2
   echo "请先在 req worktree 中提交：" >&2
