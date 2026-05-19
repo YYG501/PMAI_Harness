@@ -35,6 +35,7 @@ DEPTH_GUIDANCE = {
     "prototype": [
         ("数据层", "默认 mock 静态数据（写死 JSON 在文件顶部）。不调真实接口、不写持久化层。"),
         ("权限层", "默认不做权限校验。任何角色都能看任何页面，无登录态、无权限矩阵。"),
+        ("会话层", "默认不做 session 守护。无 session timeout、无失效跳登录、无 token 刷新、无并发登录踢出；登录页等相关页面只做静态呈现。"),
         ("API 契约", "默认不调外部接口。前端写死假数据；如需展示 loading 用 setTimeout 模拟。"),
         ("测试", "默认不写单测、e2e、集成测试。靠 PM 走查 + /qa 工具人肉验收。"),
         ("边界态", "默认主路径 loading + 成功两态即可。错误态 / 空态 / 部分态等不必实现。"),
@@ -44,6 +45,7 @@ DEPTH_GUIDANCE = {
     "system": [
         ("数据层", "真实持久化（IndexedDB / 后端 API / 数据库），跨页状态由 store / context 承载。"),
         ("权限层", "完整权限矩阵：登录态 + 角色 + 资源访问控制。每个页面 / 操作有显式权限校验。"),
+        ("会话层", "完整 session 守护：session timeout + 失效跳登录 + token 刷新 + 并发登录踢出；登录页含完整鉴权流与异常态。"),
         ("API 契约", "完整 API 定义（OpenAPI / GraphQL schema）+ 真实后端联调。前端不写假数据。"),
         ("测试", "完整测试覆盖:纯函数 ≥ 80% 单测；关键交互 e2e；引用稳定性测试覆盖核心 reducer / store。"),
         ("边界态", "全部边界态（loading / empty / error / partial / success / retry / timeout）。"),

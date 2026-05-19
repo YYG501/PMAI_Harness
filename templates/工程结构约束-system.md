@@ -27,6 +27,7 @@
 
 - **数据层**：真实持久化（IndexedDB / 后端 API / 数据库），跨页状态由 store / context 承载。
 - **权限层**：完整权限矩阵：登录态 + 角色 + 资源访问控制。每个页面 / 操作有显式权限校验。
+- **会话层**：完整 session 守护：session timeout + 失效跳登录 + token 刷新 + 并发登录踢出；登录页含完整鉴权流与异常态。
 - **API 契约**：完整 API 定义（OpenAPI / GraphQL schema）+ 真实后端联调。前端不写假数据。
 - **测试**：完整测试覆盖:纯函数 ≥ 80% 单测；关键交互 e2e；引用稳定性测试覆盖核心 reducer / store。
 - **边界态**：全部边界态（loading / empty / error / partial / success / retry / timeout）。
