@@ -115,16 +115,16 @@ if [ -z "$REQ_WORKTREE" ] || [ ! -d "$REQ_WORKTREE" ]; then
   exit 1
 fi
 
-# --- v4.5 cwd 校验：close-task 必须在 req worktree 内跑（不能在 task worktree 或主仓） ---
-# 改造背景：v4 让 close-task 跑在 task worktree → 不能删自己脚下 → 要 pending-cleanup 中转。
-# v4.5 改回 req worktree 跑 → 直接删 task worktree + branch，一步关完。
+# --- Phase 2 cwd 校验：本脚本只服务 close-task Phase 2（merge + 删 task worktree/branch） ---
+# 必须在 req worktree 内跑：删 task worktree 不能"删自己脚下"。
+# Phase 1（对齐 / 偏差 / commit / 写 marker）在 task 窗口由 skill 步骤直接执行，不调本脚本。
 CALLER_PWD="$(pwd -P 2>/dev/null || echo "")"
 REQ_WT_REAL="$(cd "$REQ_WORKTREE" && pwd -P)"
 if [ "$CALLER_PWD" != "$REQ_WT_REAL" ] && [[ "$CALLER_PWD" != "$REQ_WT_REAL"/* ]]; then
-  echo "❌ /close-task 必须在 req worktree cwd 内运行（v4.5）。" >&2
+  echo "❌ close-task Phase 2 必须在 req worktree cwd 内运行。" >&2
   echo "   当前 cwd: $CALLER_PWD" >&2
   echo "   期望:     $REQ_WT_REAL" >&2
-  echo "   请关闭当前 task 窗口，切到 req 窗口（cwd = ${REQ_WT_REAL}）后重新运行 /close-task。" >&2
+  echo "   提示：close-task 是两阶段调用——Phase 1 在 task 窗口（对齐/偏差/commit/写 marker），完成后切到 req 窗口跑 /close-task 进 Phase 2（merge + 清理）。" >&2
   exit 1
 fi
 

@@ -193,13 +193,15 @@ python3 .claude/scripts/task-transition.py "<task-file>" --to 已完成
 
 `task-transition.py` 在「执行中→已完成」入口校验文档偏差 + 自审记录非空（I-TT3）。
 
-然后提示 PM 切到 req 窗口（v4.5：close-task 必须在 req worktree 跑，不能在 task 窗口）：
+然后提示 PM 启动 close-task Phase 1（close-task 是两阶段调用：Phase 1 在 task 窗口，Phase 2 切到 req 窗口）：
 
 ```text
 ✅ task-NNN 状态已转「已完成」。
 
-请关闭本（task）窗口，切到 req 窗口运行：
+下一步：在本（task）窗口运行：
   /close-task task-NNN
+
+AI 会走 Phase 1（task md ↔ 原型对齐 / 文档偏差校验 / 视觉规范沉淀 DESIGN.md / commit 到 task 分支 / 写 finalize marker），完成后会提示你切到 req 窗口再跑一次 /close-task 走 Phase 2（merge / 删 task worktree+branch / auto-chain）。
 ```
 
 **PM 说"打回"：**
@@ -236,5 +238,5 @@ python3 .claude/scripts/task-transition.py "<task-file>" --to 已完成
 - PM 的反馈原话记录，不要改写
 - 打回**不走 transition**（task 状态保持「执行中」），仅写反馈到 PM 视图历史档案 + AI 修代码 + 追加 fix commit
 - UI 类 task 的 dev server 应该还在运行，确认 URL 可访问
-- 验收 / 打回修复在当前 task worktree 窗口完成；PM 通过验收后转「已完成」，并提示 PM 切到 req 窗口跑 `/close-task task-NNN`（v4.5：close-task 不能在 task 窗口跑）
+- 验收 / 打回修复在当前 task worktree 窗口完成；PM 通过验收后转「已完成」，并提示 PM 在本（task）窗口跑 `/close-task task-NNN` 启动 Phase 1（close-task 是两阶段调用，Phase 1 在 task 窗口对齐 + commit，Phase 2 切到 req 窗口 merge + 清理）
 - 推荐 review 仅作验收信息块末尾的「⚙️ 可选深度审查」辅助提示，PM 自取所需；AI 不得自动跑（I-RV1）；PM 报告结果后才 append 事件（I-RV3）

@@ -215,7 +215,7 @@ CURRENT_STATUS=$(python3 "$MAIN_REPO_ROOT/.claude/scripts/task-transition.py" "$
   python3 "$MAIN_REPO_ROOT/.claude/scripts/task-transition.py" "$TASK_FILE" --to 执行中
   ```
 - 「执行中」：允许重试或 PM 打回后续跑，不重复 transition。包括：commit 后已呈交但 PM 还没决策的场景（task 状态仍是「执行中」）— 此时如想重新看呈交块跑 `/task-submit`。
-- 「已完成」：错误退出，提示 `该 task 已完成；如需收尾，请关闭本窗口，切到 req 窗口运行 /close-task task-NNN`。
+- 「已完成」：错误退出，提示 `该 task 已完成；如需收尾，在本（task）窗口运行 /close-task task-NNN 启动 Phase 1（对齐/偏差/commit/写 marker），完成后会引导切到 req 窗口跑 Phase 2`。
 - 其他状态：错误退出，展示当前状态，并提示 PM 回主窗口用 `/task-status` 查看。
 
 ### 步骤 1：读取 task 两文件（成对校验）
@@ -494,15 +494,17 @@ python3 .claude/scripts/task-transition.py "$TASK_FILE" --to 已完成
 
 `task-transition.py` 在「执行中→已完成」入口校验文档偏差 + 自审记录非空（I-TT3）；不通过会拒绝转换，PM 需先补齐再喊通过。
 
-然后输出（不要在本窗口跑 /close-task；v4.5 close-task 必须在 req 窗口跑）：
+然后输出（close-task 是两阶段调用：Phase 1 在本窗口跑，Phase 2 切到 req 窗口跑）：
 
 ```text
 ✅ task-NNN 状态已转「已完成」。
 
-下一步：关闭本（task）窗口，切到 req 窗口运行：
+下一步：在本（task）窗口运行：
   /close-task task-NNN
 
-理由：close-task 会删本窗口的 task worktree，必须在 req 窗口（不会"删自己脚下"）执行。
+AI 会走 Phase 1（task md ↔ 原型对齐 / 文档偏差校验 / 视觉规范沉淀 DESIGN.md / commit 到 task 分支 / 写 finalize marker），完成后会提示你切到 req 窗口再跑一次 /close-task 走 Phase 2（merge → req / 删 task worktree+branch / auto-chain）。
+
+理由：Phase 1 必须在 task 窗口跑——agent 要直接读 task 改动的原型代码并把 task md 改动 commit 到 task 分支；跨 worktree 改会污染 req 分支历史。Phase 2 才切 req 窗口（删 task worktree 不能"删自己脚下"）。
 ```
 
 **PM 说"打回"**：
@@ -543,6 +545,6 @@ PM 在验收期间任意时刻可自跑 `/review` `/qa` `/design-review` 等 rev
 - PM 报告 review 结论后才 append `review_completed` 事件（I-RV3）；禁止 AI 替 PM 跑或凭记忆模拟
 - 事件流缺 review_completed 不阻止「执行中→已完成」转换（I-RV2）
 - dev server 在 task-execute 结束后保持运行，直到 close-task 时杀掉
-- **commit 不切状态 → 自动进步骤 11 呈交验收**（task 状态全程「执行中」直到 PM 通过；默认路径，PM 不手动敲 `/task-submit`）；PM 通过后 AI 转「已完成」并提示 PM 切到 req 窗口跑 `/close-task task-NNN`（v4.5：close-task 不能在 task 窗口跑）
+- **commit 不切状态 → 自动进步骤 11 呈交验收**（task 状态全程「执行中」直到 PM 通过；默认路径，PM 不手动敲 `/task-submit`）；PM 通过后 AI 转「已完成」并提示 PM 在本（task）窗口跑 `/close-task task-NNN` 启动 Phase 1（close-task 是两阶段调用，Phase 1 在 task 窗口对齐 + commit，Phase 2 切到 req 窗口 merge + 清理）
 - PM 打回不切状态：写反馈到 PM 视图历史档案 → AI 修代码 → 追加 fix commit → 重新呈交（不再走 `--to 执行中` transition）
 - task-submit 仍存在但仅作 PM 手动兜底入口（重启窗口 / context 丢失 / 异常退出后重新呈交）
