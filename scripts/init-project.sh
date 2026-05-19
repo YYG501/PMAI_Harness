@@ -132,6 +132,7 @@ for TMPL in "$FRAMEWORK_DIR/templates/"*.tmpl; do
     settings.json)          DEST="$TARGET_DIR/.claude/settings.json" ;;
     lark-publish.json)      DEST="$TARGET_DIR/templates/lark-publish.json.tmpl" ;;
     gitignore)              DEST="$TARGET_DIR/.gitignore" ;;
+    pm-workflow.config.yml) DEST="$TARGET_DIR/.pm-workflow/config.yml" ;;
     *)             continue ;;
   esac
 
@@ -202,6 +203,7 @@ mkdir -p "$TARGET_DIR/requirements/closed"
 mkdir -p "$TARGET_DIR/prototypes"
 mkdir -p "$TARGET_DIR/.runs/events"
 mkdir -p "$TARGET_DIR/.worktrees"
+mkdir -p "$TARGET_DIR/.pm-workflow/tasks"   # task-verify 报告 / artifact 根目录
 echo "📂 目录结构已创建"
 
 # --- i. .gitignore 已在模板复制时创建 ---

@@ -42,6 +42,12 @@ python3 .claude/scripts/task-events.py list "$TASK_FILE" --type review_completed
   • <视角 2 描述>: http://localhost:<port>/<path>?<params>
   ...
 
+🧪 task-verify 自动测试：✅ N/N 流程通过
+   完整报告：.pm-workflow/tasks/<task-stem>/verify/report.md
+   - 流程 1: <流程名> → verify/flow-1.png
+   - 流程 2: <流程名> → verify/flow-2.png
+   ...
+
 📝 改动摘要：
 [最新执行日志「**改动摘要：**」一行]
 
@@ -71,7 +77,7 @@ PM 视图：[历史档案中的偏差或"无"]
 ═══════════════════════════════════════
 ```
 
-**非 UI 类 task**：去掉「走查链接」段，加「📂 代码变更」段（关键 diff / 测试结果摘要），「⚙️ 可选深度审查」区块只列 `/review`（不含 `/qa` `/design-review`），其余结构同上。
+**非 UI 类 task**：去掉「走查链接」段，加「📂 代码变更」段（关键 diff / 测试结果摘要）；「🧪 task-verify」段标「跳过（非 UI task）」；「⚙️ 可选深度审查」区块只列 `/review`（不含 `/qa` `/design-review`），其余结构同上。
 
 ## 11.3 走查时引导 PM 反推上游文档偏差
 

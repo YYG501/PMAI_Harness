@@ -448,7 +448,35 @@ AI 在「自审记录」section 追加一条 commit 前 placeholder（提供 tas
 
 **关键约束**：「**详细发现：**」下面**必须有至少一行不带 `**xxx：**` 前缀的实质文字**（散文或 bullet 都行）。task-transition.py 的 has_meaningful_content 会过滤掉 `**工具：** **结果：** **详细发现：** **遗留问题：**` 等纯前缀行——只有不带这些前缀的行才会被算非空。
 
-**仍然适用**（I-RV1 / I-RV3）：AI 不得自动调用任何 review skill（`/review` `/qa` `/design-review`），即使是"机械检查"也不要伪装成跑了 review。本 placeholder 只是声明"AI 阶段已结束、PM 可以接手"，不冒名 review。
+**仍然适用**（I-RV1 / I-RV3）：AI 不得自动调用任何 review skill（`/review` `/qa` `/qa-only` `/design-review`），即使是"机械检查"也不要伪装成跑了 review。本 placeholder 只是声明"AI 阶段已结束、PM 可以接手"，不冒名 review。
+
+> **task-verify 不算 review skill**（参 `skills/task-verify/SKILL.md`「I-RV1 边界」表）：UAT 是验证 PM 拍板流程是否通（明确 pass/fail），review 是探索性质量审查（多元 finding）。task-verify 是 task lifecycle 内部 skill（同 task-spec / task-plan / close-task），AI 必须在步骤 7.5 自动调用。
+
+### 步骤 7.5：调 task-verify 跑流程化 UAT（UI task 必经，非 UI task 跳过）
+
+**触发条件**：task md 「🧪 自测说明」段非空且不是「无」。
+
+**流程**：Claude 主端用 Skill tool 调 `task-verify`，参数为 `$TASK_FILE`。task-verify 内部读自测说明 + 复用 task-execute 步骤 4 起的 dev server（不在跑则自起）+ 调 `gstack-browse` 逐流程跑 + 写 `.pm-workflow/tasks/<task-stem>/verify/report.md`。
+
+**结果分流**：
+
+- **pass**（exit 0）→ 进步骤 10 commit；执行日志（步骤 5）append 一行「task-verify: ✅ N/N 流程通过」
+- **fail**（exit 1）→ **不 commit**，进反馈循环：
+  1. 把 verify/report.md 失败摘要写入 PM 视图主文件「📁 历史档案 → PM 反馈」（标记 `自动反馈 — task-verify`，分类参 `_shared/pm-view/input-flow.md` §9.4，多数为「反向约束」类）：
+     ```markdown
+     ### 反馈 N - [YYYY-MM-DD] (task-verify 自动)
+     **问题描述：** task-verify M/N 流程通过；失败：流程 X 步骤 Y「期望 Z」未满足
+     **要求修改：** 详见 .pm-workflow/tasks/<task-stem>/verify/report.md
+     **分类**：反向约束
+     **处理结果：** 待处理
+     ```
+  2. 按 §反馈循环规则 改代码（不动 task md 业务字段；步骤 5 执行报告写「文档对齐预告」）
+  3. 修完重新跑步骤 3 → 7 → 7.5 task-verify
+  4. **连续 3 次 task-verify fail**（防死循环）→ 把累积 report 呈交 PM 决定是否人工接手（PM 可手动通过 / 关 task / 改 task md 自测说明字面值）
+
+**非 UI task / 自测说明为空**：task-verify 内部检测后直接返回 pass（写 `report.md` 标记 `skipped: 非 UI task`），本步骤无副作用。
+
+**dev server 起不来**：task-verify 内部超时 30s 后 fail。task-execute 视作 task-verify fail，走反馈循环（"dev server 起不来"本身就是必须修的 bug）。
 
 ### 步骤 8：（保留编号便于历史引用 — 原"自审记录由步骤 7.1 写"逻辑已并入步骤 7 的 placeholder，PM 验收阶段后续追加条目走步骤 12 后的"附录：PM 验收阶段跑 review 旁路"）
 
@@ -541,7 +569,8 @@ PM 在验收期间任意时刻可自跑 `/review` `/qa` `/design-review` 等 rev
 - 代码改动在 task worktree 中进行
 - 文档（docs/）不在 task worktree 中修改（hook 会拦截）
 - 文档偏差记录到 task 文件，由 `/doc-update` 在 close-task 前处理
-- AI 不得自动调任何 review 工具（`/review` `/qa` `/design-review` 等，I-RV1）；推荐 review 仅作步骤 11 验收信息块末尾「⚙️ 可选深度审查」辅助提示，PM 自取所需
+- AI 不得自动调任何 review 工具（`/review` `/qa` `/qa-only` `/design-review` 等，I-RV1）；推荐 review 仅作步骤 11 验收信息块末尾「⚙️ 可选深度审查」辅助提示，PM 自取所需
+- **task-verify 例外**：UI task 在步骤 7.5 **必须**调 task-verify（流程化 UAT，不属于 review skill 范畴，I-RV1 不适用）；fail → 反馈循环 + 不 commit；连续 3 次 fail 呈交 PM 人工接手
 - PM 报告 review 结论后才 append `review_completed` 事件（I-RV3）；禁止 AI 替 PM 跑或凭记忆模拟
 - 事件流缺 review_completed 不阻止「执行中→已完成」转换（I-RV2）
 - dev server 在 task-execute 结束后保持运行，直到 close-task 时杀掉
