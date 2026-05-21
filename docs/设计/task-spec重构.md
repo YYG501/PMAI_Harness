@@ -101,7 +101,7 @@ task-spec 产 **1 个物理文件** `tasks/task-NNN-<slug>.md`（不恢复双文
 
 - **①三类 sentiment 分流 → relevance 二分**：「正向规则 / 反向约束 / 决策记录」三类是双文件投递地址的产物，单文件后失去意义。新二分轴 = **relevance**：「适用当前 task」→ 写进执行区「约束与易错」段；「不适用」→ 留原 task 文件 `## PM 反馈` 段不动。relevance 具体可判（模块 / 功能是否落在当前 task 范围），不是 sentiment（要解读语气）—— ① 的「规则隐式 / AI 执行率低 / PM 错分」三毛病一起消。
 - **「不适用」必须可观测**（§X D3-12 —— v0 让它对 PM 黑盒）：PM 确认区加 **「PM 反馈承接清单」**段，每条前序反馈一行：来源 task / 原文摘要 / relevance（适用·不适用）/ 处理结果（承接·不适用）/ 一句理由。确认门摘要输出「承接 X 条 / 不适用 Z 条（来自 task-NNN）」，PM 一眼可见、可纠误判。
-- **跨模块反馈 = 已知 gap**（§X D3-12）：现役 lane 是同模块 grep（`task-spec/SKILL.md` 同模块匹配），装不下「反馈留在模块 A 的 task、却约束模块 B」的情形。relevance 二分**不解决**这个，显式 **DEFER 到 delta-7 req 事件流**；「孤儿反馈终态」（整 req 无 task 捡的反馈）入 §5 待验。
+- **跨模块反馈 = 已知 gap**（§X D3-12）：现役 lane 是同模块 grep（`task-spec/SKILL.md` 同模块匹配），装不下「反馈留在模块 A 的 task、却约束模块 B」的情形。relevance 二分**不解决**这个 —— 凡属「全项目跨功能产品行为规则」的跨模块反馈，**DEFER 到 delta-9**（2026-05-21 改：原指 delta-7；经 delta-7/delta-9 设计会话查清其本质是项目级产品规则、非 req 级事件 → 落 delta-9 `PRODUCT-RULES.md`，close-task selective promote、常驻供后续 task 读）。「孤儿反馈终态」问题随之消解 —— 项目级规则常驻、不随 req 失效。
 - 决策备选 + 理由的体系化归宿（delta-7 `decision` 事件）属 delta-7；close-req 反向对齐 PRD 属 delta-6 —— 三者不同层、不冲突。
 
 ### §2.5 上下游契约 + 完整 blast radius（Q5 已定 · D3-3 修订）
@@ -272,7 +272,7 @@ task-spec 产 **1 个物理文件** `tasks/task-NNN-<slug>.md`（不恢复双文
 - **task-spec 行数核实** —— `管线重构-GSD-review.md` §4.1 / §7 诊断记「1100+ 行」，**实测 748 行**；vp 估时按 748。
 - **typed contract 的 scoped lint 边界** —— `check-doc-pm-view.py` scoped 模式靠区段标记定位 PM 确认区边界；待验：区段标记被写错时 lint 范围会漂。vp-6 测试覆盖。
 - **delta-8 连带 v2** —— delta-3 单文件推翻 delta-8 v1 的双文件假设；delta-8 必须 v1→v2 且先于 delta-3 落地，否则 delta-8 vp-3 执行者拿失效指令。已登记 §3 ownership 表。
-- **跨模块反馈 gap + 孤儿反馈终态** —— relevance 二分 + 同模块 grep 装不下跨模块反馈，DEFER 到 delta-7；「整 req 无 task 捡的反馈」最终谁负责（delta-6 反向对齐？delta-7 事件流？）= 待验。
+- **跨模块反馈 gap** —— relevance 二分 + 同模块 grep 装不下跨模块反馈；**DEFER 到 delta-9**（2026-05-21 改自 delta-7）：属「全项目跨功能产品行为规则」的 → delta-9 close-task selective promote 到 `PRODUCT-RULES.md`。「孤儿反馈终态」问题消解 —— 项目级规则常驻、不随 req 失效。
 - **§2.6 归宿表逐 section 核实** —— 21-section 归宿是 review 逐条判定，vp-1 动手前用实际模板复核（尤其工程合同 a11y/视觉规范段实际体量、是否分流 DESIGN.md）。
 - **三态兼容期** —— 仓里同时 v1/v2/v3 三格式；`detect_format` 三态 + 兼容文案三态分流是 IRON 回归重点。
 - **本设计需先于实施定稿** —— delta-3 是最小落地包 delta-2+3+4+8 成员，与 `PRD-solution-对调.md` / `实现设计视图-HOW安家.md` 同一前置约束。
@@ -339,6 +339,7 @@ task-spec 产 **1 个物理文件** `tasks/task-NNN-<slug>.md`（不恢复双文
 | 2026-05-21 | UC-1 PM 决议：单文件改 **typed contract** —— 内部分「PM 确认区」(任务卡/范围/验收/反馈承接) +「执行区」(实现规格/易错点/工程验收)，`check-doc-pm-view.py` 改 scoped 模式只校验 PM 确认区；不恢复双文件、§0 不动 | D3-1 ACCEPT；§X 18 finding 全决议，下一步据 §X 修订 v1 |
 | 2026-05-21 | v1 修订完成：§1-§5 据 §X Round 1（18 finding 全决议）改写 —— typed contract 三区结构（§2.1/§2.6）、落盘留 task-spec（§2.2）、反馈承接清单（§2.4）、blast radius 补全 19 项 + detect_format 三态（§2.5/§2.7）、guard 替换表（§2.8）、vp 重拆为 11 条、登记 delta-8 需 v1→v2 | 文档 v0 → v1 |
 | 2026-05-21 | /plan-eng-review 包复核（§X Round 2）：6 finding 全 ACCEPT —— §2.8 保留单文件 tamper-hash（A2 推翻 v1「hash 整组删」）、§3 ownership 补 close-req/doc-update（A3）、§2.5 信封抽执行区（P1-perf）、vp-11 补 e2e + tamper-hash 测试（T2/T3）、措辞精度（F6）。最小落地包扩 delta-7 → delta-2+3+4+7+8 | 文档 v1 → v2 |
+| 2026-05-21 | 连带：delta-9 设计完成 → §2.4 / §5 跨模块反馈「DEFER 到 delta-7」改指 **delta-9**（跨功能产品行为规则 → close-task selective promote 到 `PRODUCT-RULES.md`）；孤儿反馈终态问题消解。最小落地包 → delta-2+3+4+7+8+9 | §2.4 / §5 re-point（连带 reference 修正，不升版本）|
 
 ---
 
