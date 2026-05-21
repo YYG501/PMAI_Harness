@@ -1,7 +1,7 @@
 <!-- /autoplan restore point: <LOCAL_GSTACK_HOME>/projects/PM-AI-Workflow/main-autoplan-restore-20260520-183348.md -->
-# task-spec 重构（delta-3 · 双文件塌缩 + 啰嗦点收口）(v2)
+# task-spec 重构（delta-3 · 双文件塌缩 + 啰嗦点收口）(v3)
 
-> **状态**：v2（2026-05-21）—— v1 经 /plan-eng-review 包复核修订（§X Round 2）：6 finding 落地 —— §2.8 保留单文件 PM-确认区 tamper-hash（A2，推翻 v1「hash 整组删」）、§3 ownership 表补 close-req/doc-update（A3）、§2.5 build-execution-prompt.py 写死抽执行区（P1-perf）、vp-11 补 in-flight 旧 req e2e + tamper-hash 测试（T2/T3）、措辞精度（F6）。最小落地包 = **delta-2+3+4+7+8**（delta-7 经 codex#4 拉入，见 umbrella §8）。§X Round 1/2 = review 历史。
+> **状态**：v3（2026-05-21）—— v2 经 /plan-eng-review delta-7/9 全审连带修订（§X Round 3）：4 ACCEPT —— §3 ownership 表补 close-task 行（X1，delta-3+7+9 三 delta 合改）+ delta-9 vp-3 登记（X2）、vp-4 退成「只改 task-spec relevance、§9.4 表归 delta-9 收口」（X3）、vp-11 加全新 req 整包 e2e（X4）。最小落地包 = **delta-2+3+4+7+8+9**。§X Round 1/2/3 = review 历史。**可实施**。
 > **日期**：2026-05-21
 > **作者**：PM + AI
 > **来源**：`管线重构-GSD-review.md` §4 delta-3 + §4.1 五个啰嗦点 + §8 实施顺序第 2 步；`PRD-solution-对调.md` v1.1 §2.2 / §X F11；`实现设计视图-HOW安家.md` v1 §4.1。最小落地包 = delta-2+3+4+8。
@@ -203,7 +203,7 @@ task-spec 产 **1 个物理文件** `tasks/task-NNN-<slug>.md`（不恢复双文
 | vp-1 | **typed contract 模板** —— `task.md.tmpl` + `task.engineering.md.tmpl` 合并为单一 `task.md.tmpl`，三区结构（PM 确认区 / 执行区 / 审计区）+ `task_format` 标记 + §2.6 归宿表逐 section 落位；`section-order.md` §七 重定 | §2.1 §2.6（D3-1/D3-7）|
 | vp-2 | **task-spec 删机器** —— 删 hash/reconcile/lazy-sync（步骤 9 hash / 10.5 hash 自检 / 11.0 / 12.5）；步骤 8/9 合并写单文件三区；落盘压成 1 行 `auto_commit_docs`（§2.2）；步骤 10 自检按 §2.8 拆 10.A/10.B | §2.2 §2.8（D3-8/D3-9/D3-14）|
 | vp-3 | **task-spec 上游 reader 重写**（吸收 delta-2+4 vp-4b + delta-8 vp-3）—— 步骤 6 重写为读 `prd.md` 挑切片 + `implementation-design.md` 按 HOW-ID 挑行；步骤 7/7.5 改为派生 task-scoped 自测说明 + 占位值写入执行区 | §2.5 §2.6（D3-3/D3-5）|
-| vp-4 | **relevance 二分 + 反馈承接清单** —— 步骤 5 改 relevance 二分；PM 确认区加「PM 反馈承接清单」；确认门摘要「承接X/不适用Z」；`input-flow.md` §9.4 前三类改写（视觉规范第四类不动）| §2.4（D3-12/D3-17）|
+| vp-4 | **relevance 二分 + 反馈承接清单** —— 步骤 5 改 relevance 二分；PM 确认区加「PM 反馈承接清单」；确认门摘要「承接X/不适用Z」。⚠️ **§9.4 表归 delta-9 收口**（§X Round 3 X3）—— delta-3 只改 task-spec 的 relevance 消费逻辑，**不独立改 `input-flow.md §9.4` routing 表**；§9.4 合并后全表由 delta-9 §2.8/vp-6 画出（含 relevance 维度 + 多去向 routing）| §2.4（D3-12/D3-17）|
 | vp-5 | **单一确认门** —— 删 task-confirm 步骤 3 PM 门；executor 切换非阻塞化；task-spec 步骤 12 加前置依赖检查 | §2.3（D3-15）|
 | vp-6 | **scoped lint** —— `check-doc-pm-view.py` 加 scoped 模式（对 task 文件只校验 PM 确认区）| §2.1 §2.8（D3-1）|
 | vp-7 | **detect_format 三态 + 旧格式兼容** —— `_lib/state.py` `detect_format` 三态、`read_section` 单文件查找；`task-confirm` / `task-execute` 兼容文案三态分流 | §2.7（D3-6）|
@@ -228,7 +228,8 @@ task-spec 产 **1 个物理文件** `tasks/task-NNN-<slug>.md`（不恢复双文
 | grep residual | **生产路径**断言无 `.engineering.md` / `synced_pm_view_hash` 生成；legacy 兼容代码 + 测试 fixture 的 `.engineering.md` 引用集中可数（与上一条**不同 grep**）|
 | dead suites | `test-engineering-doc-size.sh` 全删、`test-reconcile-pm-view-immutability.sh` 删；逐一标改/删：`test-task-spec.sh` / `test-fixture-v2.sh` / `test-executors.sh` / `test-close-task.sh` / `test-pre-dispatch-doc-gate.sh` / `e2e/test-full-task-loop.sh` / `helpers/fixture.sh` |
 | **单文件 tamper-hash（A2 回归）** | 确认门退出对 PM 确认区算 hash；后续写入若改动 PM 确认区 → 校验失败报错（binding-contract 机械 guard）|
-| **in-flight 旧 req e2e（T2 / IRON 回归）** | 完整旧 req fixture（旧 solution.md + 旧 task 双文件 + solution.engineering.md）跑过 delta-2+3+4+7+8 同步后框架 → 走到 close 成功 |
+| **in-flight 旧 req e2e（T2 / IRON 回归）** | 完整旧 req fixture（旧 solution.md + 旧 task 双文件 + solution.engineering.md）跑过 delta-2+3+4+7+8+9 同步后框架 → 走到 close 成功 |
+| **全新 req 整包 e2e（§X Round 3 X4 / codex outside-voice）** | 全新 req green-field 走 stage 2→3 PRD → stage 4 gap-check → implementation-design → task-spec typed contract → close-task promote → req-events decision；断言 6 个 delta（2/3/4/7/8/9）关键产物均被读写（与上一行旧-req 兼容 e2e 同处，覆盖整包前向集成）|
 | baseline | 明确新基线数（现 269）|
 
 **落地顺序 + 跨 delta 文件 ownership**（D3-2 / D3-13 / D3-16）：
@@ -245,6 +246,9 @@ task-spec 产 **1 个物理文件** `tasks/task-NNN-<slug>.md`（不恢复双文
 | `build-execution-prompt.py` | delta-3 vp-8 改 1 路径（= 抽执行区，§2.5）；delta-8 §2 / vp-4 的「2 路径」措辞 v2 已作废 |
 | `close-req` | delta-2+4 vp-4b 切 solution→prd 读；delta-3 §2.5 改 task 文件读为 typed 区锚点 —— **两 delta 顺序改不同部分**（2026-05-21 eng-review A3 补登）|
 | `doc-update` | delta-2+4 vp-4b 切 solution→prd 读；delta-3 §2.5 改 task 读为 typed 区锚点 —— 同上（A3 补登）|
+| `close-task` | **三 delta 合改**（§X Round 3 X1 补登）：delta-3 vp-8 双→单文件 merge（umbrella step 4）+ delta-7 vp-3 adjustment-promote（随 delta-3、step 4 内、Phase-2 `close-task.sh` 调 `req-events.py`、格式走 delta-3 §2.7 三态）+ delta-9 vp-2 PRODUCT-RULES selective promote（step 6、基于塌缩后 close-task、含 worktree-clean 白名单补 `docs/PRODUCT-RULES.md`）。实施按本行排序：step 4 delta-3+7 合改 → step 6 delta-9 增改 |
+| delta-9 vp-3（后置增补）| **登记，非 rewrite**（§X Round 3 X2）：delta-9 vp-3 在 umbrella step 6 给已重写完的 `task-spec` 必读清单加 `PRODUCT-RULES.md`（按 scope 章节-grep）—— 轻量后置增补、不参与 delta-3 vp-3 的 task-spec rewrite。`prd-writing` 侧同登记于 delta-2+4 §3 |
+| `req-stage-gate` | **三 delta 顺序改不同 stage**（§X Round 3 补登，原 D7-7/D9-10 deferred 项收口）：delta-2+4 vp-4a 改 Stage 2→3 换芯（umbrella step 2）→ delta-8 vp-5 接 Stage 4→5 编排 `/implementation-design`（step 5）→ delta-9 vp-5 改 stage 4（拆「必跑 gap-check / 可选 DESIGN.md 更新」，step 6）。各 delta 顺序 patch 前一个的结果、无冲突；实施按 umbrella §8 step 顺序 |
 
 **⚠️ 连带：delta-8 v1 需 v1→v2**（§X D3-2 / D3-16）—— delta-8 `实现设计视图-HOW安家.md` v1 是已定稿文档，其 §1/§2/§3/§4.1 + D8-3/D8-5 决议**全部假设 task-spec 写进双文件 `task.engineering.md`**。delta-3 单文件 typed contract 推翻这个前提。delta-8 必须 v1→v2：所有「自包含 `task.engineering.md`」措辞改为「单文件 typed contract 的执行区」；「`build-execution-prompt.py` 2 路径零改」改 1 路径；vp-4 test matrix「2 路径」断言作废；delta-8 vp-3 并入 delta-3 vp-3。delta-3 落地前 delta-8 须先 v2。
 
@@ -326,6 +330,19 @@ task-spec 产 **1 个物理文件** `tasks/task-NNN-<slug>.md`（不恢复双文
 
 **汇总**：6 ACCEPT；0 待决。A2 推翻 v1 §2.8「hash 自检换 prose」。最小落地包扩 delta-7（codex#4，见 umbrella §8）。文档 v1 → v2。
 
+### Round 3 — 2026-05-21 — /gstack-plan-eng-review（delta-7/9 全审连带 · 一致性复核）
+
+> **review 范围**：delta-7 v0 / delta-9 v1 首次全审引出的跨文档连带。本文档不重审已收口的 §1-§N 内部方案。
+
+| # | Severity | Finding 摘要 | 决议 |
+|---|---|---|---|
+| X1 | Medium | §3 跨-delta 文件 ownership 表漏 `close-task` —— 它被 delta-3（双→单文件 merge，vp-8）+ delta-7 vp-3（adjustment-promote）+ delta-9 vp-2（PRODUCT-RULES promote）三 delta 改（同 §X Round 2 A3「ownership 表漏 close-req/doc-update」同类）| **ACCEPT** — §3 ownership 表补 `close-task` 行：delta-3 文件塌缩（umbrella step 4）+ delta-7 adjustment-promote（随 delta-3、step 4 内、Phase-2 调 req-events.py、格式走 §2.7 三态）+ delta-9 vp-2 PRODUCT-RULES promote（step 6、基于塌缩后 close-task）|
+| X2 | Low | §3 ownership 表缺 delta-9 vp-3 登记（delta-9 §X D9-5）| **ACCEPT** — §3 加登记行：delta-9 vp-3 在 umbrella step 6 后置增补 task-spec 必读清单（`PRODUCT-RULES.md`），非参与 delta-3 vp-3 rewrite |
+| X3 | Medium | vp-4「input-flow.md §9.4 前三类改写」与 delta-9 vp-6「§9.4 routing 整体改写」共改同一权威表、合并后最终态无人画（delta-9 §X 连带）| **ACCEPT** — vp-4 改为「delta-3 只改 task-spec 的 relevance 消费逻辑；`input-flow.md §9.4` routing 表整体由 delta-9 §2.8 / vp-6 收口画出合并后最终全表」—— §9.4 表单一 owner = delta-9 |
+| X4 | P2（codex outside-voice）| vp-11 test matrix 有「in-flight 旧 req e2e」但缺全新 req green-field 整包 e2e —— 各 delta 单测全过、真实新 req 串起来漏接线无人拦 | **ACCEPT** — vp-11 test matrix 加「全新 req 整包 e2e」：新 req 走 stage 2→3 PRD → stage 4 gap-check → implementation-design → task-spec typed contract → close-task promote → req-events decision，断言 6 个 delta 关键产物均被读写（与现有旧-req 兼容 e2e 同处）|
+
+**汇总**：4 ACCEPT。文档 v2 → 待修订 v3（连带 ownership + §9.4 表 owner + test matrix 修订）。
+
 ---
 
 ## §Y 决议日志
@@ -340,10 +357,12 @@ task-spec 产 **1 个物理文件** `tasks/task-NNN-<slug>.md`（不恢复双文
 | 2026-05-21 | v1 修订完成：§1-§5 据 §X Round 1（18 finding 全决议）改写 —— typed contract 三区结构（§2.1/§2.6）、落盘留 task-spec（§2.2）、反馈承接清单（§2.4）、blast radius 补全 19 项 + detect_format 三态（§2.5/§2.7）、guard 替换表（§2.8）、vp 重拆为 11 条、登记 delta-8 需 v1→v2 | 文档 v0 → v1 |
 | 2026-05-21 | /plan-eng-review 包复核（§X Round 2）：6 finding 全 ACCEPT —— §2.8 保留单文件 tamper-hash（A2 推翻 v1「hash 整组删」）、§3 ownership 补 close-req/doc-update（A3）、§2.5 信封抽执行区（P1-perf）、vp-11 补 e2e + tamper-hash 测试（T2/T3）、措辞精度（F6）。最小落地包扩 delta-7 → delta-2+3+4+7+8 | 文档 v1 → v2 |
 | 2026-05-21 | 连带：delta-9 设计完成 → §2.4 / §5 跨模块反馈「DEFER 到 delta-7」改指 **delta-9**（跨功能产品行为规则 → close-task selective promote 到 `PRODUCT-RULES.md`）；孤儿反馈终态问题消解。最小落地包 → delta-2+3+4+7+8+9 | §2.4 / §5 re-point（连带 reference 修正，不升版本）|
+| 2026-05-21 | /plan-eng-review delta-7/9 全审连带（§X Round 3）：4 ACCEPT —— §3 ownership 表补 close-task 行（X1，三 delta 合改）+ delta-9 vp-3 登记行（X2）、vp-4 退成「只改 task-spec relevance、§9.4 表归 delta-9 收口」（X3）、vp-11 加全新 req 整包 e2e（X4，codex outside-voice）。最小落地包 = delta-2+3+4+7+8+9 | 文档 v2 → 待修订 v3 |
+| 2026-05-21 | **v3 修订完成**：§3 ownership 表补 close-task 行（delta-3+7+9 三 delta 合改、含排序）+ delta-9 vp-3 后置增补登记行；vp-4 改为「delta-3 只改 task-spec relevance、§9.4 表归 delta-9 收口」；vp-11 test matrix 加全新 req 整包 e2e。§0 / §1-§2 不动 | 文档 v2 → **v3**，可实施 |
 
 ---
 
-**End of task-spec 重构（delta-3）v2**
+**End of task-spec 重构（delta-3）v3**
 
 ---
 
@@ -352,11 +371,11 @@ task-spec 产 **1 个物理文件** `tasks/task-NNN-<slug>.md`（不恢复双文
 | Review | Trigger | Why | Runs | Status | Findings |
 |--------|---------|-----|------|--------|----------|
 | CEO Review | `/plan-ceo-review` (via /autoplan) | Scope & strategy | 1 | issues_open | 4-6.5/10 — §0 成立；§1-§5 范围漏 consumer、撞 delta-8、3 处实质决策推给实施期 |
-| Eng Review | `/plan-eng-review` | Architecture & tests | 2 | issues_open | R1 (autoplan v0): 18 finding；R2 (2026-05-21 包复核): 6 finding 全决议（A2 保留 tamper-hash / A3 / F6 / T2 / T3 / P1-perf）→ v1→v2 |
+| Eng Review | `/plan-eng-review` | Architecture & tests | 3 | revised | R1 (autoplan v0): 18 finding；R2 (2026-05-21 包复核): 6 finding → v2；R3 (2026-05-21 delta-7/9 全审连带): 4 finding 全决议、已落 v3 |
 | DX Review | `/plan-devex-review` (via /autoplan) | Operator experience | 1 | issues_open | 4-6/10 — 确认门盲签、格式迁移错误信息误导、删 guard 后静默漂移、反馈 lane 黑盒 |
 | Design Review | `/plan-design-review` | UI/UX gaps | 0 | — | skipped — 无 UI scope（重构 skill / 模板 / 脚本，不建界面）|
 
 - **CROSS-MODEL**：6 voices（Codex ×3 + Claude subagent ×3），收敛度异常高 —— 两模型独立落到同一批 critical（单文件应 typed contract / blast radius 漏 consumer / 撞已定稿 delta-8）。memory `feedback_autoplan_preread_existing_skill` 应用：6 个 dual-voice prompt 全部强制前置读实际 repo skill + 脚本，故 finding 全带 file:line。
 - **CROSS-PHASE THEME**：「单文件不该裸成无 lint 执行合同」在 CEO / Eng / DX 三相独立出现 → 高置信信号，转 User Challenge UC-1。「blast radius 漏 consumer」CEO + Eng 双相命中。「撞 delta-8」三相命中。
 - **UNRESOLVED**：0 —— Round 1：D3-1 经 UC-1 PM 决议 ACCEPT + D3-2~D3-18 共 18 ACCEPT；Round 2：6 finding（含 codex outside-voice）全决议。
-- **VERDICT**：delta-3 v2 —— 经 autoplan(v0→v1) + /plan-eng-review 包复核(v1→v2)，§0 成立、两轮 finding 全落地、0 待决。**ENG 待 delta-2+3+4+7+8 整包复跑 /plan-eng-review 确认**再实施。最小落地包 = **delta-2+3+4+7+8**。
+- **VERDICT**：delta-3 **v3** —— 经 autoplan(v0→v1) + /plan-eng-review 包复核(v1→v2) + delta-7/9 全审连带(v2→v3)，§0 成立、三轮 finding 全落地、0 待决。R3 的 4 ACCEPT（close-task ownership / delta-9 vp-3 登记 / §9.4 表 owner / 整包 e2e）已落进 §3，**可实施**。最小落地包 = **delta-2+3+4+7+8+9**。

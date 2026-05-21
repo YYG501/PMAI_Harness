@@ -1,7 +1,7 @@
 <!-- /autoplan restore point: <LOCAL_GSTACK_HOME>/projects/PM-AI-Workflow/main-autoplan-restore-20260520-151958.md -->
-# PRD / solution 分层对调（delta-2 + delta-4）(v1.2)
+# PRD / solution 分层对调（delta-2 + delta-4）(v1.3)
 
-> **状态**：v1.2（2026-05-21）—— v1.1 经 /plan-eng-review 包复核修订（§X Round 3）：6 finding 落地 —— quick-fix 补进 blast radius + 语义路由 vp-4c（A1）、roadmap 补 schema（codex#3）、legacy gate commit 边界（codex#2）、产物预览 PRD 原型块归宿明确（codex#5）、dead-suite 删除时机对齐 delta-3（T1）。最小落地包 = **delta-2+3+4+7+8**（delta-7 经 codex#4 拉入）。§X Round 1/2/3 = review 历史。
+> **状态**：v1.3（2026-05-21）—— v1.2 经 /plan-eng-review delta-7/9 全审连带修订（§X Round 4）：3 ACCEPT —— vp-3 正文补吸收 delta-7 vp-2 的 decision-event-append + decision 摘要并进 stage-3 确认门（X1）、delta-9 candidate-promote 不并入 vp-3 避 forward-ref（X2）、§3 加 delta-9 vp-3 跨-delta ownership 登记（X3）。最小落地包 = **delta-2+3+4+7+8+9**。§X Round 1/2/3/4 = review 历史。**可实施**。
 > **日期**：2026-05-20
 > **作者**：PM + AI
 > **来源**：`管线重构-GSD-review.md` §8 实施顺序第 1 步（delta-2 + delta-4，地基，一起做）
@@ -168,7 +168,7 @@ project-solution = **一个 skill**（项目级一次性，不用 req 的 stage-
 |---|---|---|
 | ~~vp-1~~ | **拆出本 delta**（UC-1）—— `docs/CONTEXT.md → docs/PROJECT.md` 全量改名作独立 cleanup commit，在 delta-2+4 验证通过后单独做。本 delta 用现役 `CONTEXT.md`。 | §2.3 |
 | vp-2 | **`req-solution` → `project-solution`** —— 独立新 skill（在 `/init-project` 后调；`init-project` SKILL.md handoff 改指 `/project-solution`）：内部两段、产 `docs/CONTEXT.md` + roadmap、砍工程孪生、确认门兼 6 节检查 + 精简/详细模式 + 默认值逃生阀；未决问题闸门写暂存文件 + `check-open-questions.py` 加 `--require-section` | §2.3 §2.4（F2/F5/F15）|
-| vp-3 | **`prd-writing` 前移 stage 3（核心 workflow 重写，非 header 改）** —— 改输入（brief+analysis+CONTEXT）；步骤 0/2/2.5 重写（无原型，§六 从 analysis 派生）；**多入口**：stage-3 orchestrated 模式（单一确认门）+ 保留 standalone 独立/补差模式（E2）；加 term-detector 步；清全文「阶段 6」框架文案 | §2.5（F3/F4/F6/F16 + E2）|
+| vp-3 | **`prd-writing` 前移 stage 3（核心 workflow 重写，非 header 改）** —— 改输入（brief+analysis+CONTEXT）；步骤 0/2/2.5 重写（无原型，§六 从 analysis 派生）；**多入口**：stage-3 orchestrated 模式（单一确认门）+ 保留 standalone 独立/补差模式（E2）；加 term-detector 步；清全文「阶段 6」框架文案。**吸收 delta-7 vp-2**（§X Round 4 X1）：PRD 成文后为每条决策 append `decision` 事件（`req-events.py`，delta-7 vp-1 在 umbrella step 1 已建）；stage-3 PRD 定稿确认门同时渲染本次新增 decision 摘要（备选/理由）供 PM 一并确认（delta-7 §X D7-5，不新增门）| §2.5（F3/F4/F6/F16 + E2 + delta-7 X1）|
 | vp-4a | **req-stage-gate Stage 2→3 重写 + 换芯** —— 调 prd-writing；砍 solution 双文件 reconcile + 行数 lint + stage 3→4 的 6 节门 + 📖 marker grep；`req-transition.py`（`STAGE_OUTPUT_FILES[3]=prd.md`、`STAGE_NAMES[3]=功能规格`、可执行错误信息、文件存在性新旧判别 E3）| §2.1 §2.6（F1 / E3）|
 | vp-4b | **下游消费者契约迁移** —— **完整 solution.md 消费者集**（2026-05-21 eng-review A1 全仓 grep，~25 处 vs 原命名 ~8）：`task-plan` / `task-spec`（delta-3 owns）/ `close-req` / `doc-update` / `req-analysis` / `status-view.py` / `init-project.sh` / `derive-structure-templates.py` / `check-doc-pm-view.py` / `_lib/term-detector.py` / `_shared/term-detector` / `_shared/pm-view/*`（solution 侧引用）/ `CLAUDE.md.tmpl` —— 全切 `prd.md` 或清理；抽单一 stage-metadata 表（name/output_file/review_target）脚本模板统一引用；剥离 `check-engineering-doc-size.py` solution 分支。⚠️ 实施时再全仓 grep 复核 | §2.1 §2.6（F1 / F13 / F17 / A1）|
 | vp-4c | **quick-fix 语义路由改造**（2026-05-21 eng-review A1）—— `quick-fix/SKILL.md:152,154,184` 引用 `solution.md` / `solution.engineering.md` / `/req-solution`：solution.md→prd.md 引用迁移 + **决策性编辑路由从 `/req-solution` 改指 stage-3 `/prd-writing` revise**（路由逻辑语义改写，非机械字符串替换）；umbrella §5 已把 quick-fix 移出「原样复用」 | §2.6（A1）|
@@ -191,6 +191,8 @@ project-solution = **一个 skill**（项目级一次性，不用 req 的 stage-
 | baseline | 明确新基线数（现 269）|
 
 **实施顺序**：vp-2 / vp-3 / vp-4a / vp-4b（核心，互相咬合，一起做，且与 delta-8 同批；vp-4a 换芯先于 vp-4b 下游迁移）→ vp-5 / vp-6（模板 + legacy gate）→ vp-7（测试 + SOP）。vp-1（改名）拆出，独立排在 delta-2+4 验证通过之后。
+
+**跨-delta ownership 登记（§X Round 4 X3）**：`delta-9 vp-3` 在 umbrella step 6 给已重写完的 `prd-writing` 必读清单加 `PRODUCT-RULES.md`（全文读）+ 加 candidate PRODUCT-RULES promote 入口 —— 轻量后置增补、**不参与本 delta vp-3 的 prd-writing rewrite**。本 delta vp-3 只吸收 delta-7 vp-2（decision-append，delta-7 vp-1 在 step 1 已建无 forward-ref）；delta-9 的 prd-writing 改动由 delta-9 自己在 step 6 加（X2：`PRODUCT-RULES.md` 由 delta-9 vp-1 在 step 6 创建，step-2 的 vp-3 引用不到）。
 
 ---
 
@@ -265,6 +267,18 @@ project-solution = **一个 skill**（项目级一次性，不用 req 的 stage-
 
 **汇总**：6 ACCEPT（A1 / T1 / codex#2 / codex#3 / codex#5 / codex#4）；0 待决。最小落地包扩为 delta-2+3+4+7+8。文档 v1.1 → v1.2。
 
+### Round 4 — 2026-05-21 — /gstack-plan-eng-review（delta-7/9 全审连带 · 一致性复核）
+
+> **review 范围**：delta-7 v0 / delta-9 v1 首次全审引出的跨文档连带。本文档不重审已收口的 §1-§N 内部方案，只落 delta-7/9 引出的一致性修订。
+
+| # | Severity | Finding 摘要 | 决议 |
+|---|---|---|---|
+| X1 | Medium | vp-3 正文未认领 delta-7 vp-2 的 decision-event-append（delta-7 §X D7-4）；且 delta-7 §X D7-5：decision 摘要须并进 stage-3 PRD 确认门 | **ACCEPT** — vp-3 正文补「吸收 delta-7 vp-2：PRD 成文后为每条决策 append decision 事件；stage-3 PRD 定稿确认门同时渲染本次新增 decision 摘要（备选/理由）供 PM 一并确认，不新增门」|
+| X2 | Low | delta-9 §X D9-8 的 prd-writing 候选 PRODUCT-RULES promote 入口 —— **不并入 delta-2+4 vp-3**（`PRODUCT-RULES.md` 由 delta-9 vp-1 在 umbrella step 6 创建，delta-2+4 vp-3 在 step 2、forward-ref 不到）| **ACCEPT** — delta-2+4 vp-3 **不背** candidate-promote；由 delta-9 自己在 step 6 加（见 delta-9 §X D9-8 修订）。§3 仅登记 |
+| X3 | Low | §3 缺 delta-9 vp-3 的 ownership 登记（delta-9 §X D9-5）| **ACCEPT** — §3 加登记行：delta-9 vp-3 在 umbrella step 6 后置增补 prd-writing 必读清单（`PRODUCT-RULES.md`）+ candidate-promote 入口，非参与 vp-3 rewrite |
+
+**汇总**：3 ACCEPT。delta-2+4 vp-3（prd-writing 重写）只吸收 delta-7 decision-append（X1，delta-7 vp-1 req-events.py 在 step 1、无 forward-ref）；delta-9 的 prd-writing 改动（reading-list + candidate-promote）由 delta-9 自己在 step 6 后置加（X2/X3）。文档 v1.2 → 待修订 v1.3。
+
 ---
 
 ## §Y 决议日志
@@ -288,10 +302,12 @@ project-solution = **一个 skill**（项目级一次性，不用 req 的 stage-
 | 2026-05-20 | v1 修订完成：§2.1-§2.6 / §3 / §4 据 §X Round 1（18 ACCEPT）+ 3 UC 决议改写；vp-1 拆出、vp-4 升级契约迁移、DISCUSSION-LOG 改 delta-7 事件、prd-writing 重估为 workflow 重写 | 文档 v0 → v1 |
 | 2026-05-20 | /plan-eng-review v1 复审（§X Round 2）：Step 0 拆 vp-4→vp-4a/4b；E1-E6 全决议——prd-writing 保留多入口、旧 req 文件存在性判别、legacy gate 宿主 new-req、vp-7 补 4 项测试 | 文档 v1 → v1.1 |
 | 2026-05-21 | /plan-eng-review 包复核（§X Round 3）：6 finding 全 ACCEPT —— vp-4b 补完整消费者集 + 新增 vp-4c quick-fix 语义路由、vp-5 roadmap schema、vp-6 commit 边界、§2.2/§2.5 产物预览 PRD 原型块、vp-7 dead-suite 对齐 delta-3。最小落地包扩 delta-7 → delta-2+3+4+7+8 | 文档 v1.1 → v1.2 |
+| 2026-05-21 | /plan-eng-review delta-7/9 全审连带（§X Round 4）：3 ACCEPT —— vp-3 正文补吸收 delta-7 decision-append + decision 摘要并进 stage-3 确认门（X1）、delta-9 candidate-promote 不并入 vp-3（X2，避 forward-ref）、§3 加 delta-9 vp-3 ownership 登记行（X3）。最小落地包 = delta-2+3+4+7+8+9 | 文档 v1.2 → 待修订 v1.3 |
+| 2026-05-21 | **v1.3 修订完成**：§3 vp-3 正文补「吸收 delta-7 vp-2 decision-append + stage-3 确认门渲染 decision 摘要」；§3 加跨-delta ownership 登记（delta-9 vp-3 后置增补 prd-writing、不并入本 delta vp-3）。§0-§2 不动 | 文档 v1.2 → **v1.3**，可实施 |
 
 ---
 
-**End of PRD / solution 分层对调 v1.2**
+**End of PRD / solution 分层对调 v1.3**
 
 ---
 
@@ -300,10 +316,10 @@ project-solution = **一个 skill**（项目级一次性，不用 req 的 stage-
 | Review | Trigger | Why | Runs | Status | Findings |
 |--------|---------|-----|------|--------|----------|
 | CEO Review | `/plan-ceo-review` (via /autoplan) | Scope & strategy | 1 | issues_open | 4/10 — 前提确认，§2 设计 3/3 维度 flagged，4 critical gap |
-| Eng Review | `/plan-eng-review` | Architecture & tests | 3 | issues_open | R1 (autoplan v0): 19 finding；R2 (v1 复审): clean；R3 (2026-05-21 包复核): 6 finding 全决议 → v1.2 |
+| Eng Review | `/plan-eng-review` | Architecture & tests | 4 | revised | R1 (autoplan v0): 19 finding；R2 (v1 复审): clean；R3 (2026-05-21 包复核): 6 finding → v1.2；R4 (2026-05-21 delta-7/9 全审连带): 3 finding 全决议、已落 v1.3 |
 | DX Review | `/plan-devex-review` (via /autoplan) | Operator experience | 1 | issues_open | 5/10 — stage-3 operator UX 回退（1→4 确认门）|
 | Design Review | `/plan-design-review` | UI/UX gaps | 0 | — | skipped — 无 UI scope（建 skill/模板/脚本，不建界面）|
 
 - **CROSS-MODEL:** Round 1 = 6 voices（Codex ×3 + Claude subagent ×3），收敛度异常高、3 个 critical 均带 file:line 证据。Round 2（v1 eng 复审）= 单 reviewer，boomerang 确认 Round 1 的 9 条 v0 eng finding 全部已在 v1 落地。
 - **UNRESOLVED:** 0 —— Round 1：18 ACCEPT / 1 DEFER / 3 UC；Round 2：Step 0 + 5 finding；Round 3：6 finding（含 codex outside-voice 1 Critical）全决议。
-- **VERDICT:** v1.2 —— 三轮 review。§0 前提成立；§2/§3 经 autoplan + 两轮 plan-eng-review、所有 finding 落地、0 待决。R3 把 delta-7 拉入最小包 + 多处 vp 修订。**ENG 待 delta-2+3+4+7+8 整包复跑 /plan-eng-review 确认**再实施。
+- **VERDICT:** **v1.3** —— 四轮 review。§0 前提成立；§2/§3 经 autoplan + 三轮 plan-eng-review、所有 finding 落地、0 待决。R4（delta-7/9 全审连带：vp-3 吸收 delta-7 decision-append、delta-9 vp-3 后置登记）已落进 §3，**可实施**。最小落地包 = **delta-2+3+4+7+8+9**。
