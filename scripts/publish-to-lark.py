@@ -32,6 +32,7 @@ from _lib.lark_adapter import (  # noqa: E402
     auth_status,
     docs_create_from_markdown,
     docs_update_from_markdown,
+    parse_frontmatter,
     version,
 )
 
@@ -121,22 +122,8 @@ def preflight(target_kind: str | None, config_present: bool, args_complete: bool
 
 
 # ---------- Frontmatter ----------
-
-FRONTMATTER_RE = re.compile(r"\A---\n(.*?)\n---\n?(.*)\Z", re.DOTALL)
-
-
-def parse_frontmatter(text: str):
-    m = FRONTMATTER_RE.match(text)
-    if not m:
-        return {}, text
-    fm: dict[str, str] = {}
-    for line in m.group(1).splitlines():
-        line = line.rstrip()
-        if not line or line.lstrip().startswith("#") or ":" not in line:
-            continue
-        k, v = line.split(":", 1)
-        fm[k.strip()] = v.strip()
-    return fm, m.group(2)
+# parse_frontmatter 已上移到 _lib.lark_adapter（frontmatter 拆分单一实现，
+# adapter 发送前也用它剥离 frontmatter）；本文件只保留回写侧的 write_frontmatter。
 
 
 def write_frontmatter(path: Path, fm: dict, body: str) -> None:

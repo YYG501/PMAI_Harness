@@ -5,8 +5,12 @@
 - 强制封装 cwd workaround：lark-cli 对 `@<绝对路径>` 的 markdown 处理有 bug，
   必须 `cwd=markdown.parent` + `@./<filename>`；adapter API 接 `Path` 类型，
   禁止接 `@...` 字符串
-- API surface ~5 核心：version / auth_status / auth_check(scopes) /
-  docs_create_from_markdown / docs_update_from_markdown / api_json
+- 强制封装 frontmatter 剥离：lark-cli / 飞书不识别 YAML frontmatter，直接发
+  原文件会把 `---\n...\n---` 块当正文渲染。docs_* 发送前统一剥掉 frontmatter，
+  只发正文（与 cwd workaround 同属"lark-cli markdown 发送怪癖"收口）
+- API surface ~6 核心：version / auth_status / auth_check(scopes) /
+  docs_create_from_markdown / docs_update_from_markdown / api_json；
+  另导出 parse_frontmatter（frontmatter 拆分单一实现，publish-to-lark 复用）
 - 故障语义统一：可恢复用返回值 `(ok, detail)`；硬错抛 `LarkAdapterError`
 
 调用方约定：
@@ -25,6 +29,8 @@ from __future__ import annotations
 import json
 import re
 import subprocess
+import tempfile
+from contextlib import contextmanager
 from pathlib import Path
 from typing import Optional
 
@@ -87,6 +93,35 @@ def _parse_version(s: str) -> Optional[tuple[int, int, int]]:
 
 
 # ============================================================================
+# Frontmatter
+# ============================================================================
+
+# markdown 开头的 YAML frontmatter：`---\n ... \n---`。
+# 此正则是 frontmatter 拆分的单一定义 —— publish-to-lark 的回写逻辑也 import
+# parse_frontmatter 复用，避免两份正则各自漂移。
+_FRONTMATTER_RE = re.compile(r"\A---\n(.*?)\n---\n?(.*)\Z", re.DOTALL)
+
+
+def parse_frontmatter(text: str) -> tuple[dict[str, str], str]:
+    """拆分 markdown 的 YAML frontmatter，返回 (frontmatter dict, 正文)。
+
+    无 frontmatter → 返回 ({}, 原文本对象)。frontmatter 行按 `key: value` 浅解析：
+    注释行（`#` 开头）/ 无冒号行跳过。值不做类型转换，统一当字符串。
+    """
+    m = _FRONTMATTER_RE.match(text)
+    if not m:
+        return {}, text
+    fm: dict[str, str] = {}
+    for line in m.group(1).splitlines():
+        line = line.rstrip()
+        if not line or line.lstrip().startswith("#") or ":" not in line:
+            continue
+        k, v = line.split(":", 1)
+        fm[k.strip()] = v.strip()
+    return fm, m.group(2)
+
+
+# ============================================================================
 # Public API: 自检
 # ============================================================================
 
@@ -146,6 +181,36 @@ def _validate_markdown_arg(path: Path) -> Path:
     return path
 
 
+@contextmanager
+def _markdown_body_path(markdown_path: Path):
+    """yield 一个剥掉 YAML frontmatter 的 markdown 路径，供 lark-cli 发送。
+
+    lark-cli / 飞书不会剥离 frontmatter —— 直接发原文件会把 `---\\n...\\n---`
+    块当正文渲染（覆盖发布尤其必然：回写过 lark_doc_id 的文件一定带 frontmatter）。
+
+    - 无 frontmatter → 直接 yield 原路径，不写临时文件（保持原 @./<name> 行为）。
+    - 有 frontmatter → 在原文件**同目录**写临时文件（同目录是为了让正文里的相对
+      路径，如内嵌图片引用，解析基准不变），yield 临时路径，退出时清理。
+    """
+    raw = markdown_path.read_text(encoding="utf-8")
+    _, body = parse_frontmatter(raw)
+    if body == raw:
+        # 无 frontmatter：parse_frontmatter 原样返回，省一次写盘
+        yield markdown_path
+        return
+    tmp = tempfile.NamedTemporaryFile(
+        mode="w", encoding="utf-8", suffix=".md",
+        prefix=f".{markdown_path.stem}.lark-",
+        dir=markdown_path.parent, delete=False,
+    )
+    try:
+        tmp.write(body)
+        tmp.close()
+        yield Path(tmp.name)
+    finally:
+        Path(tmp.name).unlink(missing_ok=True)
+
+
 def docs_create_from_markdown(
     markdown_path: Path, *, title: str, target: dict
 ) -> dict:
@@ -171,17 +236,17 @@ def docs_create_from_markdown(
             "validation", f"target 不合法: {target!r}（kind 应为 wiki/folder）"
         )
 
-    cmd = [
-        "lark-cli", "docs", "+create",
-        "--title", title,
-        "--markdown", f"@./{markdown_path.name}",
-    ]
-    if kind == "wiki":
-        cmd.extend(["--wiki-node", token])
-    else:
-        cmd.extend(["--folder-token", token])
-
-    res = _run(cmd, cwd=markdown_path.parent, check=True)
+    with _markdown_body_path(markdown_path) as send_path:
+        cmd = [
+            "lark-cli", "docs", "+create",
+            "--title", title,
+            "--markdown", f"@./{send_path.name}",
+        ]
+        if kind == "wiki":
+            cmd.extend(["--wiki-node", token])
+        else:
+            cmd.extend(["--folder-token", token])
+        res = _run(cmd, cwd=send_path.parent, check=True)
     try:
         return json.loads(res.stdout)
     except json.JSONDecodeError:
@@ -203,13 +268,14 @@ def docs_update_from_markdown(
     _validate_markdown_arg(markdown_path)
     if not doc_id:
         raise LarkAdapterError("validation", "doc_id 不能为空")
-    cmd = [
-        "lark-cli", "docs", "+update",
-        "--doc", doc_id,
-        "--markdown", f"@./{markdown_path.name}",
-        "--mode", mode,
-    ]
-    _run(cmd, cwd=markdown_path.parent, check=True)
+    with _markdown_body_path(markdown_path) as send_path:
+        cmd = [
+            "lark-cli", "docs", "+update",
+            "--doc", doc_id,
+            "--markdown", f"@./{send_path.name}",
+            "--mode", mode,
+        ]
+        _run(cmd, cwd=send_path.parent, check=True)
 
 
 def api_json(

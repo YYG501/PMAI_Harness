@@ -265,6 +265,114 @@ test_doctor_subcommand_happy() {
   fi
 }
 
+test_parse_frontmatter() {
+  start_test "parse_frontmatter() 拆分 frontmatter 与正文"
+  out=$(python3 - <<'PY'
+from _lib.lark_adapter import parse_frontmatter
+fm, body = parse_frontmatter("---\nlark_doc_id: docX\nfoo: bar\n---\n# 正文\n内容")
+print(fm.get("lark_doc_id") == "docX", fm.get("foo") == "bar", body == "# 正文\n内容")
+PY
+)
+  if [ "$out" = "True True True" ]; then
+    pass_test
+  else
+    _fail "expected 'True True True', got: $out"
+  fi
+}
+
+test_parse_frontmatter_none() {
+  start_test "parse_frontmatter() 无 frontmatter → ({}, 原文)"
+  out=$(python3 - <<'PY'
+from _lib.lark_adapter import parse_frontmatter
+fm, body = parse_frontmatter("# 标题\n正文")
+print(len(fm), body == "# 标题\n正文")
+PY
+)
+  if [ "$out" = "0 True" ]; then
+    pass_test
+  else
+    _fail "expected '0 True', got: $out"
+  fi
+}
+
+test_docs_create_strips_frontmatter() {
+  start_test "docs_create_from_markdown 发送前剥离 frontmatter"
+  local tmp; tmp=$(mktemp -d)
+  printf '%s\n' '---' 'lark_doc_id: docOld' 'title: T' '---' '# 真正文' '正文内容' \
+    > "$tmp/fm.md"
+  local log="$tmp/calls.log"
+  FAKE_LARK_LOG="$log" python3 - <<PY
+from pathlib import Path
+from _lib.lark_adapter import docs_create_from_markdown
+docs_create_from_markdown(Path("$tmp/fm.md"), title="t",
+                          target={"kind": "wiki", "token": "w"})
+PY
+  # lark-cli 实际收到的 markdown 首行必须是正文，不能是 --- 或 frontmatter key
+  if ! grep -q "MARKDOWN_HEAD: # 真正文" "$log"; then
+    _fail "frontmatter 未剥离；got: $(grep MARKDOWN_HEAD "$log")"
+    cat "$log" >&2
+    rm -rf "$tmp"
+    return
+  fi
+  if grep -q "MARKDOWN_HEAD: ---" "$log" || grep -q "MARKDOWN_HEAD: lark_doc_id" "$log"; then
+    _fail "frontmatter 泄漏进正文；got: $(grep MARKDOWN_HEAD "$log")"
+    rm -rf "$tmp"
+    return
+  fi
+  # 临时文件用完即清理，原文件不动
+  if ls "$tmp" | grep -q 'lark-'; then
+    _fail "剥离用的临时文件未清理：$(ls "$tmp")"
+    rm -rf "$tmp"
+    return
+  fi
+  if ! grep -q '^lark_doc_id: docOld' "$tmp/fm.md"; then
+    _fail "原文件 frontmatter 被改动"
+    rm -rf "$tmp"
+    return
+  fi
+  pass_test
+  rm -rf "$tmp"
+}
+
+test_docs_update_strips_frontmatter() {
+  start_test "docs_update_from_markdown 发送前剥离 frontmatter（覆盖发布场景）"
+  local tmp; tmp=$(mktemp -d)
+  printf '%s\n' '---' 'lark_doc_id: docOld' '---' '# 覆盖正文' '内容' > "$tmp/up.md"
+  local log="$tmp/calls.log"
+  FAKE_LARK_LOG="$log" python3 - <<PY
+from pathlib import Path
+from _lib.lark_adapter import docs_update_from_markdown
+docs_update_from_markdown(Path("$tmp/up.md"), doc_id="docOld")
+PY
+  if grep -q "MARKDOWN_HEAD: # 覆盖正文" "$log" \
+     && ! grep -q "MARKDOWN_HEAD: ---" "$log"; then
+    pass_test
+  else
+    _fail "覆盖发布未剥离 frontmatter；got: $(grep MARKDOWN_HEAD "$log")"
+    cat "$log" >&2
+  fi
+  rm -rf "$tmp"
+}
+
+test_docs_create_no_frontmatter_uses_original() {
+  start_test "无 frontmatter 时直接发原文件（不产生临时文件）"
+  local tmp; tmp=$(mktemp -d)
+  printf '%s\n' '# 无 fm' '正文' > "$tmp/plain.md"
+  local log="$tmp/calls.log"
+  FAKE_LARK_LOG="$log" python3 - <<PY
+from pathlib import Path
+from _lib.lark_adapter import docs_create_from_markdown
+docs_create_from_markdown(Path("$tmp/plain.md"), title="t",
+                          target={"kind": "wiki", "token": "w"})
+PY
+  if grep -q -- "--markdown @./plain.md" "$log" && ! ls "$tmp" | grep -q 'lark-'; then
+    pass_test
+  else
+    _fail "无 frontmatter 应直接用原文件；argv: $(grep ARGV "$log")；目录: $(ls "$tmp")"
+  fi
+  rm -rf "$tmp"
+}
+
 # Run all
 test_version_parses
 test_version_too_old
@@ -279,5 +387,10 @@ test_api_json_passthrough
 test_subprocess_failure_raises
 test_missing_cli_in_path
 test_doctor_subcommand_happy
+test_parse_frontmatter
+test_parse_frontmatter_none
+test_docs_create_strips_frontmatter
+test_docs_update_strips_frontmatter
+test_docs_create_no_frontmatter_uses_original
 
 report_results "lark-adapter"

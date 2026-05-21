@@ -90,6 +90,31 @@ test_overwrite_uses_existing_doc_id() {
   pass_test
 }
 
+test_overwrite_strips_frontmatter() {
+  start_test "publish-to-lark overwrite: 发给飞书的正文已剥离 frontmatter"
+  # doc.md 此时已带首次发布回写的 frontmatter（lark_doc_id 等）—— 覆盖路径必然带
+  : > "$WORK/fm-calls.log"
+  export FAKE_LARK_LOG="$WORK/fm-calls.log"
+  pushd "$WORK" >/dev/null
+  python3 "$FRAMEWORK_ROOT/scripts/publish-to-lark.py" \
+        --type prd --no-merge-cells doc.md >/dev/null 2>&1
+  popd >/dev/null
+  unset FAKE_LARK_LOG
+  # --no-merge-cells 下只有 docs +update 一次带 @./ 的调用 → 唯一 MARKDOWN_HEAD
+  local head_line
+  head_line=$(grep "^MARKDOWN_HEAD:" "$WORK/fm-calls.log")
+  if [ -z "$head_line" ]; then
+    _fail "未捕获 docs +update 的 MARKDOWN_HEAD; log: $(cat "$WORK/fm-calls.log")"
+    return
+  fi
+  if echo "$head_line" | grep -q -- "MARKDOWN_HEAD: ---" \
+     || echo "$head_line" | grep -q "lark_doc_id"; then
+    _fail "覆盖发布把 frontmatter 当正文发了; got: $head_line"
+    return
+  fi
+  pass_test
+}
+
 test_first_time_create_legacy_nested_shape() {
   start_test "publish-to-lark first-time: 解析旧版 document.document_id 嵌套 shape"
   # 切换 fake CLI 返回旧 shape
@@ -195,6 +220,7 @@ MD
 
 test_first_time_create_modern_shape
 test_overwrite_uses_existing_doc_id
+test_overwrite_strips_frontmatter
 test_first_time_create_legacy_nested_shape
 test_cwd_workaround_present_in_real_invocation
 test_preflight_blocks_old_lark_cli

@@ -86,7 +86,11 @@ description: 把本地 markdown 文档发布到飞书云文档，发布后自动
 
 ### 步骤 3：发布 markdown
 
-调用 `python3 .claude/scripts/publish-to-lark.py` 执行编排：
+调用 `python3 .claude/scripts/publish-to-lark.py` 执行编排。
+
+发送给飞书前，会自动剥掉 markdown 开头的 YAML frontmatter（`---` 包裹的元数据块），
+只发正文 —— 飞书不识别 frontmatter，不剥会把它当一段正文渲染。本地 markdown 文件不动。
+覆盖发布尤其必然带 frontmatter（首次发布回填的 `lark_doc_id` 等就在 frontmatter 里）。
 
 **首次发布：**
 
@@ -157,6 +161,7 @@ URL: https://xxx.feishu.cn/docx/doxcnxxxxxx
 - **merge cell 判定（前 N-1 列）**：非空 anchor 吸收下方相同内容 cell + 下方空 cell（续行 rowspan 语义）；range > 1 行才合并
 - **merge cell 判定（末列 / 需求描述）**：识别续行 row group（前 N-1 列全空的连续行），先把非锚点 cell 的 children blocks 拷贝到锚点 cell，删原 cell children，再 merge_table_cells；保留富文本格式
 - **frontmatter 回填**仅首次发布执行；覆盖发布不动 frontmatter
+- **发送时剥离 frontmatter**：发给飞书的内容只含正文，开头的 YAML frontmatter 会被剥掉（飞书不识别 frontmatter，不剥会渲染成正文）；剥离只作用于发送内容，本地 markdown 文件不动
 - **不修改正文**：除 frontmatter 外，本 skill 不改 markdown 任何内容
 - **不做 wiki/folder 切换**：首次发布的目标位置一旦定下，覆盖发布只能在同位置；要换位置必须删 frontmatter 中的 `lark_doc_id` 后重新首次发布
 
