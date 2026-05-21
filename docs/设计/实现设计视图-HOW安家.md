@@ -1,8 +1,8 @@
 <!-- /autoplan restore point: <LOCAL_GSTACK_HOME>/projects/PM-AI-Workflow/main-autoplan-restore-20260520-173742.md -->
-# req 级实现设计视图（delta-8 · HOW 安家）(v1)
+# req 级实现设计视图（delta-8 · HOW 安家）(v2)
 
-> **状态**：v1（2026-05-20）—— §1-§6 据 §X Round 1（14 ACCEPT finding）+ 4 个 User Challenge 决议修订完成。待 PM 复核 / 实施（建议实施前重跑 /plan-eng-review）。§X Round 1 = v0 的 autoplan 6-voice review 记录，保留作历史。最小落地包 = delta-2+3+4+8。
-> **日期**：2026-05-20
+> **状态**：v2（2026-05-21）—— v1 经 delta-3 v1 review 连带修订：delta-3 把 task-spec 定为产**单文件 typed contract**（见 `task-spec重构.md` v1 §2.1 / §3 ownership 表 / §X D3-2、D3-16），不再有 `task.engineering.md`。v2 把全文「自包含 `task.engineering.md`」措辞改为「task 单文件执行区」、`build-execution-prompt.py` 2→1 路径、vp-3 并入 delta-3 vp-3。§0 锁定不动；§X Round 1 = v0 autoplan review 历史，保留。最小落地包 = delta-2+3+4+8。
+> **日期**：2026-05-21
 > **作者**：PM + AI
 > **来源**：`管线重构-GSD-review.md` §4 delta-8 + §8 实施顺序第 3 步；`PRD-solution-对调.md` v1.1 §X review（UC-2 / F8 —— delta-8 与 delta-2+4 同批落地，是最小可落地包成员）
 
@@ -50,7 +50,7 @@ req 级 HOW（实现设计层）今天**寄生**在 `solution.engineering.md`（
 新增独立 skill **`/implementation-design`**，在 stage 5「拆 task」之前产出一份 req 级**实现设计文档**单文件（`implementation-design.md`，落 `$ACTIVE_REQ_DIR/`），承接原 `solution.engineering.md` 的 req 级 HOW 内容。
 
 - **producer = 独立 skill**（review UC-1）—— 不让 `task-plan`「顺带产出」。`task-plan` 是 lint 强制的 PM 视图拆分 skill（`check-doc-pm-view.py` 禁工程词、description 明写「单一文件、不生成工程合同分文件」），让它兼产 TS-laden 工程 artifact = delta-2+4 §0.1 给 `req-solution` 修过的「一个 skill 背两层」反模式。GSD 亦把产 HOW 的 `gsd-pattern-mapper` 与拆 task 的 `gsd-planner` 分成两个 agent。
-- **消费 = task-spec 上游**（review UC-4）—— `task-spec` 读 `implementation-design.md`、按 HOW-ID 挑出当前 task 相关行、写进自包含的 `task.engineering.md`；`task-execute` 只读 task 工程合同，**不直读** `implementation-design.md`。对齐 GSD：executor 只读自包含的 plan，pattern artifact 是 planner 的上游。
+- **消费 = task-spec 上游**（review UC-4）—— `task-spec` 读 `implementation-design.md`、按 HOW-ID 挑出当前 task 相关行、写进 task **单文件 typed contract 的执行区**（delta-3 v1：task-spec 产单文件，不再有 `.engineering.md`）；`task-execute` 只读 task 单文件，**不直读** `implementation-design.md`。对齐 GSD：executor 只读自包含的 plan，pattern artifact 是 planner 的上游。
 
 **性质 = relocation**：`solution.engineering` 已覆盖大部分 req 级 HOW，delta-8 把它挪到独立文件 + 独立 producer。逐章归宿见 §3.4 的 10-章归宿表（review D8-1：实测 7 章迁入 / 1 章归 DESIGN.md / 1 章删除）。
 
@@ -73,9 +73,9 @@ req 级 HOW（实现设计层）今天**寄生**在 `solution.engineering.md`（
 | `/implementation-design`（新 skill）| **新建** | stage 5 拆 task 前调；产 `implementation-design.md`（review UC-1）|
 | `solution.engineering.md` / `.tmpl` | delta-4 砍 | 10 章逐章归宿见 §3.4 表 |
 | `task-plan` | **delta-8 不动** | task-plan 保持纯 PM 视图拆分 skill；它不产、不读 implementation-design（delta-2+4 单独处理它的 prd.md 迁移）|
-| `task-spec` | **改** | 读 `implementation-design.md`、按 HOW-ID 挑当前 task 相关行、写进自包含 `task.engineering.md`（与 delta-3 的 task-spec 重构协同，见 §4.1）|
-| `task-execute` | **delta-8 不动** | 只读 task 工程合同，不直读 implementation-design（review UC-4）|
-| `build-execution-prompt.py` | **delta-8 不动** | 执行信封仍只输出 PM 视图 + task 工程合同 2 路径（review D8-3：UC-4 决议后零改）|
+| `task-spec` | **改** | 读 `implementation-design.md`、按 HOW-ID 挑当前 task 相关行、写进 task 单文件 typed contract 的**执行区**（该 reader 由 delta-3 vp-3 实现，见 §4.1）|
+| `task-execute` | **delta-8 不动** | 只读 task 单文件，不直读 implementation-design（review UC-4）；task 文件由双→单是 delta-3 的改动，非 delta-8 |
+| `build-execution-prompt.py` | **delta-8 不动** | delta-8 自身不改它；执行信封由 **delta-3** 从 2 路径改为 1 路径（task 单文件）|
 | `modulespec`（D13）| **不变** | modulespec 是模块级稳定档；implementation-design 是 req 级一次性 HOW，两层不同 |
 | req 级 PRD（delta-2）| **不变** | PRD = req 级功能规格（WHAT）；implementation-design = req 级 HOW。WHAT / HOW 分离，互相引用不重抄 |
 
@@ -141,8 +141,8 @@ req 级 HOW（实现设计层）今天**寄生**在 `solution.engineering.md`（
 |---|---|---|
 | vp-1 | 新建 `templates/implementation-design.md.tmpl` —— 4 段结构（§3.2）+ 可消费 schema（§3.3 HOW-ID 等）+ PM-invisible header（§3.1）；`check-doc-pm-view.py` 加 `implementation-design.md` 跳过 | §3 |
 | vp-2 | 新建 `/implementation-design` skill —— stage 5 拆 task 前调；读 brief + analysis + PRD + CONTEXT，按 §3.4 归宿表产 `implementation-design.md` | §1 §2（UC-1）|
-| vp-3 | `task-spec` 改：从「读 solution.engineering」改成「读 `implementation-design.md`、按 HOW-ID 挑当前 task 相关行、写进自包含 `task.engineering.md`」。`task-execute` / `build-execution-prompt.py` **零改**（UC-4）| §2（UC-4 / D8-7）|
-| vp-4 | 模板引用更新 + 测试 + SOP —— `task.engineering.md.tmpl` §3 / `CLAUDE.md.tmpl` 去 solution.engineering 引用；test matrix（见下）；`框架同步-SOP.md` 补迁移段 + operator breadcrumb（≤3 行：implementation-design 是内部 AI 参考、PM 无需处理）| §2 §6（D8-10/D8-13）|
+| vp-3 | **并入 delta-3 vp-3** —— delta-3 v1 §3 ownership：task-spec 由 delta-3 独占重写、吸收「读 `implementation-design.md` 按 HOW-ID 挑行、写进执行区」。delta-8 不再单独 patch task-spec；本 vp 退化为「向 delta-3 提供 HOW-ID 消费契约 + contract test」| §2（UC-4 / D8-7）；delta-3 v1 §3 |
+| vp-4 | 模板引用更新 + 测试 + SOP —— `CLAUDE.md.tmpl` 去 solution.engineering 引用（`task.engineering.md.tmpl` 由 delta-3 vp-1 整体删除，无需 delta-8 改）；test matrix（见下）；`框架同步-SOP.md` 补迁移段 + operator breadcrumb（≤3 行：implementation-design 是内部 AI 参考、PM 无需处理）| §2 §6（D8-10/D8-13）|
 
 **vp-4 test matrix（review D8-10）：**
 
@@ -150,17 +150,17 @@ req 级 HOW（实现设计层）今天**寄生**在 `solution.engineering.md`（
 |---|---|
 | 模板 schema | `implementation-design.md.tmpl` 4 段 + HOW-ID 字段齐 |
 | producer | `/implementation-design` 按 §3.4 归宿产出 `implementation-design.md` |
-| task-spec 派生 | task-spec 按 HOW-ID 挑行、写进自包含 `task.engineering.md` |
-| 执行信封不变 | `build-execution-prompt.py` 仍只输出 2 路径；非 Claude 执行器仍只读 task 两文件（review D8-3）|
+| task-spec 派生 | task-spec 按 HOW-ID 挑行、写进 task 单文件执行区 |
+| 执行信封 | `build-execution-prompt.py` 由 delta-3 改为 1 路径（task 单文件）；非 Claude 执行器读 task 单文件即自包含（HOW 已由 task-spec 写入执行区）|
 | 旧-req-compat（IRON 回归）| 旧 req 有 `solution.engineering.md` / 新 req 有 `implementation-design.md` 均能跑完 |
 | grep residual | 全仓无现役 `solution.engineering.md` 引用残留 |
 | baseline | 明确新基线数 |
 
 ### §4.1 落地顺序与文件 ownership（review D8-8）
 
-UC-2 把 delta-3 纳入 → **真实落地包 = delta-2+3+4+8**。三个 delta 都改 `task-spec`：delta-2+4 vp-4b（切 `prd.md`）/ delta-3（task-spec 内部重构，单独设计文档）/ delta-8 vp-3（改读 `implementation-design.md`）。
+UC-2 把 delta-3 纳入 → **真实落地包 = delta-2+3+4+8**。三个 delta 都涉及 `task-spec`，但 **delta-3 独占 task-spec 重写**（delta-3 v1 §3 ownership）：delta-2+4 vp-4b（切 `prd.md`）+ delta-8 vp-3（读 `implementation-design.md`）**均并入 delta-3 vp-3**，不对 task-spec 做多次独立改动。
 
-**落地顺序**：delta-2+4（stage 3 契约迁移，地基）→ delta-3（task-spec 重构）→ delta-8 vp-3 在 delta-3 的 task-spec 新形态上加「读 implementation-design」。delta-8 vp-1 / vp-2（模板 + 新 skill）与 delta-2+4 无文件冲突，可先行。
+**落地顺序**：delta-2+4（stage 3 契约迁移，地基）→ delta-8 vp-1/vp-2（建 `implementation-design` 模板 + skill，与 delta-2+4 无文件冲突可先行）→ **delta-3 全部 vp**（task-spec 一次性重写，吸收 prd.md + implementation-design 两个 reader）→ delta-8 vp-4 收尾。delta-8 vp-3 不再是独立步骤（已并入 delta-3 vp-3）。
 
 ---
 
@@ -168,7 +168,7 @@ UC-2 把 delta-3 纳入 → **真实落地包 = delta-2+3+4+8**。三个 delta �
 
 1. ❌ 不分 GSD 式多文件 —— 单文件多段（§3.2）
 2. ❌ 不让 task-plan 兼产 implementation-design —— 独立 `/implementation-design` skill（UC-1）
-3. ❌ task-execute 不直读 implementation-design —— 只读 task 工程合同（UC-4）
+3. ❌ task-execute 不直读 implementation-design —— 只读 task 单文件（UC-4；task 文件双→单见 delta-3 v1）
 4. ❌ 不引入专属 agent —— `/implementation-design` 主线程一气产出
 5. ❌ 不动 `modulespec`（D13）—— 不同层
 6. ❌ implementation-design 不重复 PRD 的 WHAT —— 引用，不重抄
@@ -181,13 +181,15 @@ UC-2 把 delta-3 纳入 → **真实落地包 = delta-2+3+4+8**。三个 delta �
 ## §6 风险与待验
 
 - **最小落地包 = delta-2+3+4+8**（review UC-2）—— delta-3 才让 task-spec 改读新视图；缺 delta-3，task-spec/task-execute 落地即读已删的 `solution.engineering`。四个 delta 同批，落地顺序见 §4.1。
-- **delta-3 设计文档未就绪** —— delta-8 vp-3 依赖 delta-3 的 task-spec 新形态。缓解：delta-3 设计文档需先于实施定稿（与 `PRD-solution-对调.md` v1.1 §4 同一前置）。
+- **delta-3 已定稿 v1** —— delta-3 设计文档已于 2026-05-21 经 autoplan 6-voice review 收口为 v1（task-spec 单文件 typed contract）；本 v2 即据其连带修订。delta-8 vp-3 已并入 delta-3 vp-3，落地顺序见 §4.1。
 - **本设计文档需先于实施定稿** —— 砍 `solution.engineering` 必须同时有 `implementation-design` 这个 HOW 新家。
 - **待验 —— §3.4 归宿表逐章核实**：§3.4 的 10 章归宿是 review 的逐章判定，vp-1 动手前用 `solution.engineering.md.tmpl` 实际内容复核，尤其 ch6 易错点 / ch10 验收清单的实际体量是否撑得起独立段 3。
 
 ---
 
 ## §X Review Findings（autoplan / dual voice 输出落这里）
+
+> ⚠️ **v2 supersession 注**：本节 Round 1 是 v0 review 历史。其中 D8-3 / D8-5 决议及 finding 表里「自包含 `task.engineering.md` / task 两文件 / 2 路径」等措辞，已于 v2（2026-05-21）随 delta-3 v1「task-spec 单文件 typed contract」连带取代 —— task-spec 产单文件、HOW 写入其执行区。§X 表保留原文作审计历史，**当前真相以 §1-§6 正文 + §Y 2026-05-21 行为准**。
 
 ### Round 1 — 2026-05-20 — /gstack-autoplan（6 voices：CEO Codex+Claude · Eng Codex+Claude · DX Codex+Claude）
 
@@ -228,10 +230,11 @@ UC-2 把 delta-3 纳入 → **真实落地包 = delta-2+3+4+8**。三个 delta �
 | 2026-05-20 | UC-4 PM 决议：implementation-design 只作 task-spec 上游，task-execute 只读 task 工程合同（对齐 GSD executor）| §2 / §3 |
 | 2026-05-20 | §X D8-1~D8-14 全 ACCEPT；下一步 PM 据 §X + 4 UC 决议修订 §1-§6 成 v1 | 见 §X Round 1 |
 | 2026-05-20 | v1 修订完成：§1-§6 据 §X Round 1（14 ACCEPT）+ 4 UC 决议改写 —— 独立 `/implementation-design` skill、task-spec 上游消费（task-execute 零改）、§3.4 加 10-章归宿表、段1 每行带决策字段、§3.3 定 HOW-ID schema、§4.1 加落地顺序 | 文档 v0 → v1 |
+| 2026-05-21 | v2 连带修订：delta-3 v1 把 task-spec 定为单文件 typed contract（其 autoplan §X D3-2/D3-16）→ 本文档全文「自包含 `task.engineering.md`」改「task 单文件执行区」、`build-execution-prompt.py` 2→1 路径、vp-3 并入 delta-3 vp-3、vp-4 去 `task.engineering.md.tmpl` 引用。§0 / §X Round 1 表不动 | 文档 v1 → v2 |
 
 ---
 
-**End of req 级实现设计视图（delta-8）v1**
+**End of req 级实现设计视图（delta-8）v2**
 
 ---
 
