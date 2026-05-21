@@ -257,7 +257,7 @@ Generator-HEAD: $GEN_HEAD
 
 ### 步骤 5.5：sync 后冒烟（**强制**）
 
-rsync + commit 完不代表 sync 成功。如果本次涵盖**新文件**（例如新 helper `_lib/xxx.sh` 或新 skill 子目录），其它脚本会 source / import 它——必须验脚本能 source 不崩，否则消费仓在下次 close-task / task-execute 才发现，已经晚了。
+rsync + commit 完不代表 sync 成功。如果本次涵盖**新文件**（例如新 helper `_lib/xxx.sh` / `_lib/xxx.py` 或新 skill 子目录），其它脚本会 source / import 它——必须验脚本能 source / import 不崩，否则消费仓在下次 close-task / task-execute 才发现，已经晚了。
 
 ```bash
 cd "$DST"
@@ -271,6 +271,17 @@ for s in close-task.sh close-req.sh cancel-req.sh create-task-worktree.sh create
   bash -n .claude/scripts/$s && echo "✓ $s" || echo "✗ $s SYNTAX ERROR"
 done
 
+# 5.5b-py. 关键 Python 脚本 import 冒烟。bash -n 只验 shell 语法，验不出 Python
+#          import 崩 —— §4.7 的 _lib/ 漏拷、或任何跨文件 import 断裂，shell 冒烟
+#          抓不到，这段抓。exec_module 只跑 top-level imports + defs，不触发 main。
+python3 -c "import sys; sys.path.insert(0,'.claude/scripts'); from _lib import state, events" \
+  && echo "✓ _lib（state + events）import OK" \
+  || echo "✗ _lib import FAIL —— 多半漏拷 scripts/_lib/，停手补全"
+for s in task-transition.py audit-task-events.py; do
+  python3 -c "import importlib.util,sys; sys.path.insert(0,'.claude/scripts'); _s=importlib.util.spec_from_file_location('_m','.claude/scripts/$s'); _m=importlib.util.module_from_spec(_s); _s.loader.exec_module(_m)" \
+    && echo "✓ $s import OK" || echo "✗ $s IMPORT ERROR（见上方 traceback）"
+done
+
 # 5.5c. 配置文件 init 状态检查（lark-publish.json 等需 PM 手工 init 的）
 echo "━━━ 配置文件 init 检查 ━━━"
 if [ ! -f .claude/lark-publish.json ] && [ -f templates/lark-publish.json.tmpl ]; then
@@ -281,7 +292,7 @@ fi
 # 未来若有别的需 init 的配置文件,继续加 if-not-exist 提示。
 ```
 
-任一 FAIL / SYNTAX ERROR → **revert commit** 排查后再来：
+任一 FAIL / SYNTAX ERROR / IMPORT ERROR → **revert commit** 排查后再来：
 
 ```bash
 git reset --hard HEAD~1   # 退回 sync 前
