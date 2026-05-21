@@ -371,6 +371,15 @@ req 分支的 worktree 可能在：
 
 如果 PM 心想"我只 sync 改动文件"漏拷 helper，consumer 下次 close-task 一跑 `source _lib/worktree.sh` 立即崩——步骤 5.5 冒烟就是为这个 case 设计。
 
+**当前待同步项（2026-05-21 accept 闸门 / evidence-repair，generator commit `bd1f1a3` + `f37c83f`）**：
+
+- 新文件 `scripts/_lib/events.py`（共享 `EXEC_EVENT_TYPES` / `has_execution_event` / `load_events_strict`）
+- importers：`scripts/task-transition.py`（原本只 import `_lib.state`，现在多 import `_lib.events`）+ `scripts/audit-task-events.py`（**本次新成为 `_lib` 消费方**，之前完全不 import `_lib`）
+
+下次 sync 必须把 `scripts/_lib/events.py` 一起带过去。漏了 → 消费仓 `task-transition.py`（验收转移 accept 闸门）和 `audit-task-events.py`（close-task I-CT7 审计）一 import 就 `ImportError` 崩。步骤 3a dry-run 会显示 `>f+++++++ scripts/_lib/events.py`——看见就确认整个 `_lib/` 都进了。
+
+> 注：`scripts/_lib/` 是整目录 rsync 范围内（步骤 3 拷 `scripts/`），正常不会漏。本条是显式提醒：`audit-task-events.py` 这次从"非 `_lib` 消费方"变成"`_lib` 消费方"，是新耦合。
+
 → 步骤 3 默认是整目录 rsync，本节当作"看见新 helper 时多看一眼调用方都拷到了没"。
 
 ### 4.8 别只 diff `scripts/skills` 就声称对齐（已硬卡入步骤 4a）
