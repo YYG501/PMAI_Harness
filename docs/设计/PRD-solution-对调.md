@@ -1,7 +1,7 @@
 <!-- /autoplan restore point: <LOCAL_GSTACK_HOME>/projects/PM-AI-Workflow/main-autoplan-restore-20260520-151958.md -->
-# PRD / solution 分层对调（delta-2 + delta-4）(v1.1)
+# PRD / solution 分层对调（delta-2 + delta-4）(v1.2)
 
-> **状态**：v1.1（2026-05-20）—— v1 经 /plan-eng-review 复审（§X Round 2）：Step 0 拆 vp-4 + 5 finding 全决议落地；§2/§3 已据两轮 review 收敛，0 待决。待 PM 复核 / 实施（前置：delta-8 设计文档需先定稿）。§X Round 1（v0 autoplan 6-voice）/ Round 2（v1 eng review）= review 历史。
+> **状态**：v1.2（2026-05-21）—— v1.1 经 /plan-eng-review 包复核修订（§X Round 3）：6 finding 落地 —— quick-fix 补进 blast radius + 语义路由 vp-4c（A1）、roadmap 补 schema（codex#3）、legacy gate commit 边界（codex#2）、产物预览 PRD 原型块归宿明确（codex#5）、dead-suite 删除时机对齐 delta-3（T1）。最小落地包 = **delta-2+3+4+7+8**（delta-7 经 codex#4 拉入）。§X Round 1/2/3 = review 历史。
 > **日期**：2026-05-20
 > **作者**：PM + AI
 > **来源**：`管线重构-GSD-review.md` §8 实施顺序第 1 步（delta-2 + delta-4，地基，一起做）
@@ -79,7 +79,7 @@ task-spec PM 视图 10 个 section 的去向（**用章节锚点名定位，不�
 | 📋 功能清单 | → PRD §六 功能需求 |
 | ✅ 验收清单 | → PRD §七 验收标准 |
 | 🧪 自测说明 | → PRD §七 验收标准（并入）|
-| 📐 产物预览 | → PRD §六 功能需求 的「原型」列 / 原型节 |
+| 📐 产物预览 | → PRD §六 功能需求 的「原型」节 —— stage 3 写**产物意图描述**（文字版「该呈现成什么」，UI task 执行前的视觉/布局指引）作初始内容；close-req 反向对齐时用真实原型链接 / 截图**替换回填**（2026-05-21 eng-review codex#5：意图描述能 upfront 写，不与原型链接一起推迟）|
 | 🔤 占位字典 | → PRD 附件节 |
 | 📦 范围 | 拆：req 级 → PRD §五 非目标 + §六；task 级（这个 task 改哪）→ 留 task |
 | 🎯 关键产品决策 | **结果** → PRD §四 需求分析 / §六；**备选 + 理由** → delta-7 req 事件流的 `decision` 事件（见结论 1）|
@@ -141,7 +141,7 @@ project-solution = **一个 skill**（项目级一次性，不用 req 的 stage-
 
 **⚠️ review F3：vp-3 不是「改 header / 改输入」，是 prd-writing 核心 workflow 重写。** 现有 prd-writing 架构性地围绕「原型 / task 完成后写 PRD + 反向校验原型」：步骤 2「原型为权威依据」、步骤 2.5「§六 拆分预处理把原型 page>Tab 结构重组为动作组」、「原型」列、「以原型为准」规则——stage 3 时**没有原型、没有 task**，这些全部失去输入。改造必须：
 - **步骤 0 + 多入口（review Round 2 / E2）**：prd-writing 改造后是**多入口 skill** —— ① **stage-3 orchestrated 模式**（被 req-stage-gate 调）：mode 固定「req 级」，跳过步骤 0 三选一对话；② **standalone 模式**（PM 手动 `/prd-writing`）：保留步骤 0 的「req 级 / 独立 / 补差」三选一，独立 PRD（跨模块评审）能力不丢。vp-3 须显式定义两条入口的边界 + 步骤 0 在 stage-3 模式被 stage-gate 短路的机制。
-- **步骤 2 / 2.5**：原型反向校验、§六 拆分预处理改为**从 analysis.md 的功能分解派生** §六 层级（动词锚定规则保留，但重组对象从「原型 UI 结构」换成「analysis 功能清单」）；「原型」列在 stage 3 留空，由 delta-6 close-req 反向对齐时回填。
+- **步骤 2 / 2.5**：原型反向校验、§六 拆分预处理改为**从 analysis.md 的功能分解派生** §六 层级（动词锚定规则保留，但重组对象从「原型 UI 结构」换成「analysis 功能清单」）；「原型」节 stage 3 写**产物意图描述**（文字版，§2.2）作初始内容、**不留空**，由 delta-6 close-req 反向对齐时用真实原型替换回填（2026-05-21 eng-review codex#5：UI task 执行前要有视觉/布局意图）。
 - **新增 term-detector 步（review F4）**：现役 per-req 业务词催补在 `req-solution` 步骤 3.5（req-solution 退场后丢失）。prd-writing 写完 PRD 后跑 `term-detector.py` 扫 PRD 名词解释节、patch `docs/CONTEXT.md` 业务术语表。vp-4 同时清掉 req-stage-gate stage 3→4 里依赖 `solution.md`「📖 新业务词」marker 的 grep（marker 源消失）。
 - **确认门归属（review F6）**：现 prd-writing 自带步骤 0 / 步骤 2.5 / 步骤 4 三个 PM 确认；req-stage-gate Stage 2→3 还有自己的确认门 → stage 3 会变 4 个 PM 门（现状只有 1 个），与 delta-3 §4.1③ 正在修的「确认门重叠」反模式同形。定法：prd-writing 加 **stage-3 orchestrated 模式**——跳步骤 0、删步骤 4 最终确认，步骤 2.5 §六 拆分只在 AI 判断有歧义时才询问；stage 3 只保留 **req-stage-gate 一个 PM 定稿确认门**。
 
@@ -170,9 +170,10 @@ project-solution = **一个 skill**（项目级一次性，不用 req 的 stage-
 | vp-2 | **`req-solution` → `project-solution`** —— 独立新 skill（在 `/init-project` 后调；`init-project` SKILL.md handoff 改指 `/project-solution`）：内部两段、产 `docs/CONTEXT.md` + roadmap、砍工程孪生、确认门兼 6 节检查 + 精简/详细模式 + 默认值逃生阀；未决问题闸门写暂存文件 + `check-open-questions.py` 加 `--require-section` | §2.3 §2.4（F2/F5/F15）|
 | vp-3 | **`prd-writing` 前移 stage 3（核心 workflow 重写，非 header 改）** —— 改输入（brief+analysis+CONTEXT）；步骤 0/2/2.5 重写（无原型，§六 从 analysis 派生）；**多入口**：stage-3 orchestrated 模式（单一确认门）+ 保留 standalone 独立/补差模式（E2）；加 term-detector 步；清全文「阶段 6」框架文案 | §2.5（F3/F4/F6/F16 + E2）|
 | vp-4a | **req-stage-gate Stage 2→3 重写 + 换芯** —— 调 prd-writing；砍 solution 双文件 reconcile + 行数 lint + stage 3→4 的 6 节门 + 📖 marker grep；`req-transition.py`（`STAGE_OUTPUT_FILES[3]=prd.md`、`STAGE_NAMES[3]=功能规格`、可执行错误信息、文件存在性新旧判别 E3）| §2.1 §2.6（F1 / E3）|
-| vp-4b | **下游消费者契约迁移** —— `task-plan` / `task-spec` / `close-req` / `status-view.py` / `CLAUDE.md.tmpl` 全切 `prd.md`；抽单一 stage-metadata 表（name/output_file/review_target）脚本模板统一引用；剥离 `check-engineering-doc-size.py` solution 分支 | §2.1 §2.6（F1 / F13 / F17）|
-| vp-5 | **新产物模板** —— `roadmap` 模板（DISCUSSION-LOG 不做，UC-3 改 delta-7 事件）；`req-prd.md.tmpl` header 生命周期声明改写（章节结构不动）| §2.2 §2.3 §2.5 |
-| vp-6 | **legacy readiness gate** —— 宿主 `new-req`（E5）：已有项目首次跑 `/new-req` 时检查 CONTEXT.md 6 节、缺节触发 mini-fill | §2.3（F10）|
+| vp-4b | **下游消费者契约迁移** —— **完整 solution.md 消费者集**（2026-05-21 eng-review A1 全仓 grep，~25 处 vs 原命名 ~8）：`task-plan` / `task-spec`（delta-3 owns）/ `close-req` / `doc-update` / `req-analysis` / `status-view.py` / `init-project.sh` / `derive-structure-templates.py` / `check-doc-pm-view.py` / `_lib/term-detector.py` / `_shared/term-detector` / `_shared/pm-view/*`（solution 侧引用）/ `CLAUDE.md.tmpl` —— 全切 `prd.md` 或清理；抽单一 stage-metadata 表（name/output_file/review_target）脚本模板统一引用；剥离 `check-engineering-doc-size.py` solution 分支。⚠️ 实施时再全仓 grep 复核 | §2.1 §2.6（F1 / F13 / F17 / A1）|
+| vp-4c | **quick-fix 语义路由改造**（2026-05-21 eng-review A1）—— `quick-fix/SKILL.md:152,154,184` 引用 `solution.md` / `solution.engineering.md` / `/req-solution`：solution.md→prd.md 引用迁移 + **决策性编辑路由从 `/req-solution` 改指 stage-3 `/prd-writing` revise**（路由逻辑语义改写，非机械字符串替换）；umbrella §5 已把 quick-fix 移出「原样复用」 | §2.6（A1）|
+| vp-5 | **新产物模板** —— `roadmap` 模板 + **最小 schema**（2026-05-21 eng-review codex#3）：固定路径、字段（req-id / 标题 / 状态 planned·active·done / 排序）、状态推进规则（谁在何时改）；模板 header 写明本包内 roadmap = **PM 规划视图**（机器消费者 newreq 随 delta-5 落地）。`req-prd.md.tmpl` header 生命周期声明改写（章节结构不动）| §2.2 §2.3 §2.5（codex#3）|
+| vp-6 | **legacy readiness gate** —— 宿主 `new-req`（E5）：已有项目首次跑 `/new-req` 时检查 CONTEXT.md 6 节、缺节触发 mini-fill。⚠️ **commit 边界**（2026-05-21 eng-review codex#2）：现役 new-req commit 范围仅 `brief.md / .req-meta.json / tasks/`，mini-fill 写的 `docs/CONTEXT.md` 落在范围外 → 必须扩 new-req commit 范围含 `docs/CONTEXT.md`（仅 mini-fill 触发时），否则补好的基线悬空、下游 stage 2 读不到 | §2.3（F10 / codex#2）|
 | vp-7 | **测试 + SOP** —— per-vp test matrix（见下）；`框架同步-SOP.md` 补 delta-2+4+8 迁移段；PM operator docs sweep（≤10 行新 happy path）| §2.6（F9/F16）|
 
 **vp-7 test matrix**（review F9 + Round 2 E6）：
@@ -181,7 +182,9 @@ project-solution = **一个 skill**（项目级一次性，不用 req 的 stage-
 |---|---|
 | `req-transition.py` stage 3 | `STAGE_OUTPUT_FILES[3]=prd.md`、`STAGE_NAMES[3]=功能规格`；更新 `test-req-transition.sh` stage-3 fixture |
 | **旧 req 兼容（CRITICAL 回归，E3）** | 旧 req（有 `solution.md`、无 `prd.md`）→ `req-transition.py --to 4` 走旧路径成功；新 req（有 `prd.md`）→ 走新路径成功 |
-| dead suites | 从 `run-all.sh` 移除 `test-reconcile-pm-view-immutability.sh`、`test-engineering-doc-size.sh`（solution 部分）|
+| dead suites | delta-2+4 **只剥** `test-engineering-doc-size.sh` / `test-reconcile-pm-view-immutability.sh` 的 **solution 侧用例**，**不从 `run-all.sh` 移除整个 suite**（2026-05-21 eng-review T1：中间态 task 双文件仍在、两 suite 的 task 侧覆盖仍有效；整 suite 删除归 delta-3，见 delta-3 §3 ownership）|
+| quick-fix 路由（A1）| fixture：req worktree 跑 `/quick-fix` 改决策性内容 → 引导走 stage-3 `/prd-writing` revise（非 `/req-solution`）、改 `prd.md` 非 `solution.md` |
+| legacy commit 边界（codex#2）| mini-fill 触发 → `/new-req` commit 范围含 `docs/CONTEXT.md`；下游 stage 2 读得到补好的 6 节 |
 | new suites | project-solution 结构测试；prd-writing@stage3 fixture（brief+analysis+CONTEXT → prd.md，无原型）；**prd-writing standalone 独立/补差模式测试**（E2）；legacy readiness gate（宿主 new-req）|
 | vp-4b 逐消费者 | `task-plan` / `task-spec` / `close-req` 读 `prd.md`、`status-view.py` 显示「功能规格」各一条断言 |
 | fixtures | `req-stage-gate` Stage 2→3 单一确认门断言；`check-open-questions --require-section`；prd-writing **term-detector 步** patch CONTEXT.md 业务术语表 |
@@ -193,7 +196,7 @@ project-solution = **一个 skill**（项目级一次性，不用 req 的 stage-
 
 ## §4 风险与待验
 
-- **契约迁移漏 reader** —— `solution.md` / `solution.engineering.md` 引用面广。缓解：vp-4 改完全仓 grep `solution.md` / `solution.engineering.md` 验证无现役残留（在飞旧 req 的历史产物除外）。
+- **契约迁移漏 reader** —— `solution.md` / `solution.engineering.md` 引用面广。vp-4b 已据 2026-05-21 eng-review A1 全仓 grep 显式枚举完整消费者集（含 quick-fix → vp-4c）；缓解：实施时再全仓 grep 复核无现役残留（在飞旧 req 的历史产物除外）。
 - **delta-8 未就绪** —— delta-2+4 依赖 delta-8（HOW 安家）同批落地；delta-8 单独设计文档若未先成形，本 delta 不能落。缓解：delta-8 设计文档先于实施定稿。
 - **在飞 req 撞同步** —— 同步时若有 req 在 stage 2-3，该 req 走 `req-transition.py` 兼容判断跑完旧路径；可接受，PM 需知情。
 - **prd-writing 重写规模** —— vp-3 是核心 workflow 重写（review F3），非小改；动手前先核 prd-writing 实际行数与步骤 2/2.5 的原型依赖范围。
@@ -247,6 +250,21 @@ project-solution = **一个 skill**（项目级一次性，不用 req 的 stage-
 
 **汇总**：Step 0 + 5 finding 全部落地；0 待决；文档 v1 → v1.1。
 
+### Round 3 — 2026-05-21 — /gstack-plan-eng-review（delta-2+3+4+8 包复核 · 含 codex outside-voice）
+
+> **review 范围**：作为 delta-2+3+4+8 包的一员复核（包经 codex#4 扩为 delta-2+3+4+7+8）。
+
+| # | Severity | Finding 摘要 | 决议 |
+|---|---|---|---|
+| A1 | P1 | vp-4b 的 solution.md 消费者清单不全（全仓 grep ~25 处 vs 命名 ~8）；quick-fix（umbrella §5「原样复用」）引用 solution.md / req-solution、需语义路由改写 | **ACCEPT** —— §3 vp-4b 补完整消费者集 + 新增 vp-4c quick-fix 语义路由；umbrella §5 已移 quick-fix |
+| T1 | P2 | vp-7「dead suites」与 delta-3 §3 ownership 矛盾：delta-2+4 早删 `test-reconcile-pm-view-immutability.sh` 会让中间态 task 双文件 reconcile 覆盖丢失 | **ACCEPT（IRON）** —— vp-7 改为只剥 solution 侧用例、不删整 suite；整 suite 删归 delta-3 |
+| codex#2 | Critical | legacy mini-fill 宿主 new-req，但 new-req commit 范围仅 brief/.req-meta/tasks → mini-fill 写的 `docs/CONTEXT.md` 悬空、下游读不到 | **ACCEPT** —— vp-6 加 commit 边界处理：mini-fill 触发时 new-req commit 范围含 `docs/CONTEXT.md` |
+| codex#3 | High | roadmap 无路径 / schema / 状态规则 / 真实 consumer，vp-5 只写「模板」 | **ACCEPT** —— vp-5 补 roadmap 最小 schema + 明说本包内 = PM 规划视图（机器消费随 delta-5）|
+| codex#5 | High | 产物预览迁 PRD 但 stage 3「原型列」留空等 close-req 回填 → UI task 执行前无视觉意图 | **ACCEPT（PM 决议）** —— 产物预览落 PRD 原型块作 stage-3 初始内容（文字版意图描述），close-req 用真实原型替换回填（§2.2 / §2.5）|
+| codex#4 | High | 决策备选 / 理由（§2.2 结论 1）归 delta-7 事件流，但 delta-7 不在最小包 → 第一批 req 决策理由无家 | **ACCEPT（PM 决议）** —— delta-7 拉入最小落地包 = delta-2+3+4+7+8（umbrella §8 重排、delta-7 待开聚焦设计文档）；§2.2 不动（delta-7 现已在包内，rationale 有家）|
+
+**汇总**：6 ACCEPT（A1 / T1 / codex#2 / codex#3 / codex#5 / codex#4）；0 待决。最小落地包扩为 delta-2+3+4+7+8。文档 v1.1 → v1.2。
+
 ---
 
 ## §Y 决议日志
@@ -269,10 +287,11 @@ project-solution = **一个 skill**（项目级一次性，不用 req 的 stage-
 | 2026-05-20 | §X F1-F18 ACCEPT、F19 DEFER（转 delta-6）；下一步 PM 据 §X 修订 §2/§3 成 v1 | 见 §X Round 1 |
 | 2026-05-20 | v1 修订完成：§2.1-§2.6 / §3 / §4 据 §X Round 1（18 ACCEPT）+ 3 UC 决议改写；vp-1 拆出、vp-4 升级契约迁移、DISCUSSION-LOG 改 delta-7 事件、prd-writing 重估为 workflow 重写 | 文档 v0 → v1 |
 | 2026-05-20 | /plan-eng-review v1 复审（§X Round 2）：Step 0 拆 vp-4→vp-4a/4b；E1-E6 全决议——prd-writing 保留多入口、旧 req 文件存在性判别、legacy gate 宿主 new-req、vp-7 补 4 项测试 | 文档 v1 → v1.1 |
+| 2026-05-21 | /plan-eng-review 包复核（§X Round 3）：6 finding 全 ACCEPT —— vp-4b 补完整消费者集 + 新增 vp-4c quick-fix 语义路由、vp-5 roadmap schema、vp-6 commit 边界、§2.2/§2.5 产物预览 PRD 原型块、vp-7 dead-suite 对齐 delta-3。最小落地包扩 delta-7 → delta-2+3+4+7+8 | 文档 v1.1 → v1.2 |
 
 ---
 
-**End of PRD / solution 分层对调 v1.1**
+**End of PRD / solution 分层对调 v1.2**
 
 ---
 
@@ -281,10 +300,10 @@ project-solution = **一个 skill**（项目级一次性，不用 req 的 stage-
 | Review | Trigger | Why | Runs | Status | Findings |
 |--------|---------|-----|------|--------|----------|
 | CEO Review | `/plan-ceo-review` (via /autoplan) | Scope & strategy | 1 | issues_open | 4/10 — 前提确认，§2 设计 3/3 维度 flagged，4 critical gap |
-| Eng Review | `/plan-eng-review` | Architecture & tests | 2 | clean | Round 1 (autoplan, v0): 5/10, 19 finding; Round 2 (v1 复审): v1 修订 sound，Step 0 + 5 minor finding 全决议 |
+| Eng Review | `/plan-eng-review` | Architecture & tests | 3 | issues_open | R1 (autoplan v0): 19 finding；R2 (v1 复审): clean；R3 (2026-05-21 包复核): 6 finding 全决议 → v1.2 |
 | DX Review | `/plan-devex-review` (via /autoplan) | Operator experience | 1 | issues_open | 5/10 — stage-3 operator UX 回退（1→4 确认门）|
 | Design Review | `/plan-design-review` | UI/UX gaps | 0 | — | skipped — 无 UI scope（建 skill/模板/脚本，不建界面）|
 
 - **CROSS-MODEL:** Round 1 = 6 voices（Codex ×3 + Claude subagent ×3），收敛度异常高、3 个 critical 均带 file:line 证据。Round 2（v1 eng 复审）= 单 reviewer，boomerang 确认 Round 1 的 9 条 v0 eng finding 全部已在 v1 落地。
-- **UNRESOLVED:** 0 —— Round 1：18 ACCEPT / 1 DEFER / 3 UC 已 PM 决议；Round 2：Step 0 + 5 finding 全决议。
-- **VERDICT:** v1.1 —— 两轮 review 收敛。§0 前提成立；§2/§3 经 autoplan（v0→v1）+ plan-eng-review（v1→v1.1）两轮、所有 finding 落地、0 待决。文档层面 **ENG CLEARED**。实施前置依赖：delta-8 设计文档需先定稿（§4）。
+- **UNRESOLVED:** 0 —— Round 1：18 ACCEPT / 1 DEFER / 3 UC；Round 2：Step 0 + 5 finding；Round 3：6 finding（含 codex outside-voice 1 Critical）全决议。
+- **VERDICT:** v1.2 —— 三轮 review。§0 前提成立；§2/§3 经 autoplan + 两轮 plan-eng-review、所有 finding 落地、0 待决。R3 把 delta-7 拉入最小包 + 多处 vp 修订。**ENG 待 delta-2+3+4+7+8 整包复跑 /plan-eng-review 确认**再实施。

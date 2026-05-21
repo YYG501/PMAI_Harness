@@ -1,7 +1,7 @@
 <!-- /autoplan restore point: <LOCAL_GSTACK_HOME>/projects/PM-AI-Workflow/main-autoplan-restore-20260520-183348.md -->
-# task-spec 重构（delta-3 · 双文件塌缩 + 啰嗦点收口）(v1)
+# task-spec 重构（delta-3 · 双文件塌缩 + 啰嗦点收口）(v2)
 
-> **状态**：v1（2026-05-21）—— §1-§5 据 §X Round 1（18 finding：17 ACCEPT + UC-1 typed contract 决议）修订完成。待 PM 复核 / 实施（建议实施前重跑 /plan-eng-review）。§X Round 1 = v0 的 autoplan 6-voice review 记录，保留作历史。最小落地包 = delta-2+3+4+8；**连带 delta-8 需 v1→v2**（见 §3 ownership 表）。
+> **状态**：v2（2026-05-21）—— v1 经 /plan-eng-review 包复核修订（§X Round 2）：6 finding 落地 —— §2.8 保留单文件 PM-确认区 tamper-hash（A2，推翻 v1「hash 整组删」）、§3 ownership 表补 close-req/doc-update（A3）、§2.5 build-execution-prompt.py 写死抽执行区（P1-perf）、vp-11 补 in-flight 旧 req e2e + tamper-hash 测试（T2/T3）、措辞精度（F6）。最小落地包 = **delta-2+3+4+7+8**（delta-7 经 codex#4 拉入，见 umbrella §8）。§X Round 1/2 = review 历史。
 > **日期**：2026-05-21
 > **作者**：PM + AI
 > **来源**：`管线重构-GSD-review.md` §4 delta-3 + §4.1 五个啰嗦点 + §8 实施顺序第 2 步；`PRD-solution-对调.md` v1.1 §2.2 / §X F11；`实现设计视图-HOW安家.md` v1 §4.1。最小落地包 = delta-2+3+4+8。
@@ -83,7 +83,7 @@ task-spec 产 **1 个物理文件** `tasks/task-NNN-<slug>.md`（不恢复双文
 
 ### §2.2 hash 机器去向 + 落盘（Q2 已定 · D3-8 修订）
 
-- **hash / reconcile / lazy-sync 整组随双文件删除** —— 步骤 9 hash 写入、步骤 10.5 hash 自检、步骤 11.0 / 12.5 reconcile 全消失；`input-flow.md` §9.6 整节作废；`finalize-review.py`（100% 服务双文件 hash）**整个脚本删除**（§2.5）。
+- **reconcile / lazy-sync 随双文件删除；hash 用途分离**（2026-05-21 eng-review A2 修订 v1「hash 整组删」）—— 步骤 9 双文件 hash 写入、步骤 11.0 / 12.5 reconcile 全消失，`input-flow.md` §9.6 整节作废，`finalize-review.py`（100% 服务双文件 hash）**整个脚本删除**（§2.5）。**但 hash 自检（步骤 10.5）不全删** —— 双文件**同步**用途没了，**binding-contract tamper 检测**用途保留为单文件最小 tamper-hash（确认门退出对 PM 确认区算、后续写入校验；见 §2.8）。
 - **落盘留在 task-spec，不移 `create-task-worktree.sh`**（D3-8 修订 v0 原方案）—— §0 痛点⑤是「落盘被写成 ~25 行 skill prose」，**病根是 prose 啰嗦、不是落盘发生在 task-spec**。根因优先：把 25 行 prose 压成 **1 行 helper 调用** —— 现役 `_lib/dirty-check.sh` 的 `auto_commit_docs` 保留，task-spec 确认门后调一行 `auto_commit_docs "$REQ_WORKTREE" "<msg>" "$TASK_FILE"`（单文件，pathspec 一个文件）。
 - **`create-task-worktree.sh` 的 I-DC1 pre-fork gate 保持「最后防线」语义不变**（不升主路径）—— 仍是异常兜底、触发仍告警。v0 把它升唯一机制 = fallback 当主路径（§X D3-8），废。
 - **「PM 决策 = binding contract」纪律保留**（§X D3-9）—— 删的是 hash 这个机制，不是删「PM 在确认门判定保留的内容 AI 不得改」这条约束。revise 模式仍守：只改 PM 明确要求改的段落，不顺手 normalize 其他（memory `feedback_pm_decision_is_binding_contract`）。
@@ -131,7 +131,7 @@ task-spec 产 **1 个物理文件** `tasks/task-NNN-<slug>.md`（不恢复双文
 | `close-task` | merge 回 req 分支从两文件改一文件 |
 | `close-req` / `doc-update` | **(v0 漏)** 从 task 读功能清单 / 偏差的输入契约改 typed 区锚点 |
 | `create-task-worktree.sh` | v4.5「fork 后删两文件」改删一文件；I-DC1 pre-fork gate pathspec 单文件化（语义不变，§2.2）|
-| `build-execution-prompt.py` | 执行信封 2 路径 → 1 路径 |
+| `build-execution-prompt.py` | 执行信封 2 路径 → 1 路径；**「1 路径」= 抽取 task 单文件的「执行区」进信封**（2026-05-21 eng-review P1-perf），不塞整文件 —— executor 信封不带 PM 确认区 / 审计区，保持旧双文件「executor 只见工程内容」边界 |
 | `resolve-executor.py` | **(v0 漏)** executor/model 字段源从 `.engineering.md` 改单文件 PM 确认区·任务卡；`FIELD_RE` 改用 `state.py:parse_field`（去掉自带 v1-only 解析器）|
 | `_lib/state.py` | **(v0 漏)** `detect_format` 改三态（§2.7）；`read_section` 单文件查找 |
 | `task-transition.py` | **(v0 漏)** §10/§11 gate 改单文件内查找（§2.6 critical）；`--discard` 成对 `git mv` 改单文件 |
@@ -185,7 +185,7 @@ task-spec 产 **1 个物理文件** `tasks/task-NNN-<slug>.md`（不恢复双文
 
 | 删掉的 guard | 原本拦什么 | v1 替换 |
 |---|---|---|
-| hash 自检（步骤 10.5）| AI 偷改 PM 决策保留的内容 | revise 模式 prose 约束「只改 PM 要求改的、不顺手 normalize」（binding-contract 纪律，§2.2）|
+| hash 自检（步骤 10.5）| AI 偷改 PM 决策保留的内容 | **保留为单文件最小 tamper-hash**（2026-05-21 eng-review A2，推翻 v1「换 prose」）—— 确认门退出对 **PM 确认区**算 hash、后续任何写入校验；不含双文件 reconcile / lazy-sync。机械 guard 守 binding-contract（对齐 memory `feedback_pm_decision_is_binding_contract`「确认门退出必算 hash 自检」）；revise prose 约束「只改 PM 要求改的、不顺手 normalize」作补充 |
 | reconcile（11.0 / 12.5）| 双文件失同步 | 无需 —— 单文件无第二份 |
 | 占位字典完整性闸门（10.7）| ASCII 占位词字典漏登记 → executor 无契约 | task-scoped 占位值内联进执行区（§2.6）；executor 不跨文件回查 |
 | PM-view lint 整文件（10.5）| PM 视图写作违规 | `check-doc-pm-view.py` **scoped 模式** —— 改成只校验 PM 确认区（§2.1 / UC-1）|
@@ -227,6 +227,8 @@ task-spec 产 **1 个物理文件** `tasks/task-NNN-<slug>.md`（不恢复双文
 | **旧 v2 双文件兼容（IRON 回归）** | 旧 v2 task → `task-confirm` / `task-execute` / `close-task` 兼容跑完 |
 | grep residual | **生产路径**断言无 `.engineering.md` / `synced_pm_view_hash` 生成；legacy 兼容代码 + 测试 fixture 的 `.engineering.md` 引用集中可数（与上一条**不同 grep**）|
 | dead suites | `test-engineering-doc-size.sh` 全删、`test-reconcile-pm-view-immutability.sh` 删；逐一标改/删：`test-task-spec.sh` / `test-fixture-v2.sh` / `test-executors.sh` / `test-close-task.sh` / `test-pre-dispatch-doc-gate.sh` / `e2e/test-full-task-loop.sh` / `helpers/fixture.sh` |
+| **单文件 tamper-hash（A2 回归）** | 确认门退出对 PM 确认区算 hash；后续写入若改动 PM 确认区 → 校验失败报错（binding-contract 机械 guard）|
+| **in-flight 旧 req e2e（T2 / IRON 回归）** | 完整旧 req fixture（旧 solution.md + 旧 task 双文件 + solution.engineering.md）跑过 delta-2+3+4+7+8 同步后框架 → 走到 close 成功 |
 | baseline | 明确新基线数（现 269）|
 
 **落地顺序 + 跨 delta 文件 ownership**（D3-2 / D3-13 / D3-16）：
@@ -235,11 +237,14 @@ task-spec 产 **1 个物理文件** `tasks/task-NNN-<slug>.md`（不恢复双文
 
 | 文件 | ownership |
 |---|---|
-| `task-spec` | delta-3 独占重写（吸收 delta-2+4 vp-4b + delta-8 vp-3）|
+| `task-spec` | delta-3 独占重写（吸收 **delta-2+4 vp-4b 的 task-spec 切片** + delta-8 vp-3；2026-05-21 eng-review F6 精确措辞 —— vp-4b 其余消费者 task-plan / close-req / status-view 等仍归 delta-2+4）|
 | `check-engineering-doc-size.py` | delta-2+4 剥 solution 分支 → delta-3 **删整脚本**（vp-10）|
-| `test-reconcile-pm-view-immutability.sh` | **delta-3 删**（它同时测 solution + task 双文件；delta-2+4 落地、delta-3 未落地的中间态仍需 task 部分覆盖，delta-2+4 不应早删）|
-| `task.engineering.md.tmpl` | delta-3 vp-1 **删**；delta-8 v1 vp-4 对它的引用标 obsolete |
-| `build-execution-prompt.py` | delta-3 vp-8 改 1 路径；delta-8 v1 §2 / vp-4 的「2 路径零改」措辞作废 |
+| `test-reconcile-pm-view-immutability.sh` | **delta-3 删整 suite**；delta-2+4 只剥其 solution 侧用例、不删整 suite（中间态 task 双文件仍在、task 侧覆盖仍有效）—— 2026-05-21 eng-review T1 已对齐 delta-2+4 vp-7 |
+| `test-engineering-doc-size.sh` | delta-2+4 剥 solution 侧用例 → delta-3 删整 suite（随 `check-engineering-doc-size.py` 退场，vp-10）—— A3 补登 |
+| `task.engineering.md.tmpl` | delta-3 vp-1 **删**；delta-8 vp-4 对它的引用标 obsolete |
+| `build-execution-prompt.py` | delta-3 vp-8 改 1 路径（= 抽执行区，§2.5）；delta-8 §2 / vp-4 的「2 路径」措辞 v2 已作废 |
+| `close-req` | delta-2+4 vp-4b 切 solution→prd 读；delta-3 §2.5 改 task 文件读为 typed 区锚点 —— **两 delta 顺序改不同部分**（2026-05-21 eng-review A3 补登）|
+| `doc-update` | delta-2+4 vp-4b 切 solution→prd 读；delta-3 §2.5 改 task 读为 typed 区锚点 —— 同上（A3 补登）|
 
 **⚠️ 连带：delta-8 v1 需 v1→v2**（§X D3-2 / D3-16）—— delta-8 `实现设计视图-HOW安家.md` v1 是已定稿文档，其 §1/§2/§3/§4.1 + D8-3/D8-5 决议**全部假设 task-spec 写进双文件 `task.engineering.md`**。delta-3 单文件 typed contract 推翻这个前提。delta-8 必须 v1→v2：所有「自包含 `task.engineering.md`」措辞改为「单文件 typed contract 的执行区」；「`build-execution-prompt.py` 2 路径零改」改 1 路径；vp-4 test matrix「2 路径」断言作废；delta-8 vp-3 并入 delta-3 vp-3。delta-3 落地前 delta-8 须先 v2。
 
@@ -250,7 +255,7 @@ task-spec 产 **1 个物理文件** `tasks/task-NNN-<slug>.md`（不恢复双文
 ## §4 砍掉 / 不做的机制清单（防 review 回写）
 
 1. ❌ 不保留双文件 —— task-spec 产单文件 typed contract（②④ 的根）
-2. ❌ 不保留 hash / reconcile / lazy-sync —— 随双文件删除；但**砍机制不砍 binding-contract 纪律**（PM 决策不可改，§2.2 / D3-9）
+2. ❌ 不保留 reconcile / lazy-sync —— 随双文件删除；**hash 自检保留为单文件最小 tamper-hash**（2026-05-21 eng-review A2：守 binding-contract 的机械 guard，仅删双文件同步用途，见 §2.8）；**砍机制不砍 binding-contract 纪律**（PM 决策不可改，§2.2 / D3-9）
 3. ❌ 不保留三类 sentiment 分流 —— 改 relevance 二分（§2.4）
 4. ❌ task 文件不**整体**跳过 lint —— 执行区不跑 PM-view lint，但 **PM 确认区跑 scoped PM-view lint**（UC-1 修订 v0「完全不 lint」的错误表述）
 5. ❌ task-spec 不再产 req 级产物预览 / 占位字典主表 / 自测说明主表 —— 已移 PRD（delta-2）；但 task-spec **仍派生 task-scoped 自测说明 + 占位值**进执行区（D3-5/D3-9 —— task 文件对 task-verify / executor 自包含）
@@ -308,6 +313,19 @@ task-spec 产 **1 个物理文件** `tasks/task-NNN-<slug>.md`（不恢复双文
 
 **User Challenge UC-1（typed contract）**：PM 2026-05-21 决议 —— 单文件改 typed contract（内部分 PM 确认区 + 执行区，scoped lint 只校验 PM 确认区，不恢复双文件）。见 §Y。
 
+### Round 2 — 2026-05-21 — /gstack-plan-eng-review（delta-2+3+4+8 包复核 · 含 codex outside-voice）
+
+| # | Severity | Finding 摘要 | 决议 |
+|---|---|---|---|
+| A2 | P2 | §2.8 把 binding-contract guard 从 hash 自检降级为 prose；memory `feedback_pm_decision_is_binding_contract` 记「确认门退出必算 hash 自检」为该机制 | **ACCEPT（PM 决议）** —— §2.8 / §2.2 / §4 保留**单文件最小 tamper-hash**（确认门退出对 PM 确认区算、后续写入校验；不含双文件 reconcile）|
+| A3 | P3 | §3 跨-delta ownership 表漏 close-req / doc-update（被 delta-2+4 + delta-3 两 delta 改）| **ACCEPT** —— §3 ownership 表补 close-req / doc-update / test-engineering-doc-size.sh，完整性扫一遍 |
+| F6 | P3 | §3「delta-2+4 vp-4b 并入 delta-3 vp-3」措辞易读成整个 vp-4b 并入（实际只 task-spec 切片）| **ACCEPT** —— §3 改为「vp-4b 的 task-spec 切片」|
+| T2 | P2 | 缺 in-flight 旧 req 端到端回归 —— 三份文档各测一片兼容、无 e2e | **ACCEPT（IRON）** —— vp-11 test matrix 加完整旧 req e2e |
+| T3 | P2 | A2 决议产生新测试需求（单文件 tamper-hash）| **ACCEPT** —— vp-11 test matrix 加 tamper-hash 回归 |
+| P1-perf | P3 | §2.5 build-execution-prompt.py「1 路径」未写明塞整文件还是抽执行区 | **ACCEPT** —— §2.5 写死「1 路径 = 抽取执行区」，executor 信封不带 PM 确认区 / 审计区 |
+
+**汇总**：6 ACCEPT；0 待决。A2 推翻 v1 §2.8「hash 自检换 prose」。最小落地包扩 delta-7（codex#4，见 umbrella §8）。文档 v1 → v2。
+
 ---
 
 ## §Y 决议日志
@@ -320,10 +338,11 @@ task-spec 产 **1 个物理文件** `tasks/task-NNN-<slug>.md`（不恢复双文
 | 2026-05-21 | §X D3-2~D3-18 共 17 条 ACCEPT；D3-1 转 User Challenge UC-1（typed contract）待 PM 决策 | 下一步 PM 决 UC-1 → 据 §X 修订 v1 |
 | 2026-05-21 | UC-1 PM 决议：单文件改 **typed contract** —— 内部分「PM 确认区」(任务卡/范围/验收/反馈承接) +「执行区」(实现规格/易错点/工程验收)，`check-doc-pm-view.py` 改 scoped 模式只校验 PM 确认区；不恢复双文件、§0 不动 | D3-1 ACCEPT；§X 18 finding 全决议，下一步据 §X 修订 v1 |
 | 2026-05-21 | v1 修订完成：§1-§5 据 §X Round 1（18 finding 全决议）改写 —— typed contract 三区结构（§2.1/§2.6）、落盘留 task-spec（§2.2）、反馈承接清单（§2.4）、blast radius 补全 19 项 + detect_format 三态（§2.5/§2.7）、guard 替换表（§2.8）、vp 重拆为 11 条、登记 delta-8 需 v1→v2 | 文档 v0 → v1 |
+| 2026-05-21 | /plan-eng-review 包复核（§X Round 2）：6 finding 全 ACCEPT —— §2.8 保留单文件 tamper-hash（A2 推翻 v1「hash 整组删」）、§3 ownership 补 close-req/doc-update（A3）、§2.5 信封抽执行区（P1-perf）、vp-11 补 e2e + tamper-hash 测试（T2/T3）、措辞精度（F6）。最小落地包扩 delta-7 → delta-2+3+4+7+8 | 文档 v1 → v2 |
 
 ---
 
-**End of task-spec 重构（delta-3）v1**
+**End of task-spec 重构（delta-3）v2**
 
 ---
 
@@ -332,11 +351,11 @@ task-spec 产 **1 个物理文件** `tasks/task-NNN-<slug>.md`（不恢复双文
 | Review | Trigger | Why | Runs | Status | Findings |
 |--------|---------|-----|------|--------|----------|
 | CEO Review | `/plan-ceo-review` (via /autoplan) | Scope & strategy | 1 | issues_open | 4-6.5/10 — §0 成立；§1-§5 范围漏 consumer、撞 delta-8、3 处实质决策推给实施期 |
-| Eng Review | `/plan-eng-review` (via /autoplan) | Architecture & tests | 1 | issues_open | 4-4.5/10 — blast radius 漏 13+ consumer、`task-transition.py` gate 必败、缺 section 归宿表、`detect_format` 三态不成立 |
+| Eng Review | `/plan-eng-review` | Architecture & tests | 2 | issues_open | R1 (autoplan v0): 18 finding；R2 (2026-05-21 包复核): 6 finding 全决议（A2 保留 tamper-hash / A3 / F6 / T2 / T3 / P1-perf）→ v1→v2 |
 | DX Review | `/plan-devex-review` (via /autoplan) | Operator experience | 1 | issues_open | 4-6/10 — 确认门盲签、格式迁移错误信息误导、删 guard 后静默漂移、反馈 lane 黑盒 |
 | Design Review | `/plan-design-review` | UI/UX gaps | 0 | — | skipped — 无 UI scope（重构 skill / 模板 / 脚本，不建界面）|
 
 - **CROSS-MODEL**：6 voices（Codex ×3 + Claude subagent ×3），收敛度异常高 —— 两模型独立落到同一批 critical（单文件应 typed contract / blast radius 漏 consumer / 撞已定稿 delta-8）。memory `feedback_autoplan_preread_existing_skill` 应用：6 个 dual-voice prompt 全部强制前置读实际 repo skill + 脚本，故 finding 全带 file:line。
 - **CROSS-PHASE THEME**：「单文件不该裸成无 lint 执行合同」在 CEO / Eng / DX 三相独立出现 → 高置信信号，转 User Challenge UC-1。「blast radius 漏 consumer」CEO + Eng 双相命中。「撞 delta-8」三相命中。
-- **UNRESOLVED**：1 —— D3-1（User Challenge UC-1，待 PM 决策）；其余 17 ACCEPT。
-- **VERDICT**：delta-3 v0 **非 implementation-ready**（与 delta-2+4 v0 / delta-8 v0 同档）。§0 成立；§1-§5 需据 §X Round 1（17 ACCEPT + UC-1 决议）修订成 v1。修订后建议重跑 /plan-eng-review 再实施。最小落地包 = **delta-2+3+4+8**。
+- **UNRESOLVED**：0 —— Round 1：D3-1 经 UC-1 PM 决议 ACCEPT + D3-2~D3-18 共 18 ACCEPT；Round 2：6 finding（含 codex outside-voice）全决议。
+- **VERDICT**：delta-3 v2 —— 经 autoplan(v0→v1) + /plan-eng-review 包复核(v1→v2)，§0 成立、两轮 finding 全落地、0 待决。**ENG 待 delta-2+3+4+7+8 整包复跑 /plan-eng-review 确认**再实施。最小落地包 = **delta-2+3+4+7+8**。

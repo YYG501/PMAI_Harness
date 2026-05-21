@@ -1,6 +1,6 @@
 # v3.5 管线重构方案 · PM 已判断 (v2)
 
-> **状态**：PM 已判断（2026-05-20），进入实施
+> **状态**：PM 已判断（2026-05-20）；2026-05-21 /plan-eng-review 复核修订 §5 / §8（delta-7 拉入最小落地包,详见 §Y）
 > **日期**：2026-05-20
 > **作者**：PM + AI
 
@@ -158,8 +158,8 @@ close-task → close-req         TRANSITION
 
 | 处理 | skill |
 |---|---|
-| **原样复用**（~15）| new-req · req-stage-gate · task-plan · task-confirm · task-execute · task-verify · task-submit · close-task · cancel-req · quick-fix · task-status · doc-update · publish-to-lark · term-detector · init-project |
-| **改造**（4）| req-analysis（加增量分支）· req-solution → project-solution · prd-writing（前移成 req 驱动规格）· task-spec（重构）|
+| **原样复用**（~14）| new-req · req-stage-gate · task-plan · task-confirm · task-execute · task-verify · task-submit · close-task · cancel-req · task-status · doc-update · publish-to-lark · term-detector · init-project |
+| **改造**（5）| req-analysis（加增量分支）· req-solution → project-solution · prd-writing（前移成 req 驱动规格）· task-spec（重构）· quick-fix（2026-05-21 eng-review A1：引用 solution.md / solution.engineering.md / req-solution,delta-2+4 后须迁 prd.md + 决策性编辑路由改指 stage-3 prd-writing）|
 | **新建**（1）| codebase-audit |
 
 零 skill 从头重写。
@@ -220,18 +220,24 @@ close-task → close-req         TRANSITION
 
 判断结果：delta-2/3/4/5/6/7/8 全部**通过**；delta-1 **DEFER**；2-item backlog **单独排**。
 
-推荐实施顺序（按依赖）：
+**最小落地包 = delta-2+3+4+7+8**（2026-05-21 /plan-eng-review 修订：codex outside-voice 查出 delta-2+4 §2.2 决策理由、delta-3 §2.4 跨模块反馈均已归 delta-7 事件流 —— delta-7 不在包内则第一批 req 决策理由无家；delta-7 由「后续轮次」拉入最小包）。
+
+推荐实施顺序（按依赖；delta-8 拆 vp 交错进 delta-3 两侧）：
 
 | 步 | 做什么 | 依赖 |
 |---|---|---|
-| 1 | delta-2 + delta-4 —— PRD / solution 对调（地基，一起做）| — |
-| 2 | delta-3 —— task-spec 重构（①②③ 全改）| delta-2 |
-| 3 | delta-8 —— HOW 安家 | delta-3 + delta-4 |
-| 4 | delta-7 —— req 级事件流 | — |
-| 5 | delta-6 —— A 反向对齐 | delta-7 + delta-2 |
-| 6 | delta-5 —— newreq 增量分析（独立小项，随时）| — |
+| 1 | delta-7 —— req 级事件流（独立 infra，先建：后续 delta 的决策理由 / 反馈有家）| — |
+| 2 | delta-2 + delta-4 —— PRD / solution 对调（地基，一起做）| delta-7 |
+| 3 | delta-8 vp-1/vp-2 —— implementation-design 模板 + skill（与 delta-2+4 无文件冲突，可先行）| delta-4 |
+| 4 | delta-3 —— task-spec 重构（一次性吸收 prd.md + implementation-design 两个上游 reader）| delta-2 + delta-8 vp-1/2 |
+| 5 | delta-8 vp-3（并入 delta-3 vp-3）+ vp-4 收尾 | delta-3 |
+| 6 | delta-6 —— A 反向对齐 | delta-2 + delta-7 |
+| 7 | delta-5 —— newreq 增量分析（独立小项，随时）| — |
 
-- **2-item backlog**（lark-adapter 单一入口 + 读层 state.py）：独立线，不并这轮、不阻塞管线重构；动手前先核实 `_lib/state.py` 是否已实现（近期状态盘点显示它像已存在）。
+> 步 1-5 = **最小落地包 delta-2+3+4+7+8**，须同批落地、不可拆单独 ship。步 6-7 为后续轮次。
+
+- **delta-7 聚焦设计文档待补** —— delta-7 拉入最小包后仍需按 `_模板-方案.md` 开一份聚焦设计文档（§0 痛点锁 PM 共写），先于实施定稿。
+- **2-item backlog**（lark-adapter 单一入口 + 读层 state.py）：独立线，不并这轮、不阻塞管线重构；动手前先核实 `_lib/state.py` 是否已实现。
 - 每个通过的 delta → 各开一份聚焦设计文档（`_模板-方案.md`）落地。
 
 ---
@@ -249,6 +255,7 @@ close-task → close-req         TRANSITION
 | 2026-05-20 | 记入 agent 边界设计原则：planning/决策类 skill 不 agent 化（协作在主线程），自主机械活才 agent 化 | §6.1 新增 |
 | 2026-05-20 | 记入 task 详化时机：lazy（两模式都不批量写死），两模式仅差 PM 验收闸门；GSD 容忍 / 我们规避 staleness | §3.1 新增 |
 | 2026-05-21 | §6.1 补「第二根轴 · 运行时能力」：executor 可插拔（Claude/Codex/Cursor）能力集不一，机械步是否折进 executor 取决于是否需 Claude/gstack 专有工具；task-verify 因需 gstack-browse 留 Claude 侧。「例子」列标注非穷举 | §6.1 扩充 |
+| 2026-05-21 | /plan-eng-review 复核 delta-2+3+4+8 包（13 finding，含 codex outside-voice 2 Critical）：§5 quick-fix 移入「改造」（A1）；§8 重排 —— delta-7 拉入最小落地包（codex#4）、delta-8 vp 交错进 delta-3 两侧（F7）。13 finding 决议分别落 delta-2+4 / delta-3 / delta-8 各 §X，delta-7 待开聚焦设计文档 | §5 / §8 修订 |
 
 ---
 
