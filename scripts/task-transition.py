@@ -16,6 +16,7 @@ if _SCRIPTS_DIR not in sys.path:
     sys.path.insert(0, _SCRIPTS_DIR)
 
 from _lib.state import read_section, has_meaningful_content
+from _lib.events import has_execution_event, load_events_strict
 
 # 兼容两种 task 元信息格式：
 #   旧版（段落）：**字段：** 值
@@ -40,6 +41,17 @@ def _parse_field_line(line: str) -> tuple[str, str] | None:
 # Backward compatibility alias for any callers that reference FIELD_RE directly
 FIELD_RE = FIELD_RE_OLD
 
+# Task 状态机：
+#
+#   待执行 ──/task-confirm──▶ 执行中 ──PM 验收──▶ 已完成 (终态)
+#     │                        │
+#     │     --fail-execution / └──执行失败回退──▶ 待执行
+#     │     --cancel-manual
+#     └──────────┬─────────────┘
+#                └────--discard────▶ 已废弃 (终态)
+#
+# 「执行中→已完成」验收（check_preconditions）除文档偏差/自审记录外，还要求
+# 事件流含 execution 事件（accept 闸门）—— I-CT7 在 close-task 兜底。
 VALID_TRANSITIONS = {
     "待执行": ["执行中"],
     "执行中": ["已完成", "待执行"],  # 待执行 = --fail-execution / --cancel-manual 回退
@@ -240,6 +252,30 @@ def check_preconditions(
                 "Error: 自审记录 section 为空。请至少完成一次自审并记录结果。",
                 file=sys.stderr,
             )
+            sys.exit(1)
+
+        # 3. accept 闸门（I-CT7 核心校验前移）：事件流须证明执行器被触发过。
+        #    无 execution 事件 = /task-execute 从未跑过 → 拒绝验收。
+        #    事件流缺失/不可读/含坏行 = 无法确认 → fail-closed（与 I-CT7 同口径）。
+        events_file = (
+            find_main_repo_root() / ".runs" / "events" / f"{task_file.stem}.jsonl"
+        )
+        events, problems = load_events_strict(events_file)
+        if not has_execution_event(events):
+            if problems:
+                print(
+                    "Error: accept 闸门 —— 无法确认执行器被触发过（fail-closed）：\n"
+                    + "\n".join(f"  - {p}" for p in problems)
+                    + "\n  事件流是 task 真实性的唯一凭据，读不到就不放行。",
+                    file=sys.stderr,
+                )
+            else:
+                print(
+                    "Error: accept 闸门 —— 事件流缺少 execution 事件"
+                    "（execution_started / execution_manual_completed）。\n"
+                    "  说明 /task-execute 从未跑过。请先走 /task-execute 再验收。",
+                    file=sys.stderr,
+                )
             sys.exit(1)
 
         # review 工具改为 PM 自跑推荐项；事件流仍可能含 review_completed
@@ -675,6 +711,89 @@ def cmd_snooze_manual(task_file: Path, days: int) -> None:
     print(f"✅ Manual 提醒暂缓 {days} 天（至 {until.date()}）")
 
 
+def cmd_repair_evidence(task_file: Path, reason: str, yes: bool) -> None:
+    """Handle --repair-evidence: 受支持地补记缺失的 execution 证据。
+
+    用于 task 已在「已完成」、但事件流缺 execution 事件、导致 close-task 的
+    I-CT7 被挡的情形（多为 accept 闸门上线前的遗留 task）。只补一条带
+    repaired 标记的 execution_manual_completed，不改状态、不做任意事件合成。
+    强制 --reason + PM 交互认定（--yes 跳过，用于自动化）。
+    """
+    fields = read_fields(task_file)
+    current = fields.get("状态", "")
+    if current != "已完成":
+        print(
+            f"Error: --repair-evidence 仅用于「已完成」的 task（close-task I-CT7 被挡），"
+            f"当前状态「{current}」。\n"
+            "  「执行中」的 task 请走 /task-execute（含 manual 模式）补 execution 事件。",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+
+    if not reason or not reason.strip():
+        print(
+            "Error: --repair-evidence 必须提供 --reason \"<为何该 task 的 work 真实完成>\"",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+    reason = reason.strip()
+
+    events_file = (
+        find_main_repo_root() / ".runs" / "events" / f"{task_file.stem}.jsonl"
+    )
+    events, _ = load_events_strict(events_file)
+    if has_execution_event(events):
+        print(
+            "Error: 事件流已含 execution 事件，无需 repair。",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+
+    print(
+        "⚠️  evidence-repair —— 受支持的「审计证据补记」命令。\n"
+        f"    task : {task_file.name}\n"
+        f"    理由 : {reason}\n"
+        "    将补记一条带 repaired=true 标记的 execution_manual_completed 事件，"
+        "不改状态。\n"
+        "    仅在你确认该 task 的 work 真实完成时使用 —— 它让 close-task 的 I-CT7 放行。",
+        file=sys.stderr,
+    )
+    if not yes:
+        try:
+            answer = input(
+                "确认该 task 的 work 真实完成、据实补记证据？输入 yes 继续: "
+            ).strip().lower()
+        except EOFError:
+            answer = ""
+        if answer != "yes":
+            print("已取消。", file=sys.stderr)
+            sys.exit(1)
+
+    note = f"evidence-repair（retroactive，PM 认定 work 真实完成）：{reason}"
+    cmd = [
+        sys.executable,
+        str(EVENTS_SCRIPT),
+        "append",
+        str(task_file),
+        "--type",
+        "execution_manual_completed",
+        "--note",
+        note,
+        "--payload",
+        '{"repaired": true}',
+    ]
+    result = subprocess.run(cmd, capture_output=True, text=True)
+    if result.returncode != 0:
+        output = (result.stderr or result.stdout or "").strip()
+        print(f"Error: 事件补记失败: {output}", file=sys.stderr)
+        sys.exit(1)
+
+    print(
+        f"✅ evidence-repair 完成：已向 {task_file.name} 事件流补记 "
+        "execution_manual_completed（repaired=true）。现在可重跑 close-task。"
+    )
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Task status transition")
     parser.add_argument("task_file", help="Path to task file")
@@ -705,7 +824,16 @@ def main() -> None:
     parser.add_argument(
         "--yes",
         action="store_true",
-        help="跳过 --discard 的 confirm prompt（用于自动化场景）",
+        help="跳过 --discard / --repair-evidence 的 confirm prompt（用于自动化场景）",
+    )
+    parser.add_argument(
+        "--repair-evidence",
+        action="store_true",
+        dest="repair_evidence",
+        help="受支持地补记缺失的 execution 证据：用于已是「已完成」、但事件流缺 "
+             "execution 事件、被 close-task I-CT7 挡下的 task。补一条带 repaired "
+             "标记的 execution_manual_completed，不改状态。需 --reason，"
+             "非交互场景加 --yes。",
     )
     parser.add_argument(
         "--snooze-manual",
@@ -759,6 +887,10 @@ def main() -> None:
             print("Error: --discard requires --reason \"<一句话>\"", file=sys.stderr)
             sys.exit(1)
         cmd_discard(task_file, args.reason, args.yes)
+        return
+
+    if args.repair_evidence:
+        cmd_repair_evidence(task_file, args.reason or "", args.yes)
         return
 
     if args.snooze_manual:

@@ -31,6 +31,12 @@ import sys
 from datetime import datetime
 from pathlib import Path
 
+# 让 _lib 可 import（audit-task-events.py 在 scripts/，_lib 是同级子目录）
+_SCRIPTS_DIR = str(Path(__file__).resolve().parent)
+if _SCRIPTS_DIR not in sys.path:
+    sys.path.insert(0, _SCRIPTS_DIR)
+from _lib.events import has_execution_event
+
 
 def find_main_repo_root() -> Path:
     try:
@@ -108,9 +114,8 @@ def audit_ct7(events: list[dict]) -> list[str]:
             "或旧规范三步式 status_changed(执行中→待验收) + status_changed(待验收→已完成)"
         )
 
-    # At least one execution event
-    exec_events = {"execution_started", "execution_manual_completed"}
-    if not any(e.get("event") in exec_events for e in events):
+    # At least one execution event（与 task-transition.py accept 闸门共用 _lib.events 定义）
+    if not has_execution_event(events):
         violations.append(
             "I-CT7: 事件流缺少任何 execution_started / execution_manual_completed 事件"
             "（说明执行器从未被触发，task 可能被跳过状态机直接写了代码）"

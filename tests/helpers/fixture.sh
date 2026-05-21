@@ -420,3 +420,16 @@ fixture_seed_full_event_stream() {
     echo "{\"event\":\"status_changed\",\"timestamp\":\"2020-01-01T00:20:00+00:00\",\"task\":\"$task_stem\",\"from\":\"执行中\",\"to\":\"已完成\"}"
   } > "$events_file"
 }
+
+# Seed a single execution_started event so the accept gate
+# (执行中→已完成 in task-transition.py check_preconditions) passes.
+# Use for transition tests that drive a task to 已完成 and expect success.
+# Usage: fixture_seed_execution_started <task-file>
+fixture_seed_execution_started() {
+  local task_file="$1"
+  local task_stem
+  task_stem=$(basename "$task_file" .md)
+  local events_file="$FIXTURE_DIR/.runs/events/${task_stem}.jsonl"
+  mkdir -p "$(dirname "$events_file")"
+  echo "{\"event\":\"execution_started\",\"timestamp\":\"2020-01-01T00:01:00+00:00\",\"task\":\"$task_stem\",\"executor\":\"claude-code\"}" >> "$events_file"
+}

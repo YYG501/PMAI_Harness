@@ -184,6 +184,7 @@ test_allow_missing_review_event() {
   fixture_setup
   req_dir=$(fixture_create_req "req-001" "test" 6)
   task=$(fixture_create_task "$req_dir" "001" "demo" "执行中" "/qa")
+  fixture_seed_execution_started "$task"
   # Do NOT add the /qa review_completed event — review 是 PM 自跑推荐项，
   # 缺事件不阻止转「已完成」（I-RV2）
 
@@ -207,6 +208,7 @@ test_allow_sentinel_review_tool() {
   fixture_setup
   req_dir=$(fixture_create_req "req-001" "test" 6)
   task=$(fixture_create_task "$req_dir" "001" "demo" "执行中" "/qa")
+  fixture_seed_execution_started "$task"
   _set_review_tools "$task" "(无)"
   # No review event needed
 
@@ -230,6 +232,7 @@ test_allow_empty_review_tool() {
   fixture_setup
   req_dir=$(fixture_create_req "req-001" "test" 6)
   task=$(fixture_create_task "$req_dir" "001" "demo" "执行中" "/qa")
+  fixture_seed_execution_started "$task"
   _set_review_tools "$task" ""
 
   if _run_transition "$task" --to 已完成 >/tmp/out.$$ 2>/tmp/err.$$; then
@@ -299,6 +302,7 @@ test_happy_path_start_to_done() {
   # 2. Add review event (optional in new flow, but kept here to verify it doesn't block),
   #    then 执行中 → 已完成
   fixture_add_review_event "$task" "/qa"
+  fixture_seed_execution_started "$task"
   if ! _run_transition "$task" --to 已完成 >/tmp/out.$$ 2>/tmp/err.$$; then
     _fail "执行中→已完成 failed"
     cat /tmp/err.$$ >&2
@@ -332,6 +336,205 @@ test_happy_path_start_to_done() {
   fi
 
   pass_test
+  rm -f /tmp/out.$$ /tmp/err.$$
+  fixture_teardown
+}
+
+# -----------------------------------------------------------------
+# accept 闸门：执行中→已完成 须有 execution 事件（task收口加固 vp-1）
+# -----------------------------------------------------------------
+
+test_accept_gate_pass_execution_started() {
+  start_test "accept 闸门 allow 执行中→已完成 when 事件流有 execution_started"
+  fixture_setup
+  req_dir=$(fixture_create_req "req-001" "test" 6)
+  task=$(fixture_create_task "$req_dir" "001" "demo" "执行中")
+  fixture_seed_execution_started "$task"
+
+  if _run_transition "$task" --to 已完成 >/tmp/out.$$ 2>/tmp/err.$$; then
+    pass_test
+  else
+    _fail "应放行：事件流有 execution_started"
+    cat /tmp/err.$$ >&2
+  fi
+  rm -f /tmp/out.$$ /tmp/err.$$
+  fixture_teardown
+}
+
+test_accept_gate_pass_manual_completed() {
+  start_test "accept 闸门 allow 执行中→已完成 when 事件流有 execution_manual_completed"
+  fixture_setup
+  req_dir=$(fixture_create_req "req-001" "test" 6)
+  task=$(fixture_create_task "$req_dir" "001" "demo" "执行中")
+  task_stem=$(basename "$task" .md)
+  echo "{\"event\":\"execution_manual_completed\",\"timestamp\":\"2020-01-01T00:01:00+00:00\",\"task\":\"$task_stem\"}" \
+    >> "$FIXTURE_DIR/.runs/events/${task_stem}.jsonl"
+
+  if _run_transition "$task" --to 已完成 >/tmp/out.$$ 2>/tmp/err.$$; then
+    pass_test
+  else
+    _fail "应放行：事件流有 execution_manual_completed"
+    cat /tmp/err.$$ >&2
+  fi
+  rm -f /tmp/out.$$ /tmp/err.$$
+  fixture_teardown
+}
+
+test_accept_gate_reject_no_execution_event() {
+  start_test "accept 闸门 reject 执行中→已完成 when 事件流无 execution 事件"
+  fixture_setup
+  req_dir=$(fixture_create_req "req-001" "test" 6)
+  task=$(fixture_create_task "$req_dir" "001" "demo" "执行中")
+  task_stem=$(basename "$task" .md)
+  # 事件流有 status_changed 但无 execution 事件 —— task-001 的实况
+  echo "{\"event\":\"status_changed\",\"timestamp\":\"2020-01-01T00:00:00+00:00\",\"task\":\"$task_stem\",\"from\":\"待执行\",\"to\":\"执行中\"}" \
+    >> "$FIXTURE_DIR/.runs/events/${task_stem}.jsonl"
+
+  if _run_transition "$task" --to 已完成 >/tmp/out.$$ 2>/tmp/err.$$; then
+    _fail "应拒绝：事件流无 execution 事件"
+  else
+    if grep -q "accept 闸门" /tmp/err.$$ && grep -q "task-execute" /tmp/err.$$; then
+      pass_test
+    else
+      _fail "stderr 缺 accept 闸门 / task-execute 提示"
+      cat /tmp/err.$$ >&2
+    fi
+  fi
+  rm -f /tmp/out.$$ /tmp/err.$$
+  fixture_teardown
+}
+
+test_accept_gate_fail_closed_malformed_events() {
+  start_test "accept 闸门 fail-closed 执行中→已完成 when 事件流含坏行且无 execution 事件"
+  fixture_setup
+  req_dir=$(fixture_create_req "req-001" "test" 6)
+  task=$(fixture_create_task "$req_dir" "001" "demo" "执行中")
+  task_stem=$(basename "$task" .md)
+  echo 'this is not json' >> "$FIXTURE_DIR/.runs/events/${task_stem}.jsonl"
+
+  if _run_transition "$task" --to 已完成 >/tmp/out.$$ 2>/tmp/err.$$; then
+    _fail "应 fail-closed 拒绝：事件流含坏行且无 execution 事件"
+  else
+    if grep -q "fail-closed" /tmp/err.$$; then
+      pass_test
+    else
+      _fail "stderr 缺 fail-closed 提示"
+      cat /tmp/err.$$ >&2
+    fi
+  fi
+  rm -f /tmp/out.$$ /tmp/err.$$
+  fixture_teardown
+}
+
+# -----------------------------------------------------------------
+# --repair-evidence：受支持的审计证据修复（证据修复命令 D-task）
+# -----------------------------------------------------------------
+
+test_repair_evidence_appends_marked_event() {
+  start_test "I-RE1 repair-evidence 补记带 repaired 标记的 execution_manual_completed"
+  fixture_setup
+  req_dir=$(fixture_create_req "req-001" "test" 6)
+  task=$(fixture_create_task "$req_dir" "001" "demo" "已完成")
+  task_stem=$(basename "$task" .md)
+  events_file="$FIXTURE_DIR/.runs/events/${task_stem}.jsonl"
+  echo "{\"event\":\"status_changed\",\"timestamp\":\"2020-01-01T00:00:00+00:00\",\"task\":\"$task_stem\",\"from\":\"待执行\",\"to\":\"执行中\"}" > "$events_file"
+
+  if _run_transition "$task" --repair-evidence --reason "人工窗口真实执行完成" --yes >/tmp/out.$$ 2>/tmp/err.$$; then
+    if grep -q '"event": *"execution_manual_completed"' "$events_file" && \
+       grep -q '"repaired": *true' "$events_file"; then
+      pass_test
+    else
+      _fail "事件流缺 execution_manual_completed 或 repaired 标记"
+      cat "$events_file" >&2
+    fi
+  else
+    _fail "repair-evidence 应成功"
+    cat /tmp/err.$$ >&2
+  fi
+  rm -f /tmp/out.$$ /tmp/err.$$
+  fixture_teardown
+}
+
+test_repair_evidence_rejects_missing_reason() {
+  start_test "I-RE2 repair-evidence reject without --reason"
+  fixture_setup
+  req_dir=$(fixture_create_req "req-001" "test" 6)
+  task=$(fixture_create_task "$req_dir" "001" "demo" "已完成")
+
+  if _run_transition "$task" --repair-evidence --yes >/tmp/out.$$ 2>/tmp/err.$$; then
+    _fail "应拒绝：缺 --reason"
+  else
+    if grep -qi "reason" /tmp/err.$$; then
+      pass_test
+    else
+      _fail "stderr 缺 reason 提示"
+      cat /tmp/err.$$ >&2
+    fi
+  fi
+  rm -f /tmp/out.$$ /tmp/err.$$
+  fixture_teardown
+}
+
+test_repair_evidence_rejects_non_done_status() {
+  start_test "I-RE3 repair-evidence reject 非「已完成」task"
+  fixture_setup
+  req_dir=$(fixture_create_req "req-001" "test" 6)
+  task=$(fixture_create_task "$req_dir" "001" "demo" "执行中")
+
+  if _run_transition "$task" --repair-evidence --reason "x" --yes >/tmp/out.$$ 2>/tmp/err.$$; then
+    _fail "应拒绝：仅「已完成」可 repair"
+  else
+    if grep -q "仅用于「已完成」" /tmp/err.$$ && grep -q "task-execute" /tmp/err.$$; then
+      pass_test
+    else
+      _fail "stderr 缺状态/引导提示"
+      cat /tmp/err.$$ >&2
+    fi
+  fi
+  rm -f /tmp/out.$$ /tmp/err.$$
+  fixture_teardown
+}
+
+test_repair_evidence_rejects_when_already_has_event() {
+  start_test "I-RE4 repair-evidence reject 事件流已有 execution 事件"
+  fixture_setup
+  req_dir=$(fixture_create_req "req-001" "test" 6)
+  task=$(fixture_create_task "$req_dir" "001" "demo" "已完成")
+  fixture_seed_execution_started "$task"
+
+  if _run_transition "$task" --repair-evidence --reason "x" --yes >/tmp/out.$$ 2>/tmp/err.$$; then
+    _fail "应拒绝：已有 execution 事件，无需 repair"
+  else
+    if grep -q "无需 repair" /tmp/err.$$; then
+      pass_test
+    else
+      _fail "stderr 缺「无需 repair」提示"
+      cat /tmp/err.$$ >&2
+    fi
+  fi
+  rm -f /tmp/out.$$ /tmp/err.$$
+  fixture_teardown
+}
+
+test_repair_evidence_aborts_on_eof_without_yes() {
+  start_test "I-RE5 repair-evidence aborts on EOF when --yes not passed"
+  fixture_setup
+  req_dir=$(fixture_create_req "req-001" "test" 6)
+  task=$(fixture_create_task "$req_dir" "001" "demo" "已完成")
+  task_stem=$(basename "$task" .md)
+  events_file="$FIXTURE_DIR/.runs/events/${task_stem}.jsonl"
+  echo "{\"event\":\"status_changed\",\"timestamp\":\"2020-01-01T00:00:00+00:00\",\"task\":\"$task_stem\",\"from\":\"待执行\",\"to\":\"执行中\"}" > "$events_file"
+
+  if (cd "$FIXTURE_DIR" && python3 "$TASK_TRANSITION" "$task" --repair-evidence --reason "x" </dev/null) >/tmp/out.$$ 2>/tmp/err.$$; then
+    _fail "应在 EOF 时中止"
+  else
+    if grep -q "已取消" /tmp/err.$$ && ! grep -q "execution_manual_completed" "$events_file"; then
+      pass_test
+    else
+      _fail "abort 后不应补记事件"
+      cat /tmp/err.$$ >&2
+    fi
+  fi
   rm -f /tmp/out.$$ /tmp/err.$$
   fixture_teardown
 }
@@ -647,6 +850,15 @@ test_allow_sentinel_review_tool
 test_allow_empty_review_tool
 test_reject_self_loop_executing
 test_happy_path_start_to_done
+test_accept_gate_pass_execution_started
+test_accept_gate_pass_manual_completed
+test_accept_gate_reject_no_execution_event
+test_accept_gate_fail_closed_malformed_events
+test_repair_evidence_appends_marked_event
+test_repair_evidence_rejects_missing_reason
+test_repair_evidence_rejects_non_done_status
+test_repair_evidence_rejects_when_already_has_event
+test_repair_evidence_aborts_on_eof_without_yes
 test_discard_from_pending
 test_discard_from_executing_with_worktree
 test_discard_from_executing_post_commit

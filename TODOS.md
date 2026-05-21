@@ -40,6 +40,40 @@
 
 ---
 
+## D-task: accept 闸门 — 执行事件校验前移
+
+**What:** `task-transition.py` 的「执行中→已完成」加前置校验：事件流须有 execution 事件（`execution_started`/`execution_manual_completed`），否则拒绝验收、提示先走 `/task-execute`。exec-event 判定抽 `scripts/_lib/` 与 I-CT7 共享。
+
+**Why:** I-CT7 能抓「task 没走执行通道」，但在 close-task 最后一步才收网，此时 task 已终态。把核心校验前移到验收转移，故障在可补救窗口就被拦下；I-CT7 退化为兜底。
+
+**触发事件:** req-006 `task-001-ops-log-pages` 的 close-task 被 I-CT7 挡（2026-05-21）。
+
+**设计文档:** [`docs/设计/accept闸门.md`](docs/设计/accept闸门.md)（§0 锁定 v1；plan-eng-review 完成，D1/D2/C8/T1/T2 落定；**待实施**）
+
+**状态:** ✅ **已实施并验证**（`_lib/events.py` + accept 闸门 + 4 新测 + regression 修复；全量 389/0）。未 commit。
+
+**粗估:** `task-transition.py` + `scripts/_lib/events.py` 合计 ~30 行 + 4 新测 + regression 修复（test-task-transition.sh fixture）。
+
+---
+
+## D-task: 证据修复命令 — 受支持的审计证据修复
+
+**What:** 加一个受支持、受约束、留痕的命令，把"为 task-001 手动 append 事件"那件事正式化 —— close-task 审计挡下一个 work 真实完成、但事件流以已知原因不全的 task 时，受控地补对证据（强制理由 + PM 认定 + 透明标记）。
+
+**Why:** close-task I-CT7/I-CT8 挡下证据不全的 task 时，框架无受支持修复入口，只能手改 `.runs/events/*.jsonl` —— 不留痕、不受约束。task-001 就是这么手工解封的。
+
+**来源:** 从「accept 闸门」D-task 的 plan-eng-review D5 拆出；2026-05-21 PM 拍板甲/乙 → 选乙（evidence-repair，不做 reopen 状态机回退）。codex 对 reopen 的 6 条复杂度在乙 下 4 moot / 1 简化。
+
+**设计文档:** [`docs/设计/证据修复命令.md`](docs/设计/证据修复命令.md)（§0 草稿，**待 PM 共写锁定**）。
+
+**状态:** ✅ **已实施并验证**（`--repair-evidence` 命令 + 5 测；全量 389/0）。未 commit。
+
+**核心设计风险:** 乙 本质是"受支持的让审计通过命令"——integrity surface 是方案必须解的难题（强制理由 / PM 认定 / 透明标记 / 收窄能力面）。
+
+**与 v2 的关系:** 仍是 v1 加固，不是 v2「状态物化」重做。
+
+---
+
 ## v4: PM 手动开新窗口执行 task（并行原生）
 
 **Status (2026-05-06):** ✅ **已实施完成**。A0 → A4 全部落地，159 测试全绿。设计源 `docs/归档/完成/设计-PM手动新窗口执行.md`。
