@@ -438,6 +438,7 @@ test_repair_evidence_appends_marked_event() {
   task_stem=$(basename "$task" .md)
   events_file="$FIXTURE_DIR/.runs/events/${task_stem}.jsonl"
   echo "{\"event\":\"status_changed\",\"timestamp\":\"2020-01-01T00:00:00+00:00\",\"task\":\"$task_stem\",\"from\":\"待执行\",\"to\":\"执行中\"}" > "$events_file"
+  fixture_create_task_worktree "$task" "req-001-test" >/dev/null
 
   if _run_transition "$task" --repair-evidence --reason "人工窗口真实执行完成" --yes >/tmp/out.$$ 2>/tmp/err.$$; then
     if grep -q '"event": *"execution_manual_completed"' "$events_file" && \
@@ -524,6 +525,7 @@ test_repair_evidence_aborts_on_eof_without_yes() {
   task_stem=$(basename "$task" .md)
   events_file="$FIXTURE_DIR/.runs/events/${task_stem}.jsonl"
   echo "{\"event\":\"status_changed\",\"timestamp\":\"2020-01-01T00:00:00+00:00\",\"task\":\"$task_stem\",\"from\":\"待执行\",\"to\":\"执行中\"}" > "$events_file"
+  fixture_create_task_worktree "$task" "req-001-test" >/dev/null
 
   if (cd "$FIXTURE_DIR" && python3 "$TASK_TRANSITION" "$task" --repair-evidence --reason "x" </dev/null) >/tmp/out.$$ 2>/tmp/err.$$; then
     _fail "应在 EOF 时中止"
@@ -532,6 +534,51 @@ test_repair_evidence_aborts_on_eof_without_yes() {
       pass_test
     else
       _fail "abort 后不应补记事件"
+      cat /tmp/err.$$ >&2
+    fi
+  fi
+  rm -f /tmp/out.$$ /tmp/err.$$
+  fixture_teardown
+}
+
+test_accept_gate_fail_closed_bad_encoding() {
+  start_test "accept 闸门 fail-closed 执行中→已完成 when 事件流非法 UTF-8"
+  fixture_setup
+  req_dir=$(fixture_create_req "req-001" "test" 6)
+  task=$(fixture_create_task "$req_dir" "001" "demo" "执行中")
+  task_stem=$(basename "$task" .md)
+  printf '\xff\xfe bad bytes' > "$FIXTURE_DIR/.runs/events/${task_stem}.jsonl"
+
+  if _run_transition "$task" --to 已完成 >/tmp/out.$$ 2>/tmp/err.$$; then
+    _fail "应 fail-closed 拒绝：事件流非法 UTF-8"
+  else
+    if grep -q "fail-closed" /tmp/err.$$; then
+      pass_test
+    else
+      _fail "stderr 缺 fail-closed 提示（疑 UnicodeDecodeError 未捕获）"
+      cat /tmp/err.$$ >&2
+    fi
+  fi
+  rm -f /tmp/out.$$ /tmp/err.$$
+  fixture_teardown
+}
+
+test_repair_evidence_rejects_when_branch_missing() {
+  start_test "I-RE6 repair-evidence reject 当 task 分支不存在（close-task 已跑完）"
+  fixture_setup
+  req_dir=$(fixture_create_req "req-001" "test" 6)
+  task=$(fixture_create_task "$req_dir" "001" "demo" "已完成")
+  task_stem=$(basename "$task" .md)
+  echo "{\"event\":\"status_changed\",\"timestamp\":\"2020-01-01T00:00:00+00:00\",\"task\":\"$task_stem\",\"from\":\"待执行\",\"to\":\"执行中\"}" > "$FIXTURE_DIR/.runs/events/${task_stem}.jsonl"
+  # 不建 task worktree/分支 —— 模拟 close-task 已删分支
+
+  if _run_transition "$task" --repair-evidence --reason "x" --yes >/tmp/out.$$ 2>/tmp/err.$$; then
+    _fail "应拒绝：task 分支不存在"
+  else
+    if grep -q "分支" /tmp/err.$$ && grep -q "不存在" /tmp/err.$$; then
+      pass_test
+    else
+      _fail "stderr 缺分支不存在提示"
       cat /tmp/err.$$ >&2
     fi
   fi
@@ -854,11 +901,13 @@ test_accept_gate_pass_execution_started
 test_accept_gate_pass_manual_completed
 test_accept_gate_reject_no_execution_event
 test_accept_gate_fail_closed_malformed_events
+test_accept_gate_fail_closed_bad_encoding
 test_repair_evidence_appends_marked_event
 test_repair_evidence_rejects_missing_reason
 test_repair_evidence_rejects_non_done_status
 test_repair_evidence_rejects_when_already_has_event
 test_repair_evidence_aborts_on_eof_without_yes
+test_repair_evidence_rejects_when_branch_missing
 test_discard_from_pending
 test_discard_from_executing_with_worktree
 test_discard_from_executing_post_commit

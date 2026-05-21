@@ -30,7 +30,9 @@ def load_events_strict(events_file: Path) -> tuple[list[dict], list[str]]:
         return [], [f"事件流文件不存在: {events_file}"]
     try:
         raw = events_file.read_text(encoding="utf-8")
-    except OSError as exc:
+    except (OSError, UnicodeDecodeError) as exc:
+        # UnicodeDecodeError（非法 UTF-8 字节）也视为不可读 —— strict 加载器的
+        # 职责是任何读取障碍都转成 problem、由调用方 fail-closed，不抛 traceback。
         return [], [f"事件流文件不可读: {exc}"]
     events: list[dict] = []
     problems: list[str] = []

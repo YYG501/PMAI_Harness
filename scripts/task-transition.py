@@ -738,13 +738,30 @@ def cmd_repair_evidence(task_file: Path, reason: str, yes: bool) -> None:
         sys.exit(1)
     reason = reason.strip()
 
-    events_file = (
-        find_main_repo_root() / ".runs" / "events" / f"{task_file.stem}.jsonl"
-    )
+    repo_root = find_main_repo_root()
+    events_file = repo_root / ".runs" / "events" / f"{task_file.stem}.jsonl"
     events, _ = load_events_strict(events_file)
     if has_execution_event(events):
         print(
             "Error: 事件流已含 execution 事件，无需 repair。",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+
+    # 适用窗口校验（plan-eng-review WARNING-2 / 设计 §5）：repair-evidence 只对
+    # close-task 尚未跑完、可重跑的 task 有意义。close-task 成功后会删 task 分支，
+    # 分支不在 = 已 close，repair 无意义（往已归档/已清理的 .runs/ 写无意义事件）。
+    task_stem = task_file.stem
+    branch = task_stem if task_stem.startswith("task-") else f"task-{task_stem}"
+    branch_exists = subprocess.run(
+        ["git", "-C", str(repo_root), "show-ref", "--verify", "--quiet",
+         f"refs/heads/{branch}"],
+        capture_output=True,
+    ).returncode == 0
+    if not branch_exists:
+        print(
+            f"Error: task 分支 {branch} 不存在 —— close-task 可能已跑完（分支已删）。\n"
+            "  --repair-evidence 仅用于 close-task 尚未跑完、可重跑的 task。",
             file=sys.stderr,
         )
         sys.exit(1)
