@@ -183,12 +183,26 @@ close-task → close-req         TRANSITION
 | 自主的机械活 | → agent（一次性 context）| task-execute、analysis-reviewer |
 | 协作 / 决策 | → 主线程 | task-spec、req-solution、req-analysis |
 
-三条理由：
+> 「例子」列是举例、非穷举。同一原则套其余 skill：`analysis-reviewer` 已是 agent；`task-verify` 自动 UAT 是机械活、但归属看下方「第二根轴」；`codebase-audit`（delta-1，DEFER）触发时其扫码 fan-out 按本原则用 agent。
+
+**第一根轴 · 协作 vs 机械** —— planning 类留主线程，三条理由：
 1. **对话只能在主线程** —— planning skill 是来回的（确认 / 答未决问题 / 改），agent 是 fire-and-forget，塞不进来回对话。GSD 同此：QUESTIONING 也是主线程，只 agent 化自主活。
 2. **框架价值 = PM 在环里** —— GSD agent 模型让 orchestrator"只收行数、不收内容"，故意把 PM 挡在细节外换吞吐；本框架反过来（PM 视图 / 确认门 / 未决问题闸门），就是让 PM 在产品决策里面。planning agent 化 = 丢掉协作过程 = 把本框架变成 GSD。
 3. **编排机器太重** —— GSD 33 agent + 编排层是平台规模，单人工具不需要。
 
 **已知权衡**：planning 在主线程的代价 = context 会涨 / 重复读。本方案不靠 agent 隔离治它，靠 delta-8（小实现设计视图 + 定向读）+ 现有「必读清单收敛」—— 更轻。未来若要进一步，可考虑把 planning 的"纯读 + 起草"段 agent 化（agent 起草、PM 主线程审），但默认不做。
+
+**第二根轴 · 运行时能力** —— 「机械活 → agent」不等于「折进 executor」。本框架的 executor 可插拔（`resolve-executor.py` / `build-execution-prompt.py` 执行信封，可为 Claude / Codex / Cursor），能力集不保证一致。一个 task 的生命周期跨三种角色：
+
+| 角色 | 干什么 | 跑在哪 |
+|---|---|---|
+| orchestrator | 备执行信封、派活、收口 commit | Claude 主线程 |
+| executor | 写代码 | 可插拔（Claude agent / Codex / Cursor）；不保证有浏览器 |
+| verifier（task-verify）| 浏览器 UAT | 需 `gstack-browse` → 只能 Claude/gstack 侧（主线程即可，不强求独立 agent）|
+
+（上表「自主机械活」格里的 `task-execute`，细看就是 orchestrator + executor 两段。）
+
+→ 判据：**机械 + executor 可移植**（纯写代码 / git）→ 可在 executor 内；**机械 + 需 Claude/gstack 专有工具**（如 `gstack-browse`）→ 必须留 Claude 侧。`task-verify` 属后者 —— 它在 executor 的产出（worktree + dev server）之上跑，与「谁是 executor」无关，不折进 executor 边界。
 
 ---
 
@@ -234,6 +248,7 @@ close-task → close-req         TRANSITION
 | 2026-05-20 | PM 判断（委托 AI 推荐）：delta-2~8 全通过、delta-1 DEFER、2-item backlog 单独排；实施顺序见 §8 | 方案 → v2，进入实施 |
 | 2026-05-20 | 记入 agent 边界设计原则：planning/决策类 skill 不 agent 化（协作在主线程），自主机械活才 agent 化 | §6.1 新增 |
 | 2026-05-20 | 记入 task 详化时机：lazy（两模式都不批量写死），两模式仅差 PM 验收闸门；GSD 容忍 / 我们规避 staleness | §3.1 新增 |
+| 2026-05-21 | §6.1 补「第二根轴 · 运行时能力」：executor 可插拔（Claude/Codex/Cursor）能力集不一，机械步是否折进 executor 取决于是否需 Claude/gstack 专有工具；task-verify 因需 gstack-browse 留 Claude 侧。「例子」列标注非穷举 | §6.1 扩充 |
 
 ---
 
