@@ -418,7 +418,18 @@ def render_timeline(timeline_state: dict, repo_root: Path) -> None:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="PM AI Workflow Status View")
+    parser = argparse.ArgumentParser(
+        description="PM AI Workflow Status View",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""\
+示例:
+  status-view.py                          当前所有 req / task 概览
+  status-view.py --summary                一行任务概览
+  status-view.py --timeline               全局时间线（active + closed + cancelled）
+  status-view.py --timeline --module auth 只看 auth 模块相关 req
+  status-view.py --timeline --all         时间线显示全部 archived
+""",
+    )
     parser.add_argument(
         "repo_root",
         nargs="?",

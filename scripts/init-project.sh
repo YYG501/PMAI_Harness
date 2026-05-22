@@ -46,6 +46,7 @@ fi
 
 if [ $# -lt 2 ]; then
   echo "❌ 缺少必填参数（至少需要 <project-name> 和 <target-dir>）" >&2
+  echo "   正确形态：bash scripts/init-project.sh <项目名> <落地路径> <一句话背景> [intent]" >&2
   echo "" >&2
   _print_help >&2
   exit 2
