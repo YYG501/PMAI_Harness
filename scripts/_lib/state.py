@@ -183,15 +183,19 @@ def read_section(
     """跨文件查找 section。
 
     优先级：先工程合同（v2），未命中再 PM 视图。
-    支持新格式带数字编号（## 10. 文档偏差）和旧格式（## 文档偏差）。
+    标题前缀容忍：emoji（## 📋 文档偏差，v3 单文件 typed contract）、数字编号
+    （## 10. 文档偏差，v2 工程合同）、无前缀（## 文档偏差，v1）；也容忍 section
+    名后的括号注释后缀（## 10. 文档偏差（execution agent 填写）等存量 task）。
 
     返回 (found, content)。
     Content 含 section heading 之后到下一个 ## heading 之前的全部内容。
 
     Caller 决定 found=False 时如何处理。
     """
+    # section 名前可有 emoji / 数字编号等装饰前缀（与正文以空白分隔），
+    # 名后可有括号注释后缀 —— `## ` 开头的 heading 行只要含该 section 名即命中。
     heading_re = re.compile(
-        rf"^##\s+(?:\d+\.\s+)?{re.escape(section_name)}\s*$",
+        rf"^##\s+(?:\S.*?\s)?{re.escape(section_name)}.*$",
         re.MULTILINE,
     )
 

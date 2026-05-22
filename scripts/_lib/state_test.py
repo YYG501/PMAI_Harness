@@ -194,6 +194,38 @@ class TestReadSection(unittest.TestCase):
             self.assertTrue(found)
             self.assertIn("fallback content", content)
 
+    def test_v3_section_with_emoji_heading(self):
+        """v3 单文件 typed contract：审计区标题带 emoji（## 📋 文档偏差 / ## 🔍 自审记录）。
+
+        回归守护：§8 delta-3 的 task.md.tmpl 用 emoji 标题，read_section 正则若
+        不容忍 emoji 前缀 → 每个 v3 task close 转「已完成」都被拦。
+        """
+        with tempfile.TemporaryDirectory() as d:
+            pm = Path(d) / "task-001-test.md"
+            pm.write_text(V3_TASK_MD)
+
+            found, content = read_section(pm, "文档偏差")
+            self.assertTrue(found)
+            self.assertIn("v3 文档偏差内容", content)
+
+            found, content = read_section(pm, "自审记录")
+            self.assertTrue(found)
+            self.assertIn("v3 自审记录内容", content)
+
+    def test_section_heading_with_parenthetical_suffix(self):
+        """存量 task 标题带括号注释后缀（## 10. 文档偏差（…）） —— 也要匹配。"""
+        with tempfile.TemporaryDirectory() as d:
+            pm = Path(d) / "task-001-test.md"
+            pm.write_text(
+                "# Task\n"
+                "## 10. 文档偏差（execution agent 填写，工程层视角）\n"
+                "带后缀标题的内容\n"
+            )
+
+            found, content = read_section(pm, "文档偏差")
+            self.assertTrue(found)
+            self.assertIn("带后缀标题的内容", content)
+
 
 class TestHasMeaningfulContent(unittest.TestCase):
     def test_empty(self):
