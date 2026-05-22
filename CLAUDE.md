@@ -9,7 +9,7 @@
 
 **开发流程**：普通软件项目方式（讨论需求 → 设计 → 实现 → 测试 → 提交）。不导入旧框架的任何流程系统。
 
-**当前状态**：v3.5 与 v4 task 执行架构（PM 手动新窗口 + 并行原生）已收口。2026-05-22 GSD-review 管线重构全包已落地：stage 3 PRD、req 级事件流、implementation-design、task 单文件 typed contract、PRODUCT-RULES / DESIGN gap-check、brownfield codebase-audit 等均已接入。生成器骨架（scripts / skills / templates / tests）齐全，当前测试基线 `bash tests/run-all.sh` 为 394 通过 / 0 失败；`bash scripts/measure-tthw.sh` 实测 TTHW 约 2.0 秒。下一步重点是去消费仓 ExampleConsumerApp 跑真实 req 端到端验证新管线。
+**当前状态**：v3.5 与 v4 task 执行架构（PM 手动新窗口 + 并行原生）已收口。2026-05-22 GSD-review 管线重构全包已落地：stage 3 PRD、req 级事件流、implementation-design、task 单文件 typed contract、PRODUCT-RULES / DESIGN gap-check、brownfield codebase-audit 等均已接入；同日完成 §8 后续收尾——close-task 验收通过后默认走收尾、modulespec 模板 9→5 章收敛、一轮 DX 修复、项目级文档 `CONTEXT.md → PROJECT.md` 全量改名。生成器骨架（scripts / skills / templates / tests）齐全，当前测试基线 `bash tests/run-all.sh` 为 395 通过 / 0 失败、`_lib.state_test` 57 通过 / 0 失败；`bash scripts/measure-tthw.sh` 实测 TTHW 约 2.0 秒。下一步重点是去消费仓 ExampleConsumerApp 跑真实 req 端到端验证新管线。
 
 **v3.5 实施进度 / 当前位置**：见 [`RUNTIME.md`](./RUNTIME.md)（运行时状态 / 新窗口续接入口；进度跟踪 + 已知坑 + 下一步指针）。
 

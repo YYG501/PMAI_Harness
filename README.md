@@ -168,8 +168,8 @@ bash scripts/measure-tthw.sh
 
 ## 当前状态
 
-v3.5 与 v4 task 执行架构（PM 手动新窗口 + 并行原生）已收口。2026-05-22 GSD-review 管线重构全包已落地：stage 3 PRD、req 级事件流、implementation-design、task 单文件 typed contract、PRODUCT-RULES / DESIGN gap-check、brownfield codebase-audit 等均已接入。
+v3.5 与 v4 task 执行架构（PM 手动新窗口 + 并行原生）已收口。2026-05-22 GSD-review 管线重构全包已落地：stage 3 PRD、req 级事件流、implementation-design、task 单文件 typed contract、PRODUCT-RULES / DESIGN gap-check、brownfield codebase-audit 等均已接入；同日完成 §8 后续收尾——close-task 默认收尾、modulespec 模板 9→5 章收敛、一轮 DX 修复、项目级文档 `CONTEXT.md → PROJECT.md` 全量改名。
 
-当前测试基线：`bash tests/run-all.sh` 为 394 通过 / 0 失败；`bash scripts/measure-tthw.sh` 实测 TTHW 约 2.0 秒。
+当前测试基线：`bash tests/run-all.sh` 为 395 通过 / 0 失败、`_lib.state_test` 57 通过 / 0 失败；`bash scripts/measure-tthw.sh` 实测 TTHW 约 2.0 秒。
 
 **下一步重点**：去消费仓 ExampleConsumerApp 跑真实 req 端到端验证新管线。详见 `RUNTIME.md` 顶部「当前位置」。

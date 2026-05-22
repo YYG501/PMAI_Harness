@@ -1,6 +1,6 @@
 # req attachments 机制
 
-> **状态**：方案草稿，待 PM review
+> **状态**：已落地（commit `65329d0` feat(attachments): 独立机制实施完成；2026-05-18 归档）
 > **日期**：2026-05-18
 > **作者**：PM + AI
 

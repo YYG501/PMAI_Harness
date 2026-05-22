@@ -11,6 +11,7 @@
 | 文件 | 说明 |
 |---|---|
 | [`_模板-方案.md`](./设计/_模板-方案.md) | 唯一设计文档模板（§0 痛点锁 + §1-§N 方案主体 + §X Review Findings + §Y 决议日志），起手用 |
+| [`原型简化项-机制.md`](./设计/原型简化项-机制.md) | 草稿——待 PM 共写并锁定 §0，尚未实施 |
 
 > **起手新设计**：`cp docs/设计/_模板-方案.md docs/设计/<主题>.md`
 
@@ -53,6 +54,21 @@
 | **GSD 借鉴实施方案** | [`gsd-借鉴-实施方案.md`](./归档/完成/gsd-借鉴-实施方案.md) | v3 方案 2 项全落（commits 8bb7b00 state.py + 10bdf71 lark-adapter + 214291f 补漏测试，run-all 368/0） |
 | DX 审计 | [`DX-AUDIT-2026-05-08.md`](./归档/完成/DX-AUDIT-2026-05-08.md) | 审计时点快照已完成 |
 
+**2026-05 管线重构批次（GSD-review §8 + PRD 体系收敛 + 独立机制；2026-05-22 归档）**：
+
+| 主题 | 文件 | 现役承接 |
+|---|---|---|
+| 管线重构总纲 | [`管线重构-GSD-review.md`](./归档/完成/管线重构-GSD-review.md) | §8 六步全包落地（CHANGELOG 2026-05-22）|
+| delta-2/4 PRD/solution 对调 | [`PRD-solution-对调.md`](./归档/完成/PRD-solution-对调.md) | `/project-solution` + `/prd-writing` 前移 stage 3 |
+| delta-3 task-spec 重构 | [`task-spec重构.md`](./归档/完成/task-spec重构.md) | task 单文件 typed contract（三区 + `task_format` 标记）|
+| delta-7 req 级事件流 | [`req级事件流-delta7.md`](./归档/完成/req级事件流-delta7.md) | `scripts/req-events.py` + `req-events.jsonl` |
+| delta-8 实现设计视图 | [`实现设计视图-HOW安家.md`](./归档/完成/实现设计视图-HOW安家.md) | `/implementation-design` + `templates/implementation-design.md.tmpl` |
+| delta-9 跨功能产品规则 | [`项目产品规则-delta9.md`](./归档/完成/项目产品规则-delta9.md) | `templates/PRODUCT-RULES.md.tmpl` + stage 4 gap-check |
+| accept 闸门 | [`accept闸门.md`](./归档/完成/accept闸门.md) | `task-transition.py` 验收前执行证据校验 |
+| 证据修复命令 | [`证据修复命令.md`](./归档/完成/证据修复命令.md) | `task-transition.py --repair-evidence` |
+| PRD 体系收敛 v5 | [`PRD-体系收敛.md`](./归档/完成/PRD-体系收敛.md) | 砍 `docs/prd.md` 整套 + `PROJECT.md` 6 节（11 commit）|
+| attachments 机制 | [`attachments-机制.md`](./归档/完成/attachments-机制.md) | commit `65329d0` 独立机制实施完成 |
+
 ---
 
 ## 归档/废弃/ — 被否决，不实施
@@ -60,10 +76,7 @@
 | 文件 | 否决理由 |
 |---|---|
 | [`设计-Superset独立Claude执行.md`](./归档/废弃/设计-Superset独立Claude执行.md) | 明标 DEPRECATED（被 PM 手动新窗口取代） |
-| [`设计-并行任务执行.md`](./归档/废弃/设计-并行任务执行.md) | 明标 DEPRECATED |
-| [`实施计划-双模式与格式对齐.md`](./归档/废弃/实施计划-双模式与格式对齐.md) | 明标"已废弃" |
 | [`设计-stage5-6-task循环.md`](./归档/废弃/设计-stage5-6-task循环.md) | "历史设计备忘 + 讨论中"，部分被替代 |
-| [`设计-自举使用框架.md`](./归档/废弃/设计-自举使用框架.md) | PM 否决（CLAUDE.md 明说"主仓开发普通软件项目方式，不导入旧框架"） |
 | [`task-spec-早期截断.md`](./归档/废弃/task-spec-早期截断.md) | "设计中"半年沉寂；D13 已解 task-spec 相关问题 |
 
 ---

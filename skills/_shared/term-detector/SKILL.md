@@ -92,7 +92,7 @@ with open('$SKIP_FILE', 'w') as f: json.dump(data, f, ensure_ascii=False, indent
 
 ## 决策依据
 
-- v5 `docs/设计/PRD-体系收敛.md` §2.7
+- v5 `docs/归档/完成/PRD-体系收敛.md` §2.7
 - D4 锁定：不给全局 toggle（与 MEMORY 第 2「不留 FORCE」一致）
 - autoplan T4/T12/T22/T24 共识
 
