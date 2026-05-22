@@ -49,7 +49,7 @@ v0 设计把「项目级累积视图」作为产品全景入口（first req 设�
 
 | # | 衍生 / 假设场景 | 为什么不在 §0 范围 |
 |---|---|---|
-| 1 | modulespec 内部章节组织调整 | 现有 `module.md.tmpl` 9 章是 v3.5 已验证的稳定 SoT |
+| 1 | modulespec 内部章节组织调整 | ~~现有 `module.md.tmpl` 9 章是 v3.5 已验证的稳定 SoT~~ **已重开**（2026-05-22 PM 决策，见 §Y）：9 章含 4 个 req 级章节与 req PRD 双写，已收敛为 5 章 |
 | 2 | req PRD 模板内容调整 | 模板是给研发评审的成品格式，本设计不改模板 |
 | 3 | CONTEXT 各节的写作规范 | ✅ **v2 已锁定**：详见 §2.2 |
 | 4 | 独立 PRD 的完整模板 | 复用 `req-prd.md.tmpl`，不另起 |
@@ -118,7 +118,8 @@ PRD 体系从「4 份并存」收敛为「3 份明确分工」+ **CONTEXT 6 节�
 | `/prd-writing` skill | **改**：对话式确认输入；删除「必须在 close-req 用」硬约束 | §0.1 痛点 3 |
 | 各 stage `input-flow.md` 必读列表 | **改**：移除 `docs/prd.md`，加入 `docs/modules/INDEX.md` | |
 | `templates/CLAUDE.md.tmpl:207` 框架文档表 | **改**：删项目主 PRD 行，加 modules/INDEX 行 | |
-| `module.md.tmpl` / `req-prd.md.tmpl` | **不变** | §0.4 排除项 1/2 |
+| `module.md.tmpl` | **改**（2026-05-22）：9 章 → 5 章收敛，砍 req 级章节 | 原 §0.4 排除项 1，已重开（见 §Y）|
+| `req-prd.md.tmpl` | **不变** | §0.4 排除项 2 |
 | `CONTEXT.md.tmpl` | **重构 6 节** | 详见 §2.1 |
 | `docs/modules/INDEX.md` | **新增** | 详见 §2.3 |
 | **`req-stage-gate` skill** | **改**：stage 3→4 之间加 CONTEXT 检查门 | §0.1 痛点 5 |
@@ -903,6 +904,7 @@ bash <PM-AI-Workflow 路径>/scripts/migrate-prd.sh <消费仓路径>
 | 2026-05-18 | **autoplan dual voice review 完成**（4 phase × 2 voice = 8 个独立调用，21 ACCEPT / 6 DEFER / 5 PM_DECIDE） | §X 完整记录；vp-1 估时被实证翻倍（15→43-52 refs）；INDEX 改 derived refresh；§2.6 话术对齐 req-stage-gate 模板 |
 | 2026-05-18 | **D1-D5 PM 决议** | D1: vp-1a 独立 + AI 辅助迁移；D2: CONTEXT 全强制；D3: 一次性 + 精简模式；D4: 业务词无 toggle；D5: vp-0 一次性重写 input-flow |
 | 2026-05-18 | v5 升级合并 21 ACCEPT + 5 PM 决议 | §2.2/§2.3/§2.4/§2.6/§2.7/§2.8/§2.9/§2.10/§2.11/§3/§4/§5/§7/§Y 全面更新；新 vp 序 10 个；总估时 22-28h（设计 11-16h → 实证 +50%）|
+| 2026-05-22 | **重开 §0.4 排除项 1**：modulespec 章节收敛 9 → 5 章（PM 显式决策路径，不升 v6）| 砍 4 个 req 级章节（二 Scope In/Out、六 本批不做、七 验收标准、九 Task 拆分提示）——它们与 req PRD 双写、且「本轮/本批」内容会过期；module spec 定位明确为「跨 req 累积的模块活文档」。generator commit `57a6c4e` |
 
 ---
 
