@@ -192,10 +192,12 @@ def read_section(
 
     Caller 决定 found=False 时如何处理。
     """
-    # section 名前可有 emoji / 数字编号等装饰前缀（与正文以空白分隔），
-    # 名后可有括号注释后缀 —— `## ` 开头的 heading 行只要含该 section 名即命中。
+    # 前缀只容忍数字编号（10. ）或一组符号/emoji 图标（以空白与正文分隔）；
+    # `[^\w\s]` 天然排除中文与字母数字（中文是 \w），故不会误吞 `## 其他 文档偏差`
+    # 的「其他」。后缀只容忍空白 / 括号注释 / 行尾 —— 防误匹配 `## 文档偏差说明`。
+    _prefix = r"(?:\d+\.\s+|[^\w\s]+\s+)?"
     heading_re = re.compile(
-        rf"^##\s+(?:\S.*?\s)?{re.escape(section_name)}.*$",
+        rf"^##\s+{_prefix}{re.escape(section_name)}\s*(?:[（(].*)?$",
         re.MULTILINE,
     )
 

@@ -226,6 +226,20 @@ class TestReadSection(unittest.TestCase):
             self.assertTrue(found)
             self.assertIn("带后缀标题的内容", content)
 
+    def test_section_heading_not_overmatched(self):
+        """正则不可过宽：`## 其他 文档偏差说明` 不是真审计段，不能误命中。"""
+        with tempfile.TemporaryDirectory() as d:
+            pm = Path(d) / "task-001-test.md"
+            pm.write_text(
+                "# Task\n"
+                "## 其他 文档偏差说明\n干扰说明段内容\n"
+                "## 文档偏差\n真正的审计段内容\n"
+            )
+            found, content = read_section(pm, "文档偏差")
+            self.assertTrue(found)
+            self.assertIn("真正的审计段内容", content)
+            self.assertNotIn("干扰说明段内容", content)
+
 
 class TestHasMeaningfulContent(unittest.TestCase):
     def test_empty(self):

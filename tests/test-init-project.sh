@@ -70,6 +70,11 @@ test_e2e_references_copied() {
     fi
   done
 
+  # P2: 框架自用工具 measure-tthw.sh 假定框架仓根，不该分发进消费仓
+  if [ -f "$proj/.claude/scripts/measure-tthw.sh" ]; then
+    missing="$missing measure-tthw.sh(框架自用工具误拷进消费仓)"
+  fi
+
   rm -rf "$base"
 
   if [ -n "$missing" ]; then
@@ -80,9 +85,45 @@ test_e2e_references_copied() {
 }
 
 # -----------------------------------------------------------------
+# T3: e2e —— background 含 sed 元字符（& | \）不污染生成文件
+# -----------------------------------------------------------------
+test_e2e_special_chars_in_background() {
+  start_test "T3: init-project background 含 & | \\ 不污染生成的 CLAUDE.md"
+
+  if ! command -v gstack &>/dev/null && [ ! -d "$HOME/.claude/skills/gstack" ]; then
+    echo "  ⏭️  SKIP: gstack 不可用，跳过 e2e"
+    return
+  fi
+
+  local base proj bg
+  base=$(mktemp -d)
+  proj="$base/test-proj"
+  bg='A & B | C \ D 报表系统'
+
+  if ! bash "$INIT_PROJECT_SH" "test-proj" "$proj" "$bg" prototype \
+       >/tmp/test-init-special.out 2>&1; then
+    _fail "init-project.sh 含特殊字符 background 执行失败 —— 见 /tmp/test-init-special.out"
+    tail -20 /tmp/test-init-special.out >&2
+    rm -rf "$base"
+    return
+  fi
+
+  # 生成的 CLAUDE.md 必须原样含 background —— sed 会把 & 展开、| 当分隔符报错
+  if ! grep -qF "$bg" "$proj/CLAUDE.md"; then
+    _fail "CLAUDE.md 未原样包含 background（占位符替换被元字符污染）"
+    rm -rf "$base"
+    return
+  fi
+
+  rm -rf "$base"
+  pass_test
+}
+
+# -----------------------------------------------------------------
 # Run
 # -----------------------------------------------------------------
 test_skill_copy_is_recursive
 test_e2e_references_copied
+test_e2e_special_chars_in_background
 
 report_results "init-project"

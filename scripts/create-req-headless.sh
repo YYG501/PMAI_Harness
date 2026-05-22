@@ -142,11 +142,17 @@ if [ -z "$SLUG" ]; then
   SLUG="$(TITLE="$TITLE" python3 - <<'PY'
 import os
 import re
+import hashlib
 
-title = os.environ["TITLE"].lower()
-slug = re.sub(r"[^a-z0-9]+", "-", title).strip("-")
+raw = os.environ["TITLE"]
+slug = re.sub(r"[^a-z0-9]+", "-", raw.lower()).strip("-")
 parts = [p for p in slug.split("-") if p][:4]
-print("-".join(parts) or "req")
+result = "-".join(parts)
+if not result:
+    # 标题无 ASCII 词（如纯中文）→ 退化成裸 "req" 会让分支名变 req-NNN-req。
+    # 改用标题的稳定 hash slug：同标题同 slug、不同标题不撞。
+    result = "cn-" + hashlib.md5(raw.encode("utf-8")).hexdigest()[:8]
+print(result)
 PY
 )"
 fi

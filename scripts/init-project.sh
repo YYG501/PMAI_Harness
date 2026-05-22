@@ -139,9 +139,15 @@ for TMPL in "$FRAMEWORK_DIR/templates/"*.tmpl; do
   esac
 
   mkdir -p "$(dirname "$DEST")"
-  sed -e "s|{{PROJECT_NAME}}|$PROJECT_NAME|g" \
-      -e "s|{{PROJECT_BACKGROUND}}|$BACKGROUND|g" \
-      "$TMPL" > "$DEST"
+  # 占位符替换用 Python .replace()，不解释 replacement 元字符 —— sed 会把
+  # background 里的 | 当分隔符报错、& 当「整段匹配」展开，静默污染生成文件。
+  TMPL="$TMPL" DEST="$DEST" PN="$PROJECT_NAME" BG="$BACKGROUND" python3 - <<'PY'
+import os
+text = open(os.environ["TMPL"], encoding="utf-8").read()
+text = text.replace("{{PROJECT_NAME}}", os.environ["PN"])
+text = text.replace("{{PROJECT_BACKGROUND}}", os.environ["BG"])
+open(os.environ["DEST"], "w", encoding="utf-8").write(text)
+PY
 done
 echo "📋 模板已复制并替换占位符"
 
@@ -165,9 +171,10 @@ python3 "$FRAMEWORK_DIR/scripts/inject-structure-segment.py" \
 mkdir -p "$TARGET_DIR/.claude/scripts"
 for SCRIPT in "$FRAMEWORK_DIR/scripts/"*; do
   BASENAME=$(basename "$SCRIPT")
-  # 跳过 init-project.sh 和 .ref 文件
+  # 跳过框架自用脚本（不该分发到消费仓）和 .ref 文件
   case "$BASENAME" in
-    init-project.sh) continue ;;
+    init-project.sh) continue ;;   # 只在框架仓运行
+    measure-tthw.sh) continue ;;   # 框架自用 TTHW 测量工具，假定框架仓根 + 调 init-project.sh，进消费仓必失效
     *.ref)           continue ;;
   esac
   cp -Rp "$SCRIPT" "$TARGET_DIR/.claude/scripts/$BASENAME"
