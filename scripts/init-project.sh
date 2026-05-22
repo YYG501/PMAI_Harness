@@ -107,6 +107,7 @@ fi
 # --- c. 创建项目目录 ---
 if [ -d "$TARGET_DIR" ]; then
   echo "❌ 目标目录已存在: $TARGET_DIR" >&2
+  echo "   修复：换一个不存在的路径作 <target-dir>。init-project 不写入已存在目录，避免覆盖已有内容。" >&2
   exit 1
 fi
 
@@ -181,7 +182,9 @@ for SKILL_DIR in "$FRAMEWORK_DIR/skills/"*/; do
   # 跳过 init-project（只在框架仓库中使用）
   [ "$SKILL_NAME" = "init-project" ] && continue
   mkdir -p "$TARGET_DIR/.claude/skills/$SKILL_NAME"
-  cp "$SKILL_DIR"* "$TARGET_DIR/.claude/skills/$SKILL_NAME/" 2>/dev/null || true
+  # 递归复制：skill 目录可能含 references/ 等子目录（prd-writing / task-execute）
+  # 不吞错误——skill 复制是关键步骤，失败应由 set -e 停下，而非静默漏拷
+  cp -R "$SKILL_DIR". "$TARGET_DIR/.claude/skills/$SKILL_NAME/"
 done
 echo "🛠️ Skills 已复制到 .claude/skills/"
 
