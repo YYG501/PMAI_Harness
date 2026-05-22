@@ -2,7 +2,7 @@
 name: project-solution
 description: |
   项目级一次性 skill：PM 在 /init-project 之后调用，定项目顶层方向。
-  内部两段——段 1 讨论方向（复用 analysis 提问法纪律），段 2 产出 docs/CONTEXT.md（6 节）+ docs/roadmap.md。
+  内部两段——段 1 讨论方向（复用 analysis 提问法纪律），段 2 产出 docs/PROJECT.md（6 节）+ docs/roadmap.md。
   不占 req stage、不走 req-stage-gate；项目骨架建好后只跑这一次。
 ---
 
@@ -11,7 +11,7 @@ description: |
 ## When To Use
 
 - PM 在框架仓库初始化出一个新项目、跑完 `/init-project` 之后调用
-- 一个项目只跑一次：把项目顶层方向（产品定位 / 用户 / 路线 / 技术栈 / 术语）一次性定下来，写进 `docs/CONTEXT.md`，并列出待做需求队列 `docs/roadmap.md`
+- 一个项目只跑一次：把项目顶层方向（产品定位 / 用户 / 路线 / 技术栈 / 术语）一次性定下来，写进 `docs/PROJECT.md`，并列出待做需求队列 `docs/roadmap.md`
 - 它不是 req 级 skill——不占任何 req stage，不由 `/req-stage-gate` 调度
 
 > 已存在的老项目不补跑本 skill。老项目的项目级语境兜底走 `/new-req` 首次跑时的 mini-fill。
@@ -30,20 +30,20 @@ echo "SKILL: project-solution"
 
 | | init-project | project-solution |
 |---|---|---|
-| 干什么 | 建空骨架（目录 / 脚本 / git） | 定项目方向，填 `docs/CONTEXT.md` + `docs/roadmap.md` |
+| 干什么 | 建空骨架（目录 / 脚本 / git） | 定项目方向，填 `docs/PROJECT.md` + `docs/roadmap.md` |
 | 何时 | 创建项目时 | `/init-project` 之后、起第一个 req 之前 |
 | 跑几次 | 一次 | 一次 |
 
 ## 产出
 
-- `docs/CONTEXT.md` —— 项目顶层方案，6 节：项目名称 / 产品定位 / 用户画像 / 产品路线 / 技术栈 / 业务术语表（模板 `$REPO_ROOT/templates/CONTEXT.md.tmpl`）
+- `docs/PROJECT.md` —— 项目顶层方案，6 节：项目名称 / 产品定位 / 用户画像 / 产品路线 / 技术栈 / 业务术语表（模板 `$REPO_ROOT/templates/PROJECT.md.tmpl`）
 - `docs/roadmap.md` —— 计划态 req 队列（模板 `$REPO_ROOT/templates/roadmap.md.tmpl`）
 
 **单文件，不产工程孪生** —— 本 skill 不产 `solution.engineering.md` 之类的工程合同。项目级方向只用 PM 视角写。
 
 **「产品路线」节 vs roadmap 的分工**（产出时同时填两者并对 PM 说明）：
 
-| | CONTEXT.md「产品路线」节 | docs/roadmap.md |
+| | PROJECT.md「产品路线」节 | docs/roadmap.md |
 |---|---|---|
 | 装什么 | 里程碑 / 大方向（如「Q3 上线 MVP」「先做单人版再做协作」） | 计划态 req 队列（颗粒到单个需求） |
 | 生命周期 | 稳定基线，变动慢 | 操作态，随 req 推进更新 |
@@ -59,11 +59,11 @@ echo "SKILL: project-solution"
 
 ### 段 1 · 讨论方向
 
-目标：把项目顶层方向问清楚，够写 `docs/CONTEXT.md` 6 节 + 列出初始 req 队列。
+目标：把项目顶层方向问清楚，够写 `docs/PROJECT.md` 6 节 + 列出初始 req 队列。
 
 #### 步骤 1：读已有输入
 
-- `docs/CONTEXT.md`（`/init-project` 已建空骨架；可能有项目名 + 项目背景）
+- `docs/PROJECT.md`（`/init-project` 已建空骨架；可能有项目名 + 项目背景）
 - `CLAUDE.md`（看 `/init-project` 注入的项目背景 / 工程结构约束档位）
 - **`docs/代码现状档.md`（如存在 — brownfield 场景，delta-1）**：已有代码库接入时，`/codebase-audit`
   先扫码产出的 7 维度现状档。存在 → 全文读，作为项目方向讨论的实况语境（被现状档喂着讨论，
@@ -80,7 +80,7 @@ echo "SKILL: project-solution"
 
 要问到能填满 6 节的程度：
 
-| CONTEXT 节 | 要问出 |
+| PROJECT 节 | 要问出 |
 |---|---|
 | 产品定位 | 这是什么产品 / 解决什么问题 / 给谁用 / 有无长期硬约束 |
 | 用户画像 | 主角色是谁、关键诉求（起手 1 个主角色即可） |
@@ -97,7 +97,7 @@ echo "SKILL: project-solution"
 
 #### 步骤 3：未决问题闸门（收敛前硬规则）
 
-讨论收敛、动手写 `docs/CONTEXT.md` 之前——如果还有需要 PM 拍板才能定的项目级问题（如「先做单人版还是直接做协作版」），**不能带着模糊往下写**。
+讨论收敛、动手写 `docs/PROJECT.md` 之前——如果还有需要 PM 拍板才能定的项目级问题（如「先做单人版还是直接做协作版」），**不能带着模糊往下写**。
 
 把未决问题写进暂存文件 `docs/.project-solution-open-questions.md`，格式：
 
@@ -131,15 +131,15 @@ python3 "$REPO_ROOT/.claude/scripts/check-open-questions.py" \
 
 > **禁逃生舱**：没有「暂跳过」「以后再说」「带假设前进」选项。PM 真不知道某题答案 → AI 给一个精简默认值让 PM 微调或接受，但答案必须落到暂存文件里、闸门必须过。
 
-闸门过后，暂存文件已完成使命——可保留作讨论记录，不进 CONTEXT.md。
+闸门过后，暂存文件已完成使命——可保留作讨论记录，不进 PROJECT.md。
 
 ---
 
 ### 段 2 · 输出
 
-#### 步骤 4：写 docs/CONTEXT.md（6 节）
+#### 步骤 4：写 docs/PROJECT.md（6 节）
 
-按 `$REPO_ROOT/templates/CONTEXT.md.tmpl` 把 6 节填实：项目名称 / 产品定位 / 用户画像 / 产品路线 / 技术栈 / 业务术语表。
+按 `$REPO_ROOT/templates/PROJECT.md.tmpl` 把 6 节填实：项目名称 / 产品定位 / 用户画像 / 产品路线 / 技术栈 / 业务术语表。
 
 - 「产品路线」节只写里程碑 / 大方向（见上方分工表）
 - 写作遵守 PM 视图规则：正向描述、名词带指代、不写工程黑话（reducer / props / schema）；项目级方向用 PM 语言
@@ -152,19 +152,19 @@ python3 "$REPO_ROOT/.claude/scripts/check-open-questions.py" \
 
 ### 确认门
 
-段 2 写完后走确认门。本确认门**替代旧 stage 3→4 的 CONTEXT 6 节强制门**——它兼做 6 节齐不齐检查。
+段 2 写完后走确认门。本确认门**替代旧 stage 3→4 的 PROJECT 6 节强制门**——它兼做 6 节齐不齐检查。
 
 #### 步骤 6：开场问模式
 
 ```
-📝 准备写项目方向（docs/CONTEXT.md + docs/roadmap.md）。
+📝 准备写项目方向（docs/PROJECT.md + docs/roadmap.md）。
 
 想填详细版（按完整规范），还是最简版（产品定位 1 句话 / 1 个主角色 / 1 条术语 起手）？
 最简版几分钟搞定，以后起 req 时还能接着补。
 ```
 
 - PM 答「最简 / 简版 / 快」→ 精简模式：每节 1 条起手即接受
-- PM 答「详细 / 完整 / 详版」→ 详细模式：按 CONTEXT 模板各节注释里的规范长度
+- PM 答「详细 / 完整 / 详版」→ 详细模式：按 PROJECT 模板各节注释里的规范长度
 - PM 答「混合」→ 各节 PM 临场决定
 
 > **fast-path**：精简模式下 trivial 项目不被前置仪式拖住——产品定位一句话、用户画像一个角色、术语表一条，起手即可过门。
@@ -172,9 +172,9 @@ python3 "$REPO_ROOT/.claude/scripts/check-open-questions.py" \
 #### 步骤 7：6 节齐不齐检查
 
 ```bash
-CONTEXT_STATE=$(python3 "$REPO_ROOT/.claude/scripts/check-context-sections.py" "$REPO_ROOT")
-ALL_FILLED=$(echo "$CONTEXT_STATE" | python3 -c "import sys, json; print(json.load(sys.stdin)['all_filled'])")
-EMPTY=$(echo "$CONTEXT_STATE" | python3 -c "import sys, json; print(','.join(json.load(sys.stdin)['empty_sections']))")
+PROJECT_STATE=$(python3 "$REPO_ROOT/.claude/scripts/check-project-sections.py" "$REPO_ROOT")
+ALL_FILLED=$(echo "$PROJECT_STATE" | python3 -c "import sys, json; print(json.load(sys.stdin)['all_filled'])")
+EMPTY=$(echo "$PROJECT_STATE" | python3 -c "import sys, json; print(','.join(json.load(sys.stdin)['empty_sections']))")
 ```
 
 - `all_filled` 为 True → 6 节都有实质内容，进步骤 8
@@ -189,7 +189,7 @@ EMPTY=$(echo "$CONTEXT_STATE" | python3 -c "import sys, json; print(','.join(jso
 ```
 项目方向已写好：
 
-📋 docs/CONTEXT.md
+📋 docs/PROJECT.md
    <绝对路径>
    产品定位 / 用户画像 / 产品路线 / 技术栈 / 业务术语表 已填
 
@@ -219,19 +219,19 @@ EMPTY=$(echo "$CONTEXT_STATE" | python3 -c "import sys, json; print(','.join(jso
 - ❌ 6 节检查给逃生舱（「这节不重要」「以后再说」）—— 空节必须填，PM 不知道写啥时 AI 给精简默认值
 - ❌ 自动调 `/office-hours` / `/plan-ceo-review` —— 这两个由 PM 可选自跑
 - ❌ 设 analysis-reviewer 式第二视角强制评审 —— 项目方向第二视角由 PM 自跑 `/plan-ceo-review`
-- ❌ 对 `docs/CONTEXT.md` 直接跑未决问题闸门 —— CONTEXT.md 无 `## 未决问题` section，闸门会形同虚设；必须对暂存文件跑
+- ❌ 对 `docs/PROJECT.md` 直接跑未决问题闸门 —— PROJECT.md 无 `## 未决问题` section，闸门会形同虚设；必须对暂存文件跑
 - ❌ PM chat 出现工程黑话（hash / reconcile / stale / 步骤编号）—— 给 PM 看的话只用 PM 视图语言
 
 **必做项**：
 
 - ✅ 段 1 收敛前必过未决问题闸门（对暂存文件 + `--require-section`）
-- ✅ 确认门兼做 6 节齐不齐检查（替代旧 stage 3→4 的 CONTEXT 强制门）
-- ✅ 产出时同时填 CONTEXT.md「产品路线」节与 `docs/roadmap.md`，并向 PM 说明分工
+- ✅ 确认门兼做 6 节齐不齐检查（替代旧 stage 3→4 的 PROJECT 强制门）
+- ✅ 产出时同时填 PROJECT.md「产品路线」节与 `docs/roadmap.md`，并向 PM 说明分工
 - ✅ 确认门继承「精简 / 详细」模式选择 + 「PM 不知道写啥时 AI 给精简默认值」逃生阀
 
 ## 边界
 
-- **允许产出**：`docs/CONTEXT.md`、`docs/roadmap.md`、讨论暂存文件 `docs/.project-solution-open-questions.md`
+- **允许产出**：`docs/PROJECT.md`、`docs/roadmap.md`、讨论暂存文件 `docs/.project-solution-open-questions.md`
 - **允许动作**：分批提问、未决问题闸门、6 节检查、确认门
 - **禁止顺手推进**：不自动起 req、不调 `/new-req`、不产任何 req 级文档
-- **退出条件**：`docs/CONTEXT.md` 6 节全填、`docs/roadmap.md` 已写、未决问题闸门已过、PM 已定稿
+- **退出条件**：`docs/PROJECT.md` 6 节全填、`docs/roadmap.md` 已写、未决问题闸门已过、PM 已定稿

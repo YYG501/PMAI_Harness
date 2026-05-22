@@ -1,7 +1,7 @@
 ---
 name: implementation-design
 description: |
-  Stage 5（拆 task 前）：读 brief / analysis / prd.md / docs/CONTEXT.md / docs/DESIGN.md，
+  Stage 5（拆 task 前）：读 brief / analysis / prd.md / docs/PROJECT.md / docs/DESIGN.md，
   按 $REPO_ROOT/templates/implementation-design.md.tmpl 产出 req 级实现设计文档
   implementation-design.md（HOW：这个 req 用什么架构、照哪些现有代码写、为什么这么选）。
   由 /req-stage-gate 在 Stage 4→5 编排调用，task-plan 之前。
@@ -58,7 +58,7 @@ PM 确认门（审架构决策表），通过后再调 `/task-plan`。
 | `$ACTIVE_REQ_DIR/prd.md` | req 级功能规格（WHAT）—— HOW 据此设计，不重抄 WHAT |
 | `$ACTIVE_REQ_DIR/analysis.md` | 需求分析 —— 技术依赖 / 约束 |
 | `$ACTIVE_REQ_DIR/brief.md` | 原始诉求（轻量背景）|
-| `$REPO_ROOT/docs/CONTEXT.md` | 项目级背景（技术栈 / 产品定位）|
+| `$REPO_ROOT/docs/PROJECT.md` | 项目级背景（技术栈 / 产品定位）|
 | `$REPO_ROOT/docs/DESIGN.md` | **组件 inventory** —— §2 文件·模式索引据此写「复用现有组件 X」，与 stage 4 gap-check 读同一份 |
 | `$REPO_ROOT/docs/modules/`（如存在）| 现有模块规格 —— 照哪些现有代码写 |
 

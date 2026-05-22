@@ -88,7 +88,7 @@ PM 在 worktree 里**只需要敲一次** `/req-stage-gate`，之后 stage-gate 
    - PM 提具体修改 → 按 PM 指示改 `brief.md`，改完后**只输出"已改完"二次摘要**（同一份模板，"一句话摘要"段填新内容），不贴全文
 
 3. **调用 `/req-analysis`**
-   - skill 内部完成：读 brief + CONTEXT、第一性原理 4 层分析、写 analysis.md（含 10 章 + `## 未决问题` section）、调 analysis-reviewer 一次后把报告原文贴 chat，让 PM 三选一（AI 改 / PM 自改 / 接受现状）
+   - skill 内部完成：读 brief + PROJECT、第一性原理 4 层分析、写 analysis.md（含 10 章 + `## 未决问题` section）、调 analysis-reviewer 一次后把报告原文贴 chat，让 PM 三选一（AI 改 / PM 自改 / 接受现状）
    - skill 返回 = **PM 已看过 reviewer 报告原文 + 已显式做出处理决定**；返回值带 `review_outcome ∈ {PASS, ACCEPTED_WITH_ISSUES}`
    - **orchestrator 不重调 reviewer**；如 `review_outcome=ACCEPTED_WITH_ISSUES`，stage-gate 在最终推进确认门加一行知会："⚠️ analysis 评审 NEEDS_REVISION，PM 已显式接受继续推进"——但**不阻塞**推进
 4. **未决问题闸门（Stage 2 → 3 推进的硬约束）：**
@@ -151,7 +151,7 @@ PM 选择进入 stage 3 时：
 
 1. **调用 `/prd-writing`（stage-3 orchestrated 模式）**
    - 调用时在 prompt 里明确「stage-3 orchestrated 模式」——这是被 stage-gate 编排的固定 req 级模式，skill 跳过自身开场三选一对话、不走最终确认（详见 `prd-writing/SKILL.md` 的 stage-3 模式段）。
-   - skill 内部完成：读 `brief.md` + `analysis.md` + `docs/CONTEXT.md`（+ 已有 `docs/modules/` 如存在），从 analysis 的功能分解派生 §六 功能需求层级、写 `prd.md`（章节结构按 PRD 9 章 / 11 章不变），写完跑 `check-prd-hierarchy.py` lint + `term-detector.py` 补 `docs/CONTEXT.md` 业务术语表，并为本次每条产品决策 append `decision` 事件
+   - skill 内部完成：读 `brief.md` + `analysis.md` + `docs/PROJECT.md`（+ 已有 `docs/modules/` 如存在），从 analysis 的功能分解派生 §六 功能需求层级、写 `prd.md`（章节结构按 PRD 9 章 / 11 章不变），写完跑 `check-prd-hierarchy.py` lint + `term-detector.py` 补 `docs/PROJECT.md` 业务术语表，并为本次每条产品决策 append `decision` 事件
    - skill 返回时 `prd.md` 已落盘、lint 已闭环（详见 `prd-writing/SKILL.md`：lint 在 skill 内闭环，**不**传递给 stage-gate 二次显示）；返回值带本次新增的 `decision` 摘要（备选 / 理由），供步骤 2 确认门一并渲染
 
 2. **输出确认门**（一份完整模板，把产物落地 / 规格要点 / 本次决策摘要 / 可选 review / 确认问句拼成单次输出；不分两轮发）：
@@ -220,7 +220,7 @@ PM 选择进入 stage 3 时：
 python3 .claude/scripts/req-transition.py "$ACTIVE_REQ_DIR" --to 3
 ```
 
-> **stage 3 只有一个 PM 定稿确认门**——就是步骤 2。`/prd-writing` 在 stage-3 orchestrated 模式下不出自己的确认门，由本步骤 2 统一兜住。stage 3 不再有 reconcile / 行数 lint / CONTEXT 6 节门等额外门或步骤。
+> **stage 3 只有一个 PM 定稿确认门**——就是步骤 2。`/prd-writing` 在 stage-3 orchestrated 模式下不出自己的确认门，由本步骤 2 统一兜住。stage 3 不再有 reconcile / 行数 lint / PROJECT 6 节门等额外门或步骤。
 
 推进成功后**续到 Stage 3 → 4 入口**（DESIGN.md 检查门）。
 
@@ -228,7 +228,7 @@ python3 .claude/scripts/req-transition.py "$ACTIVE_REQ_DIR" --to 3
 
 ### Stage 3 → 4（功能规格 → 设计系统）
 
-> **CONTEXT 6 节强制门已撤掉**（CONTEXT 由 `/project-solution` 产出 + 已有项目走 `/new-req`
+> **PROJECT 6 节强制门已撤掉**（PROJECT 由 `/project-solution` 产出 + 已有项目走 `/new-req`
 > legacy gate）。stage 3→4 此处直接推进 stage 4。
 
 **stage 4 永远进**（delta-9 D9-2）—— stage 4 内拆「**必跑 gap-check** +（可选）DESIGN.md

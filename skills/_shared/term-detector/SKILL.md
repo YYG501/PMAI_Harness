@@ -3,7 +3,7 @@ name: _shared/term-detector
 description: |
   业务词 / 角色发现检测器（vp-4b 共享逻辑）。被 new-req / req-analysis /
   prd-writing / task-spec 各 skill 在写 PM 视图主文件时调用，识别未登记的
-  业务词 / 角色让 AI 提示 PM 补 CONTEXT 业务术语表 / 用户画像。
+  业务词 / 角色让 AI 提示 PM 补 PROJECT 业务术语表 / 用户画像。
 ---
 
 # _shared/term-detector
@@ -47,7 +47,7 @@ echo "$RESULT"
   "new_roles": ["平台审核员"],
   "skipped": ["售后单"],      // 本 req 已被 PM 拒绝（.term-skip.json）
   "whitelisted": ["用户"],    // 通用词，silent
-  "registered": ["商品池"]    // CONTEXT 已有
+  "registered": ["商品池"]    // PROJECT 已有
 }
 ```
 

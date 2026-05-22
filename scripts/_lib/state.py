@@ -710,15 +710,15 @@ def _get_close_date(meta: dict):
 
 
 def _load_milestone_set(repo_root: Path) -> set:
-    """从 docs/CONTEXT.md ## 产品路线 节扫 ⭐ 标记的 req ID。
+    """从 docs/PROJECT.md ## 产品路线 节扫 ⭐ 标记的 req ID。
 
     模式：- ⭐ YYYY-MM-DD · <name>（关联 req-NNN）
     """
-    context_path = repo_root / "docs" / "CONTEXT.md"
-    if not context_path.exists():
+    project_path = repo_root / "docs" / "PROJECT.md"
+    if not project_path.exists():
         return set()
     try:
-        content = context_path.read_text(encoding="utf-8")
+        content = project_path.read_text(encoding="utf-8")
     except OSError:
         return set()
     return set(re.findall(r"⭐.*?关联\s*(req-\d+)", content))
@@ -738,7 +738,7 @@ def get_timeline_state(
     参数:
         since: ISO date YYYY-MM-DD; 仅返回 close/cancel 时间 >= since 的 archived
         module: 仅返回涉及该 module 的 req（meta.modules / meta.name 包含）
-        milestone_only: 仅返回 CONTEXT 产品路线节标 ⭐ 的 req
+        milestone_only: 仅返回 PROJECT 产品路线节标 ⭐ 的 req
         limit: archived (closed + cancelled) 总数限制（None = 无上限）
 
     返回:

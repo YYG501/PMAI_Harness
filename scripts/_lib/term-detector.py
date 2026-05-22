@@ -3,7 +3,7 @@
 
 被 new-req / req-analysis / prd-writing / task-spec 各 skill 在写 PM 视图主
 文件前 / 中调用，检测文本中**未登记的业务词 / 角色**，让 AI 提示 PM 补
-CONTEXT 业务术语表 / 用户画像。
+PROJECT 业务术语表 / 用户画像。
 
 检测策略（保守，避免 Clippy 风险）：
 - 候选业务词来源（仅这三处，不全文 NLP）：
@@ -13,7 +13,7 @@ CONTEXT 业务术语表 / 用户画像。
 - 角色识别：候选词以「员 / 管理员 / 运营 / 客服 / 财务 / 经理 / 主管」结尾
 - 过滤层：
   1. 白名单（whitelist.json，含技术词 + 通用业务/产品词）
-  2. CONTEXT 已登记（业务术语表 / 用户画像表）
+  2. PROJECT 已登记（业务术语表 / 用户画像表）
   3. .term-skip.json（本 req 已被 PM 拒绝的）
 
 用法（被 skill 调用）：
@@ -25,7 +25,7 @@ CONTEXT 业务术语表 / 用户画像。
   "new_roles": ["平台审核员"],
   "skipped": ["X"],  // 在 .term-skip.json 里的，PM 已拒绝
   "whitelisted": ["用户"],  // 在白名单的，silent
-  "registered": ["管理员"]  // 已在 CONTEXT 的
+  "registered": ["管理员"]  // 已在 PROJECT 的
 }
 
 调用 skill 据此输出 §2.7 话术（单词 / 多词批量 / 角色）让 PM 处理。
@@ -51,12 +51,12 @@ def load_whitelist(repo_root: Path) -> set:
     return terms
 
 
-def load_registered(context_path: Path) -> dict:
-    """Load registered terms from CONTEXT.md 业务术语表 / 用户画像表."""
+def load_registered(project_path: Path) -> dict:
+    """Load registered terms from PROJECT.md 业务术语表 / 用户画像表."""
     result = {"terms": set(), "roles": set()}
-    if not context_path.exists():
+    if not project_path.exists():
         return result
-    content = context_path.read_text(encoding="utf-8")
+    content = project_path.read_text(encoding="utf-8")
 
     # 提取 ## 用户画像 表的「角色」列
     m = re.search(r"##\s+用户画像\s*\n(.+?)(?=^##\s|\Z)", content, re.MULTILINE | re.DOTALL)
@@ -169,8 +169,8 @@ def main():
 
     text = text_path.read_text(encoding="utf-8")
     whitelist = load_whitelist(repo_root)
-    context_path = repo_root / "docs" / "CONTEXT.md"
-    registered = load_registered(context_path)
+    project_path = repo_root / "docs" / "PROJECT.md"
+    registered = load_registered(project_path)
 
     req_dir = Path(args.req_dir) if args.req_dir else None
     skip = load_skip_list(req_dir) if req_dir else set()

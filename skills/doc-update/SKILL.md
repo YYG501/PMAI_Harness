@@ -18,7 +18,7 @@ description: Use when task 已完成、PM 已通过验收、需要在 close-task
 
 - **v3 单文件 typed contract**（delta-3）：task 是一个物理文件 `task-NNN-<slug>.md`，三区由 region 标记界定——
   - PM 确认区「📌 任务卡」：`**所属模块**` / `**所属模块章节**` 字段
-  - 审计区「📋 文档偏差」表：**单一一处**偏差记录（文档偏差 / 业务偏差合并）；指向任意 prd / implementation-design / module / DESIGN / CONTEXT 等文档
+  - 审计区「📋 文档偏差」表：**单一一处**偏差记录（文档偏差 / 业务偏差合并）；指向任意 prd / implementation-design / module / DESIGN / PROJECT 等文档
 - **v2 旧双文件 task**（在飞旧 task）：PM 视图主文件（`.md`）含「📋 功能清单」/「📁 历史档案 → 业务层偏差」/「📌 任务卡」模块字段；工程合同（`.engineering.md`）含「§10 文档偏差」/「§4 功能清单工程版」/「§1 元信息扩展」。
 - **v1 旧单文件**：偏差在主文件「## 文档偏差」section；模块字段是 `**所属模块：**` 头部字段。
 
@@ -37,12 +37,12 @@ description: Use when task 已完成、PM 已通过验收、需要在 close-task
 3. 🟢 task 文件偏差表 —— v3：审计区「📋 文档偏差」；v2：工程合同 §10 + PM 视图「📁 历史档案 → 业务层偏差」
 4. 🟢 **task worktree 改动代码**（步骤 1.6 模块规格对账，逐行核对实际实现是否匹配——不读代码就不能对账；读法同 Stage 7.1 close-task：≤3 文件全读，多文件分批）
 5. 🟡 偏差涉及的原文（前后 5 行）。**支持任何 req / 项目级文档**：
-   - 项目级：`docs/CONTEXT.md` / `docs/DESIGN.md` / `docs/modules/INDEX.md` / `docs/modules/*.md` / `CLAUDE.md`
+   - 项目级：`docs/PROJECT.md` / `docs/DESIGN.md` / `docs/modules/INDEX.md` / `docs/modules/*.md` / `CLAUDE.md`
    - req 级：`requirements/active/<req>/analysis.md` / `prd.md` / `implementation-design.md`（在飞旧 req 若仅有 `solution.md` / `solution.engineering.md` 则按旧文件名读）
 
 ## 位置定位原则（必读）
 
-doc-update 涉及的长期文档（`docs/modules/*.md` / `prd.md` / `docs/DESIGN.md` / `docs/CONTEXT.md`）通常几千行。**建议优先走"多重 grep + 章节级局部读"**——保险性 ≥ 全读，且系统化、可重复；不到必要时不 Read 全文。
+doc-update 涉及的长期文档（`docs/modules/*.md` / `prd.md` / `docs/DESIGN.md` / `docs/PROJECT.md`）通常几千行。**建议优先走"多重 grep + 章节级局部读"**——保险性 ≥ 全读，且系统化、可重复；不到必要时不 Read 全文。
 
 **为什么不读全文更保险**：
 - grep 系统化：关键字命中 = 100% 不漏
@@ -119,11 +119,11 @@ D13 final 现状：close-task 永不调 doc-update settlement → 本步骤入�
 
 2. **`v3`（新单文件 typed contract）**：正常路径，**不报告警**——
    - 从 PM 确认区「📌 任务卡」读 `**所属模块**` / `**所属模块章节**` 字段
-   - 从审计区「📋 文档偏差」表读偏差记录（对账模式用，**单一一处**；文档偏差 / 业务偏差合并，指向任意 prd / implementation-design / analysis / DESIGN / module / CONTEXT 等）
+   - 从审计区「📋 文档偏差」表读偏差记录（对账模式用，**单一一处**；文档偏差 / 业务偏差合并，指向任意 prd / implementation-design / analysis / DESIGN / module / PROJECT 等）
 
 3. **`v2`（旧双文件 task）**：在飞旧 task，兼容模式继续（`echo "ℹ️  检测到旧格式 task（双文件），兼容模式继续"`）——
    - PM 视图主文件：「📌 任务卡」模块字段 + `## 📋 功能清单` + `## 📁 历史档案 → 业务层偏差` 表
-   - 工程合同（`${TASK_FILE%.md}.engineering.md`）：`## 10. 文档偏差` 表（工程层偏差，指向 DESIGN / module / CONTEXT 等）
+   - 工程合同（`${TASK_FILE%.md}.engineering.md`）：`## 10. 文档偏差` 表（工程层偏差，指向 DESIGN / module / PROJECT 等）
 
 4. **`v1`（旧单文件）**：兼容模式——偏差检查只读主文件 `## 文档偏差` section；模块字段是 `**所属模块：**` `**所属模块章节：**` 头部字段（旧版用 `：**` 不是表格）。
 
@@ -140,7 +140,7 @@ D13 final 现状：close-task 永不调 doc-update settlement → 本步骤入�
 | 偏差指向 | 进入步骤 | 处理模式 |
 |---|---|---|
 | `docs/modules/<module>.md` 功能清单表格 | 1.6 | 模块规格对账（行级精确）|
-| 其他 req / 项目级文档（brief / analysis / prd / DESIGN / CONTEXT / CLAUDE）| 步骤 2 | 通用对账（按行读原文 + 生成 Edit + PM 逐条确认）|
+| 其他 req / 项目级文档（brief / analysis / prd / DESIGN / PROJECT / CLAUDE）| 步骤 2 | 通用对账（按行读原文 + 生成 Edit + PM 逐条确认）|
 | 无任何偏差 | 跳到 步骤 1.7 | 仅做沉淀模式 |
 
 ### 步骤 1.6：模块规格对账（对账模式保留）

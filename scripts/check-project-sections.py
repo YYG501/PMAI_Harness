@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""check-context-sections.py — CONTEXT.md 6 节状态检测器（vp-4b）
+"""check-project-sections.py — PROJECT.md 6 节状态检测器（vp-4b）
 
-被 req-stage-gate skill 在 stage 3→4 闸门调用，检测 docs/CONTEXT.md 6 节
+被 req-stage-gate skill 在 stage 3→4 闸门调用，检测 docs/PROJECT.md 6 节
 （项目名称 / 产品定位 / 用户画像 / 产品路线 / 技术栈 / 业务术语表）
 是否为空骨架（HTML 注释占位 / 无实质内容）。
 
@@ -9,7 +9,7 @@
 
 返回 JSON：
 {
-  "context_path": "/path/to/CONTEXT.md",
+  "project_path": "/path/to/PROJECT.md",
   "exists": true,
   "sections": {
     "项目名称": {"present": true, "substantial": true},
@@ -22,8 +22,8 @@
 }
 
 用法：
-  python3 scripts/check-context-sections.py <repo-root>
-  python3 scripts/check-context-sections.py <repo-root> --section 产品定位  # 检查单节
+  python3 scripts/check-project-sections.py <repo-root>
+  python3 scripts/check-project-sections.py <repo-root> --section 产品定位  # 检查单节
 """
 import argparse
 import json
@@ -107,22 +107,22 @@ def is_substantial(body: str, section: str) -> bool:
     return bool(stripped)
 
 
-def check_context(repo_root: Path, target_section: str = None) -> dict:
-    """检测 CONTEXT 6 节状态。"""
-    context_path = repo_root / "docs" / "CONTEXT.md"
+def check_project(repo_root: Path, target_section: str = None) -> dict:
+    """检测 PROJECT 6 节状态。"""
+    project_path = repo_root / "docs" / "PROJECT.md"
     result = {
-        "context_path": str(context_path),
-        "exists": context_path.exists(),
+        "project_path": str(project_path),
+        "exists": project_path.exists(),
         "sections": {},
         "empty_sections": [],
         "all_filled": False,
     }
 
-    if not context_path.exists():
+    if not project_path.exists():
         result["empty_sections"] = list(REQUIRED_SECTIONS)
         return result
 
-    content = context_path.read_text(encoding="utf-8")
+    content = project_path.read_text(encoding="utf-8")
     sections = parse_sections(content)
 
     targets = [target_section] if target_section else REQUIRED_SECTIONS
@@ -140,7 +140,7 @@ def check_context(repo_root: Path, target_section: str = None) -> dict:
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Check CONTEXT.md 6 sections state")
+    parser = argparse.ArgumentParser(description="Check PROJECT.md 6 sections state")
     parser.add_argument("repo_root", help="repository root path")
     parser.add_argument("--section", help="check only specific section", default=None)
     parser.add_argument("--exit-code", action="store_true",
@@ -152,7 +152,7 @@ def main():
         print(json.dumps({"error": f"repo not found: {repo_root}"}, ensure_ascii=False), file=sys.stderr)
         sys.exit(2)
 
-    result = check_context(repo_root, args.section)
+    result = check_project(repo_root, args.section)
     print(json.dumps(result, ensure_ascii=False, indent=2))
 
     if args.exit_code:

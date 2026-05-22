@@ -28,7 +28,7 @@ prd-writing 是**多入口 skill**，两条入口的边界如下：
 - **触发**：`/req-stage-gate` 在 Stage 2→3 推进时调用本 skill。
 - **mode 固定「req 级」**：不询问写哪部分 —— stage 3 必然是当前 req 的完整 PRD。
 - **跳过步骤 0**：步骤 0 的「req 级 / 独立 / 补差」三选一对话**被 stage-gate 短路**，不向 PM 提问（短路机制见下方「步骤 0」段）。
-- **输入**：`brief.md` + `analysis.md` + `docs/CONTEXT.md`（+ 已有 `docs/modules/` 如存在）—— 详见「Required Inputs」。
+- **输入**：`brief.md` + `analysis.md` + `docs/PROJECT.md`（+ 已有 `docs/modules/` 如存在）—— 详见「Required Inputs」。
 - **产物**：`$ACTIVE_REQ_DIR/prd.md`。
 - **确认门**：stage 3 只保留 `req-stage-gate` 一个 PM 定稿确认门 —— 本 skill 内不再自带步骤 4 最终确认，步骤 2.5 §六拆分只在 AI 判断有歧义时才询问 PM（详见各步骤）。
 
@@ -72,8 +72,8 @@ standalone 模式下，AI **第一件事**是与 PM 对话确认：
 
 | 场景 | 推荐输入 |
 |---|---|
-| req 级 PRD | $ACTIVE_REQ_DIR/brief.md / analysis.md + docs/CONTEXT.md + docs/DESIGN.md + docs/modules/INDEX.md + 涉及模块的 docs/modules/<m>.md |
-| 独立 PRD（PM 指定模块清单 X/Y/Z） | docs/CONTEXT.md + docs/DESIGN.md + docs/modules/INDEX.md + docs/modules/X.md + docs/modules/Y.md + docs/modules/Z.md;**不读** req 上下文（brief/analysis），因为不绑 req |
+| req 级 PRD | $ACTIVE_REQ_DIR/brief.md / analysis.md + docs/PROJECT.md + docs/DESIGN.md + docs/modules/INDEX.md + 涉及模块的 docs/modules/<m>.md |
+| 独立 PRD（PM 指定模块清单 X/Y/Z） | docs/PROJECT.md + docs/DESIGN.md + docs/modules/INDEX.md + docs/modules/X.md + docs/modules/Y.md + docs/modules/Z.md;**不读** req 上下文（brief/analysis），因为不绑 req |
 | 补差 | 现有 PRD + 补差范围相关的 module / analysis 子集 |
 
 PM 答「改」 → 调整推荐清单 / 产物路径 → 再确认 → OK 后进入实际写作（步骤 1）。
@@ -102,7 +102,7 @@ stage 3 没有原型、没有 task —— 输入只有上游 stage 1/2 的产物
 
 - 🟢 `$ACTIVE_REQ_DIR/brief.md`（stage 1 产物 — 初始诉求）
 - 🟢 `$ACTIVE_REQ_DIR/analysis.md`（stage 2 产物 — **功能分解的权威来源**，§六层级从它派生）
-- 🟢 `docs/CONTEXT.md`（项目定位 / 用户画像 / 业务术语表 / 产品路线）
+- 🟢 `docs/PROJECT.md`（项目定位 / 用户画像 / 业务术语表 / 产品路线）
 - 🟢 `docs/DESIGN.md`（如存在 — 产品级视觉决策，PRD 不写像素颜色，仅引用稀疏）
 - 🟢 `docs/PRODUCT-RULES.md`（如存在 — **全文读**，跨功能产品行为规则；PRD 一次写对、不违背常驻规则。delta-9）
 - 🟢 `docs/modules/INDEX.md` + `docs/modules/<本 req 涉及模块>.md`（如目录存在）
@@ -188,14 +188,14 @@ stage 3 没有原型、没有 task —— 输入只有上游 stage 1/2 的产物
 
    lint 是 mechanical check，不依赖 AI 内化规则。
 
-3.6. **term-detector 步（业务词催补）**——PRD 写完、lint 通过后，跑 detector 扫 PRD 名词解释节、把新业务词 patch 进 `docs/CONTEXT.md` 业务术语表：
+3.6. **term-detector 步（业务词催补）**——PRD 写完、lint 通过后，跑 detector 扫 PRD 名词解释节、把新业务词 patch 进 `docs/PROJECT.md` 业务术语表：
 
    ```bash
    python3 "$REPO_ROOT/.claude/scripts/_lib/term-detector.py" \
      "$ACTIVE_REQ_DIR/prd.md" "$REPO_ROOT" --req-dir "$ACTIVE_REQ_DIR"
    ```
 
-   按返回 JSON 处理（详见 `skills/_shared/term-detector/SKILL.md`）：≥3 新词走多词批量话术；<3 走单词；新角色独立话术；全空 silent skip。PM 拒绝某词 → 追加 `.term-skip.json`；PM 同意 → patch `$REPO_ROOT/docs/CONTEXT.md` 业务术语表 / 用户画像表。
+   按返回 JSON 处理（详见 `skills/_shared/term-detector/SKILL.md`）：≥3 新词走多词批量话术；<3 走单词；新角色独立话术；全空 silent skip。PM 拒绝某词 → 追加 `.term-skip.json`；PM 同意 → patch `$REPO_ROOT/docs/PROJECT.md` 业务术语表 / 用户画像表。
 
    > 此步承接旧管线 `req-solution` 步骤 3.5 的 per-req 业务词催补职责 —— req-solution 退场后该职责由 prd-writing 接手。
 
@@ -224,7 +224,7 @@ stage 3 没有原型、没有 task —— 输入只有上游 stage 1/2 的产物
    - PM 选 promote → AI Edit 追加进 `docs/PRODUCT-RULES.md`「规则清单」段（不 commit，PM 后审 diff）
    - PM 说不是 → 不动
    - `docs/PRODUCT-RULES.md` 不存在 / 无候选 → silent skip
-   - **边界**：用词术语 → CONTEXT.md；模块级规则 → modulespec；视觉规范 → DESIGN.md。本步只捞全项目跨功能产品行为规则。
+   - **边界**：用词术语 → PROJECT.md；模块级规则 → modulespec；视觉规范 → DESIGN.md。本步只捞全项目跨功能产品行为规则。
 
    > 补「规划期发现的规则无沉淀路径」缺口（与 close-task §1.6 的 selective promote 同型，互补：close-task 捞执行期 PM 反馈里的、prd-writing 捞规划期讨论里的）。
 
@@ -507,7 +507,7 @@ stage 3 定稿后 PRD **冻结**：执行期 task 按它做，close-req 时另�
 ## stage 3 边界：功能规格定稿
 
 - 允许产出：`$ACTIVE_REQ_DIR/prd.md`（stage-3 模式）/ PM 指定路径（standalone 独立 PRD 模式）
-- 允许动作：基于 `brief.md` + `analysis.md` + `docs/CONTEXT.md`（+ `docs/modules/`）生成 req 级功能规格 PRD；为关键产品决策 append `decision` 事件；跑 term-detector 催补业务词
+- 允许动作：基于 `brief.md` + `analysis.md` + `docs/PROJECT.md`（+ `docs/modules/`）生成 req 级功能规格 PRD；为关键产品决策 append `decision` 事件；跑 term-detector 催补业务词
 - 禁止顺手推进：不要在写 PRD 的同时反向改 `analysis.md` 的范围边界；不要在 stage 3 自行画原型 / 拆 task（原型在 stage 4 之后、task 在 stage 5）
 - 退出条件：
   - **stage-3 模式**：PRD 写完 + lint 通过 + term-detector 跑完 + decision 事件 append 完 → 控制权交回 `req-stage-gate`，由其单一定稿确认门完成 stage 3 定稿；定稿后 PRD 冻结

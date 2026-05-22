@@ -82,7 +82,7 @@ PENDING_MARKER="$REPO_ROOT/.runs/pending-close-req.json"
 </details>
 
 ## 文档变更
-<!-- placeholder：本段在步骤 1.5 完成后回填（含 rewrite 覆盖的 docs/modules/* + docs/DESIGN.md + docs/CONTEXT.md 等；docs/prd.md 已砍，不在 rewrite 范围）。
+<!-- placeholder：本段在步骤 1.5 完成后回填（含 rewrite 覆盖的 docs/modules/* + docs/DESIGN.md + docs/PROJECT.md 等；docs/prd.md 已砍，不在 rewrite 范围）。
      如果步骤 1.5 silent skipped（无业务偏差），本段写"本 req 无项目级文档变更"。 -->
 
 ## 遗留问题
@@ -108,7 +108,7 @@ PENDING_MARKER="$REPO_ROOT/.runs/pending-close-req.json"
 
 1. **task 文件** `tasks/*.md`「📌 任务卡」表格的 `所属模块` / `所属模块章节` 字段 → 决定 sediment 进哪份 `docs/modules/<module>.md`
 2. **`prd.md` §六 功能需求** —— 模块功能合同沉淀源（delta-2：功能清单已从 task 移 PRD；task 执行区·实现规格仅作 task 级实现细节、不进 module spec）
-3. **task 文件审计区** `## 📋 文档偏差` 表（v3 单文件）→ 指向 brief / analysis / prd / DESIGN / CONTEXT / module 规格 的偏差对账
+3. **task 文件审计区** `## 📋 文档偏差` 表（v3 单文件）→ 指向 brief / analysis / prd / DESIGN / PROJECT / module 规格 的偏差对账
    - **v2 旧 task 兼容**：跨 PM 视图 `### 业务层偏差` + 工程合同 `## 10. 文档偏差` 两处（用 `detect_format` 分流）
 
 > delta-7 vp-3 已把 task「文档偏差」promote 成 req `adjustment` 事件 —— 本步骤的 modulespec
@@ -117,7 +117,7 @@ PENDING_MARKER="$REPO_ROOT/.runs/pending-close-req.json"
 **流程**：
 
 1. 遍历 `tasks/*.md`；按 `detect_format` 分流提取每 task 的偏差（v3 单文件审计区 / v2 跨两文件）。
-2. **按目标文档分组**：同一份 `docs/modules/<module>.md` / `docs/DESIGN.md` / `docs/CONTEXT.md` 的多 task 偏差并到一起（**项目主 `docs/prd.md` 已砍，不在范围**；req 级 `prd.md` 是 stage 3 定稿冻结基准，不进本 sediment 流程）。基础设施 task（`所属模块=基础设施`）跳过 module sediment，但其偏差表仍走对账。
+2. **按目标文档分组**：同一份 `docs/modules/<module>.md` / `docs/DESIGN.md` / `docs/PROJECT.md` 的多 task 偏差并到一起（**项目主 `docs/prd.md` 已砍，不在范围**；req 级 `prd.md` 是 stage 3 定稿冻结基准，不进本 sediment 流程）。基础设施 task（`所属模块=基础设施`）跳过 module sediment，但其偏差表仍走对账。
 3. 聚合后呈交 PM，按目标文档逐份决议（AskUserQuestion 或 prose；**两选项**，skip 分支 D13 final 已砍）：
 
    | 决议 | 触发条件 | 行为 |
@@ -234,17 +234,17 @@ python3 .claude/scripts/req-transition.py "$ACTIVE_REQ_DIR" --to 7
 
 ### 步骤 3.5：里程碑追加询问（v5 vp-3）
 
-问 PM 是否把本 req 加入 `docs/CONTEXT.md ## 产品路线`：
+问 PM 是否把本 req 加入 `docs/PROJECT.md ## 产品路线`：
 
 ```
-📝 本次 req 刚 close。要不要加进 `docs/CONTEXT.md` 产品路线？
+📝 本次 req 刚 close。要不要加进 `docs/PROJECT.md` 产品路线？
 - 是：追加 `YYYY-MM-DD · <req-name>（关联 <req-id>）`，要标 ⭐ 吗（标了能用 `status-view --milestone` 筛）
 - 否：不动路线（默认）
 ```
 
 PM 答「是 + ⭐」/「是 不标 ⭐」/「否」三选：
 
-- 「是 + ⭐」→ AI patch `docs/CONTEXT.md` `## 产品路线` `### 已完成` 段追加 `- ⭐ YYYY-MM-DD · <req-name>（关联 <req-id>）`
+- 「是 + ⭐」→ AI patch `docs/PROJECT.md` `## 产品路线` `### 已完成` 段追加 `- ⭐ YYYY-MM-DD · <req-name>（关联 <req-id>）`
 - 「是 不标 ⭐」→ 同上但不加 ⭐
 - 「否 / 默认 / 不动」→ 不 patch，进步骤 4
 

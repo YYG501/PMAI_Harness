@@ -15,7 +15,7 @@
 **最近活动（2026-05-22）**: **GSD-review 管线重构全包落地**（delta-2/3/4/7/8/9 最小落地包 + delta-1/5/6 追加）—— umbrella `docs/设计/管线重构-GSD-review.md` §8 六步顺序全实施：
 
 - **delta-7**（req 级事件流）：新建 `scripts/req-events.py`（`decision`/`adjustment` 两类事件，落 `requirements/active/<reqid>/req-events.jsonl` tracked）；vp-2 decision-append 并入 prd-writing、vp-3 adjustment-promote 并入 close-task.sh Phase 2。
-- **delta-2+4**（PRD/solution 对调）：`req-solution` → 新 `project-solution`（项目级，产 `docs/CONTEXT.md` + `docs/roadmap.md`）；`prd-writing` 前移 stage 3（多入口 + term-detector + decision-append）；req-stage-gate Stage 2→3 换芯；req-transition.py stage 3 → `prd.md` + 文件存在性新旧判别；~25 消费者迁移；quick-fix 路由改 stage-3 prd-writing。solution 双文件机器全砍。
+- **delta-2+4**（PRD/solution 对调）：`req-solution` → 新 `project-solution`（项目级，产 `docs/PROJECT.md` + `docs/roadmap.md`）；`prd-writing` 前移 stage 3（多入口 + term-detector + decision-append）；req-stage-gate Stage 2→3 换芯；req-transition.py stage 3 → `prd.md` + 文件存在性新旧判别；~25 消费者迁移；quick-fix 路由改 stage-3 prd-writing。solution 双文件机器全砍。
 - **delta-8**（实现设计视图）：新建 `templates/implementation-design.md.tmpl`（4 段 + HOW-ID schema）+ `/implementation-design` skill（stage 5 拆 task 前）；req-stage-gate Stage 4→5 接线 + PM 确认门。
 - **delta-3**（task-spec 重构）：task 双文件 → **单文件 typed contract**（PM 确认区/执行区/审计区三区 + `task_format` 标记）；删 hash/reconcile/lazy-sync 整套机器；relevance 二分 + PM 反馈承接清单；单一确认门；`detect_format` 三态（v1/v2/v3）；~19 消费者迁移；`finalize-review.py`/`check-engineering-doc-size.py` 删除。
 - **delta-9**（跨功能产品规则）：新建 `templates/PRODUCT-RULES.md.tmpl`；`DESIGN.md.tmpl` 升级（布局/响应式/无障碍/共享组件 inventory/Checker）；close-task PRODUCT-RULES selective promote；req-stage-gate stage 4 加 gap-check 组件复用关口（每 req 必跑）；new-req DESIGN.md legacy 迁移。
@@ -37,15 +37,15 @@
 - **测试基线**：340/0（D13 后） → **368/0**（v5 后；vp-4b 加 28 测试基线相关项）
 - 方案文档：`docs/设计/PRD-体系收敛.md`（v5，含完整 §X autoplan dual voice review）
 - 配套设计：`docs/设计/attachments-机制.md`（v0，独立机制）
-- 关键决议：D1（vp-1a 独立迁移）/ D2（CONTEXT 6 节全强制）/ D3（一次性 + 精简模式）/ D4（业务词催补不给 toggle）/ D5（vp-0 一次性重写 input-flow）
+- 关键决议：D1（vp-1a 独立迁移）/ D2（PROJECT 6 节全强制）/ D3（一次性 + 精简模式）/ D4（业务词催补不给 toggle）/ D5（vp-0 一次性重写 input-flow）
 
 **11 个 commit（已落地）**：
 | commit | 内容 |
 |---|---|
 | `4e8e63d` | design: v5 + attachments v0 设计文档 baseline |
 | `2c6c327` | feat(vp-0): 一次性重写 input-flow.md |
-| `f4eb57c` | feat(vp-4): CONTEXT.md 6 节模板重构 + migrate-context-v4.py |
-| `e3ec797` | feat(vp-4b): Stage 3 CONTEXT 检查门 + 业务词催补 hooks |
+| `f4eb57c` | feat(vp-4): PROJECT.md 6 节模板重构 + migrate-context-v4.py |
+| `e3ec797` | feat(vp-4b): Stage 3 PROJECT 检查门 + 业务词催补 hooks |
 | `0b8bfaa` | feat(vp-3): docs/modules/INDEX.md 新增 + 维护链路 |
 | `1d3505b` | feat(vp-2): close-req §2a/§2b 改 PM 主导 |
 | `fbec85b` | feat(vp-1a): migrate-prd.py 消费仓 prd 迁移 |
@@ -56,14 +56,14 @@
 | `65329d0` | feat(attachments): 独立机制实施完成 |
 
 **v5 体系产物（关键文件）**：
-- 新增脚本：`scripts/check-context-sections.py` / `scripts/_lib/term-detector.py` / `scripts/check-index-lint.py` / `scripts/migrate-context-v4.py` / `scripts/migrate-prd.py`
+- 新增脚本：`scripts/check-project-sections.py` / `scripts/_lib/term-detector.py` / `scripts/check-index-lint.py` / `scripts/migrate-context-v4.py` / `scripts/migrate-prd.py`
 - 新增模板：`templates/modules-INDEX.md.tmpl`
 - 新增 _shared：`skills/_shared/term-detector/SKILL.md` + whitelist.json
-- 重构 templates：`CONTEXT.md.tmpl`（6 节）/ `CLAUDE.md.tmpl`（文档位置表）/ `solution.md.tmpl` + `task.md.tmpl`（attachments section）
+- 重构 templates：`PROJECT.md.tmpl`（6 节）/ `CLAUDE.md.tmpl`（文档位置表）/ `solution.md.tmpl` + `task.md.tmpl`（attachments section）
 - status-view 扩展：`--timeline` / `--since` / `--module` / `--milestone` / `--limit` / `--all`
 - 删除：`templates/project-prd.md.tmpl` + `skills/project-prd-update/`
 
-**砍掉的机制清单（v5 §4 全 26 项已完整落地）**：项目主 PRD 整套（文件 + 模板 + skill + close-req §2b + 覆盖度算法 + rewrite 范围）+ CONTEXT 约束/风险节 + /prd-writing close-req 硬约束 + is_first_req 全套（字段 + resolver first 子命令 + status-view 装饰）+ DESIGN.md.tmpl first req 残留文案 + init-project CONTEXT 卡住 + 业务词催补 toggle + CONTEXT 渐进式 / 软提示 + INDEX 作为 §1.5 主 rewrite 目标 + 多 vp 各自改 input-flow。
+**砍掉的机制清单（v5 §4 全 26 项已完整落地）**：项目主 PRD 整套（文件 + 模板 + skill + close-req §2b + 覆盖度算法 + rewrite 范围）+ PROJECT 约束/风险节 + /prd-writing close-req 硬约束 + is_first_req 全套（字段 + resolver first 子命令 + status-view 装饰）+ DESIGN.md.tmpl first req 残留文案 + init-project PROJECT 卡住 + 业务词催补 toggle + PROJECT 渐进式 / 软提示 + INDEX 作为 §1.5 主 rewrite 目标 + 多 vp 各自改 input-flow。
 
 **关于历史 D13 modulespec 维护方案**（2026-05-16 落地）：见 `docs/归档/完成/modulespec-维护/主方案.md`。本 v5 与 D13 兼容共存（v5 §2.3 INDEX derived refresh 显式不污染 D13 REWRITE_COVERED_FILES metric）。
 
@@ -437,7 +437,7 @@ AI 收到后应该：
 | 步骤 6 solution.md 章节 grep（8 命中段）| ~240 | |
 | 步骤 5 task-002 `## PM 反馈` 段 | **0** | task-002 无该段（数据问题，与本次改动无关）|
 | 步骤 3 DESIGN.md 章节 grep | **0** | 关键词不命中通用章节 → 触发 §9.1.2 fallback 读「页面模板/动效/间距」|
-| 步骤 3 CONTEXT.md + prd.md | 114 | |
+| 步骤 3 PROJECT.md + prd.md | 114 | |
 | 步骤 3 当前模块（functions-v4.1 + functions） | 604 | |
 | 步骤 3 prototypes products/[id] grep（26 命中段）| ~150 | |
 | 步骤 3 prototypes products/page grep（40 命中段）| ~150 | |

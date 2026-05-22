@@ -103,7 +103,7 @@ bash scripts/measure-tthw.sh
 | Skill | 用途 |
 |---|---|
 | `/new-req` | 起一个新 req（带 brief） |
-| `/project-solution` | 初始化 / 修订项目级 CONTEXT 与 roadmap |
+| `/project-solution` | 初始化 / 修订项目级 PROJECT 与 roadmap |
 | `/quick-fix` | 不走 req 流程的小补丁（适合改文案、修小 bug） |
 
 ### 推进 req（需求级）

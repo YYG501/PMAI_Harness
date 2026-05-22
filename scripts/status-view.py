@@ -445,7 +445,7 @@ def main() -> None:
     )
     parser.add_argument("--since", default=None, help="(timeline) 仅显示关闭时间 >= YYYY-MM-DD 的 archived")
     parser.add_argument("--module", default=None, help="(timeline) 仅显示涉及该 module 的 req")
-    parser.add_argument("--milestone", action="store_true", help="(timeline) 仅显示 CONTEXT 路线节标 ⭐ 的 req")
+    parser.add_argument("--milestone", action="store_true", help="(timeline) 仅显示 PROJECT 路线节标 ⭐ 的 req")
     parser.add_argument("--limit", type=int, default=20, help="(timeline) archived 总数限制 (默认 20)")
     parser.add_argument("--all", action="store_true", help="(timeline) 取消 limit，显示全部 archived")
     args = parser.parse_args()

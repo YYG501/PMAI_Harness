@@ -408,7 +408,7 @@ req 分支的 worktree 可能在：
 不要在已 init 的项目上跑 `init-project.sh`：
 
 - `init-project.sh` 是 init 时一次性占位符替换 + 创建目录骨架（替换 `{{PROJECT_NAME}}` / `{{PROJECT_BACKGROUND}}` 等）
-- 已 init 项目的 `CLAUDE.md` / `docs/CONTEXT.md` / `docs/DESIGN.md` / `docs/prd.md` 是落地业务实例，**PM 已经写了业务背景**——再跑 init 会被空模板覆盖
+- 已 init 项目的 `CLAUDE.md` / `docs/PROJECT.md` / `docs/DESIGN.md` / `docs/prd.md` 是落地业务实例，**PM 已经写了业务背景**——再跑 init 会被空模板覆盖
 
 sync（本 SOP）只动 framework 资产（4 块），不动业务实例。
 
@@ -435,10 +435,26 @@ GSD-review 管线重构是一次性结构改动。同步到消费仓时**额外*
 **消费仓业务实例文件不被 sync 动**（SOP 只同步 scripts/skills/templates/agents）：
 - 在飞旧 req 的 `solution.md` / `solution.engineering.md` / 旧双文件 task —— 保留，跑完旧的；
   框架脚本用 `detect_format` 三态 + 文件存在性判别兼容读，不回迁。
-- 已有项目的 `docs/CONTEXT.md`（可能有空节）→ 首次 `/new-req` legacy gate 触发 mini-fill。
+- 已有项目的 `docs/PROJECT.md`（可能有空节）→ 首次 `/new-req` legacy gate 触发 mini-fill。
 - 已有项目的 `docs/DESIGN.md`（旧 6 段骨架）→ 首次 `/new-req` legacy gate 触发 mini-upgrade。
 - 已有项目无 `docs/PRODUCT-RULES.md` / `docs/roadmap.md` —— 读侧容错（缺文件不报错）；
   新项目由 `/init-project` 分发模板骨架。
+
+**⚠️ 一次性迁移：`docs/CONTEXT.md` → `docs/PROJECT.md`**
+
+本轮把项目级文档 `CONTEXT.md` 改名为 `PROJECT.md`（与 GSD 命名层级对齐 —— GSD 的
+`CONTEXT.md` 是 phase 级、`PROJECT.md` 才是项目级；原来用 `CONTEXT.md` 装项目级
+内容是撞名错层）。框架 scripts/skills/templates 已全部改读 `docs/PROJECT.md`，但
+**消费仓业务实例 `docs/CONTEXT.md` 不被 sync 动**。sync 完成后消费仓须**立即**跑：
+
+```bash
+python3 .claude/scripts/migrate-context-to-project.py
+```
+
+它做两件事：① `git mv docs/CONTEXT.md docs/PROJECT.md`；② 修业务文档（CLAUDE.md /
+docs/ / requirements/ 下 git-tracked 的 .md）里的 `CONTEXT.md` 引用。幂等、可重跑、
+新项目跑是 no-op。**漏跑 → 同步后的脚本找 `docs/PROJECT.md` 找不到，stage 3/4
+检查门、term-detector、status-view --milestone 全断。** 跑完 git diff 审查后 commit。
 
 **建议同步时机**：消费仓「无 stage ≤ 5 在飞 req」时同步，减少新旧流程混跑。
 

@@ -16,7 +16,7 @@ model: sonnet
 主线会把以下路径传给你：
 - `analysis.md` 的绝对路径（必需）
 - `brief.md` 的绝对路径（必需——你需要它来判断 analysis 是否真正回应了 stage 1 暴露的问题）
-- 可选：`docs/CONTEXT.md` 的绝对路径（项目背景，若传了就读）
+- 可选：`docs/PROJECT.md` 的绝对路径（项目背景，若传了就读）
 
 读完后按下面的 4 条角度逐条评审。
 

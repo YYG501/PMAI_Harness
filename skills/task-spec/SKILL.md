@@ -48,7 +48,7 @@ echo "SKILL: task-spec"
 | `task-plan.md` | task 元数据 |
 | `prd.md`（delta-2）| req 级 WHAT —— 挑当前 task 切片转写进执行区·实现规格 + PM 确认区·验收 |
 | `implementation-design.md`（delta-8）| req 级 HOW —— 按 `HOW-ID` + 适用关键词挑当前 task 相关行 |
-| `docs/CONTEXT.md` / `docs/DESIGN.md` / `docs/modules/` | 项目级背景 |
+| `docs/PROJECT.md` / `docs/DESIGN.md` / `docs/modules/` | 项目级背景 |
 | `docs/PRODUCT-RULES.md`（delta-9）| 跨功能产品行为规则 —— 读全部 `scope=全局` 规则 + 按当前 task 模块 / 功能关键词 grep 命中的 `scope=域限定` 规则（§9.1.1 章节-grep；`scope=全局` 永远纳入、不漏跨功能规则）。命中的规则写进执行区·约束与易错 |
 | 前序「已完成」task 的「PM 反馈」段 | same-req 反馈 lane（§步骤 5 relevance 二分）|
 | `analysis.md` | ⚪ 按需 lazy fallback —— 不默认读；PRD 切片不足时回读对应章节并在 chat 告知 PM |
@@ -275,7 +275,7 @@ auto_commit_docs "$REQ_WORKTREE" "task-NNN-<slug>: spec sealed" "$TASK_FILE"
 - 基础设施 task 必须说明：`本 task 不触发 module 规格 merge`。
 - AI 不得自动调任何 review skill（I-RV1）；只在确认门给可选 review 清单，PM 自跑。
 - **relevance 二分强制**：前序 PM 反馈按 relevance（适用 / 不适用）二分；每条都登记进 PM 反馈承接清单。
-- **跳过项目级文档"必读"被禁止**：CONTEXT / DESIGN / prd / implementation-design / modules 存在则必读。
+- **跳过项目级文档"必读"被禁止**：PROJECT / DESIGN / prd / implementation-design / modules 存在则必读。
 - **binding-contract 纪律保留**（§2.8）：删的是双文件 hash 同步机器，不是删「PM 在确认门
   判定保留的内容 AI 不得改」。revise 仍守「只改 PM 要求改的、不顺手 normalize」。
 - **单文件模板必须保留「文档偏差」「自审记录」section**：否则 `task-transition.py`

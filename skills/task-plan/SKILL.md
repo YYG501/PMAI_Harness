@@ -47,7 +47,7 @@ echo "SKILL: task-plan"
 
 按上方 Required Inputs 列出的文件**逐一读取**：
 - 上游 stage 文档（brief / analysis / prd 功能规格）
-- 项目级文档（CONTEXT / DESIGN / prd / modules / prototypes）
+- 项目级文档（PROJECT / DESIGN / prd / modules / prototypes）
 
 **特别注意**：
 - 项目级文档列为"必读"——AI 不得以"觉得不必要"为由跳过
@@ -74,7 +74,7 @@ echo "SKILL: task-plan"
 > 1. 每个 task 必须显式声明 `所属模块`，只能是一个或多个业务模块，或 `基础设施`。
 > 2. 产出在任何业务页面/流程上直接可见时，必须归到对应业务模块。
 > 3. 只有产出不在任何业务页面/流程上直接可见，且不是文档型规格（模块规格文档 / functions.md / 字段口径契约 / 范围裁剪规则），才允许标 `基础设施`。
-> 4. 基础设施 task 验收后不沉淀进 `docs/modules/<module>.md`；如需长期记录，由 PM 决定是否写入 `docs/CONTEXT.md` / `docs/DESIGN.md`。
+> 4. 基础设施 task 验收后不沉淀进 `docs/modules/<module>.md`；如需长期记录，由 PM 决定是否写入 `docs/PROJECT.md` / `docs/DESIGN.md`。
 >
 > 基础设施识别示例：项目脚手架、共用 Button/Modal 组件库、API client、auth context、构建配置。反例：登录页的"会话管理 hook"服务于登录流程，应归登录页/账号模块。
 
@@ -221,7 +221,7 @@ discard / rollback 的具体操作流程见 `task-transition` 与 `req-stage-gat
 - ❌ 自动生成 tasks/task-NNN-*.md（这是 stage 6 task-spec 的事）
 - ❌ 生成 task-plan.engineering.md 之类的工程合同分文件（task-plan 单文件，自检结论压在 §四）
 - ❌ §四 自检与状态摘要里堆论证全文 / 拆分依据论证 / autoplan 决策表（这些是过程产物，跑时输出，不长期存档）
-- ❌ 跳过项目级文档的"必读"（CONTEXT / DESIGN / prd / modules / prototypes）
+- ❌ 跳过项目级文档的"必读"（PROJECT / DESIGN / prd / modules / prototypes）
 
 **正向约束**：
 

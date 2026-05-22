@@ -75,7 +75,7 @@ PM 提修正 → 改现状档 → 重新呈交。
 ### 步骤 4：交接 project-solution
 
 PM 确认现状档后，引导 PM 跑 `/project-solution` —— project-solution 读 `docs/代码现状档.md`
-作为已有代码库的语境，和新项目一样讨论项目方向、产出 `docs/CONTEXT.md` + `docs/roadmap.md`。
+作为已有代码库的语境，和新项目一样讨论项目方向、产出 `docs/PROJECT.md` + `docs/roadmap.md`。
 
 ## Rules
 

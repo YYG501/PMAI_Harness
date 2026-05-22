@@ -323,7 +323,7 @@ Read 本 task 审计区·历史档案的 PM 反馈段，AI 预判哪些条目属
 ——适用范围超出本 task 模块、是「产品在 X 情况下应 / 不应 Y」的规则、向前管未写的 task。
 候选数 = N。**N = 0 → 直接进步骤 2**。
 
-> 边界：用词 / 术语 → CONTEXT.md 术语表；模块级规则 → modulespec；视觉规范 → DESIGN.md
+> 边界：用词 / 术语 → PROJECT.md 术语表；模块级规则 → modulespec；视觉规范 → DESIGN.md
 > （步骤 1.5 已处理）；task-local / 同模块前瞻 → 留 task 文件。本步骤只捞全项目跨功能规则。
 
 #### 1.6.3 promote 处理（默认 promote · 拿不准才问 PM）

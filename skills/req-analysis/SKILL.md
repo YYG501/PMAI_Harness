@@ -80,7 +80,7 @@ echo "SKILL: req-analysis"
 按 `_shared/pm-view/input-flow.md` 中 **Stage 2 req-analysis** 段执行：
 
 - 🟢 `$ACTIVE_REQ_DIR/brief.md`
-- 🟢 `$REPO_ROOT/docs/CONTEXT.md`（如存在）
+- 🟢 `$REPO_ROOT/docs/PROJECT.md`（如存在）
 - 🟢 `$REPO_ROOT/docs/modules/INDEX.md`（如存在 → **必读**——分析新需求必须基于已有模块用途索引，避免重复设计 / 与已有功能冲突）
 
 ## First Principles Analysis（第一性原理分析框架）
@@ -150,7 +150,7 @@ fi
 
 ### 步骤 1：读输入文档建立基线
 
-读 `$ACTIVE_REQ_DIR/brief.md`，及 `docs/CONTEXT.md` / `docs/modules/INDEX.md`（若存在）。
+读 `$ACTIVE_REQ_DIR/brief.md`，及 `docs/PROJECT.md` / `docs/modules/INDEX.md`（若存在）。
 **增量分支**：额外把 `docs/modules/<本 req 涉及模块>.md` 当已知基线读入（不重新质疑已稳定模块）。
 
 ### 步骤 2：执行第一性原理 4 层（内部推理）
@@ -171,7 +171,7 @@ python3 "$REPO_ROOT/.claude/scripts/_lib/term-detector.py" \
   "$ACTIVE_REQ_DIR/analysis.md" "$REPO_ROOT" --req-dir "$ACTIVE_REQ_DIR"
 ```
 
-按返回处理（详见 `skills/_shared/term-detector/SKILL.md`）：≥3 新词走多词批量话术，<3 走单词；新角色独立话术；全空 silent。PM 拒绝 → 追加 `.term-skip.json`；PM 同意 → patch `$REPO_ROOT/docs/CONTEXT.md` 业务术语表 / 用户画像表。
+按返回处理（详见 `skills/_shared/term-detector/SKILL.md`）：≥3 新词走多词批量话术，<3 走单词；新角色独立话术；全空 silent。PM 拒绝 → 追加 `.term-skip.json`；PM 同意 → patch `$REPO_ROOT/docs/PROJECT.md` 业务术语表 / 用户画像表。
 
 ### 步骤 3.7：attachments 引用 hook（v5 attachments 机制）
 
@@ -200,7 +200,7 @@ python3 "$REPO_ROOT/.claude/scripts/_lib/term-detector.py" \
 Agent(
   subagent_type="analysis-reviewer",
   description="Stage 2 analysis 独立评审",
-  prompt="请评审以下 analysis.md：\n\n- analysis.md 绝对路径：$ACTIVE_REQ_DIR/analysis.md\n- brief.md 绝对路径：$ACTIVE_REQ_DIR/brief.md\n- docs/CONTEXT.md 绝对路径（如存在）：$REPO_ROOT/docs/CONTEXT.md\n\n按 agent 定义里的 4 条角度（摊隐藏业务决定 / 拆正交轴 / 边界清晰 / 未决问题完备）逐条评审，按规定格式输出。"
+  prompt="请评审以下 analysis.md：\n\n- analysis.md 绝对路径：$ACTIVE_REQ_DIR/analysis.md\n- brief.md 绝对路径：$ACTIVE_REQ_DIR/brief.md\n- docs/PROJECT.md 绝对路径（如存在）：$REPO_ROOT/docs/PROJECT.md\n\n按 agent 定义里的 4 条角度（摊隐藏业务决定 / 拆正交轴 / 边界清晰 / 未决问题完备）逐条评审，按规定格式输出。"
 )
 ```
 
@@ -352,7 +352,7 @@ reviewer 返回后，**先把 reviewer 报告完整原文贴回 chat**（PASS �
 ## 阶段 2 边界
 
 - **允许产出**：`$ACTIVE_REQ_DIR/analysis.md`
-- **允许动作**：基于 brief.md / CONTEXT.md 做第一性原理分析、提出未决问题、调 analysis-reviewer 一轮一停
+- **允许动作**：基于 brief.md / PROJECT.md 做第一性原理分析、提出未决问题、调 analysis-reviewer 一轮一停
 - **禁止顺手推进**：不要自动产出 `prd.md`、`task-plan.md`，不要直接进入原型实现
 - **禁止逃生舱**：没有"带假设前进"模式；想绕开 reviewer 的合法路径只有「步骤 5 选 C 显式接受现状」
 - **退出条件**：analysis.md 已写、reviewer 至少跑过一次且报告原文已贴 chat、PM 已显式选了 A/B/C 且最终选择是 A 或 C（B 会回到步骤 4）。控制权交回 /req-stage-gate，附带 `review_outcome` 字段

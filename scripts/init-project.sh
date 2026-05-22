@@ -121,7 +121,7 @@ for TMPL in "$FRAMEWORK_DIR/templates/"*.tmpl; do
   # 确定目标位置
   case "$BASENAME" in
     CLAUDE.md)              DEST="$TARGET_DIR/CLAUDE.md" ;;
-    CONTEXT.md)             DEST="$TARGET_DIR/docs/CONTEXT.md" ;;
+    PROJECT.md)             DEST="$TARGET_DIR/docs/PROJECT.md" ;;
     DESIGN.md)              DEST="$TARGET_DIR/docs/DESIGN.md" ;;
     PRODUCT-RULES.md)       DEST="$TARGET_DIR/docs/PRODUCT-RULES.md" ;;
     roadmap.md)             DEST="$TARGET_DIR/docs/roadmap.md" ;;

@@ -279,7 +279,7 @@ if [ "$BRANCH" = "main" ] || [ "$BRANCH" = "master" ]; then
       MAIN_WRITE_ALLOWED=true
       ;;
     # 项目启动时的初始化（init-project.sh 的产出）
-    docs/CONTEXT.md|docs/DESIGN.md|docs/modules/*)
+    docs/PROJECT.md|docs/DESIGN.md|docs/modules/*)
       # 这些文档首次创建时可写（init），后续修改必须走 req 分支
       # 用 git log 判断：如果还没 commit 过，允许；否则拒绝
       if git -C "$REPO_ROOT" log --oneline -1 -- "$REL_PATH" 2>/dev/null | grep -q .; then
