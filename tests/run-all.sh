@@ -21,6 +21,7 @@ SUITES=(
   test-detect-project-structure.sh
   test-inject-structure.sh
   test-init-project.sh
+  test-tthw-smoke.sh
   test-business-deviation.sh
   test-task-spec.sh
   test-task-pm-feedback.sh

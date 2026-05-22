@@ -40,41 +40,30 @@ echo "下一个可用编号：req-$NEW_NUM"
 
 helper 同时保证 `requirements/closed/` / `requirements/active/` / `git refs/heads/req-*` 三来源全扫——AI 调一行命令即可，不再凭印象判断。helper 自身见 `scripts/_lib/req-num-resolver.sh`。
 
-### 步骤 3：先创建 worktree，再在 worktree 里创建 req 目录
+### 步骤 3：用脚本创建 worktree 与 req 状态骨架
 
 **顺序很重要：先 worktree，后文件。** 不能在主仓创建文件再拉 worktree（未 commit 的文件不会出现在 worktree 里）。
 
 从 PM 提供的需求描述生成 slug（英文 kebab-case，2-4 个词）。
 
-**3a. 创建 worktree：**
+调用统一状态创建脚本（与 CI/TTHW headless 路径共用），先只创建 worktree、`.req-meta.json` 与 `tasks/` 骨架；brief.md 仍在步骤 4 由 PM 确认后写入。
 
 ```bash
-bash .claude/scripts/create-req-worktree.sh "req-NNN-<slug>"
+REQ_BRANCH="req-$NEW_NUM-<slug>"
+REQ_JSON=$(bash .claude/scripts/create-req-headless.sh \
+  --req-id "$REQ_BRANCH" \
+  --title "<PM 需求一句话>" \
+  --no-brief \
+  --no-commit)
+
+WORKTREE_DIR=$(printf '%s\n' "$REQ_JSON" | python3 -c 'import json,sys; print(json.load(sys.stdin)["worktree"])')
+ACTIVE_REQ_DIR=$(printf '%s\n' "$REQ_JSON" | python3 -c 'import json,sys; print(json.load(sys.stdin)["req_dir"])')
+REQ_REL=$(printf '%s\n' "$REQ_JSON" | python3 -c 'import json,sys; print(json.load(sys.stdin)["req_rel"])')
 ```
 
 cd 到返回的 worktree 路径。
 
-**3b. 在 worktree 里创建 req 目录和元数据：**
-
-创建目录：`requirements/active/req-NNN-<slug>/`
-
-创建子目录：`tasks/`、`tasks/_archived/`
-
-创建 `.req-meta.json`：
-
-```json
-{
-  "id": "req-NNN",
-  "name": "<slug>",
-  "branch": "req-NNN-<slug>",
-  "worktree": ".worktrees/req-NNN-<slug>",
-  "stage": 1,
-  "stage_history": [
-    {"stage": 1, "entered_at": "<ISO-8601>"}
-  ],
-  "status": "active"
-}
-```
+脚本负责保证状态契约一致：`requirements/active/<req>/`、`.req-meta.json`、`tasks/`、worktree 路径与分支名一次性落盘。不要在 skill 里另手写一套 meta schema，避免 human path 和 headless TTHW path 漂移。
 
 ### 步骤 3.5：已有项目 CONTEXT 兜底检查（legacy readiness gate）
 
@@ -256,7 +245,7 @@ PM 在步骤 4 二确门说 OK 后、进入步骤 5 handoff 之前，AI **必须
 
 ```bash
 cd <worktree 绝对路径>
-git add brief.md .req-meta.json tasks/
+git add "$REQ_REL/brief.md" "$REQ_REL/.req-meta.json" "$REQ_REL/tasks"
 git commit -m "stage 1 brief: req-NNN-<slug>"
 ```
 
@@ -270,7 +259,7 @@ commit 范围默认只包含 brief.md + .req-meta.json + 空 tasks/ 骨架；其
 `git add` 按实际触发的兜底多加对应文件：
 
 ```bash
-git add brief.md .req-meta.json tasks/ docs/CONTEXT.md docs/DESIGN.md
+git add "$REQ_REL/brief.md" "$REQ_REL/.req-meta.json" "$REQ_REL/tasks" docs/CONTEXT.md docs/DESIGN.md
 ```
 
 未触发兜底（CONTEXT 全填 / DESIGN 已新结构、走 silent skip）时不加对应文件，保持默认范围。commit 完成后进入步骤 5 handoff。

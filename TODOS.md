@@ -50,7 +50,7 @@
 
 **设计文档:** [`docs/设计/accept闸门.md`](docs/设计/accept闸门.md)（§0 锁定 v1；plan-eng-review 完成，D1/D2/C8/T1/T2 落定；已实施）
 
-**状态:** ✅ **已实施并验证**（`bd1f1a3` + `f37c83f`；`_lib/events.py` + accept 闸门 + regression 修复；当前全量 390/0）。本条保留作设计溯源，不再是待办。
+**状态:** ✅ **已实施并验证**（`bd1f1a3` + `f37c83f`；`_lib/events.py` + accept 闸门 + regression 修复；当前全量 394/0）。本条保留作设计溯源，不再是待办。
 
 **粗估:** `task-transition.py` + `scripts/_lib/events.py` 合计 ~30 行 + 4 新测 + regression 修复（test-task-transition.sh fixture）。
 
@@ -66,7 +66,7 @@
 
 **设计文档:** [`docs/设计/证据修复命令.md`](docs/设计/证据修复命令.md)（§0 草稿，**待 PM 共写锁定**）。
 
-**状态:** ✅ **已实施并验证**（`bd1f1a3` + `f37c83f`；`--repair-evidence` 命令 + UTF-8 / 分支守卫跟进；当前全量 390/0）。本条保留作设计溯源，不再是待办。
+**状态:** ✅ **已实施并验证**（`bd1f1a3` + `f37c83f`；`--repair-evidence` 命令 + UTF-8 / 分支守卫跟进；当前全量 394/0）。本条保留作设计溯源，不再是待办。
 
 **核心设计风险:** 乙 本质是"受支持的让审计通过命令"——integrity surface 是方案必须解的难题（强制理由 / PM 认定 / 透明标记 / 收窄能力面）。
 
