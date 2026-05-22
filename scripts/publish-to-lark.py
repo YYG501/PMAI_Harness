@@ -121,6 +121,31 @@ def preflight(target_kind: str | None, config_present: bool, args_complete: bool
                 "或手动传 --target-token + --target-kind + --title")
 
 
+# ---------- HTML 表格预检 ----------
+
+_FENCE_RE = re.compile(r"```.*?```", re.DOTALL)
+
+
+def warn_if_html_tables(text: str) -> None:
+    """飞书 lark-cli 只认 GFM 管道表格（`| ... |`）；正文里裸 HTML `<table>` 会被
+    压成纯文本——标签全剥掉、单元格内容黏成一段，表格行列结构彻底丢失。
+
+    扫到就大声警告 + 给行号（先剔除 ``` 围栏代码块，避免代码示例里的 <table> 误报）。
+    不阻断发布：身份/权限类 PRD 的 §八 角色权限清单暂无干净的管道表格替代方案，
+    硬拦会让这类 PRD 完全发不出去；警告只确保不再"悄悄塌掉"。
+    """
+    masked = _FENCE_RE.sub(lambda m: "\n" * m.group(0).count("\n"), text)
+    hits = [i + 1 for i, line in enumerate(masked.splitlines())
+            if "<table" in line.lower()]
+    if not hits:
+        return
+    warn(f"检测到 {len(hits)} 处 HTML <table>（行 {', '.join(map(str, hits))}）。"
+         f"飞书发布只支持 GFM 管道表格（| ... |）——HTML <table> 会被压成纯文本、"
+         f"行列结构全丢。请改成管道表格：需要跨行合并的列，首行写值、续行该格留空，"
+         f"发布时会自动合并。（§八 角色权限清单 / 含 <img> 的原型列暂无管道替代方案，"
+         f"见 prd-writing skill。）")
+
+
 # ---------- Frontmatter ----------
 # parse_frontmatter 已上移到 _lib.lark_adapter（frontmatter 拆分单一实现，
 # adapter 发送前也用它剥离 frontmatter）；本文件只保留回写侧的 write_frontmatter。
@@ -595,6 +620,7 @@ def main() -> None:
 
     text = md_path.read_text(encoding="utf-8")
     fm, body = parse_frontmatter(text)
+    warn_if_html_tables(text)
     filename = md_path.stem
     existing_doc_id = fm.get("lark_doc_id")
 

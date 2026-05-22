@@ -218,7 +218,70 @@ MD
   fi
 }
 
+test_warns_on_html_table() {
+  start_test "preflight: 正文含裸 HTML <table> → 大声警告（不阻断发布）"
+  cat > "$WORK/htmltable.md" <<'MD'
+# HTML 表格测试
+
+正文一段。
+
+<table>
+  <tr><td>a</td><td>b</td></tr>
+</table>
+
+收尾。
+MD
+  pushd "$WORK" >/dev/null
+  out=$(python3 "$FRAMEWORK_ROOT/scripts/publish-to-lark.py" \
+        --type prd --no-merge-cells htmltable.md 2>&1)
+  rc=$?
+  popd >/dev/null
+  # 警告不阻断发布 → 仍应 exit 0
+  if [ $rc -ne 0 ]; then
+    _fail "HTML <table> 警告不应阻断发布; rc=$rc out: $out"
+    return
+  fi
+  if echo "$out" | grep -q "检测到 1 处 HTML <table>"; then
+    pass_test
+  else
+    _fail "未对 HTML <table> 报警; out: $out"
+  fi
+}
+
+test_no_warn_on_pipe_table() {
+  start_test "preflight: 纯管道表格 + 围栏代码块里的 <table> → 不误报"
+  cat > "$WORK/pipetable.md" <<'MD'
+# 管道表格测试
+
+| 角色 | 描述 |
+| --- | --- |
+| 普通成员 | 无特殊权限 |
+
+下面是代码示例，不算真表格：
+
+```html
+<table><tr><td>示例</td></tr></table>
+```
+MD
+  pushd "$WORK" >/dev/null
+  out=$(python3 "$FRAMEWORK_ROOT/scripts/publish-to-lark.py" \
+        --type prd --no-merge-cells pipetable.md 2>&1)
+  rc=$?
+  popd >/dev/null
+  if [ $rc -ne 0 ]; then
+    _fail "expected exit 0, got $rc; out: $out"
+    return
+  fi
+  if echo "$out" | grep -q "检测到.*HTML <table>"; then
+    _fail "管道表格 / 围栏内 <table> 被误报; out: $out"
+    return
+  fi
+  pass_test
+}
+
 test_first_time_create_modern_shape
+test_warns_on_html_table
+test_no_warn_on_pipe_table
 test_overwrite_uses_existing_doc_id
 test_overwrite_strips_frontmatter
 test_first_time_create_legacy_nested_shape
