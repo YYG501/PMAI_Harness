@@ -103,13 +103,20 @@ python3 -c "import json; print(json.load(open('.framework-sync-state.json'))['la
   "last_synced": {
     "generator_sha": "<生成器 commit sha>",
     "generator_repo": "PM-AI-Workflow",
-    "synced_at": "<ISO 8601 时间戳>",
     "manifest_schema": 1
   }
 }
 ```
 
-每次 sync 完成后必须更新 `generator_sha` + `synced_at`（步骤 5 模板）。
+每次 sync 完成后必须更新 `generator_sha`（步骤 5 模板）。
+
+> **不存 `synced_at` 时间戳**：上次 sync 时点 = lockfile 最后一次改动的 commit 时间，
+> 跑 `git log -1 --format=%cI -- .framework-sync-state.json` 即得，不进文件。
+> 原因：步骤 6 对 main + 每个 active req worktree 各跑一次步骤 5a，每次 `date -u` 取到
+> 不同时间戳 → 该 req close-req 合并回 main 时 `.framework-sync-state.json` 必冲突
+> （`generator_sha` 相同、纯时间戳噪音；a4130f6 / req-007 / req-006 撞过 3 次）。
+> 移除该字段后，同一次 sync 写到各分支的 lockfile 字节一致 → 合并无冲突；只有
+> `generator_sha` 真分叉才冲突（此时该冲突，是真问题）。
 
 **1a-fallback：trailer 查**（lockfile 缺失或损坏时用）
 
@@ -214,16 +221,14 @@ cd "$DST"
 git add .claude/scripts/ .claude/skills/ .claude/agents/ templates/
 git status --short  # 检查改动文件数 + untracked 目录（如新增 references/）
 
-# 5a. 更新 lockfile（主锚点，按设计 §5.3）
+# 5a. 更新 lockfile（主锚点，按设计 §5.3；不写 synced_at —— 见步骤 1a 说明）
 GEN_HEAD=$(git -C "$SRC" rev-parse --short HEAD)
-SYNCED_AT=$(date -u +%Y-%m-%dT%H:%M:%SZ)
 cat > .framework-sync-state.json <<JSON
 {
   "schema_version": 1,
   "last_synced": {
     "generator_sha": "$GEN_HEAD",
     "generator_repo": "PM-AI-Workflow",
-    "synced_at": "$SYNCED_AT",
     "manifest_schema": 1
   }
 }
