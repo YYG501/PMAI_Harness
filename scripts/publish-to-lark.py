@@ -131,8 +131,8 @@ def warn_if_html_tables(text: str) -> None:
     压成纯文本——标签全剥掉、单元格内容黏成一段，表格行列结构彻底丢失。
 
     扫到就大声警告 + 给行号（先剔除 ``` 围栏代码块，避免代码示例里的 <table> 误报）。
-    不阻断发布：身份/权限类 PRD 的 §八 角色权限清单暂无干净的管道表格替代方案，
-    硬拦会让这类 PRD 完全发不出去；警告只确保不再"悄悄塌掉"。
+    不阻断发布：旧 PRD 可能仍含 HTML 表格，硬拦会让它们发不出去；警告 + 行号
+    确保 PM 看见、不再"悄悄塌掉"。新写的 PRD 一律用管道表格（见 prd-writing）。
     """
     masked = _FENCE_RE.sub(lambda m: "\n" * m.group(0).count("\n"), text)
     hits = [i + 1 for i, line in enumerate(masked.splitlines())
@@ -141,9 +141,46 @@ def warn_if_html_tables(text: str) -> None:
         return
     warn(f"检测到 {len(hits)} 处 HTML <table>（行 {', '.join(map(str, hits))}）。"
          f"飞书发布只支持 GFM 管道表格（| ... |）——HTML <table> 会被压成纯文本、"
-         f"行列结构全丢。请改成管道表格：需要跨行合并的列，首行写值、续行该格留空，"
-         f"发布时会自动合并。（§八 角色权限清单 / 含 <img> 的原型列暂无管道替代方案，"
-         f"见 prd-writing skill。）")
+         f"行列结构全丢。请改成管道表格：需要跨行合并的列首行写值、续行留空，发布时"
+         f"自动合并；权限矩阵这类不该合并的表，表前加 <!-- lark:no-merge --> 标记。")
+
+
+# ---------- no-merge 标记 ----------
+
+_NO_MERGE_RE = re.compile(r"<!--.*?lark:no-merge.*?-->", re.IGNORECASE)
+
+
+def _is_pipe_table_row(line: str) -> bool:
+    """GFM 管道表格行：strip 后以 `|` 开头。"""
+    return line.lstrip().startswith("|")
+
+
+def parse_table_skip_flags(body: str) -> list[bool]:
+    """按出现顺序扫 body 里的 GFM 管道表格，返回每张表「是否跳过合并」。
+
+    一张表的紧邻上文（跳过空行）若含 `<!-- lark:no-merge -->` 注释 → True。
+    用途：权限矩阵这类「数据表」——每个单元格（`✅` / 空）都是独立数据，
+    空格表示「无权限」而非「上一行续行」，绝不能被启发式合并吞掉。作者在表前
+    标注后，merge_cells_for_doc 原样跳过这张表。
+
+    返回列表顺序 = body 里表格出现顺序；merge_cells_for_doc 按下标对齐文档侧
+    table block（文档 block 顺序与 markdown 表格顺序一致）。
+    """
+    lines = body.splitlines()
+    n = len(lines)
+    flags: list[bool] = []
+    i = 0
+    while i < n:
+        if _is_pipe_table_row(lines[i]):
+            j = i - 1
+            while j >= 0 and not lines[j].strip():
+                j -= 1
+            flags.append(j >= 0 and bool(_NO_MERGE_RE.search(lines[j])))
+            while i < n and _is_pipe_table_row(lines[i]):
+                i += 1
+        else:
+            i += 1
+    return flags
 
 
 # ---------- Frontmatter ----------
@@ -536,7 +573,7 @@ def merge_desc_group_with_content(
     return True
 
 
-def merge_cells_for_doc(doc_id: str):
+def merge_cells_for_doc(doc_id: str, skip_flags: list[bool] | None = None):
     try:
         blocks = get_all_blocks(doc_id)
     except RuntimeError as e:
@@ -546,10 +583,19 @@ def merge_cells_for_doc(doc_id: str):
     blocks_by_id = {b["block_id"]: b for b in blocks}
     table_blocks = [b for b in blocks if "table" in b]
 
+    # skip_flags 按下标对齐 markdown 表格顺序；数量对不上说明对齐不可靠 —— 弃用
+    # 标记、按启发式合并所有表（content 不会丢，最坏只是该跳过的表被合并了）
+    if skip_flags is not None and len(skip_flags) != len(table_blocks):
+        warn(f"no-merge 标记数（{len(skip_flags)}）与文档表格数（{len(table_blocks)}）"
+             f"不符，本次忽略 no-merge 标记")
+        skip_flags = None
+
     success = 0
     failure = 0
 
-    for table in table_blocks:
+    for idx, table in enumerate(table_blocks):
+        if skip_flags is not None and skip_flags[idx]:
+            continue
         prop = (table.get("table") or {}).get("property") or {}
         cells = (table.get("table") or {}).get("cells") or []
         rows = prop.get("row_size", 0)
@@ -650,7 +696,7 @@ def main() -> None:
         merge_s, merge_f = 0, 0
     else:
         info("扫描表格 cell 合并...")
-        merge_s, merge_f = merge_cells_for_doc(doc_id)
+        merge_s, merge_f = merge_cells_for_doc(doc_id, parse_table_skip_flags(body))
 
     fm_written = False
     if first_time:

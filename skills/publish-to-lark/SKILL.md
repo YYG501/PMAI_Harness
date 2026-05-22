@@ -114,6 +114,8 @@ lark-cli docs +update \
 
 ### 步骤 4：自动合并表格 cell（默认开启）
 
+> **逐表跳过（`<!-- lark:no-merge -->`）**：markdown 里某张表的紧邻上文若有 `<!-- lark:no-merge -->` 注释，该表整张跳过合并、原样发布。用于权限矩阵这类「数据表」—— 空单元格表示「无权限 / 无数据」而非「续行」，不能被启发式合并吞掉。脚本按表格出现顺序与文档侧 table block 下标对齐；数量对不上则忽略全部标记并警告。
+
 发布完成后，扫描文档中所有 table 块。合并按"前 N-1 列（leading）"和"末列（需求描述）"分两段处理：
 
 1. `GET /open-apis/docx/v1/documents/:doc_id/blocks` 拉所有 block
@@ -160,6 +162,8 @@ URL: https://xxx.feishu.cn/docx/doxcnxxxxxx
 - **合并是 fail-soft**：合并失败不阻塞主发布，只输出警告
 - **merge cell 判定（前 N-1 列）**：非空 anchor 吸收下方相同内容 cell + 下方空 cell（续行 rowspan 语义）；range > 1 行才合并
 - **merge cell 判定（末列 / 需求描述）**：识别续行 row group（前 N-1 列全空的连续行），先把非锚点 cell 的 children blocks 拷贝到锚点 cell，删原 cell children，再 merge_table_cells；保留富文本格式
+- **`<!-- lark:no-merge -->` 标记**：markdown 表前加此注释 → 该表跳过启发式合并、原样发布。权限矩阵等「数据表」（空格 = 无数据、不是续行）必用，否则空格会被错误合并
+- **HTML `<table>` 预检**：正文含裸 HTML `<table>` → 发布时打印警告 + 行号（飞书只认 GFM 管道表格，HTML 表会被压成纯文本、结构全丢）；警告不阻断发布
 - **frontmatter 回填**仅首次发布执行；覆盖发布不动 frontmatter
 - **发送时剥离 frontmatter**：发给飞书的内容只含正文，开头的 YAML frontmatter 会被剥掉（飞书不识别 frontmatter，不剥会渲染成正文）；剥离只作用于发送内容，本地 markdown 文件不动
 - **不修改正文**：除 frontmatter 外，本 skill 不改 markdown 任何内容

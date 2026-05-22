@@ -279,9 +279,36 @@ MD
   pass_test
 }
 
+test_no_merge_marker_parsing() {
+  start_test "parse_table_skip_flags: <!-- lark:no-merge --> 标记按表对齐"
+  out=$(python3 - "$FRAMEWORK_ROOT" <<'PY'
+import sys, importlib.util
+spec = importlib.util.spec_from_file_location(
+    "p2l", sys.argv[1] + "/scripts/publish-to-lark.py")
+m = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(m)
+body = "\n".join([
+    "普通表（应合并）：", "",
+    "| a | b |", "| --- | --- |", "| 1 | 2 |", "",
+    "<!-- lark:no-merge -->", "",
+    "| x | y |", "| --- | --- |", "| 9 | 8 |", "",
+])
+flags = m.parse_table_skip_flags(body)
+assert flags == [False, True], flags
+print("OK", flags)
+PY
+)
+  if echo "$out" | grep -q "OK \[False, True\]"; then
+    pass_test
+  else
+    _fail "skip flags 不符预期; out: $out"
+  fi
+}
+
 test_first_time_create_modern_shape
 test_warns_on_html_table
 test_no_warn_on_pipe_table
+test_no_merge_marker_parsing
 test_overwrite_uses_existing_doc_id
 test_overwrite_strips_frontmatter
 test_first_time_create_legacy_nested_shape

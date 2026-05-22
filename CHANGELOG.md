@@ -90,23 +90,30 @@ PM-AI-Workflow 生成器仓的演进记录。本文件**只记影响下游业务
 
 ## 未发布
 
-### 2026-05-22 — 飞书发布兼容修复：§七 验收标准格式 + §五 用户角色表
+### 2026-05-22 — 飞书发布兼容修复：§七 / §五 / §八 表格与列表格式
 
-- `c1f050e` fix(prd-writing): §七 验收标准去引用块嵌复选框 + §5.1 多平台用户角色表 HTML→管道表格；publish-to-lark 加 HTML `<table>` 预检警告
+- `017b665` fix(prd-writing): §七 验收标准去引用块嵌复选框 + §5.1 多平台用户角色表 HTML→管道表格；publish-to-lark 加 HTML `<table>` 预检警告
+- `6780f48` fix(prd-writing): §八 角色权限清单 / 原型列改造 + publish-to-lark 支持 `<!-- lark:no-merge -->` 标记
 
-**背景**：飞书发布工具（lark-cli）只认 GFM 管道表格 / 标准 markdown，对若干结构会"悄悄塌掉"——发出来缺内容却不报错。本次修两类：
+**背景**：飞书发布工具（lark-cli）只认 GFM 管道表格 / 标准 markdown，对若干结构会"悄悄塌掉"——发出来缺内容却不报错。prd-writing 原本多处要求用 HTML `<table>` 写带合并单元格的表，并断言"飞书识别 HTML 表格"——**该断言为假**。本次全面改造为管道表格：
 
-1. **§七 验收标准**：原模板用「引用块里嵌 `- [ ]` 复选框列表」（`> - [ ]`），飞书吞掉整个结构、只剩 Story 标题。改普通项目符号（`**Story X**` 加粗 + `-` 项目符号）。
-2. **§五 5.1 用户角色（多平台 4 列表）**：原 skill 要求用 HTML `<table>` 写以支持 rowspan，并断言"飞书识别 HTML 表格"——**该断言为假**，lark-cli 把 HTML `<table>` 压成纯文本、表结构全丢。改用管道表格 + 续行留空，跨行合并交给 publish-to-lark 现成的合并子系统。
+1. **§七 验收标准**：`> - [ ]`（引用块嵌复选框列表）→ 普通项目符号（`**Story X**` 加粗 + `-`）。
+2. **§五 5.1 用户角色（多平台 4 列表）**：HTML `<table>` → 管道表格 + 续行留空，跨行合并交给 publish-to-lark 的合并子系统。
+3. **§八 角色权限清单**：HTML `<table>` → 管道表格。权限矩阵是「数据表」——空单元格 = 无权限（独立数据），与合并子系统「空 = 续行」语义冲突，因此整表不合并：「一级功能」列每行重复写全名，表前加 `<!-- lark:no-merge -->` 标记让 publish-to-lark 跳过该表合并。
+4. **§六 原型列**：取消「原型」表格列。close-req 回填原型截图时作为独立图片放进 §6.X「原型」节，不塞进表格单元格（截图 + rowspan 的合并表无法干净发布）。
 
-改动：`skills/prd-writing/SKILL.md`（§七 / §5.1 / §八 / 原型列）、`templates/req-prd.md.tmpl`、`skills/prd-writing/references/few-shots.md`、`scripts/publish-to-lark.py`（新增 HTML `<table>` 预检警告）。
+**新增 publish-to-lark 能力**：
 
-**已知未解**：§八 角色权限清单、§六 含 `<img>` 的原型列仍依赖 HTML `<table>`（rowspan / 嵌图），暂无干净的管道表格替代——发布到飞书仍会塌（权限矩阵「空 = 无权限」与合并子系统「空 = 续行」语义冲突，两条路都不通）。渲染方案待单独设计。
+- `<!-- lark:no-merge -->`：表前加此注释 → 该表跳过启发式合并、原样发布（按表格顺序与文档 table block 下标对齐；数量对不上则忽略全部标记并警告）。
+- HTML `<table>` 预检：正文含裸 `<table>` → 打印警告 + 行号（不阻断发布）。
+
+改动：`skills/prd-writing/SKILL.md`、`templates/req-prd.md.tmpl`、`skills/prd-writing/references/few-shots.md`、`skills/publish-to-lark/SKILL.md`、`scripts/publish-to-lark.py`。
 
 **业务仓需注意**：
 
-- sync 后新跑 prd-writing 生成的 §七 / §5.1 自动用新格式；已生成的 PRD 实例不强制回填，下次 rewrite 时收敛，或手动改后重发飞书。
-- publish-to-lark 发布时若正文含 HTML `<table>` 会打印警告 + 行号，提示改管道表格；警告**不阻断**发布（§八 类 PRD 暂无替代，硬拦会发不出去）。
+- sync 后新跑 prd-writing 生成的 §七 / §五 / §八 自动用新格式；已生成的 PRD 实例不强制回填，下次 rewrite 时收敛，或手动改后重发飞书。
+- 权限矩阵类表（§八）发布前必须在表前保留 `<!-- lark:no-merge -->` 注释，否则空单元格会被错误合并。
+- publish-to-lark 发布时若正文仍含 HTML `<table>`（旧 PRD）会打印警告 + 行号，提示改管道表格。
 
 ### 2026-05-22 — §8 后续收尾：DX 修复 + close-task 默认收尾 + modulespec 收敛 + CONTEXT→PROJECT 改名
 
