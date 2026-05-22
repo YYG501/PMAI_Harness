@@ -123,35 +123,61 @@ agent 对执行区·实现规格 / PM 确认区·验收清单 / 范围 的每条
 1. **优先**：执行日志「文档对齐预告」字段提到的所有段（这些是 AI 反馈循环里已经预告会变的，命中率高）
 2. **覆盖**：四个段全量扫一遍兜底（防止预告遗漏 / 反馈中提到但未预告的段）
 
-输出格式：
+输出格式（每条差异 AI 自判 A 类 / B 类）：
 
 ```text
 对齐扫描（共 N 处差异）：
 
-1. task 文件 执行区·实现规格 #3 描述：「...」
+1. [A] task 文件 执行区·实现规格 #3 描述：「...」
    代码 path/file.tsx:LXX 实际：「...」
-   建议：[改 task md 对齐代码 / 改代码对齐 task md]
+   → 文档落后于代码，改 task md 对齐即可
 
-2. ...
+2. [B] task 文件 PM 确认区·验收清单 #2：「...」
+   代码 path/file.tsx:LXX 实际：「...」
+   → B 类原因：代码未满足该验收项（疑似代码做错）
+
+...
 ```
+
+**A 类 / B 类判定标准**：
+
+| 类 | 条件 | 处理 |
+|---|---|---|
+| **A 类**（默认对齐，不问 PM）| 文档落后于代码——task md 描述过期，代码是 PM 验收通过的合理实现，改 task md 即可对齐 | §0.3 AI 直接 Edit 对齐 |
+| **B 类**（呈交 PM）| 命中下列任一「必要」情况 | §0.3 逐条呈交 PM |
+
+B 类的三种「必要」情况：
+1. **代码可能做错**——不一致暴露代码没满足验收清单某条 / 与契约冲突
+2. **需回退原型代码**——改文档解决不了，要改代码才能对齐
+3. **范围变了**——代码动了 `§📦 范围·改` 字段之外的文件
+
+判不准属 A 还是 B → 算 B（呈交 PM）。
 
 **N = 0 → 直接进步骤 1**，本步骤跳过。
 
-#### 0.3 PM 决议（每条逐条问，对话式）
+#### 0.3 对齐处理（A 类默认对齐 · B 类才呈交 PM）
 
-每条差异呈交 PM 后问（AskUserQuestion 或 prose；不列字母，按 PM 自然语言意图分流）：
+> **原则**：PM 验收通过 = 代码已是对的。文档对齐到代码是收尾的机械活，不开逐条确认门——
+> A 类默认 AI 处理，只有 B 类（命中「必要」情况）才打断 PM。处理结果在步骤 2.3 汇总。
+
+**A 类（默认对齐，不问 PM）**：AI 用 Edit 改 `$TASK_FILE`，把过期描述对齐到代码实际。
+记下「对齐了哪几段」，留给步骤 2.3 汇总。
+
+**B 类（逐条呈交 PM）**：每条 B 类呈交 PM 后问（AskUserQuestion 或 prose；按 PM 自然语言意图分流）：
 
 ```
-要怎么对齐这条？
- - 改 task md 对齐实际原型（最常见——原型迭代过、md 没跟上）
- - 改代码对齐 task md（少见——原型实现偏离了契约，需要回 task 窗口重做）
+这条对齐要你定一下（B 类原因：<§0.2 自判的原因>）：
+ - 改 task md 对齐实际原型
+ - 改代码对齐 task md（需回 task 窗口重做）
  - 这条不重要，跳过
 ```
 
 **PM 回答的内部分流**：
-- PM 说「改 md / md 对齐 / 改 task 文档」等 → AI 用 Edit 改 `$TASK_FILE`，改后展示 git diff，PM 满意进下一条
+- PM 说「改 md / md 对齐 / 改 task 文档」等 → AI 用 Edit 改 `$TASK_FILE`，改后展示 git diff
 - PM 说「改代码 / 回退原型」等 → AI **不能自己改代码**。提示 PM：「这条对齐要回退原型。建议先关掉 close-task，回 task 窗口跑 /task-execute 重做后再 close。还是确认要在 close-task 阶段直接改代码？」 → PM 坚持要在本阶段改 → 视为退出 close-task 流程，AI 输出"请回 task 窗口重做"并 exit
 - PM 说「跳过 / 算了 / 不重要」等 → AI 不动 task md，进下一条
+
+**无 B 类（全 A 类，或 N=0）**：本步骤不打断 PM，对齐完直接进步骤 0.4。
 
 #### 0.4 patch 后 commit 到 task 分支
 
@@ -166,7 +192,9 @@ git -C "$TASK_WORKTREE" commit -m "task-NNN close-prep: PM 视图与原型对齐
 
 #### 0.5 fail-fast 与边界
 
-- **N = 0 或全部跳过**：close-task **不阻塞**（PM 决策权，不强制对齐）。
+- **N = 0**：本步骤跳过，close-task 不阻塞。
+- **全 A 类**：AI 默认对齐完即进步骤 0.4，不阻塞、不打断 PM。
+- **B 类全部跳过**：close-task 不阻塞（PM 决策权，不强制对齐）。
 - **PM 选"改代码"但又要在本阶段改**：agent 输出"请回 task 窗口跑 /task-execute"并 exit；不让 close-task 蜕变成 mini task-execute。
 - **patch 失败 / git commit 失败**：close-task 阻塞，提示 PM 人工修复后重跑。
 
@@ -238,31 +266,37 @@ Read 本 task PM 视图主文件的 PM 反馈 section，提取候选：
 [draft markdown 全文]
 ```
 
-#### 1.5.4 PM 决策（每条逐条问，对话式）
+#### 1.5.4 沉淀处理（默认 promote · 拿不准才问 PM）
 
-呈交 PM 一个对话式问句（AskUserQuestion 或 prose；不列字母代号）：
+> **原则**：分类已是「视觉规范」的反馈，默认就是项目级长期规范——AI 直接 patch
+> `docs/DESIGN.md`（不 commit），不逐条问。只有 AI 拿不准的才打断 PM。
+
+**默认 promote（不问 PM）**：AI 判定该条确属项目级视觉规范 → 用 Edit patch
+`docs/DESIGN.md`（**不 commit**），内部记账分类 `Y-rule`。
+
+**拿不准才逐条问 PM**：仅当 AI 判断该条可能是 task-local 特例（不通用）、或可能分类
+错了（其实不是视觉规范）→ 呈交 PM 一个对话式问句：
 
 ```
-请选择此条反馈的处理方式：
- - 沉淀进 DESIGN.md（项目级长期规范 → AI patch DESIGN.md，不 commit，等你审 diff）
- - 只在本 task 备注（本 task 特殊情况，不通用 → 保留在 task PM 反馈，标 "task-only"）
- - 我分类错了（其实不是视觉规范 → 改回正确分类按那条规则走）
+这条反馈我拿不准（[反馈摘要]）：
+ - 沉淀进 DESIGN.md（项目级长期规范）
+ - 只在本 task 备注（task 特例，不通用）
+ - 分类错了（其实不是视觉规范）
 ```
 
 **PM 回答的内部分流 + 内部分类映射**：
-- PM 说「沉淀 / 写进 DESIGN / 项目级」等 → 内部记账分类 `Y-rule` → AI 用 Edit patch `docs/DESIGN.md`（不 commit）
-- PM 说「task 备注 / 只本 task / task-only」等 → 内部记账分类 `Y-task-note` → 保留在 task PM 反馈，标处理结果「task-only」
-- PM 说「分类错了 / 不是视觉 / 重分类」等 → 内部记账分类 `N` → 改 task PM 反馈的分类字段为正确类型，按该类型原规则走
+- PM 说「沉淀 / 写进 DESIGN / 项目级」等 → 记账 `Y-rule` → AI 用 Edit patch `docs/DESIGN.md`（不 commit）
+- PM 说「task 备注 / 只本 task / task-only」等 → 记账 `Y-task-note` → 保留在 task PM 反馈，标处理结果「task-only」
+- PM 说「分类错了 / 不是视觉 / 重分类」等 → 记账 `N` → 改 task PM 反馈的分类字段为正确类型，按该类型原规则走
 
-**禁止**：silent commit `docs/DESIGN.md`。设计 SoT 改动必须 PM 显式审 diff。commit 由 PM 在 close-task 完成后自己跑（commit message 模板：`docs(DESIGN): 沉淀 task-NNN 反馈 — [摘要]`）。
+**禁止**：silent commit `docs/DESIGN.md`。DESIGN.md 改动 patch-不-commit，PM 在 close
+收尾审总 diff 自己 commit（步骤 2.3 提示）——这一步总审是 PM 对默认 promote 的把关。
 
-#### 1.5.5 沉淀 DESIGN.md 后的二次确认
+#### 1.5.5 沉淀后记账
 
-每条选了"沉淀进 DESIGN.md"的 patch 完成后：
-
-1. AI 输出 `git -C $REPO_ROOT diff docs/DESIGN.md` 让 PM 看
-2. PM 满意 → AI 用 Edit 把本条 PM 反馈的「处理结果」改为「已处理」+ 备注「已沉淀 DESIGN.md §X.Y」
-3. PM 要求修改 → AI 重 patch 重 diff，循环到 PM 满意（无循环上限，但 3 次还无法对齐时 AI 主动停下问 PM 是否改成"只在本 task 备注"或"分类错了"）
+每条 promote 的 patch 完成后，AI 把该条 PM 反馈的「处理结果」改为「已处理」+ 备注
+「已沉淀 DESIGN.md §X.Y」。**不逐条给 PM 看 diff** —— DESIGN.md 总 diff 由步骤 2.3
+汇总，PM 在 close 收尾时一次性审、当场可撤。
 
 #### 1.5.6 完成后进步骤 1.6
 
@@ -271,7 +305,7 @@ Read 本 task PM 视图主文件的 PM 反馈 section，提取候选：
 ### 步骤 1.6：跨功能产品行为规则反馈 selective promote 到 PRODUCT-RULES.md（delta-9 vp-2）
 
 与步骤 1.5「视觉规范 → DESIGN.md」同型 —— 扫本 task PM 反馈，对**全项目跨功能产品行为
-规则**类条目逐条让 PM 选是否 promote 到 `docs/PRODUCT-RULES.md`。
+规则**类条目逐条处理：默认 promote 到 `docs/PRODUCT-RULES.md`，AI 拿不准的才问 PM。
 
 #### 1.6.1 前置检查
 
@@ -292,25 +326,34 @@ Read 本 task 审计区·历史档案的 PM 反馈段，AI 预判哪些条目属
 > 边界：用词 / 术语 → CONTEXT.md 术语表；模块级规则 → modulespec；视觉规范 → DESIGN.md
 > （步骤 1.5 已处理）；task-local / 同模块前瞻 → 留 task 文件。本步骤只捞全项目跨功能规则。
 
-#### 1.6.3 PM 逐条决策（AI 预判 + PM 选 / 改）
+#### 1.6.3 promote 处理（默认 promote · 拿不准才问 PM）
 
-每条候选呈交 PM（对话式，不纯 AI 自动分类）：
+> **原则**：AI 预判为「全项目跨功能产品行为规则」的，默认 promote 到
+> `docs/PRODUCT-RULES.md`（不 commit），不逐条问。只有拿不准的才打断 PM。
+
+**默认 promote（不问 PM）**：AI 判定该条确属全项目跨功能规则 → 用 Edit 把条目追加进
+`docs/PRODUCT-RULES.md`「规则清单」段（**不 commit**）。条目格式：
 
 ```
-反馈 K：[反馈 1 行摘要]
-AI 预判：这是「全项目跨功能产品行为规则」，建议 promote 到 docs/PRODUCT-RULES.md
-拟写入条目：
 ### <一句话标题>
 - 规则：<产品在 X 情况下应 / 不应 Y>
 - scope：全局 | 域限定:<关键词>
 - 来源：<本 req / task>（<日期>）
-
-选择：promote 进 PRODUCT-RULES.md / 不是跨功能规则（留 task 或改归别处）
 ```
 
-- PM 选 promote → AI 用 Edit 把条目追加进 `docs/PRODUCT-RULES.md`「规则清单」段（**不 commit**，
-  与 DESIGN.md 同 —— PM 在 close-task 后审 diff 自己 commit）
+**拿不准才逐条问 PM**：仅当 AI 判断该条可能够不上「全项目跨功能规则」（够不上全项目、
+或该归术语表 / modulespec / DESIGN.md）→ 呈交 PM：
+
+```
+这条我拿不准（[反馈摘要]）：
+ - promote 进 PRODUCT-RULES.md（全项目跨功能规则）
+ - 不是跨功能规则（留 task 或改归别处）
+```
+
+- PM 选 promote → AI 追加进 PRODUCT-RULES.md（不 commit）
 - PM 说不是 → 不动 PRODUCT-RULES.md，按 PM 指示归类
+
+PRODUCT-RULES.md 改动 patch-不-commit，PM 在 close 收尾审总 diff 自己 commit。
 
 #### 1.6.4 完成后进步骤 2
 
@@ -318,7 +361,7 @@ PRODUCT-RULES.md 改动**未 commit**（步骤 3 提示 PM）；进入步骤 2�
 
 **与步骤 1 文档偏差检查的边界**：
 - 步骤 1 处理"客观文档偏差"（字段名错 / 流程描述错）→ `/doc-update` 对账
-- 步骤 1.5 处理"主观视觉规范沉淀"（PM 判断哪些反馈应作项目级长期规范）→ AI 起草 + PM 三选一
+- 步骤 1.5 处理"视觉规范沉淀"（AI 默认 promote 项目级视觉规范，拿不准才问 PM）→ patch DESIGN.md
 - 性质不同，串行处理不合并
 
 ### 步骤 2：Phase 1 收尾：登记 finalize marker，提示 PM 切窗口
@@ -362,12 +405,18 @@ with open(marker, "w") as f:
 PY
 ```
 
-#### 2.3 输出切窗口指示
+#### 2.3 输出切窗口指示（含自动收尾摘要）
 
-AI 向 PM 输出结束语，task 窗口工作到此结束：
+AI 向 PM 输出结束语，task 窗口工作到此结束。结束语含**自动收尾摘要** —— 把本次 close
+默认自动做了什么一次性讲清楚（PM 不被逐条打断、但末尾看得见）：
 
 ```
-✅ task-NNN 文档已对齐 / 偏差已处理 / 改动已 commit，已登记待 finalize marker。
+✅ task-NNN Phase 1 完成。本次自动收尾：
+
+· 文档对齐：A 类 X 处已自动对齐到代码（B 类 Y 处已逐条经你确认）
+· 视觉规范：K 条已 promote 到 docs/DESIGN.md（未 commit）
+· 跨功能规则：M 条已 promote 到 docs/PRODUCT-RULES.md（未 commit）
+（X/Y/K/M 为 0 的行省略；全 0 时整段写「无需对齐 / 无沉淀」）
 
 请切到 req 窗口（cwd = req worktree），再次运行：
 
@@ -376,12 +425,13 @@ AI 向 PM 输出结束语，task 窗口工作到此结束：
 AI 会自动走 Phase 2 完成 merge + 删 task worktree/branch + auto-chain。
 ```
 
-**如果步骤 1.5 patch 过 DESIGN.md**（uncommitted 状态），追加提示：
+**若步骤 1.5 / 1.6 patch 过 DESIGN.md / PRODUCT-RULES.md**（uncommitted），追加提示：
 
 ```
-⚠️ 步骤 1.5 沉淀了 K 条视觉规范反馈到 docs/DESIGN.md（uncommitted）。
-等 Phase 2 完成 task close 后，请在 req 窗口审 git diff docs/DESIGN.md 并 commit。
-建议 commit message: docs(DESIGN): 沉淀 task-NNN 反馈 — [一行摘要]
+⚠️ docs/DESIGN.md / docs/PRODUCT-RULES.md 有未 commit 的沉淀改动。
+Phase 2 完成后，请在 req 窗口审 git diff 这两个文件 —— 这是你对本次自动 promote 的
+总把关，发现不该 promote 的当场撤掉，满意后再 commit。
+建议 commit message: docs(DESIGN): 沉淀 task-NNN 反馈 — [摘要]
 ```
 
 **Phase 1 短路场景**：进入 skill 时检测到 marker 已存在（之前调过一次但 PM 没切窗口），跳过步骤 0 / 1 / 1.5 / 2.1 / 2.2，直接输出 2.3 切窗口指示。不要重复对齐 / 重复 commit。
