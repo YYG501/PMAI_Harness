@@ -9,9 +9,7 @@
 
 **开发流程**：普通软件项目方式（讨论需求 → 设计 → 实现 → 测试 → 提交）。不导入旧框架的任何流程系统。
 
-**当前状态**：v3.5 与 v4 task 执行架构（PM 手动新窗口 + 并行原生）已收口。2026-05-22 GSD-review 管线重构全包已落地：stage 3 PRD、req 级事件流、implementation-design、task 单文件 typed contract、PRODUCT-RULES / DESIGN gap-check、brownfield codebase-audit 等均已接入；同日完成 §8 后续收尾——close-task 验收通过后默认走收尾、modulespec 模板 9→5 章收敛、一轮 DX 修复、项目级文档 `CONTEXT.md → PROJECT.md` 全量改名。生成器骨架（scripts / skills / templates / tests）齐全，当前测试基线 `bash tests/run-all.sh` 为 395 通过 / 0 失败、`_lib.state_test` 57 通过 / 0 失败；`bash scripts/measure-tthw.sh` 实测 TTHW 约 2.0 秒。下一步重点是去消费仓 ExampleConsumerApp 跑真实 req 端到端验证新管线。
-
-**v3.5 实施进度 / 当前位置**：见 [`RUNTIME.md`](./RUNTIME.md)（运行时状态 / 新窗口续接入口；进度跟踪 + 已知坑 + 下一步指针）。
+**当前状态 / 进度**：生成器骨架（scripts / skills / templates / tests）齐全，框架功能完整。**当前进度、测试基线、下一步一律见 [`RUNTIME.md`](./RUNTIME.md)「当前位置」** —— 单一真相源；本文件不复制版本号 / 基线数字 / 阶段细节，避免漂移。
 
 **主仓改完后同步到目标项目**：手动 SOP 见 [`框架同步-SOP.md`](./框架同步-SOP.md)（hotfix 阶段过渡，框架结构稳定后改自动化）。
 
@@ -31,3 +29,17 @@
 每次触发上述 skill 时，[`hooks/review-skill-guard.cjs`](./hooks/review-skill-guard.cjs) 通过 `.claude/settings.json` 注册的 UserPromptSubmit hook 自动注入完整约束清单。**hook 跟项目走（git 跟踪），换机器 clone 即生效；不依赖全局 `~/.claude/`**。
 
 消费仓如果想享受同款保护：把 `hooks/review-skill-guard.cjs` + `.claude/settings.json` 的 hook 注册段复制过去即可（路径用 `$CLAUDE_PROJECT_DIR`，无需改）。后续考虑放进 `scripts/init-project.sh` 自动分发。
+
+---
+
+## 框架改动的文档同步
+
+改动 `scripts/` / `skills/` / `templates/` / `agents/`（会同步到业务仓的内容）时，**同一个 commit** 里要一并：
+
+1. `CHANGELOG.md`「未发布」段加条目 —— 业务仓靠它决定是否跑同步流程
+2. 视情况更新 `RUNTIME.md`「当前位置 / 下一步」（设计 / 实现进度有推进时）
+3. 设计文档状态变「已落地」→ `git mv` 到 `docs/归档/完成/` 并更新 `docs/INDEX.md`
+
+测试基线 / 当前状态 / 下一步只在 `RUNTIME.md`「当前位置」写一处；CLAUDE.md / README.md 只放指针，不复制数字 —— 别处再出现基线数字即是漂移。
+
+[`hooks/check-doc-currency.cjs`](./hooks/check-doc-currency.cjs)（`.claude/settings.json` 注册的 PreToolUse hook）在 `git commit` 时检查：动了框架资产但 CHANGELOG 没进本次提交 → 拦下并把提醒喂回。纯生成器内部改动（注释 / 测试微调 / 本仓自身工作流）确实不需要动文档时，commit message 加 `[skip-doc-check]` 跳过。
