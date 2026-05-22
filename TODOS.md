@@ -48,9 +48,9 @@
 
 **触发事件:** req-006 `task-001-ops-log-pages` 的 close-task 被 I-CT7 挡（2026-05-21）。
 
-**设计文档:** [`docs/设计/accept闸门.md`](docs/设计/accept闸门.md)（§0 锁定 v1；plan-eng-review 完成，D1/D2/C8/T1/T2 落定；**待实施**）
+**设计文档:** [`docs/设计/accept闸门.md`](docs/设计/accept闸门.md)（§0 锁定 v1；plan-eng-review 完成，D1/D2/C8/T1/T2 落定；已实施）
 
-**状态:** ✅ **已实施并验证**（`_lib/events.py` + accept 闸门 + 4 新测 + regression 修复；全量 389/0）。未 commit。
+**状态:** ✅ **已实施并验证**（`bd1f1a3` + `f37c83f`；`_lib/events.py` + accept 闸门 + regression 修复；当前全量 390/0）。本条保留作设计溯源，不再是待办。
 
 **粗估:** `task-transition.py` + `scripts/_lib/events.py` 合计 ~30 行 + 4 新测 + regression 修复（test-task-transition.sh fixture）。
 
@@ -66,7 +66,7 @@
 
 **设计文档:** [`docs/设计/证据修复命令.md`](docs/设计/证据修复命令.md)（§0 草稿，**待 PM 共写锁定**）。
 
-**状态:** ✅ **已实施并验证**（`--repair-evidence` 命令 + 5 测；全量 389/0）。未 commit。
+**状态:** ✅ **已实施并验证**（`bd1f1a3` + `f37c83f`；`--repair-evidence` 命令 + UTF-8 / 分支守卫跟进；当前全量 390/0）。本条保留作设计溯源，不再是待办。
 
 **核心设计风险:** 乙 本质是"受支持的让审计通过命令"——integrity surface 是方案必须解的难题（强制理由 / PM 认定 / 透明标记 / 收窄能力面）。
 
@@ -330,9 +330,9 @@
 - **失败信号**：AI 直接改了 / 跑通了 commit
 - **截止**：2026-05-17
 
-### QF-V3: req 分支 quick-fix 改 solution 决策性内容应引导 rollback
-- **场景**：在某个 active req 的 worktree 跑 `/quick-fix "改 solution 决策 X"`（target = `requirements/active/<req>/solution.md` §🎯 关键产品决策）
-- **预期**：AI **拒绝**（决策性修订）+ 引导 PM 走 stage 3 revise（`/req-solution`）；如 PM 答"我只是改 typo"，AI 走 short-circuit 轻量路径
+### QF-V3: req 分支 quick-fix 改 PRD 决策性内容应引导 revise
+- **场景**：在某个 active req 的 worktree 跑 `/quick-fix "改 PRD 决策 X"`（target = `requirements/active/<req>/prd.md` 的决策性内容；在飞旧 req 兼容 `solution.md`）
+- **预期**：AI **拒绝**（决策性修订）+ 引导 PM 走 stage 3 revise（`/prd-writing`）；如 PM 答"我只是改 typo"，AI 走 short-circuit 轻量路径
 - **失败信号**：AI 直接改了决策性内容 / 让 PM 答了分类后还是走 quick-fix
 - **截止**：2026-05-17
 
@@ -402,8 +402,8 @@
 - **Depends on**: schema 真有第二个版本
 
 ### TD-X1: task-spec revise 触发条件门（步骤 5/6 用 git log 比对跳过过期数据）
-- **What**: revise 模式步骤 5/6 当前按 §9.1.1 grep 强约束执行；进一步收敛——加触发条件门：自上次 task PM 视图最后一次 commit 以来，同模块 task 是否有新 close 事件 / solution.md 是否有 commit。无变更则整段跳过
-- **Why**: revise 痛点场景已 8008 → 4400（省 45%）；TD-X1 上线可再省 ~300 行（同模块 task PM 反馈段 + solution 章节 grep 在大多数 revise 场景没新内容）
+- **What**: revise 模式步骤 5/6 当前按 §9.1.1 grep 强约束执行；进一步收敛——加触发条件门：自上次 task PM 视图最后一次 commit 以来，同模块 task 是否有新 close 事件 / prd.md 或 implementation-design.md 是否有 commit。无变更则整段跳过
+- **Why**: revise 痛点场景已 8008 → 4400（省 45%）；TD-X1 上线可再省 ~300 行（同模块 task PM 反馈段 + prd / implementation-design 章节 grep 在大多数 revise 场景没新内容）
 - **Pros**: revise 更轻量；触发机制可机器判（git log）
 - **Cons**: 触发条件机制要落地（mtime 不可靠必须 git log）；增加 revise 判别复杂度
 - **Context**: docs/归档/完成/设计-skill读取收敛.md §3 不做项理由；reconcile 已用 hash 收敛过可借鉴
@@ -411,8 +411,8 @@
 - **Depends on**: docs/归档/完成/设计-skill读取收敛.md 全部落地（已 commit be47fca）
 
 ### TD-X2: docs/modules/* INDEX 索引化（first-gen 阶段 modules 全文必读 → INDEX + 涉及模块）
-- **What**: 当前 §9.1 让 req-solution / task-plan / prd-writing 必读全部 modules/*.md。砍成"INDEX.md 必读 + 本 req 涉及模块全文 + 其他 grep 按需"
-- **Why**: req-003 实测 modules 总 ~4900 行，拆 task / 写 PRD 实际只用涉及模块 + 索引。砍后 req-solution / task-plan / prd-writing 各省 ~3000 行
+- **What**: 当前 §9.1 让 prd-writing / implementation-design / task-plan 必读全部 modules/*.md。砍成"INDEX.md 必读 + 本 req 涉及模块全文 + 其他 grep 按需"
+- **Why**: req-003 实测 modules 总 ~4900 行，拆 task / 写 PRD 实际只用涉及模块 + 索引。砍后 prd-writing / implementation-design / task-plan 各省 ~3000 行
 - **Pros**: 大头节省；"全局复用判断"靠 INDEX + grep 也能覆盖
 - **Cons**: 依赖 INDEX 完整性（如果 INDEX 没及时更新会漏掉新模块）
 - **Context**: docs/归档/完成/设计-skill读取收敛.md §3.1 R3 已记

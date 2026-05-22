@@ -69,7 +69,7 @@ bash scripts/init-project.sh \
 ```
 /new-req          → 起一个 req（需求）
   ↓
-/req-stage-gate   → 推进 req 阶段（analysis → solution → plan → spec）
+/req-stage-gate   → 推进 req 阶段（analysis → PRD → gap-check → implementation-design → plan → spec）
   ↓
 /task-confirm     → PM 同意启动一个 task → 输出新窗口启动指令
   ↓ （PM 开新窗口）
@@ -97,17 +97,19 @@ bash scripts/init-project.sh \
 | Skill | 用途 |
 |---|---|
 | `/new-req` | 起一个新 req（带 brief） |
+| `/project-solution` | 初始化 / 修订项目级 CONTEXT 与 roadmap |
 | `/quick-fix` | 不走 req 流程的小补丁（适合改文案、修小 bug） |
 
 ### 推进 req（需求级）
 
 | Skill | 用途 |
 |---|---|
-| `/req-stage-gate` | 推进 req 阶段闸门（analysis → solution → plan → spec） |
+| `/req-stage-gate` | 推进 req 阶段闸门（analysis → PRD → 实现设计 → plan → spec） |
 | `/req-analysis` | 起草 / 修订 analysis.md |
-| `/req-solution` | 起草 / 修订 solution.md（PM 视图 + 工程合同） |
-| `/task-plan` | 把 solution 拆成 task 清单 |
-| `/task-spec` | 把单个 task 写成完整工程合同 |
+| `/prd-writing` | 起草 / 修订 req 级 prd.md（WHAT） |
+| `/implementation-design` | 起草 req 级 implementation-design.md（HOW） |
+| `/task-plan` | 把 PRD + 实现设计拆成 task 清单 |
+| `/task-spec` | 把单个 task 写成单文件 typed contract |
 
 ### 执行 task（任务级）
 
@@ -131,8 +133,7 @@ bash scripts/init-project.sh \
 | Skill | 用途 |
 |---|---|
 | `/doc-update` | 处理文档偏差 + 沉淀模块规格 |
-| `/prd-writing` | 起草 / 修订 PRD |
-| `/project-prd-update` | 同步项目级 PRD |
+| `/codebase-audit` | brownfield 项目代码现状审计 |
 | `/publish-to-lark` | 把文档发布到飞书 |
 
 ### 框架内部（PM 不直接用）
@@ -161,6 +162,8 @@ bash scripts/init-project.sh \
 
 ## 当前状态
 
-v3.5 实施全部收口（阶段 1 + 2 + 3 + 4 + 4.5a-f；5/6/7/8/9 废弃/跳过）。v4 task 执行架构（PM 手动新窗口 + 并行原生）已实施完成。生成器骨架（scripts / skills / templates / tests）齐全，269 单测 0 失败。
+v3.5 与 v4 task 执行架构（PM 手动新窗口 + 并行原生）已收口。2026-05-22 GSD-review 管线重构全包已落地：stage 3 PRD、req 级事件流、implementation-design、task 单文件 typed contract、PRODUCT-RULES / DESIGN gap-check、brownfield codebase-audit 等均已接入。
 
-**下一步重点**：端到端验证（拿生成器跑通真实业务项目）。详见 `RUNTIME.md` 末尾「新窗口续接命令」。
+当前测试基线：`bash tests/run-all.sh` 为 390 通过 / 0 失败。
+
+**下一步重点**：去消费仓 ExampleConsumerApp 跑真实 req 端到端验证新管线。详见 `RUNTIME.md` 顶部「当前位置」。
