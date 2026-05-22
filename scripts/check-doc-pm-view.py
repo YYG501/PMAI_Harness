@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """check-doc-pm-view.py — 启发式 lint，校验 PM 视图文档是否符合 PM-VIEW-RULES。
 
-适用对象：PM 视图主文件（solution.md / task-plan.md / tasks/task-NNN-*.md）。
+适用对象：PM 视图主文件（task-plan.md / tasks/task-NNN-*.md；在飞旧 req 的 solution.md）。
 工程合同（*.engineering.md）跳过校验（允许所有工程内容）。
 
 校验项（参 PM-VIEW-RULES §三 §七 §八）：
@@ -144,8 +144,8 @@ FORBIDDEN_PATTERNS = {
 # code blocks (PM-VIEW-RULES §3.10) — warning only; PM/AI judges legitimate
 # (CSV/分钟) vs. illegitimate (基于 X / 多 Y 场景).
 # UI 骨架 section heading 涵盖：
-#   - solution.md 的 `## 🖼 页面 UI 骨架`
 #   - tasks/task-NNN.md 的 `## 📐 产物预览`
+#   - 在飞旧 req solution.md 的 `## 🖼 页面 UI 骨架`
 UI_PAREN_PATTERN = re.compile(r"（[^）\n]{2,}）")
 UI_HEADING_PATTERN = re.compile(r"^##\s+(?:🖼|📐)")
 ANY_H2_PATTERN = re.compile(r"^##\s+")
@@ -186,6 +186,7 @@ REQUIRED_SECTIONS = {
         "风险",
         "自检与状态摘要",
     ],
+    # v2 / v1 双文件 / 老单文件 task（在飞旧 task）
     "task": [
         "任务卡",
         "关键产品决策",
@@ -195,6 +196,20 @@ REQUIRED_SECTIONS = {
         "验收清单",
     ],
 }
+
+# delta-3 §2.1：v3 单文件 typed contract 的 PM 确认区必填章节。
+# 关键产品决策 / 产物预览 / 功能清单 已移 prd.md（delta-2），不在 task 文件。
+REQUIRED_SECTIONS_V3_TASK = [
+    "任务卡",
+    "范围",
+    "验收清单",
+    "PM 反馈承接清单",
+]
+
+# v3 typed contract 标记 + PM 确认区 region 标记（scoped lint 用，delta-3 vp-6）
+TASK_FORMAT_V3_MARKER = "task_format: single-typed-v3"
+V3_REGION_PM_CONFIRM_BEGIN = "region: PM-CONFIRM begin"
+V3_REGION_PM_CONFIRM_END = "region: PM-CONFIRM end"
 
 
 def detect_doc_type(path: Path) -> str:
@@ -209,16 +224,35 @@ def detect_doc_type(path: Path) -> str:
 
 
 def is_engineering_file(path: Path) -> bool:
-    return path.name.endswith(".engineering.md")
+    """工程合同性质文件 —— 允许所有工程内容，跳过 PM-view lint。
+
+    含 `*.engineering.md` 与 `implementation-design.md`（delta-8：req 级实现设计
+    是工程合同格式 artifact，允许 TS 类型 / 字段 / 像素 / 反向约束）。
+    """
+    return (
+        path.name.endswith(".engineering.md")
+        or path.name == "implementation-design.md"
+    )
 
 
 def lint(path: Path) -> tuple[list[str], list[str]]:
-    """Return (errors, warnings)."""
+    """Return (errors, warnings).
+
+    delta-3 vp-6 scoped 模式：v3 单文件 typed contract（头部含 task_format 标记）
+    只校验「PM 确认区」（`region: PM-CONFIRM` begin/end 之间）；执行区 / 审计区
+    允许工程内容、不跑 PM-view lint。
+    """
     text = path.read_text(encoding="utf-8")
     lines = text.split("\n")
 
     errors: list[str] = []
     warnings: list[str] = []
+
+    # delta-3：v3 typed contract task 文件走 scoped 模式
+    is_v3_scoped = (
+        TASK_FORMAT_V3_MARKER in text and detect_doc_type(path) == "task"
+    )
+    in_pm_confirm = False  # 仅 v3 scoped 模式用；非 v3 文件全程视为 True
 
     # Iterate lines, skip HTML comments and code blocks
     in_html_comment = False
@@ -227,6 +261,17 @@ def lint(path: Path) -> tuple[list[str], list[str]]:
     in_history_section = False  # tracks §📁 历史档案 / 变更记录 — exempt all rules
     in_reverse_exempt_section = False  # tracks §📦 范围 / §✅ 验收清单 — exempt reverse rules
     for ln, line in enumerate(lines, 1):
+        # v3 scoped：先检测 PM 确认区 region 标记（标记本身是 HTML 注释，须在注释跳过前判）
+        if is_v3_scoped:
+            if V3_REGION_PM_CONFIRM_BEGIN in line:
+                in_pm_confirm = True
+                continue
+            if V3_REGION_PM_CONFIRM_END in line:
+                in_pm_confirm = False
+                continue
+            if not in_pm_confirm:
+                continue  # 执行区 / 审计区 —— 跳过 PM-view lint
+
         # HTML comment tracking (multi-line aware)
         if in_html_comment:
             if "-->" in line:
@@ -283,7 +328,10 @@ def lint(path: Path) -> tuple[list[str], list[str]]:
 
     # Required sections check
     doc_type = detect_doc_type(path)
-    required = REQUIRED_SECTIONS.get(doc_type, [])
+    if is_v3_scoped:
+        required = REQUIRED_SECTIONS_V3_TASK
+    else:
+        required = REQUIRED_SECTIONS.get(doc_type, [])
     if required:
         # Collect all headings (## or ### or deeper)
         headings = re.findall(r"^#{2,4}\s+(.*?)\s*$", text, re.MULTILINE)
@@ -311,20 +359,23 @@ def main() -> int:
         print(f"❌ 文件不存在: {path}", file=sys.stderr)
         print(
             "   修复：检查路径拼写；PM 视图文件应位于 "
-            "$ACTIVE_REQ_DIR/{solution.md,task-plan.md,tasks/task-NNN-*.md}。",
+            "$ACTIVE_REQ_DIR/{task-plan.md,tasks/task-NNN-*.md}。",
             file=sys.stderr,
         )
         return 2
 
     if is_engineering_file(path):
-        print(f"⏭  跳过 {path.name}：工程合同允许所有工程内容（PM-VIEW-RULES §四）")
+        print(
+            f"⏭  跳过 {path.name}：工程合同格式文件允许所有工程内容"
+            "（PM-VIEW-RULES §四；implementation-design.md 同此豁免）"
+        )
         return 0
 
     doc_type = detect_doc_type(path)
     if doc_type == "unknown":
         print(
             f"⚠️  未识别的 PM 视图文件类型: {path.name}\n"
-            f"   仅校验 solution.md / task-plan.md / tasks/task-NNN-*.md。",
+            f"   仅校验 task-plan.md / tasks/task-NNN-*.md（在飞旧 req 的 solution.md 仍兼容）。",
             file=sys.stderr,
         )
         return 0

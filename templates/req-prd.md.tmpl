@@ -1,8 +1,11 @@
 # {{REQ_ID}} — {{REQ_NAME}} PRD
 
-> 本 req 范围内的需求规格，一次性产出（定稿后不修订）。
-> 由 `/prd-writing` 在 stage 6 产出。
-> （v5 已砍项目主 PRD `docs/prd.md` 及 /project-prd-update skill；req 级 PRD 仅作单 req 评审材料，定稿后不修订）
+> **本 req 的功能规格（WHAT）** —— 由 `/prd-writing` 在 **stage 3** 产出，**stage 3 定稿后冻结**，
+> 整个执行期 task 按它做。
+> **生命周期**：stage 3 定稿冻结 → 执行期 task 驱动 → `/close-req` 收尾反向对齐成 as-built。
+> 执行期对 PRD 的偏离不直接改本文件，记入 req 事件流（`req-events.jsonl` 的 `adjustment` 事件），
+> 由 close-req 一次性反向对齐回填。
+> （v5 已砍项目主 PRD `docs/prd.md`；req 级 PRD = 本 req 的功能规格，前置驱动 task）
 
 ## 摘要
 

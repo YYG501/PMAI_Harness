@@ -21,6 +21,13 @@ import re
 import sys
 from pathlib import Path
 
+# 让 _lib 可 import（check-task-scope.py 在 scripts/，_lib 是同级子目录）
+_SCRIPTS_DIR = str(Path(__file__).resolve().parent)
+if _SCRIPTS_DIR not in sys.path:
+    sys.path.insert(0, _SCRIPTS_DIR)
+
+from _lib.state import detect_format
+
 
 def extract_scope_section(text: str) -> str:
     pattern = re.compile(r"^## 执行范围.*$", re.MULTILINE)
@@ -82,15 +89,22 @@ PROJECT_LEVEL_FILES = {"DESIGN.md", "CLAUDE.md"}
 REQ_DIR_PREFIX = "requirements/active/"
 
 
-def implicit_deny_reason(path: str, task_stem: str) -> str | None:
-    """返回 deny 原因（命中保留路径且不是自己的 task 文件）；否则 None。"""
+def implicit_deny_reason(
+    path: str, task_stem: str, is_v2: bool = False
+) -> str | None:
+    """返回 deny 原因（命中保留路径且不是自己的 task 文件）；否则 None。
+
+    delta-3：v3 单文件 task 只有 task-NNN.md 一个 own 文件。
+    v2 旧双文件 task 兼容保留 —— is_v2=True 时额外放行 task-NNN.engineering.md。
+    """
     if path in PROJECT_LEVEL_FILES:
         return f"项目级文档（PM 在 req worktree 维护，task 不得 commit）"
     if path.startswith(REQ_DIR_PREFIX):
-        # 自己的 task PM 视图 / 工程合同 允许
-        own_pm = f"tasks/{task_stem}.md"
-        own_eng = f"tasks/{task_stem}.engineering.md"
-        if path.endswith(own_pm) or path.endswith(own_eng):
+        # 自己的 task 文件允许：v3/v1 单文件只有 .md；v2 双文件兼容多放行 .engineering.md
+        own_files = {f"tasks/{task_stem}.md"}
+        if is_v2:
+            own_files.add(f"tasks/{task_stem}.engineering.md")
+        if any(path.endswith(own) for own in own_files):
             return None
         return "req 目录内非本 task 文件（PM 在 req worktree 维护，task 不得 commit）"
     return None
@@ -138,13 +152,15 @@ def main() -> int:
         return 0
 
     task_stem = task_file.stem
+    # v2 旧双文件 task 兼容：只有 v2 才放行 task-NNN.engineering.md（delta-3）
+    is_v2 = detect_format(task_file) == "v2"
 
     # Implicit deny（sync 白名单：项目级 + 同 req 其他文档）必须优先于 allowlist
     # empty 检查——否则 task 改了 DESIGN.md/CLAUDE.md 但 allowlist 缺失时会先报
     # "allowlist 未声明"而漏报"sync 白名单 deny"，错误信息不准。
     implicit_violations: list[str] = []
     for p in paths:
-        idr = implicit_deny_reason(p, task_stem)
+        idr = implicit_deny_reason(p, task_stem, is_v2=is_v2)
         if idr is not None:
             implicit_violations.append(f"{p}（{idr}）")
 

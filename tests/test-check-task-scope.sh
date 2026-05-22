@@ -138,15 +138,48 @@ test_own_task_pm_view_allowed() {
   rm -rf "$tmp"
 }
 
-test_own_engineering_contract_allowed() {
-  start_test "allowed: 自己的 task 工程合同可 commit"
+test_v2_own_engineering_contract_allowed() {
+  start_test "allowed: v2 旧双文件 task 自己的工程合同可 commit"
   local tmp=$(mktemp -d)
   local task="$tmp/task-001-test.md"
   _make_task_with_scope "$task" "修改：requirements/active/req-001/tasks/task-001-test.engineering.md"
+  # detect_format 返回 v2 需要 .engineering.md 真实存在于磁盘
+  echo "# eng contract" > "$tmp/task-001-test.engineering.md"
 
   rc=$(_run_checker "$task" "requirements/active/req-001/tasks/task-001-test.engineering.md")
   if [ "$rc" != "0" ]; then
-    _fail "自己的工程合同应被允许，得 exit=$rc"
+    _fail "v2 旧双文件 task 的工程合同应被允许，得 exit=$rc"
+    cat /tmp/scope.err >&2
+    rm -rf "$tmp"
+    return
+  fi
+  pass_test
+  rm -rf "$tmp"
+}
+
+test_v3_engineering_contract_denied() {
+  start_test "denied: v3 单文件 task 不 own .engineering.md（delta-3 单文件塌缩）"
+  local tmp=$(mktemp -d)
+  local task="$tmp/task-001-test.md"
+  # v3 单文件：头部带 task_format 标记、无 .engineering.md → 只 own 一个 .md
+  cat > "$task" <<'V3HEADER'
+# Task 001: Test
+
+<!-- task_format: single-typed-v3 -->
+
+## 📌 任务卡
+| **状态** | 执行中 |
+
+## 执行范围
+- 修改：requirements/active/req-001/tasks/task-001-test.engineering.md
+
+## 验收标准
+- [ ] 完成
+V3HEADER
+
+  rc=$(_run_checker "$task" "requirements/active/req-001/tasks/task-001-test.engineering.md")
+  if [ "$rc" != "1" ]; then
+    _fail "v3 单文件 task 不应允许 commit .engineering.md，得 exit=$rc"
     cat /tmp/scope.err >&2
     rm -rf "$tmp"
     return
@@ -214,7 +247,8 @@ test_implicit_deny_claude_md
 test_implicit_deny_other_req_task_doc
 test_implicit_deny_brief_md
 test_own_task_pm_view_allowed
-test_own_engineering_contract_allowed
+test_v2_own_engineering_contract_allowed
+test_v3_engineering_contract_denied
 test_normal_code_path_allowlist_works
 test_implicit_deny_priority_over_empty_allowlist
 

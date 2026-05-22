@@ -93,7 +93,7 @@ cd "<WORKTREE>"
 **short-circuit 例外**：当改动仅触及"叙述/格式类"（§📁 历史档案 / typo / 引用更新），AI 可输出简化版扫描区块（§3.5.3 简化版），不让 PM 答"决策性 vs 轻量"分类提问。
 
 **三条 invariant 越界时拒绝执行**（详见 §3.5.1 req 分支表的"不改"行）：
-- active req 阶段产物（brief / analysis / solution / task-plan）的决策性修订 → 引导 PM 走 `req-transition.py --rollback` 或 stage 3 revise
+- active req 阶段产物（brief / analysis / prd / task-plan）的决策性修订 → 引导 PM 走 `req-transition.py --rollback` 或 stage 3 `/prd-writing` revise
 - active task 产出 → 引导 PM 走 `/task-execute` / `/task-submit` / `/close-task`
 - 在 req 分支跑 quick-fix 改 `docs/**` → 引导 PM 改用 main quick-fix 或留给 close-req → `/doc-update`
 
@@ -149,9 +149,9 @@ bash .claude/scripts/quick-fix.sh --snapshot
 
 | 改对象 | 同时要考虑 |
 |---|---|
-| `prototypes/**` | 本 req `solution.md`（产品决策是否被撤销/修订）/ 本 req `solution.engineering.md`（工程合同更新）/ 已 close 的 task PM 视图（产品事实变化记 `[quick-fix-log]`，task md 不改）/ `docs/modules/*` **不直接改**（留给 close-req → `/doc-update`） |
+| `prototypes/**` | 本 req `prd.md`（功能规格——产品决策是否被撤销/修订）/ 本 req 实现设计文档（如存在——实现约束更新）/ 已 close 的 task PM 视图（产品事实变化记 `[quick-fix-log]`，task md 不改）/ `docs/modules/*` **不直接改**（留给 close-req → `/doc-update`） |
 | `requirements/active/<本req>/brief.md` 或 `analysis.md` | PM 必先分类（criterion 见下方）：决策性 → 拒绝走 `--rollback`；轻量 → 允许 + 扫下游产物链 |
-| `requirements/active/<本req>/solution.md` 或 `solution.engineering.md` | 同上；决策性走 stage 3 revise（`/req-solution`）；下游 task-plan / 已 close task md 引用是否要更新 |
+| `requirements/active/<本req>/prd.md` | 同上；决策性修订走 stage 3 `/prd-writing` revise；下游 task-plan / 已 close task md 引用是否要更新 |
 | 已 close task 的 `task-NNN-*.md` / `.engineering.md` | **不改**（历史档案）；产品事实变化记 `[quick-fix-log]` |
 | active task 产出 | **不改**（task 分支独家） |
 | `docs/**`（项目级合同） | **不改**（在 main 跑或留给 close-req） |
@@ -159,11 +159,11 @@ bash .claude/scripts/quick-fix.sh --snapshot
 
 #### 「决策性 vs 轻量」判断 criterion
 
-PM 在 req 分支 quick-fix 触及阶段产物（brief / analysis / solution / task-plan）时，AI 让 PM 明示分类。判断依据：
+PM 在 req 分支 quick-fix 触及阶段产物（brief / analysis / prd / task-plan）时，AI 让 PM 明示分类。判断依据：
 
-**决策性**（必走 stage-rollback / stage 3 revise）：
+**决策性**（必走 stage-rollback / stage 3 `/prd-writing` revise）：
 - 触动 §🎯 关键产品决策 / §📌 摘要 / §📦 交付物 / §🚦 跨功能产品规则 / §✅ 验收清单 等"产品决策载体"章节
-- 改动会让下游 stage 产物 stale（analysis 改 → solution stale；solution 改 → task-plan stale；以此类推）
+- 改动会让下游 stage 产物 stale（analysis 改 → prd stale；prd 改 → task-plan stale；以此类推）
 
 **轻量**（允许 quick-fix）：
 - 仅触动 §📁 历史档案 / 引用更新（章节号变了）/ typo / 格式 / blockquote 等"叙述/格式载体"章节
@@ -181,7 +181,7 @@ PM 在 req 分支 quick-fix 触及阶段产物（brief / analysis / solution / t
 ```
 当前合同（被改动撤销/修订时必须同步，扫描必扫）：
 - 项目级活合同：docs/{CONTEXT, DESIGN, modules, prd}.md
-- 各 active req 的 stage 3 合同：solution.md + solution.engineering.md
+- 各 active req 的 stage 3 功能规格：prd.md（在飞旧 req 仍可能是 solution.md + solution.engineering.md）
 - 项目代码：prototypes/
 
 历史档案（修订是叙述维护，不强制反向扫；**但需追加可见的「后期修订记录」节**）：
@@ -199,7 +199,7 @@ PM 在 req 分支 quick-fix 触及阶段产物（brief / analysis / solution / t
 - 与项目内的对照：工程合同 reconcile 末尾的 HTML 注释（input-flow §9.6.4）服务的是脚本机械 audit（PM 不看），形式不通用；quick-fix 改历史档案是 PM 决策的修订，必须 visible
 
 分层 lazy sync 边界（不立刻同步，由后续流程统一处理）：
-- 项目级 docs 变更 ↔ 各 active req solution → close-req 阶段 /doc-update 处理
+- 项目级 docs 变更 ↔ 各 active req prd → close-req 阶段 /doc-update 处理
 - main 上原型变更 ↔ 各 active req → 各 req 自己 close-req 时处理
 ```
 

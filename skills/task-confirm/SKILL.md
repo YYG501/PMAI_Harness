@@ -8,16 +8,22 @@ description: |
 
 ## When To Use
 
-- PM 调用，参数是 task **PM 视图主文件**路径（如 `/task-confirm tasks/task-001-login-ui.md`）
-- 工程合同（`tasks/task-001-login-ui.engineering.md`）由 task-spec 同时生成，与主文件成对
+- PM 调用，参数是 task 文件路径（如 `/task-confirm tasks/task-001-login-ui.md`）
 
-## 拆两文件约定（必读）
+## task 文件形态（delta-3）
 
-本 skill 处理拆两文件的 task 产物（`_shared/PM-VIEW-RULES.md` §二）：
-- **PM 视图主文件**（`.md`）：PM 决策、功能清单、范围、验收清单 — 本 skill 主要读取与展示对象
-- **工程合同**（`.engineering.md`）：实现细节、易错点、plan-review 沉淀、启动前必读 — 本 skill 仅做"成对存在"校验，不解析内容
+task-spec 产 **单文件 typed contract**（`tasks/task-NNN-<slug>.md`，头部带
+`<!-- task_format: single-typed-v3 -->` 标记，内部分 PM 确认区 / 执行区 / 审计区）。
+本 skill 读 PM 确认区的「📌 任务卡」「✅ 验收清单」「📦 范围」做摘要展示。
 
-confirm 阶段**强校验**：两文件必须成对存在；缺工程合同 = error，提示 PM 先回 `/task-spec` 重新生成。
+> **task-confirm = 机械流程**（delta-3 §2.3）：PM 在整个 task 生命周期的唯一确认门已在
+> `/task-spec` 步骤 10。task-confirm **不再设自己的「是否确认启动」问句** —— 它只做：
+> 摘要展示（informational）+ 可选 executor 切换（非阻塞告知）+ 依赖 gate（机器校验）+
+> worktree fork。
+
+**三态兼容**：仓里同时有 3 种 task 格式 —— v3 新单文件（有 task_format 标记）/ v2 旧双文件
+（有 `.engineering.md`）/ v1 老单文件。用 `python3 .claude/scripts/_lib/state.py detect_format
+<task-file>` 判别。v2 双文件保留兼容读路径；v3 缺 `.engineering.md` 是正常、不报告警。
 
 ## Preamble
 
@@ -28,52 +34,22 @@ echo "SKILL: task-confirm"
 
 ## Workflow
 
-### 步骤 1：读取 task 文件（成对校验）
+### 步骤 1：读取 task 文件
 
-1. 读取 PM 指定的**主文件**（PM 视图，`.md`），从「📌 任务卡」+「✅ 验收清单」+「📦 范围」提取关键信息（用于步骤 2 摘要）。
+读取 PM 指定的 task 文件，从 PM 确认区的「📌 任务卡」+「✅ 验收清单」+「📦 范围」提取
+关键信息（用于步骤 2 摘要）。executor / executor_model / 审查工具字段在「📌 任务卡」表格里。
 
-2. **成对存在校验**：检查同目录同 slug 的 `<task-file-stem>.engineering.md` 是否存在。
-   - **存在**（PR 2 之后生成的新 task 应有此文件）→ 后续 executor / model / 审查工具字段从工程合同 §1 读取
-   - **不存在**（兼容 PR 1 之前的旧格式 task）→ 输出 warning 并按单文件兼容模式继续：
-     ```bash
-     ENG_FILE="${TASK_FILE%.md}.engineering.md"
-     if [ ! -f "$ENG_FILE" ]; then
-       echo "⚠️  工程合同缺失（旧格式 task，按单文件兼容模式继续）：$ENG_FILE"
-       HAS_ENG=false
-     else
-       HAS_ENG=true
-     fi
-     ```
-     兼容模式下从主文件 (`$TASK_FILE`) 读取 executor / model 字段（旧模板这些字段在主文件顶部）。
-
-### 步骤 1.4：行数 lint（v2 文档输出深度指引硬约束）
-
-工程合同存在时（`HAS_ENG=true`），跑 lint 校验 `.engineering.md` 行数：
+**格式判别**（三态兼容）：
 
 ```bash
-python3 .claude/scripts/check-engineering-doc-size.py "$ENG_FILE"
+FMT=$(python3 .claude/scripts/_lib/state.py detect_format "$TASK_FILE")
+# v3 = 新单文件 typed contract（正常态，无 .engineering.md 是正常）
+# v2 = 旧双文件 task（在飞旧 task）→ "检测到旧格式 task（双文件），兼容模式继续"
+# v1 = 老单文件
 ```
 
-- **退出 0** → 进步骤 1.5；
-- **退出 1（超限）** → 给 PM 选项：
-
-  ```
-  ⚠️ 工程合同档超出长度上限（实测 <N> 行 / 上限 200 行）
-
-  通常是 PM 视图内容被重抄进工程合同——把这部分压回引用通常就修好。
-
-  请选择处理方式：
-   - 让我裁剪重写超限段落（推荐——按强制引用规则）
-   - 你自己改完，告诉我让我再检查一次
-   - 接受超限直接推进（请说明理由，我记到文件注释里作存档）
-  ```
-
-  **PM 回答的内部分流**（按自然语言意图，不列字母）：
-  - PM 说「裁剪 / 让你改 / 推荐那个」等 → 让 PM 在主窗口调 /task-spec（revise 模式）让 AI 裁剪 → 改完后重跑 /task-confirm
-  - PM 说「我改完了 / 我自己改 / 改好了再 lint」 → 等 PM 改完，回 /task-confirm
-  - PM 说「接受超限 / 强制推进，理由是 X」 → 在 `<engineering-file>` 末尾追加 `<!-- OVERRIDE-DOCSIZE: <YYYY-MM-DD> reason: <PM 理由> -->`，进步骤 1.5
-
-**档位非 prototype**：lint 自动跳过（v2 §五.4 决策）；步骤 1.4 直接通过到 1.5。
+v2 时给中性提示（不说「缺失」）：`检测到旧格式 task（双文件），兼容模式继续`。
+v3 缺 `.engineering.md` 是正常 —— **不报告警**。
 
 ### 步骤 1.5：plan review 推荐摘要（informational，不阻塞）
 
@@ -105,7 +81,9 @@ Task: task-NNN-<slug>
 plan review: 已跑 X / 未跑 Y（可选信息）
 ```
 
-review skill（`/qa` / `/design-review` / `/plan-*-review` 等）进入时按 task PM 视图主文件顶部「📂 文档结构」段（参见 `templates/task.md.tmpl`）跨双文件读全——不需要预派生 bundle、不需要带路径参数，PM 直接 `/qa` 等命令运行即可。
+review skill（`/qa` / `/design-review` / `/plan-*-review` 等）进入时读 task 单文件全文 +
+`docs/DESIGN.md` + 模块规格（参见 `templates/task.md.tmpl` 头部说明）——不需要预派生
+bundle、不需要带路径参数，PM 直接 `/qa` 等命令运行即可。
 
 **非默认态展开两行**：
 
@@ -113,31 +91,22 @@ review skill（`/qa` / `/design-review` / `/plan-*-review` 等）进入时按 ta
 执行方式: codex / gpt-5.4 (from settings 默认)
 ```
 
-### 步骤 3：交互式切换执行者（可选）
+### 步骤 3：executor 切换（非阻塞）
 
-询问 PM：
+> delta-3 §2.3：task-confirm 是机械流程 —— **不设「是否确认启动此 task？」问句**
+> （唯一确认门已在 `/task-spec` 步骤 10）。executor 切换是「机械流程 + 一次非阻塞告知」：
+> 摘要已在步骤 2 展示当前 executor，步骤 6 输出会列全 4 个可选 executor + 「想换说一声」
+> 提示 —— **不阻塞、不专门问**。PM 不响应即用当前 executor 继续。
 
-```
-是否切换执行方式？（回车保持 <EXECUTOR>）
-可选：claude-code / codex / cursor-agent / manual
-输入新 executor：
-model（留空=用默认，claude-code 仅支持 opus/sonnet/haiku）：
-```
-
-如果 PM 输入非空值：
-- 用 sed 就地更新 task 文件 `**executor：**` 和 `**executor_model：**` 字段
-- 重新调 `resolve-executor.py` 验证（若 exit 非 0，把 stderr 人话错误原样转给 PM，让 PM 改；改正前不继续）
+仅当 PM **主动说**「换 codex / 换 claude-code sonnet」等时才处理：
+- 用 sed 就地更新 task 文件「📌 任务卡」表格里的 `executor` / `executor_model` 字段
+- 重新调 `resolve-executor.py` 验证（exit 非 0 → 把 stderr 人话错误原样转给 PM，让 PM 改正）
 - 重新打印摘要
 
-> **双向 commit 行为说明（task-002 实证 / 22146458 case）**：sed 改完 task md 字段后，task-confirm 实际会产生**两个孪生 commit**（差几秒）：
-> - `task-NNN: switch executor to <X> (per PM at task-confirm)` — 在 **task 分支**
-> - `task-NNN: switch executor to <X> (sync from task-confirm)` — 在 **req 分支**
->
-> 这两个 commit 都是元信息（仅改 executor / executor_model / 开发服务器 / port 字段，不改 src/ 代码）。它们的时间戳会早于事件流首次 `*→执行中` 事件（因为 task-execute 此时还没启动）。
->
-> close-task.sh 的 I-CT8 audit 通过 `commit_only_touches_task_docs()`（A1 hotfix，见 `scripts/audit-task-events.py`）豁免它们：commit 改动文件全部是 `task-NNN.md` / `task-NNN.engineering.md` → skip I-CT8 时间戳检查。Phase 2（A2）落地后改用 commit subject prefix 豁免，本节描述会同步更新。
-
-确认无误后问：`是否确认启动此 task？如需调整执行方式（例：换 claude-code sonnet），请直接说；确认后我会创建 task worktree 并输出启动命令。`
+> **commit 行为说明**：sed 改完 task 文件字段后会产生元信息 commit（仅改 executor /
+> executor_model / dev server / port 字段，不改 src/ 代码）。close-task.sh 的 I-CT8 audit
+> 通过 `commit_only_touches_task_docs()`（见 `scripts/audit-task-events.py`）豁免：commit
+> 改动文件全部是 task 文件 → skip I-CT8 时间戳检查。
 
 ### 步骤 4-pre：依赖前置检查（v4 主防线）
 
@@ -179,13 +148,20 @@ fi
 
 脚本输出两行：第一行是 worktree 路径，第二行是端口号。
 
-**v4.5 行为**：脚本 fork task 分支后**自动把 task md（PM 视图主文件 + 工程合同）从 req 分支删除并 commit**——task md 在 task 分支独家所有，避免 v4 时代两份共存导致的路径解析赌博。close-task 时 merge 会自动"认回" task md 进入 req 分支作为最终历史档案。
+**行为**：脚本 fork task 分支后**自动把 task 文件从 req 分支删除并 commit**——task 文件
+在 task 分支独家所有，避免两份共存导致的路径解析赌博。close-task 时 merge 会自动"认回"
+task 文件进入 req 分支作为最终历史档案。（delta-3：v3 单文件只删一个文件；在飞旧 v2
+双文件 task 仍删两个。）
 
-**I-DC1 pre-fork gate**：`create-task-worktree.sh` 在 fork 之前会先检查 req 分支 working tree 里本 task 的 PM 视图主文件 + 工程合同是否 dirty——dirty 时**自动 commit** 后再 fork（pathspec 只覆盖本 task 两文件，不卷入其他改动）。这是兜底防线；正常情况 task-spec 步骤 12.6 应该已经把 task md 落盘到 req 分支，gate 触发说明 task-spec 流程被绕过或失败。脚本 stderr 输出 "⚠️ I-DC1 pre-fork gate" 警告时，AI 必须把警告原文转给 PM 看一句话说明（不当 gate，但要让 PM 知道走过 fallback 路径）。
+**I-DC1 pre-fork gate**：`create-task-worktree.sh` 在 fork 之前会先检查 req 分支 working tree
+里本 task 文件是否 dirty——dirty 时**自动 commit** 后再 fork（pathspec 只覆盖本 task 文件，
+不卷入其他改动）。这是兜底防线；正常情况 task-spec 步骤 11 应已把 task 文件落盘到 req
+分支，gate 触发说明 task-spec 流程被绕过或失败。脚本 stderr 输出 "⚠️ I-DC1 pre-fork gate"
+警告时，AI 必须把警告原文转给 PM 看一句话说明。
 
 更新 task 文件（**注意：在 task worktree 内的副本里改，不在 req 分支**）：
-- `**worktree：**` → worktree 路径
-- `**开发服务器：**` → `http://localhost:<port>`
+- 「📌 任务卡」表格的 `worktree` → worktree 路径
+- 「📌 任务卡」表格的 `dev server` → `http://localhost:<port>`
 
 > 这两个字段的更新通常推迟到 task-execute 启动时由 agent 回填，避免 task-confirm 阶段在 task 分支多出"代码先于状态机"的 commit 触发 I-CT8。
 

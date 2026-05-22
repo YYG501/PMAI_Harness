@@ -2,7 +2,7 @@
 
 > 本文件是 [`PM-VIEW-RULES.md`](../PM-VIEW-RULES.md) §三 的物理拆分。配套阅读：[`doc-strictness.md`](./doc-strictness.md)（§四 文档级严格度对照表）。
 
-适用：所有 PM 视图层文档 — `brief.md` / `analysis.md` / `solution.md` / `task-plan.md` / `tasks/task-NNN-*.md` / `prd.md`。
+适用：所有 PM 视图层文档 — `brief.md` / `analysis.md` / `prd.md` / `task-plan.md` / `tasks/task-NNN-*.md`（在飞旧 req 的 `solution.md` 同样适用）。
 
 ---
 
@@ -221,7 +221,7 @@ ASCII 框图模式下，骨架代码块每行 ≤ 80 字符（约 78 列内容 +
 
 ## 3.11 禁用版本 / 迭代过程语言
 
-PM 视图文档（solution / prd / analysis 等）描述的都是**最终产物形态**，读者不应感知中间迭代过程。所有"v1 / v2 / 重做 / 重构 / 第二代 / 下一版 / 老版 / 新版 / 主战场 / 整个 v2 范围内 / v2 整体重做"一律不写。
+PM 视图文档（prd / analysis 等）描述的都是**最终产物形态**，读者不应感知中间迭代过程。所有"v1 / v2 / 重做 / 重构 / 第二代 / 下一版 / 老版 / 新版 / 主战场 / 整个 v2 范围内 / v2 整体重做"一律不写。
 
 | 类别 | ❌ 错误 | ✅ 正确 |
 | --- | --- | --- |

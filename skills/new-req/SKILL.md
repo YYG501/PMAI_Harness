@@ -76,6 +76,75 @@ cd 到返回的 worktree 路径。
 }
 ```
 
+### 步骤 3.5：已有项目 CONTEXT 兜底检查（legacy readiness gate）
+
+在 worktree 里、写 brief.md **之前**做一次 `docs/CONTEXT.md` 兜底检查。框架同步进已有项目后，老项目的 `docs/CONTEXT.md` 可能有空节（同步前没有「项目级语境产出」这一步）。新项目的项目级语境由 `/project-solution` 在 new-project 阶段产出并自带确认门兜住；已有项目则在这里兜底。
+
+> **为什么放在 new-req**：`/new-req` 是每 req 入口、本检查每 req 首次触发、CONTEXT 填满后再跑就 silent skip——天然幂等，不需要「已查过」标记。**放在步骤 3.5（worktree 内、commit 前）**：mini-fill 写的 `docs/CONTEXT.md` 落在 worktree 的 req 分支上，能被步骤 4.5 的 commit 一并带上、被 worktree 内后续 stage 读到。
+
+```bash
+CONTEXT_STATE=$(python3 "$REPO_ROOT/.claude/scripts/check-context-sections.py" "$REPO_ROOT")
+ALL_FILLED=$(echo "$CONTEXT_STATE" | python3 -c "import sys, json; print(json.load(sys.stdin)['all_filled'])")
+EMPTY=$(echo "$CONTEXT_STATE" | python3 -c "import sys, json; print(','.join(json.load(sys.stdin)['empty_sections']))")
+```
+
+（`$REPO_ROOT` 在 worktree 内解析为 worktree 根，`docs/CONTEXT.md` 即 worktree 这份。）
+
+**CONTEXT 6 节全填（`all_filled` 为 `True`）→ silent skip**：不打断 PM，直接进步骤 4。这是已建立项目的常态。
+
+**有空节 → mini-fill**：先告诉 PM 一句、问填写模式：
+
+```
+📝 检查 docs/CONTEXT.md —— 有 <N> 节空着（<empty_sections>）。这是 AI 后续 req 必读的产品级语境基线，开始新需求前先补一遍。
+
+想填详细版（按完整规范）还是最简版（1 句话 / 1 角色 / 1 条术语 起手）？最简版几分钟搞定。
+```
+
+PM 答「最简 / 简版 / 快」→ 精简模式（每节 1 条起手即接受）
+PM 答「详细 / 完整 / 详版」→ 详细模式（按完整规范）
+PM 答「混合」→ 各节 PM 临场决定
+
+然后**只按空节依次问**（已填的节不重复问），引导话术复用 `docs/设计/PRD-体系收敛.md` §2.6 全文（产品定位 / 用户画像 / 产品路线 / 技术栈 / 业务术语表 各两版）。
+
+**禁逃生舱**（MEMORY「未决问题闸门强制答题」）：不给「暂跳过」「不重要」「以后再说」选项；PM 真不知道写啥 → AI 给精简模式默认值（如产品定位 "工具型应用，给单人 PM 用，无长期硬约束"），PM 微调或直接接受。
+
+填完后重跑 `check-context-sections.py` 验证全填，再进步骤 3.6。**mini-fill 写的 `docs/CONTEXT.md` 必须在步骤 4.5 commit 时一并 commit**（见步骤 4.5 commit 范围说明）——否则补好的基线悬空，worktree 内后续 stage 读不到。
+
+> mini-fill 只在已有项目 + CONTEXT 有空节时触发；新项目首次 `/init-project` → `/project-solution` 已把 CONTEXT 填满，这里直接 silent skip。
+
+### 步骤 3.6：已有项目 DESIGN.md 结构兜底（legacy DESIGN.md 迁移，delta-9 vp-4b）
+
+同步框架到已有项目后，老项目的 `docs/DESIGN.md` 可能仍是旧 6 段骨架（视觉风格 / 颜色 / 字体 /
+间距 / 组件规范 / 创意自由度），**缺 delta-9 升级的「共享组件 inventory」+ 布局合约 / 响应式 /
+无障碍 / Checker Sign-Off 块** —— 而 stage 4 gap-check 要查的就是「共享组件 inventory」。
+不升级 → gap-check 无 inventory 可查。
+
+在 worktree 里、写 brief.md 之前做一次结构检测：
+
+```bash
+DESIGN_MD="$REPO_ROOT/docs/DESIGN.md"
+# 新结构标志：含「共享组件 inventory」标题
+if [ -f "$DESIGN_MD" ] && ! grep -q "共享组件 inventory" "$DESIGN_MD"; then
+  NEED_DESIGN_UPGRADE=true
+fi
+```
+
+- **已是新结构**（含「共享组件 inventory」）/ 文件不存在 → silent skip，进步骤 4。
+- **旧 6 段骨架 → mini-upgrade**：告诉 PM 一句，按 `$REPO_ROOT/templates/DESIGN.md.tmpl` 新结构
+  把缺的块补进 `docs/DESIGN.md`（**保留 PM 已填的旧内容**，只追加缺的块：布局合约 / 响应式 /
+  无障碍 / 共享组件 inventory 表 / 视觉层交互规则 / Checker Sign-Off）。组件 inventory 表
+  AI 据 `docs/modules/` + 现有代码尽力盘点已有组件起手、PM 补全。
+
+```
+📝 检查 docs/DESIGN.md —— 是旧结构（缺共享组件 inventory）。stage 4 的组件复用关口要查这份
+   清单，开始新需求前先升级一次（保留你已填的视觉规范，只补缺的块）。
+```
+
+mini-upgrade 写的 `docs/DESIGN.md` 与 CONTEXT mini-fill 同 —— 必须在步骤 4.5 commit 时一并
+commit（见步骤 4.5）。每 req 入口触发、升级后自然 silent skip，天然幂等。
+
+> 只在已有项目 + 旧 DESIGN.md 时触发；新项目 `init-project` 复制的已是新结构模板，silent skip。
+
 ### 步骤 4：Stage 1 — 产出 brief.md（由 PM 主导）
 
 **关键原则**：brief 阶段如何引导思考**由 PM 自己决定**，AI 不主动调用任何工具、不预读项目文档/历史 req。AI 在此步骤只做两件事：(1) 提示 PM 三条候选路径，(2) 等 PM 选择后整理产出为 `brief.md`。
@@ -191,7 +260,20 @@ git add brief.md .req-meta.json tasks/
 git commit -m "stage 1 brief: req-NNN-<slug>"
 ```
 
-commit 范围只包含 brief.md + .req-meta.json + 空 tasks/ 骨架；其他文件不卷入。commit 完成后进入步骤 5 handoff。
+commit 范围默认只包含 brief.md + .req-meta.json + 空 tasks/ 骨架；其他文件不卷入。
+
+**例外 —— 步骤 3.5 / 3.6 legacy 兜底触发时扩 commit 范围**：
+- 步骤 3.5 mini-fill 补了 `docs/CONTEXT.md` → 加 `docs/CONTEXT.md`
+- 步骤 3.6 mini-upgrade 补了 `docs/DESIGN.md` → 加 `docs/DESIGN.md`
+
+补的文件必须随本次 commit 一起落盘，否则基线悬空、worktree 内后续 stage 读不到。此时
+`git add` 按实际触发的兜底多加对应文件：
+
+```bash
+git add brief.md .req-meta.json tasks/ docs/CONTEXT.md docs/DESIGN.md
+```
+
+未触发兜底（CONTEXT 全填 / DESIGN 已新结构、走 silent skip）时不加对应文件，保持默认范围。commit 完成后进入步骤 5 handoff。
 
 ### 步骤 5：Handoff（结束本对话，让 PM 在 worktree 新对话里继续）
 
@@ -227,4 +309,5 @@ brief.md 已 commit 后，**当前主对话不再继续 stage 2**。`/new-req` �
 - brief 引导路径由 PM 选（步骤 4）；AI 不主动调 `/office-hours`、不预读历史 req / 项目 docs
 - 选项 2（PM 给信息 + AI 引导）：AI 必须先做缺口分析再补问，不机械问全六题；走 brief 草稿 + 二次确认门
 - 选项 1（PM 自跑 office-hours）：AI 只提示 PM 自己跑，不替 PM 调 skill
-- PM 在步骤 4 二确通过后，AI 必须先跑步骤 4.5 commit（pathspec 限于 brief.md + .req-meta.json + tasks/ 骨架）再进步骤 5 handoff——保证后续 PM `git worktree remove` 时 working tree 已 clean，并符合 I-AD5/I-DC1 "dispatch 前 working tree 必须 clean"
+- 步骤 3.5 legacy readiness gate：进 worktree 后、写 brief 前检查 `docs/CONTEXT.md` 6 节；全填 → silent skip，有空节 → mini-fill（复用 PRD-体系收敛 §2.6 话术 + 精简模式 + 禁逃生舱）。每 req 入口触发、CONTEXT 填满后自然 silent skip，天然幂等，不设「已查过」标记
+- PM 在步骤 4 二确通过后，AI 必须先跑步骤 4.5 commit 再进步骤 5 handoff——保证后续 PM `git worktree remove` 时 working tree 已 clean，并符合 I-AD5/I-DC1 "dispatch 前 working tree 必须 clean"。commit pathspec 默认限于 brief.md + .req-meta.json + tasks/ 骨架；**步骤 3.5 mini-fill 触发时扩范围含 `docs/CONTEXT.md`**（未触发则不加，避免无关文件卷入）

@@ -54,19 +54,19 @@ DEPTH_GUIDANCE = {
     ],
 }
 
-# 文档输出深度 prose 段落（v2 加：与「实现深度指引」对称，控制 .engineering.md 文档展开深度）。
-# AI 在 req-solution / task-spec 写工程合同时读这段。配合 scripts/check-engineering-doc-size.py 做硬约束。
-# custom 档不预设（v2 §五.4 决策：等真实 custom 项目实证后再写规则）。
+# 文档输出深度 prose 段落（控制 task 文件「执行区」工程内容的展开深度）。
+# AI 在 task-spec 写 task 单文件 typed contract 的执行区时读这段。
+# delta-3：task-spec 双→单文件塌缩后，工程内容是 task 文件「执行区」、无独立 .engineering.md，
+# 行数 lint（check-engineering-doc-size.py）随之退场。
+# custom 档不预设（等真实 custom 项目实证后再写规则）。
 DOC_DEPTH_GUIDANCE = {
     "prototype": [
-        ("solution.engineering.md 目标行数", "≤300 行；由 scripts/check-engineering-doc-size.py 在 stage 闸门校验，超限报错。"),
-        ("task-NNN.engineering.md 目标行数", "≤200 行；同样 lint 校验。"),
-        ("强制引用规则", "上游已定义的类型/接口/函数签名/产品行为禁止重写——直接写「参见 solution.md §X.Y」或「参见 solution.engineering.md §X.Y」。"),
-        ("§4 功能清单工程版", "只列「差异点 / 复用点」，不再贴完整签名。"),
-        ("§7 plan-review 沉淀 / §8 autoplan / §9 a11y/视口/视觉规范", "默认 N/A 一行带过；视觉规范沿用 DESIGN.md。"),
-        ("§10 工程层验收清单", "只列主路径 happy path，不展开错误/空/部分态。"),
+        ("强制引用规则", "上游已定义的类型/接口/函数签名/产品行为禁止重写——直接写「参见 prd.md §X.Y」或「参见 implementation-design.md HOW-NN」。"),
+        ("执行区·实现规格", "只列「差异点 / 复用点」，不再贴完整签名。"),
+        ("执行区·约束与易错", "默认精简；视觉规范细则沿用 docs/DESIGN.md，不展开。"),
+        ("执行区·工程层验收", "只列主路径 happy path，不展开错误/空/部分态。"),
     ],
-    "system": [],  # v2 §五.4：留空 → 渲染 placeholder。等真实 system 项目实证后回来写规则。
+    "system": [],  # 留空 → 渲染 placeholder。等真实 system 项目实证后回来写规则。
 }
 
 REQUIRED_SIGNAL_FIELDS = {
@@ -183,17 +183,16 @@ def render_template(schema: dict, mode: str) -> str:
 
     out.append("### 文档输出深度指引")
     out.append("")
-    out.append("> 以下是 req-solution / task-spec 阶段 AI 写 `.engineering.md` 工程合同时的深度参考。")
-    out.append("> 配合 `scripts/check-engineering-doc-size.py` 做硬行数校验。")
+    out.append("> 以下是 task-spec 阶段 AI 写 task 单文件 typed contract「执行区」工程内容时的深度参考。")
     out.append("> PM 可手改任意条；删除上方 auto-detected 标后视为 PM 手填，框架不再覆盖。")
     out.append("")
     if DOC_DEPTH_GUIDANCE[mode]:
         for label, prose in DOC_DEPTH_GUIDANCE[mode]:
             out.append(f"- **{label}**：{prose}")
     else:
-        out.append("_PM 填_：本档下 `.engineering.md` 工程合同的深度参考。")
+        out.append("_PM 填_：本档下 task 文件「执行区」工程内容的深度参考。")
         out.append("等到第一个真实 system 项目跑出来后基于实证写规则；现在留空。")
-        out.append("常见维度：目标行数、强制引用规则（避免重写上游）、各章节展开深度。")
+        out.append("常见维度：强制引用规则（避免重写上游）、各执行区段展开深度。")
     out.append("")
 
     out.append("### 约定")

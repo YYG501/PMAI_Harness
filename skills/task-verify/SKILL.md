@@ -26,9 +26,15 @@ I-RV1 禁止 AI 自动调任何 **review skill**（`/review` `/qa` `/qa-only` `/
 
 **task-verify 必须由 AI 在 task-execute 自动调用**，不依赖 PM 手动触发；I-RV1 不适用。
 
-## 拆两文件约定
+## task 文件读取约定
 
-本 skill 只读 **PM 视图主文件**（`.md`）的「🧪 自测说明」段。工程合同（`.engineering.md`）不参与。
+本 skill 只读 task 文件的「🧪 自测说明」段：
+
+- **v3 单文件 typed contract**（delta-3）：自测说明在 task 单文件**执行区**「🧪 自测说明」section（`<!-- region: EXEC begin/end -->` 之间）。task-spec 从 `prd.md` §七验收标准派生 task-scoped 自测说明写入此处（D3-5）。
+- **v2 旧双文件 task**：自测说明在 PM 视图主文件（`.md`）「🧪 自测说明」段；工程合同（`.engineering.md`）不参与。
+- **v1 旧单文件**：自测说明在主文件「🧪 自测说明」段。
+
+三态下 section 名一致（`## 🧪 自测说明...`），步骤 2 的 awk 锚点（前缀匹配 `/^## 🧪 自测说明/`）对三态通用，无需分流读取。
 
 ## Preamble
 

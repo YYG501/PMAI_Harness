@@ -1,0 +1,46 @@
+# {{PROJECT_NAME}} — 跨功能产品行为规则
+
+> **这是什么**：项目级**跨功能产品行为规则** —— 全项目级「产品在 X 情况下应 / 不应有 Y 行为」
+> 的规则。与 `docs/DESIGN.md`（设计规范 = 界面长什么样）平级、互补。
+> **为什么有它**：跨功能规则的适用范围超出发起它的那个 task 的模块、向前管未写的 task ——
+> task 文件装不下（task-spec 同模块 grep 传不到别的模块）。这里是它的家。
+> **谁写**：① `/close-task` 收尾扫 task「PM 反馈」，AI 预判 + PM 逐条选 promote；
+> ② `/prd-writing` 规划期发现全项目规则时 PM-selective promote。
+> **谁读**：`task-spec`（生成每个 task 时按 scope 读）/ `prd-writing`（写 PRD 时全文读）。
+> **落盘路径**：`docs/PRODUCT-RULES.md`（固定）。
+
+<!--
+边界（哪些不进本文件）：
+- 用词 / 术语 → docs/CONTEXT.md 业务术语表
+- 模块级规则 / 功能 spec → 该模块 docs/modules/<module>.md
+- 视觉 / 设计 / 交互样式 → docs/DESIGN.md
+- 同模块前瞻反馈 / task-local → 留 task 文件，由后续 task 的 task-spec relevance 二分承接
+本文件只装「全项目级、跨功能、产品行为」规则。
+-->
+
+## 规则清单
+
+<!--
+扁平清单（无模块分区 —— 模块级的归 modulespec）。每条格式：
+
+### <一句话标题>
+- 规则：<产品在 X 情况下应 / 不应 Y>
+- scope：全局 | 域限定:<关键词>
+- 来源：req-NNN / task-NNN（YYYY-MM-DD）
+
+scope 字段：
+- 「全局」—— 每个 task 的 task-spec 必读（跨功能规则按定义标全局、永不漏读）
+- 「域限定:<关键词>」—— 只约束某域；task-spec 按 task 关键词 grep 命中才读
+  只有明确只约束某域的规则才标域限定。
+
+无「状态」字段 —— 规则全是常驻，加入即生效，过时由 PM 手动改 / 删。
+-->
+
+<!-- 示例（项目起步时本段为空，规则随 close-task / prd-writing promote 累积）：
+
+### 删除操作一律二次确认
+- 规则：任何不可逆的删除操作，产品必须弹二次确认，不允许一键直删
+- scope：全局
+- 来源：task-007（2026-05-22）
+
+-->

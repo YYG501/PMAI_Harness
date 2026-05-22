@@ -2,14 +2,14 @@
 name: _shared/term-detector
 description: |
   业务词 / 角色发现检测器（vp-4b 共享逻辑）。被 new-req / req-analysis /
-  req-solution / task-spec 各 skill 在写 PM 视图主文件时调用，识别未登记的
+  prd-writing / task-spec 各 skill 在写 PM 视图主文件时调用，识别未登记的
   业务词 / 角色让 AI 提示 PM 补 CONTEXT 业务术语表 / 用户画像。
 ---
 
 # _shared/term-detector
 
 > **vp-4b 共享 detector**。不是 user-facing skill，而是 4 个写作 skill 的共
-> 享逻辑落点。被各 skill 在写 brief / analysis / solution / task spec PM
+> 享逻辑落点。被各 skill 在写 brief / analysis / prd / task spec PM
 > 视图主文件**前 / 中**调用。
 
 ## 何时调用
@@ -18,7 +18,7 @@ description: |
 |---|---|---|
 | `new-req` | 步骤 4 写 brief 草稿前 / 中 | 即将写的 brief.md 内容 |
 | `req-analysis` | 写 analysis.md 时 | 即将写的 analysis.md 内容 |
-| `req-solution` | 写 solution.md PM 视图时 | 即将写的 solution.md 内容 |
+| `prd-writing` | 写 prd.md 时 | 即将写的 prd.md 内容 |
 | `task-spec` | 写 task PM 视图主文件时（**仅 .md，不扫 .engineering.md**）| 即将写的 task-NNN-*.md 内容 |
 
 **禁止位置**：

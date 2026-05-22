@@ -123,13 +123,40 @@ echo "SKILL: req-analysis"
 
 ## Workflow
 
+### 步骤 0：判别全量 / 增量分析分支（delta-5）
+
+req-analysis 有两个分支，由「项目是否已有产品基线」决定：
+
+| 分支 | 触发条件 | 怎么做 |
+|---|---|---|
+| **全量分析** | 项目无产品基线 —— `docs/modules/` 不存在或为空（首批 req / 全新项目）| 从零完整分析（步骤 1-3 全跑）|
+| **增量分析** | 项目已有基线 —— `docs/modules/INDEX.md` 存在且有模块条目 | **聚焦本 req 的新增 / 改动**，不重扫已稳定的模块 |
+
+```bash
+if [ -s "$REPO_ROOT/docs/modules/INDEX.md" ] && grep -qE '^\| ' "$REPO_ROOT/docs/modules/INDEX.md"; then
+  MODE=增量
+else
+  MODE=全量
+fi
+```
+
+**增量分析分支的差异**（其余流程不变）：
+- 步骤 1 读输入时，`docs/modules/` 已有模块规格作**已知基线**读 —— 已分析过的产品行为不重新解构。
+- 步骤 2 第一性原理聚焦**本 req 带来的新增 / 改动**：新增功能、对已有模块的改动、与已有功能的冲突 / 复用点。已稳定、本 req 不碰的模块不重新质疑。
+- 步骤 3 的 analysis.md「§影响范围」明确标出：本 req 新建什么、改动哪些已有模块、不碰哪些。
+- 增量分析**不是偷工** —— 第一性原理 4 层仍跑，只是 scope 收敛到本 req 的增量面；reviewer（步骤 4）照常强制。
+
+> 增量分析的价值：项目跑到第 5、第 10 个 req 时，不必每次把整个产品重新解构一遍 —— 聚焦增量，分析更快也更准。
+
 ### 步骤 1：读输入文档建立基线
 
 读 `$ACTIVE_REQ_DIR/brief.md`，及 `docs/CONTEXT.md` / `docs/modules/INDEX.md`（若存在）。
+**增量分支**：额外把 `docs/modules/<本 req 涉及模块>.md` 当已知基线读入（不重新质疑已稳定模块）。
 
 ### 步骤 2：执行第一性原理 4 层（内部推理）
 
 形成批判性视角，识别隐藏假设、值得商榷之处、未决业务问题。
+**增量分支**：4 层聚焦本 req 的新增 / 改动面（见步骤 0）。
 
 ### 步骤 3：写 `$ACTIVE_REQ_DIR/analysis.md`
 
@@ -149,7 +176,7 @@ python3 "$REPO_ROOT/.claude/scripts/_lib/term-detector.py" \
 ### 步骤 3.7：attachments 引用 hook（v5 attachments 机制）
 
 写本 stage PM 视图主文件**前**，AI 扫 `$ACTIVE_REQ_DIR/attachments/`（如目录存在）：
-- 上游 stage 文档（brief/analysis/solution）已引用过的材料 → 按需 Read
+- 上游 stage 文档（brief/analysis）已引用过的材料 → 按需 Read
 - 本 stage 还没引用过的新文件（PM 后上传的） → 问 PM「发现 `attachments/<file>`，要不要纳入本 stage 参考？说明重点」
 
 写完产出后，如本 stage 引用过 attachments，在文档末尾追加 `## 📎 参考材料` section：
@@ -299,7 +326,7 @@ reviewer 返回后，**先把 reviewer 报告完整原文贴回 chat**（PASS �
 
 ## Output Rules
 
-- 输出必须可直接服务后续 stage（solution.md / task-plan.md / 原型实现）
+- 输出必须可直接服务后续 stage（prd.md / task-plan.md / 原型实现）
 - 不确定项必须显式标注"假设 / 待执行"，不得隐式猜测
 - 关键问题必须放进 `## 未决问题` section，不能只散在正文里
 - 待执行问题必须**逐一列出完整问题与候选答案**，引导 PM 以编号作答；严禁以摘要形式（如"有 N 个待执行问题"）替代展示
@@ -326,6 +353,6 @@ reviewer 返回后，**先把 reviewer 报告完整原文贴回 chat**（PASS �
 
 - **允许产出**：`$ACTIVE_REQ_DIR/analysis.md`
 - **允许动作**：基于 brief.md / CONTEXT.md 做第一性原理分析、提出未决问题、调 analysis-reviewer 一轮一停
-- **禁止顺手推进**：不要自动产出 `solution.md`、`task-plan.md`，不要直接进入原型实现
+- **禁止顺手推进**：不要自动产出 `prd.md`、`task-plan.md`，不要直接进入原型实现
 - **禁止逃生舱**：没有"带假设前进"模式；想绕开 reviewer 的合法路径只有「步骤 5 选 C 显式接受现状」
 - **退出条件**：analysis.md 已写、reviewer 至少跑过一次且报告原文已贴 chat、PM 已显式选了 A/B/C 且最终选择是 A 或 C（B 会回到步骤 4）。控制权交回 /req-stage-gate，附带 `review_outcome` 字段

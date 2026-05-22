@@ -14,26 +14,30 @@ description: |
   - 备选：在主仓根用 `claude` 启动。task worktree 是 launch dir 子目录，天然在沙盒内
   - **禁止**：在 req worktree 用裸 `claude`（不加 --add-dir）启动。task worktree 不在 launch dir 子树，cd 会被 Claude Code 沙盒 reset，整个流程失败
 
-## 拆两文件约定（必读）
+## 单文件 typed contract 约定（必读）
 
-本 skill 处理拆两文件的 task 产物（`_shared/PM-VIEW-RULES.md` §二）：
-- **PM 视图主文件**（`.md`）：📌 任务卡 / 🎯 关键产品决策 / 📐 产物预览 / 📋 功能清单 / 🚦 跨功能产品规则 / 📦 范围 / ✅ 验收清单 / 📁 历史档案（执行日志、PM 反馈）
-- **工程合同**（`.engineering.md`）：§1 元信息扩展（executor / model）/ §2 状态转换说明 / §3 启动前必读（agent 必读文件清单）/ §4 功能清单工程版 / §5 实现指引 / §6 易错点 / §7 plan-review 沉淀 / §8 视觉细则 / §9 工程层验收清单 / §10 文档偏差 / §11 自审记录
+本 skill 处理 task 的单文件 typed contract（delta-3）—— 一个物理文件 `task-NNN-<slug>.md`，内部由 region 标记分三区：
 
-execute 阶段 agent 启动时**必须把工程合同内容显式 inject 到执行 prompt**。不依赖 markdown 折叠语义、不依赖 PM 主动打开。
+- **PM 确认区**（`<!-- region: PM-CONFIRM begin/end -->`）：📌 任务卡（含 executor / executor_model / 审查工具 字段）/ 📦 范围 / ✅ 验收清单 / 📥 PM 反馈承接清单。
+- **执行区**（`<!-- region: EXEC begin/end -->`）：🔁 状态转换说明 / 🚦 启动前必读 / 🔧 实现规格 / 🧩 实现设计引用 / ⚠️ 约束与易错 / 🧪 自测说明 / ✔️ 工程层验收。**执行区是 agent 的实现依据。**
+- **审计区**（`<!-- region: AUDIT begin/end -->`）：📋 文档偏差 / 🔍 自审记录 / 📁 历史档案（执行日志、PM 反馈）。
+
+agent 读 task 文件即可拿到全部执行所需内容（同一文件分区读，无需跨文件）。
 
 具体读写分工：
 | 内容 | 读 / 写位置 |
 |---|---|
-| 任务描述 / 验收清单 / 用户场景 / 功能行为 | 读 PM 视图主文件 |
-| 启动前必读清单 | 读工程合同 §3 |
-| 实现指引 / 易错点 / V1-V26 review 沉淀 | 读工程合同 §5/§6/§7 |
-| 视觉规范细则（像素 / 颜色） | 读工程合同 §8 |
-| 工程层验收清单（grep / 单测） | 读工程合同 §9 |
-| 写执行日志 | 写入 PM 视图主文件「📁 历史档案 → 执行日志」 |
-| 写文档偏差（工程层） | 写入工程合同 §10 |
-| 写自审记录 | 写入工程合同 §11 |
-| 写 PM 反馈（task-submit 打回时）| 写入 PM 视图主文件「📁 历史档案 → PM 反馈」 |
+| 任务描述 / 范围 / 验收清单 | 读 PM 确认区（📌 任务卡 / 📦 范围 / ✅ 验收清单） |
+| 启动前必读清单 | 读执行区「🚦 启动前必读」 |
+| 实现规格 / 实现设计引用（HOW） | 读执行区「🔧 实现规格」/「🧩 实现设计引用」 |
+| 约束与易错（含 a11y / 视觉细则） | 读执行区「⚠️ 约束与易错」 |
+| 工程层验收清单（grep / 单测） | 读执行区「✔️ 工程层验收」 |
+| 写执行日志 | 写入审计区「📁 历史档案 → 执行日志」 |
+| 写文档偏差 | 写入审计区「📋 文档偏差」 |
+| 写自审记录 | 写入审计区「🔍 自审记录」 |
+| 写 PM 反馈（task-submit 打回时）| 写入审计区「📁 历史档案 → PM 反馈」 |
+
+**旧 v2 双文件 task 兼容**：在飞旧 task 仍是「PM 视图主文件 `.md` + 工程合同 `.engineering.md`」双文件结构，不回迁；本 skill 保留 v2 兼容读路径（见步骤 1）。
 
 ## Workflow
 
@@ -218,40 +222,40 @@ CURRENT_STATUS=$(python3 "$MAIN_REPO_ROOT/.claude/scripts/task-transition.py" "$
 - 「已完成」：错误退出，提示 `该 task 已完成；如需收尾，在本（task）窗口运行 /close-task task-NNN 启动 Phase 1（对齐/偏差/commit/写 marker），完成后会引导切到 req 窗口跑 Phase 2`。
 - 其他状态：错误退出，展示当前状态，并提示 PM 回主窗口用 `/task-status` 查看。
 
-### 步骤 1：读取 task 两文件（成对校验）
+### 步骤 1：读取 task 文件（三态格式分流）
 
-1. 校验工程合同成对存在（兼容旧格式 task）：
+1. 判别 task 格式（v1 老单文件 / v2 双文件 / v3 新单文件 typed contract）：
    ```bash
-   ENG_FILE="${TASK_FILE%.md}.engineering.md"
-   if [ ! -f "$ENG_FILE" ]; then
-     echo "⚠️  工程合同缺失（旧格式 task，按单文件兼容模式继续）：$ENG_FILE" >&2
-     HAS_ENG=false
-   else
-     HAS_ENG=true
-   fi
+   TASK_FORMAT=$(python3 "$MAIN_REPO_ROOT/.claude/scripts/_lib/state.py" detect_format "$TASK_FILE")
    ```
-   - `HAS_ENG=true`：按下文 §2 / §3 分别从两文件读取
-   - `HAS_ENG=false`：兼容模式——所有内容从主文件 (`$TASK_FILE`) 读取（旧模板的「启动前必读」/「实现指引」/「易错点」等都在主文件中）
 
-2. 从 **PM 视图主文件**（`$TASK_FILE`）提取（业务行为层）：
-   - 「📌 任务卡」→ 任务描述
-   - 「🎯 关键产品决策」→ PM 已拍板的产品选择
-   - 「📋 功能清单」→ 功能行为、数据规则、角色权限（**硬约束**）
-   - 「🚦 跨功能产品规则」→ admin 视角的统一规则
-   - 「📦 范围」→ 改 / 不改
-   - 「✅ 验收清单」→ PM 走查主路径
+   按格式分流读取与兼容文案：
 
-3. 从 **工程合同**（`$ENG_FILE`，仅当 `HAS_ENG=true`）提取（实现细节层）：
-   - 「§1 元信息扩展」→ executor / model / 推荐 review 工具
-   - 「§3 启动前必读」→ 必读文件路径列表（步骤 2 用）
-   - 「§4 功能清单工程版」→ 实现层细节（字段名 / props / reducer action）
-   - 「§5 实现指引」→ 组件复用 / 关键算法 / vitest stub 限制 / dev console 信号规范
-   - 「§6 易错点 / 禁止项」→ 反向约束清单
-   - 「§7 plan-review 沉淀」→ V1-V26 决策（如有）
-   - 「§8 视觉规范细则」→ 像素值 / 颜色码 / a11y 要求
-   - 「§9 工程层验收清单」→ grep / 单测 / 引用稳定性等自审条目
+   - **`v3`（新单文件 typed contract）**：正常路径，**不报告警**。task 文件本身就是单文件，无 `.engineering.md` 属正常。按下文 step 2 单文件分区读。
+   - **`v2`（旧双文件 task）**：在飞旧 task，按兼容模式继续：
+     ```bash
+     ENG_FILE="${TASK_FILE%.md}.engineering.md"
+     echo "ℹ️  检测到旧格式 task（双文件），兼容模式继续：$ENG_FILE" >&2
+     ```
+     按下文 step 3 从两文件分别读取。
+   - **`v1`（旧单文件，薄 PM 视图）**：历史 task，按兼容模式继续——所有内容从 `$TASK_FILE` 读取（旧模板的「启动前必读」/「实现指引」/「易错点」等都在主文件中）。
 
-   **兼容模式**（`HAS_ENG=false`）：跳过本步，从主文件读「启动前必读」/「实现指引」/「易错点」等旧 section（旧模板这些 section 都在主文件中）。
+2. **v3 — 从 task 单文件分区读取**（执行区是实现依据）：
+   - PM 确认区「📌 任务卡」→ 任务描述、executor / executor_model / 审查工具、依赖
+   - PM 确认区「📦 范围」→ 改 / 不改
+   - PM 确认区「✅ 验收清单」→ PM 走查主路径
+   - 执行区「🚦 启动前必读」→ 必读文件路径列表（步骤 2 用）
+   - 执行区「🔧 实现规格」→ 本 task 的可执行实现规格（字段名 / props / 函数签名 / 调用链）
+   - 执行区「🧩 实现设计引用」→ HOW-ID 行 + task-scoped 占位值
+   - 执行区「⚠️ 约束与易错」→ 反向约束清单 + a11y / 视口 / 视觉规范细则
+   - 执行区「🧪 自测说明」→ task 级流程化 UAT（步骤 7.5 task-verify 读）
+   - 执行区「✔️ 工程层验收」→ grep / 单测 / 引用稳定性等自审条目
+
+3. **v2 — 从 task 两文件分别读取**（兼容路径）：
+   - PM 视图主文件（`$TASK_FILE`）：「📌 任务卡」任务描述 / 「🎯 关键产品决策」/「📋 功能清单」/「🚦 跨功能产品规则」/「📦 范围」/「✅ 验收清单」
+   - 工程合同（`$ENG_FILE`）：「§1 元信息扩展」executor / model / 「§3 启动前必读」/「§4 功能清单工程版」/「§5 实现指引」/「§6 易错点 / 禁止项」/「§7 plan-review 沉淀」/「§8 视觉规范细则」/「§9 工程层验收清单」
+
+   **v1 兼容**：跳过 step 3，从主文件读「启动前必读」/「实现指引」/「易错点」等旧 section（旧模板这些 section 都在主文件中）。
 
 ### 步骤 2：读取必读文档
 
@@ -278,23 +282,23 @@ fi
 
 不做 echo 后语义校验（grep token 命中 / 自检清单）——那是 task-execute 步骤 5 的事。本子步骤只保证内容到位。
 
-#### 2.1 按 §3 启动前必读列表读其他文档
+#### 2.1 按「启动前必读」列表读其他文档
 
-按工程合同「§3 启动前必读」列表，逐个读取文档内容。理解：
+按 task 文件的「启动前必读」列表逐个读取文档内容（v3：执行区「🚦 启动前必读」；v2：工程合同「§3 启动前必读」；v1：主文件「启动前必读」）。理解：
 - 模块规格中的**功能清单（硬约束）**：功能行为、数据规则、角色权限必须严格遵循
 - 模块规格中的**实现指引（软指引）**：推荐组件、DESIGN.md 对齐、交互状态覆盖，可在设计系统框架内自由发挥
 - 设计系统规范（DESIGN.md）
 - 项目背景（CONTEXT.md）
 - 已发布的模块规格（docs/modules/*.md）+ 模块索引（docs/modules/INDEX.md）
 - 参考源码（如列表中有已有页面/组件源码，理解其组件结构和布局模式）
-- 同模块已完成 task 的 PM 视图 + 工程合同（**两文件都读**，复用经验、避免重复）
+- 同模块已完成 task 文件（复用经验、避免重复；v3 单文件读全文，v2 旧 task 两文件都读）
 
 > **prototype 读取例外**（`_shared/pm-view/input-flow.md` §9.3.1）：task-execute 步骤 2.1 读 prototype 是**实现参考**（写新页面"长一样"），需要全局结构感 → **保留全文 Read**，**不应用** §9.3.1 反向校验 grep 强约束。
-> §9.3.1 仅适用于反向校验场景（req-solution / task-plan / task-spec / prd-writing 读 prototype 时反向校验上游文档描述）。task-execute 是写代码，不是反向校验。
+> §9.3.1 仅适用于反向校验场景（task-plan / task-spec / prd-writing 读 prototype 时反向校验上游文档描述）。task-execute 是写代码，不是反向校验。
 
 **硬软分离原则：** 功能清单定义"做什么"（不可偏离），实现指引建议"怎么做"（可灵活调整）。在满足功能行为和设计系统约束的前提下，追求最好的视觉效果和交互体验。
 
-**两文件读完后**：agent 内部把 PM 视图（功能行为）+ 工程合同（实现约束）合并理解为完整的执行指令，开始步骤 3 实现。
+**读完后**：agent 内部把 task 文件执行区（实现规格 + 实现设计引用 + 约束与易错）理解为完整的执行指令，开始步骤 3 实现。
 
 ### 步骤 3：实现代码（含 dispatch）
 
@@ -333,7 +337,7 @@ fi
 
 当 task-submit 打回后重新进入 task-execute，agent MUST：
 
-1. **读最新反馈**：从 PM 视图主文件「📁 历史档案 → PM 反馈」section 读最新一条（PM 反馈一律写主文件，不写工程合同）。
+1. **读最新反馈**：从 task 文件「📁 历史档案 → PM 反馈」section 读最新一条（v3 在审计区；v2 在 PM 视图主文件，不写工程合同）。
 
 2. **明确执行参照系**（这是反馈循环里 AI 决策的依据）：
    - 当前原型代码（task worktree 实际状态）
@@ -365,11 +369,11 @@ fi
 
 非 UI 类 task 跳过此步骤。
 
-### 步骤 5：写执行日志（PM 视图主文件）
+### 步骤 5：写执行日志
 
-**兼容模式（`HAS_ENG=false`，旧格式 task）**：写入主文件 `## 执行日志` section（旧版 section 名）。
+**v1 兼容模式**：写入主文件 `## 执行日志` section（旧版 section 名）。
 
-**新格式（`HAS_ENG=true`）**：写入 **PM 视图主文件**（`$TASK_FILE`）的「📁 历史档案 → 执行日志」section：
+**v3 / v2**：写入 task 文件「📁 历史档案 → 执行日志」section（v3 在审计区；v2 在 PM 视图主文件历史档案）：
 
 ```markdown
 #### 执行报告 - [YYYY-MM-DD HH:MM]
@@ -392,43 +396,24 @@ fi
 
 ### 步骤 6：写文档偏差
 
-**两层分工**（`_shared/PM-VIEW-RULES.md` §二 双文件原则）：
+**v3 — 写审计区「📋 文档偏差」section**（单文件 typed contract 统一一处偏差表）：
 
-| 偏差类型 | 写入位置 | 处理路径 |
-|---|---|---|
-| **工程层偏差**（字段命名 / 接口签名 / 组件路径 / 模块依赖与文档不一致） | 工程合同 §10 文档偏差表 | close-req 步骤 1.5 聚合 → doc-update rewrite mode（D13 final, 2026-05-16）|
-| **业务层偏差**（task 实证推翻或修订 req / 项目级文档的产品决策、需求描述、模块功能规格） | PM 视图「📁 历史档案 → 业务层偏差」表 | close-req 步骤 1.5 聚合 → doc-update rewrite mode（D13 final, 2026-05-16）|
-
-**兼容模式（`HAS_ENG=false`，旧格式 task）**：所有偏差写入主文件 `## 文档偏差` section（旧版）。
-
-**新格式（`HAS_ENG=true`）— 工程合同 §10**：
+实现过程中发现与 `prd.md` / `implementation-design.md` / `docs/modules` / `docs/DESIGN.md` / `docs/CONTEXT.md` 等任意文档不一致处，填进审计区「📋 文档偏差」表（四列：文档位置 / 文档原文 / 实际实现 / 建议改法）：
 
 ```markdown
-| 文档位置 | 文档原文 | 实际实现 |
-|----------|----------|----------|
-| docs/modules/auth.md 第 15 行 | 使用 JWT 认证 | 改用 Session 认证（因 XX 原因） |
-| solution.engineering.md §3.2 | 用户表 user_id 是 INTEGER | 改 BIGINT（兼容大型租户）|
-```
-
-文档位置可以指向 **任何文档**：`docs/modules/<module>.md` / `solution.engineering.md` / `docs/DESIGN.md` / `docs/CONTEXT.md` 等。doc-update 对账模式按行精确读原文 + 生成 Edit 操作 + PM 逐条确认。
-
-**新格式（`HAS_ENG=true`）— PM 视图「📁 历史档案 → 业务层偏差」**：
-
-实证发现 brief / analysis / solution（PM 视图）/ prd / module 规格 内容需修订时填这里：
-
-```markdown
-| 文档位置 | 文档原文 | 实证发现 | 建议改法 |
+| 文档位置 | 文档原文 | 实际实现 | 建议改法 |
 |---|---|---|---|
-| solution.md §🎯 决策 #2 | 选用方案 A | 实证 demo 后用户路径走不通 | 改方案 B（理由：...）|
-| brief.md「角色定义」段 | 三角色：admin/ops/user | 实证发现还有 readonly 角色 | 加 readonly 角色定义 |
-| docs/modules/account.md ### 1.2 使用角色 | "管理员一类角色" | 实证发现要拆"超管"+"普通管" | 拆两类角色描述 |
+| docs/modules/auth.md 第 15 行 | 使用 JWT 认证 | 改用 Session 认证（因 XX 原因） | 改写为 Session 认证 |
+| prd.md §🎯 关键产品决策 #2 | 选用方案 A | 实证 demo 后用户路径走不通 | 改方案 B（理由：...）|
 ```
 
-**默认值**：两段都写「无偏差」/「无」（多数 task 没偏差）。
+无偏差填「无」。close-task Phase 2 把本段 promote 成 req `adjustment` 事件；close-req 步骤 1.5 聚合 → doc-update rewrite mode（D13 final, 2026-05-16）。
 
-**判断口诀**：
-- 改的是「字段名 / 接口 / 组件路径 / 文件结构」→ 工程层 § 10
-- 改的是「业务规则 / 产品决策 / 需求描述 / 角色定义」→ 业务层 历史档案
+**v2 兼容 — 双文件两层分工**（旧 task）：工程层偏差（字段命名 / 接口签名 / 组件路径）写工程合同 §10 文档偏差表；业务层偏差（产品决策 / 需求描述 / 模块功能规格）写 PM 视图「📁 历史档案 → 业务层偏差」表。
+
+**v1 兼容**：所有偏差写入主文件 `## 文档偏差` section（旧版）。
+
+**默认值**：无偏差写「无」（多数 task 没偏差）。
 
 ### 步骤 7：写 commit 前 AI 自审 placeholder
 
@@ -462,12 +447,11 @@ AI 在「自审记录」section 追加一条 commit 前 placeholder（提供 tas
 
 - **pass**（exit 0）→ 进步骤 10 commit；执行日志（步骤 5）append 一行「task-verify: ✅ N/N 流程通过」
 - **fail**（exit 1）→ **不 commit**，进反馈循环：
-  1. 把 verify/report.md 失败摘要写入 PM 视图主文件「📁 历史档案 → PM 反馈」（标记 `自动反馈 — task-verify`，分类参 `_shared/pm-view/input-flow.md` §9.4，多数为「反向约束」类）：
+  1. 把 verify/report.md 失败摘要写入 task 文件「📁 历史档案 → PM 反馈」（v3 在审计区；v2 写 PM 视图主文件。标记 `自动反馈 — task-verify`）：
      ```markdown
      ### 反馈 N - [YYYY-MM-DD] (task-verify 自动)
      **问题描述：** task-verify M/N 流程通过；失败：流程 X 步骤 Y「期望 Z」未满足
      **要求修改：** 详见 .pm-workflow/tasks/<task-stem>/verify/report.md
-     **分类**：反向约束
      **处理结果：** 待处理
      ```
   2. 按 §反馈循环规则 改代码（不动 task md 业务字段；步骤 5 执行报告写「文档对齐预告」）
@@ -509,7 +493,7 @@ Dev server 保持运行（PM 验收时需要访问）。
 > 兜底入口：PM 在异常情况（窗口被关 / context 丢失 / 重启 IDE）下仍可手动跑 `/task-submit`，逻辑等价。
 
 详见 [`references/acceptance-handoff.md`](./references/acceptance-handoff.md)：
-- 11.1 组装验收信息包（读两文件 + diff + review_completed 事件 + UI/非 UI 判定）
+- 11.1 组装验收信息包（读 task 文件 + diff + review_completed 事件 + UI/非 UI 判定）
 - 11.2 输出验收信息块（UI 类 / 非 UI 类两种模板，含可选深度审查辅助提示）
 - 11.3 走查时引导 PM 反推上游文档偏差（reverse-flow 到「📁 历史档案 → 业务层偏差」表）
 
@@ -539,19 +523,15 @@ AI 会走 Phase 1（task md ↔ 原型对齐 / 文档偏差校验 / 视觉规范
 
 > 打回**不切状态** — task 全程是「执行中」，AI 直接基于反馈继续修，不再走 `task-transition --to 执行中` 的回退（该 transition 在 2026-05-08 删除，I-TT4 废弃）。
 
-1. 记录 PM 反馈到 PM 视图主文件「📁 历史档案 → PM 反馈」（**禁止**写入工程合同）：
+1. 记录 PM 反馈到 task 文件「📁 历史档案 → PM 反馈」（v3 在审计区；v2 写 PM 视图主文件、**禁止**写入工程合同）：
    ```markdown
    ### 反馈 N - [YYYY-MM-DD]
    **问题描述：** [PM 原话]
    **要求修改：** [具体修改要求]
-   **分类（`_shared/pm-view/input-flow.md` §9.4）**：[正向规则 / 反向约束 / 决策记录]
    **处理结果：** 待处理
    ```
 
-   分类规则（参 `_shared/pm-view/input-flow.md` §9.4）：
-   - 正向规则（"统一用 X" / "全文用 Y"）→ 后续 task 同步入「跨功能产品规则」
-   - 反向约束（"禁用 X" / "不要 Y"）→ 后续 task 同步入工程合同 §6 易错点 / 禁止项
-   - 决策记录（"二审改 X" / "重做为 Y"）→ 后续 task 同步入「关键产品决策」备选方案列
+   PM 反馈留在本段不归类。后续同 req 的 task 由 task-spec 按 relevance 二分（适用 / 不适用）承接进新 task 的「PM 反馈承接清单」（delta-3 §2.4）；视觉规范类 / 全项目跨功能产品规则由 close-task 收尾时按目标 promote（参 task 文件「📁 历史档案 → PM 反馈」段内的 close-task 说明）。
 
 2. 应用 §反馈循环规则（实现前必做下方）：按规则只改原型代码，不动 task md 业务字段；步骤 5 执行报告里写「文档对齐预告」。文档对齐统一交给 close-task §0。
 
@@ -561,7 +541,7 @@ AI 会走 Phase 1（task md ↔ 原型对齐 / 文档偏差校验 / 视觉规范
 
 ### 附录：PM 验收阶段跑 review（旁路 — 非必经）
 
-PM 在验收期间任意时刻可自跑 `/review` `/qa` `/design-review` 等 review 工具；AI 仍**不得**自行调用（I-RV1）。PM 报告结论后 AI 机械执行：在工程合同 §11 追加自审记录 + append `review_completed` 事件（I-RV2）。详见 [`references/review-bypass.md`](./references/review-bypass.md)。
+PM 在验收期间任意时刻可自跑 `/review` `/qa` `/design-review` 等 review 工具；AI 仍**不得**自行调用（I-RV1）。PM 报告结论后 AI 机械执行：在 task 文件「🔍 自审记录」段追加自审记录（v3 在审计区；v2 在工程合同 §11）+ append `review_completed` 事件（I-RV2）。详见 [`references/review-bypass.md`](./references/review-bypass.md)。
 
 ## Rules
 
@@ -575,5 +555,5 @@ PM 在验收期间任意时刻可自跑 `/review` `/qa` `/design-review` 等 rev
 - 事件流缺 review_completed 不阻止「执行中→已完成」转换（I-RV2）
 - dev server 在 task-execute 结束后保持运行，直到 close-task 时杀掉
 - **commit 不切状态 → 自动进步骤 11 呈交验收**（task 状态全程「执行中」直到 PM 通过；默认路径，PM 不手动敲 `/task-submit`）；PM 通过后 AI 转「已完成」并提示 PM 在本（task）窗口跑 `/close-task task-NNN` 启动 Phase 1（close-task 是两阶段调用，Phase 1 在 task 窗口对齐 + commit，Phase 2 切到 req 窗口 merge + 清理）
-- PM 打回不切状态：写反馈到 PM 视图历史档案 → AI 修代码 → 追加 fix commit → 重新呈交（不再走 `--to 执行中` transition）
+- PM 打回不切状态：写反馈到 task 文件「📁 历史档案 → PM 反馈」（v3 审计区 / v2 PM 视图）→ AI 修代码 → 追加 fix commit → 重新呈交（不再走 `--to 执行中` transition）
 - task-submit 仍存在但仅作 PM 手动兜底入口（重启窗口 / context 丢失 / 异常退出后重新呈交）

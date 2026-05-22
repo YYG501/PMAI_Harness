@@ -1,9 +1,12 @@
 #!/usr/bin/env python3
 """Resolve executor + model for a task.
 
-Field source (新两文件格式 → 旧单文件格式 fallback):
-  - 优先读 <task>.engineering.md §1（**executor：** / **executor_model：**）
-  - eng 文件不存在 → 退化读 PM 视图（旧 req-001 / req-002 / 单文件 task 兼容）
+Field source (delta-3 三态)：
+  - v3 新单文件 typed contract：读 task.md PM 确认区·任务卡表格字段
+    （| **executor** | ... | / | **executor_model** | ... |）
+  - v2 双文件（在飞旧 task）：读 <task>.engineering.md §1（兼容保留）
+  - v1 老单文件：读 PM 视图（旧 req-001 / req-002 兼容）
+  字段解析统一走 _lib.state.parse_field（v1 段落 + v2/v3 表格双兼容）。
 
 Inheritance chain (2 layers):
   executor: task field → settings.json executor.default → "claude-code"
@@ -17,12 +20,17 @@ from __future__ import annotations
 
 import argparse
 import json
-import re
 import subprocess
 import sys
 from pathlib import Path
 
-FIELD_RE = re.compile(r"^\*\*(.+?)：\*\*\s*(.*)$")
+# 让 _lib 可 import（resolve-executor.py 在 scripts/，_lib 是同级子目录）
+_SCRIPTS_DIR = str(Path(__file__).resolve().parent)
+if _SCRIPTS_DIR not in sys.path:
+    sys.path.insert(0, _SCRIPTS_DIR)
+
+from _lib.state import detect_format, engineering_path, parse_field
+
 VALID_EXECUTORS = {"claude-code", "codex", "cursor-agent", "manual"}
 # Default if settings.json doesn't specify allowlist
 DEFAULT_CLAUDE_CODE_MODELS = {"opus", "sonnet", "haiku"}
@@ -47,21 +55,25 @@ def find_repo_root() -> Path:
         return Path.cwd()
 
 
-def read_task_fields(task_file: Path) -> dict[str, str]:
+def read_executor_fields(task_file: Path) -> dict[str, str]:
+    """读 executor / executor_model 字段，按 detect_format 三态分流字段源。
+
+    - v2 双文件：字段在 <task>.engineering.md（兼容保留）。
+    - v3/v1 单文件：字段在 task.md（v3 任务卡表格 / v1 段落）。
+    解析统一走 _lib.state.parse_field（v1 段落 + v2/v3 表格双兼容）。
+    """
+    fmt = detect_format(task_file)
+    if fmt == "v2":
+        field_source = engineering_path(task_file)
+    else:
+        field_source = task_file
+    text = field_source.read_text(encoding="utf-8")
     fields: dict[str, str] = {}
-    with task_file.open(encoding="utf-8") as fh:
-        for idx, line in enumerate(fh):
-            if idx >= 40:
-                break
-            m = FIELD_RE.match(line.strip())
-            if m:
-                fields[m.group(1).strip()] = m.group(2).strip()
+    for name in ("executor", "executor_model"):
+        value = parse_field(text, name)
+        if value is not None:
+            fields[name] = value
     return fields
-
-
-def derive_eng_path(pm_view: Path) -> Path:
-    """<task>.md → <task>.engineering.md."""
-    return pm_view.with_suffix(".engineering.md")
 
 
 def load_settings(repo_root: Path) -> dict:
@@ -80,9 +92,7 @@ def die(msg: str, code: int = 1) -> None:
 
 
 def resolve(task_file: Path) -> dict:
-    eng_path = derive_eng_path(task_file)
-    field_source = eng_path if eng_path.exists() else task_file
-    fields = read_task_fields(field_source)
+    fields = read_executor_fields(task_file)
     repo_root = find_repo_root()
     settings = load_settings(repo_root)
     exec_cfg = settings.get("executor", {})

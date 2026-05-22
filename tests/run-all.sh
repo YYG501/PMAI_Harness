@@ -13,12 +13,13 @@ SUITES=(
   test-lark-cli-lint.sh
   test-publish-to-lark-e2e.sh
   test-check-req-doc-drift.sh
+  test-req-events.sh
+  test-implementation-design.sh
+  test-product-rules.sh
   test-check-task-scope.sh
   test-structure-schema.sh
   test-detect-project-structure.sh
   test-inject-structure.sh
-  test-depth-change-section.sh
-  test-task-spec-prose-merge.sh
   test-business-deviation.sh
   test-task-spec.sh
   test-task-pm-feedback.sh
@@ -38,7 +39,6 @@ SUITES=(
   test-run-bg.sh
   test-pre-commit-hook.sh
   test-pre-dispatch-doc-gate.sh
-  test-reconcile-pm-view-immutability.sh
   v4_T13_status_summary.sh
   v4_T14_taskexec_short_id.sh
   v4_T16_taskexec_double_scan.sh

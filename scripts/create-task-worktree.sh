@@ -69,24 +69,23 @@ fi
 # --- I-DC1 Pre-fork dirty gate ---
 # `git worktree add -b ... "$REQ_BRANCH"` 取 req 分支 HEAD commit 而非 working tree。
 # 任何停在 req worktree working tree 里没 commit 的 task md 改动（task-spec 多轮
-# revise / reconcile 应该已被 12.6 落盘，但仍兜底一道）会被 fork 漏掉，导致 task
-# 分支拿到 stale 文档。此处 auto-commit 限定本 task 两文件范围。
+# revise 应该已被确认门后的 auto_commit_docs 落盘，但仍兜底一道）会被 fork 漏掉，
+# 导致 task 分支拿到 stale 文档。delta-3 单文件 typed contract：task md 只有
+# 一个文件，pathspec 单文件化。此 gate 仍是异常兜底（最后防线），触发即告警。
 ABS_TASK_FILE_PRE=$(cd "$(dirname "$TASK_FILE")" && pwd -P)/$(basename "$TASK_FILE")
-ENG_FILE_PRE="${ABS_TASK_FILE_PRE%.md}.engineering.md"
 REQ_WT_PRE=$(resolve_worktree_path "$REQ_BRANCH" "$REPO_ROOT" || true)
 if [ -n "$REQ_WT_PRE" ] && [ -d "$REQ_WT_PRE" ]; then
   REQ_WT_PRE_REAL=$(cd "$REQ_WT_PRE" && pwd -P)
   if [[ "$ABS_TASK_FILE_PRE" == "$REQ_WT_PRE_REAL"/* ]]; then
-    REL_PM_VIEW="${ABS_TASK_FILE_PRE#${REQ_WT_PRE_REAL}/}"
-    REL_ENG="${ENG_FILE_PRE#${REQ_WT_PRE_REAL}/}"
-    PRE_FORK_DIRTY=$(list_doc_dirty "$REQ_WT_PRE_REAL" "$REL_PM_VIEW" "$REL_ENG" || true)
+    REL_TASK_FILE="${ABS_TASK_FILE_PRE#${REQ_WT_PRE_REAL}/}"
+    PRE_FORK_DIRTY=$(list_doc_dirty "$REQ_WT_PRE_REAL" "$REL_TASK_FILE" || true)
     if [ -n "$PRE_FORK_DIRTY" ]; then
       echo "⚠️ I-DC1 pre-fork gate: 检测到 task md 在 req 分支未 commit，自动落盘后再 fork：" >&2
       echo "$PRE_FORK_DIRTY" | sed 's/^/   - /' >&2
-      HASH_PRE=$([ -f "$REQ_WT_PRE_REAL/$REL_PM_VIEW" ] && shasum -a 256 "$REQ_WT_PRE_REAL/$REL_PM_VIEW" | cut -c1-12 || echo "unknown")
+      HASH_PRE=$([ -f "$REQ_WT_PRE_REAL/$REL_TASK_FILE" ] && shasum -a 256 "$REQ_WT_PRE_REAL/$REL_TASK_FILE" | cut -c1-12 || echo "unknown")
       if ! auto_commit_docs "$REQ_WT_PRE_REAL" \
           "${TASK_BASENAME}: spec sealed before fork (hash $HASH_PRE)" \
-          "$REL_PM_VIEW" "$REL_ENG"; then
+          "$REL_TASK_FILE"; then
         echo "❌ I-DC1: pre-fork auto-commit 失败，拒绝 fork。请人工处理 req worktree 后重跑 /task-confirm。" >&2
         exit 1
       fi
@@ -125,27 +124,19 @@ setup_dependency_symlinks "$REPO_ROOT" "$WORKTREE_DIR"
 # 跟着 task 分支 commit 进入 req 分支作为最终历史档案。
 #
 # 注：task-spec 阶段（task-confirm 之前）task md 仍在 req 分支，无歧义。
-# fork 之后才移走。
+# fork 之后才移走。delta-3 单文件 typed contract：task md 只有一个文件，
+# 不再有成对 .engineering.md，移走单文件即可。
 ABS_TASK_FILE=$(cd "$(dirname "$TASK_FILE")" && pwd -P)/$(basename "$TASK_FILE")
 REQ_WT=$(resolve_worktree_path "$REQ_BRANCH" "$REPO_ROOT" || true)
 if [ -n "$REQ_WT" ] && [ -d "$REQ_WT" ]; then
   REQ_WT_REAL=$(cd "$REQ_WT" && pwd -P)
   if [[ "$ABS_TASK_FILE" == "$REQ_WT_REAL"/* ]]; then
     REL_PATH="${ABS_TASK_FILE#${REQ_WT_REAL}/}"
-    ENG_REL="${REL_PATH%.md}.engineering.md"
 
-    TO_RM=()
     if [ -f "$REQ_WT_REAL/$REL_PATH" ]; then
-      TO_RM+=("$REL_PATH")
-    fi
-    if [ -f "$REQ_WT_REAL/$ENG_REL" ]; then
-      TO_RM+=("$ENG_REL")
-    fi
-
-    if [ ${#TO_RM[@]} -gt 0 ]; then
       (
         cd "$REQ_WT_REAL"
-        git rm -q "${TO_RM[@]}" 2>/dev/null || true
+        git rm -q "$REL_PATH" 2>/dev/null || true
         # commit 仅当真有 staged 改动
         if ! git diff --cached --quiet 2>/dev/null; then
           git commit -q -m "task-${TASK_BASENAME#task-}: move task md to task branch (v4.5)"

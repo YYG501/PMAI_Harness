@@ -61,10 +61,29 @@ class StateReadError(Exception):
 # Format detection
 # ============================================================================
 
-def detect_format(pm_view: Path) -> Literal["v1", "v2"]:
-    """v2 = 存在 .engineering.md 同名文件；v1 = 仅 PM 视图单文件。"""
+TASK_FORMAT_V3_MARKER = "task_format: single-typed-v3"
+
+
+def detect_format(pm_view: Path) -> Literal["v1", "v2", "v3"]:
+    """三态判别（delta-3 §2.7）—— 塌缩后仓里同时存在 3 种 task 格式：
+
+    - **v2** 双文件（在飞旧 task）：存在 `.engineering.md` 同名文件。
+    - **v3** 新单文件 typed contract：无 `.engineering.md` + 头部有 `task_format` 标记。
+    - **v1** 老单文件（历史，薄 PM 视图）：无 `.engineering.md` + 无标记。
+
+    不能再用「无 .engineering.md = v1」—— v3 也无 `.engineering.md`，靠
+    `task_format` 标记区分 v1 / v3。
+    """
     eng = engineering_path(pm_view)
-    return "v2" if eng.exists() else "v1"
+    if eng.exists():
+        return "v2"
+    try:
+        head = pm_view.read_text(encoding="utf-8")[:600]
+    except OSError:
+        return "v1"
+    if TASK_FORMAT_V3_MARKER in head:
+        return "v3"
+    return "v1"
 
 
 def engineering_path(pm_view: Path) -> Path:

@@ -10,7 +10,20 @@
 
 ---
 
-## 当前位置（2026-05-18）
+## 当前位置（2026-05-22）
+
+**最近活动（2026-05-22）**: **GSD-review 管线重构全包落地**（delta-2/3/4/7/8/9 最小落地包 + delta-1/5/6 追加）—— umbrella `docs/设计/管线重构-GSD-review.md` §8 六步顺序全实施：
+
+- **delta-7**（req 级事件流）：新建 `scripts/req-events.py`（`decision`/`adjustment` 两类事件，落 `requirements/active/<reqid>/req-events.jsonl` tracked）；vp-2 decision-append 并入 prd-writing、vp-3 adjustment-promote 并入 close-task.sh Phase 2。
+- **delta-2+4**（PRD/solution 对调）：`req-solution` → 新 `project-solution`（项目级，产 `docs/CONTEXT.md` + `docs/roadmap.md`）；`prd-writing` 前移 stage 3（多入口 + term-detector + decision-append）；req-stage-gate Stage 2→3 换芯；req-transition.py stage 3 → `prd.md` + 文件存在性新旧判别；~25 消费者迁移；quick-fix 路由改 stage-3 prd-writing。solution 双文件机器全砍。
+- **delta-8**（实现设计视图）：新建 `templates/implementation-design.md.tmpl`（4 段 + HOW-ID schema）+ `/implementation-design` skill（stage 5 拆 task 前）；req-stage-gate Stage 4→5 接线 + PM 确认门。
+- **delta-3**（task-spec 重构）：task 双文件 → **单文件 typed contract**（PM 确认区/执行区/审计区三区 + `task_format` 标记）；删 hash/reconcile/lazy-sync 整套机器；relevance 二分 + PM 反馈承接清单；单一确认门；`detect_format` 三态（v1/v2/v3）；~19 消费者迁移；`finalize-review.py`/`check-engineering-doc-size.py` 删除。
+- **delta-9**（跨功能产品规则）：新建 `templates/PRODUCT-RULES.md.tmpl`；`DESIGN.md.tmpl` 升级（布局/响应式/无障碍/共享组件 inventory/Checker）；close-task PRODUCT-RULES selective promote；req-stage-gate stage 4 加 gap-check 组件复用关口（每 req 必跑）；new-req DESIGN.md legacy 迁移。
+- **delta-1/5/6**（追加）：新建 `/codebase-audit` brownfield 入口（7 维度代码现状档 + 防 secret）；req-analysis 加全量/增量分析分支；close-req 步骤 2a 改为 PRD 反向对齐成 as-built（读 req-events `adjustment` 事件）。
+- **测试基线**：374/0 → **390/0**（净增 req-events / implementation-design / product-rules 三套件；删 4 个废弃套件 depth-change / reconcile-immutability / task-spec-prose-merge / engineering-doc-size）。
+- **下一步**：去消费仓 ExampleConsumerApp 跑真实 req 端到端验证新管线（stage 3 PRD → stage 4 gap-check → implementation-design → task-spec typed contract → close-task adjustment-promote → close-req PRD 反向对齐）。
+
+---
 
 **最近活动（2026-05-18 晚）**: **reconcile/lint hotfix**（消费仓 ExampleConsumerApp req-007 stage 3 跑出来的 hash 自指 bug）—— 2 处 framework 设计漏洞从根本修掉：
 - **Bug 2（reconcile 自指）**：req-solution/SKILL.md 步骤 R + task-spec/SKILL.md 步骤 12.5 + _shared/pm-view/input-flow.md §9.6.4 三处指令历史上都让 AI 同时写 PM 视图 + 工程合同两个视图的 reconcile 元数据。hash 基于 PM 视图全文算，写回就让 hash 失效 → 死循环。修法：reconcile 元数据**只写工程合同**，PM 视图禁动一个字节；权威定义 + 两个 skill + 两个模板（solution.md / task.md）同步落地反模式段

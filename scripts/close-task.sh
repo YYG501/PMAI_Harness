@@ -44,13 +44,15 @@ extract_task_field() {
   echo "$val"
 }
 
-# --- 工程合同成对存在（PR 2 拆两文件约定，兼容旧格式 task） ---
+# --- task 格式判别（delta-3 三态：v1/v2/v3） ---
 ENG_FILE="${TASK_FILE%.md}.engineering.md"
-if [ -f "$ENG_FILE" ]; then
+TASK_FMT=$(python3 "$REPO_ROOT/.claude/scripts/_lib/state.py" detect_format "$TASK_FILE" 2>/dev/null || echo "v3")
+if [ "$TASK_FMT" = "v2" ]; then
   HAS_ENG=true
+  echo "ℹ️  检测到旧格式 task（双文件），兼容模式继续。" >&2
 else
   HAS_ENG=false
-  echo "⚠️  工程合同缺失（旧格式 task，按单文件兼容模式继续）：$ENG_FILE" >&2
+  # v3 单文件 typed contract / v1 老单文件 —— 无 .engineering.md 是正常，不报告警。
 fi
 
 # --- 校验状态 ---
@@ -129,22 +131,27 @@ if [ "$CALLER_PWD" != "$REQ_WT_REAL" ] && [[ "$CALLER_PWD" != "$REQ_WT_REAL"/* ]
 fi
 
 # --- 检查 task worktree 是否 clean（防止 worktree remove --force 静默丢失未提交改动） ---
-# docs/DESIGN.md 例外：close-task skill §1.5 沉淀视觉规范反馈到 DESIGN.md 时不 commit
-# （PM 在 req 窗口审 diff 再 commit），§2.1 / §P2.4 都明确允许此文件 uncommitted。
-# 若 task worktree 里 DESIGN.md 真有 uncommitted（AI patch 走错 worktree 的容错）→
+# docs/DESIGN.md + docs/PRODUCT-RULES.md 例外：close-task skill §1.5 / §1.6 沉淀视觉规范 /
+# 跨功能产品规则反馈到这两份文件时不 commit（PM 在 req 窗口审 diff 再 commit）。
+# 若 task worktree 里它们真有 uncommitted（AI patch 走错 worktree 的容错）→
 # 先把改动 carry 到 req worktree（保留 PM 在 req 审 diff 的语义），再做 clean 检查。
+# delta-9 D9-4：PRODUCT-RULES.md 与 DESIGN.md 同一处理（6382baf 同类 bug 防回归）。
+CARRY_FORWARD_FILES="docs/DESIGN.md docs/PRODUCT-RULES.md"
 TASK_WORKTREE=$(resolve_worktree_path "$BRANCH" "$REPO_ROOT" || true)
 if [ -n "$TASK_WORKTREE" ] && [ -d "$TASK_WORKTREE" ]; then
-  if [ -f "$TASK_WORKTREE/docs/DESIGN.md" ]; then
-    DESIGN_STATUS=$(git -C "$TASK_WORKTREE" status --porcelain docs/DESIGN.md 2>/dev/null || true)
-    if [ -n "$DESIGN_STATUS" ]; then
-      cp "$TASK_WORKTREE/docs/DESIGN.md" "$REQ_WORKTREE/docs/DESIGN.md"
-      echo "📋 task worktree 中 docs/DESIGN.md uncommitted，已 carry 到 req worktree（防 rm -rf 丢失；PM 在 req 窗口审 diff + commit）"
+  for cf in $CARRY_FORWARD_FILES; do
+    if [ -f "$TASK_WORKTREE/$cf" ]; then
+      CF_STATUS=$(git -C "$TASK_WORKTREE" status --porcelain "$cf" 2>/dev/null || true)
+      if [ -n "$CF_STATUS" ]; then
+        mkdir -p "$REQ_WORKTREE/$(dirname "$cf")"
+        cp "$TASK_WORKTREE/$cf" "$REQ_WORKTREE/$cf"
+        echo "📋 task worktree 中 $cf uncommitted，已 carry 到 req worktree（防 rm -rf 丢失；PM 在 req 窗口审 diff + commit）"
+      fi
     fi
-  fi
-  UNCOMMITTED=$(git -C "$TASK_WORKTREE" status --porcelain 2>/dev/null | grep -v 'docs/DESIGN.md' || true)
+  done
+  UNCOMMITTED=$(git -C "$TASK_WORKTREE" status --porcelain 2>/dev/null | grep -vE 'docs/(DESIGN|PRODUCT-RULES)\.md' || true)
   if [ -n "$UNCOMMITTED" ]; then
-    echo "❌ task worktree 有未提交改动（不含 docs/DESIGN.md），不能关闭（worktree remove --force 会丢失数据）：" >&2
+    echo "❌ task worktree 有未提交改动（不含 docs/DESIGN.md / docs/PRODUCT-RULES.md），不能关闭（worktree remove --force 会丢失数据）：" >&2
     echo "$UNCOMMITTED" >&2
     echo "" >&2
     echo "请先在 task worktree 中提交：" >&2
@@ -165,9 +172,9 @@ fi
 # --- 检查 req worktree 是否 clean（有未提交改动会导致 merge 被 git 拒绝） ---
 # docs/DESIGN.md 例外：close-task skill §P2.4 明确"DESIGN.md uncommitted 等 PM 在 req 窗口审 diff + commit"，
 # 也是上面 carry 步骤的落点。merge 不会动 DESIGN.md（task 分支不 commit 它），working tree dirty 不阻塞 merge。
-REQ_UNCOMMITTED=$(git -C "$REQ_WORKTREE" status --porcelain 2>/dev/null | grep -v 'docs/DESIGN.md' || true)
+REQ_UNCOMMITTED=$(git -C "$REQ_WORKTREE" status --porcelain 2>/dev/null | grep -vE 'docs/(DESIGN|PRODUCT-RULES)\.md' || true)
 if [ -n "$REQ_UNCOMMITTED" ]; then
-  echo "❌ req worktree ($REQ_BRANCH) 有未提交改动（不含 docs/DESIGN.md），git 会拒绝 merge：" >&2
+  echo "❌ req worktree ($REQ_BRANCH) 有未提交改动（不含 docs/DESIGN.md / docs/PRODUCT-RULES.md），git 会拒绝 merge：" >&2
   echo "$REQ_UNCOMMITTED" >&2
   echo "" >&2
   echo "请先在 req worktree 中提交：" >&2
@@ -241,6 +248,79 @@ fi
 
 MERGE_OK=true
 echo "🔀 已合并 ${BRANCH} → ${REQ_BRANCH}（已验证提交落地）"
+
+# --- delta-7 vp-3：promote task 「文档偏差」→ req adjustment 事件 ---
+# Phase 2 在 req worktree：merge 后 task 文件已在 req 分支，读其文档偏差段、
+# 逐行 append 成 req-events.jsonl 的 adjustment 事件（close-req 反向对齐读它）。
+# 格式判别复用 delta-3 detect_format 三态（v2 在 .engineering.md §10、v3 在审计区）。
+REQ_EVENTS_SCRIPT="$REPO_ROOT/.claude/scripts/req-events.py"
+REQ_BASENAME_FOR_EVENTS=$(basename "$REQ_DIR")
+REQ_DIR_IN_WT="$REQ_WORKTREE/requirements/active/$REQ_BASENAME_FOR_EVENTS"
+MERGED_TASK_FILE="$REQ_WORKTREE/$TASK_FILE_REL"
+if [ -f "$REQ_EVENTS_SCRIPT" ] && [ -d "$REQ_DIR_IN_WT" ] && [ -f "$MERGED_TASK_FILE" ]; then
+  python3 - "$MERGED_TASK_FILE" "$REQ_WORKTREE/$ENG_FILE_REL" "$REQ_DIR_IN_WT" "$TASK_STEM" "$REQ_EVENTS_SCRIPT" <<'PY' || true
+import sys, subprocess, re
+from pathlib import Path
+
+task_file, eng_path_s, req_dir, task_stem, script = sys.argv[1:6]
+eng_path = Path(eng_path_s)
+
+# detect_format 三态：v2 = .engineering.md 存在 → 偏差在 §10；否则在 task 文件审计区
+if eng_path.exists():
+    src = eng_path.read_text(encoding="utf-8")
+    m = re.search(r'^##\s+(?:10\.\s+)?文档偏差\s*$', src, re.M)
+else:
+    src = Path(task_file).read_text(encoding="utf-8")
+    m = re.search(r'^##\s+📋?\s*文档偏差\s*$', src, re.M)
+if not m:
+    sys.exit(0)
+
+start = m.end()
+nm = re.search(r'^##\s+', src[start:], re.M)
+section = src[start: start + nm.start()] if nm else src[start:]
+
+rows = []
+for line in section.splitlines():
+    line = line.strip()
+    if not line.startswith('|'):
+        continue
+    rows.append([c.strip() for c in line.strip('|').split('|')])
+
+# 去表头 + 分隔行；保留 ≥3 列的数据行
+data = [
+    r for r in rows
+    if len(r) >= 3
+    and not all(set(c) <= set('-: ') for c in r if c)
+    and '文档位置' not in r[0]
+]
+tm = re.match(r'(task-\d+)', task_stem)
+task_id = tm.group(1) if tm else task_stem
+
+n = 0
+for r in data:
+    loc = r[0]
+    if not loc or loc in ('无', '-'):
+        continue
+    before = r[1] if len(r) > 1 else ''
+    after = r[2] if len(r) > 2 else ''
+    reason = r[3] if len(r) > 3 else ''
+    subprocess.run(
+        ['python3', script, 'append', req_dir, '--type', 'adjustment',
+         '--source', 'close-task@6', '--from-task', task_id,
+         '--prd-anchor', loc, '--before', before, '--after', after,
+         '--reason', reason],
+        check=False,
+    )
+    n += 1
+print(f"  promoted {n} adjustment event(s)", file=sys.stderr)
+PY
+  REQ_EVENTS_REL="requirements/active/$REQ_BASENAME_FOR_EVENTS/req-events.jsonl"
+  if [ -n "$(git -C "$REQ_WORKTREE" status --porcelain "$REQ_EVENTS_REL" 2>/dev/null)" ]; then
+    git -C "$REQ_WORKTREE" add "$REQ_EVENTS_REL"
+    git -C "$REQ_WORKTREE" commit -q -m "req-events: promote $TASK_STEM 文档偏差 → adjustment"
+    echo "📝 已 promote $TASK_STEM 文档偏差 → req adjustment 事件"
+  fi
+fi
 
 # --- 2.5. 在 req worktree 中归档 .runs/ 并 commit 到 req 分支 ---
 # 必须 commit，否则 close-req 清理 worktree 时归档文件会丢失

@@ -23,94 +23,87 @@ CLOSE_TASK_SKILL="$REPO_ROOT/skills/close-task/SKILL.md"
 # PM-VIEW-RULES §9.4
 # -----------------------------------------------------------------
 
-test_pm_view_rules_has_fourth_category() {
-  start_test "PM-VIEW-RULES §9.4 含第四类「视觉规范」"
-  if ! grep -q "四类分流\|四类" "$PM_VIEW_RULES"; then
-    _fail "§9.4 应升级为四类分流（标题或正文含「四类」）"
+# delta-9：§9.4 已收口为 relevance 二分 + 多去向 routing（不再是四类 sentiment 分流）。
+# 本组测试改为断言新结构下「视觉规范 → DESIGN.md → close-task」routing 仍在。
+
+test_pm_view_rules_has_routing_table() {
+  start_test "input-flow §9.4 收口为 relevance 二分 + 多去向 routing"
+  if ! grep -q "relevance 二分" "$PM_VIEW_RULES"; then
+    _fail "§9.4 应含 relevance 二分（delta-3）"
     return
   fi
-  if ! grep -q "视觉规范" "$PM_VIEW_RULES"; then
-    _fail "§9.4 应有「视觉规范」分类条目"
+  if ! grep -q "多去向 routing" "$PM_VIEW_RULES"; then
+    _fail "§9.4 应含多去向 routing 表（delta-9 收口）"
     return
   fi
   pass_test
 }
 
 test_pm_view_rules_design_consumer_is_close_task() {
-  start_test "PM-VIEW-RULES §9.4 视觉规范的消费者是 close-task"
-  # 提取 §9.4 section
+  start_test "§9.4 routing：视觉 / 设计反馈 → DESIGN.md，消费者 close-task"
   local section
   section=$(awk '/^## 9.4/{flag=1; next} /^## /{flag=0} flag' "$PM_VIEW_RULES")
-  if ! echo "$section" | grep -q "视觉规范.*close-task\|close-task.*视觉规范"; then
-    if ! echo "$section" | grep -q "视觉规范"; then
-      _fail "§9.4 缺视觉规范行"
-      return
-    fi
-    # 视觉规范行存在但消费者列没写 close-task
-    if ! echo "$section" | grep -A1 "视觉规范" | grep -q "close-task"; then
-      _fail "§9.4 视觉规范行的消费者列应是 close-task"
-      return
-    fi
+  if echo "$section" | grep -q "视觉.*DESIGN.md.*close-task"; then
+    pass_test
+  else
+    _fail "§9.4 routing 表应有「视觉 / 设计 → docs/DESIGN.md → close-task」一行"
   fi
-  pass_test
 }
 
 test_pm_view_rules_design_target_is_design_md() {
-  start_test "PM-VIEW-RULES §9.4 视觉规范写入位置是 docs/DESIGN.md"
+  start_test "§9.4 视觉规范写入位置是 docs/DESIGN.md"
   local section
   section=$(awk '/^## 9.4/{flag=1; next} /^## /{flag=0} flag' "$PM_VIEW_RULES")
-  if ! echo "$section" | grep -q "DESIGN\.md\|docs/DESIGN"; then
+  if echo "$section" | grep -q "DESIGN\.md\|docs/DESIGN"; then
+    pass_test
+  else
     _fail "§9.4 视觉规范条目应指向 docs/DESIGN.md"
-    return
   fi
-  pass_test
 }
 
-test_pm_view_rules_forbids_into_negative_constraint() {
-  start_test "PM-VIEW-RULES §9.4 含禁止「视觉规范塞反向约束」反模式"
+test_pm_view_rules_product_rules_routing() {
+  start_test "§9.4 routing：跨功能产品行为规则 → PRODUCT-RULES.md（delta-9）"
   local section
   section=$(awk '/^## 9.4/{flag=1; next} /^## /{flag=0} flag' "$PM_VIEW_RULES")
-  if ! echo "$section" | grep -q "视觉规范.*反向约束\|塞.*反向约束\|塞到.*易错点"; then
-    _fail "§9.4 应禁止把视觉规范类反馈塞到反向约束 / 工程合同 §6 易错点"
-    return
+  if echo "$section" | grep -q "PRODUCT-RULES.md"; then
+    pass_test
+  else
+    _fail "§9.4 routing 表应有「全项目跨功能产品行为规则 → PRODUCT-RULES.md」一行"
   fi
-  if ! echo "$section" | grep -q "task-001"; then
-    _fail "§9.4 应引用 task-001 R6 的实证（沉淀缺失反模式）"
-    return
-  fi
-  pass_test
 }
 
 # -----------------------------------------------------------------
 # templates/task.md.tmpl
 # -----------------------------------------------------------------
 
-test_task_tmpl_classification_includes_design() {
-  start_test "task.md.tmpl 反馈分类 enum 含「视觉规范」"
-  if ! grep -q "正向规则.*反向约束.*决策记录.*视觉规范\|视觉规范.*正向规则" "$TASK_TMPL"; then
-    _fail "task.md.tmpl 反馈分类 enum 应是 [正向规则 / 反向约束 / 决策记录 / 视觉规范]"
+# delta-3：v3 单文件 typed contract 的 PM 反馈段不再用
+# [正向规则/反向约束/决策记录/视觉规范] 分类 enum + Y-rule/Y-task-note/N 选项
+# （那些 close-task 内部记账标签）。改用 prose 路由说明 ——
+# 视觉规范 → docs/DESIGN.md；跨功能产品规则 → docs/PRODUCT-RULES.md；
+# task-local → 留本段由后续 task relevance 二分承接。
+
+test_task_tmpl_design_feedback_routes_to_design_md() {
+  start_test "task.md.tmpl PM 反馈段含 视觉规范 → docs/DESIGN.md 路由（delta-3 prose 路由）"
+  if ! grep -q "视觉规范.*docs/DESIGN\.md\|视觉规范类 →" "$TASK_TMPL"; then
+    _fail "task.md.tmpl PM 反馈段应说明视觉规范类反馈反推到 docs/DESIGN.md"
     return
   fi
   pass_test
 }
 
-test_task_tmpl_design_rule_routes_to_design_md() {
-  start_test "task.md.tmpl 反馈规则 block 含 视觉规范 → docs/DESIGN.md"
-  if ! grep -q "视觉规范.*DESIGN\.md\|视觉规范.*docs/DESIGN" "$TASK_TMPL"; then
-    _fail "task.md.tmpl 应说明视觉规范类反馈反推到 docs/DESIGN.md"
-    return
-  fi
-  if ! grep -q "Y-rule\|Y-task-note" "$TASK_TMPL"; then
-    _fail "task.md.tmpl 应说明三选一选项（Y-rule / Y-task-note / N）"
+test_task_tmpl_feedback_routes_cross_function_rules() {
+  start_test "task.md.tmpl PM 反馈段含 跨功能产品规则 → docs/PRODUCT-RULES.md 路由（delta-9）"
+  if ! grep -q "PRODUCT-RULES\.md" "$TASK_TMPL"; then
+    _fail "task.md.tmpl PM 反馈段应说明跨功能产品规则反推到 docs/PRODUCT-RULES.md"
     return
   fi
   pass_test
 }
 
-test_task_tmpl_warns_against_negative_constraint_misuse() {
-  start_test "task.md.tmpl 含警告「视觉规范禁塞反向约束」"
-  if ! grep -q "视觉规范.*禁止.*反向约束\|视觉规范.*禁.*塞" "$TASK_TMPL"; then
-    _fail "task.md.tmpl 应警告视觉规范类反馈不要错塞到反向约束"
+test_task_tmpl_feedback_local_stays_for_relevance() {
+  start_test "task.md.tmpl PM 反馈段说明 task-local 反馈留本段由后续 task relevance 二分承接"
+  if ! grep -q "relevance 二分承接\|relevance 二分" "$TASK_TMPL"; then
+    _fail "task.md.tmpl PM 反馈段应说明 task-local 反馈留本段、由后续 task-spec relevance 二分承接"
     return
   fi
   pass_test
@@ -224,13 +217,13 @@ test_close_task_step_3_hints_design_md_commit() {
 # Run
 # -----------------------------------------------------------------
 
-test_pm_view_rules_has_fourth_category
+test_pm_view_rules_has_routing_table
 test_pm_view_rules_design_consumer_is_close_task
 test_pm_view_rules_design_target_is_design_md
-test_pm_view_rules_forbids_into_negative_constraint
-test_task_tmpl_classification_includes_design
-test_task_tmpl_design_rule_routes_to_design_md
-test_task_tmpl_warns_against_negative_constraint_misuse
+test_pm_view_rules_product_rules_routing
+test_task_tmpl_design_feedback_routes_to_design_md
+test_task_tmpl_feedback_routes_cross_function_rules
+test_task_tmpl_feedback_local_stays_for_relevance
 test_close_task_has_step_1_5
 test_close_task_step_1_5_in_correct_order
 test_close_task_step_1_5_design_md_fallback

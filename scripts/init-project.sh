@@ -121,13 +121,14 @@ for TMPL in "$FRAMEWORK_DIR/templates/"*.tmpl; do
     CLAUDE.md)              DEST="$TARGET_DIR/CLAUDE.md" ;;
     CONTEXT.md)             DEST="$TARGET_DIR/docs/CONTEXT.md" ;;
     DESIGN.md)              DEST="$TARGET_DIR/docs/DESIGN.md" ;;
+    PRODUCT-RULES.md)       DEST="$TARGET_DIR/docs/PRODUCT-RULES.md" ;;
+    roadmap.md)             DEST="$TARGET_DIR/docs/roadmap.md" ;;
     modules-INDEX.md)       DEST="$TARGET_DIR/docs/modules/INDEX.md" ;;
     req-prd.md)             DEST="$TARGET_DIR/templates/req-prd.md.tmpl" ;;
+    implementation-design.md) DEST="$TARGET_DIR/templates/implementation-design.md.tmpl" ;;
+    codebase-audit.md)      DEST="$TARGET_DIR/templates/codebase-audit.md.tmpl" ;;
     task.md)                DEST="$TARGET_DIR/templates/task.md.tmpl" ;;
-    task.engineering.md)    DEST="$TARGET_DIR/templates/task.engineering.md.tmpl" ;;
     task-plan.md)           DEST="$TARGET_DIR/templates/task-plan.md.tmpl" ;;
-    solution.md)            DEST="$TARGET_DIR/templates/solution.md.tmpl" ;;
-    solution.engineering.md) DEST="$TARGET_DIR/templates/solution.engineering.md.tmpl" ;;
     module.md)              DEST="$TARGET_DIR/templates/module.md.tmpl" ;;
     settings.json)          DEST="$TARGET_DIR/.claude/settings.json" ;;
     lark-publish.json)      DEST="$TARGET_DIR/templates/lark-publish.json.tmpl" ;;
@@ -143,8 +144,8 @@ for TMPL in "$FRAMEWORK_DIR/templates/"*.tmpl; do
 done
 echo "📋 模板已复制并替换占位符"
 
-# --- d1.5. 复制工程结构约束源文件（非 .tmpl 后缀，runtime 被 req-solution 引用） ---
-# req-solution/SKILL.md 步骤 9 引用 $REPO_ROOT/templates/工程结构约束-{档位}.md
+# --- d1.5. 复制工程结构约束源文件（非 .tmpl 后缀，runtime 被 stage 3 工程合同链路引用） ---
+# 工程结构约束-{档位}.md 由 stage 3 工程合同链路引用
 # detect-project-structure.py 引用 templates/工程结构约束.schema.json
 for STRUCT_FILE in "$FRAMEWORK_DIR/templates/"工程结构约束-*.md "$FRAMEWORK_DIR/templates/"工程结构约束.schema.json; do
   [ -f "$STRUCT_FILE" ] || continue

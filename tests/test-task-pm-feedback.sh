@@ -109,9 +109,11 @@ test_task_submit_no_legacy_terms() {
 
 # close-task §0 扫描范围 + 读取文档对齐预告
 
-test_close_task_scans_strategic_decisions() {
-  start_test "close-task §0 includes §🎯 关键产品决策 in scan scope"
-  _assert_contains "$CLOSE_TASK_SKILL" "🎯 关键产品决策" "§🎯 in close-task §0 scan scope" || return
+test_close_task_scans_v3_typed_zones() {
+  start_test "close-task §0 scans v3 typed contract zones（关键产品决策 已移 prd.md）"
+  # delta-2：🎯 关键产品决策 移出 task 文件进 prd.md；close-task §0 改扫 v3 三区
+  _assert_contains "$CLOSE_TASK_SKILL" "🔧 实现规格" "§🔧 实现规格 in close-task §0 scan scope" || return
+  _assert_contains "$CLOSE_TASK_SKILL" "🧩 实现设计引用" "§🧩 实现设计引用 in close-task §0 scan scope" || return
   pass_test
 }
 
@@ -138,7 +140,7 @@ test_task_execute_no_legacy_triage
 test_task_execute_no_legacy_classification
 test_task_submit_references_feedback_loop_rules
 test_task_submit_no_legacy_terms
-test_close_task_scans_strategic_decisions
+test_close_task_scans_v3_typed_zones
 test_close_task_reads_doc_alignment_preview
 test_task_template_has_doc_alignment_preview_field
 

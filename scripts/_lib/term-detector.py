@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """term-detector.py — 业务词 / 角色检测器（vp-4b）
 
-被 new-req / req-analysis / req-solution / task-spec 各 skill 在写 PM 视图主
+被 new-req / req-analysis / prd-writing / task-spec 各 skill 在写 PM 视图主
 文件前 / 中调用，检测文本中**未登记的业务词 / 角色**，让 AI 提示 PM 补
 CONTEXT 业务术语表 / 用户画像。
 

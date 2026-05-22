@@ -369,6 +369,173 @@ EOF
   echo "$task_file"
 }
 
+# v3 单文件 typed contract fixture（delta-3 —— 单文件三区：PM 确认区 / 执行区 / 审计区）
+# Usage: fixture_create_task_v3 <req-dir> <task-num> <name> <status> [review_tools] [module]
+fixture_create_task_v3() {
+  local req_dir="$1"
+  local task_num="$2"
+  local name="$3"
+  local status="${4:-待执行}"
+  local review_tools="${5:-/qa}"
+  local module="${6:-基础设施}"
+  local task_slug="task-${task_num}-${name}"
+  local task_file="$req_dir/tasks/${task_slug}.md"
+
+  # req_dir 在某个 req worktree 里。找到 worktree 根
+  local req_worktree_root="$req_dir"
+  while [ "$req_worktree_root" != "/" ] && [ ! -d "$req_worktree_root/.git" ] && [ ! -f "$req_worktree_root/.git" ]; do
+    req_worktree_root=$(dirname "$req_worktree_root")
+  done
+
+  cat >"$task_file" <<EOF
+# Task $task_num: $name
+
+<!-- task_format: single-typed-v3 -->
+
+<!-- region: PM-CONFIRM begin -->
+
+## 📌 任务卡
+
+| | |
+|---|---|
+| **状态** | $status |
+| **所属模块** | $module |
+| **所属模块章节** |  |
+| **executor** | claude-code |
+| **executor_model** |  |
+| **审查工具** | $review_tools |
+| **dev server** |  |
+| **worktree** |  |
+| **创建时间** | 2026-04-12 |
+| **分支** | $task_slug |
+
+**依赖**：
+- 无
+
+**做什么**（10 秒理解）：Test task
+
+---
+
+## 📦 范围（改 / 不改）
+
+**改**
+- test.txt
+
+**不改**
+- 其他全部
+
+---
+
+## ✅ 验收清单（PM 走查）
+
+### 主路径
+- [ ] 完成
+
+---
+
+## 📥 PM 反馈承接清单
+
+无前序 PM 反馈
+
+<!-- region: PM-CONFIRM end -->
+
+<!-- region: EXEC begin -->
+
+## 🔁 状态转换说明（agent 必读）
+
+| 状态 | 谁行动 | 做什么 |
+|------|--------|--------|
+| \`待执行\` | orchestrator | 等 PM 通过 \`/task-confirm\` 创建 worktree |
+
+---
+
+## 🚦 启动前必读（按顺序，读完再执行）
+
+1. docs/modules/test.md
+
+---
+
+## 🔧 实现规格
+
+### 1 · Test
+Test task spec.
+
+---
+
+## 🧩 实现设计引用（HOW）
+
+| HOW-ID | 决策 / 文件·模式 | 本 task 落地要点 |
+|---|---|---|
+
+---
+
+## ⚠️ 约束与易错
+
+| # | 禁止行为 / 易错点 | 后果 / 理由 | 来源 |
+|---|---|---|---|
+
+---
+
+## 🧪 自测说明（task 级流程化 UAT，task-verify 自动跑）
+
+无（基础设施 task）
+
+---
+
+## ✔️ 工程层验收（自审用，agent 自动化校验）
+
+- [ ] 完成
+
+<!-- region: EXEC end -->
+
+<!-- region: AUDIT begin -->
+
+## 📋 文档偏差
+
+| 文档位置 | 文档原文 | 实际实现 | 建议改法 |
+|---|---|---|---|
+
+无
+
+---
+
+## 🔍 自审记录
+
+### 自审 1 - 2026-04-12 10:00
+**工具：** $review_tools
+**结果：** pass
+**详细发现：** 无
+**遗留问题：** 无
+
+---
+
+## 📁 历史档案（验收时打开看最新一轮）
+
+### 执行日志（agent 填写，不要删除历史记录）
+
+无
+
+---
+
+### PM 反馈（orchestrator 代为追加，agent 重跑前必读）
+
+无
+
+<!-- region: AUDIT end -->
+EOF
+
+  # Commit task file to req branch so task worktree sees it
+  if [ -n "$req_worktree_root" ] && [ -d "$req_worktree_root/.git" ] || [ -f "$req_worktree_root/.git" ]; then
+    (
+      cd "$req_worktree_root"
+      git add -A 2>/dev/null
+      git commit -q -m "create $task_slug (v3)" 2>/dev/null || true
+    )
+  fi
+
+  echo "$task_file"
+}
+
 # Create a task worktree + branch (off a req branch)
 # Usage: fixture_create_task_worktree <task-file> <req-branch>
 fixture_create_task_worktree() {

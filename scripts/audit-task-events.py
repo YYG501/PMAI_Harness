@@ -36,6 +36,7 @@ _SCRIPTS_DIR = str(Path(__file__).resolve().parent)
 if _SCRIPTS_DIR not in sys.path:
     sys.path.insert(0, _SCRIPTS_DIR)
 from _lib.events import has_execution_event
+from _lib.state import detect_format
 
 
 def find_main_repo_root() -> Path:
@@ -170,11 +171,16 @@ def task_branch_commits(task_branch: str, req_branch: str) -> list[tuple[str, da
     return commits
 
 
-def commit_only_touches_task_docs(sha: str, task_stem: str, repo_root: Path) -> bool:
-    """A1 hotfix: True if commit only modifies the task md / engineering md.
+def commit_only_touches_task_docs(
+    sha: str, task_stem: str, repo_root: Path, is_v2: bool = False
+) -> bool:
+    """A1 hotfix: True if commit only modifies the task's own doc file(s).
 
     Allows task-confirm 阶段元信息 commit (切 executor / sync from task-confirm /
     create-task-worktree 的 task md 移动等) to bypass I-CT8 timestamp check.
+
+    delta-3：v3 单文件 task 的 own 文件只有 task-NNN.md。
+    v2 旧双文件 task 兼容保留 —— is_v2=True 时额外放行 task-NNN.engineering.md。
 
     Returns False on git error or empty file list (fail-closed).
     """
@@ -188,7 +194,9 @@ def commit_only_touches_task_docs(sha: str, task_stem: str, repo_root: Path) -> 
     files = [f.strip() for f in out.split("\n") if f.strip()]
     if not files:
         return False
-    allowed_basenames = {f"{task_stem}.md", f"{task_stem}.engineering.md"}
+    allowed_basenames = {f"{task_stem}.md"}
+    if is_v2:
+        allowed_basenames.add(f"{task_stem}.engineering.md")
     return all(Path(f).name in allowed_basenames for f in files)
 
 
@@ -198,11 +206,13 @@ def audit_ct8(
     req_branch: str,
     task_stem: str,
     repo_root: Path,
+    is_v2: bool = False,
 ) -> list[str]:
     """Verify every task-branch commit is timestamped after the first transition to 执行中.
 
-    A1 hotfix: commits whose only file changes are the task's own md / engineering.md
+    A1 hotfix: commits whose only file changes are the task's own doc file(s)
     are exempted (task-confirm metadata commits are legitimate before *→执行中).
+    delta-3：is_v2 透传给 commit_only_touches_task_docs 决定是否放行 .engineering.md。
     """
     violations: list[str] = []
 
@@ -218,8 +228,8 @@ def audit_ct8(
 
     for sha, ts, subject in commits:
         if ts < earliest:
-            if commit_only_touches_task_docs(sha, task_stem, repo_root):
-                # A1 hotfix: 纯 task md / engineering 元信息 commit 豁免
+            if commit_only_touches_task_docs(sha, task_stem, repo_root, is_v2=is_v2):
+                # A1 hotfix: 纯 task 文档元信息 commit 豁免（v2 含 .engineering.md）
                 continue
             # A2 hotfix: chore(...) / chore: ... commit 豁免——task-confirm 时
             # PM 同步框架带进来的 commit 不是 task 代码，时间戳早于 *→执行中合理。
@@ -247,6 +257,8 @@ def main() -> int:
     repo = find_main_repo_root()
     task_stem = task_file.stem
     events_file = repo / ".runs" / "events" / f"{task_stem}.jsonl"
+    # v2 旧双文件 task 兼容：只有 v2 才豁免 .engineering.md 元信息 commit（delta-3）
+    is_v2 = detect_format(task_file) == "v2"
 
     events = load_events(events_file)
 
@@ -262,7 +274,11 @@ def main() -> int:
         violations.extend(audit_ct7(events))
 
     # I-CT8
-    violations.extend(audit_ct8(events, args.task_branch, args.req_branch, task_stem, repo))
+    violations.extend(
+        audit_ct8(
+            events, args.task_branch, args.req_branch, task_stem, repo, is_v2=is_v2
+        )
+    )
 
     if violations:
         print("❌ close-task 事件流审计失败：", file=sys.stderr)

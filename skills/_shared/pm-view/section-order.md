@@ -2,25 +2,6 @@
 
 > 本文件是 [`PM-VIEW-RULES.md`](../PM-VIEW-RULES.md) §七 的物理拆分。配套阅读：主文件 §五（功能清单格式）/ §六（关键产品决策格式）。
 
-## `solution.md` PM 视图章节顺序
-
-```
-1. 📌 方案摘要（10 秒理解）
-2. 📖 术语表（必填；无术语时写一行说明）
-3. 🎯 关键产品决策
-4. 📦 交付物清单
-5. 📐 数据模型与状态（PM 视角）
-6. 🧩 模块职责与边界
-7. 🖼 页面 UI 骨架
-8. 📋 规格文档变更范围
-9. 🔄 task 拆分预估
-10. 🚧 风险与未决事项
-11. ✅ 验收标准
-12. 🔧 本轮实现深度变更（默认「无变更」）
----
-13. 📁 历史档案（变更记录）
-```
-
 ## `task-plan.md` 章节顺序（单文件）
 
 ```
@@ -35,21 +16,40 @@
 
 `task-plan.md` 不拆双文件——§四 是 task-plan 自身的轻量自检结论 + task-spec / doc-update 会消费的状态索引，不是 PM 阅读层内容也不需要独立文件存档。
 
-## `tasks/task-NNN.md` PM 视图章节顺序
+## `tasks/task-NNN.md` 章节顺序（delta-3：单文件 typed contract）
+
+task-spec 产**单文件 typed contract**（头部 `<!-- task_format: single-typed-v3 -->`），
+内部分三区，由 region 标记界定。章节顺序：
 
 ```
-1. 📌 任务卡（10 秒理解）
-2. 🎯 关键产品决策
-3. 📐 产物预览（多页面用 ### 页面名 → /path 子标题分隔）
-4. 🔤 占位字典（§📐 占位词 → 实际值映射；非 UI task 写「无」）
-5. 📋 功能清单
-6. 🚦 跨功能产品规则
-7. 📦 范围（改 / 不改）
-8. ✅ 验收清单（PM 走查）
-9. 🧪 自测说明（流程化 UAT，task-verify 自动跑；非 UI task 写「无」）
----
-10. 📁 历史档案（执行日志 / 文档偏差 / 自审记录 / PM 反馈）
+<!-- region: PM-CONFIRM begin -->   ← PM 确认区（PM 在确认门读这一区；scoped PM-view lint）
+1. 📌 任务卡（含 executor / executor_model / 审查工具 字段）
+2. 📦 范围（改 / 不改）
+3. ✅ 验收清单（PM 走查）
+4. 📥 PM 反馈承接清单
+<!-- region: PM-CONFIRM end -->
+
+<!-- region: EXEC begin -->          ← 执行区（executor 实现依据；允许工程内容；不跑 PM-view lint）
+5. 🔁 状态转换说明
+6. 🚦 启动前必读
+7. 🔧 实现规格
+8. 🧩 实现设计引用（HOW-ID 行 + task-scoped 占位值）
+9. ⚠️ 约束与易错
+10. 🧪 自测说明（task-verify 自动跑；非 UI task 写「无」）
+11. ✔️ 工程层验收
+<!-- region: EXEC end -->
+
+<!-- region: AUDIT begin -->         ← 审计区（executor / PM 填；不 lint）
+12. 📋 文档偏差（task-transition「执行中→已完成」gate 锚点 + delta-7 adjustment-promote 源）
+13. 🔍 自审记录（同上 gate 锚点）
+14. 📁 历史档案（执行日志 / PM 反馈 / plan-review 沉淀）
+<!-- region: AUDIT end -->
 ```
+
+> 旧 v2 双文件（PM 视图 `.md` + 工程合同 `.engineering.md`）已废 —— task-spec 双→单文件
+> 塌缩（delta-3）。WHAT 移 `prd.md`（关键产品决策 / 产物预览 / 功能清单 / 跨功能规则）、
+> HOW 移 `implementation-design.md`，task 文件只留 task 级 typed contract。在飞旧 v2 task
+> 跑完旧的、不回迁。
 
 ## `brief.md` / `analysis.md` / `prd.md`
 

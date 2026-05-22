@@ -219,9 +219,11 @@ def check_preconditions(
         # 「待验收」状态已合并到「执行中」（2026-05-08）：commit + 呈交 + PM 验收
         # 全程 task 状态保持「执行中」；PM 通过呈交块时统一在此 transition 校验。
         # 修复 P0-1：用 _lib.state.read_section 跨文件查找。
-        # 新格式（v2）：section 在 task.engineering.md 的 §10 / §11
-        # 旧格式（v1）：section 在 PM 视图（task.md）
-        # parser 自动按"工程合同优先 → PM 视图 fallback"查找。
+        # delta-3 三态：
+        #   v3 新单文件 typed contract：section 在 task.md 审计区（## 📋 文档偏差 / ## 🔍 自审记录）
+        #   v2 双文件：section 在 task.engineering.md 的 §10 / §11
+        #   v1 老单文件：section 在 PM 视图（task.md）
+        # read_section 自动按"工程合同优先（v2）→ PM 视图 fallback（v1/v3）"查找。
 
         # 1. 文档偏差 section
         found, content = read_section(task_file, "文档偏差")
@@ -532,9 +534,13 @@ def cmd_discard(task_file: Path, reason: str, yes: bool) -> None:
         print(f"Error: git mv 失败: {mv_result.stderr.strip()}", file=sys.stderr)
         sys.exit(1)
 
-    # 1.5. 成对处理工程合同（如存在）— PR 2 拆两文件约定
-    eng_file = task_file.with_suffix(".engineering.md") \
-        if task_file.suffix == ".md" else None
+    # 1.5. v2 旧双文件兼容：成对 git mv 工程合同。
+    # delta-3：v3/v1 单文件只 mv 一个；v2 双文件才有 .engineering.md 需成对 mv。
+    # 按 detect_format 分流 —— v2 才进本分支（其判别信号即 .engineering.md 存在）。
+    from _lib.state import detect_format as _detect_format
+    eng_file = None
+    if task_file.suffix == ".md" and _detect_format(task_file) == "v2":
+        eng_file = task_file.with_suffix(".engineering.md")
     if eng_file and eng_file.exists():
         new_eng_file = discarded_dir / eng_file.name
         try:

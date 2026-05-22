@@ -11,7 +11,6 @@ source "$SCRIPT_DIR/helpers/assert.sh"
 
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 INJECT="$REPO_ROOT/scripts/inject-structure-segment.py"
-TASK_SPEC_SKILL="$REPO_ROOT/skills/task-spec/SKILL.md $REPO_ROOT/skills/task-spec/references/engineering-impl-prose-merge.md"
 INIT_PROJECT_SKILL="$REPO_ROOT/skills/init-project/SKILL.md"
 INIT_PROJECT_SH="$REPO_ROOT/scripts/init-project.sh"
 CLAUDE_TMPL="$REPO_ROOT/templates/CLAUDE.md.tmpl"
@@ -213,49 +212,11 @@ PM_HANDFILLED
 }
 
 # -----------------------------------------------------------------
-# T13: task-spec SKILL §5 含双源冲突阻断规则
+# delta-3：task-spec §5 双源 prose 合并机制已随双文件塌缩删除。
+# 旧 T13a/T13b/T13c 断言的「CLAUDE.md 工程结构约束 + solution.md 本轮实现深度
+# 变更」prose 合并 / 冲突阻断 / framework 档分支均已不存在 —— task-spec v3 直接
+# 读 implementation-design.md（HOW）。相关断言随机制删除。
 # -----------------------------------------------------------------
-
-test_t13_task_spec_has_prose_merge_rule() {
-  start_test "T13a: task-spec SKILL §5 含 A 层项目级 + B 层 req 级 prose 合并说明（4.5d.4）"
-  if ! grep -q "prose 合并\|prose 段落合并" $TASK_SPEC_SKILL; then
-    _fail "task-spec SKILL 应说明 A + B 是 prose 合并（不是 enum）"
-    return
-  fi
-  if ! grep -q "工程结构约束" $TASK_SPEC_SKILL; then
-    _fail "task-spec SKILL 应引用 CLAUDE.md「工程结构约束」段（A 层）"
-    return
-  fi
-  if ! grep -q "本轮实现深度变更" $TASK_SPEC_SKILL; then
-    _fail "task-spec SKILL 应引用 solution.md「本轮实现深度变更」段（B 层）"
-    return
-  fi
-  pass_test
-}
-
-test_t13b_task_spec_no_conflict_blocking() {
-  start_test "T13b: task-spec SKILL 已移除双源机械冲突阻断（4.5d.4：冲突由 PM 在 close-req 自决）"
-  # 不再有「阻断 + PM 二选一」机械冲突表
-  if grep -q "改 CLAUDE.md.*改 solution.md\|改 solution.md.*改 CLAUDE.md" $TASK_SPEC_SKILL; then
-    _fail "task-spec SKILL 不应再有「冲突阻断 → PM 改 CLAUDE.md / solution.md 二选一」机械规则"
-    return
-  fi
-  if ! grep -q "不再做项目级 vs req 级的冲突检测\|无机械冲突阻断" $TASK_SPEC_SKILL; then
-    _fail "task-spec SKILL 应明确说明已移除冲突阻断"
-    return
-  fi
-  pass_test
-}
-
-test_t13c_task_spec_no_framework_branch() {
-  start_test "T13c: task-spec SKILL §5 已移除 framework 档分支"
-  # 在 §5 双源拼接段（步骤 9 内）应该不再出现 framework 档处理
-  if grep -E "framework 档|framework.*跳过|跳过.*framework" $TASK_SPEC_SKILL >/dev/null; then
-    _fail "task-spec SKILL 应已移除 framework 档分支（4.5d.1 删除）"
-    return
-  fi
-  pass_test
-}
 
 # -----------------------------------------------------------------
 # init-project 流程接入校验
@@ -312,9 +273,6 @@ test_t11d_inject_unknown_writes_placeholder
 test_t11e_inject_custom_writes_skeleton
 test_t11f_inject_prototype_includes_depth_prose
 test_t12_pm_handfilled_segment_not_overwritten
-test_t13_task_spec_has_prose_merge_rule
-test_t13b_task_spec_no_conflict_blocking
-test_t13c_task_spec_no_framework_branch
 test_init_project_skill_asks_intent
 test_init_project_sh_accepts_intent_arg
 

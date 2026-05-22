@@ -52,8 +52,10 @@ bash scripts/init-project.sh "<project-name>" "<target-dir>" "<background>" "<in
 
 下一步：
   cd <target-dir>
-  运行 /new-req 开始第一个需求
+  运行 /project-solution 定项目顶层方向（产品定位 / 用户 / 路线 / 技术栈），再起第一个需求
 ```
+
+> `init-project` 只建空骨架（目录 / 脚本 / git）。项目顶层方向（`docs/CONTEXT.md` + `docs/roadmap.md`）由接在后面的 `/project-solution` 填——它跑完才运行 `/new-req`。
 
 ## Rules
 

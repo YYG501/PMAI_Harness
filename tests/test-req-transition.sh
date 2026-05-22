@@ -365,6 +365,61 @@ EOF
 }
 
 # -----------------------------------------------------------------
+# delta-2+4 E3: stage 3 换芯（solution.md → prd.md）文件存在性新旧判别
+# -----------------------------------------------------------------
+
+test_stage3_to_4_new_flow_prd() {
+  start_test "delta-2+4 E3: stage 3 有 prd.md → --to 4 走新流程成功"
+  fixture_setup
+  req_dir=$(fixture_create_req "req-001" "test" 3)
+  echo "# PRD" > "$req_dir/prd.md"
+
+  if _run_req "$req_dir" --to 4 >/tmp/out.$$ 2>/tmp/err.$$; then
+    pass_test
+  else
+    _fail "stage 3（有 prd.md）→ 4 应成功"
+    cat /tmp/err.$$ >&2
+  fi
+  rm -f /tmp/out.$$ /tmp/err.$$
+  fixture_teardown
+}
+
+test_stage3_to_4_legacy_flow_solution() {
+  start_test "delta-2+4 E3: 在飞旧 req（有 solution.md 无 prd.md）→ --to 4 走旧流程成功"
+  fixture_setup
+  req_dir=$(fixture_create_req "req-001" "test" 3)
+  echo "# Solution" > "$req_dir/solution.md"
+
+  if _run_req "$req_dir" --to 4 >/tmp/out.$$ 2>/tmp/err.$$; then
+    pass_test
+  else
+    _fail "在飞旧 req（solution.md）→ 4 应走旧流程成功"
+    cat /tmp/err.$$ >&2
+  fi
+  rm -f /tmp/out.$$ /tmp/err.$$
+  fixture_teardown
+}
+
+test_stage3_to_4_missing_both_rejected() {
+  start_test "delta-2+4 E3: stage 3 既无 prd.md 也无 solution.md → --to 4 拒绝"
+  fixture_setup
+  req_dir=$(fixture_create_req "req-001" "test" 3)
+
+  if _run_req "$req_dir" --to 4 >/tmp/out.$$ 2>/tmp/err.$$; then
+    _fail "stage 3 无产出文件应拒绝推进"
+  else
+    if grep -qE "prd\.md" /tmp/err.$$; then
+      pass_test
+    else
+      _fail "stderr 应提示缺 prd.md"
+      cat /tmp/err.$$ >&2
+    fi
+  fi
+  rm -f /tmp/out.$$ /tmp/err.$$
+  fixture_teardown
+}
+
+# -----------------------------------------------------------------
 # Run
 # -----------------------------------------------------------------
 
@@ -382,5 +437,8 @@ test_happy_path_1_to_2
 test_reject_3_to_5_when_design_empty_non_first
 test_reject_2_to_4_skip_stage3_non_first
 test_allow_3_to_5_when_design_populated
+test_stage3_to_4_new_flow_prd
+test_stage3_to_4_legacy_flow_solution
+test_stage3_to_4_missing_both_rejected
 
 report_results "req-transition"

@@ -36,16 +36,13 @@
 
 ### 文档输出深度指引
 
-> 以下是 req-solution / task-spec 阶段 AI 写 `.engineering.md` 工程合同时的深度参考。
-> 配合 `scripts/check-engineering-doc-size.py` 做硬行数校验。
+> 以下是 task-spec 阶段 AI 写 task 单文件 typed contract「执行区」工程内容时的深度参考。
 > PM 可手改任意条；删除上方 auto-detected 标后视为 PM 手填，框架不再覆盖。
 
-- **solution.engineering.md 目标行数**：≤300 行；由 scripts/check-engineering-doc-size.py 在 stage 闸门校验，超限报错。
-- **task-NNN.engineering.md 目标行数**：≤200 行；同样 lint 校验。
-- **强制引用规则**：上游已定义的类型/接口/函数签名/产品行为禁止重写——直接写「参见 solution.md §X.Y」或「参见 solution.engineering.md §X.Y」。
-- **§4 功能清单工程版**：只列「差异点 / 复用点」，不再贴完整签名。
-- **§7 plan-review 沉淀 / §8 autoplan / §9 a11y/视口/视觉规范**：默认 N/A 一行带过；视觉规范沿用 DESIGN.md。
-- **§10 工程层验收清单**：只列主路径 happy path，不展开错误/空/部分态。
+- **强制引用规则**：上游已定义的类型/接口/函数签名/产品行为禁止重写——直接写「参见 prd.md §X.Y」或「参见 implementation-design.md HOW-NN」。
+- **执行区·实现规格**：只列「差异点 / 复用点」，不再贴完整签名。
+- **执行区·约束与易错**：默认精简；视觉规范细则沿用 docs/DESIGN.md，不展开。
+- **执行区·工程层验收**：只列主路径 happy path，不展开错误/空/部分态。
 
 ### 约定
 

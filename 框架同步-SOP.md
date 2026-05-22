@@ -416,6 +416,34 @@ sync（本 SOP）只动 framework 资产（4 块），不动业务实例。
 
 ---
 
+## 4.10 管线重构（delta-2/3/4/7/8/9 + delta-1/5/6）同步注意事项
+
+GSD-review 管线重构是一次性结构改动。同步到消费仓时**额外**注意：
+
+**新增文件**（rsync 自动带过去）：
+- 脚本：`scripts/req-events.py`、`scripts/_lib/stages.py`
+- 模板：`templates/roadmap.md.tmpl`、`templates/implementation-design.md.tmpl`、
+  `templates/PRODUCT-RULES.md.tmpl`、`templates/codebase-audit.md.tmpl`
+- skill：`skills/project-solution/`、`skills/implementation-design/`、`skills/codebase-audit/`
+
+**删除文件**（rsync `--delete` 才会同步删除；若未用 `--delete`，需手动删消费仓对应文件）：
+- 脚本：`scripts/finalize-review.py`、`scripts/check-engineering-doc-size.py`
+- 模板：`templates/solution.md.tmpl`、`templates/solution.engineering.md.tmpl`、
+  `templates/task.engineering.md.tmpl`
+- skill：`skills/req-solution/`（→ 被 `project-solution` 取代）
+
+**消费仓业务实例文件不被 sync 动**（SOP 只同步 scripts/skills/templates/agents）：
+- 在飞旧 req 的 `solution.md` / `solution.engineering.md` / 旧双文件 task —— 保留，跑完旧的；
+  框架脚本用 `detect_format` 三态 + 文件存在性判别兼容读，不回迁。
+- 已有项目的 `docs/CONTEXT.md`（可能有空节）→ 首次 `/new-req` legacy gate 触发 mini-fill。
+- 已有项目的 `docs/DESIGN.md`（旧 6 段骨架）→ 首次 `/new-req` legacy gate 触发 mini-upgrade。
+- 已有项目无 `docs/PRODUCT-RULES.md` / `docs/roadmap.md` —— 读侧容错（缺文件不报错）；
+  新项目由 `/init-project` 分发模板骨架。
+
+**建议同步时机**：消费仓「无 stage ≤ 5 在飞 req」时同步，减少新旧流程混跑。
+
+---
+
 ## 5. 实战记录
 
 ### 5.1 2026-05-08 example-consumer-app sync

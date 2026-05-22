@@ -25,15 +25,13 @@ PM 体感：
 - 切到 req 窗口后再次调用（执行 Phase 2）
 - Task 状态必须为「已完成」
 
-## 拆两文件约定（必读）
+## task 文件形态（delta-3）
 
-本 skill 处理拆两文件的 task 产物（`_shared/PM-VIEW-RULES.md` §二）：
-- **PM 视图主文件**：`task-NNN-<slug>.md`（PM 决策、功能清单、验收清单、历史档案）
-- **工程合同**：`task-NNN-<slug>.engineering.md`（实现细节、易错点、plan-review 沉淀、文档偏差工程层、自审记录）
-
-close-task 阶段：
-- **文档偏差检查跨两文件**：PM 视图的执行日志 + 工程合同的 §10 文档偏差表都要读
-- **归档时成对处理**：PM 视图 + 工程合同必须一起归档 / merge / 清理，不允许只动一份
+task-spec 产 **单文件 typed contract**（`task-NNN-<slug>.md`，三区：PM 确认区 / 执行区 /
+审计区）。本 skill：
+- **文档偏差检查在单文件**：审计区的「📋 文档偏差」section（不再跨两文件）。
+- **归档单文件**：merge / 归档 / 清理只动一个 `.md`。
+- **三态兼容**：在飞旧 v2 双文件 task 仍按双文件成对处理（用 `detect_format` 分流）。
 
 ## Preamble
 
@@ -94,7 +92,7 @@ Error: --skip-doc-update / --doc-update-now 已废弃（D13 final, 2026-05-16）
 
 ### 步骤 0：task 文档 ↔ 原型对齐
 
-**目的**：PM 验收通过 ≠ task md 自动跟原型代码一致。task-execute 反馈循环故意只改原型代码，task md 业务字段（§🎯/§📐/§📋/§✅）在反馈循环里不跟——所有对齐工作集中到本步骤 batch 处理。close-task 前补齐对账，避免 task md 进入 req 分支后跟代码不符。
+**目的**：PM 验收通过 ≠ task md 自动跟原型代码一致。task-execute 反馈循环故意只改原型代码，task 文件的实现规格 / 验收 / 范围在反馈循环里不跟——所有对齐工作集中到本步骤 batch 处理。close-task 前补齐对账，避免 task md 进入 req 分支后跟代码不符。
 
 **执行位置**：cwd 已在 task worktree（agent 直接读代码 + 写 task md，无需跨 worktree）。
 
@@ -102,24 +100,24 @@ Error: --skip-doc-update / --doc-update-now 已废弃（D13 final, 2026-05-16）
 
 agent 读两边内容：
 
-- **task PM 视图主文件**（在 task worktree 里）：
-  - `## 🎯 关键产品决策`（决策反转 / 备选方案推翻情况）
-  - `## 📐 产物预览`（ASCII / 原型示意）
-  - `## 📋 功能清单`（业务规则逐条）
-  - `## ✅ 验收清单`（PM 走查清单）
-  - `## 📁 历史档案 → 执行日志`：所有执行报告的「**文档对齐预告**」字段汇总（task-execute 反馈循环里 AI 已经预告会变的段，作为对齐线索，**优先扫描这些**）
-- **task 改动的代码文件**（task md §📦 范围 → 改 字段列出的路径）：
+- **task 文件**（在 task worktree 里，单文件 typed contract）：
+  - 执行区 `## 🔧 实现规格`（task 级实现要求）
+  - 执行区 `## 🧩 实现设计引用`（HOW-ID 行 + 占位值）
+  - PM 确认区 `## ✅ 验收清单`（PM 走查清单）
+  - PM 确认区 `## 📦 范围`（改 / 不改）
+  - 审计区 `## 📁 历史档案 → 执行日志`：执行报告里 AI 记的改动摘要 / 遇到的问题，作为对齐线索
+- **task 改动的代码文件**（task 文件 PM 确认区 §📦 范围 → 改 字段列出的路径）：
   - 全文 Read（不超过 3 个文件就全读；多文件时按对齐相关性分批读）
 
 ```bash
 TASK_WORKTREE="$REPO_ROOT/.worktrees/$TASK_BRANCH"
-TASK_PM_VIEW="$TASK_WORKTREE/<task-md 相对路径>"
+TASK_FILE="$TASK_WORKTREE/<task 文件相对路径>"
 # 改动文件清单从 §📦 范围 → 改 提取
 ```
 
 #### 0.2 语义对齐扫描
 
-agent 对每条 §🎯 / §📐 / §📋 / §✅ 描述，跟实际代码做语义比对，输出**不一致项**（每项一行，附 task md 行号 + 代码 file:line）。
+agent 对执行区·实现规格 / PM 确认区·验收清单 / 范围 的每条描述，跟实际代码做语义比对，输出**不一致项**（每项一行，附 task md 行号 + 代码 file:line）。
 
 **扫描优先级**：
 1. **优先**：执行日志「文档对齐预告」字段提到的所有段（这些是 AI 反馈循环里已经预告会变的，命中率高）
@@ -130,7 +128,7 @@ agent 对每条 §🎯 / §📐 / §📋 / §✅ 描述，跟实际代码做语�
 ```text
 对齐扫描（共 N 处差异）：
 
-1. task md §📋 #3 描述：「...」
+1. task 文件 执行区·实现规格 #3 描述：「...」
    代码 path/file.tsx:LXX 实际：「...」
    建议：[改 task md 对齐代码 / 改代码对齐 task md]
 
@@ -151,7 +149,7 @@ agent 对每条 §🎯 / §📐 / §📋 / §✅ 描述，跟实际代码做语�
 ```
 
 **PM 回答的内部分流**：
-- PM 说「改 md / md 对齐 / 改 task 文档」等 → AI 用 Edit 改 `$TASK_PM_VIEW`，改后展示 git diff，PM 满意进下一条
+- PM 说「改 md / md 对齐 / 改 task 文档」等 → AI 用 Edit 改 `$TASK_FILE`，改后展示 git diff，PM 满意进下一条
 - PM 说「改代码 / 回退原型」等 → AI **不能自己改代码**。提示 PM：「这条对齐要回退原型。建议先关掉 close-task，回 task 窗口跑 /task-execute 重做后再 close。还是确认要在 close-task 阶段直接改代码？」 → PM 坚持要在本阶段改 → 视为退出 close-task 流程，AI 输出"请回 task 窗口重做"并 exit
 - PM 说「跳过 / 算了 / 不重要」等 → AI 不动 task md，进下一条
 
@@ -176,7 +174,7 @@ git -C "$TASK_WORKTREE" commit -m "task-NNN close-prep: PM 视图与原型对齐
 
 | 步骤 | 性质 | 对照源 |
 |---|---|---|
-| **0**（本节）| task md 描述 ↔ 原型代码 | task md §🎯 §📐 §📋 §✅ + 执行日志「文档对齐预告」 vs 实际改动文件 |
+| **0**（本节）| task 文件描述 ↔ 原型代码 | 执行区·实现规格 / PM 确认区·验收清单·范围 + 审计区·执行日志 vs 实际改动文件 |
 | 1 | task 实证发现的项目级文档偏差 | task md §历史档案/§10 vs brief/analysis/solution/module spec |
 | 1.5 | PM 反馈中的视觉规范沉淀 | task md PM 反馈分类=视觉规范 vs docs/DESIGN.md |
 
@@ -184,23 +182,18 @@ git -C "$TASK_WORKTREE" commit -m "task-NNN close-prep: PM 视图与原型对齐
 
 ### 步骤 1：偏差记录留作 close-req 聚合输入（D13 final, 不调 doc-update）
 
-**D13 final 改造**：close-task **不调** `/doc-update`。偏差记录（PM 视图历史档案 + 工程合同 §10）原样保留在 task 文件里，由 close-req 步骤 1.5 聚合处理（按目标文档 rewrite OR patch）。
+**D13 final 改造**：close-task **不调** `/doc-update`。偏差记录原样保留在 task 文件里，由
+close-req 步骤 1.5 聚合处理（按目标文档 rewrite OR patch）。
 
-兼容性判断（仅用于校验偏差段是否存在 / 格式是否正确，不再触发 /doc-update）：
+校验（这一步必跑，是 close-req 聚合 + delta-7 adjustment-promote 的输入约束）：
 
-```bash
-ENG_FILE="${TASK_FILE%.md}.engineering.md"
-[ -f "$ENG_FILE" ] && HAS_ENG=true || HAS_ENG=false
-```
+- **v3 单文件**：审计区 `## 📋 文档偏差` 表存在（即使是「无」也要存在该段）
+- **v2 旧双文件**：PM 视图 `### 业务层偏差` 段 + 工程合同 `## 10. 文档偏差` 表（兼容）
 
-校验（这一步必跑，是 close-req 聚合的输入约束）：
-
-1. **PM 视图主文件** `## 📁 历史档案` 含 `### 业务层偏差` 段（即使是「无偏差」也要存在该段）
-2. **工程合同** `## 10. 文档偏差` 表（仅 `HAS_ENG=true`；同样允许「无偏差」）
-
-判断：
-- **段缺失** → 报错让 PM 补段头（即使填「无偏差」）；不能省段，否则 close-req 聚合会找不到锚点
-- **段存在（含「无偏差」或具体表内容）** → 继续下一步，**不调 /doc-update**
+用 `detect_format` 分流。判断：
+- **段缺失** → 报错让 PM 补段头（即使填「无」）；不能省段，否则 close-req 聚合 +
+  delta-7 promote 会找不到锚点
+- **段存在（含「无」或具体表内容）** → 继续下一步，**不调 /doc-update**
 
 > **为什么不在这里调 /doc-update**：见本文件顶部「改造说明（D13 final）」。简言之，per-task 调 doc-update 是 N 次启动成本累加的根源（§0.1 痛点）；推迟到 close-req 末统一 rewrite。
 
@@ -271,9 +264,57 @@ Read 本 task PM 视图主文件的 PM 反馈 section，提取候选：
 2. PM 满意 → AI 用 Edit 把本条 PM 反馈的「处理结果」改为「已处理」+ 备注「已沉淀 DESIGN.md §X.Y」
 3. PM 要求修改 → AI 重 patch 重 diff，循环到 PM 满意（无循环上限，但 3 次还无法对齐时 AI 主动停下问 PM 是否改成"只在本 task 备注"或"分类错了"）
 
-#### 1.5.6 完成后进步骤 2
+#### 1.5.6 完成后进步骤 1.6
 
-所有 N 条视觉规范反馈处理完毕（每条都标了 `Y-rule` / `Y-task-note` / `N` 三个分类之一作为内部记账），DESIGN.md 改动**未 commit**（步骤 3 提示 PM 自己 commit），进入步骤 2。
+所有 N 条视觉规范反馈处理完毕（每条都标了 `Y-rule` / `Y-task-note` / `N` 三个分类之一作为内部记账），DESIGN.md 改动**未 commit**（步骤 3 提示 PM 自己 commit），进入步骤 1.6。
+
+### 步骤 1.6：跨功能产品行为规则反馈 selective promote 到 PRODUCT-RULES.md（delta-9 vp-2）
+
+与步骤 1.5「视觉规范 → DESIGN.md」同型 —— 扫本 task PM 反馈，对**全项目跨功能产品行为
+规则**类条目逐条让 PM 选是否 promote 到 `docs/PRODUCT-RULES.md`。
+
+#### 1.6.1 前置检查
+
+```bash
+PRODUCT_RULES_MD="$MAIN_REPO_ROOT/docs/PRODUCT-RULES.md"
+if [ ! -f "$PRODUCT_RULES_MD" ]; then
+  echo "ℹ️  docs/PRODUCT-RULES.md 不存在，跳过跨功能规则沉淀。"
+  # 直接进入步骤 2
+fi
+```
+
+#### 1.6.2 扫描候选 + AI 预判
+
+Read 本 task 审计区·历史档案的 PM 反馈段，AI 预判哪些条目属「**全项目跨功能产品行为规则**」
+——适用范围超出本 task 模块、是「产品在 X 情况下应 / 不应 Y」的规则、向前管未写的 task。
+候选数 = N。**N = 0 → 直接进步骤 2**。
+
+> 边界：用词 / 术语 → CONTEXT.md 术语表；模块级规则 → modulespec；视觉规范 → DESIGN.md
+> （步骤 1.5 已处理）；task-local / 同模块前瞻 → 留 task 文件。本步骤只捞全项目跨功能规则。
+
+#### 1.6.3 PM 逐条决策（AI 预判 + PM 选 / 改）
+
+每条候选呈交 PM（对话式，不纯 AI 自动分类）：
+
+```
+反馈 K：[反馈 1 行摘要]
+AI 预判：这是「全项目跨功能产品行为规则」，建议 promote 到 docs/PRODUCT-RULES.md
+拟写入条目：
+### <一句话标题>
+- 规则：<产品在 X 情况下应 / 不应 Y>
+- scope：全局 | 域限定:<关键词>
+- 来源：<本 req / task>（<日期>）
+
+选择：promote 进 PRODUCT-RULES.md / 不是跨功能规则（留 task 或改归别处）
+```
+
+- PM 选 promote → AI 用 Edit 把条目追加进 `docs/PRODUCT-RULES.md`「规则清单」段（**不 commit**，
+  与 DESIGN.md 同 —— PM 在 close-task 后审 diff 自己 commit）
+- PM 说不是 → 不动 PRODUCT-RULES.md，按 PM 指示归类
+
+#### 1.6.4 完成后进步骤 2
+
+PRODUCT-RULES.md 改动**未 commit**（步骤 3 提示 PM）；进入步骤 2。
 
 **与步骤 1 文档偏差检查的边界**：
 - 步骤 1 处理"客观文档偏差"（字段名错 / 流程描述错）→ `/doc-update` 对账
@@ -284,14 +325,17 @@ Read 本 task PM 视图主文件的 PM 反馈 section，提取候选：
 
 #### 2.1 兜底 commit 检查
 
-phase 1 步骤 0 / 1 / 1.5 应该已经把改动 commit 完。这里二次检查，确保 task worktree 干净（除 docs/DESIGN.md，那个等 PM 二次审 diff 后手 commit）：
+phase 1 步骤 0 / 1 / 1.5 / 1.6 应该已经把改动 commit 完。这里二次检查，确保 task worktree
+干净（除 `docs/DESIGN.md` + `docs/PRODUCT-RULES.md` —— 两者等 PM 二次审 diff 后手 commit）：
 
 ```bash
-UNCOMMITTED=$(git status --porcelain | grep -v 'docs/DESIGN.md' || true)
+# delta-9 D9-4：PRODUCT-RULES.md 与 DESIGN.md 同 —— patch-不-commit，须一起进白名单，
+# 否则未 commit 的 PRODUCT-RULES.md 会拌倒 worktree-clean 检查（commit 6382baf 同类 bug）。
+UNCOMMITTED=$(git status --porcelain | grep -vE 'docs/(DESIGN|PRODUCT-RULES)\.md' || true)
 if [ -n "$UNCOMMITTED" ]; then
-  echo "❌ task worktree 有未 commit 改动（不含 DESIGN.md）："
+  echo "❌ task worktree 有未 commit 改动（不含 DESIGN.md / PRODUCT-RULES.md）："
   echo "$UNCOMMITTED"
-  echo "请检查 step 0 / 1 是否漏 commit。"
+  echo "请检查 step 0 / 1 / 1.5 / 1.6 是否漏 commit。"
   exit 1
 fi
 ```
@@ -367,11 +411,15 @@ bash .claude/scripts/close-task.sh "$TASK_FILE_ABS"
 2. 校验 task 状态为「已完成」
 3. 检查文档偏差（二次检查，有未处理偏差会阻塞）
 4. merge task 分支 → req 分支
-5. 归档 `.runs/` 到 req worktree 的 `tasks/_archived/` 并 commit 到 req 分支
-6. **直接删** task worktree + task branch
-7. 杀掉 dev server 进程
-8. 清理 `.runs/` 原件
-9. 追加 `task_closed` 事件
+5. **delta-7 vp-3：promote task 审计区「📋 文档偏差」→ req `adjustment` 事件**
+   （append 到 `requirements/active/<req>/req-events.jsonl` 并 commit；格式判别走
+   `detect_format` 三态，v2 旧 task 从 `.engineering.md §10` 读、v3 从审计区读；
+   close-req 反向对齐读这些 adjustment 事件）
+6. 归档 `.runs/` 到 req worktree 的 `tasks/_archived/` 并 commit 到 req 分支
+7. **直接删** task worktree + task branch
+8. 杀掉 dev server 进程
+9. 清理 `.runs/` 原件
+10. 追加 `task_closed` 事件
 
 ### 步骤 P2.3：清 marker
 
@@ -417,9 +465,8 @@ rm -f "$PENDING_MARKER"
 - 必须在 task 状态为「已完成」时才能关闭
 - **步骤 0 对齐**：N=0 或全 skip 不阻塞 close-task（PM 决策权）；PM 选 R 但要在本阶段改代码 → agent 拒绝并提示回 task-execute（不让 close-task 蜕变成 mini task-execute）
 - 步骤 0 patch 必须 commit 到 task 分支（cwd 已在 task worktree），随 Phase 2 merge 自然进 req 分支
-- 文档偏差必须在 Phase 1 处理（close-task.sh 会做二次检查；偏差检查跨 PM 视图主文件 + 工程合同两处）
-- **PM 视图主文件 + 工程合同必须成对处理**：归档 / merge / 清理时两文件一起动，不允许只动一份
+- 文档偏差必须在 Phase 1 处理（close-task.sh 会做二次检查；v3 单文件在审计区·📋 文档偏差，v2 旧 task 跨两文件）
+- **v3 单文件归档**：merge / 归档 / 清理只动一个 `.md`；在飞旧 v2 双文件 task 仍成对处理
+- delta-7 vp-3：Phase 2 把 task 文档偏差 promote 成 req `adjustment` 事件（由 close-task.sh 自动做）
 - 不要手动执行 merge/删分支/清 worktree，全部由 close-task.sh 处理
-- close-task.sh 一步关完 phase 2：merge → 归档 → 删 worktree → 删 branch；不走 pending-cleanup 中转
-
-> **注**：`close-task.sh` 脚本在 PR 3 阶段会改造为按"主文件 + .engineering.md"成对归档；当前 PR 2 阶段脚本仍按单文件处理，工程合同需要 PM 在 close 后手动确认归档（或等 PR 3）。
+- close-task.sh 一步关完 phase 2：merge → adjustment-promote → 归档 → 删 worktree → 删 branch

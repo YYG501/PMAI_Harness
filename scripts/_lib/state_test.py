@@ -61,6 +61,22 @@ V2_TASK_MD = """# Task 001: Test
 | **创建时间** | 2026-04-29 |
 """
 
+V3_TASK_MD = """# Task 001: Test
+
+<!-- task_format: single-typed-v3 -->
+
+| | |
+|---|---|
+| **状态** | 待执行 |
+| **分支** | task-001-test |
+
+## 📋 文档偏差
+v3 文档偏差内容
+
+## 🔍 自审记录
+v3 自审记录内容
+"""
+
 V2_TASK_ENG = """# Task 001: Test — 工程合同
 
 ## 1. 启动前必读
@@ -99,6 +115,13 @@ class TestDetectFormat(unittest.TestCase):
             pm = Path(d) / "task-001-test.md"
             pm.write_text(V1_TASK_MD)
             self.assertEqual(detect_format(pm), "v1")
+
+    def test_v3_when_typed_contract_marker(self):
+        """delta-3 §2.7：无 .engineering.md + 头部 task_format 标记 → v3。"""
+        with tempfile.TemporaryDirectory() as d:
+            pm = Path(d) / "task-001-test.md"
+            pm.write_text(V3_TASK_MD)
+            self.assertEqual(detect_format(pm), "v3")
 
 
 class TestStatusParsing(unittest.TestCase):

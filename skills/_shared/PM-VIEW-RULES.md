@@ -1,9 +1,9 @@
 # PM 视图通用规则（PM-VIEW-RULES）
 
-> 适用范围：所有 PM 视角的 stage 文档 — `brief.md` / `analysis.md` / `solution.md` / `task-plan.md` / `tasks/task-NNN-*.md` / `prd.md`。
+> 适用范围：所有 PM 视角的 stage 文档 — `brief.md` / `analysis.md` / `prd.md` / `task-plan.md` / `tasks/task-NNN-*.md`（在飞旧 req 的 `solution.md` 同样适用）。
 >
 > 本文件是 **单一真相源**。下列 skill 都引用本文件，不在 skill 内部独立维护：
-> `new-req` · `req-analysis` · `req-solution` · `task-plan` · `task-spec` · `prd-writing`
+> `new-req` · `req-analysis` · `prd-writing` · `task-plan` · `task-spec`
 >
 > AI 在生成、修改任何上述文档前，先读完本文件 + 它指引的相关子文件。
 
@@ -11,15 +11,15 @@
 
 ## 索引（按消费方拆分）
 
-本文件保留**结构性的小节**（§一 三层信息分层 / §二 拆文件约定 / §五 功能清单格式 / §六 关键产品决策格式 / §十 引用方式）。**写作规则 / 输入流等大块**已物理拆到 `pm-view/` 子目录，按需读：
+本文件保留**结构性的小节**（§一 三层信息分层 / §二 task 文件形态 / §五 功能清单格式 / §六 关键产品决策格式 / §十 引用方式）。**写作规则 / 输入流等大块**已物理拆到 `pm-view/` 子目录，按需读：
 
 | 节 | 内容 | 文件 | 主要消费 skill |
 |---|---|---|---|
-| §三 | PM 视图写作规则（10 条硬约束 + UI 骨架细则）| [`pm-view/writing-rules.md`](./pm-view/writing-rules.md) | new-req · prd-writing · req-solution · task-plan · task-spec |
+| §三 | PM 视图写作规则（10 条硬约束 + UI 骨架细则）| [`pm-view/writing-rules.md`](./pm-view/writing-rules.md) | new-req · prd-writing · task-plan · task-spec |
 | §四 | 文档级严格度对照表 | [`pm-view/doc-strictness.md`](./pm-view/doc-strictness.md) | new-req（brief 行）|
-| §七 | 章节顺序约束（按文档类型）| [`pm-view/section-order.md`](./pm-view/section-order.md) | req-solution · task-plan · task-spec |
-| §八 | 自检清单（生成 / 修改 PM 视图后）| [`pm-view/checklist.md`](./pm-view/checklist.md) | req-solution · task-plan · task-spec |
-| §九 9.1 - 9.6 | 输入流约束 / PM 反馈四类分流 / 双文件 lazy sync | [`pm-view/input-flow.md`](./pm-view/input-flow.md) | 全部 PM 视图 skill |
+| §七 | 章节顺序约束（按文档类型）| [`pm-view/section-order.md`](./pm-view/section-order.md) | task-plan · task-spec |
+| §八 | 自检清单（生成 / 修改 PM 视图后）| [`pm-view/checklist.md`](./pm-view/checklist.md) | prd-writing · task-plan · task-spec |
+| §九 9.0 - 9.5 | 输入流约束 / PM 反馈分流 / 信息流图（§9.6 双文件 lazy sync 已废，delta-3）| [`pm-view/input-flow.md`](./pm-view/input-flow.md) | 全部 PM 视图 skill |
 | §9.7 | 跨 skill 共享原则 | [`pm-view/cross-skill.md`](./pm-view/cross-skill.md) | skill 作者 / 框架维护者 |
 
 **读法约定**：
@@ -57,30 +57,33 @@ PM 创建 / 审核 / 验收时直接看的内容。回答 PM 关心的问题：
 
 ---
 
-## 二、拆文件约定
+## 二、task 文件形态：单文件 typed contract（delta-3）
 
-`solution.md` / `task-NNN-*.md` 两类文档拆成两个文件：
+> ⚠️ 旧「task 拆两文件（PM 视图 `.md` + 工程合同 `.engineering.md`）」约定**已废**——
+> delta-3 把 task-spec 塌缩成单文件 typed contract。
 
-| 文件 | 内容 | 命名 |
+`tasks/task-NNN-*.md` 是 **1 个物理文件**（头部 `<!-- task_format: single-typed-v3 -->`），
+内部分三区，各区有各自的 lint：
+
+| 区 | 含哪些段 | lint |
 |---|---|---|
-| 主文件（PM 视图）| 一、PM 视图层 + 三、历史档案 | 原名不变（`solution.md` / `task-001-xxx.md`） |
-| 工程合同 | 二、工程合同层 | `<原名>.engineering.md`（同目录、同 slug）|
+| **PM 确认区** | 任务卡 / 范围 / 验收清单 / PM 反馈承接清单 | `check-doc-pm-view.py` **scoped 模式**（只校验本区，守 PM-view 写作纪律）|
+| **执行区** | 启动前必读 / 实现规格 / 实现设计引用 / 约束与易错 / 自测说明 / 工程层验收 / 状态转换说明 | 字段格式校验；允许工程内容 |
+| **审计区** | 文档偏差 / 自审记录 / 历史档案 | 不 lint |
 
-**约定**：
-- 主文件路径不变，所有现有引用（git / req-stage-gate / lark publish）不需要改
-- 主文件底部加一行：`> 工程实现细节见 <slug>.engineering.md`
-- 两文件成对出现 — `task-transition.py` / `req-transition.py` 校验，缺工程合同 = error
-- agent 启动时由 `task-execute` 显式 inject 工程合同内容到 prompt，不依赖 PM 主动打开
+WHAT 移 `prd.md`（关键产品决策 / 产物预览 / 功能清单 / 跨功能规则）、HOW 移
+`implementation-design.md`。三区由 region 标记界定（`<!-- region: PM-CONFIRM begin/end -->` 等）。
 
-`brief.md` / `analysis.md` / `task-plan.md` / `prd.md` **不拆文件**：
-- `brief.md` / `analysis.md` / `prd.md`：本身没有工程合同层，PM 视图即全部
-- `task-plan.md`：自检结论 / 验收 GAP 索引 / 模块规格状态压成末尾轻量"自检与状态摘要"节附在 PM 视图末，没有独立工程合同需要长期存档
+`brief.md` / `analysis.md` / `task-plan.md` / `prd.md` / `implementation-design.md` 均单文件。
+
+> 在飞旧 v2 双文件 task（`task-NNN.md` + `.engineering.md`）跑完旧的、不回迁；旧 req 的
+> `solution.md` 也是历史产物。`detect_format` 三态（v1/v2/v3）兼容判别。
 
 ---
 
 ## 五、功能清单格式（强制）
 
-适用：`task spec` / `prd` / `solution` 中描述具体功能时。
+适用：`task spec` / `prd` 中描述具体功能时。
 
 参照模板：`docs/modules/部门+用户+角色设计/department-group-role-design-v4.1.md` §五数据模型 / §十一鉴权规则 的节奏 — 先角色定位、再列业务规则、再独立给字段口径。
 
@@ -239,9 +242,9 @@ PM 创建 / 审核 / 验收时直接看的内容。回答 PM 关心的问题：
 
 ---
 
-## 六、关键产品决策格式（solution / task spec 必填）
+## 六、关键产品决策格式（prd / task spec 必填）
 
-每份 `solution.md` 和涉及关键产品选择的 `task spec` 必须有「关键产品决策」节：
+每份 `prd.md` 和涉及关键产品选择的 `task spec` 必须有「关键产品决策」节：
 
 ```markdown
 ## 🎯 关键产品决策
@@ -259,7 +262,7 @@ PM 创建 / 审核 / 验收时直接看的内容。回答 PM 关心的问题：
 - "备选方案"列 1-2 种合理替代，注明为什么没选
 - "共同理由"放表格下方，集中表达决策依据；不在每行的"备选方案"里重复
 
-如果某 task 是纯执行型（无 PM 决策点）：本节填一行 `本 task 无关键产品决策（执行 solution.md §X.Y 已确定方案）`。
+如果某 task 是纯执行型（无 PM 决策点）：本节填一行 `本 task 无关键产品决策（执行 prd.md §X.Y 已确定方案）`。
 
 ---
 

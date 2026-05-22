@@ -63,7 +63,7 @@ PENDING_MARKER="$REPO_ROOT/.runs/pending-close-req.json"
 # Req Close Report: req-NNN-<slug>
 
 ## 需求概述
-[从 solution.md §📌 方案摘要提取，**不读 brief.md**——brief 是 stage 1 初稿，到 close-req 时已被 7 个 stage 演化，用它写关闭报告会反映已被推翻的初衷]
+[从 prd.md §四 需求分析 提取，**不读 brief.md**——brief 是 stage 1 初稿，到 close-req 时已被 7 个 stage 演化，用它写关闭报告会反映已被推翻的初衷。在飞旧 req 若无 prd.md、仅有 solution.md，则从 solution.md §📌 方案摘要 提取]
 
 ## 完成的 task
 | Task | 摘要 |
@@ -104,17 +104,20 @@ PENDING_MARKER="$REPO_ROOT/.runs/pending-close-req.json"
 
 **目的**：D13 final 下 close-task 永不调 doc-update（不写 modulespec），所有 task 的偏差与功能清单累积到本步骤一次性沉淀。N 次 doc-update 启动成本合并成本 step 一次（§0.1 痛点）。
 
-**输入源**（遍历所有 closed task，4 处合一）：
+**输入源**（遍历所有 closed task；delta-3 单文件后 3 处合一）：
 
-1. **PM 视图主文件** `tasks/*.md` 头部「📌 任务卡」表格的 `**所属模块**` / `**所属模块章节**` 字段 → 决定 sediment 进哪份 `docs/modules/<module>.md`
-2. **PM 视图主文件** `## 📋 功能清单` → 沉淀进 module spec 的功能合同
-3. **PM 视图主文件** `## 📁 历史档案 → 业务层偏差` 表 → 指向 brief / analysis / solution PM 视图 / prd / module 规格 的偏差对账
-4. **工程合同** `tasks/*.engineering.md` `## 10. 文档偏差` 表（仅 `HAS_ENG=true`）→ 指向 solution.engineering / DESIGN / CONTEXT / module 等工程层偏差对账
+1. **task 文件** `tasks/*.md`「📌 任务卡」表格的 `所属模块` / `所属模块章节` 字段 → 决定 sediment 进哪份 `docs/modules/<module>.md`
+2. **`prd.md` §六 功能需求** —— 模块功能合同沉淀源（delta-2：功能清单已从 task 移 PRD；task 执行区·实现规格仅作 task 级实现细节、不进 module spec）
+3. **task 文件审计区** `## 📋 文档偏差` 表（v3 单文件）→ 指向 brief / analysis / prd / DESIGN / CONTEXT / module 规格 的偏差对账
+   - **v2 旧 task 兼容**：跨 PM 视图 `### 业务层偏差` + 工程合同 `## 10. 文档偏差` 两处（用 `detect_format` 分流）
+
+> delta-7 vp-3 已把 task「文档偏差」promote 成 req `adjustment` 事件 —— 本步骤的 modulespec
+> sediment 与 delta-6 close-req PRD 反向对齐（读 `adjustment` 事件）是不同消费者，互不冲突。
 
 **流程**：
 
-1. 遍历 `tasks/*.md`（过滤 `*.engineering.md`）和成对的 `.engineering.md`；提取每 task 的 4 处输入。
-2. **按目标文档分组**：同一份 `docs/modules/<module>.md` / `docs/DESIGN.md` / `docs/CONTEXT.md` / `solution.md` / `solution.engineering.md` 的多 task 偏差并到一起（**v5 vp-1 后 `docs/prd.md` 不在范围**）。基础设施 task（`所属模块=基础设施`）跳过 module sediment，但其偏差表仍走对账。
+1. 遍历 `tasks/*.md`；按 `detect_format` 分流提取每 task 的偏差（v3 单文件审计区 / v2 跨两文件）。
+2. **按目标文档分组**：同一份 `docs/modules/<module>.md` / `docs/DESIGN.md` / `docs/CONTEXT.md` 的多 task 偏差并到一起（**项目主 `docs/prd.md` 已砍，不在范围**；req 级 `prd.md` 是 stage 3 定稿冻结基准，不进本 sediment 流程）。基础设施 task（`所属模块=基础设施`）跳过 module sediment，但其偏差表仍走对账。
 3. 聚合后呈交 PM，按目标文档逐份决议（AskUserQuestion 或 prose；**两选项**，skip 分支 D13 final 已砍）：
 
    | 决议 | 触发条件 | 行为 |
@@ -158,42 +161,58 @@ PENDING_MARKER="$REPO_ROOT/.runs/pending-close-req.json"
 - ~~inter-req 推迟 / DEFERRED_TO_REQ skip 分支~~ → D13 final 已砍（polish-13，§0.4.1 多 req 并行不在范围）
 - 旧 SKIP marker 兼容（polish-15）：消费仓若有旧 `<!-- SKIP_DOC_UPDATE: ... cleanup_status=... -->` 残留（D13 final 前写的），本步骤遇到时**等同普通偏差源处理**（一次性消费掉，rewrite 决议时 `cleanup_status` 改 `done` 留作 audit trail；不再阻塞 stage 6→7 推进）
 
-### 步骤 2a：产出 req 级 PRD（PM 主导，v5 vp-2 决议）
+### 步骤 2a：PRD 反向对齐成 as-built（delta-6）
 
-> **D 决议（v5 §2 vp-2，2026-05-18）**：原 D13 final 覆盖度算法（`MODULE_TASKS_DONE == TASK_COUNT && docs/prd.md ∈ REWRITE_COVERED_FILES`）整段砍掉。PM 视角下「req 级 PRD」是评审材料（给研发评审），是否产出由 **PM 显式决定**，0 或 1 份/req，不再算覆盖度。
+> **delta-2+4 后 PRD 已在 stage 3 产出、定稿冻结**（不再像旧管线那样在 close-req 才产）。
+> close-req 这一步是把冻结的 PRD **一次性反向对齐成 as-built** —— 执行期 task 对 PRD 的偏离
+> 在 `req-events.jsonl` 的 `adjustment` 事件里累积，本步骤逐条把 PRD 改成实际做成的样子。
 
-直接对话式问 PM：
+#### 2a.1 读 adjustment 事件
 
+```bash
+python3 "$REPO_ROOT/.claude/scripts/req-events.py" list "$ACTIVE_REQ_DIR"
 ```
-📝 req close 阶段。要不要给研发评审写一份 req 级 PRD？
 
-- 要 → 跑 /prd-writing，对话式确认输入后产出 req 级 PRD
-- 不要 → 跳过这步；close-report.md 自动记一句"本 req 未产出 req 级 PRD"
-```
+`req-events.py list` 折叠出本 req 全部 `adjustment` 事件（close-task Phase 2 promote 来的
+「文档偏差」）。每条含：`from_task` / `prd_anchor`（PRD 哪条被调）/ `before`（PRD 原定）/
+`after`（实际做成）/ `reason`。
 
-**PM 回答的内部分流**：
-- PM 说「要 / 写一份 / OK」等 → 跑 `/prd-writing`（详见 §2 vp-5 改造后的灵活模式：对话式确认输入清单 + 产物路径）
-- PM 说「不要 / 跳过 / 没必要」等 → 跳过；AI 在 close-report.md 写"本 req 未产出 req 级 PRD（PM 决定）"
+> **IRON 容错**：delta-7 落地前在飞的旧 req 无 `req-events.jsonl` → `list` 输出
+> 「No req events found.」→ 本步骤 silent skip（无 adjustment 可对齐），不报错。
 
-**任何分支都不需要 PM 写理由** —— PM 主导决策，不要 AI 二次质疑。
+#### 2a.2 逐条反向对齐 prd.md
 
-> **历史**：v5 之前 §2a 用覆盖度算法（`MODULE_TASKS_DONE == TASK_COUNT` 等）做三选一推荐（完整 / 补差 / 跳过 PRD），与 PM 主导原则冲突（autoplan CEO F4 / DX D2 共识）。v5 vp-2 砍此算法。
+对每条 `adjustment`：定位 `prd_anchor` 指向的 PRD 章节，把内容从 `before` 改成 `after`
+（PRD → as-built），呈交 PM 审。**产物预览「原型」节**：stage 3 写的是产物意图描述（文字版），
+本步骤用真实原型链接 / 截图**替换回填**（codex#5）。
+
+- PM 逐条审 diff（对话式）；PM 满意 → 落 `prd.md`
+- 全部对齐后 git commit 留痕：`docs(prd): close-req as-built 反向对齐 — req-NNN`
+
+#### 2a.3 边界
+
+- **只改实际内容**（PRD 行为 → as-built），是 close 时一次性、有意的内容更新；不是 stage 3
+  那种「冻结」语义。git commit 留痕、可审计。
+- 反向对齐**不写任何元数据 / hash 回 PRD**（PRD 是单文件、无 hash 机器；只改业务内容，
+  避免 memory `reconcile-no-self-reference` 类自指问题）。
+- 无 adjustment 事件（纯按 PRD 做成、无偏离）→ silent skip，close-report 记「本 req PRD 无
+  执行期偏离，无需反向对齐」。
+
+> modulespec 沉淀（delta-6 (b)）已由步骤 1.5 D13 rewrite 流程覆盖 —— 本步骤只做 PRD 反向对齐。
 
 ### 步骤 2b：~~增量同步项目主 PRD~~（v5 vp-2 + vp-1 砍）
 
-> **v5 §4 砍掉清单 #3 / #4**：项目主 PRD `docs/prd.md` 已砍（vp-1 实施），`/project-prd-update` skill 已砍。本步骤 D13 final 时的「链式同步项目主 PRD」逻辑整段废弃。
-
-req 级 PRD 是单 req 评审材料（PM 决定是否产出），定稿后不修订 / 不并入项目主 PRD（因为项目主 PRD 已经不存在了）。
-
-→ 跳到 §2c。
+> 项目主 PRD `docs/prd.md` 已砍。本步骤废弃。→ 跳到 §2c。
 
 ### 步骤 2c：检查 req 级实现深度变更，提示 PM 是否同步项目级（4.5d.3）
 
-读 `$ACTIVE_REQ_DIR/solution.md` 的 `## 🔧 本轮实现深度变更` section。
+读 req 级实现深度变更记录的 `## 🔧 本轮实现深度变更` section：
 
-- 内容是「无变更」/ 留空 / section 不存在（旧 req 兼容）→ 跳过本步
+- 现役流程：实现深度变更记录在 req 级实现设计文档（HOW 视图）。
+- 在飞旧 req 兼容：仅有 `$ACTIVE_REQ_DIR/solution.md` 时，从其 `## 🔧 本轮实现深度变更` section 读。
+- 两处都无该 section / 内容是「无变更」/ 留空 → 跳过本步。
 - 内容含变更描述 → 向 PM 呈交两段：
-  1. **req 级变更内容**（solution.md `## 🔧 本轮实现深度变更` 原文）
+  1. **req 级变更内容**（`## 🔧 本轮实现深度变更` 原文）
   2. **项目级当前**：`$REPO_ROOT/CLAUDE.md` 的 `## 工程结构约束` section（auto-detected 标 + 派生内容）
 
   问 PM：

@@ -12,33 +12,37 @@ description: Use when task 已完成、PM 已通过验收、需要在 close-task
 1. **对账模式（reconciliation mode）**：task 文件的偏差记录有内容（不是"无偏差"），需要在合并前更新原始文档。偏差记录跨两处：PM 视图主文件 `## 📁 历史档案` + 工程合同 `## 10. 文档偏差` 表。
 2. **沉淀模式（settlement mode）**：由 `/close-task` 在 task 验收通过后调用，把 PM 视图 task 的「📋 功能清单」增量沉淀进 `docs/modules/<module>.md`。
 
-## 拆两文件约定（必读）
+## task 文件读取约定（必读）
 
-本 skill 处理拆两文件的 task 产物（`_shared/PM-VIEW-RULES.md` §二）：
-- **PM 视图主文件**（`.md`）：「📋 功能清单」/「📁 历史档案」/「📌 任务卡」中的 `**所属模块**` `**所属模块章节**` 字段
-- **工程合同**（`.engineering.md`）：「§10 文档偏差」/「§4 功能清单工程版」/「§1 元信息扩展」
+本 skill 读 task 文件的偏差记录 / 模块字段：
 
-**沉淀模式**只读 **PM 视图主文件**的「📋 功能清单」沉淀进 module spec。**禁止**把工程合同 §4 功能清单工程版（含字段名 / props / reducer action 等工程层细节）沉淀进 `docs/modules/<module>.md`——这些细节只在 task 工程合同内保留。
+- **v3 单文件 typed contract**（delta-3）：task 是一个物理文件 `task-NNN-<slug>.md`，三区由 region 标记界定——
+  - PM 确认区「📌 任务卡」：`**所属模块**` / `**所属模块章节**` 字段
+  - 审计区「📋 文档偏差」表：**单一一处**偏差记录（文档偏差 / 业务偏差合并）；指向任意 prd / implementation-design / module / DESIGN / CONTEXT 等文档
+- **v2 旧双文件 task**（在飞旧 task）：PM 视图主文件（`.md`）含「📋 功能清单」/「📁 历史档案 → 业务层偏差」/「📌 任务卡」模块字段；工程合同（`.engineering.md`）含「§10 文档偏差」/「§4 功能清单工程版」/「§1 元信息扩展」。
+- **v1 旧单文件**：偏差在主文件「## 文档偏差」section；模块字段是 `**所属模块：**` 头部字段。
 
-**对账模式**：跨两文件读取偏差记录（PM 视图历史档案 + 工程合同 §10），分别对账到对应原始文档。
+**对账模式**：
+- v3 —— 偏差记录只在审计区「📋 文档偏差」一处读取，分别对账到各偏差指向的原始文档。
+- v2 —— 跨两文件读取偏差记录（PM 视图「📁 历史档案 → 业务层偏差」+ 工程合同 §10）。
+
+**沉淀模式（D13 final 后已是死路径，见步骤 0.5）**：历史上只读 PM 视图「📋 功能清单」沉淀进 module spec。v3 task 无独立「📋 功能清单」section（delta-2 已移 prd.md），沉淀模式不再被 close-task 触发。
 
 ## Required Inputs
 
 按 `_shared/pm-view/input-flow.md` 中 **Stage 7.2 doc-update** 段执行：
 
-1. 🟢 task PM 视图主文件（PM 调用时传入）
-2. 🟢 **必须存在的成对工程合同**：`<task-stem>.engineering.md`，缺则报错并 `exit 1`
-3. 🟢 `docs/modules/<本 task 模块>.md`（沉淀目标）
-4. 🟢 工程合同 §10 文档偏差表
-5. 🟢 **task worktree 改动代码**（步骤 1.6 模块规格对账，逐行核对实际实现是否匹配——不读代码就不能对账；读法同 Stage 7.1 close-task：≤3 文件全读，多文件分批）
-6. 🟡 偏差涉及的原文（前后 5 行）。**支持任何 req / 项目级文档**：
+1. 🟢 task 文件（PM 调用时传入）—— v3 单文件 typed contract；v2 旧 task 为 PM 视图主文件 + 成对工程合同
+2. 🟢 `docs/modules/<本 task 模块>.md`（对账目标）
+3. 🟢 task 文件偏差表 —— v3：审计区「📋 文档偏差」；v2：工程合同 §10 + PM 视图「📁 历史档案 → 业务层偏差」
+4. 🟢 **task worktree 改动代码**（步骤 1.6 模块规格对账，逐行核对实际实现是否匹配——不读代码就不能对账；读法同 Stage 7.1 close-task：≤3 文件全读，多文件分批）
+5. 🟡 偏差涉及的原文（前后 5 行）。**支持任何 req / 项目级文档**：
    - 项目级：`docs/CONTEXT.md` / `docs/DESIGN.md` / `docs/modules/INDEX.md` / `docs/modules/*.md` / `CLAUDE.md`
-   - req 级：`requirements/active/<req>/brief.md` / `analysis.md` / `solution.md` / `solution.engineering.md`
-7. 沉淀模式：从 PM 视图主文件读取 `**所属模块**` / `**所属模块章节**` 字段（在「📌 任务卡」表格中）+ `## 📋 功能清单` section
+   - req 级：`requirements/active/<req>/analysis.md` / `prd.md` / `implementation-design.md`（在飞旧 req 若仅有 `solution.md` / `solution.engineering.md` 则按旧文件名读）
 
 ## 位置定位原则（必读）
 
-doc-update 涉及的长期文档（`docs/modules/*.md` / `solution.md` / `solution.engineering.md` / `docs/DESIGN.md` / `docs/CONTEXT.md`）通常几千行。**建议优先走"多重 grep + 章节级局部读"**——保险性 ≥ 全读，且系统化、可重复；不到必要时不 Read 全文。
+doc-update 涉及的长期文档（`docs/modules/*.md` / `prd.md` / `docs/DESIGN.md` / `docs/CONTEXT.md`）通常几千行。**建议优先走"多重 grep + 章节级局部读"**——保险性 ≥ 全读，且系统化、可重复；不到必要时不 Read 全文。
 
 **为什么不读全文更保险**：
 - grep 系统化：关键字命中 = 100% 不漏
@@ -106,30 +110,24 @@ D13 final 现状：close-task 永不调 doc-update settlement → 本步骤入�
 **(1)** close-req 步骤 1.5 调（走步骤 8 rewrite mode），或 **(2)** PM 主动 `/doc-update <module>` 调对账模式。
 两条入口都不需要 v1+v2 杂交判断（rewrite 是聚合模式天然处理；对账是 PM 显式定向，无 sediment 风险）。
 
-### 步骤 1：读取 task 两文件
+### 步骤 1：读取 task 文件（三态格式分流）
 
-1. 工程合同存在性校验（兼容旧格式）：
+1. 判别 task 格式：
    ```bash
-   ENG_FILE="${TASK_FILE%.md}.engineering.md"
-   if [ ! -f "$ENG_FILE" ]; then
-     echo "⚠️  工程合同缺失（旧格式 task，按单文件兼容模式继续）：$ENG_FILE"
-     HAS_ENG=false
-   else
-     HAS_ENG=true
-   fi
+   TASK_FORMAT=$(python3 "$(git rev-parse --show-toplevel)/.claude/scripts/_lib/state.py" detect_format "$TASK_FILE")
    ```
 
-   - `HAS_ENG=false`：兼容模式——偏差检查只读主文件 `## 文档偏差` section；沉淀模式从主文件 `**所属模块：**` `**所属模块章节：**` 头部字段（旧版用 `：**` 不是表格）+ `## 功能清单` section
+2. **`v3`（新单文件 typed contract）**：正常路径，**不报告警**——
+   - 从 PM 确认区「📌 任务卡」读 `**所属模块**` / `**所属模块章节**` 字段
+   - 从审计区「📋 文档偏差」表读偏差记录（对账模式用，**单一一处**；文档偏差 / 业务偏差合并，指向任意 prd / implementation-design / analysis / DESIGN / module / CONTEXT 等）
 
-2. 从 **PM 视图主文件**读取：
-   - 「📌 任务卡」表格中的 `**所属模块**` / `**所属模块章节**` 字段
-   - `## 📋 功能清单` section（沉淀模式用）
-   - `## 📁 历史档案 → 业务层偏差` 表（对账模式用，task 实证发现 req / 项目级文档需修订处；指向 brief / analysis / solution PM 视图 / prd / module 规格）
+3. **`v2`（旧双文件 task）**：在飞旧 task，兼容模式继续（`echo "ℹ️  检测到旧格式 task（双文件），兼容模式继续"`）——
+   - PM 视图主文件：「📌 任务卡」模块字段 + `## 📋 功能清单` + `## 📁 历史档案 → 业务层偏差` 表
+   - 工程合同（`${TASK_FILE%.md}.engineering.md`）：`## 10. 文档偏差` 表（工程层偏差，指向 DESIGN / module / CONTEXT 等）
 
-3. 从 **工程合同**读取：
-   - `## 10. 文档偏差` 表（对账模式用，agent 在执行中发现的工程层偏差，指向 solution.engineering / DESIGN / module / CONTEXT 等）
+4. **`v1`（旧单文件）**：兼容模式——偏差检查只读主文件 `## 文档偏差` section；模块字段是 `**所属模块：**` `**所属模块章节：**` 头部字段（旧版用 `：**` 不是表格）。
 
-4. 如果 `**所属模块**` = `基础设施`，按 Q1 + Q4 boundary table 判定为基础设施 task：跳过模块规格沉淀，返回 success。输出：
+5. 如果 `**所属模块**` = `基础设施`，按 Q1 + Q4 boundary table 判定为基础设施 task：跳过模块规格沉淀，返回 success。输出：
 
    ```text
    基础设施 task：跳过 docs/modules 沉淀，继续 close-task。
@@ -137,12 +135,12 @@ D13 final 现状：close-task 永不调 doc-update settlement → 本步骤入�
 
 ### 步骤 1.5：分流偏差（对账模式）
 
-跨两处偏差源（PM 视图「📁 历史档案 → 业务层偏差」+ 工程合同 §10）扫描所有偏差，按文档类型分流：
+扫描 task 文件偏差记录（v3：审计区「📋 文档偏差」单一一处；v2：跨 PM 视图「📁 历史档案 → 业务层偏差」+ 工程合同 §10 两处；v1：主文件「## 文档偏差」），按文档类型分流：
 
 | 偏差指向 | 进入步骤 | 处理模式 |
 |---|---|---|
 | `docs/modules/<module>.md` 功能清单表格 | 1.6 | 模块规格对账（行级精确）|
-| 其他 req / 项目级文档（brief / analysis / solution PM 视图 / prd / DESIGN / CONTEXT / CLAUDE / solution.engineering）| 步骤 2 | 通用对账（按行读原文 + 生成 Edit + PM 逐条确认）|
+| 其他 req / 项目级文档（brief / analysis / prd / DESIGN / CONTEXT / CLAUDE）| 步骤 2 | 通用对账（按行读原文 + 生成 Edit + PM 逐条确认）|
 | 无任何偏差 | 跳到 步骤 1.7 | 仅做沉淀模式 |
 
 ### 步骤 1.6：模块规格对账（对账模式保留）
@@ -256,28 +254,22 @@ PM 选择：全部通过 / 删除条 K / 调整条 K 范围 / 全部驳回
 样例：
 
 ```text
-计划改动 7 处（PM 请审核）：
+计划改动 5 处（PM 请审核）：
 
 1. docs/modules/<module>/functions-v4.1.md §1A
    旧：行展开 ▸/▾ 章节（H4 表 + 实现指引 ~50 行）
    新：行点击跳转章节（H4 表 + task-003 反转历史 blockquote）
 
-2. requirements/active/<req>/solution.md §🎯 D15
+2. requirements/active/<req>/prd.md §四 需求分析
    加：⚠️ task-003 PM 验收后反转 marker（保留原决策划掉）
 
-3. requirements/active/<req>/solution.md §🎯 D19
+3. requirements/active/<req>/prd.md §六 功能需求
    加：⚠️ task-003 反转后适用范围缩窄说明（仅详情页 Tab 1 池树内部）
 
-4. requirements/active/<req>/solution.engineering.md §3.8
-   加：列表页扩展 D15 部分整段标作废 marker
-
-5. requirements/active/<req>/solution.engineering.md §5.3
-   加：多维度紧凑展示渲染列表页部分作废说明
-
-6. requirements/active/<req>/solution.engineering.md §10.4
+4. requirements/active/<req>/prd.md §七 验收标准
    加：验收清单行展开走查项作废 + D16 跳转走查项标已落地
 
-7. requirements/active/<req>/tasks/task-NNN-*.md §所属模块章节
+5. requirements/active/<req>/tasks/task-NNN-*.md §所属模块章节
    旧：产品列表页 - 行展开明细
    新：产品列表页 - 行点击跳转
 ```
@@ -352,22 +344,27 @@ PM 在步骤 4 已审过 before/after，**默认无需再审**——直接进入
 ```yaml
 target_doc: docs/modules/<module>/<file>.md   # 一次一个目标文档
 contributing_tasks:                            # 所有改了该目标文档的 closed task
-  - pm_view: tasks/task-NNN-<slug>.md          # PM 视图主文件路径
-    engineering: tasks/task-NNN-<slug>.engineering.md  # 工程合同（可选）
-    business_deviation: |                      # PM 视图「📁 历史档案 → 业务层偏差」表
-      <表格内容或「无偏差」>
-    engineering_deviation: |                   # 工程合同 §10 偏差表（HAS_ENG=true 时）
-      <表格内容或「无偏差」>
-    feature_list: |                            # PM 视图「📋 功能清单」
-      <表格内容>
+  - task_file: tasks/task-NNN-<slug>.md        # task 文件路径（v3 单文件 typed contract）
+    deviation: |                               # v3：task 审计区「📋 文档偏差」表（合并一处）
+      <表格内容或「无」>
     module_chapter: <所属模块章节字段>
+    # —— v2 旧双文件 task 兼容字段（task_file 为 v2 时按下列拆字段喂）——
+    engineering: tasks/task-NNN-<slug>.engineering.md  # 工程合同（v2 才有）
+    business_deviation: |                      # v2：PM 视图「📁 历史档案 → 业务层偏差」表
+      <表格内容或「无偏差」>
+    engineering_deviation: |                   # v2：工程合同 §10 偏差表
+      <表格内容或「无偏差」>
 affected_chapters: [§X, §Y, ...]               # 聚合所有 contributing_tasks 的章节
 quickfix_baseline: <当前目标文档全文>           # 含 quickfix 旁路改动（git working tree）
 ```
 
+> v3 单文件 typed contract 下偏差合并为审计区「📋 文档偏差」一处 → `deviation` 单字段；
+> v2 旧 task 仍跨 PM 视图 / 工程合同两处 → `business_deviation` + `engineering_deviation`
+> 两字段。doc-update 按 `task_file` 的格式（detect_format）选读哪组字段。
+
 **流程**：
 
-1. 读目标文档全文 + 所有 contributing_tasks 的功能清单 + 偏差表
+1. 读目标文档全文 + 所有 contributing_tasks 的偏差表（v3：`deviation`；v2：两 deviation 字段）
 2. AI 起草新版整段（替换 affected_chapters，保持目录结构 / 表格风格 / 锚点 ID 不变）
 3. PM 审 diff（默认逐章节批准；PM 可主动选 "all-at-once" 跳过逐章节）
 4. 写入目标文档

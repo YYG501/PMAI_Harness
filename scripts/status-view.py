@@ -27,16 +27,8 @@ if _SCRIPTS_DIR not in sys.path:
     sys.path.insert(0, _SCRIPTS_DIR)
 
 from _lib.state import get_overall_state, get_timeline_state, list_tasks  # noqa: E402
+from _lib.stages import STAGE_NAMES  # noqa: E402  (delta-2+4 F13 单一真相源)
 
-STAGE_NAMES = {
-    1: "感受问题",
-    2: "需求分析",
-    3: "方案设计",
-    4: "设计系统建立",
-    5: "模块规格 + task 拆分",
-    6: "task 执行",
-    7: "req close",
-}
 STATUS_ICONS = {
     "待执行": "⏳",
     "执行中": "🔄",

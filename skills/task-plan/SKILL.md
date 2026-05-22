@@ -46,7 +46,7 @@ echo "SKILL: task-plan"
 ### 步骤 1：读取所有必读输入
 
 按上方 Required Inputs 列出的文件**逐一读取**：
-- 上游 stage 文档（brief / analysis / solution PM 视图）
+- 上游 stage 文档（brief / analysis / prd 功能规格）
 - 项目级文档（CONTEXT / DESIGN / prd / modules / prototypes）
 
 **特别注意**：
@@ -59,7 +59,7 @@ echo "SKILL: task-plan"
 
 > **颗粒度核心规则**：一个 task = PM 能在一次原型 demo 里完整验收的功能单元。
 >
-> **验收硬约束**：必须能在原型上演示一段业务流程才算端到端验收。PM 走查代码结构 / 文档可读性 / 契约合理性 **不算**端到端验收。文档型产物（模块规格文档 / functions.md / 字段口径契约 / 范围裁剪规则）天然不满足本约束 → **不立 task**，由业务 task close 后 `/doc-update` 流程沉淀对应章节。跨 task 共享口径决策应在 stage 3-4（analysis / solution）定死，stage 5 不为此立 task。
+> **验收硬约束**：必须能在原型上演示一段业务流程才算端到端验收。PM 走查代码结构 / 文档可读性 / 契约合理性 **不算**端到端验收。文档型产物（模块规格文档 / functions.md / 字段口径契约 / 范围裁剪规则）天然不满足本约束 → **不立 task**，由业务 task close 后 `/doc-update` 流程沉淀对应章节。跨 task 共享口径决策应在 stage 2-3（analysis / prd）定死，stage 5 不为此立 task。
 >
 > **业务模块 task**：一个 task 对应 1-N 条紧密相关的功能清单条目；紧密相关指同一个 user story 链条，或同一个页面区域可一次性 demo。不同 user story 链条即使在同一页面，也要拆成不同 task。
 >
@@ -159,7 +159,7 @@ echo "SKILL: task-plan"
 
 **§四 自检与状态摘要填写要点**：
 - §4.1 反模式 5 条逐条勾选"未命中 / 命中（已处理）"，命中时一句话说明合并 / 重构结论。**5 条全 PASS 才能进入 stage 6**。
-- §4.2 验收 GAP 清单：从 `solution.md` 「验收标准」逐条审视，编号 G1, G2, ...，由 stage 6 task-spec 按编号接住。无 GAP 时显式写"无 GAP"。
+- §4.2 验收 GAP 清单：从 `prd.md` 「验收标准」逐条审视，编号 G1, G2, ...，由 stage 6 task-spec 按编号接住。无 GAP 时显式写"无 GAP"。
 - §4.3 模块规格状态：列出本 req 涉及的每个业务模块的当前规格状态（已存在-完整 / 已存在-待补 / 不存在-待创建），影响 task-spec 步骤 4 判断。
 
 ### 步骤 4：自检（按 `_shared/pm-view/checklist.md` §八 12 项）

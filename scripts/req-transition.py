@@ -15,25 +15,11 @@ if _SCRIPTS_DIR not in sys.path:
     sys.path.insert(0, _SCRIPTS_DIR)
 
 from _lib.state import read_req_meta, StateReadError  # noqa: E402
-
-STAGE_NAMES = {
-    1: "感受问题",
-    2: "需求分析",
-    3: "方案设计",
-    4: "设计系统建立",
-    5: "模块规格 + task 拆分",
-    6: "task 执行",
-    7: "req close",
-}
-
-# Stage N requires this output file to exist (for forward transitions)
-STAGE_OUTPUT_FILES = {
-    1: "brief.md",
-    2: "analysis.md",
-    3: "solution.md",
-    # stage 4 output is docs/DESIGN.md (checked separately)
-    5: "task-plan.md",
-}
+from _lib.stages import (  # noqa: E402
+    STAGE_NAMES,
+    STAGE_OUTPUT_FILES,
+    LEGACY_STAGE3_OUTPUT,
+)
 
 
 def now_iso() -> str:
@@ -235,7 +221,30 @@ def validate_forward(meta: dict, target: int, req_dir: Path) -> None:
         sys.exit(1)
 
     # Check prerequisite output files
-    if current in STAGE_OUTPUT_FILES:
+    if current == 3:
+        # delta-2+4 E3：stage 3 换芯（solution.md → prd.md）。在飞旧 req 仍是
+        # solution.md。用文件存在性判别新旧流程，零新 .req-meta.json 字段：
+        #   solution.md 在 + prd.md 无 → 旧流程（接受 solution.md）
+        #   否则 → 新流程（要 prd.md）
+        #   两文件都有 → prd.md 优先 + 警告
+        prd = req_dir / "prd.md"
+        legacy = req_dir / LEGACY_STAGE3_OUTPUT
+        if prd.exists() and legacy.exists():
+            print(
+                "⚠️ stage 3 同时存在 prd.md 与 solution.md —— 以 prd.md 为准推进"
+                "（旧 solution.md 留作历史产物）。",
+                file=sys.stderr,
+            )
+        elif legacy.exists() and not prd.exists():
+            pass  # 旧流程：solution.md 即合法 stage 3 产出
+        elif not prd.exists():
+            print(
+                "Error: stage 3 output file not found: prd.md"
+                "（新流程 stage 3 产物为 req 级 PRD，由 /prd-writing 产出）",
+                file=sys.stderr,
+            )
+            sys.exit(1)
+    elif current in STAGE_OUTPUT_FILES:
         output_file = req_dir / STAGE_OUTPUT_FILES[current]
         if not output_file.exists():
             print(f"Error: stage {current} output file not found: {output_file.name}", file=sys.stderr)

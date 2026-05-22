@@ -22,10 +22,16 @@
 用法:
   python3 scripts/check-open-questions.py <doc-file>
   python3 scripts/check-open-questions.py <doc-file> --quiet   # 只看 exit code，不打印未答清单
+  python3 scripts/check-open-questions.py <doc-file> --require-section   # 缺 section 必须 fail
+
+--require-section 模式（delta-2+4 F5）：
+  默认模式下「缺 `## 未决问题` section」静默退出 0 —— 对大多数 stage 文档是对的
+  （它们没这 section）。但 project-solution 把未决问题写进专用暂存文件后对它跑闸门，
+  缺 section = 闸门形同虚设。该模式下缺 section 必须 fail（exit 1），不静默放行。
 
 退出码:
-  0  全部已答（或 section 不存在 / section 内显式声明无未决问题）
-  1  有未答（stdout 列出未答题号 / 行号）
+  0  全部已答（或 section 不存在且未加 --require-section / section 内显式声明无未决问题）
+  1  有未答（stdout 列出未答题号 / 行号）；或 --require-section 下缺 section
   2  参数错误 / 文件不存在
 """
 
@@ -125,6 +131,11 @@ def main():
     parser = argparse.ArgumentParser(description="未决问题闸门 lint")
     parser.add_argument("doc", help="文档路径（如 analysis.md）")
     parser.add_argument("--quiet", action="store_true", help="只看 exit code，不打印")
+    parser.add_argument(
+        "--require-section",
+        action="store_true",
+        help="缺 `## 未决问题` section 时 fail（不静默放行）—— project-solution 暂存文件用",
+    )
     args = parser.parse_args()
 
     path = Path(args.doc)
@@ -136,6 +147,17 @@ def main():
             file=sys.stderr,
         )
         sys.exit(2)
+
+    if args.require_section:
+        lines = path.read_text(encoding="utf-8").split("\n")
+        if find_section(lines) is None:
+            if not args.quiet:
+                print(
+                    f"⚠️ {path.name} 缺 `## 未决问题` section —— --require-section "
+                    "模式下闸门不放行。请在文档里加 `## 未决问题` section "
+                    "（无未决项则写「本 req 无未决问题」）。"
+                )
+            sys.exit(1)
 
     unanswered = find_open_questions(path)
 

@@ -1,0 +1,88 @@
+# 实现设计 — {{REQ_NAME}}
+
+> 本文件是 **req 级实现设计（HOW）**：这个 req 用什么架构、照哪些现有代码 / 模式写、为什么这么选。
+> 由 `/implementation-design` 在 **stage 5（拆 task 前）** 产出，承接原 `solution.engineering.md`
+> 的 req 级 HOW 内容（delta-8）。
+>
+> **性质 = 工程合同格式**：允许所有工程内容（TS 类型 / 字段名 / 像素 / 颜色 / 反向约束）。
+> **不跑 PM-view lint**（`check-doc-pm-view.py` 跳过本文件）。
+> **但 PM 经 stage-gate 确认门审定**架构决策表（选择 / 备选 / 理由）才放行 —— 不是 PM-invisible。
+>
+> **与 PRD 的分工**：PRD = req 级功能规格（WHAT）；本文件 = req 级 HOW。WHAT / HOW 分离，
+> 互相引用、不重抄。
+> **消费者**：`task-spec` 按 `HOW-ID` + 适用关键词挑出当前 task 相关行，写进 task 文件执行区；
+> `task-execute` 只读 task 文件，**不直读本文件**。
+
+- 关联 req：{{REQ_ID}}
+- 创建日期：{{CREATED_DATE}}
+- 当前 stage：5（拆 task 前）
+
+---
+
+## 段 1 · 架构决策表
+
+> 这个 req 用什么架构 / 技术选择。承接 `solution.engineering` ch1 数据结构 + ch2 派生状态规则。
+> 每条一行，带稳定 `HOW-ID`，供 task-spec 按 ID 定向消费。
+> **每行必带「选择 / 备选 / 理由 / 约束失效条件」** —— 允许写「无非平凡备选」，但不留空。
+
+| HOW-ID | 适用模块 / task 关键词 | 选择 | 备选 | 理由 | 约束失效条件 | 来源 |
+|---|---|---|---|---|---|---|
+| HOW-01 | <模块名 / 关键词> | <选定的架构 / 数据结构 / 类型> | <备选方案，或「无非平凡备选」> | <为什么选它> | <什么情况下这个决策不再成立> | <承接 solution.engineering ch1 / ch2，或「新增」> |
+
+<!-- HOW-ID 规则：HOW-01, HOW-02, ... 递增；一旦分配不复用、不重排（task-spec 按 ID 引用）。
+     「适用模块 / task 关键词」供 task-spec 按 input-flow §9.1.1 章节-grep 挑出当前 task 相关行。 -->
+
+---
+
+## 段 2 · 文件·模式索引
+
+> 照哪些现有代码 / 模式写。承接 `solution.engineering` ch3 组件实现路径 + ch4 Mock 改造 +
+> ch5 关键算法消费规则。
+> **复用优先**：据 `docs/DESIGN.md` 组件 inventory 写「复用现有组件 X」（与 stage 4 gap-check
+> 读同一份 inventory）；inventory 没有的才标新建。
+
+| HOW-ID | 适用模块 / task 关键词 | 文件路径 / 模式 | 说明（新建 / 修改 / 复用 / mock / 算法） | 来源 |
+|---|---|---|---|---|
+| HOW-10 | <模块名 / 关键词> | <具体文件路径，或现有组件名> | <复用现有组件 X / 新建 Y / 改造 mock Z / 纯函数 W> | <承接 ch3 / ch4 / ch5，或「新增」> |
+
+---
+
+## 段 3 · 约束与验收
+
+> 易错点 / 反向约束 + 工程层验收清单。承接 `solution.engineering` ch6 + ch10。
+
+### 3.1 易错点 / 反向约束
+
+| # | 禁止行为 | 后果 / 理由 | 来源 |
+|---|---|---|---|
+| 1 | <具体禁止的实现做法> | <会导致什么问题> | <PM 反馈 / plan-eng-review / 历史 task> |
+
+### 3.2 工程层验收清单
+
+<!-- agent 自审 / eng review / qa 跑通后逐条勾选的工程层断言；与 PRD「验收标准」分工：
+     PRD 是 demo 走查、本节是 agent 自动化校验 -->
+
+- [ ] <grep 校验 / 单测条目 / 引用稳定性 / 性能指标 等>
+
+---
+
+## 段 4 · 审计与修订记录
+
+> plan-review 沉淀 + 本文件修订留痕。承接 `solution.engineering` ch7。
+> （ch8 autoplan 修订点 = per-artifact 审计噪音，req 级不留；ch9 a11y / 视觉规范 → `docs/DESIGN.md`。）
+
+### 4.1 plan-review 沉淀
+
+<!-- 每条编号 V1, V2, ...；按「决策 / 理由 / 落地约束」三段式。
+     与段 1-3 冲突时本节为准，需在对应行标注「已被 V_X 取代」。 -->
+
+#### V1 [决策标题]
+**决策**：[简短描述]
+**理由**：[为什么这样选]
+**落地约束**：[实现时必须遵守的具体规则]
+
+### 4.2 修订记录
+
+| 日期 | 修订说明 |
+|---|---|
+| {{CREATED_DATE}} | 初版 |

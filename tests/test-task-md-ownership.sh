@@ -48,9 +48,10 @@ test_close_task_reclaims_task_md_before_merge() {
 }
 
 test_task_confirm_skill_documents_v45() {
-  start_test "task-confirm SKILL 文档化 v4.5 行为（task 分支独家）"
-  if ! grep -q "v4.5" "$TASK_CONFIRM_SKILL"; then
-    _fail "task-confirm SKILL 缺少 v4.5 标记"
+  start_test "task-confirm SKILL 文档化 task md 分支独家所有行为"
+  # fork 后从 req 分支删 task 文件 —— 描述措辞 v3 重写后不再带字面 "v4.5" 标
+  if ! grep -q "自动把 task 文件从 req 分支删除" "$TASK_CONFIRM_SKILL"; then
+    _fail "task-confirm SKILL 应说明 fork 后自动从 req 分支删 task 文件"
     return
   fi
   if ! grep -q "task 分支独家所有" "$TASK_CONFIRM_SKILL"; then

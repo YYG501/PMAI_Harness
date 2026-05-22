@@ -1,5 +1,7 @@
 # Task {{TASK_NUMBER}}: {{TASK_NAME}}
 
+<!-- task_format: single-typed-v3 -->
+
 <!-- ⚠️ 标题下方禁止加 frontmatter 段落。
 
   ✅ 正确：状态在 ## 📌 任务卡 表格里
@@ -12,26 +14,26 @@
 
   合法状态值（4 态）：待执行 / 执行中 / 已完成 / 已废弃
   ("待启动" 是 status-view.py 派生显示标签，不是字段值)
-  closed/ 下旧 task 是 v1 历史格式，新 task 不参考。
 -->
 
-> 本文件是 **PM 视图**（任务卡、关键决策、产物预览、功能清单、范围、验收清单、历史档案）。
+> 本文件是 task 的 **typed contract**（单文件，delta-3）—— 内部分三区，各区有各自的 lint：
 >
-> **📂 文档结构 — review 时必读以下全部文件**（任何 `/plan-eng-review` / `/plan-design-review` / `/plan-devex-review` / `/qa` / `/review` 等 review skill 进入时，**禁止只读本文件就出 finding**——单文件评审不全）：
+> - **PM 确认区**：任务卡 / task 级范围 / task 级验收清单 / PM 反馈承接清单。
+>   PM 在确认门**只读这一区**即可判 scope；跑 scoped PM-view lint（`check-doc-pm-view.py`）。
+> - **执行区**：启动前必读 / 实现规格 / 实现设计引用 / 约束与易错 / 自测说明 / 工程层验收 /
+>   状态转换说明。允许所有工程内容（TS 类型 / 字段 / 像素 / 反向约束），不跑 PM-view lint。
+> - **审计区**：文档偏差 / 自审记录 / 历史档案。executor 填，不 lint。
 >
-> - 本文件（PM 视图主文件）：任务卡 / 关键决策 / 功能清单 / PM 反馈 / 验收清单
-> - [`task-{{TASK_NUMBER}}-{{TASK_SLUG}}.engineering.md`](./task-{{TASK_NUMBER}}-{{TASK_SLUG}}.engineering.md)：启动前必读 / 功能清单工程版 / 实现指引 / 易错点 / 视觉规范细则 / plan-review 沉淀 / 工程层验收 —— **review 始终双读，缺这份评审不完整**
-> - `docs/DESIGN.md`：项目级视觉规范（颜色 / 字体 / 间距 / 组件 primitive） —— design / dx review 必读
-> - `docs/modules/<本 task 所属模块>.md`：模块规格（已实现的功能合同） —— eng / design review 必读
+> review 时（`/plan-eng-review` / `/plan-design-review` / `/qa` / `/review` 等）读本文件全文 +
+> `docs/DESIGN.md`（项目级视觉规范）+ `docs/modules/<本 task 所属模块>.md`（模块规格）。
 >
-> 写作规则参见 `skills/_shared/PM-VIEW-RULES.md`，特别是：
-> - §三 PM 视图写作规则（明确指代 / 正向描述 / 禁工程词 / 禁像素颜色 / 禁反向约束）
-> - §五 功能清单格式（N · 功能名 + 可选「使用角色」blockquote + 4 列表格「二级 / 三级 / 使用角色 / 需求描述」+ 续行前 3 格留空 rowspan + 需求描述列内联编号）
-> - §六 关键产品决策格式
-> - §七 章节顺序约束（本模板按此节锁定的顺序）
-> - §九 输入流约束（必读 brief.md / analysis.md / task-plan.md / solution.md（PM 视图）/ docs/{CONTEXT,DESIGN,prd}.md / docs/modules/<module>.md / 同模块已完成 task / prototypes/）
+> 写作规则参见 `skills/_shared/PM-VIEW-RULES.md`：§三 PM 视图写作规则（仅约束 PM 确认区）/
+> §七 章节顺序。
 
----
+<!-- ╔══════════════════════════════════════════════════════════════╗
+     ║  PM 确认区 — PM 在确认门读这一区；scoped PM-view lint 校验本区 ║
+     ╚══════════════════════════════════════════════════════════════╝ -->
+<!-- region: PM-CONFIRM begin -->
 
 ## 📌 任务卡
 
@@ -40,10 +42,19 @@
 | **状态** | 待执行 |
 | **所属模块** | [模块名 / 多个模块逗号分隔 / 基础设施] |
 | **所属模块章节** | [一级章节名；基础设施 task 留空] |
+| **executor** | claude-code |
+| **executor_model** |  |
+| **审查工具** | {{REVIEW_TOOLS}} |
 | **dev server** | （执行时填写） |
 | **worktree** | （执行时由 create-task-worktree.sh 填写） |
 | **创建时间** | {{CREATED_DATE}} |
 | **分支** | task-{{TASK_NUMBER}}-{{TASK_SLUG}} |
+
+<!--
+executor 取值：claude-code / codex / cursor-agent / manual；executor_model 留空 = settings 默认。
+claude-code 仅支持 opus / sonnet / haiku（Agent tool 枚举）。
+「审查工具」= 推荐 PM 在 task-execute 步骤 7 自跑的工具（I-RV1）；哨兵值 (无)/无/空/N/A 表示无推荐。
+-->
 
 **依赖**：
 
@@ -54,180 +65,19 @@
 
 **做什么**（10 秒理解）：
 
-<!-- 填写规则：
-- 1-2 句话讲清本 task 交付什么、改哪个区域、不改哪个区域
-- 不写技术细节（reducer / props / 字段名等）→ 进 .engineering.md
-- 不写为什么这样选（决策理由）→ 进「关键产品决策」共同理由行
--->
+<!-- 1-2 句话讲清本 task 交付什么、改哪个区域；不写技术细节（reducer / props / 字段名）。 -->
 
 [1-2 句任务描述]
 
 ---
 
-## 🎯 关键产品决策
+## 📦 范围（改 / 不改）
 
-<!-- 填写规则（PM-VIEW-RULES §六）：
-- 表格列：决策项 / 当前选择 / 备选方案
-- "决策项"必须明确"在「具体页面 - Tab - 区域」对什么对象做什么决策"
-- "当前选择"用完整业务描述
-- "备选方案"至少 1 个，标明取舍
-- "共同理由"放表格下方一段集中说明
-- 如本 task 无关键产品决策（纯执行型）：删掉表格，写一行：
-  本 task 无关键产品决策（执行 solution.md §X 已确定方案）
--->
-
-| # | 决策项 | 当前选择 | 备选方案 |
-|---|---|---|---|
-| 1 | [在「具体页面 - 区域」对什么对象做什么决策] | [完整业务描述] | [1-2 种合理替代] |
-
-> 决策的共同理由：[一段话集中说明]
-
----
-
-## 📐 产物预览
-
-<!-- 填写规则（按 task 类型生成）：
-- UI task（审查工具含 /design-review，或描述涉及 页面/组件/界面/前端/UI/view）→ ASCII 线框图
-- 纯文档 task（审查工具为空，描述含 文档/PRD/规格/说明/spec）→ markdown bullet 树形大纲
-- 其他（基础设施 / 后端 / 全栈）→ 写「无（[类型] task）」
-
-UI 线框图填写规则：
-- 用 markdown code block + ASCII 字符表达信息层级 + 主要区块布局
-- 标注顶部信息区 / Tab / 主区域分块 / 关键操作入口位置
-- **多页面 task**：每个页面用 `### 页面名 → /path` 三级标题分隔（路径是 task-verify 自动截图的依据；标题在 code block **外**，不破坏 §3.10「屏幕看得见的字」约束）
-- **单页面 task**：可省略三级标题，直接写 ASCII code block；task-verify 跳过自动截图（PM 手动验收）
-
-ASCII 框图代码块内硬约束（PM-VIEW-RULES §3.10：只允许"屏幕上看得见的字"；任何释义、注释、设计意图 → 全部下沉到框图代码块下方的「关键交互说明」段）：
-- ❌ 默认值标注：「席位（独占）」/「1（独占，固定）」→ 系统恒定属性，直接写值「1」，"独占"语义进 §交互说明
-- ❌ 文档元注释：「（新增·简化版）」/「（仅租户管理员可见）」→ 给文档读者的，admin 屏幕上看不见，整段删除
-- ❌ 设计意图：「（已吊销，弱化）」/「（弱化）」→ 文案保留状态名「已吊销」；视觉弱化进 §交互说明，引 docs/DESIGN.md
-- ❌ 字段口径解释：「（多证场景下出现）」/「（按 X 维度集动态显示）」→ 屏幕字保留入口名；触发条件 / 数据派生进 §交互说明
-- ❌ 折叠藏默认值：「[▸ 高级配置]」← 默认值藏在这里 → 默认值直接渲染；override 走单独按钮（如「改为共享部门额度」）
-- ❌ 像素值 / 颜色码 / 字号 / Tailwind 类名 / 组件库类名 → 进 .engineering.md §8
-
-大纲填写规则：
-- markdown bullet list 树形（嵌套 -），章节层级 2-3 级
-- 章节名用产品视角的业务名（不是文件名 / 类名）
--->
-
-### [页面名 1] → [/path-1]
-
-```
-[ASCII 线框图]
-```
-
-[关键交互说明：管理员（租户管理员 / 部门管理员）在该产物上能做什么、各操作触发什么响应]
-
-### [页面名 2] → [/path-2]
-
-```
-[ASCII 线框图]
-```
-
-[关键交互说明]
-
----
-
-## 🔤 占位字典
-
-<!-- 填写规则：
-- 把 §📐 ASCII 框图里出现的所有占位词（如 [Logo] / [标题] / [兜底文案]）映射到实际值
-- 格式：`[占位词]` → 实际值 + 必要时一句 PM 视图硬约束（"留空不要单字母"/"统一这条不要 X"）
-- **同类占位只写一条**（5 个页面都有 [兜底文案] → 一条说"统一用 X"），避免重复 & 强制一致性
-- ASCII 里出现但字典里没条目的占位 → task-spec 闸门会拦下不让进 task-execute
-- 字典里的硬约束会被 task-verify 翻译成 assert（如"留空" → assert empty，"统一 X" → assert text equals）
-- 非 UI task：填「无（[类型] task）」
-
-例：
-- [Logo] → assets/logo.svg；无资源时**留空**，不要单字母 / 占位符
-- [兜底文案] → 「尚未登录」（所有空状态 / 未登录场景统一这条，不要"欢迎回来"/"Hi"等问候）
-- [侧边栏] → 只 1 个，不要并列多个
--->
-
-| 占位词 | 实际值 / 硬约束 |
-|---|---|
-| `[Logo]` | [实际值 + 必要约束] |
-| `[占位 2]` | ... |
-
----
-
-## 📋 功能清单
-
-<!-- 填写规则（PM-VIEW-RULES §5.1，4 列表格 + 续行 rowspan + 需求描述列内联编号）：
-
-结构：
-- 标题：N · 功能名 — 必须含完整指代前缀（如「产品详情页 - Tab 1 额度分配视图」）
-- 紧接标题（可选）：> **使用角色**：[...]（当本节整体角色统一时写在 blockquote；逐行不同则只填表内列）
-- 4 列功能表格：二级功能 / 三级功能 / 使用角色 / 需求描述
-- 同一三级功能的多条需求 → 第 2 条起的前 3 列**留空**（视觉等同 rowspan）
-- 需求描述列内联数字编号：每条 1. / 2. / 3. ...
-- 字段定义、计算口径、边界规则等直接写进需求描述列某条编号项；**不另起字段口径独立表**
-- 正向句式：「系统提供 X」/「管理员 在 Y 场景执行 Z 后系统反馈 W」
-- 表后（可选）：> **注**：[本节额外约束 / 边界]
-
-需求描述列编号项硬约束（§5.2 判别简则：「换一套 UI 还成立吗？」成立 = 业务规则；不成立 = UI 描述，挪走）：
-  ❌ UI 排版 / 视觉容器：灰底 / 圆角 / 2 列 grid / 上下结构 / 顶部 / 底部 / 副标题 / 主按钮 / 二级按钮 → 进 §📐 产物预览 + .engineering.md §8
-  ❌ 元素位置 / 顺序：「第 1 行 X、第 2 行 Y」/「字段顺序：A / B / C」/「右侧依次是 ...」 → 进 §📐 产物预览
-  ❌ UI 控件类型：segmented control / kebab / tree connector / 折叠区 / sticky / overlay → 进 .engineering.md §8
-  ❌ 样式参照：「与 X 同款」/「与 Y 对齐」/「一致样式」 → 进 .engineering.md §8
-  ❌ 反向约束：「禁止 X」/「不允许 Y」/「不准 Z」 → 进 .engineering.md §6
-  ❌ 设计意图：「（避免双重计数）」/「（防止角色爆炸）」 → 进 §🎯 关键产品决策的「共同理由」
-  ❌ 工程词：reducer / dispatch / props / hook / useState / schema / topContent / event.stopPropagation → 进 .engineering.md §4
-  ❌ 反引号代码引用（§3.8）：`useState` / `getXxx()` / `field.attribute` / `onClick` 等 → 一律不出现在 PM 视图
-  ❌ 中英混杂业务词（§3.8）：admin / scope / CRUD / review / active / pending / null / undefined / existing / sum / count / map / filter / reduce → 改为日常中文（管理员 / 管辖范围 / 创建-编辑-删除 / 评审 / 已激活 / 待生效 / 无值 / 未设置 / 现有记录 / 累加 / 统计 / 按 X 归并 / 按 X 筛选 / 合并）
-  ❌ 数学符号（§3.8）：∩ / ∪ / ⊊ / ⊆ / 严格小于 → 改业务语言（"两者交集" / "完全包含且至少少一个"）
-
-字段值口径写作（§5.3，当字段定义出现在需求描述列时）：
-- 用业务动词：累加 / 统计 / 取 / 减 / 按 X 归并 / 按 X 筛选；不用 sum / count / reduce / map / filter
-- 状态字面量用中文：已激活 / 待生效 / 无值 / 未设置；不用 active / pending / null / undefined
-
-已弃格式（§5.5 反例）：3 列表 + 需求列表脱表（同一节多角色时角色对应关系丢失；二级 / 三级容易凑层）
-
-基础设施 task：本 section 填「无（基础设施 task）」
--->
-
-### 1 · [产品视角的功能名 — 必须含完整指代前缀]
-
-> **使用角色**：[当本节整体角色统一时写在此 blockquote；逐行不同则只填表内列，本行删除]
-
-| 二级功能 | 三级功能 | 使用角色 | 需求描述 |
-|---------|---------|---------|---------|
-| [二级功能名] | [三级功能名] | [角色名 — 角色限定条件] | 1. [业务命题或规则；过「换 UI 还成立吗」判别简则] |
-| | | | 2. ... |
-| [二级功能名] | [另一三级功能名] | [角色名] | 1. ... |
-| | | | 2. ... |
-
-> **注**：[可选，写明本节额外约束 / 边界；不需要时整行删除]
-
-### 2 · ...
-
----
-
-## 🚦 跨功能产品规则
-
-<!-- 填写规则：
-- 来自同模块已完成 task 的 PM 反馈中"正向规则"类条目（PM-VIEW-RULES §9.4 三类分流）
-- 跨多个功能的共同业务规则（统一文案 / 统一行为 / 数据闭环关系等）
-- 每条 1-2 句完整描述，不缩略
-- 如本 task 无跨功能规则：删掉本 section
--->
-
-1. [跨功能产品规则 1，正向描述]
-2. [跨功能产品规则 2]
-
----
-
-## 📦 范围
-
-<!-- 填写规则：
-- 「改」列出本 task 涉及的页面 / 区域（用产品视角的业务名，不写文件路径）
-- 「不改」列出明确排除的页面 / 区域 + 排除理由
-- 文件级路径列表进 .engineering.md
--->
+<!-- task 级范围（这个 task 改哪 / 不改哪）；req 级范围在 prd.md。
+     用产品视角的业务名（不写文件路径，文件级路径进执行区）。 -->
 
 **改**
 - [产品视角的区域名 1]
-- [产品视角的区域名 2]
 
 **不改**
 - [明确排除的区域 + 排除理由]
@@ -236,91 +86,187 @@ ASCII 框图代码块内硬约束（PM-VIEW-RULES §3.10：只允许"屏幕上�
 
 ## ✅ 验收清单（PM 走查）
 
-<!-- 填写规则：
-- PM 走查清单（不是工程层断言）
-- 每条："管理员（租户管理员 / 部门管理员）/ PM 在 X 场景下能 / 做到 Y"
-- 不写：grep 校验、单测断言、引用稳定性测试、覆盖率阈值 → 进 .engineering.md §9
-- 颗粒度：PM 自己能在 demo 时勾选的条件
-- 业务模块 task 必填；基础设施 task 也必填可验证条件（脚手架可启动、脚本可运行等）
--->
+<!-- task 级验收（PM 自己能在 demo 时勾选的条件）；req 级验收标准在 prd.md §七。
+     不写 grep 校验 / 单测断言 / 覆盖率阈值 → 那些进执行区·工程层验收。 -->
 
 ### 主路径
 - [ ] [PM 可走查的成功条件 1]
-- [ ] [PM 可走查的成功条件 2]
 
 ### 边界路径
 - [ ] [边界场景 1]
 
-### 文案
-- [ ] [文案统一性条件]
-
-### 视觉与可访问性
-- [ ] [视觉走查条件，不写像素值]
+### 文案 / 视觉
+- [ ] [文案统一性 / 视觉走查条件，不写像素值]
 
 ---
 
-## 🧪 自测说明
+## 📥 PM 反馈承接清单
 
-<!-- 填写规则（流程化 UAT，task-verify skill 自动跑）：
+<!-- delta-3 §2.4：task-spec 扫前序「已完成」task 的「PM 反馈」段，按 relevance 二分。
+     每条前序反馈一行；确认门摘要输出「承接 X 条 / 不适用 Z 条」，PM 一眼可见、可纠误判。
+     无前序反馈 → 写「无前序 PM 反馈」。 -->
 
-- UI task 必填；非 UI task 写「无（[类型] task）」
-- 每个流程一个 `### 流程 N: <流程名>` 三级标题
-- 流程内是 PM 视图自然语言的动作 + 期望（task-verify 翻译成浏览器 assert）
-- 动作支持：打开 /xxx / 输入 X / 点击 Y
-- 期望支持：跳转 /yyy / 显示 X 文案 / 留空 / 只 N 个 X / 无 X 文案
-- artifact 字段写截图存放路径（相对 .pm-workflow/tasks/<task-stem>/verify/）
-- 不允许工程黑话（selector / xpath / assert）—— 写 PM 视角的"期望看到 X"
-- task-spec 会自动派生骨架（每个 §📐 路径一条主路径流程 + 冷启动 smoke），PM 抽查 + 补流程
+| 来源 task | 原文摘要 | relevance | 处理结果 | 理由 |
+|---|---|---|---|---|
+| task-NNN | [一句话摘要] | 适用 / 不适用 | 承接（写进执行区·约束与易错）/ 不适用（留原 task 不动）| [一句理由] |
 
-例：
+无前序 PM 反馈
 
-### 流程 1: 未登录访问受保护页
-1. 打开 /workspace
-2. 期望：跳转 /login（未登录拦截）
-3. 期望：登录页显示"金管家"标题、Logo 位置留空、表单可见
-artifact: verify/flow-1.png
+<!-- region: PM-CONFIRM end -->
 
-### 流程 2: 错误密码登录
-1. 打开 /login
-2. 输入账号正确、密码错误
-3. 点击「登录」按钮
-4. 期望：显示"密码错误"，留在 /login（未跳转）
-artifact: verify/flow-2.png
+<!-- ╔══════════════════════════════════════════════════════════════╗
+     ║  执行区 — executor 实现依据；允许所有工程内容；不跑 PM-view lint ║
+     ╚══════════════════════════════════════════════════════════════╝ -->
+<!-- region: EXEC begin -->
 
-### 流程 3: 成功登录跳工作台
-1. 打开 /login
-2. 输入正确凭证，点击「登录」
-3. 期望：跳转 /workspace
-4. 期望：工作台只 1 个侧边栏、文案"尚未登录"、无"欢迎"/"Hi"等问候
-artifact: verify/flow-3.png
+## 🔁 状态转换说明（agent 必读）
 
-### 流程 N: 冷启动 smoke（task-spec 自动注入）
-1. 杀掉 dev server
-2. 清本地 storage
-3. 重启 dev server，访问 /
-4. 期望：起得来 + 首屏无报错
-artifact: verify/cold-start.log
--->
+> ⚠️ **agent 读取本文件后第一步：检查「状态」字段，按下表行动。**
+
+| 状态 | 谁行动 | 做什么 |
+|------|--------|--------|
+| `待执行` | orchestrator | 等 PM 通过 `/task-confirm` 创建 worktree；可只读代码（preflight），不得写代码 |
+| `执行中` | task window / execution agent | 在 task worktree 中实现 + 自审；呈交和 PM 验收期间仍保持此状态 |
+| `已完成` | — | PM 已通过，不再修改 |
+| `已废弃` | — | PM 决定不做。文件已 `git mv` 到 `tasks/discarded/`，task worktree + 分支已清理 |
+
+**状态转换（受控入口）：**
+`待执行` →(PM 在 task 窗口启动 `/task-execute`)→ `执行中` →(PM 通过呈交块)→ `已完成`
+PM 打回 → 保持 `执行中`；执行失败 / 放弃 manual → `待执行`
+`{待执行, 执行中}` →(PM 废弃)→ `已废弃`（专用入口 `--discard`）
+
+**禁止直接编辑「状态」字段。** 用：
+`python3 .claude/scripts/task-transition.py <task 文件路径> --to <目标状态>`
+废弃：`python3 .claude/scripts/task-transition.py <task 文件路径> --discard --reason "<一句话>"`
+
+---
+
+## 🚦 启动前必读（按顺序，读完再执行）
+
+<!-- 列出 agent 在 task worktree 启动前必读的文件路径 + 一句话说明。至少含：
+- prd.md 的相关章节（req 级 WHAT）
+- implementation-design.md 的相关 HOW-ID 行（见下「实现设计引用」段已挑出）
+- task-plan.md 的相关 GAP / 风险条目
+- docs/CONTEXT.md / docs/DESIGN.md / docs/modules/<module>.md
+- 同模块已完成 task — 复用 / 避免重复 -->
+
+1. `requirements/active/{{REQ_ID}}-{{REQ_SLUG}}/prd.md` §X — [一句话说明]
+2. `requirements/active/{{REQ_ID}}-{{REQ_SLUG}}/task-plan.md` §三 风险 + §四 自检与状态摘要
+3. `docs/CONTEXT.md` / `docs/DESIGN.md` / `docs/modules/<module>.md`
+4. 同模块已完成 task — [复用 / 避免重复]
+
+---
+
+## 🔧 实现规格
+
+<!-- 本 task「怎么做」—— 由 task-spec 从 prd.md 切片（WHAT）转写 + 补实现层细节。
+     与 prd.md 分工：prd.md 是 req 级功能规格，本段是 task 级可执行规格。
+     允许工程内容（字段名 / props / 函数签名 / 调用链）；用代码块表达类型 / 接口。 -->
+
+### 1 · [功能名]
+
+[task 级实现要求 + 实现层细节]
+
+---
+
+## 🧩 实现设计引用（HOW）
+
+<!-- task-spec 从 implementation-design.md 按 HOW-ID + 适用关键词挑出当前 task 相关行，
+     写在这里（不让 task-execute 跨文件回查）。每条带原 HOW-ID 便于追溯。
+     task-scoped 占位值也内联在本段（executor 不跨文件回查 prd.md）。 -->
+
+| HOW-ID | 决策 / 文件·模式 | 本 task 落地要点 |
+|---|---|---|
+| HOW-NN | [从 implementation-design.md 挑出的架构决策 / 文件路径] | [对本 task 的具体含义] |
+
+**task-scoped 占位值**（如本 task 含 UI 占位）：
+
+| 占位词 | 实际值 / 硬约束 |
+|---|---|
+| `[占位词]` | [实际值 + 必要约束] |
+
+---
+
+## ⚠️ 约束与易错
+
+<!-- 易错点 / 反向约束（允许反向描述：禁止 X / 不允许 Y）+ a11y / 视口 / 视觉规范细则。
+     来源标注：源 PM 反馈（含承接自前序 task 的 relevance=适用 条目）/ plan-review / 历史 task。
+     像素细则体量大时，按 delta-8 §3.4 同款判断分流 docs/DESIGN.md。 -->
+
+| # | 禁止行为 / 易错点 | 后果 / 理由 | 来源 |
+|---|---|---|---|
+| 1 | [具体禁止的实现做法] | [会导致什么问题] | [PM 反馈 / plan-review / 历史 task] |
+
+---
+
+## 🧪 自测说明（task 级流程化 UAT，task-verify 自动跑）
+
+<!-- task-spec 从 prd.md §七 验收标准派生 task-scoped 自测说明（task 文件对 task-verify 自包含）。
+     UI task 必填；非 UI task 写「无（[类型] task）」。
+     每个流程一个 `### 流程 N: <流程名>`；动作 + 期望用 PM 视角自然语言，不写 selector / assert。 -->
 
 ### 流程 1: [流程名]
 1. [动作]
-2. [动作]
-3. 期望：[期望可观察结果]
+2. 期望：[期望可观察结果]
 artifact: verify/flow-1.png
+
+### 流程 N: 冷启动 smoke（task-spec 自动注入）
+1. 杀掉 dev server；清本地 storage
+2. 重启 dev server，访问 /
+3. 期望：起得来 + 首屏无报错
+artifact: verify/cold-start.log
+
+---
+
+## ✔️ 工程层验收（自审用，agent 自动化校验）
+
+<!-- 与 PM 确认区·验收清单分工：那边是 PM demo 走查、本段是 agent 自动化断言。
+     grep 校验 / 单测条目 / 引用稳定性 / 覆盖率阈值 / 性能指标。 -->
+
+- [ ] [grep 校验 / 单测条目 / 引用稳定性 / 性能指标]
+
+<!-- region: EXEC end -->
+
+<!-- ╔══════════════════════════════════════════════════════════════╗
+     ║  审计区 — executor / PM 填；不 lint                            ║
+     ╚══════════════════════════════════════════════════════════════╝ -->
+<!-- region: AUDIT begin -->
+
+## 📋 文档偏差
+
+<!-- ⚠️ 本 section 必须保留 —— task-transition.py「执行中→已完成」gate 读它。
+     execution agent 填：实现过程发现的、与 prd.md / implementation-design.md /
+     docs/modules 不一致处。四列：文档位置 / 文档原文 / 实际实现 / 建议改法。
+     无偏差填「无」。close-task Phase 2 把本段 promote 成 req `adjustment` 事件。 -->
+
+| 文档位置 | 文档原文 | 实际实现 | 建议改法 |
+|---|---|---|---|
+
+无
+
+---
+
+## 🔍 自审记录
+
+<!-- ⚠️ 本 section 必须保留 —— task-transition.py「执行中→已完成」gate 读它。
+     PM 跑完 review 后由 orchestrator 机械追加（I-RV1：review 工具 PM 自跑）。
+     PM 全跳 review：至少留一条 `**结果：** PM 选择不跑 review` placeholder。 -->
+
+### 自审 1 - [YYYY-MM-DD HH:MM]
+**工具：** [/qa, /design-review 等，或 PM 未跑]
+**结果：** PM 报告：通过 / 发现 N 个问题 / 选择不跑 review
+**详细发现：** [F-001: ... ✅已修复 / 未发现问题 / N/A]
+**遗留问题：** 无 / [列出]
 
 ---
 
 ## 📁 历史档案（验收时打开看最新一轮）
 
-> 工程实现细节（启动前必读 / 实现指引 / 易错点 / plan-review 沉淀 / 工程层验收）见 [`task-{{TASK_NUMBER}}-{{TASK_SLUG}}.engineering.md`](./task-{{TASK_NUMBER}}-{{TASK_SLUG}}.engineering.md)
-
 <!-- 本段允许写入：
 - ✅ 执行日志（agent 在 task-execute 自动写）
 - ✅ PM 反馈（PM 在 close-task / review 后手动写）
-- ❌ AI 维护性动作（reconcile / hash 对齐）**禁止**写入 ——
-     这些只写工程合同（task.engineering.md 末尾 reconcile 注释行）。
-- 原因：hash 基于本 PM 视图全文计算，AI 写入会自指死循环
-       （详见 _shared/pm-view/input-flow.md §9.6.4 反模式段）。 -->
+- ✅ plan-review 沉淀（plan 阶段 review 沉淀，三段式 决策/理由/落地约束）
+- ❌ AI 维护性动作（hash 对齐等）禁止写入 —— 单文件已无双文件 hash 同步机器（delta-3）。 -->
 
 ### 执行日志（agent 填写，不要删除历史记录）
 
@@ -329,18 +275,10 @@ artifact: verify/flow-1.png
 **新建文件：** [列表，没有则填"无"]
 **修改文件：** [列表]
 **遇到的问题：** [如无则填"无"]
-**文档对齐预告：** [本轮原型改动可能影响 task md 哪些业务字段；首次实现 / 无影响填"无"]
-- §📋 字段口径表 第 N 行 → 改成 ...（举例）
-- §🎯 决策 #N → 反转为方案 B（举例）
+**文档对齐预告：** [本轮原型改动可能影响 task md 哪些业务字段；首次实现 / 无影响填"无"。close-task §0 对齐扫描优先读本字段]
 **验收标准完成情况：**
 - [x] 条件 1
 - [ ] 条件 2（未完成原因：...）
-
-> **「文档对齐预告」字段说明**：
-> - task-execute 反馈循环里，AI 改原型代码后在此预告可能影响的 task md 段
-> - close-task §0 读这个字段当对齐线索，跟原型代码做最终 batch 对齐
-> - 反馈循环规则禁止 AI 直接改 §🎯/§📐/§📋/§🚦/§✅ 正文，**只在这里预告**
-> - 首次执行（非反馈循环）填"无"
 
 ---
 
@@ -349,34 +287,20 @@ artifact: verify/flow-1.png
 #### 反馈 1 - [YYYY-MM-DD]
 **问题描述：** [发现了什么问题]
 **要求修改：** [具体怎么改]
-**分类（PM-VIEW-RULES §9.4）**：[正向规则 / 反向约束 / 决策记录 / 视觉规范]
 **处理结果：** 待处理 / 已处理
 
-> PM 反馈分类规则：
-> - 正向规则（"统一用 X" / "全文用 Y"）→ task-spec 同步入下一个 task 的「跨功能产品规则」
-> - 反向约束（"禁用 X" / "不要 Y"）→ task-spec 同步入下一个 task 的工程合同 §6 易错点 / 禁止项
-> - 决策记录（"二审改 X" / "重做为 Y"）→ task-spec 同步入下一个 task 的「关键产品决策」备选方案列
-> - 视觉规范（"spinner 改 +/-" / "ⓘ 用 lucide" / "chip 改 box" / "弹窗 footer baseline" 类控件/间距/图标/配色决策）→ close-task 步骤 1.5 反推到 `docs/DESIGN.md`，PM 逐条选 Y-rule / Y-task-note / N
->
-> ⚠️ 视觉规范类反馈**禁止塞到反向约束**（会进工程合同 §6 task-local sink，下一个 task 起新组件时 LLM 没参考、重复踩坑）
+> close-task 收尾会扫本段：视觉规范类 → `docs/DESIGN.md`；全项目跨功能产品行为规则 →
+> `docs/PRODUCT-RULES.md`（PM-selective promote）；task-local / 同模块前瞻 → 留本段，
+> 由后续 task 的 task-spec 按 relevance 二分承接（写进「PM 反馈承接清单」）。
 
 ---
 
-### 业务层偏差（task 实证发现 req / 项目级文档需修订处）
+### plan-review 沉淀
 
-<!-- 填写规则：
-- 默认填「无」（多数 task 不会推翻已有文档）
-- 当本 task 实证发现 brief.md / analysis.md / solution.md（PM 视图）/ prd.md / docs/modules/<module>.md
-  内容需修订时，按下方格式列出
-- 工程层偏差（接口签名 / 字段命名 / 组件路径不一致）写工程合同 §10 文档偏差，不在此重复
-- close-task 时调用 /doc-update 对账模式扫此段 + §10 → 呈交 PM 决定逐条修订原文
-- 推翻 / 修订都按"文档位置 + 文档原文 + 实证发现 + 建议改法"四列描述
--->
+<!-- plan 阶段 /plan-eng-review / /plan-design-review 沉淀，三段式：决策 / 理由 / 落地约束。
+     与执行区冲突时本段为准。 -->
 
-| 文档位置 | 文档原文 | 实证发现 | 建议改法 |
-|---|---|---|---|
-
-无
+<!-- region: AUDIT end -->
 
 ## 📎 参考材料
 
