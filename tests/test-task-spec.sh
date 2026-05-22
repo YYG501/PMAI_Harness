@@ -252,19 +252,22 @@ test_template_regression() {
   _assert_contains "$TASK_TEMPLATE" "## 📋 文档偏差" "v3 doc diff section" || return
   _assert_contains "$TASK_TEMPLATE" "## 🔍 自审记录" "v3 self-review section" || return
 
+  # module spec = 模块活文档：只留跨 req 长期为真的章节；req 时态章节已砍（详见 templates/module.md.tmpl 顶部说明）
   _assert_contains "$MODULE_TEMPLATE" "## 摘要" "module summary preserved" || return
   _assert_contains "$MODULE_TEMPLATE" "## 一、模块定位" "module positioning preserved" || return
-  _assert_contains "$MODULE_TEMPLATE" "## 二、Scope In / Scope Out" "module scope preserved" || return
-  _assert_contains "$MODULE_TEMPLATE" "## 三、功能清单（硬约束）" "module function list" || return
+  _assert_contains "$MODULE_TEMPLATE" "## 二、功能清单（硬约束）" "module function list" || return
   _assert_contains "$MODULE_TEMPLATE" "#### 1 · [三级功能名]" "module three-level function block" || return
   _assert_contains "$MODULE_TEMPLATE" "> **使用角色**：" "module section 级使用角色 blockquote（§5.1）" || return
   _assert_contains "$MODULE_TEMPLATE" "| 二级功能 | 三级功能 | 使用角色 | 需求描述 |" "module 4 列表格 header（§5.1）" || return
   _assert_missing "$MODULE_TEMPLATE" "**业务规则**：" "module 模板不再用 4 块结构 业务规则 heading（§5.1）" || return
   _assert_missing "$MODULE_TEMPLATE" "**字段口径**（仅当" "module 模板不再用字段口径独立表（§5.1）" || return
-  _assert_contains "$MODULE_TEMPLATE" "## 五、硬约束" "module hard constraints preserved" || return
-  _assert_contains "$MODULE_TEMPLATE" "## 七、验收标准" "module acceptance preserved" || return
-  _assert_contains "$MODULE_TEMPLATE" "## 八、跨模块依赖与占位策略" "module dependencies preserved" || return
-  _assert_contains "$MODULE_TEMPLATE" "## 九、Task 拆分提示" "module task split hints preserved" || return
+  _assert_contains "$MODULE_TEMPLATE" "## 三、页面与交互范围" "module pages section preserved" || return
+  _assert_contains "$MODULE_TEMPLATE" "## 四、硬约束" "module hard constraints preserved" || return
+  _assert_contains "$MODULE_TEMPLATE" "## 五、跨模块依赖与占位策略" "module dependencies preserved" || return
+  _assert_missing "$MODULE_TEMPLATE" "Scope In / Scope Out" "module 模板不再含 req 级 Scope 章节" || return
+  _assert_missing "$MODULE_TEMPLATE" "## 六、本批不做" "module 模板不再含 req 级 本批不做 章节" || return
+  _assert_missing "$MODULE_TEMPLATE" "## 七、验收标准" "module 模板不再含 req 级 验收标准 章节" || return
+  _assert_missing "$MODULE_TEMPLATE" "Task 拆分提示" "module 模板不再含 req 级 Task 拆分提示 章节" || return
   _assert_missing "$MODULE_TEMPLATE" "## 八、实现指引" "module implementation guide removed" || return
 
   _assert_contains "$DESIGN_TEMPLATE" "## 创意自由度" "DESIGN creative freedom section" || return
