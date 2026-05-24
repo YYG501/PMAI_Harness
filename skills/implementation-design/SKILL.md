@@ -24,10 +24,17 @@ description: |
 
 - 允许所有工程内容（TS 类型 / 字段名 / 像素 / 颜色 / 反向约束）。
 - **不跑 PM-view lint** —— `check-doc-pm-view.py` 跳过本文件（同它已跳过 `.engineering.md`）。
-- **有 PM 确认门** —— 产出后由 `/req-stage-gate` 走确认门，PM 审定**架构决策表**
-  （选择 / 备选 / 理由）才放行。架构决策表含「这个 req 用什么架构、为什么这么选」，
-  AI 单方面定再注入 task 与框架内核「PM 在环里」冲突。确认门展示架构决策表「选择」列
-  摘要 + 文件路径，PM 可下钻全文，不必逐字背工程细节。
+- **有 PM 确认门** —— 产出后由 `/req-stage-gate` 走确认门，PM 审定**架构决策表 + 原型简化项段**
+  （选择 / 备选 / 理由 + 简化项 SIMP-ID / PRD 锚点 / 计划简化为），两块同门一次性放行（D1）。
+  架构决策表含「这个 req 用什么架构、为什么这么选」、原型简化项段含「原型故意做得比 PRD 少的
+  scope 削减」—— 两者都是 scope 决策，AI 单方面定再注入 task 与框架内核「PM 在环里」冲突。
+  确认门展示 ① 架构决策表「选择」列摘要 ② 简化项段「SIMP-ID + 计划简化为」摘要 + 文件路径，
+  PM 可下钻全文，不必逐字背工程细节。
+
+- **简化项段 scoped PM-view lint**（D2 源头约束）—— 段 1.5「原型简化项」内容会被 close-req §2a
+  写回 PRD（PRD 是 PM 视图），所以本段产出后跑一次 scoped PM-view lint，只校验段 1.5 内的
+  「真实需求」「原型本次计划简化为」「为什么简化」三个 PM 视图字段（其余段保持工程豁免）。
+  scoped 模式入口见步骤 3 自检 + 步骤 3.5 lint 调用。
 
 ## Preamble
 
@@ -75,14 +82,39 @@ PM 确认门（审架构决策表），通过后再调 `/task-plan`。
 ### 步骤 2：按归宿表产出 implementation-design.md
 
 按 `$REPO_ROOT/templates/implementation-design.md.tmpl` 生成
-`$ACTIVE_REQ_DIR/implementation-design.md`，4 段结构：
+`$ACTIVE_REQ_DIR/implementation-design.md`，5 段结构：
 
 | 段 | 内容 | 承接来源 |
 |---|---|---|
 | 段 1 · 架构决策表 | 这个 req 用什么架构 / 数据结构 / 派生状态规则 | 原 solution.engineering ch1 + ch2 |
+| **段 1.5 · 原型简化项**（v2 新增）| 本 req 原型故意做得比 PRD 少的 scope 削减（kind 1 直接登记 / kind 2 由 task-plan §4.2 反向写回）| §0 痛点决议 + plan-eng-review Round 1 |
 | 段 2 · 文件·模式索引 | 照哪些现有代码 / 组件 / 模式写；mock 改造；关键算法消费规则 | 原 ch3 + ch4 + ch5 |
 | 段 3 · 约束与验收 | 易错点 / 反向约束 + 工程层验收清单 | 原 ch6 + ch10 |
 | 段 4 · 审计与修订记录 | plan-review 沉淀 + 修订留痕 | 原 ch7（ch8 autoplan 噪音不留；ch9 视觉规范 → DESIGN.md）|
+
+#### 2.1 段 1.5 · 原型简化项登记引导（kind 1）
+
+**触发问句**：写完段 1 架构决策后，对 PRD §六 功能需求逐条问自己：「原型本期是否原样实现这条？」。
+若 PM 在 stage 2-4 已决策本期某功能行为简化（不全做 PRD 写的范围），登记一行：
+
+- **PRD 锚点**：写「§六 6.X <功能名>」或「Story N」。close-req §2a 按章节号 + 功能名解析回 PRD，
+  必须能在 PRD 找到对应行。
+- **真实需求**：写「见 PRD §六 6.X」一句引用，不重抄 PRD 原文（避免 §5.4 closed PRD 双源）。
+- **原型本次计划简化为**：诚实写「计划」—— stage 5 还没执行，写时是计划描述，不是 as-built。
+  若执行期偏离计划，走 close-task adjustment 路径（D3 / C9）。
+- **为什么简化**：一句话理由（如「本期主流程已覆盖 80% 用例，分支路径下个 req」）。
+- **来源**：本段直接登记的写 `kind 1`；`kind 2` 是 task-plan §4.2 反向写回的（本 skill 不主动写）。
+
+**范围阈值**（C8）：只登 PM 主动决策的**决策级简化**。路线默认（如原型档「默认仅主路径」）由
+`docs/工程结构约束-prototype.md` 总体说明覆盖，不为每个略过的 edge case 立 SIMP 行。判断标准：
+**「PM 是否会因此条简化在评审时被问『为什么这块没做』」** —— 会 → 登；不会 → 走总体说明。
+
+**无简化项的情况**：原型本期 1:1 实现 PRD 全部范围 → 表格保留表头 + 单独一行写「无」。
+不要省段头（close-req §2a 读不到段会报错）。
+
+**kind 2 不在此处登记**：整块功能原型不做的（如「PRD 有 SSO 但原型本期完全不接 SSO」）由
+task-plan §4.2 验收 GAP 清单原地登记（编排顺序：implementation-design 在 task-plan 之前，
+拿不到 task-plan 决策），task-plan 决议后反向写回本段一行（来源列标 kind 2）。
 
 **可消费 schema（强制）** —— 段 1 / 段 2 每条 HOW 是一行，带稳定字段：
 
@@ -98,16 +130,41 @@ PM 确认门（审架构决策表），通过后再调 `/task-plan`。
 
 ### 步骤 3：自检
 
-- [ ] 4 段齐全；段 1 / 段 2 每条 HOW 行带 `HOW-ID` + 适用关键词
+- [ ] 5 段齐全（段 1 / 段 1.5 / 段 2 / 段 3 / 段 4）；段 1 / 段 2 每条 HOW 行带 `HOW-ID` + 适用关键词
 - [ ] 段 1 每行「选择 / 备选 / 理由 / 约束失效条件」都填了（备选可写「无非平凡备选」，但不空）
+- [ ] 段 1.5 每条 SIMP 行带稳定 `SIMP-ID`，「PRD 锚点」能在当前 PRD 找到对应章节；
+      「原型本次计划简化为」字段名诚实命名（不写「原型本次实现」—— stage 5 是计划非事实）；
+      「来源」列标 `kind 1`（本段直接登记，`kind 2` 由 task-plan §4.2 反向写回）
 - [ ] 段 2 的「复用现有组件」与 `docs/DESIGN.md` 组件 inventory 对得上
 - [ ] 不重复 PRD 的 WHAT（功能行为描述用引用，不重抄）
 - [ ] 像素 / 视觉规范细则没塞进来（那归 `docs/DESIGN.md`）
 
+### 步骤 3.5：段 1.5 scoped PM-view lint（源头约束，D2）
+
+段 1.5 内容会被 close-req §2a 写回 PRD（PRD 是 PM 视图），所以本段在源头先跑一次 scoped
+PM-view lint，避免把工程词带进 PRD 标注：
+
+```bash
+python3 "$REPO_ROOT/.claude/scripts/check-doc-pm-view.py" \
+  "$ACTIVE_REQ_DIR/implementation-design.md" --simp-scope
+```
+
+`--simp-scope` 模式只校验「## 段 1.5 · 原型简化项」表格的「真实需求」「原型本次计划简化为」
+「为什么简化」三列；其余段保持工程豁免（不变）。
+
+处理输出：
+- **0 errors + 0 warnings** → 进步骤 4
+- **有 errors** → 回步骤 2.1 改段 1.5 措辞（用 PM 视图语言重写涉事字段），再重跑；
+  连续 3 次仍有 error → 停下询问 PM
+- **有 warnings** → 每条显式判定（要么修，要么给 PM 一句话理由）
+
+无段 1.5（整段不存在）→ 退步骤 2.1 补段头 + 写「无」。lint 跳过空段（段头存在 + 单行「无」时
+0 校验）。
+
 ### 步骤 4：skill 结束
 
 写完 `implementation-design.md` → skill 退出。控制权交回 `/req-stage-gate`，由它走 PM
-确认门（审架构决策表），通过后调 `/task-plan`。
+确认门（审架构决策表 + 段 1.5 原型简化项摘要，两块同门），通过后调 `/task-plan`。
 
 产出失败（输入缺失 / PRD 未定稿等）→ 报告失败原因，不硬写。
 
@@ -119,14 +176,24 @@ PM 确认门（审架构决策表），通过后再调 `/task-plan`。
 - ❌ 把视觉规范细则（像素 / 颜色 / 字号 / 视口断点 / a11y）写进本文件 —— 归 `docs/DESIGN.md`
 - ❌ 段 1 架构决策行留空「备选 / 理由」
 - ❌ skill 内部走 PM 确认门 / 调 req-transition.py（归 orchestrator）
-- ❌ 把本文件拆成 GSD 式多文件 —— 单文件 4 段（主 AI 一气写完，无 agent 边界）
+- ❌ 把本文件拆成 GSD 式多文件 —— 单文件 5 段（主 AI 一气写完，无 agent 边界）
+- ❌ 段 1.5 字段叫「原型本次实现」—— 必须叫「原型本次计划简化为」（C6：stage 5 是计划非事实）
+- ❌ 段 1.5 PRD 锚点写自由文本（如「登录功能」）—— 必须含 §章节号 + 功能名，否则 close-req 锚点解析失败 stop
+- ❌ 段 1.5 登路线默认范围（如「edge case 不实现」）—— 那由 `docs/工程结构约束-prototype.md` 总体说明覆盖（C8 阈值=决策级简化）
+- ❌ 段 1.5 直接登 kind 2（整块功能不做）—— kind 2 由 task-plan §4.2 原地登记后反向写回（C1 编排顺序）
+
+**定向豁免（§5.3）**：
+
+段 1.5「原型简化项」字段允许写原型行为细节（如「列表只展示 5 条无分页」「按钮无 loading 态」），
+这是 **scope delta** —— PRD 里根本没有的「少做」信息，按定义不在 PRD 重抄范围。
+段 1 / 段 2 / 段 3 / 段 4 仍守「❌ 写 WHAT（功能行为）」规则，只段 1.5 豁免。
 
 ## 阶段 5 边界（拆 task 前）
 
-- **允许产出**：`$ACTIVE_REQ_DIR/implementation-design.md`
-- **允许动作**：读上游 + 项目级文档、设计 req 级架构 / 文件·模式索引 / 约束
-- **禁止顺手推进**：不拆 task、不走确认门、不调 review
-- **退出条件**：`implementation-design.md` 已写完，控制权交回 `/req-stage-gate`
+- **允许产出**：`$ACTIVE_REQ_DIR/implementation-design.md`（5 段，含 段 1.5 原型简化项）
+- **允许动作**：读上游 + 项目级文档、设计 req 级架构 / 文件·模式索引 / 约束 / 段 1.5 原型简化项 kind 1 登记
+- **禁止顺手推进**：不拆 task、不走确认门、不调 review、不直接登 kind 2（task-plan 之后才决议）
+- **退出条件**：`implementation-design.md` 已写完 + 段 1.5 通过 scoped lint，控制权交回 `/req-stage-gate`
 
 ## 文档结构
 

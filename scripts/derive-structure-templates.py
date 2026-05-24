@@ -40,7 +40,7 @@ DEPTH_GUIDANCE = {
         ("测试", "默认不写单测、e2e、集成测试。靠 PM 走查 + /qa 工具人肉验收。"),
         ("边界态", "默认主路径 loading + 成功两态即可。错误态 / 空态 / 部分态等不必实现。"),
         ("多端覆盖", "默认单端（PM 在 init 后于本段补「单端：tenant」之类的具体端名）。"),
-        ("演示路径", "默认仅主路径（happy path）。分支路径、edge case 等 PM 不在 task-plan 显式拆 task 就不实现。"),
+        ("演示路径", "默认仅主路径（happy path）。分支路径、edge case 等 PM 不在 task-plan 显式拆 task 就不实现。本句覆盖路线默认范围 —— 不必为每个略过的 edge case 在 implementation-design.md 段 1.5 立 SIMP 行（v2 / C8 阈值：只登 PM 主动决策的决策级简化；closed PRD §六章节头部引用本句作为路线默认）。"),
     ],
     "system": [
         ("数据层", "真实持久化（IndexedDB / 后端 API / 数据库），跨页状态由 store / context 承载。"),

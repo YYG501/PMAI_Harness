@@ -85,6 +85,17 @@ PENDING_MARKER="$REPO_ROOT/.runs/pending-close-req.json"
 <!-- placeholder：本段在步骤 1.5 完成后回填（含 rewrite 覆盖的 docs/modules/* + docs/DESIGN.md + docs/PROJECT.md 等；docs/prd.md 已砍，不在 rewrite 范围）。
      如果步骤 1.5 silent skipped（无业务偏差），本段写"本 req 无项目级文档变更"。 -->
 
+## 原型简化项
+<!-- v2 / T8 / C4：close-req §2a 完成后回填本段。
+     列本 req 通过 implementation-design.md 段 1.5 登记的所有 SIMP 行 —— 让评审 / 后续 req
+     一眼看到「本 req 原型本期没全做 PRD 的哪几块」，不必再翻 implementation-design.md。
+
+     无 simp 行（段 1.5 单行「无」或不存在）→ 本段写「本 req 原型按 PRD 全量实现，无简化项」。 -->
+
+| SIMP-ID | PRD 锚点 | 真实需求 | 原型本次计划简化为 | 来源 |
+|---|---|---|---|---|
+| SIMP-NN | §六 6.X / Story N | 见 PRD §六 6.X | <从 implementation-design.md 段 1.5 抄过来> | kind 1 / kind 2 |
+
 ## 遗留问题
 [如有未解决的问题或后续建议]
 ```
@@ -94,6 +105,7 @@ PENDING_MARKER="$REPO_ROOT/.runs/pending-close-req.json"
 - 遍历 `tasks/discarded/*.md` 填废弃栏；为空时整个 `<details>` 块省略。
 - 已废弃 task 编号断号是合规信号，不要为「整理顺序」而改号。
 - **`## 文档变更` 段写 placeholder 注释 + 留空**，等步骤 1.5 完成后用 doc-update §8 返回的 `REWRITE_COVERED_FILES` 清单回填。
+- **`## 原型简化项` 段写 placeholder 注释 + 留空**，等步骤 2a 完成后从 `implementation-design.md` 段 1.5 抄过来填（v2 / T8 / C4）。
 
 ### 步骤 1.5：聚合所有 closed task 偏差，按目标文档统一沉淀（D13 final, 2026-05-16）
 
@@ -161,13 +173,17 @@ PENDING_MARKER="$REPO_ROOT/.runs/pending-close-req.json"
 - ~~inter-req 推迟 / DEFERRED_TO_REQ skip 分支~~ → D13 final 已砍（polish-13，§0.4.1 多 req 并行不在范围）
 - 旧 SKIP marker 兼容（polish-15）：消费仓若有旧 `<!-- SKIP_DOC_UPDATE: ... cleanup_status=... -->` 残留（D13 final 前写的），本步骤遇到时**等同普通偏差源处理**（一次性消费掉，rewrite 决议时 `cleanup_status` 改 `done` 留作 audit trail；不再阻塞 stage 6→7 推进）
 
-### 步骤 2a：PRD 反向对齐成 as-built（delta-6）
+### 步骤 2a：PRD 反向对齐成 as-built + 原型简化项标注（delta-6 + v2）
 
 > **delta-2+4 后 PRD 已在 stage 3 产出、定稿冻结**（不再像旧管线那样在 close-req 才产）。
-> close-req 这一步是把冻结的 PRD **一次性反向对齐成 as-built** —— 执行期 task 对 PRD 的偏离
+> close-req 这一步把冻结的 PRD **一次性反向对齐成 as-built** —— 执行期 task 对 PRD 的偏离
 > 在 `req-events.jsonl` 的 `adjustment` 事件里累积，本步骤逐条把 PRD 改成实际做成的样子。
+>
+> **v2 加分支**：除了 adjustment overwrite，还读 `implementation-design.md` 段 1.5 原型简化项，
+> 在 PRD 受影响行**追加标注**（保留真实需求 + 追加「原型本次计划简化为」）。两步**顺序确定**
+> （D4）：先 adjustment overwrite 全部完成 → 再 simp 标注追加；避免标注被后续 overwrite 抹掉。
 
-#### 2a.1 读 adjustment 事件
+#### 2a.1 读 adjustment 事件 + 段 1.5 原型简化项
 
 ```bash
 python3 "$REPO_ROOT/.claude/scripts/req-events.py" list "$ACTIVE_REQ_DIR"
@@ -177,28 +193,85 @@ python3 "$REPO_ROOT/.claude/scripts/req-events.py" list "$ACTIVE_REQ_DIR"
 「文档偏差」）。每条含：`from_task` / `prd_anchor`（PRD 哪条被调）/ `before`（PRD 原定）/
 `after`（实际做成）/ `reason`。
 
-> **IRON 容错**：delta-7 落地前在飞的旧 req 无 `req-events.jsonl` → `list` 输出
-> 「No req events found.」→ 本步骤 silent skip（无 adjustment 可对齐），不报错。
+**v2 加读**：`$ACTIVE_REQ_DIR/implementation-design.md` 段 1.5「原型简化项」全表 —— 每条含
+`SIMP-ID` / PRD 锚点 / 真实需求 / 原型本次计划简化为 / 为什么简化 / 来源（kind 1/2）。
 
-#### 2a.2 逐条反向对齐 prd.md
+> **IRON 容错**：
+> - delta-7 落地前在飞的旧 req 无 `req-events.jsonl` → `list` 输出「No req events found.」→
+>   adjustment 分支 silent skip
+> - implementation-design.md 不存在（v2 之前在飞的 req）或段 1.5 不存在或单行「无」→ simp 分支
+>   silent skip
+> - 两分支都 skip → 本步骤整体 silent skip
+
+#### 2a.2 第一步：逐条 adjustment overwrite prd.md（D4 顺序：先全 overwrite）
 
 对每条 `adjustment`：定位 `prd_anchor` 指向的 PRD 章节，把内容从 `before` 改成 `after`
 （PRD → as-built），呈交 PM 审。**产物预览「原型」节**：stage 3 写的是产物意图描述（文字版），
 本步骤用真实原型链接 / 截图**替换回填**（codex#5）。
 
 - PM 逐条审 diff（对话式）；PM 满意 → 落 `prd.md`
-- 全部对齐后 git commit 留痕：`docs(prd): close-req as-built 反向对齐 — req-NNN`
+- 全部 adjustment overwrite 完成后**才进步骤 2a.3 simp 标注**（不交叉）
 
-#### 2a.3 边界
+#### 2a.3 第二步：逐条 simp 标注追加 prd.md（D4 顺序：再全 simp 标注）
 
-- **只改实际内容**（PRD 行为 → as-built），是 close 时一次性、有意的内容更新；不是 stage 3
-  那种「冻结」语义。git commit 留痕、可审计。
+对段 1.5 每条 SIMP 行：
+
+1. **锚点解析**（C5）：按「§<章节号> <功能名>」/「Story <编号>」格式解析 SIMP 行的「PRD 锚点」
+   字段，在 prd.md §六 功能需求 / §七 验收标准定位对应行
+2. **解析失败**（找不到对应章节、章节名漂移、功能名多匹配等）→ **停下问 PM**：
+
+   ```
+   段 1.5 SIMP-N 的 PRD 锚点「§六 6.X 用户登录」在当前 prd.md 找不到对应章节。
+   可能原因：
+   - PRD §六 章节号被前面 adjustment overwrite 改了 → 锚点过期
+   - simp 段写时锚点笔误
+   - PRD 章节命名重排
+   请选：
+   - 我手动告诉你 SIMP-N 对应 prd.md 哪一行
+   - 跳过 SIMP-N 不标注（close-report 会记「N 条 simp 锚点未解析」）
+   - 中止本次 close-req 回去修 simp 段
+   ```
+
+   PM 决定后按答复执行；**不**机械写错位置。
+3. **解析成功** → 在 PRD 该行**保留真实需求原文 + 追加一句标注**：
+   - kind 1（行为简化）：在功能描述段末追加「> **原型本次计划简化为**：<原型本次计划简化为>（来源：implementation-design.md SIMP-N）」
+   - kind 2（整块不做）：在功能段末追加「> **本功能原型本次不实现**（来源：implementation-design.md SIMP-N）」
+4. PM 逐条审 diff（对话式），同 adjustment 流程；PM 满意 → 落 `prd.md`
+
+**顺序硬约束（D4）**：所有 simp 标注必须在所有 adjustment overwrite 完成后才追加。
+若中途交叉 → 后续 adjustment overwrite 可能把已追加的 simp 标注抹掉。
+
+#### 2a.4 PRD 写回后 PM-view re-lint（D2 后置）
+
+所有 adjustment overwrite + simp 标注落盘后，对 prd.md 跑一次 PM-view lint：
+
+```bash
+python3 "$REPO_ROOT/.claude/scripts/check-doc-pm-view.py" "$ACTIVE_REQ_DIR/prd.md"
+```
+
+理由：simp 标注是从 implementation-design.md 段 1.5「原型本次计划简化为」字段写过来的，
+源头虽已 `--simp-scope` lint 过（T5/D2），但写回 PRD 时上下文变了（裸字段 vs 引用块），
+再校验一次确保 PRD 整文件仍守 PM-view 纪律。处理输出：
+
+- 0 errors + 0 warnings → 进步骤 2a.5
+- 有 errors → 反查 simp 标注或 adjustment overwrite 引入的违例字段，手 patch；连续 3 次仍有
+  error → 停下问 PM
+- 有 warnings → 每条显式判定，不默默 ack
+
+#### 2a.5 commit + 边界
+
+- 全部对齐 + 标注 + lint 通过后 git commit 留痕：`docs(prd): close-req as-built 反向对齐 + 原型简化项标注 — req-NNN`
+- **只改实际内容**（PRD 行为 → as-built + simp 标注追加），是 close 时一次性、有意的内容更新；
+  不是 stage 3 那种「冻结」语义。git commit 留痕、可审计。
 - 反向对齐**不写任何元数据 / hash 回 PRD**（PRD 是单文件、无 hash 机器；只改业务内容，
   避免 memory `reconcile-no-self-reference` 类自指问题）。
-- 无 adjustment 事件（纯按 PRD 做成、无偏离）→ silent skip，close-report 记「本 req PRD 无
-  执行期偏离，无需反向对齐」。
+- 无 adjustment 事件 + 无 simp 行 → silent skip，close-report 记「本 req PRD 无执行期偏离、
+  无原型简化项，无需反向对齐」。
+- 无 adjustment 但有 simp → 只跑步骤 2a.3 simp 标注分支；反之只跑 2a.2。
+- close-report 增「原型简化项」节（T8 / C4）：列每条 SIMP-ID + PRD 锚点 + 计划简化为，让评审
+  有汇总入口（detail 见 close-req SKILL Phase 1 步骤 1）。
 
-> modulespec 沉淀（delta-6 (b)）已由步骤 1.5 D13 rewrite 流程覆盖 —— 本步骤只做 PRD 反向对齐。
+> modulespec 沉淀（delta-6 (b)）已由步骤 1.5 D13 rewrite 流程覆盖 —— 本步骤只做 PRD 反向对齐 + simp 标注。
 
 ### 步骤 2b：~~增量同步项目主 PRD~~（v5 vp-2 + vp-1 砍）
 

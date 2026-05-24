@@ -47,7 +47,7 @@ echo "SKILL: task-spec"
 |---|---|
 | `task-plan.md` | task 元数据 |
 | `prd.md`（delta-2）| req 级 WHAT —— 挑当前 task 切片转写进执行区·实现规格 + PM 确认区·验收 |
-| `implementation-design.md`（delta-8）| req 级 HOW —— 按 `HOW-ID` + 适用关键词挑当前 task 相关行 |
+| `implementation-design.md`（delta-8）| req 级 HOW —— 按 `HOW-ID` + 适用关键词挑当前 task 相关行；**段 1.5「原型简化项」按 PRD 锚点 join 当前 task**（v2 D5）：命中 → 实现规格 + 验收按简化后写 + 受影响验收项行内 `[SIMP-N]` 标签 |
 | `docs/PROJECT.md` / `docs/DESIGN.md` / `docs/modules/` | 项目级背景 |
 | `docs/PRODUCT-RULES.md`（delta-9）| 跨功能产品行为规则 —— 读全部 `scope=全局` 规则 + 按当前 task 模块 / 功能关键词 grep 命中的 `scope=域限定` 规则（§9.1.1 章节-grep；`scope=全局` 永远纳入、不漏跨功能规则）。命中的规则写进执行区·约束与易错 |
 | 前序「已完成」task 的「PM 反馈」段 | same-req 反馈 lane（§步骤 5 relevance 二分）|
@@ -107,7 +107,7 @@ relevance / 处理结果 / 一句理由）—— 让「不适用」对 PM 可观
 > **跨模块反馈 = 已知 gap**：属「全项目跨功能产品行为规则」的反馈，relevance 二分装不下 ——
 > 由 close-task PM-selective promote 到 `docs/PRODUCT-RULES.md`（delta-9）；task-spec 不在此处理。
 
-### 步骤 6：从 prd.md 挑切片 + implementation-design.md 按 HOW-ID 挑行
+### 步骤 6：从 prd.md 挑切片 + implementation-design.md 按 HOW-ID 挑行 + 段 1.5 SIMP 行 join
 
 **`prd.md`（WHAT）**：按"所属模块 / 功能 / task 标题关键词"匹配 PRD §六 功能需求 /
 §七 验收标准的相关章节（`input-flow.md §9.1.1` 章节 grep 局部读）。挑出当前 task 切片：
@@ -118,6 +118,18 @@ relevance / 处理结果 / 一句理由）—— 让「不适用」对 PM 可观
 当前 task 相关的 HOW 行，写进执行区·「实现设计引用」段（带原 HOW-ID 便于追溯）。
 task-execute 只读 task 单文件、不跨文件回查 implementation-design —— 所以 HOW 行必须
 在此挑全。
+
+**`implementation-design.md` 段 1.5「原型简化项」按 PRD 锚点 join 当前 task**（v2 D5）：
+段 1.5 是 `implementation-design.md` 内的特殊段，不带 HOW-ID 而带 `SIMP-ID`。join 规则：
+
+1. 列出当前 task 从 PRD §六 挑出的章节锚（如「§六 6.3 用户登录」「Story 4」）
+2. 对段 1.5 每条 SIMP 行的「PRD 锚点」字段做章节号 + 功能名匹配；命中 → 本条 SIMP 适用当前 task
+3. 命中的 SIMP 行：
+   - 把「原型本次计划简化为」内容**改写进**执行区·实现规格的对应功能段（task 级实现要求按
+     原型简化后写，不是按 PRD 全量写）—— executor 按简化版实施
+   - 把「真实需求」引用挂在该实现规格段尾，提示 executor「PRD 的真实需求是 X，本期计划简化为 Y」
+   - PM 确认区·task 级验收清单的受影响验收项行内追加 `[SIMP-N]` 标签（D6）
+4. 0 命中 → 当前 task 无关简化项，按 PRD 全量写
 
 **只引用、转写，不大段复制原文**。
 

@@ -11,27 +11,26 @@
 
 ---
 
-## 当前位置（2026-05-22）
+## 当前位置（2026-05-24）
 
-**GSD-review 管线重构全包已落地** —— umbrella `docs/归档/完成/管线重构-GSD-review.md` §8 六步顺序全实施：
+**原型简化项登记机制 v2 全包已落地** —— 设计 `docs/归档/完成/原型简化项-机制.md` v2 + 实施 T1-T8（8 个 touchpoint，关键路径 worktree 并行 3.5-4h）：
 
-- **delta-7**（req 级事件流）：`scripts/req-events.py`（`decision` / `adjustment` 两类事件，落 `requirements/active/<reqid>/req-events.jsonl`）。
-- **delta-2+4**（PRD/solution 对调）：`req-solution` → `/project-solution`（项目级，产 `docs/PROJECT.md` + `docs/roadmap.md`）；`/prd-writing` 前移 stage 3，产 req 级 `prd.md`。
-- **delta-8**（实现设计视图）：`/implementation-design` + `templates/implementation-design.md.tmpl`，stage 5 拆 task 前产 req 级 HOW。
-- **delta-3**（task-spec 重构）：task 双文件 → 单文件 typed contract（PM 确认区 / 执行区 / 审计区三区 + `task_format` 标记）；删 hash / reconcile / lazy-sync 整套机器。
-- **delta-9**（跨功能产品规则）：`templates/PRODUCT-RULES.md.tmpl` + `DESIGN.md.tmpl` 升级；close-task selective promote；req-stage-gate stage 4 每 req 必跑 gap-check。
-- **delta-1/5/6**（追加）：`/codebase-audit` brownfield 入口；req-analysis 全量 / 增量分析分支；close-req 步骤 2a 改为读 req-events `adjustment` 反推 PRD 成 as-built。
+- **T1**：`implementation-design.md.tmpl` 加段 1.5「原型简化项」（SIMP-ID schema + 表头 + 空态「无」）+ SKILL.md kind 1 登记引导 + Rules 定向豁免 + 扩 stage-5 PM 确认门同时呈现架构决策表 + 段 1.5 摘要
+- **T2**：task-spec SKILL.md 加段 1.5 按 PRD 锚点 join 当前 task 逻辑（命中 → 实现规格 + 验收按简化后写 + 受影响验收项行内 `[SIMP-N]` 标签）+ task.md.tmpl §文档偏差区 carve-out
+- **T3**：close-req §2a 改两步顺序（先全部 adjustment overwrite → 再全部 simp 标注追加）+ 锚点解析失败停下问 PM + PRD 写回后 PM-view re-lint + close-report 加「原型简化项」节
+- **T4**：task-plan §4.2 GAP 清单加第三种处置「原型不实现（kind 2）」+ Required Inputs 补 implementation-design.md + task-plan.md.tmpl 修 stale solution.md 引用
+- **T5**：`scripts/check-doc-pm-view.py` 加 `--simp-scope` 模式（implementation-design.md 段 1.5 scoped 校验，源头约束 + 后置 PRD 校验同款 lint）
+- **T6**：`_shared/pm-view/input-flow.md` Stage 5/6 补 implementation-design.md 段 1.5 输入说明
+- **T7**：close-task Phase 1 步骤 1.1/1.2 偏差分类「纠错 vs 计划外简化」+ 计划外简化停下问 PM 回填 implementation-design.md 段 1.5（close-time 限定）
+- **T8**：`derive-structure-templates.py` 「演示路径」深度指引补「路线默认范围由本句覆盖、只登决策级简化」+ 派生 `templates/工程结构约束-prototype.md`
 
-**§8 后续收尾（同日）**：
+**测试基线**：`bash tests/run-all.sh` **398 / 0**（无回归 + `--simp-scope` 正负向手动验证 PASS）；`_lib.state_test` **57 / 0**。
 
-- **close-task 默认收尾**：PM 验收通过后默认走完收尾，仅「代码可能做错 / 需回退代码 / 范围变了」时才单独找 PM 确认；末尾给汇总 + PM 总审 diff。
-- **modulespec 模板 9→5 章收敛**：活文档只留模块级内容，req 级章节移除。
-- **一轮 DX 修复**：init-project skill 递归拷贝（修 references/ 漏拷）、入口脚本帮助 / 错误信息、read_section emoji 标题正则、sed 元字符 / 中文 slug 等 4 修。
-- **`CONTEXT.md → PROJECT.md` 全量改名**：项目级文档与 GSD 命名层级对齐；消费仓一次性迁移脚本 `scripts/migrate-context-to-project.py`。
+**vp-5 解散**（D7）：测试折进各 T 自验，不堆独立 bucket。
 
-**测试基线**：`bash tests/run-all.sh` **395 / 0**；`_lib.state_test` **57 / 0**；`bash scripts/measure-tthw.sh` 实测 TTHW ≈ 2.0 秒。
+**前置已完成**（2026-05-22 GSD 管线重构全包）：delta-1..9 全包落地（umbrella `docs/归档/完成/管线重构-GSD-review.md`），含 delta-7 req 级事件流、delta-2+4 PRD/solution 对调、delta-8 implementation-design、delta-3 task-spec 单文件 typed contract、delta-9 跨功能产品规则。
 
-**下一步**：去消费仓 `${CONSUMER_REPO_ROOT}` 跑真实 req 端到端验证新管线（stage 3 PRD → stage 4 gap-check → implementation-design → task-spec typed contract → close-task adjustment-promote → close-req PRD 反向对齐）。同步前按 `框架同步-SOP.md` 走流程；同步后在消费仓跑一次 `scripts/migrate-context-to-project.py`。
+**下一步**：去消费仓 `${CONSUMER_REPO_ROOT}` 跑真实 req 端到端验证新管线（stage 3 PRD → stage 4 gap-check → implementation-design 段 1.5 原型简化项 → task-spec typed contract → close-task 偏差分类 → close-req PRD 反向对齐 + simp 标注）。同步前按 `框架同步-SOP.md` 走流程；同步后在消费仓跑一次 `scripts/migrate-context-to-project.py`（CONTEXT→PROJECT 迁移，2026-05-22 已加）。验证关注三处待验（v2 §5）：① 漏登简化项频率（§5.1）② 计划外简化频率（§5.2）③ PRD 锚点漂移频率（§5.6）。
 
 ---
 

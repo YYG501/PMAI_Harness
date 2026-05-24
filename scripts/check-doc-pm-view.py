@@ -211,6 +211,10 @@ TASK_FORMAT_V3_MARKER = "task_format: single-typed-v3"
 V3_REGION_PM_CONFIRM_BEGIN = "region: PM-CONFIRM begin"
 V3_REGION_PM_CONFIRM_END = "region: PM-CONFIRM end"
 
+# v2 原型简化项 段 1.5 锚（--simp-scope 用，T5/D2 源头约束）
+# implementation-design.md 段 1.5 标题正则；其余段保持工程豁免不变。
+SIMP_SECTION_HEADING_PATTERN = re.compile(r"^##\s+段\s*1\.5\s*·\s*原型简化项\s*$")
+
 
 def detect_doc_type(path: Path) -> str:
     name = path.name
@@ -235,12 +239,16 @@ def is_engineering_file(path: Path) -> bool:
     )
 
 
-def lint(path: Path) -> tuple[list[str], list[str]]:
+def lint(path: Path, simp_scope: bool = False) -> tuple[list[str], list[str]]:
     """Return (errors, warnings).
 
     delta-3 vp-6 scoped 模式：v3 单文件 typed contract（头部含 task_format 标记）
     只校验「PM 确认区」（`region: PM-CONFIRM` begin/end 之间）；执行区 / 审计区
     允许工程内容、不跑 PM-view lint。
+
+    T5 (--simp-scope)：implementation-design.md 段 1.5「原型简化项」scoped 模式（D2 源头约束）
+    —— 该段内容会被 close-req §2a 写回 PRD（PRD 是 PM 视图），所以源头先校验。其余段保持
+    工程豁免不变（implementation-design.md 整体仍走 is_engineering_file 跳过）。
     """
     text = path.read_text(encoding="utf-8")
     lines = text.split("\n")
@@ -253,6 +261,10 @@ def lint(path: Path) -> tuple[list[str], list[str]]:
         TASK_FORMAT_V3_MARKER in text and detect_doc_type(path) == "task"
     )
     in_pm_confirm = False  # 仅 v3 scoped 模式用；非 v3 文件全程视为 True
+
+    # T5 (--simp-scope)：implementation-design.md 段 1.5 原型简化项 scoped 校验
+    # in_simp_section 仅在 simp_scope 模式下用；进入段 1.5 时翻 True，遇下个 H2 翻 False
+    in_simp_section = False
 
     # Iterate lines, skip HTML comments and code blocks
     in_html_comment = False
@@ -271,6 +283,22 @@ def lint(path: Path) -> tuple[list[str], list[str]]:
                 continue
             if not in_pm_confirm:
                 continue  # 执行区 / 审计区 —— 跳过 PM-view lint
+
+        # --simp-scope：段 1.5 原型简化项区域追踪（与 H2 section 追踪同层）
+        # 注：H2 追踪在下方 ANY_H2_PATTERN 判定后才更新 in_simp_section，这里先按 simp 模式
+        # 决定是否丢弃当前行（段 1.5 之外的行）。
+        if simp_scope and not in_simp_section:
+            # 还没进段 1.5；先看本行是不是段头
+            if SIMP_SECTION_HEADING_PATTERN.match(line):
+                in_simp_section = True
+                continue  # 段头本身不 lint（标题安全）
+            continue  # 段 1.5 之外 —— 跳过校验
+        if simp_scope and in_simp_section:
+            # 已在段 1.5，遇下个 H2（不是 ### / 不是 #）→ 离开段 1.5
+            if ANY_H2_PATTERN.match(line) and not SIMP_SECTION_HEADING_PATTERN.match(line):
+                in_simp_section = False
+                continue  # 离段瞬间不 lint
+            # 还在段 1.5 内 —— 继续走下面 HTML 注释 / 代码块 / 规则匹配
 
         # HTML comment tracking (multi-line aware)
         if in_html_comment:
@@ -352,6 +380,12 @@ def main() -> int:
         action="store_true",
         help="有 error 时 exit 1（默认 exit 0 不阻塞）",
     )
+    parser.add_argument(
+        "--simp-scope",
+        action="store_true",
+        help="implementation-design.md 段 1.5 原型简化项 scoped 校验（D2 源头约束）—— "
+             "仅校验段 1.5；其余段保持工程豁免。仅对 implementation-design.md 有意义。",
+    )
     args = parser.parse_args()
 
     path = Path(args.file)
@@ -364,10 +398,37 @@ def main() -> int:
         )
         return 2
 
+    # --simp-scope：跳过 is_engineering_file 豁免，进段 1.5 局部校验
+    if args.simp_scope:
+        if path.name != "implementation-design.md":
+            print(
+                f"⚠️  --simp-scope 仅适用于 implementation-design.md，当前: {path.name}",
+                file=sys.stderr,
+            )
+            return 2
+        errors, warnings = lint(path, simp_scope=True)
+        print(f"📋 PM-View Lint (--simp-scope): {path}")
+        print(f"   文档类型: implementation-design.md 段 1.5 原型简化项")
+        print()
+        if errors:
+            print(f"❌ Errors ({len(errors)}):")
+            for e in errors:
+                print(f"   {e}")
+            print()
+        if warnings:
+            print(f"⚠️  Warnings ({len(warnings)}):")
+            for w in warnings:
+                print(f"   {w}")
+            print()
+        if not errors and not warnings:
+            print("✅ 段 1.5 原型简化项通过 scoped PM-view lint。")
+        return 1 if (args.strict and errors) else 0
+
     if is_engineering_file(path):
         print(
             f"⏭  跳过 {path.name}：工程合同格式文件允许所有工程内容"
-            "（PM-VIEW-RULES §四；implementation-design.md 同此豁免）"
+            "（PM-VIEW-RULES §四；implementation-design.md 同此豁免，"
+            "段 1.5 原型简化项请用 --simp-scope 单独校验）"
         )
         return 0
 

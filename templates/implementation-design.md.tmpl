@@ -34,6 +34,33 @@
 
 ---
 
+## 段 1.5 · 原型简化项
+
+> 本 req 原型**故意做得比 PRD 少**的地方（kind 1：功能在原型里、行为简化）。每条登记一行，
+> 带稳定 `SIMP-ID`，与 `HOW-ID` 同款锚。stage 5 PM 确认门审定；task-spec 按 PRD 锚点 join
+> 当前 task；close-req §2a 据此在 PRD 受影响行追加「原型本次计划简化为」标注（PRD 真实需求保留）。
+>
+> **范围阈值**：只登 PM 在 stage 5 / task-plan 主动决策的**决策级简化**。路线默认（如「默认仅
+> 主路径」）由 `docs/工程结构约束-prototype.md` 总体说明覆盖，不为每个略过的 edge case 立行。
+>
+> **kind 2（整块功能原型不做）**：不在本段直接登记 —— 它在 task-plan §4.2 验收 GAP 清单
+> 拆 task 时才被发现；task-plan 原地登记后**反向写回**本段一行（「来源」列标 kind 2）。
+>
+> 无简化项时整表保留表头 + 单独一行写「无」。
+
+| SIMP-ID | PRD 锚点 | 真实需求（引用，不重抄）| 原型本次计划简化为 | 为什么简化 | 来源 |
+|---|---|---|---|---|---|
+| SIMP-01 | §六 6.X / Story N | 见 PRD §六 6.X | <原型实际计划做到什么；kind 2 整块不做写「本功能原型不实现」> | <为什么少做这一段> | kind 1 / kind 2 |
+
+<!-- SIMP-ID 规则：SIMP-01, SIMP-02, ... 递增；一旦分配不复用、不重排（task-spec / close-req
+     按 ID 追溯）。
+     「PRD 锚点」=「§<章节号> <功能名>」/「Story <编号>」，close-req §2a 按章节号 + 功能名解析；
+     解析失败 → close-req 停下问 PM，不机械写错位（C5）。
+     「原型本次计划简化为」是 stage 5 写时的计划描述（不是 as-built）；执行期若偏离计划走 adjustment（C6）。
+     允许在本字段写原型行为细节（PRD 没有的 scope delta） —— 见 SKILL.md Rules 定向豁免（§5.3）。 -->
+
+---
+
 ## 段 2 · 文件·模式索引
 
 > 照哪些现有代码 / 模式写。承接 `solution.engineering` ch3 组件实现路径 + ch4 Mock 改造 +

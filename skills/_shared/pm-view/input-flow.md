@@ -63,6 +63,7 @@
 ### Stage 5：task-plan
 - 🟢 `PM-VIEW-RULES.md`（步骤 0）
 - 🟢 `analysis.md` / `prd.md`（功能规格）
+- 🟡 `implementation-design.md`（v2 / C2：管线重构后必读 —— 段 1 架构决策影响 task 拆分边界；段 1.5 原型简化项决定 §4.2 验收 GAP 是否走「原型不实现」第三种处置 + kind 2 反向写回的入口）
 - ⚪ `brief.md`（按需——已被 analysis / prd 消化两层；偶尔回查初衷）
 - 🟢 `docs/PROJECT.md`
 - ⚪ `docs/DESIGN.md`（按需——视觉决策不影响 task 拆分粒度，仅在拆边界涉及视觉差异时回查）
@@ -79,7 +80,7 @@
 **first-gen**
 - 🟢 `task-plan.md`（取本 task 行 + 自检与状态摘要）
 - 🟢 `prd.md` 功能规格 / WHAT（**first-gen 整文件读，§9.1.1 逃生口**）—— 挑切片转写进执行区·实现规格 + PM 确认区·验收
-- 🟡 `implementation-design.md` / HOW（按 `HOW-ID` + 适用关键词挑行，§9.1.1）—— 写进执行区·实现设计引用
+- 🟡 `implementation-design.md` / HOW（按 `HOW-ID` + 适用关键词挑行，§9.1.1）—— 写进执行区·实现设计引用；**v2 / C7：同文件「## 段 1.5 · 原型简化项」按 PRD 锚点 join 当前 task**，命中 → 实现规格 + 验收按简化版写 + PM 确认区·验收受影响行追加 `[SIMP-N]` 标签
 - 🟢 `docs/PROJECT.md` / `docs/modules/INDEX.md` / `docs/modules/<本 task 模块>.md`
 - 🟡 `docs/DESIGN.md`（按 task 涉及功能 grep 相关章节，§9.1.1）
 - 🟡 前序「已完成」`task-*.md` 仅 grep `## PM 反馈` / `### 反馈` 段（§9.1.1）—— relevance 二分
@@ -166,6 +167,12 @@
 **prd.md（功能规格）特殊**——逃生口：
 - **first-gen 模式**：整文件读（req 级核心产物，需要全局视野）
 - **revise 模式**：按 prd-writing 改动涉及的 PRD 章节 grep 局部读
+
+**implementation-design.md「段 1.5 · 原型简化项」特殊**（v2 / C7）：
+- 该段不带 HOW-ID，带 `SIMP-ID`。task-spec / close-req 按 **PRD 锚点** join，不按 SIMP-ID grep。
+- 推荐读法：grep `^## 段 1.5` 命中段头 → 读到下个 H2 之间的表格行 → 逐行解析 PRD 锚点字段匹配
+  当前 task / close-req 输入。
+- 0 命中（段 1.5 单行「无」或本 task 不在任何 SIMP 锚点范围）→ 走 PRD 全量路径，不阻塞。
 
 ### 9.1.2 grep 不命中的 fallback 读法（防"0 行读"丢失）
 

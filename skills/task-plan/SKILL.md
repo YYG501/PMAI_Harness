@@ -34,6 +34,11 @@ echo "SKILL: task-plan"
 - `input-flow.md` §9.3.1 prototype 读取强约束（>500 行禁整文件 Read）
 - `_shared/pm-view/cross-skill.md`（特别 brief / DESIGN 改 ⚪ 按需，不强制全文必读）
 
+**v2 / C2 补**：`implementation-design.md`（如本 req 已产出，在 task-plan 之前 stage 5）
+作为必读输入 —— 段 1 架构决策表影响 task 拆分边界；段 1.5 原型简化项决定 §4.2 验收 GAP
+是否走「原型不实现」第三种处置（kind 2 反向写回的入口在本 skill）。读法按 `input-flow.md
+§9.1.1` 章节 grep。
+
 ## Workflow
 
 ### 步骤 0：读 PM 视图规则子文件（强制）
@@ -159,7 +164,14 @@ echo "SKILL: task-plan"
 
 **§四 自检与状态摘要填写要点**：
 - §4.1 反模式 5 条逐条勾选"未命中 / 命中（已处理）"，命中时一句话说明合并 / 重构结论。**5 条全 PASS 才能进入 stage 6**。
-- §4.2 验收 GAP 清单：从 `prd.md` 「验收标准」逐条审视，编号 G1, G2, ...，由 stage 6 task-spec 按编号接住。无 GAP 时显式写"无 GAP"。
+- §4.2 验收 GAP 清单：从 `prd.md` 「验收标准」逐条审视，编号 G1, G2, ...。**三种处置之一**（v2 / C1）：
+  1. **由 task-NNN 接住**（默认）—— 由 stage 6 task-spec 按编号接住
+  2. **已被 task 列表完全覆盖** —— 显式写「无 GAP」
+  3. **原型本次不实现（kind 2 整块功能不做）** —— PM 在 task-plan 决策本期整块功能不立 task；
+     在 GAP 行写「原型不实现（kind 2）→ 反向写回 implementation-design.md 段 1.5 SIMP-NN」+
+     去 `implementation-design.md` 段 1.5 追加一行（SIMP-ID 顺延接，PRD 锚点 = GAP 来源章节，
+     真实需求引用 PRD，原型本次计划简化为 = 「本功能原型不实现」，为什么简化 = PM 给的理由，
+     来源 = kind 2）。close-req §2a 据此在 PRD 加「本功能原型本次不实现」标注
 - §4.3 模块规格状态：列出本 req 涉及的每个业务模块的当前规格状态（已存在-完整 / 已存在-待补 / 不存在-待创建），影响 task-spec 步骤 4 判断。
 
 ### 步骤 4：自检（按 `_shared/pm-view/checklist.md` §八 12 项）

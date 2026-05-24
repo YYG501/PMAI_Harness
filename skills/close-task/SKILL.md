@@ -221,9 +221,67 @@ close-req 步骤 1.5 聚合处理（按目标文档 rewrite OR patch）。
 用 `detect_format` 分流。判断：
 - **段缺失** → 报错让 PM 补段头（即使填「无」）；不能省段，否则 close-req 聚合 +
   delta-7 promote 会找不到锚点
-- **段存在（含「无」或具体表内容）** → 继续下一步，**不调 /doc-update**
+- **段存在（含「无」或具体表内容）** → 继续 §1.1 分类，**不调 /doc-update**
 
 > **为什么不在这里调 /doc-update**：见本文件顶部「改造说明（D13 final）」。简言之，per-task 调 doc-update 是 N 次启动成本累加的根源（§0.1 痛点）；推迟到 close-req 末统一 rewrite。
+
+#### 1.1 偏差分类：纠错 vs 计划外简化（v2 / D3）
+
+读审计区·📋 文档偏差表。**对每条非「无」偏差行**逐条 AI 分类：
+
+| 类别 | 判别 | 处理 |
+|---|---|---|
+| **纠错偏差**（默认）| 偏差是「文档写错了 → 按代码改对」—— 字段名错 / 流程描述错 / 文案过期 | 留原表不动；close-task.sh phase 2 把它 promote 成 `adjustment` 事件，close-req §2a 反向覆盖 PRD（原路径不变）|
+| **计划外简化**（v2 D3 新增）| 偏差是「task 执行期临时决定少做某功能 / 边界 / 流程」—— 实现比 PRD 写的少、但不属于 stage 5 PM 主动决策的 SIMP-N（不在 implementation-design.md 段 1.5 已登记范围）| **停下问 PM**：是否回填 implementation-design.md 段 1.5（补 SIMP-NN）—— 见 §1.2 |
+
+**AI 分类启发式**（pattern 沉淀，非阈值脚本，memory `feedback_judgment_pattern_not_mechanization`）：
+
+- 「实际实现」字段比「文档原文」**少做了一段**（不是改错而是少做）→ 倾向计划外简化
+- 「实际实现」字段比「文档原文」**做的是另一种实现**（同范围、不同方式）→ 纠错偏差
+- 「建议改法」字段写「按代码对齐文档」→ 纠错；写「文档保留，原型本期不做」/「下个 req 再做」
+  → 计划外简化
+- task PM 确认区·验收清单受影响行有 `[SIMP-N]` 标签 → 此条已在计划内，**不应在偏差表登记**
+  （C3 carve-out；若已登记 → 提示 executor 自审失职，AI 帮删该行 + 提醒 PM）
+
+判不准 → 当**计划外简化**问 PM（让 PM 判，AI 不假装会判）。
+
+#### 1.2 计划外简化：停下问 PM 回填 implementation-design.md（C9 限定 close-time）
+
+对每条计划外简化偏差呈交 PM：
+
+```
+本 task 偏差表第 N 行像「原型本期临时少做」（不是文档写错）：
+ - 文档原文：<偏差行第 2 列>
+ - 实际实现：<偏差行第 3 列>
+
+这是计划内简化（应该回填 stage 5 implementation-design.md 段 1.5 SIMP-NN，让 close-req
+正确标注 PRD），还是真偏差（按原路径 promote adjustment 覆盖 PRD）？
+
+ - 回填 simp 段（推荐 —— PRD 保留真实需求 + 加「原型本次计划简化为」标注）
+ - 按 adjustment promote（PRD 改成实际做成的样子；真实需求只在 req-events.before 留痕）
+ - 跳过这条不处理（PM 自己事后决策）
+```
+
+**PM 回答的内部分流**：
+
+- PM 选「回填 simp 段」→ AI 用 Edit 在 implementation-design.md 段 1.5 末追加一行：
+  - SIMP-ID 顺延接（读现有最大 SIMP-NN，+1）
+  - PRD 锚点 = 偏差行第 1 列「文档位置」
+  - 真实需求 = 「见 PRD <文档位置>」引用
+  - 原型本次计划简化为 = 偏差行第 3 列「实际实现」
+  - 为什么简化 = PM 给的理由（追问一句「为什么本期少做这块」）
+  - 来源 = `kind 1 (close-task 回填)`
+  - 同步在 task 偏差表把该行删除 + 在 task PM 确认区·验收清单受影响行追加 `[SIMP-N]` 标签
+  - **C9 限定**：回填只在 close-time（本步骤）发生；**不**触发已完成 task 重新生成 / 不**回退**
+    其他已 closed task 的 task-spec / 不**重生成**当前 task。类比 close-req PRD 反向对齐 ——
+    本步骤是「写入设计文档」的 close 时一次性动作，下游 task 不重跑。
+- PM 选「按 adjustment promote」→ 偏差行留原表不动（走原路径）
+- PM 选「跳过」→ 偏差行留原表不动，备注「PM 选择不分类」
+
+#### 1.3 全部分类完成后
+
+进入步骤 1.5（视觉规范）。phase 2 close-task.sh 仍按原逻辑 promote 偏差成 adjustment ——
+回填 simp 的行已经从偏差表删了，不会 promote；adjustment 路径的行照走。
 
 ### 步骤 1.5：视觉规范反馈反推 DESIGN.md（`_shared/pm-view/input-flow.md` §9.4 第四类）
 

@@ -4,12 +4,12 @@
 > 写作规则参见 `skills/_shared/PM-VIEW-RULES.md`，特别是：
 > - §三 PM 视图写作规则
 > - §七 章节顺序约束（本模板按此节锁定的顺序）
-> - §九 输入流约束（必读 brief.md / analysis.md / solution.md（PM 视图）/ docs/{PROJECT,DESIGN,prd}.md / docs/modules/\*.md / prototypes/）
+> - §九 输入流约束（必读 brief.md / analysis.md / prd.md / implementation-design.md / docs/{PROJECT,DESIGN}.md / docs/modules/\*.md / prototypes/）
 
 - 创建日期：{{CREATED_DATE}}
 - 创建者：{{AUTHOR}}
 - 分支：{{REQ_BRANCH}}
-- 依赖：`brief.md` + `analysis.md` + `solution.md`
+- 依赖：`brief.md` + `analysis.md` + `prd.md` + `implementation-design.md`（v2 / C2：管线重构后 solution.md 砍除，依赖改 prd + implementation-design）
 - 当前 stage：5（task 拆分）
 - Status：DRAFT（待 PM 确认进入 stage 6）
 
@@ -109,16 +109,19 @@
 
 ### 4.2 验收 GAP 清单
 
-<!-- 填写规则：
-- 来自 solution.md 「验收标准」逐条审视，编号 G1, G2, ...
-- 每条："GAP 描述 / 应落到哪个 task 的验收"
-- 由 stage 6 task-spec 按编号接住
-- 如本 req 验收点已被 task 列表完全覆盖，写"无 GAP"
+<!-- 填写规则（v2 / C1 / C2：solution.md 已砍，来源改 prd.md）：
+- 来自 prd.md 「§七 验收标准」逐条审视，编号 G1, G2, ...
+- 每条三种处置之一：
+  1. 由 task-NNN 接住（默认） → 「应落到哪个 task 验收」列填 task-NNN
+  2. 已被 task 列表完全覆盖 → 整表写「无 GAP」
+  3. 原型本次不实现（kind 2 整块功能不做）→ 列填「原型不实现 → 反向写回 implementation-design.md
+     段 1.5 SIMP-NN」+ 同步去 implementation-design.md 段 1.5 追加 SIMP 行（来源列 = kind 2）
+- 由 stage 6 task-spec 按编号接住（处置 1）/ close-req §2a 据 SIMP 行标注 PRD（处置 3）
 -->
 
 | GAP # | GAP 描述 | 应落到哪个 task 验收 |
 |---|---|---|
-| G1 | [solution.md 验收标准的某条] | [task-XXX] |
+| G1 | [prd.md §七 验收标准的某条] | [task-XXX] / 原型不实现 → SIMP-NN |
 
 ### 4.3 模块规格状态
 

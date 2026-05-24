@@ -90,6 +90,35 @@ PM-AI-Workflow 生成器仓的演进记录。本文件**只记影响下游业务
 
 ## 未发布
 
+### 2026-05-24 — 原型简化项登记机制 v2 落地（T1-T8 全包）
+
+**痛点**：框架只有一份 req 级需求文档 `prd.md`，stage 3 是「评审用的完整真实需求」，close-req §2a 又把它「反向对齐成 as-built」。原型故意做得比 PRD 少的地方被 as-built 覆盖 —— 真实需求从评审文档消失。框架缺「原型故意简化」这个一等概念。
+
+**方案**（设计 `docs/归档/完成/原型简化项-机制.md` v2，落实 plan-eng-review Round 1 全 16 决议）：`implementation-design.md` 加新段「段 1.5 · 原型简化项」（带稳定 `SIMP-ID`，stage 5 PM 确认门审定），按 PRD 锚点 join 下游消费链 task-spec / close-req / close-task。`adjustment` 事件 / `req-events.py` / close-req 现有覆盖逻辑完全不动。
+
+**改动**（Lane A → Lane B/C，关键路径 worktree 并行 3.5-4h）：
+
+- **T1**（templates/implementation-design.md.tmpl + skills/implementation-design/SKILL.md）：加段 1.5「原型简化项」（SIMP-ID schema + 表头 + 空态「无」）；SKILL.md 加 kind 1 登记引导（§2.1）+ Rules 定向豁免（段 1.5 允许写原型行为细节，scope delta 按定义不在 PRD）+ 扩 stage-5 确认门同时呈现架构决策表 + 段 1.5 摘要（D1）；自检从 4 段改 5 段
+- **T2**（skills/task-spec/SKILL.md + templates/task.md.tmpl）：task-spec 步骤 6 加段 1.5 按 PRD 锚点 join 当前 task 逻辑（D5）—— 命中 → 实现规格 + PM 确认区·验收按简化后写 + 受影响验收项行内 `[SIMP-N]` 标签（D6）；task.md.tmpl §文档偏差区注释加 carve-out「已标记 SIMP-N 的不算偏差」（C3）
+- **T3**（skills/close-req/SKILL.md §2a + close-report 模板）：§2a 改成两步顺序（D4）—— 先全部 adjustment overwrite → 再全部 simp 标注追加；锚点解析失败停下问 PM 不机械写错位（C5）；PRD 写回后跑 PM-view re-lint（D2 后置）；close-report 加「原型简化项」节（T8/C4）
+- **T4**（skills/task-plan/SKILL.md §4.2 + templates/task-plan.md.tmpl）：§4.2 验收 GAP 清单加第三种处置「原型不实现（kind 2）→ 反向写回 implementation-design.md 段 1.5 SIMP-NN」（C1）；Required Inputs 补 `implementation-design.md`（C2）；task-plan.md.tmpl 修 stale `solution.md` 引用 → `prd.md + implementation-design.md`
+- **T5**（scripts/check-doc-pm-view.py）：新增 `--simp-scope` 模式 —— implementation-design.md 段 1.5 scoped 校验（D2 源头约束），只校验段 1.5「真实需求」「原型本次计划简化为」「为什么简化」三个 PM 视图字段；其余段保持工程豁免不变；implementation-design SKILL.md 步骤 3.5 调用
+- **T6**（skills/_shared/pm-view/input-flow.md）：Stage 5 task-plan 补 `implementation-design.md` 必读（C2）；Stage 6 task-spec 段 1.5 SIMP join 说明（C7）；§9.1.1 加「implementation-design.md 段 1.5 特殊读法」段（按 PRD 锚点 join，非 HOW-ID grep）
+- **T7**（skills/close-task/SKILL.md Phase 1 步骤 1）：偏差分类「纠错 vs 计划外简化」（D3）—— 计划外简化停下问 PM 是否回填 implementation-design.md 段 1.5（C9 限定 close-time，已完成 task 不重生成）
+- **T8**（scripts/derive-structure-templates.py → 派生 templates/工程结构约束-prototype.md）：「演示路径」深度指引补一句「本句覆盖路线默认范围 —— 不必为每个略过的 edge case 立 SIMP 行（C8 阈值：只登 PM 主动决策的决策级简化）」
+
+**vp-5 解散（D7）**：测试折进各 T 自验，不堆独立测试 bucket。
+
+**测试基线**：`bash tests/run-all.sh` **398/0**（无回归），新增 `--simp-scope` 正负向手动验证通过。
+
+**业务仓需注意**：
+
+- sync 后新跑 `/implementation-design` 自动产 5 段（含段 1.5）；旧 req 的 implementation-design.md 不强制回填，下次 revise 时按新模板。
+- task-spec 现在按 PRD 锚点 join 段 1.5 SIMP 行 —— 业务仓 PRD §六章节命名应稳定（功能名级），否则 close-req §2a 锚点解析会失败 stop 问 PM。
+- close-task Phase 1 现在多一步「偏差分类问 PM」 —— 计划外简化偏差才停，纠错偏差走原路径不打断（PM 体感同前）。
+- 「原型本次实现」字段名已改「原型本次计划简化为」（C6 诚实命名）；段 1.5 模板与 SIMP 行参考 v2 设计文档 `docs/归档/完成/原型简化项-机制.md`。
+- `task-plan.md.tmpl` 依赖从 `brief + analysis + solution.md` 改为 `brief + analysis + prd + implementation-design.md`；旧 task-plan 不强制回填。
+
 ### 2026-05-22 — 飞书发布兼容修复：§七 / §五 / §八 表格与列表格式
 
 - `017b665` fix(prd-writing): §七 验收标准去引用块嵌复选框 + §5.1 多平台用户角色表 HTML→管道表格；publish-to-lark 加 HTML `<table>` 预检警告

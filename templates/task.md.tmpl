@@ -87,7 +87,11 @@ claude-code 仅支持 opus / sonnet / haiku（Agent tool 枚举）。
 ## ✅ 验收清单（PM 走查）
 
 <!-- task 级验收（PM 自己能在 demo 时勾选的条件）；req 级验收标准在 prd.md §七。
-     不写 grep 校验 / 单测断言 / 覆盖率阈值 → 那些进执行区·工程层验收。 -->
+     不写 grep 校验 / 单测断言 / 覆盖率阈值 → 那些进执行区·工程层验收。
+
+     v2 D6：若本 task 命中 implementation-design.md 段 1.5 原型简化项（按 PRD 锚点 join），
+     受影响验收项行尾追加 [SIMP-N] 标签（如 `- [ ] 登录成功后跳转工作台 [SIMP-03]`），
+     让 PM 一眼看到「这条验收按原型简化版走，不是 PRD 全量」。 -->
 
 ### 主路径
 - [ ] [PM 可走查的成功条件 1]
@@ -237,7 +241,13 @@ artifact: verify/cold-start.log
 <!-- ⚠️ 本 section 必须保留 —— task-transition.py「执行中→已完成」gate 读它。
      execution agent 填：实现过程发现的、与 prd.md / implementation-design.md /
      docs/modules 不一致处。四列：文档位置 / 文档原文 / 实际实现 / 建议改法。
-     无偏差填「无」。close-task Phase 2 把本段 promote 成 req `adjustment` 事件。 -->
+     无偏差填「无」。close-task Phase 2 把本段 promote 成 req `adjustment` 事件。
+
+     ⚠️ v2 C3 carve-out：**已标记 SIMP-N 的不算偏差**。
+     若本 task 命中 implementation-design.md 段 1.5 原型简化项（PM 确认区·验收清单可见
+     [SIMP-N] 标签），原型按段 1.5「计划简化为」内容实施 ≠ 与 PRD 不一致；这是 PM 在 stage 5
+     已决策的 scope 削减，不应在此登记为偏差。executor 自审时若不确定，看 PM 确认区
+     验收行有无 [SIMP-N] 标签：有 → 跳过登记；无 → 真偏差。 -->
 
 | 文档位置 | 文档原文 | 实际实现 | 建议改法 |
 |---|---|---|---|
