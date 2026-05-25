@@ -38,11 +38,25 @@ PM AI 工作流框架的**生成器**仓库。
 
 ### 1. 初始化新业务项目
 
-**必须在本仓（PM-AI-Workflow）根目录运行**。生成器自身不能用作业务项目仓。
+**PM 主动入口**：在本仓（PM-AI-Workflow）的 Claude Code 窗口里发：
+
+```
+/init-project
+```
+
+agent 内部一气呵成 **4 阶段**：
+
+- **阶段 A · 参数收集 + brownfield 检测** —— AskUserQuestion 5 步问 PM（项目名 → 落地路径 → brownfield 检测闸门 → 一句话背景 → 项目意图）。目标目录已含 `.git/` 或代码 → 拒 + 提示走 `/codebase-audit`
+- **阶段 B · 骨架建设** —— agent 用 Bash 调 `init-project.sh`，创建业务仓 + git init + 首 commit `init: <name>`
+- **阶段 C · QUESTIONING（方向讨论）** —— @读 `skills/_shared/project-questioning.md`（单一真相源），按提问纪律跑讨论 + Decision gate「创建 PROJECT.md / 继续探索」二选一 + Loop 回路，最后写 `docs/PROJECT.md` + `docs/roadmap.md` + atomic commit `docs: project direction settled`
+- **阶段 D · 终态汇总 + Next Up** —— 输出「✅ <name> 已就绪 / cd <target> && /new-req "..."」
+
+> `/init-project` 只在生成器仓里跑（业务仓不分发）。
+
+**非交互参数化 CLI**（`measure-tthw.sh` / smoke / 批量自动化依赖）：
 
 ```bash
 cd ${REPO_ROOT}
-bash scripts/init-project.sh --help          # 看完整用法 + 参数 + 例子
 bash scripts/init-project.sh \
   <project-name> \
   <target-dir> \
@@ -53,16 +67,10 @@ bash scripts/init-project.sh \
 参数：
 - `<project-name>` — 业务项目名（也是 git 仓的名字）
 - `<target-dir>` — 业务项目落地路径（**不能已存在**）
-- `<background>` — 一句话项目背景（写进生成的 CLAUDE.md）
-- `<project-intent>` — 工程结构意图（默认 `unknown`）：
-  - `prototype` — Next.js 单页原型 / Demo 仓
-  - `system` — 完整业务系统（多模块、有后端契约）
-  - `custom` — PM 自由编辑骨架
-  - `unknown` — 探测兜底档（先 init，跑通后再分类）
+- `<background>` — 一句话项目背景
+- `<project-intent>` — 工程结构意图（默认 `unknown`）：`prototype` / `system` / `custom` / `unknown`
 
-成功后业务仓已 `git init` 并完成首个 commit，下一步在业务仓里运行 `/new-req` 启动第一个需求。
-
-> **5 分钟你会看到**：业务仓目录已建（`.claude/scripts/` `.claude/skills/` `.claude/agents/` `templates/` `CLAUDE.md` `requirements/` 等）+ 一个 init commit；终端打印「下一步：cd <target> && /new-req」。
+> 脚本是骨架构建器，**不带方向讨论**（PROJECT.md / roadmap.md 留空骨架）；直接调脚本适合自动化场景，PM 主动起项目走 `/init-project` skill 拿到完整体验。
 
 可量测 TTHW（从空项目到第一个 `status-view.py` 可识别的 active req）：
 
@@ -102,8 +110,9 @@ bash scripts/measure-tthw.sh
 
 | Skill | 用途 |
 |---|---|
-| `/new-req` | 起一个新 req（带 brief） |
-| `/project-solution` | 初始化 / 修订项目级 PROJECT 与 roadmap |
+| `/init-project` | **项目级入口**：起一个新业务项目，4 阶段一气呵成（参数 → 骨架 → 方向 → Next Up）；**只在生成器仓里跑** |
+| `/project-solution` | **项目方向规划**：4 个独立场景（重做 / 季度规划 / 老板新方向 / brownfield 接入） |
+| `/new-req` | **req 级入口**：起一个新 req（带 brief） |
 | `/quick-fix` | 不走 req 流程的小补丁（适合改文案、修小 bug） |
 
 ### 推进 req（需求级）
@@ -146,7 +155,7 @@ bash scripts/measure-tthw.sh
 
 | Skill | 用途 |
 |---|---|
-| `/init-project` | 业务项目脚手架（只在本仓使用） |
+| —（当前无；`/init-project` 2026-05-25 后归入「启动新工作」组）| — |
 
 ---
 

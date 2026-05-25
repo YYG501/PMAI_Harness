@@ -13,32 +13,45 @@
 
 ## 当前位置（2026-05-25）
 
-**D-iii v2：attachments AI 接管全包已落地**（同 D-i v4 helper-based 架构剧情）
+**D-iv M1 init-project 一气呵成落地中**（批 1，6 个 vp，~4.8h 总；当前 vp-1 + vp-2 已落，vp-3 verify pass）
 
-- **vp-1**：`scripts/_lib/attachments.py` 新建（~370 行）—— `copy_attachment` / `register_attachment` / `list_attachments_seen` / `is_seen` / `remove_attachment` / `replace_attachment` 全套 API + `SENSITIVE_PATH_PATTERNS` 12 patterns denylist + `MAX_FILE_SIZE_MB = 50` hard cap + Python `shutil.copy2 + Path.expanduser`（不靠 Bash cp）
-- **vp-2**：`skills/_shared/pm-view/attachments-upload.md` 新建（~230 行）—— trigger 0 LLM 识别 prose 单一真相源 + caller 调 helper 模式 + multi-batch / 替换 / 删除 / 冲突 / 失败兜底 + stage 前缀映射 + office-hours C4 边界
-- **vp-3 + vp-3b + vp-3c**：7 stage SKILL 加 trigger 0 inline 段（含 C2 新增 implementation-design + task-plan）+ `new-req` commit pathspec 扩 attachments/（C1 fix）+ `req-stage-gate` B 分支 trigger 0 disable（C4 fix）
-- **vp-4**：`tests/test-attachments-helper.sh` 13 case（含 trigger 2 改造 regression + 静态 grep 验证）
-- **vp-5**：`templates/req-prd.md.tmpl` 新加 `## 📎 参考材料`（保留 "九、附件（可选）" PRD 内置章节，两者并存语义清晰）
-- **vp-6**：`PM-VIEW-RULES.md` 加 §10 索引行 + `INVARIANTS.md` 立 **I-RT10**（attachments_seen 字段 + helper-only + denylist + hard cap + B 分支 trigger 0 disable 边界）
+设计文档 `docs/设计/入口与全流程体验顺畅性.md` v0.2（plan-eng-review Round 1 完整跑过：claude 9 finding + codex outside voice 7 finding，16 ACCEPT；最大改动是 codex C-1 砍掉 M3 整模块 —— `req-stage-gate` 续跑模式已是默认行为，M3 痛点 NULL）。批 1 ship 后批 2（M2 banner + M4 askuser + M5 session 播报）按 PM 拍板再启。
 
-**测试基线**：`bash tests/run-all.sh` **425 / 0**（前 412 → +13 全过；设计预期 ≥ 423/0，超出）。
+**已落（commits 6df9cf4 + dcf5802）**：
 
-**v1 → v2 反转**（同 D-i v4 Round 3 剧情）：Claude D1-D10 review 全 ACCEPT 后 Codex outside voice 命中 11 critical/high finding，集体指向根因 = v1 prose-only 应 helper 化。PM 拍 D12 = A：反转 v2。
+- **vp-1**：`skills/init-project/SKILL.md` 重写 4 阶段（A 参数 5 步 + brownfield 检测 → B 骨架 → C QUESTIONING @读 `_shared/project-questioning.md` + Decision gate + atomic commit → D Next Up 只汇总）+ 顶部 ASCII 流程图 + 失败兜底速查（R10/R11）；`scripts/init-project.sh` 删 echo "下一步：/new-req"（保留非交互参数化 CLI 入口 invariant）
+- **vp-2**：新建 `skills/_shared/project-questioning.md`（253 行，单一真相源 —— §1-§10 含提问纪律 / 问题库 / 写作规则 / Decision gate 模板 / 6 节检查 / atomic commit）+ `/project-solution` SKILL.md 238→158 行（瘦身 33%）改 @读 + 加 4 场景判断框架 + frontmatter 更新；init-project SKILL.md 阶段 C 内嵌 Decision gate 选项副本改为 @读 §6.2 引用
+- **vp-3**：阶段 D「只汇总不 commit」由 vp-1 SKILL.md 已写对，verify pass，无单独 commit
 
-**累计两轮 helper-based 升级**（D-i v4 + D-iii v2）：`.req-meta.json` 现有 4 个 helper 化字段（`stage{N}_source` / `stage{N}_tool` / `stage{N}_source_origin` / `attachments_seen`），全部走 `_lib/state.py` + `_lib/attachments.py` 读写、不得 hardcode 直读。
+**测试基线**：`bash tests/run-all.sh` **425 / 0**（D-iii v2 落地基线维持，vp-1/vp-2 无回归）。
 
-**待验项**（消费仓真实 req 一起验，与 D-i v4 待验合并）：
+**剩余 vp**：
 
-1. LLM trigger 0 识别准确性（同 D-i v4 R3-H2 DEFER 决策模式）
-2. `SENSITIVE_PATH_PATTERNS` 12 个 pattern 覆盖度
-3. `MAX_FILE_SIZE_MB = 50` 阈值是否合适
+- **vp-4**：文档同步 ← **进行中**（README 快速开始改单步 / Skill 汇总表移 `/init-project` / RUNTIME 更新 / CHANGELOG）
+- **vp-5a**：自动化测试（`test-brownfield-detect.sh` / `test-no-duplicate-questioning.sh` / `test-shared-files-exist.sh`，期望基线 425 → 428）
+- **vp-5b**：PM 手动端到端验收 + measure-tthw 计时 + 4 场景对比一致性
+- **vp-6**：`/project-solution` 4 场景定位强化（frontmatter / When To Use 重写；vp-2 已加 4 场景框架，vp-6 细化场景特定提问顺序）
 
-**下一步**：到消费仓 `${CONSUMER_REPO_ROOT}` 跑 `框架同步-SOP.md` 同步后两个 helper 升级一起验证 —— D-i v4 office-hours B 分支 + D-iii v2 attachments trigger 0。
+**下一步**：vp-4 完成（RUNTIME + CHANGELOG）→ vp-5a 自动化测试 → vp-6 → vp-5b PM 验收 → 批 1 完毕 → PM 拍板批 2 是否启 / 何时启。
 
 ---
 
 ## 历史阶段（已完成）
+
+**2026-05-25 — D-iii v2：attachments AI 接管全包**（helper-based，commit 1eb3480 + 9644046 + 6df9cf4 + dcf5802）
+
+- **vp-1**：`scripts/_lib/attachments.py` 新建（~370 行）—— `copy_attachment` / `register_attachment` / `list_attachments_seen` / `is_seen` / `remove_attachment` / `replace_attachment` + `SENSITIVE_PATH_PATTERNS` 12 patterns denylist + `MAX_FILE_SIZE_MB = 50` hard cap
+- **vp-2**：`skills/_shared/pm-view/attachments-upload.md` 新建（~230 行）—— trigger 0 LLM 识别 prose 单一真相源 + caller 调 helper 模式
+- **vp-3 + vp-3b + vp-3c**：7 stage SKILL 加 trigger 0 inline 段 + `new-req` commit pathspec 扩 attachments/（C1）+ `req-stage-gate` B 分支 trigger 0 disable（C4）
+- **vp-4**：`tests/test-attachments-helper.sh` 13 case
+- **vp-5**：`templates/req-prd.md.tmpl` 新加 `## 📎 参考材料`
+- **vp-6**：`PM-VIEW-RULES.md` 加 §10 索引行 + `INVARIANTS.md` 立 **I-RT10**
+
+**累计 helper-based 升级**（D-i v4 + D-iii v2）：`.req-meta.json` 4 个 helper 化字段（`stage{N}_source` / `stage{N}_tool` / `stage{N}_source_origin` / `attachments_seen`），全部走 `_lib/state.py` + `_lib/attachments.py` 读写。
+
+**消费仓验证待项**（与 D-iv M1 vp-5b 一起跑）：① LLM trigger 0 识别准确性 ② `SENSITIVE_PATH_PATTERNS` 覆盖度 ③ `MAX_FILE_SIZE_MB = 50` 阈值。
+
+---
 
 **2026-05-25 — D-i v4：office-hours 跨 Stage 1+2 集成全包** —— 设计 `docs/归档/完成/office-hours-跨stage1-2集成.md` v4（Codex outside voice + 3 轮 plan-eng-review 全 21 决议；snapshot 复制方案 + 体验包装层）+ 实施 vp-1 → vp-7：
 
@@ -104,9 +117,9 @@
 
 ## 新窗口续接命令
 
-> 继续 PM-AI-Workflow。读 RUNTIME.md 确认 GSD-review 管线重构全包已落地（395/0），告诉我下一步要做什么。
+> 继续 PM-AI-Workflow。读 RUNTIME.md「当前位置」确认 D-iv M1 vp-1+vp-2 已落（425/0），告诉我下一步要做什么（vp-4 / vp-5a / vp-5b / vp-6 / 批 2）。
 
 AI 收到后应该：
-1. 读本文件确认当前位置
-2. 等 PM 给具体方向（消费仓端到端验证 / 新一轮 review / 文档收口 等）
+1. 读本文件「当前位置」确认 D-iv M1 当前进度（vp-1/vp-2 已落 / vp-3 verify pass / vp-4-6 剩余）
+2. 等 PM 给具体方向（接着跑剩余 vp / 跑消费仓验证 / 启批 2 / 暂停）
 3. 不擅自启新阶段

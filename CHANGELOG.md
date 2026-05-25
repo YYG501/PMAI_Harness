@@ -90,6 +90,25 @@ PM-AI-Workflow 生成器仓的演进记录。本文件**只记影响下游业务
 
 ## 未发布
 
+### 2026-05-25 — D-iv M1 vp-3 + vp-4：阶段 D verify pass + 文档同步（README / RUNTIME / CHANGELOG）
+
+**vp-3**（阶段 D 改"只汇总不 commit"）：vp-1 SKILL.md 已写对（"PROJECT.md / roadmap.md + commit 已在阶段 C 完成。阶段 D 只做终态输出"），verify pass，无单独 commit。
+
+**vp-4**（文档同步，T4）：
+
+- `README.md` § 快速开始 1：从 `bash scripts/init-project.sh ...` 直调 CLI 改为「PM 主动入口走 `/init-project` skill 一气呵成 4 阶段」（保留非交互 CLI 作 `measure-tthw` / smoke / 批量自动化的入口 invariant；review C-5）
+- `README.md` § 完整 Skill 命令汇总：
+  - `/init-project` 从「框架内部（PM 不直接用）」组**移到「启动新工作」组顶**（review B2）+ 加"(只在生成器仓里跑)"标记
+  - `/project-solution` 描述更新为「项目方向规划：4 个独立场景（重做 / 季度规划 / 老板新方向 / brownfield 接入）」
+  - 「框架内部」组留空（用 placeholder 行注明 `/init-project` 2026-05-25 后归入「启动新工作」）
+- `RUNTIME.md`「当前位置」：D-iii v2 整段挪「历史阶段」，「当前位置」改写为 D-iv M1 vp-1/vp-2 落地 + vp-3 verify pass + 剩余 vp-4/5a/5b/6 清单
+- `RUNTIME.md`「新窗口续接命令」：更新为 D-iv 进度（425/0 + vp 列表）
+- `CHANGELOG.md`「未发布」段：本条目（vp-3 + vp-4 收尾）
+
+**测试基线**：`bash tests/run-all.sh` **425/0**（无回归；文档改动不触动测试）。
+
+---
+
 ### 2026-05-25 — D-iv M1 vp-2：`_shared/project-questioning.md` 抽取 + `/project-solution` 改 @读
 
 **改造目标**：vp-1 让 `/init-project` 阶段 C 写为 `@读 _shared/project-questioning.md`，但该 `_shared` 文件还没创建（vp-1 commit 后 vp-2 commit 前手动跑 `/init-project` 阶段 C 会找不到 `_shared` 文件）。vp-2 创建该文件 + 把 `/project-solution` 现役 inline 提问法 / 写作规则改为 @读，让两个 skill 都引用同一份单一真相源。
