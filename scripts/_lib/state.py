@@ -579,27 +579,51 @@ def read_task_plan(req_dir: Path) -> Optional[dict]:
     return {"tasks": tasks}
 
 
-def list_tasks(req_dir: Path) -> list[dict]:
+def _task_id_from_path(f: Path) -> str:
+    m = re.match(r"(task-\d{3,})", f.stem)
+    return m.group(1) if m else f.stem
+
+
+def list_tasks(req_dir: Path, repo_root: Optional[Path] = None) -> list[dict]:
     """列 req 目录下 task 文件（已 spec 过的，含 PM 视图字段）。
 
     返回 [{path: Path, id: str, meta: TaskMeta}, ...]，按 task id 排序。
     跳过 `.engineering.md` 副本与 `discarded/` 子目录。
 
+    repo_root 语义（v4.5 inconsistency 修复）：
+    - None（默认）：只扫 req_dir/tasks，向后兼容旧调用方
+    - 传入 repo_root：v4.5 task-confirm fork 后会把 task md 从 req 分支 git rm，
+      额外扫 .worktrees/task-*/requirements/active/<req-id>/tasks/ 合并去重；
+      同 task-id 优先用 task 分支版（active 状态优先 req 分支的 archived 状态）
+
     None 语义：
-    - tasks/ 不存在 → 返回 []
+    - req_dir/tasks 不存在且无 task-* worktree → 返回 []
     """
+    out: dict[str, dict] = {}
+
     tasks_dir = req_dir / "tasks"
-    if not tasks_dir.exists():
-        return []
-    out: list[dict] = []
-    for f in sorted(tasks_dir.glob("task-*.md")):
-        if f.name.endswith(".engineering.md"):
-            continue
-        meta = get_task_meta(f)
-        m = re.match(r"(task-\d{3,})", f.stem)
-        tid = m.group(1) if m else f.stem
-        out.append({"path": f, "id": tid, "meta": meta})
-    return out
+    if tasks_dir.exists():
+        for f in sorted(tasks_dir.glob("task-*.md")):
+            if f.name.endswith(".engineering.md"):
+                continue
+            tid = _task_id_from_path(f)
+            out[tid] = {"path": f, "id": tid, "meta": get_task_meta(f)}
+
+    if repo_root is not None:
+        req_id = req_dir.name
+        for branch, wt_path in _git_worktree_pairs(repo_root):
+            if not branch.startswith("task-"):
+                continue
+            task_tasks_dir = wt_path / "requirements" / "active" / req_id / "tasks"
+            if not task_tasks_dir.exists():
+                continue
+            for f in sorted(task_tasks_dir.glob("task-*.md")):
+                if f.name.endswith(".engineering.md"):
+                    continue
+                tid = _task_id_from_path(f)
+                out[tid] = {"path": f, "id": tid, "meta": get_task_meta(f)}
+
+    return [out[k] for k in sorted(out)]
 
 
 def discarded_task_ids(req_dir: Path) -> set[str]:
@@ -766,7 +790,7 @@ def get_overall_state(
     for item in raw["items"]:
         req_dir = item["req_dir"]
         meta = item["meta"]
-        tasks = list_tasks(req_dir)
+        tasks = list_tasks(req_dir, repo_root=repo_root)
         discarded = discarded_task_ids(req_dir)
         plan = read_task_plan(req_dir)
         planned = plan["tasks"] if plan else []

@@ -550,6 +550,46 @@ class TestListTasks(unittest.TestCase):
         with tempfile.TemporaryDirectory() as d:
             self.assertEqual(list_tasks(Path(d) / "no-such-req"), [])
 
+    def test_worktree_fallback_finds_task_branch_only_md(self):
+        """v4.5 fork 后 task md 从 req 分支 git rm；传 repo_root 时扫 task-* worktree 补回。"""
+        with tempfile.TemporaryDirectory() as d:
+            main, r1, t1 = _init_repo_with_worktrees(Path(d))
+            req_dir_in_req_wt = r1 / "requirements" / "active" / "req-001"
+            task_tasks_dir = t1 / "requirements" / "active" / "req-001" / "tasks"
+            task_tasks_dir.mkdir(parents=True)
+            (task_tasks_dir / "task-001-demo.md").write_text(
+                "# Task 001\n\n| **状态** | 待执行 |\n", encoding="utf-8")
+
+            tasks_without_root = list_tasks(req_dir_in_req_wt)
+            self.assertEqual(tasks_without_root, [], "不传 repo_root 应保持旧行为只扫 req 分支")
+
+            tasks_with_root = list_tasks(req_dir_in_req_wt, repo_root=main)
+            self.assertEqual(len(tasks_with_root), 1)
+            self.assertEqual(tasks_with_root[0]["id"], "task-001")
+            self.assertEqual(
+                tasks_with_root[0]["path"].resolve(),
+                (task_tasks_dir / "task-001-demo.md").resolve())
+
+    def test_task_branch_md_preferred_over_req_branch(self):
+        """同 task-id 在 req 分支（archived）和 task 分支（active）都有 → 优先 task 分支版。"""
+        with tempfile.TemporaryDirectory() as d:
+            main, r1, t1 = _init_repo_with_worktrees(Path(d))
+            req_dir = r1 / "requirements" / "active" / "req-001"
+            (req_dir / "tasks" / "task-001-demo.md").write_text(
+                "# Task 001 (req-branch archived copy)\n\n| **状态** | 已完成 |\n", encoding="utf-8")
+            task_tasks_dir = t1 / "requirements" / "active" / "req-001" / "tasks"
+            task_tasks_dir.mkdir(parents=True)
+            task_branch_md = task_tasks_dir / "task-001-demo.md"
+            task_branch_md.write_text(
+                "# Task 001 (task-branch active)\n\n| **状态** | 执行中 |\n", encoding="utf-8")
+
+            tasks = list_tasks(req_dir, repo_root=main)
+            self.assertEqual(len(tasks), 1)
+            self.assertEqual(
+                tasks[0]["path"].resolve(),
+                task_branch_md.resolve(),
+                "应优先 task 分支版 (active 状态)")
+
 
 class TestDiscardedTaskIds(unittest.TestCase):
     def test_picks_up_discarded_dir(self):

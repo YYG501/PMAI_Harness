@@ -90,6 +90,30 @@ PM-AI-Workflow 生成器仓的演进记录。本文件**只记影响下游业务
 
 ## 未发布
 
+### 2026-05-25 — fix: task 状态查询 vs v4.5 task md 单分支独占的 inconsistency
+
+**问题**：v4.5 设计 task-confirm fork 后 `git rm` task md 从 req 分支（搬到 task 分支独家），但 `list_tasks()` 和 `/task-execute` 入口的 find 命令都只扫 req 分支视角，导致：
+
+- **dangerous default**：`/task-status` 在 req 窗口扫不到已 fork 的 task → 错误推荐 `/close-req`；如果 PM 信了会**误关一个还有 task 待执行的 req**
+- PM 在 req 窗口 `ls tasks/` 看不到 task md → AI 误判 "task 还没产" → 让 PM 重跑 `/task-spec` 浪费时间
+- `/task-execute task-NNN`（短 ID）模式 find 扫不到 task-* worktree → 在已 confirm 的 task 上误报 "0 个匹配"
+
+PM 在 example-consumer-app 真实跑出来证实了 `/task-status` 漏报 task-002，决定直接修而非起 D-v 设计 doc。
+
+**修法**（example-consumer-app AI 给的 A 方案 ≈ 扫描机制扩展）：
+
+- `scripts/_lib/state.py:list_tasks(req_dir, repo_root=None)`：加可选 repo_root 参数；传入时扫 `.worktrees/task-*/requirements/active/<req-id>/tasks/` 合并去重，同 task-id 优先 task 分支版（active 状态优于 req 分支 archived 状态）；不传 repo_root 保持旧行为（向后兼容）
+- `scripts/_lib/state.py:get_overall_state()` 内部调用改传 repo_root（所有 status-view render_* 入口自动受益）
+- `scripts/status-view.py` render_timeline 两处直接 list_tasks 调用补传 repo_root
+- `skills/task-execute/SKILL.md` 入口步骤 1：短 ID + 无参两种模式的 find 命令扩到 `.worktrees/task-*/requirements/active`；加 v4.5 注释说明 fork 后 task md 在 task 分支独家
+- `scripts/_lib/state_test.py:TestListTasks` 加 2 case：worktree_fallback_finds_task_branch_only_md / task_branch_md_preferred_over_req_branch
+
+**业务仓需注意**：同步本修后 `/task-status` 在 req 窗口能正确看到已 fork 待执行的 task；可信任 status-view 给出的"下一步"建议（之前 PM 必须 `git worktree list` 手工核对）。
+
+**测试基线**：`bash tests/run-all.sh` **454 pass / 1 fail**。fail 是 `test-cleanup-pending.sh` C7 safety case，**pre-existing**（stash 本次改动后跑仍 fail，与本次无关，另行追踪）。本次新增 2 case 全过（worktree_fallback_finds_task_branch_only_md / task_branch_md_preferred_over_req_branch）。
+
+---
+
 ### 2026-05-25 — D-iv ship 后审计修复（漏改指针 + 死链 + 文档基线对齐）
 
 新窗口连续大改后的隐性问题扫查（PM 主动发起），修以下 3 处：
