@@ -14,7 +14,11 @@ _SCRIPTS_DIR = str(Path(__file__).resolve().parent)
 if _SCRIPTS_DIR not in sys.path:
     sys.path.insert(0, _SCRIPTS_DIR)
 
-from _lib.state import read_req_meta, StateReadError  # noqa: E402
+from _lib.state import (  # noqa: E402
+    read_req_meta,
+    StateReadError,
+    get_stage_source,
+)
 from _lib.stages import (  # noqa: E402
     STAGE_NAMES,
     STAGE_OUTPUT_FILES,
@@ -245,9 +249,17 @@ def validate_forward(meta: dict, target: int, req_dir: Path) -> None:
             )
             sys.exit(1)
     elif current in STAGE_OUTPUT_FILES:
-        output_file = req_dir / STAGE_OUTPUT_FILES[current]
+        # D-i v4 R3-C1：stage 2 真相源走 helper（B 分支 office-hours 产
+        # stage2-office-hours.md，A 分支 req-analysis 产 analysis.md）。其他
+        # stage 仍以 STAGE_OUTPUT_FILES 默认产物为准（B 分支机制目前只覆盖
+        # stage 2；future 扩 stage N 时只需该 stage 的 caller 写
+        # `.req-meta.json:stage{N}_source` 字段，无需改本处契约）。
+        output_file = get_stage_source(req_dir, current)
         if not output_file.exists():
-            print(f"Error: stage {current} output file not found: {output_file.name}", file=sys.stderr)
+            print(
+                f"Error: stage {current} output file not found: {output_file.name}",
+                file=sys.stderr,
+            )
             sys.exit(1)
 
 

@@ -11,6 +11,9 @@
 | 文件 | 说明 |
 |---|---|
 | [`_模板-方案.md`](./设计/_模板-方案.md) | 唯一设计文档模板（§0 痛点锁 + §1-§N 方案主体 + §X Review Findings + §Y 决议日志），起手用 |
+| [`plan-ceo-review-反向对齐PRD.md`](./设计/plan-ceo-review-反向对齐PRD.md) | **D-ii v0 stub**：plan-ceo-review 反向对齐 PRD 集成 — §0 待 PM 共写 |
+| [`attachments-体验优化.md`](./设计/attachments-体验优化.md) | **D-iii v0 stub**：attachments 体验优化（多附件场景）— §0 待 PM 共写 |
+| [`init-project-入口一气呵成.md`](./设计/init-project-入口一气呵成.md) | **D-iv v0.1**：把 `/init-project` 改造成 agent 化一气呵成入口（对齐 gsd 体验），阶段 C 字面调用 `/project-solution`（保留为项目方向规划入口）— §0 已锁 2026-05-24，方案主体待 review |
 
 > **起手新设计**：`cp docs/设计/_模板-方案.md docs/设计/<主题>.md`
 
@@ -36,6 +39,7 @@
 | 主题 | 文件 | 现役承接 |
 |---|---|---|
 | **原型简化项登记机制 v2** | [`原型简化项-机制.md`](./归档/完成/原型简化项-机制.md) | 2026-05-24 T1-T8 全包落地（398/0）—— `templates/implementation-design.md.tmpl` 段 1.5 + 7 处下游 SKILL wiring + `scripts/check-doc-pm-view.py --simp-scope` |
+| **D-i office-hours 跨 Stage 1+2 集成 v4** | [`office-hours-跨stage1-2集成.md`](./归档/完成/office-hours-跨stage1-2集成.md) | 2026-05-25 vp-1～vp-7 全包落地（412/0）—— `_lib.state.{get,set}_stage_source` helper + `req-stage-gate` Stage 1→2 合二为一选择门 + 分流 A/B + office-hours bridge snapshot + `.req-meta.json` 3 字段（stage{N}_source/_tool/_source_origin）+ I-RT9 不变式 + 下游 9 处通用化"stage 2 真相源" |
 | skill 读取收敛 | [`设计-skill读取收敛.md`](./归档/完成/设计-skill读取收敛.md) | commit be47fca + PM-VIEW-RULES §9.1 |
 | 框架同步 | [`设计-框架同步.md`](./归档/完成/设计-框架同步.md) | 实战 d0aa6c1 + 框架同步-SOP.md |
 | PM 手动新窗口执行 | [`设计-PM手动新窗口执行.md`](./归档/完成/设计-PM手动新窗口执行.md) | create-task-worktree.sh + task-confirm skill |

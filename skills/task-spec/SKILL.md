@@ -51,7 +51,7 @@ echo "SKILL: task-spec"
 | `docs/PROJECT.md` / `docs/DESIGN.md` / `docs/modules/` | 项目级背景 |
 | `docs/PRODUCT-RULES.md`（delta-9）| 跨功能产品行为规则 —— 读全部 `scope=全局` 规则 + 按当前 task 模块 / 功能关键词 grep 命中的 `scope=域限定` 规则（§9.1.1 章节-grep；`scope=全局` 永远纳入、不漏跨功能规则）。命中的规则写进执行区·约束与易错 |
 | 前序「已完成」task 的「PM 反馈」段 | same-req 反馈 lane（§步骤 5 relevance 二分）|
-| `analysis.md` | ⚪ 按需 lazy fallback —— 不默认读；PRD 切片不足时回读对应章节并在 chat 告知 PM |
+| **stage 2 真相源**（A 分支 `analysis.md` / B 分支 `stage2-office-hours.md`；路径由 `get_stage_source(req_dir, 2)` 解析）| ⚪ 按需 lazy fallback —— 不默认读；PRD 切片不足时回读对应章节并在 chat 告知 PM |
 
 特别遵守 `input-flow.md §9.1.1` 章节匹配强约束（按章节 grep 局部读，不整文件 Read 大文件）。
 
@@ -78,8 +78,7 @@ summary / 依赖。找不到 → 停止并提示 PM 先修正 `task-plan.md`。
 - 项目级文档列为"必读"，AI 不得以"觉得不必要"为由跳过。
 - `prd.md` 是 WHAT（req 级功能规格）；`implementation-design.md` 是 HOW（req 级实现设计）。
   两者分工：实现规格从 PRD 切片转写，实现设计引用从 implementation-design 按 HOW-ID 挑。
-- `analysis.md` 不默认读；仅当 PRD 切片不足以写清 task 时回读对应章节，并在 chat 告知 PM
-  「PRD 此切片不足，已回读 analysis §X」。
+- **stage 2 真相源**（A 分支 `analysis.md` / B 分支 `stage2-office-hours.md`，路径由 `get_stage_source(req_dir, 2)` 解析）不默认读；仅当 PRD 切片不足以写清 task 时回读对应章节，并在 chat 告知 PM「PRD 此切片不足，已回读 stage 2 真相源 §X」。
 
 ### 步骤 4：基础设施 task 走简化路径
 

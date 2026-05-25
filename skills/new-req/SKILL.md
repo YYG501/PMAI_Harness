@@ -134,27 +134,33 @@ commit（见步骤 4.5）。每 req 入口触发、升级后自然 silent skip�
 
 > 只在已有项目 + 旧 DESIGN.md 时触发；新项目 `init-project` 复制的已是新结构模板，silent skip。
 
-### 步骤 4：Stage 1 — 产出 brief.md（由 PM 主导）
+### 步骤 4：Stage 1 — 产出 brief.md（AI 引导，**不调用 /office-hours**）
 
-**关键原则**：brief 阶段如何引导思考**由 PM 自己决定**，AI 不主动调用任何工具、不预读项目文档/历史 req。AI 在此步骤只做两件事：(1) 提示 PM 三条候选路径，(2) 等 PM 选择后整理产出为 `brief.md`。
+**关键原则**：brief 是 PM 第一手"感受问题"的产物，AI 不主动调任何外部工具、不预读项目文档 /
+历史 req。如果 PM 想用 office-hours 风格做深挖讨论，那是 **Stage 2 的工具选择**（在 worktree
+内由 `/req-stage-gate` Stage 1→2 入口分流，B 分支走 office-hours），不是 Stage 1 的事 —— Stage 1
+的产物保持单一：PM 一句话需求 → AI 缺口分析补问 → brief 草稿 → 二次确认。
 
-输出提示给 PM（不要替 PM 选）：
+输出提示给 PM（不列字母，给两种候选路径）：
 
 ```
-brief.md 还没写。你可以选任何方式产出，我帮你整理成符合 PM 视图写作规则的格式：
+brief.md 还没写。两种方式：
 
-1. 自跑 /office-hours（gstack skill）做六问深挖思考 — 跑完把产出贴回来我整理
-2. 给我说说需求要点 — 我会做缺口分析、补问 1-3 题、出 brief 草稿、走二次确认
-3. 自己写完整 brief.md — 我只做格式校验
+1. 给我说说需求要点 — 我做缺口分析、补问 1-3 题、出 brief 草稿、走二次确认（默认）
+2. 你自己写完整 brief.md — 我只做格式校验
 
-也可以混合（先跑 1 拿到产出，再补充几句让我合并）。等你说就行。
+等你说就行。
 ```
 
 **等 PM 主动告诉**采用哪种路径或直接给内容。
 
-#### 选项 2 的内部流程（AI 自带轻量引导，**不调用 /office-hours**）
+> **历史决策**（D-i v4 §1.4）：早期版本曾有"选项 1 自跑 office-hours 把产出贴回来 AI 整理"
+> 路径，2026-05-24 PM 拍定砍掉 —— office-hours 跨 Stage 1+2 集成机制改在 Stage 2 stage-gate
+> 入口承接，避免"office-hours 跨两个阶段都被调用"的体验拧巴。
 
-PM 选 2 或直接开始描述需求时，AI 走以下流程：
+#### AI 主导轻量引导流程（PM 选默认路径或直接描述需求时）
+
+PM 选 1 或直接开始描述需求时，AI 走以下流程：
 
 1. **缺口分析**：AI 把 PM 已说的信息对照六个核心维度，判断哪些已答、哪些缺：
    - 需求真实性：有没有真实用户在痛苦
@@ -186,10 +192,10 @@ PM 选 2 或直接开始描述需求时，AI 走以下流程：
    - PM 提具体修改 → 按 PM 指示改 brief.md，改完回到步骤 4 重新出二确（不贴全文，参 Rules "确认门只给路径+一句话摘要"）
 
 **禁止**：
-- AI 主动调用 `/office-hours` 或任何 review/research skill — `/office-hours` 是 gstack 通用产品发现工具（含 builder/startup 模式选择 + telemetry + gbrain context queries），适合 PM 自主使用，不适合 AI 替 PM 跑
+- AI 主动调用 `/office-hours` 或任何 review/research skill — `/office-hours` 是 gstack 通用产品发现工具（含 builder/startup 模式选择 + telemetry + gbrain context queries），适合 PM 自主使用，不适合 AI 替 PM 跑；PM 想用 office-hours 风格深挖，在 Stage 2 stage-gate 入口走 B 分支即可
 - 在 PM 给出方向前去读 `requirements/closed/req-*` 的 brief / 项目级 docs / brief 历史 — RAG 噪声，PM 需要时自己会让你读
 - 自作主张提"我先了解一下背景再问你" — 破坏对话节奏
-- 选项 2 里**机械问全六题** — 必须先做缺口分析再只问缺的，避免重复 PM 已经说的
+- AI 引导路径里**机械问全六题** — 必须先做缺口分析再只问缺的，避免重复 PM 已经说的
 
 `brief.md` 是 stage 1 的唯一真相源，后续所有 stage 只读 brief.md。
 
@@ -295,8 +301,8 @@ brief.md 已 commit 后，**当前主对话不再继续 stage 2**。`/new-req` �
 - 允许多个 active req 并行（每个 req 一个 worktree、一条分支、一份 .req-meta.json，互不干扰）。已有 active req 时不要拦截，正常创建即可
 - slug 从需求描述自动生成，不需要问 PM
 - brief.md 用 PM 的原话整理，不要过度改写或添加 PM 没说的内容
-- brief 引导路径由 PM 选（步骤 4）；AI 不主动调 `/office-hours`、不预读历史 req / 项目 docs
-- 选项 2（PM 给信息 + AI 引导）：AI 必须先做缺口分析再补问，不机械问全六题；走 brief 草稿 + 二次确认门
-- 选项 1（PM 自跑 office-hours）：AI 只提示 PM 自己跑，不替 PM 调 skill
+- brief 引导路径由 PM 选（步骤 4：AI 引导 / PM 自写）；AI 不主动调 `/office-hours`、不预读历史 req / 项目 docs
+- AI 引导路径必须先做缺口分析再补问，不机械问全六题；走 brief 草稿 + 二次确认门
+- office-hours 不在 Stage 1 触发 —— PM 想用 office-hours 风格深挖讨论，在 Stage 2 stage-gate 入口走 B 分支（D-i v4 §1.4）
 - 步骤 3.5 legacy readiness gate：进 worktree 后、写 brief 前检查 `docs/PROJECT.md` 6 节；全填 → silent skip，有空节 → mini-fill（复用 PRD-体系收敛 §2.6 话术 + 精简模式 + 禁逃生舱）。每 req 入口触发、PROJECT 填满后自然 silent skip，天然幂等，不设「已查过」标记
 - PM 在步骤 4 二确通过后，AI 必须先跑步骤 4.5 commit 再进步骤 5 handoff——保证后续 PM `git worktree remove` 时 working tree 已 clean，并符合 I-AD5/I-DC1 "dispatch 前 working tree 必须 clean"。commit pathspec 默认限于 brief.md + .req-meta.json + tasks/ 骨架；**步骤 3.5 mini-fill 触发时扩范围含 `docs/PROJECT.md`**（未触发则不加，避免无关文件卷入）

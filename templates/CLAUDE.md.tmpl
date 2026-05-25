@@ -122,7 +122,9 @@ PM 在 chat 里直接 invoke 任何 review skill 时（`/plan-*-review` / `/qa` 
 3. 按 (分支类型, stage) 推断评审对象：
 
    分支 = req-NNN-<slug>：
-     stage 2  → requirements/active/<req>/analysis.md
+     stage 2  → requirements/active/<req>/{{stage 2 真相源}}
+                  (A 分支 analysis.md / B 分支 stage2-office-hours.md；
+                   路径见 requirements/active/<req>/.req-meta.json:stage2_source)
      stage 3  → requirements/active/<req>/prd.md
      stage 5  → requirements/active/<req>/implementation-design.md + task-plan.md
      stage 6  → 当前在 spec 的 task 文件（单文件 typed contract）；多个 task 在 spec 时 PM 须指定 task-NNN

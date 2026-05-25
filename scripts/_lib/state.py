@@ -306,6 +306,74 @@ def read_req_meta(req_dir: Path, strict: bool = True) -> Optional[dict]:
         return None
 
 
+def get_stage_source(req_dir: Path, stage_num: int) -> Path:
+    """返回 stage N 的真相源**绝对路径**（D-i v4 路径契约）。
+
+    解析优先级：
+    1. `.req-meta.json` 的 `stage{N}_source` 字段（req 内**相对路径**） — 跨工具
+       分流时由 caller 显式写入（见 `set_stage_source`）；此为权威解。
+    2. fallback 到 `STAGE_OUTPUT_FILES[stage_num]`（stages.py 默认产物文件名）；
+       覆盖：旧 req（v4 之前没写元数据字段）+ caller 没显式设置的 stage。
+
+    返回值是 `req_dir / <relative>`，调用方应 `.exists()` 自检（本函数不读盘
+    校验存在性，纯路径解析；保留调用方 vs `read_text()` 直抛 FileNotFound 的
+    错误信息空间）。
+
+    Raises:
+        KeyError: stage_num 不在 `STAGE_OUTPUT_FILES` 字典里（如 stage 4 / 6 /
+        7），且 `.req-meta.json` 也没有 `stage{N}_source` override。调用方应
+        知道自己要 stage N 是否在默认表里 —— 这是契约错误不是数据错误。
+    """
+    meta = read_req_meta(req_dir, strict=False)
+    field = f"stage{stage_num}_source"
+    if meta and field in meta:
+        return req_dir / meta[field]
+    # fallback — 默认产物文件名
+    from .stages import STAGE_OUTPUT_FILES
+    return req_dir / STAGE_OUTPUT_FILES[stage_num]
+
+
+def set_stage_source(
+    req_dir: Path,
+    stage_num: int,
+    filename: str,
+    tool: str,
+    origin: Optional[str] = None,
+) -> None:
+    """写 stage N 的真相源元数据到 `.req-meta.json`（D-i v4 路径契约）。
+
+    Args:
+        req_dir: req 目录绝对路径（含 `.req-meta.json`）。
+        stage_num: stage 序号（1-7）。
+        filename: req 内**相对路径**（如 `analysis.md` / `stage2-office-hours.md`）；
+                  caller 已确认文件在该路径下落盘。
+        tool: 产生该产物的工具名（如 `req-analysis` / `office-hours`），追溯用。
+        origin: 可选 — 外部源原始绝对路径。office-hours 分支 snapshot 复制后
+                记 `~/.gstack/projects/<slug>/<file>` 原始 path（追溯，不参与
+                解析）；A 分支无此字段。
+
+    写入字段：
+        - `stage{N}_source` = filename
+        - `stage{N}_tool` = tool
+        - `stage{N}_source_origin` = origin（仅 origin 非空时写入）
+
+    Raises:
+        StateReadError: `.req-meta.json` 不存在或 JSON 解析失败（与
+        `read_req_meta(strict=True)` 一致）；caller 应在 req 已落盘后调用。
+    """
+    meta = read_req_meta(req_dir, strict=True)
+    assert meta is not None  # strict=True 不会返回 None
+    meta[f"stage{stage_num}_source"] = filename
+    meta[f"stage{stage_num}_tool"] = tool
+    if origin is not None:
+        meta[f"stage{stage_num}_source_origin"] = origin
+    meta_file = req_dir / ".req-meta.json"
+    meta_file.write_text(
+        json.dumps(meta, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
+
+
 def read_task_meta(pm_view: Path, strict: bool = True) -> Optional[TaskMeta]:
     """读 task 元数据（PM 视图头部字段）。
 

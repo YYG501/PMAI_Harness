@@ -203,7 +203,7 @@ git -C "$TASK_WORKTREE" commit -m "task-NNN close-prep: PM 视图与原型对齐
 | 步骤 | 性质 | 对照源 |
 |---|---|---|
 | **0**（本节）| task 文件描述 ↔ 原型代码 | 执行区·实现规格 / PM 确认区·验收清单·范围 + 审计区·执行日志 vs 实际改动文件 |
-| 1 | task 实证发现的项目级文档偏差 | task md §历史档案/§10 vs brief/analysis/solution/module spec |
+| 1 | task 实证发现的项目级文档偏差 | task md §历史档案/§10 vs brief / **stage 2 真相源**（A 分支 analysis.md / B 分支 stage2-office-hours.md）/ solution / module spec |
 | 1.5 | PM 反馈中的视觉规范沉淀 | task md PM 反馈分类=视觉规范 vs docs/DESIGN.md |
 
 性质不同，串行处理不合并。

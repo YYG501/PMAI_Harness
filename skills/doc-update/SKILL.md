@@ -38,7 +38,7 @@ description: Use when task 已完成、PM 已通过验收、需要在 close-task
 4. 🟢 **task worktree 改动代码**（步骤 1.6 模块规格对账，逐行核对实际实现是否匹配——不读代码就不能对账；读法同 Stage 7.1 close-task：≤3 文件全读，多文件分批）
 5. 🟡 偏差涉及的原文（前后 5 行）。**支持任何 req / 项目级文档**：
    - 项目级：`docs/PROJECT.md` / `docs/DESIGN.md` / `docs/modules/INDEX.md` / `docs/modules/*.md` / `CLAUDE.md`
-   - req 级：`requirements/active/<req>/analysis.md` / `prd.md` / `implementation-design.md`（在飞旧 req 若仅有 `solution.md` / `solution.engineering.md` 则按旧文件名读）
+   - req 级：**stage 2 真相源**（A 分支 `requirements/active/<req>/analysis.md` / B 分支 `requirements/active/<req>/stage2-office-hours.md`，路径由 `_lib.state.get_stage_source(req_dir, 2)` 解析）/ `prd.md` / `implementation-design.md`（在飞旧 req 若仅有 `solution.md` / `solution.engineering.md` 则按旧文件名读）
 
 ## 位置定位原则（必读）
 

@@ -90,6 +90,42 @@ PM-AI-Workflow 生成器仓的演进记录。本文件**只记影响下游业务
 
 ## 未发布
 
+### 2026-05-25 — D-i v4：office-hours 跨 Stage 1+2 集成 + Stage 2 真相源路径契约（snapshot 复制方案）
+
+**痛点**：office-hours 在 Stage 1（`/new-req` 选项 1）+ Stage 2（讨论方式选择）两处都被调用看起来不合理 —— 用户视角是"一次需求讨论"，不该是 stage 1 + stage 2 两次拧巴。Stage 2 下游契约硬绑 `analysis.md` 也让"工具 2 选 1"（结构化批判 vs YC office-hours）走不通。
+
+**方案**（设计 `docs/归档/完成/office-hours-跨stage1-2集成.md` v4，落实 Codex outside voice + 3 轮 plan-eng-review 全 21 决议）：
+
+1. **PM 视角"一次需求讨论"体验包装**（`req-stage-gate` Stage 1→2）：brief 二次确认 + 讨论方式选择门合二为一，分流 A（`/req-analysis` 结构化批判）/ B（office-hours snapshot）
+2. **Stage 2 真相源路径契约**（双分支）：A 分支产 `analysis.md` + 不变；B 分支 AI snapshot 复制 office-hours 设计稿到 `$ACTIVE_REQ_DIR/stage2-office-hours.md`（req 自包含，进 git / CI / 跨机器 / 归档 / consumer 仓全维度），不引用仓外 `~/.gstack/` 路径
+3. **`.req-meta.json` 加 3 字段**：`stage{N}_source`（req 内相对路径）+ `stage{N}_tool`（产生工具名）+ `stage{N}_source_origin`（B 分支可选，外部源原始绝对路径追溯）
+4. **helper**：`_lib.state.get_stage_source(req_dir, n)` + `set_stage_source(...)`，`STAGE_OUTPUT_FILES` 字典 schema 不动（保留 `dict[int, str]` 作 fallback）
+5. **req-transition.py:247 改 helper**（R3-C1 必修，B 分支才推得进 Stage 3）
+6. **下游 SKILL 通用化**（9 处）：prd-writing / implementation-design / task-spec / doc-update / close-task 文案 / templates/task-plan.md.tmpl / templates/CLAUDE.md.tmpl / input-flow.md / req-stage-gate Stage 2→3 段
+7. **`/new-req` 砍选项 1**：单一 AI 引导路径；PM 想用 office-hours 风格深挖讨论 → Stage 2 stage-gate 入口 B 分支承接
+
+**改动**（vp-1 → vp-7，~5h）：
+
+- **vp-1**：`scripts/_lib/state.py` 加 `get_stage_source` + `set_stage_source` helper；`scripts/_lib/stages.py` 改注释扩双用途说明（transition 校验 + helper fallback）
+- **vp-2** + **vp-3**：`skills/req-stage-gate/SKILL.md` Stage 1→2 重写为合二为一选择门 + 分流 A/B；B 分支含 office-hours bridge（探测 `~/.gstack/projects/$SLUG/*-design-*.md` 按 mtime + PM 三选一 + resume 协议 + AI snapshot 复制 + helper 写元数据 + term-detector hook + 推进确认门）
+- **vp-2b**：`skills/new-req/SKILL.md` 砍选项 1（"自跑 /office-hours 整理 brief"），步骤 4 简化为 AI 引导 + PM 自写两路径；office-hours 边界注释移到 Stage 2
+- **vp-4**：下游 9 处改 helper / 通用术语：`skills/{prd-writing,implementation-design,task-spec,doc-update,close-task,req-stage-gate}/SKILL.md` + `skills/_shared/pm-view/input-flow.md` + `templates/{task-plan.md.tmpl,CLAUDE.md.tmpl}`
+- **vp-4b**：`scripts/req-transition.py:247` 由 `STAGE_OUTPUT_FILES[current]` 改 `get_stage_source(req_dir, current)`（R3-C1 必修）
+- **vp-5**：`INVARIANTS.md` 立 I-RT9（stage N 真相源契约 + `stage{N}_source` / `stage{N}_tool` / `stage{N}_source_origin` 字段定义）
+- **vp-6**：`tests/test-stage-source-helper.sh` 新增 11 case（get/set helper unit + grep 静态校验）+ `tests/test-req-transition.sh` 加 3 case（D-i v4 R3-C1 B 分支推进 / B 分支缺 snapshot 拒绝 / 旧 req fallback 兼容）
+- **vp-7**：`CHANGELOG.md` 未发布段 + `docs/INDEX.md` + 设计文档归档为 `docs/归档/完成/office-hours-跨stage1-2集成.md`
+
+**测试基线**：`bash tests/run-all.sh` **412/0**（前基线 398/0；D-i v4 新增 14 case 全过 —— 设计预期 ≥ 405/0，超出）。
+
+**业务仓需注意**：
+
+- **`/new-req` 选项 1 已砍**：旧版"自跑 /office-hours 整理 brief"路径不再可用；PM 想用 office-hours 风格请在 Stage 2 `req-stage-gate` 入口 B 分支跑（office-hours 设计稿会被 AI snapshot 复制进 req）
+- **新 req `.req-meta.json` 多 3 字段**（`stage2_source` / `stage2_tool` / `stage2_source_origin`）；旧 req（无字段）自动 fallback `analysis.md`，零迁移
+- **B 分支产物文件名固定**：`$ACTIVE_REQ_DIR/stage2-office-hours.md`；多次跑 B 分支会覆盖（PM 主动选 = 主动覆盖）。`stage2_source_origin` 字段失效不影响 req 自包含性
+- **下游 SKILL prose 改通用术语"stage 2 真相源"**：A 分支 PM 体感不变（仍读 analysis.md）；B 分支 PM 看到 chat 里 AI 提到的是 stage 2 真相源 + stage2-office-hours.md
+- **resume 协议**（PM 中断 chat 去跑 office-hours 后通知 AI 续 snapshot）：vp-2 实施时 stage-gate 状态机已落，PM 用任意句式回话 AI 都能接住（给文件名 / 给绝对路径 / 仅说"跑完了" → AI 自己重新探测）
+- **R3-H2 DEFER**（office-hours prose 语义契约）：v4 §5.1 待验项 —— 相信 LLM 全文喂消化（v0 时 PM 已 ACCEPT prd-writing LLM-based fact），消费仓真实 req 验证 §六 派生质量；如不行再引入规范化 schema contract
+
 ### 2026-05-24 — 原型简化项登记机制 v2 落地（T1-T8 全包）
 
 **痛点**：框架只有一份 req 级需求文档 `prd.md`，stage 3 是「评审用的完整真实需求」，close-req §2a 又把它「反向对齐成 as-built」。原型故意做得比 PRD 少的地方被 as-built 覆盖 —— 真实需求从评审文档消失。框架缺「原型故意简化」这个一等概念。

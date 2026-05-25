@@ -49,7 +49,7 @@
 
 **first-gen / PM 视图**
 - 🟢 `PM-VIEW-RULES.md`（步骤 0，仅 1 次/会话）
-- 🟢 `brief.md` / `analysis.md`
+- 🟢 `brief.md` / **stage 2 真相源**（A 分支 `analysis.md` / B 分支 `stage2-office-hours.md`，路径见 `.req-meta.json:stage2_source`）
 - 🟢 `docs/PROJECT.md` / `docs/DESIGN.md`
 - 🟢 `docs/modules/INDEX.md` + 全部 `docs/modules/*.md`（如存在）
 - 🟡 `prototypes/<相关页面>`（§9.3.1）
@@ -62,9 +62,9 @@
 
 ### Stage 5：task-plan
 - 🟢 `PM-VIEW-RULES.md`（步骤 0）
-- 🟢 `analysis.md` / `prd.md`（功能规格）
+- 🟢 **stage 2 真相源**（A 分支 `analysis.md` / B 分支 `stage2-office-hours.md`，路径见 `.req-meta.json:stage2_source`）/ `prd.md`（功能规格）
 - 🟡 `implementation-design.md`（v2 / C2：管线重构后必读 —— 段 1 架构决策影响 task 拆分边界；段 1.5 原型简化项决定 §4.2 验收 GAP 是否走「原型不实现」第三种处置 + kind 2 反向写回的入口）
-- ⚪ `brief.md`（按需——已被 analysis / prd 消化两层；偶尔回查初衷）
+- ⚪ `brief.md`（按需——已被 stage 2 真相源 / prd 消化两层；偶尔回查初衷）
 - 🟢 `docs/PROJECT.md`
 - ⚪ `docs/DESIGN.md`（按需——视觉决策不影响 task 拆分粒度，仅在拆边界涉及视觉差异时回查）
 - 🟢 `docs/modules/INDEX.md` + 全部 `docs/modules/*.md`
@@ -86,7 +86,7 @@
 - 🟡 前序「已完成」`task-*.md` 仅 grep `## PM 反馈` / `### 反馈` 段（§9.1.1）—— relevance 二分
 - 🟡 `prototypes/<相关页面>`（§9.3.1）
 - 🟡 `requirements/active/<req>/attachments/`（如上游 stage 引用过 → 按需读）
-- ⚪ `analysis.md`（按需 lazy fallback —— PRD 切片不足时回读对应章节并告知 PM）
+- ⚪ **stage 2 真相源**（A 分支 `analysis.md` / B 分支 `stage2-office-hours.md`，按需 lazy fallback —— PRD 切片不足时回读对应章节并告知 PM）
 - ⚪ `brief.md`
 
 **revise**
@@ -283,14 +283,14 @@ close-task 收尾 / prd-writing 规划期识别 PM 反馈 / 规则时，按下�
 brief.md（PM 视图）
    │
    ▼
-analysis.md（PM 视图）
+stage 2 真相源（PM 视图；A 分支 analysis.md / B 分支 stage2-office-hours.md）
    │
    ▼
 prd.md（req 级功能规格 / WHAT —— stage 3 prd-writing 产，定稿冻结）
-   │  ← brief / analysis / docs/PROJECT.md / docs/modules/
+   │  ← brief / stage 2 真相源 / docs/PROJECT.md / docs/modules/
    ▼
 implementation-design.md（req 级 HOW —— stage 5 implementation-design 产）
-   │  ← prd / analysis / docs/DESIGN.md 组件 inventory
+   │  ← prd / stage 2 真相源 / docs/DESIGN.md 组件 inventory
    ▼
 task-plan.md（单文件，task 拆分）
    │

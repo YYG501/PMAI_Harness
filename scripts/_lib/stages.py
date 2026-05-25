@@ -21,6 +21,15 @@ STAGE_NAMES: dict[int, str] = {
 
 # Stage N 推进前要求这个产出文件存在（forward transition 前置校验）。
 # stage 4 的产出是 docs/DESIGN.md，单独校验，不在此表。
+#
+# 双用途说明（D-i v4）：本字典同时承担两个角色 ——
+#  1) `req-transition.py` 推进 stage N→N+1 前的前置校验文件名
+#  2) `_lib.state.get_stage_source` helper 在 `.req-meta.json` 无
+#     `stage{N}_source` 字段时的**默认 fallback** 文件名
+# 因此 schema 锁定为 `dict[int, str]`（单一默认产物）；多产物分流（如 stage 2
+# 的 office-hours 分支产 `stage2-office-hours.md`）通过 `.req-meta.json` 的
+# `stage{N}_source` 字段在 req 级 override，不升级本表为 list/multi-path。
+# 详见 docs/设计/Stage2-分析方式选择-office-hours.md §1.3 / §2 / R3-H1。
 STAGE_OUTPUT_FILES: dict[int, str] = {
     1: "brief.md",
     2: "analysis.md",

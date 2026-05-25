@@ -248,6 +248,7 @@
 - **I-RT6**：回退不能跳级也不能越界（不能回到 < 1）
 - **I-RT7**：转换成功必须更新 .req-meta.json 的 stage 和 stage_history
 - **I-RT8**：写入 .req-meta.json 必须原子（写失败时文件保持原值）
+- **I-RT9**（D-i v4，2026-05-25）：stage N 真相源由 `.req-meta.json:stage{N}_source` 字段定义（req 内相对路径）。`req-transition.py` 前置校验 + 下游 SKILL 读 stage N 真相源时**必须**走 `_lib.state.get_stage_source(req_dir, n)` helper（**不得**直接 hardcode 文件名）；helper 在字段缺失时降级 `stages.py:STAGE_OUTPUT_FILES[n]` 默认产物（兼容旧 req）。配套字段：`stage{N}_tool`（产生工具名，e.g. `req-analysis` / `office-hours`）+ `stage{N}_source_origin`（B 分支可选，外部源原始绝对路径，追溯用）。**stage 2 已落地双分支**（A=analysis.md / B=stage2-office-hours.md）；其他 stage 暂未启用双源契约，按 helper fallback 走默认产物即可。
 
 ### 守卫点
 - validate_forward：line ~120-160

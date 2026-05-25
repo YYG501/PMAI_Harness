@@ -28,7 +28,7 @@ prd-writing 是**多入口 skill**，两条入口的边界如下：
 - **触发**：`/req-stage-gate` 在 Stage 2→3 推进时调用本 skill。
 - **mode 固定「req 级」**：不询问写哪部分 —— stage 3 必然是当前 req 的完整 PRD。
 - **跳过步骤 0**：步骤 0 的「req 级 / 独立 / 补差」三选一对话**被 stage-gate 短路**，不向 PM 提问（短路机制见下方「步骤 0」段）。
-- **输入**：`brief.md` + `analysis.md` + `docs/PROJECT.md`（+ 已有 `docs/modules/` 如存在）—— 详见「Required Inputs」。
+- **输入**：`brief.md` + **stage 2 真相源**（A 分支 `analysis.md` / B 分支 `stage2-office-hours.md`；路径由 `_lib.state.get_stage_source(req_dir, 2)` 解析，详见 `.req-meta.json:stage2_source`）+ `docs/PROJECT.md`（+ 已有 `docs/modules/` 如存在）—— 详见「Required Inputs」。
 - **产物**：`$ACTIVE_REQ_DIR/prd.md`。
 - **确认门**：stage 3 只保留 `req-stage-gate` 一个 PM 定稿确认门 —— 本 skill 内不再自带步骤 4 最终确认，步骤 2.5 §六拆分只在 AI 判断有歧义时才询问 PM（详见各步骤）。
 
@@ -101,7 +101,10 @@ prd-writing 历史上自带的写作规则（禁用清单 / UI 元素指代规�
 stage 3 没有原型、没有 task —— 输入只有上游 stage 1/2 的产物 + 项目级文档：
 
 - 🟢 `$ACTIVE_REQ_DIR/brief.md`（stage 1 产物 — 初始诉求）
-- 🟢 `$ACTIVE_REQ_DIR/analysis.md`（stage 2 产物 — **功能分解的权威来源**，§六层级从它派生）
+- 🟢 **stage 2 真相源**（D-i v4 路径契约）— **功能分解的权威来源**，§六层级从它派生：
+  - **A 分支**（`stage2_tool=req-analysis`）：`$ACTIVE_REQ_DIR/analysis.md`（10 章结构 + `## 未决问题`）
+  - **B 分支**（`stage2_tool=office-hours`）：`$ACTIVE_REQ_DIR/stage2-office-hours.md`（YC office-hours 设计稿 snapshot；功能分解嵌在 prose 里，§六派生时按"用户可发起动作"扫全文）
+  - 路径解析：`python3 -m _lib.state read_req_meta $ACTIVE_REQ_DIR` 拿 `stage2_source` 字段，或直接读 `get_stage_source(req_dir, 2)` helper 返回的绝对路径
 - 🟢 `docs/PROJECT.md`（项目定位 / 用户画像 / 业务术语表 / 产品路线）
 - 🟢 `docs/DESIGN.md`（如存在 — 产品级视觉决策，PRD 不写像素颜色，仅引用稀疏）
 - 🟢 `docs/PRODUCT-RULES.md`（如存在 — **全文读**，跨功能产品行为规则；PRD 一次写对、不违背常驻规则。delta-9）
@@ -122,12 +125,14 @@ stage 3 没有原型、没有 task —— 输入只有上游 stage 1/2 的产物
 
 > 步骤编号在两入口共用。stage-3 orchestrated 模式跳步骤 0；步骤 2.5 的 PM 确认门在 stage-3 模式下收敛为「仅 AI 判断有歧义时询问」；不再有独立的步骤 4 最终确认（stage 3 的定稿确认归 `req-stage-gate` 单一确认门）。
 
-1. **读入 + 拆决策**——读取「Required Inputs」列出的文件，从 `analysis.md` + `brief.md` 拆出「已确认决策」和「待执行决策」；有待执行项则先编号提问 PM，确认后再写 PRD。stage 3 没有 `solution.md` / `tasks/` 可读 —— PRD 的功能规格从 `analysis.md` 的功能分解现写。
+1. **读入 + 拆决策**——读取「Required Inputs」列出的文件，从 **stage 2 真相源**（A 分支 `analysis.md` / B 分支 `stage2-office-hours.md`）+ `brief.md` 拆出「已确认决策」和「待执行决策」；有待执行项则先编号提问 PM，确认后再写 PRD。stage 3 没有 `solution.md` / `tasks/` 可读 —— PRD 的功能规格从 stage 2 真相源的功能分解现写。
 
-2. **功能分解派生 §六层级**——stage 3 没有原型可作权威依据，§六功能需求的层级**从 `analysis.md` 的功能分解派生**：把 analysis 里列出的功能清单按用户动作重组为 §六的一级 / 二级 / 三级层级。动词锚定规则不变（见步骤 2.5），只是重组对象从「原型 UI 结构」换成「analysis 功能清单」。
+2. **功能分解派生 §六层级**——stage 3 没有原型可作权威依据，§六功能需求的层级**从 stage 2 真相源的功能分解派生**：把 stage 2 真相源里列出的功能清单按用户动作重组为 §六的一级 / 二级 / 三级层级。动词锚定规则不变（见步骤 2.5），只是重组对象从「原型 UI 结构」换成「stage 2 真相源功能清单」。
+   - **A 分支**（`analysis.md`）：第 4 章「功能分解」表是权威功能清单
+   - **B 分支**（`stage2-office-hours.md`）：office-hours prose 里讨论到的功能 / 用户故事 / 流程片段，AI 自己消化整理为功能清单（v4 §5.1.1 待验 — 相信 LLM 全文喂消化）
    - **原型节怎么写**——§六的「原型」节 stage 3 写**产物意图描述**：文字版「该功能该呈现成什么」，是 UI task 执行前的视觉 / 布局指引。不留空、不写「待补充」。close-req 反向对齐时会用真实原型链接 / 截图替换回填这段意图描述。意图描述写法：1-2 句说清「这个功能页面大致是什么形态、有哪些主要分区、用户主路径怎么走」，不写像素 / 颜色 / 组件名（那是 DESIGN.md / 工程层的事）。
 
-2.5. **§六功能拆分预处理（reorg pass）**——写 §六表格之前做一次结构预处理；目的是把「按 UI 容器组织」重组为「按用户动作组织」。stage 3 的重组对象是 `analysis.md` 的功能清单（不是原型），但动词锚定规则完全一致。
+2.5. **§六功能拆分预处理（reorg pass）**——写 §六表格之前做一次结构预处理；目的是把「按 UI 容器组织」重组为「按用户动作组织」。stage 3 的重组对象是 **stage 2 真相源**（A 分支 analysis.md 功能清单 / B 分支 office-hours prose 里讨论到的功能），不是原型，但动词锚定规则完全一致。
 
    **a. 动词清单优先**——以 prose 形式列出本 req 各一级模块下**用户可发起的所有动作**（动词锚定，不是页面 / Tab / 弹窗 / Drawer / 视图）。每模块 3-15 个动词；动词清单参考下方「层级划分原则」§二级功能动作组常用词汇表。
 
@@ -444,14 +449,14 @@ stage 3 定稿后 PRD **冻结**：执行期 task 按它做，close-req 时另�
 
 **其它边界规则：**
 
-- 二级 / 三级层级**来自该功能模块的真实业务逻辑**——stage 3 写 PRD 时参考 `analysis.md` 的功能分解结构（analysis 列出的功能清单自然形成"列表 / 创建 / 编辑 / 详情……"的二级层级）。
+- 二级 / 三级层级**来自该功能模块的真实业务逻辑**——stage 3 写 PRD 时参考 **stage 2 真相源**的功能分解结构（A 分支 `analysis.md` 第 4 章 / B 分支 `stage2-office-hours.md` prose；功能清单自然形成"列表 / 创建 / 编辑 / 详情……"的二级层级）。
 - **不得在 PRD 阶段拍脑袋分组**——例如把"列表 / 详情"硬归到"查看"组下、把"创建 / 编辑 / 启用停用 / 删除"硬归到"定义"组下，这种强行分级会让二级功能逻辑做作。
 - 同一二级功能下若三级功能 ≤ 2 个，可考虑不分级（避免强行分级）。
 - 详情类功能本身常常是一个完整的二级功能（下面再分基础信息 / 操作按钮 / 权限配置 / 授权对象等三级），不要把"详情"和"列表"硬塞到同一二级里。
 
-**与 analysis 功能分解对齐：**
+**与 stage 2 真相源功能分解对齐：**
 
-- 表格行内的功能、规则、限制以 `analysis.md` 的功能分解为依据。stage 3 没有原型 —— PRD 是从 analysis 现写功能规格的环节，由它定义功能行为。
+- 表格行内的功能、规则、限制以 **stage 2 真相源**（A 分支 `analysis.md` / B 分支 `stage2-office-hours.md`）的功能分解为依据。stage 3 没有原型 —— PRD 是从 stage 2 现写功能规格的环节，由它定义功能行为。
 - analysis 描述模糊 / 有歧义时，按 Workflow 步骤 1 在写 PRD 前编号提问 PM 确认，不在表格里自行拍板。
 - close-req 反向对齐阶段，会用真实原型 / as-built 行为反向校验本 PRD —— 那是 close-req 的职责，prd-writing 本身不做反向对齐。
 
@@ -515,8 +520,8 @@ stage 3 定稿后 PRD **冻结**：执行期 task 按它做，close-req 时另�
 ## stage 3 边界：功能规格定稿
 
 - 允许产出：`$ACTIVE_REQ_DIR/prd.md`（stage-3 模式）/ PM 指定路径（standalone 独立 PRD 模式）
-- 允许动作：基于 `brief.md` + `analysis.md` + `docs/PROJECT.md`（+ `docs/modules/`）生成 req 级功能规格 PRD；为关键产品决策 append `decision` 事件；跑 term-detector 催补业务词
-- 禁止顺手推进：不要在写 PRD 的同时反向改 `analysis.md` 的范围边界；不要在 stage 3 自行画原型 / 拆 task（原型在 stage 4 之后、task 在 stage 5）
+- 允许动作：基于 `brief.md` + **stage 2 真相源**（A 分支 analysis.md / B 分支 stage2-office-hours.md）+ `docs/PROJECT.md`（+ `docs/modules/`）生成 req 级功能规格 PRD；为关键产品决策 append `decision` 事件；跑 term-detector 催补业务词
+- 禁止顺手推进：不要在写 PRD 的同时反向改 **stage 2 真相源**（analysis.md / stage2-office-hours.md）的范围边界；不要在 stage 3 自行画原型 / 拆 task（原型在 stage 4 之后、task 在 stage 5）
 - 退出条件：
   - **stage-3 模式**：PRD 写完 + lint 通过 + term-detector 跑完 + decision 事件 append 完 → 控制权交回 `req-stage-gate`，由其单一定稿确认门完成 stage 3 定稿；定稿后 PRD 冻结
   - **standalone 模式**：PRD 经 PM 在对话中确认并写入文件
@@ -527,13 +532,13 @@ prd-writing 产出初稿后，定稿前可运行以下 prompt 做一轮质检：
 
 ```
 你现在是一个资深产品总监，正在用挑剔的眼光审查一份 req 级 PRD 草稿。
-读取 $ACTIVE_REQ_DIR/prd.md 和 $ACTIVE_REQ_DIR/analysis.md，然后找出：
+读取 $ACTIVE_REQ_DIR/prd.md 和 stage 2 真相源（路径见 $ACTIVE_REQ_DIR/.req-meta.json 的 stage2_source 字段，A 分支 analysis.md / B 分支 stage2-office-hours.md），然后找出：
 
 1. 逻辑矛盾或自相冲突的地方
 2. 遗漏的边界情况（error state、empty state、权限边界、异常流）
 3. 验收标准模糊、无法测量的条目
 4. 功能需求描述里有"支持/优化/提升体验"等无法执行的泛词
-5. prd.md 与 analysis.md 的"In Scope"不一致的地方
+5. prd.md 与 stage 2 真相源（A 分支 analysis.md / B 分支 stage2-office-hours.md）的"In Scope"不一致的地方
 6. 是否包含代码常量名（如 TENANT_ADMIN）/ 文件路径（如 prototypes/src/...）/ 文档章节引用（如 task-022 §1）/ 数据库字段名（如 enabled、createdBy）/ UI 实现术语（如扁平区、Badge、按钮置灰）
 7. §4.1 业务诉求是否从用户视角（而非"PM 讲不清"等团队内部诱因），是否每条以"**加粗短句。**"开头并配段落说明（不是单纯 bullet 列表）
 8. §4.2 设计原则是否表格化（编号 / 原则 / 内容 / 可选「对应业务诉求」列），原则名是否 4-8 字短句，内容是否写产品规则而非"本 PRD 是规格交付层"等元描述；正文「N 条设计原则」中的 N 是否与表格行数一致

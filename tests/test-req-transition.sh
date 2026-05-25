@@ -400,6 +400,89 @@ test_stage3_to_4_legacy_flow_solution() {
   fixture_teardown
 }
 
+# -----------------------------------------------------------------
+# D-i v4 R3-C1：stage 2 → 3 B 分支推进（office-hours snapshot 分支）
+# 验证 get_stage_source helper 在 req-transition 内生效，B 分支无 analysis.md
+# 但有 stage2-office-hours.md + meta:stage2_source=stage2-office-hours.md → 推得成功
+# -----------------------------------------------------------------
+
+test_stage2_to_3_B_branch_office_hours_advances() {
+  start_test "D-i v4 R3-C1: B 分支只有 stage2-office-hours.md 时 stage 2→3 推进成功"
+  fixture_setup
+  req_dir=$(fixture_create_req "req-001" "test" 2)
+  # B 分支：只产 office-hours snapshot，无 analysis.md
+  rm -f "$req_dir/analysis.md"  # fixture 默认无 analysis，确保
+  echo "<!-- snapshot from /tmp/src.md at 2026-05-25 -->" > "$req_dir/stage2-office-hours.md"
+  echo "# office-hours design" >> "$req_dir/stage2-office-hours.md"
+  # 用 helper 写 meta（实际生产 caller 走 set_stage_source；测试模拟）
+  python3 -c "
+import sys
+from pathlib import Path
+sys.path.insert(0, '$FRAMEWORK_ROOT/scripts')
+from _lib.state import set_stage_source
+set_stage_source(Path('$req_dir'), 2, 'stage2-office-hours.md',
+                 tool='office-hours',
+                 origin='/Users/x/.gstack/projects/test/y.md')
+"
+  if _run_req "$req_dir" --to 3 >/tmp/out.$$ 2>/tmp/err.$$; then
+    new_stage=$(python3 -c "import json; print(json.load(open('$req_dir/.req-meta.json'))['stage'])")
+    if [ "$new_stage" = "3" ]; then
+      pass_test
+    else
+      _fail "B 分支推进后 stage 应=3，实际=$new_stage"
+    fi
+  else
+    _fail "B 分支 stage 2→3 不应失败"
+    cat /tmp/err.$$ >&2
+  fi
+  rm -f /tmp/out.$$ /tmp/err.$$
+  fixture_teardown
+}
+
+test_stage2_to_3_B_branch_missing_snapshot_rejected() {
+  start_test "D-i v4 R3-C1: meta 标 stage2-office-hours.md 但文件缺失 → 拒绝推进"
+  fixture_setup
+  req_dir=$(fixture_create_req "req-002" "test" 2)
+  rm -f "$req_dir/analysis.md"
+  # meta 标 B 分支但故意不放 snapshot 文件
+  python3 -c "
+import sys, json
+from pathlib import Path
+sys.path.insert(0, '$FRAMEWORK_ROOT/scripts')
+from _lib.state import set_stage_source
+set_stage_source(Path('$req_dir'), 2, 'stage2-office-hours.md',
+                 tool='office-hours', origin='/tmp/x.md')
+"
+  if _run_req "$req_dir" --to 3 >/tmp/out.$$ 2>/tmp/err.$$; then
+    _fail "缺 snapshot 文件不应允许推进"
+  else
+    if grep -q "stage2-office-hours.md" /tmp/err.$$; then
+      pass_test
+    else
+      _fail "stderr 应明确指出缺 stage2-office-hours.md"
+      cat /tmp/err.$$ >&2
+    fi
+  fi
+  rm -f /tmp/out.$$ /tmp/err.$$
+  fixture_teardown
+}
+
+test_stage2_to_3_legacy_no_meta_fallback_advances() {
+  start_test "D-i v4: 旧 req 无 stage2_source 字段 → fallback analysis.md 推进成功"
+  fixture_setup
+  req_dir=$(fixture_create_req "req-003" "test" 2)
+  # 旧 req：只有 analysis.md，meta 不含 stage2_source 字段
+  echo "# analysis" > "$req_dir/analysis.md"
+  if _run_req "$req_dir" --to 3 >/tmp/out.$$ 2>/tmp/err.$$; then
+    pass_test
+  else
+    _fail "旧 req fallback 路径推进失败"
+    cat /tmp/err.$$ >&2
+  fi
+  rm -f /tmp/out.$$ /tmp/err.$$
+  fixture_teardown
+}
+
 test_stage3_to_4_missing_both_rejected() {
   start_test "delta-2+4 E3: stage 3 既无 prd.md 也无 solution.md → --to 4 拒绝"
   fixture_setup
@@ -440,5 +523,8 @@ test_allow_3_to_5_when_design_populated
 test_stage3_to_4_new_flow_prd
 test_stage3_to_4_legacy_flow_solution
 test_stage3_to_4_missing_both_rejected
+test_stage2_to_3_B_branch_office_hours_advances
+test_stage2_to_3_B_branch_missing_snapshot_rejected
+test_stage2_to_3_legacy_no_meta_fallback_advances
 
 report_results "req-transition"

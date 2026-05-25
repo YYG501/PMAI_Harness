@@ -4,12 +4,12 @@
 > 写作规则参见 `skills/_shared/PM-VIEW-RULES.md`，特别是：
 > - §三 PM 视图写作规则
 > - §七 章节顺序约束（本模板按此节锁定的顺序）
-> - §九 输入流约束（必读 brief.md / analysis.md / prd.md / implementation-design.md / docs/{PROJECT,DESIGN}.md / docs/modules/\*.md / prototypes/）
+> - §九 输入流约束（必读 brief.md / **stage 2 真相源** (A 分支 analysis.md / B 分支 stage2-office-hours.md) / prd.md / implementation-design.md / docs/{PROJECT,DESIGN}.md / docs/modules/\*.md / prototypes/）
 
 - 创建日期：{{CREATED_DATE}}
 - 创建者：{{AUTHOR}}
 - 分支：{{REQ_BRANCH}}
-- 依赖：`brief.md` + `analysis.md` + `prd.md` + `implementation-design.md`（v2 / C2：管线重构后 solution.md 砍除，依赖改 prd + implementation-design）
+- 依赖：`brief.md` + **stage 2 真相源**（A 分支 `analysis.md` / B 分支 `stage2-office-hours.md`，由 `.req-meta.json:stage2_source` 决定）+ `prd.md` + `implementation-design.md`（v2 / C2：管线重构后 solution.md 砍除，依赖改 prd + implementation-design；D-i v4 改 stage 2 双源）
 - 当前 stage：5（task 拆分）
 - Status：DRAFT（待 PM 确认进入 stage 6）
 

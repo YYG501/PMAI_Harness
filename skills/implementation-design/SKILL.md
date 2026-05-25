@@ -63,7 +63,7 @@ PM 确认门（审架构决策表），通过后再调 `/task-plan`。
 | 输入 | 用途 |
 |---|---|
 | `$ACTIVE_REQ_DIR/prd.md` | req 级功能规格（WHAT）—— HOW 据此设计，不重抄 WHAT |
-| `$ACTIVE_REQ_DIR/analysis.md` | 需求分析 —— 技术依赖 / 约束 |
+| `get_stage_source($ACTIVE_REQ_DIR, 2)` | **stage 2 真相源** —— 需求分析 / 讨论产物：A 分支 `analysis.md`（结构化），B 分支 `stage2-office-hours.md`（YC office-hours snapshot）。技术依赖 / 约束据此读。helper：`python3 -m _lib.state read_req_meta $ACTIVE_REQ_DIR` 取 `stage2_source`，或调 `_lib.state.get_stage_source` |
 | `$ACTIVE_REQ_DIR/brief.md` | 原始诉求（轻量背景）|
 | `$REPO_ROOT/docs/PROJECT.md` | 项目级背景（技术栈 / 产品定位）|
 | `$REPO_ROOT/docs/DESIGN.md` | **组件 inventory** —— §2 文件·模式索引据此写「复用现有组件 X」，与 stage 4 gap-check 读同一份 |

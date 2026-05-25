@@ -64,34 +64,51 @@ PM 在 worktree 里**只需要敲一次** `/req-stage-gate`，之后 stage-gate 
 
 ### Stage 1 → 2（感受问题 → 需求分析）
 
+> **v4 体验包装层（D-i）**：brief 二次确认 + 需求讨论方式选择**合二为一**，PM 视角"一次需求讨论"。下游分两条分流：A = 结构化批判（`/req-analysis`），B = YC office-hours 式（snapshot 复制）。两条分流的产物都通过 `_lib.state.set_stage_source` 写到 `.req-meta.json`，下游 SKILL 一律走 `get_stage_source(req_dir, 2)` helper 读 stage 2 真相源（不再硬编码 `analysis.md`）。
+
 1. 检查 `brief.md` 存在且有内容
-2. **brief 二次确认门**（新对话首次进入 worktree 时的入口闸）：
 
-   `/new-req` 在主对话写完 brief.md 后就 handoff 退场，PM 在 worktree 内新对话里第一次跑 `/req-stage-gate` 时，先做一次 brief 二次确认——给 PM 重新审视 brief.md 的机会，再启动重的 `/req-analysis`。
+2. **brief 二次确认 + 需求讨论方式选择门**（v4 合二为一）：
 
-   AI 重新读一遍 `brief.md`，给一句话摘要 + 对话式确认（v3 书面体）：
+   `/new-req` 在主对话写完 brief.md 后就 handoff 退场，PM 在 worktree 内新对话里第一次跑 `/req-stage-gate` 时，AI 重新读一遍 `brief.md`，把 brief 二确和"用哪种方式跟这个需求讨论"合并成一次对话（v3 书面体 + v4 选择门）：
 
    ```
-   Stage 1（感受问题）— brief 二次确认
+   Stage 1 → 2（需求讨论入口）
 
    ✅ brief.md
       <$ACTIVE_REQ_DIR/brief.md 绝对路径>
 
    📋 一句话摘要
-      <新对话重新读出来的核心内容，一行>
+      <重新读 brief.md 的核心内容，一行>
 
-   进入 Stage 2 前再确认一次：这版 brief 内容是否可以定稿？如需调整请直接说；确认后我会推进到需求分析（Stage 2）。
+   💬 这版 brief 是否可定稿？然后用哪种方式跟这个需求讨论？
+    - 结构化批判（默认）：第一性原理 4 层 + reviewer + 未决问题答题
+    - YC office-hours 式：六问 / 设计思考；产物直接做 Stage 2 真相源、跳 reviewer
+    - 改 brief（请说哪里）
    ```
 
-   **PM 回答的内部分流**（不列 A/B 字母）：
-   - PM 说「OK / 通过 / 没问题 / 定了」等 → 继续步骤 3 调 `/req-analysis`
-   - PM 提具体修改 → 按 PM 指示改 `brief.md`，改完后**只输出"已改完"二次摘要**（同一份模板，"一句话摘要"段填新内容），不贴全文
+   **PM 回答的内部分流**（不列 A/B 字母；按 PM 自然语言意图）：
+   - PM 说「OK / 通过 / 没问题 / 定了」/ 选第一项 / 直说"结构化批判 / 第一性原理 / req-analysis" → **分流 A**（步骤 3A）
+   - PM 选 / 直说「office-hours / YC 六问 / 设计思考」类 → **分流 B**（步骤 3B）
+   - PM 提具体修改 → 按 PM 指示改 `brief.md`，改完后**只输出"已改完"二次摘要**（同一份模板，"一句话摘要"段填新内容），不贴全文；回到本步骤 2 重新出选择门
 
-3. **调用 `/req-analysis`**
+#### 分流 A：结构化批判（`/req-analysis`）
+
+3A. **调用 `/req-analysis`**
    - skill 内部完成：读 brief + PROJECT、第一性原理 4 层分析、写 analysis.md（含 10 章 + `## 未决问题` section）、调 analysis-reviewer 一次后把报告原文贴 chat，让 PM 三选一（AI 改 / PM 自改 / 接受现状）
    - skill 返回 = **PM 已看过 reviewer 报告原文 + 已显式做出处理决定**；返回值带 `review_outcome ∈ {PASS, ACCEPTED_WITH_ISSUES}`
    - **orchestrator 不重调 reviewer**；如 `review_outcome=ACCEPTED_WITH_ISSUES`，stage-gate 在最终推进确认门加一行知会："⚠️ analysis 评审 NEEDS_REVISION，PM 已显式接受继续推进"——但**不阻塞**推进
-4. **未决问题闸门（Stage 2 → 3 推进的硬约束）：**
+   - **写 stage 2 真相源元数据**（A 分支：`analysis.md` + `tool="req-analysis"`）：
+     ```bash
+     python3 -c "
+     import sys; sys.path.insert(0, '$REPO_ROOT/.claude/scripts')
+     from _lib.state import set_stage_source
+     from pathlib import Path
+     set_stage_source(Path('$ACTIVE_REQ_DIR'), 2, 'analysis.md', tool='req-analysis')
+     "
+     ```
+
+4A. **未决问题闸门**（A 分支硬约束；B 分支由 caller 跳过，**不**动 lint 脚本本身，D-i v4 R3-M2 决议）：
 
    调用 lint 脚本：
 
@@ -133,15 +150,153 @@ PM 在 worktree 里**只需要敲一次** `/req-stage-gate`，之后 stage-gate 
      ```
      （所有 req 默认都走功能规格阶段，不再提供"跳过"选项）
 
-5. **PM 回答未决问题的处理**：
+5A. **PM 回答未决问题的处理**：
    - PM 选"逐题问你"分支后，逐题展示问题，PM 每回答一题，把答案写回 analysis.md 对应 `**PM 回答：**` 后面
-   - 所有问题答完 → 重跑 `check-open-questions.py` 验证（退出码 0）→ 解锁推进选项 → 回到步骤 4 的"推进模式"
-   - PM 在答题过程中临时想改 analysis 某段 → 允许中途切到"改 analysis"分支 → 改完后**回到步骤 3 重调 /req-analysis**（analysis 改过，reviewer 必须重跑一次；由 /req-analysis 步骤 4-5 的"调一次 + 三选一"机制保证），再走步骤 4 闸门
+   - 所有问题答完 → 重跑 `check-open-questions.py` 验证（退出码 0）→ 解锁推进选项 → 回到步骤 4A 的"推进模式"
+   - PM 在答题过程中临时想改 analysis 某段 → 允许中途切到"改 analysis"分支 → 改完后**回到步骤 3A 重调 /req-analysis**（analysis 改过，reviewer 必须重跑一次；由 /req-analysis 步骤 4-5 的"调一次 + 三选一"机制保证），再走步骤 4A 闸门
 
-推进命令（确认进入 stage 3 后才执行）：
+#### 分流 B：YC office-hours 式（snapshot 复制 + 体验包装）
+
+> **设计源**：D-i v4 §1.2 / §1.4 / §1.5。B 分支**不调 reviewer**（office-hours 自带 Cross-Model Perspective + Spec Review Loop）、**不调未决问题闸门**（office-hours 的 Open Questions prose 不带答题占位；§0.4.4）、**不调 attachments hook**（§0.4.8，D-iii 独立设计承接）。
+
+3B. **探测 office-hours 产物 + PM 三选一**
+
+   ```bash
+   # 取 gstack 项目 slug（与 office-hours skill 产物目录一致）
+   eval "$(~/.claude/skills/gstack/bin/gstack-slug 2>/dev/null)" 2>/dev/null || SLUG="unknown"
+   OH_DIR="$HOME/.gstack/projects/$SLUG"
+   # 按 mtime 倒序列 office-hours 设计稿（文件名约定：<user>-<branch>-design-<datetime>.md）
+   OH_FILES=$(ls -t "$OH_DIR"/*-design-*.md 2>/dev/null || true)
+   ```
+
+   - **找到 ≥1 个** → 列文件名 + mtime，问 PM 三选一：
+
+     ```
+     Stage 1 → 2（office-hours 分支 — 选源材料）
+
+     📂 探测到 N 份 office-hours 产物（按 mtime 排）：
+       1. <filename>  (<mtime ISO>)
+       2. ...
+
+     💬 用哪份做这次需求的讨论材料？
+      - 用第 1 份（默认，最近的一份）
+      - 跑一份新的（你去本 chat 跑 /office-hours，跑完告诉我新文件名）
+      - 我自己指定路径（贴绝对路径过来）
+      - 切回结构化批判分支
+     ```
+
+   - **没找到** → 直接给跑 / 指定 / 切回 三选一：
+
+     ```
+     Stage 1 → 2（office-hours 分支 — 无现成产物）
+
+     📂 没探测到本项目的 office-hours 产物（~/.gstack/projects/<slug>/）。
+
+     💬 怎么处理？
+      - 在本 chat 跑 /office-hours，跑完告诉我新文件名（推荐）
+      - 我自己指定路径（贴绝对路径过来）
+      - 切回结构化批判分支
+     ```
+
+   PM 答「切回结构化批判」→ 回步骤 3A（按 A 分支跑）。
+   PM 答「跑新」/「跑 office-hours」→ **进步骤 3B-resume**。
+   PM 答「用第 N 份」/「指定路径 <abs>」→ **进步骤 3B-snapshot**（源路径已确定）。
+
+3B-resume. **resume 协议**（PM 中断本 chat 去跑 `/office-hours`，跑完通知 AI；D-i v4 §5.1.2 R3-H3 PARTIALLY ACCEPT）
+
+   AI 输出一句话提示后**保持在 chat 等待**：
+
+   ```
+   好的，请在本 chat 直接跑 /office-hours（gstack skill），跑完贴一下文件名或绝对路径回来，
+   我接着把它 snapshot 进这个 req 的 Stage 2 真相源。
+   ```
+
+   PM 跑完后**任一回话句式 AI 都要接住**（不强求格式）：
+   - 给文件名："跑完了，文件名 yourname-req-001-foo-design-20260525-153010.md"
+   - 给绝对路径："/Users/.../gstack/projects/<slug>/<file>.md"
+   - 只说"跑完了" → AI 自己回到步骤 3B 重新探测（按 mtime 拿到最新一份）
+
+   解析出源路径后续走步骤 3B-snapshot。
+
+   > **PM 关 chat 后续走**：PM 在 resume 等待态关掉 chat 几天后回来 → 重敲 `/req-stage-gate` → stage-gate 从 `.req-meta.json` 当前 stage 续走（stage 仍是 1，brief 已 commit），重新走步骤 2 选择门即可（office-hours 已跑过的产物在步骤 3B 探测时会被列出来选）。续跑模式自然支持，不需要额外"暂停态"机制。
+
+3B-snapshot. **AI snapshot 复制 + 写元数据**
+
+   1. 校验源路径存在且可读（Read 失败 → 抛错给 PM）：
+      ```bash
+      test -r "$SRC_PATH" || { echo "源路径不可读：$SRC_PATH"; exit 1; }
+      ```
+
+   2. AI 用 Read 工具读源文件**全文**（不要 head/tail/grep 截断 —— snapshot 要 1:1）。
+
+   3. AI 用 Write 工具复制到 `$ACTIVE_REQ_DIR/stage2-office-hours.md`，**顶部追加 snapshot 注释**（caller 自行拼接，源路径 + ISO 时间戳，例）：
+
+      ```markdown
+      <!-- snapshot from <源绝对路径> at 2026-05-25T15:32:00Z -->
+
+      <office-hours 设计稿原文>
+      ```
+
+   4. 写 stage 2 真相源元数据（B 分支：`stage2-office-hours.md` + `tool="office-hours"` + `origin=<源绝对路径>`）：
+
+      ```bash
+      python3 -c "
+      import sys; sys.path.insert(0, '$REPO_ROOT/.claude/scripts')
+      from _lib.state import set_stage_source
+      from pathlib import Path
+      set_stage_source(
+          Path('$ACTIVE_REQ_DIR'), 2,
+          'stage2-office-hours.md',
+          tool='office-hours',
+          origin='$SRC_PATH',
+      )
+      "
+      ```
+
+4B. **B 分支 term-detector hook**（沿用 A 分支 hook，扫 stage 2 真相源）
+
+   ```bash
+   python3 "$REPO_ROOT/.claude/scripts/_lib/term-detector.py" \
+     "$ACTIVE_REQ_DIR/stage2-office-hours.md" "$REPO_ROOT" \
+     --req-dir "$ACTIVE_REQ_DIR"
+   ```
+
+   按返回 JSON 处理（与 A 分支 `/req-analysis` 内部 hook 行为等价；详见 `skills/_shared/term-detector/SKILL.md`）。
+
+   **B 分支 _不_ 跑**：
+   - analysis-reviewer（office-hours 自带 Cross-Model Perspective + Spec Review Loop）
+   - `check-open-questions.py` 未决问题闸门（office-hours `Open Questions` prose 不带 `**PM 回答：**` 占位；不该让 lint 脚本本身 req-aware，详见 D-i v4 R3-M2）
+   - attachments hook（D-iii 独立设计承接）
+
+5B. **B 分支推进确认门**
+
+   ```
+   Stage 2（需求分析）— office-hours 产物已 snapshot
+
+   ✅ stage 2 真相源
+      <$ACTIVE_REQ_DIR/stage2-office-hours.md 绝对路径>
+
+   📂 源材料
+      <$ACTIVE_REQ_DIR/.req-meta.json:stage2_source_origin 原 ~/.gstack/ 绝对路径>
+
+   📋 一句话摘要
+      <office-hours 设计稿核心要点，一行>
+
+   这份讨论产物是否可作为 Stage 2 真相源？如要换源材料请直接说；确认后我会推进到功能规格（Stage 3）。
+   ```
+
+   PM 回答的内部分流：
+   - PM 说「OK / 通过 / 没问题 / 定了」 → 推进
+   - PM 提换源材料 / 重跑 → 回步骤 3B
+   - PM 提改 brief → 回步骤 2 选择门
+
+#### 推进命令（A 或 B 任一确认后执行）
+
 ```bash
 python3 .claude/scripts/req-transition.py "$ACTIVE_REQ_DIR" --to 2
 ```
+
+> `req-transition.py` 内部走 `_lib.state.get_stage_source(req_dir, current)` helper（D-i v4 R3-C1），按 `.req-meta.json:stage2_source` 解析真相源：A 分支验 `analysis.md` 存在，B 分支验 `stage2-office-hours.md` 存在。
 
 推进成功后**续到 Stage 2 → 3 入口**（默认续跑，参见上文「续跑模式」）。
 
@@ -151,7 +306,7 @@ PM 选择进入 stage 3 时：
 
 1. **调用 `/prd-writing`（stage-3 orchestrated 模式）**
    - 调用时在 prompt 里明确「stage-3 orchestrated 模式」——这是被 stage-gate 编排的固定 req 级模式，skill 跳过自身开场三选一对话、不走最终确认（详见 `prd-writing/SKILL.md` 的 stage-3 模式段）。
-   - skill 内部完成：读 `brief.md` + `analysis.md` + `docs/PROJECT.md`（+ 已有 `docs/modules/` 如存在），从 analysis 的功能分解派生 §六 功能需求层级、写 `prd.md`（章节结构按 PRD 9 章 / 11 章不变），写完跑 `check-prd-hierarchy.py` lint + `term-detector.py` 补 `docs/PROJECT.md` 业务术语表，并为本次每条产品决策 append `decision` 事件
+   - skill 内部完成：读 `brief.md` + **stage 2 真相源**（A 分支 `analysis.md` / B 分支 `stage2-office-hours.md`，路径由 `_lib.state.get_stage_source(req_dir, 2)` 解析）+ `docs/PROJECT.md`（+ 已有 `docs/modules/` 如存在），从 stage 2 真相源的功能分解派生 §六 功能需求层级、写 `prd.md`（章节结构按 PRD 9 章 / 11 章不变），写完跑 `check-prd-hierarchy.py` lint + `term-detector.py` 补 `docs/PROJECT.md` 业务术语表，并为本次每条产品决策 append `decision` 事件
    - skill 返回时 `prd.md` 已落盘、lint 已闭环（详见 `prd-writing/SKILL.md`：lint 在 skill 内闭环，**不**传递给 stage-gate 二次显示）；返回值带本次新增的 `decision` 摘要（备选 / 理由），供步骤 2 确认门一并渲染
 
 2. **输出确认门**（一份完整模板，把产物落地 / 规格要点 / 本次决策摘要 / 可选 review / 确认问句拼成单次输出；不分两轮发）：
