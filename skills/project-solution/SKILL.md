@@ -2,8 +2,12 @@
 name: project-solution
 description: |
   项目级方向规划入口：PM 主动调用，定 / 改项目顶层方向（产品定位 / 用户 / 路线 / 技术栈 / 术语 + roadmap）。
-  4 个独立调用场景：A 项目方向重做 / B 季度规划 / C 老板新方向 / D brownfield 接入。
-  内部逻辑：场景判断 + @读 _shared/project-questioning.md 跑讨论。
+  **4 个独立调用场景**：
+    A 项目方向重做（跑过几个 req 后发现产品定位偏了）
+    B 季度 / 半年规划（主动校准 PROJECT 6 节 + 重新排 roadmap）
+    C 老板 / 市场新方向（外部输入逼着改路线）
+    D brownfield 接入定方向（紧接 /codebase-audit 后跑）
+  内部逻辑：场景判断 + @读 _shared/project-questioning.md 跑讨论（提问顺序场景特定）。
   不占 req stage、不走 req-stage-gate。
 ---
 
@@ -58,14 +62,18 @@ echo "SKILL: project-solution"
 
 调用前先判断场景：
 
-| 场景 | 触发 | 输入态 | 提问顺序（vp-6 细化）|
+| 场景 | 触发 | 输入态 | **提问顺序**（按 _shared §3 问题库挑用，**场景特定**）|
 |---|---|---|---|
-| A 重做 | PM 主动说"方向偏了 / 要重做" | `docs/PROJECT.md` 已有内容 | 按 PM 痛点切入，不必从产品定位起 |
-| B 季度规划 | PM 主动说"季度 / 半年规划" | `docs/PROJECT.md` 已有 + `roadmap.md` 历史 | 跳过产品定位 / 技术栈，重写产品路线 + roadmap |
-| C 老板新方向 | PM 主动说"老板 / 客户给了新方向" | `docs/PROJECT.md` 已有 | 从产品定位 + 用户画像重起 |
-| D brownfield 接入 | 紧接 `/codebase-audit` 之后 | `docs/代码现状档.md` 已生成 | 先读现状档作实况语境，6 节顺序按 greenfield |
+| **A 重做** | PM 主动说"方向偏了 / 要重做" | `docs/PROJECT.md` 已有内容 | (1) **痛点诊断**（旧 PROJECT 哪几节失效 / 为什么偏）→ (2) 产品定位（重定）→ (3) 用户画像（重定，可能换主角色）→ (4) 产品路线（按新定位重排里程碑）→ (5) 业务术语表（如有新术语）→ (6) roadmap 重排（旧未做 req 重新评估保留 / 砍）|
+| **B 季度规划** | PM 主动说"季度 / 半年规划" | `docs/PROJECT.md` 已有 + `roadmap.md` 历史 | (1) **过去季度 roadmap 完成度回顾**（哪些 ship / 哪些砍）→ (2) 产品路线（新季度里程碑）→ (3) roadmap（新 req 队列 + 排优先级）→ (4) 业务术语表增量（如有新业务）—— **跳过产品定位 / 用户画像 / 技术栈**（默认稳定）|
+| **C 老板新方向** | PM 主动说"老板 / 客户给了新方向" | `docs/PROJECT.md` 已有 | (1) **新方向 vs 现 PROJECT 差异点**（PM 自述新方向 + AI 对比现 PROJECT 找冲突）→ (2) 产品定位（如有变 → 改）→ (3) 用户画像（如有变 → 改，可能换主角色）→ (4) 产品路线（按新方向重整里程碑）→ (5) roadmap（新 req 队列）|
+| **D brownfield 接入** | 紧接 `/codebase-audit` 之后 | `docs/代码现状档.md` 已生成（7 维度）| (0) **全文读 `docs/代码现状档.md`**（必读，AI 不准跳）→ (1) 产品定位（**从 codebase 反推 + PM 确认**）→ (2) 用户画像（从代码层级 / API 角色反推 + PM 补）→ (3) 产品路线（PM 给未来方向）→ (4) 技术栈（**从代码现状档抄**，PM 确认）→ (5) 业务术语表（**从 model / API 命名反推 + PM 补**）→ (6) roadmap（PM 给）|
 
-> vp-6 后续：4 场景的具体提问顺序 + 输入态判断细化（如季度规划保留 + 增量 vs brownfield 从 codebase 反推）。
+**通用约束**（所有 4 场景）：
+
+- 步骤 2 提问全部走 `_shared/project-questioning.md` §2 提问纪律（分批 / 追问 / 收敛 / 编号作答）+ §3 问题库（话术挑用）
+- 步骤 3 未决问题闸门必跑（_shared §4）
+- 步骤 8 Decision gate（_shared §6）必走，不能 PM 答"OK"直接落（Decision gate label 模糊检测，review M2 落地后强制）
 
 ### 段 1 · 讨论方向
 

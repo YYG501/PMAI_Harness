@@ -90,6 +90,40 @@ PM-AI-Workflow 生成器仓的演进记录。本文件**只记影响下游业务
 
 ## 未发布
 
+### 2026-05-25 — D-iv M1 vp-6：`/project-solution` 4 场景提问顺序细化
+
+**vp-6 范围**（T6；review B1 + B 4 场景延伸）：vp-2 已经把 `/project-solution` SKILL.md 段 0 加了 4 场景判断**框架**（触发 / 输入态 / 提问顺序粗略描述）；vp-6 把提问顺序列**细化为具体的 5-7 步**，让实施时不需要每场景再想。
+
+`skills/project-solution/SKILL.md`:
+
+- frontmatter description 重写 4 场景描述（review B1 砍 E 后的 4 场景细化）：
+  - A 项目方向重做（跑过几个 req 后发现产品定位偏了）
+  - B 季度 / 半年规划（主动校准 PROJECT 6 节 + 重新排 roadmap）
+  - C 老板 / 市场新方向（外部输入逼着改路线）
+  - D brownfield 接入定方向（紧接 /codebase-audit 后跑）
+- 段 0 场景判断表「提问顺序」列从粗略一句话改为**完整 5-7 步顺序**：
+  - A 重做: 痛点诊断 → 定位 → 用户 → 路线 → 业务术语 → roadmap 重排
+  - B 季度规划: 过去 roadmap 回顾 → 产品路线（新里程碑）→ roadmap → 业务术语增量（跳过定位 / 用户 / 技术栈）
+  - C 新方向: 新方向 vs 现 PROJECT 差异 → 定位 → 用户 → 路线 → roadmap
+  - D brownfield: 全文读 `docs/代码现状档.md` → 定位（codebase 反推 + PM 确认）→ 用户 → 路线 → 技术栈（codebase 抄）→ 业务术语 → roadmap
+- 段 0 加通用约束（所有 4 场景都跑步骤 2 / 步骤 3 / 步骤 8 _shared 引用）
+
+`skills/_shared/project-questioning.md`:
+
+- §10.2 `vp-6 细化` placeholder 改为 `vp-6 已细化` + 加 4 场景顺序速查（指向 SKILL.md 段 0 完整表，避免双份维护）
+
+**测试基线**：`bash tests/run-all.sh` **436/0**（无回归）。
+
+**业务仓需注意**：
+
+- `/project-solution` 4 场景全部走同一份 `_shared/project-questioning.md`（话术库 + 写作规则 + Decision gate 共享），但**提问顺序按场景定**（SKILL.md 段 0 表）
+- D brownfield 场景必须先有 `docs/代码现状档.md`（`/codebase-audit` 产物），否则 step 0 失败
+- A/B/C 场景前置须有 `docs/PROJECT.md`（greenfield 首次起项目要走 `/init-project` 一气呵成，不走 `/project-solution`）
+
+**批 1（M1）至此 6 个 vp 全部完成**：vp-1（SKILL.md 4 阶段）+ vp-2（_shared 抽取）+ vp-3（阶段 D verify）+ vp-4（文档同步）+ vp-5a（自动化测试 +11 cases）+ vp-6（4 场景细化）；vp-5b PM 手动验收待 PM 自跑。
+
+---
+
 ### 2026-05-25 — D-iv M1 vp-5a：3 个自动化测试套件落地（防回归）
 
 **vp-5a 范围**（T5a；review T1 落实）：

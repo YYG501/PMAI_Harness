@@ -226,12 +226,16 @@ git commit -m "docs: project direction settled"
 8. §9 atomic commit
 9. 返回 init-project 阶段 D（终态汇总 + Next Up）
 
-### §10.2 `/project-solution`（4 场景之一，vp-6 细化）
+### §10.2 `/project-solution`（4 场景之一，vp-6 已细化）
 
-1. agent 按 SKILL.md 步骤 1 读已有输入（CLAUDE.md / docs/PROJECT.md / docs/代码现状档.md）
-2. 判断场景（重做 / 季度规划 / 新方向 / brownfield 接入）
+1. agent 按 SKILL.md 步骤 1 读已有输入（CLAUDE.md / `docs/PROJECT.md` / `docs/代码现状档.md`）
+2. **判断场景**（A 重做 / B 季度规划 / C 新方向 / D brownfield 接入）—— 调用方 `/project-solution` SKILL.md 段 0 表已细化触发条件 + 输入态 + 提问顺序
 3. agent @读 本文件
-4. 按 SKILL.md 场景特定顺序问 PM（不一定按 §3 顺序）
+4. 按 `/project-solution` SKILL.md 段 0 表"提问顺序"列**场景特定顺序**问 PM：
+   - A 重做：痛点诊断 → 产品定位 → 用户画像 → 产品路线 → 业务术语 → roadmap 重排
+   - B 季度规划：过去 roadmap 回顾 → 产品路线 → roadmap → 业务术语增量（跳过定位 / 用户 / 技术栈）
+   - C 新方向：新方向 vs 现 PROJECT 差异 → 产品定位 → 用户画像 → 产品路线 → roadmap
+   - D brownfield：全文读现状档 → 产品定位（codebase 反推）→ 用户画像 → 产品路线 → 技术栈（codebase 抄）→ 业务术语 → roadmap
 5. §4 未决问题闸门
 6. §6 Decision gate
 7. §5 写 / 改 PROJECT.md + roadmap.md
@@ -240,6 +244,8 @@ git commit -m "docs: project direction settled"
 10. §9 atomic commit
 11. skill 退出（不像 init-project 还有阶段 D）
 
+> 注：4 场景的**完整提问顺序表 + 输入态 + 触发条件**留在 `skills/project-solution/SKILL.md` 段 0；本节 §10.2 只给"调用方实现指南"的步骤骨架，避免双份维护漂移。
+
 ---
 
-**End of `_shared/project-questioning.md`**（M1 vp-2 落地；vp-6 后 `/project-solution` 4 场景细化时补充 §10.2 场景顺序）
+**End of `_shared/project-questioning.md`**（M1 vp-2 + vp-6 完整落地；4 场景顺序细化已落 `project-solution/SKILL.md` 段 0 表）
