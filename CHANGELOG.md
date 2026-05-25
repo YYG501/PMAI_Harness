@@ -90,6 +90,20 @@ PM-AI-Workflow 生成器仓的演进记录。本文件**只记影响下游业务
 
 ## 未发布
 
+### 2026-05-25 — fix: cleanup-pending-worktrees.sh L245 潜伏 unbound variable bug
+
+**症状**：`tests/test-cleanup-pending.sh` C7 safety case fail —— 当存在 unsafe pending entry 时，脚本应 `exit 1` 并报警 "有未清理项保留..."，实际 exit 0 且警告残缺。
+
+**根因**：L245 `echo "⚠️ 有未清理项保留在 $PENDING_FILE。请人工检查。"` —— `$PENDING_FILE` 紧跟中文句号 "。"（U+3002 UTF-8 三字节 e3 80 82），bash 在某些 locale 下 parse `$VAR` 时把后续 UTF-8 字节当变量名一部分，触发 `set -u` 抛 `PENDING_FILE�: unbound variable`；但因为该 `echo` 在 `if [ "$FAIL" -gt 0 ]` 分支内，错误吞掉后脚本 fall-through 到 fi 结束自然 exit 0（应该 exit 1）。
+
+**潜伏时长**：bug 由 fcdf01e（2026-04-26）引入，但当时所有 test case 都走 happy path（FAIL=0 不进入此分支）；35cf17f（2026-05-25 harden workflow safety boundaries）加 C7 case 第一次造 FAIL>0 场景才暴露。
+
+**修法**：`$PENDING_FILE` → `${PENDING_FILE}` 显式终结变量名边界。1 字符改动。
+
+**测试基线**：`bash tests/run-all.sh` **455 / 0**（C7 修复 + 上条 task-status fix 2 个新 case 都过；不再有 pre-existing fail）。
+
+---
+
 ### 2026-05-25 — fix: task 状态查询 vs v4.5 task md 单分支独占的 inconsistency
 
 **问题**：v4.5 设计 task-confirm fork 后 `git rm` task md 从 req 分支（搬到 task 分支独家），但 `list_tasks()` 和 `/task-execute` 入口的 find 命令都只扫 req 分支视角，导致：

@@ -242,6 +242,6 @@ echo ""
 echo "完成：成功 $OK / 失败 $FAIL"
 
 if [ "$FAIL" -gt 0 ]; then
-  echo "⚠️ 有未清理项保留在 $PENDING_FILE。请人工检查。" >&2
+  echo "⚠️ 有未清理项保留在 ${PENDING_FILE}。请人工检查。" >&2
   exit 1
 fi
