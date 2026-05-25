@@ -90,6 +90,33 @@ PM-AI-Workflow 生成器仓的演进记录。本文件**只记影响下游业务
 
 ## 未发布
 
+### 2026-05-25 — D-iv M1 vp-1：`/init-project` skill 一气呵成 4 阶段重写（批 1 起手）
+
+**改造目标**：`/init-project` 从"调 shell 脚本 + 提示 PM 下一步发 `/project-solution`"两步分裂入口，升级为 PM 主动一气呵成 4 阶段入口（参数 → 骨架 → 方向讨论 → Next Up）。
+
+**vp-1 范围**（M1 批 1 的第一个 vp；T1）：
+
+- 重写 `skills/init-project/SKILL.md`：
+  - 顶部加 4 阶段 ASCII 流程图（review B3）
+  - 阶段 A 明确 5 步参数顺序：项目名 → 落地路径 → **brownfield 检测闸门** → 一句话背景 → 项目意图（review A3）
+  - **brownfield 接口约定**（review C-7）：skill 阶段 A 拒已存在目录 + 提示 `/codebase-audit`；脚本继续拒（两层都拦）
+  - 阶段 B 用 Bash 调 `init-project.sh`（脚本作骨架构建器；non-interactive 入口 invariant 仍保留，review C-5）
+  - 阶段 C @读 `_shared/project-questioning.md` 跑讨论（**vp-2 创建该 `_shared` 文件**）+ Decision gate 二选一 + atomic commit `docs: project direction settled`（review A5）
+  - 阶段 D 只汇总不 commit（输出 Next Up 块格式）
+  - 失败兜底速查（R10 init-project.sh 失败 / `_shared` 缺失；R11 PM 中途停清理）
+- `scripts/init-project.sh`：
+  - 删 `--help` 段末「成功后: cd <target-dir> / /new-req」echo + 加说明本脚本作 skill 阶段 B 调用 / 非交互 CLI 保留
+  - 删脚本末尾 `下一步：cd $TARGET_DIR / 运行 /new-req` echo（入口语义已迁移到 `/init-project` skill）
+
+**业务仓需注意**：
+- 新建项目走 `/init-project` skill（**只在生成器仓里跑**，业务仓的 `/init-project` 不分发）—— skill 内嵌 4 阶段 agent 流程
+- `init-project.sh` 仍是非交互参数化 CLI（`measure-tthw` / smoke / 批量自动化照旧调用，不受影响）
+- vp-1 完成后 `_shared/project-questioning.md` 尚未创建 → vp-2 立刻接上；vp-1 commit 后 vp-2 commit 前 PM 不应该手动跑 `/init-project`（阶段 C 会找不到 `_shared` 文件）
+
+**测试基线**：`bash tests/run-all.sh` **425/0**（无回归；`test-inject-structure.sh` "init-project SKILL 询问项目意图" case PASS 维持）。
+
+---
+
 ### 2026-05-25 — D-iii v2：attachments AI 接管（helper-based，Model 2 — PM 不感知 attachments/ 目录）
 
 **痛点**：PM 完全不知道现仓 attachments 机制（commit 65329d0 v0 落地）存在 —— 不知道路径 / 不知道如何上传 / 不知道后续 stage 能否读取。现有 trigger 1 / 2 都是 reactive（PM 主动提 / AI 写产出前扫），永远 silent 直到 PM "知道该说"，但 PM 没在任何 chat 看到过提示就永远学不到机制存在。根因 = **PM 视角 vs 工程视角错配**（与 D-i v4 "office-hours snapshot" 同款决策剧情）。
