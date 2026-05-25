@@ -29,7 +29,7 @@ STAGE_NAMES: dict[int, str] = {
 # 因此 schema 锁定为 `dict[int, str]`（单一默认产物）；多产物分流（如 stage 2
 # 的 office-hours 分支产 `stage2-office-hours.md`）通过 `.req-meta.json` 的
 # `stage{N}_source` 字段在 req 级 override，不升级本表为 list/multi-path。
-# 详见 docs/设计/Stage2-分析方式选择-office-hours.md §1.3 / §2 / R3-H1。
+# 详见 docs/归档/完成/office-hours-跨stage1-2集成.md §1.3 / §2 / R3-H1。
 STAGE_OUTPUT_FILES: dict[int, str] = {
     1: "brief.md",
     2: "analysis.md",

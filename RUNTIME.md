@@ -15,7 +15,7 @@
 
 **D-iv 入口与全流程体验顺畅性全包 ship**（设计文档已归档 `docs/归档/完成/入口与全流程体验顺畅性.md`；M3 砍后 4 模块 M1 + M2 + M4 + M5 共 11 个技术 vp 全过；剩 vp-5b + vp-13 由 PM 同步消费仓后自验收）
 
-设计文档 `docs/设计/入口与全流程体验顺畅性.md` v0.2（plan-eng-review Round 1：claude 9 finding + codex outside voice 7 finding，16 ACCEPT；最大改动 codex C-1 砍 M3 —— `req-stage-gate` 续跑模式已是默认行为）。
+设计文档 `docs/归档/完成/入口与全流程体验顺畅性.md` v0.2（plan-eng-review Round 1：claude 9 finding + codex outside voice 7 finding，16 ACCEPT；最大改动 codex C-1 砍 M3 —— `req-stage-gate` 续跑模式已是默认行为）。
 
 **批 1 已落（M1 init-project 一气呵成；commits 6df9cf4 + dcf5802 + 39cb81f + fe1b7ac + f8c1c90）**：
 
@@ -34,7 +34,7 @@
 - **vp-11**：`scripts/status-view.py --narrative`（范围降级 codex C-4：当前 stage / 产物文件 / 最近 transition，不到小节级）+ `CLAUDE.md` 章程章节「Session 起始播报」（codex C-3 校准：PM 第一条 message 后，不是「一开窗口」）+ `tests/test-narrative-mode.sh`（5 cases）
 - **vp-12** ← **本次 commit**：批 2 文档同步 RUNTIME + CHANGELOG + 跑 tests/run-all.sh
 
-**测试基线**：vp-7 + vp-8 + vp-10 + vp-11 期望加 5+5=10 cases（436 → ~446）。**待 commit 时跑 tests/run-all.sh 确认无回归**。
+**测试基线**：`bash tests/run-all.sh` **446 / 0**（vp-7 + vp-8 + vp-10 + vp-11 实测加 10 cases：436 → 446，与预期一致；无回归）。
 
 **剩余 PM 手动**（不可自动化）：
 

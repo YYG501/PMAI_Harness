@@ -9,6 +9,8 @@ description: |
 
 # /task-submit
 
+> **PM 答题规则（M4）**：所有 AskUserQuestion 调用（呈交块决策：通过完成 / 退回继续打磨）按 `_shared/pm-view/askuser-rules.md` §1 3 硬规则走（空答 STOP / 没拿到答案禁止切 task 状态为「已完成」/ runtime 退化保留 wait）。**禁止默认走 recommend 分支 / 禁止逃生舱**。
+
 ## When To Use
 
 - **默认路径**（推荐）：不需要 PM 手动调；task-execute commit 后**自动**进入步骤 11/12 呈交+决策（commit 不切状态）。

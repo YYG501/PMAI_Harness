@@ -6,6 +6,8 @@ description: |
 
 # /skill-improve
 
+> **PM 答题规则（M4）**：所有 AskUserQuestion 调用（模式 B 反馈条目确认 / PM 逐条决策采纳）按 `_shared/pm-view/askuser-rules.md` §1 3 硬规则走（空答 STOP / 没拿到答案禁止改 SKILL.md / 归档反馈 / runtime 退化保留 wait）。**禁止默认走 recommend 分支 / 禁止逃生舱**。
+
 ## When To Use
 
 **模式 A（显式反馈文件）**：PM 已写好反馈文件，显式调用：

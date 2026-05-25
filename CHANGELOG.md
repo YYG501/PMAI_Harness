@@ -90,6 +90,22 @@ PM-AI-Workflow 生成器仓的演进记录。本文件**只记影响下游业务
 
 ## 未发布
 
+### 2026-05-25 — D-iv ship 后审计修复（漏改指针 + 死链 + 文档基线对齐）
+
+新窗口连续大改后的隐性问题扫查（PM 主动发起），修以下 3 处：
+
+- **askuser-rules 指针漏改**：vp-10 批量加指针时只覆盖 7 个核心 SKILL，遗漏 `skill-improve` + `task-submit`（两者都用 AskUserQuestion 走 PM 决策）。按 `_shared/pm-view/askuser-rules.md` §3.1 模板补齐 SKILL.md 顶部 blockquote。
+- **死链 2 处**：
+  - `RUNTIME.md` L18 写 `docs/设计/入口与全流程体验顺畅性.md` —— 实际已 `git mv` 到 `docs/归档/完成/`
+  - `scripts/_lib/stages.py` L32 注释引 `docs/设计/Stage2-分析方式选择-office-hours.md` —— 实际归档为 `office-hours-跨stage1-2集成.md`
+- **基线状态漂移**：`RUNTIME.md` L37 停留在 vp-12 commit 前的「期望 ~446，待跑」未完成态；实测 446/0 后改为「实测无回归」与 L129 / INDEX / CHANGELOG L105 对齐。
+
+**业务仓需注意**：4 文件改动小范围，按 `框架同步-SOP.md` 跟随主仓 sync 即可。`skill-improve` + `task-submit` SKILL.md 同步后 PM 视觉上多 1 行 blockquote；功能上 agent 调 AskUser 严格按 §1 3 硬规则走。
+
+**测试基线**：`bash tests/run-all.sh` **446/0**（实测无回归；4 文件改动均非测试覆盖路径）。
+
+---
+
 ### 2026-05-25 — D-iv 入口与全流程体验顺畅性 ship 收尾（设计文档归档）
 
 D-iv 批 1 + 批 2 全包技术 vp（vp-1 ~ vp-12，**vp-9 砍**）落地完毕：
