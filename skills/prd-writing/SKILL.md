@@ -125,6 +125,31 @@ stage 3 没有原型、没有 task —— 输入只有上游 stage 1/2 的产物
 
 > 步骤编号在两入口共用。stage-3 orchestrated 模式跳步骤 0；步骤 2.5 的 PM 确认门在 stage-3 模式下收敛为「仅 AI 判断有歧义时询问」；不再有独立的步骤 4 最终确认（stage 3 的定稿确认归 `req-stage-gate` 单一确认门）。
 
+### attachments AI 接管 hook（D-iii v2 trigger 0 — 任何步骤期间生效；standalone 模式不启）
+
+**stage-3 orchestrated 模式启用 trigger 0**；**standalone 模式不启**（不绑 req → 不入 req attachments/，D-iii §1.3 / §2.2）。
+
+PM 在 chat 任何位置自然描述 "我有 X 在 ~/Downloads/foo.pdf，重点 Y" → AI first-principle 识别（chat 含绝对路径 + 描述材料）→ 调 helper：
+
+```python
+from _lib.attachments import copy_attachment
+result = copy_attachment(req_dir, Path("~/Downloads/foo.pdf"),
+                        stage_prefix="prd", hint="Y 重点")
+```
+
+stage_prefix `"prd"`（Stage 3）。chat 一行确认 `已归档（attachments/prd-foo.pdf），Y 重点。继续。`（禁 cp / 绝对路径全文 / 字段名等工程黑话）。
+
+异常 catch：
+- `FileNotFoundError` → "路径不可读：<src>。"
+- `SensitivePathError` → "路径含敏感关键词，拒纳：<src>。"
+- `FileSizeError` → "文件 X MB 超 50MB 上限。"
+
+**trigger 2 fallback**：写 prd.md 前扫 `attachments/`，`is_seen(req_dir, filename)` 判定（真相源 `.req-meta.json:attachments_seen`，非引用 section）。
+
+**引用 section 渲染**：写 prd.md 时 `list_attachments_seen(req_dir)` 按 `registered_at` 升序渲染到文档物理末尾 `## 📎 参考材料` section。
+
+**单一真相源**：`skills/_shared/pm-view/attachments-upload.md`（完整 prose / 替换 / 删除 / batch / 失败兜底）。
+
 1. **读入 + 拆决策**——读取「Required Inputs」列出的文件，从 **stage 2 真相源**（A 分支 `analysis.md` / B 分支 `stage2-office-hours.md`）+ `brief.md` 拆出「已确认决策」和「待执行决策」；有待执行项则先编号提问 PM，确认后再写 PRD。stage 3 没有 `solution.md` / `tasks/` 可读 —— PRD 的功能规格从 stage 2 真相源的功能分解现写。
 
 2. **功能分解派生 §六层级**——stage 3 没有原型可作权威依据，§六功能需求的层级**从 stage 2 真相源的功能分解派生**：把 stage 2 真相源里列出的功能清单按用户动作重组为 §六的一级 / 二级 / 三级层级。动词锚定规则不变（见步骤 2.5），只是重组对象从「原型 UI 结构」换成「stage 2 真相源功能清单」。

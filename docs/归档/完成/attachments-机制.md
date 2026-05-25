@@ -1,7 +1,10 @@
-# req attachments 机制
+# req attachments 机制 v0（已被 D-iii v2 helper 化升级承接）
 
-> **状态**：已落地（commit `65329d0` feat(attachments): 独立机制实施完成；2026-05-18 归档）
-> **日期**：2026-05-18
+> **状态**：v0 已落地（commit `65329d0` 2026-05-18 归档）→ **2026-05-25 D-iii v2 helper-based 升级**
+> **现役**：`docs/归档/完成/attachments-AI-接管.md`（D-iii v2，2026-05-25 落地，测试基线 425/0）
+> **v2 改动**：trigger 0 LLM 接管识别 + `_lib/attachments.py` helper（denylist + hard cap + Python `shutil.copy2`）+ `.req-meta.json:attachments_seen` 字段（真相源）+ `## 📎 参考材料` 仅作 PM 可见展示
+> **v0 内容保留作历史基线**：目录结构 / 命名约定 / trigger 1/2 / 后续 stage 继承 / 多格式支持 / close-req 处理 / cancel-req 处理 / §九 不解决清单 全部沿用 v2
+> **日期**：2026-05-18（v0）/ 2026-05-25 加升级指针
 > **作者**：PM + AI
 
 ---

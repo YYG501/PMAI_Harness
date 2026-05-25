@@ -41,6 +41,26 @@ echo "SKILL: task-plan"
 
 ## Workflow
 
+### attachments AI 接管 hook（D-iii v2 trigger 0 — Stage 5b 期间生效）
+
+PM 在 chat 描述 "我有 X 在 ~/Downloads/foo.pdf，重点 Y" → AI first-principle 识别 → 调 helper：
+
+```python
+from _lib.attachments import copy_attachment
+result = copy_attachment(req_dir, Path("~/Downloads/foo.pdf"),
+                        stage_prefix="task-plan", hint="Y 重点")
+```
+
+stage_prefix `"task-plan"`（Stage 5b）。chat 一行确认 `已归档（attachments/task-plan-foo.pdf），Y 重点。继续。`（禁工程黑话）。
+
+异常 catch：`FileNotFoundError` / `SensitivePathError` / `FileSizeError` → chat 报错（fail-loud）。
+
+**trigger 2 fallback**：写 `task-plan.md` 前扫 `attachments/`，`is_seen` 判定。
+
+**引用 section 渲染**：写 `task-plan.md` 时 `list_attachments_seen` 按 `registered_at` 升序渲染到文档物理末尾。
+
+**单一真相源**：`skills/_shared/pm-view/attachments-upload.md`。
+
 ### 步骤 0：读 PM 视图规则子文件（强制）
 
 打开（一次会话只读 1 次）：

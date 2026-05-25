@@ -13,7 +13,34 @@
 
 ## 当前位置（2026-05-25）
 
-**D-i v4：office-hours 跨 Stage 1+2 集成全包已落地** —— 设计 `docs/归档/完成/office-hours-跨stage1-2集成.md` v4（Codex outside voice + 3 轮 plan-eng-review 全 21 决议；snapshot 复制方案 + 体验包装层）+ 实施 vp-1 → vp-7：
+**D-iii v2：attachments AI 接管全包已落地**（同 D-i v4 helper-based 架构剧情）
+
+- **vp-1**：`scripts/_lib/attachments.py` 新建（~370 行）—— `copy_attachment` / `register_attachment` / `list_attachments_seen` / `is_seen` / `remove_attachment` / `replace_attachment` 全套 API + `SENSITIVE_PATH_PATTERNS` 12 patterns denylist + `MAX_FILE_SIZE_MB = 50` hard cap + Python `shutil.copy2 + Path.expanduser`（不靠 Bash cp）
+- **vp-2**：`skills/_shared/pm-view/attachments-upload.md` 新建（~230 行）—— trigger 0 LLM 识别 prose 单一真相源 + caller 调 helper 模式 + multi-batch / 替换 / 删除 / 冲突 / 失败兜底 + stage 前缀映射 + office-hours C4 边界
+- **vp-3 + vp-3b + vp-3c**：7 stage SKILL 加 trigger 0 inline 段（含 C2 新增 implementation-design + task-plan）+ `new-req` commit pathspec 扩 attachments/（C1 fix）+ `req-stage-gate` B 分支 trigger 0 disable（C4 fix）
+- **vp-4**：`tests/test-attachments-helper.sh` 13 case（含 trigger 2 改造 regression + 静态 grep 验证）
+- **vp-5**：`templates/req-prd.md.tmpl` 新加 `## 📎 参考材料`（保留 "九、附件（可选）" PRD 内置章节，两者并存语义清晰）
+- **vp-6**：`PM-VIEW-RULES.md` 加 §10 索引行 + `INVARIANTS.md` 立 **I-RT10**（attachments_seen 字段 + helper-only + denylist + hard cap + B 分支 trigger 0 disable 边界）
+
+**测试基线**：`bash tests/run-all.sh` **425 / 0**（前 412 → +13 全过；设计预期 ≥ 423/0，超出）。
+
+**v1 → v2 反转**（同 D-i v4 Round 3 剧情）：Claude D1-D10 review 全 ACCEPT 后 Codex outside voice 命中 11 critical/high finding，集体指向根因 = v1 prose-only 应 helper 化。PM 拍 D12 = A：反转 v2。
+
+**累计两轮 helper-based 升级**（D-i v4 + D-iii v2）：`.req-meta.json` 现有 4 个 helper 化字段（`stage{N}_source` / `stage{N}_tool` / `stage{N}_source_origin` / `attachments_seen`），全部走 `_lib/state.py` + `_lib/attachments.py` 读写、不得 hardcode 直读。
+
+**待验项**（消费仓真实 req 一起验，与 D-i v4 待验合并）：
+
+1. LLM trigger 0 识别准确性（同 D-i v4 R3-H2 DEFER 决策模式）
+2. `SENSITIVE_PATH_PATTERNS` 12 个 pattern 覆盖度
+3. `MAX_FILE_SIZE_MB = 50` 阈值是否合适
+
+**下一步**：到消费仓 `${CONSUMER_REPO_ROOT}` 跑 `框架同步-SOP.md` 同步后两个 helper 升级一起验证 —— D-i v4 office-hours B 分支 + D-iii v2 attachments trigger 0。
+
+---
+
+## 历史阶段（已完成）
+
+**2026-05-25 — D-i v4：office-hours 跨 Stage 1+2 集成全包** —— 设计 `docs/归档/完成/office-hours-跨stage1-2集成.md` v4（Codex outside voice + 3 轮 plan-eng-review 全 21 决议；snapshot 复制方案 + 体验包装层）+ 实施 vp-1 → vp-7：
 
 - **vp-1**：`_lib.state.get_stage_source` + `set_stage_source` helper（stages.py STAGE_OUTPUT_FILES 保留 `dict[int, str]` schema 作 fallback；新增 `stage{N}_source` / `stage{N}_tool` / `stage{N}_source_origin` 字段契约）
 - **vp-2 + vp-3**：`req-stage-gate` Stage 1→2 重写为合二为一选择门 + 分流 A（结构化批判 `/req-analysis`）/ B（YC office-hours 式 + bridge snapshot 复制）；B 分支 resume 协议（PM 中断 chat 去跑 office-hours → 任意句式回话 AI 接住 → snapshot + helper 写元数据）
@@ -31,11 +58,7 @@
 - **R3-H2 DEFER**（v4 §5.1.1）：office-hours prose 派生 prd.md §六层级实际效果 —— 相信 LLM 全文喂消化能力，**消费仓真实 req 验证**；如不行再引入规范化 schema contract
 - **R3-H3 PARTIALLY ACCEPT**（v4 §5.1.2）：resume 协议状态机细节已写进 vp-2，真实 PM 跑过一次后再看是否要再加 chat 提示词约束
 
-**下一步**：去消费仓 `${CONSUMER_REPO_ROOT}` 同步框架后跑一次真实 req B 分支（用 office-hours 风格 stage 2 真相源跑完 stage 3 PRD），验证 §六派生质量 + resume 协议体验。同步前按 `框架同步-SOP.md` 走流程。
-
----
-
-## 历史阶段（已完成）
+**v4 下一步**：已合并到当前位置「下一步」一起验证。
 
 **2026-05-24 — 原型简化项登记机制 v2 全包**：设计 `docs/归档/完成/原型简化项-机制.md` v2 + 实施 T1-T8（8 个 touchpoint，关键路径 worktree 并行 3.5-4h）：
 

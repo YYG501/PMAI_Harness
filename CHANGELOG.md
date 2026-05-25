@@ -90,6 +90,60 @@ PM-AI-Workflow 生成器仓的演进记录。本文件**只记影响下游业务
 
 ## 未发布
 
+### 2026-05-25 — D-iii v2：attachments AI 接管（helper-based，Model 2 — PM 不感知 attachments/ 目录）
+
+**痛点**：PM 完全不知道现仓 attachments 机制（commit 65329d0 v0 落地）存在 —— 不知道路径 / 不知道如何上传 / 不知道后续 stage 能否读取。现有 trigger 1 / 2 都是 reactive（PM 主动提 / AI 写产出前扫），永远 silent 直到 PM "知道该说"，但 PM 没在任何 chat 看到过提示就永远学不到机制存在。根因 = **PM 视角 vs 工程视角错配**（与 D-i v4 "office-hours snapshot" 同款决策剧情）。
+
+**方案**（设计 `docs/归档/完成/attachments-AI-接管.md` v2，落实 Codex outside voice Round 1 11 critical/high finding + Claude D1-D10 共 21 finding）：
+
+1. **`scripts/_lib/attachments.py` 新建 helper-based 接管层**（与 D-i v4 `_lib.state.{get,set}_stage_source` 同款架构）：
+   - `copy_attachment` / `register_attachment` / `list_attachments_seen` / `is_seen` / `remove_attachment` / `replace_attachment` 全套 API
+   - **`SENSITIVE_PATH_PATTERNS` denylist**（12 个 pattern：`.env` / `.ssh/` / `.aws/` / `token` / `credential` 等）→ 命中 raise `SensitivePathError`
+   - **`MAX_FILE_SIZE_MB = 50` hard cap** → 命中 raise `FileSizeError`，不依赖 pre-commit warn fail-open
+   - Python `shutil.copy2` + `Path.expanduser()`（不靠 Bash cp）
+2. **`.req-meta.json:attachments_seen` 字段约定** —— 状态真相源（与 D-i v4 `stage{N}_source` 同 meta）；引用 section 仅作 PM 可见展示
+3. **`skills/_shared/pm-view/attachments-upload.md` 新建**单一真相源 prose（trigger 0 LLM 识别 + caller 调 helper + multi-batch / 替换 / 删除 / 冲突 / 失败兜底 + stage 前缀映射 + office-hours C4 边界）
+4. **7 stage SKILL 加 trigger 0 inline 段**：new-req / req-analysis / prd-writing / task-spec / req-stage-gate / **implementation-design** / **task-plan**（最后两个 Codex C2 新增）
+5. **`req-stage-gate` Stage 1→2 B 分支 trigger 0 disable**（C4 cross-design 冲突防护）：B 分支选 office-hours 源材料期间 PM 给的绝对路径走 `set_stage_source(tool='office-hours', origin=...)`（D-i v4 路径），**不**调 attachments helper
+6. **`new-req` 步骤 4.5 commit pathspec 扩 `attachments/`**（C1 fix 破 I-DC1 dispatch 前 working tree 必须 clean 边界）
+7. **`INVARIANTS.md` 立 I-RT10**（attachments_seen 字段 + helper-only + denylist + hard cap + B 分支 trigger 0 disable 边界）
+
+**改动**（vp-1 → vp-7，~3.5h）：
+
+- **vp-1**：`scripts/_lib/attachments.py` 新建（~370 行 Python：6 API + 2 异常 + 2 helper + denylist + hard cap）
+- **vp-2**：`skills/_shared/pm-view/attachments-upload.md` 新建（~230 行 prose 单一真相源）
+- **vp-3**：7 SKILL 加 trigger 0 段（new-req 完整段 + 6 SKILL 精简段 + 链 attachments-upload.md）
+- **vp-3b**：`new-req/SKILL.md` 步骤 4.5 commit pathspec 加动态 attachments/ add（C1 fix）
+- **vp-3c**：`req-stage-gate/SKILL.md` B 分支 trigger 0 disable prose（C4 fix）
+- **vp-4**：`tests/test-attachments-helper.sh` 新增 **13 case**（unit + integration + regression + 静态 grep；含 trigger 2 regression for is_seen 改造）
+- **vp-5**：`templates/req-prd.md.tmpl` 新加 `## 📎 参考材料`（保留 "九、附件（可选）" PRD 内置章节体系不动；两者并存语义清晰，比强行改名更对）
+- **vp-6**：`skills/_shared/PM-VIEW-RULES.md` 加 §10 主索引行 + `INVARIANTS.md` 立 I-RT10
+- **vp-7**：`CHANGELOG.md` 未发布段 + `RUNTIME.md`「当前位置」+ `docs/INDEX.md` + 设计文档归档 `git mv docs/设计/attachments-体验优化.md docs/归档/完成/attachments-AI-接管.md` + `docs/归档/完成/attachments-机制.md` 加 v2 升级指针段
+
+**测试基线**：`bash tests/run-all.sh` **425 / 0**（前基线 412/0；D-iii v2 新增 13 case 全过 —— 设计预期 ≥ 423/0，**超出**）。
+
+**v1 → v2 反转触发点**（同 D-i v4 Round 3 剧情）：
+
+- Claude plan-eng-review D1-D10 共 10 finding 全 ACCEPT 后
+- **Codex outside voice 11 critical/high finding** 集体指向根因 = v1 prose-only 应 helper 化（C1 Stage 1 dirty / C2 漏 Stage 5 入口 / C3 attachments_seen 没 helper 化 / C4 office-hours 冲突 / C5 stage 产出文档不存在 / C6 敏感文件 denylist / C7 Bash cp 脆 / C8 引用 section 不是真相源 / C9 模板事实 / C10 size fail-open / C11 测试不足）
+- PM 拍 D12 = A：反转 v1 → v2 helper-based
+
+**业务仓需注意**：
+
+- **PM mental model 切 Model 2**：PM 完全不感知 `attachments/` 目录；想上传材料 → 在 chat 自然说 "我有 X 在路径 Y，重点 Z" → AI 后台搞定（与 D-i v4 office-hours snapshot 同款交互）
+- **现有 trigger 1 / 2 保留作 fallback**：PM 真手动 cp 进 attachments/ 时 trigger 2 仍能识别（用 `is_seen` 判定基于 `attachments_seen` 真相源）
+- **B 分支选 office-hours 源材料期间** trigger 0 禁用 —— PM 在 B 分支给绝对路径不会被误归档为 attachment
+- **`/prd-writing` standalone 模式不启 trigger 0** —— standalone 不绑 req → 不入 req attachments/；想给独立 PRD 附件 PM 走手动 / 他路径
+- **`.req-meta.json` 多 1 个字段**（`attachments_seen` 列表）；旧 req 无字段自动空列表 fallback，零迁移
+- **hard cap 50MB**：超大文件 helper raise `FileSizeError`，chat 报错让 PM 走外部引用或拆小
+- **敏感路径 denylist**：12 个 pattern（`.env` / `.ssh/` / `.aws/` / `token` / `credential` 等）→ PM 给 `~/.ssh/id_rsa` 类路径会被 helper 拒纳；消费仓发现新 case 扩 pattern
+
+**待验项**（消费仓真实 req 验证）：
+
+- **LLM 识别准确性**（同 D-i v4 R3-H2 DEFER）：trigger 0 LLM prose 判断 PM "上传意图" 准确性，相信 LLM + 消费仓真实 req 验证；如不行再独立 D-* 设计引入 LLM eval framework
+- **`SENSITIVE_PATH_PATTERNS` 覆盖度**：经验值 12 pattern，可能漏 case（OAuth token cache / gcloud config 等）；消费仓使用后扩展
+- **`MAX_FILE_SIZE_MB = 50` 是否合适**：经验值；可能要消费仓调整
+
 ### 2026-05-25 — D-i v4：office-hours 跨 Stage 1+2 集成 + Stage 2 真相源路径契约（snapshot 复制方案）
 
 **痛点**：office-hours 在 Stage 1（`/new-req` 选项 1）+ Stage 2（讨论方式选择）两处都被调用看起来不合理 —— 用户视角是"一次需求讨论"，不该是 stage 1 + stage 2 两次拧巴。Stage 2 下游契约硬绑 `analysis.md` 也让"工具 2 选 1"（结构化批判 vs YC office-hours）走不通。

@@ -11,7 +11,6 @@
 | 文件 | 说明 |
 |---|---|
 | [`_模板-方案.md`](./设计/_模板-方案.md) | 唯一设计文档模板（§0 痛点锁 + §1-§N 方案主体 + §X Review Findings + §Y 决议日志），起手用 |
-| [`attachments-体验优化.md`](./设计/attachments-体验优化.md) | **D-iii v1**：attachments AI 接管（Model 2 — PM chat 描述材料 + 绝对路径 → AI 后台 cp + 命名 + 引用，PM 不感知 `attachments/` 目录）— §0 已锁，方案主体待 plan-eng-review；落地后改名为 `attachments-AI-接管.md` |
 | [`入口与全流程体验顺畅性.md`](./设计/入口与全流程体验顺畅性.md) | **D-iv v0**（合并版）：5 模块综合 — M1 init-project 一气呵成 + M2 banner/Next Up + M3 闸门 Decision gate + M4 AskUser 严格化 + M5 session 起始播报；§0 全锁（M1 锁 2026-05-24，M2-M5 锁 2026-05-25），方案主体待 review |
 
 > **起手新设计**：`cp docs/设计/_模板-方案.md docs/设计/<主题>.md`
@@ -39,6 +38,7 @@
 |---|---|---|
 | **原型简化项登记机制 v2** | [`原型简化项-机制.md`](./归档/完成/原型简化项-机制.md) | 2026-05-24 T1-T8 全包落地（398/0）—— `templates/implementation-design.md.tmpl` 段 1.5 + 7 处下游 SKILL wiring + `scripts/check-doc-pm-view.py --simp-scope` |
 | **D-i office-hours 跨 Stage 1+2 集成 v4** | [`office-hours-跨stage1-2集成.md`](./归档/完成/office-hours-跨stage1-2集成.md) | 2026-05-25 vp-1～vp-7 全包落地（412/0）—— `_lib.state.{get,set}_stage_source` helper + `req-stage-gate` Stage 1→2 合二为一选择门 + 分流 A/B + office-hours bridge snapshot + `.req-meta.json` 3 字段（stage{N}_source/_tool/_source_origin）+ I-RT9 不变式 + 下游 9 处通用化"stage 2 真相源" |
+| **D-iii attachments AI 接管 v2** | [`attachments-AI-接管.md`](./归档/完成/attachments-AI-接管.md) | 2026-05-25 vp-1～vp-7 全包落地（425/0）—— `_lib/attachments.py` helper（copy/register/list/is_seen/remove/replace + SENSITIVE_PATH_PATTERNS denylist + MAX_FILE_SIZE_MB=50 hard cap）+ `attachments-upload.md` 单一真相源 + 7 stage SKILL trigger 0 段 + `.req-meta.json:attachments_seen` 字段 + I-RT10 不变式 + B 分支 trigger 0 disable（C4 cross-design 防护）|
 | skill 读取收敛 | [`设计-skill读取收敛.md`](./归档/完成/设计-skill读取收敛.md) | commit be47fca + PM-VIEW-RULES §9.1 |
 | 框架同步 | [`设计-框架同步.md`](./归档/完成/设计-框架同步.md) | 实战 d0aa6c1 + 框架同步-SOP.md |
 | PM 手动新窗口执行 | [`设计-PM手动新窗口执行.md`](./归档/完成/设计-PM手动新窗口执行.md) | create-task-worktree.sh + task-confirm skill |
@@ -70,7 +70,7 @@
 | accept 闸门 | [`accept闸门.md`](./归档/完成/accept闸门.md) | `task-transition.py` 验收前执行证据校验 |
 | 证据修复命令 | [`证据修复命令.md`](./归档/完成/证据修复命令.md) | `task-transition.py --repair-evidence` |
 | PRD 体系收敛 v5 | [`PRD-体系收敛.md`](./归档/完成/PRD-体系收敛.md) | 砍 `docs/prd.md` 整套 + `PROJECT.md` 6 节（11 commit）|
-| attachments 机制 | [`attachments-机制.md`](./归档/完成/attachments-机制.md) | commit `65329d0` 独立机制实施完成 |
+| attachments 机制 v0（已被 v2 helper 化升级承接）| [`attachments-机制.md`](./归档/完成/attachments-机制.md) | commit `65329d0` 独立机制 v0 落地；**2026-05-25 D-iii v2 helper 化升级** → 现役见 `attachments-AI-接管.md` |
 
 ---
 

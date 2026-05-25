@@ -60,6 +60,33 @@ PM 在 worktree 里**只需要敲一次** `/req-stage-gate`，之后 stage-gate 
 已关闭此需求。
 ```
 
+## attachments AI 接管 hook（D-iii v2 trigger 0 — stage-gate 任何 stage 期间生效）
+
+> **B 分支例外**：Stage 1→2 B 分支 office-hours 选源期间（3B / 3B-resume / 3B-snapshot 子步骤）**禁用 trigger 0**，详见下文 Stage 1→2 段。
+
+PM 在 chat 描述 "我有 X 在 ~/Downloads/foo.pdf，重点 Y" → AI first-principle 识别（chat 含绝对路径 + 描述材料）→ 按当前 stage 推 `stage_prefix` 调 helper：
+
+```python
+from _lib.attachments import copy_attachment
+
+stage_prefix = {
+    1: "brief", 2: "analysis", 3: "prd",
+    5: "task-plan",   # 或 "impl"，按当前 stage-5 子步骤
+    7: "close",
+}.get(int(os.environ.get("ACTIVE_REQ_STAGE", 0)), "unknown")
+
+result = copy_attachment(req_dir, Path("~/Downloads/foo.pdf"),
+                        stage_prefix=stage_prefix, hint="Y 重点")
+```
+
+chat 一行确认 `已归档（attachments/<新名>），Y 重点。继续。`（禁工程黑话）。异常 catch（`FileNotFoundError` / `SensitivePathError` / `FileSizeError`）→ chat 报错（fail-loud）。
+
+**trigger 2 fallback**：stage-gate 在每 stage 入口扫 `attachments/`，`is_seen` 判定（基于 `.req-meta.json:attachments_seen` 真相源）。
+
+**单一真相源**：`skills/_shared/pm-view/attachments-upload.md`。
+
+---
+
 ## Stage 过渡逻辑
 
 ### Stage 1 → 2（感受问题 → 需求分析）
@@ -158,6 +185,8 @@ PM 在 worktree 里**只需要敲一次** `/req-stage-gate`，之后 stage-gate 
 #### 分流 B：YC office-hours 式（snapshot 复制 + 体验包装）
 
 > **设计源**：D-i v4 §1.2 / §1.4 / §1.5。B 分支**不调 reviewer**（office-hours 自带 Cross-Model Perspective + Spec Review Loop）、**不调未决问题闸门**（office-hours 的 Open Questions prose 不带答题占位；§0.4.4）、**不调 attachments hook**（§0.4.8，D-iii 独立设计承接）。
+>
+> **D-iii v2 trigger 0 禁用边界（C4 cross-design 冲突防护）**：B 分支 3B 探测 + 3B-resume + 3B-snapshot 三个子步骤期间 **attachments trigger 0 禁用**。PM 在这几个子步骤里给的绝对路径是 **office-hours 设计稿源材料**，走 `set_stage_source(req_dir, 2, 'stage2-office-hours.md', tool='office-hours', origin=<原绝对路径>)`（D-i v4 §1.4 §1.5 路径），**不**调 `copy_attachment` 归档为 attachment。5B 推进确认门 PM OK 后恢复 trigger 0。
 
 3B. **探测 office-hours 产物 + PM 三选一**
 

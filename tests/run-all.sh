@@ -30,6 +30,7 @@ SUITES=(
   test-req-stage-gate.sh
   test-req-transition.sh
   test-stage-source-helper.sh
+  test-attachments-helper.sh
   test-close-task.sh
   test-close-task-design-feedback.sh
   test-close-task-alignment.sh

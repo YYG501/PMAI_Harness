@@ -21,6 +21,7 @@
 | §八 | 自检清单（生成 / 修改 PM 视图后）| [`pm-view/checklist.md`](./pm-view/checklist.md) | prd-writing · task-plan · task-spec |
 | §九 9.0 - 9.5 | 输入流约束 / PM 反馈分流 / 信息流图（§9.6 双文件 lazy sync 已废，delta-3）| [`pm-view/input-flow.md`](./pm-view/input-flow.md) | 全部 PM 视图 skill |
 | §9.7 | 跨 skill 共享原则 | [`pm-view/cross-skill.md`](./pm-view/cross-skill.md) | skill 作者 / 框架维护者 |
+| §10 | attachments AI 接管（D-iii v2 trigger 0）— LLM 识别 PM chat 上传意图 + caller 调 `_lib.attachments` helper + 7 stage 通用规则（含 office-hours B 分支 disable 边界）| [`pm-view/attachments-upload.md`](./pm-view/attachments-upload.md) | 7 stage SKILL（new-req / req-analysis / prd-writing / task-spec / req-stage-gate / implementation-design / task-plan）|
 
 **读法约定**：
 - skill 步骤里写"按 §三"或"按 PM-VIEW-RULES §三" → 表示读对应子文件

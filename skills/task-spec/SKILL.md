@@ -57,6 +57,27 @@ echo "SKILL: task-spec"
 
 ## Workflow
 
+### attachments AI 接管 hook（D-iii v2 trigger 0 — 任何步骤期间生效）
+
+PM 在 chat 描述 "我有 X 在 ~/Downloads/foo.pdf，重点 Y" → AI first-principle 识别 → 调 helper：
+
+```python
+from _lib.attachments import copy_attachment
+result = copy_attachment(req_dir, Path("~/Downloads/foo.pdf"),
+                        stage_prefix=f"task-{short_id}",  # 当前 task short_id，如 task-001
+                        hint="Y 重点")
+```
+
+stage_prefix 按 task short_id（`task-001` / `task-042` 等）。chat 一行确认 `已归档（attachments/task-001-foo.pdf），Y 重点。继续。`（禁工程黑话）。
+
+异常：`FileNotFoundError` / `SensitivePathError` / `FileSizeError` 三类 catch + chat 报错（fail-loud）。
+
+**trigger 2 fallback**：写 task-NNN.md 前扫 `attachments/`，`is_seen(req_dir, filename)` 判定。
+
+**引用 section 渲染**：写 task-NNN.md 时 `list_attachments_seen(req_dir)` 按 `registered_at` 升序渲染到文档物理末尾 `## 📎 参考材料` section。
+
+**单一真相源**：`skills/_shared/pm-view/attachments-upload.md`。
+
 ### 步骤 1：校验 task-plan.md ↔ tasks/ 一致性
 
 读 `$ACTIVE_REQ_DIR/task-plan.md` 的 task id 列表，扫 `$ACTIVE_REQ_DIR/tasks/task-NNN-*.md`。

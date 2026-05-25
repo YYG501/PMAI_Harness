@@ -71,6 +71,26 @@ PM 确认门（审架构决策表），通过后再调 `/task-plan`。
 
 ## Workflow
 
+### attachments AI 接管 hook（D-iii v2 trigger 0 — Stage 5a 期间生效）
+
+PM 在 chat 描述 "我有 X 在 ~/Downloads/foo.pdf，重点 Y" → AI first-principle 识别 → 调 helper：
+
+```python
+from _lib.attachments import copy_attachment
+result = copy_attachment(req_dir, Path("~/Downloads/foo.pdf"),
+                        stage_prefix="impl", hint="Y 重点")
+```
+
+stage_prefix `"impl"`（Stage 5a `implementation-design`）。chat 一行确认 `已归档（attachments/impl-foo.pdf），Y 重点。继续。`（禁工程黑话）。
+
+异常 catch：`FileNotFoundError` / `SensitivePathError` / `FileSizeError` → chat 报错（fail-loud）。
+
+**trigger 2 fallback**：写 `implementation-design.md` 前扫 `attachments/`，`is_seen` 判定。
+
+**引用 section 渲染**：写 `implementation-design.md` 时 `list_attachments_seen` 按 `registered_at` 升序渲染到文档物理末尾。
+
+**单一真相源**：`skills/_shared/pm-view/attachments-upload.md`。
+
 ### 步骤 1：读取所有必读输入
 
 按上方 Required Inputs 逐一读取。**特别注意**：
