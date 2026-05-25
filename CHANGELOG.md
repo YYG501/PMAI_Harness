@@ -90,6 +90,45 @@ PM-AI-Workflow 生成器仓的演进记录。本文件**只记影响下游业务
 
 ## 未发布
 
+### 2026-05-25 — D-iv M1 vp-2：`_shared/project-questioning.md` 抽取 + `/project-solution` 改 @读
+
+**改造目标**：vp-1 让 `/init-project` 阶段 C 写为 `@读 _shared/project-questioning.md`，但该 `_shared` 文件还没创建（vp-1 commit 后 vp-2 commit 前手动跑 `/init-project` 阶段 C 会找不到 `_shared` 文件）。vp-2 创建该文件 + 把 `/project-solution` 现役 inline 提问法 / 写作规则改为 @读，让两个 skill 都引用同一份单一真相源。
+
+**vp-2 范围**（M1 批 1 的第二个 vp；T2）：
+
+- **新建** `skills/_shared/project-questioning.md`（253 行）：项目方向讨论的单一真相源
+  - §1 调用方约定（init-project greenfield / project-solution 4 场景，调用方自己判断 + 自己排顺序）
+  - §2 提问纪律（复用 `req-analysis` 提问法：分批 / 追问 / 收敛 / 编号作答）
+  - §3 问题库（6 节 + 典型话术）
+  - §4 未决问题闸门（暂存文件 `docs/.project-solution-open-questions.md` + `check-open-questions.py --require-section` + 禁逃生舱）
+  - §5 写作规则（PROJECT.md 6 节模板 + roadmap.md 表头 + 产品路线节 vs roadmap 分工 + PM 视图规则）
+  - §6 Decision gate 确认门（gsd Decision gate pattern 3 条硬规则 + AskUserQuestion 模板：「创建 PROJECT.md / 继续探索」+ Loop 回路）
+  - §7 6 节齐不齐检查（`check-project-sections.py` + 禁逃生舱）
+  - §8 PM 定稿展示模板
+  - §9 atomic commit（gsd new-project Step 4 pattern：`docs: project direction settled`）
+  - §10 调用方实现指南（§10.1 init-project greenfield / §10.2 project-solution 4 场景 vp-6 细化）
+- **改** `skills/project-solution/SKILL.md`（238→158 行；瘦身 ~33%）：
+  - frontmatter 更新（4 个独立调用场景 A/B/C/D；vp-6 后细化）
+  - 加 § 段 0 场景判断（A 重做 / B 季度规划 / C 老板新方向 / D brownfield 接入）+ 提问顺序表（vp-6 细化）
+  - 段 1 步骤 2/3 → @读 `_shared` §2/§3/§4
+  - 段 2 步骤 4/5 → @读 `_shared` §5
+  - 确认门步骤 7/8 → @读 `_shared` §6/§7/§8/§9
+  - 步骤 6 精简 / 详细 / 混合模式选择保留（场景特定，不属 `_shared`）
+  - Rules 加 ❌「重复 `_shared` 的提问法 / 5 组话术 / 写作规则」（必漂移）+ ✅ 段 0 场景判断
+- **改** `skills/init-project/SKILL.md` 阶段 C 描述：把 inline Decision gate 选项副本改为「按 `_shared` §6.2，本 SKILL 不内嵌副本」（避免双份）
+
+**单一真相源验证**：
+- `Decision gate "创建 PROJECT.md / 继续探索"` 选项内容只在 `_shared/project-questioning.md:151-157` 一处定义；其他 SKILL 是说明性引用（不是 inline 副本）
+- 6 节齐不齐检查 / 写作规则 / 提问纪律 / 问题库 / 未决问题闸门 全部只在 `_shared` 一处
+
+**业务仓需注意**：
+- `/project-solution` 行为不变（PM 视角依然走 4 段：场景判断 + 段 1 讨论 + 段 2 输出 + 确认门）；但内部走 @读 `_shared`，PM 不感知重构
+- `/init-project` 阶段 C 现在可以跑（`_shared/project-questioning.md` 已存在）
+
+**测试基线**：`bash tests/run-all.sh` **425/0**（无回归）。
+
+---
+
 ### 2026-05-25 — D-iv M1 vp-1：`/init-project` skill 一气呵成 4 阶段重写（批 1 起手）
 
 **改造目标**：`/init-project` 从"调 shell 脚本 + 提示 PM 下一步发 `/project-solution`"两步分裂入口，升级为 PM 主动一气呵成 4 阶段入口（参数 → 骨架 → 方向讨论 → Next Up）。

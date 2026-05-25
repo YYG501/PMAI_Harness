@@ -86,22 +86,16 @@ agent 收到脚本退出码 0 后**汇报**：「✅ 骨架已就绪 / 目录 / 
 
 ### 阶段 C · QUESTIONING（@读 `_shared/project-questioning.md`）
 
-agent **@读 `skills/_shared/project-questioning.md`**（提问法 / 写作规则 / 收敛条件 / Decision gate 模板的单一真相源），按文件内 greenfield 顺序跑讨论：
+agent **@读 `skills/_shared/project-questioning.md`**（**单一真相源** —— 提问法 / 问题库 / 写作规则 / 闸门 / Decision gate / 检查清单），按文件内 §10.1 greenfield 调用方实现指南跑：
 
-1. agent 按 `_shared/project-questioning.md` 的提问法（greenfield 顺序）逐组问 PM
-2. 讨论收敛时跑 **Decision gate**（gsd Decision gate pattern，3 条硬规则）：
-   - 选项 1（推进）：「**创建 PROJECT.md**」—— "我会开始写 PROJECT.md + roadmap.md，进阶段 D"
-   - 选项 2（留守）：「**继续探索**」—— "你还想补充行业 / 用户 / 流程 / 路线 ..."（选了 → Loop 回讨论态，不退出）
-3. PM 选 "创建 PROJECT.md" → agent 按写作规则写 `<target-dir>/docs/PROJECT.md` + `<target-dir>/docs/roadmap.md`
-4. **atomic commit**（review A5 落实）：
-
-```bash
-cd <target-dir>
-git add docs/PROJECT.md docs/roadmap.md
-git commit -m "docs: project direction settled"
-```
-
-5. 进阶段 D。
+1. **§2 提问纪律 + §3 问题库**：按 greenfield 6 节顺序问 PM
+2. **§4 未决问题闸门**：暂存文件 `docs/.project-solution-open-questions.md`（路径用 `<target-dir>/docs/...`）
+3. **§6 Decision gate 模板**：跑「创建 PROJECT.md / 继续探索」二选一 + Loop 回路（**选项内容 / label / description 全按 `_shared` §6.2，本 SKILL 不内嵌副本**）
+4. **§5 写作规则**：PM 选「创建 PROJECT.md」后写 `<target-dir>/docs/PROJECT.md` + `<target-dir>/docs/roadmap.md`
+5. **§7 6 节齐不齐检查**：跑 `check-project-sections.py` 验证
+6. **§8 PM 定稿**：展示路径 + 摘要，PM 答「OK / 定了」推进
+7. **§9 atomic commit**（review A5）：`git commit -m "docs: project direction settled"`
+8. 进阶段 D。
 
 **失败兜底（R10）**：`_shared/project-questioning.md` 路径检测前置 → 缺失 → 报错 "框架未完整安装；请 git status 检查 skills/_shared/project-questioning.md"，不进讨论。
 
