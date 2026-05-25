@@ -11,7 +11,6 @@
 | 文件 | 说明 |
 |---|---|
 | [`_模板-方案.md`](./设计/_模板-方案.md) | 唯一设计文档模板（§0 痛点锁 + §1-§N 方案主体 + §X Review Findings + §Y 决议日志），起手用 |
-| [`入口与全流程体验顺畅性.md`](./设计/入口与全流程体验顺畅性.md) | **D-iv v0**（合并版）：5 模块综合 — M1 init-project 一气呵成 + M2 banner/Next Up + M3 闸门 Decision gate + M4 AskUser 严格化 + M5 session 起始播报；§0 全锁（M1 锁 2026-05-24，M2-M5 锁 2026-05-25），方案主体待 review |
 
 > **起手新设计**：`cp docs/设计/_模板-方案.md docs/设计/<主题>.md`
 
@@ -39,6 +38,7 @@
 | **原型简化项登记机制 v2** | [`原型简化项-机制.md`](./归档/完成/原型简化项-机制.md) | 2026-05-24 T1-T8 全包落地（398/0）—— `templates/implementation-design.md.tmpl` 段 1.5 + 7 处下游 SKILL wiring + `scripts/check-doc-pm-view.py --simp-scope` |
 | **D-i office-hours 跨 Stage 1+2 集成 v4** | [`office-hours-跨stage1-2集成.md`](./归档/完成/office-hours-跨stage1-2集成.md) | 2026-05-25 vp-1～vp-7 全包落地（412/0）—— `_lib.state.{get,set}_stage_source` helper + `req-stage-gate` Stage 1→2 合二为一选择门 + 分流 A/B + office-hours bridge snapshot + `.req-meta.json` 3 字段（stage{N}_source/_tool/_source_origin）+ I-RT9 不变式 + 下游 9 处通用化"stage 2 真相源" |
 | **D-iii attachments AI 接管 v2** | [`attachments-AI-接管.md`](./归档/完成/attachments-AI-接管.md) | 2026-05-25 vp-1～vp-7 全包落地（425/0）—— `_lib/attachments.py` helper（copy/register/list/is_seen/remove/replace + SENSITIVE_PATH_PATTERNS denylist + MAX_FILE_SIZE_MB=50 hard cap）+ `attachments-upload.md` 单一真相源 + 7 stage SKILL trigger 0 段 + `.req-meta.json:attachments_seen` 字段 + I-RT10 不变式 + B 分支 trigger 0 disable（C4 cross-design 防护）|
+| **D-iv 入口与全流程体验顺畅性** | [`入口与全流程体验顺畅性.md`](./归档/完成/入口与全流程体验顺畅性.md) | 2026-05-25 批 1 + 批 2 全包技术 vp 落地（**446/0**，+21 cases）—— M1 init-project 一气呵成（vp-1~vp-6）+ M2 banner-rules.md + Decision gate label（vp-7/vp-8）+ M4 askuser-rules.md（vp-10）+ M5 status-view --narrative + CLAUDE.md「Session 起始播报」（vp-11）；**M3 砍**（codex C-1：req-stage-gate 续跑模式已默认覆盖痛点）；7 个核心 SKILL 顶部加 banner + askuser 指针；plan-eng-review Round 1（claude + codex outside voice）16 finding 全 ACCEPT；剩 vp-5b/vp-13 PM 手动验收同步消费仓后跑 |
 | skill 读取收敛 | [`设计-skill读取收敛.md`](./归档/完成/设计-skill读取收敛.md) | commit be47fca + PM-VIEW-RULES §9.1 |
 | 框架同步 | [`设计-框架同步.md`](./归档/完成/设计-框架同步.md) | 实战 d0aa6c1 + 框架同步-SOP.md |
 | PM 手动新窗口执行 | [`设计-PM手动新窗口执行.md`](./归档/完成/设计-PM手动新窗口执行.md) | create-task-worktree.sh + task-confirm skill |

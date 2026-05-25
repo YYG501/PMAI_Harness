@@ -90,6 +90,35 @@ PM-AI-Workflow 生成器仓的演进记录。本文件**只记影响下游业务
 
 ## 未发布
 
+### 2026-05-25 — D-iv 入口与全流程体验顺畅性 ship 收尾（设计文档归档）
+
+D-iv 批 1 + 批 2 全包技术 vp（vp-1 ~ vp-12，**vp-9 砍**）落地完毕：
+
+- M1 init-project 一气呵成（vp-1 ~ vp-6）
+- M2 banner + Decision gate label（vp-7 + vp-8）
+- M4 AskUser 严格化（vp-10）
+- M5 session 起始播报（vp-11）
+- 批 2 文档同步（vp-12）
+
+**收尾动作**：
+
+- 设计文档 `docs/设计/入口与全流程体验顺畅性.md` 加「已落地状态」段（7 commits + 测试基线 446/0 + PM 验收清单）
+- `git mv docs/设计/入口与全流程体验顺畅性.md → docs/归档/完成/入口与全流程体验顺畅性.md`
+- `docs/INDEX.md` 设计/段砍 D-iv 行 + 归档/完成/段加 D-iv 行
+- `RUNTIME.md`「当前位置」改为 D-iv ship + 下一步同步消费仓 + PM 自验收
+
+**PM 验收清单**（同步消费仓后跑；不阻塞 ship）：
+
+- [ ] PM 本仓外起测试项目跑 `/init-project` 端到端
+- [ ] PM 跑 `bash scripts/measure-tthw.sh` 计时（期望 ≤ 30 分钟）
+- [ ] PM 跑 `/project-solution` 4 场景对比一致性
+- [ ] PM 同步到 ExampleConsumerApp 跑真实 req 验 banner / Decision gate / askuser / narrative
+- [ ] 验收 finding 回头开 D-iv v0.3 patch vp（如有）
+
+**业务仓需注意**：同步本 ship 时按 `框架同步-SOP.md` 走；vp-1 ~ vp-12 累计 14 个文件改动 + 4 个新文件，建议同步前 grep 现状对比预期差异。
+
+---
+
 ### 2026-05-25 — D-iv M1 批 2（M2 + M4 + M5）vp-7~vp-12 全包落地
 
 批 1（M1 init-project 一气呵成）ship 完后**接着 ship 批 2**（横切普推 banner / askuser / session 播报）。**M3 砍后（codex C-1）批 2 5 个 vp**：vp-7/vp-8 M2 + vp-10 M4 + vp-11 M5 + vp-12 文档同步。注：**不引入 `--auto` 或 chain flag**（M3 砍 + codex C-2）。

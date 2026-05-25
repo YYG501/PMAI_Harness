@@ -13,7 +13,7 @@
 
 ## 当前位置（2026-05-25）
 
-**D-iv M1 批 1 + 批 2 全包技术 vp 落地完毕**（M3 砍后 4 模块：M1 + M2 + M4 + M5，共 11 个技术 vp 全过；剩 vp-5b + vp-13 PM 手动验收 PM 自跑）
+**D-iv 入口与全流程体验顺畅性全包 ship**（设计文档已归档 `docs/归档/完成/入口与全流程体验顺畅性.md`；M3 砍后 4 模块 M1 + M2 + M4 + M5 共 11 个技术 vp 全过；剩 vp-5b + vp-13 由 PM 同步消费仓后自验收）
 
 设计文档 `docs/设计/入口与全流程体验顺畅性.md` v0.2（plan-eng-review Round 1：claude 9 finding + codex outside voice 7 finding，16 ACCEPT；最大改动 codex C-1 砍 M3 —— `req-stage-gate` 续跑模式已是默认行为）。
 
@@ -41,7 +41,7 @@
 - **vp-5b**：PM 跑 `/init-project` 端到端验收 + measure-tthw 计时 + 4 场景对比一致性
 - **vp-13**：消费仓 ExampleConsumerApp 端到端验证（按 `框架同步-SOP.md` 同步后跑）
 
-**下一步**：vp-12 跑 tests/run-all.sh → commit 批 2 → PM 拍板：① 同步消费仓 ② PM vp-5b + vp-13 手动验收 ③ D-iv ship 收尾 / 归档到 `docs/归档/完成/`。
+**下一步**：① **PM 同步消费仓 ExampleConsumerApp**（按 `框架同步-SOP.md` 跑 hotfix 同步流程）② **PM 自验收**（vp-5b 本仓外起测试项目 + vp-13 消费仓真实 req 验 banner / Decision gate / askuser / narrative）③ 验收 finding 回头开 D-iv v0.3 patch vp（如有）。
 
 ---
 
@@ -126,9 +126,9 @@
 
 ## 新窗口续接命令
 
-> 继续 PM-AI-Workflow。读 RUNTIME.md「当前位置」确认 D-iv M1 批 1 + 批 2 全包技术 vp 落地（446/0），告诉我下一步（同步消费仓 / PM vp-5b 验收 / ship 收尾）。
+> 继续 PM-AI-Workflow。读 RUNTIME.md「当前位置」确认 D-iv 入口与全流程体验顺畅性已 ship（446/0，设计已归档），告诉我下一步（同步消费仓 / PM 验收 finding / 别的事）。
 
 AI 收到后应该：
-1. 读本文件「当前位置」确认 D-iv M1 全包技术 vp 已落（批 1 vp-1~vp-6 + 批 2 vp-7~vp-12，vp-9 砍）
-2. 等 PM 给具体方向（① 同步消费仓 ExampleConsumerApp ② PM vp-5b/vp-13 手动验收 ③ ship 收尾归档）
+1. 读本文件「当前位置」确认 D-iv ship 完毕（设计已归档 `docs/归档/完成/入口与全流程体验顺畅性.md`）
+2. 等 PM 给具体方向：① 帮忙同步消费仓的 SOP 问题 ② PM 自验收回来报 finding（如有）开 patch vp ③ 起别的事
 3. 不擅自启新阶段
