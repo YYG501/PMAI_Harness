@@ -11,7 +11,6 @@
 | 文件 | 说明 |
 |---|---|
 | [`_模板-方案.md`](./设计/_模板-方案.md) | 唯一设计文档模板（§0 痛点锁 + §1-§N 方案主体 + §X Review Findings + §Y 决议日志），起手用 |
-| [`plan-ceo-review-反向对齐PRD.md`](./设计/plan-ceo-review-反向对齐PRD.md) | **D-ii v0 stub**：plan-ceo-review 反向对齐 PRD 集成 — §0 待 PM 共写 |
 | [`attachments-体验优化.md`](./设计/attachments-体验优化.md) | **D-iii v0 stub**：attachments 体验优化（多附件场景）— §0 待 PM 共写 |
 | [`init-project-入口一气呵成.md`](./设计/init-project-入口一气呵成.md) | **D-iv v0.1**：把 `/init-project` 改造成 agent 化一气呵成入口（对齐 gsd 体验），阶段 C 字面调用 `/project-solution`（保留为项目方向规划入口）— §0 已锁 2026-05-24，方案主体待 review |
 
