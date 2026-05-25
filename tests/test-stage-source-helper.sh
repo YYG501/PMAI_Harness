@@ -37,7 +37,7 @@ meta = json.loads(mf.read_text(encoding='utf-8'))
 meta['stage2_source'] = 'stage2-office-hours.md'
 mf.write_text(json.dumps(meta, ensure_ascii=False, indent=2), encoding='utf-8')
 p = get_stage_source(rd, 2)
-assert p == rd / 'stage2-office-hours.md', f'expected office-hours got {p}'
+assert p == (rd / 'stage2-office-hours.md').resolve(), f'expected office-hours got {p}'
 print('OK')
 " >/tmp/out.$$ 2>/tmp/err.$$
   if grep -q "OK" /tmp/out.$$; then
@@ -61,7 +61,7 @@ sys.path.insert(0, '$FRAMEWORK_ROOT/scripts')
 from _lib.state import get_stage_source
 rd = Path('$req_dir')
 p = get_stage_source(rd, 2)
-assert p == rd / 'analysis.md', f'expected analysis.md got {p}'
+assert p == (rd / 'analysis.md').resolve(), f'expected analysis.md got {p}'
 print('OK')
 " >/tmp/out.$$ 2>/tmp/err.$$
   if grep -q "OK" /tmp/out.$$; then
@@ -86,7 +86,7 @@ sys.path.insert(0, '$FRAMEWORK_ROOT/scripts')
 from _lib.state import get_stage_source
 p = get_stage_source(Path('$req_dir'), 2)
 # strict=False 路径，meta=None → 落到 STAGE_OUTPUT_FILES[2] = 'analysis.md'
-assert p == Path('$req_dir') / 'analysis.md', f'expected analysis.md got {p}'
+assert p == (Path('$req_dir') / 'analysis.md').resolve(), f'expected analysis.md got {p}'
 print('OK')
 " >/tmp/out.$$ 2>/tmp/err.$$
   if grep -q "OK" /tmp/out.$$; then
@@ -215,6 +215,65 @@ else:
   fixture_teardown
 }
 
+test_get_stage_source_rejects_path_traversal() {
+  start_test "get_stage_source: meta traversal ../outside.md 被拒绝"
+  fixture_setup
+  req_dir=$(fixture_create_req "req-009" "test" 1)
+  outside="$req_dir/../outside.md"
+  echo "outside" > "$outside"
+  python3 -c "
+import json, sys
+from pathlib import Path
+sys.path.insert(0, '$FRAMEWORK_ROOT/scripts')
+from _lib.state import get_stage_source, StateReadError
+rd = Path('$req_dir')
+mf = rd / '.req-meta.json'
+meta = json.loads(mf.read_text(encoding='utf-8'))
+meta['stage2_source'] = '../outside.md'
+mf.write_text(json.dumps(meta, ensure_ascii=False, indent=2), encoding='utf-8')
+try:
+    get_stage_source(rd, 2)
+except StateReadError:
+    print('OK')
+else:
+    print('FAIL: traversal should be rejected')
+" >/tmp/out.$$ 2>/tmp/err.$$
+  if grep -q "^OK$" /tmp/out.$$; then
+    pass_test
+  else
+    _fail "get_stage_source 应拒绝 traversal"
+    cat /tmp/out.$$ /tmp/err.$$ >&2
+  fi
+  rm -f /tmp/out.$$ /tmp/err.$$
+  fixture_teardown
+}
+
+test_set_stage_source_rejects_path_traversal() {
+  start_test "set_stage_source: traversal ../outside.md 被拒绝"
+  fixture_setup
+  req_dir=$(fixture_create_req "req-010" "test" 1)
+  python3 -c "
+import sys
+from pathlib import Path
+sys.path.insert(0, '$FRAMEWORK_ROOT/scripts')
+from _lib.state import set_stage_source, StateReadError
+try:
+    set_stage_source(Path('$req_dir'), 2, '../outside.md', tool='req-analysis')
+except StateReadError:
+    print('OK')
+else:
+    print('FAIL: traversal should be rejected')
+" >/tmp/out.$$ 2>/tmp/err.$$
+  if grep -q "^OK$" /tmp/out.$$; then
+    pass_test
+  else
+    _fail "set_stage_source 应拒绝 traversal"
+    cat /tmp/out.$$ /tmp/err.$$ >&2
+  fi
+  rm -f /tmp/out.$$ /tmp/err.$$
+  fixture_teardown
+}
+
 # -----------------------------------------------------------------
 # ⑤+⑥ 静态 grep：D-i v4 关键 hook 点已用 helper / 通用术语
 # -----------------------------------------------------------------
@@ -269,7 +328,7 @@ rd = Path('$req_dir')
 set_stage_source(rd, 2, 'stage2-office-hours.md', tool='office-hours',
                  origin='/tmp/src.md')
 p = get_stage_source(rd, 2)
-assert p == rd / 'stage2-office-hours.md', p
+assert p == (rd / 'stage2-office-hours.md').resolve(), p
 assert p.exists(), f'file should exist at {p}'
 content = p.read_text()
 assert '<!-- snapshot from' in content, content
@@ -296,6 +355,8 @@ test_get_stage_source_keyerror_unknown_stage
 test_set_stage_source_A_branch
 test_set_stage_source_B_branch_with_origin
 test_set_stage_source_strict_no_meta_raises
+test_get_stage_source_rejects_path_traversal
+test_set_stage_source_rejects_path_traversal
 test_grep_req_transition_uses_helper
 test_grep_req_stage_gate_branch_B_has_set_stage_source
 test_grep_new_req_option1_removed

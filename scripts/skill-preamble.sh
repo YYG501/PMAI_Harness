@@ -141,9 +141,11 @@ ACTIVE_TASK_STATUS=""
 if [ -n "$ACTIVE_REQ_DIR" ]; then
   _tasks_dir="$ACTIVE_REQ_DIR/tasks"
   if [ -d "$_tasks_dir" ]; then
+    _state_py="$_PREAMBLE_DIR/_lib/state.py"
     for _tf in "$_tasks_dir"/task-*.md; do
       [ -f "$_tf" ] || continue
-      _st=$(grep -m1 '^\*\*状态：\*\*' "$_tf" 2>/dev/null | sed 's/\*\*状态：\*\* //' || true)
+      case "$_tf" in *.engineering.md) continue;; esac
+      _st=$(python3 "$_state_py" get_status "$_tf" 2>/dev/null || true)
       if [ "$_st" = "执行中" ]; then
         ACTIVE_TASK=$(basename "$_tf" .md)
         ACTIVE_TASK_STATUS="$_st"
@@ -154,7 +156,8 @@ if [ -n "$ACTIVE_REQ_DIR" ]; then
     if [ -z "$ACTIVE_TASK" ]; then
       for _tf in "$_tasks_dir"/task-*.md; do
         [ -f "$_tf" ] || continue
-        _st=$(grep -m1 '^\*\*状态：\*\*' "$_tf" 2>/dev/null | sed 's/\*\*状态：\*\* //' || true)
+        case "$_tf" in *.engineering.md) continue;; esac
+        _st=$(python3 "$_state_py" get_status "$_tf" 2>/dev/null || true)
         if [ "$_st" = "待执行" ]; then
           ACTIVE_TASK=$(basename "$_tf" .md)
           ACTIVE_TASK_STATUS="$_st"

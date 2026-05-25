@@ -5,12 +5,12 @@ Called by exec-adapters after executor exits:
   git diff --name-only HEAD | check-task-scope.py <task_file>
 
 Exit codes:
-  0 = all paths within allowlist (or allowlist undeclared — advisory pass)
+  0 = all paths within allowlist
   1 = at least one path outside allowlist (violation)
   2 = usage / file error
 
-Allowlist format mirrors build-execution-prompt.py:parse_scope (新建:/修改:
-entries). Glob patterns supported via fnmatch.
+Allowlist format mirrors task 文件「执行范围」/「文件范围（机器校验）」section
+(新建:/修改: entries). Glob patterns supported via fnmatch.
 """
 
 from __future__ import annotations
@@ -30,13 +30,20 @@ from _lib.state import detect_format
 
 
 def extract_scope_section(text: str) -> str:
-    pattern = re.compile(r"^## 执行范围.*$", re.MULTILINE)
-    match = pattern.search(text)
-    if not match:
-        return ""
-    start = match.end()
-    nxt = re.search(r"^## ", text[start:], re.MULTILINE)
-    return text[start : start + nxt.start()] if nxt else text[start:]
+    heading_patterns = [
+        r"^##\s+(?:🗂️\s*)?文件范围（机器校验）\s*$",
+        r"^##\s+文件范围\s*$",
+        r"^##\s+执行范围.*$",
+    ]
+    for heading in heading_patterns:
+        pattern = re.compile(heading, re.MULTILINE)
+        match = pattern.search(text)
+        if not match:
+            continue
+        start = match.end()
+        nxt = re.search(r"^## ", text[start:], re.MULTILINE)
+        return text[start : start + nxt.start()] if nxt else text[start:]
+    return ""
 
 
 def parse_allowlist(section: str) -> tuple[list[str], list[str]]:
@@ -173,12 +180,12 @@ def main() -> int:
     if not allow:
         if args.allow_empty:
             print(
-                "⚠️ task 文件 执行范围 section 未声明 allowlist，按 advisory 放行",
+                "⚠️ task 文件 执行范围/文件范围 section 未声明 allowlist，按 advisory 放行",
                 file=sys.stderr,
             )
             return 0
         print(
-            "❌ task 文件 执行范围 section 未声明 allowlist，拒绝（使用 --allow-empty 放行）",
+            "❌ task 文件 执行范围/文件范围 section 未声明 allowlist，拒绝（使用 --allow-empty 放行）",
             file=sys.stderr,
         )
         return 1

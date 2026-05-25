@@ -208,6 +208,83 @@ print('OK')
   fixture_teardown
 }
 
+test_register_attachment_rejects_traversal_name() {
+  start_test "register_attachment: ../evil.md filename 被拒绝"
+  fixture_setup
+  req_dir=$(fixture_create_req "req-011" "test" 2)
+
+  out=$(_run_py "
+from _lib.attachments import register_attachment, AttachmentError
+try:
+    register_attachment(Path('$req_dir'), '../evil.md', stage_prefix='analysis')
+    print('FAIL: traversal should be rejected')
+except AttachmentError:
+    print('OK')
+")
+  if echo "$out" | grep -q "^OK$"; then
+    pass_test
+  else
+    _fail "register_attachment 应拒绝 traversal filename"
+    echo "$out" >&2
+  fi
+  fixture_teardown
+}
+
+test_remove_attachment_rejects_traversal_and_keeps_file() {
+  start_test "remove_attachment: traversal 不得删除 attachments 外文件"
+  fixture_setup
+  req_dir=$(fixture_create_req "req-012" "test" 2)
+  victim="$req_dir/victim.md"
+  printf 'keep me' > "$victim"
+
+  out=$(_run_py "
+from _lib.attachments import remove_attachment, AttachmentError
+rd = Path('$req_dir')
+mf = rd / '.req-meta.json'
+meta = json.loads(mf.read_text())
+meta['attachments_seen'] = [{'name': '../victim.md'}]
+mf.write_text(json.dumps(meta, ensure_ascii=False, indent=2), encoding='utf-8')
+try:
+    remove_attachment(rd, '../victim.md')
+    print('FAIL: traversal should be rejected')
+except AttachmentError:
+    assert (rd / 'victim.md').read_text() == 'keep me'
+    print('OK')
+")
+  if echo "$out" | grep -q "^OK$"; then
+    pass_test
+  else
+    _fail "remove_attachment traversal 防护失败"
+    echo "$out" >&2
+  fi
+  fixture_teardown
+}
+
+test_copy_attachment_rejects_unsafe_stage_prefix() {
+  start_test "copy_attachment: stage_prefix traversal 被拒绝"
+  fixture_setup
+  req_dir=$(fixture_create_req "req-013" "test" 2)
+  src="$req_dir/source.pdf"
+  printf 'content' > "$src"
+
+  out=$(_run_py "
+from _lib.attachments import copy_attachment, AttachmentError
+try:
+    copy_attachment(Path('$req_dir'), Path('$src'), '../analysis')
+    print('FAIL: unsafe stage_prefix should be rejected')
+except AttachmentError:
+    assert not (Path('$req_dir') / 'attachments').exists()
+    print('OK')
+")
+  if echo "$out" | grep -q "^OK$"; then
+    pass_test
+  else
+    _fail "copy_attachment 应拒绝 unsafe stage_prefix"
+    echo "$out" >&2
+  fi
+  fixture_teardown
+}
+
 # -----------------------------------------------------------------
 # ⑦ replace_attachment
 # -----------------------------------------------------------------
@@ -387,6 +464,9 @@ test_file_size_error
 test_register_list_round_trip
 test_is_seen_legacy_req
 test_remove_attachment
+test_register_attachment_rejects_traversal_name
+test_remove_attachment_rejects_traversal_and_keeps_file
+test_copy_attachment_rejects_unsafe_stage_prefix
 test_replace_attachment
 test_path_expanduser
 test_filename_with_spaces

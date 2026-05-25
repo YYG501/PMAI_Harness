@@ -145,7 +145,7 @@ def build_prompt(task_file: Path) -> str:
             "（由 orchestrator 统一处理）"
         )
         out.append("- 禁止写 task worktree 外的任何路径")
-        out.append("- 执行区「📦 范围」未列入的产品区域 / 文件不要动、不要新建")
+        out.append("- 执行区「🗂️ 文件范围（机器校验）」未列入的文件不要动、不要新建")
         out.append("- gitignore 匹配的生成物（`.next/`、`dist/`、`node_modules/` 等）自动忽略")
         out.append("")
         exec_region = extract_exec_region(text)

@@ -20,6 +20,7 @@ EVENTS_SCRIPT="$REPO_ROOT/.claude/scripts/task-events.py"
 # 加载 worktree 解析 helper（branch ↔ 物理路径，问 git，不假设 .worktrees/）
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/_lib/worktree.sh"
+source "$SCRIPT_DIR/_lib/dev-server.sh"
 
 if [ ! -f "$TASK_FILE" ]; then
   echo "❌ task 文件不存在: $TASK_FILE" >&2
@@ -352,6 +353,16 @@ if [ ${#ARCHIVED_FILES[@]} -gt 0 ]; then
   echo "✅ 归档已 commit 到 $REQ_BRANCH"
 fi
 
+# --- 2.6. 杀 dev server（按进程 cwd 校验归属后才 kill） ---
+DEV_SERVER=$(extract_task_field "$TASK_FILE" "开发服务器")
+if [ -z "$DEV_SERVER" ]; then
+  DEV_SERVER=$(extract_task_field "$TASK_FILE" "dev server")
+fi
+PORT=$(echo "$DEV_SERVER" | grep -oE '[0-9]+' | tail -1 || true)
+if [ -n "$PORT" ] && [ "$PORT" -gt 0 ] 2>/dev/null; then
+  stop_dev_server_port "$PORT" "$TASK_WORKTREE" "$REQ_WORKTREE"
+fi
+
 # --- 3. 直接删 task worktree + branch（v4.5：cwd 在 req worktree，不删自己脚下） ---
 if [ "$MERGE_OK" = "true" ]; then
   if [ -d "$TASK_WORKTREE" ]; then
@@ -372,20 +383,6 @@ if [ "$MERGE_OK" = "true" ]; then
       echo "❌ 删 task branch $BRANCH 失败。请人工检查。" >&2
       exit 1
     fi
-  fi
-fi
-
-# --- 5. 杀 dev server（兼容字段名 "开发服务器" / "dev server"） ---
-DEV_SERVER=$(extract_task_field "$TASK_FILE" "开发服务器")
-if [ -z "$DEV_SERVER" ]; then
-  DEV_SERVER=$(extract_task_field "$TASK_FILE" "dev server")
-fi
-PORT=$(echo "$DEV_SERVER" | grep -oE '[0-9]+' | tail -1 || true)
-if [ -n "$PORT" ] && [ "$PORT" -gt 0 ] 2>/dev/null; then
-  PIDS=$(lsof -ti :"$PORT" 2>/dev/null || true)
-  if [ -n "$PIDS" ]; then
-    echo "$PIDS" | xargs kill 2>/dev/null || true
-    echo "🔌 已停止端口 $PORT 上的 dev server"
   fi
 fi
 

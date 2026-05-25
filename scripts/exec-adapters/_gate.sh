@@ -49,20 +49,48 @@ adapter_postcheck() {
   # I-AD2: diff 范围校验
   local checker="$MAIN_REPO_ROOT/.claude/scripts/check-task-scope.py"
   if [ ! -f "$checker" ]; then
-    echo "⚠️ 找不到 check-task-scope.py，跳过 I-AD2 越界校验" >&2
-    return "$executor_exit"
+    python3 "$MAIN_REPO_ROOT/.claude/scripts/task-events.py" append "$TASK_FILE" \
+      --type execution_failed \
+      --note "I-AD2 violation: check-task-scope.py missing" 2>/dev/null || true
+    echo "❌ 找不到 check-task-scope.py，I-AD2 越界校验 fail-closed" >&2
+    return 2
   fi
 
   # 收集改动：worktree 内 unstaged + staged（adapter 约定 unstaged，但 Codex 偶尔会 stage）
-  # 注意：这里不比 HEAD 而比 status --porcelain，避免漏掉 untracked 文件
-  local changed
-  changed=$(cd "$TASK_WORKTREE" && git status --porcelain 2>/dev/null | awk '{print $NF}')
-  if [ -z "$changed" ]; then
+  # diff HEAD 覆盖 tracked/staged；ls-files 覆盖 untracked。NUL → newline 后喂 checker。
+  local changed_file
+  changed_file=$(mktemp "${TMPDIR:-/tmp}/pmaiwf-scope.XXXXXX") || return 2
+  if ! (
+    cd "$TASK_WORKTREE" && {
+      git diff --name-only -z HEAD -- 2>/dev/null
+      git ls-files --others --exclude-standard -z 2>/dev/null
+    } | python3 -c '
+import sys
+seen = []
+for raw in sys.stdin.buffer.read().split(b"\0"):
+    if not raw:
+        continue
+    path = raw.decode("utf-8", "surrogateescape")
+    if path not in seen:
+        seen.append(path)
+print("\n".join(seen))
+'
+  ) >"$changed_file"; then
+    rm -f "$changed_file"
+    python3 "$MAIN_REPO_ROOT/.claude/scripts/task-events.py" append "$TASK_FILE" \
+      --type execution_failed \
+      --note "I-AD2 violation: failed to collect changed paths" 2>/dev/null || true
+    echo "❌ I-AD2: 收集 worktree 改动失败。" >&2
+    return 2
+  fi
+  if [ ! -s "$changed_file" ]; then
     # 零改动：让 task-execute 的零改动检查决定是否 --fail-execution
+    rm -f "$changed_file"
     return "$executor_exit"
   fi
 
-  if ! echo "$changed" | python3 "$checker" "$TASK_FILE" --allow-empty; then
+  if ! python3 "$checker" "$TASK_FILE" --paths-from "$changed_file"; then
+    rm -f "$changed_file"
     # scope 越界 → 记 execution_failed，返回非零给 task-execute
     python3 "$MAIN_REPO_ROOT/.claude/scripts/task-events.py" append "$TASK_FILE" \
       --type execution_failed \
@@ -72,6 +100,7 @@ adapter_postcheck() {
     echo "   代码已保留在 ${TASK_WORKTREE}，请人工检查或 /task-execute 带 --fail-execution 回退。" >&2
     return 2
   fi
+  rm -f "$changed_file"
 
   return "$executor_exit"
 }

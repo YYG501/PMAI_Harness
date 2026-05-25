@@ -32,7 +32,9 @@ active req 探测算法：以 `git worktree list` 为权威（与 skill-preamble
 
 from __future__ import annotations
 import json
+import os
 import subprocess
+import tempfile
 from pathlib import Path
 from typing import Literal, Optional, TypedDict
 import re
@@ -97,7 +99,11 @@ def engineering_path(pm_view: Path) -> Path:
 # ============================================================================
 
 # v1: **状态：** 待执行
-V1_FIELD_RE = re.compile(r"^\*\*(.+?)：\*\*\s*(.+?)\s*$", re.MULTILINE)
+# 只吞同一行内的空白；`\s*` 会跨换行，导致空字段误读成下一行字段名。
+V1_FIELD_RE = re.compile(
+    r"^\*\*(.+?)：\*\*[^\S\r\n]*(.*?)[^\S\r\n]*$",
+    re.MULTILINE,
+)
 
 # v2: | **状态** | 待执行 |
 V2_FIELD_RE = re.compile(
@@ -306,6 +312,73 @@ def read_req_meta(req_dir: Path, strict: bool = True) -> Optional[dict]:
         return None
 
 
+def write_json_atomic(path: Path, data: dict) -> None:
+    """Atomically write JSON to `path` via a temp file in the same directory."""
+    path = Path(path)
+    tmp_name: str | None = None
+    try:
+        with tempfile.NamedTemporaryFile(
+            "w",
+            encoding="utf-8",
+            dir=path.parent,
+            prefix=f".{path.name}.",
+            suffix=".tmp",
+            delete=False,
+        ) as fh:
+            tmp_name = fh.name
+            json.dump(data, fh, ensure_ascii=False, indent=2)
+            fh.write("\n")
+            fh.flush()
+            os.fsync(fh.fileno())
+        os.replace(tmp_name, path)
+        tmp_name = None
+        try:
+            dir_fd = os.open(path.parent, os.O_RDONLY)
+            try:
+                os.fsync(dir_fd)
+            finally:
+                os.close(dir_fd)
+        except OSError:
+            pass
+    finally:
+        if tmp_name:
+            try:
+                os.unlink(tmp_name)
+            except FileNotFoundError:
+                pass
+
+
+def resolve_req_relative_path(
+    req_dir: Path,
+    value: object,
+    field_name: str = "path",
+) -> Path:
+    """Resolve a metadata path that must remain inside `req_dir`.
+
+    The stage-source contract stores req-relative paths only. Reject absolute
+    paths, `..`, backslashes, empty segments and NULs before joining.
+    """
+    meta_file = req_dir / ".req-meta.json"
+    if not isinstance(value, str):
+        raise StateReadError(meta_file, f"{field_name} 必须是字符串")
+    if value != value.strip() or not value:
+        raise StateReadError(meta_file, f"{field_name} 非法路径：{value!r}")
+    if "\x00" in value or "\\" in value:
+        raise StateReadError(meta_file, f"{field_name} 非法路径：{value!r}")
+
+    rel = Path(value)
+    if rel.is_absolute() or any(part in ("", ".", "..") for part in rel.parts):
+        raise StateReadError(meta_file, f"{field_name} 必须是 req 内相对路径：{value}")
+
+    root = req_dir.resolve()
+    resolved = (root / rel).resolve()
+    try:
+        resolved.relative_to(root)
+    except ValueError as e:
+        raise StateReadError(meta_file, f"{field_name} 越过 req 目录：{value}") from e
+    return resolved
+
+
 def get_stage_source(req_dir: Path, stage_num: int) -> Path:
     """返回 stage N 的真相源**绝对路径**（D-i v4 路径契约）。
 
@@ -327,10 +400,10 @@ def get_stage_source(req_dir: Path, stage_num: int) -> Path:
     meta = read_req_meta(req_dir, strict=False)
     field = f"stage{stage_num}_source"
     if meta and field in meta:
-        return req_dir / meta[field]
+        return resolve_req_relative_path(req_dir, meta[field], field)
     # fallback — 默认产物文件名
     from .stages import STAGE_OUTPUT_FILES
-    return req_dir / STAGE_OUTPUT_FILES[stage_num]
+    return (req_dir / STAGE_OUTPUT_FILES[stage_num]).resolve()
 
 
 def get_current_stage_banner(req_dir: Path, skill: str = "REQ-STAGE-GATE") -> str:
@@ -390,15 +463,13 @@ def set_stage_source(
     """
     meta = read_req_meta(req_dir, strict=True)
     assert meta is not None  # strict=True 不会返回 None
+    resolve_req_relative_path(req_dir, filename, f"stage{stage_num}_source")
     meta[f"stage{stage_num}_source"] = filename
     meta[f"stage{stage_num}_tool"] = tool
     if origin is not None:
         meta[f"stage{stage_num}_source_origin"] = origin
     meta_file = req_dir / ".req-meta.json"
-    meta_file.write_text(
-        json.dumps(meta, ensure_ascii=False, indent=2) + "\n",
-        encoding="utf-8",
-    )
+    write_json_atomic(meta_file, meta)
 
 
 def read_task_meta(pm_view: Path, strict: bool = True) -> Optional[TaskMeta]:

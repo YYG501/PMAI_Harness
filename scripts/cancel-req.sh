@@ -18,6 +18,7 @@ REQ_DIR="${1:?用法: cancel-req.sh <req-dir>}"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/_lib/_setup-pythonpath.sh"
 source "$SCRIPT_DIR/_lib/worktree.sh"
+source "$SCRIPT_DIR/_lib/dev-server.sh"
 
 # --- 找到主仓根目录 ---
 GIT_COMMON=$(git rev-parse --git-common-dir 2>/dev/null || echo "")
@@ -123,15 +124,27 @@ elif [ ! -d "$MAIN_CLOSED" ]; then
   # main 上既没有 active 也没有 closed——创建 closed 占位目录 + 最小 meta
   mkdir -p "$MAIN_CLOSED"
   python3 -c "
-import json
+import json, os, tempfile
+def write_json_atomic(path, data):
+    d = os.path.dirname(path)
+    fd, tmp = tempfile.mkstemp(prefix='.' + os.path.basename(path) + '.', suffix='.tmp', dir=d)
+    try:
+        with os.fdopen(fd, 'w', encoding='utf-8') as f:
+            json.dump(data, f, indent=2, ensure_ascii=False)
+            f.write('\\n')
+            f.flush()
+            os.fsync(f.fileno())
+        os.replace(tmp, path)
+    finally:
+        if os.path.exists(tmp):
+            os.unlink(tmp)
 meta = {
   'id': '$REQ_ID',
   'branch': '$REQ_BRANCH',
   'status': 'cancelled',
   'note': 'cancelled before any merge to main'
 }
-with open('$MAIN_CLOSED/.req-meta.json', 'w') as f:
-    json.dump(meta, f, indent=2, ensure_ascii=False)
+write_json_atomic('$MAIN_CLOSED/.req-meta.json', meta)
 " || {
     echo "❌ 写入 cancelled 占位 meta 失败。" >&2
     exit 1
@@ -142,12 +155,24 @@ fi
 MAIN_META="$MAIN_CLOSED/.req-meta.json"
 if [ -f "$MAIN_META" ]; then
   if ! python3 -c "
-import json
+import json, os, tempfile
+def write_json_atomic(path, data):
+    d = os.path.dirname(path)
+    fd, tmp = tempfile.mkstemp(prefix='.' + os.path.basename(path) + '.', suffix='.tmp', dir=d)
+    try:
+        with os.fdopen(fd, 'w', encoding='utf-8') as f:
+            json.dump(data, f, indent=2, ensure_ascii=False)
+            f.write('\\n')
+            f.flush()
+            os.fsync(f.fileno())
+        os.replace(tmp, path)
+    finally:
+        if os.path.exists(tmp):
+            os.unlink(tmp)
 with open('$MAIN_META', 'r') as f:
     meta = json.load(f)
 meta['status'] = 'cancelled'
-with open('$MAIN_META', 'w') as f:
-    json.dump(meta, f, indent=2, ensure_ascii=False)
+write_json_atomic('$MAIN_META', meta)
 "; then
     echo "❌ 更新 cancelled meta 失败。" >&2
     exit 1
@@ -209,16 +234,17 @@ for i in "${!TASK_BRANCHES[@]}"; do
   TASK_STEM="${TASK_STEMS[$i]}"
   PORT="${TASK_PORTS[$i]}"
 
-  # 杀 dev server（不影响 cwd，立即做）
-  if [ "$PORT" != "0" ] && [ "$PORT" -gt 0 ] 2>/dev/null; then
-    lsof -ti :"$PORT" 2>/dev/null | xargs kill 2>/dev/null || true
-  fi
-
   TASK_WT=$(resolve_worktree_path "$TASK_BRANCH" "$REPO_ROOT" || true)
   if [ -z "$TASK_WT" ]; then
     # 没找到对应 worktree（可能已被手动删除）。pending-cleanup 会按 branch 处理。
     TASK_WT="$REPO_ROOT/.worktrees/$TASK_BRANCH"
   fi
+
+  # 杀 dev server（按进程 cwd 校验归属后才 kill）
+  if [ "$PORT" != "0" ] && [ "$PORT" -gt 0 ] 2>/dev/null; then
+    stop_dev_server_port "$PORT" "$TASK_WT"
+  fi
+
   python3 "$QUEUE_PENDING_PY" "$PENDING_FILE" task "$TASK_BRANCH" "$TASK_WT" "$TASK_STEM"
   echo "🕓 标记待清理 task: $TASK_BRANCH"
 

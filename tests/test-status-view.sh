@@ -71,6 +71,24 @@ test_status_from_task_worktree() {
   fixture_teardown
 }
 
+test_skill_preamble_detects_v3_active_task() {
+  start_test "skill-preamble: v3 task-card 状态能导出 ACTIVE_TASK"
+  fixture_setup
+
+  req_dir=$(fixture_create_req "req-001" "test" 6)
+  fixture_create_task_v3 "$req_dir" "001" "impl" "执行中" "/qa" >/dev/null
+  req_wt="$FIXTURE_DIR/.worktrees/req-001-test"
+
+  out=$(cd "$req_wt" && bash "$FRAMEWORK_ROOT/scripts/skill-preamble.sh" 2>&1)
+  if echo "$out" | grep -q "ACTIVE_TASK: task-001-impl (执行中)"; then
+    pass_test
+  else
+    _fail "expected ACTIVE_TASK for v3 task-card. Output:"
+    echo "$out" >&2
+  fi
+  fixture_teardown
+}
+
 test_status_no_active_req() {
   start_test "status reports empty when no active req exists"
   fixture_setup
@@ -288,6 +306,7 @@ test_status_no_active_req
 test_status_from_main_sees_req_in_worktree
 test_status_from_req_worktree
 test_status_from_task_worktree
+test_skill_preamble_detects_v3_active_task
 test_stage6_partial_spec_does_not_claim_all_done
 test_stage6_all_planned_specced_and_done_claims_all_done
 test_stage6_v2_engineering_file_not_counted_as_task

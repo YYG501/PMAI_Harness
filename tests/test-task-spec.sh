@@ -96,6 +96,7 @@ test_business_task_contract() {
 
   # 执行区：实现规格 / 实现设计引用 / 约束与易错 / 自测说明 / 工程层验收
   _assert_contains "$TASK_TEMPLATE" "## 🔧 实现规格" "执行区 实现规格" || return
+  _assert_contains "$TASK_TEMPLATE" "## 🗂️ 文件范围（机器校验）" "执行区 文件范围机器校验" || return
   _assert_contains "$TASK_TEMPLATE" "## 🧩 实现设计引用（HOW）" "执行区 实现设计引用" || return
   _assert_contains "$TASK_TEMPLATE" "## ⚠️ 约束与易错" "执行区 约束与易错" || return
   _assert_contains "$TASK_TEMPLATE" "HOW-ID" "实现设计引用含 HOW-ID 列" || return

@@ -18,6 +18,7 @@ from _lib.state import (  # noqa: E402
     read_req_meta,
     StateReadError,
     get_stage_source,
+    write_json_atomic,
 )
 from _lib.stages import (  # noqa: E402
     STAGE_NAMES,
@@ -40,9 +41,7 @@ def load_meta(req_dir: Path) -> dict:
 
 def save_meta(req_dir: Path, meta: dict) -> None:
     meta_file = req_dir / ".req-meta.json"
-    meta_file.write_text(
-        json.dumps(meta, indent=2, ensure_ascii=False) + "\n", encoding="utf-8"
-    )
+    write_json_atomic(meta_file, meta)
 
 
 def find_repo_root() -> Path:

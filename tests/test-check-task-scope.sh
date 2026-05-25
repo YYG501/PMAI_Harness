@@ -205,6 +205,81 @@ test_normal_code_path_allowlist_works() {
   rm -rf "$tmp"
 }
 
+test_v3_machine_file_scope_works() {
+  start_test "v3: 文件范围（机器校验）section 被 checker 读取"
+  local tmp=$(mktemp -d)
+  local task="$tmp/task-001-test.md"
+  cat > "$task" <<'V3'
+# Task 001: Test
+
+<!-- task_format: single-typed-v3 -->
+
+## 📌 任务卡
+| **状态** | 执行中 |
+
+## 📦 范围（改 / 不改）
+
+**改**
+- 登录页
+
+## 🗂️ 文件范围（机器校验）
+- 新建：src/login/**
+- 修改：tests/login/*.spec.ts
+- 不动：docs/**
+
+## 🔧 实现规格
+- 完成
+V3
+
+  rc=$(_run_checker "$task" "src/login/page.tsx" "tests/login/smoke.spec.ts")
+  if [ "$rc" != "0" ]; then
+    _fail "v3 机器文件范围应通过，得 exit=$rc"
+    cat /tmp/scope.err >&2
+    rm -rf "$tmp"
+    return
+  fi
+  pass_test
+  rm -rf "$tmp"
+}
+
+test_v3_pm_scope_without_file_allowlist_fails_strict() {
+  start_test "v3: 只有 PM 范围、无机器文件 allowlist 时 strict fail"
+  local tmp=$(mktemp -d)
+  local task="$tmp/task-001-test.md"
+  cat > "$task" <<'V3'
+# Task 001: Test
+
+<!-- task_format: single-typed-v3 -->
+
+## 📌 任务卡
+| **状态** | 执行中 |
+
+## 📦 范围（改 / 不改）
+
+**改**
+- 登录页
+
+## 🔧 实现规格
+- 完成
+V3
+
+  rc=$(_run_checker "$task" "src/login/page.tsx")
+  if [ "$rc" != "1" ]; then
+    _fail "缺机器 allowlist 应拒绝，得 exit=$rc"
+    cat /tmp/scope.err >&2
+    rm -rf "$tmp"
+    return
+  fi
+  if ! grep -q "未声明 allowlist" /tmp/scope.err; then
+    _fail "stderr 应说明 allowlist 未声明"
+    cat /tmp/scope.err >&2
+    rm -rf "$tmp"
+    return
+  fi
+  pass_test
+  rm -rf "$tmp"
+}
+
 test_implicit_deny_priority_over_empty_allowlist() {
   start_test "implicit deny 优先于 allowlist empty 检查（P2 修复）"
   local tmp=$(mktemp -d)
@@ -250,6 +325,8 @@ test_own_task_pm_view_allowed
 test_v2_own_engineering_contract_allowed
 test_v3_engineering_contract_denied
 test_normal_code_path_allowlist_works
+test_v3_machine_file_scope_works
+test_v3_pm_scope_without_file_allowlist_fails_strict
 test_implicit_deny_priority_over_empty_allowlist
 
 report_results "check-task-scope"

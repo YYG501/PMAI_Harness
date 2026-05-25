@@ -80,10 +80,11 @@ TMP_RESULT=$(mktemp)
 trap 'rm -f "$TMP_RESULT"' EXIT
 
 python3 - "$PENDING_FILE" "$REPO_ROOT" "$DRY_RUN" "$TMP_RESULT" <<'PY'
-import json, os, subprocess, sys
+import json, os, re, shutil, subprocess, sys
 
 pending_file, repo_root, dry_run_str, result_path = sys.argv[1:5]
 dry_run = dry_run_str == "true"
+repo_root_real = os.path.realpath(repo_root)
 
 with open(pending_file) as f:
     entries = json.load(f)
@@ -94,6 +95,65 @@ fail_count = 0
 
 def run(cmd):
     return subprocess.run(cmd, capture_output=True, text=True)
+
+
+SAFE_BRANCH_RE = re.compile(
+    r"^(task-\d{3,}(?:[-A-Za-z0-9._]+)?|req-\d{3,}(?:[-A-Za-z0-9._]+)?|tmp-quick-[A-Za-z0-9._-]+)$"
+)
+
+
+def registered_worktrees():
+    """Return branch -> real worktree path from git worktree list --porcelain."""
+    r = run(["git", "-C", repo_root, "worktree", "list", "--porcelain"])
+    if r.returncode != 0:
+        return {}
+    out = {}
+    current_path = None
+    for line in r.stdout.splitlines():
+        if line.startswith("worktree "):
+            current_path = os.path.realpath(line[len("worktree "):])
+        elif line.startswith("branch refs/heads/") and current_path:
+            branch = line[len("branch refs/heads/"):]
+            out[branch] = current_path
+    return out
+
+
+WORKTREES_BY_BRANCH = registered_worktrees()
+
+
+def validate_pending_entry(entry):
+    """Fail closed before deleting anything from a pending-cleanup entry."""
+    kind = entry.get("kind", "")
+    branch = entry.get("branch", "")
+    worktree = entry.get("worktree", "")
+    if kind not in {"task", "req"}:
+        return False, f"unsupported kind={kind!r}"
+    if not branch or not SAFE_BRANCH_RE.fullmatch(branch):
+        return False, f"unsafe branch={branch!r}"
+    if not worktree:
+        return True, ""
+
+    # Missing path is safe to prune metadata / branch later; no filesystem delete.
+    if not os.path.exists(worktree):
+        return True, ""
+
+    real = os.path.realpath(worktree)
+    protected = {
+        os.path.realpath(os.sep),
+        repo_root_real,
+        os.path.realpath(os.path.expanduser("~")),
+    }
+    if real in protected:
+        return False, f"protected worktree path={real}"
+
+    registered = WORKTREES_BY_BRANCH.get(branch)
+    if registered != real:
+        return False, (
+            "worktree path is not registered for branch "
+            f"{branch}: path={real}, registered={registered or '<none>'}"
+        )
+    return True, ""
+
 
 for e in entries:
     branch = e.get("branch", "")
@@ -109,27 +169,33 @@ for e in entries:
     failed = False
     msg_parts = []
 
+    valid, reason = validate_pending_entry(e)
+    if not valid:
+        failed = True
+        msg_parts.append(f"unsafe pending entry: {reason}")
+
     # 1. 删 worktree（如果还在）
-    if worktree and os.path.isdir(worktree):
+    if not failed and worktree and os.path.isdir(worktree):
         r = run(["git", "-C", repo_root, "worktree", "remove", worktree])
         if r.returncode != 0:
-            # 回退：rm -rf + prune
-            r2 = run(["rm", "-rf", worktree])
-            if r2.returncode != 0:
+            # 回退：只对已通过 git worktree list 校验的路径做 Python rmtree。
+            try:
+                shutil.rmtree(worktree)
+            except Exception as exc:
                 failed = True
-                msg_parts.append(f"worktree remove failed: {r.stderr.strip() or r2.stderr.strip()}")
+                msg_parts.append(f"worktree remove failed: {r.stderr.strip() or exc}")
             else:
                 run(["git", "-C", repo_root, "worktree", "prune"])
                 msg_parts.append("worktree force-removed")
         else:
             msg_parts.append("worktree removed")
-    elif worktree:
+    elif not failed and worktree:
         # worktree 已不在磁盘，prune 残留 metadata
         run(["git", "-C", repo_root, "worktree", "prune"])
         msg_parts.append("worktree already gone")
 
     # 2. 删 branch（如果还在）
-    if branch:
+    if not failed and branch:
         check = run(["git", "-C", repo_root, "show-ref", "--verify", "--quiet", f"refs/heads/{branch}"])
         if check.returncode == 0:
             r = run(["git", "-C", repo_root, "branch", "-D", branch])

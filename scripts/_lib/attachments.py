@@ -54,14 +54,13 @@ PM mental model：PM 在 chat 自然描述 "我有 X 在路径 Y"，AI 后台 cp
 
 from __future__ import annotations
 
-import json
 import re
 import shutil
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional, TypedDict
 
-from .state import read_req_meta
+from .state import read_req_meta, write_json_atomic
 
 
 # ============================================================================
@@ -192,6 +191,48 @@ def _check_sensitive(src: Path) -> None:
             raise SensitivePathError(src, pattern)
 
 
+def _validate_attachment_name(filename: str) -> str:
+    """Return a safe basename-only attachment name or raise AttachmentError."""
+    if not isinstance(filename, str):
+        raise AttachmentError("attachment filename 必须是字符串")
+    if filename != filename.strip() or not filename:
+        raise AttachmentError(f"非法 attachment filename：{filename!r}")
+    if (
+        "\x00" in filename
+        or "/" in filename
+        or "\\" in filename
+        or ".." in filename
+        or Path(filename).is_absolute()
+        or Path(filename).name != filename
+        or filename in {".", ".."}
+    ):
+        raise AttachmentError(f"非法 attachment filename：{filename!r}")
+    return filename
+
+
+def _validate_stage_prefix(stage_prefix: str) -> str:
+    """Restrict stage_prefix to a filename-safe token used in generated names."""
+    if not isinstance(stage_prefix, str):
+        raise AttachmentError("stage_prefix 必须是字符串")
+    if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]*", stage_prefix):
+        raise AttachmentError(f"非法 stage_prefix：{stage_prefix!r}")
+    if ".." in stage_prefix:
+        raise AttachmentError(f"非法 stage_prefix：{stage_prefix!r}")
+    return stage_prefix
+
+
+def _attachment_path(req_dir: Path, filename: str) -> Path:
+    """Resolve `attachments/<filename>` and enforce it stays inside attachments/."""
+    safe_name = _validate_attachment_name(filename)
+    attachments_dir = (req_dir / "attachments").resolve()
+    dst = (attachments_dir / safe_name).resolve()
+    try:
+        dst.relative_to(attachments_dir)
+    except ValueError as e:
+        raise AttachmentError(f"attachment 路径越过 attachments/：{filename!r}") from e
+    return dst
+
+
 def _next_available_name(
     attachments_dir: Path, base_name: str, ext: str
 ) -> str:
@@ -256,10 +297,7 @@ def _stage_doc_exists(req_dir: Path, stage_prefix: str) -> bool:
 def _write_meta(req_dir: Path, meta: dict) -> None:
     """原子风格写 .req-meta.json（与 _lib.state 模块 set_stage_source 同款）。"""
     meta_file = req_dir / ".req-meta.json"
-    meta_file.write_text(
-        json.dumps(meta, ensure_ascii=False, indent=2) + "\n",
-        encoding="utf-8",
-    )
+    write_json_atomic(meta_file, meta)
 
 
 # ============================================================================
@@ -293,6 +331,8 @@ def copy_attachment(
 
     >>> # copy_attachment(Path("/req"), Path("~/foo.pdf"), "analysis", "重点 X")
     """
+    stage_prefix = _validate_stage_prefix(stage_prefix)
+
     # 1. expanduser + 校验可读
     src = src.expanduser().resolve()
     if not src.exists() or not src.is_file():
@@ -312,7 +352,7 @@ def copy_attachment(
     attachments_dir.mkdir(exist_ok=True)
     base_name = f"{stage_prefix}-{src.stem}"
     new_name = _next_available_name(attachments_dir, base_name, src.suffix)
-    dst = attachments_dir / new_name
+    dst = _attachment_path(req_dir, new_name)
 
     # 5. shutil.copy2 保留 mtime（C7 Python，不靠 Bash cp）
     shutil.copy2(src, dst)
@@ -356,6 +396,8 @@ def register_attachment(
     Raises:
         StateReadError: `.req-meta.json` 不存在或解析失败
     """
+    filename = _validate_attachment_name(filename)
+    stage_prefix = _validate_stage_prefix(stage_prefix)
     meta = read_req_meta(req_dir, strict=True)
     assert meta is not None  # strict=True 保证非 None
     seen: list = meta.get("attachments_seen", [])
@@ -392,6 +434,7 @@ def is_seen(req_dir: Path, filename: str) -> bool:
         - is_seen(req_dir, file) == False → 主动问 PM "要不要纳入？"
           PM 答 OK 后 caller 调 register_attachment 补登记。
     """
+    filename = _validate_attachment_name(filename)
     return any(a.get("name") == filename for a in list_attachments_seen(req_dir))
 
 
@@ -407,7 +450,8 @@ def remove_attachment(req_dir: Path, filename: str) -> None:
     Raises:
         StateReadError: `.req-meta.json` 不存在或解析失败
     """
-    dst = req_dir / "attachments" / filename
+    filename = _validate_attachment_name(filename)
+    dst = _attachment_path(req_dir, filename)
     if dst.exists():
         dst.unlink()
     meta = read_req_meta(req_dir, strict=True)
@@ -440,6 +484,7 @@ def replace_attachment(
         FileNotFoundError: old_filename 不在 attachments_seen 或 new_src 不存在
         SensitivePathError / FileSizeError: 新源 denylist / size cap 触发
     """
+    old_filename = _validate_attachment_name(old_filename)
     seen = list_attachments_seen(req_dir)
     old_entry = next((a for a in seen if a.get("name") == old_filename), None)
     if not old_entry:
@@ -463,7 +508,7 @@ def replace_attachment(
     # cp 新（保留旧 filename）
     attachments_dir = req_dir / "attachments"
     attachments_dir.mkdir(exist_ok=True)
-    dst = attachments_dir / old_filename
+    dst = _attachment_path(req_dir, old_filename)
     shutil.copy2(new_src, dst)
 
     # 重新 register（用旧 stage_prefix）

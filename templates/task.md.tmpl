@@ -161,6 +161,18 @@ PM 打回 → 保持 `执行中`；执行失败 / 放弃 manual → `待执行`
 
 ---
 
+## 🗂️ 文件范围（机器校验）
+
+<!-- executor adapter I-AD2 只读本节做 diff allowlist 校验。
+     必须使用仓根相对路径或 glob；无对应项写「无」。禁止只写产品区域名。
+     示例：`src/auth/**`、`app/login/page.tsx`、`tests/login/*.spec.ts`。 -->
+
+- 新建：[仓根相对路径或 glob；无则写 无]
+- 修改：[仓根相对路径或 glob；无则写 无]
+- 不动：[明确禁止改动的仓根相对路径或 glob；无则写 无]
+
+---
+
 ## 🔧 实现规格
 
 <!-- 本 task「怎么做」—— 由 task-spec 从 prd.md 切片（WHAT）转写 + 补实现层细节。

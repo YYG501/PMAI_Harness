@@ -218,7 +218,25 @@ REQ_DIR="$REQ_DIR" \
 python3 - <<'PY'
 import json
 import os
+import tempfile
 from pathlib import Path
+
+
+def write_json_atomic(path: Path, data: dict) -> None:
+    with tempfile.NamedTemporaryFile(
+        "w",
+        encoding="utf-8",
+        dir=path.parent,
+        prefix=f".{path.name}.",
+        suffix=".tmp",
+        delete=False,
+    ) as fh:
+        tmp = Path(fh.name)
+        json.dump(data, fh, ensure_ascii=False, indent=2)
+        fh.write("\n")
+        fh.flush()
+        os.fsync(fh.fileno())
+    os.replace(tmp, path)
 
 req_dir = Path(os.environ["REQ_DIR"])
 meta = {
@@ -232,10 +250,7 @@ meta = {
     ],
     "status": "active",
 }
-(req_dir / ".req-meta.json").write_text(
-    json.dumps(meta, ensure_ascii=False, indent=2) + "\n",
-    encoding="utf-8",
-)
+write_json_atomic(req_dir / ".req-meta.json", meta)
 PY
 
 BRIEF_PATH=""

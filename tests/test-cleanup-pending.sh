@@ -239,11 +239,57 @@ test_dry_run_does_not_remove() {
 }
 
 # =================================================
+# C7: malicious pending entry must not delete arbitrary directories
+# =================================================
+test_rejects_unregistered_existing_worktree_path() {
+  start_test "C7 safety: unregistered existing worktree path is preserved"
+  fixture_setup
+
+  victim="$FIXTURE_DIR/not-a-worktree-but-important"
+  mkdir -p "$victim"
+  echo "keep" > "$victim/keep.txt"
+  _write_pending_task_entry "task-999-evil" "$victim"
+
+  if (cd "$FIXTURE_DIR" && bash "$CLEANUP") >/tmp/out.$$ 2>/tmp/err.$$; then
+    _fail "cleanup should reject unsafe pending entry"
+    cat /tmp/out.$$ >&2
+    rm -f /tmp/out.$$ /tmp/err.$$
+    fixture_teardown
+    return
+  fi
+
+  if [ ! -f "$victim/keep.txt" ]; then
+    _fail "unsafe cleanup deleted arbitrary directory: $victim"
+    rm -f /tmp/out.$$ /tmp/err.$$
+    fixture_teardown
+    return
+  fi
+  if [ ! -f "$FIXTURE_DIR/.runs/pending-cleanup.json" ]; then
+    _fail "unsafe entry should remain pending for manual inspection"
+    rm -f /tmp/out.$$ /tmp/err.$$
+    fixture_teardown
+    return
+  fi
+  if ! grep -q "unsafe pending entry" /tmp/out.$$; then
+    _fail "stdout should explain unsafe pending entry"
+    cat /tmp/out.$$ /tmp/err.$$ >&2
+    rm -f /tmp/out.$$ /tmp/err.$$
+    fixture_teardown
+    return
+  fi
+
+  pass_test
+  rm -f /tmp/out.$$ /tmp/err.$$
+  fixture_teardown
+}
+
+# =================================================
 test_no_pending_file_exits_zero
 test_empty_pending_list_exits_zero
 test_happy_path_removes_worktree_branch_and_file
 test_reject_when_cwd_inside_pending_worktree
 test_partial_worktree_already_gone
 test_dry_run_does_not_remove
+test_rejects_unregistered_existing_worktree_path
 
 report_results "cleanup-pending"
