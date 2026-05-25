@@ -90,6 +90,36 @@ PM-AI-Workflow 生成器仓的演进记录。本文件**只记影响下游业务
 
 ## 未发布
 
+### 2026-05-25 — D-iv M1 vp-5a：3 个自动化测试套件落地（防回归）
+
+**vp-5a 范围**（T5a；review T1 落实）：
+
+- `tests/test-brownfield-detect.sh`（3 cases）：
+  - T1 `init-project.sh` 已存在空目录 → 退出非 0 + stderr 含「目标目录已存在」
+  - T2 `init-project.sh` 已存在含 `.git` 目录 → 同 T1（脚本不区分是否含 git，都拒）
+  - T3 `init-project SKILL.md` 阶段 A 含 brownfield 描述 + `/codebase-audit` 引导 + 「两层都拦」接口约定（review C-7）
+- `tests/test-no-duplicate-questioning.sh`（4 cases）：
+  - T1 Decision gate 模板话术「我会开始写 .planning/PROJECT.md」只在 `_shared/project-questioning.md` 一处
+  - T2 6 节齐不齐**完整调用代码块**（`PROJECT_STATE=$(python3 ...`）不出现在 `init-project` / `project-solution`（_shared + new-req legacy mini-fill 各持一份合法）
+  - T3 `check-open-questions.py --require-section` 完整调用代码块只在 `_shared` 一处
+  - T4 问题库典型话术「这个项目要解决什么核心问题」只在 `_shared` 一处
+- `tests/test-shared-files-exist.sh`（4 cases）：
+  - T1 `skills/_shared/project-questioning.md` 存在 + 含 §6 Decision gate + §5 写作规则
+  - T2 `skills/_shared/PM-VIEW-RULES.md` 存在（7 个 skill 引用，防 R10）
+  - T3 `skills/_shared/pm-view/` 目录存在 + 含 `.md` 子文件
+  - T4 **前向链接完整性**：所有 SKILL.md 里 `@读 _shared/<path>.md` 引用 → 对应文件必须存在
+- 3 个测试加进 `tests/run-all.sh`（test-init-project.sh 之后；test-tthw-smoke.sh 之前）
+
+**测试基线**：`bash tests/run-all.sh` **425/0 → 436/0**（设计预期 +3，实际 +11；超出）。
+
+**业务仓需注意**：
+
+- 3 个新测试**仅检查框架自身一致性**（grep + assert 静态校验 + brownfield e2e），不依赖业务仓环境
+- 未来改动 `_shared/project-questioning.md` 时，T4 引用完整性会自动验证（删了被引用的文件 → test fail）
+- 改动 `init-project` / `project-solution` SKILL.md 时，T1/T2/T3 自动防止"反向把 _shared 内容复制回 SKILL.md"
+
+---
+
 ### 2026-05-25 — D-iv M1 vp-3 + vp-4：阶段 D verify pass + 文档同步（README / RUNTIME / CHANGELOG）
 
 **vp-3**（阶段 D 改"只汇总不 commit"）：vp-1 SKILL.md 已写对（"PROJECT.md / roadmap.md + commit 已在阶段 C 完成。阶段 D 只做终态输出"），verify pass，无单独 commit。
