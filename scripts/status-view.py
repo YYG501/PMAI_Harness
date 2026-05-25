@@ -26,7 +26,12 @@ _SCRIPTS_DIR = str(Path(__file__).resolve().parent)
 if _SCRIPTS_DIR not in sys.path:
     sys.path.insert(0, _SCRIPTS_DIR)
 
-from _lib.state import get_overall_state, get_timeline_state, list_tasks  # noqa: E402
+from _lib.state import (  # noqa: E402
+    get_current_stage_banner,
+    get_overall_state,
+    get_timeline_state,
+    list_tasks,
+)
 from _lib.stages import STAGE_NAMES  # noqa: E402  (delta-2+4 F13 单一真相源)
 
 STATUS_ICONS = {
@@ -109,6 +114,71 @@ def render_summary(state: dict, repo_root: Path) -> None:
         f"待启动 {counts['待启动']} / "
         f"待 spec {counts['待 spec']}"
     )
+
+
+def render_banner_only(state: dict, repo_root: Path, skill: str) -> None:
+    """M2 / D-iv M1 vp-7: 输出当前 active req 的 stage banner 一行。
+
+    格式按 `skills/_shared/pm-view/banner-rules.md` §1.1。
+    无 active req → 输出占位 banner（PM 知道还没起 req）。
+    """
+    active = state["active_reqs"]
+    if not active:
+        print("━━━ PMAI ► " + skill + " ▸ 无 active req（先跑 /new-req）━━━")
+        return
+    # 取第一个 active req（典型场景：单 PM 同时 1-2 个 req）
+    req_view = active[0]
+    req_dir = req_view["dir"]
+    try:
+        banner = get_current_stage_banner(req_dir, skill=skill)
+    except Exception as exc:  # noqa: BLE001
+        print(f"━━━ PMAI ► {skill} ▸ banner 渲染失败: {exc} ━━━")
+        return
+    print(banner)
+
+
+def render_narrative(state: dict, repo_root: Path) -> None:
+    """M5 / D-iv M1 vp-11: AI 可直接念的进度叙述。
+
+    范围（codex C-4 降级）：当前 active req / 当前 stage / 产物文件 / 最近 transition；
+    **不到小节级**（如「§四」/ commit hash 全文 不写，伪精确）。
+
+    无 active req → 输出"目前没有 active req"，**不编造**（review R7 防幻觉）。
+    """
+    active = state["active_reqs"]
+    if not active:
+        print("目前没有 active req。可以发 /new-req 起新需求，或发 /init-project 起新项目。")
+        return
+
+    # 单 req 场景：直接念
+    if len(active) == 1:
+        req = active[0]
+        meta = req["meta"] or {}
+        req_id = req["req_dir"].name
+        stage = meta.get("stage", 0)
+        stage_name = STAGE_NAMES.get(int(stage), f"stage {stage}") if stage else "未知"
+        tasks = req["tasks"]
+        task_summary = ""
+        if tasks:
+            in_progress = sum(1 for t in tasks if (t["meta"] or {}).get("status") == "执行中")
+            done = sum(1 for t in tasks if (t["meta"] or {}).get("status") == "已完成")
+            task_summary = f"，共 {len(tasks)} 个 task（执行中 {in_progress}，已完成 {done}）"
+        # 不写 commit hash / 时间细节；只点 stage 状态
+        print(
+            f"上次你做到 {req_id}，当前 stage {stage}/7：{stage_name}{task_summary}。"
+            f"\n下一步：发 /req-stage-gate 推进，或继续当前 stage 工作。"
+        )
+        return
+
+    # 多 req 场景：列各 req 概况
+    print(f"目前有 {len(active)} 个 active req：")
+    for req in active:
+        meta = req["meta"] or {}
+        req_id = req["req_dir"].name
+        stage = meta.get("stage", 0)
+        stage_name = STAGE_NAMES.get(int(stage), f"stage {stage}") if stage else "未知"
+        print(f"  - {req_id}：stage {stage}/7（{stage_name}），{len(req['tasks'])} 个 task")
+    print("\n下一步：发 /status-view 看详细，或 /req-stage-gate 推进具体 req。")
 
 
 def suggest_next_action(req_view: dict) -> str:
@@ -448,6 +518,18 @@ def main() -> None:
     parser.add_argument("--milestone", action="store_true", help="(timeline) 仅显示 PROJECT 路线节标 ⭐ 的 req")
     parser.add_argument("--limit", type=int, default=20, help="(timeline) archived 总数限制 (默认 20)")
     parser.add_argument("--all", action="store_true", help="(timeline) 取消 limit，显示全部 archived")
+    parser.add_argument(
+        "--banner-only", action="store_true",
+        help="(M2/D-iv M1 vp-7) 仅输出当前 active req 的 stage banner 一行（按 banner-rules.md §1.1 格式）"
+    )
+    parser.add_argument(
+        "--skill", default="REQ-STAGE-GATE",
+        help="(--banner-only) 调用方 skill 名（如 REQ-STAGE-GATE / INIT-PROJECT），用于 banner 格式"
+    )
+    parser.add_argument(
+        "--narrative", action="store_true",
+        help="(M5/D-iv M1 vp-11) 输出 AI 可直接念的进度叙述（当前 stage / 产物文件 / 最近 transition；不到小节级，codex C-4 范围降级）"
+    )
     args = parser.parse_args()
 
     if args.repo_root:
@@ -466,6 +548,14 @@ def main() -> None:
         return
 
     state = get_overall_state(repo_root, cwd=Path.cwd(), strict=False)
+
+    if args.banner_only:
+        render_banner_only(state, repo_root, args.skill)
+        return
+
+    if args.narrative:
+        render_narrative(state, repo_root)
+        return
 
     if args.summary:
         render_summary(state, repo_root)

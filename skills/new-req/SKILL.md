@@ -6,6 +6,10 @@ description: |
 
 # /new-req
 
+> **PM 视图（M2 banner + Decision gate label）**：本 skill 入口出 banner（`status-view.py --banner-only --skill NEW-REQ`）；退出出 Next Up 块（按 `_shared/pm-view/banner-rules.md` §2，引导 `/req-stage-gate` 推进）；闸门 label 按 §3 3 硬规则。
+>
+> **PM 答题规则（M4）**：所有 AskUserQuestion 调用按 `_shared/pm-view/askuser-rules.md` §1 3 硬规则走（空答 STOP / 没拿到答案禁止落盘 / runtime 退化保留 wait）。
+
 ## When To Use
 
 - PM 在业务项目中调用，参数是需求描述（如 `/new-req "实现用户登录"`）

@@ -90,6 +90,73 @@ PM-AI-Workflow 生成器仓的演进记录。本文件**只记影响下游业务
 
 ## 未发布
 
+### 2026-05-25 — D-iv M1 批 2（M2 + M4 + M5）vp-7~vp-12 全包落地
+
+批 1（M1 init-project 一气呵成）ship 完后**接着 ship 批 2**（横切普推 banner / askuser / session 播报）。**M3 砍后（codex C-1）批 2 5 个 vp**：vp-7/vp-8 M2 + vp-10 M4 + vp-11 M5 + vp-12 文档同步。注：**不引入 `--auto` 或 chain flag**（M3 砍 + codex C-2）。
+
+**vp-7：M2 banner-rules.md + status-view 复用**（T7）
+
+- 新建 `skills/_shared/pm-view/banner-rules.md`（M2 + Decision gate label 单一真相源）：
+  - §1 阶段 banner 格式（`━━━ PMAI ► <SKILL> ▸ Stage <N>/<T>: <Name> ━━━`；纯 ASCII 80 字符固定宽度）
+  - §2 Next Up 块格式（`## ▶ Next Up — <command> <hint>`）
+  - §3 Decision gate label 3 硬规则（M3 砍后整合 M2）：label=动作描述 / description=一句话 / 留守选项 Loop 回路 + 禁用模糊词 "OK"/"Proceed"/"Continue"
+  - §4 实施指南 + 失败兜底
+- 改 `scripts/_lib/state.py`：暴露 `get_current_stage_banner(req_dir, skill)` 函数（按 banner-rules.md §1.1 格式 + STAGE_NAMES 中文 stage 名）
+- 改 `scripts/status-view.py`：加 `--banner-only` 模式 + `--skill` 参数 + `render_banner_only()` 函数（active req → banner / 无 active req → 占位 banner）
+
+**vp-8：M2 banner + Decision gate label 全仓落地**（T8）
+
+- 7 个核心 SKILL 顶部加 banner-rules 指针块（最小改动，不重写 SKILL.md 整体）：`init-project` / `new-req` / `req-stage-gate` / `task-confirm` / `task-execute` / `close-task` / `close-req`
+- 新建 `tests/test-banner-label.sh`（5 cases）：
+  - T1 7 个核心 SKILL 都引用 banner-rules.md
+  - T2 banner-rules.md 含 §3 3 硬规则
+  - T3 banner-rules.md 含禁用模糊词清单（OK / Proceed / Continue）
+  - T4 `_lib/state.py` 暴露 `get_current_stage_banner`
+  - T5 `status-view.py` 含 `--banner-only` 模式
+
+**vp-10：M4 askuser-rules.md + 7 skill 加指针**（T9）
+
+- 新建 `skills/_shared/pm-view/askuser-rules.md`（M4 单一真相源，gsd `#3018 failure mode` 照搬）：
+  - §1 3 硬规则：① 空答/没答 → STOP wait next message 不重试不默认 ② 没拿到答案前禁止落盘 artifact ③ runtime 不支持时退化编号列表，仍 wait
+  - §2 不在 scope：M4.1 / M4.2 / M4.3（禁逃生舱）
+  - §3 实施指南（SKILL 顶部加引用 + 闸门类 AskUser 同时遵守 banner-rules §3）
+- 7 个核心 SKILL 顶部加 askuser-rules 指针块（同 vp-8 7 个 SKILL）
+
+**vp-11：M5 status-view --narrative + CLAUDE.md 章程**（T10）
+
+- 改 `scripts/status-view.py`：加 `--narrative` 模式 + `render_narrative()` 函数
+  - 范围降级（codex C-4）：当前 stage / 产物文件 / 最近 stage transition；**不到小节级**（不写「§四」/ commit hash 全文 / 「N 天前」相对时间）
+  - 无 active req → 输出"目前没有 active req"，不编造（review R7 防幻觉）
+- 改 `CLAUDE.md` 加章程章节「Session 起始播报」：
+  - **PM 第一条 message 后**（codex C-3 校准描述：不是「PM 一开窗口」；LLM chat 模型固有限制）AI 必须先跑 `bash .claude/scripts/status-view.py --narrative` 输出播报，再回应 PM 请求
+  - 生成器仓 vs 业务仓约束：本规则只在业务仓有 `.req-meta.json` 时生效
+- 新建 `tests/test-narrative-mode.sh`（5 cases）：
+  - T1 `--narrative` argparse 参数存在
+  - T2 `render_narrative` 函数定义
+  - T3 `render_banner_only` 函数定义（vp-7 同时验证）
+  - T4 CLAUDE.md 含「Session 起始播报」章节 + 「PM 第一条 message 后」表述 + status-view.py --narrative 调用
+  - T5 `render_narrative` 不含小节级 / commit hash / 「N 天前」字串（codex C-4 范围降级）
+
+**vp-12：批 2 文档同步**（本条目；测试基线后置跑）
+
+- `RUNTIME.md`「当前位置」批 2 落地（M3 砍批 2 5 vp 全完成）
+- `CHANGELOG.md`「未发布」段加 vp-7~vp-12 条目（本条目）
+- 跑 `tests/run-all.sh` 确认无回归
+
+**业务仓需注意**：
+
+- 同步后 7 个核心 SKILL 顶部多 2 行指针引用 `_shared/pm-view/banner-rules.md` + `askuser-rules.md`，PM 视觉上变化是 SKILL.md 前面多几行 markdown blockquote；功能上 agent 调 AskUserQuestion 严格按 askuser-rules.md §1 + Decision gate 按 banner-rules.md §3 走
+- `status-view.py` 三个新模式：`--banner-only` / `--narrative` 不影响现有 list / summary / timeline 调用
+- CLAUDE.md 加「Session 起始播报」章节：agent 在每个新 session 的 PM 第一条 message 后会先跑 narrative 播报；**不影响**当前 chat 内的后续 message
+
+**M3 砍体现在批 2**：
+- vp-9 整段砍（M3 闸门 Decision gate pattern 独立 vp → 合并到 vp-7/vp-8 M2 的 banner-rules.md §3）
+- vp-12 描述**不含** `--auto` / chain flag / `auto_chain_active` 残留（codex C-2 文档自相矛盾修复完成）
+
+**4 模块完整落地汇总**：M1（init-project 一气呵成）= vp-1 ~ vp-6 + M2（banner + Decision gate label）= vp-7 + vp-8 + M4（askuser 严格化）= vp-10 + M5（session 起始播报）= vp-11；批 2 文档同步 = vp-12；剩 vp-5b PM 手动验收 + vp-13 消费仓端到端 PM 手动跑（不可自动化）。
+
+---
+
 ### 2026-05-25 — D-iv M1 vp-6：`/project-solution` 4 场景提问顺序细化
 
 **vp-6 范围**（T6；review B1 + B 4 场景延伸）：vp-2 已经把 `/project-solution` SKILL.md 段 0 加了 4 场景判断**框架**（触发 / 输入态 / 提问顺序粗略描述）；vp-6 把提问顺序列**细化为具体的 5-7 步**，让实施时不需要每场景再想。

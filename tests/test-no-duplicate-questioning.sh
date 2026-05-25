@@ -26,15 +26,27 @@ _count_files_with() {
 #   其他 SKILL 应该 @读 §6.2 引用，不内嵌副本
 # -----------------------------------------------------------------
 test_decision_gate_template_single_source() {
-  start_test "T1: Decision gate 模板话术只在 _shared/project-questioning.md 一处"
+  start_test "T1: Decision gate 模板话术不出现在用户面 SKILL（_shared/ 多个真相源文件合法）"
   if [ ! -f "$SHARED_FILE" ]; then
     _fail "_shared/project-questioning.md 不存在 — vp-2 应已创建"
     return
   fi
-  local cnt
-  cnt=$(_count_files_with "我会开始写 .planning/PROJECT.md")
-  if [ "$cnt" -gt 1 ]; then
-    _fail "Decision gate 模板话术在 $cnt 个文件出现（应只在 _shared 一处）：$(grep -rl '我会开始写 .planning/PROJECT.md' "$REPO_ROOT/skills/" 2>/dev/null)"
+  # _shared/banner-rules.md §3.2（M2 模板真相源）+ _shared/project-questioning.md §6.2（实施引用）
+  # 都属于 _shared/ 真相源，含 Decision gate 模板话术合法（cross-reference 不算副本）
+  # 真正要禁的是：用户面 SKILL（非 _shared）持有完整 Decision gate 模板话术
+  local user_facing_hits
+  user_facing_hits=$(grep -rl "我会开始写 .planning/PROJECT.md" "$REPO_ROOT/skills/" 2>/dev/null \
+    | grep -v "/_shared/" | sort -u)
+  if [ -n "$user_facing_hits" ]; then
+    _fail "Decision gate 模板话术出现在用户面 SKILL（应只在 _shared/ 一处）：$user_facing_hits"
+    return
+  fi
+  # 同时验证 _shared/ 至少有一处持有（防 banner-rules.md / project-questioning.md 都被误删）
+  local shared_hits
+  shared_hits=$(grep -rl "我会开始写 .planning/PROJECT.md" "$REPO_ROOT/skills/_shared/" 2>/dev/null \
+    | sort -u | wc -l | tr -d ' ')
+  if [ "$shared_hits" -lt 1 ]; then
+    _fail "_shared/ 缺 Decision gate 模板话术（应至少 banner-rules.md 或 project-questioning.md 一处）"
     return
   fi
   pass_test

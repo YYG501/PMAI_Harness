@@ -7,6 +7,10 @@ description: |
 
 # /close-task
 
+> **PM 视图（M2 banner + Decision gate label）**：每个 phase 入口 banner（`status-view.py --banner-only --skill CLOSE-TASK`）；偏差分类闸门 / PM 总审 diff 闸门 label 按 `_shared/pm-view/banner-rules.md` §3 3 硬规则；退出 Next Up 引导 `/close-req`（最后一个 task）或 `/task-confirm <next-task>`。
+>
+> **PM 答题规则（M4）**：所有 AskUserQuestion 调用按 `_shared/pm-view/askuser-rules.md` §1 3 硬规则走（空答 STOP / 没拿到答案禁止 merge / runtime 退化保留 wait）。
+
 ## 两阶段调用（必读）
 
 `/close-task` 设计为两阶段调用，AI 根据 cwd 自动判断当前阶段：

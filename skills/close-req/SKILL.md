@@ -6,6 +6,10 @@ description: |
 
 # /close-req
 
+> **PM 视图（M2 banner + Decision gate label）**：入口 banner（`status-view.py --banner-only --skill CLOSE-REQ`）；close-report 定稿闸门 label 按 `_shared/pm-view/banner-rules.md` §3 3 硬规则；退出 Next Up 引导「项目方向是否需要调整」（`/project-solution` 季度场景）或 `/new-req` 起下一 req。
+>
+> **PM 答题规则（M4）**：所有 AskUserQuestion 调用按 `_shared/pm-view/askuser-rules.md` §1 3 硬规则走（空答 STOP / 没拿到答案禁止 merge to main / runtime 退化保留 wait）。
+
 ## When To Use
 
 - Orchestrator 在 stage 7 调用

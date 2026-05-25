@@ -8,6 +8,10 @@ description: |
 # /init-project（一气呵成入口）
 
 > PM 起一个新业务项目时**只跑这一个命令**，agent 内部串起 4 阶段全流程；不切窗口、不跑第二个命令、不需要记中间步骤。
+>
+> **PM 视图（M2 banner + Decision gate label）**：4 阶段每阶段入口出 banner（`status-view.py --banner-only --skill INIT-PROJECT`）；阶段 C Decision gate「创建 PROJECT.md / 继续探索」按 `_shared/pm-view/banner-rules.md` §3 3 硬规则；阶段 D Next Up 块按 §2 格式。
+>
+> **PM 答题规则（M4）**：所有 AskUserQuestion 调用按 `_shared/pm-view/askuser-rules.md` §1 3 硬规则走（空答 STOP / 没拿到答案禁止落盘 PROJECT.md / runtime 退化保留 wait）。
 
 ```
 ┌─────────────────────────────────────────────────────────┐

@@ -13,26 +13,35 @@
 
 ## 当前位置（2026-05-25）
 
-**D-iv M1 init-project 一气呵成落地中**（批 1，6 个 vp，~4.8h 总；当前 vp-1 + vp-2 已落，vp-3 verify pass）
+**D-iv M1 批 1 + 批 2 全包技术 vp 落地完毕**（M3 砍后 4 模块：M1 + M2 + M4 + M5，共 11 个技术 vp 全过；剩 vp-5b + vp-13 PM 手动验收 PM 自跑）
 
-设计文档 `docs/设计/入口与全流程体验顺畅性.md` v0.2（plan-eng-review Round 1 完整跑过：claude 9 finding + codex outside voice 7 finding，16 ACCEPT；最大改动是 codex C-1 砍掉 M3 整模块 —— `req-stage-gate` 续跑模式已是默认行为，M3 痛点 NULL）。批 1 ship 后批 2（M2 banner + M4 askuser + M5 session 播报）按 PM 拍板再启。
+设计文档 `docs/设计/入口与全流程体验顺畅性.md` v0.2（plan-eng-review Round 1：claude 9 finding + codex outside voice 7 finding，16 ACCEPT；最大改动 codex C-1 砍 M3 —— `req-stage-gate` 续跑模式已是默认行为）。
 
-**已落（commits 6df9cf4 + dcf5802）**：
+**批 1 已落（M1 init-project 一气呵成；commits 6df9cf4 + dcf5802 + 39cb81f + fe1b7ac + f8c1c90）**：
 
-- **vp-1**：`skills/init-project/SKILL.md` 重写 4 阶段（A 参数 5 步 + brownfield 检测 → B 骨架 → C QUESTIONING @读 `_shared/project-questioning.md` + Decision gate + atomic commit → D Next Up 只汇总）+ 顶部 ASCII 流程图 + 失败兜底速查（R10/R11）；`scripts/init-project.sh` 删 echo "下一步：/new-req"（保留非交互参数化 CLI 入口 invariant）
-- **vp-2**：新建 `skills/_shared/project-questioning.md`（253 行，单一真相源 —— §1-§10 含提问纪律 / 问题库 / 写作规则 / Decision gate 模板 / 6 节检查 / atomic commit）+ `/project-solution` SKILL.md 238→158 行（瘦身 33%）改 @读 + 加 4 场景判断框架 + frontmatter 更新；init-project SKILL.md 阶段 C 内嵌 Decision gate 选项副本改为 @读 §6.2 引用
-- **vp-3**：阶段 D「只汇总不 commit」由 vp-1 SKILL.md 已写对，verify pass，无单独 commit
+- **vp-1** (6df9cf4)：`skills/init-project/SKILL.md` 重写 4 阶段（A 参数 5 步 + brownfield → B 骨架 → C QUESTIONING @读 `_shared/project-questioning.md` + Decision gate + atomic commit → D Next Up 只汇总）+ 顶部 ASCII + 失败兜底速查（R10/R11）；`scripts/init-project.sh` 删 echo（保留非交互 CLI invariant）
+- **vp-2** (dcf5802)：新建 `skills/_shared/project-questioning.md`（253 行，单一真相源）+ `/project-solution` SKILL.md 238→158 行（瘦身 33%）改 @读 + 4 场景判断框架
+- **vp-3 + vp-4** (39cb81f)：阶段 D verify pass；README 单步 + `/init-project` 移到「启动新工作」组顶 + RUNTIME 更新 + CHANGELOG
+- **vp-5a** (fe1b7ac)：3 自动化测试 +11 cases（test-brownfield-detect.sh + test-no-duplicate-questioning.sh + test-shared-files-exist.sh）
+- **vp-6** (f8c1c90)：`/project-solution` 4 场景提问顺序细化（A 重做 / B 季度规划 / C 新方向 / D brownfield）
 
-**测试基线**：`bash tests/run-all.sh` **425 / 0**（D-iii v2 落地基线维持，vp-1/vp-2 无回归）。
+**批 2 已落（M2 banner + M4 askuser + M5 session 播报；commit vp-12 收尾即将做）**：
 
-**剩余 vp**：
+- **vp-7**：新建 `skills/_shared/pm-view/banner-rules.md`（M2 + Decision gate label 单一真相源；§1 banner / §2 Next Up / §3 3 硬规则）+ `_lib/state.py:get_current_stage_banner` + `status-view.py --banner-only`
+- **vp-8**：7 个核心 SKILL 顶部加 banner-rules 指针 + 新建 `tests/test-banner-label.sh`（5 cases）
+- ~~**vp-9 M3 整模块砍**~~（codex C-1 BLOCKER；Decision gate label 规范化合并到 vp-7 banner-rules.md §3）
+- **vp-10**：新建 `skills/_shared/pm-view/askuser-rules.md`（M4 单一真相源；gsd `#3018` 3 硬规则）+ 7 个核心 SKILL 顶部加 askuser-rules 指针
+- **vp-11**：`scripts/status-view.py --narrative`（范围降级 codex C-4：当前 stage / 产物文件 / 最近 transition，不到小节级）+ `CLAUDE.md` 章程章节「Session 起始播报」（codex C-3 校准：PM 第一条 message 后，不是「一开窗口」）+ `tests/test-narrative-mode.sh`（5 cases）
+- **vp-12** ← **本次 commit**：批 2 文档同步 RUNTIME + CHANGELOG + 跑 tests/run-all.sh
 
-- **vp-4**：文档同步 ← **进行中**（README 快速开始改单步 / Skill 汇总表移 `/init-project` / RUNTIME 更新 / CHANGELOG）
-- **vp-5a**：自动化测试（`test-brownfield-detect.sh` / `test-no-duplicate-questioning.sh` / `test-shared-files-exist.sh`，期望基线 425 → 428）
-- **vp-5b**：PM 手动端到端验收 + measure-tthw 计时 + 4 场景对比一致性
-- **vp-6**：`/project-solution` 4 场景定位强化（frontmatter / When To Use 重写；vp-2 已加 4 场景框架，vp-6 细化场景特定提问顺序）
+**测试基线**：vp-7 + vp-8 + vp-10 + vp-11 期望加 5+5=10 cases（436 → ~446）。**待 commit 时跑 tests/run-all.sh 确认无回归**。
 
-**下一步**：vp-4 完成（RUNTIME + CHANGELOG）→ vp-5a 自动化测试 → vp-6 → vp-5b PM 验收 → 批 1 完毕 → PM 拍板批 2 是否启 / 何时启。
+**剩余 PM 手动**（不可自动化）：
+
+- **vp-5b**：PM 跑 `/init-project` 端到端验收 + measure-tthw 计时 + 4 场景对比一致性
+- **vp-13**：消费仓 ExampleConsumerApp 端到端验证（按 `框架同步-SOP.md` 同步后跑）
+
+**下一步**：vp-12 跑 tests/run-all.sh → commit 批 2 → PM 拍板：① 同步消费仓 ② PM vp-5b + vp-13 手动验收 ③ D-iv ship 收尾 / 归档到 `docs/归档/完成/`。
 
 ---
 
@@ -117,9 +126,9 @@
 
 ## 新窗口续接命令
 
-> 继续 PM-AI-Workflow。读 RUNTIME.md「当前位置」确认 D-iv M1 vp-1+vp-2 已落（425/0），告诉我下一步要做什么（vp-4 / vp-5a / vp-5b / vp-6 / 批 2）。
+> 继续 PM-AI-Workflow。读 RUNTIME.md「当前位置」确认 D-iv M1 批 1 + 批 2 全包技术 vp 落地（446/0），告诉我下一步（同步消费仓 / PM vp-5b 验收 / ship 收尾）。
 
 AI 收到后应该：
-1. 读本文件「当前位置」确认 D-iv M1 当前进度（vp-1/vp-2 已落 / vp-3 verify pass / vp-4-6 剩余）
-2. 等 PM 给具体方向（接着跑剩余 vp / 跑消费仓验证 / 启批 2 / 暂停）
+1. 读本文件「当前位置」确认 D-iv M1 全包技术 vp 已落（批 1 vp-1~vp-6 + 批 2 vp-7~vp-12，vp-9 砍）
+2. 等 PM 给具体方向（① 同步消费仓 ExampleConsumerApp ② PM vp-5b/vp-13 手动验收 ③ ship 收尾归档）
 3. 不擅自启新阶段

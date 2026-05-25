@@ -6,6 +6,10 @@ description: |
 
 # /task-execute
 
+> **PM 视图（M2 banner + Decision gate label）**：入口 banner（`status-view.py --banner-only --skill TASK-EXECUTE`）；验收呈交闸门 label 按 `_shared/pm-view/banner-rules.md` §3 3 硬规则（label=动作如「task-NNN 通过验收」/「打回 task-NNN 修改」/「scope 改动」）；退出 Next Up 引导 `/close-task` 或继续修复。
+>
+> **PM 答题规则（M4）**：所有 AskUserQuestion 调用按 `_shared/pm-view/askuser-rules.md` §1 3 硬规则走（空答 STOP / 没拿到答案禁止默认走通过分支 / runtime 退化保留 wait）。**历史教训** commit 07a3a09：PM 没答 AI 默认走通过 → task 跳过验收。
+
 ## When To Use
 
 - PM 在新 Claude 会话中调用；也可由执行器 adapter 进入同一流程

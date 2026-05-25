@@ -24,6 +24,8 @@ SUITES=(
   test-brownfield-detect.sh
   test-no-duplicate-questioning.sh
   test-shared-files-exist.sh
+  test-banner-label.sh
+  test-narrative-mode.sh
   test-tthw-smoke.sh
   test-business-deviation.sh
   test-task-spec.sh

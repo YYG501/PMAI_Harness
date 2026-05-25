@@ -43,3 +43,25 @@
 测试基线 / 当前状态 / 下一步只在 `RUNTIME.md`「当前位置」写一处；CLAUDE.md / README.md 只放指针，不复制数字 —— 别处再出现基线数字即是漂移。
 
 [`hooks/check-doc-currency.cjs`](./hooks/check-doc-currency.cjs)（`.claude/settings.json` 注册的 PreToolUse hook）在 `git commit` 时检查：动了框架资产但 CHANGELOG 没进本次提交 → 拦下并把提醒喂回。纯生成器内部改动（注释 / 测试微调 / 本仓自身工作流）确实不需要动文档时，commit message 加 `[skip-doc-check]` 跳过。
+
+---
+
+## Session 起始播报（M5 / D-iv M1 vp-11）
+
+**PM 第一条 message 后（任何内容），AI 必须先跑** `bash .claude/scripts/status-view.py --narrative` **输出播报**，再回应 PM 的具体请求。
+
+- **触发**：每个新 chat session 的 PM 第一条 user message。**AI 不会在 PM 没说话前自动播报**（LLM chat 模型固有限制；codex C-3 校准）。
+- **目的**：PM 切窗口 / 隔天回来时不用主动问"我在哪"，AI 主动结构化报告当前 active req / 当前 stage / 最近 transition / 下一步建议。
+- **数据源**：`status-view.py --narrative` 内部走 `.req-meta.json` + `_lib.state.get_overall_state()`，严格基于现有字段（codex C-4 范围降级：当前 stage / 产物文件 / 最近 transition；**不到小节级**，不写「§四」/ commit hash 全文/「2 天前」相对时间这种伪精确）。
+- **失败兜底**（无 active req）：直接输出"目前没有 active req。可以发 /new-req 起新需求，或发 /init-project 起新项目"，**不编造**（防 R7 narrative 幻觉）。
+
+**生成器仓 vs 业务仓**：本规则只在业务仓有 `.req-meta.json` 时生效；生成器仓自己开发跑无意义（没有 PM 视图 req），跳过即可。
+
+播报示例：
+
+```
+上次你做到 req-003，当前 stage 3/7：功能规格，共 2 个 task（执行中 1，已完成 0）。
+下一步：发 /req-stage-gate 推进，或继续当前 stage 工作。
+```
+
+PM 视图规则约束：见 `_shared/PM-VIEW-RULES.md` + `_shared/pm-view/banner-rules.md`（M2 banner / Decision gate label）+ `_shared/pm-view/askuser-rules.md`（M4 AskUser 答题规则）。

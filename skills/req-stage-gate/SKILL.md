@@ -6,6 +6,10 @@ description: |
 
 # /req-stage-gate
 
+> **PM 视图（M2 banner + Decision gate label）**：本 skill 入口 / stage 转换处 / 退出处必出 banner（按 `_shared/pm-view/banner-rules.md` §1；用 `status-view.py --banner-only --skill REQ-STAGE-GATE`）；闸门 label 按 §3 3 硬规则（label=动作描述如「写 PRD」/ description=一句话 / 留守选项 Loop 回讨论态）；退出 Next Up 块按 §2 格式。**禁用模糊词** "OK" / "Proceed" / "Continue"。
+>
+> **PM 答题规则（M4）**：所有 AskUserQuestion 调用按 `_shared/pm-view/askuser-rules.md` §1 3 硬规则走（空答 STOP / 没拿到答案禁止落盘 / runtime 退化保留 wait）。**禁止默认走 recommend 分支 / 禁止逃生舱**。
+
 ## When To Use
 
 - Orchestrator 在每个 stage 完成后调用，推进到下一 stage

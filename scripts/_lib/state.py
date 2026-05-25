@@ -333,6 +333,33 @@ def get_stage_source(req_dir: Path, stage_num: int) -> Path:
     return req_dir / STAGE_OUTPUT_FILES[stage_num]
 
 
+def get_current_stage_banner(req_dir: Path, skill: str = "REQ-STAGE-GATE") -> str:
+    """返回 stage banner 字符串（M2 / D-iv M1 vp-7）。
+
+    格式：`━━━ PMAI ► <SKILL> ▸ Stage <N>/7: <Name> ━━━`（见 `_shared/pm-view/banner-rules.md` §1.1）。
+
+    Args:
+        req_dir: req 目录绝对路径（含 `.req-meta.json`）。
+        skill: 调用方 skill 名（大写形态，如 `REQ-STAGE-GATE` / `INIT-PROJECT`）；
+               默认 `REQ-STAGE-GATE`（最常见调用方）。
+
+    Returns:
+        固定格式 banner 字符串（不带尾部换行）。
+
+    Raises:
+        StateReadError: `.req-meta.json` 不存在 / 解析失败 / 缺 stage 字段。
+        KeyError: stage 数不在 STAGE_NAMES（1-7）；理论上不会发生（状态机受 INVARIANTS 保护）。
+    """
+    meta = read_req_meta(req_dir, strict=True)
+    assert meta is not None
+    stage = meta.get("stage")
+    if stage is None:
+        raise StateReadError(req_dir / ".req-meta.json", "缺 stage 字段")
+    from .stages import STAGE_NAMES
+    stage_name = STAGE_NAMES[int(stage)]
+    return f"━━━ PMAI ► {skill} ▸ Stage {stage}/7: {stage_name} ━━━"
+
+
 def set_stage_source(
     req_dir: Path,
     stage_num: int,

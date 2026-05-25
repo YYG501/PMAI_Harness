@@ -6,6 +6,10 @@ description: |
 
 # /task-confirm
 
+> **PM 视图（M2 banner + Decision gate label）**：入口 banner（`status-view.py --banner-only --skill TASK-CONFIRM`）；退出 Next Up 块引导新窗口 `/task-execute <task-id>`；执行前确认闸门 label 按 `_shared/pm-view/banner-rules.md` §3 3 硬规则（label=动作如「启动 task-NNN」/ description=一句话）。
+>
+> **PM 答题规则（M4）**：所有 AskUserQuestion 调用按 `_shared/pm-view/askuser-rules.md` §1 3 硬规则走（空答 STOP / 没拿到答案禁止落盘 worktree fork / runtime 退化保留 wait）。
+
 ## When To Use
 
 - PM 调用，参数是 task 文件路径（如 `/task-confirm tasks/task-001-login-ui.md`）
