@@ -11,8 +11,8 @@
 | 文件 | 说明 |
 |---|---|
 | [`_模板-方案.md`](./设计/_模板-方案.md) | 唯一设计文档模板（§0 痛点锁 + §1-§N 方案主体 + §X Review Findings + §Y 决议日志），起手用 |
-| [`attachments-体验优化.md`](./设计/attachments-体验优化.md) | **D-iii v0 stub**：attachments 体验优化（多附件场景）— §0 待 PM 共写 |
-| [`init-project-入口一气呵成.md`](./设计/init-project-入口一气呵成.md) | **D-iv v0.1**：把 `/init-project` 改造成 agent 化一气呵成入口（对齐 gsd 体验），阶段 C 字面调用 `/project-solution`（保留为项目方向规划入口）— §0 已锁 2026-05-24，方案主体待 review |
+| [`attachments-体验优化.md`](./设计/attachments-体验优化.md) | **D-iii v1**：attachments AI 接管（Model 2 — PM chat 描述材料 + 绝对路径 → AI 后台 cp + 命名 + 引用，PM 不感知 `attachments/` 目录）— §0 已锁，方案主体待 plan-eng-review；落地后改名为 `attachments-AI-接管.md` |
+| [`入口与全流程体验顺畅性.md`](./设计/入口与全流程体验顺畅性.md) | **D-iv v0**（合并版）：5 模块综合 — M1 init-project 一气呵成 + M2 banner/Next Up + M3 闸门 Decision gate + M4 AskUser 严格化 + M5 session 起始播报；§0 全锁（M1 锁 2026-05-24，M2-M5 锁 2026-05-25），方案主体待 review |
 
 > **起手新设计**：`cp docs/设计/_模板-方案.md docs/设计/<主题>.md`
 
