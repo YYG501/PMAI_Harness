@@ -135,14 +135,11 @@ for TMPL in "$FRAMEWORK_DIR/templates/"*.tmpl; do
     PRODUCT-RULES.md)       DEST="$TARGET_DIR/docs/PRODUCT-RULES.md" ;;
     ROADMAP.md)             DEST="$TARGET_DIR/docs/ROADMAP.md" ;;
     modules-INDEX.md)       DEST="$TARGET_DIR/docs/modules/INDEX.md" ;;
-    req-prd.md)             DEST="$TARGET_DIR/templates/req-prd.md.tmpl" ;;
-    implementation-design.md) DEST="$TARGET_DIR/templates/implementation-design.md.tmpl" ;;
-    codebase-audit.md)      DEST="$TARGET_DIR/templates/codebase-audit.md.tmpl" ;;
-    task.md)                DEST="$TARGET_DIR/templates/task.md.tmpl" ;;
-    task-plan.md)           DEST="$TARGET_DIR/templates/task-plan.md.tmpl" ;;
-    module.md)              DEST="$TARGET_DIR/templates/module.md.tmpl" ;;
+    req-prd.md|implementation-design.md|codebase-audit.md|task.md|task-plan.md|module.md|lark-publish.json)
+      # symlink 模式下，这些 runtime .tmpl 通过 templates/ symlink 跟随 framework 升级；
+      # 不再拷实体到 consumer/templates/
+      continue ;;
     settings.json)          DEST="$TARGET_DIR/.claude/settings.json" ;;
-    lark-publish.json)      DEST="$TARGET_DIR/templates/lark-publish.json.tmpl" ;;
     gitignore)              DEST="$TARGET_DIR/.gitignore" ;;
     pm-workflow.config.yml) DEST="$TARGET_DIR/.pm-workflow/config.yml" ;;
     *)             continue ;;
@@ -161,13 +158,11 @@ PY
 done
 echo "📋 模板已复制并替换占位符"
 
-# --- d1.5. 复制工程结构约束源文件（非 .tmpl 后缀，runtime 被 stage 3 工程合同链路引用） ---
-# 工程结构约束-{档位}.md 由 stage 3 工程合同链路引用
-# detect-project-structure.py 引用 templates/工程结构约束.schema.json
-for STRUCT_FILE in "$FRAMEWORK_DIR/templates/"工程结构约束-*.md "$FRAMEWORK_DIR/templates/"工程结构约束.schema.json; do
-  [ -f "$STRUCT_FILE" ] || continue
-  cp "$STRUCT_FILE" "$TARGET_DIR/templates/$(basename "$STRUCT_FILE")"
-done
+# --- d1.5. 工程结构约束源文件（symlink 模式：通过 templates/ symlink 跟随）---
+# 旧版 cp 工程结构约束-*.md / schema.json 到 consumer/templates/。
+# 方案 A symlink 模式后，consumer/templates/ 整体 symlink → $FRAMEWORK_DIR/templates/，
+# 这些文件随 framework 升级自动跟，不再单独拷。
+# 注：工程结构约束.schema.json 由 detect-project-structure.py 读，路径同样走 templates/ symlink。
 
 # --- d2. 注入工程结构约束段（4.5c）---
 python3 "$FRAMEWORK_DIR/scripts/inject-structure-segment.py" \
@@ -177,42 +172,27 @@ python3 "$FRAMEWORK_DIR/scripts/inject-structure-segment.py" \
     echo "⚠️  工程结构约束注入失败（项目仍可用，PM 后续可手动跑 detect-project-structure.py）" >&2
   }
 
-# --- e. 复制脚本 ---
-mkdir -p "$TARGET_DIR/.claude/scripts"
-for SCRIPT in "$FRAMEWORK_DIR/scripts/"*; do
-  BASENAME=$(basename "$SCRIPT")
-  # 跳过框架自用脚本（不该分发到消费仓）和 .ref 文件
-  case "$BASENAME" in
-    init-project.sh) continue ;;   # 只在框架仓运行
-    measure-tthw.sh) continue ;;   # 框架自用 TTHW 测量工具，假定框架仓根 + 调 init-project.sh，进消费仓必失效
-    *.ref)           continue ;;
-  esac
-  cp -Rp "$SCRIPT" "$TARGET_DIR/.claude/scripts/$BASENAME"
-done
-chmod +x "$TARGET_DIR/.claude/scripts/"*.sh 2>/dev/null || true
-echo "🔧 脚本已复制到 .claude/scripts/"
+# --- e/f/f2. symlink 4 块到 framework（方案 A：framework 升级自动跟）---
+# 旧版 cp 实体 4 块到 consumer/.claude/{scripts,skills,agents} + consumer/templates/，导致
+# pmai upgrade 后 consumer 内部仍是 init 时快照，不跟升级。
+# 方案 A：consumer 内只放 symlink 到 $FRAMEWORK_DIR/，framework 改完 push + pmai upgrade
+# 后 ~/.pmai/ 拉新 commit，所有 default symlink 模式的 consumer 自动用新版。
+# 代价：consumer git 历史不包含框架代码；consumer clone 到没装 pmai 的机器无法运行（须先 pmai install）。
+mkdir -p "$TARGET_DIR/.claude"
+ln -s "$FRAMEWORK_DIR/scripts"   "$TARGET_DIR/.claude/scripts"
+ln -s "$FRAMEWORK_DIR/skills"    "$TARGET_DIR/.claude/skills"
+ln -s "$FRAMEWORK_DIR/agents"    "$TARGET_DIR/.claude/agents"
+echo "🔗 .claude/scripts + .claude/skills + .claude/agents symlink → $FRAMEWORK_DIR/"
 
-# --- f. 复制 skills ---
-mkdir -p "$TARGET_DIR/.claude/skills"
-for SKILL_DIR in "$FRAMEWORK_DIR/skills/"*/; do
-  SKILL_NAME=$(basename "$SKILL_DIR")
-  # 跳过 init-project（只在框架仓库中使用）
-  [ "$SKILL_NAME" = "init-project" ] && continue
-  mkdir -p "$TARGET_DIR/.claude/skills/$SKILL_NAME"
-  # 递归复制：skill 目录可能含 references/ 等子目录（prd-writing / task-execute）
-  # 不吞错误——skill 复制是关键步骤，失败应由 set -e 停下，而非静默漏拷
-  cp -R "$SKILL_DIR". "$TARGET_DIR/.claude/skills/$SKILL_NAME/"
-done
-echo "🛠️ Skills 已复制到 .claude/skills/"
-
-# --- f2. 复制 agents ---
-if [ -d "$FRAMEWORK_DIR/agents" ]; then
-  mkdir -p "$TARGET_DIR/.claude/agents"
-  for AGENT_FILE in "$FRAMEWORK_DIR/agents/"*.md; do
-    [ -f "$AGENT_FILE" ] || continue
-    cp "$AGENT_FILE" "$TARGET_DIR/.claude/agents/$(basename "$AGENT_FILE")"
-  done
-  echo "🤖 Agents 已复制到 .claude/agents/"
+# templates/ 也 symlink（覆盖 runtime .tmpl 如 task.md.tmpl / req-prd.md.tmpl / 工程结构约束-*.md 等）
+# 注：占位符替换的 .tmpl 已在 d 段单独处理（写到 CLAUDE.md / docs/PROJECT.md 等业务路径）。
+if [ -e "$TARGET_DIR/templates" ]; then
+  # d 段可能已经创建了 templates/ 目录（如果 d 处理到任何走 default case 的 *.tmpl）
+  # 但当前 d 段对 runtime templates 是 continue 跳过 → 不会建 templates 目录；保险起见再检查一次
+  echo "⚠️  $TARGET_DIR/templates 已存在，跳过 symlink（可能 d 段误建）" >&2
+else
+  ln -s "$FRAMEWORK_DIR/templates" "$TARGET_DIR/templates"
+  echo "🔗 templates symlink → $FRAMEWORK_DIR/templates"
 fi
 
 # --- g. settings.json 已在模板复制时创建 ---
@@ -246,23 +226,20 @@ print(3000 + (h % 7000))
 echo "$BASE_PORT" > .dev-port
 echo "🔌 基础端口: $BASE_PORT"
 
-# --- k1. 复制 Claude Code hooks（项目根 hooks/，跟 .claude/settings.json 注册联动）---
+# --- k1. symlink Claude Code hooks（方案 A：跟 framework 升级）---
+# 旧版 cp .cjs/.js/.sh 文件到 consumer/hooks/。
+# 方案 A symlink 后，settings.json 注册路径 "$CLAUDE_PROJECT_DIR/hooks/<file>.cjs" 解析到
+# symlinked 目录里的实际 framework 文件，hook 行为跟 ~/.pmai/hooks/ 升级。
 if [ -d "$FRAMEWORK_DIR/hooks" ]; then
-  mkdir -p "$TARGET_DIR/hooks"
-  for HOOK_FILE in "$FRAMEWORK_DIR/hooks/"*.cjs "$FRAMEWORK_DIR/hooks/"*.js "$FRAMEWORK_DIR/hooks/"*.sh; do
-    [ -f "$HOOK_FILE" ] || continue
-    cp "$HOOK_FILE" "$TARGET_DIR/hooks/$(basename "$HOOK_FILE")"
-    chmod +x "$TARGET_DIR/hooks/$(basename "$HOOK_FILE")" 2>/dev/null || true
-  done
-  echo "🪝 Claude Code hooks 已复制到 hooks/"
+  ln -s "$FRAMEWORK_DIR/hooks" "$TARGET_DIR/hooks"
+  echo "🔗 hooks symlink → $FRAMEWORK_DIR/hooks"
 fi
 
-# --- k2. 复制 git-hooks 模板 ---
-mkdir -p "$TARGET_DIR/templates/git-hooks"
-for HOOK_TMPL in "$FRAMEWORK_DIR/templates/git-hooks/"*.tmpl; do
-  [ -f "$HOOK_TMPL" ] || continue
-  cp "$HOOK_TMPL" "$TARGET_DIR/templates/git-hooks/$(basename "$HOOK_TMPL")"
-done
+# --- k2. git-hooks 模板（symlink 模式：通过 templates/ symlink 跟随）---
+# 旧版 cp templates/git-hooks/*.tmpl 到 consumer/templates/git-hooks/。
+# 方案 A 已把 consumer/templates/ symlink → $FRAMEWORK_DIR/templates/，
+# git-hooks/*.tmpl 自然在内，无需单独拷。下面 k3 install-hooks.sh 读 templates/git-hooks/
+# 路径解析到 framework 原版。
 
 # --- k3. 安装 pre-commit hook（拦截非法 task 状态字段直改）---
 if bash "$FRAMEWORK_DIR/scripts/install-hooks.sh" 2>&1 | sed 's/^/   /'; then
