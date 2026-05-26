@@ -134,6 +134,41 @@ PENDING_MARKER="$REPO_ROOT/.runs/pending-close-req.json"
 
 1. 遍历 `tasks/*.md`；按 `detect_format` 分流提取每 task 的偏差（v3 单文件审计区 / v2 跨两文件）。
 2. **按目标文档分组**：同一份 `docs/modules/<module>.md` / `docs/DESIGN.md` / `docs/PROJECT.md` 的多 task 偏差并到一起（**项目主 `docs/prd.md` 已砍，不在范围**；req 级 `prd.md` 是 stage 3 定稿冻结基准，不进本 sediment 流程）。基础设施 task（`所属模块=基础设施`）跳过 module sediment，但其偏差表仍走对账。
+2.5. **稳定结构反查（弥补 task 偏差表盲区）**：
+
+   **盲区根因**：task 偏差表只检测「已有文档原文 vs 代码」diff —— 本 req 新建/改了「稳定结构」（菜单 IA / 路由表 / schema / config / contract），但 `docs/modules/` 从来没建过对应规格文件 → 偏差表填「无」（无源可比）→ §1.5 silent skip → 稳定结构只活在代码里，下次想沉淀也不知道有这件事。req-008 close 后发现菜单 IA 三个 app 都漏沉淀，根因即此。
+
+   **反查流程**：
+
+   ```bash
+   BASE=$(git merge-base main HEAD)   # req 起点
+   git diff --stat "$BASE" HEAD | grep -v '^docs/\|^requirements/\|^tests/'
+   git diff "$BASE" HEAD -- '*.ts' '*.tsx' '*.py' '*.go' '*.json' '*.yaml' '*.yml' | head -500
+   ```
+
+   AI 看本 req 全部代码侧 diff，自答：本 req 是否新建/改了**稳定结构**，但 `docs/modules/` 无对应规格文件？
+
+   - 正面线索：路径/文件名含 `routes`/`router`/`navigation`/`menu`/`sidebar`/`permissions`/`schema`/`contract`/`api`/`config`；内容是**声明性数据**（数组/对象/枚举字面量）非函数逻辑；影响产品 IA（用户能看到的导航/权限/URL 结构）
+   - 负面排除（不算）：单页业务逻辑、组件 refactor、测试、bug fix、内部工具脚本、纯样式调整
+   - 已被 task 偏差表覆盖的（条目已指向某 modulespec / DESIGN / PROJECT）→ 不重复列
+
+   **输出候选「孤儿稳定结构」清单**，每条含：
+
+   - 涉及文件清单（代码侧路径）+ 1-2 行 diff 证据
+   - 稳定结构类型（菜单 / 路由 / schema / config / contract / 其他）
+   - 建议 modulespec 目标路径（基于 task「所属模块」字段 + 现有 `docs/modules/` 目录结构推断）
+   - **AI 自审反证**一行：「这不该入 modulespec 的理由」—— 强制 AI 给出否定理由，防过度推荐
+
+   **PM 决议**（每条候选三选一，AskUserQuestion）：
+
+   | 决议 | 行为 |
+   |---|---|
+   | **建** | 本 req 顺便建 modulespec 主规格文件 → 追加进步骤 3 决议表，走 rewrite 分支 |
+   | **不建（追认代码即文档）** | close-report.md `## 文档变更` 段加一行：「<结构类型>：真相源 = <代码路径>（PM close-req-NNN 追认）」防下个 req 重复问 |
+   | **推下个 req** | close-report.md `## 遗留问题` 段加一条点名（含建议 modulespec 路径 + 涉及文件） |
+
+   **零候选**：反查无候选孤儿 → 直接跳到步骤 3，不调 AskUserQuestion。
+
 3. 聚合后呈交 PM，按目标文档逐份决议（AskUserQuestion 或 prose；**两选项**，skip 分支已砍）：
 
    | 决议 | 触发条件 | 行为 |
@@ -173,7 +208,7 @@ PENDING_MARKER="$REPO_ROOT/.runs/pending-close-req.json"
 **边界**：
 
 - 步骤 1.5 是 close-req 的**主路径**（每 req 必跑一次）
-- **本 req 内全部 closed task 偏差表都是「无偏差」且无功能清单变化** → silent skip 进步骤 2a（仅在「基础设施 task 单 req」之类的纯非业务 req 出现）
+- **本 req 内全部 closed task 偏差表都是「无偏差」且无功能清单变化 + 步骤 2.5 反查无候选孤儿（或所有候选 PM 选「不建 / 推下个 req」）** → silent skip 进步骤 2a（仅在「基础设施 task 单 req」之类的纯非业务 req 出现）
 - inter-req 推迟 / DEFERRED_TO_REQ skip 分支已砍（多 req 并行不在范围）
 - 旧 SKIP marker 兼容：消费仓若有旧 `<!-- SKIP_DOC_UPDATE: ... cleanup_status=... -->` 残留，本步骤遇到时**等同普通偏差源处理**（一次性消费掉，rewrite 决议时 `cleanup_status` 改 `done` 留作 audit trail；不再阻塞 stage 6→7 推进）
 

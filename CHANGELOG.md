@@ -187,6 +187,19 @@ PM-AI-Workflow 生成器仓的演进记录。本文件**只记影响下游业务
 
 ## 未发布
 
+### 2026-05-27 — fix(close-req): §1.5 加稳定结构反查，堵 task 偏差表只能 diff「已有文档 vs 代码」的盲区
+
+**触发**：消费仓 ExampleConsumerApp req-008 close 后 PM 反查发现菜单 IA（主运营 / 平台运营 / 租户三个 app 的 navigation 数据结构 + 菜单组织规则）只活在代码里 + `docs/DESIGN.md` §9.5，**没沉淀进任何 `docs/modules/<m>.md`**。三个 task 偏差表全部填「无」机器合规，但实质漏了 —— 因为偏差表是「已有文档 vs 代码」diff 算法，菜单 IA 在 modulespec 里从来没建过对应规格文件，「不一致」无从谈起 → §1.5 silent skip。
+
+**根因**：close-req §1.5 输入源（task 偏差表 + adjustment 事件）只能检测「diff 类」偏差，检测不到「本 req 新建/改了稳定结构、但 `docs/modules/` 从来没建过对应规格文件」这种**结构性缺失**。
+
+**改动**（PM 视角）：
+
+- `skills/close-req/SKILL.md` §1.5 流程加 **step 2.5 稳定结构反查**：在 task 偏差表分组之后、PM 决议之前，AI 看本 req 全部代码侧 diff（`git diff $(git merge-base main HEAD) HEAD`），按正面线索（路径含 `routes`/`navigation`/`menu`/`schema`/`config` 等 + 内容是声明性数据 + 影响产品 IA）/ 负面排除（业务页面 / refactor / 测试 / bug fix）自答「本 req 是否新建/改了稳定结构但 `docs/modules/` 无对应规格文件」。输出候选「孤儿稳定结构」清单（含文件 / 类型 / 建议 modulespec 路径 / **AI 自审反证一行防过度推荐**），PM 三选一决议：**建** → 走 rewrite / **不建（追认代码即文档）** → close-report.md `## 文档变更` 段留追认记录 / **推下个 req** → close-report.md `## 遗留问题` 加点名
+- §1.5 边界段 silent skip 条件加一项：**反查无候选孤儿（或所有候选 PM 选「不建 / 推下个 req」）**
+
+**影响**：消费仓下次 close-req 流程 PM 视角多一个反查步骤（仅当 AI 反查产出候选时出 AskUserQuestion；零候选直接跳过）。本次未补 close-task 阶段反查（task 单位反查粒度太细且 task 没收完时反查不全面，留到本次反馈累积再说）。
+
 ### 2026-05-27 — fix(close-task+req-stage-gate): 关最后一个 task 时不再让 PM 多敲一次 /req-stage-gate
 
 **触发**：PM 跑完 task-003（req-008 最后一个 task）后 `/close-task` 输出"下一步：在本（req）窗口运行 `/req-stage-gate` 推进至 Stage 7" → PM 敲 `/req-stage-gate` → 出关 req 确认门。PM 反问"closetask 之后都知道下一步是 stage7 了，为什么不直接和我确认是否要关闭 req"。
