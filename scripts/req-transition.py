@@ -225,7 +225,7 @@ def validate_forward(meta: dict, target: int, req_dir: Path) -> None:
 
     # Check prerequisite output files
     if current == 3:
-        # delta-2+4 E3：stage 3 换芯（solution.md → prd.md）。在飞旧 req 仍是
+        #  E3：stage 3 换芯（solution.md → prd.md）。在飞旧 req 仍是
         # solution.md。用文件存在性判别新旧流程，零新 .req-meta.json 字段：
         #   solution.md 在 + prd.md 无 → 旧流程（接受 solution.md）
         #   否则 → 新流程（要 prd.md）
@@ -248,7 +248,7 @@ def validate_forward(meta: dict, target: int, req_dir: Path) -> None:
             )
             sys.exit(1)
     elif current in STAGE_OUTPUT_FILES:
-        # D-i v4 R3-C1：stage 2 真相源走 helper（B 分支 office-hours 产
+        # ：stage 2 真相源走 helper（B 分支 office-hours 产
         # stage2-office-hours.md，A 分支 req-analysis 产 analysis.md）。其他
         # stage 仍以 STAGE_OUTPUT_FILES 默认产物为准（B 分支机制目前只覆盖
         # stage 2；future 扩 stage N 时只需该 stage 的 caller 写

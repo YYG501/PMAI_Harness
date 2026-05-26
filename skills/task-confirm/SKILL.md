@@ -6,25 +6,25 @@ description: |
 
 # /task-confirm
 
-> **PM 视图（M2 banner）**：入口 banner（`status-view.py --banner-only --skill TASK-CONFIRM`，见 `_shared/pm-view/banner-rules.md` §1）；退出 Next Up 块（§2）引导新窗口 `/task-execute <task-id>`。**task-confirm 不设确认闸门**（delta-3 §2.3，唯一闸门在 `/task-spec` 步骤 10），故不涉及 banner-rules §3 Decision gate label 规则。
+> **PM 视图（M2 banner）**：入口 banner（`status-view.py --banner-only --skill TASK-CONFIRM`，见 `_shared/pm-view/banner-rules.md` §1）；退出 Next Up 块（§2）引导新窗口 `/task-execute <task-id>`。**task-confirm 不设确认闸门**（唯一闸门在 `/task-spec` 步骤 10），故不涉及 banner-rules §3 Decision gate label 规则。
 >
 > **PM 答题规则（M4）**：所有 AskUserQuestion 调用按 `_shared/pm-view/askuser-rules.md` §1 3 硬规则走（空答 STOP / 没拿到答案禁止落盘 worktree fork / runtime 退化保留 wait）。
 
 ## When To Use
 
 - PM 调用，参数是 task 文件路径（如 `/task-confirm tasks/task-001-login-ui.md`）
-- **被 `/task-spec` 步骤 11 续跑触发**（speed mode 2026-05-26 默认行为）：task-spec
+- **被 `/task-spec` 步骤 11 续跑触发**（speed mode 默认行为）：task-spec
   PM 答"定稿"后落盘 commit → AI 直接续跑本 skill workflow，PM 不需手动贴
   `/task-confirm <path>`。续跑路径行为与 PM 手动调完全一致（task-confirm 自身不设
   确认门，全是机械流程）。
 
-## task 文件形态（delta-3）
+## task 文件形态
 
 task-spec 产 **单文件 typed contract**（`tasks/task-NNN-<slug>.md`，头部带
 `<!-- task_format: single-typed-v3 -->` 标记，内部分 PM 确认区 / 执行区 / 审计区）。
 本 skill 读 PM 确认区的「📌 任务卡」「✅ 验收清单」「📦 范围」做摘要展示。
 
-> **task-confirm = 机械流程**（delta-3 §2.3）：PM 在整个 task 生命周期的唯一确认门已在
+> **task-confirm = 机械流程**：PM 在整个 task 生命周期的唯一确认门已在
 > `/task-spec` 步骤 10。task-confirm **不再设自己的「是否确认启动」问句** —— 它只做：
 > 摘要展示（informational）+ 可选 executor 切换（非阻塞告知）+ 依赖 gate（机器校验）+
 > worktree fork。
@@ -104,7 +104,7 @@ bundle、不需要带路径参数，PM 直接 `/qa` 等命令运行即可。
 
 ### 步骤 3：executor 切换（非阻塞）
 
-> delta-3 §2.3：task-confirm 是机械流程 —— **不设「是否确认启动此 task？」问句**
+> ：task-confirm 是机械流程 —— **不设「是否确认启动此 task？」问句**
 > （唯一确认门已在 `/task-spec` 步骤 10）。executor 切换是「机械流程 + 一次非阻塞告知」：
 > 摘要已在步骤 2 展示当前 executor，步骤 6 输出会列全 4 个可选 executor + 「想换说一声」
 > 提示 —— **不阻塞、不专门问**。PM 不响应即用当前 executor 继续。
@@ -116,7 +116,7 @@ bundle、不需要带路径参数，PM 直接 `/qa` 等命令运行即可。
 
 > **commit 行为说明**：sed 改完 task 文件字段后会产生元信息 commit（仅改 executor /
 > executor_model / dev server / port 字段，不改 src/ 代码）。close-task.sh 的 I-CT8 audit
-> 通过 `commit_only_touches_task_docs()`（见 `scripts/audit-task-events.py`）豁免：commit
+> 通过 `commit_only_touches_task_docs`（见 `scripts/audit-task-events.py`）豁免：commit
 > 改动文件全部是 task 文件 → skip I-CT8 时间戳检查。
 
 ### 步骤 4-pre：依赖前置检查（v4 主防线）
@@ -161,7 +161,7 @@ fi
 
 **行为**：脚本 fork task 分支后**自动把 task 文件从 req 分支删除并 commit**——task 文件
 在 task 分支独家所有，避免两份共存导致的路径解析赌博。close-task 时 merge 会自动"认回"
-task 文件进入 req 分支作为最终历史档案。（delta-3：v3 单文件只删一个文件；在飞旧 v2
+task 文件进入 req 分支作为最终历史档案。（v3 单文件只删一个文件；在飞旧 v2
 双文件 task 仍删两个。）
 
 **I-DC1 pre-fork gate**：`create-task-worktree.sh` 在 fork 之前会先检查 req 分支 working tree

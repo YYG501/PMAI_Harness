@@ -45,7 +45,7 @@ extract_task_field() {
   echo "$val"
 }
 
-# --- task 格式判别（delta-3 三态：v1/v2/v3） ---
+# --- task 格式判别（三态：v1/v2/v3） ---
 ENG_FILE="${TASK_FILE%.md}.engineering.md"
 TASK_FMT=$(python3 "$REPO_ROOT/.claude/scripts/_lib/state.py" detect_format "$TASK_FILE" 2>/dev/null || echo "v3")
 if [ "$TASK_FMT" = "v2" ]; then
@@ -63,10 +63,10 @@ if [ "$STATUS" != "已完成" ]; then
   exit 1
 fi
 
-# --- 偏差记录留作 close-req 聚合输入（D13 final, 2026-05-16, polish-6） ---
+# --- 偏差记录留作 close-req 聚合输入 ---
 # 不在 close-task 阶段调 /doc-update（避免 N 次启动成本累加，§0.1 痛点）。
 # 偏差原样保留在 task 文件，由 close-req 步骤 1.5 聚合处理。
-# 详见 docs/归档/完成/modulespec-维护/主方案.md §0.1 + §1 + §3 vp-1。
+# .md §0.1 + §1 + §3 。
 # 历史 collect_diff_section helper + DOC_DIFF 阻塞 block 已删。
 
 # --- 提取分支名 ---
@@ -136,7 +136,7 @@ fi
 # 跨功能产品规则反馈到这两份文件时不 commit（PM 在 req 窗口审 diff 再 commit）。
 # 若 task worktree 里它们真有 uncommitted（AI patch 走错 worktree 的容错）→
 # 先把改动 carry 到 req worktree（保留 PM 在 req 审 diff 的语义），再做 clean 检查。
-# delta-9 D9-4：PRODUCT-RULES.md 与 DESIGN.md 同一处理（6382baf 同类 bug 防回归）。
+#  ：PRODUCT-RULES.md 与 DESIGN.md 同一处理（同类 bug 防回归）。
 CARRY_FORWARD_FILES="docs/DESIGN.md docs/PRODUCT-RULES.md"
 TASK_WORKTREE=$(resolve_worktree_path "$BRANCH" "$REPO_ROOT" || true)
 if [ -n "$TASK_WORKTREE" ] && [ -d "$TASK_WORKTREE" ]; then
@@ -250,10 +250,10 @@ fi
 MERGE_OK=true
 echo "🔀 已合并 ${BRANCH} → ${REQ_BRANCH}（已验证提交落地）"
 
-# --- delta-7 vp-3：promote task 「文档偏差」→ req adjustment 事件 ---
+# --- ：promote task 「文档偏差」→ req adjustment 事件 ---
 # Phase 2 在 req worktree：merge 后 task 文件已在 req 分支，读其文档偏差段、
 # 逐行 append 成 req-events.jsonl 的 adjustment 事件（close-req 反向对齐读它）。
-# 格式判别复用 delta-3 detect_format 三态（v2 在 .engineering.md §10、v3 在审计区）。
+# 格式判别复用  detect_format 三态（v2 在 .engineering.md §10、v3 在审计区）。
 REQ_EVENTS_SCRIPT="$REPO_ROOT/.claude/scripts/req-events.py"
 REQ_BASENAME_FOR_EVENTS=$(basename "$REQ_DIR")
 REQ_DIR_IN_WT="$REQ_WORKTREE/requirements/active/$REQ_BASENAME_FOR_EVENTS"

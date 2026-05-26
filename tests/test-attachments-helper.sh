@@ -436,7 +436,7 @@ test_skill_prose_trigger0_added() {
 
 test_skill_prose_b_branch_disable() {
   start_test "grep: req-stage-gate B 分支已加 trigger 0 disable 边界"
-  if grep -q "C4 cross-design 冲突防护" "$FRAMEWORK_ROOT/skills/req-stage-gate/SKILL.md" && \
+  if grep -q "cross-design 冲突防护" "$FRAMEWORK_ROOT/skills/req-stage-gate/SKILL.md" && \
      grep -q "attachments trigger 0 禁用" "$FRAMEWORK_ROOT/skills/req-stage-gate/SKILL.md"; then
     pass_test
   else
@@ -445,8 +445,8 @@ test_skill_prose_b_branch_disable() {
 }
 
 test_skill_prose_new_req_commit_pathspec() {
-  start_test "grep: new-req 步骤 4.5 commit pathspec 已扩 attachments/（C1 fix）"
-  if grep -q "D-iii v2 C1 fix" "$FRAMEWORK_ROOT/skills/new-req/SKILL.md" && \
+  start_test "grep: new-req 步骤 4.5 commit pathspec 已扩 attachments/"
+  if grep -qE 'attachments/.*一并\s*commit|一并\s*commit.*attachments' "$FRAMEWORK_ROOT/skills/new-req/SKILL.md" && \
      grep -q 'git add "$REQ_REL/attachments"' "$FRAMEWORK_ROOT/skills/new-req/SKILL.md"; then
     pass_test
   else

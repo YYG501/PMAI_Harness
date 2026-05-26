@@ -19,9 +19,9 @@
 | §四 | 文档级严格度对照表 | [`pm-view/doc-strictness.md`](./pm-view/doc-strictness.md) | new-req（brief 行）|
 | §七 | 章节顺序约束（按文档类型）| [`pm-view/section-order.md`](./pm-view/section-order.md) | task-plan · task-spec |
 | §八 | 自检清单（生成 / 修改 PM 视图后）| [`pm-view/checklist.md`](./pm-view/checklist.md) | prd-writing · task-plan · task-spec |
-| §九 9.0 - 9.5 | 输入流约束 / PM 反馈分流 / 信息流图（§9.6 双文件 lazy sync 已废，delta-3）| [`pm-view/input-flow.md`](./pm-view/input-flow.md) | 全部 PM 视图 skill |
+| §九 9.0 - 9.5 | 输入流约束 / PM 反馈分流 / 信息流图（§9.6 双文件 lazy sync 已废）| [`pm-view/input-flow.md`](./pm-view/input-flow.md) | 全部 PM 视图 skill |
 | §9.7 | 跨 skill 共享原则 | [`pm-view/cross-skill.md`](./pm-view/cross-skill.md) | skill 作者 / 框架维护者 |
-| §10 | attachments AI 接管（D-iii v2 trigger 0）— LLM 识别 PM chat 上传意图 + caller 调 `_lib.attachments` helper + 7 stage 通用规则（含 office-hours B 分支 disable 边界）| [`pm-view/attachments-upload.md`](./pm-view/attachments-upload.md) | 7 stage SKILL（new-req / req-analysis / prd-writing / task-spec / req-stage-gate / implementation-design / task-plan）|
+| §10 | attachments AI 接管（trigger 0）— LLM 识别 PM chat 上传意图 + caller 调 `_lib.attachments` helper + 7 stage 通用规则（含 office-hours B 分支 disable 边界）| [`pm-view/attachments-upload.md`](./pm-view/attachments-upload.md) | 7 stage SKILL（new-req / req-analysis / prd-writing / task-spec / req-stage-gate / implementation-design / task-plan）|
 
 **读法约定**：
 - skill 步骤里写"按 §三"或"按 PM-VIEW-RULES §三" → 表示读对应子文件
@@ -58,10 +58,10 @@ PM 创建 / 审核 / 验收时直接看的内容。回答 PM 关心的问题：
 
 ---
 
-## 二、task 文件形态：单文件 typed contract（delta-3）
+## 二、task 文件形态：单文件 typed contract
 
 > ⚠️ 旧「task 拆两文件（PM 视图 `.md` + 工程合同 `.engineering.md`）」约定**已废**——
-> delta-3 把 task-spec 塌缩成单文件 typed contract。
+>  把 task-spec 塌缩成单文件 typed contract。
 
 `tasks/task-NNN-*.md` 是 **1 个物理文件**（头部 `<!-- task_format: single-typed-v3 -->`），
 内部分三区，各区有各自的 lint：

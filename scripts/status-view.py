@@ -32,8 +32,8 @@ from _lib.state import (  # noqa: E402
     get_timeline_state,
     list_tasks,
 )
-from _lib.stages import STAGE_NAMES  # noqa: E402  (delta-2+4 F13 单一真相源)
-from _lib import stage6_summary  # noqa: E402  (speed mode 2026-05-26)
+from _lib.stages import STAGE_NAMES  # noqa: E402  ( F13 单一真相源)
+from _lib import stage6_summary  # noqa: E402  (speed mode)
 
 STATUS_ICONS = {
     "待执行": "⏳",
@@ -118,7 +118,7 @@ def render_summary(state: dict, repo_root: Path) -> None:
 
 
 def render_banner_only(state: dict, repo_root: Path, skill: str) -> None:
-    """M2 / D-iv M1 vp-7: 输出当前 active req 的 stage banner 一行。
+    """M2 /  : 输出当前 active req 的 stage banner 一行。
 
     格式按 `skills/_shared/pm-view/banner-rules.md` §1.1。
     无 active req → 输出占位 banner（PM 知道还没起 req）。
@@ -141,7 +141,7 @@ def render_banner_only(state: dict, repo_root: Path, skill: str) -> None:
 
 
 def render_narrative(state: dict, repo_root: Path) -> None:
-    """M5 / D-iv M1 vp-11: AI 可直接念的进度叙述。
+    """M5 /  : AI 可直接念的进度叙述。
 
     范围（codex C-4 降级）：当前 active req / 当前 stage / 产物文件 / 最近 transition；
     **不到小节级**（如「§四」/ commit hash 全文 不写，伪精确）。
@@ -187,7 +187,7 @@ def render_narrative(state: dict, repo_root: Path) -> None:
 def render_health_check(repo_root: Path) -> None:
     """项目级产品文档体检：缺则输出 1 段 hint，齐全则静默。
 
-    背景：sync 框架后老项目可能缺 GSD §8 / D-iv M1 新增的产品级文档
+    背景：sync 框架后老项目可能缺 GSD §8 /  新增的产品级文档
     （PRODUCT-RULES.md / ROADMAP.md）。`框架同步-SOP.md` §4.10 说"读侧
     容错"——个别脚本读不到不阻塞，但 PM 在 session 起始播报里需要被告知
     缺什么，否则永远不知道要补。
@@ -453,7 +453,7 @@ def render_status(state: dict, repo_root: Path) -> None:
 
 
 def render_timeline(timeline_state: dict, repo_root: Path) -> None:
-    """Render --timeline 全局视图（vp-7）。"""
+    """Render --timeline 全局视图。"""
     active = timeline_state["active"]
     closed = timeline_state["closed"]
     cancelled = timeline_state["cancelled"]
@@ -560,7 +560,7 @@ def main() -> None:
     )
     parser.add_argument(
         "--timeline", action="store_true",
-        help="全局时间线视图：active + closed + cancelled 全量按时间倒序（vp-7）"
+        help="全局时间线视图：active + closed + cancelled 全量按时间倒序"
     )
     parser.add_argument("--since", default=None, help="(timeline) 仅显示关闭时间 >= YYYY-MM-DD 的 archived")
     parser.add_argument("--module", default=None, help="(timeline) 仅显示涉及该 module 的 req")
@@ -569,7 +569,7 @@ def main() -> None:
     parser.add_argument("--all", action="store_true", help="(timeline) 取消 limit，显示全部 archived")
     parser.add_argument(
         "--banner-only", action="store_true",
-        help="(M2/D-iv M1 vp-7) 仅输出当前 active req 的 stage banner 一行（按 banner-rules.md §1.1 格式）"
+        help="(M2/ ) 仅输出当前 active req 的 stage banner 一行（按 banner-rules.md §1.1 格式）"
     )
     parser.add_argument(
         "--skill", default="REQ-STAGE-GATE",
@@ -577,11 +577,11 @@ def main() -> None:
     )
     parser.add_argument(
         "--narrative", action="store_true",
-        help="(M5/D-iv M1 vp-11) 输出 AI 可直接念的进度叙述（当前 stage / 产物文件 / 最近 transition；不到小节级，codex C-4 范围降级）"
+        help="(M5/ ) 输出 AI 可直接念的进度叙述（当前 stage / 产物文件 / 最近 transition；不到小节级，codex C-4 范围降级）"
     )
     parser.add_argument(
         "--stage6-entry", default=None, metavar="REQ_DIR",
-        help="(speed mode 2026-05-26) 渲染 stage 6 入口总览（自决项 + PM 拍过的结构决策 + task 拆分 + 产物路径 + PM 三选项）"
+        help="(speed mode) 渲染 stage 6 入口总览（自决项 + PM 拍过的结构决策 + task 拆分 + 产物路径 + PM 三选项）"
     )
     args = parser.parse_args()
 

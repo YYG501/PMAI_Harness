@@ -82,7 +82,7 @@
 [AskUserQuestion]
 question 1: req-005 角色模型用三元组还是二维分离？
 question 2: scope 字段命名叫 scope 还是 range？
-question 3: D13 vp-2 要不要先做？
+question 3:   要不要先做？
 ```
 → PM 反馈"没看明白问题"。原因：术语密集 + 多决策并列 + 无屏幕例子。
 
@@ -144,4 +144,4 @@ B. 改成"管的范围"
 
 ---
 
-**End of askuser-rules.md**（M4 单一真相源；vp-10 实施）
+**End of askuser-rules.md**（M4 单一真相源； 实施）

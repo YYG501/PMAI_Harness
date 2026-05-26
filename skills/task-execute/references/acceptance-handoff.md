@@ -81,6 +81,6 @@ PM 视图：[历史档案中的偏差或"无"]
 
 ## 11.3 走查时引导 PM 反推上游文档偏差
 
-PM 看原型 / 看 diff 时若发现 brief / analysis / solution（PM 视图）/ prd / module 规格等上游文档写错，提醒 PM 在 task PM 视图「📁 历史档案 → 业务层偏差」表填一行（默认空，多数 task 不填）。**close-req 步骤 1.5** 会聚合本 req 所有 closed task 的这段 + 工程合同 §10，按目标文档调 doc-update rewrite mode 一次性沉淀（D13 final, 2026-05-16）。
+PM 看原型 / 看 diff 时若发现 brief / analysis / solution（PM 视图）/ prd / module 规格等上游文档写错，提醒 PM 在 task PM 视图「📁 历史档案 → 业务层偏差」表填一行（默认空，多数 task 不填）。**close-req 步骤 1.5** 会聚合本 req 所有 closed task 的这段 + 工程合同 §10，按目标文档调 doc-update rewrite mode 一次性沉淀。
 
 不要让 PM 只在对话里说偏差而不落表 —— 会丢。

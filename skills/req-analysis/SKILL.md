@@ -123,7 +123,7 @@ echo "SKILL: req-analysis"
 
 ## Workflow
 
-### 步骤 0：判别全量 / 增量分析分支（delta-5）
+### 步骤 0：判别全量 / 增量分析分支
 
 req-analysis 有两个分支，由「项目是否已有产品基线」决定：
 
@@ -212,9 +212,9 @@ done
 
 按下方 §Analysis Structure 的 10 章固定结构 + `## 未决问题` section 落盘。即使有未决项也必须先写首版，不得只停留在对话。
 
-### 步骤 3.7：attachments AI 接管 hook（D-iii v2 trigger 0 + trigger 2 fallback）
+### 步骤 3.7：attachments AI 接管 hook（trigger 0 + trigger 2 fallback）
 
-#### trigger 0 — PM chat 上传意图（D-iii v2 主入口）
+#### trigger 0 — PM chat 上传意图（主入口）
 
 PM 在 chat 任何位置自然描述 "我有 X 在 ~/Downloads/foo.pdf，重点 Y" → AI first-principle LLM 识别（chat 含绝对路径 + 描述材料）→ 调 helper：
 

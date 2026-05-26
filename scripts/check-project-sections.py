@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""check-project-sections.py — PROJECT.md 6 节状态检测器（vp-4b）
+"""check-project-sections.py — PROJECT.md 6 节状态检测器
 
 被 req-stage-gate skill 在 stage 3→4 闸门调用，检测 docs/PROJECT.md 6 节
 （项目名称 / 产品定位 / 用户画像 / 产品路线 / 技术栈 / 业务术语表）

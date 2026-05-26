@@ -222,10 +222,10 @@ def check_preconditions(
         check_serial_constraint(task_file)
 
     elif current == "执行中" and target == "已完成":
-        # 「待验收」状态已合并到「执行中」（2026-05-08）：commit + 呈交 + PM 验收
+        # 「待验收」状态已合并到「执行中」：commit + 呈交 + PM 验收
         # 全程 task 状态保持「执行中」；PM 通过呈交块时统一在此 transition 校验。
         # 修复 P0-1：用 _lib.state.read_section 跨文件查找。
-        # delta-3 三态：
+        #  三态：
         #   v3 新单文件 typed contract：section 在 task.md 审计区（## 📋 文档偏差 / ## 🔍 自审记录）
         #   v2 双文件：section 在 task.engineering.md 的 §10 / §11
         #   v1 老单文件：section 在 PM 视图（task.md）
@@ -620,7 +620,7 @@ def cmd_discard(task_file: Path, reason: str, yes: bool) -> None:
         sys.exit(1)
 
     # 1.5. v2 旧双文件兼容：成对 git mv 工程合同。
-    # delta-3：v3/v1 单文件只 mv 一个；v2 双文件才有 .engineering.md 需成对 mv。
+    # ：v3/v1 单文件只 mv 一个；v2 双文件才有 .engineering.md 需成对 mv。
     # 按 detect_format 分流 —— v2 才进本分支（其判别信号即 .engineering.md 存在）。
     from _lib.state import detect_format as _detect_format
     eng_file = None

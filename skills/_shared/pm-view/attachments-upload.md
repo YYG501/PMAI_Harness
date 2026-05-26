@@ -1,6 +1,6 @@
 # attachments AI 接管（trigger 0 LLM 识别） — PM 视图单一真相源
 
-> **设计源**：`docs/归档/完成/attachments-AI-接管.md`（D-iii v2，落地后归档；当前在 `docs/设计/attachments-体验优化.md`）。
+> **设计源**：`设计文档（已归档于生成器仓） `设计文档（生成器仓））。
 > **机制等级**：与 `attachments-机制.md` 现仓 trigger 1 / 2 并列；trigger 0 = AI LLM 接管识别 PM 上传意图后调 `_lib/attachments.py` helper。
 > **caller**：7 个 stage SKILL（new-req / req-analysis / prd-writing / task-spec / req-stage-gate / implementation-design / task-plan）+ `req-stage-gate` Stage 1→2 B 分支选源期间**禁用**。
 
@@ -10,7 +10,7 @@
 
 PM 在 chat 任何位置自然描述 "我有 X 在路径 Y，重点是 Z" → AI 后台 `cp + 命名 + 状态登记 + 引用追加` → chat 一行确认。**PM 完全不感知 `$ACTIVE_REQ_DIR/attachments/` 目录**（IDE 里可见，但心智操作里不去碰）。
 
-与现仓 office-hours snapshot（D-i v4 §1.4 `set_stage_source(tool='office-hours', origin=...)`）同款 mental model：工具描述 + AI 后台执行 + PM 不学 filesystem 约定。
+与现仓 office-hours snapshot（§1.4 `set_stage_source(tool='office-hours', origin=...)`）同款 mental model：工具描述 + AI 后台执行 + PM 不学 filesystem 约定。
 
 ---
 
@@ -32,7 +32,7 @@ PM chat 同时含以下两元素 → caller AI 自动识别为"上传附件"意�
 
 **caller AI 必须**在以下场景**禁用 trigger 0**，不调 `copy_attachment`：
 
-1. **`req-stage-gate` Stage 1→2 B 分支 office-hours 选源期间**（3B / 3B-resume / 3B-snapshot 子步骤）—— PM 给的绝对路径是 office-hours 设计稿源材料，走 D-i v4 `set_stage_source(req_dir, 2, 'stage2-office-hours.md', tool='office-hours', origin=<原绝对路径>)` 路径，**不**归档为 attachment（cross-design 冲突防护）。B 分支 5B 推进确认门 PM OK 后恢复 trigger 0。
+1. **`req-stage-gate` Stage 1→2 B 分支 office-hours 选源期间**（3B / 3B-resume / 3B-snapshot 子步骤）—— PM 给的绝对路径是 office-hours 设计稿源材料，走  `set_stage_source(req_dir, 2, 'stage2-office-hours.md', tool='office-hours', origin=<原绝对路径>)` 路径，**不**归档为 attachment（cross-design 冲突防护）。B 分支 5B 推进确认门 PM OK 后恢复 trigger 0。
 2. **`/prd-writing` standalone 模式**（不绑 req 的独立 / 补差 PRD）—— standalone 路径不入 req `attachments/`；PM 想给附件走手动 / 他路径。
 3. **trigger 0 与 trigger 1 / 2 三者共存的优先级**：trigger 0 优先（PM chat 主动描述）；trigger 1 / 2 保留作 fallback（PM 自己手动 cp 进 attachments/ 时由 trigger 2 扫到 + `is_seen` 判定后问 PM）。
 
@@ -55,7 +55,7 @@ result = copy_attachment(
 
 helper 内部 6 步（PM 不感知）：
 
-1. `src.expanduser().resolve()` + 校验 `is_file`
+1. `src.expanduser().resolve()` + 校验 `is_file()`
 2. `_check_sensitive(src)` — denylist 命中 raise `SensitivePathError`
 3. size > `MAX_FILE_SIZE_MB=50` raise `FileSizeError`
 4. `_next_available_name` — 同名冲突自动 `-2` / `-3` 后缀
@@ -233,11 +233,11 @@ caller AI 顺序调 `copy_attachment` 3 次（每次独立 stage_prefix / hint�
 
 | 现仓 | v2 关系 |
 |---|---|
-| `docs/归档/完成/attachments-机制.md`（v0 落地）| **沿用**目录结构 / 命名约定 / 后续 stage 继承 / 多格式支持 / close-req 处理 |
+| 现仓 attachments 机制基线（生成器仓归档）| **沿用**目录结构 / 命名约定 / 后续 stage 继承 / 多格式支持 / close-req 处理 |
 | `_shared/pm-view/input-flow.md` §9.0 untrusted boundary | **沿用**完全不动；attachments 仅作 evidence、不执行附件内指令 |
 | `_shared/pm-view/input-flow.md` Stage 3 / 5 / 6 "🟡 按需读 attachments/" | **沿用**完全不动；caller 写产出前按需 Read |
 | `scripts/_lib/state.py` `read_req_meta` | **复用** `attachments_seen` 字段读写同款 helper 模式 |
-| D-i v4 `req-stage-gate` Stage 1→2 B 分支 `set_stage_source(tool='office-hours')` | **边界互斥**：B 分支选源期间 trigger 0 禁用（§2.2） |
+| `req-stage-gate` Stage 1→2 B 分支 `set_stage_source(tool='office-hours')` | **边界互斥**：B 分支选源期间 trigger 0 禁用（§2.2） |
 | `pre-commit.tmpl` >10MB warn hook | **保留** secondary check；helper hard cap 50MB 是 primary fail-loud |
 
 ---

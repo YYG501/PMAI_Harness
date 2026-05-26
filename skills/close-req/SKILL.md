@@ -60,9 +60,7 @@ PENDING_MARKER="$REPO_ROOT/.runs/pending-close-req.json"
 
 ### 步骤 1：写 close-report.md 初稿（`## 文档变更` 段留 placeholder，步骤 1.5 后回填）
 
-<!-- WHY breadcrumb: D13 final 下 step 1.5 才发生 modulespec rewrite。
-     close-report 的「文档变更」段必须在 step 1.5 之后填，否则会漏 rewrite 改动。
-     polish-9（Eng Codex E4）。 -->
+<!-- 「文档变更」段必须在步骤 1.5 modulespec rewrite 之后填，否则会漏 rewrite 改动。 -->
 
 在 req 目录写 `close-report.md`，内容包括：
 
@@ -93,7 +91,7 @@ PENDING_MARKER="$REPO_ROOT/.runs/pending-close-req.json"
      如果步骤 1.5 silent skipped（无业务偏差），本段写"本 req 无项目级文档变更"。 -->
 
 ## 原型简化项
-<!-- v2 / T8 / C4：close-req §2a 完成后回填本段。
+<!-- close-req §2a 完成后回填本段。
      列本 req 通过 implementation-design.md 段 1.5 登记的所有 SIMP 行 —— 让评审 / 后续 req
      一眼看到「本 req 原型本期没全做 PRD 的哪几块」，不必再翻 implementation-design.md。
 
@@ -112,41 +110,40 @@ PENDING_MARKER="$REPO_ROOT/.runs/pending-close-req.json"
 - 遍历 `tasks/discarded/*.md` 填废弃栏；为空时整个 `<details>` 块省略。
 - 已废弃 task 编号断号是合规信号，不要为「整理顺序」而改号。
 - **`## 文档变更` 段写 placeholder 注释 + 留空**，等步骤 1.5 完成后用 doc-update §8 返回的 `REWRITE_COVERED_FILES` 清单回填。
-- **`## 原型简化项` 段写 placeholder 注释 + 留空**，等步骤 2a 完成后从 `implementation-design.md` 段 1.5 抄过来填（v2 / T8 / C4）。
+- **`## 原型简化项` 段写 placeholder 注释 + 留空**，等步骤 2a 完成后从 `implementation-design.md` 段 1.5 抄过来填。
 
-### 步骤 1.5：聚合所有 closed task 偏差，按目标文档统一沉淀（D13 final, 2026-05-16）
+### 步骤 1.5：聚合所有 closed task 偏差，按目标文档统一沉淀
 
-<!-- WHY breadcrumb: D13 final 把 modulespec 沉淀从 close-task per-task 推到这一步聚合。
-     输入源不再是 SKIP_DOC_UPDATE marker（close-task vp-1 后永远不写 marker），
-     改为遍历所有 closed task 直接收集偏差。详见
-     docs/归档/完成/modulespec-维护/主方案.md §0.1 + §1 + §3 vp-2 + polish-1/7/13/15。 -->
+<!-- modulespec 沉淀从 close-task per-task 推到这一步聚合。
+     输入源不再是 SKIP_DOC_UPDATE marker（close-task 永不写 marker），
+     改为遍历所有 closed task 直接收集偏差。 -->
 
-**目的**：D13 final 下 close-task 永不调 doc-update（不写 modulespec），所有 task 的偏差与功能清单累积到本步骤一次性沉淀。N 次 doc-update 启动成本合并成本 step 一次（§0.1 痛点）。
+**目的**：close-task 永不调 doc-update（不写 modulespec），所有 task 的偏差与功能清单累积到本步骤一次性沉淀。N 次 doc-update 启动成本合并成本 step 一次（§0.1 痛点）。
 
-**输入源**（遍历所有 closed task；delta-3 单文件后 3 处合一）：
+**输入源**（遍历所有 closed task，单文件后 3 处合一）：
 
 1. **task 文件** `tasks/*.md`「📌 任务卡」表格的 `所属模块` / `所属模块章节` 字段 → 决定 sediment 进哪份 `docs/modules/<module>.md`
-2. **`prd.md` §六 功能需求** —— 模块功能合同沉淀源（delta-2：功能清单已从 task 移 PRD；task 执行区·实现规格仅作 task 级实现细节、不进 module spec）
+2. **`prd.md` §六 功能需求** —— 模块功能合同沉淀源（功能清单已从 task 移 PRD；task 执行区·实现规格仅作 task 级实现细节、不进 module spec）
 3. **task 文件审计区** `## 📋 文档偏差` 表（v3 单文件）→ 指向 brief / analysis / prd / DESIGN / PROJECT / module 规格 的偏差对账
    - **v2 旧 task 兼容**：跨 PM 视图 `### 业务层偏差` + 工程合同 `## 10. 文档偏差` 两处（用 `detect_format` 分流）
 
-> delta-7 vp-3 已把 task「文档偏差」promote 成 req `adjustment` 事件 —— 本步骤的 modulespec
-> sediment 与 delta-6 close-req PRD 反向对齐（读 `adjustment` 事件）是不同消费者，互不冲突。
+> task「文档偏差」已 promote 成 req `adjustment` 事件 —— 本步骤的 modulespec
+> sediment 与 close-req PRD 反向对齐（读 `adjustment` 事件）是不同消费者，互不冲突。
 
 **流程**：
 
 1. 遍历 `tasks/*.md`；按 `detect_format` 分流提取每 task 的偏差（v3 单文件审计区 / v2 跨两文件）。
 2. **按目标文档分组**：同一份 `docs/modules/<module>.md` / `docs/DESIGN.md` / `docs/PROJECT.md` 的多 task 偏差并到一起（**项目主 `docs/prd.md` 已砍，不在范围**；req 级 `prd.md` 是 stage 3 定稿冻结基准，不进本 sediment 流程）。基础设施 task（`所属模块=基础设施`）跳过 module sediment，但其偏差表仍走对账。
-3. 聚合后呈交 PM，按目标文档逐份决议（AskUserQuestion 或 prose；**两选项**，skip 分支 D13 final 已砍）：
+3. 聚合后呈交 PM，按目标文档逐份决议（AskUserQuestion 或 prose；**两选项**，skip 分支已砍）：
 
    | 决议 | 触发条件 | 行为 |
    |---|---|---|
-   | **rewrite**（默认 / D13 final 主路径） | 任何 closed task 改某目标文档 → 默认 rewrite | 调 doc-update SKILL 步骤 8 rewrite mode（req-level aggregation contract，不要求 ≥2 SKIP marker）|
+   | **rewrite**（默认 / 主路径） | 任何 closed task 改某目标文档 → 默认 rewrite | 调 doc-update SKILL 步骤 8 rewrite mode（req-level aggregation contract，不要求 ≥2 SKIP marker）|
    | **patch** | PM 显式选 + 单 task 单文档单段 | 调现有 doc-update 对账模式（步骤 1.5/1.6/2-5）|
 
-4. PM 决议后，doc-update SKILL §8 返回 `{覆盖的目标文档清单, 覆盖的模块清单}`（polish-2 输出契约），供步骤 2a 作 metric。
-5. **回填 close-report.md `## 文档变更` 段**（polish-9）：把 `REWRITE_COVERED_FILES` 写进步骤 1 初稿留的 placeholder。
-6. **INDEX.md derived refresh**（v5 vp-3，独立于 REWRITE_COVERED_FILES metric）：
+4. PM 决议后，doc-update SKILL §8 返回 `{覆盖的目标文档清单, 覆盖的模块清单}`（输出契约），供步骤 2a 作 metric。
+5. **回填 close-report.md `## 文档变更` 段**：把 `REWRITE_COVERED_FILES` 写进步骤 1 初稿留的 placeholder。
+6. **INDEX.md derived refresh**（独立于 REWRITE_COVERED_FILES metric）：
 
    主 rewrite 完成后，单独刷新 `docs/modules/INDEX.md`。**不进** REWRITE_COVERED_FILES（避免污染 §2a metric）：
 
@@ -167,7 +164,7 @@ PENDING_MARKER="$REPO_ROOT/.runs/pending-close-req.json"
 
 7. 全部目标文档处理完毕（含 INDEX derived refresh）后进步骤 2a。
 
-**quickfix 历史改动处理**（polish-8）：
+**quickfix 历史改动处理**：
 
 `/quick-fix` 改 `docs/modules/*.md` 是**旁路**（不走 close-task → close-req 流程），但 modulespec 当前文件状态已包含 quickfix 改动（git working tree）。步骤 1.5 调 doc-update §8 rewrite mode 时，**输入是「当前 modulespec 全文 + 本 req 各 task 偏差」**，quickfix 改动天然包含在 baseline 里 → 不需要额外收集机制。如果 PM 想审 quickfix 历史 → 看 `git log --grep '\[quick-fix\]' -- docs/modules/`，与 rewrite 流程解耦。
 
@@ -175,20 +172,16 @@ PENDING_MARKER="$REPO_ROOT/.runs/pending-close-req.json"
 
 **边界**：
 
-- 步骤 1.5 是 D13 final 下 close-req 的**主路径**（每 req 必跑一次）
+- 步骤 1.5 是 close-req 的**主路径**（每 req 必跑一次）
 - **本 req 内全部 closed task 偏差表都是「无偏差」且无功能清单变化** → silent skip 进步骤 2a（仅在「基础设施 task 单 req」之类的纯非业务 req 出现）
-- ~~inter-req 推迟 / DEFERRED_TO_REQ skip 分支~~ → D13 final 已砍（polish-13，§0.4.1 多 req 并行不在范围）
-- 旧 SKIP marker 兼容（polish-15）：消费仓若有旧 `<!-- SKIP_DOC_UPDATE: ... cleanup_status=... -->` 残留（D13 final 前写的），本步骤遇到时**等同普通偏差源处理**（一次性消费掉，rewrite 决议时 `cleanup_status` 改 `done` 留作 audit trail；不再阻塞 stage 6→7 推进）
+- inter-req 推迟 / DEFERRED_TO_REQ skip 分支已砍（多 req 并行不在范围）
+- 旧 SKIP marker 兼容：消费仓若有旧 `<!-- SKIP_DOC_UPDATE: ... cleanup_status=... -->` 残留，本步骤遇到时**等同普通偏差源处理**（一次性消费掉，rewrite 决议时 `cleanup_status` 改 `done` 留作 audit trail；不再阻塞 stage 6→7 推进）
 
-### 步骤 2a：PRD 反向对齐成 as-built + 原型简化项标注（delta-6 + v2）
+### 步骤 2a：PRD 反向对齐成 as-built + 原型简化项标注
 
-> **delta-2+4 后 PRD 已在 stage 3 产出、定稿冻结**（不再像旧管线那样在 close-req 才产）。
-> close-req 这一步把冻结的 PRD **一次性反向对齐成 as-built** —— 执行期 task 对 PRD 的偏离
-> 在 `req-events.jsonl` 的 `adjustment` 事件里累积，本步骤逐条把 PRD 改成实际做成的样子。
+> PRD 已在 stage 3 产出、定稿冻结。close-req 这一步把冻结的 PRD **一次性反向对齐成 as-built** —— 执行期 task 对 PRD 的偏离在 `req-events.jsonl` 的 `adjustment` 事件里累积，本步骤逐条把 PRD 改成实际做成的样子。
 >
-> **v2 加分支**：除了 adjustment overwrite，还读 `implementation-design.md` 段 1.5 原型简化项，
-> 在 PRD 受影响行**追加标注**（保留真实需求 + 追加「原型本次计划简化为」）。两步**顺序确定**
-> （D4）：先 adjustment overwrite 全部完成 → 再 simp 标注追加；避免标注被后续 overwrite 抹掉。
+> 除了 adjustment overwrite，还读 `implementation-design.md` 段 1.5 原型简化项，在 PRD 受影响行**追加标注**（保留真实需求 + 追加「原型本次计划简化为」）。两步**顺序硬约束**：先 adjustment overwrite 全部完成 → 再 simp 标注追加；避免标注被后续 overwrite 抹掉。
 
 #### 2a.1 读 adjustment 事件 + 段 1.5 原型简化项
 
@@ -200,17 +193,15 @@ python3 "$REPO_ROOT/.claude/scripts/req-events.py" list "$ACTIVE_REQ_DIR"
 「文档偏差」）。每条含：`from_task` / `prd_anchor`（PRD 哪条被调）/ `before`（PRD 原定）/
 `after`（实际做成）/ `reason`。
 
-**v2 加读**：`$ACTIVE_REQ_DIR/implementation-design.md` 段 1.5「原型简化项」全表 —— 每条含
+**加读**：`$ACTIVE_REQ_DIR/implementation-design.md` 段 1.5「原型简化项」全表 —— 每条含
 `SIMP-ID` / PRD 锚点 / 真实需求 / 原型本次计划简化为 / 为什么简化 / 来源（kind 1/2）。
 
 > **IRON 容错**：
-> - delta-7 落地前在飞的旧 req 无 `req-events.jsonl` → `list` 输出「No req events found.」→
->   adjustment 分支 silent skip
-> - implementation-design.md 不存在（v2 之前在飞的 req）或段 1.5 不存在或单行「无」→ simp 分支
->   silent skip
+> - 旧 req 无 `req-events.jsonl` → `list` 输出「No req events found.」→ adjustment 分支 silent skip
+> - implementation-design.md 不存在或段 1.5 不存在或单行「无」→ simp 分支 silent skip
 > - 两分支都 skip → 本步骤整体 silent skip
 
-#### 2a.2 第一步：逐条 adjustment overwrite prd.md（D4 顺序：先全 overwrite）
+#### 2a.2 第一步：逐条 adjustment overwrite prd.md（顺序硬约束：先全 overwrite）
 
 对每条 `adjustment`：定位 `prd_anchor` 指向的 PRD 章节，把内容从 `before` 改成 `after`
 （PRD → as-built），呈交 PM 审。**产物预览「原型」节**：stage 3 写的是产物意图描述（文字版），
@@ -219,11 +210,11 @@ python3 "$REPO_ROOT/.claude/scripts/req-events.py" list "$ACTIVE_REQ_DIR"
 - PM 逐条审 diff（对话式）；PM 满意 → 落 `prd.md`
 - 全部 adjustment overwrite 完成后**才进步骤 2a.3 simp 标注**（不交叉）
 
-#### 2a.3 第二步：逐条 simp 标注追加 prd.md（D4 顺序：再全 simp 标注）
+#### 2a.3 第二步：逐条 simp 标注追加 prd.md（顺序硬约束：再全 simp 标注）
 
 对段 1.5 每条 SIMP 行：
 
-1. **锚点解析**（C5）：按「§<章节号> <功能名>」/「Story <编号>」格式解析 SIMP 行的「PRD 锚点」
+1. **锚点解析**：按「§<章节号> <功能名>」/「Story <编号>」格式解析 SIMP 行的「PRD 锚点」
    字段，在 prd.md §六 功能需求 / §七 验收标准定位对应行
 2. **解析失败**（找不到对应章节、章节名漂移、功能名多匹配等）→ **停下问 PM**：
 
@@ -245,10 +236,10 @@ python3 "$REPO_ROOT/.claude/scripts/req-events.py" list "$ACTIVE_REQ_DIR"
    - kind 2（整块不做）：在功能段末追加「> **本功能原型本次不实现**（来源：implementation-design.md SIMP-N）」
 4. PM 逐条审 diff（对话式），同 adjustment 流程；PM 满意 → 落 `prd.md`
 
-**顺序硬约束（D4）**：所有 simp 标注必须在所有 adjustment overwrite 完成后才追加。
+**顺序硬约束**：所有 simp 标注必须在所有 adjustment overwrite 完成后才追加。
 若中途交叉 → 后续 adjustment overwrite 可能把已追加的 simp 标注抹掉。
 
-#### 2a.4 PRD 写回后 PM-view re-lint（D2 后置）
+#### 2a.4 PRD 写回后 PM-view re-lint
 
 所有 adjustment overwrite + simp 标注落盘后，对 prd.md 跑一次 PM-view lint：
 
@@ -257,7 +248,7 @@ python3 "$REPO_ROOT/.claude/scripts/check-doc-pm-view.py" "$ACTIVE_REQ_DIR/prd.m
 ```
 
 理由：simp 标注是从 implementation-design.md 段 1.5「原型本次计划简化为」字段写过来的，
-源头虽已 `--simp-scope` lint 过（T5/D2），但写回 PRD 时上下文变了（裸字段 vs 引用块），
+源头虽已 `--simp-scope` lint 过，但写回 PRD 时上下文变了（裸字段 vs 引用块），
 再校验一次确保 PRD 整文件仍守 PM-view 纪律。处理输出：
 
 - 0 errors + 0 warnings → 进步骤 2a.5
@@ -275,16 +266,16 @@ python3 "$REPO_ROOT/.claude/scripts/check-doc-pm-view.py" "$ACTIVE_REQ_DIR/prd.m
 - 无 adjustment 事件 + 无 simp 行 → silent skip，close-report 记「本 req PRD 无执行期偏离、
   无原型简化项，无需反向对齐」。
 - 无 adjustment 但有 simp → 只跑步骤 2a.3 simp 标注分支；反之只跑 2a.2。
-- close-report 增「原型简化项」节（T8 / C4）：列每条 SIMP-ID + PRD 锚点 + 计划简化为，让评审
+- close-report 增「原型简化项」节：列每条 SIMP-ID + PRD 锚点 + 计划简化为，让评审
   有汇总入口（detail 见 close-req SKILL Phase 1 步骤 1）。
 
-> modulespec 沉淀（delta-6 (b)）已由步骤 1.5 D13 rewrite 流程覆盖 —— 本步骤只做 PRD 反向对齐 + simp 标注。
+> modulespec 沉淀已由步骤 1.5 rewrite 流程覆盖 —— 本步骤只做 PRD 反向对齐 + simp 标注。
 
-### 步骤 2b：~~增量同步项目主 PRD~~（v5 vp-2 + vp-1 砍）
+### 步骤 2b：~~增量同步项目主 PRD~~（已砍）
 
 > 项目主 PRD `docs/prd.md` 已砍。本步骤废弃。→ 跳到 §2c。
 
-### 步骤 2c：检查 req 级实现深度变更，提示 PM 是否同步项目级（4.5d.3）
+### 步骤 2c：检查 req 级实现深度变更，提示 PM 是否同步项目级
 
 读 req 级实现深度变更记录的 `## 🔧 本轮实现深度变更` section：
 
@@ -312,7 +303,7 @@ python3 "$REPO_ROOT/.claude/scripts/check-doc-pm-view.py" "$ACTIVE_REQ_DIR/prd.m
 python3 .claude/scripts/req-transition.py "$ACTIVE_REQ_DIR" --to 7
 ```
 
-### 步骤 3.4：业务词催补 hook（2026-05-26 从 prd-writing 迁来）
+### 步骤 3.4：业务词催补 hook（从 prd-writing 迁来）
 
 req 关闭时是业务实体真正落地稳定的时刻（task 都执行完、PRD 已 as-built 反向对齐）—— 这一步把本 req 引入的新业务词 / 角色 patch 进 `docs/PROJECT.md` 业务术语表 / 用户画像表，作为长期沉淀。
 
@@ -334,7 +325,7 @@ rm "$TMPFILE"
 
 **为什么放在这里**：本 req 内的 `prd.md §三` 已经承担过本 req 临时词典的职责（impl-design / task-spec 已读它）；close-req 是把临时词典里"真正稳定下来的、值得跨 req 共享的"那部分 promote 到 PROJECT.md 业务术语表的唯一时机。
 
-### 步骤 3.5：里程碑追加询问（v5 vp-3）
+### 步骤 3.5：里程碑追加询问
 
 问 PM 是否把本 req 加入 `docs/PROJECT.md ## 产品路线`：
 

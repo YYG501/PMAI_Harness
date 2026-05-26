@@ -56,7 +56,7 @@ DEPTH_GUIDANCE = {
 
 # 文档输出深度 prose 段落（控制 task 文件「执行区」工程内容的展开深度）。
 # AI 在 task-spec 写 task 单文件 typed contract 的执行区时读这段。
-# delta-3：task-spec 双→单文件塌缩后，工程内容是 task 文件「执行区」、无独立 .engineering.md，
+# ：task-spec 双→单文件塌缩后，工程内容是 task 文件「执行区」、无独立 .engineering.md，
 # 行数 lint（check-engineering-doc-size.py）随之退场。
 # custom 档不预设（等真实 custom 项目实证后再写规则）。
 DOC_DEPTH_GUIDANCE = {

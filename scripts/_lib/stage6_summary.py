@@ -9,7 +9,7 @@
 
 被 `status-view.py --stage6-entry <req_dir>` 调用。
 
-设计来源：discuss 2026-05-26 / speed mode（无独立设计文档，方案在
+设计来源：speed mode 设计（方案在
 skills/req-stage-gate/SKILL.md「Speed Mode」段定）。
 """
 

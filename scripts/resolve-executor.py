@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Resolve executor + model for a task.
 
-Field source (delta-3 三态)：
+Field source ( 三态)：
   - v3 新单文件 typed contract：读 task.md PM 确认区·任务卡表格字段
     （| **executor** | ... | / | **executor_model** | ... |）
   - v2 双文件（在飞旧 task）：读 <task>.engineering.md §1（兼容保留）

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""check-index-lint.py — docs/modules/INDEX.md lint 校验（vp-3）
+"""check-index-lint.py — docs/modules/INDEX.md lint 校验
 
 校验规则：
 1. 每行简介 ≤30 字

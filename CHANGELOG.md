@@ -187,6 +187,31 @@ PM-AI-Workflow 生成器仓的演进记录。本文件**只记影响下游业务
 
 ## 未发布
 
+### 2026-05-27 — refactor(同步资产): 清理生成器内部编号 / 归档死链 / commit hash 短引用 + hook 防回归
+
+**触发**：PM 看到 `close-task/SKILL.md` 步骤 1 标题「文档偏差检查（D13 不调 doc-update）」追问"这里的 D13 是啥" —— 反向暴露**所有**同步到消费仓的资产（`scripts/` / `skills/` / `templates/` / `agents/`）里都积累了同类生成器内部知识债，消费仓 PM 看到完全不懂。
+
+**清理范围**（58 文件）：
+
+- **生成器内部设计任务编号**：`D13` / `D-iii v2` / `D-i v4` / `D-iv M1` / `D9-4` / `R3-C1` 等
+- **管线小批次编号**：`delta-N` / `vp-N` / `polish-N`
+- **归档路径死链**：`docs/归档/完成/...` / `docs/设计/...`（消费仓不存在这些目录）
+- **短 commit hash 引用**：`commit 6382baf 同类 bug` / `(commit 07a3a09)` 等（消费仓 git log 不同）
+- **开发日期戳**：「2026-05-16」/「2026-05-08」等内部时间线
+
+**改造原则**：
+
+- 删除内部编号但**保留 WHY 信息**（语义说明）—— 例：`"D13 final, 不调 doc-update"` → `"不调 doc-update（推迟到 close-req 末聚合，省 N 次启动成本）"`
+- **保留**：`INVARIANTS.md` 的 `I-AD1` / `I-CT7` / `I-RT9` 等稳定 anchor（消费仓也分发 INVARIANTS.md）；同 SKILL 内部 `§N.M` 章节引用；业务编号 `task-NNN` / `req-NNN`
+
+**hook 防回归**：新增 `hooks/check-sync-asset-jargon.cjs`（`.claude/settings.json` PreToolUse 注册）—— git commit 时扫 staged 改动 `+` 行，命中上述 pattern 拦下 commit，输出具体命中行 + 修法指引。逃生舱：commit message 加 `[skip-jargon-check]`。
+
+**memory 沉淀**：`feedback_sync_asset_no_internal_ids.md`（同型规则的资产层延伸，与已有 `feedback_pm_chat_no_engineering_jargon` 互补：后者管运行时 chat 输出，前者管 SKILL.md / scripts 注释源头）。
+
+**测试**：基线 525/2 —— 失败的 2 个（`test-init-project.sh T1/T2`）是 init-project.sh 重构为 symlink 模式后的 pre-existing stale test，跟本次清理无关。
+
+---
+
 ### 2026-05-26 — chore(task-spec): 砍 task 确认门里教 PM 怎么读的元说明
 
 task-spec 步骤 10 确认门输出里有一句「你确认的是 task 的 scope / 验收 / 反馈承接（PM 确认区），不是逐条背书实现细节。」—— req-008 task-003 确认时 PM 反馈"多余"。砍掉。

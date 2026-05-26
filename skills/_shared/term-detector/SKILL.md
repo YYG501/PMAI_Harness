@@ -1,26 +1,17 @@
 ---
 name: _shared/term-detector
 description: |
-  业务词 / 角色发现检测器（vp-4b 共享逻辑）。**当前只在 `close-req` Phase 1
-  调用一次**（2026-05-26 二次收敛），识别本 req 真实落地的新业务词 / 角色，
+  业务词 / 角色发现检测器（共享逻辑）。**当前只在 `close-req` Phase 1
+  调用一次**，识别本 req 真实落地的新业务词 / 角色，
   patch 进 PROJECT 业务术语表 / 用户画像。
 ---
 
 # _shared/term-detector
 
-> **vp-4b 共享 detector**。不是 user-facing skill，而是写作 skill 的共
+> ** 共享 detector**。不是 user-facing skill，而是写作 skill 的共
 > 享逻辑落点。
 >
-> **2026-05-26 二次收敛**（最终方案）：从 `prd-writing` 步骤 3.6 迁到
-> `close-req` 步骤 3.4 —— 业务实体真正稳定要等 task 都执行完、PRD 已
-> as-built 反向对齐，PRD 阶段（stage 3）就 patch 长期术语表偏早；本 req
-> 范围内的临时词典职责由 `prd.md §三 名词解释` 承担（被 `implementation-design`
-> 和 `task-spec` 显式 Required Inputs 当词典必读）。
->
-> **2026-05-26 第一次收敛**：原先在 brief / analysis / prd 三处调用，
-> brief 阶段 PM 自由描述、`**` 多为修辞 → 信噪比差 PM 全跳过；analysis
-> 阶段业务词还在变 → 登记早；prd 阶段虽然稳定但还没经过 task 落地验证。
-> 最终落到 close-req 一处。
+> **设计**：从早期 brief / analysis / prd 三处调用收敛到 close-req 一处 —— 业务实体真正稳定要等 task 都执行完、PRD 已 as-built 反向对齐；PRD 阶段就 patch 长期术语表偏早。本 req 范围内的临时词典职责由 `prd.md §三 名词解释` 承担（被 `implementation-design` 和 `task-spec` 显式 Required Inputs 当词典必读）。
 
 ## 何时调用
 
@@ -29,13 +20,13 @@ description: |
 | `close-req` | Phase 1 步骤 3.4（req 推进到 stage 7 之后、里程碑追加询问之前） | `prd.md` + 全部 `tasks/closed/*.md`（不扫 `.engineering.md`） |
 
 **禁止位置**：
-- `new-req` 写 brief（已退场 2026-05-26）：PM 修辞密度高、业务词还没沉淀
-- `req-analysis` / `req-stage-gate` B 分支写 analysis / stage2-office-hours（已退场 2026-05-26）：业务词还在变
-- `prd-writing` 写 prd.md（已退场 2026-05-26）：业务实体未经 task 落地验证；本 req 临时词典职责改由 `prd.md §三 名词解释` 承担
+- `new-req` 写 brief（已退场）：PM 修辞密度高、业务词还没沉淀
+- `req-analysis` / `req-stage-gate` B 分支写 analysis / stage2-office-hours（已退场）：业务词还在变
+- `prd-writing` 写 prd.md（已退场）：业务实体未经 task 落地验证；本 req 临时词典职责改由 `prd.md §三 名词解释` 承担
 - 写工程合同（`.engineering.md`）：工程层允许技术词，误报率高
 - close-task：单 task 收尾不催，统一推迟到 close-req
 
-## 临时词典 vs 长期词典（2026-05-26 设计）
+## 临时词典 vs 长期词典
 
 | 层级 | 文件 | 谁写 | 谁读 |
 |---|---|---|---|
@@ -111,9 +102,7 @@ with open('$SKIP_FILE', 'w') as f: json.dump(data, f, ensure_ascii=False, indent
 
 ## 决策依据
 
-- v5 `docs/归档/完成/PRD-体系收敛.md` §2.7
-- D4 锁定：不给全局 toggle（与 MEMORY 第 2「不留 FORCE」一致）
-- autoplan T4/T12/T22/T24 共识
+- 锁定：不给全局 toggle（与 MEMORY 第 2「不留 FORCE」一致）
 
 ## 不另起新 skill
 

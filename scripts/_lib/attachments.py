@@ -1,14 +1,14 @@
-"""Attachments helper — D-iii v2 Model 2 AI 接管层。
+"""Attachments helper —  Model 2 AI 接管层。
 
-设计源：docs/设计/attachments-体验优化.md (D-iii v2)，落地后归档为
-docs/归档/完成/attachments-AI-接管.md。
+设计源：设计文档（生成器仓） ，落地后归档为
+设计文档（已归档于生成器仓）。
 
 PM mental model：PM 在 chat 自然描述 "我有 X 在路径 Y"，AI 后台 cp + 命名 +
 登记到 .req-meta.json:attachments_seen + caller SKILL 在 stage 产出文档末尾
 追加 `## 📎 参考材料` 引用。PM 完全不感知 attachments/ 目录的存在。
 
-与 D-i v4 _lib.state.{get,set}_stage_source 同款 helper-based 架构。
-状态真相源 = .req-meta.json:attachments_seen（与 D-i v4 stage{N}_source 字段
+与  _lib.state.{get,set}_stage_source 同款 helper-based 架构。
+状态真相源 = .req-meta.json:attachments_seen（与  stage{N}_source 字段
 共住同一份 meta），不是 stage 产出文档里的 ## 📎 参考材料 section（该 section
 仅作 PM 可见展示）。
 
@@ -47,7 +47,7 @@ PM mental model：PM 在 chat 自然描述 "我有 X 在路径 Y"，AI 后台 cp
 
 非典型场景：
 - B 分支 office-hours 选源期间 caller SKILL **不调** copy_attachment
-  （走 _lib.state.set_stage_source，D-i v4 路径，不归档为 attachment）
+  （走 _lib.state.set_stage_source， 路径，不归档为 attachment）
 - standalone /prd-writing 模式 caller SKILL **不调** copy_attachment
   （standalone 不绑 req → 不入 req attachments/）
 """
@@ -261,7 +261,7 @@ def _stage_doc_exists(req_dir: Path, stage_prefix: str) -> bool:
 
     stage_prefix → 期望文档映射（详见 v2 §1.5）：
         brief    → brief.md
-        analysis → analysis.md / stage2-office-hours.md (D-i v4 B 分支)
+        analysis → analysis.md / stage2-office-hours.md ( B 分支)
         prd      → prd.md
         impl     → implementation-design.md
         task-plan→ task-plan.md
@@ -283,7 +283,7 @@ def _stage_doc_exists(req_dir: Path, stage_prefix: str) -> bool:
         "brief": [req_dir / "brief.md"],
         "analysis": [
             req_dir / "analysis.md",
-            req_dir / "stage2-office-hours.md",  # D-i v4 B 分支
+            req_dir / "stage2-office-hours.md",  #  B 分支
         ],
         "prd": [req_dir / "prd.md"],
         "impl": [req_dir / "implementation-design.md"],
@@ -441,7 +441,7 @@ def is_seen(req_dir: Path, filename: str) -> bool:
 def remove_attachment(req_dir: Path, filename: str) -> None:
     """rm attachment 文件 + 从 attachments_seen 移除条目。
 
-    用法：PM 说 "删 X"（D6 删除路径）。
+    用法：PM 说 "删 X"（删除路径）。
 
     Note:
         - 文件不存在 → 静默跳过（删 → 文件本来就没了 = no-op，符合预期）

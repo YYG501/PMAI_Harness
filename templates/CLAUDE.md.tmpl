@@ -67,7 +67,7 @@ PM 想中止 active 的 task：
 
 工作流里标明"必须完整执行"的 skill（如 `/req-analysis`、`/prd-writing`、`/task-spec`、`/task-execute`、`/office-hours` 等），**不能用任何其他手段替代**。具体：
 
-- **禁止**用 `advisor()` 替代 skill。advisor 是补充视角，不是流程替代品
+- **禁止**用 `advisor` 替代 skill。advisor 是补充视角，不是流程替代品
 - **禁止**用 `Agent` subagent（包括本项目自带的 `analysis-reviewer`）替代其他 skill。每个 subagent 只服务于它被显式指派的节点
 - **禁止**自写 ad hoc 评审 prompt 替代 skill。skill 里的结构化检查项（Error Map、Security、Observability 等）不是"可选节"，跳过等于丢失检查
 - **禁止**以"skill 太重和 PM 节奏冲突"为理由擅自简化。如果 skill 真的太重，正确做法是反馈给 PM 调整生成器里的 skill 定义，而不是运行时自行替换
@@ -85,7 +85,7 @@ Subagent（`Agent` 工具 spawn）是**短命、无状态、独立 context** 的
 
 **不适合**（结构性误用，已发生过 2 次事件）：
 
-- **长跑协调**：subagent turn 结束被回收，但被它启动的外部进程（codex 等）继续跑——"项目经理下班，工人还在加班"，没人收口。2026-04-22 / 2026-04-24 两次事件根因
+- **长跑协调**：subagent turn 结束被回收，但被它启动的外部进程（codex 等）继续跑——"项目经理下班，工人还在加班"，没人收口（subagent 长跑事故根因）
 - **跨 turn 状态持有**：subagent 的 context 不持久，不能用它"等通知再处理"
 - **Skill 替代品**：见上节"Skill 完整性"
 
@@ -148,7 +148,7 @@ PM 在 chat 里直接 invoke 任何 review skill 时（`/plan-*-review` / `/qa` 
 
 **与 I-RV1 的关系**：本节不破坏 I-RV1（AI 不自跑 review）。这里讲的是 **PM 主动 invoke review 时，AI 怎么解析参数**；不是 AI 主动触发。AI 仍然不得在产物生成后自动调 review。
 
-**禁止反模式**（2026-05-09 PM 实测复现）：PM 触发 skill 但参数 / 意图模糊时——
+**禁止反模式**（PM 实测复现过）：PM 触发 skill 但参数 / 意图模糊时——
 - ❌ 用一段伪精细分析（列冲突点 + A/B/C 三条路径）代替单行问意图
 - ❌ 自创"PM 自跑 = PM 应该去另一个会话独立跑"的虚构路径（不存在另起会话；slash command 永远是 Claude 当前会话执行）
 - ❌ 跑"裁剪版 skill"（违反 §Skill 完整性）
@@ -159,7 +159,7 @@ PM 在 chat 里直接 invoke 任何 review skill 时（`/plan-*-review` / `/qa` 
 
 调 codex / cursor-agent 这类外部执行器前，task worktree 的 working tree **必须干净**（无 untracked、无未 commit 改动）。`/task-execute` 步骤 3b 开头有硬 gate（INVARIANTS I-AD5），dirty 直接 exit 1，不进 adapter、不 rollback、不打回 task 状态——处理权交还 PM。
 
-**Why**：执行器（codex / cursor-agent）的 stop 是软停——已派发的 sandbox shell 子进程会延迟落盘，可能覆盖你刚手改但没 commit 的文件。失败回滚的基线是 HEAD，未 commit 的手改会一并被 git restore 清掉。事故案例：2026-04-27 PM 手改字段后 codex 后续延迟落盘把字段写回，working tree 没 commit 没法 git diff 找回。
+**Why**：执行器（codex / cursor-agent）的 stop 是软停——已派发的 sandbox shell 子进程会延迟落盘，可能覆盖你刚手改但没 commit 的文件。失败回滚的基线是 HEAD，未 commit 的手改会一并被 git restore 清掉。事故案例：PM 手改字段后 codex 后续延迟落盘把字段写回，working tree 没 commit 没法 git diff 找回。
 
 **操作纪律**：PM 反馈打回后想手改一两处再让执行器接着跑，先在 task worktree 里 commit checkpoint（`git -C <task-worktree> commit -am "pre-execute checkpoint: <一句话>"`）再 `/task-execute`。不要带着 dirty 改动直接 dispatch。
 

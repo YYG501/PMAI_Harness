@@ -13,7 +13,7 @@
 
 1. **判断场景**（调用方自己做）：
    - `/init-project` 阶段 C → greenfield 首次（输入 = 空 PROJECT.md 骨架）
-   - `/project-solution` → 按 4 场景判断（重做 / 产品路线规划 / 新方向 / brownfield 接入）（vp-6 细化）
+   - `/project-solution` → 按 4 场景判断（重做 / 产品路线规划 / 新方向 / brownfield 接入）（细化）
 2. **决定问题顺序**（调用方自己排）：
    - greenfield（init-project）：6 节按 §3 顺序问（产品定位 → 用户画像 → 产品路线 → 技术栈 → 业务术语表 → roadmap 队列）
    - 重做：按 PM 提的痛点切入，不必从产品定位起
@@ -239,7 +239,7 @@ git commit -m "docs: project direction settled"
 8. §9 atomic commit
 9. 返回 init-project 阶段 D（终态汇总 + Next Up）
 
-### §10.2 `/project-solution`（4 场景之一，vp-6 已细化）
+### §10.2 `/project-solution`（4 场景之一，已细化）
 
 1. agent 按 SKILL.md 步骤 1 读已有输入（CLAUDE.md / `docs/PROJECT.md` / `docs/代码现状档.md`）
 2. **判断场景**（A 重做 / B 产品路线规划 / C 新方向 / D brownfield 接入）—— 调用方 `/project-solution` SKILL.md 段 0 表已细化触发条件 + 输入态 + 提问顺序
@@ -261,4 +261,4 @@ git commit -m "docs: project direction settled"
 
 ---
 
-**End of `_shared/project-questioning.md`**（M1 vp-2 + vp-6 完整落地；4 场景顺序细化已落 `project-solution/SKILL.md` 段 0 表）
+**End of `_shared/project-questioning.md`**（M1  +  完整落地；4 场景顺序细化已落 `project-solution/SKILL.md` 段 0 表）

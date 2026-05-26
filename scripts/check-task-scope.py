@@ -101,7 +101,7 @@ def implicit_deny_reason(
 ) -> str | None:
     """返回 deny 原因（命中保留路径且不是自己的 task 文件）；否则 None。
 
-    delta-3：v3 单文件 task 只有 task-NNN.md 一个 own 文件。
+    ：v3 单文件 task 只有 task-NNN.md 一个 own 文件。
     v2 旧双文件 task 兼容保留 —— is_v2=True 时额外放行 task-NNN.engineering.md。
     """
     if path in PROJECT_LEVEL_FILES:
@@ -159,7 +159,7 @@ def main() -> int:
         return 0
 
     task_stem = task_file.stem
-    # v2 旧双文件 task 兼容：只有 v2 才放行 task-NNN.engineering.md（delta-3）
+    # v2 旧双文件 task 兼容：只有 v2 才放行 task-NNN.engineering.md
     is_v2 = detect_format(task_file) == "v2"
 
     # Implicit deny（sync 白名单：项目级 + 同 req 其他文档）必须优先于 allowlist

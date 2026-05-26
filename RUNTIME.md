@@ -11,7 +11,18 @@
 
 ---
 
-## 当前位置（2026-05-26）
+## 当前位置（2026-05-27）
+
+**2026-05-27 — 同步资产内部编号清理 + hook 防回归**（PM 看到 close-task SKILL.md 「D13 不调 doc-update」追问"这里 d13 是啥"触发；反向暴露所有同步资产积累了同类生成器内部知识债）：
+
+- 清理 58 文件：删 `D13` / `D-iii v2` / `delta-N` / `vp-N` / `polish-N` / `R3-C1` 等内部编号；改 `docs/归档/完成/` / `docs/设计/` 归档路径死链；删 commit hash 短引用
+- 改造原则：删内部编号但**保留 WHY 信息**（"D13 final, 不调 doc-update" → "不调 doc-update（推迟到 close-req 末聚合）"）
+- 保留：`INVARIANTS I-AD1` / `I-CT7` 等稳定 anchor；同 SKILL 内部 §章节引用
+- hook 防回归：`hooks/check-sync-asset-jargon.cjs`（git commit 时扫 staged + 行命中 pattern 拦下）
+- memory 沉淀：`feedback_sync_asset_no_internal_ids.md`（同型 `feedback_pm_chat_no_engineering_jargon` 的资产层延伸）
+- **测试基线 525 / 2**（pre-existing stale test 2 个跟本次清理无关：`test-init-project.sh T1/T2` 在 init-project 重构为 symlink 后没同步）
+
+---
 
 **Speed mode — PRD 拍板后 stage 4/5 自动推 + 结构决策门 + stage 6 入口总览**（消费仓 ExampleConsumerApp req-008 实证驱动；PM 否决 gsd 式 8 开关方案，选「1 个默认 mode + 严格清单」方向）：
 
@@ -22,7 +33,7 @@
 - **vp-5**：`tests/test-speed-mode.sh` 新增 13 case（argparse / 模块函数 / 模板列 / SKILL 段 / fixture 全机械 / 全结构 / 老 req 兼容 / SIMP 归位 / 结构 task / CLI exit / Stage 4 文案 / Stage 5→6 调用）；`tests/test-implementation-design.sh` 更新 stage-gate wiring 校验为 speed mode 关键文案
 - **vp-6**：`CHANGELOG.md` 未发布段加条目 + 本 RUNTIME 段更新
 
-**测试基线**：`bash tests/run-all.sh` **516 / 0**（前 460/0 → speed mode 主体批次 vp-1~vp-6 +13 case → 512/0 → vp-7/8 +4 case → 516/0；无回归）。
+**测试基线**：`bash tests/run-all.sh` **516 / 0**（前 460/0 → speed mode 主体批次 vp-1~vp-6 +13 case → 512/0 → vp-7/8 +4 case → 516/0；无回归）。**2026-05-27 后**：基线推到 **525 / 2**（同步资产清理后跑出 2 个 pre-existing stale test，跟清理无关）。
 
 **PM 视角变化**（用 req-008 跑下来对比）：操作次数从 ~7 次降到 ~6 次（数量差不多），但**质量大变** —— 0 次低价值"看了，过"门、N 次结构决策被前置到决策当下问、stage 6 入口给一次性总览（自决项 + PM 拍过项 + task 拆分 + 产物路径，PM 一眼判断是否进 task 执行）。
 

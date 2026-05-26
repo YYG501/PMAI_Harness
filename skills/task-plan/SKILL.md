@@ -41,7 +41,7 @@ echo "SKILL: task-plan"
 
 ## Workflow
 
-### attachments AI 接管 hook（D-iii v2 trigger 0 — Stage 5b 期间生效）
+### attachments AI 接管 hook（trigger 0 — Stage 5b 期间生效）
 
 PM 在 chat 描述 "我有 X 在 ~/Downloads/foo.pdf，重点 Y" → AI first-principle 识别 → 调 helper：
 
@@ -231,7 +231,7 @@ done
      来源 = kind 2）。close-req §2a 据此在 PRD 加「本功能原型本次不实现」标注
 - §4.3 模块规格状态：列出本 req 涉及的每个业务模块的当前规格状态（已存在-完整 / 已存在-待补 / 不存在-待创建），影响 task-spec 步骤 4 判断。
 
-### 步骤 3.5：PM 拍板执行模式（结构决策门 — speed mode 2026-05-26）
+### 步骤 3.5：PM 拍板执行模式（结构决策门 — speed mode）
 
 §二 执行模式（串行 / 并行 / 混合）是 task 级结构决策（AI 没 ground truth；并行 vs 串行影响 PM 时间分配巨大）。步骤 3 写完文件后**主动 prompt PM** 拍板：
 

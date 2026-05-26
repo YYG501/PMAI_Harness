@@ -117,7 +117,7 @@ class TestDetectFormat(unittest.TestCase):
             self.assertEqual(detect_format(pm), "v1")
 
     def test_v3_when_typed_contract_marker(self):
-        """delta-3 §2.7：无 .engineering.md + 头部 task_format 标记 → v3。"""
+        """：无 .engineering.md + 头部 task_format 标记 → v3。"""
         with tempfile.TemporaryDirectory() as d:
             pm = Path(d) / "task-001-test.md"
             pm.write_text(V3_TASK_MD)
@@ -197,7 +197,7 @@ class TestReadSection(unittest.TestCase):
     def test_v3_section_with_emoji_heading(self):
         """v3 单文件 typed contract：审计区标题带 emoji（## 📋 文档偏差 / ## 🔍 自审记录）。
 
-        回归守护：§8 delta-3 的 task.md.tmpl 用 emoji 标题，read_section 正则若
+        回归守护：§8  的 task.md.tmpl 用 emoji 标题，read_section 正则若
         不容忍 emoji 前缀 → 每个 v3 task close 转「已完成」都被拦。
         """
         with tempfile.TemporaryDirectory() as d:

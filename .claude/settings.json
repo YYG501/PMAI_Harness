@@ -20,6 +20,11 @@
             "type": "command",
             "command": "node \"$CLAUDE_PROJECT_DIR/hooks/check-doc-currency.cjs\"",
             "timeout": 10
+          },
+          {
+            "type": "command",
+            "command": "node \"$CLAUDE_PROJECT_DIR/hooks/check-sync-asset-jargon.cjs\"",
+            "timeout": 10
           }
         ]
       }

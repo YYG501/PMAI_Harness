@@ -67,7 +67,7 @@ TASK_FORMAT_V3_MARKER = "task_format: single-typed-v3"
 
 
 def detect_format(pm_view: Path) -> Literal["v1", "v2", "v3"]:
-    """三态判别（delta-3 §2.7）—— 塌缩后仓里同时存在 3 种 task 格式：
+    """三态判别—— 塌缩后仓里同时存在 3 种 task 格式：
 
     - **v2** 双文件（在飞旧 task）：存在 `.engineering.md` 同名文件。
     - **v3** 新单文件 typed contract：无 `.engineering.md` + 头部有 `task_format` 标记。
@@ -380,7 +380,7 @@ def resolve_req_relative_path(
 
 
 def get_stage_source(req_dir: Path, stage_num: int) -> Path:
-    """返回 stage N 的真相源**绝对路径**（D-i v4 路径契约）。
+    """返回 stage N 的真相源**绝对路径**（路径契约）。
 
     解析优先级：
     1. `.req-meta.json` 的 `stage{N}_source` 字段（req 内**相对路径**） — 跨工具
@@ -407,7 +407,7 @@ def get_stage_source(req_dir: Path, stage_num: int) -> Path:
 
 
 def get_current_stage_banner(req_dir: Path, skill: str = "REQ-STAGE-GATE") -> str:
-    """返回 stage banner 字符串（M2 / D-iv M1 vp-7）。
+    """返回 stage banner 字符串（M2）。
 
     格式：`━━━ PMAI ► <SKILL> ▸ Stage <N>/7: <Name> ━━━`（见 `_shared/pm-view/banner-rules.md` §1.1）。
 
@@ -440,7 +440,7 @@ def set_stage_source(
     tool: str,
     origin: Optional[str] = None,
 ) -> None:
-    """写 stage N 的真相源元数据到 `.req-meta.json`（D-i v4 路径契约）。
+    """写 stage N 的真相源元数据到 `.req-meta.json`（路径契约）。
 
     Args:
         req_dir: req 目录绝对路径（含 `.req-meta.json`）。
@@ -818,7 +818,7 @@ def get_overall_state(
 
 
 # ============================================================================
-# Archived reqs (closed / cancelled) + Timeline (vp-7)
+# Archived reqs (closed / cancelled) + Timeline 
 # ============================================================================
 
 

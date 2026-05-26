@@ -31,7 +31,7 @@ python3 "$REPO_ROOT/.claude/scripts/check-worktree-residue.py" || true
 
 如果 worktree 残留检测报警，先把警告原文展示给 PM 一句话说明（"发现 N 个 worktree 残留/冲突，已贴上方"），PM 可选择立刻清理或继续推进。不当 gate（参见 I-RT5 的范围）。
 
-## Speed Mode（默认行为 — 2026-05-26）
+## Speed Mode（默认行为）
 
 **TL;DR**：PRD（stage 3）拍板后，AI 自动推 stage 4/5，只在两处停 ——
 （a）implementation-design.md / task-plan.md 命中**「决策类型=结构」**行 → 当场逐行问 PM 拍板
@@ -131,7 +131,7 @@ PM 在 worktree 里**只需要敲一次** `/req-stage-gate`，之后 stage-gate 
 
 </details>
 
-## attachments AI 接管 hook（D-iii v2 trigger 0 — stage-gate 任何 stage 期间生效）
+## attachments AI 接管 hook（trigger 0 — stage-gate 任何 stage 期间生效）
 
 > **B 分支例外**：Stage 1→2 B 分支 office-hours 选源期间（3B / 3B-resume / 3B-snapshot 子步骤）**禁用 trigger 0**，详见下文 Stage 1→2 段。
 
@@ -162,7 +162,7 @@ chat 一行确认 `已归档（attachments/<新名>），Y 重点。继续。`�
 
 ### Stage 1 → 2（描述需求 → 需求分析）
 
-> **v4 体验包装层（D-i）**：brief 二次确认 + 需求讨论方式选择**合二为一**，PM 视角"一次需求讨论"。下游分两条分流：A = 结构化批判（`/req-analysis`），B = YC office-hours 式（snapshot 复制）。两条分流的产物都通过 `_lib.state.set_stage_source` 写到 `.req-meta.json`，下游 SKILL 一律走 `get_stage_source(req_dir, 2)` helper 读 stage 2 真相源（不再硬编码 `analysis.md`）。
+> **v4 体验包装层**：brief 二次确认 + 需求讨论方式选择**合二为一**，PM 视角"一次需求讨论"。下游分两条分流：A = 结构化批判（`/req-analysis`），B = YC office-hours 式（snapshot 复制）。两条分流的产物都通过 `_lib.state.set_stage_source` 写到 `.req-meta.json`，下游 SKILL 一律走 `get_stage_source(req_dir, 2)` helper 读 stage 2 真相源（不再硬编码 `analysis.md`）。
 
 1. 检查 `brief.md` 存在且有内容
 
@@ -206,7 +206,7 @@ chat 一行确认 `已归档（attachments/<新名>），Y 重点。继续。`�
      "
      ```
 
-4A. **未决问题闸门**（A 分支硬约束；B 分支由 caller 跳过，**不**动 lint 脚本本身，D-i v4 R3-M2 决议）：
+4A. **未决问题闸门**（A 分支硬约束；B 分支由 caller 跳过，**不**动 lint 脚本本身）：
 
    调用 lint 脚本：
 
@@ -255,9 +255,9 @@ chat 一行确认 `已归档（attachments/<新名>），Y 重点。继续。`�
 
 #### 分流 B：YC office-hours 式（snapshot 复制 + 体验包装）
 
-> **设计源**：D-i v4 §1.2 / §1.4 / §1.5。B 分支**不调 reviewer**（office-hours 自带 Cross-Model Perspective + Spec Review Loop）、**不调未决问题闸门**（office-hours 的 Open Questions prose 不带答题占位；§0.4.4）、**不调 attachments hook**（§0.4.8，D-iii 独立设计承接）。
+> B 分支**不调 reviewer**（office-hours 自带 Cross-Model Perspective + Spec Review Loop）、**不调未决问题闸门**（office-hours 的 Open Questions prose 不带答题占位）、**不调 attachments hook**（由 attachments 独立设计承接）。
 >
-> **D-iii v2 trigger 0 禁用边界（C4 cross-design 冲突防护）**：B 分支 3B 探测 + 3B-resume + 3B-snapshot 三个子步骤期间 **attachments trigger 0 禁用**。PM 在这几个子步骤里给的绝对路径是 **office-hours 设计稿源材料**，走 `set_stage_source(req_dir, 2, 'stage2-office-hours.md', tool='office-hours', origin=<原绝对路径>)`（D-i v4 §1.4 §1.5 路径），**不**调 `copy_attachment` 归档为 attachment。5B 推进确认门 PM OK 后恢复 trigger 0。
+> **trigger 0 禁用边界（cross-design 冲突防护）**：B 分支 3B 探测 + 3B-resume + 3B-snapshot 三个子步骤期间 **attachments trigger 0 禁用**。PM 在这几个子步骤里给的绝对路径是 **office-hours 设计稿源材料**，走 `set_stage_source(req_dir, 2, 'stage2-office-hours.md', tool='office-hours', origin=<原绝对路径>)`，**不**调 `copy_attachment` 归档为 attachment。5B 推进确认门 PM OK 后恢复 trigger 0。
 
 3B. **探测 office-hours 产物 + PM 三选一**
 
@@ -335,7 +335,7 @@ chat 一行确认 `已归档（attachments/<新名>），Y 重点。继续。`�
    PM 答「跑新」/「跑 office-hours」→ **进步骤 3B-resume**。
    PM 答「用第 N 份」/「指定路径 <abs>」→ **进步骤 3B-snapshot**（源路径已确定）。
 
-3B-resume. **resume 协议**（PM 中断本 chat 去跑 `/office-hours`，跑完通知 AI；D-i v4 §5.1.2 R3-H3 PARTIALLY ACCEPT）
+3B-resume. **resume 协议**（PM 中断本 chat 去跑 `/office-hours`，跑完通知 AI）
 
    AI 输出一句话提示后**保持在 chat 等待**：
 
@@ -365,7 +365,7 @@ chat 一行确认 `已归档（attachments/<新名>），Y 重点。继续。`�
    3. AI 用 Write 工具复制到 `$ACTIVE_REQ_DIR/stage2-office-hours.md`，**顶部追加 snapshot 注释**（caller 自行拼接，源路径 + ISO 时间戳，例）：
 
       ```markdown
-      <!-- snapshot from <源绝对路径> at 2026-05-25T15:32:00Z -->
+      <!-- snapshot from <源绝对路径> at <ISO-8601 时间戳> -->
 
       <office-hours 设计稿原文>
       ```
@@ -388,9 +388,9 @@ chat 一行确认 `已归档（attachments/<新名>），Y 重点。继续。`�
 
 4B. **B 分支 _不_ 跑**：
    - analysis-reviewer（office-hours 自带 Cross-Model Perspective + Spec Review Loop）
-   - `check-open-questions.py` 未决问题闸门（office-hours `Open Questions` prose 不带 `**PM 回答：**` 占位；不该让 lint 脚本本身 req-aware，详见 D-i v4 R3-M2）
-   - attachments hook（D-iii 独立设计承接）
-   - term-detector hook（业务词催补统一收敛到 `close-req` 步骤 3.4 一处，2026-05-26）
+   - `check-open-questions.py` 未决问题闸门（office-hours `Open Questions` prose 不带 `**PM 回答：**` 占位；不该让 lint 脚本本身 req-aware）
+   - attachments hook（由 attachments 独立设计承接）
+   - term-detector hook（业务词催补统一收敛到 `close-req` 步骤 3.4 一处）
 
 5B. **B 分支推进确认门**
 
@@ -420,7 +420,7 @@ chat 一行确认 `已归档（attachments/<新名>），Y 重点。继续。`�
 python3 .claude/scripts/req-transition.py "$ACTIVE_REQ_DIR" --to 2
 ```
 
-> `req-transition.py` 内部走 `_lib.state.get_stage_source(req_dir, current)` helper（D-i v4 R3-C1），按 `.req-meta.json:stage2_source` 解析真相源：A 分支验 `analysis.md` 存在，B 分支验 `stage2-office-hours.md` 存在。
+> `req-transition.py` 内部走 `_lib.state.get_stage_source(req_dir, current)` helper，按 `.req-meta.json:stage2_source` 解析真相源：A 分支验 `analysis.md` 存在，B 分支验 `stage2-office-hours.md` 存在。
 
 推进成功后**续到 Stage 2 → 3 入口**（默认续跑，参见上文「续跑模式」）。
 
@@ -519,7 +519,7 @@ python3 .claude/scripts/req-transition.py "$ACTIVE_REQ_DIR" --to 3
 > **PROJECT 6 节强制门已撤掉**（PROJECT 由 `/project-solution` 产出 + 已有项目走 `/new-req`
 > legacy gate）。stage 3→4 此处直接推进 stage 4。
 
-**stage 4 永远进**（delta-9 D9-2）—— stage 4 = **必跑 gap-check + 新组件完整规格定稿**
+**stage 4 永远进**—— stage 4 = **必跑 gap-check + 新组件完整规格定稿**
 ；gap-check 是每 req 的组件复用关口 + 完整规格定稿门，必跑。视觉基线本身在 init C.5 已由 gstack `/design-consultation` 定稿，stage 4 不再嵌视觉基线更新分支。
 
 ```bash
@@ -598,7 +598,7 @@ python3 .claude/scripts/req-transition.py "$ACTIVE_REQ_DIR" --to 5
 
 ### Stage 4 → 5（→ 实现设计 + task 拆分）
 
-stage 5 内部两步编排（delta-8 vp-5）：**先 `/implementation-design`（产 req 级 HOW）→
+stage 5 内部两步编排：**先 `/implementation-design`（产 req 级 HOW）→
 PM 确认门审架构决策表 → 再 `/task-plan`（拆 task）**。
 
 #### 步骤 5a：调 `/implementation-design`
@@ -671,7 +671,7 @@ PM 确认 implementation-design 后，调用 `/task-plan` 拆 task。
 ### Stage 5 → 6（task 规划 → task 执行）
 
 1. 检查 `task-plan.md` 存在。
-2. **检查 `implementation-design.md` 存在**（delta-8 vp-5）—— stage 5 必产 req 级实现设计；
+2. **检查 `implementation-design.md` 存在**—— stage 5 必产 req 级实现设计；
    缺失说明步骤 5a 被跳过 → 报错拦下，提示 PM 回 stage 5 跑 `/implementation-design`。
    （在飞旧 req 无此文件 → 不拦，按旧流程兼容。）
 3. 检查 `task-plan.md` 包含 task 标题列表和 `## 变更记录` section。
@@ -765,11 +765,9 @@ python3 .claude/scripts/req-transition.py "$ACTIVE_REQ_DIR" --to 6
    - task status is `「已完成」`。
    - task branch has been merged to req branch（等价于 `/close-task` 已跑完）。
    - task worktree has been cleaned up。
-   - <!-- C2 half-close detection 已删（D13 final, 2026-05-16, polish-11）：
-        D13 final 后 close-task 永不写 SKIP_DOC_UPDATE marker（--skip-doc-update flag 整套废弃），
-        本检测永远 false，纯死代码。Stage 6→7 简化为「merged + worktree cleaned」即可推进；
-        旧 marker 残留（D13 final 前消费仓写的）由 close-req 步骤 1.5 rewrite 时 cleanup_status 改 done，
-        本步骤不再扫 marker 不再阻塞。详见 docs/归档/完成/modulespec-维护/主方案.md §3 vp-2 + polish-11 -->
+   <!-- half-close detection 已删：close-task 永不写 SKIP_DOC_UPDATE marker，本检测永远 false。
+        Stage 6→7 简化为「merged + worktree cleaned」即可推进；旧 marker 残留由 close-req
+        步骤 1.5 rewrite 时 cleanup_status 改 done，本步骤不再扫 marker 不再阻塞。 -->
 
 3. All satisfied → 对话式确认门：
 
@@ -831,7 +829,7 @@ python3 .claude/scripts/req-transition.py "$ACTIVE_REQ_DIR" --to 7
 - **不写 PM 喊停识别**：PM 在确认门不答就是停（chat 天然行为），不要在 SKILL.md 加"喊停关键词识别"、不要发"已暂停"通知。PM 关窗口几天后回来重敲 `/req-stage-gate` 自然从当前 stage 续走，不需要"暂停态"概念
 - 每个 stage 结束必须显式问 PM 确认，不能自动跳过确认门
 - **确认门只给绝对路径 + 一句话变更摘要，不贴文档全文。** PM 的 IDE 已经挂在 worktree 上，文件在左侧目录树里可见，不需要把内容贴回 chat
-- **确认门标准格式**（v3 书面体；2026-05-11 全 stage 对齐完毕）：
+- **确认门标准格式**（v3 书面体）：
   - **顶部 stage 标记独占首行**：`Stage N（中文名）— <产物> <状态>`（例 `Stage 3（功能规格）— prd 待确认`、`Stage 4（设计系统）— 组件规格待确认`）
   - emoji 锚点分段（✅ 路径 / 📋 摘要 / 🧭 决策 / 📊 可选 review）
   - 路径独立缩进，不挤标题行

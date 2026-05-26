@@ -20,7 +20,7 @@ description: |
 
 ## 单文件 typed contract 约定（必读）
 
-本 skill 处理 task 的单文件 typed contract（delta-3）—— 一个物理文件 `task-NNN-<slug>.md`，内部由 region 标记分三区：
+本 skill 处理 task 的单文件 typed contract —— 一个物理文件 `task-NNN-<slug>.md`，内部由 region 标记分三区：
 
 - **PM 确认区**（`<!-- region: PM-CONFIRM begin/end -->`）：📌 任务卡（含 executor / executor_model / 审查工具 字段）/ 📦 范围 / ✅ 验收清单 / 📥 PM 反馈承接清单。
 - **执行区**（`<!-- region: EXEC begin/end -->`）：🔁 状态转换说明 / 🚦 启动前必读 / 🔧 实现规格 / 🧩 实现设计引用 / ⚠️ 约束与易错 / 🧪 自测说明 / ✔️ 工程层验收。**执行区是 agent 的实现依据。**
@@ -445,7 +445,7 @@ fi
 | prd.md §🎯 关键产品决策 #2 | 选用方案 A | 实证 demo 后用户路径走不通 | 改方案 B（理由：...）|
 ```
 
-无偏差填「无」。close-task Phase 2 把本段 promote 成 req `adjustment` 事件；close-req 步骤 1.5 聚合 → doc-update rewrite mode（D13 final, 2026-05-16）。
+无偏差填「无」。close-task Phase 2 把本段 promote 成 req `adjustment` 事件；close-req 步骤 1.5 聚合 → doc-update rewrite mode。
 
 **v2 兼容 — 双文件两层分工**（旧 task）：工程层偏差（字段命名 / 接口签名 / 组件路径）写工程合同 §10 文档偏差表；业务层偏差（产品决策 / 需求描述 / 模块功能规格）写 PM 视图「📁 历史档案 → 业务层偏差」表。
 
@@ -455,7 +455,7 @@ fi
 
 ### 步骤 7：写 commit 前 AI 自审 placeholder
 
-实现完毕、执行日志和文档偏差填好后，**不再主动列推荐 review 工具区块**（2026-05-08 收口：推荐 review 改作步骤 11 验收信息块末尾的辅助提示，不当 commit 前必经步骤）。
+实现完毕、执行日志和文档偏差填好后，**不再主动列推荐 review 工具区块**（步骤 11 收口：推荐 review 改作 验收信息块末尾的辅助提示，不当 commit 前必经步骤）。
 
 AI 在「自审记录」section 追加一条 commit 前 placeholder（提供 task-transition.py「执行中→已完成」校验所需的 has_meaningful_content 非空内容）：
 
@@ -557,7 +557,7 @@ python3 .claude/scripts/task-transition.py "$TASK_FILE" --to 已完成
 
 **PM 说"打回"**：
 
-> 打回**不切状态** — task 全程是「执行中」，AI 直接基于反馈继续修，不再走 `task-transition --to 执行中` 的回退（该 transition 在 2026-05-08 删除，I-TT4 废弃）。
+> 打回**不切状态** — task 全程是「执行中」，AI 直接基于反馈继续修，不再走 `task-transition --to 执行中` 的回退（该 transition 已删除，I-TT4 废弃）。
 
 1. 记录 PM 反馈到 task 文件「📁 历史档案 → PM 反馈」（v3 在审计区；v2 写 PM 视图主文件、**禁止**写入工程合同）：
    ```markdown
@@ -567,7 +567,7 @@ python3 .claude/scripts/task-transition.py "$TASK_FILE" --to 已完成
    **处理结果：** 待处理
    ```
 
-   PM 反馈留在本段不归类。后续同 req 的 task 由 task-spec 按 relevance 二分（适用 / 不适用）承接进新 task 的「PM 反馈承接清单」（delta-3 §2.4）；视觉规范类 / 全项目跨功能产品规则由 close-task 收尾时按目标 promote（参 task 文件「📁 历史档案 → PM 反馈」段内的 close-task 说明）。
+   PM 反馈留在本段不归类。后续同 req 的 task 由 task-spec 按 relevance 二分（适用 / 不适用）承接进新 task 的「PM 反馈承接清单」；视觉规范类 / 全项目跨功能产品规则由 close-task 收尾时按目标 promote（参 task 文件「📁 历史档案 → PM 反馈」段内的 close-task 说明）。
 
 2. 应用 §反馈循环规则（实现前必做下方）：按规则只改原型代码，不动 task md 业务字段；步骤 5 执行报告里写「文档对齐预告」。文档对齐统一交给 close-task §0。
 

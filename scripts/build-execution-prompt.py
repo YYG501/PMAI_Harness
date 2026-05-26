@@ -3,7 +3,7 @@
 
 输出执行信封：task id / 路径 / worktree / 分支 / 固定执行指令 + task 文件「执行区」。
 
-v3 单文件 typed contract（delta-3）：
+v3 单文件 typed contract：
   - task 文件单文件分三区（PM 确认区 / 执行区 / 审计区），由 region 标记界定。
   - 信封只抽 task 文件「执行区」（`<!-- region: EXEC begin -->` 到
     `<!-- region: EXEC end -->` 之间），inject 进 prompt。
@@ -38,7 +38,7 @@ if _SCRIPTS_DIR not in sys.path:
 from _lib.state import get_task_meta, engineering_path, detect_format
 
 
-# region 标记（delta-3 单文件 typed contract 三区界定）
+# region 标记（单文件 typed contract 三区界定）
 _EXEC_BEGIN = "<!-- region: EXEC begin -->"
 _EXEC_END = "<!-- region: EXEC end -->"
 

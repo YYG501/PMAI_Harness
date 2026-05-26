@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# cursor-agent adapter. See docs/归档/完成/设计-执行者可选.md §4.3
+# cursor-agent adapter. See 设计文档（已归档于生成器仓） §4.3
 #
 # WARNING: cursor-agent --force --trust has NO sandbox. Boundary protection
 # falls back entirely to the caller's post-execution越界 check.

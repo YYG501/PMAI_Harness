@@ -1,7 +1,7 @@
 ---
 name: codebase-audit
 description: |
-  Brownfield 入口（delta-1）：已有代码库接入框架时，扫码产出「代码现状档」
+  Brownfield 入口：已有代码库接入框架时，扫码产出「代码现状档」
   （7 维度：技术栈 / 集成 / 架构 / 结构 / 约定 / 测试 / 隐患；带防 secret 扫描），
   然后走和新项目一样的 /project-solution 讨论（被现状档喂着）。
   与 GSD 的 map-codebase → new-project 同构。新项目（无已有代码）不用本 skill。

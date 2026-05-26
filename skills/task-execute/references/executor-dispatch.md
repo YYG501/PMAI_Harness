@@ -167,7 +167,7 @@ fi
 
 ```bash
 # 回滚函数（失败路径或越界时调用）
-rollback_worktree() {
+rollback_worktree {
   local baseline="$1"
   cd "$TASK_WORKTREE"
   # Tracked changes: restore from baseline
@@ -232,7 +232,7 @@ fi
 ## 3e. 诊断文案函数
 
 ```bash
-output_diagnostic() {
+output_diagnostic {
   local classification="$1" executor="$2" log="$3" task="$4"
   local stage="adapter 启动"
   local suggest=""

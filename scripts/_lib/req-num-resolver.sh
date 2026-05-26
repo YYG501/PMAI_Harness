@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# req-num-resolver.sh — req 编号 helper（v5 vp-6 砍 is_first_req）
+# req-num-resolver.sh — req 编号 helper（v5  砍 is_first_req）
 #
 # 关键：必须扫**三个来源**取最大值，不能凭印象只扫文件目录。
 # **事实来源是 git 分支**——active req 都在自己分支上，main 分支视角下

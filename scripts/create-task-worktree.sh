@@ -70,7 +70,7 @@ fi
 # `git worktree add -b ... "$REQ_BRANCH"` 取 req 分支 HEAD commit 而非 working tree。
 # 任何停在 req worktree working tree 里没 commit 的 task md 改动（task-spec 多轮
 # revise 应该已被确认门后的 auto_commit_docs 落盘，但仍兜底一道）会被 fork 漏掉，
-# 导致 task 分支拿到 stale 文档。delta-3 单文件 typed contract：task md 只有
+# 导致 task 分支拿到 stale 文档。 单文件 typed contract：task md 只有
 # 一个文件，pathspec 单文件化。此 gate 仍是异常兜底（最后防线），触发即告警。
 ABS_TASK_FILE_PRE=$(cd "$(dirname "$TASK_FILE")" && pwd -P)/$(basename "$TASK_FILE")
 REQ_WT_PRE=$(resolve_worktree_path "$REQ_BRANCH" "$REPO_ROOT" || true)
@@ -124,7 +124,7 @@ setup_dependency_symlinks "$REPO_ROOT" "$WORKTREE_DIR"
 # 跟着 task 分支 commit 进入 req 分支作为最终历史档案。
 #
 # 注：task-spec 阶段（task-confirm 之前）task md 仍在 req 分支，无歧义。
-# fork 之后才移走。delta-3 单文件 typed contract：task md 只有一个文件，
+# fork 之后才移走。 单文件 typed contract：task md 只有一个文件，
 # 不再有成对 .engineering.md，移走单文件即可。
 ABS_TASK_FILE=$(cd "$(dirname "$TASK_FILE")" && pwd -P)/$(basename "$TASK_FILE")
 REQ_WT=$(resolve_worktree_path "$REQ_BRANCH" "$REPO_ROOT" || true)

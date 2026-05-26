@@ -197,8 +197,8 @@ REQUIRED_SECTIONS = {
     ],
 }
 
-# delta-3 §2.1：v3 单文件 typed contract 的 PM 确认区必填章节。
-# 关键产品决策 / 产物预览 / 功能清单 已移 prd.md（delta-2），不在 task 文件。
+# ：v3 单文件 typed contract 的 PM 确认区必填章节。
+# 关键产品决策 / 产物预览 / 功能清单 已移 prd.md，不在 task 文件。
 REQUIRED_SECTIONS_V3_TASK = [
     "任务卡",
     "范围",
@@ -206,12 +206,12 @@ REQUIRED_SECTIONS_V3_TASK = [
     "PM 反馈承接清单",
 ]
 
-# v3 typed contract 标记 + PM 确认区 region 标记（scoped lint 用，delta-3 vp-6）
+# v3 typed contract 标记 + PM 确认区 region 标记（scoped lint 用）
 TASK_FORMAT_V3_MARKER = "task_format: single-typed-v3"
 V3_REGION_PM_CONFIRM_BEGIN = "region: PM-CONFIRM begin"
 V3_REGION_PM_CONFIRM_END = "region: PM-CONFIRM end"
 
-# v2 原型简化项 段 1.5 锚（--simp-scope 用，T5/D2 源头约束）
+# v2 原型简化项 段 1.5 锚（--simp-scope 用，源头约束）
 # implementation-design.md 段 1.5 标题正则；其余段保持工程豁免不变。
 SIMP_SECTION_HEADING_PATTERN = re.compile(r"^##\s+段\s*1\.5\s*·\s*原型简化项\s*$")
 
@@ -230,7 +230,7 @@ def detect_doc_type(path: Path) -> str:
 def is_engineering_file(path: Path) -> bool:
     """工程合同性质文件 —— 允许所有工程内容，跳过 PM-view lint。
 
-    含 `*.engineering.md` 与 `implementation-design.md`（delta-8：req 级实现设计
+    含 `*.engineering.md` 与 `implementation-design.md`（req 级实现设计
     是工程合同格式 artifact，允许 TS 类型 / 字段 / 像素 / 反向约束）。
     """
     return (
@@ -242,11 +242,11 @@ def is_engineering_file(path: Path) -> bool:
 def lint(path: Path, simp_scope: bool = False) -> tuple[list[str], list[str]]:
     """Return (errors, warnings).
 
-    delta-3 vp-6 scoped 模式：v3 单文件 typed contract（头部含 task_format 标记）
+     scoped 模式：v3 单文件 typed contract（头部含 task_format 标记）
     只校验「PM 确认区」（`region: PM-CONFIRM` begin/end 之间）；执行区 / 审计区
     允许工程内容、不跑 PM-view lint。
 
-    T5 (--simp-scope)：implementation-design.md 段 1.5「原型简化项」scoped 模式（D2 源头约束）
+    --simp-scope：implementation-design.md 段 1.5「原型简化项」scoped 模式（源头约束）
     —— 该段内容会被 close-req §2a 写回 PRD（PRD 是 PM 视图），所以源头先校验。其余段保持
     工程豁免不变（implementation-design.md 整体仍走 is_engineering_file 跳过）。
     """
@@ -256,7 +256,7 @@ def lint(path: Path, simp_scope: bool = False) -> tuple[list[str], list[str]]:
     errors: list[str] = []
     warnings: list[str] = []
 
-    # delta-3：v3 typed contract task 文件走 scoped 模式
+    # ：v3 typed contract task 文件走 scoped 模式
     is_v3_scoped = (
         TASK_FORMAT_V3_MARKER in text and detect_doc_type(path) == "task"
     )
@@ -383,7 +383,7 @@ def main() -> int:
     parser.add_argument(
         "--simp-scope",
         action="store_true",
-        help="implementation-design.md 段 1.5 原型简化项 scoped 校验（D2 源头约束）—— "
+        help="implementation-design.md 段 1.5 原型简化项 scoped 校验（源头约束）—— "
              "仅校验段 1.5；其余段保持工程豁免。仅对 implementation-design.md 有意义。",
     )
     args = parser.parse_args()

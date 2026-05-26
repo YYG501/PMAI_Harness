@@ -13,7 +13,7 @@ description: |
 - PM 在 stage 6 调用，参数是 task id（如 `/task-spec task-001`）
 - 用于从 `task-plan.md` 中的单行 task 生成完整的 `tasks/task-NNN-<slug>.md`（单文件 typed contract）
 
-## 单文件 typed contract（delta-3）
+## 单文件 typed contract
 
 task-spec 产 **1 个物理文件** `tasks/task-NNN-<slug>.md`（不再产 `.engineering.md`）。
 文件头部带 `<!-- task_format: single-typed-v3 -->` 标记，内部分三区：
@@ -46,12 +46,12 @@ echo "SKILL: task-spec"
 | 输入 | 用途 |
 |---|---|
 | `task-plan.md` | task 元数据 |
-| `prd.md`（delta-2）| req 级 WHAT —— 挑当前 task 切片转写进执行区·实现规格 + PM 确认区·验收 |
+| `prd.md` | req 级 WHAT —— 挑当前 task 切片转写进执行区·实现规格 + PM 确认区·验收 |
 | `prd.md §三` | **本 req 临时词典**（名词解释）—— 写 task spec 时按本 req 引入的新业务实体 / 角色精确指代，禁同义词漂移 |
-| `implementation-design.md`（delta-8）| req 级 HOW —— 按 `HOW-ID` + 适用关键词挑当前 task 相关行；**段 1.5「原型简化项」按 PRD 锚点 join 当前 task**（v2 D5）：命中 → 实现规格 + 验收按简化后写 + 受影响验收项行内 `[SIMP-N]` 标签；**段 3.3「自由度声明」按"适用范围"挑行**：命中 → 三列写进约束与易错段 + 标签 `[FREEDOM-N]` |
+| `implementation-design.md` | req 级 HOW —— 按 `HOW-ID` + 适用关键词挑当前 task 相关行；**段 1.5「原型简化项」按 PRD 锚点 join 当前 task**：命中 → 实现规格 + 验收按简化后写 + 受影响验收项行内 `[SIMP-N]` 标签；**段 3.3「自由度声明」按"适用范围"挑行**：命中 → 三列写进约束与易错段 + 标签 `[FREEDOM-N]` |
 | `docs/PROJECT.md` / `docs/DESIGN.md` / `docs/modules/` | 项目级背景 |
 | `docs/PROJECT.md ## 业务术语表` | **长期词典**（跨 req 已沉淀的稳定业务术语）—— 跟 PRD §三 同时读：PROJECT 是沉淀基线，PRD §三 是本 req 新引入的临时词；两者并集 = 写 task spec 时的术语词典 |
-| `docs/PRODUCT-RULES.md`（delta-9）| 跨功能产品行为规则 —— 读全部 `scope=全局` 规则 + 按当前 task 模块 / 功能关键词 grep 命中的 `scope=域限定` 规则（§9.1.1 章节-grep；`scope=全局` 永远纳入、不漏跨功能规则）。命中的规则写进执行区·约束与易错 |
+| `docs/PRODUCT-RULES.md` | 跨功能产品行为规则 —— 读全部 `scope=全局` 规则 + 按当前 task 模块 / 功能关键词 grep 命中的 `scope=域限定` 规则（§9.1.1 章节-grep；`scope=全局` 永远纳入、不漏跨功能规则）。命中的规则写进执行区·约束与易错 |
 | 前序「已完成」task 的「PM 反馈」段 | same-req 反馈 lane（§步骤 5 relevance 二分）|
 | **stage 2 真相源**（A 分支 `analysis.md` / B 分支 `stage2-office-hours.md`；路径由 `get_stage_source(req_dir, 2)` 解析）| ⚪ 按需 lazy fallback —— 不默认读；PRD 切片不足时回读对应章节并在 chat 告知 PM |
 
@@ -59,7 +59,7 @@ echo "SKILL: task-spec"
 
 ## Workflow
 
-### attachments AI 接管 hook（D-iii v2 trigger 0 — 任何步骤期间生效）
+### attachments AI 接管 hook（trigger 0 — 任何步骤期间生效）
 
 PM 在 chat 描述 "我有 X 在 ~/Downloads/foo.pdf，重点 Y" → AI first-principle 识别 → 调 helper：
 
@@ -103,7 +103,7 @@ summary / 依赖。找不到 → 停止并提示 PM 先修正 `task-plan.md`。
 SOURCES=(
   "$ACTIVE_REQ_DIR/task-plan.md"            # task 元数据 + 全 task 视图
   "$REPO_ROOT/docs/PROJECT.md"              # 业务术语表（长期词典）
-  "$REPO_ROOT/docs/PRODUCT-RULES.md"        # delta-9 跨功能产品行为规则，全文读取 scope=全局 规则
+  "$REPO_ROOT/docs/PRODUCT-RULES.md"        # 跨功能产品行为规则，全文读取 scope=全局 规则
   "$REPO_ROOT/docs/modules/INDEX.md"        # 模块索引（定位涉及模块主功能规格文件）
 )
 
@@ -140,7 +140,7 @@ done
 `所属模块` 为 `基础设施` 时：`所属模块章节` 留空；执行区·实现规格填可执行的脚手架要求；
 PM 确认区·验收清单必须填可验证条件；告知 PM「本 task 不触发 module 规格 merge」。
 
-### 步骤 5：收集前序 PM 反馈，按 relevance 二分（delta-3 §2.4）
+### 步骤 5：收集前序 PM 反馈，按 relevance 二分
 
 扫前序「已完成」task 文件的「PM 反馈」段（按 `input-flow.md §9.1.1`：grep `^### 反馈`
 / `^## .*PM 反馈` 命中行后局部读，**不整文件 Read**）。同 req 内 + closed/ 下旧 task 都扫。
@@ -159,7 +159,7 @@ relevance / 处理结果 / 一句理由）—— 让「不适用」对 PM 可观
 写「无前序 PM 反馈」。
 
 > **跨模块反馈 = 已知 gap**：属「全项目跨功能产品行为规则」的反馈，relevance 二分装不下 ——
-> 由 close-task PM-selective promote 到 `docs/PRODUCT-RULES.md`（delta-9）；task-spec 不在此处理。
+> 由 close-task PM-selective promote 到 `docs/PRODUCT-RULES.md`；task-spec 不在此处理。
 
 ### 步骤 6：从 prd.md 挑切片 + implementation-design.md 按 HOW-ID / SIMP-ID / 段 3.3 挑行 join
 
@@ -173,7 +173,7 @@ relevance / 处理结果 / 一句理由）—— 让「不适用」对 PM 可观
 task-execute 只读 task 单文件、不跨文件回查 implementation-design —— 所以 HOW 行必须
 在此挑全。
 
-**`implementation-design.md` 段 1.5「原型简化项」按 PRD 锚点 join 当前 task**（v2 D5）：
+**`implementation-design.md` 段 1.5「原型简化项」按 PRD 锚点 join 当前 task**：
 段 1.5 是 `implementation-design.md` 内的特殊段，不带 HOW-ID 而带 `SIMP-ID`。join 规则：
 
 1. 列出当前 task 从 PRD §六 挑出的章节锚（如「§六 6.3 用户登录」「Story 4」）
@@ -182,7 +182,7 @@ task-execute 只读 task 单文件、不跨文件回查 implementation-design �
    - 把「原型本次计划简化为」内容**改写进**执行区·实现规格的对应功能段（task 级实现要求按
      原型简化后写，不是按 PRD 全量写）—— executor 按简化版实施
    - 把「真实需求」引用挂在该实现规格段尾，提示 executor「PRD 的真实需求是 X，本期计划简化为 Y」
-   - PM 确认区·task 级验收清单的受影响验收项行内追加 `[SIMP-N]` 标签（D6）
+   - PM 确认区·task 级验收清单的受影响验收项行内追加 `[SIMP-N]` 标签
 4. 0 命中 → 当前 task 无关简化项，按 PRD 全量写
 
 **`implementation-design.md` 段 3.3「自由度声明」按"适用范围"挑相关行**：
@@ -273,7 +273,7 @@ python3 "$REPO_ROOT/.claude/scripts/task-transition.py" \
 
 ### 步骤 10：展示确认门并等待 PM 确认（单一确认门）
 
-> delta-3：task-spec 步骤 10 是 PM 在整个 task 生命周期的**唯一确认门**（task-confirm
+> task-spec 步骤 10 是 PM 在整个 task 生命周期的**唯一确认门**（task-confirm
 > 已删自己的启动确认门）。
 
 **确认门前置依赖检查**：扫本 task `## 依赖` 列的 task 状态。有未完成依赖 → 在确认门
@@ -348,9 +348,9 @@ AI chat 出一行轻量过场，然后直接续跑 `/task-confirm` 的 workflow�
 
 接着按 task-confirm SKILL 跑（PM 体感 = task-spec 定稿后直接看到 worktree 路径 + Next Up 新窗口命令，不再多一道 "复制 /task-confirm <path>"）。
 
-> **为什么续跑**：task-confirm 自身**不设确认门**（delta-3 §2.3，唯一确认门已在 task-spec 步骤 10）；
+> **为什么续跑**：task-confirm 自身**不设确认门**（唯一确认门已在 task-spec 步骤 10）；
 > PM 在步骤 10 答"定稿"=已授权进 task 准备阶段。手动贴 `/task-confirm <path>` 是 v3.5
-> 之前的旧仪式，speed mode（2026-05-26）一并收掉。
+> 之前的旧仪式，speed mode 一并收掉。
 >
 > **退出条件**：task-confirm workflow 跑完（worktree 已 fork + Next Up 已输出）→ chat 自然停在
 > "去新窗口跑 /task-execute" 的引导上，不进 task 执行（task 执行天然在新窗口里 PM 重新触发）。

@@ -16,7 +16,7 @@
 
 `task-plan.md` 不拆双文件——§四 是 task-plan 自身的轻量自检结论 + task-spec / doc-update 会消费的状态索引，不是 PM 阅读层内容也不需要独立文件存档。
 
-## `tasks/task-NNN.md` 章节顺序（delta-3：单文件 typed contract）
+## `tasks/task-NNN.md` 章节顺序（单文件 typed contract）
 
 task-spec 产**单文件 typed contract**（头部 `<!-- task_format: single-typed-v3 -->`），
 内部分三区，由 region 标记界定。章节顺序：
@@ -40,14 +40,14 @@ task-spec 产**单文件 typed contract**（头部 `<!-- task_format: single-typ
 <!-- region: EXEC end -->
 
 <!-- region: AUDIT begin -->         ← 审计区（executor / PM 填；不 lint）
-12. 📋 文档偏差（task-transition「执行中→已完成」gate 锚点 + delta-7 adjustment-promote 源）
+12. 📋 文档偏差（task-transition「执行中→已完成」gate 锚点 +  adjustment-promote 源）
 13. 🔍 自审记录（同上 gate 锚点）
 14. 📁 历史档案（执行日志 / PM 反馈 / plan-review 沉淀）
 <!-- region: AUDIT end -->
 ```
 
 > 旧 v2 双文件（PM 视图 `.md` + 工程合同 `.engineering.md`）已废 —— task-spec 双→单文件
-> 塌缩（delta-3）。WHAT 移 `prd.md`（关键产品决策 / 产物预览 / 功能清单 / 跨功能规则）、
+> 塌缩。WHAT 移 `prd.md`（关键产品决策 / 产物预览 / 功能清单 / 跨功能规则）、
 > HOW 移 `implementation-design.md`，task 文件只留 task 级 typed contract。在飞旧 v2 task
 > 跑完旧的、不回迁。
 

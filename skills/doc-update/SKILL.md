@@ -16,7 +16,7 @@ description: Use when task 已完成、PM 已通过验收、需要在 close-task
 
 本 skill 读 task 文件的偏差记录 / 模块字段：
 
-- **v3 单文件 typed contract**（delta-3）：task 是一个物理文件 `task-NNN-<slug>.md`，三区由 region 标记界定——
+- **v3 单文件 typed contract**：task 是一个物理文件 `task-NNN-<slug>.md`，三区由 region 标记界定——
   - PM 确认区「📌 任务卡」：`**所属模块**` / `**所属模块章节**` 字段
   - 审计区「📋 文档偏差」表：**单一一处**偏差记录（文档偏差 / 业务偏差合并）；指向任意 prd / implementation-design / module / DESIGN / PROJECT 等文档
 - **v2 旧双文件 task**（在飞旧 task）：PM 视图主文件（`.md`）含「📋 功能清单」/「📁 历史档案 → 业务层偏差」/「📌 任务卡」模块字段；工程合同（`.engineering.md`）含「§10 文档偏差」/「§4 功能清单工程版」/「§1 元信息扩展」。
@@ -26,7 +26,7 @@ description: Use when task 已完成、PM 已通过验收、需要在 close-task
 - v3 —— 偏差记录只在审计区「📋 文档偏差」一处读取，分别对账到各偏差指向的原始文档。
 - v2 —— 跨两文件读取偏差记录（PM 视图「📁 历史档案 → 业务层偏差」+ 工程合同 §10）。
 
-**沉淀模式（D13 final 后已是死路径，见步骤 0.5）**：历史上只读 PM 视图「📋 功能清单」沉淀进 module spec。v3 task 无独立「📋 功能清单」section（delta-2 已移 prd.md），沉淀模式不再被 close-task 触发。
+**沉淀模式（已是死路径，见步骤 0.5）**：历史上只读 PM 视图「📋 功能清单」沉淀进 module spec。v3 task 无独立「📋 功能清单」section（功能清单已移 prd.md），沉淀模式不再被 close-task 触发。
 
 ## Required Inputs
 
@@ -96,17 +96,9 @@ grep -n '^### <module chapter>' docs/modules/<module>.md
 
 ## Workflow
 
-### 步骤 0.5：~~沉淀风险判断~~（D13 final 已删, 2026-05-16, polish-12）
+### 步骤 0.5：~~沉淀风险判断~~（已删）
 
-<!-- WHY breadcrumb: D13 final 后 close-task 不再调 /doc-update settlement，
-     原 §0.5 提议 PM 走 --skip-doc-update half-close 的分支已不存在
-     （flag 整套废弃）。所有 sediment 在 close-req 步骤 1.5 聚合一次性完成，
-     不需要 per-task "v1+v2 杂交风险" 判断（多 task 同 module 是聚合 rewrite 的默认场景）。
-     详见 docs/归档/完成/modulespec-维护/主方案.md §3 vp-1 + polish-12。 -->
-
-步骤 0.5 历史目的：进入 settlement 前判断 v1+v2 杂交风险 → 提议 PM 走半 close。
-
-D13 final 现状：close-task 永不调 doc-update settlement → 本步骤入口不会被触发。`/doc-update` 仅由
+close-task 永不调 doc-update settlement → 本步骤入口不会被触发。`/doc-update` 仅由
 **(1)** close-req 步骤 1.5 调（走步骤 8 rewrite mode），或 **(2)** PM 主动 `/doc-update <module>` 调对账模式。
 两条入口都不需要 v1+v2 杂交判断（rewrite 是聚合模式天然处理；对账是 PM 显式定向，无 sediment 风险）。
 
@@ -329,17 +321,16 @@ PM 在步骤 4 已审过 before/after，**默认无需再审**——直接进入
 
 无 PM 触发时（默认）：返回 orchestrator，允许继续运行 `close-task.sh` 的后续 merge / cleanup。
 
-### 步骤 8：rewrite mode（D13 final 主入口，close-req 步骤 1.5 默认调用）
+### 步骤 8：rewrite mode（close-req 步骤 1.5 默认调用路径）
 
-<!-- WHY breadcrumb: D13 final 把 rewrite mode 从 fallback 升为 close-req 默认调用路径。
+<!-- rewrite mode 是 close-req 步骤 1.5 聚合 close-task 偏差的默认调用路径。
      不再要求 ≥2 SKIP marker（marker 整套已废弃）；任何 close-req 步骤 1.5 聚合都默认调本步骤。
-     polish-2 输出契约：返回 REWRITE_COVERED_FILES + REWRITE_COVERED_MODULES，
-     供 close-req 步骤 2a 替代 COVERAGE_COMMITS / SKIP_PENDING metric。
-     详见 docs/归档/完成/modulespec-维护/主方案.md §3 vp-2 + polish-2。 -->
+     输出契约：返回 REWRITE_COVERED_FILES + REWRITE_COVERED_MODULES，
+     供 close-req 步骤 2a 作 metric。 -->
 
-**触发条件**：close-req 步骤 1.5 聚合各 closed task 偏差后，对每个目标文档默认调用 rewrite mode（PM 显式选 patch 时走对账模式）。**不要求** ≥2 SKIP marker（SKIP marker 整套已废弃，D13 final, 2026-05-16）。
+**触发条件**：close-req 步骤 1.5 聚合各 closed task 偏差后，对每个目标文档默认调用 rewrite mode（PM 显式选 patch 时走对账模式）。**不要求** ≥2 SKIP marker（SKIP marker 整套已废弃）。
 
-**输入契约**（D13 final, polish-2）：
+**输入契约**：
 
 ```yaml
 target_doc: docs/modules/<module>/<file>.md   # 一次一个目标文档
@@ -368,9 +359,9 @@ quickfix_baseline: <当前目标文档全文>           # 含 quickfix 旁路改
 2. AI 起草新版整段（替换 affected_chapters，保持目录结构 / 表格风格 / 锚点 ID 不变）
 3. PM 审 diff（默认逐章节批准；PM 可主动选 "all-at-once" 跳过逐章节）
 4. 写入目标文档
-5. **旧 SKIP marker 兼容**（polish-15）：若 contributing_tasks 含旧 `<!-- SKIP_DOC_UPDATE: ... cleanup_status="pending" -->` 残留（消费仓在 D13 final 前写的），rewrite 完成时把 marker `cleanup_status` 改 `"done"` 留作 audit trail；新写的 task 文件无 marker 跳过本步
+5. **旧 SKIP marker 兼容**：若 contributing_tasks 含旧 `<!-- SKIP_DOC_UPDATE: ... cleanup_status="pending" -->` 残留，rewrite 完成时把 marker `cleanup_status` 改 `"done"` 留作 audit trail；新写的 task 文件无 marker 跳过本步
 
-**输出契约**（D13 final, polish-2，返回给 close-req 步骤 1.5）：
+**输出契约**（返回给 close-req 步骤 1.5）：
 
 ```yaml
 status: success | rejected
@@ -379,11 +370,11 @@ rewrite_covered_modules: [<module-name>, ...]            # 对应模块名
 rejected_chapters: [§X, ...]                             # PM 拒绝 rewrite 的章节（仅 status=rejected）
 ```
 
-close-req 步骤 1.5 收到 output 后回填 close-report.md `## 文档变更` 段（polish-9）+ 作步骤 2a metric（polish-4）。
+close-req 步骤 1.5 收到 output 后回填 close-report.md `## 文档变更` 段 + 作步骤 2a metric。
 
 **PM 拒绝处理**：
 
-- PM 拒绝任一章节的 rewrite → 返回 `status=rejected`，让 close-req 步骤 1.5 决定是 retry 还是降级 patch mode（**不再有 skip 选项**，polish-13）
+- PM 拒绝任一章节的 rewrite → 返回 `status=rejected`，让 close-req 步骤 1.5 决定是 retry 还是降级 patch mode（**不再有 skip 选项**）
 - 不在 rewrite mode 内做"半重写"——要么全章节通过，要么退回让 close-req 重新拍
 
 **与对账模式（步骤 1.5/1.6/2-5）的边界**：
@@ -391,9 +382,9 @@ close-req 步骤 1.5 收到 output 后回填 close-report.md `## 文档变更` �
 | 模式 | 触发 | 适用场景 |
 |---|---|---|
 | 对账模式 | PM 显式调 `/doc-update <module>` OR close-req 步骤 1.5 PM 选 patch | 单 task 单文档单段，按行精确替换 |
-| rewrite mode（本步骤） | close-req 步骤 1.5 默认（D13 final 主路径） | 任何 close-req 聚合（含单 task 单 req），整段重写比按行 patch 简洁 |
+| rewrite mode（本步骤） | close-req 步骤 1.5 默认（主路径） | 任何 close-req 聚合（含单 task 单 req），整段重写比按行 patch 简洁 |
 
-**为什么不在对账模式里做（默认）**：对账模式按行精确替换，多 task 跨章节累积时 patch 顺序冲突难解；rewrite 整段写比按行打补丁更稳。D13 final 把 rewrite 升为默认是因为 §0.1 痛点（N 次启动成本累加）—— rewrite 是 close-req 末一次性聚合，启动成本只算 1 次。
+**为什么不在对账模式里做（默认）**：对账模式按行精确替换，多 task 跨章节累积时 patch 顺序冲突难解；rewrite 整段写比按行打补丁更稳。rewrite 升为默认是为了节省 §0.1 痛点的 N 次启动成本累加 —— rewrite 是 close-req 末一次性聚合，启动成本只算 1 次。
 
 ## Failure Handling（DB2）
 

@@ -16,7 +16,7 @@
   ("待启动" 是 status-view.py 派生显示标签，不是字段值)
 -->
 
-> 本文件是 task 的 **typed contract**（单文件，delta-3）—— 内部分三区，各区有各自的 lint：
+> 本文件是 task 的 **typed contract**（单文件）—— 内部分三区，各区有各自的 lint：
 >
 > - **PM 确认区**：任务卡 / task 级范围 / task 级验收清单 / PM 反馈承接清单。
 >   PM 在确认门**只读这一区**即可判 scope；跑 scoped PM-view lint（`check-doc-pm-view.py`）。
@@ -89,7 +89,7 @@ claude-code 仅支持 opus / sonnet / haiku（Agent tool 枚举）。
 <!-- task 级验收（PM 自己能在 demo 时勾选的条件）；req 级验收标准在 prd.md §七。
      不写 grep 校验 / 单测断言 / 覆盖率阈值 → 那些进执行区·工程层验收。
 
-     v2 D6：若本 task 命中 implementation-design.md 段 1.5 原型简化项（按 PRD 锚点 join），
+     若本 task 命中 implementation-design.md 段 1.5 原型简化项（按 PRD 锚点 join），
      受影响验收项行尾追加 [SIMP-N] 标签（如 `- [ ] 登录成功后跳转工作台 [SIMP-03]`），
      让 PM 一眼看到「这条验收按原型简化版走，不是 PRD 全量」。 -->
 
@@ -106,7 +106,7 @@ claude-code 仅支持 opus / sonnet / haiku（Agent tool 枚举）。
 
 ## 📥 PM 反馈承接清单
 
-<!-- delta-3 §2.4：task-spec 扫前序「已完成」task 的「PM 反馈」段，按 relevance 二分。
+<!-- ：task-spec 扫前序「已完成」task 的「PM 反馈」段，按 relevance 二分。
      每条前序反馈一行；确认门摘要输出「承接 X 条 / 不适用 Z 条」，PM 一眼可见、可纠误判。
      无前序反馈 → 写「无前序 PM 反馈」。 -->
 
@@ -207,7 +207,7 @@ PM 打回 → 保持 `执行中`；执行失败 / 放弃 manual → `待执行`
 
 <!-- 易错点 / 反向约束（允许反向描述：禁止 X / 不允许 Y）+ a11y / 视口 / 视觉规范细则。
      来源标注：源 PM 反馈（含承接自前序 task 的 relevance=适用 条目）/ plan-review / 历史 task。
-     像素细则体量大时，按 delta-8 §3.4 同款判断分流 docs/DESIGN.md。 -->
+     像素细则体量大时，分流 docs/DESIGN.md。 -->
 
 | # | 禁止行为 / 易错点 | 后果 / 理由 | 来源 |
 |---|---|---|---|
@@ -288,7 +288,7 @@ artifact: verify/cold-start.log
 - ✅ 执行日志（agent 在 task-execute 自动写）
 - ✅ PM 反馈（PM 在 close-task / review 后手动写）
 - ✅ plan-review 沉淀（plan 阶段 review 沉淀，三段式 决策/理由/落地约束）
-- ❌ AI 维护性动作（hash 对齐等）禁止写入 —— 单文件已无双文件 hash 同步机器（delta-3）。 -->
+- ❌ AI 维护性动作（hash 对齐等）禁止写入 —— 单文件已无双文件 hash 同步机器。 -->
 
 ### 执行日志（agent 填写，不要删除历史记录）
 

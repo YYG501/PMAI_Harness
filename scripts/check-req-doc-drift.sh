@@ -8,7 +8,7 @@
 #   1. 扫 sync 范围（项目级 DESIGN.md / CLAUDE.md + requirements/active/<req-id>/）
 #   2. 对每个文件比 worktree 当前 hash vs req 分支 hash
 #   3. 跳过 task own 文件 — task own 由 task 自决，永远不该被 req 推送
-#      delta-3：v3 单文件只跳 task-NNN.md；v2 旧双文件兼容时多跳 .engineering.md
+#      ：v3 单文件只跳 task-NNN.md；v2 旧双文件兼容时多跳 .engineering.md
 #   4. stdout 输出 JSON：{"drift_count": N, "files": [{"path": ..., "worktree_hash": ..., "req_hash": ...}]}
 #   5. stderr 输出给人读的清单（无 drift 时一行 "✓"，有 drift 时列文件路径）
 #   6. 纯只读 — 不写 worktree 任何文件，不写 .git/index.lock，不 emit 事件
@@ -37,7 +37,7 @@ REQ_ID="$REQ_BRANCH"
 TASK_BASENAME=$(basename "$TASK_FILE")
 TASK_STEM="${TASK_BASENAME%.md}"
 TASK_OWN_PM="requirements/active/${REQ_ID}/tasks/${TASK_BASENAME}"
-# v2 旧双文件兼容（delta-3）：工程合同实际存在时才把它列入 task own 排除集；
+# v2 旧双文件兼容：工程合同实际存在时才把它列入 task own 排除集；
 # v3/v1 单文件无 .engineering.md，TASK_OWN_ENG 置空（占位匹配不会命中真实路径）。
 TASK_OWN_ENG=""
 if [ -f "$WORKTREE/requirements/active/${REQ_ID}/tasks/${TASK_STEM}.engineering.md" ]; then

@@ -2,9 +2,9 @@
 name: task-submit
 description: |
   向 PM 呈交 task 验收信息包，根据 task 类型调整展示内容，等待 PM 决策。
-  **默认路径不再被 PM 直接调用**——task-execute 步骤 11/12 已合并本 skill 的呈交+决策逻辑（2026-05-07）。
+  **默认路径不再被 PM 直接调用**——task-execute 步骤 11/12 已合并本 skill 的呈交+决策逻辑。
   本 skill 现在的角色是 PM 手动兜底入口：窗口被关 / context 丢失 / IDE 重启后想重新呈交时使用。
-  task 状态全程是「执行中」（2026-05-08「待验收」已合并到「执行中」），commit 不切状态，PM 通过呈交块时统一转「已完成」。
+  task 状态全程是「执行中」（旧「待验收」已合并到「执行中」），commit 不切状态，PM 通过呈交块时统一转「已完成」。
 ---
 
 # /task-submit
@@ -25,7 +25,7 @@ description: |
 
 ## 单文件 typed contract 约定（必读）
 
-本 skill 处理 task 的单文件 typed contract（delta-3）—— 一个物理文件 `task-NNN-<slug>.md`，三区由 region 标记界定。submit 阶段的信息聚合锚点：
+本 skill 处理 task 的单文件 typed contract —— 一个物理文件 `task-NNN-<slug>.md`，三区由 region 标记界定。submit 阶段的信息聚合锚点：
 
 | 验收信息 | v3 单文件锚点 |
 |---|---|
@@ -172,7 +172,7 @@ commit 完成后（task 状态仍是「执行中」），不提示 PM 回主窗�
 
 **走查时引导 PM 反推 req / 项目级文档偏差**：
 
-PM 看原型 / 看 diff 时，如果发现 prd / implementation-design / analysis / module 规格 等上游文档**写错或需修订**，提醒 PM 在 task 文件「📋 文档偏差」表填一行（v3 在审计区；v2 旧 task 业务层偏差填 PM 视图「📁 历史档案 → 业务层偏差」、工程层填工程合同 §10）。默认空时多数 task 不需要填。**close-req 步骤 1.5** 会聚合本 req 所有 closed task 的偏差，按目标文档调 doc-update rewrite mode 一次性沉淀（D13 final, 2026-05-16）。
+PM 看原型 / 看 diff 时，如果发现 prd / implementation-design / analysis / module 规格 等上游文档**写错或需修订**，提醒 PM 在 task 文件「📋 文档偏差」表填一行（v3 在审计区；v2 旧 task 业务层偏差填 PM 视图「📁 历史档案 → 业务层偏差」、工程层填工程合同 §10）。默认空时多数 task 不需要填。**close-req 步骤 1.5** 会聚合本 req 所有 closed task 的偏差，按目标文档调 doc-update rewrite mode 一次性沉淀。
 
 不要让 PM 把这种偏差只在对话里说而不落到表里——会丢。
 
@@ -205,7 +205,7 @@ python3 .claude/scripts/task-transition.py "<task-file>" --to 已完成
 
 **PM 说"打回"：**
 
-> 打回**不切状态** — task 全程是「执行中」，AI 直接基于反馈继续修，不再走 `--to 执行中` 回退（该 transition 在 2026-05-08 删除，I-TT4 废弃）。
+> 打回**不切状态** — task 全程是「执行中」，AI 直接基于反馈继续修，不再走 `--to 执行中` 回退（该 transition 已删除，I-TT4 废弃）。
 
 1. 记录 PM 反馈到 task 文件「📁 历史档案 → PM 反馈」section（v3 在审计区；v2 写 PM 视图主文件、**禁止**写入工程合同）：
    ```markdown
@@ -215,7 +215,7 @@ python3 .claude/scripts/task-transition.py "<task-file>" --to 已完成
    **处理结果：** 待处理
    ```
 
-   PM 反馈留在本段不归类。后续同 req 的 task 由 task-spec 按 relevance 二分（适用 / 不适用）承接进新 task 的「PM 反馈承接清单」（delta-3 §2.4）；视觉规范类 / 全项目跨功能产品规则由 close-task 收尾时按目标 promote。
+   PM 反馈留在本段不归类。后续同 req 的 task 由 task-spec 按 relevance 二分（适用 / 不适用）承接进新 task 的「PM 反馈承接清单」；视觉规范类 / 全项目跨功能产品规则由 close-task 收尾时按目标 promote。
 
 2. 输出给 PM，并继续在本窗口修复：
 

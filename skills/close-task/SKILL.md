@@ -29,7 +29,7 @@ PM 体感：
 - 切到 req 窗口后再次调用（执行 Phase 2）
 - Task 状态必须为「已完成」
 
-## task 文件形态（delta-3）
+## task 文件形态
 
 task-spec 产 **单文件 typed contract**（`task-NNN-<slug>.md`，三区：PM 确认区 / 执行区 /
 审计区）。本 skill：
@@ -67,30 +67,23 @@ PENDING_MARKER="$REPO_ROOT/.runs/pending-close-task.json"
 | req worktree 内 | 不存在 | **报错**："没有待 finalize 的 task。请先在 task 窗口运行 /close-task" |
 | 主仓或其他位置 | - | **报错**："请在 task 窗口或 req 窗口运行 /close-task" |
 
-## 改造说明（D13 final, 2026-05-16, §0.1 token 启动成本）
+## modulespec 维护策略
 
-<!-- WHY breadcrumb: D13 final 改造把 modulespec 沉淀从 close-task per-task 推到 close-req 末聚合。
-     详见 docs/归档/完成/modulespec-维护/主方案.md。任何"为什么 close-task 不调 doc-update"
-     的疑问先读那份方案 §0.1 + §1 + §3 vp-1。-->
+close-task **不调** `/doc-update`（任何模式都不调）。task close 只 merge + 归档，**不动 `docs/modules/*.md`**。modulespec 维护推迟到 close-req 末统一 rewrite（doc-update §8 rewrite mode）。
 
-**默认行为反转**：close-task **不调** `/doc-update`（任何模式都不调）。task close 只 merge + 归档，
-**不动 docs/modules/*.md**。modulespec 维护推迟到 close-req 末统一 rewrite（doc-update §8 rewrite mode）。
+**PM 心智模型注脚**（防误判）：
 
-**台 PM 心智模型注脚**（防误判）：
-
-- 你跑完 `/close-task` 看不到 modulespec 变化 = **正常**（D13 设计，不是 bug）
+- 跑完 `/close-task` 看不到 modulespec 变化 = **正常**
 - 沉淀在 `/close-req` 末批量发生，你那时一次审完整段 diff
-- 这是为节省 N 次 doc-update 启动 token 成本（详见 §0.1）
+- 这是为节省 N 次 doc-update 启动 token 成本
 
 ### 旧 flag tombstone
 
-旧版本支持的 `--skip-doc-update` / `--doc-update-now` flag **已于 D13 final 废弃**。
-PM/AI 如带这两个 flag 调用 close-task：
+旧版本支持的 `--skip-doc-update` / `--doc-update-now` flag **已废弃**。PM/AI 如带这两个 flag 调用 close-task：
 
 ```text
-Error: --skip-doc-update / --doc-update-now 已废弃（D13 final, 2026-05-16）。
+Error: --skip-doc-update / --doc-update-now 已废弃。
        close-task 不再调 doc-update；正常 close-task 即可，modulespec 由 close-req 末统一 rewrite。
-       详见 docs/归档/完成/modulespec-维护/主方案.md。
 ```
 
 → 必须 exit non-zero（fail loud）；不要 silent ignore。
@@ -215,31 +208,29 @@ git -C "$TASK_WORKTREE" commit -m "task-NNN close-prep: PM 视图与原型对齐
 
 性质不同，串行处理不合并。
 
-### 步骤 1：偏差记录留作 close-req 聚合输入（D13 final, 不调 doc-update）
+### 步骤 1：偏差记录留作 close-req 聚合输入（不调 doc-update）
 
-**D13 final 改造**：close-task **不调** `/doc-update`。偏差记录原样保留在 task 文件里，由
-close-req 步骤 1.5 聚合处理（按目标文档 rewrite OR patch）。
+close-task **不调** `/doc-update`。偏差记录原样保留在 task 文件里，由 close-req 步骤 1.5 聚合处理（按目标文档 rewrite OR patch）。
 
-校验（这一步必跑，是 close-req 聚合 + delta-7 adjustment-promote 的输入约束）：
+校验（这一步必跑，是 close-req 聚合 + adjustment-promote 的输入约束）：
 
 - **v3 单文件**：审计区 `## 📋 文档偏差` 表存在（即使是「无」也要存在该段）
 - **v2 旧双文件**：PM 视图 `### 业务层偏差` 段 + 工程合同 `## 10. 文档偏差` 表（兼容）
 
 用 `detect_format` 分流。判断：
-- **段缺失** → 报错让 PM 补段头（即使填「无」）；不能省段，否则 close-req 聚合 +
-  delta-7 promote 会找不到锚点
+- **段缺失** → 报错让 PM 补段头（即使填「无」）；不能省段，否则 close-req 聚合 + promote 会找不到锚点
 - **段存在（含「无」或具体表内容）** → 继续 §1.1 分类，**不调 /doc-update**
 
-> **为什么不在这里调 /doc-update**：见本文件顶部「改造说明（D13 final）」。简言之，per-task 调 doc-update 是 N 次启动成本累加的根源（§0.1 痛点）；推迟到 close-req 末统一 rewrite。
+> **为什么不在这里调 /doc-update**：见本文件顶部「modulespec 维护策略」。简言之，per-task 调 doc-update 是 N 次启动成本累加的根源；推迟到 close-req 末统一 rewrite。
 
-#### 1.1 偏差分类：纠错 vs 计划外简化（v2 / D3）
+#### 1.1 偏差分类：纠错 vs 计划外简化
 
 读审计区·📋 文档偏差表。**对每条非「无」偏差行**逐条 AI 分类：
 
 | 类别 | 判别 | 处理 |
 |---|---|---|
 | **纠错偏差**（默认）| 偏差是「文档写错了 → 按代码改对」—— 字段名错 / 流程描述错 / 文案过期 | 留原表不动；close-task.sh phase 2 把它 promote 成 `adjustment` 事件，close-req §2a 反向覆盖 PRD（原路径不变）|
-| **计划外简化**（v2 D3 新增）| 偏差是「task 执行期临时决定少做某功能 / 边界 / 流程」—— 实现比 PRD 写的少、但不属于 stage 5 PM 主动决策的 SIMP-N（不在 implementation-design.md 段 1.5 已登记范围）| **停下问 PM**：是否回填 implementation-design.md 段 1.5（补 SIMP-NN）—— 见 §1.2 |
+| **计划外简化**| 偏差是「task 执行期临时决定少做某功能 / 边界 / 流程」—— 实现比 PRD 写的少、但不属于 stage 5 PM 主动决策的 SIMP-N（不在 implementation-design.md 段 1.5 已登记范围）| **停下问 PM**：是否回填 implementation-design.md 段 1.5（补 SIMP-NN）—— 见 §1.2 |
 
 **AI 分类启发式**（pattern 沉淀，非阈值脚本，memory `feedback_judgment_pattern_not_mechanization`）：
 
@@ -349,7 +340,7 @@ AI 拿不准 → 呈交 PM 对话式问句让 PM 拍板（4 选 1）。
 
 所有 N 条视觉规范反馈处理完毕（每条都标了 `Y-baseline` / `Y-inventory` / `Y-task-fix` / `N-wrong-doc` 之一作为内部记账），DESIGN.md 改动**未 commit**（步骤 3 提示 PM 自己 commit），进入步骤 1.6。
 
-### 步骤 1.6：跨功能产品行为规则反馈 selective promote 到 PRODUCT-RULES.md（delta-9 vp-2）
+### 步骤 1.6：跨功能产品行为规则反馈 selective promote 到 PRODUCT-RULES.md
 
 与步骤 1.5「视觉规范 → DESIGN.md」同型 —— 扫本 task PM 反馈，对**全项目跨功能产品行为
 规则**类条目逐条处理：默认 promote 到 `docs/PRODUCT-RULES.md`，AI 拿不准的才问 PM。
@@ -419,8 +410,8 @@ phase 1 步骤 0 / 1 / 1.5 / 1.6 应该已经把改动 commit 完。这里二次
 干净（除 `docs/DESIGN.md` + `docs/PRODUCT-RULES.md` —— 两者等 PM 二次审 diff 后手 commit）：
 
 ```bash
-# delta-9 D9-4：PRODUCT-RULES.md 与 DESIGN.md 同 —— patch-不-commit，须一起进白名单，
-# 否则未 commit 的 PRODUCT-RULES.md 会拌倒 worktree-clean 检查（commit 6382baf 同类 bug）。
+#  ：PRODUCT-RULES.md 与 DESIGN.md 同 —— patch-不-commit，须一起进白名单，
+# 否则未 commit 的 PRODUCT-RULES.md 会拌倒 worktree-clean 检查（同类 bug 防回归）。
 UNCOMMITTED=$(git status --porcelain | grep -vE 'docs/(DESIGN|PRODUCT-RULES)\.md' || true)
 if [ -n "$UNCOMMITTED" ]; then
   echo "❌ task worktree 有未 commit 改动（不含 DESIGN.md / PRODUCT-RULES.md）："
@@ -514,7 +505,7 @@ bash .claude/scripts/close-task.sh "$TASK_FILE_ABS"
 2. 校验 task 状态为「已完成」
 3. 检查文档偏差（二次检查，有未处理偏差会阻塞）
 4. merge task 分支 → req 分支
-5. **delta-7 vp-3：promote task 审计区「📋 文档偏差」→ req `adjustment` 事件**
+5. **：promote task 审计区「📋 文档偏差」→ req `adjustment` 事件**
    （append 到 `requirements/active/<req>/req-events.jsonl` 并 commit；格式判别走
    `detect_format` 三态，v2 旧 task 从 `.engineering.md §10` 读、v3 从审计区读；
    close-req 反向对齐读这些 adjustment 事件）
@@ -570,6 +561,6 @@ rm -f "$PENDING_MARKER"
 - 步骤 0 patch 必须 commit 到 task 分支（cwd 已在 task worktree），随 Phase 2 merge 自然进 req 分支
 - 文档偏差必须在 Phase 1 处理（close-task.sh 会做二次检查；v3 单文件在审计区·📋 文档偏差，v2 旧 task 跨两文件）
 - **v3 单文件归档**：merge / 归档 / 清理只动一个 `.md`；在飞旧 v2 双文件 task 仍成对处理
-- delta-7 vp-3：Phase 2 把 task 文档偏差 promote 成 req `adjustment` 事件（由 close-task.sh 自动做）
+- ：Phase 2 把 task 文档偏差 promote 成 req `adjustment` 事件（由 close-task.sh 自动做）
 - 不要手动执行 merge/删分支/清 worktree，全部由 close-task.sh 处理
 - close-task.sh 一步关完 phase 2：merge → adjustment-promote → 归档 → 删 worktree → 删 branch

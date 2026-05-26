@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Append-only JSONL event stream for req-level content events (delta-7).
+"""Append-only JSONL event stream for req-level content events .
 
 req 级「内容性事件流」—— 与 task-events.py 平行，但抬到 req 级。
 - 文件落 `<req-dir>/req-events.jsonl`，**被 git 跟踪**（随 req 分支 commit / merge，
@@ -10,7 +10,7 @@ req 级「内容性事件流」—— 与 task-events.py 平行，但抬到 req 
 - 与 task-events.py 一致的公共信封字段名（`event` / `timestamp`），零新格式。
 
 req 生命周期（stage 转换）仍由 `.req-meta.json` 的 stage_history 装；本事件流只装
-**内容**（决策理由 / PRD 调整）。三套时间线零重叠，见 delta-7 §2.6。
+**内容**（决策理由 / PRD 调整）。三套时间线零重叠，见 。
 """
 
 from __future__ import annotations

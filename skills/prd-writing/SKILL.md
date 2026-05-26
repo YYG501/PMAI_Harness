@@ -1,7 +1,7 @@
 ---
 name: prd-writing
 description: |
-  Generate a req-level PRD (功能规格). 多入口 skill (delta-2 stage 前移):
+  Generate a req-level PRD (功能规格). 多入口 skill ( stage 前移):
   (a) stage-3 orchestrated 模式 — by /req-stage-gate at stage 3; mode 固定「req 级」, 跳过步骤 0 三选一对话, 输出到 $ACTIVE_REQ_DIR/prd.md; PRD 是 stage 3 定稿冻结、驱动 task 的功能规格;
   (b) standalone 模式 — PM 手动 /prd-writing; 保留步骤 0「req 级 / 独立 / 补差」三选一; 独立 PRD (跨模块评审) 输出路径 PM 指定 (常见 docs/独立PRD/<slug>.md).
   Always trigger when the user says 'prd', 'PRD', '写需求文档', '写功能规格', '写评审 PRD', '给某模块写 PRD',
@@ -101,12 +101,12 @@ prd-writing 历史上自带的写作规则（禁用清单 / UI 元素指代规�
 stage 3 没有原型、没有 task —— 输入只有上游 stage 1/2 的产物 + 项目级文档：
 
 - 🟢 `$ACTIVE_REQ_DIR/brief.md`（stage 1 产物 — 初始诉求）
-- 🟢 **stage 2 真相源**（D-i v4 路径契约）— **功能分解的权威来源**，§六层级从它派生：
+- 🟢 **stage 2 真相源**（路径契约）— **功能分解的权威来源**，§六层级从它派生：
   - **A 分支**（`stage2_tool=req-analysis`）：`$ACTIVE_REQ_DIR/analysis.md`（10 章结构 + `## 未决问题`）
   - **B 分支**（`stage2_tool=office-hours`）：`$ACTIVE_REQ_DIR/stage2-office-hours.md`（YC office-hours 设计稿 snapshot；功能分解嵌在 prose 里，§六派生时按"用户可发起动作"扫全文）
   - 路径解析：`python3 -m _lib.state read_req_meta $ACTIVE_REQ_DIR` 拿 `stage2_source` 字段，或直接读 `get_stage_source(req_dir, 2)` helper 返回的绝对路径
 - 🟢 `docs/PROJECT.md`（项目定位 / 用户画像 / 业务术语表 / 产品路线）
-- 🟢 `docs/PRODUCT-RULES.md`（如存在 — **全文读**，跨功能产品行为规则；PRD 一次写对、不违背常驻规则。delta-9）
+- 🟢 `docs/PRODUCT-RULES.md`（如存在 — **全文读**，跨功能产品行为规则；PRD 一次写对、不违背常驻规则。）
 - 🟢 `docs/modules/INDEX.md` + `docs/modules/<本 req 涉及模块>.md`（如目录存在）
 - ❌ `docs/DESIGN.md`（视觉规范，归 implementation-design / task-execute 读；PRD 写功能规格不写像素颜色，DESIGN.md 在本 skill 只作**反向边界提示**用，不作正向源材料 —— 见 §六「原型」节 / §六 lint 视觉细节越界）
 - ❌ **没有** `prototypes/`（stage 3 时原型尚未产出）
@@ -125,9 +125,9 @@ stage 3 没有原型、没有 task —— 输入只有上游 stage 1/2 的产物
 
 > 步骤编号在两入口共用。stage-3 orchestrated 模式跳步骤 0、**必跑步骤 0.5 / 1.5（项目级 + 涉及模块 spec 强制 echo）**；standalone 模式跑步骤 0、可省 0.5 / 1.5（PM 在线会拦漏读）。**步骤 2.5 §六拆分两入口都强制 PM 确认门**（详见步骤 2.5 e）；不再有独立的步骤 4 最终确认（stage 3 的定稿确认归 `req-stage-gate` 单一确认门）。
 
-### attachments AI 接管 hook（D-iii v2 trigger 0 — 任何步骤期间生效；standalone 模式不启）
+### attachments AI 接管 hook（trigger 0 — 任何步骤期间生效；standalone 模式不启）
 
-**stage-3 orchestrated 模式启用 trigger 0**；**standalone 模式不启**（不绑 req → 不入 req attachments/，D-iii §1.3 / §2.2）。
+**stage-3 orchestrated 模式启用 trigger 0**；**standalone 模式不启**（不绑 req → 不入 req attachments/）。
 
 PM 在 chat 任何位置自然描述 "我有 X 在 ~/Downloads/foo.pdf，重点 Y" → AI first-principle 识别（chat 含绝对路径 + 描述材料）→ 调 helper：
 
@@ -327,7 +327,7 @@ done
 
 3.6. **PRD §三 名词解释 = 本 req 临时词典**——本 req 范围内引入的新业务术语 / 角色由 AI 写 §三时落地（见 §三章节写作要求 + `references/few-shots.md` 三、名词解释示例）。
 
-   `prd.md §三` 是下游 `implementation-design` / `task-spec` 的**词典必读**（见各自 Required Inputs）。**不再在本步跑 `term-detector.py` patch `docs/PROJECT.md`** —— 业务实体真正稳定要等 task 都执行落地，向 PROJECT.md 业务术语表的沉淀统一收敛到 `close-req` Phase 1（2026-05-26 收敛）。
+   `prd.md §三` 是下游 `implementation-design` / `task-spec` 的**词典必读**（见各自 Required Inputs）。**不再在本步跑 `term-detector.py` patch `docs/PROJECT.md`** —— 业务实体真正稳定要等 task 都执行落地，向 PROJECT.md 业务术语表的沉淀统一收敛到 `close-req` Phase 1。
 
 3.7. **decision 事件 append（关键产品决策留痕）**——PRD 成文后，为每条「关键产品决策」（PRD §四里的决策结果）append 一条 `decision` 事件到 req 事件流：
 
@@ -347,18 +347,18 @@ done
    - **standalone 独立 PRD 模式**：不绑 req、无 `$ACTIVE_REQ_DIR`，跳过本步骤。
    - 此步只在 PRD 含明确的关键产品决策时跑；PRD 无需决策（纯回溯 / 简单功能）时 silent skip。
 
-   **`--decided-by` 判定标准**（必填，缺则脚本报错 exit 1；2026-05-26 引入）：
+   **`--decided-by` 判定标准**（必填，缺则脚本报错 exit 1）：
 
    - `pm-explicit` —— PM 在 stage 1（new-req）/ stage 2（req-analysis 闸门）/ stage 3（PRD 写作进行中的 askuser）里**主动开口**给出过该决策的明确指示。判定时去 `req-events.jsonl` / `brief.md` / `analysis.md` / `tasks/` PM 反馈段 grep 关键词验证 —— **找得到原话才能标 `pm-explicit`**。
    - `ai-inferred` —— AI 在 PRD 写作中**自己推断**的选择，PM 未单独确认过。即便 rationale 写得头头是道、即便选项看起来"显然只能这么选"，只要事件流 / 上游文档里没 PM 原话，一律标 `ai-inferred`。
    - **拿不准 → `ai-inferred`**：这是**安全默认**。错标 `pm-explicit` 会把 AI 自拍说成"PM 拍的"污染下游（stage-gate / status-view / 后续文案）；错标 `ai-inferred` 顶多让 stage-gate 多渲染一行让 PM 单挑反对，无副作用。
    - **反模式**：「这个决策看起来很合理 / 这条 rationale 我推得很清楚 / PM 不可能反对」**不构成** `pm-explicit` 理由；只有"PM 真的说过"才算。
 
-   > 此步吸收 delta-7 的 decision 事件机制。`req-events.py` 已存在；事件落 `$ACTIVE_REQ_DIR/req-events.jsonl`（被 git 跟踪、随 req 分支留存，close 后仍可查）。
+   > 此步吸收 req-events decision 事件机制。`req-events.py` 已存在；事件落 `$ACTIVE_REQ_DIR/req-events.jsonl`（被 git 跟踪、随 req 分支留存，close 后仍可查）。
    >
-   > `decided-by` 必填于 2026-05-26 引入（修复 req-008 暴露的「AI 自拍决策混入 PM 决策摘要」问题）。stage-gate 步骤 3 收尾的定稿确认门按 `decided_by` 分两栏渲染：PM 拍段默认通过、AI 推断段允许 PM 单挑反对（详见 `req-stage-gate/SKILL.md`）。
+   > `decided-by` 必填，修复「AI 自拍决策混入 PM 决策摘要」问题。stage-gate 步骤 3 收尾的定稿确认门按 `decided_by` 分两栏渲染：PM 拍段默认通过、AI 推断段允许 PM 单挑反对（详见 `req-stage-gate/SKILL.md`）。
 
-3.8. **候选跨功能产品规则 promote（delta-9 §2.3 ②）**——写 PRD 过程中，若规划期讨论里浮出**全项目跨功能产品行为规则**（不是某 task 的 PM 反馈、而是「产品在 X 情况下应 / 不应 Y」、适用范围超出本 req 单个模块的规则），PM-selective promote 到 `docs/PRODUCT-RULES.md`：
+3.8. **候选跨功能产品规则 promote（②）**——写 PRD 过程中，若规划期讨论里浮出**全项目跨功能产品行为规则**（不是某 task 的 PM 反馈、而是「产品在 X 情况下应 / 不应 Y」、适用范围超出本 req 单个模块的规则），PM-selective promote 到 `docs/PRODUCT-RULES.md`：
 
    - AI 预判候选 + 拟写条目（标题 / 规则 / scope 全局或域限定 / 来源 req）逐条呈交 PM
    - PM 选 promote → AI Edit 追加进 `docs/PRODUCT-RULES.md`「规则清单」段（不 commit，PM 后审 diff）

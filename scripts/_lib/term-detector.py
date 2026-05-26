@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""term-detector.py — 业务词 / 角色检测器（vp-4b → 2026-05-26 收敛）
+"""term-detector.py — 业务词 / 角色检测器
 
 **当前只在 prd-writing 阶段调用**（PRD 定稿 = 业务词稳定时机；brief / analysis
 阶段早期，业务词还在变 + PM 用 `**` 多为修辞，detector 信噪比差，故不调）。

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""migrate-prd.py — 消费仓 docs/prd.md → v5 CONTEXT + modules 迁移（vp-1a）
+"""migrate-prd.py — 消费仓 docs/prd.md → v5 CONTEXT + modules 迁移
 
-按 D1 决议（v5 §2.9）：vp-1 砍 docs/prd.md 前先做 vp-1a 消费仓 prd 内容
+砍 docs/prd.md 前先做消费仓 prd 内容
 迁移（AI 辅助迁移脚本 + PM 审 diff）。
 
 原 docs/prd.md 4 section 归宿（v5 体系）:
@@ -126,11 +126,11 @@ def main():
     if is_substantial(features):
         actions.append(
             "功能清单（自动迁移有难度）→ 提示 PM 手动拆分到 docs/modules/<module>.md 各自模块；"
-            "原内容保留在 docs/prd.md，由后续 vp-1 砍 prd.md 时归档"
+            "原内容保留在 docs/prd.md，由后续步骤砍 prd.md 时归档"
         )
 
     if not actions:
-        print("✅ docs/prd.md 4 个 section 都为空 / 占位，无需迁移。可直接走 vp-1 砍 prd.md。")
+        print("✅ docs/prd.md 4 个 section 都为空 / 占位，无需迁移。可直接砍 prd.md。")
         sys.exit(0)
 
     # 写 .v5-draft
@@ -150,7 +150,7 @@ def main():
     print("✅ 满意 → 手动覆盖 CONTEXT.md + 处理 docs/prd.md 功能清单（如有）：")
     print(f"   mv {draft_path} {context_path}")
     print(f"   # 如功能清单有内容，手动拆分到 docs/modules/<module>.md")
-    print(f"   # vp-1 阶段会砍 docs/prd.md 引用 + 删文件")
+    print(f"   #  阶段会砍 docs/prd.md 引用 + 删文件")
     print()
     print("❌ 不满意 → 修改 .v5-prd-migration-draft 后再覆盖，或:")
     print(f"   rm {draft_path}")

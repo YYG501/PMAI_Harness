@@ -1,6 +1,6 @@
 # banner-rules：视觉锚点与 Decision gate label 规范（M2 单一真相源）
 
-> **职责**：banner 格式 + Next Up 块格式 + Decision gate label 3 硬规则（M3 砍后整合到 M2，2026-05-25 codex C-1）。
+> **职责**：banner 格式 + Next Up 块格式 + Decision gate label 3 硬规则（M3 砍后整合到 M2）。
 > **调用方**：req-stage-gate / init-project / new-req / task-confirm / task-execute / close-task / close-req（所有用户面 skill）。
 > **设计来源**：gsd `autonomous.md:62-69, 155-163` / `execute-phase.md:1725-1730` / `transition.md:494-509`（banner + Next Up）+ gsd `new-project.md:368-380` "Ready?" Decision gate。
 
@@ -41,7 +41,7 @@
 
 ### §1.5 数据源
 
-`status-view.py --banner-only <req_dir>` 输出一行 banner（实现见 `_lib/state.py:get_current_stage_banner()`）。
+`status-view.py --banner-only <req_dir>` 输出一行 banner（实现见 `_lib/state.py:get_current_stage_banner`）。
 
 ---
 
@@ -112,7 +112,7 @@ Next Up 块 / skill 退出提示 / 状态转换后输出 / 错误退出提示 �
 > M3 整模块砍后，**Decision gate label 规范化作为 M2 sub-feature**（不需要独立模块）。
 > 注：gsd 续跑模式（`req-stage-gate/SKILL.md:27-49, 625` 现役机制）已默认推进 stage，**Decision gate 解决的是闸门选项语义模糊问题**，不是"每 stage 喂继续"。
 
-### §3.0 适用范围（必读 — D-iv v0.3 patch 加）
+### §3.0 适用范围（必读 —  加）
 
 **§3.1-§3.4 只管 AskUserQuestion picker 闸门**（GUI 选项卡片形式）。判定规则：
 
@@ -209,4 +209,4 @@ options:
 
 ---
 
-**End of banner-rules.md**（M2 + M3 整合落地；vp-7 实施）
+**End of banner-rules.md**（M2 + M3 整合落地； 实施）

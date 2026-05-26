@@ -6,7 +6,7 @@ Enforces INVARIANTS.md I-CT7 and I-CT8:
 - I-CT7: Event stream must prove the full state-machine progression:
     待执行→执行中, 执行中→已完成 status_changed events,
     plus at least one execution_started or execution_manual_completed.
-    （2026-05-08: 「待验收」已合并到「执行中」 — commit 不切状态，PM 通过呈交块时直接转「已完成」）
+    （「待验收」已合并到「执行中」 — commit 不切状态，PM 通过呈交块时直接转「已完成」）
 - I-CT8: Each code commit on the task branch must have a committer timestamp
     strictly later than the earliest `status_changed(*, 执行中)` event.
 
@@ -104,7 +104,7 @@ def audit_ct7(events: list[dict]) -> list[str]:
 
     # 收口转换：接受两种合法路径
     #   1) 直接式（当前规范）：执行中→已完成
-    #   2) 三步式（旧规范，2026-05-08 收敛之前）：执行中→待验收 + 待验收→已完成
+    #   2) 三步式（旧规范）：执行中→待验收 + 待验收→已完成
     direct = _has_transition(events, "执行中", "已完成")
     legacy = _has_transition(events, "执行中", "待验收") and _has_transition(
         events, "待验收", "已完成"
@@ -179,7 +179,7 @@ def commit_only_touches_task_docs(
     Allows task-confirm 阶段元信息 commit (切 executor / sync from task-confirm /
     create-task-worktree 的 task md 移动等) to bypass I-CT8 timestamp check.
 
-    delta-3：v3 单文件 task 的 own 文件只有 task-NNN.md。
+    ：v3 单文件 task 的 own 文件只有 task-NNN.md。
     v2 旧双文件 task 兼容保留 —— is_v2=True 时额外放行 task-NNN.engineering.md。
 
     Returns False on git error or empty file list (fail-closed).
@@ -212,7 +212,7 @@ def audit_ct8(
 
     A1 hotfix: commits whose only file changes are the task's own doc file(s)
     are exempted (task-confirm metadata commits are legitimate before *→执行中).
-    delta-3：is_v2 透传给 commit_only_touches_task_docs 决定是否放行 .engineering.md。
+    ：is_v2 透传给 commit_only_touches_task_docs 决定是否放行 .engineering.md。
     """
     violations: list[str] = []
 
@@ -257,7 +257,7 @@ def main() -> int:
     repo = find_main_repo_root()
     task_stem = task_file.stem
     events_file = repo / ".runs" / "events" / f"{task_stem}.jsonl"
-    # v2 旧双文件 task 兼容：只有 v2 才豁免 .engineering.md 元信息 commit（delta-3）
+    # v2 旧双文件 task 兼容：只有 v2 才豁免 .engineering.md 元信息 commit
     is_v2 = detect_format(task_file) == "v2"
 
     events = load_events(events_file)

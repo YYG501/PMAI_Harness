@@ -15,7 +15,7 @@ description: |
 - Orchestrator 在 Stage 4→5 调用（由 `/req-stage-gate` 触发），**在 `/task-plan` 之前**。
 - 每个 req 都跑 —— 它产出的 `implementation-design.md` 是 `task-spec` 的上游 HOW 源。
 
-本 skill 承接原 `solution.engineering.md` 的 req 级 HOW 内容（delta-8）—— `req-solution`
+本 skill 承接原 `solution.engineering.md` 的 req 级 HOW 内容 —— `req-solution`
 退场后 req 级「这个 req 用什么架构、照哪些代码写」无家可归，本 skill 是它的新家。
 
 ## 性质：工程合同格式 + PM 经门审定
@@ -25,13 +25,13 @@ description: |
 - 允许所有工程内容（TS 类型 / 字段名 / 像素 / 颜色 / 反向约束）。
 - **不跑 PM-view lint** —— `check-doc-pm-view.py` 跳过本文件（同它已跳过 `.engineering.md`）。
 - **有 PM 确认门** —— 产出后由 `/req-stage-gate` 走确认门，PM 审定**架构决策表 + 原型简化项段**
-  （选择 / 备选 / 理由 + 简化项 SIMP-ID / PRD 锚点 / 计划简化为），两块同门一次性放行（D1）。
+  （选择 / 备选 / 理由 + 简化项 SIMP-ID / PRD 锚点 / 计划简化为），两块同门一次性放行。
   架构决策表含「这个 req 用什么架构、为什么这么选」、原型简化项段含「原型故意做得比 PRD 少的
   scope 削减」—— 两者都是 scope 决策，AI 单方面定再注入 task 与框架内核「PM 在环里」冲突。
   确认门展示 ① 架构决策表「选择」列摘要 ② 简化项段「SIMP-ID + 计划简化为」摘要 + 文件路径，
   PM 可下钻全文，不必逐字背工程细节。
 
-- **简化项段 scoped PM-view lint**（D2 源头约束）—— 段 1.5「原型简化项」内容会被 close-req §2a
+- **简化项段 scoped PM-view lint**（源头约束）—— 段 1.5「原型简化项」内容会被 close-req §2a
   写回 PRD（PRD 是 PM 视图），所以本段产出后跑一次 scoped PM-view lint，只校验段 1.5 内的
   「真实需求」「原型本次计划简化为」「为什么简化」三个 PM 视图字段（其余段保持工程豁免）。
   scoped 模式入口见步骤 3 自检 + 步骤 3.5 lint 调用。
@@ -73,7 +73,7 @@ PM 确认门（审架构决策表），通过后再调 `/task-plan`。
 
 ## Workflow
 
-### attachments AI 接管 hook（D-iii v2 trigger 0 — Stage 5a 期间生效）
+### attachments AI 接管 hook（trigger 0 — Stage 5a 期间生效）
 
 PM 在 chat 描述 "我有 X 在 ~/Downloads/foo.pdf，重点 Y" → AI first-principle 识别 → 调 helper：
 
@@ -183,7 +183,7 @@ done
   必须能在 PRD 找到对应行。
 - **真实需求**：写「见 PRD §六 6.X」一句引用，不重抄 PRD 原文（避免 §5.4 closed PRD 双源）。
 - **原型本次计划简化为**：诚实写「计划」—— stage 5 还没执行，写时是计划描述，不是 as-built。
-  若执行期偏离计划，走 close-task adjustment 路径（D3 / C9）。
+  若执行期偏离计划，走 close-task adjustment 路径。
 - **为什么简化**：一句话理由（如「本期主流程已覆盖 80% 用例，分支路径下个 req」）。
 - **来源**：本段直接登记的写 `kind 1`；`kind 2` 是 task-plan §4.2 反向写回的（本 skill 不主动写）。
 
@@ -222,7 +222,7 @@ task-plan §4.2 验收 GAP 清单原地登记（编排顺序：implementation-de
 - [ ] 不重复 PRD 的 WHAT（功能行为描述用引用，不重抄）
 - [ ] 像素 / 视觉规范细则没塞进来（那归 `docs/DESIGN.md`）
 
-### 步骤 3.5：段 1.5 scoped PM-view lint（源头约束，D2）
+### 步骤 3.5：段 1.5 scoped PM-view lint（源头约束）
 
 段 1.5 内容会被 close-req §2a 写回 PRD（PRD 是 PM 视图），所以本段在源头先跑一次 scoped
 PM-view lint，避免把工程词带进 PRD 标注：
