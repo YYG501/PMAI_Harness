@@ -6,7 +6,7 @@
 
 ---
 
-## §1 3 条硬规则
+## §1 4 条硬规则
 
 ### §1.1 规则 1：空答 / 没答 → STOP wait next message
 
@@ -62,6 +62,51 @@
 
 请回复编号（或自由文本说明）：
 ```
+
+### §1.4 规则 4：多决策必须拆开顺序问，禁止一次 AskUser 塞多个问题
+
+**适用**：AI 准备问 PM 多个决策点。典型场景 —— review 结论的多条 finding 待拍 / autoplan 多决策点 / stage 闸门同时拍多件事 / 设计方案多个 open question。
+
+**AI 行为**：
+
+- ✅ **一次只问一个决策**：一个 AskUserQuestion 调用只放 1 个 `question` 字段（即使 runtime 允许 1-4 题）
+- ✅ **业务大白话描述**：先讲屏幕上的真实样子 / 数据真实长相 / 用户路径，再问选项。例：「管理员页面这一列真实值长这样：`全租户 / 技术部 / 北京分公司`。评审觉得"数据范围"这个叫法 PM 不够直观。A. 保持原叫法 B. 改成"管的范围"」
+- ✅ **顺序推进**：PM 答完一条 → AI 再问下一条；多决策之间不并行
+- ✅ **总量预览**：开头一句话给 PM 总量心智模型，例「评审找了 3 件事要拍，逐条过」
+- ❌ **禁止**一个 AskUserQuestion 塞 ≥2 个 `question`（即使 runtime 支持 1-4 题；塞多题 = 批量打包反模式）
+- ❌ **禁止**术语密集：`combobox / scope / IA / 5/6 模型 / vp-N / I-XX5 / RBAC / ABAC` 等工程黑话直接用进 question 文本（→ 命中 `_shared/term-detector` 黑名单 + `pm-view/writing-rules.md §3.12 禁工程黑话`）
+- ❌ **禁止**把 review/autoplan 整份结论打包成一个 AskUser 问"按你看怎么办"（review 找了 N 条 finding → 要 N 次 sequential 拍板）
+
+**反例**（PM 已驳回过的写法）：
+```
+[AskUserQuestion]
+question 1: req-005 角色模型用三元组还是二维分离？
+question 2: scope 字段命名叫 scope 还是 range？
+question 3: D13 vp-2 要不要先做？
+```
+→ PM 反馈"没看明白问题"。原因：术语密集 + 多决策并列 + 无屏幕例子。
+
+**正例**：
+```
+评审找了 3 件事要拍，逐条过。第 1 件：
+
+当前管理员页面这一列真实值长这样：「全租户 / 技术部 / 北京分公司」。
+评审觉得列头"数据范围"对 PM 不够直观。
+
+[AskUserQuestion 单题]
+A. 保持"数据范围"叫法不变
+B. 改成"管的范围"
+```
+→ PM 答 A，AI 再进入第 2 件。
+
+**Why**：PM 不读工程术语；多决策并列让 PM 无法逐个消化；批量打包 = AI 把"消化决策"成本推给 PM。出处：消费仓 memory `pm-plain-language-one-decision-at-a-time.md`（PM 在 req-006 多次驳回术语密集 / 批量 AskUser，明确说"没看明白问题"）。
+
+**How to apply**：
+
+- review / autoplan / 多 finding 结论 → 写完后**按 PM 大白话视角重排成 sequential 列表**，再逐条 AskUser
+- 重的评审结论（如 [[autoplan]]）开头先给关键发现预览（"评审找了 N 件事，逐条过"），让 PM 知道总量
+- AskUserQuestion 的 `question` 字段永远 = 1 个具体决策点
+- 写完 question 文本自检：屏幕上的具体例子有吗？工程黑话扫掉了吗？
 
 ---
 
