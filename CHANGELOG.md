@@ -18,6 +18,12 @@ PM-AI-Workflow 生成器仓的演进记录。本文件**只记影响下游业务
 
 ## 已发布版本
 
+### 2026-05-26 — D-iv v0.3 patch F1：req-stage-gate 续跑模式概念收敛
+
+- `skills/req-stage-gate/SKILL.md` 续跑模式段顶部加 TL;DR 1 句话答案（"PM 只敲 1 次，AI 自动续跑 stage 1→6"）；详细规则（2 个退出条件 / 不是退出条件 / 核心边界 15 行）折叠进 `<details>`；保留"PM chat 输出格式"段不折叠（AI 执行指引，不能藏）
+- 修审计 F1：新手 PM 在 35 行铺垫中找"敲一次还是每 stage 敲一次"的答案，TL;DR 直接 1 行给出
+- 无新增测试（纯文档结构调整）；测试基线 460/0 持平
+
 ### 2026-05-25 — D-iv v0.3 patch：新手 PM 视角审计 3 BLOCKER 直修
 
 **触发**：subagent 模拟新手 PM 走完整 init→new-req→stage-gate→task→close 流程，报 3 BLOCKER + 3 FRICTION。3 BLOCKER 已 verify 为真，本次直修。

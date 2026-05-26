@@ -33,6 +33,22 @@ python3 "$REPO_ROOT/.claude/scripts/check-worktree-residue.py" || true
 
 ## 续跑模式（默认行为）
 
+**TL;DR**：PM 只敲 1 次 `/req-stage-gate`，AI 自动续跑 stage 1→6（撞到 task 执行就退出）。中间 PM 只回答确认门，不再敲命令；不答就停在闸门等 PM 下次输入，关窗口几天后回来重敲 `/req-stage-gate` 从当前 stage 续走。
+
+**PM chat 输出格式**：推进到下一 stage 时**不发独立的"已推进"通知**（避免每个 stage 之间多一段噪声）；直接进入下一 stage 的第一个动作 / 闸门 / 确认门。退出时（仅 2 种）的话术：
+
+```
+✅ Stage 已推进 N → N+1（<下一阶段中文名>）
+
+[根据退出条件二选一：]
+▶ Next Up — /task-confirm tasks/task-NNN-<slug>.md（进入 task 执行；后续 /task-execute → /close-task）
+[或]
+▶ Next Up — req 已关闭，回 main 分支；下个需求请发 /new-req "<一句话>"
+```
+
+<details>
+<summary>展开：退出条件 / 不是退出条件 / 核心边界（详细规则）</summary>
+
 PM 在 worktree 里**只需要敲一次** `/req-stage-gate`，之后 stage-gate 一路带 PM 走完所有 stage 推进。每个 stage 转换块的 `req-transition.py --to N` 成功后，**默认不退出**，立即续到下一 stage 的入口逻辑。
 
 **2 个退出条件**（撞到任一退出本次 stage-gate 调用）：
@@ -54,18 +70,7 @@ PM 在 worktree 里**只需要敲一次** `/req-stage-gate`，之后 stage-gate 
 - 续跑只是把"PM 答 OK 推进 → 下一 stage 第一步"这条路径接通，省掉 PM 重敲 `/req-stage-gate` 的仪式
 - PM 答 OK 类（OK / 通过 / 没问题 / 定了） → 走推进 + 续跑；PM 答修改类 → 走原修改分支；PM 不答 → AI 等
 
-**PM chat 输出格式**：
-
-推进到下一 stage 时**不发独立的"已推进"通知**（避免每个 stage 之间多一段噪声）；直接进入下一 stage 的第一个动作 / 闸门 / 确认门。退出时（仅 2 种）的话术：
-
-```
-✅ Stage 已推进 N → N+1（<下一阶段中文名>）
-
-[根据退出条件二选一：]
-▶ Next Up — /task-confirm tasks/task-NNN-<slug>.md（进入 task 执行；后续 /task-execute → /close-task）
-[或]
-▶ Next Up — req 已关闭，回 main 分支；下个需求请发 /new-req "<一句话>"
-```
+</details>
 
 ## attachments AI 接管 hook（D-iii v2 trigger 0 — stage-gate 任何 stage 期间生效）
 
