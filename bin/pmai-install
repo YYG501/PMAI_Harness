@@ -1,0 +1,138 @@
+#!/usr/bin/env bash
+# pmai-install — Install PMAI framework
+#
+# 2 模式：
+#   1) default 全局：clone 远程到 ~/.pmai/ + symlink 22 个 skill 到 ~/.claude/skills/pmai-*
+#   2) --local <dir>：不依赖 ~/.pmai/，<dir>/.claude/{scripts,skills,agents}/ 实体副本
+
+set -euo pipefail
+
+REMOTE="${PMAI_REMOTE:-git@github.com:YYG501/PMAI_Workflow.git}"
+PMAI_HOME="${PMAI_HOME:-$HOME/.pmai}"
+CLAUDE_SKILLS="$HOME/.claude/skills"
+SKILL_PREFIX="pmai-"
+
+usage() {
+  cat <<EOF
+Usage:
+  pmai install                # Default global: clone → ~/.pmai/ + symlink ~/.claude/skills/pmai-*
+  pmai install --local <dir>  # No ~/.pmai/, copy entity to <dir>/.claude/{scripts,skills,agents}/
+
+Env override:
+  PMAI_REMOTE=<git-url>       # Override default github remote
+  PMAI_HOME=<path>            # Override default ~/.pmai/
+
+Notes:
+  - All 22 skills get 'pmai-' prefix at registration (e.g., /pmai-init-project).
+  - skills/_shared/ is a shared resource (not a skill); skipped from prefix routing
+    but still copied/linked alongside other skills so SKILL.md cross-refs work.
+EOF
+}
+
+MODE="global"
+LOCAL_DIR=""
+
+case "${1:-}" in
+  --help|-h) usage; exit 0 ;;
+  --local)
+    shift
+    LOCAL_DIR="${1:-}"
+    [ -z "$LOCAL_DIR" ] && { echo "❌ --local needs <dir>" >&2; usage >&2; exit 2; }
+    [ ! -d "$LOCAL_DIR" ] && { echo "❌ <dir> not found: $LOCAL_DIR" >&2; exit 2; }
+    LOCAL_DIR=$(cd "$LOCAL_DIR" && pwd)  # 绝对路径
+    MODE="local"
+    ;;
+  "") MODE="global" ;;
+  *) echo "❌ unknown flag: $1" >&2; usage >&2; exit 2 ;;
+esac
+
+# 子函数：把 src_skills 下的目录装到 dst_skills，加 pmai- 前缀
+# link_mode: "symlink" | "copy"
+install_skills() {
+  local src_skills="$1"
+  local dst_skills="$2"
+  local link_mode="$3"
+  local count=0
+
+  mkdir -p "$dst_skills"
+  for skill_dir in "$src_skills"/*/; do
+    [ -d "$skill_dir" ] || continue
+    skill_name=$(basename "$skill_dir")
+
+    # _shared 不是 skill，但 SKILL.md 内部交叉引用 → 跟随拷/链但不加前缀
+    if [ "$skill_name" = "_shared" ]; then
+      dst="$dst_skills/_shared"
+    else
+      dst="$dst_skills/${SKILL_PREFIX}${skill_name}"
+    fi
+
+    # 已存在则清掉重做
+    [ -e "$dst" ] || [ -L "$dst" ] && rm -rf "$dst"
+
+    if [ "$link_mode" = "symlink" ]; then
+      ln -s "${skill_dir%/}" "$dst"
+    else
+      cp -R "$skill_dir." "$dst/"
+    fi
+    count=$((count + 1))
+  done
+  echo "   installed $count skill entries → $dst_skills"
+}
+
+if [ "$MODE" = "global" ]; then
+  echo "→ Installing PMAI globally..."
+  if [ -d "$PMAI_HOME/.git" ]; then
+    echo "⚠️  $PMAI_HOME 已存在。要升级跑: pmai upgrade" >&2
+    echo "   或先 pmai uninstall 清理后重装。" >&2
+    exit 1
+  fi
+  if [ -e "$PMAI_HOME" ]; then
+    echo "❌ $PMAI_HOME 存在但不是 git 仓。手动清理后重试。" >&2
+    exit 1
+  fi
+  echo "→ git clone $REMOTE → $PMAI_HOME"
+  git clone "$REMOTE" "$PMAI_HOME"
+  echo "→ Symlink skills to $CLAUDE_SKILLS/pmai-*"
+  install_skills "$PMAI_HOME/skills" "$CLAUDE_SKILLS" symlink
+  VER=$(cat "$PMAI_HOME/VERSION" 2>/dev/null || echo unknown)
+  echo ""
+  echo "═══════════════════════════════════════"
+  echo "✅ PMAI v$VER installed globally"
+  echo "   ~/.pmai/         framework source"
+  echo "   ~/.claude/skills/pmai-*   skill exposure"
+  echo "═══════════════════════════════════════"
+  echo "Next: cd <any-project> && /pmai-init-project"
+else
+  echo "→ Installing PMAI locally → $LOCAL_DIR"
+  if [ -d "$PMAI_HOME/.git" ]; then
+    SRC="$PMAI_HOME"
+    CLEANUP_SRC=0
+    echo "   (复用已存在 $PMAI_HOME 作源)"
+  else
+    SRC=$(mktemp -d /tmp/pmai-local-src-XXXXXX)
+    CLEANUP_SRC=1
+    echo "→ git clone $REMOTE → $SRC (临时)"
+    git clone "$REMOTE" "$SRC"
+  fi
+  mkdir -p "$LOCAL_DIR/.claude"
+  echo "→ Copy scripts → $LOCAL_DIR/.claude/scripts/"
+  rm -rf "$LOCAL_DIR/.claude/scripts"
+  cp -R "$SRC/scripts" "$LOCAL_DIR/.claude/scripts"
+  echo "→ Copy agents → $LOCAL_DIR/.claude/agents/"
+  rm -rf "$LOCAL_DIR/.claude/agents"
+  cp -R "$SRC/agents" "$LOCAL_DIR/.claude/agents"
+  echo "→ Copy skills (with $SKILL_PREFIX prefix) → $LOCAL_DIR/.claude/skills/"
+  rm -rf "$LOCAL_DIR/.claude/skills"
+  install_skills "$SRC/skills" "$LOCAL_DIR/.claude/skills" copy
+  VER=$(cat "$SRC/VERSION" 2>/dev/null || echo unknown)
+  echo "$VER" > "$LOCAL_DIR/.claude/.pmai-version"
+  if [ "$CLEANUP_SRC" = "1" ]; then
+    rm -rf "$SRC"
+  fi
+  echo ""
+  echo "═══════════════════════════════════════"
+  echo "✅ PMAI v$VER installed locally"
+  echo "   $LOCAL_DIR/.claude/{scripts,skills,agents}"
+  echo "═══════════════════════════════════════"
+  echo "Next: cd $LOCAL_DIR && /pmai-init-project"
+fi

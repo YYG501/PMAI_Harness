@@ -1,0 +1,74 @@
+#!/usr/bin/env bash
+# pmai-status — Show current PMAI install state
+#
+# 显示：
+#   - install 模式（全局装了没 / 哪些项目有 --local 副本）
+#   - 当前 VERSION + 远程 main HEAD diff（多少 commit 落后）
+#   - skill 符号链接清单
+#   - update-check 提示
+
+set -uo pipefail
+
+PMAI_HOME="${PMAI_HOME:-$HOME/.pmai}"
+CLAUDE_SKILLS="$HOME/.claude/skills"
+SKILL_PREFIX="pmai-"
+
+echo "════════════════════════════════════════════════════════════"
+echo "  PMAI Status"
+echo "════════════════════════════════════════════════════════════"
+
+if [ -d "$PMAI_HOME/.git" ]; then
+  cd "$PMAI_HOME"
+  VER=$(cat VERSION 2>/dev/null || echo unknown)
+  HEAD=$(git rev-parse --short HEAD 2>/dev/null || echo "?")
+  BRANCH=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "?")
+  REMOTE=$(git remote get-url origin 2>/dev/null || echo none)
+
+  echo "Global install:   ✅ installed"
+  echo "  Location:       $PMAI_HOME"
+  echo "  Version:        v$VER"
+  echo "  Branch:         $BRANCH @ $HEAD"
+  echo "  Remote:         $REMOTE"
+
+  # 跟远程比 commit 差
+  BEHIND=$(git rev-list --count "HEAD..origin/main" 2>/dev/null || echo "?")
+  AHEAD=$(git rev-list --count "origin/main..HEAD" 2>/dev/null || echo "?")
+  if [ "$BEHIND" != "?" ] && [ "$BEHIND" != "0" ]; then
+    echo "  Behind main:    $BEHIND commits (run: pmai upgrade)"
+  fi
+  if [ "$AHEAD" != "?" ] && [ "$AHEAD" != "0" ]; then
+    echo "  Ahead of main:  $AHEAD commits (uncommon — local edits?)"
+  fi
+
+  # 工作树脏检查
+  if ! git diff --quiet 2>/dev/null || ! git diff --cached --quiet 2>/dev/null; then
+    echo "  ⚠️  working tree dirty — 影响所有依赖 ~/.pmai/ 的消费仓"
+  fi
+
+  # update-check
+  if [ -x "$(dirname "$0")/pmai-update-check" ]; then
+    UPD=$("$(dirname "$0")/pmai-update-check" 2>/dev/null)
+    [ -n "$UPD" ] && echo "  📦 $UPD"
+  fi
+else
+  echo "Global install:   ❌ not installed (run: pmai install)"
+fi
+
+echo ""
+echo "─── Skill exposure ───"
+SYMLINK_COUNT=$(ls -d "$CLAUDE_SKILLS"/${SKILL_PREFIX}* 2>/dev/null | wc -l | tr -d ' ')
+SHARED_LINK="❌ no"
+if [ -L "$CLAUDE_SKILLS/_shared" ]; then SHARED_LINK="✅ yes"; fi
+echo "  Global (~/.claude/skills/pmai-*):  $SYMLINK_COUNT symlinks"
+echo "  _shared linked:                    $SHARED_LINK"
+
+if [ "$SYMLINK_COUNT" -gt 0 ]; then
+  echo ""
+  echo "  Skills exposed (pmai-* prefix):"
+  ls -d "$CLAUDE_SKILLS"/${SKILL_PREFIX}* 2>/dev/null | xargs -n 1 basename | sed 's/^/    /'
+fi
+
+echo ""
+echo "─── Local installs (--local consumers) ───"
+echo "  (No tracking registry yet. Use 'pmai doctor' to validate known projects.)"
+echo "════════════════════════════════════════════════════════════"

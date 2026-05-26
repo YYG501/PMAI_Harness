@@ -1,0 +1,144 @@
+#!/usr/bin/env bash
+# pmai-doctor — Integrity self-check (covers §8 critical gaps from design doc)
+#
+# Checks:
+#   1. ~/.pmai/ exists + is a git repo
+#   2. VERSION file is valid semver
+#   3. All expected skills present (~/.pmai/skills/*)
+#   4. All symlinks under ~/.claude/skills/pmai-* resolve (no dangling)
+#   5. ~/.pmai/ working tree clean (or warn if dirty — affects consumers)
+#   6. Remote reachable (short network check, non-fatal)
+
+set -uo pipefail
+
+PMAI_HOME="${PMAI_HOME:-$HOME/.pmai}"
+CLAUDE_SKILLS="$HOME/.claude/skills"
+SKILL_PREFIX="pmai-"
+
+EXIT_CODE=0
+PASS_COUNT=0
+WARN_COUNT=0
+FAIL_COUNT=0
+
+ok()   { echo "  ✅ $*"; PASS_COUNT=$((PASS_COUNT + 1)); }
+warn() { echo "  ⚠️  $*"; WARN_COUNT=$((WARN_COUNT + 1)); }
+fail() { echo "  ❌ $*"; FAIL_COUNT=$((FAIL_COUNT + 1)); EXIT_CODE=1; }
+
+echo "════════════════════════════════════════════════════════════"
+echo "  PMAI Doctor — integrity self-check"
+echo "════════════════════════════════════════════════════════════"
+
+# 1. ~/.pmai/ exists + is git repo
+echo ""
+echo "─── 1. Framework source ───"
+if [ ! -d "$PMAI_HOME" ]; then
+  fail "$PMAI_HOME 不存在（未安装；运行 pmai install）"
+  echo ""
+  echo "════════════════════════════════════════════════════════════"
+  echo "Result: ❌ FAIL ($FAIL_COUNT) / ⚠️  $WARN_COUNT / ✅ $PASS_COUNT"
+  exit 1
+fi
+ok "$PMAI_HOME exists"
+
+if [ ! -d "$PMAI_HOME/.git" ]; then
+  fail "$PMAI_HOME 不是 git 仓（损坏 / 半完整；建议重装：pmai uninstall && pmai install）"
+else
+  ok "$PMAI_HOME is a git repo"
+fi
+
+# 2. VERSION 文件
+echo ""
+echo "─── 2. VERSION file ───"
+if [ ! -f "$PMAI_HOME/VERSION" ]; then
+  fail "VERSION 文件缺失"
+else
+  VER=$(cat "$PMAI_HOME/VERSION")
+  if [[ "$VER" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+    ok "VERSION = $VER (valid semver)"
+  else
+    warn "VERSION = $VER 不是标准 semver (X.Y.Z)"
+  fi
+fi
+
+# 3. Skills 全勤
+echo ""
+echo "─── 3. Skills in ~/.pmai/skills/ ───"
+EXPECTED_SKILLS=(
+  cancel-req close-req close-task codebase-audit doc-update
+  implementation-design init-project new-req prd-writing project-solution
+  publish-to-lark quick-fix req-analysis req-stage-gate skill-improve
+  task-confirm task-execute task-plan task-spec task-status task-submit task-verify
+)
+MISSING=()
+for sk in "${EXPECTED_SKILLS[@]}"; do
+  if [ ! -d "$PMAI_HOME/skills/$sk" ]; then
+    MISSING+=("$sk")
+  fi
+done
+if [ ${#MISSING[@]} -eq 0 ]; then
+  ok "All ${#EXPECTED_SKILLS[@]} expected skills present"
+else
+  fail "Missing ${#MISSING[@]} skill(s): ${MISSING[*]}"
+fi
+
+# 4. Symlinks under ~/.claude/skills/
+echo ""
+echo "─── 4. Skill symlinks (~/.claude/skills/${SKILL_PREFIX}*) ───"
+DANGLING=()
+COUNT=0
+for s in "$CLAUDE_SKILLS"/${SKILL_PREFIX}* "$CLAUDE_SKILLS/_shared"; do
+  [ -e "$s" ] || [ -L "$s" ] || continue
+  if [ -L "$s" ]; then
+    if [ ! -e "$s" ]; then
+      DANGLING+=("$s")
+    fi
+    COUNT=$((COUNT + 1))
+  fi
+done
+if [ "$COUNT" = "0" ]; then
+  fail "No skill symlinks found (~/.claude/skills/${SKILL_PREFIX}*). 跑 pmai install 或 pmai upgrade。"
+elif [ ${#DANGLING[@]} -gt 0 ]; then
+  fail "Dangling symlinks: ${DANGLING[*]} (~/.pmai/ 可能被损坏；建议 pmai uninstall && pmai install)"
+else
+  ok "$COUNT skill symlink(s) all resolve"
+fi
+
+# 5. Working tree clean
+echo ""
+echo "─── 5. ~/.pmai/ working tree ───"
+if [ -d "$PMAI_HOME/.git" ]; then
+  cd "$PMAI_HOME"
+  if git diff --quiet 2>/dev/null && git diff --cached --quiet 2>/dev/null; then
+    ok "Working tree clean"
+  else
+    warn "Working tree dirty — uncommitted changes in ~/.pmai/ 影响所有消费仓行为"
+  fi
+fi
+
+# 6. Remote reachable
+echo ""
+echo "─── 6. Remote reachable ───"
+if [ -d "$PMAI_HOME/.git" ]; then
+  cd "$PMAI_HOME"
+  REMOTE_URL=$(git remote get-url origin 2>/dev/null || echo "")
+  if [ -z "$REMOTE_URL" ]; then
+    warn "No origin remote configured (升级会失败)"
+  elif timeout 10 git ls-remote origin HEAD >/dev/null 2>&1; then
+    ok "Remote $REMOTE_URL reachable"
+  else
+    warn "Remote $REMOTE_URL unreachable (SSH key / network / repo access?)"
+  fi
+fi
+
+echo ""
+echo "════════════════════════════════════════════════════════════"
+if [ "$EXIT_CODE" = "0" ] && [ "$WARN_COUNT" = "0" ]; then
+  echo "Result: ✅ ALL OK ($PASS_COUNT checks passed)"
+elif [ "$EXIT_CODE" = "0" ]; then
+  echo "Result: ⚠️  OK with warnings ($PASS_COUNT pass / $WARN_COUNT warn)"
+else
+  echo "Result: ❌ FAIL ($FAIL_COUNT fail / $WARN_COUNT warn / $PASS_COUNT pass)"
+fi
+echo "════════════════════════════════════════════════════════════"
+
+exit $EXIT_CODE

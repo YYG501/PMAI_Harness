@@ -1,0 +1,128 @@
+#!/usr/bin/env bash
+# pmai-uninstall — Remove PMAI framework install
+#
+# What gets removed:
+#   ~/.pmai/                      framework source (git clone)
+#   ~/.claude/skills/pmai-*       global skill symlinks
+#   ~/.claude/skills/_shared      (if it's a symlink we created)
+#
+# What is NOT removed:
+#   --local 模式下消费仓的实体副本 → 单独用 `pmai uninstall --local <dir>` 清
+#   ~/.claude/settings.json       项目级 settings 不动（hook 注册在消费仓内）
+#
+# Flags:
+#   --force                       不问确认
+#   --local <dir>                 只清 <dir> 的实体副本，~/.pmai/ 全局不动
+
+set -uo pipefail  # 注意：no -e，uninstall 必须能跑完
+
+PMAI_HOME="${PMAI_HOME:-$HOME/.pmai}"
+CLAUDE_SKILLS="$HOME/.claude/skills"
+SKILL_PREFIX="pmai-"
+
+usage() {
+  cat <<EOF
+Usage:
+  pmai uninstall                # Remove global install (~/.pmai/ + ~/.claude/skills/pmai-*)
+  pmai uninstall --force        # Skip confirmation
+  pmai uninstall --local <dir>  # Remove only <dir>'s local copy, keep ~/.pmai/
+
+Removed:
+  ~/.pmai/
+  ~/.claude/skills/pmai-*
+  ~/.claude/skills/_shared (if pmai-managed symlink)
+EOF
+}
+
+FORCE=0
+LOCAL_DIR=""
+MODE="global"
+
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --help|-h) usage; exit 0 ;;
+    --force) FORCE=1; shift ;;
+    --local)
+      shift
+      LOCAL_DIR="${1:-}"
+      [ -z "$LOCAL_DIR" ] && { echo "❌ --local needs <dir>" >&2; exit 2; }
+      MODE="local"
+      shift
+      ;;
+    *) echo "❌ unknown flag: $1" >&2; usage >&2; exit 2 ;;
+  esac
+done
+
+confirm() {
+  [ "$FORCE" = "1" ] && return 0
+  printf "%s [y/N] " "$1"
+  read -r ans
+  case "$ans" in y|Y|yes|YES) return 0 ;; *) return 1 ;; esac
+}
+
+if [ "$MODE" = "local" ]; then
+  LOCAL_DIR=$(cd "$LOCAL_DIR" 2>/dev/null && pwd || echo "$LOCAL_DIR")
+  echo "→ Local uninstall target: $LOCAL_DIR"
+  REMOVED=0
+  for sub in scripts agents skills; do
+    p="$LOCAL_DIR/.claude/$sub"
+    if [ -e "$p" ] || [ -L "$p" ]; then
+      # skills 下只清 pmai-* + _shared（避免误删 PM 自己的项目级 skill）
+      if [ "$sub" = "skills" ]; then
+        for s in "$p"/${SKILL_PREFIX}* "$p/_shared"; do
+          if [ -e "$s" ] || [ -L "$s" ]; then
+            if confirm "Remove $s ?"; then
+              rm -rf "$s"
+              REMOVED=$((REMOVED + 1))
+            fi
+          fi
+        done
+      else
+        if confirm "Remove $p ?"; then
+          rm -rf "$p"
+          REMOVED=$((REMOVED + 1))
+        fi
+      fi
+    fi
+  done
+  rm -f "$LOCAL_DIR/.claude/.pmai-version" 2>/dev/null
+  echo ""
+  echo "✅ Local uninstall done. Removed $REMOVED items from $LOCAL_DIR/.claude/"
+  exit 0
+fi
+
+# 全局卸载
+echo "→ Global uninstall plan:"
+[ -d "$PMAI_HOME" ] && echo "   - $PMAI_HOME (framework source)"
+SYMLINK_COUNT=$(ls -d "$CLAUDE_SKILLS"/${SKILL_PREFIX}* "$CLAUDE_SKILLS/_shared" 2>/dev/null | wc -l | tr -d ' ')
+echo "   - $CLAUDE_SKILLS/${SKILL_PREFIX}* ($SYMLINK_COUNT symlinks)"
+
+if [ "$SYMLINK_COUNT" = "0" ] && [ ! -d "$PMAI_HOME" ]; then
+  echo "⚠️  没找到 PMAI 全局安装。已经卸载或从未安装。"
+  exit 0
+fi
+
+confirm "Confirm uninstall?" || { echo "Aborted."; exit 0; }
+
+# 清 skill symlink
+for s in "$CLAUDE_SKILLS"/${SKILL_PREFIX}* "$CLAUDE_SKILLS/_shared"; do
+  if [ -L "$s" ]; then
+    rm "$s"
+  elif [ -d "$s" ]; then
+    echo "⚠️  $s 是实体目录不是 symlink，跳过（手动清）" >&2
+  fi
+done
+
+# 清 ~/.pmai/
+if [ -d "$PMAI_HOME" ]; then
+  rm -rf "$PMAI_HOME"
+fi
+
+echo ""
+echo "═══════════════════════════════════════"
+echo "✅ PMAI uninstalled globally"
+echo "   ~/.pmai/ removed"
+echo "   ~/.claude/skills/pmai-* removed ($SYMLINK_COUNT)"
+echo "═══════════════════════════════════════"
+echo "Note: --local installs (project-local copies) NOT touched."
+echo "      Use 'pmai uninstall --local <dir>' to remove those individually."

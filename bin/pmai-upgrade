@@ -1,0 +1,106 @@
+#!/usr/bin/env bash
+# pmai-upgrade — Upgrade PMAI framework (default: pull main; --stable: latest tag; --to <ver>: pin)
+#
+# 升级模型（档 2：VERSION + git tag）：
+#   pmai upgrade              # cd ~/.pmai && git pull origin main（吃 main 最新）
+#   pmai upgrade --stable     # 跳到最新 git tag（PM 打过的稳定 baseline）
+#   pmai upgrade --to v0.1.0  # 锁定指定版本（回滚 / 固定）
+
+set -euo pipefail
+
+PMAI_HOME="${PMAI_HOME:-$HOME/.pmai}"
+CLAUDE_SKILLS="$HOME/.claude/skills"
+SKILL_PREFIX="pmai-"
+
+usage() {
+  cat <<EOF
+Usage:
+  pmai upgrade              # Pull latest main commit
+  pmai upgrade --stable     # Jump to latest git tag (stable baseline)
+  pmai upgrade --to v0.1.0  # Pin to specific tag (rollback / freeze)
+EOF
+}
+
+MODE="main"
+TARGET_TAG=""
+
+case "${1:-}" in
+  --help|-h) usage; exit 0 ;;
+  --stable) MODE="stable" ;;
+  --to)
+    shift
+    TARGET_TAG="${1:-}"
+    [ -z "$TARGET_TAG" ] && { echo "❌ --to needs <tag>" >&2; usage >&2; exit 2; }
+    MODE="to"
+    ;;
+  "") MODE="main" ;;
+  *) echo "❌ unknown flag: $1" >&2; usage >&2; exit 2 ;;
+esac
+
+if [ ! -d "$PMAI_HOME/.git" ]; then
+  echo "❌ $PMAI_HOME 不存在或不是 git 仓。先跑 pmai install。" >&2
+  exit 1
+fi
+
+cd "$PMAI_HOME"
+OLD_VER=$(cat VERSION 2>/dev/null || echo unknown)
+OLD_HEAD=$(git rev-parse --short HEAD)
+
+echo "→ Fetching latest from origin..."
+git fetch origin --tags 2>&1 | tail -5
+
+case "$MODE" in
+  main)
+    echo "→ Pulling origin/main..."
+    git merge --ff-only origin/main 2>&1 | tail -5
+    ;;
+  stable)
+    LATEST_TAG=$(git tag -l 'v*' | sort -V | tail -1)
+    [ -z "$LATEST_TAG" ] && { echo "❌ 远程没有 v* tag。PM 还没打过 stable。" >&2; exit 1; }
+    echo "→ Checking out latest stable tag: $LATEST_TAG"
+    git checkout "$LATEST_TAG"
+    ;;
+  to)
+    if ! git rev-parse "refs/tags/$TARGET_TAG" >/dev/null 2>&1; then
+      echo "❌ tag $TARGET_TAG 不存在。可用 tag:" >&2
+      git tag -l 'v*' | sort -V | tail -10 >&2
+      exit 1
+    fi
+    echo "→ Checking out tag: $TARGET_TAG"
+    git checkout "$TARGET_TAG"
+    ;;
+esac
+
+NEW_VER=$(cat VERSION 2>/dev/null || echo unknown)
+NEW_HEAD=$(git rev-parse --short HEAD)
+
+# 重新建 skill symlink（万一新增 / 改名 / 删 skill）
+echo "→ Re-syncing skill symlinks to $CLAUDE_SKILLS/pmai-*"
+# 清旧 symlink
+for old in "$CLAUDE_SKILLS"/${SKILL_PREFIX}* "$CLAUDE_SKILLS/_shared"; do
+  [ -L "$old" ] && rm "$old"
+done
+# 重建
+count=0
+for skill_dir in "$PMAI_HOME/skills"/*/; do
+  [ -d "$skill_dir" ] || continue
+  skill_name=$(basename "$skill_dir")
+  if [ "$skill_name" = "_shared" ]; then
+    dst="$CLAUDE_SKILLS/_shared"
+  else
+    dst="$CLAUDE_SKILLS/${SKILL_PREFIX}${skill_name}"
+  fi
+  [ -e "$dst" ] || [ -L "$dst" ] && rm -rf "$dst"
+  ln -s "${skill_dir%/}" "$dst"
+  count=$((count + 1))
+done
+
+echo ""
+echo "═══════════════════════════════════════"
+if [ "$OLD_HEAD" = "$NEW_HEAD" ]; then
+  echo "✅ PMAI 已是最新（$NEW_VER @ $NEW_HEAD）"
+else
+  echo "✅ PMAI 升级：$OLD_VER ($OLD_HEAD) → $NEW_VER ($NEW_HEAD)"
+fi
+echo "   skill: $count symlinks re-synced"
+echo "═══════════════════════════════════════"

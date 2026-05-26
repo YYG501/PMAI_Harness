@@ -1,0 +1,81 @@
+#!/usr/bin/env bash
+# pmai — Main dispatcher for PMAI framework CLI
+#
+# Routes to bin/pmai-<subcommand>. Pattern matches git/gstack convention.
+
+set -euo pipefail
+
+BIN_DIR="$(cd "$(dirname "$0")" && pwd)"
+
+usage() {
+  cat <<EOF
+PMAI — PM-AI-Workflow framework CLI
+
+Usage: pmai <subcommand> [args...]
+
+Subcommands:
+  install              Install PMAI globally (default) or locally
+                       Flags: --local <dir>
+  upgrade              Pull latest framework code
+                       Flags: --stable | --to <tag>
+  uninstall            Remove PMAI install
+                       Flags: --force | --local <dir>
+  status               Show install state + version diff
+  doctor               Run integrity self-check
+  update-check         Check if newer stable tag available (silent if up-to-date)
+
+Meta:
+  --version            Print VERSION
+  --help, -h           This help
+
+Examples:
+  pmai install                              # Default global install
+  pmai install --local ~/Desktop/example-consumer-app
+  pmai upgrade                              # Pull main
+  pmai upgrade --stable                     # Jump to latest tag
+  pmai status                               # Show current state
+
+Source: $BIN_DIR
+Framework: \${PMAI_HOME:-\$HOME/.pmai}
+EOF
+}
+
+# 找 VERSION 文件位置：
+#   1. bin/../VERSION（开发仓内跑 bin/pmai）
+#   2. ~/.pmai/VERSION（装到全局后从 PATH 调用）
+find_version() {
+  if [ -f "$BIN_DIR/../VERSION" ]; then
+    cat "$BIN_DIR/../VERSION"
+  elif [ -f "${PMAI_HOME:-$HOME/.pmai}/VERSION" ]; then
+    cat "${PMAI_HOME:-$HOME/.pmai}/VERSION"
+  else
+    echo "unknown"
+  fi
+}
+
+case "${1:-}" in
+  --help|-h|help|"")
+    usage
+    exit 0
+    ;;
+  --version|-V|version)
+    echo "pmai $(find_version)"
+    exit 0
+    ;;
+  install|upgrade|uninstall|status|doctor|update-check)
+    SUB="$1"
+    shift
+    SUB_BIN="$BIN_DIR/pmai-$SUB"
+    if [ ! -x "$SUB_BIN" ]; then
+      echo "❌ pmai-$SUB 不存在或不可执行: $SUB_BIN" >&2
+      echo "   (PMAI install 损坏？尝试 pmai doctor)" >&2
+      exit 1
+    fi
+    exec "$SUB_BIN" "$@"
+    ;;
+  *)
+    echo "❌ unknown subcommand: $1" >&2
+    echo "   Run 'pmai --help' for usage." >&2
+    exit 2
+    ;;
+esac

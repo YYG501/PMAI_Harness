@@ -1,0 +1,36 @@
+#!/usr/bin/env bash
+# pmai-update-check — Check if a newer stable version is available
+#
+# 用法：自动跑（hook / status 子命令调用），不直接做升级动作。
+# 比对本地 VERSION 跟远程 latest tag。
+
+set -euo pipefail
+
+PMAI_HOME="${PMAI_HOME:-$HOME/.pmai}"
+
+if [ ! -d "$PMAI_HOME/.git" ]; then
+  exit 0  # 没装就静默退（不该报错干扰其他流程）
+fi
+
+cd "$PMAI_HOME"
+LOCAL_VER=$(cat VERSION 2>/dev/null || echo "0.0.0")
+
+# 短超时 ls-remote 拿远程最新 tag（不阻塞太久；用户离线时静默）
+REMOTE_TAG=$(timeout 5 git ls-remote --tags origin 2>/dev/null \
+  | awk '{print $2}' \
+  | grep -oE 'refs/tags/v[0-9.]+$' \
+  | sed 's|refs/tags/v||' \
+  | sort -V \
+  | tail -1)
+
+if [ -z "$REMOTE_TAG" ]; then
+  exit 0  # 远程没 tag 或网络不通，静默
+fi
+
+# 简单语义版本比较：sort -V 排序后看哪个在后
+LATEST=$(printf '%s\n%s\n' "$LOCAL_VER" "$REMOTE_TAG" | sort -V | tail -1)
+
+if [ "$LATEST" = "$REMOTE_TAG" ] && [ "$LOCAL_VER" != "$REMOTE_TAG" ]; then
+  echo "UPGRADE_AVAILABLE $LOCAL_VER → $REMOTE_TAG"
+  echo "  Run: pmai upgrade --stable"
+fi
