@@ -187,6 +187,23 @@ PM-AI-Workflow 生成器仓的演进记录。本文件**只记影响下游业务
 
 ## 未发布
 
+### 2026-05-26 — fix(task-verify + task-execute): verify pass 自说自话宣告 DONE，task 既没 commit 也没呈交
+
+**触发**：消费仓 task-002-ops-menu-reorg 跑 /task-execute 到步骤 7.5 触发 task-verify，5/5 流程 pass 后 AI 在 verify 输出末尾**自己加了一段** `STATUS: DONE / REASON: ... / ATTEMPTED: ... / RECOMMENDATION: 回 task-execute 步骤 8 起继续走（写自审 placeholder → commit → 呈交 PM 验收）` —— 然后**停下来等下一轮**。结果：task 没 commit、没走步骤 11 呈交、PM 没看到任何呈交块。AI 把 verify pass 误当 task 终态宣告，PM 体感是"自说自话，没有呈交"。
+
+**根因**：
+1. task-verify 步骤 7 只规定了"pass 时 stdout 输出哪一行" + `exit 0`，**没明文禁止**额外文本 —— AI 觉得"加点交接细节有好处"就插了 STATUS/REASON/ATTEMPTED/RECOMMENDATION 块。
+2. task-execute 步骤 7.5 pass 分流只写了「→ 进步骤 10 commit」，**没强调"不停 / 不汇报 / 不写交接块"** —— AI 把这里读成"可以先汇报一下当前状态再继续"，于是停在 RECOMMENDATION 文本等下一轮。
+3. 两处缺的是同一句硬约束："verify pass 不是 PM 节点，PM 唯一决策点是步骤 11 呈交块"。
+
+**改动**：
+- `skills/task-verify/SKILL.md` 步骤 7：加「输出禁止扩写」段，明文列举禁项（STATUS: / REASON: / ATTEMPTED: / RECOMMENDATION: 交接块、指挥 task-execute 下一步动作如「回步骤 8 继续走」）+ 解释根因（task-verify 是 task-execute 步骤 7.5 调起的子流程，越界给"下一步建议"会让 AI 误判 task 终态、停下来等下一轮）。
+- `skills/task-execute/SKILL.md` 步骤 7.5 pass 分流：扩为「**不停 / 不汇报 / 不写交接块**，自动接步骤 10 → 步骤 11 **一气走完**」+ 点名常见跑偏文本（`STATUS: DONE` / `RECOMMENDATION: 回步骤 8 继续走`）让 AI 自识别。
+
+**关联反模式**：自说自话宣告 task 完成 ⊂ 「skill 流程没走完就声称已完成」家族 —— [[feedback_skill_must_actually_invoke]] (假执行)、[[feedback_close_default_flow]] (验收后默认走完)。本次是"验收前自说自话宣告完成"，补齐前置侧。
+
+---
+
 ### 2026-05-26 — fix(task-execute): drift 脚本路径错位 + 失败容忍误吞「脚本不存在」
 
 **触发**：消费仓 ExampleConsumerApp 跑 /task-execute 时 AI 报「drift 脚本未安装，按失败容忍原则继续」—— 实际是 SKILL.md 调用路径漏写 `.claude/`，bash 找不到脚本，AI 把 `No such file or directory` 错误归类为「未安装」+ 走失败容忍静默跳过 drift 保护。drift 是 4.5f 防 task agent 合法本地改动被覆盖的关键机制，跳过等于裸奔。

@@ -174,6 +174,8 @@ DEV_PID=$!
 - **全部流程 pass** → `exit 0`，stdout 输出 `✅ task-verify pass（N/N 流程通过）`
 - **任一流程 fail** → `exit 1`，stdout 输出 `❌ task-verify fail（M/N 通过，详见 verify/report.md）` + 失败流程一句话摘要
 
+**输出禁止扩写**：除上述规定的一行 stdout（fail 时再加失败流程一句话摘要），**禁止**追加 `STATUS:` / `REASON:` / `ATTEMPTED:` / `RECOMMENDATION:` 这种交接块，**禁止**指挥 task-execute 下一步动作（如「回步骤 8 继续走」「写自审 placeholder → commit → 呈交 PM 验收」）。task-verify 是被 task-execute 步骤 7.5 调起的子流程，越界给"下一步建议"会让 AI 在此处误判为 task 终态、停下来等下一轮 → task 既没 commit 也没呈交（自说自话）。**任何"下一步"由 task-execute 步骤 7.5 的 transition 规则决定**。
+
 ## Rules
 
 - 在 **task worktree** 跑（dev server / 改动都在那）

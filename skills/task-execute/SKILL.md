@@ -483,7 +483,7 @@ AI 在「自审记录」section 追加一条 commit 前 placeholder（提供 tas
 
 **结果分流**：
 
-- **pass**（exit 0）→ 进步骤 10 commit；执行日志（步骤 5）append 一行「task-verify: ✅ N/N 流程通过」
+- **pass**（exit 0）→ **不停 / 不汇报 / 不写交接块**，自动接步骤 10 commit → 步骤 11 呈交 PM 验收**一气走完**；执行日志（步骤 5）append 一行「task-verify: ✅ N/N 流程通过」。**verify pass 不是 PM 节点**，PM 唯一的决策点是步骤 11 的呈交块；在此处停下来写 `STATUS: DONE` / `RECOMMENDATION: 回步骤 8 继续走` 等于自说自话宣告 task 完成（task 还没 commit、PM 还没看过任何东西），是常见跑偏模式
 - **fail**（exit 1）→ **不 commit**，进反馈循环：
   1. 把 verify/report.md 失败摘要写入 task 文件「📁 历史档案 → PM 反馈」（v3 在审计区；v2 写 PM 视图主文件。标记 `自动反馈 — task-verify`）：
      ```markdown
