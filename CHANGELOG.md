@@ -187,6 +187,26 @@ PM-AI-Workflow 生成器仓的演进记录。本文件**只记影响下游业务
 
 ## 未发布
 
+### 2026-05-27 — feat(pmai-sync-prds): 一键补建老仓历史 closed req 的 docs/prds/ symlink
+
+**触发**：上一条 `docs/prds/` 收口落地后，close-req / cancel-req 之后的新 req 会自动建 symlink，但**老仓在该改动之前关掉的 req 不会自动补**；PM 不想手动 `ln -sfn` 一行行敲。
+
+**改动**：
+
+- 新增 `bin/pmai-sync-prds`：在消费仓根 cwd 跑；扫 `requirements/closed/*/.req-meta.json`，按 status (`closed` / `cancelled`) 分流，调 `scripts/_lib/symlink-prd.sh` 的 `create_prd_symlink` 复用同套 helper（不重复实现）。无 prd.md / status 非 closed-or-cancelled 自动跳过。
+- `bin/pmai` dispatcher subcommand 列表追加 `sync-prds`，支持 `--dry-run` 先看会做什么再实际跑。
+- helper 路径解析按 `<cwd>/.claude/scripts/_lib/`（消费仓 install 后 default 路径）→ `<cwd>/scripts/_lib/`（本仓 dev）→ `$PMAI_HOME/scripts/_lib/` 三档兜底，default / --local / dev 三种安装形态都能直接用。
+- `tests/test-symlink-prd.sh` 加 4 个 sync-prds e2e：无 closed/ silent exit / closed+cancelled+跳过类混合 / dry-run 不动文件 / 重跑幂等，全套 14/14 过。
+
+**使用**：
+
+```bash
+cd <消费仓根>
+pmai sync-prds --dry-run    # 先看会建哪些
+pmai sync-prds              # 实际建
+git add docs/prds && git commit -m "chore: backfill docs/prds/ symlinks"
+```
+
 ### 2026-05-27 — feat(close-req+cancel-req+prd-writing): docs/prds/ 统一收口 req 关闭后 PRD 散落各处的查找痛点
 
 **触发**：PM 反馈 —— req 关闭后 `prd.md` 散在 `requirements/closed/<req>/prd.md` 各目录里，要查"我做过哪些产品需求"必须挨个翻 closed 目录；想要一个统一入口。

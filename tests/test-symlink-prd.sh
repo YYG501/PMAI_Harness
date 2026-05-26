@@ -10,6 +10,22 @@ source "$SCRIPT_DIR/helpers/fixture.sh"
 CLOSE_REQ="$FRAMEWORK_ROOT/scripts/close-req.sh"
 CANCEL_REQ="$FRAMEWORK_ROOT/scripts/cancel-req.sh"
 SYMLINK_LIB="$FRAMEWORK_ROOT/scripts/_lib/symlink-prd.sh"
+SYNC_PRDS="$FRAMEWORK_ROOT/bin/pmai-sync-prds"
+
+# 在 FIXTURE_DIR 直接造一个 closed/cancelled 的 req 目录（不走 close-req 流程，模拟历史老仓）
+_seed_closed_req() {
+  local req_basename="$1"
+  local status="$2"   # closed | cancelled
+  local with_prd="${3:-yes}"   # yes | no
+  local dir="$FIXTURE_DIR/requirements/closed/$req_basename"
+  mkdir -p "$dir"
+  cat >"$dir/.req-meta.json" <<EOF
+{"id": "${req_basename%%-*}", "branch": "$req_basename", "status": "$status"}
+EOF
+  if [ "$with_prd" = "yes" ]; then
+    echo "# Seeded PRD for $req_basename" > "$dir/prd.md"
+  fi
+}
 
 # 把 req-meta stage 推到 7 + commit（close-req I-CR1 要 stage=7）
 _bump_stage_to_7() {
@@ -457,6 +473,169 @@ test_cancel_req_without_prd_silent_skip() {
 }
 
 # =================================================
+# sync-prds: 无 requirements/closed/ → silent exit 0
+# =================================================
+test_sync_prds_no_closed_dir() {
+  start_test "sync-prds: 无 requirements/closed/ silent exit 0"
+  fixture_setup
+  rm -rf "$FIXTURE_DIR/requirements/closed"
+
+  if ! (cd "$FIXTURE_DIR" && bash "$SYNC_PRDS") >/tmp/out.$$ 2>/tmp/err.$$; then
+    _fail "sync-prds rc!=0 on empty closed/"
+    cat /tmp/err.$$ >&2
+    rm -f /tmp/out.$$ /tmp/err.$$
+    fixture_teardown
+    return
+  fi
+
+  if ! grep -q "不存在" /tmp/out.$$; then
+    _fail "expected '不存在' notice"
+    cat /tmp/out.$$ >&2
+    rm -f /tmp/out.$$ /tmp/err.$$
+    fixture_teardown
+    return
+  fi
+
+  pass_test
+  rm -f /tmp/out.$$ /tmp/err.$$
+  fixture_teardown
+}
+
+# =================================================
+# sync-prds: closed + cancelled 混合，建对两类
+# =================================================
+test_sync_prds_mixed_closed_and_cancelled() {
+  start_test "sync-prds: closed/cancelled 混合都建对"
+  fixture_setup
+
+  _seed_closed_req "req-200-alpha" closed yes
+  _seed_closed_req "req-201-beta" closed yes
+  _seed_closed_req "req-202-trash" cancelled yes
+  _seed_closed_req "req-203-noprd" closed no            # 应被跳过
+  _seed_closed_req "req-204-active" active yes          # status 非 closed/cancelled，跳过
+
+  if ! (cd "$FIXTURE_DIR" && bash "$SYNC_PRDS") >/tmp/out.$$ 2>/tmp/err.$$; then
+    _fail "sync-prds failed"
+    cat /tmp/err.$$ >&2
+    rm -f /tmp/out.$$ /tmp/err.$$
+    fixture_teardown
+    return
+  fi
+
+  # closed 类
+  for r in req-200-alpha req-201-beta; do
+    if [ ! -L "$FIXTURE_DIR/docs/prds/$r.md" ]; then
+      _fail "missing symlink: docs/prds/$r.md"
+      rm -f /tmp/out.$$ /tmp/err.$$
+      fixture_teardown
+      return
+    fi
+  done
+
+  # cancelled 类
+  if [ ! -L "$FIXTURE_DIR/docs/prds/废弃/req-202-trash.md" ]; then
+    _fail "missing cancelled symlink"
+    rm -f /tmp/out.$$ /tmp/err.$$
+    fixture_teardown
+    return
+  fi
+
+  # 跳过类不应存在
+  if [ -e "$FIXTURE_DIR/docs/prds/req-203-noprd.md" ]; then
+    _fail "no-prd req should be skipped"
+    rm -f /tmp/out.$$ /tmp/err.$$
+    fixture_teardown
+    return
+  fi
+  if [ -e "$FIXTURE_DIR/docs/prds/req-204-active.md" ]; then
+    _fail "active-status req should be skipped"
+    rm -f /tmp/out.$$ /tmp/err.$$
+    fixture_teardown
+    return
+  fi
+
+  # 汇总数字
+  if ! grep -qE "建/更新: 3" /tmp/out.$$; then
+    _fail "summary count wrong (expected 建/更新: 3)"
+    cat /tmp/out.$$ >&2
+    rm -f /tmp/out.$$ /tmp/err.$$
+    fixture_teardown
+    return
+  fi
+
+  pass_test
+  rm -f /tmp/out.$$ /tmp/err.$$
+  fixture_teardown
+}
+
+# =================================================
+# sync-prds: --dry-run 不动文件
+# =================================================
+test_sync_prds_dry_run() {
+  start_test "sync-prds: --dry-run 不动文件"
+  fixture_setup
+
+  _seed_closed_req "req-205-dry" closed yes
+
+  if ! (cd "$FIXTURE_DIR" && bash "$SYNC_PRDS" --dry-run) >/tmp/out.$$ 2>/tmp/err.$$; then
+    _fail "dry-run failed"
+    cat /tmp/err.$$ >&2
+    rm -f /tmp/out.$$ /tmp/err.$$
+    fixture_teardown
+    return
+  fi
+
+  if [ -e "$FIXTURE_DIR/docs/prds/req-205-dry.md" ]; then
+    _fail "dry-run should not create symlink"
+    rm -f /tmp/out.$$ /tmp/err.$$
+    fixture_teardown
+    return
+  fi
+
+  if ! grep -q "\[dry\]" /tmp/out.$$; then
+    _fail "dry-run output missing [dry] tag"
+    cat /tmp/out.$$ >&2
+    rm -f /tmp/out.$$ /tmp/err.$$
+    fixture_teardown
+    return
+  fi
+
+  pass_test
+  rm -f /tmp/out.$$ /tmp/err.$$
+  fixture_teardown
+}
+
+# =================================================
+# sync-prds: 重跑幂等（已建过的不报错）
+# =================================================
+test_sync_prds_idempotent() {
+  start_test "sync-prds: 重跑幂等"
+  fixture_setup
+
+  _seed_closed_req "req-206-idem" closed yes
+
+  (cd "$FIXTURE_DIR" && bash "$SYNC_PRDS") >/dev/null 2>&1
+  if ! (cd "$FIXTURE_DIR" && bash "$SYNC_PRDS") >/tmp/out.$$ 2>/tmp/err.$$; then
+    _fail "second run failed"
+    cat /tmp/err.$$ >&2
+    rm -f /tmp/out.$$ /tmp/err.$$
+    fixture_teardown
+    return
+  fi
+
+  if [ ! -L "$FIXTURE_DIR/docs/prds/req-206-idem.md" ]; then
+    _fail "symlink lost after rerun"
+    rm -f /tmp/out.$$ /tmp/err.$$
+    fixture_teardown
+    return
+  fi
+
+  pass_test
+  rm -f /tmp/out.$$ /tmp/err.$$
+  fixture_teardown
+}
+
+# =================================================
 # Run all
 # =================================================
 test_helper_closed_happy
@@ -469,5 +648,9 @@ test_close_req_creates_prd_symlink
 test_close_req_without_prd_silent_skip
 test_cancel_req_creates_cancelled_symlink
 test_cancel_req_without_prd_silent_skip
+test_sync_prds_no_closed_dir
+test_sync_prds_mixed_closed_and_cancelled
+test_sync_prds_dry_run
+test_sync_prds_idempotent
 
 report_results "symlink-prd"

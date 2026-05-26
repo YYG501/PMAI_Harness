@@ -1,0 +1,157 @@
+#!/usr/bin/env bash
+# pmai-sync-prds — 补建 docs/prds/ 下的 PRD 收口 symlink
+#
+# 场景：close-req / cancel-req 自带 symlink 创建是 2026-05-27 后的行为；
+#       老仓在此之前关掉的 req 不会自动有 symlink。本命令一次性补全。
+#
+# 行为：扫 requirements/closed/*/，按 .req-meta.json status 决定 kind：
+#   status == "closed"    -> docs/prds/<req-name>.md
+#   status == "cancelled" -> docs/prds/废弃/<req-name>.md
+#   其他 / 无 prd.md      -> 跳过
+#
+# 用法（在消费仓根 cwd 跑）：
+#   pmai sync-prds              建/更新所有 symlink
+#   pmai sync-prds --dry-run    只列要做什么，不动文件
+
+set -uo pipefail
+
+DRY_RUN=0
+case "${1:-}" in
+  -h|--help)
+    cat <<EOF
+Usage: pmai sync-prds [--dry-run]
+
+补建 docs/prds/ PRD 收口 symlink（兼容老仓没有自动 symlink 的历史 req）。
+
+Flags:
+  --dry-run    只列要做什么，不实际建 symlink
+  -h, --help   显示本帮助
+
+注意：在消费仓根目录 cwd 跑（脚本会校验 requirements/closed/ 存在）。
+EOF
+    exit 0
+    ;;
+  --dry-run)
+    DRY_RUN=1
+    ;;
+  "")
+    ;;
+  *)
+    echo "❌ unknown arg: $1" >&2
+    echo "   pmai sync-prds --help" >&2
+    exit 2
+    ;;
+esac
+
+CWD="$(pwd -P)"
+
+if ! git -C "$CWD" rev-parse --show-toplevel >/dev/null 2>&1; then
+  echo "❌ 当前目录不是 git 仓库: $CWD" >&2
+  exit 1
+fi
+
+REPO_ROOT="$(git -C "$CWD" rev-parse --show-toplevel)"
+
+CLOSED_DIR="$REPO_ROOT/requirements/closed"
+if [ ! -d "$CLOSED_DIR" ]; then
+  echo "ℹ️  $REPO_ROOT/requirements/closed/ 不存在，无 req 可收口。"
+  exit 0
+fi
+
+# 定位 symlink-prd.sh helper：消费仓常见两路径，本仓 dev 一路径，兜底 PMAI_HOME
+HELPER=""
+for candidate in \
+  "$REPO_ROOT/.claude/scripts/_lib/symlink-prd.sh" \
+  "$REPO_ROOT/scripts/_lib/symlink-prd.sh" \
+  "${PMAI_HOME:-$HOME/.pmai}/scripts/_lib/symlink-prd.sh"; do
+  if [ -f "$candidate" ]; then
+    HELPER="$candidate"
+    break
+  fi
+done
+
+if [ -z "$HELPER" ]; then
+  echo "❌ 找不到 symlink-prd.sh helper。" >&2
+  echo "   尝试过的路径：" >&2
+  echo "     $REPO_ROOT/.claude/scripts/_lib/symlink-prd.sh" >&2
+  echo "     $REPO_ROOT/scripts/_lib/symlink-prd.sh" >&2
+  echo "     ${PMAI_HOME:-$HOME/.pmai}/scripts/_lib/symlink-prd.sh" >&2
+  echo "   消费仓请确认 PMAI 已 install；或本仓 dev 请确认 scripts/_lib/ 完整。" >&2
+  exit 1
+fi
+
+source "$HELPER"
+
+echo "════════════════════════════════════════════════════════════"
+echo "  PMAI sync-prds${DRY_RUN:+ (DRY RUN — 不会动文件)}"
+echo "  Repo: $REPO_ROOT"
+echo "  Helper: $HELPER"
+echo "════════════════════════════════════════════════════════════"
+
+CREATED=0
+SKIPPED_NO_PRD=0
+SKIPPED_STATUS=0
+FAILED=0
+
+for req_dir in "$CLOSED_DIR"/*/; do
+  [ -d "$req_dir" ] || continue
+  req_basename="$(basename "$req_dir")"
+  meta="$req_dir/.req-meta.json"
+  prd="$req_dir/prd.md"
+
+  if [ ! -f "$meta" ]; then
+    echo "⚠️  $req_basename: 无 .req-meta.json，跳过"
+    SKIPPED_STATUS=$((SKIPPED_STATUS + 1))
+    continue
+  fi
+
+  status="$(python3 -c "import json; print(json.load(open('$meta')).get('status', ''))" 2>/dev/null || echo "")"
+  case "$status" in
+    closed)    kind=closed ;;
+    cancelled) kind=cancelled ;;
+    *)
+      echo "⏭  $req_basename: status='$status'，跳过"
+      SKIPPED_STATUS=$((SKIPPED_STATUS + 1))
+      continue
+      ;;
+  esac
+
+  if [ ! -f "$prd" ]; then
+    echo "⏭  $req_basename ($kind): 无 prd.md，跳过"
+    SKIPPED_NO_PRD=$((SKIPPED_NO_PRD + 1))
+    continue
+  fi
+
+  if [ "$kind" = closed ]; then
+    target="docs/prds/$req_basename.md"
+  else
+    target="docs/prds/废弃/$req_basename.md"
+  fi
+
+  if [ "$DRY_RUN" = "1" ]; then
+    echo "🔗 [dry] would create $target -> requirements/closed/$req_basename/prd.md"
+    CREATED=$((CREATED + 1))
+    continue
+  fi
+
+  if create_prd_symlink "$REPO_ROOT" "$req_basename" "$kind"; then
+    CREATED=$((CREATED + 1))
+  else
+    echo "❌ $req_basename ($kind): 建 symlink 失败" >&2
+    FAILED=$((FAILED + 1))
+  fi
+done
+
+echo ""
+echo "─── 汇总 ───"
+echo "  ${DRY_RUN:+将}建/更新: $CREATED"
+echo "  跳过（无 prd.md）: $SKIPPED_NO_PRD"
+echo "  跳过（status 非 closed/cancelled）: $SKIPPED_STATUS"
+echo "  失败: $FAILED"
+
+if [ "$DRY_RUN" = "1" ] && [ "$CREATED" -gt 0 ]; then
+  echo ""
+  echo "下一步：去掉 --dry-run 实际执行，然后 git add docs/prds + commit。"
+fi
+
+[ "$FAILED" = "0" ]
