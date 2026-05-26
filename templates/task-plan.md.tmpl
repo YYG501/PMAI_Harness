@@ -65,7 +65,14 @@
 - 标注串行 / 并行关系
 - 标注 worktree 类型（req worktree 改 docs / task worktree 改代码）
 - 给出 PM 启动建议（先启动哪个、什么时候并发）
+
+- 「执行模式」是 task 级结构决策（speed mode 2026-05-26）：
+  AI 不自决；task-plan skill 步骤 3.5 主动 prompt PM 拍板（串行 / 并行 / 混合）
+  + AI 给倾向 + 理由（同文件冲突 / 互相参照规范段 / task 数 / PM 走查负担）
+  PM 拍板后写回下方「执行模式（PM 拍板）」行 + append req-events.jsonl decision
 -->
+
+**执行模式（PM 拍板）**：<串行 / 并行 / 混合>
 
 ```text
 [流程图：task-001 → task-002 ↘

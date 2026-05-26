@@ -230,6 +230,50 @@ done
      来源 = kind 2）。close-req §2a 据此在 PRD 加「本功能原型本次不实现」标注
 - §4.3 模块规格状态：列出本 req 涉及的每个业务模块的当前规格状态（已存在-完整 / 已存在-待补 / 不存在-待创建），影响 task-spec 步骤 4 判断。
 
+### 步骤 3.5：PM 拍板执行模式（结构决策门 — speed mode 2026-05-26）
+
+§二 执行模式（串行 / 并行 / 混合）是 task 级结构决策（AI 没 ground truth；并行 vs 串行影响 PM 时间分配巨大）。步骤 3 写完文件后**主动 prompt PM** 拍板：
+
+```
+🛑 执行模式（结构决策 / 你拍板）
+
+候选：
+  A. 串行（逐 task 走查，发现一致性问题；总时长 = 各 task 之和）
+  B. 并行（多 task worktree 同时跑；最快；要求 task 间无 merge 冲突 + 不互相依赖产物）
+  C. 混合（前面几个串行打底产规范 / 复用，后面并行铺开）
+
+AI 倾向 <A/B/C>，理由：<本 req 具体情况，一行 — 例：3 个 task 改不同文件无冲突 / 但 task-001 含规范段写入要先定 / 故倾向混合（task-001 单跑、task-002+003 并行）>
+
+PM 拍板：
+```
+
+PM 答完：
+1. 修订 `task-plan.md` §二：
+   - 「执行模式（PM 拍板）」行写 PM 选定值
+   - ASCII 流程图按选定模式重画
+   - 「Lane A/B」按选定模式描述（串行 = 单 Lane / 并行 = 多 Lane / 混合 = Lane A 单 task + Lane B 并行）
+   - 「PM 启动建议」按选定模式重写
+2. append decision 事件：
+   ```bash
+   python3 .claude/scripts/req-events.py append decision \
+     --req "$(basename "$ACTIVE_REQ_DIR")" --source "task-plan@3.5" \
+     --decided-by pm-explicit \
+     --decision "执行模式：<PM 选的>" \
+     --prd-anchor "task-plan §二" \
+     --chosen "<串行 / 并行 / 混合>" \
+     --alternatives '["串行","并行","混合"]' \
+     --rationale "PM 在 task-plan 步骤 3.5 结构决策门拍板"
+   ```
+3. 进步骤 4 自检
+
+> **为什么放步骤 3.5**：步骤 3 写文件时如先 prompt PM 会打断 Write 节奏；
+> 放步骤 4 自检前是"AI 推断 + PM 拍板覆盖"的最自然时机 —— §二 落盘是 PM 决策结果而非 AI 自决。
+>
+> **续跑模式行为**：本步骤是 stage 5 内部门，不影响 req-stage-gate 续跑边界
+> （stage 5 内 PM 答完执行模式后 task-plan 继续步骤 4/5，stage-gate 续跑到 stage 6 入口总览不变）。
+>
+> **revise 触发本步骤重跑**：PM 改了 task 拆分（增删 task）后，原执行模式可能不再适用 —— 重新跑步骤 3 → 重新走步骤 3.5 拍板。
+
 ### 步骤 4：自检（按 `_shared/pm-view/checklist.md` §八 12 项）
 
 写完后对 `task-plan.md` 逐条检查：

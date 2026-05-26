@@ -136,6 +136,23 @@ PM-AI-Workflow 生成器仓的演进记录。本文件**只记影响下游业务
 
 ## 未发布
 
+### 2026-05-26 — feat(task-spec / task-confirm / task-plan): speed mode vp-7/8 — task-spec 续跑 task-confirm + task-plan 执行模式结构决策门
+
+**触发**：消费仓 ExampleConsumerApp req-008 PM 跑完 `/task-spec task-001` 后被两件事卡住：
+- (a) AI 输出"下一步运行 /task-confirm <task 文件路径>" 让 PM 复制粘贴 —— 多一道仪式；task-confirm 自身根本不设确认门（delta-3 §2.3 已固化），完全是机械流程
+- (b) PM 临时问"几个 task 可以并行吗"，AI 才说"技术上完全可以并行，我默认写串行是 PM 体验考虑" —— 即并行 / 串行是 AI 自决，没经 PM 拍板。违反 speed mode 同批刚立的"结构决策必须 PM 拍板"原则（task-plan §二 执行模式是典型 task 级结构决策）
+
+**改动**：
+- `skills/task-spec/SKILL.md` 步骤 11 改名"落盘 + 续跑 /task-confirm"：commit 成功后 AI 不再输出"下一步运行 /task-confirm <path>"让 PM 复制；改为 chat 出一行轻量过场（"准备 task 执行环境..."）然后直接续跑 task-confirm workflow（同一 chat 内 Read task-confirm SKILL.md 按步骤执行）。失败兜底：commit 失败 / task-confirm 内部报错 → 把错误原文给 PM，**不**继续续跑；PM 修复后可手动调 `/task-confirm <path>`（旧路径作 escape hatch）
+- `skills/task-confirm/SKILL.md` When To Use 段加"被 task-spec 步骤 11 续跑触发"分支，明确续跑路径行为与 PM 手动调一致（task-confirm 自身不设确认门）
+- `skills/task-plan/SKILL.md` 步骤 3 后插入新步骤 3.5「PM 拍板执行模式（结构决策门）」：写完文件后主动 prompt PM 拍串行 / 并行 / 混合 + AI 给倾向 + 理由（同文件冲突 / 互相参照规范段 / task 数 / PM 走查负担）；PM 答完修订 §二 + append decision 事件（`decided_by=pm-explicit` + `source=task-plan@3.5`）
+- `templates/task-plan.md.tmpl` §二「执行顺序与并行性」加 `**执行模式（PM 拍板）**：<串行 / 并行 / 混合>` 显式标记行 + 填写注释扩展（说明执行模式是 task 级结构决策、AI 不自决、走 task-plan skill 步骤 3.5 拍板）
+- `tests/test-speed-mode.sh` 新增 T14-T17 4 case（task-spec 续跑文案 / task-confirm When To Use 续跑分支 / task-plan 步骤 3.5 关键词 / task-plan.md.tmpl §二 执行模式标记）
+
+**影响**：PM 视角再削两道仪式 —— (a) `/task-spec` 定稿后**不再要 PM 手动贴 `/task-confirm <path>`**，直接看到 task worktree 路径 + Next Up 新窗口启动指令；(b) **执行模式（串行 / 并行 / 混合）从 AI 默认改 PM 显式拍板**，AI 给倾向 + 理由，PM 拍完写回 §二 + decision 事件 audit。续跑模式不引入新 escape hatch（commit 失败 / task-confirm 报错走老的手动调路径）。测试基线 512 → 516（+4 case 全过）。
+
+**老 SKILL 流程的等价转换**：旧 `task-spec 步骤 11 输出 /task-confirm <path>` + PM 手动敲 = 新 `task-spec 步骤 11 续跑 + AI 自动跑 task-confirm`，对 PM 行为只是"少敲一次命令"，task-confirm 内部所有 worktree fork / executor 切换 / 依赖 gate 完全不变。
+
 ### 2026-05-26 — feat(req-stage-gate / templates / status-view): speed mode — PRD 拍板后 stage 4/5 自动推 + 结构决策门 + stage 6 入口总览
 
 **触发**：消费仓 ExampleConsumerApp req-008 跑下来 PM 反馈"PRD 确定后，stage 4/5 应该一气推进"。查 req-008 实证：stage 3→4 间隔 0.1 秒、4→5 间隔 1.5 分钟、5→6 间隔 9 分钟 —— 流程时间总共 10 分钟，但 PM 还得回 4-5 次低价值确认门（"DESIGN 不动"、"impl-design 写完，过"、"task-plan 拆完，过"）。同时 implementation-design.md 7 个 HOW 决策里有 3 个（HOW-01 架构选型 / HOW-04 校验机制 / HOW-05 文档归位）AI 在写文件时悄悄自决，PM "看了，过"等于追认 —— 违反 memory `feedback_structure_decisions_need_pm`「结构决策必须 PM 拍板」。PM 否决 gsd 式 8 开关方案，选「1 个默认 mode + 严格清单」方向。

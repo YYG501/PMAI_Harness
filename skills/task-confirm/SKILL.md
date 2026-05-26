@@ -13,6 +13,10 @@ description: |
 ## When To Use
 
 - PM 调用，参数是 task 文件路径（如 `/task-confirm tasks/task-001-login-ui.md`）
+- **被 `/task-spec` 步骤 11 续跑触发**（speed mode 2026-05-26 默认行为）：task-spec
+  PM 答"定稿"后落盘 commit → AI 直接续跑本 skill workflow，PM 不需手动贴
+  `/task-confirm <path>`。续跑路径行为与 PM 手动调完全一致（task-confirm 自身不设
+  确认门，全是机械流程）。
 
 ## task 文件形态（delta-3）
 

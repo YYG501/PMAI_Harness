@@ -314,7 +314,7 @@ POST_LINT_HASH=$(shasum -a 256 "$ACTIVE_REQ_DIR/tasks/task-NNN-<slug>.md" | cut 
 
 PM 未确认前不得进入执行。
 
-### 步骤 11：落盘 + 推 /task-confirm
+### 步骤 11：落盘 + 续跑 /task-confirm（speed mode 默认）
 
 PM 确认后，把 task 文件 commit 到 req 分支（保证 task-confirm fork 时取到 PM 确认终态，
 非 working tree stale 版本；I-DC1）：
@@ -328,11 +328,25 @@ auto_commit_docs "$REQ_WORKTREE" "task-NNN-<slug>: spec sealed" "$TASK_FILE"
 `auto_commit_docs` 在文件与 HEAD 一致时静默 noop；pathspec 严格限定本 task 单文件，
 不卷入其他 working tree 改动。commit 失败 → 不推 task-confirm，把错误原文给 PM。
 
-落盘完成后推：
+**续跑 task-confirm（speed mode 默认）**：commit 成功后**不让 PM 手动贴 `/task-confirm <path>`**。
+AI chat 出一行轻量过场，然后直接续跑 `/task-confirm` 的 workflow（同一 chat 内 Read
+`skills/task-confirm/SKILL.md` 按其 step 1-N 执行；不 fork 新窗口、不要求 PM 重敲命令）：
 
 ```
-✅ task 已定稿，下一步运行 /task-confirm <task 文件路径>
+✅ task 已定稿，准备 task 执行环境（worktree fork + 启动指令）...
 ```
+
+接着按 task-confirm SKILL 跑（PM 体感 = task-spec 定稿后直接看到 worktree 路径 + Next Up 新窗口命令，不再多一道 "复制 /task-confirm <path>"）。
+
+> **为什么续跑**：task-confirm 自身**不设确认门**（delta-3 §2.3，唯一确认门已在 task-spec 步骤 10）；
+> PM 在步骤 10 答"定稿"=已授权进 task 准备阶段。手动贴 `/task-confirm <path>` 是 v3.5
+> 之前的旧仪式，speed mode（2026-05-26）一并收掉。
+>
+> **退出条件**：task-confirm workflow 跑完（worktree 已 fork + Next Up 已输出）→ chat 自然停在
+> "去新窗口跑 /task-execute" 的引导上，不进 task 执行（task 执行天然在新窗口里 PM 重新触发）。
+>
+> **失败兜底**：commit 失败 / task-confirm 内部任一步骤报错 → 把错误原文给 PM，
+> **不**继续续跑；PM 修复后可手动调 `/task-confirm <path>`（旧路径仍可用作 escape hatch）。
 
 ## Rules
 

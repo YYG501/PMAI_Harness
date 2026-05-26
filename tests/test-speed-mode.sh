@@ -27,6 +27,9 @@ STAGE6_MOD="$REPO_ROOT/scripts/_lib/stage6_summary.py"
 IMPL_TMPL="$REPO_ROOT/templates/implementation-design.md.tmpl"
 PLAN_TMPL="$REPO_ROOT/templates/task-plan.md.tmpl"
 SKILL_MD="$REPO_ROOT/skills/req-stage-gate/SKILL.md"
+TASK_SPEC_MD="$REPO_ROOT/skills/task-spec/SKILL.md"
+TASK_CONFIRM_MD="$REPO_ROOT/skills/task-confirm/SKILL.md"
+TASK_PLAN_MD="$REPO_ROOT/skills/task-plan/SKILL.md"
 
 # -----------------------------------------------------------------
 # T1: status-view.py 含 --stage6-entry argparse
@@ -369,6 +372,70 @@ test_skill_stage6_entry_call() {
 
 # -----------------------------------------------------------------
 
+# -----------------------------------------------------------------
+# T14: task-spec SKILL 步骤 11 续跑文案（speed mode 2026-05-26 vp-7）
+# -----------------------------------------------------------------
+test_task_spec_continuation() {
+  start_test "T14: task-spec SKILL 步骤 11 续跑 task-confirm（不再让 PM 手动贴）"
+  if ! grep -q "续跑 /task-confirm\|续跑 task-confirm" "$TASK_SPEC_MD"; then
+    _fail "task-spec SKILL 缺「续跑 task-confirm」speed mode 文案"
+    return
+  fi
+  # 旧"下一步运行 /task-confirm <task 文件路径>"硬复制提示应已替换
+  if grep -q "^✅ task 已定稿，下一步运行 /task-confirm <task 文件路径>$" "$TASK_SPEC_MD"; then
+    _fail "task-spec 仍保留旧"手动贴 /task-confirm <path>"提示"
+    return
+  fi
+  pass_test
+}
+
+# -----------------------------------------------------------------
+# T15: task-confirm SKILL When To Use 含「续跑触发」分支
+# -----------------------------------------------------------------
+test_task_confirm_when_to_use_continuation() {
+  start_test "T15: task-confirm SKILL When To Use 含续跑触发分支"
+  if ! grep -q "续跑触发\|续跑.*task-spec" "$TASK_CONFIRM_MD"; then
+    _fail "task-confirm SKILL When To Use 段缺「续跑触发」分支"
+    return
+  fi
+  pass_test
+}
+
+# -----------------------------------------------------------------
+# T16: task-plan SKILL 含步骤 3.5 执行模式结构决策门
+# -----------------------------------------------------------------
+test_task_plan_step_3_5_exec_mode() {
+  start_test "T16: task-plan SKILL 含步骤 3.5 PM 拍板执行模式"
+  if ! grep -q "步骤 3.5.*执行模式\|步骤 3\\.5.*执行模式" "$TASK_PLAN_MD"; then
+    _fail "task-plan SKILL 缺步骤 3.5 标题"
+    return
+  fi
+  # 必含的关键词
+  for kw in "串行" "并行" "混合" "AI 倾向" "PM 拍板" "pm-explicit"; do
+    if ! grep -q "$kw" "$TASK_PLAN_MD"; then
+      _fail "task-plan 步骤 3.5 缺关键字「$kw」"
+      return
+    fi
+  done
+  pass_test
+}
+
+# -----------------------------------------------------------------
+# T17: task-plan.md.tmpl §二 含「执行模式（PM 拍板）」行
+# -----------------------------------------------------------------
+test_task_plan_tmpl_exec_mode_marker() {
+  start_test "T17: task-plan.md.tmpl §二 含「执行模式（PM 拍板）」结构决策标记"
+  if ! grep -q "执行模式（PM 拍板）" "$PLAN_TMPL"; then
+    _fail "task-plan.md.tmpl §二 缺「执行模式（PM 拍板）」标记行"
+    return
+  fi
+  if ! grep -q "task 级结构决策\|结构决策" "$PLAN_TMPL"; then
+    _fail "task-plan.md.tmpl §二 填写注释缺「结构决策」说明"
+    return
+  fi
+  pass_test
+}
+
 test_stage6_entry_argparse
 test_stage6_module_exists
 test_impl_tmpl_decision_kind_column
@@ -382,5 +449,9 @@ test_render_structural_task
 test_missing_impl_design
 test_skill_stage4_speed_auto_continue
 test_skill_stage6_entry_call
+test_task_spec_continuation
+test_task_confirm_when_to_use_continuation
+test_task_plan_step_3_5_exec_mode
+test_task_plan_tmpl_exec_mode_marker
 
 report_results "speed-mode"
