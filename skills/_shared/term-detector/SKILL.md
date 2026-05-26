@@ -42,7 +42,7 @@ description: |
 TMPFILE=$(mktemp)
 # ...写内容到 $TMPFILE...
 
-RESULT=$(python3 "$REPO_ROOT/.claude/scripts/_lib/term-detector.py" \
+RESULT=$(python3 "$PMAI_HOME/scripts/_lib/term-detector.py" \
   "$TMPFILE" "$REPO_ROOT" \
   --req-dir "$ACTIVE_REQ_DIR")
 

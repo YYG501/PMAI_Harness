@@ -30,11 +30,11 @@ PM 体感：
 ## Preamble
 
 ```bash
-source "$(git rev-parse --show-toplevel 2>/dev/null || echo .)/.claude/scripts/skill-preamble.sh"
+source "$HOME/.pmai/scripts/skill-preamble.sh"
 echo "SKILL: close-req"
 
 # M2 banner（视觉锚点；见 _shared/pm-view/banner-rules.md §1）
-python3 "$REPO_ROOT/.claude/scripts/status-view.py" --banner-only --skill CLOSE-REQ || true
+python3 "$PMAI_HOME/scripts/status-view.py" --banner-only --skill CLOSE-REQ || true
 ```
 
 ## Phase 自动判断（入口）
@@ -186,7 +186,7 @@ PENDING_MARKER="$REPO_ROOT/.runs/pending-close-req.json"
    # 1. AI 归纳：读本 req 涉及的 docs/modules/<m>.md 的 §摘要 + §一模块定位 + §三一级章节标题，提炼用途（≤30 字）
    # 2. patch docs/modules/INDEX.md（新模块插入新行；已存在且本 req 改过规格的更新简介；未改动的不动）
    # 3. lint 校验
-   python3 "$REPO_ROOT/.claude/scripts/check-index-lint.py" "$REPO_ROOT" --exit-code || {
+   python3 "$PMAI_HOME/scripts/check-index-lint.py" "$REPO_ROOT" --exit-code || {
      # lint 失败 → AI 二次重写
      # 仍失败 → 输出空 diff 跳过本次 INDEX 刷新（不阻塞 close-req 整体）
      echo "⚠️ INDEX lint 二次重写仍失败，跳过本次 INDEX 刷新"
@@ -221,7 +221,7 @@ PENDING_MARKER="$REPO_ROOT/.runs/pending-close-req.json"
 #### 2a.1 读 adjustment 事件 + 段 1.5 原型简化项
 
 ```bash
-python3 "$REPO_ROOT/.claude/scripts/req-events.py" list "$ACTIVE_REQ_DIR"
+python3 "$PMAI_HOME/scripts/req-events.py" list "$ACTIVE_REQ_DIR"
 ```
 
 `req-events.py list` 折叠出本 req 全部 `adjustment` 事件（close-task Phase 2 promote 来的
@@ -279,7 +279,7 @@ python3 "$REPO_ROOT/.claude/scripts/req-events.py" list "$ACTIVE_REQ_DIR"
 所有 adjustment overwrite + simp 标注落盘后，对 prd.md 跑一次 PM-view lint：
 
 ```bash
-python3 "$REPO_ROOT/.claude/scripts/check-doc-pm-view.py" "$ACTIVE_REQ_DIR/prd.md"
+python3 "$PMAI_HOME/scripts/check-doc-pm-view.py" "$ACTIVE_REQ_DIR/prd.md"
 ```
 
 理由：simp 标注是从 implementation-design.md 段 1.5「原型本次计划简化为」字段写过来的，
@@ -335,7 +335,7 @@ python3 "$REPO_ROOT/.claude/scripts/check-doc-pm-view.py" "$ACTIVE_REQ_DIR/prd.m
 ### 步骤 3：推进状态
 
 ```bash
-python3 .claude/scripts/req-transition.py "$ACTIVE_REQ_DIR" --to 7
+python3 "$PMAI_HOME/scripts/req-transition.py" "$ACTIVE_REQ_DIR" --to 7
 ```
 
 ### 步骤 3.4：业务词催补 hook（从 prd-writing 迁来）
@@ -350,7 +350,7 @@ for t in "$ACTIVE_REQ_DIR"/tasks/closed/*.md; do
   [ -f "$t" ] && [[ "$t" != *.engineering.md ]] && cat "$t" >> "$TMPFILE"
 done
 
-python3 "$REPO_ROOT/.claude/scripts/_lib/term-detector.py" \
+python3 "$PMAI_HOME/scripts/_lib/term-detector.py" \
   "$TMPFILE" "$REPO_ROOT" --req-dir "$ACTIVE_REQ_DIR"
 
 rm "$TMPFILE"

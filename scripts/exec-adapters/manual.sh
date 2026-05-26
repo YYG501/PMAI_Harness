@@ -51,7 +51,7 @@ Task-${TASK_SHORT_ID} 已设为 manual 执行
 会检测到 manual 标记 + 显式告知你"不会重跑执行器，直接进自审"。
 
 如果决定放弃这个 task：
-  python3 .claude/scripts/task-transition.py "$TASK_FILE" --cancel-manual
+  python3 $HOME/.pmai/scripts/task-transition.py "$TASK_FILE" --cancel-manual
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 EOF
 

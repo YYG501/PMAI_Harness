@@ -42,7 +42,7 @@ description: |
 ## Preamble
 
 ```bash
-source "$(git rev-parse --show-toplevel 2>/dev/null || echo .)/.claude/scripts/skill-preamble.sh"
+source "$HOME/.pmai/scripts/skill-preamble.sh"
 echo "SKILL: task-submit"
 ```
 
@@ -187,7 +187,7 @@ Diff: N 文件 +X -Y 行 → PM 通过/打回？
 **PM 说"通过"：**
 
 ```bash
-python3 .claude/scripts/task-transition.py "<task-file>" --to 已完成
+python3 "$PMAI_HOME/scripts/task-transition.py" "<task-file>" --to 已完成
 ```
 
 `task-transition.py` 在「执行中→已完成」入口校验文档偏差 + 自审记录非空（I-TT3）。

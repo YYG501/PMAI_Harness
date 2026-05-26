@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # cancel-req.sh — 废弃 req：enumerate 所有 task → commit cancelled 到 main → 清理 worktree/分支
-# 用法: bash .claude/scripts/cancel-req.sh <req-dir>
+# 用法: bash $HOME/.pmai/scripts/cancel-req.sh <req-dir>
 # 不 merge req 分支到 main。但 cancelled 占位（meta+目录）会 commit 到 main。
 #
 # 顺序（任一步失败就 fail-fast）：

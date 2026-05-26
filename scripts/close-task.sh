@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # close-task.sh — Task 关闭：文档偏差检查 → 归档 → merge → 清理
-# 用法: bash .claude/scripts/close-task.sh <task-file>
+# 用法: bash $HOME/.pmai/scripts/close-task.sh <task-file>
 # 前置条件：task 状态必须为「已完成」
 
 set -euo pipefail
@@ -15,10 +15,11 @@ else
   REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null)"
 fi
 
-EVENTS_SCRIPT="$REPO_ROOT/.claude/scripts/task-events.py"
-
-# 加载 worktree 解析 helper（branch ↔ 物理路径，问 git，不假设 .worktrees/）
+# 找自身脚本目录（I-mini：framework scripts/ 互相调用走 SCRIPT_DIR，不假设消费仓有 $HOME/.pmai/scripts/）
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+EVENTS_SCRIPT="$SCRIPT_DIR/task-events.py"
+
+# 加载 worktree 解析 helper
 source "$SCRIPT_DIR/_lib/worktree.sh"
 source "$SCRIPT_DIR/_lib/dev-server.sh"
 
@@ -47,7 +48,7 @@ extract_task_field() {
 
 # --- task 格式判别（三态：v1/v2/v3） ---
 ENG_FILE="${TASK_FILE%.md}.engineering.md"
-TASK_FMT=$(python3 "$REPO_ROOT/.claude/scripts/_lib/state.py" detect_format "$TASK_FILE" 2>/dev/null || echo "v3")
+TASK_FMT=$(python3 "$SCRIPT_DIR/_lib/state.py" detect_format "$TASK_FILE" 2>/dev/null || echo "v3")
 if [ "$TASK_FMT" = "v2" ]; then
   HAS_ENG=true
   echo "ℹ️  检测到旧格式 task（双文件），兼容模式继续。" >&2
@@ -114,7 +115,7 @@ fi
 REQ_WORKTREE=$(resolve_worktree_path "$REQ_BRANCH" "$REPO_ROOT" || true)
 if [ -z "$REQ_WORKTREE" ] || [ ! -d "$REQ_WORKTREE" ]; then
   echo "❌ req worktree 不存在（git worktree list 中找不到分支 ${REQ_BRANCH}）。需要先恢复 req worktree 才能关闭 task。" >&2
-  echo "   建议：bash ${REPO_ROOT}/.claude/scripts/create-req-worktree.sh ${REQ_BRANCH}" >&2
+  echo "   建议：bash \$HOME/.pmai/scripts/create-req-worktree.sh ${REQ_BRANCH}" >&2
   exit 1
 fi
 
@@ -186,7 +187,7 @@ if [ -n "$REQ_UNCOMMITTED" ]; then
 fi
 
 # --- I-CT7 / I-CT8: 事件流与 commit 时间戳审计（merge 前强拦） ---
-AUDIT_SCRIPT="$REPO_ROOT/.claude/scripts/audit-task-events.py"
+AUDIT_SCRIPT="$SCRIPT_DIR/audit-task-events.py"
 if [ -f "$AUDIT_SCRIPT" ]; then
   if ! python3 "$AUDIT_SCRIPT" \
       --task-file "$TASK_FILE" \
@@ -254,7 +255,7 @@ echo "🔀 已合并 ${BRANCH} → ${REQ_BRANCH}（已验证提交落地）"
 # Phase 2 在 req worktree：merge 后 task 文件已在 req 分支，读其文档偏差段、
 # 逐行 append 成 req-events.jsonl 的 adjustment 事件（close-req 反向对齐读它）。
 # 格式判别复用  detect_format 三态（v2 在 .engineering.md §10、v3 在审计区）。
-REQ_EVENTS_SCRIPT="$REPO_ROOT/.claude/scripts/req-events.py"
+REQ_EVENTS_SCRIPT="$SCRIPT_DIR/req-events.py"
 REQ_BASENAME_FOR_EVENTS=$(basename "$REQ_DIR")
 REQ_DIR_IN_WT="$REQ_WORKTREE/requirements/active/$REQ_BASENAME_FOR_EVENTS"
 MERGED_TASK_FILE="$REQ_WORKTREE/$TASK_FILE_REL"

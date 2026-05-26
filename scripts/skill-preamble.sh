@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
 # skill-preamble.sh — 统一 preamble，所有 skill 的 preamble 调用它
-# 用法: source .claude/scripts/skill-preamble.sh
+# 用法: source "$PMAI_HOME/scripts/skill-preamble.sh"（I-mini 模式，推荐）
+#       或 source $HOME/.pmai/scripts/skill-preamble.sh（老消费仓 backward compat，不推荐）
 # 输出环境变量:
+#   PMAI_HOME            - 框架代码根目录（~/.pmai/ 或 env 覆盖），I-mini 后 skill 内部用此路径调脚本
 #   MAIN_REPO_ROOT       - 主仓根目录（共享元数据：.runs/、.worktrees/）
 #   REPO_ROOT            - 当前 worktree 根目录（业务数据：requirements/、docs/、prototypes/）
 #                          向后兼容：如果在 main 分支，REPO_ROOT == MAIN_REPO_ROOT
@@ -22,10 +24,29 @@
 #       多: ACTIVE_REQ 留空（不要默选第一个），输出列出所有候选
 #         skill 自己判断 ACTIVE_REQ_COUNT，决定报错或让 PM 进具体 worktree
 
+# --- -1. 解析 PMAI_HOME（I-mini 入口，skill 后续都用它）---
+# 顺序：env 显式覆盖 → 本脚本所在目录推导（开发本仓内跑 / clone 到 ~/.pmai/ 都对）→ ~/.pmai fallback
+if [ -n "${PMAI_HOME:-}" ] && [ -d "$PMAI_HOME/scripts" ]; then
+  : # PM/外部已显式传，尊重
+else
+  # 本脚本自身所在目录 = $PMAI_HOME/scripts（无论是 ~/.pmai/scripts 还是开发本仓 scripts）
+  _SELF_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+  _CANDIDATE="$(cd "$_SELF_DIR/.." && pwd)"
+  if [ -d "$_CANDIDATE/scripts" ] && [ -d "$_CANDIDATE/templates" ]; then
+    PMAI_HOME="$_CANDIDATE"
+  elif [ -d "$HOME/.pmai/scripts" ]; then
+    PMAI_HOME="$HOME/.pmai"
+  else
+    echo "❌ PMAI_HOME 解析失败：$HOME/.pmai 不存在且当前脚本路径不像 framework 源。" >&2
+    echo "   修复：跑 pmai install 装框架到 ~/.pmai/，或显式 export PMAI_HOME=/path/to/framework" >&2
+    return 1 2>/dev/null || exit 1
+  fi
+fi
+export PMAI_HOME
+
 # --- 0. 加载 worktree 解析 helper（branch ↔ 物理路径，问 git，不假设 .worktrees/） ---
-_PREAMBLE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-if [ -f "$_PREAMBLE_DIR/_lib/worktree.sh" ]; then
-  source "$_PREAMBLE_DIR/_lib/worktree.sh"
+if [ -f "$PMAI_HOME/scripts/_lib/worktree.sh" ]; then
+  source "$PMAI_HOME/scripts/_lib/worktree.sh"
 fi
 
 # --- 1. 检测当前分支 ---
@@ -291,7 +312,7 @@ fi
 # v4 A1 修订: 主窗口兜底收口 — preamble 输出 task 概览摘要 (Codex C2)
 # 单窗口 lifecycle 下作为兜底 (主路径在新窗口完成验收 + close)
 if [ -n "$ACTIVE_REQ" ] || ls "$MAIN_REPO_ROOT"/.worktrees/req-* >/dev/null 2>&1; then
-  python3 "$MAIN_REPO_ROOT/.claude/scripts/status-view.py" --summary 2>/dev/null || true
+  python3 "$MAIN_REPO_ROOT/$HOME/.pmai/scripts/status-view.py" --summary 2>/dev/null || true
 fi
 
 export MAIN_REPO_ROOT REPO_ROOT CURRENT_WORKTREE_ROOT BRANCH WORKTREE_TYPE

@@ -32,7 +32,7 @@ from pathlib import Path
 def _detect_framework_root() -> Path:
     """优先 git rev-parse 找仓根；fallback 适配两种 layout：
       - 生成器仓：scripts/inject-structure-segment.py
-      - 业务仓：.claude/scripts/inject-structure-segment.py（同步后路径）
+      - 业务仓：$HOME/.pmai/scripts/inject-structure-segment.py（同步后路径）
     """
     try:
         out = subprocess.check_output(
@@ -84,7 +84,7 @@ def render_segment(intent: str, framework_root: Path) -> str:
     if intent == "unknown":
         body = (
             "_待 PM 决定项目意图_。可选路径：\n"
-            "- 运行 `python3 .claude/scripts/detect-project-structure.py` 看探测推荐\n"
+            "- 运行 `python3 $HOME/.pmai/scripts/detect-project-structure.py` 看探测推荐\n"
             "- 或手动选 prototype / system / custom，重跑 init"
         )
         return f"{marker}\n\n{body}"

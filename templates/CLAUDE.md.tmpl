@@ -4,7 +4,7 @@
 
 **会话开始时必须执行：**
 1. 读取本文件了解项目上下文
-2. 运行 `source .claude/scripts/skill-preamble.sh` 检测当前工作位置
+2. 运行 `source $HOME/.pmai/scripts/skill-preamble.sh` 检测当前工作位置
 3. 运行 `/task-status` 了解当前状态
 
 ---
@@ -22,9 +22,9 @@
 
 **禁止直接编辑 task 文件的"状态"字段或 .req-meta.json 的"stage"字段。**
 
-- Req stage 推进/回退：`python3 .claude/scripts/req-transition.py <req-dir> --to <stage> [--rollback]`
-- Task 状态变更：`python3 .claude/scripts/task-transition.py <task-file> --to <status> [--note <text>]`
-- Task 废弃（含清理 worktree+分支）：`python3 .claude/scripts/task-transition.py <task-file> --discard --reason "<一句话>"`（源状态 ∈ {待执行, 执行中}；已完成不可——开新 task revert 或 `/cancel-req`）
+- Req stage 推进/回退：`python3 $HOME/.pmai/scripts/req-transition.py <req-dir> --to <stage> [--rollback]`
+- Task 状态变更：`python3 $HOME/.pmai/scripts/task-transition.py <task-file> --to <status> [--note <text>]`
+- Task 废弃（含清理 worktree+分支）：`python3 $HOME/.pmai/scripts/task-transition.py <task-file> --discard --reason "<一句话>"`（源状态 ∈ {待执行, 执行中}；已完成不可——开新 task revert 或 `/cancel-req`）
 
 Hook 会拦截直接编辑，但 **CLAUDE.md 规则是主要约束，hook 是补充检查**。即使绕过 hook（如通过 Bash），也必须遵守此规则。
 
@@ -175,7 +175,7 @@ main（主仓，永远不切分支）
 - task worktree 里不能修改 docs/（文档改动走 req 分支）
 - req worktree 里不能修改 prototypes/（代码改动走 task 分支）
 
-**唯一例外：** `/quick-fix` 可在 PM 明确审批的小改动场景下修改 main 或某条 req 分支（多 active req 并行时按 cwd 决定 base），但必须通过 `tmp-quick-*` worktree 隔离、PM 审批 diff、并由 `.claude/scripts/quick-fix.sh` 执行 ff-only 合并。base 分支由启动位置自动推断（主仓 main → main / `req-*` worktree → 该 req 分支 / task worktree → 拒绝）。AI 不允许绕过脚本直接写 main 或 req 分支。
+**唯一例外：** `/quick-fix` 可在 PM 明确审批的小改动场景下修改 main 或某条 req 分支（多 active req 并行时按 cwd 决定 base），但必须通过 `tmp-quick-*` worktree 隔离、PM 审批 diff、并由 `$HOME/.pmai/scripts/quick-fix.sh` 执行 ff-only 合并。base 分支由启动位置自动推断（主仓 main → main / `req-*` worktree → 该 req 分支 / task worktree → 拒绝）。AI 不允许绕过脚本直接写 main 或 req 分支。
 
 ### 文档引用原则
 
@@ -252,13 +252,13 @@ main（主仓，永远不切分支）
 
 ### 自动守卫
 
-`pre-commit` hook 调用 `.claude/scripts/check-docs-toplevel.py` 自动拦截 `docs/` 顶层不在白名单的新增 `.md` 文件。
+`pre-commit` hook 调用 `$HOME/.pmai/scripts/check-docs-toplevel.py` 自动拦截 `docs/` 顶层不在白名单的新增 `.md` 文件。
 
 - **白名单**：本节正面清单 + 项目级业务概览（在 `.docs-toplevel-allow` 一行一个 basename 自定义）
 - **拦下后**：按归位规则 mv 走，或加进 `.docs-toplevel-allow` 放行
 - **救火**：`git commit --no-verify`（绕过所有 pre-commit，慎用）
 
-老项目要启用：跑 `bash .claude/scripts/install-hooks.sh` 重新装 hook（sync 框架后第一次需要）。
+老项目要启用：跑 `bash $HOME/.pmai/scripts/install-hooks.sh` 重新装 hook（sync 框架后第一次需要）。
 
 ## 当前状态
 

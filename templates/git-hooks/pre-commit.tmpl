@@ -6,6 +6,9 @@
 #   2. 拦截 docs/ 顶层错位文件 (check-docs-toplevel.py，按 CLAUDE.md 「docs/ 归档约定」)
 #
 # 绕过：git commit --no-verify（git 内置；hook 不会被调到）。
+#
+# I-mini 模式：消费仓内 0 framework 资产，所有 checker 都从 $PMAI_HOME 调用。
+# pre-commit 进程未经过 skill-preamble.sh → 自己解析 PMAI_HOME（env 优先 / fallback ~/.pmai/）。
 
 set -e
 
@@ -15,18 +18,27 @@ if [ -z "$REPO_ROOT" ]; then
   exit 0  # 不在 git 仓里？让 git 自己处理
 fi
 
+# --- 0. 解析 PMAI_HOME（I-mini 入口）---
+PMAI_HOME="${PMAI_HOME:-$HOME/.pmai}"
+if [ ! -d "$PMAI_HOME/scripts" ]; then
+  echo "⚠️  pre-commit: PMAI 未安装在 $PMAI_HOME。所有 checker 跳过（fail-open）。" >&2
+  echo "    修复：跑 pmai install" >&2
+  # fail-open：不阻塞 commit，但跳过后续 checker
+  exit 0
+fi
+
 # --- 1. task 状态字段直改检测 ---
-CHECKER="$REPO_ROOT/.claude/scripts/check-status-direct-edit.py"
+CHECKER="$PMAI_HOME/scripts/check-status-direct-edit.py"
 if [ ! -f "$CHECKER" ]; then
   # 检测脚本缺失：fail-open（不阻塞 commit）但留 stderr 提示
   echo "⚠️  pre-commit: $CHECKER 缺失，跳过 task 状态字段直改检测。" >&2
-  echo "    如需补回：bash .claude/scripts/install-hooks.sh" >&2
+  echo "    修复：pmai upgrade 或 pmai doctor" >&2
 else
   python3 "$CHECKER"
 fi
 
 # --- 2. docs/ 顶层归档约定检测（防错位 / 重复 / 过期文件积累）---
-DOCS_CHECKER="$REPO_ROOT/.claude/scripts/check-docs-toplevel.py"
+DOCS_CHECKER="$PMAI_HOME/scripts/check-docs-toplevel.py"
 if [ -f "$DOCS_CHECKER" ]; then
   python3 "$DOCS_CHECKER"
 fi  # 脚本缺失 fail-open（老消费仓还没 sync 进新 framework 时不应阻塞）

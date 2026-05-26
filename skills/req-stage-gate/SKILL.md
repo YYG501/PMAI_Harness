@@ -17,14 +17,14 @@ description: |
 ## Preamble
 
 ```bash
-source "$(git rev-parse --show-toplevel 2>/dev/null || echo .)/.claude/scripts/skill-preamble.sh"
+source "$HOME/.pmai/scripts/skill-preamble.sh"
 echo "SKILL: req-stage-gate"
 
 # M2 banner（视觉锚点；见 _shared/pm-view/banner-rules.md §1）
-python3 "$REPO_ROOT/.claude/scripts/status-view.py" --banner-only --skill REQ-STAGE-GATE || true
+python3 "$PMAI_HOME/scripts/status-view.py" --banner-only --skill REQ-STAGE-GATE || true
 
 # worktree 残留检测（informational，不阻塞推进；有问题仅打印警告供 PM 处理）
-python3 "$REPO_ROOT/.claude/scripts/check-worktree-residue.py" || true
+python3 "$PMAI_HOME/scripts/check-worktree-residue.py" || true
 ```
 
 读取 `$ACTIVE_REQ_STAGE` 确定当前 stage。
@@ -67,7 +67,7 @@ PM 答完一个继续下一个；全部答完按 `decided_by=pm-explicit` append
 **Stage 6 入口总览**（替代原 stage 5→6 task-plan 全文确认门）：
 
 ```bash
-python3 .claude/scripts/status-view.py --stage6-entry "$ACTIVE_REQ_DIR"
+python3 "$PMAI_HOME/scripts/status-view.py" --stage6-entry "$ACTIVE_REQ_DIR"
 ```
 
 输出格式（status-view.py 内 render）：
@@ -211,7 +211,7 @@ chat 一行确认 `已归档（attachments/<新名>），Y 重点。继续。`�
    调用 lint 脚本：
 
    ```bash
-   python3 .claude/scripts/check-open-questions.py "$ACTIVE_REQ_DIR/analysis.md"
+   python3 "$PMAI_HOME/scripts/check-open-questions.py" "$ACTIVE_REQ_DIR/analysis.md"
    ```
 
    - **退出码 1**（有未答）→ 确认门进入"答题模式"，stdout 给出未答题号 + 行号：
@@ -417,7 +417,7 @@ chat 一行确认 `已归档（attachments/<新名>），Y 重点。继续。`�
 #### 推进命令（A 或 B 任一确认后执行）
 
 ```bash
-python3 .claude/scripts/req-transition.py "$ACTIVE_REQ_DIR" --to 2
+python3 "$PMAI_HOME/scripts/req-transition.py" "$ACTIVE_REQ_DIR" --to 2
 ```
 
 > `req-transition.py` 内部走 `_lib.state.get_stage_source(req_dir, current)` helper，按 `.req-meta.json:stage2_source` 解析真相源：A 分支验 `analysis.md` 存在，B 分支验 `stage2-office-hours.md` 存在。
@@ -505,7 +505,7 @@ PM 选择进入 stage 3 时：
 
 推进（PM 确认后执行）：
 ```bash
-python3 .claude/scripts/req-transition.py "$ACTIVE_REQ_DIR" --to 3
+python3 "$PMAI_HOME/scripts/req-transition.py" "$ACTIVE_REQ_DIR" --to 3
 ```
 
 > **stage 3 只有一个 PM 定稿确认门**——就是步骤 2。`/prd-writing` 在 stage-3 orchestrated 模式下不出自己的确认门，由本步骤 2 统一兜住。stage 3 不再有 reconcile / 行数 lint / PROJECT 6 节门等额外门或步骤。
@@ -523,7 +523,7 @@ python3 .claude/scripts/req-transition.py "$ACTIVE_REQ_DIR" --to 3
 ；gap-check 是每 req 的组件复用关口 + 完整规格定稿门，必跑。视觉基线本身在 init C.5 已由 gstack `/design-consultation` 定稿，stage 4 不再嵌视觉基线更新分支。
 
 ```bash
-python3 .claude/scripts/req-transition.py "$ACTIVE_REQ_DIR" --to 4
+python3 "$PMAI_HOME/scripts/req-transition.py" "$ACTIVE_REQ_DIR" --to 4
 ```
 
 推进成功后**续到 Stage 4 入口**。
@@ -591,7 +591,7 @@ Stage 4（设计系统）— 待确认
 PM 确认后推进：
 
 ```bash
-python3 .claude/scripts/req-transition.py "$ACTIVE_REQ_DIR" --to 5
+python3 "$PMAI_HOME/scripts/req-transition.py" "$ACTIVE_REQ_DIR" --to 5
 ```
 
 推进成功后**续到 Stage 4 → 5 入口**（先 `/implementation-design`，见下）。
@@ -697,7 +697,7 @@ PM 确认 implementation-design 后，调用 `/task-plan` 拆 task。
 5. **Stage 6 入口总览**（替代原 task-plan 全文确认门）：
 
    ```bash
-   python3 .claude/scripts/status-view.py --stage6-entry "$ACTIVE_REQ_DIR"
+   python3 "$PMAI_HOME/scripts/status-view.py" --stage6-entry "$ACTIVE_REQ_DIR"
    ```
 
    输出格式（status-view 内 render，**PM 单一真相源**）：
@@ -751,7 +751,7 @@ PM 确认 implementation-design 后，调用 `/task-plan` 拆 task。
 
 推进：
 ```bash
-python3 .claude/scripts/req-transition.py "$ACTIVE_REQ_DIR" --to 6
+python3 "$PMAI_HOME/scripts/req-transition.py" "$ACTIVE_REQ_DIR" --to 6
 ```
 
 推进成功后**stage-gate 退出**（续跑模式 2 条退出条件之一：「推进到 stage 6 成功」）。后续 task 执行由 `/task-spec` `/task-execute` `/close-task` 独立 skill 承担，不属于 stage-gate 推进范围。退出话术按上文「续跑模式 / PM chat 输出格式」。
@@ -821,7 +821,7 @@ Stage 6 → 7 blocked: 以下 task 尚未完整关闭
 
 推进：
 ```bash
-python3 .claude/scripts/req-transition.py "$ACTIVE_REQ_DIR" --to 7
+python3 "$PMAI_HOME/scripts/req-transition.py" "$ACTIVE_REQ_DIR" --to 7
 ```
 
 然后调用 `/close-req`。**`/close-req` 跑完即 stage-gate 退出**（续跑模式 2 条退出条件之一：「推进到 stage 7 后调完 `/close-req`」）。
@@ -850,5 +850,5 @@ python3 .claude/scripts/req-transition.py "$ACTIVE_REQ_DIR" --to 7
 - Stage 4 的 DESIGN.md 内容检测（inventory 段是否存在 / 新建组件规格是否完整）由 `req-transition.py` 自动处理
 - 回退场景：PM 说要回到之前的 stage 时，使用 `--rollback` 参数
   ```bash
-  python3 .claude/scripts/req-transition.py "$ACTIVE_REQ_DIR" --to <target> --rollback
+  python3 "$PMAI_HOME/scripts/req-transition.py" "$ACTIVE_REQ_DIR" --to <target> --rollback
   ```

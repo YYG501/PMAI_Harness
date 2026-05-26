@@ -30,7 +30,7 @@ PM 主动调用，**4 个独立场景**：
 ## Preamble
 
 ```bash
-source "$(git rev-parse --show-toplevel 2>/dev/null || echo .)/.claude/scripts/skill-preamble.sh"
+source "$HOME/.pmai/scripts/skill-preamble.sh"
 echo "SKILL: project-solution"
 ```
 
@@ -47,8 +47,8 @@ echo "SKILL: project-solution"
 
 ## 产出
 
-- `docs/PROJECT.md` —— 项目顶层方案，6 节（按 `$REPO_ROOT/templates/PROJECT.md.tmpl`）
-- `docs/ROADMAP.md` —— 计划态 req 队列（按 `$REPO_ROOT/templates/ROADMAP.md.tmpl`）
+- `docs/PROJECT.md` —— 项目顶层方案，6 节（按 `$PMAI_HOME/templates/PROJECT.md.tmpl`）
+- `docs/ROADMAP.md` —— 计划态 req 队列（按 `$PMAI_HOME/templates/ROADMAP.md.tmpl`）
 
 **单文件，不产工程孪生** —— 不产 `solution.engineering.md` 之类的工程合同。项目级方向只用 PM 视角写。
 

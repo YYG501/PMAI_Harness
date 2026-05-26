@@ -135,10 +135,13 @@ for TMPL in "$FRAMEWORK_DIR/templates/"*.tmpl; do
     PRODUCT-RULES.md)       DEST="$TARGET_DIR/docs/PRODUCT-RULES.md" ;;
     ROADMAP.md)             DEST="$TARGET_DIR/docs/ROADMAP.md" ;;
     modules-INDEX.md)       DEST="$TARGET_DIR/docs/modules/INDEX.md" ;;
-    req-prd.md|implementation-design.md|codebase-audit.md|task.md|task-plan.md|module.md|lark-publish.json)
-      # symlink 模式下，这些 runtime .tmpl 通过 templates/ symlink 跟随 framework 升级；
-      # 不再拷实体到 consumer/templates/
+    req-prd.md|implementation-design.md|codebase-audit.md|task.md|task-plan.md|module.md)
+      # runtime framework .tmpl —— skill 内部用 $PMAI_HOME/templates/ 直接调用，不拷进消费仓
       continue ;;
+    lark-publish.json)
+      # 业务实例配置模板（I-mini 例外）：PM 后续要 cp templates/lark-publish.json.tmpl
+      # → .claude/lark-publish.json 并改 token —— 必须留实体在消费仓
+      DEST="$TARGET_DIR/templates/lark-publish.json.tmpl" ;;
     settings.json)          DEST="$TARGET_DIR/.claude/settings.json" ;;
     gitignore)              DEST="$TARGET_DIR/.gitignore" ;;
     pm-workflow.config.yml) DEST="$TARGET_DIR/.pm-workflow/config.yml" ;;
@@ -172,28 +175,17 @@ python3 "$FRAMEWORK_DIR/scripts/inject-structure-segment.py" \
     echo "⚠️  工程结构约束注入失败（项目仍可用，PM 后续可手动跑 detect-project-structure.py）" >&2
   }
 
-# --- e/f/f2. symlink 4 块到 framework（方案 A：framework 升级自动跟）---
-# 旧版 cp 实体 4 块到 consumer/.claude/{scripts,skills,agents} + consumer/templates/，导致
-# pmai upgrade 后 consumer 内部仍是 init 时快照，不跟升级。
-# 方案 A：consumer 内只放 symlink 到 $FRAMEWORK_DIR/，framework 改完 push + pmai upgrade
-# 后 ~/.pmai/ 拉新 commit，所有 default symlink 模式的 consumer 自动用新版。
-# 代价：consumer git 历史不包含框架代码；consumer clone 到没装 pmai 的机器无法运行（须先 pmai install）。
+# --- e/f/f2/templates/hooks. I-mini 模式：消费仓 0 framework 资产 ---
+# 旧版方案 A symlink 5 块到 framework（绝对路径硬编码，跨机器 dangling）。
+# I-mini：消费仓内**不放任何** framework 资产（scripts/skills/agents/templates/hooks）。
+# skill 内部所有调用走 $PMAI_HOME/scripts/... 全局绝对路径（skill-preamble.sh 解析 PMAI_HOME）。
+# pre-commit hook 内部自己 fallback PMAI_HOME=$HOME/.pmai。
+# 跨机器 clone 消费仓后只需在新机器跑 pmai install → 立即可用，0 setup。
 mkdir -p "$TARGET_DIR/.claude"
-ln -s "$FRAMEWORK_DIR/scripts"   "$TARGET_DIR/.claude/scripts"
-ln -s "$FRAMEWORK_DIR/skills"    "$TARGET_DIR/.claude/skills"
-ln -s "$FRAMEWORK_DIR/agents"    "$TARGET_DIR/.claude/agents"
-echo "🔗 .claude/scripts + .claude/skills + .claude/agents symlink → $FRAMEWORK_DIR/"
-
-# templates/ 也 symlink（覆盖 runtime .tmpl 如 task.md.tmpl / req-prd.md.tmpl / 工程结构约束-*.md 等）
-# 注：占位符替换的 .tmpl 已在 d 段单独处理（写到 CLAUDE.md / docs/PROJECT.md 等业务路径）。
-if [ -e "$TARGET_DIR/templates" ]; then
-  # d 段可能已经创建了 templates/ 目录（如果 d 处理到任何走 default case 的 *.tmpl）
-  # 但当前 d 段对 runtime templates 是 continue 跳过 → 不会建 templates 目录；保险起见再检查一次
-  echo "⚠️  $TARGET_DIR/templates 已存在，跳过 symlink（可能 d 段误建）" >&2
-else
-  ln -s "$FRAMEWORK_DIR/templates" "$TARGET_DIR/templates"
-  echo "🔗 templates symlink → $FRAMEWORK_DIR/templates"
-fi
+# 注：.claude/settings.json 已在 d 段写入（占位符替换实体），hook 路径用 $HOME/.pmai/...
+# 注：消费仓 templates/ 现在仅含业务实例 .tmpl（lark-publish.json.tmpl 等 PM cp+配 token 用）
+#     —— 这些已在 d 段拷贝；framework runtime .tmpl（task.md.tmpl 等）走 $PMAI_HOME/templates/
+echo "📦 I-mini 模式：消费仓 0 framework；skill / scripts / templates / hooks 全走 \$PMAI_HOME"
 
 # --- g. settings.json 已在模板复制时创建 ---
 
@@ -226,26 +218,17 @@ print(3000 + (h % 7000))
 echo "$BASE_PORT" > .dev-port
 echo "🔌 基础端口: $BASE_PORT"
 
-# --- k1. symlink Claude Code hooks（方案 A：跟 framework 升级）---
-# 旧版 cp .cjs/.js/.sh 文件到 consumer/hooks/。
-# 方案 A symlink 后，settings.json 注册路径 "$CLAUDE_PROJECT_DIR/hooks/<file>.cjs" 解析到
-# symlinked 目录里的实际 framework 文件，hook 行为跟 ~/.pmai/hooks/ 升级。
-if [ -d "$FRAMEWORK_DIR/hooks" ]; then
-  ln -s "$FRAMEWORK_DIR/hooks" "$TARGET_DIR/hooks"
-  echo "🔗 hooks symlink → $FRAMEWORK_DIR/hooks"
-fi
+# --- k1. Claude Code hooks（I-mini：消费仓不放，settings.json 用 $HOME/.pmai/hooks/...）---
+# 旧版方案 A 把 hooks/ symlink 到 framework，settings.json 用 $CLAUDE_PROJECT_DIR/hooks/...
+# I-mini：消费仓 0 hook 目录；settings.json 已改用 $HOME/.pmai/hooks/review-skill-guard.cjs
 
-# --- k2. git-hooks 模板（symlink 模式：通过 templates/ symlink 跟随）---
-# 旧版 cp templates/git-hooks/*.tmpl 到 consumer/templates/git-hooks/。
-# 方案 A 已把 consumer/templates/ symlink → $FRAMEWORK_DIR/templates/，
-# git-hooks/*.tmpl 自然在内，无需单独拷。下面 k3 install-hooks.sh 读 templates/git-hooks/
-# 路径解析到 framework 原版。
+# --- k2. git-hooks 模板：消费仓不放，install-hooks.sh 直接从 framework 读 ---
 
 # --- k3. 安装 pre-commit hook（拦截非法 task 状态字段直改）---
 if bash "$FRAMEWORK_DIR/scripts/install-hooks.sh" 2>&1 | sed 's/^/   /'; then
   echo "🪝 git hooks 已安装"
 else
-  echo "⚠️  git hooks 安装失败（项目仍可用，PM 后续可手动跑 .claude/scripts/install-hooks.sh）" >&2
+  echo "⚠️  git hooks 安装失败（项目仍可用，PM 后续可手动跑 $HOME/.pmai/scripts/install-hooks.sh）" >&2
 fi
 
 # --- l. 初始 commit ---

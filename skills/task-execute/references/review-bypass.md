@@ -19,7 +19,7 @@ PM 在验收期间任意时刻可自跑 `/review` `/qa` `/design-review` 等 rev
 
 2. append `review_completed` 事件作为审计痕迹（I-RV2）：
    ```bash
-   python3 .claude/scripts/task-events.py append "<task-file>" \
+   python3 "$PMAI_HOME/scripts/task-events.py" append "<task-file>" \
      --type review_completed --tool "/review" --result "<pass|fail>"
    ```
 

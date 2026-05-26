@@ -15,8 +15,8 @@ _gate_fail() {
   local reason="$1"
   echo "❌ adapter gate 拒绝：$reason" >&2
   # Record execution_failed so close-task audit sees it
-  if [ -n "${TASK_FILE:-}" ] && [ -f "${MAIN_REPO_ROOT:-}/.claude/scripts/task-events.py" ]; then
-    python3 "$MAIN_REPO_ROOT/.claude/scripts/task-events.py" append "$TASK_FILE" \
+  if [ -n "${TASK_FILE:-}" ] && [ -f "${MAIN_REPO_ROOT:-}/$HOME/.pmai/scripts/task-events.py" ]; then
+    python3 "$MAIN_REPO_ROOT/$HOME/.pmai/scripts/task-events.py" append "$TASK_FILE" \
       --type execution_failed \
       --note "adapter_gate: $reason" 2>/dev/null || true
   fi
@@ -27,7 +27,7 @@ adapter_precheck() {
   : "${TASK_FILE:?adapter_precheck requires TASK_FILE}"
   : "${MAIN_REPO_ROOT:?adapter_precheck requires MAIN_REPO_ROOT}"
 
-  local transition_py="$MAIN_REPO_ROOT/.claude/scripts/task-transition.py"
+  local transition_py="$MAIN_REPO_ROOT/$HOME/.pmai/scripts/task-transition.py"
   if [ ! -f "$transition_py" ]; then
     _gate_fail "找不到 task-transition.py（$transition_py）"
   fi
@@ -47,9 +47,9 @@ adapter_postcheck() {
   local executor_exit="${1:-0}"
 
   # I-AD2: diff 范围校验
-  local checker="$MAIN_REPO_ROOT/.claude/scripts/check-task-scope.py"
+  local checker="$MAIN_REPO_ROOT/$HOME/.pmai/scripts/check-task-scope.py"
   if [ ! -f "$checker" ]; then
-    python3 "$MAIN_REPO_ROOT/.claude/scripts/task-events.py" append "$TASK_FILE" \
+    python3 "$MAIN_REPO_ROOT/$HOME/.pmai/scripts/task-events.py" append "$TASK_FILE" \
       --type execution_failed \
       --note "I-AD2 violation: check-task-scope.py missing" 2>/dev/null || true
     echo "❌ 找不到 check-task-scope.py，I-AD2 越界校验 fail-closed" >&2
@@ -77,7 +77,7 @@ print("\n".join(seen))
 '
   ) >"$changed_file"; then
     rm -f "$changed_file"
-    python3 "$MAIN_REPO_ROOT/.claude/scripts/task-events.py" append "$TASK_FILE" \
+    python3 "$MAIN_REPO_ROOT/$HOME/.pmai/scripts/task-events.py" append "$TASK_FILE" \
       --type execution_failed \
       --note "I-AD2 violation: failed to collect changed paths" 2>/dev/null || true
     echo "❌ I-AD2: 收集 worktree 改动失败。" >&2
@@ -92,7 +92,7 @@ print("\n".join(seen))
   if ! python3 "$checker" "$TASK_FILE" --paths-from "$changed_file"; then
     rm -f "$changed_file"
     # scope 越界 → 记 execution_failed，返回非零给 task-execute
-    python3 "$MAIN_REPO_ROOT/.claude/scripts/task-events.py" append "$TASK_FILE" \
+    python3 "$MAIN_REPO_ROOT/$HOME/.pmai/scripts/task-events.py" append "$TASK_FILE" \
       --type execution_failed \
       --note "I-AD2 violation: diff 越界 allowlist" 2>/dev/null || true
     echo "" >&2

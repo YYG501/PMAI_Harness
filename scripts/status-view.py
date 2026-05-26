@@ -322,11 +322,11 @@ def render_manual_section(repo_root: Path) -> None:
     print("下一步：")
     print(f"  完成手工实现后： /task-execute {sample_id}")
     print(
-        f"  暂时不想管：     python3 .claude/scripts/task-transition.py "
+        f"  暂时不想管：     python3 $HOME/.pmai/scripts/task-transition.py "
         f"{sample_task} --snooze-manual --days 3"
     )
     print(
-        f"  放弃该 task：    python3 .claude/scripts/task-transition.py "
+        f"  放弃该 task：    python3 $HOME/.pmai/scripts/task-transition.py "
         f"{sample_task} --cancel-manual"
     )
     print()

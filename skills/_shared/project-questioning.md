@@ -82,7 +82,7 @@
 2. 跑闸门脚本：
 
 ```bash
-python3 "$REPO_ROOT/.claude/scripts/check-open-questions.py" \
+python3 "$PMAI_HOME/scripts/check-open-questions.py" \
   "$REPO_ROOT/docs/.project-solution-open-questions.md" --require-section
 ```
 
@@ -97,7 +97,7 @@ python3 "$REPO_ROOT/.claude/scripts/check-open-questions.py" \
 
 ## §5 写作规则
 
-### §5.1 PROJECT.md 6 节（模板见 `$REPO_ROOT/templates/PROJECT.md.tmpl`）
+### §5.1 PROJECT.md 6 节（模板见 `$PMAI_HOME/templates/PROJECT.md.tmpl`）
 
 | 节 | 写什么 |
 |---|---|
@@ -108,7 +108,7 @@ python3 "$REPO_ROOT/.claude/scripts/check-open-questions.py" \
 | 技术栈 | 主要语言 / 前端 / 后端 / 部署 |
 | 业务术语表 | 至少 1 条；无业务专名时可空表 |
 
-### §5.2 ROADMAP.md（模板见 `$REPO_ROOT/templates/ROADMAP.md.tmpl`）
+### §5.2 ROADMAP.md（模板见 `$PMAI_HOME/templates/ROADMAP.md.tmpl`）
 
 **ROADMAP 是「历史 + 未来一张表」**，不是单一"计划态"队列。三态全用：
 
@@ -176,7 +176,7 @@ PM 选「继续探索」→ 回 §2 提问；Loop 直到 PM 选「创建 PROJECT
 写完 `docs/PROJECT.md` 后跑：
 
 ```bash
-PROJECT_STATE=$(python3 "$REPO_ROOT/.claude/scripts/check-project-sections.py" "$REPO_ROOT")
+PROJECT_STATE=$(python3 "$PMAI_HOME/scripts/check-project-sections.py" "$REPO_ROOT")
 ALL_FILLED=$(echo "$PROJECT_STATE" | python3 -c "import sys, json; print(json.load(sys.stdin)['all_filled'])")
 EMPTY=$(echo "$PROJECT_STATE" | python3 -c "import sys, json; print(','.join(json.load(sys.stdin)['empty_sections']))")
 ```

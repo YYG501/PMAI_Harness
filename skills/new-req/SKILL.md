@@ -26,11 +26,11 @@ description: |
 ## Preamble
 
 ```bash
-source "$(git rev-parse --show-toplevel 2>/dev/null || echo .)/.claude/scripts/skill-preamble.sh"
+source "$HOME/.pmai/scripts/skill-preamble.sh"
 echo "SKILL: new-req"
 
 # M2 banner（视觉锚点；见 _shared/pm-view/banner-rules.md §1）
-python3 "$REPO_ROOT/.claude/scripts/status-view.py" --banner-only --skill NEW-REQ || true
+python3 "$PMAI_HOME/scripts/status-view.py" --banner-only --skill NEW-REQ || true
 ```
 
 ## Workflow
@@ -61,7 +61,7 @@ PM 给描述后，把它当作参数继续步骤 1。
 调用 helper（封装了"扫三来源取 max"逻辑：closed 目录 / active 目录 / git 分支；事实来源是 git 分支，单独扫 closed/ 会被 active req 在自己分支上的事实骗到）：
 
 ```bash
-NEW_NUM=$(bash "$REPO_ROOT/.claude/scripts/_lib/req-num-resolver.sh" next "$REPO_ROOT")
+NEW_NUM=$(bash "$PMAI_HOME/scripts/_lib/req-num-resolver.sh" next "$REPO_ROOT")
 echo "下一个可用编号：req-$NEW_NUM"
 
 ```
@@ -78,7 +78,7 @@ helper 同时保证 `requirements/closed/` / `requirements/active/` / `git refs/
 
 ```bash
 REQ_BRANCH="req-$NEW_NUM-<slug>"
-REQ_JSON=$(bash .claude/scripts/create-req-headless.sh \
+REQ_JSON=$(bash "$PMAI_HOME/scripts/create-req-headless.sh" \
   --req-id "$REQ_BRANCH" \
   --title "<PM 需求一句话>" \
   --no-brief \
@@ -100,7 +100,7 @@ cd 到返回的 worktree 路径。
 > **为什么放在 new-req**：`/new-req` 是每 req 入口、本检查每 req 首次触发、PROJECT 填满后再跑就 silent skip——天然幂等，不需要「已查过」标记。**放在步骤 3.5（worktree 内、commit 前）**：mini-fill 写的 `docs/PROJECT.md` 落在 worktree 的 req 分支上，能被步骤 4.5 的 commit 一并带上、被 worktree 内后续 stage 读到。
 
 ```bash
-PROJECT_STATE=$(python3 "$REPO_ROOT/.claude/scripts/check-project-sections.py" "$REPO_ROOT")
+PROJECT_STATE=$(python3 "$PMAI_HOME/scripts/check-project-sections.py" "$REPO_ROOT")
 ALL_FILLED=$(echo "$PROJECT_STATE" | python3 -c "import sys, json; print(json.load(sys.stdin)['all_filled'])")
 EMPTY=$(echo "$PROJECT_STATE" | python3 -c "import sys, json; print(','.join(json.load(sys.stdin)['empty_sections']))")
 ```

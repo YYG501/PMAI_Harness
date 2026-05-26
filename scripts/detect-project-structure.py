@@ -40,7 +40,7 @@ from typing import Optional
 def _detect_repo_root() -> Path:
     """优先 git rev-parse 找仓根；fallback 适配两种 layout：
       - 生成器仓：scripts/detect-project-structure.py
-      - 业务仓：.claude/scripts/detect-project-structure.py（同步后路径）
+      - 业务仓：$HOME/.pmai/scripts/detect-project-structure.py（同步后路径）
     """
     try:
         out = subprocess.check_output(

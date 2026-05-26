@@ -39,7 +39,7 @@ I-RV1 禁止 AI 自动调任何 **review skill**（`/review` `/qa` `/qa-only` `/
 ## Preamble
 
 ```bash
-source "$(git rev-parse --show-toplevel 2>/dev/null || echo .)/.claude/scripts/skill-preamble.sh"
+source "$HOME/.pmai/scripts/skill-preamble.sh"
 echo "SKILL: task-verify"
 ```
 

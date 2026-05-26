@@ -20,7 +20,7 @@ description: |
 ## Preamble
 
 ```bash
-source "$(git rev-parse --show-toplevel 2>/dev/null || echo .)/.claude/scripts/skill-preamble.sh"
+source "$HOME/.pmai/scripts/skill-preamble.sh"
 echo "SKILL: codebase-audit"
 ```
 
@@ -45,7 +45,7 @@ echo "SKILL: codebase-audit"
 ### 步骤 2：扫码 7 维度
 
 用 read-only 工具（Glob / Grep / Read；大范围探索可派 read-only subagent fan-out）盘点
-7 个维度，逐维写进 `docs/代码现状档.md`（按 `$REPO_ROOT/templates/codebase-audit.md.tmpl`）：
+7 个维度，逐维写进 `docs/代码现状档.md`（按 `$PMAI_HOME/templates/codebase-audit.md.tmpl`）：
 
 | # | 维度 | 扫什么 |
 |---|---|---|

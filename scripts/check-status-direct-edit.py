@@ -223,7 +223,7 @@ def main() -> int:
     print("       git restore <task-file>", file=sys.stderr)
     print("  2. 用 task-transition.py 走合规流程：", file=sys.stderr)
     print(
-        "       python3 .claude/scripts/task-transition.py <task-file> --to <目标状态>",
+        "       python3 $HOME/.pmai/scripts/task-transition.py <task-file> --to <目标状态>",
         file=sys.stderr,
     )
     print("  3. 重新 commit。", file=sys.stderr)

@@ -30,17 +30,17 @@ task-spec 产 **单文件 typed contract**（`tasks/task-NNN-<slug>.md`，头部
 > worktree fork。
 
 **三态兼容**：仓里同时有 3 种 task 格式 —— v3 新单文件（有 task_format 标记）/ v2 旧双文件
-（有 `.engineering.md`）/ v1 老单文件。用 `python3 .claude/scripts/_lib/state.py detect_format
+（有 `.engineering.md`）/ v1 老单文件。用 `python3 "$PMAI_HOME/scripts/_lib/state.py" detect_format
 <task-file>` 判别。v2 双文件保留兼容读路径；v3 缺 `.engineering.md` 是正常、不报告警。
 
 ## Preamble
 
 ```bash
-source "$(git rev-parse --show-toplevel 2>/dev/null || echo .)/.claude/scripts/skill-preamble.sh"
+source "$HOME/.pmai/scripts/skill-preamble.sh"
 echo "SKILL: task-confirm"
 
 # M2 banner（视觉锚点；见 _shared/pm-view/banner-rules.md §1）
-python3 "$REPO_ROOT/.claude/scripts/status-view.py" --banner-only --skill TASK-CONFIRM || true
+python3 "$PMAI_HOME/scripts/status-view.py" --banner-only --skill TASK-CONFIRM || true
 ```
 
 ## Workflow
@@ -53,7 +53,7 @@ python3 "$REPO_ROOT/.claude/scripts/status-view.py" --banner-only --skill TASK-C
 **格式判别**（三态兼容）：
 
 ```bash
-FMT=$(python3 .claude/scripts/_lib/state.py detect_format "$TASK_FILE")
+FMT=$(python3 "$PMAI_HOME/scripts/_lib/state.py" detect_format "$TASK_FILE")
 # v3 = 新单文件 typed contract（正常态，无 .engineering.md 是正常）
 # v2 = 旧双文件 task（在飞旧 task）→ "检测到旧格式 task（双文件），兼容模式继续"
 # v1 = 老单文件
@@ -71,7 +71,7 @@ v3 缺 `.engineering.md` 是正常 —— **不报告警**。
 先解析 executor + model：
 
 ```bash
-RESOLVED=$(python3 .claude/scripts/resolve-executor.py "<task-file>")
+RESOLVED=$(python3 "$PMAI_HOME/scripts/resolve-executor.py" "<task-file>")
 EXECUTOR=$(echo "$RESOLVED" | jq -r .executor)
 MODEL=$(echo "$RESOLVED" | jq -r '.model // ""')
 SRC_EXEC=$(echo "$RESOLVED" | jq -r .source_executor)
@@ -153,7 +153,7 @@ DEPENDENCIES=$(awk '
 
 ```bash
 if [ ! -d "<expected-worktree-path>" ]; then
-  bash .claude/scripts/create-task-worktree.sh "<task-file>" "<req-branch>"
+  bash "$PMAI_HOME/scripts/create-task-worktree.sh" "<task-file>" "<req-branch>"
 fi
 ```
 

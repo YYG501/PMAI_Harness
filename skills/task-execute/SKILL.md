@@ -139,7 +139,7 @@ fi
 > 4.5f 取代 sync-req-docs.sh 静默批量覆盖：旧机制会偷偷盖掉 worktree 上 task agent 已经做的合法本地改动；新机制让 PM 看 diff 后逐文件决定。fresh fork 通常无 drift，PM 体验是 1 行「✓」直接通过。
 
 ```bash
-DRIFT_SCRIPT="$MAIN_REPO_ROOT/.claude/scripts/check-req-doc-drift.sh"
+DRIFT_SCRIPT="$PMAI_HOME/scripts/check-req-doc-drift.sh"
 if [ ! -f "$DRIFT_SCRIPT" ]; then
   echo "❌ drift 检测脚本不在预期路径：$DRIFT_SCRIPT" >&2
   echo "这通常意味着消费仓的 PMAI 框架版本落后或同步状态有问题。" >&2
@@ -191,7 +191,7 @@ while IFS= read -r path; do
  - 保留 worktree 版本
  - 跳过此文件
 EOF
-  # 「采用 req 版本」  → bash $MAIN_REPO_ROOT/.claude/scripts/apply-req-doc.sh "$TASK_WORKTREE" "$REQ_BRANCH" "$path" "$TASK_FILE"
+  # 「采用 req 版本」  → bash $PMAI_HOME/scripts/apply-req-doc.sh "$TASK_WORKTREE" "$REQ_BRANCH" "$path" "$TASK_FILE"
   # 「保留 worktree」 → 不动
   # 「跳过」          → 不动，下一文件
 done
@@ -200,9 +200,9 @@ done
 **失败容忍范围（区分两类异常，不要混淆）**：
 
 - **脚本跑起来报错**（git show 失败、hash 算不出、JSON 解析异常等）→ 不阻断启动，task-execute 继续（同 sync-req-docs 历史 best-effort 行为）。check-task-scope.py 的 implicit deny 仍然兜底拦截 task 误 commit 项目级 / 兄弟 task 文件。
-- **脚本文件不存在**（`bash: $MAIN_REPO_ROOT/.claude/scripts/check-req-doc-drift.sh: No such file or directory`）→ **不属于失败容忍**，硬失败退出，明确报给 PM：
+- **脚本文件不存在**（`bash: $PMAI_HOME/scripts/check-req-doc-drift.sh: No such file or directory`）→ **不属于失败容忍**，硬失败退出，明确报给 PM：
   ```
-  ❌ drift 检测脚本不在预期路径：$MAIN_REPO_ROOT/.claude/scripts/check-req-doc-drift.sh
+  ❌ drift 检测脚本不在预期路径：$PMAI_HOME/scripts/check-req-doc-drift.sh
   这通常意味着消费仓的 PMAI 框架版本落后或同步状态有问题。
   请回主仓跑框架同步流程后再重试 /task-execute。
   ```
@@ -240,7 +240,7 @@ DEPENDENCIES=$(awk '
 读取当前 task 状态：
 
 ```bash
-CURRENT_STATUS=$(python3 "$MAIN_REPO_ROOT/.claude/scripts/task-transition.py" "$TASK_FILE" --get-status 2>/dev/null || echo "")
+CURRENT_STATUS=$(python3 "$PMAI_HOME/scripts/task-transition.py" "$TASK_FILE" --get-status 2>/dev/null || echo "")
 ```
 
 状态处理：
@@ -254,7 +254,7 @@ CURRENT_STATUS=$(python3 "$MAIN_REPO_ROOT/.claude/scripts/task-transition.py" "$
 
 1. 判别 task 格式（v1 老单文件 / v2 双文件 / v3 新单文件 typed contract）：
    ```bash
-   TASK_FORMAT=$(python3 "$MAIN_REPO_ROOT/.claude/scripts/_lib/state.py" detect_format "$TASK_FILE")
+   TASK_FORMAT=$(python3 "$PMAI_HOME/scripts/_lib/state.py" detect_format "$TASK_FILE")
    ```
 
    按格式分流读取与兼容文案：
@@ -347,7 +347,7 @@ fi
 入口前置已经完成「待执行 → 执行中」transition，或确认当前状态为「执行中」重试。进入实现阶段前仍保留轻量断言：状态必须是「执行中」。如果不是，说明入口前置没有成功完成，立即拒绝继续。
 
 ```bash
-CURRENT_STATUS=$(python3 "$MAIN_REPO_ROOT/.claude/scripts/task-transition.py" "$TASK_FILE" --get-status 2>/dev/null || echo "")
+CURRENT_STATUS=$(python3 "$PMAI_HOME/scripts/task-transition.py" "$TASK_FILE" --get-status 2>/dev/null || echo "")
 if [ "$CURRENT_STATUS" != "执行中" ]; then
   echo "❌ /task-execute 入口拒绝：task 状态为「${CURRENT_STATUS:-未知}」，不是「执行中」。" >&2
   echo "" >&2
@@ -539,7 +539,7 @@ Dev server 保持运行（PM 验收时需要访问）。
 
 **PM 说"通过"**：
 ```bash
-python3 .claude/scripts/task-transition.py "$TASK_FILE" --to 已完成
+python3 "$PMAI_HOME/scripts/task-transition.py" "$TASK_FILE" --to 已完成
 ```
 
 `task-transition.py` 在「执行中→已完成」入口校验文档偏差 + 自审记录非空（I-TT3）；不通过会拒绝转换，PM 需先补齐再喊通过。

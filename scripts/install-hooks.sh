@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
 # install-hooks.sh — 给已 init 的项目（或本仓自身）补装 pre-commit hook。
 # 用法（在项目根运行）：
-#   bash .claude/scripts/install-hooks.sh
+#   bash $HOME/.pmai/scripts/install-hooks.sh
 # 或在框架仓里：
 #   bash scripts/install-hooks.sh
 #
 # 行为：
-#   1. 找出 hook 模板（优先 .claude/scripts/../../templates/git-hooks/，
+#   1. 找出 hook 模板（优先 $HOME/.pmai/scripts/../../templates/git-hooks/，
 #      回退到框架仓 templates/git-hooks/）
 #   2. 复制到 .git/hooks/pre-commit
 #   3. chmod +x
@@ -31,12 +31,16 @@ esac
 HOOKS_DIR="$GIT_COMMON_DIR/hooks"
 mkdir -p "$HOOKS_DIR"
 
-# 找模板：先看脚本同级（业务仓里 .claude/scripts/install-hooks.sh + ../../templates）
+# 找模板：3 candidate 兼容老 / 新 / I-mini 跨机器场景
+#   1. $SCRIPT_DIR/../../templates/git-hooks/  （老消费仓自带副本：$HOME/.pmai/scripts/install-hooks.sh）
+#   2. $SCRIPT_DIR/../templates/git-hooks/     （框架本仓 scripts/install-hooks.sh）
+#   3. ${PMAI_HOME:-$HOME/.pmai}/templates/git-hooks/  （I-mini 新消费仓：消费仓 0 framework 时）
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 TMPL=""
 for CANDIDATE in \
   "$SCRIPT_DIR/../../templates/git-hooks/pre-commit.tmpl" \
-  "$SCRIPT_DIR/../templates/git-hooks/pre-commit.tmpl"
+  "$SCRIPT_DIR/../templates/git-hooks/pre-commit.tmpl" \
+  "${PMAI_HOME:-$HOME/.pmai}/templates/git-hooks/pre-commit.tmpl"
 do
   if [ -f "$CANDIDATE" ]; then
     TMPL="$CANDIDATE"
@@ -45,7 +49,7 @@ do
 done
 
 if [ -z "$TMPL" ]; then
-  echo "❌ 找不到 pre-commit 模板：尝试过 $SCRIPT_DIR/../../templates/git-hooks/ 与 $SCRIPT_DIR/../templates/git-hooks/" >&2
+  echo "❌ 找不到 pre-commit 模板：尝试过 $SCRIPT_DIR/../../templates/git-hooks/、$SCRIPT_DIR/../templates/git-hooks/ 与 \$PMAI_HOME/templates/git-hooks/" >&2
   exit 1
 fi
 

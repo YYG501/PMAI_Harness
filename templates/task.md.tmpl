@@ -140,8 +140,8 @@ PM 打回 → 保持 `执行中`；执行失败 / 放弃 manual → `待执行`
 `{待执行, 执行中}` →(PM 废弃)→ `已废弃`（专用入口 `--discard`）
 
 **禁止直接编辑「状态」字段。** 用：
-`python3 .claude/scripts/task-transition.py <task 文件路径> --to <目标状态>`
-废弃：`python3 .claude/scripts/task-transition.py <task 文件路径> --discard --reason "<一句话>"`
+`python3 $HOME/.pmai/scripts/task-transition.py <task 文件路径> --to <目标状态>`
+废弃：`python3 $HOME/.pmai/scripts/task-transition.py <task 文件路径> --discard --reason "<一句话>"`
 
 ---
 

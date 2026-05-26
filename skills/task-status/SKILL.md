@@ -13,7 +13,7 @@ description: |
 ## Preamble
 
 ```bash
-source "$(git rev-parse --show-toplevel 2>/dev/null || echo .)/.claude/scripts/skill-preamble.sh"
+source "$HOME/.pmai/scripts/skill-preamble.sh"
 echo "SKILL: task-status"
 ```
 
@@ -22,7 +22,7 @@ echo "SKILL: task-status"
 ### 步骤 1：调用 status-view.py
 
 ```bash
-python3 .claude/scripts/status-view.py
+python3 "$PMAI_HOME/scripts/status-view.py"
 ```
 
 脚本自动：

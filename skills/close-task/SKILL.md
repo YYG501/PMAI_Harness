@@ -40,11 +40,11 @@ task-spec 产 **单文件 typed contract**（`task-NNN-<slug>.md`，三区：PM 
 ## Preamble
 
 ```bash
-source "$(git rev-parse --show-toplevel 2>/dev/null || echo .)/.claude/scripts/skill-preamble.sh"
+source "$HOME/.pmai/scripts/skill-preamble.sh"
 echo "SKILL: close-task"
 
 # M2 banner（视觉锚点；见 _shared/pm-view/banner-rules.md §1）
-python3 "$REPO_ROOT/.claude/scripts/status-view.py" --banner-only --skill CLOSE-TASK || true
+python3 "$PMAI_HOME/scripts/status-view.py" --banner-only --skill CLOSE-TASK || true
 ```
 
 ## Phase 自动判断（入口）
@@ -497,7 +497,7 @@ TASK_FILE_ABS=$(python3 -c "import json; print(json.load(open('$PENDING_MARKER')
 ### 步骤 P2.2：调 close-task.sh
 
 ```bash
-bash .claude/scripts/close-task.sh "$TASK_FILE_ABS"
+bash "$PMAI_HOME/scripts/close-task.sh" "$TASK_FILE_ABS"
 ```
 
 脚本自动：
@@ -551,7 +551,7 @@ rm -f "$PENDING_MARKER"
 
   - **「确认 / 关 / 关闭」**（或语义等价）→ AI 跑推进 + chain `/close-req`：
     ```bash
-    python3 .claude/scripts/req-transition.py "$ACTIVE_REQ_DIR" --to 7
+    python3 "$PMAI_HOME/scripts/req-transition.py" "$ACTIVE_REQ_DIR" --to 7
     ```
     成功后直接调用 `/close-req`（不再发"已推进 Stage 6→7"过渡通知，跟 req-stage-gate 续跑模式规则一致）
   - **「我还要加新 task」/ 提具体 task 描述** → AI 转 `/task-spec` 起新 task，**不**推 Stage 7

@@ -18,7 +18,7 @@ git diff --stat "$REQ_BRANCH"..HEAD
 
 读事件流的 review_completed 条目（PM 在验收期间已跑过 review 时才有）：
 ```bash
-python3 .claude/scripts/task-events.py list "$TASK_FILE" --type review_completed
+python3 "$PMAI_HOME/scripts/task-events.py" list "$TASK_FILE" --type review_completed
 ```
 - 有事件 → 自审结果末尾追加 PM 已跑的工具及结论（如 `/review pass`）
 - 无事件 → 不在主体显示，仅末尾「⚙️ 可选深度审查」提示存在性

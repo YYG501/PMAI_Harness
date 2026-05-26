@@ -8,7 +8,7 @@ usage() {
   bash create-req-headless.sh --title <title> [options]
 
 常用:
-  bash .claude/scripts/create-req-headless.sh \
+  bash $HOME/.pmai/scripts/create-req-headless.sh \
     --title "DX smoke requirement" \
     --brief "Build a minimal demo flow"
 

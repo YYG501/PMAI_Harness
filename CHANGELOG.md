@@ -187,6 +187,41 @@ PM-AI-Workflow 生成器仓的演进记录。本文件**只记影响下游业务
 
 ## 未发布
 
+### 2026-05-27 — feat(I-mini): 消费仓 0 framework + skill 全走 \$PMAI_HOME（跨机器 clone 0 setup）
+
+**目标**：照搬 gstack 模型——消费仓内**不放任何 framework 资产**（scripts/skills/agents/templates/hooks），skill 内部脚本调用全用 `$PMAI_HOME/scripts/...` 绝对路径；任何机器 clone 消费仓 + `pmai install` 后立即可用，0 setup。详 `<LOCAL_CLAUDE_HOME>/plans/tingly-bouncing-rocket.md`。
+
+**问题根因（修复前）**：v1.1 default symlink 模式 symlink target 是绝对路径硬编码 `/Users/<安装时用户名>/.pmai/`。git tracked symlink target 字符串跨 clone 不变 → 消费仓 push 后别的机器/用户 clone 全部 dangling。
+
+**改动汇总**（48 文件 / ~150 处替换）：
+- `scripts/skill-preamble.sh`：顶部加 `PMAI_HOME` 解析（env → self_dir 推导 → ~/.pmai fallback → 报错）+ self check
+- `scripts/init-project.sh`：删 5 块 symlink 段（scripts/skills/agents/templates/hooks 不再进消费仓）；只保留业务实体（CLAUDE.md / docs/PROJECT.md / .gitignore / settings.json / lark-publish.json.tmpl 业务实例）
+- `scripts/close-task.sh`：framework 互调 4 处 `$REPO_ROOT/.claude/scripts/` → `$SCRIPT_DIR/`（用 BASH_SOURCE 推自身路径）
+- `scripts/install-hooks.sh`：模板查找加 `$PMAI_HOME/templates/git-hooks/` 第 3 candidate（兼容 I-mini）
+- `templates/settings.json.tmpl`：hook 路径 `bash .claude/scripts/check-branch.sh` → `bash "$HOME/.pmai/scripts/check-branch.sh"`，review-skill-guard 路径 `$CLAUDE_PROJECT_DIR/hooks/` → `$HOME/.pmai/hooks/`；permissions allow 同步改 `$HOME/.pmai/scripts/`
+- `templates/git-hooks/pre-commit.tmpl`：顶部加 `PMAI_HOME` fallback 自检；3 处 `$REPO_ROOT/.claude/scripts/` → `$PMAI_HOME/scripts/`
+- 22 个 SKILL.md ~88 处 `.claude/scripts/` / `$REPO_ROOT/.claude/scripts/` / `$REPO_ROOT/templates/` → `$PMAI_HOME/scripts/` 或 `$PMAI_HOME/templates/`
+- `skills/task-execute/SKILL.md` + `executor-dispatch.md`：11 处 `$MAIN_REPO_ROOT/.claude/scripts/` → `$PMAI_HOME/scripts/`（Step B 漏 grep 补打）
+- scripts/ + templates/ 内 ~48 处 prose / 错误提示 / 注释 `.claude/scripts/` → `$HOME/.pmai/scripts/`
+
+**验证 6 smoke 全过**：消费仓物理结构 0 framework / `_lib.state + events` import / `status-view.py` 跑通 / 真 git commit + pre-commit hook 真跑（按当前 framework 逻辑拦 docs/notes2.md 错位 → 验证 `$PMAI_HOME/scripts/check-docs-toplevel.py` 解析正确）/ 跨位置 clone 后 source preamble 解析当前机器 PMAI_HOME / grep 残留 0。
+
+**消费仓最终结构（init 后）**：
+```
+<consumer>/
+├── .claude/settings.json          # 实体，hook 路径 $HOME/.pmai/...
+├── .git/hooks/pre-commit           # 实体（install-hooks 装），顶部自检 PMAI_HOME
+├── .gitignore CLAUDE.md            # 业务实体
+├── docs/PROJECT.md DESIGN.md ROADMAP.md PRODUCT-RULES.md modules/ 归档/
+├── requirements/active closed/  prototypes/  .runs/events/  .worktrees/  .pm-workflow/
+├── templates/lark-publish.json.tmpl   # 唯一业务实例配置模板
+└── (NO .claude/scripts / NO .claude/skills / NO .claude/agents / NO hooks/)
+```
+
+**Non-goals**（暂缓）：
+- 老消费仓（example-consumer-app 等已自带 `.claude/` 副本）迁移 — PM 5/26 决议 T3/T5 暂缓
+- `~/.pmai-state/projects/<slug>/` per-project state（I-full 范围）
+
 ### 2026-05-27 — fix(create-req-headless+CLAUDE.md): attachments 目录预建 + CLAUDE.md 文案纠正「现在就能用」
 
 **触发**：DESIGN.md 缺口审计后 PM 反问「还有 attachment 呢」+「为什么是未来有」。盘点：`requirements/active/<req>/attachments/` 是 per-req 目录、由 `_lib/attachments.py:copy_attachment()` 第一次上传时 `mkdir(exist_ok=True)` 自建 —— 零 break，但 DX 不对称：同位置的 `tasks/_archived/` `create-req-headless.sh` 预建（IDE 一眼可见），attachments 不预建（PM 第一次起 req 时 IDE 看不到目录 → 不知道有这个机制）。叠加 CLAUDE.md 模板 line 219 文案把 attachments 描述成「（可选）」让 PM 误以为是「未来才有 / 可有可无」。

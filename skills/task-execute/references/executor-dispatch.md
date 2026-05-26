@@ -38,7 +38,7 @@ if [ -f "$PENDING_FILE" ]; then
   # 通过 → 走合规通路写 execution_manual_completed（task-events.py CLI 已
   # 黑名单 execution_manual_completed，避免伪造审计证据；走 task-transition
   # 内部 API + 读 PENDING_FILE payload + 删 PENDING_FILE）
-  python3 "$MAIN_REPO_ROOT/.claude/scripts/task-transition.py" "$TASK_FILE" \
+  python3 "$PMAI_HOME/scripts/task-transition.py" "$TASK_FILE" \
     --emit-from-pending
   # 跳到 step 4（不 exec adapter，不记 execution_started）
   MANUAL_RESUME=1
@@ -76,13 +76,13 @@ if [ -z "${MANUAL_RESUME:-}" ]; then
   fi
 
   # Resolve executor + model
-  RESOLVED=$(python3 "$MAIN_REPO_ROOT/.claude/scripts/resolve-executor.py" "$TASK_FILE")
+  RESOLVED=$(python3 "$PMAI_HOME/scripts/resolve-executor.py" "$TASK_FILE")
   EXECUTOR=$(echo "$RESOLVED" | jq -r .executor)
   EXECUTOR_MODEL=$(echo "$RESOLVED" | jq -r '.model // ""')
 
   # Build prompt
   PROMPT_FILE=$(mktemp)
-  python3 "$MAIN_REPO_ROOT/.claude/scripts/build-execution-prompt.py" "$TASK_FILE" > "$PROMPT_FILE"
+  python3 "$PMAI_HOME/scripts/build-execution-prompt.py" "$TASK_FILE" > "$PROMPT_FILE"
 
   # Baseline SHA（I-AD5 保证此时 working tree == HEAD）
   BASELINE_SHA=$(git -C "$TASK_WORKTREE" rev-parse HEAD)
@@ -98,7 +98,7 @@ if [ -z "${MANUAL_RESUME:-}" ]; then
   else
     BIND_TYPE=started
   fi
-  python3 "$MAIN_REPO_ROOT/.claude/scripts/task-transition.py" "$TASK_FILE" \
+  python3 "$PMAI_HOME/scripts/task-transition.py" "$TASK_FILE" \
     --to 执行中 \
     --bound-to-execution-event "$BIND_TYPE" \
     --executor "$EXECUTOR" \
@@ -119,14 +119,14 @@ if [ -z "${MANUAL_RESUME:-}" ]; then
     TASK_WORKTREE="$TASK_WORKTREE" \
     PROMPT_FILE="$PROMPT_FILE" \
     EXECUTOR_MODEL="$EXECUTOR_MODEL" \
-      bash "$MAIN_REPO_ROOT/.claude/scripts/exec-adapters/manual.sh"
+      bash "$PMAI_HOME/scripts/exec-adapters/manual.sh"
     exit 0  # manual 已写 pending，skill 结束
   else
     # codex / cursor-agent
-    ADAPTER="$MAIN_REPO_ROOT/.claude/scripts/exec-adapters/${EXECUTOR}.sh"
+    ADAPTER="$PMAI_HOME/scripts/exec-adapters/${EXECUTOR}.sh"
     if [ ! -x "$ADAPTER" ]; then
       echo "❌ 找不到 adapter: $ADAPTER" >&2
-      python3 "$MAIN_REPO_ROOT/.claude/scripts/task-transition.py" "$TASK_FILE" \
+      python3 "$PMAI_HOME/scripts/task-transition.py" "$TASK_FILE" \
         --fail-execution --reason "adapter_missing"
       exit 1
     fi
@@ -138,7 +138,7 @@ if [ -z "${MANUAL_RESUME:-}" ]; then
       bash "$ADAPTER" > "$LOG_PATH" 2>&1
     EXIT_CODE=$?
     # 超 10 分钟会被 Bash tool timeout。如果遇上，改用：
-    #   bash .claude/scripts/run-bg.sh "$LOG_PATH" bash "$ADAPTER"
+    #   bash "$PMAI_HOME/scripts/run-bg.sh" "$LOG_PATH" bash "$ADAPTER"
     # 然后 Claude 用 **Bash run_in_background**（不是 Monitor —— Monitor 默认 5min 超时
     # 会被静默 cut）起一个 waiter，同时兜「正常退」和「卡死」两条信号：
     #   until [ -f "$LOG_PATH.exit" ] || [ -f "$LOG_PATH.stall" ]; do sleep 60; done
@@ -149,12 +149,12 @@ if [ -z "${MANUAL_RESUME:-}" ]; then
     # 这是逃生路径，不是默认模式。
 
     if [ "$EXIT_CODE" -ne 0 ]; then
-      CLASSIFICATION=$(bash "$MAIN_REPO_ROOT/.claude/scripts/classify-failure.sh" "$EXIT_CODE" "$LOG_PATH")
+      CLASSIFICATION=$(bash "$PMAI_HOME/scripts/classify-failure.sh" "$EXIT_CODE" "$LOG_PATH")
       rollback_worktree "$BASELINE_SHA"  # 见 3c 回滚函数
-      python3 "$MAIN_REPO_ROOT/.claude/scripts/task-events.py" append "$TASK_FILE" \
+      python3 "$PMAI_HOME/scripts/task-events.py" append "$TASK_FILE" \
         --type execution_failed \
         --payload "{\"executor\":\"$EXECUTOR\",\"model\":\"$EXECUTOR_MODEL\",\"exit_code\":$EXIT_CODE,\"classification\":\"$CLASSIFICATION\",\"log_path\":\"$LOG_PATH\"}"
-      python3 "$MAIN_REPO_ROOT/.claude/scripts/task-transition.py" "$TASK_FILE" \
+      python3 "$PMAI_HOME/scripts/task-transition.py" "$TASK_FILE" \
         --fail-execution --reason "$CLASSIFICATION"
       output_diagnostic "$CLASSIFICATION" "$EXECUTOR" "$LOG_PATH" "$TASK_FILE"
       exit 0
@@ -202,10 +202,10 @@ if [ -z "${MANUAL_RESUME:-}" ]; then
 
   if [ -n "$BAD_FILES" ]; then
     rollback_worktree "$BASELINE_SHA"
-    python3 "$MAIN_REPO_ROOT/.claude/scripts/task-events.py" append "$TASK_FILE" \
+    python3 "$PMAI_HOME/scripts/task-events.py" append "$TASK_FILE" \
       --type execution_failed \
       --payload "{\"reason\":\"boundary_violation\",\"bad_files\":\"$BAD_FILES\"}"
-    python3 "$MAIN_REPO_ROOT/.claude/scripts/task-transition.py" "$TASK_FILE" \
+    python3 "$PMAI_HOME/scripts/task-transition.py" "$TASK_FILE" \
       --fail-execution --reason "boundary_violation"
     output_diagnostic "boundary_violation" "$EXECUTOR" "$LOG_PATH" "$TASK_FILE"
     exit 0
@@ -214,16 +214,16 @@ if [ -z "${MANUAL_RESUME:-}" ]; then
   # 3d. 零改动检查
   CHANGE_COUNT=$(git status --porcelain | wc -l | tr -d ' ')
   if [ "$CHANGE_COUNT" -eq 0 ]; then
-    python3 "$MAIN_REPO_ROOT/.claude/scripts/task-events.py" append "$TASK_FILE" \
+    python3 "$PMAI_HOME/scripts/task-events.py" append "$TASK_FILE" \
       --type execution_failed \
       --payload "{\"reason\":\"no_changes\"}"
-    python3 "$MAIN_REPO_ROOT/.claude/scripts/task-transition.py" "$TASK_FILE" \
+    python3 "$PMAI_HOME/scripts/task-transition.py" "$TASK_FILE" \
       --fail-execution --reason "no_changes"
     output_diagnostic "no_changes" "$EXECUTOR" "$LOG_PATH" "$TASK_FILE"
     exit 0
   fi
 
-  python3 "$MAIN_REPO_ROOT/.claude/scripts/task-events.py" append "$TASK_FILE" \
+  python3 "$PMAI_HOME/scripts/task-events.py" append "$TASK_FILE" \
     --type execution_completed \
     --payload "{\"executor\":\"$EXECUTOR\",\"model\":\"$EXECUTOR_MODEL\"}"
 fi

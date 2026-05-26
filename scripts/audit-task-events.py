@@ -290,7 +290,7 @@ def main() -> int:
             "\n"
             "  1) 历史 task（accept 闸门加上之前已完成）/ 工作真实手动完成但漏跑 /task-execute：\n"
             "     合规救援路径——\n"
-            "       python3 .claude/scripts/task-transition.py <task-file> \\\n"
+            "       python3 $HOME/.pmai/scripts/task-transition.py <task-file> \\\n"
             "         --repair-evidence --reason \"<原因，例：accept 闸门加上之前完成的历史 task>\"\n"
             "     （强制 reason + 加 repaired:true 永久标记 + 只补 execution_manual_completed）\n"
             "     ⚠️ 不要用 task-events.py append 裸补——没有 repaired 标记 = 事后看像伪造。\n"

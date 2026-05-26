@@ -47,7 +47,7 @@ PM 必须给出一句话描述，例如：
 调用脚本创建隔离 worktree：
 
 ```bash
-bash .claude/scripts/quick-fix.sh "<desc>"
+bash "$PMAI_HOME/scripts/quick-fix.sh" "<desc>"
 ```
 
 脚本会输出：
@@ -119,12 +119,12 @@ PM 审批选项：
 ### 步骤 5：常用子命令
 
 ```bash
-bash .claude/scripts/quick-fix.sh --skip-tsc "<desc>"
-bash .claude/scripts/quick-fix.sh --force "<desc>"
-bash .claude/scripts/quick-fix.sh --cancel tmp-quick-YYYYMMDD-HHMMSS-PID
-bash .claude/scripts/quick-fix.sh --cleanup
-bash .claude/scripts/quick-fix.sh --history 10
-bash .claude/scripts/quick-fix.sh --snapshot
+bash "$PMAI_HOME/scripts/quick-fix.sh" --skip-tsc "<desc>"
+bash "$PMAI_HOME/scripts/quick-fix.sh" --force "<desc>"
+bash "$PMAI_HOME/scripts/quick-fix.sh" --cancel tmp-quick-YYYYMMDD-HHMMSS-PID
+bash "$PMAI_HOME/scripts/quick-fix.sh" --cleanup
+bash "$PMAI_HOME/scripts/quick-fix.sh" --history 10
+bash "$PMAI_HOME/scripts/quick-fix.sh" --snapshot
 ```
 
 ## Drift Scan Reference

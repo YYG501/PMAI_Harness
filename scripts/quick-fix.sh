@@ -158,7 +158,7 @@ is_redline_path() {
   case "$file" in
     requirements/active/*/tasks/*.md) return 0 ;;
     requirements/active/*/.req-meta.json) return 0 ;;
-    .claude/scripts|.claude/scripts/*) return 0 ;;
+    .claude/scripts|$HOME/.pmai/scripts/*) return 0 ;;
     .claude/skills|.claude/skills/*) return 0 ;;
     .claude/settings.json) return 0 ;;
   esac
@@ -250,7 +250,7 @@ warn_leftovers() {
   if [ "${#leftovers[@]}" -gt 0 ]; then
     echo "提示：检测到残留 quick-fix worktree：" >&2
     printf '  - %s\n' "${leftovers[@]}" >&2
-    echo "可运行：bash .claude/scripts/quick-fix.sh --cleanup" >&2
+    echo "可运行：bash $HOME/.pmai/scripts/quick-fix.sh --cleanup" >&2
   fi
 }
 
@@ -531,7 +531,7 @@ merge 失败（rebase 冲突或 retry 失败）。worktree 保留在 ${worktree}
 base 分支：${base_branch}（位于 ${base_worktree}）
 可选：
   1. 手工解决冲突：cd ${worktree} && git rebase --continue
-  2. 放弃本次 quick-fix：bash .claude/scripts/quick-fix.sh --cancel ${branch}
+  2. 放弃本次 quick-fix：bash $HOME/.pmai/scripts/quick-fix.sh --cancel ${branch}
 EOF
   return 1
 }

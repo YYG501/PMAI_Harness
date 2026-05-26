@@ -1,8 +1,8 @@
 {
   "permissions": {
     "allow": [
-      "Bash(bash .claude/scripts/*)",
-      "Bash(python3 .claude/scripts/*)",
+      "Bash(bash $HOME/.pmai/scripts/*)",
+      "Bash(python3 $HOME/.pmai/scripts/*)",
       "Bash(git *)",
       "Bash(npm *)",
       "Bash(bun *)",
@@ -18,7 +18,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash .claude/scripts/check-branch.sh"
+            "command": "bash \"$HOME/.pmai/scripts/check-branch.sh\""
           }
         ]
       }
@@ -29,7 +29,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node \"$CLAUDE_PROJECT_DIR/hooks/review-skill-guard.cjs\"",
+            "command": "node \"$HOME/.pmai/hooks/review-skill-guard.cjs\"",
             "timeout": 5
           }
         ]

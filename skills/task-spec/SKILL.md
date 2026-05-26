@@ -1,7 +1,7 @@
 ---
 name: task-spec
 description: |
-  Stage 6：按 task-plan.md 为单个 task 生成单文件 typed contract（$REPO_ROOT/templates/task.md.tmpl）——
+  Stage 6：按 task-plan.md 为单个 task 生成单文件 typed contract（$PMAI_HOME/templates/task.md.tmpl）——
   内部分 PM 确认区 / 执行区 / 审计区三区；读 prd.md（WHAT）+ implementation-design.md（HOW）。
   等待 PM 在唯一确认门定稿后推进 /task-confirm。
 ---
@@ -37,7 +37,7 @@ PM 确认区遵守 `skills/_shared/PM-VIEW-RULES.md`（写作纪律：明确指�
 ## Preamble
 
 ```bash
-source "$(git rev-parse --show-toplevel 2>/dev/null || echo .)/.claude/scripts/skill-preamble.sh"
+source "$HOME/.pmai/scripts/skill-preamble.sh"
 echo "SKILL: task-spec"
 ```
 
@@ -211,7 +211,7 @@ task-spec 从 `prd.md §七` 验收标准派生 **task-scoped 自测说明**写�
 
 ### 步骤 8：写单文件 typed contract（三区）
 
-按 `$REPO_ROOT/templates/task.md.tmpl` 生成 `$ACTIVE_REQ_DIR/tasks/task-NNN-<slug>.md`。
+按 `$PMAI_HOME/templates/task.md.tmpl` 生成 `$ACTIVE_REQ_DIR/tasks/task-NNN-<slug>.md`。
 
 **模板替换**：`{{TASK_NUMBER}}` / `{{TASK_NAME}}` / `{{TASK_SLUG}}` / `{{REVIEW_TOOLS}}` /
 `{{CREATED_DATE}}` / `{{REQ_ID}}` / `{{REQ_SLUG}}`；保留 `<!-- task_format: single-typed-v3 -->`
@@ -252,7 +252,7 @@ task-spec 从 `prd.md §七` 验收标准派生 **task-scoped 自测说明**写�
 
 ```bash
 PRE_LINT_HASH=$(shasum -a 256 "$ACTIVE_REQ_DIR/tasks/task-NNN-<slug>.md" | cut -c1-12)
-python3 "$REPO_ROOT/.claude/scripts/check-doc-pm-view.py" \
+python3 "$PMAI_HOME/scripts/check-doc-pm-view.py" \
   "$ACTIVE_REQ_DIR/tasks/task-NNN-<slug>.md"
 ```
 
@@ -264,7 +264,7 @@ scoped 模式只校验 PM 确认区（执行区 / 审计区允许工程内容、
 #### 9.D 字段校验（防假执行产物）
 
 ```bash
-python3 "$REPO_ROOT/.claude/scripts/task-transition.py" \
+python3 "$PMAI_HOME/scripts/task-transition.py" \
   "$ACTIVE_REQ_DIR/tasks/task-NNN-<slug>.md" --validate-fields-only
 ```
 
@@ -330,7 +330,7 @@ PM 确认后，把 task 文件 commit 到 req 分支（保证 task-confirm fork 
 非 working tree stale 版本；I-DC1）：
 
 ```bash
-source "$REPO_ROOT/.claude/scripts/_lib/dirty-check.sh"
+source "$PMAI_HOME/scripts/_lib/dirty-check.sh"
 TASK_FILE="$ACTIVE_REQ_DIR/tasks/task-NNN-<slug>.md"
 auto_commit_docs "$REQ_WORKTREE" "task-NNN-<slug>: spec sealed" "$TASK_FILE"
 ```
@@ -379,6 +379,6 @@ AI chat 出一行轻量过场，然后直接续跑 `/task-confirm` 的 workflow�
 
 ## 文档结构
 
-三区结构 + 章节顺序的单一真相源 = `$REPO_ROOT/templates/task.md.tmpl`（含每段填写
+三区结构 + 章节顺序的单一真相源 = `$PMAI_HOME/templates/task.md.tmpl`（含每段填写
 规则注释）。本 skill 不在内部复制章节定义。章节顺序另见
 `_shared/pm-view/section-order.md` §七。
