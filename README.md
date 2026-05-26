@@ -111,7 +111,7 @@ bash scripts/measure-tthw.sh
 | Skill | 用途 |
 |---|---|
 | `/init-project` | **项目级入口**：起一个新业务项目，4 阶段一气呵成（参数 → 骨架 → 方向 → Next Up）；**只在生成器仓里跑** |
-| `/project-solution` | **项目方向规划**：4 个独立场景（重做 / 季度规划 / 老板新方向 / brownfield 接入） |
+| `/project-solution` | **项目方向规划**：4 个独立场景（重做 / 产品路线规划 / 老板新方向 / brownfield 接入） |
 | `/new-req` | **req 级入口**：起一个新 req（带 brief） |
 | `/quick-fix` | 不走 req 流程的小补丁（适合改文案、修小 bug） |
 

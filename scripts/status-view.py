@@ -226,7 +226,7 @@ def render_health_check(repo_root: Path) -> None:
     print("💡 项目体检：缺以下产品级文档")
     for path, hint in missing:
         print(f"  - {path}（{hint}）")
-    print("  补法：发 /project-solution 季度规划场景；或新项目跑 /init-project 自动分发")
+    print("  补法：发 /project-solution（skill 会按场景引导补全）")
 
 
 def suggest_next_action(req_view: dict) -> str:

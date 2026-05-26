@@ -1,7 +1,7 @@
 # project-questioning：项目方向讨论的共享真相源
 
 > **职责**：项目方向讨论的**提问纪律 / 问题库 / 写作规则 / Decision gate / 6 节检查**的**单一真相源**。
-> **调用方**：`/init-project` 阶段 C（greenfield 首次起项目） + `/project-solution`（4 场景：重做 / 季度规划 / 新方向 / brownfield 接入）。
+> **调用方**：`/init-project` 阶段 C（greenfield 首次起项目） + `/project-solution`（4 场景：重做 / 产品路线规划 / 新方向 / brownfield 接入）。
 > **§2.5 抽取边界**：本文件含**写作规则 + 话术问题库 + 收敛条件 + Decision gate 模板 + 检查清单**（跨场景共享）；**不含**4 场景判断 + 提问顺序 + 输入态判断（场景特定，留 `/project-solution/SKILL.md` 独有；`/init-project` 阶段 C 用 greenfield 顺序）。
 > **复用 pattern**：跟 `skills/_shared/PM-VIEW-RULES.md` 同款 shared reference 机制。
 
@@ -13,11 +13,11 @@
 
 1. **判断场景**（调用方自己做）：
    - `/init-project` 阶段 C → greenfield 首次（输入 = 空 PROJECT.md 骨架）
-   - `/project-solution` → 按 4 场景判断（重做 / 季度规划 / 新方向 / brownfield 接入）（vp-6 细化）
+   - `/project-solution` → 按 4 场景判断（重做 / 产品路线规划 / 新方向 / brownfield 接入）（vp-6 细化）
 2. **决定问题顺序**（调用方自己排）：
    - greenfield（init-project）：6 节按 §3 顺序问（产品定位 → 用户画像 → 产品路线 → 技术栈 → 业务术语表 → roadmap 队列）
    - 重做：按 PM 提的痛点切入，不必从产品定位起
-   - 季度规划：跳过产品定位 / 技术栈（一般稳定），重写产品路线 + roadmap
+   - 产品路线规划：跳过产品定位 / 技术栈（一般稳定），重写产品路线 + roadmap
    - 新方向：从产品定位 + 用户画像重起
    - brownfield 接入：先读 `docs/代码现状档.md` 作实况语境，6 节顺序不变
 3. **跑提问 + 闸门 + 写作 + 确认门**（按 §2-§7 走）
@@ -229,11 +229,11 @@ git commit -m "docs: project direction settled"
 ### §10.2 `/project-solution`（4 场景之一，vp-6 已细化）
 
 1. agent 按 SKILL.md 步骤 1 读已有输入（CLAUDE.md / `docs/PROJECT.md` / `docs/代码现状档.md`）
-2. **判断场景**（A 重做 / B 季度规划 / C 新方向 / D brownfield 接入）—— 调用方 `/project-solution` SKILL.md 段 0 表已细化触发条件 + 输入态 + 提问顺序
+2. **判断场景**（A 重做 / B 产品路线规划 / C 新方向 / D brownfield 接入）—— 调用方 `/project-solution` SKILL.md 段 0 表已细化触发条件 + 输入态 + 提问顺序
 3. agent @读 本文件
 4. 按 `/project-solution` SKILL.md 段 0 表"提问顺序"列**场景特定顺序**问 PM：
    - A 重做：痛点诊断 → 产品定位 → 用户画像 → 产品路线 → 业务术语 → roadmap 重排
-   - B 季度规划：过去 roadmap 回顾 → 产品路线 → roadmap → 业务术语增量（跳过定位 / 用户 / 技术栈）
+   - B 产品路线规划：过去 roadmap 回顾（首次补无历史则跳过）→ 产品路线 → roadmap → 业务术语增量（跳过定位 / 用户 / 技术栈）
    - C 新方向：新方向 vs 现 PROJECT 差异 → 产品定位 → 用户画像 → 产品路线 → roadmap
    - D brownfield：全文读现状档 → 产品定位（codebase 反推）→ 用户画像 → 产品路线 → 技术栈（codebase 抄）→ 业务术语 → roadmap
 5. §4 未决问题闸门

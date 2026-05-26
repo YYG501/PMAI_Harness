@@ -122,6 +122,19 @@ PM-AI-Workflow 生成器仓的演进记录。本文件**只记影响下游业务
 
 ## 未发布
 
+### 2026-05-26 — fix(status-view): 体检 hint 措辞 — 删误导项 + 不绑死 skill 内部场景
+
+**问题**：体检 hint 旧措辞 `补法：发 /project-solution 季度规划场景；或新项目跑 /init-project 自动分发` 有 2 个问题 + 场景名"季度规划"本身狭窄：
+- "或新项目跑 /init-project 自动分发"：体检在业务仓里跑，业务仓 PM 看到 `/init-project` 提示自然会试，撞上"必须在生成器仓"边界（实测 PM 跑了，被 AI 意图门挡住）
+- 绑死场景名 + B 场景前置要求"`ROADMAP.md` 历史"：老项目首次补缺失文档没有历史，严格不满足。但 hint 强行绑场景
+- "季度规划"狭窄：B 场景实际涵盖"季度 / 半年节奏"、"老项目首次补全 PROJECT 6 节 + ROADMAP"等，统一改名"产品路线规划"
+
+**改动**：
+- `scripts/status-view.py` 体检 hint 末行改为 `补法：发 /project-solution（skill 会按场景引导补全）`。最小信息原则：hint 只告诉 PM 调啥 skill，skill 内部走法留给 skill 自己引导
+- 场景 B 改名 `季度规划` → `产品路线规划`（涵盖季度 / 半年节奏 + 老项目首次补全 ROADMAP）；触发条件 + 前置 + 步骤 1 同步扩展到支持"首次补无历史"
+- 受影响文件：`skills/project-solution/SKILL.md` (3 处) + `skills/_shared/project-questioning.md` (4 处) + `skills/close-req/SKILL.md` (2 处) + `README.md` (1 处)
+- 描述里指**时间维度**的"季度"保留（如"过去季度 roadmap 回顾"）；改的只是**场景名**
+
 ### 2026-05-26 — feat(status-view): 默认 + summary + narrative 都报项目体检（老项目升级后缺失文档全入口可见）
 
 **问题**：PM 在消费仓问"当前项目情况"或走 session 起始播报（`status-view.py --narrative`）时，无 active req 状态只输出"目前没有 active req"。**完全不报缺什么产品级文档** —— 老项目升级框架后，新增的 `docs/PRODUCT-RULES.md` / `docs/ROADMAP.md` / 漏跑 migrate 残留的 `docs/CONTEXT.md` 都没人提，PM 永远不知道要补。
