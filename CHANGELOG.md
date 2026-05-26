@@ -28,9 +28,9 @@ PM-AI-Workflow 生成器仓的演进记录。本文件**只记影响下游业务
 - `skills/req-stage-gate/SKILL.md` 4B「B 分支 term-detector hook」整段砍掉，并入「B 分支不跑」清单
 - `skills/_shared/term-detector/SKILL.md` 调用矩阵收敛到只剩 `prd-writing` 步骤 3.6 一处；description / 何时调用 / 禁止位置全段重写，注明 2026-05-26 收敛理由
 - `prd-writing` 步骤 3.6 detector 调用保留（PRD 定稿 = 业务词稳定时机，是建术语表唯一合理时间窗）
-- `scripts/_lib/term-detector.py` 候选源 / 实现**不动**（剩下只在 prd-writing 用，那时 PRD 是 AI 写，`**X**` 更倾向真术语而非修辞，依然有信号）
+- `scripts/_lib/term-detector.py` 候选源去掉 `**X**`（markdown 加粗），只保留「X」/『X』/""（显式术语标记）—— 中文 `**` 几乎只用于修辞强调，误报率压倒任何真业务词收益；docstring 同步更新
 
-**影响**：detector 召回次数从 ~3 次/req → 1 次/req；术语表"何时建"边界变清晰（PRD 定稿一次性催补）；测试基线 460/0 持平（无 detector 专门测试）。
+**影响**：detector 召回次数从 ~3 次/req → 1 次/req；噪音源（`**`）干掉；术语表"何时建"边界变清晰（PRD 定稿一次性催补）；测试基线 482/0 无回归（无 detector 专门测试）。
 
 ### 2026-05-26 — D-iv v0.3 patch F1：req-stage-gate 续跑模式概念收敛
 
@@ -136,6 +136,23 @@ PM-AI-Workflow 生成器仓的演进记录。本文件**只记影响下游业务
 
 ## 未发布
 
+### 2026-05-26 — feat(docs-toplevel-guard): pre-commit hook 拦截 docs/ 顶层错位文件
+
+**问题**：扁平化约定（见下面 fix(docs-archive-convention)）只是写在 CLAUDE.md 里靠 PM + AI 自觉。AI 写新文档时不一定真按约定归位，PM 也未必 review 路径 —— 长期还是会积累错位。
+
+**改动**：
+- 新增 `scripts/check-docs-toplevel.py`：检测 staged 新增 `docs/<basename>.md` 是否在白名单（静态：`PROJECT`/`DESIGN`/`PRODUCT-RULES`/`ROADMAP`/`prd`/`CONTEXT`；可扩展：`.docs-toplevel-allow` 一行一 basename）。错位 → exit 1 + 列文件 + 提示归位 3 路径
+- `templates/git-hooks/pre-commit.tmpl` 增加调用 `check-docs-toplevel.py` 段；脚本缺失 fail-open（老消费仓还没 sync 时不阻塞）
+- `templates/CLAUDE.md.tmpl` 归档约定段补「自动守卫」小节，说明 hook + `.docs-toplevel-allow` + 救火绕过 `--no-verify`
+- 新增 `tests/test-docs-toplevel-guard.sh` 8 case
+
+**消费仓影响**：
+- 新项目 `/init-project` 自带 hook + 检测脚本 + CLAUDE.md 约定
+- 老项目 sync 框架后 **要跑** `bash .claude/scripts/install-hooks.sh` 重装 hook 才能启用
+- 暂时不想被拦：`git commit --no-verify`，或把 basename 加进 `.docs-toplevel-allow`
+
+**测试基线**：482 → 490（+8）
+
 ### 2026-05-26 — fix(pm-chat): Stage 1→2 选择门 + office-hours 子状态 + PASS 闸门 文案去工程黑话
 
 **问题**：PM 实测 `/req-stage-gate` Stage 1→2 入口文案「这版 brief 是否可定稿？然后用哪种方式跟这个需求讨论？」一句塞两问；选项描述「结构化批判 / 第一性原理 4 层 / reviewer / YC office-hours / 跳 reviewer」全是内部机制名。office-hours 三个子状态（探测失败 / 选稿 / 没现成稿）泄露「按 mtime 排 / gstack slug / 切回结构化批判分支 / snapshot 进 Stage 2 真相源」。req-analysis PASS 闸门还在用 v2 旧句式（破折号 + "OK 我..."），与 req-stage-gate L425 自己列的反面示例自相矛盾。
@@ -150,6 +167,22 @@ PM-AI-Workflow 生成器仓的演进记录。本文件**只记影响下游业务
 - `skills/_shared/pm-view/banner-rules.md` §3.0 示例引用同步新标签
 
 **影响**：纯 PM 视图文案，无逻辑改动；dispatch 双向兼容确保 PM 用旧词也接得住；无新增测试。
+
+### 2026-05-26 — fix(docs-archive-convention): 归档子目录扁平化（删 完成/ + 旧版/ 二分）
+
+**问题**：上一版（`8a41de5`）把 `docs/归档/` 分成 `完成/` + `旧版/` 两个子目录。PM 反馈两个子目录**语义不在同一维度**：
+- "完成" 是按生命周期（在飞 → 完结）
+- "旧版" 是按版本继任（被取代）
+
+混搭分类让 PM / AI 实际归档时第一反应是"这放哪个"，反而增加摩擦。且"完成"跟生成器仓 `docs/归档/完成/` 装"已落地的设计文档"语义冲突。
+
+**改动**：
+- `templates/CLAUDE.md.tmpl` 归档约定段：归位规则改成统一进 `docs/归档/`，文件名 / commit message 自己说明为啥归档
+- `scripts/init-project.sh` 不再建 `完成/` + `旧版/` 两个子目录，只建一个 `docs/归档/.gitkeep` 扁平骨架
+- `tests/test-docs-archive-convention.sh` T3/T5/T6 同步更新（含负向断言：子目录不该再被建）
+- 文件名后缀策略：`-原始` / `-v1` 后缀加在文件名里标明历史版本（如 `登录页-原始功能清单.md`）
+
+**消费仓影响**：尚未 sync 上一版 `8a41de5` 的项目（包括 ExampleConsumerApp）—— 本 fix 替代它，sync 后直接是扁平版。已 sync `8a41de5` 的项目（暂无）→ 手工删 `docs/归档/{完成,旧版}/` 子目录即可。
 
 ### 2026-05-26 — feat(docs-archive-convention): 消费仓 docs/ 归档约定（防顶层积累错位 / 重复 / 过期文件）
 

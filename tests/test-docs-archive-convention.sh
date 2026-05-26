@@ -54,8 +54,13 @@ test_tmpl_has_negative_list_and_relocation() {
     _fail "约定缺「模块决策 → docs/modules/」归位规则"
     return
   fi
-  if ! echo "$section" | grep -q 'docs/归档/完成'; then
-    _fail "约定缺「过程档案 → docs/归档/完成」归位规则"
+  if ! echo "$section" | grep -q 'docs/归档/'; then
+    _fail "约定缺「过程档案 → docs/归档/」归位规则（扁平化）"
+    return
+  fi
+  # 子目录不该再被宣传（扁平化决议）
+  if echo "$section" | grep -qE 'docs/归档/(完成|旧版)'; then
+    _fail "约定仍提 docs/归档/{完成,旧版} 子目录 —— 应已扁平化"
     return
   fi
   if ! echo "$section" | grep -qE '不在顶层|❌'; then
@@ -76,39 +81,41 @@ test_tmpl_has_3_self_questions() {
 }
 
 # -----------------------------------------------------------------
-test_init_sh_creates_archive_dirs() {
-  start_test "T5: init-project.sh 创建 docs/归档/{完成,旧版} + .gitkeep"
-  if ! grep -q 'mkdir -p "\$TARGET_DIR/docs/归档/完成"' "$INIT_SH"; then
-    _fail "init-project.sh 缺 docs/归档/完成 mkdir"
+test_init_sh_creates_archive_dir() {
+  start_test "T5: init-project.sh 创建扁平 docs/归档/ + .gitkeep"
+  if ! grep -q 'mkdir -p "\$TARGET_DIR/docs/归档"' "$INIT_SH"; then
+    _fail "init-project.sh 缺 docs/归档 mkdir"
     return
   fi
-  if ! grep -q 'mkdir -p "\$TARGET_DIR/docs/归档/旧版"' "$INIT_SH"; then
-    _fail "init-project.sh 缺 docs/归档/旧版 mkdir"
-    return
-  fi
-  if ! grep -q 'touch "\$TARGET_DIR/docs/归档/完成/.gitkeep"' "$INIT_SH"; then
+  if ! grep -q 'touch "\$TARGET_DIR/docs/归档/.gitkeep"' "$INIT_SH"; then
     _fail "init-project.sh 缺 .gitkeep（空目录 git 跟踪需要）"
+    return
+  fi
+  # 确认子目录不再被建（扁平化决议）
+  if grep -qE 'docs/归档/(完成|旧版)' "$INIT_SH"; then
+    _fail "init-project.sh 仍含 docs/归档/{完成,旧版} 子目录 mkdir —— 应已改为扁平 docs/归档/"
     return
   fi
   pass_test
 }
 
 # -----------------------------------------------------------------
-test_init_e2e_archive_dirs_exist() {
-  start_test "T6: init-project e2e — docs/归档/ 子目录端到端存在"
+test_init_e2e_archive_dir_exists() {
+  start_test "T6: init-project e2e — 扁平 docs/归档/ 端到端存在"
   local tmp; tmp=$(mktemp -d)
   local target="$tmp/test-archive-proj"
   bash "$INIT_SH" "test-archive-proj" "$target" "test bg" >/dev/null 2>&1
-  if [ ! -d "$target/docs/归档/完成" ]; then
-    _fail "init 后 docs/归档/完成 目录不存在"
+  if [ ! -d "$target/docs/归档" ]; then
+    _fail "init 后 docs/归档 目录不存在"
     rm -rf "$tmp"; return
   fi
-  if [ ! -d "$target/docs/归档/旧版" ]; then
-    _fail "init 后 docs/归档/旧版 目录不存在"
+  if [ ! -f "$target/docs/归档/.gitkeep" ]; then
+    _fail "init 后 docs/归档/.gitkeep 不存在（空目录不会被 git 跟踪）"
     rm -rf "$tmp"; return
   fi
-  if [ ! -f "$target/docs/归档/完成/.gitkeep" ]; then
-    _fail "init 后 .gitkeep 不存在（空目录不会被 git 跟踪）"
+  # 子目录不该被建（扁平化决议）
+  if [ -d "$target/docs/归档/完成" ] || [ -d "$target/docs/归档/旧版" ]; then
+    _fail "init 后 docs/归档/{完成,旧版} 子目录仍存在 —— 应已扁平化"
     rm -rf "$tmp"; return
   fi
   rm -rf "$tmp"
@@ -121,7 +128,7 @@ test_tmpl_has_archive_convention_section
 test_tmpl_has_positive_list
 test_tmpl_has_negative_list_and_relocation
 test_tmpl_has_3_self_questions
-test_init_sh_creates_archive_dirs
-test_init_e2e_archive_dirs_exist
+test_init_sh_creates_archive_dir
+test_init_e2e_archive_dir_exists
 
 report_results "docs-archive-convention"

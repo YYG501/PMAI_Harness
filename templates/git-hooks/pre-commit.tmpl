@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 # pre-commit hook (PM-AI-Workflow)
 # 由 init-project.sh / install-hooks.sh 安装到 .git/hooks/pre-commit。
-# 唯一职责：拦截绕过 task-transition.py 的 task 状态字段直改。
-# 检测逻辑全在 .claude/scripts/check-status-direct-edit.py。
+# 职责：
+#   1. 拦截绕过 task-transition.py 的 task 状态字段直改 (check-status-direct-edit.py)
+#   2. 拦截 docs/ 顶层错位文件 (check-docs-toplevel.py，按 CLAUDE.md 「docs/ 归档约定」)
 #
 # 绕过：git commit --no-verify（git 内置；hook 不会被调到）。
 
@@ -14,15 +15,21 @@ if [ -z "$REPO_ROOT" ]; then
   exit 0  # 不在 git 仓里？让 git 自己处理
 fi
 
+# --- 1. task 状态字段直改检测 ---
 CHECKER="$REPO_ROOT/.claude/scripts/check-status-direct-edit.py"
 if [ ! -f "$CHECKER" ]; then
   # 检测脚本缺失：fail-open（不阻塞 commit）但留 stderr 提示
   echo "⚠️  pre-commit: $CHECKER 缺失，跳过 task 状态字段直改检测。" >&2
   echo "    如需补回：bash .claude/scripts/install-hooks.sh" >&2
-  exit 0
+else
+  python3 "$CHECKER"
 fi
 
-python3 "$CHECKER"
+# --- 2. docs/ 顶层归档约定检测（防错位 / 重复 / 过期文件积累）---
+DOCS_CHECKER="$REPO_ROOT/.claude/scripts/check-docs-toplevel.py"
+if [ -f "$DOCS_CHECKER" ]; then
+  python3 "$DOCS_CHECKER"
+fi  # 脚本缺失 fail-open（老消费仓还没 sync 进新 framework 时不应阻塞）
 
 # v5 attachments large file warn (>10MB) — fail-open，仅警告
 STAGED_LARGE=$(git diff --cached --name-only --diff-filter=AM \

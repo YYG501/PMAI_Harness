@@ -228,32 +228,37 @@ main（主仓，永远不切分支）
 - 项目级真相源：`PROJECT.md` / `DESIGN.md` / `PRODUCT-RULES.md` / `ROADMAP.md` / `prd.md`
 - 项目级业务概览（跨模块 / 整体定位级，如 `ops-platform-unification.md`、`product-strategy.md`）
 - 模块目录：`modules/` + `modules/INDEX.md`
-- 归档目录：`归档/`
+- 归档目录：`归档/`（扁平单层，不分子目录 —— 文件名 / commit message 自己说明为啥归档）
 
 ❌ **不在顶层**（按下表归位）：
 
 | 文件类型 | 归位 | 例子 |
 |---|---|---|
 | 模块级决策 / 用户故事 / 模块功能清单 | `docs/modules/<模块>/` | `product-principles.md`（部门 / 用户 / 角色决策）→ `docs/modules/部门+用户+角色设计/`；`user-stories-<feature>.md` 同 |
-| 过程档案 / 一次性 review / 完成的设计文档 | `docs/归档/完成/` | `PROTOTYPE_CLEANUP.md`（清理过程档案）；一次性架构 review；已落地的设计文档 |
-| 被新版取代的旧文件 | `docs/归档/旧版/`，或直接 `git rm`（git 历史能找到） | `登录页 原始功能清单.md`（已被 `登录页 功能清单 v2.md` 取代） |
-| 临时分析 / 调研 / scratch | `docs/归档/完成/` 或不进 git | 一次性 RFC / spike 分析 |
+| 过程档案 / 一次性 review / 临时分析 / 调研 / scratch | `docs/归档/` | `PROTOTYPE_CLEANUP.md`（清理过程档案）；一次性架构 review；spike 分析 |
+| 被新版取代的旧文件 | `docs/归档/`，或直接 `git rm`（git 历史能找到） | `登录页-原始功能清单.md`（已被 `登录页-功能清单-v2.md` 取代） |
 
 ### 写新文档前 AI 自问 3 题
 
 1. **作用域**：项目级 / 模块级 / 临时？
-2. **路径**：项目级 → `docs/`；模块级 → `docs/modules/<module>/`；临时 → `docs/归档/完成/`
+2. **路径**：项目级 → `docs/`；模块级 → `docs/modules/<module>/`；临时或被取代 → `docs/归档/`
 3. **命名冲突**：与现有同名 / 同主题撞？→ 旧的先 `git mv` 归档再写新的（防 `v1.md` / `v2.md` / `原始.md` 顶层堆积）
 
 ### 命名规范
 
 - 项目级文档全大写：`PROJECT.md` / `DESIGN.md` / `PRODUCT-RULES.md` / `ROADMAP.md`
 - 业务概览 / 模块文档 / 用户故事：kebab-case 小写
-- 不出现 `v1` / `v2` / `原始` / `旧` 等版本后缀在**顶层** —— 顶层永远是 latest，旧版进 `归档/旧版/`
+- 不出现 `v1` / `v2` / `原始` / `旧` 等版本后缀在**顶层** —— 顶层永远是 latest，旧版进 `归档/`（文件名带 `-v1` / `-原始` 后缀标明）
 
-### PM 视图
+### 自动守卫
 
-`/task-status` 体检段会检测 docs/ 是否按本节归位（未来 vp 落地）。当前由 PM + AI 在新建 / 整理时主动遵守。
+`pre-commit` hook 调用 `.claude/scripts/check-docs-toplevel.py` 自动拦截 `docs/` 顶层不在白名单的新增 `.md` 文件。
+
+- **白名单**：本节正面清单 + 项目级业务概览（在 `.docs-toplevel-allow` 一行一个 basename 自定义）
+- **拦下后**：按归位规则 mv 走，或加进 `.docs-toplevel-allow` 放行
+- **救火**：`git commit --no-verify`（绕过所有 pre-commit，慎用）
+
+老项目要启用：跑 `bash .claude/scripts/install-hooks.sh` 重新装 hook（sync 框架后第一次需要）。
 
 ## 当前状态
 
