@@ -465,6 +465,53 @@ docs/ / requirements/ 下 git-tracked 的 .md）里的 `CONTEXT.md` 引用。幂
 
 ---
 
+### 4.11 消费仓 I-CT7 失败时的合规救援路径
+
+`close-task` 跑 `audit-task-events.py` I-CT7 挡下来时，**合规救援命令**是：
+
+```bash
+python3 .claude/scripts/task-transition.py <task-file> \
+  --repair-evidence --reason "<原因>"
+```
+
+它强制 PM 输入 reason、加 `repaired:true` 永久标记、只允许补 `execution_manual_completed`——事后审计能区分**救援**与**伪造**。
+
+这个命令在 generator commit **`bd1f1a3` 之后**才存在（accept 闸门 + evidence-repair）。
+
+**消费仓没同步到 `bd1f1a3` 之后时**：
+
+- `task-transition.py --repair-evidence` 报 `unknown argument`
+- AI 容易绕回 `task-events.py append --type execution_manual_completed` **裸补**
+- **裸补没有 `repaired:true` 标记，事后审计无法区分救援 vs 伪造**——这是 case A 历史 task 的常见踩坑
+
+**处理顺序**：
+
+1. **先同步框架到消费仓**（本 SOP §3）—— 最低带过去 `bd1f1a3` + `f37c83f`
+2. **再救援**：在消费仓跑 `task-transition.py --repair-evidence --reason "<原因>"`
+3. **重跑 `/close-task`**
+
+**case 区分**（PM 必须自审）：
+
+- **case A**（历史 task / 真实手动完成漏跑 /task-execute）：救援是**诚实记录**，正当用法
+- **case B**（PM 真实跳过 /task-execute 直接改 status 字段）：救援等于把"偷工"洗成"诚实完成"，**PM 必须确认工作真的手动做完了**才用；否则回 `/task-execute` 重走规范
+
+**临时绕过**（不推荐，只在框架同步阻塞时用）：
+
+```bash
+python3 .claude/scripts/task-events.py append <task-file> \
+  --type execution_manual_completed \
+  --note "<原因（含 retroactive 说明）>" \
+  --payload '{"repaired":true,"reason":"<原因>"}'
+```
+
+手工模拟 `--repair-evidence` 的 payload。这是**技术债**——事后必须：
+
+1. 同步框架
+2. PM 决定是否额外跑一次 `--repair-evidence` 补正规救援痕迹（注意会留两条 `execution_manual_completed`）
+3. 在 `TODOS.md` 或 req-NNN 上记一笔
+
+---
+
 ## 5. 实战记录
 
 ### 5.1 2026-05-08 example-consumer-app sync

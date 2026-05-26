@@ -122,6 +122,18 @@ PM-AI-Workflow 生成器仓的演进记录。本文件**只记影响下游业务
 
 ## 未发布
 
+### 2026-05-26 — fix(I-CT7): audit 诊断接上 `--repair-evidence` 合规救援路径
+
+**问题**：`audit-task-events.py` I-CT7 挡下 close-task 时只输出「补齐缺失事件再重跑」，**完全没提** generator `bd1f1a3` 之后已建好的 `task-transition.py --repair-evidence` 合规救援命令。AI / PM 找不到合规出口 → 绕回 `task-events.py append --type execution_manual_completed` 裸补，没有 `repaired:true` 永久标记，事后审计无法区分救援 vs 伪造。
+
+**根因**：救援路径建好但诊断引导没接上。memory `feedback_audit_block_not_infra_bug` 说"诚实记录 = `execution_manual_completed`"——指的是走 `--repair-evidence`，但 audit 输出从来不告诉调用方这件事。
+
+**改动**：
+- `scripts/audit-task-events.py` I-CT7 / I-CT8 失败诊断扩展为三路径：(1) 历史 task / 真实手动完成 → `--repair-evidence`（明示强制 reason + `repaired:true` 标记 + 警告不要裸 append + 命令找不到时引导走 §4.11 同步框架）；(2) 真实跳过状态机 → 回 `/task-execute`；(3) 整 req 放弃 → `/cancel-req`
+- `框架同步-SOP.md` 新加 §4.11「消费仓 I-CT7 失败时的合规救援路径」—— 说明 `--repair-evidence` 在 `bd1f1a3` 之后才存在，消费仓没同步时的处理顺序（先同步 → 再救援 → 重跑 close-task），区分 case A（历史 task / 诚实救援）vs case B（PM 真实跳过 /task-execute，救援等于洗白偷工），给出框架同步阻塞时的临时绕过 payload 模板 + 技术债跟踪要求
+
+**消费仓影响**：下次同步框架后，I-CT7 挡下来的提示从一句话变成完整 3 路径诊断；不需要 schema 迁移、不影响现有事件流。
+
 ### 2026-05-25 — fix: cleanup-pending-worktrees.sh L245 潜伏 unbound variable bug
 
 **症状**：`tests/test-cleanup-pending.sh` C7 safety case fail —— 当存在 unsafe pending entry 时，脚本应 `exit 1` 并报警 "有未清理项保留..."，实际 exit 0 且警告残缺。
