@@ -124,7 +124,9 @@ def render_banner_only(state: dict, repo_root: Path, skill: str) -> None:
     """
     active = state["active_reqs"]
     if not active:
-        print("━━━ PMAI ► " + skill + " ▸ 无 active req（先跑 /new-req）━━━")
+        # 项目级 skill（init-project / new-req 等）跑在无 active req 状态是预期的；
+        # 不再硬编码"先跑 /new-req"指引（对 /init-project 反而误导）
+        print("━━━ PMAI ► " + skill + " ▸ <项目级 / 无 active req> ━━━")
         return
     # 取第一个 active req（典型场景：单 PM 同时 1-2 个 req）
     req_view = active[0]

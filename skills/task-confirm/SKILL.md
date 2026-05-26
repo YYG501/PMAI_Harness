@@ -6,7 +6,7 @@ description: |
 
 # /task-confirm
 
-> **PM 视图（M2 banner + Decision gate label）**：入口 banner（`status-view.py --banner-only --skill TASK-CONFIRM`）；退出 Next Up 块引导新窗口 `/task-execute <task-id>`；执行前确认闸门 label 按 `_shared/pm-view/banner-rules.md` §3 3 硬规则（label=动作如「启动 task-NNN」/ description=一句话）。
+> **PM 视图（M2 banner）**：入口 banner（`status-view.py --banner-only --skill TASK-CONFIRM`，见 `_shared/pm-view/banner-rules.md` §1）；退出 Next Up 块（§2）引导新窗口 `/task-execute <task-id>`。**task-confirm 不设确认闸门**（delta-3 §2.3，唯一闸门在 `/task-spec` 步骤 10），故不涉及 banner-rules §3 Decision gate label 规则。
 >
 > **PM 答题规则（M4）**：所有 AskUserQuestion 调用按 `_shared/pm-view/askuser-rules.md` §1 3 硬规则走（空答 STOP / 没拿到答案禁止落盘 worktree fork / runtime 退化保留 wait）。
 
@@ -34,6 +34,9 @@ task-spec 产 **单文件 typed contract**（`tasks/task-NNN-<slug>.md`，头部
 ```bash
 source "$(git rev-parse --show-toplevel 2>/dev/null || echo .)/.claude/scripts/skill-preamble.sh"
 echo "SKILL: task-confirm"
+
+# M2 banner（视觉锚点；见 _shared/pm-view/banner-rules.md §1）
+python3 "$REPO_ROOT/.claude/scripts/status-view.py" --banner-only --skill TASK-CONFIRM || true
 ```
 
 ## Workflow
@@ -200,7 +203,7 @@ PM 在新终端窗口里**保持在当前 req worktree 目录**（不进 task wo
 
    想换说一声（例：「换 claude-code sonnet」）；不换就直接看下一步。
 
-▶️ 下一步——开新终端窗口，保持当前 req worktree 目录（别 cd 走）：
+▶ Next Up — 开新终端窗口（保持当前 req worktree 目录，别 cd 走）：
 
    claude --add-dir <主仓根绝对路径>
    /task-execute                  ← PENDING_COUNT == 1

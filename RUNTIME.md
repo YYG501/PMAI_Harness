@@ -13,39 +13,31 @@
 
 ## 当前位置（2026-05-25）
 
-**D-iv 入口与全流程体验顺畅性全包 ship**（设计文档已归档 `docs/归档/完成/入口与全流程体验顺畅性.md`；M3 砍后 4 模块 M1 + M2 + M4 + M5 共 11 个技术 vp 全过；剩 vp-5b + vp-13 由 PM 同步消费仓后自验收）
+**D-iv v0.3 patch — 新手 PM 视角审计 3 个 BLOCKER 直修**（subagent 模拟用户走完整流程报告；本次未开新设计文档，全是已知 gap 收尾）：
 
-设计文档 `docs/归档/完成/入口与全流程体验顺畅性.md` v0.2（plan-eng-review Round 1：claude 9 finding + codex outside voice 7 finding，16 ACCEPT；最大改动 codex C-1 砍 M3 —— `req-stage-gate` 续跑模式已是默认行为）。
+- **B2**：`skills/task-confirm/SKILL.md:9` 顶部指针写「执行前确认闸门 label」与 body 行 23-25「delta-3 §2.3 不再设确认闸门」自相矛盾 → 改顶部指针为「不设确认闸门」并显式标 delta-3 引用
+- **B1a**：7 核心 SKILL 顶部「banner-rules 指针」prose 真，但 body 无 Bash 调用 → init-project/task-execute 走字面值 echo（项目级 / 入口前置阶段），其余 5 个（new-req / req-stage-gate / task-confirm / close-task / close-req）Preamble 段加 `python3 scripts/status-view.py --banner-only --skill X || true`；`status-view.py:render_banner_only` 无 active req 文案由「先跑 /new-req」改通用「<项目级 / 无 active req>」
+- **B1b**：7 核心 SKILL 退出文案补 `▶ Next Up` 关键词；`close-task` Phase 1→2 和 `close-req` Phase 1→2 切窗口给完整可复制命令（解 FRICTION 4）
+- **B3**：`req-stage-gate` stage 6→7 blocked 错误信息扩展「废弃 task 三步」可复制命令链（mv 文件 + 改 task-plan.md `## 变更记录` + 加 task 文件「废弃理由」段），堵 metadata 不一致风险；**未新建 `/cancel-task` skill**（PM 实际跳 task 频率不高再说）
+- **B4（PM 第二批补丁）**：`banner-rules.md` 新加 §3.0 适用范围 —— §3 3 硬规则**只管 AskUserQuestion picker 形式**闸门（GUI 选项卡片），续跑模式 + chat 自由对话走常规形态不受 §3 约束；4 行判定表覆盖典型场景
+- **B5（PM 第二批补丁）**：`req-stage-gate` Stage 1→2 分流 B `gstack-slug` 解析改 fail-loud —— 旧 `SLUG="unknown"` silent fallback 让 PM 误以为"没探测到 office-hours 产物"（实际是 slug 没解析对）；新代码拆三态（slug 失败 / slug OK 无产物 / slug OK 有产物），失败显式告 PM 原因 + 给两条出路
+- **测试**：`tests/test-banner-label.sh` 新增 T6-T10（body 真调 banner / Next Up 关键词 / task-confirm 不矛盾 / §3.0 适用范围 / slug fail-loud）防回归
 
-**批 1 已落（M1 init-project 一气呵成；commits 6df9cf4 + dcf5802 + 39cb81f + fe1b7ac + f8c1c90）**：
+**测试基线**：`bash tests/run-all.sh` **460 / 0**（前 446/0 → 现 455/0 其他模块小增 + 本次新增 5 case = 460；无回归）。
 
-- **vp-1** (6df9cf4)：`skills/init-project/SKILL.md` 重写 4 阶段（A 参数 5 步 + brownfield → B 骨架 → C QUESTIONING @读 `_shared/project-questioning.md` + Decision gate + atomic commit → D Next Up 只汇总）+ 顶部 ASCII + 失败兜底速查（R10/R11）；`scripts/init-project.sh` 删 echo（保留非交互 CLI invariant）
-- **vp-2** (dcf5802)：新建 `skills/_shared/project-questioning.md`（253 行，单一真相源）+ `/project-solution` SKILL.md 238→158 行（瘦身 33%）改 @读 + 4 场景判断框架
-- **vp-3 + vp-4** (39cb81f)：阶段 D verify pass；README 单步 + `/init-project` 移到「启动新工作」组顶 + RUNTIME 更新 + CHANGELOG
-- **vp-5a** (fe1b7ac)：3 自动化测试 +11 cases（test-brownfield-detect.sh + test-no-duplicate-questioning.sh + test-shared-files-exist.sh）
-- **vp-6** (f8c1c90)：`/project-solution` 4 场景提问顺序细化（A 重做 / B 季度规划 / C 新方向 / D brownfield）
+---
 
-**批 2 已落（M2 banner + M4 askuser + M5 session 播报；commit vp-12 收尾即将做）**：
-
-- **vp-7**：新建 `skills/_shared/pm-view/banner-rules.md`（M2 + Decision gate label 单一真相源；§1 banner / §2 Next Up / §3 3 硬规则）+ `_lib/state.py:get_current_stage_banner` + `status-view.py --banner-only`
-- **vp-8**：7 个核心 SKILL 顶部加 banner-rules 指针 + 新建 `tests/test-banner-label.sh`（5 cases）
-- ~~**vp-9 M3 整模块砍**~~（codex C-1 BLOCKER；Decision gate label 规范化合并到 vp-7 banner-rules.md §3）
-- **vp-10**：新建 `skills/_shared/pm-view/askuser-rules.md`（M4 单一真相源；gsd `#3018` 3 硬规则）+ 7 个核心 SKILL 顶部加 askuser-rules 指针
-- **vp-11**：`scripts/status-view.py --narrative`（范围降级 codex C-4：当前 stage / 产物文件 / 最近 transition，不到小节级）+ `CLAUDE.md` 章程章节「Session 起始播报」（codex C-3 校准：PM 第一条 message 后，不是「一开窗口」）+ `tests/test-narrative-mode.sh`（5 cases）
-- **vp-12** ← **本次 commit**：批 2 文档同步 RUNTIME + CHANGELOG + 跑 tests/run-all.sh
-
-**测试基线**：`bash tests/run-all.sh` **446 / 0**（vp-7 + vp-8 + vp-10 + vp-11 实测加 10 cases：436 → 446，与预期一致；无回归）。
-
-**剩余 PM 手动**（不可自动化）：
-
-- **vp-5b**：PM 跑 `/init-project` 端到端验收 + measure-tthw 计时 + 4 场景对比一致性
-- **vp-13**：消费仓 ExampleConsumerApp 端到端验证（按 `框架同步-SOP.md` 同步后跑）
-
-**下一步**：① **PM 同步消费仓 ExampleConsumerApp**（按 `框架同步-SOP.md` 跑 hotfix 同步流程）② **PM 自验收**（vp-5b 本仓外起测试项目 + vp-13 消费仓真实 req 验 banner / Decision gate / askuser / narrative）③ 验收 finding 回头开 D-iv v0.3 patch vp（如有）。
+**下一步**：① **PM 同步消费仓 ExampleConsumerApp**（按 `框架同步-SOP.md` 跑 hotfix 同步流程，v0.3 patch 一并带过）② **PM 端到端自验收**（vp-5b 本仓外起测试项目 + vp-13 消费仓真实 req 验 banner / Next Up / 跳 task 引导）③ 验收 finding 回头开新 patch vp。
 
 ---
 
 ## 历史阶段（已完成）
+
+**2026-05-25 — D-iv 入口与全流程体验顺畅性全包 ship**（设计文档归档 `docs/归档/完成/入口与全流程体验顺畅性.md`；M3 砍后 M1+M2+M4+M5 共 11 vp 全过；plan-eng-review Round 1 16 finding ACCEPT，codex C-1 砍 M3）：
+
+- **批 1 M1 init-project 一气呵成**（commits 6df9cf4 + dcf5802 + 39cb81f + fe1b7ac + f8c1c90）：vp-1 4 阶段重写 + vp-2 `_shared/project-questioning.md` 单一真相源 + vp-3/4 README 单步 + vp-5a 3 测试 11 cases + vp-6 `/project-solution` 4 场景细化
+- **批 2 M2 banner + M4 askuser + M5 播报**：vp-7 `banner-rules.md` + `_lib/state.py` + `status-view.py --banner-only` + vp-8 7 SKILL 加指针 + ~~vp-9 砍~~ + vp-10 `askuser-rules.md` + vp-11 `status-view.py --narrative` + CLAUDE.md「Session 起始播报」
+- **测试基线**：446 / 0（vp-7 + vp-8 + vp-10 + vp-11 实测加 10 cases）
 
 **2026-05-25 — D-iii v2：attachments AI 接管全包**（helper-based，commit 1eb3480 + 9644046 + 6df9cf4 + dcf5802）
 

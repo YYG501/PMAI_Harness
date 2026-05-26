@@ -32,6 +32,9 @@ PM 体感：
 ```bash
 source "$(git rev-parse --show-toplevel 2>/dev/null || echo .)/.claude/scripts/skill-preamble.sh"
 echo "SKILL: close-req"
+
+# M2 banner（视觉锚点；见 _shared/pm-view/banner-rules.md §1）
+python3 "$REPO_ROOT/.claude/scripts/status-view.py" --banner-only --skill CLOSE-REQ || true
 ```
 
 ## Phase 自动判断（入口）
@@ -361,8 +364,12 @@ AI 向 PM 输出结束语，req 窗口工作到此结束：
 ```
 ✅ Req 文档已 commit，stage = 7，已登记待 finalize marker。
 
-请切到主仓窗口（cwd = 主仓根目录），再次运行：
+▶ Next Up — 切到主仓窗口跑 /close-req：
 
+如果主仓窗口还开着：直接切过去运行 `/close-req`
+如果主仓窗口已关：
+  cd <MAIN_REPO_ROOT>     ← 替换为主仓根绝对路径
+  claude
   /close-req
 
 AI 会自动走 Phase 2 完成 merge + 删 worktree/branch。
@@ -409,7 +416,8 @@ rm -f "$PENDING_MARKER"
 ✅ Req 已完全关闭：<req-id>
 📍 当前位置：主仓 main 分支
 
-运行 /new-req 开始下一个需求。
+▶ Next Up — /new-req "<下一个需求>"（开始下一 req）
+         或 /project-solution（季度规划，重新审视项目方向）
 ```
 
 ## Rules

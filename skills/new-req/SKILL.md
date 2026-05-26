@@ -28,6 +28,9 @@ description: |
 ```bash
 source "$(git rev-parse --show-toplevel 2>/dev/null || echo .)/.claude/scripts/skill-preamble.sh"
 echo "SKILL: new-req"
+
+# M2 banner（视觉锚点；见 _shared/pm-view/banner-rules.md §1）
+python3 "$REPO_ROOT/.claude/scripts/status-view.py" --banner-only --skill NEW-REQ || true
 ```
 
 ## Workflow
@@ -346,7 +349,7 @@ brief.md 已 commit 后，**当前主对话不再继续 stage 2**。`/new-req` �
 ```
 ✅ brief 已 commit 至分支 req-NNN-<slug>（<short-hash>）
 
-下一步在新窗口继续：
+▶ Next Up（在新窗口继续）：
   1. 打开新终端窗口
   2. 运行：
        cd <worktree 绝对路径>

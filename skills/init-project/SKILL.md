@@ -49,6 +49,12 @@ description: |
 ## Workflow
 
 > 4 阶段顺序执行；每阶段失败有显式兜底（见 §Rules / 失败兜底段）。
+>
+> **M2 banner**（见 `_shared/pm-view/banner-rules.md` §1）：agent 进入每个阶段时**先 Bash echo 一行 banner**。init-project 是项目级 skill（生成器仓内跑、无 active req），不调 `status-view.py`，直接 echo 字面值：
+> - 阶段 A：`echo "━━━ PMAI ► INIT-PROJECT ▸ Stage A/4: 参数收集 ━━━"`
+> - 阶段 B：`echo "━━━ PMAI ► INIT-PROJECT ▸ Stage B/4: 骨架建设 ━━━"`
+> - 阶段 C：`echo "━━━ PMAI ► INIT-PROJECT ▸ Stage C/4: QUESTIONING ━━━"`
+> - 阶段 D：`echo "━━━ PMAI ► INIT-PROJECT ▸ Stage D/4: 终态汇总 ━━━"`
 
 ### 阶段 A · 参数收集 + brownfield 检测
 

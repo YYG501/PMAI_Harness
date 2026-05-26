@@ -18,6 +18,32 @@ PM-AI-Workflow 生成器仓的演进记录。本文件**只记影响下游业务
 
 ## 已发布版本
 
+### 2026-05-25 — D-iv v0.3 patch：新手 PM 视角审计 3 BLOCKER 直修
+
+**触发**：subagent 模拟新手 PM 走完整 init→new-req→stage-gate→task→close 流程，报 3 BLOCKER + 3 FRICTION。3 BLOCKER 已 verify 为真，本次直修。
+
+**改动**：
+- `skills/task-confirm/SKILL.md` 顶部指针删「执行前确认闸门 label」（与 body 行 23-25 delta-3 §2.3「不再设确认闸门」自相矛盾，原是 vp-8 后期加指针时未同步 body）
+- 5 个用户面 SKILL Preamble 段（new-req / req-stage-gate / task-confirm / close-task / close-req）加 `python3 .claude/scripts/status-view.py --banner-only --skill X || true` —— banner 真在 body 里调用，不只是顶部 prose 指针
+- 2 个 SKILL（init-project / task-execute）用字面值 `echo "━━━ PMAI ► ..."` —— init-project 是项目级（生成器仓内跑、无 active req），task-execute 入口前置阶段尚未 cd 到 task worktree
+- `scripts/status-view.py:render_banner_only` 无 active req 文案由「先跑 /new-req」改通用「<项目级 / 无 active req>」（对 /init-project 不再误导）
+- 7 SKILL 退出文案补 `▶ Next Up` 关键词（task-confirm 行 206 ▶️→▶ + new-req 步骤 5 handoff + req-stage-gate 退出 + task-execute 步骤 12 通过分支 + close-task Phase 1→2 + close-req Phase 1→2 + close-req Phase 2 终态）
+- `close-task` Phase 1→2 / `close-req` Phase 1→2 切窗口给完整可复制命令（"窗口还开着直接切 / 窗口已关用 cd + claude" 两条路径）
+- `skills/req-stage-gate/SKILL.md` stage 6→7 blocked 错误信息扩展「废弃 task 三步」可复制命令链（mv 到 tasks/discarded/ + 改 task-plan.md `## 变更记录` + 加 task 文件「废弃理由」段），堵 PM 手动跳 task 时 metadata 不一致风险
+- `skills/_shared/pm-view/banner-rules.md` 新加 §3.0 适用范围 —— §3 3 硬规则**只管 AskUserQuestion picker 形式**闸门（GUI 选项卡片），续跑模式 + chat 自由对话走常规形态不受 §3 约束（4 行判定表覆盖典型场景）。修 D-iv vp-7/8 上线后留下的"§3 vs 续跑模式互斥" tension
+- `skills/req-stage-gate/SKILL.md` Stage 1→2 分流 B `gstack-slug` 解析改 fail-loud —— 旧 `SLUG="unknown"` silent fallback 让 PM 误以为"没探测到 office-hours 产物"（实际是 slug 没解析对）；新代码拆三态 (I) slug 失败显式告 PM 原因 (II) slug OK 找到 (III) slug OK 没找到
+- `tests/test-banner-label.sh` 新增 T6-T10（7 SKILL body 真调 banner / 退出处含 ▶ Next Up / task-confirm 不矛盾 / §3.0 适用范围 / slug fail-loud）防回归
+
+**业务仓需注意**：
+- 同步后每个 SKILL 入口都会打 banner（`━━━ PMAI ► SKILL ▸ <stage> ━━━`），PM 切窗口回来不再"失忆"
+- `/close-task` Phase 1 完成后 chat 输出有完整 cd 命令；`/close-req` 同
+- 跳 task 三步走（不再是含糊的"从 task-plan.md 删除该条"）
+- **未新建** `/cancel-task` skill —— PM 实际跳 task 频率不高，三步手动可接受；若消费仓验证发现频繁要跳，再开新 vp 做 skill
+- **§3 适用范围**：以前 vp-7/8 引导 SKILL 顶部写「闸门 label 按 §3」是过度承诺；现在明确只 AskUserQuestion picker 形式才走 §3，chat 自由对话不受约束。SKILL.md 顶部 prose 指针该词原文不动（仍引用 §3），但消费方应按 §3.0 适用范围判定
+- **office-hours slug fail-loud**：消费仓若没装 gstack 或本项目未 gstack 注册，跑到 Stage 1→2 office-hours 分流时会显式报错（不再误说"没探测到产物"），PM 看到 stderr 原文知道是 slug 解析失败、直接走指定路径 / 切结构化批判分流
+
+**测试基线**：`bash tests/run-all.sh` **460 / 0**（前 455/0 + 本次新增 5 case；无回归）
+
 ### 2026-05-09 — I-DC1 文档落盘 gate（task-005 文案偏差事故根因修复）
 
 **事故**：ExampleConsumerApp task-005 三个状态变更弹窗 + 导入弹窗的实施文案与 PM 视图终态偏差。根因是 task-spec 跑了 4 轮 revise + 1 次 reconcile，全部停在 req 分支 working tree 没 commit；task-confirm 通过 `git worktree add -b ... <REQ_BRANCH>` fork 时取的是 req 分支 HEAD commit（first-gen v1），把 PM 改了 4 次的版本完全跳过，executor 按 v1 实施。

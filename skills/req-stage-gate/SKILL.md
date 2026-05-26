@@ -20,6 +20,9 @@ description: |
 source "$(git rev-parse --show-toplevel 2>/dev/null || echo .)/.claude/scripts/skill-preamble.sh"
 echo "SKILL: req-stage-gate"
 
+# M2 banner（视觉锚点；见 _shared/pm-view/banner-rules.md §1）
+python3 "$REPO_ROOT/.claude/scripts/status-view.py" --banner-only --skill REQ-STAGE-GATE || true
+
 # worktree 残留检测（informational，不阻塞推进；有问题仅打印警告供 PM 处理）
 python3 "$REPO_ROOT/.claude/scripts/check-worktree-residue.py" || true
 ```
@@ -59,9 +62,9 @@ PM 在 worktree 里**只需要敲一次** `/req-stage-gate`，之后 stage-gate 
 ✅ Stage 已推进 N → N+1（<下一阶段中文名>）
 
 [根据退出条件二选一：]
-进入 task 执行阶段。后续 task 流程走 /task-spec → /task-execute → /close-task。
+▶ Next Up — /task-confirm tasks/task-NNN-<slug>.md（进入 task 执行；后续 /task-execute → /close-task）
 [或]
-已关闭此需求。
+▶ Next Up — req 已关闭，回 main 分支；下个需求请发 /new-req "<一句话>"
 ```
 
 ## attachments AI 接管 hook（D-iii v2 trigger 0 — stage-gate 任何 stage 期间生效）
@@ -196,18 +199,51 @@ chat 一行确认 `已归档（attachments/<新名>），Y 重点。继续。`�
 
    ```bash
    # 取 gstack 项目 slug（与 office-hours skill 产物目录一致）
-   eval "$(~/.claude/skills/gstack/bin/gstack-slug 2>/dev/null)" 2>/dev/null || SLUG="unknown"
-   OH_DIR="$HOME/.gstack/projects/$SLUG"
-   # 按 mtime 倒序列 office-hours 设计稿（文件名约定：<user>-<branch>-design-<datetime>.md）
-   OH_FILES=$(ls -t "$OH_DIR"/*-design-*.md 2>/dev/null || true)
+   # fail-loud：slug 解析失败要明说原因，不能 silent fallback 到 "unknown" 让 PM 误以为"真没产物"
+   SLUG=""
+   SLUG_ERR=""
+   GSTACK_SLUG_BIN="$HOME/.claude/skills/gstack/bin/gstack-slug"
+   if [ ! -x "$GSTACK_SLUG_BIN" ]; then
+     SLUG_ERR="gstack-slug 命令不存在（路径：$GSTACK_SLUG_BIN）—— gstack 可能未装或路径已变"
+   else
+     GSTACK_OUT=$("$GSTACK_SLUG_BIN" 2>&1) && eval "$GSTACK_OUT" || true
+     if [ -z "${SLUG:-}" ]; then
+       SLUG_ERR="gstack-slug 调用失败（stderr: $GSTACK_OUT）—— 本项目可能未在 gstack 注册"
+     fi
+   fi
+
+   if [ -n "$SLUG" ]; then
+     OH_DIR="$HOME/.gstack/projects/$SLUG"
+     # 按 mtime 倒序列 office-hours 设计稿（文件名约定：<user>-<branch>-design-<datetime>.md）
+     OH_FILES=$(ls -t "$OH_DIR"/*-design-*.md 2>/dev/null || true)
+   else
+     OH_DIR=""
+     OH_FILES=""
+   fi
    ```
 
-   - **找到 ≥1 个** → 列文件名 + mtime，问 PM 三选一：
+   **分流三态**（按 `$SLUG_ERR` 和 `$OH_FILES` 拆三种）：
+
+   - **(I) SLUG 解析失败**（`$SLUG_ERR` 非空）→ **不说"没探测到"**（事实不符），直告 PM 探测无法进行：
+
+     ```
+     Stage 1 → 2（office-hours 分支 — 无法探测产物）
+
+     ⚠️ 无法定位 gstack 项目目录：
+        <SLUG_ERR 原文>
+
+     💬 怎么处理？
+      - 在本 chat 跑 /office-hours，跑完贴绝对路径过来（推荐）
+      - 我自己指定路径（贴绝对路径过来）
+      - 切回结构化批判分支
+     ```
+
+   - **(II) SLUG OK + 找到 ≥1 个** → 列文件名 + mtime，问 PM 三选一：
 
      ```
      Stage 1 → 2（office-hours 分支 — 选源材料）
 
-     📂 探测到 N 份 office-hours 产物（按 mtime 排）：
+     📂 探测到 N 份 office-hours 产物（按 mtime 排，~/.gstack/projects/<SLUG>/）：
        1. <filename>  (<mtime ISO>)
        2. ...
 
@@ -218,12 +254,12 @@ chat 一行确认 `已归档（attachments/<新名>），Y 重点。继续。`�
       - 切回结构化批判分支
      ```
 
-   - **没找到** → 直接给跑 / 指定 / 切回 三选一：
+   - **(III) SLUG OK + 没找到** → 显式告 PM 是真无产物（slug 解析成功）：
 
      ```
      Stage 1 → 2（office-hours 分支 — 无现成产物）
 
-     📂 没探测到本项目的 office-hours 产物（~/.gstack/projects/<slug>/）。
+     📂 本项目（gstack slug: <SLUG>）下没探测到 office-hours 产物（~/.gstack/projects/<SLUG>/）。
 
      💬 怎么处理？
       - 在本 chat 跑 /office-hours，跑完告诉我新文件名（推荐）
@@ -602,20 +638,32 @@ python3 .claude/scripts/req-transition.py "$ACTIVE_REQ_DIR" --to 6
 Stage 6 → 7 blocked: 以下 task 尚未完整关闭
 
 - task-001:
-  - missing task file: 请运行 /task-spec task-001 或从 task-plan.md 删除该条
+  - missing task file: 请运行 /task-spec task-001 完成 spec（或按下方「废弃 task」三步跳过）
 - task-002:
   - status is 执行中: 请在 task 窗口完成 PM 验收（task-submit 呈交块）+ /close-task
   - task branch not merged to req branch: 请运行 /close-task
 - task-003:
   - task worktree still exists: 请确认 /close-task 清理完成
-<!-- task-004 half-close 错误消息已删（D13 final polish-11，C2 detection 已废弃） -->
+
+—— 想跳过某个 task（不再实现）？必须把以下三步**全部跑完**，只跑一两步会留下不一致 metadata：
+
+  1. 移文件：
+       mkdir -p tasks/discarded
+       mv tasks/task-NNN-*.md tasks/discarded/
+  2. 改 task-plan.md：在文末 `## 变更记录` section 加一条 "删除 task-NNN：<一句话理由>"
+     （section 不存在就自己新建）
+  3. 在被移到 tasks/discarded/ 的 task 文件顶部加一段（close-report 会摘要进「已废弃 task」段）：
+       ## 废弃理由
+       <一句话理由>
+
+  三步做完后重跑 /req-stage-gate，verify 会跳过被废弃的 task。
 ```
 
 边界情况：
 
-- task in task-plan.md but task file not yet generated → judgment fails，prompt PM to run `/task-spec <task-id>` or remove it from `task-plan.md`。
+- task in task-plan.md but task file not yet generated → judgment fails，prompt PM to run `/task-spec <task-id>`，**或**按上方「废弃 task」三步跳过。
 - Infrastructure tasks → same close requirement；doc-update 会 auto-skips module merge，但仍必须完成 `/close-task` 的 branch merge 和 worktree cleanup。
-- task 文件存在但不在 task-plan.md，且未在 `## 变更记录` 中说明 → 不作为关闭条件来源；提示 PM 校验是否需要补回 task-plan.md 或删除孤儿 task 文件。
+- task 文件存在但不在 task-plan.md，且未在 `## 变更记录` 中说明 → 不作为关闭条件来源；提示 PM 校验是否需要补回 task-plan.md 或按「废弃 task」三步删除孤儿 task 文件。
 
 推进：
 ```bash

@@ -47,6 +47,14 @@ agent 读 task 文件即可拿到全部执行所需内容（同一文件分区�
 
 ### 入口前置（v4 修订）
 
+#### 入口步骤 0：M2 banner
+
+agent 进入 skill 时**立刻** Bash echo 一行 banner（task worktree 此时尚未 cd，不能调 `status-view.py`；用字面值，见 `_shared/pm-view/banner-rules.md` §1）：
+
+```bash
+echo "━━━ PMAI ► TASK-EXECUTE ▸ 启动 task 执行 ━━━"
+```
+
 #### 入口步骤 1：定位 task 文件
 
 支持三种参数模式：
@@ -520,7 +528,7 @@ python3 .claude/scripts/task-transition.py "$TASK_FILE" --to 已完成
 ```text
 ✅ task-NNN 状态已转「已完成」。
 
-下一步：在本（task）窗口运行：
+▶ Next Up — 在本（task）窗口运行：
   /close-task task-NNN
 
 AI 会走 Phase 1（task md ↔ 原型对齐 / 文档偏差校验 / 视觉规范沉淀 DESIGN.md / commit 到 task 分支 / 写 finalize marker），完成后会提示你切到 req 窗口再跑一次 /close-task 走 Phase 2（merge → req / 删 task worktree+branch / auto-chain）。

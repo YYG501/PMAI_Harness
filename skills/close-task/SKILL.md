@@ -42,6 +42,9 @@ task-spec 产 **单文件 typed contract**（`task-NNN-<slug>.md`，三区：PM 
 ```bash
 source "$(git rev-parse --show-toplevel 2>/dev/null || echo .)/.claude/scripts/skill-preamble.sh"
 echo "SKILL: close-task"
+
+# M2 banner（视觉锚点；见 _shared/pm-view/banner-rules.md §1）
+python3 "$REPO_ROOT/.claude/scripts/status-view.py" --banner-only --skill CLOSE-TASK || true
 ```
 
 ## Phase 自动判断（入口）
@@ -480,8 +483,12 @@ AI 向 PM 输出结束语，task 窗口工作到此结束。结束语含**自动
 · 跨功能规则：M 条已 promote 到 docs/PRODUCT-RULES.md（未 commit）
 （X/Y/K/M 为 0 的行省略；全 0 时整段写「无需对齐 / 无沉淀」）
 
-请切到 req 窗口（cwd = req worktree），再次运行：
+▶ Next Up — 切到 req 窗口跑 /close-task：
 
+如果 req 窗口还开着：直接切过去运行 `/close-task`
+如果 req 窗口已关：
+  cd <REQ_WORKTREE_ABS>     ← 替换为本 req worktree 绝对路径（脚本在 finalize marker 写过）
+  claude
   /close-task
 
 AI 会自动走 Phase 2 完成 merge + 删 task worktree/branch + auto-chain。
