@@ -10,7 +10,7 @@ delta-2+4 换芯：stage 3「方案设计」→「功能规格」，产物 solut
 from __future__ import annotations
 
 STAGE_NAMES: dict[int, str] = {
-    1: "感受问题",
+    1: "描述需求",
     2: "需求分析",
     3: "功能规格",
     4: "设计系统建立",

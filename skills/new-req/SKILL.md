@@ -164,7 +164,7 @@ commit（见步骤 4.5）。每 req 入口触发、升级后自然 silent skip�
 
 ### 步骤 4：Stage 1 — 产出 brief.md（AI 引导，**不调用 /office-hours**）
 
-**关键原则**：brief 是 PM 第一手"感受问题"的产物，AI 不主动调任何外部工具、不预读项目文档 /
+**关键原则**：brief 是 PM 第一手"描述需求"的产物，AI 不主动调任何外部工具、不预读项目文档 /
 历史 req。如果 PM 想用 office-hours 风格做深挖讨论，那是 **Stage 2 的工具选择**（在 worktree
 内由 `/req-stage-gate` Stage 1→2 入口分流，B 分支走 office-hours），不是 Stage 1 的事 —— Stage 1
 的产物保持单一：PM 一句话需求 → AI 缺口分析补问 → brief 草稿 → 二次确认。
@@ -204,7 +204,7 @@ PM 选 1 或直接开始描述需求时，AI 走以下流程：
 
 4. **二次确认门**（v3 书面体）：
    ```
-   Stage 1（感受问题）— brief 待确认
+   Stage 1（描述需求）— brief 待确认
 
    ✅ brief.md
       <绝对路径>
@@ -227,32 +227,12 @@ PM 选 1 或直接开始描述需求时，AI 走以下流程：
 
 `brief.md` 是 stage 1 的唯一真相源，后续所有 stage 只读 brief.md。
 
-### 步骤 4.3：业务词催补 hook（v5 vp-4b）
+### 步骤 4.3：~~业务词催补 hook~~（已退场 — 2026-05-26）
 
-写 brief 草稿后 / PM 二确前，调 `scripts/_lib/term-detector.py` 检测未登记的业务词 / 角色（含**X**加粗 / 「X」中文引号 / 双引号短词）：
-
-```bash
-python3 "$REPO_ROOT/.claude/scripts/_lib/term-detector.py" \
-  "$ACTIVE_REQ_DIR/brief.md" "$REPO_ROOT" --req-dir "$ACTIVE_REQ_DIR"
-```
-
-按返回 JSON 处理（详见 `skills/_shared/term-detector/SKILL.md`）：
-- `new_terms` ≥3 → 多词批量话术（一次问"全加 / 挑几个 / 全跳过"）
-- `new_terms` <3 + `new_roles` → 单词话术 + 新角色话术
-- 全空（new_terms + new_roles 都 0）→ silent，无需打断 PM
-
-PM 拒绝某词 → 追加 `$ACTIVE_REQ_DIR/.term-skip.json`：
-```bash
-python3 -c "
-import json, os
-p = os.environ['ACTIVE_REQ_DIR'] + '/.term-skip.json'
-data = json.load(open(p)) if os.path.exists(p) else {'skipped_terms': [], 'skipped_roles': []}
-data['skipped_terms'].append('<被拒词>')
-json.dump(data, open(p, 'w'), ensure_ascii=False, indent=2)
-"
-```
-
-PM 同意补 → AI 起草定义 + PM 确认 → AI patch `$REPO_ROOT/docs/PROJECT.md` `## 业务术语表` 表追加一行（≤30 字）/ `## 用户画像` 表追加一行（角色名 / 描述 / 关键诉求）。
+> brief 阶段不再调 `term-detector.py`。理由：brief 是 PM 自由描述需求的阶段，
+> 业务词还在变 + PM 用 `**` 多为修辞，detector 信噪比差，PM 拍下来全跳过 =
+> 浪费一次确认门。业务词催补统一收敛到 `prd-writing` 步骤 3.6 一处
+> （PRD 定稿时业务词稳定，是建术语表唯一合理的时间窗）。
 
 ### 步骤 4.4：attachments AI 接管 hook（D-iii v2 trigger 0 + 现 trigger 2 保留作 fallback）
 

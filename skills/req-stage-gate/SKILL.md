@@ -101,7 +101,7 @@ chat 一行确认 `已归档（attachments/<新名>），Y 重点。继续。`�
 
 ## Stage 过渡逻辑
 
-### Stage 1 → 2（感受问题 → 需求分析）
+### Stage 1 → 2（描述需求 → 需求分析）
 
 > **v4 体验包装层（D-i）**：brief 二次确认 + 需求讨论方式选择**合二为一**，PM 视角"一次需求讨论"。下游分两条分流：A = 结构化批判（`/req-analysis`），B = YC office-hours 式（snapshot 复制）。两条分流的产物都通过 `_lib.state.set_stage_source` 写到 `.req-meta.json`，下游 SKILL 一律走 `get_stage_source(req_dir, 2)` helper 读 stage 2 真相源（不再硬编码 `analysis.md`）。
 

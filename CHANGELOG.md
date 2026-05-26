@@ -122,6 +122,19 @@ PM-AI-Workflow 生成器仓的演进记录。本文件**只记影响下游业务
 
 ## 未发布
 
+### 2026-05-26 — refactor(stages): Stage 1 中文名「感受问题」→「描述需求」
+
+**问题**：「感受问题」措辞文艺、隐喻味重，PM 看 status-view banner / Stage 1→2 闸门时看不出这个 stage 实际要做什么（产出 brief.md 描述需求一句话）。
+
+**改动**：单一真相源 `scripts/_lib/stages.py` STAGE_NAMES[1] 改成「描述需求」；下游 `status-view.py` / `req-transition.py` / `_lib/state.get_current_stage_banner` 输出自动跟着变。同步改 prose 引用 2 处：
+
+- `skills/new-req/SKILL.md`：brief 原则段引号、二次确认门 banner 模板
+- `skills/req-stage-gate/SKILL.md`：Stage 1 → 2 章节标题
+
+**消费仓影响**：sync 后老 req（已过 Stage 1）的 banner / status-view 输出 stage 名跟着改；不影响数据 / 流程，纯文案。`docs/归档/` 历史快照保留旧名（不动）。
+
+**测试基线**：476 / 0（无变化，未新增测试 —— 纯文案 rename + 单一真相源覆盖）。
+
 ### 2026-05-26 — fix(new-req): 加步骤 0「获取需求描述」严格规定无参数兜底文案
 
 **问题**：PM 跑 `/new-req`（无参数），AI 临场编出工程黑话长文案：
