@@ -148,10 +148,60 @@ fi
 
 > 增量分析的价值：项目跑到第 5、第 10 个 req 时，不必每次把整个产品重新解构一遍 —— 聚焦增量，分析更快也更准。
 
-### 步骤 1：读输入文档建立基线
+### 步骤 0.5：项目级文档强制 echo（不依赖 LLM 自觉 Read）
 
-读 `$ACTIVE_REQ_DIR/brief.md`，及 `docs/PROJECT.md` / `docs/modules/INDEX.md`（若存在）。
-**增量分支**：额外把 `docs/modules/<本 req 涉及模块>.md` 当已知基线读入（不重新质疑已稳定模块）。
+req-analysis 是 Stage 1→2 orchestrated 模式（PM 不在 loop），必读文档漏读 = 错位分析 / 与已有模块冲突却未识别。**与 task-execute 步骤 2.0 / prd-writing 步骤 0.5 同款失效模式同款修法** —— Bash `cat` 把基础必读无条件 echo 到 transcript，保证内容进入 working context。
+
+```bash
+SOURCES=(
+  "$ACTIVE_REQ_DIR/brief.md"
+  "$REPO_ROOT/docs/PROJECT.md"
+  "$REPO_ROOT/docs/modules/INDEX.md"
+)
+
+for f in "${SOURCES[@]}"; do
+  if [ -f "$f" ]; then
+    echo "════════════════════════════════════════════════════════════════"
+    echo "FORCE READ: $f"
+    echo "════════════════════════════════════════════════════════════════"
+    cat "$f"
+    echo "════════════════════════════════════════════════════════════════"
+    echo "END $f"
+    echo "════════════════════════════════════════════════════════════════"
+  else
+    echo "ℹ️  $f 不存在，跳过"
+  fi
+done
+```
+
+**增量分支额外步骤 1.5（涉及模块 spec 强制 echo）**：步骤 1 读完已 echo 的 brief / INDEX 后，识别本 req 涉及哪些 `docs/modules/<m>.md`，再用同样 cat 模式 echo 每个涉及模块的主功能规格文件（按 INDEX.md「当前文档路径」列识别主文件；task-NNN-*.md 历史实现记录不重 echo）：
+
+```bash
+# 步骤 1 识别完涉及模块后填
+MODULE_SPECS=(
+  # 例：
+  # "$REPO_ROOT/docs/modules/部门+用户+角色设计/department-group-role-design-v4.1.md"
+)
+
+for f in "${MODULE_SPECS[@]}"; do
+  if [ -f "$f" ]; then
+    echo "════════════════════════════════════════════════════════════════"
+    echo "FORCE READ: $f"
+    echo "════════════════════════════════════════════════════════════════"
+    cat "$f"
+    echo "════════════════════════════════════════════════════════════════"
+    echo "END $f"
+    echo "════════════════════════════════════════════════════════════════"
+  fi
+done
+```
+
+全量分支跳过 1.5（无既有模块基线）。
+
+### 步骤 1：消化已 echo 的输入 + 识别涉及模块
+
+**全量分支**：`$ACTIVE_REQ_DIR/brief.md` + `docs/PROJECT.md` / `docs/modules/INDEX.md` 已由 步骤 0.5 echo 进 context，直接基于内容建立基线。
+**增量分支**：基于 brief + INDEX 识别本 req 涉及的模块清单，落到 `MODULE_SPECS` 数组 → 跑步骤 1.5 强制 echo → 把模块 spec 当已知基线（不重新质疑已稳定模块）。
 
 ### 步骤 2：执行第一性原理 4 层（内部推理）
 

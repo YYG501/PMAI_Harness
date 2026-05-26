@@ -68,17 +68,53 @@ stage_prefix `"task-plan"`（Stage 5b）。chat 一行确认 `已归档（attach
 - `skills/_shared/pm-view/section-order.md`（§七）
 - `skills/_shared/pm-view/input-flow.md`（§九）
 
-### 步骤 1：读取所有必读输入
+### 步骤 0.5：项目级文档强制 echo（不依赖 LLM 自觉 Read）
 
-按上方 Required Inputs 列出的文件**逐一读取**：
-- 上游 stage 文档（brief / analysis / prd 功能规格）
-- 项目级文档（PROJECT / DESIGN / prd / modules / prototypes）
+行 78 原 prose 警告「AI 不得以'觉得不必要'为由跳过」是无效防御 —— LLM 自觉 Read tool 触发不稳是 task-001 反复迭代踩坑的根因，与 task-execute 步骤 2.0 / prd-writing 步骤 0.5 同源。Bash `cat` 把基础必读全文 echo 进 transcript：
 
-**特别注意**：
-- 项目级文档列为"必读"——AI 不得以"觉得不必要"为由跳过
-- `prototypes/` 必读（input-flow.md §9.3）：
-  - 判断哪些能力已存在（影响 task 拆分粒度，避免重复创建）
-  - 反向校验上游文档：原型已删除 / 砍掉的工程概念不引入 task 拆分
+```bash
+# stage 2 真相源路径解析
+STAGE2_SRC=$(cd "$REPO_ROOT" && python3 -c "
+import sys; sys.path.insert(0, 'scripts')
+from pathlib import Path
+from _lib.state import get_stage_source
+print(get_stage_source(Path('$ACTIVE_REQ_DIR'), 2))
+" 2>/dev/null)
+
+SOURCES=(
+  "$ACTIVE_REQ_DIR/brief.md"
+  "$STAGE2_SRC"
+  "$ACTIVE_REQ_DIR/implementation-design.md"   # Stage 5a 已产出，task 拆分必须看架构决策表 + 段 1.5 原型简化项
+  "$REPO_ROOT/docs/PROJECT.md"
+  "$REPO_ROOT/docs/modules/INDEX.md"
+)
+
+for f in "${SOURCES[@]}"; do
+  if [ -n "$f" ] && [ -f "$f" ]; then
+    echo "════════════════════════════════════════════════════════════════"
+    echo "FORCE READ: $f"
+    echo "════════════════════════════════════════════════════════════════"
+    cat "$f"
+    echo "════════════════════════════════════════════════════════════════"
+    echo "END $f"
+    echo "════════════════════════════════════════════════════════════════"
+  else
+    echo "ℹ️  $f 不存在或未解析，跳过"
+  fi
+done
+```
+
+**不在 echo 范围**（按 `input-flow.md` 既有强约束读，不全文 echo）：
+- `prd.md` —— §9.1.1 章节 grep 按 task 切片读
+- `prototypes/` —— §9.3 >500 行禁整文件 Read（task-plan 步骤 1 仍要按 §9.3 看原型，但不能机械全文 echo）
+- `docs/DESIGN.md` / `docs/modules/<m>.md` —— 按需 grep 局部读
+
+### 步骤 1：消化已 echo 输入 + 按既有强约束读 slice-read 项
+
+步骤 0.5 已把 brief / stage2源 / implementation-design / PROJECT / INDEX 全文 echo 进 transcript。本步骤补：
+- `prd.md`：按 `input-flow.md §9.1.1` 按 task 切片关键词 grep 局部读
+- `prototypes/`：按 `input-flow.md §9.3` 强约束（>500 行禁整文件 Read）—— 判断哪些能力已存在、反向校验上游文档
+- 涉及模块 spec：按 `docs/modules/INDEX.md`（已 echo）定位主功能规格文件，按需 grep 局部读
 
 ### 步骤 2：拆分 task
 

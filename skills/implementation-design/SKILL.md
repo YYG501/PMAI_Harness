@@ -93,13 +93,73 @@ stage_prefix `"impl"`（Stage 5a `implementation-design`）。chat 一行确认 
 
 **单一真相源**：`skills/_shared/pm-view/attachments-upload.md`。
 
-### 步骤 1：读取所有必读输入
+### 步骤 0.5：项目级文档强制 echo（不依赖 LLM 自觉 Read）
 
-按上方 Required Inputs 逐一读取。**特别注意**：
-- `docs/DESIGN.md` 的组件 inventory 是「照哪些现有组件写」的权威来源 —— stage 4
-  gap-check 已先更新过 inventory（每 req 必跑组件复用关口），本 skill 读到的是更新后的。
-  §2 文件·模式索引据 inventory 写「复用现有组件 X」；inventory 没有的才标新建。
+implementation-design 必读输入是所有 orchestrated skill 里最多的（8 项），LLM 自觉 Read 漏读 / 浅读概率最高。**与 task-execute 步骤 2.0 / prd-writing 步骤 0.5 同款失效模式同款修法** —— Bash `cat` 把基础必读全文 echo 进 transcript，保证进入 working context。
+
+```bash
+# stage 2 真相源路径解析
+STAGE2_SRC=$(cd "$REPO_ROOT" && python3 -c "
+import sys; sys.path.insert(0, 'scripts')
+from pathlib import Path
+from _lib.state import get_stage_source
+print(get_stage_source(Path('$ACTIVE_REQ_DIR'), 2))
+" 2>/dev/null)
+
+SOURCES=(
+  "$ACTIVE_REQ_DIR/prd.md"           # WHAT 主源
+  "$STAGE2_SRC"                       # 技术依赖 / 约束
+  "$ACTIVE_REQ_DIR/brief.md"         # 原始诉求
+  "$REPO_ROOT/docs/PROJECT.md"       # 技术栈 / 业务术语表（长期词典）
+  "$REPO_ROOT/docs/DESIGN.md"        # 组件 inventory（正向源：照哪些组件写）
+)
+
+for f in "${SOURCES[@]}"; do
+  if [ -n "$f" ] && [ -f "$f" ]; then
+    echo "════════════════════════════════════════════════════════════════"
+    echo "FORCE READ: $f"
+    echo "════════════════════════════════════════════════════════════════"
+    cat "$f"
+    echo "════════════════════════════════════════════════════════════════"
+    echo "END $f"
+    echo "════════════════════════════════════════════════════════════════"
+  else
+    echo "ℹ️  $f 不存在或未解析，跳过"
+  fi
+done
+```
+
+涉及模块的 `docs/modules/<m>.md` 在**步骤 1.5** echo（要等步骤 1 基于 prd 识别完本 req 涉及哪些模块；不能在 0.5 机械列出 —— 会污染 context）。
+
+### 步骤 1：消化已 echo 输入 + 识别涉及模块
+
+步骤 0.5 已把 prd / stage2源 / brief / PROJECT / DESIGN 全文 echo 进 transcript。本步骤基于内容：
+- `docs/DESIGN.md` 的组件 inventory 是「照哪些现有组件写」的权威来源 —— stage 4 gap-check 已先更新过 inventory（每 req 必跑组件复用关口），本 skill 读到的是更新后的。§2 文件·模式索引据 inventory 写「复用现有组件 X」；inventory 没有的才标新建。
 - `prd.md` 是 WHAT —— 本文件只补 HOW，不重复 PRD 的功能行为描述（引用，不重抄）。
+- 同时识别本 req 涉及的模块清单（参考 `docs/modules/INDEX.md`，若 INDEX 未在步骤 0.5 echo 则补 `cat` 一次），落到 `MODULE_SPECS` 数组供步骤 1.5 使用。
+
+### 步骤 1.5：涉及模块 spec 强制 echo（同 0.5 同源）
+
+```bash
+MODULE_SPECS=(
+  # 步骤 1 识别填入，例：
+  # "$REPO_ROOT/docs/modules/部门+用户+角色设计/department-group-role-design-v4.1.md"
+)
+
+for f in "${MODULE_SPECS[@]}"; do
+  if [ -f "$f" ]; then
+    echo "════════════════════════════════════════════════════════════════"
+    echo "FORCE READ: $f"
+    echo "════════════════════════════════════════════════════════════════"
+    cat "$f"
+    echo "════════════════════════════════════════════════════════════════"
+    echo "END $f"
+    echo "════════════════════════════════════════════════════════════════"
+  fi
+done
+```
+
+涉及模块为空（如纯基础设施 req）→ 跳过本步骤。
 
 ### 步骤 2：按归宿表产出 implementation-design.md
 

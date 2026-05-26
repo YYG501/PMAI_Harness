@@ -44,7 +44,7 @@ prd-writing 是**多入口 skill**，两条入口的边界如下：
 
 ## 步骤 0 · 开场对话式确认（仅 standalone 模式走）
 
-> **stage-3 orchestrated 模式：跳过本步骤。** stage-gate 调用本 skill 时已隐含「req 级 / 当前 req / 默认产物路径」三项答案，无需再问 PM —— 这是步骤 0 被 stage-gate 短路的机制。直接进入「Required Inputs」+ 步骤 1。
+> **stage-3 orchestrated 模式：跳过本步骤。** stage-gate 调用本 skill 时已隐含「req 级 / 当前 req / 默认产物路径」三项答案，无需再问 PM —— 这是步骤 0 被 stage-gate 短路的机制。短路后直接进入**步骤 0.5（项目级文档强制 echo）→ 步骤 1（拆决策 + 识别涉及模块）→ 步骤 1.5（涉及模块 spec 强制 echo）→ 步骤 2**。步骤 0.5 / 1.5 是 stage-3 模式独有的「强制 echo 防漏读」屏障，对应 task-execute 步骤 2.0 同款修法。
 
 standalone 模式下，AI **第一件事**是与 PM 对话确认：
 
@@ -72,8 +72,8 @@ standalone 模式下，AI **第一件事**是与 PM 对话确认：
 
 | 场景 | 推荐输入 |
 |---|---|
-| req 级 PRD | $ACTIVE_REQ_DIR/brief.md / analysis.md + docs/PROJECT.md + docs/DESIGN.md + docs/modules/INDEX.md + 涉及模块的 docs/modules/<m>.md |
-| 独立 PRD（PM 指定模块清单 X/Y/Z） | docs/PROJECT.md + docs/DESIGN.md + docs/modules/INDEX.md + docs/modules/X.md + docs/modules/Y.md + docs/modules/Z.md;**不读** req 上下文（brief/analysis），因为不绑 req |
+| req 级 PRD | $ACTIVE_REQ_DIR/brief.md / analysis.md + docs/PROJECT.md + docs/PRODUCT-RULES.md + docs/modules/INDEX.md + 涉及模块的 docs/modules/<m>.md |
+| 独立 PRD（PM 指定模块清单 X/Y/Z） | docs/PROJECT.md + docs/PRODUCT-RULES.md + docs/modules/INDEX.md + docs/modules/X.md + docs/modules/Y.md + docs/modules/Z.md;**不读** req 上下文（brief/analysis），因为不绑 req |
 | 补差 | 现有 PRD + 补差范围相关的 module / analysis 子集 |
 
 PM 答「改」 → 调整推荐清单 / 产物路径 → 再确认 → OK 后进入实际写作（步骤 1）。
@@ -106,9 +106,9 @@ stage 3 没有原型、没有 task —— 输入只有上游 stage 1/2 的产物
   - **B 分支**（`stage2_tool=office-hours`）：`$ACTIVE_REQ_DIR/stage2-office-hours.md`（YC office-hours 设计稿 snapshot；功能分解嵌在 prose 里，§六派生时按"用户可发起动作"扫全文）
   - 路径解析：`python3 -m _lib.state read_req_meta $ACTIVE_REQ_DIR` 拿 `stage2_source` 字段，或直接读 `get_stage_source(req_dir, 2)` helper 返回的绝对路径
 - 🟢 `docs/PROJECT.md`（项目定位 / 用户画像 / 业务术语表 / 产品路线）
-- 🟢 `docs/DESIGN.md`（如存在 — 产品级视觉决策，PRD 不写像素颜色，仅引用稀疏）
 - 🟢 `docs/PRODUCT-RULES.md`（如存在 — **全文读**，跨功能产品行为规则；PRD 一次写对、不违背常驻规则。delta-9）
 - 🟢 `docs/modules/INDEX.md` + `docs/modules/<本 req 涉及模块>.md`（如目录存在）
+- ❌ `docs/DESIGN.md`（视觉规范，归 implementation-design / task-execute 读；PRD 写功能规格不写像素颜色，DESIGN.md 在本 skill 只作**反向边界提示**用，不作正向源材料 —— 见 §六「原型」节 / §六 lint 视觉细节越界）
 - ❌ **没有** `prototypes/`（stage 3 时原型尚未产出）
 - ❌ **没有** `tasks/`（stage 3 时 task 尚未拆分）
 - ❌ 任何 `.engineering.md`
@@ -123,7 +123,7 @@ stage 3 没有原型、没有 task —— 输入只有上游 stage 1/2 的产物
 
 ## Workflow
 
-> 步骤编号在两入口共用。stage-3 orchestrated 模式跳步骤 0；**步骤 2.5 §六拆分两入口都强制 PM 确认门**（详见步骤 2.5 e）；不再有独立的步骤 4 最终确认（stage 3 的定稿确认归 `req-stage-gate` 单一确认门）。
+> 步骤编号在两入口共用。stage-3 orchestrated 模式跳步骤 0、**必跑步骤 0.5 / 1.5（项目级 + 涉及模块 spec 强制 echo）**；standalone 模式跑步骤 0、可省 0.5 / 1.5（PM 在线会拦漏读）。**步骤 2.5 §六拆分两入口都强制 PM 确认门**（详见步骤 2.5 e）；不再有独立的步骤 4 最终确认（stage 3 的定稿确认归 `req-stage-gate` 单一确认门）。
 
 ### attachments AI 接管 hook（D-iii v2 trigger 0 — 任何步骤期间生效；standalone 模式不启）
 
@@ -150,7 +150,85 @@ stage_prefix `"prd"`（Stage 3）。chat 一行确认 `已归档（attachments/p
 
 **单一真相源**：`skills/_shared/pm-view/attachments-upload.md`（完整 prose / 替换 / 删除 / batch / 失败兜底）。
 
-1. **读入 + 拆决策**——读取「Required Inputs」列出的文件，从 **stage 2 真相源**（A 分支 `analysis.md` / B 分支 `stage2-office-hours.md`）+ `brief.md` 拆出「已确认决策」和「待执行决策」；有待执行项则先编号提问 PM，确认后再写 PRD。stage 3 没有 `solution.md` / `tasks/` 可读 —— PRD 的功能规格从 stage 2 真相源的功能分解现写。
+### 步骤 0.5 · 项目级文档强制 echo（stage-3 模式必跑；不依赖 LLM 自觉 Read）
+
+PRD 漏读 / 浅读项目级文档（brief / stage 2 真相源 / PROJECT.md / PRODUCT-RULES.md / modules INDEX）是 LLM 自觉 Read tool 触发不稳的典型踩坑（与 `task-execute` 步骤 2.0 同源问题：「Read tool 触发与否取决于 LLM 自觉，长文档进 context 后细节又会被冲淡」）。本子步骤用 Bash `cat` 把项目级文档无条件 echo 到 transcript，**保证内容进入 working context** —— 比依赖 Read tool 自觉触发硬。冗余于上方「Required Inputs」prose 列表也无害。
+
+**stage-3 orchestrated 模式：必跑本步骤**（步骤 0 被 stage-gate 短路了 → 直接进步骤 0.5 → 步骤 1）。
+**standalone 模式**：步骤 0 已与 PM 对齐清单 / PM 在线会立刻拦漏读，本步骤可省。
+
+```bash
+# stage 2 真相源路径解析（A 分支 analysis.md / B 分支 stage2-office-hours.md）
+STAGE2_SRC=$(cd "$REPO_ROOT" && python3 -c "
+import sys; sys.path.insert(0, 'scripts')
+from pathlib import Path
+from _lib.state import get_stage_source
+print(get_stage_source(Path('$ACTIVE_REQ_DIR'), 2))
+" 2>/dev/null)
+
+SOURCES=(
+  "$ACTIVE_REQ_DIR/brief.md"
+  "$STAGE2_SRC"
+  "$REPO_ROOT/docs/PROJECT.md"
+  "$REPO_ROOT/docs/PRODUCT-RULES.md"
+  "$REPO_ROOT/docs/modules/INDEX.md"
+)
+
+for f in "${SOURCES[@]}"; do
+  if [ -n "$f" ] && [ -f "$f" ]; then
+    echo "════════════════════════════════════════════════════════════════"
+    echo "FORCE READ: $f"
+    echo "════════════════════════════════════════════════════════════════"
+    cat "$f"
+    echo "════════════════════════════════════════════════════════════════"
+    echo "END $f"
+    echo "════════════════════════════════════════════════════════════════"
+  else
+    echo "ℹ️  $f 不存在或未解析，跳过"
+  fi
+done
+```
+
+涉及模块的 `docs/modules/<m>.md` 在**步骤 1.5** echo（要等步骤 1 识别完本 req 涉及哪些模块；不能在 0.5 机械列出，会污染 context）。
+
+本步骤只保证内容到位，不做 echo 后语义校验（语义校验靠 LLM 在步骤 1 拆决策 / 步骤 2 派生 §六时自然消化）。
+
+1. **拆决策 + 识别涉及模块**（基于步骤 0.5 已 echo 的内容）——从 **stage 2 真相源**（A 分支 `analysis.md` / B 分支 `stage2-office-hours.md`）+ `brief.md` 拆出「已确认决策」和「待执行决策」；有待执行项则先编号提问 PM，确认后再写 PRD。同时识别本 req 涉及的模块清单（参考步骤 0.5 已 echo 的 `docs/modules/INDEX.md`），落到 `MODULES` 变量供步骤 1.5 使用。stage 3 没有 `solution.md` / `tasks/` 可读 —— PRD 的功能规格从 stage 2 真相源的功能分解现写。
+
+1.5. **涉及模块 spec 强制 echo**（stage-3 模式必跑；同 0.5 同源理由）——步骤 1 识别完本 req 涉及模块后，把对应 modulespec 文件无条件 echo 到 transcript。一个模块可能含多个 spec 文件（如 `功能清单.md` / `task-NNN-*.md` / `prd.md`），echo **当前有效的功能规格主文件**即可（task-NNN-*.md 是历史实现记录，PRD 写作不需要重读所有），LLM 基于 INDEX.md 的"当前文档路径"列识别主文件：
+
+   ```bash
+   # 步骤 1 识别出的涉及模块（LLM 填）
+   MODULES=(
+     # 例：
+     # "部门+用户+角色设计"
+     # "日志"
+   )
+
+   # 每模块 echo 主功能规格文件（按 INDEX.md 当前路径）
+   MODULE_SPECS=(
+     # 例：
+     # "$REPO_ROOT/docs/modules/日志/功能清单.md"
+     # "$REPO_ROOT/docs/modules/部门+用户+角色设计/department-group-role-design-v4.1.md"
+   )
+
+   for f in "${MODULE_SPECS[@]}"; do
+     if [ -f "$f" ]; then
+       echo "════════════════════════════════════════════════════════════════"
+       echo "FORCE READ: $f"
+       echo "════════════════════════════════════════════════════════════════"
+       cat "$f"
+       echo "════════════════════════════════════════════════════════════════"
+       echo "END $f"
+       echo "════════════════════════════════════════════════════════════════"
+     fi
+   done
+   ```
+
+   边界：
+   - 涉及模块为空（如 IA 重整类 req 改的是框架配置不绑某模块）→ 跳过本步骤
+   - 单模块 spec > 1500 行 → 仍 echo 全文（PRD 写作要全局视野，截读会漏；task-execute 步骤 2.0 对 489 行 DESIGN.md 全文 echo 是同款判断）
+   - standalone 模式跳过（同 0.5 理由）
 
 2. **功能分解派生 §六层级**——stage 3 没有原型可作权威依据，§六功能需求的层级**从 stage 2 真相源的功能分解派生**：把 stage 2 真相源里列出的功能清单按用户动作重组为 §六的一级 / 二级 / 三级层级。动词锚定规则不变（见步骤 2.5），只是重组对象从「原型 UI 结构」换成「stage 2 真相源功能清单」。
    - **A 分支**（`analysis.md`）：第 4 章「功能分解」表是权威功能清单

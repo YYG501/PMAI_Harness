@@ -136,6 +136,53 @@ PM-AI-Workflow 生成器仓的演进记录。本文件**只记影响下游业务
 
 ## 未发布
 
+### 2026-05-26 — feat(askuser-rules / review-skill-guard): 固化 memory 反思（A1 PM 逐条决策 + A3 评审先扫现状）
+
+**触发**：盘点生成器仓 22 条 memory + 消费仓（ExampleConsumerApp）5 条 memory，识别 4 个未固化到框架的反思项，最终决定做 P0 + P1 两项（A2/A4 留 backlog）：
+- A1：消费仓 memory `pm-plain-language-one-decision-at-a-time.md` 记录 PM 多次驳回"术语密集 + 批量 AskUser"，但 `_shared/pm-view/askuser-rules.md` 不含「多决策必须拆开顺序问」硬规则 → 新消费仓 PM 必踩同样坑
+- A3：生成器仓 memory `feedback_autoplan_preread_existing_skill.md` 记录 D13 前 5 轮 autoplan 评审无一发现仓库已有 `req-stage-gate` 等机制，但 `hooks/review-skill-guard.cjs` GUARD_TEXT 不含「评审前先扫项目现有机制」约束 → 下次跑 autoplan 仍会翻车
+
+**改动**：
+- `skills/_shared/pm-view/askuser-rules.md` §1 标题从「3 条硬规则」改「4 条硬规则」+ §1.3 后插入 §1.4「多决策必须拆开顺序问」（触发场景 / AI 行为 / 反例 / 正例 / Why / How to apply 全段）
+- `hooks/review-skill-guard.cjs` GUARD_TEXT 在「FORCE stance」之后插入「Ground in 现状」段：评审 agent 必须先 grep `skills/`/`hooks/`/`scripts/`/`docs/` 找现有同主题机制，找到→优先复用、找不到→才新增；对调用方（autoplan / plan-eng-review）同样生效，派子 agent 前注入"先 grep 现状"指令
+
+**影响**：
+- 所有用 AskUserQuestion 的 skill（req-stage-gate / new-req / task-confirm / close-task 等）通过 §1 顶部引用自动继承 §1.4 约束；不需要逐 skill 改
+- review-skill-guard hook 触发 review/audit 类 skill 时自动注入新增段（消费仓 hook 文件已同步生效；新 git pull 即生效）
+- 不涉及代码逻辑改动，纯文档 / 注入文本调整；测试基线无变化
+
+**未做（留 backlog）**：A2（推翻类 req 不引用同源文档作权威）+ A4（audit 挡 task 通用诊断顺序）—— 低频场景，固化成本/收益比不划算
+
+### 2026-05-26 — fix(req-analysis / implementation-design / task-plan / task-spec): 项目级文档强制 echo 同款修法
+
+**触发**：prd-writing 落 0.5 / 1.5 强制 echo 修复后审计同类 skill，发现 4 个 orchestrated skill 有同款漏读风险，且 task-plan 行 78 / task-spec 行 101 已经写了 prose 警告「AI 不得以'觉得不必要'为由跳过」—— **说明框架早就识别这个失效模式，但只用 prose 防御无效**。本次按 task-execute 步骤 2.0 / prd-writing 步骤 0.5 同款修法批量补齐。
+
+**改动**（每个 skill 同款 Bash `cat` echo 模式，按各自 small-bounded-full-read 输入裁剪）：
+- `skills/req-analysis/SKILL.md` 新增步骤 0.5（brief + PROJECT + modules/INDEX）+ 步骤 1 改名「消化已 echo 输入 + 识别涉及模块」+ 增量分支步骤 1.5（涉及模块 spec 强制 echo）
+- `skills/implementation-design/SKILL.md` 新增步骤 0.5（prd 全文 + stage2源 + brief + PROJECT + DESIGN 组件 inventory）+ 步骤 1 改名 + 步骤 1.5 涉及模块 spec
+- `skills/task-plan/SKILL.md` 新增步骤 0.5（brief + stage2源 + implementation-design + PROJECT + modules/INDEX）+ 步骤 1 改名「消化已 echo 输入 + 按既有强约束读 slice-read 项」；prd（§9.1.1 切片）+ prototypes（§9.3 >500 行禁）+ DESIGN（按需 grep）保持既有强约束读法，**不**全文 echo
+- `skills/task-spec/SKILL.md` 新增步骤 2.5（task-plan + PROJECT + **PRODUCT-RULES delta-9 全文** + modules/INDEX）+ 步骤 3 改名；prd / impl-design / 模块 spec / PRODUCT-RULES 域限定段保持既有 §9.1.1 章节-grep，**不**全文 echo
+
+**通用模式**（4 skill 共享，便于后续 audit / 维护）：
+- 强制 echo 范围 = 全文 small-bounded 必读项（brief / stage2源 / PROJECT / PRODUCT-RULES 全局段 / modules/INDEX / 必读架构文档）
+- 不 echo 范围 = 已有 §9.1.1 章节-grep 切片读约束的 / §9.3 prototype 强约束的 / 按需 grep 局部读的（避免大文件污染 context）
+- LLM 在「消化已 echo + 识别涉及模块」步骤后填 `MODULE_SPECS` 数组，跑步骤 X.5 echo 涉及模块 spec（同 prd-writing 1.5）
+
+**影响**：4 个 orchestrated skill 漏读概率从「依赖 LLM 自觉」降到「shell 跑了就在」；prose 警告（task-plan 行 78 / task-spec 行 101）保留但已退居二线（强制 echo 是主防线）。测试基线无回归（流程注入 Bash echo，机械可见）。
+
+### 2026-05-26 — fix(prd-writing): 项目级文档强制 echo 防 LLM 自觉漏读 + DESIGN.md 移出输入清单
+
+**触发**：PM 在 req-008 stage-3 实战中发现 AI 跳过项目级文档读取直接拆 §六，质疑「skill 写了『先读项目级文档』为什么没读」。根因：prd-writing stage-3「Required Inputs」是 prose 清单（依赖 LLM 自觉调 Read tool），与 task-execute 步骤 2.0 强制 `cat` echo 模式是同一类失效（task-001 反复迭代踩坑的根因「Read tool 触发与否取决于 LLM 自觉」）—— 同款问题、同款修法，prd-writing 没复用。
+
+**改动**：
+- `skills/prd-writing/SKILL.md` 新增步骤 0.5「项目级文档强制 echo」（stage-3 模式必跑；standalone 模式 PM 在线可省）：Bash `cat` 把 `brief.md` + stage 2 真相源 + `PROJECT.md` + `PRODUCT-RULES.md` + `modules/INDEX.md` 全文无条件压进 transcript，保证 working context 到位
+- 步骤 1 标题从「读入 + 拆决策」→「拆决策 + 识别涉及模块」（基于步骤 0.5 已 echo 的内容），把"读"和"拆"解耦，LLM 不再能把"读"当暖场跳过
+- 新增步骤 1.5「涉及模块 spec 强制 echo」：步骤 1 识别完本 req 涉及模块后，`cat` echo 每个模块的主功能规格文件（INDEX.md「当前文档路径」列）；不机械 echo 整个 modules/ 目录避免污染 context；单模块 spec 全文 echo 不截读
+- DESIGN.md 从输入清单移出 —— 行 75 / 76 / 109 三处去掉：DESIGN.md 在 prd-writing 只作**反向边界提示**（"PRD 不写像素颜色 / 视觉规范归 DESIGN.md"），不作正向源材料；正常信息流是 PRD → DESIGN.md（功能定义 → 视觉规范），反向读 489 行全文进 context 浪费且违背流向。视觉规范的正向读由 implementation-design / task-execute 承担（task-execute 步骤 2.0 已强制 echo）
+- 行 30 / 47 / 126 同步更新：stage-3 短路后流程串改为「步骤 0.5 → 步骤 1 → 步骤 1.5 → 步骤 2」；Workflow 起首说明加「stage-3 必跑 0.5 / 1.5；standalone 可省」
+
+**影响**：stage-3 模式 PRD 写作前项目级文档 + 涉及模块 spec 必进 context（不再依赖 LLM 自觉）；DESIGN.md 不再为 prd-writing 浪费 489 行 context。无测试改动（流程注入 Bash echo，机械可见）。
+
 ### 2026-05-26 — fix(prd-writing): §六拆分预处理强制 PM 确认门 + 去工程黑话
 
 **触发**：PM 在 req-008（导航结构重整）stage-3 实战中遇两个问题 ——（1）AI 按步骤 2.5「stage-3 模式下 AI 自判无歧义可直接进步骤 3」的旧规则跳过 PM 拍板，PM 失去对菜单 / 模块归类的结构裁判窗口（之前要等 PRD 全文写完才能改）；（2）展示给 PM 看的拆分预览塞满工程黑话——「§六 拆分预处理」「黑名单扫描：✓ 全部通过」「下沉到需求描述列」「动作组」「二级 / 三级」「步骤 2.5」全是 PM 看不懂的内部章节号 / 内部规则名 / 模型术语。

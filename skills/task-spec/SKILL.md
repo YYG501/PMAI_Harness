@@ -95,12 +95,44 @@ stage_prefix 按 task short_id（`task-001` / `task-042` 等）。chat 一行确
 从 `task-plan.md` 定位参数指定的 `<task-id>`，提取：id / 标题 / 所属模块 / 所属模块章节 /
 summary / 依赖。找不到 → 停止并提示 PM 先修正 `task-plan.md`。
 
-### 步骤 3：读取所有必读输入
+### 步骤 2.5：项目级文档强制 echo（不依赖 LLM 自觉 Read）
 
-按上方 Required Inputs 逐一读取。**特别注意**：
-- 项目级文档列为"必读"，AI 不得以"觉得不必要"为由跳过。
-- `prd.md` 是 WHAT（req 级功能规格）；`implementation-design.md` 是 HOW（req 级实现设计）。
-  两者分工：实现规格从 PRD 切片转写，实现设计引用从 implementation-design 按 HOW-ID 挑。
+行 101 原 prose 警告「AI 不得以'觉得不必要'为由跳过」是无效防御 —— 与 task-execute 步骤 2.0 / prd-writing 步骤 0.5 同源失效模式同款修法。Bash `cat` 把基础必读全文 echo 进 transcript：
+
+```bash
+SOURCES=(
+  "$ACTIVE_REQ_DIR/task-plan.md"            # task 元数据 + 全 task 视图
+  "$REPO_ROOT/docs/PROJECT.md"              # 业务术语表（长期词典）
+  "$REPO_ROOT/docs/PRODUCT-RULES.md"        # delta-9 跨功能产品行为规则，全文读取 scope=全局 规则
+  "$REPO_ROOT/docs/modules/INDEX.md"        # 模块索引（定位涉及模块主功能规格文件）
+)
+
+for f in "${SOURCES[@]}"; do
+  if [ -f "$f" ]; then
+    echo "════════════════════════════════════════════════════════════════"
+    echo "FORCE READ: $f"
+    echo "════════════════════════════════════════════════════════════════"
+    cat "$f"
+    echo "════════════════════════════════════════════════════════════════"
+    echo "END $f"
+    echo "════════════════════════════════════════════════════════════════"
+  else
+    echo "ℹ️  $f 不存在，跳过"
+  fi
+done
+```
+
+**不在 echo 范围**（按 `input-flow.md §9.1.1` 章节-grep 切片读，避免大文件污染 context）：
+- `prd.md`：按"所属模块 / 功能 / task 标题关键词"匹配 §六 / §七 章节 grep 局部读
+- `implementation-design.md`：按 `HOW-ID` + 适用模块关键词挑行；段 1.5「原型简化项」按 PRD 锚点 join 当前 task
+- `docs/DESIGN.md` / 涉及模块 spec：按需 grep 局部读
+- `docs/PRODUCT-RULES.md` 的 `scope=域限定` 规则：按当前 task 模块 / 功能关键词 grep 命中后局部读（`scope=全局` 段在上面 echo 时已全文读取）
+- 前序「已完成」task 的「PM 反馈」段：按 §9.1.1 grep `^### 反馈` / `^## .*PM 反馈` 命中行后局部读
+
+### 步骤 3：消化已 echo 输入 + 按既有强约束读 slice-read 项
+
+步骤 2.5 已把 task-plan / PROJECT / PRODUCT-RULES / modules/INDEX 全文 echo 进 transcript。本步骤补：
+- `prd.md` 是 WHAT（req 级功能规格）；`implementation-design.md` 是 HOW（req 级实现设计）。两者分工：实现规格从 PRD 切片转写，实现设计引用从 implementation-design 按 HOW-ID 挑。
 - **stage 2 真相源**（A 分支 `analysis.md` / B 分支 `stage2-office-hours.md`，路径由 `get_stage_source(req_dir, 2)` 解析）不默认读；仅当 PRD 切片不足以写清 task 时回读对应章节，并在 chat 告知 PM「PRD 此切片不足，已回读 stage 2 真相源 §X」。
 
 ### 步骤 4：基础设施 task 走简化路径
