@@ -11,23 +11,24 @@
 
 ---
 
-## 当前位置（2026-05-25）
+## 当前位置（2026-05-26）
 
-**D-iv v0.3 patch — 新手 PM 视角审计 3 个 BLOCKER 直修**（subagent 模拟用户走完整流程报告；本次未开新设计文档，全是已知 gap 收尾）：
+**Speed mode — PRD 拍板后 stage 4/5 自动推 + 结构决策门 + stage 6 入口总览**（消费仓 ExampleConsumerApp req-008 实证驱动；PM 否决 gsd 式 8 开关方案，选「1 个默认 mode + 严格清单」方向）：
 
-- **B2**：`skills/task-confirm/SKILL.md:9` 顶部指针写「执行前确认闸门 label」与 body 行 23-25「delta-3 §2.3 不再设确认闸门」自相矛盾 → 改顶部指针为「不设确认闸门」并显式标 delta-3 引用
-- **B1a**：7 核心 SKILL 顶部「banner-rules 指针」prose 真，但 body 无 Bash 调用 → init-project/task-execute 走字面值 echo（项目级 / 入口前置阶段），其余 5 个（new-req / req-stage-gate / task-confirm / close-task / close-req）Preamble 段加 `python3 scripts/status-view.py --banner-only --skill X || true`；`status-view.py:render_banner_only` 无 active req 文案由「先跑 /new-req」改通用「<项目级 / 无 active req>」
-- **B1b**：7 核心 SKILL 退出文案补 `▶ Next Up` 关键词；`close-task` Phase 1→2 和 `close-req` Phase 1→2 切窗口给完整可复制命令（解 FRICTION 4）
-- **B3**：`req-stage-gate` stage 6→7 blocked 错误信息扩展「废弃 task 三步」可复制命令链（mv 文件 + 改 task-plan.md `## 变更记录` + 加 task 文件「废弃理由」段），堵 metadata 不一致风险；**未新建 `/cancel-task` skill**（PM 实际跳 task 频率不高再说）
-- **B4（PM 第二批补丁）**：`banner-rules.md` 新加 §3.0 适用范围 —— §3 3 硬规则**只管 AskUserQuestion picker 形式**闸门（GUI 选项卡片），续跑模式 + chat 自由对话走常规形态不受 §3 约束；4 行判定表覆盖典型场景
-- **B5（PM 第二批补丁）**：`req-stage-gate` Stage 1→2 分流 B `gstack-slug` 解析改 fail-loud —— 旧 `SLUG="unknown"` silent fallback 让 PM 误以为"没探测到 office-hours 产物"（实际是 slug 没解析对）；新代码拆三态（slug 失败 / slug OK 无产物 / slug OK 有产物），失败显式告 PM 原因 + 给两条出路
-- **测试**：`tests/test-banner-label.sh` 新增 T6-T10（body 真调 banner / Next Up 关键词 / task-confirm 不矛盾 / §3.0 适用范围 / slug fail-loud）防回归
+- **vp-1**：`templates/implementation-design.md.tmpl` 段 1 HOW 表加「决策类型」列（结构 / 机械）+ 填写规则注释（备选≥2 个有效 → 结构；"—"/「已硬约束」→ 机械；拿不准默认结构）；段 1.5 SIMP 全表标注"视作结构决策"
+- **vp-2**：`templates/task-plan.md.tmpl` §一 task 表加「决策类型」列 + 填写规则（合并 / 拆开 / 重排 order / 反模式 A 命中 → 结构）
+- **vp-3**：`skills/req-stage-gate/SKILL.md` 顶部加 `## Speed Mode（默认行为）` 段；Stage 4 步骤 4C 加 speed 自动续条件（gap-check 无新缺 + DESIGN 不改 → 跳完整确认门）；Stage 4→5 步骤 5a-gate 改 speed 行为（扫段 1 HOW + 段 1.5 SIMP 逐行 prompt 结构决策）；Stage 5→6 全段重写（扫 task 表逐行 prompt → 调 stage6-entry 出总览 → PM 三选 ✓ / ↺ / ✗）
+- **vp-4**：`scripts/_lib/stage6_summary.py` 新建（~280 行）+ `scripts/status-view.py --stage6-entry <REQ_DIR>` CLI 入口 + 从 req_dir 反推 worktree repo_root（跨仓 DESIGN.md 路径不错位）
+- **vp-5**：`tests/test-speed-mode.sh` 新增 13 case（argparse / 模块函数 / 模板列 / SKILL 段 / fixture 全机械 / 全结构 / 老 req 兼容 / SIMP 归位 / 结构 task / CLI exit / Stage 4 文案 / Stage 5→6 调用）；`tests/test-implementation-design.sh` 更新 stage-gate wiring 校验为 speed mode 关键文案
+- **vp-6**：`CHANGELOG.md` 未发布段加条目 + 本 RUNTIME 段更新
 
-**测试基线**：`bash tests/run-all.sh` **460 / 0**（前 446/0 → 现 455/0 其他模块小增 + 本次新增 5 case = 460；无回归）。
+**测试基线**：`bash tests/run-all.sh` **512 / 0**（前 460/0 → 现 512/0；本次新加 13 case 全过，+39 来自其他套自身增长，无回归）。
+
+**PM 视角变化**（用 req-008 跑下来对比）：操作次数从 ~7 次降到 ~6 次（数量差不多），但**质量大变** —— 0 次低价值"看了，过"门、N 次结构决策被前置到决策当下问、stage 6 入口给一次性总览（自决项 + PM 拍过项 + task 拆分 + 产物路径，PM 一眼判断是否进 task 执行）。
 
 ---
 
-**下一步**：① **PM 同步消费仓 ExampleConsumerApp**（按 `框架同步-SOP.md` 跑 hotfix 同步流程，v0.3 patch 一并带过）② **PM 端到端自验收**（vp-5b 本仓外起测试项目 + vp-13 消费仓真实 req 验 banner / Next Up / 跳 task 引导）③ 验收 finding 回头开新 patch vp。
+**下一步**：① **PM 同步消费仓 ExampleConsumerApp**（按 `框架同步-SOP.md` 跑 hotfix 同步流程，speed mode 一并带过）② **PM 在 ExampleConsumerApp 起新 req 端到端验收 speed mode**（重点观察：stage 3 PRD 拍板后是否一气推到 stage 6 总览门 / 命中结构决策的 prompt 形态是否好答 / 总览门里的自决 vs PM 拍过分组是否对得上）③ 验收 finding 回头开新 patch vp。
 
 ---
 

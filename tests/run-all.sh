@@ -44,6 +44,7 @@ SUITES=(
   test-cleanup-pending.sh
   test-cancel-req.sh
   test-status-view.sh
+  test-speed-mode.sh
   test-roadmap-guidance.sh
   test-new-req-no-arg-prompt.sh
   test-docs-archive-convention.sh

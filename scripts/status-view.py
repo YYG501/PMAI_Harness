@@ -33,6 +33,7 @@ from _lib.state import (  # noqa: E402
     list_tasks,
 )
 from _lib.stages import STAGE_NAMES  # noqa: E402  (delta-2+4 F13 单一真相源)
+from _lib import stage6_summary  # noqa: E402  (speed mode 2026-05-26)
 
 STATUS_ICONS = {
     "待执行": "⏳",
@@ -578,6 +579,10 @@ def main() -> None:
         "--narrative", action="store_true",
         help="(M5/D-iv M1 vp-11) 输出 AI 可直接念的进度叙述（当前 stage / 产物文件 / 最近 transition；不到小节级，codex C-4 范围降级）"
     )
+    parser.add_argument(
+        "--stage6-entry", default=None, metavar="REQ_DIR",
+        help="(speed mode 2026-05-26) 渲染 stage 6 入口总览（自决项 + PM 拍过的结构决策 + task 拆分 + 产物路径 + PM 三选项）"
+    )
     args = parser.parse_args()
 
     if args.repo_root:
@@ -604,6 +609,30 @@ def main() -> None:
     if args.narrative:
         render_narrative(state, repo_root)
         render_health_check(repo_root)
+        return
+
+    if args.stage6_entry:
+        req_dir = Path(args.stage6_entry).resolve()
+        if not req_dir.is_dir():
+            print(f"--stage6-entry 路径不存在或不是目录：{req_dir}", file=sys.stderr)
+            sys.exit(2)
+        # 从 req_dir 反推该 worktree / repo 的 root（消费仓 worktree 而非调用者 cwd）
+        try:
+            req_repo_root = Path(subprocess.check_output(
+                ["git", "-C", str(req_dir), "rev-parse", "--show-toplevel"],
+                text=True, stderr=subprocess.DEVNULL,
+            ).strip())
+        except Exception:
+            req_repo_root = repo_root
+        summary = stage6_summary.build_summary(req_dir, req_repo_root)
+        if summary is None:
+            print(
+                f"req {req_dir.name} 不满足 stage 6 入口条件："
+                f"implementation-design.md 或 task-plan.md 不存在",
+                file=sys.stderr,
+            )
+            sys.exit(3)
+        print(stage6_summary.render(summary))
         return
 
     if args.summary:

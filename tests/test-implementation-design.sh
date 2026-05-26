@@ -61,10 +61,14 @@ EOF
 }
 
 test_stage_gate_wiring() {
-  start_test "req-stage-gate Stage 4→5 接 /implementation-design + 确认门 + Stage 5→6 gate"
+  start_test "req-stage-gate Stage 4→5 接 /implementation-design + speed mode 决策门 + Stage 5→6 gate"
   local ok=1
   _has "$STAGE_GATE" "/implementation-design" || { _fail "Stage 4→5 未调 /implementation-design"; ok=0; }
-  _has "$STAGE_GATE" "implementation-design 待确认" || { _fail "缺 implementation-design PM 确认门"; ok=0; }
+  # speed mode（2026-05-26）后取代原"implementation-design 待确认"全文门：
+  # 没有结构决策时直进 5b；有结构决策时逐行 prompt。校验关键文案二选一即可。
+  _has "$STAGE_GATE" "implementation-design PM 决策门" \
+    || _has "$STAGE_GATE" "命中结构决策" \
+    || { _fail "缺 implementation-design PM 决策门 / 结构决策 prompt（speed mode）"; ok=0; }
   grep -q "检查 .implementation-design.md. 存在" "$STAGE_GATE" \
     || _has "$STAGE_GATE" "implementation-design.md\` 存在" \
     || { _fail "Stage 5→6 未检查 implementation-design.md 存在"; ok=0; }

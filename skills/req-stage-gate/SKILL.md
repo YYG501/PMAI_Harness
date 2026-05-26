@@ -31,6 +31,65 @@ python3 "$REPO_ROOT/.claude/scripts/check-worktree-residue.py" || true
 
 如果 worktree 残留检测报警，先把警告原文展示给 PM 一句话说明（"发现 N 个 worktree 残留/冲突，已贴上方"），PM 可选择立刻清理或继续推进。不当 gate（参见 I-RT5 的范围）。
 
+## Speed Mode（默认行为 — 2026-05-26）
+
+**TL;DR**：PRD（stage 3）拍板后，AI 自动推 stage 4/5，只在两处停 ——
+（a）implementation-design.md / task-plan.md 命中**「决策类型=结构」**行 → 当场逐行问 PM 拍板
+（b）进 stage 6 前给一次入口总览（自决项列表 + 已拍板结构决策复述 + task 拆分摘要 + PM 三选）
+
+**做这个 mode 的根因**：旧行为 stage 4→5 / 5→6 各有一道"产物已写完，请走查"全文确认门 → PM "看了，过" × 2 等于追认 AI 在 implementation-design 里默默自决的多个**架构选型 / 文档归位 / icon 校验机制**等结构决策（req-008 实证：events.jsonl 里 HOW-01/04/05 都是 AI 推断后 PM 默认接受）。新行为把结构决策**前置到决策当下问**，PM 不再事后从 7 个 HOW 里找"哪些我该早点拍但 AI 自决了"。
+
+**自动推条件**（达成则跳过原全文确认门）：
+
+| Stage | 自动推条件 |
+|---|---|
+| 4（设计系统）| 步骤 4A gap-check 无新缺组件 + 步骤 4B PM 选不改 DESIGN → 跳 4C 完整确认门直接推 stage 5 |
+| 4→5 步骤 5a（implementation-design）| implementation-design.md 段 1 HOW 表 + 段 1.5 SIMP 表**无任何「决策类型=结构」行 / 无任何 SIMP 行** → 跳 5a-gate 原全文确认门，直接进 5b |
+| 5→6（task-plan）| task-plan.md §一 task 表**无任何「决策类型=结构」行** → 跳原 task-plan 全文确认门，直接出 stage 6 入口总览 |
+
+**命中结构决策时的 prompt 格式**（逐行问，不批量）：
+
+```
+🛑 命中结构决策：<HOW-ID 或 SIMP-ID 或 task-ID>
+<一行描述>
+
+候选：
+  A. <选项 1>（AI 倾向）
+  B. <选项 2>
+  C. <选项 3>
+
+AI 倾向 A，理由：<一行>
+PM 拍板：
+```
+
+PM 答完一个继续下一个；全部答完按 `decided_by=pm-explicit` append 进 req-events.jsonl 各行 + 进下一步。
+
+**Stage 6 入口总览**（替代原 stage 5→6 task-plan 全文确认门）：
+
+```bash
+python3 .claude/scripts/status-view.py --stage6-entry "$ACTIVE_REQ_DIR"
+```
+
+输出格式（status-view.py 内 render）：
+- 【AI 自决 N 件】（机械产出 — HOW-ID 列表）
+- 【PM 拍过 M 件结构决策】（HOW-ID + 一行复述）
+- 【task 拆分】（task-ID + 串行/并行）
+- 【产物路径】（implementation-design.md / task-plan.md / DESIGN.md）
+- PM 三选：✓ 全 ok 进 stage 6 / ↺ 回看 [ID] / ✗ 回卷到 stage X 重做
+
+**Speed mode 的边界（不替换、不绕过的硬规则）**：
+
+| 项 | 行为 |
+|---|---|
+| Stage 1-3 流程（brief / analysis / prd 各 stage 的门） | **不变**（speed 只动 stage 3 拍板后的链）|
+| Stage 6 task 执行 / Stage 7 close-req | **不变**（不在 speed 范围）|
+| 未决问题闸门（Stage 2 `check-open-questions.py`）| **不变**（硬规则，无 FORCE 逃生舱）|
+| PRD 决策门（Stage 3 步骤 2 完整确认门）| **不变**（PRD 是 speed 的起点，必须 PM 拍板）|
+| AI 拿不准是不是结构决策 | 默认按结构停（保守 / 模板填写规则）|
+| 兼容老 req（无「决策类型」列的 implementation-design / task-plan）| AI 在 5a-gate / 5→6 入口现场推断，默认全部按结构（每行问）；不强制迁移老文件 |
+
+下面 Stage 4→5 / Stage 5→6 段在原有"PM 全文确认门"基础上加了 speed mode 分支标记。生成器仓自身（无 `.req-meta.json` / 无 active req）不跑此 SKILL，speed mode 只在业务仓有 active req 时生效。
+
 ## 续跑模式（默认行为）
 
 **TL;DR**：PM 只敲 1 次 `/req-stage-gate`，AI 自动续跑 stage 1→6（撞到 task 执行就退出）。中间 PM 只回答确认门，不再敲命令；不答就停在闸门等 PM 下次输入，关窗口几天后回来重敲 `/req-stage-gate` 从当前 stage 续走。
@@ -510,6 +569,19 @@ Stage 4（设计系统）— 组件复用关口已过
 
 #### 步骤 4C：确认门 + 推进
 
+**Speed mode 自动续条件**（满足则跳过完整确认门直接推 stage 5）：
+
+- 步骤 4A gap-check **无新缺组件**（PM 在 4A 期间没标"补"任何新组件入 inventory）
+- 且 步骤 4B PM 选**不改 DESIGN**
+
+满足两条 → 直接执行 `req-transition.py --to 5` 推进 + 续 Stage 5；chat 里只出一行轻量过场（**不发完整确认门**）：
+
+```
+Stage 4 OK（组件全部复用 / DESIGN 本次不动） → 进 Stage 5 实现设计
+```
+
+**未满足 speed 条件**（gap-check 有新建组件 / DESIGN 有改动）→ 走原完整确认门：
+
 ```
 Stage 4（设计系统）— 待确认
 
@@ -541,26 +613,45 @@ PM 确认门审架构决策表 → 再 `/task-plan`（拆 task）**。
   PM 修复后重跑 `/req-stage-gate`。
 - 产出成功 → 进步骤 5a-gate。
 
-#### 步骤 5a-gate：implementation-design PM 确认门（完整阻塞门）
+#### 步骤 5a-gate：implementation-design PM 决策门（speed mode）
 
 `implementation-design.md` 含「这个 req 用什么架构、为什么这么选」的架构决策 —— AI 单方面
-定再注入 task 与「PM 在环里」冲突，**必须经 PM 审定才放行**。对话式确认门：
+定再注入 task 与「PM 在环里」冲突，**必须经 PM 审定才放行**。
 
-```
-Stage 5（实现设计）— implementation-design 待确认
+**Speed mode 行为**（取代原"全文确认门"）：
 
-✅ implementation-design.md
-   <$ACTIVE_REQ_DIR/implementation-design.md 绝对路径>
+1. **扫文件找结构决策行**：
+   ```bash
+   # 扫段 1 HOW 表：取「决策类型」列 = 「结构」的所有行
+   # 扫段 1.5 SIMP 表：取所有 SIMP-NN 行（SIMP 全部视作结构决策，见模板说明）
+   ```
 
-🧭 架构决策表（段 1「选择」列摘要）
-   - HOW-01 <一句>
-   - HOW-02 <一句>
-   （全文 + 备选 / 理由可下钻看文件）
+2. **逐行 prompt**（按文件出现顺序）：
 
-这版实现设计是否可以定稿？如还要调整请直接说；确认后我会推进到 task 拆分（/task-plan）。
-```
+   ```
+   🛑 命中结构决策：HOW-NN <一行描述>
 
-PM 提修改 → 回 `/implementation-design` revise → 改完重新出本确认门。PM 确认 → 进步骤 5b。
+   候选：
+     A. <选项 1>（AI 倾向）
+     B. <选项 2>
+     C. <选项 3>
+
+   AI 倾向 A，理由：<段 1「理由」列内容，一行>
+   PM 拍板：
+   ```
+
+   PM 答一个进下一个；中途答完后调 `req-events.py append decision` 写每行（`decided_by=pm-explicit`），供 stage 6 入口总览复述。
+
+3. **全部答完后**：直接进步骤 5b（不再发原全文确认门）。
+
+4. **无任何结构决策行**（罕见，比如纯机械应用 PRD 已硬约束的 req）：直接进步骤 5b；chat 出一行：
+   ```
+   Stage 5 实现设计 OK（无需要拍板的架构决策） → 进 task 拆分
+   ```
+
+5. **PM 在结构决策门外想改其他段**（如改"段 3.1 易错点"）：允许中途切到 revise 模式 → 回 `/implementation-design` revise → 改完重扫段 1 / 段 1.5 重出本步骤。
+
+> **兼容老 req**（已存在的 implementation-design.md 没「决策类型」列）：现场逐行推断，默认按结构问（保守）。AI 不强制迁移老文件。
 
 #### 步骤 5b：调 `/task-plan`
 
@@ -575,32 +666,79 @@ PM 确认 implementation-design 后，调用 `/task-plan` 拆 task。
    缺失说明步骤 5a 被跳过 → 报错拦下，提示 PM 回 stage 5 跑 `/implementation-design`。
    （在飞旧 req 无此文件 → 不拦，按旧流程兼容。）
 3. 检查 `task-plan.md` 包含 task 标题列表和 `## 变更记录` section。
-4. **输出确认门**（一份完整模板，对齐 stage 2→3 风格）：
+
+4. **Speed mode 行为：task-plan 结构决策门**（取代原全文确认门）：
+
+   - **扫 task-plan.md §一 task 表**：取「决策类型」列 = 「结构」的所有行
+   - **逐行 prompt**（按 order 顺序）：
+     ```
+     🛑 命中结构决策：task-NNN <一行 title>
+
+     候选 / 原因：
+       <为什么这个 task 是结构决策 — 合并 / 拆开 / 重排 / 反模式 A 命中>
+       AI 的拆法：<本 task 当前归位>
+       备选：<不这样拆会怎样 — 一行>
+
+     PM 拍板：保留 AI 拆法 / 改成 <PM 说>
+     ```
+   - PM 答完所有结构 task → 进 stage 6 入口总览（步骤 5）
+
+   **无任何结构决策行**（task 表全是机械翻 PRD §七 验收项）→ 跳过本步骤 4，直接进步骤 5。
+
+5. **Stage 6 入口总览**（替代原 task-plan 全文确认门）：
+
+   ```bash
+   python3 .claude/scripts/status-view.py --stage6-entry "$ACTIVE_REQ_DIR"
+   ```
+
+   输出格式（status-view 内 render，**PM 单一真相源**）：
 
    ```
-   Stage 5（task 规划）— task-plan 待确认
+   ═══════════════════════════════════════
+   ✅ Stage 4/5 完成，准备进 stage 6 task 执行
+   ═══════════════════════════════════════
 
-   ✅ task-plan.md
-      <$ACTIVE_REQ_DIR/task-plan.md 绝对路径>
+   【AI 自决 N 件】（机械产出 / PRD 已硬约束）
+     HOW-02 <一行选择>
+     HOW-03 <一行选择>
+     ...
 
-   📋 一句话摘要
-      <共 N 个 task；业务模块 X 个 + 基础设施 Y 个；最长依赖链 …>
+   【PM 拍过 M 件结构决策】
+     HOW-01 <一行选定>
+     HOW-04 <一行选定>
+     ...
+     task-001 <拆分理由复述>
+     ...
+
+   【task 拆分】
+     task-001 <title>
+     task-002 <title>
+     task-003 <title>
+     执行：串行 / 并行（PM 启动建议复述）
+
+   【产物路径】
+     <绝对路径>/implementation-design.md
+     <绝对路径>/task-plan.md
+     <绝对路径>/docs/DESIGN.md（本 req <改 / 不改>）
 
    📊 可选 review（你自跑，跑完贴结论我帮你 append 事件）
-      /plan-eng-review     — 拆分合理性、依赖、并行性
-      /plan-design-review  — UI task 划分是否完整
-      /autoplan            — 上述 plan-* 的批量打包
+     /plan-eng-review     — 拆分合理性、依赖、并行性
+     /plan-design-review  — UI task 划分是否完整
+     /autoplan            — 上述 plan-* 的批量打包
 
-      跑哪几个你定，全跳也行。具体 task 文件在下一阶段（task 执行）的 /task-spec 还会再推荐一次。
-
-   这版 task 规划内容是否可以定稿？如还有需要调整的内容，请直接说；确认后我会推进到 task 执行（Stage 6）。
+   下一步：
+     ✓ 全部 ok 进 stage 6
+     ↺ 我要回看 [HOW-XX / SIMP-XX / task-XXX]
+     ✗ 回卷到 stage 4/5 重做
    ```
 
-4. **PM 回答的内部分流**（不列字母）：
-   - PM 说「OK / 通过 / 没问题 / 定了」等 → 推进 stage 6
-   - PM 提具体修改意见 → 回 `/task-plan` 改 `task-plan.md` → 改完后重新输出步骤 3 完整模板 → 再次询问
+6. **PM 回答的内部分流**（不列字母；按 PM 自然语言意图）：
+   - PM 说「OK / 通过 / 没问题 / 定了 / ✓」→ 推进 stage 6
+   - PM 说「回看 HOW-XX / task-XXX」→ AI 给该项详情 + 重新走该项的结构决策门；改完回到步骤 5 重出总览
+   - PM 说「回卷 / 回到 stage X」→ 调 `req-transition.py --to <X> --rollback`
+   - PM 提具体修改意见 → 回 `/task-plan` 改 `task-plan.md` → 改完后重新跑步骤 4 + 5
 
-> stage 5→6 只审阅 `task-plan.md`；具体 task 文件由 stage 6 的 `/task-spec` 逐个生成，写完后由 task-spec 步骤 8 再次输出推荐 review 区块。
+> stage 5→6 入口总览只审阅 `task-plan.md` + `implementation-design.md` 的结构决策项；具体 task 文件由 stage 6 的 `/task-spec` 逐个生成，写完后由 task-spec 步骤 8 再次输出推荐 review 区块。
 
 推进：
 ```bash

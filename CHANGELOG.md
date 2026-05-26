@@ -136,6 +136,21 @@ PM-AI-Workflow 生成器仓的演进记录。本文件**只记影响下游业务
 
 ## 未发布
 
+### 2026-05-26 — feat(req-stage-gate / templates / status-view): speed mode — PRD 拍板后 stage 4/5 自动推 + 结构决策门 + stage 6 入口总览
+
+**触发**：消费仓 ExampleConsumerApp req-008 跑下来 PM 反馈"PRD 确定后，stage 4/5 应该一气推进"。查 req-008 实证：stage 3→4 间隔 0.1 秒、4→5 间隔 1.5 分钟、5→6 间隔 9 分钟 —— 流程时间总共 10 分钟，但 PM 还得回 4-5 次低价值确认门（"DESIGN 不动"、"impl-design 写完，过"、"task-plan 拆完，过"）。同时 implementation-design.md 7 个 HOW 决策里有 3 个（HOW-01 架构选型 / HOW-04 校验机制 / HOW-05 文档归位）AI 在写文件时悄悄自决，PM "看了，过"等于追认 —— 违反 memory `feedback_structure_decisions_need_pm`「结构决策必须 PM 拍板」。PM 否决 gsd 式 8 开关方案，选「1 个默认 mode + 严格清单」方向。
+
+**改动**：
+- `templates/implementation-design.md.tmpl` 段 1 HOW 表加「决策类型」列（结构 / 机械）+ 填写规则注释（备选≥2 个有效 → 结构；"—"/「已硬约束」→ 机械；拿不准默认结构）；段 1.5 SIMP 全表标注"视作结构决策"
+- `templates/task-plan.md.tmpl` §一 task 表加「决策类型」列 + 填写规则（合并 / 拆开 / 重排 order / 反模式 A 命中 → 结构）
+- `skills/req-stage-gate/SKILL.md` 顶部加 `## Speed Mode（默认行为）` 段（TL;DR + 自动推条件表 + 命中结构决策时 prompt 格式 + stage 6 入口总览 + 硬规则边界清单）；Stage 4 步骤 4C 加 speed 自动续条件（gap-check 无新缺 + DESIGN 不改 → 跳完整确认门）；Stage 4→5 步骤 5a-gate 改 speed 行为（扫段 1 HOW 表 + 段 1.5 SIMP 表，逐行 prompt 结构决策；无结构决策直进 5b）；Stage 5→6 全段重写（扫 task 表逐行 prompt 结构 task → 调 `status-view.py --stage6-entry` 出总览 → PM 三选 ✓ / ↺ / ✗）
+- `scripts/_lib/stage6_summary.py` 新建（~280 行）—— stage 6 入口总览模块；解析 implementation-design.md 段 1 / 段 1.5 + task-plan.md §一 + §二 启发式抓 execution mode；渲染【AI 自决 N 件】+【PM 拍过 M 件结构决策】+【task 拆分】+【产物路径】+【可选 review】+ PM 三选
+- `scripts/status-view.py` 加 `--stage6-entry <REQ_DIR>` argparse + main 分支；从 req_dir 反推 worktree repo_root（不用调用者 cwd，否则跨仓 DESIGN.md 路径错位）
+- `tests/test-speed-mode.sh` 新增 13 case（argparse / 模块函数 / 模板列 / SKILL 段 / fixture 全机械 / 全结构 / 老 req 兼容 / SIMP 归位 / 结构 task / CLI exit / Stage 4 文案 / Stage 5→6 调用）
+- `tests/test-implementation-design.sh` 更新 `test_stage_gate_wiring`：旧"implementation-design 待确认"全文门字符串校验改为 speed mode 关键文案（"implementation-design PM 决策门" / "命中结构决策"二选一）
+
+**影响**：PM 视角操作次数从 ~7 次降到 ~6 次（数量差不多），但**质量大变** —— 0 次低价值"看了，过"门、N 次结构决策被前置到决策当下问、stage 6 入口给一次性总览（自决项 + PM 拍过项 + task 拆分 + 产物路径，PM 一眼判断是否进 task 执行）。**老 req 兼容**：已存在的 implementation-design.md / task-plan.md 无「决策类型」列 → 现场推断默认按结构（保守 / 每行都问，宁可多停一次）；不强制迁移老文件。**硬规则保留**：Stage 1-3 流程不变、未决问题闸门不变、PRD 决策门不变、Stage 6 task 执行不变、Stage 7 close 不变。测试基线 460 → 512/0（+52；本次新加 13 case 全过）。
+
 ### 2026-05-26 — feat(req-events / prd-writing / req-stage-gate): decision 事件加 decided_by 区分 PM 拍 / AI 推断
 
 **触发**：req-008 stage 4 入口 AI 文案把"规范放进 DESIGN.md"说成"PM 之前拍过"。查 `req-events.jsonl` 发现 6 条决策全是 stage 3 AI 写 PRD 时 166 毫秒内批量 append 的，`source=prd-writing@3`，无法区分「PM 在确认门主动开口拍的」 vs「AI 单方面推断的」。下游（stage 4 文案 / status-view / 后续 stage）读 decision 事件时无法识别，把 AI 自拍决策表述为"PM 决策"，违反 memory `feedback_pm_decision_is_binding_contract` 的"PM 决策 = binding contract"前提（"分得清谁拍的"）。
