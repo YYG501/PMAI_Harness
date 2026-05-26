@@ -136,6 +136,62 @@ PM 提修正 → 改现状档 → 重新呈交。
 
 **PM 选 N 时**：跳过本步骤；step 4 交接时提示「modulespec 骨架未建，后续 close-req §1.5 step 2.5 反查会兜底」。
 
+### 步骤 3.5.5：docs/DESIGN.md inventory 段兜底（无条件兜底，独立于 step 3.5 选择）
+
+> **跟 step 3.5 的关系**：3.5 是 PM 选择性建 modulespec 骨架；3.5.5 是**无条件**建 / 修复 DESIGN.md（不让 PM 选择 —— 它是 stage 4 4A 硬依赖，PM 没法绕过；3.5 [N] 也照样跑本步骤）。
+
+**为什么有这步**：DESIGN.md 是 task executor 写代码时的硬约束（stage 4 4A gap-check 强制读「共享组件 inventory」段）。老项目接入框架前通常没建过这个文件，或建了但没 inventory 段 → stage 4 4A 隐性 break，PM 第一个 req 推不到 stage 5。本步骤兜底建 / 修复。
+
+```bash
+DESIGN_MD="$REPO_ROOT/docs/DESIGN.md"
+HAS_FILE=false; HAS_INVENTORY=false
+[ -f "$DESIGN_MD" ] && HAS_FILE=true
+$HAS_FILE && grep -q "^## 共享组件 inventory" "$DESIGN_MD" && HAS_INVENTORY=true
+```
+
+| 状态 | 行为 |
+|---|---|
+| HAS_FILE=true + HAS_INVENTORY=true | silent skip |
+| HAS_FILE=true + HAS_INVENTORY=false | AI 用 Edit 在末尾追加 inventory 空段（模板见下方） |
+| HAS_FILE=false | AI 用 Write 建空骨架（含顶部状态行 + inventory 空段，模板见下方） |
+
+**inventory 空段模板**（追加 / 包含在新建骨架）：
+
+```markdown
+
+## 共享组件 inventory
+
+> **这是什么**：stage 4 gap-check 的查询底座。每个 req 动手前逐组件查这里：
+> **有 → 复用**；**没有 → 新建并加进本表**。req 间累积，越来越全，reuse 率随之上升。
+
+| 组件名 | 用途 | 视觉 | 状态 | 交互 | 出处 req |
+|---|---|---|---|---|---|
+| <!-- stage 4 4A 累积，目前为空 --> | | | | | |
+```
+
+**新建 DESIGN.md 时的空骨架**（仅当 HAS_FILE=false 时，套上方 inventory 模板）：
+
+```markdown
+<!-- 状态：兜底骨架 | 由 codebase-audit step 3.5.5 建 | 视觉基线段未建 -->
+
+# 设计系统
+
+> **本文件目的**：项目级设计系统约束。stage 4 4A gap-check 查这里的「共享组件 inventory」段；task executor 写代码时按视觉基线段（gstack 写的 8 段）做硬约束。
+>
+> **视觉基线段未建** —— 建议 PM 跑 gstack `/design-consultation` 补全 8 段（颜色 / 字体 / 间距 / 布局 / 动效 / 美学方向 / 竞品研究 / 视觉预览板）。本框架不替 gstack 写视觉基线，本骨架只兜 inventory 段（stage 4 4A 硬依赖）。
+>
+> **inventory 段**由本框架管，stage 4 4A 累积，gstack 不写。
+
+<!-- 套入上方 inventory 空段模板 -->
+```
+
+**告知 PM**：
+
+```
+📝 DESIGN.md 兜底：<已建空骨架 / 追加 inventory 段 / 已是完整态>
+  视觉基线段建议：跑 gstack `/design-consultation` 补全 8 段（PM 主动入口）
+```
+
 ### 步骤 4：交接 project-solution
 
 PM 确认现状档后，引导 PM 跑 `/project-solution` —— project-solution 读 `docs/代码现状档.md`
@@ -155,6 +211,7 @@ PM 确认现状档后，引导 PM 跑 `/project-solution` —— project-solutio
   - `docs/代码现状档.md`（默认）
   - `docs/modules/<m>.md` 主规格骨架（**仅当 step 3.5 PM 选 [Y]**）
   - `docs/modules/INDEX.md` 刷新（**仅当 step 3.5 PM 选 [Y]**）
-- **允许动作**：read-only 扫码、7 维度盘点、防 secret redact、step 3.5 选 [Y] 时按 `module.md.tmpl` 生成主规格骨架
-- **禁止**：改代码 / 改 step 3.5 范围外的业务文档 / 替 PM 做项目方向决策 / step 3.5 跳过模块清单 PM 确认环节
-- **退出条件**：现状档经 PM 确认 + step 3.5 完成（建或跳过），引导 PM 跑 `/project-solution`
+  - `docs/DESIGN.md` 兜底建 / 追加 inventory 段（**step 3.5.5 无条件，跟 step 3.5 选择无关**）
+- **允许动作**：read-only 扫码、7 维度盘点、防 secret redact、step 3.5 选 [Y] 时按 `module.md.tmpl` 生成主规格骨架、step 3.5.5 兜底 DESIGN.md inventory 段
+- **禁止**：改代码 / 改 step 3.5 / 3.5.5 范围外的业务文档 / 替 PM 做项目方向决策 / step 3.5 跳过模块清单 PM 确认环节 / step 3.5.5 替 gstack 写视觉基线 8 段（视觉基线由 PM 主动调 `/design-consultation`）
+- **退出条件**：现状档经 PM 确认 + step 3.5 完成（建或跳过）+ step 3.5.5 兜底跑过，引导 PM 跑 `/project-solution`

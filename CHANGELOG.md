@@ -187,6 +187,26 @@ PM-AI-Workflow 生成器仓的演进记录。本文件**只记影响下游业务
 
 ## 未发布
 
+### 2026-05-27 — fix(codebase-audit+new-req): docs/DESIGN.md 不存在时兜底建空骨架（双保险）
+
+**触发**：codebase-audit step 3.5 落地后做初始化缺口审计，找出 1 个真缺口 `docs/DESIGN.md`。138 处引用 / 是 stage 4 4A gap-check 硬依赖，但：greenfield + gstack 不可用 / brownfield / 已升级老项目 三种场景下文件根本不存在，且 `new-req` 步骤 3.6 原逻辑 `[ -f "$DESIGN_MD" ] && ! grep ...` 第一个条件 false 即 silent skip → stage 4 4A 跑 `grep "共享组件 inventory"` 隐性 break，PM 第一个 req 推不到 stage 5。
+
+**根因**：3.6 兜底逻辑只覆盖「文件存在但缺 inventory 段」分支，「文件不存在」直接 silent skip 没建。
+
+**改动**（PM 视角）：
+
+- `skills/codebase-audit/SKILL.md` 加 **step 3.5.5 DESIGN.md inventory 段兜底**（**无条件**，独立于 step 3.5 PM [Y/N] 选择）：HAS_FILE × HAS_INVENTORY 二维状态矩阵 —— 都有 silent skip / 有文件缺段追加 inventory / 无文件建空骨架（含顶部状态行 + 提示 PM 跑 gstack `/design-consultation` 补视觉基线 8 段 + inventory 空段）。brownfield 接入时一次性兜底。
+- `skills/new-req/SKILL.md` 步骤 3.6 加「HAS_FILE=false → 建空骨架」分支（同款写入逻辑），原「追加 inventory 段」分支保留。每 req 入口兜底 —— 任何遗漏的最后防线。
+- `skills/codebase-audit/SKILL.md` 边界段更新：允许 step 3.5.5 写 `docs/DESIGN.md`；明确「不替 gstack 写视觉基线 8 段」硬约束（视觉基线由 PM 主动调 `/design-consultation`，本框架只兜 inventory 段 + 空骨架）。
+- `skills/new-req/SKILL.md` 步骤 4.5 commit 范围扩展从「追加 inventory 段到 DESIGN.md」改成「追加 / 新建空骨架到 DESIGN.md」—— 覆盖新建分支。
+
+**影响**：
+
+- Greenfield + gstack 可用：行为不变（init C.5 仍由 gstack 建完整文件）
+- Greenfield + gstack 不可用：第一个 req 入口 new-req 3.6 兜底建空骨架（不再 silent skip）
+- Brownfield 接入：codebase-audit step 3.5.5 一次性兜底（推荐路径）；即使跳过仍由 new-req 3.6 兜底
+- 已升级老项目（如消费仓 ExampleConsumerApp）：下一个 new-req 时 3.6 自动检测 + 兜底；不需要 PM 手动做任何事
+
 ### 2026-05-27 — feat(codebase-audit): step 3.5 modulespec 主规格骨架，brownfield 接入时一次性建好
 
 **触发**：刚加完 close-req §1.5 step 2.5 稳定结构反查（事后兜底），PM 反问「为什么不在初始化时就建好」。盘点发现框架已有 greenfield / brownfield 分流（`/init-project` vs `/codebase-audit`），但**两条路径在 modulespec 上都漏了** —— 都只建 `docs/modules/` 空目录 + INDEX.md，从不主动建任何主规格文件。**老项目 IA 通常已稳定**（看代码就能识别模块边界），错过这个天然的 bootstrap 时机 → 之后每个 req close 都会被 §1.5 step 2.5 反复问「这个稳定结构要不要沉淀」。

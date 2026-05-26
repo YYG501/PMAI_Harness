@@ -131,43 +131,67 @@ PM 答「混合」→ 各节 PM 临场决定
 
 ### 步骤 3.6：已有项目 DESIGN.md inventory 段兜底
 
-同步框架到已有项目后，老项目的 `docs/DESIGN.md` 可能没有「共享组件 inventory」段（视觉基线段由 gstack `/design-consultation` 在 init C.5 时写，已有项目跳过了那一步）。stage 4 4A gap-check 查的就是这段，缺它 → 无 inventory 可查。
+同步框架到已有项目后，老项目的 `docs/DESIGN.md` 可能没有「共享组件 inventory」段（视觉基线段由 gstack `/design-consultation` 在 init C.5 时写，已有项目跳过了那一步），或文件**根本不存在**（greenfield + gstack 不可用 / brownfield 未跑过 codebase-audit step 3.5.5）。stage 4 4A gap-check 查的就是这段，缺它 → 无 inventory 可查 → stage 4 4A 隐性 break。
 
 在 worktree 里、写 brief.md 之前做一次检测：
 
 ```bash
 DESIGN_MD="$REPO_ROOT/docs/DESIGN.md"
-if [ -f "$DESIGN_MD" ] && ! grep -q "^## 共享组件 inventory" "$DESIGN_MD"; then
-  NEED_INVENTORY_APPEND=true
-fi
+HAS_FILE=false; HAS_INVENTORY=false
+[ -f "$DESIGN_MD" ] && HAS_FILE=true
+$HAS_FILE && grep -q "^## 共享组件 inventory" "$DESIGN_MD" && HAS_INVENTORY=true
 ```
 
-- **已含 inventory 段** / 文件不存在 → silent skip，进步骤 4。
-- **缺 inventory 段 → 追加空段**：AI 用 Edit 在 DESIGN.md 末尾追加：
+| 状态 | 行为 |
+|---|---|
+| HAS_FILE=true + HAS_INVENTORY=true | silent skip，进步骤 4 |
+| HAS_FILE=true + HAS_INVENTORY=false | AI 用 Edit 在末尾**追加 inventory 空段**（模板见下方）|
+| HAS_FILE=false | AI 用 Write **建空骨架 DESIGN.md**（含顶部状态行 + inventory 空段，模板见下方）|
 
-  ```markdown
+**inventory 空段模板**（追加 / 包含在新建骨架）：
 
-  ## 共享组件 inventory
+```markdown
 
-  > **这是什么**：stage 4 gap-check 的查询底座。每个 req 动手前逐组件查这里：
-  > **有 → 复用**；**没有 → 新建并加进本表**。req 间累积，越来越全，reuse 率随之上升。
+## 共享组件 inventory
 
-  | 组件名 | 用途 | 视觉 | 状态 | 交互 | 出处 req |
-  |---|---|---|---|---|---|
-  | <!-- stage 4 4A 累积，目前为空 --> | | | | | |
-  ```
+> **这是什么**：stage 4 gap-check 的查询底座。每个 req 动手前逐组件查这里：
+> **有 → 复用**；**没有 → 新建并加进本表**。req 间累积，越来越全，reuse 率随之上升。
 
-  并告诉 PM 一句：
+| 组件名 | 用途 | 视觉 | 状态 | 交互 | 出处 req |
+|---|---|---|---|---|---|
+| <!-- stage 4 4A 累积，目前为空 --> | | | | | |
+```
 
-  ```
-  📝 检查 docs/DESIGN.md —— 缺「共享组件 inventory」段。已追加空段。stage 4 的组件复用关口要查这份，从本 req 开始累积。
-  ```
+**新建 DESIGN.md 空骨架**（仅当 HAS_FILE=false 时，套上方 inventory 模板）：
 
-inventory 段追加的 `docs/DESIGN.md` 必须在步骤 4.5 commit 时一并 commit。每 req 入口触发、追加后自然 silent skip，天然幂等。
+```markdown
+<!-- 状态：兜底骨架 | 由 new-req 步骤 3.6 建 | 视觉基线段未建 -->
 
-> **视觉基线段（gstack 写的 8 段）不在本步骤兜底范围** —— 已有项目想建 / 改视觉基线，让 PM 主动调 gstack `/design-consultation`。本步骤只管 inventory 段（框架独有，gstack 不写）。
+# 设计系统
+
+> **本文件目的**：项目级设计系统约束。stage 4 4A gap-check 查这里的「共享组件 inventory」段；task executor 写代码时按视觉基线段（gstack 写的 8 段）做硬约束。
+>
+> **视觉基线段未建** —— 建议 PM 跑 gstack `/design-consultation` 补全 8 段（颜色 / 字体 / 间距 / 布局 / 动效 / 美学方向 / 竞品研究 / 视觉预览板）。本框架不替 gstack 写视觉基线，本骨架只兜 inventory 段（stage 4 4A 硬依赖）。
+>
+> **inventory 段**由本框架管，stage 4 4A 累积，gstack 不写。
+
+<!-- 套入上方 inventory 空段模板 -->
+```
+
+告诉 PM 一句：
+
+```
+📝 DESIGN.md 兜底：<已建空骨架 / 已追加 inventory 段>。stage 4 的组件复用关口要查这份，从本 req 开始累积。
+  <若新建骨架补这一行：视觉基线段建议跑 gstack `/design-consultation` 补全 8 段>
+```
+
+追加 / 新建的 `docs/DESIGN.md` 必须在步骤 4.5 commit 时一并 commit。每 req 入口触发、补完后自然 silent skip，天然幂等。
+
+> **视觉基线段（gstack 写的 8 段）不在本步骤兜底范围** —— 已有项目想建 / 改视觉基线，让 PM 主动调 gstack `/design-consultation`。本步骤只管 inventory 段 + 空骨架（框架独有，gstack 不写）。
 >
 > 新项目 `init-project` 阶段 C.5 已建空 inventory 段，本步骤 silent skip。
+>
+> 跟 `codebase-audit` step 3.5.5 关系：codebase-audit 是 brownfield 接入时一次性兜底（推荐路径）；本步骤是每 req 入口兜底（任何遗漏的最后防线）。两者完全同款写入逻辑，互不冲突。
 
 ### 步骤 4：Stage 1 — 产出 brief.md（AI 引导，**不调用 /office-hours**）
 
@@ -330,7 +354,7 @@ commit 范围默认只包含 brief.md + .req-meta.json + 空 tasks/ 骨架；**�
 
 **例外 —— 步骤 3.5 / 3.6 legacy 兜底触发时扩 commit 范围**：
 - 步骤 3.5 mini-fill 补了 `docs/PROJECT.md` → 加 `docs/PROJECT.md`
-- 步骤 3.6 追加 inventory 段到 `docs/DESIGN.md` → 加 `docs/DESIGN.md`
+- 步骤 3.6 追加 inventory 段 / 新建空骨架到 `docs/DESIGN.md` → 加 `docs/DESIGN.md`
 
 补的文件必须随本次 commit 一起落盘，否则基线悬空、worktree 内后续 stage 读不到。此时
 `git add` 按实际触发的兜底多加对应文件：
