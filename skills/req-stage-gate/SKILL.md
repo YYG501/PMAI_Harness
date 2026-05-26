@@ -62,7 +62,7 @@ PM 在 worktree 里**只需要敲一次** `/req-stage-gate`，之后 stage-gate 
 
 - **PM 在确认门不答** → AI 就显示着确认门等 PM 下次输入；这是 chat 天然行为，不需要识别"喊停关键词"也不需要发"已暂停"通知
 - **PM 关掉 claude 窗口几天后回来** → 新 chat session 自然不在 stage-gate 流程里；PM 重新敲 `/req-stage-gate`，stage-gate 从 `.req-meta.json` 当前 stage 续走
-- **闸门挂起等 PM**（未决问题闸门、各 stage 定稿确认门、reviewer NEEDS_REVISION 三选一）→ 挂着等 PM 答，不算"退出"也不算"暂停"——就是等
+- **闸门挂起等 PM**（未决问题闸门、各 stage 定稿确认门、reviewer 有必改时的三选一）→ 挂着等 PM 答，不算"退出"也不算"暂停"——就是等
 
 **核心边界（PM gatekeeper 没破）**：
 
@@ -136,7 +136,7 @@ chat 一行确认 `已归档（attachments/<新名>），Y 重点。继续。`�
 3A. **调用 `/req-analysis`**
    - skill 内部完成：读 brief + PROJECT、第一性原理 4 层分析、写 analysis.md（含 10 章 + `## 未决问题` section）、调 analysis-reviewer 一次后把报告原文贴 chat，让 PM 三选一（AI 改 / PM 自改 / 接受现状）
    - skill 返回 = **PM 已看过 reviewer 报告原文 + 已显式做出处理决定**；返回值带 `review_outcome ∈ {PASS, ACCEPTED_WITH_ISSUES}`
-   - **orchestrator 不重调 reviewer**；如 `review_outcome=ACCEPTED_WITH_ISSUES`，stage-gate 在最终推进确认门加一行知会："⚠️ analysis 评审 NEEDS_REVISION，PM 已显式接受继续推进"——但**不阻塞**推进
+   - **orchestrator 不重调 reviewer**；如 `review_outcome=ACCEPTED_WITH_ISSUES`，stage-gate 在最终推进确认门加一行知会："⚠️ analysis 评审还有必改条目，但 PM 已显式接受继续推进"——但**不阻塞**推进
    - **写 stage 2 真相源元数据**（A 分支：`analysis.md` + `tool="req-analysis"`）：
      ```bash
      python3 -c "

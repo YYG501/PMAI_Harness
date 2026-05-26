@@ -36,7 +36,7 @@ echo "SKILL: req-analysis"
 |---|---|---|
 | 写 analysis.md | ✅ | ❌ |
 | 调 analysis-reviewer | ✅（一次/轮） | ❌（不重复调） |
-| 展示 reviewer 报告原文给 PM | ✅（PASS / NEEDS_REVISION 都必须贴完整原文） | ❌ |
+| 展示 reviewer 报告原文给 PM | ✅（无论有没有必改条目都必须贴完整原文） | ❌ |
 | 收 PM 三选一决策（A/B/C） | ✅ | ❌ |
 | 改 analysis.md（A：AI 按反馈改 / B：PM 自改） | ✅ | ❌ |
 | PM 改后重跑 reviewer（A/B 后必跑 1 次） | ✅ | ❌ |
@@ -48,10 +48,10 @@ echo "SKILL: req-analysis"
 - `$ACTIVE_REQ_DIR/analysis.md` 已写盘
 - analysis-reviewer 至少跑过一次，最近一次报告原文已贴 chat
 - PM 已显式做出 A/B/C 决策；返回值带 `review_outcome ∈ {PASS, ACCEPTED_WITH_ISSUES}`
-  - `PASS`：最近一次 reviewer 返回 PASS（PM 选 A/B 修改后重评通过，或一开始就 PASS）
-  - `ACCEPTED_WITH_ISSUES`：最近一次 reviewer 返回 NEEDS_REVISION，PM 选 C 接受现状继续
+  - `PASS`：最近一次 reviewer 报告**没有必改条目**（PM 选 A/B 修改后重评通过，或一开始就无必改）
+  - `ACCEPTED_WITH_ISSUES`：最近一次 reviewer 报告**有必改条目**，但 PM 选 C 接受现状继续
 
-**不再保证 reviewer 最终 PASS**——把"是否够好"的判断权还给 PM，避免 AI 自循环不收敛或藏报告。orchestrator 信任此契约的"PM 已知悉"语义，不重调 reviewer。
+**不再保证 reviewer 最终零必改**——把"是否够好"的判断权还给 PM，避免 AI 自循环不收敛或藏报告。orchestrator 信任此契约的"PM 已知悉"语义，不重调 reviewer。
 
 ## Role（角色设定）
 
@@ -210,7 +210,7 @@ Agent(
 
 ### 步骤 5：贴 reviewer 报告原文 + PM 三选一决策门
 
-reviewer 返回后，**先把 reviewer 报告完整原文贴回 chat**（PASS 与 NEEDS_REVISION 都贴；不允许转述、摘要、隐藏，也不允许只说"reviewer 说 NEEDS_REVISION"就开始改）。
+reviewer 返回后，**先把 reviewer 报告完整原文贴回 chat**（不管报告里有没有"必改"段都贴；不允许转述、摘要、隐藏）。
 
 格式：
 
@@ -221,34 +221,52 @@ reviewer 返回后，**先把 reviewer 报告完整原文贴回 chat**（PASS �
 ===
 ```
 
-然后给 PM 对话式闸门（v2 风格，不列 A/B/C 字母）：
+#### 5.0 判定走哪个分支（机械化，不靠语义猜）
 
-**5.1 若 reviewer 返回 PASS**：
+读 reviewer 报告，按下面规则判定（**不**靠 grep "PASS" / "NEEDS_REVISION" —— 新 reviewer 不输出这些英文字符串）：
+
+| 条件 | 走哪个分支 |
+|---|---|
+| 报告里没有 `## 必改` 段，或该段下没有 finding（0 条） | **5.1 通过分支** |
+| 报告里有 `## 必改` 段且段下有 ≥1 条 finding | **5.2 有必改分支** |
+
+#### 5.1 通过分支（无必改）
+
+如报告里还有"建议改 / 锦上添花"条目，在 PM 文案里提一句让 PM 知道这些是可选的：
+
+```
+✅ 评审通过
+（报告里还有 N 条建议 / M 条锦上添花，都不阻塞下一步；要不要顺手处理一下，由你定）
+
+这版 analysis 是否可以定稿？如果想调整就直接说，确认后我交接给下一步。
+```
+
+如果报告里**只有**通过、连建议都没有，简化成：
 
 ```
 ✅ 评审通过
 
-这版 analysis 内容是否可以定稿？如还有需要调整的内容，请直接说；确认后我会交接给下一步。
+这版 analysis 是否可以定稿？如果想调整就直接说，确认后我交接给下一步。
 ```
 
 **PM 回答的内部分流**：
 - PM 说「OK / 通过 / 没问题 / 定了」等 → 本 skill 退出，返回 `review_outcome=PASS`
 - PM 提具体修改 → AI 按 PM 描述改 analysis.md → 回步骤 4 重跑 reviewer
 
-**5.2 若 reviewer 返回 NEEDS_REVISION**（**当前累计循环轮数 ≥ 3 时，必须在第二行额外加一句提示**）：
+#### 5.2 有必改分支（**当前累计循环轮数 ≥ 3 时，必须在第二行额外加一句提示**）
 
 ```
-⚠️ 评审反馈了改进建议（详见上方报告）
-[若已第 ≥3 轮 NEEDS_REVISION，加一行：这是第 <N> 轮反馈，反复改不一定有效，可以考虑接受现状或自己改。]
+⚠️ 评审说有 N 条必改（详见上方报告）
+[若已第 ≥3 轮"有必改"，加一行：这是第 <N> 轮反馈，反复改不一定有效，可以考虑接受现状或自己改。]
 
 要怎么处理？
  - 我按反馈改 analysis（改完我自己再跑一次评审）
  - 你想自己改（改完告诉我，我再跑评审）
- - 接受现状不改（评审会标"可以继续但有待改进"，下一步会知会一声但不阻塞）
+ - 接受现状不改（下一步会知会一声但不阻塞）
 ```
 
 **PM 回答的内部分流**：
-- PM 说「我改 / 你改 / AI 改」等 → AI 按 reviewer 给的「具体修改动作」改 analysis.md → 回步骤 4 重跑 reviewer
+- PM 说「我改 / 你改 / AI 改」等 → AI 按 reviewer 给的「怎么改」改 analysis.md → 回步骤 4 重跑 reviewer
 - PM 说「我自己改 / 我来改 / 我改完了」等 → 等 PM 改完通知（"改完了"）→ 回步骤 4 重跑 reviewer
 - PM 说「接受现状 / 不改了 / 就这样」等 → 本 skill 退出，返回 `review_outcome=ACCEPTED_WITH_ISSUES`
 
@@ -263,7 +281,7 @@ reviewer 返回后，**先把 reviewer 报告完整原文贴回 chat**（PASS �
 - ❌ 调 `req-transition.py`
 - ❌ 跳过 reviewer（"快速通道"、"简单 req 跳过 reviewer"等借口都禁止；PM 想跳过的合法路径只有"接受现状不改"分支）
 - ❌ 把 reviewer 报告**转述、摘要、节选**给 PM 看——必须贴完整原文，且格式必须可识别为"reviewer 原文"
-- ❌ 自动连跑两轮 reviewer 不停下让 PM 决策（哪怕第 1 轮 NEEDS_REVISION 第 2 轮 PASS 也不行）
+- ❌ 自动连跑两轮 reviewer 不停下让 PM 决策（哪怕第 1 轮有必改、第 2 轮通过也不行）
 - ❌ 提供"带假设前进"逃生舱（即"PM 不答未决问题就标 [假设: ...] 继续"——这违反新仓未决问题闸门硬规则）
 
 ## Analysis Structure

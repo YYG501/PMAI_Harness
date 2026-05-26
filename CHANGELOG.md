@@ -136,6 +136,35 @@ PM-AI-Workflow 生成器仓的演进记录。本文件**只记影响下游业务
 
 ## 未发布
 
+### 2026-05-26 — refactor(analysis-reviewer): 借鉴 Claude 官方 code-review 重构反馈框架
+
+**触发**：PM 反馈实战 reviewer 输出（req-008-reorganize-menus）有三类问题 ——（1）二元 PASS/FAIL 一刀切，3 条 finding 全打 FAIL 但实际含 nit + 误报 + 真问题混杂；（2）跟 analysis 法定结构第 7 章「拟采取方案」打架（要求方案延后到 stage 3，但章节本就要给方案）；（3）输出工程黑话太多、信息量超出 PM 阅读体量。
+
+**方法论参考**：[Claude 官方 code-review skill](`~/.claude/plugins/marketplaces/claude-plugins-official/plugins/code-review/commands/code-review.md`) 的核心机制 —— 置信度 0-100 + 阈值过滤 + 显式 false-positive 清单 +「focus on large bugs, avoid nitpicks」硬约束。
+
+**改动**：
+- `agents/analysis-reviewer.md` 整体重写：
+  - 引入置信度方法论：80-100 = 必改 / 60-79 = 建议改 / 40-59 = 锦上添花 / < 40 = 不报
+  - 顶层加 8 条 false-positive 清单（§七拟采取方案有内容 / 文档存放路径 / 排版 / 倾向性分析视为缺陷 / 方案融合呈现 / typo / 主观印象 / 评 PM 决定本身），命中直接丢弃不打分
+  - 4 角度只保留「找什么 + 真问题样例」，「不算问题」段合并到顶层 false-positive 清单
+  - 输出格式精简：取消"角度通过/失败"占位、空段不出现、blocking ≤ 5 / 全部 ≤ 10
+  - 加禁用词表：未决问题 section / stage 3 / 决策耦合 / 对齐粒度 等工程黑话改 PM 大白话
+  - 砍 PASS / NEEDS_REVISION 英文字面输出，主线 skill 改靠 grep 「## 必改」段判定
+- `skills/req-analysis/SKILL.md` 步骤 5 同步：
+  - 加 5.0「判定走哪个分支（机械化，不靠语义猜）」段：靠 `## 必改` 段存在性判定
+  - 5.1 通过分支文案补一句「报告里还有 N 条建议 / M 条锦上添花，都不阻塞下一步」
+  - 5.2 文案从「⚠️ 评审反馈了改进建议」改「⚠️ 评审说有 N 条必改」
+  - 退出契约 `review_outcome=PASS` 定义从「reviewer 返回 PASS」改「报告无必改条目」
+  - Common Mistakes 里 PASS/NEEDS_REVISION 文案中文化
+- `skills/req-stage-gate/SKILL.md`「闸门挂起等 PM」清单 + 「analysis 评审 NEEDS_REVISION」PM 视图提示中文化
+
+**影响**：
+- 反馈信号区分度变高 —— nit 不再凑出 FAIL，PM 真能跳过；置信度阈值机械化挡掉低质量 finding
+- 输出长度上限明确（必改 ≤ 5 / 全部 ≤ 10）—— 治"PM 看不动"
+- 禁用词清单覆盖实战出现的 8 类工程黑话 —— 治"读不懂"
+- 接口契约（`review_outcome` enum）不变，业务仓续 req 无需迁移
+- 测试无回归（agent + skill 文档级改动，无脚本逻辑）
+
 ### 2026-05-26 — refactor(term-detector): 二次迁移到 close-req + 临时/长期双词典分层
 
 **触发**：承接上一条 `term-detector 调用点收敛到 prd-writing 一处`。PM 进一步反馈：业务实体真正稳定要等 task 都执行落地，PRD 阶段（stage 3）就 patch PROJECT.md 长期术语表偏早；并发现 implementation-design / task-spec 没有显式"读术语表"的必读项，业务术语没有传递机制。
