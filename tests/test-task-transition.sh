@@ -121,7 +121,9 @@ test_reject_parallel_active_task_now_allowed() {
   fixture_create_task "$req_dir" "001" "running" "执行中" >/dev/null
   task=$(fixture_create_task "$req_dir" "002" "new" "待执行")
 
-  if _run_transition "$task" --to 执行中 >/tmp/out.$$ 2>/tmp/err.$$; then
+  if _run_transition "$task" --to 执行中 \
+        --bound-to-execution-event started --executor claude-code \
+        >/tmp/out.$$ 2>/tmp/err.$$; then
     pass_test
   else
     _fail "should accept when another task active after I-TT2 relaxed (v4 D0)"
@@ -282,8 +284,10 @@ test_happy_path_start_to_done() {
   task_stem=$(basename "$task" .md)
   events_file="$FIXTURE_DIR/.runs/events/${task_stem}.jsonl"
 
-  # 1. 待执行 → 执行中 (no sibling, should pass)
-  if ! _run_transition "$task" --to 执行中 >/tmp/out.$$ 2>/tmp/err.$$; then
+  # 1. 待执行 → 执行中 (no sibling, should pass) — 修复 B 后必须绑 dispatch 事件
+  if ! _run_transition "$task" --to 执行中 \
+        --bound-to-execution-event started --executor claude-code \
+        >/tmp/out.$$ 2>/tmp/err.$$; then
     _fail "待执行→执行中 failed"
     cat /tmp/err.$$ >&2
     rm -f /tmp/out.$$ /tmp/err.$$
@@ -883,6 +887,335 @@ test_validate_fields_only_rejects_derived_label() {
 }
 
 # -----------------------------------------------------------------
+# 修复 B：待执行→执行中 必须绑定 dispatch 事件
+# -----------------------------------------------------------------
+
+test_bound_event_required_for_pending_to_executing() {
+  start_test "修复 B 待执行→执行中 没 --bound-to-execution-event → 拒绝"
+  fixture_setup
+  req_dir=$(fixture_create_req "req-001" "test" 6)
+  task=$(fixture_create_task "$req_dir" "001" "demo" "待执行")
+
+  if _run_transition "$task" --to 执行中 >/tmp/out.$$ 2>/tmp/err.$$; then
+    _fail "应该拒绝裸 transition 待执行→执行中"
+  else
+    if grep -q "必须通过 --bound-to-execution-event" /tmp/err.$$; then
+      pass_test
+    else
+      _fail "stderr 缺修复 B 拒绝消息：$(cat /tmp/err.$$)"
+    fi
+  fi
+  rm -f /tmp/out.$$ /tmp/err.$$
+  fixture_teardown
+}
+
+test_bound_event_started_atomic_pair() {
+  start_test "修复 B 待执行→执行中 + bound started → atomic 写 status_changed + execution_started"
+  fixture_setup
+  req_dir=$(fixture_create_req "req-001" "test" 6)
+  task=$(fixture_create_task "$req_dir" "001" "demo" "待执行")
+  task_stem=$(basename "$task" .md)
+  events_file="$FIXTURE_DIR/.runs/events/${task_stem}.jsonl"
+
+  if ! _run_transition "$task" --to 执行中 \
+        --bound-to-execution-event started \
+        --executor claude-code --executor-model sonnet \
+        --baseline-sha abc123 >/tmp/out.$$ 2>/tmp/err.$$; then
+    _fail "transition 应通过：$(cat /tmp/err.$$)"
+    rm -f /tmp/out.$$ /tmp/err.$$
+    fixture_teardown
+    return
+  fi
+
+  # 事件流应有 status_changed + execution_started 两条，同时戳（atomic）
+  if [ ! -f "$events_file" ]; then
+    _fail "事件流文件未创建"
+    fixture_teardown
+    return
+  fi
+  status_count=$(grep -c '"event": *"status_changed"' "$events_file" || true)
+  started_count=$(grep -c '"event": *"execution_started"' "$events_file" || true)
+  if [ "$status_count" -lt 1 ] || [ "$started_count" -lt 1 ]; then
+    _fail "expected status_changed >=1 + execution_started >=1, got status=$status_count exec=$started_count"
+    cat "$events_file" >&2
+    fixture_teardown
+    return
+  fi
+  # 验 payload 字段（executor / model / baseline_sha）也落进 execution_started
+  if ! grep -q '"executor": *"claude-code"' "$events_file" || \
+     ! grep -q '"model": *"sonnet"' "$events_file" || \
+     ! grep -q '"baseline_sha": *"abc123"' "$events_file"; then
+    _fail "payload 字段缺失"
+    cat "$events_file" >&2
+    fixture_teardown
+    return
+  fi
+  pass_test
+  rm -f /tmp/out.$$ /tmp/err.$$
+  fixture_teardown
+}
+
+test_bound_event_manual_waiting_emits_waiting_event() {
+  start_test "修复 B 待执行→执行中 + bound manual-waiting → execution_manual_waiting"
+  fixture_setup
+  req_dir=$(fixture_create_req "req-001" "test" 6)
+  task=$(fixture_create_task "$req_dir" "001" "demo" "待执行")
+  task_stem=$(basename "$task" .md)
+  events_file="$FIXTURE_DIR/.runs/events/${task_stem}.jsonl"
+
+  if ! _run_transition "$task" --to 执行中 \
+        --bound-to-execution-event manual-waiting \
+        --executor manual >/tmp/out.$$ 2>/tmp/err.$$; then
+    _fail "transition 应通过：$(cat /tmp/err.$$)"
+    rm -f /tmp/out.$$ /tmp/err.$$
+    fixture_teardown
+    return
+  fi
+  if grep -q '"event": *"execution_manual_waiting"' "$events_file"; then
+    pass_test
+  else
+    _fail "缺 execution_manual_waiting 事件"
+    cat "$events_file" >&2
+  fi
+  rm -f /tmp/out.$$ /tmp/err.$$
+  fixture_teardown
+}
+
+test_bound_event_dispatch_retry_no_state_change() {
+  start_test "修复 B 执行中→执行中 + bound 重试 → 只 emit dispatch event 不动状态"
+  fixture_setup
+  req_dir=$(fixture_create_req "req-001" "test" 6)
+  task=$(fixture_create_task "$req_dir" "001" "demo" "执行中")
+  task_stem=$(basename "$task" .md)
+  events_file="$FIXTURE_DIR/.runs/events/${task_stem}.jsonl"
+  mkdir -p "$(dirname "$events_file")"
+
+  if ! _run_transition "$task" --to 执行中 \
+        --bound-to-execution-event started \
+        --executor codex >/tmp/out.$$ 2>/tmp/err.$$; then
+    _fail "重试 transition 应通过：$(cat /tmp/err.$$)"
+    rm -f /tmp/out.$$ /tmp/err.$$
+    fixture_teardown
+    return
+  fi
+
+  # 状态不动
+  if ! grep -q '^\*\*状态：\*\* 执行中' "$task"; then
+    _fail "状态被错改"
+    rm -f /tmp/out.$$ /tmp/err.$$
+    fixture_teardown
+    return
+  fi
+  # 写了 execution_started 但没新 status_changed
+  if ! grep -q '"event": *"execution_started"' "$events_file"; then
+    _fail "缺 execution_started"
+    fixture_teardown
+    return
+  fi
+  if grep -q '"event": *"status_changed"' "$events_file"; then
+    _fail "重试不该写 status_changed"
+    cat "$events_file" >&2
+    fixture_teardown
+    return
+  fi
+  pass_test
+  rm -f /tmp/out.$$ /tmp/err.$$
+  fixture_teardown
+}
+
+# -----------------------------------------------------------------
+# 修复 A：task-events.py CLI 黑名单
+# -----------------------------------------------------------------
+
+test_cli_rejects_execution_started_append() {
+  start_test "修复 A task-events.py append --type execution_started → 拒绝"
+  fixture_setup
+  req_dir=$(fixture_create_req "req-001" "test" 6)
+  task=$(fixture_create_task "$req_dir" "001" "demo" "执行中")
+  TASK_EVENTS="$FRAMEWORK_ROOT/scripts/task-events.py"
+
+  if (cd "$FIXTURE_DIR" && python3 "$TASK_EVENTS" append "$task" \
+        --type execution_started) >/tmp/out.$$ 2>/tmp/err.$$; then
+    _fail "CLI 不该接受 execution_started"
+  else
+    if grep -q "不允许通过 task-events.py CLI 写入" /tmp/err.$$; then
+      pass_test
+    else
+      _fail "stderr 缺黑名单消息：$(cat /tmp/err.$$)"
+    fi
+  fi
+  rm -f /tmp/out.$$ /tmp/err.$$
+  fixture_teardown
+}
+
+test_cli_rejects_execution_manual_completed_append() {
+  start_test "修复 A task-events.py append --type execution_manual_completed → 拒绝"
+  fixture_setup
+  req_dir=$(fixture_create_req "req-001" "test" 6)
+  task=$(fixture_create_task "$req_dir" "001" "demo" "执行中")
+  TASK_EVENTS="$FRAMEWORK_ROOT/scripts/task-events.py"
+
+  if (cd "$FIXTURE_DIR" && python3 "$TASK_EVENTS" append "$task" \
+        --type execution_manual_completed) >/tmp/out.$$ 2>/tmp/err.$$; then
+    _fail "CLI 不该接受 execution_manual_completed"
+  else
+    if grep -q "不允许通过 task-events.py CLI 写入" /tmp/err.$$; then
+      pass_test
+    else
+      _fail "stderr 缺黑名单消息：$(cat /tmp/err.$$)"
+    fi
+  fi
+  rm -f /tmp/out.$$ /tmp/err.$$
+  fixture_teardown
+}
+
+test_cli_allows_review_completed_append() {
+  start_test "修复 A task-events.py append --type review_completed → 放行（非受限）"
+  fixture_setup
+  req_dir=$(fixture_create_req "req-001" "test" 6)
+  task=$(fixture_create_task "$req_dir" "001" "demo" "执行中")
+  TASK_EVENTS="$FRAMEWORK_ROOT/scripts/task-events.py"
+
+  if (cd "$FIXTURE_DIR" && python3 "$TASK_EVENTS" append "$task" \
+        --type review_completed --tool /qa) >/tmp/out.$$ 2>/tmp/err.$$; then
+    pass_test
+  else
+    _fail "review_completed 应被放行：$(cat /tmp/err.$$)"
+  fi
+  rm -f /tmp/out.$$ /tmp/err.$$
+  fixture_teardown
+}
+
+# -----------------------------------------------------------------
+# 修复 C：--register-manual-completion
+# -----------------------------------------------------------------
+
+test_register_manual_completion_requires_executing() {
+  start_test "修复 C --register-manual-completion 仅用于「执行中」"
+  fixture_setup
+  req_dir=$(fixture_create_req "req-001" "test" 6)
+  task=$(fixture_create_task "$req_dir" "001" "demo" "已完成")
+
+  if _run_transition "$task" --register-manual-completion --reason "test" --yes \
+       >/tmp/out.$$ 2>/tmp/err.$$; then
+    _fail "应拒绝已完成状态"
+  else
+    if grep -q "仅用于「执行中」" /tmp/err.$$; then
+      pass_test
+    else
+      _fail "stderr 缺状态约束消息：$(cat /tmp/err.$$)"
+    fi
+  fi
+  rm -f /tmp/out.$$ /tmp/err.$$
+  fixture_teardown
+}
+
+test_register_manual_completion_requires_reason() {
+  start_test "修复 C --register-manual-completion 强制 --reason"
+  fixture_setup
+  req_dir=$(fixture_create_req "req-001" "test" 6)
+  task=$(fixture_create_task "$req_dir" "001" "demo" "执行中")
+
+  if _run_transition "$task" --register-manual-completion --yes \
+       >/tmp/out.$$ 2>/tmp/err.$$; then
+    _fail "应拒绝缺 --reason"
+  else
+    if grep -q "必须提供 --reason" /tmp/err.$$; then
+      pass_test
+    else
+      _fail "stderr 缺 reason 强制消息：$(cat /tmp/err.$$)"
+    fi
+  fi
+  rm -f /tmp/out.$$ /tmp/err.$$
+  fixture_teardown
+}
+
+test_register_manual_completion_rejects_if_event_already_present() {
+  start_test "修复 C --register-manual-completion 已有 exec event → 拒绝"
+  fixture_setup
+  req_dir=$(fixture_create_req "req-001" "test" 6)
+  task=$(fixture_create_task "$req_dir" "001" "demo" "执行中")
+  fixture_seed_execution_started "$task"
+
+  if _run_transition "$task" --register-manual-completion --reason "test" --yes \
+       >/tmp/out.$$ 2>/tmp/err.$$; then
+    _fail "应拒绝事件流已含 exec event"
+  else
+    if grep -q "事件流已含 execution event" /tmp/err.$$; then
+      pass_test
+    else
+      _fail "stderr 缺已有消息：$(cat /tmp/err.$$)"
+    fi
+  fi
+  rm -f /tmp/out.$$ /tmp/err.$$
+  fixture_teardown
+}
+
+# -----------------------------------------------------------------
+# 修复 C'：--emit-from-pending
+# -----------------------------------------------------------------
+
+test_emit_from_pending_requires_pending_file() {
+  start_test "修复 C' --emit-from-pending 缺 PENDING_FILE → 拒绝"
+  fixture_setup
+  req_dir=$(fixture_create_req "req-001" "test" 6)
+  task=$(fixture_create_task "$req_dir" "001" "demo" "执行中")
+
+  if _run_transition "$task" --emit-from-pending >/tmp/out.$$ 2>/tmp/err.$$; then
+    _fail "应拒绝缺 PENDING_FILE"
+  else
+    if grep -q "要求 PENDING_FILE 存在" /tmp/err.$$; then
+      pass_test
+    else
+      _fail "stderr 缺 PENDING_FILE 提示：$(cat /tmp/err.$$)"
+    fi
+  fi
+  rm -f /tmp/out.$$ /tmp/err.$$
+  fixture_teardown
+}
+
+test_emit_from_pending_happy() {
+  start_test "修复 C' --emit-from-pending happy → 写 execution_manual_completed + 删 PENDING_FILE"
+  fixture_setup
+  req_dir=$(fixture_create_req "req-001" "test" 6)
+  task=$(fixture_create_task "$req_dir" "001" "demo" "执行中")
+  task_stem=$(basename "$task" .md)
+  events_file="$FIXTURE_DIR/.runs/events/${task_stem}.jsonl"
+  # 构造 PENDING_FILE（在 fixture 主仓 .runs/）
+  mkdir -p "$FIXTURE_DIR/.runs"
+  cat > "$FIXTURE_DIR/.runs/.pending-manual-task-001.json" <<EOF
+{"task_id":"task-001","started_at":"2026-04-20T10:00:00+00:00","baseline_sha":"abc123","snoozed_until":null}
+EOF
+
+  if ! _run_transition "$task" --emit-from-pending >/tmp/out.$$ 2>/tmp/err.$$; then
+    _fail "emit-from-pending 应通过：$(cat /tmp/err.$$)"
+    rm -f /tmp/out.$$ /tmp/err.$$
+    fixture_teardown
+    return
+  fi
+
+  if ! grep -q '"event": *"execution_manual_completed"' "$events_file"; then
+    _fail "缺 execution_manual_completed 事件"
+    fixture_teardown
+    return
+  fi
+  if [ -f "$FIXTURE_DIR/.runs/.pending-manual-task-001.json" ]; then
+    _fail "PENDING_FILE 应被删除"
+    fixture_teardown
+    return
+  fi
+  # 验 payload 含 baseline_sha
+  if ! grep -q '"baseline_sha": *"abc123"' "$events_file"; then
+    _fail "缺 baseline_sha payload"
+    fixture_teardown
+    return
+  fi
+  pass_test
+  rm -f /tmp/out.$$ /tmp/err.$$
+  fixture_teardown
+}
+
+# -----------------------------------------------------------------
 # Run
 # -----------------------------------------------------------------
 
@@ -920,5 +1253,21 @@ test_validate_fields_only_passes_paragraph_format
 test_validate_fields_only_passes_table_format
 test_validate_fields_only_rejects_blockquote
 test_validate_fields_only_rejects_derived_label
+# 修复 B
+test_bound_event_required_for_pending_to_executing
+test_bound_event_started_atomic_pair
+test_bound_event_manual_waiting_emits_waiting_event
+test_bound_event_dispatch_retry_no_state_change
+# 修复 A
+test_cli_rejects_execution_started_append
+test_cli_rejects_execution_manual_completed_append
+test_cli_allows_review_completed_append
+# 修复 C
+test_register_manual_completion_requires_executing
+test_register_manual_completion_requires_reason
+test_register_manual_completion_rejects_if_event_already_present
+# 修复 C'
+test_emit_from_pending_requires_pending_file
+test_emit_from_pending_happy
 
 report_results "task-transition"

@@ -100,8 +100,9 @@ test_legal_transition_passes() {
   task=$(fixture_create_task "$req_dir" "001" "demo" "待执行")
   req_wt=$(dirname "$(dirname "$(dirname "$task")")")
 
-  # 在 req worktree 里跑 task-transition.py 推进状态
-  (cd "$req_wt" && python3 "$TASK_TRANSITION" "$task" --to 执行中) >/tmp/out.$$ 2>/tmp/err.$$ || {
+  # 在 req worktree 里跑 task-transition.py 推进状态（修复 B：必须绑定 dispatch 事件）
+  (cd "$req_wt" && python3 "$TASK_TRANSITION" "$task" --to 执行中 \
+       --bound-to-execution-event started --executor claude-code) >/tmp/out.$$ 2>/tmp/err.$$ || {
     _fail "task-transition.py 失败"
     cat /tmp/err.$$ >&2
     rm -f /tmp/out.$$ /tmp/err.$$

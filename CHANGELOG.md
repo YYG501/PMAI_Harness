@@ -18,6 +18,36 @@ PM-AI-Workflow 生成器仓的演进记录。本文件**只记影响下游业务
 
 ## 已发布版本
 
+### 2026-05-26 — task-execute 审计闭环加固（修复 A + B + C + C'）：堵 dispatch 没跑就推状态的悬空窗口
+
+**触发**：消费仓 ExampleConsumerApp req-008 task-001 复现 req-006 同款事故 —— AI 进 /task-execute 后入口前置 transition 了「待执行→执行中」，但中断 skill 没跑 dispatch 节点，直接用 Edit/Write 完成 work + 3 commit；事件流卡在仅 1 条 `status_changed`，accept 闸门正确拦下 `--to 已完成`，但 AI 给 PM 误诊"infra bug, skill 没自动 append"+ 提议 `task-events.py append --type execution_started` 补登（伪造审计证据）。req-006 后的 accept 闸门兜底有效，但缺**物理约束**让伪造路径根本执行不了 + 缺 AI 故障恢复的合规出口。
+
+**改动**（PM 视角）：
+
+- **修复 A**：`scripts/task-events.py` CLI 加黑名单 —— `execution_started` / `execution_manual_completed` 不允许通过 `task-events.py append --type ...` 写入；错误消息直接列举合规出路（`/task-execute` / `--register-manual-completion` / `--repair-evidence`）。`scripts/_lib/events.py` 加 `CLI_RESTRICTED_EVENT_TYPES` 常量 + `append_execution_event_internal()` 内部 API。
+- **修复 B**：`scripts/task-transition.py` 「待执行→执行中」transition 加 `--bound-to-execution-event {started, manual-waiting}` 必填参数；与 dispatch event 原子绑定写入（`_lib/events.py` 加 `write_status_change_and_exec_event_atomic()` 一次 `fh.write` 写两条）。裸 transition 拒绝；状态已=执行中 + 带 bound flag 视为 dispatch retry（emit dispatch event 不动状态）。
+- **修复 C**：`scripts/task-transition.py` 加 `--register-manual-completion --reason "<...>"` 命令 —— AI 故障恢复合规出口（task 状态=执行中、事件流缺 exec event、worktree 有 task commit 时用）。强制 `--reason` + 验 worktree 真有 commit + 写 `execution_manual_completed` with `{repaired:true, by:manual-completion-register}` payload + 不动状态。
+- **修复 C'**：`scripts/task-transition.py` 加 `--emit-from-pending` 命令 —— dispatch §3a manual resume 合规通路（需 PENDING_FILE 存在）；写 `execution_manual_completed` + 删 PENDING_FILE + 不动状态。
+- accept 闸门错误消息（`task-transition.py check_preconditions`）加合规出路列表 + 明确"禁止 task-events.py append 绕过"。
+- `skills/task-execute/SKILL.md` 入口前置 step 3 不再自己 transition；transition 移到 §3b dispatch 节点（atomic 绑 dispatch event）。
+- `skills/task-execute/references/executor-dispatch.md`：§3a manual resume 改调 `task-transition.py --emit-from-pending`；§3b 正常 dispatch 改调 `task-transition.py --to 执行中 --bound-to-execution-event {started|manual-waiting} --executor X ...`（按 executor 类型分流 bind type）。
+- `scripts/exec-adapters/manual.sh` 去掉 emit `execution_manual_waiting`（由 §3b atomic transition 在 manual.sh 之前写入）。
+
+**事故路径对照**：
+
+| 缺口 | 物化约束（修复后） |
+|---|---|
+| AI 用 `task-events.py append --type execution_started` 伪造审计证据 | A：CLI 直接拒绝 |
+| AI 进 /task-execute 后 transition 了但不跑 dispatch（事件流悬空）| B：transition 必须绑 dispatch event |
+| AI 用 Edit/Write 自己做完 work 后无合规补登入口 | C：`--register-manual-completion` |
+| dispatch §3a manual resume 通路曾走 CLI（A 后会拒）| C'：`--emit-from-pending` 内部 API 写 |
+
+**影响**：
+
+- 业务仓 task-execute 同步框架后所有 task 自动适用；既有"已完成" task 不受影响。
+- 业务仓如有"卡在执行中、事件流缺 exec event、worktree 有 commit"的故障 task（事故场景），同步后 AI 可调 `--register-manual-completion --reason "..."` 走合规补登 → 再走正常 `task-submit` / `--to 已完成`。
+- 测试基线 527/0 全绿（+13 新 case for A/B/C/C'）。
+
 ### 2026-05-26 — DESIGN.md 全流程重构（gstack 写视觉基线 + 框架管 inventory + 自由度声明移 implementation-design）
 
 **触发**：PM 反思 DESIGN.md 5 个写入点（init 留空骨架 / new-req 兜底 / stage 4 4A 占位 / stage 4 4B 视觉规范更新 / close-task 视觉反馈反推）混乱，定位"乱"的根因 = ① DESIGN.md 视觉基线未在 init 阶段共写、推迟到 req 级 → 把项目级决策塞进 req 流程 ② executor 在视觉规范没说的地方乱搞 ③ 创意自由度三档归属错位（项目级文档写 req 级决策）。

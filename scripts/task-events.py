@@ -10,6 +10,13 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
+# 让 _lib 可 import（task-events.py 在 scripts/，_lib 是同级子目录）
+_SCRIPTS_DIR = str(Path(__file__).resolve().parent)
+if _SCRIPTS_DIR not in sys.path:
+    sys.path.insert(0, _SCRIPTS_DIR)
+
+from _lib.events import CLI_RESTRICTED_EVENT_TYPES  # noqa: E402
+
 FIELD_RE = re.compile(r"^\*\*(.+?)：\*\*\s*(.*)$")
 
 
@@ -64,6 +71,25 @@ def cmd_append(args: argparse.Namespace) -> None:
     task_file = Path(args.task_file)
     if not task_file.exists():
         print(f"Error: task file not found: {task_file}", file=sys.stderr)
+        sys.exit(1)
+
+    # 物理拒绝伪造审计证据：execution_started / execution_manual_completed
+    # 不允许通过 CLI 直接写入。合规通路在 task-transition.py。
+    if args.type in CLI_RESTRICTED_EVENT_TYPES:
+        print(
+            f"Error: 事件类型 {args.type!r} 不允许通过 task-events.py CLI 写入。\n"
+            "  这是受保护的审计证据，必须经合规通路写入：\n"
+            "    • 走 dispatch（执行器派发）：/task-execute 自动通过\n"
+            "      python3 .claude/scripts/task-transition.py <task> --to 执行中 \\\n"
+            "          --bound-to-execution-event started [...payload]\n"
+            "    • Work 已手做完、PM 拍板补登（task 状态=执行中）：\n"
+            "      python3 .claude/scripts/task-transition.py <task> \\\n"
+            "          --register-manual-completion --reason \"<为何手做、PM 拍板>\"\n"
+            "    • task 状态已=已完成、事件流缺 exec event（close-task I-CT7 挡）：\n"
+            "      python3 .claude/scripts/task-transition.py <task> \\\n"
+            "          --repair-evidence --reason \"<为何 work 真实完成>\"",
+            file=sys.stderr,
+        )
         sys.exit(1)
 
     ep = events_path(task_file)

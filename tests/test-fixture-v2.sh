@@ -157,7 +157,8 @@ test_v2_task_transition_accepts_legal() {
   req_dir=$(fixture_create_req "req-001" "test" 6)
   task=$(fixture_create_task_v2 "$req_dir" "001" "demo" "待执行")
 
-  if (cd "$FIXTURE_DIR" && python3 "$TASK_TRANSITION" "$task" --to 执行中) >/tmp/out.$$ 2>/tmp/err.$$; then
+  if (cd "$FIXTURE_DIR" && python3 "$TASK_TRANSITION" "$task" --to 执行中 \
+        --bound-to-execution-event started --executor claude-code) >/tmp/out.$$ 2>/tmp/err.$$; then
     local status
     status=$(_parser get_status "$task")
     if [ "$status" = "执行中" ]; then

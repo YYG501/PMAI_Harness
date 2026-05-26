@@ -35,10 +35,11 @@ if [ -f "$PENDING_FILE" ]; then
     exit 1
   fi
 
-  # 通过 → 删标记，追加事件，进 step 4
-  rm -f "$PENDING_FILE"
-  python3 "$MAIN_REPO_ROOT/.claude/scripts/task-events.py" append "$TASK_FILE" \
-    --type execution_manual_completed
+  # 通过 → 走合规通路写 execution_manual_completed（task-events.py CLI 已
+  # 黑名单 execution_manual_completed，避免伪造审计证据；走 task-transition
+  # 内部 API + 读 PENDING_FILE payload + 删 PENDING_FILE）
+  python3 "$MAIN_REPO_ROOT/.claude/scripts/task-transition.py" "$TASK_FILE" \
+    --emit-from-pending
   # 跳到 step 4（不 exec adapter，不记 execution_started）
   MANUAL_RESUME=1
 fi
@@ -86,10 +87,23 @@ if [ -z "${MANUAL_RESUME:-}" ]; then
   # Baseline SHA（I-AD5 保证此时 working tree == HEAD）
   BASELINE_SHA=$(git -C "$TASK_WORKTREE" rev-parse HEAD)
 
-  # Event
-  python3 "$MAIN_REPO_ROOT/.claude/scripts/task-events.py" append "$TASK_FILE" \
-    --type execution_started \
-    --payload "{\"executor\":\"$EXECUTOR\",\"model\":\"$EXECUTOR_MODEL\",\"baseline_sha\":\"$BASELINE_SHA\"}"
+  # 修复 B：dispatch 事件与「待执行→执行中」transition 原子绑定。
+  # bind type 按 executor 分流：
+  #   manual    → execution_manual_waiting（派发到 PM 手做、等回头跑 §3a manual resume）
+  #   其他      → execution_started（普通执行器派发）
+  # task-events.py CLI 已黑名单 execution_started / manual_completed，必须走 task-transition。
+  # 重试场景（状态已=执行中）：task-transition 内部识别后只 emit dispatch 事件不动 state。
+  if [ "$EXECUTOR" = "manual" ]; then
+    BIND_TYPE=manual-waiting
+  else
+    BIND_TYPE=started
+  fi
+  python3 "$MAIN_REPO_ROOT/.claude/scripts/task-transition.py" "$TASK_FILE" \
+    --to 执行中 \
+    --bound-to-execution-event "$BIND_TYPE" \
+    --executor "$EXECUTOR" \
+    --executor-model "$EXECUTOR_MODEL" \
+    --baseline-sha "$BASELINE_SHA"
 
   LOG_PATH="$MAIN_REPO_ROOT/.runs/execution-${TASK_ID}-${EXECUTOR}.log"
   mkdir -p "$MAIN_REPO_ROOT/.runs"

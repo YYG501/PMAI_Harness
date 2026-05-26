@@ -220,7 +220,7 @@ DEPENDENCIES=$(awk '
 ' "$TASK_FILE" | grep -Eo 'task-[0-9]{3}' | sort -u)
 ```
 
-#### 入口步骤 3：检查状态 + transition
+#### 入口步骤 3：检查状态（不 transition；transition 由 §3b dispatch 物化绑定）
 
 读取当前 task 状态：
 
@@ -230,12 +230,8 @@ CURRENT_STATUS=$(python3 "$MAIN_REPO_ROOT/.claude/scripts/task-transition.py" "$
 
 状态处理：
 
-- 「待执行」：转换为「执行中」后继续。
-  ```bash
-  # D7 后无 serial 阻塞；并行约束由依赖 gate 和 worktree 隔离承担。
-  python3 "$MAIN_REPO_ROOT/.claude/scripts/task-transition.py" "$TASK_FILE" --to 执行中
-  ```
-- 「执行中」：允许重试或 PM 打回后续跑，不重复 transition。包括：commit 后已呈交但 PM 还没决策的场景（task 状态仍是「执行中」）— 此时如想重新看呈交块跑 `/task-submit`。
+- 「待执行」：继续走，进 §3b dispatch 时由 `task-transition --bound-to-execution-event` 物化绑定 dispatch 事件、原子完成 transition（修复 B：堵"状态推到执行中但 dispatch 没真跑"的悬空态）。
+- 「执行中」：允许重试或 PM 打回后续跑，不重复 transition。包括：commit 后已呈交但 PM 还没决策的场景（task 状态仍是「执行中」）— 此时如想重新看呈交块跑 `/task-submit`。dispatch §3b 进入时若已是「执行中」会单独 emit 一条 dispatch 事件作为重试审计标记，不再 transition state。
 - 「已完成」：错误退出，提示 `该 task 已完成；如需收尾，在本（task）窗口运行 /close-task task-NNN 启动 Phase 1（对齐/偏差/commit/写 marker），完成后会引导切到 req 窗口跑 Phase 2`。
 - 其他状态：错误退出，展示当前状态，并提示 PM 回主窗口用 `/task-status` 查看。
 

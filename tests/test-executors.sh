@@ -369,7 +369,7 @@ test_fail_execution_requires_reason() {
   make_sandbox
   write_task_file "$SANDBOX/task.md" "codex" ""
   # Move to 执行中
-  cd "$SANDBOX" && python3 .claude/scripts/task-transition.py task.md --to 执行中 >/dev/null 2>&1
+  cd "$SANDBOX" && python3 .claude/scripts/task-transition.py task.md --to 执行中 --bound-to-execution-event started --executor claude-code >/dev/null 2>&1
   if python3 .claude/scripts/task-transition.py task.md --fail-execution 2>/tmp/err.$$; then
     fail_test "should reject without --reason"
   else
@@ -383,7 +383,7 @@ test_fail_execution_happy() {
   start_test "task-transition --fail-execution --reason → 待执行 + event"
   make_sandbox
   write_task_file "$SANDBOX/task.md" "codex" ""
-  cd "$SANDBOX" && python3 .claude/scripts/task-transition.py task.md --to 执行中 >/dev/null 2>&1
+  cd "$SANDBOX" && python3 .claude/scripts/task-transition.py task.md --to 执行中 --bound-to-execution-event started --executor claude-code >/dev/null 2>&1
   python3 .claude/scripts/task-transition.py task.md --fail-execution --reason "sandbox_denied" >/dev/null 2>&1
   status=$(grep '^\*\*状态：\*\*' task.md | sed 's/.*：\*\* //')
   [ "$status" = "待执行" ] && pass_test || fail_test "status is $status, expected 待执行"
@@ -394,7 +394,7 @@ test_plain_to_pending_from_executing_rejected() {
   start_test "task-transition --to 待执行 from 执行中 → rejected (use --fail-execution)"
   make_sandbox
   write_task_file "$SANDBOX/task.md" "codex" ""
-  cd "$SANDBOX" && python3 .claude/scripts/task-transition.py task.md --to 执行中 >/dev/null 2>&1
+  cd "$SANDBOX" && python3 .claude/scripts/task-transition.py task.md --to 执行中 --bound-to-execution-event started --executor claude-code >/dev/null 2>&1
   if python3 .claude/scripts/task-transition.py task.md --to 待执行 2>/tmp/err.$$; then
     fail_test "should reject plain --to 待执行 from 执行中"
   else
@@ -411,7 +411,7 @@ test_cancel_manual_happy() {
   tf="$SANDBOX/task-001-smoke.md"
   write_task_file "$tf" "manual" ""
   cd "$SANDBOX"
-  python3 .claude/scripts/task-transition.py "$tf" --to 执行中 >/dev/null 2>&1
+  python3 .claude/scripts/task-transition.py "$tf" --to 执行中 --bound-to-execution-event started --executor claude-code >/dev/null 2>&1
   cat > "$SANDBOX/.runs/.pending-manual-task-001.json" <<EOF
 {"task_id":"task-001","started_at":"2026-04-20T10:00:00+00:00","baseline_sha":"abc","snoozed_until":null}
 EOF
@@ -567,7 +567,7 @@ _run_adapter_with_shim() {
   local adapter="$1" cli_name="$2" model_value="$3"
   local task="$SANDBOX/requirements/active/req-001-test/tasks/task-001-shim.md"
   write_task_file "$task" "${adapter%%.sh}" "$model_value"
-  (cd "$SANDBOX" && python3 .claude/scripts/task-transition.py "$task" --to 执行中 >/dev/null 2>&1)
+  (cd "$SANDBOX" && python3 .claude/scripts/task-transition.py "$task" --to 执行中 --bound-to-execution-event started --executor claude-code >/dev/null 2>&1)
 
   local prompt_file="$SANDBOX/.prompt"
   echo "test prompt" > "$prompt_file"

@@ -16,7 +16,13 @@ if _SCRIPTS_DIR not in sys.path:
     sys.path.insert(0, _SCRIPTS_DIR)
 
 from _lib.state import read_section, has_meaningful_content
-from _lib.events import has_execution_event, load_events_strict
+from _lib.events import (
+    has_execution_event,
+    load_events_strict,
+    append_execution_event_internal,
+    write_status_change_and_exec_event_atomic,
+    BOUND_DISPATCH_EVENT_MAP,
+)
 
 # 兼容两种 task 元信息格式：
 #   旧版（段落）：**字段：** 值
@@ -275,7 +281,22 @@ def check_preconditions(
                 print(
                     "Error: accept 闸门 —— 事件流缺少 execution 事件"
                     "（execution_started / execution_manual_completed）。\n"
-                    "  说明 /task-execute 从未跑过。请先走 /task-execute 再验收。",
+                    "  说明 dispatch 通路没真跑过。合规出路（按场景选）：\n"
+                    "\n"
+                    "    • Work 还没做：回新会话跑 /task-execute <task-id> 让 dispatch 真发射。\n"
+                    "\n"
+                    "    • Work 已手做完（worktree 有 task commit）+ PM 拍板补登：\n"
+                    "      python3 .claude/scripts/task-transition.py <task-file> \\\n"
+                    "          --register-manual-completion --reason \"<为何手做、PM 拍板>\"\n"
+                    "      （会写带 repaired:true 标记的 execution_manual_completed，"
+                    "不动状态。\n"
+                    "       完成后重跑本 transition 即可。）\n"
+                    "\n"
+                    "    • 整 task 放弃：python3 .claude/scripts/task-transition.py "
+                    "<task-file> --discard --reason \"<...>\"\n"
+                    "\n"
+                    "  ⚠️ 禁止用 task-events.py append --type execution_started 绕过 —— "
+                    "已加 CLI 黑名单。",
                     file=sys.stderr,
                 )
             sys.exit(1)
@@ -306,18 +327,65 @@ def append_event(
 
 
 def do_transition(
-    task_file: Path, current: str, target: str, note: str | None, via: str = "normal"
+    task_file: Path,
+    current: str,
+    target: str,
+    note: str | None,
+    via: str = "normal",
+    bound_event_alias: str | None = None,
+    bound_event_payload: dict | None = None,
 ) -> None:
     """Execute the state transition and write event.
 
     `via` controls precondition bypass:
-      - normal: full precondition check
-      - fail-execution: skips 已完成 precondition check (failure回退到待执行)
+      - normal: full precondition check; 「待执行→执行中」时 bound_event_alias 必填
+      - fail-execution: skips 已完成 precondition check (failure 回退到待执行)
       - cancel-manual: same as fail-execution
+      - dispatch-bound: 跑 normal preconditions 但已自带 bound_event_alias
+
+    `bound_event_alias` ∈ BOUND_DISPATCH_EVENT_MAP keys ("started" / "manual-waiting")。
+    指定时，状态变更与 dispatch 事件一次原子写入（修复 B：堵"状态变了但 dispatch 没跑"的悬空窗口）。
     """
     text = read_text(task_file)
-    if via == "normal":
+    if via in ("normal", "dispatch-bound"):
         check_preconditions(task_file, current, target, text, note)
+        # 修复 B：「待执行→执行中」必须物化绑定 dispatch 事件
+        if current == "待执行" and target == "执行中" and bound_event_alias is None:
+            print(
+                "Error: 「待执行→执行中」transition 必须通过 --bound-to-execution-event "
+                "物化绑定 dispatch 事件（修复 B）。\n"
+                "  防止 dispatch 没真跑就把状态推到执行中、事件流成为"
+                "「状态变了但无执行证据」悬空态。\n"
+                "  合规调用方：/task-execute skill 的 dispatch 节点（自动传该 flag）。\n"
+                "  AI 故障恢复路径见 --register-manual-completion。",
+                file=sys.stderr,
+            )
+            sys.exit(1)
+
+    if bound_event_alias is not None and bound_event_alias not in BOUND_DISPATCH_EVENT_MAP:
+        print(
+            f"Error: --bound-to-execution-event 值「{bound_event_alias}」非法。"
+            f"合法值：{', '.join(sorted(BOUND_DISPATCH_EVENT_MAP))}",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+
+    # 重试场景：状态已经在 target（dispatch §3b 第二次跑进来）+ bound 事件给了。
+    # 不需要 transition，仅 emit dispatch 事件（保留与历史行为一致：每次 dispatch
+    # 调用都记一笔 execution_started/manual_waiting）。
+    if current == target and bound_event_alias is not None:
+        try:
+            event_type = BOUND_DISPATCH_EVENT_MAP[bound_event_alias]
+            append_execution_event_internal(
+                task_file,
+                event_type,
+                payload=bound_event_payload,
+                note=note,
+            )
+        except Exception as exc:
+            print(f"Error: dispatch event write failed: {exc}", file=sys.stderr)
+            sys.exit(1)
+        return
 
     # FM7 fix (v4 plan §8 A0): I-CT7 fail-closed 完整性 — 状态写和事件追加的伪事务性
     original_text = text
@@ -326,15 +394,32 @@ def do_transition(
         print("Error: 无法更新状态字段。", file=sys.stderr)
         sys.exit(1)
     save_text(task_file, new_text)
-    result = append_event(task_file, current, target, note)
-    if result.returncode != 0:
-        save_text(task_file, original_text)
-        output = (result.stderr or result.stdout or "").strip()
-        if output:
-            print(f"Error: append_event failed: {output}", file=sys.stderr)
-        else:
-            print("Error: append_event failed.", file=sys.stderr)
-        sys.exit(1)
+
+    if bound_event_alias is not None:
+        # 原子写：status_changed + dispatch exec event（一次 fh.write）
+        try:
+            write_status_change_and_exec_event_atomic(
+                task_file,
+                current,
+                target,
+                bound_event_alias,
+                note=note,
+                exec_payload=bound_event_payload,
+            )
+        except Exception as exc:
+            save_text(task_file, original_text)
+            print(f"Error: atomic event write failed: {exc}", file=sys.stderr)
+            sys.exit(1)
+    else:
+        result = append_event(task_file, current, target, note)
+        if result.returncode != 0:
+            save_text(task_file, original_text)
+            output = (result.stderr or result.stdout or "").strip()
+            if output:
+                print(f"Error: append_event failed: {output}", file=sys.stderr)
+            else:
+                print("Error: append_event failed.", file=sys.stderr)
+            sys.exit(1)
 
 
 def cmd_fail_execution(task_file: Path, reason: str) -> None:
@@ -793,27 +878,199 @@ def cmd_repair_evidence(task_file: Path, reason: str, yes: bool) -> None:
             sys.exit(1)
 
     note = f"evidence-repair（retroactive，PM 认定 work 真实完成）：{reason}"
-    cmd = [
-        sys.executable,
-        str(EVENTS_SCRIPT),
-        "append",
-        str(task_file),
-        "--type",
-        "execution_manual_completed",
-        "--note",
-        note,
-        "--payload",
-        '{"repaired": true}',
-    ]
-    result = subprocess.run(cmd, capture_output=True, text=True)
-    if result.returncode != 0:
-        output = (result.stderr or result.stdout or "").strip()
-        print(f"Error: 事件补记失败: {output}", file=sys.stderr)
+    try:
+        append_execution_event_internal(
+            task_file,
+            "execution_manual_completed",
+            payload={"repaired": True},
+            note=note,
+        )
+    except Exception as exc:
+        print(f"Error: 事件补记失败: {exc}", file=sys.stderr)
         sys.exit(1)
 
     print(
         f"✅ evidence-repair 完成：已向 {task_file.name} 事件流补记 "
         "execution_manual_completed（repaired=true）。现在可重跑 close-task。"
+    )
+
+
+def cmd_emit_from_pending(task_file: Path) -> None:
+    """Handle --emit-from-pending: dispatch §3a manual resume 合规通路。
+
+    要求 PENDING_FILE 存在（manual.sh adapter 在 §3b 派发时写）。写一条
+    execution_manual_completed 事件（无 repaired 标记，因为是合规通路），
+    删 PENDING_FILE，不改状态。后续 step 4 自审 → PM 验收 → 已完成。
+
+    给 /task-execute skill §3a manual resume 通路调用，不是 PM 直接敲。
+    """
+    fields = read_fields(task_file)
+    current = fields.get("状态", "")
+    if current != "执行中":
+        print(
+            f"Error: --emit-from-pending 仅用于「执行中」的 task，"
+            f"当前状态「{current}」。\n"
+            "  此通路是 /task-execute §3a manual resume 用，需要先经 dispatch "
+            "派发到执行中。",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+
+    pf = pending_manual_path(task_file)
+    if not pf.exists():
+        print(
+            f"Error: --emit-from-pending 要求 PENDING_FILE 存在（{pf}）。\n"
+            "  PENDING_FILE 由 manual.sh adapter 在 dispatch §3b 派发时写。\n"
+            "  如果 task work 是 AI 自己用 Edit/Write 做完的（没走过 manual 通路），\n"
+            "  应当用 --register-manual-completion --reason \"<...>\" 而不是这个命令。",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+
+    repo_root = find_main_repo_root()
+    events_file = repo_root / ".runs" / "events" / f"{task_file.stem}.jsonl"
+    events, _ = load_events_strict(events_file)
+    if has_execution_event(events):
+        print(
+            "Error: 事件流已含 execution event（accept 闸门已可通过），无需 emit。",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+
+    # 读 PENDING_FILE 拿 baseline_sha 等元数据写进 event payload
+    try:
+        pending_data = json.loads(pf.read_text(encoding="utf-8"))
+    except Exception:
+        pending_data = {}
+    payload: dict = {}
+    if "baseline_sha" in pending_data:
+        payload["baseline_sha"] = pending_data["baseline_sha"]
+    if "started_at" in pending_data:
+        payload["pending_started_at"] = pending_data["started_at"]
+
+    try:
+        append_execution_event_internal(
+            task_file,
+            "execution_manual_completed",
+            payload=payload if payload else None,
+        )
+    except Exception as exc:
+        print(f"Error: 事件写入失败: {exc}", file=sys.stderr)
+        sys.exit(1)
+
+    pf.unlink()
+    print(
+        f"✅ manual resume 完成：已向 {task_file.name} 事件流写入 "
+        "execution_manual_completed。PENDING_FILE 已清理。"
+    )
+
+
+def cmd_register_manual_completion(
+    task_file: Path, reason: str, yes: bool
+) -> None:
+    """Handle --register-manual-completion: AI 故障恢复合规通路。
+
+    场景：task 状态=执行中、事件流缺 exec event、但 worktree 已有 task commit。
+    多发于「AI 进 /task-execute 后入口前置 transition 了但没跑 dispatch、自己用
+    Edit/Write 把代码做完」的故障。
+
+    强制 --reason；写一条带 {repaired:true, reason, by:manual-completion-register}
+    payload 的 execution_manual_completed；不改状态。完成后走正常 PM 验收呈交。
+
+    给 AI 在故障恢复路径调用，不是 PM 直接敲。
+    """
+    fields = read_fields(task_file)
+    current = fields.get("状态", "")
+    if current != "执行中":
+        print(
+            f"Error: --register-manual-completion 仅用于「执行中」的 task，"
+            f"当前状态「{current}」。\n"
+            "  «已完成» 状态用 --repair-evidence；«待执行» 状态请走 /task-execute。",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+
+    if not reason or not reason.strip():
+        print(
+            "Error: --register-manual-completion 必须提供 --reason "
+            "\"<为何 work 真实手做完、为何没走 dispatch>\"",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+    reason = reason.strip()
+
+    repo_root = find_main_repo_root()
+    events_file = repo_root / ".runs" / "events" / f"{task_file.stem}.jsonl"
+    events, _ = load_events_strict(events_file)
+    if has_execution_event(events):
+        print(
+            "Error: 事件流已含 execution event（accept 闸门已可通过），无需 register。\n"
+            "  如果你在故障调查中看到这条，说明前面某次 dispatch 已留下证据。",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+
+    # 验证 worktree 真有 task commit（防止"work 还没做"也来 register 走过场）
+    task_stem = task_file.stem
+    branch = task_stem if task_stem.startswith("task-") else f"task-{task_stem}"
+    task_worktree = repo_root / ".worktrees" / branch
+    has_commit = False
+    if task_worktree.exists():
+        try:
+            # 看分支与其 merge-base 之间有没有 commit
+            log_out = subprocess.check_output(
+                ["git", "-C", str(task_worktree), "log", "--oneline", "-1",
+                 "--", "."],
+                text=True,
+            ).strip()
+            has_commit = bool(log_out)
+        except Exception:
+            has_commit = False
+    if not has_commit:
+        print(
+            f"Error: task worktree {task_worktree} 未发现任何 commit。\n"
+            "  register-manual-completion 要求 work 真实已 commit；\n"
+            "  如果 work 还没做，请走 /task-execute 而不是 register。",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+
+    print(
+        "⚠️  register-manual-completion —— AI 故障恢复合规通路。\n"
+        f"    task : {task_file.name}\n"
+        f"    理由 : {reason}\n"
+        "    将写一条带 repaired=true 标记的 execution_manual_completed 事件，\n"
+        "    不改状态。完成后走正常 PM 验收呈交。",
+        file=sys.stderr,
+    )
+    if not yes:
+        try:
+            answer = input(
+                "确认 work 真实手做完成（worktree commit 已查证）且 PM 拍板补登？"
+                "输入 yes 继续: "
+            ).strip().lower()
+        except EOFError:
+            answer = ""
+        if answer != "yes":
+            print("已取消。", file=sys.stderr)
+            sys.exit(1)
+
+    note = f"register-manual-completion（AI 故障恢复，PM 拍板）：{reason}"
+    try:
+        append_execution_event_internal(
+            task_file,
+            "execution_manual_completed",
+            payload={"repaired": True, "by": "manual-completion-register"},
+            note=note,
+        )
+    except Exception as exc:
+        print(f"Error: 事件写入失败: {exc}", file=sys.stderr)
+        sys.exit(1)
+
+    print(
+        f"✅ register-manual-completion 完成：已向 {task_file.name} 事件流写入 "
+        "execution_manual_completed（repaired=true）。\n"
+        "现在可继续走 PM 验收呈交（task-submit → task-transition --to 已完成）。"
     )
 
 
@@ -857,6 +1114,45 @@ def main() -> None:
              "execution 事件、被 close-task I-CT7 挡下的 task。补一条带 repaired "
              "标记的 execution_manual_completed，不改状态。需 --reason，"
              "非交互场景加 --yes。",
+    )
+    parser.add_argument(
+        "--bound-to-execution-event",
+        dest="bound_event_alias",
+        choices=sorted(BOUND_DISPATCH_EVENT_MAP.keys()),
+        help="「待执行→执行中」transition 必填（修复 B）：与 dispatch 事件原子绑定写入。"
+             "started = 普通 executor 派发；manual-waiting = executor=manual 派发。"
+             "给 /task-execute skill 的 dispatch 节点调用。",
+    )
+    parser.add_argument(
+        "--executor",
+        help="--bound-to-execution-event 的 payload 字段：executor 名（claude-code / "
+             "codex / cursor-agent / manual）",
+    )
+    parser.add_argument(
+        "--executor-model",
+        dest="executor_model",
+        help="--bound-to-execution-event 的 payload 字段：executor model",
+    )
+    parser.add_argument(
+        "--baseline-sha",
+        dest="baseline_sha",
+        help="--bound-to-execution-event 的 payload 字段：dispatch 时的 baseline HEAD",
+    )
+    parser.add_argument(
+        "--emit-from-pending",
+        action="store_true",
+        dest="emit_from_pending",
+        help="dispatch §3a manual resume 合规通路：PENDING_FILE 存在时补一条 "
+             "execution_manual_completed，删 PENDING_FILE，不改状态。"
+             "给 /task-execute skill 调用。",
+    )
+    parser.add_argument(
+        "--register-manual-completion",
+        action="store_true",
+        dest="register_manual_completion",
+        help="AI 故障恢复合规通路（修复 C）：task 状态=执行中、事件流缺 exec event、"
+             "worktree 已有 task commit 时，写带 repaired 标记的 "
+             "execution_manual_completed，不改状态。需 --reason，非交互场景加 --yes。",
     )
     parser.add_argument(
         "--snooze-manual",
@@ -916,6 +1212,14 @@ def main() -> None:
         cmd_repair_evidence(task_file, args.reason or "", args.yes)
         return
 
+    if args.emit_from_pending:
+        cmd_emit_from_pending(task_file)
+        return
+
+    if args.register_manual_completion:
+        cmd_register_manual_completion(task_file, args.reason or "", args.yes)
+        return
+
     if args.snooze_manual:
         cmd_snooze_manual(task_file, args.days)
         return
@@ -941,7 +1245,12 @@ def main() -> None:
 
     target = args.target
     valid = VALID_TRANSITIONS.get(current, [])
-    if target not in valid:
+    # Dispatch retry 放行：状态已=target（执行中→执行中）+ bound 事件给了 →
+    # 单独 emit dispatch event 不算 state transition
+    is_dispatch_retry = (
+        current == target == "执行中" and args.bound_event_alias is not None
+    )
+    if target not in valid and not is_dispatch_retry:
         print(
             f"Error: 非法状态转换: {current} → {target}。"
             f"合法目标: {', '.join(valid) if valid else '无（终态）'}",
@@ -964,7 +1273,24 @@ def main() -> None:
         if pf.exists():
             pf.unlink()
 
-    do_transition(task_file, current, target, args.note)
+    # 修复 B: 「待执行→执行中」必须传 --bound-to-execution-event；组装 dispatch payload
+    bound_event_payload: dict | None = None
+    if args.bound_event_alias:
+        bound_event_payload = {}
+        if args.executor:
+            bound_event_payload["executor"] = args.executor
+        if args.executor_model:
+            bound_event_payload["model"] = args.executor_model
+        if args.baseline_sha:
+            bound_event_payload["baseline_sha"] = args.baseline_sha
+        if not bound_event_payload:
+            bound_event_payload = None
+
+    do_transition(
+        task_file, current, target, args.note,
+        bound_event_alias=args.bound_event_alias,
+        bound_event_payload=bound_event_payload,
+    )
     print(f"✅ Task 状态转换: {current} → {target}")
     if args.note:
         print(f"   备注: {args.note}")

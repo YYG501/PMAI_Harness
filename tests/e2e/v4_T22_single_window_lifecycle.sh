@@ -55,9 +55,9 @@ test_single_window_lifecycle() {
     return
   fi
 
-  # task-execute simulation: status transition happens in the task worktree.
-  (cd "$task_wt" && python3 "$TASK_TRANSITION" "$task_in_wt" --to 执行中 >/dev/null)
-  (cd "$task_wt" && python3 "$TASK_EVENTS" append "$task_in_wt" --type execution_started --payload '{"executor":"manual"}' >/dev/null 2>&1)
+  # task-execute simulation: 待执行→执行中 与 dispatch 事件原子绑定（修复 B）
+  (cd "$task_wt" && python3 "$TASK_TRANSITION" "$task_in_wt" --to 执行中 \
+    --bound-to-execution-event started --executor manual >/dev/null)
   # I-CT8 要求 commit 时间晚于首次 status_changed 事件 (commit 秒精度 vs event microsecond)
   sleep 1
   echo "implemented in task branch" > "$task_wt/lifecycle.txt"

@@ -34,9 +34,8 @@ cat > "$PENDING_FILE" <<EOF
 }
 EOF
 
-python3 "$MAIN_REPO_ROOT/.claude/scripts/task-events.py" append "$TASK_FILE" \
-  --type execution_manual_waiting \
-  --payload "{\"baseline_sha\":\"$BASELINE_SHA\"}" 2>/dev/null || true
+# execution_manual_waiting 事件由 task-transition.py --bound-to-execution-event
+# manual-waiting 在 dispatch §3b 入口已原子写入（修复 B），manual.sh 不再 emit。
 
 cat <<EOF
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
