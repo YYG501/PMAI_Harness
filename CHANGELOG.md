@@ -136,6 +136,24 @@ PM-AI-Workflow 生成器仓的演进记录。本文件**只记影响下游业务
 
 ## 未发布
 
+### 2026-05-26 — fix(prd-writing-lint): 加类 3 表格结构检查 + 消除规则源冲突
+
+**触发**：req-008 PRD `§6.1-6.5` 五个表格全部用 `<br/>` 把多条编号塞**单元格**，违反 `PM-VIEW-RULES.md §5.1`「续行 rowspan + 每条编号独立一行」硬规则。PM 走查发现。**3 层根因叠加**：
+- (a) **规则源冲突**：`PM-VIEW-RULES.md §5.1` 权威规定续行 rowspan；`writing-rules.md §3.12.8` 正例却用 `<br>` 塞单格 —— 两套规则互相矛盾，AI 看到必挑容易的
+- (b) **lint 漏检**：`scripts/check-prd-hierarchy.py` 类 1 / 类 2 都没覆盖**表格结构**，`<br/>` 塞单格通过 lint 直接进 stage 3 定稿门
+- (c) **AI 倾向**：表行少 = 输出少，单格 `<br>` 是天然的"省事写法"
+
+**改动**：
+- `skills/_shared/pm-view/writing-rules.md §3.12.8` 正例改写：保留"流程式分条"核心论点，但例子从 `<br>` 单格换成续行 rowspan 4 列表格；显式标注「编号条目放需求描述列时按 §5.1 续行 rowspan 渲染、禁 `<br/>`」消除规则源冲突
+- `scripts/check-prd-hierarchy.py` 新增 **类 3 — §六 表格结构**：扫 §六 所有表格的「需求描述」列出现 `<br/>` / `<br>`（任意大小写）即 fail，附 cell preview + 编号项数 + 修正示例；退出码语义与类 1 / 2 一致
+- `tests/test-prd-hierarchy-lint.sh` 新增 4 个 case（T1 类 1 UI 词 / T2 类 2 描述风格 / T3 类 3 `<br/>` 违规 / T4 类 3 续行 rowspan 正例）；接入 `tests/run-all.sh`
+
+**实战验证**：拿 req-008 PRD 实跑 lint，类 3 正确抓到 **26 处违规**（§6.1 / 6.2 / 6.3 / 6.4 / 6.5 全覆盖）。消费仓 PRD 需按续行 rowspan 重渲（PM 单独操作）。
+
+**publish-to-lark 合并验证**：发布到飞书时由 `scripts/publish-to-lark.py:merge_desc_group_with_content` 把续行 rowspan 多行 group 合并回单格（非锚点 cell 的 children 拷贝到锚点 cell + 清空原 cell + `merge_table_cells` API）—— 视觉等同有序列表换行。新增 `tests/test-publish-to-lark-rowspan-merge.py` 单测 `find_desc_group_ranges` 6 case 覆盖单 group / 多 group / 单行不合并 / 空 grid / 单列 / existing 冲突过滤，保证续行 rowspan → 飞书单格合并的语义。
+
+**影响**：PRD lint 多一道结构防线（同 task-execute 步骤 2.0 / prd-writing 0.5 「机械强制 > LLM 自觉」哲学）；规则源单一真相源恢复到 `PM-VIEW-RULES.md §5.1`；续行 rowspan markdown → 飞书单格合并已被单测兜底。测试基线 +5 case（lint 4 + publish-to-lark 1）。
+
 ### 2026-05-26 — feat(askuser-rules / review-skill-guard): 固化 memory 反思（A1 PM 逐条决策 + A3 评审先扫现状）
 
 **触发**：盘点生成器仓 22 条 memory + 消费仓（ExampleConsumerApp）5 条 memory，识别 4 个未固化到框架的反思项，最终决定做 P0 + P1 两项（A2/A4 留 backlog）：

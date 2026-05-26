@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""check-prd-hierarchy.py: 扫描 prd.md 的层级 + 描述风格违规。
+"""check-prd-hierarchy.py: 扫描 prd.md 的层级 + 描述风格 + 表格结构违规。
 
 类 1 — §六 层级（按 skills/prd-writing/SKILL.md「层级划分原则」+ UI 词汇黑名单）：
 二级功能应是用户动作组（列表 / 搜索 / 筛选 / 操作 / 创建 / 导入 / 详情）；
@@ -14,12 +14,16 @@
 - 否定式描述（无 ⋮ / 不再 X / 不是 X）
 - 工程黑话（触发-弹窗 / 锚定 / 池行末 / 账本 / 跟随失效 / 同口径 / 漂移 / focus trap ...）
 
+类 3 — §六 表格结构（按 _shared/PM-VIEW-RULES.md §5.1「续行 rowspan + 内联编号」）：
+需求描述列不允许用 <br/> / <br> 把多条编号塞同一单元格 —— 每条编号一行，
+第 2 条起的前 3 列留空（视觉等同 rowspan，纯 markdown 也能渲染）。
+
 用法:
     python3 scripts/check-prd-hierarchy.py <prd.md 路径>
 
 退出码:
     0 = 无违规
-    1 = 有违规（违规列表写到 stdout，分类 1 / 2 输出）
+    1 = 有违规（违规列表写到 stdout，分类 1 / 2 / 3 输出）
     2 = 文件读取/解析错误
 """
 
@@ -228,6 +232,51 @@ ALL_STYLE_PATTERNS: list[tuple[str, list[tuple[str, str, str]]]] = [
 ]
 
 
+def check_table_structure(
+    lines: list[str], section: tuple[int, int]
+) -> list[dict]:
+    """类 3 — §六 表格结构：扫描需求描述列内 <br/> / <br> 滥用。
+
+    PM-VIEW-RULES.md §5.1 续行 rowspan：每条编号一行，第 2 条起的前 3 列留空。
+    禁止用 <br/> 把多条编号塞单格（视觉等同但违反 rowspan 规则）。
+    """
+    violations: list[dict] = []
+    start, end = section
+    tables = find_tables(lines, start, end)
+    if not tables:
+        return violations
+
+    br_pattern = re.compile(r"<br\s*/?>", re.IGNORECASE)
+    numbered_pattern = re.compile(r"\b[1-9]\d?\.\s*")  # 1. / 2. / 10. 编号
+
+    for tbl_start, tbl_end, header in tables:
+        # 找需求描述列（兼容 "需求描述" / "需求描述列"）
+        desc_idx = next(
+            (i for i, h in enumerate(header) if "需求描述" in strip_markdown(h)),
+            None,
+        )
+        if desc_idx is None:
+            continue
+        for row_idx in range(tbl_start + 2, tbl_end):
+            cells = parse_cells(lines[row_idx])
+            if desc_idx >= len(cells):
+                continue
+            cell = cells[desc_idx]
+            br_hits = br_pattern.findall(cell)
+            if not br_hits:
+                continue
+            # 多条编号塞一格：<br> 紧邻或包裹「N.」编号 → 命中
+            # 单纯 <br> 用于格内换行（如长描述断行）也算违规（违反 §5.1）
+            num_count = len(numbered_pattern.findall(cell))
+            violations.append({
+                "line": row_idx + 1,
+                "br_count": len(br_hits),
+                "numbered_count": num_count,
+                "cell_preview": (cell[:60] + "...") if len(cell) > 60 else cell,
+            })
+    return violations
+
+
 def check_style(lines: list[str]) -> list[dict]:
     """全篇扫描描述风格违规。返回违规列表。"""
     violations: list[dict] = []
@@ -293,7 +342,14 @@ def scan(path: Path) -> int:
     # 类 2: 描述风格检查
     style_violations = check_style(lines)
 
-    has_violations = bool(section_violations) or bool(style_violations)
+    # 类 3: §六 表格结构检查（续行 rowspan vs <br> 单格）
+    table_violations: list[dict] = []
+    if section is not None:
+        table_violations = check_table_structure(lines, section)
+
+    has_violations = (
+        bool(section_violations) or bool(style_violations) or bool(table_violations)
+    )
 
     if section_violations:
         print(f"━━━ 类 1 — §六 功能需求层级违规:{len(section_violations)} 处去重命名 ━━━")
@@ -334,12 +390,33 @@ def scan(path: Path) -> int:
         print("  · 工程黑话 → 业务自然语言 (生僻描述词 = 工程黑话)")
         print()
 
+    if table_violations:
+        print(
+            f"━━━ 类 3 — §六 表格结构违规：{len(table_violations)} 处 <br/> 单格塞编号 ━━━"
+        )
+        print()
+        for v in table_violations:
+            print(
+                f'  L{v["line"]:>4}  <br> x{v["br_count"]}  编号项 x{v["numbered_count"]}'
+                f'  cell: "{v["cell_preview"]}"'
+            )
+        print()
+        print("修正方向 (详见 skills/_shared/PM-VIEW-RULES.md §5.1):")
+        print("  · 续行 rowspan 模式：每条编号一行，第 2 条起前 3 列留空")
+        print("  · 禁用 <br/> / <br> 把多条编号塞单格（违反 §5.1）")
+        print("  · 示例:")
+        print("    | 二级 | 三级 | 角色 | 1. 第一条 |")
+        print("    |      |      |      | 2. 第二条 |")
+        print("    |      |      |      | 3. 第三条 |")
+        print()
+
     if has_violations:
         return 1
 
     print(f"✓ lint 通过：{path}")
     print(f"  · §六 层级：通过")
     print(f"  · 描述风格（视觉/URL/排版/否定/工程黑话）：通过")
+    print(f"  · §六 表格结构（续行 rowspan）：通过")
     return 0
 
 
