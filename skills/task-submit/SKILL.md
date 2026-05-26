@@ -192,7 +192,7 @@ python3 .claude/scripts/task-transition.py "<task-file>" --to 已完成
 
 `task-transition.py` 在「执行中→已完成」入口校验文档偏差 + 自审记录非空（I-TT3）。
 
-然后提示 PM 启动 close-task Phase 1（close-task 是两阶段调用：Phase 1 在 task 窗口，Phase 2 切到 req 窗口）：
+然后提示 PM 启动 close-task（按 [banner-rules §2.5 内容禁忌](../_shared/pm-view/banner-rules.md#25-内容禁忌pm-facing-输出禁工程黑话与内部原理) — 不写 Phase 1/2、不写 merge / worktree / auto-chain）：
 
 ```text
 ✅ task-NNN 状态已转「已完成」。
@@ -200,7 +200,7 @@ python3 .claude/scripts/task-transition.py "<task-file>" --to 已完成
 下一步：在本（task）窗口运行：
   /close-task task-NNN
 
-AI 会走 Phase 1（task md ↔ 原型对齐 / 文档偏差校验 / 视觉规范沉淀 DESIGN.md / commit 到 task 分支 / 写 finalize marker），完成后会提示你切到 req 窗口再跑一次 /close-task 走 Phase 2（merge / 删 task worktree+branch / auto-chain）。
+本次 close 收尾在当前窗口做完（文档对齐 + 视觉规范沉淀），完成后会提示你切到 req 窗口再跑一次 /close-task 完成清理。
 ```
 
 **PM 说"打回"：**

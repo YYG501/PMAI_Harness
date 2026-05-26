@@ -187,6 +187,30 @@ PM-AI-Workflow 生成器仓的演进记录。本文件**只记影响下游业务
 
 ## 未发布
 
+### 2026-05-26 — fix(pm-view + 4 skill): PM-facing 输出禁工程黑话与"AI 为啥这样安排"内部原理解释
+
+**触发**：消费仓 task-002 跑完 task-execute 步骤 12「PM 通过 → 转已完成」后，AI 输出末尾给 PM 看一段「理由：Phase 1 必须在 task 窗口跑——agent 要直接读 task 改动的原型代码并把 task md 改动 commit 到 task 分支；跨 worktree 改会污染 req 分支历史。Phase 2 才切 req 窗口（删 task worktree 不能"删自己脚下"）。」 PM first-principle 质问"为啥要说理由"—— PM 信赖 AI 编排，不需要 AI 自证流程合理 / 不需要懂 worktree 切换的内部机制。这段不是 AI 临场加的，是 SKILL.md 第 557 行**明文写在 skill 里**的设计。
+
+**全仓扫描结果**：同根因 5 处 PM-facing 输出塞内部原理 / 工程术语 —— `task-execute/SKILL.md:547-557`（PM 通过分支输出块 + 理由段）/ `task-submit/SKILL.md:195-203`（同 wording 备份入口）/ `task-execute/SKILL.md:250`（已完成状态错误退出提示）/ `close-task/SKILL.md:460-486`（Phase 1 收尾输出块 + DESIGN.md 沉淀追加提示）。共同模式：`Phase 1` / `Phase 2` / `finalize marker` / `auto-chain` / `merge → req` / `commit 到 task 分支` / `删 task worktree+branch` 等内部状态词与工程术语直接吐给 PM。
+
+**根因**：banner-rules.md §2 只规定 Next Up 块的「格式 + 例子 + 何时打 + 渲染约束」，**没规定"内容禁忌"** —— SKILL 作者写输出块时无硬约束，逐字翻译内部实现给 PM 看就过了。需要在规则源补一条「PM-facing 输出禁工程黑话与内部原理解释」覆盖所有 SKILL 退出 / 状态转换 / 错误提示，否则只清现有 5 处下一个 SKILL 还会再犯。
+
+**改动**：
+
+- `skills/_shared/pm-view/banner-rules.md` 新增 §2.5「内容禁忌（PM-facing 输出禁工程黑话与内部原理）」：明文列 3 类禁项（内部状态词 / 内部实现术语 / "AI 为啥这样安排"原理解释）+ 允许保留清单（`task 窗口` / `req 窗口` / 命令名 / cwd 切换 —— PM 操作必需信息）+ 改写公式（工程版 → PM 版对照）+ 反例（PM 决策 picker 里的「AI 倾向 X，理由：<一行>」不受本规则约束，判定标准 = "帮 PM 做选择" vs "解释 AI 已做的选择"）。
+- `skills/task-execute/SKILL.md` 步骤 12 PM 通过输出块：删 line 557「理由：Phase 1 必须在 task 窗口跑...」段；line 555 改 PM 视角动作描述「本次 close 收尾在当前窗口做完（文档对齐 + 视觉规范沉淀），完成后会提示你切到 req 窗口再跑一次 /close-task 完成清理。」+ 加引用 banner-rules §2.5。
+- `skills/task-execute/SKILL.md` 步骤 §0「已完成」状态错误退出提示：删「启动 Phase 1（对齐/偏差/commit/写 marker），完成后会引导切到 req 窗口跑 Phase 2」，改「先在当前窗口做文档对齐和沉淀，再切 req 窗口完成清理」。
+- `skills/task-submit/SKILL.md` 步骤 4 PM 通过输出块：同 task-execute 改写（task-submit 是步骤 11 的备份入口，完全相同 wording）。
+- `skills/close-task/SKILL.md` 步骤 2.3 Phase 1 收尾输出块：「✅ task-NNN Phase 1 完成」改「✅ task-NNN 本窗口收尾完成」；「promote 到 docs/DESIGN.md（未 commit）」改「写入 docs/DESIGN.md（未 commit）」；「AI 会自动走 Phase 2 完成 merge + 删 task worktree/branch + auto-chain」改「切到 req 窗口跑 /close-task 后 AI 自动完成本 task 的归档，并自动开下一个 task（如果还有）」；DESIGN.md 沉淀追加提示「Phase 2 完成后，请在 req 窗口审 git diff」改「切到 req 窗口跑完 /close-task 后，请审 git diff」+ 「未 commit 的沉淀改动」改「未提交的沉淀改动」。
+
+**保留不动**：
+- `_shared/PM-VIEW-RULES.md:257`「决策的共同理由」、`req-stage-gate`/`task-plan` 多处「AI 倾向 A，理由：<一行>」—— PM 决策 picker 里 AI 列倾向理由给 PM 判断，是 PM-facing **必要素材**（不解释 AI 已做的选择），banner-rules §2.5 反例段已明文豁免。
+- `task-execute:105` `cd` 沙盒原理、`task-plan:156` PRD 主线规范产物判定、`close-task:198` commit 到 task 分支理由、`input-flow.md:238` 原型 page.tsx 局部读判定等 —— 这些「理由：」在 SKILL.md prose 里给 SKILL 读者看，PM 看不到。
+
+**关联反模式**：[[feedback-pm-chat-no-engineering-jargon]] 词典 ABCD 四类砍 —— 本条补齐"E 类：AI 流程编排原理解释"。
+
+---
+
 ### 2026-05-26 — fix(task-verify + task-execute): verify pass 自说自话宣告 DONE，task 既没 commit 也没呈交
 
 **触发**：消费仓 task-002-ops-menu-reorg 跑 /task-execute 到步骤 7.5 触发 task-verify，5/5 流程 pass 后 AI 在 verify 输出末尾**自己加了一段** `STATUS: DONE / REASON: ... / ATTEMPTED: ... / RECOMMENDATION: 回 task-execute 步骤 8 起继续走（写自审 placeholder → commit → 呈交 PM 验收）` —— 然后**停下来等下一轮**。结果：task 没 commit、没走步骤 11 呈交、PM 没看到任何呈交块。AI 把 verify pass 误当 task 终态宣告，PM 体感是"自说自话，没有呈交"。

@@ -457,12 +457,14 @@ PY
 AI 向 PM 输出结束语，task 窗口工作到此结束。结束语含**自动收尾摘要** —— 把本次 close
 默认自动做了什么一次性讲清楚（PM 不被逐条打断、但末尾看得见）：
 
+按 [banner-rules §2.5 内容禁忌](../_shared/pm-view/banner-rules.md#25-内容禁忌pm-facing-输出禁工程黑话与内部原理) — 不写 Phase 1/2、不写 merge / worktree / auto-chain 等内部术语：
+
 ```
-✅ task-NNN Phase 1 完成。本次自动收尾：
+✅ task-NNN 本窗口收尾完成。本次自动做了：
 
 · 文档对齐：A 类 X 处已自动对齐到代码（B 类 Y 处已逐条经你确认）
-· 视觉规范：K 条已 promote 到 docs/DESIGN.md（未 commit）
-· 跨功能规则：M 条已 promote 到 docs/PRODUCT-RULES.md（未 commit）
+· 视觉规范：K 条已写入 docs/DESIGN.md（未 commit）
+· 跨功能规则：M 条已写入 docs/PRODUCT-RULES.md（未 commit）
 （X/Y/K/M 为 0 的行省略；全 0 时整段写「无需对齐 / 无沉淀」）
 
 ▶ Next Up — 切到 req 窗口跑 /close-task：
@@ -473,15 +475,15 @@ AI 向 PM 输出结束语，task 窗口工作到此结束。结束语含**自动
   claude
   /close-task
 
-AI 会自动走 Phase 2 完成 merge + 删 task worktree/branch + auto-chain。
+切到 req 窗口跑 /close-task 后 AI 自动完成本 task 的归档，并自动开下一个 task（如果还有）。
 ```
 
 **若步骤 1.5 / 1.6 patch 过 DESIGN.md / PRODUCT-RULES.md**（uncommitted），追加提示：
 
 ```
-⚠️ docs/DESIGN.md / docs/PRODUCT-RULES.md 有未 commit 的沉淀改动。
-Phase 2 完成后，请在 req 窗口审 git diff 这两个文件 —— 这是你对本次自动 promote 的
-总把关，发现不该 promote 的当场撤掉，满意后再 commit。
+⚠️ docs/DESIGN.md / docs/PRODUCT-RULES.md 有未提交的沉淀改动。
+切到 req 窗口跑完 /close-task 后，请审 git diff 这两个文件 —— 这是你对本次自动
+沉淀的总把关，发现不该写入的当场撤掉，满意后再 commit。
 建议 commit message: docs(DESIGN): 沉淀 task-NNN 反馈 — [摘要]
 ```
 

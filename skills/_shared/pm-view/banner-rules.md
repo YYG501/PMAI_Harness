@@ -86,6 +86,24 @@
 - 命令用反引号 / 代码块包裹（PM 复制即用）
 - 最多 2 条命令（多了换分步描述）
 
+### §2.5 内容禁忌（PM-facing 输出禁工程黑话与内部原理）
+
+Next Up 块 / skill 退出提示 / 状态转换后输出 / 错误退出提示 —— 任何 PM **直接看到的 chat 输出**里：
+
+**禁内部状态词**：`Phase 1` / `Phase 2` / `finalize marker` / `auto-chain` / `bound-to-execution-event` / `dispatch` / `transition`、任何带编号的内部阶段（"步骤 7.5" "§0.4" "M2 banner" 等给 SKILL 读者看的引用号）。
+
+**禁内部实现术语**：`merge → req` / `task 分支` / `req 分支` / `worktree` / `delete branch` / `commit 到 X 分支` / `git diff` 之类描述 git 内部操作的词汇。
+
+**禁"AI 为啥这样安排"的原理解释**：典型如「理由：Phase 1 必须在 task 窗口跑——agent 要直接读 task 改动的原型代码并把 task md 改动 commit 到 task 分支；跨 worktree 改会污染 req 分支历史。Phase 2 才切 req 窗口（删 task worktree 不能"删自己脚下"）」—— PM 不需要懂内部机制 / 不需要 AI 自证流程合理。给 PM 的应该是「现在做啥 + 一句话目的」，不是「AI 为啥选这条路径」。
+
+**允许保留**：`task 窗口` / `req 窗口` / 命令名（`/close-task` `/task-execute`）/ cwd 切换提示 —— 这些是 PM 必须知道的操作信息（PM 自己要决定在哪个窗口敲哪个命令），不算工程黑话。
+
+**改写公式**：
+- 工程版："启动 Phase 1（task md ↔ 原型对齐 / 文档偏差校验 / 视觉规范沉淀 DESIGN.md / commit 到 task 分支 / 写 finalize marker）" → PM 版："本次 close 收尾在当前窗口做完（文档对齐 + 视觉规范沉淀）"
+- 工程版："AI 会自动走 Phase 2 完成 merge + 删 task worktree/branch + auto-chain" → PM 版："AI 自动完成本 task 的归档，并自动开下一个 task（如果还有）"
+
+**反例（C 类不适用）**：PM 决策 picker 里的「AI 倾向 A，理由：<本 req 具体情况一行>」—— 这是给 PM 决策的素材（PM 选 A/B 要看 AI 倾向理由判断），**不是**解释 AI 流程安排，本规则不约束。判定标准：理由内容是"帮 PM 做选择"还是"解释 AI 已经做了的选择"，后者禁。
+
 ---
 
 ## §3 Decision gate label 3 硬规则（M3 砍后整合 M2）

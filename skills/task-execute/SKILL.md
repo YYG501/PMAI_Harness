@@ -247,7 +247,7 @@ CURRENT_STATUS=$(python3 "$MAIN_REPO_ROOT/.claude/scripts/task-transition.py" "$
 
 - 「待执行」：继续走，进 §3b dispatch 时由 `task-transition --bound-to-execution-event` 物化绑定 dispatch 事件、原子完成 transition（修复 B：堵"状态推到执行中但 dispatch 没真跑"的悬空态）。
 - 「执行中」：允许重试或 PM 打回后续跑，不重复 transition。包括：commit 后已呈交但 PM 还没决策的场景（task 状态仍是「执行中」）— 此时如想重新看呈交块跑 `/task-submit`。dispatch §3b 进入时若已是「执行中」会单独 emit 一条 dispatch 事件作为重试审计标记，不再 transition state。
-- 「已完成」：错误退出，提示 `该 task 已完成；如需收尾，在本（task）窗口运行 /close-task task-NNN 启动 Phase 1（对齐/偏差/commit/写 marker），完成后会引导切到 req 窗口跑 Phase 2`。
+- 「已完成」：错误退出，提示 `该 task 已完成；如需收尾，在本（task）窗口运行 /close-task task-NNN（先在当前窗口做文档对齐和沉淀，再切 req 窗口完成清理）`。
 - 其他状态：错误退出，展示当前状态，并提示 PM 回主窗口用 `/task-status` 查看。
 
 ### 步骤 1：读取 task 文件（三态格式分流）
@@ -544,7 +544,7 @@ python3 .claude/scripts/task-transition.py "$TASK_FILE" --to 已完成
 
 `task-transition.py` 在「执行中→已完成」入口校验文档偏差 + 自审记录非空（I-TT3）；不通过会拒绝转换，PM 需先补齐再喊通过。
 
-然后输出（close-task 是两阶段调用：Phase 1 在本窗口跑，Phase 2 切到 req 窗口跑）：
+然后输出（按 [banner-rules §2.5 内容禁忌](../_shared/pm-view/banner-rules.md#25-内容禁忌pm-facing-输出禁工程黑话与内部原理) — 不写 Phase 1/2、不写 merge / worktree / auto-chain 等内部术语、不解释 AI 为啥这样安排）：
 
 ```text
 ✅ task-NNN 状态已转「已完成」。
@@ -552,9 +552,7 @@ python3 .claude/scripts/task-transition.py "$TASK_FILE" --to 已完成
 ▶ Next Up — 在本（task）窗口运行：
   /close-task task-NNN
 
-AI 会走 Phase 1（task md ↔ 原型对齐 / 文档偏差校验 / 视觉规范沉淀 DESIGN.md / commit 到 task 分支 / 写 finalize marker），完成后会提示你切到 req 窗口再跑一次 /close-task 走 Phase 2（merge → req / 删 task worktree+branch / auto-chain）。
-
-理由：Phase 1 必须在 task 窗口跑——agent 要直接读 task 改动的原型代码并把 task md 改动 commit 到 task 分支；跨 worktree 改会污染 req 分支历史。Phase 2 才切 req 窗口（删 task worktree 不能"删自己脚下"）。
+本次 close 收尾在当前窗口做完（文档对齐 + 视觉规范沉淀），完成后会提示你切到 req 窗口再跑一次 /close-task 完成清理。
 ```
 
 **PM 说"打回"**：
