@@ -13,7 +13,7 @@
 #   T9: fixture 有 SIMP 行 → 全部归入"PM 拍过"段
 #   T10: fixture task 表有结构 task → 出现在"PM 拍过"段 + task 拆分段
 #   T11: build_summary 缺 implementation-design.md → 返回 None（CLI exit 3）
-#   T12: SKILL.md Stage 4 4C 含 speed 自动续条件文案
+#   T12: SKILL.md Stage 4 4B 含 speed 自动续条件文案
 #   T13: SKILL.md Stage 5→6 含 status-view.py --stage6-entry 调用
 
 set -uo pipefail
@@ -342,17 +342,17 @@ test_missing_impl_design() {
 }
 
 # -----------------------------------------------------------------
-# T12: SKILL.md Stage 4 4C 含 speed 自动续条件文案
+# T12: SKILL.md Stage 4 4B 含 speed 自动续条件文案
 # -----------------------------------------------------------------
 test_skill_stage4_speed_auto_continue() {
-  start_test "T12: SKILL.md Stage 4 4C 含 speed 自动续条件文案"
-  # "Speed mode 自动续条件" 应在 Stage 4 4C 段内
+  start_test "T12: SKILL.md Stage 4 4B 含 speed 自动续条件文案"
+  # "Speed mode 自动续条件" 应在 Stage 4 4B 确认门段内
   if ! grep -q "Speed mode 自动续条件\|自动续条件" "$SKILL_MD"; then
     _fail "SKILL.md 缺「Speed mode 自动续条件」段文案"
     return
   fi
-  if ! grep -q "无新缺组件" "$SKILL_MD"; then
-    _fail "SKILL.md 缺「无新缺组件」自动续条件"
+  if ! grep -q "0 个新建组件\|全部复用" "$SKILL_MD"; then
+    _fail "SKILL.md 缺「0 个新建组件 / 全部复用」自动续条件"
     return
   fi
   pass_test

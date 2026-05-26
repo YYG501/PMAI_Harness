@@ -48,7 +48,7 @@ echo "SKILL: task-spec"
 | `task-plan.md` | task 元数据 |
 | `prd.md`（delta-2）| req 级 WHAT —— 挑当前 task 切片转写进执行区·实现规格 + PM 确认区·验收 |
 | `prd.md §三` | **本 req 临时词典**（名词解释）—— 写 task spec 时按本 req 引入的新业务实体 / 角色精确指代，禁同义词漂移 |
-| `implementation-design.md`（delta-8）| req 级 HOW —— 按 `HOW-ID` + 适用关键词挑当前 task 相关行；**段 1.5「原型简化项」按 PRD 锚点 join 当前 task**（v2 D5）：命中 → 实现规格 + 验收按简化后写 + 受影响验收项行内 `[SIMP-N]` 标签 |
+| `implementation-design.md`（delta-8）| req 级 HOW —— 按 `HOW-ID` + 适用关键词挑当前 task 相关行；**段 1.5「原型简化项」按 PRD 锚点 join 当前 task**（v2 D5）：命中 → 实现规格 + 验收按简化后写 + 受影响验收项行内 `[SIMP-N]` 标签；**段 3.3「自由度声明」按"适用范围"挑行**：命中 → 三列写进约束与易错段 + 标签 `[FREEDOM-N]` |
 | `docs/PROJECT.md` / `docs/DESIGN.md` / `docs/modules/` | 项目级背景 |
 | `docs/PROJECT.md ## 业务术语表` | **长期词典**（跨 req 已沉淀的稳定业务术语）—— 跟 PRD §三 同时读：PROJECT 是沉淀基线，PRD §三 是本 req 新引入的临时词；两者并集 = 写 task spec 时的术语词典 |
 | `docs/PRODUCT-RULES.md`（delta-9）| 跨功能产品行为规则 —— 读全部 `scope=全局` 规则 + 按当前 task 模块 / 功能关键词 grep 命中的 `scope=域限定` 规则（§9.1.1 章节-grep；`scope=全局` 永远纳入、不漏跨功能规则）。命中的规则写进执行区·约束与易错 |
@@ -124,7 +124,7 @@ done
 
 **不在 echo 范围**（按 `input-flow.md §9.1.1` 章节-grep 切片读，避免大文件污染 context）：
 - `prd.md`：按"所属模块 / 功能 / task 标题关键词"匹配 §六 / §七 章节 grep 局部读
-- `implementation-design.md`：按 `HOW-ID` + 适用模块关键词挑行；段 1.5「原型简化项」按 PRD 锚点 join 当前 task
+- `implementation-design.md`：按 `HOW-ID` + 适用模块关键词挑行；段 1.5「原型简化项」按 PRD 锚点 join 当前 task；段 3.3「自由度声明」按"适用范围"章节-grep 命中行
 - `docs/DESIGN.md` / 涉及模块 spec：按需 grep 局部读
 - `docs/PRODUCT-RULES.md` 的 `scope=域限定` 规则：按当前 task 模块 / 功能关键词 grep 命中后局部读（`scope=全局` 段在上面 echo 时已全文读取）
 - 前序「已完成」task 的「PM 反馈」段：按 §9.1.1 grep `^### 反馈` / `^## .*PM 反馈` 命中行后局部读
@@ -161,7 +161,7 @@ relevance / 处理结果 / 一句理由）—— 让「不适用」对 PM 可观
 > **跨模块反馈 = 已知 gap**：属「全项目跨功能产品行为规则」的反馈，relevance 二分装不下 ——
 > 由 close-task PM-selective promote 到 `docs/PRODUCT-RULES.md`（delta-9）；task-spec 不在此处理。
 
-### 步骤 6：从 prd.md 挑切片 + implementation-design.md 按 HOW-ID 挑行 + 段 1.5 SIMP 行 join
+### 步骤 6：从 prd.md 挑切片 + implementation-design.md 按 HOW-ID / SIMP-ID / 段 3.3 挑行 join
 
 **`prd.md`（WHAT）**：按"所属模块 / 功能 / task 标题关键词"匹配 PRD §六 功能需求 /
 §七 验收标准的相关章节（`input-flow.md §9.1.1` 章节 grep 局部读）。挑出当前 task 切片：
@@ -184,6 +184,17 @@ task-execute 只读 task 单文件、不跨文件回查 implementation-design �
    - 把「真实需求」引用挂在该实现规格段尾，提示 executor「PRD 的真实需求是 X，本期计划简化为 Y」
    - PM 确认区·task 级验收清单的受影响验收项行内追加 `[SIMP-N]` 标签（D6）
 4. 0 命中 → 当前 task 无关简化项，按 PRD 全量写
+
+**`implementation-design.md` 段 3.3「自由度声明」按"适用范围"挑相关行**：
+段 3.3 是本 req 视觉 / 交互 / 文案的偏离声明（默认严格度的反向）。挑行规则跟段 1 / 段 2 HOW-ID 同款 —— 按"适用范围"列章节-grep 当前 task 关键词命中行：
+
+1. 列出当前 task 涉及的关键词（task 标题 / 所属模块 / 涉及组件名）
+2. 对段 3.3 每条声明行的"适用范围"字段做章节-grep 匹配；命中 → 本条声明适用当前 task
+3. 命中的声明行：
+   - 把「适用范围 / 档位 / 理由」三列写进执行区·「约束与易错」段，标签 `[FREEDOM-N]`（N = 段 3.3 表内行号）
+   - 档位 = "允许发挥" → executor 在该范围内可自由发挥
+   - 档位 = "禁止 X" → executor 在该范围必须遵守反向约束
+4. 0 命中 → 当前 task 无关自由度偏离，executor 默认严格按 DESIGN.md + prd.md 走
 
 **只引用、转写，不大段复制原文**。
 

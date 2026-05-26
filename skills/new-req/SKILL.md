@@ -129,38 +129,45 @@ PM 答「混合」→ 各节 PM 临场决定
 
 > mini-fill 只在已有项目 + PROJECT 有空节时触发；新项目首次 `/init-project` → `/project-solution` 已把 PROJECT 填满，这里直接 silent skip。
 
-### 步骤 3.6：已有项目 DESIGN.md 结构兜底（legacy DESIGN.md 迁移，delta-9 vp-4b）
+### 步骤 3.6：已有项目 DESIGN.md inventory 段兜底
 
-同步框架到已有项目后，老项目的 `docs/DESIGN.md` 可能仍是旧 6 段骨架（视觉风格 / 颜色 / 字体 /
-间距 / 组件规范 / 创意自由度），**缺 delta-9 升级的「共享组件 inventory」+ 布局合约 / 响应式 /
-无障碍 / Checker Sign-Off 块** —— 而 stage 4 gap-check 要查的就是「共享组件 inventory」。
-不升级 → gap-check 无 inventory 可查。
+同步框架到已有项目后，老项目的 `docs/DESIGN.md` 可能没有「共享组件 inventory」段（视觉基线段由 gstack `/design-consultation` 在 init C.5 时写，已有项目跳过了那一步）。stage 4 4A gap-check 查的就是这段，缺它 → 无 inventory 可查。
 
-在 worktree 里、写 brief.md 之前做一次结构检测：
+在 worktree 里、写 brief.md 之前做一次检测：
 
 ```bash
 DESIGN_MD="$REPO_ROOT/docs/DESIGN.md"
-# 新结构标志：含「共享组件 inventory」标题
-if [ -f "$DESIGN_MD" ] && ! grep -q "共享组件 inventory" "$DESIGN_MD"; then
-  NEED_DESIGN_UPGRADE=true
+if [ -f "$DESIGN_MD" ] && ! grep -q "^## 共享组件 inventory" "$DESIGN_MD"; then
+  NEED_INVENTORY_APPEND=true
 fi
 ```
 
-- **已是新结构**（含「共享组件 inventory」）/ 文件不存在 → silent skip，进步骤 4。
-- **旧 6 段骨架 → mini-upgrade**：告诉 PM 一句，按 `$REPO_ROOT/templates/DESIGN.md.tmpl` 新结构
-  把缺的块补进 `docs/DESIGN.md`（**保留 PM 已填的旧内容**，只追加缺的块：布局合约 / 响应式 /
-  无障碍 / 共享组件 inventory 表 / 视觉层交互规则 / Checker Sign-Off）。组件 inventory 表
-  AI 据 `docs/modules/` + 现有代码尽力盘点已有组件起手、PM 补全。
+- **已含 inventory 段** / 文件不存在 → silent skip，进步骤 4。
+- **缺 inventory 段 → 追加空段**：AI 用 Edit 在 DESIGN.md 末尾追加：
 
-```
-📝 检查 docs/DESIGN.md —— 是旧结构（缺共享组件 inventory）。stage 4 的组件复用关口要查这份
-   清单，开始新需求前先升级一次（保留你已填的视觉规范，只补缺的块）。
-```
+  ```markdown
 
-mini-upgrade 写的 `docs/DESIGN.md` 与 PROJECT mini-fill 同 —— 必须在步骤 4.5 commit 时一并
-commit（见步骤 4.5）。每 req 入口触发、升级后自然 silent skip，天然幂等。
+  ## 共享组件 inventory
 
-> 只在已有项目 + 旧 DESIGN.md 时触发；新项目 `init-project` 复制的已是新结构模板，silent skip。
+  > **这是什么**：stage 4 gap-check 的查询底座。每个 req 动手前逐组件查这里：
+  > **有 → 复用**；**没有 → 新建并加进本表**。req 间累积，越来越全，reuse 率随之上升。
+
+  | 组件名 | 用途 | 视觉 | 状态 | 交互 | 出处 req |
+  |---|---|---|---|---|---|
+  | <!-- stage 4 4A 累积，目前为空 --> | | | | | |
+  ```
+
+  并告诉 PM 一句：
+
+  ```
+  📝 检查 docs/DESIGN.md —— 缺「共享组件 inventory」段。已追加空段。stage 4 的组件复用关口要查这份，从本 req 开始累积。
+  ```
+
+inventory 段追加的 `docs/DESIGN.md` 必须在步骤 4.5 commit 时一并 commit。每 req 入口触发、追加后自然 silent skip，天然幂等。
+
+> **视觉基线段（gstack 写的 8 段）不在本步骤兜底范围** —— 已有项目想建 / 改视觉基线，让 PM 主动调 gstack `/design-consultation`。本步骤只管 inventory 段（框架独有，gstack 不写）。
+>
+> 新项目 `init-project` 阶段 C.5 已建空 inventory 段，本步骤 silent skip。
 
 ### 步骤 4：Stage 1 — 产出 brief.md（AI 引导，**不调用 /office-hours**）
 
@@ -323,7 +330,7 @@ commit 范围默认只包含 brief.md + .req-meta.json + 空 tasks/ 骨架；**�
 
 **例外 —— 步骤 3.5 / 3.6 legacy 兜底触发时扩 commit 范围**：
 - 步骤 3.5 mini-fill 补了 `docs/PROJECT.md` → 加 `docs/PROJECT.md`
-- 步骤 3.6 mini-upgrade 补了 `docs/DESIGN.md` → 加 `docs/DESIGN.md`
+- 步骤 3.6 追加 inventory 段到 `docs/DESIGN.md` → 加 `docs/DESIGN.md`
 
 补的文件必须随本次 commit 一起落盘，否则基线悬空、worktree 内后续 stage 读不到。此时
 `git add` 按实际触发的兜底多加对应文件：

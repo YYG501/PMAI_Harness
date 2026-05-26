@@ -290,82 +290,64 @@ close-req 步骤 1.5 聚合处理（按目标文档 rewrite OR patch）。
 进入步骤 1.5（视觉规范）。phase 2 close-task.sh 仍按原逻辑 promote 偏差成 adjustment ——
 回填 simp 的行已经从偏差表删了，不会 promote；adjustment 路径的行照走。
 
-### 步骤 1.5：视觉规范反馈反推 DESIGN.md（`_shared/pm-view/input-flow.md` §9.4 第四类）
+### 步骤 1.5：视觉规范反馈反推 DESIGN.md（4 类分流，`_shared/pm-view/input-flow.md` §9.4 第四类）
 
-扫本 task PM 视图的 `## 📁 历史档案 → ### PM 反馈` 区域，对**分类=「视觉规范」**的条目逐条沉淀到 `$REPO_ROOT/docs/DESIGN.md`，避免视觉规范反馈进 task-local sink（task-001 R6 9 项视觉问题修了但没沉淀的反模式）。
+扫本 task PM 视图的 `## 📁 历史档案 → ### PM 反馈` 区域，对**分类=「视觉规范」**的条目按子类逐条处理。
 
-#### 1.5.1 前置检查
+> **关键原则**：DESIGN.md = task 启动前的硬约束（init C.5 视觉基线 + stage 4 4A 新组件完整规格定稿）。close-task 沉淀的是**未来约束**，不是"补本次实现"。本 task 实现错了 → 改代码，不是改 DESIGN.md。
+
+#### 1.5.0 前置检查（DESIGN.md 不存在 fallback）
 
 ```bash
 DESIGN_MD="$MAIN_REPO_ROOT/docs/DESIGN.md"
 if [ ! -f "$DESIGN_MD" ]; then
   echo "ℹ️  $REPO_ROOT/docs/DESIGN.md 不存在，跳过视觉规范沉淀。"
-  echo "   建议 PM 后续手动建立 DESIGN.md 作为项目级视觉规范单一来源（gstack /design-consultation 可生成）。"
   # 直接进入步骤 2
 fi
 ```
 
-#### 1.5.2 扫描候选反馈
+#### 1.5.1 扫描候选反馈
 
 Read 本 task PM 视图主文件的 PM 反馈 section，提取候选：
 - 分类含 `视觉规范` 的反馈条目
 - 处理结果**不**含「已沉淀 DESIGN.md」备注的（避免重复处理）
 
-候选数 = N。
+候选数 = N。**N = 0 → 直接进入步骤 2**。
 
-**N = 0 → 直接进入步骤 2**，本步骤跳过。
+#### 1.5.2 4 类分流（每条反馈先判子类）
 
-#### 1.5.3 AI 起草增量（每条反馈一次）
+对每条候选反馈，AI 先判子类（4 选 1）：
 
-读 `docs/DESIGN.md` 现有章节结构（`grep '^## \|^### \|^#### ' docs/DESIGN.md`），按反馈内容定位：
+| 子类 | 判定信号 | 落地动作 |
+|---|---|---|
+| **① 本 task 实现偏差** | "颜色不对 / 间距错了 / 字体没用 X" — 指向本次代码实现没对齐已定规范 | **不动 DESIGN.md**。task 仍在 worktree → 应改代码；已合并 → 告知 PM 起 quick-fix 或下个 task 修。记账 `Y-task-fix` |
+| **② 项目级视觉基线更新** | "以后整个项目按这个 / 所有按钮 hover 都这样 / 项目色板换 X" — 指向 gstack 写的视觉基线段（颜色 / 字体 / 间距 / 布局 / 动效） | **patch DESIGN.md gstack 写的对应段**（`## Aesthetic Direction` / `## Color` / `## Typography` / `## Spacing` / `## Layout` / `## Motion` 之一）。记账 `Y-baseline` |
+| **③ 共享组件 inventory 新规范 / 现有组件规格补充** | "侧栏导航选中态颜色其实应该 X / 新增一个 toast 组件" — 指向 inventory 段的某一行 | **patch DESIGN.md `## 共享组件 inventory` 表**（已有组件更新视觉/状态/交互列，或新组件追行）。记账 `Y-inventory` |
+| **④ 文案 voice & tone（拒绝写 DESIGN.md）** | "空状态文案太严肃 / 错误提示应该俏皮 / 所有 toast 文案都用 X 风格" | **拒绝写 DESIGN.md**，告知 PM "这是文案 voice & tone，建议沉淀到 docs/PROJECT.md（项目级语气）或 docs/prd.md（req 级文案）；DESIGN.md 只管视觉规范"。记账 `N-wrong-doc` |
 
-- **已有章节增量**：找最匹配的 `### N.M` 子条目（如 `9.2 输入框` / `9.11 弹窗模式`），起草补充段落（< 30 行）
-- **新建子条目**：现有无对应位置，起草新 `### N.M+1` 子条目（< 60 行）
+AI 拿不准 → 呈交 PM 对话式问句让 PM 拍板（4 选 1）。
 
-呈交 PM 的格式：
+#### 1.5.3 沉淀处理（按子类执行）
 
-```markdown
-反馈 K：[反馈 1 行摘要]
-建议章节：docs/DESIGN.md `### 9.X.Y [章节名]`（已有章节增量 / 新子条目）
-新增内容草稿：
-[draft markdown 全文]
-```
+**子类 ② / ③：默认 promote（不问 PM）**
+- 读 `docs/DESIGN.md` 章节结构（`grep '^## \|^### \|^#### ' docs/DESIGN.md`）按子类定位对应段：
+  - ② → gstack 视觉基线段（`## Aesthetic Direction` / `## Color` / `## Typography` 等）
+  - ③ → `## 共享组件 inventory` 表行
+- AI 用 Edit patch（**不 commit**）
 
-#### 1.5.4 沉淀处理（默认 promote · 拿不准才问 PM）
+**子类 ①**：不写 DESIGN.md，PM 反馈条目「处理结果」标 `task-fix`
 
-> **原则**：分类已是「视觉规范」的反馈，默认就是项目级长期规范——AI 直接 patch
-> `docs/DESIGN.md`（不 commit），不逐条问。只有 AI 拿不准的才打断 PM。
+**子类 ④**：不写 DESIGN.md，PM 反馈条目「处理结果」标 `wrong-doc:<建议归属>`（PROJECT.md / prd.md）
 
-**默认 promote（不问 PM）**：AI 判定该条确属项目级视觉规范 → 用 Edit patch
-`docs/DESIGN.md`（**不 commit**），内部记账分类 `Y-rule`。
+**禁止**：silent commit `docs/DESIGN.md`。DESIGN.md 改动 patch-不-commit，PM 在 close 收尾审总 diff 自己 commit（步骤 2.3 提示）—— 这一步总审是 PM 对默认 promote 的把关。
 
-**拿不准才逐条问 PM**：仅当 AI 判断该条可能是 task-local 特例（不通用）、或可能分类
-错了（其实不是视觉规范）→ 呈交 PM 一个对话式问句：
+#### 1.5.4 沉淀后记账
 
-```
-这条反馈我拿不准（[反馈摘要]）：
- - 沉淀进 DESIGN.md（项目级长期规范）
- - 只在本 task 备注（task 特例，不通用）
- - 分类错了（其实不是视觉规范）
-```
+每条 promote 的 patch 完成后，AI 把该条 PM 反馈的「处理结果」改为「已处理」+ 备注「已沉淀 DESIGN.md <段名 / inventory>」。**不逐条给 PM 看 diff** —— DESIGN.md 总 diff 由步骤 2.3 汇总，PM 在 close 收尾时一次性审、当场可撤。
 
-**PM 回答的内部分流 + 内部分类映射**：
-- PM 说「沉淀 / 写进 DESIGN / 项目级」等 → 记账 `Y-rule` → AI 用 Edit patch `docs/DESIGN.md`（不 commit）
-- PM 说「task 备注 / 只本 task / task-only」等 → 记账 `Y-task-note` → 保留在 task PM 反馈，标处理结果「task-only」
-- PM 说「分类错了 / 不是视觉 / 重分类」等 → 记账 `N` → 改 task PM 反馈的分类字段为正确类型，按该类型原规则走
+#### 1.5.5 完成后进步骤 1.6
 
-**禁止**：silent commit `docs/DESIGN.md`。DESIGN.md 改动 patch-不-commit，PM 在 close
-收尾审总 diff 自己 commit（步骤 2.3 提示）——这一步总审是 PM 对默认 promote 的把关。
-
-#### 1.5.5 沉淀后记账
-
-每条 promote 的 patch 完成后，AI 把该条 PM 反馈的「处理结果」改为「已处理」+ 备注
-「已沉淀 DESIGN.md §X.Y」。**不逐条给 PM 看 diff** —— DESIGN.md 总 diff 由步骤 2.3
-汇总，PM 在 close 收尾时一次性审、当场可撤。
-
-#### 1.5.6 完成后进步骤 1.6
-
-所有 N 条视觉规范反馈处理完毕（每条都标了 `Y-rule` / `Y-task-note` / `N` 三个分类之一作为内部记账），DESIGN.md 改动**未 commit**（步骤 3 提示 PM 自己 commit），进入步骤 1.6。
+所有 N 条视觉规范反馈处理完毕（每条都标了 `Y-baseline` / `Y-inventory` / `Y-task-fix` / `N-wrong-doc` 之一作为内部记账），DESIGN.md 改动**未 commit**（步骤 3 提示 PM 自己 commit），进入步骤 1.6。
 
 ### 步骤 1.6：跨功能产品行为规则反馈 selective promote 到 PRODUCT-RULES.md（delta-9 vp-2）
 

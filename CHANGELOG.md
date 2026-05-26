@@ -18,6 +18,27 @@ PM-AI-Workflow 生成器仓的演进记录。本文件**只记影响下游业务
 
 ## 已发布版本
 
+### 2026-05-26 — DESIGN.md 全流程重构（gstack 写视觉基线 + 框架管 inventory + 自由度声明移 implementation-design）
+
+**触发**：PM 反思 DESIGN.md 5 个写入点（init 留空骨架 / new-req 兜底 / stage 4 4A 占位 / stage 4 4B 视觉规范更新 / close-task 视觉反馈反推）混乱，定位"乱"的根因 = ① DESIGN.md 视觉基线未在 init 阶段共写、推迟到 req 级 → 把项目级决策塞进 req 流程 ② executor 在视觉规范没说的地方乱搞 ③ 创意自由度三档归属错位（项目级文档写 req 级决策）。
+
+**改动**（PM 视角）：
+
+- `/init-project` 加阶段 C.5（视觉基线必填）：调 gstack `/design-consultation` 全跑 → 写 DESIGN.md 头 8 段 → AI 追加「共享组件 inventory」空段 → PM 定稿确认 → commit。4 阶段 → 5 阶段（A/B/C/C.5/D）
+- `templates/DESIGN.md.tmpl` 删除：DESIGN.md 由 gstack 写 + AI 追加 1 段，不需要静态模板。`init-project.sh` 砍 DESIGN.md.tmpl 拷贝行
+- `/req-stage-gate` Stage 4 砍 4B 视觉规范更新分支，4A 改"新组件完整规格定稿"硬约束（PM + AI 共写视觉/状态/交互/边界，task 启动前 inventory 必须完整；不再 close-task 回填占位）
+- `/close-task` §1.5 改 4 类分流（① task 实现偏差不动 DESIGN / ② 视觉基线 patch gstack 段 / ③ inventory patch / ④ 文案 voice & tone 拒绝写 DESIGN，建议改 PROJECT 或 prd）
+- 创意自由度三档从 DESIGN.md 移到 `implementation-design.md` 段 3.3「自由度声明」（req 级，task-spec 按"适用范围"挑行写进 task 文件，stage 5 5a-gate 视作结构决策必 PM 拍板）
+- DESIGN.md 砍 a11y 独立段（PM 决定）+ Checker Sign-Off 段（搬进 init C.5 SKILL 自检流程）
+- `/new-req` 步骤 3.6 改：旧版"6 段骨架 mini-upgrade"砍，新版"检测 inventory 段是否存在，缺则追加空段"
+
+**集成 gstack 的决策**：不抄 gstack 任何内容到我们 SKILL.md（gstack 升级时跟不上）；直接调它的 skill，跟随升级。下游 SKILL 不解析 gstack 写的 8 段字段，只读「共享组件 inventory」段（我们追加 / stage 4 4A 累积 / close-task §1.5 patch）—— gstack 自由演化我们自动兼容。
+
+**影响**：
+- task executor 启动时 DESIGN.md 是完整硬约束（视觉基线 + 本 req 新组件完整规格 + 段 3.3 自由度声明）—— "没规范可循"的灰色地带消失
+- PM 触点从 5 处简化为 4 处：init C.5（gstack 主导）/ stage 4 4A（共写规格）/ close-task §1.5（分流沉淀）/ PM 任意时机调 `/design-consultation`
+- 测试基线 515/0 全绿（删 6 个旧 case + 改 3 个 + 新增 0 个）
+
 ### 2026-05-26 — term-detector 调用点收敛到 prd-writing 一处
 
 **触发**：实际跑 brief 阶段 detector 跑出 16 个候选词，全为 PM 修辞强调（`**真正的痛点**` 类），PM 全跳过 = 浪费确认门；PM 同时反馈"不知道术语表有什么用"。查清术语表实际作用：给 AI 读 `PROJECT.md` 时当背景词典（无 lint 强校验），是弱价值机制。

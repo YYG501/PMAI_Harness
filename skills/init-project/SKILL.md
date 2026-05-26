@@ -27,6 +27,10 @@ description: |
 │    讨论 → Decision gate "创建 PROJECT.md/继续探索" + Loop│
 │    写 PROJECT.md + ROADMAP.md + atomic commit           │
 │                          ↓                              │
+│  阶段 C.5 · 视觉基线（调 gstack /design-consultation）     │
+│    gstack 跑 → DESIGN.md 视觉基线 8 段 + 我们追加 inventory│
+│    + PM 定稿确认 + commit                                 │
+│                          ↓                              │
 │  阶段 D · 终态汇总 + Next Up（只汇总不 commit）            │
 │    ✅ <name> 已就绪 / cd <target> && /new-req "..."     │
 └─────────────────────────────────────────────────────────┘
@@ -48,13 +52,14 @@ description: |
 
 ## Workflow
 
-> 4 阶段顺序执行；每阶段失败有显式兜底（见 §Rules / 失败兜底段）。
+> 5 阶段顺序执行（A / B / C / C.5 / D）；每阶段失败有显式兜底（见 §Rules / 失败兜底段）。
 >
 > **M2 banner**（见 `_shared/pm-view/banner-rules.md` §1）：agent 进入每个阶段时**先 Bash echo 一行 banner**。init-project 是项目级 skill（生成器仓内跑、无 active req），不调 `status-view.py`，直接 echo 字面值：
-> - 阶段 A：`echo "━━━ PMAI ► INIT-PROJECT ▸ Stage A/4: 参数收集 ━━━"`
-> - 阶段 B：`echo "━━━ PMAI ► INIT-PROJECT ▸ Stage B/4: 骨架建设 ━━━"`
-> - 阶段 C：`echo "━━━ PMAI ► INIT-PROJECT ▸ Stage C/4: QUESTIONING ━━━"`
-> - 阶段 D：`echo "━━━ PMAI ► INIT-PROJECT ▸ Stage D/4: 终态汇总 ━━━"`
+> - 阶段 A：`echo "━━━ PMAI ► INIT-PROJECT ▸ Stage A/5: 参数收集 ━━━"`
+> - 阶段 B：`echo "━━━ PMAI ► INIT-PROJECT ▸ Stage B/5: 骨架建设 ━━━"`
+> - 阶段 C：`echo "━━━ PMAI ► INIT-PROJECT ▸ Stage C/5: QUESTIONING ━━━"`
+> - 阶段 C.5：`echo "━━━ PMAI ► INIT-PROJECT ▸ Stage C.5/5: 视觉基线 ━━━"`
+> - 阶段 D：`echo "━━━ PMAI ► INIT-PROJECT ▸ Stage D/5: 终态汇总 ━━━"`
 
 ### 阶段 A · 参数收集 + brownfield 检测
 
@@ -113,9 +118,75 @@ agent **@读 `skills/_shared/project-questioning.md`**（**单一真相源** —
 - 已 commit 阶段 B 骨架（首 commit `init: <name>` 已落）+ PROJECT.md 未 commit → **留 unstaged**，提示 PM "下次直接发 `/project-solution` 续上 PROJECT.md / ROADMAP.md 写作即可"
 - 阶段 B 未完成 → 提示 PM 手动 `rm -rf <target-dir>` 重来
 
+### 阶段 C.5 · 视觉基线（调 gstack `/design-consultation` + 追加 inventory）
+
+> **为什么有这步**：DESIGN.md 是 task executor 写代码时的硬约束（`task-execute` 步骤 2.0 强制 echo 全文）。如果视觉基线没在 task 启动前定好，executor 在"颜色 / 字体 / 间距 / 动效"这些维度上没规范可遵守 → 乱搞。本阶段把项目级视觉基线一次性建好。
+>
+> **职责分工**：gstack `/design-consultation` 包揽视觉基线（颜色 / 字体 / 间距 / 布局 / 动效 / 美学方向 / 竞品研究 / 视觉预览板）写 DESIGN.md 头 8 段；我们追加「共享组件 inventory」段（req 级累积用，gstack 不管）。
+>
+> **不抄 gstack** —— 直接调它的 skill，跟随它的升级。下游 SKILL 不解析 gstack 写的字段，只读 inventory 段，gstack 自由演化我们自动兼容。
+
+**步骤**：
+
+1. **跟 PM 说一句开场**：
+   ```
+   接下来跑 gstack /design-consultation 给项目定视觉基线（颜色 / 字体 / 布局 / 动效）。
+   它会问产品调性、是否要竞品研究、生成视觉预览板等。跟着它的对话走。
+   gstack 跑完后我再补一段空的「共享组件 inventory」表，stage 4 累积用。
+   ```
+
+2. **调 `/design-consultation`**（用 Skill 工具）—— gstack 接管对话流，PM 跟 gstack 互动定视觉方向。gstack Phase 6 把 DESIGN.md 写到 `<target-dir>/docs/DESIGN.md`（gstack 的 8 段 + Decisions Log）。
+
+3. **gstack 跑完后回到本 SKILL**，AI 用 Edit 工具在 DESIGN.md **末尾追加**「共享组件 inventory」空段：
+   ```markdown
+
+   ## 共享组件 inventory
+
+   > **这是什么**：stage 4 gap-check 的查询底座。每个 req 动手前逐组件查这里：
+   > **有 → 复用**；**没有 → 新建并加进本表**。req 间累积，越来越全，reuse 率随之上升。
+   > **gstack `/design-consultation` 不管这段**，由本框架的 `/req-stage-gate` Stage 4 4A 累积。
+
+   | 组件名 | 用途 | 视觉 | 状态 | 交互 | 出处 req |
+   |---|---|---|---|---|---|
+   | <!-- stage 4 4A 累积，目前为空 --> | | | | | |
+   ```
+
+4. **PM 定稿确认门**：
+
+   ```bash
+   # 自检：占位 __ 应该已被 gstack 全部替换为具体值
+   PLACEHOLDERS=$(grep -c "__\|#______" "$TARGET_DIR/docs/DESIGN.md" 2>/dev/null || echo 0)
+   # 自检：inventory 段是否已追加
+   HAS_INVENTORY=$(grep -c "^## 共享组件 inventory" "$TARGET_DIR/docs/DESIGN.md" 2>/dev/null || echo 0)
+   ```
+
+   - `PLACEHOLDERS > 0` → 警告 PM「gstack 写的视觉基线还有占位没填，建议回去补 gstack 流程」（不硬卡，PM 可以选择推进 + 后续手补）
+   - `HAS_INVENTORY = 0` → 步骤 3 追加失败，必须修复
+
+   定稿确认（AskUserQuestion，按 `_shared/pm-view/askuser-rules.md` §1 走）：
+   ```
+   📋 视觉基线定稿确认：
+    - 颜色 / 字体 / 间距 / 布局 / 动效 都已具体化（占位检查：{PLACEHOLDERS} 个未填）
+    - 共享组件 inventory 段已建（stage 4 累积用）
+   PM 确认推进？
+   ```
+
+5. **atomic commit**：
+   ```bash
+   cd "$TARGET_DIR"
+   git add docs/DESIGN.md
+   git commit -m "docs(DESIGN): 视觉基线定稿（gstack /design-consultation + inventory 段）"
+   ```
+
+6. 进阶段 D。
+
+**失败兜底（R12）**：gstack 未安装 / `/design-consultation` 调用失败 → 跟 PM 说「gstack 不可用，跳过 C.5。DESIGN.md 留空，第一个 req 进 stage 4 时再起视觉基线。」直接进阶段 D（DESIGN.md 不存在也不阻塞下游 —— stage 4 4A 会兜底）。
+
+**失败兜底（R13）**：PM 在 C.5 答"停 / 等下" → DESIGN.md 留 gstack 写到一半的状态（unstaged），提示 PM "下次想续可以直接调 `/design-consultation`，inventory 段需要手动追加 / 跑 `/req-stage-gate` 时自动兜底。"
+
 ### 阶段 D · 终态汇总 + Next Up（只汇总不 commit）
 
-> PROJECT.md / ROADMAP.md + commit 已在阶段 C 完成。阶段 D **只做终态输出**。
+> PROJECT.md / ROADMAP.md + DESIGN.md commit 已分别在阶段 C / C.5 完成。阶段 D **只做终态输出**。
 
 agent 输出 Next Up 块（对齐 M2 banner 规范）：
 
@@ -123,7 +194,7 @@ agent 输出 Next Up 块（对齐 M2 banner 规范）：
 ═══════════════════════════════════════
 ✅ <project-name> 已就绪
 📁 位置: <target-dir>
-📄 已创建: CLAUDE.md / docs/PROJECT.md / docs/ROADMAP.md / .claude/skills/ / .claude/scripts/ ...
+📄 已创建: CLAUDE.md / docs/PROJECT.md / docs/ROADMAP.md / docs/DESIGN.md / .claude/skills/ / .claude/scripts/ ...
 ═══════════════════════════════════════
 
 ▶ Next Up:
@@ -139,6 +210,7 @@ agent 输出 Next Up 块（对齐 M2 banner 规范）：
 - 目标目录不能已存在 + 不能含 `.git/` 或代码文件（两层拦：阶段 A skill 拒 + init-project.sh 拒）
 - gstack 是硬依赖，未安装时阶段 B 脚本会报错退出
 - 不要手动跳过阶段 C —— PROJECT.md / ROADMAP.md 是项目方向真相源，不能空骨架交付
+- 阶段 C.5 调 gstack `/design-consultation` 的输出（DESIGN.md 头 8 段 + Decisions Log）**不抄、不映射、不重写** —— 直接接受 gstack 写的内容；我们只在末尾追加「共享组件 inventory」段。gstack 升级时自动跟上。
 - 提问法 / 5 组话术 / 写作规则**真相源只在 `skills/_shared/project-questioning.md`**；本 skill 阶段 C 不内嵌副本（避免双份维护漂移）
 
 ---
@@ -152,3 +224,5 @@ agent 输出 Next Up 块（对齐 M2 banner 规范）：
 | 阶段 B 跑成功但 `_shared/project-questioning.md` 缺失 | 阶段 C 入口前置检测 + 报错 "框架未完整安装" |
 | 阶段 C PM 答"停" + 骨架已 commit | PROJECT.md / ROADMAP.md 留 unstaged + 提示下次 `/project-solution` 续 |
 | 阶段 C PM 答"停" + 骨架未 commit | 提示手动 `rm -rf <target-dir>` 重来 |
+| 阶段 C.5 gstack 未安装 / `/design-consultation` 调用失败 | 跳过 C.5，DESIGN.md 留空；第一个 req 进 stage 4 4A 时兜底 |
+| 阶段 C.5 PM 答"停" | DESIGN.md 留 gstack 写到一半的 unstaged 状态；下次手调 `/design-consultation` 续 |

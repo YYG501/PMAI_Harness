@@ -169,22 +169,16 @@ test_close_task_step_1_5_n_zero_skip() {
   pass_test
 }
 
-test_close_task_step_1_5_three_options() {
-  start_test "close-task 步骤 1.5：PM 三选一（Y-rule / Y-task-note / N）"
+test_close_task_step_1_5_four_classes() {
+  start_test "close-task 步骤 1.5：4 类分流（Y-baseline / Y-inventory / Y-task-fix / N-wrong-doc）"
   local section
   section=$(awk '/^### 步骤 1.5/{flag=1; next} /^### /{flag=0} flag' "$CLOSE_TASK_SKILL")
-  if ! echo "$section" | grep -q "Y-rule"; then
-    _fail "步骤 1.5 应有 Y-rule 选项"
-    return
-  fi
-  if ! echo "$section" | grep -q "Y-task-note"; then
-    _fail "步骤 1.5 应有 Y-task-note 选项"
-    return
-  fi
-  if ! echo "$section" | grep -q '\*\*N\*\*\|选项.*N\b\|`N`\|分类 `N`'; then
-    _fail "步骤 1.5 应有 N 内部分类标签（AI 误分类时改正）"
-    return
-  fi
+  for cls in "Y-baseline" "Y-inventory" "Y-task-fix" "N-wrong-doc"; do
+    if ! echo "$section" | grep -q "$cls"; then
+      _fail "步骤 1.5 应有 $cls 内部分类标签"
+      return
+    fi
+  done
   pass_test
 }
 
@@ -228,7 +222,7 @@ test_close_task_has_step_1_5
 test_close_task_step_1_5_in_correct_order
 test_close_task_step_1_5_design_md_fallback
 test_close_task_step_1_5_n_zero_skip
-test_close_task_step_1_5_three_options
+test_close_task_step_1_5_four_classes
 test_close_task_step_1_5_forbids_silent_commit
 test_close_task_step_3_hints_design_md_commit
 

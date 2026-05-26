@@ -123,7 +123,6 @@ for TMPL in "$FRAMEWORK_DIR/templates/"*.tmpl; do
   case "$BASENAME" in
     CLAUDE.md)              DEST="$TARGET_DIR/CLAUDE.md" ;;
     PROJECT.md)             DEST="$TARGET_DIR/docs/PROJECT.md" ;;
-    DESIGN.md)              DEST="$TARGET_DIR/docs/DESIGN.md" ;;
     PRODUCT-RULES.md)       DEST="$TARGET_DIR/docs/PRODUCT-RULES.md" ;;
     ROADMAP.md)             DEST="$TARGET_DIR/docs/ROADMAP.md" ;;
     modules-INDEX.md)       DEST="$TARGET_DIR/docs/modules/INDEX.md" ;;

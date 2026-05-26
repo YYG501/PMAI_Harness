@@ -7,7 +7,6 @@ source "$SCRIPT_DIR/helpers/fixture.sh"
 
 TASK_TEMPLATE="$FRAMEWORK_ROOT/templates/task.md.tmpl"
 MODULE_TEMPLATE="$FRAMEWORK_ROOT/templates/module.md.tmpl"
-DESIGN_TEMPLATE="$FRAMEWORK_ROOT/templates/DESIGN.md.tmpl"
 TASK_SPEC_SKILL="$FRAMEWORK_ROOT/skills/task-spec/SKILL.md"
 
 _contains() {
@@ -270,11 +269,6 @@ test_template_regression() {
   _assert_missing "$MODULE_TEMPLATE" "## 七、验收标准" "module 模板不再含 req 级 验收标准 章节" || return
   _assert_missing "$MODULE_TEMPLATE" "Task 拆分提示" "module 模板不再含 req 级 Task 拆分提示 章节" || return
   _assert_missing "$MODULE_TEMPLATE" "## 八、实现指引" "module implementation guide removed" || return
-
-  _assert_contains "$DESIGN_TEMPLATE" "## 创意自由度" "DESIGN creative freedom section" || return
-  _assert_contains "$DESIGN_TEMPLATE" "**高自由度区域**：动效、微交互、图表样式、卡片排列方式、空状态文案" "DESIGN high freedom list" || return
-  _assert_contains "$DESIGN_TEMPLATE" "**低自由度区域**：信息层级、关键操作按钮位置、状态标签颜色、色彩系统、间距基准" "DESIGN low freedom list" || return
-  _assert_contains "$DESIGN_TEMPLATE" "**不可偏离**：模块规格 / prd.md 功能清单中的功能行为、数据规则、角色权限" "DESIGN non-negotiable list" || return
 
   pass_test
 }

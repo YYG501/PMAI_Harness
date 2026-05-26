@@ -3,7 +3,6 @@
 #
 # 验证：
 # - PRODUCT-RULES.md.tmpl 结构 + 条目含 scope 字段（全局 / 域限定）
-# - DESIGN.md.tmpl 升级：布局合约 / 响应式 / 无障碍 / 共享组件 inventory / Checker Sign-Off
 # - close-task selective promote（步骤 1.6）+ worktree-clean 白名单含 PRODUCT-RULES.md（D9-4 回归）
 # - close-task.sh carry-forward / clean-check 含 docs/PRODUCT-RULES.md（6382baf-class 回归）
 # - gap-check 每 req 无条件跑（D9-2）—— req-stage-gate stage 4 必跑
@@ -16,7 +15,6 @@ source "$SCRIPT_DIR/helpers/assert.sh"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
 PR_TMPL="$REPO_ROOT/templates/PRODUCT-RULES.md.tmpl"
-DESIGN_TMPL="$REPO_ROOT/templates/DESIGN.md.tmpl"
 CLOSE_TASK="$REPO_ROOT/skills/close-task/SKILL.md"
 CLOSE_TASK_SH="$REPO_ROOT/scripts/close-task.sh"
 STAGE_GATE="$REPO_ROOT/skills/req-stage-gate/SKILL.md"
@@ -36,15 +34,6 @@ test_product_rules_template() {
     _has "$PR_TMPL" "scope：全局 | 域限定" || { _fail "条目缺 scope 字段（全局/域限定）"; ok=0; }
     _has "$PR_TMPL" "来源：req-NNN" || { _fail "条目缺来源字段"; ok=0; }
   fi
-  [ "$ok" = 1 ] && pass_test
-}
-
-test_design_template_upgrade() {
-  start_test "DESIGN.md.tmpl 升级：布局/响应式/无障碍/inventory/Checker"
-  local ok=1
-  for blk in "布局合约" "响应式" "无障碍" "共享组件 inventory" "Checker Sign-Off" "创意自由度"; do
-    _has "$DESIGN_TMPL" "$blk" || { _fail "DESIGN.md.tmpl 缺块: $blk"; ok=0; }
-  done
   [ "$ok" = 1 ] && pass_test
 }
 
@@ -104,7 +93,6 @@ test_routing_table_collapsed() {
 }
 
 test_product_rules_template
-test_design_template_upgrade
 test_close_task_promote
 test_worktree_clean_whitelist
 test_gap_check_every_req

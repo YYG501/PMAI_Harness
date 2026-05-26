@@ -510,7 +510,7 @@ python3 .claude/scripts/req-transition.py "$ACTIVE_REQ_DIR" --to 3
 
 > **stage 3 只有一个 PM 定稿确认门**——就是步骤 2。`/prd-writing` 在 stage-3 orchestrated 模式下不出自己的确认门，由本步骤 2 统一兜住。stage 3 不再有 reconcile / 行数 lint / PROJECT 6 节门等额外门或步骤。
 
-推进成功后**续到 Stage 3 → 4 入口**（DESIGN.md 检查门）。
+推进成功后**续到 Stage 3 → 4 入口**（gap-check + 新组件规格定稿）。
 
 > **旧 req 兼容（文件存在性判别）**：stage 3 涉及校验时按文件存在性判别新旧流程——`solution.md` 存在且 `prd.md` 不存在 → 旧流程（同步前在飞的旧 req，stage 3 产物仍是 `solution.md`，按旧逻辑跑完即可）；否则 → 新流程（要 `prd.md`）。两文件都有（异常态）→ `prd.md` 优先 + 打一行警告给 PM 知会。`req-transition.py` 内部同样按文件存在性判别（归 req-transition.py owner）。
 
@@ -519,8 +519,8 @@ python3 .claude/scripts/req-transition.py "$ACTIVE_REQ_DIR" --to 3
 > **PROJECT 6 节强制门已撤掉**（PROJECT 由 `/project-solution` 产出 + 已有项目走 `/new-req`
 > legacy gate）。stage 3→4 此处直接推进 stage 4。
 
-**stage 4 永远进**（delta-9 D9-2）—— stage 4 内拆「**必跑 gap-check** +（可选）DESIGN.md
-视觉规范更新」；gap-check 是每 req 的组件复用关口、不随「设计系统要不要更新」跳过。
+**stage 4 永远进**（delta-9 D9-2）—— stage 4 = **必跑 gap-check + 新组件完整规格定稿**
+；gap-check 是每 req 的组件复用关口 + 完整规格定稿门，必跑。视觉基线本身在 init C.5 已由 gstack `/design-consultation` 定稿，stage 4 不再嵌视觉基线更新分支。
 
 ```bash
 python3 .claude/scripts/req-transition.py "$ACTIVE_REQ_DIR" --to 4
@@ -528,65 +528,62 @@ python3 .claude/scripts/req-transition.py "$ACTIVE_REQ_DIR" --to 4
 
 推进成功后**续到 Stage 4 入口**。
 
-### Stage 4（设计系统 —— gap-check 必跑 + DESIGN.md 可选更新）
+### Stage 4（设计系统 —— gap-check 必跑：新组件完整规格定稿）
 
-stage 4 两块：**A 必跑 gap-check 组件复用关口** + **B 可选 DESIGN.md 视觉规范更新**。
+> **本阶段核心原则**：task 启动前 DESIGN.md 必须是**完整硬约束** —— 视觉基线（gstack 写的 8 段，init C.5 时已定）+ 本 req 新组件的**完整规格**（视觉 / 状态 / 交互 / 边界）。executor 读到的是完整规范，没有"自己看着办"的灰色地带。
+>
+> **跟之前的差异**：以前 4A 只声明"复用 vs 新建"留占位、close-task 才回填 → executor 跑 task 时 inventory 行视觉字段空着，照样乱搞。现在 4A 必须 **PM + AI 共写完整规格**才进 stage 5。
+>
+> **砍掉旧 4B（"DESIGN.md 视觉规范更新"分支）**：视觉基线在 init C.5 已由 gstack `/design-consultation` 定稿，req 级一般不动；PM 想改基线 → 任意时机直接调 `/design-consultation`（PM 主动入口），不嵌进 stage 4 流程。
 
-#### 步骤 4A：gap-check —— 组件复用关口（每 req 无条件跑，delta-9）
+#### 步骤 4A：gap-check + 新组件完整规格定稿（每 req 无条件跑）
 
-> 本质 = 每个 req 一道「逐组件判复用 vs 新建」的关口 —— 不只「查规范全不全」。
-> 直接对症「组件不复用」（executor 不知道前面 req 做过什么、又造一个）。
+> 本质 = 每个 req 一道「逐组件判复用 vs 新建 + 新建组件 PM + AI 共写完整规格」的关口。
+> 直接对症 ① 组件不复用 ② executor 在视觉规范不完整的地方乱搞。
 
-1. **前提**：`docs/DESIGN.md` 须先升级成带「共享组件 inventory」块的结构（`templates/DESIGN.md.tmpl`
-   新结构）。已有项目旧 6 段骨架由 `/new-req` legacy gate 的 DESIGN.md mini-upgrade 兜底。
-2. **读 `prd.md`**（stage 3 产出）枚举本 req 要建的**界面 / 交互 / 组件**。
-3. **逐组件对 `docs/DESIGN.md` 的组件 inventory 判定**：
+1. **前提**：`docs/DESIGN.md` 须含「共享组件 inventory」段（init C.5 已建空段；旧项目兜底由 `/new-req` 步骤 3.6 检测追加）。
+2. **读 `prd.md`** 枚举本 req 要建的**界面 / 交互 / 组件**。
+3. **逐组件对 inventory 判复用 vs 新建**：
    - inventory 里**有** → **复用**（设计输出指向它）
-   - inventory 里**没有** → **新建** + 把新组件追加进 `docs/DESIGN.md` 组件 inventory 表
-4. **缺设计规范**（布局 / 交互 / 无障碍 / 新组件）→ AI 列出来，PM 逐个表态：补（写进
-   `docs/DESIGN.md`）/ 显式跳过。
-5. **硬度**：不硬卡出 stage 4，但**强制 PM 对每个「缺 / 新建」逐个表态** —— 不能 silent 忽略。
+   - inventory 里**没有** → **新建**，触发下一步组件规格定稿
+4. **新组件完整规格定稿子流程**（对每个新建组件，PM + AI 共写）：
 
-gap-check 是**交互关口** —— 产物 = PM 在 chat 逐组件表态这个过程本身 + 新建组件入
-`docs/DESIGN.md` inventory（持久化的只有这个）。**不单独落 per-req 文件、不写 PRD**
-（PRD stage 3 已定稿冻结，gap-check stage 4 跑、写不进）。复用决策由 delta-8
-`/implementation-design`（stage 5）读 `docs/DESIGN.md` inventory 承接。
+   AI 基于 `docs/DESIGN.md` 视觉基线（颜色 / 字体 / 间距 / 动效）+ `prd.md` 描述出**完整规格初稿**，PM 审 + 改，直到拍板。一个新组件规格必须包含：
 
-#### 步骤 4B：DESIGN.md 视觉规范更新（可选）
+   ```
+   组件：<组件名>
+     视觉：<尺寸 / 背景色 / 边框 / 阴影 / 圆角 等，引用 DESIGN.md 视觉基线变量>
+     状态：<默认 / hover / 选中 / disabled / 加载中 ... 每个状态视觉差异>
+     交互：<鼠标点击 / 键盘操作 / 触发事件>
+     边界：<响应式断点 / 无内容时 / 数据极端值 等>
+   ```
 
-对话式问 PM 本次是否要更新设计系统（视觉规范本身）：
+   PM 拍板后 AI 用 Edit 把完整规格行写进 `docs/DESIGN.md` 共享组件 inventory 表（6 列：组件名 / 用途 / 视觉 / 状态 / 交互 / 出处 req）。
 
-```
-Stage 4（设计系统）— 组件复用关口已过
+5. **硬度**：**新组件规格未定稿 → 不进 stage 5**。这是关口级强约束，跟 stage 5 5a-gate「结构决策必 PM 拍板」同款硬度。
 
-🎨 本次是否需要更新设计系统视觉规范（颜色 / 字体 / 布局合约等）？
- - 不需要 → 直接推进 Stage 5
- - 需要 → 请说明哪里要改（调 /design-consultation）
-```
+gap-check 是**交互关口** —— 产物 = PM 在 chat 逐组件表态过程本身 + 完整规格行入 inventory。**不单独落 per-req 文件**。复用决策由 stage 5 `/implementation-design` 段 2 读 inventory 承接。
 
-- PM 说「不用 / 跳过」→ 跳过 4B，进确认门
-- PM 提具体修改 → 调 `/design-consultation` 更新 `docs/DESIGN.md`
+#### 步骤 4B：确认门 + 推进
 
-#### 步骤 4C：确认门 + 推进
+> 旧版"DESIGN.md 视觉规范更新"分支已砍。视觉基线在 init C.5 定，req 级不再嵌入 design-consultation。PM 想改基线任意时机主动调 `/design-consultation`，不走本 SKILL。
 
-**Speed mode 自动续条件**（满足则跳过完整确认门直接推 stage 5）：
-
-- 步骤 4A gap-check **无新缺组件**（PM 在 4A 期间没标"补"任何新组件入 inventory）
-- 且 步骤 4B PM 选**不改 DESIGN**
-
-满足两条 → 直接执行 `req-transition.py --to 5` 推进 + 续 Stage 5；chat 里只出一行轻量过场（**不发完整确认门**）：
+**Speed mode 自动续条件**：步骤 4A gap-check **0 个新建组件**（全部复用）→ 直接执行 `req-transition.py --to 5` 推进 + 续 Stage 5；chat 里只出一行过场：
 
 ```
-Stage 4 OK（组件全部复用 / DESIGN 本次不动） → 进 Stage 5 实现设计
+Stage 4 OK（组件全部复用 / 本次无新建） → 进 Stage 5 实现设计
 ```
 
-**未满足 speed 条件**（gap-check 有新建组件 / DESIGN 有改动）→ 走原完整确认门：
+**有新建组件**（PM 在 4A 期间共写过任何新组件规格）→ 走完整确认门：
 
 ```
 Stage 4（设计系统）— 待确认
 
-✅ 组件复用关口：复用 X 个 / 新建 Y 个（已入 DESIGN.md inventory）
-🎨 docs/DESIGN.md：<更新了 / 本次未更新视觉规范>
+✅ 组件复用关口：复用 X 个 / 新建 Y 个（完整规格已入 DESIGN.md inventory）
+   新建组件清单：
+    - <组件 1>
+    - <组件 2>
+    ...
 
 确认后我会推进到实现设计 + task 规划（Stage 5）。
 ```
@@ -624,10 +621,12 @@ PM 确认门审架构决策表 → 再 `/task-plan`（拆 task）**。
    ```bash
    # 扫段 1 HOW 表：取「决策类型」列 = 「结构」的所有行
    # 扫段 1.5 SIMP 表：取所有 SIMP-NN 行（SIMP 全部视作结构决策，见模板说明）
+   # 扫段 3.3 自由度声明表：取所有非「无」行（每条偏离声明全视作结构决策）
    ```
 
-2. **逐行 prompt**（按文件出现顺序）：
+2. **逐行 prompt**（按文件出现顺序：段 1 HOW → 段 1.5 SIMP → 段 3.3 自由度声明）：
 
+   段 1 / 段 1.5 行：
    ```
    🛑 命中结构决策：HOW-NN <一行描述>
 
@@ -638,6 +637,16 @@ PM 确认门审架构决策表 → 再 `/task-plan`（拆 task）**。
 
    AI 倾向 A，理由：<段 1「理由」列内容，一行>
    PM 拍板：
+   ```
+
+   段 3.3 自由度声明行：
+   ```
+   🛑 命中自由度偏离：<适用范围>
+
+   AI 提案：<档位>
+   理由：<段 3.3「理由」列内容，一行>
+
+   PM 拍板：保留 / 改档位 / 取消本条偏离
    ```
 
    PM 答一个进下一个；中途答完后调 `req-events.py append decision` 写每行（`decided_by=pm-explicit`），供 stage 6 入口总览复述。
@@ -823,7 +832,7 @@ python3 .claude/scripts/req-transition.py "$ACTIVE_REQ_DIR" --to 7
 - 每个 stage 结束必须显式问 PM 确认，不能自动跳过确认门
 - **确认门只给绝对路径 + 一句话变更摘要，不贴文档全文。** PM 的 IDE 已经挂在 worktree 上，文件在左侧目录树里可见，不需要把内容贴回 chat
 - **确认门标准格式**（v3 书面体；2026-05-11 全 stage 对齐完毕）：
-  - **顶部 stage 标记独占首行**：`Stage N（中文名）— <产物> <状态>`（例 `Stage 3（功能规格）— prd 待确认`、`Stage 4（设计系统）— DESIGN.md 待确认`）
+  - **顶部 stage 标记独占首行**：`Stage N（中文名）— <产物> <状态>`（例 `Stage 3（功能规格）— prd 待确认`、`Stage 4（设计系统）— 组件规格待确认`）
   - emoji 锚点分段（✅ 路径 / 📋 摘要 / 🧭 决策 / 📊 可选 review）
   - 路径独立缩进，不挤标题行
   - **末段确认问句独占末段**，统一句式：「这版 X 内容是否可以定稿？如还有需要调整的内容，请直接说；确认后我会推进到 <下一阶段名>（Stage N）。」（关闭门变体：「是否确认关闭此需求？如还需开启新的 task，请直接说；确认后我会启动关闭流程（Stage 7）。」）
@@ -836,7 +845,7 @@ python3 .claude/scripts/req-transition.py "$ACTIVE_REQ_DIR" --to 7
 - review 结果（PM 跑完贴回 chat 的）允许直接贴 chat——review 是讨论内容，不是文档产出
 - **未决问题闸门（硬规则）**：任何 stage 的产出文档如果含有"需要 PM 回答"的未决项，确认门必须先让 PM 答完再开放推进选项。不允许并列给出"直接推进"和"回答问题"两个选项让 PM 选——这会让 PM 绕过未回答的问题。机器校验由 `scripts/check-open-questions.py` 承担：扫 `## 未决问题` section 下的 `**PM 回答：**` 占位，任一未填 → 退出 1。目前最严格落地在 Stage 1→2（analysis.md），其他 stage 如有类似未决产出 section 直接复用本脚本
 - 推进命令只能用 `req-transition.py`，不能手动改 `.req-meta.json`
-- Stage 4 的 DESIGN.md 内容检测由 `req-transition.py` 自动处理
+- Stage 4 的 DESIGN.md 内容检测（inventory 段是否存在 / 新建组件规格是否完整）由 `req-transition.py` 自动处理
 - 回退场景：PM 说要回到之前的 stage 时，使用 `--rollback` 参数
   ```bash
   python3 .claude/scripts/req-transition.py "$ACTIVE_REQ_DIR" --to <target> --rollback
