@@ -165,4 +165,36 @@
 
 ---
 
+## 框架分发与全局安装（架构级，2026-05-26 PM 提出）
+
+**设计文档**：[`docs/设计/框架分发与全局安装.md`](docs/设计/框架分发与全局安装.md)（v0 草稿，等 PM 锁 §0）。下面只留一句话索引 + 待决策点；完整内容看设计文档。
+
+**What:** 重新设计框架的"安装 → 初始化"入口，让起新消费仓**不再依赖 cwd 在生成器仓里**。参考 GSD npm 包形态：装一次到全局 / 项目，然后任意位置跑 init。
+
+**Why:** 当前 PM-AI-Workflow 这个仓同时背两个角色——
+1. 生成器开发仓（演化 `scripts/skills/templates/`）
+2. 消费仓启动器（PM 起新项目时 `cd` 进来跑 `/init-project`）
+
+角色混淆代价：起新项目要 `cd ~/Projects/PM-AI-Workflow` 反直觉；分发给别人用 = 不可能（他们没这个仓）；框架仓 dirty working tree 时不该兼任 launcher；与 GSD 等同类工具的心智模型不一致。
+
+**3 个候选模式：**
+
+| 模式 | 怎么用 | 工作量 |
+|---|---|---|
+| A. npm/brew 全局包 | `pmai install -g` → `cd <anywhere>` → `pmai init` | 大：打包发布 / 版本管理 / 升级通道 |
+| B. install.sh 一行 | `cd <new-dir>` → `curl <url>/install.sh \| bash` → `/init-project` | 中：托管 install 脚本 + 升级机制 |
+| C. 当前 hack | `cd PM-AI-Workflow` → `/init-project` | 0，但持续承受反直觉 |
+
+**Depends on / blocked by:**
+- 跟 `框架同步-SOP.md`（hotfix 阶段过渡 SOP）整合：安装模式应同时承载初次 install + 后续 sync upgrade
+- 跟 `docs/归档/完成/设计-框架同步.md` §5 sync 脚本设计协调（manifest 机制可复用）
+- 看 DX backlog `I2`（init-project.sh 必须在框架仓里跑，容易搞错位置）—— 同一根因，可并入
+
+**下次接任者要知道:**
+- 当前 hack：`/init-project` skill 通过 cwd 在生成器仓获得加载权；阶段 A 收"落地路径"绝对路径；产物全落到该路径，框架仓 working tree 不受污染
+- 触发讨论时点：PM 有几次起新消费仓的体感后；或下游有第二人要用框架时
+- 不要先把 `框架同步-SOP.md` 实施了 —— 它跟本条都涉及"框架资产怎么进消费仓"，应一起想
+
+---
+
 **注**：TD-5（DESIGN.md vs CLAUDE.md「工程结构约束」边界文档）已直接落到 CLAUDE.md.tmpl 段顶部注释（阶段 4.5.3），不进 TODOS。
