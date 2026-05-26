@@ -1,27 +1,65 @@
 #!/usr/bin/env bash
 # pmai-update-check — Check if a newer stable version is available
 #
-# 用法：自动跑（hook / status 子命令调用），不直接做升级动作。
-# 比对本地 VERSION 跟远程 latest tag。
+# 用法：
+#   pmai-update-check              # 24h 缓存：上次查过且不过期则静默退（不查 GitHub）
+#   pmai-update-check --force      # 跳缓存强查
+#
+# 缓存：$PMAI_STATE/last-update-check 存上次查询的 UTC unix 时间戳
+# Snooze：$PMAI_STATE/update-snoozed 存用户主动暂缓的 UTC 时间戳（同样跳查）
 
 set -euo pipefail
 
 PMAI_HOME="${PMAI_HOME:-$HOME/.pmai}"
+PMAI_STATE="${PMAI_STATE:-$HOME/.pmai-state}"
+CACHE_FILE="$PMAI_STATE/last-update-check"
+SNOOZE_FILE="$PMAI_STATE/update-snoozed"
+CACHE_TTL=86400   # 24 小时
+
+FORCE=0
+if [ "${1:-}" = "--force" ]; then
+  FORCE=1
+fi
 
 if [ ! -d "$PMAI_HOME/.git" ]; then
   exit 0  # 没装就静默退（不该报错干扰其他流程）
+fi
+
+# Snooze：用户暂缓内不查
+if [ "$FORCE" = "0" ] && [ -f "$SNOOZE_FILE" ]; then
+  SNOOZE_TS=$(cat "$SNOOZE_FILE" 2>/dev/null || echo 0)
+  NOW=$(date +%s)
+  if [ "$SNOOZE_TS" -gt "$NOW" ] 2>/dev/null; then
+    exit 0
+  fi
+fi
+
+# 缓存：24h 内跑过就跳
+if [ "$FORCE" = "0" ] && [ -f "$CACHE_FILE" ]; then
+  LAST_TS=$(cat "$CACHE_FILE" 2>/dev/null || echo 0)
+  NOW=$(date +%s)
+  AGE=$((NOW - LAST_TS))
+  if [ "$AGE" -lt "$CACHE_TTL" ] && [ "$AGE" -ge 0 ]; then
+    exit 0
+  fi
 fi
 
 cd "$PMAI_HOME"
 LOCAL_VER=$(cat VERSION 2>/dev/null || echo "0.0.0")
 
 # 短超时 ls-remote 拿远程最新 tag（不阻塞太久；用户离线时静默）
-REMOTE_TAG=$(timeout 5 git ls-remote --tags origin 2>/dev/null \
+# 注意：set -o pipefail + grep no-match (远程无 v* tag 时) 会让整条 pipeline exit 1 → set -e 退出。
+# 用 || true 兜底 + 子 shell 隔离 pipefail
+REMOTE_TAG=$( { timeout 5 git ls-remote --tags origin 2>/dev/null \
   | awk '{print $2}' \
   | grep -oE 'refs/tags/v[0-9.]+$' \
   | sed 's|refs/tags/v||' \
   | sort -V \
-  | tail -1)
+  | tail -1; } 2>/dev/null || true )
+
+# 无论结果如何，更新 cache 时间戳（避免 GitHub 死活查不到时反复打）
+mkdir -p "$PMAI_STATE"
+date +%s > "$CACHE_FILE"
 
 if [ -z "$REMOTE_TAG" ]; then
   exit 0  # 远程没 tag 或网络不通，静默

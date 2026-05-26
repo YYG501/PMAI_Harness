@@ -1,0 +1,84 @@
+#!/usr/bin/env bash
+# pmai-whats-new — Show CHANGELOG entries between two versions
+#
+# 用法：
+#   pmai-whats-new                 # 从 ~/.pmai-state/just-upgraded-from 读老版本（若存在则显示并清 marker）
+#   pmai-whats-new --from v0.1.0 --to v0.2.0   # 显式指定
+#
+# 来源：$PMAI_HOME/CHANGELOG.md 的「未发布」段 + 该范围 tag 段（grep `### YYYY-MM-DD —`）
+
+set -euo pipefail
+
+PMAI_HOME="${PMAI_HOME:-$HOME/.pmai}"
+PMAI_STATE="${PMAI_STATE:-$HOME/.pmai-state}"
+MARKER="$PMAI_STATE/just-upgraded-from"
+CHANGELOG="$PMAI_HOME/CHANGELOG.md"
+
+FROM=""
+TO=""
+SILENT_IF_NO_MARKER=0
+
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --from) FROM="${2:?--from needs version}"; shift 2 ;;
+    --to)   TO="${2:?--to needs version}"; shift 2 ;;
+    --silent-if-no-marker) SILENT_IF_NO_MARKER=1; shift ;;
+    --help|-h)
+      cat <<EOF
+Usage: pmai-whats-new [--from VER] [--to VER] [--silent-if-no-marker]
+
+  Show CHANGELOG entries since last upgrade.
+  Default: read ~/.pmai-state/just-upgraded-from marker (clears after read).
+EOF
+      exit 0 ;;
+    *) echo "❌ unknown flag: $1" >&2; exit 2 ;;
+  esac
+done
+
+# 无显式 --from 时从 marker 读
+if [ -z "$FROM" ]; then
+  if [ -f "$MARKER" ]; then
+    FROM=$(cat "$MARKER" 2>/dev/null || true)
+  fi
+  if [ -z "$FROM" ]; then
+    [ "$SILENT_IF_NO_MARKER" = "1" ] && exit 0
+    echo "（无 just-upgraded-from marker；用 --from VER 显式指定）" >&2
+    exit 0
+  fi
+fi
+
+[ -z "$TO" ] && TO=$(cat "$PMAI_HOME/VERSION" 2>/dev/null || echo "current")
+
+if [ ! -f "$CHANGELOG" ]; then
+  echo "（CHANGELOG.md 不在 $PMAI_HOME，跳过）" >&2
+  exit 0
+fi
+
+# 显示「未发布」段（永远显示，因为正在迭代到最新）
+# 加上自从 $FROM 到 $TO 之间的所有 ### 日期 段
+echo "════════════════════════════════════════════════════════════"
+echo "  PMAI v${TO} — upgraded from v${FROM}"
+echo "════════════════════════════════════════════════════════════"
+echo ""
+
+# 提取「未发布」段（从「## 未发布」到下一个「## 」之间）；NR 限制避免 SIGPIPE
+echo "📝 未发布段："
+awk '/^## 未发布/{flag=1; printed=0; next} /^## /{flag=0} flag && printed<80 {print; printed++}' "$CHANGELOG"
+echo ""
+
+# 如果 FROM != TO 而且 CHANGELOG 有「## v$FROM」段 → 列 $FROM 到 $TO 之间的 ### 日期段
+# 当前 PMAI CHANGELOG 没有 tag 分段（全在「未发布」），这步留接口给将来 tag-based release
+TAG_SECTION=$(grep -nE "^## v" "$CHANGELOG" | head -5 || true)
+if [ -n "$TAG_SECTION" ]; then
+  echo "🏷️  按版本号已发布段："
+  echo "$TAG_SECTION"
+fi
+
+# 读完清 marker（无论 --from 显式还是 marker 读出，反正 What's New 已展示）
+if [ -f "$MARKER" ]; then
+  rm -f "$MARKER"
+fi
+
+echo ""
+echo "════════════════════════════════════════════════════════════"
+echo "Happy shipping! 跑 pmai status 看当前状态。"

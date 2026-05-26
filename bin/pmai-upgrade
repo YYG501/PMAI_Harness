@@ -9,6 +9,7 @@
 set -euo pipefail
 
 PMAI_HOME="${PMAI_HOME:-$HOME/.pmai}"
+PMAI_STATE="${PMAI_STATE:-$HOME/.pmai-state}"
 CLAUDE_SKILLS="$HOME/.claude/skills"
 SKILL_PREFIX="pmai-"
 
@@ -101,6 +102,17 @@ if [ "$OLD_HEAD" = "$NEW_HEAD" ]; then
   echo "✅ PMAI 已是最新（${NEW_VER} @ ${NEW_HEAD}）"
 else
   echo "✅ PMAI 升级：${OLD_VER} (${OLD_HEAD}) → ${NEW_VER} (${NEW_HEAD})"
+  # 写 JUST_UPGRADED marker + 清 update-check 缓存（下次 skill 跑时显示 What's New）
+  mkdir -p "$PMAI_STATE"
+  echo "$OLD_VER" > "$PMAI_STATE/just-upgraded-from"
+  rm -f "$PMAI_STATE/last-update-check" 2>/dev/null || true
+  rm -f "$PMAI_STATE/update-snoozed" 2>/dev/null || true
 fi
 echo "   skill: $count symlinks re-synced"
 echo "═══════════════════════════════════════"
+
+# 升级后立即展示 What's New（如有，OLD != NEW 时）
+if [ "$OLD_HEAD" != "$NEW_HEAD" ] && [ -x "$(dirname "$0")/pmai-whats-new" ]; then
+  echo ""
+  "$(dirname "$0")/pmai-whats-new" --from "$OLD_VER" --to "$NEW_VER" || true
+fi

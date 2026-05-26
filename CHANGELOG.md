@@ -187,6 +187,43 @@ PM-AI-Workflow 生成器仓的演进记录。本文件**只记影响下游业务
 
 ## 未发布
 
+### 2026-05-27 — feat(pmai 阶段 1): JUST_UPGRADED + What's New / update-check 缓存 / uninstall preview
+
+**借鉴 gstack 三个机制**（详 transcript "gstack 关键机制借鉴评估"）：
+
+1. **JUST_UPGRADED marker + Show What's New**
+   - `pmai-upgrade` 成功后写 `~/.pmai-state/just-upgraded-from` 存老版号 + 清 `last-update-check` / `update-snoozed`
+   - 立即调 `pmai-whats-new` 读 `CHANGELOG.md` 「未发布」段打印（含"v{TO} — upgraded from v{FROM}" 头 + 80 行限）
+   - 新增 `bin/pmai-whats-new`：独立脚本，可手动 `pmai whats-new` 或 `--from VER --to VER` 显式跑；marker 读完即清
+   - PM 体感：升级完直接看到 changelog，不再蒙在鼓里
+
+2. **update-check 24h 缓存 + snooze**
+   - `pmai-update-check` 加 `~/.pmai-state/last-update-check` 时间戳；24h 内 silent skip 不打 GitHub
+   - `--force` flag 跳缓存
+   - `~/.pmai-state/update-snoozed` 用户暂缓内（未来 1.1 改进时填）
+   - smoke：首次跑写 cache；24h 内重跑 30ms 内退出
+   - 修了 set -o pipefail + grep no-match 让 pipeline exit 的 bug（用 `{ ... ; } 2>/dev/null || true` 子壳隔离）
+
+3. **uninstall preview + --keep-state**
+   - 跑前打印详细 clean-up 清单：~/.pmai/ 版本 + git head + 大小，~/.pmai-state/ 内容列表，symlink 数量 + 前 5 个名字
+   - `--keep-state` 保留 `~/.pmai-state/`（重装后 PM 偏好 / cache 不丢）
+   - `--force` 行为不变（跳 [y/N] 但 preview 仍打）
+   - 跟 gstack-uninstall 安全机制对齐
+
+**新增 state 目录**：`~/.pmai-state/`
+- `just-upgraded-from`：刚升级的老版号 marker
+- `last-update-check`：24h cache 时间戳
+- `update-snoozed`：用户暂缓时间戳
+- 未来：`config.yaml`（阶段 2 #4 加 pmai-config 体系）
+
+**VERSION**：0.2.0 → 0.2.1
+
+**Non-goals**（阶段 2/3 待做）：
+- VERSION migrations（gstack 机制 #1）
+- pmai-config get/set/list 体系（gstack 机制 #4）
+- install-type detection（机制 #6）
+- vendored copy → team_mode 迁移（机制 #7）—— 跟 T3/T5 example-consumer-app 迁移绑定
+
 ### 2026-05-27 — feat(I-mini): 消费仓 0 framework + skill 全走 \$PMAI_HOME（跨机器 clone 0 setup）
 
 **目标**：照搬 gstack 模型——消费仓内**不放任何 framework 资产**（scripts/skills/agents/templates/hooks），skill 内部脚本调用全用 `$PMAI_HOME/scripts/...` 绝对路径；任何机器 clone 消费仓 + `pmai install` 后立即可用，0 setup。详 `<LOCAL_CLAUDE_HOME>/plans/tingly-bouncing-rocket.md`。
