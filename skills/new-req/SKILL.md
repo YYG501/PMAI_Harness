@@ -227,13 +227,6 @@ PM 选 1 或直接开始描述需求时，AI 走以下流程：
 
 `brief.md` 是 stage 1 的唯一真相源，后续所有 stage 只读 brief.md。
 
-### 步骤 4.3：~~业务词催补 hook~~（已退场 — 2026-05-26）
-
-> brief 阶段不再调 `term-detector.py`。理由：brief 是 PM 自由描述需求的阶段，
-> 业务词还在变 + PM 用 `**` 多为修辞，detector 信噪比差，PM 拍下来全跳过 =
-> 浪费一次确认门。业务词催补统一收敛到 `prd-writing` 步骤 3.6 一处
-> （PRD 定稿时业务词稳定，是建术语表唯一合理的时间窗）。
-
 ### 步骤 4.4：attachments AI 接管 hook（D-iii v2 trigger 0 + 现 trigger 2 保留作 fallback）
 
 #### trigger 0 — AI 接管 PM chat 上传意图（D-iii v2 主入口）

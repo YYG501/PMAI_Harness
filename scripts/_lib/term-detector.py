@@ -1,15 +1,16 @@
 #!/usr/bin/env python3
-"""term-detector.py — 业务词 / 角色检测器（vp-4b）
+"""term-detector.py — 业务词 / 角色检测器（vp-4b → 2026-05-26 收敛）
 
-被 new-req / req-analysis / prd-writing / task-spec 各 skill 在写 PM 视图主
-文件前 / 中调用，检测文本中**未登记的业务词 / 角色**，让 AI 提示 PM 补
-PROJECT 业务术语表 / 用户画像。
+**当前只在 prd-writing 阶段调用**（PRD 定稿 = 业务词稳定时机；brief / analysis
+阶段早期，业务词还在变 + PM 用 `**` 多为修辞，detector 信噪比差，故不调）。
 
 检测策略（保守，避免 Clippy 风险）：
-- 候选业务词来源（仅这三处，不全文 NLP）：
-  - **X** (markdown 加粗短词，2-15 字)
-  - 「X」/『X』 (中文引号)
+- 候选业务词来源（仅这两处显式术语标记，不全文 NLP）：
+  - 「X」/『X』 (中文引号 — 术语 / 专名专用标记)
   - "X" / "X" (中文双引号)
+- **不再扫 markdown 加粗 `**X**`**：中文 markdown 里 `**` 几乎只用于修辞强调
+  （"**真正的痛点**" / "**核心**" / "**必须**"），全抓进来 = 噪音爆炸；
+  即便偶有真业务词，PM 用 `**` 标的概率远低于裸写
 - 角色识别：候选词以「员 / 管理员 / 运营 / 客服 / 财务 / 经理 / 主管」结尾
 - 过滤层：
   1. 白名单（whitelist.json，含技术词 + 通用业务/产品词）
@@ -94,11 +95,11 @@ def load_skip_list(req_dir: Path) -> set:
 
 
 def extract_candidates(text: str) -> list:
-    """提取候选业务词：**X** / 「X」 / 『X』 / "X" / "X"。"""
+    """提取候选业务词：「X」 / 『X』 / "X" / "X"。
+
+    刻意不抓 `**X**`（markdown 加粗）—— 中文场景 `**` 几乎只用于修辞强调，
+    误报率压倒任何真业务词收益（见模块 docstring）。"""
     candidates = []
-    # markdown 加粗
-    for m in re.finditer(r"\*\*([^\*\n]{2,15})\*\*", text):
-        candidates.append(m.group(1).strip())
     # 中文单引号
     for m in re.finditer(r"「([^「」\n]{2,15})」", text):
         candidates.append(m.group(1).strip())

@@ -312,6 +312,28 @@ python3 "$REPO_ROOT/.claude/scripts/check-doc-pm-view.py" "$ACTIVE_REQ_DIR/prd.m
 python3 .claude/scripts/req-transition.py "$ACTIVE_REQ_DIR" --to 7
 ```
 
+### 步骤 3.4：业务词催补 hook（2026-05-26 从 prd-writing 迁来）
+
+req 关闭时是业务实体真正落地稳定的时刻（task 都执行完、PRD 已 as-built 反向对齐）—— 这一步把本 req 引入的新业务词 / 角色 patch 进 `docs/PROJECT.md` 业务术语表 / 用户画像表，作为长期沉淀。
+
+```bash
+# 扫输入 = 本 req 全部 PM 视图主文件（prd + 所有 closed task 主文件 .md，不扫 .engineering.md）
+TMPFILE=$(mktemp)
+cat "$ACTIVE_REQ_DIR/prd.md" > "$TMPFILE"
+for t in "$ACTIVE_REQ_DIR"/tasks/closed/*.md; do
+  [ -f "$t" ] && [[ "$t" != *.engineering.md ]] && cat "$t" >> "$TMPFILE"
+done
+
+python3 "$REPO_ROOT/.claude/scripts/_lib/term-detector.py" \
+  "$TMPFILE" "$REPO_ROOT" --req-dir "$ACTIVE_REQ_DIR"
+
+rm "$TMPFILE"
+```
+
+按返回 JSON 处理（详见 `skills/_shared/term-detector/SKILL.md`）：≥3 新词走多词批量话术；<3 走单词；新角色独立话术；全空 silent skip。PM 拒绝某词 → 追加 `.term-skip.json`；PM 同意 → patch `$REPO_ROOT/docs/PROJECT.md` 业务术语表 / 用户画像表。
+
+**为什么放在这里**：本 req 内的 `prd.md §三` 已经承担过本 req 临时词典的职责（impl-design / task-spec 已读它）；close-req 是把临时词典里"真正稳定下来的、值得跨 req 共享的"那部分 promote 到 PROJECT.md 业务术语表的唯一时机。
+
 ### 步骤 3.5：里程碑追加询问（v5 vp-3）
 
 问 PM 是否把本 req 加入 `docs/PROJECT.md ## 产品路线`：

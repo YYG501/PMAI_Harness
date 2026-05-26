@@ -331,7 +331,7 @@ chat 一行确认 `已归档（attachments/<新名>），Y 重点。继续。`�
    - analysis-reviewer（office-hours 自带 Cross-Model Perspective + Spec Review Loop）
    - `check-open-questions.py` 未决问题闸门（office-hours `Open Questions` prose 不带 `**PM 回答：**` 占位；不该让 lint 脚本本身 req-aware，详见 D-i v4 R3-M2）
    - attachments hook（D-iii 独立设计承接）
-   - term-detector hook（业务词催补统一收敛到 `prd-writing` 步骤 3.6 一处，2026-05-26）
+   - term-detector hook（业务词催补统一收敛到 `close-req` 步骤 3.4 一处，2026-05-26）
 
 5B. **B 分支推进确认门**
 
@@ -371,7 +371,7 @@ PM 选择进入 stage 3 时：
 
 1. **调用 `/prd-writing`（stage-3 orchestrated 模式）**
    - 调用时在 prompt 里明确「stage-3 orchestrated 模式」——这是被 stage-gate 编排的固定 req 级模式，skill 跳过自身开场三选一对话、不走最终确认（详见 `prd-writing/SKILL.md` 的 stage-3 模式段）。
-   - skill 内部完成：读 `brief.md` + **stage 2 真相源**（A 分支 `analysis.md` / B 分支 `stage2-office-hours.md`，路径由 `_lib.state.get_stage_source(req_dir, 2)` 解析）+ `docs/PROJECT.md`（+ 已有 `docs/modules/` 如存在），从 stage 2 真相源的功能分解派生 §六 功能需求层级、写 `prd.md`（章节结构按 PRD 9 章 / 11 章不变），写完跑 `check-prd-hierarchy.py` lint + `term-detector.py` 补 `docs/PROJECT.md` 业务术语表，并为本次每条产品决策 append `decision` 事件
+   - skill 内部完成：读 `brief.md` + **stage 2 真相源**（A 分支 `analysis.md` / B 分支 `stage2-office-hours.md`，路径由 `_lib.state.get_stage_source(req_dir, 2)` 解析）+ `docs/PROJECT.md`（+ 已有 `docs/modules/` 如存在），从 stage 2 真相源的功能分解派生 §六 功能需求层级、写 `prd.md`（章节结构按 PRD 9 章 / 11 章不变；§三 名词解释承担本 req 临时词典职责，下游 impl-design / task-spec 必读），写完跑 `check-prd-hierarchy.py` lint，并为本次每条产品决策 append `decision` 事件（业务词向 PROJECT.md 长期沉淀已迁到 `close-req` 步骤 3.4，本步不再跑 detector）
    - skill 返回时 `prd.md` 已落盘、lint 已闭环（详见 `prd-writing/SKILL.md`：lint 在 skill 内闭环，**不**传递给 stage-gate 二次显示）；返回值带本次新增的 `decision` 摘要（备选 / 理由），供步骤 2 确认门一并渲染
 
 2. **输出确认门**（一份完整模板，把产物落地 / 规格要点 / 本次决策摘要 / 可选 review / 确认问句拼成单次输出；不分两轮发）：

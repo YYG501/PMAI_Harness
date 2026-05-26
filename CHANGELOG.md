@@ -136,6 +136,31 @@ PM-AI-Workflow 生成器仓的演进记录。本文件**只记影响下游业务
 
 ## 未发布
 
+### 2026-05-26 — refactor(term-detector): 二次迁移到 close-req + 临时/长期双词典分层
+
+**触发**：承接上一条 `term-detector 调用点收敛到 prd-writing 一处`。PM 进一步反馈：业务实体真正稳定要等 task 都执行落地，PRD 阶段（stage 3）就 patch PROJECT.md 长期术语表偏早；并发现 implementation-design / task-spec 没有显式"读术语表"的必读项，业务术语没有传递机制。
+
+**设计变化**（临时词典 vs 长期词典分层）：
+| 层级 | 文件 | 谁写 | 谁读 |
+|---|---|---|---|
+| 本 req 临时词典 | `prd.md §三 名词解释` | `prd-writing` 写 PRD 时 AI 直接落地 | `implementation-design` / `task-spec` 必读 |
+| 跨 req 长期词典 | `docs/PROJECT.md ## 业务术语表` | `close-req` 步骤 3.4 detector + PM 确认 | `implementation-design` / `task-spec` 必读（与 PRD §三 并集读）|
+
+**改动**：
+- `skills/prd-writing/SKILL.md` 步骤 3.6 砍掉 detector 调用，改成纯文本说明「PRD §三 = 本 req 临时词典；patch PROJECT.md 推迟到 close-req」；同步更新 stage 3 边界 / 收尾段
+- `skills/close-req/SKILL.md` 新增步骤 3.4「业务词催补 hook」（推进 stage 7 之后、里程碑追加询问之前），detector 输入 = `prd.md` + 全部 `tasks/closed/*.md`
+- `skills/implementation-design/SKILL.md` Required Inputs 新增两行：`prd.md §三`（临时词典）+ `docs/PROJECT.md ## 业务术语表`（长期词典）
+- `skills/task-spec/SKILL.md` Required Inputs 同上新增两行
+- `skills/_shared/term-detector/SKILL.md` description / 何时调用 / 禁止位置 全段重写，新增「临时词典 vs 长期词典」对照表段
+- `skills/_shared/pm-view/input-flow.md` §9.4.2 routing 表「用词 / 术语」行拆成两行：本 req 临时 → PRD §三；跨 req 长期沉淀 → close-req detector
+- `skills/req-stage-gate/SKILL.md` Stage 2→3 描述里残留的「跑 term-detector 补 PROJECT.md」字样 + 4B 注释里的「收敛到 prd-writing 3.6」清理一致
+
+**影响**：
+- detector 触发次数不变（1 次/req），但时机从 stage 3 推迟到 stage 7
+- impl-design / task-spec 用业务术语有显式词典支撑（之前是隐式依赖 AI 读 PROJECT.md 整文消化）
+- 测试无回归
+- 业务仓影响：消费仓如果在「prd-writing 跑 detector」阶段已用过老流程，老 PROJECT.md 业务术语表里的内容不动；下一个 req 起按新流程跑
+
 ### 2026-05-26 — feat(docs-toplevel-guard): pre-commit hook 拦截 docs/ 顶层错位文件
 
 **问题**：扁平化约定（见下面 fix(docs-archive-convention)）只是写在 CLAUDE.md 里靠 PM + AI 自觉。AI 写新文档时不一定真按约定归位，PM 也未必 review 路径 —— 长期还是会积累错位。

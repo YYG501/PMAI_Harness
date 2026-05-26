@@ -218,16 +218,9 @@ stage_prefix `"prd"`（Stage 3）。chat 一行确认 `已归档（attachments/p
 
    lint 是 mechanical check，不依赖 AI 内化规则。
 
-3.6. **term-detector 步（业务词催补）**——PRD 写完、lint 通过后，跑 detector 扫 PRD 名词解释节、把新业务词 patch 进 `docs/PROJECT.md` 业务术语表：
+3.6. **PRD §三 名词解释 = 本 req 临时词典**——本 req 范围内引入的新业务术语 / 角色由 AI 写 §三时落地（见 §三章节写作要求 + `references/few-shots.md` 三、名词解释示例）。
 
-   ```bash
-   python3 "$REPO_ROOT/.claude/scripts/_lib/term-detector.py" \
-     "$ACTIVE_REQ_DIR/prd.md" "$REPO_ROOT" --req-dir "$ACTIVE_REQ_DIR"
-   ```
-
-   按返回 JSON 处理（详见 `skills/_shared/term-detector/SKILL.md`）：≥3 新词走多词批量话术；<3 走单词；新角色独立话术；全空 silent skip。PM 拒绝某词 → 追加 `.term-skip.json`；PM 同意 → patch `$REPO_ROOT/docs/PROJECT.md` 业务术语表 / 用户画像表。
-
-   > 此步承接旧管线 `req-solution` 步骤 3.5 的 per-req 业务词催补职责 —— req-solution 退场后该职责由 prd-writing 接手。
+   `prd.md §三` 是下游 `implementation-design` / `task-spec` 的**词典必读**（见各自 Required Inputs）。**不再在本步跑 `term-detector.py` patch `docs/PROJECT.md`** —— 业务实体真正稳定要等 task 都执行落地，向 PROJECT.md 业务术语表的沉淀统一收敛到 `close-req` Phase 1（2026-05-26 收敛）。
 
 3.7. **decision 事件 append（关键产品决策留痕）**——PRD 成文后，为每条「关键产品决策」（PRD §四里的决策结果）append 一条 `decision` 事件到 req 事件流：
 
@@ -260,7 +253,7 @@ stage_prefix `"prd"`（Stage 3）。chat 一行确认 `已归档（attachments/p
 
 ## stage 3 收尾 — 交回 req-stage-gate
 
-stage-3 orchestrated 模式下，PRD 写完（含 3.5 lint / 3.6 term-detector / 3.7 decision append）后，**不自带最终确认门** —— 控制权交回 `req-stage-gate`，由 stage-gate 的**单一 PM 定稿确认门**完成 stage 3 定稿。
+stage-3 orchestrated 模式下，PRD 写完（含 3.5 lint / 3.7 decision append）后，**不自带最终确认门** —— 控制权交回 `req-stage-gate`，由 stage-gate 的**单一 PM 定稿确认门**完成 stage 3 定稿。
 
 交回时向 stage-gate 提供：
 - PRD 产物路径 `$ACTIVE_REQ_DIR/prd.md`
@@ -545,10 +538,10 @@ stage 3 定稿后 PRD **冻结**：执行期 task 按它做，close-req 时另�
 ## stage 3 边界：功能规格定稿
 
 - 允许产出：`$ACTIVE_REQ_DIR/prd.md`（stage-3 模式）/ PM 指定路径（standalone 独立 PRD 模式）
-- 允许动作：基于 `brief.md` + **stage 2 真相源**（A 分支 analysis.md / B 分支 stage2-office-hours.md）+ `docs/PROJECT.md`（+ `docs/modules/`）生成 req 级功能规格 PRD；为关键产品决策 append `decision` 事件；跑 term-detector 催补业务词
+- 允许动作：基于 `brief.md` + **stage 2 真相源**（A 分支 analysis.md / B 分支 stage2-office-hours.md）+ `docs/PROJECT.md`（+ `docs/modules/`）生成 req 级功能规格 PRD；§三 名词解释承担本 req 临时词典职责（业务词向 PROJECT.md 业务术语表的沉淀收敛到 `close-req` Phase 1）；为关键产品决策 append `decision` 事件
 - 禁止顺手推进：不要在写 PRD 的同时反向改 **stage 2 真相源**（analysis.md / stage2-office-hours.md）的范围边界；不要在 stage 3 自行画原型 / 拆 task（原型在 stage 4 之后、task 在 stage 5）
 - 退出条件：
-  - **stage-3 模式**：PRD 写完 + lint 通过 + term-detector 跑完 + decision 事件 append 完 → 控制权交回 `req-stage-gate`，由其单一定稿确认门完成 stage 3 定稿；定稿后 PRD 冻结
+  - **stage-3 模式**：PRD 写完 + lint 通过 + decision 事件 append 完 → 控制权交回 `req-stage-gate`，由其单一定稿确认门完成 stage 3 定稿；定稿后 PRD 冻结
   - **standalone 模式**：PRD 经 PM 在对话中确认并写入文件
 
 ## PRD 质检 prompt（可选）

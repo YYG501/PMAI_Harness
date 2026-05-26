@@ -265,7 +265,8 @@ close-task 收尾 / prd-writing 规划期识别 PM 反馈 / 规则时，按下�
 | 反馈类型 | 去向 | 谁管 |
 |---|---|---|
 | 视觉 / 设计 / 交互样式 / 新组件 | `docs/DESIGN.md` | close-task 步骤 1.5（PM-selective）+ stage 4 gap-check |
-| 用词 / 术语 | `docs/PROJECT.md` 业务术语表 | `term-detector`（现役）|
+| 用词 / 术语（本 req 临时） | `prd.md §三 名词解释` | `prd-writing` 写 PRD 时 AI 直接落地（下游 impl-design / task-spec 必读） |
+| 用词 / 术语（跨 req 长期沉淀） | `docs/PROJECT.md` 业务术语表 | `close-req` 步骤 3.4 `term-detector` + PM 确认（2026-05-26 从 prd-writing 迁来）|
 | **全项目跨功能产品行为规则** | `docs/PRODUCT-RULES.md` | **delta-9**：close-task 步骤 1.6 / prd-writing 步骤 3.8（皆 PM-selective）|
 | 模块级规则 / 功能 spec | 该模块 `docs/modules/<module>.md` | D13 / close-req 步骤 1.5 rewrite |
 | task-local / 同模块前瞻 | 留 task 文件「PM 反馈」段 | delta-3 §9.4.1 relevance 二分由后续 task 承接 |

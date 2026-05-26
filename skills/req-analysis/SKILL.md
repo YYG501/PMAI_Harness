@@ -162,17 +162,6 @@ fi
 
 按下方 §Analysis Structure 的 10 章固定结构 + `## 未决问题` section 落盘。即使有未决项也必须先写首版，不得只停留在对话。
 
-### 步骤 3.5：业务词催补 hook（v5 vp-4b）
-
-写 analysis.md 后，调 detector 检测未登记业务词 / 角色：
-
-```bash
-python3 "$REPO_ROOT/.claude/scripts/_lib/term-detector.py" \
-  "$ACTIVE_REQ_DIR/analysis.md" "$REPO_ROOT" --req-dir "$ACTIVE_REQ_DIR"
-```
-
-按返回处理（详见 `skills/_shared/term-detector/SKILL.md`）：≥3 新词走多词批量话术，<3 走单词；新角色独立话术；全空 silent。PM 拒绝 → 追加 `.term-skip.json`；PM 同意 → patch `$REPO_ROOT/docs/PROJECT.md` 业务术语表 / 用户画像表。
-
 ### 步骤 3.7：attachments AI 接管 hook（D-iii v2 trigger 0 + trigger 2 fallback）
 
 #### trigger 0 — PM chat 上传意图（D-iii v2 主入口）

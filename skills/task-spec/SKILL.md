@@ -47,8 +47,10 @@ echo "SKILL: task-spec"
 |---|---|
 | `task-plan.md` | task 元数据 |
 | `prd.md`（delta-2）| req 级 WHAT —— 挑当前 task 切片转写进执行区·实现规格 + PM 确认区·验收 |
+| `prd.md §三` | **本 req 临时词典**（名词解释）—— 写 task spec 时按本 req 引入的新业务实体 / 角色精确指代，禁同义词漂移 |
 | `implementation-design.md`（delta-8）| req 级 HOW —— 按 `HOW-ID` + 适用关键词挑当前 task 相关行；**段 1.5「原型简化项」按 PRD 锚点 join 当前 task**（v2 D5）：命中 → 实现规格 + 验收按简化后写 + 受影响验收项行内 `[SIMP-N]` 标签 |
 | `docs/PROJECT.md` / `docs/DESIGN.md` / `docs/modules/` | 项目级背景 |
+| `docs/PROJECT.md ## 业务术语表` | **长期词典**（跨 req 已沉淀的稳定业务术语）—— 跟 PRD §三 同时读：PROJECT 是沉淀基线，PRD §三 是本 req 新引入的临时词；两者并集 = 写 task spec 时的术语词典 |
 | `docs/PRODUCT-RULES.md`（delta-9）| 跨功能产品行为规则 —— 读全部 `scope=全局` 规则 + 按当前 task 模块 / 功能关键词 grep 命中的 `scope=域限定` 规则（§9.1.1 章节-grep；`scope=全局` 永远纳入、不漏跨功能规则）。命中的规则写进执行区·约束与易错 |
 | 前序「已完成」task 的「PM 反馈」段 | same-req 反馈 lane（§步骤 5 relevance 二分）|
 | **stage 2 真相源**（A 分支 `analysis.md` / B 分支 `stage2-office-hours.md`；路径由 `get_stage_source(req_dir, 2)` 解析）| ⚪ 按需 lazy fallback —— 不默认读；PRD 切片不足时回读对应章节并在 chat 告知 PM |
