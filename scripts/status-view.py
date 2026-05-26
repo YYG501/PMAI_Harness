@@ -183,6 +183,52 @@ def render_narrative(state: dict, repo_root: Path) -> None:
     print("\n下一步：发 /status-view 看详细，或 /req-stage-gate 推进具体 req。")
 
 
+def render_health_check(repo_root: Path) -> None:
+    """项目级产品文档体检：缺则输出 1 段 hint，齐全则静默。
+
+    背景：sync 框架后老项目可能缺 GSD §8 / D-iv M1 新增的产品级文档
+    （PRODUCT-RULES.md / ROADMAP.md）。`框架同步-SOP.md` §4.10 说"读侧
+    容错"——个别脚本读不到不阻塞，但 PM 在 session 起始播报里需要被告知
+    缺什么，否则永远不知道要补。
+
+    齐全则段不输出（新项目 0 噪音）；缺失才出 hint。
+
+    生成器仓自身（根有 `scripts/init-project.sh`，framework 资产在根而非 `.claude/`）
+    不是业务仓，跳过；只在业务仓里跑。
+    """
+    if (repo_root / "scripts" / "init-project.sh").exists():
+        return
+
+    docs_dir = repo_root / "docs"
+    if not docs_dir.exists():
+        return
+
+    missing: list = []
+
+    if not (docs_dir / "PROJECT.md").exists():
+        if (docs_dir / "CONTEXT.md").exists():
+            missing.append(
+                ("docs/PROJECT.md", "可能漏跑 migrate-context-to-project.py — docs/CONTEXT.md 还在")
+            )
+        else:
+            missing.append(("docs/PROJECT.md", "项目级文档主真相源；跑 /init-project 或 /project-solution 起新建"))
+
+    if not (docs_dir / "PRODUCT-RULES.md").exists():
+        missing.append(("docs/PRODUCT-RULES.md", "GSD §8 新增的产品规则文档"))
+
+    if not (docs_dir / "ROADMAP.md").exists():
+        missing.append(("docs/ROADMAP.md", "计划态 req 队列"))
+
+    if not missing:
+        return
+
+    print()
+    print("💡 项目体检：缺以下产品级文档")
+    for path, hint in missing:
+        print(f"  - {path}（{hint}）")
+    print("  补法：发 /project-solution 季度规划场景；或新项目跑 /init-project 自动分发")
+
+
 def suggest_next_action(req_view: dict) -> str:
     """Suggest what PM should do next。req_view 是 state['active_reqs'][i]。"""
     meta = req_view["meta"]
@@ -557,6 +603,7 @@ def main() -> None:
 
     if args.narrative:
         render_narrative(state, repo_root)
+        render_health_check(repo_root)
         return
 
     if args.summary:

@@ -122,6 +122,23 @@ PM-AI-Workflow 生成器仓的演进记录。本文件**只记影响下游业务
 
 ## 未发布
 
+### 2026-05-26 — feat(status-view): narrative 加项目体检段（老项目升级后报缺失产品文档）
+
+**问题**：PM 在消费仓问"当前项目情况"或走 session 起始播报（`status-view.py --narrative`）时，无 active req 状态只输出"目前没有 active req"。但**完全不报缺什么产品级文档** —— 老项目升级框架后，新增的 `docs/PRODUCT-RULES.md` / `docs/ROADMAP.md` / 漏跑 migrate 残留的 `docs/CONTEXT.md` 都没人提，PM 永远不知道要补。
+
+**根因**：`render_narrative` 设计上**只播报 req-level 状态**（active req / stage / task），完全不检查 project-level 文档齐全度。源码 0 处引用 PRODUCT-RULES / ROADMAP。`框架同步-SOP.md` §4.10 的"读侧容错（缺文件不报错）"被错误延伸到 session 播报——容错对，但播报应该 audit。
+
+**改动**：
+- `scripts/status-view.py` 新增 `render_health_check(repo_root)` 函数：检查 `docs/{PROJECT,PRODUCT-RULES,ROADMAP}.md` 存在性，缺则输出 1 段 hint（齐全则段不输出 → 新项目 0 噪音）
+- 生成器仓自身（根有 `scripts/init-project.sh`）跳过体检，避免误报
+- `docs/CONTEXT.md` 还在但无 `docs/PROJECT.md` → 额外提示"可能漏跑 migrate-context-to-project.py"
+- main 在 `render_narrative` 后调 `render_health_check`，三个分支（0/1/多 req）都覆盖
+- 5 个新测试：`tests/test-narrative-mode.sh` T6-T10（含齐全静默 / 生成器仓跳过 / fixture 缺文档 / CONTEXT 残留 4 个 case）
+
+**消费仓影响**：sync 后业务仓里 `status-view --narrative` 自动报缺失。无 schema 迁移、无破坏改动；齐全的项目继续 0 噪音。
+
+**测试**：465/0 PASS（460 + 5 新）
+
 ### 2026-05-26 — refactor: `roadmap.md` → `ROADMAP.md` 全量改名
 
 **动机**：项目级文档命名层级对齐 —— `docs/PROJECT.md` / `docs/DESIGN.md` / `docs/PRODUCT-RULES.md` 都大写（稳定基线、project-level 文档），`docs/roadmap.md` 是同一档位但漏了大写。统一到大写减轻 PM 记忆负担。
