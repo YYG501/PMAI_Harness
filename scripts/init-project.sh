@@ -68,23 +68,32 @@ case "$PROJECT_INTENT" in
     ;;
 esac
 
-FRAMEWORK_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+# 框架源路径解析顺序：
+#   1. PMAI_HOME 环境变量（pmai install 后用，或 /pmai-init-project skill 显式传）
+#   2. ~/.pmai/（pmai install 默认位置）
+#   3. cd "$(dirname "$0")/.."（fallback：本仓内直接 bash scripts/init-project.sh 时）
+if [ -n "${PMAI_HOME:-}" ] && [ -f "$PMAI_HOME/templates/CLAUDE.md.tmpl" ]; then
+  FRAMEWORK_DIR="$PMAI_HOME"
+elif [ -f "$HOME/.pmai/templates/CLAUDE.md.tmpl" ]; then
+  FRAMEWORK_DIR="$HOME/.pmai"
+else
+  FRAMEWORK_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+fi
 
 # --- 0. 位置 sanity check（DX I2）---
-# 该脚本只能在框架仓内运行；在业务仓里跑会拷错路径
-# 判定：FRAMEWORK_DIR 必须含 templates/CLAUDE.md.tmpl + skills/init-project + scripts/inject-structure-segment.py
+# FRAMEWORK_DIR 必须含 templates/CLAUDE.md.tmpl + skills/init-project + scripts/inject-structure-segment.py
 MISSING=""
 [ -f "$FRAMEWORK_DIR/templates/CLAUDE.md.tmpl" ] || MISSING="$MISSING templates/CLAUDE.md.tmpl"
 [ -d "$FRAMEWORK_DIR/skills/init-project" ] || MISSING="$MISSING skills/init-project/"
 [ -f "$FRAMEWORK_DIR/scripts/inject-structure-segment.py" ] || MISSING="$MISSING scripts/inject-structure-segment.py"
 if [ -n "$MISSING" ]; then
-  echo "❌ 该脚本必须在框架仓（PM-AI-Workflow）根目录运行。" >&2
-  echo "   检测到缺失的标志文件：$MISSING" >&2
-  echo "   推断当前 FRAMEWORK_DIR=$FRAMEWORK_DIR 不是框架仓。" >&2
+  echo "❌ 框架源缺标志文件：$MISSING" >&2
+  echo "   FRAMEWORK_DIR=$FRAMEWORK_DIR" >&2
   echo "" >&2
-  echo "   解决方法：" >&2
-  echo "     cd /path/to/PM-AI-Workflow" >&2
-  echo "     bash scripts/init-project.sh <project-name> <target-dir> <background> [<intent>]" >&2
+  echo "   修复方法（任一）：" >&2
+  echo "     1. pmai install                       # 全局装框架到 ~/.pmai/" >&2
+  echo "     2. PMAI_HOME=/path/to/framework bash scripts/init-project.sh ..." >&2
+  echo "     3. cd /path/to/PM-AI-Workflow && bash scripts/init-project.sh ..." >&2
   exit 2
 fi
 
