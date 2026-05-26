@@ -112,23 +112,23 @@ chat 一行确认 `已归档（attachments/<新名>），Y 重点。继续。`�
    `/new-req` 在主对话写完 brief.md 后就 handoff 退场，PM 在 worktree 内新对话里第一次跑 `/req-stage-gate` 时，AI 重新读一遍 `brief.md`，把 brief 二确和"用哪种方式跟这个需求讨论"合并成一次对话（v3 书面体 + v4 选择门）：
 
    ```
-   Stage 1 → 2（需求讨论入口）
+   Stage 1 → 2
 
    ✅ brief.md
       <$ACTIVE_REQ_DIR/brief.md 绝对路径>
 
-   📋 一句话摘要
+   📋 摘要
       <重新读 brief.md 的核心内容，一行>
 
-   💬 这版 brief 是否可定稿？然后用哪种方式跟这个需求讨论？
-    - 结构化批判（默认）：第一性原理 4 层 + reviewer + 未决问题答题
-    - YC office-hours 式：六问 / 设计思考；产物直接做 Stage 2 真相源、跳 reviewer
-    - 改 brief（请说哪里）
+   💬 怎么往下走？
+    - 结构化挖透（默认）—— 一层层把需求问清楚，问完独立复核，剩下未决问题回来找你拍
+    - 开放探讨 —— 像聊天一样发散聊，聊清楚直接进 Stage 2，不另做复核
+    - brief 还要改 —— 说改哪里
    ```
 
    **PM 回答的内部分流**（不列 A/B 字母；按 PM 自然语言意图）：
-   - PM 说「OK / 通过 / 没问题 / 定了」/ 选第一项 / 直说"结构化批判 / 第一性原理 / req-analysis" → **分流 A**（步骤 3A）
-   - PM 选 / 直说「office-hours / YC 六问 / 设计思考」类 → **分流 B**（步骤 3B）
+   - PM 说「OK / 通过 / 没问题 / 定了」/ 选第一项 / 直说"结构化挖透 / 结构化批判 / 第一性原理 / req-analysis" → **分流 A**（步骤 3A）
+   - PM 选 / 直说「开放探讨 / office-hours / YC 六问 / 设计思考」类 → **分流 B**（步骤 3B）
    - PM 提具体修改 → 按 PM 指示改 `brief.md`，改完后**只输出"已改完"二次摘要**（同一份模板，"一句话摘要"段填新内容），不贴全文；回到本步骤 2 重新出选择门
 
 #### 分流 A：结构化批判（`/req-analysis`）
@@ -232,47 +232,47 @@ chat 一行确认 `已归档（attachments/<新名>），Y 重点。继续。`�
    - **(I) SLUG 解析失败**（`$SLUG_ERR` 非空）→ **不说"没探测到"**（事实不符），直告 PM 探测无法进行：
 
      ```
-     Stage 1 → 2（office-hours 分支 — 无法探测产物）
+     Stage 1 → 2（开放探讨 — 没找到现成的 office-hours 稿）
 
      ⚠️ 无法定位 gstack 项目目录：
         <SLUG_ERR 原文>
 
-     💬 怎么处理？
-      - 在本 chat 跑 /office-hours，跑完贴绝对路径过来（推荐）
-      - 我自己指定路径（贴绝对路径过来）
-      - 切回结构化批判分支
+     💬 怎么往下走？
+      - 现在跑一份 —— 在本 chat 跑 /office-hours，跑完贴路径给我
+      - 我自己指定路径 —— 贴绝对路径过来
+      - 换默认的结构化挖透
      ```
 
    - **(II) SLUG OK + 找到 ≥1 个** → 列文件名 + mtime，问 PM 三选一：
 
      ```
-     Stage 1 → 2（office-hours 分支 — 选源材料）
+     Stage 1 → 2（开放探讨 — 选讨论稿）
 
-     📂 探测到 N 份 office-hours 产物（按 mtime 排，~/.gstack/projects/<SLUG>/）：
+     📂 找到 N 份 office-hours 稿（按更新时间倒序）：
        1. <filename>  (<mtime ISO>)
        2. ...
 
-     💬 用哪份做这次需求的讨论材料？
-      - 用第 1 份（默认，最近的一份）
-      - 跑一份新的（你去本 chat 跑 /office-hours，跑完告诉我新文件名）
-      - 我自己指定路径（贴绝对路径过来）
-      - 切回结构化批判分支
+     💬 用哪份做这次的讨论稿？
+      - 用第 1 份（默认，最新的）
+      - 跑一份新的 —— 在本 chat 跑 /office-hours，跑完告诉我新文件名
+      - 我自己指定路径 —— 贴绝对路径过来
+      - 换默认的结构化挖透
      ```
 
    - **(III) SLUG OK + 没找到** → 显式告 PM 是真无产物（slug 解析成功）：
 
      ```
-     Stage 1 → 2（office-hours 分支 — 无现成产物）
+     Stage 1 → 2（开放探讨 — 没现成稿）
 
-     📂 本项目（gstack slug: <SLUG>）下没探测到 office-hours 产物（~/.gstack/projects/<SLUG>/）。
+     📂 这个项目下还没跑过 office-hours。
 
-     💬 怎么处理？
-      - 在本 chat 跑 /office-hours，跑完告诉我新文件名（推荐）
-      - 我自己指定路径（贴绝对路径过来）
-      - 切回结构化批判分支
+     💬 怎么往下走？
+      - 现在跑一份 —— 在本 chat 跑 /office-hours，跑完告诉我新文件名（推荐）
+      - 我自己指定路径 —— 贴绝对路径过来
+      - 换默认的结构化挖透
      ```
 
-   PM 答「切回结构化批判」→ 回步骤 3A（按 A 分支跑）。
+   PM 答「换结构化挖透 / 切回结构化批判」→ 回步骤 3A（按 A 分支跑）。
    PM 答「跑新」/「跑 office-hours」→ **进步骤 3B-resume**。
    PM 答「用第 N 份」/「指定路径 <abs>」→ **进步骤 3B-snapshot**（源路径已确定）。
 
@@ -281,8 +281,8 @@ chat 一行确认 `已归档（attachments/<新名>），Y 重点。继续。`�
    AI 输出一句话提示后**保持在 chat 等待**：
 
    ```
-   好的，请在本 chat 直接跑 /office-hours（gstack skill），跑完贴一下文件名或绝对路径回来，
-   我接着把它 snapshot 进这个 req 的 Stage 2 真相源。
+   好的，在本 chat 直接跑 /office-hours，跑完贴一下文件名或绝对路径过来，
+   我接着把它接进这个 req 当 Stage 2 的讨论稿。
    ```
 
    PM 跑完后**任一回话句式 AI 都要接住**（不强求格式）：
@@ -327,41 +327,32 @@ chat 一行确认 `已归档（attachments/<新名>），Y 重点。继续。`�
       "
       ```
 
-4B. **B 分支 term-detector hook**（沿用 A 分支 hook，扫 stage 2 真相源）
-
-   ```bash
-   python3 "$REPO_ROOT/.claude/scripts/_lib/term-detector.py" \
-     "$ACTIVE_REQ_DIR/stage2-office-hours.md" "$REPO_ROOT" \
-     --req-dir "$ACTIVE_REQ_DIR"
-   ```
-
-   按返回 JSON 处理（与 A 分支 `/req-analysis` 内部 hook 行为等价；详见 `skills/_shared/term-detector/SKILL.md`）。
-
-   **B 分支 _不_ 跑**：
+4B. **B 分支 _不_ 跑**：
    - analysis-reviewer（office-hours 自带 Cross-Model Perspective + Spec Review Loop）
    - `check-open-questions.py` 未决问题闸门（office-hours `Open Questions` prose 不带 `**PM 回答：**` 占位；不该让 lint 脚本本身 req-aware，详见 D-i v4 R3-M2）
    - attachments hook（D-iii 独立设计承接）
+   - term-detector hook（业务词催补统一收敛到 `prd-writing` 步骤 3.6 一处，2026-05-26）
 
 5B. **B 分支推进确认门**
 
    ```
-   Stage 2（需求分析）— office-hours 产物已 snapshot
+   Stage 2（需求分析）— office-hours 讨论稿已接入
 
-   ✅ stage 2 真相源
+   ✅ 讨论稿
       <$ACTIVE_REQ_DIR/stage2-office-hours.md 绝对路径>
 
-   📂 源材料
+   📂 原始 office-hours 文件
       <$ACTIVE_REQ_DIR/.req-meta.json:stage2_source_origin 原 ~/.gstack/ 绝对路径>
 
-   📋 一句话摘要
+   📋 摘要
       <office-hours 设计稿核心要点，一行>
 
-   这份讨论产物是否可作为 Stage 2 真相源？如要换源材料请直接说；确认后我会推进到功能规格（Stage 3）。
+   这版讨论稿内容是否可以定稿？如要换原始文件请直接说；确认后我会推进到功能规格（Stage 3）。
    ```
 
    PM 回答的内部分流：
    - PM 说「OK / 通过 / 没问题 / 定了」 → 推进
-   - PM 提换源材料 / 重跑 → 回步骤 3B
+   - PM 提换原始文件 / 重跑 → 回步骤 3B
    - PM 提改 brief → 回步骤 2 选择门
 
 #### 推进命令（A 或 B 任一确认后执行）

@@ -136,6 +136,21 @@ PM-AI-Workflow 生成器仓的演进记录。本文件**只记影响下游业务
 
 ## 未发布
 
+### 2026-05-26 — fix(pm-chat): Stage 1→2 选择门 + office-hours 子状态 + PASS 闸门 文案去工程黑话
+
+**问题**：PM 实测 `/req-stage-gate` Stage 1→2 入口文案「这版 brief 是否可定稿？然后用哪种方式跟这个需求讨论？」一句塞两问；选项描述「结构化批判 / 第一性原理 4 层 / reviewer / YC office-hours / 跳 reviewer」全是内部机制名。office-hours 三个子状态（探测失败 / 选稿 / 没现成稿）泄露「按 mtime 排 / gstack slug / 切回结构化批判分支 / snapshot 进 Stage 2 真相源」。req-analysis PASS 闸门还在用 v2 旧句式（破折号 + "OK 我..."），与 req-stage-gate L425 自己列的反面示例自相矛盾。
+
+**改动**：
+- `skills/req-stage-gate/SKILL.md`：
+  - Stage 1→2 入口改 v3 单问句 + 「结构化挖透 / 开放探讨 / brief 还要改」三选项，每条带 PM 视角的"对你意味着什么"一句话；删冗余「需求讨论入口 / 一句话摘要」
+  - office-hours 三子状态去黑话：「按 mtime 排」→「按更新时间倒序」、「源材料」→「讨论稿」、「gstack slug / office-hours 分支」泄露删除
+  - resume / B 推进确认门：「snapshot 进真相源」→「接进当讨论稿」，统一 v3 定稿句式
+  - dispatch 关键词双向兼容：新词「结构化挖透 / 开放探讨」+ 旧词「结构化批判 / office-hours」都接得住
+- `skills/req-analysis/SKILL.md` PASS 闸门 v2 → v3 统一定稿句式
+- `skills/_shared/pm-view/banner-rules.md` §3.0 示例引用同步新标签
+
+**影响**：纯 PM 视图文案，无逻辑改动；dispatch 双向兼容确保 PM 用旧词也接得住；无新增测试。
+
 ### 2026-05-26 — feat(docs-archive-convention): 消费仓 docs/ 归档约定（防顶层积累错位 / 重复 / 过期文件）
 
 **问题**：PM 实测 example-consumer-app docs/ 顶层有：
