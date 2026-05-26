@@ -75,7 +75,10 @@ _mock_autochain_prompt() {
     fi
   done < "$plan"
 
-  echo "stage 6 所有 task 已 close（含半 close）。可运行 /req-stage-gate 推进 stage 7。"
+  # PENDING==0：in-place 出 Stage 6→7 关 req 确认门（不再发"请敲 /req-stage-gate"handoff 提示）
+  # 模板跟 req-stage-gate/SKILL.md Stage 6→7 段步骤 3 共用，文案单一真相源在那边
+  echo "Stage 6（task 执行）— 全部 task 已完成"
+  echo "是否确认关闭此需求？如还需开启新的 task，请直接说；确认后我会启动关闭流程（Stage 7）。"
 }
 
 _write_autochain_plan() {
@@ -635,7 +638,7 @@ test_autochain_has_next_task() {
 }
 
 test_autochain_all_done() {
-  start_test "DX RU6 auto-chain all done prompt"
+  start_test "DX RU6 auto-chain all done → in-place close-req gate"
   fixture_setup
 
   req_dir=$(fixture_create_req "req-001" "test" 6)
@@ -644,10 +647,17 @@ test_autochain_all_done() {
   fixture_create_task "$req_dir" "002" "permission" "已完成" "/qa" >/dev/null
   out=$(_mock_autochain_prompt "$req_dir")
 
-  if echo "$out" | grep -q "可运行 /req-stage-gate"; then
-    pass_test
+  # 新行为：PENDING==0 不再发"请敲 /req-stage-gate"handoff，直接 in-place 出关 req 确认门
+  if echo "$out" | grep -q "是否确认关闭此需求" && echo "$out" | grep -q "Stage 6（task 执行）— 全部 task 已完成"; then
+    # 反向断言：旧 handoff 文案不应残留
+    if echo "$out" | grep -q "可运行 /req-stage-gate\|运行 /req-stage-gate 推进"; then
+      _fail "close-task PENDING==0 仍残留旧 handoff 文案（应改为 in-place 关 req 确认门）"
+      echo "$out" >&2
+    else
+      pass_test
+    fi
   else
-    _fail "auto-chain all-done prompt missing"
+    _fail "PENDING==0 没出 in-place 关 req 确认门"
     echo "$out" >&2
   fi
 

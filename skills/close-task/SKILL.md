@@ -523,9 +523,9 @@ rm -f "$PENDING_MARKER"
 
 ### 步骤 P2.4：确认 + auto-chain
 
-脚本成功后，检查 `task-plan.md` 决定 auto-chain 提示：
+脚本成功后，检查 `task-plan.md` 决定下一步：
 
-- 若 `PENDING > 0`：
+- 若 `PENDING > 0`：发"还有待办 task" handoff 提示
 
   ```
   Stage 6（task 执行）— task-NNN 已关闭
@@ -534,13 +534,28 @@ rm -f "$PENDING_MARKER"
   在本（req）窗口运行：/task-spec task-XXX → /task-confirm
   ```
 
-- 若 `PENDING == 0`：
+- 若 `PENDING == 0`：**in-place 出 Stage 6→7 关 req 确认门**（不让 PM 再敲一次 `/req-stage-gate`）
+
+  模板跟 `req-stage-gate/SKILL.md`「Stage 6 → 7」段步骤 3 **共用同一段文案**（关 req 模板单一真相源在 req-stage-gate；本处只复述，不允许两边偏移）：
 
   ```
-  Stage 6（task 执行）— task-NNN 已关闭，本 req 全部 task 已关闭
+  Stage 6（task 执行）— 全部 task 已完成
 
-  下一步：在本（req）窗口运行 /req-stage-gate 推进至 Stage 7（req 关闭）。
+  ✅ 状态
+     <N 个 task 全部 close、worktree 全部清理>
+
+  是否确认关闭此需求？如还需开启新的 task，请直接说；确认后我会启动关闭流程（Stage 7）。
   ```
+
+  PM 答的三种分支：
+
+  - **「确认 / 关 / 关闭」**（或语义等价）→ AI 跑推进 + chain `/close-req`：
+    ```bash
+    python3 .claude/scripts/req-transition.py "$ACTIVE_REQ_DIR" --to 7
+    ```
+    成功后直接调用 `/close-req`（不再发"已推进 Stage 6→7"过渡通知，跟 req-stage-gate 续跑模式规则一致）
+  - **「我还要加新 task」/ 提具体 task 描述** → AI 转 `/task-spec` 起新 task，**不**推 Stage 7
+  - **不答关窗口** → 几天后 PM 回来重敲 `/req-stage-gate`，由 req-stage-gate 的 Stage 6→7 入口重新拉起同一个关 req 门（兜底续走路径，确保关 req 门永远有入口）
 
 **额外提示（仅当 Phase 1 步骤 1.5 patch 过 DESIGN.md 时）**：
 

@@ -187,6 +187,29 @@ PM-AI-Workflow 生成器仓的演进记录。本文件**只记影响下游业务
 
 ## 未发布
 
+### 2026-05-27 — fix(close-task+req-stage-gate): 关最后一个 task 时不再让 PM 多敲一次 /req-stage-gate
+
+**触发**：PM 跑完 task-003（req-008 最后一个 task）后 `/close-task` 输出"下一步：在本（req）窗口运行 `/req-stage-gate` 推进至 Stage 7" → PM 敲 `/req-stage-gate` → 出关 req 确认门。PM 反问"closetask 之后都知道下一步是 stage7 了，为什么不直接和我确认是否要关闭 req"。
+
+**根因**：`req-stage-gate/SKILL.md` 自己定的规则禁止"PM 请再跑一次 /req-stage-gate"这种 handoff 文案（v3.5 老行为，规则上线后视为违例），但 `close-task/SKILL.md` PENDING==0 分支跨 skill 边界把它伪装合规。close-task PENDING==0 时**已经 100% 确定**唯一下一步就是 6→7 关 req 确认门，没有任何分支模糊。
+
+**改动**（PM 视角）：
+
+- `skills/close-task/SKILL.md` 步骤 P2.4 PENDING==0 分支：不再打"请敲 /req-stage-gate"提示，改成 in-place 直接出 Stage 6→7 关 req 确认门；PM 答「确认 / 关」→ AI 跑 `req-transition.py --to 7` 推进 → 直接调用 `/close-req`
+- `skills/req-stage-gate/SKILL.md` Stage 6→7 段头加注释 —— 标注本入口为兜底续走路径（PM 在 close-task 关 req 门不答关窗口后回来重敲的入口）；关 req 确认门模板单一真相源在 req-stage-gate，close-task 只复述
+
+**PM 触摸 chat 次数**：4 → 3（task-submit 答 + close-task 不动 + 答关 req）。
+
+**兜底场景仍走得通**：
+
+| 场景 | 行为 |
+|---|---|
+| 不是最后一个 task | 现行分支不变，close-task 打印"下一步：task-XXX，跑 /task-spec → /task-confirm" |
+| PM 在关 req 门不答关窗口几天回来 | 重敲 `/req-stage-gate`，req-stage-gate Stage 6→7 入口重新拉起同一个关 req 门 |
+| PM 答"我还要加新 task" | close-task 转 `/task-spec` 起新 task，**不**推 Stage 7 |
+
+**影响**：业务仓同步框架后 PM 在关最后一个 task 时少敲一次命令；模板单一真相源在 req-stage-gate，两边不会偏移。
+
 ### 2026-05-27 — refactor(同步资产): 清理生成器内部编号 / 归档死链 / commit hash 短引用 + hook 防回归
 
 **触发**：PM 看到 `close-task/SKILL.md` 步骤 1 标题「文档偏差检查（D13 不调 doc-update）」追问"这里的 D13 是啥" —— 反向暴露**所有**同步到消费仓的资产（`scripts/` / `skills/` / `templates/` / `agents/`）里都积累了同类生成器内部知识债，消费仓 PM 看到完全不懂。

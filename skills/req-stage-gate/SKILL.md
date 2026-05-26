@@ -758,6 +758,10 @@ python3 .claude/scripts/req-transition.py "$ACTIVE_REQ_DIR" --to 6
 
 ### Stage 6 → 7（task 执行 → req close）
 
+> **本段是兜底续走入口**：默认情况下，PM 关最后一个 task 时 `/close-task` 已 in-place 直接出本段步骤 3 的关 req 确认门（不再让 PM 敲一次 `/req-stage-gate`，省一次输入；详见 `close-task/SKILL.md` 步骤 P2.4 PENDING==0 分支）。本入口保留的唯一作用：PM 在 close-task 关 req 门**不答关窗口**几天后回来重敲 `/req-stage-gate`，由本段把同一个关 req 门重新拉起，保证关 req 门永远有入口。
+>
+> **关 req 确认门模板（步骤 3）是单一真相源**，close-task PENDING==0 分支只复述、不另立文案；改本段时一并核对 `close-task/SKILL.md` 步骤 P2.4 复述段是否还匹配。
+
 1. Read `task-plan.md`, extract task id list, and exclude ids marked deleted in the `## 变更记录` section.
    - 变更记录 exclusion algorithm：解析 task-plan.md 文末 `## 变更记录`（如果存在），找到包含关键词 `删除` 的条目，从条目中提取 `task-001` / `task-002` 这类 task-id，并从 verification list 排除。
 2. For each id verify:
