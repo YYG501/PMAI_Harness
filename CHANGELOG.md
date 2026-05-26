@@ -187,6 +187,32 @@ PM-AI-Workflow 生成器仓的演进记录。本文件**只记影响下游业务
 
 ## 未发布
 
+### 2026-05-27 — feat(close-req+cancel-req+prd-writing): docs/prds/ 统一收口 req 关闭后 PRD 散落各处的查找痛点
+
+**触发**：PM 反馈 —— req 关闭后 `prd.md` 散在 `requirements/closed/<req>/prd.md` 各目录里，要查"我做过哪些产品需求"必须挨个翻 closed 目录；想要一个统一入口。
+
+**改动**（PM 视角）：
+
+- 新增 `scripts/_lib/symlink-prd.sh` —— 提供 `create_prd_symlink <repo-root> <req-basename> <kind>` helper，被 close-req / cancel-req 共享；kind 取 `closed` / `cancelled` 决定落点；若 closed/<req>/prd.md 不存在 silent skip（兼容 stage 1/2 就 cancel 的 req 没写过 PRD）
+- `scripts/close-req.sh` step 1b.5：merge 前在 req 分支建 `docs/prds/<req-name>.md` → `../../requirements/closed/<req-name>/prd.md`，和 archive 一起进同一 commit；merge 冲突回滚段同步清理空的 `docs/prds/`
+- `scripts/cancel-req.sh` step 3：在 main 上 commit cancelled 占位前建 `docs/prds/废弃/<req-name>.md` → `../../../requirements/closed/<req-name>/prd.md`，一并进 cancel commit
+- `skills/prd-writing/SKILL.md` standalone 入口 B「独立 PRD」分支加 step 7 收口：写入 `docs/独立PRD/<slug>.md` 默认路径时建 `docs/prds/独立/<slug>.md` symlink；PM 指定其他自定义路径不动
+- 文档同步：`skills/close-req/SKILL.md` Phase 2 步骤 3 + `skills/cancel-req/SKILL.md` 步骤 2 脚本动作列表追加 symlink 行为一行
+
+**最终结构**：
+
+```
+docs/prds/
+├── req-001-用户登录.md  → ../../requirements/closed/req-001-用户登录/prd.md  (close-req)
+├── req-002-付款.md      → ../../requirements/closed/req-002-付款/prd.md
+├── 废弃/
+│   └── req-003-xxx.md   → ../../../requirements/closed/req-003-xxx/prd.md   (cancel-req)
+└── 独立/
+    └── <slug>.md        → ../../独立PRD/<slug>.md                            (prd-writing standalone)
+```
+
+**影响**：消费仓下次 close-req / cancel-req 自动生效；symlink 进 git 追踪，clone 出来即可用；老仓不会自动补建历史 req 的 symlink（PM 想补：手跑 `ln -sfn` 或后续加 `pmai sync-prds` 命令）。
+
 ### 2026-05-27 — fix(close-req): §1.5 加稳定结构反查，堵 task 偏差表只能 diff「已有文档 vs 代码」的盲区
 
 **触发**：消费仓 ExampleConsumerApp req-008 close 后 PM 反查发现菜单 IA（主运营 / 平台运营 / 租户三个 app 的 navigation 数据结构 + 菜单组织规则）只活在代码里 + `docs/DESIGN.md` §9.5，**没沉淀进任何 `docs/modules/<m>.md`**。三个 task 偏差表全部填「无」机器合规，但实质漏了 —— 因为偏差表是「已有文档 vs 代码」diff 算法，菜单 IA 在 modulespec 里从来没建过对应规格文件，「不一致」无从谈起 → §1.5 silent skip。

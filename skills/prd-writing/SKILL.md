@@ -378,7 +378,34 @@ stage-3 orchestrated 模式下，PRD 写完（含 3.5 lint / 3.7 decision append
 
 stage 3 定稿后 PRD **冻结**：执行期 task 按它做，close-req 时另做反向对齐，prd-writing 本身不做反向对齐。
 
-> standalone 模式（入口 B）：写完 PRD 后在对话中请 PM 确认、确认后写入文件即结束；无 stage-gate 衔接。
+> standalone 模式（入口 B）：写完 PRD 后在对话中请 PM 确认、确认后写入文件 → 跑下方「步骤 7」PRD 收口 symlink → 结束；无 stage-gate 衔接。
+
+### 步骤 7 · standalone 独立 PRD 收口 symlink（仅 standalone「独立」分支）
+
+**仅在** standalone 入口 B 的「独立」（跨模块评审 PRD）分支跑；req 级 / 补差分支跳过；stage-3 orchestrated 入口 A 跳过（A 走 close-req Phase 2，由 `scripts/close-req.sh` 自动建 `docs/prds/<req-name>.md` symlink）。
+
+**目的**：让 PM 在 `docs/prds/独立/` 一处看到所有独立 PRD，和 close-req 建的 `docs/prds/<req>.md`、cancel-req 建的 `docs/prds/废弃/` 三类来源统一收口。
+
+**条件**：PRD 真正写入 `docs/独立PRD/<slug>.md` 默认路径才建 symlink；PM 指定其他自定义路径（如 `docs/某专题/<slug>.md`）不动 —— 自定义路径已表达 PM 不想走默认收口。
+
+**执行**（PRD 写入文件成功后跑）：
+
+```bash
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+PRD_PATH="<刚写入的 PRD 绝对路径>"
+PRD_DIR="$(dirname "$PRD_PATH")"
+PRD_NAME="$(basename "$PRD_PATH")"
+
+if [ "$PRD_DIR" = "$REPO_ROOT/docs/独立PRD" ]; then
+  mkdir -p "$REPO_ROOT/docs/prds/独立"
+  ln -sfn "../../独立PRD/$PRD_NAME" "$REPO_ROOT/docs/prds/独立/$PRD_NAME"
+  echo "🔗 PRD 收口: docs/prds/独立/$PRD_NAME -> ../../独立PRD/$PRD_NAME"
+fi
+```
+
+边界：
+- 不 git add / commit —— standalone 模式 PM 决定何时 commit
+- 同名 symlink 用 `ln -sfn` 幂等覆盖；同名普通文件存在时 `ln -sfn` 会报错，PM 自决
 
 ---
 

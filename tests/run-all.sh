@@ -43,6 +43,7 @@ SUITES=(
   test-close-req.sh
   test-cleanup-pending.sh
   test-cancel-req.sh
+  test-symlink-prd.sh
   test-status-view.sh
   test-speed-mode.sh
   test-roadmap-guidance.sh

@@ -16,6 +16,7 @@ REQ_DIR="${1:?用法: close-req.sh <req-dir>}"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/_lib/_setup-pythonpath.sh"
 source "$SCRIPT_DIR/_lib/worktree.sh"
+source "$SCRIPT_DIR/_lib/symlink-prd.sh"
 
 # --- 找到主仓根目录 ---
 GIT_COMMON=$(git rev-parse --git-common-dir 2>/dev/null || echo "")
@@ -162,8 +163,16 @@ with open('$NEW_META', 'w') as f:
   }
 fi
 
+# 1b.5. 在 docs/prds/ 下建 PRD 收口 symlink（让 PM 一处查所有正常 close 的 req PRD）
+# 若 closed/<req>/prd.md 不存在（极少见：req 未走完 stage 3 就 close）则 silent skip。
+if ! create_prd_symlink "$REQ_WORKTREE" "$REQ_BASENAME" closed; then
+  echo "❌ 创建 docs/prds/ symlink 失败。" >&2
+  exit 1
+fi
+
 # 1c. commit 这些改动到 req 分支
 git add -A -- "$REL_CLOSED"
+[ -d "$REQ_WORKTREE/docs/prds" ] && git add -A -- "docs/prds"
 if ! git commit -m "close: archive $REQ_ID to closed/" 2>&1; then
   echo "❌ 提交归档改动到 req 分支失败（可能是 git 身份未配置或 hook 拒绝）。" >&2
   exit 1
@@ -193,6 +202,8 @@ if ! git merge "$REQ_BRANCH" --no-edit -m "close: $REQ_ID" 2>&1; then
   # closed/<req> 是 close-req 刚创建的，pre-close HEAD 里不存在。可以安全 rm -rf
   rm -rf "$REQ_WORKTREE/requirements/closed/$REQ_BASENAME"
   rmdir "$REQ_WORKTREE/requirements/closed" 2>/dev/null || true
+  # 1b.5 建的 PRD symlink + 可能 mkdir 出的空 docs/prds/ 也清理（git reset 不删空目录）
+  rmdir "$REQ_WORKTREE/docs/prds" 2>/dev/null || true
   echo "❌ merge ${REQ_BRANCH} → main 失败。req 分支已回滚到 ${PRE_CLOSE_HEAD}，请手动解决冲突后再运行 close-req。" >&2
   exit 1
 fi

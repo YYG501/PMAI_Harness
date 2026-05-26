@@ -52,8 +52,9 @@ bash .claude/scripts/cancel-req.sh "$ACTIVE_REQ_DIR"
 3. 把 req worktree/branch 写入 pending
 4. 标记 `.req-meta.json` 状态为 cancelled
 5. 移动 req 目录到 `requirements/closed/`
-6. commit
-7. 提示 PM：回主仓后跑 `bash scripts/cleanup-pending-worktrees.sh` 完成 worktree/branch 清理
+6. **若该 req 已写过 prd.md**，建 `docs/prds/废弃/<req-name>.md` symlink 收口（stage 1/2 cancel 时无 prd.md 自动 silent skip）
+7. commit
+8. 提示 PM：回主仓后跑 `bash scripts/cleanup-pending-worktrees.sh` 完成 worktree/branch 清理
 
 ### 步骤 3：确认结果
 

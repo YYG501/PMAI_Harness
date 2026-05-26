@@ -448,7 +448,7 @@ bash scripts/close-req.sh "$REQ_DIR_ABS"
 脚本自动：
 1. 二次校验 cwd 不在 req worktree 内（防御性）
 2. 校验 stage = 7 + 所有 task 已关闭
-3. 在 req 分支移动目录到 `requirements/closed/` + 更新 meta + commit
+3. 在 req 分支移动目录到 `requirements/closed/` + 更新 meta + **建 `docs/prds/<req-name>.md` symlink 收口**（指向 `requirements/closed/<req-name>/prd.md`，让 PM 在 `docs/prds/` 一处看所有 PRD） + commit
 4. merge req 分支 → main
 5. 直接删 req worktree + req branch
 

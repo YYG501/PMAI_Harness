@@ -19,6 +19,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/_lib/_setup-pythonpath.sh"
 source "$SCRIPT_DIR/_lib/worktree.sh"
 source "$SCRIPT_DIR/_lib/dev-server.sh"
+source "$SCRIPT_DIR/_lib/symlink-prd.sh"
 
 # --- 找到主仓根目录 ---
 GIT_COMMON=$(git rev-parse --git-common-dir 2>/dev/null || echo "")
@@ -179,9 +180,16 @@ write_json_atomic('$MAIN_META', meta)
   fi
 fi
 
+# 在 docs/prds/废弃/ 下建 PRD 收口 symlink（仅当 cancelled req 真的写过 prd.md，stage 1/2 cancel 时 silent skip）
+if ! create_prd_symlink "$REPO_ROOT" "$REQ_BASENAME" cancelled; then
+  echo "❌ 创建 docs/prds/废弃/ symlink 失败。" >&2
+  exit 1
+fi
+
 # 路径级 staging：只 add req 相关的两个路径（active/<req> 已经被 git mv 追踪，closed/<req> 是新内容）
 git add "requirements/active/$REQ_BASENAME" 2>/dev/null || true
 git add "requirements/closed/$REQ_BASENAME" 2>/dev/null || true
+[ -d "$REPO_ROOT/docs/prds/废弃" ] && git add "docs/prds/废弃/$REQ_BASENAME.md" 2>/dev/null || true
 
 # commit：如果没有暂存改动（占位且 meta 未变），跳过
 if [ -n "$(git diff --cached --name-only)" ]; then
