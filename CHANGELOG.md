@@ -187,6 +187,23 @@ PM-AI-Workflow 生成器仓的演进记录。本文件**只记影响下游业务
 
 ## 未发布
 
+### 2026-05-27 — feat(codebase-audit): step 3.5 modulespec 主规格骨架，brownfield 接入时一次性建好
+
+**触发**：刚加完 close-req §1.5 step 2.5 稳定结构反查（事后兜底），PM 反问「为什么不在初始化时就建好」。盘点发现框架已有 greenfield / brownfield 分流（`/init-project` vs `/codebase-audit`），但**两条路径在 modulespec 上都漏了** —— 都只建 `docs/modules/` 空目录 + INDEX.md，从不主动建任何主规格文件。**老项目 IA 通常已稳定**（看代码就能识别模块边界），错过这个天然的 bootstrap 时机 → 之后每个 req close 都会被 §1.5 step 2.5 反复问「这个稳定结构要不要沉淀」。
+
+**根因**：`/codebase-audit` 的 7 维度只覆盖技术栈 / 集成 / 架构 / 目录 / 约定 / 测试 / 隐患通用维度，**漏了「产品模块清单」这一维**，也没产 modulespec 骨架。
+
+**改动**（PM 视角）：
+
+- `skills/codebase-audit/SKILL.md` 加 **step 3.5 产品模块清单 + modulespec 主规格骨架**（PM 选择性触发）：现状档确认后问 PM「老项目 IA 已稳定，要不要现在建 modulespec 骨架？[Y/N]」。选 [Y] → AI 扫代码抽候选模块清单（子目录 / 路由 / 菜单 / PROJECT.md 业务模块段）→ PM 确认（必须）→ 按 `module.md.tmpl` 生成每个模块的 `docs/modules/<m>.md`（AI 填能扫到的部分：§摘要 / §一定位含**稳定结构指针 sub-bullet** / §三页面；§二功能清单 / §四 / §五保持空让后续 req sediment 演化）→ 刷 INDEX.md → PM 审 diff。选 [N] → 跳过，靠 close-req §1.5 step 2.5 兜底
+- `skills/codebase-audit/SKILL.md` 「Rules」/「边界」段更新：默认仍只读扫码，**例外**允许 step 3.5 选 [Y] 时产 modulespec 骨架文件；明确「AI 不替 PM 决定模块边界」硬约束
+- **greenfield 路径不动**：`/init-project` 保持现状（IA 未定，过早建会写一堆 placeholder），靠 close-req §1.5 step 2.5 按需生长
+
+**影响**：
+
+- 新 brownfield 接入项目：codebase-audit 多一个可选步骤；选 [Y] 后 close-req §1.5 step 2.5 反查在常见情况会零候选（真正退化成兜底）
+- **已接入的老项目（如消费仓 ExampleConsumerApp）retroactive 补跑**：在主仓重跑一次新版 `/codebase-audit`（现状档可以跳过 / 简化，重点跑 step 3.5），把 modulespec 骨架补齐 —— PM 自行选择时机执行
+
 ### 2026-05-27 — feat(pmai-sync-prds): 一键补建老仓历史 closed req 的 docs/prds/ symlink
 
 **触发**：上一条 `docs/prds/` 收口落地后，close-req / cancel-req 之后的新 req 会自动建 symlink，但**老仓在该改动之前关掉的 req 不会自动补**；PM 不想手动 `ln -sfn` 一行行敲。
