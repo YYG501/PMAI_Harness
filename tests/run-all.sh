@@ -44,6 +44,8 @@ SUITES=(
   test-cleanup-pending.sh
   test-cancel-req.sh
   test-status-view.sh
+  test-roadmap-guidance.sh
+  test-new-req-no-arg-prompt.sh
   test-setup-deps.sh
   test-run-bg.sh
   test-pre-commit-hook.sh

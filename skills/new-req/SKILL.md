@@ -35,6 +35,27 @@ python3 "$REPO_ROOT/.claude/scripts/status-view.py" --banner-only --skill NEW-RE
 
 ## Workflow
 
+### 步骤 0：获取需求描述（无参数兜底）
+
+调用方式：
+
+- **带参数**：`/new-req "<一句话需求>"`（如 `/new-req "实现用户登录"`）→ 跳步骤 0，直接进步骤 1
+- **不带参数**：PM 跑 `/new-req` 单独命令，AI 用**一句话**问需求是什么，然后等 PM 下一条 message 给描述
+
+**无参数时的标准问法（严格按此句，不扩展）**：
+
+```
+请告诉我新需求是什么（一句话）。
+```
+
+**禁止扩展**（防 AI 临场编工程黑话）：
+- 不写"才能生成 slug / 确定编号 / 拉 worktree" 等内部机制（PM 不需要知道这些，参考 PM 视图规则 + memory `feedback_pm_chat_no_engineering_jargon`）
+- 不举例"实现用户登录 / 租户角色批量改名" 等模板话术（PM 自己会给）
+- 不解释为什么需要描述（PM 跑 /new-req 自然知道要给需求）
+- 不写"我才能..." / "这样我能..." 句式（条件句啰嗦）
+
+PM 给描述后，把它当作参数继续步骤 1。
+
 ### 步骤 1：确定 req 编号
 
 调用 helper（封装了"扫三来源取 max"逻辑：closed 目录 / active 目录 / git 分支；事实来源是 git 分支，单独扫 closed/ 会被 active req 在自己分支上的事实骗到）：

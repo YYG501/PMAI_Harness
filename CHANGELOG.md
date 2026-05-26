@@ -122,6 +122,23 @@ PM-AI-Workflow 生成器仓的演进记录。本文件**只记影响下游业务
 
 ## 未发布
 
+### 2026-05-26 — fix(new-req): 加步骤 0「获取需求描述」严格规定无参数兜底文案
+
+**问题**：PM 跑 `/new-req`（无参数），AI 临场编出工程黑话长文案：
+> "你这次 /new-req 没带参数。请先告诉我这个新需求是什么（一句话即可，例如「实现用户登录」「租户内角色批量改名」），我才能生成 slug、确定编号、拉 worktree。"
+
+PM 不需要知道 slug / 编号 / worktree 这些内部机制，"我才能..." 条件句式啰嗦。
+
+**根因**：`skills/new-req/SKILL.md` 第一个步骤直接是「步骤 1：确定 req 编号」，**无显式步骤 0** 规定无参数时如何问 PM。AI 看 SKILL.md 直接跳步骤 1 想拉 worktree，发现没参数，自己临场编话术解释。
+
+**改动**：
+- SKILL.md 加「步骤 0：获取需求描述（无参数兜底）」
+- 标准问法严格固定一句话：`请告诉我新需求是什么（一句话）。`
+- 明示禁止扩展项：slug / 编号 / worktree 工程黑话 + "我才能..." 条件句式 + 多余举例
+- 新增 `tests/test-new-req-no-arg-prompt.sh` 4 个 case 锁住文案
+
+**测试基线**：472 → 476（+4），0 failure
+
 ### 2026-05-26 — fix(project-questioning): ROADMAP "历史 + 未来一张表" 引导（修 AI 漏写 done 行）
 
 **问题**：PM 实测跑 /project-solution B 场景写 ROADMAP，AI 只写 planned 行，漏 7 个已 close 的 req 作 done 行。模板 HTML 注释虽写了三态 + "一个 req 走完后推进到 done"，但 §5.2 ROADMAP.md 写作规则只说"计划态 + planned"，AI 注意力集中在 §5.2 规则上，没读到模板注释，漏写历史。
