@@ -139,9 +139,15 @@ fi
 > 4.5f 取代 sync-req-docs.sh 静默批量覆盖：旧机制会偷偷盖掉 worktree 上 task agent 已经做的合法本地改动；新机制让 PM 看 diff 后逐文件决定。fresh fork 通常无 drift，PM 体验是 1 行「✓」直接通过。
 
 ```bash
+DRIFT_SCRIPT="$MAIN_REPO_ROOT/.claude/scripts/check-req-doc-drift.sh"
+if [ ! -f "$DRIFT_SCRIPT" ]; then
+  echo "❌ drift 检测脚本不在预期路径：$DRIFT_SCRIPT" >&2
+  echo "这通常意味着消费仓的 PMAI 框架版本落后或同步状态有问题。" >&2
+  echo "请回主仓跑框架同步流程后再重试 /task-execute。" >&2
+  exit 1
+fi
 REQ_BRANCH=$(git -C "$MAIN_REPO_ROOT" branch --contains HEAD --format='%(refname:short)' | grep '^req-' | head -1)
-DRIFT_JSON=$(bash "$MAIN_REPO_ROOT/scripts/check-req-doc-drift.sh" \
-  "$TASK_WORKTREE" "$REQ_BRANCH" "$TASK_FILE")
+DRIFT_JSON=$(bash "$DRIFT_SCRIPT" "$TASK_WORKTREE" "$REQ_BRANCH" "$TASK_FILE")
 DRIFT_COUNT=$(echo "$DRIFT_JSON" | python3 -c 'import json,sys;print(json.load(sys.stdin)["drift_count"])')
 ```
 
@@ -185,13 +191,22 @@ while IFS= read -r path; do
  - 保留 worktree 版本
  - 跳过此文件
 EOF
-  # 「采用 req 版本」  → bash $MAIN_REPO_ROOT/scripts/apply-req-doc.sh "$TASK_WORKTREE" "$REQ_BRANCH" "$path" "$TASK_FILE"
+  # 「采用 req 版本」  → bash $MAIN_REPO_ROOT/.claude/scripts/apply-req-doc.sh "$TASK_WORKTREE" "$REQ_BRANCH" "$path" "$TASK_FILE"
   # 「保留 worktree」 → 不动
   # 「跳过」          → 不动，下一文件
 done
 ```
 
-**失败容忍**：drift 检测脚本异常 → 不阻断启动，task-execute 继续（同 sync-req-docs 历史 best-effort 行为）。check-task-scope.py 的 implicit deny 仍然兜底拦截 task 误 commit 项目级 / 兄弟 task 文件。
+**失败容忍范围（区分两类异常，不要混淆）**：
+
+- **脚本跑起来报错**（git show 失败、hash 算不出、JSON 解析异常等）→ 不阻断启动，task-execute 继续（同 sync-req-docs 历史 best-effort 行为）。check-task-scope.py 的 implicit deny 仍然兜底拦截 task 误 commit 项目级 / 兄弟 task 文件。
+- **脚本文件不存在**（`bash: $MAIN_REPO_ROOT/.claude/scripts/check-req-doc-drift.sh: No such file or directory`）→ **不属于失败容忍**，硬失败退出，明确报给 PM：
+  ```
+  ❌ drift 检测脚本不在预期路径：$MAIN_REPO_ROOT/.claude/scripts/check-req-doc-drift.sh
+  这通常意味着消费仓的 PMAI 框架版本落后或同步状态有问题。
+  请回主仓跑框架同步流程后再重试 /task-execute。
+  ```
+  AI 在 PM 对话里**禁说「脚本未安装」**这种措辞 —— 脚本不是第三方依赖，是框架自带文件，「未安装」会误导 PM 去 `npm install` / `brew install`。正确措辞是「脚本不在预期路径」+ 把完整绝对路径报出来，PM 一眼能判定是 `.claude/` 丢了还是别的问题。
 
 #### 入口步骤 2.5：依赖前置 gate（v4 兜底层）
 

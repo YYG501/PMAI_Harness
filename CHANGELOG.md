@@ -187,6 +187,20 @@ PM-AI-Workflow 生成器仓的演进记录。本文件**只记影响下游业务
 
 ## 未发布
 
+### 2026-05-26 — fix(task-execute): drift 脚本路径错位 + 失败容忍误吞「脚本不存在」
+
+**触发**：消费仓 ExampleConsumerApp 跑 /task-execute 时 AI 报「drift 脚本未安装，按失败容忍原则继续」—— 实际是 SKILL.md 调用路径漏写 `.claude/`，bash 找不到脚本，AI 把 `No such file or directory` 错误归类为「未安装」+ 走失败容忍静默跳过 drift 保护。drift 是 4.5f 防 task agent 合法本地改动被覆盖的关键机制，跳过等于裸奔。
+
+**改动**：
+
+- `skills/task-execute/SKILL.md:143/188`：drift / apply 脚本调用路径 `$MAIN_REPO_ROOT/scripts/` → `$MAIN_REPO_ROOT/.claude/scripts/`，对齐同文件 228/242 行 task-transition.py / state.py 的正确路径风格。漏写 `.claude/` 是 commit 3c7fa49（4.5f drift 引入）原始 bug，生成器仓自跑无意义所以一直没暴露，第一次到消费仓真跑就触发。
+- `skills/task-execute/SKILL.md`「失败容忍」段重写：明确区分两类异常 ——「脚本跑起来报错」走失败容忍（best-effort 兼容旧 sync-req-docs 行为），「脚本文件不存在」**不属于**失败容忍范畴、硬失败退出并报「框架版本/同步状态问题」+ 完整绝对路径。AI 禁说「脚本未安装」措辞（脚本是框架自带文件，不是第三方依赖；「未安装」会误导 PM 去 npm/brew install）。
+- `skills/task-execute/SKILL.md` 入口步骤 2.4 bash 块加 `[ ! -f "$DRIFT_SCRIPT" ]` sanity check 把规则物化到执行流程，不是只写 prose。
+
+**全仓回归**：`grep -rn '$MAIN_REPO_ROOT/scripts/' skills/ scripts/ templates/ agents/` 确认仅 SKILL.md 这两处漏写，其他都对。
+
+---
+
 ### 2026-05-26 — feat(pmai): 框架分发与全局安装 v1.1 落地 — bin/pmai-* CLI + VERSION 0.1.0 + GitHub remote
 
 **目标**：框架从"PM cd 生成器仓"hack 切到"pmai 全局 install + 任意 cwd 跑 /pmai-*"。详 [`docs/设计/框架分发与全局安装.md`](docs/设计/框架分发与全局安装.md) v1.1。
