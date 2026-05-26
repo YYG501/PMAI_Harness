@@ -48,7 +48,7 @@ agent 内部一气呵成 **4 阶段**：
 
 - **阶段 A · 参数收集 + brownfield 检测** —— AskUserQuestion 5 步问 PM（项目名 → 落地路径 → brownfield 检测闸门 → 一句话背景 → 项目意图）。目标目录已含 `.git/` 或代码 → 拒 + 提示走 `/codebase-audit`
 - **阶段 B · 骨架建设** —— agent 用 Bash 调 `init-project.sh`，创建业务仓 + git init + 首 commit `init: <name>`
-- **阶段 C · QUESTIONING（方向讨论）** —— @读 `skills/_shared/project-questioning.md`（单一真相源），按提问纪律跑讨论 + Decision gate「创建 PROJECT.md / 继续探索」二选一 + Loop 回路，最后写 `docs/PROJECT.md` + `docs/roadmap.md` + atomic commit `docs: project direction settled`
+- **阶段 C · QUESTIONING（方向讨论）** —— @读 `skills/_shared/project-questioning.md`（单一真相源），按提问纪律跑讨论 + Decision gate「创建 PROJECT.md / 继续探索」二选一 + Loop 回路，最后写 `docs/PROJECT.md` + `docs/ROADMAP.md` + atomic commit `docs: project direction settled`
 - **阶段 D · 终态汇总 + Next Up** —— 输出「✅ <name> 已就绪 / cd <target> && /new-req "..."」
 
 > `/init-project` 只在生成器仓里跑（业务仓不分发）。
@@ -70,7 +70,7 @@ bash scripts/init-project.sh \
 - `<background>` — 一句话项目背景
 - `<project-intent>` — 工程结构意图（默认 `unknown`）：`prototype` / `system` / `custom` / `unknown`
 
-> 脚本是骨架构建器，**不带方向讨论**（PROJECT.md / roadmap.md 留空骨架）；直接调脚本适合自动化场景，PM 主动起项目走 `/init-project` skill 拿到完整体验。
+> 脚本是骨架构建器，**不带方向讨论**（PROJECT.md / ROADMAP.md 留空骨架）；直接调脚本适合自动化场景，PM 主动起项目走 `/init-project` skill 拿到完整体验。
 
 可量测 TTHW（从空项目到第一个 `status-view.py` 可识别的 active req）：
 

@@ -122,6 +122,22 @@ PM-AI-Workflow 生成器仓的演进记录。本文件**只记影响下游业务
 
 ## 未发布
 
+### 2026-05-26 — refactor: `roadmap.md` → `ROADMAP.md` 全量改名
+
+**动机**：项目级文档命名层级对齐 —— `docs/PROJECT.md` / `docs/DESIGN.md` / `docs/PRODUCT-RULES.md` 都大写（稳定基线、project-level 文档），`docs/roadmap.md` 是同一档位但漏了大写。统一到大写减轻 PM 记忆负担。
+
+**改动**：
+- 模板 `git mv templates/roadmap.md.tmpl` → `templates/ROADMAP.md.tmpl`
+- `scripts/init-project.sh` case 分支 `roadmap.md)` → `ROADMAP.md)`，落点 `docs/roadmap.md` → `docs/ROADMAP.md`
+- 31 处 framework 引用全量改：`skills/{project-solution,init-project,codebase-audit}/SKILL.md` + `skills/_shared/{project-questioning,pm-view/askuser-rules}.md` + `templates/{CLAUDE,codebase-audit,ROADMAP}.md.tmpl`
+- PM 文档同步改：`README.md` 阶段 C 说明 + `框架同步-SOP.md` §4.10 列表
+- 历史快照保留小写：`docs/归档/完成/*.md` + `CHANGELOG.md` 已发布段（immutable，描述当时状态）
+
+**消费仓影响**：
+- 已有项目从未跑过 `/project-solution`（即没有 `docs/roadmap.md`）→ rsync 完即可，无业务迁移
+- 已有 `docs/roadmap.md` 的消费仓 → 同步框架后须手工 `git mv docs/roadmap.md docs/ROADMAP.md`，并 grep 业务文档（CLAUDE.md / requirements/）里的 `roadmap.md` 引用一并改大写
+- 不影响事件流 / 状态机，无 schema 迁移
+
 ### 2026-05-26 — fix(I-CT7): audit 诊断接上 `--repair-evidence` 合规救援路径
 
 **问题**：`audit-task-events.py` I-CT7 挡下 close-task 时只输出「补齐缺失事件再重跑」，**完全没提** generator `bd1f1a3` 之后已建好的 `task-transition.py --repair-evidence` 合规救援命令。AI / PM 找不到合规出口 → 绕回 `task-events.py append --type execution_manual_completed` 裸补，没有 `repaired:true` 永久标记，事后审计无法区分救援 vs 伪造。

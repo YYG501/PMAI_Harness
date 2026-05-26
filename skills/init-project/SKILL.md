@@ -2,7 +2,7 @@
 name: init-project
 description: |
   PM 主动入口 —— 起一个新业务项目时一气呵成 4 阶段：参数收集 + brownfield 检测 → 骨架建设
-  → 方向讨论（PROJECT.md + roadmap.md）→ Next Up。在生成器仓里跑。
+  → 方向讨论（PROJECT.md + ROADMAP.md）→ Next Up。在生成器仓里跑。
 ---
 
 # /init-project（一气呵成入口）
@@ -25,7 +25,7 @@ description: |
 │                          ↓                              │
 │  阶段 C · QUESTIONING (@读 _shared/project-questioning.md)│
 │    讨论 → Decision gate "创建 PROJECT.md/继续探索" + Loop│
-│    写 PROJECT.md + roadmap.md + atomic commit           │
+│    写 PROJECT.md + ROADMAP.md + atomic commit           │
 │                          ↓                              │
 │  阶段 D · 终态汇总 + Next Up（只汇总不 commit）            │
 │    ✅ <name> 已就绪 / cd <target> && /new-req "..."     │
@@ -37,7 +37,7 @@ description: |
 ## When To Use
 
 - PM 在**生成器仓（PM-AI-Workflow）**里调用（业务仓里不能跑；init-project.sh 拷贝时已排除本 skill）
-- PM 想起一个新业务项目（greenfield）—— 含项目方向讨论（PROJECT.md + roadmap.md），不只是空骨架
+- PM 想起一个新业务项目（greenfield）—— 含项目方向讨论（PROJECT.md + ROADMAP.md），不只是空骨架
 
 **不在 scope**：
 - brownfield 项目接入 → 走 `/codebase-audit`（阶段 A 检测到目标目录已含 `.git/` 或代码会拒绝并提示）
@@ -101,7 +101,7 @@ agent **@读 `skills/_shared/project-questioning.md`**（**单一真相源** —
 1. **§2 提问纪律 + §3 问题库**：按 greenfield 6 节顺序问 PM
 2. **§4 未决问题闸门**：暂存文件 `docs/.project-solution-open-questions.md`（路径用 `<target-dir>/docs/...`）
 3. **§6 Decision gate 模板**：跑「创建 PROJECT.md / 继续探索」二选一 + Loop 回路（**选项内容 / label / description 全按 `_shared` §6.2，本 SKILL 不内嵌副本**）
-4. **§5 写作规则**：PM 选「创建 PROJECT.md」后写 `<target-dir>/docs/PROJECT.md` + `<target-dir>/docs/roadmap.md`
+4. **§5 写作规则**：PM 选「创建 PROJECT.md」后写 `<target-dir>/docs/PROJECT.md` + `<target-dir>/docs/ROADMAP.md`
 5. **§7 6 节齐不齐检查**：跑 `check-project-sections.py` 验证
 6. **§8 PM 定稿**：展示路径 + 摘要，PM 答「OK / 定了」推进
 7. **§9 atomic commit**（review A5）：`git commit -m "docs: project direction settled"`
@@ -110,12 +110,12 @@ agent **@读 `skills/_shared/project-questioning.md`**（**单一真相源** —
 **失败兜底（R10）**：`_shared/project-questioning.md` 路径检测前置 → 缺失 → 报错 "框架未完整安装；请 git status 检查 skills/_shared/project-questioning.md"，不进讨论。
 
 **失败兜底（R11）**：PM 阶段 C 中途答"停 / 等下 / 我先想想" → agent 检测 git 状态：
-- 已 commit 阶段 B 骨架（首 commit `init: <name>` 已落）+ PROJECT.md 未 commit → **留 unstaged**，提示 PM "下次直接发 `/project-solution` 续上 PROJECT.md / roadmap.md 写作即可"
+- 已 commit 阶段 B 骨架（首 commit `init: <name>` 已落）+ PROJECT.md 未 commit → **留 unstaged**，提示 PM "下次直接发 `/project-solution` 续上 PROJECT.md / ROADMAP.md 写作即可"
 - 阶段 B 未完成 → 提示 PM 手动 `rm -rf <target-dir>` 重来
 
 ### 阶段 D · 终态汇总 + Next Up（只汇总不 commit）
 
-> PROJECT.md / roadmap.md + commit 已在阶段 C 完成。阶段 D **只做终态输出**。
+> PROJECT.md / ROADMAP.md + commit 已在阶段 C 完成。阶段 D **只做终态输出**。
 
 agent 输出 Next Up 块（对齐 M2 banner 规范）：
 
@@ -123,7 +123,7 @@ agent 输出 Next Up 块（对齐 M2 banner 规范）：
 ═══════════════════════════════════════
 ✅ <project-name> 已就绪
 📁 位置: <target-dir>
-📄 已创建: CLAUDE.md / docs/PROJECT.md / docs/roadmap.md / .claude/skills/ / .claude/scripts/ ...
+📄 已创建: CLAUDE.md / docs/PROJECT.md / docs/ROADMAP.md / .claude/skills/ / .claude/scripts/ ...
 ═══════════════════════════════════════
 
 ▶ Next Up:
@@ -138,7 +138,7 @@ agent 输出 Next Up 块（对齐 M2 banner 规范）：
 - 必须在框架仓库（PM-AI-Workflow）根目录运行（业务仓里跑不到本 skill）
 - 目标目录不能已存在 + 不能含 `.git/` 或代码文件（两层拦：阶段 A skill 拒 + init-project.sh 拒）
 - gstack 是硬依赖，未安装时阶段 B 脚本会报错退出
-- 不要手动跳过阶段 C —— PROJECT.md / roadmap.md 是项目方向真相源，不能空骨架交付
+- 不要手动跳过阶段 C —— PROJECT.md / ROADMAP.md 是项目方向真相源，不能空骨架交付
 - 提问法 / 5 组话术 / 写作规则**真相源只在 `skills/_shared/project-questioning.md`**；本 skill 阶段 C 不内嵌副本（避免双份维护漂移）
 
 ---
@@ -150,5 +150,5 @@ agent 输出 Next Up 块（对齐 M2 banner 规范）：
 | 阶段 A brownfield 检测命中（目标目录已存在 / 含 git / 含代码）| 拒绝 + 提示走 `/codebase-audit` |
 | 阶段 B `init-project.sh` 失败（chmod / git init / 模板缺失）| 报错贴 stderr + PM 检查；不进阶段 C |
 | 阶段 B 跑成功但 `_shared/project-questioning.md` 缺失 | 阶段 C 入口前置检测 + 报错 "框架未完整安装" |
-| 阶段 C PM 答"停" + 骨架已 commit | PROJECT.md / roadmap.md 留 unstaged + 提示下次 `/project-solution` 续 |
+| 阶段 C PM 答"停" + 骨架已 commit | PROJECT.md / ROADMAP.md 留 unstaged + 提示下次 `/project-solution` 续 |
 | 阶段 C PM 答"停" + 骨架未 commit | 提示手动 `rm -rf <target-dir>` 重来 |

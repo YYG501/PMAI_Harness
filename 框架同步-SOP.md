@@ -427,7 +427,7 @@ GSD-review 管线重构是一次性结构改动。同步到消费仓时**额外*
 
 **新增文件**（rsync 自动带过去）：
 - 脚本：`scripts/req-events.py`、`scripts/_lib/stages.py`
-- 模板：`templates/roadmap.md.tmpl`、`templates/implementation-design.md.tmpl`、
+- 模板：`templates/ROADMAP.md.tmpl`、`templates/implementation-design.md.tmpl`、
   `templates/PRODUCT-RULES.md.tmpl`、`templates/codebase-audit.md.tmpl`
 - skill：`skills/project-solution/`、`skills/implementation-design/`、`skills/codebase-audit/`
 
@@ -442,7 +442,7 @@ GSD-review 管线重构是一次性结构改动。同步到消费仓时**额外*
   框架脚本用 `detect_format` 三态 + 文件存在性判别兼容读，不回迁。
 - 已有项目的 `docs/PROJECT.md`（可能有空节）→ 首次 `/new-req` legacy gate 触发 mini-fill。
 - 已有项目的 `docs/DESIGN.md`（旧 6 段骨架）→ 首次 `/new-req` legacy gate 触发 mini-upgrade。
-- 已有项目无 `docs/PRODUCT-RULES.md` / `docs/roadmap.md` —— 读侧容错（缺文件不报错）；
+- 已有项目无 `docs/PRODUCT-RULES.md` / `docs/ROADMAP.md` —— 读侧容错（缺文件不报错）；
   新项目由 `/init-project` 分发模板骨架。
 
 **⚠️ 一次性迁移：`docs/CONTEXT.md` → `docs/PROJECT.md`**

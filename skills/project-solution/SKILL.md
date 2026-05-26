@@ -48,7 +48,7 @@ echo "SKILL: project-solution"
 ## 产出
 
 - `docs/PROJECT.md` —— 项目顶层方案，6 节（按 `$REPO_ROOT/templates/PROJECT.md.tmpl`）
-- `docs/roadmap.md` —— 计划态 req 队列（按 `$REPO_ROOT/templates/roadmap.md.tmpl`）
+- `docs/ROADMAP.md` —— 计划态 req 队列（按 `$REPO_ROOT/templates/ROADMAP.md.tmpl`）
 
 **单文件，不产工程孪生** —— 不产 `solution.engineering.md` 之类的工程合同。项目级方向只用 PM 视角写。
 
@@ -65,7 +65,7 @@ echo "SKILL: project-solution"
 | 场景 | 触发 | 输入态 | **提问顺序**（按 _shared §3 问题库挑用，**场景特定**）|
 |---|---|---|---|
 | **A 重做** | PM 主动说"方向偏了 / 要重做" | `docs/PROJECT.md` 已有内容 | (1) **痛点诊断**（旧 PROJECT 哪几节失效 / 为什么偏）→ (2) 产品定位（重定）→ (3) 用户画像（重定，可能换主角色）→ (4) 产品路线（按新定位重排里程碑）→ (5) 业务术语表（如有新术语）→ (6) roadmap 重排（旧未做 req 重新评估保留 / 砍）|
-| **B 季度规划** | PM 主动说"季度 / 半年规划" | `docs/PROJECT.md` 已有 + `roadmap.md` 历史 | (1) **过去季度 roadmap 完成度回顾**（哪些 ship / 哪些砍）→ (2) 产品路线（新季度里程碑）→ (3) roadmap（新 req 队列 + 排优先级）→ (4) 业务术语表增量（如有新业务）—— **跳过产品定位 / 用户画像 / 技术栈**（默认稳定）|
+| **B 季度规划** | PM 主动说"季度 / 半年规划" | `docs/PROJECT.md` 已有 + `ROADMAP.md` 历史 | (1) **过去季度 roadmap 完成度回顾**（哪些 ship / 哪些砍）→ (2) 产品路线（新季度里程碑）→ (3) roadmap（新 req 队列 + 排优先级）→ (4) 业务术语表增量（如有新业务）—— **跳过产品定位 / 用户画像 / 技术栈**（默认稳定）|
 | **C 老板新方向** | PM 主动说"老板 / 客户给了新方向" | `docs/PROJECT.md` 已有 | (1) **新方向 vs 现 PROJECT 差异点**（PM 自述新方向 + AI 对比现 PROJECT 找冲突）→ (2) 产品定位（如有变 → 改）→ (3) 用户画像（如有变 → 改，可能换主角色）→ (4) 产品路线（按新方向重整里程碑）→ (5) roadmap（新 req 队列）|
 | **D brownfield 接入** | 紧接 `/codebase-audit` 之后 | `docs/代码现状档.md` 已生成（7 维度）| (0) **全文读 `docs/代码现状档.md`**（必读，AI 不准跳）→ (1) 产品定位（**从 codebase 反推 + PM 确认**）→ (2) 用户画像（从代码层级 / API 角色反推 + PM 补）→ (3) 产品路线（PM 给未来方向）→ (4) 技术栈（**从代码现状档抄**，PM 确认）→ (5) 业务术语表（**从 model / API 命名反推 + PM 补**）→ (6) roadmap（PM 给）|
 
@@ -99,16 +99,16 @@ echo "SKILL: project-solution"
 
 **@读 `skills/_shared/project-questioning.md` §5.1 PROJECT.md 6 节写作规则 + §5.4 PM 视图规则**。
 
-#### 步骤 5：写 docs/roadmap.md
+#### 步骤 5：写 docs/ROADMAP.md
 
-**@读 `skills/_shared/project-questioning.md` §5.2 roadmap.md 写作规则 + §5.3 分工说明**。
+**@读 `skills/_shared/project-questioning.md` §5.2 ROADMAP.md 写作规则 + §5.3 分工说明**。
 
 ### 确认门
 
 #### 步骤 6：开场问模式（场景特定，留 SKILL.md）
 
 ```
-📝 准备写项目方向（docs/PROJECT.md + docs/roadmap.md）。
+📝 准备写项目方向（docs/PROJECT.md + docs/ROADMAP.md）。
 
 想填详细版（按完整规范），还是最简版（产品定位 1 句话 / 1 个主角色 / 1 条术语 起手）？
 最简版几分钟搞定，以后起 req 时还能接着补。
@@ -159,7 +159,7 @@ PM 选「创建 PROJECT.md」+ 定稿后：
 
 ## 边界
 
-- **允许产出**：`docs/PROJECT.md`、`docs/roadmap.md`、暂存文件 `docs/.project-solution-open-questions.md`
+- **允许产出**：`docs/PROJECT.md`、`docs/ROADMAP.md`、暂存文件 `docs/.project-solution-open-questions.md`
 - **允许动作**：分批提问、未决问题闸门、Decision gate、6 节检查、确认门、atomic commit
 - **禁止顺手推进**：不自动起 req、不调 `/new-req`、不产任何 req 级文档
-- **退出条件**：`docs/PROJECT.md` 6 节全填、`docs/roadmap.md` 已写、未决问题闸门已过、Decision gate 选了「创建 PROJECT.md」、PM 已定稿、atomic commit 已落
+- **退出条件**：`docs/PROJECT.md` 6 节全填、`docs/ROADMAP.md` 已写、未决问题闸门已过、Decision gate 选了「创建 PROJECT.md」、PM 已定稿、atomic commit 已落

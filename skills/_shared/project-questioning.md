@@ -104,18 +104,18 @@ python3 "$REPO_ROOT/.claude/scripts/check-open-questions.py" \
 | 项目名称 | 通常 `/init-project` 参数 1 已填，确认即可 |
 | 产品定位 | 1-3 句话；最简版「工具型应用，给单人 PM 用」也接受 |
 | 用户画像 | 起手 1 个主角色 + 关键诉求；最简版 1 句话 |
-| 产品路线 | **只写里程碑 / 大方向**（如「Q3 上线 MVP」/「先单人后协作」）；颗粒到单 req 的队列归 roadmap.md |
+| 产品路线 | **只写里程碑 / 大方向**（如「Q3 上线 MVP」/「先单人后协作」）；颗粒到单 req 的队列归 ROADMAP.md |
 | 技术栈 | 主要语言 / 前端 / 后端 / 部署 |
 | 业务术语表 | 至少 1 条；无业务专名时可空表 |
 
-### §5.2 roadmap.md（模板见 `$REPO_ROOT/templates/roadmap.md.tmpl`）
+### §5.2 ROADMAP.md（模板见 `$REPO_ROOT/templates/ROADMAP.md.tmpl`）
 
 - 计划态 req 队列；每行一个需求；初始状态 `planned`；按 PM 给的优先级填排序号
 - `req-id` 列留空（req 起后再回填）
 
-### §5.3 「产品路线」节 vs roadmap.md 分工
+### §5.3 「产品路线」节 vs ROADMAP.md 分工
 
-| | PROJECT.md「产品路线」节 | docs/roadmap.md |
+| | PROJECT.md「产品路线」节 | docs/ROADMAP.md |
 |---|---|---|
 | 装什么 | 里程碑 / 大方向 | 计划态 req 队列（颗粒到单 req）|
 | 生命周期 | 稳定基线，变动慢 | 操作态，随 req 推进更新 |
@@ -186,7 +186,7 @@ EMPTY=$(echo "$PROJECT_STATE" | python3 -c "import sys, json; print(','.join(jso
    <绝对路径>
    产品定位 / 用户画像 / 产品路线 / 技术栈 / 业务术语表 已填
 
-🗺 docs/roadmap.md
+🗺 docs/ROADMAP.md
    <绝对路径>
    <N> 个待做需求已排队
 
@@ -200,11 +200,11 @@ EMPTY=$(echo "$PROJECT_STATE" | python3 -c "import sys, json; print(','.join(jso
 
 ## §9 atomic commit（调用方按需）
 
-写完 PROJECT.md + roadmap.md + PM 定稿后，调用方 atomic commit（gsd new-project Step 4 pattern）：
+写完 PROJECT.md + ROADMAP.md + PM 定稿后，调用方 atomic commit（gsd new-project Step 4 pattern）：
 
 ```bash
 cd <target-dir>  # 业务仓
-git add docs/PROJECT.md docs/roadmap.md
+git add docs/PROJECT.md docs/ROADMAP.md
 git commit -m "docs: project direction settled"
 ```
 
@@ -220,7 +220,7 @@ git commit -m "docs: project direction settled"
 2. 按 §3 6 节顺序问 PM（greenfield 顺序）
 3. §4 未决问题闸门
 4. §6 Decision gate
-5. §5 写 PROJECT.md + roadmap.md
+5. §5 写 PROJECT.md + ROADMAP.md
 6. §7 6 节齐不齐检查
 7. §8 PM 定稿
 8. §9 atomic commit
@@ -238,7 +238,7 @@ git commit -m "docs: project direction settled"
    - D brownfield：全文读现状档 → 产品定位（codebase 反推）→ 用户画像 → 产品路线 → 技术栈（codebase 抄）→ 业务术语 → roadmap
 5. §4 未决问题闸门
 6. §6 Decision gate
-7. §5 写 / 改 PROJECT.md + roadmap.md
+7. §5 写 / 改 PROJECT.md + ROADMAP.md
 8. §7 6 节齐不齐检查
 9. §8 PM 定稿
 10. §9 atomic commit
