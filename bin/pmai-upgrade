@@ -98,9 +98,9 @@ done
 echo ""
 echo "═══════════════════════════════════════"
 if [ "$OLD_HEAD" = "$NEW_HEAD" ]; then
-  echo "✅ PMAI 已是最新（$NEW_VER @ $NEW_HEAD）"
+  echo "✅ PMAI 已是最新（${NEW_VER} @ ${NEW_HEAD}）"
 else
-  echo "✅ PMAI 升级：$OLD_VER ($OLD_HEAD) → $NEW_VER ($NEW_HEAD)"
+  echo "✅ PMAI 升级：${OLD_VER} (${OLD_HEAD}) → ${NEW_VER} (${NEW_HEAD})"
 fi
 echo "   skill: $count symlinks re-synced"
 echo "═══════════════════════════════════════"
