@@ -122,22 +122,28 @@ PM-AI-Workflow 生成器仓的演进记录。本文件**只记影响下游业务
 
 ## 未发布
 
-### 2026-05-26 — feat(status-view): narrative 加项目体检段（老项目升级后报缺失产品文档）
+### 2026-05-26 — feat(status-view): 默认 + summary + narrative 都报项目体检（老项目升级后缺失文档全入口可见）
 
-**问题**：PM 在消费仓问"当前项目情况"或走 session 起始播报（`status-view.py --narrative`）时，无 active req 状态只输出"目前没有 active req"。但**完全不报缺什么产品级文档** —— 老项目升级框架后，新增的 `docs/PRODUCT-RULES.md` / `docs/ROADMAP.md` / 漏跑 migrate 残留的 `docs/CONTEXT.md` 都没人提，PM 永远不知道要补。
+**问题**：PM 在消费仓问"当前项目情况"或走 session 起始播报（`status-view.py --narrative`）时，无 active req 状态只输出"目前没有 active req"。**完全不报缺什么产品级文档** —— 老项目升级框架后，新增的 `docs/PRODUCT-RULES.md` / `docs/ROADMAP.md` / 漏跑 migrate 残留的 `docs/CONTEXT.md` 都没人提，PM 永远不知道要补。
 
-**根因**：`render_narrative` 设计上**只播报 req-level 状态**（active req / stage / task），完全不检查 project-level 文档齐全度。源码 0 处引用 PRODUCT-RULES / ROADMAP。`框架同步-SOP.md` §4.10 的"读侧容错（缺文件不报错）"被错误延伸到 session 播报——容错对，但播报应该 audit。
+**根因（迭代两次）**：
+- v1（首版）：`render_narrative` 加体检 —— 但 `task-status` skill 走的是 `python3 status-view.py`（默认分支），不走 `--narrative`，体检完全没人调
+- v2（本版）：根因是体检不该绑死在某个 flag 上 —— **所有 PM-facing 的"问情况"入口**都应该看到。`框架同步-SOP.md` §4.10 的"读侧容错"被错误延伸到所有 PM 输出 —— 容错对，但播报应该 audit
 
 **改动**：
-- `scripts/status-view.py` 新增 `render_health_check(repo_root)` 函数：检查 `docs/{PROJECT,PRODUCT-RULES,ROADMAP}.md` 存在性，缺则输出 1 段 hint（齐全则段不输出 → 新项目 0 噪音）
+- `scripts/status-view.py` 新增 `render_health_check(repo_root)`：检查 `docs/{PROJECT,PRODUCT-RULES,ROADMAP}.md` 存在性，缺则输出 1 段 hint（齐全则段不输出 → 新项目 0 噪音）
 - 生成器仓自身（根有 `scripts/init-project.sh`）跳过体检，避免误报
 - `docs/CONTEXT.md` 还在但无 `docs/PROJECT.md` → 额外提示"可能漏跑 migrate-context-to-project.py"
-- main 在 `render_narrative` 后调 `render_health_check`，三个分支（0/1/多 req）都覆盖
-- 5 个新测试：`tests/test-narrative-mode.sh` T6-T10（含齐全静默 / 生成器仓跳过 / fixture 缺文档 / CONTEXT 残留 4 个 case）
+- main **三个 PM-facing 入口都调** `render_health_check`：
+  - 默认输出（`task-status` skill 调用路径）
+  - `--summary`
+  - `--narrative`（session 起始播报）
+- 不调的入口：`--banner-only`（嵌入式 stage banner，非"问情况"）+ `--timeline`（历史视图，非当前状态）
+- 7 个新测试：`tests/test-narrative-mode.sh` T6-T12
 
-**消费仓影响**：sync 后业务仓里 `status-view --narrative` 自动报缺失。无 schema 迁移、无破坏改动；齐全的项目继续 0 噪音。
+**消费仓影响**：sync 后业务仓里 `status-view`（含 task-status skill 走的默认路径）/ `--summary` / `--narrative` 三个入口都自动报缺失。无 schema 迁移、无破坏改动；齐全的项目继续 0 噪音。
 
-**测试**：465/0 PASS（460 + 5 新）
+**测试**：467/0 PASS（460 + 7 新）
 
 ### 2026-05-26 — refactor: `roadmap.md` → `ROADMAP.md` 全量改名
 

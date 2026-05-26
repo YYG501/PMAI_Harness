@@ -180,6 +180,44 @@ test_health_check_hints_migrate_when_context_remains() {
 
 # -----------------------------------------------------------------
 
+# -----------------------------------------------------------------
+# T11: 默认输出（无 flag，task-status skill 走这条）也输出体检段
+# -----------------------------------------------------------------
+test_health_check_in_default_status() {
+  start_test "T11: 默认输出（task-status skill 入口）也输出体检"
+  local tmp; tmp=$(mktemp -d)
+  mkdir -p "$tmp/docs"
+  echo "# PROJECT" > "$tmp/docs/PROJECT.md"
+  local out
+  out=$(python3 "$STATUS_VIEW" "$tmp" 2>&1)
+  if ! echo "$out" | grep -q "项目体检"; then
+    _fail "默认分支（task-status 调用路径）应输出体检段，实际：$out"
+    rm -rf "$tmp"; return
+  fi
+  rm -rf "$tmp"
+  pass_test
+}
+
+# -----------------------------------------------------------------
+# T12: --summary 分支也输出体检段
+# -----------------------------------------------------------------
+test_health_check_in_summary() {
+  start_test "T12: --summary 分支也输出体检"
+  local tmp; tmp=$(mktemp -d)
+  mkdir -p "$tmp/docs"
+  echo "# PROJECT" > "$tmp/docs/PROJECT.md"
+  local out
+  out=$(python3 "$STATUS_VIEW" --summary "$tmp" 2>&1)
+  if ! echo "$out" | grep -q "项目体检"; then
+    _fail "--summary 分支应输出体检段，实际：$out"
+    rm -rf "$tmp"; return
+  fi
+  rm -rf "$tmp"
+  pass_test
+}
+
+# -----------------------------------------------------------------
+
 test_narrative_argparse_exists
 test_render_narrative_defined
 test_render_banner_only_defined
@@ -190,5 +228,7 @@ test_health_check_skips_generator_repo
 test_health_check_reports_missing_docs
 test_health_check_silent_when_complete
 test_health_check_hints_migrate_when_context_remains
+test_health_check_in_default_status
+test_health_check_in_summary
 
 report_results "narrative-mode"

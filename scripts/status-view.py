@@ -608,9 +608,11 @@ def main() -> None:
 
     if args.summary:
         render_summary(state, repo_root)
+        render_health_check(repo_root)
         return
 
     render_status(state, repo_root)
+    render_health_check(repo_root)
 
 
 if __name__ == "__main__":
