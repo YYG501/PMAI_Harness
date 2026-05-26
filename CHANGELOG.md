@@ -136,6 +136,18 @@ PM-AI-Workflow 生成器仓的演进记录。本文件**只记影响下游业务
 
 ## 未发布
 
+### 2026-05-26 — feat(req-events / prd-writing / req-stage-gate): decision 事件加 decided_by 区分 PM 拍 / AI 推断
+
+**触发**：req-008 stage 4 入口 AI 文案把"规范放进 DESIGN.md"说成"PM 之前拍过"。查 `req-events.jsonl` 发现 6 条决策全是 stage 3 AI 写 PRD 时 166 毫秒内批量 append 的，`source=prd-writing@3`，无法区分「PM 在确认门主动开口拍的」 vs「AI 单方面推断的」。下游（stage 4 文案 / status-view / 后续 stage）读 decision 事件时无法识别，把 AI 自拍决策表述为"PM 决策"，违反 memory `feedback_pm_decision_is_binding_contract` 的"PM 决策 = binding contract"前提（"分得清谁拍的"）。
+
+**改动**：
+- `scripts/req-events.py`：decision 事件加 `--decided-by` **必填**（`pm-explicit` | `ai-inferred`），缺 / 非法值 exit 1；`cmd_list` 渲染按 `decided_by` 分三组（`[PM 拍]` / `[AI 推断]` / `[未分类 legacy]`，legacy 段兜底字段引入前的旧事件）
+- `skills/prd-writing/SKILL.md` 步骤 3.7：调用模板加 `--decided-by`；新增「判定标准」段（PM 在 stage 1/2/3 events 里有原话 → `pm-explicit`；否则 / 拿不准 → `ai-inferred`，明确"AI 推得很清楚 / 看起来显然只能这么选"**不构成** `pm-explicit` 理由）
+- `skills/req-stage-gate/SKILL.md` stage 3 定稿确认门：🧭 决策段强制分两子段（`[PM 拍]` 只列标题+选定；`[AI 推断]` 列标题+选定+备选+理由）；AI 推断段默认通过，PM 反对的单挑说条目号；模板要点同步标注「PM 视图禁出现 `decided_by` / `pm-explicit` / `ai-inferred` 字段名」
+- `tests/test-req-events.sh`：新增 4 case（缺 --decided-by 报错 / 非法值 argparse 拒绝 / list 按 decided_by 分两组渲染 + 计数 / 旧 decision 事件归 legacy 段）
+
+**影响**：decision 事件流恢复"分得清 PM 真拍 vs AI 自拍"，下游 stage 文案 / status-view 不会再把 AI 自拍说成 PM 决策；stage 3 定稿确认门多一项"AI 推断段单挑反对"语义（默认全过，PM 反对时 AI 临场决定修订粒度）。req-008 已有的 6 条决策事件保留作 `legacy` 段（append-only 不修复历史；按新判定标准重新分类要 PM 单独操作，本次不做）。测试基线 +4 case。
+
 ### 2026-05-26 — fix(prd-writing-lint): 加类 3 表格结构检查 + 消除规则源冲突
 
 **触发**：req-008 PRD `§6.1-6.5` 五个表格全部用 `<br/>` 把多条编号塞**单元格**，违反 `PM-VIEW-RULES.md §5.1`「续行 rowspan + 每条编号独立一行」硬规则。PM 走查发现。**3 层根因叠加**：

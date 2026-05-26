@@ -23,6 +23,7 @@ from pathlib import Path
 
 EVENTS_FILENAME = "req-events.jsonl"
 VALID_TYPES = ("decision", "adjustment")
+DECIDED_BY_VALUES = ("pm-explicit", "ai-inferred")
 
 
 def now_iso() -> str:
@@ -89,7 +90,22 @@ def cmd_append(args: argparse.Namespace) -> None:
         if not args.decision:
             print("Error: decision event requires --decision", file=sys.stderr)
             sys.exit(1)
+        if not args.decided_by:
+            print(
+                "Error: decision event requires --decided-by "
+                f"({' | '.join(DECIDED_BY_VALUES)})",
+                file=sys.stderr,
+            )
+            sys.exit(1)
+        if args.decided_by not in DECIDED_BY_VALUES:
+            print(
+                f"Error: --decided-by must be one of {DECIDED_BY_VALUES} "
+                f"(got: {args.decided_by!r})",
+                file=sys.stderr,
+            )
+            sys.exit(1)
         event["decision"] = args.decision
+        event["decided_by"] = args.decided_by
         if args.prd_anchor:
             event["prd_anchor"] = args.prd_anchor
         if args.chosen:
@@ -168,17 +184,37 @@ def cmd_list(args: argparse.Namespace) -> None:
     print(f"  decision: {len(decisions)} 条  ·  adjustment: {len(adjustments)} 条")
 
     if decisions:
-        print("\n## 决策（decision —— 备选 / 理由）")
-        for e in decisions:
-            print(f"\n- [{e.get('timestamp', '?')}] {e.get('decision', '(无标题)')}")
-            if e.get("prd_anchor"):
-                print(f"    PRD 锚点：{e['prd_anchor']}")
-            if e.get("chosen"):
-                print(f"    选定：{e['chosen']}")
-            if e.get("alternatives"):
-                print(f"    备选：{'; '.join(e['alternatives'])}")
-            if e.get("rationale"):
-                print(f"    理由：{e['rationale']}")
+        # 按 decided_by 分两组渲染 —— 区分 PM 在确认门主动开口拍的、
+        # 与 AI 在 PRD 写作中自己推断的（PM 未单独确认）。
+        # 旧事件无 decided_by 字段 → 归入 legacy 段（缺省记录）。
+        pm_explicit = [e for e in decisions if e.get("decided_by") == "pm-explicit"]
+        ai_inferred = [e for e in decisions if e.get("decided_by") == "ai-inferred"]
+        legacy = [e for e in decisions if e.get("decided_by") not in DECIDED_BY_VALUES]
+
+        def _render(events: list[dict]) -> None:
+            for e in events:
+                print(f"\n- [{e.get('timestamp', '?')}] {e.get('decision', '(无标题)')}")
+                if e.get("prd_anchor"):
+                    print(f"    PRD 锚点：{e['prd_anchor']}")
+                if e.get("chosen"):
+                    print(f"    选定：{e['chosen']}")
+                if e.get("alternatives"):
+                    print(f"    备选：{'; '.join(e['alternatives'])}")
+                if e.get("rationale"):
+                    print(f"    理由：{e['rationale']}")
+
+        if pm_explicit:
+            print(f"\n## 决策 · [PM 拍]（{len(pm_explicit)} 条 —— PM 在确认门主动开口）")
+            _render(pm_explicit)
+        if ai_inferred:
+            print(f"\n## 决策 · [AI 推断]（{len(ai_inferred)} 条 —— PM 未单独确认）")
+            _render(ai_inferred)
+        if legacy:
+            print(
+                f"\n## 决策 · [未分类 legacy]（{len(legacy)} 条 —— "
+                "decided_by 字段引入前的旧事件）"
+            )
+            _render(legacy)
 
     if adjustments:
         print("\n## 调整（adjustment —— 执行期对 PRD 的偏离）")
@@ -207,6 +243,15 @@ def main() -> None:
     p_append.add_argument("--source", help="Producer (skill@stage, e.g. prd-writing@3)")
     # decision fields
     p_append.add_argument("--decision", help="[decision] one-line title")
+    p_append.add_argument(
+        "--decided-by",
+        dest="decided_by",
+        choices=DECIDED_BY_VALUES,
+        help=(
+            "[decision] who decided —— pm-explicit: PM 在确认门主动开口拍；"
+            "ai-inferred: AI 在 PRD 写作中自己推断、PM 未单独确认。拿不准选 ai-inferred"
+        ),
+    )
     p_append.add_argument("--chosen", help="[decision] chosen option")
     p_append.add_argument(
         "--alternatives",

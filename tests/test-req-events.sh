@@ -29,11 +29,12 @@ _make_req_dir() {
 # Scenario 1: append decision
 # -----------------------------------------------------------------
 test_append_decision() {
-  start_test "append decision → 合法 jsonl 一行，event=decision"
+  start_test "append decision → 合法 jsonl 一行，event=decision，含 decided_by"
   local rd; rd=$(_make_req_dir)
   python3 "$REQ_EVENTS" append "$rd" --type decision \
     --source prd-writing@3 \
     --decision "状态用枚举不用布尔" \
+    --decided-by pm-explicit \
     --prd-anchor "§四 第2条" \
     --chosen "枚举 status" \
     --alternatives "布尔 is_active" \
@@ -52,6 +53,7 @@ assert e['req']=='req-001-test', e
 assert 'timestamp' in e and 'ts' not in e, e
 assert e['decision']=='状态用枚举不用布尔', e
 assert e['source']=='prd-writing@3', e
+assert e['decided_by']=='pm-explicit', e
 assert e['alternatives']==['布尔 is_active','三个独立 flag'], e
 assert e['chosen']=='枚举 status', e
 " >/dev/null 2>&1
@@ -92,7 +94,7 @@ assert 'timestamp' in e, e
 test_list_timeline() {
   start_test "list → 折叠成时间线，decision/adjustment 分组 + 计数"
   local rd; rd=$(_make_req_dir)
-  python3 "$REQ_EVENTS" append "$rd" --type decision --decision "决策A" >/dev/null 2>&1
+  python3 "$REQ_EVENTS" append "$rd" --type decision --decision "决策A" --decided-by pm-explicit >/dev/null 2>&1
   python3 "$REQ_EVENTS" append "$rd" --type adjustment --from-task task-001 >/dev/null 2>&1
   local out; out=$(python3 "$REQ_EVENTS" list "$rd" 2>&1)
   if echo "$out" | grep -q "decision: 1 条" \
@@ -137,7 +139,7 @@ test_tracked_path() {
     git config user.name T
     echo ".runs/" > .gitignore
   )
-  python3 "$REQ_EVENTS" append "$rd" --type decision --decision "x" >/dev/null 2>&1
+  python3 "$REQ_EVENTS" append "$rd" --type decision --decision "x" --decided-by pm-explicit >/dev/null 2>&1
   # git add 后 git status 该文件 staged
   (cd "$tmp" && git add requirements/active/req-001-test/req-events.jsonl) 2>/dev/null
   local staged; staged=$(cd "$tmp" && git diff --cached --name-only)
@@ -167,6 +169,83 @@ test_missing_required_field() {
 }
 
 # -----------------------------------------------------------------
+# Scenario 7: decision 缺 --decided-by 报错
+# -----------------------------------------------------------------
+test_decision_missing_decided_by() {
+  start_test "decision 缺 --decided-by → exit 1"
+  local rd; rd=$(_make_req_dir)
+  local out; out=$(python3 "$REQ_EVENTS" append "$rd" --type decision --decision "x" 2>&1)
+  local rc=$?
+  if [ "$rc" -ne 0 ] && echo "$out" | grep -q "decided-by"; then
+    pass_test
+  else
+    _fail "缺 --decided-by 应报错并提示，实际 rc=$rc out=$out"
+  fi
+  rm -rf "$(dirname "$(dirname "$(dirname "$rd")")")"
+}
+
+# -----------------------------------------------------------------
+# Scenario 8: --decided-by 非法值报错（argparse choices 把关）
+# -----------------------------------------------------------------
+test_decided_by_invalid_value() {
+  start_test "--decided-by maybe → argparse 拒绝 exit 2"
+  local rd; rd=$(_make_req_dir)
+  python3 "$REQ_EVENTS" append "$rd" --type decision \
+    --decision "x" --decided-by maybe >/dev/null 2>&1
+  local rc=$?
+  if [ "$rc" -ne 0 ]; then
+    pass_test
+  else
+    _fail "非法 --decided-by 未拒绝"
+  fi
+  rm -rf "$(dirname "$(dirname "$(dirname "$rd")")")"
+}
+
+# -----------------------------------------------------------------
+# Scenario 9: list 按 decided_by 分两组渲染（PM 拍 / AI 推断）
+# -----------------------------------------------------------------
+test_list_decided_by_groups() {
+  start_test "list → decision 按 decided_by 分两组（PM 拍 / AI 推断）"
+  local rd; rd=$(_make_req_dir)
+  python3 "$REQ_EVENTS" append "$rd" --type decision \
+    --decision "PM 拍的决策" --decided-by pm-explicit >/dev/null 2>&1
+  python3 "$REQ_EVENTS" append "$rd" --type decision \
+    --decision "AI 推断的决策 1" --decided-by ai-inferred >/dev/null 2>&1
+  python3 "$REQ_EVENTS" append "$rd" --type decision \
+    --decision "AI 推断的决策 2" --decided-by ai-inferred >/dev/null 2>&1
+  local out; out=$(python3 "$REQ_EVENTS" list "$rd" 2>&1)
+  if echo "$out" | grep -q "\[PM 拍\]（1 条" \
+     && echo "$out" | grep -q "\[AI 推断\]（2 条" \
+     && echo "$out" | grep -q "PM 拍的决策" \
+     && echo "$out" | grep -q "AI 推断的决策 1" \
+     && echo "$out" | grep -q "AI 推断的决策 2"; then
+    pass_test
+  else
+    _fail "list 未按 decided_by 分两组: $out"
+  fi
+  rm -rf "$(dirname "$(dirname "$(dirname "$rd")")")"
+}
+
+# -----------------------------------------------------------------
+# Scenario 10: list 容错 legacy decision（无 decided_by 字段的旧事件）
+# -----------------------------------------------------------------
+test_list_legacy_decision() {
+  start_test "list → 旧 decision 事件（无 decided_by）归 legacy 段"
+  local rd; rd=$(_make_req_dir)
+  # 手动写一条旧格式 decision（无 decided_by），模拟 decided_by 引入前留下的事件
+  printf '%s\n' '{"event":"decision","timestamp":"2026-05-01T00:00:00+00:00","req":"req-001-test","decision":"legacy 决策"}' \
+    > "$rd/req-events.jsonl"
+  local out; out=$(python3 "$REQ_EVENTS" list "$rd" 2>&1)
+  if echo "$out" | grep -q "未分类 legacy" \
+     && echo "$out" | grep -q "legacy 决策"; then
+    pass_test
+  else
+    _fail "legacy decision 未归 legacy 段: $out"
+  fi
+  rm -rf "$(dirname "$(dirname "$(dirname "$rd")")")"
+}
+
+# -----------------------------------------------------------------
 # Scenario 7: SKILL 引用守护 —— 防重构丢失（暂无 skill 引用，跳过登记）
 # -----------------------------------------------------------------
 
@@ -177,6 +256,10 @@ main() {
   test_list_missing_file
   test_tracked_path
   test_missing_required_field
+  test_decision_missing_decided_by
+  test_decided_by_invalid_value
+  test_list_decided_by_groups
+  test_list_legacy_decision
   report_results "req-events.py (delta-7 vp-1)"
 }
 

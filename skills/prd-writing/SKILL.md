@@ -335,6 +335,7 @@ done
    python3 "$REPO_ROOT/.claude/scripts/req-events.py" append "$ACTIVE_REQ_DIR" \
      --type decision --source prd-writing@3 \
      --decision "<决策一句话标题>" \
+     --decided-by <pm-explicit|ai-inferred> \
      --prd-anchor "<§四里哪条结果>" \
      --chosen "<选定方案>" \
      --alternatives "<备选方案 A>" --alternatives "<备选方案 B>" \
@@ -346,7 +347,16 @@ done
    - **standalone 独立 PRD 模式**：不绑 req、无 `$ACTIVE_REQ_DIR`，跳过本步骤。
    - 此步只在 PRD 含明确的关键产品决策时跑；PRD 无需决策（纯回溯 / 简单功能）时 silent skip。
 
+   **`--decided-by` 判定标准**（必填，缺则脚本报错 exit 1；2026-05-26 引入）：
+
+   - `pm-explicit` —— PM 在 stage 1（new-req）/ stage 2（req-analysis 闸门）/ stage 3（PRD 写作进行中的 askuser）里**主动开口**给出过该决策的明确指示。判定时去 `req-events.jsonl` / `brief.md` / `analysis.md` / `tasks/` PM 反馈段 grep 关键词验证 —— **找得到原话才能标 `pm-explicit`**。
+   - `ai-inferred` —— AI 在 PRD 写作中**自己推断**的选择，PM 未单独确认过。即便 rationale 写得头头是道、即便选项看起来"显然只能这么选"，只要事件流 / 上游文档里没 PM 原话，一律标 `ai-inferred`。
+   - **拿不准 → `ai-inferred`**：这是**安全默认**。错标 `pm-explicit` 会把 AI 自拍说成"PM 拍的"污染下游（stage-gate / status-view / 后续文案）；错标 `ai-inferred` 顶多让 stage-gate 多渲染一行让 PM 单挑反对，无副作用。
+   - **反模式**：「这个决策看起来很合理 / 这条 rationale 我推得很清楚 / PM 不可能反对」**不构成** `pm-explicit` 理由；只有"PM 真的说过"才算。
+
    > 此步吸收 delta-7 的 decision 事件机制。`req-events.py` 已存在；事件落 `$ACTIVE_REQ_DIR/req-events.jsonl`（被 git 跟踪、随 req 分支留存，close 后仍可查）。
+   >
+   > `decided-by` 必填于 2026-05-26 引入（修复 req-008 暴露的「AI 自拍决策混入 PM 决策摘要」问题）。stage-gate 步骤 3 收尾的定稿确认门按 `decided_by` 分两栏渲染：PM 拍段默认通过、AI 推断段允许 PM 单挑反对（详见 `req-stage-gate/SKILL.md`）。
 
 3.8. **候选跨功能产品规则 promote（delta-9 §2.3 ②）**——写 PRD 过程中，若规划期讨论里浮出**全项目跨功能产品行为规则**（不是某 task 的 PM 反馈、而是「产品在 X 情况下应 / 不应 Y」、适用范围超出本 req 单个模块的规则），PM-selective promote 到 `docs/PRODUCT-RULES.md`：
 
