@@ -187,6 +187,14 @@ PM-AI-Workflow 生成器仓的演进记录。本文件**只记影响下游业务
 
 ## 未发布
 
+### 2026-05-26 — chore(task-spec): 砍 task 确认门里教 PM 怎么读的元说明
+
+task-spec 步骤 10 确认门输出里有一句「你确认的是 task 的 scope / 验收 / 反馈承接（PM 确认区），不是逐条背书实现细节。」—— req-008 task-003 确认时 PM 反馈"多余"。砍掉。
+
+属于本批 PM-facing 输出清理的延伸（不属 banner-rules §2.5 的工程黑话 / 内部原理解释 E 类，是另一类：教 PM 怎么读 / 元说明）。目前只发现这一处，没必要立独立规则；未来再犯同类再考虑沉淀。
+
+---
+
 ### 2026-05-26 — fix(pm-view + 4 skill): PM-facing 输出禁工程黑话与"AI 为啥这样安排"内部原理解释
 
 **触发**：消费仓 task-002 跑完 task-execute 步骤 12「PM 通过 → 转已完成」后，AI 输出末尾给 PM 看一段「理由：Phase 1 必须在 task 窗口跑——agent 要直接读 task 改动的原型代码并把 task md 改动 commit 到 task 分支；跨 worktree 改会污染 req 分支历史。Phase 2 才切 req 窗口（删 task worktree 不能"删自己脚下"）。」 PM first-principle 质问"为啥要说理由"—— PM 信赖 AI 编排，不需要 AI 自证流程合理 / 不需要懂 worktree 切换的内部机制。这段不是 AI 临场加的，是 SKILL.md 第 557 行**明文写在 skill 里**的设计。

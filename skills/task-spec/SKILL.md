@@ -296,7 +296,6 @@ Stage 6（task 执行）— task-NNN <slug> 待确认
    /plan-design-review  — 交互 / 视觉层问题（UI task）
    跑哪几个你定，全跳也行。
 
-你确认的是 task 的 scope / 验收 / 反馈承接（PM 确认区），不是逐条背书实现细节。
 这版 task 内容是否可以定稿？如还要调整请直接说；确认后推进到 /task-confirm。
 ```
 
