@@ -18,6 +18,20 @@ PM-AI-Workflow 生成器仓的演进记录。本文件**只记影响下游业务
 
 ## 已发布版本
 
+### 2026-05-26 — term-detector 调用点收敛到 prd-writing 一处
+
+**触发**：实际跑 brief 阶段 detector 跑出 16 个候选词，全为 PM 修辞强调（`**真正的痛点**` 类），PM 全跳过 = 浪费确认门；PM 同时反馈"不知道术语表有什么用"。查清术语表实际作用：给 AI 读 `PROJECT.md` 时当背景词典（无 lint 强校验），是弱价值机制。
+
+**改动**：
+- `skills/new-req/SKILL.md` 砍步骤 4.3「业务词催补 hook」（brief 阶段 PM 自由描述，业务词还在变 + `**` 多为修辞，detector 信噪比差）
+- `skills/req-analysis/SKILL.md` 砍步骤 3.5「业务词催补 hook」（analysis 阶段业务词还在变，登记早）
+- `skills/req-stage-gate/SKILL.md` 4B「B 分支 term-detector hook」整段砍掉，并入「B 分支不跑」清单
+- `skills/_shared/term-detector/SKILL.md` 调用矩阵收敛到只剩 `prd-writing` 步骤 3.6 一处；description / 何时调用 / 禁止位置全段重写，注明 2026-05-26 收敛理由
+- `prd-writing` 步骤 3.6 detector 调用保留（PRD 定稿 = 业务词稳定时机，是建术语表唯一合理时间窗）
+- `scripts/_lib/term-detector.py` 候选源 / 实现**不动**（剩下只在 prd-writing 用，那时 PRD 是 AI 写，`**X**` 更倾向真术语而非修辞，依然有信号）
+
+**影响**：detector 召回次数从 ~3 次/req → 1 次/req；术语表"何时建"边界变清晰（PRD 定稿一次性催补）；测试基线 460/0 持平（无 detector 专门测试）。
+
 ### 2026-05-26 — D-iv v0.3 patch F1：req-stage-gate 续跑模式概念收敛
 
 - `skills/req-stage-gate/SKILL.md` 续跑模式段顶部加 TL;DR 1 句话答案（"PM 只敲 1 次，AI 自动续跑 stage 1→6"）；详细规则（2 个退出条件 / 不是退出条件 / 核心边界 15 行）折叠进 `<details>`；保留"PM chat 输出格式"段不折叠（AI 执行指引，不能藏）
@@ -121,6 +135,31 @@ PM-AI-Workflow 生成器仓的演进记录。本文件**只记影响下游业务
 ---
 
 ## 未发布
+
+### 2026-05-26 — feat(docs-archive-convention): 消费仓 docs/ 归档约定（防顶层积累错位 / 重复 / 过期文件）
+
+**问题**：PM 实测 example-consumer-app docs/ 顶层有：
+- 错位：`product-principles.md`（部门 / 用户 / 角色决策）+ `user-stories-permission.md`（权限用户故事）—— 是模块级决策却放顶层
+- 重复：`prd.md` 跟 `PROJECT.md` 内容重叠
+- 过程档案：`PROTOTYPE_CLEANUP.md`（清理过程档案）放根目录
+- 旧版本：`xxx 原始功能清单.md`（被 v2 取代）跟新版同处一目录
+
+**根因**：framework 完全没约定消费仓 docs/ 怎么组织 —— 新建文档时 AI 随手放顶层，长期积累混乱。
+
+**改动**：
+- `templates/CLAUDE.md.tmpl` 加「## docs/ 归档约定」节：
+  - 顶层 docs/ 正面清单（PROJECT / DESIGN / PRODUCT-RULES / ROADMAP / prd + 项目级业务概览 + modules/ + 归档/）
+  - 顶层负面清单 + 归位规则表（模块决策 → `docs/modules/<模块>/`；过程档案 → `docs/归档/完成/`；被取代的旧文件 → `docs/归档/旧版/`）
+  - 写新文档前 AI 自问 3 题（作用域 / 路径 / 命名冲突）
+  - 命名规范（项目级全大写 / 模块文档 kebab-case / 顶层禁 v1 v2 原始 后缀）
+- `scripts/init-project.sh` 新项目骨架顺手建 `docs/归档/{完成,旧版}/.gitkeep`
+- 新增 `tests/test-docs-archive-convention.sh` 6 个 case（含 init-project e2e 验证）
+
+**消费仓影响**：
+- 新项目 init 即有 `docs/归档/` 骨架 + CLAUDE.md 含完整约定
+- 老项目 sync 框架不会自动改业务 CLAUDE.md（业务实例）—— PM 可手工把约定段从 `templates/CLAUDE.md.tmpl` 复制到自己 CLAUDE.md，或参考 `templates/` 即可
+
+**测试基线**：476 → 482（+6）
 
 ### 2026-05-26 — refactor(stages): Stage 1 中文名「感受问题」→「描述需求」
 

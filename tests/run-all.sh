@@ -46,6 +46,7 @@ SUITES=(
   test-status-view.sh
   test-roadmap-guidance.sh
   test-new-req-no-arg-prompt.sh
+  test-docs-archive-convention.sh
   test-setup-deps.sh
   test-run-bg.sh
   test-pre-commit-hook.sh

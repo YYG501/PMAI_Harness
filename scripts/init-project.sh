@@ -211,6 +211,10 @@ fi
 
 # --- h. 创建目录结构 ---
 mkdir -p "$TARGET_DIR/docs/modules"
+mkdir -p "$TARGET_DIR/docs/归档/完成"   # 过程档案 / 一次性 review / 完成的设计文档
+mkdir -p "$TARGET_DIR/docs/归档/旧版"   # 被新版取代的旧文件
+touch "$TARGET_DIR/docs/归档/完成/.gitkeep"
+touch "$TARGET_DIR/docs/归档/旧版/.gitkeep"
 mkdir -p "$TARGET_DIR/requirements/active"
 mkdir -p "$TARGET_DIR/requirements/closed"
 mkdir -p "$TARGET_DIR/prototypes"
