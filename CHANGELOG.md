@@ -122,6 +122,24 @@ PM-AI-Workflow 生成器仓的演进记录。本文件**只记影响下游业务
 
 ## 未发布
 
+### 2026-05-26 — fix(project-questioning): ROADMAP "历史 + 未来一张表" 引导（修 AI 漏写 done 行）
+
+**问题**：PM 实测跑 /project-solution B 场景写 ROADMAP，AI 只写 planned 行，漏 7 个已 close 的 req 作 done 行。模板 HTML 注释虽写了三态 + "一个 req 走完后推进到 done"，但 §5.2 ROADMAP.md 写作规则只说"计划态 + planned"，AI 注意力集中在 §5.2 规则上，没读到模板注释，漏写历史。
+
+**根因**：framework 引导分裂 —— 模板说一套（三态全 + 历史 + 未来），SKILL 写作规则只重复前向半段。AI 看 SKILL 规则按字面照做，不漏写才怪。
+
+**改动**：
+- `skills/_shared/project-questioning.md` §5.2 重写：
+  - 明示 "ROADMAP 是「历史 + 未来一张表」，三态全用"
+  - 三态表格（done / active / planned）注明何时写
+  - 老项目首次跑 B 场景的具体写法：先扫 `requirements/closed/` 列已 close 全部 req-NNN 作 done 行，再问 PM planned 队列
+  - 明示"漏写 done 行 = 体检不算齐"
+- `skills/project-solution/SKILL.md` B 场景表格步骤 (3) 补"先扫 requirements/closed 写 done 行"指引
+- `skills/_shared/project-questioning.md` §10.2 步骤总览 B 行同步加 closed 提示
+- 新增 `tests/test-roadmap-guidance.sh` 5 个 case 锁引导文本完整性
+
+**测试基线**：467 → 472（+5），0 failure
+
 ### 2026-05-26 — fix(status-view): 体检 hint 措辞 — 删误导项 + 不绑死 skill 内部场景
 
 **问题**：体检 hint 旧措辞 `补法：发 /project-solution 季度规划场景；或新项目跑 /init-project 自动分发` 有 2 个问题 + 场景名"季度规划"本身狭窄：

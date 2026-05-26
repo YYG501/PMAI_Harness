@@ -110,18 +110,31 @@ python3 "$REPO_ROOT/.claude/scripts/check-open-questions.py" \
 
 ### §5.2 ROADMAP.md（模板见 `$REPO_ROOT/templates/ROADMAP.md.tmpl`）
 
-- 计划态 req 队列；每行一个需求；初始状态 `planned`；按 PM 给的优先级填排序号
-- `req-id` 列留空（req 起后再回填）
+**ROADMAP 是「历史 + 未来一张表」**，不是单一"计划态"队列。三态全用：
+
+| 状态 | 含义 | 何时写 |
+|---|---|---|
+| `done` | 已完成（req 已 close） | **老项目首次跑必写**：扫 `requirements/closed/` 全部 req-NNN，每个写一行 done；后续每次 close-req 时由 PM 把对应行从 active 推到 done |
+| `active` | 正在做（已 `/new-req` 起 req） | `/new-req` 创建 req 后 PM 把对应行从 planned 推到 active |
+| `planned` | 已规划、还没开始 | PM 给的待做需求队列 |
+
+字段：排序（数字小先做；done 行用负数或大数都行，PM 自定）/ `req-id`（done 行回填实际 req-NNN，planned 行留空，active 行 `/new-req` 后回填）/ 标题 / 状态。
+
+**老项目首次跑 B 场景的写法**：
+1. AI 主动跑 `ls requirements/closed/` 列已 close 全部 req-NNN（或读 `requirements/closed/*/close-report.md` 拿标题）
+2. AI 把这些 req 全部作为 done 行写入 ROADMAP（PM 不需要逐个口述）
+3. 然后再问 PM 计划态 req 队列（planned 行）
+4. **漏写 done 行 = 体检不算齐**：ROADMAP 只有 planned 行没 done 行，PM 拿不到历史视图
 
 ### §5.3 「产品路线」节 vs ROADMAP.md 分工
 
 | | PROJECT.md「产品路线」节 | docs/ROADMAP.md |
 |---|---|---|
-| 装什么 | 里程碑 / 大方向 | 计划态 req 队列（颗粒到单 req）|
-| 生命周期 | 稳定基线，变动慢 | 操作态，随 req 推进更新 |
-| 谁读 | AI 后续每个 req 必读的项目语境 | PM 自己的规划视图 |
+| 装什么 | 里程碑 / 大方向 | req 全表（历史 done + 当前 active + 计划 planned）|
+| 生命周期 | 稳定基线，变动慢 | 操作态，随 req 推进更新（每次 close-req 推一行到 done）|
+| 谁读 | AI 后续每个 req 必读的项目语境 | PM 自己的规划视图（兼历史回顾） |
 
-写完后调用方应向 PM 一句话说明：「产品路线节 = 大方向里程碑；roadmap = 你接下来要做的需求清单。」
+写完后调用方应向 PM 一句话说明：「产品路线节 = 大方向里程碑；roadmap = 历史 + 未来 req 全表（含已 close 的 done 行）。」
 
 ### §5.4 PM 视图规则
 
@@ -233,7 +246,7 @@ git commit -m "docs: project direction settled"
 3. agent @读 本文件
 4. 按 `/project-solution` SKILL.md 段 0 表"提问顺序"列**场景特定顺序**问 PM：
    - A 重做：痛点诊断 → 产品定位 → 用户画像 → 产品路线 → 业务术语 → roadmap 重排
-   - B 产品路线规划：过去 roadmap 回顾（首次补无历史则跳过）→ 产品路线 → roadmap → 业务术语增量（跳过定位 / 用户 / 技术栈）
+   - B 产品路线规划：过去 roadmap 回顾（首次补无历史则跳过）→ 产品路线 → roadmap（**先扫 `requirements/closed/` 写 done 行**，再问 planned 队列）→ 业务术语增量（跳过定位 / 用户 / 技术栈）
    - C 新方向：新方向 vs 现 PROJECT 差异 → 产品定位 → 用户画像 → 产品路线 → roadmap
    - D brownfield：全文读现状档 → 产品定位（codebase 反推）→ 用户画像 → 产品路线 → 技术栈（codebase 抄）→ 业务术语 → roadmap
 5. §4 未决问题闸门
