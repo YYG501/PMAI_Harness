@@ -153,6 +153,7 @@ done
 - 判断：
   - **重构类前置**：后续 task 串行执行时 merge 冲突不存在，前置理由不成立，合并进首个相关业务 task。仅当后续 task 必须并行且冲突无法避免，才考虑前置，并且必须带端到端行为验证点。
   - **文档 / 规格 / 契约类前置**：不立 task。由各业务 task close 后的 `/doc-update` 沉淀对应章节（颗粒度核心规则已说明）。
+    - **包括 PRD 明文要求的"主线规范产物"** —— 即使 PRD §6.1 / §六 把"建立 X 规范段 / 字段字典 / 权限矩阵"列为决策必有产出，仍按文档类前置处理：**不合并进业务 task**、**不把 `docs/*` 写进业务 task 的「执行范围」allowlist**。由首个相关业务 task close 后跑 `/doc-update` 沉淀进 `docs/DESIGN.md` / `docs/PROJECT.md` / `docs/modules/<m>.md`。理由：「内容必须存在」是 PRD 把关的内容硬约束，「什么时候写 / 走哪条 worktree」是流程问题（task 边界 + doc-update）—— 两件事，不能因前者绕开后者。判定信号：产物归宿是 `docs/*` 而非 `src/*` / `prototypes/*` → 默认文档类。
 
 **反模式 B：横切质量 task**
 

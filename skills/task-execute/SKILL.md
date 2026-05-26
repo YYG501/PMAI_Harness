@@ -321,6 +321,16 @@ fi
 
 **步骤 3 的流程：状态 gate → dispatch → 越界保护 → 零改动检查。** 失败路径统一走 `--fail-execution` 回退 + 诊断文案。
 
+> **task 边界硬规则**（避免任何"PRD §6.1 要求建立 X 规范"驱动的越界）：
+>
+> task worktree 内**任何 `docs/*` 改动**默认不属于 task 边界 —— 越界保护（§3c）按 task md 「执行范围」allowlist 放行，但 allowlist 应当**极少**含 `docs/*`。
+>
+> 涉及视觉规范 / 项目级规则 / 字段字典 / 权限矩阵等项目级文档产物——**即使 PRD 明文要求"建立 X 规范段"**——按以下路径处理，不在 task 主线代码 + commit 上：
+> - **PM 反馈类**：留在 PM 视图 `## 📁 历史档案 → ### PM 反馈`，分类「视觉规范」/「产品规则」，由 close-task §1.5 / §1.6 沉淀（patch 到 `$MAIN_REPO_ROOT/docs/*`，不 commit）
+> - **PRD 主线规范产物**：留草稿在 task PM 视图暂存区（或独立 .md 草稿），task close 后跑 `/doc-update` 走正规审定 + patch 到 req 分支
+>
+> 如果发现 task md 「执行范围」allowlist 写了 `docs/*` 项 → 高概率是 task-plan 拍 §4.1 反模式 A 时误判（应文档类不立 task / 走 doc-update，被错当成重构类合并进了业务 task）。当场停下来给 PM 一句话提示："task 执行范围含 docs/*，疑似 task-plan §4.1 反模式 A 文档类误判，建议先回 task-plan 调整再继续"，由 PM 拍。
+
 #### 3.0 前置状态 gate（由入口前置完成）
 
 入口前置已经完成「待执行 → 执行中」transition，或确认当前状态为「执行中」重试。进入实现阶段前仍保留轻量断言：状态必须是「执行中」。如果不是，说明入口前置没有成功完成，立即拒绝继续。

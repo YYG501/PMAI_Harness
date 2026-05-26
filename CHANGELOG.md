@@ -136,7 +136,18 @@ PM-AI-Workflow 生成器仓的演进记录。本文件**只记影响下游业务
 
 ## 未发布
 
-### 2026-05-26 — feat(task-spec / task-confirm / task-plan): speed mode vp-7/8 — task-spec 续跑 task-confirm + task-plan 执行模式结构决策门
+### 2026-05-26 — fix(task-plan / task-execute / task-plan.md.tmpl): 反模式 A 文档类误判防复发（PRD 明文规范产物绕开 doc-update 路径）
+
+**触发**：消费仓 ExampleConsumerApp req-008 task-001 执行时 AI 在 task worktree 改 `docs/DESIGN.md` 并 commit 到 task 分支 —— 越界保护放行（task md 「执行范围」allowlist 显式列了 `docs/DESIGN.md`）。回溯：task-plan stage 5 拍 §4.1 反模式自检 A 时，AI 把"PRD §6.1 决策必有产出 = 建立菜单组织规范段"按"反模式 A 重构类"处理（合并入 task-001 业务 task），实际框架明文要求"文档/规格/契约类前置 = 不立 task，走 /doc-update 沉淀"。AI 误读路径：PRD §6.1 用"必有产出"强语气 + AI 把"内容必须存在"和"什么时候写 / 走哪条 worktree"混为一谈，于是把文档产物塞进首个相关业务 task。
+
+**改动**：
+- `skills/task-plan/SKILL.md` §2.2 反模式 A "文档/规格/契约类前置"那条加明示：**包括 PRD §6.1 / §六 明文要求的"主线规范产物"**（建立规范段 / 字段字典 / 权限矩阵等）；产物归宿是 `docs/*` 即默认文档类，不合并进业务 task、不把 `docs/*` 写进 task 「执行范围」allowlist
+- `templates/task-plan.md.tmpl` §4.1 反模式自检表头加分流规则段 + 反模式 A 行「命中处理」改为强制分类填写（"重构类 → 合并入 task-N" vs "文档类 → task-N close 后走 /doc-update 沉淀到 docs/X.md"），AI 拆完无法笼统填"已处理"蒙混
+- `skills/task-execute/SKILL.md` 步骤 3 入口加 callout "task 边界硬规则"：明示 task worktree 内任何 `docs/*` 改动默认不属于 task 边界 + 视觉规范 / PM 反馈走 close-task §1.5 / PRD 主线规范产物走 `/doc-update`；发现 task md 执行范围含 `docs/*` 时 AI 主动提示 PM "疑似 task-plan §4.1 反模式 A 文档类误判，建议回 task-plan 调整"，由 PM 拍
+
+**影响**：纯文档级提示加固（SKILL prose + template 字段），不改任何 script / hook / test，无回归风险。下次 task-plan 拍 §4.1 时 AI 看到 PRD 明文"建立 X 规范段"不会再机械合并进业务 task；万一仍误判，task-execute 进步骤 3 时会主动给 PM 提示要求回 task-plan 调整（软兜底）。**硬边界 hook**（task 分支不能 commit `docs/*`）作为 P1 改动留待后续，本次未做。
+
+
 
 **触发**：消费仓 ExampleConsumerApp req-008 PM 跑完 `/task-spec task-001` 后被两件事卡住：
 - (a) AI 输出"下一步运行 /task-confirm <task 文件路径>" 让 PM 复制粘贴 —— 多一道仪式；task-confirm 自身根本不设确认门（delta-3 §2.3 已固化），完全是机械流程
