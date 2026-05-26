@@ -11,7 +11,14 @@
 
 **当前状态 / 进度**：生成器骨架（scripts / skills / templates / tests）齐全，框架功能完整。**当前进度、测试基线、下一步一律见 [`RUNTIME.md`](./RUNTIME.md)「当前位置」** —— 单一真相源；本文件不复制版本号 / 基线数字 / 阶段细节，避免漂移。
 
-**主仓改完后同步到目标项目**：手动 SOP 见 [`框架同步-SOP.md`](./框架同步-SOP.md)（hotfix 阶段过渡，框架结构稳定后改自动化）。
+**框架分发与全局安装**（2026-05-26 v1.1 落地）：
+
+- 本仓现已通过 GitHub remote `git@github.com:YYG501/PMAI_Workflow.git` 分发
+- `pmai install` 一次全局安装到 `~/.pmai/` + symlink 22 个 skill 到 `~/.claude/skills/pmai-*`（任意 cwd 可调 `/pmai-init-project`）
+- `pmai install --local <dir>` 项目级实体副本（兼容老消费仓 / clone 场景）
+- 升级 `pmai upgrade`（main）/ `pmai upgrade --stable`（tag）/ `pmai upgrade --to v0.x.0`（pin）
+- 完整设计 + review 决议 + POC 结论：[`docs/设计/框架分发与全局安装.md`](./docs/设计/框架分发与全局安装.md)（v1.1）
+- 老的手动同步 SOP：[`框架同步-SOP.md`](./框架同步-SOP.md) **标 DEPRECATED**，T3 `pmai sync` 实现完成后归档（PM 5/26 决议暂缓）
 
 ---
 

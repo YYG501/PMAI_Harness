@@ -27,21 +27,54 @@ PM AI 工作流框架的**生成器**仓库。
 | **bash** ≥ 4 | 必需 | scripts 入口语言（macOS 自带 3.x 已知坑见 INVARIANTS） |
 | **codex CLI** | 可选 | 默认执行器；不装走 `cursor-agent` / `claude` / `manual` |
 
-未装 gstack 时 `init-project.sh` 会直接报错并指向 `https://github.com/garrytan/gstack`。
+未装 gstack 时 `pmai install` / `init-project.sh` 会直接报错并指向 `https://github.com/garrytan/gstack`。
+
+---
+
+## 安装
+
+PMAI 用全局 CLI 形态分发（参考 [`docs/设计/框架分发与全局安装.md`](docs/设计/框架分发与全局安装.md)）。一次性安装，全局生效。
+
+```bash
+# 1. clone 本仓
+git clone git@github.com:YYG501/PMAI_Workflow.git ~/Desktop/Projects/PM-AI-Workflow
+
+# 2. 加 bin/ 到 PATH（追加到 ~/.zshrc 或 ~/.bashrc）
+echo 'export PATH="$HOME/Desktop/Projects/PM-AI-Workflow/bin:$PATH"' >> ~/.zshrc
+source ~/.zshrc
+
+# 3. 跑 pmai install
+pmai install                  # 默认全局：clone → ~/.pmai/ + symlink ~/.claude/skills/pmai-*
+# 或者
+pmai install --local <dir>    # 不依赖 ~/.pmai/，<dir> 自带实体副本（兼容老消费仓 / clone 场景）
+```
+
+装完 `pmai doctor` 跑一次确认 7/7 通过。
+
+**升级 / 卸载 / 状态**：
+
+```bash
+pmai upgrade              # 拉 main 最新（吃滚动版）
+pmai upgrade --stable     # 跳到最新 git tag (PM 打过的稳定 baseline)
+pmai upgrade --to v0.1.0  # 锁定指定版本（回滚）
+pmai status               # 当前 install 模式 + VERSION + main HEAD diff
+pmai doctor               # 完整性自检
+pmai uninstall            # 清掉全局装；--local <dir> 清项目级
+```
 
 ---
 
 ## 快速开始
 
-> **TTHW 期望**：从 init-project 跑通到落第一个 `brief.md` 草稿 ≤ 30 分钟。
-> init-project 自身 ~10 秒（拷贝 + git init + commit）；其余时间是 PM 思考第一个需求。
+> **TTHW 期望**：从 pmai install 跑通到落第一个 `brief.md` 草稿 ≤ 30 分钟。
+> install 自身 ~5 秒（git clone + symlink），init-project 跑 ~10 秒，其余时间是 PM 思考第一个需求。
 
 ### 1. 初始化新业务项目
 
-**PM 主动入口**：在本仓（PM-AI-Workflow）的 Claude Code 窗口里发：
+**PM 主动入口**：装好 pmai 后，**在任意 cwd**（不要求在本仓）的 Claude Code 窗口里发：
 
 ```
-/init-project
+/pmai-init-project
 ```
 
 agent 内部一气呵成 **4 阶段**：
@@ -51,17 +84,20 @@ agent 内部一气呵成 **4 阶段**：
 - **阶段 C · QUESTIONING（方向讨论）** —— @读 `skills/_shared/project-questioning.md`（单一真相源），按提问纪律跑讨论 + Decision gate「创建 PROJECT.md / 继续探索」二选一 + Loop 回路，最后写 `docs/PROJECT.md` + `docs/ROADMAP.md` + atomic commit `docs: project direction settled`
 - **阶段 D · 终态汇总 + Next Up** —— 输出「✅ <name> 已就绪 / cd <target> && /new-req "..."」
 
-> `/init-project` 只在生成器仓里跑（业务仓不分发）。
+> `/pmai-init-project` 在装了 pmai 的任意 cwd 都能跑（无需在本仓）。
 
 **非交互参数化 CLI**（`measure-tthw.sh` / smoke / 批量自动化依赖）：
 
 ```bash
-cd ${REPO_ROOT}
-bash scripts/init-project.sh \
+# 优先：从 ~/.pmai/ 调用
+bash ~/.pmai/scripts/init-project.sh \
   <project-name> \
   <target-dir> \
   "<background>" \
   [prototype|system|custom|unknown]
+
+# 或在本仓内调用（fallback 路径，自动推 FRAMEWORK_DIR）
+bash scripts/init-project.sh ...
 ```
 
 参数：
@@ -110,7 +146,7 @@ bash scripts/measure-tthw.sh
 
 | Skill | 用途 |
 |---|---|
-| `/init-project` | **项目级入口**：起一个新业务项目，4 阶段一气呵成（参数 → 骨架 → 方向 → Next Up）；**只在生成器仓里跑** |
+| `/pmai-init-project` | **项目级入口**：起一个新业务项目，4 阶段一气呵成（参数 → 骨架 → 方向 → Next Up）；装了 pmai 后**任意 cwd** 可跑 |
 | `/project-solution` | **项目方向规划**：4 个独立场景（重做 / 产品路线规划 / 老板新方向 / brownfield 接入） |
 | `/new-req` | **req 级入口**：起一个新 req（带 brief） |
 | `/quick-fix` | 不走 req 流程的小补丁（适合改文案、修小 bug） |

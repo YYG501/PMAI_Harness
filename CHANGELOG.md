@@ -187,6 +187,38 @@ PM-AI-Workflow 生成器仓的演进记录。本文件**只记影响下游业务
 
 ## 未发布
 
+### 2026-05-26 — feat(pmai): 框架分发与全局安装 v1.1 落地 — bin/pmai-* CLI + VERSION 0.1.0 + GitHub remote
+
+**目标**：框架从"PM cd 生成器仓"hack 切到"pmai 全局 install + 任意 cwd 跑 /pmai-*"。详 [`docs/设计/框架分发与全局安装.md`](docs/设计/框架分发与全局安装.md) v1.1。
+
+**改动**：
+- 新增 `bin/`（6 个脚本，全 chmod +x）：
+  - `bin/pmai`：主 dispatcher，路由 install/upgrade/uninstall/status/doctor/update-check
+  - `bin/pmai-install`：2 模式（default 全局 git clone → ~/.pmai/ + symlink ~/.claude/skills/pmai-* | --local <dir> 实体副本）
+  - `bin/pmai-upgrade`：档 2 版本管理（默认 main / --stable tag / --to pin）
+  - `bin/pmai-uninstall`：清理（含 --force / --local <dir> 分支）
+  - `bin/pmai-status`：install 模式 + VERSION + main HEAD diff
+  - `bin/pmai-doctor`：6 项完整性自检（兜底 silent failure critical gaps）
+  - `bin/pmai-update-check`：ls-remote latest tag 比对
+- 新增 `VERSION` 文件 = `0.1.0`（档 2 起步 baseline）
+- 新增 GitHub remote `git@github.com:YYG501/PMAI_Workflow.git`（PM 2026-05-26 push 首次 321 commit）
+- `scripts/init-project.sh` 改造：`FRAMEWORK_DIR` 解析顺序变 `PMAI_HOME → ~/.pmai → cd ..`
+- `README.md` 加「安装」段 + 改"快速开始"为 `/pmai-init-project` + 改命令表
+- `CLAUDE.md` 加「框架分发与全局安装」段
+- `框架同步-SOP.md` 标 DEPRECATED（T3 `pmai sync` 完成后归档；PM 决议暂缓）
+- `docs/INDEX.md` 更新设计文档条目为「v1.1 实施中」
+
+**review 决议**（10 finding，详设计文档 §X）：
+- F-ARCH-1 A：消费仓 settings.json 写绝对路径 ~/.pmai/hooks/...，hook 不进全局
+- F-ARCH-2 A：19 skill 加 pmai- 前缀（实测 22 skill + 1 _shared = 23 entries）
+- F-TEST-1 A：T0 POC 现场验证 hook 进程 cwd = 消费仓根（与 hook 脚本物理位置解耦）
+
+**T1.6 round-trip 实测通过**：install / doctor 7/7 / status / upgrade（修了 set -u 中文括号 unbound）/ uninstall 全部跑过；Claude Code 热加载 pmai-* skill 验证。
+
+**暂缓项**（PM 5/26 决议）：T3 `pmai sync <consumer>` / T5 example-consumer-app 实战迁移 — 等无 active req 时再做，避免冲击当前在飞 req。
+
+**影响**：纯新增机制（bin/ + VERSION + remote），不破坏现有 scripts/skills/templates/agents 任何逻辑；现役消费仓继续走 `框架同步-SOP.md`（DEPRECATED 但 active）。
+
 ### 2026-05-26 — fix(task-plan / task-execute / task-plan.md.tmpl): 反模式 A 文档类误判防复发（PRD 明文规范产物绕开 doc-update 路径）
 
 **触发**：消费仓 ExampleConsumerApp req-008 task-001 执行时 AI 在 task worktree 改 `docs/DESIGN.md` 并 commit 到 task 分支 —— 越界保护放行（task md 「执行范围」allowlist 显式列了 `docs/DESIGN.md`）。回溯：task-plan stage 5 拍 §4.1 反模式自检 A 时，AI 把"PRD §6.1 决策必有产出 = 建立菜单组织规范段"按"反模式 A 重构类"处理（合并入 task-001 业务 task），实际框架明文要求"文档/规格/契约类前置 = 不立 task，走 /doc-update 沉淀"。AI 误读路径：PRD §6.1 用"必有产出"强语气 + AI 把"内容必须存在"和"什么时候写 / 走哪条 worktree"混为一谈，于是把文档产物塞进首个相关业务 task。

@@ -1,8 +1,17 @@
 # 框架同步 SOP（手动操作手册）
 
-**性质**：hotfix 阶段过渡用。等 `docs/归档/完成/设计-框架同步.md` §5 sync 脚本实施完成后，本文档撤销，改用脚本。
+> **⚠️ DEPRECATED 2026-05-26**：本 SOP 处理"PM 在生成器仓改完后手动 rsync 到消费仓"。
+> 框架分发 v1.1 落地后，**新消费仓应走 `pmai install` / `pmai install --local <dir>`**（详 [`docs/设计/框架分发与全局安装.md`](docs/设计/框架分发与全局安装.md)）。
+>
+> **本 SOP 仍 active 用于**：已用旧路径自带框架副本的消费仓（example-consumer-app 等），尚未迁到 `pmai` 模式之前；T3 `pmai sync` 实现完成（PM 5/26 决议暂缓）后本 SOP 归档。
+>
+> **新消费仓不要走本 SOP**——直接 `pmai install` / `pmai install --local <dir>` 跳过手动 rsync 全套流程。
 
-**适用对象**：PM 把 PM-AI-Workflow 生成器仓的 `scripts/` `skills/` 同步到下游消费项目（example-consumer-app / ExampleConsumerB 等）。
+---
+
+**性质**：hotfix 阶段过渡用。等 `docs/归档/完成/设计-框架同步.md` §5 sync 脚本实施完成后，本文档撤销，改用脚本。**v1.1 起新消费仓改走 pmai install**。
+
+**适用对象**：PM 把 PM-AI-Workflow 生成器仓的 `scripts/` `skills/` 同步到下游**已自带副本**的消费项目（example-consumer-app / ExampleConsumerB 等）。
 
 **关联文档**：
 - `docs/归档/完成/设计-框架同步.md`（v1 定稿 2026-04-26，853 行）：完整 sync 机制设计（manifest + 脚本 + worktree 报告）
