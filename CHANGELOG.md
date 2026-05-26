@@ -187,6 +187,21 @@ PM-AI-Workflow 生成器仓的演进记录。本文件**只记影响下游业务
 
 ## 未发布
 
+### 2026-05-27 — fix(create-req-headless+CLAUDE.md): attachments 目录预建 + CLAUDE.md 文案纠正「现在就能用」
+
+**触发**：DESIGN.md 缺口审计后 PM 反问「还有 attachment 呢」+「为什么是未来有」。盘点：`requirements/active/<req>/attachments/` 是 per-req 目录、由 `_lib/attachments.py:copy_attachment()` 第一次上传时 `mkdir(exist_ok=True)` 自建 —— 零 break，但 DX 不对称：同位置的 `tasks/_archived/` `create-req-headless.sh` 预建（IDE 一眼可见），attachments 不预建（PM 第一次起 req 时 IDE 看不到目录 → 不知道有这个机制）。叠加 CLAUDE.md 模板 line 219 文案把 attachments 描述成「（可选）」让 PM 误以为是「未来才有 / 可有可无」。
+
+**改动**（PM 视角）：
+
+- `scripts/create-req-headless.sh` 每个 req 预建 `attachments/.gitkeep`（跟 `tasks/_archived` 对称）—— IDE 一眼可见 attachments 目录存在
+- `templates/CLAUDE.md.tmpl` 「文档位置」表 attachments 行重写：去掉「（可选）」，明确「**每个 req 默认可用**（new-req 时预建空目录）」+ 写清 PM 怎么用（chat 贴绝对路径 + 描述材料 → AI 自动归档登记，无需 PM 学路径操作）+ 指针到 `attachments-upload.md` 细节
+
+**影响**：
+
+- 新起 req：IDE 文件树立刻看到 `attachments/`（即使未上传任何文件）
+- 老 req（之前已存在 attachments/ 但无 .gitkeep）：不动；下次 PM 上传时仍走 helper 自动 mkdir
+- CLAUDE.md：PM 一眼知道这是「现在每个 req 都能用」的机制，不是「未来有」的可选功能
+
 ### 2026-05-27 — fix(codebase-audit+new-req): docs/DESIGN.md 不存在时兜底建空骨架（双保险）
 
 **触发**：codebase-audit step 3.5 落地后做初始化缺口审计，找出 1 个真缺口 `docs/DESIGN.md`。138 处引用 / 是 stage 4 4A gap-check 硬依赖，但：greenfield + gstack 不可用 / brownfield / 已升级老项目 三种场景下文件根本不存在，且 `new-req` 步骤 3.6 原逻辑 `[ -f "$DESIGN_MD" ] && ! grep ...` 第一个条件 false 即 silent skip → stage 4 4A 跑 `grep "共享组件 inventory"` 隐性 break，PM 第一个 req 推不到 stage 5。

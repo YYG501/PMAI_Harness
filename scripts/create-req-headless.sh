@@ -190,6 +190,8 @@ if [ -e "$REQ_DIR/.req-meta.json" ] || [ -e "$REQ_DIR/brief.md" ]; then
 fi
 
 mkdir -p "$REQ_DIR/tasks/_archived"
+mkdir -p "$REQ_DIR/attachments"
+touch "$REQ_DIR/attachments/.gitkeep"  # 跟 tasks/_archived 对称预建；PM IDE 一眼可见 attachments 机制存在（详见 skills/_shared/pm-view/attachments-upload.md）
 
 WORKTREE_META="$(python3 - "$REPO_ROOT" "$WORKTREE_DIR" <<'PY'
 from pathlib import Path
