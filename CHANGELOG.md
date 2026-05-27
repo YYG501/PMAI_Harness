@@ -187,6 +187,20 @@ PM-AI-Workflow 生成器仓的演进记录。本文件**只记影响下游业务
 
 ## 未发布
 
+### 2026-05-27 — fix(close-task / gitignore.tmpl): 清 task verify 运行时元数据
+
+- `scripts/close-task.sh` §6.5 加清理段：task worktree remove 后，**还**扫一遍 main / req worktree 内的 `.pm-workflow/tasks/<task>/verify/`，删 `dev-server.info` + `_dev-server.log`（PID/PORT 元数据，task close 后无意义）；保留 report.md / flow-*.png / _plan.md 审计资产
+- `templates/gitignore.tmpl` 加 `**/dev-server.info` + `**/_dev-server.log` ignore，新装消费仓未来不会 untracked 残留
+- 根因：现役 close-task 只清 task worktree 内 verify/（worktree remove 顺带），不清 main/req worktree 副本（PM 在 main cwd 跑过 task-verify 时写）；example-consumer-app task-002 实测撞过
+
+### 2026-05-27 — feat(pmai-migrate): vendored → I-mini 一键迁移命令
+
+- 新 `bin/pmai-migrate <consumer-dir> [--dry-run] [--force]`
+- 9 步动作：探测 vendored 模式 → git rm 4 块实体 → 清 templates runtime → 重写 settings.json → 重装 pre-commit → 删 .framework-sync-state.json
+- working tree 检查只限 framework 路径（业务路径 dirty/untracked 不阻塞）
+- step 6 cp settings.json 后立即 git add（防 commit 漏 — example-consumer-app 实测撞过补 fix）
+- example-consumer-app 实测：126 文件清掉 framework 副本，skill-preamble 跑通
+
 ### 2026-05-27 — feat(pmai 阶段 1): JUST_UPGRADED + What's New / update-check 缓存 / uninstall preview
 
 **借鉴 gstack 三个机制**（详 transcript "gstack 关键机制借鉴评估"）：

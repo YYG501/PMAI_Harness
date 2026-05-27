@@ -391,6 +391,15 @@ fi
 [ -f "$RUNS_FILE" ] && rm -f "$RUNS_FILE"
 [ -f "$EVENTS_FILE" ] && rm -f "$EVENTS_FILE"
 
+# --- 6.5. 清 verify 目录运行时元数据（PID/PORT 文件，task close 后无意义）---
+# 不动审计资产（report.md / flow-*.png / _plan.md）；只清纯运行时副产物。
+# 在 main 仓和 req worktree 两处都扫（不同阶段 task-verify 可能写不同 cwd）。
+for _vdir in "$REPO_ROOT/.pm-workflow/tasks/$TASK_STEM/verify" \
+             "$REQ_WORKTREE/.pm-workflow/tasks/$TASK_STEM/verify"; do
+  [ -d "$_vdir" ] || continue
+  rm -f "$_vdir/dev-server.info" "$_vdir/_dev-server.log" 2>/dev/null || true
+done
+
 # --- 7. 追加关闭事件 ---
 if [ -f "$EVENTS_SCRIPT" ]; then
   python3 "$EVENTS_SCRIPT" append "$TASK_FILE" --type task_closed 2>/dev/null || true
