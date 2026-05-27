@@ -8,14 +8,21 @@
 #   pmai upgrade --local <dir>            # --local 模式：重克隆 + 覆盖 <dir>/.claude/ 副本（无需 ~/.pmai/）
 #   pmai upgrade --local <dir> --stable   # --local + stable tag
 #   pmai upgrade --local <dir> --to v0.x  # --local + 锁定 tag
+#
+# 安全保证：
+#   1. 升级前 dirty 自动 stash（保护 PM 在 ~/.pmai 的本地改动）
+#   2. 失败自动回滚到 OLD_HEAD + symlink 按 OLD_HEAD 重建（trap ERR）
+#   3. --local 模式 mv-swap 原子切换 + .bak 兜底
+#   4. 升完跑 pmai-doctor 自检；不通触发回滚
 
-set -euo pipefail
+set -Eeuo pipefail
 
 PMAI_HOME="${PMAI_HOME:-$HOME/.pmai}"
 PMAI_STATE="${PMAI_STATE:-$HOME/.pmai-state}"
 CLAUDE_SKILLS="$HOME/.claude/skills"
 SKILL_PREFIX="pmai-"
 REMOTE="${PMAI_REMOTE:-git@github.com:YYG501/PMAI_Workflow.git}"
+DOCTOR_BIN="$(dirname "$0")/pmai-doctor"
 
 usage() {
   cat <<EOF
@@ -65,7 +72,34 @@ while [ $# -gt 0 ]; do
   esac
 done
 
-# 子函数：把 src_skills 下的目录装到 dst_skills，加 pmai- 前缀（与 bin/pmai-install 同源）
+# ─────────────────────────────────────────────────────────────
+# 共享 helper：把 src_skills 装到 dst_skills（symlink / copy）
+# ─────────────────────────────────────────────────────────────
+rebuild_symlinks() {
+  local src_skills="$1"
+  local dst_skills="$2"
+  local count=0
+  # 清旧
+  for old in "$dst_skills"/${SKILL_PREFIX}* "$dst_skills/_shared"; do
+    [ -L "$old" ] && rm "$old" || true
+  done
+  # 重建
+  for skill_dir in "$src_skills"/*/; do
+    [ -d "$skill_dir" ] || continue
+    local skill_name dst
+    skill_name=$(basename "$skill_dir")
+    case "$skill_name" in
+      _shared)  dst="$dst_skills/_shared" ;;
+      pmai-*)   dst="$dst_skills/$skill_name" ;;
+      *)        dst="$dst_skills/${SKILL_PREFIX}${skill_name}" ;;
+    esac
+    [ -e "$dst" ] || [ -L "$dst" ] && rm -rf "$dst" || true
+    ln -s "${skill_dir%/}" "$dst"
+    count=$((count + 1))
+  done
+  echo "$count"
+}
+
 install_skills_copy() {
   local src_skills="$1"
   local dst_skills="$2"
@@ -73,13 +107,14 @@ install_skills_copy() {
   mkdir -p "$dst_skills"
   for skill_dir in "$src_skills"/*/; do
     [ -d "$skill_dir" ] || continue
+    local skill_name dst
     skill_name=$(basename "$skill_dir")
     case "$skill_name" in
       _shared)  dst="$dst_skills/_shared" ;;
       pmai-*)   dst="$dst_skills/$skill_name" ;;
       *)        dst="$dst_skills/${SKILL_PREFIX}${skill_name}" ;;
     esac
-    [ -e "$dst" ] || [ -L "$dst" ] && rm -rf "$dst"
+    [ -e "$dst" ] || [ -L "$dst" ] && rm -rf "$dst" || true
     cp -R "${skill_dir%/}/." "$dst/"
     count=$((count + 1))
   done
@@ -87,7 +122,49 @@ install_skills_copy() {
 }
 
 # ─────────────────────────────────────────────────────────────
-# --local 模式：重克隆源 + 覆盖 <LOCAL_DIR>/.claude/{scripts,skills,agents}/
+# 回滚状态（global / local 共用 flag 防重入）
+# ─────────────────────────────────────────────────────────────
+ROLLBACK_DONE=0
+STASHED=0
+OLD_HEAD=""
+
+global_rollback() {
+  [ "$ROLLBACK_DONE" = "1" ] && return
+  ROLLBACK_DONE=1
+  trap - ERR EXIT
+  echo "" >&2
+  echo "❌ 升级失败，回滚到 ${OLD_HEAD:-原状态}..." >&2
+  if [ -n "$OLD_HEAD" ] && [ -d "$PMAI_HOME/.git" ]; then
+    (cd "$PMAI_HOME" && git reset --hard "$OLD_HEAD" >/dev/null 2>&1) || true
+    # symlink 按回退后的 ~/.pmai/skills 重建
+    rebuild_symlinks "$PMAI_HOME/skills" "$CLAUDE_SKILLS" >/dev/null 2>&1 || true
+  fi
+  if [ "$STASHED" = "1" ]; then
+    echo "" >&2
+    echo "💡 你的本地改动还在 stash 里。恢复：" >&2
+    echo "   cd $PMAI_HOME && git stash pop" >&2
+  fi
+  exit 1
+}
+
+local_rollback() {
+  [ "$ROLLBACK_DONE" = "1" ] && return
+  ROLLBACK_DONE=1
+  trap - ERR EXIT
+  echo "" >&2
+  echo "❌ --local 升级失败，回滚 $LOCAL_DIR/.claude/..." >&2
+  for d in scripts agents skills; do
+    if [ -d "$LOCAL_DIR/.claude/$d.bak" ]; then
+      rm -rf "$LOCAL_DIR/.claude/$d" 2>/dev/null || true
+      mv "$LOCAL_DIR/.claude/$d.bak" "$LOCAL_DIR/.claude/$d" 2>/dev/null || true
+    fi
+    rm -rf "$LOCAL_DIR/.claude/$d.new" 2>/dev/null || true
+  done
+  exit 1
+}
+
+# ─────────────────────────────────────────────────────────────
+# --local 模式：staging clone + mv swap
 # ─────────────────────────────────────────────────────────────
 if [ "$LOCAL_MODE" = "1" ]; then
   if [ ! -f "$LOCAL_DIR/.claude/.pmai-version" ]; then
@@ -130,17 +207,41 @@ if [ "$LOCAL_MODE" = "1" ]; then
   NEW_VER=$(cat VERSION 2>/dev/null || echo unknown)
   NEW_HEAD=$(git rev-parse --short HEAD)
 
-  echo "→ Replacing $LOCAL_DIR/.claude/{scripts,agents,skills}/ ..."
-  rm -rf "$LOCAL_DIR/.claude/scripts"
-  cp -R "$SRC/scripts" "$LOCAL_DIR/.claude/scripts"
-  rm -rf "$LOCAL_DIR/.claude/agents"
-  cp -R "$SRC/agents" "$LOCAL_DIR/.claude/agents"
-  rm -rf "$LOCAL_DIR/.claude/skills"
-  SKILL_COUNT=$(install_skills_copy "$SRC/skills" "$LOCAL_DIR/.claude/skills")
+  # D：staging + mv swap（原子）
+  echo "→ Staging $LOCAL_DIR/.claude/{scripts,agents,skills} (atomic swap)..."
 
+  # 装 trap（staging 期间挂掉清 .new；swap 后挂掉回 .bak）
+  trap local_rollback ERR
+
+  # 1. cp 到 .new staging dir
+  rm -rf "$LOCAL_DIR/.claude/scripts.new" "$LOCAL_DIR/.claude/agents.new" "$LOCAL_DIR/.claude/skills.new"
+  cp -R "$SRC/scripts" "$LOCAL_DIR/.claude/scripts.new"
+  cp -R "$SRC/agents" "$LOCAL_DIR/.claude/agents.new"
+  SKILL_COUNT=$(install_skills_copy "$SRC/skills" "$LOCAL_DIR/.claude/skills.new")
+
+  # 1.5 staging 自检（skill 数 < 22 当失败）
+  STAGED_SKILLS=$(find "$LOCAL_DIR/.claude/skills.new" -maxdepth 1 -name 'pmai-*' -type d 2>/dev/null | wc -l | tr -d ' ')
+  if [ "$STAGED_SKILLS" -lt 22 ]; then
+    echo "❌ Staging 自检失败：skill 数 $STAGED_SKILLS < 22" >&2
+    local_rollback
+  fi
+
+  # 2. mv swap：原 → .bak，staging → 正式
+  for d in scripts agents skills; do
+    [ -d "$LOCAL_DIR/.claude/$d" ] && mv "$LOCAL_DIR/.claude/$d" "$LOCAL_DIR/.claude/$d.bak"
+    mv "$LOCAL_DIR/.claude/$d.new" "$LOCAL_DIR/.claude/$d"
+  done
+
+  # 3. 写 version + 拷 CHANGELOG（这两个失败也能回滚，trap 还在）
   echo "$NEW_VER" > "$LOCAL_DIR/.claude/.pmai-version"
-  # 拷 CHANGELOG.md 让 skill Step 4 能从 local target 读 What's New
   [ -f "$SRC/CHANGELOG.md" ] && cp "$SRC/CHANGELOG.md" "$LOCAL_DIR/.claude/CHANGELOG.md"
+
+  # 4. 成功，清 .bak + 解除 trap
+  for d in scripts agents skills; do
+    rm -rf "$LOCAL_DIR/.claude/$d.bak" 2>/dev/null || true
+  done
+  trap - ERR
+  trap "rm -rf '$SRC' 2>/dev/null || true" EXIT  # 重设只清 SRC
 
   echo ""
   echo "═══════════════════════════════════════"
@@ -168,7 +269,7 @@ if [ "$LOCAL_MODE" = "1" ]; then
 fi
 
 # ─────────────────────────────────────────────────────────────
-# 全局模式（默认）：git pull ~/.pmai/ + re-sync symlinks
+# 全局模式：A stash + B trap rollback + fetch / checkout + symlink + E doctor
 # ─────────────────────────────────────────────────────────────
 
 if [ ! -d "$PMAI_HOME/.git" ]; then
@@ -178,16 +279,27 @@ fi
 
 cd "$PMAI_HOME"
 OLD_VER=$(cat VERSION 2>/dev/null || echo unknown)
-OLD_HEAD=$(git rev-parse --short HEAD)
+OLD_HEAD=$(git rev-parse HEAD)          # 全 hash，rollback 用
+OLD_HEAD_SHORT=$(git rev-parse --short HEAD)
 
-# fetch 按 MODE 分流：main 模式只拉 main 分支（快），stable / to 模式才拉 tags（慢但必需）
-# 所有 fetch 加 timeout，避免 SSH / 网络慢导致无限卡死
+# A：dirty 自动 stash
+if [ -n "$(git status --porcelain)" ]; then
+  echo "→ ~/.pmai/ 有本地改动，先 stash 一下保护..."
+  STASH_MSG="pmai-upgrade auto-stash $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+  git stash push -u -m "$STASH_MSG" >/dev/null
+  STASHED=1
+fi
+
+# B：装 trap（fetch / checkout / symlink 任意挂掉 → 回滚到 OLD_HEAD）
+trap global_rollback ERR
+
+# fetch + checkout（保留原逻辑，timeout 兜底）
 case "$MODE" in
   main)
     echo "→ Fetching origin/main..."
     timeout 30 git fetch origin main 2>&1 | tail -5 || {
       echo "❌ git fetch 超时（30s）或失败。网络 / SSH 不通？" >&2
-      exit 1
+      global_rollback
     }
     echo "→ Merging origin/main (ff-only)..."
     git merge --ff-only origin/main 2>&1 | tail -5
@@ -195,24 +307,24 @@ case "$MODE" in
   stable)
     echo "→ Fetching tags from origin..."
     timeout 60 git fetch origin --tags 2>&1 | tail -5 || {
-      echo "❌ git fetch --tags 超时（60s）或失败。网络 / SSH 不通？" >&2
-      exit 1
+      echo "❌ git fetch --tags 超时（60s）或失败。" >&2
+      global_rollback
     }
     LATEST_TAG=$(git tag -l 'v*' | sort -V | tail -1)
-    [ -z "$LATEST_TAG" ] && { echo "❌ 远程没有 v* tag。PM 还没打过 stable。" >&2; exit 1; }
+    [ -z "$LATEST_TAG" ] && { echo "❌ 远程没有 v* tag。PM 还没打过 stable。" >&2; global_rollback; }
     echo "→ Checking out latest stable tag: $LATEST_TAG"
     git checkout "$LATEST_TAG"
     ;;
   to)
     echo "→ Fetching tags from origin..."
     timeout 60 git fetch origin --tags 2>&1 | tail -5 || {
-      echo "❌ git fetch --tags 超时（60s）或失败。网络 / SSH 不通？" >&2
-      exit 1
+      echo "❌ git fetch --tags 超时（60s）或失败。" >&2
+      global_rollback
     }
     if ! git rev-parse "refs/tags/$TARGET_TAG" >/dev/null 2>&1; then
       echo "❌ tag $TARGET_TAG 不存在。可用 tag:" >&2
       git tag -l 'v*' | sort -V | tail -10 >&2
-      exit 1
+      global_rollback
     fi
     echo "→ Checking out tag: $TARGET_TAG"
     git checkout "$TARGET_TAG"
@@ -222,34 +334,30 @@ esac
 NEW_VER=$(cat VERSION 2>/dev/null || echo unknown)
 NEW_HEAD=$(git rev-parse --short HEAD)
 
-# 重新建 skill symlink（万一新增 / 改名 / 删 skill）
+# 重建 symlink
 echo "→ Re-syncing skill symlinks to $CLAUDE_SKILLS/pmai-*"
-# 清旧 symlink
-for old in "$CLAUDE_SKILLS"/${SKILL_PREFIX}* "$CLAUDE_SKILLS/_shared"; do
-  [ -L "$old" ] && rm "$old"
-done
-# 重建
-count=0
-for skill_dir in "$PMAI_HOME/skills"/*/; do
-  [ -d "$skill_dir" ] || continue
-  skill_name=$(basename "$skill_dir")
-  # pmai-* 已带前缀的不再加前缀（防 pmai-pmai-upgrade 双前缀）
-  case "$skill_name" in
-    _shared)  dst="$CLAUDE_SKILLS/_shared" ;;
-    pmai-*)   dst="$CLAUDE_SKILLS/$skill_name" ;;
-    *)        dst="$CLAUDE_SKILLS/${SKILL_PREFIX}${skill_name}" ;;
-  esac
-  [ -e "$dst" ] || [ -L "$dst" ] && rm -rf "$dst"
-  ln -s "${skill_dir%/}" "$dst"
-  count=$((count + 1))
-done
+count=$(rebuild_symlinks "$PMAI_HOME/skills" "$CLAUDE_SKILLS")
+
+# E：跑 doctor 自检（FAIL → 回滚；WARN 不触发）
+if [ -x "$DOCTOR_BIN" ]; then
+  echo "→ Running pmai-doctor self-check..."
+  if ! "$DOCTOR_BIN" >/tmp/pmai-upgrade-doctor.log 2>&1; then
+    echo "❌ pmai-doctor 自检失败，触发回滚。日志：/tmp/pmai-upgrade-doctor.log" >&2
+    tail -20 /tmp/pmai-upgrade-doctor.log >&2 || true
+    global_rollback
+  fi
+  echo "  ✅ doctor passed"
+fi
+
+# 全部成功，解除 trap
+trap - ERR
 
 echo ""
 echo "═══════════════════════════════════════"
-if [ "$OLD_HEAD" = "$NEW_HEAD" ]; then
+if [ "$OLD_HEAD_SHORT" = "$NEW_HEAD" ]; then
   echo "✅ PMAI 已是最新（${NEW_VER} @ ${NEW_HEAD}）"
 else
-  echo "✅ PMAI 升级：${OLD_VER} (${OLD_HEAD}) → ${NEW_VER} (${NEW_HEAD})"
+  echo "✅ PMAI 升级：${OLD_VER} (${OLD_HEAD_SHORT}) → ${NEW_VER} (${NEW_HEAD})"
   # 写 JUST_UPGRADED marker + 清 update-check 缓存（下次 skill 跑时显示 What's New）
   mkdir -p "$PMAI_STATE"
   echo "$OLD_VER" > "$PMAI_STATE/just-upgraded-from"
@@ -259,8 +367,15 @@ fi
 echo "   skill: $count symlinks re-synced"
 echo "═══════════════════════════════════════"
 
+# stash 恢复提示
+if [ "$STASHED" = "1" ]; then
+  echo ""
+  echo "💡 升级前 stash 了 ~/.pmai/ 的本地改动。恢复跑："
+  echo "   cd $PMAI_HOME && git stash pop"
+fi
+
 # 升级后立即展示 What's New（如有，OLD != NEW 时，--no-whats-new 跳过 — 给 skill 接管用）
-if [ "$OLD_HEAD" != "$NEW_HEAD" ] && [ "$NO_WHATS_NEW" = "0" ] && [ -x "$(dirname "$0")/pmai-whats-new" ]; then
+if [ "$OLD_HEAD_SHORT" != "$NEW_HEAD" ] && [ "$NO_WHATS_NEW" = "0" ] && [ -x "$(dirname "$0")/pmai-whats-new" ]; then
   echo ""
   "$(dirname "$0")/pmai-whats-new" --from "$OLD_VER" --to "$NEW_VER" || true
 fi
