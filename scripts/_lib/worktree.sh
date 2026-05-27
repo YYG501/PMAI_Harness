@@ -122,6 +122,14 @@ _stale_worktree_check_one() {
   local caller_cwd="$4"
 
   local wt_path="${PM_AI_WORKTREE_BASE:-$repo_root/.worktrees}/$stem"
+
+  # Case 1: broken symlink（target 不存在，conductor 等 worktree 路径常见状态）
+  if [ -L "$wt_path" ] && [ ! -e "$wt_path" ]; then
+    rm -f "$wt_path"
+    return 0
+  fi
+
+  # Case 2: 正常目录（或 valid symlink 到目录）
   [ -d "$wt_path" ] || return 1
 
   local abs_wt
