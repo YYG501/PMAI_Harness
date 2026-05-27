@@ -208,12 +208,57 @@ PM-AI-Workflow 生成器仓的演进记录。本文件**只记影响下游业务
 
 - `tests/test-attachments-helper.sh` 「new-req commit pathspec 含 attachments/」断言改为匹配新契约（attachments 永远在 4D commit 里，不再「触发时一并 commit」prose）—— 16/16 pass
 - `tests/test-new-req-no-arg-prompt.sh` 4/4 / `tests/test-no-duplicate-questioning.sh` 4/4 / `tests/test-banner-label.sh` 10/10 / `tests/test-stage-source-helper.sh` 13/13 / `tests/test-tthw-smoke.sh` 2/2 全过
+- `test-req-num-resolver.sh` 10/10 不破
 
 **影响**：
 
 - 消费仓 PM 跑 `/pmai-new-req` 时主对话**全程**主仓 main，PM `git status` 主仓永远 clean，brief 在 chat 看得见；二确通过 → handoff 块出现 → PM **自己** `cd` 切窗口。`AI 切了分支` 这个体验破绽消除
 - INVARIANTS I-AD5 / I-DC1（dispatch 前 working tree 必须 clean）仍由步骤 4D commit 保证
 - mental model 跟老仓（`pm-ai-workflow-template`）对齐：`docs/` 工作在 main，worktree 仅用作隔离
+
+---
+
+### 2026-05-27 — fix(init-project): 三层修复（黑话清理 + 路径推断默认值 + 资料档分流接住 PM 决定）
+
+**触发**：PM 在新消费仓试用 `/pmai-init-project`，三层缺陷连环暴露 ——
+
+1. AI chat 输出"然后做 brownfield 检测，再问背景和 intent" —— 工程黑话（`brownfield` / `intent` / `gate`）直接吐给 PM
+2. AI 让 PM 从空白手敲落地路径（绝对路径），不主动用 `dirname(pwd)` 推默认值
+3. 闸门检测目录已存在/含 .git/非空就硬拒，但 PM 明确说「就是这个路径，文件夹给你准备的」（目录里只有 3 个 ChatGPT 对话导出 + .DS_Store，非 codebase）—— 违反 [[feedback_pm_decision_is_binding_contract]]：PM 已拍 → AI 应该接住
+
+**根因**：
+- 黑话源头：`skills/init-project/SKILL.md` ASCII 流程图行 21 `name → path → [brownfield gate] → background → intent` + 阶段 A 标题 + 5 步顺序文字（AI 照念给 PM）
+- 闸门设计缺陷：`init-project.sh` line 119-123 + skill step 3 不区分「真 codebase（要走 audit）」vs「资料档（PM 提前放的笔记/导出/PDF）」，一刀切拒
+
+**改动**（PM 视角）：
+
+- **黑话清理**：`skills/init-project/SKILL.md`
+  - ASCII 流程图阶段 A 行换中文：「项目名 → 落地路径 → 已有内容判断 → 一句话背景 → 项目类型」
+  - 阶段 A 标题：「参数收集 + brownfield 检测」→「参数收集（含已有内容判断）」
+  - Rules 段加「PM-facing 输出禁词」表格（brownfield/greenfield/intent/project-intent/gate/闸门）+ PM 视角替代词映射；SKILL.md 内部段落（设计文档准确性）保留 brownfield 概念词
+  - 失败兜底速查表重写：原「brownfield 检测命中」拆成 step 3a（codebase 硬拒）+ step 3b PM 三选三档
+- **路径推断默认值**（自适应）：阶段 A step 2 判断 cwd 是否生成器仓（含 `skills/init-project/SKILL.md`）—— 是 → 推 `dirname(pwd)/<name>` 兄弟目录（老模式）；否 → 推 `pwd` 本身（v1.1 PM 在任意 cwd 启 claude 心智：「我在哪 init 就在哪」）。AskUser 二选 ① 用推断 ② 改别的
+- **阶段 B 脚本路径走 `$PMAI_HOME` 绝对路径**：v1.1 PM 在任意 cwd 调 skill 都行（不再依赖 cwd = 生成器仓根）；fallback 到 `$(pwd)/scripts/init-project.sh` 兼容老模式
+- **闸门：AI 主动诊断 + PM 一拍即可**（PM 同日第二轮反馈：「3a 代码标志清单写死永远不全 + 3b 三选 ①『挪到 docs/资料/』框架预设侵犯 PM 自主组织」→ 整个机制是 AI 装懂事；新方向「我已经在项目空间中了，你就直接看看当前目录情况，看看怎么初始化，怎么归档」）。step 3 重写：
+  - **3.1** AI `ls -lAh` cwd + git log（如是 repo）
+  - **3.2** AI 逐条标注（推测用途 / 类型 / 默认处置 —— 系统噪音 / 已有 git / 工具配置 / 文档 / 资料-导出 / 源码 / 已有 PMAI framework 七类）
+  - **3.3** AI 给完整方案（结构化 4 部分：当前位置 / 内容 / 判断 / 方案逐条 source→target）
+  - **3.4** PM AskUser 二选「① 走方案 / ② 我要改（自由 chat 反馈具体哪条调，AI 调完回 3.3 再确认，可循环）」
+  - **3.5** ① → AI 执行归档 mv + 调脚本 `--allow-existing`
+  - 退化捷径：cwd 完全空 / 仅 `.DS_Store` → 跳过 3.3/3.4 直接 init
+  - **codebase / 已 init 项目 不硬 gate**：3.3 方案里**优先推荐** `/pmai-codebase-audit`（有源码）或 `/pmai-project-solution`（已有 PMAI 元数据），但 PM 坚持 init 也接住（[[feedback_pm_decision_is_binding_contract]]：init 不删代码 + 可逆）
+- **`init-project.sh` 加 `--allow-existing` flag**：位置无关 flag 扫描；命中后跳过「目录已存在硬拒」line 119-123，复用现有目录 + git init 后 `git add -A` 把现有资料 add 进首 commit。skill 阶段 A step 3.5 PM 拍方案后由 AI 加上 flag 调用脚本
+
+**测试**：
+
+- `tests/test-brownfield-detect.sh` 3 → 5 case：T3 改语义断言（AI 诊断接口 + audit 引导 + `--allow-existing` flag + 不硬 gate 接口约定），不再依赖 `brownfield` / `两层都拦` 字眼；新增 T4（空目录 `--allow-existing` 接住）+ T5（资料目录 `--allow-existing` 接住 + 资料进首 commit）。本地 5/5 绿
+- `tests/test-init-project.sh` 3/3 不破坏
+
+**影响**：
+
+- 消费仓 PM 跑 `/pmai-init-project` 时 chat 输出不再出现 `brownfield` / `intent` 等工程黑话；路径推断免敲；目录有内容 → AI 主动 ls + 出方案 + PM 一拍即可（不再被 AI 列三选菜单装懂事）
+- `init-project.sh` 默认行为不变（位置参数兼容；不加 flag 仍拒已存在）；新 flag 只通过 skill 经 PM 拍板调用
+- memory `feedback_pm_chat_no_engineering_jargon` 词典 A 加 `brownfield` / `greenfield` / `intent` / `project-intent` / `gate` / `闸门`，2026-05-27 两轮反馈案例入档
 
 ---
 

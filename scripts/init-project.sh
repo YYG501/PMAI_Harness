@@ -9,17 +9,24 @@ set -euo pipefail
 _print_help() {
   cat <<HELP
 用法:
-  bash scripts/init-project.sh <project-name> <target-dir> <background> [<project-intent>]
+  bash scripts/init-project.sh <project-name> <target-dir> <background> [<project-intent>] [--allow-existing]
 
 参数:
   <project-name>      业务项目名（也是 git 仓的名字）
-  <target-dir>        业务项目落地路径（不能已存在）
+  <target-dir>        业务项目落地路径（默认不能已存在；加 --allow-existing 可复用已有目录）
   <background>        一句话项目背景（写进生成的 CLAUDE.md）
   <project-intent>    工程结构意图（默认 unknown）：
                         prototype  Next.js 单页原型 / Demo 仓
                         system     完整业务系统（多模块、有后端契约）
                         custom     PM 自由编辑骨架
                         unknown    探测兜底档（先 init，跑通后再分类）
+
+可选 flag:
+  --allow-existing    放过"目标目录已存在"检查。仅当 PM 在 /pmai-init-project skill 阶段 A
+                      step 3b 明确选了「资料档接住」分流时由 skill 加入；脚本本身不判断目录
+                      内容是否真是非 codebase（那是 skill 层的 step 3a 代码标志扫描的责任）。
+                      命中后：mkdir 改 noop（用现有目录），git init 后 git add -A 会把现有文件
+                      一起 add 进首 commit。
 
 期望时间:
   init-project 自身 ~10 秒（拷贝 + git init + commit）。
@@ -45,9 +52,22 @@ if [ "${1:-}" = "--help" ] || [ "${1:-}" = "-h" ]; then
   exit 0
 fi
 
+# 解析 --allow-existing flag（位置无关）：扫所有参数挑出 flag，剩下的当位置参数
+ALLOW_EXISTING=0
+declare -a _POSITIONAL=()
+for _arg in "$@"; do
+  if [ "$_arg" = "--allow-existing" ]; then
+    ALLOW_EXISTING=1
+  else
+    _POSITIONAL+=("$_arg")
+  fi
+done
+# set -- 重置位置参数；空数组 fallback 防 set -u
+set -- "${_POSITIONAL[@]+"${_POSITIONAL[@]}"}"
+
 if [ $# -lt 2 ]; then
   echo "❌ 缺少必填参数（至少需要 <project-name> 和 <target-dir>）" >&2
-  echo "   正确形态：bash scripts/init-project.sh <项目名> <落地路径> <一句话背景> [intent]" >&2
+  echo "   正确形态：bash scripts/init-project.sh <项目名> <落地路径> <一句话背景> [intent] [--allow-existing]" >&2
   echo "" >&2
   _print_help >&2
   exit 2
@@ -117,13 +137,17 @@ fi
 
 # --- c. 创建项目目录 ---
 if [ -d "$TARGET_DIR" ]; then
-  echo "❌ 目标目录已存在: $TARGET_DIR" >&2
-  echo "   修复：换一个不存在的路径作 <target-dir>。init-project 不写入已存在目录，避免覆盖已有内容。" >&2
-  exit 1
+  if [ "$ALLOW_EXISTING" = "1" ]; then
+    echo "📁 复用已存在目录: ${TARGET_DIR}（--allow-existing：资料档接住模式）"
+  else
+    echo "❌ 目标目录已存在: $TARGET_DIR" >&2
+    echo "   修复：换一个不存在的路径，或加 --allow-existing 接住非 codebase 资料（由 /pmai-init-project skill 阶段 A step 3b 经 PM 拍板后调用）。" >&2
+    exit 1
+  fi
+else
+  mkdir -p "$TARGET_DIR"
+  echo "📁 创建项目目录: $TARGET_DIR"
 fi
-
-mkdir -p "$TARGET_DIR"
-echo "📁 创建项目目录: $TARGET_DIR"
 
 # --- d. 复制模板 + 替换占位符 ---
 for TMPL in "$FRAMEWORK_DIR/templates/"*.tmpl; do
