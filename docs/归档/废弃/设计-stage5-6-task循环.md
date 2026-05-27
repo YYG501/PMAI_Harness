@@ -13,7 +13,7 @@
 
 ## 背景
 
-req-001 实操暴露出当前 stage 5（`/task-plan`）的两个根本问题：
+req-001 实操暴露出当前 stage 5（`/pmai-task-plan`）的两个根本问题：
 
 1. **模块规格被设计为事前对账层，但 PM 看不进去也对不上**
    - 当前 SKILL.md 要求 stage 5 step 2/2.5 先按 `module.md.tmpl` 生成 `docs/modules/<module>.md` 作为 task 拆分前的中间层
@@ -59,7 +59,7 @@ PM 真实的工作方式：
 
 ### 3. stage 5 / 6 职责重新划分
 
-**stage 5 = `/task-plan`**
+**stage 5 = `/pmai-task-plan`**
 
 - 输出：`task-plan.md`（总览 + task 标题列表【含 id / 标题 / 所属模块 / 一句简述】+ 执行顺序 + 风险）
 - PM 确认门：颗粒度、顺序、是否漏掉模块
@@ -68,7 +68,7 @@ PM 真实的工作方式：
 **stage 6 = 每个 task 一个完整子循环**
 
 1. 读 task-plan.md 取下一个 task
-2. `/task-spec <task-id>` 生成详细 task 文档
+2. `/pmai-task-spec <task-id>` 生成详细 task 文档
    - 拉相关 solution 节
    - 拉所属模块当前 `docs/modules/<module>.md` 状态
    - 拉已完成的上游 task
@@ -85,7 +85,7 @@ PM 真实的工作方式：
 
 ## 改动清单
 
-> 重要：现状 stage 6 已经有完整的 5 个 skill 闭环（`/task-confirm` → `/task-execute` → `/task-submit` → `/doc-update` → `/close-task`），不需要新拆 skill。新设计**只需要新增 1 个 + 修改 1 个**，其他全部复用。
+> 重要：现状 stage 6 已经有完整的 5 个 skill 闭环（`/pmai-task-confirm` → `/pmai-task-execute` → `/pmai-task-submit` → `/pmai-doc-update` → `/pmai-close-task`），不需要新拆 skill。新设计**只需要新增 1 个 + 修改 1 个**，其他全部复用。
 
 1. `.claude/skills/task-plan/SKILL.md`
    - 删 step 2 / 2.5（事前模块规格）
@@ -121,7 +121,7 @@ PM 真实的工作方式：
    - 区分新增/修改/跳过/不动四种情况（Q5）
    - **多模块 task atomic merge**（A3 决议）：用 git 临时分支收集所有 module merge，任一失败 rollback 整个 commit
    - 失败一律阻塞 close-task（DB2）
-   - 状态机不动，仍由 `/close-task` 内部触发 `/doc-update`
+   - 状态机不动，仍由 `/pmai-close-task` 内部触发 `/pmai-doc-update`
 
 7. **改 `.claude/skills/req-stage-gate/SKILL.md` 的 stage 6 → 7 判定**（Q4）
    - task 列表以 task-plan.md 为准
@@ -241,32 +241,32 @@ PM 真实的工作方式：
 
 | skill | 状态转换 | 职责 |
 |------|----------|------|
-| `/task-confirm` | 待确认 → 执行中 | PM 看 task 摘要、起 worktree、spawn suborchestrator |
-| `/task-execute` | (执行中持续) | 实际执行 task 工作 |
-| `/task-submit` | 执行中 → 已完成 / 回执行中 | 呈交验收信息包，PM 通过/打回 |
-| `/doc-update` | (已完成阶段) | 处理文档偏差，**含模块规格对账（步骤 1.5/1.6）** |
-| `/close-task` | (已完成阶段) | 调 `/doc-update` + merge 分支 + 清 worktree |
+| `/pmai-task-confirm` | 待确认 → 执行中 | PM 看 task 摘要、起 worktree、spawn suborchestrator |
+| `/pmai-task-execute` | (执行中持续) | 实际执行 task 工作 |
+| `/pmai-task-submit` | 执行中 → 已完成 / 回执行中 | 呈交验收信息包，PM 通过/打回 |
+| `/pmai-doc-update` | (已完成阶段) | 处理文档偏差，**含模块规格对账（步骤 1.5/1.6）** |
+| `/pmai-close-task` | (已完成阶段) | 调 `/pmai-doc-update` + merge 分支 + 清 worktree |
 
 #### 新设计的最小改动
 
-- **新增 1 个 skill**：`/task-spec <task-id>` —— 单 task 详细文档生成器（因为 stage 5 不再批量生成 task 文件，需要在 stage 6 里逐个生成）
-- **改 1 个 skill**：`/doc-update` —— 步骤 1.5/1.6 的"对账"逻辑扩展为"沉淀"，支持模块规格从无到有累积写入
-- 其他 4 个 skill（`/task-confirm` / `/task-execute` / `/task-submit` / `/close-task`）全部复用，状态机不动
+- **新增 1 个 skill**：`/pmai-task-spec <task-id>` —— 单 task 详细文档生成器（因为 stage 5 不再批量生成 task 文件，需要在 stage 6 里逐个生成）
+- **改 1 个 skill**：`/pmai-doc-update` —— 步骤 1.5/1.6 的"对账"逻辑扩展为"沉淀"，支持模块规格从无到有累积写入
+- 其他 4 个 skill（`/pmai-task-confirm` / `/pmai-task-execute` / `/pmai-task-submit` / `/pmai-close-task`）全部复用，状态机不动
 
 #### 修订后的 stage 6 子循环
 
 ```
-PM: /task-spec task-001                  ← 新 skill：生成详细 task 文档
+PM: /pmai-task-spec task-001                  ← 新 skill：生成详细 task 文档
 PM 看 task 文档 → 确认/打回改
 
-PM: /task-confirm tasks/task-001-...md   ← 现有
+PM: /pmai-task-confirm tasks/task-001-...md   ← 现有
 spawn suborchestrator 执行
 
-PM: /task-submit                         ← 现有，PM 看原型验收
+PM: /pmai-task-submit                         ← 现有，PM 看原型验收
 通过 → 状态转「已完成」
 
-PM: /close-task                          ← 现有，内部调 /doc-update
-/doc-update 把 task 的功能清单沉淀进 docs/modules/<module>.md
+PM: /pmai-close-task                          ← 现有，内部调 /pmai-doc-update
+/pmai-doc-update 把 task 的功能清单沉淀进 docs/modules/<module>.md
 merge 分支、清 worktree
 
 回到第一步，下一个 task
@@ -282,8 +282,8 @@ merge 分支、清 worktree
 
 | 场景 | 处理 |
 |------|------|
-| 新加 task（未开始）| PM 在 `task-plan.md` 列表里加一行（id 顺延，所属模块标好），然后 `/task-spec` 走新 task 的子循环 |
-| 改未开始 task 的标题/所属模块/简述 | PM 直接编辑 `task-plan.md`，`/task-spec` 时按新版本生成 |
+| 新加 task（未开始）| PM 在 `task-plan.md` 列表里加一行（id 顺延，所属模块标好），然后 `/pmai-task-spec` 走新 task 的子循环 |
+| 改未开始 task 的标题/所属模块/简述 | PM 直接编辑 `task-plan.md`，`/pmai-task-spec` 时按新版本生成 |
 | 删未开始 task | PM 从 `task-plan.md` 列表删掉 + 删除对应 `tasks/task-NNN-*.md`（如果已 spec 过） |
 | 删执行中 task | **暂不在 Q3 范围内解决**。需先终止 worktree/suborchestrator，建议未来新增轻量 `/cancel-task` |
 | 改已完成 task（功能清单已 merge 进 module 规格）| **并入 Q5 冲突处理讨论**。建议方向：新建覆盖性 task，让新 task 的功能清单 merge 时覆盖/修订前一条 |
@@ -301,7 +301,7 @@ merge 分支、清 worktree
 
 #### 不引入的东西
 
-- ❌ 不新增 `/task-plan-amend` skill
+- ❌ 不新增 `/pmai-task-plan-amend` skill
 - ❌ 不在 `.req-meta.json` 加 task-level audit log
 - ❌ 不引入"退回 stage 5"的机制
 
@@ -319,7 +319,7 @@ merge 分支、清 worktree
 
 问题：
 - "所有 task"来源不明（tasks/ 目录扫描 vs task-plan.md 列表 → 中途变更后两者会不同步）
-- "已完成"只代表 PM 验收过，但还没跑 `/close-task` → module 规格的功能清单 merge / 分支 merge / worktree 清理都没做
+- "已完成"只代表 PM 验收过，但还没跑 `/pmai-close-task` → module 规格的功能清单 merge / 分支 merge / worktree 清理都没做
 
 #### 新判定
 
@@ -336,13 +336,13 @@ merge 分支、清 worktree
 4. 不满足 → 列出哪些 task 缺什么（哪一步没跑）
 ```
 
-**核心简化**：只要校验"task 已 close"，就隐含校验了"功能清单已 merge 进 module 规格"——因为 `/doc-update` 是 `/close-task` 的前置步骤，doc-update 失败 close-task 就不会成功。
+**核心简化**：只要校验"task 已 close"，就隐含校验了"功能清单已 merge 进 module 规格"——因为 `/pmai-doc-update` 是 `/pmai-close-task` 的前置步骤，doc-update 失败 close-task 就不会成功。
 
 #### 边界情况
 
 | 情况 | 处理 |
 |------|------|
-| task-plan.md 里的 task 还没生成 task 文件 | 判定失败，提示 PM 跑 `/task-spec` 或从列表删掉 |
+| task-plan.md 里的 task 还没生成 task 文件 | 判定失败，提示 PM 跑 `/pmai-task-spec` 或从列表删掉 |
 | 基础设施 task | 同样要求已 close，但 close-task 内部的 doc-update 对基础设施 task 会**跳过** module 规格 merge（按 Q1 决议） |
 | **task 用 `--skip-doc-update` close（A1 决议逃生舱）** | **不视为完整 close**——stage 6→7 判定时该 task 算"半 close"，需要等对应人工 cleanup TODO 完成（PM 手工补 doc-update）后才视为完整 close。判定脚本读 task 的"文档偏差"section 是否含 skip-doc-update reason 标记，未清理则阻塞推进 |
 
@@ -353,7 +353,7 @@ merge 分支、清 worktree
 
 ### Q5：task 沉淀 module 规格时的冲突处理 ✅ 已确认
 
-**采用 (b) 智能化版本**：沿用现有 `/doc-update` 步骤 1.6 的"对账后逐条确认"精神，扩展为"沉淀"，区分新增/修改/跳过/不动。
+**采用 (b) 智能化版本**：沿用现有 `/pmai-doc-update` 步骤 1.6 的"对账后逐条确认"精神，扩展为"沉淀"，区分新增/修改/跳过/不动。
 
 #### 沉淀逻辑（doc-update 新增/扩展）
 
@@ -471,7 +471,7 @@ doc-update 在沉淀 task-N 的功能清单时，逐条对比 module 规格现�
 
 模块规格**不**维护实现指引（跟 `设计-功能规格文档增强.md` §8 不同，按本次决议简化）。
 
-#### `/task-spec` 生成时的填写来源
+#### `/pmai-task-spec` 生成时的填写来源
 
 | section | 来源 |
 |------|------|
@@ -490,7 +490,7 @@ doc-update 在沉淀 task-N 的功能清单时，逐条对比 module 规格现�
 
 - 这类视觉细节应该**全部上提到 `docs/DESIGN.md`**（统一规范，所有页面适用）
 - 模块/task 功能清单条目里**不允许出现**字号、像素值、组件库具体类名
-- 由 `/task-spec` 和 `/doc-update` 在生成/沉淀时自动检测并剥离这类细节
+- 由 `/pmai-task-spec` 和 `/pmai-doc-update` 在生成/沉淀时自动检测并剥离这类细节
 
 ---
 
@@ -509,10 +509,10 @@ doc-update 在沉淀 task-N 的功能清单时，逐条对比 module 规格现�
 
 | # | Friction | 决议 | 影响 |
 |---|----------|------|------|
-| RU3 | 打回时改 task 文档 vs 改代码顺序不明 | **agent 智能分流**：行为/规则修订 → 改 task 文档；bug/原型偏差 → 只改代码。agent 一句话告知判断，PM 可驳回 | 改 `/task-execute` + `/task-submit` 处理 PM 反馈分支 |
-| RU4 | 自动 merge 进 module 规格"静默通过"，PM 想 verify 一眼 | **静默 + summary link**：merge 完后一行"已沉淀 N 条新增进 docs/modules/X.md (查看 diff: <link>)"，不强制 PM 看但有显式入口 | 改 Q5 沉淀逻辑 + `/doc-update` 输出 |
-| RU6 | stage 6 子循环 4 命令链（spec/confirm/submit/close）+ 5 闸门 | **轻量 auto-chain**：close-task 完成后 orchestrator 自动提示"下一个 task 是 X，继续 (Y/n)"，PM 一键继续。其他暂停点不变 | 改 `/close-task` 末尾 + req-stage-gate 编排 |
-| DB2 | doc-update 沉淀失败的错误呈现没设计 | **失败一律阻塞 close-task**：错误信息明确（哪个文件 / failure 类型 / 续跑路径），PM 解决后重跑 `/close-task` 自动续做 doc-update | 改 `/doc-update` + `/close-task` 失败处理 |
+| RU3 | 打回时改 task 文档 vs 改代码顺序不明 | **agent 智能分流**：行为/规则修订 → 改 task 文档；bug/原型偏差 → 只改代码。agent 一句话告知判断，PM 可驳回 | 改 `/pmai-task-execute` + `/pmai-task-submit` 处理 PM 反馈分支 |
+| RU4 | 自动 merge 进 module 规格"静默通过"，PM 想 verify 一眼 | **静默 + summary link**：merge 完后一行"已沉淀 N 条新增进 docs/modules/X.md (查看 diff: <link>)"，不强制 PM 看但有显式入口 | 改 Q5 沉淀逻辑 + `/pmai-doc-update` 输出 |
+| RU6 | stage 6 子循环 4 命令链（spec/confirm/submit/close）+ 5 闸门 | **轻量 auto-chain**：close-task 完成后 orchestrator 自动提示"下一个 task 是 X，继续 (Y/n)"，PM 一键继续。其他暂停点不变 | 改 `/pmai-close-task` 末尾 + req-stage-gate 编排 |
+| DB2 | doc-update 沉淀失败的错误呈现没设计 | **失败一律阻塞 close-task**：错误信息明确（哪个文件 / failure 类型 / 续跑路径），PM 解决后重跑 `/pmai-close-task` 自动续做 doc-update | 改 `/pmai-doc-update` + `/pmai-close-task` 失败处理 |
 | UP | 现有 v1 项目升 v2 的 upgrade path 完全没讨论 | **Defer + TODOS.md**：作为后续独立子设计，本 plan 不解决 | 加 TODO 条目（见下方 P2） |
 
 ### 4 个 P1 obvious fix（写进 plan，无需 PM 拍板）
@@ -520,9 +520,9 @@ doc-update 在沉淀 task-N 的功能清单时，逐条对比 module 规格现�
 | # | Friction | 落地 |
 |---|----------|------|
 | RU1 | "基础设施"判定规则要查 SKILL.md | **task-plan.md 顶部固定附判定规则提示**：业务模块 / 基础设施二选一硬规则、4 行说明 |
-| RU2 | 实现指引-易错点的来源不告知 | `/task-spec` 生成时在易错点条目后注明 `(来自 task-XXX 的 PM 反馈)`，让 PM 知道经验来源 |
-| RU5 | task-plan 中途调整后没自动校验 vs `tasks/` 目录 | `/task-spec` 和 stage 6 子循环开头自动 check：task-plan.md 列表里的 task id ↔ `tasks/` 文件，列出差异 |
-| RU7 | 基础设施 task 跟业务 task 流程透明度 | `/task-spec` 生成基础设施 task 时明确告知 PM "本 task 不会触发 module 规格 merge（按 Q1 决议）" |
+| RU2 | 实现指引-易错点的来源不告知 | `/pmai-task-spec` 生成时在易错点条目后注明 `(来自 task-XXX 的 PM 反馈)`，让 PM 知道经验来源 |
+| RU5 | task-plan 中途调整后没自动校验 vs `tasks/` 目录 | `/pmai-task-spec` 和 stage 6 子循环开头自动 check：task-plan.md 列表里的 task id ↔ `tasks/` 文件，列出差异 |
+| RU7 | 基础设施 task 跟业务 task 流程透明度 | `/pmai-task-spec` 生成基础设施 task 时明确告知 PM "本 task 不会触发 module 规格 merge（按 Q1 决议）" |
 
 ### DX Scorecard
 
@@ -548,13 +548,13 @@ doc-update 在沉淀 task-N 的功能清单时，逐条对比 module 规格现�
 ### DX Implementation Checklist（fixes 落地核对）
 
 - [x] task-plan.md 顶部附"基础设施"判定规则提示（RU1）— Batch 2 (a6d33ab)
-- [x] `/task-spec` 在易错点条目后注明 `(来自 task-XXX 的 PM 反馈)`（RU2）— Batch 1 (90997a3)
-- [x] `/task-execute` + `/task-submit` 处理 PM 反馈时按"行为修订 vs bug"分流，agent 一句话告知判断（RU3）— Batch 3 (dfd5f5f)
-- [x] `/doc-update` 沉淀新增条目时输出 summary line + diff link（RU4）— Batch 2 (a6d33ab)
-- [x] `/task-spec` 和 stage 6 子循环开头校验 task-plan.md ↔ tasks/ 一致（RU5）— Batch 1 (90997a3)
-- [x] `/close-task` 末尾轻量 auto-chain：完成后自动提示下一个 task，PM 一键继续（RU6）— Batch 3 (dfd5f5f)
-- [x] `/task-spec` 生成基础设施 task 时明确告知"本 task 不触发 module merge"（RU7）— Batch 1 (90997a3)
-- [x] `/doc-update` 失败一律阻塞 close-task；错误信息含文件 / failure 类型 / 续跑路径（DB2）— Batch 2 (a6d33ab)
+- [x] `/pmai-task-spec` 在易错点条目后注明 `(来自 task-XXX 的 PM 反馈)`（RU2）— Batch 1 (90997a3)
+- [x] `/pmai-task-execute` + `/pmai-task-submit` 处理 PM 反馈时按"行为修订 vs bug"分流，agent 一句话告知判断（RU3）— Batch 3 (dfd5f5f)
+- [x] `/pmai-doc-update` 沉淀新增条目时输出 summary line + diff link（RU4）— Batch 2 (a6d33ab)
+- [x] `/pmai-task-spec` 和 stage 6 子循环开头校验 task-plan.md ↔ tasks/ 一致（RU5）— Batch 1 (90997a3)
+- [x] `/pmai-close-task` 末尾轻量 auto-chain：完成后自动提示下一个 task，PM 一键继续（RU6）— Batch 3 (dfd5f5f)
+- [x] `/pmai-task-spec` 生成基础设施 task 时明确告知"本 task 不触发 module merge"（RU7）— Batch 1 (90997a3)
+- [x] `/pmai-doc-update` 失败一律阻塞 close-task；错误信息含文件 / failure 类型 / 续跑路径（DB2）— Batch 2 (a6d33ab)
 - [x] Upgrade path 子设计写入 TODOS.md（UP）— commit 55015a9 时已加进 TODOS.md（DX backlog）
 
 **Batch 3 衍生一致性 fix（dfd5f5f）**：req-stage-gate C2 半 close 检测精确化为 grep `<!-- SKIP_DOC_UPDATE:` AND `cleanup_status="pending"` 同时存在；cleanup 描述改为"改 status='done'"（保留 marker 作 audit trail）。
@@ -572,8 +572,8 @@ D1/D2/D3 (Discover) / I1/I2 (Install) / HW1/HW2/HW3 (Hello World TTHW) / DB1 (IN
 | # | Issue | 决议 | 影响 |
 |---|-------|------|------|
 | Eng-1 | 10 文件改动一次合 vs 分批？ | **分 3 批 PR 落地**（见上方"落地节奏"表） | 改动清单按 batch 重组 |
-| A1 | doc-update 是 SPOF，DB2 阻塞但缺逃生舱 | **`close-task --skip-doc-update` flag**：必填 reason 写进文档偏差 section + 自动生成人工 cleanup TODO + task 标"半 close" | 改 `/close-task`（改动 #11）+ Q4 边界表更新 |
-| A3 | 多模块 task doc-update merge atomicity | **atomic merge**：git 临时分支全 merge，任一失败全回滚 | 改 `/doc-update`（改动 #6 加 atomicity 处理） |
+| A1 | doc-update 是 SPOF，DB2 阻塞但缺逃生舱 | **`close-task --skip-doc-update` flag**：必填 reason 写进文档偏差 section + 自动生成人工 cleanup TODO + task 标"半 close" | 改 `/pmai-close-task`（改动 #11）+ Q4 边界表更新 |
+| A3 | 多模块 task doc-update merge atomicity | **atomic merge**：git 临时分支全 merge，任一失败全回滚 | 改 `/pmai-doc-update`（改动 #6 加 atomicity 处理） |
 | T1 | plan 当前没明确测试策略 | **每批 PR 必带对应测试 + 4 critical gap 必须 E2E 在对应 batch 绿** | 落到 Batch 1/2/3 的 acceptance criteria；test plan 详见 `~/.gstack/projects/PM-AI-Workflow/local-user-main-eng-review-test-plan-20260425-204848.md` |
 
 ### 4 critical test gap（漏测 = silent failure）
@@ -629,13 +629,13 @@ D1/D2/D3 (Discover) / I1/I2 (Install) / HW1/HW2/HW3 (Hello World TTHW) / DB1 (IN
 - **从**：first req 自动跑 `/plan-eng-review`；后续 req 建议 PM 跑（可跳）
 - **到**：所有 req 默认自动跑 `/plan-eng-review` 审阅 `task-plan.md`，不区分 first / 后续
 - review 发现贴 chat（讨论性，不写盘）
-- PM 提修改意见 → 回 `/task-plan` 改 `task-plan.md` → 重跑 review → 再次确认门
+- PM 提修改意见 → 回 `/pmai-task-plan` 改 `task-plan.md` → 重跑 review → 再次确认门
 - 落点：`skills/req-stage-gate/SKILL.md` Stage 5 → 6 段
 
 ### Stage 6（task-spec 单 task 文档完成后，PM 确认前）
 
-- **从**：`/task-spec` 步骤 7 写完直接进步骤 8 PM 确认门，无 review
-- **到**：`/task-spec` 在 PM 确认门前插入默认 review 步骤
+- **从**：`/pmai-task-spec` 步骤 7 写完直接进步骤 8 PM 确认门，无 review
+- **到**：`/pmai-task-spec` 在 PM 确认门前插入默认 review 步骤
   - **业务模块 task** → 自动跑 `/plan-eng-review` + `/plan-design-review`
   - **基础设施 task** → 只跑 `/plan-eng-review`（无 UI 内容，跳过 design-review）
 - review 发现贴 chat；PM 选项：

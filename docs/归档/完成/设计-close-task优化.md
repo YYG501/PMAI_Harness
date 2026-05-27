@@ -1,7 +1,7 @@
 # close-task 优化设计
 
 讨论日期：2026-05-08
-背景：PM 在实际项目（ExampleConsumerApp / req-003）跑完 task-002 验收通过后，在 req 窗口跑 /close-task 流程过长 + token 消耗大（38 分钟 + 60k token）。
+背景：PM 在实际项目（ExampleConsumerApp / req-003）跑完 task-002 验收通过后，在 req 窗口跑 /pmai-close-task 流程过长 + token 消耗大（38 分钟 + 60k token）。
 
 ---
 
@@ -17,13 +17,13 @@
 | 2. 框定的是对的问题？ | CONFIRMED N — I-CT8 audit 是 band-aid，根问题是"状态字段、事件流、commit"不在同一事务里 |
 | 3. Scope 排序对？ | CONFIRMED N — R1（半 close 闭环）影响系统级信任破产，应排 #1，不是 #2 |
 | 4. Alternatives 探索充分？ | CONFIRMED N — 原 §3 缺 0C-bis 对比表，A2/A3/A4 没认真评估 |
-| 5. Implementation 依赖站得住？ | CONFIRMED N（codex 实查 repo） — `/doc-update --rewrite` flag **不存在**，doc-update SKILL 只有对账模式 + 沉淀模式；R1 原方案架在空气上 |
+| 5. Implementation 依赖站得住？ | CONFIRMED N（codex 实查 repo） — `/pmai-doc-update --rewrite` flag **不存在**，doc-update SKILL 只有对账模式 + 沉淀模式；R1 原方案架在空气上 |
 | 6. 6-month trajectory？ | CONFIRMED N — file-name allowlist 是 roach motel，每加一种元信息文件类型就要扩白名单 |
 
 **关键失实**（必须重写）：
 
 - 原 §3.1 杠杆 A 用 `task md + engineering md` file-name allowlist 做豁免，6 个月内会因为新增元信息文件（`.req-meta.json` / review 记录 / runtime marker）反复扩白名单。**应改用 commit subject / lifecycle event 类型做豁免依据**。
-- 原 §4.1 R1 引用 `/doc-update --rewrite` flag，**该 flag 不存在**。doc-update SKILL 步骤 0.5 写明"由 close-req 阶段聚合所有 SKIP marker 后统一 rewrite"是意图但**实现层没写**。R1 必须先在 doc-update SKILL 里加 rewrite mode，或改用别的实现路径。
+- 原 §4.1 R1 引用 `/pmai-doc-update --rewrite` flag，**该 flag 不存在**。doc-update SKILL 步骤 0.5 写明"由 close-req 阶段聚合所有 SKIP marker 后统一 rewrite"是意图但**实现层没写**。R1 必须先在 doc-update SKILL 里加 rewrite mode，或改用别的实现路径。
 - 原 §6 优先级 杠杆 A > R1 错——按双视角共识 R1 应排 #1（系统级信任修复），杠杆 A 可以作为 hotfix 但 roadmap 优先级低于 R1。
 
 ### 0.2 2026-05-08 P2 / P3 验证结果（在 example-consumer-app 主仓跑）
@@ -84,7 +84,7 @@ I-CT8 加入时间 2026-04-23（commit 476bc75），task-001 close 时间 2026-0
 ✅ task-002 状态已转「已完成」，10 commit 全部 clean。
 
 下一步：关闭本（task）窗口，切到 req 窗口运行：
-  /close-task task-002
+  /pmai-close-task task-002
 
 理由：close-task 会删本窗口的 task worktree，必须在 req 窗口（不会"删自己脚下"）执行。
 close-task 会做：
@@ -99,7 +99,7 @@ dev server (port 6959) 保持运行直到 close-task。
 
 PM 反馈：太啰嗦——「理由 / close-task 会做 / dev server 状态」是 close-task skill 内部知识，不应该在调用前提示里复读。
 
-### 1.2 进 req 窗口跑 /close-task 后的实际流程
+### 1.2 进 req 窗口跑 /pmai-close-task 后的实际流程
 
 PM 实测原文：
 
@@ -469,7 +469,7 @@ REQ_WORKTREE=$(git worktree list --porcelain | awk -v branch="$REQ_BRANCH" '
 `skills/task-execute/SKILL.md` L878-885 + `skills/task-submit/SKILL.md` L181-186 改成：
 
 ```text
-✅ task-NNN 已完成。到 req 窗口跑 /close-task task-NNN。
+✅ task-NNN 已完成。到 req 窗口跑 /pmai-close-task task-NNN。
 ```
 
 理由 / 子步骤 / dev server 状态 close-task skill 自己有，调用前不复读。
@@ -542,7 +542,7 @@ PM 拒绝 rewrite（任一章节）→ exit 1，让 close-req 决定是 retry �
   - **patch**（单 task 改单文档时）：调现有 doc-update 对账模式（步骤 1.5/1.6/2-5）
   - **skip**：本 req 不沉淀，留到下游 req（marker cleanup_status 保持 pending，append inter-req 备注 `<!-- DEFERRED_TO_REQ: req-NNN reason="..." -->`）
 
-全部 marker 处理完后才进步骤 2a /prd-writing（这时 module spec 已经统一沉淀，prd-writing 输入干净）。
+全部 marker 处理完后才进步骤 2a /pmai-prd-writing（这时 module spec 已经统一沉淀，prd-writing 输入干净）。
 
 PM 决议过程中拒绝任何 rewrite / patch → close-req 中止，retry 时回到步骤 1.5 重新决议。
 ```
@@ -559,7 +559,7 @@ PM 决议过程中拒绝任何 rewrite / patch → close-req 中止，retry 时�
 - task-001 / 002 / 003 / 004 的累积偏差一次性沉淀，不留 TODO 债
 - doc-update SKILL 步骤 0.5 的设计意图终于有实现支撑
 
-**vs 原 plan**：原方案直接调 `/doc-update --rewrite`（虚构的 flag），实际不存在。重写后改成"先在 doc-update SKILL 加 rewrite mode 实现，再让 close-req 调用"——多一步 SKILL 改造，但不再架空。
+**vs 原 plan**：原方案直接调 `/pmai-doc-update --rewrite`（虚构的 flag），实际不存在。重写后改成"先在 doc-update SKILL 加 rewrite mode 实现，再让 close-req 调用"——多一步 SKILL 改造，但不再架空。
 
 ### 4.2 R2：worktree 路径硬编码
 
@@ -592,7 +592,7 @@ git commit -m "close: req-NNN-<slug>"
 
 ### 4.4 R4：prd-writing 在半 close 上下文的 token + 质量风险
 
-**问题**：v2 重做场景下 functions-v4.1.md 是杂交版（被 task-001 / 002 改过但 SKIP_DOC_UPDATE 没沉淀新规则）。/prd-writing 步骤 2a 必做，会从 module spec 抽 PRD 输入——读到杂交版 → 输出 PRD 质量低 + 烧 token。
+**问题**：v2 重做场景下 functions-v4.1.md 是杂交版（被 task-001 / 002 改过但 SKIP_DOC_UPDATE 没沉淀新规则）。/pmai-prd-writing 步骤 2a 必做，会从 module spec 抽 PRD 输入——读到杂交版 → 输出 PRD 质量低 + 烧 token。
 
 **修复**：R1 解决后这个自动消失。R1 先扫 marker 统一重写 module spec → prd-writing 读到的是干净版。
 

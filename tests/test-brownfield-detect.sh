@@ -71,13 +71,13 @@ test_existing_git_dir_rejected() {
 # T3: SKILL.md 阶段 A 含 brownfield 检测描述（skill 层 prompt 校验）
 # -----------------------------------------------------------------
 test_skill_describes_brownfield_gate() {
-  start_test "T3: init-project SKILL.md 阶段 A 含 brownfield 检测 + /codebase-audit 引导"
+  start_test "T3: init-project SKILL.md 阶段 A 含 brownfield 检测 + /pmai-codebase-audit 引导"
   if ! grep -q "brownfield" "$INIT_PROJECT_SKILL"; then
     _fail "SKILL.md 不含 brownfield 描述"
     return
   fi
-  if ! grep -q "/codebase-audit" "$INIT_PROJECT_SKILL"; then
-    _fail "SKILL.md 不含 /codebase-audit 引导（brownfield 命中后应提示）"
+  if ! grep -q "/pmai-codebase-audit" "$INIT_PROJECT_SKILL"; then
+    _fail "SKILL.md 不含 /pmai-codebase-audit 引导（brownfield 命中后应提示）"
     return
   fi
   # review C-7：两层都拦的接口约定

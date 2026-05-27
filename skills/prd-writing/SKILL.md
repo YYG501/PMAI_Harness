@@ -1,9 +1,9 @@
 ---
-name: prd-writing
+name: pmai-prd-writing
 description: |
   Generate a req-level PRD (功能规格). 多入口 skill ( stage 前移):
-  (a) stage-3 orchestrated 模式 — by /req-stage-gate at stage 3; mode 固定「req 级」, 跳过步骤 0 三选一对话, 输出到 $ACTIVE_REQ_DIR/prd.md; PRD 是 stage 3 定稿冻结、驱动 task 的功能规格;
-  (b) standalone 模式 — PM 手动 /prd-writing; 保留步骤 0「req 级 / 独立 / 补差」三选一; 独立 PRD (跨模块评审) 输出路径 PM 指定 (常见 docs/独立PRD/<slug>.md).
+  (a) stage-3 orchestrated 模式 — by /pmai-req-stage-gate at stage 3; mode 固定「req 级」, 跳过步骤 0 三选一对话, 输出到 $ACTIVE_REQ_DIR/prd.md; PRD 是 stage 3 定稿冻结、驱动 task 的功能规格;
+  (b) standalone 模式 — PM 手动 /pmai-prd-writing; 保留步骤 0「req 级 / 独立 / 补差」三选一; 独立 PRD (跨模块评审) 输出路径 PM 指定 (常见 docs/独立PRD/<slug>.md).
   Always trigger when the user says 'prd', 'PRD', '写需求文档', '写功能规格', '写评审 PRD', '给某模块写 PRD',
   or wants to generate the req's 功能规格 / cross-module review material.
   do NOT use as the per-task working spec before implementation (那是 task-spec 的职责).
@@ -15,7 +15,7 @@ description: |
 
 prd-writing 产出 **req 级 PRD = 该 req 的功能规格**。
 
-PRD 在 **stage 3**（功能规格阶段）由 `/req-stage-gate` 调用产出，**定稿后冻结**，作为下游 task 拆分（stage 5）与 task 执行（stage 6）的规格依据。执行期 task 对 PRD 的偏离不回写 PRD 基准；close-req 收尾时另做反向对齐。
+PRD 在 **stage 3**（功能规格阶段）由 `/pmai-req-stage-gate` 调用产出，**定稿后冻结**，作为下游 task 拆分（stage 5）与 task 执行（stage 6）的规格依据。执行期 task 对 PRD 的偏离不回写 PRD 基准；close-req 收尾时另做反向对齐。
 
 PRD 是 PM 视图链路的核心交付层 —— 它替代了旧管线里 stage 3 的「方案设计」，从 req 真实诉求（brief + analysis）现写功能规格。stage 3 时**还没有原型、还没有 task**：原型在 stage 4 之后才出，task 在 stage 5 才拆。
 
@@ -23,24 +23,24 @@ PRD 是 PM 视图链路的核心交付层 —— 它替代了旧管线里 stage 
 
 prd-writing 是**多入口 skill**，两条入口的边界如下：
 
-### 入口 A — stage-3 orchestrated 模式（被 `/req-stage-gate` 调）
+### 入口 A — stage-3 orchestrated 模式（被 `/pmai-req-stage-gate` 调）
 
-- **触发**：`/req-stage-gate` 在 Stage 2→3 推进时调用本 skill。
+- **触发**：`/pmai-req-stage-gate` 在 Stage 2→3 推进时调用本 skill。
 - **mode 固定「req 级」**：不询问写哪部分 —— stage 3 必然是当前 req 的完整 PRD。
 - **跳过步骤 0**：步骤 0 的「req 级 / 独立 / 补差」三选一对话**被 stage-gate 短路**，不向 PM 提问（短路机制见下方「步骤 0」段）。
 - **输入**：`brief.md` + **stage 2 真相源**（A 分支 `analysis.md` / B 分支 `stage2-office-hours.md`；路径由 `_lib.state.get_stage_source(req_dir, 2)` 解析，详见 `.req-meta.json:stage2_source`）+ `docs/PROJECT.md`（+ 已有 `docs/modules/` 如存在）—— 详见「Required Inputs」。
 - **产物**：`$ACTIVE_REQ_DIR/prd.md`。
 - **确认门**：步骤 2.5 §六拆分**必有 PM 确认门**（拆分结果是 §六层级的命名底稿，PM 必须拍板；AI 不允许自判「无歧义」跳过 —— 本门确认的是结构，不是成品）；步骤 4 最终确认归 `req-stage-gate` 定稿门，本 skill 内不重复。
 
-### 入口 B — standalone 模式（PM 手动 `/prd-writing`）
+### 入口 B — standalone 模式（PM 手动 `/pmai-prd-writing`）
 
-- **触发**：PM 主动调用 `/prd-writing`（不经 stage-gate）。
+- **触发**：PM 主动调用 `/pmai-prd-writing`（不经 stage-gate）。
 - **保留步骤 0 三选一**：「req 级 / 独立 / 补差」对话照常走。
   - **req 级**：当前 req 的完整 PRD（少见 —— 正常流程由 stage-gate 在 stage 3 自动产出；此入口用于 PM 想手动重写 / 补写已有 req 的 PRD）。
   - **独立**（跨模块评审 PRD）：PM 说「独立 PRD」/「给 X / Y 模块写一份评审 PRD」/「不绑当前 req」；产物路径由 PM 指定（如 `docs/独立PRD/<slug>.md`）。**独立 PRD 能力不丢** —— 这是 standalone 模式专属。
   - **补差**：PM 已有 PRD 但想补充某节 / 某模块；同入口，对话时 PM 说「只补 X 部分」。
 
-**两入口的判别**：调用上下文带 `$ACTIVE_REQ_STAGE=3` 且 caller 是 `req-stage-gate` → 走入口 A；PM 直接 `/prd-writing` → 走入口 B。
+**两入口的判别**：调用上下文带 `$ACTIVE_REQ_STAGE=3` 且 caller 是 `req-stage-gate` → 走入口 A；PM 直接 `/pmai-prd-writing` → 走入口 B。
 
 ## 步骤 0 · 开场对话式确认（仅 standalone 模式走）
 
@@ -627,7 +627,7 @@ fi
 - 写动作与结果，不写"支持/优化/提升体验"等泛词。
 - 有规则/限制/默认值的，必须明确写出（使用"默认……""不允许……""如果……则……"等句式）。
 - **多条规则采用续行 rowspan + 需求描述列内联编号格式**——与 `_shared/PM-VIEW-RULES.md` §五 一致：第一行 4 列填齐 + 需求描述写「1. ……」；第二行起前 3 列（二级功能 / 三级功能 / 使用角色）留空，需求描述列依次写「2. ……」「3. ……」……每条规则各占一个表格行。**禁止用中文分号 `；` 串接成一段**，**禁止用 `<br>` 或 `<ol><li>` 在同一 cell 内塞多条**。能一句话说清的不要分条；单条规则的 cell 不写编号前缀。
-- 续行 rowspan 配合 `/publish-to-lark` 步骤 4 的合并逻辑：前 3 列的空 cell 合并到上方非空 anchor（rowspan 效果），需求描述列的同一 row group 多条编号通过把非锚点 cell 的 children blocks 拷贝到锚点 cell + 清空原 cell + `merge_table_cells` 三步落成单 cell 内多行编号列表（详见 `skills/publish-to-lark/SKILL.md` 步骤 4）。
+- 续行 rowspan 配合 `/pmai-publish-to-lark` 步骤 4 的合并逻辑：前 3 列的空 cell 合并到上方非空 anchor（rowspan 效果），需求描述列的同一 row group 多条编号通过把非锚点 cell 的 children blocks 拷贝到锚点 cell + 清空原 cell + `merge_table_cells` 三步落成单 cell 内多行编号列表（详见 `skills/publish-to-lark/SKILL.md` 步骤 4）。
 - 表格行中含结构化参考数据（权限矩阵、字段清单、枚举值映射等）时，提取到九、附件，需求描述中注明"具体见附件 X"，不在单元格内展开。判断标准：同一格内需要超过 3 个字段/枚举值列举，且其他行可能引用同一份数据。
 
 **相同内容单元格视觉规范：**
@@ -636,7 +636,7 @@ fi
 - 最典型场景：同一二级功能下有多个三级功能（如"角色列表"作为二级在相邻 5 行重复），第一行展示"角色列表"，第 2-5 行该列留空。
 - 此规则对二级功能列、使用角色列同样适用——同一二级功能下多个三级功能的使用角色相同时，使用角色列也合并展示。
 - 标准 markdown 不支持合并单元格语法；本规则首要约束的是**视觉效果**。
-- **发布到飞书时由 `/publish-to-lark` 步骤 4 自动合并** — 前 N-1 列：非空 anchor 吸收下方相同内容 cell + 下方空 cell（续行 rowspan 语义）；末列（需求描述）：识别续行 row group 后把非锚点 cell 的 children blocks 拷贝到锚点 cell（保留富文本）+ 清空原 cell + `merge_table_cells`。markdown 写法保持"留空 cell"+ 内联编号 1./2./3.（4 列表格）即可，AI 在发布时机械补齐合并；无需 PM 手工。
+- **发布到飞书时由 `/pmai-publish-to-lark` 步骤 4 自动合并** — 前 N-1 列：非空 anchor 吸收下方相同内容 cell + 下方空 cell（续行 rowspan 语义）；末列（需求描述）：识别续行 row group 后把非锚点 cell 的 children blocks 拷贝到锚点 cell（保留富文本）+ 清空原 cell + `merge_table_cells`。markdown 写法保持"留空 cell"+ 内联编号 1./2./3.（4 列表格）即可，AI 在发布时机械补齐合并；无需 PM 手工。
 - 不发布到飞书 / 用其它工具链时，PM 在工具侧选中相邻相同 cell 手工合并即可。
 
 ---

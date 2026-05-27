@@ -48,7 +48,7 @@ _dependency_gate() {
     dep_status=$(python3 "$TASK_TRANSITION" "$dep_file" --get-status 2>/dev/null || echo "未知")
     if [ "${dep_status}" != "已完成" ]; then
       echo "❌ $(basename "$task_file" .md) 依赖未完成：${dep} 当前状态为「${dep_status}」。" >&2
-      echo "请先 close 依赖 task，再重新运行 /task-confirm <task-file>。" >&2
+      echo "请先 close 依赖 task，再重新运行 /pmai-task-confirm <task-file>。" >&2
       return 1
     fi
   done
@@ -108,7 +108,7 @@ test_task_execute_dependency_gate() {
     fixture_teardown
     return
   fi
-  if ! grep -F -q "请先 close 依赖 task，再重新运行 /task-confirm <task-file>。" /tmp/v4_t23_exec.err.$$; then
+  if ! grep -F -q "请先 close 依赖 task，再重新运行 /pmai-task-confirm <task-file>。" /tmp/v4_t23_exec.err.$$; then
     _fail "fallback dependency gate error missing recovery instruction"
     cat /tmp/v4_t23_exec.err.$$ >&2
     fixture_teardown

@@ -143,7 +143,7 @@ def main():
         print(f"❌ 文件不存在: {args.doc}", file=sys.stderr)
         print(
             "   修复：检查路径拼写；analysis.md 应位于 $ACTIVE_REQ_DIR/。"
-            "若 analysis.md 还没生成，先跑 /req-analysis。",
+            "若 analysis.md 还没生成，先跑 /pmai-req-analysis。",
             file=sys.stderr,
         )
         sys.exit(2)

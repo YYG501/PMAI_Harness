@@ -4,7 +4,7 @@
 # Writes .pending-manual-<task>.json to $MAIN_REPO_ROOT/.runs/ (NOT relative path,
 # so observability layers see it regardless of cwd), then exits 0.
 # Caller (task-execute) must interpret exit 0 with manual executor as "skill ends
-# here; PM will re-enter via /task-execute after completing worktree changes".
+# here; PM will re-enter via /pmai-task-execute after completing worktree changes".
 
 set -euo pipefail
 
@@ -47,7 +47,7 @@ Task-${TASK_SHORT_ID} 已设为 manual 执行
   必读文档、执行范围、验收标准、写回职责都在文件里
 
 完成后跑：
-  /task-execute $TASK_SHORT_ID
+  /pmai-task-execute $TASK_SHORT_ID
 会检测到 manual 标记 + 显式告知你"不会重跑执行器，直接进自审"。
 
 如果决定放弃这个 task：

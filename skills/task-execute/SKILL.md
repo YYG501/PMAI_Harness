@@ -1,12 +1,12 @@
 ---
-name: task-execute
+name: pmai-task-execute
 description: |
   在 task worktree 中实现代码、启动 dev server、写执行日志、填文档偏差、自审并记录。
 ---
 
-# /task-execute
+# /pmai-task-execute
 
-> **PM 视图（M2 banner + Decision gate label）**：入口 banner（`status-view.py --banner-only --skill TASK-EXECUTE`）；验收呈交闸门 label 按 `_shared/pm-view/banner-rules.md` §3 3 硬规则（label=动作如「task-NNN 通过验收」/「打回 task-NNN 修改」/「scope 改动」）；退出 Next Up 引导 `/close-task` 或继续修复。
+> **PM 视图（M2 banner + Decision gate label）**：入口 banner（`status-view.py --banner-only --skill TASK-EXECUTE`）；验收呈交闸门 label 按 `_shared/pm-view/banner-rules.md` §3 3 硬规则（label=动作如「task-NNN 通过验收」/「打回 task-NNN 修改」/「scope 改动」）；退出 Next Up 引导 `/pmai-close-task` 或继续修复。
 >
 > **PM 答题规则（M4）**：所有 AskUserQuestion 调用按 `_shared/pm-view/askuser-rules.md` §1 3 硬规则走（空答 STOP / 没拿到答案禁止默认走通过分支 / runtime 退化保留 wait）。**历史教训** commit 07a3a09：PM 没答 AI 默认走通过 → task 跳过验收。
 
@@ -70,7 +70,7 @@ echo "━━━ PMAI ► TASK-EXECUTE ▸ 启动 task 执行 ━━━"
    - 唯一匹配：使用该文件。
    - 0 个或多个匹配：报错退出，并提示 PM 传完整 task 文件路径（多 active req 并行时短 ID 可能在多个 req 里冲突）。
 
-   > **v4.5 注**：task-confirm fork 后会把 task md 从 req 分支删，只在 task 分支独家。短 ID 模式必须扫 `.worktrees/task-*/` 才找得到已 fork 的 task；否则跑 `/task-execute task-NNN` 会在已 confirm 的 task 上误报 "0 个匹配"。
+   > **v4.5 注**：task-confirm fork 后会把 task md 从 req 分支删，只在 task 分支独家。短 ID 模式必须扫 `.worktrees/task-*/` 才找得到已 fork 的 task；否则跑 `/pmai-task-execute task-NNN` 会在已 confirm 的 task 上误报 "0 个匹配"。
 3. **无参数**：自动扫描主仓 + `.worktrees/req-*/requirements/active` + **`.worktrees/task-*/requirements/active`**，找出所有同时满足下列条件的 task：
    - 状态为「待执行」。
    - 对应 `.worktrees/<task-stem>` 已存在。
@@ -78,8 +78,8 @@ echo "━━━ PMAI ► TASK-EXECUTE ▸ 启动 task 执行 ━━━"
 无参数模式：
 
 - 唯一匹配：自动选定。
-- 0 个匹配：报错，提示 PM 先在主窗口运行 `/task-confirm <task-file>`。
-- 多个匹配：报错，列出候选短 ID，提示 PM 改跑 `/task-execute task-NNN`。
+- 0 个匹配：报错，提示 PM 先在主窗口运行 `/pmai-task-confirm <task-file>`。
+- 多个匹配：报错，列出候选短 ID，提示 PM 改跑 `/pmai-task-execute task-NNN`。
 
 定位成功后第一时间输出进度反馈：
 
@@ -96,7 +96,7 @@ TASK_STEM=$(basename "$TASK_FILE" .md)
 TASK_WORKTREE="$MAIN_REPO_ROOT/.worktrees/$TASK_STEM"
 ```
 
-如 worktree 不存在，报错退出并提示 PM 回主窗口重跑 `/task-confirm $TASK_FILE`。
+如 worktree 不存在，报错退出并提示 PM 回主窗口重跑 `/pmai-task-confirm $TASK_FILE`。
 
 执行 cd 并立刻验证生效（避免 Claude Code 沙盒静默 reset 后续命令落到错误目录）。
 
@@ -125,7 +125,7 @@ if [ "$ACTUAL" != "$EXPECTED_CANONICAL" ]; then
   echo "修复：关闭本会话，在新终端窗口（保持在当前 req worktree 目录）用以下命令重启 Claude：" >&2
   echo "  claude --add-dir \"$MAIN_REPO_ROOT\"" >&2
   echo "" >&2
-  echo "进新会话后再跑 /task-execute $(basename "$TASK_FILE" .md)。" >&2
+  echo "进新会话后再跑 /pmai-task-execute $(basename "$TASK_FILE" .md)。" >&2
   exit 1
 fi
 ```
@@ -143,7 +143,7 @@ DRIFT_SCRIPT="$PMAI_HOME/scripts/check-req-doc-drift.sh"
 if [ ! -f "$DRIFT_SCRIPT" ]; then
   echo "❌ drift 检测脚本不在预期路径：$DRIFT_SCRIPT" >&2
   echo "这通常意味着消费仓的 PMAI 框架版本落后或同步状态有问题。" >&2
-  echo "请回主仓跑框架同步流程后再重试 /task-execute。" >&2
+  echo "请回主仓跑框架同步流程后再重试 /pmai-task-execute。" >&2
   exit 1
 fi
 REQ_BRANCH=$(git -C "$MAIN_REPO_ROOT" branch --contains HEAD --format='%(refname:short)' | grep '^req-' | head -1)
@@ -204,13 +204,13 @@ done
   ```
   ❌ drift 检测脚本不在预期路径：$PMAI_HOME/scripts/check-req-doc-drift.sh
   这通常意味着消费仓的 PMAI 框架版本落后或同步状态有问题。
-  请回主仓跑框架同步流程后再重试 /task-execute。
+  请回主仓跑框架同步流程后再重试 /pmai-task-execute。
   ```
   AI 在 PM 对话里**禁说「脚本未安装」**这种措辞 —— 脚本不是第三方依赖，是框架自带文件，「未安装」会误导 PM 去 `npm install` / `brew install`。正确措辞是「脚本不在预期路径」+ 把完整绝对路径报出来，PM 一眼能判定是 `.claude/` 丢了还是别的问题。
 
 #### 入口步骤 2.5：依赖前置 gate（v4 兜底层）
 
-这是防止 PM 手动用 `task-transition.py` 强改状态、绕过 `/task-confirm` 的兜底层。逻辑必须与 `/task-confirm` 的「步骤 4-pre：依赖前置检查」一致：
+这是防止 PM 手动用 `task-transition.py` 强改状态、绕过 `/pmai-task-confirm` 的兜底层。逻辑必须与 `/pmai-task-confirm` 的「步骤 4-pre：依赖前置检查」一致：
 
 1. 解析 `## 依赖` section，只提取 `task-NNN` 模式。
 2. 在同 req 下查找每个依赖 task。
@@ -220,7 +220,7 @@ done
    - 直接报错给 PM：
      ```text
      ❌ task-NNN 依赖未完成：task-MMM 当前状态为「<status>」。
-     请先 close 依赖 task，再重新运行 /task-confirm <task-file>。
+     请先 close 依赖 task，再重新运行 /pmai-task-confirm <task-file>。
      ```
    - 不进入执行，不修改当前 task 状态。
 5. 全部依赖均为「已完成」时，通过 gate。
@@ -246,9 +246,9 @@ CURRENT_STATUS=$(python3 "$PMAI_HOME/scripts/task-transition.py" "$TASK_FILE" --
 状态处理：
 
 - 「待执行」：继续走，进 §3b dispatch 时由 `task-transition --bound-to-execution-event` 物化绑定 dispatch 事件、原子完成 transition（修复 B：堵"状态推到执行中但 dispatch 没真跑"的悬空态）。
-- 「执行中」：允许重试或 PM 打回后续跑，不重复 transition。包括：commit 后已呈交但 PM 还没决策的场景（task 状态仍是「执行中」）— 此时如想重新看呈交块跑 `/task-submit`。dispatch §3b 进入时若已是「执行中」会单独 emit 一条 dispatch 事件作为重试审计标记，不再 transition state。
-- 「已完成」：错误退出，提示 `该 task 已完成；如需收尾，在本（task）窗口运行 /close-task task-NNN（先在当前窗口做文档对齐和沉淀，再切 req 窗口完成清理）`。
-- 其他状态：错误退出，展示当前状态，并提示 PM 回主窗口用 `/task-status` 查看。
+- 「执行中」：允许重试或 PM 打回后续跑，不重复 transition。包括：commit 后已呈交但 PM 还没决策的场景（task 状态仍是「执行中」）— 此时如想重新看呈交块跑 `/pmai-task-submit`。dispatch §3b 进入时若已是「执行中」会单独 emit 一条 dispatch 事件作为重试审计标记，不再 transition state。
+- 「已完成」：错误退出，提示 `该 task 已完成；如需收尾，在本（task）窗口运行 /pmai-close-task task-NNN（先在当前窗口做文档对齐和沉淀，再切 req 窗口完成清理）`。
+- 其他状态：错误退出，展示当前状态，并提示 PM 回主窗口用 `/pmai-task-status` 查看。
 
 ### 步骤 1：读取 task 文件（三态格式分流）
 
@@ -338,7 +338,7 @@ fi
 >
 > 涉及视觉规范 / 项目级规则 / 字段字典 / 权限矩阵等项目级文档产物——**即使 PRD 明文要求"建立 X 规范段"**——按以下路径处理，不在 task 主线代码 + commit 上：
 > - **PM 反馈类**：留在 PM 视图 `## 📁 历史档案 → ### PM 反馈`，分类「视觉规范」/「产品规则」，由 close-task §1.5 / §1.6 沉淀（patch 到 `$MAIN_REPO_ROOT/docs/*`，不 commit）
-> - **PRD 主线规范产物**：留草稿在 task PM 视图暂存区（或独立 .md 草稿），task close 后跑 `/doc-update` 走正规审定 + patch 到 req 分支
+> - **PRD 主线规范产物**：留草稿在 task PM 视图暂存区（或独立 .md 草稿），task close 后跑 `/pmai-doc-update` 走正规审定 + patch 到 req 分支
 >
 > 如果发现 task md 「执行范围」allowlist 写了 `docs/*` 项 → 高概率是 task-plan 拍 §4.1 反模式 A 时误判（应文档类不立 task / 走 doc-update，被错当成重构类合并进了业务 task）。当场停下来给 PM 一句话提示："task 执行范围含 docs/*，疑似 task-plan §4.1 反模式 A 文档类误判，建议先回 task-plan 调整再继续"，由 PM 拍。
 
@@ -349,9 +349,9 @@ fi
 ```bash
 CURRENT_STATUS=$(python3 "$PMAI_HOME/scripts/task-transition.py" "$TASK_FILE" --get-status 2>/dev/null || echo "")
 if [ "$CURRENT_STATUS" != "执行中" ]; then
-  echo "❌ /task-execute 入口拒绝：task 状态为「${CURRENT_STATUS:-未知}」，不是「执行中」。" >&2
+  echo "❌ /pmai-task-execute 入口拒绝：task 状态为「${CURRENT_STATUS:-未知}」，不是「执行中」。" >&2
   echo "" >&2
-  echo "请回到入口前置步骤处理状态，或在主窗口运行 /task-status 查看下一步。" >&2
+  echo "请回到入口前置步骤处理状态，或在主窗口运行 /pmai-task-status 查看下一步。" >&2
   exit 1
 fi
 ```
@@ -527,8 +527,8 @@ Dev server 保持运行（PM 验收时需要访问）。
 
 ### 步骤 11：呈交 PM 验收（合并自 task-submit）
 
-> 默认路径：commit 后**自动**呈交，PM 不需手动敲 `/task-submit`。task 状态全程「执行中」，commit 不切状态。
-> 兜底入口：PM 在异常情况（窗口被关 / context 丢失 / 重启 IDE）下仍可手动跑 `/task-submit`，逻辑等价。
+> 默认路径：commit 后**自动**呈交，PM 不需手动敲 `/pmai-task-submit`。task 状态全程「执行中」，commit 不切状态。
+> 兜底入口：PM 在异常情况（窗口被关 / context 丢失 / 重启 IDE）下仍可手动跑 `/pmai-task-submit`，逻辑等价。
 
 详见 [`references/acceptance-handoff.md`](./references/acceptance-handoff.md)：
 - 11.1 组装验收信息包（读 task 文件 + diff + review_completed 事件 + UI/非 UI 判定）
@@ -550,9 +550,9 @@ python3 "$PMAI_HOME/scripts/task-transition.py" "$TASK_FILE" --to 已完成
 ✅ task-NNN 状态已转「已完成」。
 
 ▶ Next Up — 在本（task）窗口运行：
-  /close-task task-NNN
+  /pmai-close-task task-NNN
 
-本次 close 收尾在当前窗口做完（文档对齐 + 视觉规范沉淀），完成后会提示你切到 req 窗口再跑一次 /close-task 完成清理。
+本次 close 收尾在当前窗口做完（文档对齐 + 视觉规范沉淀），完成后会提示你切到 req 窗口再跑一次 /pmai-close-task 完成清理。
 ```
 
 **PM 说"打回"**：
@@ -584,12 +584,12 @@ PM 在验收期间任意时刻可自跑 `/review` `/qa` `/design-review` 等 rev
 - task 文件用绝对路径读写（task worktree 中的路径和主仓路径不同）
 - 代码改动在 task worktree 中进行
 - 文档（docs/）不在 task worktree 中修改（hook 会拦截）
-- 文档偏差记录到 task 文件，由 `/doc-update` 在 close-task 前处理
+- 文档偏差记录到 task 文件，由 `/pmai-doc-update` 在 close-task 前处理
 - AI 不得自动调任何 review 工具（`/review` `/qa` `/qa-only` `/design-review` 等，I-RV1）；推荐 review 仅作步骤 11 验收信息块末尾「⚙️ 可选深度审查」辅助提示，PM 自取所需
 - **task-verify 例外**：UI task 在步骤 7.5 **必须**调 task-verify（流程化 UAT，不属于 review skill 范畴，I-RV1 不适用）；fail → 反馈循环 + 不 commit；连续 3 次 fail 呈交 PM 人工接手
 - PM 报告 review 结论后才 append `review_completed` 事件（I-RV3）；禁止 AI 替 PM 跑或凭记忆模拟
 - 事件流缺 review_completed 不阻止「执行中→已完成」转换（I-RV2）
 - dev server 在 task-execute 结束后保持运行，直到 close-task 时杀掉
-- **commit 不切状态 → 自动进步骤 11 呈交验收**（task 状态全程「执行中」直到 PM 通过；默认路径，PM 不手动敲 `/task-submit`）；PM 通过后 AI 转「已完成」并提示 PM 在本（task）窗口跑 `/close-task task-NNN` 启动 Phase 1（close-task 是两阶段调用，Phase 1 在 task 窗口对齐 + commit，Phase 2 切到 req 窗口 merge + 清理）
+- **commit 不切状态 → 自动进步骤 11 呈交验收**（task 状态全程「执行中」直到 PM 通过；默认路径，PM 不手动敲 `/pmai-task-submit`）；PM 通过后 AI 转「已完成」并提示 PM 在本（task）窗口跑 `/pmai-close-task task-NNN` 启动 Phase 1（close-task 是两阶段调用，Phase 1 在 task 窗口对齐 + commit，Phase 2 切到 req 窗口 merge + 清理）
 - PM 打回不切状态：写反馈到 task 文件「📁 历史档案 → PM 反馈」（v3 审计区 / v2 PM 视图）→ AI 修代码 → 追加 fix commit → 重新呈交（不再走 `--to 执行中` transition）
 - task-submit 仍存在但仅作 PM 手动兜底入口（重启窗口 / context 丢失 / 异常退出后重新呈交）

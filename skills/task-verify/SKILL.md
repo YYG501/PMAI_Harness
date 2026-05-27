@@ -1,12 +1,12 @@
 ---
-name: task-verify
+name: pmai-task-verify
 description: |
   按 task md「🧪 自测说明」段的流程化 UAT 跑浏览器测试，输出 pass/fail 报告。
   在 task-execute 步骤 7.5（commit 前）自动调用；也可 PM 手动调。
   与 review skill 区别：UAT 是验证 PM 拍板的流程是否通（明确 pass/fail）；review 是探索性质量审查（多元 finding）。
 ---
 
-# /task-verify
+# /pmai-task-verify
 
 ## When To Use
 

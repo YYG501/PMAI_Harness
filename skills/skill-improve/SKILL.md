@@ -1,17 +1,17 @@
 ---
-name: skill-improve
+name: pmai-skill-improve
 description: |
   把 PM 写的 skill 反馈消化到对应 skill 的 SKILL.md / references。流程化执行：读反馈 + 对账现状 + PM 逐条决策 + 改 SKILL + 归档反馈到 skill-feedback/。
 ---
 
-# /skill-improve
+# /pmai-skill-improve
 
 > **PM 答题规则（M4）**：所有 AskUserQuestion 调用（模式 B 反馈条目确认 / PM 逐条决策采纳）按 `_shared/pm-view/askuser-rules.md` §1 3 硬规则走（空答 STOP / 没拿到答案禁止改 SKILL.md / 归档反馈 / runtime 退化保留 wait）。**禁止默认走 recommend 分支 / 禁止逃生舱**。
 
 ## When To Use
 
 **模式 A（显式反馈文件）**：PM 已写好反馈文件，显式调用：
-- `/skill-improve prd-writing skill-feedback/prd-writing-2026-04-27.md`
+- `/pmai-skill-improve prd-writing skill-feedback/prd-writing-2026-04-27.md`
 - 或反馈文件在业务仓（如 `ExampleConsumerApp/<skill>-skill-feedback.md`），参数给路径，本 skill 自动归档
 
 **模式 B（会话内直接反馈）**：PM 在会话里直接说某 skill 有问题（"这里不对"、"这个 skill 应该…"、"每次跑 X skill 都会出现…"），AI 主动识别并走本 skill 流程，无需 PM 先写反馈文件。
@@ -39,7 +39,7 @@ description: |
 1. AI 先从会话上下文里提取 PM 反馈，整理成结构化条目，向 PM 确认：
 
    ```
-   我识别到以下 [skill-name] 反馈，走 /skill-improve 消化，请确认：
+   我识别到以下 [skill-name] 反馈，走 /pmai-skill-improve 消化，请确认：
    1. [反馈条目一]
    2. [反馈条目二]
    （如有遗漏或理解偏差请补充）

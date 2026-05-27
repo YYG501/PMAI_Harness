@@ -1,14 +1,14 @@
 ---
-name: quick-fix
+name: pmai-quick-fix
 description: |
   不走 req/task 流程的 PM 审批快捷修复：在 tmp-quick-* worktree 完成小改动、检查红线、审批后 ff-only 合入启动位置对应的 base 分支（main 或 active req 分支）。
 ---
 
-# /quick-fix
+# /pmai-quick-fix
 
 ## When To Use
 
-- PM 明确判断某个改动不需要完整 `/new-req` 流程或开新 task
+- PM 明确判断某个改动不需要完整 `/pmai-new-req` 流程或开新 task
 - 适用于错别字、格式、链接、常量值、少量样式或 PM 明确认可的轻量代码改动
 - 不适用于需要完整需求分析、task 拆分、自审或阶段验收的功能改动
 
@@ -18,7 +18,7 @@ description: |
 |---|---|---|
 | 主仓根 + 当前 main | `main` | 主仓根 |
 | `req-*` worktree（任意 req 分支） | 该 req 分支 | 该 req worktree |
-| `task-*` worktree | **拒绝**（task 阶段走 `/task-execute`） | — |
+| `task-*` worktree | **拒绝**（task 阶段走 `/pmai-task-execute`） | — |
 | 其他 | 拒绝 | — |
 
 base 由脚本 `ensure_quickfix_root` 自动推断，无需 `--base` 参数。
@@ -37,10 +37,10 @@ echo "SKILL: quick-fix"
 PM 必须给出一句话描述，例如：
 
 ```bash
-/quick-fix "修正文档里的错别字"
+/pmai-quick-fix "修正文档里的错别字"
 ```
 
-如果 PM 的描述为空，或听起来像需要完整 req 流程的新功能，先询问 PM 是否改走 `/new-req`。
+如果 PM 的描述为空，或听起来像需要完整 req 流程的新功能，先询问 PM 是否改走 `/pmai-new-req`。
 
 ### 步骤 2：启动 quick-fix worktree
 
@@ -93,9 +93,9 @@ cd "<WORKTREE>"
 **short-circuit 例外**：当改动仅触及"叙述/格式类"（§📁 历史档案 / typo / 引用更新），AI 可输出简化版扫描区块（§3.5.3 简化版），不让 PM 答"决策性 vs 轻量"分类提问。
 
 **三条 invariant 越界时拒绝执行**（详见 §3.5.1 req 分支表的"不改"行）：
-- active req 阶段产物（brief / analysis / prd / task-plan）的决策性修订 → 引导 PM 走 `req-transition.py --rollback` 或 stage 3 `/prd-writing` revise
-- active task 产出 → 引导 PM 走 `/task-execute` / `/task-submit` / `/close-task`
-- 在 req 分支跑 quick-fix 改 `docs/**` → 引导 PM 改用 main quick-fix 或留给 close-req → `/doc-update`
+- active req 阶段产物（brief / analysis / prd / task-plan）的决策性修订 → 引导 PM 走 `req-transition.py --rollback` 或 stage 3 `/pmai-prd-writing` revise
+- active task 产出 → 引导 PM 走 `/pmai-task-execute` / `/pmai-task-submit` / `/pmai-close-task`
+- 在 req 分支跑 quick-fix 改 `docs/**` → 引导 PM 改用 main quick-fix 或留给 close-req → `/pmai-doc-update`
 
 ### 步骤 4：完成改动后让脚本收口
 
@@ -149,9 +149,9 @@ bash "$PMAI_HOME/scripts/quick-fix.sh" --snapshot
 
 | 改对象 | 同时要考虑 |
 |---|---|
-| `prototypes/**` | 本 req `prd.md`（功能规格——产品决策是否被撤销/修订）/ 本 req 实现设计文档（如存在——实现约束更新）/ 已 close 的 task PM 视图（产品事实变化记 `[quick-fix-log]`，task md 不改）/ `docs/modules/*` **不直接改**（留给 close-req → `/doc-update`） |
+| `prototypes/**` | 本 req `prd.md`（功能规格——产品决策是否被撤销/修订）/ 本 req 实现设计文档（如存在——实现约束更新）/ 已 close 的 task PM 视图（产品事实变化记 `[quick-fix-log]`，task md 不改）/ `docs/modules/*` **不直接改**（留给 close-req → `/pmai-doc-update`） |
 | `requirements/active/<本req>/brief.md` 或 `analysis.md` | PM 必先分类（criterion 见下方）：决策性 → 拒绝走 `--rollback`；轻量 → 允许 + 扫下游产物链 |
-| `requirements/active/<本req>/prd.md` | 同上；决策性修订走 stage 3 `/prd-writing` revise；下游 task-plan / 已 close task md 引用是否要更新 |
+| `requirements/active/<本req>/prd.md` | 同上；决策性修订走 stage 3 `/pmai-prd-writing` revise；下游 task-plan / 已 close task md 引用是否要更新 |
 | 已 close task 的 `task-NNN-*.md` / `.engineering.md` | **不改**（历史档案）；产品事实变化记 `[quick-fix-log]` |
 | active task 产出 | **不改**（task 分支独家） |
 | `docs/**`（项目级合同） | **不改**（在 main 跑或留给 close-req） |
@@ -161,7 +161,7 @@ bash "$PMAI_HOME/scripts/quick-fix.sh" --snapshot
 
 PM 在 req 分支 quick-fix 触及阶段产物（brief / analysis / prd / task-plan）时，AI 让 PM 明示分类。判断依据：
 
-**决策性**（必走 stage-rollback / stage 3 `/prd-writing` revise）：
+**决策性**（必走 stage-rollback / stage 3 `/pmai-prd-writing` revise）：
 - 触动 §🎯 关键产品决策 / §📌 摘要 / §📦 交付物 / §🚦 跨功能产品规则 / §✅ 验收清单 等"产品决策载体"章节
 - 改动会让下游 stage 产物 stale（analysis 改 → prd stale；prd 改 → task-plan stale；以此类推）
 
@@ -199,11 +199,11 @@ PM 在 req 分支 quick-fix 触及阶段产物（brief / analysis / prd / task-p
 - 与项目内的对照：工程合同 reconcile 末尾的 HTML 注释（input-flow §9.6.4）服务的是脚本机械 audit（PM 不看），形式不通用；quick-fix 改历史档案是 PM 决策的修订，必须 visible
 
 分层 lazy sync 边界（不立刻同步，由后续流程统一处理）：
-- 项目级 docs 变更 ↔ 各 active req prd → close-req 阶段 /doc-update 处理
+- 项目级 docs 变更 ↔ 各 active req prd → close-req 阶段 /pmai-doc-update 处理
 - main 上原型变更 ↔ 各 active req → 各 req 自己 close-req 时处理
 ```
 
-**术语澄清**：本节的"分层 lazy sync"指**项目级 ↔ req 级**或 **main ↔ req** 的跨层合同关系；和 `_shared/pm-view/input-flow.md` §9.6 定义的"PM 视图主文件 ↔ 工程合同"双文件 lazy sync 是**同型机制不同对象**——别混淆。§9.6 的 reconcile 流程不直接服务于 quick-fix；quick-fix 偏差扫描是 close-req `/doc-update` 之前的轻量补丁。
+**术语澄清**：本节的"分层 lazy sync"指**项目级 ↔ req 级**或 **main ↔ req** 的跨层合同关系；和 `_shared/pm-view/input-flow.md` §9.6 定义的"PM 视图主文件 ↔ 工程合同"双文件 lazy sync 是**同型机制不同对象**——别混淆。§9.6 的 reconcile 流程不直接服务于 quick-fix；quick-fix 偏差扫描是 close-req `/pmai-doc-update` 之前的轻量补丁。
 
 ### 3.5.3 偏差扫描输出格式（标准模板）
 
@@ -267,8 +267,8 @@ quick-fix commit 前 AI 必须按以下模板输出区块给 PM 看：
 
 ## Rules
 
-- `/quick-fix` 是 main 与 active req 分支写保护的唯一例外，但只通过 `tmp-quick-*` worktree + PM 审批 + 脚本合并成立
-- 必须从主仓 main 或 `req-*` worktree 启动；task worktree 内禁止（走 `/task-execute`）
+- `/pmai-quick-fix` 是 main 与 active req 分支写保护的唯一例外，但只通过 `tmp-quick-*` worktree + PM 审批 + 脚本合并成立
+- 必须从主仓 main 或 `req-*` worktree 启动；task worktree 内禁止（走 `/pmai-task-execute`）
 - AI 只能在脚本创建的 quick-fix worktree 内修改文件
 - 禁止修改 `requirements/active/*/tasks/*.md`
 - 禁止修改 `requirements/active/*/.req-meta.json`

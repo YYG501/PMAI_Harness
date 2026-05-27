@@ -35,7 +35,7 @@
 | `1d3505b` | feat(vp-2): close-req §2a/§2b 改 PM 主导 |
 | `fbec85b` | feat(vp-1a): migrate-prd.py 消费仓 prd 迁移 |
 | `73b98a8` | feat(vp-1): 砍 docs/prd.md + project-prd-update 全机制 |
-| `82d8090` | feat(vp-5): /prd-writing 灵活化（对话式确认输入）|
+| `82d8090` | feat(vp-5): /pmai-prd-writing 灵活化（对话式确认输入）|
 | `4bd03af` | feat(vp-7): status-view --timeline 全局 req 视图 |
 | `fccbed4` | feat(vp-6): 清理 first req 残留（11 处 + 测试调整）|
 | `65329d0` | feat(attachments): 独立机制实施完成 |
@@ -48,7 +48,7 @@
 - status-view 扩展：`--timeline` / `--since` / `--module` / `--milestone` / `--limit` / `--all`
 - 删除：`templates/project-prd.md.tmpl` + `skills/project-prd-update/`
 
-**砍掉的机制清单（v5 §4 全 26 项已完整落地）**：项目主 PRD 整套（文件 + 模板 + skill + close-req §2b + 覆盖度算法 + rewrite 范围）+ PROJECT 约束/风险节 + /prd-writing close-req 硬约束 + is_first_req 全套（字段 + resolver first 子命令 + status-view 装饰）+ DESIGN.md.tmpl first req 残留文案 + init-project PROJECT 卡住 + 业务词催补 toggle + PROJECT 渐进式 / 软提示 + INDEX 作为 §1.5 主 rewrite 目标 + 多 vp 各自改 input-flow。
+**砍掉的机制清单（v5 §4 全 26 项已完整落地）**：项目主 PRD 整套（文件 + 模板 + skill + close-req §2b + 覆盖度算法 + rewrite 范围）+ PROJECT 约束/风险节 + /pmai-prd-writing close-req 硬约束 + is_first_req 全套（字段 + resolver first 子命令 + status-view 装饰）+ DESIGN.md.tmpl first req 残留文案 + init-project PROJECT 卡住 + 业务词催补 toggle + PROJECT 渐进式 / 软提示 + INDEX 作为 §1.5 主 rewrite 目标 + 多 vp 各自改 input-flow。
 
 **关于历史 D13 modulespec 维护方案**（2026-05-16 落地）：见 `docs/归档/完成/modulespec-维护/主方案.md`。本 v5 与 D13 兼容共存（v5 §2.3 INDEX derived refresh 显式不污染 D13 REWRITE_COVERED_FILES metric）。
 
@@ -354,13 +354,13 @@ V2 regex 会匹配只含空格的 cell（`| **状态** | |`），strip 后返回
 | 6 | task-plan 按字段拆（Python 决策表）| ❌ 废弃（PM 自主拆 task）|
 | 7 | task-spec 双源改造 | ❌ 废弃（已被 4.5d.4 实现）|
 | 8 | 格式统一前置 + 校验 + stale | ❌ 跳过（4.5d 后边际价值低；防漂移对象已不存在）|
-| 9 | PM 可见度（req-status + STATUS.md）| ❌ 跳过（PM 自有追踪能力，dashboard 低频；现 /task-status 已合格）|
+| 9 | PM 可见度（req-status + STATUS.md）| ❌ 跳过（PM 自有追踪能力，dashboard 低频；现 /pmai-task-status 已合格）|
 
 ---
 
 ## 后续改进：skill 读取收敛（2026-05-07，commit da2174e / 5b3f255 / be47fca）
 
-**触发**：PM 跑 /task-spec task-001 revise 报"为啥这么久"——实测一次读 ~8000 行写 ~100 行，读写比 50:1。
+**触发**：PM 跑 /pmai-task-spec task-001 revise 报"为啥这么久"——实测一次读 ~8000 行写 ~100 行，读写比 50:1。
 
 **设计文档**：`docs/归档/完成/设计-skill读取收敛.md`（3 轮 review 全过）
 

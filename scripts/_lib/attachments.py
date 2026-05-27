@@ -48,7 +48,7 @@ PM mental model：PM 在 chat 自然描述 "我有 X 在路径 Y"，AI 后台 cp
 非典型场景：
 - B 分支 office-hours 选源期间 caller SKILL **不调** copy_attachment
   （走 _lib.state.set_stage_source， 路径，不归档为 attachment）
-- standalone /prd-writing 模式 caller SKILL **不调** copy_attachment
+- standalone /pmai-prd-writing 模式 caller SKILL **不调** copy_attachment
   （standalone 不绑 req → 不入 req attachments/）
 """
 

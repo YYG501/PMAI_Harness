@@ -20,11 +20,11 @@ PM-AI-Workflow 生成器仓的演进记录。本文件**只记影响下游业务
 
 ### 2026-05-26 — task-execute 审计闭环加固（修复 A + B + C + C'）：堵 dispatch 没跑就推状态的悬空窗口
 
-**触发**：消费仓 ExampleConsumerApp req-008 task-001 复现 req-006 同款事故 —— AI 进 /task-execute 后入口前置 transition 了「待执行→执行中」，但中断 skill 没跑 dispatch 节点，直接用 Edit/Write 完成 work + 3 commit；事件流卡在仅 1 条 `status_changed`，accept 闸门正确拦下 `--to 已完成`，但 AI 给 PM 误诊"infra bug, skill 没自动 append"+ 提议 `task-events.py append --type execution_started` 补登（伪造审计证据）。req-006 后的 accept 闸门兜底有效，但缺**物理约束**让伪造路径根本执行不了 + 缺 AI 故障恢复的合规出口。
+**触发**：消费仓 ExampleConsumerApp req-008 task-001 复现 req-006 同款事故 —— AI 进 /pmai-task-execute 后入口前置 transition 了「待执行→执行中」，但中断 skill 没跑 dispatch 节点，直接用 Edit/Write 完成 work + 3 commit；事件流卡在仅 1 条 `status_changed`，accept 闸门正确拦下 `--to 已完成`，但 AI 给 PM 误诊"infra bug, skill 没自动 append"+ 提议 `task-events.py append --type execution_started` 补登（伪造审计证据）。req-006 后的 accept 闸门兜底有效，但缺**物理约束**让伪造路径根本执行不了 + 缺 AI 故障恢复的合规出口。
 
 **改动**（PM 视角）：
 
-- **修复 A**：`scripts/task-events.py` CLI 加黑名单 —— `execution_started` / `execution_manual_completed` 不允许通过 `task-events.py append --type ...` 写入；错误消息直接列举合规出路（`/task-execute` / `--register-manual-completion` / `--repair-evidence`）。`scripts/_lib/events.py` 加 `CLI_RESTRICTED_EVENT_TYPES` 常量 + `append_execution_event_internal()` 内部 API。
+- **修复 A**：`scripts/task-events.py` CLI 加黑名单 —— `execution_started` / `execution_manual_completed` 不允许通过 `task-events.py append --type ...` 写入；错误消息直接列举合规出路（`/pmai-task-execute` / `--register-manual-completion` / `--repair-evidence`）。`scripts/_lib/events.py` 加 `CLI_RESTRICTED_EVENT_TYPES` 常量 + `append_execution_event_internal()` 内部 API。
 - **修复 B**：`scripts/task-transition.py` 「待执行→执行中」transition 加 `--bound-to-execution-event {started, manual-waiting}` 必填参数；与 dispatch event 原子绑定写入（`_lib/events.py` 加 `write_status_change_and_exec_event_atomic()` 一次 `fh.write` 写两条）。裸 transition 拒绝；状态已=执行中 + 带 bound flag 视为 dispatch retry（emit dispatch event 不动状态）。
 - **修复 C**：`scripts/task-transition.py` 加 `--register-manual-completion --reason "<...>"` 命令 —— AI 故障恢复合规出口（task 状态=执行中、事件流缺 exec event、worktree 有 task commit 时用）。强制 `--reason` + 验 worktree 真有 commit + 写 `execution_manual_completed` with `{repaired:true, by:manual-completion-register}` payload + 不动状态。
 - **修复 C'**：`scripts/task-transition.py` 加 `--emit-from-pending` 命令 —— dispatch §3a manual resume 合规通路（需 PENDING_FILE 存在）；写 `execution_manual_completed` + 删 PENDING_FILE + 不动状态。
@@ -38,7 +38,7 @@ PM-AI-Workflow 生成器仓的演进记录。本文件**只记影响下游业务
 | 缺口 | 物化约束（修复后） |
 |---|---|
 | AI 用 `task-events.py append --type execution_started` 伪造审计证据 | A：CLI 直接拒绝 |
-| AI 进 /task-execute 后 transition 了但不跑 dispatch（事件流悬空）| B：transition 必须绑 dispatch event |
+| AI 进 /pmai-task-execute 后 transition 了但不跑 dispatch（事件流悬空）| B：transition 必须绑 dispatch event |
 | AI 用 Edit/Write 自己做完 work 后无合规补登入口 | C：`--register-manual-completion` |
 | dispatch §3a manual resume 通路曾走 CLI（A 后会拒）| C'：`--emit-from-pending` 内部 API 写 |
 
@@ -54,13 +54,13 @@ PM-AI-Workflow 生成器仓的演进记录。本文件**只记影响下游业务
 
 **改动**（PM 视角）：
 
-- `/init-project` 加阶段 C.5（视觉基线必填）：调 gstack `/design-consultation` 全跑 → 写 DESIGN.md 头 8 段 → AI 追加「共享组件 inventory」空段 → PM 定稿确认 → commit。4 阶段 → 5 阶段（A/B/C/C.5/D）
+- `/pmai-init-project` 加阶段 C.5（视觉基线必填）：调 gstack `/design-consultation` 全跑 → 写 DESIGN.md 头 8 段 → AI 追加「共享组件 inventory」空段 → PM 定稿确认 → commit。4 阶段 → 5 阶段（A/B/C/C.5/D）
 - `templates/DESIGN.md.tmpl` 删除：DESIGN.md 由 gstack 写 + AI 追加 1 段，不需要静态模板。`init-project.sh` 砍 DESIGN.md.tmpl 拷贝行
-- `/req-stage-gate` Stage 4 砍 4B 视觉规范更新分支，4A 改"新组件完整规格定稿"硬约束（PM + AI 共写视觉/状态/交互/边界，task 启动前 inventory 必须完整；不再 close-task 回填占位）
-- `/close-task` §1.5 改 4 类分流（① task 实现偏差不动 DESIGN / ② 视觉基线 patch gstack 段 / ③ inventory patch / ④ 文案 voice & tone 拒绝写 DESIGN，建议改 PROJECT 或 prd）
+- `/pmai-req-stage-gate` Stage 4 砍 4B 视觉规范更新分支，4A 改"新组件完整规格定稿"硬约束（PM + AI 共写视觉/状态/交互/边界，task 启动前 inventory 必须完整；不再 close-task 回填占位）
+- `/pmai-close-task` §1.5 改 4 类分流（① task 实现偏差不动 DESIGN / ② 视觉基线 patch gstack 段 / ③ inventory patch / ④ 文案 voice & tone 拒绝写 DESIGN，建议改 PROJECT 或 prd）
 - 创意自由度三档从 DESIGN.md 移到 `implementation-design.md` 段 3.3「自由度声明」（req 级，task-spec 按"适用范围"挑行写进 task 文件，stage 5 5a-gate 视作结构决策必 PM 拍板）
 - DESIGN.md 砍 a11y 独立段（PM 决定）+ Checker Sign-Off 段（搬进 init C.5 SKILL 自检流程）
-- `/new-req` 步骤 3.6 改：旧版"6 段骨架 mini-upgrade"砍，新版"检测 inventory 段是否存在，缺则追加空段"
+- `/pmai-new-req` 步骤 3.6 改：旧版"6 段骨架 mini-upgrade"砍，新版"检测 inventory 段是否存在，缺则追加空段"
 
 **集成 gstack 的决策**：不抄 gstack 任何内容到我们 SKILL.md（gstack 升级时跟不上）；直接调它的 skill，跟随升级。下游 SKILL 不解析 gstack 写的 8 段字段，只读「共享组件 inventory」段（我们追加 / stage 4 4A 累积 / close-task §1.5 patch）—— gstack 自由演化我们自动兼容。
 
@@ -97,7 +97,7 @@ PM-AI-Workflow 生成器仓的演进记录。本文件**只记影响下游业务
 - `skills/task-confirm/SKILL.md` 顶部指针删「执行前确认闸门 label」（与 body 行 23-25 delta-3 §2.3「不再设确认闸门」自相矛盾，原是 vp-8 后期加指针时未同步 body）
 - 5 个用户面 SKILL Preamble 段（new-req / req-stage-gate / task-confirm / close-task / close-req）加 `python3 .claude/scripts/status-view.py --banner-only --skill X || true` —— banner 真在 body 里调用，不只是顶部 prose 指针
 - 2 个 SKILL（init-project / task-execute）用字面值 `echo "━━━ PMAI ► ..."` —— init-project 是项目级（生成器仓内跑、无 active req），task-execute 入口前置阶段尚未 cd 到 task worktree
-- `scripts/status-view.py:render_banner_only` 无 active req 文案由「先跑 /new-req」改通用「<项目级 / 无 active req>」（对 /init-project 不再误导）
+- `scripts/status-view.py:render_banner_only` 无 active req 文案由「先跑 /pmai-new-req」改通用「<项目级 / 无 active req>」（对 /pmai-init-project 不再误导）
 - 7 SKILL 退出文案补 `▶ Next Up` 关键词（task-confirm 行 206 ▶️→▶ + new-req 步骤 5 handoff + req-stage-gate 退出 + task-execute 步骤 12 通过分支 + close-task Phase 1→2 + close-req Phase 1→2 + close-req Phase 2 终态）
 - `close-task` Phase 1→2 / `close-req` Phase 1→2 切窗口给完整可复制命令（"窗口还开着直接切 / 窗口已关用 cd + claude" 两条路径）
 - `skills/req-stage-gate/SKILL.md` stage 6→7 blocked 错误信息扩展「废弃 task 三步」可复制命令链（mv 到 tasks/discarded/ + 改 task-plan.md `## 变更记录` + 加 task 文件「废弃理由」段），堵 PM 手动跳 task 时 metadata 不一致风险
@@ -107,7 +107,7 @@ PM-AI-Workflow 生成器仓的演进记录。本文件**只记影响下游业务
 
 **业务仓需注意**：
 - 同步后每个 SKILL 入口都会打 banner（`━━━ PMAI ► SKILL ▸ <stage> ━━━`），PM 切窗口回来不再"失忆"
-- `/close-task` Phase 1 完成后 chat 输出有完整 cd 命令；`/close-req` 同
+- `/pmai-close-task` Phase 1 完成后 chat 输出有完整 cd 命令；`/pmai-close-req` 同
 - 跳 task 三步走（不再是含糊的"从 task-plan.md 删除该条"）
 - **未新建** `/cancel-task` skill —— PM 实际跳 task 频率不高，三步手动可接受；若消费仓验证发现频繁要跳，再开新 vp 做 skill
 - **§3 适用范围**：以前 vp-7/8 引导 SKILL 顶部写「闸门 label 按 §3」是过度承诺；现在明确只 AskUserQuestion picker 形式才走 §3，chat 自由对话不受约束。SKILL.md 顶部 prose 指针该词原文不动（仍引用 §3），但消费方应按 §3.0 适用范围判定
@@ -142,14 +142,14 @@ PM-AI-Workflow 生成器仓的演进记录。本文件**只记影响下游业务
 - `8096be3` refactor(docs): P1-4 / P1-6 内容补丁
 - `cb601b8` refactor(docs): P1-4 task-plan 硬约束节合并 + P1-6 STATUS → RUNTIME 改名
 - `0579198` refactor(scripts): 防御性指令反模式 — req 编号扫描 / 未决问题闸门 抽脚本
-- `34b1d4d` feat(skills): /skill-improve 雏形 + 消化 prd-writing 反馈 3 项 gap
+- `34b1d4d` feat(skills): /pmai-skill-improve 雏形 + 消化 prd-writing 反馈 3 项 gap
 - `ea2dc82` refactor(skills): PM-VIEW-RULES + 三个超大 SKILL.md 按消费方拆 references
 
 **业务仓需注意**：
 
 - `skills/_shared/PM-VIEW-RULES.md` 943 → 278 行 + 6 子文件 (`pm-view/{writing-rules,doc-strictness,section-order,checklist,input-flow,cross-skill}.md`)；12 个 skill 引用路径已改为指向具体子文件。**业务仓 sync 后**，模板里 `PM-VIEW-RULES §X` 引用号仍可用（主文件做索引），无须改业务仓产物。
 - 三超大 SKILL.md 拆 references/：`task-execute` 911→539、`prd-writing` 756→315、`task-spec` 568→525。SKILL 主文件留 frontmatter + workflow 大纲 + 关键规则；详细 dispatch / acceptance handoff / writing rules / few-shots / impl-prose-merge 等进 references/。
-- 新增 skill `/skill-improve`：消化 PM 反馈到对应 skill 的流程（read 反馈 → 对账现状 → PM 决策 → 改 SKILL → 归档到 `skill-feedback/<skill-name>-<date>.md`）。业务仓不需要直接装这个 skill；当 PM 想改进框架自身 skill 时调用。
+- 新增 skill `/pmai-skill-improve`：消化 PM 反馈到对应 skill 的流程（read 反馈 → 对账现状 → PM 决策 → 改 SKILL → 归档到 `skill-feedback/<skill-name>-<date>.md`）。业务仓不需要直接装这个 skill；当 PM 想改进框架自身 skill 时调用。
 - 新增 `scripts/_lib/req-num-resolver.sh`：封装 req 编号扫描（closed 目录 / active 目录 / git refs 三来源取 max）；`new-req` SKILL §步骤 1 改为单行 helper 调用。
 - 新增 `scripts/check-open-questions.py`：未决问题闸门 lint（扫 `## 未决问题` section 下 `**PM 回答：**` 占位是否填）；`req-stage-gate` Stage 1→2 步骤 4 改为脚本调用 + exit code 路由。
 - `task-plan` / `req-solution` 「硬禁止项 vs Rules」合并成单一 `## Rules`（含「禁止项」+「正向约束」两个 sub-bullet 组），与其它 skill 对齐。
@@ -186,6 +186,34 @@ PM-AI-Workflow 生成器仓的演进记录。本文件**只记影响下游业务
 ---
 
 ## 未发布
+
+### 2026-05-27 — fix(prefix): 所有 skill 加 `pmai-` 前缀 — frontmatter / 文档 / 测试三层统一
+
+PM 发现 ExampleConsumerApp 里 slash 列表显示的命令**不带前缀**（`/task-execute` 而不是 `/pmai-task-execute`），戳穿了之前对前缀机制的误解：Claude Code 的 slash 名取自 SKILL.md frontmatter `name:` 字段，**不是目录名**。`pmai-install` 把目录名加 `pmai-` 前缀这层对暴露给 PM 的 slash 名零作用——目录前缀白加了（除了 pmai-upgrade 因为 frontmatter 也写了 pmai-upgrade 才真生效）。对照 gstack：每个 SKILL.md frontmatter 都带 `gstack-` 前缀，目录 + frontmatter 双层加，slash 名真带前缀；PMAI 是「目录加前缀，frontmatter 不加」的半成品。
+
+**改动**：
+
+- **22 个 SKILL.md frontmatter `name:` 字段加 `pmai-` 前缀**：cancel-req / close-req / close-task / codebase-audit / doc-update / implementation-design / init-project / new-req / prd-writing / project-solution / publish-to-lark / quick-fix / req-analysis / req-stage-gate / skill-improve / task-confirm / task-execute / task-plan / task-spec / task-status / task-submit / task-verify。pmai-upgrade 已带前缀跳过。
+- **1050 处文档 slash 引用同步加前缀**：skills/ + templates/ + scripts/ + docs/ + CLAUDE.md + RUNTIME.md + CHANGELOG.md + README.md 下所有 `/<skill>` → `/pmai-<skill>`。用 perl 带 lookbehind `(?<![/.\w])/<skill>\b` 安全替换，避开路径引用（`skills/task-execute/`）和复合名（`task-execute-something`）。
+- **43 处测试期望字符串同步加前缀**：tests/ 下 .sh / .md / .py 文件里 hardcode 的 slash 名。
+- gstack 的命令（`/office-hours` / `/qa` / `/review` 等）不动，保留原前缀。
+
+**PM 体验变化**（重要）：
+- 旧：`/task-execute` → 新：`/pmai-task-execute`
+- 旧：`/close-task` → 新：`/pmai-close-task`
+- 旧：`/new-req` → 新：`/pmai-new-req`
+- 旧：`/req-stage-gate` → 新：`/pmai-req-stage-gate`
+- ...（22 个全部加前缀）
+
+**消费仓历史数据不 backfill**：ExampleConsumerApp 等业务仓里已写入的 task md / req md 里仍是 `/task-execute` 等不带前缀的命令引用——这是历史记录，不强制改写。PM 未来在 IDE 输入时用带前缀的新名（`/pmai-task-execute`），生效来自 ~/.pmai 升级 + Claude Code 重新读 frontmatter。
+
+**测试**：全测 541 / 0 全过；6 个 suite 中间因测试期望字符串 hardcode 旧名暂时失败，同步把 tests/ 替换后恢复 541 / 0。
+
+**Why 这次改动算 P0 而不是技术债**：
+- 防冲突是前缀的本来目的，frontmatter 不加 = 这层设计废了；目录加前缀就是装饰
+- 文档 vs IDE slash 名 vs LLM system reminder 三处现在终于对齐：都是带前缀的
+- 跟 gstack / lark 的命名模式一致，避免"半成品"观感
+- AI 调用稳定性提升：LLM 看 system reminder 是 `pmai-task-execute`，文档里写 `/pmai-task-execute`，两边对得上，不需要"脑内 resolve"
 
 ### 2026-05-27 — fix(pmai-upgrade): 升级原子化 — dirty stash + trap 回滚 + --local mv swap + 升完跑 doctor
 
@@ -484,20 +512,20 @@ PM 实测 `pmai upgrade` 卡 4 分钟，根因 `git fetch origin --tags` 在 SSH
 
 ### 2026-05-27 — feat(codebase-audit): step 3.5 modulespec 主规格骨架，brownfield 接入时一次性建好
 
-**触发**：刚加完 close-req §1.5 step 2.5 稳定结构反查（事后兜底），PM 反问「为什么不在初始化时就建好」。盘点发现框架已有 greenfield / brownfield 分流（`/init-project` vs `/codebase-audit`），但**两条路径在 modulespec 上都漏了** —— 都只建 `docs/modules/` 空目录 + INDEX.md，从不主动建任何主规格文件。**老项目 IA 通常已稳定**（看代码就能识别模块边界），错过这个天然的 bootstrap 时机 → 之后每个 req close 都会被 §1.5 step 2.5 反复问「这个稳定结构要不要沉淀」。
+**触发**：刚加完 close-req §1.5 step 2.5 稳定结构反查（事后兜底），PM 反问「为什么不在初始化时就建好」。盘点发现框架已有 greenfield / brownfield 分流（`/pmai-init-project` vs `/pmai-codebase-audit`），但**两条路径在 modulespec 上都漏了** —— 都只建 `docs/modules/` 空目录 + INDEX.md，从不主动建任何主规格文件。**老项目 IA 通常已稳定**（看代码就能识别模块边界），错过这个天然的 bootstrap 时机 → 之后每个 req close 都会被 §1.5 step 2.5 反复问「这个稳定结构要不要沉淀」。
 
-**根因**：`/codebase-audit` 的 7 维度只覆盖技术栈 / 集成 / 架构 / 目录 / 约定 / 测试 / 隐患通用维度，**漏了「产品模块清单」这一维**，也没产 modulespec 骨架。
+**根因**：`/pmai-codebase-audit` 的 7 维度只覆盖技术栈 / 集成 / 架构 / 目录 / 约定 / 测试 / 隐患通用维度，**漏了「产品模块清单」这一维**，也没产 modulespec 骨架。
 
 **改动**（PM 视角）：
 
 - `skills/codebase-audit/SKILL.md` 加 **step 3.5 产品模块清单 + modulespec 主规格骨架**（PM 选择性触发）：现状档确认后问 PM「老项目 IA 已稳定，要不要现在建 modulespec 骨架？[Y/N]」。选 [Y] → AI 扫代码抽候选模块清单（子目录 / 路由 / 菜单 / PROJECT.md 业务模块段）→ PM 确认（必须）→ 按 `module.md.tmpl` 生成每个模块的 `docs/modules/<m>.md`（AI 填能扫到的部分：§摘要 / §一定位含**稳定结构指针 sub-bullet** / §三页面；§二功能清单 / §四 / §五保持空让后续 req sediment 演化）→ 刷 INDEX.md → PM 审 diff。选 [N] → 跳过，靠 close-req §1.5 step 2.5 兜底
 - `skills/codebase-audit/SKILL.md` 「Rules」/「边界」段更新：默认仍只读扫码，**例外**允许 step 3.5 选 [Y] 时产 modulespec 骨架文件；明确「AI 不替 PM 决定模块边界」硬约束
-- **greenfield 路径不动**：`/init-project` 保持现状（IA 未定，过早建会写一堆 placeholder），靠 close-req §1.5 step 2.5 按需生长
+- **greenfield 路径不动**：`/pmai-init-project` 保持现状（IA 未定，过早建会写一堆 placeholder），靠 close-req §1.5 step 2.5 按需生长
 
 **影响**：
 
 - 新 brownfield 接入项目：codebase-audit 多一个可选步骤；选 [Y] 后 close-req §1.5 step 2.5 反查在常见情况会零候选（真正退化成兜底）
-- **已接入的老项目（如消费仓 ExampleConsumerApp）retroactive 补跑**：在主仓重跑一次新版 `/codebase-audit`（现状档可以跳过 / 简化，重点跑 step 3.5），把 modulespec 骨架补齐 —— PM 自行选择时机执行
+- **已接入的老项目（如消费仓 ExampleConsumerApp）retroactive 补跑**：在主仓重跑一次新版 `/pmai-codebase-audit`（现状档可以跳过 / 简化，重点跑 step 3.5），把 modulespec 骨架补齐 —— PM 自行选择时机执行
 
 ### 2026-05-27 — feat(pmai-sync-prds): 一键补建老仓历史 closed req 的 docs/prds/ symlink
 
@@ -558,15 +586,15 @@ docs/prds/
 
 **影响**：消费仓下次 close-req 流程 PM 视角多一个反查步骤（仅当 AI 反查产出候选时出 AskUserQuestion；零候选直接跳过）。本次未补 close-task 阶段反查（task 单位反查粒度太细且 task 没收完时反查不全面，留到本次反馈累积再说）。
 
-### 2026-05-27 — fix(close-task+req-stage-gate): 关最后一个 task 时不再让 PM 多敲一次 /req-stage-gate
+### 2026-05-27 — fix(close-task+req-stage-gate): 关最后一个 task 时不再让 PM 多敲一次 /pmai-req-stage-gate
 
-**触发**：PM 跑完 task-003（req-008 最后一个 task）后 `/close-task` 输出"下一步：在本（req）窗口运行 `/req-stage-gate` 推进至 Stage 7" → PM 敲 `/req-stage-gate` → 出关 req 确认门。PM 反问"closetask 之后都知道下一步是 stage7 了，为什么不直接和我确认是否要关闭 req"。
+**触发**：PM 跑完 task-003（req-008 最后一个 task）后 `/pmai-close-task` 输出"下一步：在本（req）窗口运行 `/pmai-req-stage-gate` 推进至 Stage 7" → PM 敲 `/pmai-req-stage-gate` → 出关 req 确认门。PM 反问"closetask 之后都知道下一步是 stage7 了，为什么不直接和我确认是否要关闭 req"。
 
-**根因**：`req-stage-gate/SKILL.md` 自己定的规则禁止"PM 请再跑一次 /req-stage-gate"这种 handoff 文案（v3.5 老行为，规则上线后视为违例），但 `close-task/SKILL.md` PENDING==0 分支跨 skill 边界把它伪装合规。close-task PENDING==0 时**已经 100% 确定**唯一下一步就是 6→7 关 req 确认门，没有任何分支模糊。
+**根因**：`req-stage-gate/SKILL.md` 自己定的规则禁止"PM 请再跑一次 /pmai-req-stage-gate"这种 handoff 文案（v3.5 老行为，规则上线后视为违例），但 `close-task/SKILL.md` PENDING==0 分支跨 skill 边界把它伪装合规。close-task PENDING==0 时**已经 100% 确定**唯一下一步就是 6→7 关 req 确认门，没有任何分支模糊。
 
 **改动**（PM 视角）：
 
-- `skills/close-task/SKILL.md` 步骤 P2.4 PENDING==0 分支：不再打"请敲 /req-stage-gate"提示，改成 in-place 直接出 Stage 6→7 关 req 确认门；PM 答「确认 / 关」→ AI 跑 `req-transition.py --to 7` 推进 → 直接调用 `/close-req`
+- `skills/close-task/SKILL.md` 步骤 P2.4 PENDING==0 分支：不再打"请敲 /pmai-req-stage-gate"提示，改成 in-place 直接出 Stage 6→7 关 req 确认门；PM 答「确认 / 关」→ AI 跑 `req-transition.py --to 7` 推进 → 直接调用 `/pmai-close-req`
 - `skills/req-stage-gate/SKILL.md` Stage 6→7 段头加注释 —— 标注本入口为兜底续走路径（PM 在 close-task 关 req 门不答关窗口后回来重敲的入口）；关 req 确认门模板单一真相源在 req-stage-gate，close-task 只复述
 
 **PM 触摸 chat 次数**：4 → 3（task-submit 答 + close-task 不动 + 答关 req）。
@@ -575,9 +603,9 @@ docs/prds/
 
 | 场景 | 行为 |
 |---|---|
-| 不是最后一个 task | 现行分支不变，close-task 打印"下一步：task-XXX，跑 /task-spec → /task-confirm" |
-| PM 在关 req 门不答关窗口几天回来 | 重敲 `/req-stage-gate`，req-stage-gate Stage 6→7 入口重新拉起同一个关 req 门 |
-| PM 答"我还要加新 task" | close-task 转 `/task-spec` 起新 task，**不**推 Stage 7 |
+| 不是最后一个 task | 现行分支不变，close-task 打印"下一步：task-XXX，跑 /pmai-task-spec → /pmai-task-confirm" |
+| PM 在关 req 门不答关窗口几天回来 | 重敲 `/pmai-req-stage-gate`，req-stage-gate Stage 6→7 入口重新拉起同一个关 req 门 |
+| PM 答"我还要加新 task" | close-task 转 `/pmai-task-spec` 起新 task，**不**推 Stage 7 |
 
 **影响**：业务仓同步框架后 PM 在关最后一个 task 时少敲一次命令；模板单一真相源在 req-stage-gate，两边不会偏移。
 
@@ -625,10 +653,10 @@ task-spec 步骤 10 确认门输出里有一句「你确认的是 task 的 scope
 **改动**：
 
 - `skills/_shared/pm-view/banner-rules.md` 新增 §2.5「内容禁忌（PM-facing 输出禁工程黑话与内部原理）」：明文列 3 类禁项（内部状态词 / 内部实现术语 / "AI 为啥这样安排"原理解释）+ 允许保留清单（`task 窗口` / `req 窗口` / 命令名 / cwd 切换 —— PM 操作必需信息）+ 改写公式（工程版 → PM 版对照）+ 反例（PM 决策 picker 里的「AI 倾向 X，理由：<一行>」不受本规则约束，判定标准 = "帮 PM 做选择" vs "解释 AI 已做的选择"）。
-- `skills/task-execute/SKILL.md` 步骤 12 PM 通过输出块：删 line 557「理由：Phase 1 必须在 task 窗口跑...」段；line 555 改 PM 视角动作描述「本次 close 收尾在当前窗口做完（文档对齐 + 视觉规范沉淀），完成后会提示你切到 req 窗口再跑一次 /close-task 完成清理。」+ 加引用 banner-rules §2.5。
+- `skills/task-execute/SKILL.md` 步骤 12 PM 通过输出块：删 line 557「理由：Phase 1 必须在 task 窗口跑...」段；line 555 改 PM 视角动作描述「本次 close 收尾在当前窗口做完（文档对齐 + 视觉规范沉淀），完成后会提示你切到 req 窗口再跑一次 /pmai-close-task 完成清理。」+ 加引用 banner-rules §2.5。
 - `skills/task-execute/SKILL.md` 步骤 §0「已完成」状态错误退出提示：删「启动 Phase 1（对齐/偏差/commit/写 marker），完成后会引导切到 req 窗口跑 Phase 2」，改「先在当前窗口做文档对齐和沉淀，再切 req 窗口完成清理」。
 - `skills/task-submit/SKILL.md` 步骤 4 PM 通过输出块：同 task-execute 改写（task-submit 是步骤 11 的备份入口，完全相同 wording）。
-- `skills/close-task/SKILL.md` 步骤 2.3 Phase 1 收尾输出块：「✅ task-NNN Phase 1 完成」改「✅ task-NNN 本窗口收尾完成」；「promote 到 docs/DESIGN.md（未 commit）」改「写入 docs/DESIGN.md（未 commit）」；「AI 会自动走 Phase 2 完成 merge + 删 task worktree/branch + auto-chain」改「切到 req 窗口跑 /close-task 后 AI 自动完成本 task 的归档，并自动开下一个 task（如果还有）」；DESIGN.md 沉淀追加提示「Phase 2 完成后，请在 req 窗口审 git diff」改「切到 req 窗口跑完 /close-task 后，请审 git diff」+ 「未 commit 的沉淀改动」改「未提交的沉淀改动」。
+- `skills/close-task/SKILL.md` 步骤 2.3 Phase 1 收尾输出块：「✅ task-NNN Phase 1 完成」改「✅ task-NNN 本窗口收尾完成」；「promote 到 docs/DESIGN.md（未 commit）」改「写入 docs/DESIGN.md（未 commit）」；「AI 会自动走 Phase 2 完成 merge + 删 task worktree/branch + auto-chain」改「切到 req 窗口跑 /pmai-close-task 后 AI 自动完成本 task 的归档，并自动开下一个 task（如果还有）」；DESIGN.md 沉淀追加提示「Phase 2 完成后，请在 req 窗口审 git diff」改「切到 req 窗口跑完 /pmai-close-task 后，请审 git diff」+ 「未 commit 的沉淀改动」改「未提交的沉淀改动」。
 
 **保留不动**：
 - `_shared/PM-VIEW-RULES.md:257`「决策的共同理由」、`req-stage-gate`/`task-plan` 多处「AI 倾向 A，理由：<一行>」—— PM 决策 picker 里 AI 列倾向理由给 PM 判断，是 PM-facing **必要素材**（不解释 AI 已做的选择），banner-rules §2.5 反例段已明文豁免。
@@ -640,7 +668,7 @@ task-spec 步骤 10 确认门输出里有一句「你确认的是 task 的 scope
 
 ### 2026-05-26 — fix(task-verify + task-execute): verify pass 自说自话宣告 DONE，task 既没 commit 也没呈交
 
-**触发**：消费仓 task-002-ops-menu-reorg 跑 /task-execute 到步骤 7.5 触发 task-verify，5/5 流程 pass 后 AI 在 verify 输出末尾**自己加了一段** `STATUS: DONE / REASON: ... / ATTEMPTED: ... / RECOMMENDATION: 回 task-execute 步骤 8 起继续走（写自审 placeholder → commit → 呈交 PM 验收）` —— 然后**停下来等下一轮**。结果：task 没 commit、没走步骤 11 呈交、PM 没看到任何呈交块。AI 把 verify pass 误当 task 终态宣告，PM 体感是"自说自话，没有呈交"。
+**触发**：消费仓 task-002-ops-menu-reorg 跑 /pmai-task-execute 到步骤 7.5 触发 task-verify，5/5 流程 pass 后 AI 在 verify 输出末尾**自己加了一段** `STATUS: DONE / REASON: ... / ATTEMPTED: ... / RECOMMENDATION: 回 task-execute 步骤 8 起继续走（写自审 placeholder → commit → 呈交 PM 验收）` —— 然后**停下来等下一轮**。结果：task 没 commit、没走步骤 11 呈交、PM 没看到任何呈交块。AI 把 verify pass 误当 task 终态宣告，PM 体感是"自说自话，没有呈交"。
 
 **根因**：
 1. task-verify 步骤 7 只规定了"pass 时 stdout 输出哪一行" + `exit 0`，**没明文禁止**额外文本 —— AI 觉得"加点交接细节有好处"就插了 STATUS/REASON/ATTEMPTED/RECOMMENDATION 块。
@@ -657,7 +685,7 @@ task-spec 步骤 10 确认门输出里有一句「你确认的是 task 的 scope
 
 ### 2026-05-26 — fix(task-execute): drift 脚本路径错位 + 失败容忍误吞「脚本不存在」
 
-**触发**：消费仓 ExampleConsumerApp 跑 /task-execute 时 AI 报「drift 脚本未安装，按失败容忍原则继续」—— 实际是 SKILL.md 调用路径漏写 `.claude/`，bash 找不到脚本，AI 把 `No such file or directory` 错误归类为「未安装」+ 走失败容忍静默跳过 drift 保护。drift 是 4.5f 防 task agent 合法本地改动被覆盖的关键机制，跳过等于裸奔。
+**触发**：消费仓 ExampleConsumerApp 跑 /pmai-task-execute 时 AI 报「drift 脚本未安装，按失败容忍原则继续」—— 实际是 SKILL.md 调用路径漏写 `.claude/`，bash 找不到脚本，AI 把 `No such file or directory` 错误归类为「未安装」+ 走失败容忍静默跳过 drift 保护。drift 是 4.5f 防 task agent 合法本地改动被覆盖的关键机制，跳过等于裸奔。
 
 **改动**：
 
@@ -703,31 +731,31 @@ task-spec 步骤 10 确认门输出里有一句「你确认的是 task 的 scope
 
 ### 2026-05-26 — fix(task-plan / task-execute / task-plan.md.tmpl): 反模式 A 文档类误判防复发（PRD 明文规范产物绕开 doc-update 路径）
 
-**触发**：消费仓 ExampleConsumerApp req-008 task-001 执行时 AI 在 task worktree 改 `docs/DESIGN.md` 并 commit 到 task 分支 —— 越界保护放行（task md 「执行范围」allowlist 显式列了 `docs/DESIGN.md`）。回溯：task-plan stage 5 拍 §4.1 反模式自检 A 时，AI 把"PRD §6.1 决策必有产出 = 建立菜单组织规范段"按"反模式 A 重构类"处理（合并入 task-001 业务 task），实际框架明文要求"文档/规格/契约类前置 = 不立 task，走 /doc-update 沉淀"。AI 误读路径：PRD §6.1 用"必有产出"强语气 + AI 把"内容必须存在"和"什么时候写 / 走哪条 worktree"混为一谈，于是把文档产物塞进首个相关业务 task。
+**触发**：消费仓 ExampleConsumerApp req-008 task-001 执行时 AI 在 task worktree 改 `docs/DESIGN.md` 并 commit 到 task 分支 —— 越界保护放行（task md 「执行范围」allowlist 显式列了 `docs/DESIGN.md`）。回溯：task-plan stage 5 拍 §4.1 反模式自检 A 时，AI 把"PRD §6.1 决策必有产出 = 建立菜单组织规范段"按"反模式 A 重构类"处理（合并入 task-001 业务 task），实际框架明文要求"文档/规格/契约类前置 = 不立 task，走 /pmai-doc-update 沉淀"。AI 误读路径：PRD §6.1 用"必有产出"强语气 + AI 把"内容必须存在"和"什么时候写 / 走哪条 worktree"混为一谈，于是把文档产物塞进首个相关业务 task。
 
 **改动**：
 - `skills/task-plan/SKILL.md` §2.2 反模式 A "文档/规格/契约类前置"那条加明示：**包括 PRD §6.1 / §六 明文要求的"主线规范产物"**（建立规范段 / 字段字典 / 权限矩阵等）；产物归宿是 `docs/*` 即默认文档类，不合并进业务 task、不把 `docs/*` 写进 task 「执行范围」allowlist
-- `templates/task-plan.md.tmpl` §4.1 反模式自检表头加分流规则段 + 反模式 A 行「命中处理」改为强制分类填写（"重构类 → 合并入 task-N" vs "文档类 → task-N close 后走 /doc-update 沉淀到 docs/X.md"），AI 拆完无法笼统填"已处理"蒙混
-- `skills/task-execute/SKILL.md` 步骤 3 入口加 callout "task 边界硬规则"：明示 task worktree 内任何 `docs/*` 改动默认不属于 task 边界 + 视觉规范 / PM 反馈走 close-task §1.5 / PRD 主线规范产物走 `/doc-update`；发现 task md 执行范围含 `docs/*` 时 AI 主动提示 PM "疑似 task-plan §4.1 反模式 A 文档类误判，建议回 task-plan 调整"，由 PM 拍
+- `templates/task-plan.md.tmpl` §4.1 反模式自检表头加分流规则段 + 反模式 A 行「命中处理」改为强制分类填写（"重构类 → 合并入 task-N" vs "文档类 → task-N close 后走 /pmai-doc-update 沉淀到 docs/X.md"），AI 拆完无法笼统填"已处理"蒙混
+- `skills/task-execute/SKILL.md` 步骤 3 入口加 callout "task 边界硬规则"：明示 task worktree 内任何 `docs/*` 改动默认不属于 task 边界 + 视觉规范 / PM 反馈走 close-task §1.5 / PRD 主线规范产物走 `/pmai-doc-update`；发现 task md 执行范围含 `docs/*` 时 AI 主动提示 PM "疑似 task-plan §4.1 反模式 A 文档类误判，建议回 task-plan 调整"，由 PM 拍
 
 **影响**：纯文档级提示加固（SKILL prose + template 字段），不改任何 script / hook / test，无回归风险。下次 task-plan 拍 §4.1 时 AI 看到 PRD 明文"建立 X 规范段"不会再机械合并进业务 task；万一仍误判，task-execute 进步骤 3 时会主动给 PM 提示要求回 task-plan 调整（软兜底）。**硬边界 hook**（task 分支不能 commit `docs/*`）作为 P1 改动留待后续，本次未做。
 
 
 
-**触发**：消费仓 ExampleConsumerApp req-008 PM 跑完 `/task-spec task-001` 后被两件事卡住：
-- (a) AI 输出"下一步运行 /task-confirm <task 文件路径>" 让 PM 复制粘贴 —— 多一道仪式；task-confirm 自身根本不设确认门（delta-3 §2.3 已固化），完全是机械流程
+**触发**：消费仓 ExampleConsumerApp req-008 PM 跑完 `/pmai-task-spec task-001` 后被两件事卡住：
+- (a) AI 输出"下一步运行 /pmai-task-confirm <task 文件路径>" 让 PM 复制粘贴 —— 多一道仪式；task-confirm 自身根本不设确认门（delta-3 §2.3 已固化），完全是机械流程
 - (b) PM 临时问"几个 task 可以并行吗"，AI 才说"技术上完全可以并行，我默认写串行是 PM 体验考虑" —— 即并行 / 串行是 AI 自决，没经 PM 拍板。违反 speed mode 同批刚立的"结构决策必须 PM 拍板"原则（task-plan §二 执行模式是典型 task 级结构决策）
 
 **改动**：
-- `skills/task-spec/SKILL.md` 步骤 11 改名"落盘 + 续跑 /task-confirm"：commit 成功后 AI 不再输出"下一步运行 /task-confirm <path>"让 PM 复制；改为 chat 出一行轻量过场（"准备 task 执行环境..."）然后直接续跑 task-confirm workflow（同一 chat 内 Read task-confirm SKILL.md 按步骤执行）。失败兜底：commit 失败 / task-confirm 内部报错 → 把错误原文给 PM，**不**继续续跑；PM 修复后可手动调 `/task-confirm <path>`（旧路径作 escape hatch）
+- `skills/task-spec/SKILL.md` 步骤 11 改名"落盘 + 续跑 /pmai-task-confirm"：commit 成功后 AI 不再输出"下一步运行 /pmai-task-confirm <path>"让 PM 复制；改为 chat 出一行轻量过场（"准备 task 执行环境..."）然后直接续跑 task-confirm workflow（同一 chat 内 Read task-confirm SKILL.md 按步骤执行）。失败兜底：commit 失败 / task-confirm 内部报错 → 把错误原文给 PM，**不**继续续跑；PM 修复后可手动调 `/pmai-task-confirm <path>`（旧路径作 escape hatch）
 - `skills/task-confirm/SKILL.md` When To Use 段加"被 task-spec 步骤 11 续跑触发"分支，明确续跑路径行为与 PM 手动调一致（task-confirm 自身不设确认门）
 - `skills/task-plan/SKILL.md` 步骤 3 后插入新步骤 3.5「PM 拍板执行模式（结构决策门）」：写完文件后主动 prompt PM 拍串行 / 并行 / 混合 + AI 给倾向 + 理由（同文件冲突 / 互相参照规范段 / task 数 / PM 走查负担）；PM 答完修订 §二 + append decision 事件（`decided_by=pm-explicit` + `source=task-plan@3.5`）
 - `templates/task-plan.md.tmpl` §二「执行顺序与并行性」加 `**执行模式（PM 拍板）**：<串行 / 并行 / 混合>` 显式标记行 + 填写注释扩展（说明执行模式是 task 级结构决策、AI 不自决、走 task-plan skill 步骤 3.5 拍板）
 - `tests/test-speed-mode.sh` 新增 T14-T17 4 case（task-spec 续跑文案 / task-confirm When To Use 续跑分支 / task-plan 步骤 3.5 关键词 / task-plan.md.tmpl §二 执行模式标记）
 
-**影响**：PM 视角再削两道仪式 —— (a) `/task-spec` 定稿后**不再要 PM 手动贴 `/task-confirm <path>`**，直接看到 task worktree 路径 + Next Up 新窗口启动指令；(b) **执行模式（串行 / 并行 / 混合）从 AI 默认改 PM 显式拍板**，AI 给倾向 + 理由，PM 拍完写回 §二 + decision 事件 audit。续跑模式不引入新 escape hatch（commit 失败 / task-confirm 报错走老的手动调路径）。测试基线 512 → 516（+4 case 全过）。
+**影响**：PM 视角再削两道仪式 —— (a) `/pmai-task-spec` 定稿后**不再要 PM 手动贴 `/pmai-task-confirm <path>`**，直接看到 task worktree 路径 + Next Up 新窗口启动指令；(b) **执行模式（串行 / 并行 / 混合）从 AI 默认改 PM 显式拍板**，AI 给倾向 + 理由，PM 拍完写回 §二 + decision 事件 audit。续跑模式不引入新 escape hatch（commit 失败 / task-confirm 报错走老的手动调路径）。测试基线 512 → 516（+4 case 全过）。
 
-**老 SKILL 流程的等价转换**：旧 `task-spec 步骤 11 输出 /task-confirm <path>` + PM 手动敲 = 新 `task-spec 步骤 11 续跑 + AI 自动跑 task-confirm`，对 PM 行为只是"少敲一次命令"，task-confirm 内部所有 worktree fork / executor 切换 / 依赖 gate 完全不变。
+**老 SKILL 流程的等价转换**：旧 `task-spec 步骤 11 输出 /pmai-task-confirm <path>` + PM 手动敲 = 新 `task-spec 步骤 11 续跑 + AI 自动跑 task-confirm`，对 PM 行为只是"少敲一次命令"，task-confirm 内部所有 worktree fork / executor 切换 / 依赖 gate 完全不变。
 
 ### 2026-05-26 — feat(req-stage-gate / templates / status-view): speed mode — PRD 拍板后 stage 4/5 自动推 + 结构决策门 + stage 6 入口总览
 
@@ -909,7 +937,7 @@ task-spec 步骤 10 确认门输出里有一句「你确认的是 task 的 scope
 - 新增 `tests/test-docs-toplevel-guard.sh` 8 case
 
 **消费仓影响**：
-- 新项目 `/init-project` 自带 hook + 检测脚本 + CLAUDE.md 约定
+- 新项目 `/pmai-init-project` 自带 hook + 检测脚本 + CLAUDE.md 约定
 - 老项目 sync 框架后 **要跑** `bash .claude/scripts/install-hooks.sh` 重装 hook 才能启用
 - 暂时不想被拦：`git commit --no-verify`，或把 basename 加进 `.docs-toplevel-allow`
 
@@ -917,7 +945,7 @@ task-spec 步骤 10 确认门输出里有一句「你确认的是 task 的 scope
 
 ### 2026-05-26 — fix(pm-chat): Stage 1→2 选择门 + office-hours 子状态 + PASS 闸门 文案去工程黑话
 
-**问题**：PM 实测 `/req-stage-gate` Stage 1→2 入口文案「这版 brief 是否可定稿？然后用哪种方式跟这个需求讨论？」一句塞两问；选项描述「结构化批判 / 第一性原理 4 层 / reviewer / YC office-hours / 跳 reviewer」全是内部机制名。office-hours 三个子状态（探测失败 / 选稿 / 没现成稿）泄露「按 mtime 排 / gstack slug / 切回结构化批判分支 / snapshot 进 Stage 2 真相源」。req-analysis PASS 闸门还在用 v2 旧句式（破折号 + "OK 我..."），与 req-stage-gate L425 自己列的反面示例自相矛盾。
+**问题**：PM 实测 `/pmai-req-stage-gate` Stage 1→2 入口文案「这版 brief 是否可定稿？然后用哪种方式跟这个需求讨论？」一句塞两问；选项描述「结构化批判 / 第一性原理 4 层 / reviewer / YC office-hours / 跳 reviewer」全是内部机制名。office-hours 三个子状态（探测失败 / 选稿 / 没现成稿）泄露「按 mtime 排 / gstack slug / 切回结构化批判分支 / snapshot 进 Stage 2 真相源」。req-analysis PASS 闸门还在用 v2 旧句式（破折号 + "OK 我..."），与 req-stage-gate L425 自己列的反面示例自相矛盾。
 
 **改动**：
 - `skills/req-stage-gate/SKILL.md`：
@@ -986,8 +1014,8 @@ task-spec 步骤 10 确认门输出里有一句「你确认的是 task 的 scope
 
 ### 2026-05-26 — fix(new-req): 加步骤 0「获取需求描述」严格规定无参数兜底文案
 
-**问题**：PM 跑 `/new-req`（无参数），AI 临场编出工程黑话长文案：
-> "你这次 /new-req 没带参数。请先告诉我这个新需求是什么（一句话即可，例如「实现用户登录」「租户内角色批量改名」），我才能生成 slug、确定编号、拉 worktree。"
+**问题**：PM 跑 `/pmai-new-req`（无参数），AI 临场编出工程黑话长文案：
+> "你这次 /pmai-new-req 没带参数。请先告诉我这个新需求是什么（一句话即可，例如「实现用户登录」「租户内角色批量改名」），我才能生成 slug、确定编号、拉 worktree。"
 
 PM 不需要知道 slug / 编号 / worktree 这些内部机制，"我才能..." 条件句式啰嗦。
 
@@ -1003,7 +1031,7 @@ PM 不需要知道 slug / 编号 / worktree 这些内部机制，"我才能..." 
 
 ### 2026-05-26 — fix(project-questioning): ROADMAP "历史 + 未来一张表" 引导（修 AI 漏写 done 行）
 
-**问题**：PM 实测跑 /project-solution B 场景写 ROADMAP，AI 只写 planned 行，漏 7 个已 close 的 req 作 done 行。模板 HTML 注释虽写了三态 + "一个 req 走完后推进到 done"，但 §5.2 ROADMAP.md 写作规则只说"计划态 + planned"，AI 注意力集中在 §5.2 规则上，没读到模板注释，漏写历史。
+**问题**：PM 实测跑 /pmai-project-solution B 场景写 ROADMAP，AI 只写 planned 行，漏 7 个已 close 的 req 作 done 行。模板 HTML 注释虽写了三态 + "一个 req 走完后推进到 done"，但 §5.2 ROADMAP.md 写作规则只说"计划态 + planned"，AI 注意力集中在 §5.2 规则上，没读到模板注释，漏写历史。
 
 **根因**：framework 引导分裂 —— 模板说一套（三态全 + 历史 + 未来），SKILL 写作规则只重复前向半段。AI 看 SKILL 规则按字面照做，不漏写才怪。
 
@@ -1021,13 +1049,13 @@ PM 不需要知道 slug / 编号 / worktree 这些内部机制，"我才能..." 
 
 ### 2026-05-26 — fix(status-view): 体检 hint 措辞 — 删误导项 + 不绑死 skill 内部场景
 
-**问题**：体检 hint 旧措辞 `补法：发 /project-solution 季度规划场景；或新项目跑 /init-project 自动分发` 有 2 个问题 + 场景名"季度规划"本身狭窄：
-- "或新项目跑 /init-project 自动分发"：体检在业务仓里跑，业务仓 PM 看到 `/init-project` 提示自然会试，撞上"必须在生成器仓"边界（实测 PM 跑了，被 AI 意图门挡住）
+**问题**：体检 hint 旧措辞 `补法：发 /pmai-project-solution 季度规划场景；或新项目跑 /pmai-init-project 自动分发` 有 2 个问题 + 场景名"季度规划"本身狭窄：
+- "或新项目跑 /pmai-init-project 自动分发"：体检在业务仓里跑，业务仓 PM 看到 `/pmai-init-project` 提示自然会试，撞上"必须在生成器仓"边界（实测 PM 跑了，被 AI 意图门挡住）
 - 绑死场景名 + B 场景前置要求"`ROADMAP.md` 历史"：老项目首次补缺失文档没有历史，严格不满足。但 hint 强行绑场景
 - "季度规划"狭窄：B 场景实际涵盖"季度 / 半年节奏"、"老项目首次补全 PROJECT 6 节 + ROADMAP"等，统一改名"产品路线规划"
 
 **改动**：
-- `scripts/status-view.py` 体检 hint 末行改为 `补法：发 /project-solution（skill 会按场景引导补全）`。最小信息原则：hint 只告诉 PM 调啥 skill，skill 内部走法留给 skill 自己引导
+- `scripts/status-view.py` 体检 hint 末行改为 `补法：发 /pmai-project-solution（skill 会按场景引导补全）`。最小信息原则：hint 只告诉 PM 调啥 skill，skill 内部走法留给 skill 自己引导
 - 场景 B 改名 `季度规划` → `产品路线规划`（涵盖季度 / 半年节奏 + 老项目首次补全 ROADMAP）；触发条件 + 前置 + 步骤 1 同步扩展到支持"首次补无历史"
 - 受影响文件：`skills/project-solution/SKILL.md` (3 处) + `skills/_shared/project-questioning.md` (4 处) + `skills/close-req/SKILL.md` (2 处) + `README.md` (1 处)
 - 描述里指**时间维度**的"季度"保留（如"过去季度 roadmap 回顾"）；改的只是**场景名**
@@ -1067,7 +1095,7 @@ PM 不需要知道 slug / 编号 / worktree 这些内部机制，"我才能..." 
 - 历史快照保留小写：`docs/归档/完成/*.md` + `CHANGELOG.md` 已发布段（immutable，描述当时状态）
 
 **消费仓影响**：
-- 已有项目从未跑过 `/project-solution`（即没有 `docs/roadmap.md`）→ rsync 完即可，无业务迁移
+- 已有项目从未跑过 `/pmai-project-solution`（即没有 `docs/roadmap.md`）→ rsync 完即可，无业务迁移
 - 已有 `docs/roadmap.md` 的消费仓 → 同步框架后须手工 `git mv docs/roadmap.md docs/ROADMAP.md`，并 grep 业务文档（CLAUDE.md / requirements/）里的 `roadmap.md` 引用一并改大写
 - 不影响事件流 / 状态机，无 schema 迁移
 
@@ -1078,8 +1106,8 @@ PM 不需要知道 slug / 编号 / worktree 这些内部机制，"我才能..." 
 **根因**：救援路径建好但诊断引导没接上。memory `feedback_audit_block_not_infra_bug` 说"诚实记录 = `execution_manual_completed`"——指的是走 `--repair-evidence`，但 audit 输出从来不告诉调用方这件事。
 
 **改动**：
-- `scripts/audit-task-events.py` I-CT7 / I-CT8 失败诊断扩展为三路径：(1) 历史 task / 真实手动完成 → `--repair-evidence`（明示强制 reason + `repaired:true` 标记 + 警告不要裸 append + 命令找不到时引导走 §4.11 同步框架）；(2) 真实跳过状态机 → 回 `/task-execute`；(3) 整 req 放弃 → `/cancel-req`
-- `框架同步-SOP.md` 新加 §4.11「消费仓 I-CT7 失败时的合规救援路径」—— 说明 `--repair-evidence` 在 `bd1f1a3` 之后才存在，消费仓没同步时的处理顺序（先同步 → 再救援 → 重跑 close-task），区分 case A（历史 task / 诚实救援）vs case B（PM 真实跳过 /task-execute，救援等于洗白偷工），给出框架同步阻塞时的临时绕过 payload 模板 + 技术债跟踪要求
+- `scripts/audit-task-events.py` I-CT7 / I-CT8 失败诊断扩展为三路径：(1) 历史 task / 真实手动完成 → `--repair-evidence`（明示强制 reason + `repaired:true` 标记 + 警告不要裸 append + 命令找不到时引导走 §4.11 同步框架）；(2) 真实跳过状态机 → 回 `/pmai-task-execute`；(3) 整 req 放弃 → `/pmai-cancel-req`
+- `框架同步-SOP.md` 新加 §4.11「消费仓 I-CT7 失败时的合规救援路径」—— 说明 `--repair-evidence` 在 `bd1f1a3` 之后才存在，消费仓没同步时的处理顺序（先同步 → 再救援 → 重跑 close-task），区分 case A（历史 task / 诚实救援）vs case B（PM 真实跳过 /pmai-task-execute，救援等于洗白偷工），给出框架同步阻塞时的临时绕过 payload 模板 + 技术债跟踪要求
 
 **消费仓影响**：下次同步框架后，I-CT7 挡下来的提示从一句话变成完整 3 路径诊断；不需要 schema 迁移、不影响现有事件流。
 
@@ -1099,13 +1127,13 @@ PM 不需要知道 slug / 编号 / worktree 这些内部机制，"我才能..." 
 
 ### 2026-05-25 — fix: task 状态查询 vs v4.5 task md 单分支独占的 inconsistency
 
-**问题**：v4.5 设计 task-confirm fork 后 `git rm` task md 从 req 分支（搬到 task 分支独家），但 `list_tasks()` 和 `/task-execute` 入口的 find 命令都只扫 req 分支视角，导致：
+**问题**：v4.5 设计 task-confirm fork 后 `git rm` task md 从 req 分支（搬到 task 分支独家），但 `list_tasks()` 和 `/pmai-task-execute` 入口的 find 命令都只扫 req 分支视角，导致：
 
-- **dangerous default**：`/task-status` 在 req 窗口扫不到已 fork 的 task → 错误推荐 `/close-req`；如果 PM 信了会**误关一个还有 task 待执行的 req**
-- PM 在 req 窗口 `ls tasks/` 看不到 task md → AI 误判 "task 还没产" → 让 PM 重跑 `/task-spec` 浪费时间
-- `/task-execute task-NNN`（短 ID）模式 find 扫不到 task-* worktree → 在已 confirm 的 task 上误报 "0 个匹配"
+- **dangerous default**：`/pmai-task-status` 在 req 窗口扫不到已 fork 的 task → 错误推荐 `/pmai-close-req`；如果 PM 信了会**误关一个还有 task 待执行的 req**
+- PM 在 req 窗口 `ls tasks/` 看不到 task md → AI 误判 "task 还没产" → 让 PM 重跑 `/pmai-task-spec` 浪费时间
+- `/pmai-task-execute task-NNN`（短 ID）模式 find 扫不到 task-* worktree → 在已 confirm 的 task 上误报 "0 个匹配"
 
-PM 在 example-consumer-app 真实跑出来证实了 `/task-status` 漏报 task-002，决定直接修而非起 D-v 设计 doc。
+PM 在 example-consumer-app 真实跑出来证实了 `/pmai-task-status` 漏报 task-002，决定直接修而非起 D-v 设计 doc。
 
 **修法**（example-consumer-app AI 给的 A 方案 ≈ 扫描机制扩展）：
 
@@ -1115,7 +1143,7 @@ PM 在 example-consumer-app 真实跑出来证实了 `/task-status` 漏报 task-
 - `skills/task-execute/SKILL.md` 入口步骤 1：短 ID + 无参两种模式的 find 命令扩到 `.worktrees/task-*/requirements/active`；加 v4.5 注释说明 fork 后 task md 在 task 分支独家
 - `scripts/_lib/state_test.py:TestListTasks` 加 2 case：worktree_fallback_finds_task_branch_only_md / task_branch_md_preferred_over_req_branch
 
-**业务仓需注意**：同步本修后 `/task-status` 在 req 窗口能正确看到已 fork 待执行的 task；可信任 status-view 给出的"下一步"建议（之前 PM 必须 `git worktree list` 手工核对）。
+**业务仓需注意**：同步本修后 `/pmai-task-status` 在 req 窗口能正确看到已 fork 待执行的 task；可信任 status-view 给出的"下一步"建议（之前 PM 必须 `git worktree list` 手工核对）。
 
 **测试基线**：`bash tests/run-all.sh` **454 pass / 1 fail**。fail 是 `test-cleanup-pending.sh` C7 safety case，**pre-existing**（stash 本次改动后跑仍 fail，与本次无关，另行追踪）。本次新增 2 case 全过（worktree_fallback_finds_task_branch_only_md / task_branch_md_preferred_over_req_branch）。
 
@@ -1156,9 +1184,9 @@ D-iv 批 1 + 批 2 全包技术 vp（vp-1 ~ vp-12，**vp-9 砍**）落地完毕�
 
 **PM 验收清单**（同步消费仓后跑；不阻塞 ship）：
 
-- [ ] PM 本仓外起测试项目跑 `/init-project` 端到端
+- [ ] PM 本仓外起测试项目跑 `/pmai-init-project` 端到端
 - [ ] PM 跑 `bash scripts/measure-tthw.sh` 计时（期望 ≤ 30 分钟）
-- [ ] PM 跑 `/project-solution` 4 场景对比一致性
+- [ ] PM 跑 `/pmai-project-solution` 4 场景对比一致性
 - [ ] PM 同步到 ExampleConsumerApp 跑真实 req 验 banner / Decision gate / askuser / narrative
 - [ ] 验收 finding 回头开 D-iv v0.3 patch vp（如有）
 
@@ -1233,9 +1261,9 @@ D-iv 批 1 + 批 2 全包技术 vp（vp-1 ~ vp-12，**vp-9 砍**）落地完毕�
 
 ---
 
-### 2026-05-25 — D-iv M1 vp-6：`/project-solution` 4 场景提问顺序细化
+### 2026-05-25 — D-iv M1 vp-6：`/pmai-project-solution` 4 场景提问顺序细化
 
-**vp-6 范围**（T6；review B1 + B 4 场景延伸）：vp-2 已经把 `/project-solution` SKILL.md 段 0 加了 4 场景判断**框架**（触发 / 输入态 / 提问顺序粗略描述）；vp-6 把提问顺序列**细化为具体的 5-7 步**，让实施时不需要每场景再想。
+**vp-6 范围**（T6；review B1 + B 4 场景延伸）：vp-2 已经把 `/pmai-project-solution` SKILL.md 段 0 加了 4 场景判断**框架**（触发 / 输入态 / 提问顺序粗略描述）；vp-6 把提问顺序列**细化为具体的 5-7 步**，让实施时不需要每场景再想。
 
 `skills/project-solution/SKILL.md`:
 
@@ -1243,7 +1271,7 @@ D-iv 批 1 + 批 2 全包技术 vp（vp-1 ~ vp-12，**vp-9 砍**）落地完毕�
   - A 项目方向重做（跑过几个 req 后发现产品定位偏了）
   - B 季度 / 半年规划（主动校准 PROJECT 6 节 + 重新排 roadmap）
   - C 老板 / 市场新方向（外部输入逼着改路线）
-  - D brownfield 接入定方向（紧接 /codebase-audit 后跑）
+  - D brownfield 接入定方向（紧接 /pmai-codebase-audit 后跑）
 - 段 0 场景判断表「提问顺序」列从粗略一句话改为**完整 5-7 步顺序**：
   - A 重做: 痛点诊断 → 定位 → 用户 → 路线 → 业务术语 → roadmap 重排
   - B 季度规划: 过去 roadmap 回顾 → 产品路线（新里程碑）→ roadmap → 业务术语增量（跳过定位 / 用户 / 技术栈）
@@ -1259,9 +1287,9 @@ D-iv 批 1 + 批 2 全包技术 vp（vp-1 ~ vp-12，**vp-9 砍**）落地完毕�
 
 **业务仓需注意**：
 
-- `/project-solution` 4 场景全部走同一份 `_shared/project-questioning.md`（话术库 + 写作规则 + Decision gate 共享），但**提问顺序按场景定**（SKILL.md 段 0 表）
-- D brownfield 场景必须先有 `docs/代码现状档.md`（`/codebase-audit` 产物），否则 step 0 失败
-- A/B/C 场景前置须有 `docs/PROJECT.md`（greenfield 首次起项目要走 `/init-project` 一气呵成，不走 `/project-solution`）
+- `/pmai-project-solution` 4 场景全部走同一份 `_shared/project-questioning.md`（话术库 + 写作规则 + Decision gate 共享），但**提问顺序按场景定**（SKILL.md 段 0 表）
+- D brownfield 场景必须先有 `docs/代码现状档.md`（`/pmai-codebase-audit` 产物），否则 step 0 失败
+- A/B/C 场景前置须有 `docs/PROJECT.md`（greenfield 首次起项目要走 `/pmai-init-project` 一气呵成，不走 `/pmai-project-solution`）
 
 **批 1（M1）至此 6 个 vp 全部完成**：vp-1（SKILL.md 4 阶段）+ vp-2（_shared 抽取）+ vp-3（阶段 D verify）+ vp-4（文档同步）+ vp-5a（自动化测试 +11 cases）+ vp-6（4 场景细化）；vp-5b PM 手动验收待 PM 自跑。
 
@@ -1274,7 +1302,7 @@ D-iv 批 1 + 批 2 全包技术 vp（vp-1 ~ vp-12，**vp-9 砍**）落地完毕�
 - `tests/test-brownfield-detect.sh`（3 cases）：
   - T1 `init-project.sh` 已存在空目录 → 退出非 0 + stderr 含「目标目录已存在」
   - T2 `init-project.sh` 已存在含 `.git` 目录 → 同 T1（脚本不区分是否含 git，都拒）
-  - T3 `init-project SKILL.md` 阶段 A 含 brownfield 描述 + `/codebase-audit` 引导 + 「两层都拦」接口约定（review C-7）
+  - T3 `init-project SKILL.md` 阶段 A 含 brownfield 描述 + `/pmai-codebase-audit` 引导 + 「两层都拦」接口约定（review C-7）
 - `tests/test-no-duplicate-questioning.sh`（4 cases）：
   - T1 Decision gate 模板话术「我会开始写 .planning/PROJECT.md」只在 `_shared/project-questioning.md` 一处
   - T2 6 节齐不齐**完整调用代码块**（`PROJECT_STATE=$(python3 ...`）不出现在 `init-project` / `project-solution`（_shared + new-req legacy mini-fill 各持一份合法）
@@ -1303,11 +1331,11 @@ D-iv 批 1 + 批 2 全包技术 vp（vp-1 ~ vp-12，**vp-9 砍**）落地完毕�
 
 **vp-4**（文档同步，T4）：
 
-- `README.md` § 快速开始 1：从 `bash scripts/init-project.sh ...` 直调 CLI 改为「PM 主动入口走 `/init-project` skill 一气呵成 4 阶段」（保留非交互 CLI 作 `measure-tthw` / smoke / 批量自动化的入口 invariant；review C-5）
+- `README.md` § 快速开始 1：从 `bash scripts/init-project.sh ...` 直调 CLI 改为「PM 主动入口走 `/pmai-init-project` skill 一气呵成 4 阶段」（保留非交互 CLI 作 `measure-tthw` / smoke / 批量自动化的入口 invariant；review C-5）
 - `README.md` § 完整 Skill 命令汇总：
-  - `/init-project` 从「框架内部（PM 不直接用）」组**移到「启动新工作」组顶**（review B2）+ 加"(只在生成器仓里跑)"标记
-  - `/project-solution` 描述更新为「项目方向规划：4 个独立场景（重做 / 季度规划 / 老板新方向 / brownfield 接入）」
-  - 「框架内部」组留空（用 placeholder 行注明 `/init-project` 2026-05-25 后归入「启动新工作」）
+  - `/pmai-init-project` 从「框架内部（PM 不直接用）」组**移到「启动新工作」组顶**（review B2）+ 加"(只在生成器仓里跑)"标记
+  - `/pmai-project-solution` 描述更新为「项目方向规划：4 个独立场景（重做 / 季度规划 / 老板新方向 / brownfield 接入）」
+  - 「框架内部」组留空（用 placeholder 行注明 `/pmai-init-project` 2026-05-25 后归入「启动新工作」）
 - `RUNTIME.md`「当前位置」：D-iii v2 整段挪「历史阶段」，「当前位置」改写为 D-iv M1 vp-1/vp-2 落地 + vp-3 verify pass + 剩余 vp-4/5a/5b/6 清单
 - `RUNTIME.md`「新窗口续接命令」：更新为 D-iv 进度（425/0 + vp 列表）
 - `CHANGELOG.md`「未发布」段：本条目（vp-3 + vp-4 收尾）
@@ -1316,9 +1344,9 @@ D-iv 批 1 + 批 2 全包技术 vp（vp-1 ~ vp-12，**vp-9 砍**）落地完毕�
 
 ---
 
-### 2026-05-25 — D-iv M1 vp-2：`_shared/project-questioning.md` 抽取 + `/project-solution` 改 @读
+### 2026-05-25 — D-iv M1 vp-2：`_shared/project-questioning.md` 抽取 + `/pmai-project-solution` 改 @读
 
-**改造目标**：vp-1 让 `/init-project` 阶段 C 写为 `@读 _shared/project-questioning.md`，但该 `_shared` 文件还没创建（vp-1 commit 后 vp-2 commit 前手动跑 `/init-project` 阶段 C 会找不到 `_shared` 文件）。vp-2 创建该文件 + 把 `/project-solution` 现役 inline 提问法 / 写作规则改为 @读，让两个 skill 都引用同一份单一真相源。
+**改造目标**：vp-1 让 `/pmai-init-project` 阶段 C 写为 `@读 _shared/project-questioning.md`，但该 `_shared` 文件还没创建（vp-1 commit 后 vp-2 commit 前手动跑 `/pmai-init-project` 阶段 C 会找不到 `_shared` 文件）。vp-2 创建该文件 + 把 `/pmai-project-solution` 现役 inline 提问法 / 写作规则改为 @读，让两个 skill 都引用同一份单一真相源。
 
 **vp-2 范围**（M1 批 1 的第二个 vp；T2）：
 
@@ -1348,35 +1376,35 @@ D-iv 批 1 + 批 2 全包技术 vp（vp-1 ~ vp-12，**vp-9 砍**）落地完毕�
 - 6 节齐不齐检查 / 写作规则 / 提问纪律 / 问题库 / 未决问题闸门 全部只在 `_shared` 一处
 
 **业务仓需注意**：
-- `/project-solution` 行为不变（PM 视角依然走 4 段：场景判断 + 段 1 讨论 + 段 2 输出 + 确认门）；但内部走 @读 `_shared`，PM 不感知重构
-- `/init-project` 阶段 C 现在可以跑（`_shared/project-questioning.md` 已存在）
+- `/pmai-project-solution` 行为不变（PM 视角依然走 4 段：场景判断 + 段 1 讨论 + 段 2 输出 + 确认门）；但内部走 @读 `_shared`，PM 不感知重构
+- `/pmai-init-project` 阶段 C 现在可以跑（`_shared/project-questioning.md` 已存在）
 
 **测试基线**：`bash tests/run-all.sh` **425/0**（无回归）。
 
 ---
 
-### 2026-05-25 — D-iv M1 vp-1：`/init-project` skill 一气呵成 4 阶段重写（批 1 起手）
+### 2026-05-25 — D-iv M1 vp-1：`/pmai-init-project` skill 一气呵成 4 阶段重写（批 1 起手）
 
-**改造目标**：`/init-project` 从"调 shell 脚本 + 提示 PM 下一步发 `/project-solution`"两步分裂入口，升级为 PM 主动一气呵成 4 阶段入口（参数 → 骨架 → 方向讨论 → Next Up）。
+**改造目标**：`/pmai-init-project` 从"调 shell 脚本 + 提示 PM 下一步发 `/pmai-project-solution`"两步分裂入口，升级为 PM 主动一气呵成 4 阶段入口（参数 → 骨架 → 方向讨论 → Next Up）。
 
 **vp-1 范围**（M1 批 1 的第一个 vp；T1）：
 
 - 重写 `skills/init-project/SKILL.md`：
   - 顶部加 4 阶段 ASCII 流程图（review B3）
   - 阶段 A 明确 5 步参数顺序：项目名 → 落地路径 → **brownfield 检测闸门** → 一句话背景 → 项目意图（review A3）
-  - **brownfield 接口约定**（review C-7）：skill 阶段 A 拒已存在目录 + 提示 `/codebase-audit`；脚本继续拒（两层都拦）
+  - **brownfield 接口约定**（review C-7）：skill 阶段 A 拒已存在目录 + 提示 `/pmai-codebase-audit`；脚本继续拒（两层都拦）
   - 阶段 B 用 Bash 调 `init-project.sh`（脚本作骨架构建器；non-interactive 入口 invariant 仍保留，review C-5）
   - 阶段 C @读 `_shared/project-questioning.md` 跑讨论（**vp-2 创建该 `_shared` 文件**）+ Decision gate 二选一 + atomic commit `docs: project direction settled`（review A5）
   - 阶段 D 只汇总不 commit（输出 Next Up 块格式）
   - 失败兜底速查（R10 init-project.sh 失败 / `_shared` 缺失；R11 PM 中途停清理）
 - `scripts/init-project.sh`：
-  - 删 `--help` 段末「成功后: cd <target-dir> / /new-req」echo + 加说明本脚本作 skill 阶段 B 调用 / 非交互 CLI 保留
-  - 删脚本末尾 `下一步：cd $TARGET_DIR / 运行 /new-req` echo（入口语义已迁移到 `/init-project` skill）
+  - 删 `--help` 段末「成功后: cd <target-dir> / /pmai-new-req」echo + 加说明本脚本作 skill 阶段 B 调用 / 非交互 CLI 保留
+  - 删脚本末尾 `下一步：cd $TARGET_DIR / 运行 /pmai-new-req` echo（入口语义已迁移到 `/pmai-init-project` skill）
 
 **业务仓需注意**：
-- 新建项目走 `/init-project` skill（**只在生成器仓里跑**，业务仓的 `/init-project` 不分发）—— skill 内嵌 4 阶段 agent 流程
+- 新建项目走 `/pmai-init-project` skill（**只在生成器仓里跑**，业务仓的 `/pmai-init-project` 不分发）—— skill 内嵌 4 阶段 agent 流程
 - `init-project.sh` 仍是非交互参数化 CLI（`measure-tthw` / smoke / 批量自动化照旧调用，不受影响）
-- vp-1 完成后 `_shared/project-questioning.md` 尚未创建 → vp-2 立刻接上；vp-1 commit 后 vp-2 commit 前 PM 不应该手动跑 `/init-project`（阶段 C 会找不到 `_shared` 文件）
+- vp-1 完成后 `_shared/project-questioning.md` 尚未创建 → vp-2 立刻接上；vp-1 commit 后 vp-2 commit 前 PM 不应该手动跑 `/pmai-init-project`（阶段 C 会找不到 `_shared` 文件）
 
 **测试基线**：`bash tests/run-all.sh` **425/0**（无回归；`test-inject-structure.sh` "init-project SKILL 询问项目意图" case PASS 维持）。
 
@@ -1425,7 +1453,7 @@ D-iv 批 1 + 批 2 全包技术 vp（vp-1 ~ vp-12，**vp-9 砍**）落地完毕�
 - **PM mental model 切 Model 2**：PM 完全不感知 `attachments/` 目录；想上传材料 → 在 chat 自然说 "我有 X 在路径 Y，重点 Z" → AI 后台搞定（与 D-i v4 office-hours snapshot 同款交互）
 - **现有 trigger 1 / 2 保留作 fallback**：PM 真手动 cp 进 attachments/ 时 trigger 2 仍能识别（用 `is_seen` 判定基于 `attachments_seen` 真相源）
 - **B 分支选 office-hours 源材料期间** trigger 0 禁用 —— PM 在 B 分支给绝对路径不会被误归档为 attachment
-- **`/prd-writing` standalone 模式不启 trigger 0** —— standalone 不绑 req → 不入 req attachments/；想给独立 PRD 附件 PM 走手动 / 他路径
+- **`/pmai-prd-writing` standalone 模式不启 trigger 0** —— standalone 不绑 req → 不入 req attachments/；想给独立 PRD 附件 PM 走手动 / 他路径
 - **`.req-meta.json` 多 1 个字段**（`attachments_seen` 列表）；旧 req 无字段自动空列表 fallback，零迁移
 - **hard cap 50MB**：超大文件 helper raise `FileSizeError`，chat 报错让 PM 走外部引用或拆小
 - **敏感路径 denylist**：12 个 pattern（`.env` / `.ssh/` / `.aws/` / `token` / `credential` 等）→ PM 给 `~/.ssh/id_rsa` 类路径会被 helper 拒纳；消费仓发现新 case 扩 pattern
@@ -1438,17 +1466,17 @@ D-iv 批 1 + 批 2 全包技术 vp（vp-1 ~ vp-12，**vp-9 砍**）落地完毕�
 
 ### 2026-05-25 — D-i v4：office-hours 跨 Stage 1+2 集成 + Stage 2 真相源路径契约（snapshot 复制方案）
 
-**痛点**：office-hours 在 Stage 1（`/new-req` 选项 1）+ Stage 2（讨论方式选择）两处都被调用看起来不合理 —— 用户视角是"一次需求讨论"，不该是 stage 1 + stage 2 两次拧巴。Stage 2 下游契约硬绑 `analysis.md` 也让"工具 2 选 1"（结构化批判 vs YC office-hours）走不通。
+**痛点**：office-hours 在 Stage 1（`/pmai-new-req` 选项 1）+ Stage 2（讨论方式选择）两处都被调用看起来不合理 —— 用户视角是"一次需求讨论"，不该是 stage 1 + stage 2 两次拧巴。Stage 2 下游契约硬绑 `analysis.md` 也让"工具 2 选 1"（结构化批判 vs YC office-hours）走不通。
 
 **方案**（设计 `docs/归档/完成/office-hours-跨stage1-2集成.md` v4，落实 Codex outside voice + 3 轮 plan-eng-review 全 21 决议）：
 
-1. **PM 视角"一次需求讨论"体验包装**（`req-stage-gate` Stage 1→2）：brief 二次确认 + 讨论方式选择门合二为一，分流 A（`/req-analysis` 结构化批判）/ B（office-hours snapshot）
+1. **PM 视角"一次需求讨论"体验包装**（`req-stage-gate` Stage 1→2）：brief 二次确认 + 讨论方式选择门合二为一，分流 A（`/pmai-req-analysis` 结构化批判）/ B（office-hours snapshot）
 2. **Stage 2 真相源路径契约**（双分支）：A 分支产 `analysis.md` + 不变；B 分支 AI snapshot 复制 office-hours 设计稿到 `$ACTIVE_REQ_DIR/stage2-office-hours.md`（req 自包含，进 git / CI / 跨机器 / 归档 / consumer 仓全维度），不引用仓外 `~/.gstack/` 路径
 3. **`.req-meta.json` 加 3 字段**：`stage{N}_source`（req 内相对路径）+ `stage{N}_tool`（产生工具名）+ `stage{N}_source_origin`（B 分支可选，外部源原始绝对路径追溯）
 4. **helper**：`_lib.state.get_stage_source(req_dir, n)` + `set_stage_source(...)`，`STAGE_OUTPUT_FILES` 字典 schema 不动（保留 `dict[int, str]` 作 fallback）
 5. **req-transition.py:247 改 helper**（R3-C1 必修，B 分支才推得进 Stage 3）
 6. **下游 SKILL 通用化**（9 处）：prd-writing / implementation-design / task-spec / doc-update / close-task 文案 / templates/task-plan.md.tmpl / templates/CLAUDE.md.tmpl / input-flow.md / req-stage-gate Stage 2→3 段
-7. **`/new-req` 砍选项 1**：单一 AI 引导路径；PM 想用 office-hours 风格深挖讨论 → Stage 2 stage-gate 入口 B 分支承接
+7. **`/pmai-new-req` 砍选项 1**：单一 AI 引导路径；PM 想用 office-hours 风格深挖讨论 → Stage 2 stage-gate 入口 B 分支承接
 
 **改动**（vp-1 → vp-7，~5h）：
 
@@ -1465,7 +1493,7 @@ D-iv 批 1 + 批 2 全包技术 vp（vp-1 ~ vp-12，**vp-9 砍**）落地完毕�
 
 **业务仓需注意**：
 
-- **`/new-req` 选项 1 已砍**：旧版"自跑 /office-hours 整理 brief"路径不再可用；PM 想用 office-hours 风格请在 Stage 2 `req-stage-gate` 入口 B 分支跑（office-hours 设计稿会被 AI snapshot 复制进 req）
+- **`/pmai-new-req` 选项 1 已砍**：旧版"自跑 /office-hours 整理 brief"路径不再可用；PM 想用 office-hours 风格请在 Stage 2 `req-stage-gate` 入口 B 分支跑（office-hours 设计稿会被 AI snapshot 复制进 req）
 - **新 req `.req-meta.json` 多 3 字段**（`stage2_source` / `stage2_tool` / `stage2_source_origin`）；旧 req（无字段）自动 fallback `analysis.md`，零迁移
 - **B 分支产物文件名固定**：`$ACTIVE_REQ_DIR/stage2-office-hours.md`；多次跑 B 分支会覆盖（PM 主动选 = 主动覆盖）。`stage2_source_origin` 字段失效不影响 req 自包含性
 - **下游 SKILL prose 改通用术语"stage 2 真相源"**：A 分支 PM 体感不变（仍读 analysis.md）；B 分支 PM 看到 chat 里 AI 提到的是 stage 2 真相源 + stage2-office-hours.md
@@ -1495,7 +1523,7 @@ D-iv 批 1 + 批 2 全包技术 vp（vp-1 ~ vp-12，**vp-9 砍**）落地完毕�
 
 **业务仓需注意**：
 
-- sync 后新跑 `/implementation-design` 自动产 5 段（含段 1.5）；旧 req 的 implementation-design.md 不强制回填，下次 revise 时按新模板。
+- sync 后新跑 `/pmai-implementation-design` 自动产 5 段（含段 1.5）；旧 req 的 implementation-design.md 不强制回填，下次 revise 时按新模板。
 - task-spec 现在按 PRD 锚点 join 段 1.5 SIMP 行 —— 业务仓 PRD §六章节命名应稳定（功能名级），否则 close-req §2a 锚点解析会失败 stop 问 PM。
 - close-task Phase 1 现在多一步「偏差分类问 PM」 —— 计划外简化偏差才停，纠错偏差走原路径不打断（PM 体感同前）。
 - 「原型本次实现」字段名已改「原型本次计划简化为」（C6 诚实命名）；段 1.5 模板与 SIMP 行参考 v2 设计文档 `docs/归档/完成/原型简化项-机制.md`。
@@ -1556,11 +1584,11 @@ D-iv 批 1 + 批 2 全包技术 vp（vp-1 ~ vp-12，**vp-9 砍**）落地完毕�
 **影响范围**：
 
 - 新增 `scripts/req-events.py`：`decision` / `adjustment` 两类 req 级事件，落 `requirements/active/<reqid>/req-events.jsonl`。
-- `req-solution` 退场，新增 `/project-solution`；`/prd-writing` 前移到 stage 3，产 req 级 `prd.md`。
-- 新增 `/implementation-design` + `templates/implementation-design.md.tmpl`，stage 5 拆 task 前产 req 级 HOW。
+- `req-solution` 退场，新增 `/pmai-project-solution`；`/pmai-prd-writing` 前移到 stage 3，产 req 级 `prd.md`。
+- 新增 `/pmai-implementation-design` + `templates/implementation-design.md.tmpl`，stage 5 拆 task 前产 req 级 HOW。
 - `task-spec` 从双文件改成单文件 typed contract（PM 确认区 / 执行区 / 审计区三区 + `task_format` 标记）。
 - 新增 `templates/PRODUCT-RULES.md.tmpl`，升级 `DESIGN.md.tmpl`；close-task 支持 PRODUCT-RULES selective promote，req-stage-gate stage 4 每 req 必跑 gap-check。
-- 新增 `/codebase-audit` brownfield 入口；close-req 步骤 2a 改为读 req-events adjustment，把 PRD 反向对齐为 as-built。
+- 新增 `/pmai-codebase-audit` brownfield 入口；close-req 步骤 2a 改为读 req-events adjustment，把 PRD 反向对齐为 as-built。
 - 删除旧 solution / task engineering 双文件模板与 reconcile/hash 相关机制；`req-transition.py` 对在飞旧 req 保留文件存在性兼容（有 `solution.md` 且无 `prd.md` 时走旧 stage 3 判别）。
 
 **业务仓需注意**：
@@ -1576,7 +1604,7 @@ D-iv 批 1 + 批 2 全包技术 vp（vp-1 ~ vp-12，**vp-9 砍**）落地完毕�
 
 **修复**：
 
-- `task-transition.py` 的「执行中→已完成」前移执行证据校验：事件流必须有 `execution_started` 或 `execution_manual_completed`，否则拒绝验收并提示先走 `/task-execute`。
+- `task-transition.py` 的「执行中→已完成」前移执行证据校验：事件流必须有 `execution_started` 或 `execution_manual_completed`，否则拒绝验收并提示先走 `/pmai-task-execute`。
 - 新增受支持的 `--repair-evidence` 路径，用于 close-task 审计发现历史证据缺失但 PM 已确认真实完成时，受控补记带 `repaired` 标记的执行事件。
 - 执行事件判定抽到 `scripts/_lib/events.py`，同时覆盖坏行 / 非法 UTF-8 / 分支已不存在等守卫。
 

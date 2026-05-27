@@ -49,7 +49,7 @@ FIELD_RE = FIELD_RE_OLD
 
 # Task 状态机：
 #
-#   待执行 ──/task-confirm──▶ 执行中 ──PM 验收──▶ 已完成 (终态)
+#   待执行 ──/pmai-task-confirm──▶ 执行中 ──PM 验收──▶ 已完成 (终态)
 #     │                        │
 #     │     --fail-execution / └──执行失败回退──▶ 待执行
 #     │     --cancel-manual
@@ -263,7 +263,7 @@ def check_preconditions(
             sys.exit(1)
 
         # 3. accept 闸门（I-CT7 核心校验前移）：事件流须证明执行器被触发过。
-        #    无 execution 事件 = /task-execute 从未跑过 → 拒绝验收。
+        #    无 execution 事件 = /pmai-task-execute 从未跑过 → 拒绝验收。
         #    事件流缺失/不可读/含坏行 = 无法确认 → fail-closed（与 I-CT7 同口径）。
         events_file = (
             find_main_repo_root() / ".runs" / "events" / f"{task_file.stem}.jsonl"
@@ -283,7 +283,7 @@ def check_preconditions(
                     "（execution_started / execution_manual_completed）。\n"
                     "  说明 dispatch 通路没真跑过。合规出路（按场景选）：\n"
                     "\n"
-                    "    • Work 还没做：回新会话跑 /task-execute <task-id> 让 dispatch 真发射。\n"
+                    "    • Work 还没做：回新会话跑 /pmai-task-execute <task-id> 让 dispatch 真发射。\n"
                     "\n"
                     "    • Work 已手做完（worktree 有 task commit）+ PM 拍板补登：\n"
                     "      python3 $HOME/.pmai/scripts/task-transition.py <task-file> \\\n"
@@ -356,7 +356,7 @@ def do_transition(
                 "物化绑定 dispatch 事件（修复 B）。\n"
                 "  防止 dispatch 没真跑就把状态推到执行中、事件流成为"
                 "「状态变了但无执行证据」悬空态。\n"
-                "  合规调用方：/task-execute skill 的 dispatch 节点（自动传该 flag）。\n"
+                "  合规调用方：/pmai-task-execute skill 的 dispatch 节点（自动传该 flag）。\n"
                 "  AI 故障恢复路径见 --register-manual-completion。",
                 file=sys.stderr,
             )
@@ -491,7 +491,7 @@ def cmd_discard(task_file: Path, reason: str, yes: bool) -> None:
     if current == "已完成":
         print(
             "Error: 已完成 task 不能 discard。代码已合并到 req 分支，"
-            "如需撤销请新开 task revert，或用 /cancel-req 整体取消 req。",
+            "如需撤销请新开 task revert，或用 /pmai-cancel-req 整体取消 req。",
             file=sys.stderr,
         )
         sys.exit(1)
@@ -735,7 +735,7 @@ def cmd_discard(task_file: Path, reason: str, yes: bool) -> None:
 
 def cmd_get_status(task_file: Path) -> None:
     """Print the current task status field to stdout. Used by gate scripts
-    (check-branch.sh, exec-adapters/*.sh, /task-execute preamble) so no one
+    (check-branch.sh, exec-adapters/*.sh, /pmai-task-execute preamble) so no one
     re-implements the regex."""
     fields = read_fields(task_file)
     current = fields.get("状态", "")
@@ -747,7 +747,7 @@ def cmd_get_status(task_file: Path) -> None:
 
 def cmd_validate_fields_only(task_file: Path) -> None:
     """Strict header-fields validation. Used by task-spec / task-confirm post-write
-    gate so a malformed task file can't reach /task-execute.
+    gate so a malformed task file can't reach /pmai-task-execute.
 
     Checks:
       1. 状态 字段能被 _parse_field_line 解析（段落或任务卡表格格式之一）
@@ -816,7 +816,7 @@ def cmd_repair_evidence(task_file: Path, reason: str, yes: bool) -> None:
         print(
             f"Error: --repair-evidence 仅用于「已完成」的 task（close-task I-CT7 被挡），"
             f"当前状态「{current}」。\n"
-            "  「执行中」的 task 请走 /task-execute（含 manual 模式）补 execution 事件。",
+            "  「执行中」的 task 请走 /pmai-task-execute（含 manual 模式）补 execution 事件。",
             file=sys.stderr,
         )
         sys.exit(1)
@@ -902,7 +902,7 @@ def cmd_emit_from_pending(task_file: Path) -> None:
     execution_manual_completed 事件（无 repaired 标记，因为是合规通路），
     删 PENDING_FILE，不改状态。后续 step 4 自审 → PM 验收 → 已完成。
 
-    给 /task-execute skill §3a manual resume 通路调用，不是 PM 直接敲。
+    给 /pmai-task-execute skill §3a manual resume 通路调用，不是 PM 直接敲。
     """
     fields = read_fields(task_file)
     current = fields.get("状态", "")
@@ -910,7 +910,7 @@ def cmd_emit_from_pending(task_file: Path) -> None:
         print(
             f"Error: --emit-from-pending 仅用于「执行中」的 task，"
             f"当前状态「{current}」。\n"
-            "  此通路是 /task-execute §3a manual resume 用，需要先经 dispatch "
+            "  此通路是 /pmai-task-execute §3a manual resume 用，需要先经 dispatch "
             "派发到执行中。",
             file=sys.stderr,
         )
@@ -971,7 +971,7 @@ def cmd_register_manual_completion(
     """Handle --register-manual-completion: AI 故障恢复合规通路。
 
     场景：task 状态=执行中、事件流缺 exec event、但 worktree 已有 task commit。
-    多发于「AI 进 /task-execute 后入口前置 transition 了但没跑 dispatch、自己用
+    多发于「AI 进 /pmai-task-execute 后入口前置 transition 了但没跑 dispatch、自己用
     Edit/Write 把代码做完」的故障。
 
     强制 --reason；写一条带 {repaired:true, reason, by:manual-completion-register}
@@ -985,7 +985,7 @@ def cmd_register_manual_completion(
         print(
             f"Error: --register-manual-completion 仅用于「执行中」的 task，"
             f"当前状态「{current}」。\n"
-            "  «已完成» 状态用 --repair-evidence；«待执行» 状态请走 /task-execute。",
+            "  «已完成» 状态用 --repair-evidence；«待执行» 状态请走 /pmai-task-execute。",
             file=sys.stderr,
         )
         sys.exit(1)
@@ -1030,7 +1030,7 @@ def cmd_register_manual_completion(
         print(
             f"Error: task worktree {task_worktree} 未发现任何 commit。\n"
             "  register-manual-completion 要求 work 真实已 commit；\n"
-            "  如果 work 还没做，请走 /task-execute 而不是 register。",
+            "  如果 work 还没做，请走 /pmai-task-execute 而不是 register。",
             file=sys.stderr,
         )
         sys.exit(1)
@@ -1121,7 +1121,7 @@ def main() -> None:
         choices=sorted(BOUND_DISPATCH_EVENT_MAP.keys()),
         help="「待执行→执行中」transition 必填（修复 B）：与 dispatch 事件原子绑定写入。"
              "started = 普通 executor 派发；manual-waiting = executor=manual 派发。"
-             "给 /task-execute skill 的 dispatch 节点调用。",
+             "给 /pmai-task-execute skill 的 dispatch 节点调用。",
     )
     parser.add_argument(
         "--executor",
@@ -1144,7 +1144,7 @@ def main() -> None:
         dest="emit_from_pending",
         help="dispatch §3a manual resume 合规通路：PENDING_FILE 存在时补一条 "
              "execution_manual_completed，删 PENDING_FILE，不改状态。"
-             "给 /task-execute skill 调用。",
+             "给 /pmai-task-execute skill 调用。",
     )
     parser.add_argument(
         "--register-manual-completion",
@@ -1184,7 +1184,7 @@ def main() -> None:
         print(
             "  修复：检查路径拼写；task 文件应位于 "
             "$ACTIVE_REQ_DIR/tasks/task-NNN-<slug>.md。"
-            "若 task 还没生成，先在 req worktree 跑 /task-spec <task-id>。",
+            "若 task 还没生成，先在 req worktree 跑 /pmai-task-spec <task-id>。",
             file=sys.stderr,
         )
         sys.exit(1)

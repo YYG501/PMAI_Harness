@@ -16,7 +16,7 @@
 
 ### 1.1 触发问题
 
-PM 报告：跑 `/task-spec` 改 task-001（revise 模式）耗时长。AI 自描述读了 PM-VIEW-RULES + brief + analysis + solution + 工程合同 + 模块文档 + page.tsx 关键段；首次 lint 因头部"状态"字段格式错重写。PM 实际改动小（替换两个占位 + Drawer + 筛选 + 按钮联动）。
+PM 报告：跑 `/pmai-task-spec` 改 task-001（revise 模式）耗时长。AI 自描述读了 PM-VIEW-RULES + brief + analysis + solution + 工程合同 + 模块文档 + page.tsx 关键段；首次 lint 因头部"状态"字段格式错重写。PM 实际改动小（替换两个占位 + Drawer + 筛选 + 按钮联动）。
 
 ### 1.2 实测验证（req-003 task-001 revise 模式模拟）
 
@@ -211,7 +211,7 @@ revise 子集中的步骤 3 / 5 / 6 全部按 `PM-VIEW-RULES.md §9.3.1` / `§9.
 现有 269 单测必须 0 失败。
 
 ### 5.2 实测验证
-在 req-003 worktree 跑一次 `/task-spec task-001`（revise），抓 transcript：
+在 req-003 worktree 跑一次 `/pmai-task-spec task-001`（revise），抓 transcript：
 - 预期总读取量 ~4400 行（从 ~8008 降，省 ~45%）
 - 验证 lint 一次通过（P0）
 - 验证 prototype 仅 grep 命中段（~150 行 vs 2000 行）

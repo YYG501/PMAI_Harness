@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# create-req-headless.sh — non-interactive req state writer used by /new-req and CI smoke tests.
+# create-req-headless.sh — non-interactive req state writer used by /pmai-new-req and CI smoke tests.
 set -euo pipefail
 
 usage() {
@@ -20,7 +20,7 @@ usage() {
   --req-id <id>        指定 req 分支名或短 id，如 req-001-demo / req-001
   --repo-root <path>   指定业务仓根目录；默认取当前 git 仓库主 worktree
   --no-brief           只创建 worktree、.req-meta.json、tasks/ 骨架，不写 brief.md
-  --no-commit          不提交，供 /new-req 人工 brief 确认流程继续落盘
+  --no-commit          不提交，供 /pmai-new-req 人工 brief 确认流程继续落盘
   -h, --help           显示帮助
 
 输出:

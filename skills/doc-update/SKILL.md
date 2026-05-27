@@ -1,5 +1,5 @@
 ---
-name: doc-update
+name: pmai-doc-update
 description: Use when task 已完成、PM 已通过验收、需要在 close-task 合并前处理文档偏差或把 task 功能清单沉淀进模块规格。
 ---
 
@@ -7,10 +7,10 @@ description: Use when task 已完成、PM 已通过验收、需要在 close-task
 
 ## When To Use
 
-`/doc-update` 支持两种调用模式：
+`/pmai-doc-update` 支持两种调用模式：
 
 1. **对账模式（reconciliation mode）**：task 文件的偏差记录有内容（不是"无偏差"），需要在合并前更新原始文档。偏差记录跨两处：PM 视图主文件 `## 📁 历史档案` + 工程合同 `## 10. 文档偏差` 表。
-2. **沉淀模式（settlement mode）**：由 `/close-task` 在 task 验收通过后调用，把 PM 视图 task 的「📋 功能清单」增量沉淀进 `docs/modules/<module>.md`。
+2. **沉淀模式（settlement mode）**：由 `/pmai-close-task` 在 task 验收通过后调用，把 PM 视图 task 的「📋 功能清单」增量沉淀进 `docs/modules/<module>.md`。
 
 ## task 文件读取约定（必读）
 
@@ -98,8 +98,8 @@ grep -n '^### <module chapter>' docs/modules/<module>.md
 
 ### 步骤 0.5：~~沉淀风险判断~~（已删）
 
-close-task 永不调 doc-update settlement → 本步骤入口不会被触发。`/doc-update` 仅由
-**(1)** close-req 步骤 1.5 调（走步骤 8 rewrite mode），或 **(2)** PM 主动 `/doc-update <module>` 调对账模式。
+close-task 永不调 doc-update settlement → 本步骤入口不会被触发。`/pmai-doc-update` 仅由
+**(1)** close-req 步骤 1.5 调（走步骤 8 rewrite mode），或 **(2)** PM 主动 `/pmai-doc-update <module>` 调对账模式。
 两条入口都不需要 v1+v2 杂交判断（rewrite 是聚合模式天然处理；对账是 PM 显式定向，无 sediment 风险）。
 
 ### 步骤 1：读取 task 文件（三态格式分流）
@@ -153,7 +153,7 @@ E. 向 PM 展示对账结果，逐条确认后执行
 
 ### 步骤 1.7：模块规格沉淀（settlement mode）
 
-沉淀模式由 `/close-task` 在 task acceptance 后调用；它不要求「文档偏差」section 有内容。
+沉淀模式由 `/pmai-close-task` 在 task acceptance 后调用；它不要求「文档偏差」section 有内容。
 
 #### 1.7.1 复合 key 匹配
 
@@ -381,20 +381,20 @@ close-req 步骤 1.5 收到 output 后回填 close-report.md `## 文档变更` �
 
 | 模式 | 触发 | 适用场景 |
 |---|---|---|
-| 对账模式 | PM 显式调 `/doc-update <module>` OR close-req 步骤 1.5 PM 选 patch | 单 task 单文档单段，按行精确替换 |
+| 对账模式 | PM 显式调 `/pmai-doc-update <module>` OR close-req 步骤 1.5 PM 选 patch | 单 task 单文档单段，按行精确替换 |
 | rewrite mode（本步骤） | close-req 步骤 1.5 默认（主路径） | 任何 close-req 聚合（含单 task 单 req），整段重写比按行 patch 简洁 |
 
 **为什么不在对账模式里做（默认）**：对账模式按行精确替换，多 task 跨章节累积时 patch 顺序冲突难解；rewrite 整段写比按行打补丁更稳。rewrite 升为默认是为了节省 §0.1 痛点的 N 次启动成本累加 —— rewrite 是 close-req 末一次性聚合，启动成本只算 1 次。
 
 ## Failure Handling（DB2）
 
-ALL failures block close-task。失败时必须停止并返回错误报告；PM 修复 underlying issue 后，重新运行 `/close-task`，`/close-task` 会 auto-resumes doc-update，从上次失败的 task 重新执行沉淀/对账。
+ALL failures block close-task。失败时必须停止并返回错误报告；PM 修复 underlying issue 后，重新运行 `/pmai-close-task`，`/pmai-close-task` 会 auto-resumes doc-update，从上次失败的 task 重新执行沉淀/对账。
 
 错误信息必须包含：
 
 - `文件`：具体失败文件，例如 `docs/modules/account.md`
 - `failure type`：只能使用 `write-file` / `content-conflict` / `key-match-failure` / `internal-bug`
-- `recovery path`：PM 需要怎么修，例如“修正 task 的 **所属模块章节：** 后重跑 /close-task”或“手动解决 module spec 冲突后重跑 /close-task”
+- `recovery path`：PM 需要怎么修，例如“修正 task 的 **所属模块章节：** 后重跑 /pmai-close-task”或“手动解决 module spec 冲突后重跑 /pmai-close-task”
 
 推荐格式：
 
@@ -402,7 +402,7 @@ ALL failures block close-task。失败时必须停止并返回错误报告；PM 
 doc-update failed; close-task blocked
 文件: docs/modules/account.md
 failure type: key-match-failure
-recovery path: 修正 task.md 的 **所属模块章节：** 或 module spec 的 ### 章节标题后，重新运行 /close-task；系统会自动续跑 doc-update。
+recovery path: 修正 task.md 的 **所属模块章节：** 或 module spec 的 ### 章节标题后，重新运行 /pmai-close-task；系统会自动续跑 doc-update。
 ```
 
 ## Rules

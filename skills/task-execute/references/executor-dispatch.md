@@ -9,7 +9,7 @@ TASK_ID=$(basename "$TASK_FILE" .md | sed -E 's/^(task-[0-9]+).*/\1/')
 LOCK_DIR="$MAIN_REPO_ROOT/.runs/.lock-${TASK_ID}"
 
 if ! mkdir "$LOCK_DIR" 2>/dev/null; then
-  echo "❌ 另一个 /task-execute 正在运行 Task-${TASK_ID}。如确定没有，手动删除 $LOCK_DIR 后重试。" >&2
+  echo "❌ 另一个 /pmai-task-execute 正在运行 Task-${TASK_ID}。如确定没有，手动删除 $LOCK_DIR 后重试。" >&2
   exit 1
 fi
 trap 'rmdir "$LOCK_DIR" 2>/dev/null || true' EXIT
@@ -30,7 +30,7 @@ if [ -f "$PENDING_FILE" ]; then
 
   # 检查执行日志和文档偏差 section 已填
   if ! grep -q '^### 执行报告' "$TASK_FILE"; then
-    echo "⚠️ 请先在 task 文件「执行日志」section 记录你做了什么（见模板 ### 执行报告 格式），再重跑 /task-execute。"
+    echo "⚠️ 请先在 task 文件「执行日志」section 记录你做了什么（见模板 ### 执行报告 格式），再重跑 /pmai-task-execute。"
     echo "  pending 标记保留。"
     exit 1
   fi
@@ -58,7 +58,7 @@ if [ -z "${MANUAL_RESUME:-}" ]; then
   DIRTY=$(git -C "$TASK_WORKTREE" status --porcelain 2>/dev/null)
   if [ -n "$DIRTY" ]; then
     echo "" >&2
-    echo "❌ /task-execute 拒绝 dispatch：task worktree 有未 commit 改动（I-AD5）。" >&2
+    echo "❌ /pmai-task-execute 拒绝 dispatch：task worktree 有未 commit 改动（I-AD5）。" >&2
     echo "" >&2
     echo "原因：codex / cursor-agent 的 stop 是软停，已派发的 sandbox shell 子进程会延迟落盘，" >&2
     echo "可能覆盖你刚手改但没 commit 的文件。失败回滚基线是 HEAD，未 commit 的手改会被 restore 清掉。" >&2
@@ -67,7 +67,7 @@ if [ -z "${MANUAL_RESUME:-}" ]; then
     echo "现状：" >&2
     git -C "$TASK_WORKTREE" status --short >&2
     echo "" >&2
-    echo "处理（任选一种后重跑 /task-execute）：" >&2
+    echo "处理（任选一种后重跑 /pmai-task-execute）：" >&2
     echo "  保留改动：cd \"$TASK_WORKTREE\" && git add -A && git commit -m 'pre-execute checkpoint: <一句话>'" >&2
     echo "  丢弃改动：cd \"$TASK_WORKTREE\" && git restore . && git clean -fd" >&2
     echo "" >&2
@@ -275,14 +275,14 @@ Task 执行失败，已回退到「待执行」。
 下一步可直接选一项：
 1. 同执行者重试（修根因后）：
    $suggest
-   /task-confirm $task
+   /pmai-task-confirm $task
 
 2. 改用其它执行者：
    编辑 $task，修改 **executor：** 字段后
-   /task-confirm $task
+   /pmai-task-confirm $task
 
 3. 搁置：
-   /task-status 查看其它待办
+   /pmai-task-status 查看其它待办
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 EOM
 }

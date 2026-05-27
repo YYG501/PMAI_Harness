@@ -201,7 +201,7 @@ test_boundary_cases_and_output_format() {
 test_stage56_consistency() {
   start_test "req-stage-gate stage 5→6 no longer requires generated task files"
 
-  _assert_contains "$REQ_STAGE_GATE_SKILL" '具体 task 文件由 stage 6 的 `/task-spec` 逐个生成' "stage 5 no task files" || return
+  _assert_contains "$REQ_STAGE_GATE_SKILL" '具体 task 文件由 stage 6 的 `/pmai-task-spec` 逐个生成' "stage 5 no task files" || return
   _assert_contains "$REQ_STAGE_GATE_SKILL" '检查 `task-plan.md` 包含 task 标题列表和 `## 变更记录` section' "stage 5 task-plan contract" || return
 
   pass_test

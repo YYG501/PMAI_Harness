@@ -79,7 +79,7 @@ def cmd_append(args: argparse.Namespace) -> None:
         print(
             f"Error: 事件类型 {args.type!r} 不允许通过 task-events.py CLI 写入。\n"
             "  这是受保护的审计证据，必须经合规通路写入：\n"
-            "    • 走 dispatch（执行器派发）：/task-execute 自动通过\n"
+            "    • 走 dispatch（执行器派发）：/pmai-task-execute 自动通过\n"
             "      python3 $HOME/.pmai/scripts/task-transition.py <task> --to 执行中 \\\n"
             "          --bound-to-execution-event started [...payload]\n"
             "    • Work 已手做完、PM 拍板补登（task 状态=执行中）：\n"

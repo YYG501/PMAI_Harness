@@ -377,13 +377,13 @@ test_skill_stage6_entry_call() {
 # -----------------------------------------------------------------
 test_task_spec_continuation() {
   start_test "T14: task-spec SKILL 步骤 11 续跑 task-confirm（不再让 PM 手动贴）"
-  if ! grep -q "续跑 /task-confirm\|续跑 task-confirm" "$TASK_SPEC_MD"; then
+  if ! grep -q "续跑 /pmai-task-confirm\|续跑 task-confirm" "$TASK_SPEC_MD"; then
     _fail "task-spec SKILL 缺「续跑 task-confirm」speed mode 文案"
     return
   fi
-  # 旧"下一步运行 /task-confirm <task 文件路径>"硬复制提示应已替换
-  if grep -q "^✅ task 已定稿，下一步运行 /task-confirm <task 文件路径>$" "$TASK_SPEC_MD"; then
-    _fail "task-spec 仍保留旧"手动贴 /task-confirm <path>"提示"
+  # 旧"下一步运行 /pmai-task-confirm <task 文件路径>"硬复制提示应已替换
+  if grep -q "^✅ task 已定稿，下一步运行 /pmai-task-confirm <task 文件路径>$" "$TASK_SPEC_MD"; then
+    _fail "task-spec 仍保留旧"手动贴 /pmai-task-confirm <path>"提示"
     return
   fi
   pass_test

@@ -34,8 +34,8 @@ _print_help() {
     prototype
 
 说明:
-  本脚本是 /init-project skill 阶段 B 的骨架构建器（agent 用 Bash 调）。
-  PM 主动入口走 /init-project（一气呵成 4 阶段：参数 → 骨架 → 方向讨论 → Next Up）。
+  本脚本是 /pmai-init-project skill 阶段 B 的骨架构建器（agent 用 Bash 调）。
+  PM 主动入口走 /pmai-init-project（一气呵成 4 阶段：参数 → 骨架 → 方向讨论 → Next Up）。
   本脚本也保留作非交互参数化 CLI（measure-tthw / smoke / 批量自动化依赖）。
 HELP
 }
@@ -249,6 +249,6 @@ echo "════════════════════════�
 echo "✅ 项目初始化完成: $PROJECT_NAME"
 echo "📁 位置: $TARGET_DIR"
 echo "═══════════════════════════════════════"
-# 注：本脚本作为 /init-project skill 阶段 B 调用时，下一步由 skill 阶段 C/D 接管；
+# 注：本脚本作为 /pmai-init-project skill 阶段 B 调用时，下一步由 skill 阶段 C/D 接管；
 # 非交互直接调用时（measure-tthw / smoke），下一步由调用方编排。
-# 不在脚本里 echo 具体的下一步命令 —— 入口语义已迁移到 /init-project skill。
+# 不在脚本里 echo 具体的下一步命令 —— 入口语义已迁移到 /pmai-init-project skill。

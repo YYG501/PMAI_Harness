@@ -1,20 +1,20 @@
 ---
-name: codebase-audit
+name: pmai-codebase-audit
 description: |
   Brownfield 入口：已有代码库接入框架时，扫码产出「代码现状档」
   （7 维度：技术栈 / 集成 / 架构 / 结构 / 约定 / 测试 / 隐患；带防 secret 扫描），
-  然后走和新项目一样的 /project-solution 讨论（被现状档喂着）。
+  然后走和新项目一样的 /pmai-project-solution 讨论（被现状档喂着）。
   与 GSD 的 map-codebase → new-project 同构。新项目（无已有代码）不用本 skill。
 ---
 
-# /codebase-audit
+# /pmai-codebase-audit
 
 ## When To Use
 
-- **brownfield 场景**：已有代码库要接入 PM-AI-Workflow 框架时调用，**在 `/project-solution` 之前**。
-- 新项目（空仓 / 全新）**不用**本 skill —— 直接 `/init-project` → `/project-solution`。
+- **brownfield 场景**：已有代码库要接入 PM-AI-Workflow 框架时调用，**在 `/pmai-project-solution` 之前**。
+- 新项目（空仓 / 全新）**不用**本 skill —— 直接 `/pmai-init-project` → `/pmai-project-solution`。
 
-本 skill = brownfield 入口。它产出「代码现状档」喂给 `/project-solution`，让 project-solution
+本 skill = brownfield 入口。它产出「代码现状档」喂给 `/pmai-project-solution`，让 project-solution
 被已有代码库的实况喂着讨论项目方向 —— 和新项目一样的 project-solution，只是多一份现状输入。
 
 ## Preamble
@@ -66,7 +66,7 @@ echo "SKILL: codebase-audit"
 
 📋 7 维度盘点完成：技术栈 <一句> / 集成 N 个 / 架构 <一句> / 隐患 M 项
 
-这份现状档准吗？有补充 / 纠正直接说；确认后跑 /project-solution（它会读这份档作为
+这份现状档准吗？有补充 / 纠正直接说；确认后跑 /pmai-project-solution（它会读这份档作为
 已有代码库的语境讨论项目方向）。
 ```
 
@@ -194,14 +194,14 @@ $HAS_FILE && grep -q "^## 共享组件 inventory" "$DESIGN_MD" && HAS_INVENTORY=
 
 ### 步骤 4：交接 project-solution
 
-PM 确认现状档后，引导 PM 跑 `/project-solution` —— project-solution 读 `docs/代码现状档.md`
+PM 确认现状档后，引导 PM 跑 `/pmai-project-solution` —— project-solution 读 `docs/代码现状档.md`
 作为已有代码库的语境，和新项目一样讨论项目方向、产出 `docs/PROJECT.md` + `docs/ROADMAP.md`。
 
 ## Rules
 
 - **默认只读扫码**：步骤 1-4 + step 3.5 选 [N] 路径只产 `docs/代码现状档.md`，不改代码、不改其它业务文档。**例外**：step 3.5 选 [Y] 时允许生成 `docs/modules/<m>.md` 主规格骨架 + 刷新 `docs/modules/INDEX.md`（PM 确认模块清单后按 `$PMAI_HOME/skills/codebase-audit/templates/module.md.tmpl` 生成）。
 - **防 secret 是硬约束**：见上方「防 secret 扫描」段，违反 = 严重错误。
-- **不替代 `/project-solution`** —— 本 skill 只产现状档 + 可选 modulespec 骨架；项目方向讨论由 project-solution 做。
+- **不替代 `/pmai-project-solution`** —— 本 skill 只产现状档 + 可选 modulespec 骨架；项目方向讨论由 project-solution 做。
 - 新项目不用本 skill（无已有代码可审）。
 - step 3.5 模块清单由 PM 确认 —— AI 不替 PM 决定模块边界（候选清单 PM 必须过一遍）。
 
@@ -214,4 +214,4 @@ PM 确认现状档后，引导 PM 跑 `/project-solution` —— project-solutio
   - `docs/DESIGN.md` 兜底建 / 追加 inventory 段（**step 3.5.5 无条件，跟 step 3.5 选择无关**）
 - **允许动作**：read-only 扫码、7 维度盘点、防 secret redact、step 3.5 选 [Y] 时按 `$PMAI_HOME/skills/codebase-audit/templates/module.md.tmpl` 生成主规格骨架、step 3.5.5 兜底 DESIGN.md inventory 段
 - **禁止**：改代码 / 改 step 3.5 / 3.5.5 范围外的业务文档 / 替 PM 做项目方向决策 / step 3.5 跳过模块清单 PM 确认环节 / step 3.5.5 替 gstack 写视觉基线 8 段（视觉基线由 PM 主动调 `/design-consultation`）
-- **退出条件**：现状档经 PM 确认 + step 3.5 完成（建或跳过）+ step 3.5.5 兜底跑过，引导 PM 跑 `/project-solution`
+- **退出条件**：现状档经 PM 确认 + step 3.5 完成（建或跳过）+ step 3.5.5 兜底跑过，引导 PM 跑 `/pmai-project-solution`

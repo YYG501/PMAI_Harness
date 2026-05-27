@@ -131,9 +131,9 @@
 - 🟢 `docs/modules/INDEX.md`（步骤 1.5 主 rewrite 完成后 **derived refresh**，独立 `index_refreshed` 输出，不进 REWRITE_COVERED_FILES metric）
 - 🟡 `requirements/active/<req>/attachments/`（如本 req 引用过 → 按需读）
 
-### prd-writing standalone（PM 手动 `/prd-writing`）
+### prd-writing standalone（PM 手动 `/pmai-prd-writing`）
 
-> prd-writing 主位置已前移 stage 3（见上方「Stage 3：prd-writing」）。本段是 PM 手动调 `/prd-writing` 做独立 / 补差 PRD（跨模块评审材料）时的输入。
+> prd-writing 主位置已前移 stage 3（见上方「Stage 3：prd-writing」）。本段是 PM 手动调 `/pmai-prd-writing` 做独立 / 补差 PRD（跨模块评审材料）时的输入。
 - 🟢 `brief.md` / `analysis.md` / `prd.md`（如已有）
 - 🟡 `tasks/task-*.md` 遍历——`grep -nE "^## (📋 功能清单|🎯 关键产品决策|✅ 验收清单)" tasks/*.md` 命中三段后局部读（§9.1.1）。任务卡 / 历史档案 / PM 反馈对 PRD 价值低，不读
 - 🟢 `docs/PROJECT.md` / `docs/DESIGN.md` / `docs/modules/INDEX.md`

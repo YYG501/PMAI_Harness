@@ -243,7 +243,7 @@ def validate_forward(meta: dict, target: int, req_dir: Path) -> None:
         elif not prd.exists():
             print(
                 "Error: stage 3 output file not found: prd.md"
-                "（新流程 stage 3 产物为 req 级 PRD，由 /prd-writing 产出）",
+                "（新流程 stage 3 产物为 req 级 PRD，由 /pmai-prd-writing 产出）",
                 file=sys.stderr,
             )
             sys.exit(1)

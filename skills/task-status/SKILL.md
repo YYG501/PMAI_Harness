@@ -1,10 +1,10 @@
 ---
-name: task-status
+name: pmai-task-status
 description: |
   全局状态总览：展示当前 req/task 状态、最后事件和下一步建议。
 ---
 
-# /task-status
+# /pmai-task-status
 
 ## When To Use
 
@@ -47,11 +47,11 @@ python3 "$PMAI_HOME/scripts/status-view.py"
 
 - 扫到「待执行」状态且 worktree 已建的 task，输出：
   ```text
-  等待 PM 在新窗口启动（跑 /task-execute task-NNN）
+  等待 PM 在新窗口启动（跑 /pmai-task-execute task-NNN）
   ```
 - 扫到「执行中」状态 task，输出：
   ```text
-  执行中：在对应 task 窗口实现 / 验收（可跑 /task-submit 重新查看呈交块）
+  执行中：在对应 task 窗口实现 / 验收（可跑 /pmai-task-submit 重新查看呈交块）
   ```
 
 输出格式示例：
@@ -62,15 +62,15 @@ python3 "$PMAI_HOME/scripts/status-view.py"
 Task 状态：
   ✅ task-001 数据模型 — 已完成
   🔄 task-002 API 接口 — 执行中（实现中，最后活动：自审 - /qa pass）
-  🔄 task-003 前端组件 — 执行中（已 commit 待 PM 验收，可跑 /task-submit 看呈交块）
-  ⏳ task-004 导出入口 — 待执行：等待 PM 在新窗口启动（跑 /task-execute task-004）
+  🔄 task-003 前端组件 — 执行中（已 commit 待 PM 验收，可跑 /pmai-task-submit 看呈交块）
+  ⏳ task-004 导出入口 — 待执行：等待 PM 在新窗口启动（跑 /pmai-task-execute task-004）
 下一步：处理执行中 task，或启动待启动 task
 ```
 
 如果没有活跃 req：
 
 ```
-📭 没有活跃的需求。运行 /new-req 开始一个新需求。
+📭 没有活跃的需求。运行 /pmai-new-req 开始一个新需求。
 ```
 
 ## Rules

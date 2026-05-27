@@ -1,8 +1,8 @@
 # project-questioning：项目方向讨论的共享真相源
 
 > **职责**：项目方向讨论的**提问纪律 / 问题库 / 写作规则 / Decision gate / 6 节检查**的**单一真相源**。
-> **调用方**：`/init-project` 阶段 C（greenfield 首次起项目） + `/project-solution`（4 场景：重做 / 产品路线规划 / 新方向 / brownfield 接入）。
-> **§2.5 抽取边界**：本文件含**写作规则 + 话术问题库 + 收敛条件 + Decision gate 模板 + 检查清单**（跨场景共享）；**不含**4 场景判断 + 提问顺序 + 输入态判断（场景特定，留 `/project-solution/SKILL.md` 独有；`/init-project` 阶段 C 用 greenfield 顺序）。
+> **调用方**：`/pmai-init-project` 阶段 C（greenfield 首次起项目） + `/pmai-project-solution`（4 场景：重做 / 产品路线规划 / 新方向 / brownfield 接入）。
+> **§2.5 抽取边界**：本文件含**写作规则 + 话术问题库 + 收敛条件 + Decision gate 模板 + 检查清单**（跨场景共享）；**不含**4 场景判断 + 提问顺序 + 输入态判断（场景特定，留 `/pmai-project-solution/SKILL.md` 独有；`/pmai-init-project` 阶段 C 用 greenfield 顺序）。
 > **复用 pattern**：跟 `skills/_shared/PM-VIEW-RULES.md` 同款 shared reference 机制。
 
 ---
@@ -12,8 +12,8 @@
 调用方应当：
 
 1. **判断场景**（调用方自己做）：
-   - `/init-project` 阶段 C → greenfield 首次（输入 = 空 PROJECT.md 骨架）
-   - `/project-solution` → 按 4 场景判断（重做 / 产品路线规划 / 新方向 / brownfield 接入）（细化）
+   - `/pmai-init-project` 阶段 C → greenfield 首次（输入 = 空 PROJECT.md 骨架）
+   - `/pmai-project-solution` → 按 4 场景判断（重做 / 产品路线规划 / 新方向 / brownfield 接入）（细化）
 2. **决定问题顺序**（调用方自己排）：
    - greenfield（init-project）：6 节按 §3 顺序问（产品定位 → 用户画像 → 产品路线 → 技术栈 → 业务术语表 → roadmap 队列）
    - 重做：按 PM 提的痛点切入，不必从产品定位起
@@ -49,7 +49,7 @@
 | 业务术语表 | 项目里有没有需要统一口径的业务专名 | 「业务里有什么术语容易跟同行混的？比如『订单』vs『工单』？」|
 | —（roadmap）| PM 现在已知的待做需求，大致排个序 | 「列出现在已知的待做需求，按优先级排个序。」|
 
-> **项目名称节**通常 `/init-project` 已填（参数 1），调用方确认即可。
+> **项目名称节**通常 `/pmai-init-project` 已填（参数 1），调用方确认即可。
 
 **调用方挑用**：调用方按场景挑 6 节里的子集 + 顺序（init-project 全部按顺序；project-solution 按场景跳）。
 
@@ -101,7 +101,7 @@ python3 "$PMAI_HOME/scripts/check-open-questions.py" \
 
 | 节 | 写什么 |
 |---|---|
-| 项目名称 | 通常 `/init-project` 参数 1 已填，确认即可 |
+| 项目名称 | 通常 `/pmai-init-project` 参数 1 已填，确认即可 |
 | 产品定位 | 1-3 句话；最简版「工具型应用，给单人 PM 用」也接受 |
 | 用户画像 | 起手 1 个主角色 + 关键诉求；最简版 1 句话 |
 | 产品路线 | **只写里程碑 / 大方向**（如「Q3 上线 MVP」/「先单人后协作」）；颗粒到单 req 的队列归 ROADMAP.md |
@@ -115,10 +115,10 @@ python3 "$PMAI_HOME/scripts/check-open-questions.py" \
 | 状态 | 含义 | 何时写 |
 |---|---|---|
 | `done` | 已完成（req 已 close） | **老项目首次跑必写**：扫 `requirements/closed/` 全部 req-NNN，每个写一行 done；后续每次 close-req 时由 PM 把对应行从 active 推到 done |
-| `active` | 正在做（已 `/new-req` 起 req） | `/new-req` 创建 req 后 PM 把对应行从 planned 推到 active |
+| `active` | 正在做（已 `/pmai-new-req` 起 req） | `/pmai-new-req` 创建 req 后 PM 把对应行从 planned 推到 active |
 | `planned` | 已规划、还没开始 | PM 给的待做需求队列 |
 
-字段：排序（数字小先做；done 行用负数或大数都行，PM 自定）/ `req-id`（done 行回填实际 req-NNN，planned 行留空，active 行 `/new-req` 后回填）/ 标题 / 状态。
+字段：排序（数字小先做；done 行用负数或大数都行，PM 自定）/ `req-id`（done 行回填实际 req-NNN，planned 行留空，active 行 `/pmai-new-req` 后回填）/ 标题 / 状态。
 
 **老项目首次跑 B 场景的写法**：
 1. AI 主动跑 `ls requirements/closed/` 列已 close 全部 req-NNN（或读 `requirements/closed/*/close-report.md` 拿标题）
@@ -227,7 +227,7 @@ git commit -m "docs: project direction settled"
 
 ## §10 调用方实现指南
 
-### §10.1 `/init-project` 阶段 C（greenfield）
+### §10.1 `/pmai-init-project` 阶段 C（greenfield）
 
 1. agent @读 本文件
 2. 按 §3 6 节顺序问 PM（greenfield 顺序）
@@ -239,12 +239,12 @@ git commit -m "docs: project direction settled"
 8. §9 atomic commit
 9. 返回 init-project 阶段 D（终态汇总 + Next Up）
 
-### §10.2 `/project-solution`（4 场景之一，已细化）
+### §10.2 `/pmai-project-solution`（4 场景之一，已细化）
 
 1. agent 按 SKILL.md 步骤 1 读已有输入（CLAUDE.md / `docs/PROJECT.md` / `docs/代码现状档.md`）
-2. **判断场景**（A 重做 / B 产品路线规划 / C 新方向 / D brownfield 接入）—— 调用方 `/project-solution` SKILL.md 段 0 表已细化触发条件 + 输入态 + 提问顺序
+2. **判断场景**（A 重做 / B 产品路线规划 / C 新方向 / D brownfield 接入）—— 调用方 `/pmai-project-solution` SKILL.md 段 0 表已细化触发条件 + 输入态 + 提问顺序
 3. agent @读 本文件
-4. 按 `/project-solution` SKILL.md 段 0 表"提问顺序"列**场景特定顺序**问 PM：
+4. 按 `/pmai-project-solution` SKILL.md 段 0 表"提问顺序"列**场景特定顺序**问 PM：
    - A 重做：痛点诊断 → 产品定位 → 用户画像 → 产品路线 → 业务术语 → roadmap 重排
    - B 产品路线规划：过去 roadmap 回顾（首次补无历史则跳过）→ 产品路线 → roadmap（**先扫 `requirements/closed/` 写 done 行**，再问 planned 队列）→ 业务术语增量（跳过定位 / 用户 / 技术栈）
    - C 新方向：新方向 vs 现 PROJECT 差异 → 产品定位 → 用户画像 → 产品路线 → roadmap

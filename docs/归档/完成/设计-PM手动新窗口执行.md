@@ -2,7 +2,7 @@
 
 > **状态**：2026-04-25 PM 决议方案；plan 草稿，**未实施**。
 > **取代**：`设计-Superset独立Claude执行.md`（v3.5，已 deprecated）；间接取代 `设计-并行任务执行.md`（v3，已 deprecated）。
-> **核心**：极简方向——`/task-confirm` 只输出"启动指令"，PM 自己开新窗口启 Claude 跑 `/task-execute`（无参数自动找）。**支持并行**：PM 想多 task 同时跑就开多个窗口，每个窗口 = 一个独立 Claude 实例，git worktree 天然隔离。无 reducer / 无 hook / 无 sentinel / 无 PGID 树杀——并行复杂度全部由"PM 大脑 + git worktree 隔离"承担，不靠 AI 自动协调。
+> **核心**：极简方向——`/pmai-task-confirm` 只输出"启动指令"，PM 自己开新窗口启 Claude 跑 `/pmai-task-execute`（无参数自动找）。**支持并行**：PM 想多 task 同时跑就开多个窗口，每个窗口 = 一个独立 Claude 实例，git worktree 天然隔离。无 reducer / 无 hook / 无 sentinel / 无 PGID 树杀——并行复杂度全部由"PM 大脑 + git worktree 隔离"承担，不靠 AI 自动协调。
 
 ---
 
@@ -10,10 +10,10 @@
 
 PM 开新窗口这件事**让 PM 自己做**，并行也由 PM 决定开几个。AI 只给"如何在新窗口快速开始 task"的方法。
 
-- `/task-confirm` 输出：worktree 已建 + 提示在新窗口启 Claude 跑 `/task-execute`
+- `/pmai-task-confirm` 输出：worktree 已建 + 提示在新窗口启 Claude 跑 `/pmai-task-execute`
 - PM 自己开新窗口（1 个或 N 个，PM 决定）启 Claude
-- 新 Claude 输入 `/task-execute`（**无参数**自动找待启动 task；多候选时显式 `/task-execute <task-file>`）
-- SKILL 入口自动 `cd` 到对应 worktree → 转 `执行中` → 跑 codex → 走 v1 现有 `/task-submit` → 转 `待验收`
+- 新 Claude 输入 `/pmai-task-execute`（**无参数**自动找待启动 task；多候选时显式 `/pmai-task-execute <task-file>`）
+- SKILL 入口自动 `cd` 到对应 worktree → 转 `执行中` → 跑 codex → 走 v1 现有 `/pmai-task-submit` → 转 `待验收`
 - PM 跑完关新窗口（或保留），**回主窗口随便说一句** → 主 Claude SKILL preamble 顺手扫 task 状态 → 看到 N 个 `待验收` → 依次呈交 PM 验收
 
 ---
@@ -49,24 +49,24 @@ v3.5 plan 大部分章节（事件流 / scan-task-done / wakeup / hook / Superse
 |---|---|---|---|
 | D0 | 是否并行 | ✅ **并行原生** —— PM 决定开几个新窗口，每窗口 = 1 个 task。同 req 多 task 同时执行允许。无 max_parallel 软配额（自然由 PM 手动操作上限决定）| **2026-04-25 PM 选 A** |
 | D1 | 是否依赖 Superset MCP / IDE 接口 | ❌ 否——IDE-agnostic，PM 用任何 terminal/IDE 都能跑 | 2026-04-25 PM |
-| D2 | 状态转换时机 | **B：`/task-confirm` 不转状态；新窗口里 `/task-execute` SKILL 入口转 `执行中`** | 见 §4.2 |
-| D3 | 完成检测机制 | **PM 主动告知**——不是 sentinel 文件、不是 hook、不是 ScheduleWakeup。PM 在新窗口跑完 `/task-submit` 转 `待验收`，回主窗口任意输入触发主 Claude SKILL preamble 顺手扫 | 见 §4.4 |
+| D2 | 状态转换时机 | **B：`/pmai-task-confirm` 不转状态；新窗口里 `/pmai-task-execute` SKILL 入口转 `执行中`** | 见 §4.2 |
+| D3 | 完成检测机制 | **PM 主动告知**——不是 sentinel 文件、不是 hook、不是 ScheduleWakeup。PM 在新窗口跑完 `/pmai-task-submit` 转 `待验收`，回主窗口任意输入触发主 Claude SKILL preamble 顺手扫 | 见 §4.4 |
 | D4 | 中止机制 | PM 关新窗口 + 回主窗口说"放弃 task-X"→ 主 Claude 调 `task-transition --fail-execution` | 见 §7.2 |
 | D5 | task-confirm 是否调 ScheduleWakeup | ❌ 否——主 Claude 不需要主动唤醒，PM 任意输入都触发 preamble 扫描 | 2026-04-25 PM 简化原则 |
-| D6 | task-execute 无参数模式 | ✅ 自动找唯一"待启动"task（status=待确认 + worktree 已建）；多候选时报错列出，PM 显式 `/task-execute <task-file>` | **2026-04-25 PM 简化提议** |
+| D6 | task-execute 无参数模式 | ✅ 自动找唯一"待启动"task（status=待确认 + worktree 已建）；多候选时报错列出，PM 显式 `/pmai-task-execute <task-file>` | **2026-04-25 PM 简化提议** |
 | D7 | I-TT2 invariant | **放宽**——同 req 允许多个 task 处于"执行中"或"待验收"。原 serial 校验删除 | D0 蕴含 |
 
 ---
 
 ## 3. 新架构概览
 
-> **2026-04-26 sync 备注**：stage 5/6 重设计已 ship（commits `90997a3`/`a6d33ab`/`dfd5f5f`/`f9d9e3a`），引入 `/task-spec` 作为 stage 6 入口 + `doc-update` 大改 + `task-execute` 末尾"PM 反馈分流" + `close-task` 末尾"auto-chain 提示下一个 task"。本方案在 stage 5/6 ship 之后接入，**不重复这些工作**。完整 stage 6 入口序列见下图。
+> **2026-04-26 sync 备注**：stage 5/6 重设计已 ship（commits `90997a3`/`a6d33ab`/`dfd5f5f`/`f9d9e3a`），引入 `/pmai-task-spec` 作为 stage 6 入口 + `doc-update` 大改 + `task-execute` 末尾"PM 反馈分流" + `close-task` 末尾"auto-chain 提示下一个 task"。本方案在 stage 5/6 ship 之后接入，**不重复这些工作**。完整 stage 6 入口序列见下图。
 
 ```
-PM ─[/task-spec task-005]──▶ 主 Claude（在 req worktree）
+PM ─[/pmai-task-spec task-005]──▶ 主 Claude（在 req worktree）
        │ (stage 5/6 新 skill：单 task 详细文档生成器，PM 看后改 task 文件)
        │
-PM ─[/task-confirm task-005-superset.md]─▶ 主 Claude（在 req worktree）
+PM ─[/pmai-task-confirm task-005-superset.md]─▶ 主 Claude（在 req worktree）
                                               │
                                               │ 1. 解析 task 文件
                                               │ 2. 前置检查（task 文件存在 / req 分支 / 同 branch worktree 不冲突）
@@ -83,25 +83,25 @@ PM 自己操作（IDE 窗口 / 新 terminal tab / 新 Claude Code 实例 任选�
    │ claude                          # 或 IDE 默认开 Claude  │
    │                                                       │
    │ 在新 Claude 里粘贴：                                   │
-   │ /task-execute requirements/active/req-001/tasks/...md│
+   │ /pmai-task-execute requirements/active/req-001/tasks/...md│
    └──────────────────────────────────────────────────────┘
 
 新窗口 Claude（独立进程，PM 完全可见）：
-   /task-execute
+   /pmai-task-execute
      ├─▶ 入口检查 task 状态 == "待确认"
      ├─▶ task-transition.py --to 执行中（I-TT2 serial 在此校验）
      ├─▶ Bash codex.sh / cursor-agent.sh / manual.sh（同步阻塞）
-     ├─▶ 跑完 → 走 v1 现有 /task-submit 流程（自审 + 文档偏差 + review_completed）
+     ├─▶ 跑完 → 走 v1 现有 /pmai-task-submit 流程（自审 + 文档偏差 + review_completed）
      ├─▶ task-transition.py --to 待验收
      └─▶ 提示 "task-X 已转待验收，请回主窗口告诉主 Claude"
    PM 关闭新窗口
 
 新窗口 Claude 接续 (2026-04-26 单窗口 lifecycle 修订)：
-   /task-submit (在新窗口里跑完整验收流程)
+   /pmai-task-submit (在新窗口里跑完整验收流程)
      ├─▶ 文档偏差 + 自审记录 + review_completed 事件
      ├─▶ task-transition.py --to 待验收
      ├─▶ **直接在本窗口拉 diff + review 摘要呈交 PM**（不再"回主窗口"）
-     ├─▶ PM 通过 → 本窗口跑 /close-task
+     ├─▶ PM 通过 → 本窗口跑 /pmai-close-task
      │     └─▶ close-task auto-chain 提示 "task-005 已 close。关掉本窗口，去主窗口启下一个 task"
      └─▶ PM 打回 → 本窗口直接转执行中 + PM 反馈写 task 文件 → 应用 stage 5/6 PM 反馈分流策略 → 继续修
 
@@ -116,29 +116,29 @@ PM 关新窗口（task 已 close 或继续修中）
 
 ```
 主窗口 PM 连续 confirm 多个 task：
-  PM: /task-spec task-005 → /task-confirm tasks/task-005-*.md
-  PM: /task-spec task-006 → /task-confirm tasks/task-006-*.md
-  PM: /task-spec task-007 → /task-confirm tasks/task-007-*.md
+  PM: /pmai-task-spec task-005 → /pmai-task-confirm tasks/task-005-*.md
+  PM: /pmai-task-spec task-006 → /pmai-task-confirm tasks/task-006-*.md
+  PM: /pmai-task-spec task-007 → /pmai-task-confirm tasks/task-007-*.md
   3 个 worktree 已建，3 个 task "待确认"
 
 PM 决定开几个并行窗口：
 
 ┌─ 新窗口 A (task-005) ──┐  ┌─ 新窗口 B (task-006) ──┐  ┌─ 新窗口 C (task-007) ──┐
 │ claude                 │  │ claude                 │  │ claude                 │
-│ /task-execute task-005 │  │ /task-execute task-006 │  │ /task-execute task-007 │
+│ /pmai-task-execute task-005 │  │ /pmai-task-execute task-006 │  │ /pmai-task-execute task-007 │
 │ → cd / transition 执行中│  │ → cd / transition 执行中│  │ → cd / transition 执行中│
 │ → Bash codex + Monitor │  │ → Bash codex + Monitor │  │ → Bash codex + Monitor │
-│ → /task-submit 自审 +  │  │ → /task-submit 自审 +  │  │ → /task-submit 自审 +  │
+│ → /pmai-task-submit 自审 +  │  │ → /pmai-task-submit 自审 +  │  │ → /pmai-task-submit 自审 +  │
 │   review + 转待验收     │  │   review + 转待验收     │  │   review + 转待验收     │
 │ → **本窗口呈交 PM 验收**│  │ → **本窗口呈交 PM 验收**│  │ → **本窗口呈交 PM 验收**│
 │ → 通过/打回             │  │ → 通过/打回             │  │ → 通过/打回             │
-│ → /close-task           │  │ → /close-task           │  │ → /close-task           │
+│ → /pmai-close-task           │  │ → /pmai-close-task           │  │ → /pmai-close-task           │
 │ → "关窗口去主启下一个"   │  │ → "关窗口去主启下一个"   │  │ → "关窗口去主启下一个"   │
 └────────────────────────┘  └────────────────────────┘  └────────────────────────┘
    git worktree 天然隔离，3 个并发 codex 互不干扰
    每个 task 独立完成完整 lifecycle，互不耦合
 
-主窗口期间一直空闲（除非 PM 想批量看总览，可主动跑 /task-status）
+主窗口期间一直空闲（除非 PM 想批量看总览，可主动跑 /pmai-task-status）
 ```
 
 **关键差异 vs v3 并行**：
@@ -177,13 +177,13 @@ PENDING_COUNT=$(find requirements/active -name 'task-*.md' \
 
 # 输出启动指令（直接 echo 给 PM 看）
 if [ "$PENDING_COUNT" -le 1 ]; then
-  # 只有这一个待启动 → 新窗口可无参数 /task-execute
+  # 只有这一个待启动 → 新窗口可无参数 /pmai-task-execute
   cat <<EOF
 ✅ Task ${TASK_SHORT_ID} 准备就绪（worktree: .worktrees/${TASK_STEM}）。
 
 请在新窗口启动 Claude（任何方式：新 terminal tab / IDE 新窗口 / 新 Claude Code tab），然后输入：
 
-  /task-execute
+  /pmai-task-execute
 
 新窗口 Claude 会自动找到这个 task 并切到对应 worktree 启动。
 
@@ -199,7 +199,7 @@ else
 
 ⚠️ 当前有 ${PENDING_COUNT} 个待启动 task，新窗口请用短 ID（依赖 task-execute 短 ID 模糊匹配）：
 
-  /task-execute ${TASK_SHORT_ID}
+  /pmai-task-execute ${TASK_SHORT_ID}
 
 执行方式: ${EXECUTOR}${MODEL:+ / $MODEL}
 
@@ -218,7 +218,7 @@ fi
 
   ```
   ❌ task-006 依赖 task-005，但 task-005 当前状态是「执行中」。
-     请先去 task-005 对应窗口完成验收 + close，然后重跑 /task-confirm。
+     请先去 task-005 对应窗口完成验收 + close，然后重跑 /pmai-task-confirm。
      （task-005 worktree: .worktrees/task-005-...，PM 可以去那个窗口验收）
   ```
 
@@ -226,11 +226,11 @@ fi
 
 **失败 fallback**：步骤 4 (create-task-worktree.sh) 失败 → 报错给 PM 不输出启动指令；步骤 5 本身只是 echo，不会失败。
 
-**关键**：**步骤 5 不调 task-transition.py**——状态保持 "待确认"，由新窗口的 `/task-execute` 转。这意味着如果 PM 看到指令但没在新窗口跑，task 会一直停在 "待确认"，下次 `/task-status` 会提示。
+**关键**：**步骤 5 不调 task-transition.py**——状态保持 "待确认"，由新窗口的 `/pmai-task-execute` 转。这意味着如果 PM 看到指令但没在新窗口跑，task 会一直停在 "待确认"，下次 `/pmai-task-status` 会提示。
 
 ### 4.2 `skills/task-execute/SKILL.md` 入口加 transition + 无参数模式 + 自动 cd
 
-新窗口 Claude 跑 `/task-execute [<task-file>]`：
+新窗口 Claude 跑 `/pmai-task-execute [<task-file>]`：
 
 ```bash
 # 步骤 1：定位 task 文件（无参数 → 自动找；短 ID → 模糊匹配；有完整路径 → 直用）
@@ -243,9 +243,9 @@ if [ -n "$TASK_FILE" ] && [[ "$TASK_FILE" =~ ^task-[0-9]{3}$ ]]; then
   COUNT=$(echo "$MATCHES" | grep -c .)
   case "$COUNT" in
     1) TASK_FILE="$MATCHES"; echo "🎯 短 ID 匹配: $TASK_FILE" ;;
-    0) echo "❌ 找不到 $TASK_FILE-*.md。建议: /task-status 看可用 task"; exit 1 ;;
+    0) echo "❌ 找不到 $TASK_FILE-*.md。建议: /pmai-task-status 看可用 task"; exit 1 ;;
     *) echo "⚠️ 短 ID $TASK_FILE 匹配多个，请显式完整路径："
-       echo "$MATCHES" | sed 's/^/  \/task-execute /'
+       echo "$MATCHES" | sed 's/^/  \/pmai-task-execute /'
        exit 1 ;;
   esac
 fi
@@ -273,13 +273,13 @@ if [ -z "$TASK_FILE" ]; then
   COUNT=$(echo "$CANDIDATES" | grep -c .)
 
   case "$COUNT" in
-    0) echo "❌ 没有待启动的 task。请先在主窗口 /task-confirm <task-file>"; exit 1 ;;
+    0) echo "❌ 没有待启动的 task。请先在主窗口 /pmai-task-confirm <task-file>"; exit 1 ;;
     1) TASK_FILE="$CANDIDATES"
        # Pass 1 修订 #2：诊断行立即打印（在 transition 之前），给 PM progress feedback
        echo "🎯 自动选定: $TASK_FILE"
        echo "    (D6 无参数模式：扫到唯一待启动 task)" ;;
     *) echo "⚠️ 有 $COUNT 个待启动 task，请显式参数："
-       echo "$CANDIDATES" | sed 's/^/  \/task-execute /'
+       echo "$CANDIDATES" | sed 's/^/  \/pmai-task-execute /'
        exit 1 ;;
   esac
 fi
@@ -335,11 +335,11 @@ case "$STATUS" in
     ;;
   *)
     # Pass 2 修订 F1：错误退出推断意图给 next-step 提示
-    echo "❌ task 状态是 '$STATUS'，不能 /task-execute。"
+    echo "❌ task 状态是 '$STATUS'，不能 /pmai-task-execute。"
     case "$STATUS" in
-      "已完成")  echo "   建议: /close-task $TASK_STEM 或 /task-status 看全局" ;;
+      "已完成")  echo "   建议: /pmai-close-task $TASK_STEM 或 /pmai-task-status 看全局" ;;
       "待验收")  echo "   建议: 回主窗口告诉主 Claude 验收（这个 task 已经跑完了）" ;;
-      *)         echo "   建议: /task-status 看当前所有 task 状态" ;;
+      *)         echo "   建议: /pmai-task-status 看当前所有 task 状态" ;;
     esac
     exit 1
     ;;
@@ -349,7 +349,7 @@ esac
 # resolve-executor.py + Bash codex.sh / cursor-agent.sh / manual.sh
 # ...
 
-# 步骤 5：跑完后走 v1 现有 /task-submit 流程
+# 步骤 5：跑完后走 v1 现有 /pmai-task-submit 流程
 # - 提示 PM 填文档偏差 + 自审记录
 # - 跑 review (按 task 文件 审查工具 字段 iterate)
 # - task-transition.py --to 待验收
@@ -358,14 +358,14 @@ esac
 
 **关键修订点**：
 - D6 **无参数模式**：扫唯一 "待启动" task；多候选时报错列出（PM 显式参数走老路径）
-- **自动 cd worktree**：PM 不需要手动 cd，启动 Claude 之后任何位置 `/task-execute` 都能跑
+- **自动 cd worktree**：PM 不需要手动 cd，启动 Claude 之后任何位置 `/pmai-task-execute` 都能跑
 - D7 transition：**I-TT2 放宽**，同 req 多 task 同时执行允许（serial 校验删除）
 - I-CB10 (worktree 写入要求状态==执行中) 自然生效
-- v1 现状：`/task-execute` 假设是被 subagent 调用 + 状态已经是 "执行中"。新方案改成 SKILL **自己定位 + 自己 cd + 自己转状态**
+- v1 现状：`/pmai-task-execute` 假设是被 subagent 调用 + 状态已经是 "执行中"。新方案改成 SKILL **自己定位 + 自己 cd + 自己转状态**
 
 ### 4.3 `skills/task-submit/SKILL.md`（v1 现有，无改动）
 
-PM 在新窗口跑完 `/task-execute`（或 task-execute SKILL 自动接续到 /task-submit），走 v1 现有流程：
+PM 在新窗口跑完 `/pmai-task-execute`（或 task-execute SKILL 自动接续到 /pmai-task-submit），走 v1 现有流程：
 - 文档偏差 / 自审记录 / review_completed 事件
 - task-transition.py --to 待验收
 - 提示 "请回主窗口告诉主 Claude"
@@ -390,7 +390,7 @@ if [ -n "$ACTIVE_REQ" ] || ls "$MAIN_REPO_ROOT"/.worktrees/req-* >/dev/null 2>&1
   python3 "$MAIN_REPO_ROOT/.claude/scripts/status-view.py" --summary 2>/dev/null || true
   # 输出格式：
   #   📋 task 概览: 执行中 N1 / 待验收 N2 / 待启动 N3
-  #   （N2 > 0 时附加："⚠️ N2 个 task 待验收，请去对应新窗口验收（或 /task-status 看详情）"）
+  #   （N2 > 0 时附加："⚠️ N2 个 task 待验收，请去对应新窗口验收（或 /pmai-task-status 看详情）"）
 fi
 ```
 
@@ -402,7 +402,7 @@ fi
 - 验收/打回/close 全部在新窗口完成（详 §6 task-submit / close-task 修订）
 - 主窗口 preamble 提示 = 兜底，告诉 PM 还有遗漏的 task 要回新窗口处理
 
-**主动总览**：PM 想看跨 task 总览（比如管理 N 个并行）→ 在主窗口跑 `/task-status` 拿全列表。
+**主动总览**：PM 想看跨 task 总览（比如管理 N 个并行）→ 在主窗口跑 `/pmai-task-status` 拿全列表。
 
 ### 4.5 中止 task（Codex C7 修订：意图识别落 CLAUDE.md.tmpl 而非 preamble）
 
@@ -413,7 +413,7 @@ PM 想中止 → 关新窗口（无副作用，state 仍在 "执行中"）→ �
 - **CLAUDE.md.tmpl 行为规则段**：明确"PM 输入含关键词 + 有 task ID 上下文 → 主 Claude 主动调 task-transition --fail-execution"
 - 这是**主 Claude 自身的对话行为约定**，不是脚本能做的
 
-**关键词触发规则**（写进 CLAUDE.md.tmpl）：扫 PM 输入含 `放弃 / 取消 / abort / cancel`，且能从上下文推断 task（最近一次 /task-confirm 提到的 task ID，或 active "执行中" task 唯一时直接绑定）→ 触发中止。
+**关键词触发规则**（写进 CLAUDE.md.tmpl）：扫 PM 输入含 `放弃 / 取消 / abort / cancel`，且能从上下文推断 task（最近一次 /pmai-task-confirm 提到的 task ID，或 active "执行中" task 唯一时直接绑定）→ 触发中止。
 
 示例 PM 输入（全部识别）：
 - "放弃 task-005"
@@ -468,13 +468,13 @@ task 回到 "待确认"，worktree 保留供 PM 检查 dirty diff。**不需要 
 | `templates/task.md.tmpl` | **微改**（依赖字段格式说明）| 现状 `## 依赖\n无`。v4 改：在「依赖」字段上方加注释说明结构化格式（`- task-NNN (说明)`），让 task-spec 写时有 reference |
 | `skills/task-confirm/SKILL.md` | **改**：步骤 5 删 spawn subagent，改输出启动指令；步骤 5 不调 task-transition | 仓库现状未变（0 commits since v4 plan 创建）|
 | `skills/task-execute/SKILL.md` | **改**：入口加 status check + transition --to 执行中 + 自动 cd worktree + **步骤 2.5 依赖前置 gate**（详 §4.2 修订） | stage 5/6 已加末尾"PM 反馈分流策略"段；v4 改的是入口 step 1-3 + 新加 2.5 依赖检查；**与分流段不冲突** |
-| `skills/task-submit/SKILL.md` | **改**（2026-04-26 单窗口 lifecycle 修订）| stage 5/6 现有 SKILL：转 待验收 后提示 "回主窗口告诉主 Claude"。**v4 改为：在本窗口（task worktree）直接拉 diff + review 摘要呈交 PM 验收**。PM 通过 → 本窗口跑 /close-task；PM 打回 → 本窗口直接转 执行中 + PM 反馈写 task 文件 → 应用 stage 5/6 PM 反馈分流策略继续修。**不再"回主窗口"**——主窗口降级为兜底（详 §4.4） |
+| `skills/task-submit/SKILL.md` | **改**（2026-04-26 单窗口 lifecycle 修订）| stage 5/6 现有 SKILL：转 待验收 后提示 "回主窗口告诉主 Claude"。**v4 改为：在本窗口（task worktree）直接拉 diff + review 摘要呈交 PM 验收**。PM 通过 → 本窗口跑 /pmai-close-task；PM 打回 → 本窗口直接转 执行中 + PM 反馈写 task 文件 → 应用 stage 5/6 PM 反馈分流策略继续修。**不再"回主窗口"**——主窗口降级为兜底（详 §4.4） |
 | `skills/task-status/SKILL.md` | **微改**：(a) 加 `--summary` 模式（一行结论 `📋 task 概览: 执行中 N1 / 待验收 N2 / 待启动 N3`，给 §4.4 preamble 调用）；(b) 完整模式（无参数）扫到 "待确认" + worktree 已建 → 提示 "等待 PM 在新窗口启动"；扫到 "待验收" → 提示 "请去对应新窗口验收（task 在该 worktree 里跑过完整 review）" | 仓库现状未变 |
-| `skills/close-task/SKILL.md` | **改**（2026-04-26 单窗口 lifecycle 修订 + Codex C9）| stage 5/6 已加 `--skip-doc-update` + 末尾 auto-chain "下一个 task 是 task-NNN，继续吗？(Y/n)"。**v4 修改要点**：(a) close-task 在新窗口里跑（cwd 是 task worktree，脚本自己处理 cd 到 main repo 跑 merge）；(b) **末尾 auto-chain 文案改为明确指引**："✅ task-005 已 close。**关掉本窗口**（task 已结束）→ 去主窗口启下一个 task：建议下一个是 task-006（[title]），可以跑 /task-spec task-006 → /task-confirm tasks/task-006-*.md"。**不再问"继续吗"**（暗示在本窗口继续，但其实做不到——本窗口已经是 task-005 worktree） |
+| `skills/close-task/SKILL.md` | **改**（2026-04-26 单窗口 lifecycle 修订 + Codex C9）| stage 5/6 已加 `--skip-doc-update` + 末尾 auto-chain "下一个 task 是 task-NNN，继续吗？(Y/n)"。**v4 修改要点**：(a) close-task 在新窗口里跑（cwd 是 task worktree，脚本自己处理 cd 到 main repo 跑 merge）；(b) **末尾 auto-chain 文案改为明确指引**："✅ task-005 已 close。**关掉本窗口**（task 已结束）→ 去主窗口启下一个 task：建议下一个是 task-006（[title]），可以跑 /pmai-task-spec task-006 → /pmai-task-confirm tasks/task-006-*.md"。**不再问"继续吗"**（暗示在本窗口继续，但其实做不到——本窗口已经是 task-005 worktree） |
 | `skills/doc-update/SKILL.md` | **不动** | 🆕 stage 5/6 大改 (+163 行)，被 close-task 内部调用；v4 不接触 |
 | `skills/cancel-req` | **不改** | 仓库现状未变 |
 | `templates/CLAUDE.md.tmpl` 角色表 | **改第 18 行**：`Suborchestrator | 单 task owner ...` → `新窗口 Claude | PM 在新窗口启动的 Claude 实例，跑单 task；位置在 task worktree 里` | 仓库现状未变 |
-| `templates/CLAUDE.md.tmpl` 工作流文案 | **改**：解释"PM 手动开新窗口"模式，加"中止流程"，加 `/task-spec → /task-confirm → ...` 完整 stage 6 入口序列说明 | stage 5/6 入口序列要写明 |
+| `templates/CLAUDE.md.tmpl` 工作流文案 | **改**：解释"PM 手动开新窗口"模式，加"中止流程"，加 `/pmai-task-spec → /pmai-task-confirm → ...` 完整 stage 6 入口序列说明 | stage 5/6 入口序列要写明 |
 
 **不动**：
 - `scripts/exec-adapters/`（v1 现有 codex.sh / cursor-agent.sh / manual.sh / _gate.sh 全部保留）
@@ -515,7 +515,7 @@ task 回到 "待确认"，worktree 保留供 PM 检查 dirty diff。**不需要 
 
 - task 状态在 "待验收"，无负面影响
 - 下次 PM 任意输入触发 SKILL → preamble §4.4 修订摘要扫到待验收 → 主 Claude 提示验收
-- 完全等价于 v1 现状下 PM 走完 /task-submit 不及时回主窗口的场景
+- 完全等价于 v1 现状下 PM 走完 /pmai-task-submit 不及时回主窗口的场景
 
 ### 7.10 PM 打回后继续修（2026-04-26 单窗口 lifecycle 修订）
 
@@ -530,11 +530,11 @@ task 回到 "待确认"，worktree 保留供 PM 检查 dirty diff。**不需要 
 
 **不需要兜底**：因为 task-submit 呈交、PM 选打回、继续修全在同一个新窗口里发生，PM 不可能"忘记"或"找不到入口"。
 
-**唯一例外**：如果 PM 误关了新窗口才发现要打回（场景罕见）→ 重开 `/task-execute task-XXX`（状态已是"执行中"，入口不 transition，直接进 stage 5/6 PM 反馈分流）。这是 §7.4 / §7.11 兜底路径的延伸，不是主路径。
+**唯一例外**：如果 PM 误关了新窗口才发现要打回（场景罕见）→ 重开 `/pmai-task-execute task-XXX`（状态已是"执行中"，入口不 transition，直接进 stage 5/6 PM 反馈分流）。这是 §7.4 / §7.11 兜底路径的延伸，不是主路径。
 
 ### 7.11 task 文件真相源 + close-task dirty req wt（Codex C4/C5 修订）
 
-**问题**：task 文件存在两处副本——req worktree 里的（`requirements/active/<req>/tasks/task-NNN.md`）和 task worktree 里的（task worktree 是从 req 分支切出来的，自然包含同一个 task 文件）。`/task-execute` 改状态字段（"待确认"→"执行中"）时改哪份？
+**问题**：task 文件存在两处副本——req worktree 里的（`requirements/active/<req>/tasks/task-NNN.md`）和 task worktree 里的（task worktree 是从 req 分支切出来的，自然包含同一个 task 文件）。`/pmai-task-execute` 改状态字段（"待确认"→"执行中"）时改哪份？
 
 **v4 决议**：
 - **task 状态字段写入**：必须在 **task worktree** 里改（因为 task-execute SKILL 步骤 2 已经 `cd $WORKTREE_ABS`），改后 commit 到 task 分支
@@ -544,7 +544,7 @@ task 回到 "待确认"，worktree 保留供 PM 检查 dirty diff。**不需要 
 **close-task dirty req wt（Codex C5）**：close-task.sh:124 检查 req worktree clean。若 PM 在 req worktree 里手动改了 task 文件（不该这么做但可能发生）→ close-task 拒绝。
 - v4 决议：保留 v1 拒绝行为（fail-closed 正确）；CLAUDE.md.tmpl 加规则"task worktree 启动后不要在 req worktree 编辑同 task 的 task 文件"
 
-### 7.4 PM 在新窗口跑 /task-execute 但状态不是"待确认"
+### 7.4 PM 在新窗口跑 /pmai-task-execute 但状态不是"待确认"
 
 - task-execute SKILL 入口检查到状态异常 → 报错并退出，不调 transition
 - 提示 PM 检查（可能是另一个窗口已经启动过 task，或者 task 已经在 "待验收"）
@@ -557,7 +557,7 @@ task 回到 "待确认"，worktree 保留供 PM 检查 dirty diff。**不需要 
 
 PM 同时 confirm task-005 和 task-006，但 task-006 实现依赖 task-005 已 merge 的代码：
 - **PM 责任**：自己判断依赖关系，task-006 等 task-005 close 后再启
-- **辅助**：`/task-status` 显示每个 task 的 "依赖：" 字段（v1 现状已支持）；主 Claude 在 task-confirm 时如果检测到 task 文件 "依赖：" 字段非空且依赖 task 还没 close，**警告但不强制阻止**（PM 可能确实想并行启动后手动协调）
+- **辅助**：`/pmai-task-status` 显示每个 task 的 "依赖：" 字段（v1 现状已支持）；主 Claude 在 task-confirm 时如果检测到 task 文件 "依赖：" 字段非空且依赖 task 还没 close，**警告但不强制阻止**（PM 可能确实想并行启动后手动协调）
 
 ### 7.8 并行场景：同一文件不同 task 修改 → merge conflict
 
@@ -615,7 +615,7 @@ PM 同时 confirm task-005 和 task-006，但 task-006 实现依赖 task-005 已
 | §4.4 UserPromptSubmit hook | ❌ **删除** | 无 hook |
 | §4.5 ScheduleWakeup adaptive | ❌ **删除** | 无主动唤醒 |
 | §4.6 失败/超时（13 行表）| 🟡 **简化**（§7） | 4 个场景，全部走 task-transition |
-| §6.2 task-execute 自跑 review 满足 I-TT3 | ❌ **删除** | PM 在新窗口手动走 v1 现有 /task-submit 流程 |
+| §6.2 task-execute 自跑 review 满足 I-TT3 | ❌ **删除** | PM 在新窗口手动走 v1 现有 /pmai-task-submit 流程 |
 | §7.6 task-recover.sh | ❌ **删除** | 直接调 task-transition --fail-execution |
 | §7.7 close-task 清理 superset workspace | ❌ **删除** | 无 superset workspace |
 | §11 G1-G15 加固 | 🟡 **大量删除**：保留 G4 / G7 / G12 / G13；删 G5（无 reducer）/ G6（无 PID 追踪）/ G14（无 abort）/ G15（无 wakeup） | 大部分加固为并行/异步设计 |
@@ -628,28 +628,28 @@ PM 同时 confirm task-005 和 task-006，但 task-006 实现依赖 task-005 已
 
 | # | 测试 | 反例 |
 |---|---|---|
-| T1 | task-confirm 输出格式正确（单候选） | 跑 `/task-confirm <task-file>`，输出含 worktree 路径 + `/task-execute`（无参）提示；状态仍 "待确认" |
-| T2 | task-confirm 输出格式正确（多候选） | 已有 1 个 "待确认" + worktree 已建 → 再跑 `/task-confirm`，输出强制 `/task-execute <abs-path>`（带显式参数提示） |
-| T3 | task-execute 无参数找唯一 | 仅 1 个 "待启动" → `/task-execute` 自动选定 + cd worktree + 转执行中 |
-| T4 | task-execute 多候选报错 | 2 个 "待启动" → `/task-execute` 报错列出，不转状态、不 cd |
-| T5 | task-execute 入口 transition | 状态 "已完成" → 跑 `/task-execute` → 报错退出，不调 transition |
-| T6 | **I-TT2 放宽（D7）**：同 req 多 task 同时执行允许 | 同 req 已有 task-005 "执行中" → 跑 `/task-execute task-006` → 不再 serial 拒绝，task-006 也转 "执行中" |
-| T7 | task-confirm 同 branch worktree 冲突拦截 | 已存在 `.worktrees/task-005-foo/` → 跑 `/task-confirm requirements/.../task-005-foo.md` → 步骤 4 前置检查拒绝 |
+| T1 | task-confirm 输出格式正确（单候选） | 跑 `/pmai-task-confirm <task-file>`，输出含 worktree 路径 + `/pmai-task-execute`（无参）提示；状态仍 "待确认" |
+| T2 | task-confirm 输出格式正确（多候选） | 已有 1 个 "待确认" + worktree 已建 → 再跑 `/pmai-task-confirm`，输出强制 `/pmai-task-execute <abs-path>`（带显式参数提示） |
+| T3 | task-execute 无参数找唯一 | 仅 1 个 "待启动" → `/pmai-task-execute` 自动选定 + cd worktree + 转执行中 |
+| T4 | task-execute 多候选报错 | 2 个 "待启动" → `/pmai-task-execute` 报错列出，不转状态、不 cd |
+| T5 | task-execute 入口 transition | 状态 "已完成" → 跑 `/pmai-task-execute` → 报错退出，不调 transition |
+| T6 | **I-TT2 放宽（D7）**：同 req 多 task 同时执行允许 | 同 req 已有 task-005 "执行中" → 跑 `/pmai-task-execute task-006` → 不再 serial 拒绝，task-006 也转 "执行中" |
+| T7 | task-confirm 同 branch worktree 冲突拦截 | 已存在 `.worktrees/task-005-foo/` → 跑 `/pmai-task-confirm requirements/.../task-005-foo.md` → 步骤 4 前置检查拒绝 |
 | T8 | adapter 越界写入检测（v1 现有 I-AD2 沿用） | 跑 task 时 prompt 引导写别 task worktree → adapter 后置校验失败 |
 | T9 | 并行场景：3 task 同时执行 + close 顺序 | 启 3 个 "执行中" → 全部转 "待验收" → 一个一个 close-task；后 close 的 merge 走 fast-forward 或 merge commit |
 | T10 | close-task auto-chain 在并行场景的文案适应性 | 多个 待启动 task → close-task 末尾 auto-chain 文案是否清晰（不强制让 PM 串行，至少不暗示串行）。预期：发现需要 stage 5/6 改文案，登记 TODO |
 | **T11 中止意图识别（§4.5）**| PM 在主窗口任意输入触发 fail-execution | 输入 `放弃 task-005` / `取消 005` / `abort 这个`（task-005 唯一执行中时）→ 主 Claude 都识别并调 fail-execution；输入 `放弃` 无 task ID 且多 task 时 → 主 Claude 列出让 PM 选 |
 | **T12 兜底 reduce 触发（§4.4 兜底）**| 主 Claude preamble 摘要在 PM 误关新窗口场景生效 | task 状态 "待验收" + PM 关了新窗口 + 主窗口任意输入 → preamble 输出"📋 待验收 1 ⚠️ 请去对应新窗口"。**注：单窗口 lifecycle 后这是兜底场景测试，不是主路径** |
-| **T22 单窗口完整 lifecycle**（2026-04-26 修订）| 新窗口里完成 confirm 后所有步骤 | 新窗口 `/task-execute` → codex 跑完 → /task-submit 自审 → review → 转待验收 → **本窗口呈交 PM diff + review 摘要** → PM 通过 → /close-task → auto-chain 输出"关本窗口去主启下一个 task"。全程不切主窗口 |
-| **T23 依赖前置 gate（双层）**（2026-04-26 PM 决议）| 验证两个层都拦：(a) **主防线**: task-confirm 在依赖未满足时拒绝创建 worktree（task-006 依赖 task-005 != 已完成 → /task-confirm task-006 exit 1 + 不建 worktree）；(b) **兜底层**: task-execute 入口绕过 task-confirm 直接调时也拦（手工 task-transition 强改 task-005 状态 → /task-execute task-006 步骤 2.5 exit 1）| 两层都通过+无依赖时通过+任一层拦截时给明确指引 |
+| **T22 单窗口完整 lifecycle**（2026-04-26 修订）| 新窗口里完成 confirm 后所有步骤 | 新窗口 `/pmai-task-execute` → codex 跑完 → /pmai-task-submit 自审 → review → 转待验收 → **本窗口呈交 PM diff + review 摘要** → PM 通过 → /pmai-close-task → auto-chain 输出"关本窗口去主启下一个 task"。全程不切主窗口 |
+| **T23 依赖前置 gate（双层）**（2026-04-26 PM 决议）| 验证两个层都拦：(a) **主防线**: task-confirm 在依赖未满足时拒绝创建 worktree（task-006 依赖 task-005 != 已完成 → /pmai-task-confirm task-006 exit 1 + 不建 worktree）；(b) **兜底层**: task-execute 入口绕过 task-confirm 直接调时也拦（手工 task-transition 强改 task-005 状态 → /pmai-task-execute task-006 步骤 2.5 exit 1）| 两层都通过+无依赖时通过+任一层拦截时给明确指引 |
 | **T13 多 task 摘要格式（§6 task-status）**| task-status 输出多 task 一行结论 | 3 执行中 + 2 待验收 → 输出 `📋 task 概览: 执行中 3 / 待验收 2` 第一行；详情按需展开 |
-| **T14 短 ID 模糊匹配（Pass 2 F2）**| `/task-execute task-005` 自动找唯一 task-005-*.md | 1 匹配 → 用 ✓；0 匹配 → 报错；多匹配 → 列出报错 |
+| **T14 短 ID 模糊匹配（Pass 2 F2）**| `/pmai-task-execute task-005` 自动找唯一 task-005-*.md | 1 匹配 → 用 ✓；0 匹配 → 报错；多匹配 → 列出报错 |
 | **T15 FM7 transition 事务性回归**| append_event 失败时 task 文件状态字段必须回滚 | 模拟 `.runs/events/` 不可写 → `task-transition --to 执行中` 必须 exit 1 + 状态字段保持原值（不能写成功又静默丢事件） |
-| **T16 主仓无参数 /task-execute 能发现 req worktree task**（Codex C1）| `/task-execute` 在主仓 cwd 跑 → 扫到 `.worktrees/req-*/requirements/active/...` 下 task | active req 在 req worktree 时，无参数模式 happy path 可走 |
+| **T16 主仓无参数 /pmai-task-execute 能发现 req worktree task**（Codex C1）| `/pmai-task-execute` 在主仓 cwd 跑 → 扫到 `.worktrees/req-*/requirements/active/...` 下 task | active req 在 req worktree 时，无参数模式 happy path 可走 |
 | **T17 task copy / req copy 状态一致**（Codex C4）| transition 后 task worktree 与 req worktree 里的 task 文件状态字段一致 | 防止状态分裂导致 I-CB10 误判 |
 | **T18 I-CB10 在 v4 transition 后允许写**（Codex C10）| task-execute 转 "执行中" 后，新窗口 Claude 可写 task worktree | check-branch.sh 状态字段读取与 task-transition 写入时序正确 |
-| **T19 主窗口 task-status 多待验收不 dump 全 diff**（Codex C10）| 5 个待验收 task → /task-status 输出 `📋 概览` 一行 + 5 个 task 摘要，**不**自动拉全 diff | context 不撑爆；PM 显式问哪个再深入 |
-| **T20 PM 打回后 /task-execute 可重入**（Codex C6）| 打回后 task 状态 "执行中" + PM 反馈 section 有内容 → /task-execute 不阻塞，进入 stage 5/6 PM 反馈分流流程 | §7.10 路径可走 |
+| **T19 主窗口 task-status 多待验收不 dump 全 diff**（Codex C10）| 5 个待验收 task → /pmai-task-status 输出 `📋 概览` 一行 + 5 个 task 摘要，**不**自动拉全 diff | context 不撑爆；PM 显式问哪个再深入 |
+| **T20 PM 打回后 /pmai-task-execute 可重入**（Codex C6）| 打回后 task 状态 "执行中" + PM 反馈 section 有内容 → /pmai-task-execute 不阻塞，进入 stage 5/6 PM 反馈分流流程 | §7.10 路径可走 |
 | **T21 close-task 不因 req worktree dirty 卡死**（Codex C5）| 跑完 task → close-task 时 req worktree 应 clean（v4 不在 req worktree 写 task 状态）| §7.11 决议落实 |
 
 测试用 v1 现有 plain bash + `tests/helpers/`：简单单元测试放 `tests/v4_T<N>_<slug>.sh`，复杂端到端放 `tests/e2e/v4_<slug>.sh`（align stage 5/6 已建的 `tests/e2e/` 目录约定）。
@@ -669,9 +669,9 @@ PM 同时 confirm task-005 和 task-006，但 task-006 实现依赖 task-005 已
 | 2026-04-25 | PM 反思："是不是开窗口的事情让用户自己来做就好" | **v4 出现，本文档** |
 | 2026-04-25 | PM 提议简化新窗口操作（自动找唯一 task + 自动 cd） | D6 加入；新窗口操作缩到 2 步 |
 | 2026-04-25 | PM 选 A：v4 改成并行原生（不需要 v3 复杂度） | D0 改并行，D7 放宽 I-TT2，§3 加并行场景流，§7 加并行 fallback，§11 加 T6/T9 |
-| 2026-04-26 | PM 触发 /plan-eng-review，发现 stage 5/6 ship 已 drift v4 假设的"v1 现状" | sync v4 plan §3 入口加 `/task-spec`；§6 改动表加 stage 5/6 备注（task-execute 末尾分流段共存、close-task auto-chain 并行 caveat、新 skill task-spec/doc-update 标"不动但要协同"）；§11 加 T10 + 测试目录约定 align tests/e2e/ |
+| 2026-04-26 | PM 触发 /plan-eng-review，发现 stage 5/6 ship 已 drift v4 假设的"v1 现状" | sync v4 plan §3 入口加 `/pmai-task-spec`；§6 改动表加 stage 5/6 备注（task-execute 末尾分流段共存、close-task auto-chain 并行 caveat、新 skill task-spec/doc-update 标"不动但要协同"）；§11 加 T10 + 测试目录约定 align tests/e2e/ |
 | 2026-04-26 | /plan-eng-review Section 1+3+Codex outside voice 完整跑完 | Section 1: D7 加测试改写 + 顺手修 FM7 + 11/13 v3.5 gap 消失结论。Section 3: 加 T11-T15。**Codex outside voice 找 5 critical + 4 high**：(C1) D6 扫错地方，(C2/C3) "preamble 顺手扫" 是假的，(C5) close-task req wt dirty 风险，(C6) PM 打回路径断，(C7) 中止意图识别落 CLAUDE.md.tmpl 而非 preamble，(C8) §7.2 串行心智残留，(C9) close-task auto-chain 升级阻塞，(C10) 测试缺 6 断言。**改动估算从 4-5 文件升到 8 个文件**——主要新增 skill-preamble.sh + status-view.py 修订支持"主窗口自动收口" |
-| 2026-04-26 | PM 提议改为单窗口完整 lifecycle（验收 + 打回 + close 都在新窗口里）| **重大流程简化**：(a) §3 架构图重画——新窗口跑完整 lifecycle；(b) §4.4 主窗口收口降级为兜底；(c) §6 task-submit 改为新窗口直接呈交 PM 验收；(d) §6 close-task auto-chain 文案改"关本窗口去主启下一个"（不再问"继续吗"）；(e) §7.10 PM 打回路径大幅简化——同窗口继续修，删除"新窗口已关 vs 还在"分裂；(f) §11 加 T22 单窗口完整 lifecycle 测试。trade-off：失去主窗口"批量验收"模式，PM 主动跑 /task-status 拉总览补偿 |
+| 2026-04-26 | PM 提议改为单窗口完整 lifecycle（验收 + 打回 + close 都在新窗口里）| **重大流程简化**：(a) §3 架构图重画——新窗口跑完整 lifecycle；(b) §4.4 主窗口收口降级为兜底；(c) §6 task-submit 改为新窗口直接呈交 PM 验收；(d) §6 close-task auto-chain 文案改"关本窗口去主启下一个"（不再问"继续吗"）；(e) §7.10 PM 打回路径大幅简化——同窗口继续修，删除"新窗口已关 vs 还在"分裂；(f) §11 加 T22 单窗口完整 lifecycle 测试。trade-off：失去主窗口"批量验收"模式，PM 主动跑 /pmai-task-status 拉总览补偿 |
 | 2026-04-26 | PM 提议加依赖结构化（task-plan 拆分阶段考虑并行 + task-execute 入口检查依赖） | **§7.7 把"依赖 PM 自己判断"升级为"系统帮记录 + 校验"**：(a) §6 task-plan SKILL 加"## 执行顺序与并行性"输出（ASCII 依赖图 + 并行 lanes + 启动建议）；(b) §6 task-spec SKILL 写 task 文件时「依赖」字段填结构化 task ID 列表；(c) §4.2 task-execute 入口加步骤 2.5 依赖前置 gate（依赖未"已完成"则拒绝 + 明确指引）；(d) §6 task.md.tmpl 「依赖」字段加格式说明；(e) §11 加 T23 依赖 gate 测试。改动估算 8 → 11 文件 |
 | 2026-04-26 | PM 修正：依赖检查应在主 Agent 创建 worktree 时（task-confirm）做，task-execute 兜底 | **双层防御**：(a) **主防线** §4.1 task-confirm 步骤 4 创建 worktree 之前加依赖检查（fail-fast，主窗口直接报错，不浪费建 worktree）；(b) **兜底层** §4.2 步骤 2.5 保留（防 PM 手动 task-transition 强改状态 / 未来调用路径变化）。T23 升级为双层验证 |
 
@@ -686,13 +686,13 @@ PM 同时 confirm task-005 和 task-006，但 task-006 实现依赖 task-005 已
 
 ### 13.2 PM 忘记开新窗口 → task 卡 "待确认"
 
-- 缓解：`/task-status` 主动提示
+- 缓解：`/pmai-task-status` 主动提示
 - 缓解：主 Claude 在 PM 任意输入时检测并提示
 
 ### 13.3 PM 跑完不回主窗口 → 主 Claude 不知道完成
 
 - 缓解：状态在 "待验收" 是合法状态，PM 任何后续输入都会被检测
-- 缓解：`/task-status` 显示 "待验收 task: N"
+- 缓解：`/pmai-task-status` 显示 "待验收 task: N"
 
 ### 13.4 IDE 启动 Claude 的方式不一致
 
@@ -716,7 +716,7 @@ PM 同时 confirm task-005 和 task-006，但 task-006 实现依赖 task-005 已
 - **merge conflict**：同一文件多 task 改 → 后 close 的 task merge 报 conflict。v1 现有 close-task fail-closed，PM 解决后重跑
 - **task 依赖**：PM 自己判断；task-confirm 检测到 "依赖：" 字段非空且依赖未 close → 警告但不阻止
 - **review 工具并发跑**：task-005 / task-006 在两个新窗口同时跑 `/qa`（如果 qa 用 browse），可能竞争浏览器实例。**缓解**：PM 操作时序自然错开；如真需要可加锁（暂不做）
-- **req 进度感知**：v1 假设"一个时间一个 task"，进度文案"task 1/N 完成"在并行时变成"task X 完成（剩余执行中：Y, 待验收：Z）"——`/task-status` 文案需更新
+- **req 进度感知**：v1 假设"一个时间一个 task"，进度文案"task 1/N 完成"在并行时变成"task X 完成（剩余执行中：Y, 待验收：Z）"——`/pmai-task-status` 文案需更新
 
 ---
 
@@ -749,7 +749,7 @@ PM 同时 confirm task-005 和 task-006，但 task-006 实现依赖 task-005 已
 
 **Mode**：DX POLISH，**incremental scope**（PM 决议）—— 只跑适用 pass，跳 Pass 5/6/7/8（不适用 PM 单人 workflow 场景）。
 **Persona**：PM 自己（admin console4 项目主用户，已熟 v1）。
-**Magical moment**：A 候选——`/task-execute` 无参数自动找 + 自动 cd worktree。
+**Magical moment**：A 候选——`/pmai-task-execute` 无参数自动找 + 自动 cd worktree。
 
 ### DX 评分
 
@@ -773,7 +773,7 @@ PM 同时 confirm task-005 和 task-006，但 task-006 实现依赖 task-005 已
 |---|---|---|
 | 1 #2 | task-execute 第一秒打印诊断行 | §4.2 case 1) |
 | 2 F1 | 错误退出推断意图给 next-step | §4.2 case "*" |
-| 2 F2 | 短 ID 模糊匹配 (`/task-execute task-005`) | §4.2 步骤 1 新分支 |
+| 2 F2 | 短 ID 模糊匹配 (`/pmai-task-execute task-005`) | §4.2 步骤 1 新分支 |
 | 4 F1 | 多候选输出改用短 ID 格式 | §4.1 else 分支 |
 | 4 F2 | 中止意图识别（PM 不背模板）| §4.5 改写 |
 | 4 F3 | task-status 多 task 摘要格式样例 | §6 task-status 行 |

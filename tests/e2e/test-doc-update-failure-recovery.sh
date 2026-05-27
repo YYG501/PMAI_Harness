@@ -53,8 +53,8 @@ test_error_message_format_complete() {
 test_rerun_auto_resume_contract() {
   start_test "e2e failure recovery: PM fixes then reruns close-task and doc-update resumes"
 
-  _assert_contains "$DOC_UPDATE_SKILL" 'PM 修复 underlying issue 后，重新运行 `/close-task`' "rerun close-task" || return
-  _assert_contains "$DOC_UPDATE_SKILL" '`/close-task` 会 auto-resumes doc-update' "auto-resume doc-update" || return
+  _assert_contains "$DOC_UPDATE_SKILL" 'PM 修复 underlying issue 后，重新运行 `/pmai-close-task`' "rerun close-task" || return
+  _assert_contains "$DOC_UPDATE_SKILL" '`/pmai-close-task` 会 auto-resumes doc-update' "auto-resume doc-update" || return
   _assert_contains "$DOC_UPDATE_SKILL" "系统会自动续跑 doc-update" "example auto resume" || return
 
   pass_test

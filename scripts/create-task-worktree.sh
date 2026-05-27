@@ -86,7 +86,7 @@ if [ -n "$REQ_WT_PRE" ] && [ -d "$REQ_WT_PRE" ]; then
       if ! auto_commit_docs "$REQ_WT_PRE_REAL" \
           "${TASK_BASENAME}: spec sealed before fork (hash $HASH_PRE)" \
           "$REL_TASK_FILE"; then
-        echo "❌ I-DC1: pre-fork auto-commit 失败，拒绝 fork。请人工处理 req worktree 后重跑 /task-confirm。" >&2
+        echo "❌ I-DC1: pre-fork auto-commit 失败，拒绝 fork。请人工处理 req worktree 后重跑 /pmai-task-confirm。" >&2
         exit 1
       fi
     fi

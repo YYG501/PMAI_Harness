@@ -63,19 +63,19 @@ _mock_autochain_prompt() {
     if [ -z "$file" ]; then
       echo "下一个 task 是 ${id}: ${title}（所属模块: [${module}]）"
       echo "继续吗？(Y/n)"
-      [ "$answer" = "n" ] && echo "已停止 stage 6 子循环；可手动运行 /task-spec <task-id> 继续"
+      [ "$answer" = "n" ] && echo "已停止 stage 6 子循环；可手动运行 /pmai-task-spec <task-id> 继续"
       return 0
     fi
     status=$(grep -m1 '^\*\*状态：\*\*' "$file" | sed 's/.*\*\*状态：\*\* *//')
     if [ "$status" = "待执行" ]; then
       echo "下一个 task 是 ${id}: ${title}（所属模块: [${module}]）"
       echo "继续吗？(Y/n)"
-      [ "$answer" = "n" ] && echo "已停止 stage 6 子循环；可手动运行 /task-spec <task-id> 继续"
+      [ "$answer" = "n" ] && echo "已停止 stage 6 子循环；可手动运行 /pmai-task-spec <task-id> 继续"
       return 0
     fi
   done < "$plan"
 
-  # PENDING==0：in-place 出 Stage 6→7 关 req 确认门（不再发"请敲 /req-stage-gate"handoff 提示）
+  # PENDING==0：in-place 出 Stage 6→7 关 req 确认门（不再发"请敲 /pmai-req-stage-gate"handoff 提示）
   # 模板跟 req-stage-gate/SKILL.md Stage 6→7 段步骤 3 共用，文案单一真相源在那边
   echo "Stage 6（task 执行）— 全部 task 已完成"
   echo "是否确认关闭此需求？如还需开启新的 task，请直接说；确认后我会启动关闭流程（Stage 7）。"
@@ -647,10 +647,10 @@ test_autochain_all_done() {
   fixture_create_task "$req_dir" "002" "permission" "已完成" "/qa" >/dev/null
   out=$(_mock_autochain_prompt "$req_dir")
 
-  # 新行为：PENDING==0 不再发"请敲 /req-stage-gate"handoff，直接 in-place 出关 req 确认门
+  # 新行为：PENDING==0 不再发"请敲 /pmai-req-stage-gate"handoff，直接 in-place 出关 req 确认门
   if echo "$out" | grep -q "是否确认关闭此需求" && echo "$out" | grep -q "Stage 6（task 执行）— 全部 task 已完成"; then
     # 反向断言：旧 handoff 文案不应残留
-    if echo "$out" | grep -q "可运行 /req-stage-gate\|运行 /req-stage-gate 推进"; then
+    if echo "$out" | grep -q "可运行 /pmai-req-stage-gate\|运行 /pmai-req-stage-gate 推进"; then
       _fail "close-task PENDING==0 仍残留旧 handoff 文案（应改为 in-place 关 req 确认门）"
       echo "$out" >&2
     else

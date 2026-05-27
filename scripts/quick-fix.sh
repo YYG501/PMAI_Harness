@@ -68,13 +68,13 @@ current_branch() {
 # 三种合法启动位置：
 #   1) 主仓根 + branch=main          → BASE_BRANCH=main、BASE_WORKTREE=repo_root（main mode）
 #   2) req-* worktree（任意分支）    → BASE_BRANCH=该 worktree 当前分支、BASE_WORKTREE=该 worktree（req mode）
-#   3) task-* worktree               → 拒绝（task 阶段走 /task-execute）
+#   3) task-* worktree               → 拒绝（task 阶段走 /pmai-task-execute）
 ensure_quickfix_root() {
   local repo_root="$1"
   local current_root branch
   current_root=$(git rev-parse --show-toplevel 2>/dev/null || true)
   if [ -z "$current_root" ]; then
-    echo "错误：/quick-fix 必须从 git 仓库内启动。" >&2
+    echo "错误：/pmai-quick-fix 必须从 git 仓库内启动。" >&2
     exit 1
   fi
   branch=$(current_branch "$current_root")
@@ -101,7 +101,7 @@ ensure_quickfix_root() {
       BASE_WORKTREE="$current_root"
       ;;
     task-*)
-      echo "错误：/quick-fix 不能在 task worktree 内启动（task 阶段走 /task-execute）。" >&2
+      echo "错误：/pmai-quick-fix 不能在 task worktree 内启动（task 阶段走 /pmai-task-execute）。" >&2
       exit 1
       ;;
     main)
@@ -109,7 +109,7 @@ ensure_quickfix_root() {
       exit 1
       ;;
     *)
-      echo "错误：/quick-fix 只能从 main 分支或 req-* worktree 启动，当前分支：$branch" >&2
+      echo "错误：/pmai-quick-fix 只能从 main 分支或 req-* worktree 启动，当前分支：$branch" >&2
       exit 1
       ;;
   esac
@@ -176,7 +176,7 @@ check_redlines() {
   done < <(changed_files "$worktree")
 
   if [ "${#bad[@]}" -gt 0 ]; then
-    echo "错误：/quick-fix 命中红线，拒绝继续：" >&2
+    echo "错误：/pmai-quick-fix 命中红线，拒绝继续：" >&2
     printf '  - %s\n' "${bad[@]}" >&2
     return 1
   fi
@@ -198,7 +198,7 @@ check_preflight_redlines() {
   done < <(git -C "$check_root" status --porcelain)
 
   if [ "${#bad[@]}" -gt 0 ]; then
-    echo "错误：base worktree ($check_root) 当前已有红线路径改动，/quick-fix 拒绝启动：" >&2
+    echo "错误：base worktree ($check_root) 当前已有红线路径改动，/pmai-quick-fix 拒绝启动：" >&2
     printf '  - %s\n' "${bad[@]}" >&2
     return 1
   fi

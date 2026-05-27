@@ -1,16 +1,16 @@
 ---
-name: task-spec
+name: pmai-task-spec
 description: |
   Stage 6：按 task-plan.md 为单个 task 生成单文件 typed contract（$PMAI_HOME/templates/task.md.tmpl）——
   内部分 PM 确认区 / 执行区 / 审计区三区；读 prd.md（WHAT）+ implementation-design.md（HOW）。
-  等待 PM 在唯一确认门定稿后推进 /task-confirm。
+  等待 PM 在唯一确认门定稿后推进 /pmai-task-confirm。
 ---
 
-# /task-spec
+# /pmai-task-spec
 
 ## When To Use
 
-- PM 在 stage 6 调用，参数是 task id（如 `/task-spec task-001`）
+- PM 在 stage 6 调用，参数是 task id（如 `/pmai-task-spec task-001`）
 - 用于从 `task-plan.md` 中的单行 task 生成完整的 `tasks/task-NNN-<slug>.md`（单文件 typed contract）
 
 ## 单文件 typed contract
@@ -296,7 +296,7 @@ Stage 6（task 执行）— task-NNN <slug> 待确认
    /plan-design-review  — 交互 / 视觉层问题（UI task）
    跑哪几个你定，全跳也行。
 
-这版 task 内容是否可以定稿？如还要调整请直接说；确认后推进到 /task-confirm。
+这版 task 内容是否可以定稿？如还要调整请直接说；确认后推进到 /pmai-task-confirm。
 ```
 
 基础设施 task 去掉 design review 行。
@@ -324,7 +324,7 @@ POST_LINT_HASH=$(shasum -a 256 "$ACTIVE_REQ_DIR/tasks/task-NNN-<slug>.md" | cut 
 
 PM 未确认前不得进入执行。
 
-### 步骤 11：落盘 + 续跑 /task-confirm（speed mode 默认）
+### 步骤 11：落盘 + 续跑 /pmai-task-confirm（speed mode 默认）
 
 PM 确认后，把 task 文件 commit 到 req 分支（保证 task-confirm fork 时取到 PM 确认终态，
 非 working tree stale 版本；I-DC1）：
@@ -338,25 +338,25 @@ auto_commit_docs "$REQ_WORKTREE" "task-NNN-<slug>: spec sealed" "$TASK_FILE"
 `auto_commit_docs` 在文件与 HEAD 一致时静默 noop；pathspec 严格限定本 task 单文件，
 不卷入其他 working tree 改动。commit 失败 → 不推 task-confirm，把错误原文给 PM。
 
-**续跑 task-confirm（speed mode 默认）**：commit 成功后**不让 PM 手动贴 `/task-confirm <path>`**。
-AI chat 出一行轻量过场，然后直接续跑 `/task-confirm` 的 workflow（同一 chat 内 Read
+**续跑 task-confirm（speed mode 默认）**：commit 成功后**不让 PM 手动贴 `/pmai-task-confirm <path>`**。
+AI chat 出一行轻量过场，然后直接续跑 `/pmai-task-confirm` 的 workflow（同一 chat 内 Read
 `skills/task-confirm/SKILL.md` 按其 step 1-N 执行；不 fork 新窗口、不要求 PM 重敲命令）：
 
 ```
 ✅ task 已定稿，准备 task 执行环境（worktree fork + 启动指令）...
 ```
 
-接着按 task-confirm SKILL 跑（PM 体感 = task-spec 定稿后直接看到 worktree 路径 + Next Up 新窗口命令，不再多一道 "复制 /task-confirm <path>"）。
+接着按 task-confirm SKILL 跑（PM 体感 = task-spec 定稿后直接看到 worktree 路径 + Next Up 新窗口命令，不再多一道 "复制 /pmai-task-confirm <path>"）。
 
 > **为什么续跑**：task-confirm 自身**不设确认门**（唯一确认门已在 task-spec 步骤 10）；
-> PM 在步骤 10 答"定稿"=已授权进 task 准备阶段。手动贴 `/task-confirm <path>` 是 v3.5
+> PM 在步骤 10 答"定稿"=已授权进 task 准备阶段。手动贴 `/pmai-task-confirm <path>` 是 v3.5
 > 之前的旧仪式，speed mode 一并收掉。
 >
 > **退出条件**：task-confirm workflow 跑完（worktree 已 fork + Next Up 已输出）→ chat 自然停在
-> "去新窗口跑 /task-execute" 的引导上，不进 task 执行（task 执行天然在新窗口里 PM 重新触发）。
+> "去新窗口跑 /pmai-task-execute" 的引导上，不进 task 执行（task 执行天然在新窗口里 PM 重新触发）。
 >
 > **失败兜底**：commit 失败 / task-confirm 内部任一步骤报错 → 把错误原文给 PM，
-> **不**继续续跑；PM 修复后可手动调 `/task-confirm <path>`（旧路径仍可用作 escape hatch）。
+> **不**继续续跑；PM 修复后可手动调 `/pmai-task-confirm <path>`（旧路径仍可用作 escape hatch）。
 
 ## Rules
 
@@ -364,7 +364,7 @@ AI chat 出一行轻量过场，然后直接续跑 `/task-confirm` 的 workflow�
 - 不再产 `.engineering.md`；不写 hash 注释 / reconcile 元数据（单文件无第二份可同步）。
 - 不编辑其他 task 文件；不创建 / 修改 `docs/modules/*.md`；不修改 `task-plan.md`。
 - 不复制 prd.md / implementation-design.md 大段原文，只引用 + 转写为 task 级可验收内容。
-- 只有 PM 在步骤 10 确认后才推 `/task-confirm`。
+- 只有 PM 在步骤 10 确认后才推 `/pmai-task-confirm`。
 - 基础设施 task 必须说明：`本 task 不触发 module 规格 merge`。
 - AI 不得自动调任何 review skill（I-RV1）；只在确认门给可选 review 清单，PM 自跑。
 - **relevance 二分强制**：前序 PM 反馈按 relevance（适用 / 不适用）二分；每条都登记进 PM 反馈承接清单。

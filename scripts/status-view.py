@@ -126,7 +126,7 @@ def render_banner_only(state: dict, repo_root: Path, skill: str) -> None:
     active = state["active_reqs"]
     if not active:
         # 项目级 skill（init-project / new-req 等）跑在无 active req 状态是预期的；
-        # 不再硬编码"先跑 /new-req"指引（对 /init-project 反而误导）
+        # 不再硬编码"先跑 /pmai-new-req"指引（对 /pmai-init-project 反而误导）
         print("━━━ PMAI ► " + skill + " ▸ <项目级 / 无 active req> ━━━")
         return
     # 取第一个 active req（典型场景：单 PM 同时 1-2 个 req）
@@ -150,7 +150,7 @@ def render_narrative(state: dict, repo_root: Path) -> None:
     """
     active = state["active_reqs"]
     if not active:
-        print("目前没有 active req。可以发 /new-req 起新需求，或发 /init-project 起新项目。")
+        print("目前没有 active req。可以发 /pmai-new-req 起新需求，或发 /pmai-init-project 起新项目。")
         return
 
     # 单 req 场景：直接念
@@ -169,7 +169,7 @@ def render_narrative(state: dict, repo_root: Path) -> None:
         # 不写 commit hash / 时间细节；只点 stage 状态
         print(
             f"上次你做到 {req_id}，当前 stage {stage}/7：{stage_name}{task_summary}。"
-            f"\n下一步：发 /req-stage-gate 推进，或继续当前 stage 工作。"
+            f"\n下一步：发 /pmai-req-stage-gate 推进，或继续当前 stage 工作。"
         )
         return
 
@@ -181,7 +181,7 @@ def render_narrative(state: dict, repo_root: Path) -> None:
         stage = meta.get("stage", 0)
         stage_name = STAGE_NAMES.get(int(stage), f"stage {stage}") if stage else "未知"
         print(f"  - {req_id}：stage {stage}/7（{stage_name}），{len(req['tasks'])} 个 task")
-    print("\n下一步：发 /status-view 看详细，或 /req-stage-gate 推进具体 req。")
+    print("\n下一步：发 /status-view 看详细，或 /pmai-req-stage-gate 推进具体 req。")
 
 
 def render_health_check(repo_root: Path) -> None:
@@ -212,7 +212,7 @@ def render_health_check(repo_root: Path) -> None:
                 ("docs/PROJECT.md", "可能漏跑 migrate-context-to-project.py — docs/CONTEXT.md 还在")
             )
         else:
-            missing.append(("docs/PROJECT.md", "项目级文档主真相源；跑 /init-project 或 /project-solution 起新建"))
+            missing.append(("docs/PROJECT.md", "项目级文档主真相源；跑 /pmai-init-project 或 /pmai-project-solution 起新建"))
 
     if not (docs_dir / "PRODUCT-RULES.md").exists():
         missing.append(("docs/PRODUCT-RULES.md", "GSD §8 新增的产品规则文档"))
@@ -227,7 +227,7 @@ def render_health_check(repo_root: Path) -> None:
     print("💡 项目体检：缺以下产品级文档")
     for path, hint in missing:
         print(f"  - {path}（{hint}）")
-    print("  补法：发 /project-solution（skill 会按场景引导补全）")
+    print("  补法：发 /pmai-project-solution（skill 会按场景引导补全）")
 
 
 def suggest_next_action(req_view: dict) -> str:
@@ -244,28 +244,28 @@ def suggest_next_action(req_view: dict) -> str:
             status = (t["meta"] or {}).get("status", "")
             name = t["path"].stem
             if status == "执行中":
-                return f"执行中 {name}：实现 / 等待呈交 / PM 验收（可在 task 窗口跑 /task-submit 重新看呈交块）"
+                return f"执行中 {name}：实现 / 等待呈交 / PM 验收（可在 task 窗口跑 /pmai-task-submit 重新看呈交块）"
             if status == "待执行":
-                return f"确认启动 {name}：运行 /task-confirm"
+                return f"确认启动 {name}：运行 /pmai-task-confirm"
 
         all_done = bool(tasks) and all(
             (t["meta"] or {}).get("status") == "已完成" for t in tasks
         )
         if not all_done:
-            return "运行 /task-status 查看详情"
+            return "运行 /pmai-task-status 查看详情"
 
         pending = req_view["pending_spec"]
         if pending:
             next_id = pending[0]["id"]
             tail = f"（还有 {len(pending)} 个未 spec）" if len(pending) > 1 else ""
-            return f"task-plan 里还有未 spec 的 task：先运行 /task-spec {next_id}{tail}"
+            return f"task-plan 里还有未 spec 的 task：先运行 /pmai-task-spec {next_id}{tail}"
 
-        return "所有 task 已完成，运行 /close-req 关闭需求"
+        return "所有 task 已完成，运行 /pmai-close-req 关闭需求"
 
     if stage == 7:
         return "Req 正在关闭中"
 
-    return "运行 /task-status 查看详情"
+    return "运行 /pmai-task-status 查看详情"
 
 
 def render_manual_section(repo_root: Path) -> None:
@@ -320,7 +320,7 @@ def render_manual_section(repo_root: Path) -> None:
     sample_task = items[0].get("task_file", "<task-file>")
     sample_id = items[0].get("task_id", "task-NNN")
     print("下一步：")
-    print(f"  完成手工实现后： /task-execute {sample_id}")
+    print(f"  完成手工实现后： /pmai-task-execute {sample_id}")
     print(
         f"  暂时不想管：     python3 $HOME/.pmai/scripts/task-transition.py "
         f"{sample_task} --snooze-manual --days 3"
@@ -412,7 +412,7 @@ def render_status(state: dict, repo_root: Path) -> None:
     active = state["active_reqs"]
 
     if not active:
-        print("📭 没有活跃的需求。运行 /new-req 开始一个新需求。")
+        print("📭 没有活跃的需求。运行 /pmai-new-req 开始一个新需求。")
         render_manual_section(repo_root)
         render_quickfix_section(repo_root)
         return

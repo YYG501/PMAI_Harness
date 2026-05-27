@@ -33,7 +33,7 @@ PM chat 同时含以下两元素 → caller AI 自动识别为"上传附件"意�
 **caller AI 必须**在以下场景**禁用 trigger 0**，不调 `copy_attachment`：
 
 1. **`req-stage-gate` Stage 1→2 B 分支 office-hours 选源期间**（3B / 3B-resume / 3B-snapshot 子步骤）—— PM 给的绝对路径是 office-hours 设计稿源材料，走  `set_stage_source(req_dir, 2, 'stage2-office-hours.md', tool='office-hours', origin=<原绝对路径>)` 路径，**不**归档为 attachment（cross-design 冲突防护）。B 分支 5B 推进确认门 PM OK 后恢复 trigger 0。
-2. **`/prd-writing` standalone 模式**（不绑 req 的独立 / 补差 PRD）—— standalone 路径不入 req `attachments/`；PM 想给附件走手动 / 他路径。
+2. **`/pmai-prd-writing` standalone 模式**（不绑 req 的独立 / 补差 PRD）—— standalone 路径不入 req `attachments/`；PM 想给附件走手动 / 他路径。
 3. **trigger 0 与 trigger 1 / 2 三者共存的优先级**：trigger 0 优先（PM chat 主动描述）；trigger 1 / 2 保留作 fallback（PM 自己手动 cp 进 attachments/ 时由 trigger 2 扫到 + `is_seen` 判定后问 PM）。
 
 ### §2.3 AI 触发后的 6 步动作（helper 内部完成）

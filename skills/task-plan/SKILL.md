@@ -1,14 +1,14 @@
 ---
-name: task-plan
+name: pmai-task-plan
 description: |
   Stage 5：读取上游 stage 文档 + 项目级文档 + 原型代码，拆分 task 规划。按 $PMAI_HOME/skills/task-plan/templates/task-plan.md.tmpl 生成单一文件 task-plan.md（PM 视图 + 末尾轻量自检与状态摘要）。不生成具体 task 文档，不生成工程合同分文件。
 ---
 
-# /task-plan
+# /pmai-task-plan
 
 ## When To Use
 
-- Orchestrator 在 stage 5 调用（由 `/req-stage-gate` 触发）
+- Orchestrator 在 stage 5 调用（由 `/pmai-req-stage-gate` 触发）
 
 ## PM 视图规则（必读）
 
@@ -120,7 +120,7 @@ done
 
 > **颗粒度核心规则**：一个 task = PM 能在一次原型 demo 里完整验收的功能单元。
 >
-> **验收硬约束**：必须能在原型上演示一段业务流程才算端到端验收。PM 走查代码结构 / 文档可读性 / 契约合理性 **不算**端到端验收。文档型产物（模块规格文档 / functions.md / 字段口径契约 / 范围裁剪规则）天然不满足本约束 → **不立 task**，由业务 task close 后 `/doc-update` 流程沉淀对应章节。跨 task 共享口径决策应在 stage 2-3（analysis / prd）定死，stage 5 不为此立 task。
+> **验收硬约束**：必须能在原型上演示一段业务流程才算端到端验收。PM 走查代码结构 / 文档可读性 / 契约合理性 **不算**端到端验收。文档型产物（模块规格文档 / functions.md / 字段口径契约 / 范围裁剪规则）天然不满足本约束 → **不立 task**，由业务 task close 后 `/pmai-doc-update` 流程沉淀对应章节。跨 task 共享口径决策应在 stage 2-3（analysis / prd）定死，stage 5 不为此立 task。
 >
 > **业务模块 task**：一个 task 对应 1-N 条紧密相关的功能清单条目；紧密相关指同一个 user story 链条，或同一个页面区域可一次性 demo。不同 user story 链条即使在同一页面，也要拆成不同 task。
 >
@@ -152,8 +152,8 @@ done
 - 问题：纯前置 task 不满足颗粒度核心规则的验收硬约束（无法在原型上演示业务流程），却要跑完整 `/review + submit + close` 流程。
 - 判断：
   - **重构类前置**：后续 task 串行执行时 merge 冲突不存在，前置理由不成立，合并进首个相关业务 task。仅当后续 task 必须并行且冲突无法避免，才考虑前置，并且必须带端到端行为验证点。
-  - **文档 / 规格 / 契约类前置**：不立 task。由各业务 task close 后的 `/doc-update` 沉淀对应章节（颗粒度核心规则已说明）。
-    - **包括 PRD 明文要求的"主线规范产物"** —— 即使 PRD §6.1 / §六 把"建立 X 规范段 / 字段字典 / 权限矩阵"列为决策必有产出，仍按文档类前置处理：**不合并进业务 task**、**不把 `docs/*` 写进业务 task 的「执行范围」allowlist**。由首个相关业务 task close 后跑 `/doc-update` 沉淀进 `docs/DESIGN.md` / `docs/PROJECT.md` / `docs/modules/<m>.md`。理由：「内容必须存在」是 PRD 把关的内容硬约束，「什么时候写 / 走哪条 worktree」是流程问题（task 边界 + doc-update）—— 两件事，不能因前者绕开后者。判定信号：产物归宿是 `docs/*` 而非 `src/*` / `prototypes/*` → 默认文档类。
+  - **文档 / 规格 / 契约类前置**：不立 task。由各业务 task close 后的 `/pmai-doc-update` 沉淀对应章节（颗粒度核心规则已说明）。
+    - **包括 PRD 明文要求的"主线规范产物"** —— 即使 PRD §6.1 / §六 把"建立 X 规范段 / 字段字典 / 权限矩阵"列为决策必有产出，仍按文档类前置处理：**不合并进业务 task**、**不把 `docs/*` 写进业务 task 的「执行范围」allowlist**。由首个相关业务 task close 后跑 `/pmai-doc-update` 沉淀进 `docs/DESIGN.md` / `docs/PROJECT.md` / `docs/modules/<m>.md`。理由：「内容必须存在」是 PRD 把关的内容硬约束，「什么时候写 / 走哪条 worktree」是流程问题（task 边界 + doc-update）—— 两件事，不能因前者绕开后者。判定信号：产物归宿是 `docs/*` 而非 `src/*` / `prototypes/*` → 默认文档类。
 
 **反模式 B：横切质量 task**
 
@@ -301,17 +301,17 @@ python3 "$PMAI_HOME/scripts/check-doc-pm-view.py" "$ACTIVE_REQ_DIR/task-plan.md"
 - **有 warnings**：向 PM 展示，PM 决定是否修
 - **有 errors**：修复后重跑 lint；连续 3 次仍有 error 时停下询问 PM
 
-### 步骤 5：skill 结束 → /req-stage-gate 接手
+### 步骤 5：skill 结束 → /pmai-req-stage-gate 接手
 
 写完 task-plan.md → skill 退出。向 PM 展示一句话摘要 + 文件绝对路径（不贴全文）。
 
-控制权交回 `/req-stage-gate`，由它：
+控制权交回 `/pmai-req-stage-gate`，由它：
 - 输出"推荐 review 工具"区块（`/plan-eng-review` `/plan-design-review` `/autoplan` 等，PM 自选自跑，I-RV1）
 - 走推进确认门
 
 **禁止**：skill 内部不得自动调任何 review 工具。PM 要求修改 → 改完 task-plan.md 重新走 stage-gate 流程。
 
-进入 stage 6 后，具体 task 文档由 stage 6 的 `/task-spec <task-id>` 按 task-plan.md 逐个生成。
+进入 stage 6 后，具体 task 文档由 stage 6 的 `/pmai-task-spec <task-id>` 按 task-plan.md 逐个生成。
 
 ### 步骤 6（中途重新拆分）：stage 6 发现拆分需要重做
 

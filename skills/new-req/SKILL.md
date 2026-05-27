@@ -1,18 +1,18 @@
 ---
-name: new-req
+name: pmai-new-req
 description: |
   开始一个新需求：创建 req 目录和 worktree，引导 PM 完成 stage 1（brief.md）。
 ---
 
-# /new-req
+# /pmai-new-req
 
-> **PM 视图（M2 banner + Decision gate label）**：本 skill 入口出 banner（`status-view.py --banner-only --skill NEW-REQ`）；退出出 Next Up 块（按 `_shared/pm-view/banner-rules.md` §2，引导 `/req-stage-gate` 推进）；闸门 label 按 §3 3 硬规则。
+> **PM 视图（M2 banner + Decision gate label）**：本 skill 入口出 banner（`status-view.py --banner-only --skill NEW-REQ`）；退出出 Next Up 块（按 `_shared/pm-view/banner-rules.md` §2，引导 `/pmai-req-stage-gate` 推进）；闸门 label 按 §3 3 硬规则。
 >
 > **PM 答题规则（M4）**：所有 AskUserQuestion 调用按 `_shared/pm-view/askuser-rules.md` §1 3 硬规则走（空答 STOP / 没拿到答案禁止落盘 / runtime 退化保留 wait）。
 
 ## When To Use
 
-- PM 在业务项目中调用，参数是需求描述（如 `/new-req "实现用户登录"`）
+- PM 在业务项目中调用，参数是需求描述（如 `/pmai-new-req "实现用户登录"`）
 
 ## PM 视图规则（必读）
 
@@ -39,8 +39,8 @@ python3 "$PMAI_HOME/scripts/status-view.py" --banner-only --skill NEW-REQ || tru
 
 调用方式：
 
-- **带参数**：`/new-req "<一句话需求>"`（如 `/new-req "实现用户登录"`）→ 跳步骤 0，直接进步骤 1
-- **不带参数**：PM 跑 `/new-req` 单独命令，AI 用**一句话**问需求是什么，然后等 PM 下一条 message 给描述
+- **带参数**：`/pmai-new-req "<一句话需求>"`（如 `/pmai-new-req "实现用户登录"`）→ 跳步骤 0，直接进步骤 1
+- **不带参数**：PM 跑 `/pmai-new-req` 单独命令，AI 用**一句话**问需求是什么，然后等 PM 下一条 message 给描述
 
 **无参数时的标准问法（严格按此句，不扩展）**：
 
@@ -51,7 +51,7 @@ python3 "$PMAI_HOME/scripts/status-view.py" --banner-only --skill NEW-REQ || tru
 **禁止扩展**（防 AI 临场编工程黑话）：
 - 不写"才能生成 slug / 确定编号 / 拉 worktree" 等内部机制（PM 不需要知道这些，参考 PM 视图规则 + memory `feedback_pm_chat_no_engineering_jargon`）
 - 不举例"实现用户登录 / 租户角色批量改名" 等模板话术（PM 自己会给）
-- 不解释为什么需要描述（PM 跑 /new-req 自然知道要给需求）
+- 不解释为什么需要描述（PM 跑 /pmai-new-req 自然知道要给需求）
 - 不写"我才能..." / "这样我能..." 句式（条件句啰嗦）
 
 PM 给描述后，把它当作参数继续步骤 1。
@@ -95,9 +95,9 @@ cd 到返回的 worktree 路径。
 
 ### 步骤 3.5：已有项目 PROJECT 兜底检查（legacy readiness gate）
 
-在 worktree 里、写 brief.md **之前**做一次 `docs/PROJECT.md` 兜底检查。框架同步进已有项目后，老项目的 `docs/PROJECT.md` 可能有空节（同步前没有「项目级语境产出」这一步）。新项目的项目级语境由 `/project-solution` 在 new-project 阶段产出并自带确认门兜住；已有项目则在这里兜底。
+在 worktree 里、写 brief.md **之前**做一次 `docs/PROJECT.md` 兜底检查。框架同步进已有项目后，老项目的 `docs/PROJECT.md` 可能有空节（同步前没有「项目级语境产出」这一步）。新项目的项目级语境由 `/pmai-project-solution` 在 new-project 阶段产出并自带确认门兜住；已有项目则在这里兜底。
 
-> **为什么放在 new-req**：`/new-req` 是每 req 入口、本检查每 req 首次触发、PROJECT 填满后再跑就 silent skip——天然幂等，不需要「已查过」标记。**放在步骤 3.5（worktree 内、commit 前）**：mini-fill 写的 `docs/PROJECT.md` 落在 worktree 的 req 分支上，能被步骤 4.5 的 commit 一并带上、被 worktree 内后续 stage 读到。
+> **为什么放在 new-req**：`/pmai-new-req` 是每 req 入口、本检查每 req 首次触发、PROJECT 填满后再跑就 silent skip——天然幂等，不需要「已查过」标记。**放在步骤 3.5（worktree 内、commit 前）**：mini-fill 写的 `docs/PROJECT.md` 落在 worktree 的 req 分支上，能被步骤 4.5 的 commit 一并带上、被 worktree 内后续 stage 读到。
 
 ```bash
 PROJECT_STATE=$(python3 "$PMAI_HOME/scripts/check-project-sections.py" "$REPO_ROOT")
@@ -127,7 +127,7 @@ PM 答「混合」→ 各节 PM 临场决定
 
 填完后重跑 `check-project-sections.py` 验证全填，再进步骤 3.6。**mini-fill 写的 `docs/PROJECT.md` 必须在步骤 4.5 commit 时一并 commit**（见步骤 4.5 commit 范围说明）——否则补好的基线悬空，worktree 内后续 stage 读不到。
 
-> mini-fill 只在已有项目 + PROJECT 有空节时触发；新项目首次 `/init-project` → `/project-solution` 已把 PROJECT 填满，这里直接 silent skip。
+> mini-fill 只在已有项目 + PROJECT 有空节时触发；新项目首次 `/pmai-init-project` → `/pmai-project-solution` 已把 PROJECT 填满，这里直接 silent skip。
 
 ### 步骤 3.6：已有项目 DESIGN.md inventory 段兜底
 
@@ -197,7 +197,7 @@ $HAS_FILE && grep -q "^## 共享组件 inventory" "$DESIGN_MD" && HAS_INVENTORY=
 
 **关键原则**：brief 是 PM 第一手"描述需求"的产物，AI 不主动调任何外部工具、不预读项目文档 /
 历史 req。如果 PM 想用 office-hours 风格做深挖讨论，那是 **Stage 2 的工具选择**（在 worktree
-内由 `/req-stage-gate` Stage 1→2 入口分流，B 分支走 office-hours），不是 Stage 1 的事 —— Stage 1
+内由 `/pmai-req-stage-gate` Stage 1→2 入口分流，B 分支走 office-hours），不是 Stage 1 的事 —— Stage 1
 的产物保持单一：PM 一句话需求 → AI 缺口分析补问 → brief 草稿 → 二次确认。
 
 输出提示给 PM（不列字母，给两种候选路径）：
@@ -367,9 +367,9 @@ git add "$REQ_REL/brief.md" "$REQ_REL/.req-meta.json" "$REQ_REL/tasks" docs/PROJ
 
 ### 步骤 5：Handoff（结束本对话，让 PM 在 worktree 新对话里继续）
 
-brief.md 已 commit 后，**当前主对话不再继续 stage 2**。`/new-req` 的职责到此为止——req 全过程从这里搬到 worktree 内的独立 Claude 对话，让每个 req 拿到干净的 context。
+brief.md 已 commit 后，**当前主对话不再继续 stage 2**。`/pmai-new-req` 的职责到此为止——req 全过程从这里搬到 worktree 内的独立 Claude 对话，让每个 req 拿到干净的 context。
 
-输出 handoff 块（**不出 A/B**，不在主对话里调 `/req-stage-gate`）：
+输出 handoff 块（**不出 A/B**，不在主对话里调 `/pmai-req-stage-gate`）：
 
 ```
 ✅ brief 已 commit 至分支 req-NNN-<slug>（<short-hash>）
@@ -380,15 +380,15 @@ brief.md 已 commit 后，**当前主对话不再继续 stage 2**。`/new-req` �
        cd <worktree 绝对路径>
        claude
   3. 在新 Claude 对话里运行：
-       /req-stage-gate
+       /pmai-req-stage-gate
      （新对话会重新读 brief.md 给二次确认门，确认后进入 Stage 2）
 
 **敲这一次就够了**——stage-gate 续跑模式会一路带你走到 Stage 6（task 执行）才退出。
-中途不答确认门就是停，下次回来重新敲 /req-stage-gate 自动从当前 stage 续走。
+中途不答确认门就是停，下次回来重新敲 /pmai-req-stage-gate 自动从当前 stage 续走。
 ```
 
 **规则**：
-- 主对话不输出 A/B；A/B 由新对话里的 `/req-stage-gate` 负责。
+- 主对话不输出 A/B；A/B 由新对话里的 `/pmai-req-stage-gate` 负责。
 - 输出只给 commit 信息 + 切窗口指令，不贴 brief 全文。需要时让新对话的 Claude 把 brief.md 读回 chat。
 
 ## Rules

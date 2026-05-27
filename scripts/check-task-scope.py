@@ -138,7 +138,7 @@ def main() -> int:
         print(
             "  修复：检查路径拼写；task 文件应位于 "
             "$ACTIVE_REQ_DIR/tasks/task-NNN-<slug>.md。"
-            "若 task 还没生成，先在 req worktree 跑 /task-spec <task-id>。",
+            "若 task 还没生成，先在 req worktree 跑 /pmai-task-spec <task-id>。",
             file=sys.stderr,
         )
         return 2

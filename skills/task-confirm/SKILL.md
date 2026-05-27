@@ -1,21 +1,21 @@
 ---
-name: task-confirm
+name: pmai-task-confirm
 description: |
   PM 确认启动一个 task：展示摘要、校验依赖、创建 worktree，并输出新窗口启动指令。
 ---
 
-# /task-confirm
+# /pmai-task-confirm
 
-> **PM 视图（M2 banner）**：入口 banner（`status-view.py --banner-only --skill TASK-CONFIRM`，见 `_shared/pm-view/banner-rules.md` §1）；退出 Next Up 块（§2）引导新窗口 `/task-execute <task-id>`。**task-confirm 不设确认闸门**（唯一闸门在 `/task-spec` 步骤 10），故不涉及 banner-rules §3 Decision gate label 规则。
+> **PM 视图（M2 banner）**：入口 banner（`status-view.py --banner-only --skill TASK-CONFIRM`，见 `_shared/pm-view/banner-rules.md` §1）；退出 Next Up 块（§2）引导新窗口 `/pmai-task-execute <task-id>`。**task-confirm 不设确认闸门**（唯一闸门在 `/pmai-task-spec` 步骤 10），故不涉及 banner-rules §3 Decision gate label 规则。
 >
 > **PM 答题规则（M4）**：所有 AskUserQuestion 调用按 `_shared/pm-view/askuser-rules.md` §1 3 硬规则走（空答 STOP / 没拿到答案禁止落盘 worktree fork / runtime 退化保留 wait）。
 
 ## When To Use
 
-- PM 调用，参数是 task 文件路径（如 `/task-confirm tasks/task-001-login-ui.md`）
-- **被 `/task-spec` 步骤 11 续跑触发**（speed mode 默认行为）：task-spec
+- PM 调用，参数是 task 文件路径（如 `/pmai-task-confirm tasks/task-001-login-ui.md`）
+- **被 `/pmai-task-spec` 步骤 11 续跑触发**（speed mode 默认行为）：task-spec
   PM 答"定稿"后落盘 commit → AI 直接续跑本 skill workflow，PM 不需手动贴
-  `/task-confirm <path>`。续跑路径行为与 PM 手动调完全一致（task-confirm 自身不设
+  `/pmai-task-confirm <path>`。续跑路径行为与 PM 手动调完全一致（task-confirm 自身不设
   确认门，全是机械流程）。
 
 ## task 文件形态
@@ -25,7 +25,7 @@ task-spec 产 **单文件 typed contract**（`tasks/task-NNN-<slug>.md`，头部
 本 skill 读 PM 确认区的「📌 任务卡」「✅ 验收清单」「📦 范围」做摘要展示。
 
 > **task-confirm = 机械流程**：PM 在整个 task 生命周期的唯一确认门已在
-> `/task-spec` 步骤 10。task-confirm **不再设自己的「是否确认启动」问句** —— 它只做：
+> `/pmai-task-spec` 步骤 10。task-confirm **不再设自己的「是否确认启动」问句** —— 它只做：
 > 摘要展示（informational）+ 可选 executor 切换（非阻塞告知）+ 依赖 gate（机器校验）+
 > worktree fork。
 
@@ -64,7 +64,7 @@ v3 缺 `.engineering.md` 是正常 —— **不报告警**。
 
 ### 步骤 1.5：plan review 推荐摘要（informational，不阻塞）
 
-可选：调 `task-events.py check-plan-reviews <task-file>` 拿到推荐 / 已跑 / 未跑列表，附在步骤 2 摘要里给 PM 看。脚本永远 exit 0，缺 review 不阻止 confirm（I-RV2，撤销旧 I-PR1 hard gate）。如果 PM 想跑，提示回 `/task-spec` 流程或在主窗口手动调 review；跑完贴结论由 AI append `plan_review_completed` 事件。
+可选：调 `task-events.py check-plan-reviews <task-file>` 拿到推荐 / 已跑 / 未跑列表，附在步骤 2 摘要里给 PM 看。脚本永远 exit 0，缺 review 不阻止 confirm（I-RV2，撤销旧 I-PR1 hard gate）。如果 PM 想跑，提示回 `/pmai-task-spec` 流程或在主窗口手动调 review；跑完贴结论由 AI append `plan_review_completed` 事件。
 
 ### 步骤 2：展示 task 摘要（默认压单行，非默认展开）
 
@@ -105,7 +105,7 @@ bundle、不需要带路径参数，PM 直接 `/qa` 等命令运行即可。
 ### 步骤 3：executor 切换（非阻塞）
 
 > ：task-confirm 是机械流程 —— **不设「是否确认启动此 task？」问句**
-> （唯一确认门已在 `/task-spec` 步骤 10）。executor 切换是「机械流程 + 一次非阻塞告知」：
+> （唯一确认门已在 `/pmai-task-spec` 步骤 10）。executor 切换是「机械流程 + 一次非阻塞告知」：
 > 摘要已在步骤 2 展示当前 executor，步骤 6 输出会列全 4 个可选 executor + 「想换说一声」
 > 提示 —— **不阻塞、不专门问**。PM 不响应即用当前 executor 继续。
 
@@ -131,7 +131,7 @@ bundle、不需要带路径参数，PM 直接 `/qa` 等命令运行即可。
    - 主窗口直接报错给 PM：
      ```text
      ❌ task-NNN 依赖未完成：task-MMM 当前状态为「<status>」。
-     请先 close 依赖 task，再重新运行 /task-confirm <task-file>。
+     请先 close 依赖 task，再重新运行 /pmai-task-confirm <task-file>。
      ```
    - 不创建 worktree，不修改 task 状态。
 5. 全部依赖均为「已完成」时，通过检查，继续步骤 4。
@@ -178,7 +178,7 @@ task 文件进入 req 分支作为最终历史档案。（v3 单文件只删一�
 
 ### 步骤 5：检测 PENDING_COUNT（决定步骤 6 的命令分支）
 
-`/task-confirm` 只负责确认、依赖 gate 和创建 worktree；不启动 agent，不调用 `task-transition.py`。task 状态保持「待执行」，直到 PM 在新窗口运行 `/task-execute` 后由入口前置逻辑转换为「执行中」。
+`/pmai-task-confirm` 只负责确认、依赖 gate 和创建 worktree；不启动 agent，不调用 `task-transition.py`。task 状态保持「待执行」，直到 PM 在新窗口运行 `/pmai-task-execute` 后由入口前置逻辑转换为「执行中」。
 
 检测 `PENDING_COUNT`：
 
@@ -187,11 +187,11 @@ task 文件进入 req 分支作为最终历史档案。（v3 单文件只删一�
 
 启动模式（关键）：
 
-PM 在新终端窗口里**保持在当前 req worktree 目录**（不进 task worktree），用 `claude --add-dir $MAIN_REPO_ROOT` 启动新 Claude 会话。`--add-dir` 把主仓根加进 Bash 沙盒，让后续 `/task-execute` 入口能持久 cd 进 task worktree。如果不加 `--add-dir`，cd 会被 Claude Code 沙盒 reset，task-execute 失败。
+PM 在新终端窗口里**保持在当前 req worktree 目录**（不进 task worktree），用 `claude --add-dir $MAIN_REPO_ROOT` 启动新 Claude 会话。`--add-dir` 把主仓根加进 Bash 沙盒，让后续 `/pmai-task-execute` 入口能持久 cd 进 task worktree。如果不加 `--add-dir`，cd 会被 Claude Code 沙盒 reset，task-execute 失败。
 
 ### 步骤 6：给 PM 可复制命令输出
 
-**输出模板**（`$MAIN_REPO_ROOT` 必须展开成 PM 可直接复制的绝对路径；最后 `/task-execute` 那行按 PENDING_COUNT 选一条）：
+**输出模板**（`$MAIN_REPO_ROOT` 必须展开成 PM 可直接复制的绝对路径；最后 `/pmai-task-execute` 那行按 PENDING_COUNT 选一条）：
 
 ```
 已准备 Task-<id>
@@ -210,10 +210,10 @@ PM 在新终端窗口里**保持在当前 req worktree 目录**（不进 task wo
 ▶ Next Up — 开新终端窗口（保持当前 req worktree 目录，别 cd 走）：
 
    claude --add-dir <主仓根绝对路径>
-   /task-execute                  ← PENDING_COUNT == 1
-   /task-execute task-<id>        ← PENDING_COUNT > 1（必须带短 ID 避免新窗口误选）
+   /pmai-task-execute                  ← PENDING_COUNT == 1
+   /pmai-task-execute task-<id>        ← PENDING_COUNT > 1（必须带短 ID 避免新窗口误选）
 
-主窗口随时跑 /task-status 看 task 进度。
+主窗口随时跑 /pmai-task-status 看 task 进度。
 ```
 
 **执行方式列表渲染规则**（必须列全 4 项，按当前 → 其余字母序）：
@@ -243,7 +243,7 @@ PM 在新终端窗口里**保持在当前 req worktree 目录**（不进 task wo
 - 标题块用 emoji 锚点（📂 worktree / 🚀 执行方式 / ▶️ 下一步）让 PM 视线快速分段
 - worktree 路径独立成段、缩进展示，不再跟"已准备 Task-X"挤同一行
 - 执行方式必须**列全**，PM 看到所有可选才能判断要不要换；"想换告诉我"只列一个当前选很难触发 PM 的反悔意识
-- `/task-execute` 那行根据 PENDING_COUNT 输出**其中一条**（不要把两条都贴给 PM 让他选；AI 算 PENDING_COUNT 后直接选）
+- `/pmai-task-execute` 那行根据 PENDING_COUNT 输出**其中一条**（不要把两条都贴给 PM 让他选；AI 算 PENDING_COUNT 后直接选）
 - **不输出**"如果决定放弃……"中止流程——PM 真要放弃直接说「放弃 task-NNN」即可，不在主路径列出避免噪音
 
 ## Rules
@@ -251,7 +251,7 @@ PM 在新终端窗口里**保持在当前 req worktree 目录**（不进 task wo
 - 必须在 req worktree 中执行（WORKTREE_TYPE 应为 req）
 - task 文件路径如果是相对路径，基于当前 req worktree 解析
 - 状态转换必须通过 task-transition.py，不能手动改状态字段
-- /task-confirm 不转换为「执行中」；转换发生在 /task-execute 入口前置
+- /pmai-task-confirm 不转换为「执行中」；转换发生在 /pmai-task-execute 入口前置
 - 输出给 PM 的 `claude --add-dir <path>` 必须是展开后的绝对路径（不能是 `$MAIN_REPO_ROOT` 字面量），让 PM 能直接复制粘贴执行
 - 步骤 6 输出：执行方式块**必须列全 4 项**（claude-code / codex / cursor-agent / manual），▶ 标当前选，紧跟反悔提示；worktree 路径用 📂 emoji 标段；下一步命令用 ▶️ emoji 标段。不主动列"如果决定放弃……"中止流程，PM 真要放弃直接说「放弃 task-NNN」
 - plan review 是 PM 自跑推荐项（I-RV1/I-RV2），不当 confirm gate；步骤 1.5 仅做 informational 摘要

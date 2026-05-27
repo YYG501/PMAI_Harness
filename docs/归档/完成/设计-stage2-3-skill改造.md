@@ -37,7 +37,7 @@
 
 ```
 req-stage-gate
-  ├─ 调 /req-analysis（异步等待返回；返回时 = 隐含 reviewer PASS 契约）
+  ├─ 调 /pmai-req-analysis（异步等待返回；返回时 = 隐含 reviewer PASS 契约）
   ├─ grep analysis.md 的 ## 未决问题 section → 走闸门
   └─ PM 答完 → 推进 stage 2
 
@@ -88,14 +88,14 @@ req-solution（自包含）
 name: req-analysis
 description: |
   Stage 2：读 brief.md 做第一性原理批判性分析，写 analysis.md（10 章固定结构 + ## 未决问题 section），
-  内部循环调 analysis-reviewer 直到 PASS。由 /req-stage-gate 在 stage 1→2 时调用。
+  内部循环调 analysis-reviewer 直到 PASS。由 /pmai-req-stage-gate 在 stage 1→2 时调用。
 ---
 ```
 
 ### 段落结构（约 180 行，按以下顺序）
 
 1. **Preamble**（≈3 行）— 与 task-plan 一致：source skill-preamble.sh + echo SKILL 名。
-2. **When To Use**（≈3 行）— "Orchestrator 在 stage 1→2 调用（由 /req-stage-gate 触发）"。
+2. **When To Use**（≈3 行）— "Orchestrator 在 stage 1→2 调用（由 /pmai-req-stage-gate 触发）"。
 3. **Role 角色设定**（≈8 行）— 从旧仓 §Role 摘核心 5 条特质 + 1 条核心信条 + 5 条行为准则。砍掉旧仓的"务实主义者""透明化不确定性"展开，简洁化。
 4. **Required Inputs**（≈4 行）—
    - `$ACTIVE_REQ_DIR/brief.md`（必需）
@@ -161,14 +161,14 @@ description: |
 name: req-solution
 description: |
   Stage 3：读 analysis.md 做系统分层、模块边界、分期计划，写 solution.md（10 章固定结构 + Mermaid 架构图）。
-  由 /req-stage-gate 在 stage 2→3 时调用；review 与推进交回调度 skill。
+  由 /pmai-req-stage-gate 在 stage 2→3 时调用；review 与推进交回调度 skill。
 ---
 ```
 
 ### 段落结构（约 200 行，按以下顺序）
 
 1. **Preamble**（≈3 行）— 同上。
-2. **When To Use**（≈5 行）— "Orchestrator 在 stage 2→3 调用（由 /req-stage-gate 触发）" + 旧仓的"复杂需求才需要"提示（多服务/新基础设施/>3 模块）。
+2. **When To Use**（≈5 行）— "Orchestrator 在 stage 2→3 调用（由 /pmai-req-stage-gate 触发）" + 旧仓的"复杂需求才需要"提示（多服务/新基础设施/>3 模块）。
 3. **Required Inputs**（≈5 行）—
    - `$ACTIVE_REQ_DIR/analysis.md`（必需）
    - `$ACTIVE_REQ_DIR/brief.md`（必需）
@@ -177,7 +177,7 @@ description: |
 4. **Workflow**（≈20 行）—
    - 步骤 0 Discovery：读 analysis.md，识别分期 / 架构关键依赖 / 全局约束 是否已明确，有缺口先编号提问 PM（这是 stage 3 内部的小 Q&A，跟 stage 2 的未决问题不同——stage 3 没有"未决问题闸门"硬规则，但 PM 没回答前不要硬写方案）
    - 步骤 1：按下方 §文档结构 写完整 `$ACTIVE_REQ_DIR/solution.md`
-   - 步骤 2：skill 结束，控制权交回 /req-stage-gate（由它跑 /plan-ceo-review + 走确认门）
+   - 步骤 2：skill 结束，控制权交回 /pmai-req-stage-gate（由它跑 /plan-ceo-review + 走确认门）
    - **禁止项**：禁止 skill 内部走确认门、调 req-transition.py
 5. **文档结构**（≈100 行）— 旧仓 §文档结构 10 章原样搬，路径调整：
    1. 摘要
@@ -201,7 +201,7 @@ description: |
 |---|---|---|
 | 输入文件 | `docs/analysis.md` + `docs/input.md` | `$ACTIVE_REQ_DIR/analysis.md` + `$ACTIVE_REQ_DIR/brief.md` |
 | 输出文件 | `docs/solution.md` | `$ACTIVE_REQ_DIR/solution.md` |
-| 阶段 3 结束模板 | 旧 §阶段 3 结束模板（两步确认） | **删除**（交回 /req-stage-gate） |
+| 阶段 3 结束模板 | 旧 §阶段 3 结束模板（两步确认） | **删除**（交回 /pmai-req-stage-gate） |
 | Few-shots 引用 | 旧 `references/few-shots.md` | **搬过来** → `skills/req-solution/references/few-shots.md`。理由：项目走工程化方向，需要稳定的输出粒度，canonical example 约束 LLM；PM=作者=用户，"等用户 complain" 不是有效反馈回路。skill 末尾加一行：`读取 .claude/skills/req-solution/references/few-shots.md 获取各章节示例` |
 | `/plan-eng-review` `/plan-design-review` 提示 | 旧 §模块优先级排序框架末尾"可选工具" | 保留 |
 
@@ -219,14 +219,14 @@ description: |
 ### Stage 1 → 2（感受问题 → 需求分析）
 
 1. 检查 `brief.md` 存在且有内容
-2. **调用 /req-analysis**
+2. **调用 /pmai-req-analysis**
    - skill 内部完成：读 brief + CONTEXT、第一性原理分析、写 analysis.md（含 10 章 + ## 未决问题 section）、循环调 analysis-reviewer 到 PASS
    - skill 返回 = 契约保证 analysis.md 已 PASS。**orchestrator 不重复调 reviewer**
 3. **未决问题闸门**（保留现 §6 / §7 全部逻辑）
    - grep `## 未决问题` section 下 `**PM 回答：**` 占位
    - 有空 → 答题模式（A 逐题答 / B 修改 analysis）
    - 全填 → 推进模式（A 进 stage 3 / B 修改 / C 跳到 stage 5 后续 req 可选）
-   - PM 选 B 修改 → 回步骤 2 重调 /req-analysis（analysis 改了 reviewer 在 skill 内重评，orchestrator 仍不参与 reviewer）
+   - PM 选 B 修改 → 回步骤 2 重调 /pmai-req-analysis（analysis 改了 reviewer 在 skill 内重评，orchestrator 仍不参与 reviewer）
 4. PM 答完 / 确认推进 → 执行推进命令：
     python3 .claude/scripts/req-transition.py "$ACTIVE_REQ_DIR" --to 2
 ```
@@ -277,7 +277,7 @@ Stage 3→4 / Stage 4 / Stage 4→5 / Stage 5→6 / Stage 6→7 / Rules 段全�
 - `${LEGACY_REPO_ROOT}/.claude/skills/solution-design/references/few-shots.md`（**直接 copy** 到 `skills/req-solution/references/few-shots.md`）
 
 复用约定：
-- 参照 `skills/task-plan/SKILL.md` 的 frontmatter / Preamble / "由 /req-stage-gate 触发" 措辞，保持新仓 skill 风格一致
+- 参照 `skills/task-plan/SKILL.md` 的 frontmatter / Preamble / "由 /pmai-req-stage-gate 触发" 措辞，保持新仓 skill 风格一致
 - 参照 `agents/analysis-reviewer.md` 的输入路径约定（`$ACTIVE_REQ_DIR/analysis.md`、`$ACTIVE_REQ_DIR/brief.md`）
 
 ---
@@ -296,8 +296,8 @@ Stage 3→4 / Stage 4 / Stage 4→5 / Stage 5→6 / Stage 6→7 / Rules 段全�
 人工验证步骤（无自动化测试，新仓 tests/ 没有 stage 2/3 e2e 测试用例）：
 
 1. **手工跑一个测试 req**：
-   - `/new-req "测试 stage 2/3 skill 改造"` → 进 stage 1，写 brief.md
-   - `/req-stage-gate` → 应触发 /req-analysis
+   - `/pmai-new-req "测试 stage 2/3 skill 改造"` → 进 stage 1，写 brief.md
+   - `/pmai-req-stage-gate` → 应触发 /pmai-req-analysis
 2. **检查 stage 2**：
    - analysis.md 含 10 章 + `## 未决问题` section
    - skill 自动调用 analysis-reviewer，输出评审报告
@@ -437,7 +437,7 @@ PM 对 4 个澄清问题的回答：
 - req-analysis 顶部加了 §接口契约 表，明示与 orchestrator 的边界
 - req-analysis Workflow 步骤 5 写死"reviewer 完整循环在 skill 内部跑完"，步骤 6 列 6 条硬禁止项
 - req-solution 顶部同样加 §接口契约 表
-- req-stage-gate Stage 1→2 段从 4 步精简：调 /req-analysis（信任 PASS 契约）→ 闸门 → 答题处理 → 推进；不再内联 Role/reviewer 调用样例/4 层框架
+- req-stage-gate Stage 1→2 段从 4 步精简：调 /pmai-req-analysis（信任 PASS 契约）→ 闸门 → 答题处理 → 推进；不再内联 Role/reviewer 调用样例/4 层框架
 - req-stage-gate Stage 2→3 段：调 /req-solution → /plan-ceo-review → 确认门 → 推进
 - few-shots.md 直接 copy（139 行），skill 末尾引用 `.claude/skills/req-solution/references/few-shots.md`
 

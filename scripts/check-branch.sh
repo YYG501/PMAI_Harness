@@ -285,14 +285,14 @@ if [ "$BRANCH" = "main" ] || [ "$BRANCH" = "master" ]; then
       # 这些文档首次创建时可写（init），后续修改必须走 req 分支
       # 用 git log 判断：如果还没 commit 过，允许；否则拒绝
       if git -C "$REPO_ROOT" log --oneline -1 -- "$REL_PATH" 2>/dev/null | grep -q .; then
-        deny "文档 $REL_PATH 已存在，不能在 main 分支直接修改。请通过 req 分支修改（/doc-update）。"
+        deny "文档 $REL_PATH 已存在，不能在 main 分支直接修改。请通过 req 分支修改（/pmai-doc-update）。"
       fi
       MAIN_WRITE_ALLOWED=true
       ;;
   esac
 
   if [ "$MAIN_WRITE_ALLOWED" != "true" ]; then
-    deny "main 分支写保护：不允许直接修改 ${REL_PATH}。业务代码和文档必须通过 req/task 分支操作。如需初始化新项目，请用 /init-project 创建新的业务项目仓。"
+    deny "main 分支写保护：不允许直接修改 ${REL_PATH}。业务代码和文档必须通过 req/task 分支操作。如需初始化新项目，请用 /pmai-init-project 创建新的业务项目仓。"
   fi
 fi
 
@@ -319,7 +319,7 @@ esac
 # ======================================================
 # GATE 5: Task 状态约束（I-CB10）
 # 只有 task 状态 == 执行中 才允许写 task worktree 下的代码。
-# 目的：防 agent 跳过 /task-confirm → task-transition → /task-execute 流程直接写代码。
+# 目的：防 agent 跳过 /pmai-task-confirm → task-transition → /pmai-task-execute 流程直接写代码。
 # ======================================================
 case "$BRANCH" in
   task-*)
@@ -338,12 +338,12 @@ case "$BRANCH" in
         TASK_FILE="$MAIN_REPO_ROOT/.worktrees/$BRANCH"
         TASK_FILE=$(find "$MAIN_REPO_ROOT/.worktrees" -type f -path "*/tasks/${BRANCH}.md" 2>/dev/null | head -1)
         if [ -z "$TASK_FILE" ] || [ ! -f "$TASK_FILE" ]; then
-          deny "I-CB10: 找不到 task 分支 ${BRANCH} 对应的 task 文件，无法校验状态。请通过 /task-confirm 正常创建。"
+          deny "I-CB10: 找不到 task 分支 ${BRANCH} 对应的 task 文件，无法校验状态。请通过 /pmai-task-confirm 正常创建。"
         fi
 
         TASK_STATUS=$(python3 "$SCRIPT_DIR/task-transition.py" "$TASK_FILE" --get-status 2>/dev/null || echo "")
         if [ "$TASK_STATUS" != "执行中" ]; then
-          deny "I-CB10: task 状态为「${TASK_STATUS:-未知}」，不允许写 task worktree 代码。正确流程：1) /task-confirm 转「执行中」  2) /task-execute 启动执行器  3) 再改代码。若需补填 task 文件的执行日志/文档偏差/自审记录，只能改 task 文件本身。"
+          deny "I-CB10: task 状态为「${TASK_STATUS:-未知}」，不允许写 task worktree 代码。正确流程：1) /pmai-task-confirm 转「执行中」  2) /pmai-task-execute 启动执行器  3) 再改代码。若需补填 task 文件的执行日志/文档偏差/自审记录，只能改 task 文件本身。"
         fi
         ;;
     esac

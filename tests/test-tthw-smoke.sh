@@ -26,7 +26,7 @@ PY
 }
 
 test_contract_is_documented() {
-  start_test "T1: /new-req 文档引用 create-req-headless.sh 作为状态创建契约"
+  start_test "T1: /pmai-new-req 文档引用 create-req-headless.sh 作为状态创建契约"
   assert_file_exists "$REPO_ROOT/scripts/create-req-headless.sh" || return
   assert_file_exists "$MEASURE_TTHW" || return
   assert_file_contains "$NEW_REQ_SKILL" "create-req-headless.sh" || return

@@ -1,12 +1,12 @@
 ---
-name: close-req
+name: pmai-close-req
 description: |
   Req 关闭：写 close-report、更新 PRD、merge 到 main、归档。
 ---
 
-# /close-req
+# /pmai-close-req
 
-> **PM 视图（M2 banner + Decision gate label）**：入口 banner（`status-view.py --banner-only --skill CLOSE-REQ`）；close-report 定稿闸门 label 按 `_shared/pm-view/banner-rules.md` §3 3 硬规则；退出 Next Up 引导「项目方向是否需要调整」（`/project-solution` 产品路线规划场景）或 `/new-req` 起下一 req。
+> **PM 视图（M2 banner + Decision gate label）**：入口 banner（`status-view.py --banner-only --skill CLOSE-REQ`）；close-report 定稿闸门 label 按 `_shared/pm-view/banner-rules.md` §3 3 硬规则；退出 Next Up 引导「项目方向是否需要调整」（`/pmai-project-solution` 产品路线规划场景）或 `/pmai-new-req` 起下一 req。
 >
 > **PM 答题规则（M4）**：所有 AskUserQuestion 调用按 `_shared/pm-view/askuser-rules.md` §1 3 硬规则走（空答 STOP / 没拿到答案禁止 merge to main / runtime 退化保留 wait）。
 
@@ -17,15 +17,15 @@ description: |
 
 ## 两阶段调用（必读）
 
-`/close-req` 设计为两阶段调用，AI 根据 cwd 自动判断当前阶段：
+`/pmai-close-req` 设计为两阶段调用，AI 根据 cwd 自动判断当前阶段：
 
 - **Phase 1**（cwd 在 req worktree 内）：写 close-report、PRD、commit、登记待 finalize marker
 - **Phase 2**（cwd 在主仓，不在任何 worktree 内）：merge → main、删 worktree/branch、清 marker
 
 PM 体感：
-1. 在 req 窗口运行 `/close-req` → AI 走 Phase 1 → 提示切到主仓窗口
+1. 在 req 窗口运行 `/pmai-close-req` → AI 走 Phase 1 → 提示切到主仓窗口
 2. PM 切到主仓窗口
-3. 在主仓窗口运行 `/close-req` → AI 走 Phase 2 → 完全关闭
+3. 在主仓窗口运行 `/pmai-close-req` → AI 走 Phase 2 → 完全关闭
 
 ## Preamble
 
@@ -201,7 +201,7 @@ PENDING_MARKER="$REPO_ROOT/.runs/pending-close-req.json"
 
 **quickfix 历史改动处理**：
 
-`/quick-fix` 改 `docs/modules/*.md` 是**旁路**（不走 close-task → close-req 流程），但 modulespec 当前文件状态已包含 quickfix 改动（git working tree）。步骤 1.5 调 doc-update §8 rewrite mode 时，**输入是「当前 modulespec 全文 + 本 req 各 task 偏差」**，quickfix 改动天然包含在 baseline 里 → 不需要额外收集机制。如果 PM 想审 quickfix 历史 → 看 `git log --grep '\[quick-fix\]' -- docs/modules/`，与 rewrite 流程解耦。
+`/pmai-quick-fix` 改 `docs/modules/*.md` 是**旁路**（不走 close-task → close-req 流程），但 modulespec 当前文件状态已包含 quickfix 改动（git working tree）。步骤 1.5 调 doc-update §8 rewrite mode 时，**输入是「当前 modulespec 全文 + 本 req 各 task 偏差」**，quickfix 改动天然包含在 baseline 里 → 不需要额外收集机制。如果 PM 想审 quickfix 历史 → 看 `git log --grep '\[quick-fix\]' -- docs/modules/`，与 rewrite 流程解耦。
 
 **PM 拒绝处理**：PM 决议过程中拒绝任一 rewrite / patch（不接受 AI 草稿）→ close-req 中止，下次重跑 close-req 时回到步骤 1.5 重新决议。不要尝试"半重写"。
 
@@ -412,13 +412,13 @@ AI 向 PM 输出结束语，req 窗口工作到此结束：
 ```
 ✅ Req 文档已 commit，stage = 7，已登记待 finalize marker。
 
-▶ Next Up — 切到主仓窗口跑 /close-req：
+▶ Next Up — 切到主仓窗口跑 /pmai-close-req：
 
-如果主仓窗口还开着：直接切过去运行 `/close-req`
+如果主仓窗口还开着：直接切过去运行 `/pmai-close-req`
 如果主仓窗口已关：
   cd <MAIN_REPO_ROOT>     ← 替换为主仓根绝对路径
   claude
-  /close-req
+  /pmai-close-req
 
 AI 会自动走 Phase 2 完成 merge + 删 worktree/branch。
 ```
@@ -432,7 +432,7 @@ AI 会自动走 Phase 2 完成 merge + 删 worktree/branch。
 ```bash
 if [ ! -f "$PENDING_MARKER" ]; then
   echo "❌ 没有待 finalize 的 req。"
-  echo "   如要启动 close-req，请进 req worktree 后调用 /close-req"
+  echo "   如要启动 close-req，请进 req worktree 后调用 /pmai-close-req"
   exit 1
 fi
 
@@ -464,8 +464,8 @@ rm -f "$PENDING_MARKER"
 ✅ Req 已完全关闭：<req-id>
 📍 当前位置：主仓 main 分支
 
-▶ Next Up — /new-req "<下一个需求>"（开始下一 req）
-         或 /project-solution（产品路线规划，重新审视项目方向）
+▶ Next Up — /pmai-new-req "<下一个需求>"（开始下一 req）
+         或 /pmai-project-solution（产品路线规划，重新审视项目方向）
 ```
 
 ## Rules

@@ -104,7 +104,7 @@ if [ -n "$DIRTY" ]; then
   if [ -n "$BAD" ]; then
     echo "❌ main 分支有与本 req 无关的未提交改动，拒绝 cancel 以防污染 cancel commit：" >&2
     echo "$BAD" >&2
-    echo "请先处理（commit、stash 或 reset）这些改动，然后重新运行 /cancel-req。" >&2
+    echo "请先处理（commit、stash 或 reset）这些改动，然后重新运行 /pmai-cancel-req。" >&2
     exit 1
   fi
 fi

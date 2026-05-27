@@ -117,7 +117,7 @@ gap-check 的本质 = **每个 req 一道「逐组件判复用 vs 新建」的�
 | 怎么做 | 读 PRD（stage 3 产出）枚举本 req 要建的**界面 / 交互 / 组件**；逐个对 `DESIGN.md` 的组件 inventory 判定 |
 | 逐组件判定 | inventory 里**有** → **复用**（设计输出指向它）；**没有** → **新建** + 加进 `DESIGN.md` inventory |
 | 缺设计规范 | 缺的（布局 / 交互 / 无障碍 / 新组件）→ AI 列、PM 逐个表态：补（写进 `DESIGN.md`）/ 显式跳过 |
-| 产物 | gap-check 是**交互关口** —— 产物 = PM 在 chat 逐组件表态这个过程本身 + **新建组件入 `DESIGN.md` inventory**（持久化的只有这个）。**不单独落 per-req 文件、不写 PRD**（§X D9-1）—— v1 原写「记进 PRD 原型节」，但 delta-2+4 §2.5「PRD stage 3 定稿冻结」、F19 禁写回冻结 PRD 基准；gap-check stage 4 跑、晚于 stage 3，写不进。复用决策的下游需求由 delta-8 `/implementation-design` 读 `DESIGN.md` inventory 承接（§2.8 / delta-8 §X Round 3 X2）|
+| 产物 | gap-check 是**交互关口** —— 产物 = PM 在 chat 逐组件表态这个过程本身 + **新建组件入 `DESIGN.md` inventory**（持久化的只有这个）。**不单独落 per-req 文件、不写 PRD**（§X D9-1）—— v1 原写「记进 PRD 原型节」，但 delta-2+4 §2.5「PRD stage 3 定稿冻结」、F19 禁写回冻结 PRD 基准；gap-check stage 4 跑、晚于 stage 3，写不进。复用决策的下游需求由 delta-8 `/pmai-implementation-design` 读 `DESIGN.md` inventory 承接（§2.8 / delta-8 §X Round 3 X2）|
 | 硬度 | 不硬卡出 stage 4，但**强制 PM 对每个「缺 / 新建」逐个表态** —— 不能 silent 忽略 |
 | 前提 | `DESIGN.md` 须先升级成「有明确块的具体合约」（§2.7）；**已有项目的 `docs/DESIGN.md` 经 legacy 迁移升级**（§X D9-3 —— 框架同步只动模板、不动业务实例文档，旧项目 `docs/DESIGN.md` 须经 legacy readiness gate mini-upgrade，否则 gap-check 无 inventory 可查。见 §3 vp-4b）|
 
@@ -152,7 +152,7 @@ gap-check 的本质 = **每个 req 一道「逐组件判复用 vs 新建」的�
 - 用词 / 术语不进 `PRODUCT-RULES.md`。
 - **`input-flow.md §9.4` routing 表的最终结构由 delta-9 收口**（§X 连带）—— 现役四类被 supersede；delta-3 只改 task-spec 的 relevance 消费逻辑、不独立改 §9.4 表，delta-9 vp-6 画出合并后的 §9.4 全表（含 delta-3 的 relevance 维度 + 本 §2.8 多去向 routing）。单一 owner = delta-9，避免两 delta 各改一半、最终态无人画。
 - delta-3 §2.4「跨模块反馈」已改指 delta-9（已落地）。
-- **gap-check 的复用决策喂给 delta-8**（§X D9-7）—— delta-8 `/implementation-design`（stage 5）输入加 `DESIGN.md` 组件 inventory，§2 文件·模式索引据此写「复用现有组件 X」，与 gap-check（stage 4 先更新 inventory）读同一份、顺序天然一致。
+- **gap-check 的复用决策喂给 delta-8**（§X D9-7）—— delta-8 `/pmai-implementation-design`（stage 5）输入加 `DESIGN.md` 组件 inventory，§2 文件·模式索引据此写「复用现有组件 X」，与 gap-check（stage 4 先更新 inventory）读同一份、顺序天然一致。
 - **与 GSD 的差异**：GSD 每 phase 重生成 UI-SPEC；我们一份累积 `DESIGN.md` + 每 req gap-check —— req 粒度细，累积清单才是 reuse 的底座。
 
 ---
@@ -185,7 +185,7 @@ gap-check 的本质 = **每个 req 一道「逐组件判复用 vs 新建」的�
 
 **落地顺序**：vp-4 / vp-4b（DESIGN.md 升级 + legacy 迁移，gap-check 的前提）→ vp-1 / vp-5（PRODUCT-RULES.md / gap-check）→ vp-2 / vp-3（写 / 读）→ vp-6（测试 + 连带）。delta-9 整体在 umbrella §8 step 6，vp-3 后置增补已重写完的 task-spec / prd-writing。
 
-**消费侧衔接**：close-task / task-spec / prd-writing / req-stage-gate（stage 4）/ delta-8 `/implementation-design` —— 与 delta-2+4、delta-3、delta-8 撞同文件，整包实施按 delta-3 §3 ownership 表 + umbrella §8 协调。
+**消费侧衔接**：close-task / task-spec / prd-writing / req-stage-gate（stage 4）/ delta-8 `/pmai-implementation-design` —— 与 delta-2+4、delta-3、delta-8 撞同文件，整包实施按 delta-3 §3 ownership 表 + umbrella §8 协调。
 
 ---
 
@@ -205,7 +205,7 @@ gap-check 的本质 = **每个 req 一道「逐组件判复用 vs 新建」的�
 | D9-4 | High | vp-2 close-task PRODUCT-RULES promote 与步骤 1.5「视觉规范→DESIGN.md」同型，但现役步骤 2.1 worktree-clean 检查（`close-task/SKILL.md:290`）+ close-task.sh carry-forward 是 `docs/DESIGN.md` 专属白名单 → 未 commit 的 PRODUCT-RULES.md 会拌倒 worktree-clean（commit `6382baf` 已为 DESIGN.md 修过同类 bug）| §0.1 | `close-task/SKILL.md:290`、`close-task.sh:138-178`、commit `6382baf` | **ACCEPT** — vp-2 显式补 blast radius：close-task SKILL §2.1 + close-task.sh worktree-clean / carry-forward 都加 `docs/PRODUCT-RULES.md` 白名单 |
 | D9-5 | High | vp-3 独立 patch task-spec + prd-writing 必读清单，但 delta-3 §3 ownership「delta-3 独占 task-spec 重写」、delta-2+4 vp-3 重写 prd-writing，delta-9 不在任何 ownership 表（对照 delta-7 vp-2 / delta-8 vp-3 皆 fold 进 owner）| §0.3 | delta-3 §3 ownership 表 | **ACCEPT** — delta-9 vp-3 保持独立（整体 step 6、patch 已重写完的 skill、只加 reading-list 行 = 后置轻量增补，非参与 rewrite）；delta-3 §3 + delta-2+4 §3 加登记行注明「delta-9 vp-3 后置增补 reader」。不 fold（fold 会逼 delta-9 vp-1 前移、撕碎 delta-9 跨 step）|
 | D9-6 | Medium | §2.4 task-spec「生成每个 task 时」全文读 `PRODUCT-RULES.md`，该文件 §2.2 累积式只增（无 scope 字段、靠 PM 手动剪）→ 长项目 per-task 读取成本隐性涨（框架 reading-convergence 是 active 关注，memory `feedback_skill_reading_convergence` / TODOS TD-X 组）| §0.3 | §2.2 / §2.4、memory `feedback_skill_reading_convergence` | **ACCEPT** — 改章节-grep 收敛：§2.2 每条规则加 scope 字段「全局」/「域限定:<关键词>」；task-spec 读全部「全局」+ grep 命中的域限定规则（跨功能规则标全局、永不漏；域限定才 grep 跳过）。§2.2「无 scope 字段」+ §2.4 读取逻辑改写 |
-| D9-7 | High（codex outside-voice）| delta-8 `/implementation-design` producer 输入（brief+analysis+PRD+CONTEXT）无 `DESIGN.md` → implementation-design §2 文件·模式索引自行重推「照哪些现有组件写」，与 gap-check 组件复用关口脱节、可能复发「组件不复用」于 HOW 层 | §0.1(B) | delta-8 §4 vp-2 | **ACCEPT** — delta-8 vp-2 `/implementation-design` 输入加 `DESIGN.md`（组件 inventory）；gap-check（stage 4）先更新 inventory、implementation-design（stage 5）后读，顺序天然一致（连带改 delta-8，见其 §X Round 3）|
+| D9-7 | High（codex outside-voice）| delta-8 `/pmai-implementation-design` producer 输入（brief+analysis+PRD+CONTEXT）无 `DESIGN.md` → implementation-design §2 文件·模式索引自行重推「照哪些现有组件写」，与 gap-check 组件复用关口脱节、可能复发「组件不复用」于 HOW 层 | §0.1(B) | delta-8 §4 vp-2 | **ACCEPT** — delta-8 vp-2 `/pmai-implementation-design` 输入加 `DESIGN.md`（组件 inventory）；gap-check（stage 4）先更新 inventory、implementation-design（stage 5）后读，顺序天然一致（连带改 delta-8，见其 §X Round 3）|
 | D9-8 | Medium（codex outside-voice）| §2.3 PRODUCT-RULES.md 只有 close-task 一个写入口；prd-writing 读它却不能写 → 规划期（stage 3/4）发现的全项目产品行为规则若非某 task 的 PM 反馈则无沉淀路径 | §0.1 | §2.3 / §2.4 | **ACCEPT** — prd-writing（stage 3）加 candidate PRODUCT-RULES promote 入口（PM-selective，同 close-task selective 模式）；由 **delta-9 自己在 umbrella step 6 加**（patch 已重写完的 prd-writing，同 D9-5 reading-list 后置增补）。**不并入 delta-2+4 vp-3** —— `PRODUCT-RULES.md` 由 delta-9 vp-1 在 step 6 创建，delta-2+4 vp-3（step 2）引用不到，会 forward-reference |
 | D9-9 | High | vp-6「测试 + SOP + 连带」无 per-vp test matrix（delta-2/3/4/8 皆有）；缺 IRON in-flight-req 回归（在飞 req 无 PRODUCT-RULES.md、旧 DESIGN.md → 读侧容错）+ skippable-stage-4 触发 / 未升级 DESIGN.md 行为 / 6382baf-class worktree-clean 回归 | §0.3 | delta-2+4 §X F9 先例 | **ACCEPT** — vp-6 升级为完整 per-vp test matrix（含上述 GAP）；IRON in-flight-req 回归 + 6382baf-class 回归按 REGRESSION RULE 强制加 |
 | D9-10 | — | umbrella §8 把 delta-9 排 step 6（delta-2+4 step 2 / delta-3 step 4 之后）→ delta-9 只能二次 patch 已重写的 prd-writing/task-spec；req-stage-gate 被 delta-2+4/8/9 三 delta 改、无 ownership 行 | — | codex#1 | **DEFER** — 本轮 umbrella §8「读不审」；连同 delta-7/9 排序、req-stage-gate ownership、整包验收留到整包复跑 /plan-eng-review 重评 |

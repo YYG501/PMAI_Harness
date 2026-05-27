@@ -65,7 +65,7 @@ if [ "$STATUS" != "已完成" ]; then
 fi
 
 # --- 偏差记录留作 close-req 聚合输入 ---
-# 不在 close-task 阶段调 /doc-update（避免 N 次启动成本累加，§0.1 痛点）。
+# 不在 close-task 阶段调 /pmai-doc-update（避免 N 次启动成本累加，§0.1 痛点）。
 # 偏差原样保留在 task 文件，由 close-req 步骤 1.5 聚合处理。
 # .md §0.1 + §1 + §3 。
 # 历史 collect_diff_section helper + DOC_DIFF 阻塞 block 已删。
@@ -128,7 +128,7 @@ if [ "$CALLER_PWD" != "$REQ_WT_REAL" ] && [[ "$CALLER_PWD" != "$REQ_WT_REAL"/* ]
   echo "❌ close-task Phase 2 必须在 req worktree cwd 内运行。" >&2
   echo "   当前 cwd: $CALLER_PWD" >&2
   echo "   期望:     $REQ_WT_REAL" >&2
-  echo "   提示：close-task 是两阶段调用——Phase 1 在 task 窗口（对齐/偏差/commit/写 marker），完成后切到 req 窗口跑 /close-task 进 Phase 2（merge + 清理）。" >&2
+  echo "   提示：close-task 是两阶段调用——Phase 1 在 task 窗口（对齐/偏差/commit/写 marker），完成后切到 req 窗口跑 /pmai-close-task 进 Phase 2（merge + 清理）。" >&2
   exit 1
 fi
 
@@ -159,7 +159,7 @@ if [ -n "$TASK_WORKTREE" ] && [ -d "$TASK_WORKTREE" ]; then
     echo "请先在 task worktree 中提交：" >&2
     echo "  cd $TASK_WORKTREE" >&2
     echo "  git add -A && git commit -m \"wip: <描述>\"" >&2
-    echo "然后重新运行 /close-task。" >&2
+    echo "然后重新运行 /pmai-close-task。" >&2
     exit 1
   fi
 
@@ -182,7 +182,7 @@ if [ -n "$REQ_UNCOMMITTED" ]; then
   echo "请先在 req worktree 中提交：" >&2
   echo "  cd $REQ_WORKTREE" >&2
   echo "  git add -A && git commit -m \"chore: <描述>\"" >&2
-  echo "然后重新运行 /close-task。" >&2
+  echo "然后重新运行 /pmai-close-task。" >&2
   exit 1
 fi
 

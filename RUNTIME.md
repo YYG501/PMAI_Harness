@@ -38,9 +38,9 @@
 **PM 视角变化**（用 req-008 跑下来对比）：操作次数从 ~7 次降到 ~6 次（数量差不多），但**质量大变** —— 0 次低价值"看了，过"门、N 次结构决策被前置到决策当下问、stage 6 入口给一次性总览（自决项 + PM 拍过项 + task 拆分 + 产物路径，PM 一眼判断是否进 task 执行）。
 
 **vp-7/8 增量（同日批次）**：
-- **vp-7** `skills/task-spec/SKILL.md` 步骤 11 改"续跑 /task-confirm"，PM 不再手动贴命令；`skills/task-confirm/SKILL.md` When To Use 段加续跑触发分支。失败兜底走旧手动调 escape hatch
+- **vp-7** `skills/task-spec/SKILL.md` 步骤 11 改"续跑 /pmai-task-confirm"，PM 不再手动贴命令；`skills/task-confirm/SKILL.md` When To Use 段加续跑触发分支。失败兜底走旧手动调 escape hatch
 - **vp-8** `skills/task-plan/SKILL.md` 加步骤 3.5 "PM 拍板执行模式（结构决策门）"：AI 默认推断 + 主动 prompt PM 拍串行 / 并行 / 混合；`templates/task-plan.md.tmpl` §二 加显式 `**执行模式（PM 拍板）**` 标记 + 注释扩展
-- **触发**：req-008 PM 反馈 (a) 多一道 "复制 /task-confirm" 仪式（task-confirm 是机械流程不该 fork）(b) 临时问"几个 task 可以并行" 暴露 AI 自决"串行"未经 PM 拍板
+- **触发**：req-008 PM 反馈 (a) 多一道 "复制 /pmai-task-confirm" 仪式（task-confirm 是机械流程不该 fork）(b) 临时问"几个 task 可以并行" 暴露 AI 自决"串行"未经 PM 拍板
 
 ---
 
@@ -52,7 +52,7 @@
 
 **2026-05-25 — D-iv 入口与全流程体验顺畅性全包 ship**（设计文档归档 `docs/归档/完成/入口与全流程体验顺畅性.md`；M3 砍后 M1+M2+M4+M5 共 11 vp 全过；plan-eng-review Round 1 16 finding ACCEPT，codex C-1 砍 M3）：
 
-- **批 1 M1 init-project 一气呵成**（commits 6df9cf4 + dcf5802 + 39cb81f + fe1b7ac + f8c1c90）：vp-1 4 阶段重写 + vp-2 `_shared/project-questioning.md` 单一真相源 + vp-3/4 README 单步 + vp-5a 3 测试 11 cases + vp-6 `/project-solution` 4 场景细化
+- **批 1 M1 init-project 一气呵成**（commits 6df9cf4 + dcf5802 + 39cb81f + fe1b7ac + f8c1c90）：vp-1 4 阶段重写 + vp-2 `_shared/project-questioning.md` 单一真相源 + vp-3/4 README 单步 + vp-5a 3 测试 11 cases + vp-6 `/pmai-project-solution` 4 场景细化
 - **批 2 M2 banner + M4 askuser + M5 播报**：vp-7 `banner-rules.md` + `_lib/state.py` + `status-view.py --banner-only` + vp-8 7 SKILL 加指针 + ~~vp-9 砍~~ + vp-10 `askuser-rules.md` + vp-11 `status-view.py --narrative` + CLAUDE.md「Session 起始播报」
 - **测试基线**：446 / 0（vp-7 + vp-8 + vp-10 + vp-11 实测加 10 cases）
 
@@ -74,8 +74,8 @@
 **2026-05-25 — D-i v4：office-hours 跨 Stage 1+2 集成全包** —— 设计 `docs/归档/完成/office-hours-跨stage1-2集成.md` v4（Codex outside voice + 3 轮 plan-eng-review 全 21 决议；snapshot 复制方案 + 体验包装层）+ 实施 vp-1 → vp-7：
 
 - **vp-1**：`_lib.state.get_stage_source` + `set_stage_source` helper（stages.py STAGE_OUTPUT_FILES 保留 `dict[int, str]` schema 作 fallback；新增 `stage{N}_source` / `stage{N}_tool` / `stage{N}_source_origin` 字段契约）
-- **vp-2 + vp-3**：`req-stage-gate` Stage 1→2 重写为合二为一选择门 + 分流 A（结构化批判 `/req-analysis`）/ B（YC office-hours 式 + bridge snapshot 复制）；B 分支 resume 协议（PM 中断 chat 去跑 office-hours → 任意句式回话 AI 接住 → snapshot + helper 写元数据）
-- **vp-2b**：`/new-req` 砍选项 1（"自跑 /office-hours 整理 brief"）；office-hours 边界单点收敛到 Stage 2 stage-gate 入口
+- **vp-2 + vp-3**：`req-stage-gate` Stage 1→2 重写为合二为一选择门 + 分流 A（结构化批判 `/pmai-req-analysis`）/ B（YC office-hours 式 + bridge snapshot 复制）；B 分支 resume 协议（PM 中断 chat 去跑 office-hours → 任意句式回话 AI 接住 → snapshot + helper 写元数据）
+- **vp-2b**：`/pmai-new-req` 砍选项 1（"自跑 /office-hours 整理 brief"）；office-hours 边界单点收敛到 Stage 2 stage-gate 入口
 - **vp-4**：下游 9 处改 helper / 通用术语"stage 2 真相源"（prd-writing / implementation-design / task-spec / doc-update / close-task 文案 / templates 双 + input-flow.md + req-stage-gate Stage 2→3）
 - **vp-4b**：`req-transition.py:247` 由 `STAGE_OUTPUT_FILES[current]` 改 `get_stage_source(req_dir, current)`（R3-C1 必修，否则 B 分支推不进 Stage 3）
 - **vp-5**：`INVARIANTS.md` 立 **I-RT9**（stage N 真相源契约 + 3 字段定义；其他 stage 暂未启用双源，按 helper fallback 走默认产物）

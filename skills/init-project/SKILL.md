@@ -1,11 +1,11 @@
 ---
-name: init-project
+name: pmai-init-project
 description: |
   PM 主动入口 —— 起一个新业务项目时一气呵成 4 阶段：参数收集 + brownfield 检测 → 骨架建设
   → 方向讨论（PROJECT.md + ROADMAP.md）→ Next Up。在生成器仓里跑。
 ---
 
-# /init-project（一气呵成入口）
+# /pmai-init-project（一气呵成入口）
 
 > PM 起一个新业务项目时**只跑这一个命令**，agent 内部串起 4 阶段全流程；不切窗口、不跑第二个命令、不需要记中间步骤。
 >
@@ -15,7 +15,7 @@ description: |
 
 ```
 ┌─────────────────────────────────────────────────────────┐
-│              PMAI ► /init-project (M1)                  │
+│              PMAI ► /pmai-init-project (M1)                  │
 ├─────────────────────────────────────────────────────────┤
 │  阶段 A · 参数收集 + brownfield 检测                       │
 │    name → path → [brownfield gate] → background → intent│
@@ -32,7 +32,7 @@ description: |
 │    + PM 定稿确认 + commit                                 │
 │                          ↓                              │
 │  阶段 D · 终态汇总 + Next Up（只汇总不 commit）            │
-│    ✅ <name> 已就绪 / cd <target> && /new-req "..."     │
+│    ✅ <name> 已就绪 / cd <target> && /pmai-new-req "..."     │
 └─────────────────────────────────────────────────────────┘
 ```
 
@@ -44,9 +44,9 @@ description: |
 - PM 想起一个新业务项目（greenfield）—— 含项目方向讨论（PROJECT.md + ROADMAP.md），不只是空骨架
 
 **不在 scope**：
-- brownfield 项目接入 → 走 `/codebase-audit`（阶段 A 检测到目标目录已含 `.git/` 或代码会拒绝并提示）
-- 已有项目重新规划方向 → 走 `/project-solution`（4 场景之一）
-- 业务仓里起新需求 → 走 `/new-req`
+- brownfield 项目接入 → 走 `/pmai-codebase-audit`（阶段 A 检测到目标目录已含 `.git/` 或代码会拒绝并提示）
+- 已有项目重新规划方向 → 走 `/pmai-project-solution`（4 场景之一）
+- 业务仓里起新需求 → 走 `/pmai-new-req`
 
 ---
 
@@ -68,7 +68,7 @@ description: |
 1. **项目名**（英文 kebab-case，如 `my-app`）—— AskUser
 2. **落地路径**（绝对路径，如 `/Users/xxx/Projects/my-app`）—— AskUser
 3. **brownfield 检测闸门**（在拿到路径后**立刻**做）：
-   - `test -e <target-dir>` 已存在 → **拒绝 + 提示走 `/codebase-audit`**（"目标目录已存在；本 skill 只接 greenfield。如果要接入已有 codebase，请发 `/codebase-audit`"）
+   - `test -e <target-dir>` 已存在 → **拒绝 + 提示走 `/pmai-codebase-audit`**（"目标目录已存在；本 skill 只接 greenfield。如果要接入已有 codebase，请发 `/pmai-codebase-audit`"）
    - `test -d <target-dir>/.git` 或目录非空 → 同上拒绝
    - 通过 → 进 step 4
 4. **一句话项目背景**（写进生成的 CLAUDE.md）—— AskUser
@@ -78,7 +78,7 @@ description: |
    - `custom` — PM 自由编辑（不预设深度）
    - `unknown` — 探测兜底档（先 init 跑通后再分类）
 
-**brownfield 接口约定**（review C-7 落实）：本 skill 阶段 A 拒已存在目录 + 提示 `/codebase-audit`；`scripts/init-project.sh` 也拒已存在目录（脚本不放宽，line 109-113）—— **两层都拦**，PM 任意一层拒都不会创建项目。
+**brownfield 接口约定**（review C-7 落实）：本 skill 阶段 A 拒已存在目录 + 提示 `/pmai-codebase-audit`；`scripts/init-project.sh` 也拒已存在目录（脚本不放宽，line 109-113）—— **两层都拦**，PM 任意一层拒都不会创建项目。
 
 ### 阶段 B · 骨架建设（agent Bash 调 init-project.sh）
 
@@ -115,7 +115,7 @@ agent **@读 `skills/_shared/project-questioning.md`**（**单一真相源** —
 **失败兜底（R10）**：`_shared/project-questioning.md` 路径检测前置 → 缺失 → 报错 "框架未完整安装；请 git status 检查 skills/_shared/project-questioning.md"，不进讨论。
 
 **失败兜底（R11）**：PM 阶段 C 中途答"停 / 等下 / 我先想想" → agent 检测 git 状态：
-- 已 commit 阶段 B 骨架（首 commit `init: <name>` 已落）+ PROJECT.md 未 commit → **留 unstaged**，提示 PM "下次直接发 `/project-solution` 续上 PROJECT.md / ROADMAP.md 写作即可"
+- 已 commit 阶段 B 骨架（首 commit `init: <name>` 已落）+ PROJECT.md 未 commit → **留 unstaged**，提示 PM "下次直接发 `/pmai-project-solution` 续上 PROJECT.md / ROADMAP.md 写作即可"
 - 阶段 B 未完成 → 提示 PM 手动 `rm -rf <target-dir>` 重来
 
 ### 阶段 C.5 · 视觉基线（调 gstack `/design-consultation` + 追加 inventory）
@@ -144,7 +144,7 @@ agent **@读 `skills/_shared/project-questioning.md`**（**单一真相源** —
 
    > **这是什么**：stage 4 gap-check 的查询底座。每个 req 动手前逐组件查这里：
    > **有 → 复用**；**没有 → 新建并加进本表**。req 间累积，越来越全，reuse 率随之上升。
-   > **gstack `/design-consultation` 不管这段**，由本框架的 `/req-stage-gate` Stage 4 4A 累积。
+   > **gstack `/design-consultation` 不管这段**，由本框架的 `/pmai-req-stage-gate` Stage 4 4A 累积。
 
    | 组件名 | 用途 | 视觉 | 状态 | 交互 | 出处 req |
    |---|---|---|---|---|---|
@@ -182,7 +182,7 @@ agent **@读 `skills/_shared/project-questioning.md`**（**单一真相源** —
 
 **失败兜底（R12）**：gstack 未安装 / `/design-consultation` 调用失败 → 跟 PM 说「gstack 不可用，跳过 C.5。DESIGN.md 留空，第一个 req 进 stage 4 时再起视觉基线。」直接进阶段 D（DESIGN.md 不存在也不阻塞下游 —— stage 4 4A 会兜底）。
 
-**失败兜底（R13）**：PM 在 C.5 答"停 / 等下" → DESIGN.md 留 gstack 写到一半的状态（unstaged），提示 PM "下次想续可以直接调 `/design-consultation`，inventory 段需要手动追加 / 跑 `/req-stage-gate` 时自动兜底。"
+**失败兜底（R13）**：PM 在 C.5 答"停 / 等下" → DESIGN.md 留 gstack 写到一半的状态（unstaged），提示 PM "下次想续可以直接调 `/design-consultation`，inventory 段需要手动追加 / 跑 `/pmai-req-stage-gate` 时自动兜底。"
 
 ### 阶段 D · 终态汇总 + Next Up（只汇总不 commit）
 
@@ -199,7 +199,7 @@ agent 输出 Next Up 块（对齐 M2 banner 规范）：
 
 ▶ Next Up:
   cd <target-dir>
-  /new-req "<一句话需求>"
+  /pmai-new-req "<一句话需求>"
 ```
 
 ---
@@ -219,10 +219,10 @@ agent 输出 Next Up 块（对齐 M2 banner 规范）：
 
 | 场景 | 兜底 |
 |---|---|
-| 阶段 A brownfield 检测命中（目标目录已存在 / 含 git / 含代码）| 拒绝 + 提示走 `/codebase-audit` |
+| 阶段 A brownfield 检测命中（目标目录已存在 / 含 git / 含代码）| 拒绝 + 提示走 `/pmai-codebase-audit` |
 | 阶段 B `init-project.sh` 失败（chmod / git init / 模板缺失）| 报错贴 stderr + PM 检查；不进阶段 C |
 | 阶段 B 跑成功但 `_shared/project-questioning.md` 缺失 | 阶段 C 入口前置检测 + 报错 "框架未完整安装" |
-| 阶段 C PM 答"停" + 骨架已 commit | PROJECT.md / ROADMAP.md 留 unstaged + 提示下次 `/project-solution` 续 |
+| 阶段 C PM 答"停" + 骨架已 commit | PROJECT.md / ROADMAP.md 留 unstaged + 提示下次 `/pmai-project-solution` 续 |
 | 阶段 C PM 答"停" + 骨架未 commit | 提示手动 `rm -rf <target-dir>` 重来 |
 | 阶段 C.5 gstack 未安装 / `/design-consultation` 调用失败 | 跳过 C.5，DESIGN.md 留空；第一个 req 进 stage 4 4A 时兜底 |
 | 阶段 C.5 PM 答"停" | DESIGN.md 留 gstack 写到一半的 unstaged 状态；下次手调 `/design-consultation` 续 |

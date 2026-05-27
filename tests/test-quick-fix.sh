@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Tests for /quick-fix — covers core scenarios from docs/归档/完成/设计-quick-fix.md v2 §11.
+# Tests for /pmai-quick-fix — covers core scenarios from docs/归档/完成/设计-quick-fix.md v2 §11.
 # Scenarios exercised (subset of full 17; rest tracked as future work):
 #   - Scenario 1: happy path pure-docs change, ff-only merges, two-commit model visible
 #   - Scenario 11: red-line rejects edits to requirements/active/*/tasks/*.md

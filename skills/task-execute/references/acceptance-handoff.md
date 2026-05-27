@@ -1,6 +1,6 @@
 # 步骤 11 详细：呈交 PM 验收（信息包 + 输出块 + 引导反推）
 
-> 本文件是 `skills/task-execute/SKILL.md` 步骤 11 的物理拆分。主 SKILL 步骤 11 入口仅留触发说明 + 指向本文件的引用。commit 后默认自动呈交，PM 不需手动敲 `/task-submit`；task 状态全程「执行中」，commit 不切状态。
+> 本文件是 `skills/task-execute/SKILL.md` 步骤 11 的物理拆分。主 SKILL 步骤 11 入口仅留触发说明 + 指向本文件的引用。commit 后默认自动呈交，PM 不需手动敲 `/pmai-task-submit`；task 状态全程「执行中」，commit 不切状态。
 
 ## 11.1 组装验收信息包
 

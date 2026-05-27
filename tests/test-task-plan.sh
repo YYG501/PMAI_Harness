@@ -121,8 +121,8 @@ test_output_contract() {
 test_step5_gate() {
   start_test "task-plan step 5: PM confirms then req-stage-gate advances"
 
-  _assert_contains "$TASK_PLAN_SKILL" "### 步骤 5：skill 结束 → /req-stage-gate 接手" "new step 5 heading" || return
-  _assert_contains "$TASK_PLAN_SKILL" '具体 task 文档由 stage 6 的 `/task-spec <task-id>` 按 task-plan.md 逐个生成' "stage 6 task-spec one by one" || return
+  _assert_contains "$TASK_PLAN_SKILL" "### 步骤 5：skill 结束 → /pmai-req-stage-gate 接手" "new step 5 heading" || return
+  _assert_contains "$TASK_PLAN_SKILL" '具体 task 文档由 stage 6 的 `/pmai-task-spec <task-id>` 按 task-plan.md 逐个生成' "stage 6 task-spec one by one" || return
 
   pass_test
 }

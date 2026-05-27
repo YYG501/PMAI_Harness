@@ -88,7 +88,7 @@ test_failure_blocks_close_task() {
   _assert_contains "$DOC_UPDATE_SKILL" "doc-update failed; close-task blocked" "blocked error prefix" || return
   _assert_contains "$DOC_UPDATE_SKILL" '`failure type`：只能使用 `write-file` / `content-conflict` / `key-match-failure` / `internal-bug`' "failure type list" || return
   _assert_contains "$DOC_UPDATE_SKILL" '`recovery path`' "recovery path field" || return
-  _assert_contains "$DOC_UPDATE_SKILL" '重新运行 `/close-task`，`/close-task` 会 auto-resumes doc-update' "auto resume instruction" || return
+  _assert_contains "$DOC_UPDATE_SKILL" '重新运行 `/pmai-close-task`，`/pmai-close-task` 会 auto-resumes doc-update' "auto resume instruction" || return
 
   pass_test
 }

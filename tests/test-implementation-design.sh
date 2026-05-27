@@ -3,9 +3,9 @@
 #
 # 验证：
 # - skills/implementation-design/templates/implementation-design.md.tmpl 4 段结构 + HOW-ID 可消费 schema
-# - /implementation-design skill 存在 + stage 5 拆 task 前产出契约
+# - /pmai-implementation-design skill 存在 + stage 5 拆 task 前产出契约
 # - check-doc-pm-view.py 跳过 implementation-design.md（工程合同格式豁免）
-# - req-stage-gate Stage 4→5 编排调 /implementation-design + PM 确认门 + Stage 5→6 gate 检查文件
+# - req-stage-gate Stage 4→5 编排调 /pmai-implementation-design + PM 确认门 + Stage 5→6 gate 检查文件
 set -uo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -31,7 +31,7 @@ test_template_4_segments() {
 }
 
 test_skill_exists_stage5() {
-  start_test "/implementation-design skill 存在 + stage 5 拆 task 前产出"
+  start_test "/pmai-implementation-design skill 存在 + stage 5 拆 task 前产出"
   local ok=1
   [ -f "$SKILL" ] || { _fail "skills/implementation-design/SKILL.md 不存在"; ok=0; }
   if [ "$ok" = 1 ]; then
@@ -61,9 +61,9 @@ EOF
 }
 
 test_stage_gate_wiring() {
-  start_test "req-stage-gate Stage 4→5 接 /implementation-design + speed mode 决策门 + Stage 5→6 gate"
+  start_test "req-stage-gate Stage 4→5 接 /pmai-implementation-design + speed mode 决策门 + Stage 5→6 gate"
   local ok=1
-  _has "$STAGE_GATE" "/implementation-design" || { _fail "Stage 4→5 未调 /implementation-design"; ok=0; }
+  _has "$STAGE_GATE" "/pmai-implementation-design" || { _fail "Stage 4→5 未调 /pmai-implementation-design"; ok=0; }
   # speed mode（2026-05-26）后取代原"implementation-design 待确认"全文门：
   # 没有结构决策时直进 5b；有结构决策时逐行 prompt。校验关键文案二选一即可。
   _has "$STAGE_GATE" "implementation-design PM 决策门" \

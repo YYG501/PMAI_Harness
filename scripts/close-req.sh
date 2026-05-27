@@ -70,7 +70,7 @@ fi
 # 规则：req 分支必须存在且 merge 成功才能归档。避免静默丢失整个 req
 if ! git show-ref --verify --quiet "refs/heads/$REQ_BRANCH" 2>/dev/null; then
   echo "❌ req 分支 $REQ_BRANCH 不存在。不能归档未合并的 req（会丢失文档和代码）。" >&2
-  echo "   如果你想废弃这个 req 而不合并，使用 /cancel-req 而不是 /close-req。" >&2
+  echo "   如果你想废弃这个 req 而不合并，使用 /pmai-cancel-req 而不是 /pmai-close-req。" >&2
   exit 1
 fi
 
@@ -243,4 +243,4 @@ echo ""
 echo "✅ Req 已完全关闭: $REQ_ID"
 echo "📍 当前位置: 主仓 main 分支"
 echo ""
-echo "运行 /new-req 开始下一个需求。"
+echo "运行 /pmai-new-req 开始下一个需求。"

@@ -1,7 +1,7 @@
 <!-- /autoplan restore point: <LOCAL_GSTACK_HOME>/projects/PM-AI-Workflow/main-autoplan-restore-20260520-173742.md -->
 # req 级实现设计视图（delta-8 · HOW 安家）(v4)
 
-> **状态**：v4（2026-05-21）—— v3 经 /plan-eng-review delta-7/9 全审连带修订（§X Round 3）：X1 删 §3.2/§3.4 的「或 delta-7 事件流」stale 备选（delta-7 已收窄 2 类装不下 plan-review 沉淀）；X2 vp-2 `/implementation-design` 输入加 `DESIGN.md` 组件 inventory（对接 delta-9 gap-check，codex outside-voice）。§0 锁定不动；§X Round 1/2/3 = review 历史。最小落地包 = **delta-2+3+4+7+8+9**。**可实施**。
+> **状态**：v4（2026-05-21）—— v3 经 /plan-eng-review delta-7/9 全审连带修订（§X Round 3）：X1 删 §3.2/§3.4 的「或 delta-7 事件流」stale 备选（delta-7 已收窄 2 类装不下 plan-review 沉淀）；X2 vp-2 `/pmai-implementation-design` 输入加 `DESIGN.md` 组件 inventory（对接 delta-9 gap-check，codex outside-voice）。§0 锁定不动；§X Round 1/2/3 = review 历史。最小落地包 = **delta-2+3+4+7+8+9**。**可实施**。
 > v2 历史：v1 经 delta-3 v1 review 连带修订（task-spec 单文件 typed contract、`build-execution-prompt.py` 2→1 路径、vp-3 并入 delta-3 vp-3）。
 > **日期**：2026-05-21
 > **作者**：PM + AI
@@ -48,7 +48,7 @@ req 级 HOW（实现设计层）今天**寄生**在 `solution.engineering.md`（
 
 ## §1 方案概述
 
-新增独立 skill **`/implementation-design`**，在 stage 5「拆 task」之前产出一份 req 级**实现设计文档**单文件（`implementation-design.md`，落 `$ACTIVE_REQ_DIR/`），承接原 `solution.engineering.md` 的 req 级 HOW 内容。
+新增独立 skill **`/pmai-implementation-design`**，在 stage 5「拆 task」之前产出一份 req 级**实现设计文档**单文件（`implementation-design.md`，落 `$ACTIVE_REQ_DIR/`），承接原 `solution.engineering.md` 的 req 级 HOW 内容。
 
 - **producer = 独立 skill**（review UC-1）—— 不让 `task-plan`「顺带产出」。`task-plan` 是 lint 强制的 PM 视图拆分 skill（`check-doc-pm-view.py` 禁工程词、description 明写「单一文件、不生成工程合同分文件」），让它兼产 TS-laden 工程 artifact = delta-2+4 §0.1 给 `req-solution` 修过的「一个 skill 背两层」反模式。GSD 亦把产 HOW 的 `gsd-pattern-mapper` 与拆 task 的 `gsd-planner` 分成两个 agent。
 - **消费 = task-spec 上游**（review UC-4）—— `task-spec` 读 `implementation-design.md`、按 HOW-ID 挑出当前 task 相关行、写进 task **单文件 typed contract 的执行区**（delta-3 v1：task-spec 产单文件，不再有 `.engineering.md`）；`task-execute` 只读 task 单文件，**不直读** `implementation-design.md`。对齐 GSD：executor 只读自包含的 plan，pattern artifact 是 planner 的上游。
@@ -59,11 +59,11 @@ req 级 HOW（实现设计层）今天**寄生**在 `solution.engineering.md`（
 
 | # | 设计问题 | v1 决议 |
 |---|---|---|
-| Q1 | 文件名 | **`implementation-design.md`**（落 `$ACTIVE_REQ_DIR/`），由独立 `/implementation-design` skill 产出 |
+| Q1 | 文件名 | **`implementation-design.md`**（落 `$ACTIVE_REQ_DIR/`），由独立 `/pmai-implementation-design` skill 产出 |
 | Q2 | schema 定到多细 | 段框架 + **可消费 schema（HOW-ID 等）现在定**（§3.3）—— review D8-7：3 个粗粒度段名无法被现役 grep 命中，schema 不可延后 |
 | Q3 | task-spec 消费机制 | **HOW-ID 行级锚** —— task-spec 按 `HOW-ID` + 适用关键词挑行（精化原「章节锚点」，review D8-7）|
 | Q4 | 选型论证 | **折进段1 每行的决策字段**（选择/备选/理由/约束失效条件）—— review UC-3 重开：不做可选默认空大段，否则不满足 §0 的「为什么这么选」 |
-| Q5 | stage 衔接 | `/implementation-design`（stage 5、task-plan 前）产出，经 req-stage-gate 编排 + PM 确认门（2026-05-21 eng-review codex#1/#6，见 §2 / §3.1）；PRD（stage 3 冻结）；task-spec（stage 6）读 PRD(WHAT) + implementation-design(HOW) |
+| Q5 | stage 衔接 | `/pmai-implementation-design`（stage 5、task-plan 前）产出，经 req-stage-gate 编排 + PM 确认门（2026-05-21 eng-review codex#1/#6，见 §2 / §3.1）；PRD（stage 3 冻结）；task-spec（stage 6）读 PRD(WHAT) + implementation-design(HOW) |
 
 ---
 
@@ -71,8 +71,8 @@ req 级 HOW（实现设计层）今天**寄生**在 `solution.engineering.md`（
 
 | 机制 | 处理 | 备注 |
 |---|---|---|
-| `/implementation-design`（新 skill）| **新建** | stage 5 拆 task 前调；产 `implementation-design.md`（review UC-1）|
-| `req-stage-gate` | **改**（2026-05-21 eng-review codex#1/#6）| Stage 4→5 编排调 `/implementation-design`；新增 `implementation-design.md` PM 确认门；Stage 5→6 gate 检查文件存在（§3.1 / vp-5）|
+| `/pmai-implementation-design`（新 skill）| **新建** | stage 5 拆 task 前调；产 `implementation-design.md`（review UC-1）|
+| `req-stage-gate` | **改**（2026-05-21 eng-review codex#1/#6）| Stage 4→5 编排调 `/pmai-implementation-design`；新增 `implementation-design.md` PM 确认门；Stage 5→6 gate 检查文件存在（§3.1 / vp-5）|
 | `solution.engineering.md` / `.tmpl` | delta-4 砍 | 10 章逐章归宿见 §3.4 表 |
 | `task-plan` | **delta-8 不动** | task-plan 保持纯 PM 视图拆分 skill；它不产、不读 implementation-design（delta-2+4 单独处理它的 prd.md 迁移）|
 | `task-spec` | **改** | 读 `implementation-design.md`、按 HOW-ID 挑当前 task 相关行、写进 task 单文件 typed contract 的**执行区**（该 reader 由 delta-3 vp-3 实现，见 §4.1）|
@@ -91,7 +91,7 @@ req 级 HOW（实现设计层）今天**寄生**在 `solution.engineering.md`（
 
 - **工程合同格式** —— 模板 header 照搬 `solution.engineering.md.tmpl` 的允许工程内容清单（TS 类型 / 字段 / 像素 / 反向约束）。
 - **不跑 PM-view lint** —— `check-doc-pm-view.py` 跳过 `implementation-design.md`（工程内容豁免，同它已跳过 `.engineering.md`）。
-- **有 PM 确认门**（2026-05-21 eng-review codex#6 + PM 决议，**推翻 §X Round 1 D8-14「无 PM 确认门」**）—— `/implementation-design` 产出后进 stage-gate 确认门，PM 审定**架构决策表**（选择 / 备选 / 理由）才放行。理由：架构决策表含「这个 req 用什么架构、为什么这么选」，AI 单方面定再注入 task 与框架内核「PM 在环里」（umbrella §6.1 理由 2）冲突。确认门是**完整（阻塞）门**——PM 不审不放行；展示形式按标准确认门约定（架构决策表「选择」列摘要 + 文件路径，PM 可下钻全文，不必逐字背工程细节；memory `feedback_confirmation_gates`）。
+- **有 PM 确认门**（2026-05-21 eng-review codex#6 + PM 决议，**推翻 §X Round 1 D8-14「无 PM 确认门」**）—— `/pmai-implementation-design` 产出后进 stage-gate 确认门，PM 审定**架构决策表**（选择 / 备选 / 理由）才放行。理由：架构决策表含「这个 req 用什么架构、为什么这么选」，AI 单方面定再注入 task 与框架内核「PM 在环里」（umbrella §6.1 理由 2）冲突。确认门是**完整（阻塞）门**——PM 不审不放行；展示形式按标准确认门约定（架构决策表「选择」列摘要 + 文件路径，PM 可下钻全文，不必逐字背工程细节；memory `feedback_confirmation_gates`）。
 
 ### §3.2 段结构
 
@@ -133,7 +133,7 @@ req 级 HOW（实现设计层）今天**寄生**在 `solution.engineering.md`（
 
 → 7 章迁入 implementation-design、1 章归 DESIGN.md、1 章删除；ch1-5 是迁移主体。vp-1 动手前按此表核 `solution.engineering.md.tmpl` 实际内容（尤其 ch6/ch10 实际体量）。
 
-**为什么单文件不分 GSD 式多文件**：GSD 分多文件是因每 artifact 配专属 agent（文件边界 = agent 边界）；我们的 `/implementation-design` 是主 AI 一气写完，无此架构，分多文件 = cargo-cult（同 umbrella §4 delta-8）。
+**为什么单文件不分 GSD 式多文件**：GSD 分多文件是因每 artifact 配专属 agent（文件边界 = agent 边界）；我们的 `/pmai-implementation-design` 是主 AI 一气写完，无此架构，分多文件 = cargo-cult（同 umbrella §4 delta-8）。
 
 ---
 
@@ -142,17 +142,17 @@ req 级 HOW（实现设计层）今天**寄生**在 `solution.engineering.md`（
 | vp | 改什么 | 依据 |
 |---|---|---|
 | vp-1 | 新建 `templates/implementation-design.md.tmpl` —— 4 段结构（§3.2）+ 可消费 schema（§3.3 HOW-ID 等）+ PM-invisible header（§3.1）；`check-doc-pm-view.py` 加 `implementation-design.md` 跳过 | §3 |
-| vp-2 | 新建 `/implementation-design` skill —— stage 5 拆 task 前调；读 brief + analysis + PRD + CONTEXT + **`DESIGN.md`（组件 inventory，§X Round 3 X2）**，按 §3.4 归宿表产 `implementation-design.md`。§2 文件·模式索引据 `DESIGN.md` inventory 写「复用现有组件 X」—— 与 delta-9 gap-check（stage 4 先更新 inventory）读同一份，组件复用关口与 HOW 层不脱节 | §1 §2（UC-1 / D9-7）|
+| vp-2 | 新建 `/pmai-implementation-design` skill —— stage 5 拆 task 前调；读 brief + analysis + PRD + CONTEXT + **`DESIGN.md`（组件 inventory，§X Round 3 X2）**，按 §3.4 归宿表产 `implementation-design.md`。§2 文件·模式索引据 `DESIGN.md` inventory 写「复用现有组件 X」—— 与 delta-9 gap-check（stage 4 先更新 inventory）读同一份，组件复用关口与 HOW 层不脱节 | §1 §2（UC-1 / D9-7）|
 | vp-3 | **并入 delta-3 vp-3** —— delta-3 v1 §3 ownership：task-spec 由 delta-3 独占重写、吸收「读 `implementation-design.md` 按 HOW-ID 挑行、写进执行区」。delta-8 不再单独 patch task-spec；本 vp 退化为「向 delta-3 提供 HOW-ID 消费契约 + contract test」| §2（UC-4 / D8-7）；delta-3 v1 §3 |
 | vp-4 | 模板引用更新 + 测试 + SOP —— `CLAUDE.md.tmpl` 去 solution.engineering 引用（`task.engineering.md.tmpl` 由 delta-3 vp-1 整体删除，无需 delta-8 改）；test matrix（见下）；`框架同步-SOP.md` 补迁移段 + operator breadcrumb（≤3 行：implementation-design 是 req 级 HOW 工程档、PM 经 stage 5 确认门审定）| §2 §6（D8-10/D8-13）|
-| vp-5 | **req-stage-gate 接线**（2026-05-21 eng-review codex#1/#6）—— Stage 4→5 编排调 `/implementation-design`（task-plan 前）；新增 `implementation-design.md` PM 确认门（§3.1，展示架构决策表摘要 + 可下钻）；Stage 5→6 gate 检查 `implementation-design.md` 存在；含产出失败 / 重跑策略；test matrix 加 stage-gate 接线断言（Stage 4→5 调用、确认门、Stage 5→6 缺文件拦下）| §2 §3.1（codex#1/#6）|
+| vp-5 | **req-stage-gate 接线**（2026-05-21 eng-review codex#1/#6）—— Stage 4→5 编排调 `/pmai-implementation-design`（task-plan 前）；新增 `implementation-design.md` PM 确认门（§3.1，展示架构决策表摘要 + 可下钻）；Stage 5→6 gate 检查 `implementation-design.md` 存在；含产出失败 / 重跑策略；test matrix 加 stage-gate 接线断言（Stage 4→5 调用、确认门、Stage 5→6 缺文件拦下）| §2 §3.1（codex#1/#6）|
 
 **vp-4 test matrix（review D8-10）：**
 
 | 测什么 | 动作 |
 |---|---|
 | 模板 schema | `implementation-design.md.tmpl` 4 段 + HOW-ID 字段齐 |
-| producer | `/implementation-design` 按 §3.4 归宿产出 `implementation-design.md` |
+| producer | `/pmai-implementation-design` 按 §3.4 归宿产出 `implementation-design.md` |
 | task-spec 派生 | task-spec 按 HOW-ID 挑行、写进 task 单文件执行区 |
 | 执行信封 | `build-execution-prompt.py` 由 delta-3 改为 1 路径（task 单文件）；非 Claude 执行器读 task 单文件即自包含（HOW 已由 task-spec 写入执行区）|
 | 旧-req-compat（IRON 回归）| 旧 req 有 `solution.engineering.md` / 新 req 有 `implementation-design.md` 均能跑完 |
@@ -170,9 +170,9 @@ UC-2 把 delta-3 纳入 → **真实落地包 = delta-2+3+4+8**。三个 delta �
 ## §5 砍掉 / 不做的机制清单（防 review 回写）
 
 1. ❌ 不分 GSD 式多文件 —— 单文件多段（§3.2）
-2. ❌ 不让 task-plan 兼产 implementation-design —— 独立 `/implementation-design` skill（UC-1）
+2. ❌ 不让 task-plan 兼产 implementation-design —— 独立 `/pmai-implementation-design` skill（UC-1）
 3. ❌ task-execute 不直读 implementation-design —— 只读 task 单文件（UC-4；task 文件双→单见 delta-3 v1）
-4. ❌ 不引入专属 agent —— `/implementation-design` 主线程一气产出
+4. ❌ 不引入专属 agent —— `/pmai-implementation-design` 主线程一气产出
 5. ❌ 不动 `modulespec`（D13）—— 不同层
 6. ❌ implementation-design 不重复 PRD 的 WHAT —— 引用，不重抄
 7. ❌ 选型论证不做成可选默认空大段 —— 折进段1 每行的决策字段（UC-3）
@@ -204,7 +204,7 @@ UC-2 把 delta-3 纳入 → **真实落地包 = delta-2+3+4+8**。三个 delta �
 | D8-1 | Critical | 10→3 章归宿表被 §6 defer，但它就是设计本身：实测 `solution.engineering` 10 章只 5 章干净映射 3 段，ch6-10（易错点/plan-review沉淀/autoplan trail/a11y/工程验收）无归宿；ch7 是 live-routed（`task-spec:178`）丢 = 回归；「relocation 70-80%」按章数实为 ~55% | §0.1 §0.3 | `templates/solution.engineering.md.tmpl`（10 章）、`task-spec/SKILL.md:178` | **ACCEPT** — 10→3 归宿表移进 §3（逐章标 段1/2/3 / DESIGN.md / 删除），不可 defer |
 | D8-2 | Critical | shipping-unit 自相矛盾 —— delta-2+4+8 不含 delta-3，而 delta-3 才让 task-spec 改读新视图 → task-spec/task-execute 落地即读已删的 solution.engineering | §0.3 | `管线重构:213-215`、`实现设计视图:101,119` | **ACCEPT** — UC-2：真实落地包扩成 **delta-2+3+4+8** 四者同批 |
 | D8-3 | Critical | `build-execution-prompt.py`（实际 HOW 注入机制，只输出 PM 视图 + task 工程合同 2 路径）不在 vp 表；非 Claude 执行器看不到 implementation-design.md | §0.3 | `build-execution-prompt.py:84-141`、`test-executors.sh:235` | **ACCEPT** — UC-4 决议后 task-execute 不直读 implementation-design → `build-execution-prompt.py` **零改**；finding 转为 vp-test 显式断言执行信封不变、非 Claude 执行器仍只读 task 两文件 |
-| D8-4 | High | task-plan 是错误宿主 —— lint 强制 PM 视图 skill（`check-doc-pm-view.py` 禁工程词、description「单一文件不生成工程合同分文件」、Rules:222 明禁）；产 TS-laden 工程 artifact = delta-2+4 §0.1 修过的同一反模式。GSD 亦把 HOW（pattern-mapper）与拆 task（planner）分开 | §0.3 | `task-plan/SKILL.md:4,154-161,222`、`GSD-参考调研.md §1.3` | **ACCEPT** — UC-1：HOW 由**独立 `/implementation-design` skill** 产出（1 文件）；task-plan 保持纯 PM 视图拆分不变 |
+| D8-4 | High | task-plan 是错误宿主 —— lint 强制 PM 视图 skill（`check-doc-pm-view.py` 禁工程词、description「单一文件不生成工程合同分文件」、Rules:222 明禁）；产 TS-laden 工程 artifact = delta-2+4 §0.1 修过的同一反模式。GSD 亦把 HOW（pattern-mapper）与拆 task（planner）分开 | §0.3 | `task-plan/SKILL.md:4,154-161,222`、`GSD-参考调研.md §1.3` | **ACCEPT** — UC-1：HOW 由**独立 `/pmai-implementation-design` skill** 产出（1 文件）；task-plan 保持纯 PM 视图拆分不变 |
 | D8-5 | High | task-execute 直读 implementation-design = 执行期第二 HOW 源、与 task 工程合同无 precedence | §0.3 | `task-execute/SKILL.md:281-330`、`实现设计视图:71` | **ACCEPT** — UC-4：implementation-design 只作 **task-spec 上游**；task-spec 把当前 task 的 HOW 写进自包含 task.engineering.md；task-execute 只读 task 合同（对齐 GSD executor 只读自包含 plan）|
 | D8-6 | High | 选型论证默认空与 §0 冲突 —— §0.1 明列「为什么这么选」为 HOW 缺口，§3/Q4 设可选默认空 → 设计没满足自己锁定的 §0 | §0.1 | `实现设计视图:17,60,107-108` | **ACCEPT** — UC-3（重开 Q4）：架构决策表每行带最小决策字段（选择/备选/理由/约束失效条件），允许写「无非平凡备选」但不默认空 |
 | D8-7 | High | 「3 段 + 章节锚点」与现役 §9.1.1 章节 grep（按 `^### 关键词` 命中 task/模块/功能名）不兼容 —— 3 个粗粒度段无 `###` anchor / row id → 整读或 0 命中 | §0.3 | `input-flow.md:180,196`、`实现设计视图:58,82` | **ACCEPT** — vp-1 现在定真可消费 schema（HOW-ID / 适用模块 / 适用 task 关键词 / 来源 / 消费者 / 优先级）；精化 Q3「章节锚点」为 HOW-ID 锚 |
@@ -224,7 +224,7 @@ UC-2 把 delta-3 纳入 → **真实落地包 = delta-2+3+4+8**。三个 delta �
 
 | # | Severity | Finding 摘要 | 决议 |
 |---|---|---|---|
-| codex#1 | Critical | `/implementation-design` 新建但未接入 req-stage-gate 编排 —— Stage 4→5 只调 `/task-plan`、Stage 5→6 只查 `task-plan.md`（`req-stage-gate/SKILL.md:378,391`）；delta-8 vp 表只写「新建 skill」→ 新流程可能跳过 implementation-design，delta-3 task-spec 按 HOW-ID 读空文件 | **ACCEPT** —— 新增 vp-5：req-stage-gate Stage 4→5 编排调 `/implementation-design`、Stage 5→6 gate 检查文件存在、含失败/重跑策略（§2 / §4 vp-5）|
+| codex#1 | Critical | `/pmai-implementation-design` 新建但未接入 req-stage-gate 编排 —— Stage 4→5 只调 `/pmai-task-plan`、Stage 5→6 只查 `task-plan.md`（`req-stage-gate/SKILL.md:378,391`）；delta-8 vp 表只写「新建 skill」→ 新流程可能跳过 implementation-design，delta-3 task-spec 按 HOW-ID 读空文件 | **ACCEPT** —— 新增 vp-5：req-stage-gate Stage 4→5 编排调 `/pmai-implementation-design`、Stage 5→6 gate 检查文件存在、含失败/重跑策略（§2 / §4 vp-5）|
 | codex#6 | Medium | implementation-design 不设 PM 确认门（§3.1 原文）却含「为什么这么选」架构决策（§3.3 决策表：选择/备选/理由）→ AI 单方面定技术路线注入 task，与 umbrella §6.1「PM 在环里」冲突 | **ACCEPT（PM 决议 2026-05-21）** —— implementation-design 加**完整 PM 确认门**；§3.1 改写、**推翻 Round 1 D8-14「无 PM 确认门（正确）」**（PM 决策 = binding，覆盖 autoplan 旧决议；memory `feedback_pm_decision_is_binding_contract`）|
 
 **汇总**：2 ACCEPT。codex#6 推翻 §X Round 1 D8-14；§3.1「PM-invisible」框架（D8-11 部分）随之修订为「工程格式 + PM 经门审」。文档 v2 → v3。
@@ -236,7 +236,7 @@ UC-2 把 delta-3 纳入 → **真实落地包 = delta-2+3+4+8**。三个 delta �
 | # | Severity | Finding 摘要 | 决议 |
 |---|---|---|---|
 | X1 | Medium | §3.2 段4 / §3.4 ch7 把 plan-review 沉淀指向「或 delta-7 req 事件流」，但 delta-7（聚焦设计文档 v0）已 re-scope 成正好 2 个事件类型（`decision` / `adjustment`）、§0.4 + §2.2 明拒加 §0 未点名的类型 → delta-7 装不下 ch7 plan-review 沉淀。该「或 delta-7 事件流」措辞是 delta-7 收窄成 2 类之前的旧表述 | **ACCEPT** — §3.2 段4 / §3.4 ch7 删「或 delta-7 事件流」备选；ch7 plan-review 沉淀固定落段4「审计与修订记录」|
-| X2 | High（codex outside-voice）| vp-2 `/implementation-design` producer 输入（`brief + analysis + PRD + CONTEXT`）无 `DESIGN.md` → implementation-design §2「文件·模式索引」自行重推「照哪些现有代码/组件写」，与 delta-9 gap-check 组件复用关口脱节、可能在 HOW 层复发「组件不复用」 | **ACCEPT** — vp-2 `/implementation-design` 输入加 `DESIGN.md`（组件 inventory）；§2 文件·模式索引据 inventory 写「复用现有组件 X」，与 gap-check 读同一份 inventory（gap-check stage 4 先更新、implementation-design stage 5 后读，顺序天然一致）|
+| X2 | High（codex outside-voice）| vp-2 `/pmai-implementation-design` producer 输入（`brief + analysis + PRD + CONTEXT`）无 `DESIGN.md` → implementation-design §2「文件·模式索引」自行重推「照哪些现有代码/组件写」，与 delta-9 gap-check 组件复用关口脱节、可能在 HOW 层复发「组件不复用」 | **ACCEPT** — vp-2 `/pmai-implementation-design` 输入加 `DESIGN.md`（组件 inventory）；§2 文件·模式索引据 inventory 写「复用现有组件 X」，与 gap-check 读同一份 inventory（gap-check stage 4 先更新、implementation-design stage 5 后读，顺序天然一致）|
 
 **汇总**：2 ACCEPT。文档 v3 → 待修订 v4。
 
@@ -249,16 +249,16 @@ UC-2 把 delta-3 纳入 → **真实落地包 = delta-2+3+4+8**。三个 delta �
 | 2026-05-20 | 文档创建（AI 起草）；§0 待 PM 共写并锁定；§1 五个设计问题待逐题过 | — |
 | 2026-05-20 | §0 经 PM + AI 共写并锁定；§1 五题收口 —— Q1 `implementation-design.md`、Q2 只定 3 段框架（字段留 vp-1）、Q3 章节锚点定向引用、Q4 选型论证可选默认空、Q5 stage 衔接确认 | delta-8 v0 进入可 review 状态 |
 | 2026-05-20 | /gstack-autoplan 6-voice review 完成（§X Round 1）—— 14 finding：3 critical / 5 high / 5 medium / 1 low；评分 CEO 4-5 · Eng 4-5 · DX 6-7 | §1-§6 非 implementation-ready，待修订 v1 |
-| 2026-05-20 | UC-1 PM 决议：HOW 由独立 `/implementation-design` skill 产出，不塞 task-plan（对齐 GSD pattern-mapper≠planner）| §1/§2/§3/§4 调整 |
+| 2026-05-20 | UC-1 PM 决议：HOW 由独立 `/pmai-implementation-design` skill 产出，不塞 task-plan（对齐 GSD pattern-mapper≠planner）| §1/§2/§3/§4 调整 |
 | 2026-05-20 | UC-2 PM 决议：真实落地包扩成 delta-2+3+4+8 四者同批 | §4 / §6 |
 | 2026-05-20 | UC-3 PM 决议（重开 Q4）：选型论证不默认空，架构决策表每行带最小决策字段（选择/备选/理由/约束）| §3 |
 | 2026-05-20 | UC-4 PM 决议：implementation-design 只作 task-spec 上游，task-execute 只读 task 工程合同（对齐 GSD executor）| §2 / §3 |
 | 2026-05-20 | §X D8-1~D8-14 全 ACCEPT；下一步 PM 据 §X + 4 UC 决议修订 §1-§6 成 v1 | 见 §X Round 1 |
-| 2026-05-20 | v1 修订完成：§1-§6 据 §X Round 1（14 ACCEPT）+ 4 UC 决议改写 —— 独立 `/implementation-design` skill、task-spec 上游消费（task-execute 零改）、§3.4 加 10-章归宿表、段1 每行带决策字段、§3.3 定 HOW-ID schema、§4.1 加落地顺序 | 文档 v0 → v1 |
+| 2026-05-20 | v1 修订完成：§1-§6 据 §X Round 1（14 ACCEPT）+ 4 UC 决议改写 —— 独立 `/pmai-implementation-design` skill、task-spec 上游消费（task-execute 零改）、§3.4 加 10-章归宿表、段1 每行带决策字段、§3.3 定 HOW-ID schema、§4.1 加落地顺序 | 文档 v0 → v1 |
 | 2026-05-21 | v2 连带修订：delta-3 v1 把 task-spec 定为单文件 typed contract（其 autoplan §X D3-2/D3-16）→ 本文档全文「自包含 `task.engineering.md`」改「task 单文件执行区」、`build-execution-prompt.py` 2→1 路径、vp-3 并入 delta-3 vp-3、vp-4 去 `task.engineering.md.tmpl` 引用。§0 / §X Round 1 表不动 | 文档 v1 → v2 |
 | 2026-05-21 | /plan-eng-review 包复核（§X Round 2）：codex#1 → 新增 vp-5 接 req-stage-gate 编排 + Stage 5→6 gate；codex#6 + PM 决议 → implementation-design 加完整 PM 确认门、§3.1 改写、推翻 D8-14。最小落地包 delta-7 拉入（codex#4，见 umbrella §8）| §2 / §3.1 / §4 / §X 修订，文档 v2 → v3 |
-| 2026-05-21 | /plan-eng-review delta-7/9 全审连带（§X Round 3）：2 ACCEPT —— §3.2 段4 / §3.4 ch7 删「或 delta-7 事件流」备选（X1，delta-7 已收窄 2 类装不下 plan-review 沉淀）、vp-2 `/implementation-design` 输入加 `DESIGN.md` 组件 inventory（X2，codex outside-voice，对接 delta-9 gap-check）。最小落地包 = delta-2+3+4+7+8+9 | 文档 v3 → 待修订 v4 |
-| 2026-05-21 | **v4 修订完成**：§3.2 段4 + §3.4 ch7 删 stale 的「或 delta-7 事件流」备选；§4 vp-2 `/implementation-design` 输入加 `DESIGN.md` 组件 inventory。§0 / §1-§3 其余不动 | 文档 v3 → **v4**，可实施 |
+| 2026-05-21 | /plan-eng-review delta-7/9 全审连带（§X Round 3）：2 ACCEPT —— §3.2 段4 / §3.4 ch7 删「或 delta-7 事件流」备选（X1，delta-7 已收窄 2 类装不下 plan-review 沉淀）、vp-2 `/pmai-implementation-design` 输入加 `DESIGN.md` 组件 inventory（X2，codex outside-voice，对接 delta-9 gap-check）。最小落地包 = delta-2+3+4+7+8+9 | 文档 v3 → 待修订 v4 |
+| 2026-05-21 | **v4 修订完成**：§3.2 段4 + §3.4 ch7 删 stale 的「或 delta-7 事件流」备选；§4 vp-2 `/pmai-implementation-design` 输入加 `DESIGN.md` 组件 inventory。§0 / §1-§3 其余不动 | 文档 v3 → **v4**，可实施 |
 
 ---
 

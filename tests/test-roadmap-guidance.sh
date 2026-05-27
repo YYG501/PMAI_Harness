@@ -5,10 +5,10 @@
 #   T1: _shared/project-questioning.md §5.2 含"历史 + 未来一张表"明示
 #   T2: §5.2 含三态 (done / active / planned) 全列
 #   T3: §5.2 含"requirements/closed" 扫描指引（老项目首次补 done 行）
-#   T4: /project-solution SKILL.md B 场景表格行含"closed" + "done 行"指引
+#   T4: /pmai-project-solution SKILL.md B 场景表格行含"closed" + "done 行"指引
 #   T5: §10.2 步骤总览 B 行含"closed"提示
 #
-# 背景：PM 实测跑 /project-solution B 场景写出的 ROADMAP 只含 planned 行，
+# 背景：PM 实测跑 /pmai-project-solution B 场景写出的 ROADMAP 只含 planned 行，
 # 漏 7 个已 close 的 req 作 done 行。模板 HTML 注释虽有三态说明，但 §5.2
 # 写作规则只说"计划态 + planned"导致 AI 注意力没到模板注释。
 set -uo pipefail

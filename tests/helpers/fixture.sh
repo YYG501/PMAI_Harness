@@ -445,7 +445,7 @@ fixture_create_task_v3() {
 
 | 状态 | 谁行动 | 做什么 |
 |------|--------|--------|
-| \`待执行\` | orchestrator | 等 PM 通过 \`/task-confirm\` 创建 worktree |
+| \`待执行\` | orchestrator | 等 PM 通过 \`/pmai-task-confirm\` 创建 worktree |
 
 ---
 

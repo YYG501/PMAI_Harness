@@ -63,10 +63,10 @@
 | 主题 | 文件 | 现役承接 |
 |---|---|---|
 | 管线重构总纲 | [`管线重构-GSD-review.md`](./归档/完成/管线重构-GSD-review.md) | §8 六步全包落地（CHANGELOG 2026-05-22）|
-| delta-2/4 PRD/solution 对调 | [`PRD-solution-对调.md`](./归档/完成/PRD-solution-对调.md) | `/project-solution` + `/prd-writing` 前移 stage 3 |
-| delta-3 task-spec 重构 | [`task-spec重构.md`](./归档/完成/task-spec重构.md) | task 单文件 typed contract（三区 + `task_format` 标记）|
+| delta-2/4 PRD/solution 对调 | [`PRD-solution-对调.md`](./归档/完成/PRD-solution-对调.md) | `/pmai-project-solution` + `/pmai-prd-writing` 前移 stage 3 |
+| delta-3 task-spec 重构 | [`task-spec重构.md`](./归档/完成/pmai-task-spec重构.md) | task 单文件 typed contract（三区 + `task_format` 标记）|
 | delta-7 req 级事件流 | [`req级事件流-delta7.md`](./归档/完成/req级事件流-delta7.md) | `scripts/req-events.py` + `req-events.jsonl` |
-| delta-8 实现设计视图 | [`实现设计视图-HOW安家.md`](./归档/完成/实现设计视图-HOW安家.md) | `/implementation-design` + `templates/implementation-design.md.tmpl` |
+| delta-8 实现设计视图 | [`实现设计视图-HOW安家.md`](./归档/完成/实现设计视图-HOW安家.md) | `/pmai-implementation-design` + `templates/implementation-design.md.tmpl` |
 | delta-9 跨功能产品规则 | [`项目产品规则-delta9.md`](./归档/完成/项目产品规则-delta9.md) | `templates/PRODUCT-RULES.md.tmpl` + stage 4 gap-check |
 | accept 闸门 | [`accept闸门.md`](./归档/完成/accept闸门.md) | `task-transition.py` 验收前执行证据校验 |
 | 证据修复命令 | [`证据修复命令.md`](./归档/完成/证据修复命令.md) | `task-transition.py --repair-evidence` |
@@ -81,7 +81,7 @@
 |---|---|
 | [`设计-Superset独立Claude执行.md`](./归档/废弃/设计-Superset独立Claude执行.md) | 明标 DEPRECATED（被 PM 手动新窗口取代） |
 | [`设计-stage5-6-task循环.md`](./归档/废弃/设计-stage5-6-task循环.md) | "历史设计备忘 + 讨论中"，部分被替代 |
-| [`task-spec-早期截断.md`](./归档/废弃/task-spec-早期截断.md) | "设计中"半年沉寂；D13 已解 task-spec 相关问题 |
+| [`task-spec-早期截断.md`](./归档/废弃/pmai-task-spec-早期截断.md) | "设计中"半年沉寂；D13 已解 task-spec 相关问题 |
 
 ---
 

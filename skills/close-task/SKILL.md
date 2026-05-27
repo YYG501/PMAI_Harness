@@ -1,27 +1,27 @@
 ---
-name: close-task
+name: pmai-close-task
 description: |
   Task 关闭：对齐 task 文档与原型、检查文档偏差、归档运行时数据、merge 分支、清理 worktree。
   分两个 phase：task 窗口内 prepare（对齐 + 偏差处理 + commit）→ req 窗口 finalize（merge + 删 task worktree/branch）。
 ---
 
-# /close-task
+# /pmai-close-task
 
-> **PM 视图（M2 banner + Decision gate label）**：每个 phase 入口 banner（`status-view.py --banner-only --skill CLOSE-TASK`）；偏差分类闸门 / PM 总审 diff 闸门 label 按 `_shared/pm-view/banner-rules.md` §3 3 硬规则；退出 Next Up 引导 `/close-req`（最后一个 task）或 `/task-confirm <next-task>`。
+> **PM 视图（M2 banner + Decision gate label）**：每个 phase 入口 banner（`status-view.py --banner-only --skill CLOSE-TASK`）；偏差分类闸门 / PM 总审 diff 闸门 label 按 `_shared/pm-view/banner-rules.md` §3 3 硬规则；退出 Next Up 引导 `/pmai-close-req`（最后一个 task）或 `/pmai-task-confirm <next-task>`。
 >
 > **PM 答题规则（M4）**：所有 AskUserQuestion 调用按 `_shared/pm-view/askuser-rules.md` §1 3 硬规则走（空答 STOP / 没拿到答案禁止 merge / runtime 退化保留 wait）。
 
 ## 两阶段调用（必读）
 
-`/close-task` 设计为两阶段调用，AI 根据 cwd 自动判断当前阶段：
+`/pmai-close-task` 设计为两阶段调用，AI 根据 cwd 自动判断当前阶段：
 
 - **Phase 1**（cwd 在 task worktree 内）：task md 对齐 / 偏差处理 / DESIGN.md 沉淀 / commit / 登记 marker
 - **Phase 2**（cwd 在 req worktree 内）：merge → req、归档 .runs/、删 task worktree+branch、auto-chain
 
 PM 体感：
-1. 在 task 窗口验收通过后运行 `/close-task` → AI 走 Phase 1 → 提示切到 req 窗口
+1. 在 task 窗口验收通过后运行 `/pmai-close-task` → AI 走 Phase 1 → 提示切到 req 窗口
 2. PM 切到 req 窗口
-3. 在 req 窗口运行 `/close-task` → AI 走 Phase 2 → 完全关闭 + auto-chain
+3. 在 req 窗口运行 `/pmai-close-task` → AI 走 Phase 2 → 完全关闭 + auto-chain
 
 ## When To Use
 
@@ -64,17 +64,17 @@ PENDING_MARKER="$REPO_ROOT/.runs/pending-close-task.json"
 | task worktree 内（`.worktrees/task-*`） | 不存在 | **Phase 1**（正常对齐/偏差/commit 流程，结束时写 marker） |
 | task worktree 内（同一 task） | 已存在 | **Phase 1 短路**（直接告知"已 ready，请切到 req 窗口"） |
 | req worktree 内（`.worktrees/req-*`） | 存在 | **Phase 2**（merge + delete + 清 marker） |
-| req worktree 内 | 不存在 | **报错**："没有待 finalize 的 task。请先在 task 窗口运行 /close-task" |
-| 主仓或其他位置 | - | **报错**："请在 task 窗口或 req 窗口运行 /close-task" |
+| req worktree 内 | 不存在 | **报错**："没有待 finalize 的 task。请先在 task 窗口运行 /pmai-close-task" |
+| 主仓或其他位置 | - | **报错**："请在 task 窗口或 req 窗口运行 /pmai-close-task" |
 
 ## modulespec 维护策略
 
-close-task **不调** `/doc-update`（任何模式都不调）。task close 只 merge + 归档，**不动 `docs/modules/*.md`**。modulespec 维护推迟到 close-req 末统一 rewrite（doc-update §8 rewrite mode）。
+close-task **不调** `/pmai-doc-update`（任何模式都不调）。task close 只 merge + 归档，**不动 `docs/modules/*.md`**。modulespec 维护推迟到 close-req 末统一 rewrite（doc-update §8 rewrite mode）。
 
 **PM 心智模型注脚**（防误判）：
 
-- 跑完 `/close-task` 看不到 modulespec 变化 = **正常**
-- 沉淀在 `/close-req` 末批量发生，你那时一次审完整段 diff
+- 跑完 `/pmai-close-task` 看不到 modulespec 变化 = **正常**
+- 沉淀在 `/pmai-close-req` 末批量发生，你那时一次审完整段 diff
 - 这是为节省 N 次 doc-update 启动 token 成本
 
 ### 旧 flag tombstone
@@ -174,7 +174,7 @@ B 类的三种「必要」情况：
 
 **PM 回答的内部分流**：
 - PM 说「改 md / md 对齐 / 改 task 文档」等 → AI 用 Edit 改 `$TASK_FILE`，改后展示 git diff
-- PM 说「改代码 / 回退原型」等 → AI **不能自己改代码**。提示 PM：「这条对齐要回退原型。建议先关掉 close-task，回 task 窗口跑 /task-execute 重做后再 close。还是确认要在 close-task 阶段直接改代码？」 → PM 坚持要在本阶段改 → 视为退出 close-task 流程，AI 输出"请回 task 窗口重做"并 exit
+- PM 说「改代码 / 回退原型」等 → AI **不能自己改代码**。提示 PM：「这条对齐要回退原型。建议先关掉 close-task，回 task 窗口跑 /pmai-task-execute 重做后再 close。还是确认要在 close-task 阶段直接改代码？」 → PM 坚持要在本阶段改 → 视为退出 close-task 流程，AI 输出"请回 task 窗口重做"并 exit
 - PM 说「跳过 / 算了 / 不重要」等 → AI 不动 task md，进下一条
 
 **无 B 类（全 A 类，或 N=0）**：本步骤不打断 PM，对齐完直接进步骤 0.4。
@@ -195,7 +195,7 @@ git -C "$TASK_WORKTREE" commit -m "task-NNN close-prep: PM 视图与原型对齐
 - **N = 0**：本步骤跳过，close-task 不阻塞。
 - **全 A 类**：AI 默认对齐完即进步骤 0.4，不阻塞、不打断 PM。
 - **B 类全部跳过**：close-task 不阻塞（PM 决策权，不强制对齐）。
-- **PM 选"改代码"但又要在本阶段改**：agent 输出"请回 task 窗口跑 /task-execute"并 exit；不让 close-task 蜕变成 mini task-execute。
+- **PM 选"改代码"但又要在本阶段改**：agent 输出"请回 task 窗口跑 /pmai-task-execute"并 exit；不让 close-task 蜕变成 mini task-execute。
 - **patch 失败 / git commit 失败**：close-task 阻塞，提示 PM 人工修复后重跑。
 
 **与步骤 1 / 1.5 的边界**：
@@ -210,7 +210,7 @@ git -C "$TASK_WORKTREE" commit -m "task-NNN close-prep: PM 视图与原型对齐
 
 ### 步骤 1：偏差记录留作 close-req 聚合输入（不调 doc-update）
 
-close-task **不调** `/doc-update`。偏差记录原样保留在 task 文件里，由 close-req 步骤 1.5 聚合处理（按目标文档 rewrite OR patch）。
+close-task **不调** `/pmai-doc-update`。偏差记录原样保留在 task 文件里，由 close-req 步骤 1.5 聚合处理（按目标文档 rewrite OR patch）。
 
 校验（这一步必跑，是 close-req 聚合 + adjustment-promote 的输入约束）：
 
@@ -219,9 +219,9 @@ close-task **不调** `/doc-update`。偏差记录原样保留在 task 文件里
 
 用 `detect_format` 分流。判断：
 - **段缺失** → 报错让 PM 补段头（即使填「无」）；不能省段，否则 close-req 聚合 + promote 会找不到锚点
-- **段存在（含「无」或具体表内容）** → 继续 §1.1 分类，**不调 /doc-update**
+- **段存在（含「无」或具体表内容）** → 继续 §1.1 分类，**不调 /pmai-doc-update**
 
-> **为什么不在这里调 /doc-update**：见本文件顶部「modulespec 维护策略」。简言之，per-task 调 doc-update 是 N 次启动成本累加的根源；推迟到 close-req 末统一 rewrite。
+> **为什么不在这里调 /pmai-doc-update**：见本文件顶部「modulespec 维护策略」。简言之，per-task 调 doc-update 是 N 次启动成本累加的根源；推迟到 close-req 末统一 rewrite。
 
 #### 1.1 偏差分类：纠错 vs 计划外简化
 
@@ -398,7 +398,7 @@ PRODUCT-RULES.md 改动 patch-不-commit，PM 在 close 收尾审总 diff 自己
 PRODUCT-RULES.md 改动**未 commit**（步骤 3 提示 PM）；进入步骤 2。
 
 **与步骤 1 文档偏差检查的边界**：
-- 步骤 1 处理"客观文档偏差"（字段名错 / 流程描述错）→ `/doc-update` 对账
+- 步骤 1 处理"客观文档偏差"（字段名错 / 流程描述错）→ `/pmai-doc-update` 对账
 - 步骤 1.5 处理"视觉规范沉淀"（AI 默认 promote 项目级视觉规范，拿不准才问 PM）→ patch DESIGN.md
 - 性质不同，串行处理不合并
 
@@ -458,22 +458,22 @@ AI 向 PM 输出结束语，task 窗口工作到此结束。结束语含**自动
 · 跨功能规则：M 条已写入 docs/PRODUCT-RULES.md（未 commit）
 （X/Y/K/M 为 0 的行省略；全 0 时整段写「无需对齐 / 无沉淀」）
 
-▶ Next Up — 切到 req 窗口跑 /close-task：
+▶ Next Up — 切到 req 窗口跑 /pmai-close-task：
 
-如果 req 窗口还开着：直接切过去运行 `/close-task`
+如果 req 窗口还开着：直接切过去运行 `/pmai-close-task`
 如果 req 窗口已关：
   cd <REQ_WORKTREE_ABS>     ← 替换为本 req worktree 绝对路径（脚本在 finalize marker 写过）
   claude
-  /close-task
+  /pmai-close-task
 
-切到 req 窗口跑 /close-task 后 AI 自动完成本 task 的归档，并自动开下一个 task（如果还有）。
+切到 req 窗口跑 /pmai-close-task 后 AI 自动完成本 task 的归档，并自动开下一个 task（如果还有）。
 ```
 
 **若步骤 1.5 / 1.6 patch 过 DESIGN.md / PRODUCT-RULES.md**（uncommitted），追加提示：
 
 ```
 ⚠️ docs/DESIGN.md / docs/PRODUCT-RULES.md 有未提交的沉淀改动。
-切到 req 窗口跑完 /close-task 后，请审 git diff 这两个文件 —— 这是你对本次自动
+切到 req 窗口跑完 /pmai-close-task 后，请审 git diff 这两个文件 —— 这是你对本次自动
 沉淀的总把关，发现不该写入的当场撤掉，满意后再 commit。
 建议 commit message: docs(DESIGN): 沉淀 task-NNN 反馈 — [摘要]
 ```
@@ -487,7 +487,7 @@ AI 向 PM 输出结束语，task 窗口工作到此结束。结束语含**自动
 ```bash
 if [ ! -f "$PENDING_MARKER" ]; then
   echo "❌ 没有待 finalize 的 task。"
-  echo "   请先在 task 窗口运行 /close-task"
+  echo "   请先在 task 窗口运行 /pmai-close-task"
   exit 1
 fi
 
@@ -531,10 +531,10 @@ rm -f "$PENDING_MARKER"
   Stage 6（task 执行）— task-NNN 已关闭
 
   下一步：task-XXX（<title>，所属模块: [...]）
-  在本（req）窗口运行：/task-spec task-XXX → /task-confirm
+  在本（req）窗口运行：/pmai-task-spec task-XXX → /pmai-task-confirm
   ```
 
-- 若 `PENDING == 0`：**in-place 出 Stage 6→7 关 req 确认门**（不让 PM 再敲一次 `/req-stage-gate`）
+- 若 `PENDING == 0`：**in-place 出 Stage 6→7 关 req 确认门**（不让 PM 再敲一次 `/pmai-req-stage-gate`）
 
   模板跟 `req-stage-gate/SKILL.md`「Stage 6 → 7」段步骤 3 **共用同一段文案**（关 req 模板单一真相源在 req-stage-gate；本处只复述，不允许两边偏移）：
 
@@ -549,13 +549,13 @@ rm -f "$PENDING_MARKER"
 
   PM 答的三种分支：
 
-  - **「确认 / 关 / 关闭」**（或语义等价）→ AI 跑推进 + chain `/close-req`：
+  - **「确认 / 关 / 关闭」**（或语义等价）→ AI 跑推进 + chain `/pmai-close-req`：
     ```bash
     python3 "$PMAI_HOME/scripts/req-transition.py" "$ACTIVE_REQ_DIR" --to 7
     ```
-    成功后直接调用 `/close-req`（不再发"已推进 Stage 6→7"过渡通知，跟 req-stage-gate 续跑模式规则一致）
-  - **「我还要加新 task」/ 提具体 task 描述** → AI 转 `/task-spec` 起新 task，**不**推 Stage 7
-  - **不答关窗口** → 几天后 PM 回来重敲 `/req-stage-gate`，由 req-stage-gate 的 Stage 6→7 入口重新拉起同一个关 req 门（兜底续走路径，确保关 req 门永远有入口）
+    成功后直接调用 `/pmai-close-req`（不再发"已推进 Stage 6→7"过渡通知，跟 req-stage-gate 续跑模式规则一致）
+  - **「我还要加新 task」/ 提具体 task 描述** → AI 转 `/pmai-task-spec` 起新 task，**不**推 Stage 7
+  - **不答关窗口** → 几天后 PM 回来重敲 `/pmai-req-stage-gate`，由 req-stage-gate 的 Stage 6→7 入口重新拉起同一个关 req 门（兜底续走路径，确保关 req 门永远有入口）
 
 **额外提示（仅当 Phase 1 步骤 1.5 patch 过 DESIGN.md 时）**：
 

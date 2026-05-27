@@ -1,10 +1,10 @@
 ---
-name: cancel-req
+name: pmai-cancel-req
 description: |
   废弃当前 req：确认后清理所有 worktree 和分支，标记 cancelled，不 merge 到 main。
 ---
 
-# /cancel-req
+# /pmai-cancel-req
 
 ## When To Use
 
@@ -36,7 +36,7 @@ echo "SKILL: cancel-req"
 确认废弃？（Y/N）
 ```
 
-如果 PM 犹豫或不确定，建议 PM 运行 `/task-status` 先查看当前状态。
+如果 PM 犹豫或不确定，建议 PM 运行 `/pmai-task-status` 先查看当前状态。
 
 ### 步骤 2：执行废弃
 
@@ -66,7 +66,7 @@ Main 分支未受影响（零污染）。
 worktree 和 branch 待清理。请退出当前会话，回主仓后跑：
   bash scripts/cleanup-pending-worktrees.sh
 
-运行 /new-req 开始新需求。
+运行 /pmai-new-req 开始新需求。
 ```
 
 ## Rules

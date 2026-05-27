@@ -1,16 +1,16 @@
 ---
-name: req-analysis
+name: pmai-req-analysis
 description: |
   Stage 2：读 brief.md 做第一性原理批判性分析，写 analysis.md（10 章固定结构 + ## 未决问题 section），
   调 analysis-reviewer 一次后把报告原文贴 chat，让 PM 三选一决定下一步（AI 按反馈改 / PM 自改 / 接受现状）。
-  由 /req-stage-gate 在 stage 1→2 时调用。
+  由 /pmai-req-stage-gate 在 stage 1→2 时调用。
 ---
 
-# /req-analysis
+# /pmai-req-analysis
 
 ## When To Use
 
-- Orchestrator 在 stage 1→2 调用（由 `/req-stage-gate` 触发）
+- Orchestrator 在 stage 1→2 调用（由 `/pmai-req-stage-gate` 触发）
 
 ## PM 视图规则（必读）
 
@@ -427,4 +427,4 @@ reviewer 返回后，**先把 reviewer 报告完整原文贴回 chat**（不管�
 - **允许动作**：基于 brief.md / PROJECT.md 做第一性原理分析、提出未决问题、调 analysis-reviewer 一轮一停
 - **禁止顺手推进**：不要自动产出 `prd.md`、`task-plan.md`，不要直接进入原型实现
 - **禁止逃生舱**：没有"带假设前进"模式；想绕开 reviewer 的合法路径只有「步骤 5 选 C 显式接受现状」
-- **退出条件**：analysis.md 已写、reviewer 至少跑过一次且报告原文已贴 chat、PM 已显式选了 A/B/C 且最终选择是 A 或 C（B 会回到步骤 4）。控制权交回 /req-stage-gate，附带 `review_outcome` 字段
+- **退出条件**：analysis.md 已写、reviewer 至少跑过一次且报告原文已贴 chat、PM 已显式选了 A/B/C 且最终选择是 A 或 C（B 会回到步骤 4）。控制权交回 /pmai-req-stage-gate，附带 `review_outcome` 字段

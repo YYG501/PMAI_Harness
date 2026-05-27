@@ -12,13 +12,13 @@
 
 ### §0.1 痛点（1-3 句）
 
-office-hours 在 Stage 1（`/new-req` 选项 1）和 Stage 2（v3 stage-gate 选择门）都"被调用一次"看起来不合理 —— 根因不是"集成 2 处"，而是**框架把"用户视角的一次讨论"硬拆成 Stage 1（感受）+ Stage 2（分析）两阶段**。用户视角只是"提需求 → 跟 AI 讨论 → 进 PRD"，讨论工具 2 选 1（office-hours 六问 / req-analysis 第一性原理 + reviewer）。
+office-hours 在 Stage 1（`/pmai-new-req` 选项 1）和 Stage 2（v3 stage-gate 选择门）都"被调用一次"看起来不合理 —— 根因不是"集成 2 处"，而是**框架把"用户视角的一次讨论"硬拆成 Stage 1（感受）+ Stage 2（分析）两阶段**。用户视角只是"提需求 → 跟 AI 讨论 → 进 PRD"，讨论工具 2 选 1（office-hours 六问 / req-analysis 第一性原理 + reviewer）。
 
 ### §0.2 触发场景
 
 | # | 场景描述 | 实证证据 |
 |---|---|---|
-| 1 | PM 在 `/new-req` 被问"选项 1 自跑 office-hours / 选项 2 AI 引导" → 选 1 → 进 worktree 跑 stage-gate → 又被问 Stage 2 分析 → 重复 | **EVIDENCE**：PM 表述（本会话）"officehour 可能会在两个阶段被调用，感觉不太合理" |
+| 1 | PM 在 `/pmai-new-req` 被问"选项 1 自跑 office-hours / 选项 2 AI 引导" → 选 1 → 进 worktree 跑 stage-gate → 又被问 Stage 2 分析 → 重复 | **EVIDENCE**：PM 表述（本会话）"officehour 可能会在两个阶段被调用，感觉不太合理" |
 | 2 | PM 觉得用户视角是"一次讨论"不是 brief+analysis 两阶段 | **EVIDENCE**：PM 表述"从用户视角来看，就是用户提需求，然后讨论，讨论工具 2 选 1" |
 | 3 | TTHW 拖时间 | **EVIDENCE**：`TODOS.md:62` HW1 office-hours 六问拖时间 |
 | 4 | PM 原意是"用户一开始就调用 office-hours" | **EVIDENCE**：PM 表述"原来的设计是用户一开始就会调用 officehours" |
@@ -28,7 +28,7 @@ office-hours 在 Stage 1（`/new-req` 选项 1）和 Stage 2（v3 stage-gate 选
 
 **两层根因**：
 
-1. **直接根因（v2 已识别）**：Stage 2 下游契约 = "读 `$ACTIVE_REQ_DIR/analysis.md` 这个特定文件"，文件 + 结构双约束让下游死耦合到 `/req-analysis` 输出形态。
+1. **直接根因（v2 已识别）**：Stage 2 下游契约 = "读 `$ACTIVE_REQ_DIR/analysis.md` 这个特定文件"，文件 + 结构双约束让下游死耦合到 `/pmai-req-analysis` 输出形态。
 2. **体验根因（v3 新识别）**：Stage 1+2 在框架里是两个独立阶段，每个阶段都有自己的 office-hours hook，用户体验跟"一次讨论" mental model 不一致。
 3. **架构根因（v4 新识别）**：v1 → v2 → v3 路径契约方向基于"office-hours 上游会变"错误前提（fact-check 推翻）；req 自包含原则要求 stage 2 真相源在 req 内（git / CI / 跨机器 / 归档 / consumer 仓全维度），不能引用仓外 `~/.gstack/` 路径（Codex Round 3 T1 R3-C2 命中）。
 
@@ -39,8 +39,8 @@ office-hours 在 Stage 1（`/new-req` 选项 1）和 Stage 2（v3 stage-gate 选
 | 1 | 让 office-hours 内嵌 4 层 / 跑 reviewer | gstack 上游 skill 本仓不改 |
 | 2 | 把 Stage 1+2 真合并（彻底删 brief/analysis 二选一）| D5 review 否决路径 X，~1-2 周；本设计选 Z 路径"体验包装、架构不重构" |
 | 3 | 多 req 共享同一份 office-hours 设计稿 | v4 snapshot 后每 req 各自有独立 stage2-office-hours.md，天然独立 |
-| 4 | office-hours `Open Questions` 在 B 分支强制 PM 答题 | office-hours prose 不带占位答题；未决问题闸门是 `/req-analysis` 输出契约 |
-| 5 | `/req-analysis` 内部分流（子分支）| 不清晰；本设计 stage-gate 入口分流 |
+| 4 | office-hours `Open Questions` 在 B 分支强制 PM 答题 | office-hours prose 不带占位答题；未决问题闸门是 `/pmai-req-analysis` 输出契约 |
+| 5 | `/pmai-req-analysis` 内部分流（子分支）| 不清晰；本设计 stage-gate 入口分流 |
 | 6 | office-hours Supersedes 链自动跟进 | v4 snapshot 时刻冻结；PM 想换版本 → 回 Stage 2 重做 |
 | 7 | term-detector 扫 `docs/modules/INDEX.md` 比对已有模块冲突 | trade；stage 4 gap-check 兜底 |
 | 8 | attachments hook 在 B 分支补 attachments | **D-iii 独立设计**解决 |
@@ -48,7 +48,7 @@ office-hours 在 Stage 1（`/new-req` 选项 1）和 Stage 2（v3 stage-gate 选
 | 10 | AI 替 PM 调起 `/office-hours` | new-req 边界一致（AI 不替 PM 调） |
 | 11 | Stage 3 用 `/plan-ceo-review` 反向对齐 PRD | **D-ii 独立设计**解决 |
 | 12 | 引入 Stage 2 规范化 schema contract（office-hours prose → schema 字段化）| **v4 §5 待验**：相信 LLM 全文喂消化能力（v0 时 PM 已 ACCEPT prd-writing LLM-based fact）；消费仓真实 req 验证后再决定是否需要 |
-| 13 | `/new-req` 主对话里也提供 office-hours 选择门 | Z 路径选择 stage-gate 处理体验包装；如未来 new-req 需要选择门 → 独立 D-* |
+| 13 | `/pmai-new-req` 主对话里也提供 office-hours 选择门 | Z 路径选择 stage-gate 处理体验包装；如未来 new-req 需要选择门 → 独立 D-* |
 | 14 | 升级 `STAGE_OUTPUT_FILES` schema 为 `dict[int, list[str]]` 支持多产物 | **Codex R3-H1 命中**：会破 req-transition.py:247 类型；v4 不升级 schema，新建独立 helper 不动现有字典 |
 
 ---
@@ -64,7 +64,7 @@ office-hours 在 Stage 1（`/new-req` 选项 1）和 Stage 2（v3 stage-gate 选
 ```
 Stage 1（new-req 主对话）：PM 写初步 brief.md → handoff → 进 worktree
   ↓
-PM 在 worktree 跑 /req-stage-gate
+PM 在 worktree 跑 /pmai-req-stage-gate
   ↓
 [v3 体验包装层] AI 一开口：brief 二次确认 + 需求讨论入口（合二为一 chat）
 
@@ -82,7 +82,7 @@ PM 在 worktree 跑 /req-stage-gate
   ↓
 [分流 A 结构化]
   ↓
-  /req-analysis（现状不动）
+  /pmai-req-analysis（现状不动）
   ↓
   未决问题闸门 → 推进确认门
   ↓
@@ -179,7 +179,7 @@ Helper 通用 stage_num 参数：future-proof，未来 stage 3/5 加路径契约
 
 ### §1.5 PM 视角（Z 路径体验包装）
 
-PM 进 worktree 跑 `/req-stage-gate` 看到的就是**一次对话** —— brief 二次确认 + 工具选择 + 改 brief 退路。选完 AI 后台跑完 stage 1→2 推进。
+PM 进 worktree 跑 `/pmai-req-stage-gate` 看到的就是**一次对话** —— brief 二次确认 + 工具选择 + 改 brief 退路。选完 AI 后台跑完 stage 1→2 推进。
 
 stage 1/2 拆分被 hide 进 AI 内部，PM 不感知"stage 推进 N→N+1" 仪式。
 
@@ -189,7 +189,7 @@ stage 1/2 拆分被 hide 进 AI 内部，PM 不感知"stage 推进 N→N+1" 仪�
 
 | 现役 mechanism | v4 关系 | 改动 |
 |---|---|---|
-| `req-stage-gate/SKILL.md` Stage 1→2 步骤 | **改** | brief 二次确认 + 分析方式选择门合二为一；A 走 /req-analysis + helper 写元数据；B 走 office-hours bridge + **AI 复制 snapshot** + helper 写元数据 |
+| `req-stage-gate/SKILL.md` Stage 1→2 步骤 | **改** | brief 二次确认 + 分析方式选择门合二为一；A 走 /pmai-req-analysis + helper 写元数据；B 走 office-hours bridge + **AI 复制 snapshot** + helper 写元数据 |
 | `req-analysis/SKILL.md` | **不动** | A 分支照常 |
 | `new-req/SKILL.md` | **改**（§1.4 PM 拍定）| 砍选项 1，简化为单一"AI 引导写 brief"路径 |
 | `gstack-office-hours/SKILL.md` | **不动** | gstack 上游 |
@@ -216,7 +216,7 @@ stage 1/2 拆分被 hide 进 AI 内部，PM 不感知"stage 推进 N→N+1" 仪�
 | vp | 任务 | 估时 |
 |---|---|---|
 | vp-1 | `scripts/_lib/state.py` 加 `get_stage_source(req_dir, n)` + `set_stage_source(req_dir, n, filename, tool, origin=None)` helper；复用 `stages.py STAGE_OUTPUT_FILES` 作 fallback（不升级 schema）；`stages.py` 改注释扩双用途说明 | 25 min |
-| vp-2 | `req-stage-gate/SKILL.md` Stage 1→2：brief 二次确认 + 分析方式选择门合二为一；A 跑 /req-analysis + helper 写元数据；B 走 office-hours bridge | 50 min |
+| vp-2 | `req-stage-gate/SKILL.md` Stage 1→2：brief 二次确认 + 分析方式选择门合二为一；A 跑 /pmai-req-analysis + helper 写元数据；B 走 office-hours bridge | 50 min |
 | vp-2b | `new-req/SKILL.md` 砍选项 1（§1.4 PM 拍定）| 20 min |
 | vp-3 | office-hours bridge：探测 `~/.gstack/` → PM 选/跑新/手动指定 → **AI Read 源文件 + Write 复制到 `$ACTIVE_REQ_DIR/stage2-office-hours.md`** → helper 写 `.req-meta.json` (stage2_source / stage2_tool / stage2_source_origin) | 45 min |
 | vp-4 | 下游 9 处改 helper 调用（Codex R3-M1 扩 grep）：prd-writing / task-plan / implementation-design / close-task 文案 / req-analysis 步骤 3.5 term-detector hook / **task-spec / doc-update / templates/task-plan.md.tmpl / templates/CLAUDE.md.tmpl** | 50 min |
@@ -239,7 +239,7 @@ stage 1/2 拆分被 hide 进 AI 内部，PM 不感知"stage 推进 N→N+1" 仪�
 | B 分支跑第一性原理 4 层 | office-hours 等价覆盖；强补违反 §0.1 |
 | B 分支跑 attachments hook | §0.4.8 D-iii 独立 |
 | B 分支跑增量分析基线读取 | §0.4.7 trade |
-| B 分支跑未决问题闸门 | 闸门是 /req-analysis 输出契约；office-hours `Open Questions` prose 不带占位（§0.4.4）|
+| B 分支跑未决问题闸门 | 闸门是 /pmai-req-analysis 输出契约；office-hours `Open Questions` prose 不带占位（§0.4.4）|
 | **v0 复制方案中 v1 反转的"office-hours 会变"论据** | **v4 fact-check 推翻**（§0.2.5）：office-hours 文件名带 datetime 戳、Supersedes 是新文件链、review loop 只在 approval 前 — 文件生成后冻结；v1 论据基于错误前提，反转 v1 决策回到复制 |
 | **v1 引用 + metadata + follow 方案** | v2 review 否决（"架构不灵活" + ~6-8h 改 N SKILL follow） |
 | **v3 引用 `~/.gstack/` 外部路径** | **Codex T1 R3-C2 命中**（v4 反转）：req 自包含原则（git / CI / 跨机器 / 归档 / consumer 仓全维度），不能引用仓外；改 snapshot 进 req |
@@ -248,7 +248,7 @@ stage 1/2 拆分被 hide 进 AI 内部，PM 不感知"stage 推进 N→N+1" 仪�
 | **D2 Round 3 check-open-questions.py 加 stage2_tool 读取** | **Codex R3-M2 命中**（v4 反转）：doc lint 是通用 utility（被 project-solution 用 --require-section 调），不该 req-aware；skip 由 stage-gate caller 控制（B 分支不调 lint）|
 | Supersedes 链自动跟进 | §0.4.6 trade；PM 想换版本 → 回 Stage 2 重做 |
 | AI 主动调起 `/office-hours` | new-req 边界（§0.4.10）|
-| 保留 `/new-req` 选项 1 | §1.4 PM 拍定砍 |
+| 保留 `/pmai-new-req` 选项 1 | §1.4 PM 拍定砍 |
 | Stage 2 规范化 schema contract（office-hours prose → 字段化）| **Codex R3-H2** → §0.4.12 DEFER；v4 §5 待验项，相信 LLM 全文喂消化能力 |
 
 ---
@@ -273,7 +273,7 @@ stage 1/2 拆分被 hide 进 AI 内部，PM 不感知"stage 推进 N→N+1" 仪�
 | R5 | 下游 helper 调用不一致 / 9 处 grep 漏改 | vp-6 端到端覆盖 |
 | R6 | `req-transition.py:247` 改 helper 后旧 req 兼容性 | vp-6 ③ 旧 req 兼容测试覆盖 |
 | R7 | v3 体验包装 chat 合并输出过长 | vp-2 控制；摘要 ≤ 3 行；选项段独立 |
-| R8 | resume 协议 PM 中断后 chat 长时间断（PM 关 chat 几天）| PM 重开 chat 跑 `/req-stage-gate` 续走 stage-gate 续跑模式（现仓已有机制）|
+| R8 | resume 协议 PM 中断后 chat 长时间断（PM 关 chat 几天）| PM 重开 chat 跑 `/pmai-req-stage-gate` 续走 stage-gate 续跑模式（现仓已有机制）|
 
 ---
 
@@ -408,7 +408,7 @@ v2 基础上加 PM 视角"一次需求讨论" 体验包装；B 分支引用 ~/.g
 | 2026-05-24 | review D2-v2 → v1 → v2（架构不灵活 → 路径契约）| 6-8h → 3h |
 | 2026-05-24 | Round 2 D1 / D2：helper 通用 + 复用字典 | forward-compatible 升级（部分被 v4 反转）|
 | 2026-05-24 | Round 2 D4 (B) / D5 (Z) → v2 → v3：scope 扩 stage 1+2 + 体验包装 | 3h → 4h 5min |
-| 2026-05-24 | §1.4 PM 拍定：砍 /new-req 选项 1 | +20 min vp-2b |
+| 2026-05-24 | §1.4 PM 拍定：砍 /pmai-new-req 选项 1 | +20 min vp-2b |
 | 2026-05-24 | Round 3 D1 / D2：multi-path schema + script lint（v3 → v3.5 微调）| 暂存（被 v4 反转）|
 | 2026-05-24 | **Round 3 D3 Codex outside voice T1 + PM "office-hours 产出会不会变" 提问 → AI fact-check** | **v3 → v4 整体反转**：snapshot 复制方案 + 反转 Round 2 D2 / Round 3 D1 / Round 3 D2 |
 | 2026-05-24 | **v4 锁定**：snapshot 复制 + Codex 8 finding 修复（ACCEPT 12 / DEFER 1 / PARTIALLY ACCEPT 1）| 估时 ~5h；测试 ≥ 405/0 |

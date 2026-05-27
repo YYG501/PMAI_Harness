@@ -13,7 +13,7 @@
 > - v2 修订重点保留：重排代码层 P0 / 修过满表述 / 修技术细节
 
 **Changelog**：
-- **v3.10（本版，2026-05-17）：PM 1-1 逐项判定，§10.7 主表从 7 项缩到 3 项 — (1) #1 ADR 选 c 方案（模板 0.5d + 回填 D1-D15 1-1.5d）；(2) #2 lark-adapter 选 b 方案（adapter + lint，0.5-1d）；(3) 新增「读层 `state_reader.py`」（PM 一句"AI 能看到 statusview 吗"暴露的真痛点：7 skill 走 status-view，10 skill 各自 grep raw state；§10.7 之前 7 轮 review 漏看；0.5-1d）；(4) ⏸️ #3 /extract-learnings 挪到等触发（auto memory 边界没说清，需单独重设计）；(5) ❌ 砍 #4 manifest + #5 required_reading XML（跟之前 commit be47fca 落地的 PM-VIEW-RULES §9.1 单一权威源方案冲突）；(6) ❌ 砍 #6 SKILL 5 段骨架（与 Claude Code 官方 SKILL.md 格式无冲突但是 PMAI 自创"方言"，违反 memory `feedback_gstack_keep_official` 克制原则）；(7) ❌ 砍 #7 mutation 入口（现状 `/task-status` + 三道防线 + 新读层 state_reader 已够；真痛点在读层不在写层）**
+- **v3.10（本版，2026-05-17）：PM 1-1 逐项判定，§10.7 主表从 7 项缩到 3 项 — (1) #1 ADR 选 c 方案（模板 0.5d + 回填 D1-D15 1-1.5d）；(2) #2 lark-adapter 选 b 方案（adapter + lint，0.5-1d）；(3) 新增「读层 `state_reader.py`」（PM 一句"AI 能看到 statusview 吗"暴露的真痛点：7 skill 走 status-view，10 skill 各自 grep raw state；§10.7 之前 7 轮 review 漏看；0.5-1d）；(4) ⏸️ #3 /extract-learnings 挪到等触发（auto memory 边界没说清，需单独重设计）；(5) ❌ 砍 #4 manifest + #5 required_reading XML（跟之前 commit be47fca 落地的 PM-VIEW-RULES §9.1 单一权威源方案冲突）；(6) ❌ 砍 #6 SKILL 5 段骨架（与 Claude Code 官方 SKILL.md 格式无冲突但是 PMAI 自创"方言"，违反 memory `feedback_gstack_keep_official` 克制原则）；(7) ❌ 砍 #7 mutation 入口（现状 `/pmai-task-status` + 三道防线 + 新读层 state_reader 已够；真痛点在读层不在写层）**
 - **v3.9（2026-05-17）：§10.7 focused review 落 1 项核心修订 — Context Monitor hook 从主表 #2 挪到 🕓 等触发条件再启动。理由：PM 问"Claude Code statusline 已经直接看到 ctx 用量了，还需要这个吗"——根因暴露：GSD 原版 hook 价值是"让 AI agent 知道阈值（statusline 只给 user 看）"，但 PMAI 主入口是 Claude Code（user 已能直接看），剩余边际价值仅"AI 在 65% 时主动建议 close-req"。前 7 轮 autoplan + codex review 都把"GSD 有→PMAI 应抄"当成默认而没核 root cause 是否一致。违反 memory `feedback_gstack_keep_official`（借鉴克制）+ §0 PAIN_LINK 锁机制（PMAI 痛点要先于"GSD 有"）。整张主表后续 #3-#8 重编号 → #2-#7；总启动项 8 → 7；总工作量 6-9 天 → 5-8 天**
 - **v3.8（2026-05-17）：codex review 落 6 finding 修订 — (1) §10.3 加 STALE banner + 删除"砍 I-DC1/I-AD5"误判句（v3.4 RV1 推翻）；(2) Reader Map "下周做什么"入口由 §7.2+§8 改指 §10.7；(3) §1.4 GSD hook 描述按 gsd-ref 实物纠正（12 脚本含 1 worker helper，事件含 statusLine/SessionStart/PreToolUse/PostToolUse，Gemini AfterTool）；(4) Context Monitor `AfterTool` → `PostToolUse`（Claude Code 主入口）；(5) Codex hook adapter 前提更新（codex-cli 0.130.0 `hooks` 已 `stable`，PAIN_LINK 弱暂停）；(6) skill 数 21 → 20（filesystem 实测）+ manifest 起手要求"从 filesystem 生成不手填"**
 - **v3.7（2026-05-17）：补全 §10.7 漏项 — 之前只列 8 actionable + 5 暂停 + 10 废弃 = 23 项，对照 §2 矩阵原 28 项 + autoplan 新增发现漏 9 项。补全后总表：8 actionable + 1 已部分实施 + 5 暂停（PAIN 弱）+ 10 等触发条件 + 10 废弃 = 34 项**
@@ -358,15 +358,15 @@ def suggest_next_action(meta, tasks, req_dir) -> tuple[str, str | None]:
     # 改成返回二元组：next + blocking 原因（如有）
     
     # 示例：
-    # ("/task-spec task-005", None)  # 顺畅推进
-    # ("/close-task task-003", "task-003 状态=已完成但 worktree 仍有未 commit 改动")
+    # ("/pmai-task-spec task-005", None)  # 顺畅推进
+    # ("/pmai-close-task task-003", "task-003 状态=已完成但 worktree 仍有未 commit 改动")
     # ("等 PM 决策", "未决问题 #2 未回答")
 ```
 
 输出格式：
 ```
-下一步：/task-spec task-005
-⚠️ 阻塞：task-004 状态=执行中但事件流缺 execution_started（I-CT7 风险，建议先 /task-status --task task-004 排查）
+下一步：/pmai-task-spec task-005
+⚠️ 阻塞：task-004 状态=执行中但事件流缺 execution_started（I-CT7 风险，建议先 /pmai-task-status --task task-004 排查）
 ```
 
 **工作量**：1-2 小时
@@ -703,10 +703,10 @@ python3 scripts/check-inventory-drift.py || exit 1
 
 **目标**：D13 那种"总结教训"自动化。
 
-**v2 修正**：v1 写"`/close-req` 后自动跑"违反 `INVARIANTS.md` I-RV1（AI 不得自动调用 review 类工具）。改成 **PM 显式触发**：
+**v2 修正**：v1 写"`/pmai-close-req` 后自动跑"违反 `INVARIANTS.md` I-RV1（AI 不得自动调用 review 类工具）。改成 **PM 显式触发**：
 
 **触发方式**：
-1. `/close-req` 完成时**列推荐**："建议跑 `/extract-learnings` 沉淀本 req 经验"（不自动跑）
+1. `/pmai-close-req` 完成时**列推荐**："建议跑 `/extract-learnings` 沉淀本 req 经验"（不自动跑）
 2. PM 显式输入"沉淀经验 / 总结这轮 / 跑 extract-learnings"才执行
 
 **3 类沉淀内容**：
@@ -791,7 +791,7 @@ LEARNINGS.md（业务仓产出，模板放 templates/）
 | 变体 | 不抄理由 | 何时回头看 |
 |---|---|---|
 | MVP（垂直切片 + SKELETON） | quick-fix 已覆盖轻量场景；MVP 中间档暂无诉求 | ExampleConsumerApp dogfood 5+ req 后，若"做原型给老板看"场景 quick-fix 容纳不下 |
-| Spike | 你的 `/quick-fix` + worktree 隔离已覆盖；"独立探索区"概念可以用 `requirements/explorations/` 轻量目录替代 | 当 PM 出现"想试个想法但不确定要不要开 req"的频次 ≥ 3 次/月时 |
+| Spike | 你的 `/pmai-quick-fix` + worktree 隔离已覆盖；"独立探索区"概念可以用 `requirements/explorations/` 轻量目录替代 | 当 PM 出现"想试个想法但不确定要不要开 req"的频次 ≥ 3 次/月时 |
 | Spec（Ambiguity 评分 + 5 视角采访）| 4 维度 + 权重公式对 PM 太工程化 | 5 视角采访 pattern 已纳入 P1-#9（questioning-discipline） |
 | UI-phase | PM 不主管 UI 设计细节；gstack `/design-consultation` `/design-shotgun` 已覆盖 | 永不（gstack 是更优解） |
 | Secure-phase | PM 不主管安全 | 永不 |
@@ -810,7 +810,7 @@ GSD 用 `.planning/config.json` + "Absent = Enabled" 让用户开关 workflow.re
 
 GSD 有 `.planning/active-workstream` 概念，支持**多个独立工作流并行**（不同业务 / 不同租户）。
 
-**v2 修正**：v1 写"PM 一个人不并行"与现状冲突——`README.md:87` 明确说 v4 已支持 req 内 task 并行（开多新窗口跑 `/task-execute`）。
+**v2 修正**：v1 写"PM 一个人不并行"与现状冲突——`README.md:87` 明确说 v4 已支持 req 内 task 并行（开多新窗口跑 `/pmai-task-execute`）。
 
 **正确表述**：
 - ✅ PMAI **已支持** req 内 task 并行（worktree 天然隔离）
@@ -958,7 +958,7 @@ P2 列表（§2 #13-#22）按"什么实证事件出现就实施"组织：
 | 所有 PM 视图 SKILL.md 步骤 0 含 `<required_reading>` XML 块 | ✅ `bash tests/test-skill-structure.sh` 通过 | 2 |
 | 任何 `Read` 工具读到 injection pattern 弹警告 | 🟡 PM 在 chat 看到 advisory（不阻断）| 3 |
 | `/extract-learnings` 仅 PM 显式触发（不自动跑）| 🟡 `INVARIANTS.md` I-RV4 + PM 验证（**非自动化测试**）| 3 |
-| `/close-req` 完成后呈交块含 LEARNINGS 推荐 | 🟡 PM 在 chat 看到 | 3 |
+| `/pmai-close-req` 完成后呈交块含 LEARNINGS 推荐 | 🟡 PM 在 chat 看到 | 3 |
 | 任何 context 用量 ≥ 50% 收到提醒 | 🟡 PM 在 chat 看到 | 3 |
 
 **Wave 4 完成后**（按合并方案选定再补）：
@@ -967,9 +967,9 @@ P2 列表（§2 #13-#22）按"什么实证事件出现就实施"组织：
 **已 DEFER / 延后到代码层 Wave 的项（不在本表）**：
 - ~~MUTATIONS.md 登记~~ → §3.0.2 延后到真实实施
 - ~~Inventory drift 测试覆盖 5 类 entity~~ → §3.0.4 延后
-- ~~`/task-status` 含 blocking reasons~~ → §3.0.3 延后
+- ~~`/pmai-task-status` 含 blocking reasons~~ → §3.0.3 延后
 - ~~SKILL.md 行数 ≤ 400~~ → §3.0.1 单独可提前（4 个已超阈值 skill 有豁免计划）
-- ~~`/close-req` 呈交块含 verified/claimed/unverified 分流~~ → §3.5 整节 DEFER（D6=B）
+- ~~`/pmai-close-req` 呈交块含 verified/claimed/unverified 分流~~ → §3.5 整节 DEFER（D6=B）
 
 **图例**：✅ = 自动化测试可证；🟡 = 运行时可观测但不可自动证明
 
@@ -991,7 +991,7 @@ P2 列表（§2 #13-#22）按"什么实证事件出现就实施"组织：
 | C-F1 | High | 并行 task `files_modified / depends_on` 应该提到 P1-lite，不能等撞文件再补 | §2 #19 | `README.md:87` v4 已支持并行 + `INVARIANTS.md:217-218` | **待 PM 决** |
 | C-F2 | High | P0 顺序错——应先做"评审防膨胀机制落地化"（PAIN_LINK + EVIDENCE + source audit 上升为 P0A），再做 Mutation Registry / Inventory / size lint | §7.1 | `docs/design/modulespec-重写方案.md:150-165` D13 5 轮膨胀实证 | **待 PM 决** |
 | C-F3 | Medium | 缺对称防线 "Scope Integrity Contract"——AI 也可能为过 review 偷偷缩 scope 删原始痛点覆盖 | §5（GSD 比 PMAI 强 scope reduction prohibition）| `docs/gsd-借鉴分析.md:135,733` | **待 PM 决** |
-| C-F4 | Medium | §4.2 把 Spike 用 `/quick-fix` 覆盖太快——Spike 价值是"先用可逆实验拿证据"，D13 验证脚本本质就是手写 Spike | §4.2 | `docs/design/d13-验证脚本.md:116-123` | **待 PM 决** |
+| C-F4 | Medium | §4.2 把 Spike 用 `/pmai-quick-fix` 覆盖太快——Spike 价值是"先用可逆实验拿证据"，D13 验证脚本本质就是手写 Spike | §4.2 | `docs/design/d13-验证脚本.md:116-123` | **待 PM 决** |
 | C-F5 | Medium | §4.1 拒绝 TS 但 Query registry 没具体落地——`scripts/_lib/queries/` Python 版应 P1（Mutation 管写、Query 管读，成对落地）| §4.1 / §5 | `INVARIANTS.md:11-24` 60 条 + ~40 脚本现状 | **待 PM 决** |
 | C-F6 | Low | UI/Secure-phase "永不" 太绝对——auth/PII/payment/admin destructive 时应有 5 行 secure checklist | NONE | ASSUMED | **DEFER**（PAIN_LINK=NONE） |
 
@@ -1030,7 +1030,7 @@ P2 列表（§2 #13-#22）按"什么实证事件出现就实施"组织：
 |---|---|---|---|---|---|
 | C-F1 | High | Mutation Registry 示例**事件契约写反**——文档说 `req-transition.py` 发 `stage_changed` 但代码只写 .req-meta.json；说 `close-task.sh` 只消费 events 但脚本删 events 后又 append `task_closed`。照表落地会固化错误契约，影响 close-task 事件归档和 I-CT7 审计语义 | §3.0.2 / §7.3 | `docs/gsd-借鉴分析.md:273-278` + `scripts/req-transition.py:283-293` + `scripts/close-task.sh:299-306` | **待 PM 决** |
 | C-F2 | High | `required_reading` **覆盖范围矛盾**——文档说"所有 PM 视图 SKILL.md 必含"，lint 又说扫所有 SKILL.md，但改动范围只列 6 个 skill；项目实际 21 skill。两种实现都不能同时满足文档和 §7.3 验证标准 | §3.1 / §7.3 | `docs/gsd-借鉴分析.md:19,371-386` | **待 PM 决** |
-| C-F3 | Medium | P0-#25 改 `suggest_next_action()` 签名会破坏现有 2 个 renderer（579 / 638 两处都是 `print(next_action)`）；§7.3 又把 `/task-status` 标 🟡 但现有 `tests/test-status-view.sh` 已自动化，应升级到 ✅ | §3.0.3 / §7.3 | `docs/gsd-借鉴分析.md:300-310,808` + `scripts/status-view.py:400-437,579-639` + `tests/test-status-view.sh:115-147` | **待 PM 决** |
+| C-F3 | Medium | P0-#25 改 `suggest_next_action()` 签名会破坏现有 2 个 renderer（579 / 638 两处都是 `print(next_action)`）；§7.3 又把 `/pmai-task-status` 标 🟡 但现有 `tests/test-status-view.sh` 已自动化，应升级到 ✅ | §3.0.3 / §7.3 | `docs/gsd-借鉴分析.md:300-310,808` + `scripts/status-view.py:400-437,579-639` + `tests/test-status-view.sh:115-147` | **待 PM 决** |
 | C-F4 | Medium | `questioning-discipline` **抽象边界泄漏**——§2 #9 作为独立 P1 / §3.7 又说归入 `_shared/thinking/` / §3.8 同时新建 `_shared/anti-patterns/questioning.md` / §7.2 仍把 #9 排在 #7/#8 之前。三个入口管同组规则，`<required_reading>` 易重复引用或漂移 | §3.7 / §3.8 / §7.2 | `docs/gsd-借鉴分析.md:202-204,568-574,588-592,789-791` | **待 PM 决** |
 | C-F5 | Medium | Inventory drift 方案把 scripts / templates / tests / shared_refs 全手工列入 `INVENTORY.json`，与现有 `tests/run-all.sh` curated suite 冲突——新增测试需双改 inventory + run-all 入口 | §3.0.4 | `docs/gsd-借鉴分析.md:327-348` + `tests/run-all.sh:6-54` | **待 PM 决** |
 
@@ -1493,7 +1493,7 @@ PM 真需求（原话）："我目前在消费仓中遇到的很多问题，都�
 |---|---|---|---|---|---|
 | 1 | **ADR 格式 + `docs/adr/`**（c 方案：模板 + D1-D15 回填，archive 21 份触发式补）| 0.5d 模板 + 1-1.5d 回填 | 🔴 强 — 本文档 1500+ 行 / `docs/design/` 5 份 / `archive/design/` 21 份 / RUNTIME 394 行 / TODOS 399 行散落即反例；解决"格式不统一" | 独立，立即可启动 | 低 |
 | 2 | **lark-adapter 单一入口 + lint**（b 方案：抽 adapter + lint）| 0.5-1 天 | 🟢 中 — lark-cli 升级 4 连 fix 历史；PM 确认会写第二个 lark 集成脚本（weekly report / memory sync / 等）| 独立 | 低 |
-| 3 | **读层 `_lib/state_reader.py` 统一 AI 跨 skill 读 state**（v3.10 新增）| 0.5-1 天 | 🔴 强 — 现状 7 skill 走 `/task-status`，10 skill 各自 grep raw state；AI 跨 skill 读不一致 + schema 变 10 处都要改 | 独立 | 低 |
+| 3 | **读层 `_lib/state_reader.py` 统一 AI 跨 skill 读 state**（v3.10 新增）| 0.5-1 天 | 🔴 强 — 现状 7 skill 走 `/pmai-task-status`，10 skill 各自 grep raw state；AI 跨 skill 读不一致 + schema 变 10 处都要改 | 独立 | 低 |
 
 > **v3.10 变动**（vs v3.9）：
 > - 主表 7 项 → 3 项（PM 1-1 判定）
@@ -1551,9 +1551,9 @@ PM 真需求（原话）："我目前在消费仓中遇到的很多问题，都�
 
 #### 3. 读层 `_lib/state_reader.py` 统一 AI 跨 skill 读 state（v3.10 新增）
 
-- **目标**：让 AI 在不同 skill 内有统一的 state 读取接口；当前是"PM 看 `/task-status` 视觉视图，AI 各 skill 各自 grep raw state"双轨制
+- **目标**：让 AI 在不同 skill 内有统一的 state 读取接口；当前是"PM 看 `/pmai-task-status` 视觉视图，AI 各 skill 各自 grep raw state"双轨制
 - **EVIDENCE**：
-  - 7 个 skill 调用 `status-view.py` 或 `/task-status`（cancel-req / task-execute / task-status / task-spec / task-confirm / input-flow / executor-dispatch）
+  - 7 个 skill 调用 `status-view.py` 或 `/pmai-task-status`（cancel-req / task-execute / task-status / task-spec / task-confirm / input-flow / executor-dispatch）
   - 7 个 skill 直接读 `.req-meta.json`
   - 10 个 skill 直接 grep task.md 状态字段
   - `status-view.py` 输出是 PM 视觉友好格式（emoji + 中文 + format print），不是 AI 解析友好的结构化数据
@@ -1561,7 +1561,7 @@ PM 真需求（原话）："我目前在消费仓中遇到的很多问题，都�
 - **实施要点（选项 a 或 b 二选一，PM 落地时定）**：
   - **a 选项**：让 `status-view.py` 加 `--json` 输出（结构化），所有直接 grep 的 skill 改成走 `python3 status-view.py --json`；副产品：state schema 变化时只改 status-view 一处。**~0.5d**
   - **b 选项**：抽出 `_lib/state_reader.py`，把 state 读取逻辑全抽到 lib；`status-view.py` 也走 state_reader 拿数据再 render；所有 skill 都走 state_reader（不再各自 grep）。**~1d**
-- **跟 ⏸️ `#7 mutation 入口（已废弃）` 的关系**：mutation 入口是"写层统一"，state_reader 是"读层统一"。PMAI 当前真痛点在读层（grep 散落），不在写层（三道防线 + `/task-status` 已 ok）
+- **跟 ⏸️ `#7 mutation 入口（已废弃）` 的关系**：mutation 入口是"写层统一"，state_reader 是"读层统一"。PMAI 当前真痛点在读层（grep 散落），不在写层（三道防线 + `/pmai-task-status` 已 ok）
 - **PM 1-1 讨论触发点**：v3.10 PM 一句"AI 能看到 statusview 吗"暴露的真痛点，§10.7 之前 7 轮 review 漏看
 - **风险点**：低 — 只是把已有读逻辑统一抽出，不动数据本身
 
@@ -1607,7 +1607,7 @@ PM 真需求（原话）："我目前在消费仓中遇到的很多问题，都�
 | **`skill_structure.yml` manifest**（v3.10 从主表 #4 砍）| 跟 commit be47fca 落地的 PM-VIEW-RULES §9.1 单一权威源方案冲突；§9.1 已是「stage × 模式 × 文档类型 × 4 级标记」的高表达力方案，manifest yaml 是粒度更粗的平行机制，会触发双源漂移 |
 | **`<required_reading>` XML 块显式化**（v3.10 从主表 #5 砍）| 违反"单一权威源"原则——XML 散到 20 个 SKILL.md = 把 §9.1 内容散回各文件；memory `feedback_skill_reading_convergence` 已锁"优先 grep 强约束 + 章节匹配"原则，已落地实测省 45% |
 | **SKILL 5 段骨架**（v3.10 从主表 #6 砍）| 单做收益弱（PM 已说 close-task/close-req 对称化 commit 9e9316f/e5a56c0/133c32d 已修，0 新不对称证据）；技术上虽不破坏 Claude Code SKILL.md 标准，但是在 Claude Code 之上长一层 PMAI 自创"方言"，违反 memory `feedback_gstack_keep_official`（借鉴克制）原则 |
-| **集中 mutation 入口 + 原子写**（v3.10 从主表 #7 砍）| 现状 `/task-status` skill + `scripts/status-view.py` (682 行) 已满足"统一视图"PM 需求；I-DC1/I-AD5 三道防线 + commit 3c27a33 后无复发 task-005 类事故；真痛点在「读层」（10 skill 各自 grep raw state），已新增本节 #3 读层 state_reader 覆盖；写层 mutation_lib 是 PMAI 1-2 天 grok 不到的 D13 同模式 trap |
+| **集中 mutation 入口 + 原子写**（v3.10 从主表 #7 砍）| 现状 `/pmai-task-status` skill + `scripts/status-view.py` (682 行) 已满足"统一视图"PM 需求；I-DC1/I-AD5 三道防线 + commit 3c27a33 后无复发 task-005 类事故；真痛点在「读层」（10 skill 各自 grep raw state），已新增本节 #3 读层 state_reader 覆盖；写层 mutation_lib 是 PMAI 1-2 天 grok 不到的 D13 同模式 trap |
 | thinking + anti-patterns + questioning 合并 | PMAI §0 痛点锁已自解 review 膨胀 |
 | Evidence-first 呈交块（verified/claimed/unverified）| §8.8 D6=B — 无 enforcement = 精致谎言载体 |
 | GSD SDK 双实现 + TypeScript + npm 包发布 | §4.1 — PMAI 单人无诉求 |

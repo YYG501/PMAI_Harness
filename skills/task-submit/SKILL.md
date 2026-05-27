@@ -1,5 +1,5 @@
 ---
-name: task-submit
+name: pmai-task-submit
 description: |
   向 PM 呈交 task 验收信息包，根据 task 类型调整展示内容，等待 PM 决策。
   **默认路径不再被 PM 直接调用**——task-execute 步骤 11/12 已合并本 skill 的呈交+决策逻辑。
@@ -7,7 +7,7 @@ description: |
   task 状态全程是「执行中」（旧「待验收」已合并到「执行中」），commit 不切状态，PM 通过呈交块时统一转「已完成」。
 ---
 
-# /task-submit
+# /pmai-task-submit
 
 > **PM 答题规则（M4）**：所有 AskUserQuestion 调用（呈交块决策：通过完成 / 退回继续打磨）按 `_shared/pm-view/askuser-rules.md` §1 3 硬规则走（空答 STOP / 没拿到答案禁止切 task 状态为「已完成」/ runtime 退化保留 wait）。**禁止默认走 recommend 分支 / 禁止逃生舱**。
 
@@ -198,9 +198,9 @@ python3 "$PMAI_HOME/scripts/task-transition.py" "<task-file>" --to 已完成
 ✅ task-NNN 状态已转「已完成」。
 
 下一步：在本（task）窗口运行：
-  /close-task task-NNN
+  /pmai-close-task task-NNN
 
-本次 close 收尾在当前窗口做完（文档对齐 + 视觉规范沉淀），完成后会提示你切到 req 窗口再跑一次 /close-task 完成清理。
+本次 close 收尾在当前窗口做完（文档对齐 + 视觉规范沉淀），完成后会提示你切到 req 窗口再跑一次 /pmai-close-task 完成清理。
 ```
 
 **PM 说"打回"：**
@@ -233,5 +233,5 @@ python3 "$PMAI_HOME/scripts/task-transition.py" "<task-file>" --to 已完成
 - PM 的反馈原话记录，不要改写
 - 打回**不走 transition**（task 状态保持「执行中」），仅写反馈到 task 文件「📁 历史档案 → PM 反馈」（v3 审计区 / v2 PM 视图）+ AI 修代码 + 追加 fix commit
 - UI 类 task 的 dev server 应该还在运行，确认 URL 可访问
-- 验收 / 打回修复在当前 task worktree 窗口完成；PM 通过验收后转「已完成」，并提示 PM 在本（task）窗口跑 `/close-task task-NNN` 启动 Phase 1（close-task 是两阶段调用，Phase 1 在 task 窗口对齐 + commit，Phase 2 切到 req 窗口 merge + 清理）
+- 验收 / 打回修复在当前 task worktree 窗口完成；PM 通过验收后转「已完成」，并提示 PM 在本（task）窗口跑 `/pmai-close-task task-NNN` 启动 Phase 1（close-task 是两阶段调用，Phase 1 在 task 窗口对齐 + commit，Phase 2 切到 req 窗口 merge + 清理）
 - 推荐 review 仅作验收信息块末尾的「⚙️ 可选深度审查」辅助提示，PM 自取所需；AI 不得自动跑（I-RV1）；PM 报告结果后才 append 事件（I-RV3）

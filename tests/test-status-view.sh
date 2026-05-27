@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Tests for status-view.py — enforce that /task-status reads from the req worktree
+# Tests for status-view.py — enforce that /pmai-task-status reads from the req worktree
 # when running from anywhere in the repo.
 
 set -uo pipefail
@@ -11,12 +11,12 @@ source "$SCRIPT_DIR/helpers/fixture.sh"
 STATUS_VIEW="$FRAMEWORK_ROOT/scripts/status-view.py"
 
 _run_status() {
-  # cwd is where the user runs /task-status from
+  # cwd is where the user runs /pmai-task-status from
   (cd "$1" && python3 "$STATUS_VIEW" 2>&1)
 }
 
 # ---------------------------------------------------------------
-# Active req only exists in req worktree; /task-status must find it.
+# Active req only exists in req worktree; /pmai-task-status must find it.
 # ---------------------------------------------------------------
 
 test_status_from_main_sees_req_in_worktree() {
@@ -151,7 +151,7 @@ test_stage6_partial_spec_does_not_claim_all_done() {
     return
   fi
   if ! echo "$out" | grep -q "task-spec task-002"; then
-    _fail "expected hint to /task-spec task-002. Output:"
+    _fail "expected hint to /pmai-task-spec task-002. Output:"
     echo "$out" >&2
     fixture_teardown
     return

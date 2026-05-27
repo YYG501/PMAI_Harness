@@ -1,10 +1,10 @@
 ---
-name: req-stage-gate
+name: pmai-req-stage-gate
 description: |
   Req stage 边界推进：根据当前 stage 执行过渡逻辑，PM 确认后推进到下一 stage。
 ---
 
-# /req-stage-gate
+# /pmai-req-stage-gate
 
 > **PM 视图（M2 banner + Decision gate label）**：本 skill 入口 / stage 转换处 / 退出处必出 banner（按 `_shared/pm-view/banner-rules.md` §1；用 `status-view.py --banner-only --skill REQ-STAGE-GATE`）；闸门 label 按 §3 3 硬规则（label=动作描述如「写 PRD」/ description=一句话 / 留守选项 Loop 回讨论态）；退出 Next Up 块按 §2 格式。**禁用模糊词** "OK" / "Proceed" / "Continue"。
 >
@@ -92,7 +92,7 @@ python3 "$PMAI_HOME/scripts/status-view.py" --stage6-entry "$ACTIVE_REQ_DIR"
 
 ## 续跑模式（默认行为）
 
-**TL;DR**：PM 只敲 1 次 `/req-stage-gate`，AI 自动续跑 stage 1→6（撞到 task 执行就退出）。中间 PM 只回答确认门，不再敲命令；不答就停在闸门等 PM 下次输入，关窗口几天后回来重敲 `/req-stage-gate` 从当前 stage 续走。
+**TL;DR**：PM 只敲 1 次 `/pmai-req-stage-gate`，AI 自动续跑 stage 1→6（撞到 task 执行就退出）。中间 PM 只回答确认门，不再敲命令；不答就停在闸门等 PM 下次输入，关窗口几天后回来重敲 `/pmai-req-stage-gate` 从当前 stage 续走。
 
 **PM chat 输出格式**：推进到下一 stage 时**不发独立的"已推进"通知**（避免每个 stage 之间多一段噪声）；直接进入下一 stage 的第一个动作 / 闸门 / 确认门。退出时（仅 2 种）的话术：
 
@@ -100,33 +100,33 @@ python3 "$PMAI_HOME/scripts/status-view.py" --stage6-entry "$ACTIVE_REQ_DIR"
 ✅ Stage 已推进 N → N+1（<下一阶段中文名>）
 
 [根据退出条件二选一：]
-▶ Next Up — /task-confirm tasks/task-NNN-<slug>.md（进入 task 执行；后续 /task-execute → /close-task）
+▶ Next Up — /pmai-task-confirm tasks/task-NNN-<slug>.md（进入 task 执行；后续 /pmai-task-execute → /pmai-close-task）
 [或]
-▶ Next Up — req 已关闭，回 main 分支；下个需求请发 /new-req "<一句话>"
+▶ Next Up — req 已关闭，回 main 分支；下个需求请发 /pmai-new-req "<一句话>"
 ```
 
 <details>
 <summary>展开：退出条件 / 不是退出条件 / 核心边界（详细规则）</summary>
 
-PM 在 worktree 里**只需要敲一次** `/req-stage-gate`，之后 stage-gate 一路带 PM 走完所有 stage 推进。每个 stage 转换块的 `req-transition.py --to N` 成功后，**默认不退出**，立即续到下一 stage 的入口逻辑。
+PM 在 worktree 里**只需要敲一次** `/pmai-req-stage-gate`，之后 stage-gate 一路带 PM 走完所有 stage 推进。每个 stage 转换块的 `req-transition.py --to N` 成功后，**默认不退出**，立即续到下一 stage 的入口逻辑。
 
 **2 个退出条件**（撞到任一退出本次 stage-gate 调用）：
 
 | 条件 | 说明 |
 |---|---|
-| 推进到 stage 6（task 执行）成功 | task 循环由 `/task-spec` `/task-execute` `/close-task` 等独立 skill 承担，不属于 stage-gate 推进范围 |
-| 推进到 stage 7 后调完 `/close-req` | req 关闭流程结束 |
+| 推进到 stage 6（task 执行）成功 | task 循环由 `/pmai-task-spec` `/pmai-task-execute` `/pmai-close-task` 等独立 skill 承担，不属于 stage-gate 推进范围 |
+| 推进到 stage 7 后调完 `/pmai-close-req` | req 关闭流程结束 |
 
 **不是退出条件 / 不要写规则的几种情况**（chat 天然行为，写到 SKILL.md 反成噪声）：
 
 - **PM 在确认门不答** → AI 就显示着确认门等 PM 下次输入；这是 chat 天然行为，不需要识别"喊停关键词"也不需要发"已暂停"通知
-- **PM 关掉 claude 窗口几天后回来** → 新 chat session 自然不在 stage-gate 流程里；PM 重新敲 `/req-stage-gate`，stage-gate 从 `.req-meta.json` 当前 stage 续走
+- **PM 关掉 claude 窗口几天后回来** → 新 chat session 自然不在 stage-gate 流程里；PM 重新敲 `/pmai-req-stage-gate`，stage-gate 从 `.req-meta.json` 当前 stage 续走
 - **闸门挂起等 PM**（未决问题闸门、各 stage 定稿确认门、reviewer 有必改时的三选一）→ 挂着等 PM 答，不算"退出"也不算"暂停"——就是等
 
 **核心边界（PM gatekeeper 没破）**：
 
 - 每个 stage 的**确认门 / 闸门**都在原位，PM 没被任何自动化绕过
-- 续跑只是把"PM 答 OK 推进 → 下一 stage 第一步"这条路径接通，省掉 PM 重敲 `/req-stage-gate` 的仪式
+- 续跑只是把"PM 答 OK 推进 → 下一 stage 第一步"这条路径接通，省掉 PM 重敲 `/pmai-req-stage-gate` 的仪式
 - PM 答 OK 类（OK / 通过 / 没问题 / 定了） → 走推进 + 续跑；PM 答修改类 → 走原修改分支；PM 不答 → AI 等
 
 </details>
@@ -162,13 +162,13 @@ chat 一行确认 `已归档（attachments/<新名>），Y 重点。继续。`�
 
 ### Stage 1 → 2（描述需求 → 需求分析）
 
-> **v4 体验包装层**：brief 二次确认 + 需求讨论方式选择**合二为一**，PM 视角"一次需求讨论"。下游分两条分流：A = 结构化批判（`/req-analysis`），B = YC office-hours 式（snapshot 复制）。两条分流的产物都通过 `_lib.state.set_stage_source` 写到 `.req-meta.json`，下游 SKILL 一律走 `get_stage_source(req_dir, 2)` helper 读 stage 2 真相源（不再硬编码 `analysis.md`）。
+> **v4 体验包装层**：brief 二次确认 + 需求讨论方式选择**合二为一**，PM 视角"一次需求讨论"。下游分两条分流：A = 结构化批判（`/pmai-req-analysis`），B = YC office-hours 式（snapshot 复制）。两条分流的产物都通过 `_lib.state.set_stage_source` 写到 `.req-meta.json`，下游 SKILL 一律走 `get_stage_source(req_dir, 2)` helper 读 stage 2 真相源（不再硬编码 `analysis.md`）。
 
 1. 检查 `brief.md` 存在且有内容
 
 2. **brief 二次确认 + 需求讨论方式选择门**（v4 合二为一）：
 
-   `/new-req` 在主对话写完 brief.md 后就 handoff 退场，PM 在 worktree 内新对话里第一次跑 `/req-stage-gate` 时，AI 重新读一遍 `brief.md`，把 brief 二确和"用哪种方式跟这个需求讨论"合并成一次对话（v3 书面体 + v4 选择门）：
+   `/pmai-new-req` 在主对话写完 brief.md 后就 handoff 退场，PM 在 worktree 内新对话里第一次跑 `/pmai-req-stage-gate` 时，AI 重新读一遍 `brief.md`，把 brief 二确和"用哪种方式跟这个需求讨论"合并成一次对话（v3 书面体 + v4 选择门）：
 
    ```
    Stage 1 → 2
@@ -190,9 +190,9 @@ chat 一行确认 `已归档（attachments/<新名>），Y 重点。继续。`�
    - PM 选 / 直说「开放探讨 / office-hours / YC 六问 / 设计思考」类 → **分流 B**（步骤 3B）
    - PM 提具体修改 → 按 PM 指示改 `brief.md`，改完后**只输出"已改完"二次摘要**（同一份模板，"一句话摘要"段填新内容），不贴全文；回到本步骤 2 重新出选择门
 
-#### 分流 A：结构化批判（`/req-analysis`）
+#### 分流 A：结构化批判（`/pmai-req-analysis`）
 
-3A. **调用 `/req-analysis`**
+3A. **调用 `/pmai-req-analysis`**
    - skill 内部完成：读 brief + PROJECT、第一性原理 4 层分析、写 analysis.md（含 10 章 + `## 未决问题` section）、调 analysis-reviewer 一次后把报告原文贴 chat，让 PM 三选一（AI 改 / PM 自改 / 接受现状）
    - skill 返回 = **PM 已看过 reviewer 报告原文 + 已显式做出处理决定**；返回值带 `review_outcome ∈ {PASS, ACCEPTED_WITH_ISSUES}`
    - **orchestrator 不重调 reviewer**；如 `review_outcome=ACCEPTED_WITH_ISSUES`，stage-gate 在最终推进确认门加一行知会："⚠️ analysis 评审还有必改条目，但 PM 已显式接受继续推进"——但**不阻塞**推进
@@ -251,7 +251,7 @@ chat 一行确认 `已归档（attachments/<新名>），Y 重点。继续。`�
 5A. **PM 回答未决问题的处理**：
    - PM 选"逐题问你"分支后，逐题展示问题，PM 每回答一题，把答案写回 analysis.md 对应 `**PM 回答：**` 后面
    - 所有问题答完 → 重跑 `check-open-questions.py` 验证（退出码 0）→ 解锁推进选项 → 回到步骤 4A 的"推进模式"
-   - PM 在答题过程中临时想改 analysis 某段 → 允许中途切到"改 analysis"分支 → 改完后**回到步骤 3A 重调 /req-analysis**（analysis 改过，reviewer 必须重跑一次；由 /req-analysis 步骤 4-5 的"调一次 + 三选一"机制保证），再走步骤 4A 闸门
+   - PM 在答题过程中临时想改 analysis 某段 → 允许中途切到"改 analysis"分支 → 改完后**回到步骤 3A 重调 /pmai-req-analysis**（analysis 改过，reviewer 必须重跑一次；由 /pmai-req-analysis 步骤 4-5 的"调一次 + 三选一"机制保证），再走步骤 4A 闸门
 
 #### 分流 B：YC office-hours 式（snapshot 复制 + 体验包装）
 
@@ -351,7 +351,7 @@ chat 一行确认 `已归档（attachments/<新名>），Y 重点。继续。`�
 
    解析出源路径后续走步骤 3B-snapshot。
 
-   > **PM 关 chat 后续走**：PM 在 resume 等待态关掉 chat 几天后回来 → 重敲 `/req-stage-gate` → stage-gate 从 `.req-meta.json` 当前 stage 续走（stage 仍是 1，brief 已 commit），重新走步骤 2 选择门即可（office-hours 已跑过的产物在步骤 3B 探测时会被列出来选）。续跑模式自然支持，不需要额外"暂停态"机制。
+   > **PM 关 chat 后续走**：PM 在 resume 等待态关掉 chat 几天后回来 → 重敲 `/pmai-req-stage-gate` → stage-gate 从 `.req-meta.json` 当前 stage 续走（stage 仍是 1，brief 已 commit），重新走步骤 2 选择门即可（office-hours 已跑过的产物在步骤 3B 探测时会被列出来选）。续跑模式自然支持，不需要额外"暂停态"机制。
 
 3B-snapshot. **AI snapshot 复制 + 写元数据**
 
@@ -428,7 +428,7 @@ python3 "$PMAI_HOME/scripts/req-transition.py" "$ACTIVE_REQ_DIR" --to 2
 
 PM 选择进入 stage 3 时：
 
-1. **调用 `/prd-writing`（stage-3 orchestrated 模式）**
+1. **调用 `/pmai-prd-writing`（stage-3 orchestrated 模式）**
    - 调用时在 prompt 里明确「stage-3 orchestrated 模式」——这是被 stage-gate 编排的固定 req 级模式，skill 跳过自身开场三选一对话、不走最终确认（详见 `prd-writing/SKILL.md` 的 stage-3 模式段）。
    - skill 内部完成：读 `brief.md` + **stage 2 真相源**（A 分支 `analysis.md` / B 分支 `stage2-office-hours.md`，路径由 `_lib.state.get_stage_source(req_dir, 2)` 解析）+ `docs/PROJECT.md`（+ 已有 `docs/modules/` 如存在），从 stage 2 真相源的功能分解派生 §六 功能需求层级、写 `prd.md`（章节结构按 PRD 9 章 / 11 章不变；§三 名词解释承担本 req 临时词典职责，下游 impl-design / task-spec 必读），写完跑 `check-prd-hierarchy.py` lint，并为本次每条产品决策 append `decision` 事件（业务词向 PROJECT.md 长期沉淀已迁到 `close-req` 步骤 3.4，本步不再跑 detector）
    - skill 返回时 `prd.md` 已落盘、lint 已闭环（详见 `prd-writing/SKILL.md`：lint 在 skill 内闭环，**不**传递给 stage-gate 二次显示）；返回值带本次新增的 `decision` 摘要（备选 / 理由），供步骤 2 确认门一并渲染
@@ -476,16 +476,16 @@ PM 选择进入 stage 3 时：
    - 各段标题用 emoji 锚点（✅ / 📋 / 🧭 / 📊）让 PM 视线快速分段
    - 路径独立缩进，不挤标题行
    - **规格要点用有序列表分条**：PRD 内容天然多面（功能模块 / 验收 / 非目标 等），≥ 3 个要点强制用有序列表，每条聚焦一个业务面
-   - **🧭 本次新增决策段**：按 `decided_by` **强制分两子段**渲染 —— `[PM 拍]` 段渲染 `decided_by=pm-explicit` 的条目（PM 已在 stage 1/2/3 主动开口拍过，**只列标题 + 选定**，备选 / 理由略，省 PM 阅读量）；`[AI 推断]` 段渲染 `decided_by=ai-inferred` 的条目（AI 在 PRD 写作中自己定的、PM 未单独确认，**列标题 + 选定 + 备选 + 理由**让 PM 一眼判断是否反对）。**两子段标签 `[PM 拍]` `[AI 推断]` 用 PM 可懂语**，**不要**在 PM 视图里出现 `decided_by` / `pm-explicit` / `ai-inferred` 等字段名（仅本 SKILL.md 文档里出现作开发说明）。某子段无条目时该子段省略；两子段都无时整个 🧭 段省略。决策事件由 `/prd-writing` 内部 append，stage-gate 只负责按 `decided_by` 分段展示
-   - **`[AI 推断]` 段的默认通过语义**：PM 不点名反对的条目默认通过（原 `ai-inferred` 事件保留作审计痕迹）；PM 想反对的直接说条目号 + 理由，AI 临场决定修订粒度——只修该条决策（改 PRD §四对应描述 + append 新 `decision` 事件 same `prd_anchor` + `decided_by=pm-explicit` 替代）或返工 `/prd-writing`。**不另立独立确认门**——这一栏的"默认通过 / 单挑反对"并进 stage 3 定稿确认门，PM 在末段确认问句里一并表达
+   - **🧭 本次新增决策段**：按 `decided_by` **强制分两子段**渲染 —— `[PM 拍]` 段渲染 `decided_by=pm-explicit` 的条目（PM 已在 stage 1/2/3 主动开口拍过，**只列标题 + 选定**，备选 / 理由略，省 PM 阅读量）；`[AI 推断]` 段渲染 `decided_by=ai-inferred` 的条目（AI 在 PRD 写作中自己定的、PM 未单独确认，**列标题 + 选定 + 备选 + 理由**让 PM 一眼判断是否反对）。**两子段标签 `[PM 拍]` `[AI 推断]` 用 PM 可懂语**，**不要**在 PM 视图里出现 `decided_by` / `pm-explicit` / `ai-inferred` 等字段名（仅本 SKILL.md 文档里出现作开发说明）。某子段无条目时该子段省略；两子段都无时整个 🧭 段省略。决策事件由 `/pmai-prd-writing` 内部 append，stage-gate 只负责按 `decided_by` 分段展示
+   - **`[AI 推断]` 段的默认通过语义**：PM 不点名反对的条目默认通过（原 `ai-inferred` 事件保留作审计痕迹）；PM 想反对的直接说条目号 + 理由，AI 临场决定修订粒度——只修该条决策（改 PRD §四对应描述 + append 新 `decision` 事件 same `prd_anchor` + `decided_by=pm-explicit` 替代）或返工 `/pmai-prd-writing`。**不另立独立确认门**——这一栏的"默认通过 / 单挑反对"并进 stage 3 定稿确认门，PM 在末段确认问句里一并表达
    - **不显示** 任何 lint / 脚本名 / "进入 stage 3" / "term-detector" 等工程黑话（PM 视角只关心 `prd.md` 主文件 + 下一阶段名称；详见 `task-spec/SKILL.md` 步骤 12 上方禁词清单，本闸门同样适用）
-   - **禁止再加 ⚠️ lint 待办 / lint 摘要等"传话块"**：lint 处理已在 `/prd-writing` 内闭环，PM 在 stage-gate 不需要再看一遍
+   - **禁止再加 ⚠️ lint 待办 / lint 摘要等"传话块"**：lint 处理已在 `/pmai-prd-writing` 内闭环，PM 在 stage-gate 不需要再看一遍
    - **末段确认问句独占末段**：统一句式「这版 X 内容是否可以定稿？如还有需要调整的内容，请直接说；确认后我会推进到 <下一阶段名>（Stage N）。」**不列 A/B 字母选项**、**不列"放弃"**、**不在问句后追加 brief/prd 预览或动作复述**
    - **反面示例**：
      ```
      ✘ ✅ prd.md 已 lint 通过（"lint" 是内部词，PM 视角整行删；写"已生成"即可）
      ✘ ⚠️ check-prd-hierarchy.py 报 3 处 §六 层级违规，已自动修订
-        （lint 处理已在 /prd-writing 内闭环，PM 视角整段删除）
+        （lint 处理已在 /pmai-prd-writing 内闭环，PM 视角整段删除）
      ✘ 一句话摘要：覆盖 X / Y / Z + 新增 D10 / D11 + 风险 R4 + 验收 N 项 ...
         （单行塞多个要点 → 改有序列表分条）
      ✘ A) 确认（进入 term-detector + 推进 stage 3） / B) 我要修改 prd
@@ -500,15 +500,15 @@ PM 选择进入 stage 3 时：
 
 3. **PM 回答的内部分流**（chat 不列 A/B 选项；按 PM 自然语言意图）：
    - PM 说「OK / 通过 / 没问题 / 定了」等 → 走"确认"分支：直接跑 `req-transition.py --to 3`
-   - PM 提具体修改意见 → 走"修改"分支：回步骤 1 重调 `/prd-writing`（stage-3 orchestrated 模式，prompt 含 "PM 在确认门提了修改：…"）→ 重新输出步骤 2 完整模板（PM 可决定要不要再跑一遍 review）→ 再次询问
-   - PM 说「放弃这个 req / 不做了」 → 走"放弃"分支：提示 PM 跑 `/cancel-req`（**chat 模板里不主动列出此选项**，PM 主动提才走）
+   - PM 提具体修改意见 → 走"修改"分支：回步骤 1 重调 `/pmai-prd-writing`（stage-3 orchestrated 模式，prompt 含 "PM 在确认门提了修改：…"）→ 重新输出步骤 2 完整模板（PM 可决定要不要再跑一遍 review）→ 再次询问
+   - PM 说「放弃这个 req / 不做了」 → 走"放弃"分支：提示 PM 跑 `/pmai-cancel-req`（**chat 模板里不主动列出此选项**，PM 主动提才走）
 
 推进（PM 确认后执行）：
 ```bash
 python3 "$PMAI_HOME/scripts/req-transition.py" "$ACTIVE_REQ_DIR" --to 3
 ```
 
-> **stage 3 只有一个 PM 定稿确认门**——就是步骤 2。`/prd-writing` 在 stage-3 orchestrated 模式下不出自己的确认门，由本步骤 2 统一兜住。stage 3 不再有 reconcile / 行数 lint / PROJECT 6 节门等额外门或步骤。
+> **stage 3 只有一个 PM 定稿确认门**——就是步骤 2。`/pmai-prd-writing` 在 stage-3 orchestrated 模式下不出自己的确认门，由本步骤 2 统一兜住。stage 3 不再有 reconcile / 行数 lint / PROJECT 6 节门等额外门或步骤。
 
 推进成功后**续到 Stage 3 → 4 入口**（gap-check + 新组件规格定稿）。
 
@@ -516,7 +516,7 @@ python3 "$PMAI_HOME/scripts/req-transition.py" "$ACTIVE_REQ_DIR" --to 3
 
 ### Stage 3 → 4（功能规格 → 设计系统）
 
-> **PROJECT 6 节强制门已撤掉**（PROJECT 由 `/project-solution` 产出 + 已有项目走 `/new-req`
+> **PROJECT 6 节强制门已撤掉**（PROJECT 由 `/pmai-project-solution` 产出 + 已有项目走 `/pmai-new-req`
 > legacy gate）。stage 3→4 此处直接推进 stage 4。
 
 **stage 4 永远进**—— stage 4 = **必跑 gap-check + 新组件完整规格定稿**
@@ -541,7 +541,7 @@ python3 "$PMAI_HOME/scripts/req-transition.py" "$ACTIVE_REQ_DIR" --to 4
 > 本质 = 每个 req 一道「逐组件判复用 vs 新建 + 新建组件 PM + AI 共写完整规格」的关口。
 > 直接对症 ① 组件不复用 ② executor 在视觉规范不完整的地方乱搞。
 
-1. **前提**：`docs/DESIGN.md` 须含「共享组件 inventory」段（init C.5 已建空段；旧项目兜底由 `/new-req` 步骤 3.6 检测追加）。
+1. **前提**：`docs/DESIGN.md` 须含「共享组件 inventory」段（init C.5 已建空段；旧项目兜底由 `/pmai-new-req` 步骤 3.6 检测追加）。
 2. **读 `prd.md`** 枚举本 req 要建的**界面 / 交互 / 组件**。
 3. **逐组件对 inventory 判复用 vs 新建**：
    - inventory 里**有** → **复用**（设计输出指向它）
@@ -562,7 +562,7 @@ python3 "$PMAI_HOME/scripts/req-transition.py" "$ACTIVE_REQ_DIR" --to 4
 
 5. **硬度**：**新组件规格未定稿 → 不进 stage 5**。这是关口级强约束，跟 stage 5 5a-gate「结构决策必 PM 拍板」同款硬度。
 
-gap-check 是**交互关口** —— 产物 = PM 在 chat 逐组件表态过程本身 + 完整规格行入 inventory。**不单独落 per-req 文件**。复用决策由 stage 5 `/implementation-design` 段 2 读 inventory 承接。
+gap-check 是**交互关口** —— 产物 = PM 在 chat 逐组件表态过程本身 + 完整规格行入 inventory。**不单独落 per-req 文件**。复用决策由 stage 5 `/pmai-implementation-design` 段 2 读 inventory 承接。
 
 #### 步骤 4B：确认门 + 推进
 
@@ -594,20 +594,20 @@ PM 确认后推进：
 python3 "$PMAI_HOME/scripts/req-transition.py" "$ACTIVE_REQ_DIR" --to 5
 ```
 
-推进成功后**续到 Stage 4 → 5 入口**（先 `/implementation-design`，见下）。
+推进成功后**续到 Stage 4 → 5 入口**（先 `/pmai-implementation-design`，见下）。
 
 ### Stage 4 → 5（→ 实现设计 + task 拆分）
 
-stage 5 内部两步编排：**先 `/implementation-design`（产 req 级 HOW）→
-PM 确认门审架构决策表 → 再 `/task-plan`（拆 task）**。
+stage 5 内部两步编排：**先 `/pmai-implementation-design`（产 req 级 HOW）→
+PM 确认门审架构决策表 → 再 `/pmai-task-plan`（拆 task）**。
 
-#### 步骤 5a：调 `/implementation-design`
+#### 步骤 5a：调 `/pmai-implementation-design`
 
-调用 `/implementation-design` 产出 `$ACTIVE_REQ_DIR/implementation-design.md`（req 级实现设计：
+调用 `/pmai-implementation-design` 产出 `$ACTIVE_REQ_DIR/implementation-design.md`（req 级实现设计：
 架构决策表 / 文件·模式索引 / 约束与验收 / 审计与修订）。
 
 - **产出失败**（输入缺失 / PRD 未定稿等）→ skill 报告失败原因，**不继续到步骤 5b**；
-  PM 修复后重跑 `/req-stage-gate`。
+  PM 修复后重跑 `/pmai-req-stage-gate`。
 - 产出成功 → 进步骤 5a-gate。
 
 #### 步骤 5a-gate：implementation-design PM 决策门（speed mode）
@@ -658,13 +658,13 @@ PM 确认门审架构决策表 → 再 `/task-plan`（拆 task）**。
    Stage 5 实现设计 OK（无需要拍板的架构决策） → 进 task 拆分
    ```
 
-5. **PM 在结构决策门外想改其他段**（如改"段 3.1 易错点"）：允许中途切到 revise 模式 → 回 `/implementation-design` revise → 改完重扫段 1 / 段 1.5 重出本步骤。
+5. **PM 在结构决策门外想改其他段**（如改"段 3.1 易错点"）：允许中途切到 revise 模式 → 回 `/pmai-implementation-design` revise → 改完重扫段 1 / 段 1.5 重出本步骤。
 
 > **兼容老 req**（已存在的 implementation-design.md 没「决策类型」列）：现场逐行推断，默认按结构问（保守）。AI 不强制迁移老文件。
 
-#### 步骤 5b：调 `/task-plan`
+#### 步骤 5b：调 `/pmai-task-plan`
 
-PM 确认 implementation-design 后，调用 `/task-plan` 拆 task。
+PM 确认 implementation-design 后，调用 `/pmai-task-plan` 拆 task。
 
 推进成功后**续到 Stage 5 → 6 入口**（task-plan 写完后进确认门）。
 
@@ -672,7 +672,7 @@ PM 确认 implementation-design 后，调用 `/task-plan` 拆 task。
 
 1. 检查 `task-plan.md` 存在。
 2. **检查 `implementation-design.md` 存在**—— stage 5 必产 req 级实现设计；
-   缺失说明步骤 5a 被跳过 → 报错拦下，提示 PM 回 stage 5 跑 `/implementation-design`。
+   缺失说明步骤 5a 被跳过 → 报错拦下，提示 PM 回 stage 5 跑 `/pmai-implementation-design`。
    （在飞旧 req 无此文件 → 不拦，按旧流程兼容。）
 3. 检查 `task-plan.md` 包含 task 标题列表和 `## 变更记录` section。
 
@@ -726,8 +726,8 @@ PM 确认 implementation-design 后，调用 `/task-plan` 拆 task。
      执行：串行 / 并行（PM 启动建议复述）
 
    【产物路径】
-     <绝对路径>/implementation-design.md
-     <绝对路径>/task-plan.md
+     <绝对路径>/pmai-implementation-design.md
+     <绝对路径>/pmai-task-plan.md
      <绝对路径>/docs/DESIGN.md（本 req <改 / 不改>）
 
    📊 可选 review（你自跑，跑完贴结论我帮你 append 事件）
@@ -745,20 +745,20 @@ PM 确认 implementation-design 后，调用 `/task-plan` 拆 task。
    - PM 说「OK / 通过 / 没问题 / 定了 / ✓」→ 推进 stage 6
    - PM 说「回看 HOW-XX / task-XXX」→ AI 给该项详情 + 重新走该项的结构决策门；改完回到步骤 5 重出总览
    - PM 说「回卷 / 回到 stage X」→ 调 `req-transition.py --to <X> --rollback`
-   - PM 提具体修改意见 → 回 `/task-plan` 改 `task-plan.md` → 改完后重新跑步骤 4 + 5
+   - PM 提具体修改意见 → 回 `/pmai-task-plan` 改 `task-plan.md` → 改完后重新跑步骤 4 + 5
 
-> stage 5→6 入口总览只审阅 `task-plan.md` + `implementation-design.md` 的结构决策项；具体 task 文件由 stage 6 的 `/task-spec` 逐个生成，写完后由 task-spec 步骤 8 再次输出推荐 review 区块。
+> stage 5→6 入口总览只审阅 `task-plan.md` + `implementation-design.md` 的结构决策项；具体 task 文件由 stage 6 的 `/pmai-task-spec` 逐个生成，写完后由 task-spec 步骤 8 再次输出推荐 review 区块。
 
 推进：
 ```bash
 python3 "$PMAI_HOME/scripts/req-transition.py" "$ACTIVE_REQ_DIR" --to 6
 ```
 
-推进成功后**stage-gate 退出**（续跑模式 2 条退出条件之一：「推进到 stage 6 成功」）。后续 task 执行由 `/task-spec` `/task-execute` `/close-task` 独立 skill 承担，不属于 stage-gate 推进范围。退出话术按上文「续跑模式 / PM chat 输出格式」。
+推进成功后**stage-gate 退出**（续跑模式 2 条退出条件之一：「推进到 stage 6 成功」）。后续 task 执行由 `/pmai-task-spec` `/pmai-task-execute` `/pmai-close-task` 独立 skill 承担，不属于 stage-gate 推进范围。退出话术按上文「续跑模式 / PM chat 输出格式」。
 
 ### Stage 6 → 7（task 执行 → req close）
 
-> **本段是兜底续走入口**：默认情况下，PM 关最后一个 task 时 `/close-task` 已 in-place 直接出本段步骤 3 的关 req 确认门（不再让 PM 敲一次 `/req-stage-gate`，省一次输入；详见 `close-task/SKILL.md` 步骤 P2.4 PENDING==0 分支）。本入口保留的唯一作用：PM 在 close-task 关 req 门**不答关窗口**几天后回来重敲 `/req-stage-gate`，由本段把同一个关 req 门重新拉起，保证关 req 门永远有入口。
+> **本段是兜底续走入口**：默认情况下，PM 关最后一个 task 时 `/pmai-close-task` 已 in-place 直接出本段步骤 3 的关 req 确认门（不再让 PM 敲一次 `/pmai-req-stage-gate`，省一次输入；详见 `close-task/SKILL.md` 步骤 P2.4 PENDING==0 分支）。本入口保留的唯一作用：PM 在 close-task 关 req 门**不答关窗口**几天后回来重敲 `/pmai-req-stage-gate`，由本段把同一个关 req 门重新拉起，保证关 req 门永远有入口。
 >
 > **关 req 确认门模板（步骤 3）是单一真相源**，close-task PENDING==0 分支只复述、不另立文案；改本段时一并核对 `close-task/SKILL.md` 步骤 P2.4 复述段是否还匹配。
 
@@ -767,7 +767,7 @@ python3 "$PMAI_HOME/scripts/req-transition.py" "$ACTIVE_REQ_DIR" --to 6
 2. For each id verify:
    - `tasks/task-NNN-*.md` file exists。
    - task status is `「已完成」`。
-   - task branch has been merged to req branch（等价于 `/close-task` 已跑完）。
+   - task branch has been merged to req branch（等价于 `/pmai-close-task` 已跑完）。
    - task worktree has been cleaned up。
    <!-- half-close detection 已删：close-task 永不写 SKIP_DOC_UPDATE marker，本检测永远 false。
         Stage 6→7 简化为「merged + worktree cleaned」即可推进；旧 marker 残留由 close-req
@@ -792,12 +792,12 @@ python3 "$PMAI_HOME/scripts/req-transition.py" "$ACTIVE_REQ_DIR" --to 6
 Stage 6 → 7 blocked: 以下 task 尚未完整关闭
 
 - task-001:
-  - missing task file: 请运行 /task-spec task-001 完成 spec（或按下方「废弃 task」三步跳过）
+  - missing task file: 请运行 /pmai-task-spec task-001 完成 spec（或按下方「废弃 task」三步跳过）
 - task-002:
-  - status is 执行中: 请在 task 窗口完成 PM 验收（task-submit 呈交块）+ /close-task
-  - task branch not merged to req branch: 请运行 /close-task
+  - status is 执行中: 请在 task 窗口完成 PM 验收（task-submit 呈交块）+ /pmai-close-task
+  - task branch not merged to req branch: 请运行 /pmai-close-task
 - task-003:
-  - task worktree still exists: 请确认 /close-task 清理完成
+  - task worktree still exists: 请确认 /pmai-close-task 清理完成
 
 —— 想跳过某个 task（不再实现）？必须把以下三步**全部跑完**，只跑一两步会留下不一致 metadata：
 
@@ -810,13 +810,13 @@ Stage 6 → 7 blocked: 以下 task 尚未完整关闭
        ## 废弃理由
        <一句话理由>
 
-  三步做完后重跑 /req-stage-gate，verify 会跳过被废弃的 task。
+  三步做完后重跑 /pmai-req-stage-gate，verify 会跳过被废弃的 task。
 ```
 
 边界情况：
 
-- task in task-plan.md but task file not yet generated → judgment fails，prompt PM to run `/task-spec <task-id>`，**或**按上方「废弃 task」三步跳过。
-- Infrastructure tasks → same close requirement；doc-update 会 auto-skips module merge，但仍必须完成 `/close-task` 的 branch merge 和 worktree cleanup。
+- task in task-plan.md but task file not yet generated → judgment fails，prompt PM to run `/pmai-task-spec <task-id>`，**或**按上方「废弃 task」三步跳过。
+- Infrastructure tasks → same close requirement；doc-update 会 auto-skips module merge，但仍必须完成 `/pmai-close-task` 的 branch merge 和 worktree cleanup。
 - task 文件存在但不在 task-plan.md，且未在 `## 变更记录` 中说明 → 不作为关闭条件来源；提示 PM 校验是否需要补回 task-plan.md 或按「废弃 task」三步删除孤儿 task 文件。
 
 推进：
@@ -824,13 +824,13 @@ Stage 6 → 7 blocked: 以下 task 尚未完整关闭
 python3 "$PMAI_HOME/scripts/req-transition.py" "$ACTIVE_REQ_DIR" --to 7
 ```
 
-然后调用 `/close-req`。**`/close-req` 跑完即 stage-gate 退出**（续跑模式 2 条退出条件之一：「推进到 stage 7 后调完 `/close-req`」）。
+然后调用 `/pmai-close-req`。**`/pmai-close-req` 跑完即 stage-gate 退出**（续跑模式 2 条退出条件之一：「推进到 stage 7 后调完 `/pmai-close-req`」）。
 
 ## Rules
 
-- **续跑模式是默认行为**（参见上文「续跑模式」整节）：`req-transition.py --to N` 成功后默认续到下一 stage 入口，PM 一次 `/req-stage-gate` 启动后无需再敲命令直到撞退出条件。**退出条件只有 2 条**（推进到 stage 6 / 推进到 stage 7 后调完 close-req），不允许在 stage 之间插入"PM 请再跑一次 /req-stage-gate" 这种 handoff 文案——这种文案是 v3.5 之前的旧行为，本规则上线后视为违例
+- **续跑模式是默认行为**（参见上文「续跑模式」整节）：`req-transition.py --to N` 成功后默认续到下一 stage 入口，PM 一次 `/pmai-req-stage-gate` 启动后无需再敲命令直到撞退出条件。**退出条件只有 2 条**（推进到 stage 6 / 推进到 stage 7 后调完 close-req），不允许在 stage 之间插入"PM 请再跑一次 /pmai-req-stage-gate" 这种 handoff 文案——这种文案是 v3.5 之前的旧行为，本规则上线后视为违例
 - **stage 之间不发独立"已推进"通知**：续跑到下一 stage 时直接进入第一个动作 / 闸门 / 确认门，不在中间发"✅ Stage 已推进 N→N+1。下一步进入 stage M→M+1"这种过渡段（旧 chat 让 PM 体感"我又要敲一次"，且续跑模式下根本不需要敲命令）。只在 stage-gate **退出**时按上文「PM chat 输出格式」发一次终止通知
-- **不写 PM 喊停识别**：PM 在确认门不答就是停（chat 天然行为），不要在 SKILL.md 加"喊停关键词识别"、不要发"已暂停"通知。PM 关窗口几天后回来重敲 `/req-stage-gate` 自然从当前 stage 续走，不需要"暂停态"概念
+- **不写 PM 喊停识别**：PM 在确认门不答就是停（chat 天然行为），不要在 SKILL.md 加"喊停关键词识别"、不要发"已暂停"通知。PM 关窗口几天后回来重敲 `/pmai-req-stage-gate` 自然从当前 stage 续走，不需要"暂停态"概念
 - 每个 stage 结束必须显式问 PM 确认，不能自动跳过确认门
 - **确认门只给绝对路径 + 一句话变更摘要，不贴文档全文。** PM 的 IDE 已经挂在 worktree 上，文件在左侧目录树里可见，不需要把内容贴回 chat
 - **确认门标准格式**（v3 书面体）：
@@ -839,11 +839,11 @@ python3 "$PMAI_HOME/scripts/req-transition.py" "$ACTIVE_REQ_DIR" --to 7
   - 路径独立缩进，不挤标题行
   - **末段确认问句独占末段**，统一句式：「这版 X 内容是否可以定稿？如还有需要调整的内容，请直接说；确认后我会推进到 <下一阶段名>（Stage N）。」（关闭门变体：「是否确认关闭此需求？如还需开启新的 task，请直接说；确认后我会启动关闭流程（Stage 7）。」）
   - **禁**：A/B 字母选项；"——"破折号开头；"OK 我..."把示范回答嵌入动作描述；问句后追加 brief/prd 预览或动作复述
-  - **不主动列"放弃 req"选项**（PM 真要放弃直接说「放弃这个 req / cancel」，AI 提示走 `/cancel-req`）
+  - **不主动列"放弃 req"选项**（PM 真要放弃直接说「放弃这个 req / cancel」，AI 提示走 `/pmai-cancel-req`）
 - **PM chat 输出禁工程黑话**（与 `task-spec/SKILL.md` 步骤 12 上方禁词清单等价）：所有 stage 的确认门 / 任何给 PM 看的 chat 文本里**严禁**出现 `hash` / 12 位 hash 值 / `lint` / `check-prd-hierarchy` / `term-detector` / `步骤 N.M` 内部编号 等内部状态机 / 脚本术语。这些都是 AI 内部记账，PM 没有动作可做。**用"已生成"/"已更新"替代"已 lint 通过"**
 - **摘要 ≥ 3 个要点用有序列表分条**：所有 stage 的 📋 摘要段，当要点超过 2 个时强制用有序列表（`1.` / `2.` / ...）分条展示，每条一行业务语言；不允许塞成单行长串
 - **review 工具一律 PM 自跑**（I-RV1）：stage-gate 在产物写完后只输出推荐清单，不自动调任何 `/plan-*-review` / `/review` / `/qa` / `/design-review`。PM 跑完任一 review 后口述结论，AI 调 `task-events.py append` 机械记录事件作为审计痕迹；事件流不当 gate
-- **stage 3 单确认门**：stage 2→3 的 `/prd-writing` 在 stage-3 orchestrated 模式下不出自己的确认门，stage 3 只保留 stage-gate 步骤 2 一个 PM 定稿确认门；该确认门同时渲染本次新增 `decision` 摘要（备选 / 理由）供 PM 一并确认，不另立决策确认门
+- **stage 3 单确认门**：stage 2→3 的 `/pmai-prd-writing` 在 stage-3 orchestrated 模式下不出自己的确认门，stage 3 只保留 stage-gate 步骤 2 一个 PM 定稿确认门；该确认门同时渲染本次新增 `decision` 摘要（备选 / 理由）供 PM 一并确认，不另立决策确认门
 - review 结果（PM 跑完贴回 chat 的）允许直接贴 chat——review 是讨论内容，不是文档产出
 - **未决问题闸门（硬规则）**：任何 stage 的产出文档如果含有"需要 PM 回答"的未决项，确认门必须先让 PM 答完再开放推进选项。不允许并列给出"直接推进"和"回答问题"两个选项让 PM 选——这会让 PM 绕过未回答的问题。机器校验由 `scripts/check-open-questions.py` 承担：扫 `## 未决问题` section 下的 `**PM 回答：**` 占位，任一未填 → 退出 1。目前最严格落地在 Stage 1→2（analysis.md），其他 stage 如有类似未决产出 section 直接复用本脚本
 - 推进命令只能用 `req-transition.py`，不能手动改 `.req-meta.json`

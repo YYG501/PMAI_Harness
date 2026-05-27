@@ -5,7 +5,7 @@
 >
 > 本方案被 **`设计-PM手动新窗口执行.md`** (v4) 取代。原因：
 > - PM 反思："开窗口的事让用户自己来做就好"——AI 不需要自动 spawn 任何东西
-> - v4 极简：`task-confirm` 只输出 echo 启动指令，PM 在新窗口启 Claude 输 `/task-execute`（无参数自动找）
+> - v4 极简：`task-confirm` 只输出 echo 启动指令，PM 在新窗口启 Claude 输 `/pmai-task-execute`（无参数自动找）
 > - **v4 + 简化 = 天然支持并行**——PM 决定开几个新窗口；git worktree 隔离；无 reducer / 无 mutex / 无 hook / 无 sentinel / 无 PGID 树杀
 > - 改动面：v3.5 ~5-7 文件 + 13 critical/high gap → v4 ~4-5 文件 + 1 invariant 修改
 > - 不依赖 Superset MCP（IDE-agnostic）
@@ -34,7 +34,7 @@
 
 ## 0. 一句话方案
 
-`/task-confirm` 通过 Superset MCP `start_agent_session_with_prompt` 启动一个**独立持久 Claude Code 终端 pane**，cwd 绑定 task worktree，新 Claude 自己同步跑 codex（`Bash run_in_background` + `Monitor`，方向 A 模式）。完成时 append 事件到 `.runs/events/<task>.jsonl`。主 Claude 用 `ScheduleWakeup` adaptive + `UserPromptSubmit` hook 扫事件流收口（review、状态转换、通知 PM）。
+`/pmai-task-confirm` 通过 Superset MCP `start_agent_session_with_prompt` 启动一个**独立持久 Claude Code 终端 pane**，cwd 绑定 task worktree，新 Claude 自己同步跑 codex（`Bash run_in_background` + `Monitor`，方向 A 模式）。完成时 append 事件到 `.runs/events/<task>.jsonl`。主 Claude 用 `ScheduleWakeup` adaptive + `UserPromptSubmit` hook 扫事件流收口（review、状态转换、通知 PM）。
 
 ---
 
@@ -42,7 +42,7 @@
 
 ### 1.1 触发：subagent 载体根因
 
-2026-04-22 / 2026-04-24 两次事件：`/task-confirm` spawn `Agent(subagent_type=...)` 子进程跑 task；subagent 用 `Bash(run_in_background=true)` 启 codex；codex 跑 10-30 min，但 subagent turn 结束就被框架回收——**项目经理下班，工人还在加班**，没人收口。
+2026-04-22 / 2026-04-24 两次事件：`/pmai-task-confirm` spawn `Agent(subagent_type=...)` 子进程跑 task；subagent 用 `Bash(run_in_background=true)` 启 codex；codex 跑 10-30 min，但 subagent turn 结束就被框架回收——**项目经理下班，工人还在加班**，没人收口。
 
 根因不是 subagent 有 bug，是**载体误用**：subagent 设计上就是短命的（独立 context、跑完即退、便于并行隔离查询），把"长跑协调"职责塞给它就坏。
 
@@ -74,7 +74,7 @@ PM 选 B：**比方向 A 多了"独立 Claude 项目经理"载体，比 v3 砍�
 | Q2 | session cwd 控制 | cwd 自动 = workspace 的 worktree 路径；env vars **不能直接传**，靠 prompt 前缀 `export X=Y &&` | agent 查源码 `shared.ts:47-73` |
 | Q3 | 完成通知 | ❌ 无 sessionId / 无 webhook / 无 get_session_status；MCP 返回的是"启动 ack"。**必须自建 sentinel/事件流**| agent 查源码 `tools/utils/utils.ts:33-145` |
 | Q6 | `create_workspace` 能否 adopt 已有 worktree | ✅ 可——四级查找的第 3 级 `createWorkspaceFromExternalWorktree` 自动 adoption；adopt 后返回标准 `workspaceId` | agent 查源码 `apps/desktop/.../create.ts:444-454` |
-| C1 | `/task-confirm` 多一次 `create_workspace(branchName)` MCP 调用 | 已接受 | Q6 caveat |
+| C1 | `/pmai-task-confirm` 多一次 `create_workspace(branchName)` MCP 调用 | 已接受 | Q6 caveat |
 | C2 | Worktree 路径必须等于 `resolveWorktreePath(project, branch)`，否则 "multiple candidates" 报错 | ⚠️ **未验证；Phase A 第一步 spike** | Q6 caveat |
 | C3 | branch 是 join key，1 branch 多 worktree 会 adoption 死锁 | ✅ v1 已经 1 branch 1 worktree，无影响 | Q6 caveat |
 
@@ -83,7 +83,7 @@ PM 选 B：**比方向 A 多了"独立 Claude 项目经理"载体，比 v3 砍�
 ## 3. 新架构概览
 
 ```
-PM ─[/task-confirm task-005]─▶ 主 Claude（在 req worktree）
+PM ─[/pmai-task-confirm task-005]─▶ 主 Claude（在 req worktree）
                                    │
                                    │ 1. create-task-worktree.sh（已有脚本）
                                    │    └─▶ .worktrees/task-005-<slug>/  ← git worktree 创建
@@ -96,7 +96,7 @@ PM ─[/task-confirm task-005]─▶ 主 Claude（在 req worktree）
                                    │ 3. mcp__superset__start_agent_session_with_prompt({
                                    │      agent: "claude",
                                    │      workspaceId: <adopt 返回的 ID>,
-                                   │      prompt: "export PM_AI_TASK=task-005 && /task-execute task-005"
+                                   │      prompt: "export PM_AI_TASK=task-005 && /pmai-task-execute task-005"
                                    │    })
                                    │    └─▶ 新终端 pane 启动持久 Claude
                                    │        cwd = .worktrees/task-005-<slug>/
@@ -107,7 +107,7 @@ PM ─[/task-confirm task-005]─▶ 主 Claude（在 req worktree）
 
 新终端 pane（独立 Claude 实例）
    │
-   │ /task-execute task-005
+   │ /pmai-task-execute task-005
    │   └─▶ 读 task 文件、build prompt
    │   └─▶ Bash(codex.sh, run_in_background=true) → shell_id
    │   └─▶ Monitor(shell_id, until=进程退出) ← 同步等
@@ -217,7 +217,7 @@ mcp__superset__start_agent_session_with_prompt \
   --deviceId "$SUPERSET_DEVICE_ID" \
   --workspaceId "$WORKSPACE_ID" \
   --agent "claude" \
-  --prompt "/task-execute $TASK_FILE" \
+  --prompt "/pmai-task-execute $TASK_FILE" \
   || {
     # 回滚 5a + 5b + 5c（mapping 文件保留作为 cleanup 锚点）
     python3 .claude/scripts/task-transition.py "$TASK_FILE" \
@@ -233,7 +233,7 @@ echo "已启动 $TASK_SHORT_ID（Superset workspace: $WORKSPACE_ID）。新终�
 
 **关键修订点**：
 - **FM1 修复**：调 `create-task-worktree.sh` 用正确的 2 参数签名（`$TASK_FILE $REQ_BRANCH`），`task-transition --to 执行中` 在 5a 调（5b/5c 之前），任一后续步骤失败 → `task-transition --fail-execution --reason ...` 回滚到 `待确认`
-- **FM11 修复**：prompt 不拼 shell `export X && /command`；改为结构化 `/task-execute $TASK_FILE`；新 Claude 通过 Read tool 主动读 task 内容并 fence 为 untrusted_input（详 §6.2 修订）
+- **FM11 修复**：prompt 不拼 shell `export X && /command`；改为结构化 `/pmai-task-execute $TASK_FILE`；新 Claude 通过 Read tool 主动读 task 内容并 fence 为 untrusted_input（详 §6.2 修订）
 - **FM5 修复（C3 强制）**：5-pre 加 `git worktree list` 前置检查
 - **FM7 部分修复**：5a transition 失败立即 exit 1，零副作用；后续步骤失败有显式 fail-execution 回滚
 - **FM10 锚点**：5c 后立即写 `.runs/superset/<task-stem>.workspace.json`，便于 close-task / recovery 查找
@@ -388,7 +388,7 @@ PM 在主窗口输入消息时，hook 在 Claude 处理前先扫一次 `.runs/ev
 
 - `wakeup_adaptive_fast_minutes = 5`（任一活跃 task `elapsed < warn`）
 - `wakeup_adaptive_slow_minutes = 20`（所有活跃 task `elapsed >= warn`）
-- `/task-confirm` 启动 task 后强制 `ScheduleWakeup(300)` 覆盖前一次排程（依赖 G15 覆盖语义）
+- `/pmai-task-confirm` 启动 task 后强制 `ScheduleWakeup(300)` 覆盖前一次排程（依赖 G15 覆盖语义）
 
 ### 4.6 失败 / 超时（FM4 + FM5 + FM6 + FM10 修订）
 
@@ -398,8 +398,8 @@ PM 在主窗口输入消息时，hook 在 Claude 处理前先扫一次 `.runs/ev
 | **Codex 非 0 退出**（FM6） | 新 Claude append `execution_failed` 含 `exit_code` / `stderr` → **立即调 `task-transition --fail-execution --reason "codex_exit_<N>"`** 回退 `待确认` → 退出。主 Claude reduce 时提示 PM "task-X 失败，可重试或换 executor" |
 | **新 Claude pane 崩溃 / PM 关 pane 中止**（FM4 + FM5）| 事件流停在 `execution_started`，`elapsed > kill threshold` 后 scan-task-done 输出 `TIMEOUT_KILL_NEEDED`（**不再叫 execution_crashed**——因 Q3 否定 session 状态查询，长任务可能被误判，无心跳前不能宣称能检测 crash）。主 Claude 提示 PM "task-X 已超时无 completion，是否调 task-recover？"。PM 同意 → 主 Claude 调 `task-recover.sh <task-file>`（新增脚本，详 §7.6） |
 | **Codex timeout（仍在跑但超时）** | 同上路径——TIMEOUT_KILL_NEEDED → PM 关 pane → task-recover |
-| **Superset MCP 不可用**（断网 / token 失效） | `/task-confirm` 5-pre 阶段拒绝启动；提示 PM 修复后重试。**不 fallback 旧 subagent 流程** |
-| **Superset adoption 冲突**（C2 multiple candidates）| `/task-confirm` 5c 失败 → 5a transition 回退 → worktree 留下供 PM 检查（不 git worktree remove，可能含 PM 已写代码）→ 提示 PM 清理同 branch 多 worktree |
+| **Superset MCP 不可用**（断网 / token 失效） | `/pmai-task-confirm` 5-pre 阶段拒绝启动；提示 PM 修复后重试。**不 fallback 旧 subagent 流程** |
+| **Superset adoption 冲突**（C2 multiple candidates）| `/pmai-task-confirm` 5c 失败 → 5a transition 回退 → worktree 留下供 PM 检查（不 git worktree remove，可能含 PM 已写代码）→ 提示 PM 清理同 branch 多 worktree |
 | **`mcp__superset__delete_workspace` 不再调用**（FM 修订）| **timeout / crash 路径不调 delete_workspace**——会破坏 worktree adoption，下次同 branch task-confirm adoption 死锁。workspace 清理只在 `close-task.sh` / `cancel-req.sh` 里做（详 §7.7） |
 
 ---
@@ -515,7 +515,7 @@ PM 在主窗口输入消息时，hook 在 Claude 处理前先扫一次 `.runs/ev
 
 ### 7.1 Superset MCP 不可用
 
-`/task-confirm` 拒绝启动，提示 PM。**不允许 fallback 到旧 subagent 流程**。
+`/pmai-task-confirm` 拒绝启动，提示 PM。**不允许 fallback 到旧 subagent 流程**。
 
 ### 7.2 新 Claude 进程死了但事件流无 completion
 
@@ -583,7 +583,7 @@ fi
 | A4 | `UserPromptSubmit` hook（带 G7 项目边界） | T4 通过 |
 | A5 | `templates/CLAUDE.md.tmpl` 角色表重写 | 手工 review |
 | A6 | 测试套（精简至 6-7 条，详 §11） | 全绿 |
-| A7 | 业务项目升级（admin console4） | 业务项目能成功跑 `/task-confirm` |
+| A7 | 业务项目升级（admin console4） | 业务项目能成功跑 `/pmai-task-confirm` |
 
 ---
 
@@ -737,7 +737,7 @@ fi
 
 ```
 PM (Superset desktop)
-       │ /task-confirm task-NNN
+       │ /pmai-task-confirm task-NNN
        ▼
 ┌────────────────────────────────┐
 │ 主 Claude (req worktree)         │←──── ScheduleWakeup adaptive
@@ -794,10 +794,10 @@ PM (Superset desktop)
 
 ```
 ┌─ UX Flows ────────────────────────────────────────────┐
-│ /task-confirm 启动新 pane           ❌ T15 缺           │
+│ /pmai-task-confirm 启动新 pane           ❌ T15 缺           │
 │ 新 Claude 自跑 review + transition  ❌ I-TT3 验证缺      │
 │ PM 关 pane 中止                     ❌ recovery 缺       │
-│ /close-task 清理 superset workspace ❌ T(close-super) 缺│
+│ /pmai-close-task 清理 superset workspace ❌ T(close-super) 缺│
 │ 长跑无 completion 判 stale          ❌ T(stale) 缺       │
 └────────────────────────────────────────────────────────┘
 ┌─ Data Flows ──────────────────────────────────────────┐

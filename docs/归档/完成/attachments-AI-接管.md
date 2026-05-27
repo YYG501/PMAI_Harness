@@ -92,7 +92,7 @@ PM chat 同时含两元素 → AI 自动识别为 "上传附件" 意图：
 **禁用例外**（**v2 新加**）：
 
 - **req-stage-gate Stage 1→2 B 分支 office-hours 选源期间** → trigger 0 **禁用**（C4 cross-design 冲突）：B 分支 "我自己指定路径" 输入的是 office-hours 设计稿源材料，**不**归档为 attachment，走 `set_stage_source(req_dir, 2, 'stage2-office-hours.md', tool='office-hours', origin=<原绝对路径>)` 路径（已落 D-i v4）
-- **standalone `/prd-writing` 模式** → trigger 0 **不启**（D4 决议，PM 拍）
+- **standalone `/pmai-prd-writing` 模式** → trigger 0 **不启**（D4 决议，PM 拍）
 
 ### §1.4 helper 设计（v2 核心）
 
@@ -426,7 +426,7 @@ def replace_attachment(
 | 6 (task-spec / task-execute) | tasks/task-NNN-*.md | `task-NNN`（按当前 task short_id） |
 | 7 (close-task / close-req) | close-report.md | `close` |
 
-caller SKILL 在 prose 内取 `$ACTIVE_REQ_STAGE` + 当前 task short_id 推 stage_prefix。**standalone /prd-writing 模式不调 helper**（D4 边界）。
+caller SKILL 在 prose 内取 `$ACTIVE_REQ_STAGE` + 当前 task short_id 推 stage_prefix。**standalone /pmai-prd-writing 模式不调 helper**（D4 边界）。
 
 ### §1.6 office-hours 源材料 vs attachments 边界（C4）
 
@@ -534,7 +534,7 @@ attachments/ 在 git tracked → PM IDE 仍能看到目录。**目标不是藏�
 | **Bash cp + `~` 展开 + `-2` 拼接** | C7：Python `shutil.copy2 + Path.expanduser` 解决；deterministic suffix 在 `_next_available_name` |
 | **引用 section 作为状态真相源** | C3 / C8：状态真相源 = `.req-meta.json:attachments_seen`；引用 section 仅 PM 可见展示 |
 | **trigger 0 在 stage-gate B 分支选源期间启用** | C4：与 D-i v4 office-hours 源材料选择冲突，必须禁用 |
-| **trigger 0 在 standalone `/prd-writing` 启用** | D4 决议：standalone 不绑 req → 不入 req attachments/ |
+| **trigger 0 在 standalone `/pmai-prd-writing` 启用** | D4 决议：standalone 不绑 req → 不入 req attachments/ |
 | **size pre-commit warn 作 fail-open 兜底** | C10：`MAX_FILE_SIZE_MB = 50` 在 helper 里 raise，不依赖 pre-commit |
 | **"AI 识别 PM 上传意图后立即追加引用 section"** | C5：stage 产出文档可能不存在；改 helper 仅 register + caller SKILL 后续按 attachments_seen 列表渲染 |
 | **C9 `req-prd.md.tmpl` "九、附件（可选）"** | 与其他 stage `## 📎 参考材料` 不一致 → 修一致命名 |

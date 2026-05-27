@@ -39,7 +39,7 @@
 |---|---|---|
 | 1 | "把所有 GSD 67 命令 33 agent 都评估一遍" | 已在研究阶段砍掉 14 项废弃 + 5 项暂停 + 12 项等触发；本实施阶段只做 §10.7 锁定的 2 项 |
 | 2 | "改造 SKILL.md 格式" | 跟 Claude Code 官方标准无冲突但是 PMAI 自创"方言"，违反 memory `feedback_gstack_keep_official`；之前 commit be47fca 落地的 PM-VIEW-RULES §9.1 单一权威源方案已是当前可行最优 |
-| 3 | "集中 mutation 入口（写层统一）" | 现状 `/task-status` + I-DC1/I-AD5 三道防线已够；真痛点在读层（本文档 #2 覆盖）不在写层；PMAI 1-2 天 grok mutation_lib 是 D13 同模式 trap |
+| 3 | "集中 mutation 入口（写层统一）" | 现状 `/pmai-task-status` + I-DC1/I-AD5 三道防线已够；真痛点在读层（本文档 #2 覆盖）不在写层；PMAI 1-2 天 grok mutation_lib 是 D13 同模式 trap |
 | 4 | "建独立『决策』文件类别 / 索引 / 模板"（v3 新增「不解决」）| 5 个相关位置太乱 + ADR 是 PMAI 自创方言；`_模板-方案.md` §Y 决议日志段已能记决策；不强求文件级独立 |
 
 ---
@@ -77,7 +77,7 @@
 
 ### 实施 #2: 读层 `_lib/state.py`（v2 重大修订：扩展 task_parser，不新建）
 
-**目标**：让 AI 跨 skill 用统一接口读 state；当前是"PM 看 `/task-status` 视觉视图，AI 各 skill 各自 grep raw state"双轨制
+**目标**：让 AI 跨 skill 用统一接口读 state；当前是"PM 看 `/pmai-task-status` 视觉视图，AI 各 skill 各自 grep raw state"双轨制
 
 **v2 重大修订**（Eng consensus critical finding）：
 - **不新建 `state_reader.py`，改为「扩展 `_lib/task_parser.py` 升格为 `_lib/state.py`」**
@@ -142,7 +142,7 @@
 | `skill_structure.yml` manifest | 跟 commit be47fca 落地的 PM-VIEW-RULES §9.1 单一权威源方案冲突；触发双源漂移 |
 | `<required_reading>` XML 块显式化 | 违反"单一权威源"原则；散到 20 SKILL.md = 把 §9.1 内容散回各文件 |
 | SKILL 5 段骨架（强制 skill 同构） | Claude Code 标准之上长 PMAI"方言"；违反 memory `feedback_gstack_keep_official` |
-| 集中 mutation 入口（写层 mutation_lib） | 现状 `/task-status` + 三道防线已够；真痛点在读层（本文档 #2 覆盖）|
+| 集中 mutation 入口（写层 mutation_lib） | 现状 `/pmai-task-status` + 三道防线已够；真痛点在读层（本文档 #2 覆盖）|
 | 独立「决策」文件类别 / 索引 / 模板（v3 砍）| 5 个相关位置太乱 + ADR 是 PMAI 自创方言；`_模板-方案.md` §Y 决议日志段已能记决策；不强求文件级独立 |
 
 ### ⏸️ 挪等触发（暂不做）

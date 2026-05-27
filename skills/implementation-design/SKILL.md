@@ -1,18 +1,18 @@
 ---
-name: implementation-design
+name: pmai-implementation-design
 description: |
   Stage 5（拆 task 前）：读 brief / analysis / prd.md / docs/PROJECT.md / docs/DESIGN.md，
   按 $PMAI_HOME/skills/implementation-design/templates/implementation-design.md.tmpl 产出 req 级实现设计文档
   implementation-design.md（HOW：这个 req 用什么架构、照哪些现有代码写、为什么这么选）。
-  由 /req-stage-gate 在 Stage 4→5 编排调用，task-plan 之前。
+  由 /pmai-req-stage-gate 在 Stage 4→5 编排调用，task-plan 之前。
   产出经 PM 确认门审定架构决策表后放行。do NOT use to write PRD (WHAT) or task spec.
 ---
 
-# /implementation-design
+# /pmai-implementation-design
 
 ## When To Use
 
-- Orchestrator 在 Stage 4→5 调用（由 `/req-stage-gate` 触发），**在 `/task-plan` 之前**。
+- Orchestrator 在 Stage 4→5 调用（由 `/pmai-req-stage-gate` 触发），**在 `/pmai-task-plan` 之前**。
 - 每个 req 都跑 —— 它产出的 `implementation-design.md` 是 `task-spec` 的上游 HOW 源。
 
 本 skill 承接原 `solution.engineering.md` 的 req 级 HOW 内容 —— `req-solution`
@@ -24,7 +24,7 @@ description: |
 
 - 允许所有工程内容（TS 类型 / 字段名 / 像素 / 颜色 / 反向约束）。
 - **不跑 PM-view lint** —— `check-doc-pm-view.py` 跳过本文件（同它已跳过 `.engineering.md`）。
-- **有 PM 确认门** —— 产出后由 `/req-stage-gate` 走确认门，PM 审定**架构决策表 + 原型简化项段**
+- **有 PM 确认门** —— 产出后由 `/pmai-req-stage-gate` 走确认门，PM 审定**架构决策表 + 原型简化项段**
   （选择 / 备选 / 理由 + 简化项 SIMP-ID / PRD 锚点 / 计划简化为），两块同门一次性放行。
   架构决策表含「这个 req 用什么架构、为什么这么选」、原型简化项段含「原型故意做得比 PRD 少的
   scope 削减」—— 两者都是 scope 决策，AI 单方面定再注入 task 与框架内核「PM 在环里」冲突。
@@ -54,7 +54,7 @@ echo "SKILL: implementation-design"
 | 调 req-transition.py | ❌ | ✅ |
 
 **退出契约**：本 skill 返回时，`implementation-design.md` 已写完。orchestrator 接手走
-PM 确认门（审架构决策表），通过后再调 `/task-plan`。
+PM 确认门（审架构决策表），通过后再调 `/pmai-task-plan`。
 
 ## Required Inputs
 
@@ -246,8 +246,8 @@ python3 "$PMAI_HOME/scripts/check-doc-pm-view.py" \
 
 ### 步骤 4：skill 结束
 
-写完 `implementation-design.md` → skill 退出。控制权交回 `/req-stage-gate`，由它走 PM
-确认门（审架构决策表 + 段 1.5 原型简化项摘要，两块同门），通过后调 `/task-plan`。
+写完 `implementation-design.md` → skill 退出。控制权交回 `/pmai-req-stage-gate`，由它走 PM
+确认门（审架构决策表 + 段 1.5 原型简化项摘要，两块同门），通过后调 `/pmai-task-plan`。
 
 产出失败（输入缺失 / PRD 未定稿等）→ 报告失败原因，不硬写。
 
@@ -255,7 +255,7 @@ python3 "$PMAI_HOME/scripts/check-doc-pm-view.py" \
 
 **禁止项**：
 - ❌ 写 WHAT（功能行为 / 用户场景 / 验收标准）—— 那是 PRD，本文件引用不重抄
-- ❌ 拆 task —— 那是 `/task-plan`
+- ❌ 拆 task —— 那是 `/pmai-task-plan`
 - ❌ 把视觉规范细则（像素 / 颜色 / 字号 / 视口断点）写进本文件 —— 归 `docs/DESIGN.md`（视觉基线段由 gstack 写 / 共享组件 inventory 段由 stage 4 4A 累积）
 - ❌ 段 1 架构决策行留空「备选 / 理由」
 - ❌ skill 内部走 PM 确认门 / 调 req-transition.py（归 orchestrator）
@@ -276,7 +276,7 @@ python3 "$PMAI_HOME/scripts/check-doc-pm-view.py" \
 - **允许产出**：`$ACTIVE_REQ_DIR/implementation-design.md`（5 段，含 段 1.5 原型简化项）
 - **允许动作**：读上游 + 项目级文档、设计 req 级架构 / 文件·模式索引 / 约束 / 段 1.5 原型简化项 kind 1 登记
 - **禁止顺手推进**：不拆 task、不走确认门、不调 review、不直接登 kind 2（task-plan 之后才决议）
-- **退出条件**：`implementation-design.md` 已写完 + 段 1.5 通过 scoped lint，控制权交回 `/req-stage-gate`
+- **退出条件**：`implementation-design.md` 已写完 + 段 1.5 通过 scoped lint，控制权交回 `/pmai-req-stage-gate`
 
 ## 文档结构
 

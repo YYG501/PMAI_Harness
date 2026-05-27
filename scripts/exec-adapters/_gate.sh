@@ -35,7 +35,7 @@ adapter_precheck() {
   local status
   status=$(python3 "$transition_py" "$TASK_FILE" --get-status 2>/dev/null || echo "")
   if [ "$status" != "执行中" ]; then
-    _gate_fail "I-AD1: task 状态为「${status:-未知}」，不允许启动外部执行器。正确流程：/task-confirm → 状态=执行中 → /task-execute"
+    _gate_fail "I-AD1: task 状态为「${status:-未知}」，不允许启动外部执行器。正确流程：/pmai-task-confirm → 状态=执行中 → /pmai-task-execute"
   fi
 }
 
@@ -97,7 +97,7 @@ print("\n".join(seen))
       --note "I-AD2 violation: diff 越界 allowlist" 2>/dev/null || true
     echo "" >&2
     echo "❌ I-AD2: 执行器写入范围越界 task 的 allowlist。" >&2
-    echo "   代码已保留在 ${TASK_WORKTREE}，请人工检查或 /task-execute 带 --fail-execution 回退。" >&2
+    echo "   代码已保留在 ${TASK_WORKTREE}，请人工检查或 /pmai-task-execute 带 --fail-execution 回退。" >&2
     return 2
   fi
   rm -f "$changed_file"

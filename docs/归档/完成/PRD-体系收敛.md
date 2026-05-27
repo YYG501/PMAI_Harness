@@ -32,7 +32,7 @@ v3.5 当前 PRD 体系有 **4 份并存文档**（`docs/prd.md` 项目主 PRD / 
 | 2 | `docs/prd.md` 模板 §用户画像 / §产品路线 无 stage 触发填充 | grep 全仓：close-req §1.5 rewrite 输入是「task 偏差」，无「画像/路线变化」偏差源 |
 | 3 | modules vs project prd 在功能清单维度双写 | `module.md.tmpl §三 功能清单（硬约束）` + `project-prd.md.tmpl ## 功能清单`；`close-req/SKILL.md:117` 显式列两文档为 §1.5 rewrite 目标 |
 | 4 | close-req §2a 算法判断与 PM 主导预期不符 | `close-req/SKILL.md:160-186` 三选一基于覆盖度算法 |
-| 5 | 独立 PRD 场景当前无入口 | grep：`/prd-writing` / `/project-prd-update` 都绑 close-req |
+| 5 | 独立 PRD 场景当前无入口 | grep：`/pmai-prd-writing` / `/project-prd-update` 都绑 close-req |
 | 6 | CONTEXT 节填写无触发链路 | `templates/CONTEXT.md.tmpl:13` 写"first req 阶段填"但 first req 概念 v3.5 已砍 |
 | 7 | 全局 req 视图缺位 | grep 全仓：requirements/closed/ 无 INDEX，status-view.py 只覆盖 active |
 | 8 | 消费仓真实跑通后维护成本 | [ASSUMED] — 消费仓尚未投产 |
@@ -85,13 +85,13 @@ PRD 体系从「4 份并存」收敛为「3 份明确分工」+ **CONTEXT 6 节�
 |---|---|---|---|
 | **modulespec**（`docs/modules/<m>.md`）| **事实源**：当前原型/系统的功能规格事实详情 | **AI**（后续 req 开发参考基线）| 框架自动（close-task 沉淀 + close-req §1.5 rewrite）|
 | **req PRD**（`requirements/<req>/prd.md`）| **评审材料**：本 req 范围内给研发的评审 PRD | 研发 | **PM 主导**（close-req 直接问"要不要写"，0 或 1 份/req）|
-| **独立 PRD**（路径由 PM 在 prompt 指定）| **跨模块评审材料**：PM 主动起，覆盖几个 module，不绑 req | 研发 | **PM 主动调用** `/prd-writing` 并在 prompt 说明范围 |
+| **独立 PRD**（路径由 PM 在 prompt 指定）| **跨模块评审材料**：PM 主动起，覆盖几个 module，不绑 req | 研发 | **PM 主动调用** `/pmai-prd-writing` 并在 prompt 说明范围 |
 
 ### 1.2 配套基础设施
 
 - `docs/modules/INDEX.md` **新增** —— 功能全景索引（每个 module 一句话用途，≤30 字），作为 close-req §1.5 之后的 **derived refresh**（独立输出，不污染 D13 final metric）
 - `docs/CONTEXT.md` **重构为 6 节** —— 项目名称 / 产品定位 / 用户画像 / 产品路线 / 技术栈 / 业务术语表（**全部强制**，空骨架卡 stage 4）
-- `/prd-writing` **灵活化** —— 改造为对话式确认输入；改 description 加独立 PRD 触发关键词
+- `/pmai-prd-writing` **灵活化** —— 改造为对话式确认输入；改 description 加独立 PRD 触发关键词
 - **stage 3 后 CONTEXT 检查机制** —— 每个 req solution 定稿后检查 CONTEXT 空骨架，引导 PM 填（事实驱动 + 一次性 + 精简模式）；话术对齐 req-stage-gate 现有「这版 X 是否定稿」模板
 - `status-view.py --timeline` **扩展** —— 全局 req / task 视图（默认 `--limit 20` + sample output 在 §2.4）
 - **业务词 / 角色后续催补 hooks** —— `_shared/term-detector/` 共享 detector + 多词批量（≥3 新词时一次列表问） + req 级 SKIP 列表（存 `.term-skip.json`），嵌入 4 个 skill 调用同一 detector
@@ -115,7 +115,7 @@ PRD 体系从「4 份并存」收敛为「3 份明确分工」+ **CONTEXT 6 节�
 | close-req §2b 链式同步项目主 PRD | **砍** | 衍生 |
 | close-req §2a 覆盖度算法三选一 | **改**：直接问 PM「这次要不要给研发评审一份 req PRD」（是/否）| §0.1 痛点 4 |
 | close-req §1.5 rewrite 目标清单 | **改**：去掉 `docs/prd.md`；加入 `docs/modules/INDEX.md` | INDEX 维护 |
-| `/prd-writing` skill | **改**：对话式确认输入；删除「必须在 close-req 用」硬约束 | §0.1 痛点 3 |
+| `/pmai-prd-writing` skill | **改**：对话式确认输入；删除「必须在 close-req 用」硬约束 | §0.1 痛点 3 |
 | 各 stage `input-flow.md` 必读列表 | **改**：移除 `docs/prd.md`，加入 `docs/modules/INDEX.md` | |
 | `templates/CLAUDE.md.tmpl:207` 框架文档表 | **改**：删项目主 PRD 行，加 modules/INDEX 行 | |
 | `module.md.tmpl` | **改**（2026-05-22）：9 章 → 5 章收敛，砍 req 级章节 | 原 §0.4 排除项 1，已重开（见 §Y）|
@@ -527,7 +527,7 @@ bash <PM-AI-Workflow 路径>/scripts/migrate-prd.sh <消费仓路径>
 | **vp-2** | close-req §2a/§2b 改 PM 主导 — 删覆盖度算法 + A/B/C 映射；改成对话式问"要不要写 req PRD"（是/否）；§2b 链式同步整段砍；§1.5 metric 段去掉 docs/prd.md 引用；测试 | 2-3h |
 | **vp-1a** | 消费仓 docs/prd.md 迁移 — 写 `scripts/migrate-prd.sh`（4 section 自动 patch 到 CONTEXT/modules，PM 审 diff，不自动 commit）；测试（含 fixture：模拟非空消费仓 prd） | 1-2h |
 | **vp-1** | 砍 `docs/prd.md` 机制 — 删模板 + skill + close-req §2b 残留 + 全仓 43-52 处引用清理（check-branch / init-project / req-analysis / req-solution / task-execute / quick-fix / doc-update / CLAUDE.md.tmpl / status-view 等，不含 input-flow.md 因 vp-0 已改）；测试 | 5-8h |
-| **vp-5** | /prd-writing 灵活化 — 改 description 加独立 PRD 触发关键词（"Also use when PM explicitly requests independent PRD covering multiple modules"）；改写 SKILL.md 开场对话式确认输入；删除 close-req 硬约束 + "不替代项目主 PRD"段；测试 | 1-2h |
+| **vp-5** | /pmai-prd-writing 灵活化 — 改 description 加独立 PRD 触发关键词（"Also use when PM explicitly requests independent PRD covering multiple modules"）；改写 SKILL.md 开场对话式确认输入；删除 close-req 硬约束 + "不替代项目主 PRD"段；测试 | 1-2h |
 | **vp-7** | status-view --timeline 扩展 — `_lib/state.py` 加 `list_closed_reqs / list_cancelled_reqs / get_timeline_state`（保持 render-only 边界）；status-view.py 加 `--timeline` / `--since` / `--module` / `--milestone` / `--limit 20` / `--all` 参数；输出按 §2.4 sample；测试 | 3-4h |
 | **vp-6** | 清理 first req 残留 — 删 `is_first_req` 字段 / `req-num-resolver.sh` first 子命令 + caller / status-view `[first req]` 装饰 / `DESIGN.md.tmpl:3` first req 残留文案 / `new-req/SKILL.md:31,80` 步骤 1 / 模板 CLAUDE.md.tmpl:63 / CONTEXT.md.tmpl:13（共 11 处）| 1-1.5h |
 
@@ -558,8 +558,8 @@ bash <PM-AI-Workflow 路径>/scripts/migrate-prd.sh <消费仓路径>
 8. ❌ 所有 stage input-flow 对 `docs/prd.md` 的必读引用
 9. ❌ `CONTEXT.md` 的「约束条件」节
 10. ❌ `CONTEXT.md` 的「已知风险」节
-11. ❌ `/prd-writing` SKILL.md 的「必须在 close-req 用」硬约束
-12. ❌ `/prd-writing` SKILL.md 的「不替代项目主 PRD」相关段
+11. ❌ `/pmai-prd-writing` SKILL.md 的「必须在 close-req 用」硬约束
+12. ❌ `/pmai-prd-writing` SKILL.md 的「不替代项目主 PRD」相关段
 13. ❌ `is_first_req` 元数据字段 + resolver `first` 子命令 + status-view `[first req]` 装饰
 14. ❌ `DESIGN.md.tmpl` 的「first req stage 4 时填充」残留文案
 15. ❌ init-project 时强制填 CONTEXT 各节的卡住逻辑（改为 stage 3 后强制门 + 精简模式）
@@ -599,7 +599,7 @@ bash <PM-AI-Workflow 路径>/scripts/migrate-prd.sh <消费仓路径>
 
 **待验**：vp-4b 实施后 PM dogfood 几次
 
-### §5.3 /prd-writing 灵活化的对话引导质量
+### §5.3 /pmai-prd-writing 灵活化的对话引导质量
 
 **决策**：同一入口对话式确认输入
 
@@ -721,7 +721,7 @@ bash <PM-AI-Workflow 路径>/scripts/migrate-prd.sh <消费仓路径>
 | 2026-05-18 | 技术栈节是否保留？ | 保留 |
 | 2026-05-18 | CONTEXT 最终结构 | 6 节 |
 | 2026-05-18 | INDEX.md 维护节奏 | close-req §1.5 一并 rewrite |
-| 2026-05-18 | 独立 PRD 入口 | 用现有 `/prd-writing` 改造成对话式灵活模式 |
+| 2026-05-18 | 独立 PRD 入口 | 用现有 `/pmai-prd-writing` 改造成对话式灵活模式 |
 | 2026-05-18 | req PRD 触发权 | PM 主导，砍覆盖度算法 |
 | 2026-05-18 | CONTEXT 各节填写时机 | stage 3 完成后检查（事实驱动）|
 | 2026-05-18 | 是否回归 first req 元数据？ | 否决，用事实状态驱动 |
@@ -775,7 +775,7 @@ bash <PM-AI-Workflow 路径>/scripts/migrate-prd.sh <消费仓路径>
 | T4 | high | 业务词催补：共享 detector 落点 + 多词批量 + 全局 toggle | CEO+Eng+DX | §0.1 #5 + §2.7 + §5.7 | 4 skill 各跑无共享 logic；MEMORY 第 2 vs PM 体验冲突 | **ACCEPT** — `_shared/term-detector/` + 多词批量收集 + `.req-meta.json: skip_term_prompts`（D4） |
 | T5 | high | INDEX 多面问题（dangling ref + close-req §1.5 D13 metric 污染 + 质量 eval 缺失） | CEO+Eng | §0.1 #6 + §2.3 | `input-flow.md:40,68,144` 已引用 INDEX 但模板/逻辑不存在；§1.5 rewrite metric 是 §2a/2b 决策依据（`close-req/SKILL.md:151-166`）| **ACCEPT** — INDEX 改 derived post-rewrite refresh（独立 `index_refreshed` 输出）+ lint script + PM reject 流程（最多 2 次重写后跳过单 INDEX） |
 | T6 | high | attachments untrusted input boundary | CEO+Eng+DX | attachments §三/四/五 | 当前无"evidence not instructions"规则；attachments §三 AI 主扫机制使 prompt injection 风险升级 | **ACCEPT** — attachments §四 加 trust rule + 加 prompt injection fixture test |
-| T7 | high | `/prd-writing` 独立模式无可发现性 | DX | §0.1 #3 + §2 vp-5 | 现有 `skills/prd-writing/SKILL.md` description "Use in Stage 6"；不改 description PM 永远不触发独立场景 | **ACCEPT** — vp-5 明确改 description 加触发关键词「Also use when PM explicitly requests independent PRD covering multiple modules」 |
+| T7 | high | `/pmai-prd-writing` 独立模式无可发现性 | DX | §0.1 #3 + §2 vp-5 | 现有 `skills/prd-writing/SKILL.md` description "Use in Stage 6"；不改 description PM 永远不触发独立场景 | **ACCEPT** — vp-5 明确改 description 加触发关键词「Also use when PM explicitly requests independent PRD covering multiple modules」 |
 | T8 | medium | `--timeline` magic moment 缺 sample（PM 看不到 wow） | DX | §0.1 #6 + §2.4 | §2.4 只列参数无 ASCII 样例 | **ACCEPT** — §2.4 加 sample output block + 默认 `--limit 20` + 超量提示 |
 
 ---
@@ -819,7 +819,7 @@ bash <PM-AI-Workflow 路径>/scripts/migrate-prd.sh <消费仓路径>
 | T27 | high | PM 单人前提 vs 多 worktree 现实冲突 | CEO Codex F3 | NONE → §0 暗示矛盾 | `README.md:87` 多 task 新窗口并行；`status-view.py:334` 支持多 active req；`templates/CLAUDE.md.tmpl:212` 也承认 | **ACCEPT** — §0 加注脚"PM 单决策者 + 多 AI/worktree 执行面"，重审 CONTEXT/INDEX/timeline 漂移风险 |
 | T28 | medium | modulespec vs prototypes/ 双权威源 | CEO Sub F3 (DEFER) / Codex F2 (ACCEPT) | NONE | `input-flow.md:206-208,355` prototypes 是反向校验源 + reconcile 重派生；§1.1 modulespec 标"事实源" | **DISAGREE** — **PM_DECIDE** 是否拉进 §0.4 第 16 条（建议拉，仲裁规则：实现事实=prototype，产品意图=modulespec） |
 | T29 | medium | CONTEXT 产品定位 vs DESIGN 视觉风格边界 | CEO Sub F4 (DEFER) / Codex F7 (ACCEPT) | NONE | DESIGN.md.tmpl §1 视觉风格 vs CONTEXT §产品定位"长期硬约束" | **DISAGREE** — **DEFER**（vp-4 模板注释加"产品定位不写视觉风格，视觉走 DESIGN.md"即可）|
-| T30 | medium | `/prd-writing` description 缺独立 PRD 触发关键词 | CEO Codex F4 (覆盖 T7) | §0.1 #3 | 现 description "Use in Stage 6" | **合并入 T7** |
+| T30 | medium | `/pmai-prd-writing` description 缺独立 PRD 触发关键词 | CEO Codex F4 (覆盖 T7) | §0.1 #3 | 现 description "Use in Stage 6" | **合并入 T7** |
 | T31 | low | INDEX 是否真省 token（AI 是否真用 INDEX 跳读 vs 全读 modules） | CEO Sub F10 | §0.1 #1 | ASSUMED — input-flow 同时列 INDEX + 全 modules 必读 | **DEFER** — vp-3 后 dogfood 观察 |
 | T32 | low | LLM 原生 memory 颠覆 6 月风险（agent SDK / native worktree / context window 突破） | CEO Sub F11 / Codex F12 | NONE | ASSUMED | **DEFER** — 标记"v3.5 收口后下次架构 review 重审" |
 | T33 | low | 短期协作研发"一页纸"入口流失 | CEO Codex F1 关联 | NONE | ASSUMED | **DEFER** — req PRD + INDEX 实际能补位 |
@@ -891,7 +891,7 @@ bash <PM-AI-Workflow 路径>/scripts/migrate-prd.sh <消费仓路径>
 | 2026-05-18 | 砍 docs/prd.md 全套（§4 第 1-8 项）| modules + INDEX + CONTEXT 接住原职责 |
 | 2026-05-18 | CONTEXT 重构 6 节 + 各节填写规范锁定 | 详见 §2.1 + §2.2 |
 | 2026-05-18 | INDEX.md 维护节奏选 B | close-req §1.5 加 INDEX 为 rewrite 目标 |
-| 2026-05-18 | /prd-writing 改对话式灵活模式 | 同入口覆盖所有写 PRD 场景 |
+| 2026-05-18 | /pmai-prd-writing 改对话式灵活模式 | 同入口覆盖所有写 PRD 场景 |
 | 2026-05-18 | req PRD 触发权改 PM 主导 | close-req §2a 砍覆盖度算法 |
 | 2026-05-18 | CONTEXT 填写时机锁定为 stage 3 后检查（事实驱动）| 不依赖 is_first_req 元数据 |
 | 2026-05-18 | 产品路线 = 里程碑形式 | CONTEXT 一节即可 |

@@ -288,7 +288,7 @@ def main() -> int:
         print(
             "数据已保留。处理路径（按场景选）：\n"
             "\n"
-            "  1) 历史 task（accept 闸门加上之前已完成）/ 工作真实手动完成但漏跑 /task-execute：\n"
+            "  1) 历史 task（accept 闸门加上之前已完成）/ 工作真实手动完成但漏跑 /pmai-task-execute：\n"
             "     合规救援路径——\n"
             "       python3 $HOME/.pmai/scripts/task-transition.py <task-file> \\\n"
             "         --repair-evidence --reason \"<原因，例：accept 闸门加上之前完成的历史 task>\"\n"
@@ -297,10 +297,10 @@ def main() -> int:
             "     ⚠️ 命令报 unknown argument → 消费仓框架太老，先按 框架同步-SOP.md §4.11\n"
             "        同步到 generator bd1f1a3 之后。\n"
             "\n"
-            "  2) 真实跳过状态机（PM 手写代码改 status 绕过 /task-execute）：\n"
-            "     回新窗口跑 /task-execute <task-id>，让 dispatch 真实发射 execution_started。\n"
+            "  2) 真实跳过状态机（PM 手写代码改 status 绕过 /pmai-task-execute）：\n"
+            "     回新窗口跑 /pmai-task-execute <task-id>，让 dispatch 真实发射 execution_started。\n"
             "\n"
-            "  3) 整个 req 放弃：/cancel-req（代码不 merge 进 main）。",
+            "  3) 整个 req 放弃：/pmai-cancel-req（代码不 merge 进 main）。",
             file=sys.stderr,
         )
         return 1

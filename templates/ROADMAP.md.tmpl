@@ -6,14 +6,14 @@
   - roadmap = 计划态 req 队列（随 req 推进更新，颗粒到单个需求）
 
 谁在何时改：
-  - /project-solution 首次产出时填初始队列（PM 已知的待做需求）
+  - /pmai-project-solution 首次产出时填初始队列（PM 已知的待做需求）
   - PM 随时手动增删（想到新需求 / 砍掉旧需求）
   - 一个 req 走完后，PM 把对应行状态推进到 done
-  本包内 roadmap 是 PM 自己维护的规划视图；机器消费者（如 /new-req 自动挑下一个）后续落地，本包不依赖它被机器读。
+  本包内 roadmap 是 PM 自己维护的规划视图；机器消费者（如 /pmai-new-req 自动挑下一个）后续落地，本包不依赖它被机器读。
 
 状态取值（固定三态）：
   - planned  — 已规划、还没开始
-  - active   — 正在做（已 /new-req 起 req）
+  - active   — 正在做（已 /pmai-new-req 起 req）
   - done     — 已完成（req 已 close）
 
 字段：req-id（req 起后回填，未起前留空）/ 标题 / 状态 / 排序（数字，小的先做）

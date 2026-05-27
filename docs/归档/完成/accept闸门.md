@@ -20,17 +20,17 @@ reopen 拆出为独立 D-task docs/设计/reopen通道.md，本文档收敛为 a
 
 ### §0.1 痛点（1-3 句）
 
-I-CT7（事件流审计）能抓"task 没走执行通道"，但在 close-task —— 整条流程最后一步 —— 才收网。task 的执行阶段没有任何前置机制强制它真走过 `/task-execute`；唯一兜底来得太晚 —— task-001 的 work 全做完、PM 已验收，却卡在 merge 前一刻才被发现执行阶段从未 instrument。
+I-CT7（事件流审计）能抓"task 没走执行通道"，但在 close-task —— 整条流程最后一步 —— 才收网。task 的执行阶段没有任何前置机制强制它真走过 `/pmai-task-execute`；唯一兜底来得太晚 —— task-001 的 work 全做完、PM 已验收，却卡在 merge 前一刻才被发现执行阶段从未 instrument。
 
 ### §0.2 触发场景
 
 | # | 场景 | 实证证据 |
 |---|---|---|
-| 1 | task 执行期完全未走 `/task-execute`，事件流缺 execution 事件，直到 close-task I-CT7 才发现 | ExampleConsumerApp req-006 `task-001-ops-log-pages`：事件流仅 2 条 `status_changed`，3.5h 执行期零事件；close-task I-CT7 BLOCK；代码与产物均真实齐全 |
+| 1 | task 执行期完全未走 `/pmai-task-execute`，事件流缺 execution 事件，直到 close-task I-CT7 才发现 | ExampleConsumerApp req-006 `task-001-ops-log-pages`：事件流仅 2 条 `status_changed`，3.5h 执行期零事件；close-task I-CT7 BLOCK；代码与产物均真实齐全 |
 
 ### §0.3 根因
 
-`task-transition.py` 处理「执行中→已完成」（PM 验收）时，不校验事件流是否有 execution 事件。`/task-execute` 因此非强制、可被整段跳过；唯一兜底是 close-task 末尾的 I-CT7 —— 检查点离故障点（执行期）太远，发现时 task 已终态。
+`task-transition.py` 处理「执行中→已完成」（PM 验收）时，不校验事件流是否有 execution 事件。`/pmai-task-execute` 因此非强制、可被整段跳过；唯一兜底是 close-task 末尾的 I-CT7 —— 检查点离故障点（执行期）太远，发现时 task 已终态。
 
 ### §0.4 不解决什么
 
@@ -46,7 +46,7 @@ I-CT7（事件流审计）能抓"task 没走执行通道"，但在 close-task �
 
 ### §1.1 方案（一句话）
 
-在 `task-transition.py` 的 `check_preconditions()`「执行中→已完成」分支（现 L206-247，已有"文档偏差"/"自审记录"两项校验）追加第三项：事件流须有至少一条 execution 事件（`execution_started` / `execution_manual_completed`），否则拒绝转移、提示先走 `/task-execute`。I-CT7 在 close-task 保留为兜底。
+在 `task-transition.py` 的 `check_preconditions()`「执行中→已完成」分支（现 L206-247，已有"文档偏差"/"自审记录"两项校验）追加第三项：事件流须有至少一条 execution 事件（`execution_started` / `execution_manual_completed`），否则拒绝转移、提示先走 `/pmai-task-execute`。I-CT7 在 close-task 保留为兜底。
 
 ### §1.2 review 决策（D1 / D2 / C8 — 已落定）
 
