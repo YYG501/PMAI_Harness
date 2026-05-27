@@ -102,7 +102,10 @@ if [ "$LOCAL_MODE" = "1" ]; then
   SRC=$(mktemp -d "/tmp/pmai-upgrade-local-XXXXXX")
   trap "rm -rf '$SRC' 2>/dev/null || true" EXIT
   echo "→ Cloning fresh source to $SRC ..."
-  git clone "$REMOTE" "$SRC" 2>&1 | tail -3
+  timeout 120 git clone "$REMOTE" "$SRC" 2>&1 | tail -3 || {
+    echo "❌ git clone 超时（120s）或失败。网络 / SSH 不通？" >&2
+    exit 1
+  }
 
   cd "$SRC"
   case "$MODE" in
@@ -177,21 +180,35 @@ cd "$PMAI_HOME"
 OLD_VER=$(cat VERSION 2>/dev/null || echo unknown)
 OLD_HEAD=$(git rev-parse --short HEAD)
 
-echo "→ Fetching latest from origin..."
-git fetch origin --tags 2>&1 | tail -5
-
+# fetch 按 MODE 分流：main 模式只拉 main 分支（快），stable / to 模式才拉 tags（慢但必需）
+# 所有 fetch 加 timeout，避免 SSH / 网络慢导致无限卡死
 case "$MODE" in
   main)
-    echo "→ Pulling origin/main..."
+    echo "→ Fetching origin/main..."
+    timeout 30 git fetch origin main 2>&1 | tail -5 || {
+      echo "❌ git fetch 超时（30s）或失败。网络 / SSH 不通？" >&2
+      exit 1
+    }
+    echo "→ Merging origin/main (ff-only)..."
     git merge --ff-only origin/main 2>&1 | tail -5
     ;;
   stable)
+    echo "→ Fetching tags from origin..."
+    timeout 60 git fetch origin --tags 2>&1 | tail -5 || {
+      echo "❌ git fetch --tags 超时（60s）或失败。网络 / SSH 不通？" >&2
+      exit 1
+    }
     LATEST_TAG=$(git tag -l 'v*' | sort -V | tail -1)
     [ -z "$LATEST_TAG" ] && { echo "❌ 远程没有 v* tag。PM 还没打过 stable。" >&2; exit 1; }
     echo "→ Checking out latest stable tag: $LATEST_TAG"
     git checkout "$LATEST_TAG"
     ;;
   to)
+    echo "→ Fetching tags from origin..."
+    timeout 60 git fetch origin --tags 2>&1 | tail -5 || {
+      echo "❌ git fetch --tags 超时（60s）或失败。网络 / SSH 不通？" >&2
+      exit 1
+    }
     if ! git rev-parse "refs/tags/$TARGET_TAG" >/dev/null 2>&1; then
       echo "❌ tag $TARGET_TAG 不存在。可用 tag:" >&2
       git tag -l 'v*' | sort -V | tail -10 >&2

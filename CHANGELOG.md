@@ -187,6 +187,17 @@ PM-AI-Workflow 生成器仓的演进记录。本文件**只记影响下游业务
 
 ## 未发布
 
+### 2026-05-27 — fix(pmai-upgrade): fetch 按 MODE 分流 + 加 timeout（修网络慢卡死 4 分钟）
+
+PM 实测 `pmai upgrade` 卡 4 分钟，根因 `git fetch origin --tags` 在 SSH 慢的网络环境拉所有 tag 引用慢。本次根因修：
+
+- **default `main` 模式**：改 `git fetch origin main`（只 main 分支，不 `--tags`），快 10× —— main 模式根本不需要 tag 信息
+- **`--stable` / `--to`**：仍 `--tags`（必需）但加 60s timeout
+- **`--local` 模式 clone**：加 120s timeout
+- 所有 fetch / clone 超时清晰报错"网络 / SSH 不通"，不再无声卡死；失败 exit 1 不掩盖问题
+
+**影响**：业务仓 PM 跑 `pmai upgrade` 在国内网络环境从 4 分钟 → 数秒；`/pmai-upgrade` skill 调它也同样受益。`--stable` / `--to` 仍走 tag fetch（必需），最坏 60s 超时退出。
+
 ### 2026-05-27 — fix(skill-preamble + check-branch) + ci: 2 个生产真 bug 直修 + 4 stale test 同步 + GitHub Actions CI
 
 `/devex-review` 后跑全测发现 6 个 fail，里面 **2 个不是 stale 测试，是生产环境也坏的真 bug**：
