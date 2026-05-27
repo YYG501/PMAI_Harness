@@ -187,6 +187,26 @@ PM-AI-Workflow 生成器仓的演进记录。本文件**只记影响下游业务
 
 ## 未发布
 
+### 2026-05-27 — feat(pmai-upgrade + skill): `--local <dir>` 升级模式（团队仓不再缺升级入口）
+
+借鉴 GSD `get-shit-done-cc` 的双模式升级路线（global + local 都支持），补 PMAI 之前只支持全局升级的缺口。
+
+**触发**：PM 用 `--local` 装在团队仓后无法用 `/pmai-upgrade` skill（只支持全局 `~/.pmai/`），团队仓升级要手动重跑 `install.sh --local .` —— 没 AI 智能 What's New 摘要。
+
+**改动**：
+
+- `bin/pmai-upgrade` 加 `--local <dir>` flag：mktemp 重克隆源 → 按 `--stable`/`--to` checkout → 覆盖 `<dir>/.claude/{scripts,skills,agents}/` 实体副本 + 拷 `CHANGELOG.md` + 更新 `.pmai-version` + 写 JUST_UPGRADED marker + 末尾打印 `git add/commit/push` 提示
+- `bin/pmai` dispatcher help 加 `--local <dir>` 标志说明 + 团队仓 example
+- `skills/pmai-upgrade/SKILL.md` v1.1.0：Step 0 加 mode 自动检测（cwd 含 `.claude/.pmai-version` → local mode；否则 ~/.pmai/.git → global mode），Step 1 探远程用 `git ls-remote`（local 模式无本地副本可 fetch），Step 3 按 mode 分流升级命令，Step 4 CHANGELOG 路径按 mode 切换
+- frontmatter `version: 1.0.0 → 1.1.0`
+
+**端到端 smoke test 通过**：
+- TESTDIR + 假 `.pmai-version 0.0.1-test` → `pmai-upgrade --local TESTDIR --no-whats-new` → 重克隆 v0.2.1 + 24 skill 实体副本 + CHANGELOG 拷贝 + marker 写入
+- 错误分支：非 install 目录、空 dir 参数、不存在目录 都有清晰报错
+- 双前缀 bug 不复现（install_skills_copy 函数复用 bin/pmai-install 的 case 三分支）
+
+**影响**：团队仓 PM 可在 cwd 内跑 `/pmai-upgrade`，AI 自动按 `--local` 模式升 + 给 commit/push 指引；全局模式行为完全不变（向后兼容）。
+
 ### 2026-05-27 — fix(bin/pmai*+README): /devex-review 抓出的 3 个 install/help UX bug 直修
 
 `/devex-review` 实测命中 3 个新摩擦点，本次一并修：

@@ -17,7 +17,7 @@ Subcommands:
   install              Install PMAI globally (default) or locally
                        Flags: --local <dir>
   upgrade              Pull latest framework code
-                       Flags: --stable | --to <tag>
+                       Flags: --stable | --to <tag> | --local <dir>
   uninstall            Remove PMAI install
                        Flags: --force | --local <dir>
   status               Show install state + version diff
@@ -37,8 +37,9 @@ Meta:
 Examples:
   pmai install                              # Default global install
   pmai install --local ~/Desktop/example-consumer-app
-  pmai upgrade                              # Pull main
-  pmai upgrade --stable                     # Jump to latest tag
+  pmai upgrade                              # Pull main (global)
+  pmai upgrade --stable                     # Jump to latest tag (global)
+  pmai upgrade --local ~/Desktop/team-repo  # Re-clone + overwrite team repo's .claude/
   pmai status                               # Show current state
 
 Source: $BIN_DIR

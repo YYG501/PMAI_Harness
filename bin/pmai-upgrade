@@ -2,9 +2,12 @@
 # pmai-upgrade — Upgrade PMAI framework (default: pull main; --stable: latest tag; --to <ver>: pin)
 #
 # 升级模型（档 2：VERSION + git tag）：
-#   pmai upgrade              # cd ~/.pmai && git pull origin main（吃 main 最新）
-#   pmai upgrade --stable     # 跳到最新 git tag（PM 打过的稳定 baseline）
-#   pmai upgrade --to v0.1.0  # 锁定指定版本（回滚 / 固定）
+#   pmai upgrade                          # 全局：cd ~/.pmai && git pull origin main
+#   pmai upgrade --stable                 # 全局：跳到最新 git tag
+#   pmai upgrade --to v0.1.0              # 全局：锁定指定 tag
+#   pmai upgrade --local <dir>            # --local 模式：重克隆 + 覆盖 <dir>/.claude/ 副本（无需 ~/.pmai/）
+#   pmai upgrade --local <dir> --stable   # --local + stable tag
+#   pmai upgrade --local <dir> --to v0.x  # --local + 锁定 tag
 
 set -euo pipefail
 
@@ -12,20 +15,29 @@ PMAI_HOME="${PMAI_HOME:-$HOME/.pmai}"
 PMAI_STATE="${PMAI_STATE:-$HOME/.pmai-state}"
 CLAUDE_SKILLS="$HOME/.claude/skills"
 SKILL_PREFIX="pmai-"
+REMOTE="${PMAI_REMOTE:-git@github.com:YYG501/PMAI_Workflow.git}"
 
 usage() {
   cat <<EOF
 Usage:
-  pmai upgrade                    # Pull latest main commit
-  pmai upgrade --stable           # Jump to latest git tag (stable baseline)
-  pmai upgrade --to v0.1.0        # Pin to specific tag (rollback / freeze)
-  pmai upgrade --no-whats-new     # 升级后跳过 pmai-whats-new 自动展示（skill 接管时用）
+  pmai upgrade                        # Pull latest main commit (global ~/.pmai/)
+  pmai upgrade --stable               # Jump to latest git tag (stable baseline)
+  pmai upgrade --to v0.1.0            # Pin to specific tag (rollback / freeze)
+  pmai upgrade --local <dir>          # --local mode: re-clone + overwrite <dir>/.claude/
+  pmai upgrade --local <dir> --stable # --local + stable tag
+  pmai upgrade --local <dir> --to vX  # --local + pin
+  pmai upgrade --no-whats-new         # 升级后跳过 pmai-whats-new 自动展示（skill 接管时用）
+
+Env override:
+  PMAI_REMOTE=<git-url>               # Override default github remote
 EOF
 }
 
 MODE="main"
 TARGET_TAG=""
 NO_WHATS_NEW=0
+LOCAL_MODE=0
+LOCAL_DIR=""
 
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -38,11 +50,123 @@ while [ $# -gt 0 ]; do
       MODE="to"
       shift
       ;;
+    --local)
+      shift
+      LOCAL_DIR="${1:-}"
+      [ -z "$LOCAL_DIR" ] && { echo "❌ --local needs <dir>" >&2; usage >&2; exit 2; }
+      [ ! -d "$LOCAL_DIR" ] && { echo "❌ <dir> not found: $LOCAL_DIR" >&2; exit 2; }
+      LOCAL_DIR=$(cd "$LOCAL_DIR" && pwd)
+      LOCAL_MODE=1
+      shift
+      ;;
     --no-whats-new) NO_WHATS_NEW=1; shift ;;
     "") shift ;;
     *) echo "❌ unknown flag: $1" >&2; usage >&2; exit 2 ;;
   esac
 done
+
+# 子函数：把 src_skills 下的目录装到 dst_skills，加 pmai- 前缀（与 bin/pmai-install 同源）
+install_skills_copy() {
+  local src_skills="$1"
+  local dst_skills="$2"
+  local count=0
+  mkdir -p "$dst_skills"
+  for skill_dir in "$src_skills"/*/; do
+    [ -d "$skill_dir" ] || continue
+    skill_name=$(basename "$skill_dir")
+    case "$skill_name" in
+      _shared)  dst="$dst_skills/_shared" ;;
+      pmai-*)   dst="$dst_skills/$skill_name" ;;
+      *)        dst="$dst_skills/${SKILL_PREFIX}${skill_name}" ;;
+    esac
+    [ -e "$dst" ] || [ -L "$dst" ] && rm -rf "$dst"
+    cp -R "${skill_dir%/}/." "$dst/"
+    count=$((count + 1))
+  done
+  echo "$count"
+}
+
+# ─────────────────────────────────────────────────────────────
+# --local 模式：重克隆源 + 覆盖 <LOCAL_DIR>/.claude/{scripts,skills,agents}/
+# ─────────────────────────────────────────────────────────────
+if [ "$LOCAL_MODE" = "1" ]; then
+  if [ ! -f "$LOCAL_DIR/.claude/.pmai-version" ]; then
+    echo "❌ $LOCAL_DIR/.claude/.pmai-version 不存在" >&2
+    echo "   这不是 --local 安装目录。要从头装：" >&2
+    echo "   curl -fsSL https://raw.githubusercontent.com/YYG501/PMAI_Workflow/main/install.sh | bash -s -- --local $LOCAL_DIR" >&2
+    exit 1
+  fi
+
+  OLD_VER=$(cat "$LOCAL_DIR/.claude/.pmai-version" 2>/dev/null || echo unknown)
+
+  SRC=$(mktemp -d "/tmp/pmai-upgrade-local-XXXXXX")
+  trap "rm -rf '$SRC' 2>/dev/null || true" EXIT
+  echo "→ Cloning fresh source to $SRC ..."
+  git clone "$REMOTE" "$SRC" 2>&1 | tail -3
+
+  cd "$SRC"
+  case "$MODE" in
+    main) ;;  # 默认在 main
+    stable)
+      LATEST_TAG=$(git tag -l 'v*' | sort -V | tail -1)
+      [ -z "$LATEST_TAG" ] && { echo "❌ 远程无 v* tag" >&2; exit 1; }
+      echo "→ Checkout stable tag: $LATEST_TAG"
+      git checkout "$LATEST_TAG" 2>&1 | tail -3
+      ;;
+    to)
+      if ! git rev-parse "refs/tags/$TARGET_TAG" >/dev/null 2>&1; then
+        echo "❌ tag $TARGET_TAG 不存在。可用 tag:" >&2
+        git tag -l 'v*' | sort -V | tail -10 >&2
+        exit 1
+      fi
+      echo "→ Checkout tag: $TARGET_TAG"
+      git checkout "$TARGET_TAG" 2>&1 | tail -3
+      ;;
+  esac
+
+  NEW_VER=$(cat VERSION 2>/dev/null || echo unknown)
+  NEW_HEAD=$(git rev-parse --short HEAD)
+
+  echo "→ Replacing $LOCAL_DIR/.claude/{scripts,agents,skills}/ ..."
+  rm -rf "$LOCAL_DIR/.claude/scripts"
+  cp -R "$SRC/scripts" "$LOCAL_DIR/.claude/scripts"
+  rm -rf "$LOCAL_DIR/.claude/agents"
+  cp -R "$SRC/agents" "$LOCAL_DIR/.claude/agents"
+  rm -rf "$LOCAL_DIR/.claude/skills"
+  SKILL_COUNT=$(install_skills_copy "$SRC/skills" "$LOCAL_DIR/.claude/skills")
+
+  echo "$NEW_VER" > "$LOCAL_DIR/.claude/.pmai-version"
+  # 拷 CHANGELOG.md 让 skill Step 4 能从 local target 读 What's New
+  [ -f "$SRC/CHANGELOG.md" ] && cp "$SRC/CHANGELOG.md" "$LOCAL_DIR/.claude/CHANGELOG.md"
+
+  echo ""
+  echo "═══════════════════════════════════════"
+  if [ "$OLD_VER" = "$NEW_VER" ]; then
+    echo "✅ PMAI (--local) 已是最新（v${NEW_VER} @ ${NEW_HEAD}）"
+  else
+    echo "✅ PMAI (--local) 升级：v${OLD_VER} → v${NEW_VER} (${NEW_HEAD})"
+    mkdir -p "$PMAI_STATE"
+    echo "$OLD_VER" > "$PMAI_STATE/just-upgraded-from"
+  fi
+  echo "   target: $LOCAL_DIR"
+  echo "   skill:  $SKILL_COUNT entries copied"
+  echo "═══════════════════════════════════════"
+
+  if [ "$OLD_VER" != "$NEW_VER" ]; then
+    echo ""
+    echo "📋 team 仓需 commit + push 让队友拿到新版："
+    echo "   cd $LOCAL_DIR"
+    echo "   git add .claude/"
+    echo "   git commit -m 'chore: upgrade PMAI to v${NEW_VER}'"
+    echo "   git push"
+  fi
+
+  exit 0
+fi
+
+# ─────────────────────────────────────────────────────────────
+# 全局模式（默认）：git pull ~/.pmai/ + re-sync symlinks
+# ─────────────────────────────────────────────────────────────
 
 if [ ! -d "$PMAI_HOME/.git" ]; then
   echo "❌ $PMAI_HOME 不存在或不是 git 仓。先跑 pmai install。" >&2
