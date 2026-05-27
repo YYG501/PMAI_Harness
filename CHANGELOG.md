@@ -187,6 +187,38 @@ PM-AI-Workflow 生成器仓的演进记录。本文件**只记影响下游业务
 
 ## 未发布
 
+### 2026-05-27 — fix(pmai-upgrade): 升级原子化 — dirty stash + trap 回滚 + --local mv swap + 升完跑 doctor
+
+PM 提"升级方案不靠谱"——担心两件事：跑一半挂了半新半旧，PM 改了 `~/.pmai` 被 reset --hard 冲掉。审完 `gstack-upgrade` / `gsd install.js`，照搬 gstack 的兜底套路改 `bin/pmai-upgrade`（266→376 行）。
+
+**改动**：
+
+- **A 全局模式 dirty 自动 stash**：升级前 `git status --porcelain` 不空 → `git stash push -u` 自动救 PM 在 `~/.pmai` 的本地改动；末尾告知 `cd ~/.pmai && git stash pop` 恢复路径
+- **B 全局模式 trap ERR 自动回滚**：升级前记录 `OLD_HEAD` + 装 `trap global_rollback ERR`；fetch / checkout / symlink / doctor 任何一步挂 → `git reset --hard $OLD_HEAD` + 按 OLD_HEAD 重建 symlink + 提示 stash pop；`ROLLBACK_DONE` flag 防重入
+- **D --local 模式 staging + mv swap**：原来的 `rm -rf $LOCAL/.claude/skills && cp -R` 不原子，挂中间半新半旧；改成先 cp 到 `*.new` staging dir → staging 自检（skill 数 < 22 视为失败）→ 原 `mv` 成 `*.bak` → staging `mv` 到正式位 → 成功清 .bak；失败 trap 把 .bak 推回原位 + 清 .new
+- **E 升完跑 pmai-doctor 自检**：全局模式末尾跑 `pmai-doctor`，FAIL 触发 B 的回滚（WARN 不触发）；--local 模式因为没 `~/.pmai` 用 lite check（staging 阶段 skill 数 ≥ 22）
+- 全局 `set -Eeuo pipefail`（加 `-E` 让 trap 在函数 / subshell 内也生效）
+
+**兼容性**：纯增量保护层，PM 跑 `pmai upgrade` 命令、flag 全部不变（`--stable` / `--to vX` / `--local` / `--no-whats-new` 行为同前）。回滚是失败兜底，不改成功路径。
+
+**未做（明确放弃）**：
+- C symlink staging swap：B 的 trap 已 cover symlink 半重建场景；C 引入 staging 目录会让 doctor / status 等下游学会忽略，复杂度跳一档但只防"trap 自己挂"的低概率场景，ROI 不值
+- migration 脚本机制（gstack `v{VER}.sh` pattern）：当前还没真实 breaking change 案例，先不引入框架
+
+**测试**：bash -n 通过；clean 状态跑 `pmai upgrade` 跑通 doctor + 24 symlink；造 dirty 跑 `pmai upgrade` stash + 升级 + 末尾提示 pop 都对。trap 回滚路径不实际制造 doctor fail 测（会动 `~/.claude/skills` 真 symlink，风险大于收益）—— 三个 rollback 动作（reset --hard / rebuild_symlinks / stash pop 提示）单独逻辑都验过。
+
+### 2026-05-27 — refactor(templates): 修正 PROJECT/ROADMAP/lark-publish 位置 — 按 GSD pattern 扁平化
+
+上轮 refactor 把 lark-publish.json.tmpl 移到 `skills/publish-to-lark/templates/`，PM 反馈：业务实例配置（PM cp + 填 token）不该绑死单个 skill。参照 GSD（`get-shit-done/templates/` 把 `config.json` 放顶层 + workflow 内只放周期产物 checkpoint/context）的 pattern 修正：
+
+- `templates/lark-publish.json.tmpl` 回 templates/ 根（业务实例配置，跟 GSD `config.json` 顶层一致；不搞 `templates/instances/` 子目录，扁平化）
+- 同步更新 `skills/publish-to-lark/SKILL.md` + `scripts/init-project.sh` 路径
+- `init-project.sh` 注释更新：主 loop case 把 lark-publish 也归入「不走占位符替换」跳过分支（下方 f3 段独立 cp）
+
+**判断原则总结**（GSD pattern 借鉴）：
+- skill 自包含 templates/：仅装"该 skill 周期内一次性产物的模板"（如 task-plan / req-prd / implementation-design / codebase-audit / module）
+- 框架根 templates/：项目级长期文档（PROJECT / ROADMAP / CLAUDE / PRODUCT-RULES）+ 多 skill 共用（task）+ 业务实例配置（lark-publish）+ 纯 init scaffold（settings / gitignore / 等）
+
 ### 2026-05-27 — refactor(templates): skill 自包含 — 6 个 skill 独占 .tmpl 移进 skills/<skill>/templates/
 
 PM 实测发现 `templates/lark-publish.json.tmpl` 跟 `skills/publish-to-lark/` 分裂在两个目录，问"skill 依赖为啥不和 skill 放一起"。Audit 仓内每个 .tmpl 被谁引用后，把 skill 独占的 6 个移进各自 skill 目录，剩下的 8 个保留（init scaffold + 多 skill 共用）。

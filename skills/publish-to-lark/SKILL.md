@@ -46,7 +46,7 @@ description: 把本地 markdown 文档发布到飞书云文档，发布后自动
 }
 ```
 
-未配置类型时，PM 必须同时传 `--target-token` + `--target-kind` + `--title`，否则 skill 报错退出。模板见 `$PMAI_HOME/skills/publish-to-lark/templates/lark-publish.json.tmpl`。
+未配置类型时，PM 必须同时传 `--target-token` + `--target-kind` + `--title`，否则 skill 报错退出。模板见 `$PMAI_HOME/templates/lark-publish.json.tmpl`。
 
 `title_template` 占位符从 markdown frontmatter 或文件名读取（`{req_id}` / `{req_title}` / `{task_id}` / `{task_title}` / `{filename}`）。
 
@@ -60,7 +60,7 @@ description: 把本地 markdown 文档发布到飞书云文档，发布后自动
 | `lark-cli --version` ≥ `1.0.14` | `lark-cli 版本 <实际值> 低于最低要求 1.0.14；请升级` |
 | `lark-cli auth status` 已登录 | `飞书 CLI 未登录。运行 lark-cli auth login（详见 lark-shared skill）` |
 | `lark-cli auth check --scope` 关键 scope 已授权 | `缺少 scope: <list>；请在飞书开放平台为 app 申请 scope 后重新 lark-cli auth login` |
-| `.claude/lark-publish.json` 存在 或 命令行参数齐全 | `配置缺失。复制 $PMAI_HOME/skills/publish-to-lark/templates/lark-publish.json.tmpl 到 .claude/lark-publish.json 并填 token；或手动传 --target-token + --target-kind + --title` |
+| `.claude/lark-publish.json` 存在 或 命令行参数齐全 | `配置缺失。复制 $PMAI_HOME/templates/lark-publish.json.tmpl 到 .claude/lark-publish.json 并填 token；或手动传 --target-token + --target-kind + --title` |
 
 **版本基线说明：** 1.0.27 是当前已验证的工作版本（1.0.27 把 scope 名称从粗粒度改为细粒度）。lark-cli 后续如发版引入 breaking change，更新本文件并 bump 此版本号。
 

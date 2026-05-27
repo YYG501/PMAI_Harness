@@ -135,10 +135,11 @@ for TMPL in "$FRAMEWORK_DIR/templates/"*.tmpl; do
     PRODUCT-RULES.md)       DEST="$TARGET_DIR/docs/PRODUCT-RULES.md" ;;
     ROADMAP.md)             DEST="$TARGET_DIR/docs/ROADMAP.md" ;;
     modules-INDEX.md)       DEST="$TARGET_DIR/docs/modules/INDEX.md" ;;
-    task.md)
-      # runtime framework .tmpl —— skill 内部用 $PMAI_HOME/templates/ 直接调用，不拷进消费仓
-      # (req-prd / implementation-design / codebase-audit / task-plan / module / lark-publish
-      #  已迁到 skills/<skill>/templates/，不会出现在本 loop)
+    task.md|lark-publish.json)
+      # task.md: runtime framework .tmpl，skill 内部按 $PMAI_HOME/templates/ 直接调用（task-spec / task-confirm 多 skill 共用）
+      # lark-publish.json: 业务实例配置，下方 f3 段独立 cp（不走主 loop 占位符替换）
+      # 注：req-prd / implementation-design / codebase-audit / task-plan / module 已迁
+      #     skills/<skill>/templates/（req/task 周期产物 skill 自包含），不在本 loop。
       continue ;;
     settings.json)          DEST="$TARGET_DIR/.claude/settings.json" ;;
     gitignore)              DEST="$TARGET_DIR/.gitignore" ;;
@@ -182,13 +183,13 @@ python3 "$FRAMEWORK_DIR/scripts/inject-structure-segment.py" \
 mkdir -p "$TARGET_DIR/.claude"
 # 注：.claude/settings.json 已在 d 段写入（占位符替换实体），hook 路径用 $HOME/.pmai/...
 
-# --- f3. 业务实例配置模板（I-mini 例外）：从 skill 自包含 templates 拷进消费仓 ---
-# 这些是 PM 后续要 cp + 改 token 的模板，必须留实体在消费仓。
-# 框架内 .tmpl 现位于 skills/<skill>/templates/（skill 自包含 refactor 后），
-# 不再走 templates/ 主 loop。
+# --- f3. 业务实例配置模板（I-mini 例外）：lark-publish.json.tmpl 拷进消费仓 ---
+# PM 后续要 cp templates/lark-publish.json.tmpl → .claude/lark-publish.json 并填
+# 真 token —— 必须留实体在消费仓（每个项目 token 不同，~/.pmai/ 全局副本装不下
+# per-project token）。
 mkdir -p "$TARGET_DIR/templates"
-if [ -f "$FRAMEWORK_DIR/skills/publish-to-lark/templates/lark-publish.json.tmpl" ]; then
-  cp "$FRAMEWORK_DIR/skills/publish-to-lark/templates/lark-publish.json.tmpl" \
+if [ -f "$FRAMEWORK_DIR/templates/lark-publish.json.tmpl" ]; then
+  cp "$FRAMEWORK_DIR/templates/lark-publish.json.tmpl" \
      "$TARGET_DIR/templates/lark-publish.json.tmpl"
 fi
 
