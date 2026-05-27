@@ -445,12 +445,12 @@ test_skill_prose_b_branch_disable() {
 }
 
 test_skill_prose_new_req_commit_pathspec() {
-  start_test "grep: new-req 步骤 4.5 commit pathspec 已扩 attachments/"
-  if grep -qE 'attachments/.*一并\s*commit|一并\s*commit.*attachments' "$FRAMEWORK_ROOT/skills/new-req/SKILL.md" && \
-     grep -q 'git add "$REQ_REL/attachments"' "$FRAMEWORK_ROOT/skills/new-req/SKILL.md"; then
+  start_test "grep: new-req 步骤 4D commit pathspec 含 attachments/"
+  # worktree 创建后置后：attachments/ 总在 4D 一次 commit 范围里（更强契约）
+  if grep -q '"$REQ_REL/attachments"' "$FRAMEWORK_ROOT/skills/new-req/SKILL.md"; then
     pass_test
   else
-    _fail "new-req commit pathspec 未扩 attachments/"
+    _fail "new-req 4D commit pathspec 未含 attachments/"
   fi
 }
 

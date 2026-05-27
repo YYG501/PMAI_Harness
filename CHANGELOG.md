@@ -187,6 +187,36 @@ PM-AI-Workflow 生成器仓的演进记录。本文件**只记影响下游业务
 
 ## 未发布
 
+### 2026-05-27 — refactor(new-req): worktree 创建后置 — brief 整理在 main，PM 二确通过后才拉 worktree 并 handoff
+
+**触发**：消费仓 PM 跑 `/pmai-new-req` 给完需求后，AI 拿编号 + 问 slug → 立即 `create-req-headless.sh` 拉 worktree + `cd` 进去 → IDE 显示分支从 `main` 切到 `req-NNN-...`。PM 反应"你怎么切分支了"——主仓 main 工作区其实没动（worktree 是隔离机制），但视角等同于 IDE 切分支，PM 体验破绽。PM 明确"按之前的流程，应该是先整理 brief、再创建 worktree、让我手动切"（旧仓的 `docs/` 工作模式：所有 doc / 规格在 main 上整理，worktree 只用作 implementation 隔离）。
+
+**根因**：当前 SKILL 步骤 3 一上来就拉 worktree + `cd`，导致 stage 1 brief 整理全程在 worktree 内进行。PM 视角下 worktree 隔离 = IDE 切分支，这个事件应该由 **PM 明确说 OK 之后才发生**，不是 AI 在 stage 1 中段就替 PM 切。
+
+**改动**（PM 视角）：
+
+- **worktree 创建后置**：拉 worktree 推到「brief 二确通过之后」的步骤 4 原子操作。步骤 0-3 全程主对话 cwd 在主仓 main、不创建任何文件/目录，brief 草稿在 chat markdown block 展示
+- **PROJECT.md / DESIGN.md baseline 兜底搬到 main 上做并 commit 到 main**（步骤 2C）：这两份是项目级 baseline 不是 req 级，进 main 是语义正确；worktree 在步骤 4 从 main 拉自动带上
+- **attachments trigger 0/1 改成内存 list `PENDING_ATTACHMENTS`**：步骤 3.5 仅做轻量预检（路径存在 + sensitive + size），实际 cp + register 推到步骤 4B batch 执行（worktree 创建后用 `copy_attachment` 走完整 helper 路径）
+- **attachments trigger 2 砍**：worktree 还没建无 cp 目标；PM 想绕 chat 直接 cp → 等步骤 5 handoff 后在 worktree 新对话里做（由 stage-gate 后续 stage 入口 attachments trigger 兜底）
+- **步骤 4 原子操作**：4A 拉 worktree → 4B batch cp attachments → 4C 写 brief.md（含引用 section）→ 4D 一次 commit；全程用 `git -C <worktree>` 不切 cwd，任一子步失败 fail-loud + 让 PM 手动 `git worktree remove` 回滚
+- **二确门话术更新**：去掉「绝对路径行」（此时 brief.md 还没落盘）；新加「brief 草稿块」展示在 chat 里
+- **commit 范围契约更强**：4D commit pathspec 限于本 req 目录（brief.md / .req-meta.json / tasks/ / attachments/）；`docs/PROJECT.md` / `docs/DESIGN.md` 已在步骤 2C 单独 commit 到 main 不在 4D 范围
+- **handoff 内容不变**：PM 仍在新窗口手动 `cd <worktree>` + 起新 claude + 跑 `/pmai-req-stage-gate`
+
+**测试**：
+
+- `tests/test-attachments-helper.sh` 「new-req commit pathspec 含 attachments/」断言改为匹配新契约（attachments 永远在 4D commit 里，不再「触发时一并 commit」prose）—— 16/16 pass
+- `tests/test-new-req-no-arg-prompt.sh` 4/4 / `tests/test-no-duplicate-questioning.sh` 4/4 / `tests/test-banner-label.sh` 10/10 / `tests/test-stage-source-helper.sh` 13/13 / `tests/test-tthw-smoke.sh` 2/2 全过
+
+**影响**：
+
+- 消费仓 PM 跑 `/pmai-new-req` 时主对话**全程**主仓 main，PM `git status` 主仓永远 clean，brief 在 chat 看得见；二确通过 → handoff 块出现 → PM **自己** `cd` 切窗口。`AI 切了分支` 这个体验破绽消除
+- INVARIANTS I-AD5 / I-DC1（dispatch 前 working tree 必须 clean）仍由步骤 4D commit 保证
+- mental model 跟老仓（`pm-ai-workflow-template`）对齐：`docs/` 工作在 main，worktree 仅用作隔离
+
+---
+
 ### 2026-05-27 — fix(req-num-resolver): max=008/009 时 `$((...))` 按 octal 解析报错，强制 base-10
 
 **触发**：ExampleConsumerApp PM 在 closed/req-008 之后跑 `/pmai-new-req`，helper 报 `008: value too great for base (error token is "008")` 直接挂掉；PM 手动判断编号是 009 继续。
