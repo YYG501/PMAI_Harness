@@ -10,9 +10,13 @@ PM AI 工作流框架的**生成器**仓库。
 
 ## 这是什么
 
-把"PM 用 AI 做产品/业务工作"的循环固化成可复制的工作流：每个业务项目用一份生成的模板初始化，PM 通过一组 slash skill（`/new-req` `/task-confirm` `/task-execute` …）推进 req（需求）和 task（任务），框架负责状态机、worktree 隔离、文档同步、护栏。
+把"PM 用 AI 做产品/业务工作"的循环固化成可复制的工作流：每个业务项目用一份生成的模板初始化，PM 通过一组 slash skill（`/pmai-new-req` `/pmai-task-confirm` `/pmai-task-execute` …）推进 req（需求）和 task（任务），框架负责状态机、worktree 隔离、文档同步、护栏。
 
 定位是 **PM 单人生产力工具**，不是团队 SOP / CI 平台 / 多租户基础设施。
+
+**分发形态**：
+- **全局安装**（默认推荐，单人多项目场景）：框架装到 `~/.pmai/`，22+ skill symlink 到 `~/.claude/skills/pmai-*`；任意 cwd 跑 `/pmai-init-project` 起新业务项目；`pmai upgrade` 一键升级所有项目自动跟随
+- **`--local` 项目安装**（团队仓场景）：框架实体副本 commit 进业务仓 `.claude/`；队友 `git clone` 后 0 setup 即可用 `/pmai-*` skill；升级靠 `pmai upgrade --local <dir>` 或 cwd 内跑 `/pmai-upgrade` 自动重克隆+覆盖
 
 ---
 
@@ -27,7 +31,7 @@ PM AI 工作流框架的**生成器**仓库。
 | **bash** ≥ 4 | 必需 | scripts 入口语言（macOS 自带 3.x 已知坑见 INVARIANTS） |
 | **codex CLI** | 可选 | 默认执行器；不装走 `cursor-agent` / `claude` / `manual` |
 
-未装 gstack 时 `pmai install` / `init-project.sh` 会直接报错并指向 `https://github.com/garrytan/gstack`。
+未装 gstack 时 `init-project.sh`（起新业务项目）会直接报错并指向 `https://github.com/garrytan/gstack`。`pmai install` 本身不检 gstack —— 你可以先装 PMAI、需要起项目时再补装 gstack。
 
 ---
 
@@ -76,23 +80,42 @@ pmai doctor    # 7 段自检
 
 ### 两种安装模式
 
-| 模式 | 命令 | 消费仓内 framework | 跨机器 clone 消费仓 | 升级生效 |
+| 模式 | 命令 | 消费仓内 framework | 跨机器 clone 消费仓 | 升级方式 |
 |---|---|---|---|---|
-| **default 全局**（推荐）| `pmai install` | 0（消费仓干净）| ❌ 失效（symlink 指 `~/.pmai/`）| `pmai upgrade` 后所有消费仓自动跟 |
-| **--local 项目级** | `pmai install --local <dir>` | 实体副本（~3MB）| ✅ 自含可用 | 单独跑 `pmai install --local <dir>` 重装 |
+| **default 全局**（推荐）| `pmai install` | 0（消费仓干净）| ❌ 失效（symlink 指 `~/.pmai/`）| `pmai upgrade` 或 `/pmai-upgrade` skill；所有消费仓自动跟 |
+| **--local 项目级** | `pmai install --local <dir>` | 实体副本（~3MB）| ✅ 自含可用 | `pmai upgrade --local <dir>` 或 cwd 内 `/pmai-upgrade` skill 自动按 local 模式重克隆覆盖；需手动 commit + push |
 
-90% 用 default。仅当消费仓要 clone 给别人 / 推 CI / 跨用户名机器时用 `--local`。
+**怎么选**：
+- **单人多项目** → default 全局
+- **团队共享仓**（队友不愿装 pmai CLI） → `--local`
+- **CI / 离线机器 / 想锁定框架版本随项目走** → `--local`
 
 **升级 / 卸载 / 状态**：
 
 ```bash
-pmai upgrade              # 拉 main 最新（吃滚动版）
-pmai upgrade --stable     # 跳到最新 git tag (PM 打过的稳定 baseline)
-pmai upgrade --to v0.1.0  # 锁定指定版本（回滚）
+# 全局模式
+pmai upgrade                          # 拉 main 最新（吃滚动版）
+pmai upgrade --stable                 # 跳到最新 git tag（PM 打过的稳定 baseline）
+pmai upgrade --to v0.1.0              # 锁定指定版本（回滚）
+
+# --local 模式（团队仓重克隆 + 覆盖副本 + 提示 commit/push）
+pmai upgrade --local /path/to/team-repo
+pmai upgrade --local /path/to/team-repo --stable
+pmai upgrade --local /path/to/team-repo --to v0.1.0
+
+# 其他
 pmai status               # 当前 install 模式 + VERSION + main HEAD diff
 pmai doctor               # 完整性自检
 pmai uninstall            # 清掉全局装；--local <dir> 清项目级
 ```
+
+**Claude Code 内升级（推荐 — 带 AI 智能 What's New 摘要）**：
+
+```
+/pmai-upgrade
+```
+
+skill 自动检测 cwd 是 `--local` 安装目录还是全局环境，按 mode 走对应升级命令；升级完读 CHANGELOG diff + 用自然语言 5-7 bullet 总结新内容。`--local` 模式升级完会打印 `git add .claude/ + commit + push` 提示让 PM 自己执行（团队仓 commit message 由 PM 拍板）。
 
 ---
 
@@ -111,10 +134,10 @@ pmai uninstall            # 清掉全局装；--local <dir> 清项目级
 
 agent 内部一气呵成 **4 阶段**：
 
-- **阶段 A · 参数收集 + brownfield 检测** —— AskUserQuestion 5 步问 PM（项目名 → 落地路径 → brownfield 检测闸门 → 一句话背景 → 项目意图）。目标目录已含 `.git/` 或代码 → 拒 + 提示走 `/codebase-audit`
+- **阶段 A · 参数收集 + brownfield 检测** —— AskUserQuestion 5 步问 PM（项目名 → 落地路径 → brownfield 检测闸门 → 一句话背景 → 项目意图）。目标目录已含 `.git/` 或代码 → 拒 + 提示走 `/pmai-codebase-audit`
 - **阶段 B · 骨架建设** —— agent 用 Bash 调 `init-project.sh`，创建业务仓 + git init + 首 commit `init: <name>`
 - **阶段 C · QUESTIONING（方向讨论）** —— @读 `skills/_shared/project-questioning.md`（单一真相源），按提问纪律跑讨论 + Decision gate「创建 PROJECT.md / 继续探索」二选一 + Loop 回路，最后写 `docs/PROJECT.md` + `docs/ROADMAP.md` + atomic commit `docs: project direction settled`
-- **阶段 D · 终态汇总 + Next Up** —— 输出「✅ <name> 已就绪 / cd <target> && /new-req "..."」
+- **阶段 D · 终态汇总 + Next Up** —— 输出「✅ <name> 已就绪 / cd <target> && /pmai-new-req "..."」
 
 > `/pmai-init-project` 在装了 pmai 的任意 cwd 都能跑（无需在本仓）。
 
@@ -138,7 +161,7 @@ bash scripts/init-project.sh ...
 - `<background>` — 一句话项目背景
 - `<project-intent>` — 工程结构意图（默认 `unknown`）：`prototype` / `system` / `custom` / `unknown`
 
-> 脚本是骨架构建器，**不带方向讨论**（PROJECT.md / ROADMAP.md 留空骨架）；直接调脚本适合自动化场景，PM 主动起项目走 `/init-project` skill 拿到完整体验。
+> 脚本是骨架构建器，**不带方向讨论**（PROJECT.md / ROADMAP.md 留空骨架）；直接调脚本适合自动化场景，PM 主动起项目走 `/pmai-init-project` skill 拿到完整体验。
 
 可量测 TTHW（从空项目到第一个 `status-view.py` 可识别的 active req）：
 
@@ -148,82 +171,120 @@ bash scripts/measure-tthw.sh
 
 ### 2. PM 在业务仓里的日常循环
 
+> **注意**：装好 pmai 后，所有 skill 在 Claude Code 内都以 `pmai-` 前缀注册（防与 gstack / 其他框架命名冲突）。下面例子中的 `/pmai-*` 是真实的命令名。
+
 ```
-/new-req          → 起一个 req（需求）
+/pmai-new-req          → 起一个 req（需求）
   ↓
-/req-stage-gate   → 推进 req 阶段（analysis → PRD → gap-check → implementation-design → plan → spec）
+/pmai-req-stage-gate   → 推进 req 阶段（analysis → PRD → gap-check → implementation-design → plan → spec）
   ↓
-/task-confirm     → PM 同意启动一个 task → 输出新窗口启动指令
+/pmai-task-confirm     → PM 同意启动一个 task → 输出新窗口启动指令
   ↓ （PM 开新窗口）
-/task-execute     → 在新窗口里跑 codex 执行 task
-  ↓ （task 状态全程「执行中」 — commit 不切状态）
-/task-submit      → task agent commit + 呈交验收信息块
+/pmai-task-execute     → 在新窗口里跑 codex 执行 task
+  ↓ （task 状态全程「执行中」— commit 不切状态）
+/pmai-task-submit      → task agent commit + 呈交验收信息块
   ↓ （PM 在 task 窗口决策：通过 / 打回；打回不切状态，AI 直接修代码）
-                  → PM 通过 → 转「已完成」
+                       → PM 通过 → 转「已完成」
   ↓ （PM 在 req 窗口）
-/close-task       → 归档 runtime + 删 task worktree
+/pmai-close-task       → 归档 runtime + 删 task worktree
   ↓
-/close-req        → 整个 req 收尾，并入主分支
+/pmai-close-req        → 整个 req 收尾，并入主分支
 ```
 
-并行：PM 想多个 task 同时跑，开多个新窗口跑 `/task-execute` 即可（v4 单窗口 lifecycle，git worktree 天然隔离）。
+并行：PM 想多个 task 同时跑，开多个新窗口跑 `/pmai-task-execute` 即可（v4 单窗口 lifecycle，git worktree 天然隔离）。
+
+### 3. 团队仓使用（`--local` 模式）
+
+如果你的业务仓是团队共享仓（队友不愿装 pmai CLI），用 `--local` 把框架副本 commit 进仓：
+
+```bash
+# 你（PM）首装
+cd /path/to/team-repo
+curl -fsSL https://raw.githubusercontent.com/YYG501/PMAI_Workflow/main/install.sh | bash -s -- --local .
+git add .claude/
+git commit -m "chore: add PMAI framework (--local install)"
+git push
+
+# 队友
+git clone <team-repo>
+cd <team-repo>
+# → 直接 Claude Code 里用 /pmai-* skill，0 setup
+
+# 你（PM）升级
+cd /path/to/team-repo
+# 方式 A：Claude Code 内（推荐，带 AI 摘要）
+/pmai-upgrade        # skill 自动按 --local 模式重克隆 + 覆盖副本
+# 方式 B：shell
+pmai upgrade --local .
+# 然后按提示 commit + push：
+git add .claude/
+git commit -m "chore: upgrade PMAI to v<NEW>"
+git push
+```
+
+**注意事项**：
+- 检查 `.gitignore` 没把 `.claude/scripts/skills/agents/` ignore（默认不 ignore，但本仓如有自定义 `.gitignore` 需确认）
+- 业务实例 template（如配过 token 的 `templates/lark-publish.json.tmpl`）重装前 backup 一份，重装后放回
+- 升级建议由你一人负责，避免队友各自跑导致 commit 冲突
 
 ---
 
 ## 完整 Skill 命令汇总
 
-按 PM 使用频率分组：
+按 PM 使用频率分组。所有 skill 都以 `/pmai-` 前缀注册（防命名冲突）。
 
 ### 启动新工作
 
 | Skill | 用途 |
 |---|---|
 | `/pmai-init-project` | **项目级入口**：起一个新业务项目，4 阶段一气呵成（参数 → 骨架 → 方向 → Next Up）；装了 pmai 后**任意 cwd** 可跑 |
-| `/project-solution` | **项目方向规划**：4 个独立场景（重做 / 产品路线规划 / 老板新方向 / brownfield 接入） |
-| `/new-req` | **req 级入口**：起一个新 req（带 brief） |
-| `/quick-fix` | 不走 req 流程的小补丁（适合改文案、修小 bug） |
+| `/pmai-project-solution` | **项目方向规划**：4 个独立场景（重做 / 产品路线规划 / 老板新方向 / brownfield 接入） |
+| `/pmai-new-req` | **req 级入口**：起一个新 req（带 brief） |
+| `/pmai-quick-fix` | 不走 req 流程的小补丁（适合改文案、修小 bug） |
 
 ### 推进 req（需求级）
 
 | Skill | 用途 |
 |---|---|
-| `/req-stage-gate` | 推进 req 阶段闸门（analysis → PRD → 实现设计 → plan → spec） |
-| `/req-analysis` | 起草 / 修订 analysis.md |
-| `/prd-writing` | 起草 / 修订 req 级 prd.md（WHAT） |
-| `/implementation-design` | 起草 req 级 implementation-design.md（HOW） |
-| `/task-plan` | 把 PRD + 实现设计拆成 task 清单 |
-| `/task-spec` | 把单个 task 写成单文件 typed contract |
+| `/pmai-req-stage-gate` | 推进 req 阶段闸门（analysis → PRD → 实现设计 → plan → spec） |
+| `/pmai-req-analysis` | 起草 / 修订 analysis.md |
+| `/pmai-prd-writing` | 起草 / 修订 req 级 prd.md（WHAT） |
+| `/pmai-implementation-design` | 起草 req 级 implementation-design.md（HOW） |
+| `/pmai-task-plan` | 把 PRD + 实现设计拆成 task 清单 |
+| `/pmai-task-spec` | 把单个 task 写成单文件 typed contract |
 
 ### 执行 task（任务级）
 
 | Skill | 用途 |
 |---|---|
-| `/task-confirm` | PM 同意启动 task → 输出新窗口启动指令（不调任何 agent） |
-| `/task-execute` | **新窗口里运行**：自动 cd worktree + 跑 codex |
-| `/task-submit` | task agent 呈交验收信息块（兜底；默认由 task-execute 自动呈交） |
-| `/task-status` | 多 task 状态总览（待启动 / 执行中 / 已完成） |
-| `/close-task` | PM 验收通过 → 已完成 + 归档 runtime |
+| `/pmai-task-confirm` | PM 同意启动 task → 输出新窗口启动指令（不调任何 agent） |
+| `/pmai-task-execute` | **新窗口里运行**：自动 cd worktree + 跑 codex |
+| `/pmai-task-submit` | task agent 呈交验收信息块（兜底；默认由 task-execute 自动呈交） |
+| `/pmai-task-verify` | task agent 自审验收（task-execute 内部调） |
+| `/pmai-task-status` | 多 task 状态总览（待启动 / 执行中 / 已完成） |
+| `/pmai-close-task` | PM 验收通过 → 已完成 + 归档 runtime |
 
 ### 收尾 req
 
 | Skill | 用途 |
 |---|---|
-| `/close-req` | req 完成，merge 进 main + 同步项目级文档 |
-| `/cancel-req` | req 中止，回滚 worktree |
+| `/pmai-close-req` | req 完成，merge 进 main + 同步项目级文档 |
+| `/pmai-cancel-req` | req 中止，回滚 worktree |
 
 ### 旁路 / 文档维护
 
 | Skill | 用途 |
 |---|---|
-| `/doc-update` | 处理文档偏差 + 沉淀模块规格 |
-| `/codebase-audit` | brownfield 项目代码现状审计 |
-| `/publish-to-lark` | 把文档发布到飞书 |
+| `/pmai-doc-update` | 处理文档偏差 + 沉淀模块规格 |
+| `/pmai-codebase-audit` | brownfield 项目代码现状审计 |
+| `/pmai-publish-to-lark` | 把文档发布到飞书 |
 
-### 框架内部（PM 不直接用）
+### 框架维护（PM 操作 PMAI 本身）
 
 | Skill | 用途 |
 |---|---|
-| —（当前无；`/init-project` 2026-05-25 后归入「启动新工作」组）| — |
+| `/pmai-upgrade` | 升级 PMAI 框架（自动检测 global / `--local` 模式 + AI 智能 What's New 摘要 + AskUser 4 选项：main / stable tag / 锁版本 / 暂缓） |
+| `/pmai-skill-improve` | PM 用 AI 协作改 skill（限生成器仓内用） |
 
 ---
 
