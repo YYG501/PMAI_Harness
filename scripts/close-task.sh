@@ -405,4 +405,7 @@ if [ -f "$EVENTS_SCRIPT" ]; then
   python3 "$EVENTS_SCRIPT" append "$TASK_FILE" --type task_closed 2>/dev/null || true
 fi
 
+# --- 8. 兜底清孤儿 worktree（按 task/req 记录定向；历史漏清 / 中断 close 留下的）---
+cleanup_stale_worktrees "$REPO_ROOT"
+
 echo "✅ Task 已关闭: $TASK_TITLE"

@@ -236,6 +236,9 @@ if git show-ref --verify --quiet "refs/heads/$REQ_BRANCH" 2>/dev/null; then
   git branch -D "$REQ_BRANCH" 2>/dev/null && echo "🗑  branch 已删除: $REQ_BRANCH"
 fi
 
+# --- Step 4: 兜底清孤儿 worktree（按 task/req 记录定向；历史漏清 / 中断 close 留下的）---
+cleanup_stale_worktrees "$REPO_ROOT"
+
 echo ""
 echo "✅ Req 已完全关闭: $REQ_ID"
 echo "📍 当前位置: 主仓 main 分支"

@@ -187,6 +187,33 @@ PM-AI-Workflow 生成器仓的演进记录。本文件**只记影响下游业务
 
 ## 未发布
 
+### 2026-05-27 — feat(close-task / close-req): 兜底清孤儿 worktree（按 task/req 记录定向）
+
+PM 实测 ExampleConsumerApp 攒了 17 个 worktree 物理残留占 261 MB —— 历史 close 流程在 git worktree remove 失败后没清干净（早期版本无 rm -rf fallback / PM 中途 Ctrl+C 等）；当前 close 单 task 即使有 fallback 也只清当前 task，不扫历史残留。
+
+**改动**：
+
+- `scripts/_lib/worktree.sh` 加 `cleanup_stale_worktrees <repo_root>` 函数 + 内部 `_stale_worktree_check_one` helper。**按 SOT 定向**（不无差别扫 `.worktrees/*`）：
+  - `git worktree prune` 先清 git 索引死引用
+  - 枚举 `requirements/{active,closed}/*/tasks/task-*.md` + `requirements/<state>/<req-stem>`，对每条记录推导 `${PM_AI_WORKTREE_BASE:-<repo>/.worktrees}/<stem>` 路径
+  - 路径存在 + git 不认 + 不是当前 cwd → `rm -rf`
+- `scripts/close-task.sh` 步骤 8 末尾调用 `cleanup_stale_worktrees`
+- `scripts/close-req.sh` Step 4 末尾调用同函数
+
+**护栏**：
+- 只清 SOT 推导的 path，不动随机目录（验证用例 `random-not-a-task` 保留 ✓）
+- 不删 cwd 在内的目录（不删自己脚下）
+- 跳过 live worktree（`git worktree list` 仍认的）
+- 跳过 `*.engineering.md`（不是 task 本体）
+
+**已知 trade-off**：
+- 只 cover `PM_AI_WORKTREE_BASE` 约定路径（99% case）；PM 手动 mv 过 worktree 到非约定位置不会被自动清，但也安全
+- quick-fix `tmp-quick-*` worktree 不在 task/req 记录里，本来就 self-cleanup，不处理
+
+**端到端**：mktemp 建 fake 仓 + 2 个 task 记录 + 3 个 .worktrees/ 物理目录（2 个匹配 task / 1 个不匹配），跑 cleanup → 2 个孤儿清掉，random 保留 ✓。全测 541/0。
+
+**影响**：业务仓后续任意 close-task / close-req 触发时自动顺手清掉历史漏清残留；今天的 17 个残留在下次 close 或手动 `source ~/.pmai/scripts/_lib/worktree.sh && cleanup_stale_worktrees <consumer>` 即清。
+
 ### 2026-05-27 — fix(pmai-upgrade): fetch 按 MODE 分流 + 加 timeout（修网络慢卡死 4 分钟）
 
 PM 实测 `pmai upgrade` 卡 4 分钟，根因 `git fetch origin --tags` 在 SSH 慢的网络环境拉所有 tag 引用慢。本次根因修：
