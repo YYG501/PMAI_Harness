@@ -8,7 +8,9 @@ description: |
 
 > **PM 视图（M2 banner + Decision gate label）**：本 skill 入口 / stage 转换处 / 退出处必出 banner（按 `_shared/pm-view/banner-rules.md` §1；用 `status-view.py --banner-only --skill REQ-STAGE-GATE`）；闸门 label 按 §3 3 硬规则（label=动作描述如「写 PRD」/ description=一句话 / 留守选项 Loop 回讨论态）；退出 Next Up 块按 §2 格式。**禁用模糊词** "OK" / "Proceed" / "Continue"。
 >
-> **PM 答题规则（M4）**：所有 AskUserQuestion 调用按 `_shared/pm-view/askuser-rules.md` §1 3 硬规则走（空答 STOP / 没拿到答案禁止落盘 / runtime 退化保留 wait）。**禁止默认走 recommend 分支 / 禁止逃生舱**。
+> **PM 答题规则（M4）**：所有 AskUserQuestion 调用按 `_shared/pm-view/askuser-rules.md` §1 四条硬规则走（空答 STOP / 没拿到答案禁止落盘 / runtime 退化保留 wait / 多决策拆开顺序问）。**禁止默认走 recommend 分支 / 禁止逃生舱**。
+>
+> **Runtime 兜底（重要）**：本 skill 各门写的都是 picker 形态（`AskUserQuestion + options`）。runtime 不支持 AskUserQuestion 时（Codex CLI / Gemini CLI 等 ≠ Claude Code），**AI 自动按 askuser-rules.md §1.3 退化为编号列表**：picker 的每个 option 转译成 `<编号>. <label>\n   <description>` 行，末尾加「请回复编号（或自由文本说明）：」，仍 wait。**不要重写 SKILL 模板成双轨**——picker 模板是 single source of truth，退化是 AI 阅读 §1.3 后的行为模式。
 
 ## When To Use
 
