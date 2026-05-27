@@ -25,6 +25,10 @@ Subcommands:
   update-check         Check if newer stable tag available (silent if up-to-date)
   sync-prds            Backfill docs/prds/ symlinks for historical closed reqs
                        Flags: --dry-run
+  whats-new            Show CHANGELOG diff since last upgrade
+                       Flags: --from <ver>
+  migrate              Migrate consumer from vendored mode to I-mini mode
+                       Flags: <consumer-dir> [--dry-run] [--force]
 
 Meta:
   --version            Print VERSION

@@ -187,6 +187,30 @@ PM-AI-Workflow 生成器仓的演进记录。本文件**只记影响下游业务
 
 ## 未发布
 
+### 2026-05-27 — fix(bin/pmai*+README): /devex-review 抓出的 3 个 install/help UX bug 直修
+
+`/devex-review` 实测命中 3 个新摩擦点，本次一并修：
+
+- **`README §安装` PATH 教程失效** — 旧文案教用户加开发仓 `bin/` 到 PATH，但开发仓位置随 clone 路径变化、且与 `pmai install` 实际落地的 `~/.pmai/` 互相分裂。改为：clone 到 `/tmp/pmai-src` 临时位置 → `bash /tmp/pmai-src/bin/pmai install` 绝对路径调 → install 末尾给 oneshot 把 `~/.pmai/bin` 加进 PATH（稳定路径，不绑开发仓位置）。
+- **`bin/pmai-install` 装完末尾加 PATH 检测段** — 探 `$SHELL`（zsh/bash/其他）+ 探 rc 文件路径，没装过就 echo `📌 一步加 PATH` oneshot（不自动写 rc，避免破坏用户配置）；已装过给 `ℹ️ 已含 export — 开新窗口 / source 即可`。
+- **`bin/pmai` 主菜单漏列 `migrate` / `whats-new`** — case 分支早就 route 了这两个，但 `pmai --help` usage 文本没列；新用户用 `pmai migrate --help` 才能试出来。补两行说明。
+- **`bin/pmai-status` 没装时仍显示「22 symlinks」自相矛盾** — 顶部说 `❌ not installed`、下面却列 22 个 skill = 误导。改为 `INSTALLED=0` 时 symlink 段标 `⚠️ 悬空（指向不存在的 ~/.pmai/；pmai install 后才生效）` 并跳过具体 skill 名单（悬空名单意义不大）。
+- 顺手：`bin/pmai-status` 中文 echo 行的 `$PMAI_HOME` 改 `${PMAI_HOME}`，避开 bash `$VAR紧跟中文` unbound 边界 bug（与 `feedback_bash_var_chinese_boundary.md` 同型）。
+
+**影响**：纯 user-facing UX 修复，不动框架资产同步面（bin/ 不进消费仓）；测试基线 **535/6**（vs baseline **535/6**，0 回归）。
+
+### 2026-05-27 — feat(install.sh): curl 一行安装入口（gstack-style oneliner）
+
+- 新增 `install.sh` 在 repo 根：依赖检查 + SSH 优先 / HTTPS fallback git clone + 跑 `bin/pmai install [args]` + 清临时容器
+- 调用方式：
+  ```
+  curl -fsSL https://raw.githubusercontent.com/YYG501/PMAI_Workflow/main/install.sh | bash
+  curl -fsSL ... | bash -s -- --local /path  # 透传 --local 给 pmai install
+  ```
+- SSH 失败时自动 export `PMAI_REMOTE=https://...` 让 `pmai install` 内部 git clone 也走 HTTPS（新机器没配 SSH key 时仍可装；私有仓 HTTPS 需要 token）
+- README「安装」段重写：curl oneliner 作主推荐 + 手工模式保留 + 两种安装模式对照表（default / --local 跨机器差异）
+- 本地 round-trip 验证：装 v0.2.1 + 24 skill entries，临时容器自动清
+
 ### 2026-05-27 — feat(pmai-upgrade skill): standalone 模式 — PM 在 Claude Code 内 /pmai-upgrade 含 AI 智能摘要
 
 借鉴 gstack-upgrade SKILL.md，给 PMAI 升级流程加 skill 入口（PMAI 阶段 1 gstack 借鉴扩展，B-简版）：

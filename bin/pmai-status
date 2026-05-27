@@ -50,8 +50,10 @@ if [ -d "$PMAI_HOME/.git" ]; then
     UPD=$("$(dirname "$0")/pmai-update-check" 2>/dev/null)
     [ -n "$UPD" ] && echo "  📦 $UPD"
   fi
+  INSTALLED=1
 else
   echo "Global install:   ❌ not installed (run: pmai install)"
+  INSTALLED=0
 fi
 
 echo ""
@@ -59,10 +61,21 @@ echo "─── Skill exposure ───"
 SYMLINK_COUNT=$(ls -d "$CLAUDE_SKILLS"/${SKILL_PREFIX}* 2>/dev/null | wc -l | tr -d ' ')
 SHARED_LINK="❌ no"
 if [ -L "$CLAUDE_SKILLS/_shared" ]; then SHARED_LINK="✅ yes"; fi
-echo "  Global (~/.claude/skills/pmai-*):  $SYMLINK_COUNT symlinks"
-echo "  _shared linked:                    $SHARED_LINK"
 
-if [ "$SYMLINK_COUNT" -gt 0 ]; then
+# 没装时 symlink 都是悬空（指向不存在的 ~/.pmai/），明示而不是假装存在
+if [ "$INSTALLED" = "0" ] && [ "$SYMLINK_COUNT" -gt 0 ]; then
+  echo "  Global (~/.claude/skills/pmai-*):  $SYMLINK_COUNT symlinks ⚠️  悬空（指向不存在的 ${PMAI_HOME}；pmai install 后才生效）"
+  echo "  _shared linked:                    $SHARED_LINK"
+elif [ "$INSTALLED" = "0" ] && [ "$SYMLINK_COUNT" = "0" ]; then
+  echo "  Global (~/.claude/skills/pmai-*):  $SYMLINK_COUNT symlinks"
+  echo "  _shared linked:                    $SHARED_LINK"
+else
+  echo "  Global (~/.claude/skills/pmai-*):  $SYMLINK_COUNT symlinks"
+  echo "  _shared linked:                    $SHARED_LINK"
+fi
+
+# 装好时才列具体 skill；没装时悬空名单意义不大
+if [ "$INSTALLED" = "1" ] && [ "$SYMLINK_COUNT" -gt 0 ]; then
   echo ""
   echo "  Skills exposed (pmai-* prefix):"
   ls -d "$CLAUDE_SKILLS"/${SKILL_PREFIX}* 2>/dev/null | xargs -n 1 basename | sed 's/^/    /'

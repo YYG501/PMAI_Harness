@@ -35,21 +35,53 @@ PM AI 工作流框架的**生成器**仓库。
 
 PMAI 用全局 CLI 形态分发（参考 [`docs/设计/框架分发与全局安装.md`](docs/设计/框架分发与全局安装.md)）。一次性安装，全局生效。
 
+### 一行安装（推荐）
+
 ```bash
-# 1. clone 本仓
-git clone git@github.com:YYG501/PMAI_Workflow.git ~/Desktop/Projects/PM-AI-Workflow
-
-# 2. 加 bin/ 到 PATH（追加到 ~/.zshrc 或 ~/.bashrc）
-echo 'export PATH="$HOME/Desktop/Projects/PM-AI-Workflow/bin:$PATH"' >> ~/.zshrc
-source ~/.zshrc
-
-# 3. 跑 pmai install
-pmai install                  # 默认全局：clone → ~/.pmai/ + symlink ~/.claude/skills/pmai-*
-# 或者
-pmai install --local <dir>    # 不依赖 ~/.pmai/，<dir> 自带实体副本（兼容老消费仓 / clone 场景）
+curl -fsSL https://raw.githubusercontent.com/YYG501/PMAI_Workflow/main/install.sh | bash
 ```
 
-装完 `pmai doctor` 跑一次确认 7/7 通过。
+或带 `--local <dir>` 跑项目级实体副本模式：
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/YYG501/PMAI_Workflow/main/install.sh | bash -s -- --local /path/to/your/project
+```
+
+`install.sh` 做的事：
+- 依赖检查（git / bash / python3）
+- git clone PMAI 到临时位置（SSH 优先，失败自动 fallback HTTPS）
+- 跑 `bash bin/pmai install [args]`（自动 clone 到 `~/.pmai/` + symlink skill 到 `~/.claude/skills/pmai-*`）
+- install 末尾自动检测 shell（zsh/bash）+ 给 `~/.pmai/bin` 加 PATH 的 oneshot 命令
+- 清理临时安装容器
+
+### 手工模式（不走 curl）
+
+如果你想自己 clone + 检查脚本再装：
+
+```bash
+# 1. clone 到临时位置
+git clone git@github.com:YYG501/PMAI_Workflow.git /tmp/pmai-src
+
+# 2. install
+bash /tmp/pmai-src/bin/pmai install                       # default 全局
+# 或：bash /tmp/pmai-src/bin/pmai install --local <dir>   # 项目级实体副本
+
+# 3. 按 install 末尾的「📌 一步加 PATH」提示加 ~/.pmai/bin 到 PATH
+
+# 4. 校验
+pmai doctor    # 7 段自检
+```
+
+> 临时 `/tmp/pmai-src` clone 只是 installer 容器，装完可删；真正稳定的副本在 `~/.pmai/`（pmai 自己 clone 的，`pmai upgrade` 拉它）。
+
+### 两种安装模式
+
+| 模式 | 命令 | 消费仓内 framework | 跨机器 clone 消费仓 | 升级生效 |
+|---|---|---|---|---|
+| **default 全局**（推荐）| `pmai install` | 0（消费仓干净）| ❌ 失效（symlink 指 `~/.pmai/`）| `pmai upgrade` 后所有消费仓自动跟 |
+| **--local 项目级** | `pmai install --local <dir>` | 实体副本（~3MB）| ✅ 自含可用 | 单独跑 `pmai install --local <dir>` 重装 |
+
+90% 用 default。仅当消费仓要 clone 给别人 / 推 CI / 跨用户名机器时用 `--local`。
 
 **升级 / 卸载 / 状态**：
 

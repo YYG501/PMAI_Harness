@@ -92,11 +92,12 @@ count=0
 for skill_dir in "$PMAI_HOME/skills"/*/; do
   [ -d "$skill_dir" ] || continue
   skill_name=$(basename "$skill_dir")
-  if [ "$skill_name" = "_shared" ]; then
-    dst="$CLAUDE_SKILLS/_shared"
-  else
-    dst="$CLAUDE_SKILLS/${SKILL_PREFIX}${skill_name}"
-  fi
+  # pmai-* 已带前缀的不再加前缀（防 pmai-pmai-upgrade 双前缀）
+  case "$skill_name" in
+    _shared)  dst="$CLAUDE_SKILLS/_shared" ;;
+    pmai-*)   dst="$CLAUDE_SKILLS/$skill_name" ;;
+    *)        dst="$CLAUDE_SKILLS/${SKILL_PREFIX}${skill_name}" ;;
+  esac
   [ -e "$dst" ] || [ -L "$dst" ] && rm -rf "$dst"
   ln -s "${skill_dir%/}" "$dst"
   count=$((count + 1))

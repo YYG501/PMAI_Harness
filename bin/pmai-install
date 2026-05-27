@@ -60,11 +60,12 @@ install_skills() {
     skill_name=$(basename "$skill_dir")
 
     # _shared 不是 skill，但 SKILL.md 内部交叉引用 → 跟随拷/链但不加前缀
-    if [ "$skill_name" = "_shared" ]; then
-      dst="$dst_skills/_shared"
-    else
-      dst="$dst_skills/${SKILL_PREFIX}${skill_name}"
-    fi
+    # pmai-* 已带前缀的目录（如 skills/pmai-upgrade/）→ 不再加前缀（防 pmai-pmai-upgrade 双前缀 bug）
+    case "$skill_name" in
+      _shared)  dst="$dst_skills/_shared" ;;
+      pmai-*)   dst="$dst_skills/$skill_name" ;;
+      *)        dst="$dst_skills/${SKILL_PREFIX}${skill_name}" ;;
+    esac
 
     # 已存在则清掉重做
     [ -e "$dst" ] || [ -L "$dst" ] && rm -rf "$dst"
@@ -101,6 +102,27 @@ if [ "$MODE" = "global" ]; then
   echo "   ~/.pmai/         framework source"
   echo "   ~/.claude/skills/pmai-*   skill exposure"
   echo "═══════════════════════════════════════"
+
+  # PATH 检测：~/.pmai/bin 不在 PATH 就提示 oneshot（不自动改用户 rc 文件，避免破坏配置）
+  PMAI_BIN="$PMAI_HOME/bin"
+  if [ -d "$PMAI_BIN" ] && ! echo ":$PATH:" | grep -q ":$PMAI_BIN:"; then
+    # 探 PM shell 的 rc 文件
+    SHELL_RC=""
+    case "${SHELL##*/}" in
+      zsh)  SHELL_RC="$HOME/.zshrc" ;;
+      bash) [ -f "$HOME/.bashrc" ] && SHELL_RC="$HOME/.bashrc" || SHELL_RC="$HOME/.bash_profile" ;;
+      *)    SHELL_RC="$HOME/.profile" ;;
+    esac
+    # rc 文件里有没有现成 export（避免重复提示）
+    if [ -f "$SHELL_RC" ] && grep -q "\.pmai/bin" "$SHELL_RC" 2>/dev/null; then
+      echo "ℹ️  $SHELL_RC 已含 ~/.pmai/bin export — 若当前 shell 没生效，开新窗口或 source 即可"
+    else
+      echo ""
+      echo "📌 一步加 PATH（pmai 命令立即可用）："
+      echo "   echo 'export PATH=\"\$HOME/.pmai/bin:\$PATH\"' >> $SHELL_RC && source $SHELL_RC"
+    fi
+  fi
+
   echo "Next: cd <any-project> && /pmai-init-project"
 else
   echo "→ Installing PMAI locally → $LOCAL_DIR"
