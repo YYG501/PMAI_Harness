@@ -1,0 +1,223 @@
+#!/usr/bin/env bash
+# pmai-migrate — 消费仓 vendored → I-mini 一键迁移
+#
+# 用法：
+#   pmai-migrate <consumer-dir>             # preview + [y/N] + 真跑
+#   pmai-migrate <consumer-dir> --dry-run   # 仅预览
+#   pmai-migrate <consumer-dir> --force     # 跳确认
+#
+# 前提：
+#   - ~/.pmai/ 已装（PMAI_HOME 解析到）
+#   - consumer 是 git 仓
+#   - consumer working tree 必须 clean（dirty 直接拒）
+#   - consumer 必须是 vendored 模式（含 .claude/scripts 实体目录），否则报错
+#
+# 动作：
+#   1. git rm -rf .claude/scripts .claude/skills .claude/agents（实体副本）
+#   2. git rm -rf hooks/（消费仓自带 hook 副本）
+#   3. 清 templates/ 内 framework runtime .tmpl（CLAUDE/PROJECT/ROADMAP/PRODUCT-RULES/
+#      modules-INDEX/task/task-plan/module/req-prd/implementation-design/codebase-audit/
+#      settings.json/gitignore/pm-workflow.config.yml/工程结构约束-*.md/schema.json/
+#      git-hooks/）；保留业务实例（lark-publish.json.tmpl 等）
+#   4. 重写 .claude/settings.json（占位符替换 framework 模板）
+#   5. 重装 .git/hooks/pre-commit
+#   6. 删 .framework-sync-state.json（不再 vendored，I-mini 不需要）
+#   7. 提示 PM commit migration
+
+set -uo pipefail
+
+PMAI_HOME="${PMAI_HOME:-$HOME/.pmai}"
+
+usage() {
+  cat <<EOF
+Usage: pmai-migrate <consumer-dir> [--dry-run] [--force]
+
+Migrate consumer from vendored mode (self-contained .claude/scripts+skills+agents
++hooks+templates) to I-mini mode (consumer 0 framework, all via \$PMAI_HOME).
+
+Prereq:
+  - ~/.pmai/ installed (PMAI_HOME)
+  - consumer is git repo with clean working tree
+  - consumer has .claude/scripts/ (vendored mode detection)
+EOF
+}
+
+DRY_RUN=0
+FORCE=0
+CONSUMER=""
+
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --help|-h) usage; exit 0 ;;
+    --dry-run) DRY_RUN=1; shift ;;
+    --force) FORCE=1; shift ;;
+    -*) echo "❌ unknown flag: $1" >&2; usage >&2; exit 2 ;;
+    *) CONSUMER="$1"; shift ;;
+  esac
+done
+
+[ -z "$CONSUMER" ] && { echo "❌ 需要 <consumer-dir> 参数" >&2; usage >&2; exit 2; }
+
+# 解析绝对路径
+if [ ! -d "$CONSUMER" ]; then
+  echo "❌ $CONSUMER 不存在或不是目录" >&2
+  exit 2
+fi
+CONSUMER=$(cd "$CONSUMER" && pwd)
+
+# 前置检查
+if [ ! -d "$PMAI_HOME/scripts" ]; then
+  echo "❌ PMAI_HOME=$PMAI_HOME 没装框架。先跑 pmai install。" >&2
+  exit 1
+fi
+
+if [ ! -d "$CONSUMER/.git" ]; then
+  echo "❌ $CONSUMER 不是 git 仓（必须 git tracked 才能 git rm）。" >&2
+  exit 1
+fi
+
+# vendored 模式探测
+if [ ! -e "$CONSUMER/.claude/scripts" ]; then
+  echo "❌ $CONSUMER 不是 vendored 模式（无 .claude/scripts/）。" >&2
+  echo "   I-mini 模式消费仓本来就 0 framework，不需要迁移。" >&2
+  exit 1
+fi
+
+# working tree clean 检查（仅限 framework 资产路径；业务路径 untracked 不算）
+cd "$CONSUMER"
+FRAMEWORK_DIRTY=$(git status --porcelain 2>/dev/null \
+  | grep -E '^.. (\.claude/|hooks/|templates/|\.framework-sync-state\.json)' \
+  | head -10)
+if [ -n "$FRAMEWORK_DIRTY" ]; then
+  echo "❌ $CONSUMER 的 framework 路径（.claude/ / hooks/ / templates/）有未提交改动：" >&2
+  echo "$FRAMEWORK_DIRTY" >&2
+  echo "" >&2
+  echo "framework 路径必须 clean 才能 git rm。请先 commit 或 stash 这些 framework 改动。" >&2
+  exit 1
+fi
+# 业务路径 untracked / dirty 留 informational 提示，不阻塞
+OTHER_DIRTY=$(git status --porcelain 2>/dev/null | head -5)
+if [ -n "$OTHER_DIRTY" ]; then
+  echo "ℹ️  $CONSUMER 有业务路径 dirty/untracked（不阻塞 migration）：" >&2
+  echo "$OTHER_DIRTY" >&2
+  echo "" >&2
+fi
+
+# 列将要做的动作
+PMAI_VER=$(cat "$PMAI_HOME/VERSION" 2>/dev/null || echo unknown)
+echo "════════════════════════════════════════════════════════════"
+echo "  pmai-migrate — vendored → I-mini"
+echo "════════════════════════════════════════════════════════════"
+echo "Consumer:    $CONSUMER"
+echo "Branch:      $(git branch --show-current 2>/dev/null || echo unknown)"
+echo "Worktrees:   $(git worktree list 2>/dev/null | wc -l | tr -d ' ')"
+echo "PMAI src:    $PMAI_HOME (v$PMAI_VER)"
+echo ""
+echo "Plan:"
+echo "  1. git rm -rf .claude/scripts (实体 $(ls "$CONSUMER/.claude/scripts" 2>/dev/null | wc -l | tr -d ' ') items)"
+[ -d "$CONSUMER/.claude/skills" ]  && echo "  2. git rm -rf .claude/skills  (实体 $(ls "$CONSUMER/.claude/skills" 2>/dev/null | wc -l | tr -d ' ') items)"
+[ -d "$CONSUMER/.claude/agents" ]  && echo "  3. git rm -rf .claude/agents  (实体)"
+[ -d "$CONSUMER/hooks" ]           && echo "  4. git rm -rf hooks/         (实体 $(ls "$CONSUMER/hooks" 2>/dev/null | wc -l | tr -d ' ') items)"
+echo "  5. templates/: 清 framework runtime .tmpl（保留业务实例 lark-publish.json.tmpl 等）"
+echo "  6. 重写 .claude/settings.json（用 framework 模板，PROJECT_NAME 不变）"
+echo "  7. 重装 .git/hooks/pre-commit（从 $PMAI_HOME/templates/git-hooks/）"
+echo "  8. git rm .framework-sync-state.json（I-mini 不需要 sync state）"
+echo "  9. 提示 PM 审 diff + commit"
+echo ""
+
+if [ "$DRY_RUN" = "1" ]; then
+  echo "═══ DRY-RUN：不会动文件 ═══"
+  exit 0
+fi
+
+if [ "$FORCE" = "0" ]; then
+  printf "Continue? [y/N] "
+  read -r ans
+  case "$ans" in y|Y|yes|YES) ;; *) echo "Aborted."; exit 0 ;; esac
+fi
+
+echo ""
+echo "→ 1-4. git rm framework 副本..."
+git rm -rf .claude/scripts 2>&1 | tail -3
+[ -e .claude/skills ] && git rm -rf .claude/skills 2>&1 | tail -3
+[ -e .claude/agents ] && git rm -rf .claude/agents 2>&1 | tail -3
+[ -e hooks ]          && git rm -rf hooks 2>&1 | tail -3
+
+echo ""
+echo "→ 5. 清 templates/ framework runtime .tmpl（保留业务实例）..."
+# Framework runtime .tmpl 清单（跟 init-project.sh d 段 case 对齐）
+FRAMEWORK_TMPLS=(
+  CLAUDE.md.tmpl
+  PROJECT.md.tmpl
+  PRODUCT-RULES.md.tmpl
+  ROADMAP.md.tmpl
+  modules-INDEX.md.tmpl
+  req-prd.md.tmpl
+  implementation-design.md.tmpl
+  codebase-audit.md.tmpl
+  task.md.tmpl
+  task-plan.md.tmpl
+  module.md.tmpl
+  settings.json.tmpl
+  gitignore.tmpl
+  pm-workflow.config.yml.tmpl
+)
+for t in "${FRAMEWORK_TMPLS[@]}"; do
+  if [ -f "templates/$t" ]; then
+    git rm "templates/$t" 2>&1 | tail -1
+  fi
+done
+# 工程结构约束-*.md + schema.json
+for f in templates/工程结构约束-*.md templates/工程结构约束.schema.json; do
+  if [ -f "$f" ]; then
+    git rm "$f" 2>&1 | tail -1
+  fi
+done
+# git-hooks/*.tmpl
+if [ -d "templates/git-hooks" ]; then
+  git rm -rf templates/git-hooks 2>&1 | tail -1
+fi
+# 保留：lark-publish.json.tmpl 等业务实例（不在 FRAMEWORK_TMPLS 清单里的）
+echo "   templates/ 剩余文件（应仅业务实例）："
+ls templates/ 2>/dev/null | head -10
+
+echo ""
+echo "→ 6. 重写 .claude/settings.json（占位符替换）..."
+PROJECT_NAME=$(basename "$CONSUMER")
+mkdir -p "$CONSUMER/.claude"
+PMAI_HOME="$PMAI_HOME" PROJECT_NAME="$PROJECT_NAME" python3 - <<'PY'
+import os
+src = os.path.join(os.environ["PMAI_HOME"], "templates", "settings.json.tmpl")
+dst = os.path.join(os.environ["CONSUMER"], ".claude", "settings.json") if "CONSUMER" in os.environ else os.path.expanduser(".claude/settings.json")
+PY
+# 直接 cp + sed（避免 Python heredoc 环境复杂）
+cp "$PMAI_HOME/templates/settings.json.tmpl" "$CONSUMER/.claude/settings.json"
+# settings.json.tmpl 当前没有 PROJECT_NAME 占位符，cp 即可
+# cp 后立即 git add（防止 commit 漏 settings.json 改动 — example-consumer-app 实测撞过）
+git add "$CONSUMER/.claude/settings.json"
+
+echo ""
+echo "→ 7. 重装 .git/hooks/pre-commit..."
+if [ -x "$PMAI_HOME/scripts/install-hooks.sh" ]; then
+  PMAI_HOME="$PMAI_HOME" bash "$PMAI_HOME/scripts/install-hooks.sh" 2>&1 | tail -5
+else
+  echo "⚠️  $PMAI_HOME/scripts/install-hooks.sh 不存在；pre-commit 未装" >&2
+fi
+
+echo ""
+echo "→ 8. 清 .framework-sync-state.json（I-mini 不再 vendored）..."
+[ -f .framework-sync-state.json ] && git rm .framework-sync-state.json 2>&1 | tail -1
+
+echo ""
+echo "════════════════════════════════════════════════════════════"
+echo "✅ Migration 完成（changes staged，PM 审 diff 后 commit）"
+echo "════════════════════════════════════════════════════════════"
+echo ""
+echo "下一步："
+echo "  cd $CONSUMER"
+echo "  git status                  # 看 staged changes"
+echo "  git diff --cached --stat    # 摘要"
+echo "  git commit -m 'chore: migrate to PMAI I-mini mode (consumer 0 framework)'"
+echo ""
+echo "验证："
+echo "  PMAI_HOME=$PMAI_HOME bash $PMAI_HOME/scripts/skill-preamble.sh </dev/null"
