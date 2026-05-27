@@ -268,6 +268,59 @@ test_install_backs_up_existing() {
 }
 
 # -----------------------------------------------------------------
+# T10: attachments/ 小文件 commit 不触发末尾段 silent fail
+# 回归测试：末尾 STAGED_LARGE=$(... | while read; done) 在命中
+# attachments 且文件 ≤10MB 时，while body 末 `[ ] && echo` 返回 1 →
+# while exit 1 → $() 失败 → 顶部 set -e 触发 silent abort（无 stderr）。
+# 修复：done 后 `|| true`。
+# -----------------------------------------------------------------
+
+test_attachments_small_file_no_silent_fail() {
+  start_test "I-PCH10 attachments/ ≤10MB 文件 commit 不被 silent fail"
+  fixture_setup
+  _install_hook
+
+  mkdir -p "$FIXTURE_DIR/sample/attachments"
+  echo "small payload" > "$FIXTURE_DIR/sample/attachments/note.txt"
+
+  if (cd "$FIXTURE_DIR" && git add -A && git commit -q -m "add small attachment") >/tmp/out.$$ 2>/tmp/err.$$; then
+    pass_test
+  else
+    _fail "attachments/ 小文件 commit 不该被 hook 拦（silent fail 回归）"
+    cat /tmp/err.$$ >&2
+  fi
+  rm -f /tmp/out.$$ /tmp/err.$$
+  fixture_teardown
+}
+
+# -----------------------------------------------------------------
+# T11: attachments/ 大文件 (>10MB) 触发 warn 但不 block
+# -----------------------------------------------------------------
+
+test_attachments_big_file_warn_but_pass() {
+  start_test "I-PCH11 attachments/ >10MB 文件触发 warn 但 commit 通过"
+  fixture_setup
+  _install_hook
+
+  mkdir -p "$FIXTURE_DIR/big/attachments"
+  dd if=/dev/zero of="$FIXTURE_DIR/big/attachments/huge.bin" bs=1m count=12 >/dev/null 2>&1
+
+  if (cd "$FIXTURE_DIR" && git add -A && git commit -q -m "add big attachment") >/tmp/out.$$ 2>/tmp/err.$$; then
+    if grep -q "attachments/ 内有 >10MB 文件" /tmp/err.$$; then
+      pass_test
+    else
+      _fail "大文件应触发 warn stderr 但没看到"
+      cat /tmp/err.$$ >&2
+    fi
+  else
+    _fail "大文件 commit 不该被 block（仅 warn）"
+    cat /tmp/err.$$ >&2
+  fi
+  rm -f /tmp/out.$$ /tmp/err.$$
+  fixture_teardown
+}
+
+# -----------------------------------------------------------------
 # Run
 # -----------------------------------------------------------------
 
@@ -280,5 +333,7 @@ test_other_section_edit_passes
 test_no_verify_bypasses
 test_install_idempotent
 test_install_backs_up_existing
+test_attachments_small_file_no_silent_fail
+test_attachments_big_file_warn_but_pass
 
 report_results "pre-commit-hook"

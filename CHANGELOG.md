@@ -265,6 +265,27 @@ PM-AI-Workflow 生成器仓的演进记录。本文件**只记影响下游业务
 
 ## 未发布
 
+### 2026-05-27 — fix(pre-commit hook): attachments 段在小文件场景下 silent fail（set -e + 命令替换失败）
+
+**触发**：PM commit 含 `attachments/` 小文件时，hook 无任何 stderr 输出但直接 exit 1，导致 commit 莫名失败，PM 只能 `--no-verify` 救火（违反守约）。
+
+**根因**：`templates/git-hooks/pre-commit.tmpl` 末尾 attachments 大文件检测段
+`STAGED_LARGE=$(... | while read -r f; do [...] && echo ...; done)` 在命中
+`/attachments/` 路径且文件 ≤10MB 时，while body 末句 `[ ] && echo` 返回 1 →
+while exit 1 → pipeline exit 1 → 命令替换失败 → 顶部 `set -e` 让 hook silent
+abort（POSIX 行为：set -e **不豁免**赋值语句里的命令替换失败传播）。
+
+**修复**：
+
+- `done)` 后追加 `|| true`，让 warn-only 段失败不传播
+- `set -e` 后加守约注释：后续 warn-only 段必须 `|| true` 结尾
+- 新增 2 个回归 test case：`I-PCH10`（小文件不触发 silent fail）+ `I-PCH11`（大文件仍 warn 不 block）
+- `tests/test-pre-commit-hook.sh` 11/11 通过
+
+**消费仓同步**：跑 `bash $HOME/.pmai/scripts/install-hooks.sh` 在已安装项目刷新 hook 即可（pmai upgrade 后自动包含）。
+
+---
+
 ### 2026-05-27 — feat(prd-writing): §六「原型」节 AI 现画 ASCII 原型图（替代文字意图描述）
 
 **触发**：PM 反馈 PRD 现状 §6.X 模块「原型」节只写 1-2 句文字意图描述（"主要分区 + 用户主路径"），评审与下游 UI task 都拿不到视觉锚点。PM 要求 stage 3 写 PRD 时由 AI 现画 ASCII 原型，模块下每个页面 / 弹窗 / 抽屉各一张。
