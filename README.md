@@ -22,16 +22,31 @@ PM AI 工作流框架的**生成器**仓库。
 
 ## 如何使用？
 
-老板：「做一个 X 功能。」
+用户反馈：「希望加个批量审核功能，一次能审多个待审项。」
 
 ```
-1. /pmai-init-project    起业务项目（AI 跟你聊清做什么 / 为谁做，写 PROJECT.md）
-2. /pmai-new-req "X"     起需求，带一句话 brief
-3. /pmai-req-stage-gate  推进 stage：analysis → PRD → 实现设计 → 任务拆分
-4. /pmai-task-confirm    PM 拍板启动一个 task
-5. /pmai-task-execute    开新窗口，让 codex 写代码（worktree 隔离 + 自动 commit）
-6. /pmai-close-task      PM 验收通过 → 归档
-7. /pmai-close-req       合主分支，整个需求闭环
+# 起项目（只跑一次，整个产品的根基）
+
+/pmai-init-project    起业务项目（AI 跟你聊清做什么 / 为谁做，写 PROJECT.md）
+
+# req 主流程（一个需求 = 一个 req，每步 PM 拍板推进）
+
+/pmai-new-req "批量审核"   起 req + 一句话 brief
+/pmai-req-stage-gate       → stage 1 · analysis（现状 / 约束 / 边界）
+/pmai-req-stage-gate       → stage 2 · PRD（WHAT — 功能规格 / 用户故事）
+/pmai-req-stage-gate       → stage 3 · 实现设计（HOW — 技术方案）
+/pmai-req-stage-gate       → stage 4 · task plan（拆成 N 个 task）
+/pmai-req-stage-gate       → stage 5 · task spec（每个 task 写成单文件 typed contract）
+
+# task 子循环（每个 task 跑一遍；并行可开多窗口）
+
+/pmai-task-confirm    PM 拍板启动一个 task → AI 给新窗口启动指令
+/pmai-task-execute    新窗口里 codex 写代码（worktree 隔离 + 自动 commit）
+/pmai-close-task      PM 验收通过 → 归档 task runtime
+
+# req 收尾
+
+/pmai-close-req       合主分支，整个需求闭环
 ```
 
 PM 全程**只做决策**（方向 / PRD / 任务拆分 / 验收）；代码、commit、worktree 隔离、文档同步、状态机由框架兜。
