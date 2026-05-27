@@ -19,6 +19,13 @@ INIT_PROJECT_SKILL="$REPO_ROOT/skills/init-project/SKILL.md"
 # -----------------------------------------------------------------
 test_existing_empty_dir_rejected() {
   start_test "T1: init-project.sh 已存在空目录 → 拒"
+  # init-project.sh 先检查 gstack 再检查目录，CI 无 gstack 时会被 gstack 检查拦下，
+  # 错误信息变成「gstack 未安装」而非「目标目录已存在」。本测严格断言文案，需 gstack 可用。
+  if ! command -v gstack &>/dev/null && [ ! -d "$HOME/.claude/skills/gstack" ]; then
+    echo "  ⏭️  SKIP: gstack 不可用，无法走到目录检查分支"
+    return
+  fi
+
   local base existing
   base=$(mktemp -d)
   existing="$base/existing-empty"

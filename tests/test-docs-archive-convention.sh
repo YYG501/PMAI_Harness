@@ -102,6 +102,13 @@ test_init_sh_creates_archive_dir() {
 # -----------------------------------------------------------------
 test_init_e2e_archive_dir_exists() {
   start_test "T6: init-project e2e — 扁平 docs/归档/ 端到端存在"
+  # init-project.sh 依赖 gstack 才走到目录创建段；CI 无 gstack 时 init 提前 fail，e2e 无意义。
+  # T5 静态断言已守 init-project.sh 含归档目录创建逻辑。
+  if ! command -v gstack &>/dev/null && [ ! -d "$HOME/.claude/skills/gstack" ]; then
+    echo "  ⏭️  SKIP: gstack 不可用，跳过 e2e（T5 已守静态）"
+    return
+  fi
+
   local tmp; tmp=$(mktemp -d)
   local target="$tmp/test-archive-proj"
   bash "$INIT_SH" "test-archive-proj" "$target" "test bg" >/dev/null 2>&1
