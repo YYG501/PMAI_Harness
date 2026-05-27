@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""check-project-sections.py — PROJECT.md 6 节状态检测器
+"""check-project-sections.py — PROJECT.md 5 节状态检测器
 
-被 req-stage-gate skill 在 stage 3→4 闸门调用，检测 docs/PROJECT.md 6 节
-（项目名称 / 产品定位 / 用户画像 / 产品路线 / 技术栈 / 业务术语表）
+被 req-stage-gate skill 在 stage 3→4 闸门调用，检测 docs/PROJECT.md 5 节
+（项目名称 / 产品定位 / 用户画像 / 技术栈 / 业务术语表）
 是否为空骨架（HTML 注释占位 / 无实质内容）。
 
 复用 req-transition.py:78-92 check_design_md_has_content() 模式。
@@ -17,8 +17,8 @@
     "用户画像": {"present": false, "substantial": false},  // 节缺失
     ...
   },
-  "empty_sections": ["产品定位", "用户画像", "产品路线", "技术栈", "业务术语表"],
-  "all_filled": false  // 6 节全 substantial
+  "empty_sections": ["产品定位", "用户画像", "技术栈", "业务术语表"],
+  "all_filled": false  // 5 节全 substantial
 }
 
 用法：
@@ -36,7 +36,6 @@ REQUIRED_SECTIONS = [
     "项目名称",
     "产品定位",
     "用户画像",
-    "产品路线",
     "技术栈",
     "业务术语表",
 ]
@@ -90,25 +89,11 @@ def is_substantial(body: str, section: str) -> bool:
     if section in ("用户画像", "业务术语表"):
         return has_data_row
 
-    # 产品路线：必须有 ### 已完成 或 ### 计划中 下的实际内容
-    if section == "产品路线":
-        # 找 ### 已完成 和 ### 计划中 的子内容
-        sub_content = re.split(r"^###\s+", stripped, flags=re.MULTILINE)
-        # sub_content[0] = section 顶部说明（HTML 注释或空）
-        # sub_content[1:] = 每个 ### 段的内容
-        for sub in sub_content[1:]:
-            sub_lines = sub.splitlines()
-            # 跳过 ### 标题行后的内容
-            body = "\n".join(sub_lines[1:]).strip()
-            if body and not body.startswith("<!--"):
-                return True
-        return False
-
     return bool(stripped)
 
 
 def check_project(repo_root: Path, target_section: str = None) -> dict:
-    """检测 PROJECT 6 节状态。"""
+    """检测 PROJECT 5 节状态。"""
     project_path = repo_root / "docs" / "PROJECT.md"
     result = {
         "project_path": str(project_path),
@@ -140,7 +125,7 @@ def check_project(repo_root: Path, target_section: str = None) -> dict:
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Check PROJECT.md 6 sections state")
+    parser = argparse.ArgumentParser(description="Check PROJECT.md 5 sections state")
     parser.add_argument("repo_root", help="repository root path")
     parser.add_argument("--section", help="check only specific section", default=None)
     parser.add_argument("--exit-code", action="store_true",

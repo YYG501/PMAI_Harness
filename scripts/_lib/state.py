@@ -899,28 +899,12 @@ def _get_close_date(meta: dict):
     return None
 
 
-def _load_milestone_set(repo_root: Path) -> set:
-    """从 docs/PROJECT.md ## 产品路线 节扫 ⭐ 标记的 req ID。
-
-    模式：- ⭐ YYYY-MM-DD · <name>（关联 req-NNN）
-    """
-    project_path = repo_root / "docs" / "PROJECT.md"
-    if not project_path.exists():
-        return set()
-    try:
-        content = project_path.read_text(encoding="utf-8")
-    except OSError:
-        return set()
-    return set(re.findall(r"⭐.*?关联\s*(req-\d+)", content))
-
-
 def get_timeline_state(
     repo_root: Path,
     cwd: Optional[Path] = None,
     strict: bool = False,
     since: Optional[str] = None,
     module: Optional[str] = None,
-    milestone_only: bool = False,
     limit: Optional[int] = 20,
 ) -> dict:
     """全局 req 时间线视图（active + closed + cancelled）。
@@ -928,7 +912,6 @@ def get_timeline_state(
     参数:
         since: ISO date YYYY-MM-DD; 仅返回 close/cancel 时间 >= since 的 archived
         module: 仅返回涉及该 module 的 req（meta.modules / meta.name 包含）
-        milestone_only: 仅返回 PROJECT 产品路线节标 ⭐ 的 req
         limit: archived (closed + cancelled) 总数限制（None = 无上限）
 
     返回:
@@ -938,10 +921,9 @@ def get_timeline_state(
         "cancelled": [...],# 时间倒序
         "total_archived": int,  # 过滤前总数
         "truncated": int,       # 被 limit 截断的数量
-        "milestone_only": bool,
         "warnings": [...],
       }
-    每个 item: {req_dir, meta, is_milestone, close_date (datetime or None)}
+    每个 item: {req_dir, meta, close_date (datetime or None)}
     """
     from datetime import datetime
 
@@ -961,13 +943,8 @@ def get_timeline_state(
     warnings.extend(cancelled_result.get("warnings", []))
     cancelled_items = cancelled_result["items"]
 
-    milestone_set = _load_milestone_set(repo_root)
-
     def enrich(item):
-        meta = item["meta"]
-        req_id = meta.get("id", item["req_dir"].name.split("-", 2)[0] + "-" + item["req_dir"].name.split("-", 2)[1] if "-" in item["req_dir"].name else item["req_dir"].name)
-        item["is_milestone"] = req_id in milestone_set
-        item["close_date"] = _get_close_date(meta)
+        item["close_date"] = _get_close_date(item["meta"])
         return item
 
     active_items = [enrich(i) for i in active_items]
@@ -1003,12 +980,6 @@ def get_timeline_state(
         cancelled_items = [i for i in cancelled_items if match_module(i)]
         active_items = [i for i in active_items if match_module(i)]
 
-    # 过滤 milestone
-    if milestone_only:
-        closed_items = [i for i in closed_items if i.get("is_milestone")]
-        cancelled_items = [i for i in cancelled_items if i.get("is_milestone")]
-        active_items = [i for i in active_items if i.get("is_milestone")]
-
     # 时间倒序
     closed_items.sort(key=lambda i: i.get("close_date") or datetime.min, reverse=True)
     cancelled_items.sort(key=lambda i: i.get("close_date") or datetime.min, reverse=True)
@@ -1029,7 +1000,6 @@ def get_timeline_state(
         "cancelled": cancelled_items,
         "total_archived": total_archived,
         "truncated": truncated,
-        "milestone_only": milestone_only,
         "warnings": warnings,
     }
 

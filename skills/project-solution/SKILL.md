@@ -64,10 +64,10 @@ echo "SKILL: project-solution"
 
 | 场景 | 触发 | 输入态 | **提问顺序**（按 _shared §3 问题库挑用，**场景特定**）|
 |---|---|---|---|
-| **A 重做** | PM 主动说"方向偏了 / 要重做" | `docs/PROJECT.md` 已有内容 | (1) **痛点诊断**（旧 PROJECT 哪几节失效 / 为什么偏）→ (2) 产品定位（重定）→ (3) 用户画像（重定，可能换主角色）→ (4) 产品路线（按新定位重排里程碑）→ (5) 业务术语表（如有新术语）→ (6) roadmap 重排（旧未做 req 重新评估保留 / 砍）|
-| **B 产品路线规划** | PM 主动说"产品路线规划 / 季度规划 / 半年规划"，或老项目首次补 `docs/ROADMAP.md` | `docs/PROJECT.md` 已有；`ROADMAP.md` 历史可有可无（首次补则跳过步骤 1）| (1) **过去 roadmap 完成度回顾**（哪些 ship / 哪些砍；首次补无历史则跳过）→ (2) 产品路线（新里程碑）→ (3) roadmap：**先扫 `requirements/closed/` 列全部 req-NNN 作 done 行回填**（按 `_shared/project-questioning.md` §5.2 写法），再问 PM 新 req 队列（planned 行）—— ROADMAP 是历史 + 未来一张表，漏 done 行不算齐 → (4) 业务术语表增量（如有新业务）—— **跳过产品定位 / 用户画像 / 技术栈**（默认稳定）|
-| **C 老板新方向** | PM 主动说"老板 / 客户给了新方向" | `docs/PROJECT.md` 已有 | (1) **新方向 vs 现 PROJECT 差异点**（PM 自述新方向 + AI 对比现 PROJECT 找冲突）→ (2) 产品定位（如有变 → 改）→ (3) 用户画像（如有变 → 改，可能换主角色）→ (4) 产品路线（按新方向重整里程碑）→ (5) roadmap（新 req 队列）|
-| **D brownfield 接入** | 紧接 `/pmai-codebase-audit` 之后 | `docs/代码现状档.md` 已生成（7 维度）| (0) **全文读 `docs/代码现状档.md`**（必读，AI 不准跳）→ (1) 产品定位（**从 codebase 反推 + PM 确认**）→ (2) 用户画像（从代码层级 / API 角色反推 + PM 补）→ (3) 产品路线（PM 给未来方向）→ (4) 技术栈（**从代码现状档抄**，PM 确认）→ (5) 业务术语表（**从 model / API 命名反推 + PM 补**）→ (6) roadmap（PM 给）|
+| **A 重做** | PM 主动说"方向偏了 / 要重做" | `docs/PROJECT.md` 已有内容 | (1) **痛点诊断**（旧 PROJECT 哪几节失效 / 为什么偏）→ (2) 产品定位（重定）→ (3) 用户画像（重定，可能换主角色）→ (4) 业务术语表（如有新术语）→ (5) roadmap 重排（旧未做 req 重新评估保留 / 砍）|
+| **B 产品路线规划** | PM 主动说"产品路线规划 / 季度规划 / 半年规划"，或老项目首次补 `docs/ROADMAP.md` | `docs/PROJECT.md` 已有；`ROADMAP.md` 历史可有可无（首次补则跳过步骤 1）| (1) **过去 roadmap 完成度回顾**（哪些 ship / 哪些砍；首次补无历史则跳过）→ (2) roadmap：**先扫 `requirements/closed/` 列全部 req-NNN 作 done 行回填**（按 `_shared/project-questioning.md` §5.2 写法），再问 PM 新 req 队列（planned 行）—— ROADMAP 是历史 + 未来一张表，漏 done 行不算齐 → (3) 业务术语表增量（如有新业务）—— **跳过产品定位 / 用户画像 / 技术栈**（默认稳定）|
+| **C 老板新方向** | PM 主动说"老板 / 客户给了新方向" | `docs/PROJECT.md` 已有 | (1) **新方向 vs 现 PROJECT 差异点**（PM 自述新方向 + AI 对比现 PROJECT 找冲突）→ (2) 产品定位（如有变 → 改）→ (3) 用户画像（如有变 → 改，可能换主角色）→ (4) roadmap（新 req 队列）|
+| **D brownfield 接入** | 紧接 `/pmai-codebase-audit` 之后 | `docs/代码现状档.md` 已生成（7 维度）| (0) **全文读 `docs/代码现状档.md`**（必读，AI 不准跳）→ (1) 产品定位（**从 codebase 反推 + PM 确认**）→ (2) 用户画像（从代码层级 / API 角色反推 + PM 补）→ (3) 技术栈（**从代码现状档抄**，PM 确认）→ (4) 业务术语表（**从 model / API 命名反推 + PM 补**）→ (5) roadmap（PM 给）|
 
 **通用约束**（所有 4 场景）：
 
@@ -97,11 +97,11 @@ echo "SKILL: project-solution"
 
 #### 步骤 4：写 docs/PROJECT.md
 
-**@读 `skills/_shared/project-questioning.md` §5.1 PROJECT.md 6 节写作规则 + §5.4 PM 视图规则**。
+**@读 `skills/_shared/project-questioning.md` §5.1 PROJECT.md 5 节写作规则 + §5.4 PM 视图规则**。
 
 #### 步骤 5：写 docs/ROADMAP.md
 
-**@读 `skills/_shared/project-questioning.md` §5.2 ROADMAP.md 写作规则 + §5.3 分工说明**。
+**@读 `skills/_shared/project-questioning.md` §5.2 ROADMAP.md 写作规则 + §5.3 ROADMAP 唯一规划视图说明**。
 
 ### 确认门
 
@@ -120,9 +120,9 @@ echo "SKILL: project-solution"
 
 > **fast-path**：精简模式下 trivial 项目不被前置仪式拖住 —— 产品定位一句话、用户画像一个角色、术语表一条，起手即可过门。
 
-#### 步骤 7：6 节齐不齐检查
+#### 步骤 7：5 节齐不齐检查
 
-**@读 `skills/_shared/project-questioning.md` §7 6 节齐不齐检查**。
+**@读 `skills/_shared/project-questioning.md` §7 5 节齐不齐检查**。
 
 #### 步骤 8：Decision gate 确认门 + PM 定稿
 
@@ -131,7 +131,7 @@ echo "SKILL: project-solution"
 PM 选「创建 PROJECT.md」+ 定稿后：
 
 - **@读 §9 atomic commit**：`git commit -m "docs: project direction settled"`
-- 退出前向 PM 说明产品路线节与 roadmap 的分工（按 §5.3）+ 引导下一步：
+- 退出前向 PM 说明 ROADMAP 是唯一规划视图（按 §5.3）+ 引导下一步：
 
 ```
 项目方向定稿。下一步：运行 /pmai-new-req 开始第一个需求。

@@ -233,6 +233,34 @@ PM-AI-Workflow 生成器仓的演进记录。本文件**只记影响下游业务
 
 ## 未发布
 
+### 2026-05-27 — refactor(project-direction): 砍 PROJECT.md「产品路线」节 + status-view --milestone flag
+
+**触发**：PM 跑项目方向讨论时撞到「PROJECT.md 产品路线节」和「ROADMAP.md」颗粒度撞车 —— 单人项目里"叙事性里程碑"和"req 队列"颗粒度天然糊，PM 在路线节列出"P0 / P1 / P2 + 具体功能"，转头 roadmap 又重列一遍，体感「同一组功能填两次」。
+
+**根因（3 处共同造成）**：
+
+- `PROJECT.md.tmpl` 路线节下挂「已完成 / 计划中」两子节 = roadmap 轻量版
+- `_shared/project-questioning.md` §3 话术「先做什么后做什么」诱导 PM 答具体功能
+- greenfield 提问顺序「路线 → roadmap」让 PM 先吐功能、被问 roadmap 又重列一次
+
+**改动（PM 视角）**：
+
+- **PROJECT.md 从 6 节减为 5 节** —— 砍「产品路线」节及「已完成 / 计划中」子节
+- **ROADMAP.md = 唯一规划视图**（历史 done + 当前 active + 计划 planned 一张表）；叙事性里程碑废弃
+- **status-view.py 砍 `--milestone` flag** + ⭐ 标记机制（路线节不存在了，里程碑 ⭐ 失依据）
+- **close-req 步骤 3.5「里程碑追加询问」整段砍**（不再问 PM 把本 req 加进路线节）
+- 各 skill 提问顺序去掉「产品路线」（init-project greenfield / project-solution A/B/C/D 4 场景）
+
+**影响范围**：
+
+- 模板：`PROJECT.md.tmpl` / `ROADMAP.md.tmpl` / `CLAUDE.md.tmpl`
+- skill：`project-solution` / `new-req` / `close-req` / `prd-writing` / `_shared/project-questioning.md`
+- script：`check-project-sections.py`（5 节）/ `status-view.py`（砍 `--milestone`）/ `_lib/state.py`（砍 `_load_milestone_set` / `is_milestone` 字段）
+
+**消费仓影响**：已有项目 `docs/PROJECT.md` 里的「## 产品路线」节同步框架后仍保留，但 `check-project-sections.py` 不再检查它、`close-req` 不再问追加 —— 即历史内容不动、新机制不再写入。`status-view --milestone` 调用方报错（flag 已删），PM 不再用。
+
+---
+
 ### 2026-05-27 — docs(drift): new-req 重排连带漂移点修复（3 处）
 
 `refactor(new-req): worktree 创建后置` commit 后扫到 3 处 _shared / 其他 SKILL 仍引旧步骤号 / 旧 trigger 2 契约的漂移点，逐条补正：

@@ -105,7 +105,7 @@ stage 3 没有原型、没有 task —— 输入只有上游 stage 1/2 的产物
   - **A 分支**（`stage2_tool=req-analysis`）：`$ACTIVE_REQ_DIR/analysis.md`（10 章结构 + `## 未决问题`）
   - **B 分支**（`stage2_tool=office-hours`）：`$ACTIVE_REQ_DIR/stage2-office-hours.md`（YC office-hours 设计稿 snapshot；功能分解嵌在 prose 里，§六派生时按"用户可发起动作"扫全文）
   - 路径解析：`python3 -m _lib.state read_req_meta $ACTIVE_REQ_DIR` 拿 `stage2_source` 字段，或直接读 `get_stage_source(req_dir, 2)` helper 返回的绝对路径
-- 🟢 `docs/PROJECT.md`（项目定位 / 用户画像 / 业务术语表 / 产品路线）
+- 🟢 `docs/PROJECT.md`（项目定位 / 用户画像 / 业务术语表 / 技术栈）
 - 🟢 `docs/PRODUCT-RULES.md`（如存在 — **全文读**，跨功能产品行为规则；PRD 一次写对、不违背常驻规则。）
 - 🟢 `docs/modules/INDEX.md` + `docs/modules/<本 req 涉及模块>.md`（如目录存在）
 - ❌ `docs/DESIGN.md`（视觉规范，归 implementation-design / task-execute 读；PRD 写需求方案不写像素颜色，DESIGN.md 在本 skill 只作**反向边界提示**用，不作正向源材料 —— 见 §六「原型」节 / §六 lint 视觉细节越界）

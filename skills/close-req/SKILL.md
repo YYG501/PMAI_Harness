@@ -360,24 +360,6 @@ rm "$TMPFILE"
 
 **为什么放在这里**：本 req 内的 `prd.md §三` 已经承担过本 req 临时词典的职责（impl-design / task-spec 已读它）；close-req 是把临时词典里"真正稳定下来的、值得跨 req 共享的"那部分 promote 到 PROJECT.md 业务术语表的唯一时机。
 
-### 步骤 3.5：里程碑追加询问
-
-问 PM 是否把本 req 加入 `docs/PROJECT.md ## 产品路线`：
-
-```
-📝 本次 req 刚 close。要不要加进 `docs/PROJECT.md` 产品路线？
-- 是：追加 `YYYY-MM-DD · <req-name>（关联 <req-id>）`，要标 ⭐ 吗（标了能用 `status-view --milestone` 筛）
-- 否：不动路线（默认）
-```
-
-PM 答「是 + ⭐」/「是 不标 ⭐」/「否」三选：
-
-- 「是 + ⭐」→ AI patch `docs/PROJECT.md` `## 产品路线` `### 已完成` 段追加 `- ⭐ YYYY-MM-DD · <req-name>（关联 <req-id>）`
-- 「是 不标 ⭐」→ 同上但不加 ⭐
-- 「否 / 默认 / 不动」→ 不 patch，进步骤 4
-
-不追问理由（PM 主观判断，autoplan 不进 §0）。
-
 ### 步骤 4：commit 所有改动
 
 在 req worktree 中 commit 所有未提交的改动：
@@ -465,7 +447,7 @@ rm -f "$PENDING_MARKER"
 📍 当前位置：主仓 main 分支
 
 ▶ Next Up — /pmai-new-req "<下一个需求>"（开始下一 req）
-         或 /pmai-project-solution（产品路线规划，重新审视项目方向）
+         或 /pmai-project-solution（roadmap 规划，重新审视项目方向）
 ```
 
 ## Rules

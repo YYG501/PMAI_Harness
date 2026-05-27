@@ -1,6 +1,6 @@
 # project-questioning：项目方向讨论的共享真相源
 
-> **职责**：项目方向讨论的**提问纪律 / 问题库 / 写作规则 / Decision gate / 6 节检查**的**单一真相源**。
+> **职责**：项目方向讨论的**提问纪律 / 问题库 / 写作规则 / Decision gate / 5 节检查**的**单一真相源**。
 > **调用方**：`/pmai-init-project` 阶段 C（greenfield 首次起项目） + `/pmai-project-solution`（4 场景：重做 / 产品路线规划 / 新方向 / brownfield 接入）。
 > **§2.5 抽取边界**：本文件含**写作规则 + 话术问题库 + 收敛条件 + Decision gate 模板 + 检查清单**（跨场景共享）；**不含**4 场景判断 + 提问顺序 + 输入态判断（场景特定，留 `/pmai-project-solution/SKILL.md` 独有；`/pmai-init-project` 阶段 C 用 greenfield 顺序）。
 > **复用 pattern**：跟 `skills/_shared/PM-VIEW-RULES.md` 同款 shared reference 机制。
@@ -15,11 +15,11 @@
    - `/pmai-init-project` 阶段 C → greenfield 首次（输入 = 空 PROJECT.md 骨架）
    - `/pmai-project-solution` → 按 4 场景判断（重做 / 产品路线规划 / 新方向 / brownfield 接入）（细化）
 2. **决定问题顺序**（调用方自己排）：
-   - greenfield（init-project）：6 节按 §3 顺序问（产品定位 → 用户画像 → 产品路线 → 技术栈 → 业务术语表 → roadmap 队列）
+   - greenfield（init-project）：5 节按 §3 顺序问（产品定位 → 用户画像 → 技术栈 → 业务术语表 → roadmap 队列）
    - 重做：按 PM 提的痛点切入，不必从产品定位起
-   - 产品路线规划：跳过产品定位 / 技术栈（一般稳定），重写产品路线 + roadmap
+   - 产品路线规划：跳过产品定位 / 技术栈（一般稳定），重排 roadmap
    - 新方向：从产品定位 + 用户画像重起
-   - brownfield 接入：先读 `docs/代码现状档.md` 作实况语境，6 节顺序不变
+   - brownfield 接入：先读 `docs/代码现状档.md` 作实况语境，5 节顺序不变
 3. **跑提问 + 闸门 + 写作 + 确认门**（按 §2-§7 走）
 4. **PM 定稿后**：调用方按自己语境继续（init-project 进阶段 D / project-solution skill 退出）
 
@@ -31,27 +31,26 @@
 
 - **分批提问**：一次问一组相关问题，不一口气甩全部
 - **追问**：PM 答得模糊就追问到能落笔，不拿模糊回答硬写
-- **收敛**：问到够写 6 节 + 初始队列即停，不无限发散
+- **收敛**：问到够写 5 节 + 初始队列即停，不无限发散
 - **编号作答**：每批问题编号，引导 PM 用 `1A 2C` 或自由文本回答
 
 **禁止**：① 拿 PM 模糊回答硬写 ② 一气呵成把 30 题甩出来 ③ 自由话术不编号导致 PM 答案丢失定位
 
 ---
 
-## §3 问题库（按 6 节组织）
+## §3 问题库（按 5 节组织）
 
 | PROJECT 节 | 要问出 | 典型话术 |
 |---|---|---|
 | 产品定位 | 是什么产品 / 解决什么问题 / 给谁用 / 有无长期硬约束 | 「这个项目要解决什么核心问题？目标用户是谁？有没有不能动的边界（合规 / 集成 / 性能）？」|
 | 用户画像 | 主角色是谁 / 关键诉求（起手 1 个主角色即可） | 「最主要的用户是哪种人？他们最大的诉求是什么？」|
-| 产品路线 | 里程碑 / 大方向（先做什么后做什么） | 「先做 MVP 还是直接做完整版？想几个月内达成什么里程碑？」|
 | 技术栈 | 主要语言 / 前端 / 后端 / 部署 | 「用什么技术栈？前端 / 后端 / 部署有偏好吗？还是按现状走？」|
 | 业务术语表 | 项目里有没有需要统一口径的业务专名 | 「业务里有什么术语容易跟同行混的？比如『订单』vs『工单』？」|
 | —（roadmap）| PM 现在已知的待做需求，大致排个序 | 「列出现在已知的待做需求，按优先级排个序。」|
 
 > **项目名称节**通常 `/pmai-init-project` 已填（参数 1），调用方确认即可。
 
-**调用方挑用**：调用方按场景挑 6 节里的子集 + 顺序（init-project 全部按顺序；project-solution 按场景跳）。
+**调用方挑用**：调用方按场景挑 5 节里的子集 + 顺序（init-project 全部按顺序；project-solution 按场景跳）。**叙事性里程碑不另开节** —— roadmap 本身就是历史 + 未来一张表，PM 唯一规划视图；过去若需写阶段叙事，统一从 roadmap 的 done/active/planned 三态推。
 
 ---
 
@@ -97,14 +96,13 @@ python3 "$PMAI_HOME/scripts/check-open-questions.py" \
 
 ## §5 写作规则
 
-### §5.1 PROJECT.md 6 节（模板见 `$PMAI_HOME/templates/PROJECT.md.tmpl`）
+### §5.1 PROJECT.md 5 节（模板见 `$PMAI_HOME/templates/PROJECT.md.tmpl`）
 
 | 节 | 写什么 |
 |---|---|
 | 项目名称 | 通常 `/pmai-init-project` 参数 1 已填，确认即可 |
 | 产品定位 | 1-3 句话；最简版「工具型应用，给单人 PM 用」也接受 |
 | 用户画像 | 起手 1 个主角色 + 关键诉求；最简版 1 句话 |
-| 产品路线 | **只写里程碑 / 大方向**（如「Q3 上线 MVP」/「先单人后协作」）；颗粒到单 req 的队列归 ROADMAP.md |
 | 技术栈 | 主要语言 / 前端 / 后端 / 部署 |
 | 业务术语表 | 至少 1 条；无业务专名时可空表 |
 
@@ -126,15 +124,11 @@ python3 "$PMAI_HOME/scripts/check-open-questions.py" \
 3. 然后再问 PM 计划态 req 队列（planned 行）
 4. **漏写 done 行 = 体检不算齐**：ROADMAP 只有 planned 行没 done 行，PM 拿不到历史视图
 
-### §5.3 「产品路线」节 vs ROADMAP.md 分工
+### §5.3 ROADMAP.md = 唯一规划视图
 
-| | PROJECT.md「产品路线」节 | docs/ROADMAP.md |
-|---|---|---|
-| 装什么 | 里程碑 / 大方向 | req 全表（历史 done + 当前 active + 计划 planned）|
-| 生命周期 | 稳定基线，变动慢 | 操作态，随 req 推进更新（每次 close-req 推一行到 done）|
-| 谁读 | AI 后续每个 req 必读的项目语境 | PM 自己的规划视图（兼历史回顾） |
+PROJECT.md 不再有「产品路线」节（叙事性里程碑已废弃 —— 单人项目颗粒度跟 ROADMAP 撞车）。所有规划信息只在 ROADMAP.md：req 全表（历史 done + 当前 active + 计划 planned），随 req 推进更新（每次 close-req 推一行到 done）。
 
-写完后调用方应向 PM 一句话说明：「产品路线节 = 大方向里程碑；roadmap = 历史 + 未来 req 全表（含已 close 的 done 行）。」
+写完后调用方应向 PM 一句话说明：「roadmap = 历史 + 未来 req 全表（含已 close 的 done 行），是项目唯一规划视图。」
 
 ### §5.4 PM 视图规则
 
@@ -145,7 +139,7 @@ python3 "$PMAI_HOME/scripts/check-open-questions.py" \
 
 ## §6 Decision gate 确认门（gsd Decision gate pattern）
 
-> Decision gate 是 PM 答完 6 节 + roadmap 后的**收敛闸门**，3 条硬规则照搬 gsd `new-project.md:368-380` "Ready?" pattern。
+> Decision gate 是 PM 答完 5 节 + roadmap 后的**收敛闸门**，3 条硬规则照搬 gsd `new-project.md:368-380` "Ready?" pattern。
 
 ### §6.1 3 条硬规则
 
@@ -171,7 +165,7 @@ PM 选「继续探索」→ 回 §2 提问；Loop 直到 PM 选「创建 PROJECT
 
 ---
 
-## §7 写作前 6 节齐不齐检查
+## §7 写作前 5 节齐不齐检查
 
 写完 `docs/PROJECT.md` 后跑：
 
@@ -181,7 +175,7 @@ ALL_FILLED=$(echo "$PROJECT_STATE" | python3 -c "import sys, json; print(json.lo
 EMPTY=$(echo "$PROJECT_STATE" | python3 -c "import sys, json; print(','.join(json.load(sys.stdin)['empty_sections']))")
 ```
 
-- `all_filled` 为 True → 6 节都有实质内容，进 §8 PM 定稿
+- `all_filled` 为 True → 5 节都有实质内容，进 §8 PM 定稿
 - 有空节 → 把空节（`$EMPTY`）逐节引导 PM 填，填完重跑脚本
 
 **禁逃生舱**：不给「暂跳过」「这节不重要」选项。PM 真不知道某节写啥 → AI 给精简模式默认值（例：产品定位「工具型应用，给单人 PM 用，无长期硬约束」），PM 微调或直接接受。
@@ -197,7 +191,7 @@ EMPTY=$(echo "$PROJECT_STATE" | python3 -c "import sys, json; print(','.join(jso
 
 📋 docs/PROJECT.md
    <绝对路径>
-   产品定位 / 用户画像 / 产品路线 / 技术栈 / 业务术语表 已填
+   产品定位 / 用户画像 / 技术栈 / 业务术语表 已填
 
 🗺 docs/ROADMAP.md
    <绝对路径>
@@ -230,11 +224,11 @@ git commit -m "docs: project direction settled"
 ### §10.1 `/pmai-init-project` 阶段 C（greenfield）
 
 1. agent @读 本文件
-2. 按 §3 6 节顺序问 PM（greenfield 顺序）
+2. 按 §3 5 节顺序问 PM（greenfield 顺序）
 3. §4 未决问题闸门
 4. §6 Decision gate
 5. §5 写 PROJECT.md + ROADMAP.md
-6. §7 6 节齐不齐检查
+6. §7 5 节齐不齐检查
 7. §8 PM 定稿
 8. §9 atomic commit
 9. 返回 init-project 阶段 D（终态汇总 + Next Up）
@@ -245,14 +239,14 @@ git commit -m "docs: project direction settled"
 2. **判断场景**（A 重做 / B 产品路线规划 / C 新方向 / D brownfield 接入）—— 调用方 `/pmai-project-solution` SKILL.md 段 0 表已细化触发条件 + 输入态 + 提问顺序
 3. agent @读 本文件
 4. 按 `/pmai-project-solution` SKILL.md 段 0 表"提问顺序"列**场景特定顺序**问 PM：
-   - A 重做：痛点诊断 → 产品定位 → 用户画像 → 产品路线 → 业务术语 → roadmap 重排
-   - B 产品路线规划：过去 roadmap 回顾（首次补无历史则跳过）→ 产品路线 → roadmap（**先扫 `requirements/closed/` 写 done 行**，再问 planned 队列）→ 业务术语增量（跳过定位 / 用户 / 技术栈）
-   - C 新方向：新方向 vs 现 PROJECT 差异 → 产品定位 → 用户画像 → 产品路线 → roadmap
-   - D brownfield：全文读现状档 → 产品定位（codebase 反推）→ 用户画像 → 产品路线 → 技术栈（codebase 抄）→ 业务术语 → roadmap
+   - A 重做：痛点诊断 → 产品定位 → 用户画像 → 业务术语 → roadmap 重排
+   - B 产品路线规划：过去 roadmap 回顾（首次补无历史则跳过）→ roadmap（**先扫 `requirements/closed/` 写 done 行**，再问 planned 队列）→ 业务术语增量（跳过定位 / 用户 / 技术栈）
+   - C 新方向：新方向 vs 现 PROJECT 差异 → 产品定位 → 用户画像 → roadmap
+   - D brownfield：全文读现状档 → 产品定位（codebase 反推）→ 用户画像 → 技术栈（codebase 抄）→ 业务术语 → roadmap
 5. §4 未决问题闸门
 6. §6 Decision gate
 7. §5 写 / 改 PROJECT.md + ROADMAP.md
-8. §7 6 节齐不齐检查
+8. §7 5 节齐不齐检查
 9. §8 PM 定稿
 10. §9 atomic commit
 11. skill 退出（不像 init-project 还有阶段 D）

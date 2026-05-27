@@ -459,13 +459,9 @@ def render_timeline(timeline_state: dict, repo_root: Path) -> None:
     cancelled = timeline_state["cancelled"]
     total_archived = timeline_state["total_archived"]
     truncated = timeline_state["truncated"]
-    milestone_only = timeline_state["milestone_only"]
 
     print()
-    title = "📅 项目时间线"
-    if milestone_only:
-        title += "（仅里程碑 ⭐）"
-    print(title)
+    print("📅 项目时间线")
     print()
 
     # Active
@@ -479,9 +475,8 @@ def render_timeline(timeline_state: dict, repo_root: Path) -> None:
             req_name = meta.get("name", "")
             stage = meta.get("stage", 0)
             stage_name = STAGE_NAMES.get(stage, "?")
-            ms = " ⭐" if item.get("is_milestone") else ""
             tasks = list_tasks(item["req_dir"], repo_root=repo_root)
-            print(f"🔄{ms} {req_id} · {req_name}（Stage {stage} {stage_name}）")
+            print(f"🔄 {req_id} · {req_name}（Stage {stage} {stage_name}）")
             if tasks:
                 done = sum(1 for t in tasks if t.get("meta", {}).get("status") == "已完成")
                 print(f"   ↳ {done}/{len(tasks)} tasks")
@@ -505,12 +500,11 @@ def render_timeline(timeline_state: dict, repo_root: Path) -> None:
             meta = item["meta"]
             req_id = meta.get("id", item["req_dir"].name)
             req_name = meta.get("name", "")
-            ms = " ⭐" if item.get("is_milestone") else ""
             cd = item.get("close_date")
             date_str = cd.strftime("%Y-%m-%d") if cd else "?"
             tasks = list_tasks(item["req_dir"], repo_root=repo_root)
             task_count_str = f"{len(tasks)} tasks" if tasks else "0 tasks"
-            print(f"✅{ms} {req_id} · {req_name}（关闭 {date_str} · {task_count_str}）")
+            print(f"✅ {req_id} · {req_name}（关闭 {date_str} · {task_count_str}）")
 
     print()
 
@@ -531,7 +525,7 @@ def render_timeline(timeline_state: dict, repo_root: Path) -> None:
         print()
 
     print("──")
-    print("过滤参数：--since YYYY-MM-DD | --module <name> | --milestone | --all（取消 limit）")
+    print("过滤参数：--since YYYY-MM-DD | --module <name> | --all（取消 limit）")
     if timeline_state["warnings"]:
         print(f"⚠️  {len(timeline_state['warnings'])} warnings（meta 解析问题）")
 
@@ -564,7 +558,6 @@ def main() -> None:
     )
     parser.add_argument("--since", default=None, help="(timeline) 仅显示关闭时间 >= YYYY-MM-DD 的 archived")
     parser.add_argument("--module", default=None, help="(timeline) 仅显示涉及该 module 的 req")
-    parser.add_argument("--milestone", action="store_true", help="(timeline) 仅显示 PROJECT 路线节标 ⭐ 的 req")
     parser.add_argument("--limit", type=int, default=20, help="(timeline) archived 总数限制 (默认 20)")
     parser.add_argument("--all", action="store_true", help="(timeline) 取消 limit，显示全部 archived")
     parser.add_argument(
@@ -595,7 +588,7 @@ def main() -> None:
         timeline_state = get_timeline_state(
             repo_root, cwd=Path.cwd(), strict=False,
             since=args.since, module=args.module,
-            milestone_only=args.milestone, limit=limit,
+            limit=limit,
         )
         render_timeline(timeline_state, repo_root)
         return
