@@ -8,6 +8,7 @@
 #   4. All symlinks under ~/.claude/skills/pmai-* resolve (no dangling)
 #   5. ~/.pmai/ working tree clean (or warn if dirty — affects consumers)
 #   6. Remote reachable (short network check, non-fatal)
+#   7. Claude Code Bash 工具子进程 PATH 能调到 pmai（zsh 用户常踩盲点）
 
 set -uo pipefail
 
@@ -128,6 +129,28 @@ if [ -d "$PMAI_HOME/.git" ]; then
   else
     warn "Remote $REMOTE_URL unreachable (SSH key / network / repo access?)"
   fi
+fi
+
+# 7. Claude Code Bash 工具子进程 PATH
+#
+# Claude Code 的 Bash 工具开 bash 子进程（不读 zsh 的 .zshrc），macOS 上
+# login bash 读 .bash_profile。zsh 用户在 terminal 加完 PATH 之后，chat 里
+# 跑 pmai 仍可能 not found —— 这个检测把盲点暴露出来。
+echo ""
+echo "─── 7. Claude Code Bash 工具子进程 PATH ───"
+if bash -lc 'command -v pmai >/dev/null 2>&1'; then
+  ok "bash -lc 能调到 pmai（Claude Code 内 AI 可调）"
+else
+  # 算修复目标 rc：macOS 上 login bash 优先 .bash_profile
+  if [ -f "$HOME/.bash_profile" ]; then
+    FIX_RC="$HOME/.bash_profile"
+  elif [ -f "$HOME/.bashrc" ]; then
+    FIX_RC="$HOME/.bashrc"
+  else
+    FIX_RC="$HOME/.bash_profile"
+  fi
+  warn "bash -lc 调不到 pmai — Claude Code 内 AI 跑 pmai 会 not found"
+  echo "      修复：echo 'export PATH=\"\$HOME/.pmai/bin:\$PATH\"' >> $FIX_RC"
 fi
 
 echo ""

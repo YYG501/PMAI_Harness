@@ -104,22 +104,60 @@ if [ "$MODE" = "global" ]; then
   echo "═══════════════════════════════════════"
 
   # PATH 检测：~/.pmai/bin 不在 PATH 就提示 oneshot（不自动改用户 rc 文件，避免破坏配置）
+  #
+  # 双 rc 提示：zsh 用户的 terminal 走 .zshrc，但 Claude Code 内 AI 用 bash 子进程
+  # 读 .bash_profile/.bashrc，光加 .zshrc 时 chat 里跑 pmai 仍 not found。
   PMAI_BIN="$PMAI_HOME/bin"
   if [ -d "$PMAI_BIN" ] && ! echo ":$PATH:" | grep -q ":$PMAI_BIN:"; then
-    # 探 PM shell 的 rc 文件
-    SHELL_RC=""
+    # primary rc：当前 shell 用（terminal 场景）
     case "${SHELL##*/}" in
-      zsh)  SHELL_RC="$HOME/.zshrc" ;;
-      bash) [ -f "$HOME/.bashrc" ] && SHELL_RC="$HOME/.bashrc" || SHELL_RC="$HOME/.bash_profile" ;;
-      *)    SHELL_RC="$HOME/.profile" ;;
+      zsh)  PRIMARY_RC="$HOME/.zshrc" ;;
+      bash) [ -f "$HOME/.bashrc" ] && PRIMARY_RC="$HOME/.bashrc" || PRIMARY_RC="$HOME/.bash_profile" ;;
+      *)    PRIMARY_RC="$HOME/.profile" ;;
     esac
-    # rc 文件里有没有现成 export（避免重复提示）
-    if [ -f "$SHELL_RC" ] && grep -q "\.pmai/bin" "$SHELL_RC" 2>/dev/null; then
-      echo "ℹ️  $SHELL_RC 已含 ~/.pmai/bin export — 若当前 shell 没生效，开新窗口或 source 即可"
+
+    # secondary rc：仅 zsh 用户需要。Claude Code Bash 工具开 bash 子进程，
+    # macOS 上 login bash 读 .bash_profile，没有则 .bashrc。
+    CC_BASH_RC=""
+    if [ "${SHELL##*/}" = "zsh" ]; then
+      if [ -f "$HOME/.bash_profile" ]; then
+        CC_BASH_RC="$HOME/.bash_profile"
+      elif [ -f "$HOME/.bashrc" ]; then
+        CC_BASH_RC="$HOME/.bashrc"
+      fi
+    fi
+
+    PRIMARY_NEED=0
+    CC_BASH_NEED=0
+    if [ -f "$PRIMARY_RC" ] && grep -q "\.pmai/bin" "$PRIMARY_RC" 2>/dev/null; then
+      echo "ℹ️  $PRIMARY_RC 已含 ~/.pmai/bin export — 若当前 shell 没生效，开新窗口或 source 即可"
     else
+      PRIMARY_NEED=1
+    fi
+    if [ -n "$CC_BASH_RC" ]; then
+      if [ -f "$CC_BASH_RC" ] && grep -q "\.pmai/bin" "$CC_BASH_RC" 2>/dev/null; then
+        : # 已有，沉默跳过（避免 PM 屏幕被两条 ℹ️ 刷屏）
+      else
+        CC_BASH_NEED=1
+      fi
+    fi
+
+    if [ "$PRIMARY_NEED" = "1" ] || [ "$CC_BASH_NEED" = "1" ]; then
       echo ""
-      echo "📌 一步加 PATH（pmai 命令立即可用）："
-      echo "   echo 'export PATH=\"\$HOME/.pmai/bin:\$PATH\"' >> $SHELL_RC && source $SHELL_RC"
+      echo "📌 加 PATH（pmai 命令立即可用）："
+      if [ "$PRIMARY_NEED" = "1" ]; then
+        echo "   echo 'export PATH=\"\$HOME/.pmai/bin:\$PATH\"' >> $PRIMARY_RC    # terminal 用"
+      fi
+      if [ "$CC_BASH_NEED" = "1" ]; then
+        echo "   echo 'export PATH=\"\$HOME/.pmai/bin:\$PATH\"' >> $CC_BASH_RC    # Claude Code 内 bash 子进程用"
+      fi
+      if [ "$PRIMARY_NEED" = "1" ]; then
+        if [ "$CC_BASH_NEED" = "1" ]; then
+          echo "   source $PRIMARY_RC    # terminal 立即生效；Claude Code 下次启动 session 生效"
+        else
+          echo "   source $PRIMARY_RC"
+        fi
+      fi
     fi
   fi
 
