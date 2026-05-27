@@ -187,6 +187,20 @@ PM-AI-Workflow 生成器仓的演进记录。本文件**只记影响下游业务
 
 ## 未发布
 
+### 2026-05-27 — feat(pmai-upgrade skill): standalone 模式 — PM 在 Claude Code 内 /pmai-upgrade 含 AI 智能摘要
+
+借鉴 gstack-upgrade SKILL.md，给 PMAI 升级流程加 skill 入口（PMAI 阶段 1 gstack 借鉴扩展，B-简版）：
+
+- 新增 `skills/pmai-upgrade/SKILL.md`：standalone 模式 6 步 — Step 0 解析当前安装 / Step 1 探查远程 / Step 2 AskUser 4 选项（升级 main / stable tag / 锁版本 / 暂缓 1 天/1 周/永远）/ Step 3 调 bin/pmai-upgrade --no-whats-new / Step 4 读 CHANGELOG OLD..NEW + AI 5-7 bullet 智能摘要（按主题归类，跳纯重构 commit）/ Step 5 清 marker / Step 6 继续 PM 原任务
+- `bin/pmai-upgrade` 加 `--no-whats-new` flag：跳过 bin/pmai-whats-new 自动 dump（skill 接管 What's New 时用）
+- frontmatter：`version: 1.0.0` / `triggers: 升级 PMAI / 升级框架 / pmai upgrade / upgrade pmai` / `allowed-tools: Bash + Read + AskUserQuestion`
+
+**两个调用入口共存**：
+- Shell（脚本化 / cron）：`pmai upgrade` — 保留原逻辑，bin/pmai-upgrade 自动调 pmai-whats-new dump
+- Claude Code（PM 日常）：`/pmai-upgrade` — skill 接管，调 bin/ 但跳 dump，AI 智能摘要
+
+**未实现（B-完整 scope，本次不做）**：Inline 模式（其他 skill preamble 检测 UPGRADE_AVAILABLE 时自动 invoke pmai-upgrade flow）。PM 单人场景 standalone 够用；多人团队 / 升级强提醒场景未来补。
+
 ### 2026-05-27 — fix(close-task / gitignore.tmpl): 清 task verify 运行时元数据
 
 - `scripts/close-task.sh` §6.5 加清理段：task worktree remove 后，**还**扫一遍 main / req worktree 内的 `.pm-workflow/tasks/<task>/verify/`，删 `dev-server.info` + `_dev-server.log`（PID/PORT 元数据，task close 后无意义）；保留 report.md / flow-*.png / _plan.md 审计资产

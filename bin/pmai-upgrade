@@ -16,27 +16,33 @@ SKILL_PREFIX="pmai-"
 usage() {
   cat <<EOF
 Usage:
-  pmai upgrade              # Pull latest main commit
-  pmai upgrade --stable     # Jump to latest git tag (stable baseline)
-  pmai upgrade --to v0.1.0  # Pin to specific tag (rollback / freeze)
+  pmai upgrade                    # Pull latest main commit
+  pmai upgrade --stable           # Jump to latest git tag (stable baseline)
+  pmai upgrade --to v0.1.0        # Pin to specific tag (rollback / freeze)
+  pmai upgrade --no-whats-new     # 升级后跳过 pmai-whats-new 自动展示（skill 接管时用）
 EOF
 }
 
 MODE="main"
 TARGET_TAG=""
+NO_WHATS_NEW=0
 
-case "${1:-}" in
-  --help|-h) usage; exit 0 ;;
-  --stable) MODE="stable" ;;
-  --to)
-    shift
-    TARGET_TAG="${1:-}"
-    [ -z "$TARGET_TAG" ] && { echo "❌ --to needs <tag>" >&2; usage >&2; exit 2; }
-    MODE="to"
-    ;;
-  "") MODE="main" ;;
-  *) echo "❌ unknown flag: $1" >&2; usage >&2; exit 2 ;;
-esac
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --help|-h) usage; exit 0 ;;
+    --stable) MODE="stable"; shift ;;
+    --to)
+      shift
+      TARGET_TAG="${1:-}"
+      [ -z "$TARGET_TAG" ] && { echo "❌ --to needs <tag>" >&2; usage >&2; exit 2; }
+      MODE="to"
+      shift
+      ;;
+    --no-whats-new) NO_WHATS_NEW=1; shift ;;
+    "") shift ;;
+    *) echo "❌ unknown flag: $1" >&2; usage >&2; exit 2 ;;
+  esac
+done
 
 if [ ! -d "$PMAI_HOME/.git" ]; then
   echo "❌ $PMAI_HOME 不存在或不是 git 仓。先跑 pmai install。" >&2
@@ -111,8 +117,8 @@ fi
 echo "   skill: $count symlinks re-synced"
 echo "═══════════════════════════════════════"
 
-# 升级后立即展示 What's New（如有，OLD != NEW 时）
-if [ "$OLD_HEAD" != "$NEW_HEAD" ] && [ -x "$(dirname "$0")/pmai-whats-new" ]; then
+# 升级后立即展示 What's New（如有，OLD != NEW 时，--no-whats-new 跳过 — 给 skill 接管用）
+if [ "$OLD_HEAD" != "$NEW_HEAD" ] && [ "$NO_WHATS_NEW" = "0" ] && [ -x "$(dirname "$0")/pmai-whats-new" ]; then
   echo ""
   "$(dirname "$0")/pmai-whats-new" --from "$OLD_VER" --to "$NEW_VER" || true
 fi
