@@ -187,6 +187,21 @@ PM-AI-Workflow 生成器仓的演进记录。本文件**只记影响下游业务
 
 ## 未发布
 
+### 2026-05-27 — fix(req-num-resolver): max=008/009 时 `$((...))` 按 octal 解析报错，强制 base-10
+
+**触发**：ExampleConsumerApp PM 在 closed/req-008 之后跑 `/pmai-new-req`，helper 报 `008: value too great for base (error token is "008")` 直接挂掉；PM 手动判断编号是 009 继续。
+
+**根因**：`scripts/_lib/req-num-resolver.sh:51` 算 next 编号用 `$((${max:-0} + 1))`，bash arithmetic 把前导 0 的数当 octal，008/009 不是合法 octal（octal 只到 0-7）。closed/active/branch 任一来源的 max 落到 008/009 都会炸；010 之后没事（不再前导 0）。
+
+**改动**：
+
+- `scripts/_lib/req-num-resolver.sh:next_req_num` 改 `$((10#${max:-0} + 1))` 强制 base-10 解析；加一行 inline comment 说明 octal 坑。
+- `tests/test-req-num-resolver.sh` 加 2 个回归 case：`closed=008 → next=009`、`branch=req-009 → next=010`，挂到 runner 列表里。原 10 case 测试覆盖 001-007 + 010，唯独漏了 008/009 这两个 octal 边界 —— 这是 bug 漏出去的原因。
+
+**测试**：suite 8 → 10 case 全过。
+
+---
+
 ### 2026-05-27 — fix(prefix): 所有 skill 加 `pmai-` 前缀 — frontmatter / 文档 / 测试三层统一
 
 PM 发现 ExampleConsumerApp 里 slash 列表显示的命令**不带前缀**（`/task-execute` 而不是 `/pmai-task-execute`），戳穿了之前对前缀机制的误解：Claude Code 的 slash 名取自 SKILL.md frontmatter `name:` 字段，**不是目录名**。`pmai-install` 把目录名加 `pmai-` 前缀这层对暴露给 PM 的 slash 名零作用——目录前缀白加了（除了 pmai-upgrade 因为 frontmatter 也写了 pmai-upgrade 才真生效）。对照 gstack：每个 SKILL.md frontmatter 都带 `gstack-` 前缀，目录 + frontmatter 双层加，slash 名真带前缀；PMAI 是「目录加前缀，frontmatter 不加」的半成品。

@@ -48,7 +48,8 @@ next_req_num() {
   local repo_root="${1:?repo-root required}"
   local max
   max=$(_scan_req_nums "$repo_root" | tail -1)
-  printf '%03d\n' $((${max:-0} + 1))
+  # 强制 base-10：max=008/009 时 $(()) 会按 octal 解析报错（08/09 非法 octal）
+  printf '%03d\n' $((10#${max:-0} + 1))
 }
 
 # list_req_nums <repo-root>

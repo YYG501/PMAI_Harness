@@ -187,6 +187,39 @@ test_source_mode() {
 }
 
 # -----------------------------------------------------------------
+# Scenario 7.5: octal boundary —— max=008/009 时 $(()) 会按 octal 解析报错
+# 历史 bug：closed/req-008 → next 试图算 $((008+1)) 报 "value too great for base"
+# 修复：next_req_num 用 10#${max} 强制 base-10
+# -----------------------------------------------------------------
+test_octal_boundary_008() {
+  start_test "closed=008 → next=009（octal 坑回归）"
+  local repo
+  repo=$(_make_fake_repo)
+  _add_closed_req "$repo" "008"
+
+  local next
+  next=$(bash "$RESOLVER" next "$repo" 2>&1)
+  assert_equal "009" "$next" "next with max=008 (octal regression)" || { rm -rf "$repo"; return; }
+
+  rm -rf "$repo"
+  pass_test
+}
+
+test_octal_boundary_009() {
+  start_test "branch=req-009 → next=010（octal 坑回归）"
+  local repo
+  repo=$(_make_fake_repo)
+  _add_branch_req "$repo" "009" "live"
+
+  local next
+  next=$(bash "$RESOLVER" next "$repo" 2>&1)
+  assert_equal "010" "$next" "next with max=009 (octal regression)" || { rm -rf "$repo"; return; }
+
+  rm -rf "$repo"
+  pass_test
+}
+
+# -----------------------------------------------------------------
 # Scenario 8: SKILL.md 仍然引用 helper（防止下次拆 references 时删丢）
 # -----------------------------------------------------------------
 test_skill_invokes_helper() {
@@ -208,6 +241,8 @@ test_only_branch
 test_mixed
 test_list_dedup_sort
 test_source_mode
+test_octal_boundary_008
+test_octal_boundary_009
 test_skill_invokes_helper
 
 report_results "req-num-resolver"
