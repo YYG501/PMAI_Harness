@@ -62,7 +62,7 @@ PM 确认门（审架构决策表），通过后再调 `/pmai-task-plan`。
 
 | 输入 | 用途 |
 |---|---|
-| `$ACTIVE_REQ_DIR/prd.md` | req 级功能规格（WHAT）—— HOW 据此设计，不重抄 WHAT |
+| `$ACTIVE_REQ_DIR/prd.md` | req 级需求方案（WHAT）—— HOW 据此设计，不重抄 WHAT |
 | `$ACTIVE_REQ_DIR/prd.md §三` | **本 req 临时词典**（名词解释）—— 写 HOW 时按本 req 引入的新业务实体 / 角色精确指代，禁同义词漂移 |
 | `get_stage_source($ACTIVE_REQ_DIR, 2)` | **stage 2 真相源** —— 需求分析 / 讨论产物：A 分支 `analysis.md`（结构化），B 分支 `stage2-office-hours.md`（YC office-hours snapshot）。技术依赖 / 约束据此读。helper：`python3 -m _lib.state read_req_meta $ACTIVE_REQ_DIR` 取 `stage2_source`，或调 `_lib.state.get_stage_source` |
 | `$ACTIVE_REQ_DIR/brief.md` | 原始诉求（轻量背景）|

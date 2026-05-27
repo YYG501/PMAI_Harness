@@ -162,33 +162,41 @@ chat 一行确认 `已归档（attachments/<新名>），Y 重点。继续。`�
 
 ### Stage 1 → 2（描述需求 → 需求分析）
 
-> **v4 体验包装层**：brief 二次确认 + 需求讨论方式选择**合二为一**，PM 视角"一次需求讨论"。下游分两条分流：A = 结构化批判（`/pmai-req-analysis`），B = YC office-hours 式（snapshot 复制）。两条分流的产物都通过 `_lib.state.set_stage_source` 写到 `.req-meta.json`，下游 SKILL 一律走 `get_stage_source(req_dir, 2)` helper 读 stage 2 真相源（不再硬编码 `analysis.md`）。
+> **v5 设计**：所有 PM 决策门用 AskUserQuestion picker（runtime 不支持时退化为编号列表，按 `_shared/pm-view/askuser-rules.md §1.3`）。下游分两条分流：A = 结构化批判（`/pmai-req-analysis`），B = YC office-hours 式（snapshot 复制 + 体验包装）。两条分流的产物都通过 `_lib.state.set_stage_source` 写到 `.req-meta.json`，下游 SKILL 一律走 `get_stage_source(req_dir, 2)` helper 读 stage 2 真相源（不再硬编码 `analysis.md`）。
 
 1. 检查 `brief.md` 存在且有内容
 
-2. **brief 二次确认 + 需求讨论方式选择门**（v4 合二为一）：
+2. **brief 二次确认 + 需求分析方式选择门**（AskUserQuestion picker）：
 
-   `/pmai-new-req` 在主对话写完 brief.md 后就 handoff 退场，PM 在 worktree 内新对话里第一次跑 `/pmai-req-stage-gate` 时，AI 重新读一遍 `brief.md`，把 brief 二确和"用哪种方式跟这个需求讨论"合并成一次对话（v3 书面体 + v4 选择门）：
+   `/pmai-new-req` 在主对话写完 brief.md 后就 handoff 退场，PM 在 worktree 内新对话里第一次跑 `/pmai-req-stage-gate` 时，AI 重新读一遍 `brief.md`，先输出 prose 头部：
 
    ```
-   Stage 1 → 2
+   Stage 1 描述需求 → 2 需求分析
 
    ✅ brief.md
       <$ACTIVE_REQ_DIR/brief.md 绝对路径>
 
    📋 摘要
       <重新读 brief.md 的核心内容，一行>
-
-   💬 怎么往下走？
-    - 结构化挖透（默认）—— 一层层把需求问清楚，问完独立复核，剩下未决问题回来找你拍
-    - 开放探讨 —— 像聊天一样发散聊，聊清楚直接进 Stage 2，不另做复核
-    - brief 还要改 —— 说改哪里
    ```
 
-   **PM 回答的内部分流**（不列 A/B 字母；按 PM 自然语言意图）：
-   - PM 说「OK / 通过 / 没问题 / 定了」/ 选第一项 / 直说"结构化挖透 / 结构化批判 / 第一性原理 / req-analysis" → **分流 A**（步骤 3A）
-   - PM 选 / 直说「开放探讨 / office-hours / YC 六问 / 设计思考」类 → **分流 B**（步骤 3B）
-   - PM 提具体修改 → 按 PM 指示改 `brief.md`，改完后**只输出"已改完"二次摘要**（同一份模板，"一句话摘要"段填新内容），不贴全文；回到本步骤 2 重新出选择门
+   然后调用 **AskUserQuestion**：
+
+   - `question`: "怎么分析这个需求？"
+   - `options`:
+     - `label`: `AI 帮我分析`
+       `description`: `AI 跑第一性原理把 brief 挖透，列未决问题回来找你拍（默认推荐）`
+     - `label`: `用 office-hours 风格分析`
+       `description`: `走 YC office-hours（六问 + 跨模型 + 内置 review loop）；有现成稿就接入，没有就 AI 带你现在跑`
+     - `label`: `brief 还要改`
+       `description`: `说改哪里`
+
+   **PM 答题处理**（按 picker label 或编号 / 自由文本关键词）：
+   - 选 `AI 帮我分析` / 输 `1` / 输 "AI 帮我分析 / 结构化批判 / 第一性原理 / req-analysis" → **分流 A**（步骤 3A）
+   - 选 `用 office-hours 风格分析` / 输 `2` / 输 "office-hours / 六问 / YC / 跨模型" → **分流 B**（步骤 3B）
+   - 选 `brief 还要改` / 输 `3` / 直接提具体修改 → 按 PM 指示改 `brief.md`，改完后**只输出"已改完"二次摘要**（同一份 prose 头部模板，"摘要"段填新内容），不贴全文；回到本步骤 2 重新出选择门
+   - PM 答模糊词（"OK / 通过 / 没问题 / 差不多了"）→ **反问澄清**：「你想用哪种分析方式：AI 帮你分析、用 office-hours 风格、还是先改 brief？」**禁止默认走 recommend 选项**（按 `askuser-rules.md §1.1`）
+   - PM 空答 / 没答 → STOP wait next message（按 `askuser-rules.md §1.1`）
 
 #### 分流 A：结构化批判（`/pmai-req-analysis`）
 
@@ -214,39 +222,56 @@ chat 一行确认 `已归档（attachments/<新名>），Y 重点。继续。`�
    python3 "$PMAI_HOME/scripts/check-open-questions.py" "$ACTIVE_REQ_DIR/analysis.md"
    ```
 
-   - **退出码 1**（有未答）→ 确认门进入"答题模式"，stdout 给出未答题号 + 行号：
+   - **退出码 1**（有未答）→ 确认门进入"答题模式"，prose 头部 + AskUserQuestion：
+
+     prose 头部：
      ```
-     Stage 2（需求分析）— analysis 含未决问题
+     Stage 2 需求分析 — analysis 含未决问题
 
      ✅ analysis.md
         <$ACTIVE_REQ_DIR/analysis.md 绝对路径>
 
-     📋 一句话摘要
+     📋 摘要
         <本次分析的核心结论，一行>
 
      ⚠️ 留了 <N> 个未决问题需要先回答，推进前必须答完。
+     ```
 
-     请选择处理方式：
-      - 我逐题问你（推荐，答完写回 analysis.md）
-      - 你想先改 analysis 某段（请说哪里）
+     AskUserQuestion：
+     - `question`: "怎么处理未决问题？"
+     - `options`:
+       - `label`: `逐题问我`
+         `description`: `AI 逐题展示问题，你每答一题写回 analysis.md（推荐）`
+       - `label`: `先改 analysis 某段`
+         `description`: `说改哪里`
+
+     **不允许**提供"直接推进"选项——硬规则，无例外，无 FORCE 逃生舱（按 `askuser-rules.md §2 M4.3`）。
+
+   - **退出码 0**（全部已答 / section 写"本 req 无未决问题" / section 不存在）→ 确认门进入"推进模式"，prose 头部 + AskUserQuestion：
+
+     prose 头部：
      ```
-     **不允许**提供"直接推进"选项——这是硬规则，没有例外也没有 FORCE 逃生舱
-   - **退出码 0**（全部已答 / section 写"本 req 无未决问题" / section 不存在）→ 确认门进入"推进模式"：
-     ```
-     Stage 2（需求分析）— analysis 待确认
+     Stage 2 需求分析 → 3 需求方案
 
      ✅ analysis.md
         <$ACTIVE_REQ_DIR/analysis.md 绝对路径>
 
-     📋 一句话摘要
+     📋 摘要
         <本次分析的核心结论，一行>
 
      [若 review_outcome=ACCEPTED_WITH_ISSUES 加一行：]
      ⚠️ analysis 评审标了"可以继续但有待改进"，你之前显式接受了，继续推进。
-
-     这版 analysis 内容是否可以定稿？如还有需要调整的内容，请直接说；确认后我会推进到功能规格（Stage 3）。
      ```
-     （所有 req 默认都走功能规格阶段，不再提供"跳过"选项）
+
+     AskUserQuestion：
+     - `question`: "这版 analysis 内容是否可以定稿，进入 Stage 3 需求方案？"
+     - `options`:
+       - `label`: `写 PRD`
+         `description`: `我开始写 prd.md（按当前 analysis），进入 stage 3`
+       - `label`: `继续完善 analysis`
+         `description`: `你还有问题想补 analysis 里，说哪里要改`
+
+     （所有 req 默认都走需求方案阶段，不再提供"跳过"选项）
 
 5A. **PM 回答未决问题的处理**：
    - PM 选"逐题问你"分支后，逐题展示问题，PM 每回答一题，把答案写回 analysis.md 对应 `**PM 回答：**` 后面
@@ -290,50 +315,71 @@ chat 一行确认 `已归档（attachments/<新名>），Y 重点。继续。`�
 
    - **(I) SLUG 解析失败**（`$SLUG_ERR` 非空）→ **不说"没探测到"**（事实不符），直告 PM 探测无法进行：
 
+     prose 头部：
      ```
-     Stage 1 → 2（开放探讨 — 没找到现成的 office-hours 稿）
+     Stage 1 描述需求 → 2 需求分析（用 office-hours 风格）
 
      ⚠️ 无法定位 gstack 项目目录：
         <SLUG_ERR 原文>
-
-     💬 怎么往下走？
-      - 现在跑一份 —— 在本 chat 跑 /office-hours，跑完贴路径给我
-      - 我自己指定路径 —— 贴绝对路径过来
-      - 换默认的结构化挖透
      ```
 
-   - **(II) SLUG OK + 找到 ≥1 个** → 列文件名 + mtime，问 PM 三选一：
+     AskUserQuestion：
+     - `question`: "怎么往下走？"
+     - `options`:
+       - `label`: `现在跑一份 office-hours`
+         `description`: `在本 chat 跑 /office-hours，跑完贴路径给我`
+       - `label`: `我自己指定路径`
+         `description`: `贴绝对路径过来`
+       - `label`: `换 AI 帮我分析`
+         `description`: `走分流 A`
 
+   - **(II) SLUG OK + 找到 ≥1 个** → 列文件名 + mtime，picker 选哪份：
+
+     prose 头部：
      ```
-     Stage 1 → 2（开放探讨 — 选讨论稿）
+     Stage 1 描述需求 → 2 需求分析（用 office-hours 风格）
 
      📂 找到 N 份 office-hours 稿（按更新时间倒序）：
        1. <filename>  (<mtime ISO>)
        2. ...
-
-     💬 用哪份做这次的讨论稿？
-      - 用第 1 份（默认，最新的）
-      - 跑一份新的 —— 在本 chat 跑 /office-hours，跑完告诉我新文件名
-      - 我自己指定路径 —— 贴绝对路径过来
-      - 换默认的结构化挖透
      ```
+
+     AskUserQuestion：
+     - `question`: "用哪份做这次的讨论稿？"
+     - `options`:
+       - `label`: `用第 1 份（最新）`
+         `description`: `<filename of #1>`
+       - `label`: `跑一份新的`
+         `description`: `在本 chat 跑 /office-hours，跑完告诉我新文件名`
+       - `label`: `我自己指定路径`
+         `description`: `贴绝对路径过来`
+       - `label`: `换 AI 帮我分析`
+         `description`: `走分流 A`
+
+     注：AskUserQuestion 最多支持 4 options；如果 N > 1 但 PM 想用其他份，走 `我自己指定路径` 自己贴。
 
    - **(III) SLUG OK + 没找到** → 显式告 PM 是真无产物（slug 解析成功）：
 
+     prose 头部：
      ```
-     Stage 1 → 2（开放探讨 — 没现成稿）
+     Stage 1 描述需求 → 2 需求分析（用 office-hours 风格）
 
      📂 这个项目下还没跑过 office-hours。
-
-     💬 怎么往下走？
-      - 现在跑一份 —— 在本 chat 跑 /office-hours，跑完告诉我新文件名（推荐）
-      - 我自己指定路径 —— 贴绝对路径过来
-      - 换默认的结构化挖透
      ```
 
-   PM 答「换结构化挖透 / 切回结构化批判」→ 回步骤 3A（按 A 分支跑）。
-   PM 答「跑新」/「跑 office-hours」→ **进步骤 3B-resume**。
-   PM 答「用第 N 份」/「指定路径 <abs>」→ **进步骤 3B-snapshot**（源路径已确定）。
+     AskUserQuestion：
+     - `question`: "怎么往下走？"
+     - `options`:
+       - `label`: `现在跑一份 office-hours`
+         `description`: `在本 chat 跑 /office-hours，跑完告诉我新文件名（推荐）`
+       - `label`: `我自己指定路径`
+         `description`: `贴绝对路径过来`
+       - `label`: `换 AI 帮我分析`
+         `description`: `走分流 A`
+
+   PM 答 `换 AI 帮我分析` / "结构化批判 / 切回 A" → 回步骤 3A（按 A 分支跑）。
+   PM 答 `现在跑一份 office-hours` / `跑一份新的` / "跑新 / 跑 office-hours" → **进步骤 3B-resume**。
+   PM 答 `用第 N 份` / `我自己指定路径` / "用第 N 份 / 指定路径 <abs>" → **进步骤 3B-snapshot**（源路径已确定）。
 
 3B-resume. **resume 协议**（PM 中断本 chat 去跑 `/office-hours`，跑完通知 AI）
 
@@ -394,8 +440,9 @@ chat 一行确认 `已归档（attachments/<新名>），Y 重点。继续。`�
 
 5B. **B 分支推进确认门**
 
+   prose 头部：
    ```
-   Stage 2（需求分析）— office-hours 讨论稿已接入
+   Stage 2 需求分析 → 3 需求方案
 
    ✅ 讨论稿
       <$ACTIVE_REQ_DIR/stage2-office-hours.md 绝对路径>
@@ -405,14 +452,17 @@ chat 一行确认 `已归档（attachments/<新名>），Y 重点。继续。`�
 
    📋 摘要
       <office-hours 设计稿核心要点，一行>
-
-   这版讨论稿内容是否可以定稿？如要换原始文件请直接说；确认后我会推进到功能规格（Stage 3）。
    ```
 
-   PM 回答的内部分流：
-   - PM 说「OK / 通过 / 没问题 / 定了」 → 推进
-   - PM 提换原始文件 / 重跑 → 回步骤 3B
-   - PM 提改 brief → 回步骤 2 选择门
+   AskUserQuestion：
+   - `question`: "这版讨论稿内容是否可以定稿，进入 Stage 3 需求方案？"
+   - `options`:
+     - `label`: `写 PRD`
+       `description`: `我开始写 prd.md（按当前讨论稿），进入 stage 3`
+     - `label`: `换原始文件`
+       `description`: `回步骤 3B 重选 office-hours 稿`
+     - `label`: `改 brief`
+       `description`: `回步骤 2 选择门，先改 brief`
 
 #### 推进命令（A 或 B 任一确认后执行）
 
@@ -424,7 +474,7 @@ python3 "$PMAI_HOME/scripts/req-transition.py" "$ACTIVE_REQ_DIR" --to 2
 
 推进成功后**续到 Stage 2 → 3 入口**（默认续跑，参见上文「续跑模式」）。
 
-### Stage 2 → 3（需求分析 → 功能规格）
+### Stage 2 → 3（需求分析 → 需求方案）
 
 PM 选择进入 stage 3 时：
 
@@ -433,10 +483,11 @@ PM 选择进入 stage 3 时：
    - skill 内部完成：读 `brief.md` + **stage 2 真相源**（A 分支 `analysis.md` / B 分支 `stage2-office-hours.md`，路径由 `_lib.state.get_stage_source(req_dir, 2)` 解析）+ `docs/PROJECT.md`（+ 已有 `docs/modules/` 如存在），从 stage 2 真相源的功能分解派生 §六 功能需求层级、写 `prd.md`（章节结构按 PRD 9 章 / 11 章不变；§三 名词解释承担本 req 临时词典职责，下游 impl-design / task-spec 必读），写完跑 `check-prd-hierarchy.py` lint，并为本次每条产品决策 append `decision` 事件（业务词向 PROJECT.md 长期沉淀已迁到 `close-req` 步骤 3.4，本步不再跑 detector）
    - skill 返回时 `prd.md` 已落盘、lint 已闭环（详见 `prd-writing/SKILL.md`：lint 在 skill 内闭环，**不**传递给 stage-gate 二次显示）；返回值带本次新增的 `decision` 摘要（备选 / 理由），供步骤 2 确认门一并渲染
 
-2. **输出确认门**（一份完整模板，把产物落地 / 规格要点 / 本次决策摘要 / 可选 review / 确认问句拼成单次输出；不分两轮发）：
+2. **输出确认门**（prose 头部 + 中段内容 + AskUserQuestion picker；一次性输出，不分轮发）：
 
+   prose 头部 + 中段：
    ```
-   Stage 3（功能规格）— prd 待确认
+   Stage 3 需求方案 → 4 设计系统建立
 
    ✅ prd.md 已生成
       <$ACTIVE_REQ_DIR/prd.md 绝对路径>
@@ -467,20 +518,26 @@ PM 选择进入 stage 3 时：
       /autoplan            — 上述 plan-* 的批量打包
 
       跑哪几个你定，全跳也行。
-
-   这版 prd 内容是否可以定稿？如还有需要调整的内容，请直接说；确认后我会推进到设计系统建立（Stage 4）。
    ```
 
-   **模板要点**（v3 书面体）：
-   - **顶部 stage 标记**：`Stage N（中文名）— <产物> <状态>` 独占首行（例 `Stage 3（功能规格）— prd 待确认`），PM 一眼知道当前位置
+   AskUserQuestion：
+   - `question`: "这版 prd 内容是否可以定稿，进入 Stage 4 设计系统建立？"
+   - `options`:
+     - `label`: `进设计系统`
+       `description`: `我开始 Stage 4 gap-check（新组件规格定稿），PRD 冻结`
+     - `label`: `继续修订 prd`
+       `description`: `你还有要改的，说哪里要改`
+
+   **模板要点**（v5 书面体）：
+   - **顶部 stage 标记**：`Stage N <当前名字> → M <下一名字>` 独占首行（例 `Stage 3 需求方案 → 4 设计系统建立`），PM 一眼知道当前位置 + 下一步去哪
    - 各段标题用 emoji 锚点（✅ / 📋 / 🧭 / 📊）让 PM 视线快速分段
    - 路径独立缩进，不挤标题行
    - **规格要点用有序列表分条**：PRD 内容天然多面（功能模块 / 验收 / 非目标 等），≥ 3 个要点强制用有序列表，每条聚焦一个业务面
    - **🧭 本次新增决策段**：按 `decided_by` **强制分两子段**渲染 —— `[PM 拍]` 段渲染 `decided_by=pm-explicit` 的条目（PM 已在 stage 1/2/3 主动开口拍过，**只列标题 + 选定**，备选 / 理由略，省 PM 阅读量）；`[AI 推断]` 段渲染 `decided_by=ai-inferred` 的条目（AI 在 PRD 写作中自己定的、PM 未单独确认，**列标题 + 选定 + 备选 + 理由**让 PM 一眼判断是否反对）。**两子段标签 `[PM 拍]` `[AI 推断]` 用 PM 可懂语**，**不要**在 PM 视图里出现 `decided_by` / `pm-explicit` / `ai-inferred` 等字段名（仅本 SKILL.md 文档里出现作开发说明）。某子段无条目时该子段省略；两子段都无时整个 🧭 段省略。决策事件由 `/pmai-prd-writing` 内部 append，stage-gate 只负责按 `decided_by` 分段展示
-   - **`[AI 推断]` 段的默认通过语义**：PM 不点名反对的条目默认通过（原 `ai-inferred` 事件保留作审计痕迹）；PM 想反对的直接说条目号 + 理由，AI 临场决定修订粒度——只修该条决策（改 PRD §四对应描述 + append 新 `decision` 事件 same `prd_anchor` + `decided_by=pm-explicit` 替代）或返工 `/pmai-prd-writing`。**不另立独立确认门**——这一栏的"默认通过 / 单挑反对"并进 stage 3 定稿确认门，PM 在末段确认问句里一并表达
+   - **`[AI 推断]` 段的默认通过语义**：PM 选 `进设计系统` 即默认通过所有 `[AI 推断]` 条目（原 `ai-inferred` 事件保留作审计痕迹）；PM 想反对的直接说条目号 + 理由（picker 旁边的自由文本框），AI 临场决定修订粒度——只修该条决策（改 PRD §四对应描述 + append 新 `decision` 事件 same `prd_anchor` + `decided_by=pm-explicit` 替代）或返工 `/pmai-prd-writing`
    - **不显示** 任何 lint / 脚本名 / "进入 stage 3" / "term-detector" 等工程黑话（PM 视角只关心 `prd.md` 主文件 + 下一阶段名称；详见 `task-spec/SKILL.md` 步骤 12 上方禁词清单，本闸门同样适用）
    - **禁止再加 ⚠️ lint 待办 / lint 摘要等"传话块"**：lint 处理已在 `/pmai-prd-writing` 内闭环，PM 在 stage-gate 不需要再看一遍
-   - **末段确认问句独占末段**：统一句式「这版 X 内容是否可以定稿？如还有需要调整的内容，请直接说；确认后我会推进到 <下一阶段名>（Stage N）。」**不列 A/B 字母选项**、**不列"放弃"**、**不在问句后追加 brief/prd 预览或动作复述**
+   - **AskUserQuestion 末段独立**：picker 必须在 prose 头部/中段之后独立出现；**不另写 prose 确认问句**（v3 旧规则"末段确认问句独占末段"在 v5 已被 AskUserQuestion picker 替代）
    - **反面示例**：
      ```
      ✘ ✅ prd.md 已 lint 通过（"lint" 是内部词，PM 视角整行删；写"已生成"即可）
@@ -488,20 +545,19 @@ PM 选择进入 stage 3 时：
         （lint 处理已在 /pmai-prd-writing 内闭环，PM 视角整段删除）
      ✘ 一句话摘要：覆盖 X / Y / Z + 新增 D10 / D11 + 风险 R4 + 验收 N 项 ...
         （单行塞多个要点 → 改有序列表分条）
-     ✘ A) 确认（进入 term-detector + 推进 stage 3） / B) 我要修改 prd
-        （A/B 字母选项 + 工程黑话；改对话式问句）
-     ✘ ——这份 PRD 就这样定吗？OK 我就把功能规格阶段定下来，进入下一步。
-        （v2 旧句式：破折号开头 + "OK 我..."把示范回答嵌入动作。改 v3 统一句式）
-     ✘ 〔确认问句之后〕另起一段贴 prd 核心内容预览
-        （确认门只给路径 + 摘要，问句后不追加任何东西。需要看全文 PM 自己打开文件 / 让新对话读回 chat）
+     ✘ 末段加 prose 问句"这版 prd 内容是否可以定稿？"
+        （v5：picker 已经在问，prose 问句重复 → 删）
+     ✘ 〔picker 之后〕另起一段贴 prd 核心内容预览
+        （确认门只给路径 + 摘要，picker 后不追加任何东西。需要看全文 PM 自己打开文件 / 让新对话读回 chat）
      ```
 
    PM 跑完任一 review 后报告结论 → AI 调 `task-events.py append` 记 `plan_review_completed`（task 文件不存在时此处可省略，仅做口述确认）；事件流仅作审计记录，不当 gate（I-RV1/I-RV2）。
 
-3. **PM 回答的内部分流**（chat 不列 A/B 选项；按 PM 自然语言意图）：
-   - PM 说「OK / 通过 / 没问题 / 定了」等 → 走"确认"分支：直接跑 `req-transition.py --to 3`
-   - PM 提具体修改意见 → 走"修改"分支：回步骤 1 重调 `/pmai-prd-writing`（stage-3 orchestrated 模式，prompt 含 "PM 在确认门提了修改：…"）→ 重新输出步骤 2 完整模板（PM 可决定要不要再跑一遍 review）→ 再次询问
-   - PM 说「放弃这个 req / 不做了」 → 走"放弃"分支：提示 PM 跑 `/pmai-cancel-req`（**chat 模板里不主动列出此选项**，PM 主动提才走）
+3. **PM 答题处理**（picker label / 编号 / 自由文本关键词）：
+   - 选 `进设计系统` / 输 `1` / 输 "OK / 通过 / 没问题 / 定了 / 进 stage 4" → 跑 `req-transition.py --to 3`
+   - 选 `继续修订 prd` / 输 `2` / 提具体修改意见 → 回步骤 1 重调 `/pmai-prd-writing`（stage-3 orchestrated 模式，prompt 含 "PM 在确认门提了修改：…"）→ 重新输出步骤 2 完整模板（PM 可决定要不要再跑一遍 review）→ 再次询问
+   - PM 说「放弃这个 req / 不做了」 → 走"放弃"分支：提示 PM 跑 `/pmai-cancel-req`（**picker 选项里不主动列出此选项**，PM 主动提才走）
+   - PM 空答 / 没答 → STOP wait next message（按 `askuser-rules.md §1.1`）
 
 推进（PM 确认后执行）：
 ```bash
@@ -514,7 +570,7 @@ python3 "$PMAI_HOME/scripts/req-transition.py" "$ACTIVE_REQ_DIR" --to 3
 
 > **旧 req 兼容（文件存在性判别）**：stage 3 涉及校验时按文件存在性判别新旧流程——`solution.md` 存在且 `prd.md` 不存在 → 旧流程（同步前在飞的旧 req，stage 3 产物仍是 `solution.md`，按旧逻辑跑完即可）；否则 → 新流程（要 `prd.md`）。两文件都有（异常态）→ `prd.md` 优先 + 打一行警告给 PM 知会。`req-transition.py` 内部同样按文件存在性判别（归 req-transition.py owner）。
 
-### Stage 3 → 4（功能规格 → 设计系统）
+### Stage 3 → 4（需求方案 → 设计系统建立）
 
 > **PROJECT 6 节强制门已撤掉**（PROJECT 由 `/pmai-project-solution` 产出 + 已有项目走 `/pmai-new-req`
 > legacy gate）。stage 3→4 此处直接推进 stage 4。
@@ -528,7 +584,7 @@ python3 "$PMAI_HOME/scripts/req-transition.py" "$ACTIVE_REQ_DIR" --to 4
 
 推进成功后**续到 Stage 4 入口**。
 
-### Stage 4（设计系统 —— gap-check 必跑：新组件完整规格定稿）
+### Stage 4（设计系统建立 —— gap-check 必跑：新组件完整规格定稿）
 
 > **本阶段核心原则**：task 启动前 DESIGN.md 必须是**完整硬约束** —— 视觉基线（gstack 写的 8 段，init C.5 时已定）+ 本 req 新组件的**完整规格**（视觉 / 状态 / 交互 / 边界）。executor 读到的是完整规范，没有"自己看着办"的灰色地带。
 >
@@ -571,22 +627,29 @@ gap-check 是**交互关口** —— 产物 = PM 在 chat 逐组件表态过程�
 **Speed mode 自动续条件**：步骤 4A gap-check **0 个新建组件**（全部复用）→ 直接执行 `req-transition.py --to 5` 推进 + 续 Stage 5；chat 里只出一行过场：
 
 ```
-Stage 4 OK（组件全部复用 / 本次无新建） → 进 Stage 5 实现设计
+Stage 4 设计系统建立 → 5 实现设计 + task 拆分（组件全部复用 / 本次无新建，自动续）
 ```
 
 **有新建组件**（PM 在 4A 期间共写过任何新组件规格）→ 走完整确认门：
 
+prose 头部：
 ```
-Stage 4（设计系统）— 待确认
+Stage 4 设计系统建立 → 5 实现设计 + task 拆分
 
 ✅ 组件复用关口：复用 X 个 / 新建 Y 个（完整规格已入 DESIGN.md inventory）
    新建组件清单：
     - <组件 1>
     - <组件 2>
     ...
-
-确认后我会推进到实现设计 + task 规划（Stage 5）。
 ```
+
+AskUserQuestion：
+- `question`: "新组件规格是否定稿，进入 Stage 5 实现设计 + task 拆分？"
+- `options`:
+  - `label`: `进 stage 5`
+    `description`: `我开始 /pmai-implementation-design 写本 req 的实现设计（架构决策表）`
+  - `label`: `继续调整组件规格`
+    `description`: `回 4A，你说改哪个组件的哪段（视觉 / 状态 / 交互 / 边界）`
 
 PM 确认后推进：
 
@@ -596,7 +659,7 @@ python3 "$PMAI_HOME/scripts/req-transition.py" "$ACTIVE_REQ_DIR" --to 5
 
 推进成功后**续到 Stage 4 → 5 入口**（先 `/pmai-implementation-design`，见下）。
 
-### Stage 4 → 5（→ 实现设计 + task 拆分）
+### Stage 4 → 5（设计系统建立 → 实现设计 + task 拆分）
 
 stage 5 内部两步编排：**先 `/pmai-implementation-design`（产 req 级 HOW）→
 PM 确认门审架构决策表 → 再 `/pmai-task-plan`（拆 task）**。
@@ -624,38 +687,45 @@ PM 确认门审架构决策表 → 再 `/pmai-task-plan`（拆 task）**。
    # 扫段 3.3 自由度声明表：取所有非「无」行（每条偏离声明全视作结构决策）
    ```
 
-2. **逐行 prompt**（按文件出现顺序：段 1 HOW → 段 1.5 SIMP → 段 3.3 自由度声明）：
+2. **逐行 prompt**（按文件出现顺序：段 1 HOW → 段 1.5 SIMP → 段 3.3 自由度声明）。**每条决策走一次 AskUserQuestion**（按 `askuser-rules.md §1.4`：多决策必须拆开顺序问，禁止一次塞多个 question）：
 
-   段 1 / 段 1.5 行：
+   段 1 / 段 1.5 行 —— prose 头部：
    ```
    🛑 命中结构决策：HOW-NN <一行描述>
-
-   候选：
-     A. <选项 1>（AI 倾向）
-     B. <选项 2>
-     C. <选项 3>
-
-   AI 倾向 A，理由：<段 1「理由」列内容，一行>
-   PM 拍板：
    ```
 
-   段 3.3 自由度声明行：
+   AskUserQuestion：
+   - `question`: "HOW-NN <一行描述> —— 用哪个方案？"
+   - `options`（按段 1「候选方案」列内容动态填，最多 4 个；AI 倾向项 description 加"（AI 倾向，理由：<段 1「理由」列内容>）"）：
+     - `label`: `<选项 1>`
+       `description`: `<选项 1 简述，AI 倾向项加"（AI 倾向，理由：…）"）`
+     - `label`: `<选项 2>`
+       `description`: `<选项 2 简述>`
+     - `label`: `<选项 3>`
+       `description`: `<选项 3 简述>`
+
+   段 3.3 自由度声明行 —— prose 头部：
    ```
    🛑 命中自由度偏离：<适用范围>
-
-   AI 提案：<档位>
-   理由：<段 3.3「理由」列内容，一行>
-
-   PM 拍板：保留 / 改档位 / 取消本条偏离
    ```
 
-   PM 答一个进下一个；中途答完后调 `req-events.py append decision` 写每行（`decided_by=pm-explicit`），供 stage 6 入口总览复述。
+   AskUserQuestion：
+   - `question`: "<适用范围>偏离档位是 <档位> ——保留、改档位、还是取消本条偏离？"
+   - `options`:
+     - `label`: `保留 AI 提案`
+       `description`: `档位 <档位>；理由：<段 3.3「理由」列内容，一行>`
+     - `label`: `改档位`
+       `description`: `说改成哪个档位`
+     - `label`: `取消本条偏离`
+       `description`: `回退到默认档位，本条偏离声明删除`
+
+   PM 答一个进下一个（picker 完才出下一题）；中途答完后调 `req-events.py append decision` 写每行（`decided_by=pm-explicit`），供 stage 6 入口总览复述。
 
 3. **全部答完后**：直接进步骤 5b（不再发原全文确认门）。
 
 4. **无任何结构决策行**（罕见，比如纯机械应用 PRD 已硬约束的 req）：直接进步骤 5b；chat 出一行：
    ```
-   Stage 5 实现设计 OK（无需要拍板的架构决策） → 进 task 拆分
+   Stage 5 实现设计 + task 拆分（无需要拍板的架构决策，自动续）
    ```
 
 5. **PM 在结构决策门外想改其他段**（如改"段 3.1 易错点"）：允许中途切到 revise 模式 → 回 `/pmai-implementation-design` revise → 改完重扫段 1 / 段 1.5 重出本步骤。
@@ -668,7 +738,7 @@ PM 确认 implementation-design 后，调用 `/pmai-task-plan` 拆 task。
 
 推进成功后**续到 Stage 5 → 6 入口**（task-plan 写完后进确认门）。
 
-### Stage 5 → 6（task 规划 → task 执行）
+### Stage 5 → 6（实现设计 + task 拆分 → task 执行）
 
 1. 检查 `task-plan.md` 存在。
 2. **检查 `implementation-design.md` 存在**—— stage 5 必产 req 级实现设计；
@@ -679,17 +749,25 @@ PM 确认 implementation-design 后，调用 `/pmai-task-plan` 拆 task。
 4. **Speed mode 行为：task-plan 结构决策门**（取代原全文确认门）：
 
    - **扫 task-plan.md §一 task 表**：取「决策类型」列 = 「结构」的所有行
-   - **逐行 prompt**（按 order 顺序）：
+   - **每条决策走一次 AskUserQuestion**（按 `askuser-rules.md §1.4`）：
+
+     prose 头部：
      ```
      🛑 命中结构决策：task-NNN <一行 title>
 
-     候选 / 原因：
-       <为什么这个 task 是结构决策 — 合并 / 拆开 / 重排 / 反模式 A 命中>
-       AI 的拆法：<本 task 当前归位>
-       备选：<不这样拆会怎样 — 一行>
-
-     PM 拍板：保留 AI 拆法 / 改成 <PM 说>
+     原因：<为什么这个 task 是结构决策 — 合并 / 拆开 / 重排 / 反模式 A 命中>
+     AI 的拆法：<本 task 当前归位>
+     备选：<不这样拆会怎样 — 一行>
      ```
+
+     AskUserQuestion：
+     - `question`: "task-NNN <title> —— 保留 AI 拆法还是改？"
+     - `options`:
+       - `label`: `保留 AI 拆法`
+         `description`: `<本 task 当前归位>`
+       - `label`: `改 task 拆分`
+         `description`: `你说怎么改（合并 / 拆开 / 重排 / 删除）`
+
    - PM 答完所有结构 task → 进 stage 6 入口总览（步骤 5）
 
    **无任何结构决策行**（task 表全是机械翻 PRD §七 验收项）→ 跳过本步骤 4，直接进步骤 5。
@@ -703,8 +781,8 @@ PM 确认 implementation-design 后，调用 `/pmai-task-plan` 拆 task。
    输出格式（status-view 内 render，**PM 单一真相源**）：
 
    ```
-   ═══════════════════════════════════════
-   ✅ Stage 4/5 完成，准备进 stage 6 task 执行
+   Stage 5 实现设计 + task 拆分 → 6 task 执行
+
    ═══════════════════════════════════════
 
    【AI 自决 N 件】（机械产出 / PRD 已硬约束）
@@ -734,18 +812,24 @@ PM 确认 implementation-design 后，调用 `/pmai-task-plan` 拆 task。
      /plan-eng-review     — 拆分合理性、依赖、并行性
      /plan-design-review  — UI task 划分是否完整
      /autoplan            — 上述 plan-* 的批量打包
-
-   下一步：
-     ✓ 全部 ok 进 stage 6
-     ↺ 我要回看 [HOW-XX / SIMP-XX / task-XXX]
-     ✗ 回卷到 stage 4/5 重做
    ```
 
-6. **PM 回答的内部分流**（不列字母；按 PM 自然语言意图）：
-   - PM 说「OK / 通过 / 没问题 / 定了 / ✓」→ 推进 stage 6
-   - PM 说「回看 HOW-XX / task-XXX」→ AI 给该项详情 + 重新走该项的结构决策门；改完回到步骤 5 重出总览
-   - PM 说「回卷 / 回到 stage X」→ 调 `req-transition.py --to <X> --rollback`
+   然后 AskUserQuestion：
+   - `question`: "实现设计 + task 拆分是否定稿，进入 Stage 6 task 执行？"
+   - `options`:
+     - `label`: `进 stage 6`
+       `description`: `开始 task 执行（按 task-plan §一 顺序，逐个 /pmai-task-spec → /pmai-task-execute）`
+     - `label`: `回看某项`
+       `description`: `说哪一项（HOW-XX / SIMP-XX / task-XXX），AI 给你详情 + 重走该项决策门`
+     - `label`: `回卷到 stage 4 / 5 重做`
+       `description`: `说回到哪个 stage，AI 调 req-transition.py --rollback`
+
+6. **PM 答题处理**（picker label / 编号 / 自由文本关键词）：
+   - 选 `进 stage 6` / 输 `1` / 输 "OK / 通过 / 没问题 / 定了 / ✓" → 推进 stage 6
+   - 选 `回看某项` / 输 `2` / 直接说"回看 HOW-XX / task-XXX" → AI 给该项详情 + 重新走该项的结构决策门；改完回到步骤 5 重出总览
+   - 选 `回卷到 stage 4 / 5 重做` / 输 `3` / 直接说"回卷 / 回到 stage X" → 调 `req-transition.py --to <X> --rollback`
    - PM 提具体修改意见 → 回 `/pmai-task-plan` 改 `task-plan.md` → 改完后重新跑步骤 4 + 5
+   - PM 空答 / 没答 → STOP wait next message（按 `askuser-rules.md §1.1`）
 
 > stage 5→6 入口总览只审阅 `task-plan.md` + `implementation-design.md` 的结构决策项；具体 task 文件由 stage 6 的 `/pmai-task-spec` 逐个生成，写完后由 task-spec 步骤 8 再次输出推荐 review 区块。
 
@@ -773,16 +857,23 @@ python3 "$PMAI_HOME/scripts/req-transition.py" "$ACTIVE_REQ_DIR" --to 6
         Stage 6→7 简化为「merged + worktree cleaned」即可推进；旧 marker 残留由 close-req
         步骤 1.5 rewrite 时 cleanup_status 改 done，本步骤不再扫 marker 不再阻塞。 -->
 
-3. All satisfied → 对话式确认门：
+3. All satisfied → prose 头部 + AskUserQuestion：
 
+   prose 头部：
    ```
-   Stage 6（task 执行）— 全部 task 已完成
+   Stage 6 task 执行 → 7 req close
 
    ✅ 状态
       <N 个 task 全部 close、worktree 全部清理>
-
-   是否确认关闭此需求？如还需开启新的 task，请直接说；确认后我会启动关闭流程（Stage 7）。
    ```
+
+   AskUserQuestion：
+   - `question`: "是否确认关闭此需求，进入 Stage 7 req close？"
+   - `options`:
+     - `label`: `关闭 req`
+       `description`: `启动 /pmai-close-req（生成 close-report、PRD 反向对齐、merge 进 main、归档）`
+     - `label`: `还要开新 task`
+       `description`: `本 req 还没完，回 stage 6 跑 /pmai-task-spec 起新 task`
 
 4. Not satisfied → list which tasks are missing which steps。
 
@@ -834,7 +925,7 @@ python3 "$PMAI_HOME/scripts/req-transition.py" "$ACTIVE_REQ_DIR" --to 7
 - 每个 stage 结束必须显式问 PM 确认，不能自动跳过确认门
 - **确认门只给绝对路径 + 一句话变更摘要，不贴文档全文。** PM 的 IDE 已经挂在 worktree 上，文件在左侧目录树里可见，不需要把内容贴回 chat
 - **确认门标准格式**（v3 书面体）：
-  - **顶部 stage 标记独占首行**：`Stage N（中文名）— <产物> <状态>`（例 `Stage 3（功能规格）— prd 待确认`、`Stage 4（设计系统）— 组件规格待确认`）
+  - **顶部 stage 标记独占首行**：`Stage N（中文名）— <产物> <状态>`（例 `Stage 3（需求方案）— prd 待确认`、`Stage 4（设计系统）— 组件规格待确认`）
   - emoji 锚点分段（✅ 路径 / 📋 摘要 / 🧭 决策 / 📊 可选 review）
   - 路径独立缩进，不挤标题行
   - **末段确认问句独占末段**，统一句式：「这版 X 内容是否可以定稿？如还有需要调整的内容，请直接说；确认后我会推进到 <下一阶段名>（Stage N）。」（关闭门变体：「是否确认关闭此需求？如还需开启新的 task，请直接说；确认后我会启动关闭流程（Stage 7）。」）

@@ -21,10 +21,12 @@
 ### §1.2 例子
 
 ```
-━━━ PMAI ► REQ-STAGE-GATE ▸ Stage 3/7: PRD-Writing ━━━
-━━━ PMAI ► INIT-PROJECT ▸ Stage C/4: QUESTIONING ━━━
-━━━ PMAI ► TASK-EXECUTE ▸ Stage 5/7: Task-Spec → Execute ━━━
+━━━ PMAI ► REQ-STAGE-GATE ▸ Stage 3/7: 需求方案 ━━━
+━━━ PMAI ► INIT-PROJECT ▸ Stage C/4: 方向讨论 ━━━
+━━━ PMAI ► TASK-EXECUTE ▸ Stage 6/7: task 执行 ━━━
 ```
+
+stage 名字以 `scripts/_lib/stages.py:STAGE_NAMES` 为单一真相源（中文，跟 PM 视图一致）。
 
 ### §1.3 何时打
 
@@ -112,18 +114,23 @@ Next Up 块 / skill 退出提示 / 状态转换后输出 / 错误退出提示 �
 > M3 整模块砍后，**Decision gate label 规范化作为 M2 sub-feature**（不需要独立模块）。
 > 注：gsd 续跑模式（`req-stage-gate/SKILL.md:27-49, 625` 现役机制）已默认推进 stage，**Decision gate 解决的是闸门选项语义模糊问题**，不是"每 stage 喂继续"。
 
-### §3.0 适用范围（必读 —  加）
+### §3.0 适用范围（必读）
 
-**§3.1-§3.4 只管 AskUserQuestion picker 闸门**（GUI 选项卡片形式）。判定规则：
+**§3.1-§3.4 管所有 PM 决策闸门**。判定规则：
 
 | 形态 | 是否走 §3 | 例子 |
 |---|---|---|
-| SKILL.md 代码里显式调 `AskUserQuestion(...)` 或写 yaml `header / question / options` 模板 | ✅ 走 §3.1-§3.4 | `/pmai-init-project` 阶段 C「创建 PROJECT.md / 继续探索」；`/pmai-new-req` 步骤 3 缺口补问 |
-| chat 自由对话续跑（PM 答自然语言「OK / 通过 / 没问题 / 定了」触发推进）| ❌ 走常规形态，**不受 §3 约束** | `/pmai-req-stage-gate` Stage N→N+1 确认门；`/pmai-task-execute` 步骤 12 PM 验收「通过 / 打回」|
-| chat prose 列选项让 PM 自然语言回答（如「- 选项 A - 选项 B」让 PM 选）| ❌ 走常规 | `/pmai-req-stage-gate` Stage 1→2 选择门（"结构化挖透 / 开放探讨 / 改 brief"）|
-| close-task / close-req B 类逐条对齐（SKILL 显式写「AskUserQuestion 或 prose」二选一）| 用 AskUserQuestion 走 §3，用 prose 走常规 | close-task §1.5 B 类对齐 |
+| **任何 PM 决策门**（stage 转换 / 选择分流 / 推进确认 / 验收 / 留守 vs 推进 / 多分支选择）| ✅ **必须用 AskUserQuestion**（runtime 不支持时按 askuser-rules.md §1.3 退化为编号列表）| `/pmai-req-stage-gate` Stage N→N+1 推进门；Stage 1→2 选择门；`/pmai-init-project` 阶段 C；`/pmai-new-req` 缺口补问；close-task §1.5 B 类对齐；`/pmai-task-execute` 步骤 12 验收 |
+| AI 主动告知 / 状态播报（不要 PM 答）| ❌ prose 输出即可 | banner / Next Up 块 / skill 启动播报 / 进展告知 |
+| 反问澄清（PM 输入语义模糊，AI 需 PM 补一句话再决定走 A/B/C，不是闸门决策）| ❌ prose 反问 | "你说的'方案设计'指 Stage 3 需求方案还是 Stage 5 实现设计？" |
 
-**为什么这样分**：续跑模式 + chat 自由对话是 v3/v4 设计核心，PM 习惯了一句"OK"推进；强行套 §3 的 AskUserQuestion picker 会破坏续跑体验。§3 只针对真正用 GUI 选项卡片的场景（PM 看到的是「按钮二选一」而不是「自由聊天框」）。
+**为什么这样统一**（v5 决策，推翻 v3/v4 续跑模式专门豁免）：
+
+1. **multi-分流选择门用 prose 列选项让 AI 错解 PM 自然语言** —— 实际事故：req-009 Stage 1→2 PM 答"差不多聊清楚了"被 AI 误判为走 B 分支 office-hours snapshot，把附件 ChatGPT JSON 当 office-hours skill 产物 snapshot，跳了 reviewer + 未决问题闸门。picker UI 强制 PM 显式选项是防御。
+2. **续跑模式实际收益是"少一次点击"** —— picker 答完即推进，体验跟 prose 续跑相同（PM 输数字 1 或点 picker 选项跟说"OK"操作量等价），但显式选项消除歧义。
+3. **统一规则降低维护成本** —— v3/v4 的"chat prose 续跑豁免"让 stage-gate 选项跟其他 skill 选项格式分裂，PM 在不同 skill 看到不同交互形态。统一后所有闸门走同一份 picker / 退化编号规则。
+
+历史豁免（v3/v4 续跑模式专门排除 stage-gate）已在 v5 废止。
 
 ### §3.1 规则 1：label = 动作描述
 

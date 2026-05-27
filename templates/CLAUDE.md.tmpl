@@ -60,7 +60,7 @@ PM 想中止 active 的 task：
 
 - 每个 stage 结束时必须**显式询问 PM 是否进入下一 stage**
 - AI 不允许自动跨 stage
-- Stage 3（功能规格）：所有 req 必走 —— 产 req 级 PRD（`prd.md`），stage 3 定稿冻结、驱动 task
+- Stage 3（需求方案）：所有 req 必走 —— 产 req 级 PRD（`prd.md`），stage 3 定稿冻结、驱动 task
 - Stage 4（设计系统）：DESIGN.md 有实质内容时自动跳过
 
 ### Skill 完整性（流程不可用工具替代）
@@ -211,7 +211,7 @@ main（主仓，永远不切分支）
 | 模块索引 | docs/modules/INDEX.md | 每个模块一句话用途（≤30 字）；close-req §1.5 之后 derived refresh |
 | 模块规格 | docs/modules/ | 按模块组织（事实源）|
 | 视觉规范 | docs/DESIGN.md | 颜色、字体、组件规范 |
-| Req 级 PRD | requirements/active/&lt;req&gt;/prd.md | 本 req 功能规格（WHAT）；`/pmai-prd-writing` 在 **stage 3** 产出、定稿冻结、驱动 task |
+| Req 级 PRD | requirements/active/&lt;req&gt;/prd.md | 本 req 需求方案（WHAT）；`/pmai-prd-writing` 在 **stage 3** 产出、定稿冻结、驱动 task |
 | Req 级实现设计 | requirements/active/&lt;req&gt;/pmai-implementation-design.md | 本 req 实现设计（HOW）；`/pmai-implementation-design` 在 **stage 5** 产出、经 PM 确认门审定 |
 | 独立 PRD（可选） | PM prompt 指定路径 | 跨模块评审材料，PM 主动调 `/pmai-prd-writing` standalone 模式 |
 | 活跃需求 | requirements/active/ | 当前正在处理的 req（允许多个 active 并行，每个 req 一个 worktree） |

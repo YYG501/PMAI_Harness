@@ -149,7 +149,7 @@ bash "$PMAI_HOME/scripts/quick-fix.sh" --snapshot
 
 | 改对象 | 同时要考虑 |
 |---|---|
-| `prototypes/**` | 本 req `prd.md`（功能规格——产品决策是否被撤销/修订）/ 本 req 实现设计文档（如存在——实现约束更新）/ 已 close 的 task PM 视图（产品事实变化记 `[quick-fix-log]`，task md 不改）/ `docs/modules/*` **不直接改**（留给 close-req → `/pmai-doc-update`） |
+| `prototypes/**` | 本 req `prd.md`（需求方案——产品决策是否被撤销/修订）/ 本 req 实现设计文档（如存在——实现约束更新）/ 已 close 的 task PM 视图（产品事实变化记 `[quick-fix-log]`，task md 不改）/ `docs/modules/*` **不直接改**（留给 close-req → `/pmai-doc-update`） |
 | `requirements/active/<本req>/brief.md` 或 `analysis.md` | PM 必先分类（criterion 见下方）：决策性 → 拒绝走 `--rollback`；轻量 → 允许 + 扫下游产物链 |
 | `requirements/active/<本req>/prd.md` | 同上；决策性修订走 stage 3 `/pmai-prd-writing` revise；下游 task-plan / 已 close task md 引用是否要更新 |
 | 已 close task 的 `task-NNN-*.md` / `.engineering.md` | **不改**（历史档案）；产品事实变化记 `[quick-fix-log]` |
@@ -181,7 +181,7 @@ PM 在 req 分支 quick-fix 触及阶段产物（brief / analysis / prd / task-p
 ```
 当前合同（被改动撤销/修订时必须同步，扫描必扫）：
 - 项目级活合同：docs/{PROJECT, DESIGN, modules, prd}.md
-- 各 active req 的 stage 3 功能规格：prd.md（在飞旧 req 仍可能是 solution.md + solution.engineering.md）
+- 各 active req 的 stage 3 需求方案：prd.md（在飞旧 req 仍可能是 solution.md + solution.engineering.md）
 - 项目代码：prototypes/
 
 历史档案（修订是叙述维护，不强制反向扫；**但需追加可见的「后期修订记录」节**）：

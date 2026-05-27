@@ -1,23 +1,23 @@
 ---
 name: pmai-prd-writing
 description: |
-  Generate a req-level PRD (功能规格). 多入口 skill ( stage 前移):
-  (a) stage-3 orchestrated 模式 — by /pmai-req-stage-gate at stage 3; mode 固定「req 级」, 跳过步骤 0 三选一对话, 输出到 $ACTIVE_REQ_DIR/prd.md; PRD 是 stage 3 定稿冻结、驱动 task 的功能规格;
+  Generate a req-level PRD (需求方案). 多入口 skill ( stage 前移):
+  (a) stage-3 orchestrated 模式 — by /pmai-req-stage-gate at stage 3; mode 固定「req 级」, 跳过步骤 0 三选一对话, 输出到 $ACTIVE_REQ_DIR/prd.md; PRD 是 stage 3 定稿冻结、驱动 task 的需求方案;
   (b) standalone 模式 — PM 手动 /pmai-prd-writing; 保留步骤 0「req 级 / 独立 / 补差」三选一; 独立 PRD (跨模块评审) 输出路径 PM 指定 (常见 docs/独立PRD/<slug>.md).
-  Always trigger when the user says 'prd', 'PRD', '写需求文档', '写功能规格', '写评审 PRD', '给某模块写 PRD',
-  or wants to generate the req's 功能规格 / cross-module review material.
+  Always trigger when the user says 'prd', 'PRD', '写需求文档', '写需求方案', '写评审 PRD', '给某模块写 PRD',
+  or wants to generate the req's 需求方案 / cross-module review material.
   do NOT use as the per-task working spec before implementation (那是 task-spec 的职责).
 ---
 
-# PRD Writing（stage 3 功能规格 · 多入口）
+# PRD Writing（stage 3 需求方案 · 多入口）
 
 ## What This Skill Produces
 
-prd-writing 产出 **req 级 PRD = 该 req 的功能规格**。
+prd-writing 产出 **req 级 PRD = 该 req 的需求方案**。
 
-PRD 在 **stage 3**（功能规格阶段）由 `/pmai-req-stage-gate` 调用产出，**定稿后冻结**，作为下游 task 拆分（stage 5）与 task 执行（stage 6）的规格依据。执行期 task 对 PRD 的偏离不回写 PRD 基准；close-req 收尾时另做反向对齐。
+PRD 在 **stage 3**（需求方案阶段）由 `/pmai-req-stage-gate` 调用产出，**定稿后冻结**，作为下游 task 拆分（stage 5）与 task 执行（stage 6）的规格依据。执行期 task 对 PRD 的偏离不回写 PRD 基准；close-req 收尾时另做反向对齐。
 
-PRD 是 PM 视图链路的核心交付层 —— 它替代了旧管线里 stage 3 的「方案设计」，从 req 真实诉求（brief + analysis）现写功能规格。stage 3 时**还没有原型、还没有 task**：原型在 stage 4 之后才出，task 在 stage 5 才拆。
+PRD 是 PM 视图链路的核心交付层 —— 它替代了旧管线里 stage 3 的 `solution.md`，从 req 真实诉求（brief + analysis）现写本 req 的需求方案。stage 3 时**还没有原型、还没有 task**：原型在 stage 4 之后才出，task 在 stage 5 才拆。
 
 ## When To Use（两条入口）
 
@@ -84,7 +84,7 @@ PM 答「改」 → 调整推荐清单 / 产物路径 → 再确认 → OK 后�
 
 ## PM 视图规则（必读）
 
-本 skill 产出 `prd.md`（req 功能规格），须遵守 `skills/_shared/PM-VIEW-RULES.md`（主索引）。具体读以下子文件：
+本 skill 产出 `prd.md`（req 需求方案），须遵守 `skills/_shared/PM-VIEW-RULES.md`（主索引）。具体读以下子文件：
 - `_shared/pm-view/writing-rules.md`（§三 写作规则：含 §3.1-§3.11 通用规则 + **§3.12 描述风格规则**：6 类违规 + 生僻描述词 framework + PM 视角原则 + 流程式步骤 + 精简原则 + 引号风格统一）
 - `_shared/PM-VIEW-RULES.md` §五（功能清单格式：4 列表格 + 续行 rowspan + 需求描述列内联编号；业务规则只说 what，禁 how/why/字段口径混入）
 - `_shared/pm-view/doc-strictness.md`（§四 严格度对照表 — prd.md 行）
@@ -108,7 +108,7 @@ stage 3 没有原型、没有 task —— 输入只有上游 stage 1/2 的产物
 - 🟢 `docs/PROJECT.md`（项目定位 / 用户画像 / 业务术语表 / 产品路线）
 - 🟢 `docs/PRODUCT-RULES.md`（如存在 — **全文读**，跨功能产品行为规则；PRD 一次写对、不违背常驻规则。）
 - 🟢 `docs/modules/INDEX.md` + `docs/modules/<本 req 涉及模块>.md`（如目录存在）
-- ❌ `docs/DESIGN.md`（视觉规范，归 implementation-design / task-execute 读；PRD 写功能规格不写像素颜色，DESIGN.md 在本 skill 只作**反向边界提示**用，不作正向源材料 —— 见 §六「原型」节 / §六 lint 视觉细节越界）
+- ❌ `docs/DESIGN.md`（视觉规范，归 implementation-design / task-execute 读；PRD 写需求方案不写像素颜色，DESIGN.md 在本 skill 只作**反向边界提示**用，不作正向源材料 —— 见 §六「原型」节 / §六 lint 视觉细节越界）
 - ❌ **没有** `prototypes/`（stage 3 时原型尚未产出）
 - ❌ **没有** `tasks/`（stage 3 时 task 尚未拆分）
 - ❌ 任何 `.engineering.md`
@@ -193,9 +193,9 @@ done
 
 本步骤只保证内容到位，不做 echo 后语义校验（语义校验靠 LLM 在步骤 1 拆决策 / 步骤 2 派生 §六时自然消化）。
 
-1. **拆决策 + 识别涉及模块**（基于步骤 0.5 已 echo 的内容）——从 **stage 2 真相源**（A 分支 `analysis.md` / B 分支 `stage2-office-hours.md`）+ `brief.md` 拆出「已确认决策」和「待执行决策」；有待执行项则先编号提问 PM，确认后再写 PRD。同时识别本 req 涉及的模块清单（参考步骤 0.5 已 echo 的 `docs/modules/INDEX.md`），落到 `MODULES` 变量供步骤 1.5 使用。stage 3 没有 `solution.md` / `tasks/` 可读 —— PRD 的功能规格从 stage 2 真相源的功能分解现写。
+1. **拆决策 + 识别涉及模块**（基于步骤 0.5 已 echo 的内容）——从 **stage 2 真相源**（A 分支 `analysis.md` / B 分支 `stage2-office-hours.md`）+ `brief.md` 拆出「已确认决策」和「待执行决策」；有待执行项则先编号提问 PM，确认后再写 PRD。同时识别本 req 涉及的模块清单（参考步骤 0.5 已 echo 的 `docs/modules/INDEX.md`），落到 `MODULES` 变量供步骤 1.5 使用。stage 3 没有 `solution.md` / `tasks/` 可读 —— PRD 的需求方案从 stage 2 真相源的功能分解现写。
 
-1.5. **涉及模块 spec 强制 echo**（stage-3 模式必跑；同 0.5 同源理由）——步骤 1 识别完本 req 涉及模块后，把对应 modulespec 文件无条件 echo 到 transcript。一个模块可能含多个 spec 文件（如 `功能清单.md` / `task-NNN-*.md` / `prd.md`），echo **当前有效的功能规格主文件**即可（task-NNN-*.md 是历史实现记录，PRD 写作不需要重读所有），LLM 基于 INDEX.md 的"当前文档路径"列识别主文件：
+1.5. **涉及模块 spec 强制 echo**（stage-3 模式必跑；同 0.5 同源理由）——步骤 1 识别完本 req 涉及模块后，把对应 modulespec 文件无条件 echo 到 transcript。一个模块可能含多个 spec 文件（如 `功能清单.md` / `task-NNN-*.md` / `prd.md`），echo **当前有效的模块 spec 主文件**即可（task-NNN-*.md 是历史实现记录，PRD 写作不需要重读所有），LLM 基于 INDEX.md 的"当前文档路径"列识别主文件：
 
    ```bash
    # 步骤 1 识别出的涉及模块（LLM 填）
@@ -205,7 +205,7 @@ done
      # "日志"
    )
 
-   # 每模块 echo 主功能规格文件（按 INDEX.md 当前路径）
+   # 每模块 echo 主 spec 文件（按 INDEX.md 当前路径）
    MODULE_SPECS=(
      # 例：
      # "$REPO_ROOT/docs/modules/日志/功能清单.md"
@@ -618,7 +618,7 @@ fi
 
 **与 stage 2 真相源功能分解对齐：**
 
-- 表格行内的功能、规则、限制以 **stage 2 真相源**（A 分支 `analysis.md` / B 分支 `stage2-office-hours.md`）的功能分解为依据。stage 3 没有原型 —— PRD 是从 stage 2 现写功能规格的环节，由它定义功能行为。
+- 表格行内的功能、规则、限制以 **stage 2 真相源**（A 分支 `analysis.md` / B 分支 `stage2-office-hours.md`）的功能分解为依据。stage 3 没有原型 —— PRD 是从 stage 2 现写需求方案的环节，由它定义功能行为。
 - analysis 描述模糊 / 有歧义时，按 Workflow 步骤 1 在写 PRD 前编号提问 PM 确认，不在表格里自行拍板。
 - close-req 反向对齐阶段，会用真实原型 / as-built 行为反向校验本 PRD —— 那是 close-req 的职责，prd-writing 本身不做反向对齐。
 
@@ -679,10 +679,10 @@ fi
 
 ---
 
-## stage 3 边界：功能规格定稿
+## stage 3 边界：需求方案定稿
 
 - 允许产出：`$ACTIVE_REQ_DIR/prd.md`（stage-3 模式）/ PM 指定路径（standalone 独立 PRD 模式）
-- 允许动作：基于 `brief.md` + **stage 2 真相源**（A 分支 analysis.md / B 分支 stage2-office-hours.md）+ `docs/PROJECT.md`（+ `docs/modules/`）生成 req 级功能规格 PRD；§三 名词解释承担本 req 临时词典职责（业务词向 PROJECT.md 业务术语表的沉淀收敛到 `close-req` Phase 1）；为关键产品决策 append `decision` 事件
+- 允许动作：基于 `brief.md` + **stage 2 真相源**（A 分支 analysis.md / B 分支 stage2-office-hours.md）+ `docs/PROJECT.md`（+ `docs/modules/`）生成 req 级需求方案 PRD；§三 名词解释承担本 req 临时词典职责（业务词向 PROJECT.md 业务术语表的沉淀收敛到 `close-req` Phase 1）；为关键产品决策 append `decision` 事件
 - 禁止顺手推进：不要在写 PRD 的同时反向改 **stage 2 真相源**（analysis.md / stage2-office-hours.md）的范围边界；不要在 stage 3 自行画原型 / 拆 task（原型在 stage 4 之后、task 在 stage 5）
 - 退出条件：
   - **stage-3 模式**：PRD 写完 + lint 通过 + decision 事件 append 完 → 控制权交回 `req-stage-gate`，由其单一定稿确认门完成 stage 3 定稿；定稿后 PRD 冻结

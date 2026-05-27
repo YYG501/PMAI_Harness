@@ -44,7 +44,7 @@
 
 ### Stage 3：prd-writing
 
-> Stage 3 = 功能规格（PRD）。prd-writing 在 stage 3 产 `prd.md`（req 级功能规格，单文件，无工程孪生）。
+> Stage 3 = 需求方案（PRD）。prd-writing 在 stage 3 产 `prd.md`（req 级需求方案，单文件，无工程孪生）。
 > 在飞旧 req 仍可能有 stage 4 `req-solution` 产的 `solution.md`——历史产物，下游按文件存在性兼容读。
 
 **first-gen / PM 视图**
@@ -62,7 +62,7 @@
 
 ### Stage 5：task-plan
 - 🟢 `PM-VIEW-RULES.md`（步骤 0）
-- 🟢 **stage 2 真相源**（A 分支 `analysis.md` / B 分支 `stage2-office-hours.md`，路径见 `.req-meta.json:stage2_source`）/ `prd.md`（功能规格）
+- 🟢 **stage 2 真相源**（A 分支 `analysis.md` / B 分支 `stage2-office-hours.md`，路径见 `.req-meta.json:stage2_source`）/ `prd.md`（需求方案）
 - 🟡 `implementation-design.md`（v2 / C2：管线重构后必读 —— 段 1 架构决策影响 task 拆分边界；段 1.5 原型简化项决定 §4.2 验收 GAP 是否走「原型不实现」第三种处置 + kind 2 反向写回的入口）
 - ⚪ `brief.md`（按需——已被 stage 2 真相源 / prd 消化两层；偶尔回查初衷）
 - 🟢 `docs/PROJECT.md`
@@ -79,7 +79,7 @@
 
 **first-gen**
 - 🟢 `task-plan.md`（取本 task 行 + 自检与状态摘要）
-- 🟢 `prd.md` 功能规格 / WHAT（**first-gen 整文件读，§9.1.1 逃生口**）—— 挑切片转写进执行区·实现规格 + PM 确认区·验收
+- 🟢 `prd.md` 需求方案 / WHAT（**first-gen 整文件读，§9.1.1 逃生口**）—— 挑切片转写进执行区·实现规格 + PM 确认区·验收
 - 🟡 `implementation-design.md` / HOW（按 `HOW-ID` + 适用关键词挑行，§9.1.1）—— 写进执行区·实现设计引用；**v2 / C7：同文件「## 段 1.5 · 原型简化项」按 PRD 锚点 join 当前 task**，命中 → 实现规格 + 验收按简化版写 + PM 确认区·验收受影响行追加 `[SIMP-N]` 标签
 - 🟢 `docs/PROJECT.md` / `docs/modules/INDEX.md` / `docs/modules/<本 task 模块>.md`
 - 🟡 `docs/DESIGN.md`（按 task 涉及功能 grep 相关章节，§9.1.1）
@@ -164,7 +164,7 @@
 
 适用：`implementation-design.md`（按 HOW-ID 挑行）/ 同模块 `task-*.md`（`## PM 反馈` 段）/ `docs/DESIGN.md` / `tasks/task-*.md`（prd-writing 遍历）。
 
-**prd.md（功能规格）特殊**——逃生口：
+**prd.md（需求方案）特殊**——逃生口：
 - **first-gen 模式**：整文件读（req 级核心产物，需要全局视野）
 - **revise 模式**：按 prd-writing 改动涉及的 PRD 章节 grep 局部读
 
@@ -287,7 +287,7 @@ brief.md（PM 视图）
 stage 2 真相源（PM 视图；A 分支 analysis.md / B 分支 stage2-office-hours.md）
    │
    ▼
-prd.md（req 级功能规格 / WHAT —— stage 3 prd-writing 产，定稿冻结）
+prd.md（req 级需求方案 / WHAT —— stage 3 prd-writing 产，定稿冻结）
    │  ← brief / stage 2 真相源 / docs/PROJECT.md / docs/modules/
    ▼
 implementation-design.md（req 级 HOW —— stage 5 implementation-design 产）

@@ -132,7 +132,7 @@ done
 ### 步骤 3：消化已 echo 输入 + 按既有强约束读 slice-read 项
 
 步骤 2.5 已把 task-plan / PROJECT / PRODUCT-RULES / modules/INDEX 全文 echo 进 transcript。本步骤补：
-- `prd.md` 是 WHAT（req 级功能规格）；`implementation-design.md` 是 HOW（req 级实现设计）。两者分工：实现规格从 PRD 切片转写，实现设计引用从 implementation-design 按 HOW-ID 挑。
+- `prd.md` 是 WHAT（req 级需求方案）；`implementation-design.md` 是 HOW（req 级实现设计）。两者分工：实现规格从 PRD 切片转写，实现设计引用从 implementation-design 按 HOW-ID 挑。
 - **stage 2 真相源**（A 分支 `analysis.md` / B 分支 `stage2-office-hours.md`，路径由 `get_stage_source(req_dir, 2)` 解析）不默认读；仅当 PRD 切片不足以写清 task 时回读对应章节，并在 chat 告知 PM「PRD 此切片不足，已回读 stage 2 真相源 §X」。
 
 ### 步骤 4：基础设施 task 走简化路径

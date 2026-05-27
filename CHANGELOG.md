@@ -18,6 +18,52 @@ PM-AI-Workflow 生成器仓的演进记录。本文件**只记影响下游业务
 
 ## 已发布版本
 
+### 2026-05-27 — Stage 3/5 重命名 + req-stage-gate 全门 AskUserQuestion picker 化 + stage 转换标题加名字
+
+**触发**：消费仓 ExampleConsumerApp req-009 反馈三处 PM 视角不对劲 ——
+(a) Stage 1→2 三选一里「开放探讨 —— 像聊天一样发散聊，不另做复核」描述让 AI 把 PM 的 ChatGPT 对话 JSON 当 B 分支 office-hours 产物 snapshot，跳了 reviewer + 未决问题闸门，brief §6 列了 5 个未决题完全没收敛；
+(b)「功能规格」/「模块规格 + task 拆分」是工程文档化称呼，PM 心智里 stage 3 就是「需求方案」（WHAT），stage 5 就是「实现设计」（HOW）—— 词典对不上时 PM 一句「进入方案设计」AI 会困惑指 stage 3 还是 stage 5；
+(c) prose 列选项让 PM 自然语言回答的形态（v3/v4 续跑模式）让 AI 错解模糊词（"OK / 差不多"），所有 stage-gate 门改 AskUserQuestion picker（runtime 不支持时退化数字编号）。
+
+**改动**（PM 视角）：
+
+**1. stage 重命名**
+
+- `scripts/_lib/stages.py` `STAGE_NAMES[3]`「功能规格」→「需求方案」；全仓 stage 3 名 / `prd.md` 描述里的「功能规格」→「需求方案」（22 处，跨 `req-stage-gate` / `prd-writing` / `implementation-design` / `task-spec` / `quick-fix` / `input-flow.md` / `CLAUDE.md.tmpl` / `task.md.tmpl` 等 SKILL & 模板）。docs/modules 语境里「模块功能规格 / 主功能规格文件」**保留不动**（指模块 spec 文件，跟 stage 3 名无关）。
+- `STAGE_NAMES[5]`「模块规格 + task 拆分」→「实现设计 + task 拆分」（仅 `stages.py` 一处；其他「模块规格」指 docs/modules 文档保留）。
+
+**2. req-stage-gate 全门 AskUserQuestion picker 化**
+
+- Stage 1→2 主选择门：picker 三选一（AI 帮我分析 / 用 office-hours 风格分析 / brief 还要改）；B 选项从"前提式"（已跑过 office-hours 才能选）改成"动作式"（选这个就用 office-hours 分析，内部探测已有产物或引导现跑）。
+- Stage 2→3 推进确认门：picker 二选一（进设计系统 / 继续修订 prd）。
+- Stage 2 未决问题闸门：picker 二选一（逐题问我 / 先改 analysis 某段）。
+- Stage 2→3 B 分支 office-hours 三态门（SLUG 失败 / 找到 N 份 / 没找到）：每态 picker 多选一（现在跑 / 选 1 份 / 自己指定路径 / 换 AI 帮我分析）。
+- Stage 4 步骤 4B 确认门：picker 二选一（进 stage 5 / 继续调整组件规格）。
+- Stage 4→5 步骤 5a-gate 决策门：每条结构决策（HOW-NN / SIMP-NN / 自由度声明）单独 AskUserQuestion（按 askuser-rules.md §1.4 多决策拆开顺序问）。
+- Stage 5→6 步骤 4 task-plan 决策门：每条结构 task 单独 picker。
+- Stage 5→6 步骤 5 入口总览门：picker 三选一（进 stage 6 / 回看某项 / 回卷 stage 4-5）。
+- Stage 6→7 关 req 确认门：picker 二选一（关闭 req / 还要开新 task）。
+
+**3. stage 转换标题加 stage 名字**
+
+- 旧顶部标识 `Stage N（名字）— <产物> <状态>`（v3 书面体规则）→ 新统一 `Stage N <名字> → M <名字>`（转换式，含起止两 stage 名）。
+- `### Stage X → Y` 段标题补全缺漏的 stage 名：Stage 3→4 补"设计系统建立"、Stage 4→5 补"设计系统建立"、Stage 4 标题补"设计系统建立"、Stage 5→6 补"实现设计 + task 拆分"。
+
+**4. 架构规则更新**
+
+- `skills/_shared/pm-view/banner-rules.md` §3.0 表格：**废止 v3/v4 续跑模式专门豁免**（旧规则把 stage-gate 选择门 / 推进确认门归到「chat prose 不走 §3」），改成「任何 PM 决策门必须用 AskUserQuestion，runtime 不支持时退化编号列表」。
+- §1.2 banner 例子 stage 名字从 "PRD-Writing / QUESTIONING / Task-Spec → Execute" 等过时英文改成 `STAGE_NAMES` 中文真值。
+- `skills/_shared/pm-view/askuser-rules.md` §1.3 加编号规则：AskUserQuestion picker label **不带数字前缀**（picker UI 本身是按钮）；只退化模式带编号（PM 输数字回复是最快路径）；退化模式必加"请回复编号（或自由文本说明）"收尾。
+
+**业务仓影响**：
+
+- `.req-meta.json` 里 `stage` 字段仍是数字，**不受影响**；STAGE_OUTPUT_FILES 产物文件名（brief.md / analysis.md / prd.md / task-plan.md）**不变**。
+- PM 视角：所有 stage-gate 确认门从"prose 列选项 + 自然语言回话"变成"picker 卡片 + 点选/数字/关键词回话"。续跑模式（PM 答"OK"自动推进）失效——PM 必须显式选 picker 选项（点 / 输数字 / 输 label 关键词）。
+- 模糊词（"OK / 通过 / 差不多了"）AI 反问澄清而非默认推进（按 askuser-rules.md §1.1）。
+- 已经在飞的 req 不受影响（旧 prd.md / task md 里的「功能规格」字面残留属于历史档案，不强制回填）。
+
+---
+
 ### 2026-05-26 — task-execute 审计闭环加固（修复 A + B + C + C'）：堵 dispatch 没跑就推状态的悬空窗口
 
 **触发**：消费仓 ExampleConsumerApp req-008 task-001 复现 req-006 同款事故 —— AI 进 /pmai-task-execute 后入口前置 transition 了「待执行→执行中」，但中断 skill 没跑 dispatch 节点，直接用 Edit/Write 完成 work + 3 commit；事件流卡在仅 1 条 `status_changed`，accept 闸门正确拦下 `--to 已完成`，但 AI 给 PM 误诊"infra bug, skill 没自动 append"+ 提议 `task-events.py append --type execution_started` 补登（伪造审计证据）。req-006 后的 accept 闸门兜底有效，但缺**物理约束**让伪造路径根本执行不了 + 缺 AI 故障恢复的合规出口。

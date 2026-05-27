@@ -4,7 +4,10 @@ stage 名 / 推进前要求的产出文件 散落在 req-transition.py / status-
 CLAUDE.md.tmpl 等处。F13 把可被脚本引用的部分抽进本模块，脚本统一 import。
 （CLAUDE.md.tmpl 是模板 prose、无法 import，只能文本同步。）
 
- 换芯：stage 3「方案设计」→「功能规格」，产物 solution.md → prd.md。
+stage 3 命名演化：「方案设计」→「功能规格」→「需求方案」（产物 solution.md → prd.md）；
+stage 5 命名演化：「模块规格 + task 拆分」→「实现设计 + task 拆分」（implementation-design.md + task-plan.md）。
+背景：PM 视角下 3 = 需求方案（WHAT），5 = 实现设计（HOW），二分清楚；「功能规格」/「模块规格」
+偏工程文档化味，跟 PM 心智对不上。
 """
 
 from __future__ import annotations
@@ -12,9 +15,9 @@ from __future__ import annotations
 STAGE_NAMES: dict[int, str] = {
     1: "描述需求",
     2: "需求分析",
-    3: "功能规格",
+    3: "需求方案",
     4: "设计系统建立",
-    5: "模块规格 + task 拆分",
+    5: "实现设计 + task 拆分",
     6: "task 执行",
     7: "req close",
 }
