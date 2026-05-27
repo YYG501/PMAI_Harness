@@ -34,7 +34,8 @@ PM chat 同时含以下两元素 → caller AI 自动识别为"上传附件"意�
 
 1. **`req-stage-gate` Stage 1→2 B 分支 office-hours 选源期间**（3B / 3B-resume / 3B-snapshot 子步骤）—— PM 给的绝对路径是 office-hours 设计稿源材料，走  `set_stage_source(req_dir, 2, 'stage2-office-hours.md', tool='office-hours', origin=<原绝对路径>)` 路径，**不**归档为 attachment（cross-design 冲突防护）。B 分支 5B 推进确认门 PM OK 后恢复 trigger 0。
 2. **`/pmai-prd-writing` standalone 模式**（不绑 req 的独立 / 补差 PRD）—— standalone 路径不入 req `attachments/`；PM 想给附件走手动 / 他路径。
-3. **trigger 0 与 trigger 1 / 2 三者共存的优先级**：trigger 0 优先（PM chat 主动描述）；trigger 1 / 2 保留作 fallback（PM 自己手动 cp 进 attachments/ 时由 trigger 2 扫到 + `is_seen` 判定后问 PM）。
+3. **`/pmai-new-req` worktree 创建后置例外**（v 当前）—— new-req 步骤 0-3 全程 worktree 还没创建（推到步骤 4 拉），chat 时 `ACTIVE_REQ_DIR` 不存在 → trigger 0 **不**立即调 `copy_attachment`，仅做轻量预检（路径存在 + sensitive + size）后入内存 list `PENDING_ATTACHMENTS = [{src, hint}, ...]`；实际 batch 调用 `copy_attachment` 推迟到步骤 4B（worktree 创建后），届时走完整 helper 路径。详 `skills/new-req/SKILL.md` 步骤 3.5 / 4B。
+4. **trigger 0 与 trigger 1 / 2 三者共存的优先级**：trigger 0 优先（PM chat 主动描述）；trigger 1 / 2 保留作 fallback（PM 自己手动 cp 进 attachments/ 时由 trigger 2 扫到 + `is_seen` 判定后问 PM）。**new-req 例外**：trigger 2 在 new-req 砍（worktree 还没建无 cp 目标）；PM 想绕 chat 直接 cp → 等步骤 5 handoff 后在 worktree 新对话里做（stage-gate 后续 stage 入口 trigger 2 兜底）。
 
 ### §2.3 AI 触发后的 6 步动作（helper 内部完成）
 
@@ -187,6 +188,8 @@ caller SKILL 写 stage 产出文档时（或 helper 返回 `pending_inject=True`
 ## §6 trigger 2 静默扫描保留（v2 改造）
 
 现仓 trigger 2（AI 写产出前扫 `attachments/` 发现新文件主动问 PM）**保留作 fallback**。v2 改造：trigger 2 判定 "已识别" 改用 `is_seen(req_dir, filename)`（基于 attachments_seen 列表），**不**依赖引用 section（跨 stage 旧规则只列本 stage 引用过的，不能作真相源）。
+
+> **`/pmai-new-req` 不适用本节**：new-req worktree 创建后置，stage 1 期间 `requirements/active/<req>/attachments/` 不存在，PM 无 cp 目标。PM 想绕 chat 直接 cp → 等步骤 5 handoff 后在 worktree 新对话里做（由 stage 2+ caller SKILL 的 trigger 2 兜底）。
 
 caller AI 写 stage 产出前扫 `attachments/`：
 

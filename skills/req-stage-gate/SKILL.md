@@ -541,7 +541,7 @@ python3 "$PMAI_HOME/scripts/req-transition.py" "$ACTIVE_REQ_DIR" --to 4
 > 本质 = 每个 req 一道「逐组件判复用 vs 新建 + 新建组件 PM + AI 共写完整规格」的关口。
 > 直接对症 ① 组件不复用 ② executor 在视觉规范不完整的地方乱搞。
 
-1. **前提**：`docs/DESIGN.md` 须含「共享组件 inventory」段（init C.5 已建空段；旧项目兜底由 `/pmai-new-req` 步骤 3.6 检测追加）。
+1. **前提**：`docs/DESIGN.md` 须含「共享组件 inventory」段（init C.5 已建空段；旧项目兜底由 `/pmai-new-req` 步骤 2B 检测追加）。
 2. **读 `prd.md`** 枚举本 req 要建的**界面 / 交互 / 组件**。
 3. **逐组件对 inventory 判复用 vs 新建**：
    - inventory 里**有** → **复用**（设计输出指向它）

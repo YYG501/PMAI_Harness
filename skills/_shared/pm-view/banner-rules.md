@@ -118,7 +118,7 @@ Next Up 块 / skill 退出提示 / 状态转换后输出 / 错误退出提示 �
 
 | 形态 | 是否走 §3 | 例子 |
 |---|---|---|
-| SKILL.md 代码里显式调 `AskUserQuestion(...)` 或写 yaml `header / question / options` 模板 | ✅ 走 §3.1-§3.4 | `/pmai-init-project` 阶段 C「创建 PROJECT.md / 继续探索」；`/pmai-new-req` 步骤 4 缺口补问 |
+| SKILL.md 代码里显式调 `AskUserQuestion(...)` 或写 yaml `header / question / options` 模板 | ✅ 走 §3.1-§3.4 | `/pmai-init-project` 阶段 C「创建 PROJECT.md / 继续探索」；`/pmai-new-req` 步骤 3 缺口补问 |
 | chat 自由对话续跑（PM 答自然语言「OK / 通过 / 没问题 / 定了」触发推进）| ❌ 走常规形态，**不受 §3 约束** | `/pmai-req-stage-gate` Stage N→N+1 确认门；`/pmai-task-execute` 步骤 12 PM 验收「通过 / 打回」|
 | chat prose 列选项让 PM 自然语言回答（如「- 选项 A - 选项 B」让 PM 选）| ❌ 走常规 | `/pmai-req-stage-gate` Stage 1→2 选择门（"结构化挖透 / 开放探讨 / 改 brief"）|
 | close-task / close-req B 类逐条对齐（SKILL 显式写「AskUserQuestion 或 prose」二选一）| 用 AskUserQuestion 走 §3，用 prose 走常规 | close-task §1.5 B 类对齐 |

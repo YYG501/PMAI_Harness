@@ -187,6 +187,18 @@ PM-AI-Workflow 生成器仓的演进记录。本文件**只记影响下游业务
 
 ## 未发布
 
+### 2026-05-27 — docs(drift): new-req 重排连带漂移点修复（3 处）
+
+`refactor(new-req): worktree 创建后置` commit 后扫到 3 处 _shared / 其他 SKILL 仍引旧步骤号 / 旧 trigger 2 契约的漂移点，逐条补正：
+
+- `skills/req-stage-gate/SKILL.md:544`「旧项目兜底由 `/pmai-new-req` 步骤 3.6 检测追加」→ 步骤 2B（DESIGN.md inventory 兜底已搬到新 SKILL 的步骤 2B）
+- `skills/_shared/pm-view/banner-rules.md:121` AskUserQuestion 示例「`/pmai-new-req` 步骤 4 缺口补问」→ 步骤 3（缺口补问从原步骤 4 变 步骤 3）
+- `skills/_shared/pm-view/attachments-upload.md` §2.2 / §6：加 new-req 例外段 —— trigger 0 在 new-req chat 时**不**立即调 `copy_attachment`，仅入内存 list `PENDING_ATTACHMENTS`，实际 batch 调用推迟到步骤 4B（worktree 创建后）；trigger 2 在 new-req 砍（worktree 还没建无 cp 目标），PM 想绕 chat → handoff 后在 worktree 新对话里做（stage 2+ caller SKILL 的 trigger 2 兜底）
+
+**测试**：attachments-helper 16/16 / banner-label 10/10 / no-duplicate-questioning 4/4 全过。
+
+---
+
 ### 2026-05-27 — refactor(new-req): worktree 创建后置 — brief 整理在 main，PM 二确通过后才拉 worktree 并 handoff
 
 **触发**：消费仓 PM 跑 `/pmai-new-req` 给完需求后，AI 拿编号 + 问 slug → 立即 `create-req-headless.sh` 拉 worktree + `cd` 进去 → IDE 显示分支从 `main` 切到 `req-NNN-...`。PM 反应"你怎么切分支了"——主仓 main 工作区其实没动（worktree 是隔离机制），但视角等同于 IDE 切分支，PM 体验破绽。PM 明确"按之前的流程，应该是先整理 brief、再创建 worktree、让我手动切"（旧仓的 `docs/` 工作模式：所有 doc / 规格在 main 上整理，worktree 只用作 implementation 隔离）。
