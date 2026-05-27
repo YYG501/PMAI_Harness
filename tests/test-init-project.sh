@@ -1,11 +1,12 @@
 #!/usr/bin/env bash
-# init-project.sh 测试
+# init-project.sh 测试（I-mini 模式 — 2026-05-26 起）
 #
-# T1（静态）：skill 复制必须递归 —— 守 P1 回归
-#   P1 bug：cp 非递归 glob + 2>/dev/null 吞错 → skill 的 references/ 子目录漏拷
-#   （prd-writing / task-execute 都依赖 references/，新项目 init 后会丢这些引用文件）
-# T2（e2e）：真跑 init-project.sh，断言生成项目含 skills/*/references/*
-#   gstack 不可用时 skip（T1 已守回归）
+# I-mini 不变量：消费仓 .claude/ **不**含 framework 资产（scripts/skills/agents/templates/hooks）。
+# 所有 skill 通过全局 ~/.claude/skills/pmai-* symlink 暴露（指向 $PMAI_HOME/skills/），
+# skill 内部调用走 $PMAI_HOME 全局路径。跨机器 clone 消费仓后只需 pmai install → 立即可用。
+#
+# T1（静态）：init-project.sh 不应再有 cp -R skills 等 framework 资产复制行（旧模式守反向回归）
+# T2（e2e）：真跑 init-project.sh，断言生成项目 .claude/ 不含 framework 资产
 set -uo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -15,36 +16,28 @@ REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 INIT_PROJECT_SH="$REPO_ROOT/scripts/init-project.sh"
 
 # -----------------------------------------------------------------
-# T1: 静态 —— skill 复制用 cp -R、不吞错（无环境依赖，永远跑）
+# T1: 静态 —— init-project.sh 不复制 framework 资产到消费仓（I-mini 反向回归守护）
 # -----------------------------------------------------------------
-test_skill_copy_is_recursive() {
-  start_test "T1: init-project.sh skill 复制递归（不漏 references/ 子目录）"
-  local copy_line
-  copy_line=$(grep -E 'cp .*SKILL_DIR' "$INIT_PROJECT_SH" || true)
-  if [ -z "$copy_line" ]; then
-    _fail "未找到 skill 复制行（grep 'cp .*SKILL_DIR'）"
-    return
-  fi
-  if ! echo "$copy_line" | grep -q 'cp -R'; then
-    _fail "skill 复制必须用 cp -R，否则 references/ 子目录漏拷 — 实际: $copy_line"
-    return
-  fi
-  if echo "$copy_line" | grep -q '2>/dev/null'; then
-    _fail "skill 复制不应 2>/dev/null 吞错误（会静默漏拷）— 实际: $copy_line"
+test_no_framework_asset_copy() {
+  start_test "T1: init-project.sh 不复制 framework 资产到消费仓（I-mini）"
+  # 任何 cp -R SKILL_DIR / cp .*skills/ 都是回退到旧 cp 模式 → fail
+  local bad
+  bad=$(grep -nE 'cp[[:space:]]+-R.*(SKILL_DIR|FRAMEWORK_DIR/skills|FRAMEWORK_DIR/scripts|FRAMEWORK_DIR/agents)' "$INIT_PROJECT_SH" || true)
+  if [ -n "$bad" ]; then
+    _fail "init-project.sh 含旧 framework 资产复制行（I-mini 应 0 拷贝）— 实际：$bad"
     return
   fi
   pass_test
 }
 
 # -----------------------------------------------------------------
-# T2: e2e —— 真跑 init-project.sh，断言 references/ 被拷贝
+# T2: e2e —— 真跑 init-project.sh，断言生成项目 .claude/ 不含 framework 资产
 # -----------------------------------------------------------------
-test_e2e_references_copied() {
-  start_test "T2: init-project 生成项目含 skills/*/references/* 引用文件"
+test_e2e_no_framework_assets_in_consumer() {
+  start_test "T2: init-project 生成的消费仓 .claude/ 不含 framework 资产（I-mini）"
 
-  # gstack 前提（同 init-project.sh）；缺则 skip，T1 已守回归
   if ! command -v gstack &>/dev/null && [ ! -d "$HOME/.claude/skills/gstack" ]; then
-    echo "  ⏭️  SKIP: gstack 不可用，跳过 e2e（T1 静态断言已守 P1 回归）"
+    echo "  ⏭️  SKIP: gstack 不可用，跳过 e2e（T1 静态断言已守反向回归）"
     return
   fi
 
@@ -60,25 +53,19 @@ test_e2e_references_copied() {
     return
   fi
 
-  local missing="" skill ref_dir
-  for skill in prd-writing task-execute; do
-    ref_dir="$proj/.claude/skills/$skill/references"
-    if [ ! -d "$ref_dir" ]; then
-      missing="$missing $skill/references(目录缺失)"
-    elif [ -z "$(ls -A "$ref_dir" 2>/dev/null)" ]; then
-      missing="$missing $skill/references(目录为空)"
-    fi
-  done
-
-  # P2: 框架自用工具 measure-tthw.sh 假定框架仓根，不该分发进消费仓
-  if [ -f "$proj/.claude/scripts/measure-tthw.sh" ]; then
-    missing="$missing measure-tthw.sh(框架自用工具误拷进消费仓)"
-  fi
+  local leaked=""
+  # I-mini：以下路径都不该在消费仓里
+  [ -d "$proj/.claude/skills" ] && leaked="$leaked .claude/skills/"
+  [ -d "$proj/.claude/scripts" ] && leaked="$leaked .claude/scripts/"
+  [ -d "$proj/.claude/agents" ] && leaked="$leaked .claude/agents/"
+  [ -d "$proj/.claude/templates" ] && leaked="$leaked .claude/templates/"
+  # 框架自用工具不该分发到消费仓
+  [ -f "$proj/.claude/scripts/measure-tthw.sh" ] && leaked="$leaked measure-tthw.sh"
 
   rm -rf "$base"
 
-  if [ -n "$missing" ]; then
-    _fail "生成项目漏拷 references/:$missing"
+  if [ -n "$leaked" ]; then
+    _fail "消费仓含 framework 资产泄漏（I-mini 应 0 framework）：$leaked"
     return
   fi
   pass_test
@@ -122,8 +109,8 @@ test_e2e_special_chars_in_background() {
 # -----------------------------------------------------------------
 # Run
 # -----------------------------------------------------------------
-test_skill_copy_is_recursive
-test_e2e_references_copied
+test_no_framework_asset_copy
+test_e2e_no_framework_assets_in_consumer
 test_e2e_special_chars_in_background
 
 report_results "init-project"

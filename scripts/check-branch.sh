@@ -339,7 +339,7 @@ case "$BRANCH" in
           deny "I-CB10: 找不到 task 分支 ${BRANCH} 对应的 task 文件，无法校验状态。请通过 /task-confirm 正常创建。"
         fi
 
-        TASK_STATUS=$(python3 "${MAIN_REPO_ROOT}/$HOME/.pmai/scripts/task-transition.py" "$TASK_FILE" --get-status 2>/dev/null || echo "")
+        TASK_STATUS=$(python3 "${PMAI_HOME:-$HOME/.pmai}/scripts/task-transition.py" "$TASK_FILE" --get-status 2>/dev/null || echo "")
         if [ "$TASK_STATUS" != "执行中" ]; then
           deny "I-CB10: task 状态为「${TASK_STATUS:-未知}」，不允许写 task worktree 代码。正确流程：1) /task-confirm 转「执行中」  2) /task-execute 启动执行器  3) 再改代码。若需补填 task 文件的执行日志/文档偏差/自审记录，只能改 task 文件本身。"
         fi

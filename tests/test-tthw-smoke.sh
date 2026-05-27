@@ -86,7 +86,8 @@ PY
     rm -f "$out" "$err"
     return
   fi
-  if ! (cd "$project_dir" && python3 .claude/scripts/status-view.py) \
+  # I-mini：消费仓不带 .claude/scripts/，status-view.py 走 framework 绝对路径
+  if ! (cd "$project_dir" && python3 "$REPO_ROOT/scripts/status-view.py") \
     | grep -q "当前 Req"; then
     _fail "status-view.py 未识别 active req"
     cat "$out" >&2

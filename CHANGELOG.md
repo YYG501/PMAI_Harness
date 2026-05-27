@@ -187,6 +187,24 @@ PM-AI-Workflow 生成器仓的演进记录。本文件**只记影响下游业务
 
 ## 未发布
 
+### 2026-05-27 — fix(skill-preamble + check-branch) + ci: 2 个生产真 bug 直修 + 4 stale test 同步 + GitHub Actions CI
+
+`/devex-review` 后跑全测发现 6 个 fail，里面 **2 个不是 stale 测试，是生产环境也坏的真 bug**：
+
+**真 bug 1 — `scripts/skill-preamble.sh:165`**：`_state_py="$_PREAMBLE_DIR/_lib/state.py"` 中 `_PREAMBLE_DIR` **从未被赋值**（脚本里只此一处用），拼出来是 `/_lib/state.py`，python3 调用必失败被 `|| true` 吞掉。后果：`ACTIVE_TASK` / `ACTIVE_TASK_STATUS` 永远算不出值，skill preamble 输出永远缺这两行，依赖 ACTIVE_TASK 的 skill 行为退化到「没活跃 task」分支。修：改 `$PMAI_HOME/scripts/_lib/state.py`（PMAI_HOME 头部已算）。
+
+**真 bug 2 — `scripts/check-branch.sh:342`**：`python3 "${MAIN_REPO_ROOT}/$HOME/.pmai/scripts/task-transition.py"` 把两个绝对路径相拼（`/tmp/foo` + `/Users/x/.pmai/...`）= `/tmp/foo//Users/x/.pmai/...`，文件**永远不存在**，python3 必失败 → `TASK_STATUS` 永远空 → I-CB10 gate 永远报「未知」→ task worktree 任何代码写入都被 deny。修：改 `${PMAI_HOME:-$HOME/.pmai}/scripts/task-transition.py`。
+
+**stale 测试同步**（4 处，断言比代码改动慢半拍）：
+
+- `tests/test-speed-mode.sh` T13：grep 字面 `status-view.py --stage6-entry` 匹配不到 SKILL.md 里 `status-view.py" --stage6-entry`（双引号包路径）→ 改通配正则
+- `tests/test-init-project.sh` T1+T2：旧 cp 模式守护 → I-mini（消费仓 0 framework）后该死。重写为反向回归守护：T1 验 init-project.sh 不含 `cp -R.*SKILL_DIR`，T2 验生成项目 `.claude/` 不含 `skills/scripts/agents/templates/`
+- `tests/test-tthw-smoke.sh` T2：调 `python3 .claude/scripts/status-view.py`，I-mini 消费仓没这个路径 → 改 framework `$REPO_ROOT/scripts/status-view.py`
+
+**配 CI（`.github/workflows/tests.yml`）**：push 到 main / PR 自动跑 `bash tests/run-all.sh`，ubuntu-latest + python 3.10，timeout 10 min。RUNTIME 漂掉的「525/2 vs 实际 535/6」就是无 CI 的代价 —— 现在制度化。
+
+**测试基线**：525/2（RUNTIME 旧）→ 535/6（baseline 真相）→ **541/0**（全过）。
+
 ### 2026-05-27 — feat(pmai-upgrade + skill): `--local <dir>` 升级模式（团队仓不再缺升级入口）
 
 借鉴 GSD `get-shit-done-cc` 的双模式升级路线（global + local 都支持），补 PMAI 之前只支持全局升级的缺口。

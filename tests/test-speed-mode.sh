@@ -363,7 +363,7 @@ test_skill_stage4_speed_auto_continue() {
 # -----------------------------------------------------------------
 test_skill_stage6_entry_call() {
   start_test "T13: SKILL.md Stage 5→6 含 status-view.py --stage6-entry 调用"
-  if ! grep -q "status-view.py --stage6-entry" "$SKILL_MD"; then
+  if ! grep -qE 'status-view\.py("?[[:space:]]+|"[[:space:]]+)--stage6-entry' "$SKILL_MD"; then
     _fail "SKILL.md 缺 status-view.py --stage6-entry 调用"
     return
   fi

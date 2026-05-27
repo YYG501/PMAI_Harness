@@ -162,7 +162,7 @@ ACTIVE_TASK_STATUS=""
 if [ -n "$ACTIVE_REQ_DIR" ]; then
   _tasks_dir="$ACTIVE_REQ_DIR/tasks"
   if [ -d "$_tasks_dir" ]; then
-    _state_py="$_PREAMBLE_DIR/_lib/state.py"
+    _state_py="$PMAI_HOME/scripts/_lib/state.py"
     for _tf in "$_tasks_dir"/task-*.md; do
       [ -f "$_tf" ] || continue
       case "$_tf" in *.engineering.md) continue;; esac
