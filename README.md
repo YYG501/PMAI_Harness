@@ -20,6 +20,24 @@ PM AI 工作流框架的**生成器**仓库。
 
 ---
 
+## 如何使用？
+
+老板：「做一个 X 功能。」
+
+```
+1. /pmai-init-project    起业务项目（AI 跟你聊清做什么 / 为谁做，写 PROJECT.md）
+2. /pmai-new-req "X"     起需求，带一句话 brief
+3. /pmai-req-stage-gate  推进 stage：analysis → PRD → 实现设计 → 任务拆分
+4. /pmai-task-confirm    PM 拍板启动一个 task
+5. /pmai-task-execute    开新窗口，让 codex 写代码（worktree 隔离 + 自动 commit）
+6. /pmai-close-task      PM 验收通过 → 归档
+7. /pmai-close-req       合主分支，整个需求闭环
+```
+
+PM 全程**只做决策**（方向 / PRD / 任务拆分 / 验收）；代码、commit、worktree 隔离、文档同步、状态机由框架兜。
+
+---
+
 ## 依赖
 
 | 工具 | 必需性 | 用途 |
