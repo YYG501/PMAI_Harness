@@ -265,7 +265,19 @@ PM-AI-Workflow 生成器仓的演进记录。本文件**只记影响下游业务
 
 ## 未发布
 
-### 2026-05-27 — fix(pre-commit hook): attachments 段在小文件场景下 silent fail（set -e + 命令替换失败）
+### 2026-05-27 — fix(new-req): cwd 护栏 + 4E 兜底 + Next Up 文案精简（防 AI 直接 cd "$WORKTREE_DIR" 污染主对话 cwd）
+
+**触发**：PM 在消费仓跑 /pmai-new-req 时观察到 Claude Code status 栏路径从主仓切到 worktree —— 违反 SKILL.md 规则 441（主对话 cwd 不切 worktree 是 PM 视图契约，切分支事件必须由 PM 显式开新窗口触发）。
+
+**根因**：AI 在步骤 4 debug pre-commit hook 时图省事用 `cd "$WORKTREE_DIR" && <cmd>`，没遵守现有 prose 规则的 `git -C` 写法。Claude Code Bash 工具 cwd 在多次调用间持久（工具说明明写），一次 cd 永久带走主对话 cwd，导致 PM 看 status 栏发现自己被拖进了 worktree 分支。
+
+**修复**（`skills/new-req/SKILL.md`）：
+
+- **步骤 4 入口加 AI 执行硬规则**（上游护栏）：表格列出 3 种安全形式（`git -C` / subshell `(cd && cmd)` / 工具 `--cwd`），明写"禁止直接 `cd "$WORKTREE_DIR"`"含顺手写法，并解释 Bash 工具 cwd 持久这件事
+- **加 4E cwd 兜底**：handoff 前显式 `cd "$REPO_ROOT" && pwd`，4A-4D 听话时是 no-op；任一步意外切 cwd 都被本步骤拉回主仓
+- **Next Up 文案精简**：3 步分行 + 段落注释 → 一行 `cd <path> && claude` + 一句 `/pmai-req-stage-gate`，减少 PM 误读（之前 PM 反馈"已经在 worktree 中还让我 cd" = IDE 视觉混淆 + 文案啰嗦叠加）
+
+**影响**：业务仓续跑 /pmai-new-req 时 LLM 受护栏约束直接 cd 概率下降；即使临场失误，4E 兜底；handoff 文案 PM 视图更清爽。**与 PM-VIEW-RULES 一致**（不切 cwd 是 PM 视图契约）。
 
 **触发**：PM commit 含 `attachments/` 小文件时，hook 无任何 stderr 输出但直接 exit 1，导致 commit 莫名失败，PM 只能 `--no-verify` 救火（违反守约）。
 

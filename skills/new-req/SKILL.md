@@ -336,6 +336,20 @@ PM 视图 chat 一行确认（**禁工程黑话**，不输出 cp 命令 / 绝对
 
 PM 在步骤 3 二确门说 OK 后，AI 在主对话**不切 cwd**，全程用 `git -C <worktree>` 操作 worktree。一气呵成：拉 worktree → batch cp attachments → 写 brief.md → commit → 出 handoff。期间任何一步失败 fail-loud；已落盘的部分让 PM 手动清理或 `git worktree remove "$WORKTREE_DIR"` 回滚。
 
+#### AI 执行硬规则（cwd 护栏，4A-4D 全程适用）
+
+**禁止直接 `cd "$WORKTREE_DIR"`**（含 `cd "$WORKTREE_DIR" && <cmd>` 这种顺手写法）。在 worktree 内跑任何命令必须用以下三种安全形式之一：
+
+| 形式 | 用法示例 | 适用场景 |
+|---|---|---|
+| `git -C "$WORKTREE_DIR" <cmd>` | `git -C "$WT" status` | 99% 场景（所有 git 命令） |
+| `(cd "$WORKTREE_DIR" && <cmd>)` subshell | `(cd "$WT" && bash -x .git/hooks/pre-commit)` | 必须切 cwd 的非 git 命令（debug hook、跑工具链） |
+| 工具自带的 `--cwd` / `cwd=` 参数 | `python3 -c '...' cwd="$WT"`、`node --cwd "$WT"` | 脚本 / 包管理器 |
+
+**为什么这是硬规则**：Claude Code 的 Bash 工具 cwd 在多次调用间**持久**（工具说明明写）。一旦敲了 `cd "$WORKTREE_DIR"`，整个主对话后续每次 Bash 调用都从 worktree 起 —— PM 看 status 栏会发现自己被拖进 worktree 分支，违反 PM 视图契约（"切分支事件必须由 PM 显式开新窗口触发，不是 AI 中途悄悄做"）。subshell `(...)` 不会污染主 shell；`git -C` / `--cwd` 根本不切 shell cwd。Debug 压力下尤其容易破例 —— **没有例外**。
+
+兜底：步骤 4E 末尾会 `cd "$REPO_ROOT"` 显式回主仓。即使本规则违反一次，4E 也能把 cwd 拉回来。
+
 #### 4A：拉 worktree 骨架
 
 ```bash
@@ -404,6 +418,15 @@ commit 范围限于本 req 目录内的文件 —— brief.md / .req-meta.json /
 
 commit 完成 → working tree clean，满足 INVARIANTS I-AD5 / I-DC1（dispatch 前 working tree 必须 clean），步骤 5 handoff 后 PM 想 `git worktree remove` 不会撞 dirty tree。
 
+#### 4E：cwd 兜底（防御性，handoff 前最后一步）
+
+```bash
+cd "$REPO_ROOT"
+pwd  # 必须输出主仓路径，作为 cwd 仍在主仓 main 的视觉证据
+```
+
+**为什么必须**：Claude Code 的 Bash 工具 cwd 在多次调用间持久。若 4A-4D 任一步 AI 临场误写 `cd "$WORKTREE_DIR"` 而非 `git -C`（规则 444），cwd 会泡在 worktree 里 —— PM 看到的 status 栏路径会从主仓切到 worktree，且步骤 5 之后所有 Bash 解析的 `$REPO_ROOT` / 默认 cwd 全错。本步骤显式 cd 回 `$REPO_ROOT` 是无成本兜底（4A-4D 已正确用 `git -C` 时也是 no-op），不依赖 LLM 听话。
+
 ### 步骤 5：Handoff（结束本对话，让 PM 在 worktree 新对话里继续）
 
 brief.md 已 commit 后，**当前主对话不再继续 stage 2**。`/pmai-new-req` 的职责到此为止——req 全过程从这里搬到 worktree 内的独立 Claude 对话，让每个 req 拿到干净的 context。
@@ -411,19 +434,16 @@ brief.md 已 commit 后，**当前主对话不再继续 stage 2**。`/pmai-new-r
 输出 handoff 块（**不出 A/B**，不在主对话里调 `/pmai-req-stage-gate`）：
 
 ```
-✅ brief 已 commit 至分支 req-NNN-<slug>（<short-hash>）
+✅ brief 已 commit 至 req-NNN-<slug>（<short-hash>）
 
-▶ Next Up（在新窗口继续）：
-  1. 打开新终端窗口
-  2. 运行：
-       cd <worktree 绝对路径>
-       claude
-  3. 在新 Claude 对话里运行：
-       /pmai-req-stage-gate
-     （新对话会重新读 brief.md 给二次确认门，确认后进入 Stage 2）
+每个 req 由独立 Claude 对话承担。本对话到此结束 —— 开新窗口继续：
 
-**敲这一次就够了**——stage-gate 续跑模式会一路带你走到 Stage 6（task 执行）才退出。
-中途不答确认门就是停，下次回来重新敲 /pmai-req-stage-gate 自动从当前 stage 续走。
+▶ Next Up：
+   cd <worktree 绝对路径> && claude
+   新对话发：/pmai-req-stage-gate
+
+stage-gate 续跑模式一路带到 Stage 6（task 执行）才退出。中途不答确认门即停；
+回来重发 /pmai-req-stage-gate 自动从当前 stage 续走。
 ```
 
 **规则**：
