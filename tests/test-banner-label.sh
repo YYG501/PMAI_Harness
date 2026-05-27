@@ -165,17 +165,22 @@ test_task_confirm_no_contradiction() {
 # D-iv v0.3 patch 加：§3 不再无差别管所有闸门，只管 GUI picker 形式；
 # chat 自由对话续跑闸门走常规形态。验证适用范围段存在 + 关键判定字眼。
 test_banner_rules_scope_disclaimer() {
-  start_test "T9: banner-rules §3 含 §3.0 适用范围（仅 AskUserQuestion picker）"
+  start_test "T9: banner-rules §3 含 §3.0 适用范围（AskUserQuestion + picker 形态）"
   if ! grep -q "§3.0 适用范围" "$BANNER_RULES"; then
     _fail "banner-rules.md 缺 §3.0 适用范围段"
     return
   fi
-  if ! grep -q "AskUserQuestion picker" "$BANNER_RULES"; then
-    _fail "banner-rules.md §3.0 未点明「AskUserQuestion picker」适用范围"
+  section=$(awk '/### §3\.0/,/### §3\.1/' "$BANNER_RULES")
+  if ! echo "${section}" | grep -q "AskUserQuestion"; then
+    _fail "banner-rules.md §3.0 未点明 AskUserQuestion 形态"
     return
   fi
-  if ! grep -q "续跑\|自由对话" "$BANNER_RULES"; then
-    _fail "banner-rules.md §3.0 未说明续跑 / chat 自由对话不受 §3 约束"
+  if ! echo "${section}" | grep -q "picker"; then
+    _fail "banner-rules.md §3.0 未提及 picker 形态"
+    return
+  fi
+  if ! grep -q "反问澄清\|prose 反问\|prose 输出" "$BANNER_RULES"; then
+    _fail "banner-rules.md §3.0 未说明 prose 输出 / 反问澄清不受 §3 约束"
     return
   fi
   pass_test

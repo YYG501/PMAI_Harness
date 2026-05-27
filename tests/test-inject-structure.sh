@@ -223,9 +223,9 @@ PM_HANDFILLED
 # -----------------------------------------------------------------
 
 test_init_project_skill_asks_intent() {
-  start_test "init-project SKILL 步骤 1 询问项目意图（4 项信息）"
-  if ! grep -q "项目意图" "$INIT_PROJECT_SKILL"; then
-    _fail "init-project SKILL 应询问 PM「项目意图」"
+  start_test "init-project SKILL 步骤 1 询问项目类型（4 项信息）"
+  if ! grep -q "项目类型" "$INIT_PROJECT_SKILL"; then
+    _fail "init-project SKILL 应询问 PM「项目类型」"
     return
   fi
   # 应列出 prototype / system / custom / unknown 四选项

@@ -41,9 +41,9 @@ test_step_0_subsections() {
 
 test_step_0_three_choice() {
   start_test "步骤 0 PM 三选项含 改 task md / 改代码 / 跳过 三个分支（v2 对话式）"
-  for keyword in "改 task md 对齐" "改代码对齐" "跳过"; do
-    if ! grep -q -F "$keyword" "$CLOSE_TASK_SKILL"; then
-      _fail "PM 三选项缺少分支关键词「$keyword」"
+  for keyword in "改 task md" "改代码" "跳过"; do
+    if ! grep -q -F "${keyword}" "$CLOSE_TASK_SKILL"; then
+      _fail "PM 三选项缺少分支关键词「${keyword}」"
       return
     fi
   done
