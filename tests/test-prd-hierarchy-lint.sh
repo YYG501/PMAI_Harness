@@ -6,6 +6,7 @@
 #   T2: 类 2 — 描述风格违规（既有覆盖，保留 smoke）
 #   T3: 类 3 — §六 表格结构（<br/> 单格塞编号 → fail）
 #   T4: 类 3 — 续行 rowspan 正例 → pass
+#   T5: 类 2 — fenced code block 内 ASCII 原型字符不被误报 → pass
 set -uo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -146,6 +147,48 @@ else
     _fail "T2: 类 2 段缺失"
     cat "$TMP_DIR/out-l2.txt" >&2
   fi
+fi
+
+# -----------------------------------------------------------------
+# T5: fenced code block 内 ASCII 原型字符（▾ / · / ⋮）不被类 2 误报
+# -----------------------------------------------------------------
+start_test "T5 类 2 — fenced block ASCII 原型字符不误报"
+
+cat > "$TMP_DIR/prd-ascii-ok.md" <<'EOF'
+## 六、功能需求
+
+### 6.1 角色管理
+
+这是角色列表页 —— 进入菜单后默认展示。
+
+```
+┌────────────────────────────────────────┐
+│  角色管理        筛选: 类型[全部▾]      │
+├────────────────────────────────────────┤
+│  财务审计员      · 自定义 · 2 人        │
+│  区域销售总监    · 自定义 · 5 人        │
+└────────────────────────────────────────┘
+```
+
+| 二级功能 | 三级功能 | 使用角色 | 需求描述 |
+| --- | --- | --- | --- |
+| 列表 | 查看 | 角色 A | 1. 业务规则 |
+
+## 七、验收标准
+
+无。
+EOF
+
+if python3 "$LINT" "$TMP_DIR/prd-ascii-ok.md" > "$TMP_DIR/out-ascii.txt" 2>&1; then
+  if grep -q "✓ lint 通过" "$TMP_DIR/out-ascii.txt"; then
+    pass_test "T5 类 2 — fenced block ASCII 原型字符不误报"
+  else
+    _fail "T5: 退出 0 但缺通过 marker"
+    cat "$TMP_DIR/out-ascii.txt" >&2
+  fi
+else
+  _fail "T5: fenced ASCII 应 pass 但 lint 误报退出 $?"
+  cat "$TMP_DIR/out-ascii.txt" >&2
 fi
 
 report_results "prd-hierarchy-lint"

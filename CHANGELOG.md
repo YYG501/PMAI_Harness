@@ -265,6 +265,28 @@ PM-AI-Workflow 生成器仓的演进记录。本文件**只记影响下游业务
 
 ## 未发布
 
+### 2026-05-27 — feat(prd-writing): §六「原型」节 AI 现画 ASCII 原型图（替代文字意图描述）
+
+**触发**：PM 反馈 PRD 现状 §6.X 模块「原型」节只写 1-2 句文字意图描述（"主要分区 + 用户主路径"），评审与下游 UI task 都拿不到视觉锚点。PM 要求 stage 3 写 PRD 时由 AI 现画 ASCII 原型，模块下每个页面 / 弹窗 / 抽屉各一张。
+
+**改动（PM 视角）**：
+
+- §六 每个 §6.X 模块的「原型」节由 **AI 现画 ASCII 原型图**（fenced code block 包裹）替代纯文字意图描述
+- **数量规则**：模块下涉及几个页面 / 弹窗 / 抽屉就画几张，一一对应不省略
+- **详细度**：中等（30-60 行，含表头列名 / 列表行示例 / 表单字段名 / 主要按钮文案）；不画像素 / 颜色 hex / 组件库名（DESIGN.md 范畴）
+- **每张图上方 1 句文字兜底**：「这是 X 页面 / 弹窗 / 抽屉」+ 用户主路径；close-req 反向对齐时 ASCII 替换为真实截图，兜底句保留
+
+**影响范围**：
+
+- 模板：`skills/prd-writing/templates/req-prd.md.tmpl`（§六 顶部清单改成 ASCII 注释）
+- skill：`skills/prd-writing/SKILL.md`（步骤 2 / 步骤 3 / 「PRD 结构」§六 / 功能需求表格写法「原型素材」段 / 质检 prompt 第 22 条 共 5 处）
+- few-shots：`skills/prd-writing/references/few-shots.md` 新增「§六 原型节 ASCII 示例」段（角色列表页 + 新建角色弹窗 + 角色详情抽屉 3 张完整示例 + 4 条反例）
+- lint：`scripts/check-prd-hierarchy.py` 的 `check_style` 跳过 fenced code block —— ASCII 里的 `▾` / ` · ` 不被类 2 描述风格扫描误报
+
+**消费仓影响**：stage 3 起新 PRD 时 AI 自动现画 ASCII 原型；已写完的旧 PRD 不强制回填（仍允许文字描述）。close-req 反向对齐机制不变，仍用真实截图替换。
+
+---
+
 ### 2026-05-27 — refactor(project-direction): 砍 PROJECT.md「产品路线」节 + status-view --milestone flag
 
 **触发**：PM 跑项目方向讨论时撞到「PROJECT.md 产品路线节」和「ROADMAP.md」颗粒度撞车 —— 单人项目里"叙事性里程碑"和"req 队列"颗粒度天然糊，PM 在路线节列出"P0 / P1 / P2 + 具体功能"，转头 roadmap 又重列一遍，体感「同一组功能填两次」。

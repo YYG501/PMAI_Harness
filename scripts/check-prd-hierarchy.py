@@ -278,9 +278,19 @@ def check_table_structure(
 
 
 def check_style(lines: list[str]) -> list[dict]:
-    """全篇扫描描述风格违规。返回违规列表。"""
+    """全篇扫描描述风格违规。返回违规列表。
+
+    Fenced code block (```) 内的行整体跳过 —— §六「原型」节 ASCII 原型图
+    包在 fenced block 里，会含 ▾ / · 等界面字符（界面元素，非工程黑话）。
+    """
     violations: list[dict] = []
+    in_fenced = False
     for line_idx, line in enumerate(lines):
+        if line.lstrip().startswith("```"):
+            in_fenced = not in_fenced
+            continue
+        if in_fenced:
+            continue
         if line.startswith("---"):
             continue
         for category, patterns in ALL_STYLE_PATTERNS:
