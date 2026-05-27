@@ -64,7 +64,7 @@ case "${1:-}" in
     echo "pmai $(find_version)"
     exit 0
     ;;
-  install|upgrade|uninstall|status|doctor|update-check|sync-prds)
+  install|upgrade|uninstall|status|doctor|update-check|sync-prds|whats-new|migrate)
     SUB="$1"
     shift
     SUB_BIN="$BIN_DIR/pmai-$SUB"
