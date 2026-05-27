@@ -4,6 +4,9 @@
 # Output: {} on allow (exit 0), {"decision":"deny","reason":"..."} on deny (exit 2)
 set -euo pipefail
 
+# 脚本所在目录（用于找 sibling python3 helpers，I-mini 全局 / --local 副本两种模式都对）
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
 # --- Read JSON from stdin (one-shot) ---
 INPUT=$(cat)
 
@@ -167,7 +170,6 @@ case "$REL_PATH" in
   requirements/*/tasks/task-*.md)
     # 用 _lib.state.parse_status_from_text 检测状态字段
     # 双兼容 v1（**状态：**）+ v2（| **状态** |）
-    SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
     source "$SCRIPT_DIR/_lib/_setup-pythonpath.sh"
 
     STATUS_MODIFIED=$(echo "$INPUT" | python3 -c "
@@ -339,7 +341,7 @@ case "$BRANCH" in
           deny "I-CB10: 找不到 task 分支 ${BRANCH} 对应的 task 文件，无法校验状态。请通过 /task-confirm 正常创建。"
         fi
 
-        TASK_STATUS=$(python3 "${PMAI_HOME:-$HOME/.pmai}/scripts/task-transition.py" "$TASK_FILE" --get-status 2>/dev/null || echo "")
+        TASK_STATUS=$(python3 "$SCRIPT_DIR/task-transition.py" "$TASK_FILE" --get-status 2>/dev/null || echo "")
         if [ "$TASK_STATUS" != "执行中" ]; then
           deny "I-CB10: task 状态为「${TASK_STATUS:-未知}」，不允许写 task worktree 代码。正确流程：1) /task-confirm 转「执行中」  2) /task-execute 启动执行器  3) 再改代码。若需补填 task 文件的执行日志/文档偏差/自审记录，只能改 task 文件本身。"
         fi
