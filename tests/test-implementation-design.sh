@@ -2,7 +2,7 @@
 # delta-8：req 级实现设计视图（implementation-design）测试
 #
 # 验证：
-# - templates/implementation-design.md.tmpl 4 段结构 + HOW-ID 可消费 schema
+# - skills/implementation-design/templates/implementation-design.md.tmpl 4 段结构 + HOW-ID 可消费 schema
 # - /implementation-design skill 存在 + stage 5 拆 task 前产出契约
 # - check-doc-pm-view.py 跳过 implementation-design.md（工程合同格式豁免）
 # - req-stage-gate Stage 4→5 编排调 /implementation-design + PM 确认门 + Stage 5→6 gate 检查文件
@@ -12,7 +12,7 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 source "$SCRIPT_DIR/helpers/assert.sh"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
-TMPL="$REPO_ROOT/templates/implementation-design.md.tmpl"
+TMPL="$REPO_ROOT/skills/implementation-design/templates/implementation-design.md.tmpl"
 SKILL="$REPO_ROOT/skills/implementation-design/SKILL.md"
 STAGE_GATE="$REPO_ROOT/skills/req-stage-gate/SKILL.md"
 CHECK_PM="$REPO_ROOT/scripts/check-doc-pm-view.py"

@@ -187,6 +187,34 @@ PM-AI-Workflow 生成器仓的演进记录。本文件**只记影响下游业务
 
 ## 未发布
 
+### 2026-05-27 — refactor(templates): skill 自包含 — 6 个 skill 独占 .tmpl 移进 skills/<skill>/templates/
+
+PM 实测发现 `templates/lark-publish.json.tmpl` 跟 `skills/publish-to-lark/` 分裂在两个目录，问"skill 依赖为啥不和 skill 放一起"。Audit 仓内每个 .tmpl 被谁引用后，把 skill 独占的 6 个移进各自 skill 目录，剩下的 8 个保留（init scaffold + 多 skill 共用）。
+
+**移动**：
+- `templates/codebase-audit.md.tmpl` → `skills/codebase-audit/templates/`
+- `templates/module.md.tmpl` → `skills/codebase-audit/templates/`
+- `templates/implementation-design.md.tmpl` → `skills/implementation-design/templates/`
+- `templates/req-prd.md.tmpl` → `skills/prd-writing/templates/`
+- `templates/task-plan.md.tmpl` → `skills/task-plan/templates/`
+- `templates/lark-publish.json.tmpl` → `skills/publish-to-lark/templates/`
+
+**保留 templates/**（不移）：
+- 纯 init scaffold：CLAUDE.md / PRODUCT-RULES / PROJECT / ROADMAP / modules-INDEX / pm-workflow.config / gitignore / settings.json
+- 多 skill 共用：task.md.tmpl（task-spec + task-confirm + init-project + state_test 4 触点）
+
+**改动**：
+- 5 个 SKILL.md 路径引用从 `$PMAI_HOME/templates/X.tmpl` → `$PMAI_HOME/skills/<skill>/templates/X.tmpl`
+- `scripts/init-project.sh` 主 loop 移除 6 个 .tmpl 的 `continue` 分支；新增独立段 cp `skills/publish-to-lark/templates/lark-publish.json.tmpl` → consumer `templates/`（业务实例配置，PM 后续 cp + 填 token 必须留实体）
+- 4 个 test 文件路径同步更新（test-implementation-design / test-task-spec / test-task-plan / test-speed-mode）
+
+**收益**：
+- skill 自包含：删 skill 时连带 .tmpl 一并删，无孤儿
+- 看 skill 时一眼能看到它用的所有资源（SKILL.md + references/ + templates/）
+- 框架根 `templates/` 收敛到"消费仓 scaffold 模板"语义
+
+**测试**：541/0 全绿。
+
 ### 2026-05-27 — feat(close-task / close-req): 兜底清孤儿 worktree（按 task/req 记录定向）
 
 PM 实测 ExampleConsumerApp 攒了 17 个 worktree 物理残留占 261 MB —— 历史 close 流程在 git worktree remove 失败后没清干净（早期版本无 rm -rf fallback / PM 中途 Ctrl+C 等）；当前 close 单 task 即使有 fallback 也只清当前 task，不扫历史残留。

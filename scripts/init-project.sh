@@ -135,13 +135,11 @@ for TMPL in "$FRAMEWORK_DIR/templates/"*.tmpl; do
     PRODUCT-RULES.md)       DEST="$TARGET_DIR/docs/PRODUCT-RULES.md" ;;
     ROADMAP.md)             DEST="$TARGET_DIR/docs/ROADMAP.md" ;;
     modules-INDEX.md)       DEST="$TARGET_DIR/docs/modules/INDEX.md" ;;
-    req-prd.md|implementation-design.md|codebase-audit.md|task.md|task-plan.md|module.md)
+    task.md)
       # runtime framework .tmpl —— skill 内部用 $PMAI_HOME/templates/ 直接调用，不拷进消费仓
+      # (req-prd / implementation-design / codebase-audit / task-plan / module / lark-publish
+      #  已迁到 skills/<skill>/templates/，不会出现在本 loop)
       continue ;;
-    lark-publish.json)
-      # 业务实例配置模板（I-mini 例外）：PM 后续要 cp templates/lark-publish.json.tmpl
-      # → .claude/lark-publish.json 并改 token —— 必须留实体在消费仓
-      DEST="$TARGET_DIR/templates/lark-publish.json.tmpl" ;;
     settings.json)          DEST="$TARGET_DIR/.claude/settings.json" ;;
     gitignore)              DEST="$TARGET_DIR/.gitignore" ;;
     pm-workflow.config.yml) DEST="$TARGET_DIR/.pm-workflow/config.yml" ;;
@@ -183,9 +181,18 @@ python3 "$FRAMEWORK_DIR/scripts/inject-structure-segment.py" \
 # 跨机器 clone 消费仓后只需在新机器跑 pmai install → 立即可用，0 setup。
 mkdir -p "$TARGET_DIR/.claude"
 # 注：.claude/settings.json 已在 d 段写入（占位符替换实体），hook 路径用 $HOME/.pmai/...
-# 注：消费仓 templates/ 现在仅含业务实例 .tmpl（lark-publish.json.tmpl 等 PM cp+配 token 用）
-#     —— 这些已在 d 段拷贝；framework runtime .tmpl（task.md.tmpl 等）走 $PMAI_HOME/templates/
-echo "📦 I-mini 模式：消费仓 0 framework；skill / scripts / templates / hooks 全走 \$PMAI_HOME"
+
+# --- f3. 业务实例配置模板（I-mini 例外）：从 skill 自包含 templates 拷进消费仓 ---
+# 这些是 PM 后续要 cp + 改 token 的模板，必须留实体在消费仓。
+# 框架内 .tmpl 现位于 skills/<skill>/templates/（skill 自包含 refactor 后），
+# 不再走 templates/ 主 loop。
+mkdir -p "$TARGET_DIR/templates"
+if [ -f "$FRAMEWORK_DIR/skills/publish-to-lark/templates/lark-publish.json.tmpl" ]; then
+  cp "$FRAMEWORK_DIR/skills/publish-to-lark/templates/lark-publish.json.tmpl" \
+     "$TARGET_DIR/templates/lark-publish.json.tmpl"
+fi
+
+echo "📦 I-mini 模式：消费仓 0 framework；skill / scripts / hooks 全走 \$PMAI_HOME，templates/ 只含业务实例配置"
 
 # --- g. settings.json 已在模板复制时创建 ---
 

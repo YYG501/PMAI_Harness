@@ -6,7 +6,7 @@ source "$SCRIPT_DIR/helpers/assert.sh"
 source "$SCRIPT_DIR/helpers/fixture.sh"
 
 TASK_PLAN_SKILL="$FRAMEWORK_ROOT/skills/task-plan/SKILL.md"
-TASK_PLAN_TEMPLATE="$FRAMEWORK_ROOT/templates/task-plan.md.tmpl"
+TASK_PLAN_TEMPLATE="$FRAMEWORK_ROOT/skills/task-plan/templates/task-plan.md.tmpl"
 
 _contains() {
   local file="$1"
@@ -111,7 +111,7 @@ test_output_contract() {
 
   _assert_contains "$TASK_PLAN_SKILL" "### 步骤 3：写 task-plan.md" "step 3 heading" || return
   _assert_contains "$TASK_PLAN_SKILL" "不生成具体 task 文档" "stage 5 only generates plan, not task docs" || return
-  # task-plan 列字段定义在 templates/task-plan.md.tmpl
+  # task-plan 列字段定义在 skills/task-plan/templates/task-plan.md.tmpl
   _assert_contains "$TASK_PLAN_TEMPLATE" "id / title / 所属模块 / 所属模块章节 / summary / order / risk" "task-plan columns" || return
   _assert_contains "$TASK_PLAN_SKILL" "变更记录" "change log section required" || return
 

@@ -305,7 +305,7 @@ done
 
    跳过条件：本 req 不含 §六功能需求章节内容（极少见，几乎不发生）。
 
-3. **生成 PRD**——按下方「PRD 结构」生成完整 `$ACTIVE_REQ_DIR/prd.md`（骨架见 `$PMAI_HOME/templates/req-prd.md.tmpl`），语言风格对齐「写作规则」与「few-shots」。**§六功能需求表格的二级 / 三级命名严格按步骤 2.5 的版本写入；不允许在写表格时再发明新的二级 / 三级名。** §六「原型」节按步骤 2 写产物意图描述。
+3. **生成 PRD**——按下方「PRD 结构」生成完整 `$ACTIVE_REQ_DIR/prd.md`（骨架见 `$PMAI_HOME/skills/prd-writing/templates/req-prd.md.tmpl`），语言风格对齐「写作规则」与「few-shots」。**§六功能需求表格的二级 / 三级命名严格按步骤 2.5 的版本写入；不允许在写表格时再发明新的二级 / 三级名。** §六「原型」节按步骤 2 写产物意图描述。
 
 3.5. **lint（自动兜底，必跑）**——写完 PRD 后跑 `python3 $REPO_ROOT/scripts/check-prd-hierarchy.py $ACTIVE_REQ_DIR/prd.md`。脚本做两类机械检查：
 

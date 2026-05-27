@@ -1,7 +1,7 @@
 ---
 name: task-plan
 description: |
-  Stage 5：读取上游 stage 文档 + 项目级文档 + 原型代码，拆分 task 规划。按 $PMAI_HOME/templates/task-plan.md.tmpl 生成单一文件 task-plan.md（PM 视图 + 末尾轻量自检与状态摘要）。不生成具体 task 文档，不生成工程合同分文件。
+  Stage 5：读取上游 stage 文档 + 项目级文档 + 原型代码，拆分 task 规划。按 $PMAI_HOME/skills/task-plan/templates/task-plan.md.tmpl 生成单一文件 task-plan.md（PM 视图 + 末尾轻量自检与状态摘要）。不生成具体 task 文档，不生成工程合同分文件。
 ---
 
 # /task-plan
@@ -14,7 +14,7 @@ description: |
 
 本 skill 生成的文档须遵守 `skills/_shared/PM-VIEW-RULES.md`（主索引）。具体读以下子文件：
 - `_shared/pm-view/writing-rules.md`（§三 写作规则：明确指代 / 正向描述 / 禁工程词 / 禁像素颜色 / 禁反向约束）
-- `_shared/pm-view/section-order.md`（§七 章节顺序：按 `$PMAI_HOME/templates/task-plan.md.tmpl`）
+- `_shared/pm-view/section-order.md`（§七 章节顺序：按 `$PMAI_HOME/skills/task-plan/templates/task-plan.md.tmpl`）
 - `_shared/pm-view/input-flow.md`（§九 输入流：上游 stage 文档 + 项目级文档；输入清单见下方 Required Inputs）
 
 > 「工程合同」成分（反模式自检结论 / 验收 GAP 索引 / 模块规格状态）压在末尾 §四 自检与状态摘要节。详细论证 / autoplan 决策不长期存档，跑时输出即可。
@@ -203,7 +203,7 @@ done
 
 ### 步骤 3：写 task-plan.md
 
-按 `$PMAI_HOME/templates/task-plan.md.tmpl` 生成 `$ACTIVE_REQ_DIR/task-plan.md`：
+按 `$PMAI_HOME/skills/task-plan/templates/task-plan.md.tmpl` 生成 `$ACTIVE_REQ_DIR/task-plan.md`：
 
 **章节顺序**（强制，由 `_shared/pm-view/section-order.md` §七锁定）：
 1. 📌 拆分摘要
@@ -278,7 +278,7 @@ PM 答完：
 ### 步骤 4：自检（按 `_shared/pm-view/checklist.md` §八 12 项）
 
 写完后对 `task-plan.md` 逐条检查：
-- [ ] 章节顺序符合 $PMAI_HOME/templates/task-plan.md.tmpl
+- [ ] 章节顺序符合 $PMAI_HOME/skills/task-plan/templates/task-plan.md.tmpl
 - [ ] 所有名词带完整指代前缀
 - [ ] 无像素值 / 颜色码 / Emoji 视觉
 - [ ] 无反向约束

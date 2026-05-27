@@ -6,7 +6,7 @@ source "$SCRIPT_DIR/helpers/assert.sh"
 source "$SCRIPT_DIR/helpers/fixture.sh"
 
 TASK_TEMPLATE="$FRAMEWORK_ROOT/templates/task.md.tmpl"
-MODULE_TEMPLATE="$FRAMEWORK_ROOT/templates/module.md.tmpl"
+MODULE_TEMPLATE="$FRAMEWORK_ROOT/skills/codebase-audit/templates/module.md.tmpl"
 TASK_SPEC_SKILL="$FRAMEWORK_ROOT/skills/task-spec/SKILL.md"
 
 _contains() {
@@ -252,7 +252,7 @@ test_template_regression() {
   _assert_contains "$TASK_TEMPLATE" "## 📋 文档偏差" "v3 doc diff section" || return
   _assert_contains "$TASK_TEMPLATE" "## 🔍 自审记录" "v3 self-review section" || return
 
-  # module spec = 模块活文档：只留跨 req 长期为真的章节；req 时态章节已砍（详见 templates/module.md.tmpl 顶部说明）
+  # module spec = 模块活文档：只留跨 req 长期为真的章节；req 时态章节已砍（详见 skills/codebase-audit/templates/module.md.tmpl 顶部说明）
   _assert_contains "$MODULE_TEMPLATE" "## 摘要" "module summary preserved" || return
   _assert_contains "$MODULE_TEMPLATE" "## 一、模块定位" "module positioning preserved" || return
   _assert_contains "$MODULE_TEMPLATE" "## 二、功能清单（硬约束）" "module function list" || return

@@ -45,7 +45,7 @@ echo "SKILL: codebase-audit"
 ### 步骤 2：扫码 7 维度
 
 用 read-only 工具（Glob / Grep / Read；大范围探索可派 read-only subagent fan-out）盘点
-7 个维度，逐维写进 `docs/代码现状档.md`（按 `$PMAI_HOME/templates/codebase-audit.md.tmpl`）：
+7 个维度，逐维写进 `docs/代码现状档.md`（按 `$PMAI_HOME/skills/codebase-audit/templates/codebase-audit.md.tmpl`）：
 
 | # | 维度 | 扫什么 |
 |---|---|---|
@@ -74,7 +74,7 @@ PM 提修正 → 改现状档 → 重新呈交。
 
 ### 步骤 3.5：产品模块清单 + modulespec 主规格骨架（PM 选择性触发）
 
-> **brownfield 项目专属步骤**：老代码库的模块边界往往已经稳定在代码里（菜单 / 路由 / 模块目录结构）。本步骤提取「产品模块清单」+ 按 `templates/module.md.tmpl` 生成 `docs/modules/<m>.md` 主规格骨架。
+> **brownfield 项目专属步骤**：老代码库的模块边界往往已经稳定在代码里（菜单 / 路由 / 模块目录结构）。本步骤提取「产品模块清单」+ 按 `$PMAI_HOME/skills/codebase-audit/templates/module.md.tmpl` 生成 `docs/modules/<m>.md` 主规格骨架。
 >
 > **为什么有这步**：不建 modulespec → 后续 task 偏差表无 baseline 可 diff →「本 req 新建/改了稳定结构但 `docs/modules/` 无对应规格文件」常态化 → 每个 req close 时 §1.5 step 2.5 反复问「这次稳定结构要不要沉淀」。一次性建好 = 反查退化成真正的兜底。
 >
@@ -121,7 +121,7 @@ PM 提修正 → 改现状档 → 重新呈交。
 
    PM 可以：合并 / 拆分 / 改名 / 排除某条 / 增加 AI 漏掉的。PM 修正 → AI 调整 → 重新呈交 → PM 确认。
 
-3. **生成主规格骨架**：按 `templates/module.md.tmpl` 为每个确认模块建 `docs/modules/<m>.md` ——
+3. **生成主规格骨架**：按 `$PMAI_HOME/skills/codebase-audit/templates/module.md.tmpl` 为每个确认模块建 `docs/modules/<m>.md` ——
 
    - **§摘要**：AI 写 1-3 句（基于代码扫到的功能形态 + PROJECT.md / 代码现状档）
    - **§一 模块定位 1.1-1.4**：AI 填能扫到的部分；**1.4 职责边界末尾追加「**稳定结构指针**」sub-bullet 列菜单 / 路由 / schema / config 文件路径**（指针不抄内容，防漂移）
@@ -199,7 +199,7 @@ PM 确认现状档后，引导 PM 跑 `/project-solution` —— project-solutio
 
 ## Rules
 
-- **默认只读扫码**：步骤 1-4 + step 3.5 选 [N] 路径只产 `docs/代码现状档.md`，不改代码、不改其它业务文档。**例外**：step 3.5 选 [Y] 时允许生成 `docs/modules/<m>.md` 主规格骨架 + 刷新 `docs/modules/INDEX.md`（PM 确认模块清单后按 `module.md.tmpl` 生成）。
+- **默认只读扫码**：步骤 1-4 + step 3.5 选 [N] 路径只产 `docs/代码现状档.md`，不改代码、不改其它业务文档。**例外**：step 3.5 选 [Y] 时允许生成 `docs/modules/<m>.md` 主规格骨架 + 刷新 `docs/modules/INDEX.md`（PM 确认模块清单后按 `$PMAI_HOME/skills/codebase-audit/templates/module.md.tmpl` 生成）。
 - **防 secret 是硬约束**：见上方「防 secret 扫描」段，违反 = 严重错误。
 - **不替代 `/project-solution`** —— 本 skill 只产现状档 + 可选 modulespec 骨架；项目方向讨论由 project-solution 做。
 - 新项目不用本 skill（无已有代码可审）。
@@ -212,6 +212,6 @@ PM 确认现状档后，引导 PM 跑 `/project-solution` —— project-solutio
   - `docs/modules/<m>.md` 主规格骨架（**仅当 step 3.5 PM 选 [Y]**）
   - `docs/modules/INDEX.md` 刷新（**仅当 step 3.5 PM 选 [Y]**）
   - `docs/DESIGN.md` 兜底建 / 追加 inventory 段（**step 3.5.5 无条件，跟 step 3.5 选择无关**）
-- **允许动作**：read-only 扫码、7 维度盘点、防 secret redact、step 3.5 选 [Y] 时按 `module.md.tmpl` 生成主规格骨架、step 3.5.5 兜底 DESIGN.md inventory 段
+- **允许动作**：read-only 扫码、7 维度盘点、防 secret redact、step 3.5 选 [Y] 时按 `$PMAI_HOME/skills/codebase-audit/templates/module.md.tmpl` 生成主规格骨架、step 3.5.5 兜底 DESIGN.md inventory 段
 - **禁止**：改代码 / 改 step 3.5 / 3.5.5 范围外的业务文档 / 替 PM 做项目方向决策 / step 3.5 跳过模块清单 PM 确认环节 / step 3.5.5 替 gstack 写视觉基线 8 段（视觉基线由 PM 主动调 `/design-consultation`）
 - **退出条件**：现状档经 PM 确认 + step 3.5 完成（建或跳过）+ step 3.5.5 兜底跑过，引导 PM 跑 `/project-solution`

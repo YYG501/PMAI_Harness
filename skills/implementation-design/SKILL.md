@@ -2,7 +2,7 @@
 name: implementation-design
 description: |
   Stage 5（拆 task 前）：读 brief / analysis / prd.md / docs/PROJECT.md / docs/DESIGN.md，
-  按 $PMAI_HOME/templates/implementation-design.md.tmpl 产出 req 级实现设计文档
+  按 $PMAI_HOME/skills/implementation-design/templates/implementation-design.md.tmpl 产出 req 级实现设计文档
   implementation-design.md（HOW：这个 req 用什么架构、照哪些现有代码写、为什么这么选）。
   由 /req-stage-gate 在 Stage 4→5 编排调用，task-plan 之前。
   产出经 PM 确认门审定架构决策表后放行。do NOT use to write PRD (WHAT) or task spec.
@@ -163,7 +163,7 @@ done
 
 ### 步骤 2：按归宿表产出 implementation-design.md
 
-按 `$PMAI_HOME/templates/implementation-design.md.tmpl` 生成
+按 `$PMAI_HOME/skills/implementation-design/templates/implementation-design.md.tmpl` 生成
 `$ACTIVE_REQ_DIR/implementation-design.md`，5 段结构：
 
 | 段 | 内容 | 承接来源 |
@@ -280,5 +280,5 @@ python3 "$PMAI_HOME/scripts/check-doc-pm-view.py" \
 
 ## 文档结构
 
-段结构 + 可消费 schema 的单一真相源 = `$PMAI_HOME/templates/implementation-design.md.tmpl`。
+段结构 + 可消费 schema 的单一真相源 = `$PMAI_HOME/skills/implementation-design/templates/implementation-design.md.tmpl`。
 本 skill 不在内部复制章节定义。
