@@ -8,7 +8,7 @@ description: |
 
 > **PM 视图（M2 banner + Decision gate label）**：入口 banner（`status-view.py --banner-only --skill TASK-EXECUTE`）；验收呈交闸门 label 按 `_shared/pm-view/banner-rules.md` §3 3 硬规则（label=动作如「task-NNN 通过验收」/「打回 task-NNN 修改」/「scope 改动」）；退出 Next Up 引导 `/pmai-close-task` 或继续修复。
 >
-> **PM 答题规则（M4）**：所有 AskUserQuestion 调用按 `_shared/pm-view/askuser-rules.md` §1 3 硬规则走（空答 STOP / 没拿到答案禁止默认走通过分支 / runtime 退化保留 wait）。**历史教训** commit 07a3a09：PM 没答 AI 默认走通过 → task 跳过验收。
+> **PM 答题规则（M4）**：所有 AskUserQuestion 调用按 `_shared/pm-view/askuser-rules.md` §1 四条硬规则走（空答 STOP / 没拿到答案禁止默认走通过分支 / runtime 退化保留 wait / 多决策拆开顺序问）。**历史教训** commit 07a3a09：PM 没答 AI 默认走通过 → task 跳过验收。**Runtime 兜底**：本 skill 各门写的都是 picker 形态；runtime 不支持时 AI 按 §1.3 自动退化为编号列表，仍 wait。
 
 ## When To Use
 
@@ -153,29 +153,32 @@ DRIFT_COUNT=$(echo "$DRIFT_JSON" | python3 -c 'import json,sys;print(json.load(s
 
 **drift_count = 0**：直接通过，进步骤 2.5（无需打扰 PM）。
 
-**drift_count > 0**：把候选清单呈交 PM，按下面交互处理：
+**drift_count > 0**：prose 头部 + AskUserQuestion picker：
 
+prose 头部：
 ```
 ⚠️ 检测到 ${REQ_BRANCH} 上有 N 个文件比 task worktree 新：
   - <path 1>
   - <path 2>
   ...
-
-请选择处理方式：
- - 逐文件看 diff（推荐，每个文件单独决定采用 req 版本 / 保留 worktree 版本 / 跳过）
- - 全部跳过（task 内执行基于当前 worktree 文件）
- - 全部采用 req 版本（无需逐个 diff）
 ```
 
-PM 选项处理（按自然语言意图分流，不列字母）：
+AskUserQuestion（处理整体策略）：
+- `question`: "怎么处理 req 文档 drift？"
+- `options`:
+  - `label`: `逐文件看 diff`
+    `description`: `推荐，每个文件单独决定采用 req 版本 / 保留 worktree 版本 / 跳过`
+  - `label`: `全部跳过`
+    `description`: `不动 worktree，task 内执行基于当前 worktree 文件`
+  - `label`: `全部采用 req 版本`
+    `description`: `对清单内每个 file 调 apply-req-doc.sh 全部覆盖，无需逐个 diff`
 
-| PM 表达 | 行为 |
-|---|---|
-| 「全部跳过 / 不动 / 用现有的」 | 不动 worktree，task-execute 继续。task 内执行基于当前 worktree 文件。 |
-| 「全部采用 / 全部覆盖 / 用 req 版本」 | 对清单内每个 file 调 `apply-req-doc.sh`，跳过 diff 询问，全部覆盖。 |
-| 「逐个看 / 一个个来 / 逐文件」 | 逐文件循环：先 `git diff --no-index <worktree path> <(git show <branch>:<path>)` 给 PM 看，再问下面分流问。 |
+**PM 答题处理**：
+- 选 `全部跳过` / 输 `2` / 输 "全部跳过 / 不动 / 用现有的" → 不动 worktree，task-execute 继续
+- 选 `全部采用 req 版本` / 输 `3` / 输 "全部采用 / 全部覆盖 / 用 req 版本" → 对清单内每个 file 调 `apply-req-doc.sh` 全部覆盖
+- 选 `逐文件看 diff` / 输 `1` / 输 "逐个看 / 一个个来 / 逐文件" → 进入逐文件循环（每个文件单独 AskUserQuestion）
 
-逐文件循环流程伪码：
+逐文件循环（按 `askuser-rules.md §1.4` 多决策拆开顺序问，每个文件单独 AskUserQuestion）：
 
 ```bash
 echo "$DRIFT_JSON" | python3 -c 'import json,sys;[print(f["path"]) for f in json.load(sys.stdin)["files"]]' | \
@@ -183,19 +186,18 @@ while IFS= read -r path; do
   # 让 PM 看 diff（worktree 现状 vs req 分支版本）
   git -C "$TASK_WORKTREE" diff --no-index --color=always \
     "$path" <(git -C "$TASK_WORKTREE" show "${REQ_BRANCH}:${path}") || true
-
-  # 问 PM 三选项（按自然语言意图，不列字母）
-  cat <<EOF
-请选择此文件的处理方式：
- - 采用 req 版本
- - 保留 worktree 版本
- - 跳过此文件
-EOF
-  # 「采用 req 版本」  → bash $PMAI_HOME/scripts/apply-req-doc.sh "$TASK_WORKTREE" "$REQ_BRANCH" "$path" "$TASK_FILE"
-  # 「保留 worktree」 → 不动
-  # 「跳过」          → 不动，下一文件
 done
 ```
+
+每个文件 AskUserQuestion：
+- `question`: "<path> 怎么处理？"
+- `options`:
+  - `label`: `采用 req 版本`
+    `description`: `调 apply-req-doc.sh 覆盖 worktree 版本`
+  - `label`: `保留 worktree 版本`
+    `description`: `不动 worktree`
+  - `label`: `跳过此文件`
+    `description`: `不动，进下一文件`
 
 **失败容忍范围（区分两类异常，不要混淆）**：
 
@@ -535,9 +537,17 @@ Dev server 保持运行（PM 验收时需要访问）。
 - 11.2 输出验收信息块（UI 类 / 非 UI 类两种模板，含可选深度审查辅助提示）
 - 11.3 走查时引导 PM 反推上游文档偏差（reverse-flow 到「📁 历史档案 → 业务层偏差」表）
 
-### 步骤 12：等待 PM 决策
+### 步骤 12：等待 PM 决策（AskUserQuestion picker）
 
-**PM 说"通过"**：
+呈交块（步骤 11 输出）后，AI 调 AskUserQuestion：
+- `question`: "task-NNN 验收？"
+- `options`:
+  - `label`: `通过`
+    `description`: `task 转「已完成」，进 /pmai-close-task`
+  - `label`: `打回`
+    `description`: `task 保持「执行中」，AI 基于反馈继续修；说哪里要改`
+
+**PM 选 `通过`**（或输 `1` / 输 "OK / 通过 / 没问题"）：
 ```bash
 python3 "$PMAI_HOME/scripts/task-transition.py" "$TASK_FILE" --to 已完成
 ```
@@ -555,7 +565,7 @@ python3 "$PMAI_HOME/scripts/task-transition.py" "$TASK_FILE" --to 已完成
 本次 close 收尾在当前窗口做完（文档对齐 + 视觉规范沉淀），完成后会提示你切到 req 窗口再跑一次 /pmai-close-task 完成清理。
 ```
 
-**PM 说"打回"**：
+**PM 选 `打回`**（或输 `2` / 提具体反馈 / 输 "打回 / 改一下 / 不对"）：
 
 > 打回**不切状态** — task 全程是「执行中」，AI 直接基于反馈继续修，不再走 `task-transition --to 执行中` 的回退（该 transition 已删除，I-TT4 废弃）。
 

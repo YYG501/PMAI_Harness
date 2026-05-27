@@ -11,6 +11,8 @@ description: |
 
 # PRD Writing（stage 3 需求方案 · 多入口）
 
+> **PM 答题规则（M4）**：所有 AskUserQuestion 调用按 `_shared/pm-view/askuser-rules.md` §1 四条硬规则走（空答 STOP / 没拿到答案禁止落盘 prd.md / runtime 退化保留 wait / 多决策拆开顺序问）。**Runtime 兜底**：本 skill 各门写的都是 picker 形态；runtime 不支持时 AI 按 §1.3 自动退化为编号列表，仍 wait。
+
 ## What This Skill Produces
 
 prd-writing 产出 **req 级 PRD = 该 req 的需求方案**。
@@ -46,27 +48,35 @@ prd-writing 是**多入口 skill**，两条入口的边界如下：
 
 > **stage-3 orchestrated 模式：跳过本步骤。** stage-gate 调用本 skill 时已隐含「req 级 / 当前 req / 默认产物路径」三项答案，无需再问 PM —— 这是步骤 0 被 stage-gate 短路的机制。短路后直接进入**步骤 0.5（项目级文档强制 echo）→ 步骤 1（拆决策 + 识别涉及模块）→ 步骤 1.5（涉及模块 spec 强制 echo）→ 步骤 2**。步骤 0.5 / 1.5 是 stage-3 模式独有的「强制 echo 防漏读」屏障，对应 task-execute 步骤 2.0 同款修法。
 
-standalone 模式下，AI **第一件事**是与 PM 对话确认：
+standalone 模式下，AI **第一件事**是与 PM 对话确认。AI 调 AskUserQuestion 三连（按 `_shared/pm-view/askuser-rules.md §1.4` 多决策拆开顺序问）：
 
-```
-📝 准备写 PRD。先和你对齐三件事：
+**第一题：写哪部分？**
+- `question`: "PRD 写哪部分？"
+- `options`:
+  - `label`: `req 级`
+    `description`: `当前 req 的完整 PRD（含 9-11 章）`
+  - `label`: `独立 PRD`
+    `description`: `跨模块评审，回答时告诉我覆盖哪几个模块`
+  - `label`: `补差`
+    `description`: `已有 PRD，补充某节 / 某模块`
 
-1. 写哪部分？
-   - req 级（当前 req 的完整 PRD，含 9-11 章）
-   - 独立（跨模块评审，告诉我覆盖哪几个模块）
-   - 补差（已有 PRD，补充某节 / 某模块）
+**第二题（PM 答完第一题后问）：产物路径？**
+- `question`: "PRD 产物放哪？"
+- `options`:
+  - `label`: `默认路径`
+    `description`: `req 级 → $ACTIVE_REQ_DIR/prd.md ；独立 → docs/独立PRD/<slug>.md ；补差 → 现有 PRD 同路径覆盖`
+  - `label`: `我指定`
+    `description`: `贴绝对路径`
 
-2. 我准备读这些文件：
-   - <按下方"输入推荐表"列出建议清单>
-   要加 / 减文件吗？
+**第三题（PM 答完前两题后问）：输入清单确认？**
 
-3. 产物想放哪？
-   - req 级 → $ACTIVE_REQ_DIR/prd.md（默认）
-   - 独立 → docs/独立PRD/<slug>.md（默认）/ 你指定路径
-   - 补差 → 现有 PRD 同路径覆盖
-
-回我「OK」或「改」+ 具体修改。
-```
+AI 先在 prose 里列出按"输入推荐表"对应场景的推荐输入清单，然后调 AskUserQuestion：
+- `question`: "我准备读这些文件，要加 / 减吗？"
+- `options`:
+  - `label`: `用推荐清单`
+    `description`: `按 AI 列的清单读`
+  - `label`: `加减文件`
+    `description`: `说哪些要加 / 减`
 
 **输入推荐表（standalone 模式）**：
 
@@ -76,7 +86,7 @@ standalone 模式下，AI **第一件事**是与 PM 对话确认：
 | 独立 PRD（PM 指定模块清单 X/Y/Z） | docs/PROJECT.md + docs/PRODUCT-RULES.md + docs/modules/INDEX.md + docs/modules/X.md + docs/modules/Y.md + docs/modules/Z.md;**不读** req 上下文（brief/analysis），因为不绑 req |
 | 补差 | 现有 PRD + 补差范围相关的 module / analysis 子集 |
 
-PM 答「改」 → 调整推荐清单 / 产物路径 → 再确认 → OK 后进入实际写作（步骤 1）。
+三题答完后进入实际写作（步骤 1）。
 
 **禁止**：
 - 当 PM 在 prompt 里明确说「独立 PRD」或「覆盖 X/Y 模块」时仍按 req 级流程跑（要识别独立模式跳过 req 上下文必读）

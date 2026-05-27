@@ -8,7 +8,7 @@ description: |
 
 > **PM 视图（M2 banner）**：入口 banner（`status-view.py --banner-only --skill TASK-CONFIRM`，见 `_shared/pm-view/banner-rules.md` §1）；退出 Next Up 块（§2）引导新窗口 `/pmai-task-execute <task-id>`。**task-confirm 不设确认闸门**（唯一闸门在 `/pmai-task-spec` 步骤 10），故不涉及 banner-rules §3 Decision gate label 规则。
 >
-> **PM 答题规则（M4）**：所有 AskUserQuestion 调用按 `_shared/pm-view/askuser-rules.md` §1 3 硬规则走（空答 STOP / 没拿到答案禁止落盘 worktree fork / runtime 退化保留 wait）。
+> **PM 答题规则（M4）**：所有 AskUserQuestion 调用按 `_shared/pm-view/askuser-rules.md` §1 四条硬规则走（空答 STOP / 没拿到答案禁止落盘 worktree fork / runtime 退化保留 wait / 多决策拆开顺序问）。**Runtime 兜底**：本 skill 如有 picker 门时，runtime 不支持时 AI 按 §1.3 自动退化为编号列表，仍 wait。
 
 ## When To Use
 

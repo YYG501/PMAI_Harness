@@ -19,6 +19,8 @@ allowed-tools:
 
 # /pmai-upgrade
 
+> **PM 答题规则（M4）**：所有 AskUserQuestion 调用按 `_shared/pm-view/askuser-rules.md` §1 四条硬规则走（空答 STOP / 没拿到答案禁止 git pull / runtime 退化保留 wait / 多决策拆开顺序问）。**Runtime 兜底**：本 skill 各门写的都是 picker 形态；runtime 不支持时 AI 按 §1.3 自动退化为编号列表，仍 wait。
+
 升级 PMAI 框架到最新 main / git tag 版本。**Standalone 用法**：PM 主动调用，AI 内部跑 `bin/pmai-upgrade` + 升级后用自然语言 5-7 bullet 总结 What's New。
 
 **两种模式自动适配**：
@@ -98,22 +100,42 @@ echo "远程最新 tag:   ${LATEST_TAG:-(none)}"
 
 ### Step 2：AskUser 确认升级模式
 
-`AskUserQuestion` 问 PM（4 选项）：
-
+prose 头部：
 ```
 PMAI 有新版本可用（当前 v{OLD_VER}，远程 main = {LATEST_MAIN}{有 tag 时显示 tag 信息}）。
-
-A) 升级到 main 最新（推荐 — 跟主开发线）
-B) 升级到最新 stable tag（仅当 tag 存在；保守路径）
-C) 锁定指定 tag（输入版本号）
-D) 暂缓 — 1 天 / 1 周 / 永远（写 snooze）
 ```
 
-> **暂缓机制**（D 子流程）：
-> - 1 天 → 写 `~/.pmai-state/update-snoozed` UTC `$(date +%s)` + 86400
-> - 1 周 → `+ 604800`
-> - 永远 → 写一个远超未来值（如 `9999999999`），PM 想恢复就 `rm ~/.pmai-state/update-snoozed`
-> 后续 `pmai update-check` 在 snooze 期内 silent skip。
+AskUserQuestion：
+- `question`: "怎么升级？"
+- `options`:
+  - `label`: `升级到 main 最新`
+    `description`: `推荐 — 跟主开发线`
+  - `label`: `升级到最新 stable tag`
+    `description`: `仅当 tag 存在；保守路径`
+  - `label`: `锁定指定 tag`
+    `description`: `输入版本号（如 v0.x.0）`
+  - `label`: `暂缓`
+    `description`: `写 snooze，子流程再问 1 天 / 1 周 / 永远`
+
+**PM 答题处理**：
+- 选 `升级到 main 最新` / 输 `1` → 进 Step 3 跑 `pmai upgrade`
+- 选 `升级到最新 stable tag` / 输 `2` → 进 Step 3 跑 `pmai upgrade --stable`
+- 选 `锁定指定 tag` / 输 `3` → 等 PM 输版本号后进 Step 3 跑 `pmai upgrade --to <ver>`
+- 选 `暂缓` / 输 `4` → 进 D 子流程
+
+**D 子流程：暂缓机制（picker 二级）**：
+
+AskUserQuestion：
+- `question`: "暂缓多久？"
+- `options`:
+  - `label`: `1 天`
+    `description`: `写 ~/.pmai-state/update-snoozed UTC + 86400 秒`
+  - `label`: `1 周`
+    `description`: `写 + 604800 秒`
+  - `label`: `永远`
+    `description`: `写远超未来值（如 9999999999），想恢复 rm ~/.pmai-state/update-snoozed`
+
+后续 `pmai update-check` 在 snooze 期内 silent skip。
 
 ### Step 3：调 bin/pmai-upgrade（关键 — 接管 What's New）
 

@@ -11,7 +11,7 @@ description: |
 >
 > **PM 视图（M2 banner + Decision gate label）**：4 阶段每阶段入口出 banner（`status-view.py --banner-only --skill INIT-PROJECT`）；阶段 C Decision gate「创建 PROJECT.md / 继续探索」按 `_shared/pm-view/banner-rules.md` §3 3 硬规则；阶段 D Next Up 块按 §2 格式。
 >
-> **PM 答题规则（M4）**：所有 AskUserQuestion 调用按 `_shared/pm-view/askuser-rules.md` §1 3 硬规则走（空答 STOP / 没拿到答案禁止落盘 PROJECT.md / runtime 退化保留 wait）。
+> **PM 答题规则（M4）**：所有 AskUserQuestion 调用按 `_shared/pm-view/askuser-rules.md` §1 四条硬规则走（空答 STOP / 没拿到答案禁止落盘 PROJECT.md / runtime 退化保留 wait / 多决策拆开顺序问）。**Runtime 兜底**：本 skill 各门写的都是 picker 形态；runtime 不支持时 AI 按 §1.3 自动退化为编号列表，仍 wait。
 
 ```
 ┌─────────────────────────────────────────────────────────┐

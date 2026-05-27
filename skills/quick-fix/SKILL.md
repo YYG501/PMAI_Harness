@@ -6,6 +6,8 @@ description: |
 
 # /pmai-quick-fix
 
+> **PM 答题规则（M4）**：所有 AskUserQuestion 调用按 `_shared/pm-view/askuser-rules.md` §1 四条硬规则走（空答 STOP / 没拿到答案禁止 ff-merge / runtime 退化保留 wait / 多决策拆开顺序问）。**Runtime 兜底**：本 skill 如有 picker 门时，runtime 不支持时 AI 按 §1.3 自动退化为编号列表，仍 wait。
+
 ## When To Use
 
 - PM 明确判断某个改动不需要完整 `/pmai-new-req` 流程或开新 task
@@ -172,7 +174,16 @@ PM 在 req 分支 quick-fix 触及阶段产物（brief / analysis / prd / task-p
 **Short-circuit**（PM 不必先分类，AI 直接走"轻量"路径）：
 - diff 仅触及 §📁 历史档案 / 显著的引用更新 / 显然的 typo —— AI 在偏差扫描区块里说明"识别为轻量类，跳过分类提问"
 
-**边界 case 由 PM 拍板**：AI 不确定时回单行问 PM "决策性 / 轻量"。
+**边界 case 由 PM 拍板**：AI 不确定时用 AskUserQuestion picker：
+
+- `question`: "本次改动是决策性修订还是轻量？"
+- `options`:
+  - `label`: `决策性`
+    `description`: `必走 stage-rollback / stage 3 /pmai-prd-writing revise，quick-fix 拒绝`
+  - `label`: `轻量`
+    `description`: `仅触动叙述/格式载体章节，允许 quick-fix 直接修`
+
+Runtime 不支持时按 `_shared/pm-view/askuser-rules.md §1.3` 退化编号列表。
 
 ### 3.5.2 合同概念分类（指导原则）
 

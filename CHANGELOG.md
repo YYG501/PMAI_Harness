@@ -18,6 +18,38 @@ PM-AI-Workflow 生成器仓的演进记录。本文件**只记影响下游业务
 
 ## 已发布版本
 
+### 2026-05-27 — 12 个用户决策 skill 全部 picker 化（v5 PM 视图统一收敛 第二批）
+
+**触发**：上一条 req-stage-gate 全门 picker 化只动了 stage 流程 orchestrator。PM 想"所有让用户决策的 skill 都 OK"，跑 audit 发现 12 个 skill 里只有 2 个完全 picker 化、6 个还在 prose、4 个部分 picker 化。
+
+**改动**（每个 skill 顶部 M4 引用统一升级 + 主 prose 决策门改 picker）：
+
+| Skill | 主要改动 |
+|---|---|
+| `close-task` | 0.3 B 类对齐 / 1.2 计划外简化 / 1.5.2 拿不准分类 / 1.6.3 跨功能规则 / P2.4 关 req 门 全 picker 化 |
+| `close-req` | 1.5 rewrite vs patch / 2.5 候选孤儿三选一 / 2c 项目级同步 全 picker 化 |
+| `task-execute` | 入口步骤 2.4 drift 整体策略 + 逐文件 picker / 步骤 12 PM 验收 picker（通过 / 打回） |
+| `task-submit` | 步骤 4 PM 验收 picker（通过 / 打回） |
+| `new-req` | 步骤 3 brief 引导方式 picker（AI 引导 / 我自己写）+ 二次确认 picker |
+| `quick-fix` | 步骤 3.5 决策性 vs 轻量分类 picker；顶部加 M4 引用 |
+| `prd-writing` | standalone 模式步骤 0 三选一对话 → 三连 picker（写哪部分 / 产物路径 / 输入清单）；顶部加 M4 引用 |
+| `project-solution` | 步骤 6 最简 / 详细 / 混合三选模式 picker；顶部加 M4 引用 |
+| `pmai-upgrade` | Step 2 升级模式四选 picker + D 暂缓子流程二级 picker（1 天 / 1 周 / 永远）；顶部加 M4 引用 |
+| 顶部 M4 引用统一升级 | init-project / task-confirm / task-submit / task-execute / new-req / close-task / close-req / skill-improve 八个 skill 的「§1 3 硬规则」→「§1 四条硬规则」+ 加 Runtime 兜底重申 |
+
+**未改的（设计上保留）**：
+
+- `task-confirm` 步骤 6 执行方式列表（informational + PM 被动选；不是阻塞门）
+- `skill-improve` 步骤 4 用 multiSelect（已 picker 化，>3 项分组形式不强制改）
+
+**业务仓影响**：
+
+- 所有 PM 决策门变成 picker 卡片 + 编号 fallback。PM 高频触发的 close-task / close-req / task-execute / task-submit 全统一形态。
+- 续跑模式（PM 答"OK"自动推进）失效，PM 必须显式选 picker 选项（点击 / 输数字 / 输 label 关键词）。
+- 模糊词（"OK / 通过 / 差不多了"）AI 反问澄清而非默认推进（按 askuser-rules.md §1.1）。
+
+---
+
 ### 2026-05-27 — Stage 3/5 重命名 + req-stage-gate 全门 AskUserQuestion picker 化 + stage 转换标题加名字
 
 **触发**：消费仓 ExampleConsumerApp req-009 反馈三处 PM 视角不对劲 ——

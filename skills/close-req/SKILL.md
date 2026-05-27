@@ -8,7 +8,7 @@ description: |
 
 > **PM 视图（M2 banner + Decision gate label）**：入口 banner（`status-view.py --banner-only --skill CLOSE-REQ`）；close-report 定稿闸门 label 按 `_shared/pm-view/banner-rules.md` §3 3 硬规则；退出 Next Up 引导「项目方向是否需要调整」（`/pmai-project-solution` 产品路线规划场景）或 `/pmai-new-req` 起下一 req。
 >
-> **PM 答题规则（M4）**：所有 AskUserQuestion 调用按 `_shared/pm-view/askuser-rules.md` §1 3 硬规则走（空答 STOP / 没拿到答案禁止 merge to main / runtime 退化保留 wait）。
+> **PM 答题规则（M4）**：所有 AskUserQuestion 调用按 `_shared/pm-view/askuser-rules.md` §1 四条硬规则走（空答 STOP / 没拿到答案禁止 merge to main / runtime 退化保留 wait / 多决策拆开顺序问）。**Runtime 兜底**：本 skill 各门写的都是 picker 形态；runtime 不支持时 AI 按 §1.3 自动退化为编号列表，仍 wait。
 
 ## When To Use
 
@@ -159,22 +159,28 @@ PENDING_MARKER="$REPO_ROOT/.runs/pending-close-req.json"
    - 建议 modulespec 目标路径（基于 task「所属模块」字段 + 现有 `docs/modules/` 目录结构推断）
    - **AI 自审反证**一行：「这不该入 modulespec 的理由」—— 强制 AI 给出否定理由，防过度推荐
 
-   **PM 决议**（每条候选三选一，AskUserQuestion）：
+   **PM 决议**（每条候选用 AskUserQuestion picker，按 `askuser-rules.md §1.4` 多决策拆开顺序问）：
 
-   | 决议 | 行为 |
-   |---|---|
-   | **建** | 本 req 顺便建 modulespec 主规格文件 → 追加进步骤 3 决议表，走 rewrite 分支 |
-   | **不建（追认代码即文档）** | close-report.md `## 文档变更` 段加一行：「<结构类型>：真相源 = <代码路径>（PM close-req-NNN 追认）」防下个 req 重复问 |
-   | **推下个 req** | close-report.md `## 遗留问题` 段加一条点名（含建议 modulespec 路径 + 涉及文件） |
+   - `question`: "「<结构类型>」候选 modulespec 怎么处理？"
+   - `options`:
+     - `label`: `建 modulespec`
+       `description`: `本 req 顺便建 modulespec 主规格文件 → 追加进步骤 3 决议表，走 rewrite 分支`
+     - `label`: `不建（追认代码即文档）`
+       `description`: `close-report.md「## 文档变更」段加一行追认（防下个 req 重复问）`
+     - `label`: `推下个 req`
+       `description`: `close-report.md「## 遗留问题」段加一条点名（含建议 modulespec 路径 + 涉及文件）`
 
    **零候选**：反查无候选孤儿 → 直接跳到步骤 3，不调 AskUserQuestion。
 
-3. 聚合后呈交 PM，按目标文档逐份决议（AskUserQuestion 或 prose；**两选项**，skip 分支已砍）：
+3. 聚合后呈交 PM，按目标文档逐份决议用 AskUserQuestion picker（按 `askuser-rules.md §1.4` 多决策拆开顺序问；skip 分支已砍）：
 
-   | 决议 | 触发条件 | 行为 |
-   |---|---|---|
-   | **rewrite**（默认 / 主路径） | 任何 closed task 改某目标文档 → 默认 rewrite | 调 doc-update SKILL 步骤 8 rewrite mode（req-level aggregation contract，不要求 ≥2 SKIP marker）|
-   | **patch** | PM 显式选 + 单 task 单文档单段 | 调现有 doc-update 对账模式（步骤 1.5/1.6/2-5）|
+   每份目标文档一次 AskUserQuestion：
+   - `question`: "<目标文档路径> 用 rewrite 还是 patch？"
+   - `options`:
+     - `label`: `rewrite`
+       `description`: `默认 / 主路径——调 doc-update SKILL 步骤 8 rewrite mode（req-level aggregation contract，不要求 ≥2 SKIP marker）`
+     - `label`: `patch`
+       `description`: `单 task 单文档单段时用——调现有 doc-update 对账模式（步骤 1.5/1.6/2-5）`
 
 4. PM 决议后，doc-update SKILL §8 返回 `{覆盖的目标文档清单, 覆盖的模块清单}`（输出契约），供步骤 2a 作 metric。
 5. **回填 close-report.md `## 文档变更` 段**：把 `REWRITE_COVERED_FILES` 写进步骤 1 初稿留的 placeholder。
@@ -321,14 +327,17 @@ python3 "$PMAI_HOME/scripts/check-doc-pm-view.py" "$ACTIVE_REQ_DIR/prd.md"
   1. **req 级变更内容**（`## 🔧 本轮实现深度变更` 原文）
   2. **项目级当前**：`$REPO_ROOT/CLAUDE.md` 的 `## 工程结构约束` section（auto-detected 标 + 派生内容）
 
-  问 PM：
+  AskUserQuestion：
+  - `question`: "本 req 改了项目代码架构。是否把变更同步到项目级 CLAUDE.md「## 工程结构约束」段（让后续 req 默认按新深度走）？"
+  - `options`:
+    - `label`: `同步到项目级`
+      `description`: `PM 手改 $REPO_ROOT/CLAUDE.md「## 工程结构约束」段，删 auto-detected 标后视为手填，框架不再覆盖`
+    - `label`: `不同步`
+      `description`: `本 req 是一次性升级 / 试验，不影响后续 req 默认深度（项目级保持原档）`
 
-  > 本 req 改了项目代码架构。是否把变更同步到项目级 `CLAUDE.md`「## 工程结构约束」段（让后续 req 默认按新深度走）？
-  > - **[Y] 同步**：PM 手改 `$REPO_ROOT/CLAUDE.md`「## 工程结构约束」段，删 auto-detected 标后视为手填，框架不再覆盖
-  > - **[N] 不同步**：本 req 是一次性升级 / 试验，不影响后续 req 默认深度（项目级保持原档）
-
-  - PM 选 **Y**：AI 不替 PM 改项目级（手改 = PM 决策落地，AI 不抢）；提示 PM「请手改 `$REPO_ROOT/CLAUDE.md`，按本 req 升级写新版本」+ 等 PM 改完确认后再继续步骤 3
-  - PM 选 **N**：不动，本步骤结束
+  **PM 答题处理**：
+  - 选 `同步到项目级` / 输 `1` → AI 不替 PM 改项目级（手改 = PM 决策落地，AI 不抢）；提示 PM「请手改 `$REPO_ROOT/CLAUDE.md`，按本 req 升级写新版本」+ 等 PM 改完确认后再继续步骤 3
+  - 选 `不同步` / 输 `2` → 不动，本步骤结束
 
 **Why 不让 AI 自动改项目级**：项目级深度变更影响所有后续 req，是 PM 长期决策；AI 自动覆盖容易把试验性升级当成永久升级。让 PM 手改，PM 心智更明确「我在改全局规则」。
 

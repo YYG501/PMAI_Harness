@@ -13,6 +13,8 @@ description: |
 
 # /pmai-project-solution
 
+> **PM 答题规则（M4）**：所有 AskUserQuestion 调用按 `_shared/pm-view/askuser-rules.md` §1 四条硬规则走（空答 STOP / 没拿到答案禁止落盘 PROJECT.md / ROADMAP.md / runtime 退化保留 wait / 多决策拆开顺序问）。**Runtime 兜底**：本 skill 各门写的都是 picker 形态；runtime 不支持时 AI 按 §1.3 自动退化为编号列表，仍 wait。
+
 ## When To Use
 
 PM 主动调用，**4 个独立场景**：
@@ -107,16 +109,27 @@ echo "SKILL: project-solution"
 
 #### 步骤 6：开场问模式（场景特定，留 SKILL.md）
 
+prose 头部：
 ```
 📝 准备写项目方向（docs/PROJECT.md + docs/ROADMAP.md）。
-
-想填详细版（按完整规范），还是最简版（产品定位 1 句话 / 1 个主角色 / 1 条术语 起手）？
-最简版几分钟搞定，以后起 req 时还能接着补。
 ```
 
-- PM 答「最简 / 简版 / 快」→ 精简模式：每节 1 条起手即接受
-- PM 答「详细 / 完整 / 详版」→ 详细模式：按 PROJECT 模板各节注释里的规范长度
-- PM 答「混合」→ 各节 PM 临场决定
+AskUserQuestion：
+- `question`: "用哪种模式起手？"
+- `options`:
+  - `label`: `最简版`
+    `description`: `产品定位 1 句话 / 1 个主角色 / 1 条术语起手，几分钟搞定（推荐 trivial 项目）`
+  - `label`: `详细版`
+    `description`: `按 PROJECT 模板各节注释里的规范长度填`
+  - `label`: `混合`
+    `description`: `各节 PM 临场决定`
+
+**PM 答题处理**：
+- 选 `最简版` / 输 `1` / 输 "最简 / 简版 / 快" → 精简模式：每节 1 条起手即接受
+- 选 `详细版` / 输 `2` / 输 "详细 / 完整 / 详版" → 详细模式：按 PROJECT 模板各节注释里的规范长度
+- 选 `混合` / 输 `3` → 各节 PM 临场决定
+
+Runtime 不支持 AskUserQuestion 时按 `_shared/pm-view/askuser-rules.md §1.3` 退化编号列表。
 
 > **fast-path**：精简模式下 trivial 项目不被前置仪式拖住 —— 产品定位一句话、用户画像一个角色、术语表一条，起手即可过门。
 

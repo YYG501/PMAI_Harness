@@ -8,7 +8,7 @@ description: |
 
 > **PM 视图（M2 banner + Decision gate label）**：本 skill 入口出 banner（`status-view.py --banner-only --skill NEW-REQ`）；退出出 Next Up 块（按 `_shared/pm-view/banner-rules.md` §2，引导 `/pmai-req-stage-gate` 推进）；闸门 label 按 §3 3 硬规则。
 >
-> **PM 答题规则（M4）**：所有 AskUserQuestion 调用按 `_shared/pm-view/askuser-rules.md` §1 3 硬规则走（空答 STOP / 没拿到答案禁止落盘 / runtime 退化保留 wait）。
+> **PM 答题规则（M4）**：所有 AskUserQuestion 调用按 `_shared/pm-view/askuser-rules.md` §1 四条硬规则走（空答 STOP / 没拿到答案禁止落盘 / runtime 退化保留 wait / 多决策拆开顺序问）。**Runtime 兜底**：本 skill 各门写的都是 picker 形态；runtime 不支持时 AI 按 §1.3 自动退化为编号列表，仍 wait。
 
 ## When To Use
 
@@ -205,18 +205,22 @@ git -C "$REPO_ROOT" commit -m "chore(baseline): new-req 入口兜底 PROJECT.md 
 
 **关键工程约束**：本步全程**主对话 cwd 在主仓 main**，**不**拉 worktree、**不**写任何文件到磁盘（baseline commit 例外，已在步骤 2 完成）。brief 草稿在 chat 里 markdown block 展示给 PM 看；attachments PM 提交意图也只在内存里记录 list，**实际 cp + register 推迟到步骤 4 worktree 创建后**。这样：(a) main 工作区零脏（PM `git status` 看到的永远是 clean）；(b) PM 视角"我说完 OK 它才创建工作区"，不会出现"AI 中段切了 cwd"的体验破绽。
 
-输出提示给 PM（不列字母，给两种候选路径）：
-
+prose 头部：
 ```
-brief.md 还没写。两种方式：
-
-1. 给我说说需求要点 — 我做缺口分析、补问 1-3 题、出 brief 草稿、走二次确认（默认）
-2. 你自己写完整 brief.md — 我只做格式校验
-
-等你说就行。
+brief.md 还没写。
 ```
 
-**等 PM 主动告诉**采用哪种路径或直接给内容。
+AskUserQuestion：
+- `question`: "用哪种方式写 brief？"
+- `options`:
+  - `label`: `AI 引导`
+    `description`: `给我说说需求要点—我做缺口分析、补问 1-3 题、出 brief 草稿、走二次确认（默认）`
+  - `label`: `我自己写`
+    `description`: `你自己写完整 brief.md，我只做格式校验`
+
+**PM 答题处理**：
+- 选 `AI 引导` / 输 `1` / 直接描述需求 → 走下方 AI 主导轻量引导流程
+- 选 `我自己写` / 输 `2` → 等 PM 把完整 brief.md 文本贴 chat，AI 做格式校验后进步骤 4
 
 > **历史决策**：早期版本曾有"选项 1 自跑 office-hours 把产出贴回来 AI 整理"
 > 该路径已砍掉 —— office-hours 跨 Stage 1+2 集成机制改在 Stage 2 stage-gate
@@ -238,22 +242,30 @@ PM 选 1 或直接开始描述需求时，AI 走以下流程：
 
 3. **出 brief 草稿**：拿到答案后，AI 按 `_shared/pm-view/writing-rules.md` §三 + `_shared/pm-view/doc-strictness.md` §四 brief.md 行拼一版 brief 草稿，**直接在 chat 里 markdown block 展示给 PM 看**（不写文件 —— worktree 还没创建，brief.md 真实路径不存在）。
 
-4. **二次确认门**（v3 书面体；此时文件还没落盘，路径行省略）：
-   ```
-   Stage 1（描述需求）— brief 待确认
+4. **二次确认门**（v5 picker；此时文件还没落盘，路径行省略）：
 
-   📋 一句话摘要
+   prose 头部：
+   ```
+   Stage 1 描述需求 → 2 需求分析
+
+   📋 摘要
       <一行>
 
    📝 brief 草稿
       （chat 上方的 markdown block）
-
-   这版 brief 内容是否可以定稿？如还有需要调整的内容，请直接说；确认后我会创建 worktree，把 brief 一并 commit 进 req 分支，然后让你切窗口继续 Stage 2。
    ```
 
-5. **PM 回答的内部分流**（不列字母）：
-   - PM 说「OK / 通过 / 没问题 / 定了」等 → 进步骤 4（拉 worktree + 一次 commit + handoff）
-   - PM 提具体修改 → 按 PM 指示改 chat 里的 brief 草稿（内存中改即可），改完回到步骤 4 重新出二确（不贴全文，参 Rules "确认门只给一句话摘要 + 草稿块"）
+   AskUserQuestion：
+   - `question`: "这版 brief 内容是否可以定稿？"
+   - `options`:
+     - `label`: `创建 worktree`
+       `description`: `定稿，AI 创建 worktree + commit brief，PM 切窗口继续 Stage 2`
+     - `label`: `还要改`
+       `description`: `说哪里要改`
+
+5. **PM 答题处理**：
+   - 选 `创建 worktree` / 输 `1` / 输 "OK / 通过 / 没问题 / 定了" → 进步骤 4（拉 worktree + 一次 commit + handoff）
+   - 选 `还要改` / 输 `2` / 提具体修改 → 按 PM 指示改 chat 里的 brief 草稿（内存中改即可），改完回到步骤 4 重新出二确（不贴全文，参 Rules "确认门只给摘要 + 草稿块"）
 
 **禁止**：
 - AI 主动调用 `/office-hours` 或任何 review/research skill — `/office-hours` 是 gstack 通用产品发现工具（含 builder/startup 模式选择 + telemetry + gbrain context queries），适合 PM 自主使用，不适合 AI 替 PM 跑；PM 想用 office-hours 风格深挖，在 Stage 2 stage-gate 入口走 B 分支即可

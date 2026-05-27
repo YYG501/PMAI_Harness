@@ -9,7 +9,7 @@ description: |
 
 > **PM 视图（M2 banner + Decision gate label）**：每个 phase 入口 banner（`status-view.py --banner-only --skill CLOSE-TASK`）；偏差分类闸门 / PM 总审 diff 闸门 label 按 `_shared/pm-view/banner-rules.md` §3 3 硬规则；退出 Next Up 引导 `/pmai-close-req`（最后一个 task）或 `/pmai-task-confirm <next-task>`。
 >
-> **PM 答题规则（M4）**：所有 AskUserQuestion 调用按 `_shared/pm-view/askuser-rules.md` §1 3 硬规则走（空答 STOP / 没拿到答案禁止 merge / runtime 退化保留 wait）。
+> **PM 答题规则（M4）**：所有 AskUserQuestion 调用按 `_shared/pm-view/askuser-rules.md` §1 四条硬规则走（空答 STOP / 没拿到答案禁止 merge / runtime 退化保留 wait / 多决策拆开顺序问）。**Runtime 兜底**：本 skill 各门写的都是 picker 形态；runtime 不支持时 AI 按 §1.3 自动退化为编号列表，仍 wait。
 
 ## 两阶段调用（必读）
 
@@ -163,19 +163,30 @@ B 类的三种「必要」情况：
 **A 类（默认对齐，不问 PM）**：AI 用 Edit 改 `$TASK_FILE`，把过期描述对齐到代码实际。
 记下「对齐了哪几段」，留给步骤 2.3 汇总。
 
-**B 类（逐条呈交 PM）**：每条 B 类呈交 PM 后问（AskUserQuestion 或 prose；按 PM 自然语言意图分流）：
+**B 类（逐条呈交 PM）**：每条 B 类用 AskUserQuestion picker（按 `askuser-rules.md §1.4` 多决策拆开顺序问，runtime 不支持时按 §1.3 退化编号列表）：
 
+prose 头部：
 ```
 这条对齐要你定一下（B 类原因：<§0.2 自判的原因>）：
- - 改 task md 对齐实际原型
- - 改代码对齐 task md（需回 task 窗口重做）
- - 这条不重要，跳过
+  文档原文：<偏差行第 2 列>
+  实际实现：<偏差行第 3 列>
 ```
 
-**PM 回答的内部分流**：
-- PM 说「改 md / md 对齐 / 改 task 文档」等 → AI 用 Edit 改 `$TASK_FILE`，改后展示 git diff
-- PM 说「改代码 / 回退原型」等 → AI **不能自己改代码**。提示 PM：「这条对齐要回退原型。建议先关掉 close-task，回 task 窗口跑 /pmai-task-execute 重做后再 close。还是确认要在 close-task 阶段直接改代码？」 → PM 坚持要在本阶段改 → 视为退出 close-task 流程，AI 输出"请回 task 窗口重做"并 exit
-- PM 说「跳过 / 算了 / 不重要」等 → AI 不动 task md，进下一条
+AskUserQuestion：
+- `question`: "这条偏差怎么对齐？"
+- `options`:
+  - `label`: `改 task md`
+    `description`: `对齐 task md 到实际原型，AI 用 Edit 改完展示 git diff`
+  - `label`: `改代码`
+    `description`: `回退原型对齐 task md（建议关掉 close-task 回 task 窗口跑 /pmai-task-execute 重做）`
+  - `label`: `跳过`
+    `description`: `这条不重要，AI 不动 task md，进下一条`
+
+**PM 答题处理**：
+- 选 `改 md` / 输 `1` / 输 "改 md / md 对齐 / 改 task 文档" → AI 用 Edit 改 `$TASK_FILE`，改后展示 git diff
+- 选 `改代码` / 输 `2` / 输 "改代码 / 回退原型" → AI **不能自己改代码**。提示 PM：「建议先关掉 close-task 回 task 窗口跑 /pmai-task-execute 重做后再 close。还是确认要在 close-task 阶段直接改代码？」→ PM 坚持要在本阶段改 → 视为退出 close-task 流程，AI 输出"请回 task 窗口重做"并 exit
+- 选 `跳过` / 输 `3` / 输 "跳过 / 算了 / 不重要" → AI 不动 task md，进下一条
+- PM 空答 / 没答 → STOP wait next message（按 `askuser-rules.md §1.1`）
 
 **无 B 类（全 A 类，或 N=0）**：本步骤不打断 PM，对齐完直接进步骤 0.4。
 
@@ -245,24 +256,28 @@ close-task **不调** `/pmai-doc-update`。偏差记录原样保留在 task 文�
 
 #### 1.2 计划外简化：停下问 PM 回填 implementation-design.md（C9 限定 close-time）
 
-对每条计划外简化偏差呈交 PM：
+对每条计划外简化偏差用 AskUserQuestion picker（按 `askuser-rules.md §1.4` 多决策拆开顺序问）：
 
+prose 头部：
 ```
 本 task 偏差表第 N 行像「原型本期临时少做」（不是文档写错）：
  - 文档原文：<偏差行第 2 列>
  - 实际实现：<偏差行第 3 列>
-
-这是计划内简化（应该回填 stage 5 implementation-design.md 段 1.5 SIMP-NN，让 close-req
-正确标注 PRD），还是真偏差（按原路径 promote adjustment 覆盖 PRD）？
-
- - 回填 simp 段（推荐 —— PRD 保留真实需求 + 加「原型本次计划简化为」标注）
- - 按 adjustment promote（PRD 改成实际做成的样子；真实需求只在 req-events.before 留痕）
- - 跳过这条不处理（PM 自己事后决策）
 ```
 
-**PM 回答的内部分流**：
+AskUserQuestion：
+- `question`: "这条偏差是计划内简化（回填 SIMP-NN）、真偏差（promote adjustment 覆盖 PRD），还是跳过？"
+- `options`:
+  - `label`: `回填 simp 段`
+    `description`: `推荐——PRD 保留真实需求 + 加「原型本次计划简化为」标注`
+  - `label`: `按 adjustment promote`
+    `description`: `PRD 改成实际做成的样子；真实需求只在 req-events.before 留痕`
+  - `label`: `跳过这条`
+    `description`: `不处理，PM 自己事后决策`
 
-- PM 选「回填 simp 段」→ AI 用 Edit 在 implementation-design.md 段 1.5 末追加一行：
+**PM 答题处理**：
+
+- 选 `回填 simp 段` / 输 `1` → AI 用 Edit 在 implementation-design.md 段 1.5 末追加一行：
   - SIMP-ID 顺延接（读现有最大 SIMP-NN，+1）
   - PRD 锚点 = 偏差行第 1 列「文档位置」
   - 真实需求 = 「见 PRD <文档位置>」引用
@@ -273,7 +288,8 @@ close-task **不调** `/pmai-doc-update`。偏差记录原样保留在 task 文�
   - **C9 限定**：回填只在 close-time（本步骤）发生；**不**触发已完成 task 重新生成 / 不**回退**
     其他已 closed task 的 task-spec / 不**重生成**当前 task。类比 close-req PRD 反向对齐 ——
     本步骤是「写入设计文档」的 close 时一次性动作，下游 task 不重跑。
-- PM 选「按 adjustment promote」→ 偏差行留原表不动（走原路径）
+- 选 `按 adjustment promote` / 输 `2` → 偏差行留原表不动（走原路径）
+- 选 `跳过这条` / 输 `3` → 不处理，进下一条
 - PM 选「跳过」→ 偏差行留原表不动，备注「PM 选择不分类」
 
 #### 1.3 全部分类完成后
@@ -316,7 +332,25 @@ Read 本 task PM 视图主文件的 PM 反馈 section，提取候选：
 | **③ 共享组件 inventory 新规范 / 现有组件规格补充** | "侧栏导航选中态颜色其实应该 X / 新增一个 toast 组件" — 指向 inventory 段的某一行 | **patch DESIGN.md `## 共享组件 inventory` 表**（已有组件更新视觉/状态/交互列，或新组件追行）。记账 `Y-inventory` |
 | **④ 文案 voice & tone（拒绝写 DESIGN.md）** | "空状态文案太严肃 / 错误提示应该俏皮 / 所有 toast 文案都用 X 风格" | **拒绝写 DESIGN.md**，告知 PM "这是文案 voice & tone，建议沉淀到 docs/PROJECT.md（项目级语气）或 docs/prd.md（req 级文案）；DESIGN.md 只管视觉规范"。记账 `N-wrong-doc` |
 
-AI 拿不准 → 呈交 PM 对话式问句让 PM 拍板（4 选 1）。
+AI 拿不准 → 呈交 PM 用 AskUserQuestion picker（4 选 1）：
+
+prose 头部：
+```
+本条反馈分类拿不准（请你拍）：
+  反馈原文：<反馈条目>
+```
+
+AskUserQuestion：
+- `question`: "这条反馈属于哪一类？"
+- `options`:
+  - `label`: `本 task 实现偏差`
+    `description`: `不动 DESIGN.md，task 仍在 worktree 应改代码 / 已合并起 quick-fix`
+  - `label`: `项目级视觉基线更新`
+    `description`: `patch DESIGN.md gstack 写的对应段（Color/Typography/Spacing 等）`
+  - `label`: `共享组件 inventory 新规范`
+    `description`: `patch DESIGN.md 共享组件 inventory 表`
+  - `label`: `文案 voice & tone`
+    `description`: `拒绝写 DESIGN.md，建议沉淀到 PROJECT.md（项目级）或 prd.md（req 级）`
 
 #### 1.5.3 沉淀处理（按子类执行）
 
@@ -379,17 +413,25 @@ Read 本 task 审计区·历史档案的 PM 反馈段，AI 预判哪些条目属
 - 来源：<本 req / task>（<日期>）
 ```
 
-**拿不准才逐条问 PM**：仅当 AI 判断该条可能够不上「全项目跨功能规则」（够不上全项目、
-或该归术语表 / modulespec / DESIGN.md）→ 呈交 PM：
+**拿不准才逐条问 PM**：仅当 AI 判断该条可能够不上「全项目跨功能规则」（够不上全项目、或该归术语表 / modulespec / DESIGN.md）→ AskUserQuestion picker：
 
+prose 头部：
 ```
-这条我拿不准（[反馈摘要]）：
- - promote 进 PRODUCT-RULES.md（全项目跨功能规则）
- - 不是跨功能规则（留 task 或改归别处）
+这条规则我拿不准是不是全项目跨功能：
+  反馈原文：<反馈摘要>
 ```
 
-- PM 选 promote → AI 追加进 PRODUCT-RULES.md（不 commit）
-- PM 说不是 → 不动 PRODUCT-RULES.md，按 PM 指示归类
+AskUserQuestion：
+- `question`: "这条规则归到 PRODUCT-RULES.md 还是别处？"
+- `options`:
+  - `label`: `promote 进 PRODUCT-RULES.md`
+    `description`: `全项目跨功能产品行为规则`
+  - `label`: `不是跨功能规则`
+    `description`: `留 task 或改归别处（你说归哪）`
+
+**PM 答题处理**：
+- 选 `promote` / 输 `1` → AI 追加进 PRODUCT-RULES.md（不 commit）
+- 选 `不是跨功能规则` / 输 `2` → 不动 PRODUCT-RULES.md，按 PM 指示归类
 
 PRODUCT-RULES.md 改动 patch-不-commit，PM 在 close 收尾审总 diff 自己 commit。
 
@@ -538,24 +580,31 @@ rm -f "$PENDING_MARKER"
 
   模板跟 `req-stage-gate/SKILL.md`「Stage 6 → 7」段步骤 3 **共用同一段文案**（关 req 模板单一真相源在 req-stage-gate；本处只复述，不允许两边偏移）：
 
+  prose 头部：
   ```
-  Stage 6（task 执行）— 全部 task 已完成
+  Stage 6 task 执行 → 7 req close
 
   ✅ 状态
      <N 个 task 全部 close、worktree 全部清理>
-
-  是否确认关闭此需求？如还需开启新的 task，请直接说；确认后我会启动关闭流程（Stage 7）。
   ```
 
-  PM 答的三种分支：
+  AskUserQuestion：
+  - `question`: "是否确认关闭此需求，进入 Stage 7 req close？"
+  - `options`:
+    - `label`: `关闭 req`
+      `description`: `启动 /pmai-close-req（生成 close-report、PRD 反向对齐、merge 进 main、归档）`
+    - `label`: `还要开新 task`
+      `description`: `本 req 还没完，回 stage 6 跑 /pmai-task-spec 起新 task`
 
-  - **「确认 / 关 / 关闭」**（或语义等价）→ AI 跑推进 + chain `/pmai-close-req`：
+  **PM 答题处理**：
+
+  - 选 `关闭 req` / 输 `1` / 输 "确认 / 关 / 关闭" → AI 跑推进 + chain `/pmai-close-req`：
     ```bash
     python3 "$PMAI_HOME/scripts/req-transition.py" "$ACTIVE_REQ_DIR" --to 7
     ```
     成功后直接调用 `/pmai-close-req`（不再发"已推进 Stage 6→7"过渡通知，跟 req-stage-gate 续跑模式规则一致）
-  - **「我还要加新 task」/ 提具体 task 描述** → AI 转 `/pmai-task-spec` 起新 task，**不**推 Stage 7
-  - **不答关窗口** → 几天后 PM 回来重敲 `/pmai-req-stage-gate`，由 req-stage-gate 的 Stage 6→7 入口重新拉起同一个关 req 门（兜底续走路径，确保关 req 门永远有入口）
+  - 选 `还要开新 task` / 输 `2` / 提具体 task 描述 → AI 转 `/pmai-task-spec` 起新 task，**不**推 Stage 7
+  - PM 不答关窗口 → 几天后 PM 回来重敲 `/pmai-req-stage-gate`，由 req-stage-gate 的 Stage 6→7 入口重新拉起同一个关 req 门（兜底续走路径，确保关 req 门永远有入口）
 
 **额外提示（仅当 Phase 1 步骤 1.5 patch 过 DESIGN.md 时）**：
 

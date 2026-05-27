@@ -9,7 +9,7 @@ description: |
 
 # /pmai-task-submit
 
-> **PM 答题规则（M4）**：所有 AskUserQuestion 调用（呈交块决策：通过完成 / 退回继续打磨）按 `_shared/pm-view/askuser-rules.md` §1 3 硬规则走（空答 STOP / 没拿到答案禁止切 task 状态为「已完成」/ runtime 退化保留 wait）。**禁止默认走 recommend 分支 / 禁止逃生舱**。
+> **PM 答题规则（M4）**：所有 AskUserQuestion 调用（呈交块决策：通过完成 / 退回继续打磨）按 `_shared/pm-view/askuser-rules.md` §1 四条硬规则走（空答 STOP / 没拿到答案禁止切 task 状态为「已完成」/ runtime 退化保留 wait / 多决策拆开顺序问）。**禁止默认走 recommend 分支 / 禁止逃生舱**。**Runtime 兜底**：本 skill 呈交块用 picker 形态；runtime 不支持时 AI 按 §1.3 自动退化为编号列表，仍 wait。
 
 ## When To Use
 
@@ -182,9 +182,17 @@ PM 看原型 / 看 diff 时，如果发现 prd / implementation-design / analysi
 Diff: N 文件 +X -Y 行 → PM 通过/打回？
 ```
 
-### 步骤 4：等待 PM 决策
+### 步骤 4：等待 PM 决策（AskUserQuestion picker）
 
-**PM 说"通过"：**
+呈交块（步骤 3 输出）后，AI 调 AskUserQuestion：
+- `question`: "task-NNN 验收？"
+- `options`:
+  - `label`: `通过`
+    `description`: `task 转「已完成」，进 /pmai-close-task`
+  - `label`: `打回`
+    `description`: `task 保持「执行中」，AI 基于反馈继续修；说哪里要改`
+
+**PM 选 `通过`**（或输 `1` / 输 "OK / 通过 / 没问题"）：
 
 ```bash
 python3 "$PMAI_HOME/scripts/task-transition.py" "<task-file>" --to 已完成
@@ -203,7 +211,7 @@ python3 "$PMAI_HOME/scripts/task-transition.py" "<task-file>" --to 已完成
 本次 close 收尾在当前窗口做完（文档对齐 + 视觉规范沉淀），完成后会提示你切到 req 窗口再跑一次 /pmai-close-task 完成清理。
 ```
 
-**PM 说"打回"：**
+**PM 选 `打回`**（或输 `2` / 提具体反馈 / 输 "打回 / 改一下 / 不对"）：
 
 > 打回**不切状态** — task 全程是「执行中」，AI 直接基于反馈继续修，不再走 `--to 执行中` 回退（该 transition 已删除，I-TT4 废弃）。
 
