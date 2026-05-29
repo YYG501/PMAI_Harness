@@ -16,6 +16,14 @@ PM-AI-Workflow 生成器仓的演进记录。本文件**只记影响下游业务
 
 ---
 
+## 未发布
+
+### PMAI 重构落地（office-hours 收敛）—— 进行中
+
+- `feat(templates)`: 新增三个脊柱模板 —— `PRODUCT-STATE.md.tmpl`（产品现状层 hub：当前功能 / 主原型现状 / 实现深度状态 / 索引；只在沉淀时更新）、`req-plan.md.tmpl`（per-req 实现文档：范围清单 + 关键决策两节）、`DESIGN.md.tmpl`（正向视觉约束 + 产品化 demo 目标 + UI 习惯）。属重构「薄脊柱」首批；**尚未接线**（init-project / new-req 改造在后续 commit）。设计真相源见 `docs/设计/PMAI重构方向-office-hours收敛.md` + `docs/设计/PMAI重构-实施清单.md`。
+
+---
+
 ## 已发布版本
 
 ### 2026-05-27 — 12 个用户决策 skill 全部 picker 化（v5 PM 视图统一收敛 第二批）
