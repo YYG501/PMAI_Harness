@@ -140,8 +140,28 @@ def render_banner_only(state: dict, repo_root: Path, skill: str) -> None:
     print(banner)
 
 
+def _product_oneliner(repo_root: Path) -> str:
+    """PRODUCT-STATE.md 的产品现状一句话（产品轴 lead 用）；读不到返回空串。
+
+    六步重构：播报主轴从「Stage N/M」转成「你的产品现在长什么样 + 在做什么」。
+    产品定位一句话从 PRODUCT-STATE.md 取（根目录或 docs/）；无则 lead 留空、退回 req 轴。
+    """
+    for cand in (repo_root / "PRODUCT-STATE.md", repo_root / "docs" / "PRODUCT-STATE.md"):
+        if not cand.exists():
+            continue
+        try:
+            for line in cand.read_text(encoding="utf-8").splitlines():
+                s = line.strip()
+                if not s or s[0] in "#<>|" or s.startswith("---"):
+                    continue
+                return s[:80]
+        except OSError:
+            pass
+    return ""
+
+
 def render_narrative(state: dict, repo_root: Path) -> None:
-    """M5 /  : AI 可直接念的进度叙述。
+    """M5 /  : AI 可直接念的进度叙述（产品轴）。
 
     范围（codex C-4 降级）：当前 active req / 当前 stage / 产物文件 / 最近 transition；
     **不到小节级**（如「§四」/ commit hash 全文 不写，伪精确）。
@@ -167,21 +187,26 @@ def render_narrative(state: dict, repo_root: Path) -> None:
             done = sum(1 for t in tasks if (t["meta"] or {}).get("status") == "已完成")
             task_summary = f"，共 {len(tasks)} 个 task（执行中 {in_progress}，已完成 {done}）"
         # 不写 commit hash / 时间细节；只点 stage 状态
+        prod = _product_oneliner(repo_root)
+        prod_line = f"你的产品：{prod}\n" if prod else ""
         print(
-            f"上次你做到 {req_id}，当前 stage {stage}/{MAX_STAGE}：{stage_name}{task_summary}。"
-            f"\n下一步：发 /pmai-req-stage-gate 推进，或继续当前 stage 工作。"
+            f"{prod_line}当前在做 {req_id}（{stage_name} 阶段{task_summary}）。"
+            f"\n下一步：发 /pmai-next 推进，或继续当前阶段工作。"
         )
         return
 
-    # 多 req 场景：列各 req 概况
+    # 多 req 场景：产品轴 lead + 列各 req 概况
+    prod = _product_oneliner(repo_root)
+    if prod:
+        print(f"你的产品：{prod}")
     print(f"目前有 {len(active)} 个 active req：")
     for req in active:
         meta = req["meta"] or {}
         req_id = req["req_dir"].name
         stage = meta.get("stage", 0)
         stage_name = STAGE_NAMES.get(int(stage), f"stage {stage}") if stage else "未知"
-        print(f"  - {req_id}：stage {stage}/{MAX_STAGE}（{stage_name}），{len(req['tasks'])} 个 task")
-    print("\n下一步：发 /status-view 看详细，或 /pmai-req-stage-gate 推进具体 req。")
+        print(f"  - {req_id}：{stage_name} 阶段，{len(req['tasks'])} 个 task")
+    print("\n下一步：发 /status-view 看详细，或 /pmai-next 推进具体 req。")
 
 
 def render_health_check(repo_root: Path) -> None:
