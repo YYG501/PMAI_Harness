@@ -18,7 +18,15 @@
 - **核心**：砍 7-stage 固定流水线 + 每段全文确认门 → 坍缩成**六步**（①上下文脊柱 ②范围确认 ③栈内 build ④三道审 ⑤体验迭代 ⑥沉淀）；想 / 建原型交 Claude Code 在栈内直连、零录入，PMAI 缩成**上下文脊柱 + 范围确认 + 沉淀**层。
 - **真相源**：方向 = `docs/设计/PMAI重构方向-office-hours收敛.md`（§2.3.1 范围确认 / §2.3.2 复审沉淀 / 两不变量 / 证据 / 决议日志）；落地 = `docs/设计/PMAI重构-实施清单.md`（skill 去留 / gstack 接入 / worktree / 基础设施 / **D1-D10 全拍定** / §7 新 scope）；决策快照 memory `project_pmai_reshape_direction`。
 - **关键决策（全 PM 拍板）**：D1 六步反转 · D2 task 降后台留名（mode 中立）· D3 PRODUCT-STATE = 现状层 hub · D4 实现深度 mode 按层挂靠（复用现成 `工程结构约束-{prototype,system,custom}`）· D5 prototype 默认 Next.js+shadcn · D6 实现文档 = per-req `req-plan.md` · D8 worktree 自动托管早上 + spike · 附件机制保留 + rewire · §7（站点爬·对齐线上·覆盖审计 checks-JSON·产物层 deliverables）。
-- **状态**：**纯设计、零代码改动**；测试基线不变（仍 **525 / 2**）。下一步见下「下一步」。
+- **状态**：方案纯设计；落地已起步（见下「重构落地进度」）。**测试基线 548 / 0**（实跑发现比旧记的 525/2 高且全绿，旧数字已过期，以此为准）。
+
+**重构落地进度（branch `reshape-office-hours`）**：
+- ✅ 阶段1 增量脊柱：`PRODUCT-STATE.md.tmpl` / `req-plan.md.tmpl` / `DESIGN.md.tmpl` / `prototype-README.md.tmpl` 模板 + `coverage-reviewer` agent（均已提交、548 绿、尚未接线）
+- ✅ plan-eng-review 跑完（PM 拍：自动托管 spike 加固复现 2026-04-22 事故 / 六步坍缩先迁移测试；落点进实施清单 §6）
+- ✅ 六步坍缩盘点：stages.py（两 dict）+ req-transition.py（推进引擎）+ status-view/state（6+ 处 STAGE_NAMES）+ 7 个 stage 专属测试 全摸清
+- ⏳ **#9 六步坍缩核心**（重写引擎 + 锁步迁测试 + 级联 24 skill）= 大协调改动，careful 分批进行中
+- ⛔ **阶段2 build 纪律**：按设计自身"新机制先 spike"纪律，需在**一个真实消费仓需求**上验 design 约定能否逼近视觉 —— 非自动可完成，待真 req + PM
+- 详细任务看 TaskList（10 项）
 
 ---
 
