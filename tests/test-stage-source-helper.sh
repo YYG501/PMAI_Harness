@@ -51,17 +51,17 @@ print('OK')
 }
 
 test_get_stage_source_fallback_no_field() {
-  start_test "get_stage_source: meta 无 stage2_source → fallback analysis.md"
+  start_test "get_stage_source: meta 无 stage1_source → fallback req-plan.md（六步：stage 1 范围确认产物）"
   fixture_setup
-  req_dir=$(fixture_create_req "req-002" "test" 2)
+  req_dir=$(fixture_create_req "req-002" "test" 1)
   python3 -c "
 import sys
 from pathlib import Path
 sys.path.insert(0, '$FRAMEWORK_ROOT/scripts')
 from _lib.state import get_stage_source
 rd = Path('$req_dir')
-p = get_stage_source(rd, 2)
-assert p == (rd / 'analysis.md').resolve(), f'expected analysis.md got {p}'
+p = get_stage_source(rd, 1)
+assert p == (rd / 'req-plan.md').resolve(), f'expected req-plan.md got {p}'
 print('OK')
 " >/tmp/out.$$ 2>/tmp/err.$$
   if grep -q "OK" /tmp/out.$$; then
@@ -84,9 +84,9 @@ import sys
 from pathlib import Path
 sys.path.insert(0, '$FRAMEWORK_ROOT/scripts')
 from _lib.state import get_stage_source
-p = get_stage_source(Path('$req_dir'), 2)
-# strict=False 路径，meta=None → 落到 STAGE_OUTPUT_FILES[2] = 'analysis.md'
-assert p == (Path('$req_dir') / 'analysis.md').resolve(), f'expected analysis.md got {p}'
+p = get_stage_source(Path('$req_dir'), 1)
+# strict=False 路径，meta=None → 落到 STAGE_OUTPUT_FILES[1] = 'req-plan.md'
+assert p == (Path('$req_dir') / 'req-plan.md').resolve(), f'expected req-plan.md got {p}'
 print('OK')
 " >/tmp/out.$$ 2>/tmp/err.$$
   if grep -q "OK" /tmp/out.$$; then

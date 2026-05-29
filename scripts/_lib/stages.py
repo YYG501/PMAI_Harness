@@ -1,44 +1,45 @@
-"""Single source of truth for req stage metadata .
+"""Single source of truth for req stage metadata（六步重构后）.
+
+六步重构（office-hours 收敛）后的状态机：
+- 「① 上下文脊柱」是项目级、init 时建（PRODUCT-STATE / DESIGN / 主原型），**不是 per-req stage**。
+- per-req 生命周期收敛成 4 个阶段（原 7-stage 坍缩）：
+    1 范围确认  —— 三条上坡路产出 req-plan.md（范围清单 + 决策页），PM 拍板
+    2 build     —— 在 prototype/ 栈内建（mode 中立：原型 / 真系统按工程结构约束的层）
+    3 复审      —— 三道机器审（覆盖审计 / 视觉门 / 行为审）+ 体验迭代 → 呈交闸门 PM 验收
+    4 沉淀      —— 更新 PRODUCT-STATE + merge 主原型回 main（+ 按需 prd-writing 出 PRD）
 
 stage 名 / 推进前要求的产出文件 散落在 req-transition.py / status-view.py /
-CLAUDE.md.tmpl 等处。F13 把可被脚本引用的部分抽进本模块，脚本统一 import。
-（CLAUDE.md.tmpl 是模板 prose、无法 import，只能文本同步。）
+CLAUDE.md.tmpl 等处，脚本统一 import 本模块。（CLAUDE.md.tmpl 是模板 prose，
+无法 import，文本同步。）
 
-stage 3 命名演化：「方案设计」→「功能规格」→「需求方案」（产物 solution.md → prd.md）；
-stage 5 命名演化：「模块规格 + task 拆分」→「实现设计 + task 拆分」（implementation-design.md + task-plan.md）。
-背景：PM 视角下 3 = 需求方案（WHAT），5 = 实现设计（HOW），二分清楚；「功能规格」/「模块规格」
-偏工程文档化味，跟 PM 心智对不上。
+显示已转产品轴（banner/status 播报"产品现状 + 主原型状态 + 本次增量"，不再播
+"Stage N/M"），故 stage 编号是**内部状态标记**、不再 PM-facing。
 """
 
 from __future__ import annotations
 
+# per-req 阶段数（坍缩后）。① 脊柱不计入（项目级）。
+MAX_STAGE: int = 4
+
 STAGE_NAMES: dict[int, str] = {
-    1: "描述需求",
-    2: "需求分析",
-    3: "需求方案",
-    4: "设计系统建立",
-    5: "实现设计 + task 拆分",
-    6: "task 执行",
-    7: "req close",
+    1: "范围确认",
+    2: "build",
+    3: "复审",
+    4: "沉淀",
 }
 
 # Stage N 推进前要求这个产出文件存在（forward transition 前置校验）。
-# stage 4 的产出是 docs/DESIGN.md，单独校验，不在此表。
 #
-# 双用途说明：本字典同时承担两个角色 ——
+# 双用途说明（沿用重构前契约）：
 #  1) `req-transition.py` 推进 stage N→N+1 前的前置校验文件名
 #  2) `_lib.state.get_stage_source` helper 在 `.req-meta.json` 无
 #     `stage{N}_source` 字段时的**默认 fallback** 文件名
-# 因此 schema 锁定为 `dict[int, str]`（单一默认产物）；多产物分流（如 stage 2
-# 的 office-hours 分支产 `stage2-office-hours.md`）通过 `.req-meta.json` 的
-# `stage{N}_source` 字段在 req 级 override，不升级本表为 list/multi-path。
-# .md §1.3 / §2 / 。
+# schema 锁定为 `dict[int, str]`（单一默认产物）。
+#
+# 六步里只有第 1 步「范围确认」有法定文档产物（req-plan.md）；
+# build / 复审 的"产出"是 prototype 代码 + 三道审证据，无单一 .md 前置文件
+# （闸门由 PM 验收 + task demo 确认把守，不靠文件存在性）；
+# 沉淀 的产物（PRODUCT-STATE 更新 / merge / 按需 PRD）由 close-req 流程把守。
 STAGE_OUTPUT_FILES: dict[int, str] = {
-    1: "brief.md",
-    2: "analysis.md",
-    3: "prd.md",
-    5: "task-plan.md",
+    1: "req-plan.md",
 }
-
-# stage 3 旧产物（在飞旧 req 兼容判别用）—— 见 req-transition.py 文件存在性判别。
-LEGACY_STAGE3_OUTPUT = "solution.md"

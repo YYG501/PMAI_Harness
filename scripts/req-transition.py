@@ -23,7 +23,7 @@ from _lib.state import (  # noqa: E402
 from _lib.stages import (  # noqa: E402
     STAGE_NAMES,
     STAGE_OUTPUT_FILES,
-    LEGACY_STAGE3_OUTPUT,
+    MAX_STAGE,
 )
 
 
@@ -201,62 +201,24 @@ def validate_forward(meta: dict, target: int, req_dir: Path) -> None:
         print(f"Error: target stage {target} is not forward from current stage {current}. Use --rollback for backward transitions.", file=sys.stderr)
         sys.exit(1)
 
-    if target > 7:
-        print(f"Error: invalid stage {target}. Max is 7.", file=sys.stderr)
+    if target > MAX_STAGE:
+        print(f"Error: invalid stage {target}. Max is {MAX_STAGE}.", file=sys.stderr)
         sys.exit(1)
 
     expected_next = current + 1
-
-    # Stage 4 auto-skip: 只有 DESIGN.md 有实质内容时才能跳过 stage 4
-    if expected_next == 4 and target == 5:
-        if check_design_md_has_content(req_dir):
-            expected_next = 5  # Allow 3 -> 5 (skip 4)
-        else:
-            print(
-                "Error: DESIGN.md 还没有实质内容，不能跳过 stage 4（设计系统建立）。"
-                "请先在 stage 4 填充 docs/DESIGN.md。",
-                file=sys.stderr,
-            )
-            sys.exit(1)
 
     if target != expected_next:
         print(f"Error: must advance to stage {expected_next} from {current} (got {target}).", file=sys.stderr)
         sys.exit(1)
 
-    # Check prerequisite output files
-    if current == 3:
-        #  E3：stage 3 换芯（solution.md → prd.md）。在飞旧 req 仍是
-        # solution.md。用文件存在性判别新旧流程，零新 .req-meta.json 字段：
-        #   solution.md 在 + prd.md 无 → 旧流程（接受 solution.md）
-        #   否则 → 新流程（要 prd.md）
-        #   两文件都有 → prd.md 优先 + 警告
-        prd = req_dir / "prd.md"
-        legacy = req_dir / LEGACY_STAGE3_OUTPUT
-        if prd.exists() and legacy.exists():
-            print(
-                "⚠️ stage 3 同时存在 prd.md 与 solution.md —— 以 prd.md 为准推进"
-                "（旧 solution.md 留作历史产物）。",
-                file=sys.stderr,
-            )
-        elif legacy.exists() and not prd.exists():
-            pass  # 旧流程：solution.md 即合法 stage 3 产出
-        elif not prd.exists():
-            print(
-                "Error: stage 3 output file not found: prd.md"
-                "（新流程 stage 3 产物为 req 级 PRD，由 /pmai-prd-writing 产出）",
-                file=sys.stderr,
-            )
-            sys.exit(1)
-    elif current in STAGE_OUTPUT_FILES:
-        # ：stage 2 真相源走 helper（B 分支 office-hours 产
-        # stage2-office-hours.md，A 分支 req-analysis 产 analysis.md）。其他
-        # stage 仍以 STAGE_OUTPUT_FILES 默认产物为准（B 分支机制目前只覆盖
-        # stage 2；future 扩 stage N 时只需该 stage 的 caller 写
-        # `.req-meta.json:stage{N}_source` 字段，无需改本处契约）。
+    # Check prerequisite output file（六步：只有 stage 1「范围确认」有法定文档前置 =
+    # req-plan.md；build / 复审 的闸门由 PM 验收 + task demo 确认把守，不靠文件存在性。
+    # stage 真相源仍走 get_stage_source helper，尊重 .req-meta.json:stage{N}_source override）。
+    if current in STAGE_OUTPUT_FILES:
         output_file = get_stage_source(req_dir, current)
         if not output_file.exists():
             print(
-                f"Error: stage {current} output file not found: {output_file.name}",
+                f"Error: stage {current}（{STAGE_NAMES.get(current, '?')}）output file not found: {output_file.name}",
                 file=sys.stderr,
             )
             sys.exit(1)
@@ -274,15 +236,15 @@ def validate_rollback(meta: dict, target: int, req_dir: Path) -> None:
         print(f"Error: invalid stage {target}. Min is 1.", file=sys.stderr)
         sys.exit(1)
 
-    if current == 7:
-        print("Error: cannot rollback from stage 7 (close). Merge to main is irreversible.", file=sys.stderr)
+    if current == MAX_STAGE:
+        print(f"Error: cannot rollback from stage {MAX_STAGE}（沉淀）. Merge to main is irreversible.", file=sys.stderr)
         sys.exit(1)
 
-    # Stage 6 rollback requires all tasks closed/cancelled
-    if current == 6:
+    # 复审（3）回退要求 task（demo 单元）都已确认/取消，避免回退丢在途 demo
+    if current == 3:
         all_closed, open_tasks = check_all_tasks_closed(req_dir)
         if not all_closed:
-            print("Error: cannot rollback from stage 6 with open tasks:", file=sys.stderr)
+            print("Error: cannot rollback from stage 3（复审）with open tasks:", file=sys.stderr)
             for t in open_tasks:
                 print(f"  - {t}", file=sys.stderr)
             sys.exit(1)

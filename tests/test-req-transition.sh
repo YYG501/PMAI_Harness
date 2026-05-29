@@ -1,6 +1,11 @@
 #!/usr/bin/env bash
 set -uo pipefail
 
+# 六步重构后的 req-transition 测试：per-req 四阶段
+#   1 范围确认（前置产物 req-plan.md）→ 2 build → 3 复审 → 4 沉淀
+# build / 复审 无法定文档前置（闸门靠 PM 验收 + task demo 确认）；
+# 沉淀（4）= merge 回 main 不可回退；复审（3）回退要求 task 都已确认/取消。
+
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 source "$SCRIPT_DIR/helpers/assert.sh"
 source "$SCRIPT_DIR/helpers/fixture.sh"
@@ -9,22 +14,6 @@ REQ_TRANSITION="$FRAMEWORK_ROOT/scripts/req-transition.py"
 
 _run_req() {
   (cd "$FIXTURE_DIR" && python3 "$REQ_TRANSITION" "$@")
-}
-
-_set_meta_stage() {
-  # Directly rewrite the meta stage without using the transition script
-  local req_dir="$1"
-  local stage="$2"
-  python3 - "$req_dir" "$stage" <<'PY'
-import json, sys
-from pathlib import Path
-req_dir = Path(sys.argv[1])
-stage = int(sys.argv[2])
-mf = req_dir / ".req-meta.json"
-meta = json.loads(mf.read_text(encoding="utf-8"))
-meta["stage"] = stage
-mf.write_text(json.dumps(meta, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
-PY
 }
 
 # -----------------------------------------------------------------
@@ -51,14 +40,19 @@ test_reject_cross_level_forward() {
 }
 
 test_reject_stage_too_high() {
-  start_test "I-RT1 reject forward to stage > 7"
+  start_test "I-RT1 reject forward to stage > 4 (MAX_STAGE)"
   fixture_setup
-  req_dir=$(fixture_create_req "req-001" "test" 6)
+  req_dir=$(fixture_create_req "req-001" "test" 3)
 
-  if _run_req "$req_dir" --to 8 >/tmp/out.$$ 2>/tmp/err.$$; then
-    _fail "should reject target > 7"
+  if _run_req "$req_dir" --to 5 >/tmp/out.$$ 2>/tmp/err.$$; then
+    _fail "should reject target > 4"
   else
-    pass_test
+    if grep -qE "(Max is 4|invalid stage)" /tmp/err.$$; then
+      pass_test
+    else
+      _fail "stderr missing max-stage message"
+      cat /tmp/err.$$ >&2
+    fi
   fi
   rm -f /tmp/out.$$ /tmp/err.$$
   fixture_teardown
@@ -66,22 +60,103 @@ test_reject_stage_too_high() {
 
 # -----------------------------------------------------------------
 # I-RT3: forward transition requires prerequisite output file
+#         六步：只有 stage 1「范围确认」有法定前置 = req-plan.md
 # -----------------------------------------------------------------
 
-test_reject_stage1_to_2_no_brief() {
-  start_test "I-RT3 reject 1→2 when brief.md missing"
+test_reject_stage1_to_2_no_req_plan() {
+  start_test "I-RT3 reject 1→2 when req-plan.md missing"
   fixture_setup
   req_dir=$(fixture_create_req "req-001" "test" 1)
-  # Remove brief.md (fixture created it)
-  rm -f "$req_dir/brief.md"
+  rm -f "$req_dir/req-plan.md"  # 确保范围确认产物缺失
 
   if _run_req "$req_dir" --to 2 >/tmp/out.$$ 2>/tmp/err.$$; then
-    _fail "should reject when brief.md missing"
+    _fail "should reject when req-plan.md missing"
   else
-    if grep -q "brief.md" /tmp/err.$$; then
+    if grep -q "req-plan.md" /tmp/err.$$; then
       pass_test
     else
-      _fail "stderr missing brief.md message"
+      _fail "stderr missing req-plan.md message"
+      cat /tmp/err.$$ >&2
+    fi
+  fi
+  rm -f /tmp/out.$$ /tmp/err.$$
+  fixture_teardown
+}
+
+test_happy_path_1_to_2() {
+  start_test "happy path: 1 → 2 succeeds with req-plan.md, stage_history appended"
+  fixture_setup
+  req_dir=$(fixture_create_req "req-001" "test" 1)
+  echo "# req-plan" > "$req_dir/req-plan.md"
+
+  if ! _run_req "$req_dir" --to 2 >/tmp/out.$$ 2>/tmp/err.$$; then
+    _fail "forward 1→2 failed"
+    cat /tmp/err.$$ >&2
+    rm -f /tmp/out.$$ /tmp/err.$$
+    fixture_teardown
+    return
+  fi
+
+  new_stage=$(python3 -c "import json; print(json.load(open('$req_dir/.req-meta.json'))['stage'])")
+  if [ "$new_stage" != "2" ]; then
+    _fail "stage not updated to 2 (got $new_stage)"
+    rm -f /tmp/out.$$ /tmp/err.$$; fixture_teardown; return
+  fi
+
+  hist_len=$(python3 -c "import json; print(len(json.load(open('$req_dir/.req-meta.json'))['stage_history']))")
+  if [ "$hist_len" -lt 2 ]; then
+    _fail "stage_history not appended (len=$hist_len)"
+    rm -f /tmp/out.$$ /tmp/err.$$; fixture_teardown; return
+  fi
+
+  last_entry=$(python3 -c "import json; h = json.load(open('$req_dir/.req-meta.json'))['stage_history'][-1]; print(h.get('direction'), h.get('from_stage'), h.get('stage'))")
+  if [ "$last_entry" != "forward 1 2" ]; then
+    _fail "last stage_history entry wrong: $last_entry"
+    rm -f /tmp/out.$$ /tmp/err.$$; fixture_teardown; return
+  fi
+
+  pass_test
+  rm -f /tmp/out.$$ /tmp/err.$$
+  fixture_teardown
+}
+
+test_build_and_review_advance_no_file_gate() {
+  start_test "六步：build(2)→复审(3)→沉淀(4) 无文档前置、可顺推"
+  fixture_setup
+  req_dir=$(fixture_create_req "req-001" "test" 2)
+
+  ok=1
+  _run_req "$req_dir" --to 3 >/tmp/out.$$ 2>/tmp/err.$$ || ok=0
+  if [ "$ok" = "1" ]; then
+    _run_req "$req_dir" --to 4 >/tmp/out.$$ 2>/tmp/err.$$ || ok=0
+  fi
+  if [ "$ok" = "1" ]; then
+    new_stage=$(python3 -c "import json; print(json.load(open('$req_dir/.req-meta.json'))['stage'])")
+    [ "$new_stage" = "4" ] && pass_test || _fail "顺推后 stage 应=4，实际=$new_stage"
+  else
+    _fail "build/复审 不该有文档前置卡推进"
+    cat /tmp/err.$$ >&2
+  fi
+  rm -f /tmp/out.$$ /tmp/err.$$
+  fixture_teardown
+}
+
+# -----------------------------------------------------------------
+# I-RT4: 沉淀（4）= merge 回 main 不可回退
+# -----------------------------------------------------------------
+
+test_reject_rollback_from_settle() {
+  start_test "I-RT4 reject rollback from stage 4（沉淀，不可逆）"
+  fixture_setup
+  req_dir=$(fixture_create_req "req-001" "test" 4)
+
+  if _run_req "$req_dir" --to 3 --rollback >/tmp/out.$$ 2>/tmp/err.$$; then
+    _fail "should reject rollback from stage 4"
+  else
+    if grep -qE "(沉淀|irreversible|stage 4)" /tmp/err.$$; then
+      pass_test
+    else
+      _fail "stderr missing 沉淀-irreversible message"
       cat /tmp/err.$$ >&2
     fi
   fi
@@ -90,42 +165,19 @@ test_reject_stage1_to_2_no_brief() {
 }
 
 # -----------------------------------------------------------------
-# I-RT4: cannot rollback from stage 7
+# I-RT5: 复审（3）回退要求 task（demo 单元）都已确认/取消
 # -----------------------------------------------------------------
 
-test_reject_rollback_from_stage7() {
-  start_test "I-RT4 reject rollback from stage 7"
+test_reject_rollback_from_review_with_active_task() {
+  start_test "I-RT5 reject rollback from stage 3（复审）with active task"
   fixture_setup
-  req_dir=$(fixture_create_req "req-001" "test" 7)
-
-  if _run_req "$req_dir" --to 6 --rollback >/tmp/out.$$ 2>/tmp/err.$$; then
-    _fail "should reject rollback from stage 7"
-  else
-    if grep -qE "(stage 7|irreversible|不可逆)" /tmp/err.$$; then
-      pass_test
-    else
-      _fail "stderr missing stage-7 message"
-      cat /tmp/err.$$ >&2
-    fi
-  fi
-  rm -f /tmp/out.$$ /tmp/err.$$
-  fixture_teardown
-}
-
-# -----------------------------------------------------------------
-# I-RT5: stage 6 rollback requires no active tasks
-# -----------------------------------------------------------------
-
-test_reject_rollback_from_stage6_with_active_task() {
-  start_test "I-RT5 reject rollback from stage 6 with active task"
-  fixture_setup
-  req_dir=$(fixture_create_req "req-001" "test" 6)
+  req_dir=$(fixture_create_req "req-001" "test" 3)
   fixture_create_task "$req_dir" "001" "live" "执行中" >/dev/null
 
-  if _run_req "$req_dir" --to 5 --rollback >/tmp/out.$$ 2>/tmp/err.$$; then
+  if _run_req "$req_dir" --to 2 --rollback >/tmp/out.$$ 2>/tmp/err.$$; then
     _fail "should reject rollback with active task"
   else
-    if grep -qE "(open tasks|active|执行中)" /tmp/err.$$; then
+    if grep -qE "(open tasks|active|执行中|复审)" /tmp/err.$$; then
       pass_test
     else
       _fail "stderr missing active-task message"
@@ -136,13 +188,13 @@ test_reject_rollback_from_stage6_with_active_task() {
   fixture_teardown
 }
 
-test_allow_rollback_from_stage6_all_closed() {
-  start_test "I-RT5 allow rollback from 6 when all tasks 已完成"
+test_allow_rollback_from_review_all_closed() {
+  start_test "I-RT5 allow rollback from 3（复审）when all tasks 已完成"
   fixture_setup
-  req_dir=$(fixture_create_req "req-001" "test" 6)
+  req_dir=$(fixture_create_req "req-001" "test" 3)
   fixture_create_task "$req_dir" "001" "done" "已完成" >/dev/null
 
-  if _run_req "$req_dir" --to 5 --rollback >/tmp/out.$$ 2>/tmp/err.$$; then
+  if _run_req "$req_dir" --to 2 --rollback >/tmp/out.$$ 2>/tmp/err.$$; then
     pass_test
   else
     _fail "should allow rollback when all closed"
@@ -208,293 +260,18 @@ test_reject_rollback_target_ge_current() {
   fixture_teardown
 }
 
-test_reject_rollback_target_greater() {
-  start_test "I-RT6 reject rollback when target > current"
+test_reject_2_to_4_skip_review() {
+  start_test "I-RT1 reject 2→4 (skip 复审 3) — 不可跳级"
   fixture_setup
-  req_dir=$(fixture_create_req "req-001" "test" 3)
-
-  if _run_req "$req_dir" --to 5 --rollback >/tmp/out.$$ 2>/tmp/err.$$; then
-    _fail "should reject rollback with target > current"
-  else
-    pass_test
-  fi
-  rm -f /tmp/out.$$ /tmp/err.$$
-  fixture_teardown
-}
-
-# -----------------------------------------------------------------
-# Happy path: 1 → 2 with brief.md
-# -----------------------------------------------------------------
-
-test_happy_path_1_to_2() {
-  start_test "happy path: 1 → 2 succeeds with brief.md, stage_history appended"
-  fixture_setup
-  req_dir=$(fixture_create_req "req-001" "test" 1)
-  # fixture already created brief.md
-
-  if ! _run_req "$req_dir" --to 2 >/tmp/out.$$ 2>/tmp/err.$$; then
-    _fail "forward 1→2 failed"
-    cat /tmp/err.$$ >&2
-    rm -f /tmp/out.$$ /tmp/err.$$
-    fixture_teardown
-    return
-  fi
-
-  # Verify meta updated
-  new_stage=$(python3 -c "import json; print(json.load(open('$req_dir/.req-meta.json'))['stage'])")
-  if [ "$new_stage" != "2" ]; then
-    _fail "stage not updated to 2 (got $new_stage)"
-    rm -f /tmp/out.$$ /tmp/err.$$
-    fixture_teardown
-    return
-  fi
-
-  # Verify stage_history appended
-  hist_len=$(python3 -c "import json; print(len(json.load(open('$req_dir/.req-meta.json'))['stage_history']))")
-  if [ "$hist_len" -lt 2 ]; then
-    _fail "stage_history not appended (len=$hist_len)"
-    rm -f /tmp/out.$$ /tmp/err.$$
-    fixture_teardown
-    return
-  fi
-
-  # Verify direction + from_stage
-  last_entry=$(python3 -c "import json; h = json.load(open('$req_dir/.req-meta.json'))['stage_history'][-1]; print(h.get('direction'), h.get('from_stage'), h.get('stage'))")
-  if [ "$last_entry" != "forward 1 2" ]; then
-    _fail "last stage_history entry wrong: $last_entry"
-    rm -f /tmp/out.$$ /tmp/err.$$
-    fixture_teardown
-    return
-  fi
-
-  pass_test
-  rm -f /tmp/out.$$ /tmp/err.$$
-  fixture_teardown
-}
-
-# -----------------------------------------------------------------
-# I-RT4: stage 3→5 requires DESIGN.md content regardless of is_first
-# -----------------------------------------------------------------
-
-test_reject_3_to_5_when_design_empty_non_first() {
-  start_test "I-RT4 reject 3→5 when DESIGN.md empty (even for non-first req)"
-  fixture_setup
-  req_dir=$(fixture_create_req "req-001" "test" 3 false)
-
-  # 确保 stage 3 的前置输出 solution.md 存在（不是 DESIGN.md；是 req 内的方案设计文档）
-  (
-    cd "$FIXTURE_DIR/.worktrees/req-001-test"
-    echo "# Solution" > "requirements/active/req-001-test/solution.md"
-    git add -A && git commit -q -m "add solution.md"
-  )
-
-  # docs/DESIGN.md 是空的（fixture_setup 用 touch 创建）
-  if _run_req "$req_dir" --to 5 >/tmp/out.$$ 2>/tmp/err.$$; then
-    _fail "should reject 3→5 when DESIGN.md empty"
-  else
-    if grep -q "DESIGN.md" /tmp/err.$$; then
-      pass_test
-    else
-      _fail "stderr missing DESIGN.md message"
-      cat /tmp/err.$$ >&2
-    fi
-  fi
-  rm -f /tmp/out.$$ /tmp/err.$$
-  fixture_teardown
-}
-
-test_reject_2_to_4_skip_stage3_non_first() {
-  start_test "I-RT2 reject 2→4 (skip stage 3) for non-first req — stage 3 不再可跳"
-  fixture_setup
-  req_dir=$(fixture_create_req "req-001" "test" 2 false)
-  # 制造 stage 2 的产出文件 analysis.md（前置条件）
-  (
-    cd "$FIXTURE_DIR/.worktrees/req-001-test"
-    echo "# Analysis" > "requirements/active/req-001-test/analysis.md"
-    git add -A && git commit -q -m "add analysis.md"
-  )
+  req_dir=$(fixture_create_req "req-001" "test" 2)
 
   if _run_req "$req_dir" --to 4 >/tmp/out.$$ 2>/tmp/err.$$; then
-    _fail "should reject 2→4 (stage 3 不可跳)"
+    _fail "should reject 2→4 (skip stage 3)"
   else
     if grep -qE "(advance|stage)" /tmp/err.$$; then
       pass_test
     else
       _fail "stderr missing stage-advance message"
-      cat /tmp/err.$$ >&2
-    fi
-  fi
-  rm -f /tmp/out.$$ /tmp/err.$$
-  fixture_teardown
-}
-
-test_allow_3_to_5_when_design_populated() {
-  start_test "I-RT4 allow 3→5 when DESIGN.md has content"
-  fixture_setup
-  req_dir=$(fixture_create_req "req-001" "test" 3 false)
-
-  # 在 req worktree 里补 solution.md 和 docs/DESIGN.md 内容
-  (
-    cd "$FIXTURE_DIR/.worktrees/req-001-test"
-    echo "# Solution" > "requirements/active/req-001-test/solution.md"
-    cat > docs/DESIGN.md <<'EOF'
-# 设计系统
-
-## 颜色
-- primary: #000
-- secondary: #fff
-
-## 字体
-- 标题: Inter 24px
-- 正文: Inter 16px
-
-## 间距
-- base: 8px
-EOF
-    git add -A && git commit -q -m "populate design"
-  )
-
-  if _run_req "$req_dir" --to 5 >/tmp/out.$$ 2>/tmp/err.$$; then
-    pass_test
-  else
-    _fail "should allow 3→5 when DESIGN.md populated"
-    cat /tmp/err.$$ >&2
-  fi
-  rm -f /tmp/out.$$ /tmp/err.$$
-  fixture_teardown
-}
-
-# -----------------------------------------------------------------
-# delta-2+4 E3: stage 3 换芯（solution.md → prd.md）文件存在性新旧判别
-# -----------------------------------------------------------------
-
-test_stage3_to_4_new_flow_prd() {
-  start_test "delta-2+4 E3: stage 3 有 prd.md → --to 4 走新流程成功"
-  fixture_setup
-  req_dir=$(fixture_create_req "req-001" "test" 3)
-  echo "# PRD" > "$req_dir/prd.md"
-
-  if _run_req "$req_dir" --to 4 >/tmp/out.$$ 2>/tmp/err.$$; then
-    pass_test
-  else
-    _fail "stage 3（有 prd.md）→ 4 应成功"
-    cat /tmp/err.$$ >&2
-  fi
-  rm -f /tmp/out.$$ /tmp/err.$$
-  fixture_teardown
-}
-
-test_stage3_to_4_legacy_flow_solution() {
-  start_test "delta-2+4 E3: 在飞旧 req（有 solution.md 无 prd.md）→ --to 4 走旧流程成功"
-  fixture_setup
-  req_dir=$(fixture_create_req "req-001" "test" 3)
-  echo "# Solution" > "$req_dir/solution.md"
-
-  if _run_req "$req_dir" --to 4 >/tmp/out.$$ 2>/tmp/err.$$; then
-    pass_test
-  else
-    _fail "在飞旧 req（solution.md）→ 4 应走旧流程成功"
-    cat /tmp/err.$$ >&2
-  fi
-  rm -f /tmp/out.$$ /tmp/err.$$
-  fixture_teardown
-}
-
-# -----------------------------------------------------------------
-# D-i v4 R3-C1：stage 2 → 3 B 分支推进（office-hours snapshot 分支）
-# 验证 get_stage_source helper 在 req-transition 内生效，B 分支无 analysis.md
-# 但有 stage2-office-hours.md + meta:stage2_source=stage2-office-hours.md → 推得成功
-# -----------------------------------------------------------------
-
-test_stage2_to_3_B_branch_office_hours_advances() {
-  start_test "D-i v4 R3-C1: B 分支只有 stage2-office-hours.md 时 stage 2→3 推进成功"
-  fixture_setup
-  req_dir=$(fixture_create_req "req-001" "test" 2)
-  # B 分支：只产 office-hours snapshot，无 analysis.md
-  rm -f "$req_dir/analysis.md"  # fixture 默认无 analysis，确保
-  echo "<!-- snapshot from /tmp/src.md at 2026-05-25 -->" > "$req_dir/stage2-office-hours.md"
-  echo "# office-hours design" >> "$req_dir/stage2-office-hours.md"
-  # 用 helper 写 meta（实际生产 caller 走 set_stage_source；测试模拟）
-  python3 -c "
-import sys
-from pathlib import Path
-sys.path.insert(0, '$FRAMEWORK_ROOT/scripts')
-from _lib.state import set_stage_source
-set_stage_source(Path('$req_dir'), 2, 'stage2-office-hours.md',
-                 tool='office-hours',
-                 origin='/Users/x/.gstack/projects/test/y.md')
-"
-  if _run_req "$req_dir" --to 3 >/tmp/out.$$ 2>/tmp/err.$$; then
-    new_stage=$(python3 -c "import json; print(json.load(open('$req_dir/.req-meta.json'))['stage'])")
-    if [ "$new_stage" = "3" ]; then
-      pass_test
-    else
-      _fail "B 分支推进后 stage 应=3，实际=$new_stage"
-    fi
-  else
-    _fail "B 分支 stage 2→3 不应失败"
-    cat /tmp/err.$$ >&2
-  fi
-  rm -f /tmp/out.$$ /tmp/err.$$
-  fixture_teardown
-}
-
-test_stage2_to_3_B_branch_missing_snapshot_rejected() {
-  start_test "D-i v4 R3-C1: meta 标 stage2-office-hours.md 但文件缺失 → 拒绝推进"
-  fixture_setup
-  req_dir=$(fixture_create_req "req-002" "test" 2)
-  rm -f "$req_dir/analysis.md"
-  # meta 标 B 分支但故意不放 snapshot 文件
-  python3 -c "
-import sys, json
-from pathlib import Path
-sys.path.insert(0, '$FRAMEWORK_ROOT/scripts')
-from _lib.state import set_stage_source
-set_stage_source(Path('$req_dir'), 2, 'stage2-office-hours.md',
-                 tool='office-hours', origin='/tmp/x.md')
-"
-  if _run_req "$req_dir" --to 3 >/tmp/out.$$ 2>/tmp/err.$$; then
-    _fail "缺 snapshot 文件不应允许推进"
-  else
-    if grep -q "stage2-office-hours.md" /tmp/err.$$; then
-      pass_test
-    else
-      _fail "stderr 应明确指出缺 stage2-office-hours.md"
-      cat /tmp/err.$$ >&2
-    fi
-  fi
-  rm -f /tmp/out.$$ /tmp/err.$$
-  fixture_teardown
-}
-
-test_stage2_to_3_legacy_no_meta_fallback_advances() {
-  start_test "D-i v4: 旧 req 无 stage2_source 字段 → fallback analysis.md 推进成功"
-  fixture_setup
-  req_dir=$(fixture_create_req "req-003" "test" 2)
-  # 旧 req：只有 analysis.md，meta 不含 stage2_source 字段
-  echo "# analysis" > "$req_dir/analysis.md"
-  if _run_req "$req_dir" --to 3 >/tmp/out.$$ 2>/tmp/err.$$; then
-    pass_test
-  else
-    _fail "旧 req fallback 路径推进失败"
-    cat /tmp/err.$$ >&2
-  fi
-  rm -f /tmp/out.$$ /tmp/err.$$
-  fixture_teardown
-}
-
-test_stage3_to_4_missing_both_rejected() {
-  start_test "delta-2+4 E3: stage 3 既无 prd.md 也无 solution.md → --to 4 拒绝"
-  fixture_setup
-  req_dir=$(fixture_create_req "req-001" "test" 3)
-
-  if _run_req "$req_dir" --to 4 >/tmp/out.$$ 2>/tmp/err.$$; then
-    _fail "stage 3 无产出文件应拒绝推进"
-  else
-    if grep -qE "prd\.md" /tmp/err.$$; then
-      pass_test
-    else
-      _fail "stderr 应提示缺 prd.md"
       cat /tmp/err.$$ >&2
     fi
   fi
@@ -508,23 +285,15 @@ test_stage3_to_4_missing_both_rejected() {
 
 test_reject_cross_level_forward
 test_reject_stage_too_high
-test_reject_stage1_to_2_no_brief
-test_reject_rollback_from_stage7
-test_reject_rollback_from_stage6_with_active_task
-test_allow_rollback_from_stage6_all_closed
+test_reject_stage1_to_2_no_req_plan
+test_happy_path_1_to_2
+test_build_and_review_advance_no_file_gate
+test_reject_rollback_from_settle
+test_reject_rollback_from_review_with_active_task
+test_allow_rollback_from_review_all_closed
 test_reject_rollback_to_zero
 test_reject_rollback_negative
 test_reject_rollback_target_ge_current
-test_reject_rollback_target_greater
-test_happy_path_1_to_2
-test_reject_3_to_5_when_design_empty_non_first
-test_reject_2_to_4_skip_stage3_non_first
-test_allow_3_to_5_when_design_populated
-test_stage3_to_4_new_flow_prd
-test_stage3_to_4_legacy_flow_solution
-test_stage3_to_4_missing_both_rejected
-test_stage2_to_3_B_branch_office_hours_advances
-test_stage2_to_3_B_branch_missing_snapshot_rejected
-test_stage2_to_3_legacy_no_meta_fallback_advances
+test_reject_2_to_4_skip_review
 
 report_results "req-transition"

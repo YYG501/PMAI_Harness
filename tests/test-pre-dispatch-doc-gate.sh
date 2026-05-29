@@ -243,8 +243,8 @@ test_req_transition_forward_auto_commits_dirty() {
   local req_branch="req-002-trans"
   local req_wt="$FIXTURE_DIR/.worktrees/$req_branch"
 
-  echo "PM 改的 brief 内容" >> "$req_dir/brief.md"
-  echo "# Analysis" > "$req_dir/analysis.md"
+  # 范围确认产物 req-plan.md（stage 1 前置）—— 制造 dirty 待 seal
+  echo "PM 改的 req-plan 内容" > "$req_dir/req-plan.md"
 
   local out rc
   out=$( cd "$req_wt" && python3 "$REQ_TRANSITION" "$req_dir" --to 2 2>&1 )
@@ -252,10 +252,10 @@ test_req_transition_forward_auto_commits_dirty() {
   if [ "$rc" != "0" ]; then _fail "transition rc=$rc, out=$out"; fixture_teardown; return; fi
   echo "$out" | grep -q "I-DC1 pre-transition gate" || { _fail "缺少 I-DC1 警告"; fixture_teardown; return; }
 
-  # gate 跑在 save_meta 之前 → brief / analysis 应已 commit；
+  # gate 跑在 save_meta 之前 → req-plan.md 应已 commit；
   # .req-meta.json 是 transition 自身后续写的，不在 gate 范围（一直如此，由 close 流程兜底）。
   local docs_dirty
-  docs_dirty=$( git -C "$req_wt" status --porcelain -- "$req_dir/brief.md" "$req_dir/analysis.md" 2>/dev/null )
+  docs_dirty=$( git -C "$req_wt" status --porcelain -- "$req_dir/req-plan.md" 2>/dev/null )
   if [ -n "$docs_dirty" ]; then _fail "PM 文档未落盘: $docs_dirty"; fixture_teardown; return; fi
 
   fixture_teardown
@@ -297,6 +297,10 @@ test_req_transition_forward_clean_noop() {
   req_dir=$(fixture_create_req "req-004" "clean" 1)
   local req_branch="req-004-clean"
   local req_wt="$FIXTURE_DIR/.worktrees/$req_branch"
+
+  # 范围确认产物存在且已 commit（clean，不触发 seal）
+  echo "# req-plan" > "$req_dir/req-plan.md"
+  ( cd "$req_wt" && git add -A && git commit -q -m "seal req-plan" )
 
   local out rc
   out=$( cd "$req_wt" && python3 "$REQ_TRANSITION" "$req_dir" --to 2 2>&1 )
