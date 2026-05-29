@@ -3,42 +3,46 @@ name: pmai-doc-update
 description: Use when task 已完成、PM 已通过验收、需要在 close-task 合并前处理文档偏差或把 task 功能清单沉淀进模块规格。
 ---
 
-# Doc Update — 文档偏差修复 / 模块规格沉淀
+# Doc Update — 文档偏差修复（异常兜底入口）
 
 ## When To Use
 
-`/pmai-doc-update` 支持两种调用模式：
+**这个 skill 已不在正常路径上跑。** 正常情况下，需求收尾时的「对账 + 把稳定结构沉淀进规格」由 `/pmai-close-req`（收尾这一步的内置动作）一次做完——`/pmai-next` 把需求推到「收尾」时自动驱动，无需单独调本 skill。
 
-1. **对账模式（reconciliation mode）**：task 文件的偏差记录有内容（不是"无偏差"），需要在合并前更新原始文档。偏差记录跨两处：PM 视图主文件 `## 📁 历史档案` + 工程合同 `## 10. 文档偏差` 表。
-2. **沉淀模式（settlement mode）**：由 `/pmai-close-task` 在 task 验收通过后调用，把 PM 视图 task 的「📋 功能清单」增量沉淀进 `docs/modules/<module>.md`。
+`/pmai-doc-update` 现在只剩一个角色：**PM 手动兜底入口**。当收尾里的对账漏了某处、或想单独把一处文档偏差按行精确改回来时，PM 才显式 `/pmai-doc-update <目标文件>` 跑一次对账。
+
+历史上本 skill 有两种调用模式，现在状态如下：
+
+1. **对账模式（reconciliation mode）**：仍可用。task 文件的偏差记录有内容（不是"无偏差"），需要按行精确更新原始文档。偏差记录在 task 审计区「📋 文档偏差」表一处读取。**正常路径已并入 `/pmai-close-req` 收尾的「把稳定结构沉淀进规格」动作**——本 skill 的对账模式只在 PM 显式兜底调用时跑。
+2. **沉淀模式（settlement mode）**：**已废（死路径）**。历史上由旧的 task 关闭流程在验收通过后调，把 task 的「📋 功能清单」增量沉淀进 `docs/modules/<module>.md`。六步重构后：① 需求级沉淀统一由 `/pmai-close-req` 收尾一次性做完（少 N 次启动成本）；② task 功能清单已移到需求方案里、task 文件不再有独立「📋 功能清单」section。两条原因叠加 → 没有任何入口会再触发沉淀模式。下文步骤 1.7 / 步骤 8 留作历史契约与 `/pmai-close-req` 兜底引用，不再被自动调用。
 
 ## task 文件读取约定（必读）
 
 本 skill 读 task 文件的偏差记录 / 模块字段：
 
-- **v3 单文件 typed contract**：task 是一个物理文件 `task-NNN-<slug>.md`，三区由 region 标记界定——
+- **单文件 typed contract（当前格式）**：task 是一个物理文件 `task-NNN-<slug>.md`，三区由 region 标记界定——
   - PM 确认区「📌 任务卡」：`**所属模块**` / `**所属模块章节**` 字段
-  - 审计区「📋 文档偏差」表：**单一一处**偏差记录（文档偏差 / 业务偏差合并）；指向任意 prd / implementation-design / module / DESIGN / PROJECT 等文档
-- **v2 旧双文件 task**（在飞旧 task）：PM 视图主文件（`.md`）含「📋 功能清单」/「📁 历史档案 → 业务层偏差」/「📌 任务卡」模块字段；工程合同（`.engineering.md`）含「§10 文档偏差」/「§4 功能清单工程版」/「§1 元信息扩展」。
-- **v1 旧单文件**：偏差在主文件「## 文档偏差」section；模块字段是 `**所属模块：**` 头部字段。
+  - 审计区「📋 文档偏差」表：**单一一处**偏差记录（文档偏差 / 业务偏差合并）；指向任意需求方案 / 实现设计 / module / DESIGN / 项目级文档等
+- **旧双文件 task**（在飞旧 task）：PM 视图主文件（`.md`）含「📋 功能清单」/「📁 历史档案 → 业务层偏差」/「📌 任务卡」模块字段；工程合同（`.engineering.md`）含「§10 文档偏差」/「§4 功能清单工程版」/「§1 元信息扩展」。
+- **旧单文件**：偏差在主文件「## 文档偏差」section；模块字段是 `**所属模块：**` 头部字段。
 
 **对账模式**：
-- v3 —— 偏差记录只在审计区「📋 文档偏差」一处读取，分别对账到各偏差指向的原始文档。
-- v2 —— 跨两文件读取偏差记录（PM 视图「📁 历史档案 → 业务层偏差」+ 工程合同 §10）。
+- 当前格式 —— 偏差记录只在审计区「📋 文档偏差」一处读取，分别对账到各偏差指向的原始文档。
+- 旧双文件 —— 跨两文件读取偏差记录（PM 视图「📁 历史档案 → 业务层偏差」+ 工程合同 §10）。
 
-**沉淀模式（已是死路径，见步骤 0.5）**：历史上只读 PM 视图「📋 功能清单」沉淀进 module spec。v3 task 无独立「📋 功能清单」section（功能清单已移 prd.md），沉淀模式不再被 close-task 触发。
+**沉淀模式（死路径，见步骤 0.5）**：历史上只读 PM 视图「📋 功能清单」沉淀进 module spec。当前格式的 task 无独立「📋 功能清单」section（功能清单已移到需求方案里），且需求级沉淀已并入 `/pmai-close-req` 收尾——沉淀模式不再被任何入口触发。
 
 ## Required Inputs
 
-按 `_shared/pm-view/input-flow.md` 中 **Stage 7.2 doc-update** 段执行：
+读法约束按 `_shared/pm-view/input-flow.md` 中 **doc-update** 段执行（长文档分段看、不整文件 Read）：
 
-1. 🟢 task 文件（PM 调用时传入）—— v3 单文件 typed contract；v2 旧 task 为 PM 视图主文件 + 成对工程合同
+1. 🟢 task 文件（PM 兜底调用时传入）—— 单文件 typed contract；旧 task 为 PM 视图主文件 + 成对工程合同
 2. 🟢 `docs/modules/<本 task 模块>.md`（对账目标）
-3. 🟢 task 文件偏差表 —— v3：审计区「📋 文档偏差」；v2：工程合同 §10 + PM 视图「📁 历史档案 → 业务层偏差」
-4. 🟢 **task worktree 改动代码**（步骤 1.6 模块规格对账，逐行核对实际实现是否匹配——不读代码就不能对账；读法同 Stage 7.1 close-task：≤3 文件全读，多文件分批）
-5. 🟡 偏差涉及的原文（前后 5 行）。**支持任何 req / 项目级文档**：
-   - 项目级：`docs/PROJECT.md` / `docs/DESIGN.md` / `docs/modules/INDEX.md` / `docs/modules/*.md` / `CLAUDE.md`
-   - req 级：**stage 2 真相源**（A 分支 `requirements/active/<req>/analysis.md` / B 分支 `requirements/active/<req>/stage2-office-hours.md`，路径由 `_lib.state.get_stage_source(req_dir, 2)` 解析）/ `prd.md` / `implementation-design.md`（在飞旧 req 若仅有 `solution.md` / `solution.engineering.md` 则按旧文件名读）
+3. 🟢 task 文件偏差表 —— 当前格式：审计区「📋 文档偏差」；旧双文件：工程合同 §10 + PM 视图「📁 历史档案 → 业务层偏差」
+4. 🟢 **task worktree 改动代码**（步骤 1.6 模块规格对账，逐行核对实际实现是否匹配——不读代码就不能对账；≤3 文件全读，多文件分批）
+5. 🟡 偏差涉及的原文（前后 5 行）。**支持任何需求 / 项目级文档**：
+   - 项目级：`docs/PROJECT.md` / `docs/DESIGN.md` / `docs/modules/INDEX.md` / `docs/modules/*.md` / `docs/PRODUCT-STATE.md` / `docs/PRODUCT-RULES.md` / `CLAUDE.md`
+   - 需求级：`req-plan.md`（范围清单 + 关键决策，本需求真相源）/ `prd.md`（按需反向出的需求方案，若有）/ `implementation-design.md` / `analysis.md`（在飞旧需求的上游产物，若有则按旧文件名读）
 
 ## 位置定位原则（必读）
 
@@ -98,9 +102,9 @@ grep -n '^### <module chapter>' docs/modules/<module>.md
 
 ### 步骤 0.5：~~沉淀风险判断~~（已删）
 
-close-task 永不调 doc-update settlement → 本步骤入口不会被触发。`/pmai-doc-update` 仅由
-**(1)** close-req 步骤 1.5 调（走步骤 8 rewrite mode），或 **(2)** PM 主动 `/pmai-doc-update <module>` 调对账模式。
-两条入口都不需要 v1+v2 杂交判断（rewrite 是聚合模式天然处理；对账是 PM 显式定向，无 sediment 风险）。
+没有任何入口会调沉淀模式（死路径）→ 本步骤入口不会被触发。`/pmai-doc-update` 现在只剩一个入口：
+**PM 主动 `/pmai-doc-update <module>` 调对账模式**（异常兜底）。需求级的「对账 + 把稳定结构沉淀进规格」已并入
+`/pmai-close-req` 收尾这一步内置做完，不再走本 skill。PM 显式定向的对账无 sediment 杂交风险，不需要旧的多格式杂交判断。
 
 ### 步骤 1：读取 task 文件（三态格式分流）
 
@@ -109,17 +113,17 @@ close-task 永不调 doc-update settlement → 本步骤入口不会被触发。
    TASK_FORMAT=$(python3 "$(git rev-parse --show-toplevel)/.claude/scripts/_lib/state.py" detect_format "$TASK_FILE")
    ```
 
-2. **`v3`（新单文件 typed contract）**：正常路径，**不报告警**——
+2. **`v3`（当前单文件 typed contract）**：主路径，**不报告警**——
    - 从 PM 确认区「📌 任务卡」读 `**所属模块**` / `**所属模块章节**` 字段
-   - 从审计区「📋 文档偏差」表读偏差记录（对账模式用，**单一一处**；文档偏差 / 业务偏差合并，指向任意 prd / implementation-design / analysis / DESIGN / module / PROJECT 等）
+   - 从审计区「📋 文档偏差」表读偏差记录（对账模式用，**单一一处**；文档偏差 / 业务偏差合并，指向任意需求方案 / 实现设计 / analysis / DESIGN / module / 项目级文档等）
 
 3. **`v2`（旧双文件 task）**：在飞旧 task，兼容模式继续（`echo "ℹ️  检测到旧格式 task（双文件），兼容模式继续"`）——
    - PM 视图主文件：「📌 任务卡」模块字段 + `## 📋 功能清单` + `## 📁 历史档案 → 业务层偏差` 表
-   - 工程合同（`${TASK_FILE%.md}.engineering.md`）：`## 10. 文档偏差` 表（工程层偏差，指向 DESIGN / module / PROJECT 等）
+   - 工程合同（`${TASK_FILE%.md}.engineering.md`）：`## 10. 文档偏差` 表（工程层偏差，指向 DESIGN / module / 项目级文档等）
 
 4. **`v1`（旧单文件）**：兼容模式——偏差检查只读主文件 `## 文档偏差` section；模块字段是 `**所属模块：**` `**所属模块章节：**` 头部字段（旧版用 `：**` 不是表格）。
 
-5. 如果 `**所属模块**` = `基础设施`，按 Q1 + Q4 boundary table 判定为基础设施 task：跳过模块规格沉淀，返回 success。输出：
+5. 如果 `**所属模块**` = `基础设施`，判定为基础设施 task：跳过模块规格沉淀，返回 success。输出：
 
    ```text
    基础设施 task：跳过 docs/modules 沉淀，继续 close-task。
@@ -132,8 +136,8 @@ close-task 永不调 doc-update settlement → 本步骤入口不会被触发。
 | 偏差指向 | 进入步骤 | 处理模式 |
 |---|---|---|
 | `docs/modules/<module>.md` 功能清单表格 | 1.6 | 模块规格对账（行级精确）|
-| 其他 req / 项目级文档（brief / analysis / prd / DESIGN / PROJECT / CLAUDE）| 步骤 2 | 通用对账（按行读原文 + 生成 Edit + PM 逐条确认）|
-| 无任何偏差 | 跳到 步骤 1.7 | 仅做沉淀模式 |
+| 其他需求 / 项目级文档（req-plan / analysis / prd / DESIGN / PROJECT / PRODUCT-STATE / PRODUCT-RULES / CLAUDE）| 步骤 2 | 通用对账（按行读原文 + 生成 Edit + PM 逐条确认）|
+| 无任何偏差 | 直接返回 | 无对账可做（沉淀已并入 `/pmai-close-req`，不在此处做）|
 
 ### 步骤 1.6：模块规格对账（对账模式保留）
 
@@ -153,7 +157,9 @@ E. 向 PM 展示对账结果，逐条确认后执行
 
 ### 步骤 1.7：模块规格沉淀（settlement mode）
 
-沉淀模式由 `/pmai-close-task` 在 task acceptance 后调用；它不要求「文档偏差」section 有内容。
+> **死路径（保留作历史契约）**：本步骤不再被任何入口自动调用。需求级沉淀已并入 `/pmai-close-req` 收尾一次性做完。下文保留沉淀模式的匹配 / 处理逻辑，仅供 `/pmai-close-req` 收尾沉淀时参照同一套复合 key / 四种情况规则，以及 PM 兜底手动跑时参考。
+
+历史上沉淀模式由 `/pmai-close-task` 在 task acceptance 后调用；它不要求「文档偏差」section 有内容。
 
 #### 1.7.1 复合 key 匹配
 
@@ -246,30 +252,27 @@ PM 选择：全部通过 / 删除条 K / 调整条 K 范围 / 全部驳回
 样例：
 
 ```text
-计划改动 5 处（PM 请审核）：
+计划改动 4 处（PM 请审核）：
 
-1. docs/modules/<module>/functions-v4.1.md §1A
-   旧：行展开 ▸/▾ 章节（H4 表 + 实现指引 ~50 行）
-   新：行点击跳转章节（H4 表 + task-003 反转历史 blockquote）
+1. docs/modules/<module>.md §<章节>
+   旧：行展开明细章节（功能表 + 实现指引）
+   新：行点击跳转章节（功能表 + 反转历史 blockquote）
 
-2. requirements/active/<req>/prd.md §四 需求分析
-   加：⚠️ task-003 PM 验收后反转 marker（保留原决策划掉）
+2. requirements/active/<req>/req-plan.md「范围清单」
+   加：⚠️ PM 验收后反转标记（保留原决策划掉）
 
-3. requirements/active/<req>/prd.md §六 功能需求
-   加：⚠️ task-003 反转后适用范围缩窄说明（仅详情页 Tab 1 池树内部）
+3. requirements/active/<req>/prd.md §<章节>
+   加：⚠️ 反转后适用范围缩窄说明
 
-4. requirements/active/<req>/prd.md §七 验收标准
-   加：验收清单行展开走查项作废 + D16 跳转走查项标已落地
-
-5. requirements/active/<req>/tasks/task-NNN-*.md §所属模块章节
+4. requirements/active/<req>/tasks/task-NNN-*.md §所属模块章节
    旧：产品列表页 - 行展开明细
    新：产品列表页 - 行点击跳转
 ```
 
 **精简 before/after 的取材**：
 - 改动方向（旧→新 / 加 / 删 / 标作废）
-- 关键内容关键词（如"反转 marker" / "适用范围缩窄"），不是完整段落
-- 每条 ≤ 3 行；超过表示这处改动是结构性重写，应当回到步骤 0.5 评估是否走半 close
+- 关键内容关键词（如"反转标记" / "适用范围缩窄"），不是完整段落
+- 每条 ≤ 3 行；超过表示这处改动是结构性重写，应当回到 `/pmai-close-req` 收尾的整段沉淀路径，而非在这里按行 patch
 
 **为什么不贴完整 diff**：
 - 主对话贴 N 处完整 diff 是 doc-update token 主要来源
@@ -283,14 +286,14 @@ PM 选择：全部通过 / 删除条 K / 调整条 K 范围 / 全部驳回
 - PM 说"全部通过" → 进步骤 5 落盘
 - PM 说"删除条 K" / "驳回条 K" → 从清单移除该条，**重新展示更新后的清单**让 PM 复核
 - PM 说"调整条 K 范围"（如"K 只标作废不要删整段"） → AI 按反馈调整内部草稿，**重新展示该条的动作摘要**，PM 确认后进步骤 5
-- PM 说"全部驳回" → 跳过对账模式；若沉淀模式仍需执行，不得跳过沉淀
+- PM 说"全部驳回" → 跳过对账模式，本次不改任何文件
 
 ### 步骤 5：执行修改 + 输出位置摘要
 
 执行已审核通过的修改：
 
 - 对账模式：用 Edit 工具逐条修改（不用 Write），只改偏差涉及的具体行
-- 沉淀模式：按 1.7 的复合 key 和 atomic merge 规则更新 `docs/modules/*.md`
+- 沉淀模式（死路径，仅历史参照）：按 1.7 的复合 key 和 atomic merge 规则更新 `docs/modules/*.md`
 
 落盘完成后**输出位置摘要**（不贴 diff 文本）：
 
@@ -301,11 +304,11 @@ PM 选择：全部通过 / 删除条 K / 调整条 K 范围 / 全部驳回
 ...
 ```
 
-PM 在步骤 4 已审过 before/after，**默认无需再审**——直接进入 close-task 后续。如需核对实际行级改动：跑 `git diff` 或在 IDE 看 source control diff（步骤 6 可选环节）。
+PM 在步骤 4 已审过 before/after，**默认无需再审**。如需核对实际行级改动：跑 `git diff` 或在 IDE 看 source control diff（步骤 6 可选环节）。
 
 ### 步骤 6：可选核对 + 不满意时局部二次 patch
 
-**默认路径**：步骤 4 PM 已审过 before/after，落盘即视为完成——直接返回 orchestrator，继续 close-task 后续 merge / cleanup。**步骤 6 默认 silent skip**，AI 不强制提示 PM 去 IDE 审。
+**默认路径**：步骤 4 PM 已审过 before/after，落盘即视为完成。**步骤 6 默认 silent skip**，AI 不强制提示 PM 去 IDE 审。（PM 兜底手动调本 skill 时，落盘即结束；不存在自动续跑的下游流程。）
 
 **触发条件**：仅当 PM 主动核对（自己跑 `git diff` / 在 IDE 看 source control diff）发现某处实际改动跟步骤 4 展示的 before/after 不一致 / 摘要简化漏了细节，PM 在对话里指出（如「§3.8 那段改回去」/「§1A 缺一句 X」）。
 
@@ -319,49 +322,45 @@ PM 在步骤 4 已审过 before/after，**默认无需再审**——直接进入
 
 **循环上限**：同条 3 轮内未对齐 → AI 主动停下问 PM「是否升级处理：task md 是否需要补充信息 / 反转关键字是否齐全」
 
-无 PM 触发时（默认）：返回 orchestrator，允许继续运行 `close-task.sh` 的后续 merge / cleanup。
+无 PM 触发时（默认）：落盘即结束。历史上本 skill 由旧 task 关闭流程编排时，此处会返回 orchestrator，允许继续运行 `close-task.sh` 的后续 merge / cleanup；六步重构后无此自动续跑路径。
 
-### 步骤 8：rewrite mode（close-req 步骤 1.5 默认调用路径）
+### 步骤 8：rewrite mode（`/pmai-close-req` 收尾沉淀的整段重写契约）
 
-<!-- rewrite mode 是 close-req 步骤 1.5 聚合 close-task 偏差的默认调用路径。
-     不再要求 ≥2 SKIP marker（marker 整套已废弃）；任何 close-req 步骤 1.5 聚合都默认调本步骤。
-     输出契约：返回 REWRITE_COVERED_FILES + REWRITE_COVERED_MODULES，
-     供 close-req 步骤 2a 作 metric。 -->
+> 本步骤是 `/pmai-close-req` 收尾「把稳定结构沉淀进规格」这一步的整段重写参照契约。需求收尾聚合本需求所有偏差后，对每个目标文档默认走整段重写（PM 显式选按行 patch 时退回对账模式）。
 
-**触发条件**：close-req 步骤 1.5 聚合各 closed task 偏差后，对每个目标文档默认调用 rewrite mode（PM 显式选 patch 时走对账模式）。**不要求** ≥2 SKIP marker（SKIP marker 整套已废弃）。
+**触发条件**：`/pmai-close-req` 收尾沉淀聚合本需求各偏差后，对每个目标文档默认走整段重写。
 
 **输入契约**：
 
 ```yaml
 target_doc: docs/modules/<module>/<file>.md   # 一次一个目标文档
-contributing_tasks:                            # 所有改了该目标文档的 closed task
-  - task_file: tasks/task-NNN-<slug>.md        # task 文件路径（v3 单文件 typed contract）
-    deviation: |                               # v3：task 审计区「📋 文档偏差」表（合并一处）
+contributing_tasks:                            # 所有改了该目标文档的已收尾 task
+  - task_file: tasks/task-NNN-<slug>.md        # task 文件路径（单文件 typed contract）
+    deviation: |                               # 当前格式：task 审计区「📋 文档偏差」表（合并一处）
       <表格内容或「无」>
     module_chapter: <所属模块章节字段>
-    # —— v2 旧双文件 task 兼容字段（task_file 为 v2 时按下列拆字段喂）——
-    engineering: tasks/task-NNN-<slug>.engineering.md  # 工程合同（v2 才有）
-    business_deviation: |                      # v2：PM 视图「📁 历史档案 → 业务层偏差」表
+    # —— 旧双文件 task 兼容字段（task_file 为旧双文件时按下列拆字段喂）——
+    engineering: tasks/task-NNN-<slug>.engineering.md  # 工程合同（旧双文件才有）
+    business_deviation: |                      # 旧双文件：PM 视图「📁 历史档案 → 业务层偏差」表
       <表格内容或「无偏差」>
-    engineering_deviation: |                   # v2：工程合同 §10 偏差表
+    engineering_deviation: |                   # 旧双文件：工程合同 §10 偏差表
       <表格内容或「无偏差」>
 affected_chapters: [§X, §Y, ...]               # 聚合所有 contributing_tasks 的章节
 quickfix_baseline: <当前目标文档全文>           # 含 quickfix 旁路改动（git working tree）
 ```
 
-> v3 单文件 typed contract 下偏差合并为审计区「📋 文档偏差」一处 → `deviation` 单字段；
-> v2 旧 task 仍跨 PM 视图 / 工程合同两处 → `business_deviation` + `engineering_deviation`
+> 当前单文件 typed contract 下偏差合并为审计区「📋 文档偏差」一处 → `deviation` 单字段；
+> 旧双文件 task 仍跨 PM 视图 / 工程合同两处 → `business_deviation` + `engineering_deviation`
 > 两字段。doc-update 按 `task_file` 的格式（detect_format）选读哪组字段。
 
 **流程**：
 
-1. 读目标文档全文 + 所有 contributing_tasks 的偏差表（v3：`deviation`；v2：两 deviation 字段）
+1. 读目标文档全文 + 所有 contributing_tasks 的偏差表（当前格式：`deviation`；旧双文件：两 deviation 字段）
 2. AI 起草新版整段（替换 affected_chapters，保持目录结构 / 表格风格 / 锚点 ID 不变）
 3. PM 审 diff（默认逐章节批准；PM 可主动选 "all-at-once" 跳过逐章节）
 4. 写入目标文档
-5. **旧 SKIP marker 兼容**：若 contributing_tasks 含旧 `<!-- SKIP_DOC_UPDATE: ... cleanup_status="pending" -->` 残留，rewrite 完成时把 marker `cleanup_status` 改 `"done"` 留作 audit trail；新写的 task 文件无 marker 跳过本步
 
-**输出契约**（返回给 close-req 步骤 1.5）：
+**输出契约**（返回给 `/pmai-close-req` 收尾沉淀）：
 
 ```yaml
 status: success | rejected
@@ -370,23 +369,25 @@ rewrite_covered_modules: [<module-name>, ...]            # 对应模块名
 rejected_chapters: [§X, ...]                             # PM 拒绝 rewrite 的章节（仅 status=rejected）
 ```
 
-close-req 步骤 1.5 收到 output 后回填 close-report.md `## 文档变更` 段 + 作步骤 2a metric。
+`/pmai-close-req` 收到 output 后回填收尾报告「文档变更」段。
 
 **PM 拒绝处理**：
 
-- PM 拒绝任一章节的 rewrite → 返回 `status=rejected`，让 close-req 步骤 1.5 决定是 retry 还是降级 patch mode（**不再有 skip 选项**）
-- 不在 rewrite mode 内做"半重写"——要么全章节通过，要么退回让 close-req 重新拍
+- PM 拒绝任一章节的 rewrite → 返回 `status=rejected`，让 `/pmai-close-req` 决定是 retry 还是降级 patch mode
+- 不在 rewrite mode 内做"半重写"——要么全章节通过，要么退回让 `/pmai-close-req` 重新拍
 
 **与对账模式（步骤 1.5/1.6/2-5）的边界**：
 
 | 模式 | 触发 | 适用场景 |
 |---|---|---|
-| 对账模式 | PM 显式调 `/pmai-doc-update <module>` OR close-req 步骤 1.5 PM 选 patch | 单 task 单文档单段，按行精确替换 |
-| rewrite mode（本步骤） | close-req 步骤 1.5 默认（主路径） | 任何 close-req 聚合（含单 task 单 req），整段重写比按行 patch 简洁 |
+| 对账模式 | PM 显式调 `/pmai-doc-update <module>`（兜底）OR `/pmai-close-req` 沉淀时 PM 选 patch | 单 task 单文档单段，按行精确替换 |
+| rewrite mode（本步骤） | `/pmai-close-req` 收尾沉淀默认（主路径） | 任何收尾聚合（含单 task 单需求），整段重写比按行 patch 简洁 |
 
-**为什么不在对账模式里做（默认）**：对账模式按行精确替换，多 task 跨章节累积时 patch 顺序冲突难解；rewrite 整段写比按行打补丁更稳。rewrite 升为默认是为了节省 §0.1 痛点的 N 次启动成本累加 —— rewrite 是 close-req 末一次性聚合，启动成本只算 1 次。
+**为什么不在对账模式里做（默认）**：对账模式按行精确替换，多 task 跨章节累积时 patch 顺序冲突难解；rewrite 整段写比按行打补丁更稳。整段重写升为默认是为了省掉每个 task 各跑一次的启动成本累加 —— 收尾沉淀是需求末一次性聚合，启动成本只算 1 次。
 
 ## Failure Handling（DB2）
+
+> 下文是本 skill 的失败契约。术语保留旧 task 关闭流程的措辞（close-task / auto-resume）作历史一致性；六步重构后正常路径的对账 / 沉淀已并入 `/pmai-close-req`，失败时同样停下返回错误报告、修复后重跑 `/pmai-close-req`。PM 兜底手动调本 skill 时，失败即停下报错，由 PM 决定下一步。
 
 ALL failures block close-task。失败时必须停止并返回错误报告；PM 修复 underlying issue 后，重新运行 `/pmai-close-task`，`/pmai-close-task` 会 auto-resumes doc-update，从上次失败的 task 重新执行沉淀/对账。
 
@@ -411,7 +412,7 @@ recovery path: 修正 task.md 的 **所属模块章节：** 或 module spec 的 
 
 - 只改偏差记录或 task 功能清单沉淀涉及的内容，不改任何其他部分。
 - 对账模式用 Edit 工具的 old_string → new_string，精确替换。
-- 沉淀模式只在目标 module chapter 下 ADD/MODIFY 匹配的三级功能块。
+- 沉淀模式（死路径，仅历史参照）只在目标 module chapter 下 ADD/MODIFY 匹配的三级功能块。
 - old_string 必须从文档中实际读取，不能凭记忆。
 
 **风格一致原则（强制）：**

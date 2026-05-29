@@ -1,9 +1,9 @@
 # PM 视图通用规则（PM-VIEW-RULES）
 
-> 适用范围：所有 PM 视角的 stage 文档 — `brief.md` / `analysis.md` / `prd.md` / `task-plan.md` / `tasks/task-NNN-*.md`（在飞旧 req 的 `solution.md` 同样适用）。
+> 适用范围：所有 PM 视角的产物 — `req-plan.md`（范围清单 + 决策页）/ `PRODUCT-STATE.md` / 按需 `prd.md` / `task-plan.md` / `tasks/task-NNN-*.md`（在飞旧 req 的 `brief.md` / `analysis.md` / `solution.md` 同样适用）。
 >
 > 本文件是 **单一真相源**。下列 skill 都引用本文件，不在 skill 内部独立维护：
-> `new-req` · `req-analysis` · `prd-writing` · `task-plan` · `task-spec`
+> `new-req` · `prd-writing` · `task-plan` · `task-spec`
 >
 > AI 在生成、修改任何上述文档前，先读完本文件 + 它指引的相关子文件。
 
@@ -16,12 +16,12 @@
 | 节 | 内容 | 文件 | 主要消费 skill |
 |---|---|---|---|
 | §三 | PM 视图写作规则（10 条硬约束 + UI 骨架细则）| [`pm-view/writing-rules.md`](./pm-view/writing-rules.md) | new-req · prd-writing · task-plan · task-spec |
-| §四 | 文档级严格度对照表 | [`pm-view/doc-strictness.md`](./pm-view/doc-strictness.md) | new-req（brief 行）|
+| §四 | 文档级严格度对照表 | [`pm-view/doc-strictness.md`](./pm-view/doc-strictness.md) | new-req（req-plan.md 行）|
 | §七 | 章节顺序约束（按文档类型）| [`pm-view/section-order.md`](./pm-view/section-order.md) | task-plan · task-spec |
 | §八 | 自检清单（生成 / 修改 PM 视图后）| [`pm-view/checklist.md`](./pm-view/checklist.md) | prd-writing · task-plan · task-spec |
 | §九 9.0 - 9.5 | 输入流约束 / PM 反馈分流 / 信息流图（§9.6 双文件 lazy sync 已废）| [`pm-view/input-flow.md`](./pm-view/input-flow.md) | 全部 PM 视图 skill |
 | §9.7 | 跨 skill 共享原则 | [`pm-view/cross-skill.md`](./pm-view/cross-skill.md) | skill 作者 / 框架维护者 |
-| §10 | attachments AI 接管（trigger 0）— LLM 识别 PM chat 上传意图 + caller 调 `_lib.attachments` helper + 7 stage 通用规则（含 office-hours B 分支 disable 边界）| [`pm-view/attachments-upload.md`](./pm-view/attachments-upload.md) | 7 stage SKILL（new-req / req-analysis / prd-writing / task-spec / req-stage-gate / implementation-design / task-plan）|
+| §10 | attachments AI 接管（trigger 0）— LLM 识别 PM chat 上传意图 + caller 调 `_lib.attachments` helper + 主路径通用规则 | [`pm-view/attachments-upload.md`](./pm-view/attachments-upload.md) | 主路径 SKILL（new-req / next 范围确认 / task-plan / prd-writing / task-spec）|
 
 **读法约定**：
 - skill 步骤里写"按 §三"或"按 PM-VIEW-RULES §三" → 表示读对应子文件
@@ -72,13 +72,14 @@ PM 创建 / 审核 / 验收时直接看的内容。回答 PM 关心的问题：
 | **执行区** | 启动前必读 / 实现规格 / 实现设计引用 / 约束与易错 / 自测说明 / 工程层验收 / 状态转换说明 | 字段格式校验；允许工程内容 |
 | **审计区** | 文档偏差 / 自审记录 / 历史档案 | 不 lint |
 
-WHAT 移 `prd.md`（关键产品决策 / 产物预览 / 功能清单 / 跨功能规则）、HOW 移
-`implementation-design.md`。三区由 region 标记界定（`<!-- region: PM-CONFIRM begin/end -->` 等）。
+WHAT 走 `req-plan.md`（范围清单 / 关键决策页）、HOW 走项目级 `DESIGN.md`（脊柱里
+的架构与约定）。三区由 region 标记界定（`<!-- region: PM-CONFIRM begin/end -->` 等）。
 
-`brief.md` / `analysis.md` / `task-plan.md` / `prd.md` / `implementation-design.md` 均单文件。
+`req-plan.md` / `task-plan.md` / 按需 `prd.md` 均单文件。
 
 > 在飞旧 v2 双文件 task（`task-NNN.md` + `.engineering.md`）跑完旧的、不回迁；旧 req 的
-> `solution.md` 也是历史产物。`detect_format` 三态（v1/v2/v3）兼容判别。
+> `brief.md` / `analysis.md` / `solution.md` / `implementation-design.md` 均为历史产物。
+> `detect_format` 三态（v1/v2/v3）兼容判别。
 
 ---
 

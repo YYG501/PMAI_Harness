@@ -16,13 +16,12 @@ REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 BANNER_RULES="$REPO_ROOT/skills/_shared/pm-view/banner-rules.md"
 
 # 7 个核心 SKILL（用户面 skill）
+# 六步主路径 PM-facing skill（req-stage-gate 砍 / task-confirm·close-task 降后台 → 移出；pmai-next 为新驱动）
 CORE_SKILLS=(
   init-project
   new-req
-  req-stage-gate
-  task-confirm
+  next
   task-execute
-  close-task
   close-req
 )
 
@@ -222,6 +221,5 @@ test_all_core_skills_invoke_banner_in_body
 test_all_core_skills_have_next_up
 test_task_confirm_no_contradiction
 test_banner_rules_scope_disclaimer
-test_office_hours_slug_fail_loud
 
 report_results "banner-label"

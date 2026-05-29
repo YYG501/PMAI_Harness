@@ -1,7 +1,7 @@
 # banner-rules：视觉锚点与 Decision gate label 规范（M2 单一真相源）
 
 > **职责**：banner 格式 + Next Up 块格式 + Decision gate label 3 硬规则（M3 砍后整合到 M2）。
-> **调用方**：req-stage-gate / init-project / new-req / task-confirm / task-execute / close-task / close-req（所有用户面 skill）。
+> **调用方**：next / init-project / new-req / task-confirm / task-execute / close-task / close-req（所有用户面 skill）。
 > **设计来源**：gsd `autonomous.md:62-69, 155-163` / `execute-phase.md:1725-1730` / `transition.md:494-509`（banner + Next Up）+ gsd `new-project.md:368-380` "Ready?" Decision gate。
 
 ---
@@ -14,16 +14,16 @@
 ━━━ PMAI ► <SKILL> ▸ Stage <N>/<T>: <Name> ━━━
 ```
 
-- `<SKILL>`：当前 skill 名，大写（如 `REQ-STAGE-GATE` / `INIT-PROJECT` / `TASK-EXECUTE`）
-- `<N>/<T>`：当前 stage / 总 stage 数（如 `3/7` for req stage 3 of 7）
-- `<Name>`：stage 显示名（如 `PRD-Writing` / `Implementation-Design` / `QUESTIONING`）
+- `<SKILL>`：当前 skill 名，大写（如 `NEXT` / `INIT-PROJECT` / `TASK-EXECUTE`）
+- `<N>/<T>`：当前 stage / 总 stage 数（如 `2/4` for req stage 2 of 4）
+- `<Name>`：stage 显示名（如 `范围确认` / `build` / `复审`）
 
 ### §1.2 例子
 
 ```
-━━━ PMAI ► REQ-STAGE-GATE ▸ Stage 3/7: 需求方案 ━━━
+━━━ PMAI ► NEXT ▸ Stage 1/4: 范围确认 ━━━
+━━━ PMAI ► NEXT ▸ Stage 2/4: build ━━━
 ━━━ PMAI ► INIT-PROJECT ▸ Stage C/4: 方向讨论 ━━━
-━━━ PMAI ► TASK-EXECUTE ▸ Stage 6/7: task 执行 ━━━
 ```
 
 stage 名字以 `scripts/_lib/stages.py:STAGE_NAMES` 为单一真相源（中文，跟 PM 视图一致）。
@@ -31,7 +31,7 @@ stage 名字以 `scripts/_lib/stages.py:STAGE_NAMES` 为单一真相源（中文
 ### §1.3 何时打
 
 - skill 入口（PM 一发命令就打）
-- 每个 stage 转换前后（req-stage-gate stage N → N+1 时打 N+1 banner）
+- 每个 stage 转换前后（/pmai-next 推进 stage N → N+1 时打 N+1 banner）
 - skill 退出前（让 PM 知道最后停在哪）
 
 ### §1.4 渲染约束（review R6）
@@ -72,7 +72,7 @@ stage 名字以 `scripts/_lib/stages.py:STAGE_NAMES` 为单一真相源（中文
   cd <target-dir>
   /pmai-new-req "<一句话需求>"
 
-## ▶ Next Up — /pmai-req-stage-gate（推进 stage 3 → 4 gap-check）
+## ▶ Next Up — /pmai-next（范围确认拍板后，进 build）
 
 ## ▶ Next Up — /pmai-close-req（req 全 task 完成，merge 进 main）
 ```
@@ -112,7 +112,7 @@ Next Up 块 / skill 退出提示 / 状态转换后输出 / 错误退出提示 �
 
 > Decision gate = AskUserQuestion 在闸门处给 PM **明确动作二选一**（gsd new-project.md:368-380 "Ready?" pattern）。
 > M3 整模块砍后，**Decision gate label 规范化作为 M2 sub-feature**（不需要独立模块）。
-> 注：gsd 续跑模式（`req-stage-gate/SKILL.md:27-49, 625` 现役机制）已默认推进 stage，**Decision gate 解决的是闸门选项语义模糊问题**，不是"每 stage 喂继续"。
+> 注：/pmai-next 推进模式已默认往前推进 stage，**Decision gate 解决的是闸门选项语义模糊问题**，不是"每 stage 喂继续"。
 
 ### §3.0 适用范围（必读）
 
@@ -120,17 +120,17 @@ Next Up 块 / skill 退出提示 / 状态转换后输出 / 错误退出提示 �
 
 | 形态 | 是否走 §3 | 例子 |
 |---|---|---|
-| **任何 PM 决策门**（stage 转换 / 选择分流 / 推进确认 / 验收 / 留守 vs 推进 / 多分支选择）| ✅ **必须用 AskUserQuestion**（runtime 不支持时按 askuser-rules.md §1.3 退化为编号列表）| `/pmai-req-stage-gate` Stage N→N+1 推进门；Stage 1→2 选择门；`/pmai-init-project` 阶段 C；`/pmai-new-req` 缺口补问；close-task §1.5 B 类对齐；`/pmai-task-execute` 步骤 12 验收 |
+| **任何 PM 决策门**（stage 转换 / 选择分流 / 推进确认 / 验收 / 留守 vs 推进 / 多分支选择）| ✅ **必须用 AskUserQuestion**（runtime 不支持时按 askuser-rules.md §1.3 退化为编号列表）| `/pmai-next` 推进门；new-req 三条上坡路选择门；`/pmai-init-project` 阶段 C；`/pmai-new-req` 缺口补问；close-task §1.5 B 类对齐；`/pmai-task-execute` 步骤 12 验收 |
 | AI 主动告知 / 状态播报（不要 PM 答）| ❌ prose 输出即可 | banner / Next Up 块 / skill 启动播报 / 进展告知 |
-| 反问澄清（PM 输入语义模糊，AI 需 PM 补一句话再决定走 A/B/C，不是闸门决策）| ❌ prose 反问 | "你说的'方案设计'指 Stage 3 需求方案还是 Stage 5 实现设计？" |
+| 反问澄清（PM 输入语义模糊，AI 需 PM 补一句话再决定走 A/B/C，不是闸门决策）| ❌ prose 反问 | "你说的'改原型'指本次范围里的改动，还是想新起一个需求？" |
 
-**为什么这样统一**（v5 决策，推翻 v3/v4 续跑模式专门豁免）：
+**为什么这样统一**（v5 决策，推翻早期续跑模式专门豁免）：
 
-1. **multi-分流选择门用 prose 列选项让 AI 错解 PM 自然语言** —— 实际事故：req-009 Stage 1→2 PM 答"差不多聊清楚了"被 AI 误判为走 B 分支 office-hours snapshot，把附件 ChatGPT JSON 当 office-hours skill 产物 snapshot，跳了 reviewer + 未决问题闸门。picker UI 强制 PM 显式选项是防御。
+1. **multi-分流选择门用 prose 列选项让 AI 错解 PM 自然语言** —— 实际事故：范围确认里 PM 答"差不多聊清楚了"被 AI 误判为选了某条上坡路，跳了该走的对话与闸门。picker UI 强制 PM 显式选项是防御。
 2. **续跑模式实际收益是"少一次点击"** —— picker 答完即推进，体验跟 prose 续跑相同（PM 输数字 1 或点 picker 选项跟说"OK"操作量等价），但显式选项消除歧义。
-3. **统一规则降低维护成本** —— v3/v4 的"chat prose 续跑豁免"让 stage-gate 选项跟其他 skill 选项格式分裂，PM 在不同 skill 看到不同交互形态。统一后所有闸门走同一份 picker / 退化编号规则。
+3. **统一规则降低维护成本** —— 早期的"chat prose 续跑豁免"让推进闸门跟其他 skill 选项格式分裂，PM 在不同 skill 看到不同交互形态。统一后所有闸门走同一份 picker / 退化编号规则。
 
-历史豁免（v3/v4 续跑模式专门排除 stage-gate）已在 v5 废止。
+历史豁免（早期续跑模式专门排除推进闸门）已废止。
 
 ### §3.1 规则 1：label = 动作描述
 
@@ -139,8 +139,8 @@ Next Up 块 / skill 退出提示 / 状态转换后输出 / 错误退出提示 �
 | 推进选项 label | 留守选项 label |
 |---|---|
 | "创建 PROJECT.md" | "继续探索" |
-| "写 PRD" | "继续完善 analysis" |
-| "推进 stage 4 gap-check" | "继续修订 PRD" |
+| "拍板范围清单，进 build" | "继续收范围" |
+| "开始 build" | "继续改决策页" |
 | "启动 task-001" | "改 task scope" |
 
 **错误**（**禁用模糊词**）：
@@ -151,7 +151,7 @@ Next Up 块 / skill 退出提示 / 状态转换后输出 / 错误退出提示 �
 | "Proceed" / "继续" | 模糊（继续什么？推进还是留守？）|
 | "Continue" | 同上 |
 | "是" / "Yes" | 没说做什么 |
-| "通过" | gsd 续跑模式下"通过"已是续跑触发词，闸门选项不再用 |
+| "通过" | /pmai-next 推进模式下"通过"已是推进触发词，闸门选项不再用 |
 
 ### §3.2 规则 2：description = 一句话解释
 
@@ -163,13 +163,13 @@ label 是动作名（短），description 是该动作的"我会做什么"一句
 |---|---|
 | "创建 PROJECT.md" | "我会开始写 .planning/PROJECT.md，进入后续配置、需求和路线图流程。" |
 | "继续探索" | "你还想补充行业、客户类型、典型销售流程、Demo 形态或内部协作方式。" |
-| "写 PRD" | "我会开始写 prd.md（按 stage 2 analysis），进入 stage 3。" |
-| "继续完善 analysis" | "你还有问题想补 analysis 里。" |
+| "拍板范围清单，进 build" | "我会按确认后的范围清单和决策页，在主原型里开始动手建。" |
+| "继续收范围" | "你还有范围或关键决策想再聊清楚。" |
 
 **错误**：
 
 - description 写 200 字长说明 → 应该是模板代码块或文档摘抄链接
-- description 跟 label 完全重复（"创建 PROJECT.md" / "创建 PROJECT.md" → description 没增信息）
+- description 跟 label 完全重复（"开始 build" / "开始 build" → description 没增信息）
 
 ### §3.3 规则 3：留守选项有 Loop 回路
 

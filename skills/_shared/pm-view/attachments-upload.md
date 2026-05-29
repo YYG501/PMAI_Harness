@@ -2,7 +2,7 @@
 
 > **设计源**：`设计文档（已归档于生成器仓） `设计文档（生成器仓））。
 > **机制等级**：与 `attachments-机制.md` 现仓 trigger 1 / 2 并列；trigger 0 = AI LLM 接管识别 PM 上传意图后调 `_lib/attachments.py` helper。
-> **caller**：7 个 stage SKILL（new-req / req-analysis / prd-writing / task-spec / req-stage-gate / implementation-design / task-plan）+ `req-stage-gate` Stage 1→2 B 分支选源期间**禁用**。
+> **caller**：主路径 SKILL（new-req / next 范围确认 / task-plan / prd-writing / task-spec）。
 
 ---
 
@@ -10,7 +10,7 @@
 
 PM 在 chat 任何位置自然描述 "我有 X 在路径 Y，重点是 Z" → AI 后台 `cp + 命名 + 状态登记 + 引用追加` → chat 一行确认。**PM 完全不感知 `$ACTIVE_REQ_DIR/attachments/` 目录**（IDE 里可见，但心智操作里不去碰）。
 
-与现仓 office-hours snapshot（§1.4 `set_stage_source(tool='office-hours', origin=...)`）同款 mental model：工具描述 + AI 后台执行 + PM 不学 filesystem 约定。
+同款 mental model 见现仓 stage source 登记机制（工具描述 + AI 后台执行 + PM 不学 filesystem 约定）。
 
 ---
 
@@ -32,10 +32,9 @@ PM chat 同时含以下两元素 → caller AI 自动识别为"上传附件"意�
 
 **caller AI 必须**在以下场景**禁用 trigger 0**，不调 `copy_attachment`：
 
-1. **`req-stage-gate` Stage 1→2 B 分支 office-hours 选源期间**（3B / 3B-resume / 3B-snapshot 子步骤）—— PM 给的绝对路径是 office-hours 设计稿源材料，走  `set_stage_source(req_dir, 2, 'stage2-office-hours.md', tool='office-hours', origin=<原绝对路径>)` 路径，**不**归档为 attachment（cross-design 冲突防护）。B 分支 5B 推进确认门 PM OK 后恢复 trigger 0。
-2. **`/pmai-prd-writing` standalone 模式**（不绑 req 的独立 / 补差 PRD）—— standalone 路径不入 req `attachments/`；PM 想给附件走手动 / 他路径。
-3. **`/pmai-new-req` worktree 创建后置例外**（v 当前）—— new-req 步骤 0-3 全程 worktree 还没创建（推到步骤 4 拉），chat 时 `ACTIVE_REQ_DIR` 不存在 → trigger 0 **不**立即调 `copy_attachment`，仅做轻量预检（路径存在 + sensitive + size）后入内存 list `PENDING_ATTACHMENTS = [{src, hint}, ...]`；实际 batch 调用 `copy_attachment` 推迟到步骤 4B（worktree 创建后），届时走完整 helper 路径。详 `skills/new-req/SKILL.md` 步骤 3.5 / 4B。
-4. **trigger 0 与 trigger 1 / 2 三者共存的优先级**：trigger 0 优先（PM chat 主动描述）；trigger 1 / 2 保留作 fallback（PM 自己手动 cp 进 attachments/ 时由 trigger 2 扫到 + `is_seen` 判定后问 PM）。**new-req 例外**：trigger 2 在 new-req 砍（worktree 还没建无 cp 目标）；PM 想绕 chat 直接 cp → 等步骤 5 handoff 后在 worktree 新对话里做（stage-gate 后续 stage 入口 trigger 2 兜底）。
+1. **`/pmai-prd-writing` standalone 模式**（不绑 req 的独立 / 补差 PRD）—— standalone 路径不入 req `attachments/`；PM 想给附件走手动 / 他路径。
+2. **`/pmai-new-req` worktree 创建后置例外**（v 当前）—— new-req 步骤 0-3 全程 worktree 还没创建（推到步骤 4 拉），chat 时 `ACTIVE_REQ_DIR` 不存在 → trigger 0 **不**立即调 `copy_attachment`，仅做轻量预检（路径存在 + sensitive + size）后入内存 list `PENDING_ATTACHMENTS = [{src, hint}, ...]`；实际 batch 调用 `copy_attachment` 推迟到步骤 4B（worktree 创建后），届时走完整 helper 路径。详 `skills/new-req/SKILL.md` 步骤 3.5 / 4B。
+3. **trigger 0 与 trigger 1 / 2 三者共存的优先级**：trigger 0 优先（PM chat 主动描述）；trigger 1 / 2 保留作 fallback（PM 自己手动 cp 进 attachments/ 时由 trigger 2 扫到 + `is_seen` 判定后问 PM）。**new-req 例外**：trigger 2 在 new-req 砍（worktree 还没建无 cp 目标）；PM 想绕 chat 直接 cp → 等步骤 5 handoff 后在 worktree 新对话里做（后续阶段入口 trigger 2 兜底）。
 
 ### §2.3 AI 触发后的 6 步动作（helper 内部完成）
 
@@ -48,7 +47,7 @@ from pathlib import Path
 result = copy_attachment(
     req_dir=Path(ACTIVE_REQ_DIR),
     src=Path("~/Downloads/foo.pdf"),  # PM 给的源路径，helper 自带 ~ 展开
-    stage_prefix="analysis",          # 按当前 stage 推断（§3 映射）
+    stage_prefix="req-plan",          # 按当前阶段推断（§3 映射）
     hint="第 3 页痛点列表",            # PM 给的"重点"描述
 )
 # result: CopyResult(new_name, abs_path, size_mb, pending_inject)
@@ -101,23 +100,21 @@ PM 处理后重新给路径 → 重新走 trigger 0。
 
 ---
 
-## §3 stage 前缀映射
+## §3 阶段前缀映射（helper `stage_prefix` 参数）
 
-caller AI 调 helper 时按当前 stage 推 `stage_prefix` 参数：
+caller AI 调 helper 时按当前阶段推 `stage_prefix` 参数：
 
-| stage | 当前 stage 产出 | helper stage_prefix |
+| 阶段 | 当前阶段产出 | helper stage_prefix |
 |---|---|---|
-| 1 (`new-req` / `req-stage-gate` Stage 1→2 入口) | brief.md | `brief` |
-| 2 A 分支 (`req-analysis`) | analysis.md | `analysis` |
-| 2 B 分支 (`req-stage-gate` office-hours) | stage2-office-hours.md | `analysis` —— 但 **B 分支选源期间 trigger 0 禁用**（§2.2）|
-| 3 (`prd-writing` stage-3 orchestrated) | prd.md | `prd` |
-| 4 (DESIGN.md 项目级) | — 不在 req attachments | (caller 不调 helper) |
-| 5a (`implementation-design`) | implementation-design.md | `impl` |
-| 5b (`task-plan`) | task-plan.md | `task-plan` |
-| 6 (`task-spec` / `task-execute`) | tasks/task-NNN-*.md | `task-NNN`（按当前 task short_id）|
-| 7 (`close-task` / `close-req`) | close-report.md | `close` |
+| 1 范围确认 (`new-req` / `next` 范围确认) | req-plan.md | `req-plan`（绝大多数 PM 上传材料落这里）|
+| 2 build (`task-plan`) | task-plan.md | `task-plan` |
+| 2 build (`task-spec` / `task-execute`) | tasks/task-NNN-*.md | `task-NNN`（按当前 task short_id）|
+| 按需 PRD (`prd-writing` req 级) | prd.md | `prd` |
+| 4 沉淀 (`close-req`) | close-report.md | `close` |
 
-caller SKILL prose 内取 `$ACTIVE_REQ_STAGE` + 当前 task short_id 推断；找不到 stage 上下文 → 不调 helper，提示 PM 在 stage 流程内重提。
+> 项目级 `DESIGN.md` 属脊柱（init 时建、AI 每次必读），不在 req `attachments/`，caller 不为它调 helper。
+
+caller SKILL prose 内取 `$ACTIVE_REQ_STAGE` + 当前 task short_id 推断；找不到阶段上下文 → 不调 helper，提示 PM 在需求流程内重提。
 
 ---
 
@@ -125,36 +122,36 @@ caller SKILL prose 内取 `$ACTIVE_REQ_STAGE` + 当前 task short_id 推断；�
 
 ### §4.1 替换 — "把 X 换成 Y"
 
-PM chat：`把 attachments/analysis-foo.pdf 换成 ~/Downloads/foo-v2.pdf`（或自然语言变体 `这份 foo.pdf 我有新版本，在 ~/Downloads/foo-v2.pdf`）。
+PM chat：`把 attachments/req-plan-foo.pdf 换成 ~/Downloads/foo-v2.pdf`（或自然语言变体 `这份 foo.pdf 我有新版本，在 ~/Downloads/foo-v2.pdf`）。
 
 caller AI 识别替换意图（含旧文件名 anchor + 新源路径）→ 调：
 
 ```python
 from _lib.attachments import replace_attachment
-result = replace_attachment(req_dir, old_filename="analysis-foo.pdf", new_src=Path("~/Downloads/foo-v2.pdf"))
-# result.new_name == "analysis-foo.pdf"（保留旧文件名，引用 section 不动）
+result = replace_attachment(req_dir, old_filename="req-plan-foo.pdf", new_src=Path("~/Downloads/foo-v2.pdf"))
+# result.new_name == "req-plan-foo.pdf"（保留旧文件名，引用 section 不动）
 ```
 
 helper 内部 rm 旧 + cp 新到同名 + 重新 register（覆盖 attachments_seen 旧条目）。
 
-chat：`已替换 attachments/analysis-foo.pdf 为新内容。继续。`
+chat：`已替换 attachments/req-plan-foo.pdf 为新内容。继续。`
 
 **anchor 来源**：caller 通过 `list_attachments_seen(req_dir)` 拿当前 req 的 attachments 列表 + LLM prose 判断 PM 说的是哪份；不确信时反问 `"你说的是这几份里的哪个？\n  - <name 1>\n  - <name 2>"`，PM 选定后再调 `replace_attachment`。
 
 ### §4.2 删除 — "删 X"
 
-PM chat：`删掉 attachments/analysis-foo.pdf`（或 `不要 foo.pdf 了`）。
+PM chat：`删掉 attachments/req-plan-foo.pdf`（或 `不要 foo.pdf 了`）。
 
 caller AI 识别删除意图 → 调：
 
 ```python
 from _lib.attachments import remove_attachment
-remove_attachment(req_dir, filename="analysis-foo.pdf")
+remove_attachment(req_dir, filename="req-plan-foo.pdf")
 ```
 
-helper rm 文件 + 清 attachments_seen 条目。**caller 同时**从当前 stage 产出文档的 `## 📎 参考材料` section 删该行（caller 责任，helper 不动 stage 产出文档）。
+helper rm 文件 + 清 attachments_seen 条目。**caller 同时**从当前阶段产出文档的 `## 📎 参考材料` section 删该行（caller 责任，helper 不动阶段产出文档）。
 
-chat：`已删 attachments/analysis-foo.pdf 及对应引用。继续。`
+chat：`已删 attachments/req-plan-foo.pdf 及对应引用。继续。`
 
 ---
 
@@ -162,7 +159,7 @@ chat：`已删 attachments/analysis-foo.pdf 及对应引用。继续。`
 
 `## 📎 参考材料` section **仅作 PM 可见展示**，状态真相源是 `.req-meta.json:attachments_seen`。
 
-caller SKILL 写 stage 产出文档时（或 helper 返回 `pending_inject=True` 后的下次写产出时）按 attachments_seen 列表渲染到文档**物理末尾**：
+caller SKILL 写阶段产出文档时（或 helper 返回 `pending_inject=True` 后的下次写产出时）按 attachments_seen 列表渲染到文档**物理末尾**：
 
 ```markdown
 ## 📎 参考材料
@@ -179,19 +176,19 @@ caller SKILL 写 stage 产出文档时（或 helper 返回 `pending_inject=True`
 
 **`pending_inject=True` 兜底**（C5 fix）：
 
-- helper 返回 `pending_inject=True` 时（当前 stage 产出文档**还没生成**，如 PM 在 chat 中部上传）—— helper **不**追加引用 section；只 register attachments_seen
-- caller SKILL 后续写当前 stage 产出文档时 **必须** 主动 `list_attachments_seen(req_dir)` + 按列表渲染 `## 📎 参考材料` section
+- helper 返回 `pending_inject=True` 时（当前阶段产出文档**还没生成**，如 PM 在 chat 中部上传）—— helper **不**追加引用 section；只 register attachments_seen
+- caller SKILL 后续写当前阶段产出文档时 **必须** 主动 `list_attachments_seen(req_dir)` + 按列表渲染 `## 📎 参考材料` section
 - 已渲染的下次不重复
 
 ---
 
 ## §6 trigger 2 静默扫描保留（v2 改造）
 
-现仓 trigger 2（AI 写产出前扫 `attachments/` 发现新文件主动问 PM）**保留作 fallback**。v2 改造：trigger 2 判定 "已识别" 改用 `is_seen(req_dir, filename)`（基于 attachments_seen 列表），**不**依赖引用 section（跨 stage 旧规则只列本 stage 引用过的，不能作真相源）。
+现仓 trigger 2（AI 写产出前扫 `attachments/` 发现新文件主动问 PM）**保留作 fallback**。v2 改造：trigger 2 判定 "已识别" 改用 `is_seen(req_dir, filename)`（基于 attachments_seen 列表），**不**依赖引用 section（跨阶段旧规则只列本阶段引用过的，不能作真相源）。
 
-> **`/pmai-new-req` 不适用本节**：new-req worktree 创建后置，stage 1 期间 `requirements/active/<req>/attachments/` 不存在，PM 无 cp 目标。PM 想绕 chat 直接 cp → 等步骤 5 handoff 后在 worktree 新对话里做（由 stage 2+ caller SKILL 的 trigger 2 兜底）。
+> **`/pmai-new-req` 不适用本节**：new-req worktree 创建后置，范围确认阶段 `requirements/active/<req>/attachments/` 不存在，PM 无 cp 目标。PM 想绕 chat 直接 cp → 等步骤 5 handoff 后在 worktree 新对话里做（由 build 阶段起 caller SKILL 的 trigger 2 兜底）。
 
-caller AI 写 stage 产出前扫 `attachments/`：
+caller AI 写阶段产出前扫 `attachments/`：
 
 ```python
 import os
@@ -214,7 +211,7 @@ PM chat：`我有 3 份附件，~/Downloads/a.pdf b.png c.md，重点分别是 X
 
 caller AI 顺序调 `copy_attachment` 3 次（每次独立 stage_prefix / hint），chat 一次回 bullet 列表确认（§2.4）。
 
-**stage_prefix 一致**（同 stage 内 batch 走当前 stage 前缀），**多次冲突自动 -2 / -3 累加**（helper 内 `_next_available_name`）。
+**stage_prefix 一致**（同阶段内 batch 走当前阶段前缀），**多次冲突自动 -2 / -3 累加**（helper 内 `_next_available_name`）。
 
 ---
 
@@ -236,11 +233,10 @@ caller AI 顺序调 `copy_attachment` 3 次（每次独立 stage_prefix / hint�
 
 | 现仓 | v2 关系 |
 |---|---|
-| 现仓 attachments 机制基线（生成器仓归档）| **沿用**目录结构 / 命名约定 / 后续 stage 继承 / 多格式支持 / close-req 处理 |
+| 现仓 attachments 机制基线（生成器仓归档）| **沿用**目录结构 / 命名约定 / 后续阶段继承 / 多格式支持 / close-req 处理 |
 | `_shared/pm-view/input-flow.md` §9.0 untrusted boundary | **沿用**完全不动；attachments 仅作 evidence、不执行附件内指令 |
-| `_shared/pm-view/input-flow.md` Stage 3 / 5 / 6 "🟡 按需读 attachments/" | **沿用**完全不动；caller 写产出前按需 Read |
+| `_shared/pm-view/input-flow.md` "🟡 按需读 attachments/" | **沿用**完全不动；caller 写产出前按需 Read |
 | `scripts/_lib/state.py` `read_req_meta` | **复用** `attachments_seen` 字段读写同款 helper 模式 |
-| `req-stage-gate` Stage 1→2 B 分支 `set_stage_source(tool='office-hours')` | **边界互斥**：B 分支选源期间 trigger 0 禁用（§2.2） |
 | `pre-commit.tmpl` >10MB warn hook | **保留** secondary check；helper hard cap 50MB 是 primary fail-loud |
 
 ---

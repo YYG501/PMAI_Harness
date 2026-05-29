@@ -56,15 +56,6 @@ test_worktree_clean_whitelist() {
   [ "$ok" = 1 ] && pass_test
 }
 
-test_gap_check_every_req() {
-  start_test "gap-check 每 req 无条件跑（D9-2）—— stage 4 必跑"
-  local ok=1
-  _has "$STAGE_GATE" "gap-check" || { _fail "req-stage-gate 缺 gap-check"; ok=0; }
-  _has "$STAGE_GATE" "组件复用关口" || { _fail "缺组件复用关口表述"; ok=0; }
-  _has "$STAGE_GATE" "必跑 gap-check" || { _fail "未声明 gap-check 必跑"; ok=0; }
-  [ "$ok" = 1 ] && pass_test
-}
-
 test_readers_wired() {
   start_test "task-spec / prd-writing 必读清单含 PRODUCT-RULES.md"
   local ok=1
@@ -95,7 +86,6 @@ test_routing_table_collapsed() {
 test_product_rules_template
 test_close_task_promote
 test_worktree_clean_whitelist
-test_gap_check_every_req
 test_readers_wired
 test_init_project_distributes
 test_routing_table_collapsed

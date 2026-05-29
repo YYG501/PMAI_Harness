@@ -30,14 +30,20 @@ test_template_4_segments() {
   [ "$ok" = 1 ] && pass_test
 }
 
-test_skill_exists_stage5() {
-  start_test "/pmai-implementation-design skill 存在 + stage 5 拆 task 前产出"
+test_skill_is_build_background_helper() {
+  start_test "/pmai-implementation-design skill 存在 + 降本 build 后台辅助（不产正式文档）"
   local ok=1
   [ -f "$SKILL" ] || { _fail "skills/implementation-design/SKILL.md 不存在"; ok=0; }
   if [ "$ok" = 1 ]; then
-    _has "$SKILL" "implementation-design.md" || { _fail "skill 未声明产物"; ok=0; }
-    _has "$SKILL" "HOW-ID" || { _fail "skill 未定义 HOW-ID 消费契约"; ok=0; }
+    # 六步降后台后：本 skill 不产正式 implementation-design.md 文档，只做 build 的 AI 后台 HOW context。
+    # 旧断言「skill 声明产出 implementation-design.md / 定义 HOW-ID 消费契约」随这两个机制（独立工程文档 + HOW-ID schema）一起砍——
+    # 这是契约规则 3「旧机制被砍的断言连测试一起迁/删」。新断言改查降后台语义。
+    _has "$SKILL" "不产正式" || { _fail "skill 未声明「不产正式文档」降后台性质"; ok=0; }
     grep -q "DESIGN.md" "$SKILL" || { _fail "skill 输入未含 DESIGN.md 组件 inventory"; ok=0; }
+    # 产品口径实现文档（范围清单 + 决策页）的家是 task-plan 的 req-plan.md，本 skill 应指过去
+    _has "$SKILL" "req-plan" || { _fail "skill 未把产品口径实现文档指向 task-plan/req-plan"; ok=0; }
+    # /pmai-next 驱动（接管被砍的 req-stage-gate 推进）
+    _has "$SKILL" "/pmai-next" || { _fail "skill 未由 /pmai-next 驱动"; ok=0; }
   fi
   [ "$ok" = 1 ] && pass_test
 }
@@ -60,21 +66,6 @@ EOF
   fi
 }
 
-test_stage_gate_wiring() {
-  start_test "req-stage-gate Stage 4→5 接 /pmai-implementation-design + speed mode 决策门 + Stage 5→6 gate"
-  local ok=1
-  _has "$STAGE_GATE" "/pmai-implementation-design" || { _fail "Stage 4→5 未调 /pmai-implementation-design"; ok=0; }
-  # speed mode（2026-05-26）后取代原"implementation-design 待确认"全文门：
-  # 没有结构决策时直进 5b；有结构决策时逐行 prompt。校验关键文案二选一即可。
-  _has "$STAGE_GATE" "implementation-design PM 决策门" \
-    || _has "$STAGE_GATE" "命中结构决策" \
-    || { _fail "缺 implementation-design PM 决策门 / 结构决策 prompt（speed mode）"; ok=0; }
-  grep -q "检查 .implementation-design.md. 存在" "$STAGE_GATE" \
-    || _has "$STAGE_GATE" "implementation-design.md\` 存在" \
-    || { _fail "Stage 5→6 未检查 implementation-design.md 存在"; ok=0; }
-  [ "$ok" = 1 ] && pass_test
-}
-
 test_no_solution_engineering_residual() {
   start_test "全仓无现役 solution.engineering.md 模板残留"
   if [ -f "$REPO_ROOT/templates/solution.engineering.md.tmpl" ]; then
@@ -85,9 +76,8 @@ test_no_solution_engineering_residual() {
 }
 
 test_template_4_segments
-test_skill_exists_stage5
+test_skill_is_build_background_helper
 test_pm_view_lint_skips
-test_stage_gate_wiring
 test_no_solution_engineering_residual
 
 report_results "implementation-design (delta-8)"

@@ -421,9 +421,9 @@ print('OK')
 # -----------------------------------------------------------------
 
 test_skill_prose_trigger0_added() {
-  start_test "grep: 7 个 stage SKILL 已加 trigger 0 段"
+  start_test "grep: 6 个 stage SKILL 已加 trigger 0 段"
   local all_ok=1
-  for skill in skills/new-req/SKILL.md skills/req-analysis/SKILL.md skills/prd-writing/SKILL.md skills/task-spec/SKILL.md skills/req-stage-gate/SKILL.md skills/implementation-design/SKILL.md skills/task-plan/SKILL.md; do
+  for skill in skills/new-req/SKILL.md skills/req-analysis/SKILL.md skills/prd-writing/SKILL.md skills/task-spec/SKILL.md skills/implementation-design/SKILL.md skills/task-plan/SKILL.md; do
     if ! grep -q "copy_attachment" "$FRAMEWORK_ROOT/$skill"; then
       _fail "$skill 未加 copy_attachment 引用（trigger 0 段缺失）"
       all_ok=0
@@ -431,16 +431,6 @@ test_skill_prose_trigger0_added() {
   done
   if [ "$all_ok" = "1" ]; then
     pass_test
-  fi
-}
-
-test_skill_prose_b_branch_disable() {
-  start_test "grep: req-stage-gate B 分支已加 trigger 0 disable 边界"
-  if grep -q "cross-design 冲突防护" "$FRAMEWORK_ROOT/skills/req-stage-gate/SKILL.md" && \
-     grep -q "attachments trigger 0 禁用" "$FRAMEWORK_ROOT/skills/req-stage-gate/SKILL.md"; then
-    pass_test
-  else
-    _fail "req-stage-gate B 分支 trigger 0 disable prose 缺失"
   fi
 }
 
@@ -472,7 +462,6 @@ test_path_expanduser
 test_filename_with_spaces
 test_trigger2_regression_manual_cp_detection
 test_skill_prose_trigger0_added
-test_skill_prose_b_branch_disable
 test_skill_prose_new_req_commit_pathspec
 
 report_results "attachments-helper"

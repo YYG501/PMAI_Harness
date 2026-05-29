@@ -92,25 +92,6 @@ test_plan_tmpl_decision_kind_column() {
 }
 
 # -----------------------------------------------------------------
-# T5: req-stage-gate SKILL.md 含 ## Speed Mode 段
-# -----------------------------------------------------------------
-test_skill_speed_mode_section() {
-  start_test "T5: req-stage-gate SKILL.md 含 ## Speed Mode 段"
-  if ! grep -q "^## Speed Mode" "$SKILL_MD"; then
-    _fail "SKILL.md 缺 ## Speed Mode 段（一级标题）"
-    return
-  fi
-  # 段内必含的关键约束
-  for kw in "决策类型=结构" "stage6-entry" "未决问题闸门" "硬规则"; do
-    if ! grep -q "$kw" "$SKILL_MD"; then
-      _fail "SKILL.md Speed Mode 段缺关键字「$kw」"
-      return
-    fi
-  done
-  pass_test
-}
-
-# -----------------------------------------------------------------
 # Fixture helpers
 # -----------------------------------------------------------------
 _make_req_dir_with_files() {
@@ -342,35 +323,6 @@ test_missing_impl_design() {
 }
 
 # -----------------------------------------------------------------
-# T12: SKILL.md Stage 4 4B 含 speed 自动续条件文案
-# -----------------------------------------------------------------
-test_skill_stage4_speed_auto_continue() {
-  start_test "T12: SKILL.md Stage 4 4B 含 speed 自动续条件文案"
-  # "Speed mode 自动续条件" 应在 Stage 4 4B 确认门段内
-  if ! grep -q "Speed mode 自动续条件\|自动续条件" "$SKILL_MD"; then
-    _fail "SKILL.md 缺「Speed mode 自动续条件」段文案"
-    return
-  fi
-  if ! grep -q "0 个新建组件\|全部复用" "$SKILL_MD"; then
-    _fail "SKILL.md 缺「0 个新建组件 / 全部复用」自动续条件"
-    return
-  fi
-  pass_test
-}
-
-# -----------------------------------------------------------------
-# T13: SKILL.md Stage 5→6 含 status-view.py --stage6-entry 调用
-# -----------------------------------------------------------------
-test_skill_stage6_entry_call() {
-  start_test "T13: SKILL.md Stage 5→6 含 status-view.py --stage6-entry 调用"
-  if ! grep -qE 'status-view\.py("?[[:space:]]+|"[[:space:]]+)--stage6-entry' "$SKILL_MD"; then
-    _fail "SKILL.md 缺 status-view.py --stage6-entry 调用"
-    return
-  fi
-  pass_test
-}
-
-# -----------------------------------------------------------------
 
 # -----------------------------------------------------------------
 # T14: task-spec SKILL 步骤 11 续跑文案（speed mode 2026-05-26 vp-7）
@@ -440,15 +392,12 @@ test_stage6_entry_argparse
 test_stage6_module_exists
 test_impl_tmpl_decision_kind_column
 test_plan_tmpl_decision_kind_column
-test_skill_speed_mode_section
 test_render_all_mechanical
 test_render_all_structural
 test_render_legacy_no_kind_column
 test_render_simp_into_pm_section
 test_render_structural_task
 test_missing_impl_design
-test_skill_stage4_speed_auto_continue
-test_skill_stage6_entry_call
 test_task_spec_continuation
 test_task_confirm_when_to_use_continuation
 test_task_plan_step_3_5_exec_mode

@@ -116,8 +116,8 @@ test_end_to_end_flow_description_complete() {
   _assert_contains "$TASK_SPEC_SKILL" "一次只生成一个 task 的**一个文件**" "one task at a time (single-file typed contract)" || return
   _assert_contains "$DOC_UPDATE_SKILL" '沉淀模式由 `/pmai-close-task` 在 task acceptance 后调用' "close-task calls settlement" || return
   _assert_contains "$DOC_UPDATE_SKILL" '允许继续运行 `close-task.sh` 的后续 merge / cleanup' "close-task continues after doc-update" || return
-  _assert_contains "$REQ_STAGE_GATE_SKILL" "task branch has been merged to req branch" "gate checks merge" || return
-  _assert_contains "$REQ_STAGE_GATE_SKILL" "task worktree has been cleaned up" "gate checks cleanup" || return
+  # 六步重构：req-stage-gate 砍后，task 分支 merge / worktree 清理改由 close-task 降后台自动托管
+  # （上方 doc-update→close-task 断言已覆盖），不再断言 req-stage-gate 的 Stage 5/6 gate prose
 
   pass_test
 }

@@ -288,16 +288,6 @@ test_grep_req_transition_uses_helper() {
   fi
 }
 
-test_grep_req_stage_gate_branch_B_has_set_stage_source() {
-  start_test "grep: req-stage-gate B 分支调 set_stage_source(tool='office-hours')"
-  if grep -q "set_stage_source" "$FRAMEWORK_ROOT/skills/req-stage-gate/SKILL.md" && \
-     grep -q "tool='office-hours'" "$FRAMEWORK_ROOT/skills/req-stage-gate/SKILL.md"; then
-    pass_test
-  else
-    _fail "req-stage-gate B 分支应调 set_stage_source 写 office-hours tool 元数据"
-  fi
-}
-
 test_grep_new_req_option1_removed() {
   start_test "grep: new-req 砍选项 1（不再说"自跑 /office-hours 整理 brief"）"
   # 砍掉的特征：原选项 1 "自跑 /office-hours（gstack skill）做六问深挖思考"
@@ -358,7 +348,6 @@ test_set_stage_source_strict_no_meta_raises
 test_get_stage_source_rejects_path_traversal
 test_set_stage_source_rejects_path_traversal
 test_grep_req_transition_uses_helper
-test_grep_req_stage_gate_branch_B_has_set_stage_source
 test_grep_new_req_option1_removed
 test_set_get_round_trip_B_branch
 

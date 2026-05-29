@@ -1,14 +1,29 @@
 ---
 name: pmai-task-execute
 description: |
-  在 task worktree 中实现代码、启动 dev server、写执行日志、填文档偏差、自审并记录。
+  六步第三步「建」的核心：在 prototype/ 用 Claude Code 栈内建（零录入），强制先读 DESIGN.md 再动手；建完自动跑三道审（覆盖审计 + 视觉门 + 行为审）合成一份给 PM；再走体验迭代（AI 主动批量 flag、PM 勾改），最后呈交验收闸门（PM 唯一决策点）。
 ---
 
 # /pmai-task-execute
 
-> **PM 视图（M2 banner + Decision gate label）**：入口 banner（`status-view.py --banner-only --skill TASK-EXECUTE`）；验收呈交闸门 label 按 `_shared/pm-view/banner-rules.md` §3 3 硬规则（label=动作如「task-NNN 通过验收」/「打回 task-NNN 修改」/「scope 改动」）；退出 Next Up 引导 `/pmai-close-task` 或继续修复。
+> **PM 视图（banner + 决策门 label）**：入口 banner（`status-view.py --banner-only --skill TASK-EXECUTE`）；验收呈交闸门 label 按 `_shared/pm-view/banner-rules.md` §3 三条硬规则（label=动作如「task-NNN 通过验收」/「打回 task-NNN 修改」/「范围改动」）；退出 Next Up 引导 `/pmai-close-task` 或继续修改。
 >
-> **PM 答题规则（M4）**：所有 AskUserQuestion 调用按 `_shared/pm-view/askuser-rules.md` §1 四条硬规则走（空答 STOP / 没拿到答案禁止默认走通过分支 / runtime 退化保留 wait / 多决策拆开顺序问）。**历史教训** commit 07a3a09：PM 没答 AI 默认走通过 → task 跳过验收。**Runtime 兜底**：本 skill 各门写的都是 picker 形态；runtime 不支持时 AI 按 §1.3 自动退化为编号列表，仍 wait。
+> **PM 答题规则**：所有 AskUserQuestion 调用按 `_shared/pm-view/askuser-rules.md` §1 四条硬规则走（空答 STOP / 没拿到答案禁止默认走通过分支 / runtime 退化保留 wait / 多决策拆开顺序问）。**历史教训**：PM 没答 AI 默认走通过 → task 跳过验收。**Runtime 兜底**：本 skill 各门写的都是 picker 形态；runtime 不支持时 AI 按 §1.3 自动退化为编号列表，仍 wait。
+
+## 六步定位
+
+这一步是「建」——把第二步（范围确认）拍板的范围清单，在 `prototype/` 主原型里用 Claude Code **栈内建出来（零录入，PM 不手敲代码）**。一个 task 是 PM 看 demo 确认方向的阶段单元。
+
+每个 task 走完三段：
+
+1. **建**：强制先读项目 `DESIGN.md`（视觉规范单一来源）→ 在 `prototype/` 里实现。
+2. **建完自动三道审**（复用同一次 dev server 起停，合成一份给 PM）：
+   - **覆盖审计**：`coverage-reviewer` agent 用范围清单对代码硬 diff，报「建了 / 丢了 / 降级占位」（白纸新鲜视角，非自审）。
+   - **视觉门**：gstack `/design-review` 起 dev server 后**只截图审计、不自动改**，出口是 PM 一句话 pass / 打回。
+   - **行为审**：task 自测说明派生的验收流程驱动 gstack `/browse` 走确定性路径（验证「跑得通不通」）。
+3. **体验迭代**：AI 把三道审 + 自己看出来的问题**主动批量 flag** 给 PM，PM 勾哪些改；停止条件 = demo 成功标准达到 + PM 在呈交闸门拍板。
+
+呈交验收闸门保留 —— **这是 PM 全程唯一的决策点**。
 
 ## When To Use
 
@@ -41,13 +56,13 @@ agent 读 task 文件即可拿到全部执行所需内容（同一文件分区�
 | 写自审记录 | 写入审计区「🔍 自审记录」 |
 | 写 PM 反馈（task-submit 打回时）| 写入审计区「📁 历史档案 → PM 反馈」 |
 
-**旧 v2 双文件 task 兼容**：在飞旧 task 仍是「PM 视图主文件 `.md` + 工程合同 `.engineering.md`」双文件结构，不回迁；本 skill 保留 v2 兼容读路径（见步骤 1）。
+**旧双文件 task 兼容**：在飞旧 task 仍是「PM 视图主文件 `.md` + 工程合同 `.engineering.md`」双文件结构，不回迁；本 skill 保留双文件兼容读路径（见步骤 1）。
 
 ## Workflow
 
-### 入口前置（v4 修订）
+### 入口前置
 
-#### 入口步骤 0：M2 banner
+#### 入口步骤 0：banner
 
 agent 进入 skill 时**立刻** Bash echo 一行 banner（task worktree 此时尚未 cd，不能调 `status-view.py`；用字面值，见 `_shared/pm-view/banner-rules.md` §1）：
 
@@ -70,7 +85,7 @@ echo "━━━ PMAI ► TASK-EXECUTE ▸ 启动 task 执行 ━━━"
    - 唯一匹配：使用该文件。
    - 0 个或多个匹配：报错退出，并提示 PM 传完整 task 文件路径（多 active req 并行时短 ID 可能在多个 req 里冲突）。
 
-   > **v4.5 注**：task-confirm fork 后会把 task md 从 req 分支删，只在 task 分支独家。短 ID 模式必须扫 `.worktrees/task-*/` 才找得到已 fork 的 task；否则跑 `/pmai-task-execute task-NNN` 会在已 confirm 的 task 上误报 "0 个匹配"。
+   > **注**：task-confirm 创建 task worktree 后会把 task md 从 req 分支删、只在 task 分支独家。短 ID 模式必须扫 `.worktrees/task-*/` 才找得到这类 task；否则跑 `/pmai-task-execute task-NNN` 会在已 confirm 的 task 上误报 "0 个匹配"。
 3. **无参数**：自动扫描主仓 + `.worktrees/req-*/requirements/active` + **`.worktrees/task-*/requirements/active`**，找出所有同时满足下列条件的 task：
    - 状态为「待执行」。
    - 对应 `.worktrees/<task-stem>` 已存在。
@@ -132,11 +147,11 @@ fi
 
 注意：`pwd -P` 解析 macOS 上 `/tmp` ↔ `/private/tmp` 这类符号链接，避免 canonical 路径不一致导致误判。`EXPECTED_CANONICAL` 在子 shell 里算（子 shell 不受沙盒 reset 影响），代表 task worktree 的真实绝对路径。
 
-#### 入口步骤 2.4：检测 req 文档 drift + PM 决定是否拉取（4.5f 改造）
+#### 入口步骤 2.4：检测 req 文档 drift + PM 决定是否拉取
 
-`scripts/check-req-doc-drift.sh` 列出 task worktree 与 req 分支之间「项目级 DESIGN.md / CLAUDE.md + requirements/active/<req-id>/」范围内 hash 不一致的文件。**纯只读** —— 不写 worktree 任何文件、不写 `.git/index.lock`。task own 的两文件（PM 视图 + 工程合同）不在 drift 范围（task 自决）。
+`scripts/check-req-doc-drift.sh` 列出 task worktree 与 req 分支之间「项目级 DESIGN.md / CLAUDE.md + requirements/active/<req-id>/」范围内 hash 不一致的文件。**纯只读** —— 不写 worktree 任何文件、不写 `.git/index.lock`。task own 的文件不在 drift 范围（task 自决）。
 
-> 4.5f 取代 sync-req-docs.sh 静默批量覆盖：旧机制会偷偷盖掉 worktree 上 task agent 已经做的合法本地改动；新机制让 PM 看 diff 后逐文件决定。fresh fork 通常无 drift，PM 体验是 1 行「✓」直接通过。
+> 取代静默批量覆盖：旧机制会偷偷盖掉 worktree 上 task agent 已经做的合法本地改动；现机制让 PM 看 diff 后逐文件决定。新建的 task worktree 通常无 drift，PM 体验是 1 行「✓」直接通过。
 
 ```bash
 DRIFT_SCRIPT="$PMAI_HOME/scripts/check-req-doc-drift.sh"
@@ -210,7 +225,7 @@ done
   ```
   AI 在 PM 对话里**禁说「脚本未安装」**这种措辞 —— 脚本不是第三方依赖，是框架自带文件，「未安装」会误导 PM 去 `npm install` / `brew install`。正确措辞是「脚本不在预期路径」+ 把完整绝对路径报出来，PM 一眼能判定是 `.claude/` 丢了还是别的问题。
 
-#### 入口步骤 2.5：依赖前置 gate（v4 兜底层）
+#### 入口步骤 2.5：依赖前置 gate（兜底层）
 
 这是防止 PM 手动用 `task-transition.py` 强改状态、绕过 `/pmai-task-confirm` 的兜底层。逻辑必须与 `/pmai-task-confirm` 的「步骤 4-pre：依赖前置检查」一致：
 
@@ -247,7 +262,7 @@ CURRENT_STATUS=$(python3 "$PMAI_HOME/scripts/task-transition.py" "$TASK_FILE" --
 
 状态处理：
 
-- 「待执行」：继续走，进 §3b dispatch 时由 `task-transition --bound-to-execution-event` 物化绑定 dispatch 事件、原子完成 transition（修复 B：堵"状态推到执行中但 dispatch 没真跑"的悬空态）。
+- 「待执行」：继续走，进 §3b dispatch 时由 `task-transition --bound-to-execution-event` 物化绑定 dispatch 事件、原子完成 transition（堵"状态推到执行中但 dispatch 没真跑"的悬空态）。
 - 「执行中」：允许重试或 PM 打回后续跑，不重复 transition。包括：commit 后已呈交但 PM 还没决策的场景（task 状态仍是「执行中」）— 此时如想重新看呈交块跑 `/pmai-task-submit`。dispatch §3b 进入时若已是「执行中」会单独 emit 一条 dispatch 事件作为重试审计标记，不再 transition state。
 - 「已完成」：错误退出，提示 `该 task 已完成；如需收尾，在本（task）窗口运行 /pmai-close-task task-NNN（先在当前窗口做文档对齐和沉淀，再切 req 窗口完成清理）`。
 - 其他状态：错误退出，展示当前状态，并提示 PM 回主窗口用 `/pmai-task-status` 查看。
@@ -289,9 +304,11 @@ CURRENT_STATUS=$(python3 "$PMAI_HOME/scripts/task-transition.py" "$TASK_FILE" --
 
 ### 步骤 2：读取必读文档
 
-#### 2.0 项目级 DESIGN.md 强制 echo（不依赖 §3 列表 / 不依赖 LLM 选择性 Read）
+#### 2.0 项目级 DESIGN.md 强制 echo（建之前必读，六步③硬规则）
 
-UI task 漏读 / 浅读 DESIGN.md 是 task-001 反复迭代踩坑的根因（Read tool 触发与否取决于 LLM 自觉，489 行内容进 context 后细节又会被冲淡）。本子步骤用 Bash `cat` 把 DESIGN.md 全文无条件 echo 到 transcript，**保证内容进入 working context**——比依赖 Read tool 自觉触发硬。冗余于 §3 启动前必读列表也无害。
+**六步「建」的硬规则：动手写代码前必须先把项目 `DESIGN.md` 读进 context。** DESIGN.md 是项目级视觉规范单一来源（一组正向视觉约束），栈内建出来的页面要落在这套约束里。
+
+UI task 漏读 / 浅读 DESIGN.md 是早期原型反复迭代踩坑的根因（Read tool 触发与否取决于 LLM 自觉，长文进 context 后细节又会被冲淡）。本子步骤用 Bash `cat` 把 DESIGN.md 全文无条件 echo 到 transcript，**保证内容进入 working context**——比依赖 Read tool 自觉触发硬。冗余于「启动前必读」列表也无害。
 
 ```bash
 DESIGN_MD="$TASK_WORKTREE/docs/DESIGN.md"
@@ -328,9 +345,11 @@ fi
 
 **硬软分离原则：** 功能清单定义"做什么"（不可偏离），实现指引建议"怎么做"（可灵活调整）。在满足功能行为和设计系统约束的前提下，追求最好的视觉效果和交互体验。
 
-**读完后**：agent 内部把 task 文件执行区（实现规格 + 实现设计引用 + 约束与易错）理解为完整的执行指令，开始步骤 3 实现。
+**读完后**：agent 内部把 task 文件执行区（实现规格 + 实现设计引用 + 约束与易错）理解为完整的执行指令，开始步骤 3 在 `prototype/` 里栈内建。
 
-### 步骤 3：实现代码（含 dispatch）
+### 步骤 3：在 prototype/ 栈内建（含 dispatch）
+
+这一步是六步「建」的动手处：直接在 `prototype/` 主原型里用 Claude Code 实现范围清单里的内容（**零录入** —— PM 不手敲代码，AI 在栈内建）。改动落在 task worktree 的 `prototype/`，确认后由 close-task / close-req merge 回主原型主线。
 
 **步骤 3 的流程：状态 gate → dispatch → 越界保护 → 零改动检查。** 失败路径统一走 `--fail-execution` 回退 + 诊断文案。
 
@@ -473,11 +492,62 @@ AI 在「自审记录」section 追加一条 commit 前 placeholder（提供 tas
 
 **关键约束**：「**详细发现：**」下面**必须有至少一行不带 `**xxx：**` 前缀的实质文字**（散文或 bullet 都行）。task-transition.py 的 has_meaningful_content 会过滤掉 `**工具：** **结果：** **详细发现：** **遗留问题：**` 等纯前缀行——只有不带这些前缀的行才会被算非空。
 
-**仍然适用**（I-RV1 / I-RV3）：AI 不得自动调用任何 review skill（`/review` `/qa` `/qa-only` `/design-review`），即使是"机械检查"也不要伪装成跑了 review。本 placeholder 只是声明"AI 阶段已结束、PM 可以接手"，不冒名 review。
+**边界（I-RV1 / I-RV3）**：建完三道审里 AI **自动**跑的只有三道（覆盖审计 `coverage-reviewer` agent / 视觉门 `/design-review` 只截图不改 / 行为审 task-verify 驱动 `/browse`）—— 这三道是「建」的纪律，每 build 自动跑、出口都是给 PM 看的证据，不替 PM 拍板。**探索式 review 工具**（`/review` `/qa` `/qa-only`）仍是 PM 手动旁路，AI 不得自动调，即使是"机械检查"也不要伪装成跑了探索式 review。本 placeholder 只是声明"AI 阶段已结束、PM 可以接手"，不冒名探索式 review。
 
 > **task-verify 不算 review skill**（参 `skills/task-verify/SKILL.md`「I-RV1 边界」表）：UAT 是验证 PM 拍板流程是否通（明确 pass/fail），review 是探索性质量审查（多元 finding）。task-verify 是 task lifecycle 内部 skill（同 task-spec / task-plan / close-task），AI 必须在步骤 7.5 自动调用。
 
-### 步骤 7.5：调 task-verify 跑流程化 UAT（UI task 必经，非 UI task 跳过）
+### 步骤 7.3：建完三道审（覆盖审计 + 视觉门 + 行为审，合成一份给 PM）
+
+六步「建」完，AI **自动**跑三道机器审。三道审抓三种不同的病，复用同一次 dev server 起停（别各起各的）。最后 AI 把三份结果**合成一段给 PM 看**（不是三段堆给 PM）。
+
+> **顺序与边界**：覆盖审计是静态读码 diff（不需要 dev server）→ 先跑；视觉门 + 行为审都需要 dev server（步骤 4 已起，没起则起一次复用）。三道审**只报不改**（除 task-verify fail 进反馈循环修代码外），是给 PM 看的证据，不替 PM 拍板。
+
+#### 7.3a 覆盖审计（coverage-reviewer agent，白纸新鲜视角）
+
+调 `coverage-reviewer` agent，喂它**范围清单**（第二步拍板的范围）+ 本 task 在 `prototype/` 的代码 diff。agent 用范围清单对代码逐项 diff，报每条范围：**建了 / 丢了 / 降级占位**。
+
+- 这是**独立新鲜视角**审计（对标 `analysis-reviewer`），不是 AI 自审 —— 故意不让建代码的 AI 同时当审计员，避开自审盲区。
+- 输出三类：✅ 建了 / ❌ 丢了（范围清单有、代码没建）/ ⚠️ 降级占位（建了但是空壳 / 假数据 / 交互没接）。
+- 「丢了」「降级占位」条目进步骤 7.3d 合成报告，由 PM 在体验迭代里决定是否补。
+
+#### 7.3b 视觉门（gstack `/design-review`，只截图不改）
+
+起 dev server 后用 Skill tool 调 gstack `/design-review`，对照项目 `DESIGN.md` 审视觉一致性。
+
+- **只跑审计 + 截图，不自动跑修复 Loop** —— 出口是 PM 一句话 pass / 打回（保住 PM 拍板点）。AI 不替 PM 改视觉。
+- 用 `/browse`（headless），禁 `mcp__claude-in-chrome__*`。
+- 视觉门 finding（间距 / 层级 / 配色不一致 / AI slop 等）进合成报告。
+
+#### 7.3c 行为审（验收流程驱动 `/browse`，确定性路径）= 步骤 7.5 task-verify
+
+行为审 = task 自测说明派生的验收流程驱动 `/browse` 走确定性路径，验证「跑得通不通」。这一道由步骤 7.5 的 task-verify 承接（见下）：task-verify 内部就是「读自测说明 → 起/复用 dev server → 调 `/browse` 逐流程跑 → 出 pass/fail + 截图」。
+
+- 区别于 `/qa` 的 AI 探索：行为审是**确定性**走 PM 拍板的流程（明确 pass/fail），每 build 自动跑。
+- `/qa` 的 AI 探索式找 bug 是 PM **可选手动**跑的旁路（见附录），AI 不自动跑。
+
+#### 7.3d 合成一份给 PM + 体验迭代（AI 主动批量 flag、PM 勾改）
+
+三道审跑完，AI **合成一段**给 PM（覆盖审计的「丢了 / 降级占位」+ 视觉门的不一致 finding + 行为审的 fail 项 + AI 自己看出来的问题），用 PM 听得懂的话**主动批量列出建议改的项**，让 PM 勾哪些改：
+
+```
+建完自查（task-NNN）：
+覆盖：范围清单 8 项，建了 6 / 占位 1 / 漏 1
+  ⚠️ 「导出 CSV」按钮建了但点了没反应（占位）
+  ❌ 「批量删除」没建
+视觉：2 处和 DESIGN.md 不一致
+  • 卡片间距 12px，规范是 16px
+  • 主按钮用了非规范的橙色
+行为：验收流程 3/4 通过；失败：「提交后跳转结果页」没跳
+
+要不要我现在一起改？（你勾哪些，我改哪些）
+```
+
+- **AI 主动 flag、PM 勾改** —— 不是 AI 静默全改，也不是 PM 自己逐个找问题。AI 把发现摊开，PM 拍哪些值得改。
+- PM 勾的项 → AI 按 §反馈循环规则改 `prototype/` 代码（不动 task md 业务字段；步骤 5 写「文档对齐预告」）→ 重新跑三道审。
+- **停止条件**：demo 成功标准达到 + PM 在步骤 12 呈交闸门拍板。磨不动（反复改不到位）→ 上抛回第二步重新收范围，别在 build 里死磕。
+- **行为审 fail（task-verify exit 1）** 的处理见步骤 7.5（不 commit、进反馈循环、连续 3 次 fail 呈交 PM）。
+
+### 步骤 7.5：调 task-verify 跑流程化 UAT（= 行为审；UI task 必经，非 UI task 跳过）
 
 **触发条件**：task md 「🧪 自测说明」段非空且不是「无」。
 
@@ -485,7 +555,7 @@ AI 在「自审记录」section 追加一条 commit 前 placeholder（提供 tas
 
 **结果分流**：
 
-- **pass**（exit 0）→ **不停 / 不汇报 / 不写交接块**，自动接步骤 10 commit → 步骤 11 呈交 PM 验收**一气走完**；执行日志（步骤 5）append 一行「task-verify: ✅ N/N 流程通过」。**verify pass 不是 PM 节点**，PM 唯一的决策点是步骤 11 的呈交块；在此处停下来写 `STATUS: DONE` / `RECOMMENDATION: 回步骤 8 继续走` 等于自说自话宣告 task 完成（task 还没 commit、PM 还没看过任何东西），是常见跑偏模式
+- **pass**（exit 0）→ **不停 / 不汇报 / 不写交接块**，把这一道结果并进步骤 7.3d 合成报告，自动接步骤 10 commit → 步骤 11 呈交 PM 验收**一气走完**；执行日志（步骤 5）append 一行「task-verify: ✅ N/N 流程通过」。**verify pass 不是 PM 节点**，PM 唯一的决策点是步骤 11 的呈交块；在此处停下来写 `STATUS: DONE` / `RECOMMENDATION: 回前面步骤继续走` 等于自说自话宣告 task 完成（task 还没 commit、PM 还没看过任何东西），是常见跑偏模式
 - **fail**（exit 1）→ **不 commit**，进反馈循环：
   1. 把 verify/report.md 失败摘要写入 task 文件「📁 历史档案 → PM 反馈」（v3 在审计区；v2 写 PM 视图主文件。标记 `自动反馈 — task-verify`）：
      ```markdown
@@ -525,7 +595,7 @@ git commit -m "task-${TASK_ID}: ${SUMMARY}"
 
 Dev server 保持运行（PM 验收时需要访问）。
 
-**Commit 后不退出 skill** —— 直接进步骤 11 呈交验收（v4 单窗口 lifecycle）。
+**Commit 后不退出 skill** —— 直接进步骤 11 呈交验收（单窗口走完建 → 审 → 呈交）。
 
 ### 步骤 11：呈交 PM 验收（合并自 task-submit）
 
@@ -595,8 +665,9 @@ PM 在验收期间任意时刻可自跑 `/review` `/qa` `/design-review` 等 rev
 - 代码改动在 task worktree 中进行
 - 文档（docs/）不在 task worktree 中修改（hook 会拦截）
 - 文档偏差记录到 task 文件，由 `/pmai-doc-update` 在 close-task 前处理
-- AI 不得自动调任何 review 工具（`/review` `/qa` `/qa-only` `/design-review` 等，I-RV1）；推荐 review 仅作步骤 11 验收信息块末尾「⚙️ 可选深度审查」辅助提示，PM 自取所需
-- **task-verify 例外**：UI task 在步骤 7.5 **必须**调 task-verify（流程化 UAT，不属于 review skill 范畴，I-RV1 不适用）；fail → 反馈循环 + 不 commit；连续 3 次 fail 呈交 PM 人工接手
+- **建完三道审 AI 自动跑**（六步「建」纪律，I-RV1 不适用）：覆盖审计 `coverage-reviewer` agent（步骤 7.3a）/ 视觉门 `/design-review` 只截图不改（步骤 7.3b）/ 行为审 task-verify 驱动 `/browse`（步骤 7.5）。三道审只报不改、出口都是给 PM 看的证据
+- AI 不得自动调**探索式** review 工具（`/review` `/qa` `/qa-only`，I-RV1）；这些仅作步骤 11 验收信息块末尾「⚙️ 可选深度审查」辅助提示，PM 自取所需
+- **task-verify 例外**：UI task 在步骤 7.5 **必须**调 task-verify（流程化 UAT，行为审；不属于探索式 review 范畴，I-RV1 不适用）；fail → 反馈循环 + 不 commit；连续 3 次 fail 呈交 PM 人工接手
 - PM 报告 review 结论后才 append `review_completed` 事件（I-RV3）；禁止 AI 替 PM 跑或凭记忆模拟
 - 事件流缺 review_completed 不阻止「执行中→已完成」转换（I-RV2）
 - dev server 在 task-execute 结束后保持运行，直到 close-task 时杀掉
