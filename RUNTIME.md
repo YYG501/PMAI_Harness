@@ -24,9 +24,13 @@
 - ✅ 阶段1 增量脊柱：`PRODUCT-STATE.md.tmpl` / `req-plan.md.tmpl` / `DESIGN.md.tmpl` / `prototype-README.md.tmpl` 模板 + `coverage-reviewer` agent（均已提交、548 绿、尚未接线）
 - ✅ plan-eng-review 跑完（PM 拍：自动托管 spike 加固复现 2026-04-22 事故 / 六步坍缩先迁移测试；落点进实施清单 §6）
 - ✅ 六步坍缩盘点：stages.py（两 dict）+ req-transition.py（推进引擎）+ status-view/state（6+ 处 STAGE_NAMES）+ 7 个 stage 专属测试 全摸清
-- ⏳ **#9 六步坍缩核心**（重写引擎 + 锁步迁测试 + 级联 24 skill）= 大协调改动，careful 分批进行中
+- ✅ **#9 六步坍缩引擎**（411b568）：`stages.py` 7-stage→四阶段（1 范围确认/2 build/3 复审/4 沉淀）+ `req-transition.py` 重写（MAX_STAGE=4、删 stage-4 跳过/prd-solution 前置/stage6-7 回退）+ 迁 3 测试套（删 8 个 7-stage 独有用例），**548→540 全绿、已提交**
+- ⏳ **#10 大级联（未做）**：24 skill 的 prose 仍引用旧 7-stage（砍 stage-gate / 降后台 / 改造 / 合并）+ status-view 转产品轴 + build 三道审接线 + 沉淀两档 + attachments rewire = 大体量 prose 工程
+- ⏳ **#3/#4/#5/#6/#7 改造**（init/new-req/藏显示/入口/砍冗余）= 多与 #10 级联耦合
+- ⛔ **#8 自动托管 spike**：加固版（复现+挡 2026-04-22 事故）需 careful 专注一段
 - ⛔ **阶段2 build 纪律**：按设计自身"新机制先 spike"纪律，需在**一个真实消费仓需求**上验 design 约定能否逼近视觉 —— 非自动可完成，待真 req + PM
-- 详细任务看 TaskList（10 项）
+- **⚠️ 消费仓暂勿同步**（CHANGELOG 已标）：skill 未级联、旧 req 越界
+- 详细任务看 TaskList（#1/#9 done，余 8 项）
 
 ---
 
