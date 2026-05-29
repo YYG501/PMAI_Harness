@@ -428,9 +428,9 @@ def get_current_stage_banner(req_dir: Path, skill: str = "REQ-STAGE-GATE") -> st
     stage = meta.get("stage")
     if stage is None:
         raise StateReadError(req_dir / ".req-meta.json", "缺 stage 字段")
-    from .stages import STAGE_NAMES
+    from .stages import STAGE_NAMES, MAX_STAGE
     stage_name = STAGE_NAMES[int(stage)]
-    return f"━━━ PMAI ► {skill} ▸ Stage {stage}/7: {stage_name} ━━━"
+    return f"━━━ PMAI ► {skill} ▸ Stage {stage}/{MAX_STAGE}: {stage_name} ━━━"
 
 
 def set_stage_source(

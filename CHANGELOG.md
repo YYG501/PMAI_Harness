@@ -21,6 +21,7 @@ PM-AI-Workflow 生成器仓的演进记录。本文件**只记影响下游业务
 ### PMAI 重构落地（office-hours 收敛）—— 进行中
 
 - `feat(scripts)!` **六步坍缩引擎（BREAKING）**：`stages.py` 7-stage → per-req 四阶段（**1 范围确认 → 2 build → 3 复审 → 4 沉淀**；① 上下文脊柱 = init 项目级、不算 req stage）；`req-transition.py` 重写——`MAX_STAGE=4`、删 stage-4 DESIGN 跳过 / stage-3 prd-solution 前置 / stage-6·7 回退专属逻辑，stage 1 前置产物 = `req-plan.md`，沉淀（4）不可回退、复审（3）回退要求 task 已确认。迁移 3 个 stage 专属测试套（req-transition / stage-source-helper / pre-dispatch-doc-gate），删 8 个 7-stage 独有用例（DESIGN-skip / prd-solution / office-hours-fallback）。基线 548 → **540 全绿**。**⚠️ 消费仓暂勿同步本批**：24 skill 的 prose 仍引用旧 7-stage、尚未级联；在飞旧 req（stage 5-7）状态值在新机器下越界。待 skill 级联 + 旧 req 迁移方案完成再放同步。
+- `fix(scripts)`: `status-view.py` / `_lib/state.py` 的 banner + narrative `/7` 硬编码 → `/{MAX_STAGE}`（四阶段，不再谎称 7 段；完整产品轴显示是后续 #5）。
 - `feat(templates)`: 新增三个脊柱模板 —— `PRODUCT-STATE.md.tmpl`（产品现状层 hub：当前功能 / 主原型现状 / 实现深度状态 / 索引；只在沉淀时更新）、`req-plan.md.tmpl`（per-req 实现文档：范围清单 + 关键决策两节）、`DESIGN.md.tmpl`（正向视觉约束 + 产品化 demo 目标 + UI 习惯）。属重构「薄脊柱」首批；**尚未接线**（init-project / new-req 改造在后续 commit）。设计真相源见 `docs/设计/PMAI重构方向-office-hours收敛.md` + `docs/设计/PMAI重构-实施清单.md`。
 - `feat(agents)`: 新增 `coverage-reviewer` agent（build 后覆盖审计：白纸视角拿 req-plan 范围清单 vs prototype 代码硬 diff，报建了 / 丢了 / 降级占位；对标 `analysis-reviewer`、不参与 build 防自审盲区；只做静态读码核对存在，视觉 / 行为 / 架构归 design-review / browse / 其他）。`.claude/agents/` 加同款 symlink。尚未接线（build 三道审在六步坍缩批接入）。
 - `feat(templates)`: 新增 `prototype-README.md.tmpl`（主原型说明：单一主原型不留 fork、按 mode 实现深度、视觉照 DESIGN、原地重写转真）。prototype/ 代码脚手架本身由 init-project 用 `create-next-app` 起（后续 commit 接线）。

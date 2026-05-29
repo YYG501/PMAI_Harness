@@ -32,7 +32,7 @@ from _lib.state import (  # noqa: E402
     get_timeline_state,
     list_tasks,
 )
-from _lib.stages import STAGE_NAMES  # noqa: E402  ( F13 单一真相源)
+from _lib.stages import STAGE_NAMES, MAX_STAGE  # noqa: E402  ( F13 单一真相源)
 from _lib import stage6_summary  # noqa: E402  (speed mode)
 
 STATUS_ICONS = {
@@ -168,7 +168,7 @@ def render_narrative(state: dict, repo_root: Path) -> None:
             task_summary = f"，共 {len(tasks)} 个 task（执行中 {in_progress}，已完成 {done}）"
         # 不写 commit hash / 时间细节；只点 stage 状态
         print(
-            f"上次你做到 {req_id}，当前 stage {stage}/7：{stage_name}{task_summary}。"
+            f"上次你做到 {req_id}，当前 stage {stage}/{MAX_STAGE}：{stage_name}{task_summary}。"
             f"\n下一步：发 /pmai-req-stage-gate 推进，或继续当前 stage 工作。"
         )
         return
@@ -180,7 +180,7 @@ def render_narrative(state: dict, repo_root: Path) -> None:
         req_id = req["req_dir"].name
         stage = meta.get("stage", 0)
         stage_name = STAGE_NAMES.get(int(stage), f"stage {stage}") if stage else "未知"
-        print(f"  - {req_id}：stage {stage}/7（{stage_name}），{len(req['tasks'])} 个 task")
+        print(f"  - {req_id}：stage {stage}/{MAX_STAGE}（{stage_name}），{len(req['tasks'])} 个 task")
     print("\n下一步：发 /status-view 看详细，或 /pmai-req-stage-gate 推进具体 req。")
 
 
