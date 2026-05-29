@@ -43,6 +43,11 @@
 - `git worktree lock` 是 git 自带功能，会拦 `git worktree remove` 但不会拦 fs-level 写入；真实约束力需 POC
 - chmod 方案和 lock 方案的 tradeoff 要考虑
 
+**2026-05-29 office-hours 重构决议（plan-eng-review，= 重构任务 #8）**：
+- PM 拍板：自动托管（AI 自动建 / merge / 删 task worktree、PM 零窗口切换）**早上、随阶段 0 做**（不再 defer 等数据攒够）。
+- spike 验收标准升级：除 happy-path（自动建/merge/删），**必须复现 2026-04-22 串台事故场景 + 证明物化约束（worktree lock / chmod）挡得住**——本「状态物化」即采纳作加固。
+- ⚠️ **固化前仍需上面的 POC**：lock 对 Codex 的 fs-level 约束力 / chmod 处理 `.next`·`dist` 生成目录 —— 这是 spike 的验证内容，**需在真实 worktree 场景上跑过**，不盲固化（六步重构其余部分已落地：branch `reshape-office-hours`，533/0 绿；本项是重构唯一剩下、依赖真实场景验证的 spike）。
+
 ---
 
 ## DX backlog (来自 plan-devex-review 2026-04-25)
