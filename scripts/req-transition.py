@@ -44,55 +44,6 @@ def save_meta(req_dir: Path, meta: dict) -> None:
     write_json_atomic(meta_file, meta)
 
 
-def find_repo_root() -> Path:
-    import subprocess
-    try:
-        common = subprocess.check_output(
-            ["git", "rev-parse", "--git-common-dir"], text=True
-        ).strip()
-        if common and common != ".git":
-            return Path(common).resolve().parent
-    except Exception:
-        pass
-    try:
-        return Path(
-            subprocess.check_output(
-                ["git", "rev-parse", "--show-toplevel"], text=True
-            ).strip()
-        )
-    except Exception:
-        return Path.cwd()
-
-
-def check_design_md_has_content(req_dir: Path) -> bool:
-    """Check if docs/DESIGN.md has substantial content (not just skeleton).
-
-    Looks at the current worktree's docs/DESIGN.md (not the main repo root's),
-    because during req-transition the DESIGN.md that matters is the one on
-    the req branch currently being advanced.
-    """
-    # req_dir is .../.worktrees/<branch>/requirements/active/<req> OR
-    # <repo_root>/requirements/active/<req>. The worktree root is two levels up.
-    worktree_root = req_dir.parent.parent.parent
-    design_file = worktree_root / "docs" / "DESIGN.md"
-    if not design_file.exists():
-        # Fallback to main repo root for legacy callers
-        repo_root = find_repo_root()
-        design_file = repo_root / "docs" / "DESIGN.md"
-        if not design_file.exists():
-            return False
-    content = design_file.read_text(encoding="utf-8")
-    # Remove comments and empty lines
-    lines = [
-        l.strip()
-        for l in content.split("\n")
-        if l.strip() and not l.strip().startswith("<!--") and not l.strip().startswith(">")
-    ]
-    # More than just headings = has content
-    non_heading = [l for l in lines if not l.startswith("#")]
-    return len(non_heading) > 3
-
-
 def check_all_tasks_closed(req_dir: Path) -> tuple[bool, list[str]]:
     """Check if all tasks in req are closed or cancelled.
     Tolerates both old paragraph format (**状态：** 值) and new task-card

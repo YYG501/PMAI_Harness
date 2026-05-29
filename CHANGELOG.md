@@ -30,6 +30,7 @@ PM-AI-Workflow 生成器仓的演进记录。本文件**只记影响下游业务
   - **_shared**：input-flow（哪个 skill 读什么改六步）/ banner-rules（四阶段示例）/ PM-VIEW-RULES / attachments-upload（caller 改新主路径）。
   - 迁/删钉旧机制的测试（speed-mode / office-hours-B 分支 / stage-gate wiring / gap-check / 旧 trigger-0）。基线 540 → **533 全绿**。
   - **⚠️ 消费仓仍暂勿同步**：attachments stage_prefix rewire、build 三道审脚本级接线、藏显示产品轴、自动托管加固 spike、阶段2 真实 req spike 尚未完成；且在飞旧 req 状态值越界。
+- `chore(scripts)`: 砍 `req-transition.py` 死代码 `check_design_md_has_content` / `find_repo_root`（stage-4 跳过随六步坍缩移除后无人调用）。
 - `feat(scripts)`: status-view narrative/status **转产品轴 lead** —— 先念 PRODUCT-STATE 产品现状一句话 + 在做什么需求（`{阶段名} 阶段`），stage 编号退为次要语境、不再 lead；驱动文案改 /pmai-next。
 - `fix(scripts)`: `status-view.py` / `_lib/state.py` 的 banner `/7` 硬编码 → `/{MAX_STAGE}`（skill-header banner 仍留轻量阶段锚点）。
 - `feat(templates)`: 新增三个脊柱模板 —— `PRODUCT-STATE.md.tmpl`（产品现状层 hub：当前功能 / 主原型现状 / 实现深度状态 / 索引；只在沉淀时更新）、`req-plan.md.tmpl`（per-req 实现文档：范围清单 + 关键决策两节）、`DESIGN.md.tmpl`（正向视觉约束 + 产品化 demo 目标 + UI 习惯）。属重构「薄脊柱」首批；**尚未接线**（init-project / new-req 改造在后续 commit）。设计真相源见 `docs/设计/PMAI重构方向-office-hours收敛.md` + `docs/设计/PMAI重构-实施清单.md`。
