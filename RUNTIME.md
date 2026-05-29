@@ -25,12 +25,13 @@
 - ✅ plan-eng-review 跑完（PM 拍：自动托管 spike 加固复现 2026-04-22 事故 / 六步坍缩先迁移测试；落点进实施清单 §6）
 - ✅ 六步坍缩盘点：stages.py（两 dict）+ req-transition.py（推进引擎）+ status-view/state（6+ 处 STAGE_NAMES）+ 7 个 stage 专属测试 全摸清
 - ✅ **#9 六步坍缩引擎**（411b568）：`stages.py` 7-stage→四阶段（1 范围确认/2 build/3 复审/4 沉淀）+ `req-transition.py` 重写（MAX_STAGE=4、删 stage-4 跳过/prd-solution 前置/stage6-7 回退）+ 迁 3 测试套（删 8 个 7-stage 独有用例），**548→540 全绿、已提交**
-- ⏳ **#10 大级联（未做）**：24 skill 的 prose 仍引用旧 7-stage（砍 stage-gate / 降后台 / 改造 / 合并）+ status-view 转产品轴 + build 三道审接线 + 沉淀两档 + attachments rewire = 大体量 prose 工程
-- ⏳ **#3/#4/#5/#6/#7 改造**（init/new-req/藏显示/入口/砍冗余）= 多与 #10 级联耦合
+- ✅ **#10 六步级联**（17710cd，workflow 19 agent + 收口）：砍 req-stage-gate→壳 / 新建 `skills/next` (/pmai-next 驱动) / 降后台 6 / 改造 7（init·new-req·task-plan·task-execute·task-status·close-req·prd-writing）/ 合并 2 / _shared 同步；迁删钉旧机制测试。**540→533 全绿、已提交**
+- ✅ **#3 init-project / #4 new-req / #6 入口收敛+next**：随级联落地
+- ⏳ **余下未做**：#5 藏显示 banner/status 转**完整产品轴**（现 /7→/4 半步）；#7 砍冗余剩余（req-stage-gate 已砍，其余纯过程税）；attachments.py 的 stage_prefix→req-plan rewire（skill prose 已指、helper 未动）；build 三道审的**脚本级接线**（prose 已写、coverage-reviewer/browse 编排未脚本化）
 - ⛔ **#8 自动托管 spike**：加固版（复现+挡 2026-04-22 事故）需 careful 专注一段
-- ⛔ **阶段2 build 纪律**：按设计自身"新机制先 spike"纪律，需在**一个真实消费仓需求**上验 design 约定能否逼近视觉 —— 非自动可完成，待真 req + PM
-- **⚠️ 消费仓暂勿同步**（CHANGELOG 已标）：skill 未级联、旧 req 越界
-- 详细任务看 TaskList（#1/#9 done，余 8 项）
+- ⛔ **阶段2 build 纪律**：按设计"新机制先 spike"，需**真实消费仓 req** 验 design 约定逼近视觉 —— 非自动可完成，待真 req + PM
+- **⚠️ 消费仓暂勿同步**（CHANGELOG 已标）：attachments rewire / 三道审脚本接线 / 藏显示 / spike 未完，旧 req 越界
+- 详细任务看 TaskList（#1/#3/#4/#6/#9/#10 done）
 
 ---
 
