@@ -28,10 +28,10 @@
 - ✅ **#10 六步级联**（17710cd，workflow 19 agent + 收口）：砍 req-stage-gate→壳 / 新建 `skills/next` (/pmai-next 驱动) / 降后台 6 / 改造 7（init·new-req·task-plan·task-execute·task-status·close-req·prd-writing）/ 合并 2 / _shared 同步；迁删钉旧机制测试。**540→533 全绿、已提交**
 - ✅ **#3 init-project / #4 new-req / #6 入口收敛+next**：随级联落地
 - ⏳ **余下未做**：#5 藏显示 banner/status 转**完整产品轴**（现 /7→/4 半步）；#7 砍冗余剩余（req-stage-gate 已砍，其余纯过程税）；attachments.py 的 stage_prefix→req-plan rewire（skill prose 已指、helper 未动）；build 三道审的**脚本级接线**（prose 已写、coverage-reviewer/browse 编排未脚本化）
-- ⛔ **#8 自动托管 spike**：加固版（复现+挡 2026-04-22 事故）需 careful 专注一段
-- ⛔ **阶段2 build 纪律**：按设计"新机制先 spike"，需**真实消费仓 req** 验 design 约定逼近视觉 —— 非自动可完成，待真 req + PM
-- **⚠️ 消费仓暂勿同步**（CHANGELOG 已标）：attachments rewire / 三道审脚本接线 / 藏显示 / spike 未完，旧 req 越界
-- 详细任务看 TaskList（#1/#3/#4/#6/#9/#10 done）
+- ✅ **阶段2 核心押注已验证**：A/B spike `ExampleAgentProject-pathB`（Next.js15+React19+17 组件栈内真构建），PM 判"整体相近、Claude Code 配 skill 能逼近"（方向稿 §X-C）。build 纪律机制（DESIGN 正向约束+三道审+coverage-reviewer）已在级联实现。**非 blocker**（一度误列已纠）
+- **#8 自动托管拆两半**：前半（自动建/merge/删省机械活）已 prose 化（task-confirm/close-task 降后台 + /pmai-next 驱动），端到端待真 req 跑；**后半（状态物化硬加固）防的 2026-04-22 并行多 task 串台，在六步顺序 demo 流程下大概率不复存在 → 先不做、并行多 task 才重启**（已记 TODOS v2）
+- **⚠️ 消费仓暂勿同步**（CHANGELOG 已标）：attachments stage_prefix rewire / 三道审脚本级编排 待补，旧 req 状态越界
+- 详细任务看 TaskList（10 项完成 9，仅 #8 后半按判断"先不做"）
 
 ---
 
