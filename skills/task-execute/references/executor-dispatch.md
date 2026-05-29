@@ -68,8 +68,8 @@ if [ -z "${MANUAL_RESUME:-}" ]; then
     git -C "$TASK_WORKTREE" status --short >&2
     echo "" >&2
     echo "处理（任选一种后重跑 /pmai-task-execute）：" >&2
-    echo "  保留改动：cd \"$TASK_WORKTREE\" && git add -A && git commit -m 'pre-execute checkpoint: <一句话>'" >&2
-    echo "  丢弃改动：cd \"$TASK_WORKTREE\" && git restore . && git clean -fd" >&2
+    echo "  保留改动：git -C \"$TASK_WORKTREE\" add -A && git -C \"$TASK_WORKTREE\" commit -m 'pre-execute checkpoint: <一句话>'" >&2
+    echo "  丢弃改动：git -C \"$TASK_WORKTREE\" restore . && git -C \"$TASK_WORKTREE\" clean -fd" >&2
     echo "" >&2
     echo "注意：本次 task 状态保留为「执行中」，不回退、不 rollback worktree。" >&2
     exit 1

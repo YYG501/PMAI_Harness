@@ -20,6 +20,7 @@ PM-AI-Workflow 生成器仓的演进记录。本文件**只记影响下游业务
 
 ### PMAI 重构落地（office-hours 收敛）—— 进行中
 
+- `fix(skills)`: **task-execute 对齐单窗口模型**——build 这步唯一没跟上单窗口收敛的文件（task-confirm / close-task 早已收敛）。删掉「`claude --add-dir` 起独立会话 + auto-cd 进隔离副本 + 沙盒 reset 自检」整套多窗口机制，改成 AI 在 PM 当前窗口用 `git -C "$TASK_WORKTREE"` / 子 shell 显式目录操作隔离副本（不依赖会话 cwd 持久化）；`MAIN_REPO_ROOT` 经 `git rev-parse --git-common-dir` 从任意位置稳健解析。验收通过后 AI **自动接 close-task 收尾链**（不再提示 PM 切 req 窗口手跑），删残留的「close-task 两阶段 / Phase 2」陈旧引用。PM 全程零窗口切换。基线 **533 全绿**（含 `e2e/v4_T22_single_window_lifecycle` 端到端）。
 - `feat(scripts)!` **六步坍缩引擎（BREAKING）**：`stages.py` 7-stage → per-req 四阶段（**1 范围确认 → 2 build → 3 复审 → 4 沉淀**；① 上下文脊柱 = init 项目级、不算 req stage）；`req-transition.py` 重写——`MAX_STAGE=4`、删 stage-4 DESIGN 跳过 / stage-3 prd-solution 前置 / stage-6·7 回退专属逻辑，stage 1 前置产物 = `req-plan.md`，沉淀（4）不可回退、复审（3）回退要求 task 已确认。迁移 3 个 stage 专属测试套（req-transition / stage-source-helper / pre-dispatch-doc-gate），删 8 个 7-stage 独有用例（DESIGN-skip / prd-solution / office-hours-fallback）。基线 548 → **540 全绿**。**⚠️ 消费仓暂勿同步本批**：24 skill 的 prose 仍引用旧 7-stage、尚未级联；在飞旧 req（stage 5-7）状态值在新机器下越界。待 skill 级联 + 旧 req 迁移方案完成再放同步。
 - `feat(skills)!` **六步级联：22 skill + _shared 全改造（BREAKING）**：
   - **砍**：req-stage-gate → 薄壳（推进驱动搬到新建的 /pmai-next）。

@@ -27,11 +27,8 @@ description: |
 
 ## When To Use
 
-- PM 在新 Claude 会话中调用；也可由执行器 adapter 进入同一流程
-- 启动 Claude 的方式（关键，否则下面的「自动 cd 到 task worktree」失效）：
-  - 推荐：在 req worktree 目录用 `claude --add-dir <主仓根绝对路径>` 启动。launch dir = req worktree（PM 心智自然），`--add-dir` 把主仓根加进 Bash 沙盒，task worktree（位于 `.worktrees/` 下）也在沙盒内，cd 能持久化
-  - 备选：在主仓根用 `claude` 启动。task worktree 是 launch dir 子目录，天然在沙盒内
-  - **禁止**：在 req worktree 用裸 `claude`（不加 --add-dir）启动。task worktree 不在 launch dir 子树，cd 会被 Claude Code 沙盒 reset，整个流程失败
+- 由 `/pmai-next` 在 build 推进里拉起，PM **不切窗口、不另起会话**；也可由执行器 adapter 进入同一流程。
+- **单窗口模型**：AI 在 PM 当前所在的窗口操作 task 隔离副本——所有命令显式带目录（git 用 `git -C "$TASK_WORKTREE"`；跑构建 / dev 用子 shell `( cd "$TASK_WORKTREE/prototype" && … )`，子 shell 的 cd 在单次 Bash 调用内永远生效），**不依赖会话 cwd 持久化、不 `cd` 进隔离副本**。PM 无需 `claude --add-dir`、无需为每个 task 开新窗口。
 
 ## 单文件 typed contract 约定（必读）
 
@@ -64,7 +61,7 @@ agent 读 task 文件即可拿到全部执行所需内容（同一文件分区�
 
 #### 入口步骤 0：banner
 
-agent 进入 skill 时**立刻** Bash echo 一行 banner（task worktree 此时尚未 cd，不能调 `status-view.py`；用字面值，见 `_shared/pm-view/banner-rules.md` §1）：
+agent 进入 skill 时**立刻** Bash echo 一行 banner（此时 task 隔离副本路径还没解析，不调 `status-view.py`；用字面值，见 `_shared/pm-view/banner-rules.md` §1）：
 
 ```bash
 echo "━━━ PMAI ► TASK-EXECUTE ▸ 启动 task 执行 ━━━"
@@ -93,7 +90,7 @@ echo "━━━ PMAI ► TASK-EXECUTE ▸ 启动 task 执行 ━━━"
 无参数模式：
 
 - 唯一匹配：自动选定。
-- 0 个匹配：报错，提示 PM 先在主窗口运行 `/pmai-task-confirm <task-file>`。
+- 0 个匹配：报错，提示 PM 先跑 `/pmai-task-confirm <task-file>` 把隔离副本备好。
 - 多个匹配：报错，列出候选短 ID，提示 PM 改跑 `/pmai-task-execute task-NNN`。
 
 定位成功后第一时间输出进度反馈：
@@ -102,50 +99,23 @@ echo "━━━ PMAI ► TASK-EXECUTE ▸ 启动 task 执行 ━━━"
 echo "🎯 自动选定: $TASK_FILE"
 ```
 
-#### 入口步骤 2：自动 cd 到 task worktree（含沙盒边界自检）
+#### 入口步骤 2：解析 task 隔离副本路径（不 cd）
 
-从 task 文件 stem 推导 task worktree：
+单窗口模型不 `cd` 进隔离副本——解析出主仓根 + task 隔离副本的绝对路径，后续所有命令显式带目录。从任意位置（主仓 / req 隔离副本 / 当前 build 窗口）都能稳健解析：
 
 ```bash
+MAIN_REPO_ROOT="$(cd "$(git rev-parse --git-common-dir 2>/dev/null)/.." && pwd)"
 TASK_STEM=$(basename "$TASK_FILE" .md)
 TASK_WORKTREE="$MAIN_REPO_ROOT/.worktrees/$TASK_STEM"
-```
 
-如 worktree 不存在，报错退出并提示 PM 回主窗口重跑 `/pmai-task-confirm $TASK_FILE`。
-
-执行 cd 并立刻验证生效（避免 Claude Code 沙盒静默 reset 后续命令落到错误目录）。
-
-**关键：必须分两次 Bash 工具调用做这件事，单次合并会失效。**
-
-理由：单次 Bash 调用里 `cd` 在调用内永远生效（用 `pwd` 立刻看是切到的目标），Claude Code 的沙盒 reset 发生在**调用结束后**——所以单次 `cd && pwd && check` 永远 pass。要捕获 reset，必须独立第二次调用，让 reset 有机会落到 cwd 上再 pwd。
-
-第 1 次调用（cd）：
-
-```bash
-cd "$TASK_WORKTREE"
-```
-
-观察这次调用的输出：如果出现 `Shell cwd was reset to <launch-dir>`，立即按下面 hard fail 路径报错。
-
-第 2 次调用（独立验证）：
-
-```bash
-EXPECTED_CANONICAL=$(cd "$TASK_WORKTREE" 2>/dev/null && pwd -P)
-ACTUAL=$(pwd -P)
-if [ "$ACTUAL" != "$EXPECTED_CANONICAL" ]; then
-  echo "❌ task-execute 启动失败：cd 后 cwd 是 $ACTUAL，期望 $EXPECTED_CANONICAL" >&2
-  echo "" >&2
-  echo "原因：当前 Claude 会话的 launch dir 不在主仓子树内，且启动时未带 --add-dir，cd 被沙盒 reset。" >&2
-  echo "" >&2
-  echo "修复：关闭本会话，在新终端窗口（保持在当前 req worktree 目录）用以下命令重启 Claude：" >&2
-  echo "  claude --add-dir \"$MAIN_REPO_ROOT\"" >&2
-  echo "" >&2
-  echo "进新会话后再跑 /pmai-task-execute $(basename "$TASK_FILE" .md)。" >&2
+if [ ! -d "$TASK_WORKTREE" ]; then
+  echo "❌ task 隔离副本不存在：$TASK_WORKTREE" >&2
+  echo "   先跑 /pmai-task-confirm $TASK_FILE 备好隔离副本再重试（task-confirm 正常由 build 推进自动跑，这里是异常兜底）。" >&2
   exit 1
 fi
 ```
 
-注意：`pwd -P` 解析 macOS 上 `/tmp` ↔ `/private/tmp` 这类符号链接，避免 canonical 路径不一致导致误判。`EXPECTED_CANONICAL` 在子 shell 里算（子 shell 不受沙盒 reset 影响），代表 task worktree 的真实绝对路径。
+> **为什么不 cd**：task 隔离副本在 `.worktrees/` 下，可能不在当前会话 launch dir 子树内，`cd` 会被 Claude Code 沙盒在调用结束后 reset，后续命令落到错误目录。改用显式 `git -C` / 子 shell cd（单次 Bash 调用内有效）彻底回避——PM 也因此不必 `claude --add-dir`、不必切窗口。`MAIN_REPO_ROOT` 经 `git rev-parse --git-common-dir` 解析，不论会话起在主仓还是哪个隔离副本里都指向同一个主仓根。
 
 #### 入口步骤 2.4：检测 req 文档 drift + PM 决定是否拉取
 
@@ -264,8 +234,8 @@ CURRENT_STATUS=$(python3 "$PMAI_HOME/scripts/task-transition.py" "$TASK_FILE" --
 
 - 「待执行」：继续走，进 §3b dispatch 时由 `task-transition --bound-to-execution-event` 物化绑定 dispatch 事件、原子完成 transition（堵"状态推到执行中但 dispatch 没真跑"的悬空态）。
 - 「执行中」：允许重试或 PM 打回后续跑，不重复 transition。包括：commit 后已呈交但 PM 还没决策的场景（task 状态仍是「执行中」）— 此时如想重新看呈交块跑 `/pmai-task-submit`。dispatch §3b 进入时若已是「执行中」会单独 emit 一条 dispatch 事件作为重试审计标记，不再 transition state。
-- 「已完成」：错误退出，提示 `该 task 已完成；如需收尾，在本（task）窗口运行 /pmai-close-task task-NNN（先在当前窗口做文档对齐和沉淀，再切 req 窗口完成清理）`。
-- 其他状态：错误退出，展示当前状态，并提示 PM 回主窗口用 `/pmai-task-status` 查看。
+- 「已完成」：错误退出，提示 `该 task 已完成；如需收尾跑 /pmai-close-task task-NNN（AI 自动跑完收尾链：对齐 + 沉淀 + 并回 + 清理，不切窗口）`。
+- 其他状态：错误退出，展示当前状态，并提示 PM 用 `/pmai-task-status` 查看。
 
 ### 步骤 1：读取 task 文件（三态格式分流）
 
@@ -372,7 +342,7 @@ CURRENT_STATUS=$(python3 "$PMAI_HOME/scripts/task-transition.py" "$TASK_FILE" --
 if [ "$CURRENT_STATUS" != "执行中" ]; then
   echo "❌ /pmai-task-execute 入口拒绝：task 状态为「${CURRENT_STATUS:-未知}」，不是「执行中」。" >&2
   echo "" >&2
-  echo "请回到入口前置步骤处理状态，或在主窗口运行 /pmai-task-status 查看下一步。" >&2
+  echo "请回到入口前置步骤处理状态，或运行 /pmai-task-status 查看下一步。" >&2
   exit 1
 fi
 ```
@@ -421,8 +391,8 @@ fi
 
 ### 步骤 4：启动 dev server（UI 类 task）
 
-如果是 UI 类 task：
-1. 启动 dev server，绑定到 task 文件中指定的端口
+如果是 UI 类 task（dev server 在隔离副本里起，命令显式带目录，不 cd 会话）：
+1. 在 `$TASK_WORKTREE/prototype` 里启动 dev server，绑定到 task 文件中指定的端口（子 shell：`( cd "$TASK_WORKTREE/prototype" && <dev 命令> )`，或用包管理器的 `--dir` / `--prefix`；用 Bash run_in_background 让它后台跑）
 2. 确保 server 在后台运行，不阻塞后续步骤
 3. 验证 server 可访问
 
@@ -466,7 +436,7 @@ fi
 | prd.md §🎯 关键产品决策 #2 | 选用方案 A | 实证 demo 后用户路径走不通 | 改方案 B（理由：...）|
 ```
 
-无偏差填「无」。close-task Phase 2 把本段 promote 成 req `adjustment` 事件；close-req 步骤 1.5 聚合 → doc-update rewrite mode。
+无偏差填「无」。close-task 收尾时把本段 promote 成 req `adjustment` 事件；close-req 步骤 1.5 聚合 → doc-update rewrite mode。
 
 **v2 兼容 — 双文件两层分工**（旧 task）：工程层偏差（字段命名 / 接口签名 / 组件路径）写工程合同 §10 文档偏差表；业务层偏差（产品决策 / 需求描述 / 模块功能规格）写 PM 视图「📁 历史档案 → 业务层偏差」表。
 
@@ -583,14 +553,12 @@ AI 在「自审记录」section 追加一条 commit 前 placeholder（提供 tas
 task 状态在 commit 前后**全程保持「执行中」**——不再转「待验收」。PM 验收期间 task 状态仍是「执行中」（I-CB10 写入豁免范围覆盖：PM 打回反馈后 AI 继续修代码不被拦截），PM 通过呈交块时再统一转「已完成」。
 
 ```bash
-cd "$TASK_WORKTREE"
-
-# 收集改动摘要（从最近一条「执行报告」section 提取）
+# 收集改动摘要（从最近一条「执行报告」section 提取；$TASK_FILE 是绝对路径）
 SUMMARY=$(awk '/^### 执行报告/{flag=1} flag && /^\*\*改动摘要/{sub(/\*\*改动摘要：\*\*\s*/,"");print;exit}' "$TASK_FILE")
 [ -z "$SUMMARY" ] && SUMMARY="实现 $(basename "$TASK_FILE" .md)"
 
-git add -A
-git commit -m "task-${TASK_ID}: ${SUMMARY}"
+git -C "$TASK_WORKTREE" add -A
+git -C "$TASK_WORKTREE" commit -m "task-${TASK_ID}: ${SUMMARY}"
 ```
 
 Dev server 保持运行（PM 验收时需要访问）。
@@ -624,16 +592,15 @@ python3 "$PMAI_HOME/scripts/task-transition.py" "$TASK_FILE" --to 已完成
 
 `task-transition.py` 在「执行中→已完成」入口校验文档偏差 + 自审记录非空（I-TT3）；不通过会拒绝转换，PM 需先补齐再喊通过。
 
-然后输出（按 [banner-rules §2.5 内容禁忌](../_shared/pm-view/banner-rules.md#25-内容禁忌pm-facing-输出禁工程黑话与内部原理) — 不写 Phase 1/2、不写 merge / worktree / auto-chain 等内部术语、不解释 AI 为啥这样安排）：
+然后 **AI 自动接 `/pmai-close-task task-NNN` 收尾链**（验收通过即自动续跑，与 close-task「demo 验收通过后 AI 自动跑完整链、PM 不切窗口」一致）。输出按 [banner-rules §2.5 内容禁忌](../_shared/pm-view/banner-rules.md#25-内容禁忌pm-facing-输出禁工程黑话与内部原理) — 不写 Phase 1/2、不写 merge / worktree / auto-chain 等内部术语、不解释 AI 为啥这样安排：
 
 ```text
-✅ task-NNN 状态已转「已完成」。
+✅ task-NNN 通过验收，已转「已完成」。
 
-▶ Next Up — 在本（task）窗口运行：
-  /pmai-close-task task-NNN
-
-本次 close 收尾在当前窗口做完（文档对齐 + 视觉规范沉淀），完成后会提示你切到 req 窗口再跑一次 /pmai-close-task 完成清理。
+▶ Next Up：正在自动收尾这个 task，完成后接着往下推进 —— 你不用动手。
 ```
+
+> 异常兜底：若自动收尾没触发（窗口关了 / context 丢了），PM 手动跑 `/pmai-close-task task-NNN` 从断点续跑即可，无需切窗口。
 
 **PM 选 `打回`**（或输 `2` / 提具体反馈 / 输 "打回 / 改一下 / 不对"）：
 
@@ -661,6 +628,7 @@ PM 在验收期间任意时刻可自跑 `/review` `/qa` `/design-review` 等 rev
 
 ## Rules
 
+- **单窗口 / 显式目录**：不 `cd` 进 task 隔离副本、不依赖会话 cwd；git 用 `git -C "$TASK_WORKTREE"`，构建 / dev 用子 shell `( cd "$TASK_WORKTREE/prototype" && … )`（单次 Bash 调用内 cd 有效）。PM 全程不切窗口、不开新会话、不必 `claude --add-dir`
 - task 文件用绝对路径读写（task worktree 中的路径和主仓路径不同）
 - 代码改动在 task worktree 中进行
 - 文档（docs/）不在 task worktree 中修改（hook 会拦截）
@@ -671,6 +639,6 @@ PM 在验收期间任意时刻可自跑 `/review` `/qa` `/design-review` 等 rev
 - PM 报告 review 结论后才 append `review_completed` 事件（I-RV3）；禁止 AI 替 PM 跑或凭记忆模拟
 - 事件流缺 review_completed 不阻止「执行中→已完成」转换（I-RV2）
 - dev server 在 task-execute 结束后保持运行，直到 close-task 时杀掉
-- **commit 不切状态 → 自动进步骤 11 呈交验收**（task 状态全程「执行中」直到 PM 通过；默认路径，PM 不手动敲 `/pmai-task-submit`）；PM 通过后 AI 转「已完成」并提示 PM 在本（task）窗口跑 `/pmai-close-task task-NNN` 启动 Phase 1（close-task 是两阶段调用，Phase 1 在 task 窗口对齐 + commit，Phase 2 切到 req 窗口 merge + 清理）
+- **commit 不切状态 → 自动进步骤 11 呈交验收**（task 状态全程「执行中」直到 PM 通过；默认路径，PM 不手动敲 `/pmai-task-submit`）；PM 通过后 AI 转「已完成」并**自动接 `/pmai-close-task task-NNN` 收尾链**（单窗口跑完对齐 + 沉淀 + 并回 + 清理，不切窗口、不分两阶段；close-task 异常恢复入口留给中断兜底）
 - PM 打回不切状态：写反馈到 task 文件「📁 历史档案 → PM 反馈」（v3 审计区 / v2 PM 视图）→ AI 修代码 → 追加 fix commit → 重新呈交（不再走 `--to 执行中` transition）
 - task-submit 仍存在但仅作 PM 手动兜底入口（重启窗口 / context 丢失 / 异常退出后重新呈交）
