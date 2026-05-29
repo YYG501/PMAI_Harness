@@ -11,7 +11,16 @@
 
 ---
 
-## 当前位置（2026-05-27）
+## 当前位置（2026-05-29）
+
+**2026-05-29 — PMAI 重构方向（office-hours 收敛）：方案定盘、未实施**（PM 跑 `/gstack-office-hours` 诊断"框架用着不顺、出的第一版原型不如直接给 AI"；全程取证 + 5 视角对抗审 + 真实 A/B spike 收敛出重构方向。**这是方向性反转、范围远超单个 feature**）：
+
+- **核心**：砍 7-stage 固定流水线 + 每段全文确认门 → 坍缩成**六步**（①上下文脊柱 ②范围确认 ③栈内 build ④三道审 ⑤体验迭代 ⑥沉淀）；想 / 建原型交 Claude Code 在栈内直连、零录入，PMAI 缩成**上下文脊柱 + 范围确认 + 沉淀**层。
+- **真相源**：方向 = `docs/设计/PMAI重构方向-office-hours收敛.md`（§2.3.1 范围确认 / §2.3.2 复审沉淀 / 两不变量 / 证据 / 决议日志）；落地 = `docs/设计/PMAI重构-实施清单.md`（skill 去留 / gstack 接入 / worktree / 基础设施 / **D1-D10 全拍定** / §7 新 scope）；决策快照 memory `project_pmai_reshape_direction`。
+- **关键决策（全 PM 拍板）**：D1 六步反转 · D2 task 降后台留名（mode 中立）· D3 PRODUCT-STATE = 现状层 hub · D4 实现深度 mode 按层挂靠（复用现成 `工程结构约束-{prototype,system,custom}`）· D5 prototype 默认 Next.js+shadcn · D6 实现文档 = per-req `req-plan.md` · D8 worktree 自动托管早上 + spike · 附件机制保留 + rewire · §7（站点爬·对齐线上·覆盖审计 checks-JSON·产物层 deliverables）。
+- **状态**：**纯设计、零代码改动**；测试基线不变（仍 **525 / 2**）。下一步见下「下一步」。
+
+---
 
 **2026-05-27 — 同步资产内部编号清理 + hook 防回归**（PM 看到 close-task SKILL.md 「D13 不调 doc-update」追问"这里 d13 是啥"触发；反向暴露所有同步资产积累了同类生成器内部知识债）：
 
@@ -44,7 +53,13 @@
 
 ---
 
-**下一步**：① **PM 同步消费仓 ExampleConsumerApp**（按 `框架同步-SOP.md` 跑 hotfix 同步流程，speed mode 一并带过）② **PM 在 ExampleConsumerApp 起新 req 端到端验收 speed mode**（重点观察：stage 3 PRD 拍板后是否一气推到 stage 6 总览门 / 命中结构决策的 prompt 形态是否好答 / 总览门里的自决 vs PM 拍过分组是否对得上）③ 验收 finding 回头开新 patch vp。
+**下一步（2026-05-29 起 — 重构落地）**：
+
+1. **`/plan-eng-review` 审重构落地顺序 + 风险**（方案大，动手前审最稳；重点盯：D8 自动托管 spike = 动 merge/删/residue + dispatch-clean 事故区 / 覆盖审计吸收 checks-JSON 的改造面 / 阶段 0「砍冗余」具体边界）。
+2. **阶段 0**（方向稿 §4）：砍冗余（工程双合同 / 同范围重复 / 琐碎 req 全套 / 机器废气 —— 稳赚独立、可立即动）+ worktree PM 视图隐藏 + 自动托管 spike + 入口收敛定方向（init / new-req / next / status）。
+3. 下一个真实 req 用新 build 路径（栈内 + design 约定 + 三道审 + 覆盖审计）当 **build spike**。
+
+**旧 speed mode 下一步（同步 ExampleConsumerApp + 端到端验收）= 暂缓**：7-stage 正被坍缩成六步，speed mode 是 7-stage 的优化，待重构阶段 0 落地后重估是否还需独立验收（不擅自废，PM 拍）。
 
 ---
 
@@ -135,9 +150,9 @@
 
 ## 新窗口续接命令
 
-> 继续 PM-AI-Workflow。读 RUNTIME.md「当前位置」确认 D-iv 入口与全流程体验顺畅性已 ship（446/0，设计已归档），告诉我下一步（同步消费仓 / PM 验收 finding / 别的事）。
+> 继续 PM-AI-Workflow。读 RUNTIME.md「当前位置」——**PMAI 重构方向（office-hours 收敛）方案已定盘**（两份设计文档 + memory `project_pmai_reshape_direction`，D1-D10 全拍定，**纯设计未实施**，基线仍 525/2）。下一步：`/plan-eng-review` 审落地 → 阶段 0（砍冗余 + 藏显示 + 自动托管 spike）。等 PM 给方向。
 
 AI 收到后应该：
-1. 读本文件「当前位置」确认 D-iv ship 完毕（设计已归档 `docs/归档/完成/入口与全流程体验顺畅性.md`）
-2. 等 PM 给具体方向：① 帮忙同步消费仓的 SOP 问题 ② PM 自验收回来报 finding（如有）开 patch vp ③ 起别的事
-3. 不擅自启新阶段
+1. 读本文件「当前位置」2026-05-29 段 + 两份设计文档（方向 `PMAI重构方向-office-hours收敛.md` / 落地 `PMAI重构-实施清单.md`）确认重构方案与所有 D 决策
+2. 等 PM 给具体方向：① 起 `/plan-eng-review` 审落地 ② 直接进阶段 0 砍冗余（稳赚独立）③ 别的事
+3. **不擅自动代码**——重构是纯设计态，改动前先确认走哪一步
