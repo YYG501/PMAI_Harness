@@ -367,6 +367,8 @@ fi
 # --- 3. 直接删 task worktree + branch（v4.5：cwd 在 req worktree，不删自己脚下） ---
 if [ "$MERGE_OK" = "true" ]; then
   if [ -d "$TASK_WORKTREE" ]; then
+    # v2 状态物化：删前先 unlock（创建时 lock 了；幂等）
+    git -C "$REPO_ROOT" worktree unlock "$TASK_WORKTREE" 2>/dev/null || true
     if git -C "$REPO_ROOT" worktree remove "$TASK_WORKTREE" 2>/dev/null; then
       echo "🧹 已删 task worktree: $TASK_WORKTREE"
     else

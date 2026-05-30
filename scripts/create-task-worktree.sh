@@ -109,6 +109,13 @@ else
   fi
 fi
 
+# --- v2 状态物化：lock task worktree ---
+# 并发多 task 时防 `git worktree remove/prune` 误删活动 worktree（一个 task 的
+# close/cleanup 不会顺手 prune 掉另一个在跑的 task 副本）。lock 不拦 fs 写入，
+# 跨 task 代码串台由 dispatch 的越界保护 (executor-dispatch §3c) + 一 task 一执行器
+# 兜底；lock 专管移除竞态。close-task / discard / cleanup 删前先 unlock（幂等）。
+git -C "$REPO_ROOT" worktree lock "$WORKTREE_DIR" 2>/dev/null || true
+
 setup_dependency_symlinks "$REPO_ROOT" "$WORKTREE_DIR"
 
 # 4.5f：fork 时 worktree == req 分支，drift = 0，无需预 sync。

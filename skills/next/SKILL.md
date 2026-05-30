@@ -72,6 +72,17 @@ worktree 残留检测报警时，先把警告原文一句话转给 PM（"发现 
 
 每个阶段的具体流程在对应 skill 里，本 skill 只负责**判断当前在哪一步、报清楚、把对应能力拉起来**，不复制各 skill 的内部细节。
 
+### build 阶段：串行 / 并行派发（按 task-plan 拍的执行模式）
+
+task-plan 里 PM 拍过这次的执行模式（串行 / 并行 / 混合）。build 推进按它走：
+
+- **串行**：一个 task 走完 `/pmai-task-execute`（建 → 三道审 → 呈交）、PM 拍板，再起下一个。
+- **并行**：把**依赖已满足、互不冲突**的 task **各派一个独立执行器并发建**——每个 task 自己的 locked worktree、自己的执行器（claude subagent / codex / cursor / gemini）。全部建完 + 各自三道审后，**逐个呈交 PM 验收**（建并发、呈交仍串行，PM 一个个拍）。
+- **混合**：先串行打底的 task（产规范 / 被依赖的），再把后面独立的并发铺开。
+
+> **一 task 一执行器（铁律，2026-04-22 串台根因）**：并发时**绝不让一个执行器一口气干多个 task**。每个 task = 一次独立 `/pmai-task-execute` 派发 = 一个只认自己 worktree 的执行器（workspace 限定 + 越界保护兜底）。2026-04-22 事故就是一个 Codex suborchestrator 一气干了 task-001→006、把各 task 代码混进一个 worktree——结构上禁掉「一执行器多 task」即根除。
+> 并发安全：每 task worktree 建时 `git worktree lock`（防一个 task 的清理 prune 掉另一个在跑的）；同 task 重复派发由 per-task lock 挡。
+
 ### 第 4 步：推进后给一句 Next Up
 
 一步走完，按 `_shared/pm-view/banner-rules.md` §2 出 ▶ Next Up 块，告诉 PM 下一步动作。例：

@@ -37,6 +37,7 @@ SUITES=(
   test-stage-source-helper.sh
   test-attachments-helper.sh
   test-close-task.sh
+  test-worktree-lock.sh
   test-close-task-design-feedback.sh
   test-close-task-alignment.sh
   test-task-md-ownership.sh

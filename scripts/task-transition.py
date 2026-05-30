@@ -682,6 +682,11 @@ def cmd_discard(task_file: Path, reason: str, yes: bool) -> None:
 
     # 4. 清理 task worktree
     if has_worktree:
+        # v2 状态物化：删前先 unlock（创建时 lock 了；幂等）
+        subprocess.run(
+            ["git", "-C", str(repo_root), "worktree", "unlock", str(task_worktree)],
+            capture_output=True, text=True,
+        )
         wt_result = subprocess.run(
             ["git", "-C", str(repo_root), "worktree", "remove", "--force",
              str(task_worktree)],

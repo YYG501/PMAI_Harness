@@ -295,7 +295,8 @@ EOM
 当 executor=claude-code，**驱动（PM 窗口的 Claude）用 Agent 工具 spawn 一个独立 Claude subagent** 去隔离副本里建——不在驱动自己的上下文里 inline 建（保隔离 + 角色分离：建的 AI 与编排 / 审查的 AI 分开、failable 沙盒、PM 窗口对话不被建码过程刷屏；与 codex / cursor-agent / gemini 走独立 CLI 一致）。
 
 **驱动怎么派发：**
-- 调 Agent 工具，`prompt` = `$PROMPT_FILE` 全文 + 一段隔离约束：「你在隔离副本 `$TASK_WORKTREE` 里实现：所有文件用**绝对路径**写到该副本下（如 `$TASK_WORKTREE/prototype/...`）；**禁止 git add / git commit**（commit 由驱动统一做）」。`executor_model` 非空时按它选 subagent 的 model（opus / sonnet / haiku）。
+- 调 Agent 工具，`prompt` = `$PROMPT_FILE` 全文 + 一段隔离约束：「你在隔离副本 `$TASK_WORKTREE` 里**只建这一个 task**：所有文件用**绝对路径**写到该副本下（如 `$TASK_WORKTREE/prototype/...`）；**不碰其它 task / 其它 worktree**；**禁止 git add / git commit**（commit 由驱动统一做）」。`executor_model` 非空时按它选 subagent 的 model（opus / sonnet / haiku）。
+- **一 task 一 subagent**（2026-04-22 串台铁律）：每次派发只建一个 task；并发多 task 时驱动起多个**各自独立**的 subagent，绝不让一个 subagent 一口气干多个 task。
 - **不开新 worktree**（不挂 `isolation: worktree`）——task 隔离副本已由 task-confirm 建好，subagent 写进这个现成的副本。
 - subagent 返回后，驱动接着跑 3c 越界检查 / 3d 零改动检查 / step 10 commit。PM 全程一个窗口。
 

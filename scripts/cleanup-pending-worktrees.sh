@@ -176,6 +176,8 @@ for e in entries:
 
     # 1. 删 worktree（如果还在）
     if not failed and worktree and os.path.isdir(worktree):
+        # v2 状态物化：删前先 unlock（创建时 lock 了；幂等）
+        run(["git", "-C", repo_root, "worktree", "unlock", worktree])
         r = run(["git", "-C", repo_root, "worktree", "remove", worktree])
         if r.returncode != 0:
             # 回退：只对已通过 git worktree list 校验的路径做 Python rmtree。
