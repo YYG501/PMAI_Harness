@@ -5,7 +5,9 @@
 
 ---
 
-## v2: 状态物化到 worktree 生命周期
+## v2: 状态物化到 worktree 生命周期 — ✅ 已落地（2026-05-30，CHANGELOG 474fff5）
+
+> 下方为历史设计上下文；实际落地与原计划的差异见本节末「✅ 已落地」条。
 
 **What:** 把 task 状态从「markdown 字段」升级为「文件系统约束」。具体（2026-05-08「待验收」合并入「执行中」后简化）：
 - `/task-confirm`（待执行→执行中）才 `git worktree add`
@@ -46,7 +48,9 @@
 **2026-05-29 office-hours 重构决议（plan-eng-review，= 重构任务 #8）**：
 - PM 拍板：自动托管（AI 自动建 / merge / 删 task worktree、PM 零窗口切换）**早上、随阶段 0 做**（不再 defer 等数据攒够）。
 - spike 验收标准升级：除 happy-path（自动建/merge/删），**必须复现 2026-04-22 串台事故场景 + 证明物化约束（worktree lock / chmod）挡得住**——本「状态物化」即采纳作加固。
-- ⚠️ **固化前仍需上面的 POC**：lock 对 Codex 的 fs-level 约束力 / chmod 处理 `.next`·`dist` 生成目录 —— 这是 spike 的验证内容，**需在真实 worktree 场景上跑过**，不盲固化（六步重构其余部分已落地：branch `reshape-office-hours`，533/0 绿；本项是重构唯一剩下、依赖真实场景验证的 spike）。
+- ✅ **已落地（2026-05-30，CHANGELOG 474fff5 + 84fed8a）**：worktree lock（建即 lock、close/discard/cleanup 删前 unlock）+ **一 task 一执行器结构化防线**（2026-04-22 串台根因 = 一执行器干多 task，结构上禁掉）+ **并行多 task 编排**（/pmai-next 按 task-plan 串/并/混派发）。回归测试 `test-worktree-lock.sh`，基线 535 全绿。
+  - **与原计划的差异**：原 v2 的 `chmod` 物理写约束**不适合并行**（同 uid 多执行器无法互相只读）→ 改用结构化防线（一 task 一执行器 + dispatch 越界保护）防跨 task 串台，`git worktree lock` 专管移除竞态。
+  - **真 Codex 对 lock 的 fs-level POC**：PM 决定**不阻塞落地**（别管 POC、边用边验）；若真 Codex 越界写穿，回退点 = 当年规划的 chmod 兜底 / 或限制并行只用 claude subagent。
 
 ---
 
