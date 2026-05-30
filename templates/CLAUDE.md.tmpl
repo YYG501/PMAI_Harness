@@ -5,18 +5,17 @@
 **会话开始时必须执行：**
 1. 读取本文件了解项目上下文
 2. 运行 `source $HOME/.pmai/scripts/skill-preamble.sh` 检测当前工作位置
-3. 运行 `/pmai-task-status` 了解当前状态
+3. 运行 `/pmai-next` 了解当前在六步的哪一步 + 下一步该做什么（没有 active 需求时它会引导起新需求）
 
 ---
 
-### 角色定义
+### 角色定义（单窗口模型）
 
-| 角色 | 职责 | 工作位置 |
-|------|------|---------|
-| PM | 决策、确认、验收。不写代码 | 对话界面 |
-| 主 Orchestrator | 流程推进、文档维护、向 PM 呈交验收 | req 活跃时在 req worktree，否则在主仓 main |
-| 新窗口 Claude | PM 在新窗口启动的 Claude 实例，跑单 task；位置在 task worktree 里 |
-| Execution Agent | 纯代码执行器，可被替换 | task worktree |
+| 角色 | 职责 |
+|------|------|
+| PM | 决策、确认、验收。不写代码。**全程一个窗口**，不切窗口、不另起会话 |
+| 驱动 Claude | PM 这个窗口里的 AI：六步推进（范围确认 / 派发 build / 跑三道审 / 呈交验收 / 沉淀）、文档维护；用 `git -C <worktree>` 操作隔离副本，不 cd 自己的会话 |
+| 执行器 | build 时驱动派发的**独立 AI**（`claude-code` = 独立 subagent / `codex` / `cursor-agent` / `gemini`），在 task 隔离副本沙盒里建；PM 在 task 卡 `executor` 字段指定（留空走 settings 默认） |
 
 ### 状态转换受控入口
 
@@ -28,40 +27,33 @@
 
 Hook 会拦截直接编辑，但 **CLAUDE.md 规则是主要约束，hook 是补充检查**。即使绕过 hook（如通过 Bash），也必须遵守此规则。
 
-### v4 工作流入口序列 (PM 手动开新窗口)
+### 六步工作流入口（PM 主循环 4 条，全程一个窗口）
 
-stage 6 task 子循环完整入口:
-1. PM (主窗口): /pmai-task-spec task-NNN — 生成 task 详细文档, PM 看 + 改
-2. PM (主窗口): /pmai-task-confirm tasks/task-NNN-*.md — 主 Claude 检查依赖 + 创建 worktree + 输出启动指令
-3. PM 在新窗口启动 Claude (terminal/IDE 任选)
-4. PM (新窗口): /pmai-task-execute (无参数自动找; 多候选用 task-NNN 短 ID)
-5. 新 Claude 自动 cd worktree + 转执行中 + 跑 codex + 自动接续 /pmai-task-submit
-6. PM (新窗口): 看 diff/review 摘要 → 通过/打回
-7. 通过 → 新窗口跑 /pmai-close-task → "关本窗口去主启下一个 task"
+- `/pmai-init-project` — 起新项目（建上下文脊柱：PRODUCT-STATE / PROJECT / DESIGN + 主原型）
+- `/pmai-new-req "<一句话需求>"` — 起新需求（范围确认 → `req-plan.md`，拉隔离副本）
+- `/pmai-next` — **推进主驱动**：读当前在六步哪一步（范围确认 → build → 复审 → 沉淀），告诉你「现在该做 X / 要你拍 Y」，点头再动
+- `/pmai-task-status` — 看产品现状 + 当前在哪一步
+
+build 一步：驱动把 task 派给你指定的**独立执行器**在隔离副本里建，建完自动跑三道审、呈交你验收 —— **全程不切窗口、不另起会话**。机器步骤（task-spec / task-confirm / task-execute / close-task）降后台、PM 不感知，留作异常恢复入口。
 
 ### 中止 task 意图识别
 
-PM 想中止 active 的 task：
-- 关掉对应新窗口 (无副作用，task 状态留在执行中)
-- 回主窗口用任何自然语句表达放弃，例如：
-  - "放弃 task-005"
-  - "取消 005"
-  - "abort 这个" (task-005 是唯一执行中时, 推断绑定)
-- 主 Claude 识别意图 + 调 task-transition --fail-execution → task 回 待执行
-- worktree 保留供 PM 检查 dirty diff
+PM 想中止 active 的 task —— 用任何自然语句表达放弃：
+- "放弃 task-005" / "取消 005" / "abort 这个"（task-005 是唯一执行中时推断绑定）
+- 驱动 Claude 识别意图 + 调 `task-transition.py --fail-execution` → task 回「待执行」
+- 隔离副本保留供 PM 检查 dirty diff（不切窗口）
 
-### task 文件真相源 (单窗口 lifecycle 修订)
+### task 文件真相源（单窗口）
 
-- task 状态字段写入必须在 task worktree 里改 (task-execute 步骤 2 已自动 cd)
-- 改后 commit 到 task 分支, close-task merge 到 req 分支自然 sync
-- PM 不要在 req worktree 里手动改 task 文件 (会让 close-task dirty 检查拒绝 merge)
+- task 状态 / 内容写入落在 task 隔离副本里，驱动用 `git -C <task-worktree>` 操作（不 cd 自己的会话）
+- 改后 commit 到 task 分支，close-task merge 回当前需求分支自然 sync
+- PM 不要在需求隔离副本里手动改 task 文件（会让 close-task dirty 检查拒绝 merge）
 
 ### 确认门
 
-- 每个 stage 结束时必须**显式询问 PM 是否进入下一 stage**
-- AI 不允许自动跨 stage
-- Stage 3（需求方案）：所有 req 必走 —— 产 req 级 PRD（`prd.md`），stage 3 定稿冻结、驱动 task
-- Stage 4（设计系统）：DESIGN.md 有实质内容时自动跳过
+- 六步推进的每一步，AI **先说「要做 X / 要你拍 Y」、PM 点头再动**，不自动跨步
+- 关键拍板点：**范围确认定稿门**（`req-plan.md` 范围清单 + 决策页，PM 拍板；有未决问题用 `check-open-questions.py` 拦住逐条答完才放行）、**呈交验收门**（build 完看 demo，PM 通过 / 打回 —— build 唯一决策点）、**沉淀**（close-req 更新 PRODUCT-STATE + 并回主原型）
+- 反向 PRD（`prd.md`）**按需**产（PM 要拿去评审 / 留档才 `/pmai-prd-writing`），不是每个需求必产
 
 ### Skill 完整性（流程不可用工具替代）
 
@@ -89,7 +81,7 @@ Subagent（`Agent` 工具 spawn）是**短命、无状态、独立 context** 的
 - **跨 turn 状态持有**：subagent 的 context 不持久，不能用它"等通知再处理"
 - **Skill 替代品**：见上节"Skill 完整性"
 
-判断标准：**subagent 必须在单次 turn 内能完整跑完**（典型 < 5 分钟，且不依赖被它启动的后台进程的输出）。否则换载体——主 Orchestrator + `ScheduleWakeup` / hook 轮询 / 后台进程 sentinel。
+判断标准：**subagent 必须在单次 turn 内能完整跑完**（典型 < 5 分钟，且不依赖被它启动的后台进程的输出）。否则换载体——驱动 Claude + `ScheduleWakeup` / hook 轮询 / 后台进程 sentinel。
 
 ### Review 工具：AI 列推荐，PM 自跑（I-RV1/I-RV2/I-RV3）
 
@@ -97,10 +89,10 @@ Subagent（`Agent` 工具 spawn）是**短命、无状态、独立 context** 的
 
 | 产物 | 推荐 review 工具（默认清单） |
 |---|---|
-| prd.md（stage 2→3 写完）| `/plan-ceo-review` `/plan-eng-review` `/plan-design-review` `/autoplan` |
-| task-plan.md（stage 5 写完）| `/plan-eng-review` `/plan-design-review` `/autoplan` |
-| task 文件（task-spec 步骤 8 写完）| 业务 task: `/plan-eng-review` `/plan-design-review` ；基础设施 task: `/plan-eng-review` |
-| task 实现完毕（task-execute 步骤 7）| `/review` ；UI task 加 `/qa` `/design-review` |
+| `req-plan.md`（范围确认定稿）| `/plan-ceo-review` `/plan-eng-review` `/plan-design-review` `/autoplan` |
+| `task-plan.md`（范围清单）| `/plan-eng-review` `/plan-design-review` `/autoplan` |
+| `prd.md`（按需反向 PRD 写完）| `/plan-ceo-review` `/plan-eng-review` `/plan-design-review` `/autoplan` |
+| task 实现完毕（build 后）| `/review` ；UI task 加 `/qa` `/design-review` |
 
 PM 跑完任一 review 后报告结论 → AI 调 `task-events.py append --type [plan_]review_completed --tool <name> --result <pass|fail>` 机械记录事件作为审计痕迹（I-RV2）。事件流**不当任何状态机硬 gate**：缺事件不阻止 task-confirm 启动、不阻止「执行中→已完成」转换。
 
@@ -119,15 +111,12 @@ PM 在 chat 里直接 invoke 任何 review skill 时（`/plan-*-review` / `/qa` 
 2. 取当前 stage（仅当分支属于 req/task 工作流）：
    jq -r .stage .req-meta.json 2>/dev/null
 
-3. 按 (分支类型, stage) 推断评审对象：
+3. 按 (分支类型, 六步阶段) 推断评审对象（阶段读 .req-meta.json:stage，1 范围确认 / 2 build / 3 复审 / 4 沉淀）：
 
    分支 = req-NNN-<slug>：
-     stage 2  → requirements/active/<req>/{{stage 2 真相源}}
-                  (A 分支 analysis.md / B 分支 stage2-office-hours.md；
-                   路径见 requirements/active/<req>/.req-meta.json:stage2_source)
-     stage 3  → requirements/active/<req>/prd.md
-     stage 5  → requirements/active/<req>/pmai-implementation-design.md + task-plan.md
-     stage 6  → 当前在 spec 的 task 文件（单文件 typed contract）；多个 task 在 spec 时 PM 须指定 task-NNN
+     stage 1（范围确认）→ requirements/active/<req>/req-plan.md（+ task-plan.md 如已拆）
+     stage 2-3（build / 复审）→ 当前在建的 task 文件（单文件 typed contract）；多 task 时 PM 须指定 task-NNN
+     stage 4（沉淀）→ requirements/active/<req>/prd.md（如已按需产）
 
    分支 = task-NNN-<slug>：
      默认评审本 task 文件（单文件 typed contract，全文读）
@@ -172,8 +161,8 @@ main（主仓，永远不切分支）
 ```
 
 - 不允许任何角色直接修改 main 分支上的代码文件
-- task worktree 里不能修改 docs/（文档改动走 req 分支）
-- req worktree 里不能修改 prototypes/（代码改动走 task 分支）
+- task 隔离副本里不改 docs/（文档改动走需求分支）
+- 需求隔离副本里不改 `prototype/`（代码改动走 task 分支）
 
 **唯一例外：** `/pmai-quick-fix` 可在 PM 明确审批的小改动场景下修改 main 或某条 req 分支（多 active req 并行时按 cwd 决定 base），但必须通过 `tmp-quick-*` worktree 隔离、PM 审批 diff、并由 `$HOME/.pmai/scripts/quick-fix.sh` 执行 ff-only 合并。base 分支由启动位置自动推断（主仓 main → main / `req-*` worktree → 该 req 分支 / task worktree → 拒绝）。AI 不允许绕过脚本直接写 main 或 req 分支。
 
@@ -211,8 +200,9 @@ main（主仓，永远不切分支）
 | 模块索引 | docs/modules/INDEX.md | 每个模块一句话用途（≤30 字）；close-req §1.5 之后 derived refresh |
 | 模块规格 | docs/modules/ | 按模块组织（事实源）|
 | 视觉规范 | docs/DESIGN.md | 颜色、字体、组件规范 |
-| Req 级 PRD | requirements/active/&lt;req&gt;/prd.md | 本 req 需求方案（WHAT）；`/pmai-prd-writing` 在 **stage 3** 产出、定稿冻结、驱动 task |
-| Req 级实现设计 | requirements/active/&lt;req&gt;/pmai-implementation-design.md | 本 req 实现设计（HOW）；`/pmai-implementation-design` 在 **stage 5** 产出、经 PM 确认门审定 |
+| Req 级实现文档 | requirements/active/&lt;req&gt;/req-plan.md | 本 req **范围确认产物**：范围清单（WHAT）+ 关键决策页（WHY）；②范围确认 PM 拍板、驱动 build |
+| 产品现状 | docs/PRODUCT-STATE.md | 产品现状层 hub（现在长什么样 / 做到哪 / 哪些真哪些 mock）；沉淀时更新、每个新需求开头先读 |
+| Req 级 PRD（按需）| requirements/active/&lt;req&gt;/prd.md | **按需**反向 PRD（评审 / 留档才产）；`/pmai-prd-writing`，不是每个 req 必产 |
 | 独立 PRD（可选） | PM prompt 指定路径 | 跨模块评审材料，PM 主动调 `/pmai-prd-writing` standalone 模式 |
 | 活跃需求 | requirements/active/ | 当前正在处理的 req（允许多个 active 并行，每个 req 一个 worktree） |
 | 已关闭需求 | requirements/closed/ | 已完成或已取消的 req |
@@ -262,7 +252,7 @@ main（主仓，永远不切分支）
 
 ## 当前状态
 
-运行 `/pmai-task-status` 查看当前 req/task 状态和下一步操作。
+运行 `/pmai-next` 看当前在六步哪一步 + 下一步；`/pmai-task-status` 看产品现状 + 当前位置。
 
 ## quick-fix
 
