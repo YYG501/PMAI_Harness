@@ -82,6 +82,7 @@ task-plan 里 PM 拍过这次的执行模式（串行 / 并行 / 混合）。bui
 
 > **一 task 一执行器（铁律，2026-04-22 串台根因）**：并发时**绝不让一个执行器一口气干多个 task**。每个 task = 一次独立 `/pmai-task-execute` 派发 = 一个只认自己 worktree 的执行器（workspace 限定 + 越界保护兜底）。2026-04-22 事故就是一个 Codex suborchestrator 一气干了 task-001→006、把各 task 代码混进一个 worktree——结构上禁掉「一执行器多 task」即根除。
 > 并发安全：每 task worktree 建时 `git worktree lock`（防一个 task 的清理 prune 掉另一个在跑的）；同 task 重复派发由 per-task lock 挡。
+> **安全边界（2026-05-30 实测 + PM 拍板「接受残留」）**：外部执行器**不能靠 sandbox / config 物理关进自己的 worktree**——codex `workspace-write` 实测放行整个 `$HOME`（cwd / `writable_roots` 都收窄不动它），`git worktree lock` 也不拦 fs 写。所以防线是**结构化**：一 task 一执行器 + dispatch 越界保护（扫自己 worktree 超 allowlist 的文件、rollback）——足以挡 2026-04-22 那次事故形态（执行器把别 task 代码堆进**自己**的 worktree 再 commit）。**残留**：执行器故意写绝对路径到**兄弟** worktree 物理拦不住，但非历史形态、正常 build prompt 不诱发、低概率；真物理隔离（容器 / 独立 uid）对单人工具不成比例，**不做**。
 
 ### 第 4 步：推进后给一句 Next Up
 

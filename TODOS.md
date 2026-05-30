@@ -50,7 +50,7 @@
 - spike 验收标准升级：除 happy-path（自动建/merge/删），**必须复现 2026-04-22 串台事故场景 + 证明物化约束（worktree lock / chmod）挡得住**——本「状态物化」即采纳作加固。
 - ✅ **已落地（2026-05-30，CHANGELOG 474fff5 + 84fed8a）**：worktree lock（建即 lock、close/discard/cleanup 删前 unlock）+ **一 task 一执行器结构化防线**（2026-04-22 串台根因 = 一执行器干多 task，结构上禁掉）+ **并行多 task 编排**（/pmai-next 按 task-plan 串/并/混派发）。回归测试 `test-worktree-lock.sh`，基线 535 全绿。
   - **与原计划的差异**：原 v2 的 `chmod` 物理写约束**不适合并行**（同 uid 多执行器无法互相只读）→ 改用结构化防线（一 task 一执行器 + dispatch 越界保护）防跨 task 串台，`git worktree lock` 专管移除竞态。
-  - **真 Codex 对 lock 的 fs-level POC**：PM 决定**不阻塞落地**（别管 POC、边用边验）；若真 Codex 越界写穿，回退点 = 当年规划的 chmod 兜底 / 或限制并行只用 claude subagent。
+  - **真 Codex POC 已跑（2026-05-30）→ C（config 收窄）死、PM 拍 A（接受残留）**：codex `workspace-write` 实测放行整个 `$HOME`（cwd / `writable_roots` 都收不窄）、`git lock` 不拦 fs 写 → **外部执行器无法靠 config 物理隔离**；chmod 也不适合并行（同 uid）。防线 = 结构化（一 task 一执行器 + 越界保护），挡历史事故形态足够；真物理隔离（容器 / 独立 uid）对单人工具不成比例、不做。**别再试 config 收窄（已证死）。**
 
 ---
 
