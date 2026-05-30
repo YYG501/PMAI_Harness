@@ -2,7 +2,7 @@
 
 > docs/ 目录按**文档生命周期**分类：起草 → 执行 → 归档（完成 / 废弃）。本文件是各目录的活索引。
 >
-> **不在 docs/ 的关键文档**（顶层）：`CLAUDE.md`（章程）、`RUNTIME.md`（运行时状态）、`TODOS.md`（待决清单）、`INVARIANTS.md`（不变量）、`CHANGELOG.md`、`框架同步-SOP.md`、`README.md`
+> **不在 docs/ 的关键文档**（顶层）：`PRODUCT.md`（产品定位真相源）、`CLAUDE.md`（章程）、`RUNTIME.md`（运行时状态）、`TODOS.md`（待决清单）、`INVARIANTS.md`（不变量）、`CHANGELOG.md`、`框架同步-SOP.md`、`README.md`
 
 ---
 
@@ -12,6 +12,8 @@
 |---|---|
 | [`_模板-方案.md`](./设计/_模板-方案.md) | 唯一设计文档模板（§0 痛点锁 + §1-§N 方案主体 + §X Review Findings + §Y 决议日志），起手用 |
 | [`框架分发与全局安装.md`](./设计/框架分发与全局安装.md) | **v1.1 实施中**（2026-05-26）—— 框架从"cd 生成器仓"hack 切到"pmai 全局 install + 任意 cwd 跑 /pmai-*"；T0 POC ✅ / T1 ✅ bin/pmai-* 6 脚本 + VERSION 0.1.0 / T2 ✅ init-project.sh PMAI_HOME / T4 ✅ 文档更新 / T3+T5（消费仓同步与迁移）PM 决议暂缓 |
+| [`PMAI重构方向-office-hours收敛.md`](./设计/PMAI重构方向-office-hours收敛.md) | **六步重构方向真相源**（office-hours 收敛）—— per-req 四阶段（范围确认 / build / 复审 / 沉淀）+ 上下文脊柱（PRODUCT-STATE / 主原型 / DESIGN）+ 三条上坡路 + 三道审 + 反向 PRD 沉淀。2026-05-30 主体 + follow-on 全落地（branch `reshape-office-hours`，543/0）；**合 main 后归档到 完成/** |
+| [`PMAI重构-实施清单.md`](./设计/PMAI重构-实施清单.md) | **六步重构落地真相源** —— skill 去留 + gstack 接入 + worktree 模型 + D-decisions + §7 复盘 scope（站点爬 / 对齐线上 / checks 引擎 / 产物层）。2026-05-30 全落地；**合 main 后归档到 完成/** |
 
 > **起手新设计**：`cp docs/设计/_模板-方案.md docs/设计/<主题>.md`
 
@@ -82,6 +84,8 @@
 | [`设计-Superset独立Claude执行.md`](./归档/废弃/设计-Superset独立Claude执行.md) | 明标 DEPRECATED（被 PM 手动新窗口取代） |
 | [`设计-stage5-6-task循环.md`](./归档/废弃/设计-stage5-6-task循环.md) | "历史设计备忘 + 讨论中"，部分被替代 |
 | [`task-spec-早期截断.md`](./归档/废弃/pmai-task-spec-早期截断.md) | "设计中"半年沉寂；D13 已解 task-spec 相关问题 |
+| [`task执行自动化与文档精简.md`](./归档/废弃/task执行自动化与文档精简.md) | 2026-05-28 前稿，方向已并入 office-hours 收敛 reshape 并落地（见 `设计/PMAI重构*`），草稿归档 |
+| [`产品现状与主原型.md`](./归档/废弃/产品现状与主原型.md) | 2026-05-28 前稿（§0 已锁），范式直接演进成 reshape 并落地，草稿归档 |
 
 ---
 
