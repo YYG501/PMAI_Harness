@@ -69,18 +69,24 @@ echo "SKILL: task-verify"
 
 ## Workflow
 
-### 步骤 1：定位 task 文件 + cd 到 task worktree
+### 步骤 1：定位 task 文件 + 解析隔离副本路径（不 cd）
 
-参数同建（task-execute）入口步骤 1（完整路径 / 短 ID / 无参数 自动扫描）。定位到 `TASK_FILE` 后：
+参数同建（task-execute）入口步骤 1（完整路径 / 短 ID / 无参数 自动扫描）。定位到 `TASK_FILE` 后，单窗口模型**不 `cd` 进隔离副本**——解析绝对路径，后续命令显式带目录：
 
 ```bash
+MAIN_REPO_ROOT="$(cd "$(git rev-parse --git-common-dir 2>/dev/null)/.." && pwd)"
 TASK_STEM=$(basename "$TASK_FILE" .md)
 TASK_WORKTREE="$MAIN_REPO_ROOT/.worktrees/$TASK_STEM"
 VERIFY_DIR="$TASK_WORKTREE/.pm-workflow/tasks/$TASK_STEM/verify"
 mkdir -p "$VERIFY_DIR"
+
+if [ ! -d "$TASK_WORKTREE" ]; then
+  echo "❌ task 隔离副本不存在：$TASK_WORKTREE（先跑 /pmai-task-confirm 备好）" >&2
+  exit 1
+fi
 ```
 
-cd 到 task worktree 沙盒边界处理同建入口步骤 2（分两次 Bash 调用 + EXPECTED_CANONICAL 验证 + `claude --add-dir` 提示）；失败直接报错退出。
+后续 dev server / browse 命令一律显式带目录（`git -C` / 子 shell `( cd "$TASK_WORKTREE" && … )`，单次 Bash 调用内 cd 有效），不依赖会话 cwd——PM 不切窗口、不必 `claude --add-dir`。
 
 ### 步骤 2：读 task「🧪 自测说明」段（范围清单派生的验收流程）
 
@@ -131,38 +137,44 @@ done
 
 **找到** → 进步骤 5。
 
-**找不到** → 起 dev server，30s 超时：
+**找不到** → 在隔离副本里起 dev server（显式带目录、后台跑），30s 超时：
 
 ```bash
-$DEV_COMMAND > "$VERIFY_DIR/_dev-server.log" 2>&1 &
+( cd "$TASK_WORKTREE" && $DEV_COMMAND ) > "$VERIFY_DIR/_dev-server.log" 2>&1 &
 DEV_PID=$!
 # 轮询 30s 直到 ready_check 200
 ```
 
 仍未 ready → 写 `report.md` 标记 `dev_server_failed`，返回 fail（exit 1）。
 
-### 步骤 5：逐流程跑（调 gstack-browse）
+### 步骤 4.5：登录态前置（条件分支，默认跳过）
 
-读 `_plan.md` 的每个流程，调 Skill tool → `gstack-browse` 按 PM 视图动作描述翻译成浏览器操作：
+仅当 `_plan.md` 的验收流程**访问需要真实登录态的页面**（system mode 真 auth）时，才在跑 `/browse` 前用 Skill tool 调 gstack `/setup-browser-cookies` 导一次 cookie，让后续 `/browse` 带登录态。**由 AI 读流程内容临场判断**触不触发：
 
-| PM 视图动作 | 浏览器操作 |
-|---|---|
-| "打开 /xxx" | navigate `$BASE_URL/xxx` |
-| "输入 X" | fill 对应表单字段 |
-| "点击 Y" | click 对应按钮（按 text / role） |
-| "期望：跳转 /yyy" | assert URL 含 `/yyy` |
-| "期望：显示 X 文案" | assert page contains text "X" |
-| "期望：Logo 位置留空" | assert 对应选择器 empty / hidden |
-| "期望：只 N 个侧边栏" | assert count of `aside` == N |
-| "期望：无 X 文案" | assert page NOT contains "X" |
-| artifact: verify/flow-N.png | screenshot 到 `$VERIFY_DIR/flow-N.png` |
+- 绝大多数本地 dev 是 mock auth / 无鉴权 → **不触发，直接进步骤 5**。
+- ⚠️ cookie 路径有 macOS Keychain 弹窗 + PM 手动选域，**破坏无人值守**——只在真 auth 必要时走。
+- 完整 cookie 接线（自动判定 + 导入常驻 session）等真撞到 system mode req 再补（演进项，本轮不预建）。
 
-**流程内任一 assert 失败**：
-- 记录失败步骤序号 + PM 视图原文 + 浏览器实际状态摘要
-- 截图当前状态 → `$VERIFY_DIR/flow-N-FAIL.png`
-- 标记本流程 fail，继续下一流程（**不中断整个行为审**，便于一次性出全报告）
+### 步骤 5：逐流程跑（调 gstack-browse，注入验收流程 + 固定纪律）
 
-**全部 assert 通过** → 标记本流程 pass，存最终截图。
+**不再用硬编码的「PM 动作→浏览器操作」映射表**（任何新句式都要回去改表 = 机械化债）。改成：把 `_plan.md` 的验收流程**原文当 prompt 注入** gstack `/browse`，由 `/browse` 自己把「打开→操作→期望」翻成浏览器操作，配一段**固定纪律 prompt** 钉住确定性。
+
+用 Skill tool 调 `gstack-browse`，prompt = 验收流程原文 + 下面这段纪律（`$BASE_URL` / `$VERIFY_DIR` 填实际值）：
+
+```
+你在跑一条 PM 拍板的确定性验收流程，不是自由探索。严格遵守：
+- 严格按流程文本逐步走，一步不漏、不加戏、不自由点别的页面
+- 每一步的「期望」都要 assert；断言优先用页面可见文案，不要用 CSS selector（文案更稳、跨两次跑一致）
+- 某步 assert 失败：记录失败步骤序号 + 流程原文 + 页面实际状态摘要，截图当前状态到
+  $VERIFY_DIR/flow-N-FAIL.png，然后【继续跑下一个流程】（不中断整个行为审）
+- 全程只读不改：不要尝试改任何代码 / 文件
+- 只回每个流程的 ✅/❌ + 失败摘要 + 截图路径；不要给"下一步建议"、不要打健康分
+BASE_URL = $BASE_URL；截图目录 = $VERIFY_DIR；通过流程截图存 flow-N.png、失败存 flow-N-FAIL.png
+```
+
+每个流程 `/browse` 跑完回 pass/fail + 截图：通过存 `$VERIFY_DIR/flow-N.png`，失败存 `$VERIFY_DIR/flow-N-FAIL.png`，**失败不中断、继续下一流程**（便于一次性出全报告）。
+
+> **为什么是 `/browse` 不是 `/qa`**：`/browse` 是「指哪打哪」的确定性浏览器操作层，allowed-tools 只有 Bash/Read/AskUserQuestion，**物理上无 Edit/Write → 天然只报不改**。`/qa` 是「Test→Fix→Verify」，会**自动改代码 + 强制 clean working tree（刚 build 完必 dirty、每次先被拦）+ 出健康分（不是"你拍的流程通没通"）**——撞「只报不改 + 确定性」两条硬约束，prompt 也压不住它 click-everything 的探索目标。**确定性来自注入的固定流程文本 + 这段纪律 prompt，不来自换工具。**
 
 ### 步骤 6：写 verify/report.md
 
