@@ -31,7 +31,7 @@ if _SCRIPTS_DIR not in sys.path:
 
 from _lib.state import detect_format, engineering_path, parse_field
 
-VALID_EXECUTORS = {"claude-code", "codex", "cursor-agent", "manual"}
+VALID_EXECUTORS = {"claude-code", "codex", "cursor-agent", "gemini", "manual"}
 # Default if settings.json doesn't specify allowlist
 DEFAULT_CLAUDE_CODE_MODELS = {"opus", "sonnet", "haiku"}
 
@@ -140,7 +140,7 @@ def resolve(task_file: Path) -> dict:
                 f"{' / '.join(sorted(allowlist))}\n"
                 f"当前值：{model}\n"
                 f"修复：\n"
-                f"  - 如果你想用 {model}，把 **executor：** 改成 codex 或 cursor-agent\n"
+                f"  - 如果你想用 {model}，把 **executor：** 改成 codex / cursor-agent / gemini\n"
                 f"  - 或者清空 **executor_model：** 字段让 Agent tool 用默认 model"
             )
 

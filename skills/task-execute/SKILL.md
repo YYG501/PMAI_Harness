@@ -28,7 +28,8 @@ description: |
 ## When To Use
 
 - 由 `/pmai-next` 在 build 推进里拉起，PM **不切窗口、不另起会话**；也可由执行器 adapter 进入同一流程。
-- **单窗口模型**：AI 在 PM 当前所在的窗口操作 task 隔离副本——所有命令显式带目录（git 用 `git -C "$TASK_WORKTREE"`；跑构建 / dev 用子 shell `( cd "$TASK_WORKTREE/prototype" && … )`，子 shell 的 cd 在单次 Bash 调用内永远生效），**不依赖会话 cwd 持久化、不 `cd` 进隔离副本**。PM 无需 `claude --add-dir`、无需为每个 task 开新窗口。
+- **谁来建 = PM 指定的独立执行器**：build 派发给 task 卡 `executor` 字段指定的执行器——`claude-code`（独立 Claude subagent）/ `codex` / `cursor-agent` / `gemini`（各自独立 CLI），留空走 settings 默认。**建的都是独立 AI、在 task 隔离副本沙盒里干；驱动自己不 inline 建**（保隔离 + 角色分离 + failable 沙盒、PM 窗口对话不被建码过程刷屏）。
+- **驱动（PM 这一个窗口）只做编排**：定位 task / 解析执行器 / 派发 / 越界·零改动检查 / commit / 跑三道审 / 呈交 PM。这些命令显式带目录（git 用 `git -C "$TASK_WORKTREE"`；起 dev 用子 shell `( cd "$TASK_WORKTREE/prototype" && … )`，单次 Bash 调用内 cd 有效），**不依赖会话 cwd、不 `cd` 进隔离副本**。PM 无需 `claude --add-dir`、无需为每个 task 开新窗口。
 
 ## 单文件 typed contract 约定（必读）
 
@@ -319,7 +320,7 @@ fi
 
 ### 步骤 3：在 prototype/ 栈内建（含 dispatch）
 
-这一步是六步「建」的动手处：直接在 `prototype/` 主原型里用 Claude Code 实现范围清单里的内容（**零录入** —— PM 不手敲代码，AI 在栈内建）。改动落在 task worktree 的 `prototype/`，确认后由 close-task / close-req merge 回主原型主线。
+这一步是六步「建」的动手处：用 PM 指定的执行器（默认 Claude Code，可换 codex / cursor-agent / gemini）在 `prototype/` 主原型里实现范围清单里的内容（**零录入** —— PM 不手敲代码，独立执行器在栈内建）。改动落在 task worktree 的 `prototype/`，确认后由 close-task / close-req merge 回主原型主线。
 
 **步骤 3 的流程：状态 gate → dispatch → 越界保护 → 零改动检查。** 失败路径统一走 `--fail-execution` 回退 + 诊断文案。
 
@@ -628,7 +629,8 @@ PM 在验收期间任意时刻可自跑 `/review` `/qa` `/design-review` 等 rev
 
 ## Rules
 
-- **单窗口 / 显式目录**：不 `cd` 进 task 隔离副本、不依赖会话 cwd；git 用 `git -C "$TASK_WORKTREE"`，构建 / dev 用子 shell `( cd "$TASK_WORKTREE/prototype" && … )`（单次 Bash 调用内 cd 有效）。PM 全程不切窗口、不开新会话、不必 `claude --add-dir`
+- **build 由独立执行器干、驱动只编排**：build 派发给 PM 指定的执行器（`claude-code` = 独立 subagent / `codex` / `cursor-agent` / `gemini` = 独立 CLI），都在 task 隔离副本沙盒里独立建；驱动不 inline 建（隔离 + 角色分离）。取值见 task 卡 `executor` 字段 / settings 默认
+- **单窗口 / 显式目录**：驱动的编排命令不 `cd` 进 task 隔离副本、不依赖会话 cwd；git 用 `git -C "$TASK_WORKTREE"`，构建 / dev 用子 shell `( cd "$TASK_WORKTREE/prototype" && … )`（单次 Bash 调用内 cd 有效）。PM 全程不切窗口、不开新会话、不必 `claude --add-dir`
 - task 文件用绝对路径读写（task worktree 中的路径和主仓路径不同）
 - 代码改动在 task worktree 中进行
 - 文档（docs/）不在 task worktree 中修改（hook 会拦截）

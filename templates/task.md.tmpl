@@ -51,8 +51,9 @@
 | **分支** | task-{{TASK_NUMBER}}-{{TASK_SLUG}} |
 
 <!--
-executor 取值：claude-code / codex / cursor-agent / manual；executor_model 留空 = settings 默认。
+executor 取值：claude-code / codex / cursor-agent / gemini / manual；executor_model 留空 = settings 默认。
 claude-code 仅支持 opus / sonnet / haiku（Agent tool 枚举）。
+claude-code 走独立 subagent（Agent 工具）在隔离副本里建；codex / cursor-agent / gemini 走各自 CLI adapter。
 「审查工具」= 推荐 PM 在 task-execute 步骤 7 自跑的工具（I-RV1）；哨兵值 (无)/无/空/N/A 表示无推荐。
 -->
 

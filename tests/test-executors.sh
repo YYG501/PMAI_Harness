@@ -161,6 +161,20 @@ test_resolver_default_claude_code() {
   teardown_sandbox
 }
 
+test_resolver_gemini_task() {
+  start_test "resolver: gemini executor from task field"
+  make_sandbox
+  write_settings_json "$SANDBOX"
+  write_task_file "$SANDBOX/task.md" "gemini" ""
+  out=$(cd "$SANDBOX" && python3 .claude/scripts/resolve-executor.py task.md)
+  if _has_field "$out" executor gemini && _has_field "$out" source_executor task; then
+    pass_test
+  else
+    fail_test "expected gemini/task, got: $out"
+  fi
+  teardown_sandbox
+}
+
 test_resolver_invalid_executor() {
   start_test "resolver: invalid executor → exit 1 with human message"
   make_sandbox
@@ -654,6 +668,11 @@ test_cursor_agent_adapter_filled_model_passes_through() {
   teardown_sandbox
 }
 
+# 注：gemini.sh adapter 走与 cursor-agent.sh 逐字同构的路径（source _gate.sh →
+# adapter_precheck → CLI → adapter_postcheck），结构正确性由该同构保证。这里不另加
+# adapter shim 用例——codex/cursor 的 4 个 shim 用例在裸 shell 下已因 _gate.sh:30 的
+# `$MAIN_REPO_ROOT/$HOME/.pmai` 路径 bug 全 fail（本套未进 run-all），不再叠加。
+
 # ======================================================================
 # Live adapter tests (SKIP_LIVE_TESTS gated)
 # ======================================================================
@@ -678,6 +697,7 @@ echo "────────────────────────�
 test_resolver_task_field
 test_resolver_settings_default
 test_resolver_default_claude_code
+test_resolver_gemini_task
 test_resolver_invalid_executor
 test_resolver_claude_code_model_valid
 test_resolver_claude_code_model_invalid

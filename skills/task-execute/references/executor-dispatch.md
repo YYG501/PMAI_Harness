@@ -110,9 +110,9 @@ if [ -z "${MANUAL_RESUME:-}" ]; then
 
   # Dispatch
   if [ "$EXECUTOR" = "claude-code" ]; then
-    # 走下面「claude-code 执行者的主流程」——当前 Claude 实例自己实现
-    # Prompt 已写到 $PROMPT_FILE，Claude 应读它理解执行边界
-    echo "✓ executor=claude-code，当前 Claude 实例继续执行。Prompt: $PROMPT_FILE"
+    # claude-code 执行者 = 驱动 spawn 一个独立 Claude subagent 去隔离副本里建
+    # （见下面「claude-code 执行者：独立 build subagent」）。Prompt 已写到 $PROMPT_FILE。
+    echo "✓ executor=claude-code：派发独立 build subagent（worktree=$TASK_WORKTREE）。Prompt: $PROMPT_FILE"
   elif [ "$EXECUTOR" = "manual" ]; then
     MAIN_REPO_ROOT="$MAIN_REPO_ROOT" \
     TASK_FILE="$TASK_FILE" \
@@ -122,7 +122,7 @@ if [ -z "${MANUAL_RESUME:-}" ]; then
       bash "$PMAI_HOME/scripts/exec-adapters/manual.sh"
     exit 0  # manual 已写 pending，skill 结束
   else
-    # codex / cursor-agent
+    # codex / cursor-agent / gemini（统一走 exec-adapters/${EXECUTOR}.sh 独立 CLI 进程）
     ADAPTER="$PMAI_HOME/scripts/exec-adapters/${EXECUTOR}.sh"
     if [ ! -x "$ADAPTER" ]; then
       echo "❌ 找不到 adapter: $ADAPTER" >&2
@@ -290,18 +290,20 @@ EOM
 
 ---
 
-## claude-code 执行者的主流程
+## claude-code 执行者：独立 build subagent
 
-当 executor=claude-code 走这里，当前 Claude 实例执行：
+当 executor=claude-code，**驱动（PM 窗口的 Claude）用 Agent 工具 spawn 一个独立 Claude subagent** 去隔离副本里建——不在驱动自己的上下文里 inline 建（保隔离 + 角色分离：建的 AI 与编排 / 审查的 AI 分开、failable 沙盒、PM 窗口对话不被建码过程刷屏；与 codex / cursor-agent / gemini 走独立 CLI 一致）。
 
-**实现前必做（UI 类 task）：**
+**驱动怎么派发：**
+- 调 Agent 工具，`prompt` = `$PROMPT_FILE` 全文 + 一段隔离约束：「你在隔离副本 `$TASK_WORKTREE` 里实现：所有文件用**绝对路径**写到该副本下（如 `$TASK_WORKTREE/prototype/...`）；**禁止 git add / git commit**（commit 由驱动统一做）」。`executor_model` 非空时按它选 subagent 的 model（opus / sonnet / haiku）。
+- **不开新 worktree**（不挂 `isolation: worktree`）——task 隔离副本已由 task-confirm 建好，subagent 写进这个现成的副本。
+- subagent 返回后，驱动接着跑 3c 越界检查 / 3d 零改动检查 / step 10 commit。PM 全程一个窗口。
+
+**subagent 的实现纪律（写进派发 prompt，UI 类 task）：**
 - 读 `$PROMPT_FILE` 获取完整执行契约（允许/禁止写入、验收标准、写回职责）
-- 用 Glob 扫描项目中的页面和组件目录，了解已有哪些组件和页面
-- 如果要实现的功能与已有页面类似（如列表页、表单页），先读取该页面源码，复用其布局和组件
-- 优先 import 已有组件，不要重写功能相同的组件
+- 用 Glob 扫描项目已有页面和组件目录，了解已有哪些组件和页面
+- 要实现的功能与已有页面类似（列表页 / 表单页）→ 先读该页面源码，复用其布局和组件
+- 优先 import 已有组件，不重写功能相同的组件
 - 遵循已有代码的样式模式和目录约定
-
-- 新建文件按执行范围创建
-- 修改文件按执行范围修改
-- 不动的文件不要碰
-- **禁止 git add / git commit**（commit 由 step 10 统一做）
+- 新建 / 修改文件按执行范围；不动的文件不碰
+- **禁止 git add / git commit**（commit 由驱动 step 10 统一做）
