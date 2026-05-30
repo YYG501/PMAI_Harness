@@ -147,13 +147,19 @@ DEV_PID=$!
 
 仍未 ready → 写 `report.md` 标记 `dev_server_failed`，返回 fail（exit 1）。
 
-### 步骤 4.5：登录态前置（条件分支，默认跳过）
+### 步骤 4.5：登录态前置（验收流程触到登录后页面时）
 
-仅当 `_plan.md` 的验收流程**访问需要真实登录态的页面**（system mode 真 auth）时，才在跑 `/browse` 前用 Skill tool 调 gstack `/setup-browser-cookies` 导一次 cookie，让后续 `/browse` 带登录态。**由 AI 读流程内容临场判断**触不触发：
+行为审要测的页面在**登录后**时，先确保 `/browse` 带登录态。两条路，AI 按本页所在层的实现深度（读 `工程结构约束-{prototype,system,custom}.md` / `PRODUCT-STATE.md` 判 mock / system）选：
 
-- 绝大多数本地 dev 是 mock auth / 无鉴权 → **不触发，直接进步骤 5**。
-- ⚠️ cookie 路径有 macOS Keychain 弹窗 + PM 手动选域，**破坏无人值守**——只在真 auth 必要时走。
-- 完整 cookie 接线（自动判定 + 导入常驻 session）等真撞到 system mode req 再补（演进项，本轮不预建）。
+1. **登录能用 UI 走通**（账号密码表单 → 后端发 session cookie）——**默认走这条**：把「登录」作为验收流程**第一步**写进 `_plan.md`，`/browse` 跑一遍登录、同一 session 自然带上 cookie，后续步骤就是登录态，**不需要外部导入**。prototype mode（mock auth）+ system mode 里表单可登录的，都走这条。
+2. **登录走不通 UI**（外部 SSO / OAuth 跳转 / MFA / captcha——仅 system mode 真 auth 可能遇到）：跑步骤 5 前用 Skill tool 调 gstack `/setup-browser-cookies` 导一次真 cookie，让后续 `/browse` 带登录态。
+   ```bash
+   # 仅当本页 = system mode 真 auth 且登录非表单可走时
+   # （AI 判定后）用 Skill tool 调 gstack /setup-browser-cookies，导入常驻 browse session
+   ```
+   - ⚠️ cookie 导入有 **macOS Keychain 弹窗 + PM 手动选域，破坏无人值守**——**仅在路 1 走不通时才用**。
+
+mock auth / 无鉴权 / 表单可登录 → 路 1，无 cookie 动作，直接进步骤 5。**只有 system mode 真 auth + 登录非表单可走**才落到路 2。
 
 ### 步骤 5：逐流程跑（调 gstack-browse，注入验收流程 + 固定纪律）
 
