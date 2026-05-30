@@ -303,7 +303,7 @@ test_attachments_big_file_warn_but_pass() {
   _install_hook
 
   mkdir -p "$FIXTURE_DIR/big/attachments"
-  dd if=/dev/zero of="$FIXTURE_DIR/big/attachments/huge.bin" bs=1m count=12 >/dev/null 2>&1
+  dd if=/dev/zero of="$FIXTURE_DIR/big/attachments/huge.bin" bs=1M count=12 >/dev/null 2>&1
 
   if (cd "$FIXTURE_DIR" && git add -A && git commit -q -m "add big attachment") >/tmp/out.$$ 2>/tmp/err.$$; then
     if grep -q "attachments/ 内有 >10MB 文件" /tmp/err.$$; then
