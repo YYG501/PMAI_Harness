@@ -226,6 +226,12 @@ git -C "$REPO_ROOT" commit -m "chore(baseline): new-req 入口兜底 PROJECT.md 
 
 > **office-hours 是可选 aid，不进固定流程**：PM 想用 office-hours 风格做深挖讨论时，**PM 自己手动调 gstack `/office-hours`**——它帮 PM 想清楚，不是范围清单生成器。AI **不主动替 PM 跑** office-hours（它含 builder/startup 模式选择 + telemetry + gbrain context queries，适合 PM 自主用）。它只是"收范围对话"这条上坡路上 AI 可以建议 PM 用的辅助，不是 new-req 必经的一环。
 
+> **brownfield 按需 skill（有信号才建议，不机械弹）**：PM 的需求若是「**照某个现有站 / 线上产品做**」——
+> - 「想从某个站起原型 / 照它补几页」 → AI 建议 `/pmai-scrape-prototype`（§7.A 爬站点重建近似）。
+> - 「原型要对齐我们线上真实产品」 → AI 建议 `/pmai-align-to-live`（§7.B 第四条 diff 轴）。
+>
+> 只在 PM 话里出现这类信号才提一句、PM 自取；没信号别弹（同 office-hours 的"可选 aid"纪律）。两者共用 §7.C checks-spec 引擎（`skills/_shared/checks-spec.md`）。
+
 #### 3.2：结晶成 req-plan.md 草稿（两节）
 
 收敛出方向后，AI 按 `_shared/pm-view/writing-rules.md` §三 + `_shared/pm-view/doc-strictness.md` §四，拼一版 `req-plan.md` 草稿，**直接在 chat 里 markdown block 展示给 PM 看**（不写文件 —— worktree 还没创建，真实路径不存在）。两节：
