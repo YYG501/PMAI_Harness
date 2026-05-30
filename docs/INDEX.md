@@ -2,7 +2,7 @@
 
 > docs/ 目录按**文档生命周期**分类：起草 → 执行 → 归档（完成 / 废弃）。本文件是各目录的活索引。
 >
-> **不在 docs/ 的关键文档**（顶层）：`PRODUCT.md`（产品定位真相源）、`CLAUDE.md`（章程）、`RUNTIME.md`（运行时状态）、`TODOS.md`（待决清单）、`INVARIANTS.md`（不变量）、`CHANGELOG.md`、`框架同步-SOP.md`、`README.md`
+> **不在 docs/ 的关键文档**（顶层）：`PRODUCT.md`（产品定位真相源）、`CLAUDE.md`（章程）、`RUNTIME.md`（运行时状态）、`TODOS.md`（待决清单）、`INVARIANTS.md`（不变量）、`CHANGELOG.md`、`README.md`
 
 ---
 
@@ -58,6 +58,7 @@
 | stage3 改进 | [`stage3-改进计划.md`](./归档/完成/stage3-改进计划.md) | req-analysis skill |
 | **GSD 借鉴研究分析** | [`gsd-借鉴-研究分析.md`](./归档/完成/gsd-借鉴-研究分析.md) | 研究 v3.10 完成（3 项识别，其中 ADR 项被文档目录整理替代） |
 | **GSD 借鉴实施方案** | [`gsd-借鉴-实施方案.md`](./归档/完成/gsd-借鉴-实施方案.md) | v3 方案 2 项全落（commits 8bb7b00 state.py + 10bdf71 lark-adapter + 214291f 补漏测试，run-all 368/0） |
+| **GSD 参考调研笔记** | [`GSD-参考调研.md`](./归档/完成/GSD-参考调研.md) | 原始调研笔记，已并入上面两份 gsd-借鉴 落地；2026-05-30 从根目录归档 |
 | DX 审计 | [`DX-AUDIT-2026-05-08.md`](./归档/完成/DX-AUDIT-2026-05-08.md) | 审计时点快照已完成 |
 
 **2026-05 管线重构批次（GSD-review §8 + PRD 体系收敛 + 独立机制；2026-05-22 归档）**：
@@ -86,6 +87,8 @@
 | [`task-spec-早期截断.md`](./归档/废弃/pmai-task-spec-早期截断.md) | "设计中"半年沉寂；D13 已解 task-spec 相关问题 |
 | [`task执行自动化与文档精简.md`](./归档/废弃/task执行自动化与文档精简.md) | 2026-05-28 前稿，方向已并入 office-hours 收敛 reshape 并落地（见 `设计/PMAI重构*`），草稿归档 |
 | [`产品现状与主原型.md`](./归档/废弃/产品现状与主原型.md) | 2026-05-28 前稿（§0 已锁），范式直接演进成 reshape 并落地，草稿归档 |
+| [`框架同步-SOP.md`](./归档/废弃/框架同步-SOP.md) | 手动同步流程，**DEPRECATED**；pmai install/upgrade 承接，`pmai sync` 落地后彻底退役；2026-05-30 从根目录归档 |
+| [`误粘-cursor聊天记录.md`](./归档/废弃/误粘-cursor聊天记录.md) | 误粘进根目录的 Cursor 聊天记录（非设计文档，与 PMAI 无关），留档备查 |
 
 ---
 

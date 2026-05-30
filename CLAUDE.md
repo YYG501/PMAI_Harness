@@ -20,7 +20,7 @@
 - `pmai install --local <dir>` 项目级实体副本（兼容老消费仓 / clone 场景）
 - 升级 `pmai upgrade`（main）/ `pmai upgrade --stable`（tag）/ `pmai upgrade --to v0.x.0`（pin）
 - 完整设计 + review 决议 + POC 结论：[`docs/设计/框架分发与全局安装.md`](./docs/设计/框架分发与全局安装.md)（v1.1）
-- 老的手动同步 SOP：[`框架同步-SOP.md`](./框架同步-SOP.md) **标 DEPRECATED**，T3 `pmai sync` 实现完成后归档（PM 5/26 决议暂缓）
+- 老的手动同步 SOP：[`框架同步-SOP.md`](./docs/归档/废弃/框架同步-SOP.md) **DEPRECATED + 已归档**（pmai install/upgrade 承接；`pmai sync` 落地后彻底退役）
 
 ---
 
