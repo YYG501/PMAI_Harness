@@ -24,7 +24,7 @@ PM mental model：PM 在 chat 自然描述 "我有 X 在路径 Y"，AI 后台 cp
     |                       |                                    |
     |   from _lib.attachments import copy_attachment             |
     |   r = copy_attachment(req_dir, Path("~/Downloads/foo.pdf"),|
-    |                       stage_prefix="analysis",              |
+    |                       stage_prefix="req-plan",             |
     |                       hint="Y 重点")                         |
     +-----------------------------------------------------------+
                             |
@@ -259,14 +259,13 @@ def _next_available_name(
 def _stage_doc_exists(req_dir: Path, stage_prefix: str) -> bool:
     """判断当前 stage 产出文档是否存在（C5 pending reference fix）。
 
-    stage_prefix → 期望文档映射（详见 v2 §1.5）：
-        brief    → brief.md
-        analysis → analysis.md / stage2-office-hours.md ( B 分支)
-        prd      → prd.md
-        impl     → implementation-design.md
-        task-plan→ task-plan.md
-        close    → close-report.md
+    stage_prefix → 期望文档映射（六步）：
+        req-plan → req-plan.md（②范围确认主产物，替代旧 brief/analysis/prd 前置链）
+        task-plan→ task-plan.md（范围清单）
+        prd      → prd.md（按需 PRD，prd-writing standalone）
+        close    → close-report.md（沉淀收尾，如有）
         task-NNN → tasks/task-NNN-*.md (任一 glob 命中)
+        — 旧 7-stage 锚点 brief / analysis / impl 保留，兼容在飞旧 req —
 
     返回 False 表示产出文档还没生成 → CopyResult.pending_inject=True，caller
     后续写产出时应读 attachments_seen 渲染引用 section（不能假设此刻可追加）。
@@ -280,15 +279,18 @@ def _stage_doc_exists(req_dir: Path, stage_prefix: str) -> bool:
                     list(tasks_dir.glob(f"{stage_prefix}.md")))
 
     mapping = {
+        # 六步锚点（主要落 req-plan）
+        "req-plan": [req_dir / "req-plan.md"],
+        "task-plan": [req_dir / "task-plan.md"],
+        "prd": [req_dir / "prd.md"],            # 按需 PRD（prd-writing standalone）
+        "close": [req_dir / "close-report.md"],  # 沉淀收尾（如有）
+        # 旧 7-stage 锚点（兼容在飞旧 req，新 req 不再产）
         "brief": [req_dir / "brief.md"],
         "analysis": [
             req_dir / "analysis.md",
-            req_dir / "stage2-office-hours.md",  #  B 分支
+            req_dir / "stage2-office-hours.md",
         ],
-        "prd": [req_dir / "prd.md"],
         "impl": [req_dir / "implementation-design.md"],
-        "task-plan": [req_dir / "task-plan.md"],
-        "close": [req_dir / "close-report.md"],
     }
     candidates = mapping.get(stage_prefix, [])
     return any(p.exists() for p in candidates)
@@ -316,8 +318,8 @@ def copy_attachment(
     Args:
         req_dir: req 目录绝对路径（含 `.req-meta.json`）
         src: PM 给的源路径（支持 `~` / `~user` 展开）
-        stage_prefix: stage 前缀（brief / analysis / prd / task-NNN /
-                      impl / task-plan / close）—— 决定命名前缀 + pending 判定
+        stage_prefix: stage 前缀（req-plan / task-plan / prd / task-NNN /
+                      close；旧 brief / analysis / impl 仍兼容）—— 决定命名前缀 + pending 判定
         hint: PM 给的"重点"描述（追溯用，可空）
 
     Returns:
@@ -329,7 +331,7 @@ def copy_attachment(
         FileSizeError: src 超 MAX_FILE_SIZE_MB hard cap
         StateReadError: `.req-meta.json` 不存在或解析失败（register_attachment 抛）
 
-    >>> # copy_attachment(Path("/req"), Path("~/foo.pdf"), "analysis", "重点 X")
+    >>> # copy_attachment(Path("/req"), Path("~/foo.pdf"), "req-plan", "重点 X")
     """
     stage_prefix = _validate_stage_prefix(stage_prefix)
 

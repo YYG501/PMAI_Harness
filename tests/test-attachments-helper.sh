@@ -67,6 +67,35 @@ print('OK')
   fixture_teardown
 }
 
+test_copy_attachment_req_plan_anchor() {
+  start_test "copy_attachment: req-plan 六步锚点 pending 判定（rewire 回归）"
+  fixture_setup
+  req_dir=$(fixture_create_req "req-001" "test" 2)
+  src="$req_dir/spec-mock.pdf"
+  printf 'mock' > "$src"
+
+  out=$(_run_py "
+from _lib.attachments import copy_attachment
+# req-plan.md 不存在 → pending_inject True + 命名前缀 req-plan
+r = copy_attachment(Path('$req_dir'), Path('$src'), 'req-plan', 'h')
+assert r['new_name'] == 'req-plan-spec-mock.pdf', r['new_name']
+assert r['pending_inject'] == True, r
+# 建 req-plan.md 后 → pending_inject False（证明六步锚点在映射里）
+(Path('$req_dir') / 'req-plan.md').write_text('# plan')
+src2 = Path('$req_dir') / 'spec2.pdf'; src2.write_text('m')
+r2 = copy_attachment(Path('$req_dir'), src2, 'req-plan')
+assert r2['pending_inject'] == False, r2
+print('OK')
+")
+  if echo "$out" | grep -q "^OK$"; then
+    pass_test
+  else
+    _fail "req-plan 锚点回归失败"
+    echo "$out" >&2
+  fi
+  fixture_teardown
+}
+
 # -----------------------------------------------------------------
 # ② SensitivePathError 触发
 # -----------------------------------------------------------------
@@ -449,6 +478,7 @@ test_skill_prose_new_req_commit_pathspec() {
 # -----------------------------------------------------------------
 
 test_copy_attachment_happy_path
+test_copy_attachment_req_plan_anchor
 test_sensitive_path_error
 test_file_size_error
 test_register_list_round_trip
