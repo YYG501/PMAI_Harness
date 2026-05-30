@@ -34,6 +34,7 @@ SUITES=(
   test-doc-update.sh
   test-req-stage-gate.sh
   test-req-transition.sh
+  test-migrate-reqs.sh
   test-stage-source-helper.sh
   test-attachments-helper.sh
   test-close-task.sh
