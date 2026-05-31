@@ -83,9 +83,19 @@
 
 **下一步（2026-05-31 起）**：
 
-1. **PM 审本批 review 修复 + 残留处理的 diff**（4 P0 + P1/P2 + 4 deferred 项；CHANGELOG 未发布段已记），满意后提交。
-2. **真 req build spike**：用新 build 路径（栈内 + DESIGN 约定 + `build-audits.py` 三道审编排）跑一个真实需求，端到端验证三道审产 conformant 结果 + dev server 复用 + 自动托管闭环（脚本已固化，差真 req 验证）。
-3. 消费仓同步：在飞旧 req 先跑 `migrate-reqs-to-6step.py` 解越界（按歧义警告手工确认 active stage 3/4 的 req）。
+review 修复 diff 已审、已提交（`e0792fa` 4 P0 + P1/P2 + deferred + `b3527fc` 二轮完整性缺口；工作树干净，基线 572/0）。
+
+**build spike 部分验证完成（2026-05-31）**：搭最小消费沙盒（`/tmp/pmai-spike-sandbox`：脊柱 + req-plan 范围清单 9 项 + 真 Next.js prototype，**故意埋 1 个降级占位 + 2 个漏建**）跑了一遍六步「建」后半截编排：
+- ✅ **resolve**：输入校验通过、建 `audits/`、打印三道 manifest、YAML block-list 端口解析对（3000/5173，且无 PyYAML 走手写 fallback）。
+- ✅ **覆盖审计真跑**：`coverage-reviewer` agent **独立读码硬 diff**，准确揪出角色 tab 空 `onClick` = degraded、状态筛选 = missing、`/users/[id]` 详情页 = missing（built 6 / degraded 1 / missing 2），未被 task 描述带偏。
+- ✅ **synthesize + gate**：合成 `synthesis.md`（PM 视图无工程黑话）+ 机器 summary 计数零误差 + gate 正确判 needs-review。
+- ✅ **fail-loud 防漏跑**：藏掉 coverage.json → exit 2 + stderr 点名缺哪道，不静默合成。
+- ✅ 回归 `test-build-audits.sh` 7/7 全绿。
+- ⏳ **仍待真 req 验证**（本 spike 按「编排+覆盖审计真跑」档，未起浏览器）：视觉门 `/design-review` + 行为审 `/browse` 的**真实浏览器链路** + dev server 真复用 timing + worktree 自动托管 fork/merge/删闭环。本 spike 这两道用的是 conformant 造值，只验编排不验浏览器质量。
+
+余下：
+1. **真 req build spike（浏览器链路那半截）**：在一个真实需求上把视觉门 / 行为审用真 gstack 工具实跑 + dev server 真复用 + 自动托管闭环走一遍（编排 + 覆盖审计已验，差浏览器侧）。
+2. 消费仓同步：在飞旧 req 先跑 `migrate-reqs-to-6step.py` 解越界（按歧义警告手工确认 active stage 3/4 的 req）。
 
 **旧 speed mode = 已退役**（2026-05-31，PM 授权判断）：7-stage 优化，坍缩后驱动 `req-stage-gate` 编排已删，残件（`stage6_summary.py` / `--stage6-entry` / 决策类型列 / `test-speed-mode.sh`）全清。
 
@@ -178,9 +188,9 @@
 
 ## 新窗口续接命令
 
-> 继续 PM-AI-Workflow。读 RUNTIME.md「当前位置」——**PMAI 重构（office-hours 收敛）已大体落地**（六步引擎 + 22 skill 级联 + 执行器可插拔 + checks-diff + 迁移 + §7.A/B/C/D 全提交；2026-05-31 gstack-review 审出并修 4 P0 + P1/P2 + 处理 5 个 deferred 项：退役 speed mode、build 三道审脚本编排 `build-audits.py` 落地等）。**测试基线 572/0**。真相源：方向 `PMAI重构方向-office-hours收敛.md` / 落地 `PMAI重构-实施清单.md`（D1-D10 全拍定）+ memory `project_pmai_reshape_direction`。下一步看「下一步」段：审 review diff → 提交 → 真 req build spike 端到端验证（唯一余下项）。
+> 继续 PM-AI-Workflow。读 RUNTIME.md「当前位置」——**PMAI 重构（office-hours 收敛）已大体落地**（六步引擎 + 22 skill 级联 + 执行器可插拔 + checks-diff + 迁移 + §7.A/B/C/D 全提交；2026-05-31 gstack-review 审出并修 4 P0 + P1/P2 + 处理 5 个 deferred 项：退役 speed mode、build 三道审脚本编排 `build-audits.py` 落地等）。**测试基线 572/0**。真相源：方向 `PMAI重构方向-office-hours收敛.md` / 落地 `PMAI重构-实施清单.md`（D1-D10 全拍定）+ memory `project_pmai_reshape_direction`。下一步看「下一步」段：review diff 已提交（含 `b3527fc` 二轮），唯一余下 = 真 req build spike 端到端验证。
 
 AI 收到后应该：
 1. 读本文件「当前位置」2026-05-31 段（review 修复）+ 2026-05-29 段（重构方向）+ 两份设计文档确认现状与所有 D 决策
-2. 看「下一步」段决定做什么；review 修复的 diff 未提交（working tree 有改动），PM 要审 diff 才提交
+2. 看「下一步」段决定做什么；review 修复 diff 已提交、工作树干净，唯一余下 = 真 req build spike
 3. **改框架资产先看 CHANGELOG 未发布段**了解已落地的近期改动，避免重复/冲突
