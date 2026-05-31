@@ -163,7 +163,7 @@ for TMPL in "$FRAMEWORK_DIR/templates/"*.tmpl; do
     PRODUCT-STATE.md)       DEST="$TARGET_DIR/docs/PRODUCT-STATE.md" ;;   # 六步项目底座：现状层 hub（下游 FORCE READ docs/PRODUCT-STATE.md）
     DESIGN.md)              DEST="$TARGET_DIR/docs/DESIGN.md" ;;          # 六步项目底座：正向视觉约束（build 前 AI 必读 docs/DESIGN.md）
     PRODUCT-RULES.md)       DEST="$TARGET_DIR/docs/PRODUCT-RULES.md" ;;
-    ROADMAP.md)             DEST="$TARGET_DIR/docs/ROADMAP.md" ;;
+    TODO.md)                DEST="$TARGET_DIR/docs/TODO.md" ;;
     modules-INDEX.md)       DEST="$TARGET_DIR/docs/modules/INDEX.md" ;;
     task.md|lark-publish.json)
       # task.md: runtime framework .tmpl，skill 内部按 $PMAI_HOME/templates/ 直接调用（task-spec / task-confirm 多 skill 共用）

@@ -1,10 +1,10 @@
 ---
 name: pmai-project-solution
 description: |
-  项目级方向规划入口：PM 主动调用，定 / 改项目顶层方向（产品定位 / 用户 / 路线 / 技术栈 / 术语 + roadmap）。
+  项目级方向规划入口：PM 主动调用，定 / 改项目顶层方向（产品定位 / 用户 / 路线 / 技术栈 / 术语 + TODO 待办池）。
   **4 个独立调用场景**：
     A 项目方向重做（跑过几个 req 后发现产品定位偏了）
-    B 产品路线规划（主动校准 PROJECT 6 节 + 重新排 roadmap，含季度 / 半年节奏）
+    B 产品路线规划（主动校准 PROJECT 6 节 + 刷新 TODO 待办池，含季度 / 半年节奏）
     C 老板 / 市场新方向（外部输入逼着改路线）
     D brownfield 接入方向恢复（接入时 /pmai-codebase-audit 内联方向讨论被打断 / 想重定方向时手动补跑）
   内部逻辑：场景判断 + @读 _shared/project-questioning.md 跑讨论（提问顺序场景特定）。
@@ -13,14 +13,14 @@ description: |
 
 # /pmai-project-solution
 
-> **PM 答题规则（M4）**：所有 AskUserQuestion 调用按 `_shared/pm-view/askuser-rules.md` §1 四条硬规则走（空答 STOP / 没拿到答案禁止落盘 PROJECT.md / ROADMAP.md / runtime 退化保留 wait / 多决策拆开顺序问）。**Runtime 兜底**：本 skill 各门写的都是 picker 形态；runtime 不支持时 AI 按 §1.3 自动退化为编号列表，仍 wait。
+> **PM 答题规则（M4）**：所有 AskUserQuestion 调用按 `_shared/pm-view/askuser-rules.md` §1 四条硬规则走（空答 STOP / 没拿到答案禁止落盘 PROJECT.md / TODO.md / runtime 退化保留 wait / 多决策拆开顺序问）。**Runtime 兜底**：本 skill 各门写的都是 picker 形态；runtime 不支持时 AI 按 §1.3 自动退化为编号列表，仍 wait。
 
 ## When To Use
 
 PM 主动调用，**4 个独立场景**：
 
 - **A 项目方向重做**：跑过几个 req 后发现产品定位偏了，重新定方向
-- **B 产品路线规划**：主动校准 PROJECT 6 节 + 重新排 roadmap（含季度 / 半年节奏 / 老项目首次补全）
+- **B 产品路线规划**：主动校准 PROJECT 6 节 + 刷新 TODO 待办池（含季度 / 半年节奏 / 老项目首次补全）
 - **C 老板 / 市场新方向**：外部输入逼着改路线
 - **D brownfield 接入方向恢复**：brownfield 接入的方向讨论已搬进 `/pmai-codebase-audit` step 4 内联跑（一气呵成）。本场景只在**异常恢复**时用——接入时方向讨论被打断没跑完（窗口关了 / context 丢了）、或现状档当时定的方向想重来。正常 brownfield 接入**不用**手敲本命令。
 
@@ -51,7 +51,7 @@ echo "SKILL: project-solution"
 ## 产出
 
 - `docs/PROJECT.md` —— 项目顶层方案，6 节（按 `$PMAI_HOME/templates/PROJECT.md.tmpl`）
-- `docs/ROADMAP.md` —— 计划态 req 队列（按 `$PMAI_HOME/templates/ROADMAP.md.tmpl`）
+- `docs/TODO.md` —— PM 待办池（无序，按 `$PMAI_HOME/templates/TODO.md.tmpl`）
 
 **单文件，不产工程孪生** —— 不产 `solution.engineering.md` 之类的工程合同。项目级方向只用 PM 视角写。
 
@@ -67,10 +67,10 @@ echo "SKILL: project-solution"
 
 | 场景 | 触发 | 输入态 | **提问顺序**（按 _shared §3 问题库挑用，**场景特定**）|
 |---|---|---|---|
-| **A 重做** | PM 主动说"方向偏了 / 要重做" | `docs/PROJECT.md` 已有内容 | (1) **痛点诊断**（旧 PROJECT 哪几节失效 / 为什么偏）→ (2) 产品定位（重定）→ (3) 用户画像（重定，可能换主角色）→ (4) 业务术语表（如有新术语）→ (5) roadmap 重排（旧未做 req 重新评估保留 / 砍）|
-| **B 产品路线规划** | PM 主动说"产品路线规划 / 季度规划 / 半年规划"，或老项目首次补 `docs/ROADMAP.md` | `docs/PROJECT.md` 已有；`ROADMAP.md` 历史可有可无（首次补则跳过步骤 1）| (1) **过去 roadmap 完成度回顾**（哪些 ship / 哪些砍；首次补无历史则跳过）→ (2) roadmap：**先扫 `requirements/closed/` 列全部 req-NNN 作 done 行回填**（按 `_shared/project-questioning.md` §5.2 写法），再问 PM 新 req 队列（planned 行）—— ROADMAP 是历史 + 未来一张表，漏 done 行不算齐 → (3) 业务术语表增量（如有新业务）—— **跳过产品定位 / 用户画像 / 技术栈**（默认稳定）|
-| **C 老板新方向** | PM 主动说"老板 / 客户给了新方向" | `docs/PROJECT.md` 已有 | (1) **新方向 vs 现 PROJECT 差异点**（PM 自述新方向 + AI 对比现 PROJECT 找冲突）→ (2) 产品定位（如有变 → 改）→ (3) 用户画像（如有变 → 改，可能换主角色）→ (4) roadmap（新 req 队列）|
-| **D brownfield 方向恢复** | 接入时 `/pmai-codebase-audit` step 4 内联方向讨论被打断 / 想重定方向（正常接入不走这）| `docs/CODEBASE-AUDIT.md` 已生成（7 维度）| (0) **全文读 `docs/CODEBASE-AUDIT.md`**（必读，AI 不准跳）→ (1) 产品定位（**从 codebase 反推 + PM 确认**）→ (2) 用户画像（从代码层级 / API 角色反推 + PM 补）→ (3) 技术栈（**从代码现状档抄**，PM 确认）→ (4) 业务术语表（**从 model / API 命名反推 + PM 补**）→ (5) roadmap（PM 给）|
+| **A 重做** | PM 主动说"方向偏了 / 要重做" | `docs/PROJECT.md` 已有内容 | (1) **痛点诊断**（旧 PROJECT 哪几节失效 / 为什么偏）→ (2) 产品定位（重定）→ (3) 用户画像（重定，可能换主角色）→ (4) 业务术语表（如有新术语）→ (5) 刷新 TODO 待办池（旧待办 PM 自己评估保留 / 划掉，AI 不替排序）|
+| **B 产品路线规划** | PM 主动说"产品路线规划 / 季度规划 / 半年规划"，或老项目首次补 `docs/TODO.md` | `docs/PROJECT.md` 已有；`TODO.md` 可有可无 | (1) 刷新 TODO 待办池：**问 PM 现在想做啥记进待办池**（AI 不扫 `requirements/closed/` 反推历史、不排序，按 `_shared/project-questioning.md` §5.2 写法）→ (2) 业务术语表增量（如有新业务）—— **跳过产品定位 / 用户画像 / 技术栈**（默认稳定）|
+| **C 老板新方向** | PM 主动说"老板 / 客户给了新方向" | `docs/PROJECT.md` 已有 | (1) **新方向 vs 现 PROJECT 差异点**（PM 自述新方向 + AI 对比现 PROJECT 找冲突）→ (2) 产品定位（如有变 → 改）→ (3) 用户画像（如有变 → 改，可能换主角色）→ (4) 刷新 TODO 待办池（PM 给的新待办）|
+| **D brownfield 方向恢复** | 接入时 `/pmai-codebase-audit` step 4 内联方向讨论被打断 / 想重定方向（正常接入不走这）| `docs/CODEBASE-AUDIT.md` 已生成（7 维度）| (0) **全文读 `docs/CODEBASE-AUDIT.md`**（必读，AI 不准跳）→ (1) 产品定位（**从 codebase 反推 + PM 确认**）→ (2) 用户画像（从代码层级 / API 角色反推 + PM 补）→ (3) 技术栈（**从代码现状档抄**，PM 确认）→ (4) 业务术语表（**从 model / API 命名反推 + PM 补**）→ (5) 刷新 TODO 待办池（PM 给，AI 不反推填充）|
 
 **通用约束**（所有 4 场景）：
 
@@ -102,9 +102,9 @@ echo "SKILL: project-solution"
 
 **@读 `skills/_shared/project-questioning.md` §5.1 PROJECT.md 5 节写作规则 + §5.4 PM 视图规则**。
 
-#### 步骤 5：写 docs/ROADMAP.md
+#### 步骤 5：写 docs/TODO.md
 
-**@读 `skills/_shared/project-questioning.md` §5.2 ROADMAP.md 写作规则 + §5.3 ROADMAP 唯一规划视图说明**。
+**@读 `skills/_shared/project-questioning.md` §5.2 TODO.md 写作规则 + §5.3 TODO 是 PM 待办池说明**。
 
 ### 确认门
 
@@ -112,7 +112,7 @@ echo "SKILL: project-solution"
 
 prose 头部：
 ```
-📝 准备写项目方向（docs/PROJECT.md + docs/ROADMAP.md）。
+📝 准备写项目方向（docs/PROJECT.md + docs/TODO.md）。
 ```
 
 AskUserQuestion：
@@ -145,7 +145,7 @@ Runtime 不支持 AskUserQuestion 时按 `_shared/pm-view/askuser-rules.md §1.3
 PM 选「创建 PROJECT.md」+ 定稿后：
 
 - **@读 §9 atomic commit**：`git commit -m "docs: project direction settled"`
-- 退出前向 PM 说明 ROADMAP 是唯一规划视图（按 §5.3）+ 引导下一步：
+- 退出前提醒 PM TODO 待办池里有哪些待办（按 §5.3），不替 PM 定下一个该做啥 + 引导下一步：
 
 ```
 项目方向定稿。下一步：运行 /pmai-new-req 开始第一个需求。
@@ -173,7 +173,7 @@ PM 选「创建 PROJECT.md」+ 定稿后：
 
 ## 边界
 
-- **允许产出**：`docs/PROJECT.md`、`docs/ROADMAP.md`、暂存文件 `docs/.project-solution-open-questions.md`
+- **允许产出**：`docs/PROJECT.md`、`docs/TODO.md`、暂存文件 `docs/.project-solution-open-questions.md`
 - **允许动作**：分批提问、未决问题闸门、Decision gate、6 节检查、确认门、atomic commit
 - **禁止顺手推进**：不自动起 req、不调 `/pmai-new-req`、不产任何 req 级文档
-- **退出条件**：`docs/PROJECT.md` 6 节全填、`docs/ROADMAP.md` 已写、未决问题闸门已过、Decision gate 选了「创建 PROJECT.md」、PM 已定稿、atomic commit 已落
+- **退出条件**：`docs/PROJECT.md` 6 节全填、`docs/TODO.md` 已写、未决问题闸门已过、Decision gate 选了「创建 PROJECT.md」、PM 已定稿、atomic commit 已落

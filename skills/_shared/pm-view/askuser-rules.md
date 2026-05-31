@@ -32,7 +32,7 @@
 
 - ✅ **PM 答完后再写文件 / commit**
 - ❌ PM 没答之前 **不能** ：
-  - 写 PROJECT.md / ROADMAP.md / prd.md / task.md 等 PM 视图文件
+  - 写 PROJECT.md / TODO.md / prd.md / task.md 等 PM 视图文件
   - git commit / git push
   - 调用 `req-transition.py --to N+1`（stage 推进）
   - 调用 `task-transition.py --status 已完成`（task 状态切换）

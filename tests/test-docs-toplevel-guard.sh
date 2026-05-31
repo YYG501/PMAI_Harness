@@ -3,7 +3,7 @@
 #
 # 验证 docs/ 顶层归档约定守卫（PM 选 B 方案 — pre-commit hook 强制拦截）：
 #   T1: check-docs-toplevel.py 存在
-#   T2: 白名单文件被允许（PROJECT/PRODUCT-STATE/DESIGN/PRODUCT-RULES/ROADMAP/prd/CONTEXT）
+#   T2: 白名单文件被允许（PROJECT/PRODUCT-STATE/DESIGN/PRODUCT-RULES/TODO/prd/CONTEXT）
 #   T3: 错位文件被拦下（exit 1）
 #   T4: docs/modules/ 下文件不影响（不算顶层）
 #   T5: docs/归档/ 下文件不影响
@@ -31,9 +31,9 @@ test_checker_exists() {
 
 # -----------------------------------------------------------------
 test_whitelist_passes() {
-  start_test "T2: 白名单文件（PROJECT/PRODUCT-STATE/DESIGN/PRODUCT-RULES/ROADMAP/prd/CONTEXT）被允许"
+  start_test "T2: 白名单文件（PROJECT/PRODUCT-STATE/DESIGN/PRODUCT-RULES/TODO/prd/CONTEXT）被允许"
   local tmp; tmp=$(mktemp -d)
-  for f in PROJECT.md PRODUCT-STATE.md DESIGN.md PRODUCT-RULES.md ROADMAP.md prd.md CONTEXT.md; do
+  for f in PROJECT.md PRODUCT-STATE.md DESIGN.md PRODUCT-RULES.md TODO.md prd.md CONTEXT.md; do
     if ! python3 "$CHECKER" --repo-root "$tmp" --from-paths "docs/$f" >/dev/null 2>&1; then
       _fail "白名单 docs/$f 应被允许，实际被拦下"
       rm -rf "$tmp"; return

@@ -35,7 +35,7 @@ STATIC_ALLOW = {
     "PRODUCT-STATE.md",
     "DESIGN.md",
     "PRODUCT-RULES.md",
-    "ROADMAP.md",
+    "TODO.md",
     "prd.md",
     "CONTEXT.md",  # 老项目兼容（migrate-context-to-project.py 跑前）
 }

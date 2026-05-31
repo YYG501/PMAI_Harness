@@ -212,7 +212,7 @@ def render_health_check(repo_root: Path) -> None:
     """项目级产品文档体检：缺则输出 1 段 hint，齐全则静默。
 
     背景：sync 框架后老项目可能缺 GSD §8 /  新增的产品级文档
-    （PRODUCT-RULES.md / ROADMAP.md）。「读侧容错」纪律（个别脚本读不到
+    （PRODUCT-RULES.md / TODO.md）。「读侧容错」纪律（个别脚本读不到
     不阻塞）——但 PM 在 session 起始播报里需要被告知
     缺什么，否则永远不知道要补。
 
@@ -241,8 +241,8 @@ def render_health_check(repo_root: Path) -> None:
     if not (docs_dir / "PRODUCT-RULES.md").exists():
         missing.append(("docs/PRODUCT-RULES.md", "GSD §8 新增的产品规则文档"))
 
-    if not (docs_dir / "ROADMAP.md").exists():
-        missing.append(("docs/ROADMAP.md", "计划态 req 队列"))
+    if not (docs_dir / "TODO.md").exists():
+        missing.append(("docs/TODO.md", "PM 待办池"))
 
     if not missing:
         return

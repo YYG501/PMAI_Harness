@@ -114,10 +114,10 @@ test_health_check_skips_generator_repo() {
 }
 
 # -----------------------------------------------------------------
-# T8: 业务仓 fixture 缺 PRODUCT-RULES.md / ROADMAP.md 时输出体检
+# T8: 业务仓 fixture 缺 PRODUCT-RULES.md / TODO.md 时输出体检
 # -----------------------------------------------------------------
 test_health_check_reports_missing_docs() {
-  start_test "T8: 业务仓 fixture 缺 PRODUCT-RULES.md / ROADMAP.md 时输出体检"
+  start_test "T8: 业务仓 fixture 缺 PRODUCT-RULES.md / TODO.md 时输出体检"
   local tmp; tmp=$(mktemp -d)
   # 模拟业务仓：根无 scripts/init-project.sh，docs/ 只有 PROJECT.md
   mkdir -p "$tmp/docs"
@@ -125,15 +125,15 @@ test_health_check_reports_missing_docs() {
   local out
   out=$(python3 "$STATUS_VIEW" --narrative "$tmp" 2>&1)
   if ! echo "$out" | grep -q "项目体检"; then
-    _fail "缺 PRODUCT-RULES + ROADMAP 时应输出体检段，实际：$out"
+    _fail "缺 PRODUCT-RULES + TODO 时应输出体检段，实际：$out"
     rm -rf "$tmp"; return
   fi
   if ! echo "$out" | grep -q "PRODUCT-RULES.md"; then
     _fail "体检应列 PRODUCT-RULES.md"
     rm -rf "$tmp"; return
   fi
-  if ! echo "$out" | grep -q "ROADMAP.md"; then
-    _fail "体检应列 ROADMAP.md"
+  if ! echo "$out" | grep -q "TODO.md"; then
+    _fail "体检应列 TODO.md"
     rm -rf "$tmp"; return
   fi
   rm -rf "$tmp"
@@ -149,7 +149,7 @@ test_health_check_silent_when_complete() {
   mkdir -p "$tmp/docs"
   echo "# PROJECT" > "$tmp/docs/PROJECT.md"
   echo "# PRODUCT-RULES" > "$tmp/docs/PRODUCT-RULES.md"
-  echo "# ROADMAP" > "$tmp/docs/ROADMAP.md"
+  echo "# TODO" > "$tmp/docs/TODO.md"
   local out
   out=$(python3 "$STATUS_VIEW" --narrative "$tmp" 2>&1)
   if echo "$out" | grep -q "项目体检"; then

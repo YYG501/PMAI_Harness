@@ -196,7 +196,7 @@ main（主仓，永远不切分支）
 | 文档 | 路径 | 说明 |
 |------|------|------|
 | 项目背景 | docs/PROJECT.md | 5 节：项目名 / 产品定位 / 用户画像 / 技术栈 / 业务术语表；由 `/pmai-project-solution` 产出 + 自带确认门；已有项目首次 `/pmai-new-req` 走 legacy 补全门 |
-| 项目 roadmap | docs/ROADMAP.md | 计划态 req 队列；由 `/pmai-project-solution` 产出，PM 维护 |
+| PM 待办池 | docs/TODO.md | PM 提过 / 讨论过想做的事，无序，PM 维护（AI 不反推填充） |
 | 模块索引 | docs/modules/INDEX.md | 每个模块一句话用途（≤30 字）；close-req §1.5 之后 derived refresh |
 | 模块规格 | docs/modules/ | 按模块组织（事实源）|
 | 视觉规范 | docs/DESIGN.md | 颜色、字体、组件规范 |
@@ -215,7 +215,7 @@ main（主仓，永远不切分支）
 ### 顶层 docs/ 只放项目级真相源
 
 ✅ **允许在顶层**：
-- 项目级真相源：`PROJECT.md` / `PRODUCT-STATE.md` / `DESIGN.md` / `PRODUCT-RULES.md` / `ROADMAP.md` / `prd.md`
+- 项目级真相源：`PROJECT.md` / `PRODUCT-STATE.md` / `DESIGN.md` / `PRODUCT-RULES.md` / `TODO.md` / `prd.md`
 - 项目级业务概览（跨模块 / 整体定位级，如 `ops-platform-unification.md`、`product-strategy.md`）
 - 模块目录：`modules/` + `modules/INDEX.md`
 - 归档目录：`docs/归档/`（扁平单层，不分子目录 —— 文件名 / commit message 自己说明为啥归档）
@@ -236,7 +236,7 @@ main（主仓，永远不切分支）
 
 ### 命名规范
 
-- 项目级文档全大写：`PROJECT.md` / `DESIGN.md` / `PRODUCT-RULES.md` / `ROADMAP.md`
+- 项目级文档全大写：`PROJECT.md` / `DESIGN.md` / `PRODUCT-RULES.md` / `TODO.md`
 - 业务概览 / 模块文档 / 用户故事：kebab-case 小写
 - 不出现 `v1` / `v2` / `原始` / `旧` 等版本后缀在**顶层** —— 顶层永远是 latest，旧版进 `docs/归档/`（文件名带 `-v1` / `-原始` 后缀标明）
 

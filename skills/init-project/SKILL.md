@@ -24,7 +24,7 @@ description: |
 │    业务仓 + git init + 首 commit "init: <name>"          │
 │                          ↓                              │
 │  C · 项目方向（@读 _shared/project-questioning.md）        │
-│    讨论 → 确认门 → 写 PROJECT.md + ROADMAP.md + commit   │
+│    讨论 → 确认门 → 写 PROJECT.md + TODO.md + commit     │
 │                          ↓                              │
 │  C.5 · 视觉基线 + 主原型脚手架                             │
 │    DESIGN.md（正向视觉约束）+ prototype/ 起一版能跑 + commit│
@@ -39,7 +39,7 @@ description: |
 ## When To Use
 
 - PM 在**生成器仓（PM-AI-Workflow）**里调用（业务仓里不能跑；init-project.sh 拷贝时已排除本 skill）
-- PM 想起一个新业务项目 —— 含项目方向讨论（PROJECT.md + ROADMAP.md）+ 视觉基线（DESIGN.md）+ 一版能跑的主原型，不只是空骨架
+- PM 想起一个新业务项目 —— 含项目方向讨论（PROJECT.md + TODO.md）+ 视觉基线（DESIGN.md）+ 一版能跑的主原型，不只是空骨架
 
 **不在 scope**：
 
@@ -56,7 +56,7 @@ init 跑完后，项目里有这几样，构成 AI 以后每次进项目的"必�
 | 文件 / 目录 | 装什么 | 谁写 / 谁读 |
 |---|---|---|
 | `docs/PROJECT.md` | 定位 / 用户 / 角色 / 术语 / 路线（项目方向真相源） | C 步讨论后写；每次进项目读 |
-| `docs/ROADMAP.md` | 路线节奏 | C 步写 |
+| `docs/TODO.md` | PM 待办池（无序，不排序） | C 步写 |
 | `docs/PRODUCT-STATE.md` | 产品**现状层**（现在长什么样、做到哪、哪些真哪些 mock）；模板已就位，内容随每次沉淀累积 | 只在 close-req 沉淀那刻更新；每个新需求开头先读 |
 | `docs/DESIGN.md` | 视觉与交互约定（**正向约束**：该怎么做，不是禁止清单） | C.5 起草；build 前 AI 必读再动手 |
 | `docs/PRODUCT-RULES.md` | 跨功能产品规则 | 随产品演进 PM 调 |
@@ -202,7 +202,7 @@ bash "$SCRIPT" "<project-name>" "<target-dir>" "<background>" "<mode>" --allow-e
 脚本会：
 - 检测 gstack 依赖（gstack 未装 → 报错退出）
 - 默认：拒已存在目录；命中 `--allow-existing` → 跳过该检查，目录可非空
-- 创建目标目录（已存在则用现有）+ 铺项目底座模板（PRODUCT-STATE / DESIGN / PRODUCT-RULES / ROADMAP + prototype/ README 等）
+- 创建目标目录（已存在则用现有）+ 铺项目底座模板（PRODUCT-STATE / DESIGN / PRODUCT-RULES / TODO + prototype/ README 等）
 - 按 `<mode>`（项目类型）注入对应的「工程结构约束」段进 CLAUDE.md
 - 初始化 git（main 分支）+ 首 commit `init: <project-name>`（命中 `--allow-existing` 时首 commit 也包含 PM 原本就放在目录里的资料文件）
 
@@ -217,7 +217,7 @@ agent **@读 `skills/_shared/project-questioning.md`**（**单一真相源** —
 1. **提问纪律 + 问题库**：按 6 节顺序问 PM（定位 / 用户 / 角色 / 术语 / 路线 等）
 2. **未决问题确认门**：暂存文件 `docs/.project-solution-open-questions.md`（路径用 `<target-dir>/docs/...`）
 3. **确认门模板**：跑「创建 PROJECT.md / 继续探索」二选一 + Loop 回路（**选项内容 / label / description 全按 `_shared` 文件，本 SKILL 不内嵌副本**）
-4. **写作规则**：PM 选「创建 PROJECT.md」后写 `<target-dir>/docs/PROJECT.md` + `<target-dir>/docs/ROADMAP.md`
+4. **写作规则**：PM 选「创建 PROJECT.md」后写 `<target-dir>/docs/PROJECT.md` + `<target-dir>/docs/TODO.md`
 5. **6 节齐不齐检查**：跑 `check-project-sections.py` 验证
 6. **PM 定稿**：展示路径 + 摘要，PM 答「OK / 定了」推进
 7. **atomic commit**：`git commit -m "docs: project direction settled"`
@@ -226,7 +226,7 @@ agent **@读 `skills/_shared/project-questioning.md`**（**单一真相源** —
 **失败兜底**：`_shared/project-questioning.md` 路径检测前置 → 缺失 → 报错 "框架未完整安装；请 git status 检查 skills/_shared/project-questioning.md"，不进讨论。
 
 **失败兜底（PM 中途停）**：PM C 步中途答"停 / 等下 / 我先想想" → agent 检测 git 状态：
-- 已 commit B 步骨架（首 commit `init: <name>` 已落）+ PROJECT.md 未 commit → **留 unstaged**，提示 PM "下次直接发 `/pmai-project-solution` 续上 PROJECT.md / ROADMAP.md 写作即可"
+- 已 commit B 步骨架（首 commit `init: <name>` 已落）+ PROJECT.md 未 commit → **留 unstaged**，提示 PM "下次直接发 `/pmai-project-solution` 续上 PROJECT.md / TODO.md 写作即可"
 - B 步未完成 → 提示 PM 手动 `rm -rf <target-dir>` 重来
 
 ### C.5 · 视觉基线 + 主原型脚手架
@@ -286,7 +286,7 @@ agent **@读 `skills/_shared/project-questioning.md`**（**单一真相源** —
 
 ### D · 终态汇总 + Next Up（只汇总不 commit）
 
-> PROJECT.md / ROADMAP.md + DESIGN.md / prototype/ 的 commit 已分别在 C / C.5 完成。D 步**只做终态输出**。
+> PROJECT.md / TODO.md + DESIGN.md / prototype/ 的 commit 已分别在 C / C.5 完成。D 步**只做终态输出**。
 
 agent 输出 Next Up 块：
 
@@ -294,7 +294,7 @@ agent 输出 Next Up 块：
 ═══════════════════════════════════════
 ✅ <project-name> 已就绪
 📁 位置: <target-dir>
-📄 已建项目底座: docs/PROJECT.md / ROADMAP.md / PRODUCT-STATE.md / DESIGN.md / PRODUCT-RULES.md
+📄 已建项目底座: docs/PROJECT.md / TODO.md / PRODUCT-STATE.md / DESIGN.md / PRODUCT-RULES.md
 🧩 主原型: prototype/（<所选技术栈>）
 ═══════════════════════════════════════
 
@@ -311,7 +311,7 @@ agent 输出 Next Up 块：
 - 老模式兼容：PM 在生成器仓根目录跑也行（脚本 `$PMAI_HOME` fallback 到 `$(pwd)/scripts/init-project.sh`）
 - 目标目录默认不能已存在；A 步 AI 诊断到已有内容时优先推荐 audit / project-solution，PM 拍 init 也接住（AI 加 `--allow-existing`，**不硬 gate**）
 - gstack 是硬依赖，未安装时 B 步脚本会报错退出
-- 不要手动跳过 C 步 —— PROJECT.md / ROADMAP.md 是项目方向真相源，不能空骨架交付
+- 不要手动跳过 C 步 —— PROJECT.md 是项目方向真相源，不能空骨架交付（TODO.md 是 PM 待办池）
 - **DESIGN.md 是 build 硬约束，不能空交付** —— C.5 即使主原型起不来，视觉基线也要填好（第一个 req build 就靠它）
 - 借 gstack `/design-consultation` 出 DESIGN.md 初稿时**不抄、不映射、不重写** —— 直接接受它写的内容，跟随它升级
 - 提问法 / 话术 / 写作规则**真相源只在 `skills/_shared/project-questioning.md`**；本 skill C 步不内嵌副本（避免双份维护漂移）
@@ -344,7 +344,7 @@ SKILL.md 内部段落保留 `brownfield` 概念词用于设计准确性；AI 跟
 | A 步 step 3 AI 诊断到已有 codebase / PMAI 脚手架 | 3.3 方案里**优先推荐** `/pmai-codebase-audit` 或 `/pmai-project-solution`；PM 坚持 init 也接住（**不硬 gate**）|
 | B 步 `init-project.sh` 失败（chmod / git init / 模板缺失）| 报错贴 stderr + PM 检查；不进 C 步 |
 | B 步跑成功但 `_shared/project-questioning.md` 缺失 | C 步入口前置检测 + 报错 "框架未完整安装" |
-| C 步 PM 答"停" + 骨架已 commit | PROJECT.md / ROADMAP.md 留 unstaged + 提示下次 `/pmai-project-solution` 续 |
+| C 步 PM 答"停" + 骨架已 commit | PROJECT.md / TODO.md 留 unstaged + 提示下次 `/pmai-project-solution` 续 |
 | C 步 PM 答"停" + 骨架未 commit | 提示手动 `rm -rf <target-dir>` 重来 |
 | C.5 步 gstack / 脚手架不可用 | 用 `DESIGN.md.tmpl` 模板手填视觉基线；主原型起不来则留空，第一个 req build 时补（DESIGN.md 不能空）|
 | C.5 步 PM 答"停" | DESIGN.md / prototype/ 留 unstaged 状态；下次续填 / 第一个 req 补主原型 |

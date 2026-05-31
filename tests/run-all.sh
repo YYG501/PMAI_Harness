@@ -51,7 +51,7 @@ SUITES=(
   test-cancel-req.sh
   test-symlink-prd.sh
   test-status-view.sh
-  test-roadmap-guidance.sh
+  test-todo-guidance.sh
   test-new-req-no-arg-prompt.sh
   test-docs-archive-convention.sh
   test-docs-toplevel-guard.sh

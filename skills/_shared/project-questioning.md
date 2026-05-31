@@ -16,9 +16,9 @@
    - `/pmai-codebase-audit` step 4 → brownfield 首次接入（输入 = 刚产出的 `docs/CODEBASE-AUDIT.md` 现状档）
    - `/pmai-project-solution` → 按 4 场景判断（重做 / 产品路线规划 / 新方向 / 接入方向恢复）（细化）
 2. **决定问题顺序**（调用方自己排）：
-   - greenfield（init-project）：5 节按 §3 顺序问（产品定位 → 用户画像 → 技术栈 → 业务术语表 → roadmap 队列）
+   - greenfield（init-project）：5 节按 §3 顺序问（产品定位 → 用户画像 → 技术栈 → 业务术语表 → TODO 待办池）
    - 重做：按 PM 提的痛点切入，不必从产品定位起
-   - 产品路线规划：跳过产品定位 / 技术栈（一般稳定），重排 roadmap
+   - 产品路线规划：跳过产品定位 / 技术栈（一般稳定），刷新 TODO 待办池（不排序）
    - 新方向：从产品定位 + 用户画像重起
    - brownfield 接入：先读 `docs/CODEBASE-AUDIT.md` 作实况语境，5 节顺序不变
 3. **跑提问 + 闸门 + 写作 + 确认门**（按 §2-§7 走）
@@ -47,11 +47,11 @@
 | 用户画像 | 主角色是谁 / 关键诉求（起手 1 个主角色即可） | 「最主要的用户是哪种人？他们最大的诉求是什么？」|
 | 技术栈 | 主要语言 / 前端 / 后端 / 部署 | 「用什么技术栈？前端 / 后端 / 部署有偏好吗？还是按现状走？」|
 | 业务术语表 | 项目里有没有需要统一口径的业务专名 | 「业务里有什么术语容易跟同行混的？比如『订单』vs『工单』？」|
-| —（roadmap）| PM 现在已知的待做需求，大致排个序 | 「列出现在已知的待做需求，按优先级排个序。」|
+| —（TODO）| PM 提过 / 讨论过想做的事 | 「列出你现在想到要做的事，不用排顺序。」|
 
 > **项目名称节**通常 `/pmai-init-project` 已填（参数 1），调用方确认即可。
 
-**调用方挑用**：调用方按场景挑 5 节里的子集 + 顺序（init-project 全部按顺序；project-solution 按场景跳）。**叙事性里程碑不另开节** —— roadmap 本身就是历史 + 未来一张表，PM 唯一规划视图；过去若需写阶段叙事，统一从 roadmap 的 done/active/planned 三态推。
+**调用方挑用**：调用方按场景挑 5 节里的子集 + 顺序（init-project 全部按顺序；project-solution 按场景跳）。**叙事性里程碑不另开节** —— TODO 是 PM 的待办池，只记 PM 提过 / 讨论过想做的，AI 不从代码 / 竞品 / 已 close 历史反推填充。
 
 ---
 
@@ -107,29 +107,28 @@ python3 "$PMAI_HOME/scripts/check-open-questions.py" \
 | 技术栈 | 主要语言 / 前端 / 后端 / 部署 |
 | 业务术语表 | 至少 1 条；无业务专名时可空表 |
 
-### §5.2 ROADMAP.md（模板见 `$PMAI_HOME/templates/ROADMAP.md.tmpl`）
+### §5.2 TODO.md（模板见 `$PMAI_HOME/templates/TODO.md.tmpl`）
 
-**ROADMAP 是「历史 + 未来一张表」**，不是单一"计划态"队列。三态全用：
+**TODO 是 PM 的待办池**——只记 PM 提过 / 讨论过想做的事，无序、不排顺序。三态简单：
 
-| 状态 | 含义 | 何时写 |
-|---|---|---|
-| `done` | 已完成（req 已 close） | **老项目首次跑必写**：扫 `requirements/closed/` 全部 req-NNN，每个写一行 done；后续每次 close-req 时由 PM 把对应行从 active 推到 done |
-| `active` | 正在做（已 `/pmai-new-req` 起 req） | `/pmai-new-req` 创建 req 后 PM 把对应行从 planned 推到 active |
-| `planned` | 已规划、还没开始 | PM 给的待做需求队列 |
+| 状态 | 含义 |
+|---|---|
+| `todo` | 讨论过 / 提过想做，还没开始 |
+| `doing` | 正在做（已 `/pmai-new-req` 起 req） |
+| `done` | 做完了（req 已 close） |
 
-字段：排序（数字小先做；done 行用负数或大数都行，PM 自定）/ `req-id`（done 行回填实际 req-NNN，planned 行留空，active 行 `/pmai-new-req` 后回填）/ 标题 / 状态。
+字段：`req-id`（起 req 后回填，未起前留空）/ 标题 / 状态。**没有「排序」列**——待办池不排顺序。
 
-**老项目首次跑 B 场景的写法**：
-1. AI 主动跑 `ls requirements/closed/` 列已 close 全部 req-NNN（或读 `requirements/closed/*/close-report.md` 拿标题）
-2. AI 把这些 req 全部作为 done 行写入 ROADMAP（PM 不需要逐个口述）
-3. 然后再问 PM 计划态 req 队列（planned 行）
-4. **漏写 done 行 = 体检不算齐**：ROADMAP 只有 planned 行没 done 行，PM 拿不到历史视图
+**写 TODO 的硬规则**：
+1. **只记 PM 主动提过 / 讨论过想做的事**——AI 不从代码、竞品、`requirements/closed/` 反推填充，池子里只有 PM 真说过想做的。
+2. **不替 PM 排顺序**——条目无序，PM 要做时自己挑。
+3. PM 没给具体待办 → TODO 留空（一行占位即可），不替 PM 脑补队列。
 
-### §5.3 ROADMAP.md = 唯一规划视图
+### §5.3 TODO.md 是 PM 待办池（不是规划真相源）
 
-PROJECT.md 不再有「产品路线」节（叙事性里程碑已废弃 —— 单人项目颗粒度跟 ROADMAP 撞车）。所有规划信息只在 ROADMAP.md：req 全表（历史 done + 当前 active + 计划 planned），随 req 推进更新（每次 close-req 推一行到 done）。
+TODO 不是项目方向真相源——**方向真相源是 `PROJECT.md`**。TODO 只是 PM 自己维护的待办清单：想到要做的记一笔、不想做了划掉。
 
-写完后调用方应向 PM 一句话说明：「roadmap = 历史 + 未来 req 全表（含已 close 的 done 行），是项目唯一规划视图。」
+PM 要起新需求时，调用方应**提醒 PM「待办池里有这些」让 PM 挑一个**，不替 PM 判断「下一个该做 X」。
 
 ### §5.4 PM 视图规则
 
@@ -140,7 +139,7 @@ PROJECT.md 不再有「产品路线」节（叙事性里程碑已废弃 —— �
 
 ## §6 Decision gate 确认门（gsd Decision gate pattern）
 
-> Decision gate 是 PM 答完 5 节 + roadmap 后的**收敛闸门**，3 条硬规则照搬 gsd `new-project.md:368-380` "Ready?" pattern。
+> Decision gate 是 PM 答完 5 节 + TODO 后的**收敛闸门**，3 条硬规则照搬 gsd `new-project.md:368-380` "Ready?" pattern。
 
 ### §6.1 3 条硬规则
 
@@ -194,9 +193,9 @@ EMPTY=$(echo "$PROJECT_STATE" | python3 -c "import sys, json; print(','.join(jso
    <绝对路径>
    产品定位 / 用户画像 / 技术栈 / 业务术语表 已填
 
-🗺 docs/ROADMAP.md
+🗒 docs/TODO.md
    <绝对路径>
-   <N> 个待做需求已排队
+   <N> 条待办已记入待办池
 
 这样定吗？想改的说哪里；OK 的话项目方向就定下来了。
 ```
@@ -208,11 +207,11 @@ EMPTY=$(echo "$PROJECT_STATE" | python3 -c "import sys, json; print(','.join(jso
 
 ## §9 atomic commit（调用方按需）
 
-写完 PROJECT.md + ROADMAP.md + PM 定稿后，调用方 atomic commit（gsd new-project Step 4 pattern）：
+写完 PROJECT.md + TODO.md + PM 定稿后，调用方 atomic commit（gsd new-project Step 4 pattern）：
 
 ```bash
 cd <target-dir>  # 业务仓
-git add docs/PROJECT.md docs/ROADMAP.md
+git add docs/PROJECT.md docs/TODO.md
 git commit -m "docs: project direction settled"
 ```
 
@@ -228,7 +227,7 @@ git commit -m "docs: project direction settled"
 2. 按 §3 5 节顺序问 PM（greenfield 顺序）
 3. §4 未决问题闸门
 4. §6 Decision gate
-5. §5 写 PROJECT.md + ROADMAP.md
+5. §5 写 PROJECT.md + TODO.md
 6. §7 5 节齐不齐检查
 7. §8 PM 定稿
 8. §9 atomic commit
@@ -237,16 +236,16 @@ git commit -m "docs: project direction settled"
 ### §10.2 `/pmai-project-solution`（4 场景之一，已细化）
 
 1. agent 按 SKILL.md 步骤 1 读已有输入（CLAUDE.md / `docs/PROJECT.md` / `docs/CODEBASE-AUDIT.md`）
-2. **判断场景**（A 重做 / B 产品路线规划 / C 新方向 / D brownfield 接入）—— 调用方 `/pmai-project-solution` SKILL.md 段 0 表已细化触发条件 + 输入态 + 提问顺序
+2. **判断场景**（A 重做 / B 产品路线规划 / C 新方向 / D 接入方向恢复）—— 调用方 `/pmai-project-solution` SKILL.md 段 0 表已细化触发条件 + 输入态 + 提问顺序
 3. agent @读 本文件
 4. 按 `/pmai-project-solution` SKILL.md 段 0 表"提问顺序"列**场景特定顺序**问 PM：
-   - A 重做：痛点诊断 → 产品定位 → 用户画像 → 业务术语 → roadmap 重排
-   - B 产品路线规划：过去 roadmap 回顾（首次补无历史则跳过）→ roadmap（**先扫 `requirements/closed/` 写 done 行**，再问 planned 队列）→ 业务术语增量（跳过定位 / 用户 / 技术栈）
-   - C 新方向：新方向 vs 现 PROJECT 差异 → 产品定位 → 用户画像 → roadmap
-   - D brownfield：全文读现状档 → 产品定位（codebase 反推）→ 用户画像 → 技术栈（codebase 抄）→ 业务术语 → roadmap
+   - A 重做：痛点诊断 → 产品定位 → 用户画像 → 业务术语 → 刷新 TODO 待办池
+   - B 产品路线规划：问 PM 现在想做啥记进 TODO 待办池（**AI 不扫 `requirements/closed/` 反推历史、不排序**）→ 业务术语增量（跳过定位 / 用户 / 技术栈）
+   - C 新方向：新方向 vs 现 PROJECT 差异 → 产品定位 → 用户画像 → 刷新 TODO
+   - D 接入方向恢复：全文读现状档 → 产品定位（codebase 反推）→ 用户画像 → 技术栈（codebase 抄）→ 业务术语 → 刷新 TODO
 5. §4 未决问题闸门
 6. §6 Decision gate
-7. §5 写 / 改 PROJECT.md + ROADMAP.md
+7. §5 写 / 改 PROJECT.md + TODO.md
 8. §7 5 节齐不齐检查
 9. §8 PM 定稿
 10. §9 atomic commit

@@ -3,7 +3,7 @@
 #
 # 验证消费仓 docs/ 归档约定（PM 实测踩坑修复 — example-consumer-app 顶层有错位文件）：
 #   T1: templates/CLAUDE.md.tmpl 含「docs/ 归档约定」节
-#   T2: 约定含顶层正面清单（PROJECT/DESIGN/PRODUCT-RULES/ROADMAP/prd）
+#   T2: 约定含顶层正面清单（PROJECT/DESIGN/PRODUCT-RULES/TODO/prd）
 #   T3: 约定含顶层负面清单 + 归位规则（模块决策 → modules/；过程档案 → 归档/完成/）
 #   T4: 约定含「写新文档前 AI 自问 3 题」
 #   T5: init-project.sh 创建 docs/归档/{完成,旧版}/ 骨架 + .gitkeep
@@ -35,7 +35,7 @@ test_tmpl_has_archive_convention_section() {
 # -----------------------------------------------------------------
 test_tmpl_has_positive_list() {
   start_test "T2: 约定含顶层正面清单"
-  for f in PROJECT.md DESIGN.md PRODUCT-RULES.md ROADMAP.md prd.md; do
+  for f in PROJECT.md DESIGN.md PRODUCT-RULES.md TODO.md prd.md; do
     if ! grep -q "$f" "$CLAUDE_TMPL"; then
       _fail "约定缺正面清单项: $f"
       return
