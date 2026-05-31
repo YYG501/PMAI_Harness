@@ -74,7 +74,7 @@ claude-code 走独立 subagent（Agent 工具）在隔离副本里建；codex / 
 
 ## 📦 范围（改 / 不改）
 
-<!-- task 级范围（这个 task 改哪 / 不改哪）；req 级范围在 prd.md。
+<!-- task 级范围（这个 task 改哪 / 不改哪）；req 级范围在 req-plan.md（范围清单）。
      用产品视角的业务名（不写文件路径，文件级路径进执行区）。 -->
 
 **改**
@@ -87,12 +87,8 @@ claude-code 走独立 subagent（Agent 工具）在隔离副本里建；codex / 
 
 ## ✅ 验收清单（PM 走查）
 
-<!-- task 级验收（PM 自己能在 demo 时勾选的条件）；req 级验收标准在 prd.md §七。
-     不写 grep 校验 / 单测断言 / 覆盖率阈值 → 那些进执行区·工程层验收。
-
-     若本 task 命中 implementation-design.md 段 1.5 原型简化项（按 PRD 锚点 join），
-     受影响验收项行尾追加 [SIMP-N] 标签（如 `- [ ] 登录成功后跳转工作台 [SIMP-03]`），
-     让 PM 一眼看到「这条验收按原型简化版走，不是 PRD 全量」。 -->
+<!-- task 级验收（PM 自己能在 demo 时勾选的条件）；req 级验收标准在 req-plan.md 范围清单。
+     不写 grep 校验 / 单测断言 / 覆盖率阈值 → 那些进执行区·工程层验收。 -->
 
 ### 主路径
 - [ ] [PM 可走查的成功条件 1]
@@ -149,15 +145,15 @@ PM 打回 → 保持 `执行中`；执行失败 / 放弃 manual → `待执行`
 ## 🚦 启动前必读（按顺序，读完再执行）
 
 <!-- 列出 agent 在 task worktree 启动前必读的文件路径 + 一句话说明。至少含：
-- prd.md 的相关章节（req 级 WHAT）
-- implementation-design.md 的相关 HOW-ID 行（见下「实现设计引用」段已挑出）
-- task-plan.md 的相关 GAP / 风险条目
-- docs/PROJECT.md / docs/DESIGN.md / docs/modules/<module>.md
+- req-plan.md 的范围清单 + 决策页（req 级 WHAT + 拍了什么）
+- 本段下方「工程 HOW（task-spec 草拟）」（task-scoped 实现要点已挑出）
+- task-plan.md 的相关风险 / 执行模式条目
+- docs/PRODUCT-STATE.md / docs/DESIGN.md / docs/modules/<module>.md
 - 同模块已完成 task — 复用 / 避免重复 -->
 
-1. `requirements/active/{{REQ_ID}}-{{REQ_SLUG}}/prd.md` §X — [一句话说明]
-2. `requirements/active/{{REQ_ID}}-{{REQ_SLUG}}/pmai-task-plan.md` §三 风险 + §四 自检与状态摘要
-3. `docs/PROJECT.md` / `docs/DESIGN.md` / `docs/modules/<module>.md`
+1. `requirements/active/{{REQ_ID}}-{{REQ_SLUG}}/req-plan.md` — 范围清单 + 决策页（本 task 相关项）
+2. `requirements/active/{{REQ_ID}}-{{REQ_SLUG}}/task-plan.md` §三 风险 + §四 自检与状态摘要
+3. `docs/PRODUCT-STATE.md` / `docs/DESIGN.md` / `docs/modules/<module>.md`
 4. 同模块已完成 task — [复用 / 避免重复]
 
 ---
@@ -176,8 +172,8 @@ PM 打回 → 保持 `执行中`；执行失败 / 放弃 manual → `待执行`
 
 ## 🔧 实现规格
 
-<!-- 本 task「怎么做」—— 由 task-spec 从 prd.md 切片（WHAT）转写 + 补实现层细节。
-     与 prd.md 分工：prd.md 是 req 级需求方案，本段是 task 级可执行规格。
+<!-- 本 task「怎么做」—— 由 task-spec 从 req-plan.md 范围清单切片（WHAT）转写 + 补实现层细节。
+     与 req-plan.md 分工：req-plan.md 是 req 级范围 + 决策页，本段是 task 级可执行规格。
      允许工程内容（字段名 / props / 函数签名 / 调用链）；用代码块表达类型 / 接口。 -->
 
 ### 1 · [功能名]
@@ -186,15 +182,15 @@ PM 打回 → 保持 `执行中`；执行失败 / 放弃 manual → `待执行`
 
 ---
 
-## 🧩 实现设计引用（HOW）
+## 🧩 工程 HOW（task-spec 草拟）
 
-<!-- task-spec 从 implementation-design.md 按 HOW-ID + 适用关键词挑出当前 task 相关行，
-     写在这里（不让 task-execute 跨文件回查）。每条带原 HOW-ID 便于追溯。
-     task-scoped 占位值也内联在本段（executor 不跨文件回查 prd.md）。 -->
+<!-- 六步里工程 HOW 降 AI 后台、不再有独立 implementation-design.md：task-spec 直接从
+     req-plan.md 决策页 + 同模块现有代码草拟本 task 的实现要点，内联在这里
+     （不让 task-execute 跨文件回查）。task-scoped 占位值也内联在本段。 -->
 
-| HOW-ID | 决策 / 文件·模式 | 本 task 落地要点 |
-|---|---|---|
-| HOW-NN | [从 implementation-design.md 挑出的架构决策 / 文件路径] | [对本 task 的具体含义] |
+| 决策 / 文件·模式 | 本 task 落地要点 |
+|---|---|
+| [task-spec 草拟的架构决策 / 文件路径] | [对本 task 的具体含义] |
 
 **task-scoped 占位值**（如本 task 含 UI 占位）：
 
@@ -218,7 +214,7 @@ PM 打回 → 保持 `执行中`；执行失败 / 放弃 manual → `待执行`
 
 ## 🧪 自测说明（task 级流程化 UAT，task-verify 自动跑）
 
-<!-- task-spec 从 prd.md §七 验收标准派生 task-scoped 自测说明（task 文件对 task-verify 自包含）。
+<!-- task-spec 从 req-plan.md 范围清单（验收项）派生 task-scoped 自测说明（task 文件对 task-verify 自包含）。
      UI task 必填；非 UI task 写「无（[类型] task）」。
      每个流程一个 `### 流程 N: <流程名>`；动作 + 期望用 PM 视角自然语言，不写 selector / assert。 -->
 
@@ -252,15 +248,9 @@ artifact: verify/cold-start.log
 ## 📋 文档偏差
 
 <!-- ⚠️ 本 section 必须保留 —— task-transition.py「执行中→已完成」gate 读它。
-     execution agent 填：实现过程发现的、与 prd.md / implementation-design.md /
+     execution agent 填：实现过程发现的、与 req-plan.md 范围清单 / 决策页 /
      docs/modules 不一致处。四列：文档位置 / 文档原文 / 实际实现 / 建议改法。
-     无偏差填「无」。close-task Phase 2 把本段 promote 成 req `adjustment` 事件。
-
-     ⚠️ v2 C3 carve-out：**已标记 SIMP-N 的不算偏差**。
-     若本 task 命中 implementation-design.md 段 1.5 原型简化项（PM 确认区·验收清单可见
-     [SIMP-N] 标签），原型按段 1.5「计划简化为」内容实施 ≠ 与 PRD 不一致；这是 PM 在 stage 5
-     已决策的 scope 削减，不应在此登记为偏差。executor 自审时若不确定，看 PM 确认区
-     验收行有无 [SIMP-N] 标签：有 → 跳过登记；无 → 真偏差。 -->
+     无偏差填「无」。close-task 把本段 promote 成 req `adjustment` 事件。 -->
 
 | 文档位置 | 文档原文 | 实际实现 | 建议改法 |
 |---|---|---|---|

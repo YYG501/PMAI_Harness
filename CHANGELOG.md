@@ -20,6 +20,14 @@ PM-AI-Workflow 生成器仓的演进记录。本文件**只记影响下游业务
 
 ### PMAI 重构落地（office-hours 收敛）—— 进行中
 
+- `fix(scripts+skills+templates)`: **第二轮 gstack-review 修复（四源交叉：手工 + 2 Claude agent + Codex 跨模型）**——验收 `reshape-office-hours` 全工作产出，修一批绿网测不到的完整性缺口。基线 572 → **572 全绿**（断言 1:1 替换、用例数不变）。
+  - **prototype/ 改名收尾**（设计 §3「收敛为单一 prototype/ 升一等概念」，复数残留是 blast-radius 漏扫）：`init-project.sh` `mkdir prototypes` → `prototype`（单数，对齐 build-audits / check-branch / 所有 SKILL）；`check-branch.sh` GATE 4 删 `req-*) prototypes/*) deny`（**PM 拍**，对齐 D10：轻 / 文档 task 不 fork、在 req worktree 直接改原型——旧拦截前提「所有原型改动走 task 分支」六步后不成立，且死守复数路径=对真路径 `prototype/*` 永不触发）；`quick-fix` 反向同步表 / `cross-skill.md` / `writing-rules.md` 的 `prototypes/` → `prototype/`。
+  - **build-audits 接线缺口**（Codex 抓）：`build-audits.py:_dev_ports` 加 YAML block-list 解析（`pm-workflow.config.yml.tmpl` 默认就是 block list，旧版只认 inline `[...]` → 默认配置解析成空端口、resolve fail-loud）；`task-verify/SKILL.md` 新增步骤 6.5 **自己写** `audits/behavior.json`（确定性产物；原靠 build 流程事后转换、无确定性生产者 → synthesize 缺它 fail-loud 卡正常 UI task）；`build-audits.py` 加 `_validate_audit_shapes`（畸形 audit 数组 fail-loud 点名哪道、不抛裸 AttributeError）。
+  - **bash `$VAR` 紧跟 CJK 全角标点 blast-radius**（前次审只修 `_gate.sh` 一处；实证 macOS bash 3.2 + `set -u` 下崩 exit 127）：`close-req.sh:96` `$REPO_ROOT）` / `task-verify/SKILL.md` `$TASK_WORKTREE（` / `dev-server.sh:71` `$pid：` → `${VAR}`。
+  - **`python3 -c` 路径插值代码注入加固**（pre-existing 防御纵深）：`init-project.sh` / `_setup-deps.sh` 端口推导从 `'$path'` 插值改 `sys.argv[1]` 传值（恶意目录名不再越狱执行）。
+  - **checks-diff.py JSON 健壮性**：plan 解析失败友好 fail-loud（不抛裸 traceback）；单个畸形 artifact JSON 报 P0 不崩整份报告（`PARSE_ERROR` 哨兵，对齐已有 shape-错误处理）。
+  - **README + 模板 + docstring 六步对齐**：`README.md` 两处流程图 + 命令表从 7-stage 多窗口重写为六步单窗口（4 入口 + task 机器降后台）；`task.md.tmpl` 删 SIMP-N carve-out / `implementation-design.md` 死引用 / `prd.md`→`req-plan.md` / 死路径 `pmai-task-plan.md`→`task-plan.md`；`state.py` / `req-transition.py` docstring `/7`·`1-7`·旧 stage 5→6 → 六步；`project-solution` 把 req-stage-gate 当活跃驱动的指针 → `/pmai-next`。
+
 - `feat(scripts+skills)`: **build 三道审脚本级编排落地**（六步落地原余下项）。新增 `scripts/build-audits.py` 把三道审能确定性固化的部分固化（覆盖审计是 agent、视觉门是 gstack skill —— 这两道仍由 task-execute 用 Agent/Skill 工具调起，脚本不当子进程调 LLM）：
   - `resolve <task-file>`：校验输入（范围清单 `req-plan.md` / `prototype/` / `.pm-workflow/config.yml` 的 dev 端口）→ 缺则 **fail-loud**（防对着缺失锚点跑审）；建 `audits/` 目录；打印三道 manifest（每道读什么、把规范化结果写哪、dev server 复用约定）。
   - `synthesize <task-file>`：读 `audits/` 下三道规范化结果（`coverage.json` / `visual.json` / `behavior.json`，统一 schema）→ **校验三道齐全**（漏跑 fail-loud 点出缺的那道，挡住「漏跑一道还往下走 / 各起 dev server / 不合成」）→ 合成一份 `synthesis.md` 给 PM（覆盖 丢了/降级 + 视觉 findings + 行为 pass/fail + 建议改的项）+ stdout 机器 summary（各道计数 + gate=clean|needs-review，门禁仅作给 PM 的建议、不替 PM 拍板）。

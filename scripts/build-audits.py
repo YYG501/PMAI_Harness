@@ -75,12 +75,18 @@ def _range_list(task_file: Path) -> Path:
 
 
 def _dev_ports(repo_root: Path) -> list[str]:
-    """从 .pm-workflow/config.yml 取 dev_server.ports（轻量解析，不引 yaml 依赖）。"""
+    """从 .pm-workflow/config.yml 取 dev_server.ports（轻量解析，不引 yaml 依赖）。
+
+    兼容两种写法：inline（`ports: [3000, 5173]`）与 YAML block list（`ports:` 下方
+    缩进 `- 3000`）。后者是 pm-workflow.config.yml.tmpl 的默认格式，旧版只认 inline
+    会把默认配置解析成空端口、让 resolve fail-loud。
+    """
     cfg = repo_root / ".pm-workflow" / "config.yml"
     if not cfg.exists():
         return []
     ports: list[str] = []
     in_dev = False
+    in_ports_block = False
     for raw in cfg.read_text(encoding="utf-8").splitlines():
         line = raw.rstrip()
         if not line.strip() or line.lstrip().startswith("#"):
@@ -89,12 +95,20 @@ def _dev_ports(repo_root: Path) -> list[str]:
         stripped = line.strip()
         if indent == 0:
             in_dev = stripped.startswith("dev_server:")
+            in_ports_block = False
             continue
+        if in_ports_block:
+            if stripped.startswith("- "):  # 收 block list 项
+                ports.append(stripped[2:].strip().strip("'\""))
+                continue
+            in_ports_block = False  # 同级出现别的键 → block 结束（不 continue，落下面键处理）
         if in_dev and stripped.startswith("ports:"):
             rest = stripped[len("ports:"):].strip()
             if rest.startswith("[") and rest.endswith("]"):
                 ports = [p.strip().strip("'\"") for p in rest[1:-1].split(",") if p.strip()]
-            break
+                break  # inline 一行拿全
+            in_ports_block = True  # 准备收下面缩进的 block list 项
+            continue
     return [p for p in ports if p]
 
 
@@ -109,6 +123,17 @@ def _load_audit(path: Path, key: str) -> dict[str, Any]:
     if not isinstance(data, dict):
         _die(f"{AUDIT_LABEL[key]}结果顶层应为 JSON 对象：{path}")
     return data
+
+
+def _validate_audit_shapes(cov: dict, vis: dict, beh: dict) -> None:
+    """三道审结果的关键数组必须是对象列表（防畸形 LLM 输出在合成时 AttributeError）。
+    fail-loud 点名哪道审不合 schema，而不是抛裸 traceback。"""
+    items = cov.get("items", [])
+    if not isinstance(items, list) or any(not isinstance(i, dict) for i in items):
+        _die("覆盖审计结果 coverage.json 的 items 应为对象数组（每项 {name,status,note}）")
+    findings = vis.get("findings", [])
+    if not isinstance(findings, list) or any(not isinstance(f, dict) for f in findings):
+        _die("视觉门结果 visual.json 的 findings 应为对象数组（每项 {severity,desc}）")
 
 
 def cmd_resolve(task_file: Path, repo_root: Path) -> int:
@@ -247,6 +272,7 @@ def cmd_synthesize(task_file: Path, repo_root: Path, fail_on_gate: bool) -> int:
     cov = _load_audit(audit_dir / AUDIT_FILES["coverage"], "coverage")
     vis = _load_audit(audit_dir / AUDIT_FILES["visual"], "visual")
     beh = _load_audit(audit_dir / AUDIT_FILES["behavior"], "behavior")
+    _validate_audit_shapes(cov, vis, beh)
 
     report, summary = _render_synthesis(task_file.stem, cov, vis, beh)
     out_path = audit_dir / "synthesis.md"

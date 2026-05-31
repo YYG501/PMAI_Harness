@@ -93,7 +93,7 @@ if [ -n "$CALLER_CWD" ] && [ -n "$REQ_WORKTREE_REAL" ]; then
     echo "   当前 cwd: $CALLER_CWD" >&2
     echo "   req worktree: $REQ_WORKTREE_REAL" >&2
     echo "" >&2
-    echo "   请切到主仓窗口（cwd = $REPO_ROOT），再跑：" >&2
+    echo "   请切到主仓窗口（cwd = ${REPO_ROOT}），再跑：" >&2
     echo "   bash scripts/close-req.sh $REQ_DIR" >&2
     exit 1
   fi

@@ -229,7 +229,7 @@ mkdir -p "$TARGET_DIR/docs/归档"   # 扁平：过程档案 / 一次性 review 
 touch "$TARGET_DIR/docs/归档/.gitkeep"
 mkdir -p "$TARGET_DIR/requirements/active"
 mkdir -p "$TARGET_DIR/requirements/closed"
-mkdir -p "$TARGET_DIR/prototypes"
+mkdir -p "$TARGET_DIR/prototype"   # 单一主原型（单数）；SKILL C.5 用 create-next-app 在此起栈
 mkdir -p "$TARGET_DIR/.runs/events"
 mkdir -p "$TARGET_DIR/.worktrees"
 mkdir -p "$TARGET_DIR/.pm-workflow/tasks"   # task-verify 报告 / artifact 根目录
@@ -245,10 +245,10 @@ echo "🔀 Git 仓库已初始化（main 分支）"
 # --- k. 推导基础端口 ---
 PROJECT_PATH=$(pwd)
 BASE_PORT=$(python3 -c "
-import hashlib
-h = int(hashlib.md5('$PROJECT_PATH'.encode()).hexdigest(), 16)
+import hashlib, sys
+h = int(hashlib.md5(sys.argv[1].encode()).hexdigest(), 16)
 print(3000 + (h % 7000))
-" 2>/dev/null || echo "3000")
+" "$PROJECT_PATH" 2>/dev/null || echo "3000")
 echo "$BASE_PORT" > .dev-port
 echo "🔌 基础端口: $BASE_PORT"
 

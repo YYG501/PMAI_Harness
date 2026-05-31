@@ -81,10 +81,10 @@ def check_all_tasks_closed(req_dir: Path) -> tuple[bool, list[str]]:
 
 def seal_req_docs_before_transition(req_dir: Path, current: int, target: int) -> None:
     """I-DC1 pre-transition gate：把 req worktree 里 active req 范围内的未 commit
-    文档改动自动 commit。覆盖 brief / analysis / solution / DESIGN / task-plan / tasks/。
+    文档改动自动 commit。覆盖 req-plan / DESIGN / task-plan / tasks/（在飞旧 req 仍含 brief/analysis/solution）。
     range 严格限定避免卷入主仓其他改动。
 
-    rationale: stage 5→6 之后会触发 task-confirm 通过 git worktree add fork
+    rationale: build 阶段会触发 task-confirm 通过 git worktree add fork
     task 分支；working tree 飘的文档不会被 fork 带走。这道 gate 保证每次 stage
     切换都把当前 stage 的产出落盘，下游消费拿到的就是 PM 看过的版本。
     """

@@ -35,24 +35,20 @@ PMAI 不和 Claude Design、design-html 或 Claude Code 比"谁更快生成第�
 
 /pmai-init-project    起业务项目（AI 跟你聊清做什么 / 为谁做，写 PROJECT.md）
 
-# req 主流程（一个需求 = 一个 req，每步 PM 拍板推进）
+# req 主循环（一个需求 = 一个 req；全程一个窗口，机器步骤降后台，PM 只在闸门拍板）
 
-/pmai-new-req "批量审核"   起 req + 一句话 brief
-/pmai-req-stage-gate       → stage 1 · analysis（现状 / 约束 / 边界）
-/pmai-req-stage-gate       → stage 2 · PRD（WHAT — 功能规格 / 用户故事）
-/pmai-req-stage-gate       → stage 3 · 实现设计（HOW — 技术方案）
-/pmai-req-stage-gate       → stage 4 · task plan（拆成 N 个 task）
-/pmai-req-stage-gate       → stage 5 · task spec（每个 task 写成单文件 typed contract）
+/pmai-new-req "批量审核"   起 req + 一句话 brief（需求一句话 + 给谁看 + demo 成功标准）
+/pmai-next                 推进六步（先说再动）：
+                           ① 范围确认 → 产 req-plan.md（范围清单 + 决策页），PM 拍板
+                           ② 在 prototype/ 栈内 build（Claude Code / 指定执行器零录入直建）
+                           ③ 三道审（覆盖审计 / 视觉门 / 行为审）+ 体验迭代 → 呈交 PM 一句 pass / 打回
+                           ④ 沉淀 → 更新 PRODUCT-STATE + merge 回 main（+ 按需反向出可评审 PRD）
+/pmai-task-status          产品现状视图（产品长什么样 / 主原型状态 / 本次增量）
 
-# task 子循环（每个 task 跑一遍；并行可开多窗口）
+# task 机器（task-confirm / execute / close 全降后台、由 /pmai-next 自动编排，PM 不感知、不切窗口）
+# 收尾的「沉淀」由 /pmai-next 接 close-req 走；也可单独跑：
 
-/pmai-task-confirm    PM 拍板启动一个 task → AI 给新窗口启动指令
-/pmai-task-execute    新窗口里 codex 写代码（worktree 隔离 + 自动 commit）
-/pmai-close-task      PM 验收通过 → 归档 task runtime
-
-# req 收尾
-
-/pmai-close-req       合主分支，整个需求闭环
+/pmai-close-req       合主分支，整个需求闭环（沉淀两档：每 req 更 PRODUCT-STATE / 按需出可评审 PRD）
 ```
 
 PM 全程**只做决策**（方向 / PRD / 任务拆分 / 验收）；代码、commit、worktree 隔离、文档同步、状态机由框架兜。
@@ -213,24 +209,21 @@ bash scripts/measure-tthw.sh
 > **注意**：装好 pmai 后，所有 skill 在 Claude Code 内都以 `pmai-` 前缀注册（防与 gstack / 其他框架命名冲突）。下面例子中的 `/pmai-*` 是真实的命令名。
 
 ```
-/pmai-new-req          → 起一个 req（需求）
+/pmai-new-req          → 起一个 req（需求）+ 一句话 brief
   ↓
-/pmai-req-stage-gate   → 推进 req 阶段（analysis → PRD → gap-check → implementation-design → plan → spec）
-  ↓
-/pmai-task-confirm     → PM 同意启动一个 task → 输出新窗口启动指令
-  ↓ （PM 开新窗口）
-/pmai-task-execute     → 在新窗口里跑 codex 执行 task
-  ↓ （task 状态全程「执行中」— commit 不切状态）
-/pmai-task-submit      → task agent commit + 呈交验收信息块
-  ↓ （PM 在 task 窗口决策：通过 / 打回；打回不切状态，AI 直接修代码）
-                       → PM 通过 → 转「已完成」
-  ↓ （PM 在 req 窗口）
-/pmai-close-task       → 归档 runtime + 删 task worktree
+/pmai-next             → 推进六步（先说再动，全程一个窗口）：
+                         ① 范围确认（产 req-plan.md，PM 拍板范围 + 决策页）
+                         ② 在 prototype/ 栈内 build（指定执行器零录入直建，后台 fork/merge worktree）
+                         ③ 三道审（覆盖 / 视觉 / 行为）+ 体验迭代
+  ↓ （task 机器：confirm / execute / close 全降后台，PM 不感知；task 状态全程「执行中」）
+                       → 呈交 PM 一句 pass / 打回（唯一拍板点；打回不切状态，AI 直接修）
+  ↓ （PM 通过）
+/pmai-next             → ④ 沉淀：更新 PRODUCT-STATE + 按需反向出 PRD
   ↓
 /pmai-close-req        → 整个 req 收尾，并入主分支
 ```
 
-并行：PM 想多个 task 同时跑，开多个新窗口跑 `/pmai-task-execute` 即可（v4 单窗口 lifecycle，git worktree 天然隔离）。
+并行多 task：PM 在 task-plan 拍执行模式（串行 / 并行 / 混合）；并行时 `/pmai-next` 给依赖已满足、互不冲突的 task 各派一个独立执行器并发建（各自 locked worktree），建完逐个呈交。**一 task 一执行器**铁律防串台。全程 PM 一个窗口。
 
 ### 3. 团队仓使用（`--local` 模式）
 
@@ -285,23 +278,21 @@ git push
 
 | Skill | 用途 |
 |---|---|
-| `/pmai-req-stage-gate` | 推进 req 阶段闸门（analysis → PRD → 实现设计 → plan → spec） |
-| `/pmai-req-analysis` | 起草 / 修订 analysis.md |
-| `/pmai-prd-writing` | 起草 / 修订 req 级 prd.md（WHAT） |
-| `/pmai-implementation-design` | 起草 req 级 implementation-design.md（HOW） |
-| `/pmai-task-plan` | 把 PRD + 实现设计拆成 task 清单 |
-| `/pmai-task-spec` | 把单个 task 写成单文件 typed contract |
+| `/pmai-next` | **六步推进主驱动**：读当前阶段做下一步（范围确认 → build → 复审 → 沉淀），先说再动 |
+| `/pmai-task-plan` | 范围确认产出：把范围清单拆成 task 单元（执行深度 / 并行性 PM 拍） |
+| `/pmai-prd-writing` | **按需** standalone：原型确认后反向出可评审 PRD（真系统口径，可跨 req） |
+| `/pmai-req-stage-gate` · `/pmai-req-analysis` · `/pmai-implementation-design` · `/pmai-task-spec` | 已降后台 / 异常恢复入口（六步主流程不直接调；机器步骤由 `/pmai-next` 编排） |
 
-### 执行 task（任务级）
+### task 机器（全降后台，由 `/pmai-next` 自动编排；PM 不直接调，留作异常恢复入口）
 
 | Skill | 用途 |
 |---|---|
-| `/pmai-task-confirm` | PM 同意启动 task → 输出新窗口启动指令（不调任何 agent） |
-| `/pmai-task-execute` | **新窗口里运行**：自动 cd worktree + 跑 codex |
-| `/pmai-task-submit` | task agent 呈交验收信息块（兜底；默认由 task-execute 自动呈交） |
-| `/pmai-task-verify` | task agent 自审验收（task-execute 内部调） |
-| `/pmai-task-status` | 多 task 状态总览（待启动 / 执行中 / 已完成） |
-| `/pmai-close-task` | PM 验收通过 → 已完成 + 归档 runtime |
+| `/pmai-task-confirm` | 后台自动 fork task worktree（PM 零窗口切换；异常恢复时才手动调） |
+| `/pmai-task-execute` | build 载体：在 prototype/ 栈内由指定执行器建 + 三道审 + 自动接呈交（同一个窗口，`git -C` 显式目录） |
+| `/pmai-task-submit` | 呈交验收信息块兜底（默认由 task-execute 自动呈交） |
+| `/pmai-task-verify` | 行为审：验收流程驱动 `/browse` 确定性跑（task-execute 内部调） |
+| `/pmai-task-status` | 产品现状视图（产品长什么样 / 主原型状态 / 本次增量） |
+| `/pmai-close-task` | 后台自动 merge + 归档 + 删 worktree（PM 验收通过后自动链） |
 
 ### 收尾 req
 
@@ -314,7 +305,7 @@ git push
 
 | Skill | 用途 |
 |---|---|
-| `/pmai-doc-update` | 处理文档偏差 + 沉淀模块规格 |
+| `/pmai-doc-update` | 处理文档偏差（对账模式；沉淀模式已并入 close-req） |
 | `/pmai-codebase-audit` | brownfield 项目代码现状审计 |
 | `/pmai-publish-to-lark` | 把文档发布到飞书 |
 

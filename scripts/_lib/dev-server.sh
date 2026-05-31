@@ -68,7 +68,7 @@ stop_dev_server_port() {
       stopped=$((stopped + 1))
     else
       skipped=$((skipped + 1))
-      echo "⚠️ 跳过端口 $port 的进程 $pid：cwd 不在当前 task/req worktree 内（cwd=${cwd:-未知}）" >&2
+      echo "⚠️ 跳过端口 $port 的进程 ${pid}：cwd 不在当前 task/req worktree 内（cwd=${cwd:-未知}）" >&2
     fi
   done <<EOF
 $pids

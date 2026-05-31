@@ -393,8 +393,8 @@ def get_stage_source(req_dir: Path, stage_num: int) -> Path:
     错误信息空间）。
 
     Raises:
-        KeyError: stage_num 不在 `STAGE_OUTPUT_FILES` 字典里（如 stage 4 / 6 /
-        7），且 `.req-meta.json` 也没有 `stage{N}_source` override。调用方应
+        KeyError: stage_num 不在 `STAGE_OUTPUT_FILES` 字典里（六步里只有 stage 1
+        有默认产物 req-plan.md；如 stage 2/3/4），且 `.req-meta.json` 也没有 `stage{N}_source` override。调用方应
         知道自己要 stage N 是否在默认表里 —— 这是契约错误不是数据错误。
     """
     meta = read_req_meta(req_dir, strict=False)
@@ -409,7 +409,7 @@ def get_stage_source(req_dir: Path, stage_num: int) -> Path:
 def get_current_stage_banner(req_dir: Path, skill: str = "REQ-STAGE-GATE") -> str:
     """返回 stage banner 字符串（M2）。
 
-    格式：`━━━ PMAI ► <SKILL> ▸ Stage <N>/7: <Name> ━━━`（见 `_shared/pm-view/banner-rules.md` §1.1）。
+    格式：`━━━ PMAI ► <SKILL> ▸ Stage <N>/<MAX_STAGE>: <Name> ━━━`（见 `_shared/pm-view/banner-rules.md` §1.1）。
 
     Args:
         req_dir: req 目录绝对路径（含 `.req-meta.json`）。
@@ -444,7 +444,7 @@ def set_stage_source(
 
     Args:
         req_dir: req 目录绝对路径（含 `.req-meta.json`）。
-        stage_num: stage 序号（1-7）。
+        stage_num: stage 序号（1-MAX_STAGE，六步=1-4）。
         filename: req 内**相对路径**（如 `analysis.md` / `stage2-office-hours.md`）；
                   caller 已确认文件在该路径下落盘。
         tool: 产生该产物的工具名（如 `req-analysis` / `office-hours`），追溯用。

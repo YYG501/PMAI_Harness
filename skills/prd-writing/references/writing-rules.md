@@ -86,7 +86,7 @@ PRD 是产品规格层文档，不出现任何代码 / 路径 / 字段名 / 文�
 | 类型 | ❌ 错误 | ✅ 正确 |
 | --- | --- | --- |
 | 代码常量名 | `TENANT_ADMIN`、`DEPARTMENT_ADMIN` | "租户管理员"、"部门管理员" |
-| 文件名 / 路径 | `TenantRolesPage`、`prototypes/src/...` | 用产品功能名称指代页面 |
+| 文件名 / 路径 | `TenantRolesPage`、`prototype/src/...` | 用产品功能名称指代页面 |
 | 文档章节号 | `task-022 §1`、`V4.1 §十二.2` | PRD 自包含，不依赖外部章节号 |
 | 数据库 / 字段名 | `enabled`、`createdBy`、`includeDescendants`、`permissions[]` | "角色启用状态"、"创建人字段"、"是否含子部门" |
 

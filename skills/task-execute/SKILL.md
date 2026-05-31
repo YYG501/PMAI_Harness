@@ -504,7 +504,7 @@ python3 "$PMAI_HOME/scripts/build-audits.py" resolve "$TASK_FILE"
 
 - 区别于 `/qa` 的 AI 探索：行为审是**确定性**走 PM 拍板的流程（明确 pass/fail），每 build 自动跑。
 - `/qa` 的 AI 探索式找 bug 是 PM **可选手动**跑的旁路（见附录），AI 不自动跑。
-- task-verify 跑完后**规范化写** `audits/behavior.json`：`{"status":"pass|fail|skipped","passed":int,"total":int,"note"}`（镜像 task-verify 的 pass/fail + 流程计数；非 UI task = `skipped`）。
+- `audits/behavior.json` 由 **task-verify 步骤 6.5 自己写**（确定性产物 `{"status":"pass|fail|skipped","passed":int,"total":int,"note"}`，本流程不再事后人工转换）；非 UI task = `skipped`。synthesize 缺它会 fail-loud。
 
 #### 7.3d 合成一份给 PM + 体验迭代（AI 主动批量 flag、PM 勾改）
 

@@ -102,25 +102,24 @@ test_main_rejects_random_toplevel() {
 # ---------------------------------------------------------------
 
 test_abs_path_from_task_to_req_worktree_gate() {
-  start_test "I-CB1/CB2 in task wt, abs path into req worktree → gated by req branch"
+  start_test "I-CB1/CB2 (D10) abs path into req worktree prototype/ → allowed（跨 task 串台移交执行器 adapter_postcheck）"
   fixture_setup
   req_dir=$(fixture_create_req "req-001" "test" 3)
-  # 给 req 里放一个 task 文件
   task_file=$(fixture_create_task "$req_dir" "001" "impl" "执行中")
-  # 在主仓里建一个 task worktree 指向这个 task（off req 分支）
   task_wt=$(fixture_create_task_worktree "$task_file" "req-001-test")
 
-  # 从 task worktree 里，用绝对路径指向 req worktree 下的 prototypes/
+  # 从 task worktree 里，用绝对路径指向 req worktree 下的 prototype/
   cd "$task_wt"
-  mkdir -p "$FIXTURE_DIR/.worktrees/req-001-test/prototypes" 2>/dev/null || true
-  abs_target="$FIXTURE_DIR/.worktrees/req-001-test/prototypes/bad.ts"
+  mkdir -p "$FIXTURE_DIR/.worktrees/req-001-test/prototype" 2>/dev/null || true
+  abs_target="$FIXTURE_DIR/.worktrees/req-001-test/prototype/edit.ts"
 
   capture_check "Write" "$abs_target" "" "" "x"
-  # 目标所在 worktree 是 req-* 分支 → I-CB5 拒绝 prototypes/
+  # 六步 D10：req worktree 放行 prototype/（原 req-prototype 拦截已删）。跨 task 串台不再靠
+  # check-branch，交执行器 adapter_postcheck（扫自身 worktree 超界文件 + rollback）+ 一 task 一执行器。
   if [ "$RC" = "2" ] && echo "$OUT" | grep -q '"deny"'; then
-    pass_test
+    _fail "abs path into req prototype/ should be allowed after D10 (rc=$RC, out=$OUT)"
   else
-    _fail "abs path into req wt should be gated by req branch (rc=$RC, out=$OUT)"
+    pass_test
   fi
   fixture_teardown
 }
@@ -167,21 +166,22 @@ test_task_branch_rejects_docs_write() {
 }
 
 # ---------------------------------------------------------------
-# I-CB5: req 分支不能写 prototypes/
+# I-CB5 (D10): req 分支可直接写 prototype/（轻 / 文档 task 在 req worktree 改原型）
 # ---------------------------------------------------------------
 
-test_req_branch_rejects_prototypes_write() {
-  start_test "I-CB5 req branch rejects write to prototypes/index.ts"
+test_req_branch_allows_prototype_write() {
+  start_test "I-CB5 (D10) req branch ALLOWS write to prototype/index.ts"
   fixture_setup
   req_dir=$(fixture_create_req "req-001" "test" 3)
 
   cd "$FIXTURE_DIR/.worktrees/req-001-test"
-  mkdir -p prototypes
-  capture_check "Write" "prototypes/index.ts" "" "" "console.log(1)"
+  mkdir -p prototype
+  capture_check "Write" "prototype/index.ts" "" "" "console.log(1)"
+  # 六步 D10：原 req-prototype 拦截已删；req worktree 放行 prototype/，跨界交执行器层
   if [ "$RC" = "2" ] && echo "$OUT" | grep -q '"deny"'; then
-    pass_test
+    _fail "req branch should ALLOW prototype/ writes after D10 (rc=$RC, out=$OUT)"
   else
-    _fail "req branch should deny prototypes/ writes (rc=$RC, out=$OUT)"
+    pass_test
   fi
   fixture_teardown
 }
@@ -332,7 +332,7 @@ test_main_rejects_random_toplevel
 test_abs_path_from_task_to_req_worktree_gate
 test_abs_path_from_task_to_main_repo_gate
 test_task_branch_rejects_docs_write
-test_req_branch_rejects_prototypes_write
+test_req_branch_allows_prototype_write
 test_reject_direct_task_status_edit
 test_reject_direct_req_stage_edit
 test_outside_repo_non_tmp_denied

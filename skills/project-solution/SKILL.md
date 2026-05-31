@@ -26,7 +26,7 @@ PM 主动调用，**4 个独立场景**：
 
 > **不在 scope**：
 > - greenfield 首次起新项目 → 走 `/pmai-init-project`（一气呵成 4 阶段；阶段 C 内嵌方向讨论按同款 `_shared/project-questioning.md` 跑）
-> - req 级 analysis / PRD / spec → 走 `/pmai-req-stage-gate`
+> - req 级范围确认 / 按需 PRD / 沉淀 → 走 `/pmai-new-req` 起需求、`/pmai-next` 推进六步（`req-stage-gate` 已降为异常恢复壳）
 > - 老项目同步兜底 → 走 `/pmai-new-req` mini-fill（不在本 skill 范围）
 
 ## Preamble

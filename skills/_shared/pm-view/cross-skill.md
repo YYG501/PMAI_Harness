@@ -15,7 +15,7 @@
    - `prd-writing`：🟢 全文必读
    - **不可整体砍**：DESIGN 是 PM 反馈第四类（视觉规范）沉淀地（§9.4），不同 skill 按不同强度引用
 
-3. **`prototypes/` 反向校验场景按 §9.3.1 grep 强约束**：仅 task-execute 例外（实现参考全文读）
+3. **`prototype/` 反向校验场景按 §9.3.1 grep 强约束**：仅 task-execute 例外（实现参考全文读）
 
 4. **章节匹配场景按 §9.1.1 grep 强约束**：prd.md 在 first-gen 整文件读 / revise grep
 

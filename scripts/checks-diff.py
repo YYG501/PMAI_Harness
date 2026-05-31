@@ -37,13 +37,27 @@ class Issue:
     detail: str
 
 
-def load_json(path: Path) -> dict[str, Any] | None:
+# 单个抓取产物 JSON 解析失败的哨兵：文件在但非合法 JSON。返回它（而非抛 SystemExit），
+# 让 build() 对该 check 报 P0、不崩掉整份报告（与 shape 错误的处理对齐）。
+PARSE_ERROR = object()
+
+
+def load_json(path: Path):
+    """读单个抓取产物：缺 → None；非法 JSON → PARSE_ERROR 哨兵（不抛、由 caller 决定）。"""
     if not path.exists():
         return None
     try:
         return json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        return PARSE_ERROR
+
+
+def _read_plan(plan_path: Path) -> dict[str, Any]:
+    """读 checks-spec 计划（operator 输入）—— 解析失败 fail-loud 友好报错，不抛裸 traceback。"""
+    try:
+        return json.loads(plan_path.read_text(encoding="utf-8"))
     except json.JSONDecodeError as exc:
-        raise SystemExit(f"[checks-diff] JSON 解析失败: {path}\n{exc}")
+        raise SystemExit(f"[checks-diff] 计划文件 JSON 解析失败: {plan_path}\n{exc}")
 
 
 def _btn_text(text: Any) -> str:
@@ -172,7 +186,7 @@ def render_todo(plan: dict[str, Any], issues: list[Issue]) -> str:
 
 
 def build(plan_path: Path, artifacts_root: Path) -> list[Issue]:
-    plan = json.loads(plan_path.read_text(encoding="utf-8"))
+    plan = _read_plan(plan_path)
     checks = plan.get("checks", []) or []
     if not checks:
         raise SystemExit("[checks-diff] 计划中 checks 为空")
@@ -189,7 +203,12 @@ def build(plan_path: Path, artifacts_root: Path) -> list[Issue]:
                                f"check.id 含非法字符（仅允许字母数字 . _ -，禁路径分隔与 ..）：{cid}"))
             continue
         ref = load_json(artifacts_root / "reference" / f"{cid}.json")
+        if ref is PARSE_ERROR:
+            ref = None  # 畸形 reference → 退覆盖审计模式（只查 local must-haves）
         local = load_json(artifacts_root / "local" / f"{cid}.json")
+        if local is PARSE_ERROR:
+            issues.append(Issue("P0", cid, "本地抓取畸形", f"local/{cid}.json 非合法 JSON（解析失败），单条不崩整份报告"))
+            continue
         issues.extend(compare_check(check, ref, local))
     return issues
 
@@ -207,7 +226,7 @@ def main() -> int:
     if not plan_path.exists():
         raise SystemExit(f"[checks-diff] 计划文件不存在：{plan_path}")
 
-    plan = json.loads(plan_path.read_text(encoding="utf-8"))
+    plan = _read_plan(plan_path)
     issues = build(plan_path, artifacts_root)
 
     report_path = Path(args.report)

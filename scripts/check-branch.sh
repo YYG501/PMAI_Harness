@@ -307,13 +307,9 @@ case "$BRANCH" in
         ;;
     esac
     ;;
-  req-*)
-    case "$REL_PATH" in
-      prototypes/*)
-        deny "req worktree 中不能编辑 prototypes/ 下的文件，代码改动请在 task 分支操作"
-        ;;
-    esac
-    ;;
+  # 六步 worktree 模型：req worktree 可直接改 prototype/（轻 / 文档 task 不 fork、在 req worktree 改）；
+  # 深 task fork 到 task worktree 后由 GATE 5（status==执行中）约束。原 req-prototype 拦截已删；
+  # 跨 task 串台保护移交执行器退出后越界审（adapter_postcheck 扫自身 worktree 超界 + rollback）。
 esac
 
 # ======================================================
@@ -332,7 +328,7 @@ case "$BRANCH" in
         # 运行时元数据：gitignore，放行
         ;;
       *)
-        # 其他路径（prototypes/ 代码、docs/ 等）：要求状态 == 执行中
+        # 其他路径（prototype/ 代码、docs/ 等）：要求状态 == 执行中
         # 定位 task 文件：task 文件存在于 task worktree 和 req worktree 里，不在主仓根
         # 搜索顺序：优先 task 自己的 worktree → fallback 所有 worktree
         TASK_FILE="$MAIN_REPO_ROOT/.worktrees/$BRANCH"

@@ -141,8 +141,8 @@ bash "$PMAI_HOME/scripts/quick-fix.sh" --snapshot
 
 | 改对象 | 同时要考虑 |
 |---|---|
-| `prototypes/**` | `docs/modules/*.md`（项目级模块规格描述的功能形态）/ `docs/modules/INDEX.md`（模块用途索引）/ `docs/DESIGN.md`（视觉规范——涉及视觉时） |
-| `docs/PROJECT/DESIGN/modules/prd.md` | `prototypes/**`（原型是否已反映新文档——反向同步）/ 文档间交叉引用 |
+| `prototype/**` | `docs/modules/*.md`（项目级模块规格描述的功能形态）/ `docs/modules/INDEX.md`（模块用途索引）/ `docs/DESIGN.md`（视觉规范——涉及视觉时） |
+| `docs/PROJECT/DESIGN/modules/prd.md` | `prototype/**`（原型是否已反映新文档——反向同步）/ 文档间交叉引用 |
 | `requirements/closed/<closed-req>/**`（含其内 tasks/） | 这是历史快照（引用更新 / 错别字 / 反映后续 req 变化）；通常不外溢。改"产品决策记录"= 改写历史，PM 要明确意图。**改完必须在被改文件末尾追加 visible §📝 后期修订记录 section**（详见 §3.5.2）|
 | `templates/` / `.claude/scripts/` / `.claude/skills/` | §Rules 已禁止；走单独 PR 不走 quick-fix |
 | **其他 target**（表外） | **按 §3.5.2 概念分类自己推断**——表外不是"无需扫"，是"AI 用概念判断" |
@@ -151,7 +151,7 @@ bash "$PMAI_HOME/scripts/quick-fix.sh" --snapshot
 
 | 改对象 | 同时要考虑 |
 |---|---|
-| `prototypes/**` | 本 req `prd.md`（需求方案——产品决策是否被撤销/修订）/ 本 req 实现设计文档（如存在——实现约束更新）/ 已 close 的 task PM 视图（产品事实变化记 `[quick-fix-log]`，task md 不改）/ `docs/modules/*` **不直接改**（留给 close-req → `/pmai-doc-update`） |
+| `prototype/**` | 本 req `prd.md`（需求方案——产品决策是否被撤销/修订）/ 本 req 实现设计文档（如存在——实现约束更新）/ 已 close 的 task PM 视图（产品事实变化记 `[quick-fix-log]`，task md 不改）/ `docs/modules/*` **不直接改**（留给 close-req → `/pmai-doc-update`） |
 | `requirements/active/<本req>/brief.md` 或 `analysis.md` | PM 必先分类（criterion 见下方）：决策性 → 拒绝走 `--rollback`；轻量 → 允许 + 扫下游产物链 |
 | `requirements/active/<本req>/prd.md` | 同上；决策性修订走 stage 3 `/pmai-prd-writing` revise；下游 task-plan / 已 close task md 引用是否要更新 |
 | 已 close task 的 `task-NNN-*.md` / `.engineering.md` | **不改**（历史档案）；产品事实变化记 `[quick-fix-log]` |
@@ -193,7 +193,7 @@ Runtime 不支持时按 `_shared/pm-view/askuser-rules.md §1.3` 退化编号列
 当前合同（被改动撤销/修订时必须同步，扫描必扫）：
 - 项目级活合同：docs/{PROJECT, DESIGN, modules, prd}.md
 - 各 active req 的 stage 3 需求方案：prd.md（在飞旧 req 仍可能是 solution.md + solution.engineering.md）
-- 项目代码：prototypes/
+- 项目代码：prototype/
 
 历史档案（修订是叙述维护，不强制反向扫；**但需追加可见的「后期修订记录」节**）：
 - closed req 产出（含其内的 tasks/）：`requirements/closed/**`（包括 `requirements/closed/<closed-req>/tasks/*.md`）—— **仅在 main 分支跑 quick-fix 时适用**

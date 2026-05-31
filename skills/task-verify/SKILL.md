@@ -81,7 +81,7 @@ VERIFY_DIR="$TASK_WORKTREE/.pm-workflow/tasks/$TASK_STEM/verify"
 mkdir -p "$VERIFY_DIR"
 
 if [ ! -d "$TASK_WORKTREE" ]; then
-  echo "❌ task 隔离副本不存在：$TASK_WORKTREE（先跑 /pmai-task-confirm 备好）" >&2
+  echo "❌ task 隔离副本不存在：${TASK_WORKTREE}（先跑 /pmai-task-confirm 备好）" >&2
   exit 1
 fi
 ```
@@ -210,6 +210,23 @@ BASE_URL = $BASE_URL；截图目录 = $VERIFY_DIR；通过流程截图存 flow-N
 
 ❌ FAIL — 流程 2 未通过。请修复"错误密码"路径的错误提示后重跑。
 ```
+
+### 步骤 6.5：写 audits/behavior.json（build 三道审消费的机器结果）
+
+行为审是三道审里**唯一确定性的一道**（客观 pass/fail + 计数），所以它自己产机器结果、不靠 build 流程事后转换（否则 build-audits synthesize 会因缺 `behavior.json` fail-loud 卡住正常 UI task）。写到 `audits/`（与 `verify/` 同级，build-audits 读这里）：
+
+```bash
+AUDIT_DIR="$TASK_WORKTREE/.pm-workflow/tasks/$TASK_STEM/audits"
+mkdir -p "$AUDIT_DIR"
+# STATUS=pass|fail|skipped（全过=pass / 有 fail=fail / 非 UI=skipped）；PASSED/TOTAL = 步骤 6 的 M/N；NOTE 一句话
+python3 -c '
+import json, sys
+json.dump({"status": sys.argv[2], "passed": int(sys.argv[3]), "total": int(sys.argv[4]), "note": sys.argv[5]},
+          open(sys.argv[1], "w", encoding="utf-8"), ensure_ascii=False)
+' "$AUDIT_DIR/behavior.json" "$STATUS" "$PASSED" "$TOTAL" "$NOTE"
+```
+
+非 UI（步骤 1 自测说明段写"无"）：`STATUS=skipped PASSED=0 TOTAL=0`，仍写 behavior.json。
 
 ### 步骤 7：返回 pass / fail
 

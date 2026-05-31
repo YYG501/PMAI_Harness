@@ -66,11 +66,11 @@ derive_base_port() {
   local repo_root="$1"
 
   python3 -c "
-import hashlib, os
-project_path = os.path.realpath('$repo_root')
+import hashlib, os, sys
+project_path = os.path.realpath(sys.argv[1])
 h = int(hashlib.md5(project_path.encode()).hexdigest(), 16)
 print(3000 + (h % 7000))
-" 2>/dev/null || echo "3000"
+" "$repo_root" 2>/dev/null || echo "3000"
 }
 
 derive_task_port() {
