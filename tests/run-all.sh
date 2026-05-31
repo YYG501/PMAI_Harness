@@ -38,6 +38,7 @@ SUITES=(
   test-checks-diff.sh
   test-build-audits.sh
   test-stage-source-helper.sh
+  test-state-lib.sh
   test-attachments-helper.sh
   test-close-task.sh
   test-worktree-lock.sh
