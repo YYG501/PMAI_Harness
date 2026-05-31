@@ -20,6 +20,8 @@ PM-AI-Workflow 生成器仓的演进记录。本文件**只记影响下游业务
 
 ### PMAI 重构落地（office-hours 收敛）—— 进行中
 
+- `docs(skills+tests)`: **收 task-plan SKILL 三处「产范围清单」误导措辞**（description / When To Use / 「task 是什么」）。根因：task-plan 实际产物是 task 拆分（task 列表 + 执行顺序 + GAP 映射），其模板里**没有「范围清单」节**，但 SKILL 措辞写成「产/细化范围清单」，让它看起来和 new-req 的 `req-plan.md`（范围清单 WHAT + 决策页 WHY）职责重叠；且自称「它产的范围清单是覆盖审计锚点」与真相源 `input-flow.md`（覆盖审计对照 **req-plan** 范围清单，build spike 已实证）冲突。改为「承接 req-plan 范围清单、拆成可验收 task 单元」，明确锚点归 req-plan、本 skill 不另产、不复制。连带修 `test-implementation-design.sh:43` 注释「task-plan 的 req-plan.md」→「new-req 产的 req-plan.md」（req-plan 是 new-req 的产物，非 task-plan）。**纯措辞 + 注释，零功能改动**，test-task-plan 8/8、test-implementation-design 4/4 零回归。
+
 - `fix(scripts+skills+templates)`: **第二轮 gstack-review 修复（四源交叉：手工 + 2 Claude agent + Codex 跨模型）**——验收 `reshape-office-hours` 全工作产出，修一批绿网测不到的完整性缺口。基线 572 → **572 全绿**（断言 1:1 替换、用例数不变）。
   - **prototype/ 改名收尾**（设计 §3「收敛为单一 prototype/ 升一等概念」，复数残留是 blast-radius 漏扫）：`init-project.sh` `mkdir prototypes` → `prototype`（单数，对齐 build-audits / check-branch / 所有 SKILL）；`check-branch.sh` GATE 4 删 `req-*) prototypes/*) deny`（**PM 拍**，对齐 D10：轻 / 文档 task 不 fork、在 req worktree 直接改原型——旧拦截前提「所有原型改动走 task 分支」六步后不成立，且死守复数路径=对真路径 `prototype/*` 永不触发）；`quick-fix` 反向同步表 / `cross-skill.md` / `writing-rules.md` 的 `prototypes/` → `prototype/`。
   - **build-audits 接线缺口**（Codex 抓）：`build-audits.py:_dev_ports` 加 YAML block-list 解析（`pm-workflow.config.yml.tmpl` 默认就是 block list，旧版只认 inline `[...]` → 默认配置解析成空端口、resolve fail-loud）；`task-verify/SKILL.md` 新增步骤 6.5 **自己写** `audits/behavior.json`（确定性产物；原靠 build 流程事后转换、无确定性生产者 → synthesize 缺它 fail-loud 卡正常 UI task）；`build-audits.py` 加 `_validate_audit_shapes`（畸形 audit 数组 fail-loud 点名哪道、不抛裸 AttributeError）。

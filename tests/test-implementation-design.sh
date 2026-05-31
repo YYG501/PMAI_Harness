@@ -40,7 +40,7 @@ test_skill_is_build_background_helper() {
     # 这是契约规则 3「旧机制被砍的断言连测试一起迁/删」。新断言改查降后台语义。
     _has "$SKILL" "不产正式" || { _fail "skill 未声明「不产正式文档」降后台性质"; ok=0; }
     grep -q "DESIGN.md" "$SKILL" || { _fail "skill 输入未含 DESIGN.md 组件 inventory"; ok=0; }
-    # 产品口径实现文档（范围清单 + 决策页）的家是 task-plan 的 req-plan.md，本 skill 应指过去
+    # 产品口径实现文档（范围清单 + 决策页）的家是 new-req 产的 req-plan.md，本 skill 应指过去
     _has "$SKILL" "req-plan" || { _fail "skill 未把产品口径实现文档指向 task-plan/req-plan"; ok=0; }
     # /pmai-next 驱动（接管被砍的 req-stage-gate 推进）
     _has "$SKILL" "/pmai-next" || { _fail "skill 未由 /pmai-next 驱动"; ok=0; }

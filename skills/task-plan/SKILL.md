@@ -1,15 +1,15 @@
 ---
 name: pmai-task-plan
 description: |
-  范围确认阶段产/细化范围清单：读项目脊柱（PRODUCT-STATE / DESIGN / 主原型）+ 本次 req-plan + 原型代码，把本次增量拆成 task。一个 task = PM 看 demo 确认方向的阶段单元（非工程 ticket、mode 中立）。按 $PMAI_HOME/skills/task-plan/templates/task-plan.md.tmpl 生成单一文件 task-plan.md（PM 视图 + 末尾轻量自检与状态摘要）。范围清单同时是 build 完覆盖审计的锚点。不生成具体 task 文档，不生成工程合同分文件。
+  承接 req-plan 范围清单、拆成可验收的 task 单元：读项目脊柱（PRODUCT-STATE / DESIGN / 主原型）+ 本次 req-plan + 原型代码，把本次增量拆成 task。一个 task = PM 看 demo 确认方向的阶段单元（非工程 ticket、mode 中立）。按 $PMAI_HOME/skills/task-plan/templates/task-plan.md.tmpl 生成单一文件 task-plan.md（task 列表 + 执行顺序 + 验收 GAP 映射 + 末尾轻量自检与状态摘要）。覆盖审计的锚点是 req-plan 范围清单（本 skill 承接它拆 task，不另产范围清单）。不生成具体 task 文档，不生成工程合同分文件。
 ---
 
 # /pmai-task-plan
 
 ## When To Use
 
-- 范围确认阶段、req-plan 拍板后产/细化范围清单时，由 `/pmai-next` 推进调用
-- 产出范围清单（页面 / 字段 / 按钮 / tab / 状态 / 做不做）= build 完覆盖审计的锚点 + 决策页
+- 范围确认阶段、req-plan 拍板后把范围拆成 task 时，由 `/pmai-next` 推进调用
+- 承接 req-plan 范围清单（页面 / 字段 / 按钮 / tab / 状态 / 做不做）→ 拆成可在原型上逐个验收的 task。范围清单 + 决策页是 `req-plan.md` 的产物（new-req 产、PM 拍板）；覆盖审计对照 req-plan 范围清单，本 skill 不另产、不复制
 
 ## task 是什么（先对齐心智）
 
@@ -17,7 +17,7 @@ description: |
 
 - 它不是工程 ticket，不绑某种实现 mode（原型草图 / 真系统都走同一个 task 边界）。
 - 它承接「范围确认」里 PM 拍板的范围清单，把「这次要做哪些页面 / 字段 / 按钮 / tab / 状态 / 哪些明确不做」细化成一条条可在原型上验收的功能单元。
-- 它产出的范围清单，build 完会被覆盖审计逐条对照原型代码（做没做、做全没做），所以拆 task 时清单要写到「PM 看得出有没有漏」的颗粒度。
+- 它承接的 req-plan 范围清单，build 完会被覆盖审计逐条对照原型代码（做没做、做全没做），所以拆 task 时要保证每条范围都落到某个 task、颗粒度到「PM 看得出有没有漏」。
 
 ## PM 视图规则（必读）
 
