@@ -139,7 +139,7 @@ T1="$(now_ms)"
 
 if ! (
   cd "$TARGET_DIR"
-  bash $HOME/.pmai/scripts/create-req-headless.sh \
+  bash "$FRAMEWORK_ROOT/scripts/create-req-headless.sh" \
     --title "$REQ_TITLE" \
     --brief "$REQ_BRIEF"
 ) >"$REQ_JSON" 2>"$REQ_LOG"; then
@@ -150,7 +150,7 @@ T2="$(now_ms)"
 
 if ! (
   cd "$TARGET_DIR"
-  python3 $HOME/.pmai/scripts/status-view.py
+  python3 "$FRAMEWORK_ROOT/scripts/status-view.py"
 ) >"$STATUS_LOG" 2>&1; then
   cat "$STATUS_LOG" >&2
   exit 1

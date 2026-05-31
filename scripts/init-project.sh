@@ -90,15 +90,19 @@ esac
 
 # 框架源路径解析顺序：
 #   1. PMAI_HOME 环境变量（pmai install 后用，或 /pmai-init-project skill 显式传）
-#   2. ~/.pmai/（pmai install 默认位置）
-#   3. cd "$(dirname "$0")/.."（fallback：本仓内直接 bash scripts/init-project.sh 时）
+#   2. cd "$(dirname "$0")/.."（本仓 / ~/.pmai 内直接 bash scripts/init-project.sh 时）
+#   3. ~/.pmai/（pmai install 默认位置兜底）
+SELF_FRAMEWORK_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 if [ -n "${PMAI_HOME:-}" ] && [ -f "$PMAI_HOME/templates/CLAUDE.md.tmpl" ]; then
   FRAMEWORK_DIR="$PMAI_HOME"
+elif [ -f "$SELF_FRAMEWORK_DIR/templates/CLAUDE.md.tmpl" ]; then
+  FRAMEWORK_DIR="$SELF_FRAMEWORK_DIR"
 elif [ -f "$HOME/.pmai/templates/CLAUDE.md.tmpl" ]; then
   FRAMEWORK_DIR="$HOME/.pmai"
 else
-  FRAMEWORK_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+  FRAMEWORK_DIR="$SELF_FRAMEWORK_DIR"
 fi
+export PMAI_HOME="$FRAMEWORK_DIR"
 
 # --- 0. 位置 sanity check（DX I2）---
 # FRAMEWORK_DIR 必须含 templates/CLAUDE.md.tmpl + skills/init-project + scripts/inject-structure-segment.py
