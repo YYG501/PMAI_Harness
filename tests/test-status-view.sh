@@ -75,7 +75,7 @@ test_skill_preamble_detects_v3_active_task() {
   start_test "skill-preamble: v3 task-card 状态能导出 ACTIVE_TASK"
   fixture_setup
 
-  req_dir=$(fixture_create_req "req-001" "test" 6)
+  req_dir=$(fixture_create_req "req-001" "test" 2)
   fixture_create_task_v3 "$req_dir" "001" "impl" "执行中" "/qa" >/dev/null
   req_wt="$FIXTURE_DIR/.worktrees/req-001-test"
 
@@ -131,10 +131,10 @@ _write_task_plan() {
 }
 
 test_stage6_partial_spec_does_not_claim_all_done() {
-  start_test "S-PLAN1 stage 6: plan has 4 tasks but only task-001 spec'd & done → should not claim all done"
+  start_test "S-PLAN1 stage 2 build: plan has 4 tasks but only task-001 spec'd & done → should not claim all done"
   fixture_setup
 
-  req_dir=$(fixture_create_req "req-001" "test" 6)
+  req_dir=$(fixture_create_req "req-001" "test" 2)
   _write_task_plan "req-001-test" \
     "task-001" "登录主流程" \
     "task-002" "权限提示" \
@@ -150,8 +150,8 @@ test_stage6_partial_spec_does_not_claim_all_done() {
     fixture_teardown
     return
   fi
-  if ! echo "$out" | grep -q "task-spec task-002"; then
-    _fail "expected hint to /pmai-task-spec task-002. Output:"
+  if ! echo "$out" | grep -q "build task-002"; then
+    _fail "expected hint to build task-002 (六步 /pmai-next 驱动). Output:"
     echo "$out" >&2
     fixture_teardown
     return
@@ -167,10 +167,10 @@ test_stage6_partial_spec_does_not_claim_all_done() {
 }
 
 test_stage6_all_planned_specced_and_done_claims_all_done() {
-  start_test "S-PLAN2 stage 6: plan == specced && all done → claim all done"
+  start_test "S-PLAN2 stage 2 build: plan == specced && all done → claim all done"
   fixture_setup
 
-  req_dir=$(fixture_create_req "req-001" "test" 6)
+  req_dir=$(fixture_create_req "req-001" "test" 2)
   _write_task_plan "req-001-test" \
     "task-001" "登录" \
     "task-002" "退出"
@@ -190,10 +190,10 @@ test_stage6_all_planned_specced_and_done_claims_all_done() {
 }
 
 test_stage6_v2_engineering_file_not_counted_as_task() {
-  start_test "S-PLAN2b stage 6: v2 engineering companion is not counted as a task"
+  start_test "S-PLAN2b stage 2 build: v2 engineering companion is not counted as a task"
   fixture_setup
 
-  req_dir=$(fixture_create_req "req-001" "test" 6)
+  req_dir=$(fixture_create_req "req-001" "test" 2)
   _write_task_plan "req-001-test" \
     "task-001" "双文件任务"
   fixture_create_task_v2 "$req_dir" "001" "dualfile" "已完成" "/qa" >/dev/null
@@ -217,10 +217,10 @@ test_stage6_v2_engineering_file_not_counted_as_task() {
 }
 
 test_stage6_no_plan_file_falls_back_to_legacy() {
-  start_test "S-PLAN3 stage 6: no task-plan.md → original behavior (all done if specced all done)"
+  start_test "S-PLAN3 stage 2 build: no task-plan.md → original behavior (all done if specced all done)"
   fixture_setup
 
-  req_dir=$(fixture_create_req "req-001" "test" 6)
+  req_dir=$(fixture_create_req "req-001" "test" 2)
   fixture_create_task "$req_dir" "001" "only" "已完成" "/qa" >/dev/null
   (cd "$FIXTURE_DIR/.worktrees/req-001-test" && git add -A && git commit -q -m "add task")
 
@@ -236,10 +236,10 @@ test_stage6_no_plan_file_falls_back_to_legacy() {
 }
 
 test_stage6_discarded_task_is_excluded_from_pending() {
-  start_test "S-PLAN4 stage 6: task in tasks/discarded/ is excluded from 待 spec"
+  start_test "S-PLAN4 stage 2 build: task in tasks/discarded/ is excluded from 待 spec"
   fixture_setup
 
-  req_dir=$(fixture_create_req "req-001" "test" 6)
+  req_dir=$(fixture_create_req "req-001" "test" 2)
   _write_task_plan "req-001-test" \
     "task-001" "kept" \
     "task-002" "discarded" \
@@ -263,10 +263,10 @@ test_stage6_discarded_task_is_excluded_from_pending() {
 }
 
 test_stage6_does_not_match_task_id_in_change_log() {
-  start_test "S-PLAN5 stage 6: ## 变更记录 mentions of task-id are not matched as planned"
+  start_test "S-PLAN5 stage 2 build: ## 变更记录 mentions of task-id are not matched as planned"
   fixture_setup
 
-  req_dir=$(fixture_create_req "req-001" "test" 6)
+  req_dir=$(fixture_create_req "req-001" "test" 2)
   # Hand-write plan: only task-001 in the table; ## 变更记录 mentions a fake task-009
   plan="$req_dir/task-plan.md"
   cat > "$plan" <<'EOF'
@@ -282,7 +282,7 @@ EOF
   (cd "$FIXTURE_DIR/.worktrees/req-001-test" && git add -A && git commit -q -m "add plan and task")
 
   out=$(_run_status "$FIXTURE_DIR")
-  if echo "$out" | grep -q "task-spec task-009"; then
+  if echo "$out" | grep -q "build task-009"; then
     _fail "task-id in 变更记录 should NOT be treated as un-spec'd. Output:"
     echo "$out" >&2
     fixture_teardown

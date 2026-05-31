@@ -36,10 +36,12 @@ SUITES=(
   test-req-transition.sh
   test-migrate-reqs.sh
   test-checks-diff.sh
+  test-build-audits.sh
   test-stage-source-helper.sh
   test-attachments-helper.sh
   test-close-task.sh
   test-worktree-lock.sh
+  test-executors.sh
   test-close-task-design-feedback.sh
   test-close-task-alignment.sh
   test-task-md-ownership.sh
@@ -48,7 +50,6 @@ SUITES=(
   test-cancel-req.sh
   test-symlink-prd.sh
   test-status-view.sh
-  test-speed-mode.sh
   test-roadmap-guidance.sh
   test-new-req-no-arg-prompt.sh
   test-docs-archive-convention.sh

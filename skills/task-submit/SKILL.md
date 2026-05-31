@@ -194,10 +194,10 @@ python3 "$PMAI_HOME/scripts/task-transition.py" "<task-file>" --to 已完成
 ```text
 ✅ task-NNN 状态已转「已完成」。
 
-下一步：在本（task）窗口运行：
+下一步：在当前窗口运行：
   /pmai-close-task task-NNN
 
-这次收尾在当前窗口做完（文档对齐 + 视觉规范沉淀），完成后会提示你切到 req 窗口再跑一次 /pmai-close-task 做清理。
+收尾在单个窗口一气跑完（文档对齐 + 视觉规范沉淀 + 合并主原型 + 清理 worktree），不切窗口、不分两阶段。
 ```
 
 **PM 选 `退回`**（或输 `2` / 提具体反馈 / 输 "退回 / 改一下 / 不对"）：
@@ -230,5 +230,5 @@ python3 "$PMAI_HOME/scripts/task-transition.py" "<task-file>" --to 已完成
 - PM 的反馈原话记录，不要改写
 - 退回**不走 transition**（task 状态保持「执行中」），只写反馈到 task 文件「📁 历史档案 → PM 反馈」（审计区 / 旧双文件 task 写 PM 视图）+ AI 改代码 + 追加 fix commit
 - UI 类 task 的 dev server 应该还在运行，确认 URL 可访问
-- 验收 / 打磨都在当前 task worktree 窗口完成；PM 拍「通过」后转「已完成」，并提示 PM 在本（task）窗口跑 `/pmai-close-task task-NNN`（close-task 两段：先在 task 窗口对齐 + commit，再切到 req 窗口 merge + 清理）
+- 验收 / 打磨都在 PM 当前窗口完成；PM 拍「通过」后转「已完成」。默认路径下 task-execute 已自动接 close-task 收尾链（单窗口）；本兜底入口被手动调用时，提示 PM 在当前窗口跑 `/pmai-close-task task-NNN`（单窗口一气跑完对齐 + 合并 + 清理，不切窗口、不分两阶段）
 - 推荐 review 仅作验收信息块末尾的「⚙️ 可选深度审查」辅助提示，PM 自取所需；AI 不得自动跑（I-RV1）；PM 报告结果后才 append 事件（I-RV3）

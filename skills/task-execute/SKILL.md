@@ -469,9 +469,17 @@ AI 在「自审记录」section 追加一条 commit 前 placeholder（提供 tas
 
 ### 步骤 7.3：建完三道审（覆盖审计 + 视觉门 + 行为审，合成一份给 PM）
 
-六步「建」完，AI **自动**跑三道机器审。三道审抓三种不同的病，复用同一次 dev server 起停（别各起各的）。最后 AI 把三份结果**合成一段给 PM 看**（不是三段堆给 PM）。
+六步「建」完，AI **自动**跑三道机器审。三道审抓三种不同的病，复用同一次 dev server 起停（别各起各的）。最后**合成一份给 PM 看**（不是三段堆给 PM）。
 
 > **顺序与边界**：覆盖审计是静态读码 diff（不需要 dev server）→ 先跑；视觉门 + 行为审都需要 dev server（步骤 4 已起，没起则起一次复用）。三道审**只报不改**（除 task-verify fail 进反馈循环修代码外），是给 PM 看的证据，不替 PM 拍板。
+
+**编排由 `build-audits.py` 固化**（防漏跑一道 / 各起 dev server / 不合成）。覆盖审计是 agent、视觉门是 gstack skill —— 这两道仍由本 skill 用 Agent / Skill 工具调起（脚本没法当子进程调 LLM）；脚本管「校验输入 + 收齐三道结果 + 合成 + 门禁」：
+
+```bash
+# 7.3 开头：校验输入（范围清单 / prototype / dev 端口），建 audits/，打印三道 manifest（每道把规范化结果写哪）
+python3 "$PMAI_HOME/scripts/build-audits.py" resolve "$TASK_FILE"
+# 缺输入会 fail-loud（如范围清单没产 → 覆盖审计无锚点）；按 manifest 跑 7.3a/b/c，各写 audits/<道>.json
+```
 
 #### 7.3a 覆盖审计（coverage-reviewer agent，白纸新鲜视角）
 
@@ -479,6 +487,7 @@ AI 在「自审记录」section 追加一条 commit 前 placeholder（提供 tas
 
 - 这是**独立新鲜视角**审计（对标 `analysis-reviewer`），不是 AI 自审 —— 故意不让建代码的 AI 同时当审计员，避开自审盲区。
 - 输出三类：✅ 建了 / ❌ 丢了（范围清单有、代码没建）/ ⚠️ 降级占位（建了但是空壳 / 假数据 / 交互没接）。
+- **把 agent 结果规范化写** `audits/coverage.json`：`{"items":[{"name","status":"built|missing|degraded","note"}]}`（路径见 resolve manifest）。
 - 「丢了」「降级占位」条目进步骤 7.3d 合成报告，由 PM 在体验迭代里决定是否补。
 
 #### 7.3b 视觉门（gstack `/design-review`，只截图不改）
@@ -487,7 +496,7 @@ AI 在「自审记录」section 追加一条 commit 前 placeholder（提供 tas
 
 - **只跑审计 + 截图，不自动跑修复 Loop** —— 出口是 PM 一句话 pass / 打回（保住 PM 拍板点）。AI 不替 PM 改视觉。
 - 用 `/browse`（headless），禁 `mcp__claude-in-chrome__*`。
-- 视觉门 finding（间距 / 层级 / 配色不一致 / AI slop 等）进合成报告。
+- 视觉门 finding（间距 / 层级 / 配色不一致 / AI slop 等）进合成报告；**规范化写** `audits/visual.json`：`{"findings":[{"severity":"P0|P1|P2","desc"}]}`（无不一致写 `{"findings":[]}`）。
 
 #### 7.3c 行为审（验收流程驱动 `/browse`，确定性路径）= 步骤 7.5 task-verify
 
@@ -495,10 +504,19 @@ AI 在「自审记录」section 追加一条 commit 前 placeholder（提供 tas
 
 - 区别于 `/qa` 的 AI 探索：行为审是**确定性**走 PM 拍板的流程（明确 pass/fail），每 build 自动跑。
 - `/qa` 的 AI 探索式找 bug 是 PM **可选手动**跑的旁路（见附录），AI 不自动跑。
+- task-verify 跑完后**规范化写** `audits/behavior.json`：`{"status":"pass|fail|skipped","passed":int,"total":int,"note"}`（镜像 task-verify 的 pass/fail + 流程计数；非 UI task = `skipped`）。
 
 #### 7.3d 合成一份给 PM + 体验迭代（AI 主动批量 flag、PM 勾改）
 
-三道审跑完，AI **合成一段**给 PM（覆盖审计的「丢了 / 降级占位」+ 视觉门的不一致 finding + 行为审的 fail 项 + AI 自己看出来的问题），用 PM 听得懂的话**主动批量列出建议改的项**，让 PM 勾哪些改：
+三道结果都规范化写进 `audits/` 后，**调脚本合成**（确定性校验三道齐全，漏跑会 fail-loud 把缺的那道点出来——挡住「漏跑一道还往下走」）：
+
+```bash
+python3 "$PMAI_HOME/scripts/build-audits.py" synthesize "$TASK_FILE"
+# 产出 audits/synthesis.md（PM 一页报告：覆盖/视觉/行为 + 建议改的项 + gate=clean|needs-review）
+# + stdout 机器 summary（各道计数 + gate）
+```
+
+AI 把 `synthesis.md` 用 PM 听得懂的话呈给 PM（可加一句 AI 自己看出来、三道审没覆盖的问题），**主动批量列出建议改的项**，让 PM 勾哪些改：
 
 ```
 建完自查（task-NNN）：

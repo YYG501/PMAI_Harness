@@ -316,7 +316,7 @@ AskUserQuestion：
 #### 1.5.0 前置检查（DESIGN.md 不存在 fallback）
 
 ```bash
-DESIGN_MD="$MAIN_REPO_ROOT/docs/DESIGN.md"
+DESIGN_MD="$REPO_ROOT/docs/DESIGN.md"
 if [ ! -f "$DESIGN_MD" ]; then
   echo "ℹ️  $REPO_ROOT/docs/DESIGN.md 不存在，跳过视觉规范沉淀。"
   # 直接进入步骤 2
@@ -366,7 +366,7 @@ AskUserQuestion：
 
 **子类 ② / ③：默认 promote（不问 PM）**
 - 读 `docs/DESIGN.md` 章节结构（`grep '^## \|^### \|^#### ' docs/DESIGN.md`）按子类定位对应段：
-  - ② → 视觉基线段（`## Aesthetic Direction` / `## Color` / `## Typography` 等）
+  - ② → 视觉基线段。DESIGN.md 有两种合法结构：gstack `design-consultation` 写的是 `## Aesthetic Direction` / `## Color` / `## Typography` / `## Spacing` / `## Layout` / `## Motion`；项目用框架模板手填的则是单节 `## 一、视觉基调`。**按 grep 出的实际结构定位**：命中 gstack 英文细分段就 patch 对应那个；否则 patch 进 `## 一、视觉基调` 这一节；两者都没有再在视觉基线段尾 append。
   - ③ → `## 共享组件 inventory` 表行
 - AI 用 Edit patch（**不 commit**）
 
@@ -392,7 +392,7 @@ AskUserQuestion：
 #### 1.6.1 前置检查
 
 ```bash
-PRODUCT_RULES_MD="$MAIN_REPO_ROOT/docs/PRODUCT-RULES.md"
+PRODUCT_RULES_MD="$REPO_ROOT/docs/PRODUCT-RULES.md"
 if [ ! -f "$PRODUCT_RULES_MD" ]; then
   echo "ℹ️  docs/PRODUCT-RULES.md 不存在，跳过跨功能规则沉淀。"
   # 直接进入步骤 2

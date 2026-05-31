@@ -11,14 +11,27 @@
 
 ---
 
-## 当前位置（2026-05-29）
+## 当前位置（2026-05-31）
 
-**2026-05-29 — PMAI 重构方向（office-hours 收敛）：方案定盘、未实施**（PM 跑 `/gstack-office-hours` 诊断"框架用着不顺、出的第一版原型不如直接给 AI"；全程取证 + 5 视角对抗审 + 真实 A/B spike 收敛出重构方向。**这是方向性反转、范围远超单个 feature**）：
+**2026-05-31 — gstack-review 审 `reshape-office-hours` 全工作产出 + 修复**（PM 调 `/gstack-review`：5 specialist 并行 + Codex 跨模型对抗审，多源交叉确认）：
+
+- **审出 4 个 P0（破坏 reshape 头号特性）+ 5 P1 + 6 P2，全部修复；后按 PM 授权处理 5 个 deferred 项。基线 543 → 579 →（退役 speed mode 删 14）565 →（build-audits +7）572/0**：
+  - P0-1 沉淀死路：`close-req.sh` stage 门卡 `!= "7"`（六步沉淀=4）→ 永远关不掉 → 改 4 + fixture。
+  - P0-2 脊柱没建：`init-project.sh` template case 默认 `*) continue` 跳过 PRODUCT-STATE/DESIGN → 补 case 铺到 `docs/`。
+  - P0-3 外部执行器全崩：`_gate.sh` `$MAIN_REPO_ROOT/$HOME` 路径翻倍 + `$transition_py）` set-u unbound → BASH_SOURCE 解析 + `${}` + test-executors 进 run-all。
+  - P0-4 迁移锁死旧 stage-4 active：no-op 跳过 + active stage∈{3,4} 歧义警告。
+  - P1/P2：脊柱读路径 docs/ 前缀 + `$MAIN_REPO_ROOT`→`$REPO_ROOT` / task-plan.md.tmpl 六步对齐 / 多窗口 prose 收单窗口 / checks-diff 路径穿越+畸形+假无差异 / discard worktree 路径问 git / lock 失败告警 / status-view suggest_next_action 转六步。
+- **复盘沉淀** memory `feedback_stage_refactor_review_blast_radius`（SKILL prose 改≠落地；审 stage 重构必查底层 .sh stage 门 + fixture + init case + 共享 gate）。
+- **deferred 项（PM 授权 AI 判断后处理）**：① 退役 speed mode 子系统（坍缩后驱动 req-stage-gate 编排已删 → 残件 stage6_summary/--stage6-entry/决策类型列/test-speed-mode 全死，已清）② close-task ② 视觉段定位容错两种 DESIGN 结构（gstack 英文段 / 模板中文「一、视觉基调」）③ prototype-README 改 create-next-app 之后写（避目录冲突）④ deliverables-INDEX 确认已 lazy 创建、不改 ⑤ **build 三道审脚本级编排落地**（PM 让继续后做）：新增 `scripts/build-audits.py`（resolve 校验输入 + synthesize 收齐三道 + 合成 + 门禁），接线进 task-execute 步骤 7.3，回归 7 例。**剩真 req build spike 端到端验证**。
+
+---
+
+**2026-05-29 — PMAI 重构方向（office-hours 收敛）：方案定盘 → 已落地**（PM 跑 `/gstack-office-hours` 诊断"框架用着不顺、出的第一版原型不如直接给 AI"；全程取证 + 5 视角对抗审 + 真实 A/B spike 收敛出重构方向。**这是方向性反转、范围远超单个 feature**）：
 
 - **核心**：砍 7-stage 固定流水线 + 每段全文确认门 → 坍缩成**六步**（①上下文脊柱 ②范围确认 ③栈内 build ④三道审 ⑤体验迭代 ⑥沉淀）；想 / 建原型交 Claude Code 在栈内直连、零录入，PMAI 缩成**上下文脊柱 + 范围确认 + 沉淀**层。
 - **真相源**：方向 = `docs/设计/PMAI重构方向-office-hours收敛.md`（§2.3.1 范围确认 / §2.3.2 复审沉淀 / 两不变量 / 证据 / 决议日志）；落地 = `docs/设计/PMAI重构-实施清单.md`（skill 去留 / gstack 接入 / worktree / 基础设施 / **D1-D10 全拍定** / §7 新 scope）；决策快照 memory `project_pmai_reshape_direction`。
 - **关键决策（全 PM 拍板）**：D1 六步反转 · D2 task 降后台留名（mode 中立）· D3 PRODUCT-STATE = 现状层 hub · D4 实现深度 mode 按层挂靠（复用现成 `工程结构约束-{prototype,system,custom}`）· D5 prototype 默认 Next.js+shadcn · D6 实现文档 = per-req `req-plan.md` · D8 worktree 自动托管早上 + spike · 附件机制保留 + rewire · §7（站点爬·对齐线上·覆盖审计 checks-JSON·产物层 deliverables）。
-- **状态**：方案纯设计；落地已起步（见下「重构落地进度」）。**测试基线 548 / 0**（实跑发现比旧记的 525/2 高且全绿，旧数字已过期，以此为准）。
+- **状态**：落地大体完成（六步引擎 + 22 skill 级联 + 执行器可插拔 + 并行 build/worktree lock + checks-diff 引擎 + 旧 req 迁移 + §7.A/B/C/D 全提交）。**2026-05-31 gstack-review 审当前分支全工作产出，审出并修 4 个 P0 + 全部 P1/P2**（见下「2026-05-31」段）。**测试基线 572 / 0**（旧记 533/548/525/579/565 全过期，以此为准）。
 
 **重构落地进度（branch `reshape-office-hours`）**：
 - ✅ 阶段1 增量脊柱：`PRODUCT-STATE.md.tmpl` / `req-plan.md.tmpl` / `DESIGN.md.tmpl` / `prototype-README.md.tmpl` 模板 + `coverage-reviewer` agent（均已提交、548 绿、尚未接线）
@@ -27,10 +40,12 @@
 - ✅ **#9 六步坍缩引擎**（411b568）：`stages.py` 7-stage→四阶段（1 范围确认/2 build/3 复审/4 沉淀）+ `req-transition.py` 重写（MAX_STAGE=4、删 stage-4 跳过/prd-solution 前置/stage6-7 回退）+ 迁 3 测试套（删 8 个 7-stage 独有用例），**548→540 全绿、已提交**
 - ✅ **#10 六步级联**（17710cd，workflow 19 agent + 收口）：砍 req-stage-gate→壳 / 新建 `skills/next` (/pmai-next 驱动) / 降后台 6 / 改造 7（init·new-req·task-plan·task-execute·task-status·close-req·prd-writing）/ 合并 2 / _shared 同步；迁删钉旧机制测试。**540→533 全绿、已提交**
 - ✅ **#3 init-project / #4 new-req / #6 入口收敛+next**：随级联落地
-- ⏳ **余下未做**：#5 藏显示 banner/status 转**完整产品轴**（现 /7→/4 半步）；#7 砍冗余剩余（req-stage-gate 已砍，其余纯过程税）；attachments.py 的 stage_prefix→req-plan rewire（skill prose 已指、helper 未动）；build 三道审的**脚本级接线**（prose 已写、coverage-reviewer/browse 编排未脚本化）
+- ✅ **已补**：attachments stage_prefix→req-plan rewire（helper 已动）；status-view `suggest_next_action` 转六步产品轴；banner `/{MAX_STAGE}`；§7.A/B/C/D。
+- ✅ **build 三道审脚本级编排**：`scripts/build-audits.py`（resolve + synthesize）已固化「校验输入 + 收齐三道 + 合成一份 + 门禁」，接线进 task-execute 步骤 7.3（覆盖审计 agent / 视觉门 gstack skill 仍 LLM 调起，脚本管编排）。
+- ⏳ **余下未做（唯一）**：build 三道审 + 自动托管的**真 req build spike 端到端验证**（脚本编排 + coverage-reviewer/design-review/task-verify 产 conformant 结果 + dev server 复用 timing，在真实需求上跑一遍验闭环）。
 - ✅ **阶段2 核心押注已验证**：A/B spike `ExampleAgentProject-pathB`（Next.js15+React19+17 组件栈内真构建），PM 判"整体相近、Claude Code 配 skill 能逼近"（方向稿 §X-C）。build 纪律机制（DESIGN 正向约束+三道审+coverage-reviewer）已在级联实现。**非 blocker**（一度误列已纠）
 - **#8 自动托管拆两半**：前半（自动建/merge/删省机械活）已 prose 化（task-confirm/close-task 降后台 + /pmai-next 驱动），端到端待真 req 跑；**后半（状态物化硬加固）防的 2026-04-22 并行多 task 串台，在六步顺序 demo 流程下大概率不复存在 → 先不做、并行多 task 才重启**（已记 TODOS v2）
-- **⚠️ 消费仓暂勿同步**（CHANGELOG 已标）：attachments stage_prefix rewire / 三道审脚本级编排 待补，旧 req 状态越界
+- **⚠️ 消费仓同步**：attachments rewire / CLAUDE.md.tmpl 六步重写 / 旧 req 迁移脚本（`migrate-reqs-to-6step.py`，含 active stage∈{3,4} 歧义警告）均已落地；剩 build 三道审脚本级编排待补；在飞旧 req 同步前先跑一次迁移脚本解越界（见 TODOS）
 - 详细任务看 TaskList（10 项完成 9，仅 #8 后半按判断"先不做"）
 
 ---
@@ -66,13 +81,13 @@
 
 ---
 
-**下一步（2026-05-29 起 — 重构落地）**：
+**下一步（2026-05-31 起）**：
 
-1. **`/plan-eng-review` 审重构落地顺序 + 风险**（方案大，动手前审最稳；重点盯：D8 自动托管 spike = 动 merge/删/residue + dispatch-clean 事故区 / 覆盖审计吸收 checks-JSON 的改造面 / 阶段 0「砍冗余」具体边界）。
-2. **阶段 0**（方向稿 §4）：砍冗余（工程双合同 / 同范围重复 / 琐碎 req 全套 / 机器废气 —— 稳赚独立、可立即动）+ worktree PM 视图隐藏 + 自动托管 spike + 入口收敛定方向（init / new-req / next / status）。
-3. 下一个真实 req 用新 build 路径（栈内 + design 约定 + 三道审 + 覆盖审计）当 **build spike**。
+1. **PM 审本批 review 修复 + 残留处理的 diff**（4 P0 + P1/P2 + 4 deferred 项；CHANGELOG 未发布段已记），满意后提交。
+2. **真 req build spike**：用新 build 路径（栈内 + DESIGN 约定 + `build-audits.py` 三道审编排）跑一个真实需求，端到端验证三道审产 conformant 结果 + dev server 复用 + 自动托管闭环（脚本已固化，差真 req 验证）。
+3. 消费仓同步：在飞旧 req 先跑 `migrate-reqs-to-6step.py` 解越界（按歧义警告手工确认 active stage 3/4 的 req）。
 
-**旧 speed mode 下一步（同步 ExampleConsumerApp + 端到端验收）= 暂缓**：7-stage 正被坍缩成六步，speed mode 是 7-stage 的优化，待重构阶段 0 落地后重估是否还需独立验收（不擅自废，PM 拍）。
+**旧 speed mode = 已退役**（2026-05-31，PM 授权判断）：7-stage 优化，坍缩后驱动 `req-stage-gate` 编排已删，残件（`stage6_summary.py` / `--stage6-entry` / 决策类型列 / `test-speed-mode.sh`）全清。
 
 ---
 
@@ -163,9 +178,9 @@
 
 ## 新窗口续接命令
 
-> 继续 PM-AI-Workflow。读 RUNTIME.md「当前位置」——**PMAI 重构方向（office-hours 收敛）方案已定盘**（两份设计文档 + memory `project_pmai_reshape_direction`，D1-D10 全拍定，**纯设计未实施**，基线仍 525/2）。下一步：`/plan-eng-review` 审落地 → 阶段 0（砍冗余 + 藏显示 + 自动托管 spike）。等 PM 给方向。
+> 继续 PM-AI-Workflow。读 RUNTIME.md「当前位置」——**PMAI 重构（office-hours 收敛）已大体落地**（六步引擎 + 22 skill 级联 + 执行器可插拔 + checks-diff + 迁移 + §7.A/B/C/D 全提交；2026-05-31 gstack-review 审出并修 4 P0 + P1/P2 + 处理 5 个 deferred 项：退役 speed mode、build 三道审脚本编排 `build-audits.py` 落地等）。**测试基线 572/0**。真相源：方向 `PMAI重构方向-office-hours收敛.md` / 落地 `PMAI重构-实施清单.md`（D1-D10 全拍定）+ memory `project_pmai_reshape_direction`。下一步看「下一步」段：审 review diff → 提交 → 真 req build spike 端到端验证（唯一余下项）。
 
 AI 收到后应该：
-1. 读本文件「当前位置」2026-05-29 段 + 两份设计文档（方向 `PMAI重构方向-office-hours收敛.md` / 落地 `PMAI重构-实施清单.md`）确认重构方案与所有 D 决策
-2. 等 PM 给具体方向：① 起 `/plan-eng-review` 审落地 ② 直接进阶段 0 砍冗余（稳赚独立）③ 别的事
-3. **不擅自动代码**——重构是纯设计态，改动前先确认走哪一步
+1. 读本文件「当前位置」2026-05-31 段（review 修复）+ 2026-05-29 段（重构方向）+ 两份设计文档确认现状与所有 D 决策
+2. 看「下一步」段决定做什么；review 修复的 diff 未提交（working tree 有改动），PM 要审 diff 才提交
+3. **改框架资产先看 CHANGELOG 未发布段**了解已落地的近期改动，避免重复/冲突

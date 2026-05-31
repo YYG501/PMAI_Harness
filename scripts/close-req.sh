@@ -3,7 +3,7 @@
 # 用法: bash scripts/close-req.sh <req-dir>
 # 前置条件：
 #   1. 在主仓 cwd（不在 req worktree 内）运行
-#   2. 该 req 下所有 task 已关闭，stage = 7
+#   2. 该 req 下所有 task 已关闭，stage = 4（六步「沉淀」= MAX_STAGE；close-req/SKILL.md Phase 1 已 --to 4）
 
 set -euo pipefail
 
@@ -39,8 +39,9 @@ REQ_ID=$(printf '%s' "$REQ_META_JSON" | python3 -c "import sys,json; print(json.
 REQ_STAGE=$(printf '%s' "$REQ_META_JSON" | python3 -c "import sys,json; print(json.load(sys.stdin).get('stage',''))")
 
 # --- 校验 stage ---
-if [ "$REQ_STAGE" != "7" ]; then
-  echo "❌ req 当前在 stage ${REQ_STAGE}，不是 stage 7。请先推进到 stage 7。" >&2
+# 六步：沉淀 = stage 4（MAX_STAGE）。/pmai-next 走到沉淀时 close-req/SKILL.md Phase 1 先 --to 4，再调本脚本。
+if [ "$REQ_STAGE" != "4" ]; then
+  echo "❌ req 当前在 stage ${REQ_STAGE}，不是 stage 4（沉淀）。请先推进到沉淀阶段（/pmai-next）。" >&2
   exit 1
 fi
 

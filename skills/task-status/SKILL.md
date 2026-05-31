@@ -55,11 +55,11 @@ python3 "$PMAI_HOME/scripts/status-view.py"
 
 - 扫到「待执行」状态且 worktree 已建的 task，输出：
   ```text
-  等待 PM 在新窗口启动（跑 /pmai-task-execute task-NNN）
+  发 /pmai-next 推进 build，AI 在当前窗口起这个 task 的 demo
   ```
 - 扫到「执行中」状态 task，输出：
   ```text
-  执行中：在对应 task 窗口实现 / 验收（可跑 /pmai-task-submit 重新查看呈交块）
+  执行中：AI 在当前窗口实现 / 等 PM 验收（可跑 /pmai-task-submit 重新查看呈交块）
   ```
 
 输出格式示例：
@@ -74,7 +74,7 @@ Task 状态：
   ✅ task-001 数据模型 — 已完成
   🔄 task-002 历史列表 — 执行中（实现中，最后活动：自审 - /qa pass）
   🔄 task-003 历史筛选 — 执行中（已 commit 待 PM 验收，可跑 /pmai-task-submit 看呈交块）
-  ⏳ task-004 历史导出 — 待执行：等待 PM 在新窗口启动（跑 /pmai-task-execute task-004）
+  ⏳ task-004 历史导出 — 待执行：发 /pmai-next 推进 build 起这个 task
 下一步：处理执行中 task，或发 /pmai-next 推进，或启动待启动 task
 ```
 

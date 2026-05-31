@@ -15,10 +15,13 @@ _setup() {
   T=$(mktemp -d)
   mkdir -p "$T/requirements/closed/req-001-old" \
            "$T/requirements/active/req-002-inflight" \
-           "$T/requirements/active/req-003-new"
+           "$T/requirements/active/req-003-new" \
+           "$T/requirements/active/req-004-design"
   echo '{"stage": 7, "stage_history": [{"stage":7}]}' > "$T/requirements/closed/req-001-old/.req-meta.json"
   echo '{"stage": 6, "stage_history": [{"stage":5},{"stage":6}]}' > "$T/requirements/active/req-002-inflight/.req-meta.json"
   echo '{"stage": 2, "stage_history": [{"stage":1},{"stage":2}]}' > "$T/requirements/active/req-003-new/.req-meta.json"
+  # 旧 7-stage 停在 stage 4（design）的 active req：数值不越界、无法与新六步沉淀(4) 区分 → 脚本不动、列歧义警告
+  echo '{"stage": 4, "status": "active", "stage_history": [{"stage":1},{"stage":2},{"stage":3},{"stage":4}]}' > "$T/requirements/active/req-004-design/.req-meta.json"
 }
 _teardown() { rm -rf "$T"; }
 _stage() { python3 -c "import json;print(json.load(open('$1'))['stage'])"; }
@@ -58,7 +61,7 @@ test_idempotent() {
   local out s7
   out=$(python3 "$MIGRATE" "$T" 2>&1)
   s7=$(_stage "$T/requirements/closed/req-001-old/.req-meta.json")
-  if echo "$out" | grep -q "没有需要迁移" && [ "$s7" = "4" ]; then
+  if echo "$out" | grep -q "没有需要" && [ "$s7" = "4" ]; then
     pass_test
   else
     _fail "幂等失败：out=$out s7=$s7"
@@ -76,9 +79,25 @@ test_dry_run_no_write() {
   _teardown
 }
 
+test_ambiguous_active_flagged() {
+  start_test "migrate: active 且 stage∈{3,4} 的旧 req 不动 + 列入歧义警告（P0-4）"
+  _setup
+  local out s4 m4
+  out=$(python3 "$MIGRATE" "$T" 2>&1)
+  s4=$(_stage "$T/requirements/active/req-004-design/.req-meta.json")
+  m4=$(_field "$T/requirements/active/req-004-design/.req-meta.json" migrated_from_7stage)
+  if [ "$s4" = "4" ] && [ -z "$m4" ] && echo "$out" | grep -q "歧义" && echo "$out" | grep -q "req-004-design"; then
+    pass_test
+  else
+    _fail "歧义未处理：s4=$s4(期4) migrated='$m4'(期空)，out 应含「歧义」+ req-004-design：$out"
+  fi
+  _teardown
+}
+
 test_remap_legacy
 test_marks_provenance
 test_idempotent
 test_dry_run_no_write
+test_ambiguous_active_flagged
 
 report_results "migrate-reqs"

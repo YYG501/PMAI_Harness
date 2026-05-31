@@ -668,10 +668,28 @@ test_cursor_agent_adapter_filled_model_passes_through() {
   teardown_sandbox
 }
 
-# 注：gemini.sh adapter 走与 cursor-agent.sh 逐字同构的路径（source _gate.sh →
-# adapter_precheck → CLI → adapter_postcheck），结构正确性由该同构保证。这里不另加
-# adapter shim 用例——codex/cursor 的 4 个 shim 用例在裸 shell 下已因 _gate.sh:30 的
-# `$MAIN_REPO_ROOT/$HOME/.pmai` 路径 bug 全 fail（本套未进 run-all），不再叠加。
+# gemini.sh adapter 走与 cursor-agent.sh 逐字同构的路径（source _gate.sh →
+# adapter_precheck → CLI → adapter_postcheck）。这里给它同款 shim 用例，覆盖空数组
+# 展开 ${MODEL_ARGS[@]+"${MODEL_ARGS[@]}"}（codex/cursor 同类 bug 的发源处）。
+# 本套已进 run-all（_gate.sh 的 scripts 目录解析改走 BASH_SOURCE 后 4 个 adapter 用例转绿）。
+
+test_gemini_adapter_empty_model_reaches_cli() {
+  start_test "gemini.sh: EXECUTOR_MODEL='' 时 adapter 仍能调到 gemini CLI（空数组不 unbound 死掉）"
+  make_sandbox
+  write_settings_json "$SANDBOX"
+  _run_adapter_with_shim gemini.sh gemini ""
+  _assert_shim_invoked_without_model_flag
+  teardown_sandbox
+}
+
+test_gemini_adapter_filled_model_passes_through() {
+  start_test "gemini.sh: EXECUTOR_MODEL='gemini-2.5-pro' 透传 --model gemini-2.5-pro"
+  make_sandbox
+  write_settings_json "$SANDBOX"
+  _run_adapter_with_shim gemini.sh gemini "gemini-2.5-pro"
+  _assert_shim_received_model "gemini-2.5-pro"
+  teardown_sandbox
+}
 
 # ======================================================================
 # Live adapter tests (SKIP_LIVE_TESTS gated)
@@ -729,6 +747,8 @@ test_codex_adapter_empty_model_reaches_cli
 test_codex_adapter_filled_model_passes_through
 test_cursor_agent_adapter_empty_model_reaches_cli
 test_cursor_agent_adapter_filled_model_passes_through
+test_gemini_adapter_empty_model_reaches_cli
+test_gemini_adapter_filled_model_passes_through
 
 test_codex_adapter_live
 

@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 from collections import defaultdict
 from dataclasses import dataclass
 from pathlib import Path
@@ -51,7 +52,12 @@ def _btn_text(text: Any) -> str:
 
 def button_disabled_map(artifact: dict[str, Any]) -> dict[str, bool]:
     result: dict[str, bool] = {}
-    for btn in artifact.get("buttons", []) or []:
+    buttons = artifact.get("buttons", []) or []
+    if not isinstance(buttons, list):  # 抓取产物畸形（buttons 不是数组）→ 当空，不崩
+        buttons = []
+    for btn in buttons:
+        if not isinstance(btn, dict):
+            continue
         text = _btn_text(btn.get("text"))
         if text and text not in result:
             result[text] = bool(btn.get("disabled", False))
@@ -67,8 +73,16 @@ def compare_check(
     issues: list[Issue] = []
     cid = str(check.get("id", "unknown"))
 
+    # reference 畸形（非 dict，如顶层数组 / 错误对象）→ 当作无 reference（退覆盖审计模式）
+    if reference is not None and not isinstance(reference, dict):
+        reference = None
+
     if local is None:
         issues.append(Issue("P0", cid, "缺少本地抓取", f"未找到 local/{cid}.json"))
+        return issues
+    if not isinstance(local, dict):
+        # 合法 JSON 但 shape 错（顶层数组 / 字符串 / null）→ 报 P0、不让单个畸形产物崩掉整份报告
+        issues.append(Issue("P0", cid, "本地抓取畸形", f"local/{cid}.json 顶层不是 JSON 对象（应为 {{url,title,textPreview,buttons}}）"))
         return issues
 
     local_text = str(local.get("textPreview", ""))
@@ -107,6 +121,11 @@ def compare_check(
     if check.get("must_cover_states", []) or []:
         states = ", ".join(str(s) for s in check["must_cover_states"])
         issues.append(Issue("P2", cid, "状态覆盖需人工确认", f"在页面演示并人工确认状态覆盖：{states}"))
+
+    # 无任何可执行断言 → 别让它静默算「无差异」（防假「全过」信心）
+    if not (check.get("must_have_text") or check.get("must_check_buttons") or check.get("must_cover_states")):
+        issues.append(Issue("P2", cid, "无可执行断言",
+                           "该 check 未声明 must_have_text / must_check_buttons / must_cover_states——引擎未验证任何结构，勿据此判「无差异」"))
 
     return issues
 
@@ -162,6 +181,12 @@ def build(plan_path: Path, artifacts_root: Path) -> list[Issue]:
         cid = str(check.get("id", "")).strip()
         if not cid:
             issues.append(Issue("P0", "unknown", "计划字段错误", "check.id 为空"))
+            continue
+        # cid 拼进 artifacts 路径，且 checks-spec 可由爬站/线上 AI 派生 → 防路径穿越：
+        # 仅允许字母数字 . _ -（regex 已排除 / \），并禁 . / .. 当组件名。
+        if cid in {".", ".."} or not re.fullmatch(r"[A-Za-z0-9._-]+", cid):
+            issues.append(Issue("P0", cid, "计划字段错误",
+                               f"check.id 含非法字符（仅允许字母数字 . _ -，禁路径分隔与 ..）：{cid}"))
             continue
         ref = load_json(artifacts_root / "reference" / f"{cid}.json")
         local = load_json(artifacts_root / "local" / f"{cid}.json")

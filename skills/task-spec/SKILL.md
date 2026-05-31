@@ -288,13 +288,13 @@ AI chat 出一行轻量过场，然后直接续跑 `/pmai-task-confirm` 的 work
 ✅ task 内部执行依据已就绪，准备 task 执行环境（worktree fork + 启动指令）...
 ```
 
-接着按 task-confirm SKILL 跑（PM 体感 = build 推进时直接看到 worktree 路径 + Next Up 新窗口命令，不再多一道手敲命令）。
+接着按 task-confirm SKILL 跑（task-confirm 后台 fork worktree，控制权交回 `/pmai-next` 在同一窗口继续 build；PM 不切窗口、不手敲命令）。
 
 > **为什么续跑而非停下确认**：task 文件是 build 阶段的内部执行依据，范围已在范围确认拍板；
 > task-confirm 自身也不设确认门。这两道旧确认仪式都已机器降为后台续跑。
 >
-> **退出条件**：task-confirm workflow 跑完（worktree 已 fork + Next Up 已输出）→ chat 自然停在
-> "去新窗口跑 /pmai-task-execute" 的引导上，不进 task 执行（task 执行天然在新窗口里 PM 重新触发）。
+> **退出条件**：task-confirm workflow 跑完（worktree 已后台 fork）→ 控制权交回 `/pmai-next`，
+> 由它在同一窗口推进进 task-execute（build），PM 不切窗口、不另起会话。
 >
 > **失败兜底（异常恢复）**：commit 失败 / task-confirm 内部任一步骤报错 → 把错误原文给 PM，
 > **不**继续续跑；PM 修复后可手动调 `/pmai-task-confirm <path>`。

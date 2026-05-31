@@ -9,18 +9,17 @@
 
 ## 六步重构后续（2026-05-30 survey）
 
-### 消费仓 sync 阻塞（合 main 前要清）
+### 真 req build spike 端到端验证（六步落地唯一余下项）
 
-- **在飞旧 req 状态值越界**：旧 7-stage req（停在 stage 5-7）在新机器（`MAX_STAGE=4`）下状态值越界 —— 需旧 req 迁移方案或 sentinel 兼容，再放消费仓同步。
-  （CLAUDE.md.tmpl 六步重写已做、attachments rewire 已做，见 `CHANGELOG.md`。）
+- **What**：build 三道审的**脚本编排已固化**（`scripts/build-audits.py` resolve + synthesize；覆盖审计 agent / 视觉门 gstack skill 仍 LLM 调起）。差的是在**一个真实 req** 上跑一遍：三道审产 conformant 结果 json、dev server 复用 timing、三审合成 + 自动托管 worktree 闭环。脚本回归齐（`test-build-audits.sh` 7 例），但 LLM 调起那两道 + 整 loop 没在真需求上验过。
+- **触发**：下一个真实 req 用新 build 路径跑，当 **build spike**。
+- **Context**：`docs/设计/PMAI重构-实施清单.md` §6 阶段 2 + §2 gstack 接入表；编排 `scripts/build-audits.py`。
 
-### 产物 / brownfield 能力（§7 复盘 scope，按需才上）
+### 消费仓 sync（合 main 前确认）
 
-设计真相源：`docs/设计/PMAI重构-实施清单.md` §7.A / §7.B / §7.C。
+- **在飞旧 req 状态值越界**：旧 7-stage req（停在 stage 5-7）在新机器（`MAX_STAGE=4`）下越界。**迁移脚本 `migrate-reqs-to-6step.py` 已落地**（含 active stage∈{3,4} 歧义警告）—— 消费仓同步前跑一次解越界、按歧义警告手工确认。CLAUDE.md.tmpl 六步重写 + attachments rewire 均已做（见 `CHANGELOG.md`）。
 
-- **§7.A 站点爬原型**：新 skill / 编排 —— gstack `browse` 走遍目标站每页每弹窗（截图 + 结构）当参考 → 在 `prototype/` 栈内重建近似（非无损拷贝）。**触发**：PM 真要从现有站起原型。
-- **§7.B 对齐线上**：第四条 diff 轴（原型 vs 线上真实产品）；吸收 PM 自写的 `prototype-live-align`（拆解吸收、不整块移植）。**触发**：brownfield 要原型先对齐现实再改。
-- **§7.C 机器可检 checks 引擎**：范围清单 → checks-spec（`must_have_text` / `must_check_buttons` / `must_cover_states`），覆盖审计从肉眼打勾 → 精确 diff。**不独立做** —— 只作 §7.A/§7.B 的共用引擎（要那俩才连带建）；行为审「更硬确定性」演进项也并这里（等行为审真 flaky 才值）。
+> **注**：§7.A 站点爬（`scrape-prototype`）/ §7.B 对齐线上（`align-to-live`）/ §7.C checks 引擎（`checks-diff.py`）**已于 `reshape-office-hours` 分支落地**（见 `CHANGELOG.md`），从本清单移除；设计真相源仍在 `docs/设计/PMAI重构-实施清单.md` §7。
 
 ---
 

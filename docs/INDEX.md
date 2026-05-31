@@ -17,6 +17,12 @@
 
 > **起手新设计**：`cp docs/设计/_模板-方案.md docs/设计/<主题>.md`
 
+**参考 / 留档**（非生命周期设计文档）：
+
+| 文件 | 说明 |
+|---|---|
+| [`build-audits-编排与自测.md`](./build-audits-编排与自测.md) | build 三道审编排 `scripts/build-audits.py` 参考（LLM/脚本边界 + 规范化结果 schema 契约）+ 2026-05-31 自测留档（真实 manifest / 合成报告 / 守卫验证）。脚本已落地（572/0），真 req build spike 验证待做 |
+
 ---
 
 ## 执行中/ — PM 已锁，准备/正在 ship

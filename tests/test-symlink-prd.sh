@@ -27,8 +27,8 @@ EOF
   fi
 }
 
-# 把 req-meta stage 推到 7 + commit（close-req I-CR1 要 stage=7）
-_bump_stage_to_7() {
+# 把 req-meta stage 推到 4（六步沉淀 = MAX_STAGE）+ commit（close-req I-CR1 要 stage=4）
+_bump_stage_to_finalize() {
   local req_dir="$1"
   local req_branch
   req_branch=$(python3 -c "import json; print(json.load(open('$req_dir/.req-meta.json'))['branch'])")
@@ -36,13 +36,13 @@ _bump_stage_to_7() {
 import json
 p = '$req_dir/.req-meta.json'
 m = json.load(open(p))
-m['stage'] = 7
+m['stage'] = 4
 json.dump(m, open(p, 'w'), indent=2, ensure_ascii=False)
 "
   (
     cd "$FIXTURE_DIR/.worktrees/$req_branch"
     git add -A
-    git commit -q -m "stage 7"
+    git commit -q -m "stage 4 沉淀"
   )
 }
 
@@ -321,7 +321,7 @@ test_close_req_creates_prd_symlink() {
 
   req_dir=$(fixture_create_req "req-001" "syml" 1)
   _write_prd_in_req_worktree "$req_dir" "# Req 001 PRD\n本 req PRD 正文。"
-  _bump_stage_to_7 "$req_dir"
+  _bump_stage_to_finalize "$req_dir"
 
   if ! (cd "$FIXTURE_DIR" && bash "$CLOSE_REQ" "$req_dir") >/tmp/out.$$ 2>/tmp/err.$$; then
     _fail "close-req failed"
@@ -365,7 +365,7 @@ test_close_req_without_prd_silent_skip() {
   start_test "close-req: 无 prd.md silent skip 不报错"
   fixture_setup
 
-  req_dir=$(fixture_create_req "req-002" "noprd" 7)
+  req_dir=$(fixture_create_req "req-002" "noprd" 4)
   # 不写 prd.md
 
   if ! (cd "$FIXTURE_DIR" && bash "$CLOSE_REQ" "$req_dir") >/tmp/out.$$ 2>/tmp/err.$$; then

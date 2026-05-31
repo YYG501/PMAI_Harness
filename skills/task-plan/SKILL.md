@@ -87,8 +87,8 @@ prose 警告「AI 不得以'觉得不必要'为由跳过」是无效防御 —�
 
 ```bash
 SOURCES=(
-  "$REPO_ROOT/PRODUCT-STATE.md"       # 项目脊柱：产品当前能力面，判断本次增量落在哪
-  "$REPO_ROOT/DESIGN.md"              # 项目脊柱：设计与架构约束，task 拆分边界受其约束
+  "$REPO_ROOT/docs/PRODUCT-STATE.md"  # 项目脊柱：产品当前能力面，判断本次增量落在哪
+  "$REPO_ROOT/docs/DESIGN.md"         # 项目脊柱：设计与架构约束，task 拆分边界受其约束
   "$ACTIVE_REQ_DIR/req-plan.md"       # 本次范围清单 WHAT + 关键决策页 WHY，拆 task 的直接依据
 )
 

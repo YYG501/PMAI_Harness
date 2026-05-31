@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import re
 import subprocess
 import sys
@@ -23,6 +24,30 @@ from _lib.events import (
     write_status_change_and_exec_event_atomic,
     BOUND_DISPATCH_EVENT_MAP,
 )
+
+def _resolve_task_worktree(repo_root: Path, branch: str) -> Path:
+    """解析 branch 对应的 task worktree 实际路径。
+
+    先问 git `worktree list`（认 create-task-worktree.sh 的 PM_AI_WORKTREE_BASE / 任意 attach 位置），
+    git 没列出再回退约定路径（PM_AI_WORKTREE_BASE 或 repo_root/.worktrees）。
+    曾硬编码 repo_root/.worktrees/<branch> —— 自定义 base 下 discard 找不到 worktree、漏 unlock/remove
+    → 留下永久 locked 孤儿 worktree + 分支（gstack-review P1-5）。
+    """
+    out = subprocess.run(
+        ["git", "-C", str(repo_root), "worktree", "list", "--porcelain"],
+        capture_output=True, text=True,
+    )
+    if out.returncode == 0:
+        cur = None
+        for line in out.stdout.splitlines():
+            if line.startswith("worktree "):
+                cur = line[len("worktree "):].strip()
+            elif line.startswith("branch ") and cur:
+                if line[len("branch "):].strip() == f"refs/heads/{branch}":
+                    return Path(cur)
+    base = os.environ.get("PM_AI_WORKTREE_BASE") or str(repo_root / ".worktrees")
+    return Path(base) / branch
+
 
 # 兼容两种 task 元信息格式：
 #   旧版（段落）：**字段：** 值
@@ -534,7 +559,7 @@ def cmd_discard(task_file: Path, reason: str, yes: bool) -> None:
         )
         sys.exit(1)
 
-    task_worktree = repo_root / ".worktrees" / branch
+    task_worktree = _resolve_task_worktree(repo_root, branch)
     has_worktree = task_worktree.exists()
     has_branch = (
         subprocess.run(

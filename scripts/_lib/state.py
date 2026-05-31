@@ -421,7 +421,7 @@ def get_current_stage_banner(req_dir: Path, skill: str = "REQ-STAGE-GATE") -> st
 
     Raises:
         StateReadError: `.req-meta.json` 不存在 / 解析失败 / 缺 stage 字段。
-        KeyError: stage 数不在 STAGE_NAMES（1-7）；理论上不会发生（状态机受 INVARIANTS 保护）。
+        KeyError: stage 数不在 STAGE_NAMES（1-MAX_STAGE，六步=1-4）；理论上不会发生（状态机受 INVARIANTS 保护）。
     """
     meta = read_req_meta(req_dir, strict=True)
     assert meta is not None

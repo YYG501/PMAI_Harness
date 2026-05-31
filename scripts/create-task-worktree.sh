@@ -114,7 +114,11 @@ fi
 # close/cleanup 不会顺手 prune 掉另一个在跑的 task 副本）。lock 不拦 fs 写入，
 # 跨 task 代码串台由 dispatch 的越界保护 (executor-dispatch §3c) + 一 task 一执行器
 # 兜底；lock 专管移除竞态。close-task / discard / cleanup 删前先 unlock（幂等）。
-git -C "$REPO_ROOT" worktree lock "$WORKTREE_DIR" 2>/dev/null || true
+# lock 失败别静默吞：它是并发删除的关键防线，失败＝防线缺位（git 版本/权限/元数据异常）。
+# 不 fail-hard（lock 不支持的环境仍要能建 worktree），但**显式告警**，让并发派发的调用方看见降级。
+if ! git -C "$REPO_ROOT" worktree lock "$WORKTREE_DIR" 2>/dev/null; then
+  echo "⚠️ git worktree lock 失败：$WORKTREE_DIR —— 并发多 task 时移除竞态防线缺位（prune/remove 可能误删活动 worktree）。建议串行执行或排查 git 版本/权限。" >&2
+fi
 
 setup_dependency_symlinks "$REPO_ROOT" "$WORKTREE_DIR"
 

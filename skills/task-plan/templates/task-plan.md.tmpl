@@ -4,14 +4,14 @@
 > 写作规则参见 `skills/_shared/PM-VIEW-RULES.md`，特别是：
 > - §三 PM 视图写作规则
 > - §七 章节顺序约束（本模板按此节锁定的顺序）
-> - §九 输入流约束（必读 brief.md / **stage 2 真相源** (A 分支 analysis.md / B 分支 stage2-office-hours.md) / prd.md / implementation-design.md / docs/{PROJECT,DESIGN}.md / docs/modules/\*.md / prototypes/）
+> - §九 输入流约束（必读项目脊柱 `docs/PRODUCT-STATE.md` / `docs/DESIGN.md` + 本次 `req-plan.md`（范围清单 WHAT + 决策页 WHY）+ `prototype/` 主原型代码）
 
 - 创建日期：{{CREATED_DATE}}
 - 创建者：{{AUTHOR}}
 - 分支：{{REQ_BRANCH}}
-- 依赖：`brief.md` + **stage 2 真相源**（A 分支 `analysis.md` / B 分支 `stage2-office-hours.md`，由 `.req-meta.json:stage2_source` 决定）+ `prd.md` + `implementation-design.md`（v2 / C2：管线重构后 solution.md 砍除，依赖改 prd + implementation-design； 改 stage 2 双源）
-- 当前 stage：5（task 拆分）
-- Status：DRAFT（待 PM 确认进入 stage 6）
+- 依赖：`req-plan.md`（本次范围清单 + 关键决策页，拆 task 的直接依据）+ 项目脊柱 `docs/PRODUCT-STATE.md` / `docs/DESIGN.md` + `prototype/` 主原型代码
+- 阶段：范围确认（task-plan 是范围确认阶段产物；拍板后由 `/pmai-next` 推进进 build）
+- Status：DRAFT（待 PM 确认拆分 → 进 build）
 
 ---
 
@@ -30,31 +30,35 @@
 ## 一、Task 列表
 
 <!-- 填写规则：
-- 表格列：id / title / 所属模块 / 所属模块章节 / summary / order / risk / 决策类型
+- 表格列：id / title / 所属模块 / 所属模块章节 / summary / order / risk
 - "title" 用产品视角的功能名（与 task spec 顶部标题保持一致）
 - "所属模块" = 业务模块名 / 基础设施
 - "所属模块章节" 业务模块 task 必填，基础设施 task 留空
 - "summary" 一句话讲清本 task 交付什么 + 验收角度（不写实现细节）
 - "order" = task 在执行链路中的顺序号
 - "risk" = 标关联到 §三 风险表的 R 编号；无关联写"无"
-- 不允许写超过一行的 summary（细节进 task spec）
-
-- 「决策类型」列（speed mode 用 — 见 skills/req-stage-gate/SKILL.md「speed mode」段）：
-  - **结构**：本行 task 涉及以下任一情况（speed mode 自动推进期间命中 → 当场停下问 PM）：
-    * 合并：本 task 把 PRD §七 / GAP 清单的多条验收项 / 多个 solution 候选合在一起
-    * 拆开：把 PRD 单一功能拆成多个 task（如按文件 / 按子流程）
-    * 重排：本 task 的 order 不是按 PRD §六 自然顺序、是 PM / AI 重排过的
-    * 反模式 A 命中已处理（纯前置文档 / 规格 / 契约 task 已合并到业务 task）
-  - **机械**：本 task 完全是 PRD §七 验收某一条的直译，无合并 / 无拆开 / order 按自然顺序
-  - **拿不准 → 默认填「结构」**（保守 / 宁可多停一次）
+- 不允许写超过一行的 summary（细节进 build）
+- 每条 task 除「交付什么」外，还要在下方「每个 task 的范围细节」里写清四字段（执行深度 / PM 确认什么 / 不做什么 / 并行性），决定 PM 怎么看 demo 验收、build 时怎么排（见 task-plan SKILL 步骤 2）
+- 结构决策（合并 / 拆开 / 重排 task）由步骤 3.5「PM 拍板执行模式门」在 §二 处理，AI 不自决；本表不再设 per-task「决策类型」列
 -->
 
-| id | title | 所属模块 | 所属模块章节 | summary | order | risk | 决策类型 |
-|----|-------|---------|------------|---------|-------|------|---------|
+| id | title | 所属模块 | 所属模块章节 | summary | order | risk |
+|----|-------|---------|------------|---------|-------|------|
 
-**未纳入本 plan 的 solution 候选**（如有，写一段说明为什么不纳入；如无写"无"）：
+### 每个 task 的范围细节（SKILL 步骤 2 四字段）
 
-[列出 solution 中提到但未拆为 task 的候选 + 处理路径（"留待 PM 反馈后追加" / "归到 task-XXX" / "不在本 req 范围"）]
+<!-- 每个 task 一段，写清四字段（防覆盖审计误判为「漏」、防 build 越界、定 PM demo 验收角度）：
+- 执行深度：页面 / 字段 / 按钮 / tab / 状态做到什么程度（跑通主流程 / 含边界态 / 含空态错误态）
+- PM 确认什么：这块 demo 上要 PM 拍板的方向问题（一句话）
+- 不做什么：本 task 明确划出去、本次不做的部分
+- 并行性：能否与其它 task 同时在各自原型分支跑（无 merge 冲突 + 不互相依赖），还是必须排在某 task 之后
+-->
+
+**task-001**：执行深度 [...] / PM 确认 [...] / 不做 [...] / 并行性 [...]
+
+**未纳入本 plan 的范围清单条目**（如有，写一段说明为什么不纳入；如无写"无"）：
+
+[列出 req-plan 范围清单里提到但未拆为 task 的条目 + 处理路径（"留待 PM 反馈后追加" / "归到 task-XXX" / "本次原型不实现 → req-plan 决策页 D-NN"）]
 
 ---
 
@@ -85,7 +89,7 @@
 **PM 启动建议**：
 - 先启动 [task-XXX]
 - [task-XXX] 完成后可同时启动 [task-YYY] / [task-ZZZ]
-- 全部 task 完成后进入 stage 7 验收 / 收尾
+- 全部 task 完成后由 `/pmai-next` 推进进复审 / 沉淀
 
 ---
 
@@ -106,49 +110,49 @@
 
 ## 四、自检与状态摘要
 
-> 本节是 task-plan 自身的轻量自检结论 + task-spec / doc-update 会消费的状态索引。
+> 本节是 task-plan 自身的轻量自检结论 + task-spec / 沉淀（close-req）会消费的状态索引。
 > **不是**给 PM 读的产品决策内容；PM 看一眼"反模式 5/5 PASS"即可。
 
 ### 4.1 反模式自检（5 条）
 
-按 task-plan skill §2.2 五条反模式逐条自检。每条只写一行结论；命中时一句话说明合并 / 重构后的处理。**5 条全 PASS 才能进入 stage 6**。
+按 task-plan skill §2.2 五条反模式逐条自检。每条只写一行结论；命中时一句话说明合并 / 重构后的处理。**5 条全 PASS 才能进入 build**。
 
 **反模式 A 命中时必须分流**（SKILL §2.2 反模式 A "判断"两分支）：
 - **重构类** → 合并入 task-N（写明 N）
-- **文档 / 规格 / 契约类**（含 PRD §6.1 / §六 明文要求的"建立 X 规范段 / 字段字典 / 权限矩阵"等主线规范产物，产物归宿是 `docs/*`）→ **不合并入 task**、**不把 `docs/*` 写进任何 task 的「执行范围」allowlist**；由 task-N close 后走 `/pmai-doc-update` 沉淀（写明 N + 目标文件路径）
+- **文档 / 规格 / 契约类**（含 req-plan 关键决策页明文要求的"建立 X 规范段 / 字段字典 / 权限矩阵"等主线规范产物，产物归宿是脊柱文档 `docs/PRODUCT-STATE.md` / `docs/DESIGN.md`）→ **不合并入 task**、**不把脊柱文档写进任何 task 的「执行范围」allowlist**；由首个相关业务 task 收尾后在沉淀（close-req）补对应章节（写明 N + 目标文件路径）
 
 | # | 反模式 | 状态 | 命中处理（仅命中时填，含分类）|
 |---|---|---|---|
-| A | 纯前置 task（重构 / 文档 / 规格 / 契约） | 未命中 / 命中（已处理）| 类型: 重构类 → 合并入 task-N / 文档类 → task-N close 后走 /pmai-doc-update 沉淀到 docs/X.md |
+| A | 纯前置 task（重构 / 文档 / 规格 / 契约） | 未命中 / 命中（已处理）| 类型: 重构类 → 合并入 task-N / 文档类 → task-N 收尾后在沉淀（close-req）补 docs/PRODUCT-STATE.md / docs/DESIGN.md 对应章节 |
 | B | 横切质量 task | 未命中 / 命中（已处理）| — |
 | C | 共生对拆成两个 | 未命中 / 命中（已处理）| — |
 | D | 同文件串行多 task | 未命中 / 命中（已处理）| — |
 | E | 业务功能 task 没有模块归属 | 未命中 / 命中（已处理）| — |
 
-**结论**：[5 条全部 PASS / 命中 X 条已处理] → 可 / 不可进入 stage 6
+**结论**：[5 条全部 PASS / 命中 X 条已处理] → 可 / 不可进入 build
 
 ### 4.2 验收 GAP 清单
 
-<!-- 填写规则（v2 / C1 / C2：solution.md 已砍，来源改 prd.md）：
-- 来自 prd.md 「§七 验收标准」逐条审视，编号 G1, G2, ...
+<!-- 填写规则（来源 = req-plan 范围清单；solution.md / prd.md §七 / implementation-design SIMP 均已不是来源）：
+- 来自 req-plan.md 范围清单逐条审视，编号 G1, G2, ...（每条都要能在 build 完被覆盖审计对照原型代码验到）
 - 每条三种处置之一：
   1. 由 task-NNN 接住（默认） → 「应落到哪个 task 验收」列填 task-NNN
   2. 已被 task 列表完全覆盖 → 整表写「无 GAP」
-  3. 原型本次不实现（kind 2 整块功能不做）→ 列填「原型不实现 → 反向写回 implementation-design.md
-     段 1.5 SIMP-NN」+ 同步去 implementation-design.md 段 1.5 追加 SIMP 行（来源列 = kind 2）
-- 由 stage 6 task-spec 按编号接住（处置 1）/ close-req §2a 据 SIMP 行标注 PRD（处置 3）
+  3. 本次原型不实现（整块功能不做，PM 已在 req-plan 关键决策页拍板）→ 列填「本次原型不实现 → req-plan 决策页 D-NN」，
+     引用 req-plan 关键决策页对应那条决策
+- 处置 1 由 build 期 task-spec 按编号接住 / 处置 3 由沉淀（close-req）据 req-plan 决策页在 PRODUCT-STATE 标注「本功能本次不做」，供覆盖审计排除、不误报为漏
 -->
 
 | GAP # | GAP 描述 | 应落到哪个 task 验收 |
 |---|---|---|
-| G1 | [prd.md §七 验收标准的某条] | [task-XXX] / 原型不实现 → SIMP-NN |
+| G1 | [req-plan 范围清单的某条] | [task-XXX] / 本次原型不实现 → req-plan 决策页 D-NN |
 
 ### 4.3 模块规格状态
 
 <!-- 填写规则：
-- 列出本 req 涉及的每个业务模块的当前规格状态
+- 列出本 req 涉及的每个业务模块在 PRODUCT-STATE.md 里的当前状态
 - 状态：已存在-完整 / 已存在-待补 / 不存在-待创建
-- 影响 task-spec 步骤 4 判断（读取当前模块规格）
+- 影响 build 期 task-spec 判断（要不要新建模块章节）
 -->
 
 | 模块 | 当前规格状态 | 本 req 涉及的章节 |

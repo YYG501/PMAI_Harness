@@ -31,16 +31,16 @@ with open(p, 'w') as f:
 }
 
 # =================================================
-# I-CR1: reject when stage is not 7
+# I-CR1: reject when stage is not 4 (六步沉淀 = MAX_STAGE)
 # =================================================
-test_reject_if_stage_not_7() {
-  start_test "I-CR1 reject when req stage is not 7"
+test_reject_if_stage_not_4() {
+  start_test "I-CR1 reject when req stage is not 4（沉淀）"
   fixture_setup
 
-  req_dir=$(fixture_create_req "req-001" "test" 5)
+  req_dir=$(fixture_create_req "req-001" "test" 3)
 
   if (cd "$FIXTURE_DIR" && bash "$CLOSE_REQ" "$req_dir") >/tmp/out.$$ 2>/tmp/err.$$; then
-    _fail "should reject when stage is not 7"
+    _fail "should reject when stage is not 4"
   else
     if grep -q "stage" /tmp/err.$$; then
       pass_test
@@ -61,7 +61,7 @@ test_reject_if_open_tasks_exist() {
   start_test "I-CR2 reject when there are open tasks"
   fixture_setup
 
-  req_dir=$(fixture_create_req "req-001" "test" 7)
+  req_dir=$(fixture_create_req "req-001" "test" 4)
   # Create a task with status 执行中 (open)
   task=$(fixture_create_task "$req_dir" "001" "stillopen" "执行中" "/qa")
   # Commit the task file
@@ -93,7 +93,7 @@ test_reject_if_req_branch_missing() {
   start_test "I-CR3 reject when req branch does not exist (suggest cancel-req)"
   fixture_setup
 
-  req_dir=$(fixture_create_req "req-001" "test" 7)
+  req_dir=$(fixture_create_req "req-001" "test" 4)
 
   # Copy req dir to main repo so script can find meta even with branch gone
   main_req_dir="$FIXTURE_DIR/requirements/active/req-001-test"
@@ -127,7 +127,7 @@ test_reject_if_req_worktree_missing() {
   start_test "I-CR4 reject when req worktree does not exist"
   fixture_setup
 
-  req_dir=$(fixture_create_req "req-001" "test" 7)
+  req_dir=$(fixture_create_req "req-001" "test" 4)
 
   # Copy meta to main repo so we can pass a valid path
   main_req_dir="$FIXTURE_DIR/requirements/active/req-001-test"
@@ -160,7 +160,7 @@ test_reject_on_merge_conflict_no_partial_state() {
   start_test "I-CR9 merge conflict does not leave partial state on main"
   fixture_setup
 
-  req_dir=$(fixture_create_req "req-001" "test" 7)
+  req_dir=$(fixture_create_req "req-001" "test" 4)
 
   # Modify main branch to create a conflict with what req branch will do
   (
@@ -226,7 +226,7 @@ test_archive_committed_before_merge() {
   start_test "I-CR5 archive commit lands before merge (happy path verifies order)"
   fixture_setup
 
-  req_dir=$(fixture_create_req "req-001" "test" 7)
+  req_dir=$(fixture_create_req "req-001" "test" 4)
 
   if (cd "$FIXTURE_DIR" && bash "$CLOSE_REQ" "$req_dir") >/tmp/out.$$ 2>/tmp/err.$$; then
     # After close, main should contain the archive commit "close: archive req-001"
@@ -252,7 +252,7 @@ test_happy_path_close_req() {
   start_test "happy path: close-req succeeds and main has closed/req"
   fixture_setup
 
-  req_dir=$(fixture_create_req "req-001" "test" 7)
+  req_dir=$(fixture_create_req "req-001" "test" 4)
 
   if (cd "$FIXTURE_DIR" && bash "$CLOSE_REQ" "$req_dir") >/tmp/out.$$ 2>/tmp/err.$$; then
     # Verify: main branch has requirements/closed/req-001-test
@@ -325,7 +325,7 @@ test_happy_path_with_completed_task() {
   start_test "happy path: close-req works when req has a 已完成 task"
   fixture_setup
 
-  req_dir=$(fixture_create_req "req-001" "test" 7)
+  req_dir=$(fixture_create_req "req-001" "test" 4)
   task=$(fixture_create_task "$req_dir" "001" "done" "已完成" "/qa")
   (
     cd "$FIXTURE_DIR/.worktrees/req-001-test"
@@ -357,7 +357,7 @@ test_merge_failure_rolls_back_req_branch() {
   start_test "I-CR9b merge failure rolls req branch back to pre-close state"
   fixture_setup
 
-  req_dir=$(fixture_create_req "req-001" "test" 7)
+  req_dir=$(fixture_create_req "req-001" "test" 4)
 
   # Create conflict: same file on main and on req branch with different content
   (
@@ -404,7 +404,7 @@ test_reject_when_cwd_inside_req_worktree() {
   start_test "I-CR10 reject when cwd is inside req worktree"
   fixture_setup
 
-  req_dir=$(fixture_create_req "req-001" "test" 7)
+  req_dir=$(fixture_create_req "req-001" "test" 4)
   req_wt="$FIXTURE_DIR/.worktrees/req-001-test"
 
   if (cd "$req_wt" && bash "$CLOSE_REQ" "$req_dir") >/tmp/out.$$ 2>/tmp/err.$$; then
@@ -426,7 +426,7 @@ test_reject_if_req_worktree_has_unrelated_dirty_changes() {
   start_test "I-CR11 reject unrelated dirty changes in req worktree"
   fixture_setup
 
-  req_dir=$(fixture_create_req "req-001" "test" 7)
+  req_dir=$(fixture_create_req "req-001" "test" 4)
   req_wt="$FIXTURE_DIR/.worktrees/req-001-test"
   mkdir -p "$req_wt/prototypes"
   echo "leak" > "$req_wt/prototypes/unrelated.txt"
@@ -461,7 +461,7 @@ test_reject_if_req_worktree_has_unrelated_dirty_changes() {
 # =================================================
 # Run all tests
 # =================================================
-test_reject_if_stage_not_7
+test_reject_if_stage_not_4
 test_reject_if_open_tasks_exist
 test_reject_if_req_branch_missing
 test_reject_if_req_worktree_missing

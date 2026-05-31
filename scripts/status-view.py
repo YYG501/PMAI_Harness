@@ -33,7 +33,6 @@ from _lib.state import (  # noqa: E402
     list_tasks,
 )
 from _lib.stages import STAGE_NAMES, MAX_STAGE  # noqa: E402  ( F13 单一真相源)
-from _lib import stage6_summary  # noqa: E402  (speed mode)
 
 STATUS_ICONS = {
     "待执行": "⏳",
@@ -256,22 +255,25 @@ def render_health_check(repo_root: Path) -> None:
 
 
 def suggest_next_action(req_view: dict) -> str:
-    """Suggest what PM should do next。req_view 是 state['active_reqs'][i]。"""
+    """Suggest what PM should do next。req_view 是 state['active_reqs'][i]。
+    六步：1 范围确认 / 2 build / 3 复审 / 4 沉淀（MAX_STAGE=4）。"""
     meta = req_view["meta"]
     stage = meta.get("stage", 0)
     tasks = req_view["tasks"]
 
-    if stage <= 5:
-        return f"继续 stage {stage}（{STAGE_NAMES.get(stage, '?')}）的工作"
+    # 范围确认（≤1）：定 / 细化范围清单、拆 task
+    if stage <= 1:
+        return f"继续{STAGE_NAMES.get(stage, '范围确认')}：定 / 细化范围清单（发 /pmai-next 推进）"
 
-    if stage == 6:
+    # build（2）：逐个 task 在原型上做出来 + 三道审 + PM 验收（单窗口，/pmai-next 驱动）
+    if stage == 2:
         for t in tasks:
             status = (t["meta"] or {}).get("status", "")
             name = t["path"].stem
             if status == "执行中":
-                return f"执行中 {name}：实现 / 等待呈交 / PM 验收（可在 task 窗口跑 /pmai-task-submit 重新看呈交块）"
+                return f"执行中 {name}：AI 实现 / 等 PM 验收（可跑 /pmai-task-submit 重新看呈交块）"
             if status == "待执行":
-                return f"确认启动 {name}：运行 /pmai-task-confirm"
+                return f"发 /pmai-next 推进 build 起 {name}"
 
         all_done = bool(tasks) and all(
             (t["meta"] or {}).get("status") == "已完成" for t in tasks
@@ -282,13 +284,18 @@ def suggest_next_action(req_view: dict) -> str:
         pending = req_view["pending_spec"]
         if pending:
             next_id = pending[0]["id"]
-            tail = f"（还有 {len(pending)} 个未 spec）" if len(pending) > 1 else ""
-            return f"task-plan 里还有未 spec 的 task：先运行 /pmai-task-spec {next_id}{tail}"
+            tail = f"（还有 {len(pending)} 个未起）" if len(pending) > 1 else ""
+            return f"task-plan 里还有未起的 task：发 /pmai-next 继续 build {next_id}{tail}"
 
-        return "所有 task 已完成，运行 /pmai-close-req 关闭需求"
+        return "所有 task 已完成，发 /pmai-next 推进到复审 / 沉淀"
 
-    if stage == 7:
-        return "Req 正在关闭中"
+    # 复审（3）
+    if stage == 3:
+        return "复审阶段：发 /pmai-next 推进（复审通过后进沉淀）"
+
+    # 沉淀（≥4 = MAX_STAGE）
+    if stage >= 4:
+        return "沉淀阶段：运行 /pmai-close-req 沉淀产品现状 + 关闭需求"
 
     return "运行 /pmai-task-status 查看详情"
 
@@ -597,10 +604,6 @@ def main() -> None:
         "--narrative", action="store_true",
         help="(M5/ ) 输出 AI 可直接念的进度叙述（当前 stage / 产物文件 / 最近 transition；不到小节级，codex C-4 范围降级）"
     )
-    parser.add_argument(
-        "--stage6-entry", default=None, metavar="REQ_DIR",
-        help="(speed mode) 渲染 stage 6 入口总览（自决项 + PM 拍过的结构决策 + task 拆分 + 产物路径 + PM 三选项）"
-    )
     args = parser.parse_args()
 
     if args.repo_root:
@@ -629,29 +632,6 @@ def main() -> None:
         render_health_check(repo_root)
         return
 
-    if args.stage6_entry:
-        req_dir = Path(args.stage6_entry).resolve()
-        if not req_dir.is_dir():
-            print(f"--stage6-entry 路径不存在或不是目录：{req_dir}", file=sys.stderr)
-            sys.exit(2)
-        # 从 req_dir 反推该 worktree / repo 的 root（消费仓 worktree 而非调用者 cwd）
-        try:
-            req_repo_root = Path(subprocess.check_output(
-                ["git", "-C", str(req_dir), "rev-parse", "--show-toplevel"],
-                text=True, stderr=subprocess.DEVNULL,
-            ).strip())
-        except Exception:
-            req_repo_root = repo_root
-        summary = stage6_summary.build_summary(req_dir, req_repo_root)
-        if summary is None:
-            print(
-                f"req {req_dir.name} 不满足 stage 6 入口条件："
-                f"implementation-design.md 或 task-plan.md 不存在",
-                file=sys.stderr,
-            )
-            sys.exit(3)
-        print(stage6_summary.render(summary))
-        return
 
     if args.summary:
         render_summary(state, repo_root)

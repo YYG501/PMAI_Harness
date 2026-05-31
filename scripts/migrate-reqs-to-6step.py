@@ -5,13 +5,19 @@
 （`STAGE_NAMES` 只有 1-4 → 显示 "?"，req-transition 校验失效）。本脚本一次性把
 越界的 stage 值重映射：
 
-    旧 7-stage                                  → 六步
-    1 brief / 2 analysis / 3 prd / 4 design / 5 impl-design → 1 范围确认
-    6 task-loop（build）                                     → 2 build
-    7 close                                                 → 4 沉淀
+    旧 7-stage（仅越界值 stage > MAX_STAGE 才重映射）   → 六步
+    5 impl-design                                       → 1 范围确认
+    6 task-loop（build）                                 → 2 build
+    7 close                                             → 4 沉淀
 
-**只动「明显是旧 7-stage」的 req**：`stage > MAX_STAGE`，或 `stage_history` 里出现过
-> MAX_STAGE 的值。stage ≤ 4 的 req 不碰（数值不越界、不会崩；且无法可靠区分旧/新）。
+**只动数值越界的 stage（> MAX_STAGE）**。旧 stage 1-4（brief/analysis/prd/design）数值不越界、
+**且无法可靠区分「旧 7-stage 的 1-4」与「新六步的 1-4」——一律不动**（`new == old` 时 migrate_one
+直接 return None，不盖 `migrated_from_7stage` 戳、不污染 stage_history）。
+
+**⚠️ 歧义区（旧 prd/design ↔ 新复审/沉淀）**：旧 7-stage 的 stage 3（prd）/ 4（design）数值恰好
+落在新六步的 3（复审）/ 4（沉淀）。一个停在旧 stage 4（design）的 **active** 旧 req，本脚本不动它、
+新引擎会把它读成「沉淀=done」且 `req-transition` 禁止从 MAX_STAGE 回退 → 未完成需求被锁成不可逆完成态。
+脚本无可靠信号自动区分，跑完会**列出所有 active 且 stage∈{3,4} 的 req 让 PM 手工确认**（不做不安全的自动迁移）。
 
 **幂等**：已带 `migrated_from_7stage` 字段的 req 跳过。支持 `--dry-run`。
 
@@ -41,6 +47,7 @@ from _lib.stages import MAX_STAGE  # noqa: E402
 
 # 旧 7-stage → 六步（仅越界值需要；1-4 数值已在范围内不动）
 LEGACY_TO_6STEP: dict[int, int] = {5: 1, 6: 2, 7: 4}
+STAGE_NAME_HINT = {1: "范围确认", 2: "build", 3: "复审", 4: "沉淀"}
 
 
 def _remap(old_stage: int) -> int:
@@ -90,7 +97,11 @@ def migrate_one(meta_file: Path, dry_run: bool) -> dict | None:
         return None
 
     old = meta.get("stage")
-    new = _remap(old) if isinstance(old, int) else 4
+    if not isinstance(old, int):
+        return None  # 无 stage 数值可重映射（损坏 / 非 7-stage meta）—— 不动、不盖戳
+    new = _remap(old)
+    if new == old:
+        return None  # 旧 stage 1-4 = 新 stage 1-4，无法可靠区分 → 不动、不盖 migrated_from_7stage、不污染 stage_history
     if not dry_run:
         meta["migrated_from_7stage"] = old
         meta["stage"] = new
@@ -106,6 +117,25 @@ def migrate_one(meta_file: Path, dry_run: bool) -> dict | None:
     return {"req": meta_file.parent.name, "old": old, "new": new}
 
 
+def scan_ambiguous_active(root: Path) -> list:
+    """active（非 closed/cancelled）且 stage∈{3,4} 的 req：旧 prd(3)/design(4) 与新复审(3)/沉淀(4)
+    同号、脚本无法可靠区分。这类 req 若实为旧 design、新引擎会读成沉淀=done 且不可回退 → PM 须手工确认。"""
+    out, seen = [], set()
+    for mf in _iter_meta_files(root):
+        try:
+            meta = json.loads(mf.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            continue
+        if not isinstance(meta, dict) or "migrated_from_7stage" in meta:
+            continue
+        if meta.get("status") in {"closed", "cancelled"}:
+            continue
+        if meta.get("stage") in {3, 4} and mf.parent.name not in seen:
+            seen.add(mf.parent.name)
+            out.append({"req": mf.parent.name, "stage": meta.get("stage")})
+    return out
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="迁移旧 7-stage req stage 值到六步")
     parser.add_argument("root", help="消费仓根目录 或 requirements/ 目录")
@@ -118,25 +148,34 @@ def main() -> None:
         sys.exit(1)
 
     migrated = [r for mf in _iter_meta_files(root) if (r := migrate_one(mf, args.dry_run))]
+    ambiguous = scan_ambiguous_active(root)
 
     label = "将迁移（dry-run）" if args.dry_run else "已迁移"
     if not migrated:
-        print("✓ 没有需要迁移的旧 7-stage req（都已是六步 / 已迁移）。")
-        return
-    print(f"{label} {len(migrated)} 个旧 7-stage req → 六步：")
-    for r in migrated:
-        name = STAGE_NAME_HINT.get(r["new"], "")
-        print(f"   - {r['req']}: stage {r['old']} → {r['new']}（{name}）")
-    if args.dry_run:
-        print("\n（dry-run，未写入。去掉 --dry-run 真跑。）")
+        print("✓ 没有需要 stage 重映射的旧 7-stage req（stage 值都未越界 / 已迁移）。")
     else:
+        print(f"{label} {len(migrated)} 个 stage 越界的旧 7-stage req → 六步：")
+        for r in migrated:
+            name = STAGE_NAME_HINT.get(r["new"], "")
+            print(f"   - {r['req']}: stage {r['old']} → {r['new']}（{name}）")
+        if args.dry_run:
+            print("\n（dry-run，未写入。去掉 --dry-run 真跑。）")
+        else:
+            print(
+                "\n⚠️ in-flight 旧 req（映射到 stage 1/2）无六步产物（req-plan.md），"
+                "不能直接 /pmai-next 续跑——在旧框架收尾 / close 或当 done 处理。"
+            )
+
+    # P0-4 歧义区：旧 prd(3)/design(4) 与新复审(3)/沉淀(4) 同号，脚本无法区分 → 列出让 PM 手工确认。
+    if ambiguous:
         print(
-            "\n⚠️ in-flight 旧 req（映射到 stage 1/2）无六步产物（req-plan.md），"
-            "不能直接 /pmai-next 续跑——在旧框架收尾 / close 或当 done 处理。"
+            "\n⚠️ 歧义需求（active 且 stage∈{3,4}，脚本未动）—— 旧 7-stage 的 prd(3)/design(4) 与"
+            "新六步的 复审(3)/沉淀(4) 同号。请逐个确认它们确实在新六步阶段，不是停在旧 prd/design"
+            "（后者会被新引擎当成已完成、且 req-transition 不可回退）："
         )
-
-
-STAGE_NAME_HINT = {1: "范围确认", 2: "build", 3: "复审", 4: "沉淀"}
+        for a in ambiguous:
+            name = STAGE_NAME_HINT.get(a["stage"], "")
+            print(f"   - {a['req']}: stage {a['stage']}（{name}？）")
 
 
 if __name__ == "__main__":
