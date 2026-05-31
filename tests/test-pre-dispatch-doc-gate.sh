@@ -159,7 +159,7 @@ test_create_task_worktree_seals_dirty_task_md() {
 **开发服务器：**
 
 ## 启动前必读
-- docs/PROJECT.md
+- docs/PRODUCT.md
 
 ## 任务描述
 v1 文案
@@ -193,7 +193,7 @@ EOF
 **开发服务器：**
 
 ## 启动前必读
-- docs/PROJECT.md
+- docs/PRODUCT.md
 
 ## 任务描述
 v3 终态文案 (修订后)

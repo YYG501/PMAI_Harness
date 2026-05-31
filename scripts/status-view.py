@@ -230,13 +230,13 @@ def render_health_check(repo_root: Path) -> None:
 
     missing: list = []
 
-    if not (docs_dir / "PROJECT.md").exists():
+    if not (docs_dir / "PRODUCT.md").exists():
         if (docs_dir / "CONTEXT.md").exists():
             missing.append(
-                ("docs/PROJECT.md", "可能漏跑 migrate-context-to-project.py — docs/CONTEXT.md 还在")
+                ("docs/PRODUCT.md", "可能漏跑 migrate-context-to-project.py — docs/CONTEXT.md 还在")
             )
         else:
-            missing.append(("docs/PROJECT.md", "项目级文档主真相源；跑 /pmai-init-project 或 /pmai-project-solution 起新建"))
+            missing.append(("docs/PRODUCT.md", "项目级文档主真相源；跑 /pmai-init-project 或 /pmai-project-solution 起新建"))
 
     if not (docs_dir / "PRODUCT-RULES.md").exists():
         missing.append(("docs/PRODUCT-RULES.md", "GSD §8 新增的产品规则文档"))

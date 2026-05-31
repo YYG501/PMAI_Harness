@@ -33,7 +33,7 @@ test_checker_exists() {
 test_whitelist_passes() {
   start_test "T2: 白名单文件（PROJECT/PRODUCT-STATE/DESIGN/PRODUCT-RULES/TODO/prd/CONTEXT）被允许"
   local tmp; tmp=$(mktemp -d)
-  for f in PROJECT.md PRODUCT-STATE.md DESIGN.md PRODUCT-RULES.md TODO.md prd.md CONTEXT.md; do
+  for f in PRODUCT.md PRODUCT-STATE.md DESIGN.md PRODUCT-RULES.md TODO.md prd.md CONTEXT.md; do
     if ! python3 "$CHECKER" --repo-root "$tmp" --from-paths "docs/$f" >/dev/null 2>&1; then
       _fail "白名单 docs/$f 应被允许，实际被拦下"
       rm -rf "$tmp"; return

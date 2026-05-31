@@ -78,7 +78,7 @@ write_task_file() {
 
 ## 启动前必读（按顺序，读完再执行）
 
-1. docs/PROJECT.md
+1. docs/PRODUCT.md
 
 ## 任务描述
 最小测试 task。
@@ -261,7 +261,7 @@ test_prompt_envelope_two_files() {
 
 ## 3. 启动前必读
 
-1. docs/PROJECT.md
+1. docs/PRODUCT.md
 EOF
   out=$(cd "$SANDBOX" && python3 .claude/scripts/build-execution-prompt.py task-001-foo.md)
   missing=""

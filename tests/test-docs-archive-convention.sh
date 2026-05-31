@@ -10,7 +10,7 @@
 #   T6: init-project 端到端：新项目跑完后 docs/归档/ 子目录确实存在
 #
 # 背景：PM 实测 example-consumer-app docs/ 顶层有错位（product-principles.md /
-# user-stories-permission.md 是模块决策却放顶层）+ 重复（prd.md 跟 PROJECT.md
+# user-stories-permission.md 是模块决策却放顶层）+ 重复（prd.md 跟 PRODUCT.md
 # 重叠）+ 过程档案（PROTOTYPE_CLEANUP.md 放根目录）。framework 无约定 = AI
 # 新建文档时随手放顶层 → 长期积累混乱。
 set -uo pipefail
@@ -35,7 +35,7 @@ test_tmpl_has_archive_convention_section() {
 # -----------------------------------------------------------------
 test_tmpl_has_positive_list() {
   start_test "T2: 约定含顶层正面清单"
-  for f in PROJECT.md DESIGN.md PRODUCT-RULES.md TODO.md prd.md; do
+  for f in PRODUCT.md DESIGN.md PRODUCT-RULES.md TODO.md prd.md; do
     if ! grep -q "$f" "$CLAUDE_TMPL"; then
       _fail "约定缺正面清单项: $f"
       return

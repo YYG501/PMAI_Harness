@@ -32,7 +32,7 @@
 
 - ✅ **PM 答完后再写文件 / commit**
 - ❌ PM 没答之前 **不能** ：
-  - 写 PROJECT.md / TODO.md / prd.md / task.md 等 PM 视图文件
+  - 写 PRODUCT.md / TODO.md / prd.md / task.md 等 PM 视图文件
   - git commit / git push
   - 调用 `req-transition.py --to N+1`（stage 推进）
   - 调用 `task-transition.py --status 已完成`（task 状态切换）
@@ -59,8 +59,8 @@
 
 请选择：
 
-1. 创建 PROJECT.md
-   我会开始写 PROJECT.md，进入下一步
+1. 创建 PRODUCT.md
+   我会开始写 PRODUCT.md，进入下一步
 
 2. 继续探索
    你还想补充行业 / 用户 / 流程
@@ -145,7 +145,7 @@ B. 改成"管的范围"
 
 ### §3.3 未决问题闸门特殊约束
 
-未决问题闸门（_shared/project-questioning.md §4）= AskUser 的一种 + 暂存文件 + 闸门脚本三层防守。**askuser-rules §1.2 落盘禁止**对它仍然生效（PM 没答完所有未决问题前，不能写 PROJECT.md / prd.md）。
+未决问题闸门（_shared/project-questioning.md §4）= AskUser 的一种 + 暂存文件 + 闸门脚本三层防守。**askuser-rules §1.2 落盘禁止**对它仍然生效（PM 没答完所有未决问题前，不能写 PRODUCT.md / prd.md）。
 
 ---
 

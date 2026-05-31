@@ -3,7 +3,7 @@ name: pmai-codebase-audit
 description: |
   Brownfield 一气呵成入口：已有代码库接入框架时，一个命令走完——扫码产出「代码现状档」
   （7 维度：技术栈 / 集成 / 架构 / 结构 / 约定 / 测试 / 隐患；带防 secret 扫描），PM 过目现状档后，
-  在同一流程内内联跑项目方向讨论（被现状档喂着，和新项目一样），产出 docs/PROJECT.md + docs/TODO.md。
+  在同一流程内内联跑项目方向讨论（被现状档喂着，和新项目一样），产出 docs/PRODUCT.md + docs/TODO.md。
   与 GSD 的 map-codebase → new-project 同构。新项目（无已有代码）不用本 skill。
 ---
 
@@ -68,7 +68,7 @@ echo "SKILL: codebase-audit"
 📋 7 维度盘点完成：技术栈 <一句> / 集成 N 个 / 架构 <一句> / 隐患 M 项
 
 这份现状档准吗？有补充 / 纠正直接说。
-你过目后说「继续」，我接着用这份现状档跟你定项目方向（产出 PROJECT.md + TODO.md）。
+你过目后说「继续」，我接着用这份现状档跟你定项目方向（产出 PRODUCT.md + TODO.md）。
 ```
 
 PM 提修正 → 改现状档 → 重新呈交。
@@ -105,7 +105,7 @@ PM 提修正 → 改现状档 → 重新呈交。
    - 子目录信号：`src/modules/*` / `src/pages/*` / `src/features/*` / `apps/*` / `packages/*`
    - 多 app 项目：每个 app 当一个 module
    - 路由表 / 菜单配置里的顶级分组（找 `routes`/`navigation`/`menu`/`sidebar` 关键词文件）
-   - `docs/PROJECT.md` 已有的「业务模块」段（若之前 project-solution 跑过）
+   - `docs/PRODUCT.md` 已有的「业务模块」段（若之前 project-solution 跑过）
    - 候选清单去重 / 合并明显同义的（如 `user-management` 和 `user-mgmt`）
 
 2. **PM 确认候选清单**：呈交清单格式 ——
@@ -126,7 +126,7 @@ PM 提修正 → 改现状档 → 重新呈交。
 
 3. **生成主规格骨架**：按 `$PMAI_HOME/skills/codebase-audit/templates/module.md.tmpl` 为每个确认模块建 `docs/modules/<m>.md` ——
 
-   - **§摘要**：AI 写 1-3 句（基于代码扫到的功能形态 + PROJECT.md / 代码现状档）
+   - **§摘要**：AI 写 1-3 句（基于代码扫到的功能形态 + PRODUCT.md / 代码现状档）
    - **§一 模块定位 1.1-1.4**：AI 填能扫到的部分；**1.4 职责边界末尾追加「**稳定结构指针**」sub-bullet 列菜单 / 路由 / schema / config 文件路径**（指针不抄内容，防漂移）
    - **§二 功能清单**：保持模板空（后续 task close 时由 close-req §1.5 sediment 填）
    - **§三 页面与交互范围**：AI 填能扫到的（路由表 / 页面文件）
@@ -221,7 +221,7 @@ HAS_PS=false
 | 当前功能 / 能力 | `CODEBASE-AUDIT.md` §3 架构 + §4 目录结构 + 路由 / 菜单扫描的功能面，每条 ≤ 一行 |
 | 主原型现状 | brownfield 无 `prototype/` 脚手架 → 按 audit §4 页面 / 路由列已有页面区域，备注统一标「源自现有 codebase，非 prototype/ 脚手架」；若连页面都没有，如实写「主原型尚未立」 |
 | 实现深度状态（mock / 真） | 按 audit §1 技术栈 + §2 外部集成反推每层真 / mock（brownfield 有真 DB / 真后端的层填「真系统」，何时转列填「接入时已是」或「—」；扫不到的层填「未知」） |
-| 产品定位一句话 | **留空占位**，step 4 拍定 PROJECT.md 产品定位后回填（要对齐 PROJECT.md，而它 step 4 才产出） |
+| 产品定位一句话 | **留空占位**，step 4 拍定 PRODUCT.md 产品定位后回填（要对齐 PRODUCT.md，而它 step 4 才产出） |
 
 **顶部状态行**（插在 H1 标题之前）：
 
@@ -236,7 +236,7 @@ HAS_PS=false
   产品定位一句话留空，step 4 定方向后回填
 ```
 
-### 步骤 4：内联方向讨论（产 PROJECT.md + TODO.md）
+### 步骤 4：内联方向讨论（产 PRODUCT.md + TODO.md）
 
 PM 在 step 3 轻停顿说「继续」后，**在本流程内直接接着跑项目方向讨论**——不交接出去、不让 PM 手敲 `/pmai-project-solution`。逻辑和 greenfield（`/pmai-init-project` 阶段 C）完全同一套，走共享真相源。
 
@@ -251,19 +251,19 @@ PM 在 step 3 轻停顿说「继续」后，**在本流程内直接接着跑项�
    - (4) 业务术语表（**从 model / API 命名反推 + PM 补**）
    - (5) TODO 待办池（PM 给，AI 不反推填充——只记 PM 提过/讨论过想做的，不排序）
 4. **未决问题闸门**（@读 `_shared/project-questioning.md` §4）：暂存文件 `docs/.project-solution-open-questions.md`，闸门必过。
-5. **Decision gate 确认门**（@读 §6）：label = 动作描述，PM 选「创建 PROJECT.md」才落盘；选「继续探索」回提问 Loop。
-6. **写 `docs/PROJECT.md` + `docs/TODO.md`**（@读 §5 写作规则）。
+5. **Decision gate 确认门**（@读 §6）：label = 动作描述，PM 选「创建 PRODUCT.md」才落盘；选「继续探索」回提问 Loop。
+6. **写 `docs/PRODUCT.md` + `docs/TODO.md`**（@读 §5 写作规则）。
 7. **5 节齐不齐检查**（@读 §7）：跑 `check-project-sections.py`，有空节逐节补。
 8. **PM 定稿**（@读 §8）：展示路径 + 摘要，PM 答「OK / 定了」。
-9. **回填 PRODUCT-STATE 产品定位**：把 step 3.5.7 留空的 `docs/PRODUCT-STATE.md` 产品定位一句话按 PROJECT.md 拍定的定位填上，去掉顶部状态行里「产品定位待回填」那句。
-10. **atomic commit**（@读 §9）：`git commit -m "docs: project direction settled"`（含 PROJECT.md / TODO.md / PRODUCT-STATE.md 回填）。
+9. **回填 PRODUCT-STATE 产品定位**：把 step 3.5.7 留空的 `docs/PRODUCT-STATE.md` 产品定位一句话按 PRODUCT.md 拍定的定位填上，去掉顶部状态行里「产品定位待回填」那句。
+10. **atomic commit**（@读 §9）：`git commit -m "docs: project direction settled"`（含 PRODUCT.md / TODO.md / PRODUCT-STATE.md 回填）。
 11. 收尾向 PM 一句话说明 TODO 是 PM 自己维护的待办池（AI 不反推填充），给 ▶ Next Up 块引到第一个需求：`/pmai-new-req "<一句话需求>"`。
 
 > **为什么内联而不是交接**：方向讨论的全部逻辑已沉淀在共享的 `_shared/project-questioning.md`，greenfield 的 init-project 阶段 C 就是这么内联跑的；brownfield 现状档此刻已在手，没有任何技术理由再拆成第二个手敲命令。轻停顿（step 3）已经给了 PM 消化现状档的时间——「留消化时间」和「逼 PM 手敲命令」是两件事，本 skill 只保留前者。
 
 ## Rules
 
-- **扫码阶段只读**：步骤 1-3（扫码 + 产现状档）只读代码、不改代码。step 4 内联方向讨论才写 `docs/PROJECT.md` + `docs/TODO.md`（PM 在 Decision gate 拍板后落盘）。
+- **扫码阶段只读**：步骤 1-3（扫码 + 产现状档）只读代码、不改代码。step 4 内联方向讨论才写 `docs/PRODUCT.md` + `docs/TODO.md`（PM 在 Decision gate 拍板后落盘）。
 - **防 secret 是硬约束**：见上方「防 secret 扫描」段，违反 = 严重错误。
 - **方向讨论走共享真相源**：step 4 内联方向讨论必须 @读 `skills/_shared/project-questioning.md`，**不要**在本 skill 里重抄提问法 / 写作规则（必漂移；真相源单一，和 init-project 阶段 C / project-solution 共用同一套）。
 - **与 `/pmai-project-solution` 分工**：本 skill 管 brownfield **首次接入定方向**（内联跑完）；`/pmai-project-solution` 管**事后改方向**（场景 A 重做 / B 路线规划 / C 新方向）。接入不再需要 PM 手敲 project-solution。
@@ -275,11 +275,11 @@ PM 在 step 3 轻停顿说「继续」后，**在本流程内直接接着跑项�
 - **允许产出**：
   - `docs/CODEBASE-AUDIT.md`（默认）
   - `docs/PRODUCT-STATE.md` 兜底建骨架（**step 3.5.7 无条件**，反推填现状三段，产品定位一句话 step 4 回填）
-  - `docs/PROJECT.md` + `docs/TODO.md`（**step 4 内联方向讨论，PM 在 Decision gate 拍板后**）
+  - `docs/PRODUCT.md` + `docs/TODO.md`（**step 4 内联方向讨论，PM 在 Decision gate 拍板后**）
   - `docs/.project-solution-open-questions.md`（step 4 未决问题闸门暂存文件）
   - `docs/modules/<m>.md` 主规格骨架（**仅当 step 3.5 PM 选 [Y]**）
   - `docs/modules/INDEX.md` 刷新（**仅当 step 3.5 PM 选 [Y]**）
   - `docs/DESIGN.md` 兜底建 / 追加 inventory 段（**step 3.5.5 无条件，跟 step 3.5 选择无关**）
 - **允许动作**：read-only 扫码、7 维度盘点、防 secret redact、step 3.5 选 [Y] 时按 `$PMAI_HOME/skills/codebase-audit/templates/module.md.tmpl` 生成主规格骨架、step 3.5.5 兜底 DESIGN.md inventory 段、step 3.5.7 兜底 PRODUCT-STATE.md（反推填现状三段，定位 step 4 回填）、step 4 内联方向讨论（@读 `_shared/project-questioning.md`）
 - **禁止**：改代码 / 改 step 3.5 / 3.5.5 范围外的业务文档 / step 4 替 PM 做方向决策（必过 Decision gate）/ step 3.5 跳过模块清单 PM 确认环节 / step 3.5.5 替 gstack 写视觉基线 8 段（视觉基线由 PM 主动调 `/design-consultation`）/ 在 step 4 重抄 `_shared/project-questioning.md` 的提问法与写作规则
-- **退出条件**：现状档经 PM 确认 + step 3.5 完成（建或跳过）+ step 3.5.5 兜底跑过 + step 3.5.7 PRODUCT-STATE 兜底跑过 + step 4 方向讨论定稿（PROJECT.md / TODO.md 已落 + PRODUCT-STATE 产品定位已回填 + atomic commit）+ 给出 ▶ Next Up（`/pmai-new-req`）
+- **退出条件**：现状档经 PM 确认 + step 3.5 完成（建或跳过）+ step 3.5.5 兜底跑过 + step 3.5.7 PRODUCT-STATE 兜底跑过 + step 4 方向讨论定稿（PRODUCT.md / TODO.md 已落 + PRODUCT-STATE 产品定位已回填 + atomic commit）+ 给出 ▶ Next Up（`/pmai-new-req`）

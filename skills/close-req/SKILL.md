@@ -204,9 +204,9 @@ PM 选「先不出」→ 跳过，close-report 记「本需求未出评审 PRD�
 python3 "$PMAI_HOME/scripts/req-transition.py" "$ACTIVE_REQ_DIR" --to 4
 ```
 
-### 步骤 6：业务词催补 —— 把本需求稳定下来的新词沉进 docs/PROJECT.md
+### 步骤 6：业务词催补 —— 把本需求稳定下来的新词沉进 docs/PRODUCT.md
 
-需求收尾是业务实体真正落地稳定的时刻——把本需求引入的新业务词 / 角色 patch 进 `docs/PROJECT.md` 业务术语表 / 用户画像表，作为长期沉淀：
+需求收尾是业务实体真正落地稳定的时刻——把本需求引入的新业务词 / 角色 patch 进 `docs/PRODUCT.md` 业务术语表 / 用户画像表，作为长期沉淀：
 
 ```bash
 # 扫输入 = 本需求的 PM 视图主文件（req-plan + 所有收尾 task 主文件 .md）
@@ -222,7 +222,7 @@ python3 "$PMAI_HOME/scripts/_lib/term-detector.py" \
 rm "$TMPFILE"
 ```
 
-按返回 JSON 处理（详见 `skills/_shared/term-detector/SKILL.md`）：≥3 新词走多词批量话术；<3 走单词；新角色独立话术；全空 silent skip。PM 拒绝某词 → 追加 `.term-skip.json`；PM 同意 → patch `docs/PROJECT.md` 业务术语表 / 用户画像表。
+按返回 JSON 处理（详见 `skills/_shared/term-detector/SKILL.md`）：≥3 新词走多词批量话术；<3 走单词；新角色独立话术；全空 silent skip。PM 拒绝某词 → 追加 `.term-skip.json`；PM 同意 → patch `docs/PRODUCT.md` 业务术语表 / 用户画像表。
 
 ### 步骤 7：commit 所有改动
 

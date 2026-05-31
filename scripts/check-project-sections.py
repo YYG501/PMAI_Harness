@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""check-project-sections.py — PROJECT.md 5 节状态检测器
+"""check-project-sections.py — PRODUCT.md 5 节状态检测器
 
-被 req-stage-gate skill 在 stage 3→4 闸门调用，检测 docs/PROJECT.md 5 节
+被 req-stage-gate skill 在 stage 3→4 闸门调用，检测 docs/PRODUCT.md 5 节
 （项目名称 / 产品定位 / 用户画像 / 技术栈 / 业务术语表）
 是否为空骨架（HTML 注释占位 / 无实质内容）。
 
@@ -93,8 +93,8 @@ def is_substantial(body: str, section: str) -> bool:
 
 
 def check_project(repo_root: Path, target_section: str = None) -> dict:
-    """检测 PROJECT 5 节状态。"""
-    project_path = repo_root / "docs" / "PROJECT.md"
+    """检测 PRODUCT 5 节状态。"""
+    project_path = repo_root / "docs" / "PRODUCT.md"
     result = {
         "project_path": str(project_path),
         "exists": project_path.exists(),

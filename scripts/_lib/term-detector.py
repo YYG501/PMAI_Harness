@@ -53,7 +53,7 @@ def load_whitelist(repo_root: Path) -> set:
 
 
 def load_registered(project_path: Path) -> dict:
-    """Load registered terms from PROJECT.md 业务术语表 / 用户画像表."""
+    """Load registered terms from PRODUCT.md 业务术语表 / 用户画像表."""
     result = {"terms": set(), "roles": set()}
     if not project_path.exists():
         return result
@@ -170,7 +170,7 @@ def main():
 
     text = text_path.read_text(encoding="utf-8")
     whitelist = load_whitelist(repo_root)
-    project_path = repo_root / "docs" / "PROJECT.md"
+    project_path = repo_root / "docs" / "PRODUCT.md"
     registered = load_registered(project_path)
 
     req_dir = Path(args.req_dir) if args.req_dir else None

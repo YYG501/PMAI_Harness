@@ -142,7 +142,7 @@ bash "$PMAI_HOME/scripts/quick-fix.sh" --snapshot
 | 改对象 | 同时要考虑 |
 |---|---|
 | `prototype/**` | `docs/modules/*.md`（项目级模块规格描述的功能形态）/ `docs/modules/INDEX.md`（模块用途索引）/ `docs/DESIGN.md`（视觉规范——涉及视觉时） |
-| `docs/PROJECT/DESIGN/modules/prd.md` | `prototype/**`（原型是否已反映新文档——反向同步）/ 文档间交叉引用 |
+| `docs/PRODUCT/DESIGN/modules/prd.md` | `prototype/**`（原型是否已反映新文档——反向同步）/ 文档间交叉引用 |
 | `requirements/closed/<closed-req>/**`（含其内 tasks/） | 这是历史快照（引用更新 / 错别字 / 反映后续 req 变化）；通常不外溢。改"产品决策记录"= 改写历史，PM 要明确意图。**改完必须在被改文件末尾追加 visible §📝 后期修订记录 section**（详见 §3.5.2）|
 | `templates/` / `.claude/scripts/` / `.claude/skills/` | §Rules 已禁止；走单独 PR 不走 quick-fix |
 | **其他 target**（表外） | **按 §3.5.2 概念分类自己推断**——表外不是"无需扫"，是"AI 用概念判断" |
@@ -191,7 +191,7 @@ Runtime 不支持时按 `_shared/pm-view/askuser-rules.md §1.3` 退化编号列
 
 ```
 当前合同（被改动撤销/修订时必须同步，扫描必扫）：
-- 项目级活合同：docs/{PROJECT, DESIGN, modules, prd}.md
+- 项目级活合同：docs/{PRODUCT, DESIGN, modules, prd}.md
 - 各 active req 的 stage 3 需求方案：prd.md（在飞旧 req 仍可能是 solution.md + solution.engineering.md）
 - 项目代码：prototype/
 

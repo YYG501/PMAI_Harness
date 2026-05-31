@@ -79,11 +79,11 @@ REQ_BRANCH="req-$NEW_NUM-<slug>"      # 仅记内存，不在 main 上创建任�
 
 ### 步骤 2：项目底座兜底（主仓 main 上）
 
-在主仓 main 分支做一次项目底座检查 —— `docs/PROJECT.md`（6 节）+ `docs/DESIGN.md`（视觉约束 + 共享组件 inventory）。这两份是**项目级**而非 req 级，缺则补、补完直接 commit 到 main（理由：worktree 从 main 拉，main 上有这两份项目底座才能被 worktree 内 build 读到；项目底座不跟 req-plan 混 commit）。
+在主仓 main 分支做一次项目底座检查 —— `docs/PRODUCT.md`（5 节）+ `docs/DESIGN.md`（视觉约束 + 共享组件 inventory）。这两份是**项目级**而非 req 级，缺则补、补完直接 commit 到 main（理由：worktree 从 main 拉，main 上有这两份项目底座才能被 worktree 内 build 读到；项目底座不跟 req-plan 混 commit）。
 
 > **为什么放在这里**：`/pmai-new-req` 是每 req 入口、本检查每 req 首次触发、项目底座填满后再跑就 silent skip——天然幂等，不需要「已查过」标记。**放在步骤 2（拉 worktree 之前）**：main 上 commit 完，步骤 4 拉 worktree 时自动带上。
 
-#### 2A：PROJECT.md 兜底
+#### 2A：PRODUCT.md 兜底
 
 ```bash
 PROJECT_STATE=$(python3 "$PMAI_HOME/scripts/check-project-sections.py" "$REPO_ROOT")
@@ -91,14 +91,14 @@ ALL_FILLED=$(echo "$PROJECT_STATE" | python3 -c "import sys, json; print(json.lo
 EMPTY=$(echo "$PROJECT_STATE" | python3 -c "import sys, json; print(','.join(json.load(sys.stdin)['empty_sections']))")
 ```
 
-（`$REPO_ROOT` 在主仓 main 上解析为主仓根，`docs/PROJECT.md` 是 main 上这份。）
+（`$REPO_ROOT` 在主仓 main 上解析为主仓根，`docs/PRODUCT.md` 是 main 上这份。）
 
-**PROJECT 6 节全填（`all_filled` 为 `True`）→ silent skip**：不打断 PM，直接进步骤 4。这是已建立项目的常态。
+**PRODUCT 5 节全填（`all_filled` 为 `True`）→ silent skip**：不打断 PM，直接进步骤 4。这是已建立项目的常态。
 
 **有空节 → mini-fill**：先告诉 PM 一句、问填写模式：
 
 ```
-📝 检查 docs/PROJECT.md —— 有 <N> 节空着（<empty_sections>）。这是 AI 后续每个需求必读的产品语境基线，开始新需求前先补一遍。
+📝 检查 docs/PRODUCT.md —— 有 <N> 节空着（<empty_sections>）。这是 AI 后续每个需求必读的产品语境基线，开始新需求前先补一遍。
 
 想填详细版（按完整规范）还是最简版（1 句话 / 1 角色 / 1 条术语 起手）？最简版几分钟搞定。
 ```
@@ -111,9 +111,9 @@ PM 答「混合」→ 各节 PM 临场决定
 
 **禁逃生舱**（MEMORY「未决问题闸门强制答题」）：不给「暂跳过」「不重要」「以后再说」选项；PM 真不知道写啥 → AI 给精简模式默认值（如产品定位 "工具型应用，给单人 PM 用，无长期硬约束"），PM 微调或直接接受。
 
-填完后重跑 `check-project-sections.py` 验证全填，**mini-fill 写的 `docs/PROJECT.md` 在 2A 末尾立即 commit 到 main**（见本步末 commit 说明）。
+填完后重跑 `check-project-sections.py` 验证全填，**mini-fill 写的 `docs/PRODUCT.md` 在 2A 末尾立即 commit 到 main**（见本步末 commit 说明）。
 
-> mini-fill 只在已有项目 + PROJECT 有空节时触发；新项目首次 `/pmai-init-project` 已把 PROJECT 填满，这里直接 silent skip。
+> mini-fill 只在已有项目 + PRODUCT 有空节时触发；新项目首次 `/pmai-init-project` 已把 PRODUCT 填满，这里直接 silent skip。
 
 #### 2B：DESIGN.md inventory 段兜底
 
@@ -181,20 +181,20 @@ $HAS_FILE && grep -q "^## 共享组件 inventory" "$DESIGN_MD" && HAS_INVENTORY=
 
 #### 2C：commit 项目底座到 main（仅 2A / 2B 实际触发时）
 
-2A / 2B 写了 / 改了 `docs/PROJECT.md` / `docs/DESIGN.md` → 在主仓 main 上 commit。两者都没触发（全 silent skip）→ 跳过本节。
+2A / 2B 写了 / 改了 `docs/PRODUCT.md` / `docs/DESIGN.md` → 在主仓 main 上 commit。两者都没触发（全 silent skip）→ 跳过本节。
 
 ```bash
 # 仅 add 实际改动的文件（按 2A / 2B 触发情况）
-[ "$PROJECT_TOUCHED" = "true" ] && git -C "$REPO_ROOT" add docs/PROJECT.md
+[ "$PROJECT_TOUCHED" = "true" ] && git -C "$REPO_ROOT" add docs/PRODUCT.md
 [ "$DESIGN_TOUCHED"  = "true" ] && git -C "$REPO_ROOT" add docs/DESIGN.md
 
-git -C "$REPO_ROOT" commit -m "chore(baseline): new-req 入口兜底 PROJECT.md / DESIGN.md"
+git -C "$REPO_ROOT" commit -m "chore(baseline): new-req 入口兜底 PRODUCT.md / DESIGN.md"
 ```
 
 告诉 PM 一句：
 
 ```
-📝 项目底座已 commit 至 main（<short-hash>）：<PROJECT.md / DESIGN.md / 二者>。后面拉 worktree 自动带上。
+📝 项目底座已 commit 至 main（<short-hash>）：<PRODUCT.md / DESIGN.md / 二者>。后面拉 worktree 自动带上。
 ```
 
 ### 步骤 3：范围确认 —— 读产品现状 + 跑主原型 → 三条上坡路 → 产 req-plan.md
@@ -427,7 +427,7 @@ git -C "$WORKTREE_DIR" add \
 git -C "$WORKTREE_DIR" commit -m "范围确认: req-$NEW_NUM-<slug>"
 ```
 
-commit 范围限于本 req 目录内的文件 —— req-plan.md / brief.md / .req-meta.json / tasks/ 骨架 / attachments/（含 .gitkeep + 实际附件）。`docs/PROJECT.md` / `docs/DESIGN.md` 已在步骤 2C commit 到 main，不在本 commit 范围。
+commit 范围限于本 req 目录内的文件 —— req-plan.md / brief.md / .req-meta.json / tasks/ 骨架 / attachments/（含 .gitkeep + 实际附件）。`docs/PRODUCT.md` / `docs/DESIGN.md` 已在步骤 2C commit 到 main，不在本 commit 范围。
 
 commit 完成 → working tree clean，满足 INVARIANTS I-AD5 / I-DC1（dispatch 前 working tree 必须 clean），步骤 5 handoff 后 PM 想 `git worktree remove` 不会撞 dirty tree。
 
@@ -472,9 +472,9 @@ req-plan.md 已 commit 后，**当前主对话不再继续 build**。`/pmai-new-
 - office-hours 是 PM 自主使用的可选 aid（范围确认期想深挖时 PM 手动调），**AI 不主动替 PM 跑**、不进固定流程
 - 范围清单里的分区 / 菜单归类 / 模块切分 / 命名底稿是结构决策，PM 必须在定稿门拍板，AI 不自判「无歧义」跳门
 - **worktree 创建后置**（核心规则）：拉 worktree 在步骤 4 一次性完成（范围定稿之后）。步骤 0-3 全程主对话 cwd 在主仓 main、不创建任何文件 / 目录，req-plan 草稿在 chat markdown block 展示。理由：worktree 隔离机制对 PM 视角等同于 IDE 切分支，这个事件必须在 PM 明确说 OK 之后才发生；中段切 cwd = 体验破绽
-- 步骤 2 项目底座兜底（PROJECT.md / DESIGN.md）在主仓 main 上做并 commit 到 main —— 这两份是项目级的项目底座不是 req 级，进 main 是语义正确；worktree 在步骤 4 从 main 拉时自动带上
+- 步骤 2 项目底座兜底（PRODUCT.md / DESIGN.md）在主仓 main 上做并 commit 到 main —— 这两份是项目级的项目底座不是 req 级，进 main 是语义正确；worktree 在步骤 4 从 main 拉时自动带上
 - 步骤 3.5 attachments：trigger 0/1 仅记内存 list `PENDING_ATTACHMENTS`，不调 helper；实际 cp + register 在步骤 4B batch 执行。**trigger 2 砍** —— worktree 还没建无 cp 目标；PM 想绕 chat 等 handoff 后在 worktree 新对话里做
 - 步骤 4 原子性：4A 拉 worktree → 4B batch cp attachments → 4C 写 req-plan.md + brief.md → 4D 一次 commit。全程用 `git -C <worktree>` 不切 cwd；任一子步失败 fail-loud + 让 PM 手动清理 / `git worktree remove` 回滚
-- commit 范围限于本 req 目录内的文件（req-plan.md / brief.md / .req-meta.json / tasks/ / attachments/）。`docs/PROJECT.md` / `docs/DESIGN.md` 已在步骤 2C 单独 commit 到 main，不在 4D 范围
+- commit 范围限于本 req 目录内的文件（req-plan.md / brief.md / .req-meta.json / tasks/ / attachments/）。`docs/PRODUCT.md` / `docs/DESIGN.md` 已在步骤 2C 单独 commit 到 main，不在 4D 范围
 - I-AD5 / I-DC1（dispatch 前 working tree 必须 clean）由步骤 4D commit 保证：commit 完成 → worktree clean → 步骤 5 handoff 后 PM `git worktree remove` 不会撞 dirty tree
 - handoff 指向 `/pmai-next`（六步推进驱动），不指向旧的 `/pmai-req-stage-gate`

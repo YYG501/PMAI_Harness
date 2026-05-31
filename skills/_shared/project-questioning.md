@@ -12,7 +12,7 @@
 调用方应当：
 
 1. **判断场景**（调用方自己做）：
-   - `/pmai-init-project` 阶段 C → greenfield 首次（输入 = 空 PROJECT.md 骨架）
+   - `/pmai-init-project` 阶段 C → greenfield 首次（输入 = 空 PRODUCT.md 骨架）
    - `/pmai-codebase-audit` step 4 → brownfield 首次接入（输入 = 刚产出的 `docs/CODEBASE-AUDIT.md` 现状档）
    - `/pmai-project-solution` → 按 4 场景判断（重做 / 产品路线规划 / 新方向 / 接入方向恢复）（细化）
 2. **决定问题顺序**（调用方自己排）：
@@ -41,7 +41,7 @@
 
 ## §3 问题库（按 5 节组织）
 
-| PROJECT 节 | 要问出 | 典型话术 |
+| PRODUCT 节 | 要问出 | 典型话术 |
 |---|---|---|
 | 产品定位 | 是什么产品 / 解决什么问题 / 给谁用 / 有无长期硬约束 | 「这个项目要解决什么核心问题？目标用户是谁？有没有不能动的边界（合规 / 集成 / 性能）？」|
 | 用户画像 | 主角色是谁 / 关键诉求（起手 1 个主角色即可） | 「最主要的用户是哪种人？他们最大的诉求是什么？」|
@@ -57,7 +57,7 @@
 
 ## §4 未决问题闸门（收敛前硬规则）
 
-讨论收敛、动手写 `docs/PROJECT.md` 之前 —— 如果还有需要 PM 拍板才能定的项目级问题（如「先做单人版还是直接做协作版」），**不能带着模糊往下写**。
+讨论收敛、动手写 `docs/PRODUCT.md` 之前 —— 如果还有需要 PM 拍板才能定的项目级问题（如「先做单人版还是直接做协作版」），**不能带着模糊往下写**。
 
 **步骤**：
 
@@ -97,7 +97,7 @@ python3 "$PMAI_HOME/scripts/check-open-questions.py" \
 
 ## §5 写作规则
 
-### §5.1 PROJECT.md 5 节（模板见 `$PMAI_HOME/templates/PROJECT.md.tmpl`）
+### §5.1 PRODUCT.md 5 节（模板见 `$PMAI_HOME/templates/PRODUCT.md.tmpl`）
 
 | 节 | 写什么 |
 |---|---|
@@ -126,7 +126,7 @@ python3 "$PMAI_HOME/scripts/check-open-questions.py" \
 
 ### §5.3 TODO.md 是 PM 待办池（不是规划真相源）
 
-TODO 不是项目方向真相源——**方向真相源是 `PROJECT.md`**。TODO 只是 PM 自己维护的待办清单：想到要做的记一笔、不想做了划掉。
+TODO 不是项目方向真相源——**方向真相源是 `PRODUCT.md`**。TODO 只是 PM 自己维护的待办清单：想到要做的记一笔、不想做了划掉。
 
 PM 要起新需求时，调用方应**提醒 PM「待办池里有这些」让 PM 挑一个**，不替 PM 判断「下一个该做 X」。
 
@@ -145,29 +145,29 @@ PM 要起新需求时，调用方应**提醒 PM「待办池里有这些」让 PM
 
 | # | 规则 |
 |---|---|
-| 1 | **label = 动作描述**（例："创建 PROJECT.md" / "继续探索"），禁用 "OK" / "Proceed" / "Continue" 模糊词 |
-| 2 | **description = 一句话解释**（例："我会开始写 PROJECT.md，进入下一步" / "你还想补充行业 / 客户 / 流程"），不是文档化长说明 |
+| 1 | **label = 动作描述**（例："创建 PRODUCT.md" / "继续探索"），禁用 "OK" / "Proceed" / "Continue" 模糊词 |
+| 2 | **description = 一句话解释**（例："我会开始写 PRODUCT.md，进入下一步" / "你还想补充行业 / 客户 / 流程"），不是文档化长说明 |
 | 3 | **留守选项有 Loop 回路**：选了「继续探索」自动回到讨论态，不退出 skill |
 
 ### §6.2 Decision gate 模板（AskUserQuestion）
 
 ```
 header: "Ready?"
-question: "我想我大致明白你想做什么了。准备好写 PROJECT.md 了吗？"
+question: "我想我大致明白你想做什么了。准备好写 PRODUCT.md 了吗？"
 options:
-  - label: "创建 PROJECT.md"
-    description: "我会开始写 .planning/PROJECT.md，进入后续配置、需求和路线图流程。"
+  - label: "创建 PRODUCT.md"
+    description: "我会开始写 docs/PRODUCT.md，进入后续配置、需求和路线图流程。"
   - label: "继续探索"
     description: "你还想补充行业、客户类型、典型流程、Demo 形态或内部协作方式。"
 ```
 
-PM 选「继续探索」→ 回 §2 提问；Loop 直到 PM 选「创建 PROJECT.md」。
+PM 选「继续探索」→ 回 §2 提问；Loop 直到 PM 选「创建 PRODUCT.md」。
 
 ---
 
 ## §7 写作前 5 节齐不齐检查
 
-写完 `docs/PROJECT.md` 后跑：
+写完 `docs/PRODUCT.md` 后跑：
 
 ```bash
 PROJECT_STATE=$(python3 "$PMAI_HOME/scripts/check-project-sections.py" "$REPO_ROOT")
@@ -189,7 +189,7 @@ EMPTY=$(echo "$PROJECT_STATE" | python3 -c "import sys, json; print(','.join(jso
 ```
 项目方向已写好：
 
-📋 docs/PROJECT.md
+📋 docs/PRODUCT.md
    <绝对路径>
    产品定位 / 用户画像 / 技术栈 / 业务术语表 已填
 
@@ -207,11 +207,11 @@ EMPTY=$(echo "$PROJECT_STATE" | python3 -c "import sys, json; print(','.join(jso
 
 ## §9 atomic commit（调用方按需）
 
-写完 PROJECT.md + TODO.md + PM 定稿后，调用方 atomic commit（gsd new-project Step 4 pattern）：
+写完 PRODUCT.md + TODO.md + PM 定稿后，调用方 atomic commit（gsd new-project Step 4 pattern）：
 
 ```bash
 cd <target-dir>  # 业务仓
-git add docs/PROJECT.md docs/TODO.md
+git add docs/PRODUCT.md docs/TODO.md
 git commit -m "docs: project direction settled"
 ```
 
@@ -227,7 +227,7 @@ git commit -m "docs: project direction settled"
 2. 按 §3 5 节顺序问 PM（greenfield 顺序）
 3. §4 未决问题闸门
 4. §6 Decision gate
-5. §5 写 PROJECT.md + TODO.md
+5. §5 写 PRODUCT.md + TODO.md
 6. §7 5 节齐不齐检查
 7. §8 PM 定稿
 8. §9 atomic commit
@@ -235,17 +235,17 @@ git commit -m "docs: project direction settled"
 
 ### §10.2 `/pmai-project-solution`（4 场景之一，已细化）
 
-1. agent 按 SKILL.md 步骤 1 读已有输入（CLAUDE.md / `docs/PROJECT.md` / `docs/CODEBASE-AUDIT.md`）
+1. agent 按 SKILL.md 步骤 1 读已有输入（CLAUDE.md / `docs/PRODUCT.md` / `docs/CODEBASE-AUDIT.md`）
 2. **判断场景**（A 重做 / B 产品路线规划 / C 新方向 / D 接入方向恢复）—— 调用方 `/pmai-project-solution` SKILL.md 段 0 表已细化触发条件 + 输入态 + 提问顺序
 3. agent @读 本文件
 4. 按 `/pmai-project-solution` SKILL.md 段 0 表"提问顺序"列**场景特定顺序**问 PM：
    - A 重做：痛点诊断 → 产品定位 → 用户画像 → 业务术语 → 刷新 TODO 待办池
    - B 产品路线规划：问 PM 现在想做啥记进 TODO 待办池（**AI 不扫 `requirements/closed/` 反推历史、不排序**）→ 业务术语增量（跳过定位 / 用户 / 技术栈）
-   - C 新方向：新方向 vs 现 PROJECT 差异 → 产品定位 → 用户画像 → 刷新 TODO
+   - C 新方向：新方向 vs 现 PRODUCT 差异 → 产品定位 → 用户画像 → 刷新 TODO
    - D 接入方向恢复：全文读现状档 → 产品定位（codebase 反推）→ 用户画像 → 技术栈（codebase 抄）→ 业务术语 → 刷新 TODO
 5. §4 未决问题闸门
 6. §6 Decision gate
-7. §5 写 / 改 PROJECT.md + TODO.md
+7. §5 写 / 改 PRODUCT.md + TODO.md
 8. §7 5 节齐不齐检查
 9. §8 PM 定稿
 10. §9 atomic commit

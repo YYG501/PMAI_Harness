@@ -159,7 +159,7 @@ for TMPL in "$FRAMEWORK_DIR/templates/"*.tmpl; do
   # 确定目标位置
   case "$BASENAME" in
     CLAUDE.md)              DEST="$TARGET_DIR/CLAUDE.md" ;;
-    PROJECT.md)             DEST="$TARGET_DIR/docs/PROJECT.md" ;;
+    PRODUCT.md)             DEST="$TARGET_DIR/docs/PRODUCT.md" ;;
     PRODUCT-STATE.md)       DEST="$TARGET_DIR/docs/PRODUCT-STATE.md" ;;   # 六步项目底座：现状层 hub（下游 FORCE READ docs/PRODUCT-STATE.md）
     DESIGN.md)              DEST="$TARGET_DIR/docs/DESIGN.md" ;;          # 六步项目底座：正向视觉约束（build 前 AI 必读 docs/DESIGN.md）
     PRODUCT-RULES.md)       DEST="$TARGET_DIR/docs/PRODUCT-RULES.md" ;;

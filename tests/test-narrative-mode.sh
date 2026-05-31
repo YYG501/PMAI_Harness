@@ -119,9 +119,9 @@ test_health_check_skips_generator_repo() {
 test_health_check_reports_missing_docs() {
   start_test "T8: 业务仓 fixture 缺 PRODUCT-RULES.md / TODO.md 时输出体检"
   local tmp; tmp=$(mktemp -d)
-  # 模拟业务仓：根无 scripts/init-project.sh，docs/ 只有 PROJECT.md
+  # 模拟业务仓：根无 scripts/init-project.sh，docs/ 只有 PRODUCT.md
   mkdir -p "$tmp/docs"
-  echo "# PROJECT" > "$tmp/docs/PROJECT.md"
+  echo "# PRODUCT" > "$tmp/docs/PRODUCT.md"
   local out
   out=$(python3 "$STATUS_VIEW" --narrative "$tmp" 2>&1)
   if ! echo "$out" | grep -q "项目体检"; then
@@ -147,7 +147,7 @@ test_health_check_silent_when_complete() {
   start_test "T9: 业务仓产品文档齐全时不输出体检（0 噪音）"
   local tmp; tmp=$(mktemp -d)
   mkdir -p "$tmp/docs"
-  echo "# PROJECT" > "$tmp/docs/PROJECT.md"
+  echo "# PRODUCT" > "$tmp/docs/PRODUCT.md"
   echo "# PRODUCT-RULES" > "$tmp/docs/PRODUCT-RULES.md"
   echo "# TODO" > "$tmp/docs/TODO.md"
   local out
@@ -161,10 +161,10 @@ test_health_check_silent_when_complete() {
 }
 
 # -----------------------------------------------------------------
-# T10: 业务仓有 docs/CONTEXT.md 但无 docs/PROJECT.md 时提示 migrate
+# T10: 业务仓有 docs/CONTEXT.md 但无 docs/PRODUCT.md 时提示 migrate
 # -----------------------------------------------------------------
 test_health_check_hints_migrate_when_context_remains() {
-  start_test "T10: docs/CONTEXT.md 还在但无 PROJECT.md 时提示 migrate"
+  start_test "T10: docs/CONTEXT.md 还在但无 PRODUCT.md 时提示 migrate"
   local tmp; tmp=$(mktemp -d)
   mkdir -p "$tmp/docs"
   echo "# CONTEXT" > "$tmp/docs/CONTEXT.md"
@@ -187,7 +187,7 @@ test_health_check_in_default_status() {
   start_test "T11: 默认输出（task-status skill 入口）也输出体检"
   local tmp; tmp=$(mktemp -d)
   mkdir -p "$tmp/docs"
-  echo "# PROJECT" > "$tmp/docs/PROJECT.md"
+  echo "# PRODUCT" > "$tmp/docs/PRODUCT.md"
   local out
   out=$(python3 "$STATUS_VIEW" "$tmp" 2>&1)
   if ! echo "$out" | grep -q "项目体检"; then
@@ -205,7 +205,7 @@ test_health_check_in_summary() {
   start_test "T12: --summary 分支也输出体检"
   local tmp; tmp=$(mktemp -d)
   mkdir -p "$tmp/docs"
-  echo "# PROJECT" > "$tmp/docs/PROJECT.md"
+  echo "# PRODUCT" > "$tmp/docs/PRODUCT.md"
   local out
   out=$(python3 "$STATUS_VIEW" --summary "$tmp" 2>&1)
   if ! echo "$out" | grep -q "项目体检"; then

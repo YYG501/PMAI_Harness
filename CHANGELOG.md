@@ -20,6 +20,13 @@ PM-AI-Workflow 生成器仓的演进记录。本文件**只记影响下游业务
 
 ### PMAI 重构落地（office-hours 收敛）—— 进行中
 
+- `refactor(skills+scripts+templates)`: **项目底座文件 `docs/PROJECT.md` → `docs/PRODUCT.md`**（与 PRODUCT-STATE.md / PRODUCT-RULES.md 三兄弟统一命名）。消费仓试用反馈：`PROJECT.md` 标题写「项目背景」、装的却是产品定位/用户/术语，跟两个 PRODUCT 兄弟不一条心，名实不符。改名采**最小一致**范围（PM 拍板）：
+  - **文件名 + 全部引用**：`templates/PROJECT.md.tmpl → PRODUCT.md.tmpl`（H1「# 项目背景」→「# 产品背景」）；29 个框架文件里的 `docs/PROJECT.md` 路径、按钮文案「创建 PROJECT.md」→「创建 PRODUCT.md」、裸词文件简称全改。脚本层硬路径同步：`check-project-sections.py` / `status-view.py` / `init-project.sh` cp case / `check-docs-toplevel.py` 白名单 / `check-branch.sh` 写保护 / `_lib/term-detector.py`。
+  - **migrate 脚本升级**：`migrate-context-to-project.py` 扩成双跳（CONTEXT.md **或** PROJECT.md → PRODUCT.md 一步到位），老消费仓升级跑一次即可平滑迁移。
+  - **顺手对齐 5/6 节**：脚本 `check-project-sections.py` 一直是 5 节为准（项目名称/产品定位/用户画像/技术栈/业务术语表），SKILL 里误写「6 节」的（project-solution / new-req / init-project）改回 5 节。
+  - **不动**（最小一致边界）：skill 名 `pmai-project-solution` / 脚本名 `check-project-sections.py` / 共享文件 `project-questioning.md` / 暂存文件 `.project-solution-open-questions.md`（PM 不直接看、改名 blast radius 远超收益）；模板 5 个二级节名（脚本数据键）；真「项目/工作层级」措辞（项目方向/项目级 vs req 级，活动概念非文件内容）。
+  - 测试 fixture 同步（fixture.sh / test-narrative-mode / test-docs-toplevel-guard / test-docs-archive-convention / test-no-duplicate-questioning 锚点）。基线 573/0 全绿。
+
 - `fix(skills+scripts+templates)`: **ROADMAP → TODO 待办池（AI 不反推填充 / 不排序）+ codebase-audit 兜底建 PRODUCT-STATE**（消费仓试用反馈）。基线 573/0 全绿。
   - **ROADMAP.md → TODO.md，去「路线图」语义**：PM 反馈 brownfield 方向讨论时 AI 从代码 / 竞品反推出一串 req 还替 PM 排好顺序，是 PM 没要的。根因：旧 ROADMAP 设计成「历史 + 未来一张表 / 唯一规划视图 / 排序数字小先做」，还指示 AI「先扫 `requirements/closed/` 反推 done 行」「替 PM 排 planned 队列」。改法：`templates/ROADMAP.md.tmpl` → `templates/TODO.md.tmpl`，改成**无序待办池**——只记 PM 提过 / 讨论过想做的，状态 todo/doing/done，**去掉「排序」列**，AI **不从代码 / 竞品 / `requirements/closed/` 反推填充**。PM 要起需求时 AI 提醒「池里有这些」让 PM 挑，不替 PM 定「下一个该做 X」。真相源 `_shared/project-questioning.md` §5.2/§5.3 重写，调用方 project-solution（A/B/C/D 场景）/ codebase-audit step 4 / init-project C 步全部跟改；`init-project.sh` cp case、`status-view.py` 存在性检查、`check-docs-toplevel.py` 白名单、`CLAUDE.md.tmpl` 三处约定、4 个测试 fixture 连带改名。`test-roadmap-guidance.sh` → `test-todo-guidance.sh` 重写成反向断言（断「无序待办池 / todo-doing-done / AI 不反推填充」，防回归）。**机器零依赖**：除 status-view 查存在性外无脚本读 ROADMAP 内容。
   - **codebase-audit 兜底建 PRODUCT-STATE.md**：greenfield 的 `init-project.sh` 会铺 PRODUCT-STATE 模板，但 brownfield 走 codebase-audit 从不建它 → 消费仓缺这个「产品现状层」hub，下游 `new-req` 范围确认（强制读它）退化成白纸起步。照 step 3.5.5（DESIGN inventory 兜底）同款无条件模式，新增 **step 3.5.7：PRODUCT-STATE.md 兜底**——HAS_FILE 探测 → 缺则建骨架 + 从现状档反推填「当前功能 / 主原型现状 / 实现深度」三段（产品现状 = 已发生事实，反推是对的；产品定位一句话留空、step 4 定方向后回填）。含**防腐豁免**措辞：首次 bootstrap ≠ 违反「只在 close-req 更新」铁律，由顶部状态行标注草稿态区分。

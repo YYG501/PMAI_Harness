@@ -41,12 +41,12 @@ description: Use when task 已完成、PM 已通过验收、需要在 close-task
 3. 🟢 task 文件偏差表 —— 当前格式：审计区「📋 文档偏差」；旧双文件：工程合同 §10 + PM 视图「📁 历史档案 → 业务层偏差」
 4. 🟢 **task worktree 改动代码**（步骤 1.6 模块规格对账，逐行核对实际实现是否匹配——不读代码就不能对账；≤3 文件全读，多文件分批）
 5. 🟡 偏差涉及的原文（前后 5 行）。**支持任何需求 / 项目级文档**：
-   - 项目级：`docs/PROJECT.md` / `docs/DESIGN.md` / `docs/modules/INDEX.md` / `docs/modules/*.md` / `docs/PRODUCT-STATE.md` / `docs/PRODUCT-RULES.md` / `CLAUDE.md`
+   - 项目级：`docs/PRODUCT.md` / `docs/DESIGN.md` / `docs/modules/INDEX.md` / `docs/modules/*.md` / `docs/PRODUCT-STATE.md` / `docs/PRODUCT-RULES.md` / `CLAUDE.md`
    - 需求级：`req-plan.md`（范围清单 + 关键决策，本需求真相源）/ `prd.md`（按需反向出的需求方案，若有）/ `implementation-design.md` / `analysis.md`（在飞旧需求的上游产物，若有则按旧文件名读）
 
 ## 位置定位原则（必读）
 
-doc-update 涉及的长期文档（`docs/modules/*.md` / `prd.md` / `docs/DESIGN.md` / `docs/PROJECT.md`）通常几千行。**建议优先走"多重 grep + 章节级局部读"**——保险性 ≥ 全读，且系统化、可重复；不到必要时不 Read 全文。
+doc-update 涉及的长期文档（`docs/modules/*.md` / `prd.md` / `docs/DESIGN.md` / `docs/PRODUCT.md`）通常几千行。**建议优先走"多重 grep + 章节级局部读"**——保险性 ≥ 全读，且系统化、可重复；不到必要时不 Read 全文。
 
 **为什么不读全文更保险**：
 - grep 系统化：关键字命中 = 100% 不漏
@@ -136,7 +136,7 @@ grep -n '^### <module chapter>' docs/modules/<module>.md
 | 偏差指向 | 进入步骤 | 处理模式 |
 |---|---|---|
 | `docs/modules/<module>.md` 功能清单表格 | 1.6 | 模块规格对账（行级精确）|
-| 其他需求 / 项目级文档（req-plan / analysis / prd / DESIGN / PROJECT / PRODUCT-STATE / PRODUCT-RULES / CLAUDE）| 步骤 2 | 通用对账（按行读原文 + 生成 Edit + PM 逐条确认）|
+| 其他需求 / 项目级文档（req-plan / analysis / prd / DESIGN / PRODUCT / PRODUCT-STATE / PRODUCT-RULES / CLAUDE）| 步骤 2 | 通用对账（按行读原文 + 生成 Edit + PM 逐条确认）|
 | 无任何偏差 | 直接返回 | 无对账可做（沉淀已并入 `/pmai-close-req`，不在此处做）|
 
 ### 步骤 1.6：模块规格对账（对账模式保留）

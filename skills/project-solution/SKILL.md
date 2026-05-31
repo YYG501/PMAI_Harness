@@ -4,7 +4,7 @@ description: |
   项目级方向规划入口：PM 主动调用，定 / 改项目顶层方向（产品定位 / 用户 / 路线 / 技术栈 / 术语 + TODO 待办池）。
   **4 个独立调用场景**：
     A 项目方向重做（跑过几个 req 后发现产品定位偏了）
-    B 产品路线规划（主动校准 PROJECT 6 节 + 刷新 TODO 待办池，含季度 / 半年节奏）
+    B 产品路线规划（主动校准 PRODUCT 5 节 + 刷新 TODO 待办池，含季度 / 半年节奏）
     C 老板 / 市场新方向（外部输入逼着改路线）
     D brownfield 接入方向恢复（接入时 /pmai-codebase-audit 内联方向讨论被打断 / 想重定方向时手动补跑）
   内部逻辑：场景判断 + @读 _shared/project-questioning.md 跑讨论（提问顺序场景特定）。
@@ -13,14 +13,14 @@ description: |
 
 # /pmai-project-solution
 
-> **PM 答题规则（M4）**：所有 AskUserQuestion 调用按 `_shared/pm-view/askuser-rules.md` §1 四条硬规则走（空答 STOP / 没拿到答案禁止落盘 PROJECT.md / TODO.md / runtime 退化保留 wait / 多决策拆开顺序问）。**Runtime 兜底**：本 skill 各门写的都是 picker 形态；runtime 不支持时 AI 按 §1.3 自动退化为编号列表，仍 wait。
+> **PM 答题规则（M4）**：所有 AskUserQuestion 调用按 `_shared/pm-view/askuser-rules.md` §1 四条硬规则走（空答 STOP / 没拿到答案禁止落盘 PRODUCT.md / TODO.md / runtime 退化保留 wait / 多决策拆开顺序问）。**Runtime 兜底**：本 skill 各门写的都是 picker 形态；runtime 不支持时 AI 按 §1.3 自动退化为编号列表，仍 wait。
 
 ## When To Use
 
 PM 主动调用，**4 个独立场景**：
 
 - **A 项目方向重做**：跑过几个 req 后发现产品定位偏了，重新定方向
-- **B 产品路线规划**：主动校准 PROJECT 6 节 + 刷新 TODO 待办池（含季度 / 半年节奏 / 老项目首次补全）
+- **B 产品路线规划**：主动校准 PRODUCT 5 节 + 刷新 TODO 待办池（含季度 / 半年节奏 / 老项目首次补全）
 - **C 老板 / 市场新方向**：外部输入逼着改路线
 - **D brownfield 接入方向恢复**：brownfield 接入的方向讨论已搬进 `/pmai-codebase-audit` step 4 内联跑（一气呵成）。本场景只在**异常恢复**时用——接入时方向讨论被打断没跑完（窗口关了 / context 丢了）、或现状档当时定的方向想重来。正常 brownfield 接入**不用**手敲本命令。
 
@@ -46,11 +46,11 @@ echo "SKILL: project-solution"
 | 在哪跑 | 生成器仓 | 业务仓 |
 | 跑几次 | 一次 | N 次（按场景需要）|
 
-**共享提问真相源**：两个 skill 都 @读 `skills/_shared/project-questioning.md`（提问法 / 问题库 / 写作规则 / Decision gate / 6 节检查）。**场景特定逻辑**（输入态判断 / 提问顺序）留各自 SKILL.md。
+**共享提问真相源**：两个 skill 都 @读 `skills/_shared/project-questioning.md`（提问法 / 问题库 / 写作规则 / Decision gate / 5 节检查）。**场景特定逻辑**（输入态判断 / 提问顺序）留各自 SKILL.md。
 
 ## 产出
 
-- `docs/PROJECT.md` —— 项目顶层方案，6 节（按 `$PMAI_HOME/templates/PROJECT.md.tmpl`）
+- `docs/PRODUCT.md` —— 项目顶层方案，5 节（按 `$PMAI_HOME/templates/PRODUCT.md.tmpl`）
 - `docs/TODO.md` —— PM 待办池（无序，按 `$PMAI_HOME/templates/TODO.md.tmpl`）
 
 **单文件，不产工程孪生** —— 不产 `solution.engineering.md` 之类的工程合同。项目级方向只用 PM 视角写。
@@ -67,9 +67,9 @@ echo "SKILL: project-solution"
 
 | 场景 | 触发 | 输入态 | **提问顺序**（按 _shared §3 问题库挑用，**场景特定**）|
 |---|---|---|---|
-| **A 重做** | PM 主动说"方向偏了 / 要重做" | `docs/PROJECT.md` 已有内容 | (1) **痛点诊断**（旧 PROJECT 哪几节失效 / 为什么偏）→ (2) 产品定位（重定）→ (3) 用户画像（重定，可能换主角色）→ (4) 业务术语表（如有新术语）→ (5) 刷新 TODO 待办池（旧待办 PM 自己评估保留 / 划掉，AI 不替排序）|
-| **B 产品路线规划** | PM 主动说"产品路线规划 / 季度规划 / 半年规划"，或老项目首次补 `docs/TODO.md` | `docs/PROJECT.md` 已有；`TODO.md` 可有可无 | (1) 刷新 TODO 待办池：**问 PM 现在想做啥记进待办池**（AI 不扫 `requirements/closed/` 反推历史、不排序，按 `_shared/project-questioning.md` §5.2 写法）→ (2) 业务术语表增量（如有新业务）—— **跳过产品定位 / 用户画像 / 技术栈**（默认稳定）|
-| **C 老板新方向** | PM 主动说"老板 / 客户给了新方向" | `docs/PROJECT.md` 已有 | (1) **新方向 vs 现 PROJECT 差异点**（PM 自述新方向 + AI 对比现 PROJECT 找冲突）→ (2) 产品定位（如有变 → 改）→ (3) 用户画像（如有变 → 改，可能换主角色）→ (4) 刷新 TODO 待办池（PM 给的新待办）|
+| **A 重做** | PM 主动说"方向偏了 / 要重做" | `docs/PRODUCT.md` 已有内容 | (1) **痛点诊断**（旧 PRODUCT 哪几节失效 / 为什么偏）→ (2) 产品定位（重定）→ (3) 用户画像（重定，可能换主角色）→ (4) 业务术语表（如有新术语）→ (5) 刷新 TODO 待办池（旧待办 PM 自己评估保留 / 划掉，AI 不替排序）|
+| **B 产品路线规划** | PM 主动说"产品路线规划 / 季度规划 / 半年规划"，或老项目首次补 `docs/TODO.md` | `docs/PRODUCT.md` 已有；`TODO.md` 可有可无 | (1) 刷新 TODO 待办池：**问 PM 现在想做啥记进待办池**（AI 不扫 `requirements/closed/` 反推历史、不排序，按 `_shared/project-questioning.md` §5.2 写法）→ (2) 业务术语表增量（如有新业务）—— **跳过产品定位 / 用户画像 / 技术栈**（默认稳定）|
+| **C 老板新方向** | PM 主动说"老板 / 客户给了新方向" | `docs/PRODUCT.md` 已有 | (1) **新方向 vs 现 PRODUCT 差异点**（PM 自述新方向 + AI 对比现 PRODUCT 找冲突）→ (2) 产品定位（如有变 → 改）→ (3) 用户画像（如有变 → 改，可能换主角色）→ (4) 刷新 TODO 待办池（PM 给的新待办）|
 | **D brownfield 方向恢复** | 接入时 `/pmai-codebase-audit` step 4 内联方向讨论被打断 / 想重定方向（正常接入不走这）| `docs/CODEBASE-AUDIT.md` 已生成（7 维度）| (0) **全文读 `docs/CODEBASE-AUDIT.md`**（必读，AI 不准跳）→ (1) 产品定位（**从 codebase 反推 + PM 确认**）→ (2) 用户画像（从代码层级 / API 角色反推 + PM 补）→ (3) 技术栈（**从代码现状档抄**，PM 确认）→ (4) 业务术语表（**从 model / API 命名反推 + PM 补**）→ (5) 刷新 TODO 待办池（PM 给，AI 不反推填充）|
 
 **通用约束**（所有 4 场景）：
@@ -82,7 +82,7 @@ echo "SKILL: project-solution"
 
 #### 步骤 1：读已有输入
 
-- `docs/PROJECT.md`（已有内容 / 或 `/pmai-init-project` 已建的空骨架）
+- `docs/PRODUCT.md`（已有内容 / 或 `/pmai-init-project` 已建的空骨架）
 - `CLAUDE.md`（看注入的项目背景 / 工程结构约束档位）
 - `docs/CODEBASE-AUDIT.md`（如存在 —— brownfield 场景；`/pmai-codebase-audit` 先扫码产出的 7 维度现状档）—— 存在 → 全文读，作为讨论实况语境
 
@@ -98,9 +98,9 @@ echo "SKILL: project-solution"
 
 ### 段 2 · 输出
 
-#### 步骤 4：写 docs/PROJECT.md
+#### 步骤 4：写 docs/PRODUCT.md
 
-**@读 `skills/_shared/project-questioning.md` §5.1 PROJECT.md 5 节写作规则 + §5.4 PM 视图规则**。
+**@读 `skills/_shared/project-questioning.md` §5.1 PRODUCT.md 5 节写作规则 + §5.4 PM 视图规则**。
 
 #### 步骤 5：写 docs/TODO.md
 
@@ -112,7 +112,7 @@ echo "SKILL: project-solution"
 
 prose 头部：
 ```
-📝 准备写项目方向（docs/PROJECT.md + docs/TODO.md）。
+📝 准备写项目方向（docs/PRODUCT.md + docs/TODO.md）。
 ```
 
 AskUserQuestion：
@@ -121,13 +121,13 @@ AskUserQuestion：
   - `label`: `最简版`
     `description`: `产品定位 1 句话 / 1 个主角色 / 1 条术语起手，几分钟搞定（推荐 trivial 项目）`
   - `label`: `详细版`
-    `description`: `按 PROJECT 模板各节注释里的规范长度填`
+    `description`: `按 PRODUCT 模板各节注释里的规范长度填`
   - `label`: `混合`
     `description`: `各节 PM 临场决定`
 
 **PM 答题处理**：
 - 选 `最简版` / 输 `1` / 输 "最简 / 简版 / 快" → 精简模式：每节 1 条起手即接受
-- 选 `详细版` / 输 `2` / 输 "详细 / 完整 / 详版" → 详细模式：按 PROJECT 模板各节注释里的规范长度
+- 选 `详细版` / 输 `2` / 输 "详细 / 完整 / 详版" → 详细模式：按 PRODUCT 模板各节注释里的规范长度
 - 选 `混合` / 输 `3` → 各节 PM 临场决定
 
 Runtime 不支持 AskUserQuestion 时按 `_shared/pm-view/askuser-rules.md §1.3` 退化编号列表。
@@ -142,7 +142,7 @@ Runtime 不支持 AskUserQuestion 时按 `_shared/pm-view/askuser-rules.md §1.3
 
 **@读 `skills/_shared/project-questioning.md` §6 Decision gate 模板 + §8 PM 定稿展示模板**。
 
-PM 选「创建 PROJECT.md」+ 定稿后：
+PM 选「创建 PRODUCT.md」+ 定稿后：
 
 - **@读 §9 atomic commit**：`git commit -m "docs: project direction settled"`
 - 退出前提醒 PM TODO 待办池里有哪些待办（按 §5.3），不替 PM 定下一个该做啥 + 引导下一步：
@@ -159,7 +159,7 @@ PM 选「创建 PROJECT.md」+ 定稿后：
 - ❌ 产工程孪生文件（`solution.engineering.md` 之类）—— 单文件，只写 PM 视角
 - ❌ 自动调 `/office-hours` / `/plan-ceo-review` —— 这两个由 PM 可选自跑
 - ❌ 设 analysis-reviewer 式第二视角强制评审 —— 项目方向第二视角由 PM 自跑 `/plan-ceo-review`
-- ❌ 对 `docs/PROJECT.md` 直接跑未决问题闸门 —— PROJECT.md 无 `## 未决问题` section；必须对 `docs/.project-solution-open-questions.md` 暂存文件跑（@读 §4）
+- ❌ 对 `docs/PRODUCT.md` 直接跑未决问题闸门 —— PRODUCT.md 无 `## 未决问题` section；必须对 `docs/.project-solution-open-questions.md` 暂存文件跑（@读 §4）
 - ❌ PM chat 出现工程黑话（hash / reconcile / stale / 步骤编号）—— 给 PM 看的话只用 PM 视图语言
 - ❌ **重复 `_shared/project-questioning.md` 的提问法 / 5 组话术 / 写作规则**（必漂移；真相源单一）
 
@@ -173,7 +173,7 @@ PM 选「创建 PROJECT.md」+ 定稿后：
 
 ## 边界
 
-- **允许产出**：`docs/PROJECT.md`、`docs/TODO.md`、暂存文件 `docs/.project-solution-open-questions.md`
-- **允许动作**：分批提问、未决问题闸门、Decision gate、6 节检查、确认门、atomic commit
+- **允许产出**：`docs/PRODUCT.md`、`docs/TODO.md`、暂存文件 `docs/.project-solution-open-questions.md`
+- **允许动作**：分批提问、未决问题闸门、Decision gate、5 节检查、确认门、atomic commit
 - **禁止顺手推进**：不自动起 req、不调 `/pmai-new-req`、不产任何 req 级文档
-- **退出条件**：`docs/PROJECT.md` 6 节全填、`docs/TODO.md` 已写、未决问题闸门已过、Decision gate 选了「创建 PROJECT.md」、PM 已定稿、atomic commit 已落
+- **退出条件**：`docs/PRODUCT.md` 5 节全填、`docs/TODO.md` 已写、未决问题闸门已过、Decision gate 选了「创建 PRODUCT.md」、PM 已定稿、atomic commit 已落

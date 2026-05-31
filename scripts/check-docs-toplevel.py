@@ -31,7 +31,7 @@ from pathlib import Path
 
 # 项目级真相源（CLAUDE.md.tmpl §docs/ 归档约定 正面清单）
 STATIC_ALLOW = {
-    "PROJECT.md",
+    "PRODUCT.md",
     "PRODUCT-STATE.md",
     "DESIGN.md",
     "PRODUCT-RULES.md",

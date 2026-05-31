@@ -3,7 +3,7 @@ name: _shared/term-detector
 description: |
   业务词 / 角色发现检测器（共享逻辑）。**当前只在 `close-req` Phase 1
   调用一次**，识别本 req 真实落地的新业务词 / 角色，
-  patch 进 PROJECT 业务术语表 / 用户画像。
+  patch 进 PRODUCT 业务术语表 / 用户画像。
 ---
 
 # _shared/term-detector
@@ -31,9 +31,9 @@ description: |
 | 层级 | 文件 | 谁写 | 谁读 |
 |---|---|---|---|
 | **本 req 临时词典** | `prd.md §三 名词解释` | `prd-writing` 写 PRD 时 AI 直接写 | `implementation-design` / `task-spec` 必读 |
-| **跨 req 长期词典** | `docs/PROJECT.md ## 业务术语表` | `close-req` 步骤 3.4 detector + PM 确认 → patch | `implementation-design` / `task-spec` 必读 |
+| **跨 req 长期词典** | `docs/PRODUCT.md ## 业务术语表` | `close-req` 步骤 3.4 detector + PM 确认 → patch | `implementation-design` / `task-spec` 必读 |
 
-两份词典在 stage 5 是**并集读**：PROJECT 是已沉淀的稳定基线，PRD §三 是本 req 新引入还未升级的临时词。close-req 时 detector 把本 req 真稳定下来的词从临时词典 promote 到长期词典。
+两份词典在 stage 5 是**并集读**：PRODUCT 是已沉淀的稳定基线，PRD §三 是本 req 新引入还未升级的临时词。close-req 时 detector 把本 req 真稳定下来的词从临时词典 promote 到长期词典。
 
 ## 如何调用
 
@@ -57,7 +57,7 @@ echo "$RESULT"
   "new_roles": ["平台审核员"],
   "skipped": ["售后单"],      // 本 req 已被 PM 拒绝（.term-skip.json）
   "whitelisted": ["用户"],    // 通用词，silent
-  "registered": ["商品池"]    // PROJECT 已有
+  "registered": ["商品池"]    // PRODUCT 已有
 }
 ```
 

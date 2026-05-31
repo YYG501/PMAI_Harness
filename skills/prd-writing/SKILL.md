@@ -37,7 +37,7 @@ prd-writing 是**多入口 skill**，两条入口的边界如下：
 - **触发**：`/pmai-next` 推进到「沉淀」一步、PM 选择「这个 req 要出一份评审 / 留档 PRD」时调用本 skill。**不是每个 req 必跑** —— 每 req 必做的沉淀只有更新 `PRODUCT-STATE.md` + merge 主原型回 main；反向 PRD 是按需档。
 - **mode 固定「req 级」**：不询问写哪部分 —— 沉淀阶段必然是当前 req 的完整反向 PRD。
 - **跳过步骤 0**：步骤 0 的「req 级 / 独立 / 补差」三选一对话**被 `/pmai-next` 短路**，不向 PM 提问（短路机制见下方「步骤 0」段）。
-- **输入**：`req-plan.md`（范围清单 + 决策页）+ `brief.md` + 最终 `prototype/` + `docs/PRODUCT-STATE.md` + `docs/PROJECT.md`（+ 已有 `docs/modules/` 如存在）—— 详见「Required Inputs」。
+- **输入**：`req-plan.md`（范围清单 + 决策页）+ `brief.md` + 最终 `prototype/` + `docs/PRODUCT-STATE.md` + `docs/PRODUCT.md`（+ 已有 `docs/modules/` 如存在）—— 详见「Required Inputs」。
 - **产物**：`$ACTIVE_REQ_DIR/prd.md`。
 - **确认门**：步骤 2.5 §六拆分**必有 PM 确认门**（拆分结果是 §六层级的命名底稿，PM 必须拍板；AI 不允许自判「无歧义」跳过 —— 本门确认的是结构，不是成品）；最终确认归 `/pmai-next` 的沉淀确认门，本 skill 内不重复。
 
@@ -89,8 +89,8 @@ AI 先在 prose 里列出按"输入推荐表"对应场景的推荐输入清单�
 
 | 场景 | 推荐输入 |
 |---|---|
-| req 级 PRD | $ACTIVE_REQ_DIR/req-plan.md / brief.md + 最终 prototype/ + docs/PRODUCT-STATE.md + docs/PROJECT.md + docs/PRODUCT-RULES.md + docs/modules/INDEX.md + 涉及模块的 docs/modules/<m>.md |
-| 独立 PRD（PM 指定模块清单 X/Y/Z） | docs/PRODUCT-STATE.md + docs/PROJECT.md + docs/PRODUCT-RULES.md + docs/modules/INDEX.md + docs/modules/X.md + docs/modules/Y.md + docs/modules/Z.md;**不读** req 上下文（req-plan/brief），因为不绑 req |
+| req 级 PRD | $ACTIVE_REQ_DIR/req-plan.md / brief.md + 最终 prototype/ + docs/PRODUCT-STATE.md + docs/PRODUCT.md + docs/PRODUCT-RULES.md + docs/modules/INDEX.md + 涉及模块的 docs/modules/<m>.md |
+| 独立 PRD（PM 指定模块清单 X/Y/Z） | docs/PRODUCT-STATE.md + docs/PRODUCT.md + docs/PRODUCT-RULES.md + docs/modules/INDEX.md + docs/modules/X.md + docs/modules/Y.md + docs/modules/Z.md;**不读** req 上下文（req-plan/brief），因为不绑 req |
 | 补差 | 现有 PRD + 补差范围相关的 module / req-plan 子集 |
 
 三题答完后进入实际写作（步骤 1）。
@@ -121,7 +121,7 @@ prd-writing 历史上自带的写作规则（禁用清单 / UI 元素指代规�
 - 🟢 `$ACTIVE_REQ_DIR/brief.md`（初始诉求 — 业务规则 / 权限语义的另一锚）
 - 🟢 最终 `prototype/`（栈内建好的主原型）— **结构 / 字段 / 交互的来源**：实际页面 / 弹窗 / 字段 / 按钮按它落 §六与原型节。遵守 `input-flow.md` §9.3.1 原型读取强约束（>500 行禁整文件 Read，按目录 / 入口选读）。**只取结构，不从 mock 实现反推业务规则**（真系统口径铁律）。
 - 🟢 `docs/PRODUCT-STATE.md`（产品现状，项目底座核心 — 已落地的产品全貌 / 主原型当前状态；PRD 要和产品现状一致，不重复造口径）
-- 🟢 `docs/PROJECT.md`（项目定位 / 用户画像 / 业务术语表 / 技术栈）
+- 🟢 `docs/PRODUCT.md`（项目定位 / 用户画像 / 业务术语表 / 技术栈）
 - 🟢 `docs/PRODUCT-RULES.md`（如存在 — **全文读**，跨功能产品行为规则；PRD 一次写对、不违背常驻规则。）
 - 🟢 `docs/modules/INDEX.md` + `docs/modules/<本 req 涉及模块>.md`（如目录存在）
 - ❌ `docs/DESIGN.md`（视觉规范，归 build 阶段读；PRD 写需求方案不写像素颜色，DESIGN.md 在本 skill 只作**反向边界提示**用，不作正向源材料 —— 见 §六「原型」节 / §六 lint 视觉细节越界）
@@ -166,7 +166,7 @@ stage_prefix `"prd"`。chat 一行确认 `已归档（attachments/prd-foo.pdf）
 
 ### 步骤 0.5 · 项目级文档强制 echo（沉淀按需模式必跑；不依赖 LLM 自觉 Read）
 
-PRD 漏读 / 浅读项目级文档（req-plan / brief / PRODUCT-STATE / PROJECT.md / PRODUCT-RULES.md / modules INDEX）是 LLM 自觉 Read tool 触发不稳的典型踩坑（与 `task-execute` 步骤 2.0 同源问题：「Read tool 触发与否取决于 LLM 自觉，长文档进 context 后细节又会被冲淡」）。本子步骤用 Bash `cat` 把项目级文档无条件 echo 到 transcript，**保证内容进入 working context** —— 比依赖 Read tool 自觉触发硬。冗余于上方「Required Inputs」prose 列表也无害。
+PRD 漏读 / 浅读项目级文档（req-plan / brief / PRODUCT-STATE / PRODUCT.md / PRODUCT-RULES.md / modules INDEX）是 LLM 自觉 Read tool 触发不稳的典型踩坑（与 `task-execute` 步骤 2.0 同源问题：「Read tool 触发与否取决于 LLM 自觉，长文档进 context 后细节又会被冲淡」）。本子步骤用 Bash `cat` 把项目级文档无条件 echo 到 transcript，**保证内容进入 working context** —— 比依赖 Read tool 自觉触发硬。冗余于上方「Required Inputs」prose 列表也无害。
 
 **沉淀按需模式：必跑本步骤**（步骤 0 被 `/pmai-next` 短路了 → 直接进步骤 0.5 → 步骤 1）。
 **standalone 模式**：步骤 0 已与 PM 对齐清单 / PM 在线会立刻拦漏读，本步骤可省。
@@ -178,7 +178,7 @@ SOURCES=(
   "$ACTIVE_REQ_DIR/req-plan.md"
   "$ACTIVE_REQ_DIR/brief.md"
   "$REPO_ROOT/docs/PRODUCT-STATE.md"
-  "$REPO_ROOT/docs/PROJECT.md"
+  "$REPO_ROOT/docs/PRODUCT.md"
   "$REPO_ROOT/docs/PRODUCT-RULES.md"
   "$REPO_ROOT/docs/modules/INDEX.md"
 )
@@ -342,7 +342,7 @@ done
 
 3.6. **PRD §三 名词解释 = 本 req 临时词典**——本 req 范围内引入的新业务术语 / 角色由 AI 写 §三时落地（见 §三章节写作要求 + `references/few-shots.md` 三、名词解释示例）。
 
-   `prd.md §三` 可作下游评审 / 后续 req 的**词典参考**。**不再在本步跑 `term-detector.py` patch `docs/PROJECT.md`** —— 业务实体稳定后向 PROJECT.md 业务术语表的沉淀统一收敛到 `close-req`。
+   `prd.md §三` 可作下游评审 / 后续 req 的**词典参考**。**不再在本步跑 `term-detector.py` patch `docs/PRODUCT.md`** —— 业务实体稳定后向 PRODUCT.md 业务术语表的沉淀统一收敛到 `close-req`。
 
 3.7. **decision 事件 append（关键产品决策留痕）**——PRD 成文后，为每条「关键产品决策」（PRD §四里的决策结果）append 一条 `decision` 事件到 req 事件流：
 
@@ -379,7 +379,7 @@ done
    - PM 选 promote → AI Edit 追加进 `docs/PRODUCT-RULES.md`「规则清单」段（不 commit，PM 后审 diff）
    - PM 说不是 → 不动
    - `docs/PRODUCT-RULES.md` 不存在 / 无候选 → silent skip
-   - **边界**：用词术语 → PROJECT.md；模块级规则 → modulespec；视觉规范 → DESIGN.md。本步只捞全项目跨功能产品行为规则。
+   - **边界**：用词术语 → PRODUCT.md；模块级规则 → modulespec；视觉规范 → DESIGN.md。本步只捞全项目跨功能产品行为规则。
 
    > 补「规划期发现的规则无沉淀路径」缺口（与 close-task 的 selective promote 同型，互补：close-task 捞执行期 PM 反馈里的、prd-writing 捞范围确认 / 沉淀讨论里的）。
 
@@ -715,7 +715,7 @@ ASCII 原型示例见 `references/few-shots.md`「§六 原型节 ASCII 示例�
 ## 沉淀边界：反向需求方案定稿
 
 - 允许产出：`$ACTIVE_REQ_DIR/prd.md`（沉淀按需模式）/ PM 指定路径（standalone 独立 PRD 模式）
-- 允许动作：基于 `req-plan.md`（范围清单 + 决策页）+ `brief.md` + 最终 `prototype/` + `docs/PRODUCT-STATE.md` + `docs/PROJECT.md`（+ `docs/modules/`）反向合成 req 级真系统口径 PRD；§三 名词解释承担本 req 临时词典职责（业务词向 PROJECT.md 业务术语表的沉淀收敛到 `close-req`）；为关键产品决策 append `decision` 事件
+- 允许动作：基于 `req-plan.md`（范围清单 + 决策页）+ `brief.md` + 最终 `prototype/` + `docs/PRODUCT-STATE.md` + `docs/PRODUCT.md`（+ `docs/modules/`）反向合成 req 级真系统口径 PRD；§三 名词解释承担本 req 临时词典职责（业务词向 PRODUCT.md 业务术语表的沉淀收敛到 `close-req`）；为关键产品决策 append `decision` 事件
 - 禁止顺手推进：不要在写 PRD 的同时反向改 `req-plan.md` 的范围边界；**不从 mock 原型的临时实现反推业务规则**（真系统口径铁律）；本 skill 不动 build / 复审产物
 - 退出条件：
   - **沉淀按需模式**：PRD 写完 + lint 通过 + decision 事件 append 完 → 控制权交回 `/pmai-next`，由其沉淀一步的单一定稿确认门完成 PRD 定稿

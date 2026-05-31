@@ -306,7 +306,7 @@ fi
 - 模块规格中的**功能清单（硬约束）**：功能行为、数据规则、角色权限必须严格遵循
 - 模块规格中的**实现指引（软指引）**：推荐组件、DESIGN.md 对齐、交互状态覆盖，可在设计系统框架内自由发挥
 - 设计系统规范（DESIGN.md）
-- 项目背景（PROJECT.md）
+- 产品背景（PRODUCT.md）
 - 已发布的模块规格（docs/modules/*.md）+ 模块索引（docs/modules/INDEX.md）
 - 参考源码（如列表中有已有页面/组件源码，理解其组件结构和布局模式）
 - 同模块已完成 task 文件（复用经验、避免重复；v3 单文件读全文，v2 旧 task 两文件都读）
@@ -428,7 +428,7 @@ fi
 
 **v3 — 写审计区「📋 文档偏差」section**（单文件 typed contract 统一一处偏差表）：
 
-实现过程中发现与 `prd.md` / `implementation-design.md` / `docs/modules` / `docs/DESIGN.md` / `docs/PROJECT.md` 等任意文档不一致处，填进审计区「📋 文档偏差」表（四列：文档位置 / 文档原文 / 实际实现 / 建议改法）：
+实现过程中发现与 `prd.md` / `implementation-design.md` / `docs/modules` / `docs/DESIGN.md` / `docs/PRODUCT.md` 等任意文档不一致处，填进审计区「📋 文档偏差」表（四列：文档位置 / 文档原文 / 实际实现 / 建议改法）：
 
 ```markdown
 | 文档位置 | 文档原文 | 实际实现 | 建议改法 |
