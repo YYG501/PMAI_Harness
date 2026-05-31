@@ -33,7 +33,7 @@ PMAI 不和 Claude Design、design-html 或 Claude Code 比"谁更快生成第�
 ```
 # 起项目（只跑一次，整个产品的根基）
 
-/pmai-init-project    起业务项目（AI 跟你聊清做什么 / 为谁做，写 PROJECT.md）
+/pmai-init-project    起业务项目（AI 自动判断空仓 / 已有代码，聊清做什么 / 为谁做，写 PROJECT.md）
 
 # req 主循环（一个需求 = 一个 req；全程一个窗口，机器步骤降后台，PM 只在闸门拍板）
 
@@ -169,7 +169,7 @@ skill 自动检测 cwd 是 `--local` 安装目录还是全局环境，按 mode �
 
 agent 内部一气呵成 **4 阶段**：
 
-- **阶段 A · 参数收集 + brownfield 检测** —— AskUserQuestion 5 步问 PM（项目名 → 落地路径 → brownfield 检测闸门 → 一句话背景 → 项目意图）。目标目录已含 `.git/` 或代码 → 拒 + 提示走 `/pmai-codebase-audit`
+- **阶段 A · 参数收集 + 已有内容判断** —— AskUserQuestion 5 步问 PM（项目名 → 落地路径 → 已有内容判断 → 一句话背景 → 项目意图）。**这一步 AI 自动扫目录分诊，PM 不用预先判断**：空目录直接建；扫到已有源码 / 已 init 过 → AI 在方案里**主动建议**改走 `/pmai-codebase-audit`（接旧代码）或 `/pmai-project-solution`（重做方向），但**不硬拦**，PM 坚持 init 也接住（不删代码、可逆）
 - **阶段 B · 骨架建设** —— agent 用 Bash 调 `init-project.sh`，创建业务仓 + git init + 首 commit `init: <name>`
 - **阶段 C · QUESTIONING（方向讨论）** —— @读 `skills/_shared/project-questioning.md`（单一真相源），按提问纪律跑讨论 + Decision gate「创建 PROJECT.md / 继续探索」二选一 + Loop 回路，最后写 `docs/PROJECT.md` + `docs/ROADMAP.md` + atomic commit `docs: project direction settled`
 - **阶段 D · 终态汇总 + Next Up** —— 输出「✅ <name> 已就绪 / cd <target> && /pmai-new-req "..."」
