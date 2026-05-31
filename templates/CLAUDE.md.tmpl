@@ -29,7 +29,7 @@ Hook 会拦截直接编辑，但 **CLAUDE.md 规则是主要约束，hook 是补
 
 ### 六步工作流入口（PM 主循环 4 条，全程一个窗口）
 
-- `/pmai-init-project` — 起新项目（建上下文脊柱：PRODUCT-STATE / PROJECT / DESIGN + 主原型）
+- `/pmai-init-project` — 起新项目（建项目底座：PRODUCT-STATE / PROJECT / DESIGN + 主原型）
 - `/pmai-new-req "<一句话需求>"` — 起新需求（范围确认 → `req-plan.md`，拉隔离副本）
 - `/pmai-next` — **推进主驱动**：读当前在六步哪一步（范围确认 → build → 复审 → 沉淀），告诉你「现在该做 X / 要你拍 Y」，点头再动
 - `/pmai-task-status` — 看产品现状 + 当前在哪一步
@@ -218,7 +218,7 @@ main（主仓，永远不切分支）
 - 项目级真相源：`PROJECT.md` / `DESIGN.md` / `PRODUCT-RULES.md` / `ROADMAP.md` / `prd.md`
 - 项目级业务概览（跨模块 / 整体定位级，如 `ops-platform-unification.md`、`product-strategy.md`）
 - 模块目录：`modules/` + `modules/INDEX.md`
-- 归档目录：`归档/`（扁平单层，不分子目录 —— 文件名 / commit message 自己说明为啥归档）
+- 归档目录：`archive/`（扁平单层，不分子目录 —— 文件名 / commit message 自己说明为啥归档）
 
 ❌ **不在顶层**（按下表归位）：
 
@@ -238,7 +238,7 @@ main（主仓，永远不切分支）
 
 - 项目级文档全大写：`PROJECT.md` / `DESIGN.md` / `PRODUCT-RULES.md` / `ROADMAP.md`
 - 业务概览 / 模块文档 / 用户故事：kebab-case 小写
-- 不出现 `v1` / `v2` / `原始` / `旧` 等版本后缀在**顶层** —— 顶层永远是 latest，旧版进 `归档/`（文件名带 `-v1` / `-原始` 后缀标明）
+- 不出现 `v1` / `v2` / `原始` / `旧` 等版本后缀在**顶层** —— 顶层永远是 latest，旧版进 `archive/`（文件名带 `-v1` / `-原始` 后缀标明）
 
 ### 自动守卫
 
@@ -262,12 +262,12 @@ main（主仓，永远不切分支）
 
 PM 要做产品介绍 / PPT / 图片 / 对外文档等**产物**时，走这一条通道（不枚举能力、不建插件框架）：
 
-1. **先 @读脊柱**：任何产物生成——无论是 skill，还是你临场「在仓库里生成 X」——**第一步先读产品脊柱当 context**：`docs/PRODUCT-STATE.md`（产品现状 hub，入口）→ 按需展开 `prototype/`（主原型）/ `docs/DESIGN.md`（视觉）/ `docs/PRODUCT-RULES.md`（产品规则）。**只要在这个仓库里跑、读了脊柱，就懂这个产品**——产物才不会脱离真实产品凭空编。
+1. **先 @读项目底座**：任何产物生成——无论是 skill，还是你临场「在仓库里生成 X」——**第一步先读项目底座当 context**：`docs/PRODUCT-STATE.md`（产品现状 hub，入口）→ 按需展开 `prototype/`（主原型）/ `docs/DESIGN.md`（视觉）/ `docs/PRODUCT-RULES.md`（产品规则）。**只要在这个仓库里跑、读了项目底座，就懂这个产品**——产物才不会脱离真实产品凭空编。
 2. **落点 `deliverables/`**（产品级、住 main）+ 在 `deliverables/INDEX.md` 登记一行（产物名 — 一句话用途 — 日期）。目录 / INDEX 不存在就建（格式见 `$HOME/.pmai/templates/deliverables-INDEX.md.tmpl`）。
-3. **skill = 固化的临场**：默认**临场生成**（PM 说「生成一份 X」，你读脊柱后直接产）；只有**反复用 / 要统一格式**的产物才固化成 skill（同 `scrape → skillify` 路径），**不要为一次性产物预建 skill**。
+3. **skill = 固化的临场**：默认**临场生成**（PM 说「生成一份 X」，你读项目底座后直接产）；只有**反复用 / 要统一格式**的产物才固化成 skill（同 `scrape → skillify` 路径），**不要为一次性产物预建 skill**。
 4. **产物 skill 统一命名 `make-*`**（如 gstack `make-pdf` / 未来自建 `make-deck`）、进 `INDEX.md`；**不建产物插件框架**。
 
-已有产物入口：`/pmai-prd-writing` standalone（反向 PRD，已读脊柱）；PRD 要发布级 PDF 用 gstack `make-pdf`。PPT / 图片 gstack 无现成 → 走外部工具 / 未来自建 `make-*`，但都照第 1 条**先读脊柱**。
+已有产物入口：`/pmai-prd-writing` standalone（反向 PRD，已读项目底座）；PRD 要发布级 PDF 用 gstack `make-pdf`。PPT / 图片 gstack 无现成 → 走外部工具 / 未来自建 `make-*`，但都照第 1 条**先读项目底座**。
 
 ## gstack
 

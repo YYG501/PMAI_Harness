@@ -1,9 +1,9 @@
 ---
 name: pmai-codebase-audit
 description: |
-  Brownfield 入口：已有代码库接入框架时，扫码产出「代码现状档」
-  （7 维度：技术栈 / 集成 / 架构 / 结构 / 约定 / 测试 / 隐患；带防 secret 扫描），
-  然后走和新项目一样的 /pmai-project-solution 讨论（被现状档喂着）。
+  Brownfield 一气呵成入口：已有代码库接入框架时，一个命令走完——扫码产出「代码现状档」
+  （7 维度：技术栈 / 集成 / 架构 / 结构 / 约定 / 测试 / 隐患；带防 secret 扫描），PM 过目现状档后，
+  在同一流程内内联跑项目方向讨论（被现状档喂着，和新项目一样），产出 docs/PROJECT.md + docs/ROADMAP.md。
   与 GSD 的 map-codebase → new-project 同构。新项目（无已有代码）不用本 skill。
 ---
 
@@ -11,11 +11,12 @@ description: |
 
 ## When To Use
 
-- **brownfield 场景**：已有代码库要接入 PM-AI-Workflow 框架时调用，**在 `/pmai-project-solution` 之前**。
-- 新项目（空仓 / 全新）**不用**本 skill —— 直接 `/pmai-init-project` → `/pmai-project-solution`。
+- **brownfield 场景**：已有代码库要接入 PM-AI-Workflow 框架时调用。一个命令走完接入：扫码产现状档 → PM 过目 → 内联定方向。
+- 新项目（空仓 / 全新）**不用**本 skill —— 直接 `/pmai-init-project`（greenfield 一气呵成入口）。
 
-本 skill = brownfield 入口。它产出「代码现状档」喂给 `/pmai-project-solution`，让 project-solution
-被已有代码库的实况喂着讨论项目方向 —— 和新项目一样的 project-solution，只是多一份现状输入。
+本 skill = brownfield 一气呵成入口，和 greenfield 的 `/pmai-init-project` 对称：greenfield 一个命令把骨架 + 方向讨论做完，brownfield 一个命令把现状盘点 + 方向讨论做完。中间隔一个「PM 过目现状档」的轻停顿（现状档是方向决策的输入材料，PM 点头再继续），不用 PM 手敲第二个命令。方向讨论这一段和新项目走同一套 `_shared/project-questioning.md`，只是多一份现状输入喂着。
+
+> **与 `/pmai-project-solution` 的分工**：本 skill 内联跑的是 brownfield **首次接入定方向**；`/pmai-project-solution` 是**事后改方向**的按需入口（跑过几个 req 发现定位偏了 / 产品路线规划 / 老板新方向）。接入用本 skill 一条龙，不再需要先 audit 再手动 project-solution。
 
 ## Preamble
 
@@ -45,7 +46,7 @@ echo "SKILL: codebase-audit"
 ### 步骤 2：扫码 7 维度
 
 用 read-only 工具（Glob / Grep / Read；大范围探索可派 read-only subagent fan-out）盘点
-7 个维度，逐维写进 `docs/代码现状档.md`（按 `$PMAI_HOME/skills/codebase-audit/templates/codebase-audit.md.tmpl`）：
+7 个维度，逐维写进 `docs/CODEBASE-AUDIT.md`（按 `$PMAI_HOME/skills/codebase-audit/templates/codebase-audit.md.tmpl`）：
 
 | # | 维度 | 扫什么 |
 |---|---|---|
@@ -59,18 +60,20 @@ echo "SKILL: codebase-audit"
 
 ### 步骤 3：产出现状档 + PM 确认
 
-写完 `docs/代码现状档.md` 后呈交 PM：
+写完 `docs/CODEBASE-AUDIT.md` 后呈交 PM：
 
 ```
-✅ 代码现状档：docs/代码现状档.md
+✅ 代码现状档：docs/CODEBASE-AUDIT.md
 
 📋 7 维度盘点完成：技术栈 <一句> / 集成 N 个 / 架构 <一句> / 隐患 M 项
 
-这份现状档准吗？有补充 / 纠正直接说；确认后跑 /pmai-project-solution（它会读这份档作为
-已有代码库的语境讨论项目方向）。
+这份现状档准吗？有补充 / 纠正直接说。
+你过目后说「继续」，我接着用这份现状档跟你定项目方向（产出 PROJECT.md + ROADMAP.md）。
 ```
 
 PM 提修正 → 改现状档 → 重新呈交。
+
+> **这是一个轻停顿，不是流程终点**：现状档是方向决策的输入材料，留这个停顿让 PM 先把它看准（可以离线慢慢读）。PM 说「继续 / 接着定方向 / OK」→ 进 step 3.5 / 3.5.5 兜底，再进 step 4 内联方向讨论。**不要**让 PM 去手敲 `/pmai-project-solution`——方向讨论就在本流程内接着跑。
 
 ### 步骤 3.5：产品模块清单 + modulespec 主规格骨架（PM 选择性触发）
 
@@ -192,26 +195,48 @@ $HAS_FILE && grep -q "^## 共享组件 inventory" "$DESIGN_MD" && HAS_INVENTORY=
   视觉基线段建议：跑 gstack `/design-consultation` 补全 8 段（PM 主动入口）
 ```
 
-### 步骤 4：交接 project-solution
+### 步骤 4：内联方向讨论（产 PROJECT.md + ROADMAP.md）
 
-PM 确认现状档后，引导 PM 跑 `/pmai-project-solution` —— project-solution 读 `docs/代码现状档.md`
-作为已有代码库的语境，和新项目一样讨论项目方向、产出 `docs/PROJECT.md` + `docs/ROADMAP.md`。
+PM 在 step 3 轻停顿说「继续」后，**在本流程内直接接着跑项目方向讨论**——不交接出去、不让 PM 手敲 `/pmai-project-solution`。逻辑和 greenfield（`/pmai-init-project` 阶段 C）完全同一套，走共享真相源。
+
+**怎么跑**：
+
+1. **@读 `skills/_shared/project-questioning.md`**（**单一真相源**——提问纪律 / 问题库 / 写作规则 / Decision gate / 5 节检查）。
+2. **全文读 `docs/CODEBASE-AUDIT.md`**（刚产出的现状档，作已有代码库的实况语境，AI 不准跳）。
+3. 按 **brownfield 提问顺序**问 PM（场景特定，与 `/pmai-project-solution` 段 0 表「D brownfield 接入」一致）：
+   - (1) 产品定位（**从 codebase 反推 + PM 确认**）
+   - (2) 用户画像（从代码层级 / API 角色反推 + PM 补）
+   - (3) 技术栈（**从现状档抄**，PM 确认）
+   - (4) 业务术语表（**从 model / API 命名反推 + PM 补**）
+   - (5) roadmap（PM 给）
+4. **未决问题闸门**（@读 `_shared/project-questioning.md` §4）：暂存文件 `docs/.project-solution-open-questions.md`，闸门必过。
+5. **Decision gate 确认门**（@读 §6）：label = 动作描述，PM 选「创建 PROJECT.md」才落盘；选「继续探索」回提问 Loop。
+6. **写 `docs/PROJECT.md` + `docs/ROADMAP.md`**（@读 §5 写作规则）。
+7. **5 节齐不齐检查**（@读 §7）：跑 `check-project-sections.py`，有空节逐节补。
+8. **PM 定稿**（@读 §8）：展示路径 + 摘要，PM 答「OK / 定了」。
+9. **atomic commit**（@读 §9）：`git commit -m "docs: project direction settled"`。
+10. 收尾向 PM 一句话说明 ROADMAP 是唯一规划视图，给 ▶ Next Up 块引到第一个需求：`/pmai-new-req "<一句话需求>"`。
+
+> **为什么内联而不是交接**：方向讨论的全部逻辑已沉淀在共享的 `_shared/project-questioning.md`，greenfield 的 init-project 阶段 C 就是这么内联跑的；brownfield 现状档此刻已在手，没有任何技术理由再拆成第二个手敲命令。轻停顿（step 3）已经给了 PM 消化现状档的时间——「留消化时间」和「逼 PM 手敲命令」是两件事，本 skill 只保留前者。
 
 ## Rules
 
-- **默认只读扫码**：步骤 1-4 + step 3.5 选 [N] 路径只产 `docs/代码现状档.md`，不改代码、不改其它业务文档。**例外**：step 3.5 选 [Y] 时允许生成 `docs/modules/<m>.md` 主规格骨架 + 刷新 `docs/modules/INDEX.md`（PM 确认模块清单后按 `$PMAI_HOME/skills/codebase-audit/templates/module.md.tmpl` 生成）。
+- **扫码阶段只读**：步骤 1-3（扫码 + 产现状档）只读代码、不改代码。step 4 内联方向讨论才写 `docs/PROJECT.md` + `docs/ROADMAP.md`（PM 在 Decision gate 拍板后落盘）。
 - **防 secret 是硬约束**：见上方「防 secret 扫描」段，违反 = 严重错误。
-- **不替代 `/pmai-project-solution`** —— 本 skill 只产现状档 + 可选 modulespec 骨架；项目方向讨论由 project-solution 做。
+- **方向讨论走共享真相源**：step 4 内联方向讨论必须 @读 `skills/_shared/project-questioning.md`，**不要**在本 skill 里重抄提问法 / 写作规则（必漂移；真相源单一，和 init-project 阶段 C / project-solution 共用同一套）。
+- **与 `/pmai-project-solution` 分工**：本 skill 管 brownfield **首次接入定方向**（内联跑完）；`/pmai-project-solution` 管**事后改方向**（场景 A 重做 / B 路线规划 / C 新方向）。接入不再需要 PM 手敲 project-solution。
 - 新项目不用本 skill（无已有代码可审）。
 - step 3.5 模块清单由 PM 确认 —— AI 不替 PM 决定模块边界（候选清单 PM 必须过一遍）。
 
 ## 边界
 
 - **允许产出**：
-  - `docs/代码现状档.md`（默认）
+  - `docs/CODEBASE-AUDIT.md`（默认）
+  - `docs/PROJECT.md` + `docs/ROADMAP.md`（**step 4 内联方向讨论，PM 在 Decision gate 拍板后**）
+  - `docs/.project-solution-open-questions.md`（step 4 未决问题闸门暂存文件）
   - `docs/modules/<m>.md` 主规格骨架（**仅当 step 3.5 PM 选 [Y]**）
   - `docs/modules/INDEX.md` 刷新（**仅当 step 3.5 PM 选 [Y]**）
   - `docs/DESIGN.md` 兜底建 / 追加 inventory 段（**step 3.5.5 无条件，跟 step 3.5 选择无关**）
-- **允许动作**：read-only 扫码、7 维度盘点、防 secret redact、step 3.5 选 [Y] 时按 `$PMAI_HOME/skills/codebase-audit/templates/module.md.tmpl` 生成主规格骨架、step 3.5.5 兜底 DESIGN.md inventory 段
-- **禁止**：改代码 / 改 step 3.5 / 3.5.5 范围外的业务文档 / 替 PM 做项目方向决策 / step 3.5 跳过模块清单 PM 确认环节 / step 3.5.5 替 gstack 写视觉基线 8 段（视觉基线由 PM 主动调 `/design-consultation`）
-- **退出条件**：现状档经 PM 确认 + step 3.5 完成（建或跳过）+ step 3.5.5 兜底跑过，引导 PM 跑 `/pmai-project-solution`
+- **允许动作**：read-only 扫码、7 维度盘点、防 secret redact、step 3.5 选 [Y] 时按 `$PMAI_HOME/skills/codebase-audit/templates/module.md.tmpl` 生成主规格骨架、step 3.5.5 兜底 DESIGN.md inventory 段、step 4 内联方向讨论（@读 `_shared/project-questioning.md`）
+- **禁止**：改代码 / 改 step 3.5 / 3.5.5 范围外的业务文档 / step 4 替 PM 做方向决策（必过 Decision gate）/ step 3.5 跳过模块清单 PM 确认环节 / step 3.5.5 替 gstack 写视觉基线 8 段（视觉基线由 PM 主动调 `/design-consultation`）/ 在 step 4 重抄 `_shared/project-questioning.md` 的提问法与写作规则
+- **退出条件**：现状档经 PM 确认 + step 3.5 完成（建或跳过）+ step 3.5.5 兜底跑过 + step 4 方向讨论定稿（PROJECT.md / ROADMAP.md 已落 + atomic commit）+ 给出 ▶ Next Up（`/pmai-new-req`）

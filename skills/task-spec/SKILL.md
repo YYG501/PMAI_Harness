@@ -59,7 +59,7 @@ echo "SKILL: task-spec"
 | `task-plan.md` | task 元数据 + 全 task 视图（build 阶段范围清单拆出的 task）|
 | `req-plan.md` | 范围确认阶段拍板的真相源 —— **范围清单（WHAT）** 挑当前 task 切片转写进执行区·实现规格 + PM 确认区·验收；**决策页（WHY）** 提供本 task 实现要遵守的关键产品决策 |
 | `req-plan.md` 名词 | **本 req 临时词典** —— 写 task 内容时按本 req 引入的新业务实体 / 角色精确指代，禁同义词漂移 |
-| `docs/PRODUCT-STATE.md` / `docs/DESIGN.md` / `docs/modules/` | 产品脊柱背景（产品现状 / 设计约定 / 模块现状）|
+| `docs/PRODUCT-STATE.md` / `docs/DESIGN.md` / `docs/modules/` | 项目底座背景（产品现状 / 设计约定 / 模块现状）|
 | `docs/PRODUCT-STATE.md ## 业务术语表`（若有）| **长期词典**（跨 req 已沉淀的稳定业务术语）—— 跟 req-plan 名词同时读：PRODUCT-STATE 是沉淀基线，req-plan 名词是本 req 新引入的临时词；两者并集 = 写 task 内容时的术语词典 |
 | `docs/PRODUCT-RULES.md` | 跨功能产品行为规则 —— 读全部 `scope=全局` 规则 + 按当前 task 模块 / 功能关键词 grep 命中的 `scope=域限定` 规则（章节-grep；`scope=全局` 永远纳入、不漏跨功能规则）。命中的规则写进执行区·约束与易错 |
 | 前序「已完成」task 的「PM 反馈」段 | same-req 反馈 lane（relevance 二分）|
@@ -107,7 +107,7 @@ stage_prefix 按 task short_id（`task-001` / `task-042` 等）。chat 一行确
 从 `task-plan.md` 定位参数指定的 `<task-id>`，提取：id / 标题 / 所属模块 / 所属模块章节 /
 summary / 依赖。找不到 → 停止并提示 PM 先修正 `task-plan.md`。
 
-### 步骤 2.5：产品脊柱文档强制 echo（不依赖 LLM 自觉 Read）
+### 步骤 2.5：项目底座文档强制 echo（不依赖 LLM 自觉 Read）
 
 prose 警告「AI 不得以'觉得不必要'为由跳过」是无效防御。Bash `cat` 把基础必读全文 echo 进 transcript：
 
@@ -318,7 +318,7 @@ task 文件后台落盘后，本环节对 PM 已拍板内容仍守不篡改纪�
 - 基础设施 task 必须说明：`本 task 不触发 module 规格 merge`。
 - AI 不得自动调任何 review skill；review 是 build 完三道审 + 体验迭代阶段的事，不在本环节。
 - **relevance 二分强制**：前序 PM 反馈按 relevance（适用 / 不适用）二分；每条都登记进 PM 反馈承接清单。
-- **跳过产品脊柱"必读"被禁止**：PRODUCT-STATE / DESIGN / req-plan / modules 存在则必读。
+- **跳过项目底座"必读"被禁止**：PRODUCT-STATE / DESIGN / req-plan / modules 存在则必读。
 - **binding-contract 纪律保留**：删的是双文件 hash 同步机器，不是删「PM 在范围确认拍板的范围 AI 不得加码或删改」。
 - **单文件模板必须保留「文档偏差」「自审记录」section**：否则 `task-transition.py`
   「执行中→已完成」gate 失锚点、对所有新 task 必败。

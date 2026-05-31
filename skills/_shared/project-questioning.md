@@ -1,7 +1,7 @@
 # project-questioning：项目方向讨论的共享真相源
 
 > **职责**：项目方向讨论的**提问纪律 / 问题库 / 写作规则 / Decision gate / 5 节检查**的**单一真相源**。
-> **调用方**：`/pmai-init-project` 阶段 C（greenfield 首次起项目） + `/pmai-project-solution`（4 场景：重做 / 产品路线规划 / 新方向 / brownfield 接入）。
+> **调用方**：`/pmai-init-project` 阶段 C（greenfield 首次起项目，内联） + `/pmai-codebase-audit` step 4（brownfield 首次接入定方向，内联） + `/pmai-project-solution`（事后改方向：重做 / 产品路线规划 / 新方向 / 接入方向恢复）。
 > **§2.5 抽取边界**：本文件含**写作规则 + 话术问题库 + 收敛条件 + Decision gate 模板 + 检查清单**（跨场景共享）；**不含**4 场景判断 + 提问顺序 + 输入态判断（场景特定，留 `/pmai-project-solution/SKILL.md` 独有；`/pmai-init-project` 阶段 C 用 greenfield 顺序）。
 > **复用 pattern**：跟 `skills/_shared/PM-VIEW-RULES.md` 同款 shared reference 机制。
 
@@ -13,15 +13,16 @@
 
 1. **判断场景**（调用方自己做）：
    - `/pmai-init-project` 阶段 C → greenfield 首次（输入 = 空 PROJECT.md 骨架）
-   - `/pmai-project-solution` → 按 4 场景判断（重做 / 产品路线规划 / 新方向 / brownfield 接入）（细化）
+   - `/pmai-codebase-audit` step 4 → brownfield 首次接入（输入 = 刚产出的 `docs/CODEBASE-AUDIT.md` 现状档）
+   - `/pmai-project-solution` → 按 4 场景判断（重做 / 产品路线规划 / 新方向 / 接入方向恢复）（细化）
 2. **决定问题顺序**（调用方自己排）：
    - greenfield（init-project）：5 节按 §3 顺序问（产品定位 → 用户画像 → 技术栈 → 业务术语表 → roadmap 队列）
    - 重做：按 PM 提的痛点切入，不必从产品定位起
    - 产品路线规划：跳过产品定位 / 技术栈（一般稳定），重排 roadmap
    - 新方向：从产品定位 + 用户画像重起
-   - brownfield 接入：先读 `docs/代码现状档.md` 作实况语境，5 节顺序不变
+   - brownfield 接入：先读 `docs/CODEBASE-AUDIT.md` 作实况语境，5 节顺序不变
 3. **跑提问 + 闸门 + 写作 + 确认门**（按 §2-§7 走）
-4. **PM 定稿后**：调用方按自己语境继续（init-project 进阶段 D / project-solution skill 退出）
+4. **PM 定稿后**：调用方按自己语境继续（init-project 进阶段 D / codebase-audit 给 ▶ Next Up 引到 `/pmai-new-req` / project-solution skill 退出）
 
 ---
 
@@ -235,7 +236,7 @@ git commit -m "docs: project direction settled"
 
 ### §10.2 `/pmai-project-solution`（4 场景之一，已细化）
 
-1. agent 按 SKILL.md 步骤 1 读已有输入（CLAUDE.md / `docs/PROJECT.md` / `docs/代码现状档.md`）
+1. agent 按 SKILL.md 步骤 1 读已有输入（CLAUDE.md / `docs/PROJECT.md` / `docs/CODEBASE-AUDIT.md`）
 2. **判断场景**（A 重做 / B 产品路线规划 / C 新方向 / D brownfield 接入）—— 调用方 `/pmai-project-solution` SKILL.md 段 0 表已细化触发条件 + 输入态 + 提问顺序
 3. agent @读 本文件
 4. 按 `/pmai-project-solution` SKILL.md 段 0 表"提问顺序"列**场景特定顺序**问 PM：

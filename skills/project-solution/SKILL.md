@@ -6,7 +6,7 @@ description: |
     A 项目方向重做（跑过几个 req 后发现产品定位偏了）
     B 产品路线规划（主动校准 PROJECT 6 节 + 重新排 roadmap，含季度 / 半年节奏）
     C 老板 / 市场新方向（外部输入逼着改路线）
-    D brownfield 接入定方向（紧接 /pmai-codebase-audit 后跑）
+    D brownfield 接入方向恢复（接入时 /pmai-codebase-audit 内联方向讨论被打断 / 想重定方向时手动补跑）
   内部逻辑：场景判断 + @读 _shared/project-questioning.md 跑讨论（提问顺序场景特定）。
   不占 req stage、不走 req-stage-gate。
 ---
@@ -22,10 +22,11 @@ PM 主动调用，**4 个独立场景**：
 - **A 项目方向重做**：跑过几个 req 后发现产品定位偏了，重新定方向
 - **B 产品路线规划**：主动校准 PROJECT 6 节 + 重新排 roadmap（含季度 / 半年节奏 / 老项目首次补全）
 - **C 老板 / 市场新方向**：外部输入逼着改路线
-- **D brownfield 接入定方向**：紧接 `/pmai-codebase-audit` 之后跑
+- **D brownfield 接入方向恢复**：brownfield 接入的方向讨论已搬进 `/pmai-codebase-audit` step 4 内联跑（一气呵成）。本场景只在**异常恢复**时用——接入时方向讨论被打断没跑完（窗口关了 / context 丢了）、或现状档当时定的方向想重来。正常 brownfield 接入**不用**手敲本命令。
 
 > **不在 scope**：
 > - greenfield 首次起新项目 → 走 `/pmai-init-project`（一气呵成 4 阶段；阶段 C 内嵌方向讨论按同款 `_shared/project-questioning.md` 跑）
+> - brownfield 首次接入定方向 → 走 `/pmai-codebase-audit`（一气呵成：扫码产现状档 → PM 过目 → step 4 内联方向讨论，同款 `_shared/project-questioning.md`）。本 skill 场景 D 只兜接入方向讨论被打断的异常恢复
 > - req 级范围确认 / 按需 PRD / 沉淀 → 走 `/pmai-new-req` 起需求、`/pmai-next` 推进六步（`req-stage-gate` 已降为异常恢复壳）
 > - 老项目同步兜底 → 走 `/pmai-new-req` mini-fill（不在本 skill 范围）
 
@@ -69,7 +70,7 @@ echo "SKILL: project-solution"
 | **A 重做** | PM 主动说"方向偏了 / 要重做" | `docs/PROJECT.md` 已有内容 | (1) **痛点诊断**（旧 PROJECT 哪几节失效 / 为什么偏）→ (2) 产品定位（重定）→ (3) 用户画像（重定，可能换主角色）→ (4) 业务术语表（如有新术语）→ (5) roadmap 重排（旧未做 req 重新评估保留 / 砍）|
 | **B 产品路线规划** | PM 主动说"产品路线规划 / 季度规划 / 半年规划"，或老项目首次补 `docs/ROADMAP.md` | `docs/PROJECT.md` 已有；`ROADMAP.md` 历史可有可无（首次补则跳过步骤 1）| (1) **过去 roadmap 完成度回顾**（哪些 ship / 哪些砍；首次补无历史则跳过）→ (2) roadmap：**先扫 `requirements/closed/` 列全部 req-NNN 作 done 行回填**（按 `_shared/project-questioning.md` §5.2 写法），再问 PM 新 req 队列（planned 行）—— ROADMAP 是历史 + 未来一张表，漏 done 行不算齐 → (3) 业务术语表增量（如有新业务）—— **跳过产品定位 / 用户画像 / 技术栈**（默认稳定）|
 | **C 老板新方向** | PM 主动说"老板 / 客户给了新方向" | `docs/PROJECT.md` 已有 | (1) **新方向 vs 现 PROJECT 差异点**（PM 自述新方向 + AI 对比现 PROJECT 找冲突）→ (2) 产品定位（如有变 → 改）→ (3) 用户画像（如有变 → 改，可能换主角色）→ (4) roadmap（新 req 队列）|
-| **D brownfield 接入** | 紧接 `/pmai-codebase-audit` 之后 | `docs/代码现状档.md` 已生成（7 维度）| (0) **全文读 `docs/代码现状档.md`**（必读，AI 不准跳）→ (1) 产品定位（**从 codebase 反推 + PM 确认**）→ (2) 用户画像（从代码层级 / API 角色反推 + PM 补）→ (3) 技术栈（**从代码现状档抄**，PM 确认）→ (4) 业务术语表（**从 model / API 命名反推 + PM 补**）→ (5) roadmap（PM 给）|
+| **D brownfield 方向恢复** | 接入时 `/pmai-codebase-audit` step 4 内联方向讨论被打断 / 想重定方向（正常接入不走这）| `docs/CODEBASE-AUDIT.md` 已生成（7 维度）| (0) **全文读 `docs/CODEBASE-AUDIT.md`**（必读，AI 不准跳）→ (1) 产品定位（**从 codebase 反推 + PM 确认**）→ (2) 用户画像（从代码层级 / API 角色反推 + PM 补）→ (3) 技术栈（**从代码现状档抄**，PM 确认）→ (4) 业务术语表（**从 model / API 命名反推 + PM 补**）→ (5) roadmap（PM 给）|
 
 **通用约束**（所有 4 场景）：
 
@@ -83,7 +84,7 @@ echo "SKILL: project-solution"
 
 - `docs/PROJECT.md`（已有内容 / 或 `/pmai-init-project` 已建的空骨架）
 - `CLAUDE.md`（看注入的项目背景 / 工程结构约束档位）
-- `docs/代码现状档.md`（如存在 —— brownfield 场景；`/pmai-codebase-audit` 先扫码产出的 7 维度现状档）—— 存在 → 全文读，作为讨论实况语境
+- `docs/CODEBASE-AUDIT.md`（如存在 —— brownfield 场景；`/pmai-codebase-audit` 先扫码产出的 7 维度现状档）—— 存在 → 全文读，作为讨论实况语境
 
 #### 步骤 2：分批提问 PM
 

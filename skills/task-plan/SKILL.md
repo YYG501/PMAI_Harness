@@ -1,7 +1,7 @@
 ---
 name: pmai-task-plan
 description: |
-  承接 req-plan 范围清单、拆成可验收的 task 单元：读项目脊柱（PRODUCT-STATE / DESIGN / 主原型）+ 本次 req-plan + 原型代码，把本次增量拆成 task。一个 task = PM 看 demo 确认方向的阶段单元（非工程 ticket、mode 中立）。按 $PMAI_HOME/skills/task-plan/templates/task-plan.md.tmpl 生成单一文件 task-plan.md（task 列表 + 执行顺序 + 验收 GAP 映射 + 末尾轻量自检与状态摘要）。覆盖审计的锚点是 req-plan 范围清单（本 skill 承接它拆 task，不另产范围清单）。不生成具体 task 文档，不生成工程合同分文件。
+  承接 req-plan 范围清单、拆成可验收的 task 单元：读项目底座（PRODUCT-STATE / DESIGN / 主原型）+ 本次 req-plan + 原型代码，把本次增量拆成 task。一个 task = PM 看 demo 确认方向的阶段单元（非工程 ticket、mode 中立）。按 $PMAI_HOME/skills/task-plan/templates/task-plan.md.tmpl 生成单一文件 task-plan.md（task 列表 + 执行顺序 + 验收 GAP 映射 + 末尾轻量自检与状态摘要）。覆盖审计的锚点是 req-plan 范围清单（本 skill 承接它拆 task，不另产范围清单）。不生成具体 task 文档，不生成工程合同分文件。
 ---
 
 # /pmai-task-plan
@@ -24,7 +24,7 @@ description: |
 本 skill 生成的文档须遵守 `skills/_shared/PM-VIEW-RULES.md`（主索引）。具体读以下子文件：
 - `_shared/pm-view/writing-rules.md`（写作规则：明确指代 / 正向描述 / 禁工程词 / 禁像素颜色 / 禁反向约束）
 - `_shared/pm-view/section-order.md`（章节顺序：按 `$PMAI_HOME/skills/task-plan/templates/task-plan.md.tmpl`）
-- `_shared/pm-view/input-flow.md`（输入流：项目脊柱 + 本次 req-plan + 原型代码；输入清单见下方 Required Inputs）
+- `_shared/pm-view/input-flow.md`（输入流：项目底座 + 本次 req-plan + 原型代码；输入清单见下方 Required Inputs）
 
 > 「工程合同」成分（反模式自检结论 / 验收 GAP 索引 / 模块规格状态）压在末尾「四、自检与状态摘要」节。详细论证 / 复审决策不长期存档，跑时输出即可。
 
@@ -39,7 +39,7 @@ echo "SKILL: task-plan"
 
 按 `_shared/pm-view/input-flow.md` 中 **task-plan** 段执行。核心输入三类：
 
-1. **项目脊柱**（init 时建、每次必读、治失忆）：
+1. **项目底座**（init 时建、每次必读、治失忆）：
    - `PRODUCT-STATE.md` —— 产品当前能力面，判断本次增量落在哪、哪些能力已存在
    - `DESIGN.md` —— 设计与架构约束，task 拆分边界受其约束
    - `prototype/`（主原型代码）—— 判断哪些能力原型里已有、反向校验范围清单
@@ -81,14 +81,14 @@ stage_prefix `"task-plan"`。chat 一行确认 `已归档（attachments/task-pla
 - `skills/_shared/pm-view/section-order.md`（章节顺序）
 - `skills/_shared/pm-view/input-flow.md`（输入流）
 
-### 步骤 0.5：脊柱与范围文档强制 echo（不依赖 LLM 自觉 Read）
+### 步骤 0.5：项目底座与范围文档强制 echo（不依赖 LLM 自觉 Read）
 
 prose 警告「AI 不得以'觉得不必要'为由跳过」是无效防御 —— LLM 自觉 Read tool 触发不稳是反复迭代踩坑的根因。Bash `cat` 把基础必读全文 echo 进 transcript（治失忆）：
 
 ```bash
 SOURCES=(
-  "$REPO_ROOT/docs/PRODUCT-STATE.md"  # 项目脊柱：产品当前能力面，判断本次增量落在哪
-  "$REPO_ROOT/docs/DESIGN.md"         # 项目脊柱：设计与架构约束，task 拆分边界受其约束
+  "$REPO_ROOT/docs/PRODUCT-STATE.md"  # 项目底座：产品当前能力面，判断本次增量落在哪
+  "$REPO_ROOT/docs/DESIGN.md"         # 项目底座：设计与架构约束，task 拆分边界受其约束
   "$ACTIVE_REQ_DIR/req-plan.md"       # 本次范围清单 WHAT + 关键决策页 WHY，拆 task 的直接依据
 )
 
@@ -161,7 +161,7 @@ done
 - 判断：
   - **重构类前置**：后续 task 串行执行时 merge 冲突不存在，前置理由不成立，合并进首个相关业务 task。仅当后续 task 必须并行且冲突无法避免，才考虑前置，并且必须带端到端行为验证点。
   - **文档 / 规格 / 契约类前置**：不立 task。由各业务 task 收尾后的沉淀流程补对应章节（颗粒度核心规则已说明）。
-    - **包括 req-plan 关键决策页明文要求的"主线规范产物"** —— 即使决策页把"建立 X 规范段 / 字段字典 / 权限矩阵"列为必有产出，仍按文档类前置处理：**不合并进业务 task**、**不把 `PRODUCT-STATE.md` / `DESIGN.md` 写进业务 task 的「执行范围」allowlist**。由首个相关业务 task 收尾后沉淀进 `PRODUCT-STATE.md` / `DESIGN.md`。理由：「内容必须存在」是范围确认把关的内容硬约束，「什么时候写 / 走哪条原型分支」是流程问题（task 边界 + 沉淀）—— 两件事，不能因前者绕开后者。判定信号：产物归宿是脊柱文档（`PRODUCT-STATE.md` / `DESIGN.md`）而非 `prototype/` 里的代码 → 默认文档类。
+    - **包括 req-plan 关键决策页明文要求的"主线规范产物"** —— 即使决策页把"建立 X 规范段 / 字段字典 / 权限矩阵"列为必有产出，仍按文档类前置处理：**不合并进业务 task**、**不把 `PRODUCT-STATE.md` / `DESIGN.md` 写进业务 task 的「执行范围」allowlist**。由首个相关业务 task 收尾后沉淀进 `PRODUCT-STATE.md` / `DESIGN.md`。理由：「内容必须存在」是范围确认把关的内容硬约束，「什么时候写 / 走哪条原型分支」是流程问题（task 边界 + 沉淀）—— 两件事，不能因前者绕开后者。判定信号：产物归宿是项目底座文档（`PRODUCT-STATE.md` / `DESIGN.md`）而非 `prototype/` 里的代码 → 默认文档类。
 
 **反模式 B：横切质量 task**
 
@@ -340,7 +340,7 @@ build 阶段一个个把 task 做出来时，有时跑到 task-NNN 才发现 tas
 - ❌ 自动生成 tasks/task-NNN-*.md（这是 task-spec 的事，build 期间逐个生成）
 - ❌ 生成 task-plan.engineering.md 之类的工程合同分文件（task-plan 单文件，自检结论压在「四、自检与状态摘要」）
 - ❌ 「四、自检与状态摘要」里堆论证全文 / 拆分依据论证 / 复审决策表（这些是过程产物，跑时输出，不长期存档）
-- ❌ 跳过脊柱与范围文档的"必读"（PRODUCT-STATE / DESIGN / 主原型 / req-plan）
+- ❌ 跳过项目底座与范围文档的"必读"（PRODUCT-STATE / DESIGN / 主原型 / req-plan）
 
 **正向约束**：
 

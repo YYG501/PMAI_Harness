@@ -20,6 +20,11 @@ PM-AI-Workflow 生成器仓的演进记录。本文件**只记影响下游业务
 
 ### PMAI 重构落地（office-hours 收敛）—— 进行中
 
+- `fix(skills+scripts+templates)`: **brownfield 接入改一气呵成 + 消除「脊柱」黑话 + 中文产物文件名转英文**（消费仓试用反馈三连）。
+  - **brownfield 接入不再两段手敲**：`/pmai-codebase-audit` 原本扫完现状档就停下、要 PM 手敲第二个命令 `/pmai-project-solution` 才定方向 —— 与 greenfield `/pmai-init-project`「一个命令含方向讨论」不对称。根因：设计把「留 PM 消化现状档的时间」和「逼 PM 手敲第二命令」绑死，但方向讨论逻辑早已共享在 `_shared/project-questioning.md`（init-project 阶段 C 就内联跑）。改法：codebase-audit step 3 呈交现状档后留**轻停顿**（PM 过目、可离线读），PM 说「继续」→ **step 4 内联跑方向讨论**（@读同款 `project-questioning.md` + 现状档实况，产 `docs/PROJECT.md` + `docs/ROADMAP.md` + Decision gate + atomic commit + ▶ Next Up 引到 `/pmai-new-req`），不交接出去。`project-solution` 保留但场景 D 从「接入必经步」降级为**接入方向讨论被打断的异常恢复入口**；`project-questioning.md` 调用方契约补登记 codebase-audit step 4 为第三调用方。
+  - **「脊柱 / 上下文脊柱 / 产品脊柱 / 项目脊柱」→「项目底座」**：PM 看不懂内部黑话「脊柱」。17 个同步资产 70 处统一改「项目底座」，零残留。指代不变（PRODUCT-STATE / PROJECT / DESIGN / PRODUCT-RULES / ROADMAP + prototype/，AI 每次进项目先读、治失忆的根基）。
+  - **中文产物文件名转英文**：`docs/代码现状档.md` → `docs/CODEBASE-AUDIT.md`（对齐 PRODUCT-STATE.md / PROJECT.md / DESIGN.md 全大写项目级命名，含 codebase-audit SKILL + 模板 + project-solution + project-questioning 全部引用）。面向 PM 的概念词「代码现状档」保留中文，只改落盘路径。`docs/归档/` 目录名维持不变（PM 几乎不直接输入该路径，概念词「归档」已是中文、可懂；改名 blast radius 大而收益小，不动）。
+
 - `docs(skills+tests)`: **收 task-plan SKILL 三处「产范围清单」误导措辞**（description / When To Use / 「task 是什么」）。根因：task-plan 实际产物是 task 拆分（task 列表 + 执行顺序 + GAP 映射），其模板里**没有「范围清单」节**，但 SKILL 措辞写成「产/细化范围清单」，让它看起来和 new-req 的 `req-plan.md`（范围清单 WHAT + 决策页 WHY）职责重叠；且自称「它产的范围清单是覆盖审计锚点」与真相源 `input-flow.md`（覆盖审计对照 **req-plan** 范围清单，build spike 已实证）冲突。改为「承接 req-plan 范围清单、拆成可验收 task 单元」，明确锚点归 req-plan、本 skill 不另产、不复制。连带修 `test-implementation-design.sh:43` 注释「task-plan 的 req-plan.md」→「new-req 产的 req-plan.md」（req-plan 是 new-req 的产物，非 task-plan）。**纯措辞 + 注释，零功能改动**，test-task-plan 8/8、test-implementation-design 4/4 零回归。
 
 - `fix(scripts+skills+templates)`: **第二轮 gstack-review 修复（四源交叉：手工 + 2 Claude agent + Codex 跨模型）**——验收 `reshape-office-hours` 全工作产出，修一批绿网测不到的完整性缺口。基线 572 → **572 全绿**（断言 1:1 替换、用例数不变）。

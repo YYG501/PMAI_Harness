@@ -72,7 +72,7 @@ PM 创建 / 审核 / 验收时直接看的内容。回答 PM 关心的问题：
 | **执行区** | 启动前必读 / 实现规格 / 实现设计引用 / 约束与易错 / 自测说明 / 工程层验收 / 状态转换说明 | 字段格式校验；允许工程内容 |
 | **审计区** | 文档偏差 / 自审记录 / 历史档案 | 不 lint |
 
-WHAT 走 `req-plan.md`（范围清单 / 关键决策页）、HOW 走项目级 `DESIGN.md`（脊柱里
+WHAT 走 `req-plan.md`（范围清单 / 关键决策页）、HOW 走项目级 `DESIGN.md`（项目底座里
 的架构与约定）。三区由 region 标记界定（`<!-- region: PM-CONFIRM begin/end -->` 等）。
 
 `req-plan.md` / `task-plan.md` / 按需 `prd.md` 均单文件。

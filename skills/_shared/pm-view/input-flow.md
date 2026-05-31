@@ -7,7 +7,7 @@
 六步模型（真相源 [`docs/设计/PMAI重构方向-office-hours收敛.md`](../../../docs/设计/PMAI重构方向-office-hours收敛.md)）：
 
 ```
-① 上下文脊柱（项目级，init 时建，AI 每次必读，治失忆）
+① 项目底座（项目级，init 时建，AI 每次必读，治失忆）
 ② 范围确认（new-req → req-plan）
 ③ build（在 prototype/ 用 Claude Code 建）
 ④ 复审（build 完自动三道审）
@@ -39,22 +39,22 @@
 - ⚪ 按需 lazy（写不出来回查）
 - ❌ 显式不读
 
-### ① 上下文脊柱（项目级，init 建，下游每步必读）
+### ① 项目底座（项目级，init 建，下游每步必读）
 
-脊柱四件套是项目级、`init-project` 时建、AI 每次进项目必读，治"每次重新解释产品"的失忆。**不是 per-req 产物**——所有 req 共享同一份，只在第⑥步沉淀那一刻被写。
+项目底座四件套是项目级、`init-project` 时建、AI 每次进项目必读，治"每次重新解释产品"的失忆。**不是 per-req 产物**——所有 req 共享同一份，只在第⑥步沉淀那一刻被写。
 
 | 产物 | 等级 | 说明 |
 |---|---|---|
-| `docs/PRODUCT-STATE.md` | 🟢 | 产品现状（已上线 / 主原型已验证 / 在建 的功能盘点 + mock↔真实状态位）；脊柱心脏 |
+| `docs/PRODUCT-STATE.md` | 🟢 | 产品现状（已上线 / 主原型已验证 / 在建 的功能盘点 + mock↔真实状态位）；项目底座核心 |
 | `docs/DESIGN.md` | 🟢 | N 条正向视觉约束 + 产品化 demo 目标；build / 复审视觉门的护身符 |
 | `prototype/`（主原型） | 🟢 | 绝对单一主原型，不留 fork / 变体；当前产品行为的最权威证据（按 §9.3 反向校验、§9.3.1 大文件读法）|
 | `docs/PRODUCT-RULES.md` | 🟢 | 全项目跨功能产品行为规则（"产品在 X 情况下应 / 不应 Y"）；task / PRD 按 scope 读 |
 
-- `init-project`：PM 输入（项目名 / 目录 / mode）+ 已有内容判断，无大文件读；产出脊柱四件套骨架。
+- `init-project`：PM 输入（项目名 / 目录 / mode）+ 已有内容判断，无大文件读；产出项目底座四件套骨架。
 
 ### ② 范围确认（new-req → req-plan）
 
-new-req 进来，先 `@读` 脊柱（PRODUCT-STATE + DESIGN + PRODUCT-RULES）并**跑主原型**找出当前需求相对现状的 delta，然后走三条上坡路（思路清=直奔清单 / 有岔路=收范围对话抛 A/B/C + 画 ASCII / 想看图=视觉变体探几版草图）收敛，产出 `req-plan.md`（两节：范围清单 WHAT + 关键决策页 WHY），PM 拍板冻结。
+new-req 进来，先 `@读` 项目底座（PRODUCT-STATE + DESIGN + PRODUCT-RULES）并**跑主原型**找出当前需求相对现状的 delta，然后走三条上坡路（思路清=直奔清单 / 有岔路=收范围对话抛 A/B/C + 画 ASCII / 想看图=视觉变体探几版草图）收敛，产出 `req-plan.md`（两节：范围清单 WHAT + 关键决策页 WHY），PM 拍板冻结。
 
 - 🟢 `docs/PRODUCT-STATE.md`（@读 —— 找 delta 的基线，AI 据此指出"这是新东西、当前原型没有"）
 - 🟢 `prototype/`（**跑主原型** + 按 §9.3 / §9.3.1 反向校验现有页面字段 / 交互 / 已落地组件）
@@ -143,7 +143,7 @@ AI 主动批量 flag、PM 勾改；停止条件 = demo 成功标准 + PM 闸门�
 2. 按命中行号 + 下一个同级或更高级 header 之间的区间 offset/limit Read
 3. 关键词从当前 task 标题 / 所属模块 / 功能名提取
 
-适用：脊柱大文件按需局部读 / `docs/DESIGN.md`（task 涉及功能挑章节）/ `req-plan.md`（revise 模式按改动涉及章节）。
+适用：项目底座大文件按需局部读 / `docs/DESIGN.md`（task 涉及功能挑章节）/ `req-plan.md`（revise 模式按改动涉及章节）。
 
 **req-plan.md / PRD（反向）特殊**——逃生口：
 - **first-gen 模式**：整文件读（req 级核心产物，需要全局视野）
@@ -252,11 +252,11 @@ close-task 收尾 / 反向 PRD 规划期识别 PM 反馈 / 规则时，按下表
 ## 9.5 信息流图（六步）
 
 ```
-① 上下文脊柱（项目级，init 建，每步必读）
+① 项目底座（项目级，init 建，每步必读）
    docs/PRODUCT-STATE.md · docs/DESIGN.md · prototype/（主原型）· docs/PRODUCT-RULES.md
    │
    ▼
-② 范围确认  new-req @读脊柱 + 跑主原型 → 三条上坡路 → req-plan.md
+② 范围确认  new-req @读项目底座 + 跑主原型 → 三条上坡路 → req-plan.md
    │  （两节：范围清单 WHAT + 关键决策页 WHY，PM 拍板冻结）
    ▼
 ③ build  task-spec 从 req-plan 派生 task 单文件 typed contract（三区）
@@ -272,7 +272,7 @@ close-task 收尾 / 反向 PRD 规划期识别 PM 反馈 / 规则时，按下表
           + 按需（反向 PRD：结构←prototype + req-plan 清单 / 规则←决策页 + PRODUCT-RULES）
 
 （旧 7-stage 链 brief / analysis / prd / solution / implementation-design 已坍缩为
-  req-plan.md + 脊柱四件套；solution 双文件机器 + hash / reconcile / lazy-sync 整套已砍。）
+  req-plan.md + 项目底座四件套；solution 双文件机器 + hash / reconcile / lazy-sync 整套已砍。）
 ```
 
 ## 9.6 ~~双文件 lazy sync~~（已废止）

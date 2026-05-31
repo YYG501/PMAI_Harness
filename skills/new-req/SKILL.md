@@ -57,7 +57,7 @@ python3 "$PMAI_HOME/scripts/status-view.py" --banner-only --skill NEW-REQ || tru
 
 PM 给描述后，把它当作参数继续步骤 1。
 
-> **流程总览（worktree 创建后置）**：本 skill 全程主对话 cwd **不切**到 worktree —— `/pmai-new-req` 入口（步骤 0）→ 编号 + slug（步骤 1，main 上）→ 产品脊柱兜底（步骤 2，main 上 commit）→ 范围确认对话 + 定稿门（步骤 3，chat 内存）→ 范围定稿**瞬间**拉 worktree + 一次性 commit req-plan / brief / attachments / .req-meta.json / tasks 骨架进 req 分支（步骤 4，用 `git -C <worktree>` 全程不 cd）→ handoff 让 PM 手动切窗口、发 `/pmai-next`（步骤 5）。**关键差异**：worktree 是隔离机制，PM 视角下 IDE 切分支这个事件应该由 PM 自己触发（步骤 5 切窗口 `cd`），不是 AI 在范围确认中段就替 PM 切。
+> **流程总览（worktree 创建后置）**：本 skill 全程主对话 cwd **不切**到 worktree —— `/pmai-new-req` 入口（步骤 0）→ 编号 + slug（步骤 1，main 上）→ 项目底座兜底（步骤 2，main 上 commit）→ 范围确认对话 + 定稿门（步骤 3，chat 内存）→ 范围定稿**瞬间**拉 worktree + 一次性 commit req-plan / brief / attachments / .req-meta.json / tasks 骨架进 req 分支（步骤 4，用 `git -C <worktree>` 全程不 cd）→ handoff 让 PM 手动切窗口、发 `/pmai-next`（步骤 5）。**关键差异**：worktree 是隔离机制，PM 视角下 IDE 切分支这个事件应该由 PM 自己触发（步骤 5 切窗口 `cd`），不是 AI 在范围确认中段就替 PM 切。
 
 ### 步骤 1：确定 req 编号
 
@@ -77,11 +77,11 @@ helper 同时保证 `requirements/closed/` / `requirements/active/` / `git refs/
 REQ_BRANCH="req-$NEW_NUM-<slug>"      # 仅记内存，不在 main 上创建任何文件 / 目录
 ```
 
-### 步骤 2：产品脊柱兜底（主仓 main 上）
+### 步骤 2：项目底座兜底（主仓 main 上）
 
-在主仓 main 分支做一次产品脊柱检查 —— `docs/PROJECT.md`（6 节）+ `docs/DESIGN.md`（视觉约束 + 共享组件 inventory）。这两份是**项目级**而非 req 级，缺则补、补完直接 commit 到 main（理由：worktree 从 main 拉，main 上有这两份脊柱才能被 worktree 内 build 读到；产品脊柱不跟 req-plan 混 commit）。
+在主仓 main 分支做一次项目底座检查 —— `docs/PROJECT.md`（6 节）+ `docs/DESIGN.md`（视觉约束 + 共享组件 inventory）。这两份是**项目级**而非 req 级，缺则补、补完直接 commit 到 main（理由：worktree 从 main 拉，main 上有这两份项目底座才能被 worktree 内 build 读到；项目底座不跟 req-plan 混 commit）。
 
-> **为什么放在这里**：`/pmai-new-req` 是每 req 入口、本检查每 req 首次触发、脊柱填满后再跑就 silent skip——天然幂等，不需要「已查过」标记。**放在步骤 2（拉 worktree 之前）**：main 上 commit 完，步骤 4 拉 worktree 时自动带上。
+> **为什么放在这里**：`/pmai-new-req` 是每 req 入口、本检查每 req 首次触发、项目底座填满后再跑就 silent skip——天然幂等，不需要「已查过」标记。**放在步骤 2（拉 worktree 之前）**：main 上 commit 完，步骤 4 拉 worktree 时自动带上。
 
 #### 2A：PROJECT.md 兜底
 
@@ -179,7 +179,7 @@ $HAS_FILE && grep -q "^## 共享组件 inventory" "$DESIGN_MD" && HAS_INVENTORY=
 >
 > 跟 `codebase-audit` step 3.5.5 关系：codebase-audit 是 brownfield 接入时一次性兜底（推荐路径）；本步骤是每 req 入口兜底（任何遗漏的最后防线）。两者完全同款写入逻辑，互不冲突。
 
-#### 2C：commit 脊柱到 main（仅 2A / 2B 实际触发时）
+#### 2C：commit 项目底座到 main（仅 2A / 2B 实际触发时）
 
 2A / 2B 写了 / 改了 `docs/PROJECT.md` / `docs/DESIGN.md` → 在主仓 main 上 commit。两者都没触发（全 silent skip）→ 跳过本节。
 
@@ -194,14 +194,14 @@ git -C "$REPO_ROOT" commit -m "chore(baseline): new-req 入口兜底 PROJECT.md 
 告诉 PM 一句：
 
 ```
-📝 产品脊柱已 commit 至 main（<short-hash>）：<PROJECT.md / DESIGN.md / 二者>。后面拉 worktree 自动带上。
+📝 项目底座已 commit 至 main（<short-hash>）：<PROJECT.md / DESIGN.md / 二者>。后面拉 worktree 自动带上。
 ```
 
 ### 步骤 3：范围确认 —— 读产品现状 + 跑主原型 → 三条上坡路 → 产 req-plan.md
 
 **这一步是 new-req 的核心**：把 PM 一句话需求，和 PM 一起收敛成一份 `req-plan.md`（范围清单 + 关键决策）。一份两节、产品口径、**PM 拍板**——治 PM 老痛点"不确认方案就让 AI 出、出错了花巨多时间调"。
 
-**关键工程约束**：本步全程**主对话 cwd 在主仓 main**，**不**拉 worktree、**不**写任何文件到磁盘（脊柱 commit 例外，已在步骤 2 完成）。req-plan 草稿在 chat 里 markdown block 展示给 PM 看；attachments PM 提交意图也只在内存里记录 list，**实际 cp + register 推迟到步骤 4 worktree 创建后**。这样：(a) main 工作区零脏（PM `git status` 看到的永远是 clean）；(b) PM 视角"我说完 OK 它才创建工作区"，不会出现"AI 中段切了 cwd"的体验破绽。
+**关键工程约束**：本步全程**主对话 cwd 在主仓 main**，**不**拉 worktree、**不**写任何文件到磁盘（项目底座 commit 例外，已在步骤 2 完成）。req-plan 草稿在 chat 里 markdown block 展示给 PM 看；attachments PM 提交意图也只在内存里记录 list，**实际 cp + register 推迟到步骤 4 worktree 创建后**。这样：(a) main 工作区零脏（PM `git status` 看到的永远是 clean）；(b) PM 视角"我说完 OK 它才创建工作区"，不会出现"AI 中段切了 cwd"的体验破绽。
 
 #### 3.0：先读产品现状 + 跑当前主原型
 
@@ -210,7 +210,7 @@ git -C "$REPO_ROOT" commit -m "chore(baseline): new-req 入口兜底 PROJECT.md 
 1. `@读` 主仓 main 上的 `docs/PRODUCT-STATE.md`（当前功能 / 主原型现状 / mock-真状态位）+ `docs/PRODUCT-RULES.md`（跨功能产品规则，若有）。
 2. 看一眼 `prototype/` 当前主原型（结构 / 已有页面 / 已有组件），心里有底当前覆盖到哪。
 
-> **读什么不读什么**：只读产品脊柱（PRODUCT-STATE / PRODUCT-RULES / DESIGN）+ 主原型现状。**不**主动去翻 `requirements/closed/req-*` 的历史 req 文档（RAG 噪声，PM 需要时自己会让你读）。脊柱缺失（新项目还没沉淀过）→ 当作"白纸起步"，直接走清单，不报错。
+> **读什么不读什么**：只读项目底座（PRODUCT-STATE / PRODUCT-RULES / DESIGN）+ 主原型现状。**不**主动去翻 `requirements/closed/req-*` 的历史 req 文档（RAG 噪声，PM 需要时自己会让你读）。项目底座缺失（新项目还没沉淀过）→ 当作"白纸起步"，直接走清单，不报错。
 
 #### 3.1：选一条上坡路（AI 临场判断，不机械化）
 
@@ -282,7 +282,7 @@ brief 不再驱动任何重分析（原 brief→analysis→prd 前置链已砍�
 
 **禁止**：
 - AI 主动调用 `/office-hours` 或任何 review/research skill 替 PM 跑 —— office-hours 是 PM 自主使用的可选 aid（见 3.1 护栏），不是 new-req 流程的一环
-- 在 PM 给出方向前去读 `requirements/closed/req-*` 的历史 req 文档 — RAG 噪声，PM 需要时自己会让你读（产品脊柱例外，3.0 必读）
+- 在 PM 给出方向前去读 `requirements/closed/req-*` 的历史 req 文档 — RAG 噪声，PM 需要时自己会让你读（项目底座例外，3.0 必读）
 - 自作主张提"我先了解一下背景再问你" — 破坏对话节奏
 - 机械抛固定数量岔路口 — 必须按 3.1 临场判断，简单需求直奔清单
 
@@ -375,7 +375,7 @@ ACTIVE_REQ_DIR=$(printf '%s\n' "$REQ_JSON" | python3 -c 'import json,sys; print(
 REQ_REL=$(printf '%s\n' "$REQ_JSON" | python3 -c 'import json,sys; print(json.load(sys.stdin)["req_rel"])')
 ```
 
-脚本负责保证状态契约一致：`requirements/active/<req>/`、`.req-meta.json`、`tasks/_archived/`、`attachments/.gitkeep`、worktree 路径与分支名一次性落盘。`--no-brief` 让脚本只建骨架，req-plan.md / brief.md 由 4C 自己写（脚本只管状态契约，文档内容是 skill 的事）。**worktree 从 main 拉**，自动带上步骤 2 commit 的脊柱。不要在 skill 里另手写一套 meta schema，避免 human path 和 headless TTHW path 漂移。
+脚本负责保证状态契约一致：`requirements/active/<req>/`、`.req-meta.json`、`tasks/_archived/`、`attachments/.gitkeep`、worktree 路径与分支名一次性落盘。`--no-brief` 让脚本只建骨架，req-plan.md / brief.md 由 4C 自己写（脚本只管状态契约，文档内容是 skill 的事）。**worktree 从 main 拉**，自动带上步骤 2 commit 的项目底座。不要在 skill 里另手写一套 meta schema，避免 human path 和 headless TTHW path 漂移。
 
 #### 4B：batch cp attachments（步骤 3.5 PENDING_ATTACHMENTS 非空时）
 
@@ -468,11 +468,11 @@ req-plan.md 已 commit 后，**当前主对话不再继续 build**。`/pmai-new-
 - 允许多个 active req 并行（每个 req 一个 worktree、一条分支、一份 .req-meta.json，互不干扰）。已有 active req 时不要拦截，正常创建即可
 - slug 从需求描述自动生成，不需要问 PM
 - 主产物 `req-plan.md`（范围清单 + 决策页）= 范围真相源，PM 拍板；`brief.md` 是轻量入口稿（需求一句话 + 给谁看 + demo 成功标准），不驱动重分析。原 brief→analysis→prd 前置链已砍
-- 范围确认先 `@读` 产品脊柱（PRODUCT-STATE / PRODUCT-RULES / DESIGN）+ 跑当前主原型找 delta，再走三条上坡路（直奔清单 / 收范围对话 / 视觉变体探）—— 走哪条 AI 临场判断，**不机械化**（思路清的简单需求直奔清单，不强行抛岔路口）
+- 范围确认先 `@读` 项目底座（PRODUCT-STATE / PRODUCT-RULES / DESIGN）+ 跑当前主原型找 delta，再走三条上坡路（直奔清单 / 收范围对话 / 视觉变体探）—— 走哪条 AI 临场判断，**不机械化**（思路清的简单需求直奔清单，不强行抛岔路口）
 - office-hours 是 PM 自主使用的可选 aid（范围确认期想深挖时 PM 手动调），**AI 不主动替 PM 跑**、不进固定流程
 - 范围清单里的分区 / 菜单归类 / 模块切分 / 命名底稿是结构决策，PM 必须在定稿门拍板，AI 不自判「无歧义」跳门
 - **worktree 创建后置**（核心规则）：拉 worktree 在步骤 4 一次性完成（范围定稿之后）。步骤 0-3 全程主对话 cwd 在主仓 main、不创建任何文件 / 目录，req-plan 草稿在 chat markdown block 展示。理由：worktree 隔离机制对 PM 视角等同于 IDE 切分支，这个事件必须在 PM 明确说 OK 之后才发生；中段切 cwd = 体验破绽
-- 步骤 2 产品脊柱兜底（PROJECT.md / DESIGN.md）在主仓 main 上做并 commit 到 main —— 这两份是项目级脊柱不是 req 级，进 main 是语义正确；worktree 在步骤 4 从 main 拉时自动带上
+- 步骤 2 项目底座兜底（PROJECT.md / DESIGN.md）在主仓 main 上做并 commit 到 main —— 这两份是项目级的项目底座不是 req 级，进 main 是语义正确；worktree 在步骤 4 从 main 拉时自动带上
 - 步骤 3.5 attachments：trigger 0/1 仅记内存 list `PENDING_ATTACHMENTS`，不调 helper；实际 cp + register 在步骤 4B batch 执行。**trigger 2 砍** —— worktree 还没建无 cp 目标；PM 想绕 chat 等 handoff 后在 worktree 新对话里做
 - 步骤 4 原子性：4A 拉 worktree → 4B batch cp attachments → 4C 写 req-plan.md + brief.md → 4D 一次 commit。全程用 `git -C <worktree>` 不切 cwd；任一子步失败 fail-loud + 让 PM 手动清理 / `git worktree remove` 回滚
 - commit 范围限于本 req 目录内的文件（req-plan.md / brief.md / .req-meta.json / tasks/ / attachments/）。`docs/PROJECT.md` / `docs/DESIGN.md` 已在步骤 2C 单独 commit 到 main，不在 4D 范围

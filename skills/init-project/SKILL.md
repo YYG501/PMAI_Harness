@@ -2,14 +2,14 @@
 name: pmai-init-project
 description: |
   PM 主动入口 —— 起一个新业务项目时一气呵成 4 步：参数收集（含已有内容判断）→ 骨架建设
-  → 上下文脊柱（PRODUCT-STATE + PROJECT + DESIGN + prototype/ 主原型）→ Next Up。在生成器仓里跑。
+  → 项目底座（PRODUCT-STATE + PROJECT + DESIGN + prototype/ 主原型）→ Next Up。在生成器仓里跑。
 ---
 
 # /pmai-init-project（一气呵成入口）
 
 > PM 起一个新业务项目时**只跑这一个命令**，agent 内部串起全流程；不切窗口、不跑第二个命令、不需要记中间步骤。
 >
-> **它建的是"上下文脊柱"**：项目级的几份文件 + 一份能跑的主原型，AI 以后每次进项目先读它们，治失忆。不是一堆走流程的中间稿。
+> **它建的是"项目底座"**：项目级的几份文件 + 一份能跑的主原型，AI 以后每次进项目先读它们，治失忆。不是一堆走流程的中间稿。
 >
 > **PM 视图**：每一步入口先 echo 一行进度条（banner 规范见 `_shared/pm-view/banner-rules.md`）；最后一步给 ▶ Next Up 块。
 
@@ -49,7 +49,7 @@ description: |
 
 ---
 
-## 这一步建出什么（上下文脊柱）
+## 这一步建出什么（项目底座）
 
 init 跑完后，项目里有这几样，构成 AI 以后每次进项目的"必读上下文"：
 
@@ -202,11 +202,11 @@ bash "$SCRIPT" "<project-name>" "<target-dir>" "<background>" "<mode>" --allow-e
 脚本会：
 - 检测 gstack 依赖（gstack 未装 → 报错退出）
 - 默认：拒已存在目录；命中 `--allow-existing` → 跳过该检查，目录可非空
-- 创建目标目录（已存在则用现有）+ 铺脊柱模板（PRODUCT-STATE / DESIGN / PRODUCT-RULES / ROADMAP + prototype/ README 等）
+- 创建目标目录（已存在则用现有）+ 铺项目底座模板（PRODUCT-STATE / DESIGN / PRODUCT-RULES / ROADMAP + prototype/ README 等）
 - 按 `<mode>`（项目类型）注入对应的「工程结构约束」段进 CLAUDE.md
 - 初始化 git（main 分支）+ 首 commit `init: <project-name>`（命中 `--allow-existing` 时首 commit 也包含 PM 原本就放在目录里的资料文件）
 
-agent 收到脚本退出码 0 后**汇报**：「✅ 骨架已就绪 / 脊柱模板 + scripts + 工程结构约束段全部到位」→ 进 C 步。
+agent 收到脚本退出码 0 后**汇报**：「✅ 骨架已就绪 / 项目底座模板 + scripts + 工程结构约束段全部到位」→ 进 C 步。
 
 **失败兜底**：脚本退出码非 0 → agent 不进 C 步，向 PM 报错（贴脚本 stderr）+ 提示 PM 检查（常见原因：chmod 权限 / git init 失败 / 模板 source 缺失）。
 
@@ -294,7 +294,7 @@ agent 输出 Next Up 块：
 ═══════════════════════════════════════
 ✅ <project-name> 已就绪
 📁 位置: <target-dir>
-📄 已建脊柱: docs/PROJECT.md / ROADMAP.md / PRODUCT-STATE.md / DESIGN.md / PRODUCT-RULES.md
+📄 已建项目底座: docs/PROJECT.md / ROADMAP.md / PRODUCT-STATE.md / DESIGN.md / PRODUCT-RULES.md
 🧩 主原型: prototype/（<所选技术栈>）
 ═══════════════════════════════════════
 

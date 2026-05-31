@@ -1,7 +1,7 @@
 """Single source of truth for req stage metadata（六步重构后）.
 
 六步重构（office-hours 收敛）后的状态机：
-- 「① 上下文脊柱」是项目级、init 时建（PRODUCT-STATE / DESIGN / 主原型），**不是 per-req stage**。
+- 「① 项目底座」是项目级、init 时建（PRODUCT-STATE / DESIGN / 主原型），**不是 per-req stage**。
 - per-req 生命周期收敛成 4 个阶段（原 7-stage 坍缩）：
     1 范围确认  —— 三条上坡路产出 req-plan.md（范围清单 + 决策页），PM 拍板
     2 build     —— 在 prototype/ 栈内建（mode 中立：原型 / 真系统按工程结构约束的层）
@@ -18,7 +18,7 @@ CLAUDE.md.tmpl 等处，脚本统一 import 本模块。（CLAUDE.md.tmpl 是模
 
 from __future__ import annotations
 
-# per-req 阶段数（坍缩后）。① 脊柱不计入（项目级）。
+# per-req 阶段数（坍缩后）。① 项目底座不计入（项目级）。
 MAX_STAGE: int = 4
 
 STAGE_NAMES: dict[int, str] = {

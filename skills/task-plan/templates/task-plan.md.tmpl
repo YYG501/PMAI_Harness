@@ -4,12 +4,12 @@
 > 写作规则参见 `skills/_shared/PM-VIEW-RULES.md`，特别是：
 > - §三 PM 视图写作规则
 > - §七 章节顺序约束（本模板按此节锁定的顺序）
-> - §九 输入流约束（必读项目脊柱 `docs/PRODUCT-STATE.md` / `docs/DESIGN.md` + 本次 `req-plan.md`（范围清单 WHAT + 决策页 WHY）+ `prototype/` 主原型代码）
+> - §九 输入流约束（必读项目底座 `docs/PRODUCT-STATE.md` / `docs/DESIGN.md` + 本次 `req-plan.md`（范围清单 WHAT + 决策页 WHY）+ `prototype/` 主原型代码）
 
 - 创建日期：{{CREATED_DATE}}
 - 创建者：{{AUTHOR}}
 - 分支：{{REQ_BRANCH}}
-- 依赖：`req-plan.md`（本次范围清单 + 关键决策页，拆 task 的直接依据）+ 项目脊柱 `docs/PRODUCT-STATE.md` / `docs/DESIGN.md` + `prototype/` 主原型代码
+- 依赖：`req-plan.md`（本次范围清单 + 关键决策页，拆 task 的直接依据）+ 项目底座 `docs/PRODUCT-STATE.md` / `docs/DESIGN.md` + `prototype/` 主原型代码
 - 阶段：范围确认（task-plan 是范围确认阶段产物；拍板后由 `/pmai-next` 推进进 build）
 - Status：DRAFT（待 PM 确认拆分 → 进 build）
 
@@ -119,7 +119,7 @@
 
 **反模式 A 命中时必须分流**（SKILL §2.2 反模式 A "判断"两分支）：
 - **重构类** → 合并入 task-N（写明 N）
-- **文档 / 规格 / 契约类**（含 req-plan 关键决策页明文要求的"建立 X 规范段 / 字段字典 / 权限矩阵"等主线规范产物，产物归宿是脊柱文档 `docs/PRODUCT-STATE.md` / `docs/DESIGN.md`）→ **不合并入 task**、**不把脊柱文档写进任何 task 的「执行范围」allowlist**；由首个相关业务 task 收尾后在沉淀（close-req）补对应章节（写明 N + 目标文件路径）
+- **文档 / 规格 / 契约类**（含 req-plan 关键决策页明文要求的"建立 X 规范段 / 字段字典 / 权限矩阵"等主线规范产物，产物归宿是项目底座文档 `docs/PRODUCT-STATE.md` / `docs/DESIGN.md`）→ **不合并入 task**、**不把项目底座文档写进任何 task 的「执行范围」allowlist**；由首个相关业务 task 收尾后在沉淀（close-req）补对应章节（写明 N + 目标文件路径）
 
 | # | 反模式 | 状态 | 命中处理（仅命中时填，含分类）|
 |---|---|---|---|

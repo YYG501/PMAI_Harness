@@ -31,9 +31,9 @@ description: |
 
 ## Workflow
 
-### 步骤 0：banner + @读脊柱
+### 步骤 0：banner + @读项目底座
 
-入口 echo banner。**先读脊柱**（`docs/PRODUCT-STATE.md` → `prototype/` 现状 / `docs/DESIGN.md` / `工程结构约束-*.md`），知道原型现在长什么样、哪层 mock / 真，才能判「线上有而原型缺」是 delta 还是本就不做。
+入口 echo banner。**先读项目底座**（`docs/PRODUCT-STATE.md` → `prototype/` 现状 / `docs/DESIGN.md` / `工程结构约束-*.md`），知道原型现在长什么样、哪层 mock / 真，才能判「线上有而原型缺」是 delta 还是本就不做。
 
 ### 步骤 1：Plan —— 爬线上派生 checks-spec（产出，不改代码）
 

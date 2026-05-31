@@ -112,7 +112,7 @@ caller AI 调 helper 时按当前阶段推 `stage_prefix` 参数：
 | 按需 PRD (`prd-writing` req 级) | prd.md | `prd` |
 | 4 沉淀 (`close-req`) | close-report.md | `close` |
 
-> 项目级 `DESIGN.md` 属脊柱（init 时建、AI 每次必读），不在 req `attachments/`，caller 不为它调 helper。
+> 项目级 `DESIGN.md` 属项目底座（init 时建、AI 每次必读），不在 req `attachments/`，caller 不为它调 helper。
 
 caller SKILL prose 内取 `$ACTIVE_REQ_STAGE` + 当前 task short_id 推断；找不到阶段上下文 → 不调 helper，提示 PM 在需求流程内重提。
 

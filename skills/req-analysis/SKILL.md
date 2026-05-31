@@ -61,7 +61,7 @@ echo "SKILL: req-analysis"
 ## Required Inputs
 
 - 🟢 PM 当前的需求描述（口头 / chat 里说的，或 `/pmai-new-req` 传进来的范围确认上下文）
-- 🟢 `$REPO_ROOT/docs/PRODUCT-STATE.md`（产品现状脊柱，如存在 → 读，避免和已有功能冲突 / 重复设计）
+- 🟢 `$REPO_ROOT/docs/PRODUCT-STATE.md`（产品现状，项目底座核心，如存在 → 读，避免和已有功能冲突 / 重复设计）
 - 🟢 `$REPO_ROOT/docs/DESIGN.md`（视觉与共享组件约束，如存在 → 涉及 UI 取舍时读）
 - 🟢 `$REPO_ROOT/prototype/`（当前主原型，如存在 → 涉及现有交互的需求时，跑一下看现状）
 
@@ -208,6 +208,6 @@ chat 一行确认 `已归档（attachments/analysis-foo.pdf），Y 重点。继�
 ## 边界
 
 - **角色**：后台帮想工具，按需调起，不是必跑闸门、不每个需求强产文档。
-- **允许动作**：读需求 + 产品现状脊柱、第一性原理深问、产轻量讨论稿、提未决业务问题给范围确认对话。
+- **允许动作**：读需求 + 产品现状（项目底座核心）、第一性原理深问、产轻量讨论稿、提未决业务问题给范围确认对话。
 - **不顺手推进**：不直接拉 worktree、不写 `req-plan.md`、不进 build——那是 `/pmai-new-req` 和 `/pmai-next` 的职责。深问完把结论交回范围确认对话。
 - **退出**：讨论稿已展示给 PM、关键结论可被范围确认对话吸收。控制权交回 `/pmai-new-req`（若从范围确认调起）或 PM（若手动调起，PM 接着发 `/pmai-new-req` 谈范围）。后续六步推进统一由 `/pmai-next` 驱动。

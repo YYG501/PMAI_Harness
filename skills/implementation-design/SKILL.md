@@ -44,7 +44,7 @@ echo "SKILL: implementation-design"
 |---|---|
 | `$ACTIVE_REQ_DIR/req-plan.md` | **本 req 的范围清单（WHAT）+ 决策页（WHY）**——PM 已拍板的范围，HOW 据此设计，不重抄 WHAT |
 | `$REPO_ROOT/docs/DESIGN.md` | **组件 inventory / 视觉约定**——「照哪些现有组件写」的权威来源；build 强制 @读它 |
-| `$REPO_ROOT/docs/PRODUCT-STATE.md` | **产品现状脊柱**——当前功能 / 主原型现状 / mock-真状态位，治失忆 |
+| `$REPO_ROOT/docs/PRODUCT-STATE.md` | **产品现状（项目底座核心）**——当前功能 / 主原型现状 / mock-真状态位，治失忆 |
 | `$REPO_ROOT/docs/PRODUCT-RULES.md`（如存在）| 跨 req 沉淀的业务规则 / 权限语义 |
 | `$REPO_ROOT/prototype/` | 主原型现有代码——照哪些现有代码 / 模式写 |
 

@@ -27,9 +27,9 @@ PM 想**照一个现有站起原型 / 补几页**时用：gstack `/browse` 把�
 
 ## Workflow
 
-### 步骤 0：banner + @读脊柱
+### 步骤 0：banner + @读项目底座
 
-入口 echo banner。**先读脊柱**（`docs/PRODUCT-STATE.md` → `prototype/` 现状 / `docs/DESIGN.md` / `工程结构约束-*.md`）——知道主原型现在有什么、按哪档建，重建才落在同一条主原型线上、不另起风格。
+入口 echo banner。**先读项目底座**（`docs/PRODUCT-STATE.md` → `prototype/` 现状 / `docs/DESIGN.md` / `工程结构约束-*.md`）——知道主原型现在有什么、按哪档建，重建才落在同一条主原型线上、不另起风格。
 
 ### 步骤 1：爬站 → 派生 checks-spec + 截图（产出，不改代码）
 
