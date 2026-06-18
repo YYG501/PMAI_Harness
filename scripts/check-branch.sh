@@ -280,13 +280,18 @@ if [ "$BRANCH" = "main" ] || [ "$BRANCH" = "master" ]; then
     .runs/*|.worktrees/*|.dev-port)
       MAIN_WRITE_ALLOWED=true
       ;;
-    # 项目启动时的初始化（init-project.sh 的产出）
-    docs/PRODUCT.md|docs/DESIGN.md|docs/modules/*)
-      # 这些文档首次创建时可写（init），后续修改必须走 req 分支
-      # 用 git log 判断：如果还没 commit 过，允许；否则拒绝
-      if git -C "$REPO_ROOT" log --oneline -1 -- "$REL_PATH" 2>/dev/null | grep -q .; then
-        deny "文档 $REL_PATH 已存在，不能在 main 分支直接修改。请通过 req 分支修改（/pmai-doc-update）。"
-      fi
+    # 探索变体目录：mocks/ 是探索草稿的家（连当场否掉的草图都留），与产品真相源（prototype/ + docs/）
+    # 两回事——探索发生在 main 上（new-req 范围确认期视觉变体探）、本就该随时可写。manifest + 生成的看版页同此。
+    mocks/*)
+      MAIN_WRITE_ALLOWED=true
+      ;;
+    # 文档全树（lifecycle 迁移批 1，§1③ 写保护放宽）：docs/** 一律放行 main 直接写。
+    # 「讨论=无 worktree、小改直接改」的前提是文档可在 main 上动——含 docs/modules 三件套 +
+    # .req-meta.json 非状态字段（stage 字段仍由 GATE 2 走 req-transition 拦）、PRODUCT-STATE /
+    # PRODUCT-RULES / TODO / decisions / PRODUCT / DESIGN。删了旧「docs/modules 已 commit 后拒绝」
+    # 的 git-log 门控、删了 deposit marker 门控（deposit skill 进 dormant）。
+    # 边界：prototype/ 及业务代码目录仍走 worktree（默认拒绝，见下方 deny）。
+    docs/*)
       MAIN_WRITE_ALLOWED=true
       ;;
   esac
