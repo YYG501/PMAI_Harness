@@ -18,7 +18,27 @@ PM-AI-Workflow 生成器仓的演进记录。本文件**只记影响下游业务
 
 ## 未发布
 
+### 框架瘦身改造（吸收 ExampleAgentProject 设计方法）—— 进行中
+
+- `docs(设计+skills)`: **瘦身改造 v2 起步——消费仓文档结构重定义 + 沉淀分流对齐新布局**（设计源 `docs/设计/吸收ExampleAgentProject设计方法-改造方案.md` §3/§5/§6）。方向：砍框架过度设计（仪式）、借 ExampleAgentProject 工作模式（模块三件套 / design-card / spec-polish / mock）、补真实缺口（跨 req 决策+术语记忆 / 规格质量 / worktree 隔离）。**本批先落文档结构定义 + 沉淀路由对齐；lifecycle 迁移（取消 requirements/ 树、瘦 close 机器）单独走、必跑测试。**
+  - **新增 `docs/设计/消费仓文档结构.md`**：新布局权威定义——`docs/` 一棵树装下所有真相源（项目级 `PRODUCT/PRODUCT-STATE/PRODUCT-RULES/DESIGN/TODO` + 模块级 `docs/modules/<模块>/` 三件套 `discussion.md`/`decisions.md`/`spec.md` + `.req-meta` 工作状态 + 附件 `docs/inputs/<类别>/` 自动归类）；**取消 `requirements/active|closed/` 整棵树**；**决策从 3 个家减到 2 个**（模块 `decisions.md` + 项目 `PRODUCT-RULES`，`docs/decisions/` 折进 PRODUCT-RULES）；worktree 统一挂 `.worktrees/<分支>/`；模块文件夹取代旧 `docs/modules/<m>.md` 单文件。含「放什么进哪」路由表 + 「自动归位」行为定义（文档归位 / 附件归类 / 决策回写 / 术语回写）+ 留给 lifecycle 迁移 agent 的 6 个交接接口。
+  - **`skills/_shared/deposit-routing.md` 对齐新布局**：四类分流扩成六类——① 耐久事实（落点加模块 `spec.md`）、② 决策与理路（2 个家：跨模块→`PRODUCT-RULES` / 单模块→模块 `decisions.md`，吸收原 `docs/decisions/`）、③ 遗留→TODO、④ 探索变体→mocks、**⑤ 跨 req 决策回写**（治"跨 req 没记忆"）、**⑥ 术语回写**→`PRODUCT.md` 业务术语表；新增「附件自动归类」节（按类型落 `docs/inputs/<类别>/`、去 per-req 作用域 + stage_prefix、**保留** denylist + 50MB cap + untrusted 边界）；开火点更新为 `/close`（原 close-req）+ `/pmai-deposit`（dormant 保留）。
+  - **接口留给 lifecycle 迁移 agent**：requirements/ 取消（req-plan/brief/prd/attachments/.req-meta 按路由表迁走 + 瘦 `close-req.sh`/`req-transition`/I-CR·I-RT）、`.req-meta` 从 per-req `.req-meta.json` 搬到 per-模块 `docs/modules/<模块>/.req-meta`、附件 helper rewire（去 `req_dir`/`stage_prefix` 改 `inputs/<类别>/`、保留护栏）、`docs/decisions/` 折进 PRODUCT-RULES、`docs/modules/<m>.md`→文件夹三件套、文档地图 + 防腐铁律对齐。
+
 ### PMAI 重构落地（office-hours 收敛）—— 进行中
+
+- `feat(skills+scripts+templates)`: **分档运行 + 每档沉淀 + mock 变体治理 + 项目决策记录**（统一三份设计落地：`分档运行与沉淀层` / `文档治理与知识棘轮` / `项目奠基决策记录`）。解 PM 四痛：①轻档（main 直接改）漏沉淀 ②脊柱入口看不到实存文档 ③成熟决策困在讨论稿 ④mock 探索变体找不回。**消费仓需重跑 `pmai install` / `pmai upgrade` 拉新 skill（`/pmai-deposit`）+ 重 init 的项目才有 `docs/decisions/` + `mocks/` 脚手架；存量项目这两个目录首次用到时由 skill / PM 手建。**
+  - **新增 `/pmai-deposit`（轻档轻沉淀）**：main 上聊定 / 改完后把成果按四类归位（现状→PRODUCT-STATE / 理路→决策记录 / 遗留→TODO / 探索变体→mocks 看版），两道闸（收敛点 + 有耐久产出才提）+ 切两挡（纯静默档静默写 / 需审档总审 diff）+ AI 单独 `沉淀:` commit 不卷 WIP。skill 数 22 → 23。
+  - **分档运行模型**（`CLAUDE.md.tmpl`）：轻（main 直接改 + `/pmai-deposit`）/ 中（轻 req 直建 + close-req）/ 重（完整 req + close-req）三档，每档一个沉淀开火点；+ AI 主动提议沉淀的行为规则。
+  - **四类分流单一真相源** `skills/_shared/deposit-routing.md`（close-req 中/重档 + deposit 轻档共用）；close-req 步骤 2/2.5 加理路类识别（AskUser「冻结进决策记录」第 4 选项）+「推下个需求」自动入 TODO（F-G3 单一真相源、close-report 只渲染指针）。
+  - **项目决策记录（冻结档）**：`templates/decision-record.md.tmpl` + `skills/_shared/decision-record.md`（共享冻结参考）；触发点 project-solution 步骤 8.5 / init-project C-6.5 / close-req 2.5；落 `docs/decisions/<日期>-<slug>.md`（带日期、写一次不维护，不在防腐铁律内）。new-req 起步扫 `docs/decisions/` 列已有记录、范围触及理路域则读回（F-G1 主动触发）。
+  - **mock 变体治理子系统**：`scripts/gen-mock-board.py`（manifest 真相源 → 生成看版 `index.html`）+ `templates/mocks-{manifest.json,README.md}.tmpl` + `mocks/` 脚手架；new-req 视觉变体探存进 `mocks/` 不再挑定即弃；退役标记不删。
+  - **文档地图 + 脊柱两层读取模型**：`templates/文档地图.md`（框架全局，CLAUDE 放 `$PMAI_HOME` 指针）；PRODUCT-STATE = 必读核心、PRODUCT/DESIGN/RULES/modules/decisions/主原型 = 索引展开层。
+  - **防腐铁律扩**：PRODUCT-STATE 现状写口从 1 个（close-req）→ 2 个 sanctioned（+ `/pmai-deposit`），仍互斥收敛。`check-branch.sh` GATE 3 新增：`mocks/*` + `docs/decisions/*` main 无条件可写（探索草稿 / 冻结档豁免）；`docs/PRODUCT-STATE/RULES/TODO/modules` 经 `.runs/deposit-in-progress` marker 门控放行（blast radius 限定沉淀落点）。
+  - **索引漂移检测** `scripts/check-state-index-drift.py`（new-req 起步跑，advisory）：报 docs/ 顶层实存但 PRODUCT-STATE 索引漏挂的文档。
+  - 测试：+5 GATE 3 沉淀分档用例 + test-mock-board（7）进 run-all；基线 **588/0 全绿**。
+
+- `fix(skills+scripts)`: **stage 编号清理 + banner 去号**（`stage编号清理与banner去号` 设计落地）：runtime AI 读的 prose 里残留的旧 7-stage 编号（`stage 6` 等）清成阶段名（范围确认 / build / 复审 / 沉淀），治 AI 把概念号当 stage 号推过头；banner 去 `Stage N/T` 只显阶段名；input-flow §9 加六步↔内部 stage 唯一映射表；新 lint hook `hooks/check-stage-number-jargon.cjs` 拦回潮。quick-fix 产物链旧编号 DEFER（独立 blast radius）。
 
 - `refactor(skills+scripts+templates)`: **项目底座文件 `docs/PROJECT.md` → `docs/PRODUCT.md`**（与 PRODUCT-STATE.md / PRODUCT-RULES.md 三兄弟统一命名）。消费仓试用反馈：`PROJECT.md` 标题写「项目背景」、装的却是产品定位/用户/术语，跟两个 PRODUCT 兄弟不一条心，名实不符。改名采**最小一致**范围（PM 拍板）：
   - **文件名 + 全部引用**：`templates/PROJECT.md.tmpl → PRODUCT.md.tmpl`（H1「# 项目背景」→「# 产品背景」）；29 个框架文件里的 `docs/PROJECT.md` 路径、按钮文案「创建 PROJECT.md」→「创建 PRODUCT.md」、裸词文件简称全改。脚本层硬路径同步：`check-project-sections.py` / `status-view.py` / `init-project.sh` cp case / `check-docs-toplevel.py` 白名单 / `check-branch.sh` 写保护 / `_lib/term-detector.py`。
