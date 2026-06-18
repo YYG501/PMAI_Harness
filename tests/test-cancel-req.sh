@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Tests for cancel-req.sh — enforces invariants I-CA1 ~ I-CA6
+# Tests for cancel-req.sh — enforces invariants I-CA1 ~ I-CA7（方案 A·清模块 .req-meta）
 
 set -uo pipefail
 
@@ -10,29 +10,26 @@ source "$SCRIPT_DIR/helpers/fixture.sh"
 CANCEL_REQ="$FRAMEWORK_ROOT/scripts/cancel-req.sh"
 CLEANUP_PENDING="$FRAMEWORK_ROOT/scripts/cleanup-pending-worktrees.sh"
 
-# cancel-req.sh expects the req-dir to live under the MAIN repo's requirements/active/.
-# Fixture creates it inside the req worktree. We mirror it to main so the script
-# can find it (and test the move-to-closed behavior on main).
+# cancel-req（方案 A）：真相源 = docs/modules/<模块>/。废弃 = 在 main 上清模块 .req-meta，
+# 不 merge req 分支到 main；task/req worktree 推迟到 cleanup-pending 兜底清。
 #
-# Returns the path to the req dir on main.
-_setup_req_on_main() {
+# fixture_create_req 在 req worktree 里建模块目录。把它镜像到 main 的 docs/modules/，
+# 让 cancel-req 能在 main 上清掉模块 .req-meta。返回 main 上的模块目录路径。
+_setup_module_on_main() {
   local req_id="$1"
   local name="$2"
   local stage="${3:-3}"
   local req_branch="$req_id-$name"
 
-  # Standard fixture creates worktree + req dir inside worktree
   fixture_create_req "$req_id" "$name" "$stage" >/dev/null
 
-  # Also copy req dir to main repo's requirements/active/ so cancel-req can mv it
-  local main_req_dir="$FIXTURE_DIR/requirements/active/$req_branch"
-  mkdir -p "$main_req_dir"
-  cp -R "$FIXTURE_DIR/.worktrees/$req_branch/requirements/active/$req_branch/." "$main_req_dir/"
+  local main_module="$FIXTURE_DIR/docs/modules/$req_branch"
+  mkdir -p "$main_module"
+  cp -R "$FIXTURE_DIR/.worktrees/$req_branch/docs/modules/$req_branch/." "$main_module/"
 
-  # Commit the main-side req dir so git status is clean (not strictly required)
-  (cd "$FIXTURE_DIR" && git add -A >/dev/null 2>&1 && git commit -q -m "mirror req $req_id on main" 2>/dev/null || true)
+  (cd "$FIXTURE_DIR" && git add -A >/dev/null 2>&1 && git commit -q -m "mirror module $req_id on main" 2>/dev/null || true)
 
-  echo "$main_req_dir"
+  echo "$main_module"
 }
 
 # ---------------------------------------------------------------
@@ -40,15 +37,14 @@ _setup_req_on_main() {
 # ---------------------------------------------------------------
 
 test_cancel_happy_path() {
-  start_test "happy path: cancel removes worktree, branch, moves dir to closed/"
+  start_test "happy path: cancel clears module .req-meta on main + removes worktree/branch"
   fixture_setup
-  req_dir=$(_setup_req_on_main "req-001" "test" 3)
+  req_dir=$(_setup_module_on_main "req-001" "test" 3)
 
   cd "$FIXTURE_DIR"
   bash "$CANCEL_REQ" "$req_dir" >/dev/null 2>&1
 
-  # Cancel 后 worktree/branch 推迟到 cleanup（防止 dangling cwd）。
-  # 跑 cleanup 完成清理，再断言已删。
+  # Cancel 后 worktree/branch 推迟到 cleanup（防 dangling cwd）。
   bash "$CLEANUP_PENDING" >/dev/null 2>&1
 
   # Worktree removed
@@ -61,14 +57,14 @@ test_cancel_happy_path() {
     _fail "req branch should be deleted after cleanup"
     fixture_teardown; return
   fi
-  # Dir moved to closed/
-  if [ ! -d "$FIXTURE_DIR/requirements/closed/req-001-test" ]; then
-    _fail "req dir should be in requirements/closed/"
+  # 模块 .req-meta 已清（main 上）
+  if [ -f "$FIXTURE_DIR/docs/modules/req-001-test/.req-meta.json" ]; then
+    _fail "module .req-meta should be cleared on main"
     fixture_teardown; return
   fi
-  # active/ is gone
-  if [ -d "$FIXTURE_DIR/requirements/active/req-001-test" ]; then
-    _fail "req dir should NOT remain in active/"
+  # 模块三件套留场（discussion.md 仍在）
+  if [ ! -f "$FIXTURE_DIR/docs/modules/req-001-test/discussion.md" ]; then
+    _fail "module 三件套 (discussion.md) should remain on main"
     fixture_teardown; return
   fi
   pass_test
@@ -82,7 +78,7 @@ test_cancel_happy_path() {
 test_cancel_does_not_merge_to_main() {
   start_test "I-CA1 cancel does not merge req code to main"
   fixture_setup
-  req_dir=$(_setup_req_on_main "req-001" "test" 3)
+  req_dir=$(_setup_module_on_main "req-001" "test" 3)
 
   # 在 req 分支上加一个显著的文件，证明 req 分支有内容
   (
@@ -117,9 +113,9 @@ test_cancel_does_not_merge_to_main() {
 test_cancel_cleans_active_task() {
   start_test "I-CA2 cancel with active task removes task worktree + branch"
   fixture_setup
-  req_dir=$(_setup_req_on_main "req-001" "test" 3)
+  req_dir=$(_setup_module_on_main "req-001" "test" 3)
 
-  # 在 main 侧的 req 目录里建 task
+  # 在 main 侧的模块目录里建 task
   task_file=$(fixture_create_task "$req_dir" "001" "impl" "执行中")
   # 建 task worktree（off req 分支）
   task_wt=$(fixture_create_task_worktree "$task_file" "req-001-test")
@@ -151,28 +147,35 @@ test_cancel_cleans_active_task() {
 }
 
 # ---------------------------------------------------------------
-# I-CA4: 目录到 closed/，meta.status=cancelled
+# I-CA4（方案 A）：cancel 后模块 .req-meta 已清（不再移 closed/、不再留 status=cancelled 文件）
 # ---------------------------------------------------------------
 
-test_cancel_sets_meta_status_cancelled() {
-  start_test "I-CA4 after cancel, meta.status == 'cancelled' in closed/"
+test_cancel_clears_module_meta() {
+  start_test "I-CA4 after cancel, module .req-meta is cleared (no closed/ archive)"
   fixture_setup
-  req_dir=$(_setup_req_on_main "req-001" "test" 3)
+  req_dir=$(_setup_module_on_main "req-001" "test" 3)
 
   cd "$FIXTURE_DIR"
   bash "$CANCEL_REQ" "$req_dir" >/dev/null 2>&1
 
-  closed_meta="$FIXTURE_DIR/requirements/closed/req-001-test/.req-meta.json"
-  if [ ! -f "$closed_meta" ]; then
-    _fail "closed meta should exist at $closed_meta"
+  # 模块 .req-meta 应被删（main 上）
+  if [ -f "$FIXTURE_DIR/docs/modules/req-001-test/.req-meta.json" ]; then
+    _fail "module .req-meta should be cleared after cancel"
     fixture_teardown; return
   fi
-  status=$(python3 -c "import json; print(json.load(open('$closed_meta'))['status'])" 2>/dev/null)
-  if [ "$status" = "cancelled" ]; then
-    pass_test
-  else
-    _fail "meta.status should be 'cancelled', got '$status'"
+  # 方案 A 下不再有 requirements/closed/ 归档目录
+  if [ -d "$FIXTURE_DIR/requirements/closed/req-001-test" ]; then
+    _fail "no requirements/closed/ archive should be created under 方案 A"
+    fixture_teardown; return
   fi
+  # cancel commit 应进入 main
+  # 用 grep ... >/dev/null（不加 -q）：grep -q 命中即早退会让上游 git SIGPIPE，
+  # 在 set -o pipefail 下整条管道返回非 0，假阴性。
+  if ! git -C "$FIXTURE_DIR" log main --oneline | grep "cancel: req-001" >/dev/null; then
+    _fail "main log should contain a cancel commit"
+    fixture_teardown; return
+  fi
+  pass_test
   fixture_teardown
 }
 
@@ -183,69 +186,78 @@ test_cancel_sets_meta_status_cancelled() {
 test_cancel_is_idempotent_after_partial_cleanup() {
   start_test "I-CA5 idempotent: re-run after partial cleanup does not error"
   fixture_setup
-  req_dir=$(_setup_req_on_main "req-001" "test" 3)
+  req_dir=$(_setup_module_on_main "req-001" "test" 3)
 
-  # 手动模拟部分清理状态：删掉 worktree 和分支（但留下 active/ 目录和 meta）
+  # 手动模拟部分清理状态：删掉 worktree 和分支（但留下 main 上的模块 .req-meta）
   git -C "$FIXTURE_DIR" worktree remove "$FIXTURE_DIR/.worktrees/req-001-test" --force 2>/dev/null || \
     rm -rf "$FIXTURE_DIR/.worktrees/req-001-test"
   git -C "$FIXTURE_DIR" branch -D req-001-test 2>/dev/null || true
 
   cd "$FIXTURE_DIR"
-  # 再跑 cancel-req 应该能清理完剩下的（active → closed + meta 更新）且不报错
-  if bash "$CANCEL_REQ" "$req_dir" >/dev/null 2>&1; then
+  # 再跑 cancel-req 应该能清理完剩下的（清 main 上模块 .req-meta）且不报错
+  if bash "$CANCEL_REQ" "$req_dir" >/tmp/out.$$ 2>/tmp/err.$$; then
     :
   else
     _fail "second-run cancel-req failed (rc=$?)"
-    fixture_teardown; return
+    cat /tmp/err.$$ >&2
+    rm -f /tmp/out.$$ /tmp/err.$$; fixture_teardown; return
   fi
 
-  # closed/ 应该存在
-  if [ ! -d "$FIXTURE_DIR/requirements/closed/req-001-test" ]; then
-    _fail "closed/ dir should exist after idempotent re-run"
-    fixture_teardown; return
+  # 模块 .req-meta 应已清
+  if [ -f "$FIXTURE_DIR/docs/modules/req-001-test/.req-meta.json" ]; then
+    _fail "module .req-meta should be cleared after idempotent re-run"
+    rm -f /tmp/out.$$ /tmp/err.$$; fixture_teardown; return
   fi
   pass_test
+  rm -f /tmp/out.$$ /tmp/err.$$
   fixture_teardown
 }
 
-test_cancel_rerun_on_fully_closed_does_not_error() {
+test_cancel_rerun_on_already_cleared_does_not_error() {
   start_test "I-CA5 idempotent: running cancel twice on same req does not crash"
   fixture_setup
-  req_dir=$(_setup_req_on_main "req-001" "test" 3)
+  req_dir=$(_setup_module_on_main "req-001" "test" 3)
 
   cd "$FIXTURE_DIR"
   bash "$CANCEL_REQ" "$req_dir" >/dev/null 2>&1
-  # 第二次：req_dir 已被 mv 到 closed/，所以先尝试用 closed 路径再跑
-  closed_dir="$FIXTURE_DIR/requirements/closed/req-001-test"
-  # 第二次传 closed 路径，脚本应优雅处理（meta 在但 worktree/active 目录都没了）
-  if bash "$CANCEL_REQ" "$closed_dir" >/dev/null 2>&1; then
+  # 第二次：模块 .req-meta 已被删，脚本应优雅退出（缺 meta 直接报错退出，rc!=0 但不崩溃）。
+  # 用 cleanup 把 worktree/branch 清完后第二次跑：模块 .req-meta 已无 → 脚本 fail-fast（缺 meta）。
+  bash "$CLEANUP_PENDING" >/dev/null 2>&1
+  if bash "$CANCEL_REQ" "$req_dir" >/tmp/out.$$ 2>/tmp/err.$$; then
+    # 已无 .req-meta，理应报「不存在」退出非 0；若返回 0 也不算崩溃
     pass_test
   else
-    _fail "second cancel-req run should not crash (rc=$?)"
+    # 缺 meta 时 fail-fast 退出是预期的优雅处理（非崩溃）
+    if grep -q "不存在" /tmp/err.$$; then
+      pass_test
+    else
+      _fail "second cancel-req run should fail gracefully (got unexpected error)"
+      cat /tmp/err.$$ >&2
+    fi
   fi
+  rm -f /tmp/out.$$ /tmp/err.$$
   fixture_teardown
 }
 
 # ---------------------------------------------------------------
-# I-CA6: cancel-req must clean task worktrees/branches even when req
+# I-CA6: cancel-req must clean task worktrees/branches even when module
 # only exists in the req worktree (not mirrored on main).
 # ---------------------------------------------------------------
 
-test_cancel_cleans_tasks_when_req_not_on_main() {
-  start_test "I-CA6 cancel cleans task branches when req only in req worktree"
+test_cancel_cleans_tasks_when_module_not_on_main() {
+  start_test "I-CA6 cancel cleans task branches when module only in req worktree"
   fixture_setup
 
-  # 不走 _setup_req_on_main：req 目录只存在于 req worktree，不在 main 上
-  fixture_create_req "req-001" "test" 3 >/dev/null
-  req_dir_in_wt="$FIXTURE_DIR/.worktrees/req-001-test/requirements/active/req-001-test"
+  # 不走 _setup_module_on_main：模块目录只存在于 req worktree，不在 main 上
+  module_dir_in_wt=$(fixture_create_req "req-001" "test" 3)
 
-  # 在 req worktree 的 req dir 里建 task
-  task_file=$(fixture_create_task "$req_dir_in_wt" "001" "impl" "执行中")
+  # 在 req worktree 的模块目录里建 task
+  task_file=$(fixture_create_task "$module_dir_in_wt" "001" "impl" "执行中")
   task_wt=$(fixture_create_task_worktree "$task_file" "req-001-test")
 
-  # 跑 cancel-req，传入 req worktree 里的 req 目录
+  # 跑 cancel-req，传入 req worktree 里的模块目录
   cd "$FIXTURE_DIR"
-  bash "$CANCEL_REQ" "$req_dir_in_wt" >/tmp/out.$$ 2>/tmp/err.$$
+  bash "$CANCEL_REQ" "$module_dir_in_wt" >/tmp/out.$$ 2>/tmp/err.$$
   rc=$?
 
   if [ "$rc" != "0" ]; then
@@ -282,7 +294,7 @@ test_cancel_cleans_tasks_when_req_not_on_main() {
 test_cancel_rejects_dirty_main() {
   start_test "I-CA7 cancel rejects when main has unrelated dirty changes"
   fixture_setup
-  req_dir=$(_setup_req_on_main "req-001" "test" 3)
+  req_dir=$(_setup_module_on_main "req-001" "test" 3)
 
   # 在 main 留一个无关脏文件
   echo "stray" > "$FIXTURE_DIR/unrelated.txt"
@@ -327,10 +339,10 @@ test_cancel_rejects_dirty_main() {
 test_cancel_happy_path
 test_cancel_does_not_merge_to_main
 test_cancel_cleans_active_task
-test_cancel_sets_meta_status_cancelled
+test_cancel_clears_module_meta
 test_cancel_is_idempotent_after_partial_cleanup
-test_cancel_rerun_on_fully_closed_does_not_error
-test_cancel_cleans_tasks_when_req_not_on_main
+test_cancel_rerun_on_already_cleared_does_not_error
+test_cancel_cleans_tasks_when_module_not_on_main
 test_cancel_rejects_dirty_main
 
 report_results "cancel-req"

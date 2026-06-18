@@ -2,7 +2,8 @@
 """Pre-commit gate: 拦截绕过 task-transition.py 的 task 状态字段直改。
 
 逻辑：
-  对每个 staged 的 `requirements/**/tasks/task-*.md`（不含 .engineering.md）：
+  对每个 staged 的 `docs/modules/**/tasks/task-*.md`（+ 旧 `requirements/**/tasks/`，
+  dormant 兼容；不含 .engineering.md）：
     1. 读 HEAD 版本的「状态」字段值（首次 commit 该文件 → HEAD 不存在 → 跳过）
     2. 读 index 版本的「状态」字段值
     3. HEAD 值 == index 值 → 跳过（状态没变，可能只是改了执行日志/PM 反馈）
@@ -66,8 +67,12 @@ def staged_task_files() -> list[str]:
         line = line.strip()
         if not line:
             continue
-        # requirements/**/tasks/task-*.md 但不要 .engineering.md / discarded/
-        if not re.match(r"^requirements/.+/tasks/task-[^/]+\.md$", line):
+        # task 真相源迁 docs/modules/**/tasks/（lifecycle 迁移批 2/3，对齐 check-branch.sh GATE 1）；
+        # 旧 requirements/**/tasks/ 路径保留（dormant 降级，过渡期在飞 task 仍可能在场）。
+        # 两条都拦状态直改。不要 .engineering.md / discarded/。
+        if not re.match(
+            r"^(requirements|docs/modules)/.+/tasks/task-[^/]+\.md$", line
+        ):
             continue
         if line.endswith(".engineering.md"):
             continue

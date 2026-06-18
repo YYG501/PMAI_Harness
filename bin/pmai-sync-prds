@@ -4,10 +4,15 @@
 # 场景：close-req / cancel-req 自带 symlink 创建是 2026-05-27 后的行为；
 #       老仓在此之前关掉的 req 不会自动有 symlink。本命令一次性补全。
 #
-# 行为：扫 requirements/closed/*/，按 .req-meta.json status 决定 kind：
-#   status == "closed"    -> docs/prds/<req-name>.md
-#   status == "cancelled" -> docs/prds/废弃/<req-name>.md
-#   其他 / 无 prd.md      -> 跳过
+# 真相源迁移（lifecycle 迁移批 3，方案 A）：PRD 源从 requirements/closed/<req>/prd.md
+# 改到模块文件夹 docs/modules/<模块>/prd.md（模块文件夹是长期真相源，close 后留场）。
+#
+# 行为：扫 docs/modules/*/，凡有 prd.md 的模块收口为 symlink：
+#   有 prd.md + 无 .req-meta（已收尾） / .req-meta.status==closed -> docs/prds/<模块>.md
+#   有 prd.md + .req-meta.status==cancelled                      -> docs/prds/废弃/<模块>.md
+#   .req-meta.status==active（在做的工作）                        -> 跳过（PRD 还在进行中）
+#   无 prd.md                                                    -> 跳过
+# 注：方案 A 下 close 清掉 .req-meta，模块「已收尾」= 无 .req-meta；这类统一按 closed 收口。
 #
 # 用法（在消费仓根 cwd 跑）：
 #   pmai sync-prds              建/更新所有 symlink
@@ -27,7 +32,7 @@ Flags:
   --dry-run    只列要做什么，不实际建 symlink
   -h, --help   显示本帮助
 
-注意：在消费仓根目录 cwd 跑（脚本会校验 requirements/closed/ 存在）。
+注意：在消费仓根目录 cwd 跑（脚本会校验 docs/modules/ 存在）。
 EOF
     exit 0
     ;;
@@ -52,9 +57,9 @@ fi
 
 REPO_ROOT="$(git -C "$CWD" rev-parse --show-toplevel)"
 
-CLOSED_DIR="$REPO_ROOT/requirements/closed"
-if [ ! -d "$CLOSED_DIR" ]; then
-  echo "ℹ️  $REPO_ROOT/requirements/closed/ 不存在，无 req 可收口。"
+MODULES_DIR="$REPO_ROOT/docs/modules"
+if [ ! -d "$MODULES_DIR" ]; then
+  echo "ℹ️  $REPO_ROOT/docs/modules/ 不存在，无模块可收口。"
   exit 0
 fi
 
@@ -93,28 +98,34 @@ SKIPPED_NO_PRD=0
 SKIPPED_STATUS=0
 FAILED=0
 
-for req_dir in "$CLOSED_DIR"/*/; do
+for req_dir in "$MODULES_DIR"/*/; do
   [ -d "$req_dir" ] || continue
   req_basename="$(basename "$req_dir")"
   meta="$req_dir/.req-meta.json"
   prd="$req_dir/prd.md"
 
-  if [ ! -f "$meta" ]; then
-    echo "⚠️  $req_basename: 无 .req-meta.json，跳过"
-    SKIPPED_STATUS=$((SKIPPED_STATUS + 1))
-    continue
+  # 收口类型：无 .req-meta（已收尾）/ status==closed → closed；status==cancelled → cancelled；
+  # status==active（在做的工作）→ 跳过（PRD 进行中）。
+  if [ -f "$meta" ]; then
+    status="$(python3 -c "import json; print(json.load(open('$meta')).get('status', ''))" 2>/dev/null || echo "")"
+    case "$status" in
+      closed)    kind=closed ;;
+      cancelled) kind=cancelled ;;
+      active)
+        echo "⏭  $req_basename: status='active'（在做的工作），跳过"
+        SKIPPED_STATUS=$((SKIPPED_STATUS + 1))
+        continue
+        ;;
+      *)
+        echo "⏭  $req_basename: status='$status'，跳过"
+        SKIPPED_STATUS=$((SKIPPED_STATUS + 1))
+        continue
+        ;;
+    esac
+  else
+    # 无 .req-meta = 模块已收尾（方案 A close 清掉了工作状态）
+    kind=closed
   fi
-
-  status="$(python3 -c "import json; print(json.load(open('$meta')).get('status', ''))" 2>/dev/null || echo "")"
-  case "$status" in
-    closed)    kind=closed ;;
-    cancelled) kind=cancelled ;;
-    *)
-      echo "⏭  $req_basename: status='$status'，跳过"
-      SKIPPED_STATUS=$((SKIPPED_STATUS + 1))
-      continue
-      ;;
-  esac
 
   if [ ! -f "$prd" ]; then
     echo "⏭  $req_basename ($kind): 无 prd.md，跳过"
@@ -129,7 +140,7 @@ for req_dir in "$CLOSED_DIR"/*/; do
   fi
 
   if [ "$DRY_RUN" = "1" ]; then
-    echo "🔗 [dry] would create $target -> requirements/closed/$req_basename/prd.md"
+    echo "🔗 [dry] would create $target -> docs/modules/$req_basename/prd.md"
     CREATED=$((CREATED + 1))
     continue
   fi

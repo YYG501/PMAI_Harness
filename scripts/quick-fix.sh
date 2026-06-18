@@ -156,6 +156,9 @@ unstage_dependency_symlinks() {
 is_redline_path() {
   local file="$1"
   case "$file" in
+    # 真相源迁 docs/modules/<模块>/（lifecycle 迁移批 2/3）；旧 requirements/active/ 保留 dormant。
+    docs/modules/*/tasks/*.md) return 0 ;;
+    docs/modules/*/.req-meta.json) return 0 ;;
     requirements/active/*/tasks/*.md) return 0 ;;
     requirements/active/*/.req-meta.json) return 0 ;;
     .claude/scripts|$HOME/.pmai/scripts/*) return 0 ;;
@@ -217,7 +220,10 @@ warn_active_reqs() {
   local _wt
   for _wt in "${_wt_paths[@]}"; do
     [ -d "$_wt" ] || continue
-    for meta in "$_wt"/requirements/active/req-*/.req-meta.json; do
+    # 真相源迁 docs/modules/<模块>/.req-meta.json（lifecycle 迁移批 2/3）；旧
+    # requirements/active/req-*/ 路径保留作 dormant 兼容（过渡期在飞 req 仍可能在场）。
+    for meta in "$_wt"/docs/modules/*/.req-meta.json "$_wt"/requirements/active/req-*/.req-meta.json; do
+      [ -f "$meta" ] || continue
       status=$(python3 - "$meta" <<'PY' 2>/dev/null || true
 import json, sys
 print(json.load(open(sys.argv[1], encoding="utf-8")).get("status", ""))

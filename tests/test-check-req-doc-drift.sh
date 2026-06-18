@@ -145,6 +145,12 @@ test_drift_skips_task_own_engineering() {
   task=$(fixture_create_task_v2 "$req_dir" "001" "demo" "执行中")
   task_wt=$(fixture_create_task_worktree "$task" "req-001-test")
 
+  # check-req-doc-drift.sh（dormant，仍按 requirements/active/ 约定）的 task-own 工程合同
+  # 排除依赖 WORKTREE working dir 里存在该 .engineering.md。批 3 拆掉 fixture 的
+  # requirements/active/ 镜像后，在 task worktree 里显式落一份让 -f 检查命中（还原旧桥接的效果）。
+  mkdir -p "$task_wt/requirements/active/req-001-test/tasks"
+  echo "# eng in wt" > "$task_wt/requirements/active/req-001-test/tasks/task-001-demo.engineering.md"
+
   _req_commit_file "$req_dir" "requirements/active/req-001-test/tasks/task-001-demo.engineering.md" "# Hijacked eng"
 
   out=$(_run_drift "$task_wt" "req-001-test" "$task")
