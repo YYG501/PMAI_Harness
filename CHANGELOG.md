@@ -20,6 +20,15 @@ PM-AI-Workflow 生成器仓的演进记录。本文件**只记影响下游业务
 
 ### 框架瘦身改造（吸收 ExampleAgentProject 设计方法）—— 进行中
 
+- `feat(scripts+tests)`: **lifecycle 迁移批 0-4——取消 `requirements/active|closed/` 树，req 状态真相源迁 `docs/modules/<模块>/.req-meta.json`（方案 A·清模块 .req-meta）**（设计源 `docs/设计/lifecycle迁移计划.md`）。**消费仓影响**：close/cancel 语义反转——不再把 req 目录 `git mv` 到 `requirements/closed/`、不再留 `status=closed/cancelled` 占位；收尾 = 清掉模块 `.req-meta.json`（`git rm`），模块三件套（`docs/modules/<模块>/` spec/decisions/discussion）作为长期真相源留场。**消费仓需重跑 `pmai install` / `pmai upgrade` 拉新机器**；在飞 req 迁移走 `scripts/migrate-reqs-to-modules.py --dry-run`（PM 拍后 `--apply`）。
+  - **`close-req.sh` 重写**：close = 清模块 `.req-meta`；**有 worktree+分支** → 在 req 分支清 + commit → merge 回 main（ancestor 验证 + 失败回滚 I-CR9）；**无 worktree/无分支**（讨论·小改直接在 main 改的）→ 直接 main 清 `.req-meta` 跳 merge。stage 门对齐 stage 4（沉淀=MAX_STAGE）；cwd-in-worktree / 无关脏文件防护保留（防护范围改按模块路径）。
+  - **`cancel-req.sh` 重写**：cancel = 在 main 清模块 `.req-meta`（不 merge），task/req worktree 推迟 cleanup-pending 兜底清；main 污染防护按模块路径。
+  - **`_lib/symlink-prd.sh` + `bin/pmai-sync-prds`**：PRD 收口源从 `requirements/closed/<req>/prd.md` 改 `docs/modules/<模块>/prd.md`；sync-prds 扫 `docs/modules/*`（无 `.req-meta` 或 status=closed → closed 类；cancelled → 废弃；active → 跳过）。
+  - **`check-status-direct-edit.py`（pre-commit）+ `quick-fix.sh`**：task 状态直改拦截 + active-req warn + redline 路径补 `docs/modules/*` 真相源（旧 `requirements/*` 保留 dormant 兼容）。
+  - **`check-branch.sh` GATE 1/2/3（批 1/2 已落）**：main 写保护放宽 `docs/**` 全放行（`prototype/` 仍拒绝、stage 字段仍走 req-transition）；GATE 路径迁 `docs/modules/*`。
+  - **INVARIANTS 对齐**：I-CR1/3/4/5/8 + I-CA4 + I-CB3/5/6 + I-DC1 + I-RT4 改语义；**新增 I-MOD1**（模块工作状态真相源 = `docs/modules/<模块>/.req-meta.json`、走 `_lib.state` helper）；task/exec 系列标 🟡dormant（代码保留·测试仍跑）。
+  - 测试基线 **599/0 全绿**（批 0-2 后 588→599；批 3/4 零净回归）。
+
 - `docs(设计+skills)`: **瘦身改造 v2 起步——消费仓文档结构重定义 + 沉淀分流对齐新布局**（设计源 `docs/设计/吸收ExampleAgentProject设计方法-改造方案.md` §3/§5/§6）。方向：砍框架过度设计（仪式）、借 ExampleAgentProject 工作模式（模块三件套 / design-card / spec-polish / mock）、补真实缺口（跨 req 决策+术语记忆 / 规格质量 / worktree 隔离）。**本批先落文档结构定义 + 沉淀路由对齐；lifecycle 迁移（取消 requirements/ 树、瘦 close 机器）单独走、必跑测试。**
   - **新增 `docs/设计/消费仓文档结构.md`**：新布局权威定义——`docs/` 一棵树装下所有真相源（项目级 `PRODUCT/PRODUCT-STATE/PRODUCT-RULES/DESIGN/TODO` + 模块级 `docs/modules/<模块>/` 三件套 `discussion.md`/`decisions.md`/`spec.md` + `.req-meta` 工作状态 + 附件 `docs/inputs/<类别>/` 自动归类）；**取消 `requirements/active|closed/` 整棵树**；**决策从 3 个家减到 2 个**（模块 `decisions.md` + 项目 `PRODUCT-RULES`，`docs/decisions/` 折进 PRODUCT-RULES）；worktree 统一挂 `.worktrees/<分支>/`；模块文件夹取代旧 `docs/modules/<m>.md` 单文件。含「放什么进哪」路由表 + 「自动归位」行为定义（文档归位 / 附件归类 / 决策回写 / 术语回写）+ 留给 lifecycle 迁移 agent 的 6 个交接接口。
   - **`skills/_shared/deposit-routing.md` 对齐新布局**：四类分流扩成六类——① 耐久事实（落点加模块 `spec.md`）、② 决策与理路（2 个家：跨模块→`PRODUCT-RULES` / 单模块→模块 `decisions.md`，吸收原 `docs/decisions/`）、③ 遗留→TODO、④ 探索变体→mocks、**⑤ 跨 req 决策回写**（治"跨 req 没记忆"）、**⑥ 术语回写**→`PRODUCT.md` 业务术语表；新增「附件自动归类」节（按类型落 `docs/inputs/<类别>/`、去 per-req 作用域 + stage_prefix、**保留** denylist + 50MB cap + untrusted 边界）；开火点更新为 `/close`（原 close-req）+ `/pmai-deposit`（dormant 保留）。

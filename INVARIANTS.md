@@ -8,22 +8,30 @@
 
 ## 主索引（速查）
 
-按字母前缀分组，共 60 条不变量。详细定义见下方对应 section。
+按字母前缀分组。详细定义见下方对应 section。
+
+> **lifecycle 迁移（reshape·批 3/4，方案 A）**：req 状态真相源已从 `requirements/active|closed/` 整棵树迁到
+> `docs/modules/<模块>/.req-meta.json`（见新增 **I-MOD1**）。close = 清模块 `.req-meta`（不再 git mv active→closed），
+> worktree 可选（无 worktree 直接 main 清）。受影响：I-CR1/3/4/5/8、I-CA4、I-CB3/5/6、I-DC1、I-RT4。
+> **task/exec 系列（I-CT* / I-TT* / I-CB4/10 / I-AD* / I-DC1 的 task 两道防线）标 dormant**——并行多 task 暂未激活、
+> 代码保留不删，未来恢复时一并复活。
 
 | 前缀 | 出处 section | 范围 | 一句话主旨 |
 |---|---|---|---|
 | **I-G** (1-5) | [通用](#通用不变式所有脚本共享) | 全局 | 半完成防御 / 错误吞掉禁止 / 前置条件 / 归档 commit / 写检查 |
-| **I-CT** (1-8) | [close-task.sh](#close-tasksh) | task close 流程 | 状态/前置/merge/归档顺序 + 事件流证明状态机推进（CT7-8） |
-| **I-CR** (1-9) | [close-req.sh](#close-reqsh) | req close 流程 | stage 7 / task 全闭 / merge main 顺序 + ancestor 验证 |
-| **I-CA** (1-6) | [cancel-req.sh](#cancel-reqsh) | req 废弃流程 | 不 merge main / 全 task 先清 / 幂等 |
-| **I-CB** (1-8, 10) | [check-branch.sh](#check-branchsh) | PreToolUse hook | 路径归一化 / 白名单 / fail-closed / read-only + task 状态硬 gate（CB10） |
-| **I-AD** (1-5) | [exec-adapters](#exec-adaptersshcodexsh--cursor-agentsh) | 外部执行器 | 启动前状态校验 / diff 范围 / clean dispatch（AD5） |
-| **I-DC** (1) | [文档落盘 gate](#文档落盘-gateidc1) | task-spec / task-confirm / req-transition | dispatch 前 working tree 文档必须 clean（auto-commit 兜底） |
+| **I-CT** (1-8) 🟡dormant | [close-task.sh](#close-tasksh) | task close 流程 | 状态/前置/merge/归档顺序 + 事件流证明状态机推进（CT7-8） |
+| **I-CR** (1-9) | [close-req.sh](#close-reqsh) | req close 流程 | stage 4 沉淀 / task 全闭 / 有 worktree 才 merge + ancestor 验证 / close=清模块 .req-meta |
+| **I-CA** (1-6) | [cancel-req.sh](#cancel-reqsh) | req 废弃流程 | 不 merge main / 全 task 先清 / 清模块 .req-meta / 幂等 |
+| **I-CB** (1-8, 10) | [check-branch.sh](#check-branchsh) | PreToolUse hook | 路径归一化 / 白名单(docs/** 放行) / fail-closed / read-only + task 状态硬 gate（CB10·dormant） |
+| **I-AD** (1-5) 🟡dormant | [exec-adapters](#exec-adaptersshcodexsh--cursor-agentsh) | 外部执行器 | 启动前状态校验 / diff 范围 / clean dispatch（AD5） |
+| **I-DC** (1) | [文档落盘 gate](#文档落盘-gateidc1) | task-spec / task-confirm / req-transition | dispatch 前 working tree 文档必须 clean（task 两道防线 dormant；req-transition 防线活跃） |
 | **I-RV** (1-3) | [review 工具](#review-工具推荐而非强制) | review 推荐 | AI 不自跑 / 事件不当 gate / 不 fake append |
-| **I-TT** (1-3,5-7) | [task-transition.py](#task-transitionpy) | task 状态转换 | 2 主转换 + 1 失败回退 / D0 并行 / 原子性 |
-| **I-RT** (1-8) | [req-transition.py](#req-transitionpy) | req stage 转换 | 逐级推进 / stage 3-4 可跳 / stage 7 不可回退 |
+| **I-TT** (1-3,5-7) 🟡dormant | [task-transition.py](#task-transitionpy) | task 状态转换 | 2 主转换 + 1 失败回退 / D0 并行 / 原子性 |
+| **I-RT** (1-10) | [req-transition.py](#req-transitionpy) | req stage 转换 | 逐级推进 / stage 3-4 可跳 / stage 4 沉淀不可回退 |
+| **I-MOD** (1) | [模块工作状态真相源](#模块工作状态真相源i-mod1) | lifecycle 状态读写 | 真相源 = docs/modules/<模块>/.req-meta.json，走 _lib.state helper |
 
 > **已废弃**：~~I-TT4~~（打回不切状态，详见 §I-TT1）；~~I-PR1~~（旧 plan-review hard gate，被 I-RV2 撤销）。
+> **🟡dormant 说明**：标 dormant 的不变量其代码保留、测试仍跑（验证未被误伤），但不在当前活跃路径（六步单 task / 无并行）。
 
 ---
 
@@ -38,6 +46,11 @@
 ---
 
 ## close-task.sh
+
+> 🟡 **dormant**（lifecycle 迁移批 4）：task 全套（confirm/execute/close）在六步单 task 模型下不在活跃路径。
+> 本节代码保留、测试仍跑（验证未误伤），并行多 task 恢复时一并复活。注：close-task.sh 从 task 文件路径
+> 派生 REQ_DIR（已自适应 `docs/modules/<模块>/tasks/`），但其归档/事件路径仍 hardcode `requirements/active/`
+> ——dormant，下次激活 task 系列时一并对齐到 docs/modules。
 
 **目的**：PM 通过验收后，将 task 分支合并回 req 分支并清理。
 
@@ -68,28 +81,31 @@
 
 ## close-req.sh
 
-**目的**：req 的所有 task 都已关闭后，将 req 分支合并回 main 并归档。
+**目的**（lifecycle 迁移批 3，方案 A）：req 收尾 = 清掉模块的工作状态层 `.req-meta.json`，模块三件套
+（`docs/modules/<模块>/` 下 spec/decisions/discussion）作为长期真相源留场。两条路径：有 worktree+分支 →
+在 req 分支清 `.req-meta` + commit → merge 回 main；无 worktree/无分支（讨论·小改直接在 main 改的）→
+直接在 main 清 `.req-meta` + commit，跳 merge。**不再 `git mv active→closed`、不再留 `status=closed` 占位文件。**
 
 ### 不变式
 
-- **I-CR1**：req stage 必须是 7
-- **I-CR2**：req 下所有 task 状态必须是"已完成"（或已 cancelled）
-- **I-CR3**：req 分支必须存在。如果不存在，拒绝 close（可能是用户想 cancel-req 而不是 close-req）
-- **I-CR4**：req worktree 必须存在
-- **I-CR5**：**所有状态改动必须先 commit 到 req 分支**（requirements/active → closed 的移动、meta.status=closed），再 merge 到 main
-- **I-CR6**：merge 到 main 必须成功且通过 ancestor 验证
-- **I-CR7**：清理顺序必须是：req 分支上 commit → merge → 删分支 → 删 worktree。每步失败都必须硬退出，不能吞错
+- **I-CR1**：close 前 req stage 必须是 **4（六步「沉淀」= MAX_STAGE）**。（旧文档写「stage 7」，已对齐到 4。）
+- **I-CR2**：req 下所有 task 状态必须是"已完成"（或已 cancelled）。task 系列 dormant 时模块下通常无 `tasks/`，该校验空过（自动通过）。
+- **I-CR3**：req 分支**可选**。分支存在 → 走 merge 路径；分支不存在 → 视为无 worktree 路径，跳过 merge，直接在 main 清 `.req-meta`（治讨论·小改无分支也能收尾）。
+- **I-CR4**：req worktree **可选**（同 I-CR3）。worktree 存在才走 merge；不存在则 main 直接清。
+- **I-CR5**：**有 worktree 时**所有状态改动（清模块 `.req-meta`）必须先 commit 到 req 分支再 merge 到 main；**无 worktree 时**直接在 main commit。
+- **I-CR6**：（仅 merge 路径生效）merge 到 main 必须成功且通过 `merge-base --is-ancestor` 验证。
+- **I-CR7**：（merge 路径）清理顺序必须是：req 分支上 commit → merge → 删分支 → 删 worktree。每步失败都必须硬退出，不能吞错。
 - **I-CR8**：close 成功后，main 分支上应该有：
-  - req 分支的所有代码/文档提交
-  - req 目录在 requirements/closed/
-  - meta.status = closed
-- **I-CR9**：close 失败不能留下半完成状态（已 merge 但未归档、已删分支但目录还在 active/）
+  - （merge 路径）req 分支的所有代码/文档提交
+  - 模块三件套仍在 `docs/modules/<模块>/`（长期真相源留场）
+  - 模块 `.req-meta.json` **已清**（无 `status=closed` 占位）
+- **I-CR9**：close 失败不能留下半完成状态（merge 失败时 req 分支 reset 回 pre-close、main 不留半截 `.req-meta` 清除）。
 
 ### 守卫点
-- 前置检查：line ~19-52
-- req 分支操作（移目录+改 meta+commit）：line ~54-88
-- 切 main + merge：line ~90-105
-- 清理（只在 merge 成功后）：line ~107-122
+- 前置检查（stage==4 + task 全闭 + 判定有无 worktree/分支）：脚本前段
+- 路径 A（有 worktree）：清模块 `.req-meta`（`git rm`）+ commit → 切 main merge（ancestor 验证）→ 删分支/worktree
+- 路径 B（无 worktree）：main 上污染防护 + `git rm .req-meta` + commit（不 merge）
+- PRD 收口 symlink + 兜底清孤儿：两路径汇合后
 
 ---
 
@@ -102,14 +118,15 @@
 - **I-CA1**：cancel 不 merge 到 main，main 零污染
 - **I-CA2**：req 下所有活跃 task（执行中）的 worktree 和分支必须清理
 - **I-CA3**：必须在所有 task 清理完成后才清理 req 本身
-- **I-CA4**：req 目录必须移到 requirements/closed/（保留记录），meta.status = cancelled
+- **I-CA4**（lifecycle 迁移批 3，方案 A）：cancel = 在 main 上**清掉模块 `.req-meta.json`**（清工作状态层），不再 `git mv` 到 `requirements/closed/`、不留 `status=cancelled` 占位文件。模块三件套若已在 main 则留场（历史在 git log + `decisions.md`）。模块只存在于 req worktree（未镜像到 main）时，main 本就无该工作状态，跳过 commit。
 - **I-CA5**：Cancel 失败留下的残留（worktree、分支）必须能重新运行脚本清理干净（幂等）
-- **I-CA6**：cancel 后 PM 能从 `/task-status` 看到这个 req 已 cancelled
+- **I-CA6**：cancel 后 PM 能从 `/task-status` 看到这个 req 已不在「在做的工作」列表（模块 `.req-meta` 已清 = 自然消失）
 
 ### 守卫点
-- task 清理循环：line ~31-57
-- req 分支/worktree 清理：line ~66-76
-- 归档移动 + meta 更新：line ~78-95
+- task 枚举（在删任何 worktree 前先读全）：Step 1
+- 切 main + 污染防护（只允许本模块路径脏）：Step 2 / 2.5
+- 清模块 `.req-meta`（`git rm`）+ PRD 收口 symlink + 路径级 commit：Step 3
+- task / req worktree 标记待清理（推迟到 cleanup-pending，防 dangling cwd）：Step 4 / 5
 
 ---
 
@@ -121,26 +138,29 @@
 
 - **I-CB1**：所有路径归一化必须基于 **MAIN_REPO_ROOT**，不是当前 worktree toplevel。这样绝对路径和相对路径得到一致的 gate 判断
 - **I-CB2**：目标文件所在的"有效分支"是它所在 worktree 的分支，不一定是当前 shell 的分支。必须按 `.worktrees/<branch>/` 前缀推导
-- **I-CB3**：**白名单模式**：main 分支上默认拒绝所有写入，只放行白名单路径（.claude/、CLAUDE.md、requirements/active/、requirements/closed/、.runs/、.worktrees/、.dev-port、init 时的 docs）
-- **I-CB4**：task 分支（`task-*`）不能写 docs/（文档改动走 req 分支）
-- **I-CB5**：req 分支（`req-*`）不能直接写 prototypes/ 代码（代码改动走 task 分支）
-- **I-CB6**：task 文件的"状态"字段 和 .req-meta.json 的"stage"字段 禁止直接编辑（必须走 transition 脚本）
+- **I-CB3**（lifecycle 迁移批 1，写保护放宽）：**白名单模式**：main 分支上默认拒绝所有写入，只放行白名单路径。当前白名单 = `.claude/*`、`CLAUDE.md`、`.gitignore`、`README.md`、`.runs/*`、`.worktrees/*`、`.dev-port`、`mocks/*`、**`docs/**`（全树放行——含 `docs/modules/` 三件套 + `.req-meta.json` 非状态字段）**。已删旧 `requirements/active|closed/*` 白名单条目（真相源迁 `docs/modules/`）、已删 `docs/modules/*` 的「已 commit 后拒绝」git-log 门控、已删 deposit marker 门控（deposit dormant）。**边界**：`prototype/**` 及业务代码目录在 main 上仍默认拒绝（走 worktree）；`docs/modules/*/.req-meta.json` 的 **stage 字段**仍由 GATE 2 拦直改。
+- **I-CB4** 🟡dormant：task 分支（`task-*`）不能写 docs/（文档改动走 req 分支）
+- **I-CB5**（注：语义已变更）：六步 req worktree 模型下 req 分支（`req-*`）**可**直接改 prototype/（轻/文档 task 不 fork、在 req worktree 改）；原「req 分支不能写 prototypes/」拦截已删。跨 task 串台保护移交执行器退出后越界审（adapter postcheck）。
+- **I-CB6**：task 文件的"状态"字段（GATE 1）和 `.req-meta.json` 的"stage"字段（GATE 2）禁止直接编辑（必须走 transition 脚本）。**路径**：GATE 1/2 匹配 `docs/modules/*/...`（新真相源）+ `requirements/*/...`（dormant 兼容）两套。task 状态部分 dormant；stage 部分活跃（main 写保护放宽后 docs/** 全放行，stage 字段必须仍由 req-transition 走）。
 - **I-CB7**：hook 失败或无法判断 → 默认拒绝（fail-closed），不放行
 - **I-CB8**：hook 本身不能修改任何文件（read-only 验证逻辑）
-- **I-CB10**：**task worktree 写入时，task 状态字段必须为「执行中」**。状态为「待执行/已完成」或字段读不到一律 deny。这是对 Claude 实例越权写 task 代码的结构性防御（hook 侧）。豁免范围：task 文件本身的写入（执行日志/自审记录/文档偏差 section 填写需要放行）+ `.runs/`/`.worktrees/` 运行时元数据。注：「执行中」覆盖 AI 实现期 + PM 验收期 — 验收期 AI 收 PM 打回反馈仍可写代码（task 状态全程不切，PM 通过才转「已完成」）
+- **I-CB10** 🟡dormant：**task worktree 写入时，task 状态字段必须为「执行中」**。状态为「待执行/已完成」或字段读不到一律 deny。这是对 Claude 实例越权写 task 代码的结构性防御（hook 侧）。豁免范围：task 文件本身的写入（执行日志/自审记录/文档偏差 section 填写需要放行）+ `.runs/`/`.worktrees/` 运行时元数据。注：「执行中」覆盖 AI 实现期 + PM 验收期 — 验收期 AI 收 PM 打回反馈仍可写代码（task 状态全程不切，PM 通过才转「已完成」）
+
+> **commit 侧镜像**：pre-commit hook 的 `check-status-direct-edit.py`（I-CB6 task 状态部分的 commit-time 兜底）同样匹配 `docs/modules/*/tasks/`（+ dormant `requirements/*/tasks/`）。
 
 ### 守卫点
 - 路径归一化：line ~39-102
 - 有效分支推导：line ~114-125
-- Gate 0（task 状态直改）：case ~162-180
-- Gate 1（req stage 直改）：case ~182-193
-- Gate 2（不在这里，合并到 Gate 3）
-- Gate 3（main 白名单）：line ~197-230
-- Gate 4（worktree 作用域）：line ~232-250
+- GATE 1（task 状态直改，`docs/modules/*/tasks/` + dormant `requirements/*/tasks/`）：case ~171
+- GATE 2（req stage 直改，`docs/modules/*/.req-meta.json` + dormant `requirements/*/.req-meta.json`）：case ~227
+- GATE 3（main 白名单，含 `docs/*` 全放行）：line ~272-305
+- GATE 4（worktree 作用域）/ GATE 5（task 状态约束·dormant）：line ~310+
 
 ---
 
 ## exec-adapters/*.sh （codex.sh / cursor-agent.sh）
+
+> 🟡 **dormant**（lifecycle 迁移批 4）：外部执行器随 task build 系列 dormant（六步单 task 模型下未走 task fork→外部执行器派发）。代码保留、约束不删；并行多 task / 外部执行器恢复时一并复活。注：I-AD2 的「diff 范围按 task 文件 allowlist」在无 task 模型下需重定义（plan §6.R4 待核 /build 是否复用 adapter），dormant 期间不触发。
 
 **目的**：调外部执行器（Codex、Cursor-Agent）跑 task 代码。Adapter 在独立进程中运行，Claude Code 的 PreToolUse hook 管不到其写操作——adapter 是「外部执行器越权」的唯一防御点。
 
@@ -166,17 +186,17 @@
 ### 不变式
 
 - **I-DC1**：**文档级 dispatch 边界（git worktree fork / req-transition stage 切换）之前，working tree 内对应文档必须落盘到 git 分支**。三道防线，任一触发即视为 I-DC1 被守住：
-  1. **task-spec 步骤 12.6**（首道防线，PM 不感知）：reconcile 出口处由 skill 自身把 task md 两文件（PM 视图主文件 + 工程合同）commit 到 req 分支。
-  2. **create-task-worktree.sh pre-fork gate**（兜底）：fork 前检查 req 分支 working tree 中本 task 两文件是否 dirty，dirty 时 auto-commit + stderr 警告（pathspec 严格限定本 task 范围，不卷入其他改动）。task-confirm SKILL 必须把警告原文转给 PM 一句话说明。
-  3. **req-transition.py pre-transition gate**（兜底）：forward 推进时把 active req 范围内（`requirements/active/<req>/` + `docs/DESIGN.md`）的未 commit 改动 auto-commit，commit 失败则 exit 1 拒绝推进。rollback 不触发（不是 dispatch）。
+  1. 🟡dormant **task-spec 步骤 12.6**（首道防线，PM 不感知）：reconcile 出口处由 skill 自身把 task md 两文件（PM 视图主文件 + 工程合同）commit 到 req 分支。
+  2. 🟡dormant **create-task-worktree.sh pre-fork gate**（兜底）：fork 前检查 req 分支 working tree 中本 task 两文件是否 dirty，dirty 时 auto-commit + stderr 警告（pathspec 严格限定本 task 范围）。
+  3. **req-transition.py pre-transition gate**（活跃）：forward 推进时把 active req 范围内的未 commit 改动 auto-commit，commit 失败则 exit 1 拒绝推进。rollback 不触发（不是 dispatch）。**seal 范围**（lifecycle 迁移批 2/3）= 传入的 `req_dir` 本身（已迁 `docs/modules/<模块>/`，`relative_to` 自适应；过渡期若指 `requirements/active/<req>` 也兼容）+ 同名模块目录双写桥接（批 3 拆掉 requirements 半边后该段自然 no-op）+ 项目基线 docs（`docs/DESIGN.md` / `docs/PRODUCT.md` / `docs/PRODUCT-RULES.md`）。
 
   原则：auto-commit pathspec **永远精确限定**到本次 dispatch 涉及的文档范围；从不 `git add -A`，避免把 PM 在 working tree 里飘的其他改动（譬如手改的 prototype 代码）误捆进文档 commit。
 
 ### 守卫点
 
-- task-spec 步骤 12.6：`skills/task-spec/SKILL.md`（reconcile 出口处调 `auto_commit_docs`）
-- create-task-worktree pre-fork gate：`scripts/create-task-worktree.sh`（"I-DC1 Pre-fork dirty gate" 段）
-- req-transition pre-transition gate：`scripts/req-transition.py` `seal_req_docs_before_transition`
+- 🟡 task-spec 步骤 12.6：`skills/task-spec/SKILL.md`（dormant）
+- 🟡 create-task-worktree pre-fork gate：`scripts/create-task-worktree.sh`（dormant）
+- req-transition pre-transition gate（活跃）：`scripts/req-transition.py` `seal_req_docs_before_transition`
 - 共享 helper：`scripts/_lib/dirty-check.sh`（`list_doc_dirty` / `auto_commit_docs`）
 
 ---
@@ -204,6 +224,8 @@
 ---
 
 ## task-transition.py
+
+> 🟡 **dormant**（lifecycle 迁移批 4）：task 状态机随 task 系列 dormant（六步单 task 模型）。代码保留、测试仍跑；并行多 task 恢复时复活。
 
 **目的**：Task 状态转换的单一入口。
 
@@ -243,7 +265,7 @@
 - **I-RT1**：正向转换必须逐级推进（不能跨级，除非 stage 4 自动跳过）
 - **I-RT2**：所有 req 默认都必须经过 stage 3（方案设计）；只有 stage 4 在 `docs/DESIGN.md` 已有实质内容时可由 `req-transition.py --to 5` 自动跳过
 - **I-RT3**：每个 stage 正向推进时必须验证前一 stage 的产出文件存在
-- **I-RT4**：Stage 7 不可回退（merge 到 main 不可逆）
+- **I-RT4**：**Stage 4（六步「沉淀」= MAX_STAGE）不可回退**（沉淀=close，清模块 `.req-meta` / merge 到 main 不可逆）。（旧文档写「stage 7」，已对齐到 4。）
 - **I-RT5**：Stage 6 回退必须校验所有 task 已关闭/取消（有活跃 task 时禁止回退）
 - **I-RT6**：回退不能跳级也不能越界（不能回到 < 1）
 - **I-RT7**：转换成功必须更新 .req-meta.json 的 stage 和 stage_history
@@ -256,6 +278,26 @@
 - validate_rollback：line ~162-185
 - save_meta：line ~43-49
 - stage_history 追加：line ~207
+
+---
+
+## 模块工作状态真相源（I-MOD1）
+
+**目的**（lifecycle 迁移批 3/4，方案 A）：把「req 状态从哪读」收敛成一条规则，防止后续又散落 grep 目录树。
+取代旧的「扫 `requirements/active/` 目录 = active、移到 `requirements/closed/` = 关闭」二级目录模型。
+
+### 不变式
+
+- **I-MOD1**：**模块工作状态的唯一真相源 = `docs/modules/<模块>/.req-meta.json`**。
+  - `.req-meta.json` 在场且 `status == "active"` = 该模块有在做的工作；文件不存在 = 没有在做的工作（close/cancel 清掉了它）。
+  - 模块文件夹 `docs/modules/<模块>/`（三件套 spec/decisions/discussion）是**长期真相源**，不随 close/cancel 消失；消失的只是 `.req-meta.json` 这层临时工作状态。
+  - 读写模块工作状态**必须**走 `_lib.state` helper（`read_req_meta` / `list_active_reqs` / `list_closed_reqs` / `list_cancelled_reqs` / `get_overall_state` / `_collect_from_modules`），**不得**直接 grep / 遍历目录树假设布局。close/cancel 机器清状态 = `git rm docs/modules/<模块>/.req-meta.json`。
+  - 方案 A 推论：`list_closed_reqs` / `list_cancelled_reqs` 自然返回空（无 `status=closed/cancelled` 文件可读）——历史在 git log + 模块 `decisions.md` 的 supersede 记录里。归档时间线视图（`get_timeline_state` / status-view closed 段）改读 git log 或砍，列入批 5（可选）。
+
+### 守卫点
+- 读层：`scripts/_lib/state.py`（`_collect_from_modules` 扫 `docs/modules/*/.req-meta.json`；批 2 已切单读）
+- close/cancel 清状态：`scripts/close-req.sh` / `scripts/cancel-req.sh`（`git rm <模块>/.req-meta.json`）
+- 孤儿 worktree 兜底枚举：`scripts/_lib/worktree.sh` `cleanup_stale_worktrees`（按 `docs/modules/*/.req-meta.json` 的 `branch` 字段定向）
 
 ---
 
