@@ -639,37 +639,13 @@ def discarded_task_ids(req_dir: Path) -> set[str]:
     return ids
 
 
-def _collect_active_from(
-    active_dir: Path, warnings: list[dict]
-) -> list[tuple[Path, dict]]:
-    """扫单个 requirements/active/ 目录，返回 [(req_dir, meta), ...]。"""
-    if not active_dir.exists():
-        return []
-    found: list[tuple[Path, dict]] = []
-    for req_dir in sorted(active_dir.iterdir()):
-        if not req_dir.is_dir():
-            continue
-        meta_file = req_dir / ".req-meta.json"
-        if not meta_file.exists():
-            continue
-        try:
-            meta = json.loads(meta_file.read_text(encoding="utf-8"))
-        except (OSError, json.JSONDecodeError) as e:
-            warnings.append({"path": str(meta_file), "reason": str(e)})
-            continue
-        if meta.get("status") == "active":
-            found.append((req_dir, meta))
-    return found
-
-
 # ---------------------------------------------------------------------------
-# 过渡层（lifecycle 迁移批 0）：docs/modules/<模块>/.req-meta.json 双读
+# 真相源（lifecycle 迁移批 2，单读）：docs/modules/<模块>/.req-meta.json
 #
-# 新真相源 = docs/modules/*/.req-meta.json（lifecycle 迁移计划 ①）。批 0 纯加法：
-# 旧 requirements/active|closed/ 与新 docs/modules/* **同时扫、合并去重**（旧路径
-# 先不删，由批 2 原子切换收口）。dedup 在调用方 `_append` 里按 meta.id（缺则 req
-# 目录名）去重——module 目录名 ≠ req 分支名，故必须按 id 去重，否则同一 req 在新旧
-# 两处会被算两次。
+# 新真相源 = docs/modules/*/.req-meta.json（lifecycle 迁移计划 ①）。批 0 曾双读
+# 旧 requirements/active|closed/ + 新 docs/modules/*，批 2 已删旧扫描、原子切单读。
+# dedup 仍在调用方 `_append` / `_dedup_archived` 里按 meta.id（缺则目录名）去重——
+# 主仓 + 各 req worktree 可能各暴露同一 req 的模块文件夹，按 id 去重避免双算。
 # ---------------------------------------------------------------------------
 
 def _collect_from_modules(
@@ -677,9 +653,8 @@ def _collect_from_modules(
 ) -> list[tuple[Path, dict]]:
     """扫 docs/modules/*/.req-meta.json，返回 status ∈ statuses 的 [(module_dir, meta), ...]。
 
-    与 `_collect_active_from` 同构，但真相源是模块文件夹（每个模块目录直接含
-    `.req-meta.json`，无 active/closed 二级目录）。`statuses` 过滤所需状态集
-    （active / closed / cancelled）。
+    真相源是模块文件夹（每个模块目录直接含 `.req-meta.json`，无 active/closed
+    二级目录）。`statuses` 过滤所需状态集（active / closed / cancelled）。
     """
     if not modules_dir.exists():
         return []
@@ -709,8 +684,8 @@ def list_active_reqs(
 
     cwd 行为：
     - cwd 在 req-* / task-* worktree（git 视角）→ 优先扫该 worktree 自身的
-      requirements/active/；若有结果直接返回（cwd 唯一定 req 语义，与
-      skill-preamble.sh 一致）
+      docs/modules/*（批 2 单读真相源）；若有结果直接返回（cwd 唯一定 req 语义，
+      与 skill-preamble.sh 一致）
     - cwd=None 或 main → 扫主仓 + 所有 `git worktree list` 拿到的 req-*
 
     返回：{"items": [{"req_dir": Path, "meta": dict}, ...], "warnings": [...]}
@@ -735,8 +710,8 @@ def list_active_reqs(
     seen: set[str] = set()
 
     def _dedup_key(req_dir: Path, meta: dict) -> str:
-        # 双读过渡：module 目录名 ≠ req 分支名，故按 meta.id 去重（缺 id 才退回目录名），
-        # 否则同一 req 在 requirements/active 与 docs/modules 各算一次。
+        # 按 meta.id 去重（缺 id 才退回目录名）：主仓 + 各 req worktree 可能各暴露同一
+        # req 的模块文件夹（module 目录名 ≠ req 分支名），不按 id 去重会被算两次。
         rid = meta.get("id") if isinstance(meta, dict) else None
         return rid if isinstance(rid, str) and rid else req_dir.name
 
@@ -763,11 +738,8 @@ def list_active_reqs(
         if cwd_root is not None:
             br = _branch_of(cwd_root)
             if br.startswith("req-"):
-                local = _collect_active_from(
-                    cwd_root / "requirements" / "active", warnings
-                )
-                # 双读过渡（批 0）：cwd worktree 自身的 docs/modules/* 也算
-                local += _collect_from_modules(
+                # 批 2 单读：真相源只剩 docs/modules/*/.req-meta.json（status==active）。
+                local = _collect_from_modules(
                     cwd_root / "docs" / "modules", warnings, ("active",)
                 )
                 if local:
@@ -777,13 +749,10 @@ def list_active_reqs(
                         raise StateReadError(Path(w["path"]), w["reason"])
                     return {"items": items, "warnings": warnings}
             if br.startswith("task-"):
-                # task worktree 自身 active/ 一般为空，去 req worktree 找
+                # task worktree 自身一般无模块状态，去 req worktree 的 docs/modules/* 找
                 for wt_branch, wt_path in _git_worktree_pairs(repo_root):
                     if wt_branch.startswith("req-"):
-                        local = _collect_active_from(
-                            wt_path / "requirements" / "active", warnings
-                        )
-                        local += _collect_from_modules(
+                        local = _collect_from_modules(
                             wt_path / "docs" / "modules", warnings, ("active",)
                         )
                         if local:
@@ -795,13 +764,12 @@ def list_active_reqs(
                     return {"items": items, "warnings": warnings}
 
     # 主仓 + 所有 git worktree 上的 req-* 分支
-    _append(_collect_active_from(repo_root / "requirements" / "active", warnings))
-    # 双读过渡（批 0）：新真相源 docs/modules/* 与旧 requirements/active/ 合并（按 id 去重）
+    # 批 2 单读：真相源 = docs/modules/*/.req-meta.json（status==active）。旧
+    # requirements/active/ 扫描已删（迁移脚本仍保留旧目录数据，本批只切机器读向）。
     _append(_collect_from_modules(repo_root / "docs" / "modules", warnings, ("active",)))
     for wt_branch, wt_path in _git_worktree_pairs(repo_root):
         if not wt_branch.startswith("req-"):
             continue
-        _append(_collect_active_from(wt_path / "requirements" / "active", warnings))
         _append(_collect_from_modules(wt_path / "docs" / "modules", warnings, ("active",)))
 
     if strict and warnings:
@@ -877,36 +845,13 @@ def get_overall_state(
 # ============================================================================
 
 
-def _collect_archived_from(
-    closed_dir: Path, warnings: list[dict]
-) -> list[tuple[Path, dict]]:
-    """扫 requirements/closed/ 目录，按 meta.status 区分 closed / cancelled。"""
-    if not closed_dir.exists():
-        return []
-    found: list[tuple[Path, dict]] = []
-    for req_dir in sorted(closed_dir.iterdir()):
-        if not req_dir.is_dir():
-            continue
-        meta_file = req_dir / ".req-meta.json"
-        if not meta_file.exists():
-            continue
-        try:
-            meta = json.loads(meta_file.read_text(encoding="utf-8"))
-        except (OSError, json.JSONDecodeError) as e:
-            warnings.append({"path": str(meta_file), "reason": str(e)})
-            continue
-        if meta.get("status") in ("closed", "cancelled"):
-            found.append((req_dir, meta))
-    return found
-
-
 def _dedup_archived(
     pairs: list[tuple[Path, dict]], want_status: str
 ) -> list[dict]:
-    """从 [(req_dir, meta), ...] 取 status==want_status 的，按 meta.id（缺则目录名）去重。
+    """从 [(module_dir, meta), ...] 取 status==want_status 的，按 meta.id（缺则目录名）去重。
 
-    双读过渡：旧 requirements/closed/ 与新 docs/modules/* 可能各暴露同一 req，
-    按 id 去重避免双算（同 list_active_reqs 的 _dedup_key 逻辑）。
+    主仓 + 各 req worktree 可能各暴露同一 req 的模块文件夹，按 id 去重避免双算
+    （同 list_active_reqs 的 _dedup_key 逻辑）。
     """
     seen: set[str] = set()
     out: list[dict] = []
@@ -923,11 +868,14 @@ def _dedup_archived(
 
 
 def list_closed_reqs(repo_root: Path, strict: bool = False) -> dict:
-    """扫 requirements/closed/ + docs/modules/* 拿 status='closed' 的 req（不含 cancelled）。"""
+    """扫 docs/modules/* 拿 status='closed' 的 req（不含 cancelled）。
+
+    批 2 单读：真相源只剩 docs/modules/*/.req-meta.json。旧 requirements/closed/
+    扫描已删。注：方案 A/B（close 后删 .req-meta vs 留 status=closed）是批 3 的事，
+    本批只切读向——若批 3 选方案 A，closed/cancelled 列表自然为空（无文件可读）。
+    """
     warnings: list[dict] = []
-    pairs = _collect_archived_from(repo_root / "requirements" / "closed", warnings)
-    # 双读过渡（批 0）：新真相源 docs/modules/* 的 status=closed 也算
-    pairs += _collect_from_modules(
+    pairs = _collect_from_modules(
         repo_root / "docs" / "modules", warnings, ("closed",)
     )
     items = _dedup_archived(pairs, "closed")
@@ -938,11 +886,9 @@ def list_closed_reqs(repo_root: Path, strict: bool = False) -> dict:
 
 
 def list_cancelled_reqs(repo_root: Path, strict: bool = False) -> dict:
-    """扫 requirements/closed/ + docs/modules/* 拿 status='cancelled' 的 req。"""
+    """扫 docs/modules/* 拿 status='cancelled' 的 req。批 2 单读（同 list_closed_reqs）。"""
     warnings: list[dict] = []
-    pairs = _collect_archived_from(repo_root / "requirements" / "closed", warnings)
-    # 双读过渡（批 0）：新真相源 docs/modules/* 的 status=cancelled 也算
-    pairs += _collect_from_modules(
+    pairs = _collect_from_modules(
         repo_root / "docs" / "modules", warnings, ("cancelled",)
     )
     items = _dedup_archived(pairs, "cancelled")

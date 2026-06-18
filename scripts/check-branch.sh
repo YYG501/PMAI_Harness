@@ -166,8 +166,10 @@ deny() {
 # ======================================================
 # GATE 1: Task 状态直改拦截
 # ======================================================
+# 批 2：task 真相源迁到 docs/modules/<模块>/tasks/；task 系列 dormant，旧
+# requirements/*/tasks/ 路径保留（dormant 降级），两条都拦状态直改。
 case "$REL_PATH" in
-  requirements/*/tasks/task-*.md)
+  requirements/*/tasks/task-*.md|docs/modules/*/tasks/task-*.md)
     # 用 _lib.state.parse_status_from_text 检测状态字段
     # 双兼容 v1（**状态：**）+ v2（| **状态** |）
     source "$SCRIPT_DIR/_lib/_setup-pythonpath.sh"
@@ -219,8 +221,11 @@ esac
 # ======================================================
 # GATE 2: Req stage 直改拦截
 # ======================================================
+# 批 2：req 状态真相源迁到 docs/modules/<模块>/.req-meta.json（补批 1 留下的 GATE2 洞——
+# main 写保护放宽后 docs/** 全放行，stage 字段必须仍由 req-transition 走，不能 main 直改）。
+# 旧 requirements/*/.req-meta.json 路径保留（过渡期 fixture/在飞 req 仍可能在场）。
 case "$REL_PATH" in
-  requirements/*/.req-meta.json)
+  requirements/*/.req-meta.json|docs/modules/*/.req-meta.json)
     STAGE_MODIFIED=$(echo "$INPUT" | python3 -c "
 import sys, json, re
 
@@ -272,10 +277,8 @@ if [ "$BRANCH" = "main" ] || [ "$BRANCH" = "master" ]; then
     .claude/*|CLAUDE.md|.gitignore|README.md)
       MAIN_WRITE_ALLOWED=true
       ;;
-    # req 生命周期元数据：close-req/cancel-req 需要在 main 上动 requirements/ 目录
-    requirements/active/*|requirements/closed/*)
-      MAIN_WRITE_ALLOWED=true
-      ;;
+    # 批 2：删旧 requirements/active|closed/* 白名单条目（真相源已迁 docs/modules/*，
+    # 走下方 docs/* 全放行；req 状态文件的 stage 字段仍由 GATE 2 拦直改）。
     # 运行时元数据：不入库，但允许写（gitignored）
     .runs/*|.worktrees/*|.dev-port)
       MAIN_WRITE_ALLOWED=true
@@ -325,8 +328,9 @@ esac
 case "$BRANCH" in
   task-*)
     # 豁免：task 文件本身（填执行日志/自审记录/文档偏差）+ 运行时元数据
+    # 批 2：task 真相源 docs/modules/<模块>/tasks/；dormant 旧 requirements/*/tasks/ 保留。
     case "$REL_PATH" in
-      requirements/*/tasks/task-*.md)
+      requirements/*/tasks/task-*.md|docs/modules/*/tasks/task-*.md)
         # task 文件本身的写入：允许（gate 1 已经保护状态字段不被直改）
         ;;
       .runs/*|.worktrees/*|.dev-port)

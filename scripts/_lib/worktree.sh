@@ -62,11 +62,14 @@ list_worktrees_by_branch_prefix() {
 }
 
 # cleanup_stale_worktrees <repo_root>
-# 兜底清理：按 requirements/{active,closed}/*/tasks/task-*.md + requirements/<req-stem>
+# 兜底清理：按 docs/modules/<模块>/.req-meta.json 的 branch 字段（+ 模块下 tasks/task-*.md）
 # 真相源定向枚举，对每个推导出的 worktree 路径（${PM_AI_WORKTREE_BASE:-<repo>/.worktrees}/<stem>）
 # 检查是否 git 已不认 + 物理还在 → rm -rf。close-task / close-req 末尾调用。
 #
-# 不无差别扫 .worktrees/* — path 必须从 task/req 记录推导。
+# 批 2 改：枚举真相源从 requirements/{active,closed}/* 换成 docs/modules/*（lifecycle 迁移②）。
+# req 的 worktree stem 取 meta.branch（模块目录名可能是中文、非分支名）；task dormant 时
+# 模块下一般无 tasks/，task 分支枚举退化为 no-op（保留扫描、无 task 时空过）。
+# 不无差别扫 .worktrees/* — path 必须从模块记录推导。
 # 护栏：跳过 live worktree、跳过当前 cwd 所在的目录。
 cleanup_stale_worktrees() {
   local repo_root="$1"
@@ -84,16 +87,18 @@ cleanup_stale_worktrees() {
   local cleaned=0 caller_cwd
   caller_cwd=$(pwd -P 2>/dev/null || echo "")
 
-  # 枚举 requirements/{active,closed}/* 下所有 task + req
-  local req_dir task_file stem
-  for state_dir in "$repo_root/requirements/active" "$repo_root/requirements/closed"; do
-    [ -d "$state_dir" ] || continue
-    for req_dir in "$state_dir"/*; do
-      [ -d "$req_dir" ] || continue
+  # 枚举 docs/modules/* 下每个模块的 req 分支 + task（dormant）
+  local modules_dir module_dir meta task_file stem branch
+  modules_dir="$repo_root/docs/modules"
+  if [ -d "$modules_dir" ]; then
+    for module_dir in "$modules_dir"/*; do
+      [ -d "$module_dir" ] || continue
+      meta="$module_dir/.req-meta.json"
+      [ -f "$meta" ] || continue
 
-      # 检查每个 task 的 worktree
-      if [ -d "$req_dir/tasks" ]; then
-        for task_file in "$req_dir/tasks"/task-*.md; do
+      # 检查每个 task 的 worktree（task dormant：模块下通常无 tasks/，循环空过）
+      if [ -d "$module_dir/tasks" ]; then
+        for task_file in "$module_dir/tasks"/task-*.md; do
           [ -f "$task_file" ] || continue
           case "$task_file" in *.engineering.md) continue ;; esac
           stem=$(basename "$task_file" .md)
@@ -102,14 +107,15 @@ cleanup_stale_worktrees() {
         done
       fi
 
-      # 检查 req 自己的 worktree
-      stem=$(basename "$req_dir")
-      _stale_worktree_check_one "$repo_root" "$stem" "$live_paths" "$caller_cwd" \
+      # 检查 req 自己的 worktree：stem = meta.branch（模块目录名可能是中文）
+      branch=$(python3 -c "import json,sys; print(json.load(open(sys.argv[1])).get('branch',''))" "$meta" 2>/dev/null || echo "")
+      [ -n "$branch" ] || continue
+      _stale_worktree_check_one "$repo_root" "$branch" "$live_paths" "$caller_cwd" \
         && cleaned=$((cleaned + 1))
     done
-  done
+  fi
 
-  [ "$cleaned" -gt 0 ] && echo "🧹 顺手清掉 $cleaned 个孤儿 worktree（按 task/req 记录定向）"
+  [ "$cleaned" -gt 0 ] && echo "🧹 顺手清掉 $cleaned 个孤儿 worktree（按模块 .req-meta 定向）"
   return 0
 }
 

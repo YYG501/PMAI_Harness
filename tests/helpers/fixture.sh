@@ -66,6 +66,14 @@ fixture_teardown() {
 
 # Create a fake active req with meta at given stage
 # Usage: fixture_create_req <req-id> <name> <stage>
+#
+# 批 2 双写桥接（lifecycle 迁移计划 §4 line 184「平滑过渡」）：
+#   真相源 = docs/modules/<分支>/.req-meta.json（state.py 批 2 已切单读、只认这里）。
+#   同时仍建 requirements/active/<分支>/（close/cancel/symlink-prd 机器是批 3 才重写，
+#   当前未改、仍按旧路径 git mv 归档）—— 让两组消费方各取所需、互不打架。
+#   模块目录名 = req 分支名（测试不关心模块名派生）。
+#   返回 requirements/active/<分支> 路径（close/cancel/symlink 测试把它当 <req-dir> 传入）。
+# 注：批 3 把 close/cancel 重写成「清模块 .req-meta」后，本桥接的 requirements/ 这半可拆。
 fixture_create_req() {
   local req_id="$1"
   local name="$2"
@@ -78,12 +86,17 @@ fixture_create_req() {
     git worktree add -q -b "$req_branch" ".worktrees/$req_branch" main
   )
 
-  # Create req dir inside the worktree
-  local req_dir="$FIXTURE_DIR/.worktrees/$req_branch/requirements/active/$req_branch"
+  local wt="$FIXTURE_DIR/.worktrees/$req_branch"
+  # 旧布局（批 3 机器仍读）
+  local req_dir="$wt/requirements/active/$req_branch"
+  # 新真相源（批 2 state.py 单读）
+  local module_dir="$wt/docs/modules/$req_branch"
   mkdir -p "$req_dir/tasks"
+  mkdir -p "$module_dir/tasks"
 
-  # Create meta
-  cat >"$req_dir/.req-meta.json" <<EOF
+  # Create meta（两处同一份）
+  local meta_json
+  meta_json=$(cat <<EOF
 {
   "id": "$req_id",
   "name": "$name",
@@ -94,13 +107,16 @@ fixture_create_req() {
   "status": "active"
 }
 EOF
+)
+  printf '%s\n' "$meta_json" > "$req_dir/.req-meta.json"
+  printf '%s\n' "$meta_json" > "$module_dir/.req-meta.json"
 
   # Create minimal brief.md
   echo "# Brief" > "$req_dir/brief.md"
 
   # Commit on req branch
   (
-    cd "$FIXTURE_DIR/.worktrees/$req_branch"
+    cd "$wt"
     git add -A
     git commit -q -m "create $req_id"
   )
@@ -117,6 +133,27 @@ EOF
 # 默认 fixture_create_task = v1（保持现有 15 个 suite 不回归）。
 # 新写测试用 v2，验证 parser 在生产真实格式上的行为。
 # v1/v2 双轨保留至双模式上线后统一清理（见 TODOS.md / docs/归档/完成/设计-新两文件格式对齐.md Q3）。
+
+# 批 2 桥接：把 requirements/active/<分支>/tasks/ 下刚建的 task 文件镜像到
+# 新真相源侧 docs/modules/<分支>/tasks/（state.py 批 2 单读模块目录，list_tasks
+# 读 module_dir/tasks）。req_dir = <wt>/requirements/active/<分支>，模块目录推导为
+# <wt>/docs/modules/<分支>。镜像后一并 commit（避免 close-req 的 UNRELATED_DIRTY 拦截）。
+_fixture_mirror_task_to_module() {
+  local req_dir="$1"  # <wt>/requirements/active/<branch>
+  shift
+  # 推导模块 tasks 目录
+  local branch wt module_tasks
+  branch=$(basename "$req_dir")
+  wt=$(cd "$req_dir/../../.." && pwd)
+  module_tasks="$wt/docs/modules/$branch/tasks"
+  [ -d "$wt/docs/modules/$branch" ] || return 0  # 非 fixture_create_req 建的 req（无模块侧）→ 跳过
+  mkdir -p "$module_tasks"
+  local f
+  for f in "$@"; do
+    [ -f "$f" ] || continue
+    cp "$f" "$module_tasks/$(basename "$f")"
+  done
+}
 
 # v1 单文件 fixture（旧格式）
 # Usage: fixture_create_task <req-dir> <task-num> <name> <status> [review_tools]
@@ -183,6 +220,9 @@ Test task
 ## PM 反馈
 无
 EOF
+
+  # 批 2 桥接：镜像到 docs/modules/<分支>/tasks/（state.py 单读真相源）
+  _fixture_mirror_task_to_module "$req_dir" "$task_file"
 
   # Commit task file to req branch so it appears in task worktrees later
   if [ -n "$req_worktree_root" ] && [ -d "$req_worktree_root/.git" ] || [ -f "$req_worktree_root/.git" ]; then
@@ -356,6 +396,9 @@ EOF
 **详细发现：** 无
 **遗留问题：** 无
 EOF
+
+  # 批 2 桥接：镜像 PM 视图 + 工程合同到 docs/modules/<分支>/tasks/
+  _fixture_mirror_task_to_module "$req_dir" "$task_file" "$eng_file"
 
   # Commit both files to req branch so task worktree sees them
   if [ -n "$req_worktree_root" ] && [ -d "$req_worktree_root/.git" ] || [ -f "$req_worktree_root/.git" ]; then
@@ -531,6 +574,9 @@ Test task spec.
 
 <!-- region: AUDIT end -->
 EOF
+
+  # 批 2 桥接：镜像到 docs/modules/<分支>/tasks/
+  _fixture_mirror_task_to_module "$req_dir" "$task_file"
 
   # Commit task file to req branch so task worktree sees it
   if [ -n "$req_worktree_root" ] && [ -d "$req_worktree_root/.git" ] || [ -f "$req_worktree_root/.git" ]; then

@@ -183,15 +183,16 @@ WORKTREE_DIR="$(printf "%s\n" "$WORKTREE_OUTPUT" | tail -n 1)"
 [ -n "$WORKTREE_DIR" ] && [ -d "$WORKTREE_DIR" ] || die "create-req-worktree.sh 未返回有效 worktree 路径"
 WORKTREE_DIR="$(cd "$WORKTREE_DIR" && pwd)"
 
-REQ_REL="requirements/active/$BRANCH"
+# 批 2：真相源迁 docs/modules/<模块>/（lifecycle 迁移计划 ①，不再建 requirements/active/）。
+# 模块目录名暂用 req 分支名（§7 待 PM 拍 #4 模块名来源；后续 /design 可让 PM 指定）。
+REQ_REL="docs/modules/$BRANCH"
 REQ_DIR="$WORKTREE_DIR/$REQ_REL"
 if [ -e "$REQ_DIR/.req-meta.json" ] || [ -e "$REQ_DIR/brief.md" ]; then
   die "req 已存在，拒绝覆盖: $REQ_DIR"
 fi
 
 mkdir -p "$REQ_DIR/tasks/_archived"
-mkdir -p "$REQ_DIR/attachments"
-touch "$REQ_DIR/attachments/.gitkeep"  # 跟 tasks/_archived 对称预建；PM IDE 一眼可见 attachments 机制存在（详见 skills/_shared/pm-view/attachments-upload.md）
+# 附件不进模块文件夹（按类型进 docs/inputs/<类别>/，见迁移计划 §3，批 6 落地）。
 
 WORKTREE_META="$(python3 - "$REPO_ROOT" "$WORKTREE_DIR" <<'PY'
 from pathlib import Path

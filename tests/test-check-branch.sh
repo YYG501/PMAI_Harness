@@ -71,15 +71,18 @@ test_main_allows_claude_settings() {
   fixture_teardown
 }
 
-test_main_allows_requirements_active_brief() {
-  start_test "I-CB3 main allows requirements/active/req-001/brief.md"
+test_main_allows_module_meta_create() {
+  # 批 2：真相源迁 docs/modules/*；旧 requirements/active 白名单已删。模块 .req-meta.json
+  # 在 main 上首建（/design 开工）放行——走 docs/* 全放行；stage 字段直改仍由 GATE2 拦。
+  start_test "I-CB3 (批2) main allows docs/modules/<模块>/.req-meta.json create（非 stage 直改）"
   fixture_setup
   cd "$FIXTURE_DIR"
-  capture_check "Write" "requirements/active/req-001/brief.md" "" "" "# Brief"
+  mkdir -p docs/modules/能力匹配卡
+  capture_check "Write" "docs/modules/能力匹配卡/.req-meta.json" "" "" '{"id":"req-001","name":"能力匹配卡","stage":1,"status":"active"}'
   if [ "$RC" = "0" ] && ! echo "$OUT" | grep -q '"deny"'; then
     pass_test
   else
-    _fail "should allow requirements/active write on main (rc=$RC, out=$OUT)"
+    _fail "should allow module .req-meta.json create on main (rc=$RC, out=$OUT)"
   fi
   fixture_teardown
 }
@@ -424,27 +427,29 @@ test_main_still_rejects_prototype_code() {
 }
 
 test_main_still_rejects_stage_direct_edit() {
-  start_test "GATE3 (批1) main 仍拒绝 stage 直改（GATE2 保留，走 req-transition）"
+  # 批 2：补 GATE2 洞——真相源迁 docs/modules/<模块>/.req-meta.json 后，main 上 docs/** 虽全放行，
+  # 但该文件的 stage 字段直改仍必须被 GATE2 拦（走 req-transition）。用新路径验证。
+  start_test "GATE2 (批2) main 仍拒绝 docs/modules/<模块>/.req-meta.json 的 stage 直改（走 req-transition）"
   fixture_setup
   cd "$FIXTURE_DIR"
-  mkdir -p requirements/active/req-001-test
-  cat > requirements/active/req-001-test/.req-meta.json <<'JSON'
-{"id":"req-001","name":"test","stage":3,"status":"active"}
+  mkdir -p docs/modules/能力匹配卡
+  cat > docs/modules/能力匹配卡/.req-meta.json <<'JSON'
+{"id":"req-001","name":"能力匹配卡","stage":3,"status":"active"}
 JSON
-  git add -A && git commit -q -m "seed meta"
-  capture_check "Edit" "requirements/active/req-001-test/.req-meta.json" \
+  git add -A && git commit -q -m "seed module meta"
+  capture_check "Edit" "docs/modules/能力匹配卡/.req-meta.json" \
     '"stage": 3' '"stage": 4' ""
   if [ "$RC" = "2" ] && echo "$OUT" | grep -q '"deny"' && echo "$OUT" | grep -q "req-transition"; then
     pass_test
   else
-    _fail "批1 main 仍应拒绝 stage 直改 (rc=$RC, out=$OUT)"
+    _fail "批2 main 仍应拒绝 docs/modules stage 直改 (rc=$RC, out=$OUT)"
   fi
   fixture_teardown
 }
 
 test_main_rejects_src_write
 test_main_allows_claude_settings
-test_main_allows_requirements_active_brief
+test_main_allows_module_meta_create
 test_main_rejects_random_toplevel
 test_abs_path_from_task_to_req_worktree_gate
 test_abs_path_from_task_to_main_repo_gate

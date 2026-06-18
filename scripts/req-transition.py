@@ -80,26 +80,55 @@ def check_all_tasks_closed(req_dir: Path) -> tuple[bool, list[str]]:
 
 
 def seal_req_docs_before_transition(req_dir: Path, current: int, target: int) -> None:
-    """I-DC1 pre-transition gate：把 req worktree 里 active req 范围内的未 commit
-    文档改动自动 commit。覆盖 req-plan / DESIGN / task-plan / tasks/（在飞旧 req 仍含 brief/analysis/solution）。
-    range 严格限定避免卷入主仓其他改动。
+    """I-DC1 pre-transition gate：把 req worktree 里本 req 范围内的未 commit 文档改动
+    自动 commit。range 严格限定避免卷入主仓其他改动。
 
-    rationale: build 阶段会触发 task-confirm 通过 git worktree add fork
-    task 分支；working tree 飘的文档不会被 fork 带走。这道 gate 保证每次 stage
-    切换都把当前 stage 的产出落盘，下游消费拿到的就是 PM 看过的版本。
+    批 2：真相源迁 docs/modules/<模块>/（三件套 discussion/decisions/spec + .req-meta）。
+    seal 范围 = 传入的 req_dir 本身（无论它指 docs/modules/<模块> 还是过渡期 requirements/
+    active/<req>，relative_to 自适应）+ 同名模块目录（双写桥接时另一侧也落盘）+ 项目基线 docs
+    （DESIGN/PRODUCT/PRODUCT-RULES）。
+
+    rationale: build 阶段会触发 task-confirm 通过 git worktree add fork task 分支；
+    working tree 飘的文档不会被 fork 带走。这道 gate 保证每次 stage 切换都把当前 stage 的
+    产出落盘，下游消费拿到的就是 PM 看过的版本。
     """
     import subprocess
 
-    worktree_root = req_dir.parent.parent.parent
+    # worktree 根：优先问 git（不假设 req_dir 固定深度），失败回退三层上推启发式。
+    try:
+        worktree_root = Path(subprocess.run(
+            ["git", "-C", str(req_dir), "rev-parse", "--show-toplevel"],
+            capture_output=True, text=True, check=True,
+        ).stdout.strip())
+    except (subprocess.CalledProcessError, OSError):
+        worktree_root = req_dir.parent.parent.parent
+
     if not (worktree_root / ".git").exists() and not (worktree_root / ".git").is_file():
         # req_dir 不在 git worktree 内（测试 fixture 等场景）→ 跳过
         return
 
-    rel_req = req_dir.relative_to(worktree_root)
+    try:
+        rel_req = req_dir.relative_to(worktree_root)
+    except ValueError:
+        return
     pathspecs = [str(rel_req)]
-    design_md = worktree_root / "docs" / "DESIGN.md"
-    if design_md.exists():
-        pathspecs.append("docs/DESIGN.md")
+
+    # 双写桥接：若传入的是 requirements/active/<req>，同名模块目录 docs/modules/<branch>
+    # 也一并落盘（反之亦然）；批 3 拆掉 requirements 半边后这段自然 no-op。
+    branch = req_dir.name
+    sibling_candidates = []
+    if rel_req.parts[:2] == ("requirements", "active"):
+        sibling_candidates.append(Path("docs") / "modules" / branch)
+    elif rel_req.parts[:2] == ("docs", "modules"):
+        sibling_candidates.append(Path("requirements") / "active" / branch)
+    for cand in sibling_candidates:
+        if (worktree_root / cand).exists():
+            pathspecs.append(str(cand))
+
+    # 项目基线 docs（设计/产品规格随 req 推进更新）
+    for baseline in ("docs/DESIGN.md", "docs/PRODUCT.md", "docs/PRODUCT-RULES.md"):
+        if (worktree_root / baseline).exists():
+            pathspecs.append(baseline)
 
     try:
         status_out = subprocess.run(
