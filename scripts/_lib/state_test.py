@@ -29,6 +29,8 @@ from _lib.state import (
     read_task_plan,
     list_tasks,
     list_active_reqs,
+    list_closed_reqs,
+    list_cancelled_reqs,
     get_overall_state,
     discarded_task_ids,
     StateReadError,
@@ -754,6 +756,108 @@ class TestCLINewSubcommands(unittest.TestCase):
             payload = json.loads(result.stdout)
             self.assertEqual(payload["items"], [])
             self.assertEqual(payload["warnings"], [])
+
+
+# ---------------------------------------------------------------------------
+# 双读过渡（lifecycle 迁移批 0）：docs/modules/<模块>/.req-meta.json 与
+# requirements/active|closed/ 同时扫、按 id 去重。
+# ---------------------------------------------------------------------------
+
+def _make_module(repo: Path, module: str, req_id: str,
+                 status: str = "active", stage: int = 2) -> Path:
+    """在 repo/docs/modules/<module>/ 建一个带 .req-meta.json 的模块（新真相源）。"""
+    module_dir = repo / "docs" / "modules" / module
+    module_dir.mkdir(parents=True)
+    meta = {"id": req_id, "name": module, "branch": f"{req_id}-{module}",
+            "stage": stage, "status": status}
+    (module_dir / ".req-meta.json").write_text(
+        json.dumps(meta, ensure_ascii=False, indent=2), encoding="utf-8")
+    return module_dir
+
+
+class TestDualReadModules(unittest.TestCase):
+    """批 0 双读：新 docs/modules/* 真相源被 list_active/closed/cancelled 读到。"""
+
+    def test_active_read_from_modules_only(self):
+        with tempfile.TemporaryDirectory() as d:
+            repo = Path(d)
+            _make_module(repo, "能力匹配卡", "req-010", status="active")
+            ids = [i["meta"]["id"] for i in list_active_reqs(repo)["items"]]
+            self.assertEqual(ids, ["req-010"])
+
+    def test_active_merges_old_and_new(self):
+        """requirements/active 旧 req + docs/modules 新 req 合并（不同 id → 两条）。"""
+        with tempfile.TemporaryDirectory() as d:
+            repo = Path(d)
+            _make_req(repo, "req-001")                       # 旧 requirements/active
+            _make_module(repo, "待办", "req-002")            # 新 docs/modules
+            ids = sorted(i["meta"]["id"] for i in list_active_reqs(repo)["items"])
+            self.assertEqual(ids, ["req-001", "req-002"])
+
+    def test_active_dedup_by_id_across_layouts(self):
+        """同一 req-id 既在 requirements/active 又在 docs/modules → 按 id 去重只一条。"""
+        with tempfile.TemporaryDirectory() as d:
+            repo = Path(d)
+            _make_req(repo, "req-001")                       # 旧
+            _make_module(repo, "某模块", "req-001")          # 新（同 id，不同目录名）
+            items = list_active_reqs(repo)["items"]
+            ids = [i["meta"]["id"] for i in items]
+            self.assertEqual(ids.count("req-001"), 1)
+
+    def test_modules_skip_non_active_for_active_list(self):
+        """docs/modules 里 status=closed 的不进 active 列表。"""
+        with tempfile.TemporaryDirectory() as d:
+            repo = Path(d)
+            _make_module(repo, "已收尾", "req-020", status="closed")
+            _make_module(repo, "在做", "req-021", status="active")
+            ids = [i["meta"]["id"] for i in list_active_reqs(repo)["items"]]
+            self.assertEqual(ids, ["req-021"])
+
+    def test_closed_read_from_modules(self):
+        with tempfile.TemporaryDirectory() as d:
+            repo = Path(d)
+            _make_module(repo, "收尾模块", "req-030", status="closed", stage=4)
+            ids = [i["meta"]["id"] for i in list_closed_reqs(repo)["items"]]
+            self.assertEqual(ids, ["req-030"])
+
+    def test_cancelled_read_from_modules(self):
+        with tempfile.TemporaryDirectory() as d:
+            repo = Path(d)
+            _make_module(repo, "废弃模块", "req-040", status="cancelled")
+            ids = [i["meta"]["id"] for i in list_cancelled_reqs(repo)["items"]]
+            self.assertEqual(ids, ["req-040"])
+
+    def test_closed_dedup_across_layouts(self):
+        """同 id 的 closed req 在 requirements/closed + docs/modules → 去重一条。"""
+        with tempfile.TemporaryDirectory() as d:
+            repo = Path(d)
+            old = repo / "requirements" / "closed" / "req-001-x"
+            old.mkdir(parents=True)
+            (old / ".req-meta.json").write_text(
+                json.dumps({"id": "req-001", "name": "x", "status": "closed"}),
+                encoding="utf-8")
+            _make_module(repo, "x模块", "req-001", status="closed")
+            items = list_closed_reqs(repo)["items"]
+            self.assertEqual([i["meta"]["id"] for i in items].count("req-001"), 1)
+
+    def test_corrupt_module_meta_emits_warning_not_raise(self):
+        with tempfile.TemporaryDirectory() as d:
+            repo = Path(d)
+            bad = repo / "docs" / "modules" / "坏模块"
+            bad.mkdir(parents=True)
+            (bad / ".req-meta.json").write_text("{not json", encoding="utf-8")
+            out = list_active_reqs(repo)
+            self.assertEqual(out["items"], [])
+            self.assertEqual(len(out["warnings"]), 1)
+
+    def test_module_without_meta_ignored(self):
+        """docs/modules 下纯文档模块（无 .req-meta.json）不算 req。"""
+        with tempfile.TemporaryDirectory() as d:
+            repo = Path(d)
+            doc_only = repo / "docs" / "modules" / "纯文档"
+            doc_only.mkdir(parents=True)
+            (doc_only / "spec.md").write_text("# spec", encoding="utf-8")
+            self.assertEqual(list_active_reqs(repo)["items"], [])
 
 
 if __name__ == "__main__":

@@ -21,6 +21,7 @@ SUITES=(
   test-detect-project-structure.sh
   test-inject-structure.sh
   test-init-project.sh
+  test-init-project-codex-compat.sh
   test-brownfield-detect.sh
   test-no-duplicate-questioning.sh
   test-shared-files-exist.sh
@@ -35,8 +36,10 @@ SUITES=(
   test-req-stage-gate.sh
   test-req-transition.sh
   test-migrate-reqs.sh
+  test-migrate-reqs-to-modules.sh
   test-checks-diff.sh
   test-build-audits.sh
+  test-mock-board.sh
   test-stage-source-helper.sh
   test-state-lib.sh
   test-attachments-helper.sh
