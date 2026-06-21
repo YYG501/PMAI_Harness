@@ -122,7 +122,7 @@ test_step5_gate() {
   start_test "task-plan step 5: PM confirms then /pmai-next advances"
 
   _assert_contains "$TASK_PLAN_SKILL" "### 步骤 5：skill 结束 → /pmai-next 接手" "new step 5 heading" || return
-  _assert_contains "$TASK_PLAN_SKILL" '具体 task 文档由 stage 6 的 `/pmai-task-spec <task-id>` 按 task-plan.md 逐个生成' "task-spec one by one (e2e-locked phrasing)" || return
+  _assert_contains "$TASK_PLAN_SKILL" '具体 task 文档由 build 阶段的 `/pmai-task-spec <task-id>` 按 task-plan.md 逐个生成' "task-spec one by one (e2e-locked phrasing)" || return
 
   pass_test
 }

@@ -15,6 +15,8 @@
 
 PRD 行文层面的 6 条语言指纹，§4.1 / §4.2 / §三 / §6.x / §七 / §八 全篇适用。
 
+> **适用范围（2026-06-21）**：L1–L6 是**真系统研发 PRD**（本 skill `prd-writing` 反向产出、给研发评审、UI 即交付契约）的重型风格。**`/design` 产出的产品模块 spec 不套全套 L1–L6**——只取 **8 类禁用清单 + L6 术语锁定 + L1 轻版**；L2–L5 按需可选、不强加（金标准 = ExampleAgentProject 待办 spec：大白话、按产品行为写）。详见 `_shared/info-design.md` 第四块「两类产物、两套风格」。
+
 #### L1 · 加粗短句开题 + 段落展开 + 反例 + 后果
 
 bullet 形式的"原则 / 诉求 / 价值"段（§4.1 业务诉求 / §4.3 方案价值 / §6.x 关键产品定义）必须用「**X。** 段落说明」结构，**不能用单纯短语 bullet**。段落内除了正面说什么外，**给出反例 + 反例后果**——让读者明白"为什么不那样设计"，不是只看到"这样设计"。
@@ -217,3 +219,7 @@ PRD 是最终需求规格，读者不应感知中间迭代过程。所有"v1 / v
 ### 描述风格规则（已移至 _shared）
 
 req-003 PRD 修订经验沉淀的「6 类描述风格违规 + 生僻描述词 framework + PM 视角原则 + 流程式步骤 + 精简原则」已搬到 [`_shared/pm-view/writing-rules.md`](../../_shared/pm-view/writing-rules.md) §3.12 作为单一真相源（与 L1-L6 / 9 类禁用清单并列）。本文件不再重复展开。
+
+### 定稿磨文纪律（吸收 ExampleAgentProject spec-polish，已并入 _shared）
+
+框架瘦身后写规格只剩一个 skill，磨文是它的收口步。ExampleAgentProject 的 `spec-polish` 9 条文字纪律已 reconcile 进 [`_shared/pm-view/writing-rules.md`](../../_shared/pm-view/writing-rules.md) §3.13（含逐条对账说明），不再单独维护一份 spec-polish。**与本文件 L1-L6 的关系**：9 条里第 2（一个概念一个词）/ 第 6（术语精确）/ 第 9（写完 grep 自查）直接并入 L6 名词表锁定；其余补为 _shared §3.13.1-§3.13.3 新规则或并入 §3.12.6 工程黑话词典。写规格时这两份一起遵守，无两套并存。

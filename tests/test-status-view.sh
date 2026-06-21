@@ -111,9 +111,13 @@ test_status_no_active_req() {
 _write_task_plan() {
   local req_branch="$1"
   shift
-  local req_dir="$FIXTURE_DIR/.worktrees/$req_branch/requirements/active/$req_branch"
-  local plan="$req_dir/task-plan.md"
-  {
+  # 批 2：state.py 单读真相源 = docs/modules/<分支>/，task-plan.md 也写这里（read_task_plan
+  # 读 module_dir/task-plan.md）。同时写 requirements/active 侧（批 3 机器仍在用），保持对称。
+  local wt="$FIXTURE_DIR/.worktrees/$req_branch"
+  local module_dir="$wt/docs/modules/$req_branch"
+  local req_dir="$wt/requirements/active/$req_branch"
+  local plan_body
+  plan_body=$(
     echo "| id | title | 所属模块 | 所属模块章节 | summary | order | risk |"
     echo "|----|-------|----------|--------------|---------|-------|------|"
     while [ $# -ge 2 ]; do
@@ -126,8 +130,10 @@ _write_task_plan() {
     echo "## 变更记录"
     echo ""
     echo "- （暂无）"
-  } > "$plan"
-  (cd "$FIXTURE_DIR/.worktrees/$req_branch" && git add -A && git commit -q -m "add task-plan")
+  )
+  printf '%s\n' "$plan_body" > "$module_dir/task-plan.md"
+  printf '%s\n' "$plan_body" > "$req_dir/task-plan.md"
+  (cd "$wt" && git add -A && git commit -q -m "add task-plan")
 }
 
 test_stage6_partial_spec_does_not_claim_all_done() {
@@ -246,8 +252,10 @@ test_stage6_discarded_task_is_excluded_from_pending() {
     "task-003" "kept2"
   fixture_create_task "$req_dir" "001" "kept" "已完成" "/qa" >/dev/null
   fixture_create_task "$req_dir" "003" "kept2" "已完成" "/qa" >/dev/null
-  # Place a discarded marker for task-002
-  mkdir -p "$req_dir/tasks/discarded"
+  # Place a discarded marker for task-002（批 2：写新真相源侧 docs/modules/<分支>/tasks/discarded/）
+  module_dir="$FIXTURE_DIR/.worktrees/req-001-test/docs/modules/req-001-test"
+  mkdir -p "$module_dir/tasks/discarded" "$req_dir/tasks/discarded"
+  echo "# task-002 discarded" > "$module_dir/tasks/discarded/task-002-discarded.md"
   echo "# task-002 discarded" > "$req_dir/tasks/discarded/task-002-discarded.md"
   (cd "$FIXTURE_DIR/.worktrees/req-001-test" && git add -A && git commit -q -m "discard task-002")
 
@@ -268,7 +276,9 @@ test_stage6_does_not_match_task_id_in_change_log() {
 
   req_dir=$(fixture_create_req "req-001" "test" 2)
   # Hand-write plan: only task-001 in the table; ## 变更记录 mentions a fake task-009
-  plan="$req_dir/task-plan.md"
+  # 批 2：写新真相源侧 docs/modules/<分支>/task-plan.md（read_task_plan 读这里）
+  module_dir="$FIXTURE_DIR/.worktrees/req-001-test/docs/modules/req-001-test"
+  for plan in "$module_dir/task-plan.md" "$req_dir/task-plan.md"; do
   cat > "$plan" <<'EOF'
 | id | title | 所属模块 | 所属模块章节 | summary | order | risk |
 |----|-------|----------|--------------|---------|-------|------|
@@ -278,6 +288,7 @@ test_stage6_does_not_match_task_id_in_change_log() {
 
 - 2026-04-26 废弃 task-009（regex 误抓陷阱）
 EOF
+  done
   fixture_create_task "$req_dir" "001" "only" "已完成" "/qa" >/dev/null
   (cd "$FIXTURE_DIR/.worktrees/req-001-test" && git add -A && git commit -q -m "add plan and task")
 

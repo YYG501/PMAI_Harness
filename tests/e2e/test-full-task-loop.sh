@@ -112,7 +112,7 @@ test_end_to_end_flow_description_complete() {
   start_test "e2e contract: Stage 5/6 flow description is complete"
 
   _assert_contains "$TASK_PLAN_SKILL" '不生成具体 task 文档' "stage 5 only plan, not task docs" || return
-  _assert_contains "$TASK_PLAN_SKILL" '具体 task 文档由 stage 6 的 `/pmai-task-spec <task-id>`' "stage 6 task-spec handoff" || return
+  _assert_contains "$TASK_PLAN_SKILL" '具体 task 文档由 build 阶段的 `/pmai-task-spec <task-id>`' "build-phase task-spec handoff" || return
   _assert_contains "$TASK_SPEC_SKILL" "一次只生成一个 task 的**一个文件**" "one task at a time (single-file typed contract)" || return
   _assert_contains "$DOC_UPDATE_SKILL" '沉淀模式由 `/pmai-close-task` 在 task acceptance 后调用' "close-task calls settlement" || return
   _assert_contains "$DOC_UPDATE_SKILL" '允许继续运行 `close-task.sh` 的后续 merge / cleanup' "close-task continues after doc-update" || return

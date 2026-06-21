@@ -209,8 +209,14 @@ git -C "$REPO_ROOT" commit -m "chore(baseline): new-req 入口兜底 PRODUCT.md 
 
 1. `@读` 主仓 main 上的 `docs/PRODUCT-STATE.md`（当前功能 / 主原型现状 / mock-真状态位）+ `docs/PRODUCT-RULES.md`（跨功能产品规则，若有）。
 2. 看一眼 `prototype/` 当前主原型（结构 / 已有页面 / 已有组件），心里有底当前覆盖到哪。
+3. **扫一眼项目决策记录**（`docs/decisions/`，若有）：像扫 TODO 一样，列出「已有项目决策记录 N 份（标题 + 域）」，**让 AI 判相关**——本需求范围若触及某份已冻结的理路域（护城河 / 机制整体 / 某交互理念），**读回那一份**当 context（治"理路按需读 = 实际从不"）。不相关的不读、不镜像进必读核心。
+4. **顺带查索引漂移**（治"脊柱入口看不到实存文档"）：
+   ```bash
+   python3 "$PMAI_HOME/scripts/check-state-index-drift.py" "$REPO_ROOT" || true
+   ```
+   有漏挂（docs/ 实存但 PRODUCT-STATE 索引没列）→ 一句话提示 PM「这几份文档没挂进现状索引，要不要我顺手补上」，PM 点头再补（补索引走 `/pmai-deposit` 或本需求 close 时）。不强制、不阻塞范围确认。
 
-> **读什么不读什么**：只读项目底座（PRODUCT-STATE / PRODUCT-RULES / DESIGN）+ 主原型现状。**不**主动去翻 `requirements/closed/req-*` 的历史 req 文档（RAG 噪声，PM 需要时自己会让你读）。项目底座缺失（新项目还没沉淀过）→ 当作"白纸起步"，直接走清单，不报错。
+> **读什么不读什么**：只读项目底座（PRODUCT-STATE / PRODUCT-RULES / DESIGN / 相关的项目决策记录）+ 主原型现状。**不**主动去翻 `requirements/closed/req-*` 的历史 req 文档（RAG 噪声，PM 需要时自己会让你读）。项目底座缺失（新项目还没沉淀过）→ 当作"白纸起步"，直接走清单，不报错。
 
 #### 3.1：选一条上坡路（AI 临场判断，不机械化）
 
@@ -220,9 +226,12 @@ git -C "$REPO_ROOT" commit -m "chore(baseline): new-req 入口兜底 PRODUCT.md 
 |---|---|---|
 | **直奔清单** | PM 思路已清、需求边界明确 | 不抛岔路口、不画图，直接照 PM 说的 + 对照主原型 delta，结晶成范围清单 + 决策页草稿，进定稿门 |
 | **收范围对话** | 有概念岔路 / PM 思路未定 | 对照 PRODUCT-STATE + 主原型找 delta → 抛结构化岔路口（A/B/C，**画 ASCII 把每个选择的后果摆出来**）→ PM 答 → 综合成具体结构复确认 → 一致性检查 → 收敛后结晶成清单 |
-| **视觉变体探** | 文字岔路掰不清 / PM 想用眼睛挑 | 先出几版**便宜的静态视觉草图**（mock，**不动真原型代码、不录入 `prototype/`**）给 PM 挑 → 挑定方向回到清单。Claude Design / gstack `/design-shotgun`「只看不导」在此承接 |
+| **视觉变体探** | 文字岔路掰不清 / PM 想用眼睛挑 | 先出几版**便宜的静态视觉草图**（mock，**不动真原型代码、不录入 `prototype/`**）给 PM 挑 → 挑定方向回到清单。Claude Design / gstack `/design-shotgun`「只看不导」在此承接。**草图落进 `mocks/` 留存**（见下方"变体留存"）—— 不再挑定即弃 |
 
 **护栏（防机械化，关键）**：何时抛岔路口、抛几个、何时画 ASCII、何时改走视觉草图——**全是 AI 临场判断，不得写成"每个 req 必跑 N 个岔路口"的硬流程**。思路清的简单需求强行拖一遍岔路对话 = 又长回流程税。框架在本步只管两头（**产品现状进场 + req-plan 落盘**），中间收敛对话交给判断。
+
+> **变体留存（走"视觉变体探"时）**：出的几版静态草图**落进 `mocks/`**（独立变体目录，与 `prototype/` 主原型分开），并登记进 `mocks/manifest.json`（路径 / 探了什么 / 好东西 / 状态 / 出自哪轮），跑 `python3 "$PMAI_HOME/scripts/gen-mock-board.py" "$REPO_ROOT"` 重生成看版。挑定的那版标 `featured`，没选的仍在目录可翻、看版不高亮——治"探过的 mock 找不回"。**这一步只登记不挑定即弃**；真正"探了什么 / 为何选这版"的收口在沉淀（close-req §2.5 ④ 或 `/pmai-deposit`）。
+> **不破 main 零写盘**：`mocks/` 是**探索草稿**的家、与本 req 的产品改动（req-plan / prototype）两回事——它在 main 上随时可写（`check-branch.sh` 探索草稿豁免），不进 req worktree、不拉 PM 进分支。所以登记变体≠把 PM 拖进工作区，与本 skill「步骤 3 不写 req 产物到盘」不冲突。
 
 > **office-hours 是可选 aid，不进固定流程**：PM 想用 office-hours 风格做深挖讨论时，**PM 自己手动调 gstack `/office-hours`**——它帮 PM 想清楚，不是范围清单生成器。AI **不主动替 PM 跑** office-hours（它含 builder/startup 模式选择 + telemetry + gbrain context queries，适合 PM 自主用）。它只是"收范围对话"这条上坡路上 AI 可以建议 PM 用的辅助，不是 new-req 必经的一环。
 

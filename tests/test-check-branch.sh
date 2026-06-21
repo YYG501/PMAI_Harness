@@ -71,15 +71,18 @@ test_main_allows_claude_settings() {
   fixture_teardown
 }
 
-test_main_allows_requirements_active_brief() {
-  start_test "I-CB3 main allows requirements/active/req-001/brief.md"
+test_main_allows_module_meta_create() {
+  # 批 2：真相源迁 docs/modules/*；旧 requirements/active 白名单已删。模块 .req-meta.json
+  # 在 main 上首建（/design 开工）放行——走 docs/* 全放行；stage 字段直改仍由 GATE2 拦。
+  start_test "I-CB3 (批2) main allows docs/modules/<模块>/.req-meta.json create（非 stage 直改）"
   fixture_setup
   cd "$FIXTURE_DIR"
-  capture_check "Write" "requirements/active/req-001/brief.md" "" "" "# Brief"
+  mkdir -p docs/modules/能力匹配卡
+  capture_check "Write" "docs/modules/能力匹配卡/.req-meta.json" "" "" '{"id":"req-001","name":"能力匹配卡","stage":1,"status":"active"}'
   if [ "$RC" = "0" ] && ! echo "$OUT" | grep -q '"deny"'; then
     pass_test
   else
-    _fail "should allow requirements/active write on main (rc=$RC, out=$OUT)"
+    _fail "should allow module .req-meta.json create on main (rc=$RC, out=$OUT)"
   fi
   fixture_teardown
 }
@@ -325,9 +328,128 @@ test_task_status_gate_allows_task_file_edit() {
   fixture_teardown
 }
 
+# ---------------------------------------------------------------
+# GATE 3 沉淀分档：mocks/ + decisions/ 无条件可写 main；PRODUCT-STATE marker 门控
+# ---------------------------------------------------------------
+
+test_main_allows_mocks_write() {
+  start_test "GATE3 main ALLOWS mocks/ write (探索草稿豁免)"
+  fixture_setup
+  cd "$FIXTURE_DIR"
+  capture_check "Write" "mocks/manifest.json" "" "" '{"variants":[]}'
+  if [ "$RC" = "0" ] && ! echo "$OUT" | grep -q '"deny"'; then
+    pass_test
+  else
+    _fail "should allow mocks/ on main unconditionally (rc=$RC, out=$OUT)"
+  fi
+  fixture_teardown
+}
+
+test_main_allows_decisions_write() {
+  start_test "GATE3 main ALLOWS docs/decisions/ write (冻结档豁免)"
+  fixture_setup
+  cd "$FIXTURE_DIR"
+  capture_check "Write" "docs/decisions/2026-06-04-foo.md" "" "" "# 冻结档"
+  if [ "$RC" = "0" ] && ! echo "$OUT" | grep -q '"deny"'; then
+    pass_test
+  else
+    _fail "should allow docs/decisions/ on main unconditionally (rc=$RC, out=$OUT)"
+  fi
+  fixture_teardown
+}
+
+# 批1（lifecycle 迁移）：docs/** 全放行 main 直接写、删 deposit marker 门控。
+# 原 test_main_rejects_product_state_without_marker（无 marker 拒绝）翻成放行；
+# 原 marker 在场放行 / marker blast radius 两例删除（marker 门控已删）。
+
+test_main_allows_product_state_no_marker() {
+  start_test "GATE3 (批1) main ALLOWS PRODUCT-STATE write WITHOUT marker (docs/** 全放行)"
+  fixture_setup
+  cd "$FIXTURE_DIR"
+  rm -f .runs/deposit-in-progress 2>/dev/null || true
+  capture_check "Write" "docs/PRODUCT-STATE.md" "old" "new" ""
+  if [ "$RC" = "0" ] && ! echo "$OUT" | grep -q '"deny"'; then
+    pass_test
+  else
+    _fail "批1 后 docs/PRODUCT-STATE 应放行 main（无 marker）(rc=$RC, out=$OUT)"
+  fi
+  fixture_teardown
+}
+
+test_main_allows_product_rules_and_todo() {
+  start_test "GATE3 (批1) main ALLOWS docs/PRODUCT-RULES.md + docs/TODO.md (docs/** 全放行)"
+  fixture_setup
+  cd "$FIXTURE_DIR"
+  capture_check "Write" "docs/PRODUCT-RULES.md" "old" "new" ""
+  local rc1="$RC" out1="$OUT"
+  capture_check "Write" "docs/TODO.md" "old" "new" ""
+  if [ "$rc1" = "0" ] && ! echo "$out1" | grep -q '"deny"' \
+     && [ "$RC" = "0" ] && ! echo "$OUT" | grep -q '"deny"'; then
+    pass_test
+  else
+    _fail "PRODUCT-RULES/TODO 应放行 main (rules rc=$rc1 out=$out1; todo rc=$RC out=$OUT)"
+  fi
+  fixture_teardown
+}
+
+test_main_allows_docs_modules_triplet() {
+  start_test "GATE3 (批1) main ALLOWS docs/modules/<模块>/ 三件套写（含已 commit 后再改）"
+  fixture_setup
+  cd "$FIXTURE_DIR"
+  mkdir -p docs/modules/能力匹配卡
+  # 先建并 commit，再改——验证旧「已 commit 后拒绝」的 git-log 门控已删
+  capture_check "Write" "docs/modules/能力匹配卡/spec.md" "" "" "# spec v1"
+  local rc1="$RC" out1="$OUT"
+  echo "# spec v1" > docs/modules/能力匹配卡/spec.md
+  git add -A && git commit -q -m "add module spec"
+  capture_check "Write" "docs/modules/能力匹配卡/spec.md" "# spec v1" "# spec v2" ""
+  if [ "$rc1" = "0" ] && ! echo "$out1" | grep -q '"deny"' \
+     && [ "$RC" = "0" ] && ! echo "$OUT" | grep -q '"deny"'; then
+    pass_test
+  else
+    _fail "docs/modules 三件套应放行（含已 commit 后再改）(create rc=$rc1 out=$out1; reedit rc=$RC out=$OUT)"
+  fi
+  fixture_teardown
+}
+
+test_main_still_rejects_prototype_code() {
+  start_test "GATE3 (批1) main 仍拒绝 prototype/ 代码（放宽只针对 docs/，业务代码走 worktree）"
+  fixture_setup
+  cd "$FIXTURE_DIR"
+  mkdir -p prototype
+  capture_check "Write" "prototype/app.ts" "" "" "console.log(1)"
+  if [ "$RC" = "2" ] && echo "$OUT" | grep -q '"deny"'; then
+    pass_test
+  else
+    _fail "批1 main 仍应拒绝 prototype/ 代码 (rc=$RC, out=$OUT)"
+  fi
+  fixture_teardown
+}
+
+test_main_still_rejects_stage_direct_edit() {
+  # 批 2：补 GATE2 洞——真相源迁 docs/modules/<模块>/.req-meta.json 后，main 上 docs/** 虽全放行，
+  # 但该文件的 stage 字段直改仍必须被 GATE2 拦（走 req-transition）。用新路径验证。
+  start_test "GATE2 (批2) main 仍拒绝 docs/modules/<模块>/.req-meta.json 的 stage 直改（走 req-transition）"
+  fixture_setup
+  cd "$FIXTURE_DIR"
+  mkdir -p docs/modules/能力匹配卡
+  cat > docs/modules/能力匹配卡/.req-meta.json <<'JSON'
+{"id":"req-001","name":"能力匹配卡","stage":3,"status":"active"}
+JSON
+  git add -A && git commit -q -m "seed module meta"
+  capture_check "Edit" "docs/modules/能力匹配卡/.req-meta.json" \
+    '"stage": 3' '"stage": 4' ""
+  if [ "$RC" = "2" ] && echo "$OUT" | grep -q '"deny"' && echo "$OUT" | grep -q "req-transition"; then
+    pass_test
+  else
+    _fail "批2 main 仍应拒绝 docs/modules stage 直改 (rc=$RC, out=$OUT)"
+  fi
+  fixture_teardown
+}
+
 test_main_rejects_src_write
 test_main_allows_claude_settings
-test_main_allows_requirements_active_brief
+test_main_allows_module_meta_create
 test_main_rejects_random_toplevel
 test_abs_path_from_task_to_req_worktree_gate
 test_abs_path_from_task_to_main_repo_gate
@@ -340,5 +462,12 @@ test_outside_repo_tmp_allowed
 test_task_status_gate_rejects_when_pending
 test_task_status_gate_allows_when_executing
 test_task_status_gate_allows_task_file_edit
+test_main_allows_mocks_write
+test_main_allows_decisions_write
+test_main_allows_product_state_no_marker
+test_main_allows_product_rules_and_todo
+test_main_allows_docs_modules_triplet
+test_main_still_rejects_prototype_code
+test_main_still_rejects_stage_direct_edit
 
 report_results "check-branch"

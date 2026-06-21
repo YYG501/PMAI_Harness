@@ -409,7 +409,7 @@ def get_stage_source(req_dir: Path, stage_num: int) -> Path:
 def get_current_stage_banner(req_dir: Path, skill: str = "REQ-STAGE-GATE") -> str:
     """返回 stage banner 字符串（M2）。
 
-    格式：`━━━ PMAI ► <SKILL> ▸ Stage <N>/<MAX_STAGE>: <Name> ━━━`（见 `_shared/pm-view/banner-rules.md` §1.1）。
+    格式：`━━━ PMAI ► <SKILL> ▸ <Name> ━━━`（去 stage 号，见 `_shared/pm-view/banner-rules.md` §1.1）。
 
     Args:
         req_dir: req 目录绝对路径（含 `.req-meta.json`）。
@@ -428,9 +428,9 @@ def get_current_stage_banner(req_dir: Path, skill: str = "REQ-STAGE-GATE") -> st
     stage = meta.get("stage")
     if stage is None:
         raise StateReadError(req_dir / ".req-meta.json", "缺 stage 字段")
-    from .stages import STAGE_NAMES, MAX_STAGE
+    from .stages import STAGE_NAMES
     stage_name = STAGE_NAMES[int(stage)]
-    return f"━━━ PMAI ► {skill} ▸ Stage {stage}/{MAX_STAGE}: {stage_name} ━━━"
+    return f"━━━ PMAI ► {skill} ▸ {stage_name} ━━━"
 
 
 def set_stage_source(
@@ -447,7 +447,7 @@ def set_stage_source(
         stage_num: stage 序号（1-MAX_STAGE，六步=1-4）。
         filename: req 内**相对路径**（如 `analysis.md` / `stage2-office-hours.md`）；
                   caller 已确认文件在该路径下落盘。
-        tool: 产生该产物的工具名（如 `req-analysis` / `office-hours`），追溯用。
+        tool: 产生该产物的工具名（如 `req-questioning` / `office-hours`），追溯用。
         origin: 可选 — 外部源原始绝对路径。office-hours 分支 snapshot 复制后
                 记 `~/.gstack/projects/<slug>/<file>` 原始 path（追溯，不参与
                 解析）；A 分支无此字段。
@@ -639,17 +639,30 @@ def discarded_task_ids(req_dir: Path) -> set[str]:
     return ids
 
 
-def _collect_active_from(
-    active_dir: Path, warnings: list[dict]
+# ---------------------------------------------------------------------------
+# 真相源（lifecycle 迁移批 2，单读）：docs/modules/<模块>/.req-meta.json
+#
+# 新真相源 = docs/modules/*/.req-meta.json（lifecycle 迁移计划 ①）。批 0 曾双读
+# 旧 requirements/active|closed/ + 新 docs/modules/*，批 2 已删旧扫描、原子切单读。
+# dedup 仍在调用方 `_append` / `_dedup_archived` 里按 meta.id（缺则目录名）去重——
+# 主仓 + 各 req worktree 可能各暴露同一 req 的模块文件夹，按 id 去重避免双算。
+# ---------------------------------------------------------------------------
+
+def _collect_from_modules(
+    modules_dir: Path, warnings: list[dict], statuses: tuple[str, ...]
 ) -> list[tuple[Path, dict]]:
-    """扫单个 requirements/active/ 目录，返回 [(req_dir, meta), ...]。"""
-    if not active_dir.exists():
+    """扫 docs/modules/*/.req-meta.json，返回 status ∈ statuses 的 [(module_dir, meta), ...]。
+
+    真相源是模块文件夹（每个模块目录直接含 `.req-meta.json`，无 active/closed
+    二级目录）。`statuses` 过滤所需状态集（active / closed / cancelled）。
+    """
+    if not modules_dir.exists():
         return []
     found: list[tuple[Path, dict]] = []
-    for req_dir in sorted(active_dir.iterdir()):
-        if not req_dir.is_dir():
+    for module_dir in sorted(modules_dir.iterdir()):
+        if not module_dir.is_dir():
             continue
-        meta_file = req_dir / ".req-meta.json"
+        meta_file = module_dir / ".req-meta.json"
         if not meta_file.exists():
             continue
         try:
@@ -657,8 +670,8 @@ def _collect_active_from(
         except (OSError, json.JSONDecodeError) as e:
             warnings.append({"path": str(meta_file), "reason": str(e)})
             continue
-        if meta.get("status") == "active":
-            found.append((req_dir, meta))
+        if meta.get("status") in statuses:
+            found.append((module_dir, meta))
     return found
 
 
@@ -671,8 +684,8 @@ def list_active_reqs(
 
     cwd 行为：
     - cwd 在 req-* / task-* worktree（git 视角）→ 优先扫该 worktree 自身的
-      requirements/active/；若有结果直接返回（cwd 唯一定 req 语义，与
-      skill-preamble.sh 一致）
+      docs/modules/*（批 2 单读真相源）；若有结果直接返回（cwd 唯一定 req 语义，
+      与 skill-preamble.sh 一致）
     - cwd=None 或 main → 扫主仓 + 所有 `git worktree list` 拿到的 req-*
 
     返回：{"items": [{"req_dir": Path, "meta": dict}, ...], "warnings": [...]}
@@ -696,11 +709,18 @@ def list_active_reqs(
 
     seen: set[str] = set()
 
+    def _dedup_key(req_dir: Path, meta: dict) -> str:
+        # 按 meta.id 去重（缺 id 才退回目录名）：主仓 + 各 req worktree 可能各暴露同一
+        # req 的模块文件夹（module 目录名 ≠ req 分支名），不按 id 去重会被算两次。
+        rid = meta.get("id") if isinstance(meta, dict) else None
+        return rid if isinstance(rid, str) and rid else req_dir.name
+
     def _append(reqs: list[tuple[Path, dict]]) -> None:
         for req_dir, meta in reqs:
-            if req_dir.name in seen:
+            key = _dedup_key(req_dir, meta)
+            if key in seen:
                 continue
-            seen.add(req_dir.name)
+            seen.add(key)
             items.append({"req_dir": req_dir, "meta": meta})
 
     # cwd 落在某个 worktree → 让 cwd 优先
@@ -718,8 +738,9 @@ def list_active_reqs(
         if cwd_root is not None:
             br = _branch_of(cwd_root)
             if br.startswith("req-"):
-                local = _collect_active_from(
-                    cwd_root / "requirements" / "active", warnings
+                # 批 2 单读：真相源只剩 docs/modules/*/.req-meta.json（status==active）。
+                local = _collect_from_modules(
+                    cwd_root / "docs" / "modules", warnings, ("active",)
                 )
                 if local:
                     _append(local)
@@ -728,11 +749,11 @@ def list_active_reqs(
                         raise StateReadError(Path(w["path"]), w["reason"])
                     return {"items": items, "warnings": warnings}
             if br.startswith("task-"):
-                # task worktree 自身 active/ 一般为空，去 req worktree 找
+                # task worktree 自身一般无模块状态，去 req worktree 的 docs/modules/* 找
                 for wt_branch, wt_path in _git_worktree_pairs(repo_root):
                     if wt_branch.startswith("req-"):
-                        local = _collect_active_from(
-                            wt_path / "requirements" / "active", warnings
+                        local = _collect_from_modules(
+                            wt_path / "docs" / "modules", warnings, ("active",)
                         )
                         if local:
                             _append(local)
@@ -743,11 +764,13 @@ def list_active_reqs(
                     return {"items": items, "warnings": warnings}
 
     # 主仓 + 所有 git worktree 上的 req-* 分支
-    _append(_collect_active_from(repo_root / "requirements" / "active", warnings))
+    # 批 2 单读：真相源 = docs/modules/*/.req-meta.json（status==active）。旧
+    # requirements/active/ 扫描已删（迁移脚本仍保留旧目录数据，本批只切机器读向）。
+    _append(_collect_from_modules(repo_root / "docs" / "modules", warnings, ("active",)))
     for wt_branch, wt_path in _git_worktree_pairs(repo_root):
         if not wt_branch.startswith("req-"):
             continue
-        _append(_collect_active_from(wt_path / "requirements" / "active", warnings))
+        _append(_collect_from_modules(wt_path / "docs" / "modules", warnings, ("active",)))
 
     if strict and warnings:
         w = warnings[0]
@@ -822,38 +845,40 @@ def get_overall_state(
 # ============================================================================
 
 
-def _collect_archived_from(
-    closed_dir: Path, warnings: list[dict]
-) -> list[tuple[Path, dict]]:
-    """扫 requirements/closed/ 目录，按 meta.status 区分 closed / cancelled。"""
-    if not closed_dir.exists():
-        return []
-    found: list[tuple[Path, dict]] = []
-    for req_dir in sorted(closed_dir.iterdir()):
-        if not req_dir.is_dir():
+def _dedup_archived(
+    pairs: list[tuple[Path, dict]], want_status: str
+) -> list[dict]:
+    """从 [(module_dir, meta), ...] 取 status==want_status 的，按 meta.id（缺则目录名）去重。
+
+    主仓 + 各 req worktree 可能各暴露同一 req 的模块文件夹，按 id 去重避免双算
+    （同 list_active_reqs 的 _dedup_key 逻辑）。
+    """
+    seen: set[str] = set()
+    out: list[dict] = []
+    for req_dir, meta in pairs:
+        if meta.get("status") != want_status:
             continue
-        meta_file = req_dir / ".req-meta.json"
-        if not meta_file.exists():
+        rid = meta.get("id") if isinstance(meta, dict) else None
+        key = rid if isinstance(rid, str) and rid else req_dir.name
+        if key in seen:
             continue
-        try:
-            meta = json.loads(meta_file.read_text(encoding="utf-8"))
-        except (OSError, json.JSONDecodeError) as e:
-            warnings.append({"path": str(meta_file), "reason": str(e)})
-            continue
-        if meta.get("status") in ("closed", "cancelled"):
-            found.append((req_dir, meta))
-    return found
+        seen.add(key)
+        out.append({"req_dir": req_dir, "meta": meta})
+    return out
 
 
 def list_closed_reqs(repo_root: Path, strict: bool = False) -> dict:
-    """扫 requirements/closed/ 拿 status='closed' 的 req（不含 cancelled）。"""
+    """扫 docs/modules/* 拿 status='closed' 的 req（不含 cancelled）。
+
+    批 2 单读：真相源只剩 docs/modules/*/.req-meta.json。旧 requirements/closed/
+    扫描已删。注：方案 A/B（close 后删 .req-meta vs 留 status=closed）是批 3 的事，
+    本批只切读向——若批 3 选方案 A，closed/cancelled 列表自然为空（无文件可读）。
+    """
     warnings: list[dict] = []
-    items: list[dict] = []
-    for req_dir, meta in _collect_archived_from(
-        repo_root / "requirements" / "closed", warnings
-    ):
-        if meta.get("status") == "closed":
-            items.append({"req_dir": req_dir, "meta": meta})
+    pairs = _collect_from_modules(
+        repo_root / "docs" / "modules", warnings, ("closed",)
+    )
+    items = _dedup_archived(pairs, "closed")
     if strict and warnings:
         w = warnings[0]
         raise StateReadError(Path(w["path"]), w["reason"])
@@ -861,14 +886,12 @@ def list_closed_reqs(repo_root: Path, strict: bool = False) -> dict:
 
 
 def list_cancelled_reqs(repo_root: Path, strict: bool = False) -> dict:
-    """扫 requirements/closed/ 拿 status='cancelled' 的 req。"""
+    """扫 docs/modules/* 拿 status='cancelled' 的 req。批 2 单读（同 list_closed_reqs）。"""
     warnings: list[dict] = []
-    items: list[dict] = []
-    for req_dir, meta in _collect_archived_from(
-        repo_root / "requirements" / "closed", warnings
-    ):
-        if meta.get("status") == "cancelled":
-            items.append({"req_dir": req_dir, "meta": meta})
+    pairs = _collect_from_modules(
+        repo_root / "docs" / "modules", warnings, ("cancelled",)
+    )
+    items = _dedup_archived(pairs, "cancelled")
     if strict and warnings:
         w = warnings[0]
         raise StateReadError(Path(w["path"]), w["reason"])

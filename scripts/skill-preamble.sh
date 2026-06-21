@@ -96,11 +96,12 @@ _ACTIVE_REQ_DIRS=()
 _ACTIVE_REQ_STAGES=()
 
 # 把单个 root 下所有 status=active 的 req 加进候选列表（按 id 去重）
+# 批 2 单读：真相源 = docs/modules/<模块>/.req-meta.json（模块名可为中文，不限 req- 前缀）。
 _collect_active_reqs_in() {
   local root="$1"
-  local active_dir="$root/requirements/active"
-  [ -d "$active_dir" ] || return 0
-  for req_dir in "$active_dir"/req-*/; do
+  local modules_dir="$root/docs/modules"
+  [ -d "$modules_dir" ] || return 0
+  for req_dir in "$modules_dir"/*/; do
     [ -d "$req_dir" ] || continue
     local meta="$req_dir/.req-meta.json"
     [ -f "$meta" ] || continue

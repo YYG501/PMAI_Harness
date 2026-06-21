@@ -59,12 +59,13 @@ PM 全程**只做决策**（方向 / PRD / 任务拆分 / 验收）；代码、c
 
 | 工具 | 必需性 | 用途 |
 |---|---|---|
-| **Claude Code** | 必需 | 主要 AI 协作入口（slash skill 在这里跑） |
+| **Claude Code** | 推荐 | 一等主控入口（slash skill 原生在这里跑） |
+| **Codex** | 实验支持 | 可读消费仓 `AGENTS.md` 作为主控入口；也可作为 build 执行器 |
 | **gstack** | 必需 | `/qa` `/review` `/codex` 等子流程依赖；`init-project.sh` 入口会检测 | 
 | **git** ≥ 2.30 | 必需 | worktree 是核心隔离机制 |
 | **python3** ≥ 3.10 | 必需 | scripts 大多用 python（zero-dep stdlib） |
 | **bash** ≥ 4 | 必需 | scripts 入口语言（macOS 自带 3.x 已知坑见 INVARIANTS） |
-| **codex CLI** | 可选 | 默认执行器；不装走 `cursor-agent` / `claude` / `manual` |
+| **codex CLI** | 可选 | build 执行器；不装走 `cursor-agent` / `claude` / `manual` |
 
 未装 gstack 时 `init-project.sh`（起新业务项目）会直接报错并指向 `https://github.com/garrytan/gstack`。`pmai install` 本身不检 gstack —— 你可以先装 PMAI、需要起项目时再补装 gstack。
 
@@ -281,7 +282,7 @@ git push
 | `/pmai-next` | **六步推进主驱动**：读当前阶段做下一步（范围确认 → build → 复审 → 沉淀），先说再动 |
 | `/pmai-task-plan` | 范围确认产出：把范围清单拆成 task 单元（执行深度 / 并行性 PM 拍） |
 | `/pmai-prd-writing` | **按需** standalone：原型确认后反向出可评审 PRD（真系统口径，可跨 req） |
-| `/pmai-req-stage-gate` · `/pmai-req-analysis` · `/pmai-implementation-design` · `/pmai-task-spec` | 已降后台 / 异常恢复入口（六步主流程不直接调；机器步骤由 `/pmai-next` 编排） |
+| `/pmai-req-stage-gate` · `/pmai-implementation-design` · `/pmai-task-spec` | 已降后台 / 异常恢复入口（六步主流程不直接调；机器步骤由 `/pmai-next` 编排）。`/pmai-req-analysis` **已删**，深问能力并入 `/pmai-design` 探索段（`_shared/req-questioning.md`） |
 
 ### task 机器（全降后台，由 `/pmai-next` 自动编排；PM 不直接调，留作异常恢复入口）
 

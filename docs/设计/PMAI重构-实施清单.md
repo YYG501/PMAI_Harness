@@ -4,6 +4,8 @@
 > **来源**：对着仓库现状（`skills/` / `scripts/` / `hooks/` / `templates/`）的 4 维 grounded 分析。
 > **怎么读**：本文是"现有资产逐项去留 + gstack 怎么接 + worktree 怎么走"。**最该先看 §5「PM 必须拍的决策清单」**——其余表都是在等这几条拍了之后才动手。
 > **标记**：★ = 结构决策，必须 PM 拍板（不允许 AI 自决，见 memory「结构决策类中间产物必须 PM 拍板」）。
+>
+> **【2026-06-21 部分 supersede】** 本清单关于 **req-analysis** 的处置（"取消强制 stage、深问保留为后台帮想、不强制 reviewer 链"）已被《工作方法论与工作流-总纲》开放 2·已拍 B 取代：req-analysis skill **已删**，诊断内核搬进 `skills/_shared/req-questioning.md`、成 `/design` 段①探索（escape-hatch 默认放行）；analysis-reviewer 改挂探索段。其余条目仍有效，但口径以总纲为准。
 
 ---
 

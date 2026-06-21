@@ -52,6 +52,7 @@ echo "SKILL: project-solution"
 
 - `docs/PRODUCT.md` —— 项目顶层方案，5 节（按 `$PMAI_HOME/templates/PRODUCT.md.tmpl`）
 - `docs/TODO.md` —— PM 待办池（无序，按 `$PMAI_HOME/templates/TODO.md.tmpl`）
+- `docs/decisions/<日期>-<slug>.md` —— **按需**：本轮方向讨论若产出了项目级理路（护城河 / 机制整体 / 演进），冻一份项目决策记录留作历史坐标（见确认门步骤 8.5）。纯微调不冻。
 
 **单文件，不产工程孪生** —— 不产 `solution.engineering.md` 之类的工程合同。项目级方向只用 PM 视角写。
 
@@ -144,7 +145,17 @@ Runtime 不支持 AskUserQuestion 时按 `_shared/pm-view/askuser-rules.md §1.3
 
 PM 选「创建 PRODUCT.md」+ 定稿后：
 
-- **@读 §9 atomic commit**：`git commit -m "docs: project direction settled"`
+- 先走步骤 8.5（按需冻决策记录），再 atomic commit（两者进同一个 commit）。
+
+#### 步骤 8.5：按需冻项目决策记录（本轮有实质理路才做）
+
+本轮方向讨论若产出了**项目级理路**——护城河论证 / 几个机制怎么整体咬合 / 关键交互理念推导 / v2 演进方向（不是单条术语、不是 5 节里的离散填空）——**@读 `skills/_shared/decision-record.md`** 判门槛（纯微调不冻），有实质理路 → 向 PM 提一句「这轮定了 <一句话理路>，冻一份项目决策记录留底，好吗」，PM 点头 → 按 `$PMAI_HOME/templates/decision-record.md.tmpl` 写 `docs/decisions/<日期>-<slug>.md`（理路节 + 当时事实摘要带日期 + 指针）。**纯微调 / 无跨文件理路 → silent skip 本步**。
+
+> **本 skill 不写 PRODUCT-STATE 索引**：project-solution 不是 PRODUCT-STATE 的 sanctioned 写口（防腐铁律只认 close-req + `/pmai-deposit`）。冻的决策记录靠 `/pmai-new-req` 起步直接扫 `docs/decisions/` 发现（+ PRODUCT-STATE 已有指向 `docs/decisions/` 的通用索引），不需要本 skill 逐条挂索引。`docs/decisions/` 在 main 上可写（冻结档豁免，见 `check-branch.sh`）。
+
+#### 步骤 8.6：atomic commit + 引导下一步
+
+- **@读 §9 atomic commit**：`git commit -m "docs: project direction settled"`（含 PRODUCT.md / TODO.md / 本轮若冻的 decisions/）
 - 退出前提醒 PM TODO 待办池里有哪些待办（按 §5.3），不替 PM 定下一个该做啥 + 引导下一步：
 
 ```
@@ -173,7 +184,7 @@ PM 选「创建 PRODUCT.md」+ 定稿后：
 
 ## 边界
 
-- **允许产出**：`docs/PRODUCT.md`、`docs/TODO.md`、暂存文件 `docs/.project-solution-open-questions.md`
-- **允许动作**：分批提问、未决问题闸门、Decision gate、5 节检查、确认门、atomic commit
+- **允许产出**：`docs/PRODUCT.md`、`docs/TODO.md`、`docs/decisions/<日期>-<slug>.md`（本轮有实质理路时按需冻）、暂存文件 `docs/.project-solution-open-questions.md`
+- **允许动作**：分批提问、未决问题闸门、Decision gate、5 节检查、确认门、按需冻决策记录、atomic commit
 - **禁止顺手推进**：不自动起 req、不调 `/pmai-new-req`、不产任何 req 级文档
 - **退出条件**：`docs/PRODUCT.md` 5 节全填、`docs/TODO.md` 已写、未决问题闸门已过、Decision gate 选了「创建 PRODUCT.md」、PM 已定稿、atomic commit 已落

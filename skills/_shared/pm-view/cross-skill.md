@@ -4,7 +4,7 @@
 
 **描述风格规则跨 skill 适用范围**：[`writing-rules.md`](./writing-rules.md) §3.12「描述风格规则」适用于所有 PM 视图产出（PRD / task spec / 飞书发布前文案 / brief / analysis），由 `scripts/check-prd-hierarchy.py` lint 类 2 全篇兜底机械违规。新违规词按 writing-rules.md 顶部「如何补新规则」5 步反馈循环 SOP 补入。
 
-1. **`.engineering.md` 仅工程合同链路读**：PM 视图 skill（req-analysis / prd-writing / task-plan / task-spec PM）一律 ❌ 不读任何 `.engineering.md`（§9.1 / §9.2）
+1. **`.engineering.md` 仅工程合同链路读**：PM 视图 skill（design 探索段 / prd-writing / task-plan / task-spec PM）一律 ❌ 不读任何 `.engineering.md`（§9.1 / §9.2）
 
 2. **`docs/DESIGN.md` 在 PM 视图链路保留必读但分级**（按 §9.1 各 skill 行）：
    - `task-spec` PM 视图（first-gen + revise）：🟡 章节 grep（按 task 涉及功能 grep 相关章节，§9.1.1）

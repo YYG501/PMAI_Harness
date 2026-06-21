@@ -21,10 +21,11 @@ fixture_setup() {
   export FIXTURE_DIR
 
   # Create project structure
+  # 真相源 = docs/modules/（lifecycle 迁移批 2/3）。批 3 拆掉 requirements/ 桥接后
+  # fixture_setup 不再预建 requirements/active|closed/；仍直接操作老 requirements/closed/
+  # 的少数测试（symlink-prd helper unit / sync-prds 兼容老仓）自行 mkdir。
   mkdir -p "$FIXTURE_DIR/.claude"
   mkdir -p "$FIXTURE_DIR/docs/modules"
-  mkdir -p "$FIXTURE_DIR/requirements/active"
-  mkdir -p "$FIXTURE_DIR/requirements/closed"
   mkdir -p "$FIXTURE_DIR/prototypes"
   mkdir -p "$FIXTURE_DIR/.runs/events"
   mkdir -p "$FIXTURE_DIR/.worktrees"
@@ -66,6 +67,12 @@ fixture_teardown() {
 
 # Create a fake active req with meta at given stage
 # Usage: fixture_create_req <req-id> <name> <stage>
+#
+# 真相源（lifecycle 迁移批 2/3）= docs/modules/<分支>/.req-meta.json，state.py 单读、
+# close/cancel 机器（批 3 重写后）也只认这里。批 2 曾双写一份 requirements/active/<分支>/
+# 桥接旧 close/cancel；批 3 把机器改成「清模块 .req-meta」后，requirements/ 半边已拆。
+#   模块目录名 = req 分支名（测试不关心模块名派生）。
+#   返回 docs/modules/<分支> 路径（close/cancel/symlink 测试把它当 <req-dir> 传入）。
 fixture_create_req() {
   local req_id="$1"
   local name="$2"
@@ -78,12 +85,14 @@ fixture_create_req() {
     git worktree add -q -b "$req_branch" ".worktrees/$req_branch" main
   )
 
-  # Create req dir inside the worktree
-  local req_dir="$FIXTURE_DIR/.worktrees/$req_branch/requirements/active/$req_branch"
-  mkdir -p "$req_dir/tasks"
+  local wt="$FIXTURE_DIR/.worktrees/$req_branch"
+  # 真相源（state.py 单读 + close/cancel 批 3 单读）
+  local module_dir="$wt/docs/modules/$req_branch"
+  mkdir -p "$module_dir/tasks"
 
   # Create meta
-  cat >"$req_dir/.req-meta.json" <<EOF
+  local meta_json
+  meta_json=$(cat <<EOF
 {
   "id": "$req_id",
   "name": "$name",
@@ -94,18 +103,20 @@ fixture_create_req() {
   "status": "active"
 }
 EOF
+)
+  printf '%s\n' "$meta_json" > "$module_dir/.req-meta.json"
 
-  # Create minimal brief.md
-  echo "# Brief" > "$req_dir/brief.md"
+  # Create minimal discussion.md（模块三件套之一；占位让 git 有内容可 commit）
+  echo "# Discussion" > "$module_dir/discussion.md"
 
   # Commit on req branch
   (
-    cd "$FIXTURE_DIR/.worktrees/$req_branch"
+    cd "$wt"
     git add -A
     git commit -q -m "create $req_id"
   )
 
-  echo "$req_dir"
+  echo "$module_dir"
 }
 
 # Create a fake task in a req's tasks/ dir AND commit it to the req branch.

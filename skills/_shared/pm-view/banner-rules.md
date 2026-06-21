@@ -11,19 +11,19 @@
 ### §1.1 格式
 
 ```
-━━━ PMAI ► <SKILL> ▸ Stage <N>/<T>: <Name> ━━━
+━━━ PMAI ► <SKILL> ▸ <Name> ━━━
 ```
 
 - `<SKILL>`：当前 skill 名，大写（如 `NEXT` / `INIT-PROJECT` / `TASK-EXECUTE`）
-- `<N>/<T>`：当前 stage / 总 stage 数（如 `2/4` for req stage 2 of 4）
-- `<Name>`：stage 显示名（如 `范围确认` / `build` / `复审`）
+- `<Name>`：阶段显示名（如 `范围确认` / `build` / `复审`）
+- **不打 stage 号**：stage 号是内部状态标记、不再 PM-facing，banner 只显阶段名
 
 ### §1.2 例子
 
 ```
-━━━ PMAI ► NEXT ▸ Stage 1/4: 范围确认 ━━━
-━━━ PMAI ► NEXT ▸ Stage 2/4: build ━━━
-━━━ PMAI ► INIT-PROJECT ▸ Stage C/4: 方向讨论 ━━━
+━━━ PMAI ► NEXT ▸ 范围确认 ━━━
+━━━ PMAI ► NEXT ▸ build ━━━
+━━━ PMAI ► INIT-PROJECT ▸ 方向讨论 ━━━
 ```
 
 stage 名字以 `scripts/_lib/stages.py:STAGE_NAMES` 为单一真相源（中文，跟 PM 视图一致）。

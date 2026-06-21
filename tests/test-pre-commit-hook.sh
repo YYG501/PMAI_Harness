@@ -9,6 +9,11 @@ source "$SCRIPT_DIR/helpers/fixture.sh"
 INSTALL_HOOKS="$FRAMEWORK_ROOT/scripts/install-hooks.sh"
 TASK_TRANSITION="$FRAMEWORK_ROOT/scripts/task-transition.py"
 
+# pre-commit hook 模板按 $PMAI_HOME 解析 checker 路径（默认 ~/.pmai）。把它指向本仓，
+# 让 hook 调本仓 scripts/check-status-direct-edit.py（验证当前 repo 行为，
+# 不依赖、不改动用户的 ~/.pmai 安装；git 调 hook 时继承本进程环境）。
+export PMAI_HOME="$FRAMEWORK_ROOT"
+
 # Helper: 把当前 fixture 装上 hook（在 fixture main worktree 里跑 install-hooks.sh）
 _install_hook() {
   (cd "$FIXTURE_DIR" && bash "$INSTALL_HOOKS") >/dev/null
@@ -127,10 +132,10 @@ test_legal_transition_passes() {
 
 test_direct_edit_rejected() {
   start_test "I-PCH5 sed 直改状态字段后 commit 被拒"
-  # pre-commit hook 在 ~/.pmai/ 不存在时 fail-open（跳过 checker），任何 sed 直改都"通过"。
-  # 这是 hook 设计选择（保护 PM 在 ~/.pmai 暂时不可用时仍能 commit）。CI 无 ~/.pmai 时 skip。
-  if [ ! -d "$HOME/.pmai" ]; then
-    echo "  ⏭️  SKIP: ~/.pmai 不存在，hook 走 fail-open 分支，无法验证拒绝行为"
+  # pre-commit hook 在 $PMAI_HOME/scripts 不存在时 fail-open（跳过 checker），任何 sed 直改都"通过"。
+  # 本测试已 export PMAI_HOME=本仓，checker 一定在；仅极端环境下 scripts/ 缺失才 skip。
+  if [ ! -d "$PMAI_HOME/scripts" ]; then
+    echo "  ⏭️  SKIP: \$PMAI_HOME/scripts 不存在，hook 走 fail-open 分支，无法验证拒绝行为"
     return
   fi
   fixture_setup

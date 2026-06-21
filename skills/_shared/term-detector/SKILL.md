@@ -17,11 +17,11 @@ description: |
 
 | 调用 skill | 调用位置 | 输入文件 |
 |---|---|---|
-| `close-req` | Phase 1 步骤 3.4（req 推进到 stage 7 之后、里程碑追加询问之前） | `prd.md` + 全部 `tasks/closed/*.md`（不扫 `.engineering.md`） |
+| `close-req` | Phase 1 步骤 3.4（req 推进到沉淀阶段之后、里程碑追加询问之前） | `prd.md` + 全部 `tasks/closed/*.md`（不扫 `.engineering.md`） |
 
 **禁止位置**：
 - `new-req` 写 brief（已退场）：PM 修辞密度高、业务词还没沉淀
-- `req-analysis` / `req-stage-gate` B 分支写 analysis / stage2-office-hours（已退场）：业务词还在变
+- `/design` 探索段（`req-questioning`）写 discussion 第一节 / `req-stage-gate` B 分支 office-hours（已退场）：业务词还在变
 - `prd-writing` 写 prd.md（已退场）：业务实体未经 task 落地验证；本 req 临时词典职责改由 `prd.md §三 名词解释` 承担
 - 写工程合同（`.engineering.md`）：工程层允许技术词，误报率高
 - close-task：单 task 收尾不催，统一推迟到 close-req
@@ -33,7 +33,7 @@ description: |
 | **本 req 临时词典** | `prd.md §三 名词解释` | `prd-writing` 写 PRD 时 AI 直接写 | `implementation-design` / `task-spec` 必读 |
 | **跨 req 长期词典** | `docs/PRODUCT.md ## 业务术语表` | `close-req` 步骤 3.4 detector + PM 确认 → patch | `implementation-design` / `task-spec` 必读 |
 
-两份词典在 stage 5 是**并集读**：PRODUCT 是已沉淀的稳定基线，PRD §三 是本 req 新引入还未升级的临时词。close-req 时 detector 把本 req 真稳定下来的词从临时词典 promote 到长期词典。
+两份词典在 build 阶段是**并集读**：PRODUCT 是已沉淀的稳定基线，PRD §三 是本 req 新引入还未升级的临时词。close-req 时 detector 把本 req 真稳定下来的词从临时词典 promote 到长期词典。
 
 ## 如何调用
 

@@ -30,7 +30,8 @@ _copy_task_path_to_task_worktree() {
   local task_file="$3"
   local req_name
   req_name=$(basename "$req_dir")
-  echo "$task_wt/requirements/active/$req_name/tasks/$(basename "$task_file")"
+  # 批 3：task 真相源迁 docs/modules/<分支>/tasks/（fixture 不再镜像 requirements/active/）
+  echo "$task_wt/docs/modules/$req_name/tasks/$(basename "$task_file")"
 }
 
 test_single_window_lifecycle() {
@@ -84,7 +85,8 @@ test_single_window_lifecycle() {
     fixture_teardown
     return
   fi
-  final_task="$FIXTURE_DIR/.worktrees/req-001-single/requirements/active/req-001-single/tasks/task-001-lifecycle.md"
+  # 批 3：task 真相源迁 docs/modules/<分支>/tasks/
+  final_task="$FIXTURE_DIR/.worktrees/req-001-single/docs/modules/req-001-single/tasks/task-001-lifecycle.md"
   final_status=$(python3 "$TASK_TRANSITION" "$final_task" --get-status)
   if [ "$final_status" != "已完成" ]; then
     _fail "expected final status 已完成, got $final_status"

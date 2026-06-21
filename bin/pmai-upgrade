@@ -219,10 +219,10 @@ if [ "$LOCAL_MODE" = "1" ]; then
   cp -R "$SRC/agents" "$LOCAL_DIR/.claude/agents.new"
   SKILL_COUNT=$(install_skills_copy "$SRC/skills" "$LOCAL_DIR/.claude/skills.new")
 
-  # 1.5 staging 自检（skill 数 < 22 当失败）
+  # 1.5 staging 自检（skill 数 < 23 当失败）
   STAGED_SKILLS=$(find "$LOCAL_DIR/.claude/skills.new" -maxdepth 1 -name 'pmai-*' -type d 2>/dev/null | wc -l | tr -d ' ')
-  if [ "$STAGED_SKILLS" -lt 22 ]; then
-    echo "❌ Staging 自检失败：skill 数 $STAGED_SKILLS < 22" >&2
+  if [ "$STAGED_SKILLS" -lt 23 ]; then
+    echo "❌ Staging 自检失败：skill 数 $STAGED_SKILLS < 23" >&2
     local_rollback
   fi
 

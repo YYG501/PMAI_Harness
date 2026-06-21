@@ -19,8 +19,10 @@
 门禁（gate）只产**给 PM 看的建议**，不替 PM 拍板：clean / needs-review。
 
 用法：
-  build-audits.py resolve    <task-file> [--repo-root DIR]
-  build-audits.py synthesize <task-file> [--repo-root DIR] [--fail-on-gate]
+  build-audits.py resolve    <锚点文件> [--repo-root DIR] [--range-list spec.md] [--audit-dir DIR] [--label 模块名]
+  build-audits.py synthesize <锚点文件> [--repo-root DIR] [--audit-dir DIR] [--label 模块名] [--fail-on-gate]
+  （dormant task-* 流程不传 --range-list/--audit-dir，回退 <req-dir>/req-plan.md + tasks/<task>/audits；
+    build skill 无 task，显式传锚点=模块规格 spec.md，**敲死、不再"实施时择一"**——见 build/SKILL.md 步骤 6。）
 """
 
 from __future__ import annotations
@@ -65,12 +67,20 @@ def _find_repo_root(task_file: Path, override: str | None) -> Path:
     return task_file.parent
 
 
-def _audit_dir(repo_root: Path, task_file: Path) -> Path:
+def _audit_dir(repo_root: Path, task_file: Path, override: str | None = None) -> Path:
+    # 默认（dormant task-* 流程）：.pm-workflow/tasks/<task.stem>/audits。
+    # build skill（无 task）传 --audit-dir 显式锚定（如按模块名 .pm-workflow/audits/<模块>）。
+    if override:
+        p = Path(override).expanduser()
+        return p if p.is_absolute() else (repo_root / p)
     return repo_root / ".pm-workflow" / "tasks" / task_file.stem / "audits"
 
 
-def _range_list(task_file: Path) -> Path:
-    # task 文件住 <req-dir>/tasks/task-NNN.md → 范围清单 = <req-dir>/req-plan.md
+def _range_list(task_file: Path, override: str | None = None) -> Path:
+    # 默认（dormant task-* 流程）：task 文件住 <req-dir>/tasks/task-NNN.md → 范围清单 = <req-dir>/req-plan.md。
+    # build skill（无 task / 无 req-plan）传 --range-list 显式锚定模块规格 spec.md（覆盖审计锚点）。
+    if override:
+        return Path(override).expanduser()
     return task_file.parent.parent / "req-plan.md"
 
 
@@ -136,15 +146,17 @@ def _validate_audit_shapes(cov: dict, vis: dict, beh: dict) -> None:
         _die("视觉门结果 visual.json 的 findings 应为对象数组（每项 {severity,desc}）")
 
 
-def cmd_resolve(task_file: Path, repo_root: Path) -> int:
-    range_list = _range_list(task_file)
+def cmd_resolve(task_file: Path, repo_root: Path,
+                range_list_override: str | None = None,
+                audit_dir_override: str | None = None) -> int:
+    range_list = _range_list(task_file, range_list_override)
     prototype = repo_root / "prototype"
-    audit_dir = _audit_dir(repo_root, task_file)
+    audit_dir = _audit_dir(repo_root, task_file, audit_dir_override)
     ports = _dev_ports(repo_root)
 
     problems = []
     if not range_list.exists():
-        problems.append(f"范围清单不存在：{range_list}（覆盖审计无锚点，先回范围确认产 req-plan.md）")
+        problems.append(f"范围清单不存在：{range_list}（覆盖审计无锚点，先产模块规格 spec.md / req-plan.md）")
     if not prototype.is_dir():
         problems.append(f"主原型目录不存在：{prototype}（视觉门 / 行为审无可审页面）")
     if not ports:
@@ -267,14 +279,16 @@ def _render_synthesis(task_stem: str, cov: dict, vis: dict, beh: dict) -> tuple[
     return "\n".join(out) + "\n", summary
 
 
-def cmd_synthesize(task_file: Path, repo_root: Path, fail_on_gate: bool) -> int:
-    audit_dir = _audit_dir(repo_root, task_file)
+def cmd_synthesize(task_file: Path, repo_root: Path, fail_on_gate: bool,
+                   audit_dir_override: str | None = None,
+                   label: str | None = None) -> int:
+    audit_dir = _audit_dir(repo_root, task_file, audit_dir_override)
     cov = _load_audit(audit_dir / AUDIT_FILES["coverage"], "coverage")
     vis = _load_audit(audit_dir / AUDIT_FILES["visual"], "visual")
     beh = _load_audit(audit_dir / AUDIT_FILES["behavior"], "behavior")
     _validate_audit_shapes(cov, vis, beh)
 
-    report, summary = _render_synthesis(task_file.stem, cov, vis, beh)
+    report, summary = _render_synthesis(label or task_file.stem, cov, vis, beh)
     out_path = audit_dir / "synthesis.md"
     out_path.write_text(report, encoding="utf-8")
     print(f"[build-audits] 合成报告：{out_path}")
@@ -291,6 +305,13 @@ def main() -> int:
         sp = sub.add_parser(name)
         sp.add_argument("task_file")
         sp.add_argument("--repo-root", default=None)
+        # build skill（无 task / 无 req-plan）用这几个显式锚定，**敲死锚点、不再"实施时择一"**：
+        sp.add_argument("--range-list", default=None,
+                        help="覆盖审计锚点路径（build skill 传模块规格 spec.md；默认回退 <req-dir>/req-plan.md）")
+        sp.add_argument("--audit-dir", default=None,
+                        help="audits/ 目录（build skill 按模块名锚定；默认 .pm-workflow/tasks/<task>/audits）")
+        sp.add_argument("--label", default=None,
+                        help="合成报告标题用的名字（build skill 传模块名；默认用 task 文件名）")
         if name == "synthesize":
             sp.add_argument("--fail-on-gate", action="store_true",
                             help="gate != clean 时返回非零（默认 0，门禁仅作给 PM 的建议）")
@@ -298,13 +319,13 @@ def main() -> int:
 
     task_file = Path(args.task_file).expanduser()
     if not task_file.exists():
-        _die(f"task 文件不存在：{task_file}")
+        _die(f"锚点文件不存在：{task_file}（传 task 文件或模块规格 spec.md，用于定位仓根）")
     task_file = task_file.resolve()
     repo_root = _find_repo_root(task_file, args.repo_root)
 
     if args.cmd == "resolve":
-        return cmd_resolve(task_file, repo_root)
-    return cmd_synthesize(task_file, repo_root, args.fail_on_gate)
+        return cmd_resolve(task_file, repo_root, args.range_list, args.audit_dir)
+    return cmd_synthesize(task_file, repo_root, args.fail_on_gate, args.audit_dir, args.label)
 
 
 if __name__ == "__main__":

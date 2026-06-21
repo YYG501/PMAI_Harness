@@ -1,18 +1,22 @@
 #!/usr/bin/env bash
-# cancel-req.sh — 废弃 req：enumerate 所有 task → commit cancelled 到 main → 清理 worktree/分支
-# 用法: bash $HOME/.pmai/scripts/cancel-req.sh <req-dir>
-# 不 merge req 分支到 main。但 cancelled 占位（meta+目录）会 commit 到 main。
+# cancel-req.sh — 废弃 req（方案 A·清模块 .req-meta，不 merge main）
+# 用法: bash $HOME/.pmai/scripts/cancel-req.sh <模块目录>  （= docs/modules/<模块>/）
+#
+# 新模型（lifecycle 迁移批 3，方案 A）：
+#   废弃 = 在 main 上删模块 .req-meta.json（清掉「在做的工作」标记），不 merge req 分支到 main。
+#   模块三件套（spec/decisions/discussion）若已在 main 则留场（历史在 git log + decisions 里）。
+#   task worktree/分支推迟到 cleanup-pending 兜底清（防 dangling cwd）。
 #
 # 顺序（任一步失败就 fail-fast）：
-#   1. 从 source of truth（传入的 REQ_DIR）枚举所有 task 分支/worktree/dev 端口
-#   2. 切回 main，检查 main 是否脏（有脏则拒绝，避免污染 cancel commit）
-#   3. 在 main 上做路径级 staging + commit cancelled 占位
-#   4. 清理枚举出来的 task worktree/分支 + 杀 dev server + 删 .runs/
-#   5. 清理 req worktree/分支
+#   1. 从 source of truth（传入的模块目录）枚举所有 task 分支/worktree/dev 端口
+#   2. 切回 main，检查 main 是否脏（脏则拒绝，避免污染 cancel commit）
+#   3. 在 main 上删模块 .req-meta + 路径级 commit
+#   4. 清理 task worktree/分支 + 杀 dev server + 删 .runs/
+#   5. 标记 req worktree/分支待清理
 
 set -euo pipefail
 
-REQ_DIR="${1:?用法: cancel-req.sh <req-dir>}"
+REQ_DIR="${1:?用法: cancel-req.sh <模块目录>}"
 
 # --- Setup PYTHONPATH for _lib.state ---
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -31,7 +35,7 @@ fi
 
 REQ_META="$REQ_DIR/.req-meta.json"
 if [ ! -f "$REQ_META" ]; then
-  echo "❌ req 元数据不存在: $REQ_META" >&2
+  echo "❌ 模块工作状态文件不存在: $REQ_META" >&2
   exit 1
 fi
 
@@ -39,18 +43,18 @@ fi
 REQ_META_JSON=$(python3 -m _lib.state read_req_meta "$REQ_DIR" 2>/dev/null || echo "{}")
 REQ_BRANCH=$(printf '%s' "$REQ_META_JSON" | python3 -c "import sys,json; print(json.load(sys.stdin).get('branch',''))")
 REQ_ID=$(printf '%s' "$REQ_META_JSON" | python3 -c "import sys,json; print(json.load(sys.stdin).get('id',''))")
-REQ_BASENAME=$(basename "$REQ_DIR")
+MODULE_BASENAME=$(basename "$REQ_DIR")
 
 if [ -z "$REQ_BRANCH" ] || [ -z "$REQ_ID" ]; then
-  echo "❌ 无法从 req 元数据读取 branch/id 字段。" >&2
+  echo "❌ 无法从模块元数据读取 branch/id 字段。" >&2
   exit 1
 fi
 
 echo "⚠️ 即将废弃 req: $REQ_ID"
 
 # --- Step 1: 从 source of truth 枚举所有 task（在删任何 worktree/分支之前）---
-# task 信息以 REQ_DIR/tasks/ 为真相源：REQ_DIR 可能指向 req worktree 里的目录，
-# 也可能是 main 上的目录。无论哪种，都要在它还存在时把信息先读出来。
+# task 信息以 REQ_DIR/tasks/ 为真相源：REQ_DIR 可能指向 req worktree 里的模块目录，
+# 也可能是 main 上的模块目录。无论哪种，都要在它还存在时把信息先读出来。
 declare -a TASK_BRANCHES=()
 declare -a TASK_PORTS=()
 declare -a TASK_STEMS=()
@@ -90,16 +94,13 @@ if [ "$CURRENT" != "main" ]; then
   fi
 fi
 
-# --- Step 2.5: main 污染防护：如果 main 有任何在 req 路径之外的脏文件，拒绝 ---
-# 只允许 requirements/active/<req> 或 requirements/closed/<req> 下的改动参与 cancel commit
+# --- Step 2.5: main 污染防护：如果 main 有任何在本模块路径之外的脏文件，拒绝 ---
+# 只允许 docs/modules/<模块> 下的改动参与 cancel commit
+REL_MODULE="docs/modules/$MODULE_BASENAME"
 DIRTY=$(git status --porcelain 2>/dev/null || true)
 if [ -n "$DIRTY" ]; then
-  # 过滤：任何不属于 requirements/active/<req> 或 requirements/closed/<req> 的改动都是污染
-  BAD=$(echo "$DIRTY" | awk -v prefix1="requirements/active/$REQ_BASENAME" -v prefix2="requirements/closed/$REQ_BASENAME" '
-    {
-      path = substr($0, 4)
-      if (path !~ "^"prefix1 && path !~ "^"prefix2) print $0
-    }
+  BAD=$(printf '%s\n' "$DIRTY" | awk -v prefix="$REL_MODULE/" '
+    { path = substr($0, 4); if (index(path, prefix) != 1) print $0 }
   ')
   if [ -n "$BAD" ]; then
     echo "❌ main 分支有与本 req 无关的未提交改动，拒绝 cancel 以防污染 cancel commit：" >&2
@@ -109,97 +110,33 @@ if [ -n "$DIRTY" ]; then
   fi
 fi
 
-# --- Step 3: 在 main 上：移动 req 目录到 closed/ + 更新 meta + 路径级 commit ---
-CLOSED_DIR="$REPO_ROOT/requirements/closed"
-mkdir -p "$CLOSED_DIR"
+# --- Step 3: 在 main 上删模块 .req-meta（方案 A）+ PRD 收口 symlink + 路径级 commit ---
+MAIN_MODULE="$REPO_ROOT/$REL_MODULE"
+MAIN_MODULE_META="$MAIN_MODULE/.req-meta.json"
 
-MAIN_ACTIVE="$REPO_ROOT/requirements/active/$REQ_BASENAME"
-MAIN_CLOSED="$CLOSED_DIR/$REQ_BASENAME"
-
-if [ -d "$MAIN_ACTIVE" ]; then
-  if ! git mv "requirements/active/$REQ_BASENAME" "requirements/closed/$REQ_BASENAME" 2>&1; then
-    echo "❌ 在 main 上移动 req 目录失败。" >&2
-    exit 1
-  fi
-elif [ ! -d "$MAIN_CLOSED" ]; then
-  # main 上既没有 active 也没有 closed——创建 closed 占位目录 + 最小 meta
-  mkdir -p "$MAIN_CLOSED"
-  python3 -c "
-import json, os, tempfile
-def write_json_atomic(path, data):
-    d = os.path.dirname(path)
-    fd, tmp = tempfile.mkstemp(prefix='.' + os.path.basename(path) + '.', suffix='.tmp', dir=d)
-    try:
-        with os.fdopen(fd, 'w', encoding='utf-8') as f:
-            json.dump(data, f, indent=2, ensure_ascii=False)
-            f.write('\\n')
-            f.flush()
-            os.fsync(f.fileno())
-        os.replace(tmp, path)
-    finally:
-        if os.path.exists(tmp):
-            os.unlink(tmp)
-meta = {
-  'id': '$REQ_ID',
-  'branch': '$REQ_BRANCH',
-  'status': 'cancelled',
-  'note': 'cancelled before any merge to main'
-}
-write_json_atomic('$MAIN_CLOSED/.req-meta.json', meta)
-" || {
-    echo "❌ 写入 cancelled 占位 meta 失败。" >&2
-    exit 1
-  }
-fi
-
-# 更新 meta.status = cancelled
-MAIN_META="$MAIN_CLOSED/.req-meta.json"
-if [ -f "$MAIN_META" ]; then
-  if ! python3 -c "
-import json, os, tempfile
-def write_json_atomic(path, data):
-    d = os.path.dirname(path)
-    fd, tmp = tempfile.mkstemp(prefix='.' + os.path.basename(path) + '.', suffix='.tmp', dir=d)
-    try:
-        with os.fdopen(fd, 'w', encoding='utf-8') as f:
-            json.dump(data, f, indent=2, ensure_ascii=False)
-            f.write('\\n')
-            f.flush()
-            os.fsync(f.fileno())
-        os.replace(tmp, path)
-    finally:
-        if os.path.exists(tmp):
-            os.unlink(tmp)
-with open('$MAIN_META', 'r') as f:
-    meta = json.load(f)
-meta['status'] = 'cancelled'
-write_json_atomic('$MAIN_META', meta)
-"; then
-    echo "❌ 更新 cancelled meta 失败。" >&2
-    exit 1
-  fi
-fi
-
-# 在 docs/prds/废弃/ 下建 PRD 收口 symlink（仅当 cancelled req 真的写过 prd.md，stage 1/2 cancel 时 silent skip）
-if ! create_prd_symlink "$REPO_ROOT" "$REQ_BASENAME" cancelled; then
+# 在 docs/prds/废弃/ 下建 PRD 收口 symlink（仅当模块真的写过 prd.md；stage 1/2 cancel 时 silent skip）
+if ! create_prd_symlink "$REPO_ROOT" "$MODULE_BASENAME" cancelled; then
   echo "❌ 创建 docs/prds/废弃/ symlink 失败。" >&2
   exit 1
 fi
 
-# 路径级 staging：只 add req 相关的两个路径（active/<req> 已经被 git mv 追踪，closed/<req> 是新内容）
-git add "requirements/active/$REQ_BASENAME" 2>/dev/null || true
-git add "requirements/closed/$REQ_BASENAME" 2>/dev/null || true
-[ -d "$REPO_ROOT/docs/prds/废弃" ] && git add "docs/prds/废弃/$REQ_BASENAME.md" 2>/dev/null || true
+# 删模块 .req-meta（若在 main 上）；不在 main（只在 req worktree）则无需删——cancel 不 merge，
+# req 分支随 worktree 一起被清，主仓本就没这份工作状态。
+if [ -f "$MAIN_MODULE_META" ]; then
+  git rm -q -- "$REL_MODULE/.req-meta.json" 2>/dev/null || rm -f "$MAIN_MODULE_META"
+fi
+git add -A -- "$REL_MODULE" 2>/dev/null || true
+[ -d "$REPO_ROOT/docs/prds/废弃" ] && git add "docs/prds/废弃/$MODULE_BASENAME.md" 2>/dev/null || true
 
-# commit：如果没有暂存改动（占位且 meta 未变），跳过
+# commit：如果没有暂存改动（main 上本就没这份工作状态），跳过
 if [ -n "$(git diff --cached --name-only)" ]; then
-  if ! git commit -m "cancel: $REQ_ID" 2>&1; then
+  if ! git commit -m "cancel: ${REQ_ID}（清模块 .req-meta）" 2>&1; then
     echo "❌ commit cancelled 状态失败。中止以防数据丢失。" >&2
     exit 1
   fi
-  echo "✅ cancelled 状态已 commit 到 main"
+  echo "✅ cancelled 状态已 commit 到 main（清模块 .req-meta）"
 else
-  echo "ℹ️ 没有新改动需要 commit（可能已经处于 cancelled 状态）"
+  echo "ℹ️ main 上无本模块工作状态需要清（req 仅存在于 req worktree），跳过 commit"
 fi
 
 # --- Step 4: 标记 task worktree/分支为待清理 + 杀 dev server + 删 .runs/ 原件 ---
@@ -269,7 +206,7 @@ fi
 python3 "$QUEUE_PENDING_PY" "$PENDING_FILE" req "$REQ_BRANCH" "$REQ_WORKTREE" "$REQ_DIR"
 echo "🕓 标记待清理 req: $REQ_BRANCH"
 
-echo "✅ Req 已废弃: ${REQ_ID}（未 merge 到 main，cancelled 状态已记录）"
+echo "✅ Req 已废弃: ${REQ_ID}（未 merge 到 main，模块 .req-meta 已清）"
 echo ""
 echo "📋 worktree 和 branch 待清理。请退出当前会话，回主仓 ($REPO_ROOT) 执行："
 echo "   bash scripts/cleanup-pending-worktrees.sh"

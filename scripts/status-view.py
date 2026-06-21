@@ -142,7 +142,7 @@ def render_banner_only(state: dict, repo_root: Path, skill: str) -> None:
 def _product_oneliner(repo_root: Path) -> str:
     """PRODUCT-STATE.md 的产品现状一句话（产品轴 lead 用）；读不到返回空串。
 
-    六步重构：播报主轴从「Stage N/M」转成「你的产品现在长什么样 + 在做什么」。
+    六步重构：播报主轴从内部 stage 编号转成「你的产品现在长什么样 + 在做什么」。
     产品定位一句话从 PRODUCT-STATE.md 取（根目录或 docs/）；无则 lead 留空、退回 req 轴。
     """
     for cand in (repo_root / "PRODUCT-STATE.md", repo_root / "docs" / "PRODUCT-STATE.md"):
@@ -508,7 +508,7 @@ def render_timeline(timeline_state: dict, repo_root: Path) -> None:
             stage = meta.get("stage", 0)
             stage_name = STAGE_NAMES.get(stage, "?")
             tasks = list_tasks(item["req_dir"], repo_root=repo_root)
-            print(f"🔄 {req_id} · {req_name}（Stage {stage} {stage_name}）")
+            print(f"🔄 {req_id} · {req_name}（{stage_name}）")
             if tasks:
                 done = sum(1 for t in tasks if t.get("meta", {}).get("status") == "已完成")
                 print(f"   ↳ {done}/{len(tasks)} tasks")

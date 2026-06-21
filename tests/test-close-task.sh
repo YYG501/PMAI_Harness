@@ -158,7 +158,8 @@ test_reject_if_req_worktree_missing() {
 
   # task 文件在 task worktree 里也有副本（经 req 分支 checkout 而来）
   # 同步 mark_done 到 task worktree 的副本，并 commit 到 task 分支
-  task_in_wt="$task_wt/requirements/active/req-001-test/tasks/task-004-noreqwt.md"
+  # 批 3：task 真相源迁 docs/modules/<分支>/tasks/（fixture 不再镜像 requirements/active/）
+  task_in_wt="$task_wt/docs/modules/req-001-test/tasks/task-004-noreqwt.md"
   sed -i.bak 's|^\*\*状态：\*\*.*|\*\*状态：\*\* 已完成|' "$task_in_wt"
   rm -f "$task_in_wt.bak"
   (cd "$task_wt" && git add -A && git commit -q -m "mark done")
@@ -579,7 +580,8 @@ test_ct8_does_not_exempt_mixed_commit() {
   local task_stem=$(basename "$task" .md)
 
   # Mixed commit: task md (worktree already has it from req fork) + a non-task source file
-  local rel_task="requirements/active/req-001-test/tasks/${task_stem}.md"
+  # 批 3：task 真相源迁 docs/modules/<分支>/tasks/
+  local rel_task="docs/modules/req-001-test/tasks/${task_stem}.md"
   (cd "$task_wt" && \
     echo "trailing change for mixed test" >> "$rel_task" && \
     mkdir -p src && \
@@ -712,8 +714,8 @@ test_happy_path_conductor_worktree_path() {
   conductor_path="$conductor_base/req-001-test"
   git -C "$FIXTURE_DIR" worktree move "$FIXTURE_DIR/.worktrees/req-001-test" "$conductor_path"
 
-  # move 后 task md 在新路径
-  task_after_move="$conductor_path/requirements/active/req-001-test/tasks/$task_stem.md"
+  # move 后 task md 在新路径（批 3：task 真相源迁 docs/modules/<分支>/tasks/）
+  task_after_move="$conductor_path/docs/modules/req-001-test/tasks/$task_stem.md"
   _mark_task_done "$task_after_move"
 
   if (cd "$conductor_path" && bash "$CLOSE_TASK" "$task_after_move") >/tmp/out.$$ 2>/tmp/err.$$; then

@@ -11,7 +11,32 @@
 
 ---
 
-## 当前位置（2026-05-31）
+## 当前位置（2026-06-19）
+
+**2026-06-19 — 框架瘦身改造 v2：吸收 ExampleAgentProject 设计方法 + lifecycle 迁移（批 0-4）**（分支 `reshape/absorb-01agent`；设计源 `docs/设计/lifecycle迁移计划.md`）：
+
+- **方向**：砍框架过度设计、借 ExampleAgentProject 工作模式（模块三件套 / design-card / spec-polish / mock）、补真实缺口；其中 **lifecycle 机器层重构** = 取消 `requirements/active|closed/` 整棵树，req 状态真相源迁到 `docs/modules/<模块>/.req-meta.json`（见 INVARIANTS 新增 **I-MOD1**）。
+- **批 0-2（已完成）**：迁移脚本 `migrate-reqs-to-modules.py`（dry-run）+ `_lib/state.py` 双读→单读切真相源 + `check-branch.sh` GATE 1/2/3 路径迁移与 main 写保护放宽（`docs/**` 全放行、`prototype/` 仍拒绝、stage 字段仍走 req-transition）+ `create-req-headless.sh`/`skill-preamble.sh`/`worktree.sh cleanup` 路径切换 + fixture 双写桥接。
+- **批 3（已完成·本轮·方案 A）**：`close-req.sh` 重写——close = 清模块 `.req-meta`（`git rm`），不再 `git mv active→closed`；有 worktree → merge 回 main（ancestor 验证 + I-CR9 回滚），无 worktree/无分支 → 直接 main 清 `.req-meta` 跳 merge。`cancel-req.sh` 同步改清模块 `.req-meta`（不 merge）。`symlink-prd.sh` + `pmai-sync-prds` PRD 源改 `docs/modules/<模块>/prd.md`。拆掉 fixture 的 `requirements/` 半边桥接（`fixture_create_req` 只建 `docs/modules/`、task 直落模块 tasks/）。连带修：`check-status-direct-edit.py`（pre-commit）+ `quick-fix.sh`（warn_active_reqs / is_redline_path）补 `docs/modules/*` 真相源；close-task / drift / pre-commit-hook / v4_T22 等 dormant·e2e 测试的 `requirements/active/` 路径假设改 `docs/modules/`。
+- **批 4（已完成·本轮）**：INVARIANTS.md 对齐——I-CR1/3/4/5/8（close 方案 A·worktree 可选·stage 4 沉淀）、I-CA4（清模块 .req-meta）、I-CB3/5/6（main docs/** 放行·路径迁移）、I-DC1（seal 路径 docs/modules·task 两道防线 dormant）、I-RT4（stage 4 沉淀不可回退）、**新增 I-MOD1**；task/exec 系列（I-CT/I-TT/I-CB4/10/I-AD + I-DC1 task 防线）标 🟡dormant（代码保留·测试仍跑·并行多 task 恢复时复活）。
+- **测试基线 599 / 0**（批 0-2 后 588→599；批 3/4 零净回归，仍 599/0）。
+- **下一步**：① PM 总审本轮 diff + 决定 merge（merge 前必手动跑两条真实 close 路径：有 worktree / 无 worktree）② 批 5（可选）= timeline/status-view closed 视图处置（方案 A 下 closed/cancelled 列表自然空）③ 批 6（附件迁移 I-RT10·与核心解耦）④ 余债：INVARIANTS I-RT2/I-RT5 仍写旧 stage 5/6 措辞（六步迁移遗留·非本批引入）；close-task.sh 归档/事件路径仍 hardcode `requirements/active/`（dormant·下次激活 task 系列一并对齐）。
+
+---
+
+## 历史位置（2026-06-04）
+
+**2026-06-04 — 分档运行 + 每档沉淀 + mock 变体治理 + 项目决策记录：四份设计落地**（PM「把已确定的设计直接落地实现 → 完整 review → 更新文档」）：
+
+- **解 PM 在消费仓 `ExampleAgentProject` 实证的四痛**：①轻档（main 直接改 / 聊定直落，不进 req）漏沉淀 ②脊柱入口（PRODUCT-STATE 索引）看不到一半实存文档 ③成熟决策困在讨论稿、脊柱无指针 ④mock 探索变体集体孤儿找不回。根因：沉淀只有一个机器开火点 = close-req 末尾，而 PM 真实用法是**分档**的、最轻那档绕过唯一开火点 = 结构性失明。
+- **落地的设计**（§0 锁 + §1 抠定 + Round1 review 0 真 High）：`分档运行与沉淀层`（umbrella）+ `文档治理与知识棘轮` + `项目奠基决策记录` + `stage编号清理与banner去号`（机械清理）。**build 直建轻车道未落地**——其 §X 4 条 High（信封↔task 状态机冲突 / close-task merge-back 崩 / 字段契约脊柱无归宿）动代码前必填、尚未在设计正文落定，本轮排除。
+- **核心交付**：新 skill `/pmai-deposit`（轻档轻沉淀，skill 数 22→23）+ 四类分流单一真相源 `_shared/deposit-routing.md` + 项目决策记录冻结档（`decision-record.md.tmpl` + `_shared/decision-record.md` + 三触发点）+ mock 变体治理子系统（`gen-mock-board.py` + `mocks/` 脚手架）+ 文档地图（脊柱两层读取模型）+ 索引漂移检测 + `check-branch.sh` GATE 3 轻沉淀合法写入口（marker 门控 + mocks/decisions 豁免）。
+- **PM 拍板项**：F2 = 新建 `/pmai-deposit`（vs 挂 quick-fix）；R5 = `docs/decisions/` + 类名「项目决策记录」。
+- **review**：2 个独立对抗子 agent（闭痛+保真 / 机制可用性+防再绕开），强读代码 + 端到端走查。审出并修：project-solution 写 decisions 被 GATE 3 拦（→ decisions/* 设无条件可写 + 不写 PRODUCT-STATE 索引保防腐）、manifest 中英文 key 漂移（→ 钉英文 key + gen-mock-board 报警）、mocks/ 跨分支（→ close-req 退役改 main 做）、marker 悬挂（→ deposit 入口清陈旧）、2 个 stale stage-6 fixture（stage 清理 blast radius 漏网，→ 修断言）。
+- **测试基线 588 / 0**（前 572/0 → 本轮 +mock 子系统 7 + GATE 3 沉淀分档 5 + 修 2 stale fixture）。**所有改动未 commit，工作树待 PM 总审**。
+- **下一步**：① PM 总审本轮 diff + 决定是否 commit + 是否把 4 份落地设计 `git mv` 进 `docs/归档/完成/` ② **整理消费仓 `ExampleAgentProject` 让它能通过框架跑起来**（R4 迁移练兵：拿真实四痛场景走一遍分档沉淀逐痛核对）。memory `project_build_fidelity_two_causes` / `feedback_dont_design_around_bypass`。
+
+---
 
 **2026-05-31 — gstack-review 审 `reshape-office-hours` 全工作产出 + 修复**（PM 调 `/gstack-review`：5 specialist 并行 + Codex 跨模型对抗审，多源交叉确认）：
 

@@ -1,0 +1,14 @@
+{
+  "_comment": "mocks/ 变体清单 —— 这一份是 mock 看版的唯一真相源。看版页 index.html 由 scripts/gen-mock-board.py 从本文件生成，不要手写看版。每生成一个值得留的探索变体，往 variants 加一条，再重跑 gen-mock-board.py 重生成看版。",
+  "_fields": {
+    "path": "相对 mocks/ 的路径，点开能直接看这个 mock（如 approach-b/index.html 或 todo-skeleton.html）",
+    "explores": "这一版在探索什么 —— 一句话",
+    "good_parts": "这一版的好东西 / 值得合并进主原型的候选 —— 一句话",
+    "status": "状态，枚举：活跃 / 待合并 / 已退役。活跃·待合并 在看版高亮在上；已退役 折叠灰显在下、留存不删",
+    "round": "出自哪一轮探索（探索轮次 / req 标识，便于回溯）",
+    "featured": "true/false。true = 收敛时挑定值得留的精选版，看版里高亮突出；false 仍在目录可翻、看版不高亮",
+    "retired_note": "可选。status 为已退役时，记一句『已并入主原型（位置 / commit）』"
+  },
+  "_status_enum": ["活跃", "待合并", "已退役"],
+  "variants": []
+}
