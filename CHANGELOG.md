@@ -20,6 +20,13 @@ PM-AI-Workflow 生成器仓的演进记录。本文件**只记影响下游业务
 
 ### 框架瘦身改造（吸收 ExampleAgentProject 设计方法）—— 进行中
 
+- `feat(skills+scripts+agents)`: **工作方法论纠错实施（6 条开放问题拍板后 A-D 组）**——纠正 reshape "砍仪式补方法"里"补进来的方法本身仍是信息呈现视角 + 砍掉探索整段"的浅设计（设计源 `docs/设计/工作方法论与工作流-总纲.md`，§0 同构错 6 处）。**消费仓影响**（需重跑 `pmai install` / `upgrade`）：
+  - **A 立对抗三问强制门**：新增 `skills/_shared/anti-cut-check.md`（减法决策当场答"丢了什么 / 对所有类型成立吗 / 是不是把内核当仪式砍了"+ 对称判别尺、三行自答落 decisions）；接入 dormant-skills 新增条目 + close 减法类沉淀。配套：改造方案 §0 解锁"不可反向修改"元前提锁。
+  - **B 真相源修复**：① 理路拆家——撤销"决策收家（折叠 `docs/decisions/` 进 PRODUCT-RULES、3 家减 2）"，恢复 3 个正交的家（理路→`docs/decisions/` 冻结 / 跨模块规则→`PRODUCT-RULES` / 单模块→模块 `decisions.md`），`deposit-routing.md` + `close/SKILL.md` 反转、删"遇冲突以本 skill 为准"例外、close picker 恢复"冻结成项目理路"第 4 选项；② `build-audits.py` 锚点参数化（`--range-list`/`--audit-dir`/`--label`，敲死"实施时择一"，向后兼容 task-* 回退默认）。
+  - **C `/design` 三段式重构**：①探索（新增·补回 reshape 砍掉的整段）→②设计（按需求类型选方法）→③写规格。**删 `req-analysis` skill**、诊断内核搬进 `skills/_shared/req-questioning.md`（office-hours 式对话诊断 + escape-hatch 默认放行 + 闻味触发清单 + 砍外部 demand 三问）；`info-design.md` 删"5 问对任何需求成立"、拆成"真通用内核 3 条 + 七类开放分类选方法"、§八四类补全成七类、禁用清单收归单一真相源；`design/SKILL.md` 重写三段式 + 记忆分档加载 + 进场侧读 TODO / 按需理路；`analysis-reviewer` agent 改挂探索段评审 `discussion.md` 第一节；清 req-analysis 全部残留引用。
+  - **D worktree/close 收口**：build 步骤 5 加 `pnpm install`（worktree 复用 store）+ 端口探测错开（并行 build）；close-req.sh cwd 护栏文案软化；`close/SKILL.md` 入口判断改"按本需求开没开 worktree 判（不看 cwd）"支持主仓会话远程操作 worktree。
+  - 测试基线 **601/0 全绿**（新增 build-audits 2 个 override 用例；close / stage-source / attachments 测试随改动对齐）。
+
 - `feat(scripts+tests)`: **lifecycle 迁移批 0-4——取消 `requirements/active|closed/` 树，req 状态真相源迁 `docs/modules/<模块>/.req-meta.json`（方案 A·清模块 .req-meta）**（设计源 `docs/设计/lifecycle迁移计划.md`）。**消费仓影响**：close/cancel 语义反转——不再把 req 目录 `git mv` 到 `requirements/closed/`、不再留 `status=closed/cancelled` 占位；收尾 = 清掉模块 `.req-meta.json`（`git rm`），模块三件套（`docs/modules/<模块>/` spec/decisions/discussion）作为长期真相源留场。**消费仓需重跑 `pmai install` / `pmai upgrade` 拉新机器**；在飞 req 迁移走 `scripts/migrate-reqs-to-modules.py --dry-run`（PM 拍后 `--apply`）。
   - **`close-req.sh` 重写**：close = 清模块 `.req-meta`；**有 worktree+分支** → 在 req 分支清 + commit → merge 回 main（ancestor 验证 + 失败回滚 I-CR9）；**无 worktree/无分支**（讨论·小改直接在 main 改的）→ 直接 main 清 `.req-meta` 跳 merge。stage 门对齐 stage 4（沉淀=MAX_STAGE）；cwd-in-worktree / 无关脏文件防护保留（防护范围改按模块路径）。
   - **`cancel-req.sh` 重写**：cancel = 在 main 清模块 `.req-meta`（不 merge），task/req worktree 推迟 cleanup-pending 兜底清；main 污染防护按模块路径。

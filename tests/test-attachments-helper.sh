@@ -450,9 +450,10 @@ print('OK')
 # -----------------------------------------------------------------
 
 test_skill_prose_trigger0_added() {
-  start_test "grep: 6 个 stage SKILL 已加 trigger 0 段"
+  start_test "grep: 5 个 stage SKILL 已加 trigger 0 段"
   local all_ok=1
-  for skill in skills/new-req/SKILL.md skills/req-analysis/SKILL.md skills/prd-writing/SKILL.md skills/task-spec/SKILL.md skills/implementation-design/SKILL.md skills/task-plan/SKILL.md; do
+  # req-analysis 已删（C1 删 skill 搬内核到 _shared/req-questioning.md；探索段附件走 attachments-upload.md 按类型归类）
+  for skill in skills/new-req/SKILL.md skills/prd-writing/SKILL.md skills/task-spec/SKILL.md skills/implementation-design/SKILL.md skills/task-plan/SKILL.md; do
     if ! grep -q "copy_attachment" "$FRAMEWORK_ROOT/$skill"; then
       _fail "$skill 未加 copy_attachment 引用（trigger 0 段缺失）"
       all_ok=0

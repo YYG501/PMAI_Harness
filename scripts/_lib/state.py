@@ -447,7 +447,7 @@ def set_stage_source(
         stage_num: stage 序号（1-MAX_STAGE，六步=1-4）。
         filename: req 内**相对路径**（如 `analysis.md` / `stage2-office-hours.md`）；
                   caller 已确认文件在该路径下落盘。
-        tool: 产生该产物的工具名（如 `req-analysis` / `office-hours`），追溯用。
+        tool: 产生该产物的工具名（如 `req-questioning` / `office-hours`），追溯用。
         origin: 可选 — 外部源原始绝对路径。office-hours 分支 snapshot 复制后
                 记 `~/.gstack/projects/<slug>/<file>` 原始 path（追溯，不参与
                 解析）；A 分支无此字段。

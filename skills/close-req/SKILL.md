@@ -17,7 +17,8 @@ description: |
 1. **每个需求必做**——更新「产品现状」（PRODUCT-STATE）+ 把主原型合回主线。
 2. **按需**——PM 真要拿去评审时，反向合成一份可评审 PRD（真系统口径）。
 
-**防腐铁律**：「产品现状」**只在这一刻被写**。别处随手更新它必然漂成假现状——所以沉淀是它唯一的写入口。
+**防腐铁律**：`docs/PRODUCT-STATE.md`（产品现状）**只在沉淀这一刻被写**——本 skill（中 / 重档）+ 轻档 `/pmai-deposit`（main 直接改的轻沉淀）是它仅有的两个 sanctioned 写入口，都是收敛点触发的原子写。别处随手更新它必然漂成假现状。
+> **冻结档不在铁律约束内**：项目决策记录（`docs/decisions/<日期>-<slug>.md`，带日期、写一次不维护）**从不声称是现状**，读者看到的是"那时的判断"，结构上无法和脊柱竞争"当前真相"名分——所以铁律杀不到它（见 §步骤 2 理路类沉淀）。
 
 ## 什么时候用
 
@@ -89,7 +90,9 @@ AI 把 patch 草稿（diff 形态）呈交 PM 审；PM 满意 → 落盘。
 
 > **为什么放这里、为什么只在这里写**：单人 PM 没有人帮 review，「维护一份活文档」的纪律会腐烂（旧仓主原型跑完整个项目只剩一个 README = 教训）。把更新绑死在沉淀这一个原子动作里，是防止现状档漂成假现状的唯一办法。
 
-### 步骤 2：把本需求带来的稳定结构 / 模块规格沉淀进 docs（对账并入这一步）
+### 步骤 2：四类分流沉淀（稳定结构 / 理路 / 遗留 / 探索变体）
+
+> **本步是沉淀的"四类分流"**（与轻档 `/pmai-deposit` 同一套，**@读 `skills/_shared/deposit-routing.md`** 看总则）：① 耐久事实（稳定结构 / 规则）→ 规格（本小节）；② 理路（为什么这么拼）→ 项目决策记录（§2 理路类沉淀）；③ 遗留 → TODO（AskUser「推下个需求」自动入）；④ 探索变体 → mocks 看版（§2 变体登记）。步骤 1 已落 ① 的现状部分；本步收 ① 的规格部分 + ②③④。
 
 本需求若新建 / 改了**稳定结构**（菜单 / 路由 / 权限 / schema / 跨功能产品规则），它现在只活在 `prototype/` 代码里——这一步把它沉淀成长期可读的规格，下一个需求才不会重复踩。
 
@@ -118,9 +121,11 @@ AI 看 diff，自答：本需求是否新建 / 改了**稳定结构**，但 `doc
   - `label`: `不沉淀（追认代码即文档）`
     `description`: `close-report 记一行追认（防下个需求重复问）`
   - `label`: `推下个需求`
-    `description`: `close-report「遗留问题」记一条点名（含建议目标 + 涉及文件）`
+    `description`: `自动写进 docs/TODO.md 待办池一条（带一句话自包含：建议目标 + 涉及文件）；close-report 只渲染指针`
 
-**零候选**：找不到候选 → 直接跳到步骤 3，不调 AskUserQuestion。
+**「推下个需求」自动入 TODO（③ 遗留出口，真相源单一在 TODO）**：PM 每选一条「推下个需求」，AI 立即往 `docs/TODO.md` 追加一行（`| | <建议目标，含涉及文件，一句话自包含> | todo |`）。条目自包含 = 下个需求起步扫 TODO 时直接看懂、不靠翻 closed。close-report 的「遗留问题」段**只渲染指针**（"已转入 TODO 第 N 条：<标题>"），不再各写一份（双写会漂）。保留 TODO"不反推"纪律：自动入的是 PM 此刻拍过的遗留，不是 AI 凭空反推。
+
+**零候选**：找不到候选 → 直接跳到步骤 2.5，不调 AskUserQuestion。
 
 **沉淀 / 更新规格文件**：PM 选「沉淀进规格」的，AI 把对应规格写 / 更新到目标文件，呈交 PM 审 diff，满意后落盘。这一步把过去散在每个 task 的对账合并成沉淀时一次做完——少 N 次启动成本。
 
@@ -136,7 +141,36 @@ python3 "$PMAI_HOME/scripts/check-index-lint.py" "$REPO_ROOT" --exit-code || {
 
 lint 连续失败或 PM 两次 reject → 空 diff 跳过本次 INDEX 刷新（不阻塞 close-req 整体）。
 
-**silent skip**：本需求纯非业务（如只动基础设施 / 工具脚本），无现状变化、无稳定结构候选、无规则变化 → 步骤 1 / 2 都可 silent skip，close-report 记「本需求无产品级文档变更」。
+**silent skip**：本需求纯非业务（如只动基础设施 / 工具脚本），无现状变化、无稳定结构候选、无规则变化、无理路、无探索变体 → 步骤 1 / 2 / 2.5 都可 silent skip，close-report 记「本需求无产品级文档变更」。
+
+### 步骤 2.5：理路类沉淀（②）+ 探索变体登记（④）
+
+四类分流里 ②③ 已在步骤 1/2 落（① 现状 + 规格、③ 遗留→TODO）；本步收 **② 理路** 和 **④ 探索变体**。
+
+**② 理路类沉淀 —— 本需求若产出了"项目级理路"才做**：
+
+看本需求的 `req-plan.md` 决策页 + 收敛过程，有没有产出**跨文件的整体设计意图**——护城河论证 / 几个机制怎么整体咬合 / 关键交互理念的推导 / v2 演进方向。**注意区分**：单条规则 → `PRODUCT-RULES`（步骤 2 ①）；模块功能清单 → `docs/modules/`（步骤 2 ①）；per-req"为什么选 A 不选 B" → 本就在 req-plan 决策页，不外冻。**只有"跨文件整体理路"才是 ② 的候选**。
+
+有候选 → **@读 `skills/_shared/decision-record.md`** 判门槛（纯微调不冻），然后 AskUserQuestion（按 `askuser-rules.md §1.4` 多决策拆开顺序问）：
+
+- `question`: "本需求这层「<一句话理路主题>」要不要冻一份项目决策记录留底？"
+- `options`:
+  - `label`: `冻结进决策记录`
+    `description`: `按 decision-record 模板写 docs/decisions/<日期>-<slug>.md（理路节 + 当时事实摘要带日期 + 指针指当前真相源），并挂进 PRODUCT-STATE 索引`
+  - `label`: `不冻（无实质理路）`
+    `description`: `本轮没有跨文件整体意图，纯离散事实已在步骤 2 落规格`
+  - `label`: `推下个需求`
+    `description`: `自动写进 docs/TODO.md（同步骤 2 ③ 出口）`
+
+PM 选「冻结」→ AI 按 `$PMAI_HOME/templates/decision-record.md.tmpl` 写 `docs/decisions/<日期>-<slug>.md`，呈交 PM 审 diff（路径 + 一句摘要，不复读全文），落盘后在 `docs/PRODUCT-STATE.md` 索引节挂一条指向 `docs/decisions/`。
+
+**④ 探索变体退役 —— 本需求若把某探索变体并进了主原型才做**：
+
+变体在探索时（`/pmai-new-req` 范围确认期）已登记进 `mocks/`（在 **main 上**）。本步只处理"并进主原型 → 标 `已退役`"。
+
+**关键：`mocks/` 是 main 级 store，Phase 1 在 req worktree 内，不在这里改 mocks/**（worktree 内改会与 main 分叉）。本 req 若把某变体并进了主原型 → **记一笔待办**，close 合回主线后（Phase 2 / cwd 主仓 main）跑 `/pmai-deposit` 顺手标 `已退役`（往 `mocks/manifest.json` 把该条 `status` 改 `已退役` + 填 `retired_note`"已并入主原型（位置/commit）"，重生成看版；**留不删**）。
+
+无变体并入（多数需求）→ silent skip 本小节。
 
 ### 步骤 3：按需反向出可评审 PRD（PM 要拿去评审才做）
 
@@ -190,7 +224,7 @@ PM 选「先不出」→ 跳过，close-report 记「本需求未出评审 PRD�
 [步骤 3：出了 → 路径；没出 → 「按需，以后单独 /pmai-prd-writing」。]
 
 ## 遗留问题
-[步骤 2 PM 选「推下个需求」的稳定结构候选 + 其他后续建议。]
+[**只渲染指针，不复述**：步骤 2 / 2.5 PM 选「推下个需求」的已自动转入 TODO，这里写「已转入 docs/TODO.md 第 N 条：<标题>」。真相源单一在 TODO（下个需求起步自动浮出来）。无遗留则写「无」。]
 ```
 
 **生成规则**：
@@ -320,7 +354,9 @@ rm -f "$PENDING_MARKER"
 - Phase 间通过 `$REPO_ROOT/.runs/pending-close-req.json` 衔接（marker 落主仓，因需求 worktree 会被 Phase 2 删）。
 - Phase 1 进入时若 marker 已存在 → 短路（直接告知"已 ready，请切窗口"），不重复写文档。
 - Phase 2 进入时若 marker 不存在 → 报错（避免误触）。
-- **「产品现状」只在本 skill 沉淀这一刻写**（防腐铁律）；别处随手更新它必然漂成假现状。
+- **`docs/PRODUCT-STATE.md`（产品现状）只在沉淀这一刻写**（防腐铁律）：本 skill（中 / 重档）+ 轻档 `/pmai-deposit` 是仅有的两个 sanctioned 写入口，都是收敛点触发的原子写；别处随手更新它必然漂成假现状。
+- **项目决策记录（`docs/decisions/`）是冻结档**：带日期、写一次不维护、从不声称是现状 → 不在防腐铁律约束内（它无法和脊柱竞争"当前真相"名分）。
+- **沉淀四类分流** @读 `skills/_shared/deposit-routing.md`（与 `/pmai-deposit` 单一真相源）：① 现状/规则→脊柱、② 理路→决策记录、③ 遗留→TODO（单一真相源、close-report 只渲染指针）、④ 探索变体→mocks 看版。
 - **PRD 按需出，不是每需求必出**；要出就走 `/pmai-prd-writing` standalone，真系统口径、多源合成。
 - 合回主线后不可回退（沉淀是终态）。
 - 需求目录移到 closed/ 后保留完整记录。

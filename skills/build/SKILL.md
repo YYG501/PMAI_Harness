@@ -212,11 +212,27 @@ CHANGE_COUNT=$(git -C "$BUILD_DIR" status --porcelain | wc -l | tr -d ' ')
 
 ### 步骤 5：起 dev server（UI 类）
 
-UI 类需求起 dev server 给后面 review loop + 视觉门 + 行为审复用（**只起一次，三道审复用同一个**，别各起各的）：
+UI 类需求起 dev server 给后面 review loop + 视觉门 + 行为审复用（**只起一次，三道审复用同一个**，别各起各的）。
+
+**① 先装依赖（worktree 复用 pnpm store，不重复下载）**：worktree 从 main 拉、没有 `node_modules`。用 **pnpm** 装——它把包存全局 store、`node_modules` 是到 store 的硬链接，多个 worktree 并行 build 共享同一份 store、不各下一遍（这就是"复用 build 组件"）：
 
 ```bash
-( cd "$BUILD_DIR/prototype" && <dev 命令> )   # 用 Bash run_in_background 后台跑，绑定 config.yml 的 dev 端口
+( cd "$BUILD_DIR/prototype" && pnpm install )   # main 上建（BUILD_DIR=REPO_ROOT）若 node_modules 已在、可跳过
 ```
+
+**② 端口探测错开（并行 build 防抢端口）**：多个 worktree 同时 build 会抢 config.yml 同一个 dev 端口。从候选端口探测、占用就顺延下一个，把实际端口记下来给三道审复用：
+
+```bash
+# 从 config.yml dev_server.ports 候选里挑第一个没被占用的（候选解析见 build-audits.py _dev_ports）
+PORT=""
+for p in <config.yml dev_server.ports 候选>; do
+  if ! lsof -iTCP:"$p" -sTCP:LISTEN -t >/dev/null 2>&1; then PORT="$p"; break; fi
+done
+[ -z "$PORT" ] && { echo "❌ 候选端口都被占用：先关掉别的 dev server，或在 config.yml 的 dev_server.ports 加端口。"; exit 1; }
+( cd "$BUILD_DIR/prototype" && <dev 命令> --port "$PORT" )   # Bash run_in_background 后台跑；记下 $PORT 给视觉门 / 行为审复用
+```
+
+> **并行 build 心智**：worktree = 真实 build 的并行隔离（不同分支各挂一个 worktree、同时改、互不串）；① 复用 pnpm store 让 N 个 worktree 不各装一遍依赖、② 端口错开让 N 个 dev server 不抢端口。worktree 从 main 拉天然带定稿的 `spec.md` / `PRODUCT-*` / `DESIGN.md`（决策文档读得到），无需另同步。
 
 非 UI 类需求跳过。
 
@@ -224,9 +240,16 @@ UI 类需求起 dev server 给后面 review loop + 视觉门 + 行为审复用�
 
 建完 AI **自动**跑三道机器审，复用 task-execute 那套 `build-audits.py` 编排（确定性收集 + 合成一份给 PM；只报不改，是给 PM 看的证据，不替 PM 拍板）。
 
-> **锚点差异**：`build-audits.py` 现版 `_range_list()` 把锚点写死成 `<req-dir>/req-plan.md`，且 audits 目录按 `task.stem` 算。本 skill 无 task / 无 req-plan，覆盖审计锚点是**模块规格 `spec.md`**。两种落地（实施时择一）：
-> - **轻**：不调脚本 resolve / synthesize，AI 自己跑三道审 + 自己合成一页报告（schema 同脚本：built/missing/degraded、findings、pass/fail/total）。模块规格 = 覆盖审计的逐项锚点。
-> - **接脚本**：给 `build-audits.py` 加 `--range-list`（指向 spec.md）+ `--audit-dir`（按模块名）参数，复用其 fail-loud「三道齐全」校验。这条更稳但要改脚本，归到后续收口（见报告「与脚本的接口」）。
+> **锚点已敲死**（2026-06-21 开放问题实施 B3——撤销原"两种落地实施时择一"，把工程决策推给运行时=锚点悬空，是同构错第 5 处）：本 skill 无 task / 无 req-plan，覆盖审计锚点统一是**模块规格 `spec.md`**。`build-audits.py` 已**参数化锚点**（`--range-list` / `--audit-dir` / `--label`；不传时仍回退 `req-plan.md` + `tasks/<task>/audits`，dormant task-* 行为不变）。**统一接脚本**，复用其 fail-loud「三道齐全」校验——覆盖审计是防残承重墙，不走纯 AI 自跑（避免静默漏一道审还往下走）：
+> ```bash
+> SPEC="$BUILD_DIR/docs/modules/<模块>/spec.md"   # 锚点文件=模块规格（定位仓根 + 覆盖审计逐项锚点）
+> python3 "$PMAI_HOME/scripts/build-audits.py" resolve "$SPEC" \
+>     --repo-root "$BUILD_DIR" --range-list "$SPEC" \
+>     --audit-dir ".pm-workflow/audits/<模块>" --label "<模块>"
+> # …三道审各写 coverage.json / visual.json / behavior.json 进 $BUILD_DIR/.pm-workflow/audits/<模块>/…
+> python3 "$PMAI_HOME/scripts/build-audits.py" synthesize "$SPEC" \
+>     --repo-root "$BUILD_DIR" --audit-dir ".pm-workflow/audits/<模块>" --label "<模块>"
+> ```
 
 三道审抓三种不同的病：
 

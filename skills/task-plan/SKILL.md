@@ -317,7 +317,7 @@ python3 "$PMAI_HOME/scripts/check-doc-pm-view.py" "$ACTIVE_REQ_DIR/task-plan.md"
 
 **禁止**：skill 内部不得自动调任何 review 工具。PM 要求修改 → 改完 task-plan.md 重新走 `/pmai-next` 流程。
 
-进 build 后，具体 task 文档由 stage 6 的 `/pmai-task-spec <task-id>` 按 task-plan.md 逐个生成（每个 task 一个单文件，机器降 AI 后台、worktree 自动托管）。
+进 build 后，具体 task 文档由 build 阶段的 `/pmai-task-spec <task-id>` 按 task-plan.md 逐个生成（每个 task 一个单文件，机器降 AI 后台、worktree 自动托管）。
 
 ### 步骤 6（中途重新拆分）：build 期间发现拆分需要重做
 

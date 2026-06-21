@@ -140,10 +140,10 @@ from pathlib import Path
 sys.path.insert(0, '$FRAMEWORK_ROOT/scripts')
 from _lib.state import set_stage_source
 rd = Path('$req_dir')
-set_stage_source(rd, 2, 'analysis.md', tool='req-analysis')
+set_stage_source(rd, 2, 'analysis.md', tool='req-questioning')
 meta = json.loads((rd / '.req-meta.json').read_text())
 assert meta['stage2_source'] == 'analysis.md', meta
-assert meta['stage2_tool'] == 'req-analysis', meta
+assert meta['stage2_tool'] == 'req-questioning', meta
 assert 'stage2_source_origin' not in meta, 'A 分支不应有 origin'
 print('OK')
 " >/tmp/out.$$ 2>/tmp/err.$$
@@ -199,7 +199,7 @@ from pathlib import Path
 sys.path.insert(0, '$FRAMEWORK_ROOT/scripts')
 from _lib.state import set_stage_source, StateReadError
 try:
-    set_stage_source(Path('$req_dir'), 2, 'analysis.md', tool='req-analysis')
+    set_stage_source(Path('$req_dir'), 2, 'analysis.md', tool='req-questioning')
 except StateReadError:
     print('OK')
 else:
@@ -258,7 +258,7 @@ from pathlib import Path
 sys.path.insert(0, '$FRAMEWORK_ROOT/scripts')
 from _lib.state import set_stage_source, StateReadError
 try:
-    set_stage_source(Path('$req_dir'), 2, '../outside.md', tool='req-analysis')
+    set_stage_source(Path('$req_dir'), 2, '../outside.md', tool='req-questioning')
 except StateReadError:
     print('OK')
 else:

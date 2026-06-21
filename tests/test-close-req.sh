@@ -366,7 +366,7 @@ test_reject_when_cwd_inside_req_worktree() {
   if (cd "$req_wt" && bash "$CLOSE_REQ" "$req_dir") >/tmp/out.$$ 2>/tmp/err.$$; then
     _fail "should reject when cwd is inside req worktree"
   else
-    if grep -qE "(cwd 在 req worktree|切到主仓窗口)" /tmp/err.$$; then
+    if grep -qE "(worktree 里头|主仓窗口)" /tmp/err.$$; then
       pass_test
     else
       _fail "stderr missing cwd-in-worktree message"

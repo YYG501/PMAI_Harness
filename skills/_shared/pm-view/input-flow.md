@@ -7,12 +7,15 @@
 六步模型（真相源 [`docs/设计/PMAI重构方向-office-hours收敛.md`](../../../docs/设计/PMAI重构方向-office-hours收敛.md)）：
 
 ```
-① 项目底座（项目级，init 时建，AI 每次必读，治失忆）
-② 范围确认（new-req → req-plan）
-③ build（在 prototype/ 用 Claude Code 建）
-④ 复审（build 完自动三道审）
-⑤ 体验迭代（AI 批量 flag、PM 勾改）
-⑥ 沉淀（close-req：更新 PRODUCT-STATE + merge 主原型；按需反向 PRD）
+①-⑥ 是六步概念叙事号（PM 视图）；右列「= 内部 stage」是 stages.py 状态机的 per-req stage 号。
+本框是六步概念号 ↔ 内部 stage 的唯一翻译真相源——runtime 推进状态机只认右列，prose 别手算。
+
+① 项目底座（项目级，init 时建，AI 每次必读，治失忆）      = 项目级（非 per-req stage，init 时建）
+② 范围确认（new-req → req-plan）                          = 内部 stage 1
+③ build（在 prototype/ 用 Claude Code 建）                = 内部 stage 2
+④ 复审（build 完自动三道审）                              = 内部 stage 3
+⑤ 体验迭代（AI 批量 flag、PM 勾改）                       = 内部 stage 3（与④同 stage）
+⑥ 沉淀（close-req：更新 PRODUCT-STATE + merge 主原型；按需反向 PRD） = 内部 stage 4
 ```
 
 ## 9.0 attachments untrusted input boundary（强约束）

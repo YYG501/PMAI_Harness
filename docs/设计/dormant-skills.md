@@ -18,6 +18,8 @@ dormant 的 skill 仍留在框架里——它们的 SKILL.md、references、脚�
 
 这样既砍掉了过度设计的仪式感，又不破坏框架三周积累的工程化资产（隔离 / 真相源治理 / 三道审 / 不变量）。瘦身是**可逆**的。
 
+> **【2026-06-21 强制门】新增任何 dormant / 合并 / collapse 条目前，先过对抗三问**（@读 `skills/_shared/anti-cut-check.md`）：逐条答 (a) 丢了什么 (b) 对所有需求类型成立吗 (c) 是不是把内核当仪式砍了，用对称判别尺判一次，**三行自答附在该条目下**。本清单自身就暴露了漏这道门的代价——当年"req-analysis 并入主干第①②问""决策收家"等条目正是没过门才砍错（同构错 6 处，见 `docs/设计/工作方法论与工作流-总纲.md` §0）。判别尺两边都用：砍错的捞回（如 req-analysis 探索内核），砍对的（7-stage / task 机器）别捞。
+
 ---
 
 ## 为什么这些进 dormant（按组）
@@ -40,13 +42,13 @@ dormant 的 skill 仍留在框架里——它们的 SKILL.md、references、脚�
 
 ### C 组 · 后台辅助 / 深问帮想（并入活跃 skill 或按需）
 
-`req-analysis`、`implementation-design`、`spec-polish`、`doc-update`
+`implementation-design`、`spec-polish`、`doc-update`（注：`req-analysis` 已于 2026-06-21 **删除**、非 dormant——见下）
 
-- **`req-analysis`（深问帮想）**：需求有岔路时帮 PM 把"想要的方案"还原成"真正要解决的问题"。瘦身后这个价值并入 `/design` 的信息设计讨论主干（普适主干第 ① ② 问：谁看 / 决策与动作边界），不再是单独一道闸门 / 单独 skill。
+- **`req-analysis`（深问帮想）【2026-06-21 已删，非 dormant】**：上一轮写"并入 `/design` 信息设计主干第 ① ② 问"是**同构错**（①②问是信息呈现起点、不是问题探索；把"探索能力"内核当"强制闸门"形态一起砍了，见总纲 §0 第 1 处）。**纠正（开放2·已拍 B）**：诊断内核**真搬**进 `skills/_shared/req-questioning.md`，成 `/design` **段①探索**（escape-hatch 默认放行、闻味才 push、砍外部 demand 三问、融 office-hours 对话诊断）。req-analysis skill 目录已删、不保留 dormant。
 - **`implementation-design`（后台想工程 HOW）**：build 前后台快速想清楚组件怎么拆 / 状态怎么管 / mock 数据结构。瘦身后这个职责由 `/build` 内部按需做（PM 选工具后建之前），不单独成 skill / 不走确认门。
 - **`spec-polish`（磨文）**：**逻辑已并入唯一的写规格 skill `/design`**——磨文字成了写规格的收口步。ExampleAgentProject 的 spec-polish 9 条文字纪律的**操作正本**已在 `_shared/info-design.md` §四「磨文字 · 收口纪律」（`/design` 写规格时 `@读`、逐条扫）；逐条对账 + 框架原本缺的三条细则在 `_shared/pm-view/writing-rules.md` §3.13。框架里**本来就没有 spec-polish 这个 skill 目录**（它在 ExampleAgentProject 仓）；这里列它是为了明确"它的纪律去哪了"——不另起一个磨文 skill，纪律进 `_shared` 单一真相源（三处不并存：info-design 给操作口诀、§3.13 给对账细则、writing-rules 给禁用清单）。
 - **`doc-update`（文档偏差处理）**：task 完成后处理文档偏差 / 把功能清单沉淀进模块规格。瘦身后这个价值并入 `/close` 的沉淀步（文档自动归位 + 老规格 vs 新原型对账）。
-- **何时重新激活**：req-analysis / implementation-design 在某个需求特别复杂、想单独跑一道深问 / 工程预想时可手动调；doc-update 随 task 状态机一起恢复。
+- **何时重新激活**：implementation-design 在某需求特别复杂、想单独跑一道工程预想时可手动调；doc-update 随 task 状态机一起恢复。（`req-analysis` 已删，深问能力常驻 `/design` 段①探索，无需"重新激活"。）
 
 ### D 组 · 小改快捷路径
 

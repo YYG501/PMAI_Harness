@@ -142,8 +142,8 @@ def main():
     if not path.is_file():
         print(f"❌ 文件不存在: {args.doc}", file=sys.stderr)
         print(
-            "   修复：检查路径拼写；analysis.md 应位于 $ACTIVE_REQ_DIR/。"
-            "若 analysis.md 还没生成，先跑 /pmai-req-analysis。",
+            "   修复：检查路径拼写。"
+            "若探索结论 / 待答问题文档还没生成，先跑 /pmai-design 段①探索（产出 discussion.md）。",
             file=sys.stderr,
         )
         sys.exit(2)

@@ -141,9 +141,9 @@ PM 提修正 → 改现状档 → 重新呈交。
 
 ### 步骤 3.5.5：docs/DESIGN.md inventory 段兜底（无条件兜底，独立于 step 3.5 选择）
 
-> **跟 step 3.5 的关系**：3.5 是 PM 选择性建 modulespec 骨架；3.5.5 是**无条件**建 / 修复 DESIGN.md（不让 PM 选择 —— 它是 stage 4 4A 硬依赖，PM 没法绕过；3.5 [N] 也照样跑本步骤）。
+> **跟 step 3.5 的关系**：3.5 是 PM 选择性建 modulespec 骨架；3.5.5 是**无条件**建 / 修复 DESIGN.md（不让 PM 选择 —— 它是 build 阶段读 DESIGN / 复审的覆盖审计·视觉门硬依赖，PM 没法绕过；3.5 [N] 也照样跑本步骤）。
 
-**为什么有这步**：DESIGN.md 是 task executor 写代码时的硬约束（stage 4 4A gap-check 强制读「共享组件 inventory」段）。老项目接入框架前通常没建过这个文件，或建了但没 inventory 段 → stage 4 4A 隐性 break，PM 第一个 req 推不到 stage 5。本步骤兜底建 / 修复。
+**为什么有这步**：DESIGN.md 是 task executor 写代码时的硬约束（build 阶段读 DESIGN / 复审的覆盖审计·视觉门强制读「共享组件 inventory」段）。老项目接入框架前通常没建过这个文件，或建了但没 inventory 段 → build 阶段隐性 break，PM 第一个 req 推不到复审。本步骤兜底建 / 修复。
 
 ```bash
 DESIGN_MD="$REPO_ROOT/docs/DESIGN.md"
@@ -164,12 +164,12 @@ $HAS_FILE && grep -q "^## 共享组件 inventory" "$DESIGN_MD" && HAS_INVENTORY=
 
 ## 共享组件 inventory
 
-> **这是什么**：stage 4 gap-check 的查询底座。每个 req 动手前逐组件查这里：
+> **这是什么**：build 阶段读 DESIGN / 复审的覆盖审计·视觉门的查询底座。每个 req 动手前逐组件查这里：
 > **有 → 复用**；**没有 → 新建并加进本表**。req 间累积，越来越全，reuse 率随之上升。
 
 | 组件名 | 用途 | 视觉 | 状态 | 交互 | 出处 req |
 |---|---|---|---|---|---|
-| <!-- stage 4 4A 累积，目前为空 --> | | | | | |
+| <!-- 复审累积，目前为空 --> | | | | | |
 ```
 
 **新建 DESIGN.md 时的空骨架**（仅当 HAS_FILE=false 时，套上方 inventory 模板）：
@@ -179,11 +179,11 @@ $HAS_FILE && grep -q "^## 共享组件 inventory" "$DESIGN_MD" && HAS_INVENTORY=
 
 # 设计系统
 
-> **本文件目的**：项目级设计系统约束。stage 4 4A gap-check 查这里的「共享组件 inventory」段；task executor 写代码时按视觉基线段（gstack 写的 8 段）做硬约束。
+> **本文件目的**：项目级设计系统约束。build 阶段读 DESIGN / 复审的覆盖审计·视觉门查这里的「共享组件 inventory」段；task executor 写代码时按视觉基线段（gstack 写的 8 段）做硬约束。
 >
-> **视觉基线段未建** —— 建议 PM 跑 gstack `/design-consultation` 补全 8 段（颜色 / 字体 / 间距 / 布局 / 动效 / 美学方向 / 竞品研究 / 视觉预览板）。本框架不替 gstack 写视觉基线，本骨架只兜 inventory 段（stage 4 4A 硬依赖）。
+> **视觉基线段未建** —— 建议 PM 跑 gstack `/design-consultation` 补全 8 段（颜色 / 字体 / 间距 / 布局 / 动效 / 美学方向 / 竞品研究 / 视觉预览板）。本框架不替 gstack 写视觉基线，本骨架只兜 inventory 段（build 阶段读 DESIGN / 复审的覆盖审计·视觉门硬依赖）。
 >
-> **inventory 段**由本框架管，stage 4 4A 累积，gstack 不写。
+> **inventory 段**由本框架管，复审累积，gstack 不写。
 
 <!-- 套入上方 inventory 空段模板 -->
 ```

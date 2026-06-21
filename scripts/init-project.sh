@@ -105,9 +105,10 @@ fi
 export PMAI_HOME="$FRAMEWORK_DIR"
 
 # --- 0. 位置 sanity check（DX I2）---
-# FRAMEWORK_DIR 必须含 templates/CLAUDE.md.tmpl + skills/init-project + scripts/inject-structure-segment.py
+# FRAMEWORK_DIR 必须含 host entry 模板 + skills/init-project + scripts/inject-structure-segment.py
 MISSING=""
 [ -f "$FRAMEWORK_DIR/templates/CLAUDE.md.tmpl" ] || MISSING="$MISSING templates/CLAUDE.md.tmpl"
+[ -f "$FRAMEWORK_DIR/templates/AGENTS.md.tmpl" ] || MISSING="$MISSING templates/AGENTS.md.tmpl"
 [ -d "$FRAMEWORK_DIR/skills/init-project" ] || MISSING="$MISSING skills/init-project/"
 [ -f "$FRAMEWORK_DIR/scripts/inject-structure-segment.py" ] || MISSING="$MISSING scripts/inject-structure-segment.py"
 if [ -n "$MISSING" ]; then
@@ -159,6 +160,7 @@ for TMPL in "$FRAMEWORK_DIR/templates/"*.tmpl; do
   # 确定目标位置
   case "$BASENAME" in
     CLAUDE.md)              DEST="$TARGET_DIR/CLAUDE.md" ;;
+    AGENTS.md)              DEST="$TARGET_DIR/AGENTS.md" ;;
     PRODUCT.md)             DEST="$TARGET_DIR/docs/PRODUCT.md" ;;
     PRODUCT-STATE.md)       DEST="$TARGET_DIR/docs/PRODUCT-STATE.md" ;;   # 六步项目底座：现状层 hub（下游 FORCE READ docs/PRODUCT-STATE.md）
     DESIGN.md)              DEST="$TARGET_DIR/docs/DESIGN.md" ;;          # 六步项目底座：正向视觉约束（build 前 AI 必读 docs/DESIGN.md）
@@ -231,6 +233,8 @@ echo "📦 I-mini 模式：消费仓 0 framework；skill / scripts / hooks 全�
 mkdir -p "$TARGET_DIR/docs/modules"
 mkdir -p "$TARGET_DIR/docs/归档"   # 扁平：过程档案 / 一次性 review / 被取代旧文件全装这里，文件名说明为啥归档
 touch "$TARGET_DIR/docs/归档/.gitkeep"
+mkdir -p "$TARGET_DIR/docs/decisions"   # 项目决策记录（冻结档）：理路"为什么这么拼"的家；沉淀时按需冻
+touch "$TARGET_DIR/docs/decisions/.gitkeep"
 mkdir -p "$TARGET_DIR/requirements/active"
 mkdir -p "$TARGET_DIR/requirements/closed"
 mkdir -p "$TARGET_DIR/prototype"   # 单一主原型（单数）；SKILL C.5 用 create-next-app 在此起栈
@@ -238,6 +242,26 @@ mkdir -p "$TARGET_DIR/.runs/events"
 mkdir -p "$TARGET_DIR/.worktrees"
 mkdir -p "$TARGET_DIR/.pm-workflow/tasks"   # task-verify 报告 / artifact 根目录
 echo "📂 目录结构已创建"
+
+# --- h2. mocks/ 探索变体目录（manifest 真相源 + 生成的看版页）---
+# manifest + README 实体落消费仓（每项目自己的变体清单）；index.html 由 gen-mock-board.py 生成（勿手改）。
+mkdir -p "$TARGET_DIR/mocks"
+for MK in mocks-manifest.json:manifest.json mocks-README.md:README.md; do
+  SRC_TMPL="$FRAMEWORK_DIR/templates/${MK%%:*}.tmpl"
+  DEST_FILE="$TARGET_DIR/mocks/${MK##*:}"
+  if [ -f "$SRC_TMPL" ]; then
+    TMPL="$SRC_TMPL" DEST="$DEST_FILE" PN="$PROJECT_NAME" BG="$BACKGROUND" python3 - <<'PY'
+import os
+text = open(os.environ["TMPL"], encoding="utf-8").read()
+text = text.replace("{{PROJECT_NAME}}", os.environ["PN"])
+text = text.replace("{{PROJECT_BACKGROUND}}", os.environ["BG"])
+open(os.environ["DEST"], "w", encoding="utf-8").write(text)
+PY
+  fi
+done
+# 生成初始空看版（manifest 暂无变体 → "暂无变体"空看版，不报错）
+python3 "$FRAMEWORK_DIR/scripts/gen-mock-board.py" "$TARGET_DIR" >/dev/null 2>&1 || true
+echo "🎨 mocks/ 探索变体目录已建（manifest + 看版）"
 
 # --- i. .gitignore 已在模板复制时创建 ---
 

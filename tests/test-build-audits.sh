@@ -133,6 +133,44 @@ test_synthesize_fail_on_gate_exit() {
   _teardown
 }
 
+# --- B3 参数化锚点：build skill（无 task / 无 req-plan）用 --range-list/--audit-dir/--label 显式锚定 ---
+
+test_resolve_override_spec_anchor() {
+  start_test "resolve --range-list/--audit-dir: build skill 锚点=模块 spec.md（非 req-plan.md）"
+  _setup
+  mkdir -p "$T/docs/modules/demo"
+  echo "# demo 规格" > "$T/docs/modules/demo/spec.md"
+  SPEC="$T/docs/modules/demo/spec.md"
+  out=$(python3 "$AUDITS" resolve "$SPEC" --repo-root "$T" --range-list "$SPEC" --audit-dir ".pm-workflow/audits/demo" --label "demo" 2>&1)
+  # 范围清单锚到 spec.md（不是 req-plan.md）+ audits 落点按模块名 demo（不是 tasks/spec）
+  if echo "$out" | grep -q "modules/demo/spec.md" \
+     && [ -d "$T/.pm-workflow/audits/demo" ] \
+     && [ ! -d "$T/.pm-workflow/tasks/spec/audits" ]; then
+    pass_test
+  else
+    _fail "override 应锚 spec.md + audits/demo（非 req-plan/tasks/spec）。Output: $out"
+  fi
+  _teardown
+}
+
+test_synthesize_override_label() {
+  start_test "synthesize --audit-dir/--label: 报告标题用模块名 + 读对 audit-dir"
+  _setup
+  AUD="$T/.pm-workflow/audits/demo"
+  _write_coverage '{"items":[{"name":"列表","status":"built"}]}'
+  _write_visual '{"findings":[]}'
+  _write_behavior '{"status":"pass","passed":1,"total":1}'
+  mkdir -p "$T/docs/modules/demo"; echo "# demo" > "$T/docs/modules/demo/spec.md"
+  SPEC="$T/docs/modules/demo/spec.md"
+  out=$(python3 "$AUDITS" synthesize "$SPEC" --repo-root "$T" --audit-dir ".pm-workflow/audits/demo" --label "demo" 2>&1)
+  if echo "$out" | grep -q '"task": "demo"' && grep -q "三道审合成报告 — demo" "$AUD/synthesis.md"; then
+    pass_test
+  else
+    _fail "override synthesize 标题应=demo。Output: $out / synthesis: $(cat "$AUD/synthesis.md" 2>/dev/null)"
+  fi
+  _teardown
+}
+
 test_resolve_ok
 test_resolve_missing_rangelist
 test_resolve_missing_port
@@ -140,5 +178,7 @@ test_synthesize_incomplete_fails
 test_synthesize_clean_gate
 test_synthesize_needs_review_gate
 test_synthesize_fail_on_gate_exit
+test_resolve_override_spec_anchor
+test_synthesize_override_label
 
 report_results "build-audits"

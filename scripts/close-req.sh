@@ -104,12 +104,16 @@ if [ "$HAVE_BRANCH" = "true" ] && [ -n "$REQ_WORKTREE" ] && [ -d "$REQ_WORKTREE"
   if [ -n "$CALLER_CWD" ] && [ -n "$REQ_WORKTREE_REAL" ]; then
     if [ "$CALLER_CWD" = "$REQ_WORKTREE_REAL" ] || \
        printf '%s/' "$CALLER_CWD" | grep -qF "${REQ_WORKTREE_REAL}/"; then
-      echo "❌ 当前 cwd 在 req worktree 内，不能直接删除。" >&2
-      echo "   当前 cwd: $CALLER_CWD" >&2
-      echo "   req worktree: $REQ_WORKTREE_REAL" >&2
+      echo "⚠️ 这个会话窗口正站在 worktree 里头，删不掉它自己所在的 worktree。" >&2
+      echo "   （系统限制：删 worktree 时进程不能正站在里面，否则收尾会报 ENOENT——这不是你的操作错。）" >&2
       echo "" >&2
-      echo "   请切到主仓窗口（cwd = ${REPO_ROOT}），再跑：" >&2
-      echo "   bash scripts/close-req.sh $REQ_DIR" >&2
+      echo "   当前位置：    $CALLER_CWD" >&2
+      echo "   要收尾的 worktree：$REQ_WORKTREE_REAL" >&2
+      echo "" >&2
+      echo "   换个地方跑 close 就行（二选一）：" >&2
+      echo "   · 推荐：到主仓窗口（位置 = ${REPO_ROOT}）跑 —— 主仓会话本就能远程操作 worktree：" >&2
+      echo "       bash scripts/close-req.sh $REQ_DIR" >&2
+      echo "   · 或：这条需求先不收尾、worktree 留着继续干，等回到主仓窗口再 /close。" >&2
       exit 1
     fi
   fi
