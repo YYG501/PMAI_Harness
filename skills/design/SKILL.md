@@ -35,7 +35,7 @@ description: |
 主产物是模块三件套（`discussion.md` / `decisions.md` / `spec.md`），PM 拍板。须遵守 `skills/_shared/PM-VIEW-RULES.md`（主索引），具体读：
 - `_shared/pm-view/writing-rules.md`（写作规则：明确指代 / 正向描述 / 禁工程词 / 禁像素颜色）
 - `_shared/pm-view/askuser-rules.md`（PM 答题四条硬规则：空答 STOP / 没拿到答案禁止落盘 / runtime 退化保留 wait / 多决策拆开顺序问）
-- 写规格时的语言纪律全在 `_shared/info-design.md` 第四块 + **禁用清单单一真相源 `prd-writing/references/writing-rules.md`（L1–L6 + 8 类禁用）**——本 skill 不重抄。
+- 写规格时的语言纪律全在 `_shared/info-design.md` 第四块 + **禁用清单单一真相源 `skills/prd-writing/references/writing-rules.md`（L1–L6 + 8 类禁用）**——本 skill 不重抄。
 
 ## 铁律 · 先懂问题再设计、先讨论清楚再改
 
@@ -131,8 +131,8 @@ PM 拿"想要的方案"来，先还原成"要解决的真问题"——这是上�
 
 **收口三道**（详见 `info-design.md` 四 + `consistency-scan.md`）：
 
-1. **磨文字**：对照 9 条逐条扫（只写最终事实 / 不造词 / 去 AI 腔 / 多步流程用叙述 / 术语全文一致……），改完 grep 自查残留。**只动文字、不动结构**——发现要改的是结构，停下回段②（甚至段①）。禁用清单单一真相源 = `prd-writing/references/writing-rules.md`。
-2. **派 subagent 冷读自检**：拿 spec 当尺子扫两类残留——① 机制 / 落点没说清（状态 / 动作只给名字没说怎么发生、落在哪、记什么）② 内部简称读者要猜。拿回清单逐条改。silent 自检，不升格强制门。
+1. **磨文字**：对照 9 条逐条扫（只写最终事实 / 不造词 / 去 AI 腔 / 多步流程用叙述 / 术语全文一致……），改完 grep 自查残留。**只动文字、不动结构**——发现要改的是结构，停下回段②（甚至段①）。禁用清单单一真相源 = `skills/prd-writing/references/writing-rules.md`。
+2. **派通用 subagent 冷读自检**（白纸读 spec，**不是 `analysis-reviewer`**——那个只评审探索段 discussion 第一节、不审 spec）：拿 spec 当尺子扫两类残留——① 机制 / 落点没说清（状态 / 动作只给名字没说怎么发生、落在哪、记什么）② 内部简称读者要猜。拿回清单逐条改。silent 自检，不升格强制门。
 3. **一致性扫描**：这次改动碰的字段 / 规则 / 概念，grep 规格 ↔ 原型 ↔ DESIGN ↔ 术语表对账；对不上的 flag 给 PM 拍（哪个对 / 有意删还是漏实现 / 术语要不要统一），不静默吞、不自动改。
 
 **收尾分流**（两条都不在本 skill 开 worktree）：

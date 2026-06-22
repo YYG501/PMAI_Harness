@@ -20,6 +20,8 @@ PM-AI-Workflow 生成器仓的演进记录。本文件**只记影响下游业务
 
 ### 框架瘦身改造（吸收 ExampleAgentProject 设计方法）—— 进行中
 
+- `fix(skills)`: **design skill codex 第二视角审核修复 3 项**（PM 让 codex 审 /design 后，逐条核验真实性再修）：① `writing-rules.md` 引用路径前缀统一——design / info-design 三处 `prd-writing/...` → `skills/prd-writing/...`，防 AI 按仓库根解析扑空；② 探索段 escape-hatch 产物分档（`req-questioning.md`）：放行档不写 discussion 第一节、仅 push 档"现状切片 + 至少一条值得商榷"必含，消除"必含 vs 按需"自相矛盾（防探索段退回每次必审、抵消 escape-hatch 低疲劳目标）；③ spec 冷读自检澄清用通用 subagent（非只审探索段 discussion 第一节的 `analysis-reviewer`），消除 orphaned handoff。
+
 - `refactor(skills+bin)`: **skill 清单收敛——合并 align-to-live + scrape-prototype → `mirror-site`，project-solution 更名 `strategy`**（PM 拍板：两个 brownfield diff 轴流程 90% 同构合一；project-solution 名实不符、定位收窄）。**消费仓需重跑 `pmai install` / `upgrade`**：旧 `/pmai-align-to-live` `/pmai-scrape-prototype` `/pmai-project-solution` 命令失效，分别换 `/pmai-mirror-site`（mode=rebuild / align）、`/pmai-strategy`。
   - **mirror-site**：align（对齐自己线上·改存量）+ scrape（照外部站重建·建增量）合一个 skill，用 mode 区分参照来源，共用 /browse 爬 + checks-diff 引擎 + Plan→批→Execute。
   - **strategy**（原 project-solution）：定位明确为"项目跑起来后回头校准 / 重做顶层方向"，与起步定方向（init-project / codebase-audit）划清边界；同步 21 处引用（skill / _shared / scripts 提示文本 / templates / docs），**保留历史暂存文件名 `.project-solution-open-questions.md` 不动**（init-project / codebase-audit 共用）。
