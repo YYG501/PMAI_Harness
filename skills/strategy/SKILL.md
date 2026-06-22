@@ -1,7 +1,8 @@
 ---
-name: pmai-project-solution
+name: pmai-strategy
 description: |
-  项目级方向规划入口：PM 主动调用，定 / 改项目顶层方向（产品定位 / 用户 / 路线 / 技术栈 / 术语 + TODO 待办池）。
+  项目方向校准 / 重做入口：项目跑起来之后，PM 主动回头**重定 / 校准已定的顶层方向**（产品定位 / 用户 / 路线 / 技术栈 / 术语 + TODO 待办池）。
+  与起步定方向分工清楚：首次定方向走 /pmai-init-project（greenfield 起步）或 /pmai-codebase-audit（brownfield 接入）；本 skill 专管**事后回头改方向**，不重复起步那道门。
   **4 个独立调用场景**：
     A 项目方向重做（跑过几个 req 后发现产品定位偏了）
     B 产品路线规划（主动校准 PRODUCT 5 节 + 刷新 TODO 待办池，含季度 / 半年节奏）
@@ -9,9 +10,13 @@ description: |
     D brownfield 接入方向恢复（接入时 /pmai-codebase-audit 内联方向讨论被打断 / 想重定方向时手动补跑）
   内部逻辑：场景判断 + @读 _shared/project-questioning.md 跑讨论（提问顺序场景特定）。
   不占 req stage、不走 req-stage-gate。
+  Always trigger when the user says 重定方向 / 校准方向 / 项目方向偏了 / 产品路线规划 / 季度规划 / 老板给了新方向 / 项目方向重做。
+  do NOT use for 首次起项目定方向（那走 /pmai-init-project 或 /pmai-codebase-audit）。
 ---
 
-# /pmai-project-solution
+# /pmai-strategy
+
+> **一句话定位**：项目跑起来后回头**校准 / 重做顶层方向**（定位·用户·路线·术语）。首次起步定方向是 `/pmai-init-project`（greenfield）/ `/pmai-codebase-audit`（brownfield）的活；本 skill 专管**事后回头改**，不替它们做起步那道门。
 
 > **PM 答题规则（M4）**：所有 AskUserQuestion 调用按 `_shared/pm-view/askuser-rules.md` §1 四条硬规则走（空答 STOP / 没拿到答案禁止落盘 PRODUCT.md / TODO.md / runtime 退化保留 wait / 多决策拆开顺序问）。**Runtime 兜底**：本 skill 各门写的都是 picker 形态；runtime 不支持时 AI 按 §1.3 自动退化为编号列表，仍 wait。
 
@@ -34,12 +39,12 @@ PM 主动调用，**4 个独立场景**：
 
 ```bash
 source "$HOME/.pmai/scripts/skill-preamble.sh"
-echo "SKILL: project-solution"
+echo "SKILL: strategy"
 ```
 
 ## 与 init-project 的关系
 
-| | `/pmai-init-project` | `/pmai-project-solution` |
+| | `/pmai-init-project` | `/pmai-strategy` |
 |---|---|---|
 | 干什么 | 起新项目（4 阶段一气呵成；含方向讨论）| 定 / 改项目方向（4 场景之一）|
 | 何时 | 创建新项目时（一次性）| 重做 / 规划 / 新方向 / brownfield 接入 |
@@ -151,7 +156,7 @@ PM 选「创建 PRODUCT.md」+ 定稿后：
 
 本轮方向讨论若产出了**项目级理路**——护城河论证 / 几个机制怎么整体咬合 / 关键交互理念推导 / v2 演进方向（不是单条术语、不是 5 节里的离散填空）——**@读 `skills/_shared/decision-record.md`** 判门槛（纯微调不冻），有实质理路 → 向 PM 提一句「这轮定了 <一句话理路>，冻一份项目决策记录留底，好吗」，PM 点头 → 按 `$PMAI_HOME/templates/decision-record.md.tmpl` 写 `docs/decisions/<日期>-<slug>.md`（理路节 + 当时事实摘要带日期 + 指针）。**纯微调 / 无跨文件理路 → silent skip 本步**。
 
-> **本 skill 不写 PRODUCT-STATE 索引**：project-solution 不是 PRODUCT-STATE 的 sanctioned 写口（防腐铁律只认 close-req + `/pmai-deposit`）。冻的决策记录靠 `/pmai-new-req` 起步直接扫 `docs/decisions/` 发现（+ PRODUCT-STATE 已有指向 `docs/decisions/` 的通用索引），不需要本 skill 逐条挂索引。`docs/decisions/` 在 main 上可写（冻结档豁免，见 `check-branch.sh`）。
+> **本 skill 不写 PRODUCT-STATE 索引**：strategy 不是 PRODUCT-STATE 的 sanctioned 写口（防腐铁律只认 close-req + `/pmai-deposit`）。冻的决策记录靠 `/pmai-new-req` 起步直接扫 `docs/decisions/` 发现（+ PRODUCT-STATE 已有指向 `docs/decisions/` 的通用索引），不需要本 skill 逐条挂索引。`docs/decisions/` 在 main 上可写（冻结档豁免，见 `check-branch.sh`）。
 
 #### 步骤 8.6：atomic commit + 引导下一步
 

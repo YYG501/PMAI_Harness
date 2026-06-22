@@ -16,7 +16,7 @@
 | [`PMAI重构-实施清单.md`](./设计/PMAI重构-实施清单.md) | **六步重构落地真相源** —— skill 去留 + gstack 接入 + worktree 模型 + D-decisions + §7 复盘 scope（站点爬 / 对齐线上 / checks 引擎 / 产物层）。2026-05-30 全落地；**合 main 后归档到 完成/** |
 | [`stage编号清理与banner去号.md`](./设计/stage编号清理与banner去号.md) | **已落地（2026-06-04，待 PM 总审归档）**—— 清三套编号混用（六步①-⑥ / 内部 stage1-4 / 旧7-stage 4A·5·6·7）导致 runtime AI 推过头：prose 去裸数字 + input-flow §9 加映射列 + banner 去 stage 号（state.py:433 单点）+ lint hook；「六步」名保留。quick-fix drift-scan 产物链停旧机 = DEFER 单独议题 |
 | [`分档运行与沉淀层.md`](./设计/分档运行与沉淀层.md) | **已落地（2026-06-04，待 PM 总审归档）**—— **演进母文档运行模型 + 统一另三份子设计的共同前提**。痛点 = 沉淀只挂 full-req 末尾(close 唯一写入口, code 实锤 close-req:90)，但 PM 真实用法分档(大量 main 直接改不进 req) → 轻档绕过沉淀点 → 四痛(真相源乱/脊柱入口不可见/决策困讨论稿/mock变体找不回)。方案：① 分档谱(轻 main 直接改 / 中 轻 req 直建 / 重 完整 req)② 沉淀触发从 close-only 扩到每档(机制不新造,补触发点)③ mock 变体留存+找回(母文档生成但不持久化,子设计零覆盖)。§1.4 待抠=轻档"轻沉淀"具体形态。实证 wf_52e02581(对抗验证已纠混合航道/脊柱不可见措辞) |
-| [`项目奠基决策记录.md`](./设计/项目奠基决策记录.md) | **已落地（2026-06-04，R5 拍定，待 PM 总审归档）**—— 新增「项目级冻结决策记录」文档类（`docs/decisions/<日期>-<slug>.md`），承接奠基轮"为什么这么拼"的理路（护城河 / 交互咬合 / 机制整体 / 演进故事）；脊柱接不住、防腐铁律禁活文档 → 走冻结档。产出触发：project-solution/init-project 方向讨论 + close-req 步骤2 理路类。PM 已选「冻结」方向 |
+| [`项目奠基决策记录.md`](./设计/项目奠基决策记录.md) | **已落地（2026-06-04，R5 拍定，待 PM 总审归档）**—— 新增「项目级冻结决策记录」文档类（`docs/decisions/<日期>-<slug>.md`），承接奠基轮"为什么这么拼"的理路（护城河 / 交互咬合 / 机制整体 / 演进故事）；脊柱接不住、防腐铁律禁活文档 → 走冻结档。产出触发：strategy/init-project 方向讨论 + close-req 步骤2 理路类。PM 已选「冻结」方向 |
 | [`build直建轻车道.md`](./设计/build直建轻车道.md) | **草稿 v1 / §0 已锁**（2026-06-01）—— 读 GSD 真源码后重写。根因=结构放错地方（用了 GSD 反模式的逐层转写链 req-plan→task-plan→task-spec + 缺了 GSD 的对抗验证网），非"层多"。方案 4 条：A 单块/多块叉口(task-plan)、B req-plan 升「自包含实现方案」(契约当数据)、C 扩 coverage-reviewer 成对抗网(字段级+Wired+跨req集成审)、D 重锚 per-task→req-build。blast radius 中心=INVARIANTS 五组+状态机+~18 测试(非 prose)。已决：R1 选 A 路(轻量信封当网载体)、task-plan 退役(拆/不拆挪进实现方案、拆分逻辑变「执行计划」节)。§0 已锁、待 review。实证 wf_ee98a18b/461ad10d/85033273/2bdd0fea |
 | [`文档治理与知识棘轮.md`](./设计/文档治理与知识棘轮.md) | **已落地（2026-06-04，待 PM 总审归档）**—— 元目标"聊天 AI 知道产品 + 产出积累"的地基。痛点 = 文档治理隐式散在 4 处无成文模型 + 跨 req/跨 close 知识棘轮漏（后面读不到前面的讨论/决策/遗留）。方案：成文「文档地图」(4 类+存放+读取) + 知识棘轮 close 三出口(耐久→脊柱 / 理路→决策记录 / 遗留→TODO) + 决策落点收敛成一条管道。G2(遗留孤儿)+G3(无成文模型) 本设计独有，G1/G4 联动决策记录/build轻车道。grep grounded(new-req:213 / close-req:76,120) |
 
@@ -77,7 +77,7 @@
 | 主题 | 文件 | 现役承接 |
 |---|---|---|
 | 管线重构总纲 | [`管线重构-GSD-review.md`](./归档/完成/管线重构-GSD-review.md) | §8 六步全包落地（CHANGELOG 2026-05-22）|
-| delta-2/4 PRD/solution 对调 | [`PRD-solution-对调.md`](./归档/完成/PRD-solution-对调.md) | `/pmai-project-solution` + `/pmai-prd-writing` 前移 stage 3 |
+| delta-2/4 PRD/solution 对调 | [`PRD-solution-对调.md`](./归档/完成/PRD-solution-对调.md) | `/pmai-strategy` + `/pmai-prd-writing` 前移 stage 3 |
 | delta-3 task-spec 重构 | [`task-spec重构.md`](./归档/完成/pmai-task-spec重构.md) | task 单文件 typed contract（三区 + `task_format` 标记）|
 | delta-7 req 级事件流 | [`req级事件流-delta7.md`](./归档/完成/req级事件流-delta7.md) | `scripts/req-events.py` + `req-events.jsonl` |
 | delta-8 实现设计视图 | [`实现设计视图-HOW安家.md`](./归档/完成/实现设计视图-HOW安家.md) | `/pmai-implementation-design` + `templates/implementation-design.md.tmpl` |

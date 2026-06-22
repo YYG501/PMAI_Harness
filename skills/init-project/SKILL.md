@@ -42,7 +42,7 @@ description: |
 - **脊柱搭好 = AI 就能放开手陪你试**。PRODUCT.md 里有一句话定位、DESIGN.md 有视觉基线、prototype/ 能跑——AI 进项目读得到上下文，就能直接陪 PM 在主原型上随便改、试几个方向、推翻重来，全程在 main 上动、不开 worktree、不走流程。
 - **方向清晰后再"纳入结构"**。当某个方向试明白了、PM 准备好了，用 `/design` 立第一个功能模块（模块三件套），把探索成果沉淀成结构化的规格。结构是**长出来的**，不是开局强加的。
 
-> 想要更系统地把项目方向讨论透（定位 / 用户 / 角色 / 路线全过一遍），那是 `/pmai-project-solution` 的活，PM 任何时候可主动调；本 skill 不替它做那道重门。
+> 想要更系统地把项目方向讨论透（定位 / 用户 / 角色 / 路线全过一遍），那是 `/pmai-strategy` 的活，PM 任何时候可主动调；本 skill 不替它做那道重门。
 
 ---
 
@@ -53,7 +53,7 @@ description: |
 
 **不在 scope**：
 
-- 系统地把项目方向讨论透（定位 / 用户 / 角色 / 路线全过一遍）→ 走 `/pmai-project-solution`（PM 准备好了主动调）
+- 系统地把项目方向讨论透（定位 / 用户 / 角色 / 路线全过一遍）→ 走 `/pmai-strategy`（PM 准备好了主动调）
 - 接入已有 codebase → 走 `/pmai-codebase-audit`（A 步 AI 诊断到源码时会优先推荐）
 - 立第一个功能模块、写规格 → 方向清晰后走 `/design`
 - 业务仓里起新需求 → 走 `/design`
@@ -66,7 +66,7 @@ init 跑完后，项目里有这几样，构成 AI 以后每次进项目的"必�
 
 | 文件 / 目录 | 装什么 | 谁写 / 谁读 |
 |---|---|---|
-| `docs/PRODUCT.md` | 一句话定位 + 业务术语表（项目方向真相源；起步只留一句话，方向清晰后随 `/design` / `/pmai-project-solution` 长厚） | C 步写一句话；每次进项目读 |
+| `docs/PRODUCT.md` | 一句话定位 + 业务术语表（项目方向真相源；起步只留一句话，方向清晰后随 `/design` / `/pmai-strategy` 长厚） | C 步写一句话；每次进项目读 |
 | `docs/TODO.md` | PM 待办池（无序，不排序） | C 步写 |
 | `docs/PRODUCT-STATE.md` | 产品**现状层**（现在长什么样、做到哪、哪些真哪些 mock）；模板已就位，内容随每次沉淀累积 | 只在 `/close` 沉淀那刻更新；开 `/design` 时先读 |
 | `docs/DESIGN.md` | 视觉与交互约定（**正向约束**：该怎么做，不是禁止清单） | C 步起草；build 前 AI 必读再动手 |
@@ -135,7 +135,7 @@ init 跑完后，项目里有这几样，构成 AI 以后每次进项目的"必�
    | 文档 | `README.md` / `LICENSE` / `*.md` 笔记 | 保留原位；若 PMAI 模板有同名 → 合并或加 `.pmai` 后缀 |
    | 资料/导出 | `*.json` ChatGPT 导出 / `*.pdf` 资料 / `*.csv` / `*.xlsx` | 归档到 `docs/inputs/<语义子目录>/`（子目录名 AI 看文件名+内容推） |
    | 源码 | `*.py` / `*.js` / `*.ts` / 任何 manifest（`package.json`/`pyproject.toml`/...）| **提示 PM 优先跑 `/pmai-codebase-audit`** 产出现状档；PM 坚持 init 也允许（init 不删代码 + 可逆） |
-   | 已有 framework | 含 `docs/PRODUCT.md` / 其他 PMAI 元数据 | 提示 PM 这里曾经 init 过 → 是否走 `/pmai-project-solution` 重做方向更合适 |
+   | 已有 framework | 含 `docs/PRODUCT.md` / 其他 PMAI 元数据 | 提示 PM 这里曾经 init 过 → 是否走 `/pmai-strategy` 重做方向更合适 |
 
    **3.3 AI 给完整方案**（结构化展示，每条一行说清「源 → 目标」）：
 
@@ -176,7 +176,7 @@ init 跑完后，项目里有这几样，构成 AI 以后每次进项目的"必�
 
    **edge case 提示**：
    - **已有 codebase**（源码 / manifest）：AI 在 3.3 方案里**优先推荐** `/pmai-codebase-audit`，但**不硬 gate**（[[feedback_pm_decision_is_binding_contract]]：PM 拍 init 即接住，init 不破坏代码 + 可逆）
-   - **已有 PMAI 脚手架**：AI 在 3.3 方案里**优先推荐** `/pmai-project-solution` 重做方向，同样不硬 gate
+   - **已有 PMAI 脚手架**：AI 在 3.3 方案里**优先推荐** `/pmai-strategy` 重做方向，同样不硬 gate
 
 4. **一句话项目背景**（写进生成的 CLAUDE.md）—— AskUser
 
@@ -190,7 +190,7 @@ init 跑完后，项目里有这几样，构成 AI 以后每次进项目的"必�
 
 **已有内容接口约定**：
 - **AI 主动诊断不硬 gate**：本 skill step 3 由 AI `ls -A` + 逐条标注 + 给完整方案 + PM 一拍即可走（不写死代码标志清单、不给三选菜单装懂事）
-- **codebase / 已 init 项目优先推荐 audit / project-solution**：3.3 方案里 AI 优先建议跑 `/pmai-codebase-audit`（已有源码）或 `/pmai-project-solution`（已有 PMAI 脚手架），但**不硬 gate**（[[feedback_pm_decision_is_binding_contract]]：PM 坚持 init 也接住 —— init 不删代码 + 可逆）
+- **codebase / 已 init 项目优先推荐 audit / strategy**：3.3 方案里 AI 优先建议跑 `/pmai-codebase-audit`（已有源码）或 `/pmai-strategy`（已有 PMAI 脚手架），但**不硬 gate**（[[feedback_pm_decision_is_binding_contract]]：PM 坚持 init 也接住 —— init 不删代码 + 可逆）
 - **脚本层默认仍拒**：`init-project.sh` 默认拒已存在目录；本 skill 通过 `--allow-existing` flag 接住 PM 拍后的方案。脚本本身不判断内容是否真是 codebase（那是 skill 层 AI 诊断的责任）
 
 ### B · 建骨架（agent Bash 调 init-project.sh）
@@ -222,7 +222,7 @@ agent 收到脚本退出码 0 后**汇报**：「✅ 骨架已就绪 / 上下文
 
 ### C · 一句话方向 + 视觉基线 + 主原型脚手架（轻）
 
-> **这一步刻意是轻的**。起项目不在这里逼 PM 答完整方向问卷——那会过早锁死还没想清楚的方向。本步只把"AI 能放开手陪你试"的三样脊柱填到位：**PRODUCT.md 留一句话定位 + DESIGN.md 视觉基线 + prototype/ 起一版能跑**。完整方向讨论（定位 / 用户 / 角色 / 路线全过一遍）等 PM 想系统过时再走 `/pmai-project-solution`。
+> **这一步刻意是轻的**。起项目不在这里逼 PM 答完整方向问卷——那会过早锁死还没想清楚的方向。本步只把"AI 能放开手陪你试"的三样脊柱填到位：**PRODUCT.md 留一句话定位 + DESIGN.md 视觉基线 + prototype/ 起一版能跑**。完整方向讨论（定位 / 用户 / 角色 / 路线全过一遍）等 PM 想系统过时再走 `/pmai-strategy`。
 >
 > **DESIGN.md 是 build 硬约束**：原型 build 时 AI 动手前必读再写代码。视觉基线没定好 → 在"颜色 / 字体 / 间距 / 动效"上没规范可遵守 → 乱搞。`templates/DESIGN.md.tmpl` 是正向约束版起草模板（告诉 AI"该怎么做"比列一堆"别做什么"更能逼出好视觉；四节：视觉基调 / 产品化 demo 目标 / UI 习惯 / 组件来源）。
 
@@ -231,13 +231,13 @@ agent 收到脚本退出码 0 后**汇报**：「✅ 骨架已就绪 / 上下文
 1. **跟 PM 说一句开场**：
    ```
    骨架搭好了。接下来只做三件轻的，让 AI 能放开手陪你试方向：
-     1. PRODUCT.md 写一句话定位（这产品给谁、解决什么——一句话即可，想清楚了再用 /pmai-project-solution 过透）
+     1. PRODUCT.md 写一句话定位（这产品给谁、解决什么——一句话即可，想清楚了再用 /pmai-strategy 过透）
      2. DESIGN.md 视觉基线（颜色 / 字体 / 布局 / 动效 / UI 习惯，build 时的硬约束）
      3. prototype/ 起一版能跑的主原型（默认 Next.js + TS + Tailwind + shadcn，想换栈现在说）
    视觉基线可以我陪你过一遍模板填，也可以借 gstack /design-consultation 出初稿。
    ```
 
-2. **PRODUCT.md 写一句话定位**：AskUser 问 PM 一句话（这产品给谁、解决什么），写进 `<target-dir>/docs/PRODUCT.md` 的定位节 + 业务术语表起一个空架（方向清晰后随 `/design` / `/pmai-project-solution` 长厚）。**不在这里跑 5 节方向问卷**——一句话定位够 AI 进项目读上下文、陪 PM 探索即可。同时写 `<target-dir>/docs/TODO.md`（PM 把脑子里的待办先记下，无序）。
+2. **PRODUCT.md 写一句话定位**：AskUser 问 PM 一句话（这产品给谁、解决什么），写进 `<target-dir>/docs/PRODUCT.md` 的定位节 + 业务术语表起一个空架（方向清晰后随 `/design` / `/pmai-strategy` 长厚）。**不在这里跑 5 节方向问卷**——一句话定位够 AI 进项目读上下文、陪 PM 探索即可。同时写 `<target-dir>/docs/TODO.md`（PM 把脑子里的待办先记下，无序）。
 
 3. **填 DESIGN.md（正向视觉约束）**：基于 `docs/DESIGN.md`（B 步已铺的 `DESIGN.md.tmpl` 起草版），AI 陪 PM 把四节填具体——
    - 视觉基调（主色 / 强调色 / 中性灰阶 / 圆角 / 阴影 / 字号阶梯 / 间距倍数）
@@ -298,7 +298,7 @@ agent 输出 Next Up 块：
   cd <target-dir>
   · 先随便试方向 —— 直接在 prototype/ 上改，AI 陪你试（在 main 上动、不开 worktree）
   · 想清楚某个方向了 —— /design "<一句话>" 立第一个模块、纳入结构
-  · 想把项目方向系统过透 —— /pmai-project-solution
+  · 想把项目方向系统过透 —— /pmai-strategy
 ```
 
 ---
@@ -307,10 +307,10 @@ agent 输出 Next Up 块：
 
 - PM 在**任意 cwd** 都能调（`pmai install` 后 `~/.claude/skills/pmai-init-project` 全局可用）；B 步脚本路径走 `$PMAI_HOME` 绝对路径
 - 老模式兼容：PM 在生成器仓根目录跑也行（脚本 `$PMAI_HOME` fallback 到 `$(pwd)/scripts/init-project.sh`）
-- 目标目录默认不能已存在；A 步 AI 诊断到已有内容时优先推荐 audit / project-solution，PM 拍 init 也接住（AI 加 `--allow-existing`，**不硬 gate**）
+- 目标目录默认不能已存在；A 步 AI 诊断到已有内容时优先推荐 audit / strategy，PM 拍 init 也接住（AI 加 `--allow-existing`，**不硬 gate**）
 - gstack 是硬依赖，未安装时 B 步脚本会报错退出
-- **起项目 = 只建骨架、不锁流程**：C 步只填一句话定位，**不在这里跑完整方向问卷**（5 节定位 / 用户 / 角色 / 路线讨论是 `/pmai-project-solution` 的活，PM 准备好了主动调）。早期靠自由探索想清楚方向，比开局答问卷更有效
-- PRODUCT.md 不能完全空交付，但**只要一句话定位即可**（够 AI 进项目读上下文、陪 PM 探索）；术语表起空架，方向清晰后随 `/design` / `/pmai-project-solution` 长厚
+- **起项目 = 只建骨架、不锁流程**：C 步只填一句话定位，**不在这里跑完整方向问卷**（5 节定位 / 用户 / 角色 / 路线讨论是 `/pmai-strategy` 的活，PM 准备好了主动调）。早期靠自由探索想清楚方向，比开局答问卷更有效
+- PRODUCT.md 不能完全空交付，但**只要一句话定位即可**（够 AI 进项目读上下文、陪 PM 探索）；术语表起空架，方向清晰后随 `/design` / `/pmai-strategy` 长厚
 - **DESIGN.md 是 build 硬约束，不能空交付** —— C 步即使主原型起不来，视觉基线也要填好（第一个 `/design` build 就靠它）
 - 借 gstack `/design-consultation` 出 DESIGN.md 初稿时**不抄、不映射、不重写** —— 直接接受它写的内容，跟随它升级
 
@@ -339,8 +339,8 @@ SKILL.md 内部段落保留 `brownfield` 概念词用于设计准确性；AI 跟
 | A 步 step 3 cwd 完全空 / 只 `.DS_Store` | 跳过 3.3/3.4 退化捷径；直接调脚本 |
 | A 步 step 3 AI 出方案 + PM 选 ①（走方案）| AI 执行归档 mv + 调脚本加 `--allow-existing` |
 | A 步 step 3 PM 选 ②（要改）| 等 PM 文本反馈具体哪条改；AI 调整方案后回 3.3/3.4 再确认（可循环）|
-| A 步 step 3 AI 诊断到已有 codebase / PMAI 脚手架 | 3.3 方案里**优先推荐** `/pmai-codebase-audit` 或 `/pmai-project-solution`；PM 坚持 init 也接住（**不硬 gate**）|
+| A 步 step 3 AI 诊断到已有 codebase / PMAI 脚手架 | 3.3 方案里**优先推荐** `/pmai-codebase-audit` 或 `/pmai-strategy`；PM 坚持 init 也接住（**不硬 gate**）|
 | B 步 `init-project.sh` 失败（chmod / git init / 模板缺失）| 报错贴 stderr + PM 检查；不进 C 步 |
 | C 步 gstack / 脚手架不可用 | 用 `DESIGN.md.tmpl` 模板手填视觉基线；主原型起不来则留空，第一个 `/design` build 时补（DESIGN.md 不能空）|
-| C 步 PM 答"停" + 骨架已 commit | PRODUCT.md 一句话 / TODO.md / DESIGN.md / prototype/ 留 unstaged + 提示下次直接续填或 `/pmai-project-solution` 过透方向 |
+| C 步 PM 答"停" + 骨架已 commit | PRODUCT.md 一句话 / TODO.md / DESIGN.md / prototype/ 留 unstaged + 提示下次直接续填或 `/pmai-strategy` 过透方向 |
 | C 步 PM 答"停" + 骨架未 commit | 提示手动 `rm -rf <target-dir>` 重来 |

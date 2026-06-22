@@ -1,7 +1,7 @@
 # askuser-rules：AskUserQuestion 答题规则（M4 单一真相源）
 
 > **职责**：PM 答题门规则的**单一真相源**，gsd `#3018 failure mode` 照搬。
-> **调用方**：所有用 AskUserQuestion 的 skill（req-stage-gate / init-project / project-solution / new-req / task-confirm / task-execute / close-task / close-req）。
+> **调用方**：所有用 AskUserQuestion 的 skill（req-stage-gate / init-project / strategy / new-req / task-confirm / task-execute / close-task / close-req）。
 > **设计来源**：gsd `discuss-phase.md:95-102` + `gsd-discuss-phase/SKILL.md:29-35` 的 `#3018 failure mode` + 仓库 memory `feedback_open_questions_gate.md` + `feedback_close_default_flow.md` + commit 07a3a09。
 
 ---

@@ -71,8 +71,8 @@ echo "─── 3. Skills in ~/.pmai/skills/ ───"
 EXPECTED_SKILLS=(
   # 活跃集（reshape 后 PM 日常入口）
   init-project design mock build close publish-to-lark status
-  # 按需主动调（brownfield / 项目方向）
-  project-solution codebase-audit align-to-live scrape-prototype
+  # 按需主动调（brownfield / 项目方向 / 照站对齐）
+  strategy codebase-audit mirror-site
   # dormant：task 状态机
   task-plan task-spec task-confirm task-execute task-verify task-submit task-status close-task
   # dormant：req 阶段驱动 / 后台辅助 / 小改 / 轻沉淀 / 旧 req 流程

@@ -53,7 +53,7 @@ def main() -> None:
     elif new.exists():
         print(f"ℹ️  已是 docs/{NEW_NAME}，跳过改名")
     else:
-        print(f"ℹ️  无旧名文档（可能尚未跑 project-solution）—— 仅扫引用")
+        print(f"ℹ️  无旧名文档（可能尚未跑 strategy）—— 仅扫引用")
 
     # 2. 修业务文档引用（git-tracked 的 .md，排除 .claude/ —— 那是框架同步资产）
     tracked = subprocess.check_output(

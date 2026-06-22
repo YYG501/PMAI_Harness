@@ -16,7 +16,7 @@ description: |
 
 本 skill = brownfield 一气呵成入口，和 greenfield 的 `/pmai-init-project` 对称：greenfield 一个命令把骨架 + 方向讨论做完，brownfield 一个命令把现状盘点 + 方向讨论做完。中间隔一个「PM 过目现状档」的轻停顿（现状档是方向决策的输入材料，PM 点头再继续），不用 PM 手敲第二个命令。方向讨论这一段和新项目走同一套 `_shared/project-questioning.md`，只是多一份现状输入喂着。
 
-> **与 `/pmai-project-solution` 的分工**：本 skill 内联跑的是 brownfield **首次接入定方向**；`/pmai-project-solution` 是**事后改方向**的按需入口（跑过几个 req 发现定位偏了 / 产品路线规划 / 老板新方向）。接入用本 skill 一条龙，不再需要先 audit 再手动 project-solution。
+> **与 `/pmai-strategy` 的分工**：本 skill 内联跑的是 brownfield **首次接入定方向**；`/pmai-strategy` 是**事后改方向**的按需入口（跑过几个 req 发现定位偏了 / 产品路线规划 / 老板新方向）。接入用本 skill 一条龙，不再需要先 audit 再手动 strategy。
 
 ## Preamble
 
@@ -73,7 +73,7 @@ echo "SKILL: codebase-audit"
 
 PM 提修正 → 改现状档 → 重新呈交。
 
-> **这是一个轻停顿，不是流程终点**：现状档是方向决策的输入材料，留这个停顿让 PM 先把它看准（可以离线慢慢读）。PM 说「继续 / 接着定方向 / OK」→ 进 step 3.5 / 3.5.5 兜底，再进 step 4 内联方向讨论。**不要**让 PM 去手敲 `/pmai-project-solution`——方向讨论就在本流程内接着跑。
+> **这是一个轻停顿，不是流程终点**：现状档是方向决策的输入材料，留这个停顿让 PM 先把它看准（可以离线慢慢读）。PM 说「继续 / 接着定方向 / OK」→ 进 step 3.5 / 3.5.5 兜底，再进 step 4 内联方向讨论。**不要**让 PM 去手敲 `/pmai-strategy`——方向讨论就在本流程内接着跑。
 
 ### 步骤 3.5：产品模块清单 + modulespec 主规格骨架（PM 选择性触发）
 
@@ -105,7 +105,7 @@ PM 提修正 → 改现状档 → 重新呈交。
    - 子目录信号：`src/modules/*` / `src/pages/*` / `src/features/*` / `apps/*` / `packages/*`
    - 多 app 项目：每个 app 当一个 module
    - 路由表 / 菜单配置里的顶级分组（找 `routes`/`navigation`/`menu`/`sidebar` 关键词文件）
-   - `docs/PRODUCT.md` 已有的「业务模块」段（若之前 project-solution 跑过）
+   - `docs/PRODUCT.md` 已有的「业务模块」段（若之前 strategy 跑过）
    - 候选清单去重 / 合并明显同义的（如 `user-management` 和 `user-mgmt`）
 
 2. **PM 确认候选清单**：呈交清单格式 ——
@@ -238,13 +238,13 @@ HAS_PS=false
 
 ### 步骤 4：内联方向讨论（产 PRODUCT.md + TODO.md）
 
-PM 在 step 3 轻停顿说「继续」后，**在本流程内直接接着跑项目方向讨论**——不交接出去、不让 PM 手敲 `/pmai-project-solution`。逻辑和 greenfield（`/pmai-init-project` 阶段 C）完全同一套，走共享真相源。
+PM 在 step 3 轻停顿说「继续」后，**在本流程内直接接着跑项目方向讨论**——不交接出去、不让 PM 手敲 `/pmai-strategy`。逻辑和 greenfield（`/pmai-init-project` 阶段 C）完全同一套，走共享真相源。
 
 **怎么跑**：
 
 1. **@读 `skills/_shared/project-questioning.md`**（**单一真相源**——提问纪律 / 问题库 / 写作规则 / Decision gate / 5 节检查）。
 2. **全文读 `docs/CODEBASE-AUDIT.md`**（刚产出的现状档，作已有代码库的实况语境，AI 不准跳）。
-3. 按 **brownfield 提问顺序**问 PM（场景特定，与 `/pmai-project-solution` 段 0 表「D brownfield 接入」一致）：
+3. 按 **brownfield 提问顺序**问 PM（场景特定，与 `/pmai-strategy` 段 0 表「D brownfield 接入」一致）：
    - (1) 产品定位（**从 codebase 反推 + PM 确认**）
    - (2) 用户画像（从代码层级 / API 角色反推 + PM 补）
    - (3) 技术栈（**从现状档抄**，PM 确认）
@@ -265,8 +265,8 @@ PM 在 step 3 轻停顿说「继续」后，**在本流程内直接接着跑项�
 
 - **扫码阶段只读**：步骤 1-3（扫码 + 产现状档）只读代码、不改代码。step 4 内联方向讨论才写 `docs/PRODUCT.md` + `docs/TODO.md`（PM 在 Decision gate 拍板后落盘）。
 - **防 secret 是硬约束**：见上方「防 secret 扫描」段，违反 = 严重错误。
-- **方向讨论走共享真相源**：step 4 内联方向讨论必须 @读 `skills/_shared/project-questioning.md`，**不要**在本 skill 里重抄提问法 / 写作规则（必漂移；真相源单一，和 init-project 阶段 C / project-solution 共用同一套）。
-- **与 `/pmai-project-solution` 分工**：本 skill 管 brownfield **首次接入定方向**（内联跑完）；`/pmai-project-solution` 管**事后改方向**（场景 A 重做 / B 路线规划 / C 新方向）。接入不再需要 PM 手敲 project-solution。
+- **方向讨论走共享真相源**：step 4 内联方向讨论必须 @读 `skills/_shared/project-questioning.md`，**不要**在本 skill 里重抄提问法 / 写作规则（必漂移；真相源单一，和 init-project 阶段 C / strategy 共用同一套）。
+- **与 `/pmai-strategy` 分工**：本 skill 管 brownfield **首次接入定方向**（内联跑完）；`/pmai-strategy` 管**事后改方向**（场景 A 重做 / B 路线规划 / C 新方向）。接入不再需要 PM 手敲 strategy。
 - 新项目不用本 skill（无已有代码可审）。
 - step 3.5 模块清单由 PM 确认 —— AI 不替 PM 决定模块边界（候选清单 PM 必须过一遍）。
 

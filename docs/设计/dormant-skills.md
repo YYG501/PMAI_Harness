@@ -59,11 +59,13 @@ dormant 的 skill 仍留在框架里——它们的 SKILL.md、references、脚�
 
 ### E 组 · 项目级方向 / brownfield 接入（按需，非全 dormant）
 
-`project-solution`、`codebase-audit`、`align-to-live`、`scrape-prototype`
+`strategy`、`codebase-audit`、`mirror-site`
 
-- **`project-solution`（项目级方向规划）**：⚠️ **不是纯 dormant，是"按需主动入口"**。它不进日常推进流程，但**活跃的 `/init-project` 明确推荐它**——init 只建骨架 + 一句话定位，PM 想"把项目方向系统过透（定位 / 用户 / 角色 / 路线全过一遍）"时主动调 `/pmai-project-solution`；AI 在 init 诊断到已有 PMAI 脚手架时也优先推荐它重做方向。所以它**保留可主动调用**，不该被当成"激活才能用"。
+> **2026-06-22 调整**：`project-solution` 更名 `strategy`（定位收窄为"项目跑起来后回头校准 / 重做方向"）；`align-to-live` + `scrape-prototype` 合并为 `mirror-site`（两模式 rebuild / align，参照来源不同、共用 browse + checks-diff 引擎）。
+
+- **`strategy`（项目方向校准 / 重做，原 project-solution）**：⚠️ **不是纯 dormant，是"按需主动入口"**。它不进日常推进流程，专管**项目跑起来后回头改方向**（首次起步定方向是 `/init-project` / `/codebase-audit` 的活）。PM 想"把项目方向系统过透 / 跑偏了重定 / 产品路线规划"时主动调 `/pmai-strategy`；AI 在 init 诊断到已有 PMAI 脚手架时也优先推荐它重做方向。**保留可主动调用**，不该被当成"激活才能用"。
 - **`codebase-audit`（brownfield 接入扫码）**：已有代码库接入框架时产出代码现状档。新项目用不到，已有项目接入才用——`/init-project` 在 A 步诊断到源码时优先推荐它。**按需保留可调**。
-- **`align-to-live`（对齐线上真实产品）/ `scrape-prototype`（站点爬原型）**：这两个是 brownfield 的两条专门 diff 轴（原型对齐现实 / 照某站重建）。普通新项目用不到；PM 手动调或 `/design` 范围确认里 AI 判断该对齐 / 该爬时建议。**按需保留可调**。
+- **`mirror-site`（照参考站对齐原型，原 align-to-live + scrape-prototype 合并）**：brownfield 的"参照外部站 / 线上"轴，两模式——rebuild（照外部站重建近似，建增量）/ align（把已有原型对齐自己线上，改存量）。普通新项目用不到；PM 手动调或 `/design` 范围确认里 AI 判断该爬 / 该对齐时建议。**按需保留可调**。
 - **小结**：E 组**严格说不是"默认不用"而是"按需用、不进日常流程"**——它们不在 ~7 个活跃集里占位，但都保留可主动调用、且被活跃 skill（主要是 `/init-project`）作为分支推荐。落地时别把它们的入口砍死。
 
 ---
@@ -96,4 +98,4 @@ dormant 的 skill 仍留在框架里——它们的 SKILL.md、references、脚�
 | `/publish-to-lark` | 文档发飞书 |
 | `/status` | 现状视图（轻量 `pmai-status`，复用 `status-view.py`；可选）|
 
-> dormant 的 skill 都不在这张表里占位；但 E 组（project-solution / codebase-audit / align-to-live / scrape-prototype）保留**按需主动调**，主要被 `/init-project` / `/design` 作为分支推荐。
+> dormant 的 skill 都不在这张表里占位；但 E 组（strategy / codebase-audit / mirror-site）保留**按需主动调**，主要被 `/init-project` / `/design` 作为分支推荐。

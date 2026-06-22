@@ -26,7 +26,7 @@
 
 --require-section 模式：
   默认模式下「缺 `## 未决问题` section」静默退出 0 —— 对大多数 stage 文档是对的
-  （它们没这 section）。但 project-solution 把未决问题写进专用暂存文件后对它跑闸门，
+  （它们没这 section）。但 strategy 把未决问题写进专用暂存文件后对它跑闸门，
   缺 section = 闸门形同虚设。该模式下缺 section 必须 fail（exit 1），不静默放行。
 
 退出码:
@@ -134,7 +134,7 @@ def main():
     parser.add_argument(
         "--require-section",
         action="store_true",
-        help="缺 `## 未决问题` section 时 fail（不静默放行）—— project-solution 暂存文件用",
+        help="缺 `## 未决问题` section 时 fail（不静默放行）—— strategy 暂存文件用",
     )
     args = parser.parse_args()
 

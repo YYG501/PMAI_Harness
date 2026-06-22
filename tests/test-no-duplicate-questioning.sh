@@ -55,11 +55,11 @@ test_decision_gate_template_single_source() {
 # -----------------------------------------------------------------
 # T2: 6 节齐不齐**完整调用代码块**（PROJECT_STATE=$(python3 ... + ALL_FILLED + EMPTY 3 行块）
 #   只在 _shared 一处（new-req mini-fill 是 legacy 兜底，允许独立持有；不算重复）
-#   关键：检测 init-project / project-solution 不持有该完整代码块副本
+#   关键：检测 init-project / strategy 不持有该完整代码块副本
 # -----------------------------------------------------------------
 test_section_check_block_not_in_d_iv_skills() {
-  start_test "T2: 6 节齐不齐完整调用代码块不出现在 init-project / project-solution（_shared + new-req legacy 兜底各持一份合法）"
-  for skill in init-project project-solution; do
+  start_test "T2: 6 节齐不齐完整调用代码块不出现在 init-project / strategy（_shared + new-req legacy 兜底各持一份合法）"
+  for skill in init-project strategy; do
     if grep -q 'PROJECT_STATE=$(python3' "$REPO_ROOT/skills/$skill/SKILL.md" 2>/dev/null; then
       _fail "$skill/SKILL.md 不应持有 PROJECT_STATE=\$(python3 完整代码块副本（应 @读 _shared §7）"
       return
@@ -75,18 +75,18 @@ test_section_check_block_not_in_d_iv_skills() {
 
 # -----------------------------------------------------------------
 # T3: 未决问题闸门**完整调用代码块**（python3 ... check-open-questions.py ... --require-section）
-#   只在 _shared 一处（init-project / project-solution 仅引用路径名是合法的说明性引用，不算副本）
+#   只在 _shared 一处（init-project / strategy 仅引用路径名是合法的说明性引用，不算副本）
 # -----------------------------------------------------------------
 test_open_questions_gate_block_only_in_shared() {
   start_test "T3: check-open-questions.py --require-section 完整调用代码块只在 _shared 一处"
   local cnt
   cnt=$(grep -rl 'check-open-questions\.py.*\.project-solution-open-questions\.md.*--require-section\|--require-section.*\.project-solution-open-questions\.md' "$REPO_ROOT/skills/" 2>/dev/null | sort -u | wc -l | tr -d ' ')
-  # 单行匹配难捕获多行 bash heredoc，改用更精确的检查：grep _shared 必含完整调用 + init-project / project-solution 不含
+  # 单行匹配难捕获多行 bash heredoc，改用更精确的检查：grep _shared 必含完整调用 + init-project / strategy 不含
   if ! grep -q "check-open-questions.py" "$SHARED_FILE" 2>/dev/null; then
     _fail "_shared/project-questioning.md 缺 check-open-questions.py 调用（§4 未决问题闸门）"
     return
   fi
-  for skill in init-project project-solution; do
+  for skill in init-project strategy; do
     if grep -q "check-open-questions\.py.*--require-section" "$REPO_ROOT/skills/$skill/SKILL.md" 2>/dev/null; then
       _fail "$skill/SKILL.md 不应持有 check-open-questions.py --require-section 完整调用（应 @读 _shared §4）"
       return

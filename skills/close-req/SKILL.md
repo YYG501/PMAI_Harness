@@ -6,7 +6,7 @@ description: |
 
 # /pmai-close-req
 
-> **PM 视图（banner + 决策门 label）**：入口 banner（`status-view.py --banner-only --skill CLOSE-REQ`）；收尾确认门 label 按 `_shared/pm-view/banner-rules.md` §3 三条硬规则；退出 Next Up 引导「项目方向是否需要调整」（`/pmai-project-solution` 产品路线规划）或 `/pmai-new-req` 起下一个需求。
+> **PM 视图（banner + 决策门 label）**：入口 banner（`status-view.py --banner-only --skill CLOSE-REQ`）；收尾确认门 label 按 `_shared/pm-view/banner-rules.md` §3 三条硬规则；退出 Next Up 引导「项目方向是否需要调整」（`/pmai-strategy` 产品路线规划）或 `/pmai-new-req` 起下一个需求。
 >
 > **PM 答题规则**：所有 AskUserQuestion 调用按 `_shared/pm-view/askuser-rules.md` §1 四条硬规则走（空答 STOP / 没拿到答案禁止 merge 到主线 / runtime 退化保留 wait / 多决策拆开顺序问）。**Runtime 兜底**：本 skill 各门写的都是 picker 形态；runtime 不支持时 AI 按 §1.3 自动退化为编号列表，仍 wait。
 
@@ -345,7 +345,7 @@ rm -f "$PENDING_MARKER"
 📍 当前位置：主仓 main 分支
 
 ▶ Next Up — /pmai-new-req "<下一个需求>"（开始下一个需求）
-         或 /pmai-project-solution（重新审视项目方向 / 路线）
+         或 /pmai-strategy（重新审视项目方向 / 路线）
 ```
 
 ## Rules

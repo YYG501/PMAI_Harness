@@ -236,7 +236,7 @@ def render_health_check(repo_root: Path) -> None:
                 ("docs/PRODUCT.md", "可能漏跑 migrate-context-to-project.py — docs/CONTEXT.md 还在")
             )
         else:
-            missing.append(("docs/PRODUCT.md", "项目级文档主真相源；跑 /pmai-init-project 或 /pmai-project-solution 起新建"))
+            missing.append(("docs/PRODUCT.md", "项目级文档主真相源；跑 /pmai-init-project 或 /pmai-strategy 起新建"))
 
     if not (docs_dir / "PRODUCT-RULES.md").exists():
         missing.append(("docs/PRODUCT-RULES.md", "GSD §8 新增的产品规则文档"))
@@ -251,7 +251,7 @@ def render_health_check(repo_root: Path) -> None:
     print("💡 项目体检：缺以下产品级文档")
     for path, hint in missing:
         print(f"  - {path}（{hint}）")
-    print("  补法：发 /pmai-project-solution（skill 会按场景引导补全）")
+    print("  补法：发 /pmai-strategy（skill 会按场景引导补全）")
 
 
 def suggest_next_action(req_view: dict) -> str:

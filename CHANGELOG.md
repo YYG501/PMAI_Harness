@@ -20,6 +20,11 @@ PM-AI-Workflow 生成器仓的演进记录。本文件**只记影响下游业务
 
 ### 框架瘦身改造（吸收 ExampleAgentProject 设计方法）—— 进行中
 
+- `refactor(skills+bin)`: **skill 清单收敛——合并 align-to-live + scrape-prototype → `mirror-site`，project-solution 更名 `strategy`**（PM 拍板：两个 brownfield diff 轴流程 90% 同构合一；project-solution 名实不符、定位收窄）。**消费仓需重跑 `pmai install` / `upgrade`**：旧 `/pmai-align-to-live` `/pmai-scrape-prototype` `/pmai-project-solution` 命令失效，分别换 `/pmai-mirror-site`（mode=rebuild / align）、`/pmai-strategy`。
+  - **mirror-site**：align（对齐自己线上·改存量）+ scrape（照外部站重建·建增量）合一个 skill，用 mode 区分参照来源，共用 /browse 爬 + checks-diff 引擎 + Plan→批→Execute。
+  - **strategy**（原 project-solution）：定位明确为"项目跑起来后回头校准 / 重做顶层方向"，与起步定方向（init-project / codebase-audit）划清边界；同步 21 处引用（skill / _shared / scripts 提示文本 / templates / docs），**保留历史暂存文件名 `.project-solution-open-questions.md` 不动**（init-project / codebase-audit 共用）。
+  - 连带：`pmai-doctor` EXPECTED_SKILLS 同步（`tests/test-doctor-skills.sh` 全等校验护住）、`new-req` brownfield 建议、`dormant-skills.md` 清单更新。
+
 - `feat(skills+scripts+agents)`: **工作方法论纠错实施（6 条开放问题拍板后 A-D 组）**——纠正 reshape "砍仪式补方法"里"补进来的方法本身仍是信息呈现视角 + 砍掉探索整段"的浅设计（设计源 `docs/设计/工作方法论与工作流-总纲.md`，§0 同构错 6 处）。**消费仓影响**（需重跑 `pmai install` / `upgrade`）：
   - **A 立对抗三问强制门**：新增 `skills/_shared/anti-cut-check.md`（减法决策当场答"丢了什么 / 对所有类型成立吗 / 是不是把内核当仪式砍了"+ 对称判别尺、三行自答落 decisions）；接入 dormant-skills 新增条目 + close 减法类沉淀。配套：改造方案 §0 解锁"不可反向修改"元前提锁。
   - **B 真相源修复**：① 理路拆家——撤销"决策收家（折叠 `docs/decisions/` 进 PRODUCT-RULES、3 家减 2）"，恢复 3 个正交的家（理路→`docs/decisions/` 冻结 / 跨模块规则→`PRODUCT-RULES` / 单模块→模块 `decisions.md`），`deposit-routing.md` + `close/SKILL.md` 反转、删"遇冲突以本 skill 为准"例外、close picker 恢复"冻结成项目理路"第 4 选项；② `build-audits.py` 锚点参数化（`--range-list`/`--audit-dir`/`--label`，敲死"实施时择一"，向后兼容 task-* 回退默认）。
