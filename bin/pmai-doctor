@@ -64,15 +64,21 @@ fi
 # 3. Skills 全勤
 echo ""
 echo "─── 3. Skills in ~/.pmai/skills/ ───"
-# 期望全勤的 skill（reshape 活跃集 + dormant + 维护工具）。
+# 期望全勤的 skill —— 必须与 skills/ 目录（除 _shared）完全一致。
 # ⚠️ 加 / 删 skill 时必须同步本清单 —— 否则 pmai upgrade 的 doctor 自检会误判「缺 skill」触发回滚
 #    （reshape 删 req-analysis、加 build/close/design/mock/status 时漏改本清单的教训）。
+#    tests/test-doctor-skills.sh 对本清单与 skills/ 目录做全等校验，漏同步会在 run-all 红掉。
 EXPECTED_SKILLS=(
-  build close design mock status
-  cancel-req close-req close-task codebase-audit doc-update
-  implementation-design init-project new-req prd-writing project-solution
-  publish-to-lark quick-fix req-stage-gate skill-improve
-  task-confirm task-execute task-plan task-spec task-status task-submit task-verify
+  # 活跃集（reshape 后 PM 日常入口）
+  init-project design mock build close publish-to-lark status
+  # 按需主动调（brownfield / 项目方向）
+  project-solution codebase-audit align-to-live scrape-prototype
+  # dormant：task 状态机
+  task-plan task-spec task-confirm task-execute task-verify task-submit task-status close-task
+  # dormant：req 阶段驱动 / 后台辅助 / 小改 / 轻沉淀 / 旧 req 流程
+  req-stage-gate next implementation-design doc-update quick-fix deposit new-req close-req cancel-req prd-writing
+  # 框架自身维护
+  pmai-upgrade skill-improve
 )
 MISSING=()
 for sk in "${EXPECTED_SKILLS[@]}"; do
