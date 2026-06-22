@@ -11,16 +11,18 @@
 
 ---
 
-## 当前位置（2026-06-19）
+## 当前位置（2026-06-22）
 
-**2026-06-19 — 框架瘦身改造 v2：吸收 ExampleAgentProject 设计方法 + lifecycle 迁移（批 0-4）**（分支 `reshape/absorb-01agent`；设计源 `docs/设计/lifecycle迁移计划.md`）：
+**框架瘦身改造（吸收 ExampleAgentProject 设计方法）已整体 merge 进 `main`**（merge commit `135c3f7`，2026-06-21；reshape/absorb-01agent 分支全部并入；CHANGELOG 整段仍在「未发布」、消费仓尚未打 tag 同步。设计源 `docs/设计/lifecycle迁移计划.md` + `docs/设计/工作方法论与工作流-总纲.md`）。本轮交付（已落地·已 merge）：
 
 - **方向**：砍框架过度设计、借 ExampleAgentProject 工作模式（模块三件套 / design-card / spec-polish / mock）、补真实缺口；其中 **lifecycle 机器层重构** = 取消 `requirements/active|closed/` 整棵树，req 状态真相源迁到 `docs/modules/<模块>/.req-meta.json`（见 INVARIANTS 新增 **I-MOD1**）。
 - **批 0-2（已完成）**：迁移脚本 `migrate-reqs-to-modules.py`（dry-run）+ `_lib/state.py` 双读→单读切真相源 + `check-branch.sh` GATE 1/2/3 路径迁移与 main 写保护放宽（`docs/**` 全放行、`prototype/` 仍拒绝、stage 字段仍走 req-transition）+ `create-req-headless.sh`/`skill-preamble.sh`/`worktree.sh cleanup` 路径切换 + fixture 双写桥接。
 - **批 3（已完成·本轮·方案 A）**：`close-req.sh` 重写——close = 清模块 `.req-meta`（`git rm`），不再 `git mv active→closed`；有 worktree → merge 回 main（ancestor 验证 + I-CR9 回滚），无 worktree/无分支 → 直接 main 清 `.req-meta` 跳 merge。`cancel-req.sh` 同步改清模块 `.req-meta`（不 merge）。`symlink-prd.sh` + `pmai-sync-prds` PRD 源改 `docs/modules/<模块>/prd.md`。拆掉 fixture 的 `requirements/` 半边桥接（`fixture_create_req` 只建 `docs/modules/`、task 直落模块 tasks/）。连带修：`check-status-direct-edit.py`（pre-commit）+ `quick-fix.sh`（warn_active_reqs / is_redline_path）补 `docs/modules/*` 真相源；close-task / drift / pre-commit-hook / v4_T22 等 dormant·e2e 测试的 `requirements/active/` 路径假设改 `docs/modules/`。
 - **批 4（已完成·本轮）**：INVARIANTS.md 对齐——I-CR1/3/4/5/8（close 方案 A·worktree 可选·stage 4 沉淀）、I-CA4（清模块 .req-meta）、I-CB3/5/6（main docs/** 放行·路径迁移）、I-DC1（seal 路径 docs/modules·task 两道防线 dormant）、I-RT4（stage 4 沉淀不可回退）、**新增 I-MOD1**；task/exec 系列（I-CT/I-TT/I-CB4/10/I-AD + I-DC1 task 防线）标 🟡dormant（代码保留·测试仍跑·并行多 task 恢复时复活）。
-- **测试基线 599 / 0**（批 0-2 后 588→599；批 3/4 零净回归，仍 599/0）。
-- **下一步**：① PM 总审本轮 diff + 决定 merge（merge 前必手动跑两条真实 close 路径：有 worktree / 无 worktree）② 批 5（可选）= timeline/status-view closed 视图处置（方案 A 下 closed/cancelled 列表自然空）③ 批 6（附件迁移 I-RT10·与核心解耦）④ 余债：INVARIANTS I-RT2/I-RT5 仍写旧 stage 5/6 措辞（六步迁移遗留·非本批引入）；close-task.sh 归档/事件路径仍 hardcode `requirements/active/`（dormant·下次激活 task 系列一并对齐）。
+- **工作方法论纠错 A-D**（merge 含·6 条开放问题拍板后）：纠正 reshape「砍仪式补方法」浅设计——A 对抗三问强制门（`skills/_shared/anti-cut-check.md`）/ B 恢复 3 个正交决策家 + `build-audits.py` 锚点参数化 / C `/design` 三段式重构（探索→设计→写规格、删 `req-analysis` skill、诊断内核搬 `req-questioning.md`）/ D worktree·close 收口。新增 skill `design`/`mock`/`build`/`close`/`status` + 方法论 `info-design`/`req-questioning`/`anti-cut-check`。
+- **规格语言风格标准**（merge 含）：两类产物两套风格 + 格式骨架统一（标题序号 / 规范节名 / 固定节用表格）+ 规格样例（轻 spec / 重 PRD / 同需求对照）。
+- **测试基线 601 / 0 全绿**（lifecycle 批 0-2 后 588→599；批 3/4 零净回归→599；方法论纠错 A-D +2 build-audits override 用例→601；已随 merge 进 main）。
+- **下一步**：① **消费仓同步决策**——CHANGELOG 整段仍「未发布」，本轮改动大（消费仓需重跑 `pmai install`/`upgrade`，在飞 req 跑 `migrate-reqs-to-modules.py --dry-run` 迁移）；是否打 tag 发布待 PM 拍。② **真 req build spike 端到端验证**（一直挂着的余债：视觉门 `/design-review` + 行为审 `/browse` 真实浏览器链路 + dev server 真复用 + worktree 自动托管 fork/merge/删闭环；编排 + 覆盖审计已在 spike 验过，差浏览器侧）。③ **迁移练兵**：拿消费仓 `ExampleAgentProject` 走一遍新 `docs/modules` 结构 + 分档沉淀逐痛核对。④ **余债**：批 5（timeline/status-view closed 视图，方案 A 下列表自然空）/ 批 6（附件迁移 I-RT10·与核心解耦）/ INVARIANTS I-RT2/I-RT5 仍写旧 stage 5/6 措辞（迁移遗留·非本批引入）/ close-task.sh 归档·事件路径仍 hardcode `requirements/active/`（dormant·下次激活 task 系列一并对齐）。
 
 ---
 
@@ -213,9 +215,9 @@ review 修复 diff 已审、已提交（`e0792fa` 4 P0 + P1/P2 + deferred + `b35
 
 ## 新窗口续接命令
 
-> 继续 PM-AI-Workflow。读 RUNTIME.md「当前位置」——**PMAI 重构（office-hours 收敛）已大体落地**（六步引擎 + 22 skill 级联 + 执行器可插拔 + checks-diff + 迁移 + §7.A/B/C/D 全提交；2026-05-31 gstack-review 审出并修 4 P0 + P1/P2 + 处理 5 个 deferred 项：退役 speed mode、build 三道审脚本编排 `build-audits.py` 落地等）。**测试基线 572/0**。真相源：方向 `PMAI重构方向-office-hours收敛.md` / 落地 `PMAI重构-实施清单.md`（D1-D10 全拍定）+ memory `project_pmai_reshape_direction`。下一步看「下一步」段：review diff 已提交（含 `b3527fc` 二轮），唯一余下 = 真 req build spike 端到端验证。
+> 继续 PM-AI-Workflow。读 RUNTIME.md「当前位置」——**框架瘦身改造（吸收 ExampleAgentProject 设计方法）已整体 merge 进 `main`**（merge `135c3f7`，2026-06-21）：lifecycle 迁移（取消 `requirements/` 树 → `docs/modules/<模块>/.req-meta.json`，新增 I-MOD1）+ 工作方法论纠错 A-D + 新 skill（design/mock/build/close/status）+ 方法论（info-design/req-questioning/anti-cut-check）+ 规格语言风格标准。**测试基线 601/0**，工作树干净。真相源：`docs/设计/lifecycle迁移计划.md` + `docs/设计/工作方法论与工作流-总纲.md`；更早的重构方向 `PMAI重构方向-office-hours收敛.md`（D1-D10）+ memory `project_pmai_reshape_direction`。下一步看「下一步」段：CHANGELOG 整段仍「未发布」（消费仓同步待决）/ 真 req build spike 浏览器链路 / ExampleAgentProject 迁移练兵。
 
 AI 收到后应该：
-1. 读本文件「当前位置」2026-05-31 段（review 修复）+ 2026-05-29 段（重构方向）+ 两份设计文档确认现状与所有 D 决策
-2. 看「下一步」段决定做什么；review 修复 diff 已提交、工作树干净，唯一余下 = 真 req build spike
+1. 读本文件「当前位置」2026-06-22 段（reshape 瘦身改造 merge）确认现状；更早的重构方向决策见 2026-05-29 段 + 两份设计文档
+2. 看「下一步」段决定做什么；merge 已进 main、工作树干净
 3. **改框架资产先看 CHANGELOG 未发布段**了解已落地的近期改动，避免重复/冲突
