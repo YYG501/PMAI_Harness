@@ -1,14 +1,15 @@
 #!/usr/bin/env python3
-"""gen-mock-board.py — 从变体清单生成 mock 看版导航页
+"""gen-mock-board.py — 从变体清单生成 mockup 看版（单页并排比稿画廊）
 
 设计真相源：「分档运行与沉淀层」设计 §1.3（四叉已拍定）。
 
 核心纪律：
   - `<repo>/mocks/manifest.json` 是变体清单，**唯一真相源**。
   - `<repo>/mocks/index.html` 是**纯生成物**，永远不手改 —— 改 manifest.json 再重生成。
-  - 看版按状态分组：活跃 / 待合并 高亮在上；已退役 折叠灰显在下（<details>）。
+  - 看版 = **单页比稿画廊**：各变体的画面**内联铺在同一页并排比**（图片嵌缩略图、
+    HTML 嵌缩放预览），点击放大看原图 / 开原页。不再只给跳转链接（治"做成两个页面"）。
+  - 按状态分组：活跃 / 待合并 高亮在上；已退役 折叠灰显在下（<details>）。
   - featured 变体视觉突出。
-  - 每条渲染 5 字段；路径渲染成可点的相对链接（点开能看那个 mock）。
 
 用法：
   python3 scripts/gen-mock-board.py <repo_root>
@@ -17,7 +18,7 @@
   manifest 不存在或无变体 → 生成"暂无变体"的空看版，不报错（exit 0）。
 
 manifest schema（每条变体）：
-  path        相对 mocks/ 的路径（可点开的 mock 文件 / 目录）
+  path        相对 mocks/ 的路径（图片 .png/.jpg/.webp/.svg 或页面 .html / 目录）
   explores    探索什么（一句话）
   good_parts  好东西 / 可合并候选（一句话）
   status      状态：活跃 / 待合并 / 已退役
@@ -41,6 +42,10 @@ STATUS_RETIRED = "已退役"
 
 # 高亮区状态顺序（待合并排在活跃前 —— 待合并是更接近沉淀的状态，先看）
 HIGHLIGHT_ORDER = [STATUS_PENDING_MERGE, STATUS_ACTIVE]
+
+# 内联预览：按扩展名判画面类型
+IMAGE_EXTS = {".png", ".jpg", ".jpeg", ".webp", ".gif", ".svg", ".avif"}
+HTML_EXTS = {".html", ".htm"}
 
 GENERATED_BANNER = (
     "本文件由 scripts/gen-mock-board.py 从 mocks/manifest.json 生成。"
@@ -94,8 +99,50 @@ def _field(variant: dict, key: str) -> str:
     return _esc(val)
 
 
+def _preview_kind(path: str) -> str:
+    """据扩展名判内联预览方式：image / html / other（目录、无扩展名等）。"""
+    ext = ("." + path.rsplit(".", 1)[1].lower()) if "." in path.rsplit("/", 1)[-1] else ""
+    if ext in IMAGE_EXTS:
+        return "image"
+    if ext in HTML_EXTS:
+        return "html"
+    return "other"
+
+
+def _preview_html(path: str) -> str:
+    """渲染卡片顶部的内联画面。图片→<img>；HTML→缩放 <iframe>；其它→占位。
+
+    外层是指向原文件的 <a>（新标签打开），点画面即看大图 / 开原页。
+    """
+    if not path:
+        return (
+            '<div class="preview preview-missing"><span>（未登记路径）</span></div>'
+        )
+    href = _esc_attr(path)
+    kind = _preview_kind(path)
+    if kind == "image":
+        return (
+            f'<a class="preview" href="{href}" target="_blank" rel="noopener" '
+            f'title="点开看原图">'
+            f'<img src="{href}" loading="lazy" alt=""></a>'
+        )
+    if kind == "html":
+        # iframe 缩放成缩略图；pointer-events:none 让外层 <a> 接住点击。
+        return (
+            f'<a class="preview preview-html" href="{href}" target="_blank" rel="noopener" '
+            f'title="点开看完整页面">'
+            f'<iframe src="{href}" loading="lazy" tabindex="-1" scrolling="no"></iframe>'
+            f'<span class="preview-html-hint">HTML 页 · 点开看完整</span></a>'
+        )
+    # 目录 / 未知类型：给个可点占位
+    return (
+        f'<a class="preview preview-other" href="{href}" target="_blank" rel="noopener">'
+        f'<span>📄 {_esc(path)}<br><small>点开查看</small></span></a>'
+    )
+
+
 def render_variant_card(variant: dict) -> str:
-    """渲染单条变体卡片（5 字段 + 可点路径 + featured 标记）。"""
+    """渲染单条变体卡片：内联画面 + 路径 + 状态徽标 + 字段。"""
     path = variant.get("path") or ""
     featured = _is_featured(variant)
     status = variant.get("status") or ""
@@ -113,9 +160,8 @@ def render_variant_card(variant: dict) -> str:
         else ""
     )
 
-    # 路径渲染成可点链接（相对 mocks/，点开能看那个 mock）。无 path → 纯文本占位。
     if path:
-        path_html = f'<a class="variant-path" href="{_esc_attr(path)}">{_esc(path)}</a>'
+        path_html = f'<a class="variant-path" href="{_esc_attr(path)}" target="_blank" rel="noopener">{_esc(path)}</a>'
     else:
         path_html = '<span class="variant-path variant-path-missing">（未登记路径）</span>'
 
@@ -127,15 +173,18 @@ def render_variant_card(variant: dict) -> str:
             f'<span class="field-value">{_field(variant, "retired_note")}</span></div>'
         )
 
-    return f"""        <article class="{' '.join(card_classes)}">
-          <header class="variant-head">
-            {path_html}
-            <span class="badges">{status_badge}{featured_badge}</span>
-          </header>
-          <div class="field"><span class="field-label">探索什么</span><span class="field-value">{_field(variant, "explores")}</span></div>
-          <div class="field"><span class="field-label">好东西</span><span class="field-value">{_field(variant, "good_parts")}</span></div>
-          <div class="field"><span class="field-label">出自哪轮</span><span class="field-value">{_field(variant, "round")}</span></div>
-{retired_note}        </article>"""
+    return f"""          <article class="{' '.join(card_classes)}">
+            {_preview_html(path)}
+            <div class="variant-body">
+              <header class="variant-head">
+                {path_html}
+                <span class="badges">{status_badge}{featured_badge}</span>
+              </header>
+              <div class="field"><span class="field-label">探索什么</span><span class="field-value">{_field(variant, "explores")}</span></div>
+              <div class="field"><span class="field-label">好东西</span><span class="field-value">{_field(variant, "good_parts")}</span></div>
+              <div class="field"><span class="field-label">出自哪轮</span><span class="field-value">{_field(variant, "round")}</span></div>
+{retired_note}            </div>
+          </article>"""
 
 
 def _status_slug(status: str) -> str:
@@ -196,7 +245,7 @@ def render_board(data: dict, manifest_rel: str) -> str:
             sections.append(
                 f'      <section class="group group-active">\n'
                 f'        <h2>活跃 · 待合并 <span class="count">{len(active_like)}</span></h2>\n'
-                f"{cards}\n"
+                f'        <div class="grid">\n{cards}\n        </div>\n'
                 f"      </section>"
             )
         else:
@@ -212,7 +261,7 @@ def render_board(data: dict, manifest_rel: str) -> str:
                 f'      <section class="group group-retired">\n'
                 f'        <details>\n'
                 f'          <summary>已退役 <span class="count">{len(retired)}</span>（留存可翻，不进活跃高亮）</summary>\n'
-                f"{cards}\n"
+                f'          <div class="grid">\n{cards}\n          </div>\n'
                 f"        </details>\n"
                 f"      </section>"
             )
@@ -232,7 +281,7 @@ def _render_empty(parse_error: bool) -> str:
         '      <section class="group group-empty">\n'
         f"{note}"
         '        <p class="empty-note">暂无变体。<br>'
-        "探索期生成 mock 后，往 <code>manifest.json</code> 加一条、"
+        "探索期生成 mockup 后，往 <code>manifest.json</code> 加一条、"
         "重跑 <code>gen-mock-board.py</code>，这里就会列出来。</p>\n"
         "      </section>"
     )
@@ -247,32 +296,38 @@ def _html_shell(body: str, total: int, manifest_rel: str) -> str:
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Mock 变体看版</title>
+<title>Mockup 看版 · 多方案并排比</title>
 <style>
   :root {{
-    --bg: #f6f7f9;
+    --bg: #f4f5f7;
     --card: #ffffff;
-    --ink: #1f2328;
+    --ink: #14181d;
     --muted: #6a737d;
-    --line: #e1e4e8;
+    --line: #e3e6ea;
+    --line-soft: #eef0f2;
     --accent: #2563eb;
     --featured: #f59e0b;
+    --preview-bg: #fbfcfd;
+    --radius: 14px;
   }}
   * {{ box-sizing: border-box; }}
   body {{
-    margin: 0; padding: 2rem 1.5rem; background: var(--bg); color: var(--ink);
+    margin: 0; padding: 2.2rem 2rem 4rem; background: var(--bg); color: var(--ink);
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
                  "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
-    line-height: 1.55; max-width: 960px; margin-inline: auto;
+    line-height: 1.55; max-width: 1400px; margin-inline: auto;
   }}
-  header.board-head {{ margin-bottom: 1.5rem; }}
-  header.board-head h1 {{ margin: 0 0 .35rem; font-size: 1.5rem; }}
+  header.board-head {{ margin-bottom: 2rem; }}
+  header.board-head h1 {{ margin: 0 0 .4rem; font-size: 1.6rem; letter-spacing: -.01em; }}
   header.board-head .sub {{ color: var(--muted); font-size: .9rem; }}
   header.board-head .sub code {{
-    background: #eef0f2; padding: .05rem .35rem; border-radius: 4px; font-size: .85em;
+    background: #e9ebee; padding: .05rem .4rem; border-radius: 5px; font-size: .85em;
   }}
-  .group {{ margin-bottom: 2rem; }}
-  .group h2 {{ font-size: 1.05rem; border-bottom: 2px solid var(--line); padding-bottom: .4rem; }}
+  .group {{ margin-bottom: 2.4rem; }}
+  .group h2 {{
+    font-size: 1.05rem; margin: 0 0 1.1rem; padding-bottom: .45rem;
+    border-bottom: 2px solid var(--line);
+  }}
   .group-active h2 {{ border-bottom-color: var(--accent); }}
   .count {{
     display: inline-block; min-width: 1.4em; text-align: center;
@@ -281,38 +336,80 @@ def _html_shell(body: str, total: int, manifest_rel: str) -> str:
   }}
   details > summary {{
     cursor: pointer; font-size: 1.05rem; font-weight: 600; color: var(--muted);
-    padding: .4rem 0; border-bottom: 2px solid var(--line); list-style: revert;
+    padding: .45rem 0; border-bottom: 2px solid var(--line); list-style: revert;
+    margin-bottom: 1.1rem;
   }}
-  details[open] > summary {{ margin-bottom: 1rem; }}
+
+  /* 单页并排画廊：自适应网格，各变体的画面摊在一页里比 */
+  .grid {{
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+    gap: 1.4rem;
+  }}
+
   .variant-card {{
-    background: var(--card); border: 1px solid var(--line); border-radius: 10px;
-    padding: 1rem 1.1rem; margin-top: 1rem;
+    background: var(--card); border: 1px solid var(--line); border-radius: var(--radius);
+    overflow: hidden; display: flex; flex-direction: column;
+    box-shadow: 0 1px 2px rgba(20,24,29,.04);
+    transition: box-shadow .15s ease, transform .15s ease;
   }}
+  .variant-card:hover {{ box-shadow: 0 6px 22px rgba(20,24,29,.1); transform: translateY(-2px); }}
   .variant-card.featured {{
-    border-color: var(--featured); border-left-width: 5px;
-    box-shadow: 0 1px 4px rgba(245,158,11,.18);
+    border-color: var(--featured);
+    box-shadow: 0 0 0 2px rgba(245,158,11,.28), 0 6px 22px rgba(245,158,11,.14);
   }}
-  .variant-card.retired {{ opacity: .62; background: #fafbfc; }}
+  .variant-card.retired {{ opacity: .6; }}
+
+  /* 内联画面区 */
+  .preview {{
+    display: block; height: 230px; background: var(--preview-bg);
+    border-bottom: 1px solid var(--line-soft); position: relative; overflow: hidden;
+    text-decoration: none; color: var(--muted);
+  }}
+  .preview img {{
+    width: 100%; height: 100%; object-fit: contain; object-position: center; display: block;
+  }}
+  .preview-html iframe {{
+    width: 1280px; height: 800px; border: 0; background: #fff;
+    transform: scale(.34); transform-origin: top left; pointer-events: none;
+  }}
+  .preview-html-hint, .preview-missing span, .preview-other span {{
+    position: absolute; left: 0; right: 0; bottom: 0;
+    background: rgba(20,24,29,.62); color: #fff; font-size: .72rem;
+    padding: .25rem .5rem; text-align: center;
+  }}
+  .preview-missing, .preview-other {{
+    display: flex; align-items: center; justify-content: center; text-align: center;
+    font-size: .85rem;
+  }}
+  .preview-missing span, .preview-other span {{
+    position: static; background: none; color: var(--muted); padding: 0;
+  }}
+  .preview-other small {{ color: var(--accent); }}
+
+  .variant-body {{ padding: .85rem 1rem 1rem; display: flex; flex-direction: column; gap: .1rem; }}
   .variant-head {{
     display: flex; align-items: baseline; justify-content: space-between;
-    gap: .75rem; flex-wrap: wrap; margin-bottom: .6rem;
+    gap: .6rem; flex-wrap: wrap; margin-bottom: .55rem;
   }}
-  .variant-path {{ font-weight: 600; font-size: 1rem; color: var(--accent); text-decoration: none; word-break: break-all; }}
+  .variant-path {{
+    font-weight: 600; font-size: .92rem; color: var(--accent); text-decoration: none;
+    word-break: break-all;
+  }}
   .variant-path:hover {{ text-decoration: underline; }}
   .variant-path-missing {{ color: var(--muted); font-style: italic; }}
-  .badges {{ display: inline-flex; gap: .4rem; flex-shrink: 0; }}
-  .badge {{ font-size: .72rem; padding: .12rem .5rem; border-radius: 999px; white-space: nowrap; }}
+  .badges {{ display: inline-flex; gap: .35rem; flex-shrink: 0; }}
+  .badge {{ font-size: .7rem; padding: .12rem .5rem; border-radius: 999px; white-space: nowrap; }}
   .badge-featured {{ background: var(--featured); color: #fff; }}
   .badge-status {{ border: 1px solid var(--line); color: var(--muted); }}
   .badge-status.status-active {{ background: #dcfce7; border-color: #86efac; color: #166534; }}
   .badge-status.status-pending {{ background: #dbeafe; border-color: #93c5fd; color: #1e40af; }}
   .badge-status.status-retired {{ background: #f3f4f6; color: #6b7280; }}
-  .field {{ display: flex; gap: .6rem; font-size: .9rem; padding: .15rem 0; }}
-  .field-label {{ flex-shrink: 0; width: 5em; color: var(--muted); }}
+  .field {{ display: flex; gap: .55rem; font-size: .86rem; padding: .12rem 0; }}
+  .field-label {{ flex-shrink: 0; width: 4.5em; color: var(--muted); }}
   .field-value {{ color: var(--ink); }}
-  .retired-note .field-label {{ width: 5em; }}
   .empty-note {{ color: var(--muted); background: var(--card); border: 1px dashed var(--line);
-    border-radius: 10px; padding: 1.5rem; text-align: center; }}
+    border-radius: var(--radius); padding: 1.8rem; text-align: center; }}
   .empty-note code {{ background: #eef0f2; padding: .05rem .35rem; border-radius: 4px; }}
   .parse-error {{ color: #b91c1c; background: #fef2f2; border: 1px solid #fecaca;
     border-radius: 8px; padding: .75rem 1rem; }}
@@ -320,8 +417,8 @@ def _html_shell(body: str, total: int, manifest_rel: str) -> str:
 </head>
 <body>
   <header class="board-head">
-    <h1>Mock 变体看版</h1>
-    <p class="sub">探索期并行原型集 · 共 {total} 个变体 · 真相源 <code>{_esc(manifest_rel)}</code>（本页自动生成，勿手改）</p>
+    <h1>Mockup 看版</h1>
+    <p class="sub">多方案并排比 · 共 {total} 个变体 · 点画面看大图 · 真相源 <code>{_esc(manifest_rel)}</code>（本页自动生成，勿手改）</p>
   </header>
 {body}
 </body>

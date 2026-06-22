@@ -12,7 +12,7 @@
 
 dormant 的 skill 仍留在框架里——它们的 SKILL.md、references、脚本、测试、不变量**全部保留**，不删一行代码。只是：
 
-- **PM 面前不出现**：日常工作只用活跃集（`/init-project` / `/design` / `/mock` / `/build` / `/close` / `/publish-to-lark` / `/status`）。
+- **PM 面前不出现**：日常工作只用活跃集（`/init-project` / `/design` / `/mockup` / `/build` / `/close` / `/publish-to-lark` / `/status`）。
 - **默认不主动触发**：AI 不在常规流程里调它们。
 - **可重新激活**：以后真需要（如并行多 task），把对应 skill 拉回活跃集即可，状态机 / 脚本原地就能用。
 
@@ -92,7 +92,7 @@ dormant 的 skill 仍留在框架里——它们的 SKILL.md、references、脚�
 |---|---|
 | `/init-project` | 起项目骨架（只建脊柱、不锁流程） |
 | `/design` | 唯一写规格 skill（信息设计 + 三件套 + 磨文收口） |
-| `/mock` | 据讨论生成多 mock 变体给 PM 选 |
+| `/mockup` | 据讨论生成多 mock 变体给 PM 选 |
 | `/build` | 大需求才用（PM 选工具 + 选要不要 worktree）|
 | `/close` | 收尾沉淀（决策 / 术语回写 + 对账 + 归位 + merge）|
 | `/publish-to-lark` | 文档发飞书 |

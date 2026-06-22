@@ -66,11 +66,11 @@ echo ""
 echo "─── 3. Skills in ~/.pmai/skills/ ───"
 # 期望全勤的 skill —— 必须与 skills/ 目录（除 _shared）完全一致。
 # ⚠️ 加 / 删 skill 时必须同步本清单 —— 否则 pmai upgrade 的 doctor 自检会误判「缺 skill」触发回滚
-#    （reshape 删 req-analysis、加 build/close/design/mock/status 时漏改本清单的教训）。
+#    （reshape 删 req-analysis、加 build/close/design/mockup/status 时漏改本清单的教训）。
 #    tests/test-doctor-skills.sh 对本清单与 skills/ 目录做全等校验，漏同步会在 run-all 红掉。
 EXPECTED_SKILLS=(
   # 活跃集（reshape 后 PM 日常入口）
-  init-project design mock build close publish-to-lark status
+  init-project design mockup build close publish-to-lark status
   # 按需主动调（brownfield / 项目方向 / 照站对齐）
   strategy codebase-audit mirror-site
   # dormant：task 状态机

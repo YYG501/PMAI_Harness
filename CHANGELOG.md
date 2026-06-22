@@ -20,6 +20,8 @@ PM-AI-Workflow 生成器仓的演进记录。本文件**只记影响下游业务
 
 ### 框架瘦身改造（吸收 ExampleAgentProject 设计方法）—— 进行中
 
+- `feat(skills+scripts)`: **mock → mockup 改名 + 接入 AI 出图 + 看版重设计**。① skill `mock`→`mockup`（命令 `/pmai-mock`→`/pmai-mockup`，frontmatter `pmai-mock`→`pmai-mockup`），同步 `design`/`info-design`/`dormant-skills` 等引用 + `bin/pmai-doctor` EXPECTED_SKILLS；② 新增 `scripts/gen-mockup-image.sh`——用 codex 内置 image_gen 出 UI 设计稿图（钉 codex **0.135.0**，0.141 无头出图回归不可用；走 ChatGPT 订阅免 API key；脚本自己 diff `generated_images` 取新增图复制，天然验真防拷旧图冒充）；③ `scripts/gen-mock-board.py` 重设计成**单页比稿画廊**（各版画面内联铺一页并排比：图片嵌缩略图、HTML 嵌缩放预览，点开看大图），mockup skill 工作流支持图片 / HTML 两路 + 让 PM 选这轮出几版（借 design-shotgun）。**消费仓需重跑 `pmai upgrade`**：`/pmai-mock` 失效换 `/pmai-mockup`；图片路需本机装 codex（npx 自动拉 0.135.0）。`mocks/` 目录名与 `gen-mock-board.py` 脚本名保留不变。
+
 - `fix(skills)`: **design skill codex 第二视角审核修复 3 项**（PM 让 codex 审 /design 后，逐条核验真实性再修）：① `writing-rules.md` 引用路径前缀统一——design / info-design 三处 `prd-writing/...` → `skills/prd-writing/...`，防 AI 按仓库根解析扑空；② 探索段 escape-hatch 产物分档（`req-questioning.md`）：放行档不写 discussion 第一节、仅 push 档"现状切片 + 至少一条值得商榷"必含，消除"必含 vs 按需"自相矛盾（防探索段退回每次必审、抵消 escape-hatch 低疲劳目标）；③ spec 冷读自检澄清用通用 subagent（非只审探索段 discussion 第一节的 `analysis-reviewer`），消除 orphaned handoff。
 
 - `refactor(skills+bin)`: **skill 清单收敛——合并 align-to-live + scrape-prototype → `mirror-site`，project-solution 更名 `strategy`**（PM 拍板：两个 brownfield diff 轴流程 90% 同构合一；project-solution 名实不符、定位收窄）。**消费仓需重跑 `pmai install` / `upgrade`**：旧 `/pmai-align-to-live` `/pmai-scrape-prototype` `/pmai-project-solution` 命令失效，分别换 `/pmai-mirror-site`（mode=rebuild / align）、`/pmai-strategy`。

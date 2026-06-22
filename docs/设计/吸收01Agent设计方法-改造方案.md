@@ -61,7 +61,7 @@
 /design「一句话」                                    ← 不开 worktree
    ↓ 讨论 = 动文档(自动带上历史决策 + 术语,不让你重复说)   ┐
    ↓ /design 本身就是通用 design-card:理清信息模型      ├ 都在 main 上直接动文档
-   ↓ → /mock:据讨论生成多个 mock 方案(借 design-shotgun)给 PM 选 / 确认  │
+   ↓ → /mockup:据讨论生成多个 mock 方案(借 design-shotgun)给 PM 选 / 确认  │
    ↓ 产出/演进 模块三件套(discussion→decisions→spec)      ┘
    ├─ 小改:直接改,不开 worktree、不走流程
    └─ 大需求 → /build:开分支 + worktree(选工具)→ 建 → 看原型挑错改(review loop)
@@ -89,7 +89,7 @@
 |---|---|---|
 | 生命周期 | **/init-project**(轻)| 起项目骨架、不锁流程；早期自由探索；方向清晰后"纳入结构"(立第一个模块)。吸收原 brownfield 接入 |
 | | **/design** | = **唯一的写规格 skill**(见 §4):判新开/重做模块、加载基线、跑通用 design-card 信息设计、产/演进模块三件套。**只动文档、不开 worktree** |
-| | **/mock** | **据讨论内容(信息模型设计结论)生成 mock 页面**给 PM 提前确认设计(取代规格里画 ASCII)。**借 gstack `/design-shotgun`:一次生成多个方案变体让 PM 选** + 看版留存。**轻量、不开 worktree**，建在框架 `mocks/` + `gen-mock-board.py` 底子上 |
+| | **/mockup** | **据讨论内容(信息模型设计结论)生成 mock 页面**给 PM 提前确认设计(取代规格里画 ASCII)。**借 gstack `/design-shotgun`:一次生成多个方案变体让 PM 选** + 看版留存。**轻量、不开 worktree**，建在框架 `mocks/` + `gen-mock-board.py` 底子上 |
 | | **/build**(灵活·仅大需求)| **PM 选工具**(Claude Code / Codex / cursor / 手动，复用 exec-adapter)**+ 选要不要开 worktree** → 建 → review loop |
 | | **/close** | 规格反向定稿、决策/术语回写基线、文档自动归位、有 worktree 则 merge 回 main |
 | 工具 | **/publish-to-lark** | 文档发飞书(ExampleAgentProject 原用 lark-cli + 重发法，这是其 skill 版)|
@@ -123,8 +123,8 @@
 > **决策两个家（从 3 减到 2）**：模块决策 → 模块 `decisions.md`；跨模块/全局的规则·决策·理路 → 项目级 `PRODUCT-RULES.md`。
 > **框架连带改动(最深的一处)**：`docs/modules/<m>.md`(单文件)→ `docs/modules/<模块>/`(文件夹)；**取消 `requirements/active|closed/` 整棵树**——doc/附件/状态全不在那。连带要瘦 close 机器(`close-req.sh` / `req-transition` / I-CR·I-RT 建在 requirements/ 上)；本方案最深改动,按 lifecycle 迁移单独走、必跑测试(task 已 dormant、req 已弱化,方向一致)。
 
-### mock —— 设计确认 + 探索（**做成 /mock skill**；借 ExampleAgentProject + gstack `/design-shotgun` + 框架 `mocks/`）
-**/mock skill**:据讨论内容(信息模型设计结论)**生成 mock 页面**，给 PM **提前确认设计**(取代框架在规格里画 ASCII)，确认了再定稿规格 / 进 build。**借 gstack `/design-shotgun`——一次生成多个 mock 方案变体让 PM 选**；看版留存(不挑定的不删、manifest 登记)；原型本身也是"活 mock"，看着改。轻量、不开 worktree。建在框架 `mocks/` + `gen-mock-board.py` 底子上(实施时读 design-shotgun 借其多变体生成法)。
+### mock —— 设计确认 + 探索（**做成 /mockup skill**；借 ExampleAgentProject + gstack `/design-shotgun` + 框架 `mocks/`）
+**/mockup skill**:据讨论内容(信息模型设计结论)**生成 mock 页面**，给 PM **提前确认设计**(取代框架在规格里画 ASCII)，确认了再定稿规格 / 进 build。**借 gstack `/design-shotgun`——一次生成多个 mock 方案变体让 PM 选**；看版留存(不挑定的不删、manifest 登记)；原型本身也是"活 mock"，看着改。轻量、不开 worktree。建在框架 `mocks/` + `gen-mock-board.py` 底子上(实施时读 design-shotgun 借其多变体生成法)。
 
 ### 附件 / 素材 —— `docs/inputs/<类别>/`，自动归类（借 ExampleAgentProject）
 PM 上传的附件 / 素材**按类型自动归位**到 `docs/inputs/<类别>/`(访谈 / 竞品调研 / 会议脑暴 / 产品原文 / 信息模型 / 行业参照…,类别随项目长),AI 上传时判类型归位——**不再按 req 作用域塞 `requirements/<req>/attachments/`**。保留安全预检(敏感路径 denylist + 大小上限),去掉 per-req 作用域 + stage_prefix。
@@ -256,7 +256,7 @@ PM 上传的附件 / 素材**按类型自动归位**到 `docs/inputs/<类别>/`(
 | 2026-06-19 | 格式结合 = ExampleAgentProject 10 章骨架(尤其 §六信息模型)+ 框架 writing-rules reconcile + 不嵌原型 + 为什么进决策记录 + 一致性扫描 | §4 |
 | 2026-06-19 | 框架 §六 ASCII 原型节去掉，设计确认改为**提前用 mock 页面**;规格只留 normative + 引用 mock | §1.1/§3/§4 |
 | 2026-06-19 | **写规格 skill 必须通用灵活**:骨架是菜单不是死模板——信息模型按需出现、功能需求散文或表格自适应、唯一判据=讲清楚;保留写作纪律、放开章节与形式 | §4 |
-| 2026-06-19 | **生成 mock 做成独立 skill /mock**:据讨论生成 mock 页面给 PM 提前确认设计;**借 gstack design-shotgun 一次生成多变体让 PM 选**;轻量不开 worktree、建在 mocks/ 底子上(区别于 /build 真实现) | §1.1/§2/§3 |
+| 2026-06-19 | **生成 mock 做成独立 skill /mockup**:据讨论生成 mock 页面给 PM 提前确认设计;**借 gstack design-shotgun 一次生成多变体让 PM 选**;轻量不开 worktree、建在 mocks/ 底子上(区别于 /build 真实现) | §1.1/§2/§3 |
 | 2026-06-19 | **记忆方案核实定稿**:框架读侧已齐(/design 开场已读 PRODUCT-RULES + 相关模块 decisions.md)，**不照搬 ExampleAgentProject 机器本地的 Claude Code 记忆**(不建子系统);只补两处回写——决策→模块 decisions.md / PRODUCT-RULES、新术语→PRODUCT.md 业务术语表;/design 开场读清单补术语表 | §6 |
 | 2026-06-19 | **/new-req 改名 `/design`** | §1/§2/§4 |
 | 2026-06-19 | **close-req 改名 `/close`**(去 -req、与 /design 一致；脚本/不变量名不动) | §1/§2 |
