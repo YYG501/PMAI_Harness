@@ -1,9 +1,9 @@
 ---
 name: pmai-prd-writing
 description: |
-  PM 视图成文器：统一负责模块规格 spec.md 与 PRD 的结构和语言质量。
-  (a) 模块规格模式 — 由 /pmai-design 在探索/设计拍板后调用，输出/更新 docs/modules/<模块>/spec.md；
-  (b) 当前工作 PRD 模式 — 由 /pmai-close 在收尾时按需调用，基于 spec/decisions/prototype 反向合成 docs/modules/<模块>/prd.md；
+  PM 视图成文器：统一负责模块规格 spec.md 的生成/修改，以及 PRD 的结构和语言质量。
+  (a) 模块规格模式 — 由 /pmai-design 在探索/设计拍板后调用，也由 /pmai-close 在收尾修订规格时按需调用，输出/更新 docs/modules/<模块>/spec.md；
+  (b) 当前工作 PRD 模式 — 由 /pmai-close 在 PM 需要评审/留档 PRD 时按需调用，基于 spec/decisions/prototype 反向合成 docs/modules/<模块>/prd.md；
   (c) 手动模式 — PM 手动 /pmai-prd-writing，写独立 PRD 或补齐/规范已有 PRD/spec。
   Always trigger when the user says 'prd', 'PRD', '写需求文档', '写需求方案', '写评审 PRD', '写规格',
   '规范一下 PRD/规格', '补齐 PRD/规格', or asks to turn confirmed design decisions into a PM-facing spec/PRD.
@@ -15,16 +15,16 @@ description: |
 
 ## What This Skill Produces
 
-prd-writing 是**统一成文器**，负责把已经拍板的信息写成 PM 视图文档，并集中把关结构、语言风格和 lint。它写两类产物：
+prd-writing 是**统一成文器**，负责把已经拍板的信息写成 `spec.md` 或 PRD，并集中把关结构、语言风格和 lint。它覆盖四种产物形态：
 
 | 文档类型 | 何时写 | 产物路径 | 用途 |
 |---|---|---|---|
-| **模块规格** | `/pmai-design` 探索 + 设计拍板后 | `docs/modules/<模块>/spec.md` | build 的权威契约；写产品行为、规则、字段口径、验收路径 |
+| **模块规格** | `/pmai-design` 探索 + 设计拍板后；或 `/pmai-close` 收尾发现规格需要按最终结果修订时 | `docs/modules/<模块>/spec.md` | build 的权威契约；写产品行为、规则、字段口径、验收路径 |
 | **当前工作 PRD** | `/pmai-close` 收尾时 PM 按需选择 | `docs/modules/<模块>/prd.md` | 给研发/业务评审或留档的完整需求方案 |
 | **独立 PRD** | PM 手动要求跨模块/专题评审材料 | 默认 `docs/独立PRD/<slug>.md`，可由 PM 指定 | 不绑定当前工作的一份 PRD |
 | **补差/规范** | PM 已有 PRD 或规格，需要补齐、改结构、统一语言 | 原文件同路径覆盖或 PM 指定路径 | 修已有文档，不重做设计 |
 
-本 skill **只负责成文，不负责替 PM 或 `/pmai-design` 重新做产品决策**。如果写作时发现信息结构没想清、范围没拍板、规则互相矛盾，必须停下把问题交回 `/pmai-design` 或 PM 确认，不能在写作阶段补拍脑袋决策。
+本 skill **只负责 `spec.md` / PRD 成文，不负责替 PM 或 `/pmai-design` 重新做产品决策，也不负责生成 `discussion.md` / `decisions.md`**。`discussion.md` / `decisions.md` 是输入、证据和留痕位置；如果写作时发现信息结构没想清、范围没拍板、规则互相矛盾，必须停下把问题交回 `/pmai-design`、`/pmai-close` 或 PM 确认，不能在写作阶段补拍脑袋决策。
 
 当前工作 PRD 是**反向合成**，不是「把代码翻译成文档」，更**不从 mock 原型随手的实现反推业务规则**：
 
@@ -39,12 +39,14 @@ prd-writing 是**统一成文器**，负责把已经拍板的信息写成 PM 视
 
 prd-writing 是多模式 skill。先判**文档目标**，再判**触发方式**。
 
-### 模式 A — 模块规格成文（由 `/pmai-design` 调用）
+### 模式 A — 模块规格生成/修改（由 `/pmai-design` 或 `/pmai-close` 调用）
 
-- **触发**：`/pmai-design` 完成探索与设计，PM 已拍板模块身份、信息模型、关键规则、呈现方向。
-- **输入**：`discussion.md` 中已收敛的探索结论 + `decisions.md` 中已拍板决策 + PM 确认的 mock/原型线索 + 项目底座。
+- **触发**：
+  - `/pmai-design` 完成探索与设计，PM 已拍板模块身份、信息模型、关键规则、呈现方向。
+  - `/pmai-close` 收尾时，最终原型/验收结论要求修订模块规格。
+- **输入**：`discussion.md` 中已收敛的探索结论 + `decisions.md` 中已拍板决策 + PM 确认的 mock/原型线索 + 项目底座；由 `/pmai-close` 调用时，还要读最终 `prototype/` 与验收结论。
 - **产物**：`docs/modules/<模块>/spec.md`。
-- **边界**：不重新设计；发现未决问题就停止落盘，交回 `/pmai-design` 继续问清。
+- **边界**：只生成/修改 `spec.md`；不写 `discussion.md` / `decisions.md`。发现未决问题就停止落盘，交回调用方继续问清。
 
 ### 模式 B — 当前工作 PRD（由 `/pmai-close` 按需调用）
 
@@ -76,7 +78,7 @@ PM 手动调用时，AI 第一件事是确认文档目标。AI 调 AskUserQuesti
 - `question`: "这次要写哪类文档？"
 - `options`:
   - `label`: `模块规格`
-    `description`: `把已拍板设计写成 docs/modules/<模块>/spec.md`
+    `description`: `生成或修改 docs/modules/<模块>/spec.md`
   - `label`: `当前工作 PRD`
     `description`: `基于当前模块工作生成完整 PRD`
   - `label`: `独立 PRD`
@@ -106,7 +108,7 @@ AI 先在 prose 里列出按"输入推荐表"对应场景的推荐输入清单�
 
 | 场景 | 推荐输入 |
 |---|---|
-| 模块规格 | `/pmai-design` 已收敛的 discussion/decisions + docs/PRODUCT-STATE.md + docs/PRODUCT.md + docs/PRODUCT-RULES.md + docs/modules/INDEX.md + 已确认 mock/原型线索 |
+| 模块规格 | `/pmai-design` 已收敛的 discussion/decisions + docs/PRODUCT-STATE.md + docs/PRODUCT.md + docs/PRODUCT-RULES.md + docs/modules/INDEX.md + 已确认 mock/原型线索；如是 `/pmai-close` 收尾修订，还要读最终 prototype/ 与验收结论 |
 | 当前工作 PRD | 最终 prototype/ + docs/PRODUCT-STATE.md + docs/PRODUCT.md + docs/PRODUCT-RULES.md + docs/modules/INDEX.md + 涉及模块的 docs/modules/<模块>/spec.md / decisions.md |
 | 独立 PRD（PM 指定模块清单 X/Y/Z） | docs/PRODUCT-STATE.md + docs/PRODUCT.md + docs/PRODUCT-RULES.md + docs/modules/INDEX.md + docs/modules/X/spec.md + docs/modules/Y/spec.md + docs/modules/Z/spec.md |
 | 补差 | 现有 PRD/spec + 补差范围相关的 module spec / decisions 子集 |
@@ -134,7 +136,7 @@ prd-writing 历史上自带的写作规则（禁用清单 / UI 元素指代规�
 
 ### 模块规格模式（模式 A）
 
-`/pmai-design` 调用时，输入已经来自同一模块的 `discussion.md` / `decisions.md`。本 skill 要做的是把已确认内容写成 `spec.md`，不再展开 PRD §六重组。
+`/pmai-design` 调用时，输入已经来自同一模块的 `discussion.md` / `decisions.md`。`/pmai-close` 调用时，输入还包括最终原型、验收结论和收尾对账结果。本 skill 要做的是把已确认内容写成或修订 `spec.md`，不再展开 PRD §六重组，也不生成 `discussion.md` / `decisions.md`。
 
 - 🟢 本模块 `discussion.md`（探索结论 + 设计讨论收敛稿）
 - 🟢 本模块 `decisions.md`（已拍板决策、否过方案、术语定名）
@@ -142,7 +144,7 @@ prd-writing 历史上自带的写作规则（禁用清单 / UI 元素指代规�
 - 🟢 `docs/PRODUCT.md`（项目定位 / 用户画像 / 业务术语表）
 - 🟢 `docs/PRODUCT-RULES.md`（跨功能产品行为规则）
 - 🟢 `docs/modules/INDEX.md`
-- 🟡 已确认的 mock / 原型线索（如有，只作为呈现方向 evidence；规格不嵌 ASCII、不描述像素布局）
+- 🟡 已确认的 mock / 原型线索；由 `/pmai-close` 调用时读最终 `prototype/` 与验收结论（只作为规格修订 evidence；规格不嵌 ASCII、不描述像素布局）
 - ❌ 任何 `.engineering.md`
 
 ### 当前工作 PRD 模式（模式 B）
@@ -193,9 +195,9 @@ stage_prefix `"prd"`。chat 一行确认 `已归档（docs/inputs/attachments/pr
 
 **单一真相源**：`skills/_shared/pm-view/attachments-upload.md`（完整 prose / 替换 / 删除 / batch / 失败兜底）。
 
-### S1-S5 · 模块规格成文流程（模式 A）
+### S1-S5 · 模块规格生成/修改流程（模式 A）
 
-S1. **核对设计已收敛**：确认 `discussion.md` 里没有未回答问题，`decisions.md` 已记录关键拍板。若还有未决问题，停止写 `spec.md`，交回 `/pmai-design`。
+S1. **核对结论已收敛**：确认 `discussion.md` 里没有未回答问题，`decisions.md` 已记录关键拍板；由 `/pmai-close` 调用时，同时确认最终原型/验收结论没有新的未决产品问题。若还有未决问题，停止写 `spec.md`，交回调用方。
 
 S2. **抽取规格骨架**：从 `discussion.md` / `decisions.md` 提炼模块定位、功能清单、信息模型、业务规则、页面 / 交互口径、验收路径、边界与非目标。章节顺序按 `_shared/pm-view/section-order.md` 的 `spec.md` 约束。
 
@@ -208,7 +210,7 @@ S4. **语言把关**：模块规格不套 PRD 的重型全文风格，但必须�
 - 不写代码路径 / 字段名 / reducer / hook 等工程词；
 - 不嵌原型 ASCII，不写像素和颜色。
 
-S5. **规格自检**：对照 `skills/_shared/info-design.md`「规格 4 问」和 `skills/_shared/pm-view/checklist.md` 自查；发现结构问题回 `/pmai-design`，只发现表达问题则直接修文。
+S5. **规格自检**：对照 `skills/_shared/info-design.md`「规格 4 问」和 `skills/_shared/pm-view/checklist.md` 自查；发现结构问题回调用方补拍，发现表达问题则直接修文。
 
 模块规格模式到这里结束，不进入下方 PRD §六重组、原型覆盖表和独立 PRD symlink 流程。
 
@@ -743,7 +745,7 @@ ASCII 原型示例见 `references/few-shots.md`「§六 原型节 ASCII 示例�
 - 允许动作：把已拍板的设计结论写成模块规格；或基于模块 `spec.md` / `decisions.md` + 最终 `prototype/` + `docs/PRODUCT-STATE.md` + `docs/PRODUCT.md` + `docs/PRODUCT-RULES.md` 反向合成当前工作真系统口径 PRD；§三 名词解释承担本次工作临时词典职责（业务词向 PRODUCT.md 业务术语表的沉淀收敛到 `/pmai-close`）；为关键产品决策 / 跨功能规则列候选清单
 - 禁止顺手推进：不要在成文时新增产品范围、重做设计、反向改模块 `spec.md` 的范围边界；**不从 mock 原型的临时实现反推业务规则**（真系统口径铁律）；本 skill 不动 build / 复审产物
 - 退出条件：
-  - **模块规格模式**：`spec.md` 写完 + 自检通过 → 控制权交回 `/pmai-design`
+  - **模块规格模式**：`spec.md` 写完/修完 + 自检通过 → 控制权交回调用方（`/pmai-design` 或 `/pmai-close`）
   - **当前工作 PRD 模式**：PRD 写完 + lint 通过 + 候选清单整理完 → 控制权交回 `/pmai-close`
   - **独立 PRD / 补差模式**：文档经 PM 在对话中确认并写入文件
 

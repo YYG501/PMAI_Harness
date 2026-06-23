@@ -158,7 +158,7 @@ rm -f "$TMPFILE"
 
 **写规格纪律**（@读 `/pmai-prd-writing` 模块规格模式的写作纪律 / `_shared/pm-view/writing-rules.md`）：规格只留 normative 文字——"为什么"甩 `decisions.md` / `PRODUCT-RULES`，"原型长什么样"甩 `DESIGN.md` / mock，**规格里不嵌原型 ASCII**（设计确认靠 mock，不靠规格画图）。
 
-> **写规格的厚活在 `/pmai-prd-writing` 模块规格模式，设计拍板在 `/pmai-design`**；`/pmai-close` 这一步是"把已定的结论收口落盘 + 升版"，不重新做信息设计。若发现规格还有没理清的信息结构 → 不在 `/pmai-close` 硬写，回 `/pmai-design` 补。
+> **`spec.md` 的生成和修改一律走 `/pmai-prd-writing` 模块规格模式**。设计拍板在 `/pmai-design`；`/pmai-close` 只提供最终原型、验收结论和收尾对账结果作为输入，调用 prd-writing 把已定结论写入/修订 `spec.md`。若发现规格还有没理清的信息结构 → 不在 `/pmai-close` 硬写，回 `/pmai-design` 补。
 
 ---
 
