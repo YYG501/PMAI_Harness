@@ -24,7 +24,7 @@ caller SKILL 在 stage 产出文档末尾追加 `## 📎 参考材料` 引用。
     |                       |                                    |
     |   from _lib.attachments import copy_attachment             |
     |   r = copy_attachment(req_dir, Path("~/Downloads/foo.pdf"),|
-    |                       stage_prefix="req-plan",             |
+    |                       stage_prefix="spec",                 |
     |                       hint="Y 重点")                         |
     +-----------------------------------------------------------+
                             |
@@ -270,7 +270,7 @@ def _stage_doc_exists(req_dir: Path, stage_prefix: str) -> bool:
     """判断当前 stage 产出文档是否存在（C5 pending reference fix）。
 
     stage_prefix → 期望文档映射（六步）：
-        req-plan → req-plan.md（②范围确认主产物，替代旧 brief/analysis/prd 前置链）
+        spec     → spec.md（模块规格，build 锚点）
         prd      → prd.md（按需 PRD，prd-writing standalone）
         close    → close-report.md（沉淀收尾，如有）
         — 旧 7-stage 锚点 brief / analysis / impl 保留，兼容在飞旧 req —
@@ -279,7 +279,8 @@ def _stage_doc_exists(req_dir: Path, stage_prefix: str) -> bool:
     后续写产出时应读 attachments_seen 渲染引用 section（不能假设此刻可追加）。
     """
     mapping = {
-        # 六步锚点（主要落 req-plan）
+        "spec": [req_dir / "spec.md"],
+        # 历史六步锚点（只读兼容）
         "req-plan": [req_dir / "req-plan.md"],
         "prd": [req_dir / "prd.md"],            # 按需 PRD（prd-writing standalone）
         "close": [req_dir / "close-report.md"],  # 沉淀收尾（如有）
@@ -316,7 +317,7 @@ def copy_attachment(
     Args:
         req_dir: req 目录绝对路径（含 `.req-meta.json`）
         src: PM 给的源路径（支持 `~` / `~user` 展开）
-        stage_prefix: stage 前缀（req-plan / prd / close；旧 brief / analysis / impl
+        stage_prefix: stage 前缀（spec / prd / close；旧 req-plan / brief / analysis / impl
                       仍兼容）—— 决定命名前缀 + pending 判定
         hint: PM 给的"重点"描述（追溯用，可空）
 
@@ -329,7 +330,7 @@ def copy_attachment(
         FileSizeError: src 超 MAX_FILE_SIZE_MB hard cap
         StateReadError: `.req-meta.json` 不存在或解析失败（register_attachment 抛）
 
-    >>> # copy_attachment(Path("/req"), Path("~/foo.pdf"), "req-plan", "重点 X")
+    >>> # copy_attachment(Path("/req"), Path("~/foo.pdf"), "spec", "重点 X")
     """
     stage_prefix = _validate_stage_prefix(stage_prefix)
 

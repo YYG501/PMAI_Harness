@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# TTHW smoke test: init-project → first status-view-visible req.
+# TTHW smoke test: init-project → first status-view-visible active work.
 set -uo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -7,7 +7,6 @@ source "$SCRIPT_DIR/helpers/assert.sh"
 
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 MEASURE_TTHW="$REPO_ROOT/scripts/measure-tthw.sh"
-NEW_REQ_SKILL="$REPO_ROOT/skills/new-req/SKILL.md"
 
 json_value() {
   local json_file="$1"
@@ -26,10 +25,9 @@ PY
 }
 
 test_contract_is_documented() {
-  start_test "T1: /pmai-new-req 文档引用 create-req-headless.sh 作为状态创建契约"
+  start_test "T1: TTHW smoke 使用 headless active-work 状态创建契约"
   assert_file_exists "$REPO_ROOT/scripts/create-req-headless.sh" || return
   assert_file_exists "$MEASURE_TTHW" || return
-  assert_file_contains "$NEW_REQ_SKILL" "create-req-headless.sh" || return
   assert_file_contains "$MEASURE_TTHW" "status-view.py" || return
   pass_test
 }
@@ -88,8 +86,8 @@ PY
   fi
   # I-mini：消费仓不带 .claude/scripts/，status-view.py 走 framework 绝对路径
   if ! (cd "$project_dir" && python3 "$REPO_ROOT/scripts/status-view.py") \
-    | grep -q "当前 Req"; then
-    _fail "status-view.py 未识别 active req"
+    | grep -q "当前工作"; then
+    _fail "status-view.py 未识别 active work"
     cat "$out" >&2
     rm -rf "$(json_value "$out" run_root 2>/dev/null || true)"
     rm -f "$out" "$err"

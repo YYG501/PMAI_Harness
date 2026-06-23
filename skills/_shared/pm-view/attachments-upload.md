@@ -1,6 +1,6 @@
 # attachments AI 接管（trigger 0 LLM 识别）
 
-> **caller**：主路径 SKILL（new-req / next / design / build / prd-writing / close）。  
+> **caller**：主路径 SKILL（next / design / build / prd-writing / close）。  
 > **目标目录**：`docs/inputs/attachments/`。  
 > **状态登记**：当前模块 `docs/modules/<模块>/.req-meta.json:attachments_seen`。
 
@@ -34,10 +34,10 @@ from pathlib import Path
 result = copy_attachment(
     req_dir=Path(ACTIVE_REQ_DIR),          # docs/modules/<模块>
     src=Path("~/Downloads/foo.pdf"),
-    stage_prefix="scope",                 # 见 §3
+    stage_prefix="spec",                  # 见 §3
     hint="第 3 页痛点列表",
 )
-# result.new_name == "docs/inputs/attachments/scope-foo.pdf"
+# result.new_name == "docs/inputs/attachments/spec-foo.pdf"
 ```
 
 helper 内部：
@@ -84,7 +84,7 @@ helper 内部：
 
 | 场景 | helper stage_prefix |
 |---|---|
-| 范围确认 / design | `scope` |
+| design / 模块规格 | `spec` |
 | build | `build` |
 | 复审 | `review` |
 | 反向 PRD | `prd` |
@@ -100,21 +100,21 @@ helper 内部：
 from _lib.attachments import replace_attachment
 result = replace_attachment(
     req_dir,
-    old_filename="docs/inputs/attachments/scope-foo.pdf",
+    old_filename="docs/inputs/attachments/spec-foo.pdf",
     new_src=Path("~/Downloads/foo-v2.pdf"),
 )
 ```
 
-chat：`已替换 docs/inputs/attachments/scope-foo.pdf 为新内容。继续。`
+chat：`已替换 docs/inputs/attachments/spec-foo.pdf 为新内容。继续。`
 
 删除：
 
 ```python
 from _lib.attachments import remove_attachment
-remove_attachment(req_dir, filename="docs/inputs/attachments/scope-foo.pdf")
+remove_attachment(req_dir, filename="docs/inputs/attachments/spec-foo.pdf")
 ```
 
-chat：`已删 docs/inputs/attachments/scope-foo.pdf 及对应引用。继续。`
+chat：`已删 docs/inputs/attachments/spec-foo.pdf 及对应引用。继续。`
 
 ## §5 引用 section 渲染规则
 
@@ -155,7 +155,7 @@ for entry in os.scandir(repo_root / "docs" / "inputs" / "attachments"):
 | 源路径不可读 | `FileNotFoundError` | chat 报错 + 让 PM 重提 |
 | 命中 denylist | `SensitivePathError` | chat 报错 + 让 PM 确认 / 换路径 |
 | 超 50MB | `FileSizeError` | chat 报错 + 建议外部引用 / 拆小 |
-| `.req-meta.json` 不存在 | `StateReadError` | chat 报错 + 让 PM 在 req 流程内重提 |
+| `.req-meta.json` 不存在 | `StateReadError` | chat 报错 + 让 PM 在当前工作流程内重提 |
 | 磁盘满 / 权限 | `OSError` | chat 报错 + 让 PM 处理 |
 
 所有失败必须 fail-loud，不静默吞。

@@ -1,7 +1,7 @@
 # banner-rules：视觉锚点与 Decision gate label 规范（M2 单一真相源）
 
 > **职责**：banner 格式 + Next Up 块格式 + Decision gate label 3 硬规则（M3 砍后整合到 M2）。
-> **调用方**：next / init-project / new-req / design / build / close / cancel-req（所有用户面 skill）。
+> **调用方**：next / init-project / design / build / close / cancel（所有用户面 skill）。
 > **设计来源**：gsd `autonomous.md:62-69, 155-163` / `execute-phase.md:1725-1730` / `transition.md:494-509`（banner + Next Up）+ gsd `new-project.md:368-380` "Ready?" Decision gate。
 
 ---
@@ -66,11 +66,11 @@ stage 名字以 `scripts/_lib/stages.py:STAGE_NAMES` 为单一真相源（中文
 ### §2.2 例子
 
 ```
-## ▶ Next Up — cd <target-dir> && /pmai-new-req "<一句话需求>"
+## ▶ Next Up — cd <target-dir> && /design "<一句话需求>"
 
 ▶ Next Up:
   cd <target-dir>
-  /pmai-new-req "<一句话需求>"
+  /design "<一句话需求>"
 
 ## ▶ Next Up — /pmai-next（范围确认拍板后，进 build）
 
@@ -104,7 +104,7 @@ Next Up 块 / skill 退出提示 / 状态转换后输出 / 错误退出提示 �
 - 工程版："启动复审脚本、合并分支、删除隔离环境" → PM 版："我会把这次建好的内容检查完，确认后收尾到主线。"
 - 工程版："执行器写了 12 个文件，coverage diff 命中 3 项" → PM 版："我会列出已建内容和未覆盖的验收点，让你决定要不要继续改。"
 
-**反例（C 类不适用）**：PM 决策 picker 里的「AI 倾向 A，理由：<本 req 具体情况一行>」—— 这是给 PM 决策的素材（PM 选 A/B 要看 AI 倾向理由判断），**不是**解释 AI 流程安排，本规则不约束。判定标准：理由内容是"帮 PM 做选择"还是"解释 AI 已经做了的选择"，后者禁。
+**反例（C 类不适用）**：PM 决策 picker 里的「AI 倾向 A，理由：<本次工作具体情况一行>」—— 这是给 PM 决策的素材（PM 选 A/B 要看 AI 倾向理由判断），**不是**解释 AI 流程安排，本规则不约束。判定标准：理由内容是"帮 PM 做选择"还是"解释 AI 已经做了的选择"，后者禁。
 
 ---
 
@@ -120,7 +120,7 @@ Next Up 块 / skill 退出提示 / 状态转换后输出 / 错误退出提示 �
 
 | 形态 | 是否走 §3 | 例子 |
 |---|---|---|
-| **任何 PM 决策门**（阶段转换 / 选择分流 / 推进确认 / 验收 / 留守 vs 推进 / 多分支选择）| ✅ **必须用 AskUserQuestion**（runtime 不支持时按 askuser-rules.md §1.3 退化为编号列表）| `/pmai-next` 推进门；new-req 上坡路选择门；`/pmai-init-project` 阶段 C；`/build` 隔离环境与执行器选择；`/close` 沉淀确认 |
+| **任何 PM 决策门**（阶段转换 / 选择分流 / 推进确认 / 验收 / 留守 vs 推进 / 多分支选择）| ✅ **必须用 AskUserQuestion**（runtime 不支持时按 askuser-rules.md §1.3 退化为编号列表）| `/pmai-next` 推进门；`/design` 结构决策门；`/pmai-init-project` 阶段 C；`/build` 隔离环境与执行器选择；`/close` 沉淀确认 |
 | AI 主动告知 / 状态播报（不要 PM 答）| ❌ prose 输出即可 | banner / Next Up 块 / skill 启动播报 / 进展告知 |
 | 反问澄清（PM 输入语义模糊，AI 需 PM 补一句话再决定走 A/B/C，不是闸门决策）| ❌ prose 反问 | "你说的'改原型'指本次范围里的改动，还是想新起一个需求？" |
 

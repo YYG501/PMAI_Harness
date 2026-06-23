@@ -54,11 +54,11 @@ test_decision_gate_template_single_source() {
 
 # -----------------------------------------------------------------
 # T2: 6 节齐不齐**完整调用代码块**（PROJECT_STATE=$(python3 ... + ALL_FILLED + EMPTY 3 行块）
-#   只在 _shared 一处（new-req mini-fill 是 legacy 兜底，允许独立持有；不算重复）
+#   只在 _shared 一处（不再允许入口 skill 各自复制）
 #   关键：检测 init-project / strategy 不持有该完整代码块副本
 # -----------------------------------------------------------------
 test_section_check_block_not_in_d_iv_skills() {
-  start_test "T2: 6 节齐不齐完整调用代码块不出现在 init-project / strategy（_shared + new-req legacy 兜底各持一份合法）"
+  start_test "T2: 6 节齐不齐完整调用代码块不出现在 init-project / strategy（_shared 单一真相源）"
   for skill in init-project strategy; do
     if grep -q 'PROJECT_STATE=$(python3' "$REPO_ROOT/skills/$skill/SKILL.md" 2>/dev/null; then
       _fail "$skill/SKILL.md 不应持有 PROJECT_STATE=\$(python3 完整代码块副本（应 @读 _shared §7）"

@@ -289,18 +289,6 @@ test_module_semantic_dir_name() {
   pass_test
 }
 
-# -----------------------------------------------------------------
-# Scenario 8: SKILL.md 仍然引用 helper（防止下次拆 references 时删丢）
-# -----------------------------------------------------------------
-test_skill_invokes_helper() {
-  start_test "skills/new-req/SKILL.md 引用 req-num-resolver.sh helper"
-  local skill="$REPO_ROOT/skills/new-req/SKILL.md"
-  assert_file_contains "$skill" "req-num-resolver.sh" || return
-  assert_file_contains "$skill" "next" || return  # CLI subcommand
-  pass_test
-}
-
-# -----------------------------------------------------------------
 # Run
 # -----------------------------------------------------------------
 
@@ -316,6 +304,5 @@ test_octal_boundary_009
 test_module_meta_active
 test_module_closed_dir_only
 test_module_semantic_dir_name
-test_skill_invokes_helper
 
 report_results "req-num-resolver"

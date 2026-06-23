@@ -393,8 +393,8 @@ def get_stage_source(req_dir: Path, stage_num: int) -> Path:
     错误信息空间）。
 
     Raises:
-        KeyError: stage_num 不在 `STAGE_OUTPUT_FILES` 字典里（六步里只有 stage 1
-        有默认产物 req-plan.md；如 stage 2/3/4），且 `.req-meta.json` 也没有 `stage{N}_source` override。调用方应
+        KeyError: stage_num 不在 `STAGE_OUTPUT_FILES` 字典里（当前只有 stage 1
+        有默认产物 spec.md；如 stage 2/3/4），且 `.req-meta.json` 也没有 `stage{N}_source` override。调用方应
         知道自己要 stage N 是否在默认表里 —— 这是契约错误不是数据错误。
     """
     meta = read_req_meta(req_dir, strict=False)

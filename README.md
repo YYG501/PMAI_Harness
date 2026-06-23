@@ -35,23 +35,15 @@ PMAI 不和 Claude Design、design-html 或 Claude Code 比"谁更快生成第�
 
 /pmai-init-project    起业务项目（AI 自动判断空仓 / 已有代码，聊清做什么 / 为谁做，写 PROJECT.md）
 
-# req 主循环（一个需求 = 一个 req；全程一个窗口，机器步骤降后台，PM 只在闸门拍板）
+# 日常循环（模块规格先行，必要时再建）
 
-/pmai-new-req "批量审核"   起 req + 一句话 brief（需求一句话 + 给谁看 + demo 成功标准）
-/pmai-next                 推进六步（先说再动）：
-                           ① 范围确认 → 产 req-plan.md（范围清单 + 决策页），PM 拍板
-                           ② 在 prototype/ 栈内 build（Claude Code / 指定执行器零录入直建）
-                           ③ 三道审（覆盖审计 / 视觉门 / 行为审）+ 体验迭代 → 呈交 PM 一句 pass / 打回
-                           ④ 沉淀 → 更新 PRODUCT-STATE + merge 回 main（+ 按需反向出可评审 PRD）
-/pmai-task-status          产品现状视图（产品长什么样 / 主原型状态 / 本次增量）
-
-# task 机器（task-confirm / execute / close 全降后台、由 /pmai-next 自动编排，PM 不感知、不切窗口）
-# 收尾的「沉淀」由 /pmai-next 接 close-req 走；也可单独跑：
-
-/pmai-close-req       合主分支，整个需求闭环（沉淀两档：每 req 更 PRODUCT-STATE / 按需出可评审 PRD）
+/design "批量审核"    讨论清楚，写模块三件套：discussion.md / decisions.md / spec.md
+/build 批量审核       大需求才建：对着 spec.md 在 prototype/ 里实现，可选隔离环境和执行器
+/close                PM 验收后沉淀：更新 PRODUCT-STATE / PRODUCT-RULES / 模块规格，必要时合回 main
+/pmai-status          产品现状视图（产品长什么样 / 当前模块做到哪 / 下一步）
 ```
 
-PM 全程**只做决策**（方向 / PRD / 任务拆分 / 验收）；代码、commit、worktree 隔离、文档同步、状态机由框架兜。
+PM 全程**只做决策**（方向 / 结构 / 建造方式 / 验收 / 沉淀）；代码、commit、worktree 隔离、文档同步由框架兜。
 
 ---
 
@@ -157,7 +149,7 @@ skill 自动检测 cwd 是 `--local` 安装目录还是全局环境，按 mode �
 
 ## 快速开始
 
-> **TTHW 期望**：从 pmai install 跑通到落第一个 `brief.md` 草稿 ≤ 30 分钟。
+> **TTHW 期望**：从 pmai install 跑通到第一个模块规格草稿 ≤ 30 分钟。
 > install 自身 ~5 秒（git clone + symlink），init-project 跑 ~10 秒，其余时间是 PM 思考第一个需求。
 
 ### 1. 初始化新业务项目
@@ -173,7 +165,7 @@ agent 内部一气呵成 **4 阶段**：
 - **阶段 A · 参数收集 + 已有内容判断** —— AskUserQuestion 5 步问 PM（项目名 → 落地路径 → 已有内容判断 → 一句话背景 → 项目意图）。**这一步 AI 自动扫目录分诊，PM 不用预先判断**：空目录直接建；扫到已有源码 / 已 init 过 → AI 在方案里**主动建议**改走 `/pmai-codebase-audit`（接旧代码）或 `/pmai-project-solution`（重做方向），但**不硬拦**，PM 坚持 init 也接住（不删代码、可逆）
 - **阶段 B · 骨架建设** —— agent 用 Bash 调 `init-project.sh`，创建业务仓 + git init + 首 commit `init: <name>`
 - **阶段 C · QUESTIONING（方向讨论）** —— @读 `skills/_shared/project-questioning.md`（单一真相源），按提问纪律跑讨论 + Decision gate「创建 PROJECT.md / 继续探索」二选一 + Loop 回路，最后写 `docs/PROJECT.md` + `docs/ROADMAP.md` + atomic commit `docs: project direction settled`
-- **阶段 D · 终态汇总 + Next Up** —— 输出「✅ <name> 已就绪 / cd <target> && /pmai-new-req "..."」
+- **阶段 D · 终态汇总 + Next Up** —— 输出「✅ <name> 已就绪 / cd <target> && /design "..."」
 
 > `/pmai-init-project` 在装了 pmai 的任意 cwd 都能跑（无需在本仓）。
 
@@ -199,7 +191,7 @@ bash scripts/init-project.sh ...
 
 > 脚本是骨架构建器，**不带方向讨论**（PROJECT.md / ROADMAP.md 留空骨架）；直接调脚本适合自动化场景，PM 主动起项目走 `/pmai-init-project` skill 拿到完整体验。
 
-可量测 TTHW（从空项目到第一个 `status-view.py` 可识别的 active req）：
+可量测 TTHW（从空项目到第一个 `status-view.py` 可识别的 active work）：
 
 ```bash
 bash scripts/measure-tthw.sh
@@ -210,21 +202,16 @@ bash scripts/measure-tthw.sh
 > **注意**：装好 pmai 后，所有 skill 在 Claude Code 内都以 `pmai-` 前缀注册（防与 gstack / 其他框架命名冲突）。下面例子中的 `/pmai-*` 是真实的命令名。
 
 ```
-/pmai-new-req          → 起一个 req（需求）+ 一句话 brief
+/design "<一句话>"      → 探索真问题、理清信息结构、写模块三件套
   ↓
-/pmai-next             → 推进六步（先说再动，全程一个窗口）：
-                         ① 范围确认（产 req-plan.md，PM 拍板范围 + 决策页）
-                         ② 在 prototype/ 栈内 build（指定执行器零录入直建，后台 fork/merge worktree）
-                         ③ 三道审（覆盖 / 视觉 / 行为）+ 体验迭代
-  ↓ （task 机器：confirm / execute / close 全降后台，PM 不感知；task 状态全程「执行中」）
-                       → 呈交 PM 一句 pass / 打回（唯一拍板点；打回不切状态，AI 直接修）
-  ↓ （PM 通过）
-/pmai-next             → ④ 沉淀：更新 PRODUCT-STATE + 按需反向出 PRD
+/build <模块>          → 大需求才建；对着 docs/modules/<模块>/spec.md 改 prototype/
   ↓
-/pmai-close-req        → 整个 req 收尾，并入主分支
+/pmai-next             → 忘了当前停在哪时，用它读状态并提示下一步
+  ↓
+/close                 → PM 验收后沉淀产品现状、规则、模块规格；有隔离环境则合回 main
 ```
 
-并行多 task：PM 在 task-plan 拍执行模式（串行 / 并行 / 混合）；并行时 `/pmai-next` 给依赖已满足、互不冲突的 task 各派一个独立执行器并发建（各自 locked worktree），建完逐个呈交。**一 task 一执行器**铁律防串台。全程 PM 一个窗口。
+简单改动可以跳过完整流程：直接改完后用 `/close` 或 `/pmai-deposit` 做轻量沉淀。大需求才进入 `/build`。
 
 ### 3. 团队仓使用（`--local` 模式）
 
@@ -272,41 +259,28 @@ git push
 |---|---|
 | `/pmai-init-project` | **项目级入口**：起一个新业务项目，4 阶段一气呵成（参数 → 骨架 → 方向 → Next Up）；装了 pmai 后**任意 cwd** 可跑 |
 | `/pmai-project-solution` | **项目方向规划**：4 个独立场景（重做 / 产品路线规划 / 老板新方向 / brownfield 接入） |
-| `/pmai-new-req` | **req 级入口**：起一个新 req（带 brief） |
-| `/pmai-quick-fix` | 不走 req 流程的小补丁（适合改文案、修小 bug） |
+| `/design` | **模块设计入口**：起新功能 / 重做模块，写 discussion / decisions / spec |
+| `/pmai-quick-fix` | 不走完整流程的小补丁（适合改文案、修小 bug） |
 
-### 推进 req（需求级）
+### 推进模块工作
 
 | Skill | 用途 |
 |---|---|
-| `/pmai-next` | **六步推进主驱动**：读当前阶段做下一步（范围确认 → build → 复审 → 沉淀），先说再动 |
-| `/pmai-task-plan` | 范围确认产出：把范围清单拆成 task 单元（执行深度 / 并行性 PM 拍） |
+| `/pmai-next` | **续跑辅助**：读当前阶段做下一步（设计 → build → 复审 → 沉淀），先说再动 |
+| `/build` | 对着模块 `spec.md` 在 `prototype/` 建；PM 选择执行器和是否开隔离环境 |
 | `/pmai-prd-writing` | **按需** standalone：原型确认后反向出可评审 PRD（真系统口径，可跨 req） |
-| `/pmai-req-stage-gate` · `/pmai-implementation-design` · `/pmai-task-spec` | 已降后台 / 异常恢复入口（六步主流程不直接调；机器步骤由 `/pmai-next` 编排）。`/pmai-req-analysis` **已删**，深问能力并入 `/pmai-design` 探索段（`_shared/req-questioning.md`） |
 
-### task 机器（全降后台，由 `/pmai-next` 自动编排；PM 不直接调，留作异常恢复入口）
-
-| Skill | 用途 |
-|---|---|
-| `/pmai-task-confirm` | 后台自动 fork task worktree（PM 零窗口切换；异常恢复时才手动调） |
-| `/pmai-task-execute` | build 载体：在 prototype/ 栈内由指定执行器建 + 三道审 + 自动接呈交（同一个窗口，`git -C` 显式目录） |
-| `/pmai-task-submit` | 呈交验收信息块兜底（默认由 task-execute 自动呈交） |
-| `/pmai-task-verify` | 行为审：验收流程驱动 `/browse` 确定性跑（task-execute 内部调） |
-| `/pmai-task-status` | 产品现状视图（产品长什么样 / 主原型状态 / 本次增量） |
-| `/pmai-close-task` | 后台自动 merge + 归档 + 删 worktree（PM 验收通过后自动链） |
-
-### 收尾 req
+### 收尾 / 放弃
 
 | Skill | 用途 |
 |---|---|
-| `/pmai-close-req` | req 完成，merge 进 main + 同步项目级文档 |
-| `/pmai-cancel-req` | req 中止，回滚 worktree |
+| `/close` | 完成当前模块工作，沉淀产品现状 / 规则 / 模块规格，有隔离环境则合回 main |
+| `/pmai-cancel` | 放弃当前工作，不合并，清活跃状态并排队清理隔离环境 |
 
 ### 旁路 / 文档维护
 
 | Skill | 用途 |
 |---|---|
-| `/pmai-doc-update` | 处理文档偏差（对账模式；沉淀模式已并入 close-req） |
 | `/pmai-codebase-audit` | brownfield 项目代码现状审计 |
 | `/pmai-publish-to-lark` | 把文档发布到飞书 |
 

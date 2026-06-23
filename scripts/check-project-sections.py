@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """check-project-sections.py — PRODUCT.md 5 节状态检测器
 
-被 req-stage-gate skill 在 stage 3→4 闸门调用，检测 docs/PRODUCT.md 5 节
+被项目方向 / 健康检查流程调用，检测 docs/PRODUCT.md 5 节
 （项目名称 / 产品定位 / 用户画像 / 技术栈 / 业务术语表）
 是否为空骨架（HTML 注释占位 / 无实质内容）。
 

@@ -210,15 +210,15 @@ echo "REPO_ROOT: $REPO_ROOT"
 echo "BRANCH: $BRANCH"
 echo "WORKTREE_TYPE: $WORKTREE_TYPE"
 if [ "$ACTIVE_REQ_COUNT" -eq 1 ]; then
-  echo "ACTIVE_REQ: $ACTIVE_REQ (stage $ACTIVE_REQ_STAGE)"
+  echo "ACTIVE_WORK: $ACTIVE_REQ (stage $ACTIVE_REQ_STAGE)"
 elif [ "$ACTIVE_REQ_COUNT" -gt 1 ]; then
-  echo "ACTIVE_REQS ($ACTIVE_REQ_COUNT 个并行)："
+  echo "ACTIVE_WORKS ($ACTIVE_REQ_COUNT 个并行)："
   for _i in "${!_ACTIVE_REQ_IDS[@]}"; do
     echo "  - ${_ACTIVE_REQ_IDS[$_i]} (stage ${_ACTIVE_REQ_STAGES[$_i]})  →  ${_ACTIVE_REQ_DIRS[$_i]}"
   done
-  echo "提示：当前在主仓视角，多 active req 并行 — 操作具体 req 请先 cd 进对应 worktree。"
+  echo "提示：当前在主仓视角，多 active work 并行 — 操作具体工作请先 cd 进对应 worktree。"
 fi
-# 主窗口兜底收口：preamble 输出当前需求摘要。
+# 主窗口兜底收口：preamble 输出当前工作摘要。
 if [ -n "$ACTIVE_REQ" ] || ls "$MAIN_REPO_ROOT"/.worktrees/req-* >/dev/null 2>&1; then
   python3 "$PMAI_HOME/scripts/status-view.py" --summary 2>/dev/null || true
 fi

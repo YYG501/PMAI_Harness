@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """check-open-questions.py — 未决问题闸门 lint 脚本
 
-把 req-stage-gate SKILL §4「未决问题闸门（硬规则）」从 prose 防御抽出成机器校验。
-原 prose 入口：skills/req-stage-gate/SKILL.md:284 `## 未决问题` section grep `**PM 回答：**` 检测。
+把「未决问题闸门（硬规则）」从 prose 防御抽出成机器校验。
+历史 prose 入口曾在 req-stage-gate skill；当前由 design / project-questioning 等调用。
 
 适用对象：含 `## 未决问题` section 的产出文档（当前最严格落地在 analysis.md，
 其他 stage 类似产出可比照适用）。
@@ -12,11 +12,11 @@
 - 在该 section 内找所有 `**PM 回答：**` 行
 - 判断每条 `**PM 回答：**` 之后是否有非空内容（同行后接文字 OR 后续行非空非新 section）
 - 任一未答 → 退出 1 + 输出未答题号 / 行号到 stdout
-- 全部已答（或 section 写"本 req 无未决问题"）→ 退出 0
+- 全部已答（或 section 写"本次工作无未决问题"）→ 退出 0
 
 注意：
 - section 缺失 → 退出 0（许多 stage 文档没这 section，本脚本只在文档真有 section 时校验）
-- "本 req 无未决问题" 显式声明也视为已答
+- "本次工作无未决问题" 显式声明也视为已答
 - 只检测 `**PM 回答：**` 前缀；如果产出文档用了别的占位符（如 `**回答：**`）需要先把模板改齐再跑
 
 用法:
@@ -49,7 +49,7 @@ Q_HEADER = re.compile(r"^###\s+(Q\d+)[:：]\s*(.*)$")
 # `**PM 回答：**` 前缀（容忍中英冒号 + 全/半角空格）
 PM_ANSWER_PREFIX = re.compile(r"^\*\*PM\s*回答\s*[:：]\*\*\s*(.*)$")
 # section 内显式声明无未决问题
-NO_OPEN_QUESTIONS = re.compile(r"本\s*req\s*无未决问题")
+NO_OPEN_QUESTIONS = re.compile(r"本\s*(次工作|req)\s*无未决问题")
 
 
 def find_section(lines):
@@ -155,7 +155,7 @@ def main():
                 print(
                     f"⚠️ {path.name} 缺 `## 未决问题` section —— --require-section "
                     "模式下闸门不放行。请在文档里加 `## 未决问题` section "
-                    "（无未决项则写「本 req 无未决问题」）。"
+                    "（无未决项则写「本次工作无未决问题」）。"
                 )
             sys.exit(1)
 

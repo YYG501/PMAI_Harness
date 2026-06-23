@@ -9,14 +9,14 @@ source "$SCRIPT_DIR/helpers/fixture.sh"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 STATUS_VIEW="$REPO_ROOT/scripts/status-view.py"
 
-test_summary_lists_active_req() {
-  start_test "summary: lists active req by stage, no task wording"
+test_summary_lists_active_work() {
+  start_test "summary: lists active work by stage, no task wording"
   fixture_setup
   fixture_create_req "req-001" "test" 2 >/dev/null
 
   local out
   out=$(cd "$FIXTURE_DIR" && python3 "$STATUS_VIEW" --summary 2>&1)
-  if echo "$out" | grep -q "active req" \
+  if echo "$out" | grep -q "active work" \
      && echo "$out" | grep -q "req-001" \
      && ! echo "$out" | grep -qi "task"; then
     pass_test
@@ -43,8 +43,8 @@ test_status_suggests_build_not_task() {
   fixture_teardown
 }
 
-test_banner_only_renders_active_req() {
-  start_test "banner-only: active req renders without task dependency"
+test_banner_only_renders_active_work() {
+  start_test "banner-only: active work renders without task dependency"
   fixture_setup
   fixture_create_req "req-001" "test" 2 >/dev/null
 
@@ -74,9 +74,9 @@ test_timeline_has_no_task_counts() {
   fixture_teardown
 }
 
-test_summary_lists_active_req
+test_summary_lists_active_work
 test_status_suggests_build_not_task
-test_banner_only_renders_active_req
+test_banner_only_renders_active_work
 test_timeline_has_no_task_counts
 
 report_results "status-view"

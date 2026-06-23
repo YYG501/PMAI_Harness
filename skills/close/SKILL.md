@@ -1,7 +1,7 @@
 ---
 name: pmai-close
 description: |
-  收尾一个工作（原 close-req 演进）：把本次拍的决策与新术语回写进基线（跨 req 记忆）、
+  收尾一个工作（原 close-req 演进）：把本次拍的决策与新术语回写进基线（跨工作记忆）、
   规格定稿 / 就地升版、做「老规格 vs 新原型」对账（防 review 把规格悄悄删掉）、
   文档自动归位（产出落各自的家、根目录不留游离），有 worktree 则 merge 回 main。
 ---
@@ -24,7 +24,7 @@ description: |
 
 | | 干什么 | 落到哪 |
 |---|---|---|
-| **① 跨 req 记忆回写** | 本次拍的**决策**、造的**新术语**沉进基线 | 单模块决策 → 模块 `decisions.md`；跨模块**规则** → `PRODUCT-RULES.md`；跨文件**理路** → `docs/decisions/`（冻结）；新术语 → `PRODUCT.md` 业务术语表 |
+| **① 跨工作记忆回写** | 本次拍的**决策**、造的**新术语**沉进基线 | 单模块决策 → 模块 `decisions.md`；跨模块**规则** → `PRODUCT-RULES.md`；跨文件**理路** → `docs/decisions/`（冻结）；新术语 → `PRODUCT.md` 业务术语表 |
 | **② 规格定稿 / 就地升版** | 把这次的设计结论固化成规格真相源 | `docs/modules/<模块>/spec.md`（同文件夹就地演进：升版本号 + 变更日志 + 老条目 supersede） |
 | **③ 老规格 vs 新原型对账** | 防 review 改原型时把规格信息悄悄删了 | 逐条 flag「确认删 / 还是漏实现」，PM 拍；不盲目重写 |
 | **④ 文档自动归位 + 现状更新 + merge** | 产出落各自的家、根目录不留游离；现状档更新；有 worktree 则合回 main | `docs/PRODUCT-STATE.md` / `docs/inputs/<类别>/` / `mocks/`；`.worktrees/<分支>/` → main |
@@ -52,9 +52,9 @@ python3 "$PMAI_HOME/scripts/status-view.py" --banner-only --skill CLOSE 2>/dev/n
 
 > **PM 答题规则**：所有 AskUserQuestion 按 `_shared/pm-view/askuser-rules.md` §1 走（空答 STOP / 没拿到答案禁止 merge 到主线 / runtime 不支持 picker 时退化为编号列表仍 wait / 多决策拆开顺序问）。
 
-## 入口判断：这次有没有 worktree（按"本需求开没开 build worktree"判，不看当前 cwd）
+## 入口判断：这次有没有 worktree（按"当前工作开没开 build worktree"判，不看当前 cwd）
 
-`/close` 兼容两种工作形态（v2 §5：讨论 / 小改在 main 上直接做、无 worktree；只有大需求才开 worktree）。**形态由"这条需求有没有开 build worktree"决定**——close-req.sh 从 `REQ_DIR` 推导对应分支 / worktree 是否存在（Path A 有 / Path B 无），**不是看当前会话 cwd 在哪**。这样"主仓会话远程操作 worktree"（推荐形态）也能正确收尾。
+`/close` 兼容两种工作形态（v2 §5：讨论 / 小改在 main 上直接做、无 worktree；只有大需求才开 worktree）。**形态由"当前工作有没有开 build worktree"决定**——close-req.sh 从 `REQ_DIR` 推导对应分支 / worktree 是否存在（Path A 有 / Path B 无），**不是看当前会话 cwd 在哪**。这样"主仓会话远程操作 worktree"（推荐形态）也能正确收尾。
 
 ```bash
 REPO_ROOT="$(cd "$(git rev-parse --git-common-dir 2>/dev/null)/.." && pwd)"
@@ -62,7 +62,7 @@ CURRENT_WT="$(git rev-parse --show-toplevel 2>/dev/null)"
 CUR_BRANCH="$(git branch --show-current 2>/dev/null)"
 ```
 
-| 本需求 worktree | 会话 cwd | 走法 |
+| 当前工作 worktree | 会话 cwd | 走法 |
 |---|---|---|
 | **没开**（Path B：小改 / 讨论直接在 main 上做） | 主仓 | 走步骤 1–5（回写 + 定稿 + 对账 + 归位），**无 merge 步**（本就在 main） |
 | **开了**（Path A：大需求） | **在主仓**（推荐：主仓会话用 `git -C` 远程操作 worktree） | 走步骤 1–5 + 步骤 6（commit + merge 回 main + 删 worktree）。**cwd 在主仓，删 worktree 安全、不触 ENOENT** |

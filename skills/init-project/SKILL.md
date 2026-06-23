@@ -81,7 +81,7 @@ init 跑完后，项目里有这几样，构成 AI 以后每次进项目的"必�
 
 > 顺序执行 A / B / C / D；每步失败有显式兜底（见 §失败兜底速查）。
 >
-> **进度条**：agent 进入每一步**先 Bash echo 一行**。init-project 是项目级 skill（生成器仓内跑、无 active req），直接 echo 字面值：
+> **进度条**：agent 进入每一步**先 Bash echo 一行**。init-project 是项目级 skill（生成器仓内跑、无 active work），直接 echo 字面值：
 > - A：`echo "━━━ PMAI ► INIT-PROJECT ▸ 参数收集 ━━━"`
 > - B：`echo "━━━ PMAI ► INIT-PROJECT ▸ 建骨架 ━━━"`
 > - C：`echo "━━━ PMAI ► INIT-PROJECT ▸ 一句话方向 + 视觉基线 + 主原型 ━━━"`

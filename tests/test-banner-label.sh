@@ -19,10 +19,11 @@ BANNER_RULES="$REPO_ROOT/skills/_shared/pm-view/banner-rules.md"
 # 核心 SKILL（用户面 skill）
 CORE_SKILLS=(
   init-project
-  new-req
+  design
   next
   build
   close
+  cancel
 )
 
 # -----------------------------------------------------------------
@@ -111,7 +112,7 @@ test_banner_only_renders_active_req() {
   fixture_create_req "req-001" "test" 2 >/dev/null
 
   local out rc
-  out=$(cd "$FIXTURE_DIR" && python3 "$REPO_ROOT/scripts/status-view.py" --banner-only --skill new-req 2>&1)
+  out=$(cd "$FIXTURE_DIR" && python3 "$REPO_ROOT/scripts/status-view.py" --banner-only --skill design 2>&1)
   rc=$?
 
   if [ "$rc" != "0" ]; then
@@ -196,33 +197,6 @@ test_banner_rules_scope_disclaimer() {
   fi
   pass_test
 }
-
-# -----------------------------------------------------------------
-# T10: req-stage-gate office-hours slug fail-loud（D-iv v0.3 patch）
-# -----------------------------------------------------------------
-# 旧代码 SLUG="unknown" silent fallback 让 PM 误以为"没探测到产物"；新代码必须 fail-loud
-test_office_hours_slug_fail_loud() {
-  start_test "T10: req-stage-gate office-hours slug 解析 fail-loud（不 silent fallback unknown）"
-  local f="$REPO_ROOT/skills/req-stage-gate/SKILL.md"
-  # 旧 silent fallback 字眼不该再有
-  if grep -q 'SLUG="unknown"' "$f"; then
-    _fail "req-stage-gate 仍含 SLUG=\"unknown\" silent fallback（应改 fail-loud）"
-    return
-  fi
-  # 新增 SLUG_ERR 错误捕获变量应在
-  if ! grep -q "SLUG_ERR" "$f"; then
-    _fail "req-stage-gate 缺 SLUG_ERR 错误捕获（fail-loud 关键变量）"
-    return
-  fi
-  # 三态分流应有显式 "无法定位" 文案
-  if ! grep -q "无法定位 gstack 项目目录" "$f"; then
-    _fail "req-stage-gate 缺「无法定位 gstack 项目目录」分流文案"
-    return
-  fi
-  pass_test
-}
-
-# -----------------------------------------------------------------
 
 test_all_core_skills_reference_banner_rules
 test_banner_rules_has_label_3_rules

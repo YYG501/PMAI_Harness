@@ -39,13 +39,13 @@
 | 档 | 什么时候 | 怎么走 | 收尾 |
 |---|---|---|---|
 | 轻 | typo、链接、格式、很小代码修补 | `/pmai-quick-fix` 或 main 上直接小改 | `/pmai-deposit` 或 `/close` |
-| 中 | 一个模块内的完整讨论 / 规格演进 | `/pmai-new-req` → `/design` / `/pmai-next` | `/close` |
+| 中 | 一个模块内的完整讨论 / 规格演进 | `/design` / `/pmai-next` | `/close` |
 | 重 | 需要实际建一片原型功能 | `/design` 定稿模块 `spec.md` → `/build <模块>` → 复审 | `/close` |
 
 ### 主入口
 
 - `/pmai-init-project` — 起新项目，建项目底座。
-- `/pmai-new-req "<一句话需求>"` — 起新需求状态骨架。
+- `/design "<一句话需求>"` — 起新功能 / 重做模块，写模块三件套。
 - `/design <模块>` — 讨论、收范围、写模块三件套。
 - `/build <模块>` — 对着 `docs/modules/<模块>/spec.md` 在 `prototype/` 建。
 - `/pmai-next` — 读当前状态，提示下一步并拉起对应入口。

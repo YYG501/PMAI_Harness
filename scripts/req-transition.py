@@ -45,7 +45,7 @@ def save_meta(req_dir: Path, meta: dict) -> None:
 
 
 def seal_req_docs_before_transition(req_dir: Path, current: int, target: int) -> None:
-    """I-DC1 pre-transition gate：把 req worktree 里本 req 范围内的未 commit 文档改动
+    """I-DC1 pre-transition gate：把 worktree 里当前工作范围内的未 commit 文档改动
     自动 commit。range 严格限定避免卷入主仓其他改动。
 
     批 2：真相源迁 docs/modules/<模块>/（三件套 discussion/decisions/spec + .req-meta）。
@@ -96,7 +96,7 @@ def seal_req_docs_before_transition(req_dir: Path, current: int, target: int) ->
 
     dirty_files = [line[3:] if len(line) > 3 else line for line in status_out.splitlines()]
     print(
-        f"⚠️ I-DC1 pre-transition gate: stage {current}→{target} 检测到 active req 范围内未 commit 文档改动，自动落盘：",
+        f"⚠️ I-DC1 pre-transition gate: stage {current}→{target} 检测到当前工作范围内未 commit 文档改动，自动落盘：",
         file=sys.stderr,
     )
     for f in dirty_files:
@@ -144,8 +144,8 @@ def validate_forward(meta: dict, target: int, req_dir: Path) -> None:
         print(f"Error: must advance to stage {expected_next} from {current} (got {target}).", file=sys.stderr)
         sys.exit(1)
 
-    # Check prerequisite output file（六步：只有 stage 1「范围确认」有法定文档前置 =
-    # req-plan.md；build / 复审 的闸门由 PM 验收把守，不靠文件存在性。
+    # Check prerequisite output file：只有 stage 1「设计」有法定文档前置 =
+    # spec.md；build / 复审 的闸门由 PM 验收把守，不靠文件存在性。
     # stage 真相源仍走 get_stage_source helper，尊重 .req-meta.json:stage{N}_source override）。
     if current in STAGE_OUTPUT_FILES:
         output_file = get_stage_source(req_dir, current)

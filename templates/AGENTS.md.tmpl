@@ -9,15 +9,15 @@
 - `CLAUDE.md` 里写的“驱动 Claude”，在 Codex 会话中等价理解为“驱动 Codex”。
 - `/pmai-*` 是 PMAI 的用户命令名。Codex 没有 Claude Code slash skill runtime 时，按对应 `~/.pmai/skills/<command-without-pmai-prefix>/SKILL.md` 的步骤执行。
 - 机器状态推进必须走 `~/.pmai/scripts/` 下的脚本，不要直接改 `.req-meta.json:stage`。
-- build 阶段的实现改动应落在当前 req worktree 或明确允许的轻量入口内，不要绕过分支/阶段护栏。
+- build 阶段的实现改动应落在当前工作 worktree 或明确允许的轻量入口内，不要绕过分支/阶段护栏。
 
 ## Startup
 
 会话开始时按顺序做：
 
 1. 读 `CLAUDE.md`，把其中的 Claude host 名称按上面的 Host Mapping 映射到 Codex。
-2. 运行 `source $HOME/.pmai/scripts/skill-preamble.sh` 检测 PMAI_HOME、当前 worktree 和 active req。
-3. 按 `/pmai-next` 等价流程判断当前下一步；没有 active req 时，引导 PM 起 `/pmai-new-req`。
+2. 运行 `source $HOME/.pmai/scripts/skill-preamble.sh` 检测 PMAI_HOME、当前 worktree 和 active work。
+3. 按 `/pmai-next` 等价流程判断当前下一步；没有 active work 时，引导 PM 运行 `/design`。
 
 ## Command Resolution
 

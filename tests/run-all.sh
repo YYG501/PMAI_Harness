@@ -23,7 +23,6 @@ SUITES=(
   test-banner-label.sh
   test-narrative-mode.sh
   test-tthw-smoke.sh
-  test-req-stage-gate.sh
   test-req-transition.sh
   test-migrate-reqs.sh
   test-migrate-reqs-to-modules.sh
@@ -39,7 +38,6 @@ SUITES=(
   test-symlink-prd.sh
   test-status-view.sh
   test-todo-guidance.sh
-  test-new-req-no-arg-prompt.sh
   test-docs-archive-convention.sh
   test-docs-toplevel-guard.sh
   test-setup-deps.sh

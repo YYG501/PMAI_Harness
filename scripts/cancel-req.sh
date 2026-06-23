@@ -47,7 +47,7 @@ if [ -z "$REQ_BRANCH" ] || [ -z "$REQ_ID" ]; then
   exit 1
 fi
 
-echo "⚠️ 即将废弃 req: $REQ_ID"
+echo "⚠️ 即将放弃当前工作: $REQ_ID"
 
 # --- Step 1: 切回 main（硬失败）---
 cd "$REPO_ROOT"
@@ -68,9 +68,9 @@ if [ -n "$DIRTY" ]; then
     { path = substr($0, 4); if (index(path, prefix) != 1) print $0 }
   ')
   if [ -n "$BAD" ]; then
-    echo "❌ main 分支有与本 req 无关的未提交改动，拒绝 cancel 以防污染 cancel commit：" >&2
+    echo "❌ main 分支有与当前工作无关的未提交改动，拒绝 cancel 以防污染 cancel commit：" >&2
     echo "$BAD" >&2
-    echo "请先处理（commit、stash 或 reset）这些改动，然后重新运行 /pmai-cancel-req。" >&2
+    echo "请先处理（commit、stash 或 reset）这些改动，然后重新运行 /pmai-cancel。" >&2
     exit 1
   fi
 fi
@@ -101,7 +101,7 @@ if [ -n "$(git diff --cached --name-only)" ]; then
   fi
   echo "✅ cancelled 状态已 commit 到 main（清模块 .req-meta）"
 else
-  echo "ℹ️ main 上无本模块工作状态需要清（req 仅存在于 req worktree），跳过 commit"
+  echo "ℹ️ main 上无本模块工作状态需要清（当前工作仅存在于隔离 worktree），跳过 commit"
 fi
 
 # --- Step 3: 标记 req worktree/分支为待清理 ---
@@ -141,9 +141,9 @@ if [ -z "$REQ_WORKTREE" ]; then
   REQ_WORKTREE="$REPO_ROOT/.worktrees/$REQ_BRANCH"
 fi
 python3 "$QUEUE_PENDING_PY" "$PENDING_FILE" req "$REQ_BRANCH" "$REQ_WORKTREE" "$REQ_DIR"
-echo "🕓 标记待清理 req: $REQ_BRANCH"
+echo "🕓 标记待清理当前工作: $REQ_BRANCH"
 
-echo "✅ Req 已废弃: ${REQ_ID}（未 merge 到 main，模块 .req-meta 已清）"
+echo "✅ 当前工作已放弃: ${REQ_ID}（未 merge 到 main，模块 .req-meta 已清）"
 echo ""
 echo "📋 worktree 和 branch 待清理。请退出当前会话，回主仓 ($REPO_ROOT) 执行："
 echo "   bash scripts/cleanup-pending-worktrees.sh"

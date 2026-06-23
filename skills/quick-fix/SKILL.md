@@ -10,7 +10,7 @@ description: |
 
 ## When To Use
 
-- PM 明确判断某个改动不需要完整 `/pmai-new-req` / `/design` / `/build`。
+- PM 明确判断某个改动不需要完整 `/design` / `/build`。
 - 适用于错别字、格式、链接、常量值、少量样式、很小的代码修补。
 - 不适用于需要重新讨论范围、改模块规格、补验收路径或改一片功能的工作；这类走 `/design` 或 `/build`。
 

@@ -9,7 +9,7 @@ description: |
     C 老板 / 市场新方向（外部输入逼着改路线）
     D brownfield 接入方向恢复（接入时 /pmai-codebase-audit 内联方向讨论被打断 / 想重定方向时手动补跑）
   内部逻辑：场景判断 + @读 _shared/project-questioning.md 跑讨论（提问顺序场景特定）。
-  不占 req stage、不走 req-stage-gate。
+  不占活跃工作阶段，不调用推进脚本。
   Always trigger when the user says 重定方向 / 校准方向 / 项目方向偏了 / 产品路线规划 / 季度规划 / 老板给了新方向 / 项目方向重做。
   do NOT use for 首次起项目定方向（那走 /pmai-init-project 或 /pmai-codebase-audit）。
 ---
@@ -24,7 +24,7 @@ description: |
 
 PM 主动调用，**4 个独立场景**：
 
-- **A 项目方向重做**：跑过几个 req 后发现产品定位偏了，重新定方向
+- **A 项目方向重做**：跑过几个模块工作后发现产品定位偏了，重新定方向
 - **B 产品路线规划**：主动校准 PRODUCT 5 节 + 刷新 TODO 待办池（含季度 / 半年节奏 / 老项目首次补全）
 - **C 老板 / 市场新方向**：外部输入逼着改路线
 - **D brownfield 接入方向恢复**：brownfield 接入的方向讨论已搬进 `/pmai-codebase-audit` step 4 内联跑（一气呵成）。本场景只在**异常恢复**时用——接入时方向讨论被打断没跑完（窗口关了 / context 丢了）、或现状档当时定的方向想重来。正常 brownfield 接入**不用**手敲本命令。
@@ -32,8 +32,8 @@ PM 主动调用，**4 个独立场景**：
 > **不在 scope**：
 > - greenfield 首次起新项目 → 走 `/pmai-init-project`（一气呵成 4 阶段；阶段 C 内嵌方向讨论按同款 `_shared/project-questioning.md` 跑）
 > - brownfield 首次接入定方向 → 走 `/pmai-codebase-audit`（一气呵成：扫码产现状档 → PM 过目 → step 4 内联方向讨论，同款 `_shared/project-questioning.md`）。本 skill 场景 D 只兜接入方向讨论被打断的异常恢复
-> - req 级范围确认 / 按需 PRD / 沉淀 → 走 `/pmai-new-req` 起需求、`/pmai-next` 推进六步（`req-stage-gate` 已降为异常恢复壳）
-> - 老项目同步兜底 → 走 `/pmai-new-req` mini-fill（不在本 skill 范围）
+> - 模块设计 / build / 按需 PRD / 沉淀 → 走 `/design`、`/build`、`/close`、`/pmai-prd-writing`
+> - 老项目同步兜底 → 走 `/pmai-codebase-audit` 或 `/pmai-status` 提示的健康检查，不在本 skill 范围
 
 ## Preamble
 
@@ -156,7 +156,7 @@ PM 选「创建 PRODUCT.md」+ 定稿后：
 
 本轮方向讨论若产出了**项目级理路**——护城河论证 / 几个机制怎么整体咬合 / 关键交互理念推导 / v2 演进方向（不是单条术语、不是 5 节里的离散填空）——**@读 `skills/_shared/decision-record.md`** 判门槛（纯微调不冻），有实质理路 → 向 PM 提一句「这轮定了 <一句话理路>，冻一份项目决策记录留底，好吗」，PM 点头 → 按 `$PMAI_HOME/templates/decision-record.md.tmpl` 写 `docs/decisions/<日期>-<slug>.md`（理路节 + 当时事实摘要带日期 + 指针）。**纯微调 / 无跨文件理路 → silent skip 本步**。
 
-> **本 skill 不写 PRODUCT-STATE 索引**：strategy 不是 PRODUCT-STATE 的 sanctioned 写口（防腐铁律只认 close-req + `/pmai-deposit`）。冻的决策记录靠 `/pmai-new-req` 起步直接扫 `docs/decisions/` 发现（+ PRODUCT-STATE 已有指向 `docs/decisions/` 的通用索引），不需要本 skill 逐条挂索引。`docs/decisions/` 在 main 上可写（冻结档豁免，见 `check-branch.sh`）。
+> **本 skill 不写 PRODUCT-STATE 索引**：strategy 不是 PRODUCT-STATE 的 sanctioned 写口（防腐铁律只认 `/close` + `/pmai-deposit`）。冻的决策记录靠 `/design` 进场扫 `docs/decisions/` 发现（+ PRODUCT-STATE 已有指向 `docs/decisions/` 的通用索引），不需要本 skill 逐条挂索引。`docs/decisions/` 在 main 上可写（冻结档豁免，见 `check-branch.sh`）。
 
 #### 步骤 8.6：atomic commit + 引导下一步
 
@@ -164,14 +164,14 @@ PM 选「创建 PRODUCT.md」+ 定稿后：
 - 退出前提醒 PM TODO 待办池里有哪些待办（按 §5.3），不替 PM 定下一个该做啥 + 引导下一步：
 
 ```
-项目方向定稿。下一步：运行 /pmai-new-req 开始第一个需求。
+项目方向定稿。下一步：运行 /design 开始第一个功能 / 模块。
 ```
 
 ## Rules
 
 **禁止项**：
 
-- ❌ 走 req stage / 调 `req-transition.py` / 调 `/pmai-req-stage-gate` —— 本 skill 是项目级，不占 req stage
+- ❌ 走活跃工作 stage / 调 `req-transition.py` —— 本 skill 是项目级，不占模块工作阶段
 - ❌ 产工程孪生文件（`solution.engineering.md` 之类）—— 单文件，只写 PM 视角
 - ❌ 自动调 `/office-hours` / `/plan-ceo-review` —— 这两个由 PM 可选自跑
 - ❌ 设 analysis-reviewer 式第二视角强制评审 —— 项目方向第二视角由 PM 自跑 `/plan-ceo-review`
@@ -191,5 +191,5 @@ PM 选「创建 PRODUCT.md」+ 定稿后：
 
 - **允许产出**：`docs/PRODUCT.md`、`docs/TODO.md`、`docs/decisions/<日期>-<slug>.md`（本轮有实质理路时按需冻）、暂存文件 `docs/.project-solution-open-questions.md`
 - **允许动作**：分批提问、未决问题闸门、Decision gate、5 节检查、确认门、按需冻决策记录、atomic commit
-- **禁止顺手推进**：不自动起 req、不调 `/pmai-new-req`、不产任何 req 级文档
+- **禁止顺手推进**：不自动进入 `/design`、不产任何模块工作文档
 - **退出条件**：`docs/PRODUCT.md` 5 节全填、`docs/TODO.md` 已写、未决问题闸门已过、Decision gate 选了「创建 PRODUCT.md」、PM 已定稿、atomic commit 已落

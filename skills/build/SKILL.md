@@ -89,7 +89,7 @@ BUILD_DIR="$MAIN_REPO_ROOT/.worktrees/$BUILD_BRANCH"
 git -C "$MAIN_REPO_ROOT" worktree add -b "$BUILD_BRANCH" "$BUILD_DIR" main
 ```
 
-**cwd 护栏（硬规则，同 new-req 步骤 4）**：禁止 `cd "$BUILD_DIR"`（含 `cd … && cmd` 顺手写法）。在 worktree 内跑命令必须用三种安全形式之一：
+**cwd 护栏（硬规则）**：禁止 `cd "$BUILD_DIR"`（含 `cd … && cmd` 顺手写法）。在 worktree 内跑命令必须用三种安全形式之一：
 | 形式 | 用法 | 场景 |
 |---|---|---|
 | `git -C "$BUILD_DIR" <cmd>` | `git -C "$BUILD_DIR" status` | 所有 git 命令 |

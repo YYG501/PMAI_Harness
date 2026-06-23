@@ -4,7 +4,7 @@
 #   ① get_stage_source 4 case（meta 有 / 缺 / 旧 req fallback / KeyError 防御）
 #   ② set_stage_source 3 case（新写 / append origin / 旧 meta 兼容写）
 #   ⑤+⑥ 静态 grep：SKILL.md / templates 不再硬编码 analysis.md（关键 hook 点）
-#   ⑦ new-req 砍选项 1：grep 删除痕迹
+#   ⑦ stage 1 默认产物跟随模块 spec.md
 set -uo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -51,7 +51,7 @@ print('OK')
 }
 
 test_get_stage_source_fallback_no_field() {
-  start_test "get_stage_source: meta 无 stage1_source → fallback req-plan.md（六步：stage 1 范围确认产物）"
+  start_test "get_stage_source: meta 无 stage1_source → fallback spec.md（stage 1 设计产物）"
   fixture_setup
   req_dir=$(fixture_create_req "req-002" "test" 1)
   python3 -c "
@@ -61,7 +61,7 @@ sys.path.insert(0, '$FRAMEWORK_ROOT/scripts')
 from _lib.state import get_stage_source
 rd = Path('$req_dir')
 p = get_stage_source(rd, 1)
-assert p == (rd / 'req-plan.md').resolve(), f'expected req-plan.md got {p}'
+assert p == (rd / 'spec.md').resolve(), f'expected spec.md got {p}'
 print('OK')
 " >/tmp/out.$$ 2>/tmp/err.$$
   if grep -q "OK" /tmp/out.$$; then
@@ -85,8 +85,8 @@ from pathlib import Path
 sys.path.insert(0, '$FRAMEWORK_ROOT/scripts')
 from _lib.state import get_stage_source
 p = get_stage_source(Path('$req_dir'), 1)
-# strict=False 路径，meta=None → 落到 STAGE_OUTPUT_FILES[1] = 'req-plan.md'
-assert p == (Path('$req_dir') / 'req-plan.md').resolve(), f'expected req-plan.md got {p}'
+# strict=False 路径，meta=None → 落到 STAGE_OUTPUT_FILES[1] = 'spec.md'
+assert p == (Path('$req_dir') / 'spec.md').resolve(), f'expected spec.md got {p}'
 print('OK')
 " >/tmp/out.$$ 2>/tmp/err.$$
   if grep -q "OK" /tmp/out.$$; then
@@ -288,17 +288,6 @@ test_grep_req_transition_uses_helper() {
   fi
 }
 
-test_grep_new_req_option1_removed() {
-  start_test "grep: new-req 砍选项 1（不再说"自跑 /office-hours 整理 brief"）"
-  # 砍掉的特征：原选项 1 "自跑 /office-hours（gstack skill）做六问深挖思考"
-  if grep -q "自跑 /office-hours" "$FRAMEWORK_ROOT/skills/new-req/SKILL.md"; then
-    _fail "new-req 仍含 '自跑 /office-hours' 选项 1 残留"
-  else
-    pass_test
-  fi
-}
-
-# -----------------------------------------------------------------
 # ④ snapshot 集成：B 分支推 Stage 3 路径连通（合并到 ③ 由 test-req-transition 覆盖；
 #                  这里独立验 helper 写完 → get 读回链路）
 # -----------------------------------------------------------------
@@ -348,7 +337,6 @@ test_set_stage_source_strict_no_meta_raises
 test_get_stage_source_rejects_path_traversal
 test_set_stage_source_rejects_path_traversal
 test_grep_req_transition_uses_helper
-test_grep_new_req_option1_removed
 test_set_get_round_trip_B_branch
 
 report_results "stage-source-helper"

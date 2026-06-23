@@ -6,7 +6,7 @@
 越界的 stage 值重映射：
 
     旧 7-stage（仅越界值 stage > MAX_STAGE 才重映射）   → 六步
-    5 impl-design                                       → 1 范围确认
+    5 impl-design                                       → 1 设计
     6 task-loop（build）                                 → 2 build
     7 close                                             → 4 沉淀
 
@@ -22,7 +22,7 @@
 **幂等**：已带 `migrated_from_7stage` 字段的 req 跳过。支持 `--dry-run`。
 
 **重要 caveat（迁移只动 stage 数值、不动产物）**：closed 旧 req（多数，→ stage 4 沉淀=done）
-完全 OK。**in-flight 旧 req**（停在 stage 5/6 → 映射到 1/2）**没有六步产物**（req-plan.md），
+完全 OK。**in-flight 旧 req**（停在 stage 5/6 → 映射到 1/2）**没有当前流程产物**（spec.md），
 不能直接 `/pmai-next` 续跑——建议在旧框架上收尾 / close，或当 done 处理。本脚本只解越界、
 不做产物迁移（那是另一件大事，且 PM 的旧 req 基本都已 closed）。
 
@@ -47,7 +47,7 @@ from _lib.stages import MAX_STAGE  # noqa: E402
 
 # 旧 7-stage → 六步（仅越界值需要；1-4 数值已在范围内不动）
 LEGACY_TO_6STEP: dict[int, int] = {5: 1, 6: 2, 7: 4}
-STAGE_NAME_HINT = {1: "范围确认", 2: "build", 3: "复审", 4: "沉淀"}
+STAGE_NAME_HINT = {1: "设计", 2: "build", 3: "复审", 4: "沉淀"}
 
 
 def _remap(old_stage: int) -> int:
@@ -162,7 +162,7 @@ def main() -> None:
             print("\n（dry-run，未写入。去掉 --dry-run 真跑。）")
         else:
             print(
-                "\n⚠️ in-flight 旧 req（映射到 stage 1/2）无六步产物（req-plan.md），"
+                "\n⚠️ in-flight 旧 req（映射到 stage 1/2）无当前流程产物（spec.md），"
                 "不能直接 /pmai-next 续跑——在旧框架收尾 / close 或当 done 处理。"
             )
 

@@ -5,7 +5,7 @@
 must_check_buttons[disabled] / must_cover_states）+ 两份抓取产物（reference / local），
 对比出 P0/P1/P2 差异报告。三个消费场景共用同一引擎、只换参照物：
 
-  - **覆盖审计**：checks 从 req-plan 范围清单派生；local = build 出的 prototype（reference 可空，只查 local 有没有 must-haves）
+  - **覆盖审计**：checks 从模块 spec.md 派生；local = build 出的 prototype（reference 可空，只查 local 有没有 must-haves）
   - **对齐线上（§7.B）**：checks + reference = 爬线上真实产品；local = prototype
   - **站点爬（§7.A）**：checks + reference = 爬目标站；local = 重建出的 prototype
 

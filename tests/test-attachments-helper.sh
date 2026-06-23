@@ -67,8 +67,8 @@ print('OK')
   fixture_teardown
 }
 
-test_copy_attachment_req_plan_anchor() {
-  start_test "copy_attachment: req-plan 六步锚点 pending 判定（rewire 回归）"
+test_copy_attachment_spec_anchor() {
+  start_test "copy_attachment: spec 模块规格锚点 pending 判定"
   fixture_setup
   req_dir=$(fixture_create_req "req-001" "test" 2)
   src="$req_dir/spec-mock.pdf"
@@ -76,21 +76,21 @@ test_copy_attachment_req_plan_anchor() {
 
   out=$(_run_py "
 from _lib.attachments import copy_attachment
-# req-plan.md 不存在 → pending_inject True + 命名前缀 req-plan
-r = copy_attachment(Path('$req_dir'), Path('$src'), 'req-plan', 'h')
-assert r['new_name'] == 'docs/inputs/attachments/req-plan-spec-mock.pdf', r['new_name']
+# spec.md 不存在 → pending_inject True + 命名前缀 spec
+r = copy_attachment(Path('$req_dir'), Path('$src'), 'spec', 'h')
+assert r['new_name'] == 'docs/inputs/attachments/spec-spec-mock.pdf', r['new_name']
 assert r['pending_inject'] == True, r
-# 建 req-plan.md 后 → pending_inject False（证明六步锚点在映射里）
-(Path('$req_dir') / 'req-plan.md').write_text('# plan')
+# 建 spec.md 后 → pending_inject False（证明模块规格锚点在映射里）
+(Path('$req_dir') / 'spec.md').write_text('# spec')
 src2 = Path('$req_dir') / 'spec2.pdf'; src2.write_text('m')
-r2 = copy_attachment(Path('$req_dir'), src2, 'req-plan')
+r2 = copy_attachment(Path('$req_dir'), src2, 'spec')
 assert r2['pending_inject'] == False, r2
 print('OK')
 ")
   if echo "$out" | grep -q "^OK$"; then
     pass_test
   else
-    _fail "req-plan 锚点回归失败"
+    _fail "spec 锚点回归失败"
     echo "$out" >&2
   fi
   fixture_teardown
@@ -455,7 +455,7 @@ print('OK')
 test_skill_prose_trigger0_added() {
   start_test "grep: 主路径 SKILL 已加 trigger 0 段"
   local all_ok=1
-  for skill in skills/new-req/SKILL.md skills/prd-writing/SKILL.md; do
+  for skill in skills/design/SKILL.md skills/prd-writing/SKILL.md; do
     if ! grep -q "copy_attachment" "$FRAMEWORK_ROOT/$skill"; then
       _fail "$skill 未加 copy_attachment 引用（trigger 0 段缺失）"
       all_ok=0
@@ -466,12 +466,12 @@ test_skill_prose_trigger0_added() {
   fi
 }
 
-test_skill_prose_new_req_commit_pathspec() {
-  start_test "grep: new-req 说明附件归 docs/inputs/"
-  if grep -q 'docs/inputs' "$FRAMEWORK_ROOT/skills/new-req/SKILL.md"; then
+test_skill_prose_design_inputs_path() {
+  start_test "grep: design 说明附件归 docs/inputs/"
+  if grep -q 'docs/inputs' "$FRAMEWORK_ROOT/skills/design/SKILL.md"; then
     pass_test
   else
-    _fail "new-req 未说明附件归 docs/inputs/"
+    _fail "design 未说明附件归 docs/inputs/"
   fi
 }
 
@@ -480,7 +480,7 @@ test_skill_prose_new_req_commit_pathspec() {
 # -----------------------------------------------------------------
 
 test_copy_attachment_happy_path
-test_copy_attachment_req_plan_anchor
+test_copy_attachment_spec_anchor
 test_sensitive_path_error
 test_file_size_error
 test_register_list_round_trip
@@ -494,6 +494,6 @@ test_path_expanduser
 test_filename_with_spaces
 test_trigger2_regression_manual_cp_detection
 test_skill_prose_trigger0_added
-test_skill_prose_new_req_commit_pathspec
+test_skill_prose_design_inputs_path
 
 report_results "attachments-helper"

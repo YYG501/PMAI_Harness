@@ -3,7 +3,7 @@
 > 适用范围：所有 PM 视角的产物 — `docs/modules/<模块>/discussion.md` / `decisions.md` / `spec.md` / `PRODUCT-STATE.md` / 按需 `prd.md`（在飞旧 req 的 `brief.md` / `analysis.md` / `solution.md` 同样适用）。
 >
 > 本文件是 **单一真相源**。下列 skill 都引用本文件，不在 skill 内部独立维护：
-> `new-req` · `design` · `build` · `close` · `prd-writing`
+> `design` · `build` · `close` · `prd-writing`
 >
 > AI 在生成、修改任何上述文档前，先读完本文件 + 它指引的相关子文件。
 
@@ -15,13 +15,13 @@
 
 | 节 | 内容 | 文件 | 主要消费 skill |
 |---|---|---|---|
-| §三 | PM 视图写作规则（10 条硬约束 + UI 骨架细则）| [`pm-view/writing-rules.md`](./pm-view/writing-rules.md) | new-req · design · close · prd-writing |
+| §三 | PM 视图写作规则（10 条硬约束 + UI 骨架细则）| [`pm-view/writing-rules.md`](./pm-view/writing-rules.md) | design · close · prd-writing |
 | §四 | 文档级严格度对照表 | [`pm-view/doc-strictness.md`](./pm-view/doc-strictness.md) | PM 视图 skill |
 | §七 | 章节顺序约束（按文档类型）| [`pm-view/section-order.md`](./pm-view/section-order.md) | design · close · prd-writing |
 | §八 | 自检清单（生成 / 修改 PM 视图后）| [`pm-view/checklist.md`](./pm-view/checklist.md) | prd-writing · design |
 | §九 9.0 - 9.5 | 输入流约束 / PM 反馈分流 / 信息流图（§9.6 双文件 lazy sync 已废）| [`pm-view/input-flow.md`](./pm-view/input-flow.md) | 全部 PM 视图 skill |
 | §9.7 | 跨 skill 共享原则 | [`pm-view/cross-skill.md`](./pm-view/cross-skill.md) | skill 作者 / 框架维护者 |
-| §10 | attachments AI 接管（trigger 0）— LLM 识别 PM chat 上传意图 + caller 调 `_lib.attachments` helper + 主路径通用规则 | [`pm-view/attachments-upload.md`](./pm-view/attachments-upload.md) | 主路径 SKILL（new-req / next / design / build / close / prd-writing）|
+| §10 | attachments AI 接管（trigger 0）— LLM 识别 PM chat 上传意图 + caller 调 `_lib.attachments` helper + 主路径通用规则 | [`pm-view/attachments-upload.md`](./pm-view/attachments-upload.md) | 主路径 SKILL（next / design / build / close / prd-writing）|
 
 **读法约定**：
 - skill 步骤里写"按 §三"或"按 PM-VIEW-RULES §三" → 表示读对应子文件

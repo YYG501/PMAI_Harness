@@ -199,9 +199,9 @@ $HAS_FILE && grep -q "^## 共享组件 inventory" "$DESIGN_MD" && HAS_INVENTORY=
 
 > **跟 step 3.5 / 3.5.5 的关系**：和 step 3.5.5（DESIGN.md inventory 兜底）同款**无条件**模式——PM 没法绕过、跟 step 3.5 的 Y/N 无关。
 
-**为什么有这步**：`docs/PRODUCT-STATE.md` 是产品「现状层」hub，下游 `/pmai-new-req` 范围确认开头**强制读它**（当前功能 / 主原型现状 / mock-真状态位）。greenfield 的 `init-project.sh` 会铺这个模板，但 brownfield 走 codebase-audit 从不建它 → PM 第一个 req 范围确认退化成「白纸起步」，audit 已扫到的全部现状在 new-req 入场时丢失。本步骤兜底建 + 从现状档反推填充。
+**为什么有这步**：`docs/PRODUCT-STATE.md` 是产品「现状层」hub，下游 `/design` 开头**强制读它**（当前功能 / 主原型现状 / mock-真状态位）。greenfield 的 `init-project.sh` 会铺这个模板，但 brownfield 走 codebase-audit 从不建它 → PM 第一个模块设计退化成「白纸起步」，audit 已扫到的全部现状在 `/design` 入场时丢失。本步骤兜底建 + 从现状档反推填充。
 
-> **防腐豁免（必读，否则 review 会误判 BLOCKER）**：`PRODUCT-STATE.md` 模板写「只在 close-req 沉淀那刻更新」（防腐铁律）。**brownfield 首次 bootstrap 不违反**——首次建档 vs 后续随手改是两回事（类比 greenfield init-project 也在 close-req 之外先铺模板，codebase-audit 只是多一步反推填，填的是 audit 已扫到的**现状事实**，不是凭空编未来）。bootstrap 态由顶部状态行明确标出，与 close-req 沉淀态区分。**反推只引用 `CODEBASE-AUDIT.md` 已落事实 + 可验证代码扫描；扫不到的层填「未知 / 待确认」不猜测**（防 narrative 幻觉）。
+> **防腐豁免（必读，否则 review 会误判 BLOCKER）**：`PRODUCT-STATE.md` 模板写「只在 /close 沉淀那刻更新」（防腐铁律）。**brownfield 首次 bootstrap 不违反**——首次建档 vs 后续随手改是两回事（类比 greenfield init-project 也在 /close 之外先铺模板，codebase-audit 只是多一步反推填，填的是 audit 已扫到的**现状事实**，不是凭空编未来）。bootstrap 态由顶部状态行明确标出，与 /close 沉淀态区分。**反推只引用 `CODEBASE-AUDIT.md` 已落事实 + 可验证代码扫描；扫不到的层填「未知 / 待确认」不猜测**（防 narrative 幻觉）。
 
 ```bash
 PRODUCT_STATE_MD="$REPO_ROOT/docs/PRODUCT-STATE.md"
@@ -257,7 +257,7 @@ PM 在 step 3 轻停顿说「继续」后，**在本流程内直接接着跑项�
 8. **PM 定稿**（@读 §8）：展示路径 + 摘要，PM 答「OK / 定了」。
 9. **回填 PRODUCT-STATE 产品定位**：把 step 3.5.7 留空的 `docs/PRODUCT-STATE.md` 产品定位一句话按 PRODUCT.md 拍定的定位填上，去掉顶部状态行里「产品定位待回填」那句。
 10. **atomic commit**（@读 §9）：`git commit -m "docs: project direction settled"`（含 PRODUCT.md / TODO.md / PRODUCT-STATE.md 回填）。
-11. 收尾向 PM 一句话说明 TODO 是 PM 自己维护的待办池（AI 不反推填充），给 ▶ Next Up 块引到第一个需求：`/pmai-new-req "<一句话需求>"`。
+11. 收尾向 PM 一句话说明 TODO 是 PM 自己维护的待办池（AI 不反推填充），给 ▶ Next Up 块引到第一个功能：`/design "<一句话>"`。
 
 > **为什么内联而不是交接**：方向讨论的全部逻辑已沉淀在共享的 `_shared/project-questioning.md`，greenfield 的 init-project 阶段 C 就是这么内联跑的；brownfield 现状档此刻已在手，没有任何技术理由再拆成第二个手敲命令。轻停顿（step 3）已经给了 PM 消化现状档的时间——「留消化时间」和「逼 PM 手敲命令」是两件事，本 skill 只保留前者。
 
@@ -282,4 +282,4 @@ PM 在 step 3 轻停顿说「继续」后，**在本流程内直接接着跑项�
   - `docs/DESIGN.md` 兜底建 / 追加 inventory 段（**step 3.5.5 无条件，跟 step 3.5 选择无关**）
 - **允许动作**：read-only 扫码、7 维度盘点、防 secret redact、step 3.5 选 [Y] 时按 `$PMAI_HOME/skills/codebase-audit/templates/module.md.tmpl` 生成主规格骨架、step 3.5.5 兜底 DESIGN.md inventory 段、step 3.5.7 兜底 PRODUCT-STATE.md（反推填现状三段，定位 step 4 回填）、step 4 内联方向讨论（@读 `_shared/project-questioning.md`）
 - **禁止**：改代码 / 改 step 3.5 / 3.5.5 范围外的业务文档 / step 4 替 PM 做方向决策（必过 Decision gate）/ step 3.5 跳过模块清单 PM 确认环节 / step 3.5.5 替 gstack 写视觉基线 8 段（视觉基线由 PM 主动调 `/design-consultation`）/ 在 step 4 重抄 `_shared/project-questioning.md` 的提问法与写作规则
-- **退出条件**：现状档经 PM 确认 + step 3.5 完成（建或跳过）+ step 3.5.5 兜底跑过 + step 3.5.7 PRODUCT-STATE 兜底跑过 + step 4 方向讨论定稿（PRODUCT.md / TODO.md 已落 + PRODUCT-STATE 产品定位已回填 + atomic commit）+ 给出 ▶ Next Up（`/pmai-new-req`）
+- **退出条件**：现状档经 PM 确认 + step 3.5 完成（建或跳过）+ step 3.5.5 兜底跑过 + step 3.5.7 PRODUCT-STATE 兜底跑过 + step 4 方向讨论定稿（PRODUCT.md / TODO.md 已落 + PRODUCT-STATE 产品定位已回填 + atomic commit）+ 给出 ▶ Next Up（`/design`）

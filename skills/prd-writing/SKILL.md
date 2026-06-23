@@ -1,12 +1,12 @@
 ---
 name: pmai-prd-writing
 description: |
-  Generate a req-level PRD (需求方案). 多入口 skill:
-  (a) 沉淀按需模式 — 由 /pmai-next 在「沉淀」一步按需调用; mode 固定「req 级」, 跳过步骤 0 三选一对话, 输出到 $ACTIVE_REQ_DIR/prd.md; PRD 反向出本 req 的真系统口径需求方案, 供评审/留档;
-  (b) standalone 模式 — PM 手动 /pmai-prd-writing; 保留步骤 0「req 级 / 独立 / 补差」三选一; 独立 PRD (跨模块评审) 输出路径 PM 指定 (常见 docs/独立PRD/<slug>.md).
+  Generate a module/work-level PRD (需求方案). 多入口 skill:
+  (a) 沉淀按需模式 — 由 /close 或 /pmai-next 在「沉淀」一步按需调用; mode 固定「当前工作」, 跳过步骤 0 三选一对话, 输出到 $ACTIVE_REQ_DIR/prd.md; PRD 反向出本次模块工作的真系统口径需求方案, 供评审/留档;
+  (b) standalone 模式 — PM 手动 /pmai-prd-writing; 保留步骤 0「当前工作 / 独立 / 补差」三选一; 独立 PRD (跨模块评审) 输出路径 PM 指定 (常见 docs/独立PRD/<slug>.md).
   Always trigger when the user says 'prd', 'PRD', '写需求文档', '写需求方案', '写评审 PRD', '给某模块写 PRD',
-  or wants to generate the req's 需求方案 / cross-module review material.
-  do NOT use as the build-time spec (那是 req-plan.md 的职责).
+  or wants to generate the current work's 需求方案 / cross-module review material.
+  do NOT use as the build-time spec (那是模块 spec.md 的职责).
 ---
 
 # PRD Writing（沉淀按需 · 反向需求方案 · 多入口）
@@ -15,18 +15,18 @@ description: |
 
 ## What This Skill Produces
 
-prd-writing 产出 **req 级 PRD = 该 req 的反向需求方案**。
+prd-writing 产出 **当前工作 PRD = 本次模块工作的反向需求方案**。
 
-PRD 在「**沉淀**」一步**按需**产出（PM 真要拿去评审 / 留档时才合成，可一次覆盖多个 req）—— **不是每个 req 都硬产一份**，避免文档税。常见由 `/pmai-next` 在沉淀一步按需触发；PM 也可随时 standalone 手动调。
+PRD 在「**沉淀**」一步**按需**产出（PM 真要拿去评审 / 留档时才合成，可一次覆盖多个模块）—— **不是每次工作都硬产一份**，避免文档税。常见由 `/close` 或 `/pmai-next` 在沉淀一步按需触发；PM 也可随时 standalone 手动调。
 
 PRD 是**反向合成**，不是「把代码翻译成文档」，更**不从 mock 原型随手的实现反推业务规则**：
 
-- **结构 / 字段 / 交互** ← 最终原型（`prototype/`）+ 范围清单（`req-plan.md`）
-- **业务规则 / 权限语义 / 审批口径** ← `brief.md` + `req-plan.md` 的关键决策页
+- **结构 / 字段 / 交互** ← 最终原型（`prototype/`）+ 模块规格（`docs/modules/<模块>/spec.md`）
+- **业务规则 / 权限语义 / 审批口径** ← 模块 `spec.md` + `decisions.md`
 
-**铁律（真系统口径）**：哪怕这版原型是 mock 壳，PRD 也按**真实系统口径**写 —— 需求、业务规则、权限语义都面向生产系统，绝不从 mock 原型的临时实现反推。权限 / 审批这类「为什么」规则代码本来就反映不出来，从 `brief.md` + 决策页锁定。
+**铁律（真系统口径）**：哪怕这版原型是 mock 壳，PRD 也按**真实系统口径**写 —— 需求、业务规则、权限语义都面向生产系统，绝不从 mock 原型的临时实现反推。权限 / 审批这类「为什么」规则代码本来就反映不出来，从模块规格和决策记录锁定。
 
-PRD 内含**原型覆盖范围表**：列出本 req 原型覆盖了哪些功能 / 页面、哪些仍是 mock 占位 / 未覆盖（见下方 PRD 结构「§九 附件」+ 步骤 2 原型覆盖范围表）。
+PRD 内含**原型覆盖范围表**：列出本次模块工作覆盖了哪些功能 / 页面、哪些仍是 mock 占位 / 未覆盖（见下方 PRD 结构「§九 附件」+ 步骤 2 原型覆盖范围表）。
 
 ## When To Use（两条入口）
 
@@ -34,9 +34,9 @@ prd-writing 是**多入口 skill**，两条入口的边界如下：
 
 ### 入口 A — 沉淀按需模式（由 `/pmai-next` 在沉淀一步调）
 
-- **触发**：`/pmai-next` 推进到「沉淀」一步、PM 选择「这个 req 要出一份评审 / 留档 PRD」时调用本 skill。**不是每个 req 必跑** —— 每 req 必做的沉淀只有更新 `PRODUCT-STATE.md` + merge 主原型回 main；反向 PRD 是按需档。
-- **mode 固定「req 级」**：不询问写哪部分 —— 沉淀阶段必然是当前 req 的完整反向 PRD。
-- **跳过步骤 0**：步骤 0 的「req 级 / 独立 / 补差」三选一对话**被 `/pmai-next` 短路**，不向 PM 提问（短路机制见下方「步骤 0」段）。
+- **触发**：`/pmai-next` 推进到「沉淀」一步、PM 选择「当前工作要出一份评审 / 留档 PRD」时调用本 skill。**不是每次工作都必跑** —— 每次工作必做的沉淀只有更新 `PRODUCT-STATE.md` + merge 主原型回 main；反向 PRD 是按需档。
+- **mode 固定「当前工作」**：不询问写哪部分 —— 沉淀阶段必然是当前工作的完整反向 PRD。
+- **跳过步骤 0**：步骤 0 的「当前工作 / 独立 / 补差」三选一对话**被 `/pmai-next` 短路**，不向 PM 提问（短路机制见下方「步骤 0」段）。
 - **输入**：涉及模块的 `docs/modules/<模块>/spec.md` / `decisions.md` + 最终 `prototype/` + `docs/PRODUCT-STATE.md` + `docs/PRODUCT.md` + `docs/PRODUCT-RULES.md`—— 详见「Required Inputs」。
 - **产物**：`$ACTIVE_REQ_DIR/prd.md`。
 - **确认门**：步骤 2.5 §六拆分**必有 PM 确认门**（拆分结果是 §六层级的命名底稿，PM 必须拍板；AI 不允许自判「无歧义」跳过 —— 本门确认的是结构，不是成品）；最终确认归 `/pmai-next` 的沉淀确认门，本 skill 内不重复。
@@ -44,24 +44,24 @@ prd-writing 是**多入口 skill**，两条入口的边界如下：
 ### 入口 B — standalone 模式（PM 手动 `/pmai-prd-writing`）
 
 - **触发**：PM 主动调用 `/pmai-prd-writing`（不经 `/pmai-next`）。
-- **保留步骤 0 三选一**：「req 级 / 独立 / 补差」对话照常走。
-  - **req 级**：当前 req 的完整反向 PRD（此入口用于 PM 想手动重写 / 补写已有 req 的 PRD）。
-  - **独立**（跨模块评审 PRD）：PM 说「独立 PRD」/「给 X / Y 模块写一份评审 PRD」/「不绑当前 req」；产物路径由 PM 指定（如 `docs/独立PRD/<slug>.md`）。**独立 PRD 能力不丢** —— 这是 standalone 模式专属。
+- **保留步骤 0 三选一**：「当前工作 / 独立 / 补差」对话照常走。
+  - **当前工作**：当前模块工作的完整反向 PRD（此入口用于 PM 想手动重写 / 补写已有 PRD）。
+  - **独立**（跨模块评审 PRD）：PM 说「独立 PRD」/「给 X / Y 模块写一份评审 PRD」/「不绑当前工作」；产物路径由 PM 指定（如 `docs/独立PRD/<slug>.md`）。**独立 PRD 能力不丢** —— 这是 standalone 模式专属。
   - **补差**：PM 已有 PRD 但想补充某节 / 某模块；同入口，对话时 PM 说「只补 X 部分」。
 
 **两入口的判别**：调用上下文由 `/pmai-next` 在沉淀一步带入 → 走入口 A；PM 直接 `/pmai-prd-writing` → 走入口 B。
 
 ## 步骤 0 · 开场对话式确认（仅 standalone 模式走）
 
-> **沉淀按需模式：跳过本步骤。** `/pmai-next` 调用本 skill 时已隐含「req 级 / 当前工作 / 默认产物路径」三项答案，无需再问 PM。短路后直接进入**步骤 0.5（项目级文档强制 echo）→ 步骤 1（识别涉及模块）→ 步骤 1.5（涉及模块 spec 强制 echo）→ 步骤 2**。步骤 0.5 / 1.5 是沉淀按需模式独有的「强制 echo 防漏读」屏障。
+> **沉淀按需模式：跳过本步骤。** `/pmai-next` 调用本 skill 时已隐含「当前工作 / 默认产物路径」两项答案，无需再问 PM。短路后直接进入**步骤 0.5（项目级文档强制 echo）→ 步骤 1（识别涉及模块）→ 步骤 1.5（涉及模块 spec 强制 echo）→ 步骤 2**。步骤 0.5 / 1.5 是沉淀按需模式独有的「强制 echo 防漏读」屏障。
 
 standalone 模式下，AI **第一件事**是与 PM 对话确认。AI 调 AskUserQuestion 三连（按 `_shared/pm-view/askuser-rules.md §1.4` 多决策拆开顺序问）：
 
 **第一题：写哪部分？**
 - `question`: "PRD 写哪部分？"
 - `options`:
-  - `label`: `req 级`
-    `description`: `当前 req 的完整 PRD（含 9-11 章）`
+  - `label`: `当前工作`
+    `description`: `当前模块工作的完整 PRD（含 9-11 章）`
   - `label`: `独立 PRD`
     `description`: `跨模块评审，回答时告诉我覆盖哪几个模块`
   - `label`: `补差`
@@ -71,7 +71,7 @@ standalone 模式下，AI **第一件事**是与 PM 对话确认。AI 调 AskUse
 - `question`: "PRD 产物放哪？"
 - `options`:
   - `label`: `默认路径`
-    `description`: `req 级 → $ACTIVE_REQ_DIR/prd.md ；独立 → docs/独立PRD/<slug>.md ；补差 → 现有 PRD 同路径覆盖`
+    `description`: `当前工作 → $ACTIVE_REQ_DIR/prd.md ；独立 → docs/独立PRD/<slug>.md ；补差 → 现有 PRD 同路径覆盖`
   - `label`: `我指定`
     `description`: `贴绝对路径`
 
@@ -89,19 +89,19 @@ AI 先在 prose 里列出按"输入推荐表"对应场景的推荐输入清单�
 
 | 场景 | 推荐输入 |
 |---|---|
-| req 级 PRD | 最终 prototype/ + docs/PRODUCT-STATE.md + docs/PRODUCT.md + docs/PRODUCT-RULES.md + docs/modules/INDEX.md + 涉及模块的 docs/modules/<模块>/spec.md / decisions.md |
+| 当前工作 PRD | 最终 prototype/ + docs/PRODUCT-STATE.md + docs/PRODUCT.md + docs/PRODUCT-RULES.md + docs/modules/INDEX.md + 涉及模块的 docs/modules/<模块>/spec.md / decisions.md |
 | 独立 PRD（PM 指定模块清单 X/Y/Z） | docs/PRODUCT-STATE.md + docs/PRODUCT.md + docs/PRODUCT-RULES.md + docs/modules/INDEX.md + docs/modules/X/spec.md + docs/modules/Y/spec.md + docs/modules/Z/spec.md |
 | 补差 | 现有 PRD + 补差范围相关的 module spec / decisions 子集 |
 
 三题答完后进入实际写作（步骤 1）。
 
 **禁止**：
-- 当 PM 在 prompt 里明确说「独立 PRD」或「覆盖 X/Y 模块」时仍按 req 级流程跑（要识别独立模式跳过 req 上下文必读）
-- 推荐清单僵化（PM 选独立 PRD 后仍读无关模块或旧 req 上下文）
+- 当 PM 在 prompt 里明确说「独立 PRD」或「覆盖 X/Y 模块」时仍按当前工作流程跑（要识别独立模式跳过当前工作上下文必读）
+- 推荐清单僵化（PM 选独立 PRD 后仍读无关模块或旧工作上下文）
 
 ## PM 视图规则（必读）
 
-本 skill 产出 `prd.md`（req 需求方案），须遵守 `skills/_shared/PM-VIEW-RULES.md`（主索引）。具体读以下子文件：
+本 skill 产出 `prd.md`（当前工作需求方案），须遵守 `skills/_shared/PM-VIEW-RULES.md`（主索引）。具体读以下子文件：
 - `_shared/pm-view/writing-rules.md`（§三 写作规则：含 §3.1-§3.11 通用规则 + **§3.12 描述风格规则**：6 类违规 + 生僻描述词 framework + PM 视角原则 + 流程式步骤 + 精简原则 + 引号风格统一）
 - `_shared/PM-VIEW-RULES.md` §五（功能清单格式：4 列表格 + 续行 rowspan + 需求描述列内联编号；业务规则只说 what，禁 how/why/字段口径混入）
 - `_shared/pm-view/doc-strictness.md`（§四 严格度对照表 — prd.md 行）
@@ -121,13 +121,13 @@ prd-writing 历史上自带的写作规则（禁用清单 / UI 元素指代规�
 - 🟢 `docs/PRODUCT-STATE.md`（产品现状，项目底座核心 — 已落地的产品全貌 / 主原型当前状态；PRD 要和产品现状一致，不重复造口径）
 - 🟢 `docs/PRODUCT.md`（项目定位 / 用户画像 / 业务术语表 / 技术栈）
 - 🟢 `docs/PRODUCT-RULES.md`（如存在 — **全文读**，跨功能产品行为规则；PRD 一次写对、不违背常驻规则。）
-- 🟢 `docs/modules/INDEX.md` + `docs/modules/<本 req 涉及模块>/spec.md` / `decisions.md`（如目录存在）
+- 🟢 `docs/modules/INDEX.md` + `docs/modules/<本次工作涉及模块>/spec.md` / `decisions.md`（如目录存在）
 - ❌ `docs/DESIGN.md`（视觉规范，归 build 阶段读；PRD 写需求方案不写像素颜色，DESIGN.md 在本 skill 只作**反向边界提示**用，不作正向源材料 —— 见 §六「原型」节 / §六 lint 视觉细节越界）
 - ❌ 任何 `.engineering.md`
 
 ### standalone 模式（入口 B）
 
-按步骤 0 与 PM 对话确认的清单读入，参考上方「输入推荐表」。独立 PRD 不读旧 req 上下文。
+按步骤 0 与 PM 对话确认的清单读入，参考上方「输入推荐表」。独立 PRD 不读旧工作上下文。
 
 特别遵守：
 - standalone 模式如读 `prototype/`（独立 PRD 评审已落地模块时有原型），遵守 `input-flow.md` §9.3.1 原型读取强约束（>500 行禁整文件 Read）
@@ -193,13 +193,13 @@ for f in "${SOURCES[@]}"; do
 done
 ```
 
-涉及模块的 `docs/modules/<模块>/spec.md` 在**步骤 1.5** echo（要等步骤 1 识别完本 req 涉及哪些模块；不能在 0.5 机械列出，会污染 context）。
+涉及模块的 `docs/modules/<模块>/spec.md` 在**步骤 1.5** echo（要等步骤 1 识别完本次工作涉及哪些模块；不能在 0.5 机械列出，会污染 context）。
 
 本步骤只保证内容到位，不做 echo 后语义校验（语义校验靠 LLM 在步骤 1 拆决策 / 步骤 2 派生 §六时自然消化）。
 
 1. **识别涉及模块 + 拆决策**（基于步骤 0.5 已 echo 的内容）——从 `docs/modules/INDEX.md`、当前 `.req-meta.json`、本次改动与 PM 说明识别模块清单，落到 `MODULES` 变量供步骤 1.5 使用；从模块 `decisions.md` 拆出「已确认决策」和「待补口径」。有待补口径则先编号提问 PM，确认后再写 PRD。**PRD 的需求方案从模块 spec / decisions + 最终原型的结构反向拼** —— 真系统口径，不从 mock 实现反推规则。
 
-1.5. **涉及模块 spec 强制 echo**（沉淀按需模式必跑；同 0.5 同源理由）——步骤 1 识别完本 req 涉及模块后，把对应 modulespec 文件无条件 echo 到 transcript。一个模块可能含多个 spec 文件（如 `功能清单.md` / `prd.md`），echo **当前有效的模块 spec 主文件**即可（历史实现记录 PRD 写作不需要重读所有），LLM 基于 INDEX.md 的"当前文档路径"列识别主文件：
+1.5. **涉及模块 spec 强制 echo**（沉淀按需模式必跑；同 0.5 同源理由）——步骤 1 识别完本次工作涉及模块后，把对应 module spec 文件无条件 echo 到 transcript。一个模块可能含多个 spec 文件（如 `功能清单.md` / `prd.md`），echo **当前有效的模块 spec 主文件**即可（历史实现记录 PRD 写作不需要重读所有），LLM 基于 INDEX.md 的"当前文档路径"列识别主文件：
 
    ```bash
    # 步骤 1 识别出的涉及模块（LLM 填）
@@ -230,14 +230,14 @@ done
    ```
 
    边界：
-   - 涉及模块为空（如 IA 重整类 req 改的是框架配置不绑某模块）→ 跳过本步骤
+   - 涉及模块为空（如 IA 重整类工作改的是框架配置不绑某模块）→ 跳过本步骤
    - 单模块 spec > 1500 行 → 仍 echo 全文（PRD 写作要全局视野，截读会漏）
    - standalone 模式跳过（同 0.5 理由）
 
-2. **功能分解派生 §六层级 + 原型覆盖范围表**——沉淀阶段原型已建完，§六功能需求的层级**从范围清单（`req-plan.md`）+ 最终原型的实际结构派生**：把范围清单里列出的功能 / 页面 / 字段，对照原型里**真实建出来的**结构，按用户动作重组为 §六的一级 / 二级 / 三级层级。动词锚定规则不变（见步骤 2.5），重组对象是「范围清单功能项 + 原型真实结构」。
-   - **范围清单（`req-plan.md`）**：范围清单（WHAT）是功能项的权威来源；§六层级从它派生。
-   - **最终原型（`prototype/`）**：实际页面 / 弹窗 / 字段 / 按钮按它落 §六行 + 原型节。**只取结构，不从 mock 实现反推业务规则** —— 权限 / 审批 / 校验等口径从 brief + 决策页锁定（真系统口径铁律）。
-   - **原型覆盖范围表**——反向 PRD 必含一张「原型覆盖范围表」，落到 §九 附件：列出范围清单里每个功能 / 页面，对照原型标注覆盖状态（已完整覆盖 / mock 占位 / 未覆盖）。让评审一眼看出本 req 原型把哪些做实了、哪些还是壳。表结构与示例见下方「PRD 结构」§九 附件。
+2. **功能分解派生 §六层级 + 原型覆盖范围表**——沉淀阶段原型已建完，§六功能需求的层级**从模块 `spec.md` + 最终原型的实际结构派生**：把规格里列出的功能 / 页面 / 字段，对照原型里**真实建出来的**结构，按用户动作重组为 §六的一级 / 二级 / 三级层级。动词锚定规则不变（见步骤 2.5），重组对象是「模块规格功能项 + 原型真实结构」。
+   - **模块规格（`spec.md`）**：规格是功能项的权威来源；§六层级从它派生。
+   - **最终原型（`prototype/`）**：实际页面 / 弹窗 / 字段 / 按钮按它落 §六行 + 原型节。**只取结构，不从 mock 实现反推业务规则** —— 权限 / 审批 / 校验等口径从模块 `spec.md` + `decisions.md` 锁定（真系统口径铁律）。
+   - **原型覆盖范围表**——反向 PRD 必含一张「原型覆盖范围表」，落到 §九 附件：列出范围清单里每个功能 / 页面，对照原型标注覆盖状态（已完整覆盖 / mock 占位 / 未覆盖）。让评审一眼看出本次工作把哪些做实了、哪些还是壳。表结构与示例见下方「PRD 结构」§九 附件。
    - **原型节怎么写**——§六的「原型」节沉淀阶段**优先放真实原型截图**（原型已建完）；暂无截图时由 AI 按原型实际结构现画 ASCII，不写"待补充"。规则：
      - **数量**：模块下有几个页面 / 弹窗 / 抽屉就放几张，**一一对应不省略**。例：「角色管理」模块含「角色列表页 + 创建角色弹窗 + 角色详情抽屉」 → 放 3 张。识别清单参考最终原型实际结构 + 范围清单功能项 + §六二级功能动作组（创建 / 编辑 / 详情类动作通常对应一个弹窗或抽屉）。
      - **详细度**：中等。ASCII 兜底时每张 30-60 行，含：顶部标题 / 主要分区框 / 表头列名 / 列表行示例（2-3 行真实数据样例）/ 主要按钮文案 / 表单字段名。**不画**：像素 / 颜色 hex / 组件库名（Badge / Tag / Drawer 等）/ 字体字号 —— 这些是 DESIGN.md 范畴。
@@ -245,9 +245,9 @@ done
      - **格式**：截图用标准 markdown 图片；ASCII 兜底用 markdown fenced code block 包裹（` ``` ` 标记），保证等宽对齐不被渲染破坏。
      - 示例见 prd-writing skill few-shots「§六 原型节 ASCII 示例」段。
 
-2.5. **§六功能拆分预处理（reorg pass）**——写 §六表格之前做一次结构预处理；目的是把「按 UI 容器组织」重组为「按业务本质对应的一致维度组织」。沉淀阶段的重组对象是 **范围清单（`req-plan.md`）功能项 + 最终原型的真实结构**；维度选取规则见 a。
+2.5. **§六功能拆分预处理（reorg pass）**——写 §六表格之前做一次结构预处理；目的是把「按 UI 容器组织」重组为「按业务本质对应的一致维度组织」。沉淀阶段的重组对象是 **模块 `spec.md` 功能项 + 最终原型的真实结构**；维度选取规则见 a。
 
-   **a. 选定组织维度**——先认定本 req 业务本质对应的**一致维度**作为二级 / 三级层级的组织轴；选定后所有二级 / 三级命名围绕同一维度展开。常见维度（不限于这些，AI 看 brief / req-plan 业务本质临场判断）：
+   **a. 选定组织维度**——先认定本次模块工作业务本质对应的**一致维度**作为二级 / 三级层级的组织轴；选定后所有二级 / 三级命名围绕同一维度展开。常见维度（不限于这些，AI 看 spec / decisions 业务本质临场判断）：
 
    | 业务类型 | 维度 | 二级 / 三级命名风格 |
    |---|---|---|
@@ -256,9 +256,9 @@ done
    | 配置 / 设置类 | **设置项归类** | 设置项名称 |
    | 流程 / 状态机类 | **步骤 / 节点** | 步骤名 |
 
-   维度判定优先级：**范围清单 / 决策页明示** > **业务本质推断** > **e 步骤请 PM 拍板**。`req-plan.md` 已言明（如决策页写「按菜单分组重组」）直接采用；不清晰时在 e 步骤一并请 PM 拍板，不替 PM 决定维度。
+   维度判定优先级：**模块规格 / 决策记录明示** > **业务本质推断** > **e 步骤请 PM 拍板**。`spec.md` 或 `decisions.md` 已言明（如决策记录写「按菜单分组重组」）直接采用；不清晰时在 e 步骤一并请 PM 拍板，不替 PM 决定维度。
 
-   以 prose 形式列出本 req 各一级模块下属于该维度的所有功能项；每模块 3-15 项。CRUD 业务可参考下方「层级划分原则」§二级功能动作组常用词汇表（仅动作维度适用）。
+   以 prose 形式列出本次工作各一级模块下属于该维度的所有功能项；每模块 3-15 项。CRUD 业务可参考下方「层级划分原则」§二级功能动作组常用词汇表（仅动作维度适用）。
 
    **b. 聚类成二级 / 三级**——按选定维度聚类：同维度下的归类作为二级功能、细分作为三级功能。命名风格随维度变（见 a 表格）；同一维度内保持一致。同一二级下三级 ≤ 2 个时可不分级（避免强行分级）。
 
@@ -270,7 +270,7 @@ done
         - 分组维度：「Tab 1 工作台」→「工作台」（去掉 UI 容器名）
         - 设置项维度：「角色权限设置面板」→「角色权限」
         - 「池行紧凑形态」→ 删除（下沉到 d 步骤）
-      - 例外：若 `菜单` 是本 req 业务本质核心词（IA 重整类 req），允许保留但不作为二级 / 三级命名本身 ——「菜单结构」属业务领域词，「工作台菜单」作为二级则仍命中（应改「工作台」）。
+      - 例外：若 `菜单` 是本次工作业务本质核心词（IA 重整类工作），允许保留但不作为二级 / 三级命名本身 ——「菜单结构」属业务领域词，「工作台菜单」作为二级则仍命中（应改「工作台」）。
 
    **d. 下沉规则**——以下内容**禁外溢成独立二级或三级，必须写进对应三级的需求描述列编号项**（跨业务通用，与 a 维度无关）：
       - 角色视角差异（不同角色看到的范围 / 入口可见性差异）
@@ -285,7 +285,7 @@ done
    ```
    功能模块拆分
 
-   [AI 一句话说明组织维度 + 理由，用 PM 大白话 —— 不照搬 a 表格的"维度"二字，用 req 业务本质对应的具体词。
+   [AI 一句话说明组织维度 + 理由，用 PM 大白话 —— 不照搬 a 表格的"维度"二字，用本次工作业务本质对应的具体词。
     示例（AI 临场填，不照抄）：
       · "这次按用户操作组织二级 / 三级（CRUD 后台业务，每个二级是一类动作）"
       · "这次按一级菜单分组组织二级，三级是该分组下的具体菜单项（导航结构重整）"
@@ -313,9 +313,9 @@ done
    - 黑名单命中（c 步骤）由 AI 自己重写后再展示给 PM 看最终版，**不要把违规原命名贴给 PM 看**（PM 看了反而困惑）。
    - 发现规则空白（c 步骤黑名单漏抓 / 词汇表缺词），同步补到「层级划分原则」段。
 
-   跳过条件：本 req 不含 §六功能需求章节内容（极少见，几乎不发生）。
+   跳过条件：本次工作不含 §六功能需求章节内容（极少见，几乎不发生）。
 
-3. **生成 PRD**——按下方「PRD 结构」生成完整 PRD 到**产物路径 `$PRD_PATH`**（骨架见 `$PMAI_HOME/skills/prd-writing/templates/req-prd.md.tmpl`），语言风格对齐「写作规则」与「few-shots」。**`$PRD_PATH` 按 mode 解析**：沉淀按需 / standalone「req 级」= `$ACTIVE_REQ_DIR/prd.md`；standalone「独立」= 步骤 0 PM 指定路径（默认 `docs/独立PRD/<slug>.md`）；standalone「补差」= 现有 PRD 同路径覆盖。**§六功能需求表格的二级 / 三级命名严格按步骤 2.5 的版本写入；不允许在写表格时再发明新的二级 / 三级名。** §六「原型」节按步骤 2 现画 ASCII（每模块下每个页面 / 弹窗 / 抽屉一张 + 1 句文字兜底）。
+3. **生成 PRD**——按下方「PRD 结构」生成完整 PRD 到**产物路径 `$PRD_PATH`**（骨架见 `$PMAI_HOME/skills/prd-writing/templates/req-prd.md.tmpl`），语言风格对齐「写作规则」与「few-shots」。**`$PRD_PATH` 按 mode 解析**：沉淀按需 / standalone「当前工作」= `$ACTIVE_REQ_DIR/prd.md`；standalone「独立」= 步骤 0 PM 指定路径（默认 `docs/独立PRD/<slug>.md`）；standalone「补差」= 现有 PRD 同路径覆盖。**§六功能需求表格的二级 / 三级命名严格按步骤 2.5 的版本写入；不允许在写表格时再发明新的二级 / 三级名。** §六「原型」节按步骤 2 现画 ASCII（每模块下每个页面 / 弹窗 / 抽屉一张 + 1 句文字兜底）。
 
 3.5. **lint（自动兜底，必跑）**——写完 PRD 后跑 `python3 $REPO_ROOT/scripts/check-prd-hierarchy.py "$PRD_PATH"`（`$PRD_PATH` = 步骤 3 按 mode 解析的产物路径；独立 PRD 时是 PM 指定路径，不是 `$ACTIVE_REQ_DIR/prd.md`）。脚本做两类机械检查：
 
@@ -335,11 +335,11 @@ done
 
    lint 是 mechanical check，不依赖 AI 内化规则。
 
-3.6. **PRD §三 名词解释 = 本 req 临时词典**——本 req 范围内引入的新业务术语 / 角色由 AI 写 §三时落地（见 §三章节写作要求 + `references/few-shots.md` 三、名词解释示例）。
+3.6. **PRD §三 名词解释 = 本次工作临时词典**——本次工作范围内引入的新业务术语 / 角色由 AI 写 §三时落地（见 §三章节写作要求 + `references/few-shots.md` 三、名词解释示例）。
 
-   `prd.md §三` 可作下游评审 / 后续 req 的**词典参考**。**不再在本步跑 `term-detector.py` patch `docs/PRODUCT.md`** —— 业务实体稳定后向 PRODUCT.md 业务术语表的沉淀统一收敛到 `close-req`。
+   `prd.md §三` 可作下游评审 / 后续工作的**词典参考**。**不再在本步跑 `term-detector.py` patch `docs/PRODUCT.md`** —— 业务实体稳定后向 PRODUCT.md 业务术语表的沉淀统一收敛到 `/close`。
 
-3.7. **decision 事件 append（关键产品决策留痕）**——PRD 成文后，为每条「关键产品决策」（PRD §四里的决策结果）append 一条 `decision` 事件到 req 事件流：
+3.7. **decision 事件 append（关键产品决策留痕）**——PRD 成文后，为每条「关键产品决策」（PRD §四里的决策结果）append 一条 `decision` 事件到当前工作事件流：
 
    ```bash
    python3 "$PMAI_HOME/scripts/req-events.py" append "$ACTIVE_REQ_DIR" \
@@ -352,23 +352,23 @@ done
      --rationale "<为什么这么选>"
    ```
 
-   - **结果留 PRD**：决策的**结果**写在 PRD §四（需求分析）；决策的**备选 + 理由**进 `decision` 事件 —— PRD 只装结果，不堆备选清单。决策的口径优先**回填自 `req-plan.md` 决策页**（反向 PRD 的「为什么」本就锁在决策页），不在沉淀阶段新拍。
+   - **结果留 PRD**：决策的**结果**写在 PRD §四（需求分析）；决策的**备选 + 理由**进 `decision` 事件 —— PRD 只装结果，不堆备选清单。决策的口径优先**回填自模块 `decisions.md`**，不在沉淀阶段新拍。
    - 每条关键产品决策一条 `decision` 事件；`--alternatives` 可重复传多个。
    - **standalone 独立 PRD 模式**：不绑 req、无 `$ACTIVE_REQ_DIR`，跳过本步骤。
    - 此步只在 PRD 含明确的关键产品决策时跑；PRD 无需决策（纯回溯 / 简单功能）时 silent skip。
 
    **`--decided-by` 判定标准**（必填，缺则脚本报错 exit 1）：
 
-   - `pm-explicit` —— PM 在范围确认（new-req 的三条上坡路 / `req-plan.md` 决策页拍板）或沉淀阶段 PRD 写作进行中的 askuser 里**主动开口**给出过该决策的明确指示。判定时去 `req-events.jsonl` / `req-plan.md` / `brief.md` PM 反馈段 grep 关键词验证 —— **找得到原话才能标 `pm-explicit`**。
+   - `pm-explicit` —— PM 在 `/design` 结构决策门、模块 `decisions.md` 或沉淀阶段 PRD 写作进行中的 askuser 里**主动开口**给出过该决策的明确指示。判定时去 `req-events.jsonl` / `decisions.md` / `discussion.md` PM 反馈段 grep 关键词验证 —— **找得到原话才能标 `pm-explicit`**。
    - `ai-inferred` —— AI 在 PRD 写作中**自己推断**的选择，PM 未单独确认过。即便 rationale 写得头头是道、即便选项看起来"显然只能这么选"，只要事件流 / 上游文档里没 PM 原话，一律标 `ai-inferred`。
    - **拿不准 → `ai-inferred`**：这是**安全默认**。错标 `pm-explicit` 会把 AI 自拍说成"PM 拍的"污染下游（status-view / 后续文案）；错标 `ai-inferred` 顶多让沉淀确认门多渲染一行让 PM 单挑反对，无副作用。
    - **反模式**：「这个决策看起来很合理 / 这条 rationale 我推得很清楚 / PM 不可能反对」**不构成** `pm-explicit` 理由；只有"PM 真的说过"才算。
 
-   > 此步吸收 req-events decision 事件机制。`req-events.py` 已存在；事件落 `$ACTIVE_REQ_DIR/req-events.jsonl`（被 git 跟踪、随 req 分支留存，close 后仍可查）。
+   > 此步吸收 req-events decision 事件机制。`req-events.py` 已存在；事件落 `$ACTIVE_REQ_DIR/req-events.jsonl`（被 git 跟踪、随当前工作分支留存，close 后仍可查）。
    >
    > `decided-by` 必填，修复「AI 自拍决策混入 PM 决策摘要」问题。`/pmai-next` 沉淀一步的定稿确认门按 `decided_by` 分两栏渲染：PM 拍段默认通过、AI 推断段允许 PM 单挑反对。
 
-3.8. **候选跨功能产品规则 promote（②）**——写 PRD 过程中，若规划期讨论里浮出**全项目跨功能产品行为规则**（不是某 task 的 PM 反馈、而是「产品在 X 情况下应 / 不应 Y」、适用范围超出本 req 单个模块的规则），PM-selective promote 到 `docs/PRODUCT-RULES.md`：
+3.8. **候选跨功能产品规则 promote（②）**——写 PRD 过程中，若规划期讨论里浮出**全项目跨功能产品行为规则**（不是某次实现反馈、而是「产品在 X 情况下应 / 不应 Y」、适用范围超出本次工作单个模块的规则），PM-selective promote 到 `docs/PRODUCT-RULES.md`：
 
    - AI 预判候选 + 拟写条目（标题 / 规则 / scope 全局或域限定 / 来源 req）逐条呈交 PM
    - PM 选 promote → AI Edit 追加进 `docs/PRODUCT-RULES.md`「规则清单」段（不 commit，PM 后审 diff）
@@ -386,15 +386,15 @@ done
 - PRD 产物路径 `$ACTIVE_REQ_DIR/prd.md`
 - **本次新增 decision 摘要**：列出 3.7 步 append 的每条 `decision`（标题 / 选定 / 备选 / 理由），供 `/pmai-next` 在定稿确认门里一并渲染给 PM —— PM 确认 PRD 时同时确认这些决策记录。**不新增独立的 decision 确认门**，并进沉淀一步已有的单一定稿确认门。
 
-反向 PRD 是**沉淀产物**，定稿后随 req 留档；它已是基于最终原型反向合成的真系统口径方案，本身不再做二次反向对齐。
+反向 PRD 是**沉淀产物**，定稿后随当前工作留档；它已是基于最终原型反向合成的真系统口径方案，本身不再做二次反向对齐。
 
 > standalone 模式（入口 B）：写完 PRD 后在对话中请 PM 确认、确认后写入文件 → 跑下方「步骤 7」PRD 收口 symlink → 结束；无 `/pmai-next` 衔接。
 
 ### 步骤 7 · standalone 独立 PRD 收口 symlink（仅 standalone「独立」分支）
 
-**仅在** standalone 入口 B 的「独立」（跨模块评审 PRD）分支跑；req 级 / 补差分支跳过；沉淀按需 入口 A 跳过（A 走 close-req，由 `scripts/close-req.sh` 自动建 `docs/prds/<req-name>.md` symlink）。
+**仅在** standalone 入口 B 的「独立」（跨模块评审 PRD）分支跑；当前工作 / 补差分支跳过；沉淀按需入口 A 跳过（A 走 `/close`，由 `scripts/close-req.sh` 自动建 `docs/prds/<模块>.md` symlink）。
 
-**目的**：让 PM 在 `docs/prds/独立/` 一处看到所有独立 PRD，和 close-req 建的 `docs/prds/<req>.md`、cancel-req 建的 `docs/prds/废弃/` 三类来源统一收口。
+**目的**：让 PM 在 `docs/prds/独立/` 一处看到所有独立 PRD，和 `/close` 建的 `docs/prds/<模块>.md`、`/pmai-cancel` 建的 `docs/prds/废弃/` 三类来源统一收口。
 
 **条件**：PRD 真正写入 `docs/独立PRD/<slug>.md` 默认路径才建 symlink；PM 指定其他自定义路径（如 `docs/某专题/<slug>.md`）不动 —— 自定义路径已表达 PM 不想走默认收口。
 
@@ -486,7 +486,7 @@ fi
 
 #### 5.3 非目标
 
-明确列出**不在本期范围内**的功能点，避免范围蔓延。例如"本期不建设审计日志查询 UI""不对资源创建者设置豁免权"等。本 req 范围外的功能（PM 在 brief / analysis 里划在本期之外的）显式写进 §5.3，让评审一眼看出范围边界。
+明确列出**不在本期范围内**的功能点，避免范围蔓延。例如"本期不建设审计日志查询 UI""不对资源创建者设置豁免权"等。本次工作范围外的功能显式写进 §5.3，让评审一眼看出范围边界。
 
 ### 六、功能需求
 
@@ -537,13 +537,13 @@ ASCII 原型示例见 `references/few-shots.md`「§六 原型节 ASCII 示例�
 
 存放：**原型覆盖范围表**（反向 PRD 必含，见下）、**权限矩阵**（默认权限策略表）、**字段字典**（审计日志必须字段、状态机字段定义）、**枚举值表**（资源类型、操作类型、错误码）、**占位字典**（§六「原型」节里用到的占位词 → 实际值映射，如有）。提取规则：当某功能的默认值/枚举值/字段清单行数较多，且多处功能行会引用同一份数据时，提取到附件，表格中注明"具体见附件 X"（示例见 `references/few-shots.md` §九）。
 
-**原型覆盖范围表（反向 PRD 必含）**：列出范围清单里每个功能 / 页面，对照最终原型标注覆盖状态，让评审一眼看出本 req 原型把哪些做实了、哪些仍是壳。每行一个功能 / 页面：
+**原型覆盖范围表（反向 PRD 必含）**：列出范围清单里每个功能 / 页面，对照最终原型标注覆盖状态，让评审一眼看出本次工作把哪些做实了、哪些仍是壳。每行一个功能 / 页面：
 
 | 功能 / 页面 | 覆盖状态 | 说明 |
 | --- | --- | --- |
 | 角色列表页 | 已覆盖 | 列表 / 搜索 / 筛选均可交互 |
 | 创建角色弹窗 | mock 占位 | 表单可填，提交走 mock 数据、未接真后端 |
-| 批量导入角色 | 未覆盖 | 本 req 原型未建，列入后续 |
+| 批量导入角色 | 未覆盖 | 本次工作未建，列入后续 |
 
 覆盖状态三档：**已覆盖**（功能在原型里建实、可交互）/ **mock 占位**（界面在、数据 / 逻辑是 mock 壳）/ **未覆盖**（原型未建）。状态来自步骤 2 对范围清单逐项对照原型的标注。
 
@@ -551,7 +551,7 @@ ASCII 原型示例见 `references/few-shots.md`「§六 原型节 ASCII 示例�
 
 ## 身份 / 权限类 PRD 专属可选章节
 
-适用范围：当本 req 涉及身份认证 / RBAC / 角色权限 / 账号体系 / 组织架构等场景时，在 §六 功能需求之后插入两个专属章节（§七、§八），原有 §七 验收标准 顺延为 §九，§八 非功能性需求 顺延为 §十，§九 附件 顺延为 §十一。最终结构变为 11 节。
+适用范围：当本次工作涉及身份认证 / RBAC / 角色权限 / 账号体系 / 组织架构等场景时，在 §六 功能需求之后插入两个专属章节（§七、§八），原有 §七 验收标准 顺延为 §九，§八 非功能性需求 顺延为 §十，§九 附件 顺延为 §十一。最终结构变为 11 节。
 
 ### 数据权限范围
 
@@ -712,7 +712,7 @@ ASCII 原型示例见 `references/few-shots.md`「§六 原型节 ASCII 示例�
 ## 沉淀边界：反向需求方案定稿
 
 - 允许产出：`$ACTIVE_REQ_DIR/prd.md`（沉淀按需模式）/ PM 指定路径（standalone 独立 PRD 模式）
-- 允许动作：基于模块 `spec.md` / `decisions.md` + 最终 `prototype/` + `docs/PRODUCT-STATE.md` + `docs/PRODUCT.md` + `docs/PRODUCT-RULES.md` 反向合成 req 级真系统口径 PRD；§三 名词解释承担本 req 临时词典职责（业务词向 PRODUCT.md 业务术语表的沉淀收敛到 `/close`）；为关键产品决策 append `decision` 事件
+- 允许动作：基于模块 `spec.md` / `decisions.md` + 最终 `prototype/` + `docs/PRODUCT-STATE.md` + `docs/PRODUCT.md` + `docs/PRODUCT-RULES.md` 反向合成当前工作真系统口径 PRD；§三 名词解释承担本次工作临时词典职责（业务词向 PRODUCT.md 业务术语表的沉淀收敛到 `/close`）；为关键产品决策 append `decision` 事件
 - 禁止顺手推进：不要在写 PRD 的同时反向改模块 `spec.md` 的范围边界；**不从 mock 原型的临时实现反推业务规则**（真系统口径铁律）；本 skill 不动 build / 复审产物
 - 退出条件：
   - **沉淀按需模式**：PRD 写完 + lint 通过 + decision 事件 append 完 → 控制权交回 `/pmai-next`，由其沉淀一步的单一定稿确认门完成 PRD 定稿
@@ -723,14 +723,14 @@ ASCII 原型示例见 `references/few-shots.md`「§六 原型节 ASCII 示例�
 prd-writing 产出初稿后，定稿前可运行以下 prompt 做一轮质检：
 
 ```
-你现在是一个资深产品总监，正在用挑剔的眼光审查一份 req 级反向 PRD 草稿。
-读取 $ACTIVE_REQ_DIR/prd.md 和范围清单 $ACTIVE_REQ_DIR/req-plan.md（范围清单 WHAT + 决策页 WHY），然后找出：
+你现在是一个资深产品总监，正在用挑剔的眼光审查一份当前工作反向 PRD 草稿。
+读取 $ACTIVE_REQ_DIR/prd.md、模块 spec.md 和 decisions.md（功能口径 WHAT + 决策 WHY），然后找出：
 
 1. 逻辑矛盾或自相冲突的地方
 2. 遗漏的边界情况（error state、empty state、权限边界、异常流）
 3. 验收标准模糊、无法测量的条目
 4. 功能需求描述里有"支持/优化/提升体验"等无法执行的泛词
-5. prd.md 与 req-plan.md 范围清单的"In Scope"不一致的地方；§九 原型覆盖范围表是否对照最终原型如实标注（已覆盖 / mock 占位 / 未覆盖），有没有把 mock 壳写成已落地
+5. prd.md 与模块 spec.md 的范围不一致的地方；§九 原型覆盖范围表是否对照最终原型如实标注（已覆盖 / mock 占位 / 未覆盖），有没有把 mock 壳写成已落地
 6. 是否包含代码常量名（如 TENANT_ADMIN）/ 文件路径（如 prototype/src/...）/ 文档章节引用 / 数据库字段名（如 enabled、createdBy）/ UI 实现术语（如扁平区、Badge、按钮置灰）
 7. §4.1 业务诉求是否从用户视角（而非"PM 讲不清"等团队内部诱因），是否每条以"**加粗短句。**"开头并配段落说明（不是单纯 bullet 列表）
 8. §4.2 设计原则是否表格化（编号 / 原则 / 内容 / 可选「对应业务诉求」列），原则名是否 4-8 字短句，内容是否写产品规则而非"本 PRD 是规格交付层"等元描述；正文「N 条设计原则」中的 N 是否与表格行数一致

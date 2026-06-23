@@ -229,7 +229,7 @@ if [ "$BRANCH" = "main" ] || [ "$BRANCH" = "master" ]; then
       MAIN_WRITE_ALLOWED=true
       ;;
     # 探索变体目录：mocks/ 是探索草稿的家（连当场否掉的草图都留），与产品真相源（prototype/ + docs/）
-    # 两回事——探索发生在 main 上（new-req 范围确认期视觉变体探）、本就该随时可写。manifest + 生成的看版页同此。
+    # 两回事——探索发生在 main 上（design 期视觉变体探）、本就该随时可写。manifest + 生成的看版页同此。
     mocks/*)
       MAIN_WRITE_ALLOWED=true
       ;;

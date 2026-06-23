@@ -90,7 +90,7 @@ if [ "$HAVE_BRANCH" = "true" ] && [ -n "$REQ_WORKTREE" ] && [ -d "$REQ_WORKTREE"
       echo "   换个地方跑 close 就行（二选一）：" >&2
       echo "   · 推荐：到主仓窗口（位置 = ${REPO_ROOT}）跑 —— 主仓会话本就能远程操作 worktree：" >&2
       echo "       bash scripts/close-req.sh $REQ_DIR" >&2
-      echo "   · 或：这条需求先不收尾、worktree 留着继续干，等回到主仓窗口再 /close。" >&2
+      echo "   · 或：当前工作先不收尾、worktree 留着继续干，等回到主仓窗口再 /close。" >&2
       exit 1
     fi
   fi
@@ -271,7 +271,7 @@ fi
 cleanup_stale_worktrees "$REPO_ROOT"
 
 echo ""
-echo "✅ Req 已收尾: ${REQ_ID}（模块三件套留在 docs/modules/，工作状态 .req-meta 已清）"
+echo "✅ 当前工作已收尾: ${REQ_ID}（模块三件套留在 docs/modules/，工作状态 .req-meta 已清）"
 echo "📍 当前位置: 主仓 main 分支"
 echo ""
-echo "运行 /pmai-new-req 开始下一个需求。"
+echo "运行 /design 开始下一个功能 / 模块。"

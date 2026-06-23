@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 set -uo pipefail
 
-# 六步重构后的 req-transition 测试：per-req 四阶段
-#   1 范围确认（前置产物 req-plan.md）→ 2 build → 3 复审 → 4 沉淀
-# build / 复审 无法定文档前置（闸门靠 PM 验收 + task demo 确认）；
+# req-transition 测试：活跃工作四阶段
+#   1 设计（前置产物 spec.md）→ 2 build → 3 复审 → 4 沉淀
+# build / 复审 无法定文档前置（闸门靠 PM 验收确认）；
 # 沉淀（4）= merge 回 main 不可回退；复审（3）回退要求 task 都已确认/取消。
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -60,22 +60,22 @@ test_reject_stage_too_high() {
 
 # -----------------------------------------------------------------
 # I-RT3: forward transition requires prerequisite output file
-#         六步：只有 stage 1「范围确认」有法定前置 = req-plan.md
+#         只有 stage 1「设计」有法定前置 = spec.md
 # -----------------------------------------------------------------
 
-test_reject_stage1_to_2_no_req_plan() {
-  start_test "I-RT3 reject 1→2 when req-plan.md missing"
+test_reject_stage1_to_2_no_spec() {
+  start_test "I-RT3 reject 1→2 when spec.md missing"
   fixture_setup
   req_dir=$(fixture_create_req "req-001" "test" 1)
-  rm -f "$req_dir/req-plan.md"  # 确保范围确认产物缺失
+  rm -f "$req_dir/spec.md"  # 确保设计产物缺失
 
   if _run_req "$req_dir" --to 2 >/tmp/out.$$ 2>/tmp/err.$$; then
-    _fail "should reject when req-plan.md missing"
+    _fail "should reject when spec.md missing"
   else
-    if grep -q "req-plan.md" /tmp/err.$$; then
+    if grep -q "spec.md" /tmp/err.$$; then
       pass_test
     else
-      _fail "stderr missing req-plan.md message"
+      _fail "stderr missing spec.md message"
       cat /tmp/err.$$ >&2
     fi
   fi
@@ -84,10 +84,10 @@ test_reject_stage1_to_2_no_req_plan() {
 }
 
 test_happy_path_1_to_2() {
-  start_test "happy path: 1 → 2 succeeds with req-plan.md, stage_history appended"
+  start_test "happy path: 1 → 2 succeeds with spec.md, stage_history appended"
   fixture_setup
   req_dir=$(fixture_create_req "req-001" "test" 1)
-  echo "# req-plan" > "$req_dir/req-plan.md"
+  echo "# spec" > "$req_dir/spec.md"
 
   if ! _run_req "$req_dir" --to 2 >/tmp/out.$$ 2>/tmp/err.$$; then
     _fail "forward 1→2 failed"
@@ -264,7 +264,7 @@ test_reject_2_to_4_skip_review() {
 
 test_reject_cross_level_forward
 test_reject_stage_too_high
-test_reject_stage1_to_2_no_req_plan
+test_reject_stage1_to_2_no_spec
 test_happy_path_1_to_2
 test_build_and_review_advance_no_file_gate
 test_reject_rollback_from_settle

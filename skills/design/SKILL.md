@@ -35,6 +35,8 @@ description: |
 主产物是模块三件套（`discussion.md` / `decisions.md` / `spec.md`），PM 拍板。须遵守 `skills/_shared/PM-VIEW-RULES.md`（主索引），具体读：
 - `_shared/pm-view/writing-rules.md`（写作规则：明确指代 / 正向描述 / 禁工程词 / 禁像素颜色）
 - `_shared/pm-view/askuser-rules.md`（PM 答题四条硬规则：空答 STOP / 没拿到答案禁止落盘 / runtime 退化保留 wait / 多决策拆开顺序问）
+- `_shared/pm-view/banner-rules.md`（入口 banner + 收尾 ▶ Next Up）
+- `_shared/pm-view/attachments-upload.md`（PM 给材料时，归档到 `docs/inputs/attachments/`，用 `_lib.attachments.copy_attachment` 登记）
 - 写规格时的语言纪律全在 `_shared/info-design.md` 第四块 + **禁用清单单一真相源 `skills/prd-writing/references/writing-rules.md`（L1–L6 + 8 类禁用）**——本 skill 不重抄。
 
 ## 铁律 · 先懂问题再设计、先讨论清楚再改
@@ -49,6 +51,8 @@ description: |
 ```bash
 source "$HOME/.pmai/scripts/skill-preamble.sh"
 echo "SKILL: design"
+
+python3 "$PMAI_HOME/scripts/status-view.py" --banner-only --skill DESIGN || true
 ```
 
 ## Workflow（三段式：探索 → 设计 → 写规格）
@@ -147,7 +151,7 @@ PM 拿"想要的方案"来，先还原成"要解决的真问题"——这是上�
 ```
 模块三件套已写好 / 升版（docs/modules/<模块>/）：真问题、信息模型、规格、决策都齐了，设计也用 mock 确认过（如涉及界面）。
 
-下一步：
+▶ Next Up：
   · 改动不大 → 直接 /close 收尾（定稿 + 回写基线 + 归位）
   · 要建原型 / 真实现 → /build（你选工具、选要不要开独立工作区）
 ```

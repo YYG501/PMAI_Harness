@@ -5,7 +5,7 @@
 # - 全已答 → exit 0
 # - 有未答 → exit 1 + 列出未答题号 / 行号
 # - section 不存在 → exit 0
-# - section 显式声明"本 req 无未决问题" → exit 0
+# - section 显式声明"本次工作无未决问题" → exit 0
 # - 同行答案 / 后续行答案两种格式都识别
 # - 文件不存在 → exit 2
 # - SKILL.md 引用本脚本（防止重构时丢失）
@@ -117,13 +117,13 @@ test_no_section() {
 # Scenario 4: section 显式声明无未决问题
 # -----------------------------------------------------------------
 test_explicit_none() {
-  start_test "section 写「本 req 无未决问题」→ exit 0"
+  start_test "section 写「本次工作无未决问题」→ exit 0"
   local md
   md=$(_write_md '# X
 
 ## 未决问题
 
-（本 req 无未决问题）
+（本次工作无未决问题）
 ')
   python3 "$CHECKER" "$md" >/dev/null
   local rc=$?

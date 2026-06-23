@@ -6,8 +6,8 @@
 看视觉视图"的真相源漂移）。
 
 本文件只做：
-- 选用 active req 渲染策略（0 个 / 1 个 / 多个）
-- 单 req 的字段格式（stage 名 / icon / 下一步建议）
+- 选用 active work 渲染策略（0 个 / 1 个 / 多个）
+- 单个工作项的字段格式（stage 名 / icon / 下一步建议）
 - quick-fix 段
 """
 
@@ -64,10 +64,10 @@ def _format_last_event(ev: dict | None) -> str | None:
 
 
 def render_summary(state: dict, repo_root: Path) -> None:
-    """One-line active req overview for preamble output."""
+    """One-line active work overview for preamble output."""
     active = state["active_reqs"]
     if not active:
-        print("📭 暂无 active req")
+        print("📭 暂无 active work")
         return
     parts = []
     for req in active:
@@ -75,22 +75,21 @@ def render_summary(state: dict, repo_root: Path) -> None:
         req_id = meta.get("id", "?")
         stage = meta.get("stage", 0)
         parts.append(f"{req_id}:{STAGE_NAMES.get(stage, '?')}")
-    print("📋 active req: " + " / ".join(parts))
+    print("📋 active work: " + " / ".join(parts))
 
 
 def render_banner_only(state: dict, repo_root: Path, skill: str) -> None:
-    """M2 /  : 输出当前 active req 的 stage banner 一行。
+    """M2 /  : 输出当前 active work 的 stage banner 一行。
 
     格式按 `skills/_shared/pm-view/banner-rules.md` §1.1。
-    无 active req → 输出占位 banner（PM 知道还没起 req）。
+    无 active work → 输出占位 banner（PM 知道当前没有进行中的工作）。
     """
     active = state["active_reqs"]
     if not active:
-        # 项目级 skill（init-project / new-req 等）跑在无 active req 状态是预期的；
-        # 不再硬编码"先跑 /pmai-new-req"指引（对 /pmai-init-project 反而误导）
-        print("━━━ PMAI ► " + skill + " ▸ <项目级 / 无 active req> ━━━")
+        # 项目级 skill（init-project / design 等）跑在无 active work 状态是预期的。
+        print("━━━ PMAI ► " + skill + " ▸ <项目级 / 无 active work> ━━━")
         return
-    # 取第一个 active req（典型场景：单 PM 同时 1-2 个 req）
+    # 取第一个 active work（典型场景：单 PM 同时 1-2 个工作）
     req_view = active[0]
     req_dir = req_view["req_dir"]
     try:
@@ -105,7 +104,7 @@ def _product_oneliner(repo_root: Path) -> str:
     """PRODUCT-STATE.md 的产品现状一句话（产品轴 lead 用）；读不到返回空串。
 
     六步重构：播报主轴从内部 stage 编号转成「你的产品现在长什么样 + 在做什么」。
-    产品定位一句话从 PRODUCT-STATE.md 取（根目录或 docs/）；无则 lead 留空、退回 req 轴。
+    产品定位一句话从 PRODUCT-STATE.md 取（根目录或 docs/）；无则 lead 留空、退回当前工作轴。
     """
     for cand in (repo_root / "PRODUCT-STATE.md", repo_root / "docs" / "PRODUCT-STATE.md"):
         if not cand.exists():
@@ -124,17 +123,17 @@ def _product_oneliner(repo_root: Path) -> str:
 def render_narrative(state: dict, repo_root: Path) -> None:
     """M5 /  : AI 可直接念的进度叙述（产品轴）。
 
-    范围（codex C-4 降级）：当前 active req / 当前 stage / 产物文件 / 最近 transition；
+    范围（codex C-4 降级）：当前 active work / 当前 stage / 产物文件 / 最近 transition；
     **不到小节级**（如「§四」/ commit hash 全文 不写，伪精确）。
 
-    无 active req → 输出"目前没有 active req"，**不编造**（review R7 防幻觉）。
+    无 active work → 输出"目前没有 active work"，**不编造**（review R7 防幻觉）。
     """
     active = state["active_reqs"]
     if not active:
-        print("目前没有 active req。可以发 /pmai-new-req 起新需求，或发 /pmai-init-project 起新项目。")
+        print("目前没有 active work。可以发 /design 设计新功能，或发 /pmai-init-project 起新项目。")
         return
 
-    # 单 req 场景：直接念
+    # 单个工作场景：直接念
     if len(active) == 1:
         req = active[0]
         meta = req["meta"] or {}
@@ -150,18 +149,18 @@ def render_narrative(state: dict, repo_root: Path) -> None:
         )
         return
 
-    # 多 req 场景：产品轴 lead + 列各 req 概况
+    # 多个工作场景：产品轴 lead + 列各工作概况
     prod = _product_oneliner(repo_root)
     if prod:
         print(f"你的产品：{prod}")
-    print(f"目前有 {len(active)} 个 active req：")
+    print(f"目前有 {len(active)} 个 active work：")
     for req in active:
         meta = req["meta"] or {}
         req_id = req["req_dir"].name
         stage = meta.get("stage", 0)
         stage_name = STAGE_NAMES.get(int(stage), f"stage {stage}") if stage else "未知"
         print(f"  - {req_id}：{stage_name} 阶段")
-    print("\n下一步：发 /status-view 看详细，或 /pmai-next 推进具体 req。")
+    print("\n下一步：发 /pmai-status 看详细，或 /pmai-next 推进具体工作。")
 
 
 def render_health_check(repo_root: Path) -> None:
@@ -211,14 +210,14 @@ def render_health_check(repo_root: Path) -> None:
 
 
 def suggest_next_action(req_view: dict) -> str:
-    """Suggest what PM should do next。req_view 是 state['active_reqs'][i]。
-    六步：1 范围确认 / 2 build / 3 复审 / 4 沉淀（MAX_STAGE=4）。"""
+    """Suggest what PM should do next. req_view 是 state['active_reqs'][i].
+    四步：1 设计 / 2 build / 3 复审 / 4 沉淀（MAX_STAGE=4）。"""
     meta = req_view["meta"]
     stage = meta.get("stage", 0)
 
-    # 范围确认（≤1）：定 / 细化模块规格
+    # 设计（≤1）：定 / 细化模块规格
     if stage <= 1:
-        return f"继续{STAGE_NAMES.get(stage, '范围确认')}：定 / 细化模块规格（发 /pmai-next 推进）"
+        return f"继续{STAGE_NAMES.get(stage, '设计')}：定 / 细化模块规格（发 /pmai-next 推进）"
 
     # build（2）：对模块 spec 直建 + 三道审 + PM 验收
     if stage == 2:
@@ -230,7 +229,7 @@ def suggest_next_action(req_view: dict) -> str:
 
     # 沉淀（≥4 = MAX_STAGE）
     if stage >= 4:
-        return "沉淀阶段：运行 /close 沉淀产品现状 + 关闭需求"
+        return "沉淀阶段：运行 /close 沉淀产品现状 + 收尾当前工作"
 
     return "运行 /pmai-status 查看详情"
 
@@ -273,7 +272,7 @@ def _render_single_req(req_view: dict) -> None:
     stage_name = STAGE_NAMES.get(stage, "?")
     req_dir = req_view["req_dir"]
 
-    print(f"Req：{req_id}（{req_name}）")
+    print(f"当前工作：{req_id}（{req_name}）")
     print(f"Stage：{stage} - {stage_name}")
     print(f"Worktree：{req_dir.parent.parent.parent}")
     print()
@@ -285,7 +284,7 @@ def render_status(state: dict, repo_root: Path) -> None:
     active = state["active_reqs"]
 
     if not active:
-        print("📭 没有活跃的需求。运行 /pmai-new-req 开始一个新需求。")
+        print("📭 没有活跃工作。运行 /design 设计新功能。")
         render_quickfix_section(repo_root)
         return
 
@@ -296,7 +295,7 @@ def render_status(state: dict, repo_root: Path) -> None:
         req_name = meta.get("name", "?")
         stage = meta.get("stage", 0)
         stage_name = STAGE_NAMES.get(stage, "?")
-        print(f"当前 Req：{req_id}（{req_name}）")
+        print(f"当前工作：{req_id}（{req_name}）")
         print(f"Stage：{stage} - {stage_name}")
         print()
 
@@ -305,7 +304,7 @@ def render_status(state: dict, repo_root: Path) -> None:
         print(f"下一步：{suggest_next_action(req_view)}")
         return
 
-    print(f"📚 {len(active)} 个 active req 并行：")
+    print(f"📚 {len(active)} 个 active work 并行：")
     print()
     for idx, req_view in enumerate(active):
         if idx > 0:
@@ -314,7 +313,7 @@ def render_status(state: dict, repo_root: Path) -> None:
         print()
 
     render_quickfix_section(repo_root)
-    print("提示：操作具体 req 请先 cd 进对应 worktree 再跑 skill；主仓视角不默选某个 req。")
+    print("提示：操作具体工作请先 cd 进对应 worktree 再跑 skill；主仓视角不默选某个工作。")
 
 
 def render_timeline(timeline_state: dict, repo_root: Path) -> None:
@@ -332,7 +331,7 @@ def render_timeline(timeline_state: dict, repo_root: Path) -> None:
     # Active
     print("═══ Active ═══")
     if not active:
-        print("  （无进行中需求）")
+        print("  （无进行中工作）")
     else:
         for item in active:
             meta = item["meta"]
@@ -353,7 +352,7 @@ def render_timeline(timeline_state: dict, repo_root: Path) -> None:
         print(label)
     if not closed:
         if total_archived == 0:
-            print("  （无已关闭需求）")
+            print("  （无已关闭工作）")
     else:
         for item in closed:
             meta = item["meta"]
@@ -393,10 +392,10 @@ def main() -> None:
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""\
 示例:
-  status-view.py                          当前所有 req 概览
-  status-view.py --summary                一行 active req 概览
+  status-view.py                          当前工作概览
+  status-view.py --summary                一行 active work 概览
   status-view.py --timeline               全局时间线（active + closed + cancelled）
-  status-view.py --timeline --module auth 只看 auth 模块相关 req
+  status-view.py --timeline --module auth 只看 auth 模块相关工作
   status-view.py --timeline --all         时间线显示全部 archived
 """,
     )
@@ -407,23 +406,23 @@ def main() -> None:
         help="Repository root (auto-detected if omitted)",
     )
     parser.add_argument(
-        "--summary", action="store_true", help="Print one-line active req overview"
+        "--summary", action="store_true", help="Print one-line active work overview"
     )
     parser.add_argument(
         "--timeline", action="store_true",
         help="全局时间线视图：active + closed + cancelled 全量按时间倒序"
     )
     parser.add_argument("--since", default=None, help="(timeline) 仅显示关闭时间 >= YYYY-MM-DD 的 archived")
-    parser.add_argument("--module", default=None, help="(timeline) 仅显示涉及该 module 的 req")
+    parser.add_argument("--module", default=None, help="(timeline) 仅显示涉及该 module 的工作")
     parser.add_argument("--limit", type=int, default=20, help="(timeline) archived 总数限制 (默认 20)")
     parser.add_argument("--all", action="store_true", help="(timeline) 取消 limit，显示全部 archived")
     parser.add_argument(
         "--banner-only", action="store_true",
-        help="(M2/ ) 仅输出当前 active req 的 stage banner 一行（按 banner-rules.md §1.1 格式）"
+        help="(M2/ ) 仅输出当前 active work 的 stage banner 一行（按 banner-rules.md §1.1 格式）"
     )
     parser.add_argument(
         "--skill", default="REQ-STAGE-GATE",
-        help="(--banner-only) 调用方 skill 名（如 REQ-STAGE-GATE / INIT-PROJECT），用于 banner 格式"
+        help="(--banner-only) 调用方 skill 名（如 STATUS / INIT-PROJECT），用于 banner 格式"
     )
     parser.add_argument(
         "--narrative", action="store_true",

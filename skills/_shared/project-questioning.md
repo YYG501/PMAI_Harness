@@ -22,7 +22,7 @@
    - 新方向：从产品定位 + 用户画像重起
    - brownfield 接入：先读 `docs/CODEBASE-AUDIT.md` 作实况语境，5 节顺序不变
 3. **跑提问 + 闸门 + 写作 + 确认门**（按 §2-§7 走）
-4. **PM 定稿后**：调用方按自己语境继续（init-project 进阶段 D / codebase-audit 给 ▶ Next Up 引到 `/pmai-new-req` / strategy skill 退出）
+4. **PM 定稿后**：调用方按自己语境继续（init-project 进阶段 D / codebase-audit 给 ▶ Next Up 引到 `/design` / strategy skill 退出）
 
 ---
 
@@ -114,7 +114,7 @@ python3 "$PMAI_HOME/scripts/check-open-questions.py" \
 | 状态 | 含义 |
 |---|---|
 | `todo` | 讨论过 / 提过想做，还没开始 |
-| `doing` | 正在做（已 `/pmai-new-req` 起 req） |
+| `doing` | 正在做（已进入 `/design` 或 `/build`） |
 | `done` | 做完了（req 已 close） |
 
 字段：`req-id`（起 req 后回填，未起前留空）/ 标题 / 状态。**没有「排序」列**——待办池不排顺序。

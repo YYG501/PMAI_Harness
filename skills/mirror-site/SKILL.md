@@ -5,14 +5,14 @@ description: |
     ①照站重建（mode=rebuild）：从外部目标站起原型 / 照某站补几页 —— 建增量
     ②对齐线上（mode=align）：把已有主原型对齐到自己线上真实产品 —— 改存量
   共用 gstack /browse 爬 + checks-diff 引擎验，两阶段 Plan→PM 批→Execute。不是无损拷贝
-  （跨栈重建必然近似，「只看不导」纪律）。按需 skill（PM 手动调 / new-req 范围确认里 AI 判断该爬 / 该对齐时建议）。
+  （跨栈重建必然近似，「只看不导」纪律）。按需 skill（PM 手动调 / design 里 AI 判断该爬 / 该对齐时建议）。
   Always trigger when the user says 照某站起原型 / 照它补几页 / 爬站点重建 / 原型对齐线上 / 对齐真实产品 / mirror 某站。
   do NOT use for 不参照任何站的纯新建（走 /design + /build）。
 ---
 
 # /pmai-mirror-site —— 照参考站对齐原型（§7.A/B 合并）
 
-> **PM 视图**：入口 banner（`status-view.py --banner-only --skill MIRROR-SITE`，无 active req 时用字面值）；Plan 阶段出确认门（PM 批了才动 `prototype/`）；产物只给路径 + 一句话，按 `_shared/PM-VIEW-RULES.md`。
+> **PM 视图**：入口 banner（`status-view.py --banner-only --skill MIRROR-SITE`，无 active work 时用字面值）；Plan 阶段出确认门（PM 批了才动 `prototype/`）；产物只给路径 + 一句话，按 `_shared/PM-VIEW-RULES.md`。
 > **PM 答题规则**：AskUserQuestion 按 `_shared/pm-view/askuser-rules.md`（空答 STOP，不默认走通过）。
 
 ## 定位

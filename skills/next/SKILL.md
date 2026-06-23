@@ -1,14 +1,12 @@
 ---
 name: pmai-next
 description: |
-  推进当前需求到下一步：读当前需求做到哪了，把它往前推一步——确认范围 / 接着建 / 建完三道审 / 收尾沉淀。推进前先说清「接下来要做什么 / 要你拍哪个板」再动手。
+  续跑当前模块工作：读当前做到哪了，把它往前推一步——设计 / build / 复审 / 收尾沉淀。推进前先说清「接下来要做什么 / 要你拍哪个板」再动手。
 ---
 
 # /pmai-next
 
-> **本 skill 是需求推进的主驱动。** 一个需求从「范围确认 → build → 复审 → 沉淀」一路往前走，都靠它推。PM 不用记自己在哪一步——发 `/pmai-next`，AI 读当前状态，告诉你「现在该做 X / 要你拍 Y」，你点头它再动。
->
-> 异常恢复（窗口被关 / 状态读不出 / worktree 残留卡住）走 `/pmai-req-stage-gate` 复位，复位完再回到 `/pmai-next`。
+> **本 skill 是续跑辅助，不是新需求入口。** 新功能 / 重做模块从 `/design` 开始；大需求建造走 `/build`；收尾走 `/close`。PM 不用记当前停在哪一步时，可以发 `/pmai-next`，AI 读当前状态，告诉你「现在该做 X / 要你拍 Y」，你点头它再动。
 
 > **PM 视图（banner + 决策门 label）**：入口 banner（`status-view.py --banner-only --skill NEXT`）；推进确认门 / 验收门 label 按 `_shared/pm-view/banner-rules.md` §3 三条硬规则；退出 Next Up 块按 §2。
 >
@@ -16,8 +14,8 @@ description: |
 
 ## 什么时候用
 
-- 一个需求做到一半，想往前走一步：发 `/pmai-next`。
-- `/pmai-new-req` 把范围确认完、拉好 worktree 后，PM 在新窗口发 `/pmai-next` 接着建。
+- 一个模块工作做到一半，想往前走一步：发 `/pmai-next`。
+- `/design` 已经写好模块规格，PM 想继续 build / 复审 / 沉淀。
 - 某一步的确认门没答就关了窗口，回来重发 `/pmai-next`，它从当前位置把同一个确认门重新拉起来。
 
 ## 核心护栏：先说要做什么，再动手
@@ -48,13 +46,13 @@ worktree 残留检测报警时，先把警告原文一句话转给 PM（"发现 
 
 ### 第 1 步：读当前需求做到哪了
 
-通过 `_lib.state.get_overall_state()` 拿当前 active req、当前在哪个阶段（范围确认 / build / 复审 / 沉淀）、最近一次状态变更、当前 task 情况。
+通过 `_lib.state.get_overall_state()` 拿当前 active work、当前在哪个阶段（设计 / build / 复审 / 沉淀）、最近一次状态变更。
 
-**无 active req → 不编造**（防 narrative 幻觉），直接给兜底提示：
+**无 active work → 不编造**（防 narrative 幻觉），直接给兜底提示：
 
 ```
-目前没有 active req。
-可以发 /pmai-new-req 起新需求，或发 /pmai-init-project 起新项目。
+目前没有 active work。
+可以发 /design 设计新功能，或发 /pmai-init-project 起新项目。
 ```
 
 ### 第 2 步：先报「接下来要做什么 / 要你拍什么」
@@ -65,7 +63,7 @@ worktree 残留检测报警时，先把警告原文一句话转给 PM（"发现 
 
 | 当前阶段 | `/pmai-next` 做什么 |
 |---|---|
-| **范围确认** | 读产品现状 + 跑当前主原型找 delta，和 PM 把范围谈成模块规格草案：`docs/modules/<模块>/discussion.md` / `decisions.md` / `spec.md`。范围细化、结构决策和 mock 讨论走 `/design`；结构决策当场逐条问 PM 拍。**范围定稿前，若关键决策页里还有没拍板的问题，用 `check-open-questions.py` 拦住、逐条让 PM 答完才放行，不给绕过的口子。** |
+| **设计** | 读产品现状 + 跑当前主原型找 delta，和 PM 把范围谈成模块规格：`docs/modules/<模块>/discussion.md` / `decisions.md` / `spec.md`。范围细化、结构决策和 mock 讨论走 `/design`；结构决策当场逐条问 PM 拍。若关键决策页里还有没拍板的问题，用 `check-open-questions.py` 拦住，逐条让 PM 答完才放行。 |
 | **build** | 调 `/build <模块>`：对着 `docs/modules/<模块>/spec.md` 在 `prototype/` 里建，动手前强制读 `docs/DESIGN.md`，建完进入复审。 |
 | **复审** | build 完自动跑三道审：覆盖审计（范围清单 vs 实际改了什么的硬对比）+ 视觉门（gstack `/design-review` 只截图不改）+ 行为审（按验收流程跑 gstack `/browse`）。审完进体验迭代 + 呈交闸门，等 PM 验收 |
 | **沉淀** | 调 `/close` 收尾：更新产品现状（PRODUCT-STATE）+ 决策 / 术语 / 模块规格归位；PM 要拿去评审时按需反向出可评审 PRD |
@@ -74,7 +72,7 @@ worktree 残留检测报警时，先把警告原文一句话转给 PM（"发现 
 
 ### build 阶段：模块级直建
 
-build 阶段不再拆 task。`/pmai-next` 只需要定位当前 active req 涉及的模块，并把控制权交给 `/build <模块>`：
+build 阶段不再拆 task。`/pmai-next` 只需要定位当前工作涉及的模块，并把控制权交给 `/build <模块>`：
 
 - 单模块：直接提示将调用 `/build <模块>`，等 PM 确认后进入 build。
 - 多模块：先列出模块清单，让 PM 选本轮先建哪个；每次 build 只对一个模块规格负责，避免一次 prompt 混多个边界。
@@ -102,7 +100,7 @@ build 阶段不再拆 task。`/pmai-next` 只需要定位当前 active req 涉�
 ## Rules
 
 - **先说后做**：推进任何一步前先讲清「要做 X / 要你拍 Y」，PM 点头再动手——本 skill 第一铁律。
-- **不编造状态**：读不到 active req 就直说没有，引导发 `/pmai-new-req`；不假装有进度。
+- **不编造状态**：读不到 active work 就直说没有，引导发 `/design`；不假装有进度。
 - **结构决策前置**：分区 / 菜单归类 / 模块切分 / 命名底稿命中时当场逐条问 PM 拍板，不自判「无歧义」跳门、不事后追认。
 - **不复制各阶段 skill 的内部逻辑**：本 skill 只判断当前位置 + 报清楚 + 把对应能力拉起来；范围确认 / build / 复审 / 沉淀的细节各归其 skill。
 - **PM chat 输出禁工程黑话**：不出现 `hash` / `lint` / 脚本名 / 内部编号 等内部记账词；用 PM 听得懂的话讲现状和下一步。
