@@ -12,5 +12,5 @@
 | `docs/modules/<模块>/discussion.md` | ✅ 允许 + 指代前缀 | ❌ 禁用 | ❌ 禁用 | ❌ 禁用 |
 | `docs/modules/<模块>/decisions.md` | ✅ 允许 + 指代前缀 | ❌ 禁用 | ❌ 禁用 | ❌ 禁用 |
 | `docs/modules/<模块>/spec.md` | ✅ 允许 + 指代前缀 | ❌ 禁用 | ❌ 禁用 | ❌ 禁用 |
-| `solution.md`（在飞旧 req 历史产物）| ✅ 允许 + 指代前缀 | ❌ 禁用 | ❌ 禁用 | ❌ 禁用 |
+| `solution.md`（旧历史产物）| ✅ 允许 + 指代前缀 | ❌ 禁用 | ❌ 禁用 | ❌ 禁用 |
 | `*.engineering.md`（历史产物） | ✅ 全部允许 | ✅ 全部允许 | ✅ 全部允许 | ✅ 全部允许 |

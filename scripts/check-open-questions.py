@@ -2,7 +2,7 @@
 """check-open-questions.py — 未决问题闸门 lint 脚本
 
 把「未决问题闸门（硬规则）」从 prose 防御抽出成机器校验。
-历史 prose 入口曾在 req-stage-gate skill；当前由 design / project-questioning 等调用。
+历史 prose 入口曾在旧阶段门 skill；当前由 design / project-questioning 等调用。
 
 适用对象：含 `## 未决问题` section 的产出文档（当前最严格落地在 analysis.md，
 其他 stage 类似产出可比照适用）。
@@ -49,7 +49,7 @@ Q_HEADER = re.compile(r"^###\s+(Q\d+)[:：]\s*(.*)$")
 # `**PM 回答：**` 前缀（容忍中英冒号 + 全/半角空格）
 PM_ANSWER_PREFIX = re.compile(r"^\*\*PM\s*回答\s*[:：]\*\*\s*(.*)$")
 # section 内显式声明无未决问题
-NO_OPEN_QUESTIONS = re.compile(r"本\s*(次工作|req)\s*无未决问题")
+NO_OPEN_QUESTIONS = re.compile(r"本\s*(次工作|轮工作|工作)\s*无未决问题")
 
 
 def find_section(lines):

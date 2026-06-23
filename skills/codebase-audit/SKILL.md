@@ -16,7 +16,7 @@ description: |
 
 本 skill = brownfield 一气呵成入口，和 greenfield 的 `/pmai-init-project` 对称：greenfield 一个命令把骨架 + 方向讨论做完，brownfield 一个命令把现状盘点 + 方向讨论做完。中间隔一个「PM 过目现状档」的轻停顿（现状档是方向决策的输入材料，PM 点头再继续），不用 PM 手敲第二个命令。方向讨论这一段和新项目走同一套 `_shared/project-questioning.md`，只是多一份现状输入喂着。
 
-> **与 `/pmai-strategy` 的分工**：本 skill 内联跑的是 brownfield **首次接入定方向**；`/pmai-strategy` 是**事后改方向**的按需入口（跑过几个 req 发现定位偏了 / 产品路线规划 / 老板新方向）。接入用本 skill 一条龙，不再需要先 audit 再手动 strategy。
+> **与 `/pmai-strategy` 的分工**：本 skill 内联跑的是 brownfield **首次接入定方向**；`/pmai-strategy` 是**事后改方向**的按需入口（跑过几轮模块工作发现定位偏了 / 产品路线规划 / 老板新方向）。接入用本 skill 一条龙，不再需要先 audit 再手动 strategy。
 
 ## Preamble
 
@@ -131,7 +131,7 @@ PM 提修正 → 改现状档 → 重新呈交。
    - **§二 功能清单**：保持模板空（后续 design / close 按需填）
    - **§三 页面与交互范围**：AI 填能扫到的（路由表 / 页面文件）
    - **§四 硬约束** / **§五 跨模块依赖与占位策略**：保持空，PM 后续按需补
-   - **顶部状态行**：保留模板的「草稿 | 未经 PM 确认 | 生成时间」标记 —— 让 PM 后续知道哪些段是 AI bootstrap 的、哪些是后续 req sediment 的
+   - **顶部状态行**：保留模板的「草稿 | 未经 PM 确认 | 生成时间」标记 —— 让 PM 后续知道哪些段是 AI bootstrap 的、哪些是后续模块沉淀的
 
 4. **刷新 INDEX.md**：按生成的模块清单 patch `docs/modules/INDEX.md`（每个新模块一行：名称 / 路径 / 一句话定位），跑 `check-index-lint.py` 校验。
 
@@ -143,7 +143,7 @@ PM 提修正 → 改现状档 → 重新呈交。
 
 > **跟 step 3.5 的关系**：3.5 是 PM 选择性建 modulespec 骨架；3.5.5 是**无条件**建 / 修复 DESIGN.md（不让 PM 选择 —— 它是 build 阶段读 DESIGN / 复审的覆盖审计·视觉门硬依赖，PM 没法绕过；3.5 [N] 也照样跑本步骤）。
 
-**为什么有这步**：DESIGN.md 是 task executor 写代码时的硬约束（build 阶段读 DESIGN / 复审的覆盖审计·视觉门强制读「共享组件 inventory」段）。老项目接入框架前通常没建过这个文件，或建了但没 inventory 段 → build 阶段隐性 break，PM 第一个 req 推不到复审。本步骤兜底建 / 修复。
+**为什么有这步**：DESIGN.md 是 build 执行写代码时的硬约束（build 阶段读 DESIGN / 复审的覆盖审计·视觉门强制读「共享组件 inventory」段）。老项目接入框架前通常没建过这个文件，或建了但没 inventory 段 → build 阶段隐性 break，PM 第一个模块工作推不到复审。本步骤兜底建 / 修复。
 
 ```bash
 DESIGN_MD="$REPO_ROOT/docs/DESIGN.md"
@@ -164,10 +164,10 @@ $HAS_FILE && grep -q "^## 共享组件 inventory" "$DESIGN_MD" && HAS_INVENTORY=
 
 ## 共享组件 inventory
 
-> **这是什么**：build 阶段读 DESIGN / 复审的覆盖审计·视觉门的查询底座。每个 req 动手前逐组件查这里：
-> **有 → 复用**；**没有 → 新建并加进本表**。req 间累积，越来越全，reuse 率随之上升。
+> **这是什么**：build 阶段读 DESIGN / 复审的覆盖审计·视觉门的查询底座。每个模块工作动手前逐组件查这里：
+> **有 → 复用**；**没有 → 新建并加进本表**。跨模块工作持续累积，越来越全，reuse 率随之上升。
 
-| 组件名 | 用途 | 视觉 | 状态 | 交互 | 出处 req |
+| 组件名 | 用途 | 视觉 | 状态 | 交互 | 出处工作 |
 |---|---|---|---|---|---|
 | <!-- 复审累积，目前为空 --> | | | | | |
 ```
@@ -214,7 +214,7 @@ HAS_PS=false
 | HAS_PS=true | silent skip（已有，不覆盖） |
 | HAS_PS=false | AI 用 Write 套 `$PMAI_HOME/templates/PRODUCT-STATE.md.tmpl` 建骨架 + 反推填三段 + 顶部状态行 |
 
-**反推填充映射**（产品现状 = 已发生事实，直接反推、不设 PM 确认门——与反推未来 req 需 PM 拍板顺序本质不同）：
+**反推填充映射**（产品现状 = 已发生事实，直接反推、不设 PM 确认门——与反推未来待办需 PM 拍板顺序本质不同）：
 
 | PRODUCT-STATE 段 | 从哪反推 |
 |---|---|

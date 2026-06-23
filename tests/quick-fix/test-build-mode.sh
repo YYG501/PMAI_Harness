@@ -13,9 +13,9 @@ QF="$FRAMEWORK_ROOT/scripts/quick-fix.sh"
 test_build_mode_merges_to_build_branch() {
   start_test "scenario QB1 build mode merges to build branch, leaves main untouched"
   fixture_setup
-  fixture_create_req req-001 test 1 >/dev/null 2>&1
+  fixture_create_work work-001 test 1 >/dev/null 2>&1
 
-  local build_wt="$FIXTURE_DIR/.worktrees/build-req-001-test"
+  local build_wt="$FIXTURE_DIR/.worktrees/build-work-001-test"
   # Pre-state: main has empty prototypes/, build branch has same
   echo "# main version" > "$FIXTURE_DIR/prototypes/page.md"
   (cd "$FIXTURE_DIR" && git add -A && git commit -q -m "main page")
@@ -34,7 +34,7 @@ test_build_mode_merges_to_build_branch() {
   base_branch=$(awk '/^BASE_BRANCH:/{print $2}' "$out")
 
   if [ "$rc" -eq 0 ] \
-    && [ "$base_branch" = "build-req-001-test" ] \
+    && [ "$base_branch" = "build-work-001-test" ] \
     && grep -q "build-only fix" "$build_wt/prototypes/page.md" \
     && ! grep -q "build-only fix" "$FIXTURE_DIR/prototypes/page.md"; then
     pass_test
@@ -93,3 +93,4 @@ test_weird_branch_rejected() {
 test_build_mode_merges_to_build_branch
 test_task_worktree_rejected
 test_weird_branch_rejected
+report_results "quick-fix build mode"

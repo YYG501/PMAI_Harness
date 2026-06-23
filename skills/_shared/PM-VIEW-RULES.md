@@ -1,6 +1,6 @@
 # PM 视图通用规则（PM-VIEW-RULES）
 
-> 适用范围：所有 PM 视角的产物 — `docs/modules/<模块>/discussion.md` / `decisions.md` / `spec.md` / `PRODUCT-STATE.md` / 按需 `prd.md`（在飞旧 req 的 `brief.md` / `analysis.md` / `solution.md` 同样适用）。
+> 适用范围：所有 PM 视角的产物 — `docs/modules/<模块>/discussion.md` / `decisions.md` / `spec.md` / `PRODUCT-STATE.md` / 按需 `prd.md`（旧历史产物 `brief.md` / `analysis.md` / `solution.md` 同样适用）。
 >
 > 本文件是 **单一真相源**。下列 skill 都引用本文件，不在 skill 内部独立维护：
 > `design` · `build` · `close` · `prd-writing`
@@ -68,7 +68,7 @@ PM 创建 / 审核 / 验收时直接看的内容。回答 PM 关心的问题：
 | `decisions.md` | 已拍板决策、共同理由、否过的方案 |
 | `spec.md` | 可建规格：信息模型、功能清单、业务规则、验收路径 |
 
-旧 `task-plan.md` / `tasks/task-NNN-*.md` / `.engineering.md` 只作历史兼容，不作为新流程产物。
+旧 `task-plan.md` / `tasks/task-NNN-*.md` / `.engineering.md` 只作历史证据，不作为新流程产物。
 
 ---
 

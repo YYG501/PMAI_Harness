@@ -84,7 +84,7 @@
 **反例**（PM 已驳回过的写法）：
 ```
 [AskUserQuestion]
-question 1: req-005 角色模型用三元组还是二维分离？
+question 1: 角色模型用三元组还是二维分离？
 question 2: scope 字段命名叫 scope 还是 range？
 question 3:   要不要先做？
 ```
@@ -103,7 +103,7 @@ B. 改成"管的范围"
 ```
 → PM 答 A，AI 再进入第 2 件。
 
-**Why**：PM 不读工程术语；多决策并列让 PM 无法逐个消化；批量打包 = AI 把"消化决策"成本推给 PM。出处：消费仓 memory `pm-plain-language-one-decision-at-a-time.md`（PM 在 req-006 多次驳回术语密集 / 批量 AskUser，明确说"没看明白问题"）。
+**Why**：PM 不读工程术语；多决策并列让 PM 无法逐个消化；批量打包 = AI 把"消化决策"成本推给 PM。出处：消费仓 memory `pm-plain-language-one-decision-at-a-time.md`（PM 多次驳回术语密集 / 批量 AskUser，明确说"没看明白问题"）。
 
 **How to apply**：
 

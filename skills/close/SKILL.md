@@ -95,7 +95,7 @@ git diff --stat "$BASE" HEAD
 
 ---
 
-## 步骤 2：跨 req 记忆回写（① 决策 + 术语 —— 本 skill 的核心新增）
+## 步骤 2：跨工作记忆回写（① 决策 + 术语 —— 本 skill 的核心新增）
 
 这是 v2 补的真实缺口：**本次拍的决策、造的术语，要沉进下一次 `/pmai-design` 开场会读到的家**，不能只躺在本次的讨论/代码里随工作结束失忆。
 
@@ -197,7 +197,7 @@ python3 "$PMAI_HOME/scripts/check-state-index-drift.py" "$REPO_ROOT" || true
 | 这次产出了什么 | 归到哪 |
 |---|---|
 | 模块讨论/决策/规格 | `docs/modules/<模块>/`（discussion.md / decisions.md / spec.md，已在步骤 2/3 落） |
-| PM 上传的附件 / 素材（访谈 / 竞品 / 脑暴 / 产品原文…） | `docs/inputs/<类别>/`（按类型自动归类；保留敏感路径预检 + 大小上限，去 per-req 作用域） |
+| PM 上传的附件 / 素材（访谈 / 竞品 / 脑暴 / 产品原文…） | `docs/inputs/<类别>/`（按类型自动归类；保留敏感路径预检 + 大小上限，去单工作作用域） |
 | 探索期的 mock 变体 | `mocks/`（manifest.json 真相源 + 看版） |
 | 根目录散落的临时 md / 半成品 | 归 `docs/归档/` 或并进对应模块文件夹；**根目录不留游离** |
 

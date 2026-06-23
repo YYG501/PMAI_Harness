@@ -4,7 +4,7 @@ description: |
   项目方向校准 / 重做入口：项目跑起来之后，PM 主动回头**重定 / 校准已定的顶层方向**（产品定位 / 用户 / 路线 / 技术栈 / 术语 + TODO 待办池）。
   与起步定方向分工清楚：首次定方向走 /pmai-init-project（greenfield 起步）或 /pmai-codebase-audit（brownfield 接入）；本 skill 专管**事后回头改方向**，不重复起步那道门。
   **4 个独立调用场景**：
-    A 项目方向重做（跑过几个 req 后发现产品定位偏了）
+    A 项目方向重做（跑过几轮模块工作后发现产品定位偏了）
     B 产品路线规划（主动校准 PRODUCT 5 节 + 刷新 TODO 待办池，含季度 / 半年节奏）
     C 老板 / 市场新方向（外部输入逼着改路线）
     D brownfield 接入方向恢复（接入时 /pmai-codebase-audit 内联方向讨论被打断 / 想重定方向时手动补跑）

@@ -78,7 +78,7 @@ test_main_allows_module_meta_create() {
   fixture_setup
   cd "$FIXTURE_DIR"
   mkdir -p docs/modules/能力匹配卡
-  capture_check "Write" "docs/modules/能力匹配卡/.work-meta.json" "" "" '{"id":"req-001","name":"能力匹配卡","stage":1,"status":"active"}'
+  capture_check "Write" "docs/modules/能力匹配卡/.work-meta.json" "" "" '{"id":"work-001","name":"能力匹配卡","stage":1,"status":"active"}'
   if [ "$RC" = "0" ] && ! echo "$OUT" | grep -q '"deny"'; then
     pass_test
   else
@@ -111,9 +111,9 @@ test_main_rejects_random_toplevel() {
 test_build_branch_allows_prototype_write() {
   start_test "I-CB5 build branch ALLOWS write to prototype/index.ts"
   fixture_setup
-  work_dir=$(fixture_create_req "req-001" "test" 3)
+  work_dir=$(fixture_create_work "work-001" "test" 3)
 
-  cd "$FIXTURE_DIR/.worktrees/build-req-001-test"
+  cd "$FIXTURE_DIR/.worktrees/build-work-001-test"
   mkdir -p prototype
   capture_check "Write" "prototype/index.ts" "" "" "console.log(1)"
   # build worktree 放行 prototype/，跨界交执行器层。

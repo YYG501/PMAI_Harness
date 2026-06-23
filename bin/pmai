@@ -23,8 +23,6 @@ Subcommands:
   status               Show install state + version diff
   doctor               Run integrity self-check
   update-check         Check if newer stable tag available (silent if up-to-date)
-  sync-prds            Backfill docs/prds/ symlinks for historical closed reqs
-                       Flags: --dry-run
   whats-new            Show CHANGELOG diff since last upgrade
                        Flags: --from <ver>
   migrate              Migrate consumer from vendored mode to I-mini mode
@@ -69,7 +67,7 @@ case "${1:-}" in
     echo "pmai $(find_version)"
     exit 0
     ;;
-  install|upgrade|uninstall|status|doctor|update-check|sync-prds|whats-new|migrate)
+  install|upgrade|uninstall|status|doctor|update-check|whats-new|migrate)
     SUB="$1"
     shift
     SUB_BIN="$BIN_DIR/pmai-$SUB"

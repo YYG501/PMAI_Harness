@@ -115,12 +115,12 @@ python3 "$PMAI_HOME/scripts/check-open-questions.py" \
 |---|---|
 | `todo` | 讨论过 / 提过想做，还没开始 |
 | `doing` | 正在做（已进入 `/pmai-design` 或 `/pmai-build`） |
-| `done` | 做完了（req 已 close） |
+| `done` | 做完了（对应工作已 close） |
 
-字段：`req-id`（起 req 后回填，未起前留空）/ 标题 / 状态。**没有「排序」列**——待办池不排顺序。
+字段：来源工作（进入 `/pmai-design` / `/pmai-build` 后回填，可空）/ 标题 / 状态。**没有「排序」列**——待办池不排顺序。
 
 **写 TODO 的硬规则**：
-1. **只记 PM 主动提过 / 讨论过想做的事**——AI 不从代码、竞品、`requirements/pmai-closed/` 反推填充，池子里只有 PM 真说过想做的。
+1. **只记 PM 主动提过 / 讨论过想做的事**——AI 不从代码、竞品、历史收尾记录反推填充，池子里只有 PM 真说过想做的。
 2. **不替 PM 排顺序**——条目无序，PM 要做时自己挑。
 3. PM 没给具体待办 → TODO 留空（一行占位即可），不替 PM 脑补队列。
 

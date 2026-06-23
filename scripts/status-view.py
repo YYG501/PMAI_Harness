@@ -70,11 +70,11 @@ def render_summary(state: dict, repo_root: Path) -> None:
         print("📭 暂无 active work")
         return
     parts = []
-    for req in active:
-        meta = req["meta"]
-        req_id = meta.get("id", "?")
+    for work in active:
+        meta = work["meta"]
+        work_id = meta.get("id", "?")
         stage = meta.get("stage", 0)
-        parts.append(f"{req_id}:{STAGE_NAMES.get(stage, '?')}")
+        parts.append(f"{work_id}:{STAGE_NAMES.get(stage, '?')}")
     print("📋 active work: " + " / ".join(parts))
 
 
@@ -90,8 +90,8 @@ def render_banner_only(state: dict, repo_root: Path, skill: str) -> None:
         print("━━━ PMAI ► " + skill + " ▸ <项目级 / 无 active work> ━━━")
         return
     # 取第一个 active work（典型场景：单 PM 同时 1-2 个工作）
-    req_view = active[0]
-    work_dir = req_view["work_dir"]
+    work_view = active[0]
+    work_dir = work_view["work_dir"]
     try:
         banner = get_current_stage_banner(work_dir, skill=skill)
     except Exception as exc:  # noqa: BLE001
@@ -135,17 +135,17 @@ def render_narrative(state: dict, repo_root: Path) -> None:
 
     # 单个工作场景：直接念
     if len(active) == 1:
-        req = active[0]
-        meta = req["meta"] or {}
-        req_id = req["work_dir"].name
+        work = active[0]
+        meta = work["meta"] or {}
+        work_id = work["work_dir"].name
         stage = meta.get("stage", 0)
         stage_name = STAGE_NAMES.get(int(stage), f"stage {stage}") if stage else "未知"
         # 不写 commit hash / 时间细节；只点 stage 状态
         prod = _product_oneliner(repo_root)
         prod_line = f"你的产品：{prod}\n" if prod else ""
         print(
-            f"{prod_line}当前在做 {req_id}（{stage_name} 阶段）。"
-            f"\n下一步：{suggest_next_action(req)}"
+            f"{prod_line}当前在做 {work_id}（{stage_name} 阶段）。"
+            f"\n下一步：{suggest_next_action(work)}"
         )
         return
 
@@ -154,12 +154,12 @@ def render_narrative(state: dict, repo_root: Path) -> None:
     if prod:
         print(f"你的产品：{prod}")
     print(f"目前有 {len(active)} 个 active work：")
-    for req in active:
-        meta = req["meta"] or {}
-        req_id = req["work_dir"].name
+    for work in active:
+        meta = work["meta"] or {}
+        work_id = work["work_dir"].name
         stage = meta.get("stage", 0)
         stage_name = STAGE_NAMES.get(int(stage), f"stage {stage}") if stage else "未知"
-        print(f"  - {req_id}：{stage_name} 阶段")
+        print(f"  - {work_id}：{stage_name} 阶段")
     print("\n下一步：发 /pmai-status 看详细；推进时按具体工作选择 /pmai-design、/pmai-build 或 /pmai-close。")
 
 

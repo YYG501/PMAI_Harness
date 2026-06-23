@@ -25,11 +25,11 @@ _assert_redline_blocks() {
 }
 
 test_task_file_redline() {
-  _assert_redline_blocks "scenario 11 blocks module tasks md" "mkdir -p docs/modules/req-001/tasks && echo bad > docs/modules/req-001/tasks/task-001.md"
+  _assert_redline_blocks "scenario 11 blocks module tasks md" "mkdir -p docs/modules/work-001/tasks && echo bad > docs/modules/work-001/tasks/task-001.md"
 }
 
 test_meta_redline() {
-  _assert_redline_blocks "scenario 12 blocks req meta" "mkdir -p docs/modules/req-001 && echo '{}' > docs/modules/req-001/.work-meta.json"
+  _assert_redline_blocks "scenario 12 blocks work meta" "mkdir -p docs/modules/work-001 && echo '{}' > docs/modules/work-001/.work-meta.json"
 }
 
 test_claude_scripts_redline() {

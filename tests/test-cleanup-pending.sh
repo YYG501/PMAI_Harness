@@ -82,11 +82,11 @@ test_happy_path_removes_worktree_branch_and_file() {
   start_test "C3 happy: removes worktree + branch, deletes pending file when list empty"
   fixture_setup
 
-  fixture_create_req "req-001" "happy" 4 >/dev/null
-  req_wt="$FIXTURE_DIR/.worktrees/build-req-001-happy"
-  req_branch="build-req-001-happy"
+  fixture_create_work "work-001" "happy" 4 >/dev/null
+  work_wt="$FIXTURE_DIR/.worktrees/build-work-001-happy"
+  work_branch="build-work-001-happy"
 
-  _write_pending_work_entry "$req_branch" "$req_wt"
+  _write_pending_work_entry "$work_branch" "$work_wt"
 
   if ! (cd "$FIXTURE_DIR" && bash "$CLEANUP") >/tmp/out.$$ 2>/tmp/err.$$; then
     _fail "cleanup failed"
@@ -97,14 +97,14 @@ test_happy_path_removes_worktree_branch_and_file() {
     return
   fi
 
-  if [ -d "$req_wt" ]; then
-    _fail "worktree should be removed: $req_wt"
+  if [ -d "$work_wt" ]; then
+    _fail "worktree should be removed: $work_wt"
     rm -f /tmp/out.$$ /tmp/err.$$
     fixture_teardown
     return
   fi
-  if git -C "$FIXTURE_DIR" show-ref --verify --quiet "refs/heads/$req_branch"; then
-    _fail "branch should be deleted: $req_branch"
+  if git -C "$FIXTURE_DIR" show-ref --verify --quiet "refs/heads/$work_branch"; then
+    _fail "branch should be deleted: $work_branch"
     rm -f /tmp/out.$$ /tmp/err.$$
     fixture_teardown
     return
@@ -128,12 +128,12 @@ test_reject_when_cwd_inside_pending_worktree() {
   start_test "C4 reject when cwd is inside a pending worktree"
   fixture_setup
 
-  fixture_create_req "req-002" "trap" 4 >/dev/null
-  req_wt="$FIXTURE_DIR/.worktrees/build-req-002-trap"
+  fixture_create_work "work-002" "trap" 4 >/dev/null
+  work_wt="$FIXTURE_DIR/.worktrees/build-work-002-trap"
 
-  _write_pending_work_entry "build-req-002-trap" "$req_wt"
+  _write_pending_work_entry "build-work-002-trap" "$work_wt"
 
-  if (cd "$req_wt" && bash "$CLEANUP") >/tmp/out.$$ 2>/tmp/err.$$; then
+  if (cd "$work_wt" && bash "$CLEANUP") >/tmp/out.$$ 2>/tmp/err.$$; then
     _fail "should reject when cwd is inside pending worktree"
   else
     if grep -q "cwd 在以下待清理 worktree 内" /tmp/err.$$; then
@@ -160,14 +160,14 @@ test_partial_worktree_already_gone() {
   start_test "C5 worktree already removed externally → still cleans branch + entry"
   fixture_setup
 
-  fixture_create_req "req-003" "stale" 4 >/dev/null
-  req_wt="$FIXTURE_DIR/.worktrees/build-req-003-stale"
-  req_branch="build-req-003-stale"
+  fixture_create_work "work-003" "stale" 4 >/dev/null
+  work_wt="$FIXTURE_DIR/.worktrees/build-work-003-stale"
+  work_branch="build-work-003-stale"
 
-  _write_pending_work_entry "$req_branch" "$req_wt"
+  _write_pending_work_entry "$work_branch" "$work_wt"
 
   # Simulate: worktree dir removed by hand (but git metadata still references it)
-  rm -rf "$req_wt"
+  rm -rf "$work_wt"
 
   if ! (cd "$FIXTURE_DIR" && bash "$CLEANUP") >/tmp/out.$$ 2>/tmp/err.$$; then
     _fail "cleanup should succeed even if worktree dir already gone"
@@ -177,7 +177,7 @@ test_partial_worktree_already_gone() {
     return
   fi
 
-  if git -C "$FIXTURE_DIR" show-ref --verify --quiet "refs/heads/$req_branch"; then
+  if git -C "$FIXTURE_DIR" show-ref --verify --quiet "refs/heads/$work_branch"; then
     _fail "branch should be deleted even when worktree dir already gone"
     rm -f /tmp/out.$$ /tmp/err.$$
     fixture_teardown
@@ -196,11 +196,11 @@ test_dry_run_does_not_remove() {
   start_test "C6 dry-run lists pending but removes nothing"
   fixture_setup
 
-  fixture_create_req "req-004" "dryrun" 4 >/dev/null
-  req_wt="$FIXTURE_DIR/.worktrees/build-req-004-dryrun"
-  req_branch="build-req-004-dryrun"
+  fixture_create_work "work-004" "dryrun" 4 >/dev/null
+  work_wt="$FIXTURE_DIR/.worktrees/build-work-004-dryrun"
+  work_branch="build-work-004-dryrun"
 
-  _write_pending_work_entry "$req_branch" "$req_wt"
+  _write_pending_work_entry "$work_branch" "$work_wt"
 
   if ! (cd "$FIXTURE_DIR" && bash "$CLEANUP" --dry-run) >/tmp/out.$$ 2>/tmp/err.$$; then
     _fail "dry-run should exit 0"
@@ -218,10 +218,10 @@ test_dry_run_does_not_remove() {
     return
   fi
 
-  if [ ! -d "$req_wt" ]; then
+  if [ ! -d "$work_wt" ]; then
     _fail "worktree should still exist after dry-run"
   fi
-  if ! git -C "$FIXTURE_DIR" show-ref --verify --quiet "refs/heads/$req_branch"; then
+  if ! git -C "$FIXTURE_DIR" show-ref --verify --quiet "refs/heads/$work_branch"; then
     _fail "branch should still exist after dry-run"
   fi
   if [ ! -f "$FIXTURE_DIR/.runs/pending-cleanup.json" ]; then
@@ -245,7 +245,7 @@ test_rejects_unregistered_existing_worktree_path() {
   victim="$FIXTURE_DIR/not-a-worktree-but-important"
   mkdir -p "$victim"
   echo "keep" > "$victim/keep.txt"
-  _write_pending_work_entry "build-req-999-evil" "$victim"
+  _write_pending_work_entry "build-work-999-evil" "$victim"
 
   if (cd "$FIXTURE_DIR" && bash "$CLEANUP") >/tmp/out.$$ 2>/tmp/err.$$; then
     _fail "cleanup should reject unsafe pending entry"

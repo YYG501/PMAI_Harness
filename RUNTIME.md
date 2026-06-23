@@ -28,9 +28,10 @@
 - `cleanup-pending-worktrees` pending 项改为 `kind=work` + `build-*` 安全校验。
 - 删除活跃 `docs/设计/` 旧设计稿，避免把过期方案当当前真相源。
 
-## 下一步
+## 剩余验证
 
-- 跑全量 `tests/run-all.sh`，修剩余因删除旧机制暴露的测试漂移。
-- 继续扫活跃文档中的旧词：`req-*`、`/pmai-next`、`new-req`、`req-stage-gate`、`work-transition`。
-- 全绿后提交本轮清理。
+- 在一个真实业务模块上跑完整 `/pmai-design` → `/pmai-build` → `/pmai-close`，验证三道 build 审计、dev server 复用、worktree 创建/合并/清理闭环。
 
+## 本轮验证
+
+- `tests/run-all.sh`：272 passed / 0 failed。

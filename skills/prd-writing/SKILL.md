@@ -347,7 +347,7 @@ done
 
 3.8. **候选跨功能产品规则 promote（②）**——写 PRD 过程中，若规划期讨论里浮出**全项目跨功能产品行为规则**（不是某次实现反馈、而是「产品在 X 情况下应 / 不应 Y」、适用范围超出本次工作单个模块的规则），PM-selective promote 到 `docs/PRODUCT-RULES.md`：
 
-   - AI 预判候选 + 拟写条目（标题 / 规则 / scope 全局或域限定 / 来源 req）逐条呈交 PM
+   - AI 预判候选 + 拟写条目（标题 / 规则 / scope 全局或域限定 / 来源工作）逐条呈交 PM
    - PM 选 promote → AI Edit 追加进 `docs/PRODUCT-RULES.md`「规则清单」段（不 commit，PM 后审 diff）
    - PM 说不是 → 不动
    - `docs/PRODUCT-RULES.md` 不存在 / 无候选 → silent skip

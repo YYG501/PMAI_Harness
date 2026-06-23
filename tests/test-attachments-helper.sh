@@ -39,7 +39,7 @@ $script
 test_copy_attachment_happy_path() {
   start_test "copy_attachment: 成功 cp + 机械命名 + attachments_seen append + pending_inject"
   fixture_setup
-  work_dir=$(fixture_create_req "req-001" "test" 2)
+  work_dir=$(fixture_create_work "work-001" "test" 2)
   src="$work_dir/source-mock.pdf"
   printf 'PDF content mock' > "$src"
 
@@ -70,7 +70,7 @@ print('OK')
 test_copy_attachment_spec_anchor() {
   start_test "copy_attachment: spec 模块规格锚点 pending 判定"
   fixture_setup
-  work_dir=$(fixture_create_req "req-001" "test" 2)
+  work_dir=$(fixture_create_work "work-001" "test" 2)
   src="$work_dir/spec-mock.pdf"
   printf 'mock' > "$src"
 
@@ -103,7 +103,7 @@ print('OK')
 test_sensitive_path_error() {
   start_test "SensitivePathError: .env 命中 denylist"
   fixture_setup
-  work_dir=$(fixture_create_req "req-002" "test" 2)
+  work_dir=$(fixture_create_work "work-002" "test" 2)
   src="$work_dir/.env"
   printf 'SECRET=xxx' > "$src"
 
@@ -131,7 +131,7 @@ except SensitivePathError as e:
 test_file_size_error() {
   start_test "FileSizeError: >50MB hard cap"
   fixture_setup
-  work_dir=$(fixture_create_req "req-003" "test" 2)
+  work_dir=$(fixture_create_work "work-003" "test" 2)
   src="$work_dir/big.bin"
   # 51 MB 二进制
   dd if=/dev/zero of="$src" bs=1048576 count=51 2>/dev/null
@@ -160,7 +160,7 @@ except FileSizeError as e:
 test_register_list_round_trip() {
   start_test "register_attachment + list_attachments_seen round-trip"
   fixture_setup
-  work_dir=$(fixture_create_req "req-004" "test" 2)
+  work_dir=$(fixture_create_work "work-004" "test" 2)
 
   out=$(_run_py "
 from _lib.attachments import register_attachment, list_attachments_seen
@@ -190,7 +190,7 @@ print('OK')
 test_is_seen_missing_field() {
   start_test "is_seen: 缺字段 无 attachments_seen 字段 → False（缺字段 兼容）"
   fixture_setup
-  work_dir=$(fixture_create_req "req-005" "test" 2)
+  work_dir=$(fixture_create_work "work-005" "test" 2)
   # fixture 创建的 .work-meta.json 无 attachments_seen 字段（缺字段 形态）
 
   out=$(_run_py "
@@ -215,7 +215,7 @@ print('OK')
 test_remove_attachment() {
   start_test "remove_attachment: rm 文件 + 清 attachments_seen 行"
   fixture_setup
-  work_dir=$(fixture_create_req "req-006" "test" 2)
+  work_dir=$(fixture_create_work "work-006" "test" 2)
   src="$work_dir/source.pdf"
   printf 'content' > "$src"
 
@@ -241,7 +241,7 @@ print('OK')
 test_register_attachment_rejects_traversal_name() {
   start_test "register_attachment: ../evil.md filename 被拒绝"
   fixture_setup
-  work_dir=$(fixture_create_req "req-011" "test" 2)
+  work_dir=$(fixture_create_work "work-011" "test" 2)
 
   out=$(_run_py "
 from _lib.attachments import register_attachment, AttachmentError
@@ -263,7 +263,7 @@ except AttachmentError:
 test_remove_attachment_rejects_traversal_and_keeps_file() {
   start_test "remove_attachment: traversal 不得删除 attachments 外文件"
   fixture_setup
-  work_dir=$(fixture_create_req "req-012" "test" 2)
+  work_dir=$(fixture_create_work "work-012" "test" 2)
   victim="$work_dir/victim.md"
   printf 'keep me' > "$victim"
 
@@ -293,7 +293,7 @@ except AttachmentError:
 test_copy_attachment_rejects_unsafe_stage_prefix() {
   start_test "copy_attachment: stage_prefix traversal 被拒绝"
   fixture_setup
-  work_dir=$(fixture_create_req "req-013" "test" 2)
+  work_dir=$(fixture_create_work "work-013" "test" 2)
   src="$work_dir/source.pdf"
   printf 'content' > "$src"
 
@@ -322,7 +322,7 @@ except AttachmentError:
 test_replace_attachment() {
   start_test "replace_attachment: 保留旧 filename + 内容已替换 + attachments_seen 更新"
   fixture_setup
-  work_dir=$(fixture_create_req "req-007" "test" 2)
+  work_dir=$(fixture_create_work "work-007" "test" 2)
   src_old="$work_dir/v1.pdf"
   printf 'OLD content' > "$src_old"
   src_new="$work_dir/v2.pdf"
@@ -361,7 +361,7 @@ print('OK')
 test_path_expanduser() {
   start_test "expanduser: ~/x.pdf 自动展开"
   fixture_setup
-  work_dir=$(fixture_create_req "req-008" "test" 2)
+  work_dir=$(fixture_create_work "work-008" "test" 2)
   # 在 $HOME 下放一个临时文件
   src_file="$HOME/.pmaiwf-test-expand-$$.pdf"
   printf 'expand test' > "$src_file"
@@ -390,7 +390,7 @@ print('OK')
 test_filename_with_spaces() {
   start_test "含空格文件名: foo bar.pdf 不炸"
   fixture_setup
-  work_dir=$(fixture_create_req "req-009" "test" 2)
+  work_dir=$(fixture_create_work "work-009" "test" 2)
   src="$work_dir/foo bar.pdf"
   printf 'space content' > "$src"
 
@@ -419,7 +419,7 @@ print('OK')
 test_trigger2_regression_manual_cp_detection() {
   start_test "trigger 2 regression: PM 手动 cp 进 docs/inputs/attachments/ + is_seen 判定（基于 attachments_seen 真相源）"
   fixture_setup
-  work_dir=$(fixture_create_req "req-010" "test" 2)
+  work_dir=$(fixture_create_work "work-010" "test" 2)
 
   # 模拟 PM 手动 cp（绕过 trigger 0）—— 文件落盘但 attachments_seen 无登记
   mkdir -p "$FIXTURE_DIR/docs/inputs/attachments"

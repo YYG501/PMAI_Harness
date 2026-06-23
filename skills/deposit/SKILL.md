@@ -14,7 +14,7 @@ description: |
 
 ## When To Use
 
-- PM 在 main 上聊定一个方向 / 顺手改了点东西（小到不值得起 req），想把"产品现在变成什么样 / 为什么这么定 / 还差什么 / 探了哪些视觉"收一下。
+- PM 在 main 上聊定一个方向 / 顺手改了点东西（小到不值得起完整设计-build 流程），想把"产品现在变成什么样 / 为什么这么定 / 还差什么 / 探了哪些视觉"收一下。
 - PM 显式说「沉淀一下」「记一下」「归位」。
 - AI 在回 PM 的某一轮里识别到收敛点（聊定 / 改完）且真有耐久产出时，**主动提议**沉淀（见 CLAUDE.md「AI 主动提议沉淀」行为规则）；PM 点头后走本流程。
 - **不适用**：要完整设计 / 建造 → `/pmai-design` / `/pmai-build`；只是在 main 改一处文件 → `/pmai-quick-fix`；已经在完整工作里推进 → `/pmai-status` 或 `/pmai-close`。
@@ -106,7 +106,7 @@ rm -f "$REPO_ROOT/.runs/deposit-in-progress"
 
 ## Rules
 
-- 从主仓 main 触发（cwd 主仓根、分支 main）；在 req worktree 内 → 引导走对应沉淀流程，不在此处理。
+- 从主仓 main 触发（cwd 主仓根、分支 main）；在 build worktree 内 → 引导走对应沉淀流程，不在此处理。
 - **两道闸**：只在收敛点 + 只在有耐久产出时沉淀；一道不过 → 不动 + 告诉 PM 一句，不空跑不编造。
 - 四类分流 @读 `_shared/deposit-routing.md`（单一真相源）；理路冻结 @读 `_shared/decision-record.md`；**重量随产出缩放**，多数轻档只动 PRODUCT-STATE。
 - **marker 纪律**：`.runs/deposit-in-progress` 设了必须清（commit 后 / 任何中断都 `rm -f` 兜底）；它只放行沉淀 allowlist 到 main，不开其它路径。

@@ -1,8 +1,7 @@
 # shellcheck shell=bash
 # symlink-prd.sh — 在 docs/prds/ 下为模块的 prd.md 建相对 symlink，统一 PRD 检索入口。
 #
-# 真相源迁移（lifecycle 迁移批 3，方案 A）：PRD 源从 requirements/pmai-closed/<req>/prd.md
-# 改到模块文件夹 docs/modules/<模块>/prd.md（模块文件夹是长期真相源，close 后留场）。
+# PRD 源在模块文件夹 docs/modules/<模块>/prd.md（模块文件夹是长期真相源，close 后留场）。
 #
 # 两类 PRD 收口位置：
 #   kind=closed     -> docs/prds/<模块>.md        -> ../../docs/modules/<模块>/prd.md
@@ -20,15 +19,15 @@
 
 create_prd_symlink() {
   local repo_root="$1"
-  local req_basename="$2"
+  local module_name="$2"
   local kind="$3"
 
-  if [ -z "$repo_root" ] || [ -z "$req_basename" ] || [ -z "$kind" ]; then
-    echo "create_prd_symlink: 缺少参数 (repo_root='$repo_root' req_basename='$req_basename' kind='$kind')" >&2
+  if [ -z "$repo_root" ] || [ -z "$module_name" ] || [ -z "$kind" ]; then
+    echo "create_prd_symlink: 缺少参数 (repo_root='$repo_root' module_name='$module_name' kind='$kind')" >&2
     return 1
   fi
 
-  local prd_src="$repo_root/docs/modules/$req_basename/prd.md"
+  local prd_src="$repo_root/docs/modules/$module_name/prd.md"
   if [ ! -f "$prd_src" ]; then
     return 0
   fi
@@ -37,13 +36,13 @@ create_prd_symlink() {
   case "$kind" in
     closed)
       link_dir="$repo_root/docs/prds"
-      link_name="$req_basename.md"
-      link_target="../../docs/modules/$req_basename/prd.md"
+      link_name="$module_name.md"
+      link_target="../../docs/modules/$module_name/prd.md"
       ;;
     cancelled)
       link_dir="$repo_root/docs/prds/废弃"
-      link_name="$req_basename.md"
-      link_target="../../../docs/modules/$req_basename/prd.md"
+      link_name="$module_name.md"
+      link_target="../../../docs/modules/$module_name/prd.md"
       ;;
     *)
       echo "create_prd_symlink: 未知 kind='$kind'（允许 closed | cancelled）" >&2

@@ -31,7 +31,7 @@ source "$HOME/.pmai/scripts/skill-preamble.sh"
 echo "SKILL: mockup"
 ```
 
-本 skill 从**主仓 main** 触发（动的是探索设计稿，不进任何 req worktree）。`mocks/` 在 main 上随时可写（属探索草稿、`check-branch.sh` 已豁免），所以**不开分支、不开 worktree、不拉 PM 进工作区**。
+本 skill 从**主仓 main** 触发（动的是探索设计稿，不进任何 build worktree）。`mocks/` 在 main 上随时可写（属探索草稿、`check-branch.sh` 已豁免），所以**不开分支、不开 worktree、不拉 PM 进工作区**。
 
 ## 借 gstack /pmai-design-shotgun
 

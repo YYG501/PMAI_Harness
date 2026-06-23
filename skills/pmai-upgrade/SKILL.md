@@ -234,7 +234,7 @@ rm -f "$HOME/.pmai-state/just-upgraded-from" 2>/dev/null || true
 
 ### Step 6：继续 PM 原任务
 
-升级完成。如果 PM 原本想做别的事（如启 req / 跑 task），继续走那个流程。如果 PM 单纯只是 `/pmai-upgrade`，结束 skill。
+升级完成。如果 PM 原本想做别的事（如起模块设计 / build），继续走那个流程。如果 PM 单纯只是 `/pmai-upgrade`，结束 skill。
 
 ## Rules
 

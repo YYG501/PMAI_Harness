@@ -154,7 +154,7 @@ class CopyResult(TypedDict):
     """`copy_attachment` 返回值 schema。
 
     Fields:
-        new_name: 落盘后的 req 内相对路径（机械命名 + 冲突 -N 后缀后）
+        new_name: 落盘后的工作内相对路径（机械命名 + 冲突 -N 后缀后）
         abs_path: 落盘绝对路径
         size_mb: 文件大小（MB）
         pending_inject: True 表示当前 stage 产出文档不存在 → helper 仅 register

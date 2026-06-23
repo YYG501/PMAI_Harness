@@ -183,7 +183,7 @@ check_redlines() {
 }
 
 check_preflight_redlines() {
-  local check_root="$1"  # main mode 传主仓根，req mode 传 req worktree
+  local check_root="$1"  # main mode 传主仓根，build mode 传 build worktree
   local bad=()
   local line status file
   while IFS= read -r line; do
@@ -209,11 +209,11 @@ warn_active_work() {
   local found=()
   local meta work_dir status id
   shopt -s nullglob
-  # 主仓 + 所有 attached 的 req worktree（不假设在 .worktrees/，问 git）
+  # 主仓 + 所有 attached 的 build worktree（不假设在 .worktrees/，问 git）
   local _wt_paths=("$repo_root")
   while IFS=$'\t' read -r _wt_branch _wt_path; do
     [ -n "$_wt_path" ] && _wt_paths+=("$_wt_path")
-  done < <(list_worktrees_by_branch_prefix "req-" "$repo_root" 2>/dev/null)
+  done < <(list_worktrees_by_branch_prefix "build-" "$repo_root" 2>/dev/null)
   local _wt
   for _wt in "${_wt_paths[@]}"; do
     [ -d "$_wt" ] || continue
@@ -239,7 +239,7 @@ PY
   shopt -u nullglob
 
   if [ "${#found[@]}" -gt 0 ]; then
-    echo "警告：当前有活跃 req，ff-only merge 可能需要自动 rebase：" >&2
+    echo "警告：当前有活跃 work，ff-only merge 可能需要自动 rebase：" >&2
     printf '  - %s\n' "${found[@]}" >&2
   fi
 }
@@ -472,8 +472,8 @@ commit_and_merge() {
   local worktree="$2"
   local branch="$3"
   local desc="$4"
-  local base_branch="$5"     # main mode: "main"; req mode: "req-NNN-*"
-  local base_worktree="$6"   # main mode: repo_root; req mode: req worktree path
+  local base_branch="$5"     # main mode: "main"; build mode: "build-*"
+  local base_worktree="$6"   # main mode: repo_root; build mode: build worktree path
 
   (
     cd "$worktree"
@@ -506,7 +506,7 @@ commit_and_merge() {
   )
 
   if git -C "$base_worktree" merge --ff-only "$branch"; then
-    # force=true: merge 已成功，repo_root 的 HEAD（main）可能不含 tmp 分支（req mode 时），
+    # force=true: merge 已成功，repo_root 的 HEAD（main）可能不含 tmp 分支（build mode 时），
     # 此时 `branch -d` 的 merged-into-HEAD 检查会误判，直接 -D
     cleanup_branch "$repo_root" "$branch" true
     echo "quick-fix 已合并到 ${base_branch}：${branch}"

@@ -13,21 +13,21 @@ CLEANUP_PENDING="$FRAMEWORK_ROOT/scripts/cleanup-pending-worktrees.sh"
 # cancel-work（方案 A）：真相源 = docs/modules/<模块>/。废弃 = 在 main 上清模块 .work-meta，
 # 不 merge work branch到 main；worktree 推迟到 cleanup-pending 兜底清。
 #
-# fixture_create_req 在 worktree 里建模块目录。把它镜像到 main 的 docs/modules/，
+# fixture_create_work 在 worktree 里建模块目录。把它镜像到 main 的 docs/modules/，
 # 让 cancel-work 能在 main 上清掉模块 .work-meta。返回 main 上的模块目录路径。
 _setup_module_on_main() {
-  local req_id="$1"
+  local work_id="$1"
   local name="$2"
   local stage="${3:-3}"
-  local req_branch="build-$req_id-$name"
+  local work_branch="build-$work_id-$name"
 
-  fixture_create_req "$req_id" "$name" "$stage" >/dev/null
+  fixture_create_work "$work_id" "$name" "$stage" >/dev/null
 
-  local main_module="$FIXTURE_DIR/docs/modules/$req_branch"
+  local main_module="$FIXTURE_DIR/docs/modules/$work_branch"
   mkdir -p "$main_module"
-  cp -R "$FIXTURE_DIR/.worktrees/$req_branch/docs/modules/$req_branch/." "$main_module/"
+  cp -R "$FIXTURE_DIR/.worktrees/$work_branch/docs/modules/$work_branch/." "$main_module/"
 
-  (cd "$FIXTURE_DIR" && git add -A >/dev/null 2>&1 && git commit -q -m "mirror module $req_id on main" 2>/dev/null || true)
+  (cd "$FIXTURE_DIR" && git add -A >/dev/null 2>&1 && git commit -q -m "mirror module $work_id on main" 2>/dev/null || true)
 
   echo "$main_module"
 }
@@ -39,7 +39,7 @@ _setup_module_on_main() {
 test_cancel_happy_path() {
   start_test "happy path: cancel clears module .work-meta on main + removes worktree/branch"
   fixture_setup
-  work_dir=$(_setup_module_on_main "req-001" "test" 3)
+  work_dir=$(_setup_module_on_main "work-001" "test" 3)
 
   cd "$FIXTURE_DIR"
   bash "$CANCEL_WORK" "$work_dir" >/dev/null 2>&1
@@ -48,22 +48,22 @@ test_cancel_happy_path() {
   bash "$CLEANUP_PENDING" >/dev/null 2>&1
 
   # Worktree removed
-  if [ -d "$FIXTURE_DIR/.worktrees/build-req-001-test" ]; then
+  if [ -d "$FIXTURE_DIR/.worktrees/build-work-001-test" ]; then
     _fail "worktree should be gone after cleanup"
     fixture_teardown; return
   fi
   # Branch removed
-  if git -C "$FIXTURE_DIR" branch --list build-req-001-test | grep -q .; then
+  if git -C "$FIXTURE_DIR" branch --list build-work-001-test | grep -q .; then
     _fail "build branch should be deleted after cleanup"
     fixture_teardown; return
   fi
   # 模块 .work-meta 已清（main 上）
-  if [ -f "$FIXTURE_DIR/docs/modules/build-req-001-test/.work-meta.json" ]; then
+  if [ -f "$FIXTURE_DIR/docs/modules/build-work-001-test/.work-meta.json" ]; then
     _fail "module .work-meta should be cleared on main"
     fixture_teardown; return
   fi
   # 模块三件套留场（discussion.md 仍在）
-  if [ ! -f "$FIXTURE_DIR/docs/modules/build-req-001-test/discussion.md" ]; then
+  if [ ! -f "$FIXTURE_DIR/docs/modules/build-work-001-test/discussion.md" ]; then
     _fail "module 三件套 (discussion.md) should remain on main"
     fixture_teardown; return
   fi
@@ -78,28 +78,28 @@ test_cancel_happy_path() {
 test_cancel_does_not_merge_to_main() {
   start_test "I-CA1 cancel does not merge work code to main"
   fixture_setup
-  work_dir=$(_setup_module_on_main "req-001" "test" 3)
+  work_dir=$(_setup_module_on_main "work-001" "test" 3)
 
   # 在 work branch上加一个显著的文件，证明 work branch有内容
   (
-    cd "$FIXTURE_DIR/.worktrees/build-req-001-test"
-    echo "req-only content" > req-only-marker.md
+    cd "$FIXTURE_DIR/.worktrees/build-work-001-test"
+    echo "work-only content" > work-only-marker.md
     git add -A
-    git commit -q -m "req work"
+    git commit -q -m "work branch change"
   )
 
   cd "$FIXTURE_DIR"
   bash "$CANCEL_WORK" "$work_dir" >/dev/null 2>&1
 
-  # main 上不应该存在 req-only-marker.md
-  if [ -f "$FIXTURE_DIR/req-only-marker.md" ]; then
+  # main 上不应该存在 work-only-marker.md
+  if [ -f "$FIXTURE_DIR/work-only-marker.md" ]; then
     _fail "main should NOT have work branch's content"
     fixture_teardown; return
   fi
 
-  # git log on main should not contain req's commit message
-  if git -C "$FIXTURE_DIR" log main --oneline | grep -q "req work"; then
-    _fail "main log should not contain 'req work' commit"
+  # git log on main should not contain the work branch commit message
+  if git -C "$FIXTURE_DIR" log main --oneline | grep -q "work branch change"; then
+    _fail "main log should not contain work branch commit"
     fixture_teardown; return
   fi
   pass_test
@@ -113,25 +113,25 @@ test_cancel_does_not_merge_to_main() {
 test_cancel_clears_module_meta() {
   start_test "I-CA4 after cancel, module .work-meta is cleared (no closed/ archive)"
   fixture_setup
-  work_dir=$(_setup_module_on_main "req-001" "test" 3)
+  work_dir=$(_setup_module_on_main "work-001" "test" 3)
 
   cd "$FIXTURE_DIR"
   bash "$CANCEL_WORK" "$work_dir" >/dev/null 2>&1
 
   # 模块 .work-meta 应被删（main 上）
-  if [ -f "$FIXTURE_DIR/docs/modules/build-req-001-test/.work-meta.json" ]; then
+  if [ -f "$FIXTURE_DIR/docs/modules/build-work-001-test/.work-meta.json" ]; then
     _fail "module .work-meta should be cleared after cancel"
     fixture_teardown; return
   fi
   # 方案 A 下不再有 requirements/pmai-closed/ 归档目录
-  if [ -d "$FIXTURE_DIR/requirements/pmai-closed/build-req-001-test" ]; then
+  if [ -d "$FIXTURE_DIR/requirements/pmai-closed/build-work-001-test" ]; then
     _fail "no requirements/pmai-closed/ archive should be created under 方案 A"
     fixture_teardown; return
   fi
   # cancel commit 应进入 main
   # 用 grep ... >/dev/null（不加 -q）：grep -q 命中即早退会让上游 git SIGPIPE，
   # 在 set -o pipefail 下整条管道返回非 0，假阴性。
-  if ! git -C "$FIXTURE_DIR" log main --oneline | grep "cancel: req-001" >/dev/null; then
+  if ! git -C "$FIXTURE_DIR" log main --oneline | grep "cancel: work-001" >/dev/null; then
     _fail "main log should contain a cancel commit"
     fixture_teardown; return
   fi
@@ -146,12 +146,12 @@ test_cancel_clears_module_meta() {
 test_cancel_is_idempotent_after_partial_cleanup() {
   start_test "I-CA5 idempotent: re-run after partial cleanup does not error"
   fixture_setup
-  work_dir=$(_setup_module_on_main "req-001" "test" 3)
+  work_dir=$(_setup_module_on_main "work-001" "test" 3)
 
   # 手动模拟部分清理状态：删掉 worktree 和分支（但留下 main 上的模块 .work-meta）
-  git -C "$FIXTURE_DIR" worktree remove "$FIXTURE_DIR/.worktrees/build-req-001-test" --force 2>/dev/null || \
-    rm -rf "$FIXTURE_DIR/.worktrees/build-req-001-test"
-  git -C "$FIXTURE_DIR" branch -D build-req-001-test 2>/dev/null || true
+  git -C "$FIXTURE_DIR" worktree remove "$FIXTURE_DIR/.worktrees/build-work-001-test" --force 2>/dev/null || \
+    rm -rf "$FIXTURE_DIR/.worktrees/build-work-001-test"
+  git -C "$FIXTURE_DIR" branch -D build-work-001-test 2>/dev/null || true
 
   cd "$FIXTURE_DIR"
   # 再跑 cancel-work 应该能清理完剩下的（清 main 上模块 .work-meta）且不报错
@@ -164,7 +164,7 @@ test_cancel_is_idempotent_after_partial_cleanup() {
   fi
 
   # 模块 .work-meta 应已清
-  if [ -f "$FIXTURE_DIR/docs/modules/build-req-001-test/.work-meta.json" ]; then
+  if [ -f "$FIXTURE_DIR/docs/modules/build-work-001-test/.work-meta.json" ]; then
     _fail "module .work-meta should be cleared after idempotent re-run"
     rm -f /tmp/out.$$ /tmp/err.$$; fixture_teardown; return
   fi
@@ -176,7 +176,7 @@ test_cancel_is_idempotent_after_partial_cleanup() {
 test_cancel_rerun_on_already_cleared_does_not_error() {
   start_test "I-CA5 idempotent: running cancel twice on same work does not crash"
   fixture_setup
-  work_dir=$(_setup_module_on_main "req-001" "test" 3)
+  work_dir=$(_setup_module_on_main "work-001" "test" 3)
 
   cd "$FIXTURE_DIR"
   bash "$CANCEL_WORK" "$work_dir" >/dev/null 2>&1
@@ -206,7 +206,7 @@ test_cancel_rerun_on_already_cleared_does_not_error() {
 test_cancel_rejects_dirty_main() {
   start_test "I-CA7 cancel rejects when main has unrelated dirty changes"
   fixture_setup
-  work_dir=$(_setup_module_on_main "req-001" "test" 3)
+  work_dir=$(_setup_module_on_main "work-001" "test" 3)
 
   # 在 main 留一个无关脏文件
   echo "stray" > "$FIXTURE_DIR/unrelated.txt"

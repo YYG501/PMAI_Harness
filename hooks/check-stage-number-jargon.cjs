@@ -6,16 +6,15 @@
 //
 // 为什么挡：stage 号是内部状态标记（stages.py 自述「不再 PM-facing」），却历史地漏进
 //   ① runtime AI 读来做推进决策的 SKILL prose、② 打给 PM 看的 banner。runtime AI 把
-//   概念步号 / 旧 7-stage 实现号当成 per-req stage 号去推进状态机 → 推过头一格。
+//   概念步号 / 旧 7-stage 实现号当成单工作 stage 号去推进状态机 → 推过头一格。
 //   prose 里引用阶段一律用名字（范围确认 / build / 复审 / 沉淀），裸 stage 号只准出现在
-//   .py / .sh 代码和 .req-meta.json 字段里。本 hook 让这条纪律回不去。
+//   .py / .sh 代码和 .work-meta.json 字段里。本 hook 让这条纪律回不去。
 //
 // allowlist（放行）：
 //   - 代码块内（```…``` fence；按 working-tree 全文定位行号判断是否落在 fence 区间）
 //   - 代码标识符：MAX_STAGE / STAGE_\w+ / stage_\w+ / {stage} / {MAX_STAGE} 等
 //     （从行里剔除这些 token 后再检测裸 stage 号）
-//   - .req-meta.json 字段名引用（"stage" 字段；不是 `stage <数字>` 形态，本就不命中）
-//   注意 new-req 的 `4A-4D` 是步骤 4 子步，不是 `stage N` 形态，本就不命中。
+//   - .work-meta.json 字段名引用（"stage" 字段；不是 `stage <数字>` 形态，本就不命中）
 //
 // 行为：deny 拦下 commit，列具体行 + 改法（裸 stage 号 → 阶段名）。
 //       逃生舱：commit message 含 [skip-stage-check] → 放行。
@@ -143,7 +142,7 @@ process.stdin.on('end', () => {
 
     const reason = `⚠️ stage 编号检查（check-stage-number-jargon hook）
 
-本次 commit 在 skills/ 的 SKILL prose 里引入了裸 stage 号（stage <N> / Stage <N>）。stage 号是内部状态标记（stages.py 自述「不再 PM-facing」）——runtime AI 读 prose 时会把它当成 per-req stage 号去推进状态机，推过头一格。
+本次 commit 在 skills/ 的 SKILL prose 里引入了裸 stage 号（stage <N> / Stage <N>）。stage 号是内部状态标记（stages.py 自述「不再 PM-facing」）——runtime AI 读 prose 时会把它当成单工作 stage 号去推进状态机，推过头一格。
 
 命中（前 10 条）：
 ${sample}${more}
@@ -156,7 +155,7 @@ ${sample}${more}
   - 旧 7-stage 幽灵（stage 4/4A/5/6/7）→ 按对应新机阶段名重写
   - 六步概念号 ↔ 内部 stage 的翻译真相源见 _shared/pm-view/input-flow.md §九 六步框
 
-放行：代码块（\`\`\`…\`\`\`）内的映射表 / 代码示例；代码标识符（MAX_STAGE / STAGE_NAMES / stage_num / {stage}）；.req-meta.json 的 "stage" 字段名。
+放行：代码块（\`\`\`…\`\`\`）内的映射表 / 代码示例；代码标识符（MAX_STAGE / STAGE_NAMES / stage_num / {stage}）；.work-meta.json 的 "stage" 字段名。
 
 → 改完重新 git add + commit。
 → 若确实是不进消费仓的实验 / 历史承接注记，commit message 加 [skip-stage-check] 跳过。

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# _setup-deps.sh — worktree 依赖 symlink 工具函数库（供 req/quick-fix worktree 共用）
+# _setup-deps.sh — worktree 依赖 symlink 工具函数库（供 build/quick-fix worktree 共用）
 #
 # 用法: source 本文件后调用函数，均不修改调用方 set -e 状态：
 #   symlink_if_exists <src> <dst>

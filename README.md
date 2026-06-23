@@ -268,7 +268,7 @@ git push
 |---|---|
 | `/pmai-status` | **续跑辅助**：读当前阶段做下一步（设计 → build → 复审 → 沉淀），先说再动 |
 | `/pmai-build` | 对着模块 `spec.md` 在 `prototype/` 建；PM 选择执行器和是否开隔离环境 |
-| `/pmai-prd-writing` | **按需** standalone：原型确认后反向出可评审 PRD（真系统口径，可跨 req） |
+| `/pmai-prd-writing` | **按需** standalone：原型确认后反向出可评审 PRD（真系统口径，可跨模块） |
 
 ### 收尾 / 放弃
 

@@ -7,16 +7,16 @@ source "$SCRIPT_DIR/helpers/fixture.sh"
 
 QF="$FRAMEWORK_ROOT/scripts/quick-fix.sh"
 
-test_active_req_warns_but_merges() {
-  start_test "scenario 7 active req warns and ff-only succeeds"
+test_active_work_warns_but_merges() {
+  start_test "scenario 7 active work warns and ff-only succeeds"
   fixture_setup
-  fixture_create_req "req-001" "test" 6 >/dev/null
+  fixture_create_work "work-001" "test" 6 >/dev/null
   if (cd "$FIXTURE_DIR" && QUICK_FIX_COMMAND="mkdir -p docs && echo warn > docs/warn.md" QUICK_FIX_APPROVE=1 bash "$QF" "warn active" >/tmp/qf.out.$$ 2>/tmp/qf.err.$$) \
     && [ -f "$FIXTURE_DIR/docs/warn.md" ] \
-    && grep -q "活跃 req" /tmp/qf.err.$$; then
+    && grep -q "活跃 work" /tmp/qf.err.$$; then
     pass_test
   else
-    _fail "active req warn path failed"
+    _fail "active work warn path failed"
     cat /tmp/qf.out.$$ /tmp/qf.err.$$ >&2
   fi
   rm -f /tmp/qf.out.$$ /tmp/qf.err.$$
@@ -76,8 +76,8 @@ test_same_second_unique_branches() {
   fixture_teardown
 }
 
-test_active_req_warns_but_merges
+test_active_work_warns_but_merges
 test_ff_only_rebase_retry_success
 test_rebase_conflict_keeps_worktree
 test_same_second_unique_branches
-report_results "quick-fix concurrent req"
+report_results "quick-fix concurrent work"

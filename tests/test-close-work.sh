@@ -8,7 +8,7 @@ source "$SCRIPT_DIR/helpers/fixture.sh"
 CLOSE_WORK="$FRAMEWORK_ROOT/scripts/close-work.sh"
 
 # close-work（方案 A）后真相源是 docs/modules/<模块>/。
-# work_dir = docs/modules/<分支>（fixture_create_req 现返回模块目录）。
+# work_dir = docs/modules/<分支>（fixture_create_work 现返回模块目录）。
 # 收尾语义：模块 .work-meta.json 被删（清工作状态），模块三件套留场；有 worktree 走 merge，
 # 无 worktree/无分支直接在 main 清。
 
@@ -24,18 +24,18 @@ test_no_branch_closes_via_main() {
   start_test "I-CR3 no branch → main 直接清 .work-meta（不拒绝）"
   fixture_setup
 
-  work_dir=$(fixture_create_req "req-001" "test" 4)
+  work_dir=$(fixture_create_work "work-001" "test" 4)
 
   # 把模块三件套 + .work-meta 落到 main（无 worktree 路径要求模块已在 main）
-  main_module="$FIXTURE_DIR/docs/modules/build-req-001-test"
+  main_module="$FIXTURE_DIR/docs/modules/build-work-001-test"
   mkdir -p "$main_module"
   cp -R "$work_dir/." "$main_module/"
   (cd "$FIXTURE_DIR" && git add -A && git commit -q -m "mirror module on main")
 
   # 删 work branch + worktree
-  git -C "$FIXTURE_DIR" worktree remove "$FIXTURE_DIR/.worktrees/build-req-001-test" --force 2>/dev/null || \
-    rm -rf "$FIXTURE_DIR/.worktrees/build-req-001-test"
-  git -C "$FIXTURE_DIR" branch -D "build-req-001-test" 2>/dev/null || true
+  git -C "$FIXTURE_DIR" worktree remove "$FIXTURE_DIR/.worktrees/build-work-001-test" --force 2>/dev/null || \
+    rm -rf "$FIXTURE_DIR/.worktrees/build-work-001-test"
+  git -C "$FIXTURE_DIR" branch -D "build-work-001-test" 2>/dev/null || true
 
   if (cd "$FIXTURE_DIR" && bash "$CLOSE_WORK" "$main_module") >/tmp/out.$$ 2>/tmp/err.$$; then
     # 模块 .work-meta 已被清
@@ -63,17 +63,17 @@ test_no_worktree_closes_via_main() {
   start_test "I-CR4 no worktree → main 直接清 .work-meta（不拒绝）"
   fixture_setup
 
-  work_dir=$(fixture_create_req "req-001" "test" 4)
+  work_dir=$(fixture_create_work "work-001" "test" 4)
 
   # 模块三件套落 main
-  main_module="$FIXTURE_DIR/docs/modules/build-req-001-test"
+  main_module="$FIXTURE_DIR/docs/modules/build-work-001-test"
   mkdir -p "$main_module"
   cp -R "$work_dir/." "$main_module/"
   (cd "$FIXTURE_DIR" && git add -A && git commit -q -m "mirror module on main")
 
   # 删 worktree 目录但保留分支
-  git -C "$FIXTURE_DIR" worktree remove "$FIXTURE_DIR/.worktrees/build-req-001-test" --force 2>/dev/null || \
-    rm -rf "$FIXTURE_DIR/.worktrees/build-req-001-test"
+  git -C "$FIXTURE_DIR" worktree remove "$FIXTURE_DIR/.worktrees/build-work-001-test" --force 2>/dev/null || \
+    rm -rf "$FIXTURE_DIR/.worktrees/build-work-001-test"
 
   if (cd "$FIXTURE_DIR" && bash "$CLOSE_WORK" "$main_module") >/tmp/out.$$ 2>/tmp/err.$$; then
     if [ -f "$main_module/.work-meta.json" ]; then
@@ -97,7 +97,7 @@ test_reject_on_merge_conflict_no_partial_state() {
   start_test "I-CR9 merge conflict does not leave partial state on main"
   fixture_setup
 
-  work_dir=$(fixture_create_req "req-001" "test" 4)
+  work_dir=$(fixture_create_work "work-001" "test" 4)
 
   # Modify main branch to create a conflict with what work branch will do
   (
@@ -109,10 +109,10 @@ test_reject_on_merge_conflict_no_partial_state() {
 
   # Modify same file on work branch
   (
-    cd "$FIXTURE_DIR/.worktrees/build-req-001-test"
-    echo "req version" > conflict.txt
+    cd "$FIXTURE_DIR/.worktrees/build-work-001-test"
+    echo "work version" > conflict.txt
     git add conflict.txt
-    git commit -q -m "req: conflict.txt"
+    git commit -q -m "work: conflict.txt"
   )
 
   if (cd "$FIXTURE_DIR" && bash "$CLOSE_WORK" "$work_dir") >/tmp/out.$$ 2>/tmp/err.$$; then
@@ -126,19 +126,19 @@ test_reject_on_merge_conflict_no_partial_state() {
 
   # 方案 A 下不再有 closed/ 目录。半完成态判定：merge 是否真落地。
   # 若 merge 失败回滚，work branch应仍在场 + work branch上模块 .work-meta 应仍有（pre-close）。
-  if git -C "$FIXTURE_DIR" log main --oneline | grep "close: req-001" >/dev/null; then
+  if git -C "$FIXTURE_DIR" log main --oneline | grep "close: work-001" >/dev/null; then
     # merge 真落地（自动解决冲突的极端情况）：main 上模块 .work-meta 应已清
-    if [ -f "$FIXTURE_DIR/docs/modules/build-req-001-test/.work-meta.json" ]; then
+    if [ -f "$FIXTURE_DIR/docs/modules/build-work-001-test/.work-meta.json" ]; then
       _fail "merge landed but module .work-meta not cleared on main (half state)"
     else
       pass_test
     fi
   else
     # merge 未落地：work branch应仍在（可重试），模块 .work-meta 应仍在 work branch上（pre-close）
-    if ! git -C "$FIXTURE_DIR" show-ref --verify --quiet "refs/heads/build-req-001-test"; then
-      _fail "req branch deleted but close did not land (half state)"
-    elif [ ! -f "$FIXTURE_DIR/.worktrees/build-req-001-test/docs/modules/build-req-001-test/.work-meta.json" ]; then
-      _fail "req branch rolled back but module .work-meta missing (half state)"
+    if ! git -C "$FIXTURE_DIR" show-ref --verify --quiet "refs/heads/build-work-001-test"; then
+      _fail "work branch deleted but close did not land (half state)"
+    elif [ ! -f "$FIXTURE_DIR/.worktrees/build-work-001-test/docs/modules/build-work-001-test/.work-meta.json" ]; then
+      _fail "work branch rolled back but module .work-meta missing (half state)"
     else
       pass_test
     fi
@@ -156,11 +156,11 @@ test_archive_committed_before_merge() {
   start_test "I-CR5 clear-state commit lands before merge (happy path verifies order)"
   fixture_setup
 
-  work_dir=$(fixture_create_req "req-001" "test" 4)
+  work_dir=$(fixture_create_work "work-001" "test" 4)
 
   if (cd "$FIXTURE_DIR" && bash "$CLOSE_WORK" "$work_dir") >/tmp/out.$$ 2>/tmp/err.$$; then
-    # After close, main should contain the close commit "close: 收尾 req-001"
-    if git -C "$FIXTURE_DIR" log main --oneline | grep "close: 收尾 req-001" >/dev/null; then
+    # After close, main should contain the close commit "close: 收尾 work-001"
+    if git -C "$FIXTURE_DIR" log main --oneline | grep "close: 收尾 work-001" >/dev/null; then
       pass_test
     else
       _fail "close commit not found on main branch log"
@@ -178,14 +178,14 @@ test_archive_committed_before_merge() {
 # =================================================
 # Happy path: full close-work succeeds (有 worktree → merge 路径)
 # =================================================
-test_happy_path_close_req() {
+test_happy_path_close_work() {
   start_test "happy path: close-work clears module .work-meta + merges to main"
   fixture_setup
 
-  work_dir=$(fixture_create_req "req-001" "test" 4)
+  work_dir=$(fixture_create_work "work-001" "test" 4)
 
   if (cd "$FIXTURE_DIR" && bash "$CLOSE_WORK" "$work_dir") >/tmp/out.$$ 2>/tmp/err.$$; then
-    main_module="$FIXTURE_DIR/docs/modules/build-req-001-test"
+    main_module="$FIXTURE_DIR/docs/modules/build-work-001-test"
 
     # 模块目录在 main 上仍在（三件套 discussion.md 留场）
     if [ ! -d "$main_module" ]; then
@@ -205,11 +205,11 @@ test_happy_path_close_req() {
     fi
 
     # branch + worktree 已删
-    if git -C "$FIXTURE_DIR" show-ref --verify --quiet "refs/heads/build-req-001-test"; then
-      _fail "req branch should be deleted by close-work.sh"
+    if git -C "$FIXTURE_DIR" show-ref --verify --quiet "refs/heads/build-work-001-test"; then
+      _fail "work branch should be deleted by close-work.sh"
       rm -f /tmp/out.$$ /tmp/err.$$; fixture_teardown; return
     fi
-    if [ -d "$FIXTURE_DIR/.worktrees/build-req-001-test" ]; then
+    if [ -d "$FIXTURE_DIR/.worktrees/build-work-001-test" ]; then
       _fail "worktree should be removed by close-work.sh"
       rm -f /tmp/out.$$ /tmp/err.$$; fixture_teardown; return
     fi
@@ -235,11 +235,11 @@ test_happy_path_close_req() {
 # =================================================
 # I-CR9b: on merge failure, work branch is reset to pre-close (module .work-meta still present)
 # =================================================
-test_merge_failure_rolls_back_req_branch() {
+test_merge_failure_rolls_back_work_branch() {
   start_test "I-CR9b merge failure rolls work branch back to pre-close state"
   fixture_setup
 
-  work_dir=$(fixture_create_req "req-001" "test" 4)
+  work_dir=$(fixture_create_work "work-001" "test" 4)
 
   # Create conflict: same file on main and on work branch with different content
   (
@@ -247,8 +247,8 @@ test_merge_failure_rolls_back_req_branch() {
     echo "main" > clash.txt && git add clash.txt && git commit -q -m "main: clash"
   )
   (
-    cd "$FIXTURE_DIR/.worktrees/build-req-001-test"
-    echo "req" > clash.txt && git add clash.txt && git commit -q -m "req: clash"
+    cd "$FIXTURE_DIR/.worktrees/build-work-001-test"
+    echo "work" > clash.txt && git add clash.txt && git commit -q -m "work: clash"
   )
 
   # Should fail
@@ -256,17 +256,17 @@ test_merge_failure_rolls_back_req_branch() {
     { _fail "close-work should have failed on conflict"; rm -f /tmp/out.$$ /tmp/err.$$; fixture_teardown; return; }
 
   # On work branch: 模块 .work-meta 应仍在（pre-close 状态，被回滚回来）
-  req_wt="$FIXTURE_DIR/.worktrees/build-req-001-test"
-  if [ ! -f "$req_wt/docs/modules/build-req-001-test/.work-meta.json" ]; then
-    _fail "req branch should be rolled back with module .work-meta restored"
-    ls "$req_wt/docs/modules/build-req-001-test" >&2 2>&1 || true
+  work_wt="$FIXTURE_DIR/.worktrees/build-work-001-test"
+  if [ ! -f "$work_wt/docs/modules/build-work-001-test/.work-meta.json" ]; then
+    _fail "work branch should be rolled back with module .work-meta restored"
+    ls "$work_wt/docs/modules/build-work-001-test" >&2 2>&1 || true
     cat /tmp/err.$$ >&2
     rm -f /tmp/out.$$ /tmp/err.$$; fixture_teardown; return
   fi
 
   # main 上模块 .work-meta 不应被清（merge 未落地）
-  if [ ! -f "$FIXTURE_DIR/docs/modules/build-req-001-test/.work-meta.json" ] && \
-     git -C "$FIXTURE_DIR" show main:docs/modules/build-req-001-test/.work-meta.json >/dev/null 2>&1; then
+  if [ ! -f "$FIXTURE_DIR/docs/modules/build-work-001-test/.work-meta.json" ] && \
+     git -C "$FIXTURE_DIR" show main:docs/modules/build-work-001-test/.work-meta.json >/dev/null 2>&1; then
     : # 不应到这（main 上本来就没 mirror，跳过）
   fi
 
@@ -278,14 +278,14 @@ test_merge_failure_rolls_back_req_branch() {
 # =================================================
 # I-CR10: reject when cwd is inside the worktree
 # =================================================
-test_reject_when_cwd_inside_req_worktree() {
+test_reject_when_cwd_inside_work_worktree() {
   start_test "I-CR10 reject when cwd is inside worktree"
   fixture_setup
 
-  work_dir=$(fixture_create_req "req-001" "test" 4)
-  req_wt="$FIXTURE_DIR/.worktrees/build-req-001-test"
+  work_dir=$(fixture_create_work "work-001" "test" 4)
+  work_wt="$FIXTURE_DIR/.worktrees/build-work-001-test"
 
-  if (cd "$req_wt" && bash "$CLOSE_WORK" "$work_dir") >/tmp/out.$$ 2>/tmp/err.$$; then
+  if (cd "$work_wt" && bash "$CLOSE_WORK" "$work_dir") >/tmp/out.$$ 2>/tmp/err.$$; then
     _fail "should reject when cwd is inside worktree"
   else
     if grep -qE "(worktree 里头|主仓窗口)" /tmp/err.$$; then
@@ -300,14 +300,14 @@ test_reject_when_cwd_inside_req_worktree() {
   fixture_teardown
 }
 
-test_reject_if_req_worktree_has_unrelated_dirty_changes() {
+test_reject_if_work_worktree_has_unrelated_dirty_changes() {
   start_test "I-CR11 reject unrelated dirty changes in worktree"
   fixture_setup
 
-  work_dir=$(fixture_create_req "req-001" "test" 4)
-  req_wt="$FIXTURE_DIR/.worktrees/build-req-001-test"
-  mkdir -p "$req_wt/prototypes"
-  echo "leak" > "$req_wt/prototypes/unrelated.txt"
+  work_dir=$(fixture_create_work "work-001" "test" 4)
+  work_wt="$FIXTURE_DIR/.worktrees/build-work-001-test"
+  mkdir -p "$work_wt/prototypes"
+  echo "leak" > "$work_wt/prototypes/unrelated.txt"
 
   if (cd "$FIXTURE_DIR" && bash "$CLOSE_WORK" "$work_dir") >/tmp/out.$$ 2>/tmp/err.$$; then
     _fail "should reject unrelated dirty file instead of committing it"
@@ -335,11 +335,11 @@ test_reject_if_req_worktree_has_unrelated_dirty_changes() {
 # =================================================
 test_no_branch_closes_via_main
 test_no_worktree_closes_via_main
-test_reject_when_cwd_inside_req_worktree
-test_reject_if_req_worktree_has_unrelated_dirty_changes
+test_reject_when_cwd_inside_work_worktree
+test_reject_if_work_worktree_has_unrelated_dirty_changes
 test_reject_on_merge_conflict_no_partial_state
 test_archive_committed_before_merge
-test_happy_path_close_req
-test_merge_failure_rolls_back_req_branch
+test_happy_path_close_work
+test_merge_failure_rolls_back_work_branch
 
 report_results "close-work"

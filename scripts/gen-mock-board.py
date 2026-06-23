@@ -22,7 +22,7 @@ manifest schema（每条变体）：
   explores    探索什么（一句话）
   good_parts  好东西 / 可合并候选（一句话）
   status      状态：活跃 / 待合并 / 已退役
-  round       出自哪轮（探索轮次 / req 标识）
+  round       出自哪轮（探索轮次 / 工作标识）
   featured    bool，是否值得留的精选版（看版高亮）
   retired_note  可选，状态=已退役 时记"已并入主原型(位置/commit)"
 

@@ -2,7 +2,7 @@
 
 > 本文件是 [`PM-VIEW-RULES.md`](../PM-VIEW-RULES.md) §三 的物理拆分。配套阅读：[`doc-strictness.md`](./doc-strictness.md)（§四 文档级严格度对照表）。
 
-适用：所有 PM 视图层文档 — `docs/modules/<模块>/discussion.md` / `decisions.md` / `spec.md` / `prd.md`（在飞旧 req 的 `brief.md` / `analysis.md` / `solution.md` 历史产物同样适用）。
+适用：所有 PM 视图层文档 — `docs/modules/<模块>/discussion.md` / `decisions.md` / `spec.md` / `prd.md`（旧历史产物 `brief.md` / `analysis.md` / `solution.md` 同样适用）。
 
 ---
 
@@ -232,7 +232,7 @@ PM 视图文档（prd / analysis 等）描述的都是**最终产物形态**，�
 
 例外：文档版本信息 / 变更日志（这是文档自身的版本号）；产品名版本（如"万智平台 2.1"）作为产品名一部分时可保留。
 
-## 3.12 描述风格规则（req-003 PRD 修订经验沉淀）
+## 3.12 描述风格规则（历史 PRD 修订经验沉淀）
 
 适用：所有 PM 视图层文档,但 PRD §六 表格 / §五 用户故事 / §4.1 业务诉求 等 prose 段最常踩。lint `scripts/check-prd-hierarchy.py` 类 2 全篇扫描机械违规;LLM 在生成时按本段 framework 自检。
 

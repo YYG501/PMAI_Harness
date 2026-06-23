@@ -20,7 +20,6 @@ BANNER_RULES="$REPO_ROOT/skills/_shared/pm-view/banner-rules.md"
 CORE_SKILLS=(
   init-project
   design
-  next
   build
   close
   cancel
@@ -101,15 +100,15 @@ test_status_view_has_banner_only() {
 }
 
 # -----------------------------------------------------------------
-# T5b: --banner-only 在有 active req 时真渲染 banner，不抛异常
-# 回归 codex 审出的 P1：render_banner_only 读 req_view["dir"]，但状态层
+# T5b: --banner-only 在有 active work 时真渲染 banner，不抛异常
+# 回归 codex 审出的 P1：render_banner_only 读 work_view["dir"]，但状态层
 # 返回的 key 是 work_dir → KeyError，且该行在 try 外不被兜底 → 所有 skill 横幅崩。
-# T5 只静态 grep 参数存在，构造不出 active req 跑不到这条路（覆盖缺口）。
+# T5 只静态 grep 参数存在，构造不出 active work 跑不到这条路（覆盖缺口）。
 # -----------------------------------------------------------------
-test_banner_only_renders_active_req() {
-  start_test "T5b: --banner-only 有 active req 时真渲染（P1 KeyError 回归）"
+test_banner_only_renders_active_work() {
+  start_test "T5b: --banner-only 有 active work 时真渲染（P1 KeyError 回归）"
   fixture_setup
-  fixture_create_req "req-001" "test" 2 >/dev/null
+  fixture_create_work "work-001" "test" 2 >/dev/null
 
   local out rc
   out=$(cd "$FIXTURE_DIR" && python3 "$REPO_ROOT/scripts/status-view.py" --banner-only --skill design 2>&1)
@@ -154,10 +153,10 @@ test_all_core_skills_invoke_banner_in_body() {
 }
 
 # -----------------------------------------------------------------
-# T7: 7 个核心 SKILL 退出处含 Next Up 关键词
+# T7: 核心 SKILL 退出处含 Next Up 关键词
 # -----------------------------------------------------------------
 test_all_core_skills_have_next_up() {
-  start_test "T7: 7 核心 SKILL 退出处含 ▶ Next Up 关键词"
+  start_test "T7: 核心 SKILL 退出处含 ▶ Next Up 关键词"
   local missing=()
   for skill in "${CORE_SKILLS[@]}"; do
     if ! grep -qE "▶ Next Up" "$REPO_ROOT/skills/$skill/SKILL.md" 2>/dev/null; then
@@ -203,7 +202,7 @@ test_banner_rules_has_label_3_rules
 test_banner_rules_lists_forbidden_words
 test_state_lib_exposes_banner_helper
 test_status_view_has_banner_only
-test_banner_only_renders_active_req
+test_banner_only_renders_active_work
 test_all_core_skills_invoke_banner_in_body
 test_all_core_skills_have_next_up
 test_banner_rules_scope_disclaimer
