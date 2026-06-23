@@ -19,7 +19,7 @@ usage() {
   --slug <slug>        指定英文 kebab-case slug
   --req-id <id>        指定 req 分支名或短 id，如 req-001-demo / req-001
   --repo-root <path>   指定业务仓根目录；默认取当前 git 仓库主 worktree
-  --no-brief           只创建 worktree、.req-meta.json、tasks/ 骨架，不写 brief.md
+  --no-brief           只创建 worktree 和 .req-meta.json，不写 brief.md
   --no-commit          不提交，供 /pmai-new-req 人工 brief 确认流程继续落盘
   -h, --help           显示帮助
 
@@ -191,7 +191,7 @@ if [ -e "$REQ_DIR/.req-meta.json" ] || [ -e "$REQ_DIR/brief.md" ]; then
   die "req 已存在，拒绝覆盖: $REQ_DIR"
 fi
 
-mkdir -p "$REQ_DIR/tasks/_archived"
+mkdir -p "$REQ_DIR"
 # 附件不进模块文件夹（按类型进 docs/inputs/<类别>/，见迁移计划 §3，批 6 落地）。
 
 WORKTREE_META="$(python3 - "$REPO_ROOT" "$WORKTREE_DIR" <<'PY'
@@ -287,7 +287,7 @@ COMMIT=""
 if [ "$NO_COMMIT" != true ]; then
   (
     cd "$WORKTREE_DIR"
-    git add "$REQ_REL/.req-meta.json" "$REQ_REL/brief.md" "$REQ_REL/tasks"
+    git add "$REQ_REL/.req-meta.json" "$REQ_REL/brief.md"
     git commit -m "stage 1 brief: $BRANCH" >/dev/null
   )
   COMMIT="$(git -C "$WORKTREE_DIR" rev-parse --short HEAD)"

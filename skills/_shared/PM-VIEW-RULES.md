@@ -1,9 +1,9 @@
 # PM 视图通用规则（PM-VIEW-RULES）
 
-> 适用范围：所有 PM 视角的产物 — `req-plan.md`（范围清单 + 决策页）/ `PRODUCT-STATE.md` / 按需 `prd.md` / `task-plan.md` / `tasks/task-NNN-*.md`（在飞旧 req 的 `brief.md` / `analysis.md` / `solution.md` 同样适用）。
+> 适用范围：所有 PM 视角的产物 — `docs/modules/<模块>/discussion.md` / `decisions.md` / `spec.md` / `PRODUCT-STATE.md` / 按需 `prd.md`（在飞旧 req 的 `brief.md` / `analysis.md` / `solution.md` 同样适用）。
 >
 > 本文件是 **单一真相源**。下列 skill 都引用本文件，不在 skill 内部独立维护：
-> `new-req` · `prd-writing` · `task-plan` · `task-spec`
+> `new-req` · `design` · `build` · `close` · `prd-writing`
 >
 > AI 在生成、修改任何上述文档前，先读完本文件 + 它指引的相关子文件。
 
@@ -11,17 +11,17 @@
 
 ## 索引（按消费方拆分）
 
-本文件保留**结构性的小节**（§一 三层信息分层 / §二 task 文件形态 / §五 功能清单格式 / §六 关键产品决策格式 / §十 引用方式）。**写作规则 / 输入流等大块**已物理拆到 `pm-view/` 子目录，按需读：
+本文件保留**结构性的小节**（§一 三层信息分层 / §五 功能清单格式 / §六 关键产品决策格式 / §十 引用方式）。**写作规则 / 输入流等大块**已物理拆到 `pm-view/` 子目录，按需读：
 
 | 节 | 内容 | 文件 | 主要消费 skill |
 |---|---|---|---|
-| §三 | PM 视图写作规则（10 条硬约束 + UI 骨架细则）| [`pm-view/writing-rules.md`](./pm-view/writing-rules.md) | new-req · prd-writing · task-plan · task-spec |
-| §四 | 文档级严格度对照表 | [`pm-view/doc-strictness.md`](./pm-view/doc-strictness.md) | new-req（req-plan.md 行）|
-| §七 | 章节顺序约束（按文档类型）| [`pm-view/section-order.md`](./pm-view/section-order.md) | task-plan · task-spec |
-| §八 | 自检清单（生成 / 修改 PM 视图后）| [`pm-view/checklist.md`](./pm-view/checklist.md) | prd-writing · task-plan · task-spec |
+| §三 | PM 视图写作规则（10 条硬约束 + UI 骨架细则）| [`pm-view/writing-rules.md`](./pm-view/writing-rules.md) | new-req · design · close · prd-writing |
+| §四 | 文档级严格度对照表 | [`pm-view/doc-strictness.md`](./pm-view/doc-strictness.md) | PM 视图 skill |
+| §七 | 章节顺序约束（按文档类型）| [`pm-view/section-order.md`](./pm-view/section-order.md) | design · close · prd-writing |
+| §八 | 自检清单（生成 / 修改 PM 视图后）| [`pm-view/checklist.md`](./pm-view/checklist.md) | prd-writing · design |
 | §九 9.0 - 9.5 | 输入流约束 / PM 反馈分流 / 信息流图（§9.6 双文件 lazy sync 已废）| [`pm-view/input-flow.md`](./pm-view/input-flow.md) | 全部 PM 视图 skill |
 | §9.7 | 跨 skill 共享原则 | [`pm-view/cross-skill.md`](./pm-view/cross-skill.md) | skill 作者 / 框架维护者 |
-| §10 | attachments AI 接管（trigger 0）— LLM 识别 PM chat 上传意图 + caller 调 `_lib.attachments` helper + 主路径通用规则 | [`pm-view/attachments-upload.md`](./pm-view/attachments-upload.md) | 主路径 SKILL（new-req / next 范围确认 / task-plan / prd-writing / task-spec）|
+| §10 | attachments AI 接管（trigger 0）— LLM 识别 PM chat 上传意图 + caller 调 `_lib.attachments` helper + 主路径通用规则 | [`pm-view/attachments-upload.md`](./pm-view/attachments-upload.md) | 主路径 SKILL（new-req / next / design / build / close / prd-writing）|
 
 **读法约定**：
 - skill 步骤里写"按 §三"或"按 PM-VIEW-RULES §三" → 表示读对应子文件
@@ -58,34 +58,23 @@ PM 创建 / 审核 / 验收时直接看的内容。回答 PM 关心的问题：
 
 ---
 
-## 二、task 文件形态：单文件 typed contract
+## 二、模块三件套
 
-> ⚠️ 旧「task 拆两文件（PM 视图 `.md` + 工程合同 `.engineering.md`）」约定**已废**——
->  把 task-spec 塌缩成单文件 typed contract。
+当前活跃 PM 视图以功能模块为组织单位：
 
-`tasks/task-NNN-*.md` 是 **1 个物理文件**（头部 `<!-- task_format: single-typed-v3 -->`），
-内部分三区，各区有各自的 lint：
+| 文件 | 职责 |
+|---|---|
+| `discussion.md` | 范围讨论、开放问题、PM 输入上下文 |
+| `decisions.md` | 已拍板决策、共同理由、否过的方案 |
+| `spec.md` | 可建规格：信息模型、功能清单、业务规则、验收路径 |
 
-| 区 | 含哪些段 | lint |
-|---|---|---|
-| **PM 确认区** | 任务卡 / 范围 / 验收清单 / PM 反馈承接清单 | `check-doc-pm-view.py` **scoped 模式**（只校验本区，守 PM-view 写作纪律）|
-| **执行区** | 启动前必读 / 实现规格 / 实现设计引用 / 约束与易错 / 自测说明 / 工程层验收 / 状态转换说明 | 字段格式校验；允许工程内容 |
-| **审计区** | 文档偏差 / 自审记录 / 历史档案 | 不 lint |
-
-WHAT 走 `req-plan.md`（范围清单 / 关键决策页）、HOW 走项目级 `DESIGN.md`（项目底座里
-的架构与约定）。三区由 region 标记界定（`<!-- region: PM-CONFIRM begin/end -->` 等）。
-
-`req-plan.md` / `task-plan.md` / 按需 `prd.md` 均单文件。
-
-> 在飞旧 v2 双文件 task（`task-NNN.md` + `.engineering.md`）跑完旧的、不回迁；旧 req 的
-> `brief.md` / `analysis.md` / `solution.md` / `implementation-design.md` 均为历史产物。
-> `detect_format` 三态（v1/v2/v3）兼容判别。
+旧 `task-plan.md` / `tasks/task-NNN-*.md` / `.engineering.md` 只作历史兼容，不作为新流程产物。
 
 ---
 
 ## 五、功能清单格式（强制）
 
-适用：`task spec` / `prd` 中描述具体功能时。
+适用：模块 `spec.md` / `prd` 中描述具体功能时。
 
 参照模板：`docs/modules/部门+用户+角色设计/department-group-role-design-v4.1.md` §五数据模型 / §十一鉴权规则 的节奏 — 先角色定位、再列业务规则、再独立给字段口径。
 
@@ -113,7 +102,7 @@ WHAT 走 `req-plan.md`（范围清单 / 关键决策页）、HOW 走项目级 `D
 - **续行 rowspan 模式**：同一三级功能的多条需求 → 第 2 条起的前 3 列**留空**（视觉等同 rowspan，纯 markdown 也能渲染）
 - **需求描述列内联编号**：每条 1. / 2. / 3. ...
 - **二级功能跨多个三级功能**：同一二级功能字符串可在多行重复出现（不强制收敛 rowspan 在二级功能列）
-- **二级功能 = 用户动作组（列表 / 搜索 / 筛选 / 操作 / 创建 / 导入 / 详情），不是 UI 组件**（页面 / Tab / 弹窗 / Drawer / 视图）；**三级功能 = 动作子项**，命名以**动词**锚定（分配 / 调整 / 撤销 / 启用 / 吊销 / 查看），**不是 UI 形态描述**（"池行紧凑形态" / "视图入口" / "顶部右侧操作按钮"）。**角色视角差异 / UI 视图切换 / UI 形态规则**全部写进需求描述列编号项，**不外溢成独立三级**——例如"部门视角"和"许可证视角"不拆成两个三级，应作为同一三级"查看 X"下需求描述列的编号项。详细规则与正反例对照见 [`skills/prd-writing/SKILL.md`](../prd-writing/SKILL.md) §六「层级划分原则」+ [`skills/prd-writing/references/few-shots.md`](../prd-writing/references/few-shots.md) 完整层级示例段；task-spec 与 prd-writing 共用同一套命名规则避免分流。
+- **二级功能 = 用户动作组（列表 / 搜索 / 筛选 / 操作 / 创建 / 导入 / 详情），不是 UI 组件**（页面 / Tab / 弹窗 / Drawer / 视图）；**三级功能 = 动作子项**，命名以**动词**锚定（分配 / 调整 / 撤销 / 启用 / 吊销 / 查看），**不是 UI 形态描述**（"池行紧凑形态" / "视图入口" / "顶部右侧操作按钮"）。**角色视角差异 / UI 视图切换 / UI 形态规则**全部写进需求描述列编号项，**不外溢成独立三级**。详细规则与正反例对照见 [`skills/prd-writing/SKILL.md`](../prd-writing/SKILL.md) §六「层级划分原则」+ [`skills/prd-writing/references/few-shots.md`](../prd-writing/references/few-shots.md) 完整层级示例段。
 - **字段定义、计算口径、边界规则等**：直接写进需求描述列的某条编号项；**不另起字段口径独立表**
 - 表前后的 blockquote（`> **使用角色**：` / `> **注**：`）按需写，没东西写就整行删
 

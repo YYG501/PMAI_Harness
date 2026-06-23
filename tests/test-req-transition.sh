@@ -165,39 +165,18 @@ test_reject_rollback_from_settle() {
 }
 
 # -----------------------------------------------------------------
-# I-RT5: 复审（3）回退要求 task（demo 单元）都已确认/取消
+# I-RT5: 复审（3）可按普通回退规则退到 build（2）
 # -----------------------------------------------------------------
 
-test_reject_rollback_from_review_with_active_task() {
-  start_test "I-RT5 reject rollback from stage 3（复审）with active task"
+test_allow_rollback_from_review_to_build() {
+  start_test "I-RT5 allow rollback from 3（复审）to 2（build）"
   fixture_setup
   req_dir=$(fixture_create_req "req-001" "test" 3)
-  fixture_create_task "$req_dir" "001" "live" "执行中" >/dev/null
-
-  if _run_req "$req_dir" --to 2 --rollback >/tmp/out.$$ 2>/tmp/err.$$; then
-    _fail "should reject rollback with active task"
-  else
-    if grep -qE "(open tasks|active|执行中|复审)" /tmp/err.$$; then
-      pass_test
-    else
-      _fail "stderr missing active-task message"
-      cat /tmp/err.$$ >&2
-    fi
-  fi
-  rm -f /tmp/out.$$ /tmp/err.$$
-  fixture_teardown
-}
-
-test_allow_rollback_from_review_all_closed() {
-  start_test "I-RT5 allow rollback from 3（复审）when all tasks 已完成"
-  fixture_setup
-  req_dir=$(fixture_create_req "req-001" "test" 3)
-  fixture_create_task "$req_dir" "001" "done" "已完成" >/dev/null
 
   if _run_req "$req_dir" --to 2 --rollback >/tmp/out.$$ 2>/tmp/err.$$; then
     pass_test
   else
-    _fail "should allow rollback when all closed"
+    _fail "should allow rollback from review to build"
     cat /tmp/err.$$ >&2
   fi
   rm -f /tmp/out.$$ /tmp/err.$$
@@ -289,8 +268,7 @@ test_reject_stage1_to_2_no_req_plan
 test_happy_path_1_to_2
 test_build_and_review_advance_no_file_gate
 test_reject_rollback_from_settle
-test_reject_rollback_from_review_with_active_task
-test_allow_rollback_from_review_all_closed
+test_allow_rollback_from_review_to_build
 test_reject_rollback_to_zero
 test_reject_rollback_negative
 test_reject_rollback_target_ge_current

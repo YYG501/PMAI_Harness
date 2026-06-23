@@ -2,8 +2,8 @@
 # pre-commit hook (PM-AI-Workflow)
 # 由 init-project.sh / install-hooks.sh 安装到 .git/hooks/pre-commit。
 # 职责：
-#   1. 拦截绕过 task-transition.py 的 task 状态字段直改 (check-status-direct-edit.py)
-#   2. 拦截 docs/ 顶层错位文件 (check-docs-toplevel.py，按 CLAUDE.md 「docs/ 归档约定」)
+#   1. 拦截 docs/ 顶层错位文件 (check-docs-toplevel.py，按 CLAUDE.md 「docs/ 归档约定」)
+#   2. 对 attachments/ 大文件给出 warning（不阻塞）
 #
 # 绕过：git commit --no-verify（git 内置；hook 不会被调到）。
 #
@@ -29,17 +29,7 @@ if [ ! -d "$PMAI_HOME/scripts" ]; then
   exit 0
 fi
 
-# --- 1. task 状态字段直改检测 ---
-CHECKER="$PMAI_HOME/scripts/check-status-direct-edit.py"
-if [ ! -f "$CHECKER" ]; then
-  # 检测脚本缺失：fail-open（不阻塞 commit）但留 stderr 提示
-  echo "⚠️  pre-commit: $CHECKER 缺失，跳过 task 状态字段直改检测。" >&2
-  echo "    修复：pmai upgrade 或 pmai doctor" >&2
-else
-  python3 "$CHECKER"
-fi
-
-# --- 2. docs/ 顶层归档约定检测（防错位 / 重复 / 过期文件积累）---
+# --- 1. docs/ 顶层归档约定检测（防错位 / 重复 / 过期文件积累）---
 DOCS_CHECKER="$PMAI_HOME/scripts/check-docs-toplevel.py"
 if [ -f "$DOCS_CHECKER" ]; then
   python3 "$DOCS_CHECKER"

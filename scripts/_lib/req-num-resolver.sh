@@ -1,14 +1,15 @@
 #!/usr/bin/env bash
 # req-num-resolver.sh — req 编号 helper（v5  砍 is_first_req）
 #
-# 关键：必须扫**三个来源**取最大值，不能凭印象只扫文件目录。
+# 关键：必须扫**所有来源**取最大值，不能凭印象只扫文件目录。
 # **事实来源是 git 分支**——active req 都在自己分支上，main 分支视角下
-# requirements/active/ 通常是空的（active req 没 merge 回 main），只看目录会漏号导致撞号。
+# 模块目录里的 active req 通常看不全（active req 没 merge 回 main），只看目录会漏号导致撞号。
 #
-# 三个来源：
-#   1. closed req 目录（main 分支可见，已 merge 的归档）
-#   2. active req 目录（main 分支视角通常空，但兜底扫一下）
-#   3. git 所有 req-NNN-* 分支（主要来源，包括其他 worktree 里的 active req）
+# 来源（lifecycle 迁移后真相源是 docs/modules/<模块>/.req-meta.json，旧 requirements/ 树已废）：
+#   1. docs/modules/*/.req-meta.json 的 id 字段（真相源；即便 /design 把模块目录改成语义名也能命中）
+#   2. docs/modules/req-NNN-* 目录名（兜底 close 后：方案 A 会 git rm .req-meta，但模块文档目录仍在）
+#   3. git 所有 req-NNN-* 分支（包括其他 worktree 里的 active req）
+#   4. 旧 requirements/closed|active 目录（向后兼容；迁移后通常不存在，扫到即兼容老仓）
 #
 # 使用方法：
 #   SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -28,15 +29,18 @@
 _scan_req_nums() {
   local repo_root="$1"
   {
-    # 1. closed req 目录
-    ls -d "$repo_root/requirements/closed/req-"* 2>/dev/null \
-      | sed -E 's|.*/req-([0-9]+)-.*|\1|'
-    # 2. active req 目录
-    ls -d "$repo_root/requirements/active/req-"* 2>/dev/null \
-      | sed -E 's|.*/req-([0-9]+)-.*|\1|'
-    # 3. git 所有 req-NNN-* 分支
+    # 1. docs/modules 真相源：.req-meta.json 的 id 字段（active req，即便目录被改成语义名）
+    grep -rhoE '"id"[[:space:]]*:[[:space:]]*"req-[0-9]+' "$repo_root/docs/modules" 2>/dev/null \
+      | sed -E 's|.*req-([0-9]+).*|\1|'
+    # 2. docs/modules/req-NNN-* 目录名（兜底 close 后：.req-meta 已 git rm 但模块目录仍在）
+    ls -d "$repo_root/docs/modules/req-"* 2>/dev/null \
+      | sed -E 's|.*/req-([0-9]+).*|\1|'
+    # 3. git 所有 req-NNN-* 分支（包括其他 worktree 里的 active req）
     git -C "$repo_root" for-each-ref --format='%(refname:short)' 'refs/heads/req-*' 2>/dev/null \
       | sed -E 's|.*req-([0-9]+)-.*|\1|'
+    # 4. 旧 requirements/closed|active 目录（向后兼容老仓；迁移后通常不存在）
+    ls -d "$repo_root/requirements/closed/req-"* "$repo_root/requirements/active/req-"* 2>/dev/null \
+      | sed -E 's|.*/req-([0-9]+)-.*|\1|'
   } | grep -E '^[0-9]+$' | sort -nu
 }
 

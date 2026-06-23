@@ -26,7 +26,7 @@ source "$HOME/.pmai/scripts/skill-preamble.sh"
 echo "SKILL: deposit"
 ```
 
-本 skill 从**主仓 main** 触发（cwd 在主仓根、分支 = main）。若当前在 req/task worktree 内 → 告诉 PM「沉淀走对应流程：req 里发 /pmai-next 推到沉淀，或 close-req」，退出。
+本 skill 从**主仓 main** 触发（cwd 在主仓根、分支 = main）。若当前在 req worktree 内 → 告诉 PM「沉淀走对应流程：req 里发 /pmai-next 推到沉淀，或 close-req」，退出。
 
 ## Workflow
 
@@ -106,7 +106,7 @@ rm -f "$REPO_ROOT/.runs/deposit-in-progress"
 
 ## Rules
 
-- 从主仓 main 触发（cwd 主仓根、分支 main）；在 req/task worktree 内 → 引导走对应沉淀流程，不在此处理。
+- 从主仓 main 触发（cwd 主仓根、分支 main）；在 req worktree 内 → 引导走对应沉淀流程，不在此处理。
 - **两道闸**：只在收敛点 + 只在有耐久产出时沉淀；一道不过 → 不动 + 告诉 PM 一句，不空跑不编造。
 - 四类分流 @读 `_shared/deposit-routing.md`（单一真相源）；理路冻结 @读 `_shared/decision-record.md`；**重量随产出缩放**，多数轻档只动 PRODUCT-STATE。
 - **marker 纪律**：`.runs/deposit-in-progress` 设了必须清（commit 后 / 任何中断都 `rm -f` 兜底）；它只放行沉淀 allowlist 到 main，不开其它路径。

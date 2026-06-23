@@ -1,7 +1,7 @@
 # askuser-rules：AskUserQuestion 答题规则（M4 单一真相源）
 
 > **职责**：PM 答题门规则的**单一真相源**，gsd `#3018 failure mode` 照搬。
-> **调用方**：所有用 AskUserQuestion 的 skill（req-stage-gate / init-project / strategy / new-req / task-confirm / task-execute / close-task / close-req）。
+> **调用方**：所有用 AskUserQuestion 的 skill（init-project / strategy / new-req / design / next / build / close / cancel-req 等）。
 > **设计来源**：gsd `discuss-phase.md:95-102` + `gsd-discuss-phase/SKILL.md:29-35` 的 `#3018 failure mode` + 仓库 memory `feedback_open_questions_gate.md` + `feedback_close_default_flow.md` + commit 07a3a09。
 
 ---
@@ -32,12 +32,11 @@
 
 - ✅ **PM 答完后再写文件 / commit**
 - ❌ PM 没答之前 **不能** ：
-  - 写 PRODUCT.md / TODO.md / prd.md / task.md 等 PM 视图文件
+  - 写 PRODUCT.md / TODO.md / prd.md / 模块 spec 等 PM 视图文件
   - git commit / git push
   - 调用 `req-transition.py --to N+1`（stage 推进）
-  - 调用 `task-transition.py --status 已完成`（task 状态切换）
 
-**历史教训**：commit `07a3a09` 处理过"PM 没答 AI 默认走通过分支导致 task 跳过验收"事故（memory `feedback_close_default_flow.md`）；commit `feedback_pm_decision_is_binding_contract.md` 强调"PM 决策 = binding contract，没答前 AI 不能假定"。
+**历史教训**：PM 没答时 AI 默认走推荐分支，会跳过验收或范围拍板；`feedback_pm_decision_is_binding_contract.md` 强调"PM 决策 = binding contract，没答前 AI 不能假定"。
 
 ### §1.3 规则 3：runtime 不支持 AskUserQuestion 时退化为编号列表，仍 wait
 

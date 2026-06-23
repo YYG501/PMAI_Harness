@@ -2,7 +2,7 @@
 # Tests for scripts/_setup-deps.sh::setup_dependency_symlinks
 #
 # Regression for: 主仓根没有 package.json 时（子目录项目模式如 prototypes/、
-# apps/web/、packages/foo/），原实现整个 setup 空转，task worktree 拿不到任何
+# apps/web/、packages/foo/），原实现整个 setup 空转，worktree 拿不到任何
 # node_modules symlink — codex/cursor-agent 跑测试全失败。
 
 set -u

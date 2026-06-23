@@ -73,10 +73,8 @@ EXPECTED_SKILLS=(
   init-project design mockup build close publish-to-lark status
   # 按需主动调（brownfield / 项目方向 / 照站对齐）
   strategy codebase-audit mirror-site
-  # dormant：task 状态机
-  task-plan task-spec task-confirm task-execute task-verify task-submit task-status close-task
-  # dormant：req 阶段驱动 / 后台辅助 / 小改 / 轻沉淀 / 旧 req 流程
-  req-stage-gate next implementation-design doc-update quick-fix deposit new-req close-req cancel-req prd-writing
+  # 按需辅助：恢复 / 小改 / 轻沉淀 / 新建与取消 / 反向 PRD
+  req-stage-gate next quick-fix deposit new-req cancel-req prd-writing
   # 框架自身维护
   pmai-upgrade skill-improve
 )

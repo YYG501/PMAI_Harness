@@ -2,13 +2,13 @@
 
 > 本文件是 [`PM-VIEW-RULES.md`](../PM-VIEW-RULES.md) §三 的物理拆分。配套阅读：[`doc-strictness.md`](./doc-strictness.md)（§四 文档级严格度对照表）。
 
-适用：所有 PM 视图层文档 — `brief.md` / `analysis.md` / `prd.md` / `task-plan.md` / `tasks/task-NNN-*.md`（在飞旧 req 的 `solution.md` 同样适用）。
+适用：所有 PM 视图层文档 — `docs/modules/<模块>/discussion.md` / `decisions.md` / `spec.md` / `prd.md`（在飞旧 req 的 `brief.md` / `analysis.md` / `solution.md` 历史产物同样适用）。
 
 ---
 
 ## 如何补新规则（反馈循环 SOP）
 
-当 PM 复审 PRD / task spec 等产物发现新违规词时，按以下 5 步补：
+当 PM 复审 PRD / 模块规格等产物发现新违规词时，按以下 5 步补：
 
 1. **加规则**：到本文件对应子段（§3.1-§3.12）的 ❌/✅ 对照表，加一行违规词 + 正确写法。
 2. **加 lint pattern**：到 `scripts/check-prd-hierarchy.py` 对应 PATTERN 列表（VISUAL/URL/PUNCT/NEG/JARGON_PATTERNS）。pattern 用 `(regex, reason_with_hint)` tuple，让 lint 输出能给具体改写建议。
@@ -16,7 +16,7 @@
 4. **跑回归测试**：`scripts/tests/run-tests.sh` 确保旧规则不破坏。
 5. **跑回测**：用本次发现违规的真实 PRD 跑新 lint，验证抓得到；抓到的处数写到 commit message。
 
-跨 skill 复用：本文件改动自动覆盖所有 PM 视图 skill（prd-writing / task-spec / publish-to-lark 等），无需逐个改。
+跨 skill 复用：本文件改动自动覆盖所有 PM 视图 skill（design / prd-writing / publish-to-lark 等），无需逐个改。
 
 ---
 
@@ -33,7 +33,7 @@ PM 视图里出现的每个名词，必须能让读者一眼知道**指代哪个
 | 列表 | 「产品访问管理 - 产品列表页」的产品列表 |
 | 失效证 | 状态为已失效（含已过期 / 已停用 / 已吊销 / 未生效）的许可证 |
 | admin | 租户管理员 / 部门管理员（仅在其权限范围内的部门）|
-| Tab 2 不动 | 「产品详情页 - Tab 2 用户开通（task-004 实现）」保持现状不动 |
+| Tab 2 不动 | 「产品详情页 - Tab 2 用户开通」保持现状不动 |
 
 **自检**：单字"状态"、"列表"、"树"、"弹窗"、"操作"、"按钮"、"用户"出现时，前面必须有完整指代前缀。
 
@@ -201,7 +201,7 @@ PM 视图用正向句式。**隐式反向（"无 X / 没有 X / 不出现 X / �
 | 字段口径（"（多证场景下出现）"） | 给读者解释字段定义 | 屏幕字保留入口名；触发条件进 §交互说明 |
 | 折叠藏默认值（"[▸ 高级配置]"） | 默认值伪装成扩展项 | 默认值直接渲染；override 走单独按钮（如「改为共享部门额度」） |
 
-**自动 lint 边界**：`check-doc-pm-view.py` 仅对骨架代码块内出现的 `（...）` 报 warning（不区分类型）。warning 不阻塞，由 PM/AI 自判是合法标识型（CSV / 1080p / 2 个）还是非法释义型（基于 X / 按 Y / 多 Z 场景）。其余 4 类失败模式 lint 抓不全，靠步骤 5 自检 + reviewer。
+**检查边界**：骨架代码块内出现 `（...）` 时，由 PM/AI 自判是合法标识型（CSV / 1080p / 2 个）还是非法释义型（基于 X / 按 Y / 多 Z 场景）。其余 4 类失败模式靠步骤 5 自检 + reviewer，不依赖旧 task 文档 lint。
 
 ### 3.10.1 骨架宽度硬约束
 

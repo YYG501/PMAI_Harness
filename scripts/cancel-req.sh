@@ -5,14 +5,12 @@
 # 新模型（lifecycle 迁移批 3，方案 A）：
 #   废弃 = 在 main 上删模块 .req-meta.json（清掉「在做的工作」标记），不 merge req 分支到 main。
 #   模块三件套（spec/decisions/discussion）若已在 main 则留场（历史在 git log + decisions 里）。
-#   task worktree/分支推迟到 cleanup-pending 兜底清（防 dangling cwd）。
+#   req worktree/分支推迟到 cleanup-pending 兜底清（防 dangling cwd）。
 #
 # 顺序（任一步失败就 fail-fast）：
-#   1. 从 source of truth（传入的模块目录）枚举所有 task 分支/worktree/dev 端口
-#   2. 切回 main，检查 main 是否脏（脏则拒绝，避免污染 cancel commit）
-#   3. 在 main 上删模块 .req-meta + 路径级 commit
-#   4. 清理 task worktree/分支 + 杀 dev server + 删 .runs/
-#   5. 标记 req worktree/分支待清理
+#   1. 切回 main，检查 main 是否脏（脏则拒绝，避免污染 cancel commit）
+#   2. 在 main 上删模块 .req-meta + 路径级 commit
+#   3. 标记 req worktree/分支待清理
 
 set -euo pipefail
 
@@ -22,7 +20,6 @@ REQ_DIR="${1:?用法: cancel-req.sh <模块目录>}"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/_lib/_setup-pythonpath.sh"
 source "$SCRIPT_DIR/_lib/worktree.sh"
-source "$SCRIPT_DIR/_lib/dev-server.sh"
 source "$SCRIPT_DIR/_lib/symlink-prd.sh"
 
 # --- 找到主仓根目录 ---
@@ -52,39 +49,7 @@ fi
 
 echo "⚠️ 即将废弃 req: $REQ_ID"
 
-# --- Step 1: 从 source of truth 枚举所有 task（在删任何 worktree/分支之前）---
-# task 信息以 REQ_DIR/tasks/ 为真相源：REQ_DIR 可能指向 req worktree 里的模块目录，
-# 也可能是 main 上的模块目录。无论哪种，都要在它还存在时把信息先读出来。
-declare -a TASK_BRANCHES=()
-declare -a TASK_PORTS=()
-declare -a TASK_STEMS=()
-
-SRC_TASKS_DIR="$REQ_DIR/tasks"
-if [ -d "$SRC_TASKS_DIR" ]; then
-  for TASK_FILE in "$SRC_TASKS_DIR"/task-*.md; do
-    [ -f "$TASK_FILE" ] || continue
-    case "$TASK_FILE" in *.engineering.md) continue;; esac
-    # 用 _lib.state 双兼容 v1/v2 取分支 + 端口（从 dev_server / 开发服务器 字段）
-    TASK_BRANCH=$(python3 -m _lib.state get_branch "$TASK_FILE" 2>/dev/null || echo "")
-    [ -z "$TASK_BRANCH" ] && continue
-    TASK_STEM=$(basename "$TASK_FILE" .md)
-    PORT=$(python3 -m _lib.state get_meta "$TASK_FILE" 2>/dev/null | python3 -c "
-import sys, json, re
-try:
-    d = json.load(sys.stdin)
-except Exception:
-    d = {}
-v = d.get('dev_server') or ''
-m = re.search(r'\d+', v)
-print(m.group() if m else '0')
-" 2>/dev/null || echo "0")
-    TASK_BRANCHES+=("$TASK_BRANCH")
-    TASK_STEMS+=("$TASK_STEM")
-    TASK_PORTS+=("${PORT:-0}")
-  done
-fi
-
-# --- Step 2: 切回 main（硬失败）---
+# --- Step 1: 切回 main（硬失败）---
 cd "$REPO_ROOT"
 CURRENT=$(git branch --show-current 2>/dev/null || true)
 if [ "$CURRENT" != "main" ]; then
@@ -94,7 +59,7 @@ if [ "$CURRENT" != "main" ]; then
   fi
 fi
 
-# --- Step 2.5: main 污染防护：如果 main 有任何在本模块路径之外的脏文件，拒绝 ---
+# --- Step 1.5: main 污染防护：如果 main 有任何在本模块路径之外的脏文件，拒绝 ---
 # 只允许 docs/modules/<模块> 下的改动参与 cancel commit
 REL_MODULE="docs/modules/$MODULE_BASENAME"
 DIRTY=$(git status --porcelain 2>/dev/null || true)
@@ -110,7 +75,7 @@ if [ -n "$DIRTY" ]; then
   fi
 fi
 
-# --- Step 3: 在 main 上删模块 .req-meta（方案 A）+ PRD 收口 symlink + 路径级 commit ---
+# --- Step 2: 在 main 上删模块 .req-meta（方案 A）+ PRD 收口 symlink + 路径级 commit ---
 MAIN_MODULE="$REPO_ROOT/$REL_MODULE"
 MAIN_MODULE_META="$MAIN_MODULE/.req-meta.json"
 
@@ -139,8 +104,8 @@ else
   echo "ℹ️ main 上无本模块工作状态需要清（req 仅存在于 req worktree），跳过 commit"
 fi
 
-# --- Step 4: 标记 task worktree/分支为待清理 + 杀 dev server + 删 .runs/ 原件 ---
-# 不立即删 worktree/branch：PM 可能在某个 task/req worktree 内调用 cancel-req，
+# --- Step 3: 标记 req worktree/分支为待清理 ---
+# 不立即删 worktree/branch：PM 可能在某个 req worktree 内调用 cancel-req，
 # 立即删除会让 Claude Code 父进程 cwd 变成 dangling，触发 Stop hook 的
 # posix_spawn ENOENT。改为写 pending，由 cleanup-pending-worktrees.sh 在主仓 cwd 兜底清理。
 PENDING_FILE="$REPO_ROOT/.runs/pending-cleanup.json"
@@ -165,40 +130,12 @@ entry = {
     "worktree": worktree,
     "queued_at": datetime.datetime.now().astimezone().isoformat(timespec="seconds"),
 }
-if kind == "task":
-    entry["task_file"] = ref
-elif kind == "req":
+if kind == "req":
     entry["req_dir"] = ref
 entries.append(entry)
 with open(pending_file, "w") as f:
     json.dump(entries, f, indent=2, ensure_ascii=False)
 PY
-
-for i in "${!TASK_BRANCHES[@]}"; do
-  TASK_BRANCH="${TASK_BRANCHES[$i]}"
-  TASK_STEM="${TASK_STEMS[$i]}"
-  PORT="${TASK_PORTS[$i]}"
-
-  TASK_WT=$(resolve_worktree_path "$TASK_BRANCH" "$REPO_ROOT" || true)
-  if [ -z "$TASK_WT" ]; then
-    # 没找到对应 worktree（可能已被手动删除）。pending-cleanup 会按 branch 处理。
-    TASK_WT="$REPO_ROOT/.worktrees/$TASK_BRANCH"
-  fi
-
-  # 杀 dev server（按进程 cwd 校验归属后才 kill）
-  if [ "$PORT" != "0" ] && [ "$PORT" -gt 0 ] 2>/dev/null; then
-    stop_dev_server_port "$PORT" "$TASK_WT"
-  fi
-
-  python3 "$QUEUE_PENDING_PY" "$PENDING_FILE" task "$TASK_BRANCH" "$TASK_WT" "$TASK_STEM"
-  echo "🕓 标记待清理 task: $TASK_BRANCH"
-
-  # .runs/ 原件可以立即删（不在 worktree 内）
-  rm -f "$REPO_ROOT/.runs/$TASK_STEM.json" 2>/dev/null
-  rm -f "$REPO_ROOT/.runs/events/$TASK_STEM.jsonl" 2>/dev/null
-done
-
-# --- Step 5: 标记 req worktree/分支为待清理 ---
 REQ_WORKTREE=$(resolve_worktree_path "$REQ_BRANCH" "$REPO_ROOT" || true)
 if [ -z "$REQ_WORKTREE" ]; then
   REQ_WORKTREE="$REPO_ROOT/.worktrees/$REQ_BRANCH"

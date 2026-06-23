@@ -15,10 +15,8 @@
 # 动作：
 #   1. git rm -rf .claude/scripts .claude/skills .claude/agents（实体副本）
 #   2. git rm -rf hooks/（消费仓自带 hook 副本）
-#   3. 清 templates/ 内 framework runtime .tmpl（CLAUDE/PROJECT/ROADMAP/PRODUCT-RULES/
-#      modules-INDEX/task/task-plan/module/req-prd/implementation-design/codebase-audit/
-#      settings.json/gitignore/pm-workflow.config.yml/工程结构约束-*.md/schema.json/
-#      git-hooks/）；保留业务实例（lark-publish.json.tmpl 等）
+#   3. 清 templates/ 内旧 framework runtime .tmpl（含历史 task/req 产物模板）；
+#      保留业务实例（lark-publish.json.tmpl 等）
 #   4. 重写 .claude/settings.json（占位符替换 framework 模板）
 #   5. 重装 .git/hooks/pre-commit
 #   6. 删 .framework-sync-state.json（不再 vendored，I-mini 不需要）
@@ -145,7 +143,7 @@ git rm -rf .claude/scripts 2>&1 | tail -3
 
 echo ""
 echo "→ 5. 清 templates/ framework runtime .tmpl（保留业务实例）..."
-# Framework runtime .tmpl 清单（跟 init-project.sh d 段 case 对齐）
+# 旧 framework runtime .tmpl 清单（迁移老消费仓时清理；当前新项目不再生成其中的历史 task/req 模板）
 FRAMEWORK_TMPLS=(
   CLAUDE.md.tmpl
   PROJECT.md.tmpl

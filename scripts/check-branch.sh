@@ -91,7 +91,7 @@ if str(target).startswith(main_str) or str(target) == str(main_root):
     if rel_to_main.startswith('.worktrees/'):
         parts = rel_to_main.split('/', 2)
         if len(parts) >= 2:
-            wt_branch = parts[1]  # 例如 'task-001-xxx' 或 'req-001-xxx'
+            wt_branch = parts[1]  # 例如 'req-001-xxx'
             wt_rel = parts[2] if len(parts) >= 3 else '.'
             print(f'WORKTREE|{wt_branch}|{wt_rel}')
         else:
@@ -115,7 +115,7 @@ if [ "$SCOPE" = "__OUTSIDE_REPO__" ]; then
       exit 0
       ;;
     *)
-      reason="写仓库外的路径被拒绝：${FILE_PATH}。业务改动必须在 req/task worktree 内进行。如需写临时文件请用 /tmp/ 或 /var/tmp/。"
+      reason="写仓库外的路径被拒绝：${FILE_PATH}。业务改动必须在 main 或 req worktree 内进行。如需写临时文件请用 /tmp/ 或 /var/tmp/。"
       reason_escaped=$(echo "$reason" | python3 -c "import sys,json; print(json.dumps(sys.stdin.read().strip())[1:-1])")
       printf '{"decision": "deny", "reason": "%s"}\n' "$reason_escaped"
       exit 2
@@ -164,62 +164,7 @@ deny() {
 }
 
 # ======================================================
-# GATE 1: Task 状态直改拦截
-# ======================================================
-# 批 2：task 真相源迁到 docs/modules/<模块>/tasks/；task 系列 dormant，旧
-# requirements/*/tasks/ 路径保留（dormant 降级），两条都拦状态直改。
-case "$REL_PATH" in
-  requirements/*/tasks/task-*.md|docs/modules/*/tasks/task-*.md)
-    # 用 _lib.state.parse_status_from_text 检测状态字段
-    # 双兼容 v1（**状态：**）+ v2（| **状态** |）
-    source "$SCRIPT_DIR/_lib/_setup-pythonpath.sh"
-
-    STATUS_MODIFIED=$(echo "$INPUT" | python3 -c "
-import sys, json
-from _lib.state import parse_status_from_text
-
-data = json.load(sys.stdin)
-ti = data.get('tool_input', data)
-old = ti.get('old_string', '')
-new = ti.get('new_string', '')
-content = ti.get('content', '')
-file_path = ti.get('file_path', '')
-
-# Edit tool: check if old_string or new_string touches status
-if old or new:
-    old_status = parse_status_from_text(old)
-    new_status = parse_status_from_text(new)
-    if old_status is not None or new_status is not None:
-        # 任一边有状态字段
-        if old_status != new_status:
-            print('DENY')
-            sys.exit(0)
-
-# Write tool: content vs existing file
-if content and not old:
-    proposed = parse_status_from_text(content)
-    if proposed:
-        try:
-            with open(file_path, 'r', encoding='utf-8') as f:
-                existing_content = f.read()
-            existing = parse_status_from_text(existing_content)
-            if existing and proposed != existing:
-                print('DENY')
-                sys.exit(0)
-        except FileNotFoundError:
-            pass  # New file creation — allow
-
-print('ALLOW')
-" 2>/dev/null || echo "ALLOW")
-
-    if [ "$STATUS_MODIFIED" = "DENY" ]; then
-      deny "请使用 python3 $HOME/.pmai/scripts/task-transition.py 修改 task 状态"
-    fi
-    ;;
-esac
-
-# ======================================================
-# GATE 2: Req stage 直改拦截
+# GATE 1: Req stage 直改拦截
 # ======================================================
 # 批 2：req 状态真相源迁到 docs/modules/<模块>/.req-meta.json（补批 1 留下的 GATE2 洞——
 # main 写保护放宽后 docs/** 全放行，stage 字段必须仍由 req-transition 走，不能 main 直改）。
@@ -265,7 +210,7 @@ print('ALLOW')
 esac
 
 # ======================================================
-# GATE 3: Main 分支写保护（白名单模式，默认拒绝）
+# GATE 2: Main 分支写保护（白名单模式，默认拒绝）
 # ======================================================
 # main 分支上，只允许写入以下白名单路径。其他所有路径都拒绝。
 # 业务代码、文档、配置都必须走 req 分支隔离
@@ -300,58 +245,16 @@ if [ "$BRANCH" = "main" ] || [ "$BRANCH" = "master" ]; then
   esac
 
   if [ "$MAIN_WRITE_ALLOWED" != "true" ]; then
-    deny "main 分支写保护：不允许直接修改 ${REL_PATH}。业务代码和文档必须通过 req/task 分支操作。如需初始化新项目，请用 /pmai-init-project 创建新的业务项目仓。"
+    deny "main 分支写保护：不允许直接修改 ${REL_PATH}。业务代码必须通过 build/req worktree 操作。如需初始化新项目，请用 /pmai-init-project 创建新的业务项目仓。"
   fi
 fi
 
 # ======================================================
-# GATE 4: Worktree 作用域保护
+# GATE 3: Worktree 作用域保护
 # ======================================================
 case "$BRANCH" in
-  task-*)
-    case "$REL_PATH" in
-      docs/*)
-        deny "task worktree 中不能编辑 docs/ 下的文件，文档改动请在 req 分支操作"
-        ;;
-    esac
-    ;;
-  # 六步 worktree 模型：req worktree 可直接改 prototype/（轻 / 文档 task 不 fork、在 req worktree 改）；
-  # 深 task fork 到 task worktree 后由 GATE 5（status==执行中）约束。原 req-prototype 拦截已删；
-  # 跨 task 串台保护移交执行器退出后越界审（adapter_postcheck 扫自身 worktree 超界 + rollback）。
-esac
-
-# ======================================================
-# GATE 5: Task 状态约束（I-CB10）
-# 只有 task 状态 == 执行中 才允许写 task worktree 下的代码。
-# 目的：防 agent 跳过 /pmai-task-confirm → task-transition → /pmai-task-execute 流程直接写代码。
-# ======================================================
-case "$BRANCH" in
-  task-*)
-    # 豁免：task 文件本身（填执行日志/自审记录/文档偏差）+ 运行时元数据
-    # 批 2：task 真相源 docs/modules/<模块>/tasks/；dormant 旧 requirements/*/tasks/ 保留。
-    case "$REL_PATH" in
-      requirements/*/tasks/task-*.md|docs/modules/*/tasks/task-*.md)
-        # task 文件本身的写入：允许（gate 1 已经保护状态字段不被直改）
-        ;;
-      .runs/*|.worktrees/*|.dev-port)
-        # 运行时元数据：gitignore，放行
-        ;;
-      *)
-        # 其他路径（prototype/ 代码、docs/ 等）：要求状态 == 执行中
-        # 定位 task 文件：task 文件存在于 task worktree 和 req worktree 里，不在主仓根
-        # 搜索顺序：优先 task 自己的 worktree → fallback 所有 worktree
-        TASK_FILE="$MAIN_REPO_ROOT/.worktrees/$BRANCH"
-        TASK_FILE=$(find "$MAIN_REPO_ROOT/.worktrees" -type f -path "*/tasks/${BRANCH}.md" 2>/dev/null | head -1)
-        if [ -z "$TASK_FILE" ] || [ ! -f "$TASK_FILE" ]; then
-          deny "I-CB10: 找不到 task 分支 ${BRANCH} 对应的 task 文件，无法校验状态。请通过 /pmai-task-confirm 正常创建。"
-        fi
-
-        TASK_STATUS=$(python3 "$SCRIPT_DIR/task-transition.py" "$TASK_FILE" --get-status 2>/dev/null || echo "")
-        if [ "$TASK_STATUS" != "执行中" ]; then
-          deny "I-CB10: task 状态为「${TASK_STATUS:-未知}」，不允许写 task worktree 代码。正确流程：1) /pmai-task-confirm 转「执行中」  2) /pmai-task-execute 启动执行器  3) 再改代码。若需补填 task 文件的执行日志/文档偏差/自审记录，只能改 task 文件本身。"
-        fi
-        ;;
-    esac
+  req-*)
+    # req/build worktree 可以改 prototype/；文档真相源在 main/docs 或 req docs 下按具体流程沉淀。
     ;;
 esac
 

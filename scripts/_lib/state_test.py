@@ -4,7 +4,7 @@
     cd ${REPO_ROOT}
     PYTHONPATH=scripts python3 -m unittest scripts._lib.state_test -v
 
-19 原测试（task_parser 时代）+ state 扩展 API 单测（末尾段）。
+原 task_parser 兼容读取 + req state 扩展 API 单测。
 """
 
 import json
@@ -25,14 +25,10 @@ from _lib.state import (
     read_req_meta,
     read_task_meta,
     read_task_status,
-    read_task_events,
-    read_task_plan,
-    list_tasks,
     list_active_reqs,
     list_closed_reqs,
     list_cancelled_reqs,
     get_overall_state,
-    discarded_task_ids,
     StateReadError,
 )
 
@@ -487,128 +483,6 @@ class TestReadTaskMetaStatus(unittest.TestCase):
         self.assertIsNone(read_task_status(Path("/nope.md"), strict=False))
 
 
-class TestReadTaskEvents(unittest.TestCase):
-    def test_missing_returns_empty(self):
-        with tempfile.TemporaryDirectory() as d:
-            self.assertEqual(read_task_events(Path(d), "task-001"), [])
-
-    def test_skip_bad_json_lines(self):
-        with tempfile.TemporaryDirectory() as d:
-            events_dir = Path(d) / ".runs" / "events"
-            events_dir.mkdir(parents=True)
-            (events_dir / "task-001.jsonl").write_text(
-                '{"event":"a"}\n{not json}\n{"event":"b"}\n',
-                encoding="utf-8")
-            evs = read_task_events(Path(d), "task-001")
-            self.assertEqual([e["event"] for e in evs], ["a", "b"])
-
-    def test_tail_returns_last_n(self):
-        with tempfile.TemporaryDirectory() as d:
-            events_dir = Path(d) / ".runs" / "events"
-            events_dir.mkdir(parents=True)
-            (events_dir / "task-001.jsonl").write_text(
-                '{"event":"a"}\n{"event":"b"}\n{"event":"c"}\n',
-                encoding="utf-8")
-            self.assertEqual(
-                [e["event"] for e in read_task_events(Path(d), "task-001", tail=2)],
-                ["b", "c"])
-
-
-class TestReadTaskPlan(unittest.TestCase):
-    def test_missing_returns_none(self):
-        with tempfile.TemporaryDirectory() as d:
-            req = Path(d) / "req-001"
-            req.mkdir()
-            self.assertIsNone(read_task_plan(req))
-
-    def test_parses_planning_table(self):
-        with tempfile.TemporaryDirectory() as d:
-            req = Path(d) / "req-001"
-            req.mkdir()
-            (req / "task-plan.md").write_text(
-                "# Plan\n"
-                "| ID | 标题 |\n"
-                "|---|---|\n"
-                "| task-001 | 一 |\n"
-                "| task-002 | 二 |\n"
-                "\n## 变更记录\n"
-                "| task-003 | 不应被解析 |\n",
-                encoding="utf-8")
-            plan = read_task_plan(req)
-            ids = [t["id"] for t in plan["tasks"]]
-            self.assertEqual(ids, ["task-001", "task-002"])
-
-
-class TestListTasks(unittest.TestCase):
-    def test_skips_engineering_md(self):
-        with tempfile.TemporaryDirectory() as d:
-            req = _make_req(Path(d), "req-001")
-            (req / "tasks" / "task-001-demo.md").write_text(
-                "# Task 001\n\n| **状态** | 执行中 |\n| **分支** | task-001-demo |\n",
-                encoding="utf-8")
-            (req / "tasks" / "task-001-demo.engineering.md").write_text(
-                "engineering only\n", encoding="utf-8")
-            tasks = list_tasks(req)
-            self.assertEqual(len(tasks), 1)
-            self.assertEqual(tasks[0]["id"], "task-001")
-
-    def test_missing_tasks_dir_returns_empty(self):
-        with tempfile.TemporaryDirectory() as d:
-            self.assertEqual(list_tasks(Path(d) / "no-such-req"), [])
-
-    def test_worktree_fallback_finds_task_branch_only_md(self):
-        """v4.5 fork 后 task md 从 req 分支 git rm；传 repo_root 时扫 task-* worktree 补回。"""
-        with tempfile.TemporaryDirectory() as d:
-            main, r1, t1 = _init_repo_with_worktrees(Path(d))
-            req_dir_in_req_wt = r1 / "requirements" / "active" / "req-001"
-            task_tasks_dir = t1 / "requirements" / "active" / "req-001" / "tasks"
-            task_tasks_dir.mkdir(parents=True)
-            (task_tasks_dir / "task-001-demo.md").write_text(
-                "# Task 001\n\n| **状态** | 待执行 |\n", encoding="utf-8")
-
-            tasks_without_root = list_tasks(req_dir_in_req_wt)
-            self.assertEqual(tasks_without_root, [], "不传 repo_root 应保持旧行为只扫 req 分支")
-
-            tasks_with_root = list_tasks(req_dir_in_req_wt, repo_root=main)
-            self.assertEqual(len(tasks_with_root), 1)
-            self.assertEqual(tasks_with_root[0]["id"], "task-001")
-            self.assertEqual(
-                tasks_with_root[0]["path"].resolve(),
-                (task_tasks_dir / "task-001-demo.md").resolve())
-
-    def test_task_branch_md_preferred_over_req_branch(self):
-        """同 task-id 在 req 分支（archived）和 task 分支（active）都有 → 优先 task 分支版。"""
-        with tempfile.TemporaryDirectory() as d:
-            main, r1, t1 = _init_repo_with_worktrees(Path(d))
-            # 任务 dormant 的 task-fork fallback 路径仍读 worktree 的 requirements/active/<req>/tasks/
-            # （批 2 不动 dormant task 代码）；这里手建该目录验证 fallback + 同 id 优先 task 分支版。
-            req_dir = r1 / "requirements" / "active" / "req-001"
-            (req_dir / "tasks").mkdir(parents=True)
-            (req_dir / "tasks" / "task-001-demo.md").write_text(
-                "# Task 001 (req-branch archived copy)\n\n| **状态** | 已完成 |\n", encoding="utf-8")
-            task_tasks_dir = t1 / "requirements" / "active" / "req-001" / "tasks"
-            task_tasks_dir.mkdir(parents=True)
-            task_branch_md = task_tasks_dir / "task-001-demo.md"
-            task_branch_md.write_text(
-                "# Task 001 (task-branch active)\n\n| **状态** | 执行中 |\n", encoding="utf-8")
-
-            tasks = list_tasks(req_dir, repo_root=main)
-            self.assertEqual(len(tasks), 1)
-            self.assertEqual(
-                tasks[0]["path"].resolve(),
-                task_branch_md.resolve(),
-                "应优先 task 分支版 (active 状态)")
-
-
-class TestDiscardedTaskIds(unittest.TestCase):
-    def test_picks_up_discarded_dir(self):
-        with tempfile.TemporaryDirectory() as d:
-            req = _make_req(Path(d), "req-001")
-            (req / "tasks" / "discarded").mkdir()
-            (req / "tasks" / "discarded" / "task-002-old.md").write_text("x")
-            self.assertEqual(discarded_task_ids(req), {"task-002"})
-
-
 class TestListActiveReqsTolerantAggregation(unittest.TestCase):
     def test_corrupt_meta_emits_warning_not_raise(self):
         with tempfile.TemporaryDirectory() as d:
@@ -650,9 +524,9 @@ def _git(repo: Path, *args: str) -> str:
 
 
 def _init_repo_with_worktrees(root: Path) -> tuple[Path, Path, Path]:
-    """建一个 main 仓 + 2 个 req worktree（req-001 / req-002）+ 1 个 task worktree（task-001 fork req-001）。
+    """建一个 main 仓 + 2 个 req worktree（req-001 / req-002）。
 
-    返回 (main, req001_wt, task001_wt)。
+    返回 (main, req001_wt, req002_wt)。
     """
     main = root / "main"
     main.mkdir()
@@ -667,19 +541,17 @@ def _init_repo_with_worktrees(root: Path) -> tuple[Path, Path, Path]:
     wt_root.mkdir()
     req001_wt = wt_root / "req-001-demo"
     req002_wt = wt_root / "req-002-other"
-    task001_wt = wt_root / "task-001-demo"
     _git(main, "worktree", "add", "-q", "-b", "req-001-demo", str(req001_wt))
     _git(main, "worktree", "add", "-q", "-b", "req-002-other", str(req002_wt))
-    _git(main, "worktree", "add", "-q", "-b", "task-001-demo", str(task001_wt))
 
     # 在两个 req worktree 各放 active req（同名 id 模拟两 req 并行）
     _make_req(req001_wt, "req-001")
     _make_req(req002_wt, "req-002")
-    return main, req001_wt, task001_wt
+    return main, req001_wt, req002_wt
 
 
 class TestListActiveReqsCwdAndWorktrees(unittest.TestCase):
-    """v3 §1 #2 清单显式覆盖: multi active / task worktree cwd / 跨 worktree 去重。"""
+    """v3 §1 #2 清单显式覆盖: multi active / req worktree cwd / 跨 worktree 去重。"""
 
     def test_multi_active_across_worktrees_deduped(self):
         with tempfile.TemporaryDirectory() as d:
@@ -695,14 +567,6 @@ class TestListActiveReqsCwdAndWorktrees(unittest.TestCase):
             ids = [i["meta"]["id"] for i in out["items"]]
             self.assertEqual(ids, ["req-001"])  # cwd 唯一定 req，不要被 req-002 干扰
 
-    def test_cwd_in_task_worktree_finds_sibling_reqs(self):
-        with tempfile.TemporaryDirectory() as d:
-            main, _r1, t1 = _init_repo_with_worktrees(Path(d))
-            out = list_active_reqs(main, cwd=t1)
-            ids = sorted(i["meta"]["id"] for i in out["items"])
-            # task worktree 自身 active/ 为空 → 从兄弟 req worktree 拿，应该看到两个 req
-            self.assertEqual(ids, ["req-001", "req-002"])
-
     def test_main_repo_active_dedupes_against_worktree(self):
         """主仓 + req worktree 都暴露同 id 时，basename 去重只保留一份。"""
         with tempfile.TemporaryDirectory() as d:
@@ -717,27 +581,15 @@ class TestListActiveReqsCwdAndWorktrees(unittest.TestCase):
 
 
 class TestGetOverallState(unittest.TestCase):
-    def test_pending_spec_diff(self):
+    def test_returns_active_req_items_only(self):
         with tempfile.TemporaryDirectory() as d:
             repo = Path(d)
-            req = _make_req(repo, "req-001")
-            (req / "task-plan.md").write_text(
-                "| ID | 标题 |\n|---|---|\n"
-                "| task-001 | 一 |\n| task-002 | 二 |\n| task-003 | 三 |\n",
-                encoding="utf-8")
-            # spec 了 task-001
-            (req / "tasks" / "task-001-demo.md").write_text(
-                "# Task\n\n| **状态** | 已完成 |\n", encoding="utf-8")
-            # discard 了 task-003
-            (req / "tasks" / "discarded").mkdir()
-            (req / "tasks" / "discarded" / "task-003-old.md").write_text("x")
+            _make_req(repo, "req-001")
             state = get_overall_state(repo)
             self.assertEqual(len(state["active_reqs"]), 1)
             r = state["active_reqs"][0]
-            self.assertEqual(len(r["tasks"]), 1)
-            self.assertEqual(
-                [p["id"] for p in r["pending_spec"]], ["task-002"])
-            self.assertEqual(r["discarded_ids"], ["task-003"])
+            self.assertEqual(r["meta"]["id"], "req-001")
+            self.assertEqual(set(r.keys()), {"req_dir", "meta"})
 
     def test_tolerant_no_active_returns_empty(self):
         with tempfile.TemporaryDirectory() as d:

@@ -653,7 +653,7 @@ def main() -> None:
     ap = argparse.ArgumentParser(prog="publish-to-lark",
                                  description="把本地 markdown 发布到飞书云文档")
     ap.add_argument("markdown", help="markdown 文件路径")
-    ap.add_argument("--type", help="文档类型 (prd/task-spec/analysis/other)")
+    ap.add_argument("--type", help="文档类型 (prd/spec/analysis/other)")
     ap.add_argument("--target-token", help="覆盖目标 token (wiki node 或 folder)")
     ap.add_argument("--target-kind", choices=["wiki", "folder"], help="目标位置类型")
     ap.add_argument("--title", help="覆盖标题")

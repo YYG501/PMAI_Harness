@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
 """Append-only JSONL event stream for req-level content events .
 
-req 级「内容性事件流」—— 与 task-events.py 平行，但抬到 req 级。
+req 级「内容性事件流」。
 - 文件落 `<req-dir>/req-events.jsonl`，**被 git 跟踪**（随 req 分支 commit / merge，
   close 后仍可查），不落 gitignored 的 `.runs/`。
-- 两类事件（§0 re-scope 后只此两类，不加 §0 未点名的类型）：
+- 两类事件：
     decision   —— prd-writing @ stage 3 做决策时，结果留 PRD §四、备选+理由进事件。
-    adjustment —— 执行期 task 对 PRD 的偏离（close-task Phase 2 promote）。
-- 与 task-events.py 一致的公共信封字段名（`event` / `timestamp`），零新格式。
+    adjustment —— build / 复审期间对 PRD 的偏离。
+- 使用稳定公共信封字段名（`event` / `timestamp`）。
 
 req 生命周期（stage 转换）仍由 `.req-meta.json` 的 stage_history 装；本事件流只装
 **内容**（决策理由 / PRD 调整）。三套时间线零重叠，见 。
@@ -27,12 +27,12 @@ DECIDED_BY_VALUES = ("pm-explicit", "ai-inferred")
 
 
 def now_iso() -> str:
-    """ISO-8601 UTC timestamp —— 与 task-events.py now_iso() 同实现。"""
+    """ISO-8601 UTC timestamp."""
     return datetime.now(timezone.utc).isoformat()
 
 
 def find_repo_root() -> Path:
-    """Find the real repo root (not a worktree) —— 同 task-events.py。"""
+    """Find the real repo root (not a worktree)."""
     import subprocess
 
     try:
@@ -54,7 +54,7 @@ def find_repo_root() -> Path:
 
 
 def resolve_req_dir(arg: str) -> Path:
-    """接受 req 目录路径，或裸 reqid（无斜杠）→ 解析到 requirements/active/<reqid>。
+    """接受 req 目录路径，或裸 reqid（无斜杠）→ 解析到 docs/modules/*/.req-meta.json。
 
     传目录路径时直接用 —— 文件落 caller 所在的 worktree（req worktree），
     随 req 分支 commit；不经 find_repo_root（那会指向主仓）。
@@ -64,8 +64,18 @@ def resolve_req_dir(arg: str) -> Path:
         return p
     if "/" in arg or p.exists():
         return p
-    # 裸 reqid —— 解析到 requirements/active/<reqid>
-    return find_repo_root() / "requirements" / "active" / arg
+    # 裸 reqid —— 扫 docs/modules/<模块>/.req-meta.json，按 id 或 branch 匹配。
+    root = find_repo_root()
+    modules_dir = root / "docs" / "modules"
+    if modules_dir.is_dir():
+        for meta_path in sorted(modules_dir.glob("*/.req-meta.json")):
+            try:
+                meta = json.loads(meta_path.read_text(encoding="utf-8"))
+            except Exception:
+                continue
+            if arg in {meta.get("id"), meta.get("branch"), meta_path.parent.name}:
+                return meta_path.parent
+    return modules_dir / arg
 
 
 def events_path(req_dir: Path) -> Path:
@@ -128,7 +138,7 @@ def cmd_append(args: argparse.Namespace) -> None:
         if args.reason:
             event["reason"] = args.reason
 
-    # Free-form payload —— 与 task-events.py 一致，不覆盖已有字段
+    # Free-form payload；不覆盖已有字段。
     if args.payload:
         try:
             payload = json.loads(args.payload)

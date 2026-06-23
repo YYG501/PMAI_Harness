@@ -167,11 +167,9 @@ for TMPL in "$FRAMEWORK_DIR/templates/"*.tmpl; do
     PRODUCT-RULES.md)       DEST="$TARGET_DIR/docs/PRODUCT-RULES.md" ;;
     TODO.md)                DEST="$TARGET_DIR/docs/TODO.md" ;;
     modules-INDEX.md)       DEST="$TARGET_DIR/docs/modules/INDEX.md" ;;
-    task.md|lark-publish.json)
-      # task.md: runtime framework .tmpl，skill 内部按 $PMAI_HOME/templates/ 直接调用（task-spec / task-confirm 多 skill 共用）
+    lark-publish.json)
       # lark-publish.json: 业务实例配置，下方 f3 段独立 cp（不走主 loop 占位符替换）
-      # 注：req-prd / implementation-design / codebase-audit / task-plan / module 已迁
-      #     skills/<skill>/templates/（req/task 周期产物 skill 自包含），不在本 loop。
+      # 注：当前流程的模块/PRD/审计模板由对应 skill 自带，不在本 loop。
       continue ;;
     settings.json)          DEST="$TARGET_DIR/.claude/settings.json" ;;
     gitignore)              DEST="$TARGET_DIR/.gitignore" ;;
@@ -235,12 +233,10 @@ mkdir -p "$TARGET_DIR/docs/归档"   # 扁平：过程档案 / 一次性 review 
 touch "$TARGET_DIR/docs/归档/.gitkeep"
 mkdir -p "$TARGET_DIR/docs/decisions"   # 项目决策记录（冻结档）：理路"为什么这么拼"的家；沉淀时按需冻
 touch "$TARGET_DIR/docs/decisions/.gitkeep"
-mkdir -p "$TARGET_DIR/requirements/active"
-mkdir -p "$TARGET_DIR/requirements/closed"
 mkdir -p "$TARGET_DIR/prototype"   # 单一主原型（单数）；SKILL C.5 用 create-next-app 在此起栈
 mkdir -p "$TARGET_DIR/.runs/events"
 mkdir -p "$TARGET_DIR/.worktrees"
-mkdir -p "$TARGET_DIR/.pm-workflow/tasks"   # task-verify 报告 / artifact 根目录
+mkdir -p "$TARGET_DIR/.pm-workflow/audits"   # build 三道审报告 / artifact 根目录
 echo "📂 目录结构已创建"
 
 # --- h2. mocks/ 探索变体目录（manifest 真相源 + 生成的看版页）---

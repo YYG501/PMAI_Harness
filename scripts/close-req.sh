@@ -14,7 +14,6 @@
 # 前置条件：
 #   1. 在主仓 cwd 运行（不在 req worktree 内）
 #   2. stage = 4（六步「沉淀」= MAX_STAGE；close-req/SKILL.md Phase 1 已 --to 4）
-#   3. 该模块下所有 task 已关闭
 
 set -euo pipefail
 
@@ -55,28 +54,6 @@ REQ_STAGE=$(printf '%s' "$REQ_META_JSON" | python3 -c "import sys,json; print(js
 if [ "$REQ_STAGE" != "4" ]; then
   echo "❌ 模块当前在 stage ${REQ_STAGE}，不是 stage 4（沉淀）。请先推进到沉淀阶段（/pmai-next）。" >&2
   exit 1
-fi
-
-# --- 校验所有 task 已关闭（task 系列 dormant：模块下通常无 tasks/，循环空过自动通过）---
-# 用 _lib.state.get_status 双兼容 v1/v2 格式
-TASKS_DIR="$REQ_DIR/tasks"
-if [ -d "$TASKS_DIR" ]; then
-  OPEN_TASKS=""
-  for TF in "$TASKS_DIR"/task-*.md; do
-    [ -f "$TF" ] || continue
-    case "$TF" in *.engineering.md) continue;; esac
-    STATUS=$(python3 -m _lib.state get_status "$TF" 2>/dev/null || echo "")
-    case "$STATUS" in
-      待执行|执行中)
-        OPEN_TASKS="${OPEN_TASKS}${TF}"$'\n'
-        ;;
-    esac
-  done
-  if [ -n "$OPEN_TASKS" ]; then
-    echo "❌ 以下 task 尚未关闭：" >&2
-    printf "%s" "$OPEN_TASKS" >&2
-    exit 1
-  fi
 fi
 
 # --- 判定 close 路径：有无分支 / worktree ---

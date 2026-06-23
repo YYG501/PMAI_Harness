@@ -57,11 +57,11 @@ python3 "$PMAI_HOME/scripts/status-view.py" --banner-only --skill NEW-REQ || tru
 
 PM 给描述后，把它当作参数继续步骤 1。
 
-> **流程总览（worktree 创建后置）**：本 skill 全程主对话 cwd **不切**到 worktree —— `/pmai-new-req` 入口（步骤 0）→ 编号 + slug（步骤 1，main 上）→ 项目底座兜底（步骤 2，main 上 commit）→ 范围确认对话 + 定稿门（步骤 3，chat 内存）→ 范围定稿**瞬间**拉 worktree + 一次性 commit req-plan / brief / attachments / .req-meta.json / tasks 骨架进 req 分支（步骤 4，用 `git -C <worktree>` 全程不 cd）→ handoff 让 PM 手动切窗口、发 `/pmai-next`（步骤 5）。**关键差异**：worktree 是隔离机制，PM 视角下 IDE 切分支这个事件应该由 PM 自己触发（步骤 5 切窗口 `cd`），不是 AI 在范围确认中段就替 PM 切。
+> **流程总览（worktree 创建后置）**：本 skill 全程主对话 cwd **不切**到 worktree —— `/pmai-new-req` 入口（步骤 0）→ 编号 + slug（步骤 1，main 上）→ 项目底座兜底（步骤 2，main 上 commit）→ 范围确认对话 + 定稿门（步骤 3，chat 内存）→ 范围定稿**瞬间**拉 worktree + 一次性 commit req-plan / brief / .req-meta.json 进模块目录（步骤 4，用 `git -C <worktree>` 全程不 cd）→ handoff 让 PM 手动切窗口、发 `/pmai-next`（步骤 5）。**关键差异**：worktree 是隔离机制，PM 视角下 IDE 切分支这个事件应该由 PM 自己触发（步骤 5 切窗口 `cd`），不是 AI 在范围确认中段就替 PM 切。
 
 ### 步骤 1：确定 req 编号
 
-调用 helper（封装了"扫三来源取 max"逻辑：closed 目录 / active 目录 / git 分支；事实来源是 git 分支，单独扫 closed/ 会被 active req 在自己分支上的事实骗到）：
+调用 helper（封装了"扫模块 meta + git 分支取 max"逻辑；事实来源是 git 分支，模块 meta 用于覆盖 main 上已经落地的 req 编号）：
 
 ```bash
 NEW_NUM=$(bash "$PMAI_HOME/scripts/_lib/req-num-resolver.sh" next "$REPO_ROOT")
@@ -69,7 +69,7 @@ echo "下一个可用编号：req-$NEW_NUM"
 
 ```
 
-helper 同时保证 `requirements/closed/` / `requirements/active/` / `git refs/heads/req-*` 三来源全扫——AI 调一行命令即可，不再凭印象判断。helper 自身见 `scripts/_lib/req-num-resolver.sh`。
+helper 同时保证 `docs/modules/*/.req-meta.json` / `git refs/heads/req-*` 两类来源全扫——AI 调一行命令即可，不再凭印象判断。helper 自身见 `scripts/_lib/req-num-resolver.sh`。
 
 从 PM 提供的需求描述顺手生成 slug（英文 kebab-case，2-4 个词），记在内存里供步骤 4 拉 worktree 用：
 
@@ -216,7 +216,7 @@ git -C "$REPO_ROOT" commit -m "chore(baseline): new-req 入口兜底 PRODUCT.md 
    ```
    有漏挂（docs/ 实存但 PRODUCT-STATE 索引没列）→ 一句话提示 PM「这几份文档没挂进现状索引，要不要我顺手补上」，PM 点头再补（补索引走 `/pmai-deposit` 或本需求 close 时）。不强制、不阻塞范围确认。
 
-> **读什么不读什么**：只读项目底座（PRODUCT-STATE / PRODUCT-RULES / DESIGN / 相关的项目决策记录）+ 主原型现状。**不**主动去翻 `requirements/closed/req-*` 的历史 req 文档（RAG 噪声，PM 需要时自己会让你读）。项目底座缺失（新项目还没沉淀过）→ 当作"白纸起步"，直接走清单，不报错。
+> **读什么不读什么**：只读项目底座（PRODUCT-STATE / PRODUCT-RULES / DESIGN / 相关的项目决策记录）+ 主原型现状。**不**主动去翻历史 req 文档（RAG 噪声，PM 需要时自己会让你读）。项目底座缺失（新项目还没沉淀过）→ 当作"白纸起步"，直接走清单，不报错。
 
 #### 3.1：选一条上坡路（AI 临场判断，不机械化）
 
@@ -291,7 +291,7 @@ brief 不再驱动任何重分析（原 brief→analysis→prd 前置链已砍�
 
 **禁止**：
 - AI 主动调用 `/office-hours` 或任何 review/research skill 替 PM 跑 —— office-hours 是 PM 自主使用的可选 aid（见 3.1 护栏），不是 new-req 流程的一环
-- 在 PM 给出方向前去读 `requirements/closed/req-*` 的历史 req 文档 — RAG 噪声，PM 需要时自己会让你读（项目底座例外，3.0 必读）
+- 在 PM 给出方向前去读历史 req 文档 — RAG 噪声，PM 需要时自己会让你读（项目底座例外，3.0 必读）
 - 自作主张提"我先了解一下背景再问你" — 破坏对话节奏
 - 机械抛固定数量岔路口 — 必须按 3.1 临场判断，简单需求直奔清单
 
@@ -332,7 +332,7 @@ PM 视图 chat 一行确认（**禁工程黑话**，不输出 cp 命令 / 绝对
 
 #### trigger 2 砍
 
-PM 手动 cp 进 attachments/ + AI 扫目录补 register 这条路径在本流程**不存在**：worktree 还没建，`requirements/active/<req>/attachments/` 这个路径不存在，PM 无 cp 目标。PM 想绕 chat 直接 cp → 等步骤 5 handoff 后在 worktree 新对话里做（由 build 期 attachments trigger 兜底）。
+PM 手动 cp 进附件目录 + AI 扫目录补 register 这条路径在本流程**不存在**：worktree 还没建，`docs/inputs/attachments/` 目标尚未归属到本 req。PM 想绕 chat 直接 cp → 等步骤 5 handoff 后在 worktree 新对话里做（由 build 期附件 trigger 兜底）。
 
 #### 引用 section 渲染（推迟到步骤 4C）
 
@@ -341,7 +341,7 @@ PM 手动 cp 进 attachments/ + AI 扫目录补 register 这条路径在本流�
 ```markdown
 ## 📎 参考材料
 
-- `attachments/brief-user-interview.pdf` — 用户访谈记录（30 页，重点 §3 痛点）
+- `docs/inputs/attachments/brief-user-interview.pdf` — 用户访谈记录（30 页，重点 §3 痛点）
 ```
 
 按 `registered_at` 升序。无附件（PENDING_ATTACHMENTS 为空）→ 不渲染 section。
@@ -384,7 +384,7 @@ ACTIVE_REQ_DIR=$(printf '%s\n' "$REQ_JSON" | python3 -c 'import json,sys; print(
 REQ_REL=$(printf '%s\n' "$REQ_JSON" | python3 -c 'import json,sys; print(json.load(sys.stdin)["req_rel"])')
 ```
 
-脚本负责保证状态契约一致：`requirements/active/<req>/`、`.req-meta.json`、`tasks/_archived/`、`attachments/.gitkeep`、worktree 路径与分支名一次性落盘。`--no-brief` 让脚本只建骨架，req-plan.md / brief.md 由 4C 自己写（脚本只管状态契约，文档内容是 skill 的事）。**worktree 从 main 拉**，自动带上步骤 2 commit 的项目底座。不要在 skill 里另手写一套 meta schema，避免 human path 和 headless TTHW path 漂移。
+脚本负责保证状态契约一致：`docs/modules/<模块>/.req-meta.json`、worktree 路径与分支名一次性落盘。`--no-brief` 让脚本只建状态骨架，req-plan.md / brief.md 由 4C 自己写（脚本只管状态契约，文档内容是 skill 的事）。**worktree 从 main 拉**，自动带上步骤 2 commit 的项目底座。不要在 skill 里另手写一套 meta schema，避免 human path 和 headless TTHW path 漂移。
 
 #### 4B：batch cp attachments（步骤 3.5 PENDING_ATTACHMENTS 非空时）
 
@@ -415,7 +415,7 @@ attachments = list_attachments_seen(Path(ACTIVE_REQ_DIR))
 final_plan = REQ_PLAN_DRAFT_FROM_STEP3   # 范围清单节 + 决策页节
 if attachments:
     final_plan += "\n\n## 📎 参考材料\n\n" + "\n".join(
-        f"- `attachments/{a['name']}` — {a.get('hint', '')}".rstrip(" —")
+        f"- `{a['name']}` — {a.get('hint', '')}".rstrip(" —")
         for a in attachments
     )
 
@@ -429,14 +429,14 @@ if attachments:
 git -C "$WORKTREE_DIR" add \
   "$REQ_REL/req-plan.md" \
   "$REQ_REL/brief.md" \
-  "$REQ_REL/.req-meta.json" \
-  "$REQ_REL/tasks" \
-  "$REQ_REL/attachments"
+  "$REQ_REL/.req-meta.json"
+
+[ -d "$WORKTREE_DIR/docs/inputs" ] && git -C "$WORKTREE_DIR" add "docs/inputs"
 
 git -C "$WORKTREE_DIR" commit -m "范围确认: req-$NEW_NUM-<slug>"
 ```
 
-commit 范围限于本 req 目录内的文件 —— req-plan.md / brief.md / .req-meta.json / tasks/ 骨架 / attachments/（含 .gitkeep + 实际附件）。`docs/PRODUCT.md` / `docs/DESIGN.md` 已在步骤 2C commit 到 main，不在本 commit 范围。
+commit 范围限于本 req 目录内的文件 —— req-plan.md / brief.md / .req-meta.json；附件如有则纳入 `docs/inputs/`。`docs/PRODUCT.md` / `docs/DESIGN.md` 已在步骤 2C commit 到 main，不在本 commit 范围。
 
 commit 完成 → working tree clean，满足 INVARIANTS I-AD5 / I-DC1（dispatch 前 working tree 必须 clean），步骤 5 handoff 后 PM 想 `git worktree remove` 不会撞 dirty tree。
 
@@ -484,6 +484,6 @@ req-plan.md 已 commit 后，**当前主对话不再继续 build**。`/pmai-new-
 - 步骤 2 项目底座兜底（PRODUCT.md / DESIGN.md）在主仓 main 上做并 commit 到 main —— 这两份是项目级的项目底座不是 req 级，进 main 是语义正确；worktree 在步骤 4 从 main 拉时自动带上
 - 步骤 3.5 attachments：trigger 0/1 仅记内存 list `PENDING_ATTACHMENTS`，不调 helper；实际 cp + register 在步骤 4B batch 执行。**trigger 2 砍** —— worktree 还没建无 cp 目标；PM 想绕 chat 等 handoff 后在 worktree 新对话里做
 - 步骤 4 原子性：4A 拉 worktree → 4B batch cp attachments → 4C 写 req-plan.md + brief.md → 4D 一次 commit。全程用 `git -C <worktree>` 不切 cwd；任一子步失败 fail-loud + 让 PM 手动清理 / `git worktree remove` 回滚
-- commit 范围限于本 req 目录内的文件（req-plan.md / brief.md / .req-meta.json / tasks/ / attachments/）。`docs/PRODUCT.md` / `docs/DESIGN.md` 已在步骤 2C 单独 commit 到 main，不在 4D 范围
+- commit 范围限于本 req 目录内的文件（req-plan.md / brief.md / .req-meta.json）和 `docs/inputs/` 附件。`docs/PRODUCT.md` / `docs/DESIGN.md` 已在步骤 2C 单独 commit 到 main，不在 4D 范围
 - I-AD5 / I-DC1（dispatch 前 working tree 必须 clean）由步骤 4D commit 保证：commit 完成 → worktree clean → 步骤 5 handoff 后 PM `git worktree remove` 不会撞 dirty tree
 - handoff 指向 `/pmai-next`（六步推进驱动），不指向旧的 `/pmai-req-stage-gate`

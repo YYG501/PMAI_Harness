@@ -42,32 +42,6 @@ test_reject_if_stage_not_4() {
 }
 
 # =================================================
-# I-CR2: reject when there are open tasks
-# =================================================
-test_reject_if_open_tasks_exist() {
-  start_test "I-CR2 reject when there are open tasks"
-  fixture_setup
-
-  req_dir=$(fixture_create_req "req-001" "test" 4)
-  # Create a task with status 执行中 (open) — 直接落在 docs/modules/<分支>/tasks/
-  task=$(fixture_create_task "$req_dir" "001" "stillopen" "执行中" "/qa")
-
-  if (cd "$FIXTURE_DIR" && bash "$CLOSE_REQ" "$req_dir") >/tmp/out.$$ 2>/tmp/err.$$; then
-    _fail "should reject when task is still open"
-  else
-    if grep -q "尚未关闭" /tmp/err.$$; then
-      pass_test
-    else
-      _fail "stderr missing open-tasks message"
-      cat /tmp/err.$$ >&2
-    fi
-  fi
-
-  rm -f /tmp/out.$$ /tmp/err.$$
-  fixture_teardown
-}
-
-# =================================================
 # I-CR3/CR5（方案 A 新语义）：无分支 → 走 main 直接清 .req-meta，不再拒绝
 # =================================================
 test_no_branch_closes_via_main() {
@@ -283,34 +257,6 @@ test_happy_path_close_req() {
 }
 
 # =================================================
-# Extra: happy path with a closed task present
-# =================================================
-test_happy_path_with_completed_task() {
-  start_test "happy path: close-req works when req has a 已完成 task"
-  fixture_setup
-
-  req_dir=$(fixture_create_req "req-001" "test" 4)
-  task=$(fixture_create_task "$req_dir" "001" "done" "已完成" "/qa")
-
-  if (cd "$FIXTURE_DIR" && bash "$CLOSE_REQ" "$req_dir") >/tmp/out.$$ 2>/tmp/err.$$; then
-    # 模块下的 task 文件随三件套留在 main（不再有 closed/ 归档）
-    main_task="$FIXTURE_DIR/docs/modules/req-001-test/tasks/task-001-done.md"
-    if [ -f "$main_task" ]; then
-      pass_test
-    else
-      _fail "task file should remain under module on main"
-      ls "$FIXTURE_DIR/docs/modules/req-001-test/tasks" >&2 2>&1 || true
-    fi
-  else
-    _fail "close-req failed with completed task present"
-    cat /tmp/err.$$ >&2
-  fi
-
-  rm -f /tmp/out.$$ /tmp/err.$$
-  fixture_teardown
-}
-
-# =================================================
 # I-CR9b: on merge failure, req branch is reset to pre-close (module .req-meta still present)
 # =================================================
 test_merge_failure_rolls_back_req_branch() {
@@ -412,7 +358,6 @@ test_reject_if_req_worktree_has_unrelated_dirty_changes() {
 # Run all tests
 # =================================================
 test_reject_if_stage_not_4
-test_reject_if_open_tasks_exist
 test_no_branch_closes_via_main
 test_no_worktree_closes_via_main
 test_reject_when_cwd_inside_req_worktree
@@ -420,7 +365,6 @@ test_reject_if_req_worktree_has_unrelated_dirty_changes
 test_reject_on_merge_conflict_no_partial_state
 test_archive_committed_before_merge
 test_happy_path_close_req
-test_happy_path_with_completed_task
 test_merge_failure_rolls_back_req_branch
 
 report_results "close-req"

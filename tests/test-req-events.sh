@@ -2,7 +2,7 @@
 # Tests for scripts/req-events.py（delta-7 vp-1 —— req 级内容性事件流）
 #
 # 验证：
-# - append decision → 一行合法 jsonl，event=decision，公共信封字段 timestamp（对齐 task-events.py，非 ts）
+# - append decision → 一行合法 jsonl，event=decision，公共信封字段 timestamp（非 ts）
 # - append adjustment → 一行合法 jsonl，event=adjustment
 # - list → 折叠成可读时间线（decision / adjustment 分组 + 计数）
 # - 文件落 <req-dir>/req-events.jsonl（tracked 路径，非 .runs/）
@@ -18,11 +18,14 @@ source "$SCRIPT_DIR/helpers/assert.sh"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 REQ_EVENTS="$REPO_ROOT/scripts/req-events.py"
 
-# 建临时 req 目录（不需 git，除 tracked 测试外）
+# 建临时模块 req 目录（不需 git，除 tracked 测试外）
 _make_req_dir() {
   local tmp; tmp=$(mktemp -d "${TMPDIR:-/tmp}/reqevt.XXXXXX")
-  mkdir -p "$tmp/requirements/active/req-001-test"
-  echo "$tmp/requirements/active/req-001-test"
+  mkdir -p "$tmp/docs/modules/req-001-test"
+  cat > "$tmp/docs/modules/req-001-test/.req-meta.json" <<'JSON'
+{"id":"req-001","branch":"req-001-test","stage":2,"status":"active"}
+JSON
+  echo "$tmp/docs/modules/req-001-test"
 }
 
 # -----------------------------------------------------------------
@@ -68,8 +71,8 @@ test_append_adjustment() {
   start_test "append adjustment → 合法 jsonl 一行，event=adjustment"
   local rd; rd=$(_make_req_dir)
   python3 "$REQ_EVENTS" append "$rd" --type adjustment \
-    --source close-task@6 \
-    --from-task task-003 \
+    --source build-review@3 \
+    --from-task build-review \
     --prd-anchor "§六 功能3" \
     --before "PRD 原定弹窗确认" \
     --after "实际做成 inline 提示" \
@@ -79,7 +82,7 @@ test_append_adjustment() {
 import json
 e=json.loads(open('$f').readline())
 assert e['event']=='adjustment', e
-assert e['from_task']=='task-003', e
+assert e['from_task']=='build-review', e
 assert e['before']=='PRD 原定弹窗确认', e
 assert e['after']=='实际做成 inline 提示', e
 assert 'timestamp' in e, e
@@ -130,8 +133,11 @@ test_list_missing_file() {
 test_tracked_path() {
   start_test "req-events.jsonl 落 req 目录、git add 不被拦（tracked）"
   local tmp; tmp=$(mktemp -d "${TMPDIR:-/tmp}/reqevt.XXXXXX")
-  local rd="$tmp/requirements/active/req-001-test"
+  local rd="$tmp/docs/modules/req-001-test"
   mkdir -p "$rd"
+  cat > "$rd/.req-meta.json" <<'JSON'
+{"id":"req-001","branch":"req-001-test","stage":2,"status":"active"}
+JSON
   (
     cd "$tmp"
     git init -b main -q
@@ -141,7 +147,7 @@ test_tracked_path() {
   )
   python3 "$REQ_EVENTS" append "$rd" --type decision --decision "x" --decided-by pm-explicit >/dev/null 2>&1
   # git add 后 git status 该文件 staged
-  (cd "$tmp" && git add requirements/active/req-001-test/req-events.jsonl) 2>/dev/null
+  (cd "$tmp" && git add docs/modules/req-001-test/req-events.jsonl) 2>/dev/null
   local staged; staged=$(cd "$tmp" && git diff --cached --name-only)
   if echo "$staged" | grep -q "req-events.jsonl"; then
     pass_test

@@ -22,7 +22,7 @@
 
 ### 实现深度指引
 
-> 以下是 task-execute 阶段 AI 写代码时的深度参考。PM 可手改任意条；
+> 以下是 build 阶段 AI 写代码时的深度参考。PM 可手改任意条；
 > 删除上方 auto-detected 标后视为 PM 手填，框架不再覆盖。
 
 - **数据层**：真实持久化（IndexedDB / 后端 API / 数据库），跨页状态由 store / context 承载。
@@ -36,10 +36,10 @@
 
 ### 文档输出深度指引
 
-> 以下是 task-spec 阶段 AI 写 task 单文件 typed contract「执行区」工程内容时的深度参考。
+> 以下是 build prompt 生成时的工程内容深度参考。
 > PM 可手改任意条；删除上方 auto-detected 标后视为 PM 手填，框架不再覆盖。
 
-_PM 填_：本档下 task 文件「执行区」工程内容的深度参考。
+_PM 填_：本档下 build prompt 工程内容的深度参考。
 等到第一个真实 system 项目跑出来后基于实证写规则；现在留空。
 常见维度：强制引用规则（避免重写上游）、各执行区段展开深度。
 

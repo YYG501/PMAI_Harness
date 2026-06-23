@@ -1,8 +1,7 @@
 ---
 name: _shared/term-detector
 description: |
-  业务词 / 角色发现检测器（共享逻辑）。**当前只在 `close-req` Phase 1
-  调用一次**，识别本 req 真实落地的新业务词 / 角色，
+  业务词 / 角色发现检测器（共享逻辑）。当前由 `/close` 调用，识别本次工作真实落地的新业务词 / 角色，
   patch 进 PRODUCT 业务术语表 / 用户画像。
 ---
 
@@ -11,29 +10,28 @@ description: |
 > ** 共享 detector**。不是 user-facing skill，而是写作 skill 的共
 > 享逻辑落点。
 >
-> **设计**：从早期 brief / analysis / prd 三处调用收敛到 close-req 一处 —— 业务实体真正稳定要等 task 都执行完、PRD 已 as-built 反向对齐；PRD 阶段就 patch 长期术语表偏早。本 req 范围内的临时词典职责由 `prd.md §三 名词解释` 承担（被 `implementation-design` 和 `task-spec` 显式 Required Inputs 当词典必读）。
+> **设计**：业务实体真正稳定要等 design/build/复审完成后再沉淀；PRD 写作阶段不直接 patch 长期术语表。本次工作内的临时词典职责由模块 `discussion.md` / `decisions.md` 或 PRD §三名词解释承担。
 
 ## 何时调用
 
 | 调用 skill | 调用位置 | 输入文件 |
 |---|---|---|
-| `close-req` | Phase 1 步骤 3.4（req 推进到沉淀阶段之后、里程碑追加询问之前） | `prd.md` + 全部 `tasks/closed/*.md`（不扫 `.engineering.md`） |
+| `/close` | 术语回写步骤 | 涉及模块 `discussion.md` / `decisions.md` / `spec.md` + 按需 `prd.md` |
 
 **禁止位置**：
-- `new-req` 写 brief（已退场）：PM 修辞密度高、业务词还没沉淀
-- `/design` 探索段（`req-questioning`）写 discussion 第一节 / `req-stage-gate` B 分支 office-hours（已退场）：业务词还在变
-- `prd-writing` 写 prd.md（已退场）：业务实体未经 task 落地验证；本 req 临时词典职责改由 `prd.md §三 名词解释` 承担
+- `new-req` 刚起需求：PM 修辞密度高、业务词还没沉淀
+- `/design` 探索中：业务词还在变
+- `prd-writing` 写 prd.md：PRD 是评审产物，不直接升级长期术语
 - 写工程合同（`.engineering.md`）：工程层允许技术词，误报率高
-- close-task：单 task 收尾不催，统一推迟到 close-req
 
 ## 临时词典 vs 长期词典
 
 | 层级 | 文件 | 谁写 | 谁读 |
 |---|---|---|---|
-| **本 req 临时词典** | `prd.md §三 名词解释` | `prd-writing` 写 PRD 时 AI 直接写 | `implementation-design` / `task-spec` 必读 |
-| **跨 req 长期词典** | `docs/PRODUCT.md ## 业务术语表` | `close-req` 步骤 3.4 detector + PM 确认 → patch | `implementation-design` / `task-spec` 必读 |
+| **本次工作临时词典** | 模块 `discussion.md` / `decisions.md` 或 `prd.md §三 名词解释` | design / prd-writing | build / close 按需读 |
+| **跨 req 长期词典** | `docs/PRODUCT.md ## 业务术语表` | `/close` detector + PM 确认 → patch | design / build / prd-writing 必读 |
 
-两份词典在 build 阶段是**并集读**：PRODUCT 是已沉淀的稳定基线，PRD §三 是本 req 新引入还未升级的临时词。close-req 时 detector 把本 req 真稳定下来的词从临时词典 promote 到长期词典。
+两份词典在 build 阶段是**并集读**：PRODUCT 是已沉淀的稳定基线，模块 discussion/decisions 或 PRD §三是本次新引入还未升级的临时词。`/close` 时 detector 把真稳定下来的词 promote 到长期词典。
 
 ## 如何调用
 

@@ -7,16 +7,10 @@ SUITES=(
   test-check-branch.sh
   test-req-num-resolver.sh
   test-check-open-questions.sh
-  test-task-transition.sh
-  test-fixture-v2.sh
   test-lark-adapter.sh
   test-lark-cli-lint.sh
   test-publish-to-lark-e2e.sh
-  test-check-req-doc-drift.sh
   test-req-events.sh
-  test-implementation-design.sh
-  test-product-rules.sh
-  test-check-task-scope.sh
   test-structure-schema.sh
   test-detect-project-structure.sh
   test-inject-structure.sh
@@ -29,11 +23,6 @@ SUITES=(
   test-banner-label.sh
   test-narrative-mode.sh
   test-tthw-smoke.sh
-  test-business-deviation.sh
-  test-task-spec.sh
-  test-task-pm-feedback.sh
-  test-task-plan.sh
-  test-doc-update.sh
   test-req-stage-gate.sh
   test-req-transition.sh
   test-migrate-reqs.sh
@@ -44,12 +33,6 @@ SUITES=(
   test-stage-source-helper.sh
   test-state-lib.sh
   test-attachments-helper.sh
-  test-close-task.sh
-  test-worktree-lock.sh
-  test-executors.sh
-  test-close-task-design-feedback.sh
-  test-close-task-alignment.sh
-  test-task-md-ownership.sh
   test-close-req.sh
   test-cleanup-pending.sh
   test-cancel-req.sh
@@ -62,13 +45,8 @@ SUITES=(
   test-setup-deps.sh
   test-run-bg.sh
   test-pre-commit-hook.sh
-  test-pre-dispatch-doc-gate.sh
   test-prd-hierarchy-lint.sh
   test-publish-to-lark-rowspan-merge.sh
-  v4_T13_status_summary.sh
-  v4_T14_taskexec_short_id.sh
-  v4_T16_taskexec_double_scan.sh
-  v4_T23_dependency_gate.sh
   test-quick-fix-skill.sh
   quick-fix/test-happy-path.sh
   quick-fix/test-tsc-gate.sh
@@ -76,11 +54,6 @@ SUITES=(
   quick-fix/test-redline-enforcement.sh
   quick-fix/test-cleanup.sh
   quick-fix/test-sanitize.sh
-  e2e/test-full-task-loop.sh
-  e2e/test-doc-update-failure-recovery.sh
-  # e2e/test-skip-doc-update-recovery.sh 已删（D13 final polish-10, --skip-doc-update flag 废弃）
-  e2e/test-pushback-loop.sh
-  e2e/v4_T22_single_window_lifecycle.sh
 )
 
 TOTAL_PASS=0

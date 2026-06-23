@@ -6,9 +6,9 @@ description: |
 
 # /build
 
-> 这是改造后的 **大需求建造入口**。和老的 task 状态机不一样：不拆 task、不走「待执行 / 执行中 / 已完成」状态机、不开 typed-contract 三区。它对着**模块规格** `docs/modules/<模块>/spec.md` 建，建完 review loop + 三道审，再 merge 回 main。
+> 这是改造后的 **大需求建造入口**。它不拆任务卡、不走独立任务状态机。它对着**模块规格** `docs/modules/<模块>/spec.md` 建，建完 review loop + 三道审，再 merge 回 main。
 >
-> 老的 `task-*`（task-plan / task-spec / task-confirm / task-execute / task-verify / submit / close-task）都进 **dormant**，并行多 task 才激活。本 skill 不依赖它们的状态机，只复用它们底下的两件无状态资产：**exec-adapter**（可插拔执行器）和 **build-audits.py**（三道审编排）。
+> 本 skill 只依赖两类通用资产：**exec-adapter**（可插拔执行器）和 **build-audits.py**（三道审编排）。二者不绑定任务卡。
 
 ## When To Use
 
@@ -32,9 +32,12 @@ description: |
 ```bash
 source "$HOME/.pmai/scripts/skill-preamble.sh"
 echo "SKILL: build"
+
+# 视觉锚点（见 _shared/pm-view/banner-rules.md §1）
+python3 "$PMAI_HOME/scripts/status-view.py" --banner-only --skill BUILD || true
 ```
 
-preamble 会解析出 `PMAI_HOME` / `MAIN_REPO_ROOT` / `REPO_ROOT` / `BRANCH`。后续命令都用这些绝对路径锚点，**不依赖会话 cwd**（理由同 task-execute：worktree 在 `.worktrees/` 下可能不在会话子树内，cwd 会被沙盒 reset）。
+preamble 会解析出 `PMAI_HOME` / `MAIN_REPO_ROOT` / `REPO_ROOT` / `BRANCH`。后续命令都用这些绝对路径锚点，**不依赖会话 cwd**：worktree 在 `.worktrees/` 下可能不在会话子树内，cwd 会被沙盒 reset。
 
 ## Workflow
 
@@ -50,7 +53,7 @@ preamble 会解析出 `PMAI_HOME` / `MAIN_REPO_ROOT` / `REPO_ROOT` / `BRANCH`。
    - `spec.md` 在 → `@读` 它（信息模型 + 业务规则 + 字段口径 + 状态机 + 文案就是建造契约），再 `@读` 同模块 `decisions.md`（为什么这么定，避免建造时推翻已拍的决策）。
 3. **确认这是大需求**。如果看下来其实是小改（一两处字段 / 文案 / 局部调整），一句话提示 PM「这个改动不大，直接在 prototype/ 改掉就行、不用单开建造流程」，征得同意后**退出 /build**，按小改直接动 prototype/（main 上，无 worktree）。大需求才继续步骤 1。
 
-> 为什么对着 spec.md 不对着 task 文件：改造后唯一组织单位是功能模块，模块规格 = 唯一真相源（信息模型理清的结论就写在里面，不另起文件）。build 的覆盖审计锚点从「范围清单」改成「模块规格」。
+> 为什么对着 spec.md：改造后唯一组织单位是功能模块，模块规格 = 唯一真相源（信息模型理清的结论就写在里面，不另起文件）。build 的覆盖审计锚点是「模块规格」。
 
 ### 步骤 1：PM 选要不要开隔离环境建（worktree 可选）
 
@@ -99,7 +102,7 @@ git -C "$MAIN_REPO_ROOT" worktree add -b "$BUILD_BRANCH" "$BUILD_DIR" main
 
 ### 步骤 2：PM 选用什么工具建（执行器可选）
 
-改造后的核心灵活点：**PM 选谁来建**。复用 exec-adapter 那套可插拔执行器（已落地 `scripts/exec-adapters/{codex,cursor-agent,gemini,manual}.sh` + claude-code 的独立 subagent 路径）。
+改造后的核心灵活点：**PM 选谁来建**。`/build` 提供通用执行器入口（`scripts/exec-adapters/{codex,cursor-agent,gemini,manual}.sh` + claude-code 的独立 subagent 路径），执行器只负责按 prompt 改 `BUILD_DIR/prototype/`，不碰阶段状态。
 
 AskUserQuestion：
 - `question`: "用什么来建？"
@@ -113,13 +116,13 @@ AskUserQuestion：
   - `label`: `我自己建`
     `description`: `你手动改，我只在建完帮你跑检查`
 
-**PM 答题处理**（映射到 exec-adapter 的执行器名）：
+**PM 答题处理**（映射到 build executor 名）：
 - `Claude Code` / 输 `1` → `EXECUTOR=claude-code`
 - `Codex` / 输 `2` → `EXECUTOR=codex`
 - `Cursor` / 输 `3` → `EXECUTOR=cursor-agent`
 - `我自己建` / 输 `4` → `EXECUTOR=manual`
 
-> **executor 来源差异（与老 task-execute 的关键区别）**：老流程从 task 卡 `executor` 字段读，本 skill **直接问 PM**（PM 选工具是改造后的明确诉求）。settings.json 里若配了 `executor.default` 可作为 AskUserQuestion 的默认高亮项，但仍由 PM 当场拍。`executor_model` 留空走 settings 默认（不另外问 PM 模型，除非 PM 主动提）。
+> **executor 来源**：本 skill **直接问 PM** 用什么工具建。settings.json 里若配了 `executor.default` 可作为 AskUserQuestion 的默认高亮项，但仍由 PM 当场拍。`executor_model` 留空走 settings 默认（不另外问 PM 模型，除非 PM 主动提）。
 
 ### 步骤 3：建之前先把 DESIGN.md 读进 context（硬规则）
 
@@ -158,15 +161,14 @@ BASELINE_SHA=$(git -C "$BUILD_DIR" rev-parse HEAD)
 
 subagent 返回后回到本驱动跑 4c / 4d。
 
-#### 4b：codex / cursor-agent / gemini / manual = 走 exec-adapter
+#### 4b：codex / cursor-agent / gemini / manual = 走 build adapter
 
-复用现成 adapter（独立 CLI 进程；adapter 约定改动落 `BUILD_DIR` 且 unstaged，不自己 commit）：
+调用通用 build adapter（独立 CLI 进程；adapter 约定改动落 `BUILD_DIR` 且 unstaged，不自己 commit）：
 
 ```bash
 PROMPT_FILE=$(mktemp)
-# prompt 用模块规格当契约（不是 task 文件）。spec.md 全文 + DESIGN.md 约束 + 隔离纪律。
-# 注：build-execution-prompt.py 入参是 task 文件，本 skill 不走 task；直接把 spec.md +
-#     DESIGN.md + 上面那段隔离纪律拼成 prompt 写进 $PROMPT_FILE 即可（无 task 卡可读）。
+# prompt 用模块规格当契约。直接把 spec.md + DESIGN.md + 上面那段隔离纪律
+# 拼成 prompt 写进 $PROMPT_FILE。
 
 if [ "$EXECUTOR" = "manual" ]; then
   echo "请在 $BUILD_DIR/prototype/ 里按 docs/modules/<模块>/spec.md 建，建完回来发 /build 继续（我跳过执行器、直接帮你跑检查）。"
@@ -178,18 +180,15 @@ ADAPTER="$PMAI_HOME/scripts/exec-adapters/${EXECUTOR}.sh"
 [ -x "$ADAPTER" ] || { echo "❌ 找不到 adapter：$ADAPTER"; exit 1; }
 LOG="$MAIN_REPO_ROOT/.runs/build-${EXECUTOR}.log"; mkdir -p "$MAIN_REPO_ROOT/.runs"
 
-# adapter 入参用环境变量（沿用 adapter 契约）。注意：现成 adapter 的 _gate.sh 里
-# adapter_precheck / adapter_postcheck 默认锚 task 状态机 + task allowlist——本 skill 无 task。
-# 调用时显式不走 task gate：把 TASK_FILE 留空、I-AD1 状态 gate 不适用（本 skill 自管
-# clean tree + 下面的越界/零改动检查兜底）。若 adapter 强依赖 TASK_FILE，传一个指向 spec.md
-# 的占位、并在 build 侧用 4c 越界检查 + 4d 零改动检查替代 adapter_postcheck 的 task scope 校验。
-MAIN_REPO_ROOT="$MAIN_REPO_ROOT" TASK_WORKTREE="$BUILD_DIR" PROMPT_FILE="$PROMPT_FILE" \
+# adapter 入参用环境变量。build 自己负责 clean tree、越界检查和零改动检查；
+# adapter 只负责把执行器跑起来。
+MAIN_REPO_ROOT="$MAIN_REPO_ROOT" BUILD_DIR="$BUILD_DIR" MODULE_NAME="<模块>" PROMPT_FILE="$PROMPT_FILE" \
   bash "$ADAPTER" > "$LOG" 2>&1
 EXIT_CODE=$?
 [ "$EXIT_CODE" -ne 0 ] && { echo "❌ 执行器失败（exit $EXIT_CODE），日志：$LOG。可换工具重建或改用「我自己建」。"; git -C "$BUILD_DIR" restore . 2>/dev/null; git -C "$BUILD_DIR" clean -fd 2>/dev/null; exit 0; }
 ```
 
-> 超 10 分钟会被 Bash tool timeout：改用 `scripts/run-bg.sh` 后台跑 + Bash run_in_background 起 waiter（`until [ -f "$LOG.exit" ] || [ -f "$LOG.stall" ]; do sleep 60; done`），同 task-execute 逃生路径。
+> 超 10 分钟会被 Bash tool timeout：改用 `scripts/run-bg.sh` 后台跑 + Bash run_in_background 起 waiter（`until [ -f "$LOG.exit" ] || [ -f "$LOG.stall" ]; do sleep 60; done`）。
 
 #### 4c：越界写保护（轻量）
 
@@ -201,7 +200,7 @@ build 改动应集中在 `prototype/`。`docs/*` 改动**默认不属于 build �
 done
 ```
 
-> 不复用 `check-task-scope.py`（它锚 task allowlist，本 skill 无 task）。本 skill 用「docs/* = 越界」这条简单规则即可——大需求建造改的就是 prototype/。命中越界给 PM 看，PM 决定回退还是放行（不静默吞）。
+> 本 skill 用「docs/* = 越界」这条简单规则即可——大需求建造改的就是 prototype/。命中越界给 PM 看，PM 决定回退还是放行（不静默吞）。
 
 #### 4d：零改动检查
 
@@ -238,9 +237,9 @@ done
 
 ### 步骤 6：建完三道审（覆盖 / 视觉 / 行为，复用 build-audits.py）
 
-建完 AI **自动**跑三道机器审，复用 task-execute 那套 `build-audits.py` 编排（确定性收集 + 合成一份给 PM；只报不改，是给 PM 看的证据，不替 PM 拍板）。
+建完 AI **自动**跑三道机器审，走 `build-audits.py` 编排（确定性收集 + 合成一份给 PM；只报不改，是给 PM 看的证据，不替 PM 拍板）。
 
-> **锚点已敲死**（2026-06-21 开放问题实施 B3——撤销原"两种落地实施时择一"，把工程决策推给运行时=锚点悬空，是同构错第 5 处）：本 skill 无 task / 无 req-plan，覆盖审计锚点统一是**模块规格 `spec.md`**。`build-audits.py` 已**参数化锚点**（`--range-list` / `--audit-dir` / `--label`；不传时仍回退 `req-plan.md` + `tasks/<task>/audits`，dormant task-* 行为不变）。**统一接脚本**，复用其 fail-loud「三道齐全」校验——覆盖审计是防残承重墙，不走纯 AI 自跑（避免静默漏一道审还往下走）：
+> **锚点已敲死**：覆盖审计锚点统一是**模块规格 `spec.md`**。`build-audits.py` 已参数化锚点（`--range-list` / `--audit-dir` / `--label`）。统一接脚本，复用其 fail-loud「三道齐全」校验——覆盖审计是防残承重墙，不走纯 AI 自跑（避免静默漏一道审还往下走）：
 > ```bash
 > SPEC="$BUILD_DIR/docs/modules/<模块>/spec.md"   # 锚点文件=模块规格（定位仓根 + 覆盖审计逐项锚点）
 > python3 "$PMAI_HOME/scripts/build-audits.py" resolve "$SPEC" \
@@ -325,8 +324,8 @@ PM 拍 `可以，收尾` → build 的活到此为止，**merge 回 main + 文�
 ## Rules
 
 - **只大需求走 build**。讨论（改文档）/ 小改（一两处字段 / 文案 / 局部）不走这——在 main 上由 `/design` 或直接改 prototype/ 完成，无 worktree。步骤 0 判出是小改 → 退出 build。
-- **对着模块规格建，不对着 task**。覆盖审计锚点 = `docs/modules/<模块>/spec.md`（不是 req-plan / task 卡）。不拆 task、不走 task 状态机、不开 typed-contract 三区——那套（task-*）dormant，并行多 task 才激活。
-- **PM 选工具**（claude-code / codex / cursor-agent / manual，复用 exec-adapter）**+ PM 选要不要 worktree**（步骤 1 / 步骤 2 两道 PM 决策）。executor 从问 PM 拿，不从 task 卡读。
+- **对着模块规格建**。覆盖审计锚点 = `docs/modules/<模块>/spec.md`。不拆任务卡、不走独立任务状态机。
+- **PM 选工具**（claude-code / codex / cursor-agent / manual，复用 exec-adapter）**+ PM 选要不要 worktree**（步骤 1 / 步骤 2 两道 PM 决策）。executor 从问 PM 拿。
 - **worktree 可选、统一挂 `.worktrees/<分支>/`**。开了就用 `git -C "$BUILD_DIR"` / subshell，禁 `cd` 进 worktree（cwd 护栏）；没开则 `BUILD_DIR="$REPO_ROOT"`、main 上直接建（main 写保护已放宽）。
 - **claude-code = 派独立 build subagent**（Agent 工具），不在驱动上下文 inline 建（隔离 + 角色分离 + 不刷 PM 屏）；codex / cursor-agent / gemini / manual 走现成 exec-adapter。一次只建本模块这一片。
 - **建之前必读 DESIGN.md**（cat echo 进 context）+ 模块规格当契约；先扫已有组件复用、不重写。

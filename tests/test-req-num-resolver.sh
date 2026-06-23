@@ -45,6 +45,21 @@ _add_branch_req() {
   git -C "$repo" branch "req-${num}-${slug}" main 2>/dev/null
 }
 
+# 真相源（lifecycle 迁移后）：docs/modules/<分支>/.req-meta.json（active req）
+_add_module_req() {
+  local repo="$1" num="$2" slug="${3:-test}"
+  mkdir -p "$repo/docs/modules/req-${num}-${slug}"
+  printf '{\n  "id": "req-%s",\n  "status": "active"\n}\n' "$num" \
+    > "$repo/docs/modules/req-${num}-${slug}/.req-meta.json"
+}
+
+# close 后（方案 A）：.req-meta.json 已 git rm，但模块文档目录仍在 docs/modules/
+_add_module_closed() {
+  local repo="$1" num="$2" slug="${3:-test}"
+  mkdir -p "$repo/docs/modules/req-${num}-${slug}"
+  echo "# spec" > "$repo/docs/modules/req-${num}-${slug}/spec.md"
+}
+
 # -----------------------------------------------------------------
 # Scenario 1: 空仓
 # -----------------------------------------------------------------
@@ -220,6 +235,61 @@ test_octal_boundary_009() {
 }
 
 # -----------------------------------------------------------------
+# Scenario 9: docs/modules 真相源（lifecycle 迁移后的 active req）
+# 回归 codex 审出的 P1：编号源只扫旧 requirements/ + 分支，漏 docs/modules/*/.req-meta.json。
+# -----------------------------------------------------------------
+test_module_meta_active() {
+  start_test "docs/modules/req-006/.req-meta.json（active 真相源）→ next=007"
+  local repo
+  repo=$(_make_fake_repo)
+  _add_module_req "$repo" "006" "foo"
+
+  local next
+  next=$(bash "$RESOLVER" next "$repo")
+  assert_equal "007" "$next" "next picks up docs/modules .req-meta id" || { rm -rf "$repo"; return; }
+
+  rm -rf "$repo"
+  pass_test
+}
+
+# -----------------------------------------------------------------
+# Scenario 10: close 后只剩模块目录（方案 A git rm 了 .req-meta），仍不可撞号
+# 这是 codex P1-2 的核心：close 后磁盘+分支都不留 .req-meta，旧逻辑会复用编号。
+# -----------------------------------------------------------------
+test_module_closed_dir_only() {
+  start_test "docs/modules/req-006-foo 仅剩目录（close 后无 .req-meta）→ next=007"
+  local repo
+  repo=$(_make_fake_repo)
+  _add_module_closed "$repo" "006" "foo"
+
+  local next
+  next=$(bash "$RESOLVER" next "$repo")
+  assert_equal "007" "$next" "closed module dir still reserves the number" || { rm -rf "$repo"; return; }
+
+  rm -rf "$repo"
+  pass_test
+}
+
+# -----------------------------------------------------------------
+# Scenario 11: 模块目录被 /design 改成语义名 → 仍靠 .req-meta id 命中
+# -----------------------------------------------------------------
+test_module_semantic_dir_name() {
+  start_test "模块目录改语义名（无 req-NNN 前缀）→ 仍靠 .req-meta id 命中 → next=008"
+  local repo
+  repo=$(_make_fake_repo)
+  mkdir -p "$repo/docs/modules/订单中心"
+  printf '{\n  "id": "req-007",\n  "status": "active"\n}\n' \
+    > "$repo/docs/modules/订单中心/.req-meta.json"
+
+  local next
+  next=$(bash "$RESOLVER" next "$repo")
+  assert_equal "008" "$next" "semantic module dir matched via .req-meta id" || { rm -rf "$repo"; return; }
+
+  rm -rf "$repo"
+  pass_test
+}
+
+# -----------------------------------------------------------------
 # Scenario 8: SKILL.md 仍然引用 helper（防止下次拆 references 时删丢）
 # -----------------------------------------------------------------
 test_skill_invokes_helper() {
@@ -243,6 +313,9 @@ test_list_dedup_sort
 test_source_mode
 test_octal_boundary_008
 test_octal_boundary_009
+test_module_meta_active
+test_module_closed_dir_only
+test_module_semantic_dir_name
 test_skill_invokes_helper
 
 report_results "req-num-resolver"

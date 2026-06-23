@@ -68,7 +68,7 @@ current_branch() {
 # 三种合法启动位置：
 #   1) 主仓根 + branch=main          → BASE_BRANCH=main、BASE_WORKTREE=repo_root（main mode）
 #   2) req-* worktree（任意分支）    → BASE_BRANCH=该 worktree 当前分支、BASE_WORKTREE=该 worktree（req mode）
-#   3) task-* worktree               → 拒绝（task 阶段走 /pmai-task-execute）
+#   3) task-* worktree               → 拒绝（历史 task worktree，不再作为当前入口）
 ensure_quickfix_root() {
   local repo_root="$1"
   local current_root branch
@@ -101,7 +101,7 @@ ensure_quickfix_root() {
       BASE_WORKTREE="$current_root"
       ;;
     task-*)
-      echo "错误：/pmai-quick-fix 不能在 task worktree 内启动（task 阶段走 /pmai-task-execute）。" >&2
+      echo "错误：/pmai-quick-fix 不能在历史 task worktree 内启动。请回 main 或 req-* worktree。" >&2
       exit 1
       ;;
     main)
@@ -156,11 +156,8 @@ unstage_dependency_symlinks() {
 is_redline_path() {
   local file="$1"
   case "$file" in
-    # 真相源迁 docs/modules/<模块>/（lifecycle 迁移批 2/3）；旧 requirements/active/ 保留 dormant。
     docs/modules/*/tasks/*.md) return 0 ;;
     docs/modules/*/.req-meta.json) return 0 ;;
-    requirements/active/*/tasks/*.md) return 0 ;;
-    requirements/active/*/.req-meta.json) return 0 ;;
     .claude/scripts|$HOME/.pmai/scripts/*) return 0 ;;
     .claude/skills|.claude/skills/*) return 0 ;;
     .claude/settings.json) return 0 ;;
@@ -220,9 +217,8 @@ warn_active_reqs() {
   local _wt
   for _wt in "${_wt_paths[@]}"; do
     [ -d "$_wt" ] || continue
-    # 真相源迁 docs/modules/<模块>/.req-meta.json（lifecycle 迁移批 2/3）；旧
-    # requirements/active/req-*/ 路径保留作 dormant 兼容（过渡期在飞 req 仍可能在场）。
-    for meta in "$_wt"/docs/modules/*/.req-meta.json "$_wt"/requirements/active/req-*/.req-meta.json; do
+    # 真相源 = docs/modules/<模块>/.req-meta.json。
+    for meta in "$_wt"/docs/modules/*/.req-meta.json; do
       [ -f "$meta" ] || continue
       status=$(python3 - "$meta" <<'PY' 2>/dev/null || true
 import json, sys

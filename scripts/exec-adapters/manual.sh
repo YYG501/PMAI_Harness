@@ -1,32 +1,27 @@
 #!/usr/bin/env bash
-# manual adapter. See 设计文档（已归档于生成器仓） §4.5
+# manual build adapter.
 #
-# Writes .pending-manual-<task>.json to $MAIN_REPO_ROOT/.runs/ (NOT relative path,
-# so observability layers see it regardless of cwd), then exits 0.
-# Caller (task-execute) must interpret exit 0 with manual executor as "skill ends
-# here; PM will re-enter via /pmai-task-execute after completing worktree changes".
+# It records a pending manual build marker and exits 0. /build should stop and
+# resume checks after the PM finishes editing.
 
 set -euo pipefail
 
-: "${TASK_FILE:?TASK_FILE required}"
-: "${TASK_WORKTREE:?TASK_WORKTREE required}"
-: "${MAIN_REPO_ROOT:?MAIN_REPO_ROOT required}"
+source "$(dirname "$0")/_gate.sh"
+adapter_precheck
 
-TASK_SHORT_ID=$(basename "$TASK_FILE" .md | sed -E 's/^(task-[0-9]+).*/\1/')
-REQ_ID=$(basename "$(dirname "$(dirname "$TASK_FILE")")")
-NOW=$(date -Iseconds)
-BASELINE_SHA=$(git -C "$TASK_WORKTREE" rev-parse HEAD 2>/dev/null || echo "unknown")
+BUILD_DIR_RESOLVED="$(adapter_build_dir)"
+MAIN_REPO_ROOT="${MAIN_REPO_ROOT:-$BUILD_DIR_RESOLVED}"
+MODULE_NAME="${MODULE_NAME:-manual-build}"
+NOW="$(date -Iseconds)"
+BASELINE_SHA="$(git -C "$BUILD_DIR_RESOLVED" rev-parse HEAD 2>/dev/null || echo unknown)"
 
 mkdir -p "$MAIN_REPO_ROOT/.runs"
-PENDING_FILE="$MAIN_REPO_ROOT/.runs/.pending-manual-${TASK_SHORT_ID}.json"
+PENDING_FILE="$MAIN_REPO_ROOT/.runs/.pending-manual-build-${MODULE_NAME}.json"
 
-# JSON 字段 "task_id" 保留向后兼容；含义为 short_id（变量已重命名，字段名未动）
 cat > "$PENDING_FILE" <<EOF
 {
-  "task_id": "$TASK_SHORT_ID",
-  "task_file": "$TASK_FILE",
-  "task_worktree": "$TASK_WORKTREE",
-  "req_id": "$REQ_ID",
+  "module": "$MODULE_NAME",
+  "build_dir": "$BUILD_DIR_RESOLVED",
   "executor": "manual",
   "started_at": "$NOW",
   "baseline_sha": "$BASELINE_SHA",
@@ -34,25 +29,13 @@ cat > "$PENDING_FILE" <<EOF
 }
 EOF
 
-# execution_manual_waiting 事件由 task-transition.py --bound-to-execution-event
-# manual-waiting 在 dispatch §3b 入口已原子写入（修复 B），manual.sh 不再 emit。
-
 cat <<EOF
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Task-${TASK_SHORT_ID} 已设为 manual 执行
+Manual build 已登记
 
-请在以下 worktree 完成实现：
-  $TASK_WORKTREE
-参考 task 文件：$TASK_FILE
-  必读文档、执行范围、验收标准、写回职责都在文件里
+请在以下目录完成实现：
+  $BUILD_DIR_RESOLVED/prototype
 
-完成后跑：
-  /pmai-task-execute $TASK_SHORT_ID
-会检测到 manual 标记 + 显式告知你"不会重跑执行器，直接进自审"。
-
-如果决定放弃这个 task：
-  python3 $HOME/.pmai/scripts/task-transition.py "$TASK_FILE" --cancel-manual
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+完成后重新进入 /build，我会跳过执行器并继续跑检查。
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 EOF
-
-exit 0

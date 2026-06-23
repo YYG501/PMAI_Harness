@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
-# cleanup-pending-worktrees.sh — 清理由 close-task / close-req 标记的待清理 worktree + branch
+# cleanup-pending-worktrees.sh — 清理由 cancel/close 标记的待清理 req worktree + branch
 # 用法: bash scripts/cleanup-pending-worktrees.sh [--dry-run]
 #
 # 背景：
-# close-task / close-req 不再直接删 worktree/branch。原因是 PM 经常在被关闭的
+# cancel/close 不再总是直接删 worktree/branch。原因是 PM 可能在被废弃的
 # worktree 内（即 cwd = .worktrees/<branch>）执行 close，删除会让 Claude Code
 # 父进程的 cwd 变成 dangling，下一次 Stop hook 的 posix_spawn 报 ENOENT。
 # 解决办法是把删除推迟，由本脚本在主仓 cwd 的会话里统一执行。
@@ -98,7 +98,7 @@ def run(cmd):
 
 
 SAFE_BRANCH_RE = re.compile(
-    r"^(task-\d{3,}(?:[-A-Za-z0-9._]+)?|req-\d{3,}(?:[-A-Za-z0-9._]+)?|tmp-quick-[A-Za-z0-9._-]+)$"
+    r"^req-\d{3,}(?:[-A-Za-z0-9._]+)?$"
 )
 
 
@@ -126,7 +126,7 @@ def validate_pending_entry(entry):
     kind = entry.get("kind", "")
     branch = entry.get("branch", "")
     worktree = entry.get("worktree", "")
-    if kind not in {"task", "req"}:
+    if kind != "req":
         return False, f"unsupported kind={kind!r}"
     if not branch or not SAFE_BRANCH_RE.fullmatch(branch):
         return False, f"unsafe branch={branch!r}"

@@ -181,17 +181,17 @@ test_health_check_hints_migrate_when_context_remains() {
 # -----------------------------------------------------------------
 
 # -----------------------------------------------------------------
-# T11: 默认输出（无 flag，task-status skill 走这条）也输出体检段
+# T11: 默认输出（无 flag，status skill 走这条）也输出体检段
 # -----------------------------------------------------------------
 test_health_check_in_default_status() {
-  start_test "T11: 默认输出（task-status skill 入口）也输出体检"
+  start_test "T11: 默认输出（status skill 入口）也输出体检"
   local tmp; tmp=$(mktemp -d)
   mkdir -p "$tmp/docs"
   echo "# PRODUCT" > "$tmp/docs/PRODUCT.md"
   local out
   out=$(python3 "$STATUS_VIEW" "$tmp" 2>&1)
   if ! echo "$out" | grep -q "项目体检"; then
-    _fail "默认分支（task-status 调用路径）应输出体检段，实际：$out"
+    _fail "默认分支（status 调用路径）应输出体检段，实际：$out"
     rm -rf "$tmp"; return
   fi
   rm -rf "$tmp"

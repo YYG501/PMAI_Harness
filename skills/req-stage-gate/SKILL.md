@@ -36,7 +36,7 @@ python3 "$PMAI_HOME/scripts/check-worktree-residue.py" || true
 
 ## 做什么
 
-1. **读当前需求状态**：通过 `_lib.state.get_overall_state()` 拿到当前 active req、当前阶段（范围确认 / build / 复审 / 沉淀）、最近一次状态变更、当前 task 情况。
+1. **读当前需求状态**：通过 `_lib.state.get_overall_state()` 拿到当前 active req、当前阶段（范围确认 / build / 复审 / 沉淀）、最近一次状态变更和涉及模块。
 
 2. **复位播报**：用 PM 听得懂的话讲清「你现在在哪、上一步做完了什么、下一步该做什么」。**不编造**——读不到 active req 就直说没有，让 PM 起新需求。
 
@@ -69,9 +69,9 @@ PM 在 `/pmai-next` 的某个确认门没答就关了窗口，回来重敲本 sk
 
 Preamble 的 `check-worktree-residue.py` 报警时，把警告原文转给 PM，按 PM 选择处理（立刻清理 / 先继续）。清理干净后提示发 `/pmai-next` 继续。
 
-### task 关闭后续走
+### build / 复审后续走
 
-一个需求的 task 都做完、PM 验收过后，正常情况下 `/pmai-close-task` 会直接把沉淀（更新 PRODUCT-STATE、merge 主原型回 main）这一步拉起来。如果那一步因为窗口被关没接上，PM 回来敲本 skill → AI 复位后提示发 `/pmai-next`，由它把沉淀阶段重新拉起来。
+一个需求 build 完、PM 验收过后，正常情况下 `/pmai-next` 会把沉淀（更新 PRODUCT-STATE、merge 主原型回 main）这一步拉起来。如果那一步因为窗口被关没接上，PM 回来敲本 skill → AI 复位后提示发 `/pmai-next`，由它把沉淀阶段重新拉起来。
 
 ## 已搬走的能力（指针）
 

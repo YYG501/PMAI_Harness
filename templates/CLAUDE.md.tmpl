@@ -3,197 +3,93 @@
 ## 框架规则（不要修改此区域）
 
 **会话开始时必须执行：**
-1. 读取本文件了解项目上下文
-2. 运行 `source $HOME/.pmai/scripts/skill-preamble.sh` 检测当前工作位置
-3. 运行 `/pmai-next` 了解当前在六步的哪一步 + 下一步该做什么（没有 active 需求时它会引导起新需求）
+
+1. 读取本文件了解项目上下文。
+2. 运行 `source $HOME/.pmai/scripts/skill-preamble.sh` 检测当前工作位置。
+3. 运行 `/pmai-status` 或 `/pmai-next` 了解当前在做哪个模块、下一步该做什么。
 
 ---
 
 ### 角色定义（单窗口模型）
 
 | 角色 | 职责 |
-|------|------|
-| PM | 决策、确认、验收。不写代码。**全程一个窗口**，不切窗口、不另起会话 |
-| 驱动 Claude | PM 这个窗口里的 AI：六步推进（范围确认 / 派发 build / 跑三道审 / 呈交验收 / 沉淀）、文档维护；用 `git -C <worktree>` 操作隔离副本，不 cd 自己的会话 |
-| 执行器 | build 时驱动派发的**独立 AI**（`claude-code` = 独立 subagent / `codex` / `cursor-agent` / `gemini`），在 task 隔离副本沙盒里建；PM 在 task 卡 `executor` 字段指定（留空走 settings 默认） |
+|---|---|
+| PM | 决策、确认、验收。不写代码。默认一个窗口 |
+| 驱动 AI | PM 这个窗口里的 AI：范围确认 / design、派发 build、跑复审、呈交验收、close 沉淀 |
+| 执行器 | `/build` 时可选的独立执行器（Claude Code / Codex / Cursor / Gemini / PM 手动），按模块 `spec.md` 在 `prototype/` 里建 |
 
-### 状态转换受控入口
+### 状态与文件真相源
 
-**禁止直接编辑 task 文件的"状态"字段或 .req-meta.json 的"stage"字段。**
+当前活跃架构只认模块目录：
 
-- Req stage 推进/回退：`python3 $HOME/.pmai/scripts/req-transition.py <req-dir> --to <stage> [--rollback]`
-- Task 状态变更：`python3 $HOME/.pmai/scripts/task-transition.py <task-file> --to <status> [--note <text>]`
-- Task 废弃（含清理 worktree+分支）：`python3 $HOME/.pmai/scripts/task-transition.py <task-file> --discard --reason "<一句话>"`（源状态 ∈ {待执行, 执行中}；已完成不可——开新 task revert 或 `/pmai-cancel-req`）
+- 模块状态：`docs/modules/<模块>/.req-meta.json`
+- 模块讨论：`docs/modules/<模块>/discussion.md`
+- 模块决策：`docs/modules/<模块>/decisions.md`
+- 模块规格：`docs/modules/<模块>/spec.md`
+- 项目现状：`docs/PRODUCT-STATE.md`
+- 跨模块规则：`docs/PRODUCT-RULES.md`
+- 视觉规范：`docs/DESIGN.md`
+- 主原型：`prototype/`
+- 输入材料：`docs/inputs/<类别>/`
 
-Hook 会拦截直接编辑，但 **CLAUDE.md 规则是主要约束，hook 是补充检查**。即使绕过 hook（如通过 Bash），也必须遵守此规则。
+不要创建 `requirements/active|closed`、`task-plan.md` 或 `tasks/task-NNN.md`。历史仓库里如果还有这些文件，只作归档/迁移证据，不作为新流程入口。
 
-### 分档运行（按事情大小挑档，AI 不卡）
+### 工作分档
 
-不是每件事都要走完整需求。按事情大小分三档——三档是同一条流程的伸缩，不是三套机制，走哪档 PM 当下挑：
-
-| 档 | 什么时候 | 怎么走 | 沉淀开火点 |
+| 档 | 什么时候 | 怎么走 | 收尾 |
 |---|---|---|---|
-| **轻 · main 直接改** | 小改 / 一段讨论顺手定的 / 纯文档调整 | 在 main 上改（小改走 `/pmai-quick-fix`），**不进 req** | 改完 / 聊定 → `/pmai-deposit` 轻沉淀 |
-| **中 · 轻 req 直建** | 一个完整功能、要并行隔离 | `/pmai-new-req` → `/pmai-next` 直建（不拆 task）→ 复审 | close-req |
-| **重 · 完整 req** | 多块大需求 | `/pmai-new-req` → `/pmai-next` 拆 task → 完整六步 | close-req |
+| 轻 | typo、链接、格式、很小代码修补 | `/pmai-quick-fix` 或 main 上直接小改 | `/pmai-deposit` 或 `/close` |
+| 中 | 一个模块内的完整讨论 / 规格演进 | `/pmai-new-req` → `/design` / `/pmai-next` | `/close` |
+| 重 | 需要实际建一片原型功能 | `/design` 定稿模块 `spec.md` → `/build <模块>` → 复审 | `/close` |
 
-**关键：每一档都有一个沉淀开火点**——轻档别因为"没进 req"就漏掉沉淀（产出飘着没进库、真相源乱、决策不进库、mock 找不回，就是这么来的）。
+### 主入口
 
-### 六步工作流入口（中 / 重档，全程一个窗口）
-
-- `/pmai-init-project` — 起新项目（建项目底座：PRODUCT-STATE / PRODUCT / DESIGN + 主原型）
-- `/pmai-new-req "<一句话需求>"` — 起新需求（范围确认 → `req-plan.md`，拉隔离副本）
-- `/pmai-next` — **推进主驱动**：读当前在六步哪一步（范围确认 → build → 复审 → 沉淀），告诉你「现在该做 X / 要你拍 Y」，点头再动
-- `/pmai-deposit` — **轻档沉淀**：main 上聊定 / 改完后，把成果归位进项目底座（现状 / 理路 / 遗留 / 探索变体），单独 commit
-- `/pmai-task-status` — 看产品现状 + 当前在哪一步
-
-build 一步：驱动把 task 派给你指定的**独立执行器**在隔离副本里建，建完自动跑三道审、呈交你验收 —— **全程不切窗口、不另起会话**。机器步骤（task-spec / task-confirm / task-execute / close-task）降后台、PM 不感知，留作异常恢复入口。
-
-### 中止 task 意图识别
-
-PM 想中止 active 的 task —— 用任何自然语句表达放弃：
-- "放弃 task-005" / "取消 005" / "abort 这个"（task-005 是唯一执行中时推断绑定）
-- 驱动 Claude 识别意图 + 调 `task-transition.py --fail-execution` → task 回「待执行」
-- 隔离副本保留供 PM 检查 dirty diff（不切窗口）
-
-### task 文件真相源（单窗口）
-
-- task 状态 / 内容写入落在 task 隔离副本里，驱动用 `git -C <task-worktree>` 操作（不 cd 自己的会话）
-- 改后 commit 到 task 分支，close-task merge 回当前需求分支自然 sync
-- PM 不要在需求隔离副本里手动改 task 文件（会让 close-task dirty 检查拒绝 merge）
+- `/pmai-init-project` — 起新项目，建项目底座。
+- `/pmai-new-req "<一句话需求>"` — 起新需求状态骨架。
+- `/design <模块>` — 讨论、收范围、写模块三件套。
+- `/build <模块>` — 对着 `docs/modules/<模块>/spec.md` 在 `prototype/` 建。
+- `/pmai-next` — 读当前状态，提示下一步并拉起对应入口。
+- `/close` — 收尾沉淀：现状、决策、术语、模块规格、输入材料归位；有 build worktree 则合回 main。
+- `/pmai-status` — 只读现状视图。
+- `/pmai-prd-writing` — 按需反向生成可评审 PRD。
 
 ### 确认门
 
-- 六步推进的每一步，AI **先说「要做 X / 要你拍 Y」、PM 点头再动**，不自动跨步
-- 关键拍板点：**范围确认定稿门**（`req-plan.md` 范围清单 + 决策页，PM 拍板；有未决问题用 `check-open-questions.py` 拦住逐条答完才放行）、**呈交验收门**（build 完看 demo，PM 通过 / 打回 —— build 唯一决策点）、**沉淀**（close-req 更新 PRODUCT-STATE + 并回主原型）
-- 反向 PRD（`prd.md`）**按需**产（PM 要拿去评审 / 留档才 `/pmai-prd-writing`），不是每个需求必产
+- AI 任何阶段都必须先说清「要做 X / 要你拍 Y」，PM 答完再动手。
+- PM 没答确认门之前，不写 PM 视图文件、不提交、不合并、不推进状态。
+- 关键拍板点：范围定稿、结构/命名决策、build 执行方式、复审验收、close 沉淀。
 
-### AI 主动提议沉淀（轻档不漏沉淀的关键）
+### build 纪律
 
-轻档（main 直接改 / 聊定直落）最容易漏沉淀。**AI 在回 PM 的某一轮里，识别到收敛点 + 真有耐久产出时，主动提一句沉淀**：
+- build 的功能锚点是 `docs/modules/<模块>/spec.md`，不是 task 文件。
+- 动手前必须读 `docs/DESIGN.md`。
+- 代码改动集中在 `prototype/`。执行器如改了 `docs/**`，必须呈交 PM 决定保留还是回退。
+- 大需求可开 `.worktrees/build-*` 隔离环境；小改可直接在 main 上做。
+- 使用外部执行器前，目标 worktree 必须 clean；dirty 时先让 PM决定提交 checkpoint、清理或取消。
 
-- **两道闸都过才提**：① 只在「聊定了 / 改完了」这种收敛时刻（PM 还在来回讨论时不打断）；② 只在真有耐久产出（新现状 / 新决策理路 / 新规则 / 新探索变体）时——纯文字微调、还没定的方向，不提。
-- **怎么提**：一句话「这段聊定了 <X>，要不要我顺手沉淀一下（归位进现状 / 决策记录 / 待办）？」PM 点头 → 走 `/pmai-deposit`。
-- **硬限制**：chat 模型里 AI 没法在 PM 不说话时自己动（同会话起始播报）——所以"主动提议" = 在它**回 PM 的那一轮里**顺手提，不是后台守护进程。漏提了 PM 随时可显式说「沉淀一下」兜底。
+### Review 工具
 
-### Skill 完整性（流程不可用工具替代）
-
-工作流里标明"必须完整执行"的 skill（如 `/pmai-req-analysis`、`/pmai-prd-writing`、`/pmai-task-spec`、`/pmai-task-execute`、`/office-hours` 等），**不能用任何其他手段替代**。具体：
-
-- **禁止**用 `advisor` 替代 skill。advisor 是补充视角，不是流程替代品
-- **禁止**用 `Agent` subagent（包括本项目自带的 `analysis-reviewer`）替代其他 skill。每个 subagent 只服务于它被显式指派的节点
-- **禁止**自写 ad hoc 评审 prompt 替代 skill。skill 里的结构化检查项（Error Map、Security、Observability 等）不是"可选节"，跳过等于丢失检查
-- **禁止**以"skill 太重和 PM 节奏冲突"为理由擅自简化。如果 skill 真的太重，正确做法是反馈给 PM 调整生成器里的 skill 定义，而不是运行时自行替换
-- **禁止 AI 自跑 review 工具**（I-RV1）：`/plan-ceo-review` `/plan-eng-review` `/plan-design-review` `/plan-devex-review` `/review` `/qa` `/design-review` `/autoplan` 等所有 review 类 skill **由 PM 自跑**。AI 在产物生成后只列推荐清单，不替 PM 调用——尤其 `/qa` `/design-review` 依赖 browse 看真实页面，AI 自跑容易"假执行"（声称跑了但只手工对照文档）
-
-AI 擅自用工具替代 skill 或假执行是**流程违规**，即便产出看起来等价。被 PM 问到"你跑了 skill 吗"时，如实回答；若没跑，立即补跑，不找理由。
+AI 可以推荐 review / QA / design-review 工具，但不替 PM 假执行。PM 主动调用 review 类工具时，AI 按当前模块和改动对象推断评审目标；推断失败只问一个澄清问题。
 
 ### Subagent 使用边界
 
-Subagent（`Agent` 工具 spawn）是**短命、无状态、独立 context** 的子进程，**适合**：
+Subagent 适合一次性读文件、第二视角评审、独立查询；不适合长期协调、跨 turn 等待、替代 skill 主流程。任何会启动后台长跑执行器的动作，都由驱动 AI 负责收口。
 
-- 第二视角评审（如 `analysis-reviewer`，跑完 PASS/FAIL 即退）
-- 大范围 read-only 探索（多关键字 grep + 文件读，避免污染主 context）
-- 可并行的独立查询（多个 subagent 同时跑互不依赖的检索）
+### 文档位置
 
-**不适合**（结构性误用，已发生过 2 次事件）：
-
-- **长跑协调**：subagent turn 结束被回收，但被它启动的外部进程（codex 等）继续跑——"项目经理下班，工人还在加班"，没人收口（subagent 长跑事故根因）
-- **跨 turn 状态持有**：subagent 的 context 不持久，不能用它"等通知再处理"
-- **Skill 替代品**：见上节"Skill 完整性"
-
-判断标准：**subagent 必须在单次 turn 内能完整跑完**（典型 < 5 分钟，且不依赖被它启动的后台进程的输出）。否则换载体——驱动 Claude + `ScheduleWakeup` / hook 轮询 / 后台进程 sentinel。
-
-### Review 工具：AI 列推荐，PM 自跑（I-RV1/I-RV2/I-RV3）
-
-所有 review 类 skill 一律由 PM 手动调用。AI 在 4 个产物生成后输出"推荐 review 工具"区块，PM 自选自跑：
-
-| 产物 | 推荐 review 工具（默认清单） |
-|---|---|
-| `req-plan.md`（范围确认定稿）| `/plan-ceo-review` `/plan-eng-review` `/plan-design-review` `/autoplan` |
-| `task-plan.md`（范围清单）| `/plan-eng-review` `/plan-design-review` `/autoplan` |
-| `prd.md`（按需反向 PRD 写完）| `/plan-ceo-review` `/plan-eng-review` `/plan-design-review` `/autoplan` |
-| task 实现完毕（build 后）| `/review` ；UI task 加 `/qa` `/design-review` |
-
-PM 跑完任一 review 后报告结论 → AI 调 `task-events.py append --type [plan_]review_completed --tool <name> --result <pass|fail>` 机械记录事件作为审计痕迹（I-RV2）。事件流**不当任何状态机硬 gate**：缺事件不阻止 task-confirm 启动、不阻止「执行中→已完成」转换。
-
-**禁止假执行**（I-RV3）：append 事件**只能**在 PM 明确报告 review 结果之后做。AI 不得"先 append 后跑"、不得"跳过 PM 直接 append"、不得凭文档对照模拟出 review 结论。"AI 凭记忆/凭规范文档手工对照来代替 PM 跑 review"是流程违规。
-
-PM 看完 review 决策（采纳改 task 还是不改）由 PM 自决，AI 不替 PM 决策。
-
-### Review skill 触发时的评审对象推断（PM 不带参数时 AI 自己推）
-
-PM 在 chat 里直接 invoke 任何 review skill 时（`/plan-*-review` / `/qa` / `/review` / `/design-review` / `/autoplan` / `/cso` 等 gstack skill），**默认不需要带文件路径参数**。AI 按 worktree 状态自动推断评审对象：
-
-```
-1. 取当前分支：
-   git branch --show-current
-
-2. 取当前 stage（仅当分支属于 req/task 工作流）：
-   jq -r .stage .req-meta.json 2>/dev/null
-
-3. 按 (分支类型, 六步阶段) 推断评审对象（阶段读 .req-meta.json:stage，1 范围确认 / 2 build / 3 复审 / 4 沉淀）：
-
-   分支 = req-NNN-<slug>：
-     stage 1（范围确认）→ requirements/active/<req>/req-plan.md（+ task-plan.md 如已拆）
-     stage 2-3（build / 复审）→ 当前在建的 task 文件（单文件 typed contract）；多 task 时 PM 须指定 task-NNN
-     stage 4（沉淀）→ requirements/active/<req>/prd.md（如已按需产）
-
-   分支 = task-NNN-<slug>：
-     默认评审本 task 文件（单文件 typed contract，全文读）
-
-   分支 = main / 其他：
-     无法推断 → 走 fallback 单行问 PM
-```
-
-**fallback**——推断失败（PM 在 main 分支 / `.req-meta.json` 缺失 / stage 与 review 类型对不上 / 同 stage 多个候选 task）：
-
-> AI 单行问："你想 review 哪个文件？"
-
-不列冲突点、不给 A/B/C 选项菜单、不列多路径分析。一个 disambiguating question，等 PM 答完直接执行。
-
-**PM 显式覆盖**：PM 传文件路径（如 `/plan-eng-review path/to/file.md`）→ 用 PM 给的，跳过推断。
-
-**为什么 AI 推而不是让 PM 显式带路径**：PM 在哪个 worktree 跑 review，目标文件就是该 worktree 当前 stage 的产物——这是项目内置约定。让 PM 重复"你已经站在哪个 worktree"的信息是 UX 噪声；推断失败再问，比"每次都问"成本低。
-
-**与 I-RV1 的关系**：本节不破坏 I-RV1（AI 不自跑 review）。这里讲的是 **PM 主动 invoke review 时，AI 怎么解析参数**；不是 AI 主动触发。AI 仍然不得在产物生成后自动调 review。
-
-**禁止反模式**（PM 实测复现过）：PM 触发 skill 但参数 / 意图模糊时——
-- ❌ 用一段伪精细分析（列冲突点 + A/B/C 三条路径）代替单行问意图
-- ❌ 自创"PM 自跑 = PM 应该去另一个会话独立跑"的虚构路径（不存在另起会话；slash command 永远是 Claude 当前会话执行）
-- ❌ 跑"裁剪版 skill"（违反 §Skill 完整性）
-
-第一反应是单行 disambiguating question，明确后直接执行或退出，**不写多段分析**。
-
-### 外部执行器调用前置（Pre-dispatch checkpoint）
-
-调 codex / cursor-agent 这类外部执行器前，task worktree 的 working tree **必须干净**（无 untracked、无未 commit 改动）。`/pmai-task-execute` 步骤 3b 开头有硬 gate（INVARIANTS I-AD5），dirty 直接 exit 1，不进 adapter、不 rollback、不打回 task 状态——处理权交还 PM。
-
-**Why**：执行器（codex / cursor-agent）的 stop 是软停——已派发的 sandbox shell 子进程会延迟落盘，可能覆盖你刚手改但没 commit 的文件。失败回滚的基线是 HEAD，未 commit 的手改会一并被 git restore 清掉。事故案例：PM 手改字段后 codex 后续延迟落盘把字段写回，working tree 没 commit 没法 git diff 找回。
-
-**操作纪律**：PM 反馈打回后想手改一两处再让执行器接着跑，先在 task worktree 里 commit checkpoint（`git -C <task-worktree> commit -am "pre-execute checkpoint: <一句话>"`）再 `/pmai-task-execute`。不要带着 dirty 改动直接 dispatch。
-
-### 分支结构
-
-```
-main（主仓，永远不切分支）
-  └── req-NNN-<slug>（req worktree，从 main 创建）
-        └── task-NNN-<slug>（task worktree，从 req 分支创建）
-```
-
-- 不允许任何角色直接修改 main 分支上的代码文件
-- task 隔离副本里不改 docs/（文档改动走需求分支）
-- 需求隔离副本里不改 `prototype/`（代码改动走 task 分支）
-
-**唯一例外：** `/pmai-quick-fix` 可在 PM 明确审批的小改动场景下修改 main 或某条 req 分支（多 active req 并行时按 cwd 决定 base），但必须通过 `tmp-quick-*` worktree 隔离、PM 审批 diff、并由 `$HOME/.pmai/scripts/quick-fix.sh` 执行 ff-only 合并。base 分支由启动位置自动推断（主仓 main → main / `req-*` worktree → 该 req 分支 / task worktree → 拒绝）。AI 不允许绕过脚本直接写 main 或 req 分支。
-
-### 文档引用原则
-
-- task 文件**只引用文档路径/锚点**，不复制原文
-- execution agent 必须直接读原始文件，不能只靠 task 描述里的摘要
-- 任何信息只在一个地方有真相源
-
----
+| 文档 | 路径 | 说明 |
+|---|---|---|
+| 产品背景 | `docs/PRODUCT.md` | 产品定位 / 用户画像 / 技术栈 / 业务术语表 |
+| 产品现状 | `docs/PRODUCT-STATE.md` | 当前产品长什么样、做到哪、哪些真哪些 mock |
+| 视觉规范 | `docs/DESIGN.md` | 颜色、字体、组件、交互规范 |
+| 跨模块规则 | `docs/PRODUCT-RULES.md` | 全项目产品行为规则 |
+| 模块索引 | `docs/modules/INDEX.md` | 每个模块一句话用途 |
+| 模块三件套 | `docs/modules/<模块>/discussion.md` / `decisions.md` / `spec.md` | 讨论、决策、规格 |
+| 项目决策记录 | `docs/decisions/` | 项目级理路冻结档 |
+| 输入材料 | `docs/inputs/<类别>/` | PM 上传 / 调研 / 竞品 / 旧文档等材料 |
+| 探索变体 | `mocks/` | 探索期 mock，看版与退役记录 |
+| 待办池 | `docs/TODO.md` | PM 真说过想做但未开工的事项 |
+| 按需 PRD | `docs/独立PRD/` 或 PM 指定路径 | 对外评审材料，不是每个 req 必产 |
 
 ## 项目背景
 
@@ -203,119 +99,45 @@ main（主仓，永远不切分支）
 
 <!-- auto-detected by scripts/detect-project-structure.py — PM 可改。
      标记被删除后视为 PM 手填，框架不再覆盖。
-     - prototype 档 / system 档：内容由 init-project 从 templates/工程结构约束-{prototype|system}.md
-       注入（{prototype-root} 替换为实际原型根目录），含代码组织约束 +
-       实现深度 prose 指引（数据层 / 权限 / API / 测试 / 边界态 / 多端 / 演示路径）
-     - custom 档：派生骨架，PM 自由 prose 编辑代码组织 + 实现深度（无预设值）
-     - unknown 档：PM 暂未选定，留占位提示；后续可跑
-       detect-project-structure.py 看推荐再选 -->
+     unknown 档：PM 暂未选定时保留占位，后续可重新检测并选择 prototype/system/custom。 -->
 
 {{STRUCTURE_CONSTRAINTS}}
 
-## 文档位置
-
-| 文档 | 路径 | 说明 |
-|------|------|------|
-| 产品背景 | docs/PRODUCT.md | 5 节：项目名 / 产品定位 / 用户画像 / 技术栈 / 业务术语表；由 `/pmai-strategy` 产出 + 自带确认门；已有项目首次 `/pmai-new-req` 走 legacy 补全门 |
-| PM 待办池 | docs/TODO.md | PM 提过 / 讨论过想做的事，无序，PM 维护（AI 不反推填充） |
-| 模块索引 | docs/modules/INDEX.md | 每个模块一句话用途（≤30 字）；close-req §1.5 之后 derived refresh |
-| 模块规格 | docs/modules/ | 按模块组织（事实源）|
-| 项目决策记录 | docs/decisions/ | 项目级理路冻结档（"为什么这么拼"：护城河 / 机制整体 / 演进）；带日期、写一次不维护；查"为什么"才读（脊柱索引展开层）；沉淀时由 close-req / strategy / `/pmai-deposit` 按需冻 |
-| 探索变体（mock）| mocks/ | 探索期并行视觉草图的家（`manifest.json` 真相源 + 生成的 `index.html` 看版）；与 prototype/ 主原型分开；退役标记不删 |
-| 视觉规范 | docs/DESIGN.md | 颜色、字体、组件规范 |
-| Req 级实现文档 | requirements/active/&lt;req&gt;/req-plan.md | 本 req **范围确认产物**：范围清单（WHAT）+ 关键决策页（WHY）；②范围确认 PM 拍板、驱动 build |
-| 产品现状 | docs/PRODUCT-STATE.md | 产品现状层 hub（现在长什么样 / 做到哪 / 哪些真哪些 mock）；沉淀时更新、每个新需求开头先读 |
-| Req 级 PRD（按需）| requirements/active/&lt;req&gt;/prd.md | **按需**反向 PRD（评审 / 留档才产）；`/pmai-prd-writing`，不是每个 req 必产 |
-| 独立 PRD（可选） | PM prompt 指定路径 | 跨模块评审材料，PM 主动调 `/pmai-prd-writing` standalone 模式 |
-| 活跃需求 | requirements/active/ | 当前正在处理的 req（允许多个 active 并行，每个 req 一个 worktree） |
-| 已关闭需求 | requirements/closed/ | 已完成或已取消的 req |
-| 附件目录 | requirements/active/&lt;req&gt;/attachments/ | **每个 req 默认可用**（new-req 时预建空目录）。PM 在 chat 任何时候贴绝对路径 + 描述材料（如「这份 PDF 的第 3 页是痛点 → /Users/.../foo.pdf」），AI 自动归档进本目录并登记到 `.req-meta.json:attachments_seen`。无需 PM 学路径操作。详 `skills/_shared/pm-view/attachments-upload.md`。Untrusted input，AI 仅作 evidence。 |
-
 ## 文档治理（读取策略）
 
-**脊柱分两层**（决定 AI 每次载入多少）：
+**脊柱分两层**：
 
-- **必读核心** = `docs/PRODUCT-STATE.md`：进项目就读，是"当前产品长什么样"的 hub（现状 + 指向其余脊柱的索引）。
-- **索引展开** = `PRODUCT` / `DESIGN` / `PRODUCT-RULES` / `modules/` / `decisions/` + 主原型：被 hub 索引着，查到 / 当前需求范围触及才读，不每次全载。其中 `docs/decisions/`（项目决策记录）= 查"为什么这么拼"时才展开。
+- **必读核心** = `docs/PRODUCT-STATE.md`：进项目就读，是当前产品现状 hub。
+- **索引展开** = `PRODUCT` / `DESIGN` / `PRODUCT-RULES` / `modules/` / `decisions/` + 主原型：被 hub 索引着，查到或当前范围触及时才读。
 
-**完整文档地图**（每类内容住哪 / 何时读 / 生命周期 / 什么够格当脊柱）见 `$PMAI_HOME/templates/文档地图.md`——新建任何文档前对一眼归位。
+新建任何文档前，对照 `$PMAI_HOME/templates/文档地图.md` 判断归位。
 
 ## docs/ 归档约定
 
-防消费仓 docs/ 长期积累错位 / 重复 / 过期文件。**新建文档前 AI 必读本节，按归位规则落地**。
+✅ 顶层 `docs/` 只放项目级真相源：
 
-### 顶层 docs/ 只放项目级真相源
+- `PRODUCT.md`
+- `PRODUCT-STATE.md`
+- `DESIGN.md`
+- `PRODUCT-RULES.md`
+- `TODO.md`
+- `prd.md`
+- `modules/`
+- `decisions/`
+- `inputs/`
+- `归档/`
 
-✅ **允许在顶层**：
-- 项目级真相源：`PRODUCT.md` / `PRODUCT-STATE.md` / `DESIGN.md` / `PRODUCT-RULES.md` / `TODO.md` / `prd.md`
-- 项目级业务概览（跨模块 / 整体定位级，如 `ops-platform-unification.md`、`product-strategy.md`）
-- 模块目录：`modules/` + `modules/INDEX.md`
-- 归档目录：`docs/归档/`（扁平单层，不分子目录 —— 文件名 / commit message 自己说明为啥归档）
+❌ 不在顶层：
 
-❌ **不在顶层**（按下表归位）：
+| 文件类型 | 归位 |
+|---|---|
+| 模块级讨论 / 决策 / 规格 | `docs/modules/<模块>/` |
+| 一次性 review / 临时分析 / scratch | `docs/归档/` |
+| PM 上传材料 / 调研材料 | `docs/inputs/<类别>/` |
+| 探索期 mock 变体 | `mocks/` |
 
-| 文件类型 | 归位 | 例子 |
-|---|---|---|
-| 模块级决策 / 用户故事 / 模块功能清单 | `docs/modules/<模块>/` | `product-principles.md`（部门 / 用户 / 角色决策）→ `docs/modules/部门+用户+角色设计/`；`user-stories-<feature>.md` 同 |
-| 过程档案 / 一次性 review / 临时分析 / 调研 / scratch | `docs/归档/` | `PROTOTYPE_CLEANUP.md`（清理过程档案）；一次性架构 review；spike 分析 |
-| 被新版取代的旧文件 | `docs/归档/`，或直接 `git rm`（git 历史能找到） | `登录页-原始功能清单.md`（已被 `登录页-功能清单-v2.md` 取代） |
+写新文档前 AI 自问 3 题：
 
-### 写新文档前 AI 自问 3 题
-
-1. **作用域**：项目级 / 模块级 / 临时？
-2. **路径**：项目级 → `docs/`；模块级 → `docs/modules/<module>/`；临时或被取代 → `docs/归档/`
-3. **命名冲突**：与现有同名 / 同主题撞？→ 旧的先 `git mv` 归档再写新的（防 `v1.md` / `v2.md` / `原始.md` 顶层堆积）
-
-### 命名规范
-
-- 项目级文档全大写：`PRODUCT.md` / `DESIGN.md` / `PRODUCT-RULES.md` / `TODO.md`
-- 业务概览 / 模块文档 / 用户故事：kebab-case 小写
-- 不出现 `v1` / `v2` / `原始` / `旧` 等版本后缀在**顶层** —— 顶层永远是 latest，旧版进 `docs/归档/`（文件名带 `-v1` / `-原始` 后缀标明）
-
-### 自动守卫
-
-`pre-commit` hook 调用 `$HOME/.pmai/scripts/check-docs-toplevel.py` 自动拦截 `docs/` 顶层不在白名单的新增 `.md` 文件。
-
-- **白名单**：本节正面清单 + 项目级业务概览（在 `.docs-toplevel-allow` 一行一个 basename 自定义）
-- **拦下后**：按归位规则 mv 走，或加进 `.docs-toplevel-allow` 放行
-- **救火**：`git commit --no-verify`（绕过所有 pre-commit，慎用）
-
-老项目要启用：跑 `bash $HOME/.pmai/scripts/install-hooks.sh` 重新装 hook（sync 框架后第一次需要）。
-
-## 当前状态
-
-运行 `/pmai-next` 看当前在六步哪一步 + 下一步；`/pmai-task-status` 看产品现状 + 当前位置。
-
-## quick-fix
-
-可用 `/pmai-quick-fix "<一句话描述>"` 处理 PM 明确认定不需要完整 req 流程的小改动。
-
-## 产物层（deliverables）
-
-PM 要做产品介绍 / PPT / 图片 / 对外文档等**产物**时，走这一条通道（不枚举能力、不建插件框架）：
-
-1. **先 @读项目底座**：任何产物生成——无论是 skill，还是你临场「在仓库里生成 X」——**第一步先读项目底座当 context**：`docs/PRODUCT-STATE.md`（产品现状 hub，入口）→ 按需展开 `prototype/`（主原型）/ `docs/DESIGN.md`（视觉）/ `docs/PRODUCT-RULES.md`（产品规则）/ `docs/decisions/`（项目决策记录，查"为什么这么拼"）。**只要在这个仓库里跑、读了项目底座，就懂这个产品**——产物才不会脱离真实产品凭空编。
-2. **落点 `deliverables/`**（产品级、住 main）+ 在 `deliverables/INDEX.md` 登记一行（产物名 — 一句话用途 — 日期）。目录 / INDEX 不存在就建（格式见 `$HOME/.pmai/templates/deliverables-INDEX.md.tmpl`）。
-3. **skill = 固化的临场**：默认**临场生成**（PM 说「生成一份 X」，你读项目底座后直接产）；只有**反复用 / 要统一格式**的产物才固化成 skill（同 `scrape → skillify` 路径），**不要为一次性产物预建 skill**。
-4. **产物 skill 统一命名 `make-*`**（如 gstack `make-pdf` / 未来自建 `make-deck`）、进 `INDEX.md`；**不建产物插件框架**。
-
-已有产物入口：`/pmai-prd-writing` standalone（反向 PRD，已读项目底座）；PRD 要发布级 PDF 用 gstack `make-pdf`。PPT / 图片 gstack 无现成 → 走外部工具 / 未来自建 `make-*`，但都照第 1 条**先读项目底座**。
-
-## gstack
-
-Use `/browse` from gstack for all web browsing.
-
-可用 gstack skills：`/qa`, `/qa-only`, `/design-review`, `/review`, `/investigate`, `/design-consultation`, `/browse`, `/setup-browser-cookies`.
-
-## review/audit 类 skill 执行强制约束
-
-跑 `/plan-ceo-review` `/plan-eng-review` `/plan-design-review` `/plan-devex-review` `/review` `/qa` `/qa-only` `/design-review` `/devex-review` `/autoplan` 等 review/audit 类 skill 时：
-
-1. **完整跑官方 skill 的所有 required sections**（11/11，不是 5/11）
-2. **禁止给 PM 出"A 简化 / B 中等 / C 完整"程度门** —— 把"是否偷工"推给 PM 是反模式
-3. **跳过项必须给具体"不适用"原因**：本项目没基础设施 / 没该需求 算具体；"PM 偏好简单"/"务实"/"skill 太重" 不算
-4. **输出末尾标完整度**：例 `## REVIEW COMPLETE: 11/11 sections` 或 `## REVIEW PARTIAL: 8/11 (跳过项 + 具体原因)`
-5. **禁把 BLOCKER finding 降级 WARNING** 避免显得苛刻 —— 保留原 severity
-6. 真有 section 不适用 → 默认跑完整版，跑完在完整度标记里写原因；PM 觉得多余事后会让你砍
-
-每次触发上述 skill 时，`hooks/review-skill-guard.cjs` 通过 `.claude/settings.json` 注册的 UserPromptSubmit hook 自动注入完整约束清单。
+1. 这是长期真相源、过程档案、输入材料，还是按需产物？
+2. 读者下次会从哪个入口找它？
+3. 如果放顶层 `docs/`，是否会和现有脊柱文件竞争真相源？

@@ -44,41 +44,6 @@ def save_meta(req_dir: Path, meta: dict) -> None:
     write_json_atomic(meta_file, meta)
 
 
-def check_all_tasks_closed(req_dir: Path) -> tuple[bool, list[str]]:
-    """Check if all tasks in req are closed or cancelled.
-    Tolerates both old paragraph format (**状态：** 值) and new task-card
-    table format (| **状态** | 值 |). Skips engineering files (.engineering.md)
-    so each task is only counted once via its PM-view main file.
-    """
-    tasks_dir = req_dir / "tasks"
-    if not tasks_dir.exists():
-        return True, []
-
-    import re
-    field_re_old = re.compile(r"^\*\*状态：\*\*\s*(.*)$")
-    field_re_new = re.compile(r"^\|\s*\*\*状态\*\*\s*\|\s*(.*?)\s*\|.*$")
-    open_tasks = []
-
-    for tf in sorted(tasks_dir.glob("task-*.md")):
-        # Skip the engineering companion file (PR 2 拆两文件约定)
-        if tf.name.endswith(".engineering.md"):
-            continue
-        status = None
-        with tf.open(encoding="utf-8") as fh:
-            for idx, line in enumerate(fh):
-                if idx >= 40:
-                    break
-                stripped = line.strip()
-                m = field_re_old.match(stripped) or field_re_new.match(stripped)
-                if m:
-                    status = m.group(1).strip()
-                    break
-        if status and status in ("待执行", "执行中"):
-            open_tasks.append(f"{tf.name} ({status})")
-
-    return len(open_tasks) == 0, open_tasks
-
-
 def seal_req_docs_before_transition(req_dir: Path, current: int, target: int) -> None:
     """I-DC1 pre-transition gate：把 req worktree 里本 req 范围内的未 commit 文档改动
     自动 commit。range 严格限定避免卷入主仓其他改动。
@@ -88,9 +53,9 @@ def seal_req_docs_before_transition(req_dir: Path, current: int, target: int) ->
     active/<req>，relative_to 自适应）+ 同名模块目录（双写桥接时另一侧也落盘）+ 项目基线 docs
     （DESIGN/PRODUCT/PRODUCT-RULES）。
 
-    rationale: build 阶段会触发 task-confirm 通过 git worktree add fork task 分支；
-    working tree 飘的文档不会被 fork 带走。这道 gate 保证每次 stage 切换都把当前 stage 的
-    产出落盘，下游消费拿到的就是 PM 看过的版本。
+    rationale: build 阶段通常会切到实现 worktree；working tree 飘的文档不会被
+    后续执行上下文稳定带走。这道 gate 保证每次 stage 切换都把当前 stage 的产出落盘，
+    下游消费拿到的就是 PM 看过的版本。
     """
     import subprocess
 
@@ -112,18 +77,6 @@ def seal_req_docs_before_transition(req_dir: Path, current: int, target: int) ->
     except ValueError:
         return
     pathspecs = [str(rel_req)]
-
-    # 双写桥接：若传入的是 requirements/active/<req>，同名模块目录 docs/modules/<branch>
-    # 也一并落盘（反之亦然）；批 3 拆掉 requirements 半边后这段自然 no-op。
-    branch = req_dir.name
-    sibling_candidates = []
-    if rel_req.parts[:2] == ("requirements", "active"):
-        sibling_candidates.append(Path("docs") / "modules" / branch)
-    elif rel_req.parts[:2] == ("docs", "modules"):
-        sibling_candidates.append(Path("requirements") / "active" / branch)
-    for cand in sibling_candidates:
-        if (worktree_root / cand).exists():
-            pathspecs.append(str(cand))
 
     # 项目基线 docs（设计/产品规格随 req 推进更新）
     for baseline in ("docs/DESIGN.md", "docs/PRODUCT.md", "docs/PRODUCT-RULES.md"):
@@ -192,7 +145,7 @@ def validate_forward(meta: dict, target: int, req_dir: Path) -> None:
         sys.exit(1)
 
     # Check prerequisite output file（六步：只有 stage 1「范围确认」有法定文档前置 =
-    # req-plan.md；build / 复审 的闸门由 PM 验收 + task demo 确认把守，不靠文件存在性。
+    # req-plan.md；build / 复审 的闸门由 PM 验收把守，不靠文件存在性。
     # stage 真相源仍走 get_stage_source helper，尊重 .req-meta.json:stage{N}_source override）。
     if current in STAGE_OUTPUT_FILES:
         output_file = get_stage_source(req_dir, current)
@@ -219,15 +172,6 @@ def validate_rollback(meta: dict, target: int, req_dir: Path) -> None:
     if current == MAX_STAGE:
         print(f"Error: cannot rollback from stage {MAX_STAGE}（沉淀）. Merge to main is irreversible.", file=sys.stderr)
         sys.exit(1)
-
-    # 复审（3）回退要求 task（demo 单元）都已确认/取消，避免回退丢在途 demo
-    if current == 3:
-        all_closed, open_tasks = check_all_tasks_closed(req_dir)
-        if not all_closed:
-            print("Error: cannot rollback from stage 3（复审）with open tasks:", file=sys.stderr)
-            for t in open_tasks:
-                print(f"  - {t}", file=sys.stderr)
-            sys.exit(1)
 
 
 def main() -> None:

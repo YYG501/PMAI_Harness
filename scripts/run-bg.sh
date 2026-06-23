@@ -7,7 +7,7 @@
 # 是 ISO-8601 UTC 时间戳）。不杀任何子进程，处理权交还 PM。
 # 设 RUN_BG_STALL_SECONDS=0 关闭 watchdog。
 #
-# 调用方协议（见 task-execute/SKILL.md）：用 Bash run_in_background 起 waiter
+# 调用方协议：用 Bash run_in_background 起 waiter
 #   until [ -f "$LOG.exit" ] || [ -f "$LOG.stall" ]; do sleep 60; done
 #   if [ -f "$LOG.stall" ]; then echo "STALLED at $(cat "$LOG.stall")"
 #   else echo "exit_code=$(cat "$LOG.exit")"; fi

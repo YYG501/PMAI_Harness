@@ -69,5 +69,5 @@ fi
 cp "$TMPL" "$DEST"
 chmod +x "$DEST"
 echo "✅ pre-commit hook 已安装：$DEST"
-echo "   职责：拦截绕过 task-transition.py 的 task 状态字段直改。"
+echo "   职责：检查 docs/ 顶层归档约定，并对 attachments/ 大文件给出 warning。"
 echo "   救火绕过：git commit --no-verify"

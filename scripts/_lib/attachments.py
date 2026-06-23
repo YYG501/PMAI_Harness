@@ -4,8 +4,8 @@
 设计文档（已归档于生成器仓）。
 
 PM mental model：PM 在 chat 自然描述 "我有 X 在路径 Y"，AI 后台 cp + 命名 +
-登记到 .req-meta.json:attachments_seen + caller SKILL 在 stage 产出文档末尾
-追加 `## 📎 参考材料` 引用。PM 完全不感知 attachments/ 目录的存在。
+归入 docs/inputs/attachments/ + 登记到 .req-meta.json:attachments_seen +
+caller SKILL 在 stage 产出文档末尾追加 `## 📎 参考材料` 引用。
 
 与  _lib.state.{get,set}_stage_source 同款 helper-based 架构。
 状态真相源 = .req-meta.json:attachments_seen（与  stage{N}_source 字段
@@ -35,7 +35,7 @@ PM mental model：PM 在 chat 自然描述 "我有 X 在路径 Y"，AI 后台 cp
     |    2. _check_sensitive(src) → SensitivePathError            |
     |    3. size > MAX_FILE_SIZE_MB → FileSizeError                |
     |    4. _next_available_name → 冲突 -2/-3 后缀                 |
-    |    5. shutil.copy2 落盘 attachments/<新名>                  |
+    |    5. shutil.copy2 落盘 docs/inputs/attachments/<新名>       |
     |    6. register_attachment → .req-meta.json 登记              |
     +-----------------------------------------------------------+
                             |
@@ -49,7 +49,7 @@ PM mental model：PM 在 chat 自然描述 "我有 X 在路径 Y"，AI 后台 cp
 - B 分支 office-hours 选源期间 caller SKILL **不调** copy_attachment
   （走 _lib.state.set_stage_source， 路径，不归档为 attachment）
 - standalone /pmai-prd-writing 模式 caller SKILL **不调** copy_attachment
-  （standalone 不绑 req → 不入 req attachments/）
+  （standalone 不绑 req → 不入 req attachments_seen）
 """
 
 from __future__ import annotations
@@ -142,7 +142,7 @@ class AttachmentSeenEntry(TypedDict, total=False):
     """`.req-meta.json:attachments_seen` 列表元素 schema。
 
     Fields:
-        name: req 内相对路径（如 `analysis-interview.pdf`）—— 真相源
+        name: repo 内相对路径（如 `docs/inputs/attachments/analysis-interview.pdf`）—— 真相源
         src_origin: PM 给的源绝对路径（追溯用；replace 后会更新）
         hint: PM 给的"重点"描述（追溯用，可空）
         stage_prefix: 上传时 stage 前缀（命名时的 stage 上下文）
@@ -192,21 +192,22 @@ def _check_sensitive(src: Path) -> None:
 
 
 def _validate_attachment_name(filename: str) -> str:
-    """Return a safe basename-only attachment name or raise AttachmentError."""
+    """Return a safe relative attachment path under docs/inputs or raise."""
     if not isinstance(filename, str):
         raise AttachmentError("attachment filename 必须是字符串")
     if filename != filename.strip() or not filename:
         raise AttachmentError(f"非法 attachment filename：{filename!r}")
     if (
         "\x00" in filename
-        or "/" in filename
         or "\\" in filename
         or ".." in filename
         or Path(filename).is_absolute()
-        or Path(filename).name != filename
         or filename in {".", ".."}
     ):
         raise AttachmentError(f"非法 attachment filename：{filename!r}")
+    p = Path(filename)
+    if p.parts[:2] != ("docs", "inputs") or len(p.parts) < 4:
+        raise AttachmentError(f"attachment filename 必须位于 docs/inputs/<类别>/：{filename!r}")
     return filename
 
 
@@ -222,15 +223,24 @@ def _validate_stage_prefix(stage_prefix: str) -> str:
 
 
 def _attachment_path(req_dir: Path, filename: str) -> Path:
-    """Resolve `attachments/<filename>` and enforce it stays inside attachments/."""
+    """Resolve `docs/inputs/<类别>/<filename>` from repo root and enforce boundary."""
     safe_name = _validate_attachment_name(filename)
-    attachments_dir = (req_dir / "attachments").resolve()
-    dst = (attachments_dir / safe_name).resolve()
+    repo_root = _repo_root_from_req_dir(req_dir)
+    inputs_dir = (repo_root / "docs" / "inputs").resolve()
+    dst = (repo_root / safe_name).resolve()
     try:
-        dst.relative_to(attachments_dir)
+        dst.relative_to(inputs_dir)
     except ValueError as e:
-        raise AttachmentError(f"attachment 路径越过 attachments/：{filename!r}") from e
+        raise AttachmentError(f"attachment 路径越过 docs/inputs/：{filename!r}") from e
     return dst
+
+
+def _repo_root_from_req_dir(req_dir: Path) -> Path:
+    """Infer repo root from docs/modules/<module> req_dir."""
+    req_dir = req_dir.resolve()
+    if len(req_dir.parents) >= 3 and req_dir.parent.name == "modules" and req_dir.parent.parent.name == "docs":
+        return req_dir.parent.parent.parent
+    return req_dir.parent
 
 
 def _next_available_name(
@@ -239,7 +249,7 @@ def _next_available_name(
     """同名冲突时返回 `<base>-2.ext` / `<base>-3.ext` / ... 直到不冲突。
 
     Args:
-        attachments_dir: 已 mkdir 的 attachments/ 目录
+        attachments_dir: 已 mkdir 的 docs/inputs/attachments/ 目录
         base_name: 候选基名（不含扩展名，如 `analysis-foo`）
         ext: 扩展名（含点，如 `.pdf`）；可空字符串
 
@@ -261,36 +271,24 @@ def _stage_doc_exists(req_dir: Path, stage_prefix: str) -> bool:
 
     stage_prefix → 期望文档映射（六步）：
         req-plan → req-plan.md（②范围确认主产物，替代旧 brief/analysis/prd 前置链）
-        task-plan→ task-plan.md（范围清单）
         prd      → prd.md（按需 PRD，prd-writing standalone）
         close    → close-report.md（沉淀收尾，如有）
-        task-NNN → tasks/task-NNN-*.md (任一 glob 命中)
         — 旧 7-stage 锚点 brief / analysis / impl 保留，兼容在飞旧 req —
 
     返回 False 表示产出文档还没生成 → CopyResult.pending_inject=True，caller
     后续写产出时应读 attachments_seen 渲染引用 section（不能假设此刻可追加）。
     """
-    if stage_prefix.startswith("task-") and stage_prefix != "task-plan":
-        # task-NNN 走 glob 匹配（task-001 / task-001-foo / task-001-*.md 任一）
-        tasks_dir = req_dir / "tasks"
-        if not tasks_dir.exists():
-            return False
-        return bool(list(tasks_dir.glob(f"{stage_prefix}-*.md")) or
-                    list(tasks_dir.glob(f"{stage_prefix}.md")))
-
     mapping = {
         # 六步锚点（主要落 req-plan）
         "req-plan": [req_dir / "req-plan.md"],
-        "task-plan": [req_dir / "task-plan.md"],
         "prd": [req_dir / "prd.md"],            # 按需 PRD（prd-writing standalone）
         "close": [req_dir / "close-report.md"],  # 沉淀收尾（如有）
-        # 旧 7-stage 锚点（兼容在飞旧 req，新 req 不再产）
+        # 旧 7-stage 锚点（只读兼容，不作为新产物）
         "brief": [req_dir / "brief.md"],
         "analysis": [
             req_dir / "analysis.md",
             req_dir / "stage2-office-hours.md",
         ],
-        "impl": [req_dir / "implementation-design.md"],
     }
     candidates = mapping.get(stage_prefix, [])
     return any(p.exists() for p in candidates)
@@ -313,13 +311,13 @@ def copy_attachment(
     stage_prefix: str,
     hint: Optional[str] = None,
 ) -> CopyResult:
-    """复制源文件到 req attachments/ 目录 + 登记到 `.req-meta.json:attachments_seen`。
+    """复制源文件到 docs/inputs/attachments/ + 登记到 `.req-meta.json:attachments_seen`。
 
     Args:
         req_dir: req 目录绝对路径（含 `.req-meta.json`）
         src: PM 给的源路径（支持 `~` / `~user` 展开）
-        stage_prefix: stage 前缀（req-plan / task-plan / prd / task-NNN /
-                      close；旧 brief / analysis / impl 仍兼容）—— 决定命名前缀 + pending 判定
+        stage_prefix: stage 前缀（req-plan / prd / close；旧 brief / analysis / impl
+                      仍兼容）—— 决定命名前缀 + pending 判定
         hint: PM 给的"重点"描述（追溯用，可空）
 
     Returns:
@@ -350,10 +348,12 @@ def copy_attachment(
         raise FileSizeError(src, size_mb)
 
     # 4. 命名 + 冲突 -2 后缀
-    attachments_dir = req_dir / "attachments"
-    attachments_dir.mkdir(exist_ok=True)
+    repo_root = _repo_root_from_req_dir(req_dir)
+    attachments_dir = repo_root / "docs" / "inputs" / "attachments"
+    attachments_dir.mkdir(parents=True, exist_ok=True)
     base_name = f"{stage_prefix}-{src.stem}"
-    new_name = _next_available_name(attachments_dir, base_name, src.suffix)
+    basename = _next_available_name(attachments_dir, base_name, src.suffix)
+    new_name = f"docs/inputs/attachments/{basename}"
     dst = _attachment_path(req_dir, new_name)
 
     # 5. shutil.copy2 保留 mtime（C7 Python，不靠 Bash cp）
@@ -390,7 +390,7 @@ def register_attachment(
 
     Args:
         req_dir: req 目录绝对路径
-        filename: req 内相对路径（如 `analysis-foo.pdf`）—— 真相源 key
+        filename: repo 内相对路径（如 `docs/inputs/attachments/analysis-foo.pdf`）—— 真相源 key
         src_origin: PM 给的源绝对路径（追溯用，可空）
         hint: PM 给的"重点"描述（追溯用，可空）
         stage_prefix: 上传时 stage 前缀（追溯用）
@@ -431,7 +431,7 @@ def is_seen(req_dir: Path, filename: str) -> bool:
     """trigger 2 改造判定：filename 是否已在 attachments_seen 列表。
 
     用法（trigger 2 SKILL prose）：
-        AI 扫 attachments/ 发现 `<file>`：
+        AI 扫 docs/inputs/attachments/ 发现 `<file>`：
         - is_seen(req_dir, file) == True  → 跳过（已注册）
         - is_seen(req_dir, file) == False → 主动问 PM "要不要纳入？"
           PM 答 OK 后 caller 调 register_attachment 补登记。
@@ -477,7 +477,7 @@ def replace_attachment(
 
     Args:
         req_dir: req 目录绝对路径
-        old_filename: attachments_seen 中已注册的旧文件名（如 `analysis-foo.pdf`）
+        old_filename: attachments_seen 中已注册的旧文件名（如 `docs/inputs/attachments/analysis-foo.pdf`）
         new_src: 新源路径（PM 给的）
 
     Returns: CopyResult（new_name = old_filename，pending_inject 同 stage 判定）
@@ -508,9 +508,8 @@ def replace_attachment(
     remove_attachment(req_dir, old_filename)
 
     # cp 新（保留旧 filename）
-    attachments_dir = req_dir / "attachments"
-    attachments_dir.mkdir(exist_ok=True)
     dst = _attachment_path(req_dir, old_filename)
+    dst.parent.mkdir(parents=True, exist_ok=True)
     shutil.copy2(new_src, dst)
 
     # 重新 register（用旧 stage_prefix）

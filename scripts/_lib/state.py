@@ -1,6 +1,6 @@
 """State reader — single authority for reading PM-AI-Workflow runtime state.
 
-跨 skill 统一读层：把 task / req / events / 聚合视图的读取从各处 grep + jq
+跨 skill 统一读层：把 req / 聚合视图的读取从各处 grep + jq
 + 散落的 json.load 收敛到一个 lib。`status-view.py` 反向 dogfood 本 lib，
 避免双轨"AI grep raw / PM 看视觉视图"的真相源漂移。
 
@@ -21,7 +21,7 @@ contract §10/§11 (v2). read_section auto-discovers across both files.
   点后必须有空格；不支持 `## 10.<name>` / `## 10。<name>` / `## 10) <name>`
 
 错误契约：
-- 单文件 reader（`read_req_meta` / `read_task_meta`）默认 strict=True 抛
+- 单文件 reader（`read_req_meta`）默认 strict=True 抛
   `StateReadError(path, reason)`；调用方可显式传 strict=False 拿 None / {}。
 - 聚合扫描（`list_active_reqs` / `get_overall_state`）默认 tolerant，单条目
   解析失败时不抛，把 `{path, reason}` 累积到返回值的 `warnings` 数组。
@@ -506,139 +506,6 @@ def read_task_status(pm_view: Path, strict: bool = False) -> Optional[str]:
     return get_task_status(pm_view)
 
 
-def read_task_events(
-    repo_root: Path, task_id: str, tail: Optional[int] = None
-) -> list[dict]:
-    """读 task 事件流（`<repo_root>/.runs/events/<task_id>.jsonl`）。
-
-    注意：事件文件不在 task 文件夹下，而在 repo root `.runs/events/`，
-    因此参数是 repo_root + task_id，不是 task path。
-
-    None 语义：
-    - 事件文件不存在 → 返回 [] （事件流自然空，不算错）
-    - 单行 JSON 坏 → 跳过该行不计入（事件流 append-only，宽容）
-    - tail=N → 仅返回最末 N 条
-
-    >>> # read_task_events(Path("/nope"), "task-001") == []
-    """
-    events_file = repo_root / ".runs" / "events" / f"{task_id}.jsonl"
-    if not events_file.exists():
-        return []
-    try:
-        raw = events_file.read_text(encoding="utf-8")
-    except OSError:
-        return []
-    events: list[dict] = []
-    for line in raw.splitlines():
-        line = line.strip()
-        if not line:
-            continue
-        try:
-            ev = json.loads(line)
-        except json.JSONDecodeError:
-            continue
-        if isinstance(ev, dict):
-            events.append(ev)
-    if tail is not None and tail >= 0:
-        events = events[-tail:]
-    return events
-
-
-_PLAN_ROW_RE = re.compile(r"^\|[^|]*?(task-\d{3,})[^|]*\|\s*([^|]*?)\s*\|")
-
-
-def read_task_plan(req_dir: Path) -> Optional[dict]:
-    """读 task-plan.md 计划表，返回 {tasks: [{id, title}, ...]}。
-
-    解析仅限 task-plan.md 中第一个 `## ` heading 之前的区域（避免误命中
-    `## 变更记录` / `## 执行顺序与并行性` 等段落里出现的 task id）。
-
-    None 语义：
-    - task-plan.md 不存在 → 返回 None（PM 还没规划 / 该 req 不走 task-plan）
-    - 表存在但无合法行 → 返回 {"tasks": []}
-    """
-    plan_file = req_dir / "task-plan.md"
-    if not plan_file.exists():
-        return None
-    try:
-        content = plan_file.read_text(encoding="utf-8")
-    except OSError:
-        return None
-    head = content.split("\n## ", 1)[0]
-    seen: set[str] = set()
-    tasks: list[dict] = []
-    for line in head.splitlines():
-        m = _PLAN_ROW_RE.match(line)
-        if not m:
-            continue
-        tid = m.group(1).strip()
-        if tid in seen:
-            continue
-        seen.add(tid)
-        tasks.append({"id": tid, "title": m.group(2).strip()})
-    return {"tasks": tasks}
-
-
-def _task_id_from_path(f: Path) -> str:
-    m = re.match(r"(task-\d{3,})", f.stem)
-    return m.group(1) if m else f.stem
-
-
-def list_tasks(req_dir: Path, repo_root: Optional[Path] = None) -> list[dict]:
-    """列 req 目录下 task 文件（已 spec 过的，含 PM 视图字段）。
-
-    返回 [{path: Path, id: str, meta: TaskMeta}, ...]，按 task id 排序。
-    跳过 `.engineering.md` 副本与 `discarded/` 子目录。
-
-    repo_root 语义（v4.5 inconsistency 修复）：
-    - None（默认）：只扫 req_dir/tasks，向后兼容旧调用方
-    - 传入 repo_root：v4.5 task-confirm fork 后会把 task md 从 req 分支 git rm，
-      额外扫 .worktrees/task-*/requirements/active/<req-id>/tasks/ 合并去重；
-      同 task-id 优先用 task 分支版（active 状态优先 req 分支的 archived 状态）
-
-    None 语义：
-    - req_dir/tasks 不存在且无 task-* worktree → 返回 []
-    """
-    out: dict[str, dict] = {}
-
-    tasks_dir = req_dir / "tasks"
-    if tasks_dir.exists():
-        for f in sorted(tasks_dir.glob("task-*.md")):
-            if f.name.endswith(".engineering.md"):
-                continue
-            tid = _task_id_from_path(f)
-            out[tid] = {"path": f, "id": tid, "meta": get_task_meta(f)}
-
-    if repo_root is not None:
-        req_id = req_dir.name
-        for branch, wt_path in _git_worktree_pairs(repo_root):
-            if not branch.startswith("task-"):
-                continue
-            task_tasks_dir = wt_path / "requirements" / "active" / req_id / "tasks"
-            if not task_tasks_dir.exists():
-                continue
-            for f in sorted(task_tasks_dir.glob("task-*.md")):
-                if f.name.endswith(".engineering.md"):
-                    continue
-                tid = _task_id_from_path(f)
-                out[tid] = {"path": f, "id": tid, "meta": get_task_meta(f)}
-
-    return [out[k] for k in sorted(out)]
-
-
-def discarded_task_ids(req_dir: Path) -> set[str]:
-    """tasks/discarded/ 下的 task id 集合。目录不存在 → 空集。"""
-    discarded_dir = req_dir / "tasks" / "discarded"
-    if not discarded_dir.exists():
-        return set()
-    ids: set[str] = set()
-    for f in discarded_dir.glob("task-*.md"):
-        m = re.match(r"(task-\d{3,})", f.stem)
-        if m:
-            ids.add(m.group(1))
-    return ids
-
-
 # ---------------------------------------------------------------------------
 # 真相源（lifecycle 迁移批 2，单读）：docs/modules/<模块>/.req-meta.json
 #
@@ -683,7 +550,7 @@ def list_active_reqs(
     """扫主仓 + 所有 git worktree 上的 active req（按 id 去重）。
 
     cwd 行为：
-    - cwd 在 req-* / task-* worktree（git 视角）→ 优先扫该 worktree 自身的
+    - cwd 在 req-* worktree（git 视角）→ 优先扫该 worktree 自身的
       docs/modules/*（批 2 单读真相源）；若有结果直接返回（cwd 唯一定 req 语义，
       与 skill-preamble.sh 一致）
     - cwd=None 或 main → 扫主仓 + 所有 `git worktree list` 拿到的 req-*
@@ -748,21 +615,6 @@ def list_active_reqs(
                         w = warnings[0]
                         raise StateReadError(Path(w["path"]), w["reason"])
                     return {"items": items, "warnings": warnings}
-            if br.startswith("task-"):
-                # task worktree 自身一般无模块状态，去 req worktree 的 docs/modules/* 找
-                for wt_branch, wt_path in _git_worktree_pairs(repo_root):
-                    if wt_branch.startswith("req-"):
-                        local = _collect_from_modules(
-                            wt_path / "docs" / "modules", warnings, ("active",)
-                        )
-                        if local:
-                            _append(local)
-                if items:
-                    if strict and warnings:
-                        w = warnings[0]
-                        raise StateReadError(Path(w["path"]), w["reason"])
-                    return {"items": items, "warnings": warnings}
-
     # 主仓 + 所有 git worktree 上的 req-* 分支
     # 批 2 单读：真相源 = docs/modules/*/.req-meta.json（status==active）。旧
     # requirements/active/ 扫描已删（迁移脚本仍保留旧目录数据，本批只切机器读向）。
@@ -783,7 +635,7 @@ def get_overall_state(
     cwd: Optional[Path] = None,
     strict: bool = False,
 ) -> dict:
-    """聚合视图：所有 active req + 各 req 下 task 状态 + 计划/已废弃统计。
+    """聚合视图：所有 active req。
 
     `status-view.py` 直接消费此函数作为渲染输入（dogfood）。
 
@@ -793,12 +645,6 @@ def get_overall_state(
         {
           "req_dir": Path,
           "meta": dict,             # .req-meta.json 全部字段
-          "tasks": [                # tasks/ 下已 spec 的 task
-            {"id", "path", "meta", "last_event"}
-          ],
-          "planned": [{"id", "title"}, ...],         # task-plan.md 顺序
-          "discarded_ids": [...],
-          "pending_spec": [{"id", "title"}, ...],    # planned 但未 spec 且非 discarded
         }, ...
       ],
       "warnings": [{"path", "reason"}, ...]
@@ -813,29 +659,9 @@ def get_overall_state(
     for item in raw["items"]:
         req_dir = item["req_dir"]
         meta = item["meta"]
-        tasks = list_tasks(req_dir, repo_root=repo_root)
-        discarded = discarded_task_ids(req_dir)
-        plan = read_task_plan(req_dir)
-        planned = plan["tasks"] if plan else []
-        specced_ids = {t["id"] for t in tasks}
-        pending_spec = [
-            p for p in planned
-            if p["id"] not in specced_ids and p["id"] not in discarded
-        ]
-        enriched_tasks: list[dict] = []
-        for t in tasks:
-            last_event = None
-            evs = read_task_events(repo_root, t["path"].stem, tail=1)
-            if evs:
-                last_event = evs[-1]
-            enriched_tasks.append({**t, "last_event": last_event})
         out.append({
             "req_dir": req_dir,
             "meta": meta,
-            "tasks": enriched_tasks,
-            "planned": planned,
-            "discarded_ids": sorted(discarded),
-            "pending_spec": pending_spec,
         })
     return {"active_reqs": out, "warnings": warnings}
 
@@ -1034,7 +860,7 @@ def get_timeline_state(
 def _print_doctor(repo_root: Path, req_arg: Optional[str]) -> int:
     """`python3 -m _lib.state doctor [<req>]`
 
-    打印：当前 repo_root / cwd / active req 探测结果 / 指定 req 的 meta + task
+    打印：当前 repo_root / cwd / active req 探测结果 / 指定 req 的 meta
     列表 + warning。PM 在 chat 复制粘贴跑，定位"为什么 active req 不一致"。
     """
     import sys
@@ -1050,10 +876,6 @@ def _print_doctor(repo_root: Path, req_arg: Optional[str]) -> int:
         print(f"  - {meta.get('id', '?')} ({meta.get('name', '?')})"
               f"  stage={meta.get('stage', '?')}  status={meta.get('status', '?')}")
         print(f"    dir={rd}")
-        print(f"    tasks={len(item['tasks'])}  "
-              f"planned={len(item['planned'])}  "
-              f"pending_spec={len(item['pending_spec'])}  "
-              f"discarded={len(item['discarded_ids'])}")
 
     if state["warnings"]:
         print("WARNINGS:")
@@ -1073,16 +895,6 @@ def _print_doctor(repo_root: Path, req_arg: Optional[str]) -> int:
         print(f"\n=== req `{req_arg}` 明细 ===")
         print(json.dumps({
             "meta": target["meta"],
-            "tasks": [
-                {
-                    "id": t["id"],
-                    "status": (t["meta"] or {}).get("status"),
-                    "branch": (t["meta"] or {}).get("branch"),
-                } for t in target["tasks"]
-            ],
-            "planned": target["planned"],
-            "pending_spec": target["pending_spec"],
-            "discarded_ids": target["discarded_ids"],
         }, ensure_ascii=False, indent=2))
     return 0
 
@@ -1155,8 +967,6 @@ def _cli():
                 {
                     "req_dir": str(r["req_dir"]),
                     "meta": r["meta"],
-                    "task_count": len(r["tasks"]),
-                    "pending_spec_count": len(r["pending_spec"]),
                 } for r in out["active_reqs"]
             ],
             "warnings": out["warnings"],

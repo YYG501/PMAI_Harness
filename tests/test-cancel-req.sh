@@ -11,7 +11,7 @@ CANCEL_REQ="$FRAMEWORK_ROOT/scripts/cancel-req.sh"
 CLEANUP_PENDING="$FRAMEWORK_ROOT/scripts/cleanup-pending-worktrees.sh"
 
 # cancel-req（方案 A）：真相源 = docs/modules/<模块>/。废弃 = 在 main 上清模块 .req-meta，
-# 不 merge req 分支到 main；task/req worktree 推迟到 cleanup-pending 兜底清。
+# 不 merge req 分支到 main；req worktree 推迟到 cleanup-pending 兜底清。
 #
 # fixture_create_req 在 req worktree 里建模块目录。把它镜像到 main 的 docs/modules/，
 # 让 cancel-req 能在 main 上清掉模块 .req-meta。返回 main 上的模块目录路径。
@@ -100,46 +100,6 @@ test_cancel_does_not_merge_to_main() {
   # git log on main should not contain req's commit message
   if git -C "$FIXTURE_DIR" log main --oneline | grep -q "req work"; then
     _fail "main log should not contain 'req work' commit"
-    fixture_teardown; return
-  fi
-  pass_test
-  fixture_teardown
-}
-
-# ---------------------------------------------------------------
-# I-CA2: 活跃 task 被清理
-# ---------------------------------------------------------------
-
-test_cancel_cleans_active_task() {
-  start_test "I-CA2 cancel with active task removes task worktree + branch"
-  fixture_setup
-  req_dir=$(_setup_module_on_main "req-001" "test" 3)
-
-  # 在 main 侧的模块目录里建 task
-  task_file=$(fixture_create_task "$req_dir" "001" "impl" "执行中")
-  # 建 task worktree（off req 分支）
-  task_wt=$(fixture_create_task_worktree "$task_file" "req-001-test")
-
-  # sanity
-  if [ ! -d "$task_wt" ]; then
-    _fail "task worktree setup failed"
-    fixture_teardown; return
-  fi
-
-  cd "$FIXTURE_DIR"
-  bash "$CANCEL_REQ" "$req_dir" >/dev/null 2>&1
-
-  # Cancel 后清理推迟到 cleanup
-  bash "$CLEANUP_PENDING" >/dev/null 2>&1
-
-  # task worktree gone
-  if [ -d "$task_wt" ]; then
-    _fail "task worktree should be removed after cleanup"
-    fixture_teardown; return
-  fi
-  # task branch gone
-  if git -C "$FIXTURE_DIR" branch --list "task-001-impl" | grep -q .; then
-    _fail "task branch should be deleted after cleanup"
     fixture_teardown; return
   fi
   pass_test
@@ -240,54 +200,6 @@ test_cancel_rerun_on_already_cleared_does_not_error() {
 }
 
 # ---------------------------------------------------------------
-# I-CA6: cancel-req must clean task worktrees/branches even when module
-# only exists in the req worktree (not mirrored on main).
-# ---------------------------------------------------------------
-
-test_cancel_cleans_tasks_when_module_not_on_main() {
-  start_test "I-CA6 cancel cleans task branches when module only in req worktree"
-  fixture_setup
-
-  # 不走 _setup_module_on_main：模块目录只存在于 req worktree，不在 main 上
-  module_dir_in_wt=$(fixture_create_req "req-001" "test" 3)
-
-  # 在 req worktree 的模块目录里建 task
-  task_file=$(fixture_create_task "$module_dir_in_wt" "001" "impl" "执行中")
-  task_wt=$(fixture_create_task_worktree "$task_file" "req-001-test")
-
-  # 跑 cancel-req，传入 req worktree 里的模块目录
-  cd "$FIXTURE_DIR"
-  bash "$CANCEL_REQ" "$module_dir_in_wt" >/tmp/out.$$ 2>/tmp/err.$$
-  rc=$?
-
-  if [ "$rc" != "0" ]; then
-    _fail "cancel-req should succeed (rc=$rc)"
-    cat /tmp/err.$$ >&2
-    rm -f /tmp/out.$$ /tmp/err.$$
-    fixture_teardown; return
-  fi
-
-  # Cancel 后清理推迟到 cleanup
-  bash "$CLEANUP_PENDING" >/dev/null 2>&1
-
-  # task worktree/分支 必须清掉
-  if [ -d "$task_wt" ]; then
-    _fail "task worktree left behind after cleanup: $task_wt"
-    rm -f /tmp/out.$$ /tmp/err.$$
-    fixture_teardown; return
-  fi
-  if git -C "$FIXTURE_DIR" branch --list "task-001-impl" | grep -q .; then
-    _fail "task branch left behind after cleanup"
-    rm -f /tmp/out.$$ /tmp/err.$$
-    fixture_teardown; return
-  fi
-
-  pass_test
-  rm -f /tmp/out.$$ /tmp/err.$$
-  fixture_teardown
-}
-
-# ---------------------------------------------------------------
 # I-CA7: cancel-req must refuse when main has unrelated dirty changes
 # ---------------------------------------------------------------
 
@@ -338,11 +250,9 @@ test_cancel_rejects_dirty_main() {
 
 test_cancel_happy_path
 test_cancel_does_not_merge_to_main
-test_cancel_cleans_active_task
 test_cancel_clears_module_meta
 test_cancel_is_idempotent_after_partial_cleanup
 test_cancel_rerun_on_already_cleared_does_not_error
-test_cancel_cleans_tasks_when_module_not_on_main
 test_cancel_rejects_dirty_main
 
 report_results "cancel-req"

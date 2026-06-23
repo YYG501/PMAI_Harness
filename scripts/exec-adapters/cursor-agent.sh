@@ -1,20 +1,15 @@
 #!/usr/bin/env bash
-# cursor-agent adapter. See 设计文档（已归档于生成器仓） §4.3
+# cursor-agent build adapter.
 #
-# WARNING: cursor-agent --force --trust has NO sandbox. Boundary protection
-# falls back entirely to the caller's post-execution越界 check.
+# WARNING: cursor-agent --force --trust has no sandbox. /build must run its
+# post-execution changed-path review before accepting the result.
 
 set -euo pipefail
 
-: "${TASK_WORKTREE:?TASK_WORKTREE required}"
-: "${PROMPT_FILE:?PROMPT_FILE required}"
-: "${TASK_FILE:?TASK_FILE required (for I-AD1/I-AD2 gate)}"
-: "${MAIN_REPO_ROOT:?MAIN_REPO_ROOT required (for I-AD1/I-AD2 gate)}"
-
-# I-AD1: 启动前状态 gate
 source "$(dirname "$0")/_gate.sh"
 adapter_precheck
 
+BUILD_DIR_RESOLVED="$(adapter_build_dir)"
 PROMPT="$(cat "$PROMPT_FILE")"
 
 MODEL_ARGS=()
@@ -22,10 +17,9 @@ MODEL_ARGS=()
 
 EXEC_EXIT=0
 cursor-agent -p --force --trust \
-  --workspace "$TASK_WORKTREE" \
+  --workspace "$BUILD_DIR_RESOLVED" \
   --output-format text \
   ${MODEL_ARGS[@]+"${MODEL_ARGS[@]}"} \
   "$PROMPT" || EXEC_EXIT=$?
 
-# I-AD2: 退出后越界校验（cursor-agent 无 sandbox，这层是唯一边界防护）
 adapter_postcheck "$EXEC_EXIT"

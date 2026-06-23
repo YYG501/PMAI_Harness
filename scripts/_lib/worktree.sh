@@ -62,13 +62,12 @@ list_worktrees_by_branch_prefix() {
 }
 
 # cleanup_stale_worktrees <repo_root>
-# 兜底清理：按 docs/modules/<模块>/.req-meta.json 的 branch 字段（+ 模块下 tasks/task-*.md）
+# 兜底清理：按 docs/modules/<模块>/.req-meta.json 的 branch 字段
 # 真相源定向枚举，对每个推导出的 worktree 路径（${PM_AI_WORKTREE_BASE:-<repo>/.worktrees}/<stem>）
-# 检查是否 git 已不认 + 物理还在 → rm -rf。close-task / close-req 末尾调用。
+# 检查是否 git 已不认 + 物理还在 → rm -rf。close/cancel 收尾时兜底调用。
 #
 # 批 2 改：枚举真相源从 requirements/{active,closed}/* 换成 docs/modules/*（lifecycle 迁移②）。
-# req 的 worktree stem 取 meta.branch（模块目录名可能是中文、非分支名）；task dormant 时
-# 模块下一般无 tasks/，task 分支枚举退化为 no-op（保留扫描、无 task 时空过）。
+# req 的 worktree stem 取 meta.branch（模块目录名可能是中文、非分支名）。
 # 不无差别扫 .worktrees/* — path 必须从模块记录推导。
 # 护栏：跳过 live worktree、跳过当前 cwd 所在的目录。
 cleanup_stale_worktrees() {
@@ -87,25 +86,14 @@ cleanup_stale_worktrees() {
   local cleaned=0 caller_cwd
   caller_cwd=$(pwd -P 2>/dev/null || echo "")
 
-  # 枚举 docs/modules/* 下每个模块的 req 分支 + task（dormant）
-  local modules_dir module_dir meta task_file stem branch
+  # 枚举 docs/modules/* 下每个模块的 req 分支
+  local modules_dir module_dir meta branch
   modules_dir="$repo_root/docs/modules"
   if [ -d "$modules_dir" ]; then
     for module_dir in "$modules_dir"/*; do
       [ -d "$module_dir" ] || continue
       meta="$module_dir/.req-meta.json"
       [ -f "$meta" ] || continue
-
-      # 检查每个 task 的 worktree（task dormant：模块下通常无 tasks/，循环空过）
-      if [ -d "$module_dir/tasks" ]; then
-        for task_file in "$module_dir/tasks"/task-*.md; do
-          [ -f "$task_file" ] || continue
-          case "$task_file" in *.engineering.md) continue ;; esac
-          stem=$(basename "$task_file" .md)
-          _stale_worktree_check_one "$repo_root" "$stem" "$live_paths" "$caller_cwd" \
-            && cleaned=$((cleaned + 1))
-        done
-      fi
 
       # 检查 req 自己的 worktree：stem = meta.branch（模块目录名可能是中文）
       branch=$(python3 -c "import json,sys; print(json.load(open(sys.argv[1])).get('branch',''))" "$meta" 2>/dev/null || echo "")

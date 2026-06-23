@@ -1,7 +1,7 @@
 # banner-rules：视觉锚点与 Decision gate label 规范（M2 单一真相源）
 
 > **职责**：banner 格式 + Next Up 块格式 + Decision gate label 3 硬规则（M3 砍后整合到 M2）。
-> **调用方**：next / init-project / new-req / task-confirm / task-execute / close-task / close-req（所有用户面 skill）。
+> **调用方**：next / init-project / new-req / design / build / close / cancel-req（所有用户面 skill）。
 > **设计来源**：gsd `autonomous.md:62-69, 155-163` / `execute-phase.md:1725-1730` / `transition.md:494-509`（banner + Next Up）+ gsd `new-project.md:368-380` "Ready?" Decision gate。
 
 ---
@@ -14,7 +14,7 @@
 ━━━ PMAI ► <SKILL> ▸ <Name> ━━━
 ```
 
-- `<SKILL>`：当前 skill 名，大写（如 `NEXT` / `INIT-PROJECT` / `TASK-EXECUTE`）
+- `<SKILL>`：当前 skill 名，大写（如 `NEXT` / `INIT-PROJECT` / `BUILD`）
 - `<Name>`：阶段显示名（如 `范围确认` / `build` / `复审`）
 - **不打 stage 号**：stage 号是内部状态标记、不再 PM-facing，banner 只显阶段名
 
@@ -74,7 +74,7 @@ stage 名字以 `scripts/_lib/stages.py:STAGE_NAMES` 为单一真相源（中文
 
 ## ▶ Next Up — /pmai-next（范围确认拍板后，进 build）
 
-## ▶ Next Up — /pmai-close-req（req 全 task 完成，merge 进 main）
+## ▶ Next Up — /close（复审通过后收尾沉淀）
 ```
 
 ### §2.3 何时打
@@ -96,13 +96,13 @@ Next Up 块 / skill 退出提示 / 状态转换后输出 / 错误退出提示 �
 
 **禁内部实现术语**：`merge → req` / `task 分支` / `req 分支` / `worktree` / `delete branch` / `commit 到 X 分支` / `git diff` 之类描述 git 内部操作的词汇。
 
-**禁"AI 为啥这样安排"的原理解释**：典型如「理由：Phase 1 必须在 task 窗口跑——agent 要直接读 task 改动的原型代码并把 task md 改动 commit 到 task 分支；跨 worktree 改会污染 req 分支历史。Phase 2 才切 req 窗口（删 task worktree 不能"删自己脚下"）」—— PM 不需要懂内部机制 / 不需要 AI 自证流程合理。给 PM 的应该是「现在做啥 + 一句话目的」，不是「AI 为啥选这条路径」。
+**禁"AI 为啥这样安排"的原理解释**：PM 不需要懂内部机制 / 不需要 AI 自证流程合理。给 PM 的应该是「现在做啥 + 一句话目的」，不是「AI 为啥选这条路径」。
 
-**允许保留**：`task 窗口` / `req 窗口` / 命令名（`/pmai-close-task` `/pmai-task-execute`）/ cwd 切换提示 —— 这些是 PM 必须知道的操作信息（PM 自己要决定在哪个窗口敲哪个命令），不算工程黑话。
+**允许保留**：命令名（如 `/build` / `/close`）和必要路径提示；这些是 PM 必须知道的操作信息。
 
 **改写公式**：
-- 工程版："启动 Phase 1（task md ↔ 原型对齐 / 文档偏差校验 / 视觉规范沉淀 DESIGN.md / commit 到 task 分支 / 写 finalize marker）" → PM 版："本次 close 收尾在当前窗口做完（文档对齐 + 视觉规范沉淀）"
-- 工程版："AI 会自动走 Phase 2 完成 merge + 删 task worktree/branch + auto-chain" → PM 版："AI 自动完成本 task 的归档，并自动开下一个 task（如果还有）"
+- 工程版："启动复审脚本、合并分支、删除隔离环境" → PM 版："我会把这次建好的内容检查完，确认后收尾到主线。"
+- 工程版："执行器写了 12 个文件，coverage diff 命中 3 项" → PM 版："我会列出已建内容和未覆盖的验收点，让你决定要不要继续改。"
 
 **反例（C 类不适用）**：PM 决策 picker 里的「AI 倾向 A，理由：<本 req 具体情况一行>」—— 这是给 PM 决策的素材（PM 选 A/B 要看 AI 倾向理由判断），**不是**解释 AI 流程安排，本规则不约束。判定标准：理由内容是"帮 PM 做选择"还是"解释 AI 已经做了的选择"，后者禁。
 
@@ -120,7 +120,7 @@ Next Up 块 / skill 退出提示 / 状态转换后输出 / 错误退出提示 �
 
 | 形态 | 是否走 §3 | 例子 |
 |---|---|---|
-| **任何 PM 决策门**（stage 转换 / 选择分流 / 推进确认 / 验收 / 留守 vs 推进 / 多分支选择）| ✅ **必须用 AskUserQuestion**（runtime 不支持时按 askuser-rules.md §1.3 退化为编号列表）| `/pmai-next` 推进门；new-req 三条上坡路选择门；`/pmai-init-project` 阶段 C；`/pmai-new-req` 缺口补问；close-task §1.5 B 类对齐；`/pmai-task-execute` 步骤 12 验收 |
+| **任何 PM 决策门**（阶段转换 / 选择分流 / 推进确认 / 验收 / 留守 vs 推进 / 多分支选择）| ✅ **必须用 AskUserQuestion**（runtime 不支持时按 askuser-rules.md §1.3 退化为编号列表）| `/pmai-next` 推进门；new-req 上坡路选择门；`/pmai-init-project` 阶段 C；`/build` 隔离环境与执行器选择；`/close` 沉淀确认 |
 | AI 主动告知 / 状态播报（不要 PM 答）| ❌ prose 输出即可 | banner / Next Up 块 / skill 启动播报 / 进展告知 |
 | 反问澄清（PM 输入语义模糊，AI 需 PM 补一句话再决定走 A/B/C，不是闸门决策）| ❌ prose 反问 | "你说的'改原型'指本次范围里的改动，还是想新起一个需求？" |
 
@@ -141,7 +141,7 @@ Next Up 块 / skill 退出提示 / 状态转换后输出 / 错误退出提示 �
 | "创建 PRODUCT.md" | "继续探索" |
 | "拍板范围清单，进 build" | "继续收范围" |
 | "开始 build" | "继续改决策页" |
-| "启动 task-001" | "改 task scope" |
+| "开始 build" | "继续改模块规格" |
 
 **错误**（**禁用模糊词**）：
 
@@ -200,12 +200,12 @@ options:
 ### §4.1 stage 转换流程
 
 ```
-1. agent 完成 stage N 工作
-2. 打 stage N+1 banner（§1.2 格式；status-view.py --banner-only 提供数据）
-3. 执行 stage N+1 第一个动作
+1. agent 完成当前阶段工作
+2. 打下一阶段 banner（§1.2 格式；status-view.py --banner-only 提供数据）
+3. 执行下一阶段第一个动作
 4. 跑到 PM 输入点 → Decision gate（§3 模板）
-5. PM 答推进 → 进 stage N+2 入口（回 step 2）
-   PM 答留守 → Loop 回 stage N 讨论态（§3.3）
+5. PM 答推进 → 进入下一阶段入口（回 step 2）
+   PM 答留守 → Loop 回当前阶段讨论态（§3.3）
 6. skill 退出（stage 全完成 / PM `--stop` / 失败）→ Next Up 块（§2）
 ```
 

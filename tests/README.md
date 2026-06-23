@@ -9,10 +9,8 @@
 bash tests/run-all.sh
 
 # 跑单个脚本的测试
-bash tests/test-close-task.sh
 bash tests/test-close-req.sh
 bash tests/test-check-branch.sh
-bash tests/test-task-transition.sh
 bash tests/test-req-transition.sh
 bash tests/test-cancel-req.sh
 ```
@@ -28,10 +26,8 @@ tests/
 │   └── fixture.sh               # setup/teardown：创建假项目结构
 ├── fixtures/
 │   └── (运行时临时目录)
-├── test-close-task.sh
 ├── test-close-req.sh
 ├── test-check-branch.sh
-├── test-task-transition.sh
 ├── test-req-transition.sh
 └── test-cancel-req.sh
 ```

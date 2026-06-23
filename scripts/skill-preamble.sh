@@ -8,16 +8,14 @@
 #   REPO_ROOT            - 当前 worktree 根目录（业务数据：requirements/、docs/、prototypes/）
 #                          向后兼容：如果在 main 分支，REPO_ROOT == MAIN_REPO_ROOT
 #   BRANCH               - 当前分支
-#   WORKTREE_TYPE        - main / req / task
+#   WORKTREE_TYPE        - main / req / legacy-task
 #   ACTIVE_REQ           - 活跃 req ID（cwd 唯一确定 req 时设值；main + 多 active 时留空）
 #   ACTIVE_REQ_STAGE     - 活跃 req 当前 stage（同 ACTIVE_REQ 的留空规则）
 #   ACTIVE_REQ_DIR       - 活跃 req 目录绝对路径（同上）
 #   ACTIVE_REQ_COUNT     - 检测到的 active req 数量（0 / 1 / 多）
-#   ACTIVE_TASK          - 活跃 task stem
-#   ACTIVE_TASK_STATUS   - 活跃 task 状态
 #
 # 多 active req 语义：
-#   - 在 req/task worktree 里：cwd 唯一确定 req，ACTIVE_REQ 必单值
+#   - 在 req worktree 里：cwd 唯一确定 req，ACTIVE_REQ 必单值
 #   - 在主仓 main：可能有 0/1/多 active req
 #       0: 三个变量空
 #       1: ACTIVE_REQ 单值（同旧行为）
@@ -83,7 +81,7 @@ WORKTREE_TYPE="main"
 if [[ "$BRANCH" == req-* ]]; then
   WORKTREE_TYPE="req"
 elif [[ "$BRANCH" == task-* ]]; then
-  WORKTREE_TYPE="task"
+  WORKTREE_TYPE="legacy-task"
 fi
 
 # --- 4. 读取活跃 req（cwd 优先；main 时可能多 active） ---
@@ -124,7 +122,7 @@ _collect_active_reqs_in() {
   done
 }
 
-# req/task worktree 里 cwd 唯一确定 req（自身 active/ 必只含一个）
+# req worktree 里 cwd 唯一确定 req（自身 active/ 必只含一个）
 # 主仓 main：扫主仓 + 所有 .worktrees/req-*，可能 0/1/多 active
 if [ "$WORKTREE_TYPE" != "main" ]; then
   _collect_active_reqs_in "$CURRENT_WORKTREE_ROOT"
@@ -156,40 +154,6 @@ if [ "$ACTIVE_REQ_COUNT" -eq 1 ]; then
   ACTIVE_REQ_STAGE="${_ACTIVE_REQ_STAGES[0]}"
 fi
 
-# --- 5. 读取活跃 task ---
-ACTIVE_TASK=""
-ACTIVE_TASK_STATUS=""
-
-if [ -n "$ACTIVE_REQ_DIR" ]; then
-  _tasks_dir="$ACTIVE_REQ_DIR/tasks"
-  if [ -d "$_tasks_dir" ]; then
-    _state_py="$PMAI_HOME/scripts/_lib/state.py"
-    for _tf in "$_tasks_dir"/task-*.md; do
-      [ -f "$_tf" ] || continue
-      case "$_tf" in *.engineering.md) continue;; esac
-      _st=$(python3 "$_state_py" get_status "$_tf" 2>/dev/null || true)
-      if [ "$_st" = "执行中" ]; then
-        ACTIVE_TASK=$(basename "$_tf" .md)
-        ACTIVE_TASK_STATUS="$_st"
-        break
-      fi
-    done
-    # 如果没有执行中的，找待执行的
-    if [ -z "$ACTIVE_TASK" ]; then
-      for _tf in "$_tasks_dir"/task-*.md; do
-        [ -f "$_tf" ] || continue
-        case "$_tf" in *.engineering.md) continue;; esac
-        _st=$(python3 "$_state_py" get_status "$_tf" 2>/dev/null || true)
-        if [ "$_st" = "待执行" ]; then
-          ACTIVE_TASK=$(basename "$_tf" .md)
-          ACTIVE_TASK_STATUS="$_st"
-          break
-        fi
-      done
-    fi
-  fi
-fi
-
 # --- 6. 中断恢复检测（使用主仓的 .runs/） ---
 _PENDING_DIR="$MAIN_REPO_ROOT/.runs"
 if [ -d "$_PENDING_DIR" ]; then
@@ -218,66 +182,12 @@ except: print(0)
       fi
     fi
 
-    echo "⚠️ 检测到上次 /$_skill_name 执行中断。运行 /pmai-task-status 查看当前状态。"
+    echo "⚠️ 检测到上次 /$_skill_name 执行中断。运行 /pmai-status 查看当前状态。"
     rm -f "$_pf"
   done
 fi
 
-# --- 6b. Manual 任务等待汇总（非阻塞，汇总式，支持 snooze + 年龄降级） ---
-if [ -d "$_PENDING_DIR" ]; then
-  _manual_aggregate=$(python3 - "$_PENDING_DIR" <<'PY' 2>/dev/null || echo ""
-import glob
-import json
-import os
-import sys
-from datetime import datetime, timezone
-
-pending_dir = sys.argv[1]
-now = datetime.now(timezone.utc)
-total = 0
-old = 0
-for f in glob.glob(os.path.join(pending_dir, ".pending-manual-*.json")):
-    try:
-        data = json.load(open(f))
-    except Exception:
-        continue
-    snoozed = data.get("snoozed_until")
-    if snoozed:
-        try:
-            snooze_dt = datetime.fromisoformat(snoozed)
-            if snooze_dt.tzinfo is None:
-                snooze_dt = snooze_dt.replace(tzinfo=timezone.utc)
-            if snooze_dt > now:
-                continue
-        except Exception:
-            pass
-    total += 1
-    started = data.get("started_at", "")
-    if started:
-        try:
-            s = datetime.fromisoformat(started)
-            if s.tzinfo is None:
-                s = s.replace(tzinfo=timezone.utc)
-            age_days = (now - s).days
-            if age_days > 7:
-                old += 1
-        except Exception:
-            pass
-print(f"{total}\t{old}")
-PY
-  )
-  _manual_total=$(echo "$_manual_aggregate" | awk '{print $1}')
-  _manual_old=$(echo "$_manual_aggregate" | awk '{print $2}')
-  if [ -n "$_manual_total" ] && [ "$_manual_total" != "0" ] 2>/dev/null; then
-    if [ "${_manual_old:-0}" != "0" ] 2>/dev/null && [ "${_manual_old:-0}" -gt 0 ] 2>/dev/null; then
-      echo "⚠️  有 $_manual_total 个 manual task 等待中（$_manual_old 个超过 7 天）。运行 /pmai-task-status 查看详情。"
-    else
-      echo "ℹ️  有 $_manual_total 个 manual task 等待中。运行 /pmai-task-status 查看详情。"
-    fi
-  fi
-fi
-
-# --- 6c. quick-fix 残留 worktree 提醒（非阻塞） ---
+# --- 6b. quick-fix 残留 worktree 提醒（非阻塞） ---
 if [ -d "$MAIN_REPO_ROOT/.worktrees" ]; then
   _quickfix_leftovers=()
   for _qf_wt in "$MAIN_REPO_ROOT"/.worktrees/tmp-quick-*; do
@@ -308,13 +218,10 @@ elif [ "$ACTIVE_REQ_COUNT" -gt 1 ]; then
   done
   echo "提示：当前在主仓视角，多 active req 并行 — 操作具体 req 请先 cd 进对应 worktree。"
 fi
-[ -n "$ACTIVE_TASK" ] && echo "ACTIVE_TASK: $ACTIVE_TASK ($ACTIVE_TASK_STATUS)"
-
-# v4 A1 修订: 主窗口兜底收口 — preamble 输出 task 概览摘要 (Codex C2)
-# 单窗口 lifecycle 下作为兜底 (主路径在新窗口完成验收 + close)
+# 主窗口兜底收口：preamble 输出当前需求摘要。
 if [ -n "$ACTIVE_REQ" ] || ls "$MAIN_REPO_ROOT"/.worktrees/req-* >/dev/null 2>&1; then
-  python3 "$MAIN_REPO_ROOT/$HOME/.pmai/scripts/status-view.py" --summary 2>/dev/null || true
+  python3 "$PMAI_HOME/scripts/status-view.py" --summary 2>/dev/null || true
 fi
 
 export MAIN_REPO_ROOT REPO_ROOT CURRENT_WORKTREE_ROOT BRANCH WORKTREE_TYPE
-export ACTIVE_REQ ACTIVE_REQ_STAGE ACTIVE_REQ_DIR ACTIVE_REQ_COUNT ACTIVE_TASK ACTIVE_TASK_STATUS
+export ACTIVE_REQ ACTIVE_REQ_STAGE ACTIVE_REQ_DIR ACTIVE_REQ_COUNT

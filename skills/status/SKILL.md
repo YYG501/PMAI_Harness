@@ -6,13 +6,13 @@ description: |
 
 # /pmai-status
 
-> 轻量现状视图。复用 `status-view.py`，**只读、不改任何状态**。区别于 dormant 的 `pmai-task-status`（那是旧 task 机器的状态视图，默认不用）。
+> 轻量现状视图。复用 `status-view.py`，**只读、不改任何状态**。
 
 ## When To Use
 
 - PM 想看：当前产品现状 / 在做哪个模块 / 最近的重要决策。
 - 开新窗口、隔天回来，想一眼知道"我在哪、上次做到哪、下一步建议"。
-- 不适用：要推进工作 → `/design`；要看 task 机器细节 → dormant 的 `pmai-task-status`（默认不用）。
+- 不适用：要推进工作 → `/design`。
 
 ## Preamble
 
@@ -41,5 +41,4 @@ echo "SKILL: status"
 ## Rules
 
 - 只读视图，绝不写文件 / 改状态（区别于会改状态的 `/design` / `/build` / `/close`）。
-- 是轻量现状视图，**不是** dormant 的 `pmai-task-status`（旧 task 机器）。
 - PM 话术不出内部词（`.req-meta` / 真相源 / 派生 等不直接念给 PM）。

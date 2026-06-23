@@ -77,11 +77,11 @@ PM 提修正 → 改现状档 → 重新呈交。
 
 ### 步骤 3.5：产品模块清单 + modulespec 主规格骨架（PM 选择性触发）
 
-> **brownfield 项目专属步骤**：老代码库的模块边界往往已经稳定在代码里（菜单 / 路由 / 模块目录结构）。本步骤提取「产品模块清单」+ 按 `$PMAI_HOME/skills/codebase-audit/templates/module.md.tmpl` 生成 `docs/modules/<m>.md` 主规格骨架。
+> **brownfield 项目专属步骤**：老代码库的模块边界往往已经稳定在代码里（菜单 / 路由 / 模块目录结构）。本步骤提取「产品模块清单」+ 按 `$PMAI_HOME/skills/codebase-audit/templates/module.md.tmpl` 生成 `docs/modules/<m>/spec.md` 主规格骨架。
 >
-> **为什么有这步**：不建 modulespec → 后续 task 偏差表无 baseline 可 diff →「本 req 新建/改了稳定结构但 `docs/modules/` 无对应规格文件」常态化 → 每个 req close 时 §1.5 step 2.5 反复问「这次稳定结构要不要沉淀」。一次性建好 = 反查退化成真正的兜底。
+> **为什么有这步**：不建 modulespec → 后续 build / close 无 baseline 可 diff →「本次新建/改了稳定结构但 `docs/modules/` 无对应规格文件」常态化。一次性建好 = 反查退化成真正的兜底。
 >
-> **新项目（greenfield）不需要本步骤** —— IA 还没定，过早建会写一堆空 placeholder；走 close-req §1.5 step 2.5 反查按需生长。
+> **新项目（greenfield）不需要本步骤** —— IA 还没定，过早建会写一堆空 placeholder；走 `/design` / `/close` 按需生长。
 
 **PM 触发**：步骤 3 现状档确认后问 PM：
 
@@ -89,13 +89,13 @@ PM 提修正 → 改现状档 → 重新呈交。
 ✅ 现状档已确认。
 
 你这个老项目已经有稳定的产品模块边界（基于代码扫描识别出 N 个候选模块）。
-要不要现在建 docs/modules/<m>.md 主规格骨架？
+要不要现在建 docs/modules/<m>/spec.md 主规格骨架？
 
-✅ 好处：后续 task 偏差表能直接 diff，close-req 不会反复问「这次稳定结构要不要沉淀」
+✅ 好处：后续 build / close 能直接 diff，不会反复问「这次稳定结构要不要沉淀」
 ⚠️ 代价：现在多花 N 分钟过一遍模块清单 + 看 AI 生成的骨架
 
 [Y] 现在建（推荐 —— 项目 IA 已经稳定的老项目都应该建）
-[N] 跳过（IA 还在演化，按需走，靠 close-req §1.5 step 2.5 兜底）
+[N] 跳过（IA 还在演化，按需走，靠 /design / /close 兜底）
 ```
 
 **PM 选 Y 时执行**：
@@ -115,7 +115,7 @@ PM 提修正 → 改现状档 → 重新呈交。
 
    1. <module-name>
       证据：<src/ 路径 + 文件数 + 关键文件>
-      建议主规格路径：docs/modules/<module-name>.md
+      建议主规格路径：docs/modules/<module-name>/spec.md
       简短定位（AI 草拟，≤30 字）：<...>
       检测到的稳定结构：菜单(src/.../X.ts) / 路由(src/.../Y.ts) / schema(src/.../Z.ts)
 
@@ -124,11 +124,11 @@ PM 提修正 → 改现状档 → 重新呈交。
 
    PM 可以：合并 / 拆分 / 改名 / 排除某条 / 增加 AI 漏掉的。PM 修正 → AI 调整 → 重新呈交 → PM 确认。
 
-3. **生成主规格骨架**：按 `$PMAI_HOME/skills/codebase-audit/templates/module.md.tmpl` 为每个确认模块建 `docs/modules/<m>.md` ——
+3. **生成主规格骨架**：按 `$PMAI_HOME/skills/codebase-audit/templates/module.md.tmpl` 为每个确认模块建 `docs/modules/<m>/spec.md` ——
 
    - **§摘要**：AI 写 1-3 句（基于代码扫到的功能形态 + PRODUCT.md / 代码现状档）
    - **§一 模块定位 1.1-1.4**：AI 填能扫到的部分；**1.4 职责边界末尾追加「**稳定结构指针**」sub-bullet 列菜单 / 路由 / schema / config 文件路径**（指针不抄内容，防漂移）
-   - **§二 功能清单**：保持模板空（后续 task close 时由 close-req §1.5 sediment 填）
+   - **§二 功能清单**：保持模板空（后续 design / close 按需填）
    - **§三 页面与交互范围**：AI 填能扫到的（路由表 / 页面文件）
    - **§四 硬约束** / **§五 跨模块依赖与占位策略**：保持空，PM 后续按需补
    - **顶部状态行**：保留模板的「草稿 | 未经 PM 确认 | 生成时间」标记 —— 让 PM 后续知道哪些段是 AI bootstrap 的、哪些是后续 req sediment 的
@@ -137,7 +137,7 @@ PM 提修正 → 改现状档 → 重新呈交。
 
 5. **PM 审 diff**：呈交 `git diff docs/modules/`，PM 满意 → 本步骤结束。不满意 → AI 调整。PM 大改 → 可以中止 step 3.5 走 [N] 路径。
 
-**PM 选 N 时**：跳过本步骤；step 4 交接时提示「modulespec 骨架未建，后续 close-req §1.5 step 2.5 反查会兜底」。
+**PM 选 N 时**：跳过本步骤；step 4 交接时提示「modulespec 骨架未建，后续 /design / /close 反查会兜底」。
 
 ### 步骤 3.5.5：docs/DESIGN.md inventory 段兜底（无条件兜底，独立于 step 3.5 选择）
 
@@ -277,7 +277,7 @@ PM 在 step 3 轻停顿说「继续」后，**在本流程内直接接着跑项�
   - `docs/PRODUCT-STATE.md` 兜底建骨架（**step 3.5.7 无条件**，反推填现状三段，产品定位一句话 step 4 回填）
   - `docs/PRODUCT.md` + `docs/TODO.md`（**step 4 内联方向讨论，PM 在 Decision gate 拍板后**）
   - `docs/.project-solution-open-questions.md`（step 4 未决问题闸门暂存文件）
-  - `docs/modules/<m>.md` 主规格骨架（**仅当 step 3.5 PM 选 [Y]**）
+  - `docs/modules/<m>/spec.md` 主规格骨架（**仅当 step 3.5 PM 选 [Y]**）
   - `docs/modules/INDEX.md` 刷新（**仅当 step 3.5 PM 选 [Y]**）
   - `docs/DESIGN.md` 兜底建 / 追加 inventory 段（**step 3.5.5 无条件，跟 step 3.5 选择无关**）
 - **允许动作**：read-only 扫码、7 维度盘点、防 secret redact、step 3.5 选 [Y] 时按 `$PMAI_HOME/skills/codebase-audit/templates/module.md.tmpl` 生成主规格骨架、step 3.5.5 兜底 DESIGN.md inventory 段、step 3.5.7 兜底 PRODUCT-STATE.md（反推填现状三段，定位 step 4 回填）、step 4 内联方向讨论（@读 `_shared/project-questioning.md`）

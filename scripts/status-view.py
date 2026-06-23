@@ -8,17 +8,14 @@
 本文件只做：
 - 选用 active req 渲染策略（0 个 / 1 个 / 多个）
 - 单 req 的字段格式（stage 名 / icon / 下一步建议）
-- pending manual + quick-fix 段
+- quick-fix 段
 """
 
 from __future__ import annotations
 
 import argparse
-import glob
-import json
 import subprocess
 import sys
-from datetime import datetime, timezone
 from pathlib import Path
 
 # 让 _lib 可以 import（status-view.py 自身在 scripts/，_lib 是同级子目录）
@@ -30,15 +27,8 @@ from _lib.state import (  # noqa: E402
     get_current_stage_banner,
     get_overall_state,
     get_timeline_state,
-    list_tasks,
 )
 from _lib.stages import STAGE_NAMES, MAX_STAGE  # noqa: E402  ( F13 单一真相源)
-
-STATUS_ICONS = {
-    "待执行": "⏳",
-    "执行中": "🔄",
-    "已完成": "✅",
-}
 
 
 def find_repo_root() -> Path:
@@ -73,47 +63,19 @@ def _format_last_event(ev: dict | None) -> str | None:
     return etype
 
 
-def _task_worktree_exists(repo_root: Path, task_stem: str) -> bool:
-    worktrees_dir = repo_root / ".worktrees"
-    if not worktrees_dir.exists():
-        return False
-    exact = worktrees_dir / task_stem
-    if exact.is_dir():
-        return True
-    return any(
-        wt.is_dir() and wt.name.startswith(f"{task_stem}-")
-        for wt in worktrees_dir.iterdir()
-    )
-
-
 def render_summary(state: dict, repo_root: Path) -> None:
-    """One-line task overview for preamble output."""
-    counts = {"执行中": 0, "待启动": 0, "待 spec": 0}
-    seen_stems: set[str] = set()
-
-    for req in state["active_reqs"]:
-        for t in req["tasks"]:
-            stem = t["path"].stem
-            if stem in seen_stems:
-                continue
-            seen_stems.add(stem)
-            status = (t["meta"] or {}).get("status", "")
-            if status == "执行中":
-                counts["执行中"] += 1
-            elif status == "待执行" and _task_worktree_exists(repo_root, stem):
-                counts["待启动"] += 1
-        counts["待 spec"] += len(req["pending_spec"])
-
-    if not any(counts.values()):
-        print("📋 暂无 active task")
+    """One-line active req overview for preamble output."""
+    active = state["active_reqs"]
+    if not active:
+        print("📭 暂无 active req")
         return
-
-    print(
-        "📋 task 概览: "
-        f"执行中 {counts['执行中']} / "
-        f"待启动 {counts['待启动']} / "
-        f"待 spec {counts['待 spec']}"
-    )
+    parts = []
+    for req in active:
+        meta = req["meta"]
+        req_id = meta.get("id", "?")
+        stage = meta.get("stage", 0)
+        parts.append(f"{req_id}:{STAGE_NAMES.get(stage, '?')}")
+    print("📋 active req: " + " / ".join(parts))
 
 
 def render_banner_only(state: dict, repo_root: Path, skill: str) -> None:
@@ -130,7 +92,7 @@ def render_banner_only(state: dict, repo_root: Path, skill: str) -> None:
         return
     # 取第一个 active req（典型场景：单 PM 同时 1-2 个 req）
     req_view = active[0]
-    req_dir = req_view["dir"]
+    req_dir = req_view["req_dir"]
     try:
         banner = get_current_stage_banner(req_dir, skill=skill)
     except Exception as exc:  # noqa: BLE001
@@ -179,17 +141,11 @@ def render_narrative(state: dict, repo_root: Path) -> None:
         req_id = req["req_dir"].name
         stage = meta.get("stage", 0)
         stage_name = STAGE_NAMES.get(int(stage), f"stage {stage}") if stage else "未知"
-        tasks = req["tasks"]
-        task_summary = ""
-        if tasks:
-            in_progress = sum(1 for t in tasks if (t["meta"] or {}).get("status") == "执行中")
-            done = sum(1 for t in tasks if (t["meta"] or {}).get("status") == "已完成")
-            task_summary = f"，共 {len(tasks)} 个 task（执行中 {in_progress}，已完成 {done}）"
         # 不写 commit hash / 时间细节；只点 stage 状态
         prod = _product_oneliner(repo_root)
         prod_line = f"你的产品：{prod}\n" if prod else ""
         print(
-            f"{prod_line}当前在做 {req_id}（{stage_name} 阶段{task_summary}）。"
+            f"{prod_line}当前在做 {req_id}（{stage_name} 阶段）。"
             f"\n下一步：发 /pmai-next 推进，或继续当前阶段工作。"
         )
         return
@@ -204,7 +160,7 @@ def render_narrative(state: dict, repo_root: Path) -> None:
         req_id = req["req_dir"].name
         stage = meta.get("stage", 0)
         stage_name = STAGE_NAMES.get(int(stage), f"stage {stage}") if stage else "未知"
-        print(f"  - {req_id}：{stage_name} 阶段，{len(req['tasks'])} 个 task")
+        print(f"  - {req_id}：{stage_name} 阶段")
     print("\n下一步：发 /status-view 看详细，或 /pmai-next 推进具体 req。")
 
 
@@ -259,35 +215,14 @@ def suggest_next_action(req_view: dict) -> str:
     六步：1 范围确认 / 2 build / 3 复审 / 4 沉淀（MAX_STAGE=4）。"""
     meta = req_view["meta"]
     stage = meta.get("stage", 0)
-    tasks = req_view["tasks"]
 
-    # 范围确认（≤1）：定 / 细化范围清单、拆 task
+    # 范围确认（≤1）：定 / 细化模块规格
     if stage <= 1:
-        return f"继续{STAGE_NAMES.get(stage, '范围确认')}：定 / 细化范围清单（发 /pmai-next 推进）"
+        return f"继续{STAGE_NAMES.get(stage, '范围确认')}：定 / 细化模块规格（发 /pmai-next 推进）"
 
-    # build（2）：逐个 task 在原型上做出来 + 三道审 + PM 验收（单窗口，/pmai-next 驱动）
+    # build（2）：对模块 spec 直建 + 三道审 + PM 验收
     if stage == 2:
-        for t in tasks:
-            status = (t["meta"] or {}).get("status", "")
-            name = t["path"].stem
-            if status == "执行中":
-                return f"执行中 {name}：AI 实现 / 等 PM 验收（可跑 /pmai-task-submit 重新看呈交块）"
-            if status == "待执行":
-                return f"发 /pmai-next 推进 build 起 {name}"
-
-        all_done = bool(tasks) and all(
-            (t["meta"] or {}).get("status") == "已完成" for t in tasks
-        )
-        if not all_done:
-            return "运行 /pmai-task-status 查看详情"
-
-        pending = req_view["pending_spec"]
-        if pending:
-            next_id = pending[0]["id"]
-            tail = f"（还有 {len(pending)} 个未起）" if len(pending) > 1 else ""
-            return f"task-plan 里还有未起的 task：发 /pmai-next 继续 build {next_id}{tail}"
-
-        return "所有 task 已完成，发 /pmai-next 推进到复审 / 沉淀"
+        return "build 阶段：发 /pmai-next 选择模块并进入 /build"
 
     # 复审（3）
     if stage == 3:
@@ -295,73 +230,9 @@ def suggest_next_action(req_view: dict) -> str:
 
     # 沉淀（≥4 = MAX_STAGE）
     if stage >= 4:
-        return "沉淀阶段：运行 /pmai-close-req 沉淀产品现状 + 关闭需求"
+        return "沉淀阶段：运行 /close 沉淀产品现状 + 关闭需求"
 
-    return "运行 /pmai-task-status 查看详情"
-
-
-def render_manual_section(repo_root: Path) -> None:
-    pending_dir = repo_root / ".runs"
-    if not pending_dir.exists():
-        return
-
-    pattern = str(pending_dir / ".pending-manual-*.json")
-    files = glob.glob(pattern)
-    if not files:
-        return
-
-    now = datetime.now(timezone.utc)
-    items: list[dict] = []
-    for fp in files:
-        try:
-            data = json.load(open(fp, encoding="utf-8"))
-        except Exception:
-            continue
-        snoozed = data.get("snoozed_until")
-        if snoozed:
-            try:
-                s = datetime.fromisoformat(snoozed)
-                if s.tzinfo is None:
-                    s = s.replace(tzinfo=timezone.utc)
-                if s > now:
-                    continue
-            except Exception:
-                pass
-        items.append(data)
-
-    if not items:
-        return
-
-    print("Manual 等待中：")
-    for data in sorted(items, key=lambda d: d.get("started_at", "")):
-        task_id = data.get("task_id", "?")
-        started = data.get("started_at", "")
-        age_str = ""
-        if started:
-            try:
-                s = datetime.fromisoformat(started)
-                if s.tzinfo is None:
-                    s = s.replace(tzinfo=timezone.utc)
-                days = (now - s).days
-                hrs = int(((now - s).total_seconds() % 86400) // 3600)
-                age_str = f"等待 {days} 天 {hrs} 小时"
-            except Exception:
-                age_str = started
-        print(f"  {task_id}（{age_str}）")
-    print()
-    sample_task = items[0].get("task_file", "<task-file>")
-    sample_id = items[0].get("task_id", "task-NNN")
-    print("下一步：")
-    print(f"  完成手工实现后： /pmai-task-execute {sample_id}")
-    print(
-        f"  暂时不想管：     python3 $HOME/.pmai/scripts/task-transition.py "
-        f"{sample_task} --snooze-manual --days 3"
-    )
-    print(
-        f"  放弃该 task：    python3 $HOME/.pmai/scripts/task-transition.py "
-        f"{sample_task} --cancel-manual"
-    )
-    print()
+    return "运行 /pmai-status 查看详情"
 
 
 def render_quickfix_section(repo_root: Path) -> None:
@@ -394,31 +265,6 @@ def render_quickfix_section(repo_root: Path) -> None:
     print()
 
 
-def _render_task_lines(req_view: dict) -> None:
-    """渲染 req_view 下 spec 过的 task + pending_spec。"""
-    for t in req_view["tasks"]:
-        meta = t["meta"] or {}
-        status = meta.get("status", "?")
-        icon = STATUS_ICONS.get(status, "❓")
-
-        try:
-            title = t["path"].read_text(encoding="utf-8").split("\n")[0]
-            title = title.replace("# ", "").strip()
-        except Exception:
-            title = t["path"].stem
-
-        line = f"  {icon} {title} — {status}"
-        if status == "执行中":
-            last_event = _format_last_event(t.get("last_event"))
-            if last_event:
-                line += f"（最后活动：{last_event}）"
-        print(line)
-
-    for p in req_view["pending_spec"]:
-        display = p.get("title") or p["id"]
-        print(f"  📝 {p['id']}: {display} — 待 spec")
-
-
 def _render_single_req(req_view: dict) -> None:
     meta = req_view["meta"]
     req_id = meta.get("id", "?")
@@ -432,11 +278,6 @@ def _render_single_req(req_view: dict) -> None:
     print(f"Worktree：{req_dir.parent.parent.parent}")
     print()
 
-    if req_view["tasks"] or req_view["pending_spec"]:
-        print("Task 状态：")
-        _render_task_lines(req_view)
-        print()
-
     print(f"下一步：{suggest_next_action(req_view)}")
 
 
@@ -445,7 +286,6 @@ def render_status(state: dict, repo_root: Path) -> None:
 
     if not active:
         print("📭 没有活跃的需求。运行 /pmai-new-req 开始一个新需求。")
-        render_manual_section(repo_root)
         render_quickfix_section(repo_root)
         return
 
@@ -460,12 +300,6 @@ def render_status(state: dict, repo_root: Path) -> None:
         print(f"Stage：{stage} - {stage_name}")
         print()
 
-        if req_view["tasks"] or req_view["pending_spec"]:
-            print("Task 状态：")
-            _render_task_lines(req_view)
-            print()
-
-        render_manual_section(repo_root)
         render_quickfix_section(repo_root)
 
         print(f"下一步：{suggest_next_action(req_view)}")
@@ -479,7 +313,6 @@ def render_status(state: dict, repo_root: Path) -> None:
         _render_single_req(req_view)
         print()
 
-    render_manual_section(repo_root)
     render_quickfix_section(repo_root)
     print("提示：操作具体 req 请先 cd 进对应 worktree 再跑 skill；主仓视角不默选某个 req。")
 
@@ -507,13 +340,7 @@ def render_timeline(timeline_state: dict, repo_root: Path) -> None:
             req_name = meta.get("name", "")
             stage = meta.get("stage", 0)
             stage_name = STAGE_NAMES.get(stage, "?")
-            tasks = list_tasks(item["req_dir"], repo_root=repo_root)
             print(f"🔄 {req_id} · {req_name}（{stage_name}）")
-            if tasks:
-                done = sum(1 for t in tasks if t.get("meta", {}).get("status") == "已完成")
-                print(f"   ↳ {done}/{len(tasks)} tasks")
-            else:
-                print("   ↳ 0/0 tasks")
 
     print()
 
@@ -534,9 +361,7 @@ def render_timeline(timeline_state: dict, repo_root: Path) -> None:
             req_name = meta.get("name", "")
             cd = item.get("close_date")
             date_str = cd.strftime("%Y-%m-%d") if cd else "?"
-            tasks = list_tasks(item["req_dir"], repo_root=repo_root)
-            task_count_str = f"{len(tasks)} tasks" if tasks else "0 tasks"
-            print(f"✅ {req_id} · {req_name}（关闭 {date_str} · {task_count_str}）")
+            print(f"✅ {req_id} · {req_name}（关闭 {date_str}）")
 
     print()
 
@@ -568,8 +393,8 @@ def main() -> None:
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""\
 示例:
-  status-view.py                          当前所有 req / task 概览
-  status-view.py --summary                一行任务概览
+  status-view.py                          当前所有 req 概览
+  status-view.py --summary                一行 active req 概览
   status-view.py --timeline               全局时间线（active + closed + cancelled）
   status-view.py --timeline --module auth 只看 auth 模块相关 req
   status-view.py --timeline --all         时间线显示全部 archived
@@ -582,7 +407,7 @@ def main() -> None:
         help="Repository root (auto-detected if omitted)",
     )
     parser.add_argument(
-        "--summary", action="store_true", help="Print one-line task overview"
+        "--summary", action="store_true", help="Print one-line active req overview"
     )
     parser.add_argument(
         "--timeline", action="store_true",

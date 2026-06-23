@@ -65,24 +65,22 @@ worktree 残留检测报警时，先把警告原文一句话转给 PM（"发现 
 
 | 当前阶段 | `/pmai-next` 做什么 |
 |---|---|
-| **范围确认** | 读产品现状 + 跑当前主原型找 delta，和 PM 把范围谈成 `req-plan.md`（范围清单 + 关键决策页），PM 拍板。范围细化 / 列范围清单走 `/pmai-task-plan`；想深挖工程 HOW 按需后台走 `/pmai-implementation-design`。结构决策当场逐条问 PM 拍。**范围定稿前，若关键决策页里还有没拍板的问题，用 `check-open-questions.py` 拦住、逐条让 PM 答完才放行，不给绕过的口子。** |
-| **build** | 在 `prototype/` 里用 Claude Code 栈内建这次的增量（零录入、mode 中立），动手前**强制 @读 `docs/DESIGN.md`**。看 demo 确认方向的工作单元走 `/pmai-task-execute` |
+| **范围确认** | 读产品现状 + 跑当前主原型找 delta，和 PM 把范围谈成模块规格草案：`docs/modules/<模块>/discussion.md` / `decisions.md` / `spec.md`。范围细化、结构决策和 mock 讨论走 `/design`；结构决策当场逐条问 PM 拍。**范围定稿前，若关键决策页里还有没拍板的问题，用 `check-open-questions.py` 拦住、逐条让 PM 答完才放行，不给绕过的口子。** |
+| **build** | 调 `/build <模块>`：对着 `docs/modules/<模块>/spec.md` 在 `prototype/` 里建，动手前强制读 `docs/DESIGN.md`，建完进入复审。 |
 | **复审** | build 完自动跑三道审：覆盖审计（范围清单 vs 实际改了什么的硬对比）+ 视觉门（gstack `/design-review` 只截图不改）+ 行为审（按验收流程跑 gstack `/browse`）。审完进体验迭代 + 呈交闸门，等 PM 验收 |
-| **沉淀** | 调 `/pmai-close-req` 收尾：更新产品现状（PRODUCT-STATE）+ 把主原型合回主线；PM 要拿去评审时按需反向出可评审 PRD |
+| **沉淀** | 调 `/close` 收尾：更新产品现状（PRODUCT-STATE）+ 决策 / 术语 / 模块规格归位；PM 要拿去评审时按需反向出可评审 PRD |
 
 每个阶段的具体流程在对应 skill 里，本 skill 只负责**判断当前在哪一步、报清楚、把对应能力拉起来**，不复制各 skill 的内部细节。
 
-### build 阶段：串行 / 并行派发（按 task-plan 拍的执行模式）
+### build 阶段：模块级直建
 
-task-plan 里 PM 拍过这次的执行模式（串行 / 并行 / 混合）。build 推进按它走：
+build 阶段不再拆 task。`/pmai-next` 只需要定位当前 active req 涉及的模块，并把控制权交给 `/build <模块>`：
 
-- **串行**：一个 task 走完 `/pmai-task-execute`（建 → 三道审 → 呈交）、PM 拍板，再起下一个。
-- **并行**：把**依赖已满足、互不冲突**的 task **各派一个独立执行器并发建**——每个 task 自己的 locked worktree、自己的执行器（claude subagent / codex / cursor / gemini）。全部建完 + 各自三道审后，**逐个呈交 PM 验收**（建并发、呈交仍串行，PM 一个个拍）。
-- **混合**：先串行打底的 task（产规范 / 被依赖的），再把后面独立的并发铺开。
+- 单模块：直接提示将调用 `/build <模块>`，等 PM 确认后进入 build。
+- 多模块：先列出模块清单，让 PM 选本轮先建哪个；每次 build 只对一个模块规格负责，避免一次 prompt 混多个边界。
+- 小改：如果看下来只是字段 / 文案 / 局部组件微调，提示 PM 直接改，不启动 build 流。
 
-> **一 task 一执行器（铁律，2026-04-22 串台根因）**：并发时**绝不让一个执行器一口气干多个 task**。每个 task = 一次独立 `/pmai-task-execute` 派发 = 一个只认自己 worktree 的执行器（workspace 限定 + 越界保护兜底）。2026-04-22 事故就是一个 Codex suborchestrator 一气干了 task-001→006、把各 task 代码混进一个 worktree——结构上禁掉「一执行器多 task」即根除。
-> 并发安全：每 task worktree 建时 `git worktree lock`（防一个 task 的清理 prune 掉另一个在跑的）；同 task 重复派发由 per-task lock 挡。
-> **安全边界（2026-05-30 实测 + PM 拍板「接受残留」）**：外部执行器**不能靠 sandbox / config 物理关进自己的 worktree**——codex `workspace-write` 实测放行整个 `$HOME`（cwd / `writable_roots` 都收窄不动它），`git worktree lock` 也不拦 fs 写。所以防线是**结构化**：一 task 一执行器 + dispatch 越界保护（扫自己 worktree 超 allowlist 的文件、rollback）——足以挡 2026-04-22 那次事故形态（执行器把别 task 代码堆进**自己**的 worktree 再 commit）。**残留**：执行器故意写绝对路径到**兄弟** worktree 物理拦不住，但非历史形态、正常 build prompt 不诱发、低概率；真物理隔离（容器 / 独立 uid）对单人工具不成比例，**不做**。
+`/build` 自己负责隔离环境、执行器选择、三道审和呈交验收；`/pmai-next` 不复制这些细节。
 
 ### 第 4 步：推进后给一句 Next Up
 

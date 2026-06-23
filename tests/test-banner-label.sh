@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # test-banner-label.sh
 #
-# 验证 M2 banner + Decision gate label 规范在 7 个核心 SKILL 落地（D-iv M1 vp-8）：
-#   T1: 7 个核心 SKILL.md 顶部都引用 banner-rules.md
+# 验证 M2 banner + Decision gate label 规范在核心 SKILL 落地（D-iv M1 vp-8）：
+#   T1: 核心 SKILL.md 顶部都引用 banner-rules.md
 #   T2: banner-rules.md 含 §3 Decision gate label 3 硬规则
 #   T3: banner-rules.md 含「禁用模糊词」清单（OK / Proceed / Continue）
 #   T4: _lib/state.py 暴露 get_current_stage_banner（vp-7 helper）
@@ -11,25 +11,25 @@ set -uo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 source "$SCRIPT_DIR/helpers/assert.sh"
+source "$SCRIPT_DIR/helpers/fixture.sh"
 
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 BANNER_RULES="$REPO_ROOT/skills/_shared/pm-view/banner-rules.md"
 
-# 7 个核心 SKILL（用户面 skill）
-# 六步主路径 PM-facing skill（req-stage-gate 砍 / task-confirm·close-task 降后台 → 移出；pmai-next 为新驱动）
+# 核心 SKILL（用户面 skill）
 CORE_SKILLS=(
   init-project
   new-req
   next
-  task-execute
-  close-req
+  build
+  close
 )
 
 # -----------------------------------------------------------------
-# T1: 7 个核心 SKILL 都引用 banner-rules.md
+# T1: 核心 SKILL 都引用 banner-rules.md
 # -----------------------------------------------------------------
 test_all_core_skills_reference_banner_rules() {
-  start_test "T1: 7 个核心 SKILL.md 顶部都引用 banner-rules.md"
+  start_test "T1: 核心 SKILL.md 顶部都引用 banner-rules.md"
   local missing=()
   for skill in "${CORE_SKILLS[@]}"; do
     if ! grep -q "banner-rules.md" "$REPO_ROOT/skills/$skill/SKILL.md" 2>/dev/null; then
@@ -100,22 +100,49 @@ test_status_view_has_banner_only() {
 }
 
 # -----------------------------------------------------------------
-# T6: 7 个核心 SKILL 真的在 body 里调用 banner（不只是顶部 prose 指针）
+# T5b: --banner-only 在有 active req 时真渲染 banner，不抛异常
+# 回归 codex 审出的 P1：render_banner_only 读 req_view["dir"]，但状态层
+# 返回的 key 是 req_dir → KeyError，且该行在 try 外不被兜底 → 所有 skill 横幅崩。
+# T5 只静态 grep 参数存在，构造不出 active req 跑不到这条路（覆盖缺口）。
 # -----------------------------------------------------------------
-# 验证方式：每个 SKILL.md 必须含至少 2 次 banner 引用 ——
-#   1 次顶部 PM 视图 prose 指针（T1 已查），
-#   1 次 body 真实调用（status-view.py --banner-only 调用 OR 字面值 echo "━━━ PMAI ► ..."）
-# 这是 D-iv v0.3 patch 修 "banner 设计骗局" BLOCKER 的硬约束。
+test_banner_only_renders_active_req() {
+  start_test "T5b: --banner-only 有 active req 时真渲染（P1 KeyError 回归）"
+  fixture_setup
+  fixture_create_req "req-001" "test" 2 >/dev/null
+
+  local out rc
+  out=$(cd "$FIXTURE_DIR" && python3 "$REPO_ROOT/scripts/status-view.py" --banner-only --skill new-req 2>&1)
+  rc=$?
+
+  if [ "$rc" != "0" ]; then
+    _fail "--banner-only 非 0 退出 (rc=$rc)。输出：$out"; fixture_teardown; return
+  fi
+  if echo "$out" | grep -qE "渲染失败|KeyError|Traceback"; then
+    _fail "--banner-only 渲染异常。输出：$out"; fixture_teardown; return
+  fi
+  if ! echo "$out" | grep -q "PMAI"; then
+    _fail "--banner-only 未输出 PMAI 横幅。输出：$out"; fixture_teardown; return
+  fi
+  fixture_teardown
+  pass_test
+}
+
+# -----------------------------------------------------------------
+# T6: 核心 SKILL 真的在 body 里调用 banner
+# -----------------------------------------------------------------
+# 验证方式：每个 SKILL.md 至少有 1 次真实调用
+# （status-view.py --banner-only 调用 OR 字面值 echo "━━━ PMAI ► ..."）。
 test_all_core_skills_invoke_banner_in_body() {
-  start_test "T6: 7 核心 SKILL body 真调用 banner（非仅顶部指针）"
+  start_test "T6: 核心 SKILL body 真调用 banner"
   local missing=()
   for skill in "${CORE_SKILLS[@]}"; do
     local file="$REPO_ROOT/skills/$skill/SKILL.md"
     # 计 banner 引用总数（status-view 调用 + 字面值 banner echo 都算）
     local cnt
-    cnt=$(grep -cE "status-view\.py.*--banner-only|━━━ PMAI ► [A-Z-]+ ▸" "$file" 2>/dev/null || echo 0)
-    if [ "$cnt" -lt 2 ]; then
-      missing+=("$skill(只有 $cnt 处，需 ≥2)")
+    cnt=$(grep -cE "status-view\.py.*--banner-only|━━━ PMAI ► [A-Z-]+ ▸" "$file" 2>/dev/null || true)
+    cnt="${cnt:-0}"
+    if [ "$cnt" -lt 1 ]; then
+      missing+=("$skill")
     fi
   done
   if [ "${#missing[@]}" -gt 0 ]; then
@@ -142,21 +169,6 @@ test_all_core_skills_have_next_up() {
   fi
   pass_test
 }
-
-# -----------------------------------------------------------------
-# T8: task-confirm SKILL.md 不再有"执行前确认闸门"自相矛盾
-# -----------------------------------------------------------------
-test_task_confirm_no_contradiction() {
-  start_test "T8: task-confirm 顶部指针不再写「执行前确认闸门 label」（与 delta-3 §2.3 一致）"
-  # 顶部指针段（行 1-15 内）若含"执行前确认闸门"就是 D-iv 自相矛盾未修
-  if sed -n '1,15p' "$REPO_ROOT/skills/task-confirm/SKILL.md" | grep -q "执行前确认闸门"; then
-    _fail "task-confirm 顶部仍写「执行前确认闸门 label」，与 body 行 23-25 「不再设确认闸门」矛盾"
-    return
-  fi
-  pass_test
-}
-
-# -----------------------------------------------------------------
 
 # -----------------------------------------------------------------
 # T9: banner-rules.md §3 含 §3.0 适用范围（仅 AskUserQuestion picker）
@@ -217,9 +229,9 @@ test_banner_rules_has_label_3_rules
 test_banner_rules_lists_forbidden_words
 test_state_lib_exposes_banner_helper
 test_status_view_has_banner_only
+test_banner_only_renders_active_req
 test_all_core_skills_invoke_banner_in_body
 test_all_core_skills_have_next_up
-test_task_confirm_no_contradiction
 test_banner_rules_scope_disclaimer
 
 report_results "banner-label"

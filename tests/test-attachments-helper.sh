@@ -46,12 +46,12 @@ test_copy_attachment_happy_path() {
   out=$(_run_py "
 from _lib.attachments import copy_attachment
 r = copy_attachment(Path('$req_dir'), Path('$src'), 'analysis', 'test hint')
-assert r['new_name'] == 'analysis-source-mock.pdf', r['new_name']
-assert (Path('$req_dir') / 'attachments' / 'analysis-source-mock.pdf').exists()
+assert r['new_name'] == 'docs/inputs/attachments/analysis-source-mock.pdf', r['new_name']
+assert r['abs_path'].exists()
 meta = json.loads((Path('$req_dir') / '.req-meta.json').read_text())
 seen = meta['attachments_seen']
 assert len(seen) == 1, seen
-assert seen[0]['name'] == 'analysis-source-mock.pdf'
+assert seen[0]['name'] == 'docs/inputs/attachments/analysis-source-mock.pdf'
 assert seen[0]['hint'] == 'test hint'
 assert seen[0]['stage_prefix'] == 'analysis'
 # pending_inject: analysis.md 不存在
@@ -78,7 +78,7 @@ test_copy_attachment_req_plan_anchor() {
 from _lib.attachments import copy_attachment
 # req-plan.md 不存在 → pending_inject True + 命名前缀 req-plan
 r = copy_attachment(Path('$req_dir'), Path('$src'), 'req-plan', 'h')
-assert r['new_name'] == 'req-plan-spec-mock.pdf', r['new_name']
+assert r['new_name'] == 'docs/inputs/attachments/req-plan-spec-mock.pdf', r['new_name']
 assert r['pending_inject'] == True, r
 # 建 req-plan.md 后 → pending_inject False（证明六步锚点在映射里）
 (Path('$req_dir') / 'req-plan.md').write_text('# plan')
@@ -164,12 +164,12 @@ test_register_list_round_trip() {
 
   out=$(_run_py "
 from _lib.attachments import register_attachment, list_attachments_seen
-register_attachment(Path('$req_dir'), 'analysis-x.pdf', src_origin='/orig/x.pdf', hint='hint X', stage_prefix='analysis')
-register_attachment(Path('$req_dir'), 'analysis-y.pdf', src_origin='/orig/y.pdf', hint='hint Y', stage_prefix='analysis')
+register_attachment(Path('$req_dir'), 'docs/inputs/attachments/analysis-x.pdf', src_origin='/orig/x.pdf', hint='hint X', stage_prefix='analysis')
+register_attachment(Path('$req_dir'), 'docs/inputs/attachments/analysis-y.pdf', src_origin='/orig/y.pdf', hint='hint Y', stage_prefix='analysis')
 seen = list_attachments_seen(Path('$req_dir'))
 assert len(seen) == 2, seen
-assert seen[0]['name'] == 'analysis-x.pdf'
-assert seen[1]['name'] == 'analysis-y.pdf'
+assert seen[0]['name'] == 'docs/inputs/attachments/analysis-x.pdf'
+assert seen[1]['name'] == 'docs/inputs/attachments/analysis-y.pdf'
 assert seen[0]['src_origin'] == '/orig/x.pdf'
 assert seen[0]['hint'] == 'hint X'
 print('OK')
@@ -195,7 +195,7 @@ test_is_seen_legacy_req() {
 
   out=$(_run_py "
 from _lib.attachments import is_seen, list_attachments_seen
-assert is_seen(Path('$req_dir'), 'analysis-x.pdf') == False
+assert is_seen(Path('$req_dir'), 'docs/inputs/attachments/analysis-x.pdf') == False
 assert list_attachments_seen(Path('$req_dir')) == []
 print('OK')
 ")
@@ -222,10 +222,11 @@ test_remove_attachment() {
   out=$(_run_py "
 from _lib.attachments import copy_attachment, remove_attachment, is_seen
 copy_attachment(Path('$req_dir'), Path('$src'), 'analysis', 'hint')
-assert is_seen(Path('$req_dir'), 'analysis-source.pdf')
-remove_attachment(Path('$req_dir'), 'analysis-source.pdf')
-assert not (Path('$req_dir') / 'attachments' / 'analysis-source.pdf').exists()
-assert not is_seen(Path('$req_dir'), 'analysis-source.pdf')
+name = 'docs/inputs/attachments/analysis-source.pdf'
+assert is_seen(Path('$req_dir'), name)
+remove_attachment(Path('$req_dir'), name)
+assert not (Path('$req_dir').parents[2] / name).exists()
+assert not is_seen(Path('$req_dir'), name)
 print('OK')
 ")
   if echo "$out" | grep -q "^OK$"; then
@@ -302,7 +303,7 @@ try:
     copy_attachment(Path('$req_dir'), Path('$src'), '../analysis')
     print('FAIL: unsafe stage_prefix should be rejected')
 except AttachmentError:
-    assert not (Path('$req_dir') / 'attachments').exists()
+    assert not (Path('$FIXTURE_DIR') / 'docs/inputs/attachments').exists()
     print('OK')
 ")
   if echo "$out" | grep -q "^OK$"; then
@@ -330,15 +331,16 @@ test_replace_attachment() {
   out=$(_run_py "
 from _lib.attachments import copy_attachment, replace_attachment, list_attachments_seen
 copy_attachment(Path('$req_dir'), Path('$src_old'), 'analysis', 'v1 hint')
-r = replace_attachment(Path('$req_dir'), 'analysis-v1.pdf', Path('$src_new'))
-assert r['new_name'] == 'analysis-v1.pdf', r  # 保留旧 filename
-dst = Path('$req_dir') / 'attachments' / 'analysis-v1.pdf'
+old_name = 'docs/inputs/attachments/analysis-v1.pdf'
+r = replace_attachment(Path('$req_dir'), old_name, Path('$src_new'))
+assert r['new_name'] == old_name, r  # 保留旧 filename
+dst = r['abs_path']
 assert dst.exists()
 content = dst.read_bytes()
 assert content == b'NEW content much longer', content  # 新内容已替换
 seen = list_attachments_seen(Path('$req_dir'))
 assert len(seen) == 1, seen
-assert seen[0]['name'] == 'analysis-v1.pdf'
+assert seen[0]['name'] == old_name
 # src_origin 用 endswith 比较（macOS /var/ vs /private/var/ resolve 差异）
 assert seen[0]['src_origin'].endswith('/v2.pdf'), seen[0]['src_origin']
 print('OK')
@@ -367,7 +369,7 @@ test_path_expanduser() {
   out=$(_run_py "
 from _lib.attachments import copy_attachment
 r = copy_attachment(Path('$req_dir'), Path('~/.pmaiwf-test-expand-$$.pdf'), 'analysis')
-assert r['new_name'] == 'analysis-.pmaiwf-test-expand-$$.pdf' or '.pmaiwf-test-expand-' in r['new_name'], r
+assert r['new_name'] == 'docs/inputs/attachments/analysis-.pmaiwf-test-expand-$$.pdf' or '.pmaiwf-test-expand-' in r['new_name'], r
 assert r['abs_path'].exists()
 print('OK')
 ")
@@ -395,7 +397,7 @@ test_filename_with_spaces() {
   out=$(_run_py "
 from _lib.attachments import copy_attachment
 r = copy_attachment(Path('$req_dir'), Path('$src'), 'analysis')
-assert r['new_name'] == 'analysis-foo bar.pdf', r
+assert r['new_name'] == 'docs/inputs/attachments/analysis-foo bar.pdf', r
 assert r['abs_path'].exists()
 content = r['abs_path'].read_text()
 assert content == 'space content'
@@ -415,23 +417,24 @@ print('OK')
 # -----------------------------------------------------------------
 
 test_trigger2_regression_manual_cp_detection() {
-  start_test "trigger 2 regression: PM 手动 cp 进 attachments/ + is_seen 判定（基于 attachments_seen 真相源）"
+  start_test "trigger 2 regression: PM 手动 cp 进 docs/inputs/attachments/ + is_seen 判定（基于 attachments_seen 真相源）"
   fixture_setup
   req_dir=$(fixture_create_req "req-010" "test" 2)
 
   # 模拟 PM 手动 cp（绕过 trigger 0）—— 文件落盘但 attachments_seen 无登记
-  mkdir -p "$req_dir/attachments"
-  printf 'manual cp content' > "$req_dir/attachments/analysis-manual.pdf"
+  mkdir -p "$FIXTURE_DIR/docs/inputs/attachments"
+  printf 'manual cp content' > "$FIXTURE_DIR/docs/inputs/attachments/analysis-manual.pdf"
 
   out=$(_run_py "
 from _lib.attachments import is_seen, register_attachment, list_attachments_seen
 # regression 关键：is_seen 是 False（因 attachments_seen 列表无该条目，即使文件已落盘）
 # 这正是 trigger 2 改造的核心 —— 不用引用 section 判，用 attachments_seen 真相源判
-assert is_seen(Path('$req_dir'), 'analysis-manual.pdf') == False
+name = 'docs/inputs/attachments/analysis-manual.pdf'
+assert is_seen(Path('$req_dir'), name) == False
 # trigger 2 流程：caller 扫到 + is_seen=False → 问 PM → 答 OK 后补登记
-register_attachment(Path('$req_dir'), 'analysis-manual.pdf', src_origin='manual-cp', hint='补登记', stage_prefix='analysis')
+register_attachment(Path('$req_dir'), name, src_origin='manual-cp', hint='补登记', stage_prefix='analysis')
 # 补登记后 is_seen=True
-assert is_seen(Path('$req_dir'), 'analysis-manual.pdf') == True
+assert is_seen(Path('$req_dir'), name) == True
 seen = list_attachments_seen(Path('$req_dir'))
 assert len(seen) == 1
 print('OK')
@@ -450,10 +453,9 @@ print('OK')
 # -----------------------------------------------------------------
 
 test_skill_prose_trigger0_added() {
-  start_test "grep: 5 个 stage SKILL 已加 trigger 0 段"
+  start_test "grep: 主路径 SKILL 已加 trigger 0 段"
   local all_ok=1
-  # req-analysis 已删（C1 删 skill 搬内核到 _shared/req-questioning.md；探索段附件走 attachments-upload.md 按类型归类）
-  for skill in skills/new-req/SKILL.md skills/prd-writing/SKILL.md skills/task-spec/SKILL.md skills/implementation-design/SKILL.md skills/task-plan/SKILL.md; do
+  for skill in skills/new-req/SKILL.md skills/prd-writing/SKILL.md; do
     if ! grep -q "copy_attachment" "$FRAMEWORK_ROOT/$skill"; then
       _fail "$skill 未加 copy_attachment 引用（trigger 0 段缺失）"
       all_ok=0
@@ -465,12 +467,11 @@ test_skill_prose_trigger0_added() {
 }
 
 test_skill_prose_new_req_commit_pathspec() {
-  start_test "grep: new-req 步骤 4D commit pathspec 含 attachments/"
-  # worktree 创建后置后：attachments/ 总在 4D 一次 commit 范围里（更强契约）
-  if grep -q '"$REQ_REL/attachments"' "$FRAMEWORK_ROOT/skills/new-req/SKILL.md"; then
+  start_test "grep: new-req 说明附件归 docs/inputs/"
+  if grep -q 'docs/inputs' "$FRAMEWORK_ROOT/skills/new-req/SKILL.md"; then
     pass_test
   else
-    _fail "new-req 4D commit pathspec 未含 attachments/"
+    _fail "new-req 未说明附件归 docs/inputs/"
   fi
 }
 
