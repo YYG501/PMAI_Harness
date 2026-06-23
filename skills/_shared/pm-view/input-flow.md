@@ -7,7 +7,7 @@
 当前四段模型：
 
 ```
-① 设计：design 把需求收敛到模块三件套
+① 设计：design 把需求收敛到已拍板结论，prd-writing 成文为模块 spec
 ② build：对着 docs/modules/<模块>/spec.md 在 prototype/ 建
 ③ 复审：覆盖审计 + 视觉门 + 行为审 + PM 体验迭代
 ④ close：沉淀 PRODUCT-STATE / PRODUCT-RULES / 模块规格，必要时反向 PRD
@@ -47,7 +47,7 @@ PM 上传的外部材料统一归档到 `docs/inputs/attachments/`。强约束�
 | `docs/PRODUCT-RULES.md` | 🟢 | 全项目跨功能产品行为规则 |
 | `docs/modules/INDEX.md` | 🟢 | 模块入口索引 |
 
-### 设计（design）
+### 设计（design + prd-writing 模块规格模式）
 
 - 🟢 `docs/PRODUCT-STATE.md`
 - 🟢 `docs/PRODUCT-RULES.md`
@@ -58,7 +58,7 @@ PM 上传的外部材料统一归档到 `docs/inputs/attachments/`。强约束�
 - 🟡 `docs/inputs/attachments/`（如 PM 上传材料，仅作 evidence）
 - ❌ 任何 `.engineering.md`
 
-产出以模块为单位落在 `docs/modules/<模块>/`：讨论记录进 `discussion.md`，拍板理由进 `decisions.md`，可建规格进 `spec.md`。不要生成 `task-plan.md` 或 `tasks/task-NNN.md`。
+产出以模块为单位落在 `docs/modules/<模块>/`：`/pmai-design` 负责探索、设计和 PM 拍板；`/pmai-prd-writing` 的模块规格模式负责把已拍板内容成文为 `spec.md`，并统一把关结构和语言风格。讨论记录进 `discussion.md`，拍板理由进 `decisions.md`，可建规格进 `spec.md`。不要生成 `task-plan.md` 或 `tasks/task-NNN.md`。
 
 ### build（模块级直建）
 
@@ -180,6 +180,7 @@ prototype 文件 > 500 行 → **禁止**整文件 Read。读法：
     ▼
 范围确认 / design
   docs/modules/<模块>/discussion.md · decisions.md · spec.md
+  （design 收敛内容，prd-writing 统一成文 spec）
     │
     ▼
 build

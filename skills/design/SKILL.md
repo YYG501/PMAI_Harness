@@ -1,16 +1,16 @@
 ---
 name: pmai-design
 description: |
-  设计或重做一个功能模块时的唯一入口，也是唯一的写规格 skill。三段式：①探索（还原真问题，escape-hatch 默认放行）→ ②设计（按需求类型选方法把信息理清）→ ③写规格（演进模块三件套 discussion / decisions / spec）。新开 / 重做都走它；重做 = 就地升版同一文件夹。只动文档、不开 worktree。小改直接 /pmai-close，大需求转 /pmai-build。
+  设计或重做一个功能模块时的唯一设计入口。三段式：①探索（还原真问题，escape-hatch 默认放行）→ ②设计（按需求类型选方法把信息理清）→ ③交给 /pmai-prd-writing 成文 spec.md（与 discussion / decisions 组成模块三件套）。新开 / 重做都走它；重做 = 就地升版同一文件夹。只动文档、不开 worktree。小改直接 /pmai-close，大需求转 /pmai-build。
   Always trigger when the user says 设计 / 重做 / 改一下某张卡 / 某个页面 / 某个模块, 写规格, 把信息理清, 或起一个新功能需求。
   do NOT use for 纯样式微调 / 文案错字 / 不动信息结构的 bug —— 那些直接改。
 ---
 
-# /pmai-design · 设计 + 写规格（唯一写规格 skill · 三段式）
+# /pmai-design · 设计驾驶舱（三段式）
 
-> 本 skill 是设计的"驾驶舱"。三段式：**①探索 → ②设计 → ③写规格**——先懂问题再设计（探索 ⊥ 信息设计是两个正交阶段，上一轮 reshape 把 ① 整段砍没了、这次补回）。方法论全文不内嵌在这——开工前 `@读`：
+> 本 skill 是设计的"驾驶舱"。三段式：**①探索 → ②设计 → ③交给 prd-writing 成文**——先懂问题再设计（探索 ⊥ 信息设计是两个正交阶段，上一轮 reshape 把 ① 整段砍没了、这次补回）。方法论全文不内嵌在这——开工前 `@读`：
 > - `skills/_shared/module-questioning.md`（**①探索**：对话诊断还原真问题、escape-hatch 默认档、闻味触发清单）
-> - `skills/_shared/info-design.md`（**②设计 + ③写规格**：真通用内核 3 条、按需求类型选方法七类、规格通用骨架、磨文字纪律、规格 4 问治法）
+> - `skills/_shared/info-design.md`（**②设计 + ③成文**：真通用内核 3 条、按需求类型选方法七类、规格通用骨架、磨文字纪律、规格 4 问治法）
 > - `skills/_shared/consistency-scan.md`（收口：改原型 / 规格 → 对账 → flag）
 >
 > 给 PM 的话里**不出现** 通用内核 / 4 环 / 三身份 / drift 这类内部术语，全程大白话。
@@ -25,10 +25,10 @@ description: |
 
 ## 这个 skill 干什么 · 不干什么
 
-- **干**：判断新开还是重做哪个模块 → 加载跨需求记忆（分档读）→ **①探索还原真问题** → **②按需求类型选方法理清信息**（一步一停、必要时调 `/mockup` 确认设计）→ **③写 / 演进三件套** → 磨文字 + 派 subagent 冷读 + 一致性扫描收口。
+- **干**：判断新开还是重做哪个模块 → 加载跨需求记忆（分档读）→ **①探索还原真问题** → **②按需求类型选方法理清信息**（一步一停、必要时调 `/mockup` 确认设计）→ **③调用 `/pmai-prd-writing` 把已拍板结论写成 `spec.md`** → 一致性扫描收口。
 - **不干**：开 worktree（本 skill **全程在 main 上只动文档**）、写代码建原型（那是 `/pmai-build`）、merge 定稿（那是 `/pmai-close`）。
 
-> **它是唯一的写规格 skill**：探索 + 理结构 + 写骨架 + 磨文字 + 冷读自检全在这一步。原 req-analysis（探索）/ prd-writing / spec-polish 的活都并进来了（它们已删 / 转 dormant）。
+> **它是唯一的设计入口**：探索 + 理结构 + PM 拍板在这一步完成；最终成文交给 `/pmai-prd-writing` 的「模块规格模式」，统一控制 `spec.md` 的结构和语言风格。原 req-analysis（探索）/ spec-polish 的设计与打磨职责已并入本流程，成文规则集中在 prd-writing。
 
 ## PM 视图规则（必读）
 
@@ -37,7 +37,7 @@ description: |
 - `_shared/pm-view/askuser-rules.md`（PM 答题四条硬规则：空答 STOP / 没拿到答案禁止落盘 / runtime 退化保留 wait / 多决策拆开顺序问）
 - `_shared/pm-view/banner-rules.md`（入口 banner + 收尾 ▶ Next Up）
 - `_shared/pm-view/attachments-upload.md`（PM 给材料时，归档到 `docs/inputs/attachments/`，用 `_lib.attachments.copy_attachment` 登记）
-- 写规格时的语言纪律全在 `_shared/info-design.md` 第四块 + **禁用清单单一真相源 `skills/prd-writing/references/writing-rules.md`（L1–L6 + 8 类禁用）**——本 skill 不重抄。
+- 写规格时由 `/pmai-prd-writing` 执行成文与语言把关；本 skill 只负责把内容讨论清楚、把决策拍定。语言纪律全在 `_shared/info-design.md` 第四块 + **禁用清单单一真相源 `skills/prd-writing/references/writing-rules.md`（L1–L6 + 8 类禁用）**——本 skill 不重抄。
 
 ## 铁律 · 先懂问题再设计、先讨论清楚再改
 
@@ -55,9 +55,9 @@ echo "SKILL: design"
 python3 "$PMAI_HOME/scripts/status-view.py" --banner-only --skill DESIGN || true
 ```
 
-## Workflow（三段式：探索 → 设计 → 写规格）
+## Workflow（三段式：探索 → 设计 → 成文）
 
-> 三段正交：**①探索**=要解决什么真问题、**②设计**=怎么把信息摆清楚、**③写规格**=固化成三件套。物理对齐三件套自然顺序（discussion → decisions → spec）。
+> 三段正交：**①探索**=要解决什么真问题、**②设计**=怎么把信息摆清楚、**③成文**=调用 `/pmai-prd-writing` 把已拍板内容固化成 `spec.md`。物理对齐三件套自然顺序（discussion → decisions → spec）。
 
 ### 准备 A · 判断新开还是重做哪个模块
 
@@ -113,9 +113,9 @@ PM 拿"想要的方案"来，先还原成"要解决的真问题"——这是上�
 - **按类型加特化问题集（两面：逻辑面 + 呈现面，详见 `info-design.md` 二）**：先判**逻辑面**（后端规则 / 纯算法 / Agent · 引擎 / 流程 · 状态机），再判**有没有呈现面**——**只要结果给人看，就必须同时按呈现类型（信息密集 UI 卡 / 多对象管理页 / 数据产物）把那张脸设计出来**（落点 / 卡面 / 抽屉 / 交互[看依据 · 否决 · 过目] / 待办落点）、和 PM 确认、视觉调 /mockup。**别把'后端引擎'判定只当逻辑面就收工**（ROI 反面教训）。**三身份只在"信息密集 UI 卡"**。判出某面"不属任何已列类型" → 逐类说理由 + PM 拍 + 事后沉淀回 info-design。
 - **深度自适应、AI 提议 PM 拍**：判这次走全套还是轻过，说一句给 PM（"这个信息挺密、我想把字段从哪来、上卡面还是收抽屉都过一遍，行吗？"），PM 同意再走。**不机械化成"每需求必跑全部问题"**——思路清的简单需求轻过，别拖。
 - **一步一停**：每问（或每两问）和 PM 对一次。讨论过程续写进 `discussion.md`；拍定的点**上移**进 `decisions.md`（含"这是 X 类需求"判定）/ `spec.md`，底稿不再当真相。
-- **呈现面收尾自检（进段③写规格前必过）**：这东西有没有用户看得见的输出？有 → 我跟 PM 确认过它**显示在哪、长什么样、怎么交互**了吗？没确认，不许进写规格。
+- **呈现面收尾自检（进段③成文前必过）**：这东西有没有用户看得见的输出？有 → 我跟 PM 确认过它**显示在哪、长什么样、怎么交互**了吗？没确认，不许进成文。
 
-写规格前跑未决问题检查；如还有未回答项，逐条让 PM 答完再落 `spec.md`：
+成文前跑未决问题检查；如还有未回答项，逐条让 PM 答完再落 `spec.md`：
 
 ```bash
 python3 "$PMAI_HOME/scripts/check-open-questions.py" "$MODULE_DIR/discussion.md"
@@ -125,9 +125,9 @@ python3 "$PMAI_HOME/scripts/check-open-questions.py" "$MODULE_DIR/discussion.md"
 
 > **护栏（防机械化）**：什么时候多问、什么时候轻过、什么时候调 mock——AI 临场判断，不得写成"每个需求必跑全部特化问题"的死流程。框架只管两头（记忆进场 + 三件套落盘），中间收敛交给判断。
 
-### 段 ③ 写规格 · 演进三件套 + 收口 + 分流（@读 `info-design.md` 三、四、五）
+### 段 ③ 成文 · 调 `/pmai-prd-writing` 演进 spec + 收口 + 分流（@读 `info-design.md` 三、四、五）
 
-把①②的结论落成模块三件套。三件**维度不同、内容零重叠**：
+把①②的结论交给 `/pmai-prd-writing` 的「模块规格模式」落成 `spec.md`，并与前面已写的 `discussion.md` / `decisions.md` 组成模块三件套。三件**维度不同、内容零重叠**：
 
 | 文档 | 装什么 | 铁律 |
 |---|---|---|
@@ -135,13 +135,13 @@ python3 "$PMAI_HOME/scripts/check-open-questions.py" "$MODULE_DIR/discussion.md"
 | `decisions.md` | 拍定的**本模块**决策（结论 + 为什么 + 否过什么 + 被推翻标 supersede）+ "这是 X 类需求"判定 | 只记决策，**不复制规格口径**、链回 spec |
 | `spec.md` | **唯一真相源**：信息模型 + 判定规则 + 字段口径 + 状态机 + 文案 | 评审 / 开发只看这份；别处不许再写一份口径；正文 = 纯最终事实、不留迭代痕迹 |
 
-**spec 怎么写**（详见 `info-design.md` 三）：顶部钉权威声明（与原型不一致以规格为准、没说清先确认）；章节是菜单不是死模板（§六信息模型按需出现、§八核心动作**按七类自适应**、其余有就写没有省）；不嵌原型 ASCII（引用确认的 mock 路径）；术语 grep 收口（用准备 B 加载的业务术语表既有词）。
+**spec 怎么写**由 `/pmai-prd-writing` 负责执行（详见 `info-design.md` 三）：顶部钉权威声明（与原型不一致以规格为准、没说清先确认）；章节是菜单不是死模板（§六信息模型按需出现、§八核心动作**按七类自适应**、其余有就写没有省）；不嵌原型 ASCII（引用确认的 mock 路径）；术语 grep 收口（用准备 B 加载的业务术语表既有词）。
 
 **重做模块 = 就地升版同一文件夹**：`spec.md` 版本 +1 + 变更日志加一行；被推翻的旧结论在 `decisions.md` 标 supersede（不删假装没发生）；只有"模块身份本身变了"才另起 + 归档旧的（例外，PM 拍）；合并旧内容先 **reconcile**（矛盾旧结论标 supersede 或删，不照搬进新真相源）。
 
 **收口三道**（详见 `info-design.md` 四 + `consistency-scan.md`）：
 
-1. **磨文字**：对照 9 条逐条扫（只写最终事实 / 不造词 / 去 AI 腔 / 多步流程用叙述 / 术语全文一致……），改完 grep 自查残留。**只动文字、不动结构**——发现要改的是结构，停下回段②（甚至段①）。禁用清单单一真相源 = `skills/prd-writing/references/writing-rules.md`。
+1. **成文把关**：由 `/pmai-prd-writing` 对照 9 条逐条扫（只写最终事实 / 不造词 / 去 AI 腔 / 多步流程用叙述 / 术语全文一致……），改完 grep 自查残留。**只动文字、不动结构**——发现要改的是结构，停下回段②（甚至段①）。禁用清单单一真相源 = `skills/prd-writing/references/writing-rules.md`。
 2. **派通用 subagent 冷读自检**（白纸读 spec，**不是 `analysis-reviewer`**——那个只评审探索段 discussion 第一节、不审 spec）：拿 spec 当尺子扫两类残留——① 机制 / 落点没说清（状态 / 动作只给名字没说怎么发生、落在哪、记什么）② 内部简称读者要猜。拿回清单逐条改。silent 自检，不升格强制门。
 3. **一致性扫描**：这次改动碰的字段 / 规则 / 概念，grep 规格 ↔ 原型 ↔ DESIGN ↔ 术语表对账；对不上的 flag 给 PM 拍（哪个对 / 有意删还是漏实现 / 术语要不要统一），不静默吞、不自动改。
 
@@ -155,7 +155,7 @@ python3 "$PMAI_HOME/scripts/check-open-questions.py" "$MODULE_DIR/discussion.md"
 输出一句给 PM 说清在哪、下一步：
 
 ```
-模块三件套已写好 / 升版（docs/modules/<模块>/）：真问题、信息模型、规格、决策都齐了，设计也用 mock 确认过（如涉及界面）。
+模块三件套已写好 / 升版（docs/modules/<模块>/）：真问题、信息模型、规格、决策都齐了，成文已按 prd-writing 规则磨过，设计也用 mock 确认过（如涉及界面）。
 
 ▶ Next Up：
   · 改动不大 → 直接 /pmai-close 收尾（定稿 + 回写基线 + 归位）
@@ -164,7 +164,7 @@ python3 "$PMAI_HOME/scripts/check-open-questions.py" "$MODULE_DIR/discussion.md"
 
 ## Rules
 
-- **三段式：①探索 → ②设计 → ③写规格**，先懂问题再设计。探索段是单 PM 唯一外部对抗源，不许跳（但 escape-hatch 默认放行、闻味才 push，不是每次审一遍）。
+- **三段式：①探索 → ②设计 → ③调用 prd-writing 成文**，先懂问题再设计。探索段是单 PM 唯一外部对抗源，不许跳（但 escape-hatch 默认放行、闻味才 push，不是每次审一遍）。
 - **全程在 main 上只动文档、不开 worktree、不建原型**。开 worktree 是 `/pmai-build` 的事、merge 定稿是 `/pmai-close` 的事。
 - **唯一组织单位 = 功能模块**；一模块一文件夹 `docs/modules/<模块>/`，三件套 `discussion.md` / `decisions.md` / `spec.md`，文件名英文、正文中文。
 - **重做模块 = 就地升版同一文件夹**（版本 + 变更日志 + supersede + git 留痕），不 per-版本另开文件夹；身份变了才另起 + 归档旧的（例外，PM 拍）。

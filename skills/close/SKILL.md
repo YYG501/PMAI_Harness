@@ -156,9 +156,9 @@ rm -f "$TMPFILE"
 3. 被取代的老条目打**删除线** + 标"被 v<新版> 取代"（supersede 留痕，不直接删——读者能看到演进）。
 4. 顶部声明保持钉死："本规格是权威定义；与原型不一致以规格为准；没说清的先确认"（治规格 4 问之"分不清原型/规格"）。
 
-**写规格纪律**（@读写规格 skill 的写作纪律 / `_shared/pm-view/writing-rules.md`）：规格只留 normative 文字——"为什么"甩 `decisions.md` / `PRODUCT-RULES`，"原型长什么样"甩 `DESIGN.md` / mock，**规格里不嵌原型 ASCII**（设计确认靠 mock，不靠规格画图）。
+**写规格纪律**（@读 `/pmai-prd-writing` 模块规格模式的写作纪律 / `_shared/pm-view/writing-rules.md`）：规格只留 normative 文字——"为什么"甩 `decisions.md` / `PRODUCT-RULES`，"原型长什么样"甩 `DESIGN.md` / mock，**规格里不嵌原型 ASCII**（设计确认靠 mock，不靠规格画图）。
 
-> **写规格的厚活在写规格 skill / `/pmai-design`**；`/pmai-close` 这一步是"把已定的结论收口落盘 + 升版"，不重新做信息设计。若发现规格还有没理清的信息结构 → 不在 `/pmai-close` 硬写，回 `/pmai-design` 补。
+> **写规格的厚活在 `/pmai-prd-writing` 模块规格模式，设计拍板在 `/pmai-design`**；`/pmai-close` 这一步是"把已定的结论收口落盘 + 升版"，不重新做信息设计。若发现规格还有没理清的信息结构 → 不在 `/pmai-close` 硬写，回 `/pmai-design` 补。
 
 ---
 

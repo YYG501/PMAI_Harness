@@ -6,7 +6,7 @@
 # 两类 PRD 收口位置：
 #   kind=closed     -> docs/prds/<模块>.md        -> ../../docs/modules/<模块>/prd.md
 #   kind=cancelled  -> docs/prds/废弃/<模块>.md   -> ../../../docs/modules/<模块>/prd.md
-#   kind=standalone -> 由 caller 自行 ln（路径自定，见 prd-writing SKILL 步骤 0 收口段）
+#   独立 PRD 不走本 helper；由 caller 自行 ln（路径自定，见 prd-writing SKILL 独立 PRD 收口段）
 #
 # 用法（caller 已 source 本文件）：
 #   create_prd_symlink <repo-root> <模块名> <closed|cancelled>
