@@ -3,13 +3,13 @@ name: pmai-deposit
 description: |
   轻档轻沉淀：PM 在 main 上聊定直落 / 不进完整设计-build 流程的轻量工作做完后，把成果按四类归位进项目底座
   （现状→PRODUCT-STATE / 理路→项目决策记录 / 遗留→TODO / 探索变体→mocks 看版），单独 commit。
-  PM 显式「沉淀一下」入口，也承接 AI 在收敛点的主动提议。轻量同构于 `/close` 的沉淀，但只在 main 触发、重量随产出缩放。
+  PM 显式「沉淀一下」入口，也承接 AI 在收敛点的主动提议。轻量同构于 `/pmai-close` 的沉淀，但只在 main 触发、重量随产出缩放。
 ---
 
 # /pmai-deposit
 
 > **这是什么**：分档运行里**最轻那一档**（main 直接改 / 聊定直落、跳过完整设计-build 流程）的沉淀开火点。让轻档产出也有一个地方收口，不再"飘着没进库 / 真相源乱 / 决策不进库 / mock 找不回"。
-> **和 /close 的关系**：同一套四类分流（@读 `_shared/deposit-routing.md`），但 `/close` 是中/重档工作的完整收尾，本 skill 是 main 上的轻量同构（重量随产出缩放）。
+> **和 /pmai-close 的关系**：同一套四类分流（@读 `_shared/deposit-routing.md`），但 `/pmai-close` 是中/重档工作的完整收尾，本 skill 是 main 上的轻量同构（重量随产出缩放）。
 > **和 quick-fix 的关系**：quick-fix 管"在 main 上改一处"，本 skill 管"把改完的成果沉淀进底座"——两件事，可前后脚发生。
 
 ## When To Use
@@ -17,7 +17,7 @@ description: |
 - PM 在 main 上聊定一个方向 / 顺手改了点东西（小到不值得起 req），想把"产品现在变成什么样 / 为什么这么定 / 还差什么 / 探了哪些视觉"收一下。
 - PM 显式说「沉淀一下」「记一下」「归位」。
 - AI 在回 PM 的某一轮里识别到收敛点（聊定 / 改完）且真有耐久产出时，**主动提议**沉淀（见 CLAUDE.md「AI 主动提议沉淀」行为规则）；PM 点头后走本流程。
-- **不适用**：要完整设计 / 建造 → `/design` / `/build`；只是在 main 改一处文件 → `/pmai-quick-fix`；已经在完整工作里推进 → `/pmai-next` 或 `/close`。
+- **不适用**：要完整设计 / 建造 → `/pmai-design` / `/pmai-build`；只是在 main 改一处文件 → `/pmai-quick-fix`；已经在完整工作里推进 → `/pmai-status` 或 `/pmai-close`。
 
 ## Preamble
 
@@ -26,7 +26,7 @@ source "$HOME/.pmai/scripts/skill-preamble.sh"
 echo "SKILL: deposit"
 ```
 
-本 skill 从**主仓 main** 触发（cwd 在主仓根、分支 = main）。若当前在隔离工作区内 → 告诉 PM「沉淀走对应流程：发 /pmai-next 推到沉淀，或 /close」，退出。
+本 skill 从**主仓 main** 触发（cwd 在主仓根、分支 = main）。若当前在隔离工作区内 → 告诉 PM「沉淀走对应流程：发 /pmai-status 推到沉淀，或 /pmai-close」，退出。
 
 ## Workflow
 
@@ -113,4 +113,4 @@ rm -f "$REPO_ROOT/.runs/deposit-in-progress"
 - **单独 commit、不卷 WIP**：`git add` 逐个列本次沉淀动的文件，禁 `git add -A`；commit message 一律 `沉淀: <一句话>`。
 - **F3 切两挡**：纯静默档（补一句 / 挂索引 / 纯订正）静默写 + 回执一行不强制总审；需审档（决策记录 / 新变体 / 改规则·模块）才总审 diff。
 - **PM 话术纪律**（F-G4）：回执 / 提议只用 PM 视图语言，不出现"四类分流 / 出口①②③④ / manifest / featured / 冻结档 / 索引展开层"等内部词。
-- **防腐铁律不破**：轻沉淀是 PRODUCT-STATE 的合法原子写入口之一（与 `/close` 并列），不是退回"随手改活文档"；写入仍是收敛点触发的原子动作。
+- **防腐铁律不破**：轻沉淀是 PRODUCT-STATE 的合法原子写入口之一（与 `/pmai-close` 并列），不是退回"随手改活文档"；写入仍是收敛点触发的原子动作。

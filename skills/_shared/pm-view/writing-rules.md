@@ -390,7 +390,7 @@ PRD 是产品规格描述,不是给读者的 how-to 指南。**禁用 PM 指令�
 ## 3.13 定稿磨文纪律（吸收 ExampleAgentProject spec-polish · 对账 + 补缺）
 
 > **分工说明（避免三处并存）**：
-> - **9 条磨文的操作正本**在 [`_shared/info-design.md`](../info-design.md) §四「磨文字 · 收口纪律」——`/design` 写规格时 `@读` 那份、照着逐条扫。
+> - **9 条磨文的操作正本**在 [`_shared/info-design.md`](../info-design.md) §四「磨文字 · 收口纪律」——`/pmai-design` 写规格时 `@读` 那份、照着逐条扫。
 > - **L1-L6 + 8 类禁用**在 [`prd-writing/references/writing-rules.md`](../../prd-writing/references/writing-rules.md)。
 > - **本段 §3.13** = **逐条对账记录 + 框架原本缺的三条的详细展开**。info-design 的 9 条磨文是简版口诀；这里把"每条 reconcile 到哪、哪些是新补的"讲透，并把三条新规则的 ❌/✅ 对照写全。三处不重复立同一条规则——info-design 给操作口诀、本段给对账与细则、writing-rules 给禁用清单。
 >

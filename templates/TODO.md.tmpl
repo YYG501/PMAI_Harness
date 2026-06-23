@@ -6,8 +6,8 @@
 
 谁在何时改：
   - /pmai-strategy / /pmai-codebase-audit 首次产出时，只记 PM 主动提过 / 讨论过的待办。
-    AI 不从代码、竞品、requirements/closed 反推填充 —— 池子里只有 PM 真说过想做的。
-  - 沉淀时（/close 或 /pmai-deposit）PM 选「推下个功能」的遗留，自动写入一条，
+    AI 不从代码、竞品或历史归档反推填充 —— 池子里只有 PM 真说过想做的。
+  - 沉淀时（/pmai-close 或 /pmai-deposit）PM 选「推下个功能」的遗留，自动写入一条，
     标题带一句话自包含（建议目标 + 涉及文件），下个需求起步直接看懂、不靠翻 closed。
     这仍是 PM 此刻拍过的遗留，不是 AI 凭空反推 —— "不反推"纪律不破。
     遗留真相源单一在本池子；close-report 只渲染指针「已转入 TODO 第 N 条」。
@@ -17,8 +17,8 @@
 
 状态取值（三态，简单）：
   - todo   — 讨论过 / 提过想做，还没开始
-  - doing  — 正在做（已进入 /design 或 /build）
-  - done   — 做完了（req 已 close）
+  - doing  — 正在做（已进入 /pmai-design 或 /pmai-build）
+  - done   — 做完了（已 close）
 
 字段：工作标识（进入完整工作后可回填，未起前留空）/ 标题 / 状态
       —— 没有「排序」列，待办池不排顺序。

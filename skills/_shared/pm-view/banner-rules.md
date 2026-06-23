@@ -31,7 +31,7 @@ stage 名字以 `scripts/_lib/stages.py:STAGE_NAMES` 为单一真相源（中文
 ### §1.3 何时打
 
 - skill 入口（PM 一发命令就打）
-- 每个 stage 转换前后（/pmai-next 推进 stage N → N+1 时打 N+1 banner）
+- 每个 stage 转换前后（/pmai-status 推进 stage N → N+1 时打 N+1 banner）
 - skill 退出前（让 PM 知道最后停在哪）
 
 ### §1.4 渲染约束（review R6）
@@ -43,7 +43,7 @@ stage 名字以 `scripts/_lib/stages.py:STAGE_NAMES` 为单一真相源（中文
 
 ### §1.5 数据源
 
-`status-view.py --banner-only <req_dir>` 输出一行 banner（实现见 `_lib/state.py:get_current_stage_banner`）。
+`status-view.py --banner-only <work_dir>` 输出一行 banner（实现见 `_lib/state.py:get_current_stage_banner`）。
 
 ---
 
@@ -66,15 +66,15 @@ stage 名字以 `scripts/_lib/stages.py:STAGE_NAMES` 为单一真相源（中文
 ### §2.2 例子
 
 ```
-## ▶ Next Up — cd <target-dir> && /design "<一句话需求>"
+## ▶ Next Up — cd <target-dir> && /pmai-design "<一句话需求>"
 
 ▶ Next Up:
   cd <target-dir>
-  /design "<一句话需求>"
+  /pmai-design "<一句话需求>"
 
-## ▶ Next Up — /pmai-next（范围确认拍板后，进 build）
+## ▶ Next Up — /pmai-status（范围确认拍板后，进 build）
 
-## ▶ Next Up — /close（复审通过后收尾沉淀）
+## ▶ Next Up — /pmai-close（复审通过后收尾沉淀）
 ```
 
 ### §2.3 何时打
@@ -98,7 +98,7 @@ Next Up 块 / skill 退出提示 / 状态转换后输出 / 错误退出提示 �
 
 **禁"AI 为啥这样安排"的原理解释**：PM 不需要懂内部机制 / 不需要 AI 自证流程合理。给 PM 的应该是「现在做啥 + 一句话目的」，不是「AI 为啥选这条路径」。
 
-**允许保留**：命令名（如 `/build` / `/close`）和必要路径提示；这些是 PM 必须知道的操作信息。
+**允许保留**：命令名（如 `/pmai-build` / `/pmai-close`）和必要路径提示；这些是 PM 必须知道的操作信息。
 
 **改写公式**：
 - 工程版："启动复审脚本、合并分支、删除隔离环境" → PM 版："我会把这次建好的内容检查完，确认后收尾到主线。"
@@ -112,7 +112,7 @@ Next Up 块 / skill 退出提示 / 状态转换后输出 / 错误退出提示 �
 
 > Decision gate = AskUserQuestion 在闸门处给 PM **明确动作二选一**（gsd new-project.md:368-380 "Ready?" pattern）。
 > M3 整模块砍后，**Decision gate label 规范化作为 M2 sub-feature**（不需要独立模块）。
-> 注：/pmai-next 推进模式已默认往前推进 stage，**Decision gate 解决的是闸门选项语义模糊问题**，不是"每 stage 喂继续"。
+> 注：/pmai-status 推进模式已默认往前推进 stage，**Decision gate 解决的是闸门选项语义模糊问题**，不是"每 stage 喂继续"。
 
 ### §3.0 适用范围（必读）
 
@@ -120,7 +120,7 @@ Next Up 块 / skill 退出提示 / 状态转换后输出 / 错误退出提示 �
 
 | 形态 | 是否走 §3 | 例子 |
 |---|---|---|
-| **任何 PM 决策门**（阶段转换 / 选择分流 / 推进确认 / 验收 / 留守 vs 推进 / 多分支选择）| ✅ **必须用 AskUserQuestion**（runtime 不支持时按 askuser-rules.md §1.3 退化为编号列表）| `/pmai-next` 推进门；`/design` 结构决策门；`/pmai-init-project` 阶段 C；`/build` 隔离环境与执行器选择；`/close` 沉淀确认 |
+| **任何 PM 决策门**（阶段转换 / 选择分流 / 推进确认 / 验收 / 留守 vs 推进 / 多分支选择）| ✅ **必须用 AskUserQuestion**（runtime 不支持时按 askuser-rules.md §1.3 退化为编号列表）| `/pmai-status` 推进门；`/pmai-design` 结构决策门；`/pmai-init-project` 阶段 C；`/pmai-build` 隔离环境与执行器选择；`/pmai-close` 沉淀确认 |
 | AI 主动告知 / 状态播报（不要 PM 答）| ❌ prose 输出即可 | banner / Next Up 块 / skill 启动播报 / 进展告知 |
 | 反问澄清（PM 输入语义模糊，AI 需 PM 补一句话再决定走 A/B/C，不是闸门决策）| ❌ prose 反问 | "你说的'改原型'指本次范围里的改动，还是想新起一个需求？" |
 
@@ -151,7 +151,7 @@ Next Up 块 / skill 退出提示 / 状态转换后输出 / 错误退出提示 �
 | "Proceed" / "继续" | 模糊（继续什么？推进还是留守？）|
 | "Continue" | 同上 |
 | "是" / "Yes" | 没说做什么 |
-| "通过" | /pmai-next 推进模式下"通过"已是推进触发词，闸门选项不再用 |
+| "通过" | /pmai-status 推进模式下"通过"已是推进触发词，闸门选项不再用 |
 
 ### §3.2 规则 2：description = 一句话解释
 

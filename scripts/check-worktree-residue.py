@@ -24,7 +24,7 @@ from pathlib import Path
 def find_repo_root() -> Path:
     p = Path.cwd()
     for parent in [p, *p.parents]:
-        if (parent / ".git").exists() or (parent / ".req-meta.json").exists():
+        if (parent / ".git").exists() or (parent / ".work-meta.json").exists():
             return parent
     return p
 

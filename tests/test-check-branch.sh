@@ -72,17 +72,17 @@ test_main_allows_claude_settings() {
 }
 
 test_main_allows_module_meta_create() {
-  # 批 2：真相源迁 docs/modules/*；旧 requirements/active 白名单已删。模块 .req-meta.json
-  # 在 main 上首建（/design 开工）放行——走 docs/* 全放行；stage 字段直改仍由 GATE2 拦。
-  start_test "I-CB3 (批2) main allows docs/modules/<模块>/.req-meta.json create（非 stage 直改）"
+  # 批 2：真相源迁 docs/modules/*；旧 requirements/active 白名单已删。模块 .work-meta.json
+  # 在 main 上首建（/pmai-design 开工）放行——走 docs/* 全放行；stage 字段直改仍由 GATE2 拦。
+  start_test "I-CB3 (批2) main allows docs/modules/<模块>/.work-meta.json create（非 stage 直改）"
   fixture_setup
   cd "$FIXTURE_DIR"
   mkdir -p docs/modules/能力匹配卡
-  capture_check "Write" "docs/modules/能力匹配卡/.req-meta.json" "" "" '{"id":"req-001","name":"能力匹配卡","stage":1,"status":"active"}'
+  capture_check "Write" "docs/modules/能力匹配卡/.work-meta.json" "" "" '{"id":"req-001","name":"能力匹配卡","stage":1,"status":"active"}'
   if [ "$RC" = "0" ] && ! echo "$OUT" | grep -q '"deny"'; then
     pass_test
   else
-    _fail "should allow module .req-meta.json create on main (rc=$RC, out=$OUT)"
+    _fail "should allow module .work-meta.json create on main (rc=$RC, out=$OUT)"
   fi
   fixture_teardown
 }
@@ -105,44 +105,22 @@ test_main_rejects_random_toplevel() {
 # ---------------------------------------------------------------
 
 # ---------------------------------------------------------------
-# I-CB5: req/build worktree 可直接写 prototype/
+# I-CB5: build worktree 可直接写 prototype/
 # ---------------------------------------------------------------
 
-test_req_branch_allows_prototype_write() {
-  start_test "I-CB5 (D10) req branch ALLOWS write to prototype/index.ts"
+test_build_branch_allows_prototype_write() {
+  start_test "I-CB5 build branch ALLOWS write to prototype/index.ts"
   fixture_setup
-  req_dir=$(fixture_create_req "req-001" "test" 3)
+  work_dir=$(fixture_create_req "req-001" "test" 3)
 
-  cd "$FIXTURE_DIR/.worktrees/req-001-test"
+  cd "$FIXTURE_DIR/.worktrees/build-req-001-test"
   mkdir -p prototype
   capture_check "Write" "prototype/index.ts" "" "" "console.log(1)"
-  # 六步 D10：原 req-prototype 拦截已删；req worktree 放行 prototype/，跨界交执行器层
+  # build worktree 放行 prototype/，跨界交执行器层。
   if [ "$RC" = "2" ] && echo "$OUT" | grep -q '"deny"'; then
-    _fail "req branch should ALLOW prototype/ writes after D10 (rc=$RC, out=$OUT)"
+    _fail "build branch should ALLOW prototype/ writes (rc=$RC, out=$OUT)"
   else
     pass_test
-  fi
-  fixture_teardown
-}
-
-# ---------------------------------------------------------------
-# I-CB6: 禁止直接改 req stage 字段
-# ---------------------------------------------------------------
-
-test_reject_direct_req_stage_edit() {
-  start_test "I-CB6 reject direct edit to .req-meta.json stage"
-  fixture_setup
-  req_dir=$(fixture_create_req "req-001" "test" 3)
-
-  cd "$FIXTURE_DIR/.worktrees/req-001-test"
-  meta="$req_dir/.req-meta.json"
-  old='"stage": 3'
-  new='"stage": 4'
-  capture_check "Edit" "$meta" "$old" "$new" ""
-  if [ "$RC" = "2" ] && echo "$OUT" | grep -q '"deny"' && echo "$OUT" | grep -q "req-transition"; then
-    pass_test
-  else
-    _fail "should deny direct req stage edit (rc=$RC, out=$OUT)"
   fi
   fixture_teardown
 }
@@ -278,33 +256,11 @@ test_main_still_rejects_prototype_code() {
   fixture_teardown
 }
 
-test_main_still_rejects_stage_direct_edit() {
-  # 批 2：补 GATE2 洞——真相源迁 docs/modules/<模块>/.req-meta.json 后，main 上 docs/** 虽全放行，
-  # 但该文件的 stage 字段直改仍必须被 GATE2 拦（走 req-transition）。用新路径验证。
-  start_test "GATE2 (批2) main 仍拒绝 docs/modules/<模块>/.req-meta.json 的 stage 直改（走 req-transition）"
-  fixture_setup
-  cd "$FIXTURE_DIR"
-  mkdir -p docs/modules/能力匹配卡
-  cat > docs/modules/能力匹配卡/.req-meta.json <<'JSON'
-{"id":"req-001","name":"能力匹配卡","stage":3,"status":"active"}
-JSON
-  git add -A && git commit -q -m "seed module meta"
-  capture_check "Edit" "docs/modules/能力匹配卡/.req-meta.json" \
-    '"stage": 3' '"stage": 4' ""
-  if [ "$RC" = "2" ] && echo "$OUT" | grep -q '"deny"' && echo "$OUT" | grep -q "req-transition"; then
-    pass_test
-  else
-    _fail "批2 main 仍应拒绝 docs/modules stage 直改 (rc=$RC, out=$OUT)"
-  fi
-  fixture_teardown
-}
-
 test_main_rejects_src_write
 test_main_allows_claude_settings
 test_main_allows_module_meta_create
 test_main_rejects_random_toplevel
-test_req_branch_allows_prototype_write
-test_reject_direct_req_stage_edit
+test_build_branch_allows_prototype_write
 test_outside_repo_non_tmp_denied
 test_outside_repo_tmp_allowed
 test_main_allows_mocks_write
@@ -313,6 +269,5 @@ test_main_allows_product_state_no_marker
 test_main_allows_product_rules_and_todo
 test_main_allows_docs_modules_triplet
 test_main_still_rejects_prototype_code
-test_main_still_rejects_stage_direct_edit
 
 report_results "check-branch"

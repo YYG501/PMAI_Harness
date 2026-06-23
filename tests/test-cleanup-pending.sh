@@ -7,8 +7,8 @@ source "$SCRIPT_DIR/helpers/fixture.sh"
 
 CLEANUP="$FRAMEWORK_ROOT/scripts/cleanup-pending-worktrees.sh"
 
-# Helper: write a pending-cleanup.json with one req entry for $branch / $worktree
-_write_pending_req_entry() {
+# Helper: write a pending-cleanup.json with one work entry for $branch / $worktree
+_write_pending_work_entry() {
   local branch="$1"
   local worktree="$2"
   python3 - "$FIXTURE_DIR/.runs/pending-cleanup.json" "$branch" "$worktree" <<'PY'
@@ -20,10 +20,10 @@ if os.path.exists(path):
     with open(path) as f:
         entries = json.load(f)
 entries.append({
-    "kind": "req",
+    "kind": "work",
     "branch": branch,
     "worktree": worktree,
-    "req_dir": "docs/modules/" + branch,
+    "work_dir": "docs/modules/" + branch,
     "queued_at": "2026-04-26T13:00:00+08:00",
 })
 with open(path, "w") as f:
@@ -83,10 +83,10 @@ test_happy_path_removes_worktree_branch_and_file() {
   fixture_setup
 
   fixture_create_req "req-001" "happy" 4 >/dev/null
-  req_wt="$FIXTURE_DIR/.worktrees/req-001-happy"
-  req_branch="req-001-happy"
+  req_wt="$FIXTURE_DIR/.worktrees/build-req-001-happy"
+  req_branch="build-req-001-happy"
 
-  _write_pending_req_entry "$req_branch" "$req_wt"
+  _write_pending_work_entry "$req_branch" "$req_wt"
 
   if ! (cd "$FIXTURE_DIR" && bash "$CLEANUP") >/tmp/out.$$ 2>/tmp/err.$$; then
     _fail "cleanup failed"
@@ -129,9 +129,9 @@ test_reject_when_cwd_inside_pending_worktree() {
   fixture_setup
 
   fixture_create_req "req-002" "trap" 4 >/dev/null
-  req_wt="$FIXTURE_DIR/.worktrees/req-002-trap"
+  req_wt="$FIXTURE_DIR/.worktrees/build-req-002-trap"
 
-  _write_pending_req_entry "req-002-trap" "$req_wt"
+  _write_pending_work_entry "build-req-002-trap" "$req_wt"
 
   if (cd "$req_wt" && bash "$CLEANUP") >/tmp/out.$$ 2>/tmp/err.$$; then
     _fail "should reject when cwd is inside pending worktree"
@@ -161,10 +161,10 @@ test_partial_worktree_already_gone() {
   fixture_setup
 
   fixture_create_req "req-003" "stale" 4 >/dev/null
-  req_wt="$FIXTURE_DIR/.worktrees/req-003-stale"
-  req_branch="req-003-stale"
+  req_wt="$FIXTURE_DIR/.worktrees/build-req-003-stale"
+  req_branch="build-req-003-stale"
 
-  _write_pending_req_entry "$req_branch" "$req_wt"
+  _write_pending_work_entry "$req_branch" "$req_wt"
 
   # Simulate: worktree dir removed by hand (but git metadata still references it)
   rm -rf "$req_wt"
@@ -197,10 +197,10 @@ test_dry_run_does_not_remove() {
   fixture_setup
 
   fixture_create_req "req-004" "dryrun" 4 >/dev/null
-  req_wt="$FIXTURE_DIR/.worktrees/req-004-dryrun"
-  req_branch="req-004-dryrun"
+  req_wt="$FIXTURE_DIR/.worktrees/build-req-004-dryrun"
+  req_branch="build-req-004-dryrun"
 
-  _write_pending_req_entry "$req_branch" "$req_wt"
+  _write_pending_work_entry "$req_branch" "$req_wt"
 
   if ! (cd "$FIXTURE_DIR" && bash "$CLEANUP" --dry-run) >/tmp/out.$$ 2>/tmp/err.$$; then
     _fail "dry-run should exit 0"
@@ -245,7 +245,7 @@ test_rejects_unregistered_existing_worktree_path() {
   victim="$FIXTURE_DIR/not-a-worktree-but-important"
   mkdir -p "$victim"
   echo "keep" > "$victim/keep.txt"
-  _write_pending_req_entry "req-999-evil" "$victim"
+  _write_pending_work_entry "build-req-999-evil" "$victim"
 
   if (cd "$FIXTURE_DIR" && bash "$CLEANUP") >/tmp/out.$$ 2>/tmp/err.$$; then
     _fail "cleanup should reject unsafe pending entry"

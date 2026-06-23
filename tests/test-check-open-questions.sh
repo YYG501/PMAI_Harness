@@ -224,11 +224,11 @@ test_quiet_mode() {
 }
 
 # -----------------------------------------------------------------
-# Scenario 9: SKILL.md 仍然引用脚本
+# Scenario 9: active design skill 仍然引用脚本
 # -----------------------------------------------------------------
 test_skill_invokes_script() {
-  start_test "skills/next/SKILL.md 引用 check-open-questions.py"
-  local skill="$REPO_ROOT/skills/next/SKILL.md"
+  start_test "skills/design/SKILL.md 引用 check-open-questions.py"
+  local skill="$REPO_ROOT/skills/design/SKILL.md"
   assert_file_contains "$skill" "check-open-questions.py" || return
   pass_test
 }

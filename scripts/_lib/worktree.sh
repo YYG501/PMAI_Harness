@@ -62,12 +62,12 @@ list_worktrees_by_branch_prefix() {
 }
 
 # cleanup_stale_worktrees <repo_root>
-# 兜底清理：按 docs/modules/<模块>/.req-meta.json 的 branch 字段
+# 兜底清理：按 docs/modules/<模块>/.work-meta.json 的 branch 字段
 # 真相源定向枚举，对每个推导出的 worktree 路径（${PM_AI_WORKTREE_BASE:-<repo>/.worktrees}/<stem>）
 # 检查是否 git 已不认 + 物理还在 → rm -rf。close/cancel 收尾时兜底调用。
 #
-# 批 2 改：枚举真相源从 requirements/{active,closed}/* 换成 docs/modules/*（lifecycle 迁移②）。
-# req 的 worktree stem 取 meta.branch（模块目录名可能是中文、非分支名）。
+# 枚举真相源 docs/modules/*。
+# worktree stem 取 meta.branch（模块目录名可能是中文、非分支名）。
 # 不无差别扫 .worktrees/* — path 必须从模块记录推导。
 # 护栏：跳过 live worktree、跳过当前 cwd 所在的目录。
 cleanup_stale_worktrees() {
@@ -86,16 +86,16 @@ cleanup_stale_worktrees() {
   local cleaned=0 caller_cwd
   caller_cwd=$(pwd -P 2>/dev/null || echo "")
 
-  # 枚举 docs/modules/* 下每个模块的 req 分支
+  # 枚举 docs/modules/* 下每个模块的 build 分支
   local modules_dir module_dir meta branch
   modules_dir="$repo_root/docs/modules"
   if [ -d "$modules_dir" ]; then
     for module_dir in "$modules_dir"/*; do
       [ -d "$module_dir" ] || continue
-      meta="$module_dir/.req-meta.json"
+      meta="$module_dir/.work-meta.json"
       [ -f "$meta" ] || continue
 
-      # 检查 req 自己的 worktree：stem = meta.branch（模块目录名可能是中文）
+      # 检查 work 自己的 worktree：stem = meta.branch（模块目录名可能是中文）
       branch=$(python3 -c "import json,sys; print(json.load(open(sys.argv[1])).get('branch',''))" "$meta" 2>/dev/null || echo "")
       [ -n "$branch" ] || continue
       _stale_worktree_check_one "$repo_root" "$branch" "$live_paths" "$caller_cwd" \
@@ -103,7 +103,7 @@ cleanup_stale_worktrees() {
     done
   fi
 
-  [ "$cleaned" -gt 0 ] && echo "🧹 顺手清掉 $cleaned 个孤儿 worktree（按模块 .req-meta 定向）"
+  [ "$cleaned" -gt 0 ] && echo "🧹 顺手清掉 $cleaned 个孤儿 worktree（按模块 .work-meta 定向）"
   return 0
 }
 

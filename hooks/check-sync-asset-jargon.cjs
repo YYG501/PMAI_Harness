@@ -6,7 +6,7 @@
 //
 //   - 生成器内部设计任务编号：D13 / D-iii vN / D-i vN / D-iv MN / DN-N 等
 //   - 管线小批次编号：delta-N / vp-N / polish-N / RN-CN/HN/MN
-//   - 归档路径死链：docs/归档/完成/ / docs/设计/
+//   - 归档路径死链：docs/归档/完成/
 //   - 「commit <短 hash> 同类 bug」短引用
 //
 // 行为：deny 拦下 commit，告诉模型「同步资产里禁出现生成器内部编号」+ 列具体行。
@@ -33,7 +33,6 @@ const FORBIDDEN = [
   { re: /\bpolish-\d+\b/, name: 'polish-N 小修补编号' },
   { re: /\bR\d+-[CHM]\d+\b/, name: 'RN-CN/HN/MN review 决议编号' },
   { re: /docs\/归档\/完成\//, name: 'docs/归档/完成/ 路径（消费仓不存在 = 死链）' },
-  { re: /docs\/设计\//, name: 'docs/设计/ 路径（消费仓不存在 = 死链）' },
   { re: /commit\s+[0-9a-f]{7,8}\s*同类\s*bug/, name: '「commit <短 hash> 同类 bug」短引用（消费仓 git log 不同）' },
 ];
 
@@ -113,7 +112,7 @@ ${sample}${more}
 
 修法：
   - 设计任务编号 / vp-N / delta-N / polish-N → 改成语义说明或砍掉（保留 WHY 信息但不留内部 ID）
-  - docs/归档/完成/ / docs/设计/ → 改成"设计文档（生成器仓归档）"或彻底删
+  - docs/归档/完成/ → 改成"设计文档（生成器仓归档）"或彻底删
   - commit <短 hash> 同类 bug → 改成"同类 bug 防回归"
 
 保留：INVARIANTS I-AD1 / I-CT7 等稳定 anchor（消费仓也分发 INVARIANTS.md）+ 同 SKILL 内部 §章节引用。

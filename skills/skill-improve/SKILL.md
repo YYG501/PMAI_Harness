@@ -156,7 +156,7 @@ PM 反馈来源：skill-feedback/<skill-name>-<YYYY-MM-DD>.md
 ## 与其它 skill 的关系
 
 - **不替代 build / review 反馈循环**（build 反馈先改当前原型，不沉淀到 skill 层）
-- **下游接 `/close` 视觉规范反馈反推 DESIGN.md** 的逻辑等价 —— 都是"PM 反馈 → 沉淀到长期约束源"，但各自归不同沉淀点（DESIGN.md 是项目级视觉规范单一来源；skill SKILL.md 是 skill 行为约束单一来源）
+- **下游接 `/pmai-close` 视觉规范反馈反推 DESIGN.md** 的逻辑等价 —— 都是"PM 反馈 → 沉淀到长期约束源"，但各自归不同沉淀点（DESIGN.md 是项目级视觉规范单一来源；skill SKILL.md 是 skill 行为约束单一来源）
 
 ## Rules
 

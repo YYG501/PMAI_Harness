@@ -1,16 +1,16 @@
 ---
 name: pmai-close
 description: |
-  收尾一个工作（原 close-req 演进）：把本次拍的决策与新术语回写进基线（跨工作记忆）、
+  收尾一个工作（原 close-work 演进）：把本次拍的决策与新术语回写进基线（跨工作记忆）、
   规格定稿 / 就地升版、做「老规格 vs 新原型」对账（防 review 把规格悄悄删掉）、
   文档自动归位（产出落各自的家、根目录不留游离），有 worktree 则 merge 回 main。
 ---
 
-# /close
+# /pmai-close
 
-> **这是什么**：一次工作（讨论 / 小改 / 大需求）做完后的收尾。把成果固化进项目基线，并把"本次拍过的决策、造出来的术语"沉进**下一次 `/design` 开场会读到的家**——解决"换个工作 AI 就失忆、逼 PM 重复说"。
+> **这是什么**：一次工作（讨论 / 小改 / 大需求）做完后的收尾。把成果固化进项目基线，并把"本次拍过的决策、造出来的术语"沉进**下一次 `/pmai-design` 开场会读到的家**——解决"换个工作 AI 就失忆、逼 PM 重复说"。
 >
-> **和 `/design` 的关系**：`/design` 开场**读**基线（`PRODUCT-RULES` + 相关模块 `decisions.md` + `PRODUCT.md` 业务术语表）；`/close` 收尾**写**这三处。一读一写，闭环。
+> **和 `/pmai-design` 的关系**：`/pmai-design` 开场**读**基线（`PRODUCT-RULES` + 相关模块 `decisions.md` + `PRODUCT.md` 业务术语表）；`/pmai-close` 收尾**写**这三处。一读一写，闭环。
 >
 > **PM 视图**：收尾用 PM 看得懂的话——「现状更新了 / 决策记下了 / 术语进表了 / 探的几版视觉留着了 / 改动并回主线了」。不出现"四类分流 / 派生 4 环 / 三身份 / supersede / 一致性扫描"等内部词。
 
@@ -18,7 +18,7 @@ description: |
 
 - 一段工作收口：讨论定了、规格演进完、原型改完、PM 说「收一下 / 归位 / 这事完了」。
 - 大需求 build 完、PM 验收过，把分支 merge 回 main 的那一刻。
-- 不适用：还在来回讨论没定（别打断）→ 继续 `/design`；只想看现在做到哪 → `/status`。
+- 不适用：还在来回讨论没定（别打断）→ 继续 `/pmai-design`；只想看现在做到哪 → `/status`。
 
 ## 这一步干四件事
 
@@ -31,11 +31,11 @@ description: |
 
 > **四类分流是同一套**（@读 `skills/_shared/deposit-routing.md`）：① 耐久事实（现状/规则/稳定结构）② 理路 ③ 遗留 ④ 探索变体。本 skill 是它在「收尾」开火点的完整套用——决策 / 理路按 **3 个正交的家**分流（见下「v2 落点对齐」；2026-06-21 开放 5 拍板撤销原"3 减 2 折叠"）。
 
-## v2 落点对齐（与旧 close-req 的关键差异，必读）
+## v2 落点对齐（与旧 close-work 的关键差异，必读）
 
-本 skill 是 `close-req` 在框架瘦身 v2（吸收 ExampleAgentProject 设计方法）下的演进。落点按 v2 文档体系走，**不照搬旧 close-req 的目录动作**：
+本 skill 是 `close-work` 在框架瘦身 v2（吸收 ExampleAgentProject 设计方法）下的演进。落点按 v2 文档体系走，**不照搬旧 close-work 的目录动作**：
 
-- **不再移目录到 `closed/`**。v2 取消了 `requirements/active|closed/` 整棵树——文档全进 `docs/` 一棵树（模块三件套在 `docs/modules/<模块>/`，附件按类别在 `docs/inputs/<类别>/`，worktree 挂 `.worktrees/<分支>/`）。所以 `/close` **没有"整目录搬家"这一步**；它做的是"把散落的产出归到各自的家 + merge 分支"。
+- **不再移目录到 `closed/`**。v2 取消了 `requirements/active|closed/` 整棵树——文档全进 `docs/` 一棵树（模块三件套在 `docs/modules/<模块>/`，附件按类别在 `docs/inputs/<类别>/`，worktree 挂 `.worktrees/<分支>/`）。所以 `/pmai-close` **没有"整目录搬家"这一步**；它做的是"把散落的产出归到各自的家 + merge 分支"。
 - **决策 / 理路 3 个正交的家**（2026-06-21 开放 5 拍板：撤销原"3 减 2 折叠"，理路单独冻结落点）：① 单模块决策 → 模块 `decisions.md`（活）；② 跨模块 / 全局**规则**（产品行为约束）→ 项目级 `PRODUCT-RULES.md`（活、scope）；③ 跨文件 / 项目级**理路**（护城河 / 机制咬合 / 演进故事）→ `docs/decisions/<日期>-<slug>.md`（**冻结**、写一次、不维护）。理路与规则维度正交——一份文件没法半冻半活、防腐铁律没法对半执行，**别混塞 PRODUCT-RULES 一份**。
   > 单一真相源对齐：理路落点 + 门槛 @读 `_shared/decision-record.md`（`docs/decisions/` 冻结档）、四类分流 @读 `_shared/deposit-routing.md`（已反转回 3 家）。本 skill 与二者口径已统一，**不再需要"以本 skill 为准"的例外**（原例外是折叠期 lifecycle 未对齐的产物，开放 5 拍板后消解）。
 - **规格就地升版，不 per-版本开新文件夹**：重做一个模块 = 在同一 `docs/modules/<模块>/` 里演进 `spec.md`（版本号 + 变更日志 + 老条目 supersede 删除线 + git）；只有"模块身份本身变了"才另起 + 归档旧的（例外，PM 拍）。
@@ -54,7 +54,7 @@ python3 "$PMAI_HOME/scripts/status-view.py" --banner-only --skill CLOSE 2>/dev/n
 
 ## 入口判断：这次有没有 worktree（按"当前工作开没开 build worktree"判，不看当前 cwd）
 
-`/close` 兼容两种工作形态（v2 §5：讨论 / 小改在 main 上直接做、无 worktree；只有大需求才开 worktree）。**形态由"当前工作有没有开 build worktree"决定**——close-req.sh 从 `REQ_DIR` 推导对应分支 / worktree 是否存在（Path A 有 / Path B 无），**不是看当前会话 cwd 在哪**。这样"主仓会话远程操作 worktree"（推荐形态）也能正确收尾。
+`/pmai-close` 兼容两种工作形态（v2 §5：讨论 / 小改在 main 上直接做、无 worktree；只有大需求才开 worktree）。**形态由"当前工作有没有开 build worktree"决定**——close-work.sh 从 `WORK_DIR` 推导对应分支 / worktree 是否存在（Path A 有 / Path B 无），**不是看当前会话 cwd 在哪**。这样"主仓会话远程操作 worktree"（推荐形态）也能正确收尾。
 
 ```bash
 REPO_ROOT="$(cd "$(git rev-parse --git-common-dir 2>/dev/null)/.." && pwd)"
@@ -66,14 +66,14 @@ CUR_BRANCH="$(git branch --show-current 2>/dev/null)"
 |---|---|---|
 | **没开**（Path B：小改 / 讨论直接在 main 上做） | 主仓 | 走步骤 1–5（回写 + 定稿 + 对账 + 归位），**无 merge 步**（本就在 main） |
 | **开了**（Path A：大需求） | **在主仓**（推荐：主仓会话用 `git -C` 远程操作 worktree） | 走步骤 1–5 + 步骤 6（commit + merge 回 main + 删 worktree）。**cwd 在主仓，删 worktree 安全、不触 ENOENT** |
-| **开了**（Path A） | 在 `.worktrees/<分支>/` 内 | close-req.sh **友好提示切回主仓窗口**再跑（删 worktree 时进程不能站在里头，ENOENT，脚本内无法修复） |
+| **开了**（Path A） | 在 `.worktrees/<分支>/` 内 | close-work.sh **友好提示切回主仓窗口**再跑（删 worktree 时进程不能站在里头，ENOENT，脚本内无法修复） |
 
 > **为什么推荐主仓会话**：worktree = build 的并行隔离；操作它不必把会话切进去——主仓会话 `git -C "$BUILD_DIR"` 远程改 / `( cd … && cmd )` subshell 跑 dev，process cwd 始终在主仓，close 删 worktree 永远安全。build skill 的 cwd 护栏已强制这条。
-> v2 放宽了 main 写保护（允许直接改文档 / 小代码），所以"小改在 main 上直接 `/close`"是合法路径，不需要先开 worktree 再合回。
+> v2 放宽了 main 写保护（允许直接改文档 / 小代码），所以"小改在 main 上直接 `/pmai-close`"是合法路径，不需要先开 worktree 再合回。
 
 ---
 
-## 步骤 1：判定本次动了哪个模块 + 读基线（接 /design 的读侧）
+## 步骤 1：判定本次动了哪个模块 + 读基线（接 /pmai-design 的读侧）
 
 先弄清这次工作落在**哪个模块**、它的三件套在哪：
 
@@ -84,10 +84,10 @@ git diff --stat "$BASE" HEAD
 ```
 
 - 改了 `docs/modules/<模块>/` 下的文件 → 本次涉及该模块。
-- 改了 `prototype/` 代码 → 对应到它实现的模块（看 `.req-meta` 当前工作状态 / `discussion.md`）。
+- 改了 `prototype/` 代码 → 对应到它实现的模块（看 `.work-meta` 当前工作状态 / `discussion.md`）。
 - 没有任何模块归属（纯基础设施 / 工具脚本）→ 多数步骤 silent skip，跳到步骤 4/5 归位。
 
-**读基线对齐口径**（和 `/design` 开场读的是同三处，确保回写时用既有词、不和已定决策打架）：
+**读基线对齐口径**（和 `/pmai-design` 开场读的是同三处，确保回写时用既有词、不和已定决策打架）：
 
 - `docs/PRODUCT.md` 业务术语表 —— 本次新词要不要并进去、有没有和既有词冲突。
 - `docs/PRODUCT-RULES.md` —— 本次跨模块决策是否已有同类规则（避免重复 / 矛盾）。
@@ -97,7 +97,7 @@ git diff --stat "$BASE" HEAD
 
 ## 步骤 2：跨 req 记忆回写（① 决策 + 术语 —— 本 skill 的核心新增）
 
-这是 v2 补的真实缺口：**本次拍的决策、造的术语，要沉进下一次 `/design` 开场会读到的家**，不能只躺在本次的讨论/代码里随工作结束失忆。
+这是 v2 补的真实缺口：**本次拍的决策、造的术语，要沉进下一次 `/pmai-design` 开场会读到的家**，不能只躺在本次的讨论/代码里随工作结束失忆。
 
 ### 2.1 决策回写 —— 分两个家
 
@@ -115,18 +115,18 @@ git diff --stat "$BASE" HEAD
 逐条 AskUserQuestion picker（多条按 `askuser-rules.md §1.4` 拆开顺序问）：
 - `question`: "「<一句话决策>」要不要记下来给后面用？"
 - `options`:
-  - `记进本模块`：写进 `docs/modules/<模块>/decisions.md`（后面做这个模块时 `/design` 会读到）
+  - `记进本模块`：写进 `docs/modules/<模块>/decisions.md`（后面做这个模块时 `/pmai-design` 会读到）
   - `记成跨模块规则`：写进 `docs/PRODUCT-RULES.md`（产品行为约束、管整个产品、所有模块都受约束、活档）
   - `冻结成项目理路`：写进 `docs/decisions/<日期>-<slug>.md`（护城河 / 机制咬合 / 演进故事这类叙事性"为什么"，**冻结档**、写一次不维护、挂 PRODUCT-STATE 索引）
   - `不记`：本次没有要传给后面的决策（自审反证成立）
 
-> **为什么补这处**：旧 close-req 沉淀只收"整体意图"，**单条决策会漏在已关需求里**、下一个工作的 `/design` 读不到 → PM 被迫重复说。本步把"决策回写"显式化、绑死在收尾这一刻。
+> **为什么补这处**：旧 close-work 沉淀只收"整体意图"，**单条决策会漏在已关需求里**、下一个工作的 `/pmai-design` 读不到 → PM 被迫重复说。本步把"决策回写"显式化、绑死在收尾这一刻。
 
 ### 2.2 术语回写 —— 进 PRODUCT.md 业务术语表
 
-本次**新定义 / 改了口径的概念、角色、业务词**，回写 `docs/PRODUCT.md` 业务术语表 / 用户画像表——下次 `/design` 讨论用既有词，不重新发明。
+本次**新定义 / 改了口径的概念、角色、业务词**，回写 `docs/PRODUCT.md` 业务术语表 / 用户画像表——下次 `/pmai-design` 讨论用既有词，不重新发明。
 
-可借现成 term-detector 扫一遍候选（与旧 close-req 步骤 6 同机制；详见 `skills/_shared/term-detector/SKILL.md`）：
+可借现成 term-detector 扫一遍候选（与旧 close-work 步骤 6 同机制；详见 `skills/_shared/term-detector/SKILL.md`）：
 
 ```bash
 # 扫输入 = 本次工作主文件（模块 discussion/spec + 本次会话拍板）
@@ -146,7 +146,7 @@ rm -f "$TMPFILE"
 
 把本次的设计结论固化成规格真相源 `docs/modules/<模块>/spec.md`。两种触发：
 
-- **正向**（`/design` 讨论定了 + 用 mock 确认了设计）→ 把信息模型结论写成规格。
+- **正向**（`/pmai-design` 讨论定了 + 用 mock 确认了设计）→ 把信息模型结论写成规格。
 - **反向**（大需求 build 完）→ 以最终 `prototype/` + `discussion.md` 决策为据，反向把规格写到真系统口径定稿。**哪怕这版原型是 mock 壳，规格也按真实系统口径写，绝不从 mock 的随手实现反推规则。**
 
 **就地升版规则**（v2：重做模块 = 同文件夹演进，不 per-版本开新文件夹）：
@@ -158,7 +158,7 @@ rm -f "$TMPFILE"
 
 **写规格纪律**（@读写规格 skill 的写作纪律 / `_shared/pm-view/writing-rules.md`）：规格只留 normative 文字——"为什么"甩 `decisions.md` / `PRODUCT-RULES`，"原型长什么样"甩 `DESIGN.md` / mock，**规格里不嵌原型 ASCII**（设计确认靠 mock，不靠规格画图）。
 
-> **写规格的厚活在写规格 skill / `/design`**；`/close` 这一步是"把已定的结论收口落盘 + 升版"，不重新做信息设计。若发现规格还有没理清的信息结构 → 不在 `/close` 硬写，回 `/design` 补。
+> **写规格的厚活在写规格 skill / `/pmai-design`**；`/pmai-close` 这一步是"把已定的结论收口落盘 + 升版"，不重新做信息设计。若发现规格还有没理清的信息结构 → 不在 `/pmai-close` 硬写，回 `/pmai-design` 补。
 
 ---
 
@@ -213,7 +213,7 @@ python3 "$PMAI_HOME/scripts/gen-mock-board.py" "$REPO_ROOT"
 ### 5.4 顺手补索引 + 更新工作状态
 
 - 本次新建了 `docs/modules/<新模块>/` → 在 `docs/PRODUCT-STATE.md` 索引节挂一条；刷 `docs/modules/INDEX.md`（`check-index-lint.py` 校验，失败两次则空 diff 跳过、不阻塞）。
-- 更新本模块 `.req-meta`（当前工作状态：本次分支/阶段收尾、置为已收口）。
+- 更新本模块 `.work-meta`（当前工作状态：本次分支/阶段收尾、置为已收口）。
 
 > **silent skip**：纯非业务工作（只动工具脚本 / 基础设施）→ 步骤 2–5 可整体 silent skip，回执记「本次无产品级文档变更」。
 
@@ -247,7 +247,7 @@ merge 回 main（具体的 merge / 删 worktree / 删分支编排由 lifecycle �
 ✅ 已收尾：<模块> 规格定到 v<X>{；这次拍的几条决策记下了/术语进表了}{；和原型对了一遍，<N> 处待你定的已处理}{；探的 <M> 版视觉留在看版了}{；改动并回主线了（<short-hash>）}。
 
 ▶ Next Up:
-  /design "<下一个要做的模块/需求>"   — 起下一段工作（开场会自动带上刚记下的决策和术语）
+  /pmai-design "<下一个要做的模块/需求>"   — 起下一段工作（开场会自动带上刚记下的决策和术语）
   /status                              — 看现在做到哪
 ```
 
@@ -255,15 +255,15 @@ merge 回 main（具体的 merge / 删 worktree / 删分支编排由 lifecycle �
 
 ## Rules
 
-- **形态自适应**：小改/讨论在 main 上直接 `/close`（无 merge 步）；大需求 cwd 在 `.worktrees/<分支>/` 才走步骤 6 merge。入口先判形态。
+- **形态自适应**：小改/讨论在 main 上直接 `/pmai-close`（无 merge 步）；大需求 cwd 在 `.worktrees/<分支>/` 才走步骤 6 merge。入口先判形态。
 - **决策 / 理路 3 个正交的家**（开放 5 拍板，撤销原 3→2 折叠）：单模块决策 → 模块 `decisions.md`（活）；跨模块**规则** → `PRODUCT-RULES.md`（活、scope）；跨文件**理路** → `docs/decisions/<日期>-<slug>.md`（**冻结**）。理路与规则分家、不混塞一份。
 - **术语回写**：新定义的概念/角色/业务词 → `PRODUCT.md` 业务术语表；纯文字微调不算。
 - **规格就地升版**：重做模块 = 同 `docs/modules/<模块>/` 演进 `spec.md`（版本号 + 变更日志 + 老条目 supersede 留痕）；身份变了才另起 + 归档旧的（例外，PM 拍）。规格只留 normative、不嵌原型 ASCII、顶部钉"规格为权威"。
 - **老规格 vs 新原型对账**：每条对不上的都 flag「确认删 / 还是漏实现」让 PM 拍，不盲目重写——根除"规格被 review 悄悄删"。脚本 advisory（`|| true`），**不升格强制门**（I-RV1）。
-- **`docs/PRODUCT-STATE.md` 只在沉淀这刻写**（防腐铁律）：`/close`（重档）+ `/deposit`（轻档，已 dormant 但保留）是仅有的 sanctioned 写入口，收敛点触发的原子写。
-- **不再移目录到 `closed/`**：v2 取消 `requirements/active|closed/` 树；`/close` 没有"整目录搬家"步，只做归位 + merge。
+- **`docs/PRODUCT-STATE.md` 只在沉淀这刻写**（防腐铁律）：`/pmai-close`（重档）+ `/deposit`（轻档，已 dormant 但保留）是仅有的 sanctioned 写入口，收敛点触发的原子写。
+- **不再移目录到 `closed/`**：v2 取消 `requirements/active|closed/` 树；`/pmai-close` 没有"整目录搬家"步，只做归位 + merge。
 - **四类分流 @读 `_shared/deposit-routing.md`**（单一真相源，已反转回 3 家）；理路门槛 + 冻结落点 @读 `_shared/decision-record.md`（`docs/decisions/` 冻结档）。三者口径已统一，无"以本 skill 为准"例外。
 - **merge 终态**：合回主线后不可回退；merge 前任何 PM 决策门没拿到答案 → STOP，禁止 merge。
 - **PM 话术纪律**（F-G4）：回执/提议只用 PM 视图语言，不出现"四类分流 / 出口①②③④ / 派生 4 环 / 三身份 / supersede / 一致性扫描 / manifest / featured"等内部词。
-- **不删代码**：瘦身 = 缩小活跃集；本 skill 是 close-req 的活跃演进，`close-req` 转 dormant 保留不删。
+- **不删代码**：瘦身 = 缩小活跃集；本 skill 是 close-work 的活跃演进，`close-work` 转 dormant 保留不删。
 ```

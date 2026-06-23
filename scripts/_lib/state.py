@@ -1,12 +1,12 @@
 """State reader — single authority for reading PM-AI-Workflow runtime state.
 
-跨 skill 统一读层：把 req / 聚合视图的读取从各处 grep + jq
+跨 skill 统一读层：把当前工作 / 聚合视图的读取从各处 grep + jq
 + 散落的 json.load 收敛到一个 lib。`status-view.py` 反向 dogfood 本 lib，
 避免双轨"AI grep raw / PM 看视觉视图"的真相源漂移。
 
 历史：本文件由 `_lib/task_parser.py`（task 元数据 v1/v2 兼容层）扩展 + 改名
 而来，原 API 全部保留（detect_format / parse_field / get_task_*  / read_section
-/ has_meaningful_content）。新增 API 见下方"State (req / events / overall)"段。
+/ has_meaningful_content）。新增 API 见下方"State (work / overall)"段。
 
 V1 format (legacy):  **状态：** 待执行  / **分支：** task-001-xxx
 V2 format (current): | **状态** | 待执行 |  / | **分支** | task-001-xxx |
@@ -21,12 +21,12 @@ contract §10/§11 (v2). read_section auto-discovers across both files.
   点后必须有空格；不支持 `## 10.<name>` / `## 10。<name>` / `## 10) <name>`
 
 错误契约：
-- 单文件 reader（`read_req_meta`）默认 strict=True 抛
+- 单文件 reader（`read_work_meta`）默认 strict=True 抛
   `StateReadError(path, reason)`；调用方可显式传 strict=False 拿 None / {}。
-- 聚合扫描（`list_active_reqs` / `get_overall_state`）默认 tolerant，单条目
+- 聚合扫描（`list_active_work` / `get_overall_state`）默认 tolerant，单条目
   解析失败时不抛，把 `{path, reason}` 累积到返回值的 `warnings` 数组。
 
-active req 探测算法：以 `git worktree list` 为权威（与 skill-preamble.sh 一
+active work 探测算法：以 `git worktree list` 为权威（与 skill-preamble.sh 一
 致），不假设 worktree 一定在 `<repo>/.worktrees/`。
 """
 
@@ -247,14 +247,14 @@ def has_meaningful_content(content: Optional[str]) -> bool:
 
 
 # ============================================================================
-# State (req / events / overall)
+# State (work / overall)
 # ============================================================================
 
 # Wrapper around get_task_meta（旧 API 名称 → 新 API 名称的语义对齐）。
 # read_task_meta / read_task_status 是新增 API surface；内部委托到原实现，
 # 加上 strict 错误契约。
 
-# v2 修订 EVIDENCE 节录：active req 探测必须走 worktree-list（与
+# active work 探测必须走 worktree-list（与
 # skill-preamble.sh 一致），不能假设 worktree 一定在 <repo>/.worktrees/。
 
 
@@ -289,20 +289,20 @@ def _git_worktree_pairs(repo_root: Path) -> list[tuple[str, Path]]:
     return pairs
 
 
-def read_req_meta(req_dir: Path, strict: bool = True) -> Optional[dict]:
-    """读 req 元数据（`.req-meta.json`）。
+def read_work_meta(work_dir: Path, strict: bool = True) -> Optional[dict]:
+    """读当前工作元数据（`.work-meta.json`）。
 
     None 语义：
     - strict=False 且 meta 不存在 → 返回 None
     - strict=False 且 JSON 解析失败 → 返回 None
     - strict=True（默认）任一失败 → 抛 StateReadError
 
-    >>> # read_req_meta(Path("/nope"), strict=False) is None
+    >>> # read_work_meta(Path("/nope"), strict=False) is None
     """
-    meta_file = req_dir / ".req-meta.json"
+    meta_file = work_dir / ".work-meta.json"
     if not meta_file.exists():
         if strict:
-            raise StateReadError(meta_file, ".req-meta.json 不存在")
+            raise StateReadError(meta_file, ".work-meta.json 不存在")
         return None
     try:
         return json.loads(meta_file.read_text(encoding="utf-8"))
@@ -348,128 +348,30 @@ def write_json_atomic(path: Path, data: dict) -> None:
                 pass
 
 
-def resolve_req_relative_path(
-    req_dir: Path,
-    value: object,
-    field_name: str = "path",
-) -> Path:
-    """Resolve a metadata path that must remain inside `req_dir`.
-
-    The stage-source contract stores req-relative paths only. Reject absolute
-    paths, `..`, backslashes, empty segments and NULs before joining.
-    """
-    meta_file = req_dir / ".req-meta.json"
-    if not isinstance(value, str):
-        raise StateReadError(meta_file, f"{field_name} 必须是字符串")
-    if value != value.strip() or not value:
-        raise StateReadError(meta_file, f"{field_name} 非法路径：{value!r}")
-    if "\x00" in value or "\\" in value:
-        raise StateReadError(meta_file, f"{field_name} 非法路径：{value!r}")
-
-    rel = Path(value)
-    if rel.is_absolute() or any(part in ("", ".", "..") for part in rel.parts):
-        raise StateReadError(meta_file, f"{field_name} 必须是 req 内相对路径：{value}")
-
-    root = req_dir.resolve()
-    resolved = (root / rel).resolve()
-    try:
-        resolved.relative_to(root)
-    except ValueError as e:
-        raise StateReadError(meta_file, f"{field_name} 越过 req 目录：{value}") from e
-    return resolved
-
-
-def get_stage_source(req_dir: Path, stage_num: int) -> Path:
-    """返回 stage N 的真相源**绝对路径**（路径契约）。
-
-    解析优先级：
-    1. `.req-meta.json` 的 `stage{N}_source` 字段（req 内**相对路径**） — 跨工具
-       分流时由 caller 显式写入（见 `set_stage_source`）；此为权威解。
-    2. fallback 到 `STAGE_OUTPUT_FILES[stage_num]`（stages.py 默认产物文件名）；
-       覆盖：旧 req（v4 之前没写元数据字段）+ caller 没显式设置的 stage。
-
-    返回值是 `req_dir / <relative>`，调用方应 `.exists()` 自检（本函数不读盘
-    校验存在性，纯路径解析；保留调用方 vs `read_text()` 直抛 FileNotFound 的
-    错误信息空间）。
-
-    Raises:
-        KeyError: stage_num 不在 `STAGE_OUTPUT_FILES` 字典里（当前只有 stage 1
-        有默认产物 spec.md；如 stage 2/3/4），且 `.req-meta.json` 也没有 `stage{N}_source` override。调用方应
-        知道自己要 stage N 是否在默认表里 —— 这是契约错误不是数据错误。
-    """
-    meta = read_req_meta(req_dir, strict=False)
-    field = f"stage{stage_num}_source"
-    if meta and field in meta:
-        return resolve_req_relative_path(req_dir, meta[field], field)
-    # fallback — 默认产物文件名
-    from .stages import STAGE_OUTPUT_FILES
-    return (req_dir / STAGE_OUTPUT_FILES[stage_num]).resolve()
-
-
-def get_current_stage_banner(req_dir: Path, skill: str = "REQ-STAGE-GATE") -> str:
+def get_current_stage_banner(work_dir: Path, skill: str = "WORK") -> str:
     """返回 stage banner 字符串（M2）。
 
     格式：`━━━ PMAI ► <SKILL> ▸ <Name> ━━━`（去 stage 号，见 `_shared/pm-view/banner-rules.md` §1.1）。
 
     Args:
-        req_dir: req 目录绝对路径（含 `.req-meta.json`）。
-        skill: 调用方 skill 名（大写形态，如 `REQ-STAGE-GATE` / `INIT-PROJECT`）；
-               默认 `REQ-STAGE-GATE`（最常见调用方）。
+        work_dir: 当前模块工作目录绝对路径（含 `.work-meta.json`）。
+        skill: 调用方 skill 名（大写形态，如 `DESIGN` / `BUILD` / `CLOSE`）。
 
     Returns:
         固定格式 banner 字符串（不带尾部换行）。
 
     Raises:
-        StateReadError: `.req-meta.json` 不存在 / 解析失败 / 缺 stage 字段。
+        StateReadError: `.work-meta.json` 不存在 / 解析失败 / 缺 stage 字段。
         KeyError: stage 数不在 STAGE_NAMES（1-MAX_STAGE，六步=1-4）；理论上不会发生（状态机受 INVARIANTS 保护）。
     """
-    meta = read_req_meta(req_dir, strict=True)
+    meta = read_work_meta(work_dir, strict=True)
     assert meta is not None
     stage = meta.get("stage")
     if stage is None:
-        raise StateReadError(req_dir / ".req-meta.json", "缺 stage 字段")
+        raise StateReadError(work_dir / ".work-meta.json", "缺 stage 字段")
     from .stages import STAGE_NAMES
     stage_name = STAGE_NAMES[int(stage)]
     return f"━━━ PMAI ► {skill} ▸ {stage_name} ━━━"
-
-
-def set_stage_source(
-    req_dir: Path,
-    stage_num: int,
-    filename: str,
-    tool: str,
-    origin: Optional[str] = None,
-) -> None:
-    """写 stage N 的真相源元数据到 `.req-meta.json`（路径契约）。
-
-    Args:
-        req_dir: req 目录绝对路径（含 `.req-meta.json`）。
-        stage_num: stage 序号（1-MAX_STAGE，六步=1-4）。
-        filename: req 内**相对路径**（如 `analysis.md` / `stage2-office-hours.md`）；
-                  caller 已确认文件在该路径下落盘。
-        tool: 产生该产物的工具名（如 `req-questioning` / `office-hours`），追溯用。
-        origin: 可选 — 外部源原始绝对路径。office-hours 分支 snapshot 复制后
-                记 `~/.gstack/projects/<slug>/<file>` 原始 path（追溯，不参与
-                解析）；A 分支无此字段。
-
-    写入字段：
-        - `stage{N}_source` = filename
-        - `stage{N}_tool` = tool
-        - `stage{N}_source_origin` = origin（仅 origin 非空时写入）
-
-    Raises:
-        StateReadError: `.req-meta.json` 不存在或 JSON 解析失败（与
-        `read_req_meta(strict=True)` 一致）；caller 应在 req 已落盘后调用。
-    """
-    meta = read_req_meta(req_dir, strict=True)
-    assert meta is not None  # strict=True 不会返回 None
-    resolve_req_relative_path(req_dir, filename, f"stage{stage_num}_source")
-    meta[f"stage{stage_num}_source"] = filename
-    meta[f"stage{stage_num}_tool"] = tool
-    if origin is not None:
-        meta[f"stage{stage_num}_source_origin"] = origin
-    meta_file = req_dir / ".req-meta.json"
-    write_json_atomic(meta_file, meta)
 
 
 def read_task_meta(pm_view: Path, strict: bool = True) -> Optional[TaskMeta]:
@@ -507,20 +409,19 @@ def read_task_status(pm_view: Path, strict: bool = False) -> Optional[str]:
 
 
 # ---------------------------------------------------------------------------
-# 真相源（lifecycle 迁移批 2，单读）：docs/modules/<模块>/.req-meta.json
+# 真相源（lifecycle 迁移批 2，单读）：docs/modules/<模块>/.work-meta.json
 #
-# 新真相源 = docs/modules/*/.req-meta.json（lifecycle 迁移计划 ①）。批 0 曾双读
-# 旧 requirements/active|closed/ + 新 docs/modules/*，批 2 已删旧扫描、原子切单读。
+# 新真相源 = docs/modules/*/.work-meta.json。
 # dedup 仍在调用方 `_append` / `_dedup_archived` 里按 meta.id（缺则目录名）去重——
-# 主仓 + 各 req worktree 可能各暴露同一 req 的模块文件夹，按 id 去重避免双算。
+# 主仓 + 各 build worktree 可能各暴露同一 work 的模块文件夹，按 id 去重避免双算。
 # ---------------------------------------------------------------------------
 
 def _collect_from_modules(
     modules_dir: Path, warnings: list[dict], statuses: tuple[str, ...]
 ) -> list[tuple[Path, dict]]:
-    """扫 docs/modules/*/.req-meta.json，返回 status ∈ statuses 的 [(module_dir, meta), ...]。
+    """扫 docs/modules/*/.work-meta.json，返回 status ∈ statuses 的 [(module_dir, meta), ...]。
 
-    真相源是模块文件夹（每个模块目录直接含 `.req-meta.json`，无 active/closed
+    真相源是模块文件夹（每个模块目录直接含 `.work-meta.json`，无 active/pmai-closed
     二级目录）。`statuses` 过滤所需状态集（active / closed / cancelled）。
     """
     if not modules_dir.exists():
@@ -529,7 +430,7 @@ def _collect_from_modules(
     for module_dir in sorted(modules_dir.iterdir()):
         if not module_dir.is_dir():
             continue
-        meta_file = module_dir / ".req-meta.json"
+        meta_file = module_dir / ".work-meta.json"
         if not meta_file.exists():
             continue
         try:
@@ -542,20 +443,18 @@ def _collect_from_modules(
     return found
 
 
-def list_active_reqs(
+def list_active_work(
     repo_root: Path,
     cwd: Optional[Path] = None,
     strict: bool = False,
 ) -> dict:
-    """扫主仓 + 所有 git worktree 上的 active req（按 id 去重）。
+    """扫主仓 + 所有 git worktree 上的 active work（按 id 去重）。
 
     cwd 行为：
-    - cwd 在 req-* worktree（git 视角）→ 优先扫该 worktree 自身的
-      docs/modules/*（批 2 单读真相源）；若有结果直接返回（cwd 唯一定 req 语义，
-      与 skill-preamble.sh 一致）
-    - cwd=None 或 main → 扫主仓 + 所有 `git worktree list` 拿到的 req-*
+    - cwd 在 build-* worktree（git 视角）→ 优先扫该 worktree 自身的 docs/modules/*
+    - cwd=None 或 main → 扫主仓 + 所有 `git worktree list` 拿到的 build-* worktree
 
-    返回：{"items": [{"req_dir": Path, "meta": dict}, ...], "warnings": [...]}
+    返回：{"items": [{"work_dir": Path, "meta": dict}, ...], "warnings": [...]}
     （tolerant 默认；strict=True 时遇到 warning 抛 StateReadError）。
 
     None 语义：repo 无 git → items=[]、warnings=[]（与 skill-preamble fallback
@@ -576,19 +475,18 @@ def list_active_reqs(
 
     seen: set[str] = set()
 
-    def _dedup_key(req_dir: Path, meta: dict) -> str:
-        # 按 meta.id 去重（缺 id 才退回目录名）：主仓 + 各 req worktree 可能各暴露同一
-        # req 的模块文件夹（module 目录名 ≠ req 分支名），不按 id 去重会被算两次。
+    def _dedup_key(work_dir: Path, meta: dict) -> str:
+        # 按 meta.id 去重（缺 id 才退回目录名）：主仓 + build worktree 可能各暴露同一模块工作。
         rid = meta.get("id") if isinstance(meta, dict) else None
-        return rid if isinstance(rid, str) and rid else req_dir.name
+        return rid if isinstance(rid, str) and rid else work_dir.name
 
-    def _append(reqs: list[tuple[Path, dict]]) -> None:
-        for req_dir, meta in reqs:
-            key = _dedup_key(req_dir, meta)
+    def _append(work_items: list[tuple[Path, dict]]) -> None:
+        for work_dir, meta in work_items:
+            key = _dedup_key(work_dir, meta)
             if key in seen:
                 continue
             seen.add(key)
-            items.append({"req_dir": req_dir, "meta": meta})
+            items.append({"work_dir": work_dir, "meta": meta})
 
     # cwd 落在某个 worktree → 让 cwd 优先
     if cwd is not None:
@@ -604,8 +502,7 @@ def list_active_reqs(
             cwd_root = None
         if cwd_root is not None:
             br = _branch_of(cwd_root)
-            if br.startswith("req-"):
-                # 批 2 单读：真相源只剩 docs/modules/*/.req-meta.json（status==active）。
+            if br.startswith("build-"):
                 local = _collect_from_modules(
                     cwd_root / "docs" / "modules", warnings, ("active",)
                 )
@@ -615,12 +512,10 @@ def list_active_reqs(
                         w = warnings[0]
                         raise StateReadError(Path(w["path"]), w["reason"])
                     return {"items": items, "warnings": warnings}
-    # 主仓 + 所有 git worktree 上的 req-* 分支
-    # 批 2 单读：真相源 = docs/modules/*/.req-meta.json（status==active）。旧
-    # requirements/active/ 扫描已删（迁移脚本仍保留旧目录数据，本批只切机器读向）。
+    # 主仓 + 所有 git worktree 上的 build 分支。
     _append(_collect_from_modules(repo_root / "docs" / "modules", warnings, ("active",)))
     for wt_branch, wt_path in _git_worktree_pairs(repo_root):
-        if not wt_branch.startswith("req-"):
+        if not wt_branch.startswith("build-"):
             continue
         _append(_collect_from_modules(wt_path / "docs" / "modules", warnings, ("active",)))
 
@@ -635,39 +530,39 @@ def get_overall_state(
     cwd: Optional[Path] = None,
     strict: bool = False,
 ) -> dict:
-    """聚合视图：所有 active req。
+    """聚合视图：所有 active work。
 
     `status-view.py` 直接消费此函数作为渲染输入（dogfood）。
 
     返回结构：
     {
-      "active_reqs": [
+      "active_work": [
         {
-          "req_dir": Path,
-          "meta": dict,             # .req-meta.json 全部字段
+          "work_dir": Path,
+          "meta": dict,             # .work-meta.json 全部字段
         }, ...
       ],
       "warnings": [{"path", "reason"}, ...]
     }
 
-    错误契约：默认 tolerant；strict=True 时 list_active_reqs 内任一 warning
+    错误契约：默认 tolerant；strict=True 时 list_active_work 内任一 warning
     抛 StateReadError（聚合层不再额外收集别处错）。
     """
-    raw = list_active_reqs(repo_root, cwd=cwd, strict=strict)
+    raw = list_active_work(repo_root, cwd=cwd, strict=strict)
     warnings = list(raw["warnings"])
     out: list[dict] = []
     for item in raw["items"]:
-        req_dir = item["req_dir"]
+        work_dir = item["work_dir"]
         meta = item["meta"]
         out.append({
-            "req_dir": req_dir,
+            "work_dir": work_dir,
             "meta": meta,
         })
-    return {"active_reqs": out, "warnings": warnings}
+    return {"active_work": out, "warnings": warnings}
 
 
 # ============================================================================
-# Archived reqs (closed / cancelled) + Timeline 
+# Archived work (closed / cancelled) + Timeline
 # ============================================================================
 
 
@@ -676,29 +571,28 @@ def _dedup_archived(
 ) -> list[dict]:
     """从 [(module_dir, meta), ...] 取 status==want_status 的，按 meta.id（缺则目录名）去重。
 
-    主仓 + 各 req worktree 可能各暴露同一 req 的模块文件夹，按 id 去重避免双算
-    （同 list_active_reqs 的 _dedup_key 逻辑）。
+    主仓 + 各 build worktree 可能各暴露同一 work 的模块文件夹，按 id 去重避免双算
+    （同 list_active_work 的 _dedup_key 逻辑）。
     """
     seen: set[str] = set()
     out: list[dict] = []
-    for req_dir, meta in pairs:
+    for work_dir, meta in pairs:
         if meta.get("status") != want_status:
             continue
         rid = meta.get("id") if isinstance(meta, dict) else None
-        key = rid if isinstance(rid, str) and rid else req_dir.name
+        key = rid if isinstance(rid, str) and rid else work_dir.name
         if key in seen:
             continue
         seen.add(key)
-        out.append({"req_dir": req_dir, "meta": meta})
+        out.append({"work_dir": work_dir, "meta": meta})
     return out
 
 
-def list_closed_reqs(repo_root: Path, strict: bool = False) -> dict:
-    """扫 docs/modules/* 拿 status='closed' 的 req（不含 cancelled）。
+def list_closed_work(repo_root: Path, strict: bool = False) -> dict:
+    """扫 docs/modules/* 拿 status='closed' 的 work（不含 cancelled）。
 
-    批 2 单读：真相源只剩 docs/modules/*/.req-meta.json。旧 requirements/closed/
-    扫描已删。注：方案 A/B（close 后删 .req-meta vs 留 status=closed）是批 3 的事，
-    本批只切读向——若批 3 选方案 A，closed/cancelled 列表自然为空（无文件可读）。
+    当前方案 close/cancel 后删除 `.work-meta.json`，因此 closed/cancelled
+    列表通常自然为空；函数保留给历史元数据或诊断场景。
     """
     warnings: list[dict] = []
     pairs = _collect_from_modules(
@@ -711,8 +605,8 @@ def list_closed_reqs(repo_root: Path, strict: bool = False) -> dict:
     return {"items": items, "warnings": warnings}
 
 
-def list_cancelled_reqs(repo_root: Path, strict: bool = False) -> dict:
-    """扫 docs/modules/* 拿 status='cancelled' 的 req。批 2 单读（同 list_closed_reqs）。"""
+def list_cancelled_work(repo_root: Path, strict: bool = False) -> dict:
+    """扫 docs/modules/* 拿 status='cancelled' 的 work。"""
     warnings: list[dict] = []
     pairs = _collect_from_modules(
         repo_root / "docs" / "modules", warnings, ("cancelled",)
@@ -756,11 +650,11 @@ def get_timeline_state(
     module: Optional[str] = None,
     limit: Optional[int] = 20,
 ) -> dict:
-    """全局 req 时间线视图（active + closed + cancelled）。
+    """全局 work 时间线视图（active + closed + cancelled）。
 
     参数:
         since: ISO date YYYY-MM-DD; 仅返回 close/cancel 时间 >= since 的 archived
-        module: 仅返回涉及该 module 的 req（meta.modules / meta.name 包含）
+        module: 仅返回涉及该 module 的 work（meta.modules / meta.name 包含）
         limit: archived (closed + cancelled) 总数限制（None = 无上限）
 
     返回:
@@ -772,23 +666,23 @@ def get_timeline_state(
         "truncated": int,       # 被 limit 截断的数量
         "warnings": [...],
       }
-    每个 item: {req_dir, meta, close_date (datetime or None)}
+    每个 item: {work_dir, meta, close_date (datetime or None)}
     """
     from datetime import datetime
 
     warnings: list[dict] = []
 
     # active
-    active_result = list_active_reqs(repo_root, cwd, strict=False)
+    active_result = list_active_work(repo_root, cwd, strict=False)
     warnings.extend(active_result.get("warnings", []))
     active_items = active_result["items"]
 
     # closed + cancelled
-    closed_result = list_closed_reqs(repo_root, strict=False)
+    closed_result = list_closed_work(repo_root, strict=False)
     warnings.extend(closed_result.get("warnings", []))
     closed_items = closed_result["items"]
 
-    cancelled_result = list_cancelled_reqs(repo_root, strict=False)
+    cancelled_result = list_cancelled_work(repo_root, strict=False)
     warnings.extend(cancelled_result.get("warnings", []))
     cancelled_items = cancelled_result["items"]
 
@@ -857,11 +751,11 @@ def get_timeline_state(
 # CLI entry (供 bash 调用)
 # ============================================================================
 
-def _print_doctor(repo_root: Path, req_arg: Optional[str]) -> int:
-    """`python3 -m _lib.state doctor [<req>]`
+def _print_doctor(repo_root: Path, work_arg: Optional[str]) -> int:
+    """`python3 -m _lib.state doctor [<work-id>]`
 
-    打印：当前 repo_root / cwd / active req 探测结果 / 指定 req 的 meta
-    列表 + warning。PM 在 chat 复制粘贴跑，定位"为什么 active req 不一致"。
+    打印：当前 repo_root / cwd / active work 探测结果 / 指定 work 的 meta
+    列表 + warning。PM 在 chat 复制粘贴跑，定位"为什么 active work 不一致"。
     """
     import sys
 
@@ -869,10 +763,10 @@ def _print_doctor(repo_root: Path, req_arg: Optional[str]) -> int:
     print(f"cwd:       {Path.cwd()}")
 
     state = get_overall_state(repo_root, cwd=Path.cwd(), strict=False)
-    print(f"active req 数量: {len(state['active_reqs'])}")
-    for item in state["active_reqs"]:
+    print(f"active work 数量: {len(state['active_work'])}")
+    for item in state["active_work"]:
         meta = item["meta"]
-        rd = item["req_dir"]
+        rd = item["work_dir"]
         print(f"  - {meta.get('id', '?')} ({meta.get('name', '?')})"
               f"  stage={meta.get('stage', '?')}  status={meta.get('status', '?')}")
         print(f"    dir={rd}")
@@ -882,17 +776,17 @@ def _print_doctor(repo_root: Path, req_arg: Optional[str]) -> int:
         for w in state["warnings"]:
             print(f"  - {w['path']}: {w['reason']}")
 
-    if req_arg:
-        # 精确诊断单个 req
+    if work_arg:
+        # 精确诊断单个 work
         target: Optional[dict] = None
-        for item in state["active_reqs"]:
-            if item["meta"].get("id") == req_arg or item["req_dir"].name == req_arg:
+        for item in state["active_work"]:
+            if item["meta"].get("id") == work_arg or item["work_dir"].name == work_arg:
                 target = item
                 break
         if target is None:
-            print(f"\n指定的 req `{req_arg}` 未在 active 列表中。", file=sys.stderr)
+            print(f"\n指定的 work `{work_arg}` 未在 active 列表中。", file=sys.stderr)
             return 3
-        print(f"\n=== req `{req_arg}` 明细 ===")
+        print(f"\n=== work `{work_arg}` 明细 ===")
         print(json.dumps({
             "meta": target["meta"],
         }, ensure_ascii=False, indent=2))
@@ -905,8 +799,8 @@ def _cli():
         print(
             "usage: python3 -m _lib.state <fn> [args...]\n"
             "  fns: get_status / get_branch / get_worktree / get_meta /\n"
-            "       read_section / detect_format / read_req_meta /\n"
-            "       list_active_reqs / get_overall_state / doctor",
+            "       read_section / detect_format / read_work_meta /\n"
+            "       list_active_work / get_overall_state / doctor",
             file=sys.stderr,
         )
         sys.exit(2)
@@ -915,7 +809,7 @@ def _cli():
 
     # 聚合 / state-level 子命令：参数不是 task pm_view
     if fn == "doctor":
-        # doctor [<req-id>]  — repo_root 由 cwd 推导（取 git common-dir 的父）
+        # doctor [<work-id>]  — repo_root 由 cwd 推导（取 git common-dir 的父）
         repo_root = Path.cwd()
         try:
             common = subprocess.check_output(
@@ -929,29 +823,29 @@ def _cli():
                              else Path.cwd())
         except Exception:
             pass
-        req_arg = sys.argv[2] if len(sys.argv) > 2 else None
-        sys.exit(_print_doctor(repo_root, req_arg))
+        work_arg = sys.argv[2] if len(sys.argv) > 2 else None
+        sys.exit(_print_doctor(repo_root, work_arg))
 
-    if fn == "read_req_meta":
+    if fn == "read_work_meta":
         if len(sys.argv) < 3:
-            print("usage: read_req_meta <req_dir>", file=sys.stderr)
+            print("usage: read_work_meta <work_dir>", file=sys.stderr)
             sys.exit(2)
-        req_dir = Path(sys.argv[2])
+        work_dir = Path(sys.argv[2])
         try:
-            meta = read_req_meta(req_dir, strict=True)
+            meta = read_work_meta(work_dir, strict=True)
         except StateReadError as e:
             print(str(e), file=sys.stderr)
             sys.exit(1)
         print(json.dumps(meta, ensure_ascii=False))
         return
 
-    if fn == "list_active_reqs":
-        # list_active_reqs [<repo_root>]
+    if fn == "list_active_work":
+        # list_active_work [<repo_root>]
         repo_root = Path(sys.argv[2]) if len(sys.argv) > 2 else Path.cwd()
-        out = list_active_reqs(repo_root, cwd=Path.cwd(), strict=False)
+        out = list_active_work(repo_root, cwd=Path.cwd(), strict=False)
         print(json.dumps({
             "items": [
-                {"req_dir": str(i["req_dir"]), "meta": i["meta"]}
+                {"work_dir": str(i["work_dir"]), "meta": i["meta"]}
                 for i in out["items"]
             ],
             "warnings": out["warnings"],
@@ -963,11 +857,11 @@ def _cli():
         out = get_overall_state(repo_root, cwd=Path.cwd(), strict=False)
         # 仅打印结构化摘要，不打 last_event 全文（避免 stdout 过长）
         print(json.dumps({
-            "active_reqs": [
+            "active_work": [
                 {
-                    "req_dir": str(r["req_dir"]),
+                    "work_dir": str(r["work_dir"]),
                     "meta": r["meta"],
-                } for r in out["active_reqs"]
+                } for r in out["active_work"]
             ],
             "warnings": out["warnings"],
         }, ensure_ascii=False))

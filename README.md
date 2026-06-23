@@ -37,9 +37,9 @@ PMAI 不和 Claude Design、design-html 或 Claude Code 比"谁更快生成第�
 
 # 日常循环（模块规格先行，必要时再建）
 
-/design "批量审核"    讨论清楚，写模块三件套：discussion.md / decisions.md / spec.md
-/build 批量审核       大需求才建：对着 spec.md 在 prototype/ 里实现，可选隔离环境和执行器
-/close                PM 验收后沉淀：更新 PRODUCT-STATE / PRODUCT-RULES / 模块规格，必要时合回 main
+/pmai-design "批量审核"    讨论清楚，写模块三件套：discussion.md / decisions.md / spec.md
+/pmai-build 批量审核       大需求才建：对着 spec.md 在 prototype/ 里实现，可选隔离环境和执行器
+/pmai-close                PM 验收后沉淀：更新 PRODUCT-STATE / PRODUCT-RULES / 模块规格，必要时合回 main
 /pmai-status          产品现状视图（产品长什么样 / 当前模块做到哪 / 下一步）
 ```
 
@@ -65,7 +65,7 @@ PM 全程**只做决策**（方向 / 结构 / 建造方式 / 验收 / 沉淀）�
 
 ## 安装
 
-PMAI 用全局 CLI 形态分发（参考 [`docs/设计/框架分发与全局安装.md`](docs/设计/框架分发与全局安装.md)）。一次性安装，全局生效。
+PMAI 用全局 CLI 形态分发。一次性安装，全局生效。
 
 ### 一行安装（推荐）
 
@@ -165,7 +165,7 @@ agent 内部一气呵成 **4 阶段**：
 - **阶段 A · 参数收集 + 已有内容判断** —— AskUserQuestion 5 步问 PM（项目名 → 落地路径 → 已有内容判断 → 一句话背景 → 项目意图）。**这一步 AI 自动扫目录分诊，PM 不用预先判断**：空目录直接建；扫到已有源码 / 已 init 过 → AI 在方案里**主动建议**改走 `/pmai-codebase-audit`（接旧代码）或 `/pmai-project-solution`（重做方向），但**不硬拦**，PM 坚持 init 也接住（不删代码、可逆）
 - **阶段 B · 骨架建设** —— agent 用 Bash 调 `init-project.sh`，创建业务仓 + git init + 首 commit `init: <name>`
 - **阶段 C · QUESTIONING（方向讨论）** —— @读 `skills/_shared/project-questioning.md`（单一真相源），按提问纪律跑讨论 + Decision gate「创建 PROJECT.md / 继续探索」二选一 + Loop 回路，最后写 `docs/PROJECT.md` + `docs/ROADMAP.md` + atomic commit `docs: project direction settled`
-- **阶段 D · 终态汇总 + Next Up** —— 输出「✅ <name> 已就绪 / cd <target> && /design "..."」
+- **阶段 D · 终态汇总 + Next Up** —— 输出「✅ <name> 已就绪 / cd <target> && /pmai-design "..."」
 
 > `/pmai-init-project` 在装了 pmai 的任意 cwd 都能跑（无需在本仓）。
 
@@ -202,16 +202,16 @@ bash scripts/measure-tthw.sh
 > **注意**：装好 pmai 后，所有 skill 在 Claude Code 内都以 `pmai-` 前缀注册（防与 gstack / 其他框架命名冲突）。下面例子中的 `/pmai-*` 是真实的命令名。
 
 ```
-/design "<一句话>"      → 探索真问题、理清信息结构、写模块三件套
+/pmai-design "<一句话>"      → 探索真问题、理清信息结构、写模块三件套
   ↓
-/build <模块>          → 大需求才建；对着 docs/modules/<模块>/spec.md 改 prototype/
+/pmai-build <模块>          → 大需求才建；对着 docs/modules/<模块>/spec.md 改 prototype/
   ↓
-/pmai-next             → 忘了当前停在哪时，用它读状态并提示下一步
+/pmai-status             → 忘了当前停在哪时，用它读状态并提示下一步
   ↓
-/close                 → PM 验收后沉淀产品现状、规则、模块规格；有隔离环境则合回 main
+/pmai-close                 → PM 验收后沉淀产品现状、规则、模块规格；有隔离环境则合回 main
 ```
 
-简单改动可以跳过完整流程：直接改完后用 `/close` 或 `/pmai-deposit` 做轻量沉淀。大需求才进入 `/build`。
+简单改动可以跳过完整流程：直接改完后用 `/pmai-close` 或 `/pmai-deposit` 做轻量沉淀。大需求才进入 `/pmai-build`。
 
 ### 3. 团队仓使用（`--local` 模式）
 
@@ -259,22 +259,22 @@ git push
 |---|---|
 | `/pmai-init-project` | **项目级入口**：起一个新业务项目，4 阶段一气呵成（参数 → 骨架 → 方向 → Next Up）；装了 pmai 后**任意 cwd** 可跑 |
 | `/pmai-project-solution` | **项目方向规划**：4 个独立场景（重做 / 产品路线规划 / 老板新方向 / brownfield 接入） |
-| `/design` | **模块设计入口**：起新功能 / 重做模块，写 discussion / decisions / spec |
+| `/pmai-design` | **模块设计入口**：起新功能 / 重做模块，写 discussion / decisions / spec |
 | `/pmai-quick-fix` | 不走完整流程的小补丁（适合改文案、修小 bug） |
 
 ### 推进模块工作
 
 | Skill | 用途 |
 |---|---|
-| `/pmai-next` | **续跑辅助**：读当前阶段做下一步（设计 → build → 复审 → 沉淀），先说再动 |
-| `/build` | 对着模块 `spec.md` 在 `prototype/` 建；PM 选择执行器和是否开隔离环境 |
+| `/pmai-status` | **续跑辅助**：读当前阶段做下一步（设计 → build → 复审 → 沉淀），先说再动 |
+| `/pmai-build` | 对着模块 `spec.md` 在 `prototype/` 建；PM 选择执行器和是否开隔离环境 |
 | `/pmai-prd-writing` | **按需** standalone：原型确认后反向出可评审 PRD（真系统口径，可跨 req） |
 
 ### 收尾 / 放弃
 
 | Skill | 用途 |
 |---|---|
-| `/close` | 完成当前模块工作，沉淀产品现状 / 规则 / 模块规格，有隔离环境则合回 main |
+| `/pmai-close` | 完成当前模块工作，沉淀产品现状 / 规则 / 模块规格，有隔离环境则合回 main |
 | `/pmai-cancel` | 放弃当前工作，不合并，清活跃状态并排队清理隔离环境 |
 
 ### 旁路 / 文档维护

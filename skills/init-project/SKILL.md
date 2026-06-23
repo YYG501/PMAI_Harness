@@ -3,14 +3,14 @@ name: pmai-init-project
 description: |
   PM 主动入口 —— 起一个新业务项目时只建骨架、不锁流程：参数收集（含已有内容判断）→ 建骨架
   → 上下文脊柱（PRODUCT-STATE + PRODUCT + DESIGN + prototype/ 主原型）→ Next Up。早期自由探索，
-  方向清晰后再用 /design 立第一个模块、纳入结构。在生成器仓里跑。
+  方向清晰后再用 /pmai-design 立第一个模块、纳入结构。在生成器仓里跑。
 ---
 
 # /pmai-init-project（起项目骨架，不锁流程）
 
 > PM 起一个新业务项目时**只跑这一个命令**，agent 内部串起全流程；不切窗口、不跑第二个命令、不需要记中间步骤。
 >
-> **它只建"上下文脊柱"**：项目级的几份文件 + 一份能跑的主原型，AI 以后每次进项目先读它们，治失忆。**不锁流程、不强逼你先答一堆方向问卷**——脊柱搭好就可以自由探索、试方向，AI 放开手陪你试。等方向清晰、你准备好了，再用 `/design` 立第一个模块、把成果"纳入结构"。
+> **它只建"上下文脊柱"**：项目级的几份文件 + 一份能跑的主原型，AI 以后每次进项目先读它们，治失忆。**不锁流程、不强逼你先答一堆方向问卷**——脊柱搭好就可以自由探索、试方向，AI 放开手陪你试。等方向清晰、你准备好了，再用 `/pmai-design` 立第一个模块、把成果"纳入结构"。
 >
 > **PM 视图**：每一步入口先 echo 一行进度条（banner 规范见 `_shared/pm-view/banner-rules.md`）；最后一步给 ▶ Next Up 块。
 
@@ -27,8 +27,8 @@ description: |
 │  C · 一句话方向 + 视觉基线 + 主原型脚手架（轻）            │
 │    PRODUCT.md 留一句话定位 + DESIGN.md + prototype/ + commit│
 │                          ↓                              │
-│  D · 终态汇总 + Next Up（自由探索 / 准备好了 /design）     │
-│    ✅ <name> 已就绪 / 先随便试 → 想清楚了 /design "..."     │
+│  D · 终态汇总 + Next Up（自由探索 / 准备好了 /pmai-design）     │
+│    ✅ <name> 已就绪 / 先随便试 → 想清楚了 /pmai-design "..."     │
 └─────────────────────────────────────────────────────────┘
 ```
 
@@ -40,7 +40,7 @@ description: |
 
 - **早期最值钱的是自由探索**。方向往往是边试边清晰的，不是开局答问卷答出来的。开局就强制一道重门方向讨论，会把还没想清楚的方向过早定死，锁住创造力。
 - **脊柱搭好 = AI 就能放开手陪你试**。PRODUCT.md 里有一句话定位、DESIGN.md 有视觉基线、prototype/ 能跑——AI 进项目读得到上下文，就能直接陪 PM 在主原型上随便改、试几个方向、推翻重来，全程在 main 上动、不开 worktree、不走流程。
-- **方向清晰后再"纳入结构"**。当某个方向试明白了、PM 准备好了，用 `/design` 立第一个功能模块（模块三件套），把探索成果沉淀成结构化的规格。结构是**长出来的**，不是开局强加的。
+- **方向清晰后再"纳入结构"**。当某个方向试明白了、PM 准备好了，用 `/pmai-design` 立第一个功能模块（模块三件套），把探索成果沉淀成结构化的规格。结构是**长出来的**，不是开局强加的。
 
 > 想要更系统地把项目方向讨论透（定位 / 用户 / 角色 / 路线全过一遍），那是 `/pmai-strategy` 的活，PM 任何时候可主动调；本 skill 不替它做那道重门。
 
@@ -55,8 +55,8 @@ description: |
 
 - 系统地把项目方向讨论透（定位 / 用户 / 角色 / 路线全过一遍）→ 走 `/pmai-strategy`（PM 准备好了主动调）
 - 接入已有 codebase → 走 `/pmai-codebase-audit`（A 步 AI 诊断到源码时会优先推荐）
-- 立第一个功能模块、写规格 → 方向清晰后走 `/design`
-- 业务仓里起新需求 → 走 `/design`
+- 立第一个功能模块、写规格 → 方向清晰后走 `/pmai-design`
+- 业务仓里起新需求 → 走 `/pmai-design`
 
 ---
 
@@ -66,11 +66,11 @@ init 跑完后，项目里有这几样，构成 AI 以后每次进项目的"必�
 
 | 文件 / 目录 | 装什么 | 谁写 / 谁读 |
 |---|---|---|
-| `docs/PRODUCT.md` | 一句话定位 + 业务术语表（项目方向真相源；起步只留一句话，方向清晰后随 `/design` / `/pmai-strategy` 长厚） | C 步写一句话；每次进项目读 |
+| `docs/PRODUCT.md` | 一句话定位 + 业务术语表（项目方向真相源；起步只留一句话，方向清晰后随 `/pmai-design` / `/pmai-strategy` 长厚） | C 步写一句话；每次进项目读 |
 | `docs/TODO.md` | PM 待办池（无序，不排序） | C 步写 |
-| `docs/PRODUCT-STATE.md` | 产品**现状层**（现在长什么样、做到哪、哪些真哪些 mock）；模板已就位，内容随每次沉淀累积 | 只在 `/close` 沉淀那刻更新；开 `/design` 时先读 |
+| `docs/PRODUCT-STATE.md` | 产品**现状层**（现在长什么样、做到哪、哪些真哪些 mock）；模板已就位，内容随每次沉淀累积 | 只在 `/pmai-close` 沉淀那刻更新；开 `/pmai-design` 时先读 |
 | `docs/DESIGN.md` | 视觉与交互约定（**正向约束**：该怎么做，不是禁止清单） | C 步起草；build 前 AI 必读再动手 |
-| `docs/PRODUCT-RULES.md` | 跨模块的规则 + 关键决策 + 奠基理路（项目级基线） | 随产品演进 PM 调；`/close` 沉淀时回写跨模块决策 |
+| `docs/PRODUCT-RULES.md` | 跨模块的规则 + 关键决策 + 奠基理路（项目级基线） | 随产品演进 PM 调；`/pmai-close` 沉淀时回写跨模块决策 |
 | `prototype/` | **单一主原型**（默认 Next.js + TS + Tailwind + shadcn，init 时可改栈）；所有探索 / 需求的原型都在这一条线上演进 | C 步起一版能跑的；早期自由探索直接在 main 上改它，大需求才在 worktree 改、确认后并回 main |
 
 > 模板源：`templates/PRODUCT-STATE.md.tmpl` / `templates/DESIGN.md.tmpl` / `templates/PRODUCT-RULES.md.tmpl` / `templates/prototype-README.md.tmpl`。建骨架（B 步）由 `init-project.sh` 把这些铺到位，本 skill 负责把一句话定位 / 视觉基线填进去。
@@ -234,10 +234,10 @@ agent 收到脚本退出码 0 后**汇报**：「✅ 骨架已就绪 / 上下文
      1. PRODUCT.md 写一句话定位（这产品给谁、解决什么——一句话即可，想清楚了再用 /pmai-strategy 过透）
      2. DESIGN.md 视觉基线（颜色 / 字体 / 布局 / 动效 / UI 习惯，build 时的硬约束）
      3. prototype/ 起一版能跑的主原型（默认 Next.js + TS + Tailwind + shadcn，想换栈现在说）
-   视觉基线可以我陪你过一遍模板填，也可以借 gstack /design-consultation 出初稿。
+   视觉基线可以我陪你过一遍模板填，也可以借 gstack /pmai-design-consultation 出初稿。
    ```
 
-2. **PRODUCT.md 写一句话定位**：AskUser 问 PM 一句话（这产品给谁、解决什么），写进 `<target-dir>/docs/PRODUCT.md` 的定位节 + 业务术语表起一个空架（方向清晰后随 `/design` / `/pmai-strategy` 长厚）。**不在这里跑 5 节方向问卷**——一句话定位够 AI 进项目读上下文、陪 PM 探索即可。同时写 `<target-dir>/docs/TODO.md`（PM 把脑子里的待办先记下，无序）。
+2. **PRODUCT.md 写一句话定位**：AskUser 问 PM 一句话（这产品给谁、解决什么），写进 `<target-dir>/docs/PRODUCT.md` 的定位节 + 业务术语表起一个空架（方向清晰后随 `/pmai-design` / `/pmai-strategy` 长厚）。**不在这里跑 5 节方向问卷**——一句话定位够 AI 进项目读上下文、陪 PM 探索即可。同时写 `<target-dir>/docs/TODO.md`（PM 把脑子里的待办先记下，无序）。
 
 3. **填 DESIGN.md（正向视觉约束）**：基于 `docs/DESIGN.md`（B 步已铺的 `DESIGN.md.tmpl` 起草版），AI 陪 PM 把四节填具体——
    - 视觉基调（主色 / 强调色 / 中性灰阶 / 圆角 / 阴影 / 字号阶梯 / 间距倍数）
@@ -245,7 +245,7 @@ agent 收到脚本退出码 0 后**汇报**：「✅ 骨架已就绪 / 上下文
    - UI 习惯（不用浏览器原生弹框 / 宽表横向滚动 / 状态要全）
    - 组件 / token 来源（指向 prototype/ 的 `components/ui` shadcn + 本文件 token）
 
-   > **想借 gstack 出初稿**：调 gstack `/design-consultation`（用 Skill 工具），让它接管对话定视觉方向并写 `docs/DESIGN.md`。**不抄 gstack** —— 直接调它的 skill、接受它写的内容、跟随它升级；不解析、不映射、不重写。gstack 不可用就回到本步用模板手填（见失败兜底）。
+   > **想借 gstack 出初稿**：调 gstack `/pmai-design-consultation`（用 Skill 工具），让它接管对话定视觉方向并写 `docs/DESIGN.md`。**不抄 gstack** —— 直接调它的 skill、接受它写的内容、跟随它升级；不解析、不映射、不重写。gstack 不可用就回到本步用模板手填（见失败兜底）。
 
 4. **起主原型 `prototype/`**：在 `<target-dir>/prototype/` 用脚手架起一版能跑的（默认 Next.js + TS + Tailwind + shadcn；PM 在 step 1 说要换栈就按 PM 的）。约定（来自 `prototype-README.md.tmpl`）：每页 self-contained、视觉照 DESIGN.md、按 step A5 选的项目类型档走实现深度（prototype 档全 mock / system 档真后端 / custom 档按层混搭）。
    **prototype/README.md 在脚手架之后写**：`create-next-app` 会生成自己的默认 README，脚手架跑完后 AI 用 `$PMAI_HOME/templates/prototype-README.md.tmpl` 覆盖 `prototype/README.md`（占位符按项目替换）—— 不在 B 步铺，避免与 `create-next-app` 的非空目录冲突。
@@ -265,7 +265,7 @@ agent 收到脚本退出码 0 后**汇报**：「✅ 骨架已就绪 / 上下文
    PM 确认推进？
    ```
    - `PLACEHOLDERS > 0` → 提示 PM「DESIGN.md 还有占位没填」（不硬卡，PM 可推进后续手补）
-   - `HAS_PROTO = 0` → 主原型没起来，提示 PM 是否跳过（gstack / 脚手架不可用时也允许空 prototype/，第一个 `/design` build 时再起）
+   - `HAS_PROTO = 0` → 主原型没起来，提示 PM 是否跳过（gstack / 脚手架不可用时也允许空 prototype/，第一个 `/pmai-design` build 时再起）
 
 6. **atomic commit**：
    ```bash
@@ -276,9 +276,9 @@ agent 收到脚本退出码 0 后**汇报**：「✅ 骨架已就绪 / 上下文
 
 7. 进 D 步。
 
-**失败兜底（gstack / 脚手架不可用）**：gstack 未装或 `/design-consultation` 调用失败 → 回到 step 3 用 `DESIGN.md.tmpl` 模板手填；脚手架起不来 → 跟 PM 说「主原型先留空，第一个 `/design` build 时再起」，DESIGN.md 仍要填（它是 build 硬约束，不能空）。直接进 D 步。
+**失败兜底（gstack / 脚手架不可用）**：gstack 未装或 `/pmai-design-consultation` 调用失败 → 回到 step 3 用 `DESIGN.md.tmpl` 模板手填；脚手架起不来 → 跟 PM 说「主原型先留空，第一个 `/pmai-design` build 时再起」，DESIGN.md 仍要填（它是 build 硬约束，不能空）。直接进 D 步。
 
-**失败兜底（PM 中途停）**：PM 在 C 步答"停 / 等下" → 已写的 PRODUCT.md 一句话 / DESIGN.md / prototype/ 留写到一半的 unstaged 状态，提示 PM "下次想续可以直接陪你过 DESIGN.md，或第一个 `/design` 时补主原型。"
+**失败兜底（PM 中途停）**：PM 在 C 步答"停 / 等下" → 已写的 PRODUCT.md 一句话 / DESIGN.md / prototype/ 留写到一半的 unstaged 状态，提示 PM "下次想续可以直接陪你过 DESIGN.md，或第一个 `/pmai-design` 时补主原型。"
 
 ### D · 终态汇总 + Next Up（只汇总不 commit）
 
@@ -297,7 +297,7 @@ agent 输出 Next Up 块：
 ▶ Next Up（不锁流程，两条路随你）:
   cd <target-dir>
   · 先随便试方向 —— 直接在 prototype/ 上改，AI 陪你试（在 main 上动、不开 worktree）
-  · 想清楚某个方向了 —— /design "<一句话>" 立第一个模块、纳入结构
+  · 想清楚某个方向了 —— /pmai-design "<一句话>" 立第一个模块、纳入结构
   · 想把项目方向系统过透 —— /pmai-strategy
 ```
 
@@ -310,9 +310,9 @@ agent 输出 Next Up 块：
 - 目标目录默认不能已存在；A 步 AI 诊断到已有内容时优先推荐 audit / strategy，PM 拍 init 也接住（AI 加 `--allow-existing`，**不硬 gate**）
 - gstack 是硬依赖，未安装时 B 步脚本会报错退出
 - **起项目 = 只建骨架、不锁流程**：C 步只填一句话定位，**不在这里跑完整方向问卷**（5 节定位 / 用户 / 角色 / 路线讨论是 `/pmai-strategy` 的活，PM 准备好了主动调）。早期靠自由探索想清楚方向，比开局答问卷更有效
-- PRODUCT.md 不能完全空交付，但**只要一句话定位即可**（够 AI 进项目读上下文、陪 PM 探索）；术语表起空架，方向清晰后随 `/design` / `/pmai-strategy` 长厚
-- **DESIGN.md 是 build 硬约束，不能空交付** —— C 步即使主原型起不来，视觉基线也要填好（第一个 `/design` build 就靠它）
-- 借 gstack `/design-consultation` 出 DESIGN.md 初稿时**不抄、不映射、不重写** —— 直接接受它写的内容，跟随它升级
+- PRODUCT.md 不能完全空交付，但**只要一句话定位即可**（够 AI 进项目读上下文、陪 PM 探索）；术语表起空架，方向清晰后随 `/pmai-design` / `/pmai-strategy` 长厚
+- **DESIGN.md 是 build 硬约束，不能空交付** —— C 步即使主原型起不来，视觉基线也要填好（第一个 `/pmai-design` build 就靠它）
+- 借 gstack `/pmai-design-consultation` 出 DESIGN.md 初稿时**不抄、不映射、不重写** —— 直接接受它写的内容，跟随它升级
 
 ### PM-facing 输出禁词（[[feedback_pm_chat_no_engineering_jargon]]）
 
@@ -341,6 +341,6 @@ SKILL.md 内部段落保留 `brownfield` 概念词用于设计准确性；AI 跟
 | A 步 step 3 PM 选 ②（要改）| 等 PM 文本反馈具体哪条改；AI 调整方案后回 3.3/3.4 再确认（可循环）|
 | A 步 step 3 AI 诊断到已有 codebase / PMAI 脚手架 | 3.3 方案里**优先推荐** `/pmai-codebase-audit` 或 `/pmai-strategy`；PM 坚持 init 也接住（**不硬 gate**）|
 | B 步 `init-project.sh` 失败（chmod / git init / 模板缺失）| 报错贴 stderr + PM 检查；不进 C 步 |
-| C 步 gstack / 脚手架不可用 | 用 `DESIGN.md.tmpl` 模板手填视觉基线；主原型起不来则留空，第一个 `/design` build 时补（DESIGN.md 不能空）|
+| C 步 gstack / 脚手架不可用 | 用 `DESIGN.md.tmpl` 模板手填视觉基线；主原型起不来则留空，第一个 `/pmai-design` build 时补（DESIGN.md 不能空）|
 | C 步 PM 答"停" + 骨架已 commit | PRODUCT.md 一句话 / TODO.md / DESIGN.md / prototype/ 留 unstaged + 提示下次直接续填或 `/pmai-strategy` 过透方向 |
 | C 步 PM 答"停" + 骨架未 commit | 提示手动 `rm -rf <target-dir>` 重来 |

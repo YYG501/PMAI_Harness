@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# quick-fix req mode + task reject 回归测试。
-# Covers ensure_quickfix_root 三种分支：req-* 接受、task-* 拒绝、weird 分支拒绝。
+# quick-fix build mode + task reject 回归测试。
+# Covers ensure_quickfix_root 三种分支：build-* 接受、task-* 拒绝、weird 分支拒绝。
 
 set -uo pipefail
 
@@ -10,36 +10,36 @@ source "$SCRIPT_DIR/helpers/fixture.sh"
 
 QF="$FRAMEWORK_ROOT/scripts/quick-fix.sh"
 
-test_req_mode_merges_to_req_branch() {
-  start_test "scenario QR1 req mode merges to req branch, leaves main untouched"
+test_build_mode_merges_to_build_branch() {
+  start_test "scenario QB1 build mode merges to build branch, leaves main untouched"
   fixture_setup
   fixture_create_req req-001 test 1 >/dev/null 2>&1
 
-  local req_wt="$FIXTURE_DIR/.worktrees/req-001-test"
-  # Pre-state: main has empty prototypes/, req has same
+  local build_wt="$FIXTURE_DIR/.worktrees/build-req-001-test"
+  # Pre-state: main has empty prototypes/, build branch has same
   echo "# main version" > "$FIXTURE_DIR/prototypes/page.md"
   (cd "$FIXTURE_DIR" && git add -A && git commit -q -m "main page")
-  # req branch picks it up via merge
-  (cd "$req_wt" && git merge -q --no-edit main 2>/dev/null || true)
+  # build branch picks it up via merge
+  (cd "$build_wt" && git merge -q --no-edit main 2>/dev/null || true)
 
-  # Run quick-fix from req worktree
+  # Run quick-fix from build worktree
   local out err
   out=$(mktemp); err=$(mktemp)
-  (cd "$req_wt" && QUICK_FIX_COMMAND='echo "req-only fix" >> prototypes/page.md' \
+  (cd "$build_wt" && QUICK_FIX_COMMAND='echo "build-only fix" >> prototypes/page.md' \
     QUICK_FIX_DECISION=pass QUICK_FIX_ASSUME_YES=1 \
-    bash "$QF" "req mode test" >"$out" 2>"$err")
+    bash "$QF" "build mode test" >"$out" 2>"$err")
   local rc=$?
 
   local base_branch
   base_branch=$(awk '/^BASE_BRANCH:/{print $2}' "$out")
 
   if [ "$rc" -eq 0 ] \
-    && [ "$base_branch" = "req-001-test" ] \
-    && grep -q "req-only fix" "$req_wt/prototypes/page.md" \
-    && ! grep -q "req-only fix" "$FIXTURE_DIR/prototypes/page.md"; then
+    && [ "$base_branch" = "build-req-001-test" ] \
+    && grep -q "build-only fix" "$build_wt/prototypes/page.md" \
+    && ! grep -q "build-only fix" "$FIXTURE_DIR/prototypes/page.md"; then
     pass_test
   else
-    _fail "req mode failed: rc=$rc base=$base_branch"
+    _fail "build mode failed: rc=$rc base=$base_branch"
     echo "--stdout--" >&2; cat "$out" >&2
     echo "--stderr--" >&2; cat "$err" >&2
   fi
@@ -90,6 +90,6 @@ test_weird_branch_rejected() {
   fixture_teardown
 }
 
-test_req_mode_merges_to_req_branch
+test_build_mode_merges_to_build_branch
 test_task_worktree_rejected
 test_weird_branch_rejected

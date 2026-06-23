@@ -10,9 +10,9 @@ description: |
 
 ## When To Use
 
-- PM 明确判断某个改动不需要完整 `/design` / `/build`。
+- PM 明确判断某个改动不需要完整 `/pmai-design` / `/pmai-build`。
 - 适用于错别字、格式、链接、常量值、少量样式、很小的代码修补。
-- 不适用于需要重新讨论范围、改模块规格、补验收路径或改一片功能的工作；这类走 `/design` 或 `/build`。
+- 不适用于需要重新讨论范围、改模块规格、补验收路径或改一片功能的工作；这类走 `/pmai-design` 或 `/pmai-build`。
 
 ## Mode
 
@@ -21,7 +21,7 @@ quick-fix 只面向当前主线的小改。脚本创建 `tmp-quick-*` worktree�
 | 启动位置 | 行为 |
 |---|---|
 | 主仓根 + 当前 main | 允许，base = main |
-| `.worktrees/build-*` | 拒绝；先回主仓或完成 `/build` / `/close` |
+| `.worktrees/pmai-build-*` | 拒绝；先回主仓或完成 `/pmai-build` / `/pmai-close` |
 | 其他分支 / 历史 worktree | 拒绝；避免把小修合进错误基线 |
 
 ## Preamble
@@ -41,7 +41,7 @@ PM 必须给出一句话描述：
 /pmai-quick-fix "修正文档里的错别字"
 ```
 
-描述为空，或听起来像新功能 / 规格变化 / 验收变化时，先问 PM 是否改走 `/design`。
+描述为空，或听起来像新功能 / 规格变化 / 验收变化时，先问 PM 是否改走 `/pmai-design`。
 
 ### 步骤 2：启动 quick-fix worktree
 
@@ -82,9 +82,9 @@ cd "<WORKTREE>"
 short-circuit：仅 typo / 格式 / 引用更新时，可输出简化版扫描区块，不问额外分类。
 
 **越界时拒绝 quick-fix**：
-- 改动会改变模块 `spec.md` 的核心产品决策 → 走 `/design` 修订规格。
-- 改动会新增或大改 `prototype/` 一片功能 → 走 `/build`。
-- 改动会改项目级规则 / 术语并需要 PM 逐条拍 → 走 `/close` 或 `/design`。
+- 改动会改变模块 `spec.md` 的核心产品决策 → 走 `/pmai-design` 修订规格。
+- 改动会新增或大改 `prototype/` 一片功能 → 走 `/pmai-build`。
+- 改动会改项目级规则 / 术语并需要 PM 逐条拍 → 走 `/pmai-close` 或 `/pmai-design`。
 
 ### 步骤 4：完成改动后让脚本收口
 
@@ -143,7 +143,7 @@ bash "$PMAI_HOME/scripts/quick-fix.sh" --snapshot
 
 历史档案（只作叙述维护，不强制反向扫）：
 - docs/归档/**
-- docs/设计/** 中明确标为历史或已废弃的设计稿
+- docs/归档/** 中明确标为历史或已废弃的设计稿
 
 输入材料（证据，不是产品合同）：
 - docs/inputs/**

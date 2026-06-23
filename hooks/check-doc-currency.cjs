@@ -59,37 +59,13 @@ process.stdin.on('end', () => {
     if (!touchedFramework) process.exit(0);
     if (changed.includes('CHANGELOG.md')) process.exit(0);
 
-    // 附加检查：docs/设计/ 里状态已"已落地"但还没归档的设计文档
-    let lifecycleHint = '';
-    try {
-      const stranded = git('ls-files docs/设计/')
-        .split('\n')
-        .filter(f => f.endsWith('.md') && !f.includes('_模板'))
-        .filter(f => {
-          try {
-            const head = fs.readFileSync(f, 'utf8').slice(0, 600);
-            return /状态[^\n]*(?:已落地|已实施|已完成)/.test(head);
-          } catch {
-            return false;
-          }
-        });
-      if (stranded.length) {
-        lifecycleHint =
-          '\n\n附带：以下设计文档状态已是"已落地"但仍在 docs/设计/ —— ' +
-          '落地后应 git mv 到 docs/归档/完成/ 并更新 docs/INDEX.md：\n' +
-          stranded.map(f => `  - ${f}`).join('\n');
-      }
-    } catch {
-      /* 忽略附加检查的任何异常 */
-    }
-
     const reason = `⚠️ 文档新鲜度检查（check-doc-currency hook）
 
 本次 commit 动了框架资产（scripts/ skills/ templates/ agents/ 之一 —— 会同步到业务仓），但 CHANGELOG.md 不在本次提交里。
 
 提交前确认：
 1. CHANGELOG.md「未发布」段加了对应条目吗？（业务仓靠它决定是否跑同步）
-2. RUNTIME.md「当前位置 / 下一步」需要更新吗？${lifecycleHint}
+2. RUNTIME.md「当前位置 / 下一步」需要更新吗？
 
 → 补完文档，重新 git add + commit。
 → 若确认本次确实不影响业务仓、不需动文档（纯生成器内部改动 / 注释 / 测试微调），commit message 加 [skip-doc-check] 重新提交即可跳过。

@@ -1,26 +1,25 @@
 #!/usr/bin/env bash
 # skill-preamble.sh — 统一 preamble，所有 skill 的 preamble 调用它
 # 用法: source "$PMAI_HOME/scripts/skill-preamble.sh"（I-mini 模式，推荐）
-#       或 source $HOME/.pmai/scripts/skill-preamble.sh（老消费仓 backward compat，不推荐）
+#       或 source $HOME/.pmai/scripts/skill-preamble.sh
 # 输出环境变量:
 #   PMAI_HOME            - 框架代码根目录（~/.pmai/ 或 env 覆盖），I-mini 后 skill 内部用此路径调脚本
 #   MAIN_REPO_ROOT       - 主仓根目录（共享元数据：.runs/、.worktrees/）
-#   REPO_ROOT            - 当前 worktree 根目录（业务数据：requirements/、docs/、prototypes/）
-#                          向后兼容：如果在 main 分支，REPO_ROOT == MAIN_REPO_ROOT
+#   REPO_ROOT            - 当前 worktree 根目录（业务数据：docs/、prototype/）
 #   BRANCH               - 当前分支
-#   WORKTREE_TYPE        - main / req / legacy-task
-#   ACTIVE_REQ           - 活跃 req ID（cwd 唯一确定 req 时设值；main + 多 active 时留空）
-#   ACTIVE_REQ_STAGE     - 活跃 req 当前 stage（同 ACTIVE_REQ 的留空规则）
-#   ACTIVE_REQ_DIR       - 活跃 req 目录绝对路径（同上）
-#   ACTIVE_REQ_COUNT     - 检测到的 active req 数量（0 / 1 / 多）
+#   WORKTREE_TYPE        - main / work / legacy-task
+#   ACTIVE_WORK          - 活跃工作 ID（cwd 唯一确定工作时设值；main + 多 active 时留空）
+#   ACTIVE_WORK_STAGE    - 活跃工作当前阶段（同 ACTIVE_WORK 的留空规则）
+#   ACTIVE_WORK_DIR      - 活跃工作目录绝对路径（同上）
+#   ACTIVE_WORK_COUNT    - 检测到的 active work 数量（0 / 1 / 多）
 #
-# 多 active req 语义：
-#   - 在 req worktree 里：cwd 唯一确定 req，ACTIVE_REQ 必单值
-#   - 在主仓 main：可能有 0/1/多 active req
+# 多 active work 语义：
+#   - 在工作 worktree 里：cwd 唯一确定工作，ACTIVE_WORK 必单值
+#   - 在主仓 main：可能有 0/1/多 active work
 #       0: 三个变量空
-#       1: ACTIVE_REQ 单值（同旧行为）
-#       多: ACTIVE_REQ 留空（不要默选第一个），输出列出所有候选
-#         skill 自己判断 ACTIVE_REQ_COUNT，决定报错或让 PM 进具体 worktree
+#       1: ACTIVE_WORK 单值（同旧行为）
+#       多: ACTIVE_WORK 留空（不要默选第一个），输出列出所有候选
+#         skill 自己判断 ACTIVE_WORK_COUNT，决定报错或让 PM 进具体 worktree
 
 # --- -1. 解析 PMAI_HOME（I-mini 入口，skill 后续都用它）---
 # 顺序：env 显式覆盖 → 本脚本所在目录推导（开发本仓内跑 / clone 到 ~/.pmai/ 都对）→ ~/.pmai fallback
@@ -73,35 +72,34 @@ fi
 # CURRENT_WORKTREE_ROOT: 当前 worktree（业务数据在这里）
 CURRENT_WORKTREE_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
 
-# 向后兼容：REPO_ROOT 指向当前 worktree（业务数据）
 REPO_ROOT="$CURRENT_WORKTREE_ROOT"
 
 # --- 3. 检测 worktree 类型 ---
 WORKTREE_TYPE="main"
-if [[ "$BRANCH" == req-* ]]; then
-  WORKTREE_TYPE="req"
+if [[ "$BRANCH" == build-* ]]; then
+  WORKTREE_TYPE="work"
 elif [[ "$BRANCH" == task-* ]]; then
   WORKTREE_TYPE="legacy-task"
 fi
 
-# --- 4. 读取活跃 req（cwd 优先；main 时可能多 active） ---
-ACTIVE_REQ=""
-ACTIVE_REQ_STAGE=""
-ACTIVE_REQ_DIR=""
-ACTIVE_REQ_COUNT=0
-_ACTIVE_REQ_IDS=()
-_ACTIVE_REQ_DIRS=()
-_ACTIVE_REQ_STAGES=()
+# --- 4. 读取活跃工作（cwd 优先；main 时可能多 active） ---
+ACTIVE_WORK=""
+ACTIVE_WORK_STAGE=""
+ACTIVE_WORK_DIR=""
+ACTIVE_WORK_COUNT=0
+_ACTIVE_WORK_IDS=()
+_ACTIVE_WORK_DIRS=()
+_ACTIVE_WORK_STAGES=()
 
-# 把单个 root 下所有 status=active 的 req 加进候选列表（按 id 去重）
-# 批 2 单读：真相源 = docs/modules/<模块>/.req-meta.json（模块名可为中文，不限 req- 前缀）。
-_collect_active_reqs_in() {
+# 把单个 root 下所有 status=active 的工作加进候选列表（按 id 去重）。
+# 真相源 = docs/modules/<模块>/.work-meta.json。
+_collect_active_work_in() {
   local root="$1"
   local modules_dir="$root/docs/modules"
   [ -d "$modules_dir" ] || return 0
-  for req_dir in "$modules_dir"/*/; do
-    [ -d "$req_dir" ] || continue
-    local meta="$req_dir/.req-meta.json"
+  for work_dir in "$modules_dir"/*/; do
+    [ -d "$work_dir" ] || continue
+    local meta="$work_dir/.work-meta.json"
     [ -f "$meta" ] || continue
     local status id stage
     status=$(python3 -c "import json; print(json.load(open('$meta')).get('status',''))" 2>/dev/null || echo "")
@@ -110,48 +108,47 @@ _collect_active_reqs_in() {
     stage=$(python3 -c "import json; print(json.load(open('$meta'))['stage'])" 2>/dev/null || echo "")
     [ -n "$id" ] || continue
     local already=0
-    if [ "${#_ACTIVE_REQ_IDS[@]}" -gt 0 ]; then
-      for existing in "${_ACTIVE_REQ_IDS[@]}"; do
+    if [ "${#_ACTIVE_WORK_IDS[@]}" -gt 0 ]; then
+      for existing in "${_ACTIVE_WORK_IDS[@]}"; do
         [ "$existing" = "$id" ] && { already=1; break; }
       done
     fi
     [ "$already" = "1" ] && continue
-    _ACTIVE_REQ_IDS+=("$id")
-    _ACTIVE_REQ_DIRS+=("${req_dir%/}")
-    _ACTIVE_REQ_STAGES+=("$stage")
+    _ACTIVE_WORK_IDS+=("$id")
+    _ACTIVE_WORK_DIRS+=("${work_dir%/}")
+    _ACTIVE_WORK_STAGES+=("$stage")
   done
 }
 
-# req worktree 里 cwd 唯一确定 req（自身 active/ 必只含一个）
-# 主仓 main：扫主仓 + 所有 .worktrees/req-*，可能 0/1/多 active
+# 工作 worktree 里 cwd 唯一确定工作（自身 active work 优先）。
+# 主仓 main：扫主仓 + 所有 attached worktree，可能 0/1/多 active。
 if [ "$WORKTREE_TYPE" != "main" ]; then
-  _collect_active_reqs_in "$CURRENT_WORKTREE_ROOT"
-  if [ "${#_ACTIVE_REQ_IDS[@]}" -eq 0 ]; then
-    _collect_active_reqs_in "$MAIN_REPO_ROOT"
+  _collect_active_work_in "$CURRENT_WORKTREE_ROOT"
+  if [ "${#_ACTIVE_WORK_IDS[@]}" -eq 0 ]; then
+    _collect_active_work_in "$MAIN_REPO_ROOT"
   fi
 else
-  _collect_active_reqs_in "$MAIN_REPO_ROOT"
-  # 通过 git worktree list 遍历所有 attached 的 req-* worktree（不假设在 .worktrees/）
+  _collect_active_work_in "$MAIN_REPO_ROOT"
+  # 通过 git worktree list 遍历所有 attached 的 build worktree（不假设在 .worktrees/）
   if command -v list_worktrees_by_branch_prefix >/dev/null 2>&1; then
     while IFS=$'\t' read -r _wt_branch _wt_path; do
-      [ -n "$_wt_path" ] && [ -d "$_wt_path" ] && _collect_active_reqs_in "$_wt_path"
-    done < <(list_worktrees_by_branch_prefix "req-" "$MAIN_REPO_ROOT" 2>/dev/null)
+      [ -n "$_wt_path" ] && [ -d "$_wt_path" ] && _collect_active_work_in "$_wt_path"
+    done < <(list_worktrees_by_branch_prefix "build-" "$MAIN_REPO_ROOT" 2>/dev/null)
   else
-    # fallback：helper 不可用时退回旧 glob
-    for _req_wt in "$MAIN_REPO_ROOT"/.worktrees/req-*; do
-      [ -d "$_req_wt" ] || continue
-      _collect_active_reqs_in "$_req_wt"
+    for _work_wt in "$MAIN_REPO_ROOT"/.worktrees/build-*; do
+      [ -d "$_work_wt" ] || continue
+      _collect_active_work_in "$_work_wt"
     done
   fi
 fi
 
-ACTIVE_REQ_COUNT="${#_ACTIVE_REQ_IDS[@]}"
+ACTIVE_WORK_COUNT="${#_ACTIVE_WORK_IDS[@]}"
 
-# 单值兼容：仅 1 个时填 ACTIVE_REQ；多个时留空，强制 skill 走"按 cwd 选 req 或拒绝默选"路径
-if [ "$ACTIVE_REQ_COUNT" -eq 1 ]; then
-  ACTIVE_REQ="${_ACTIVE_REQ_IDS[0]}"
-  ACTIVE_REQ_DIR="${_ACTIVE_REQ_DIRS[0]}"
-  ACTIVE_REQ_STAGE="${_ACTIVE_REQ_STAGES[0]}"
+# 仅 1 个时填 ACTIVE_WORK；多个时留空，强制 skill 走"按 cwd 选工作或拒绝默选"路径
+if [ "$ACTIVE_WORK_COUNT" -eq 1 ]; then
+  ACTIVE_WORK="${_ACTIVE_WORK_IDS[0]}"
+  ACTIVE_WORK_DIR="${_ACTIVE_WORK_DIRS[0]}"
+  ACTIVE_WORK_STAGE="${_ACTIVE_WORK_STAGES[0]}"
 fi
 
 # --- 6. 中断恢复检测（使用主仓的 .runs/） ---
@@ -209,19 +206,19 @@ echo "MAIN_REPO_ROOT: $MAIN_REPO_ROOT"
 echo "REPO_ROOT: $REPO_ROOT"
 echo "BRANCH: $BRANCH"
 echo "WORKTREE_TYPE: $WORKTREE_TYPE"
-if [ "$ACTIVE_REQ_COUNT" -eq 1 ]; then
-  echo "ACTIVE_WORK: $ACTIVE_REQ (stage $ACTIVE_REQ_STAGE)"
-elif [ "$ACTIVE_REQ_COUNT" -gt 1 ]; then
-  echo "ACTIVE_WORKS ($ACTIVE_REQ_COUNT 个并行)："
-  for _i in "${!_ACTIVE_REQ_IDS[@]}"; do
-    echo "  - ${_ACTIVE_REQ_IDS[$_i]} (stage ${_ACTIVE_REQ_STAGES[$_i]})  →  ${_ACTIVE_REQ_DIRS[$_i]}"
+if [ "$ACTIVE_WORK_COUNT" -eq 1 ]; then
+  echo "ACTIVE_WORK: $ACTIVE_WORK (stage $ACTIVE_WORK_STAGE)"
+elif [ "$ACTIVE_WORK_COUNT" -gt 1 ]; then
+  echo "ACTIVE_WORKS ($ACTIVE_WORK_COUNT 个并行)："
+  for _i in "${!_ACTIVE_WORK_IDS[@]}"; do
+    echo "  - ${_ACTIVE_WORK_IDS[$_i]} (stage ${_ACTIVE_WORK_STAGES[$_i]})  →  ${_ACTIVE_WORK_DIRS[$_i]}"
   done
   echo "提示：当前在主仓视角，多 active work 并行 — 操作具体工作请先 cd 进对应 worktree。"
 fi
 # 主窗口兜底收口：preamble 输出当前工作摘要。
-if [ -n "$ACTIVE_REQ" ] || ls "$MAIN_REPO_ROOT"/.worktrees/req-* >/dev/null 2>&1; then
+if [ -n "$ACTIVE_WORK" ] || ls "$MAIN_REPO_ROOT"/.worktrees/build-* >/dev/null 2>&1; then
   python3 "$PMAI_HOME/scripts/status-view.py" --summary 2>/dev/null || true
 fi
 
 export MAIN_REPO_ROOT REPO_ROOT CURRENT_WORKTREE_ROOT BRANCH WORKTREE_TYPE
-export ACTIVE_REQ ACTIVE_REQ_STAGE ACTIVE_REQ_DIR ACTIVE_REQ_COUNT
+export ACTIVE_WORK ACTIVE_WORK_STAGE ACTIVE_WORK_DIR ACTIVE_WORK_COUNT

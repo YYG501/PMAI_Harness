@@ -91,7 +91,7 @@ if str(target).startswith(main_str) or str(target) == str(main_root):
     if rel_to_main.startswith('.worktrees/'):
         parts = rel_to_main.split('/', 2)
         if len(parts) >= 2:
-            wt_branch = parts[1]  # 例如 'req-001-xxx'
+            wt_branch = parts[1]  # 例如 'build-demo'
             wt_rel = parts[2] if len(parts) >= 3 else '.'
             print(f'WORKTREE|{wt_branch}|{wt_rel}')
         else:
@@ -115,7 +115,7 @@ if [ "$SCOPE" = "__OUTSIDE_REPO__" ]; then
       exit 0
       ;;
     *)
-      reason="写仓库外的路径被拒绝：${FILE_PATH}。业务改动必须在 main 或 req worktree 内进行。如需写临时文件请用 /tmp/ 或 /var/tmp/。"
+      reason="写仓库外的路径被拒绝：${FILE_PATH}。业务改动必须在 main 或 build worktree 内进行。如需写临时文件请用 /tmp/ 或 /var/tmp/。"
       reason_escaped=$(echo "$reason" | python3 -c "import sys,json; print(json.dumps(sys.stdin.read().strip())[1:-1])")
       printf '{"decision": "deny", "reason": "%s"}\n' "$reason_escaped"
       exit 2
@@ -164,56 +164,10 @@ deny() {
 }
 
 # ======================================================
-# GATE 1: Req stage 直改拦截
-# ======================================================
-# 批 2：req 状态真相源迁到 docs/modules/<模块>/.req-meta.json（补批 1 留下的 GATE2 洞——
-# main 写保护放宽后 docs/** 全放行，stage 字段必须仍由 req-transition 走，不能 main 直改）。
-# 旧 requirements/*/.req-meta.json 路径保留（过渡期 fixture/在飞 req 仍可能在场）。
-case "$REL_PATH" in
-  requirements/*/.req-meta.json|docs/modules/*/.req-meta.json)
-    STAGE_MODIFIED=$(echo "$INPUT" | python3 -c "
-import sys, json, re
-
-data = json.load(sys.stdin)
-ti = data.get('tool_input', data)
-old = ti.get('old_string', '')
-new = ti.get('new_string', '')
-content = ti.get('content', '')
-file_path = ti.get('file_path', '')
-
-# Check Edit tool
-if old or new:
-    if re.search(r'\"stage\"', old) or re.search(r'\"stage\"', new):
-        print('DENY')
-        sys.exit(0)
-
-# Check Write tool (full file rewrite)
-if content and not old:
-    if re.search(r'\"stage\"', content):
-        try:
-            with open(file_path, 'r', encoding='utf-8') as f:
-                existing = json.load(f)
-            proposed = json.loads(content)
-            if existing.get('stage') != proposed.get('stage'):
-                print('DENY')
-                sys.exit(0)
-        except (FileNotFoundError, json.JSONDecodeError, ValueError):
-            pass
-
-print('ALLOW')
-" 2>/dev/null || echo "ALLOW")
-
-    if [ "$STAGE_MODIFIED" = "DENY" ]; then
-      deny "请使用 python3 $HOME/.pmai/scripts/req-transition.py 修改 req stage"
-    fi
-    ;;
-esac
-
-# ======================================================
-# GATE 2: Main 分支写保护（白名单模式，默认拒绝）
+# GATE 1: Main 分支写保护（白名单模式，默认拒绝）
 # ======================================================
 # main 分支上，只允许写入以下白名单路径。其他所有路径都拒绝。
-# 业务代码、文档、配置都必须走 req 分支隔离
+# 业务代码必须走 build 分支隔离；docs/** 是当前文档真相源。
 if [ "$BRANCH" = "main" ] || [ "$BRANCH" = "master" ]; then
   MAIN_WRITE_ALLOWED=false
 
@@ -222,8 +176,7 @@ if [ "$BRANCH" = "main" ] || [ "$BRANCH" = "master" ]; then
     .claude/*|CLAUDE.md|.gitignore|README.md)
       MAIN_WRITE_ALLOWED=true
       ;;
-    # 批 2：删旧 requirements/active|closed/* 白名单条目（真相源已迁 docs/modules/*，
-    # 走下方 docs/* 全放行；req 状态文件的 stage 字段仍由 GATE 2 拦直改）。
+    # 旧 requirements/active|closed/* 不再是状态真相源，也不在 main 写入白名单内。
     # 运行时元数据：不入库，但允许写（gitignored）
     .runs/*|.worktrees/*|.dev-port)
       MAIN_WRITE_ALLOWED=true
@@ -233,11 +186,9 @@ if [ "$BRANCH" = "main" ] || [ "$BRANCH" = "master" ]; then
     mocks/*)
       MAIN_WRITE_ALLOWED=true
       ;;
-    # 文档全树（lifecycle 迁移批 1，§1③ 写保护放宽）：docs/** 一律放行 main 直接写。
-    # 「讨论=无 worktree、小改直接改」的前提是文档可在 main 上动——含 docs/modules 三件套 +
-    # .req-meta.json 非状态字段（stage 字段仍由 GATE 2 走 req-transition 拦）、PRODUCT-STATE /
-    # PRODUCT-RULES / TODO / decisions / PRODUCT / DESIGN。删了旧「docs/modules 已 commit 后拒绝」
-    # 的 git-log 门控、删了 deposit marker 门控（deposit skill 进 dormant）。
+    # 文档全树：docs/** 一律放行 main 直接写。
+    # 「讨论=无 worktree、小改直接改」的前提是文档可在 main 上动——含 docs/modules 三件套、
+    # .work-meta.json、PRODUCT-STATE、PRODUCT-RULES、TODO、decisions、PRODUCT、DESIGN。
     # 边界：prototype/ 及业务代码目录仍走 worktree（默认拒绝，见下方 deny）。
     docs/*)
       MAIN_WRITE_ALLOWED=true
@@ -245,7 +196,7 @@ if [ "$BRANCH" = "main" ] || [ "$BRANCH" = "master" ]; then
   esac
 
   if [ "$MAIN_WRITE_ALLOWED" != "true" ]; then
-    deny "main 分支写保护：不允许直接修改 ${REL_PATH}。业务代码必须通过 build/req worktree 操作。如需初始化新项目，请用 /pmai-init-project 创建新的业务项目仓。"
+    deny "main 分支写保护：不允许直接修改 ${REL_PATH}。业务代码必须通过 build-* worktree 操作。如需初始化新项目，请用 /pmai-init-project 创建新的业务项目仓。"
   fi
 fi
 
@@ -253,8 +204,8 @@ fi
 # GATE 3: Worktree 作用域保护
 # ======================================================
 case "$BRANCH" in
-  req-*)
-    # req/build worktree 可以改 prototype/；文档真相源在 main/docs 或 req docs 下按具体流程沉淀。
+  build-*)
+    # build worktree 可以改 prototype/；文档真相源在 main/docs 或模块 docs 下按具体流程沉淀。
     ;;
 esac
 

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # manual build adapter.
 #
-# It records a pending manual build marker and exits 0. /build should stop and
+# It records a pending manual build marker and exits 0. /pmai-build should stop and
 # resume checks after the PM finishes editing.
 
 set -euo pipefail
@@ -36,6 +36,6 @@ Manual build 已登记
 请在以下目录完成实现：
   $BUILD_DIR_RESOLVED/prototype
 
-完成后重新进入 /build，我会跳过执行器并继续跑检查。
+完成后重新进入 /pmai-build，我会跳过执行器并继续跑检查。
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 EOF

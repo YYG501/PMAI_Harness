@@ -39,14 +39,14 @@ const GUARD_TEXT = `⚠️ REVIEW SKILL 执行强制约束（review-skill-guard 
 
 1. **grep + read**：先扫 \`skills/\` \`hooks/\` \`scripts/\` \`docs/\` 找现有同主题机制
    - 评 "加幂等性" → 先 grep \`idempotent|幂等\`
-   - 评 "加 stage 闸门" → 先看 \`skills/req-stage-gate/\`
+   - 评 "加阶段/状态门" → 先扫 \`skills/\`、\`scripts/\`、\`INVARIANTS.md\` 的当前实现
    - 评 "加权限校验" → 先扫 \`docs/modules/\` + \`PRODUCT-RULES.md\`
 2. **找到现有机制 → 优先复用 / 优化**：评审报告里明写「项目已有 X 机制（位置 Y），建议优化 vs 替代 vs 文档化」，不要凭空建议新增
 3. **真没有 → 才建议新增**，且在 finding 里标注"已 grep 确认无既存机制"
 
 **对 autoplan / plan-eng-review 等调用方同样生效**：派评审子 agent 前在 prompt 里强制注入"先 grep 现状"指令；不要让 agent 只拿到方案文档就开评。
 
-**历史教训**：D13 modulespec 设计前 5 轮 autoplan 评审无一发现仓库已有 \`req-stage-gate\` / \`task-plan\` 等成熟闸门机制，反复建议"加 stage 校验"——根因是评审 agent 没扫现状。
+**历史教训**：早期设计评审多次只看方案文档，没有扫仓库现状，反复建议新增已有或已废弃的机制——根因是评审 agent 没扫现状。
 
 ## Common failure modes（自检清单，命中即返工）
 

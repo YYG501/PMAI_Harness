@@ -1,7 +1,7 @@
 # shellcheck shell=bash
 # symlink-prd.sh — 在 docs/prds/ 下为模块的 prd.md 建相对 symlink，统一 PRD 检索入口。
 #
-# 真相源迁移（lifecycle 迁移批 3，方案 A）：PRD 源从 requirements/closed/<req>/prd.md
+# 真相源迁移（lifecycle 迁移批 3，方案 A）：PRD 源从 requirements/pmai-closed/<req>/prd.md
 # 改到模块文件夹 docs/modules/<模块>/prd.md（模块文件夹是长期真相源，close 后留场）。
 #
 # 两类 PRD 收口位置：

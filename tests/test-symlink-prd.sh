@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# Tests for docs/prds/ PRD 收口 symlink — close-req / cancel-req / helper unit
+# Tests for docs/prds/ PRD 收口 symlink — close-work / cancel-work / helper unit
 #
-# 真相源迁移（lifecycle 迁移批 3，方案 A）：PRD 源从 requirements/closed/<req>/prd.md
+# 真相源迁移（lifecycle 迁移批 3，方案 A）：PRD 源从 requirements/pmai-closed/<req>/prd.md
 # 改到模块文件夹 docs/modules/<模块>/prd.md。
 
 set -uo pipefail
@@ -10,13 +10,13 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 source "$SCRIPT_DIR/helpers/assert.sh"
 source "$SCRIPT_DIR/helpers/fixture.sh"
 
-CLOSE_REQ="$FRAMEWORK_ROOT/scripts/close-req.sh"
-CANCEL_REQ="$FRAMEWORK_ROOT/scripts/cancel-req.sh"
+CLOSE_WORK="$FRAMEWORK_ROOT/scripts/close-work.sh"
+CANCEL_WORK="$FRAMEWORK_ROOT/scripts/cancel-work.sh"
 SYMLINK_LIB="$FRAMEWORK_ROOT/scripts/_lib/symlink-prd.sh"
 SYNC_PRDS="$FRAMEWORK_ROOT/bin/pmai-sync-prds"
 
-# 在 FIXTURE_DIR 直接造一个模块目录 + prd.md（不走 close-req 流程，模拟历史老仓）
-# status: closed | cancelled | active | (none) → none 时不写 .req-meta（= 已收尾）
+# 在 FIXTURE_DIR 直接造一个模块目录 + prd.md（不走 close-work 流程，模拟历史老仓）
+# status: closed | cancelled | active | (none) → none 时不写 .work-meta（= 已收尾）
 _seed_module() {
   local module="$1"
   local status="$2"   # closed | cancelled | active | none
@@ -24,7 +24,7 @@ _seed_module() {
   local dir="$FIXTURE_DIR/docs/modules/$module"
   mkdir -p "$dir"
   if [ "$status" != "none" ]; then
-    cat >"$dir/.req-meta.json" <<EOF
+    cat >"$dir/.work-meta.json" <<EOF
 {"id": "${module%%-*}", "branch": "$module", "status": "$status"}
 EOF
   fi
@@ -33,14 +33,14 @@ EOF
   fi
 }
 
-# 把 req-meta stage 推到 4（六步沉淀 = MAX_STAGE）+ commit（close-req I-CR1 要 stage=4）
+# 把 work-meta stage 推到 4（六步沉淀 = MAX_STAGE）+ commit（close-work I-CR1 要 stage=4）
 _bump_stage_to_finalize() {
-  local req_dir="$1"
+  local work_dir="$1"
   local req_branch
-  req_branch=$(python3 -c "import json; print(json.load(open('$req_dir/.req-meta.json'))['branch'])")
+  req_branch=$(python3 -c "import json; print(json.load(open('$work_dir/.work-meta.json'))['branch'])")
   python3 -c "
 import json
-p = '$req_dir/.req-meta.json'
+p = '$work_dir/.work-meta.json'
 m = json.load(open(p))
 m['stage'] = 4
 json.dump(m, open(p, 'w'), indent=2, ensure_ascii=False)
@@ -52,13 +52,13 @@ json.dump(m, open(p, 'w'), indent=2, ensure_ascii=False)
   )
 }
 
-# 在 req worktree 模块目录写 prd.md + commit
+# 在 worktree 模块目录写 prd.md + commit
 _write_prd_in_req_worktree() {
-  local req_dir="$1"
-  local body="${2:-# PRD\n\n本 req 的 PRD 内容。}"
+  local work_dir="$1"
+  local body="${2:-# PRD\n\n本 work 的 PRD 内容。}"
   local req_branch
-  req_branch=$(python3 -c "import json; print(json.load(open('$req_dir/.req-meta.json'))['branch'])")
-  printf '%b\n' "$body" > "$req_dir/prd.md"
+  req_branch=$(python3 -c "import json; print(json.load(open('$work_dir/.work-meta.json'))['branch'])")
+  printf '%b\n' "$body" > "$work_dir/prd.md"
   (
     cd "$FIXTURE_DIR/.worktrees/$req_branch"
     git add -A
@@ -66,7 +66,7 @@ _write_prd_in_req_worktree() {
   )
 }
 
-# cancel-req 要求模块在 main 的 docs/modules/ 下；镜像过去
+# cancel-work 要求模块在 main 的 docs/modules/ 下；镜像过去
 _mirror_module_to_main() {
   local req_id="$1"
   local name="$2"
@@ -316,18 +316,18 @@ test_helper_idempotent_on_existing_symlink() {
 }
 
 # =================================================
-# E2E: close-req happy path 建 docs/prds/<模块>.md
+# E2E: close-work happy path 建 docs/prds/<模块>.md
 # =================================================
 test_close_req_creates_prd_symlink() {
-  start_test "close-req: happy path 建 docs/prds/<模块>.md symlink"
+  start_test "close-work: happy path 建 docs/prds/<模块>.md symlink"
   fixture_setup
 
-  req_dir=$(fixture_create_req "req-001" "syml" 1)
-  _write_prd_in_req_worktree "$req_dir" "# Req 001 PRD\n本 req PRD 正文。"
-  _bump_stage_to_finalize "$req_dir"
+  work_dir=$(fixture_create_req "req-001" "syml" 1)
+  _write_prd_in_req_worktree "$work_dir" "# Req 001 PRD\n本 work PRD 正文。"
+  _bump_stage_to_finalize "$work_dir"
 
-  if ! (cd "$FIXTURE_DIR" && bash "$CLOSE_REQ" "$req_dir") >/tmp/out.$$ 2>/tmp/err.$$; then
-    _fail "close-req failed"
+  if ! (cd "$FIXTURE_DIR" && bash "$CLOSE_WORK" "$work_dir") >/tmp/out.$$ 2>/tmp/err.$$; then
+    _fail "close-work failed"
     echo "--- stderr ---" >&2
     cat /tmp/err.$$ >&2
     rm -f /tmp/out.$$ /tmp/err.$$
@@ -361,17 +361,17 @@ test_close_req_creates_prd_symlink() {
 }
 
 # =================================================
-# E2E: close-req 无 prd.md (理论上很少见) 仍能完成不报错
+# E2E: close-work 无 prd.md (理论上很少见) 仍能完成不报错
 # =================================================
 test_close_req_without_prd_silent_skip() {
-  start_test "close-req: 无 prd.md silent skip 不报错"
+  start_test "close-work: 无 prd.md silent skip 不报错"
   fixture_setup
 
-  req_dir=$(fixture_create_req "req-002" "noprd" 4)
+  work_dir=$(fixture_create_req "req-002" "noprd" 4)
   # 不写 prd.md
 
-  if ! (cd "$FIXTURE_DIR" && bash "$CLOSE_REQ" "$req_dir") >/tmp/out.$$ 2>/tmp/err.$$; then
-    _fail "close-req failed when no prd.md"
+  if ! (cd "$FIXTURE_DIR" && bash "$CLOSE_WORK" "$work_dir") >/tmp/out.$$ 2>/tmp/err.$$; then
+    _fail "close-work failed when no prd.md"
     cat /tmp/err.$$ >&2
     rm -f /tmp/out.$$ /tmp/err.$$
     fixture_teardown
@@ -391,15 +391,15 @@ test_close_req_without_prd_silent_skip() {
 }
 
 # =================================================
-# E2E: cancel-req 有 prd.md 建 docs/prds/废弃/<模块>.md
+# E2E: cancel-work 有 prd.md 建 docs/prds/废弃/<模块>.md
 # =================================================
 test_cancel_req_creates_cancelled_symlink() {
-  start_test "cancel-req: 有 prd.md 建 docs/prds/废弃/<模块>.md symlink"
+  start_test "cancel-work: 有 prd.md 建 docs/prds/废弃/<模块>.md symlink"
   fixture_setup
 
-  # 在 req worktree 模块目录写 prd.md
+  # 在 worktree 模块目录写 prd.md
   fixture_create_req "req-003" "cancel-with-prd" 3 >/dev/null
-  printf "# Cancelled PRD\n本 req 写过 PRD 但被 cancel。\n" \
+  printf "# Cancelled PRD\n本 work 写过 PRD 但被 cancel。\n" \
     > "$FIXTURE_DIR/.worktrees/req-003-cancel-with-prd/docs/modules/req-003-cancel-with-prd/prd.md"
   (
     cd "$FIXTURE_DIR/.worktrees/req-003-cancel-with-prd"
@@ -410,8 +410,8 @@ test_cancel_req_creates_cancelled_symlink() {
   main_module=$(_mirror_module_to_main "req-003" "cancel-with-prd")
 
   cd "$FIXTURE_DIR"
-  if ! bash "$CANCEL_REQ" "$main_module" >/tmp/out.$$ 2>/tmp/err.$$; then
-    _fail "cancel-req failed"
+  if ! bash "$CANCEL_WORK" "$main_module" >/tmp/out.$$ 2>/tmp/err.$$; then
+    _fail "cancel-work failed"
     cat /tmp/err.$$ >&2
     rm -f /tmp/out.$$ /tmp/err.$$
     fixture_teardown
@@ -444,18 +444,18 @@ test_cancel_req_creates_cancelled_symlink() {
 }
 
 # =================================================
-# E2E: cancel-req 无 prd.md (stage 1/2 cancel) silent skip
+# E2E: cancel-work 无 prd.md (stage 1/2 cancel) silent skip
 # =================================================
 test_cancel_req_without_prd_silent_skip() {
-  start_test "cancel-req: 无 prd.md (stage 1/2 cancel) silent skip"
+  start_test "cancel-work: 无 prd.md (stage 1/2 cancel) silent skip"
   fixture_setup
 
   fixture_create_req "req-004" "cancel-noprd" 2 >/dev/null
   main_module=$(_mirror_module_to_main "req-004" "cancel-noprd")
 
   cd "$FIXTURE_DIR"
-  if ! bash "$CANCEL_REQ" "$main_module" >/tmp/out.$$ 2>/tmp/err.$$; then
-    _fail "cancel-req failed on no-prd path"
+  if ! bash "$CANCEL_WORK" "$main_module" >/tmp/out.$$ 2>/tmp/err.$$; then
+    _fail "cancel-work failed on no-prd path"
     cat /tmp/err.$$ >&2
     rm -f /tmp/out.$$ /tmp/err.$$
     fixture_teardown

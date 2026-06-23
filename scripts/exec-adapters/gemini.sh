@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # gemini build adapter.
 #
-# WARNING: gemini --yolo has no sandbox. /build must run its post-execution
+# WARNING: gemini --yolo has no sandbox. /pmai-build must run its post-execution
 # changed-path review before accepting the result.
 
 set -euo pipefail

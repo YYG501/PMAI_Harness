@@ -34,7 +34,7 @@
 - ❌ PM 没答之前 **不能** ：
   - 写 PRODUCT.md / TODO.md / prd.md / 模块 spec 等 PM 视图文件
   - git commit / git push
-  - 调用 `req-transition.py --to N+1`（stage 推进）
+  - 继续执行 `/pmai-design`、`/pmai-build` 或 `/pmai-close` 的后续写盘步骤
 
 **历史教训**：PM 没答时 AI 默认走推荐分支，会跳过验收或范围拍板；`feedback_pm_decision_is_binding_contract.md` 强调"PM 决策 = binding contract，没答前 AI 不能假定"。
 

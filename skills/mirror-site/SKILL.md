@@ -7,7 +7,7 @@ description: |
   共用 gstack /browse 爬 + checks-diff 引擎验，两阶段 Plan→PM 批→Execute。不是无损拷贝
   （跨栈重建必然近似，「只看不导」纪律）。按需 skill（PM 手动调 / design 里 AI 判断该爬 / 该对齐时建议）。
   Always trigger when the user says 照某站起原型 / 照它补几页 / 爬站点重建 / 原型对齐线上 / 对齐真实产品 / mirror 某站。
-  do NOT use for 不参照任何站的纯新建（走 /design + /build）。
+  do NOT use for 不参照任何站的纯新建（走 /pmai-design + /pmai-build）。
 ---
 
 # /pmai-mirror-site —— 照参考站对齐原型（§7.A/B 合并）
@@ -91,7 +91,7 @@ python3 "$PMAI_HOME/scripts/checks-diff.py" \
 - **只看不导**：截图 / 结构当参考，代码栈内建 / 改，不跨栈录入
 - Plan 没批前不动 `prototype/`（红线）；checks 由 AI 派生不让 PM 写 JSON
 - 单窗口：dev server / browse / 建改 显式带目录，不 cd 会话、不切窗口
-- 引擎只查结构 / 文案 / 按钮态；视觉归 DESIGN + `/design-review`，状态覆盖演示归行为审 `/browse`
+- 引擎只查结构 / 文案 / 按钮态；视觉归 DESIGN + `/pmai-design-review`，状态覆盖演示归行为审 `/browse`
 - rebuild 重建是 build：强制读 DESIGN、复用已有组件、可派独立执行器；抓真实数据填 mock 用 `/scrape`
 - 参照站登录后页面才用 `/setup-browser-cookies`（无人值守会被 Keychain 弹窗打断，仅必要时）
 - 全走 `/browse`（headless），禁 `mcp__claude-in-chrome__*`

@@ -6,7 +6,7 @@
 
 1. 读取本文件了解项目上下文。
 2. 运行 `source $HOME/.pmai/scripts/skill-preamble.sh` 检测当前工作位置。
-3. 运行 `/pmai-status` 或 `/pmai-next` 了解当前在做哪个模块、下一步该做什么。
+3. 运行 `/pmai-status` 或 `/pmai-status` 了解当前在做哪个模块、下一步该做什么。
 
 ---
 
@@ -16,13 +16,13 @@
 |---|---|
 | PM | 决策、确认、验收。不写代码。默认一个窗口 |
 | 驱动 AI | PM 这个窗口里的 AI：范围确认 / design、派发 build、跑复审、呈交验收、close 沉淀 |
-| 执行器 | `/build` 时可选的独立执行器（Claude Code / Codex / Cursor / Gemini / PM 手动），按模块 `spec.md` 在 `prototype/` 里建 |
+| 执行器 | `/pmai-build` 时可选的独立执行器（Claude Code / Codex / Cursor / Gemini / PM 手动），按模块 `spec.md` 在 `prototype/` 里建 |
 
 ### 状态与文件真相源
 
 当前活跃架构只认模块目录：
 
-- 模块状态：`docs/modules/<模块>/.req-meta.json`
+- 模块状态：`docs/modules/<模块>/.work-meta.json`
 - 模块讨论：`docs/modules/<模块>/discussion.md`
 - 模块决策：`docs/modules/<模块>/decisions.md`
 - 模块规格：`docs/modules/<模块>/spec.md`
@@ -38,18 +38,18 @@
 
 | 档 | 什么时候 | 怎么走 | 收尾 |
 |---|---|---|---|
-| 轻 | typo、链接、格式、很小代码修补 | `/pmai-quick-fix` 或 main 上直接小改 | `/pmai-deposit` 或 `/close` |
-| 中 | 一个模块内的完整讨论 / 规格演进 | `/design` / `/pmai-next` | `/close` |
-| 重 | 需要实际建一片原型功能 | `/design` 定稿模块 `spec.md` → `/build <模块>` → 复审 | `/close` |
+| 轻 | typo、链接、格式、很小代码修补 | `/pmai-quick-fix` 或 main 上直接小改 | `/pmai-deposit` 或 `/pmai-close` |
+| 中 | 一个模块内的完整讨论 / 规格演进 | `/pmai-design` / `/pmai-status` | `/pmai-close` |
+| 重 | 需要实际建一片原型功能 | `/pmai-design` 定稿模块 `spec.md` → `/pmai-build <模块>` → 复审 | `/pmai-close` |
 
 ### 主入口
 
 - `/pmai-init-project` — 起新项目，建项目底座。
-- `/design "<一句话需求>"` — 起新功能 / 重做模块，写模块三件套。
-- `/design <模块>` — 讨论、收范围、写模块三件套。
-- `/build <模块>` — 对着 `docs/modules/<模块>/spec.md` 在 `prototype/` 建。
-- `/pmai-next` — 读当前状态，提示下一步并拉起对应入口。
-- `/close` — 收尾沉淀：现状、决策、术语、模块规格、输入材料归位；有 build worktree 则合回 main。
+- `/pmai-design "<一句话需求>"` — 起新功能 / 重做模块，写模块三件套。
+- `/pmai-design <模块>` — 讨论、收范围、写模块三件套。
+- `/pmai-build <模块>` — 对着 `docs/modules/<模块>/spec.md` 在 `prototype/` 建。
+- `/pmai-status` — 读当前状态，提示下一步并拉起对应入口。
+- `/pmai-close` — 收尾沉淀：现状、决策、术语、模块规格、输入材料归位；有 build worktree 则合回 main。
 - `/pmai-status` — 只读现状视图。
 - `/pmai-prd-writing` — 按需反向生成可评审 PRD。
 
@@ -64,7 +64,7 @@
 - build 的功能锚点是 `docs/modules/<模块>/spec.md`，不是 task 文件。
 - 动手前必须读 `docs/DESIGN.md`。
 - 代码改动集中在 `prototype/`。执行器如改了 `docs/**`，必须呈交 PM 决定保留还是回退。
-- 大需求可开 `.worktrees/build-*` 隔离环境；小改可直接在 main 上做。
+- 大需求可开 `.worktrees/pmai-build-*` 隔离环境；小改可直接在 main 上做。
 - 使用外部执行器前，目标 worktree 必须 clean；dirty 时先让 PM决定提交 checkpoint、清理或取消。
 
 ### Review 工具

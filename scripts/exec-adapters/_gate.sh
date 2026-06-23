@@ -3,7 +3,7 @@
 #
 # Required env vars:
 #   PROMPT_FILE
-#   BUILD_DIR or TASK_WORKTREE (legacy env name accepted by /build while callers migrate)
+#   BUILD_DIR or TASK_WORKTREE (legacy env name accepted by /pmai-build while callers migrate)
 
 adapter_build_dir() {
   local dir="${BUILD_DIR:-${TASK_WORKTREE:-}}"

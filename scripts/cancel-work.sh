@@ -1,20 +1,20 @@
 #!/usr/bin/env bash
-# cancel-req.sh — 废弃 req（方案 A·清模块 .req-meta，不 merge main）
-# 用法: bash $HOME/.pmai/scripts/cancel-req.sh <模块目录>  （= docs/modules/<模块>/）
+# cancel-work.sh — 废弃当前工作（方案 A·清模块 .work-meta，不 merge main）
+# 用法: bash $HOME/.pmai/scripts/cancel-work.sh <模块目录>  （= docs/modules/<模块>/）
 #
 # 新模型（lifecycle 迁移批 3，方案 A）：
-#   废弃 = 在 main 上删模块 .req-meta.json（清掉「在做的工作」标记），不 merge req 分支到 main。
+#   废弃 = 在 main 上删模块 .work-meta.json（清掉「在做的工作」标记），不 merge work branch到 main。
 #   模块三件套（spec/decisions/discussion）若已在 main 则留场（历史在 git log + decisions 里）。
-#   req worktree/分支推迟到 cleanup-pending 兜底清（防 dangling cwd）。
+#   worktree/分支推迟到 cleanup-pending 兜底清（防 dangling cwd）。
 #
 # 顺序（任一步失败就 fail-fast）：
 #   1. 切回 main，检查 main 是否脏（脏则拒绝，避免污染 cancel commit）
-#   2. 在 main 上删模块 .req-meta + 路径级 commit
-#   3. 标记 req worktree/分支待清理
+#   2. 在 main 上删模块 .work-meta + 路径级 commit
+#   3. 标记 worktree/分支待清理
 
 set -euo pipefail
 
-REQ_DIR="${1:?用法: cancel-req.sh <模块目录>}"
+WORK_DIR="${1:?用法: cancel-work.sh <模块目录>}"
 
 # --- Setup PYTHONPATH for _lib.state ---
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -30,24 +30,24 @@ else
   REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null)"
 fi
 
-REQ_META="$REQ_DIR/.req-meta.json"
-if [ ! -f "$REQ_META" ]; then
-  echo "❌ 模块工作状态文件不存在: $REQ_META" >&2
+WORK_META="$WORK_DIR/.work-meta.json"
+if [ ! -f "$WORK_META" ]; then
+  echo "❌ 模块工作状态文件不存在: $WORK_META" >&2
   exit 1
 fi
 
-# 走 _lib.state.read_req_meta CLI（与 close-req.sh 统一）
-REQ_META_JSON=$(python3 -m _lib.state read_req_meta "$REQ_DIR" 2>/dev/null || echo "{}")
-REQ_BRANCH=$(printf '%s' "$REQ_META_JSON" | python3 -c "import sys,json; print(json.load(sys.stdin).get('branch',''))")
-REQ_ID=$(printf '%s' "$REQ_META_JSON" | python3 -c "import sys,json; print(json.load(sys.stdin).get('id',''))")
-MODULE_BASENAME=$(basename "$REQ_DIR")
+# 走 _lib.state.read_work_meta CLI（与 close-work.sh 统一）
+WORK_META_JSON=$(python3 -m _lib.state read_work_meta "$WORK_DIR" 2>/dev/null || echo "{}")
+WORK_BRANCH=$(printf '%s' "$WORK_META_JSON" | python3 -c "import sys,json; print(json.load(sys.stdin).get('branch',''))")
+WORK_ID=$(printf '%s' "$WORK_META_JSON" | python3 -c "import sys,json; print(json.load(sys.stdin).get('id',''))")
+MODULE_BASENAME=$(basename "$WORK_DIR")
 
-if [ -z "$REQ_BRANCH" ] || [ -z "$REQ_ID" ]; then
+if [ -z "$WORK_BRANCH" ] || [ -z "$WORK_ID" ]; then
   echo "❌ 无法从模块元数据读取 branch/id 字段。" >&2
   exit 1
 fi
 
-echo "⚠️ 即将放弃当前工作: $REQ_ID"
+echo "⚠️ 即将放弃当前工作: $WORK_ID"
 
 # --- Step 1: 切回 main（硬失败）---
 cd "$REPO_ROOT"
@@ -75,9 +75,9 @@ if [ -n "$DIRTY" ]; then
   fi
 fi
 
-# --- Step 2: 在 main 上删模块 .req-meta（方案 A）+ PRD 收口 symlink + 路径级 commit ---
+# --- Step 2: 在 main 上删模块 .work-meta（方案 A）+ PRD 收口 symlink + 路径级 commit ---
 MAIN_MODULE="$REPO_ROOT/$REL_MODULE"
-MAIN_MODULE_META="$MAIN_MODULE/.req-meta.json"
+MAIN_MODULE_META="$MAIN_MODULE/.work-meta.json"
 
 # 在 docs/prds/废弃/ 下建 PRD 收口 symlink（仅当模块真的写过 prd.md；stage 1/2 cancel 时 silent skip）
 if ! create_prd_symlink "$REPO_ROOT" "$MODULE_BASENAME" cancelled; then
@@ -85,27 +85,27 @@ if ! create_prd_symlink "$REPO_ROOT" "$MODULE_BASENAME" cancelled; then
   exit 1
 fi
 
-# 删模块 .req-meta（若在 main 上）；不在 main（只在 req worktree）则无需删——cancel 不 merge，
-# req 分支随 worktree 一起被清，主仓本就没这份工作状态。
+# 删模块 .work-meta（若在 main 上）；不在 main（只在 worktree）则无需删——cancel 不 merge，
+# work branch随 worktree 一起被清，主仓本就没这份工作状态。
 if [ -f "$MAIN_MODULE_META" ]; then
-  git rm -q -- "$REL_MODULE/.req-meta.json" 2>/dev/null || rm -f "$MAIN_MODULE_META"
+  git rm -q -- "$REL_MODULE/.work-meta.json" 2>/dev/null || rm -f "$MAIN_MODULE_META"
 fi
 git add -A -- "$REL_MODULE" 2>/dev/null || true
 [ -d "$REPO_ROOT/docs/prds/废弃" ] && git add "docs/prds/废弃/$MODULE_BASENAME.md" 2>/dev/null || true
 
 # commit：如果没有暂存改动（main 上本就没这份工作状态），跳过
 if [ -n "$(git diff --cached --name-only)" ]; then
-  if ! git commit -m "cancel: ${REQ_ID}（清模块 .req-meta）" 2>&1; then
+  if ! git commit -m "cancel: ${WORK_ID}（清模块 .work-meta）" 2>&1; then
     echo "❌ commit cancelled 状态失败。中止以防数据丢失。" >&2
     exit 1
   fi
-  echo "✅ cancelled 状态已 commit 到 main（清模块 .req-meta）"
+  echo "✅ cancelled 状态已 commit 到 main（清模块 .work-meta）"
 else
   echo "ℹ️ main 上无本模块工作状态需要清（当前工作仅存在于隔离 worktree），跳过 commit"
 fi
 
-# --- Step 3: 标记 req worktree/分支为待清理 ---
-# 不立即删 worktree/branch：PM 可能在某个 req worktree 内调用 cancel-req，
+# --- Step 3: 标记 worktree/分支为待清理 ---
+# 不立即删 worktree/branch：PM 可能在某个 worktree 内调用 cancel-work，
 # 立即删除会让 Claude Code 父进程 cwd 变成 dangling，触发 Stop hook 的
 # posix_spawn ENOENT。改为写 pending，由 cleanup-pending-worktrees.sh 在主仓 cwd 兜底清理。
 PENDING_FILE="$REPO_ROOT/.runs/pending-cleanup.json"
@@ -130,20 +130,20 @@ entry = {
     "worktree": worktree,
     "queued_at": datetime.datetime.now().astimezone().isoformat(timespec="seconds"),
 }
-if kind == "req":
-    entry["req_dir"] = ref
+if kind == "work":
+    entry["work_dir"] = ref
 entries.append(entry)
 with open(pending_file, "w") as f:
     json.dump(entries, f, indent=2, ensure_ascii=False)
 PY
-REQ_WORKTREE=$(resolve_worktree_path "$REQ_BRANCH" "$REPO_ROOT" || true)
-if [ -z "$REQ_WORKTREE" ]; then
-  REQ_WORKTREE="$REPO_ROOT/.worktrees/$REQ_BRANCH"
+WORK_WORKTREE=$(resolve_worktree_path "$WORK_BRANCH" "$REPO_ROOT" || true)
+if [ -z "$WORK_WORKTREE" ]; then
+  WORK_WORKTREE="$REPO_ROOT/.worktrees/$WORK_BRANCH"
 fi
-python3 "$QUEUE_PENDING_PY" "$PENDING_FILE" req "$REQ_BRANCH" "$REQ_WORKTREE" "$REQ_DIR"
-echo "🕓 标记待清理当前工作: $REQ_BRANCH"
+python3 "$QUEUE_PENDING_PY" "$PENDING_FILE" work "$WORK_BRANCH" "$WORK_WORKTREE" "$WORK_DIR"
+echo "🕓 标记待清理当前工作: $WORK_BRANCH"
 
-echo "✅ 当前工作已放弃: ${REQ_ID}（未 merge 到 main，模块 .req-meta 已清）"
+echo "✅ 当前工作已放弃: ${WORK_ID}（未 merge 到 main，模块 .work-meta 已清）"
 echo ""
 echo "📋 worktree 和 branch 待清理。请退出当前会话，回主仓 ($REPO_ROOT) 执行："
 echo "   bash scripts/cleanup-pending-worktrees.sh"

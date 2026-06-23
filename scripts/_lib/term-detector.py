@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """term-detector.py — 业务词 / 角色检测器
 
-**当前只在 prd-writing 阶段调用**（PRD 定稿 = 业务词稳定时机；brief / analysis
-阶段早期，业务词还在变 + PM 用 `**` 多为修辞，detector 信噪比差，故不调）。
+当前由 `/pmai-close` 调用。业务词真正稳定要等 design/build/复审完成后再沉淀；
+早期讨论里 PM 用 `**` 多为修辞，detector 信噪比差，故不调。
 
 检测策略（保守，避免 Clippy 风险）：
 - 候选业务词来源（仅这两处显式术语标记，不全文 NLP）：
@@ -15,10 +15,10 @@
 - 过滤层：
   1. 白名单（whitelist.json，含技术词 + 通用业务/产品词）
   2. PROJECT 已登记（业务术语表 / 用户画像表）
-  3. .term-skip.json（本 req 已被 PM 拒绝的）
+  3. .term-skip.json（本次工作已被 PM 拒绝的）
 
 用法（被 skill 调用）：
-  python3 scripts/_lib/term-detector.py <text-file> <repo-root> [--req-dir <req-dir>]
+  python3 scripts/_lib/term-detector.py <text-file> <repo-root> [--work-dir <work-dir>]
 
 输出 JSON：
 {
@@ -80,9 +80,9 @@ def load_registered(project_path: Path) -> dict:
     return result
 
 
-def load_skip_list(req_dir: Path) -> set:
-    """Load .term-skip.json for current req (PM 本 req 已拒绝的词)."""
-    skip_path = req_dir / ".term-skip.json"
+def load_skip_list(work_dir: Path) -> set:
+    """Load .term-skip.json for current work (PM 本次工作已拒绝的词)."""
+    skip_path = work_dir / ".term-skip.json"
     if not skip_path.exists():
         return set()
     try:
@@ -159,7 +159,7 @@ def main():
     parser = argparse.ArgumentParser(description="Detect new business terms / roles in stage output")
     parser.add_argument("text_file", help="path to file containing the stage output text")
     parser.add_argument("repo_root", help="repository root path")
-    parser.add_argument("--req-dir", default=None, help="active req dir (for .term-skip.json)")
+    parser.add_argument("--work-dir", default=None, help="active work dir (for .term-skip.json)")
     args = parser.parse_args()
 
     repo_root = Path(args.repo_root).resolve()
@@ -173,8 +173,8 @@ def main():
     project_path = repo_root / "docs" / "PRODUCT.md"
     registered = load_registered(project_path)
 
-    req_dir = Path(args.req_dir) if args.req_dir else None
-    skip = load_skip_list(req_dir) if req_dir else set()
+    work_dir = Path(args.work_dir) if args.work_dir else None
+    skip = load_skip_list(work_dir) if work_dir else set()
 
     result = detect(text, whitelist, registered, skip)
     print(json.dumps(result, ensure_ascii=False, indent=2))

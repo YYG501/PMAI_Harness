@@ -5,7 +5,7 @@
 #   ② SensitivePathError 触发（.env / .ssh / token denylist）
 #   ③ FileSizeError 触发（>50MB hard cap）
 #   ④ register + list round-trip
-#   ⑤ is_seen 旧 req 兼容（无 attachments_seen 字段 → 空）
+#   ⑤ is_seen 缺字段 兼容（无 attachments_seen 字段 → 空）
 #   ⑥ remove_attachment（rm + 清 seen 行）
 #   ⑦ replace_attachment（保留 filename + attachments_seen 更新）
 #   ⑧ Path.expanduser 处理 ~/x.pdf
@@ -39,22 +39,22 @@ $script
 test_copy_attachment_happy_path() {
   start_test "copy_attachment: 成功 cp + 机械命名 + attachments_seen append + pending_inject"
   fixture_setup
-  req_dir=$(fixture_create_req "req-001" "test" 2)
-  src="$req_dir/source-mock.pdf"
+  work_dir=$(fixture_create_req "req-001" "test" 2)
+  src="$work_dir/source-mock.pdf"
   printf 'PDF content mock' > "$src"
 
   out=$(_run_py "
 from _lib.attachments import copy_attachment
-r = copy_attachment(Path('$req_dir'), Path('$src'), 'analysis', 'test hint')
-assert r['new_name'] == 'docs/inputs/attachments/analysis-source-mock.pdf', r['new_name']
+r = copy_attachment(Path('$work_dir'), Path('$src'), 'spec', 'test hint')
+assert r['new_name'] == 'docs/inputs/attachments/spec-source-mock.pdf', r['new_name']
 assert r['abs_path'].exists()
-meta = json.loads((Path('$req_dir') / '.req-meta.json').read_text())
+meta = json.loads((Path('$work_dir') / '.work-meta.json').read_text())
 seen = meta['attachments_seen']
 assert len(seen) == 1, seen
-assert seen[0]['name'] == 'docs/inputs/attachments/analysis-source-mock.pdf'
+assert seen[0]['name'] == 'docs/inputs/attachments/spec-source-mock.pdf'
 assert seen[0]['hint'] == 'test hint'
-assert seen[0]['stage_prefix'] == 'analysis'
-# pending_inject: analysis.md 不存在
+assert seen[0]['stage_prefix'] == 'spec'
+# pending_inject: spec.md 不存在
 assert r['pending_inject'] == True, r
 print('OK')
 ")
@@ -70,20 +70,20 @@ print('OK')
 test_copy_attachment_spec_anchor() {
   start_test "copy_attachment: spec 模块规格锚点 pending 判定"
   fixture_setup
-  req_dir=$(fixture_create_req "req-001" "test" 2)
-  src="$req_dir/spec-mock.pdf"
+  work_dir=$(fixture_create_req "req-001" "test" 2)
+  src="$work_dir/spec-mock.pdf"
   printf 'mock' > "$src"
 
   out=$(_run_py "
 from _lib.attachments import copy_attachment
 # spec.md 不存在 → pending_inject True + 命名前缀 spec
-r = copy_attachment(Path('$req_dir'), Path('$src'), 'spec', 'h')
+r = copy_attachment(Path('$work_dir'), Path('$src'), 'spec', 'h')
 assert r['new_name'] == 'docs/inputs/attachments/spec-spec-mock.pdf', r['new_name']
 assert r['pending_inject'] == True, r
 # 建 spec.md 后 → pending_inject False（证明模块规格锚点在映射里）
-(Path('$req_dir') / 'spec.md').write_text('# spec')
-src2 = Path('$req_dir') / 'spec2.pdf'; src2.write_text('m')
-r2 = copy_attachment(Path('$req_dir'), src2, 'spec')
+(Path('$work_dir') / 'spec.md').write_text('# spec')
+src2 = Path('$work_dir') / 'spec2.pdf'; src2.write_text('m')
+r2 = copy_attachment(Path('$work_dir'), src2, 'spec')
 assert r2['pending_inject'] == False, r2
 print('OK')
 ")
@@ -103,14 +103,14 @@ print('OK')
 test_sensitive_path_error() {
   start_test "SensitivePathError: .env 命中 denylist"
   fixture_setup
-  req_dir=$(fixture_create_req "req-002" "test" 2)
-  src="$req_dir/.env"
+  work_dir=$(fixture_create_req "req-002" "test" 2)
+  src="$work_dir/.env"
   printf 'SECRET=xxx' > "$src"
 
   out=$(_run_py "
 from _lib.attachments import copy_attachment, SensitivePathError
 try:
-    copy_attachment(Path('$req_dir'), Path('$src'), 'analysis')
+    copy_attachment(Path('$work_dir'), Path('$src'), 'spec')
     print('FAIL: should raise SensitivePathError')
 except SensitivePathError as e:
     print(f'OK: pattern={e.pattern}')
@@ -131,15 +131,15 @@ except SensitivePathError as e:
 test_file_size_error() {
   start_test "FileSizeError: >50MB hard cap"
   fixture_setup
-  req_dir=$(fixture_create_req "req-003" "test" 2)
-  src="$req_dir/big.bin"
+  work_dir=$(fixture_create_req "req-003" "test" 2)
+  src="$work_dir/big.bin"
   # 51 MB 二进制
   dd if=/dev/zero of="$src" bs=1048576 count=51 2>/dev/null
 
   out=$(_run_py "
 from _lib.attachments import copy_attachment, FileSizeError
 try:
-    copy_attachment(Path('$req_dir'), Path('$src'), 'analysis')
+    copy_attachment(Path('$work_dir'), Path('$src'), 'spec')
     print('FAIL: should raise FileSizeError')
 except FileSizeError as e:
     print(f'OK: size_mb={e.size_mb:.1f}')
@@ -160,16 +160,16 @@ except FileSizeError as e:
 test_register_list_round_trip() {
   start_test "register_attachment + list_attachments_seen round-trip"
   fixture_setup
-  req_dir=$(fixture_create_req "req-004" "test" 2)
+  work_dir=$(fixture_create_req "req-004" "test" 2)
 
   out=$(_run_py "
 from _lib.attachments import register_attachment, list_attachments_seen
-register_attachment(Path('$req_dir'), 'docs/inputs/attachments/analysis-x.pdf', src_origin='/orig/x.pdf', hint='hint X', stage_prefix='analysis')
-register_attachment(Path('$req_dir'), 'docs/inputs/attachments/analysis-y.pdf', src_origin='/orig/y.pdf', hint='hint Y', stage_prefix='analysis')
-seen = list_attachments_seen(Path('$req_dir'))
+register_attachment(Path('$work_dir'), 'docs/inputs/attachments/spec-x.pdf', src_origin='/orig/x.pdf', hint='hint X', stage_prefix='spec')
+register_attachment(Path('$work_dir'), 'docs/inputs/attachments/spec-y.pdf', src_origin='/orig/y.pdf', hint='hint Y', stage_prefix='spec')
+seen = list_attachments_seen(Path('$work_dir'))
 assert len(seen) == 2, seen
-assert seen[0]['name'] == 'docs/inputs/attachments/analysis-x.pdf'
-assert seen[1]['name'] == 'docs/inputs/attachments/analysis-y.pdf'
+assert seen[0]['name'] == 'docs/inputs/attachments/spec-x.pdf'
+assert seen[1]['name'] == 'docs/inputs/attachments/spec-y.pdf'
 assert seen[0]['src_origin'] == '/orig/x.pdf'
 assert seen[0]['hint'] == 'hint X'
 print('OK')
@@ -184,25 +184,25 @@ print('OK')
 }
 
 # -----------------------------------------------------------------
-# ⑤ is_seen 旧 req 兼容（无 attachments_seen 字段）
+# ⑤ is_seen 缺字段 兼容（无 attachments_seen 字段）
 # -----------------------------------------------------------------
 
-test_is_seen_legacy_req() {
-  start_test "is_seen: 旧 req 无 attachments_seen 字段 → False（旧 req 兼容）"
+test_is_seen_missing_field() {
+  start_test "is_seen: 缺字段 无 attachments_seen 字段 → False（缺字段 兼容）"
   fixture_setup
-  req_dir=$(fixture_create_req "req-005" "test" 2)
-  # fixture 创建的 .req-meta.json 无 attachments_seen 字段（旧 req 形态）
+  work_dir=$(fixture_create_req "req-005" "test" 2)
+  # fixture 创建的 .work-meta.json 无 attachments_seen 字段（缺字段 形态）
 
   out=$(_run_py "
 from _lib.attachments import is_seen, list_attachments_seen
-assert is_seen(Path('$req_dir'), 'docs/inputs/attachments/analysis-x.pdf') == False
-assert list_attachments_seen(Path('$req_dir')) == []
+assert is_seen(Path('$work_dir'), 'docs/inputs/attachments/spec-x.pdf') == False
+assert list_attachments_seen(Path('$work_dir')) == []
 print('OK')
 ")
   if echo "$out" | grep -q "^OK$"; then
     pass_test
   else
-    _fail "旧 req 兼容失败"
+    _fail "缺字段 兼容失败"
     echo "$out" >&2
   fi
   fixture_teardown
@@ -215,18 +215,18 @@ print('OK')
 test_remove_attachment() {
   start_test "remove_attachment: rm 文件 + 清 attachments_seen 行"
   fixture_setup
-  req_dir=$(fixture_create_req "req-006" "test" 2)
-  src="$req_dir/source.pdf"
+  work_dir=$(fixture_create_req "req-006" "test" 2)
+  src="$work_dir/source.pdf"
   printf 'content' > "$src"
 
   out=$(_run_py "
 from _lib.attachments import copy_attachment, remove_attachment, is_seen
-copy_attachment(Path('$req_dir'), Path('$src'), 'analysis', 'hint')
-name = 'docs/inputs/attachments/analysis-source.pdf'
-assert is_seen(Path('$req_dir'), name)
-remove_attachment(Path('$req_dir'), name)
-assert not (Path('$req_dir').parents[2] / name).exists()
-assert not is_seen(Path('$req_dir'), name)
+copy_attachment(Path('$work_dir'), Path('$src'), 'spec', 'hint')
+name = 'docs/inputs/attachments/spec-source.pdf'
+assert is_seen(Path('$work_dir'), name)
+remove_attachment(Path('$work_dir'), name)
+assert not (Path('$work_dir').parents[2] / name).exists()
+assert not is_seen(Path('$work_dir'), name)
 print('OK')
 ")
   if echo "$out" | grep -q "^OK$"; then
@@ -241,12 +241,12 @@ print('OK')
 test_register_attachment_rejects_traversal_name() {
   start_test "register_attachment: ../evil.md filename 被拒绝"
   fixture_setup
-  req_dir=$(fixture_create_req "req-011" "test" 2)
+  work_dir=$(fixture_create_req "req-011" "test" 2)
 
   out=$(_run_py "
 from _lib.attachments import register_attachment, AttachmentError
 try:
-    register_attachment(Path('$req_dir'), '../evil.md', stage_prefix='analysis')
+    register_attachment(Path('$work_dir'), '../evil.md', stage_prefix='spec')
     print('FAIL: traversal should be rejected')
 except AttachmentError:
     print('OK')
@@ -263,14 +263,14 @@ except AttachmentError:
 test_remove_attachment_rejects_traversal_and_keeps_file() {
   start_test "remove_attachment: traversal 不得删除 attachments 外文件"
   fixture_setup
-  req_dir=$(fixture_create_req "req-012" "test" 2)
-  victim="$req_dir/victim.md"
+  work_dir=$(fixture_create_req "req-012" "test" 2)
+  victim="$work_dir/victim.md"
   printf 'keep me' > "$victim"
 
   out=$(_run_py "
 from _lib.attachments import remove_attachment, AttachmentError
-rd = Path('$req_dir')
-mf = rd / '.req-meta.json'
+rd = Path('$work_dir')
+mf = rd / '.work-meta.json'
 meta = json.loads(mf.read_text())
 meta['attachments_seen'] = [{'name': '../victim.md'}]
 mf.write_text(json.dumps(meta, ensure_ascii=False, indent=2), encoding='utf-8')
@@ -293,14 +293,14 @@ except AttachmentError:
 test_copy_attachment_rejects_unsafe_stage_prefix() {
   start_test "copy_attachment: stage_prefix traversal 被拒绝"
   fixture_setup
-  req_dir=$(fixture_create_req "req-013" "test" 2)
-  src="$req_dir/source.pdf"
+  work_dir=$(fixture_create_req "req-013" "test" 2)
+  src="$work_dir/source.pdf"
   printf 'content' > "$src"
 
   out=$(_run_py "
 from _lib.attachments import copy_attachment, AttachmentError
 try:
-    copy_attachment(Path('$req_dir'), Path('$src'), '../analysis')
+    copy_attachment(Path('$work_dir'), Path('$src'), '../spec')
     print('FAIL: unsafe stage_prefix should be rejected')
 except AttachmentError:
     assert not (Path('$FIXTURE_DIR') / 'docs/inputs/attachments').exists()
@@ -322,23 +322,23 @@ except AttachmentError:
 test_replace_attachment() {
   start_test "replace_attachment: 保留旧 filename + 内容已替换 + attachments_seen 更新"
   fixture_setup
-  req_dir=$(fixture_create_req "req-007" "test" 2)
-  src_old="$req_dir/v1.pdf"
+  work_dir=$(fixture_create_req "req-007" "test" 2)
+  src_old="$work_dir/v1.pdf"
   printf 'OLD content' > "$src_old"
-  src_new="$req_dir/v2.pdf"
+  src_new="$work_dir/v2.pdf"
   printf 'NEW content much longer' > "$src_new"
 
   out=$(_run_py "
 from _lib.attachments import copy_attachment, replace_attachment, list_attachments_seen
-copy_attachment(Path('$req_dir'), Path('$src_old'), 'analysis', 'v1 hint')
-old_name = 'docs/inputs/attachments/analysis-v1.pdf'
-r = replace_attachment(Path('$req_dir'), old_name, Path('$src_new'))
+copy_attachment(Path('$work_dir'), Path('$src_old'), 'spec', 'v1 hint')
+old_name = 'docs/inputs/attachments/spec-v1.pdf'
+r = replace_attachment(Path('$work_dir'), old_name, Path('$src_new'))
 assert r['new_name'] == old_name, r  # 保留旧 filename
 dst = r['abs_path']
 assert dst.exists()
 content = dst.read_bytes()
 assert content == b'NEW content much longer', content  # 新内容已替换
-seen = list_attachments_seen(Path('$req_dir'))
+seen = list_attachments_seen(Path('$work_dir'))
 assert len(seen) == 1, seen
 assert seen[0]['name'] == old_name
 # src_origin 用 endswith 比较（macOS /var/ vs /private/var/ resolve 差异）
@@ -361,15 +361,15 @@ print('OK')
 test_path_expanduser() {
   start_test "expanduser: ~/x.pdf 自动展开"
   fixture_setup
-  req_dir=$(fixture_create_req "req-008" "test" 2)
+  work_dir=$(fixture_create_req "req-008" "test" 2)
   # 在 $HOME 下放一个临时文件
   src_file="$HOME/.pmaiwf-test-expand-$$.pdf"
   printf 'expand test' > "$src_file"
 
   out=$(_run_py "
 from _lib.attachments import copy_attachment
-r = copy_attachment(Path('$req_dir'), Path('~/.pmaiwf-test-expand-$$.pdf'), 'analysis')
-assert r['new_name'] == 'docs/inputs/attachments/analysis-.pmaiwf-test-expand-$$.pdf' or '.pmaiwf-test-expand-' in r['new_name'], r
+r = copy_attachment(Path('$work_dir'), Path('~/.pmaiwf-test-expand-$$.pdf'), 'spec')
+assert r['new_name'] == 'docs/inputs/attachments/spec-.pmaiwf-test-expand-$$.pdf' or '.pmaiwf-test-expand-' in r['new_name'], r
 assert r['abs_path'].exists()
 print('OK')
 ")
@@ -390,14 +390,14 @@ print('OK')
 test_filename_with_spaces() {
   start_test "含空格文件名: foo bar.pdf 不炸"
   fixture_setup
-  req_dir=$(fixture_create_req "req-009" "test" 2)
-  src="$req_dir/foo bar.pdf"
+  work_dir=$(fixture_create_req "req-009" "test" 2)
+  src="$work_dir/foo bar.pdf"
   printf 'space content' > "$src"
 
   out=$(_run_py "
 from _lib.attachments import copy_attachment
-r = copy_attachment(Path('$req_dir'), Path('$src'), 'analysis')
-assert r['new_name'] == 'docs/inputs/attachments/analysis-foo bar.pdf', r
+r = copy_attachment(Path('$work_dir'), Path('$src'), 'spec')
+assert r['new_name'] == 'docs/inputs/attachments/spec-foo bar.pdf', r
 assert r['abs_path'].exists()
 content = r['abs_path'].read_text()
 assert content == 'space content'
@@ -419,23 +419,23 @@ print('OK')
 test_trigger2_regression_manual_cp_detection() {
   start_test "trigger 2 regression: PM 手动 cp 进 docs/inputs/attachments/ + is_seen 判定（基于 attachments_seen 真相源）"
   fixture_setup
-  req_dir=$(fixture_create_req "req-010" "test" 2)
+  work_dir=$(fixture_create_req "req-010" "test" 2)
 
   # 模拟 PM 手动 cp（绕过 trigger 0）—— 文件落盘但 attachments_seen 无登记
   mkdir -p "$FIXTURE_DIR/docs/inputs/attachments"
-  printf 'manual cp content' > "$FIXTURE_DIR/docs/inputs/attachments/analysis-manual.pdf"
+  printf 'manual cp content' > "$FIXTURE_DIR/docs/inputs/attachments/spec-manual.pdf"
 
   out=$(_run_py "
 from _lib.attachments import is_seen, register_attachment, list_attachments_seen
 # regression 关键：is_seen 是 False（因 attachments_seen 列表无该条目，即使文件已落盘）
 # 这正是 trigger 2 改造的核心 —— 不用引用 section 判，用 attachments_seen 真相源判
-name = 'docs/inputs/attachments/analysis-manual.pdf'
-assert is_seen(Path('$req_dir'), name) == False
+name = 'docs/inputs/attachments/spec-manual.pdf'
+assert is_seen(Path('$work_dir'), name) == False
 # trigger 2 流程：caller 扫到 + is_seen=False → 问 PM → 答 OK 后补登记
-register_attachment(Path('$req_dir'), name, src_origin='manual-cp', hint='补登记', stage_prefix='analysis')
+register_attachment(Path('$work_dir'), name, src_origin='manual-cp', hint='补登记', stage_prefix='spec')
 # 补登记后 is_seen=True
-assert is_seen(Path('$req_dir'), name) == True
-seen = list_attachments_seen(Path('$req_dir'))
+assert is_seen(Path('$work_dir'), name) == True
+seen = list_attachments_seen(Path('$work_dir'))
 assert len(seen) == 1
 print('OK')
 ")
@@ -484,7 +484,7 @@ test_copy_attachment_spec_anchor
 test_sensitive_path_error
 test_file_size_error
 test_register_list_round_trip
-test_is_seen_legacy_req
+test_is_seen_missing_field
 test_remove_attachment
 test_register_attachment_rejects_traversal_name
 test_remove_attachment_rejects_traversal_and_keeps_file

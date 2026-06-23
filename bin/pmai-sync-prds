@@ -1,18 +1,18 @@
 #!/usr/bin/env bash
 # pmai-sync-prds — 补建 docs/prds/ 下的 PRD 收口 symlink
 #
-# 场景：close-req / cancel-req 自带 symlink 创建是 2026-05-27 后的行为；
+# 场景：close-work / cancel-work 自带 symlink 创建是 2026-05-27 后的行为；
 #       老仓在此之前关掉的 req 不会自动有 symlink。本命令一次性补全。
 #
-# 真相源迁移（lifecycle 迁移批 3，方案 A）：PRD 源从 requirements/closed/<req>/prd.md
+# 真相源迁移（lifecycle 迁移批 3，方案 A）：PRD 源从 requirements/pmai-closed/<req>/prd.md
 # 改到模块文件夹 docs/modules/<模块>/prd.md（模块文件夹是长期真相源，close 后留场）。
 #
 # 行为：扫 docs/modules/*/，凡有 prd.md 的模块收口为 symlink：
-#   有 prd.md + 无 .req-meta（已收尾） / .req-meta.status==closed -> docs/prds/<模块>.md
-#   有 prd.md + .req-meta.status==cancelled                      -> docs/prds/废弃/<模块>.md
-#   .req-meta.status==active（在做的工作）                        -> 跳过（PRD 还在进行中）
+#   有 prd.md + 无 .work-meta（已收尾） / .work-meta.status==closed -> docs/prds/<模块>.md
+#   有 prd.md + .work-meta.status==cancelled                      -> docs/prds/废弃/<模块>.md
+#   .work-meta.status==active（在做的工作）                        -> 跳过（PRD 还在进行中）
 #   无 prd.md                                                    -> 跳过
-# 注：方案 A 下 close 清掉 .req-meta，模块「已收尾」= 无 .req-meta；这类统一按 closed 收口。
+# 注：方案 A 下 close 清掉 .work-meta，模块「已收尾」= 无 .work-meta；这类统一按 closed 收口。
 #
 # 用法（在消费仓根 cwd 跑）：
 #   pmai sync-prds              建/更新所有 symlink
@@ -98,13 +98,13 @@ SKIPPED_NO_PRD=0
 SKIPPED_STATUS=0
 FAILED=0
 
-for req_dir in "$MODULES_DIR"/*/; do
-  [ -d "$req_dir" ] || continue
-  req_basename="$(basename "$req_dir")"
-  meta="$req_dir/.req-meta.json"
-  prd="$req_dir/prd.md"
+for work_dir in "$MODULES_DIR"/*/; do
+  [ -d "$work_dir" ] || continue
+  req_basename="$(basename "$work_dir")"
+  meta="$work_dir/.work-meta.json"
+  prd="$work_dir/prd.md"
 
-  # 收口类型：无 .req-meta（已收尾）/ status==closed → closed；status==cancelled → cancelled；
+  # 收口类型：无 .work-meta（已收尾）/ status==closed → closed；status==cancelled → cancelled；
   # status==active（在做的工作）→ 跳过（PRD 进行中）。
   if [ -f "$meta" ]; then
     status="$(python3 -c "import json; print(json.load(open('$meta')).get('status', ''))" 2>/dev/null || echo "")"
@@ -123,7 +123,7 @@ for req_dir in "$MODULES_DIR"/*/; do
         ;;
     esac
   else
-    # 无 .req-meta = 模块已收尾（方案 A close 清掉了工作状态）
+    # 无 .work-meta = 模块已收尾（方案 A close 清掉了工作状态）
     kind=closed
   fi
 

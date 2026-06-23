@@ -5,13 +5,11 @@ set -uo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 SUITES=(
   test-check-branch.sh
-  test-req-num-resolver.sh
-  test-check-open-questions.sh
+    test-check-open-questions.sh
   test-lark-adapter.sh
   test-lark-cli-lint.sh
   test-publish-to-lark-e2e.sh
-  test-req-events.sh
-  test-structure-schema.sh
+    test-structure-schema.sh
   test-detect-project-structure.sh
   test-inject-structure.sh
   test-init-project.sh
@@ -22,19 +20,14 @@ SUITES=(
   test-doctor-skills.sh
   test-banner-label.sh
   test-narrative-mode.sh
-  test-tthw-smoke.sh
-  test-req-transition.sh
-  test-migrate-reqs.sh
-  test-migrate-reqs-to-modules.sh
-  test-checks-diff.sh
+          test-checks-diff.sh
   test-build-audits.sh
   test-mock-board.sh
-  test-stage-source-helper.sh
-  test-state-lib.sh
+    test-state-lib.sh
   test-attachments-helper.sh
-  test-close-req.sh
+  test-close-work.sh
   test-cleanup-pending.sh
-  test-cancel-req.sh
+  test-cancel-work.sh
   test-symlink-prd.sh
   test-status-view.sh
   test-todo-guidance.sh

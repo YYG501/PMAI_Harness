@@ -96,7 +96,7 @@ def build_v5_context(old_sections: dict, project_name: str) -> tuple[str, list[s
 
     # ## 产品路线 — 新增空骨架
     out.append("## 产品路线\n")
-    out.append("<!-- 里程碑形式（宣告性 ≠ 约束）；精简模式 = \"计划中\" 1 条；close-req 时可追加里程碑（标 ⭐ 可被 status-view --milestone 筛到） -->")
+    out.append("<!-- 里程碑形式（宣告性 ≠ 约束）；精简模式 = \"计划中\" 1 条；close-work 时可追加里程碑（标 ⭐ 可被 status-view --milestone 筛到） -->")
     out.append("")
     out.append("### 已完成")
     out.append("")

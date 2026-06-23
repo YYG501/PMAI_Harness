@@ -65,7 +65,7 @@ def _format_last_event(ev: dict | None) -> str | None:
 
 def render_summary(state: dict, repo_root: Path) -> None:
     """One-line active work overview for preamble output."""
-    active = state["active_reqs"]
+    active = state["active_work"]
     if not active:
         print("📭 暂无 active work")
         return
@@ -84,16 +84,16 @@ def render_banner_only(state: dict, repo_root: Path, skill: str) -> None:
     格式按 `skills/_shared/pm-view/banner-rules.md` §1.1。
     无 active work → 输出占位 banner（PM 知道当前没有进行中的工作）。
     """
-    active = state["active_reqs"]
+    active = state["active_work"]
     if not active:
         # 项目级 skill（init-project / design 等）跑在无 active work 状态是预期的。
         print("━━━ PMAI ► " + skill + " ▸ <项目级 / 无 active work> ━━━")
         return
     # 取第一个 active work（典型场景：单 PM 同时 1-2 个工作）
     req_view = active[0]
-    req_dir = req_view["req_dir"]
+    work_dir = req_view["work_dir"]
     try:
-        banner = get_current_stage_banner(req_dir, skill=skill)
+        banner = get_current_stage_banner(work_dir, skill=skill)
     except Exception as exc:  # noqa: BLE001
         print(f"━━━ PMAI ► {skill} ▸ banner 渲染失败: {exc} ━━━")
         return
@@ -128,16 +128,16 @@ def render_narrative(state: dict, repo_root: Path) -> None:
 
     无 active work → 输出"目前没有 active work"，**不编造**（review R7 防幻觉）。
     """
-    active = state["active_reqs"]
+    active = state["active_work"]
     if not active:
-        print("目前没有 active work。可以发 /design 设计新功能，或发 /pmai-init-project 起新项目。")
+        print("目前没有 active work。可以发 /pmai-design 设计新功能，或发 /pmai-init-project 起新项目。")
         return
 
     # 单个工作场景：直接念
     if len(active) == 1:
         req = active[0]
         meta = req["meta"] or {}
-        req_id = req["req_dir"].name
+        req_id = req["work_dir"].name
         stage = meta.get("stage", 0)
         stage_name = STAGE_NAMES.get(int(stage), f"stage {stage}") if stage else "未知"
         # 不写 commit hash / 时间细节；只点 stage 状态
@@ -145,7 +145,7 @@ def render_narrative(state: dict, repo_root: Path) -> None:
         prod_line = f"你的产品：{prod}\n" if prod else ""
         print(
             f"{prod_line}当前在做 {req_id}（{stage_name} 阶段）。"
-            f"\n下一步：发 /pmai-next 推进，或继续当前阶段工作。"
+            f"\n下一步：{suggest_next_action(req)}"
         )
         return
 
@@ -156,11 +156,11 @@ def render_narrative(state: dict, repo_root: Path) -> None:
     print(f"目前有 {len(active)} 个 active work：")
     for req in active:
         meta = req["meta"] or {}
-        req_id = req["req_dir"].name
+        req_id = req["work_dir"].name
         stage = meta.get("stage", 0)
         stage_name = STAGE_NAMES.get(int(stage), f"stage {stage}") if stage else "未知"
         print(f"  - {req_id}：{stage_name} 阶段")
-    print("\n下一步：发 /pmai-status 看详细，或 /pmai-next 推进具体工作。")
+    print("\n下一步：发 /pmai-status 看详细；推进时按具体工作选择 /pmai-design、/pmai-build 或 /pmai-close。")
 
 
 def render_health_check(repo_root: Path) -> None:
@@ -210,26 +210,26 @@ def render_health_check(repo_root: Path) -> None:
 
 
 def suggest_next_action(req_view: dict) -> str:
-    """Suggest what PM should do next. req_view 是 state['active_reqs'][i].
+    """Suggest what PM should do next. req_view 是 state['active_work'][i].
     四步：1 设计 / 2 build / 3 复审 / 4 沉淀（MAX_STAGE=4）。"""
     meta = req_view["meta"]
     stage = meta.get("stage", 0)
 
     # 设计（≤1）：定 / 细化模块规格
     if stage <= 1:
-        return f"继续{STAGE_NAMES.get(stage, '设计')}：定 / 细化模块规格（发 /pmai-next 推进）"
+        return f"继续{STAGE_NAMES.get(stage, '设计')}：发 /pmai-design 细化模块规格"
 
     # build（2）：对模块 spec 直建 + 三道审 + PM 验收
     if stage == 2:
-        return "build 阶段：发 /pmai-next 选择模块并进入 /build"
+        return "build 阶段：发 /pmai-build <模块> 对着 spec 建"
 
     # 复审（3）
     if stage == 3:
-        return "复审阶段：发 /pmai-next 推进（复审通过后进沉淀）"
+        return "复审阶段：继续 /pmai-build 的复审与验收；通过后发 /pmai-close"
 
     # 沉淀（≥4 = MAX_STAGE）
     if stage >= 4:
-        return "沉淀阶段：运行 /close 沉淀产品现状 + 收尾当前工作"
+        return "沉淀阶段：运行 /pmai-close 沉淀产品现状 + 收尾当前工作"
 
     return "运行 /pmai-status 查看详情"
 
@@ -270,21 +270,21 @@ def _render_single_req(req_view: dict) -> None:
     req_name = meta.get("name", "?")
     stage = meta.get("stage", 0)
     stage_name = STAGE_NAMES.get(stage, "?")
-    req_dir = req_view["req_dir"]
+    work_dir = req_view["work_dir"]
 
     print(f"当前工作：{req_id}（{req_name}）")
     print(f"Stage：{stage} - {stage_name}")
-    print(f"Worktree：{req_dir.parent.parent.parent}")
+    print(f"Worktree：{work_dir.parent.parent.parent}")
     print()
 
     print(f"下一步：{suggest_next_action(req_view)}")
 
 
 def render_status(state: dict, repo_root: Path) -> None:
-    active = state["active_reqs"]
+    active = state["active_work"]
 
     if not active:
-        print("📭 没有活跃工作。运行 /design 设计新功能。")
+        print("📭 没有活跃工作。运行 /pmai-design 设计新功能。")
         render_quickfix_section(repo_root)
         return
 
@@ -335,7 +335,7 @@ def render_timeline(timeline_state: dict, repo_root: Path) -> None:
     else:
         for item in active:
             meta = item["meta"]
-            req_id = meta.get("id", item["req_dir"].name)
+            req_id = meta.get("id", item["work_dir"].name)
             req_name = meta.get("name", "")
             stage = meta.get("stage", 0)
             stage_name = STAGE_NAMES.get(stage, "?")
@@ -356,7 +356,7 @@ def render_timeline(timeline_state: dict, repo_root: Path) -> None:
     else:
         for item in closed:
             meta = item["meta"]
-            req_id = meta.get("id", item["req_dir"].name)
+            req_id = meta.get("id", item["work_dir"].name)
             req_name = meta.get("name", "")
             cd = item.get("close_date")
             date_str = cd.strftime("%Y-%m-%d") if cd else "?"
@@ -369,7 +369,7 @@ def render_timeline(timeline_state: dict, repo_root: Path) -> None:
         print(f"═══ Cancelled（显示 {len(cancelled)}）═══")
         for item in cancelled:
             meta = item["meta"]
-            req_id = meta.get("id", item["req_dir"].name)
+            req_id = meta.get("id", item["work_dir"].name)
             req_name = meta.get("name", "")
             cd = item.get("close_date")
             date_str = cd.strftime("%Y-%m-%d") if cd else "?"

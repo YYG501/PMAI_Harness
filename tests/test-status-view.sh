@@ -27,14 +27,14 @@ test_summary_lists_active_work() {
 }
 
 test_status_suggests_build_not_task() {
-  start_test "status: build stage suggests /build path, no /pmai-task command"
+  start_test "status: build stage suggests /pmai-build path, no /pmai-task command"
   fixture_setup
   fixture_create_req "req-001" "test" 2 >/dev/null
 
   local out
   out=$(cd "$FIXTURE_DIR" && python3 "$STATUS_VIEW" 2>&1)
   if echo "$out" | grep -q "build 阶段" \
-     && echo "$out" | grep -q "/build" \
+     && echo "$out" | grep -q "/pmai-build" \
      && ! echo "$out" | grep -q "/pmai-task"; then
     pass_test
   else

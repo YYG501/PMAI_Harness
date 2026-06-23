@@ -1,8 +1,7 @@
-# build 三道审编排（`scripts/build-audits.py`）参考 + 自测留档
+# build 三道审编排（`scripts/pmai-build-audits.py`）参考 + 自测留档
 
-> **性质**：六步「建」完三道审的脚本级编排参考 + 2026-05-31 自测记录。
-> **设计真相源**：`docs/设计/PMAI重构-实施清单.md` §6 阶段 2 + §2 gstack 接入表 / 方向稿 §2.3.2。
-> **落地状态**：脚本 + 回归（`tests/test-build-audits.sh` 7 例）已落地（基线 572/0）；**真 req build spike 端到端验证未做**（见 `TODOS.md`）。
+> **性质**：`/pmai-build` 三道审的脚本级编排参考 + 2026-05-31 自测记录。
+> **落地状态**：脚本 + 回归（`tests/test-build-audits.sh`）已落地；真实业务模块端到端验证见 `TODOS.md`。
 
 ---
 
@@ -12,9 +11,9 @@ build 完三道机器审，各查一种病、对照不同参照物，合成一�
 
 | 道 | 查 | 工具 | 参照 |
 |---|---|---|---|
-| ① 覆盖审计 | 建全没 | `coverage-reviewer` agent（白纸视角、非自审） | 范围清单 `req-plan.md` |
-| ② 视觉门 | 长得对不对 | gstack `/design-review`（只截图不改） | `docs/DESIGN.md` |
-| ③ 行为审 | 跑得通不通 | `task-verify` 驱动 `/browse`（确定性路径） | 范围清单派生的验收流程 |
+| ① 覆盖审计 | 建全没 | `coverage-reviewer` agent（白纸视角、非自审） | 模块 `spec.md` |
+| ② 视觉门 | 长得对不对 | gstack `/pmai-design-review`（只截图不改） | `docs/DESIGN.md` |
+| ③ 行为审 | 跑得通不通 | 浏览器 / 脚本化验收 | 模块 `spec.md` 派生的验收流程 |
 
 **覆盖审计是 agent、视觉门是 gstack skill —— 都是 LLM 驱动，脚本没法当子进程调起。** 所以 `build-audits.py`
 **不"跑"三道审**，只固化能确定性固化的部分（这几块原本靠 AI 自觉、易漏跑/各起 dev server/不合成）：
@@ -22,11 +21,11 @@ build 完三道机器审，各查一种病、对照不同参照物，合成一�
 - `resolve <task>`：校验输入（范围清单 / `prototype/` / dev 端口）→ 缺则 **fail-loud**；建 `audits/`；打印三道 manifest（每道读什么、把规范化结果写哪、dev server 复用约定）。
 - `synthesize <task>`：读三道规范化结果 → **校验三道齐全**（漏跑 fail-loud 点名）→ 合成 `synthesis.md` + 机器 summary（计数 + `gate=clean|needs-review`，门禁仅作给 PM 的**建议**、不替 PM 拍板）。
 
-接线：`skills/task-execute/SKILL.md` 步骤 7.3 开头 `resolve`、7.3a/b/c 各写规范化 json、7.3d 调 `synthesize`。
+接线：`skills/build/SKILL.md` 在三道审前跑 `resolve`，每道审各写规范化 json，最后调 `synthesize`。
 
-## 2. 输入契约（三道规范化结果，task-execute 跑完每道写一份）
+## 2. 输入契约（三道规范化结果，build 跑完每道写一份）
 
-| 文件（`<worktree>/.pm-workflow/tasks/<task-stem>/audits/`）| schema |
+| 文件（`<worktree>/.pm-workflow/audits/<模块>/`）| schema |
 |---|---|
 | `coverage.json` | `{"items":[{"name","status":"built\|missing\|degraded","note"}]}` |
 | `visual.json` | `{"findings":[{"severity":"P0\|P1\|P2","desc"}]}`（空 findings = 视觉通过）|
@@ -41,9 +40,9 @@ build 完三道机器审，各查一种病、对照不同参照物，合成一�
 ```
 [build-audits] 输入已校验，audits/ 已就绪。按下面 manifest 跑三道审，各写规范化结果：
   ① 覆盖审计（coverage-reviewer agent，静态读码、不需 dev server）→ 写 .../audits/coverage.json
-  ② 视觉门（gstack /design-review，只截图不改；复用同一次 dev server）→ 写 .../audits/visual.json
-  ③ 行为审（task-verify 驱动 /browse；复用同一次 dev server）→ 写 .../audits/behavior.json
-  dev server：覆盖审计不需要；视觉门 + 行为审复用 task-execute 步骤 4 起的同一个（端口候选 3000, 5173），别各起各的。
+  ② 视觉门（gstack /pmai-design-review，只截图不改；复用同一次 dev server）→ 写 .../audits/visual.json
+  ③ 行为审（浏览器 / 脚本化验收；复用同一次 dev server）→ 写 .../audits/behavior.json
+  dev server：覆盖审计不需要；视觉门 + 行为审复用 build 阶段启动的同一个（端口候选 3000, 5173），别各起各的。
 ```
 
 ### synthesize 机器 summary（needs-review 场景：漏建 1 + 降级 1 + 视觉 2 + 行为 fail）
@@ -84,4 +83,4 @@ build 完三道机器审，各查一种病、对照不同参照物，合成一�
 ## 4. 余下（build spike 才能验）
 
 脚本编排确定、测过；但 LLM 调起的覆盖审计 agent / 视觉门 skill 在**真页面**上产出 conformant json、
-dev server 三道复用 timing、整 loop —— 须下一个真实 req 当 build spike 跑一遍才算闭环。
+dev server 三道复用 timing、整 loop —— 须下一个真实模块工作当 build spike 跑一遍才算闭环。

@@ -164,7 +164,7 @@ verify.py 用 `normalize` + 字符串相等比对。如果 AI 选择不同插入
 1. ✓ P5-mini 报告完成
 2. **进 vp-01**（quickfix-log 数据契约 + frontmatter 升级 schema，~0.5h）
 3. **进 vp-02**（close-task SKILL：写 quickfix-log，不动 modulespec，~1.5h）
-4. **进 vp-03**（close-req 入口锁，~1h）
+4. **进 vp-03**（close-work 入口锁，~1h）
 5. **vp-04 完成后跑 P5 真实例补判**（PM 给 2-3 个真实 req）
 
 按 vp 估时表，1-3 累计 4h，可以一鼓作气干完。

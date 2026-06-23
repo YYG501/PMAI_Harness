@@ -5,7 +5,7 @@
 （项目名称 / 产品定位 / 用户画像 / 技术栈 / 业务术语表）
 是否为空骨架（HTML 注释占位 / 无实质内容）。
 
-复用 req-transition.py:78-92 check_design_md_has_content() 模式。
+复用旧设计检查逻辑的有效部分：只判断 DESIGN.md 关键章节是否有正文。
 
 返回 JSON：
 {

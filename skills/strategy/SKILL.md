@@ -32,7 +32,7 @@ PM 主动调用，**4 个独立场景**：
 > **不在 scope**：
 > - greenfield 首次起新项目 → 走 `/pmai-init-project`（一气呵成 4 阶段；阶段 C 内嵌方向讨论按同款 `_shared/project-questioning.md` 跑）
 > - brownfield 首次接入定方向 → 走 `/pmai-codebase-audit`（一气呵成：扫码产现状档 → PM 过目 → step 4 内联方向讨论，同款 `_shared/project-questioning.md`）。本 skill 场景 D 只兜接入方向讨论被打断的异常恢复
-> - 模块设计 / build / 按需 PRD / 沉淀 → 走 `/design`、`/build`、`/close`、`/pmai-prd-writing`
+> - 模块设计 / build / 按需 PRD / 沉淀 → 走 `/pmai-design`、`/pmai-build`、`/pmai-close`、`/pmai-prd-writing`
 > - 老项目同步兜底 → 走 `/pmai-codebase-audit` 或 `/pmai-status` 提示的健康检查，不在本 skill 范围
 
 ## Preamble
@@ -74,7 +74,7 @@ echo "SKILL: strategy"
 | 场景 | 触发 | 输入态 | **提问顺序**（按 _shared §3 问题库挑用，**场景特定**）|
 |---|---|---|---|
 | **A 重做** | PM 主动说"方向偏了 / 要重做" | `docs/PRODUCT.md` 已有内容 | (1) **痛点诊断**（旧 PRODUCT 哪几节失效 / 为什么偏）→ (2) 产品定位（重定）→ (3) 用户画像（重定，可能换主角色）→ (4) 业务术语表（如有新术语）→ (5) 刷新 TODO 待办池（旧待办 PM 自己评估保留 / 划掉，AI 不替排序）|
-| **B 产品路线规划** | PM 主动说"产品路线规划 / 季度规划 / 半年规划"，或老项目首次补 `docs/TODO.md` | `docs/PRODUCT.md` 已有；`TODO.md` 可有可无 | (1) 刷新 TODO 待办池：**问 PM 现在想做啥记进待办池**（AI 不扫 `requirements/closed/` 反推历史、不排序，按 `_shared/project-questioning.md` §5.2 写法）→ (2) 业务术语表增量（如有新业务）—— **跳过产品定位 / 用户画像 / 技术栈**（默认稳定）|
+| **B 产品路线规划** | PM 主动说"产品路线规划 / 季度规划 / 半年规划"，或老项目首次补 `docs/TODO.md` | `docs/PRODUCT.md` 已有；`TODO.md` 可有可无 | (1) 刷新 TODO 待办池：**问 PM 现在想做啥记进待办池**（AI 不扫 `requirements/pmai-closed/` 反推历史、不排序，按 `_shared/project-questioning.md` §5.2 写法）→ (2) 业务术语表增量（如有新业务）—— **跳过产品定位 / 用户画像 / 技术栈**（默认稳定）|
 | **C 老板新方向** | PM 主动说"老板 / 客户给了新方向" | `docs/PRODUCT.md` 已有 | (1) **新方向 vs 现 PRODUCT 差异点**（PM 自述新方向 + AI 对比现 PRODUCT 找冲突）→ (2) 产品定位（如有变 → 改）→ (3) 用户画像（如有变 → 改，可能换主角色）→ (4) 刷新 TODO 待办池（PM 给的新待办）|
 | **D brownfield 方向恢复** | 接入时 `/pmai-codebase-audit` step 4 内联方向讨论被打断 / 想重定方向（正常接入不走这）| `docs/CODEBASE-AUDIT.md` 已生成（7 维度）| (0) **全文读 `docs/CODEBASE-AUDIT.md`**（必读，AI 不准跳）→ (1) 产品定位（**从 codebase 反推 + PM 确认**）→ (2) 用户画像（从代码层级 / API 角色反推 + PM 补）→ (3) 技术栈（**从代码现状档抄**，PM 确认）→ (4) 业务术语表（**从 model / API 命名反推 + PM 补**）→ (5) 刷新 TODO 待办池（PM 给，AI 不反推填充）|
 
@@ -156,7 +156,7 @@ PM 选「创建 PRODUCT.md」+ 定稿后：
 
 本轮方向讨论若产出了**项目级理路**——护城河论证 / 几个机制怎么整体咬合 / 关键交互理念推导 / v2 演进方向（不是单条术语、不是 5 节里的离散填空）——**@读 `skills/_shared/decision-record.md`** 判门槛（纯微调不冻），有实质理路 → 向 PM 提一句「这轮定了 <一句话理路>，冻一份项目决策记录留底，好吗」，PM 点头 → 按 `$PMAI_HOME/templates/decision-record.md.tmpl` 写 `docs/decisions/<日期>-<slug>.md`（理路节 + 当时事实摘要带日期 + 指针）。**纯微调 / 无跨文件理路 → silent skip 本步**。
 
-> **本 skill 不写 PRODUCT-STATE 索引**：strategy 不是 PRODUCT-STATE 的 sanctioned 写口（防腐铁律只认 `/close` + `/pmai-deposit`）。冻的决策记录靠 `/design` 进场扫 `docs/decisions/` 发现（+ PRODUCT-STATE 已有指向 `docs/decisions/` 的通用索引），不需要本 skill 逐条挂索引。`docs/decisions/` 在 main 上可写（冻结档豁免，见 `check-branch.sh`）。
+> **本 skill 不写 PRODUCT-STATE 索引**：strategy 不是 PRODUCT-STATE 的 sanctioned 写口（防腐铁律只认 `/pmai-close` + `/pmai-deposit`）。冻的决策记录靠 `/pmai-design` 进场扫 `docs/decisions/` 发现（+ PRODUCT-STATE 已有指向 `docs/decisions/` 的通用索引），不需要本 skill 逐条挂索引。`docs/decisions/` 在 main 上可写（冻结档豁免，见 `check-branch.sh`）。
 
 #### 步骤 8.6：atomic commit + 引导下一步
 
@@ -164,14 +164,14 @@ PM 选「创建 PRODUCT.md」+ 定稿后：
 - 退出前提醒 PM TODO 待办池里有哪些待办（按 §5.3），不替 PM 定下一个该做啥 + 引导下一步：
 
 ```
-项目方向定稿。下一步：运行 /design 开始第一个功能 / 模块。
+项目方向定稿。下一步：运行 /pmai-design 开始第一个功能 / 模块。
 ```
 
 ## Rules
 
 **禁止项**：
 
-- ❌ 走活跃工作 stage / 调 `req-transition.py` —— 本 skill 是项目级，不占模块工作阶段
+- ❌ 走活跃模块工作流 —— 本 skill 是项目级，不占模块工作阶段
 - ❌ 产工程孪生文件（`solution.engineering.md` 之类）—— 单文件，只写 PM 视角
 - ❌ 自动调 `/office-hours` / `/plan-ceo-review` —— 这两个由 PM 可选自跑
 - ❌ 设 analysis-reviewer 式第二视角强制评审 —— 项目方向第二视角由 PM 自跑 `/plan-ceo-review`
@@ -191,5 +191,5 @@ PM 选「创建 PRODUCT.md」+ 定稿后：
 
 - **允许产出**：`docs/PRODUCT.md`、`docs/TODO.md`、`docs/decisions/<日期>-<slug>.md`（本轮有实质理路时按需冻）、暂存文件 `docs/.project-solution-open-questions.md`
 - **允许动作**：分批提问、未决问题闸门、Decision gate、5 节检查、确认门、按需冻决策记录、atomic commit
-- **禁止顺手推进**：不自动进入 `/design`、不产任何模块工作文档
+- **禁止顺手推进**：不自动进入 `/pmai-design`、不产任何模块工作文档
 - **退出条件**：`docs/PRODUCT.md` 5 节全填、`docs/TODO.md` 已写、未决问题闸门已过、Decision gate 选了「创建 PRODUCT.md」、PM 已定稿、atomic commit 已落

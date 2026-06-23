@@ -19,14 +19,14 @@
 - `pmai install` 一次全局安装到 `~/.pmai/` + symlink 23 个 skill 到 `~/.claude/skills/pmai-*`（任意 cwd 可调 `/pmai-init-project`）
 - `pmai install --local <dir>` 项目级实体副本（兼容老消费仓 / clone 场景）
 - 升级 `pmai upgrade`（main）/ `pmai upgrade --stable`（tag）/ `pmai upgrade --to v0.x.0`（pin）
-- 完整设计 + review 决议 + POC 结论：[`docs/设计/框架分发与全局安装.md`](./docs/设计/框架分发与全局安装.md)（v1.1）
+- 安装和升级以 `README.md`、`bin/pmai`、`bin/pmai-doctor` 为当前真相源。
 - 老的手动同步 SOP：[`框架同步-SOP.md`](./docs/归档/废弃/框架同步-SOP.md) **DEPRECATED + 已归档**（pmai install/upgrade 承接；`pmai sync` 落地后彻底退役）
 
 ---
 
 ## review/audit 类 skill 执行强制约束
 
-跑 `/plan-ceo-review` `/plan-eng-review` `/plan-design-review` `/plan-devex-review` `/review` `/qa` `/qa-only` `/design-review` `/devex-review` `/autoplan` 等 review/audit 类 skill 时：
+跑 `/plan-ceo-review` `/plan-eng-review` `/plan-design-review` `/plan-devex-review` `/review` `/qa` `/qa-only` `/pmai-design-review` `/devex-review` `/autoplan` 等 review/audit 类 skill 时：
 
 1. **完整跑官方 skill 的所有 required sections**（11/11，不是 5/11）
 2. **禁止给 PM 出"A 简化 / B 中等 / C 完整"程度门** —— 把"是否偷工"推给 PM 是反模式
@@ -60,17 +60,17 @@
 **PM 第一条 message 后（任何内容），AI 必须先跑** `bash .claude/scripts/status-view.py --narrative` **输出播报**，再回应 PM 的具体请求。
 
 - **触发**：每个新 chat session 的 PM 第一条 user message。**AI 不会在 PM 没说话前自动播报**（LLM chat 模型固有限制；codex C-3 校准）。
-- **目的**：PM 切窗口 / 隔天回来时不用主动问"我在哪"，AI 主动结构化报告当前 active req / 当前 stage / 最近 transition / 下一步建议。
-- **数据源**：`status-view.py --narrative` 内部走 `.req-meta.json` + `_lib.state.get_overall_state()`，严格基于现有字段（codex C-4 范围降级：当前 stage / 产物文件 / 最近 transition；**不到小节级**，不写「§四」/ commit hash 全文/「2 天前」相对时间这种伪精确）。
-- **失败兜底**（无 active req）：直接输出"目前没有 active req。可以发 /pmai-new-req 起新需求，或发 /pmai-init-project 起新项目"，**不编造**（防 R7 narrative 幻觉）。
+- **目的**：PM 切窗口 / 隔天回来时不用主动问"我在哪"，AI 主动结构化报告当前 active work / 当前模块 / 下一步建议。
+- **数据源**：`status-view.py --narrative` 内部走 `.work-meta.json` + `_lib.state.get_overall_state()`，严格基于现有字段；不写小节级、commit hash 全文或相对时间这种伪精确内容。
+- **失败兜底**（无 active work）：直接输出"目前没有 active work。可以发 /pmai-design 起一个模块工作，或发 /pmai-init-project 起新项目"，**不编造**。
 
-**生成器仓 vs 业务仓**：本规则只在业务仓有 `.req-meta.json` 时生效；生成器仓自己开发跑无意义（没有 PM 视图 req），跳过即可。
+**生成器仓 vs 业务仓**：本规则只在业务仓有 `.work-meta.json` 时生效；生成器仓自己开发跑无意义（没有 PM 视图 active work），跳过即可。
 
 播报示例：
 
 ```
-上次你做到 req-003，当前 stage 3/7：功能规格，共 2 个 task（执行中 1，已完成 0）。
-下一步：发 /pmai-req-stage-gate 推进，或继续当前 stage 工作。
+当前没有 active work。
+下一步：发 /pmai-design 起一个模块工作，或发 /pmai-status 查看产品现状。
 ```
 
 PM 视图规则约束：见 `_shared/PM-VIEW-RULES.md` + `_shared/pm-view/banner-rules.md`（M2 banner / Decision gate label）+ `_shared/pm-view/askuser-rules.md`（M4 AskUser 答题规则）。

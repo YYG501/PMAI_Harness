@@ -75,7 +75,7 @@
     "**/node_modules/**",
     "**/.next/**",
     "**/dist/**",
-    "**/build/**",
+    "**/pmai-build/**",
     "**/.git/**",
     "**/coverage/**",
     "**/.gstack/**"

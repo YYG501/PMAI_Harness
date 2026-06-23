@@ -154,7 +154,7 @@ test_nested_node_modules_pruned() {
 # Prune：.worktrees / .git / .next / dist / build 不被遍历
 # ----------------------------------------------------------------------
 test_pruned_dirs_ignored() {
-  start_test ".worktrees/.git/.next/dist/build 里的 package.json 全部被 prune"
+  start_test ".worktrees/.git/.next/dist/pmai-build 里的 package.json 全部被 prune"
   make_fixture
   echo '{}' > "$REPO/package.json"
   mkdir -p "$REPO/node_modules"

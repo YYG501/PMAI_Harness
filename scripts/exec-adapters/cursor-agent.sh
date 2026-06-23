@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # cursor-agent build adapter.
 #
-# WARNING: cursor-agent --force --trust has no sandbox. /build must run its
+# WARNING: cursor-agent --force --trust has no sandbox. /pmai-build must run its
 # post-execution changed-path review before accepting the result.
 
 set -euo pipefail

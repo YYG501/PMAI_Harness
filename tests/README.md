@@ -9,10 +9,9 @@
 bash tests/run-all.sh
 
 # 跑单个脚本的测试
-bash tests/test-close-req.sh
+bash tests/test-close-work.sh
 bash tests/test-check-branch.sh
-bash tests/test-req-transition.sh
-bash tests/test-cancel-req.sh
+bash tests/test-cancel-work.sh
 ```
 
 ## 目录结构
@@ -26,10 +25,9 @@ tests/
 │   └── fixture.sh               # setup/teardown：创建假项目结构
 ├── fixtures/
 │   └── (运行时临时目录)
-├── test-close-req.sh
+├── test-close-work.sh
 ├── test-check-branch.sh
-├── test-req-transition.sh
-└── test-cancel-req.sh
+└── test-cancel-work.sh
 ```
 
 ## 测试约定

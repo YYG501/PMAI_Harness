@@ -2,7 +2,7 @@
 name: pmai-prd-writing
 description: |
   Generate a module/work-level PRD (需求方案). 多入口 skill:
-  (a) 沉淀按需模式 — 由 /close 或 /pmai-next 在「沉淀」一步按需调用; mode 固定「当前工作」, 跳过步骤 0 三选一对话, 输出到 $ACTIVE_REQ_DIR/prd.md; PRD 反向出本次模块工作的真系统口径需求方案, 供评审/留档;
+  (a) 沉淀按需模式 — 由 /pmai-close 或 /pmai-status 在「沉淀」一步按需调用; mode 固定「当前工作」, 跳过步骤 0 三选一对话, 输出到 $ACTIVE_WORK_DIR/prd.md; PRD 反向出本次模块工作的真系统口径需求方案, 供评审/留档;
   (b) standalone 模式 — PM 手动 /pmai-prd-writing; 保留步骤 0「当前工作 / 独立 / 补差」三选一; 独立 PRD (跨模块评审) 输出路径 PM 指定 (常见 docs/独立PRD/<slug>.md).
   Always trigger when the user says 'prd', 'PRD', '写需求文档', '写需求方案', '写评审 PRD', '给某模块写 PRD',
   or wants to generate the current work's 需求方案 / cross-module review material.
@@ -17,7 +17,7 @@ description: |
 
 prd-writing 产出 **当前工作 PRD = 本次模块工作的反向需求方案**。
 
-PRD 在「**沉淀**」一步**按需**产出（PM 真要拿去评审 / 留档时才合成，可一次覆盖多个模块）—— **不是每次工作都硬产一份**，避免文档税。常见由 `/close` 或 `/pmai-next` 在沉淀一步按需触发；PM 也可随时 standalone 手动调。
+PRD 在「**沉淀**」一步**按需**产出（PM 真要拿去评审 / 留档时才合成，可一次覆盖多个模块）—— **不是每次工作都硬产一份**，避免文档税。常见由 `/pmai-close` 或 `/pmai-status` 在沉淀一步按需触发；PM 也可随时 standalone 手动调。
 
 PRD 是**反向合成**，不是「把代码翻译成文档」，更**不从 mock 原型随手的实现反推业务规则**：
 
@@ -32,28 +32,28 @@ PRD 内含**原型覆盖范围表**：列出本次模块工作覆盖了哪些功
 
 prd-writing 是**多入口 skill**，两条入口的边界如下：
 
-### 入口 A — 沉淀按需模式（由 `/pmai-next` 在沉淀一步调）
+### 入口 A — 沉淀按需模式（由 `/pmai-status` 在沉淀一步调）
 
-- **触发**：`/pmai-next` 推进到「沉淀」一步、PM 选择「当前工作要出一份评审 / 留档 PRD」时调用本 skill。**不是每次工作都必跑** —— 每次工作必做的沉淀只有更新 `PRODUCT-STATE.md` + merge 主原型回 main；反向 PRD 是按需档。
+- **触发**：`/pmai-status` 推进到「沉淀」一步、PM 选择「当前工作要出一份评审 / 留档 PRD」时调用本 skill。**不是每次工作都必跑** —— 每次工作必做的沉淀只有更新 `PRODUCT-STATE.md` + merge 主原型回 main；反向 PRD 是按需档。
 - **mode 固定「当前工作」**：不询问写哪部分 —— 沉淀阶段必然是当前工作的完整反向 PRD。
-- **跳过步骤 0**：步骤 0 的「当前工作 / 独立 / 补差」三选一对话**被 `/pmai-next` 短路**，不向 PM 提问（短路机制见下方「步骤 0」段）。
+- **跳过步骤 0**：步骤 0 的「当前工作 / 独立 / 补差」三选一对话**被 `/pmai-status` 短路**，不向 PM 提问（短路机制见下方「步骤 0」段）。
 - **输入**：涉及模块的 `docs/modules/<模块>/spec.md` / `decisions.md` + 最终 `prototype/` + `docs/PRODUCT-STATE.md` + `docs/PRODUCT.md` + `docs/PRODUCT-RULES.md`—— 详见「Required Inputs」。
-- **产物**：`$ACTIVE_REQ_DIR/prd.md`。
-- **确认门**：步骤 2.5 §六拆分**必有 PM 确认门**（拆分结果是 §六层级的命名底稿，PM 必须拍板；AI 不允许自判「无歧义」跳过 —— 本门确认的是结构，不是成品）；最终确认归 `/pmai-next` 的沉淀确认门，本 skill 内不重复。
+- **产物**：`$ACTIVE_WORK_DIR/prd.md`。
+- **确认门**：步骤 2.5 §六拆分**必有 PM 确认门**（拆分结果是 §六层级的命名底稿，PM 必须拍板；AI 不允许自判「无歧义」跳过 —— 本门确认的是结构，不是成品）；最终确认归 `/pmai-status` 的沉淀确认门，本 skill 内不重复。
 
 ### 入口 B — standalone 模式（PM 手动 `/pmai-prd-writing`）
 
-- **触发**：PM 主动调用 `/pmai-prd-writing`（不经 `/pmai-next`）。
+- **触发**：PM 主动调用 `/pmai-prd-writing`（不经 `/pmai-status`）。
 - **保留步骤 0 三选一**：「当前工作 / 独立 / 补差」对话照常走。
   - **当前工作**：当前模块工作的完整反向 PRD（此入口用于 PM 想手动重写 / 补写已有 PRD）。
   - **独立**（跨模块评审 PRD）：PM 说「独立 PRD」/「给 X / Y 模块写一份评审 PRD」/「不绑当前工作」；产物路径由 PM 指定（如 `docs/独立PRD/<slug>.md`）。**独立 PRD 能力不丢** —— 这是 standalone 模式专属。
   - **补差**：PM 已有 PRD 但想补充某节 / 某模块；同入口，对话时 PM 说「只补 X 部分」。
 
-**两入口的判别**：调用上下文由 `/pmai-next` 在沉淀一步带入 → 走入口 A；PM 直接 `/pmai-prd-writing` → 走入口 B。
+**两入口的判别**：调用上下文由 `/pmai-status` 在沉淀一步带入 → 走入口 A；PM 直接 `/pmai-prd-writing` → 走入口 B。
 
 ## 步骤 0 · 开场对话式确认（仅 standalone 模式走）
 
-> **沉淀按需模式：跳过本步骤。** `/pmai-next` 调用本 skill 时已隐含「当前工作 / 默认产物路径」两项答案，无需再问 PM。短路后直接进入**步骤 0.5（项目级文档强制 echo）→ 步骤 1（识别涉及模块）→ 步骤 1.5（涉及模块 spec 强制 echo）→ 步骤 2**。步骤 0.5 / 1.5 是沉淀按需模式独有的「强制 echo 防漏读」屏障。
+> **沉淀按需模式：跳过本步骤。** `/pmai-status` 调用本 skill 时已隐含「当前工作 / 默认产物路径」两项答案，无需再问 PM。短路后直接进入**步骤 0.5（项目级文档强制 echo）→ 步骤 1（识别涉及模块）→ 步骤 1.5（涉及模块 spec 强制 echo）→ 步骤 2**。步骤 0.5 / 1.5 是沉淀按需模式独有的「强制 echo 防漏读」屏障。
 
 standalone 模式下，AI **第一件事**是与 PM 对话确认。AI 调 AskUserQuestion 三连（按 `_shared/pm-view/askuser-rules.md §1.4` 多决策拆开顺序问）：
 
@@ -71,7 +71,7 @@ standalone 模式下，AI **第一件事**是与 PM 对话确认。AI 调 AskUse
 - `question`: "PRD 产物放哪？"
 - `options`:
   - `label`: `默认路径`
-    `description`: `当前工作 → $ACTIVE_REQ_DIR/prd.md ；独立 → docs/独立PRD/<slug>.md ；补差 → 现有 PRD 同路径覆盖`
+    `description`: `当前工作 → $ACTIVE_WORK_DIR/prd.md ；独立 → docs/独立PRD/<slug>.md ；补差 → 现有 PRD 同路径覆盖`
   - `label`: `我指定`
     `description`: `贴绝对路径`
 
@@ -134,17 +134,17 @@ prd-writing 历史上自带的写作规则（禁用清单 / UI 元素指代规�
 
 ## Workflow
 
-> 步骤编号在两入口共用。沉淀按需模式跳步骤 0、**必跑步骤 0.5 / 1.5（项目级 + 涉及模块 spec 强制 echo）**；standalone 模式跑步骤 0、可省 0.5 / 1.5（PM 在线会拦漏读）。**步骤 2.5 §六拆分两入口都强制 PM 确认门**（详见步骤 2.5 e）；不再有独立的最终确认（沉淀的定稿确认归 `/pmai-next` 单一确认门）。
+> 步骤编号在两入口共用。沉淀按需模式跳步骤 0、**必跑步骤 0.5 / 1.5（项目级 + 涉及模块 spec 强制 echo）**；standalone 模式跑步骤 0、可省 0.5 / 1.5（PM 在线会拦漏读）。**步骤 2.5 §六拆分两入口都强制 PM 确认门**（详见步骤 2.5 e）；不再有独立的最终确认（沉淀的定稿确认归 `/pmai-status` 单一确认门）。
 
 ### attachments AI 接管 hook（trigger 0 — 任何步骤期间生效；standalone 模式不启）
 
-**沉淀按需模式启用 trigger 0**；**standalone 模式不启**（不绑当前模块状态 → 不写 `.req-meta.json`）。
+**沉淀按需模式启用 trigger 0**；**standalone 模式不启**（不绑当前模块状态 → 不写 `.work-meta.json`）。
 
 PM 在 chat 任何位置自然描述 "我有 X 在 ~/Downloads/foo.pdf，重点 Y" → AI first-principle 识别（chat 含绝对路径 + 描述材料）→ 调 helper：
 
 ```python
 from _lib.attachments import copy_attachment
-result = copy_attachment(req_dir, Path("~/Downloads/foo.pdf"),
+result = copy_attachment(work_dir, Path("~/Downloads/foo.pdf"),
                         stage_prefix="prd", hint="Y 重点")
 ```
 
@@ -155,9 +155,9 @@ stage_prefix `"prd"`。chat 一行确认 `已归档（docs/inputs/attachments/pr
 - `SensitivePathError` → "路径含敏感关键词，拒纳：<src>。"
 - `FileSizeError` → "文件 X MB 超 50MB 上限。"
 
-**trigger 2 fallback**：写 prd.md 前扫 `docs/inputs/attachments/`，`is_seen(req_dir, filename)` 判定（真相源 `.req-meta.json:attachments_seen`，非引用 section）。
+**trigger 2 fallback**：写 prd.md 前扫 `docs/inputs/attachments/`，`is_seen(work_dir, filename)` 判定（真相源 `.work-meta.json:attachments_seen`，非引用 section）。
 
-**引用 section 渲染**：写 prd.md 时 `list_attachments_seen(req_dir)` 按 `registered_at` 升序渲染到文档物理末尾 `## 📎 参考材料` section。
+**引用 section 渲染**：写 prd.md 时 `list_attachments_seen(work_dir)` 按 `registered_at` 升序渲染到文档物理末尾 `## 📎 参考材料` section。
 
 **单一真相源**：`skills/_shared/pm-view/attachments-upload.md`（完整 prose / 替换 / 删除 / batch / 失败兜底）。
 
@@ -165,7 +165,7 @@ stage_prefix `"prd"`。chat 一行确认 `已归档（docs/inputs/attachments/pr
 
 PRD 漏读 / 浅读项目级文档（PRODUCT-STATE / PRODUCT.md / PRODUCT-RULES.md / modules INDEX）是 LLM 自觉 Read tool 触发不稳的典型踩坑。本子步骤用 Bash `cat` 把项目级文档无条件 echo 到 transcript，**保证内容进入 working context** —— 比依赖 Read tool 自觉触发硬。冗余于上方「Required Inputs」prose 列表也无害。
 
-**沉淀按需模式：必跑本步骤**（步骤 0 被 `/pmai-next` 短路了 → 直接进步骤 0.5 → 步骤 1）。
+**沉淀按需模式：必跑本步骤**（步骤 0 被 `/pmai-status` 短路了 → 直接进步骤 0.5 → 步骤 1）。
 **standalone 模式**：步骤 0 已与 PM 对齐清单 / PM 在线会立刻拦漏读，本步骤可省。
 
 最终 `prototype/`（结构 / 字段 / 交互来源）按 `input-flow.md` §9.3.1 强约束选读，不在本步全文 echo（原型代码量大，全文 echo 会污染 context；步骤 2 派生 §六时按目录 / 入口选读）。
@@ -197,7 +197,7 @@ done
 
 本步骤只保证内容到位，不做 echo 后语义校验（语义校验靠 LLM 在步骤 1 拆决策 / 步骤 2 派生 §六时自然消化）。
 
-1. **识别涉及模块 + 拆决策**（基于步骤 0.5 已 echo 的内容）——从 `docs/modules/INDEX.md`、当前 `.req-meta.json`、本次改动与 PM 说明识别模块清单，落到 `MODULES` 变量供步骤 1.5 使用；从模块 `decisions.md` 拆出「已确认决策」和「待补口径」。有待补口径则先编号提问 PM，确认后再写 PRD。**PRD 的需求方案从模块 spec / decisions + 最终原型的结构反向拼** —— 真系统口径，不从 mock 实现反推规则。
+1. **识别涉及模块 + 拆决策**（基于步骤 0.5 已 echo 的内容）——从 `docs/modules/INDEX.md`、当前 `.work-meta.json`、本次改动与 PM 说明识别模块清单，落到 `MODULES` 变量供步骤 1.5 使用；从模块 `decisions.md` 拆出「已确认决策」和「待补口径」。有待补口径则先编号提问 PM，确认后再写 PRD。**PRD 的需求方案从模块 spec / decisions + 最终原型的结构反向拼** —— 真系统口径，不从 mock 实现反推规则。
 
 1.5. **涉及模块 spec 强制 echo**（沉淀按需模式必跑；同 0.5 同源理由）——步骤 1 识别完本次工作涉及模块后，把对应 module spec 文件无条件 echo 到 transcript。一个模块可能含多个 spec 文件（如 `功能清单.md` / `prd.md`），echo **当前有效的模块 spec 主文件**即可（历史实现记录 PRD 写作不需要重读所有），LLM 基于 INDEX.md 的"当前文档路径"列识别主文件：
 
@@ -309,15 +309,15 @@ done
    **门规则**：
    - PM 回「OK」/「就这样」/「可以」→ 进步骤 3 写表格。
    - PM 给修改意见 → 回 a-d 重做拆分，再次输出展示模板请 PM 确认（迭代直到 PM 拍板）。
-   - **禁止 AI 自判「无歧义」跳过本门**。理由：本门确认的是 §六层级的**命名底稿**（PM 决定怎么分组 / 怎么叫），与 `/pmai-next` 沉淀一步的**成品定稿门**职责完全不同（一个看结构、一个看成品），不存在叠加 —— PM 在这一门是结构裁判，跳了 PM 就失去了对菜单 / 模块归类的拍板机会。
+   - **禁止 AI 自判「无歧义」跳过本门**。理由：本门确认的是 §六层级的**命名底稿**（PM 决定怎么分组 / 怎么叫），与 `/pmai-status` 沉淀一步的**成品定稿门**职责完全不同（一个看结构、一个看成品），不存在叠加 —— PM 在这一门是结构裁判，跳了 PM 就失去了对菜单 / 模块归类的拍板机会。
    - 黑名单命中（c 步骤）由 AI 自己重写后再展示给 PM 看最终版，**不要把违规原命名贴给 PM 看**（PM 看了反而困惑）。
    - 发现规则空白（c 步骤黑名单漏抓 / 词汇表缺词），同步补到「层级划分原则」段。
 
    跳过条件：本次工作不含 §六功能需求章节内容（极少见，几乎不发生）。
 
-3. **生成 PRD**——按下方「PRD 结构」生成完整 PRD 到**产物路径 `$PRD_PATH`**（骨架见 `$PMAI_HOME/skills/prd-writing/templates/req-prd.md.tmpl`），语言风格对齐「写作规则」与「few-shots」。**`$PRD_PATH` 按 mode 解析**：沉淀按需 / standalone「当前工作」= `$ACTIVE_REQ_DIR/prd.md`；standalone「独立」= 步骤 0 PM 指定路径（默认 `docs/独立PRD/<slug>.md`）；standalone「补差」= 现有 PRD 同路径覆盖。**§六功能需求表格的二级 / 三级命名严格按步骤 2.5 的版本写入；不允许在写表格时再发明新的二级 / 三级名。** §六「原型」节按步骤 2 现画 ASCII（每模块下每个页面 / 弹窗 / 抽屉一张 + 1 句文字兜底）。
+3. **生成 PRD**——按下方「PRD 结构」生成完整 PRD 到**产物路径 `$PRD_PATH`**（骨架见 `$PMAI_HOME/skills/prd-writing/templates/prd.md.tmpl`），语言风格对齐「写作规则」与「few-shots」。**`$PRD_PATH` 按 mode 解析**：沉淀按需 / standalone「当前工作」= `$ACTIVE_WORK_DIR/prd.md`；standalone「独立」= 步骤 0 PM 指定路径（默认 `docs/独立PRD/<slug>.md`）；standalone「补差」= 现有 PRD 同路径覆盖。**§六功能需求表格的二级 / 三级命名严格按步骤 2.5 的版本写入；不允许在写表格时再发明新的二级 / 三级名。** §六「原型」节按步骤 2 现画 ASCII（每模块下每个页面 / 弹窗 / 抽屉一张 + 1 句文字兜底）。
 
-3.5. **lint（自动兜底，必跑）**——写完 PRD 后跑 `python3 $REPO_ROOT/scripts/check-prd-hierarchy.py "$PRD_PATH"`（`$PRD_PATH` = 步骤 3 按 mode 解析的产物路径；独立 PRD 时是 PM 指定路径，不是 `$ACTIVE_REQ_DIR/prd.md`）。脚本做两类机械检查：
+3.5. **lint（自动兜底，必跑）**——写完 PRD 后跑 `python3 $REPO_ROOT/scripts/check-prd-hierarchy.py "$PRD_PATH"`（`$PRD_PATH` = 步骤 3 按 mode 解析的产物路径；独立 PRD 时是 PM 指定路径，不是 `$ACTIVE_WORK_DIR/prd.md`）。脚本做两类机械检查：
 
    **类 1 — §六层级**：扫描 §六表格的二级 / 三级 cell 是否含 UI 词违规（弹窗 / 面板 / 视图 / 视角 / 入口 / 字段 / 段 / 区块 / 菜单 / 顶部 / 行级 / 池行 / Tab / Drawer / 紧凑形态 + 启发式形态如「X弹窗」「X字段」「顶部X」「行级X」等）。
 
@@ -337,36 +337,13 @@ done
 
 3.6. **PRD §三 名词解释 = 本次工作临时词典**——本次工作范围内引入的新业务术语 / 角色由 AI 写 §三时落地（见 §三章节写作要求 + `references/few-shots.md` 三、名词解释示例）。
 
-   `prd.md §三` 可作下游评审 / 后续工作的**词典参考**。**不再在本步跑 `term-detector.py` patch `docs/PRODUCT.md`** —— 业务实体稳定后向 PRODUCT.md 业务术语表的沉淀统一收敛到 `/close`。
+   `prd.md §三` 可作下游评审 / 后续工作的**词典参考**。**不再在本步跑 `term-detector.py` patch `docs/PRODUCT.md`** —— 业务实体稳定后向 PRODUCT.md 业务术语表的沉淀统一收敛到 `/pmai-close`。
 
-3.7. **decision 事件 append（关键产品决策留痕）**——PRD 成文后，为每条「关键产品决策」（PRD §四里的决策结果）append 一条 `decision` 事件到当前工作事件流：
+3.7. **关键产品决策回填**——PRD 成文后，检查 §四里的关键产品决策是否已经存在于模块 `decisions.md` 或项目级 `PRODUCT-RULES.md`。
 
-   ```bash
-   python3 "$PMAI_HOME/scripts/req-events.py" append "$ACTIVE_REQ_DIR" \
-     --type decision --source prd-writing \
-     --decision "<决策一句话标题>" \
-     --decided-by <pm-explicit|ai-inferred> \
-     --prd-anchor "<§四里哪条结果>" \
-     --chosen "<选定方案>" \
-     --alternatives "<备选方案 A>" --alternatives "<备选方案 B>" \
-     --rationale "<为什么这么选>"
-   ```
-
-   - **结果留 PRD**：决策的**结果**写在 PRD §四（需求分析）；决策的**备选 + 理由**进 `decision` 事件 —— PRD 只装结果，不堆备选清单。决策的口径优先**回填自模块 `decisions.md`**，不在沉淀阶段新拍。
-   - 每条关键产品决策一条 `decision` 事件；`--alternatives` 可重复传多个。
-   - **standalone 独立 PRD 模式**：不绑 req、无 `$ACTIVE_REQ_DIR`，跳过本步骤。
-   - 此步只在 PRD 含明确的关键产品决策时跑；PRD 无需决策（纯回溯 / 简单功能）时 silent skip。
-
-   **`--decided-by` 判定标准**（必填，缺则脚本报错 exit 1）：
-
-   - `pm-explicit` —— PM 在 `/design` 结构决策门、模块 `decisions.md` 或沉淀阶段 PRD 写作进行中的 askuser 里**主动开口**给出过该决策的明确指示。判定时去 `req-events.jsonl` / `decisions.md` / `discussion.md` PM 反馈段 grep 关键词验证 —— **找得到原话才能标 `pm-explicit`**。
-   - `ai-inferred` —— AI 在 PRD 写作中**自己推断**的选择，PM 未单独确认过。即便 rationale 写得头头是道、即便选项看起来"显然只能这么选"，只要事件流 / 上游文档里没 PM 原话，一律标 `ai-inferred`。
-   - **拿不准 → `ai-inferred`**：这是**安全默认**。错标 `pm-explicit` 会把 AI 自拍说成"PM 拍的"污染下游（status-view / 后续文案）；错标 `ai-inferred` 顶多让沉淀确认门多渲染一行让 PM 单挑反对，无副作用。
-   - **反模式**：「这个决策看起来很合理 / 这条 rationale 我推得很清楚 / PM 不可能反对」**不构成** `pm-explicit` 理由；只有"PM 真的说过"才算。
-
-   > 此步吸收 req-events decision 事件机制。`req-events.py` 已存在；事件落 `$ACTIVE_REQ_DIR/req-events.jsonl`（被 git 跟踪、随当前工作分支留存，close 后仍可查）。
-   >
-   > `decided-by` 必填，修复「AI 自拍决策混入 PM 决策摘要」问题。`/pmai-next` 沉淀一步的定稿确认门按 `decided_by` 分两栏渲染：PM 拍段默认通过、AI 推断段允许 PM 单挑反对。
+   - 已存在：PRD 只引用结果，不重复写一套备选和理由。
+   - 不存在：停下来让 PM 确认是否回填到模块 `decisions.md` 或 `PRODUCT-RULES.md`；未确认前不落盘。
+   - standalone 独立 PRD 模式：没有绑定模块时，只在 PRD 内保留决策结果，不回填项目基线。
 
 3.8. **候选跨功能产品规则 promote（②）**——写 PRD 过程中，若规划期讨论里浮出**全项目跨功能产品行为规则**（不是某次实现反馈、而是「产品在 X 情况下应 / 不应 Y」、适用范围超出本次工作单个模块的规则），PM-selective promote 到 `docs/PRODUCT-RULES.md`：
 
@@ -378,23 +355,23 @@ done
 
    > 补「规划期发现的规则无沉淀路径」缺口：prd-writing 捞范围确认 / 沉淀讨论里的跨功能规则候选。
 
-## 沉淀收尾 — 交回 /pmai-next
+## 沉淀收尾 — 交回 /pmai-status
 
-沉淀按需模式下，PRD 写完（含 3.5 lint / 3.7 decision append）后，**不自带最终确认门** —— 控制权交回 `/pmai-next`，由其沉淀一步的**单一 PM 定稿确认门**完成 PRD 定稿。
+沉淀按需模式下，PRD 写完（含 3.5 lint / 3.7 decision append）后，**不自带最终确认门** —— 控制权交回 `/pmai-status`，由其沉淀一步的**单一 PM 定稿确认门**完成 PRD 定稿。
 
-交回时向 `/pmai-next` 提供：
-- PRD 产物路径 `$ACTIVE_REQ_DIR/prd.md`
-- **本次新增 decision 摘要**：列出 3.7 步 append 的每条 `decision`（标题 / 选定 / 备选 / 理由），供 `/pmai-next` 在定稿确认门里一并渲染给 PM —— PM 确认 PRD 时同时确认这些决策记录。**不新增独立的 decision 确认门**，并进沉淀一步已有的单一定稿确认门。
+交回时向 `/pmai-status` 提供：
+- PRD 产物路径 `$ACTIVE_WORK_DIR/prd.md`
+- **本次新增 decision 摘要**：列出 3.7 步 append 的每条 `decision`（标题 / 选定 / 备选 / 理由），供 `/pmai-status` 在定稿确认门里一并渲染给 PM —— PM 确认 PRD 时同时确认这些决策记录。**不新增独立的 decision 确认门**，并进沉淀一步已有的单一定稿确认门。
 
 反向 PRD 是**沉淀产物**，定稿后随当前工作留档；它已是基于最终原型反向合成的真系统口径方案，本身不再做二次反向对齐。
 
-> standalone 模式（入口 B）：写完 PRD 后在对话中请 PM 确认、确认后写入文件 → 跑下方「步骤 7」PRD 收口 symlink → 结束；无 `/pmai-next` 衔接。
+> standalone 模式（入口 B）：写完 PRD 后在对话中请 PM 确认、确认后写入文件 → 跑下方「步骤 7」PRD 收口 symlink → 结束；无 `/pmai-status` 衔接。
 
 ### 步骤 7 · standalone 独立 PRD 收口 symlink（仅 standalone「独立」分支）
 
-**仅在** standalone 入口 B 的「独立」（跨模块评审 PRD）分支跑；当前工作 / 补差分支跳过；沉淀按需入口 A 跳过（A 走 `/close`，由 `scripts/close-req.sh` 自动建 `docs/prds/<模块>.md` symlink）。
+**仅在** standalone 入口 B 的「独立」（跨模块评审 PRD）分支跑；当前工作 / 补差分支跳过；沉淀按需入口 A 跳过（A 走 `/pmai-close`，由 `scripts/close-work.sh` 自动建 `docs/prds/<模块>.md` symlink）。
 
-**目的**：让 PM 在 `docs/prds/独立/` 一处看到所有独立 PRD，和 `/close` 建的 `docs/prds/<模块>.md`、`/pmai-cancel` 建的 `docs/prds/废弃/` 三类来源统一收口。
+**目的**：让 PM 在 `docs/prds/独立/` 一处看到所有独立 PRD，和 `/pmai-close` 建的 `docs/prds/<模块>.md`、`/pmai-cancel` 建的 `docs/prds/废弃/` 三类来源统一收口。
 
 **条件**：PRD 真正写入 `docs/独立PRD/<slug>.md` 默认路径才建 symlink；PM 指定其他自定义路径（如 `docs/某专题/<slug>.md`）不动 —— 自定义路径已表达 PM 不想走默认收口。
 
@@ -523,7 +500,7 @@ ASCII 原型示例见 `references/few-shots.md`「§六 原型节 ASCII 示例�
 
 - ...
 
-验收点必须可测量、可执行；避免"系统应稳定运行""用户体验良好"等无法测的描述。验收标准是 `/build` 行为审与 `/close` 验收的依据 —— 写得越可测，下游越好用。
+验收点必须可测量、可执行；避免"系统应稳定运行""用户体验良好"等无法测的描述。验收标准是 `/pmai-build` 行为审与 `/pmai-close` 验收的依据 —— 写得越可测，下游越好用。
 
 ### 八、非功能性需求
 
@@ -711,11 +688,11 @@ ASCII 原型示例见 `references/few-shots.md`「§六 原型节 ASCII 示例�
 
 ## 沉淀边界：反向需求方案定稿
 
-- 允许产出：`$ACTIVE_REQ_DIR/prd.md`（沉淀按需模式）/ PM 指定路径（standalone 独立 PRD 模式）
-- 允许动作：基于模块 `spec.md` / `decisions.md` + 最终 `prototype/` + `docs/PRODUCT-STATE.md` + `docs/PRODUCT.md` + `docs/PRODUCT-RULES.md` 反向合成当前工作真系统口径 PRD；§三 名词解释承担本次工作临时词典职责（业务词向 PRODUCT.md 业务术语表的沉淀收敛到 `/close`）；为关键产品决策 append `decision` 事件
+- 允许产出：`$ACTIVE_WORK_DIR/prd.md`（沉淀按需模式）/ PM 指定路径（standalone 独立 PRD 模式）
+- 允许动作：基于模块 `spec.md` / `decisions.md` + 最终 `prototype/` + `docs/PRODUCT-STATE.md` + `docs/PRODUCT.md` + `docs/PRODUCT-RULES.md` 反向合成当前工作真系统口径 PRD；§三 名词解释承担本次工作临时词典职责（业务词向 PRODUCT.md 业务术语表的沉淀收敛到 `/pmai-close`）；为关键产品决策 append `decision` 事件
 - 禁止顺手推进：不要在写 PRD 的同时反向改模块 `spec.md` 的范围边界；**不从 mock 原型的临时实现反推业务规则**（真系统口径铁律）；本 skill 不动 build / 复审产物
 - 退出条件：
-  - **沉淀按需模式**：PRD 写完 + lint 通过 + decision 事件 append 完 → 控制权交回 `/pmai-next`，由其沉淀一步的单一定稿确认门完成 PRD 定稿
+  - **沉淀按需模式**：PRD 写完 + lint 通过 + decision 事件 append 完 → 控制权交回 `/pmai-status`，由其沉淀一步的单一定稿确认门完成 PRD 定稿
   - **standalone 模式**：PRD 经 PM 在对话中确认并写入文件
 
 ## PRD 质检 prompt（可选）
@@ -724,7 +701,7 @@ prd-writing 产出初稿后，定稿前可运行以下 prompt 做一轮质检：
 
 ```
 你现在是一个资深产品总监，正在用挑剔的眼光审查一份当前工作反向 PRD 草稿。
-读取 $ACTIVE_REQ_DIR/prd.md、模块 spec.md 和 decisions.md（功能口径 WHAT + 决策 WHY），然后找出：
+读取 $ACTIVE_WORK_DIR/prd.md、模块 spec.md 和 decisions.md（功能口径 WHAT + 决策 WHY），然后找出：
 
 1. 逻辑矛盾或自相冲突的地方
 2. 遗漏的边界情况（error state、empty state、权限边界、异常流）

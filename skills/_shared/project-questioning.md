@@ -22,13 +22,13 @@
    - 新方向：从产品定位 + 用户画像重起
    - brownfield 接入：先读 `docs/CODEBASE-AUDIT.md` 作实况语境，5 节顺序不变
 3. **跑提问 + 闸门 + 写作 + 确认门**（按 §2-§7 走）
-4. **PM 定稿后**：调用方按自己语境继续（init-project 进阶段 D / codebase-audit 给 ▶ Next Up 引到 `/design` / strategy skill 退出）
+4. **PM 定稿后**：调用方按自己语境继续（init-project 进阶段 D / codebase-audit 给 ▶ Next Up 引到 `/pmai-design` / strategy skill 退出）
 
 ---
 
 ## §2 提问纪律
 
-借用 `req-questioning`（探索段诊断内核）的提问方法 / 纪律：
+借用 `module-questioning`（探索段诊断内核）的提问方法 / 纪律：
 
 - **分批提问**：一次问一组相关问题，不一口气甩全部
 - **追问**：PM 答得模糊就追问到能落笔，不拿模糊回答硬写
@@ -114,13 +114,13 @@ python3 "$PMAI_HOME/scripts/check-open-questions.py" \
 | 状态 | 含义 |
 |---|---|
 | `todo` | 讨论过 / 提过想做，还没开始 |
-| `doing` | 正在做（已进入 `/design` 或 `/build`） |
+| `doing` | 正在做（已进入 `/pmai-design` 或 `/pmai-build`） |
 | `done` | 做完了（req 已 close） |
 
 字段：`req-id`（起 req 后回填，未起前留空）/ 标题 / 状态。**没有「排序」列**——待办池不排顺序。
 
 **写 TODO 的硬规则**：
-1. **只记 PM 主动提过 / 讨论过想做的事**——AI 不从代码、竞品、`requirements/closed/` 反推填充，池子里只有 PM 真说过想做的。
+1. **只记 PM 主动提过 / 讨论过想做的事**——AI 不从代码、竞品、`requirements/pmai-closed/` 反推填充，池子里只有 PM 真说过想做的。
 2. **不替 PM 排顺序**——条目无序，PM 要做时自己挑。
 3. PM 没给具体待办 → TODO 留空（一行占位即可），不替 PM 脑补队列。
 
@@ -240,7 +240,7 @@ git commit -m "docs: project direction settled"
 3. agent @读 本文件
 4. 按 `/pmai-strategy` SKILL.md 段 0 表"提问顺序"列**场景特定顺序**问 PM：
    - A 重做：痛点诊断 → 产品定位 → 用户画像 → 业务术语 → 刷新 TODO 待办池
-   - B 产品路线规划：问 PM 现在想做啥记进 TODO 待办池（**AI 不扫 `requirements/closed/` 反推历史、不排序**）→ 业务术语增量（跳过定位 / 用户 / 技术栈）
+   - B 产品路线规划：问 PM 现在想做啥记进 TODO 待办池（**AI 不扫 `requirements/pmai-closed/` 反推历史、不排序**）→ 业务术语增量（跳过定位 / 用户 / 技术栈）
    - C 新方向：新方向 vs 现 PRODUCT 差异 → 产品定位 → 用户画像 → 刷新 TODO
    - D 接入方向恢复：全文读现状档 → 产品定位（codebase 反推）→ 用户画像 → 技术栈（codebase 抄）→ 业务术语 → 刷新 TODO
 5. §4 未决问题闸门

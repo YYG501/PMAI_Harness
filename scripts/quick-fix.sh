@@ -66,9 +66,9 @@ current_branch() {
 
 # 设全局 BASE_BRANCH + BASE_WORKTREE，决定 quick-fix 改的目标分支与合并工作树。
 # 三种合法启动位置：
-#   1) 主仓根 + branch=main          → BASE_BRANCH=main、BASE_WORKTREE=repo_root（main mode）
-#   2) req-* worktree（任意分支）    → BASE_BRANCH=该 worktree 当前分支、BASE_WORKTREE=该 worktree（req mode）
-#   3) task-* worktree               → 拒绝（历史 task worktree，不再作为当前入口）
+#   1) 主仓根 + branch=main           → BASE_BRANCH=main、BASE_WORKTREE=repo_root（main mode）
+#   2) build-* worktree（任意分支）   → BASE_BRANCH=该 worktree 当前分支、BASE_WORKTREE=该 worktree（build mode）
+#   3) task-* worktree                → 拒绝（历史 task worktree，不再作为当前入口）
 ensure_quickfix_root() {
   local repo_root="$1"
   local current_root branch
@@ -96,12 +96,12 @@ ensure_quickfix_root() {
 
   # 在 worktree 内（current_root != repo_root）
   case "$branch" in
-    req-*)
+    build-*)
       BASE_BRANCH="$branch"
       BASE_WORKTREE="$current_root"
       ;;
     task-*)
-      echo "错误：/pmai-quick-fix 不能在历史 task worktree 内启动。请回 main 或 req-* worktree。" >&2
+      echo "错误：/pmai-quick-fix 不能在历史 task worktree 内启动。请回 main 或 build-* worktree。" >&2
       exit 1
       ;;
     main)
@@ -109,7 +109,7 @@ ensure_quickfix_root() {
       exit 1
       ;;
     *)
-      echo "错误：/pmai-quick-fix 只能从 main 分支或 req-* worktree 启动，当前分支：$branch" >&2
+      echo "错误：/pmai-quick-fix 只能从 main 分支或 build-* worktree 启动，当前分支：$branch" >&2
       exit 1
       ;;
   esac
@@ -157,7 +157,7 @@ is_redline_path() {
   local file="$1"
   case "$file" in
     docs/modules/*/tasks/*.md) return 0 ;;
-    docs/modules/*/.req-meta.json) return 0 ;;
+    docs/modules/*/.work-meta.json) return 0 ;;
     .claude/scripts|$HOME/.pmai/scripts/*) return 0 ;;
     .claude/skills|.claude/skills/*) return 0 ;;
     .claude/settings.json) return 0 ;;
@@ -204,10 +204,10 @@ check_preflight_redlines() {
   fi
 }
 
-warn_active_reqs() {
+warn_active_work() {
   local repo_root="$1"
   local found=()
-  local meta req_dir status id
+  local meta work_dir status id
   shopt -s nullglob
   # 主仓 + 所有 attached 的 req worktree（不假设在 .worktrees/，问 git）
   local _wt_paths=("$repo_root")
@@ -217,8 +217,8 @@ warn_active_reqs() {
   local _wt
   for _wt in "${_wt_paths[@]}"; do
     [ -d "$_wt" ] || continue
-    # 真相源 = docs/modules/<模块>/.req-meta.json。
-    for meta in "$_wt"/docs/modules/*/.req-meta.json; do
+    # 真相源 = docs/modules/<模块>/.work-meta.json。
+    for meta in "$_wt"/docs/modules/*/.work-meta.json; do
       [ -f "$meta" ] || continue
       status=$(python3 - "$meta" <<'PY' 2>/dev/null || true
 import json, sys
@@ -231,8 +231,8 @@ import json, sys
 print(json.load(open(sys.argv[1], encoding="utf-8")).get("id", "unknown"))
 PY
 )
-        req_dir=$(dirname "$meta")
-        found+=("$id ($req_dir)")
+        work_dir=$(dirname "$meta")
+        found+=("$id ($work_dir)")
       fi
     done
   done
@@ -553,7 +553,7 @@ cmd_main() {
   # 设置 BASE_BRANCH / BASE_WORKTREE（全局）
   ensure_quickfix_root "$repo_root"
   check_preflight_redlines "$BASE_WORKTREE"
-  warn_active_reqs "$repo_root"
+  warn_active_work "$repo_root"
   warn_leftovers "$repo_root"
 
   local base_head ts branch worktree worktree_parent

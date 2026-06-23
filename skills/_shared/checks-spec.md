@@ -51,5 +51,5 @@ python3 "$PMAI_HOME/scripts/checks-diff.py" \
 
 ## 边界
 
-- 引擎只查**结构 / 文案 / 按钮态**（机器可判的）。**视觉细则**（sticky / 横滚 / 禁 native `alert`·`confirm` 用包装组件 / 留白密度 / 四态覆盖的样子）照 `docs/DESIGN.md` + `工程结构约束-*.md`，归视觉门（`/design-review`），不在本引擎。
+- 引擎只查**结构 / 文案 / 按钮态**（机器可判的）。**视觉细则**（sticky / 横滚 / 禁 native `alert`·`confirm` 用包装组件 / 留白密度 / 四态覆盖的样子）照 `docs/DESIGN.md` + `工程结构约束-*.md`，归视觉门（`/pmai-design-review`），不在本引擎。
 - `must_cover_states` 引擎只提醒「去演示确认」，不自动判（状态切换是行为，归行为审 `/browse`）。

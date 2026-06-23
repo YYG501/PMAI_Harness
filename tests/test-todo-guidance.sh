@@ -4,9 +4,9 @@
 # 验证 TODO「PM 待办池」语义引导覆盖到位（PM 反馈：AI 不该替我反推填充 / 排序）：
 #   T1: _shared/project-questioning.md §5.2 是 TODO.md（不是 ROADMAP.md），含"待办池"语义
 #   T2: §5.2 含三态 todo / doing / done（无序池三态，不是 planned/active/done）
-#   T3: §5.2 明写 AI 不反推填充（不从代码/竞品/requirements/closed 反推）—— 反向断言
+#   T3: §5.2 明写 AI 不反推填充（不从代码/竞品/requirements/pmai-closed 反推）—— 反向断言
 #   T4: §5.2 不再含"排序"列 / "历史 + 未来一张表" / "唯一规划视图"旧反模式
-#   T5: strategy B 场景表格行不再让 AI 扫 requirements/closed 反推 done 行
+#   T5: strategy B 场景表格行不再让 AI 扫 requirements/pmai-closed 反推 done 行
 #
 # 背景：PM 反馈 brownfield 方向讨论时 AI 从代码/竞品反推出一串 req 还替 PM 排好顺序，
 # 是 PM 没要的。ROADMAP「历史+未来一张表 / 排序 / 扫 closed 补 done 行」整套被砍，
@@ -91,8 +91,8 @@ test_b_scenario_no_scan_closed() {
     return
   fi
   # 反向断言：B 场景行不该再让 AI 扫 closed 写 done 行（旧反模式：「先扫 ... 作 done 行回填」）。
-  # 注意：行内允许出现「AI 不扫 requirements/closed 反推历史」这种否定指令，
-  # 所以只拦旧的「done 行回填 / 写 done 行」正向措辞，不裸匹配 requirements/closed。
+  # 注意：行内允许出现「AI 不扫 requirements/pmai-closed 反推历史」这种否定指令，
+  # 所以只拦旧的「done 行回填 / 写 done 行」正向措辞，不裸匹配 requirements/pmai-closed。
   if echo "$row" | grep -qE 'done 行(回填|)|作 done 行|写 done 行'; then
     _fail "B 场景表格行仍让 AI 反推 done 行（旧 ROADMAP 反模式，应已删）"
     return

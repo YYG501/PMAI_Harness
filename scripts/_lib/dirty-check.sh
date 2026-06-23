@@ -10,7 +10,7 @@
 #   auto_commit_docs <worktree> <message> <pathspec...>  # 把 pathspec 范围内的改动 git add + commit；零改动时静默跳过
 #
 # 不变式：I-DC1（pre-dispatch worktree clean）—— 任何把文档从 working tree fork
-# 给下游消费（git worktree add / req-transition）的边界，必须先确保对应文档
+# 给下游消费（git worktree add / build 派发）的边界，必须先确保对应文档
 # 不在 working tree 飘着。"事后 commit 救不回延迟落盘"原则同样适用文档边界。
 
 # 内部：在指定 worktree 下解析 dirty 文件（含 staged / unstaged / untracked）。

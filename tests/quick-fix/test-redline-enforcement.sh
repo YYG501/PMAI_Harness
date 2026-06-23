@@ -29,7 +29,7 @@ test_task_file_redline() {
 }
 
 test_meta_redline() {
-  _assert_redline_blocks "scenario 12 blocks req meta" "mkdir -p docs/modules/req-001 && echo '{}' > docs/modules/req-001/.req-meta.json"
+  _assert_redline_blocks "scenario 12 blocks req meta" "mkdir -p docs/modules/req-001 && echo '{}' > docs/modules/req-001/.work-meta.json"
 }
 
 test_claude_scripts_redline() {

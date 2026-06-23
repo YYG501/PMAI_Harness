@@ -8,8 +8,8 @@
 
 - `CLAUDE.md` 里写的“驱动 Claude”，在 Codex 会话中等价理解为“驱动 Codex”。
 - `/pmai-*` 是 PMAI 的用户命令名。Codex 没有 Claude Code slash skill runtime 时，按对应 `~/.pmai/skills/<command-without-pmai-prefix>/SKILL.md` 的步骤执行。
-- 机器状态推进必须走 `~/.pmai/scripts/` 下的脚本，不要直接改 `.req-meta.json:stage`。
-- build 阶段的实现改动应落在当前工作 worktree 或明确允许的轻量入口内，不要绕过分支/阶段护栏。
+- 运行态只认 `build-*` 工作分支；不要创建 `req-*` 或通用 `work-*` 分支。
+- build 阶段的实现改动应落在当前工作 worktree 或明确允许的轻量入口内，不要绕过分支护栏。
 
 ## Startup
 
@@ -17,7 +17,7 @@
 
 1. 读 `CLAUDE.md`，把其中的 Claude host 名称按上面的 Host Mapping 映射到 Codex。
 2. 运行 `source $HOME/.pmai/scripts/skill-preamble.sh` 检测 PMAI_HOME、当前 worktree 和 active work。
-3. 按 `/pmai-next` 等价流程判断当前下一步；没有 active work 时，引导 PM 运行 `/design`。
+3. 按 `/pmai-status` 等价流程判断当前下一步；没有 active work 时，引导 PM 运行 `/pmai-design`。
 
 ## Command Resolution
 
@@ -31,7 +31,7 @@ Codex 收到 PM 输入的 `/pmai-xxx` 时：
 ## Runtime Fallback
 
 - AskUserQuestion 不可用时，输出编号列表并要求 PM 回复编号或自由文本；没有明确回答前停止推进。
-- 没拿到 PM 答案前，不能写 PM 视图文件、commit 或推进 req stage。
+- 没拿到 PM 答案前，不能写 PM 视图文件、commit 或收尾当前工作。
 - Claude Code subagent 不可用时，不能用临时 ad hoc prompt 替代标明“必须完整执行”的 skill；应说明 runtime 限制并请求 PM 选择可用路径。
 - review / qa / design-review 类工具仍由 PM 主动触发；Codex 主控只列推荐清单和记录 PM 明确报告的结果。
 
@@ -39,5 +39,5 @@ Codex 收到 PM 输入的 `/pmai-xxx` 时：
 
 - 不要改 `CLAUDE.md` 的框架规则区，除非 PM 明确要求更新项目规则。
 - 不要把 `~/.pmai/skills`、`~/.pmai/scripts` 或其他 framework 资产复制进消费仓。
-- 不要绕过 `req-transition.py`、`check-branch.sh` 直接改 req stage。
-- 派发外部执行器前，build/req worktree 必须干净；dirty 时先交还 PM 决策。
+- 不要绕过 `check-branch.sh` 在 main 上直接改业务代码。
+- 派发外部执行器前，build worktree 必须干净；dirty 时先交还 PM 决策。

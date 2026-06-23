@@ -22,12 +22,12 @@ from _lib.state import (
     parse_status_from_text,
     read_section,
     has_meaningful_content,
-    read_req_meta,
+    read_work_meta,
     read_task_meta,
     read_task_status,
-    list_active_reqs,
-    list_closed_reqs,
-    list_cancelled_reqs,
+    list_active_work,
+    list_closed_work,
+    list_cancelled_work,
     get_overall_state,
     StateReadError,
 )
@@ -420,7 +420,7 @@ class TestCLIExitCodes(unittest.TestCase):
 # ============================================================================
 
 
-REQ_META_OK = {
+WORK_META_OK = {
     "id": "req-001", "name": "demo", "branch": "req-001-demo",
     "stage": 6, "status": "active",
 }
@@ -430,45 +430,45 @@ def _make_req(repo: Path, req_id: str, status: str = "active",
               stage: int = 6) -> Path:
     """Create req fixture under repo/docs/modules/<req_id>/（批 2 单读真相源）。
 
-    批 2 起真相源 = docs/modules/<模块>/.req-meta.json。这里模块目录名直接用
+    批 2 起真相源 = docs/modules/<模块>/.work-meta.json。这里模块目录名直接用
     req_id（测试不关心模块名派生，只验扫描/聚合/去重逻辑）。
     """
-    req_dir = repo / "docs" / "modules" / req_id
-    (req_dir / "tasks").mkdir(parents=True)
-    meta = {**REQ_META_OK, "id": req_id, "name": req_id,
+    work_dir = repo / "docs" / "modules" / req_id
+    (work_dir / "tasks").mkdir(parents=True)
+    meta = {**WORK_META_OK, "id": req_id, "name": req_id,
             "branch": f"{req_id}-demo", "stage": stage, "status": status}
-    (req_dir / ".req-meta.json").write_text(
+    (work_dir / ".work-meta.json").write_text(
         json.dumps(meta, ensure_ascii=False, indent=2), encoding="utf-8")
-    return req_dir
+    return work_dir
 
 
 class TestReadReqMeta(unittest.TestCase):
     def test_strict_missing_raises(self):
         with self.assertRaises(StateReadError):
-            read_req_meta(Path("/nonexistent/req"), strict=True)
+            read_work_meta(Path("/nonexistent/req"), strict=True)
 
     def test_tolerant_missing_returns_none(self):
-        self.assertIsNone(read_req_meta(Path("/nonexistent/req"), strict=False))
+        self.assertIsNone(read_work_meta(Path("/nonexistent/req"), strict=False))
 
     def test_corrupt_strict_raises(self):
         with tempfile.TemporaryDirectory() as d:
             req = Path(d) / "req-001"
             req.mkdir()
-            (req / ".req-meta.json").write_text("{not json", encoding="utf-8")
+            (req / ".work-meta.json").write_text("{not json", encoding="utf-8")
             with self.assertRaises(StateReadError):
-                read_req_meta(req, strict=True)
+                read_work_meta(req, strict=True)
 
     def test_corrupt_tolerant_returns_none(self):
         with tempfile.TemporaryDirectory() as d:
             req = Path(d) / "req-001"
             req.mkdir()
-            (req / ".req-meta.json").write_text("{not json", encoding="utf-8")
-            self.assertIsNone(read_req_meta(req, strict=False))
+            (req / ".work-meta.json").write_text("{not json", encoding="utf-8")
+            self.assertIsNone(read_work_meta(req, strict=False))
 
     def test_happy_returns_dict(self):
         with tempfile.TemporaryDirectory() as d:
             req = _make_req(Path(d), "req-001")
-            meta = read_req_meta(req)
+            meta = read_work_meta(req)
             self.assertEqual(meta["id"], "req-001")
             self.assertEqual(meta["status"], "active")
 
@@ -490,8 +490,8 @@ class TestListActiveReqsTolerantAggregation(unittest.TestCase):
             _make_req(repo, "req-001")
             bad = repo / "docs" / "modules" / "坏模块"
             (bad).mkdir(parents=True)
-            (bad / ".req-meta.json").write_text("{not json", encoding="utf-8")
-            out = list_active_reqs(repo)
+            (bad / ".work-meta.json").write_text("{not json", encoding="utf-8")
+            out = list_active_work(repo)
             ids = [i["meta"]["id"] for i in out["items"]]
             self.assertEqual(ids, ["req-001"])
             self.assertEqual(len(out["warnings"]), 1)
@@ -501,9 +501,9 @@ class TestListActiveReqsTolerantAggregation(unittest.TestCase):
             repo = Path(d)
             bad = repo / "docs" / "modules" / "坏模块"
             bad.mkdir(parents=True)
-            (bad / ".req-meta.json").write_text("{not json", encoding="utf-8")
+            (bad / ".work-meta.json").write_text("{not json", encoding="utf-8")
             with self.assertRaises(StateReadError):
-                list_active_reqs(repo, strict=True)
+                list_active_work(repo, strict=True)
 
     def test_skip_non_active_status(self):
         with tempfile.TemporaryDirectory() as d:
@@ -511,7 +511,7 @@ class TestListActiveReqsTolerantAggregation(unittest.TestCase):
             _make_req(repo, "req-001", status="closed")
             _make_req(repo, "req-002", status="active")
             ids = [i["meta"]["id"]
-                   for i in list_active_reqs(repo)["items"]]
+                   for i in list_active_work(repo)["items"]]
             self.assertEqual(ids, ["req-002"])
 
 
@@ -524,9 +524,9 @@ def _git(repo: Path, *args: str) -> str:
 
 
 def _init_repo_with_worktrees(root: Path) -> tuple[Path, Path, Path]:
-    """建一个 main 仓 + 2 个 req worktree（req-001 / req-002）。
+    """建一个 main 仓 + 2 个 build worktree。
 
-    返回 (main, req001_wt, req002_wt)。
+    返回 (main, build001_wt, build002_wt)。
     """
     main = root / "main"
     main.mkdir()
@@ -539,10 +539,10 @@ def _init_repo_with_worktrees(root: Path) -> tuple[Path, Path, Path]:
 
     wt_root = root / "wts"
     wt_root.mkdir()
-    req001_wt = wt_root / "req-001-demo"
-    req002_wt = wt_root / "req-002-other"
-    _git(main, "worktree", "add", "-q", "-b", "req-001-demo", str(req001_wt))
-    _git(main, "worktree", "add", "-q", "-b", "req-002-other", str(req002_wt))
+    req001_wt = wt_root / "build-001-demo"
+    req002_wt = wt_root / "build-002-other"
+    _git(main, "worktree", "add", "-q", "-b", "build-001-demo", str(req001_wt))
+    _git(main, "worktree", "add", "-q", "-b", "build-002-other", str(req002_wt))
 
     # 在两个 req worktree 各放 active req（同名 id 模拟两 req 并行）
     _make_req(req001_wt, "req-001")
@@ -551,29 +551,29 @@ def _init_repo_with_worktrees(root: Path) -> tuple[Path, Path, Path]:
 
 
 class TestListActiveReqsCwdAndWorktrees(unittest.TestCase):
-    """v3 §1 #2 清单显式覆盖: multi active / req worktree cwd / 跨 worktree 去重。"""
+    """覆盖 multi active / build worktree cwd / 跨 worktree 去重。"""
 
     def test_multi_active_across_worktrees_deduped(self):
         with tempfile.TemporaryDirectory() as d:
             main, _r1, _t1 = _init_repo_with_worktrees(Path(d))
-            out = list_active_reqs(main)
+            out = list_active_work(main)
             ids = sorted(i["meta"]["id"] for i in out["items"])
             self.assertEqual(ids, ["req-001", "req-002"])
 
     def test_cwd_in_req_worktree_returns_only_that_req(self):
         with tempfile.TemporaryDirectory() as d:
             main, r1, _t1 = _init_repo_with_worktrees(Path(d))
-            out = list_active_reqs(main, cwd=r1)
+            out = list_active_work(main, cwd=r1)
             ids = [i["meta"]["id"] for i in out["items"]]
-            self.assertEqual(ids, ["req-001"])  # cwd 唯一定 req，不要被 req-002 干扰
+            self.assertEqual(ids, ["req-001"])  # cwd 唯一定当前工作，不要被另一 worktree 干扰
 
     def test_main_repo_active_dedupes_against_worktree(self):
-        """主仓 + req worktree 都暴露同 id 时，basename 去重只保留一份。"""
+        """主仓 + build worktree 都暴露同 id 时，basename 去重只保留一份。"""
         with tempfile.TemporaryDirectory() as d:
             main, r1, _t1 = _init_repo_with_worktrees(Path(d))
             # main 也放一份 req-001（实际场景：用户先在 main 写 brief 然后 fork worktree）
             _make_req(main, "req-001")
-            out = list_active_reqs(main)
+            out = list_active_work(main)
             ids_count = {i["meta"]["id"]: 0 for i in out["items"]}
             for i in out["items"]:
                 ids_count[i["meta"]["id"]] += 1
@@ -586,30 +586,30 @@ class TestGetOverallState(unittest.TestCase):
             repo = Path(d)
             _make_req(repo, "req-001")
             state = get_overall_state(repo)
-            self.assertEqual(len(state["active_reqs"]), 1)
-            r = state["active_reqs"][0]
+            self.assertEqual(len(state["active_work"]), 1)
+            r = state["active_work"][0]
             self.assertEqual(r["meta"]["id"], "req-001")
-            self.assertEqual(set(r.keys()), {"req_dir", "meta"})
+            self.assertEqual(set(r.keys()), {"work_dir", "meta"})
 
     def test_tolerant_no_active_returns_empty(self):
         with tempfile.TemporaryDirectory() as d:
             state = get_overall_state(Path(d))
-            self.assertEqual(state["active_reqs"], [])
+            self.assertEqual(state["active_work"], [])
             self.assertEqual(state["warnings"], [])
 
 
 class TestCLINewSubcommands(unittest.TestCase):
-    def test_cli_read_req_meta_strict_missing_exit1(self):
+    def test_cli_read_work_meta_strict_missing_exit1(self):
         result = subprocess.run(
             ["python3", "-m", "_lib.state",
-             "read_req_meta", "/nonexistent/req"],
+             "read_work_meta", "/nonexistent/req"],
             capture_output=True, text=True, env=_CLI_ENV)
         self.assertEqual(result.returncode, 1)
 
-    def test_cli_list_active_reqs_empty_repo(self):
+    def test_cli_list_active_work_empty_repo(self):
         with tempfile.TemporaryDirectory() as d:
             result = subprocess.run(
-                ["python3", "-m", "_lib.state", "list_active_reqs", d],
+                ["python3", "-m", "_lib.state", "list_active_work", d],
                 capture_output=True, text=True, env=_CLI_ENV)
             self.assertEqual(result.returncode, 0)
             payload = json.loads(result.stdout)
@@ -618,31 +618,31 @@ class TestCLINewSubcommands(unittest.TestCase):
 
 
 # ---------------------------------------------------------------------------
-# 真相源单读（lifecycle 迁移批 2）：docs/modules/<模块>/.req-meta.json 是唯一真相源，
+# 真相源单读（lifecycle 迁移批 2）：docs/modules/<模块>/.work-meta.json 是唯一真相源，
 # 旧 requirements/active|closed/ 扫描已删。
 # ---------------------------------------------------------------------------
 
 def _make_module(repo: Path, module: str, req_id: str,
                  status: str = "active", stage: int = 2) -> Path:
-    """在 repo/docs/modules/<module>/ 建一个带 .req-meta.json 的模块（真相源）。"""
+    """在 repo/docs/modules/<module>/ 建一个带 .work-meta.json 的模块（真相源）。"""
     module_dir = repo / "docs" / "modules" / module
     module_dir.mkdir(parents=True)
     meta = {"id": req_id, "name": module, "branch": f"{req_id}-{module}",
             "stage": stage, "status": status}
-    (module_dir / ".req-meta.json").write_text(
+    (module_dir / ".work-meta.json").write_text(
         json.dumps(meta, ensure_ascii=False, indent=2), encoding="utf-8")
     return module_dir
 
 
 class TestModulesSingleRead(unittest.TestCase):
-    """批 2 单读：docs/modules/* 真相源被 list_active/closed/cancelled 读到；
+    """批 2 单读：docs/modules/* 真相源被 list_active/pmai-closed/cancelled 读到；
     旧 requirements/active|closed/ 已不再被扫描。"""
 
     def test_active_read_from_modules_only(self):
         with tempfile.TemporaryDirectory() as d:
             repo = Path(d)
             _make_module(repo, "能力匹配卡", "req-010", status="active")
-            ids = [i["meta"]["id"] for i in list_active_reqs(repo)["items"]]
+            ids = [i["meta"]["id"] for i in list_active_work(repo)["items"]]
             self.assertEqual(ids, ["req-010"])
 
     def test_active_two_modules_listed(self):
@@ -651,7 +651,7 @@ class TestModulesSingleRead(unittest.TestCase):
             repo = Path(d)
             _make_module(repo, "能力匹配卡", "req-001", status="active")
             _make_module(repo, "待办", "req-002", status="active")
-            ids = sorted(i["meta"]["id"] for i in list_active_reqs(repo)["items"])
+            ids = sorted(i["meta"]["id"] for i in list_active_work(repo)["items"])
             self.assertEqual(ids, ["req-001", "req-002"])
 
     def test_legacy_requirements_active_ignored(self):
@@ -661,12 +661,12 @@ class TestModulesSingleRead(unittest.TestCase):
             # 旧布局（应被忽略）
             old = repo / "requirements" / "active" / "req-900-legacy"
             old.mkdir(parents=True)
-            (old / ".req-meta.json").write_text(
+            (old / ".work-meta.json").write_text(
                 json.dumps({"id": "req-900", "name": "legacy", "status": "active"}),
                 encoding="utf-8")
             # 新布局
             _make_module(repo, "新模块", "req-001", status="active")
-            ids = [i["meta"]["id"] for i in list_active_reqs(repo)["items"]]
+            ids = [i["meta"]["id"] for i in list_active_work(repo)["items"]]
             self.assertEqual(ids, ["req-001"])  # req-900 不进列表
 
     def test_modules_skip_non_active_for_active_list(self):
@@ -675,52 +675,52 @@ class TestModulesSingleRead(unittest.TestCase):
             repo = Path(d)
             _make_module(repo, "已收尾", "req-020", status="closed")
             _make_module(repo, "在做", "req-021", status="active")
-            ids = [i["meta"]["id"] for i in list_active_reqs(repo)["items"]]
+            ids = [i["meta"]["id"] for i in list_active_work(repo)["items"]]
             self.assertEqual(ids, ["req-021"])
 
     def test_closed_read_from_modules(self):
         with tempfile.TemporaryDirectory() as d:
             repo = Path(d)
             _make_module(repo, "收尾模块", "req-030", status="closed", stage=4)
-            ids = [i["meta"]["id"] for i in list_closed_reqs(repo)["items"]]
+            ids = [i["meta"]["id"] for i in list_closed_work(repo)["items"]]
             self.assertEqual(ids, ["req-030"])
 
     def test_cancelled_read_from_modules(self):
         with tempfile.TemporaryDirectory() as d:
             repo = Path(d)
             _make_module(repo, "废弃模块", "req-040", status="cancelled")
-            ids = [i["meta"]["id"] for i in list_cancelled_reqs(repo)["items"]]
+            ids = [i["meta"]["id"] for i in list_cancelled_work(repo)["items"]]
             self.assertEqual(ids, ["req-040"])
 
     def test_legacy_requirements_closed_ignored(self):
-        """批 2 后旧 requirements/closed/ 不再被扫描。"""
+        """批 2 后旧 requirements/pmai-closed/ 不再被扫描。"""
         with tempfile.TemporaryDirectory() as d:
             repo = Path(d)
             old = repo / "requirements" / "closed" / "req-001-x"
             old.mkdir(parents=True)
-            (old / ".req-meta.json").write_text(
+            (old / ".work-meta.json").write_text(
                 json.dumps({"id": "req-001", "name": "x", "status": "closed"}),
                 encoding="utf-8")
-            self.assertEqual(list_closed_reqs(repo)["items"], [])
+            self.assertEqual(list_closed_work(repo)["items"], [])
 
     def test_corrupt_module_meta_emits_warning_not_raise(self):
         with tempfile.TemporaryDirectory() as d:
             repo = Path(d)
             bad = repo / "docs" / "modules" / "坏模块"
             bad.mkdir(parents=True)
-            (bad / ".req-meta.json").write_text("{not json", encoding="utf-8")
-            out = list_active_reqs(repo)
+            (bad / ".work-meta.json").write_text("{not json", encoding="utf-8")
+            out = list_active_work(repo)
             self.assertEqual(out["items"], [])
             self.assertEqual(len(out["warnings"]), 1)
 
     def test_module_without_meta_ignored(self):
-        """docs/modules 下纯文档模块（无 .req-meta.json）不算 req。"""
+        """docs/modules 下纯文档模块（无 .work-meta.json）不算 req。"""
         with tempfile.TemporaryDirectory() as d:
             repo = Path(d)
             doc_only = repo / "docs" / "modules" / "纯文档"
             doc_only.mkdir(parents=True)
             (doc_only / "spec.md").write_text("# spec", encoding="utf-8")
-            self.assertEqual(list_active_reqs(repo)["items"], [])
+            self.assertEqual(list_active_work(repo)["items"], [])
 
 
 if __name__ == "__main__":

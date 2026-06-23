@@ -103,7 +103,7 @@ test_status_view_has_banner_only() {
 # -----------------------------------------------------------------
 # T5b: --banner-only 在有 active req 时真渲染 banner，不抛异常
 # 回归 codex 审出的 P1：render_banner_only 读 req_view["dir"]，但状态层
-# 返回的 key 是 req_dir → KeyError，且该行在 try 外不被兜底 → 所有 skill 横幅崩。
+# 返回的 key 是 work_dir → KeyError，且该行在 try 外不被兜底 → 所有 skill 横幅崩。
 # T5 只静态 grep 参数存在，构造不出 active req 跑不到这条路（覆盖缺口）。
 # -----------------------------------------------------------------
 test_banner_only_renders_active_req() {

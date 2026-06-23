@@ -20,7 +20,7 @@ fixture_setup() {
 
   # Create project structure
   # 真相源 = docs/modules/（lifecycle 迁移批 2/3）。批 3 拆掉 requirements/ 桥接后
-  # fixture_setup 不再预建 requirements/active|closed/；仍直接操作老 requirements/closed/
+  # fixture_setup 不再预建 requirements/active|closed/；仍直接操作老 requirements/pmai-closed/
   # 的少数测试（symlink-prd helper unit / sync-prds 兼容老仓）自行 mkdir。
   mkdir -p "$FIXTURE_DIR/.claude"
   mkdir -p "$FIXTURE_DIR/docs/modules"
@@ -63,21 +63,16 @@ fixture_teardown() {
   unset FIXTURE_DIR
 }
 
-# Create a fake active req with meta at given stage
-# Usage: fixture_create_req <req-id> <name> <stage>
-#
-# 真相源（lifecycle 迁移批 2/3）= docs/modules/<分支>/.req-meta.json，state.py 单读、
-# close/cancel 机器（批 3 重写后）也只认这里。批 2 曾双写一份 requirements/active/<分支>/
-# 桥接旧 close/cancel；批 3 把机器改成「清模块 .req-meta」后，requirements/ 半边已拆。
-#   模块目录名 = req 分支名（测试不关心模块名派生）。
-#   返回 docs/modules/<分支> 路径（close/cancel/symlink 测试把它当 <req-dir> 传入）。
+# Create a fake active build work with meta at given stage.
+# Usage: fixture_create_req <work-id> <name> <stage>
+# 返回 docs/modules/<分支> 路径。
 fixture_create_req() {
   local req_id="$1"
   local name="$2"
   local stage="${3:-1}"
-  local req_branch="$req_id-$name"
+  local req_branch="build-$req_id-$name"
 
-  # Create req worktree on new branch (from main)
+  # Create build worktree on new branch (from main)
   (
     cd "$FIXTURE_DIR"
     git worktree add -q -b "$req_branch" ".worktrees/$req_branch" main
@@ -102,7 +97,7 @@ fixture_create_req() {
 }
 EOF
 )
-  printf '%s\n' "$meta_json" > "$module_dir/.req-meta.json"
+  printf '%s\n' "$meta_json" > "$module_dir/.work-meta.json"
 
   # Create minimal discussion.md（模块三件套之一；占位让 git 有内容可 commit）
   echo "# Discussion" > "$module_dir/discussion.md"

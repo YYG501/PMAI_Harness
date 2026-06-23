@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Tests for scripts/gen-mock-board.py
 #
-# 验证 mock 变体看版生成器（设计 docs/设计/分档运行与沉淀层.md §1.3）：
+# 验证 mock 变体看版生成器：
 # - 含 2 活跃/待合并 + 1 已退役 + 1 featured 的样例 manifest → 生成 index.html
 # - 生成的看版含所有变体的路径 / 字段
 # - 路径渲染成可点 <a href>

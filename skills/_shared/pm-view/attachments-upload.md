@@ -2,7 +2,7 @@
 
 > **caller**：主路径 SKILL（next / design / build / prd-writing / close）。  
 > **目标目录**：`docs/inputs/attachments/`。  
-> **状态登记**：当前模块 `docs/modules/<模块>/.req-meta.json:attachments_seen`。
+> **状态登记**：当前模块 `docs/modules/<模块>/.work-meta.json:attachments_seen`。
 
 ## §1 PM 视角 mental model
 
@@ -21,8 +21,8 @@ AI 不确信时，反问一句：`是否要把 <path> 归档进本需求的参�
 
 ### §2.2 禁用例外
 
-1. `prd-writing` standalone 模式不绑 req 时，不写当前模块 `.req-meta.json`；PM 可使用外部引用。
-2. 当前还没有模块目录 / `.req-meta.json` 时，只做轻量预检并记录待处理列表；等模块创建后批量归档。
+1. `prd-writing` standalone 模式不绑 req 时，不写当前模块 `.work-meta.json`；PM 可使用外部引用。
+2. 当前还没有模块目录 / `.work-meta.json` 时，只做轻量预检并记录待处理列表；等模块创建后批量归档。
 3. PM 给的是仓库内已有 source-of-truth 路径时，不复制为附件；直接按来源文件读取。
 
 ### §2.3 AI 触发后的 helper 调用
@@ -32,7 +32,7 @@ from _lib.attachments import copy_attachment
 from pathlib import Path
 
 result = copy_attachment(
-    req_dir=Path(ACTIVE_REQ_DIR),          # docs/modules/<模块>
+    work_dir=Path(ACTIVE_WORK_DIR),          # docs/modules/<模块>
     src=Path("~/Downloads/foo.pdf"),
     stage_prefix="spec",                  # 见 §3
     hint="第 3 页痛点列表",
@@ -47,7 +47,7 @@ helper 内部：
 3. 拒绝超过 50MB 文件。
 4. 同名冲突自动加 `-2` / `-3`。
 5. 复制到 `docs/inputs/attachments/<new_name>`。
-6. 登记 `.req-meta.json:attachments_seen`。
+6. 登记 `.work-meta.json:attachments_seen`。
 
 ### §2.4 chat 输出（PM 视图）
 
@@ -99,7 +99,7 @@ helper 内部：
 ```python
 from _lib.attachments import replace_attachment
 result = replace_attachment(
-    req_dir,
+    work_dir,
     old_filename="docs/inputs/attachments/spec-foo.pdf",
     new_src=Path("~/Downloads/foo-v2.pdf"),
 )
@@ -111,14 +111,14 @@ chat：`已替换 docs/inputs/attachments/spec-foo.pdf 为新内容。继续。`
 
 ```python
 from _lib.attachments import remove_attachment
-remove_attachment(req_dir, filename="docs/inputs/attachments/spec-foo.pdf")
+remove_attachment(work_dir, filename="docs/inputs/attachments/spec-foo.pdf")
 ```
 
 chat：`已删 docs/inputs/attachments/spec-foo.pdf 及对应引用。继续。`
 
 ## §5 引用 section 渲染规则
 
-`## 📎 参考材料` section 仅作 PM 可见展示，状态真相源是 `.req-meta.json:attachments_seen`。
+`## 📎 参考材料` section 仅作 PM 可见展示，状态真相源是 `.work-meta.json:attachments_seen`。
 
 ```markdown
 ## 📎 参考材料
@@ -143,7 +143,7 @@ from _lib.attachments import is_seen, register_attachment
 
 for entry in os.scandir(repo_root / "docs" / "inputs" / "attachments"):
     rel = f"docs/inputs/attachments/{entry.name}"
-    if entry.is_file() and not is_seen(req_dir, rel):
+    if entry.is_file() and not is_seen(work_dir, rel):
         # 问 PM "要不要纳入？说明重点"
         ...
 ```
@@ -155,7 +155,7 @@ for entry in os.scandir(repo_root / "docs" / "inputs" / "attachments"):
 | 源路径不可读 | `FileNotFoundError` | chat 报错 + 让 PM 重提 |
 | 命中 denylist | `SensitivePathError` | chat 报错 + 让 PM 确认 / 换路径 |
 | 超 50MB | `FileSizeError` | chat 报错 + 建议外部引用 / 拆小 |
-| `.req-meta.json` 不存在 | `StateReadError` | chat 报错 + 让 PM 在当前工作流程内重提 |
+| `.work-meta.json` 不存在 | `StateReadError` | chat 报错 + 让 PM 在当前工作流程内重提 |
 | 磁盘满 / 权限 | `OSError` | chat 报错 + 让 PM 处理 |
 
 所有失败必须 fail-loud，不静默吞。

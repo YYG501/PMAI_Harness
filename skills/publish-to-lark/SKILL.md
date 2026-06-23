@@ -181,7 +181,7 @@ URL: https://xxx.feishu.cn/docx/doxcnxxxxxx
 prd-writing 在沉淀阶段结束模板加：
 
 ```markdown
-D) 发布到飞书—— 调 /pmai-publish-to-lark $ACTIVE_REQ_DIR/prd.md --type prd
+D) 发布到飞书—— 调 /pmai-publish-to-lark $ACTIVE_WORK_DIR/prd.md --type prd
 ```
 
 future skill（analysis 等）类似集成。
