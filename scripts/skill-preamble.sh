@@ -207,11 +207,11 @@ echo "REPO_ROOT: $REPO_ROOT"
 echo "BRANCH: $BRANCH"
 echo "WORKTREE_TYPE: $WORKTREE_TYPE"
 if [ "$ACTIVE_WORK_COUNT" -eq 1 ]; then
-  echo "ACTIVE_WORK: $ACTIVE_WORK (stage $ACTIVE_WORK_STAGE)"
+  echo "ACTIVE_WORK: $ACTIVE_WORK (当前进度 $ACTIVE_WORK_STAGE)"
 elif [ "$ACTIVE_WORK_COUNT" -gt 1 ]; then
   echo "ACTIVE_WORKS ($ACTIVE_WORK_COUNT 个并行)："
   for _i in "${!_ACTIVE_WORK_IDS[@]}"; do
-    echo "  - ${_ACTIVE_WORK_IDS[$_i]} (stage ${_ACTIVE_WORK_STAGES[$_i]})  →  ${_ACTIVE_WORK_DIRS[$_i]}"
+    echo "  - ${_ACTIVE_WORK_IDS[$_i]} (当前进度 ${_ACTIVE_WORK_STAGES[$_i]})  →  ${_ACTIVE_WORK_DIRS[$_i]}"
   done
   echo "提示：当前在主仓视角，多 active work 并行 — 操作具体工作请先 cd 进对应 worktree。"
 fi

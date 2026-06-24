@@ -12,7 +12,7 @@
 - 项目描述 -> 产品定位（提示 PM 是否合并）
 - 技术栈: 保留
 - 约束条件 -> 非空时提示 PM 归并到「产品定位」末段，原段保留打 TODO
-- 已知风险 -> 非空时提示 PM 移到 brief.md 或丢弃，原段保留打 TODO
+- 已知风险 -> 非空时提示 PM 归到模块 discussion/decisions 或 docs/TODO.md，原段保留打 TODO
 - 新增节（用户画像 / 产品路线 / 业务术语表）: 空骨架
 
 不自动 commit，输出 diff 让 PM 审。
@@ -87,7 +87,7 @@ def build_v5_context(old_sections: dict, project_name: str) -> tuple[str, list[s
 
     # ## 用户画像 — 新增空骨架
     out.append("## 用户画像\n")
-    out.append("<!-- 起手 1 个主角色即可（精简模式）；后续 brief / analysis 出现新角色 AI 会催你补 -->")
+    out.append("<!-- 起手 1 个主角色即可（精简模式）；后续 discussion / decisions / spec / PRD 出现新角色 AI 会催你补 -->")
     out.append("")
     out.append("| 角色 | 描述 | 关键诉求 |")
     out.append("|---|---|---|")
@@ -118,7 +118,7 @@ def build_v5_context(old_sections: dict, project_name: str) -> tuple[str, list[s
 
     # ## 业务术语表 — 新增空骨架
     out.append("## 业务术语表\n")
-    out.append("<!-- 每条 ≤30 字；精简模式 = 1 条核心业务词；后续 brief / analysis / solution / task spec 出现新词 AI 会催你补 -->")
+    out.append("<!-- 每条 ≤30 字；精简模式 = 1 条核心业务词；后续 discussion / decisions / spec / PRD 出现新词 AI 会催你补 -->")
     out.append("")
     out.append("| 术语 | 说明 |")
     out.append("|---|---|")
@@ -140,11 +140,11 @@ def build_v5_context(old_sections: dict, project_name: str) -> tuple[str, list[s
     if is_substantial(risk_body):
         out.append("---")
         out.append("")
-        out.append("<!-- TODO(v5 migration): 老「已知风险」节内容保留如下，建议 PM 移到 brief.md（具体风险绑 req）或丢弃，然后删除本块。-->")
+        out.append("<!-- TODO(v5 migration): 老「已知风险」节内容保留如下，建议 PM 归到相关模块 discussion.md / decisions.md（待处理风险进 docs/TODO.md）或丢弃，然后删除本块。-->")
         out.append("## 已知风险（v5 migration TODO）\n")
         out.append(risk_body)
         out.append("")
-        notes.append("已知风险（migration TODO）: 老内容保留，PM 应移到 brief.md 后手动删本块")
+        notes.append("已知风险（migration TODO）: 老内容保留，PM 应归到模块讨论/决策或 docs/TODO.md 后手动删本块")
 
     return "\n".join(out).rstrip() + "\n", notes
 

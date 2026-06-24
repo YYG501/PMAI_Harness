@@ -208,8 +208,20 @@ def load_config():
         die(f"{CONFIG_PATH} JSON 解析失败: {e}")
 
 
-def render_title(template: str, fm: dict, filename: str) -> str:
-    ctx = {**fm, "filename": filename}
+def infer_module_from_path(markdown_path: Path) -> str | None:
+    """Infer module slug from docs/modules/<module>/<doc>.md when frontmatter omits it."""
+    parent = markdown_path.parent
+    if parent.name and parent.parent.name == "modules":
+        return parent.name
+    return None
+
+
+def render_title(template: str, fm: dict, markdown_path: Path) -> str:
+    ctx = {**fm, "filename": markdown_path.stem}
+    if not ctx.get("module"):
+        module = infer_module_from_path(markdown_path)
+        if module:
+            ctx["module"] = module
     keys = re.findall(r"\{(\w+)\}", template)
     missing = [k for k in keys if k not in ctx or not ctx[k]]
     if missing:
@@ -218,7 +230,7 @@ def render_title(template: str, fm: dict, filename: str) -> str:
     return template.format(**{k: ctx[k] for k in keys})
 
 
-def resolve_target(args, fm: dict, filename: str) -> dict:
+def resolve_target(args, fm: dict, markdown_path: Path) -> dict:
     config = load_config()
 
     if args.target_token and args.target_kind:
@@ -237,9 +249,9 @@ def resolve_target(args, fm: dict, filename: str) -> dict:
         title = args.title
     elif args.type and config:
         tpl = (config.get("default_targets") or {}).get(args.type, {}).get("title_template", "{filename}")
-        title = render_title(tpl, fm, filename)
+        title = render_title(tpl, fm, markdown_path)
     else:
-        title = filename
+        title = markdown_path.stem
 
     return {"kind": kind, "token": token, "title": title}
 
@@ -653,7 +665,7 @@ def main() -> None:
     ap = argparse.ArgumentParser(prog="publish-to-lark",
                                  description="把本地 markdown 发布到飞书云文档")
     ap.add_argument("markdown", help="markdown 文件路径")
-    ap.add_argument("--type", help="文档类型 (prd/spec/analysis/other)")
+    ap.add_argument("--type", help="文档类型 (prd/spec/other)")
     ap.add_argument("--target-token", help="覆盖目标 token (wiki node 或 folder)")
     ap.add_argument("--target-kind", choices=["wiki", "folder"], help="目标位置类型")
     ap.add_argument("--title", help="覆盖标题")
@@ -687,7 +699,7 @@ def main() -> None:
         doc_id, url = publish_overwrite(md_path, existing_doc_id)
         first_time = False
     else:
-        target = resolve_target(args, fm, filename)
+        target = resolve_target(args, fm, md_path)
         doc_id, url = publish_first_time(md_path, target)
         first_time = True
 

@@ -79,8 +79,9 @@ CUR_BRANCH="$(git branch --show-current 2>/dev/null)"
 
 ```bash
 # 本次工作起点（小改场景 BASE 可能就是上一个 commit；大需求是分支起点）
-BASE=$(git merge-base main HEAD 2>/dev/null || git rev-parse HEAD~1)
-git diff --stat "$BASE" HEAD
+WORK_ROOT="${ACTIVE_WORK_DIR:-$REPO_ROOT}"
+BASE=$(git -C "$WORK_ROOT" merge-base main HEAD 2>/dev/null || git -C "$WORK_ROOT" rev-parse HEAD~1)
+git -C "$WORK_ROOT" diff --stat "$BASE" HEAD
 ```
 
 - 改了 `docs/modules/<模块>/` 下的文件 → 本次涉及该模块。
@@ -178,7 +179,7 @@ python3 "$PMAI_HOME/scripts/check-state-index-drift.py" "$REPO_ROOT" || true
    - **「规格说 X、原型现在 Y」** → 哪个对？PM 拍：改规格对齐原型，还是原型是 bug。
    - **「这条规格在原型里找不到对应了」** → **有意删（同步删规格）还是漏实现（补回）？**（治第 4 问的核心——根除"规格被 review 悄悄删掉"）。
    - **「改了术语 / 近义词」** → 要不要在术语表统一收口（grep 残留近义词替换）。
-3. PM 逐条拍，按结果改 `spec.md` / 记 TODO（漏实现 → 推下个工作）/ 更新术语表。
+3. PM 逐条拍，按结果把规格修订输入交给 `/pmai-prd-writing` 模块规格模式更新 `spec.md` / 记 TODO（漏实现 → 推下个工作）/ 更新术语表。
 
 > 这是 **silent 自检 + 并入收尾呈交**的轻行为，**不升格成强制门**（守红线 I-RV1：不升格 AI 自动 review）。脚本 advisory（`|| true`），最终判断在 PM。
 
@@ -255,7 +256,7 @@ merge 回 main（具体的 merge / 删 worktree / 删分支编排由 lifecycle �
 
 ## Rules
 
-- **形态自适应**：小改/讨论在 main 上直接 `/pmai-close`（无 merge 步）；大需求 cwd 在 `.worktrees/<分支>/` 才走步骤 6 merge。入口先判形态。
+- **形态自适应**：小改/讨论在 main 上直接 `/pmai-close`（无 merge 步）；大需求只要当前工作开过 build worktree，就走步骤 6 merge（推荐 cwd 仍在主仓）。入口先判形态。
 - **决策 / 理路 3 个正交的家**（开放 5 拍板，撤销原 3→2 折叠）：单模块决策 → 模块 `decisions.md`（活）；跨模块**规则** → `PRODUCT-RULES.md`（活、scope）；跨文件**理路** → `docs/decisions/<日期>-<slug>.md`（**冻结**）。理路与规则分家、不混塞一份。
 - **术语回写**：新定义的概念/角色/业务词 → `PRODUCT.md` 业务术语表；纯文字微调不算。
 - **规格就地升版**：重做模块 = 同 `docs/modules/<模块>/` 演进 `spec.md`（版本号 + 变更日志 + 老条目 supersede 留痕）；身份变了才另起 + 归档旧的（例外，PM 拍）。规格只留 normative、不嵌原型 ASCII、顶部钉"规格为权威"。

@@ -30,8 +30,8 @@ _print_help() {
 
 期望时间:
   init-project 自身 ~10 秒（拷贝 + git init + commit）。
-  跑通后到落第一个 brief.md ~10-30 分钟（取决于 PM 思考速度）。
-  完整 TTHW（init → 第一个 brief.md 落档）<= 30 分钟。
+  跑通后到落第一个模块 spec.md ~10-30 分钟（取决于 PM 思考速度）。
+  完整 TTHW（init → 第一个模块 spec.md 落档）<= 30 分钟。
 
 例子:
   bash scripts/init-project.sh \\

@@ -82,7 +82,7 @@ cd "<WORKTREE>"
 short-circuit：仅 typo / 格式 / 引用更新时，可输出简化版扫描区块，不问额外分类。
 
 **越界时拒绝 quick-fix**：
-- 改动会改变模块 `spec.md` 的核心产品决策 → 走 `/pmai-design` 修订规格。
+- 改动会改变模块 `spec.md` 的核心产品决策 → 走 `/pmai-design` 重新拍板，并由 `/pmai-prd-writing` 模块规格模式修订 `spec.md`。
 - 改动会新增或大改 `prototype/` 一片功能 → 走 `/pmai-build`。
 - 改动会改项目级规则 / 术语并需要 PM 逐条拍 → 走 `/pmai-close` 或 `/pmai-design`。
 

@@ -1,6 +1,6 @@
 # PM 视图通用规则（PM-VIEW-RULES）
 
-> 适用范围：所有 PM 视角的产物 — `docs/modules/<模块>/discussion.md` / `decisions.md` / `spec.md` / `PRODUCT-STATE.md` / 按需 `prd.md`（旧历史产物 `brief.md` / `analysis.md` / `solution.md` 同样适用）。
+> 适用范围：所有 PM 视角的当前产物 — `docs/modules/<模块>/discussion.md` / `decisions.md` / `spec.md` / `PRODUCT-STATE.md` / 按需 `prd.md`。
 >
 > 本文件是 **单一真相源**。下列 skill 都引用本文件，不在 skill 内部独立维护：
 > `design` · `build` · `close` · `prd-writing`
@@ -233,9 +233,9 @@ PM 创建 / 审核 / 验收时直接看的内容。回答 PM 关心的问题：
 
 ---
 
-## 六、关键产品决策格式（prd / task spec 必填）
+## 六、关键产品决策格式（prd / 模块 spec 必填）
 
-每份 `prd.md` 和涉及关键产品选择的 `task spec` 必须有「关键产品决策」节：
+每份 `prd.md` 和涉及关键产品选择的模块 `spec.md` 必须有「关键产品决策」节：
 
 ```markdown
 ## 🎯 关键产品决策

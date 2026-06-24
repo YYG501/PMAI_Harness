@@ -94,7 +94,7 @@ Next Up 块 / skill 退出提示 / 状态转换后输出 / 错误退出提示 �
 
 **禁内部状态词**：`Phase 1` / `Phase 2` / `finalize marker` / `auto-chain` / `bound-to-execution-event` / `dispatch` / `transition`、任何带编号的内部阶段（"步骤 7.5" "§0.4" "M2 banner" 等给 SKILL 读者看的引用号）。
 
-**禁内部实现术语**：`merge → req` / `task 分支` / `req 分支` / `worktree` / `delete branch` / `commit 到 X 分支` / `git diff` 之类描述 git 内部操作的词汇。
+**禁内部实现术语**：`task 分支` / `worktree` / `delete branch` / `commit 到 X 分支` / `git diff` 之类描述 git 内部操作的词汇。
 
 **禁"AI 为啥这样安排"的原理解释**：PM 不需要懂内部机制 / 不需要 AI 自证流程合理。给 PM 的应该是「现在做啥 + 一句话目的」，不是「AI 为啥选这条路径」。
 

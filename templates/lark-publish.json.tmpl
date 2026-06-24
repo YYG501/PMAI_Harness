@@ -1,15 +1,10 @@
 {
-  "_comment": "publish-to-lark 配置：按文档类型设默认目标位置和命名规则。kind 为 wiki 时 token 是 wiki node token；kind 为 folder 时 token 是文件夹 token。title_template 占位符从 markdown frontmatter 或文件名读取（{req_id}/{req_title}/{module}/{filename}）。",
+  "_comment": "publish-to-lark 配置：按文档类型设默认目标位置和命名规则。kind 为 wiki 时 token 是 wiki node token；kind 为 folder 时 token 是文件夹 token。title_template 占位符从 markdown frontmatter 或文件名读取（{module}/{filename}）。",
   "default_targets": {
     "prd": {
       "kind": "wiki",
       "token": "REPLACE_WITH_WIKI_NODE_TOKEN",
-      "title_template": "{req_id} - {req_title} PRD"
-    },
-    "analysis": {
-      "kind": "wiki",
-      "token": "REPLACE_WITH_WIKI_NODE_TOKEN",
-      "title_template": "{req_id} 需求分析"
+      "title_template": "{module} PRD"
     }
   }
 }

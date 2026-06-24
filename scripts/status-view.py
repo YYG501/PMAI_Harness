@@ -139,12 +139,12 @@ def render_narrative(state: dict, repo_root: Path) -> None:
         meta = work["meta"] or {}
         work_id = work["work_dir"].name
         stage = meta.get("stage", 0)
-        stage_name = STAGE_NAMES.get(int(stage), f"stage {stage}") if stage else "未知"
+        stage_name = STAGE_NAMES.get(int(stage), "未知") if stage else "未知"
         # 不写 commit hash / 时间细节；只点 stage 状态
         prod = _product_oneliner(repo_root)
         prod_line = f"你的产品：{prod}\n" if prod else ""
         print(
-            f"{prod_line}当前在做 {work_id}（{stage_name} 阶段）。"
+            f"{prod_line}当前在做 {work_id}。\n当前进度：{stage_name}。"
             f"\n下一步：{suggest_next_action(work)}"
         )
         return
@@ -158,8 +158,8 @@ def render_narrative(state: dict, repo_root: Path) -> None:
         meta = work["meta"] or {}
         work_id = work["work_dir"].name
         stage = meta.get("stage", 0)
-        stage_name = STAGE_NAMES.get(int(stage), f"stage {stage}") if stage else "未知"
-        print(f"  - {work_id}：{stage_name} 阶段")
+        stage_name = STAGE_NAMES.get(int(stage), "未知") if stage else "未知"
+        print(f"  - {work_id}：当前进度 {stage_name}")
     print("\n下一步：发 /pmai-status 看详细；推进时按具体工作选择 /pmai-design、/pmai-build 或 /pmai-close。")
 
 
@@ -209,10 +209,10 @@ def render_health_check(repo_root: Path) -> None:
     print("  补法：发 /pmai-strategy（skill 会按场景引导补全）")
 
 
-def suggest_next_action(req_view: dict) -> str:
-    """Suggest what PM should do next. req_view 是 state['active_work'][i].
+def suggest_next_action(work_view: dict) -> str:
+    """Suggest what PM should do next. work_view 是 state['active_work'][i].
     四步：1 设计 / 2 build / 3 复审 / 4 沉淀（MAX_STAGE=4）。"""
-    meta = req_view["meta"]
+    meta = work_view["meta"]
     stage = meta.get("stage", 0)
 
     # 设计（≤1）：定 / 细化模块规格
@@ -221,15 +221,15 @@ def suggest_next_action(req_view: dict) -> str:
 
     # build（2）：对模块 spec 直建 + 三道审 + PM 验收
     if stage == 2:
-        return "build 阶段：发 /pmai-build <模块> 对着 spec 建"
+        return "当前进度：build；发 /pmai-build <模块> 对着 spec 建"
 
     # 复审（3）
     if stage == 3:
-        return "复审阶段：继续 /pmai-build 的复审与验收；通过后发 /pmai-close"
+        return "当前进度：复审；继续 /pmai-build 的复审与验收；通过后发 /pmai-close"
 
     # 沉淀（≥4 = MAX_STAGE）
     if stage >= 4:
-        return "沉淀阶段：运行 /pmai-close 沉淀产品现状 + 收尾当前工作"
+        return "当前进度：沉淀；运行 /pmai-close 沉淀产品现状 + 收尾当前工作"
 
     return "运行 /pmai-status 查看详情"
 
@@ -264,20 +264,20 @@ def render_quickfix_section(repo_root: Path) -> None:
     print()
 
 
-def _render_single_req(req_view: dict) -> None:
-    meta = req_view["meta"]
-    req_id = meta.get("id", "?")
-    req_name = meta.get("name", "?")
+def _render_single_work(work_view: dict) -> None:
+    meta = work_view["meta"]
+    work_id = meta.get("id", "?")
+    work_name = meta.get("name", "?")
     stage = meta.get("stage", 0)
     stage_name = STAGE_NAMES.get(stage, "?")
-    work_dir = req_view["work_dir"]
+    work_dir = work_view["work_dir"]
 
-    print(f"当前工作：{req_id}（{req_name}）")
-    print(f"Stage：{stage} - {stage_name}")
+    print(f"当前工作：{work_id}（{work_name}）")
+    print(f"当前进度：{stage_name}")
     print(f"Worktree：{work_dir.parent.parent.parent}")
     print()
 
-    print(f"下一步：{suggest_next_action(req_view)}")
+    print(f"下一步：{suggest_next_action(work_view)}")
 
 
 def render_status(state: dict, repo_root: Path) -> None:
@@ -289,27 +289,27 @@ def render_status(state: dict, repo_root: Path) -> None:
         return
 
     if len(active) == 1:
-        req_view = active[0]
-        meta = req_view["meta"]
-        req_id = meta.get("id", "?")
-        req_name = meta.get("name", "?")
+        work_view = active[0]
+        meta = work_view["meta"]
+        work_id = meta.get("id", "?")
+        work_name = meta.get("name", "?")
         stage = meta.get("stage", 0)
         stage_name = STAGE_NAMES.get(stage, "?")
-        print(f"当前工作：{req_id}（{req_name}）")
-        print(f"Stage：{stage} - {stage_name}")
+        print(f"当前工作：{work_id}（{work_name}）")
+        print(f"当前进度：{stage_name}")
         print()
 
         render_quickfix_section(repo_root)
 
-        print(f"下一步：{suggest_next_action(req_view)}")
+        print(f"下一步：{suggest_next_action(work_view)}")
         return
 
     print(f"📚 {len(active)} 个 active work 并行：")
     print()
-    for idx, req_view in enumerate(active):
+    for idx, work_view in enumerate(active):
         if idx > 0:
             print("─" * 60)
-        _render_single_req(req_view)
+        _render_single_work(work_view)
         print()
 
     render_quickfix_section(repo_root)
@@ -335,11 +335,11 @@ def render_timeline(timeline_state: dict, repo_root: Path) -> None:
     else:
         for item in active:
             meta = item["meta"]
-            req_id = meta.get("id", item["work_dir"].name)
-            req_name = meta.get("name", "")
+            work_id = meta.get("id", item["work_dir"].name)
+            work_name = meta.get("name", "")
             stage = meta.get("stage", 0)
             stage_name = STAGE_NAMES.get(stage, "?")
-            print(f"🔄 {req_id} · {req_name}（{stage_name}）")
+            print(f"🔄 {work_id} · {work_name}（{stage_name}）")
 
     print()
 
@@ -356,11 +356,11 @@ def render_timeline(timeline_state: dict, repo_root: Path) -> None:
     else:
         for item in closed:
             meta = item["meta"]
-            req_id = meta.get("id", item["work_dir"].name)
-            req_name = meta.get("name", "")
+            work_id = meta.get("id", item["work_dir"].name)
+            work_name = meta.get("name", "")
             cd = item.get("close_date")
             date_str = cd.strftime("%Y-%m-%d") if cd else "?"
-            print(f"✅ {req_id} · {req_name}（关闭 {date_str}）")
+            print(f"✅ {work_id} · {work_name}（关闭 {date_str}）")
 
     print()
 
@@ -369,11 +369,11 @@ def render_timeline(timeline_state: dict, repo_root: Path) -> None:
         print(f"═══ Cancelled（显示 {len(cancelled)}）═══")
         for item in cancelled:
             meta = item["meta"]
-            req_id = meta.get("id", item["work_dir"].name)
-            req_name = meta.get("name", "")
+            work_id = meta.get("id", item["work_dir"].name)
+            work_name = meta.get("name", "")
             cd = item.get("close_date")
             date_str = cd.strftime("%Y-%m-%d") if cd else "?"
-            print(f"❌ {req_id} · {req_name}（取消 {date_str}）")
+            print(f"❌ {work_id} · {work_name}（取消 {date_str}）")
         print()
 
     if truncated > 0:

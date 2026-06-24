@@ -178,20 +178,26 @@ PM 在 chat 任何位置自然描述 "我有 X 在 ~/Downloads/foo.pdf，重点 
 
 ```python
 from _lib.attachments import copy_attachment
+
+# 模块规格模式
+result = copy_attachment(work_dir, Path("~/Downloads/foo.pdf"),
+                        stage_prefix="spec", hint="Y 重点")
+
+# 当前工作 PRD 模式
 result = copy_attachment(work_dir, Path("~/Downloads/foo.pdf"),
                         stage_prefix="prd", hint="Y 重点")
 ```
 
-stage_prefix `"prd"`。chat 一行确认 `已归档（docs/inputs/attachments/prd-foo.pdf），Y 重点。继续。`（禁 cp / 绝对路径全文 / 字段名等工程黑话）。
+stage_prefix 按模式取值：模块规格模式用 `"spec"`，当前工作 PRD 模式用 `"prd"`。chat 一行确认 `已归档（docs/inputs/attachments/<spec|prd>-foo.pdf），Y 重点。继续。`（禁 cp / 绝对路径全文 / 字段名等工程黑话）。
 
 异常 catch：
 - `FileNotFoundError` → "路径不可读：<src>。"
 - `SensitivePathError` → "路径含敏感关键词，拒纳：<src>。"
 - `FileSizeError` → "文件 X MB 超 50MB 上限。"
 
-**trigger 2 fallback**：写 prd.md 前扫 `docs/inputs/attachments/`，`is_seen(work_dir, filename)` 判定（真相源 `.work-meta.json:attachments_seen`，非引用 section）。
+**trigger 2 fallback**：写 `spec.md` / `prd.md` 前扫 `docs/inputs/attachments/`，`is_seen(work_dir, filename)` 判定（真相源 `.work-meta.json:attachments_seen`，非引用 section）。
 
-**引用 section 渲染**：写 prd.md 时 `list_attachments_seen(work_dir)` 按 `registered_at` 升序渲染到文档物理末尾 `## 📎 参考材料` section。
+**引用 section 渲染**：写 `spec.md` / `prd.md` 时 `list_attachments_seen(work_dir)` 按 `registered_at` 升序渲染到文档物理末尾 `## 📎 参考材料` section。
 
 **单一真相源**：`skills/_shared/pm-view/attachments-upload.md`（完整 prose / 替换 / 删除 / batch / 失败兜底）。
 

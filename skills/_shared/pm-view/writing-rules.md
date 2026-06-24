@@ -2,7 +2,7 @@
 
 > 本文件是 [`PM-VIEW-RULES.md`](../PM-VIEW-RULES.md) §三 的物理拆分。配套阅读：[`doc-strictness.md`](./doc-strictness.md)（§四 文档级严格度对照表）。
 
-适用：所有 PM 视图层文档 — `docs/modules/<模块>/discussion.md` / `decisions.md` / `spec.md` / `prd.md`（旧历史产物 `brief.md` / `analysis.md` / `solution.md` 同样适用）。
+适用：所有 PM 视图层当前文档 — `docs/modules/<模块>/discussion.md` / `decisions.md` / `spec.md` / `prd.md`。
 
 ---
 

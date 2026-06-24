@@ -33,9 +33,10 @@ test_status_suggests_build_not_task() {
 
   local out
   out=$(cd "$FIXTURE_DIR" && python3 "$STATUS_VIEW" 2>&1)
-  if echo "$out" | grep -q "build 阶段" \
+  if echo "$out" | grep -q "当前进度：build" \
      && echo "$out" | grep -q "/pmai-build" \
-     && ! echo "$out" | grep -q "/pmai-task"; then
+     && ! echo "$out" | grep -q "/pmai-task" \
+     && ! echo "$out" | grep -q "Stage："; then
     pass_test
   else
     _fail "status output unexpected: $out"

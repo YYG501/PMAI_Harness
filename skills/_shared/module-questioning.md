@@ -1,7 +1,7 @@
 <!-- 共享参考 · 需求探索 / 对话诊断（/pmai-design 三段式的第一段「探索」内核）。
      谁读：/pmai-design 探索段（@读本文件）。什么时候：每个需求开工，先过探索段的"闻味判断"。
      产物：探索结论结晶进该模块 discussion.md 第一节（不另起文件）。
-     来历：吸收原 req-analysis（第一性原理深问）+ gstack office-hours（对话诊断），
+     来历：吸收原探索深问能力 + gstack office-hours（对话诊断），
             砍掉依赖外部 demand / 真实用户的问题（单 PM 内部产品问不出真答案）。
      当前作为 `/pmai-design` 的模块需求追问内核使用。 -->
 

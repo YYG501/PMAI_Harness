@@ -35,6 +35,6 @@
 7. 边界与非目标
 8. 参考材料
 
-## `brief.md` / `analysis.md` / `prd.md`
+## `prd.md`
 
-这些是历史或按需产物。各 skill 内定义章节，本文件不重复约束。
+PRD 是按需产物，由 `/pmai-prd-writing` 定义章节，本文件不重复约束。

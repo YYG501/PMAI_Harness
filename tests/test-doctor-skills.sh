@@ -2,7 +2,7 @@
 # test-doctor-skills.sh
 #
 # 防回归：bin/pmai-doctor 的 EXPECTED_SKILLS 必须与 skills/ 目录（除 _shared）完全一致。
-# 背景（2026-06-22 事故）：reshape 删 req-analysis / 加 design 等漏改本清单 →
+# 背景（2026-06-22 事故）：reshape 删旧探索 skill / 加 design 等漏改本清单 →
 #   pmai upgrade 的 doctor 自检把正确的升级误判成「缺 skill」触发回滚。
 #   T0: bin/pmai-doctor 存在且含 EXPECTED_SKILLS 数组
 #   T1: EXPECTED_SKILLS ⊆ skills/ 目录（防清单残留已删 skill → doctor 误报回滚）

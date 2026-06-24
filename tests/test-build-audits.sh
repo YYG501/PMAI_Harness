@@ -135,7 +135,7 @@ test_synthesize_fail_on_gate_exit() {
 # --- B3 参数化锚点：build skill 用 --range-list/--audit-dir/--label 显式锚定 ---
 
 test_resolve_override_spec_anchor() {
-  start_test "resolve --range-list/--audit-dir: build skill 锚点=模块 spec.md（非 req-plan.md）"
+  start_test "resolve --range-list/--audit-dir: build skill 锚点=模块 spec.md"
   _setup
   SPEC="$T/docs/modules/demo/spec.md"
   out=$(python3 "$AUDITS" resolve "$SPEC" --repo-root "$T" --range-list "$SPEC" --audit-dir ".pm-workflow/audits/demo" --label "demo" 2>&1)

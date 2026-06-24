@@ -1,6 +1,6 @@
 ---
 name: pmai-publish-to-lark
-description: 把本地 markdown 文档发布到飞书云文档，发布后自动合并表格中相邻相同内容的 cell。首次发布回填飞书 URL 到 markdown frontmatter，下次按 URL 覆盖原文档。通用发布编排层，被 prd-writing 等 skill 调用；PM 也可手动 `/pmai-publish-to-lark <markdown 路径> [--type prd|analysis|other]`。
+description: 把本地 markdown 文档发布到飞书云文档，发布后自动合并表格中相邻相同内容的 cell。首次发布回填飞书 URL 到 markdown frontmatter，下次按 URL 覆盖原文档。通用发布编排层，被 prd-writing 等 skill 调用；PM 也可手动 `/pmai-publish-to-lark <markdown 路径> [--type prd|spec|other]`。
 ---
 
 # /pmai-publish-to-lark
@@ -8,13 +8,13 @@ description: 把本地 markdown 文档发布到飞书云文档，发布后自动
 ## When To Use
 
 - 由 prd-writing 在沉淀阶段结束模板调用（D 选项），用于发布当前工作 PRD
-- 未来可被 analysis 等其它 skill 复用
+- 未来可被 spec 等其它 PM 视图文档复用
 - PM 手动调用：`/pmai-publish-to-lark <markdown 路径> [--type <type>] [--target-token <token>] [--title <title>]`
 
 ## Required Inputs
 
 1. `markdown_path`：要发布的 markdown 文件绝对路径
-2. `--type`（可选）：文档类型，决定默认目标位置和命名规则（`prd` / `analysis` / `other`）
+2. `--type`（可选）：文档类型，决定默认目标位置和命名规则（`prd` / `spec` / `other`）
 3. `--target-token`（可选）：覆盖默认目标位置（wiki node token 或 folder token）
 4. `--target-kind`（可选）：`wiki` 或 `folder`，与 `--target-token` 配套
 5. `--title`（可选）：覆盖默认标题
@@ -30,12 +30,7 @@ description: 把本地 markdown 文档发布到飞书云文档，发布后自动
     "prd": {
       "kind": "wiki",
       "token": "wikxxx...",
-      "title_template": "{req_id} - {req_title} PRD"
-    },
-    "analysis": {
-      "kind": "wiki",
-      "token": "wikxxx...",
-      "title_template": "{req_id} 需求分析"
+      "title_template": "{module} PRD"
     }
   }
 }
@@ -43,7 +38,7 @@ description: 把本地 markdown 文档发布到飞书云文档，发布后自动
 
 未配置类型时，PM 必须同时传 `--target-token` + `--target-kind` + `--title`，否则 skill 报错退出。模板见 `$PMAI_HOME/templates/lark-publish.json.tmpl`。
 
-`title_template` 占位符从 markdown frontmatter 或文件名读取（`{req_id}` / `{req_title}` / `{module}` / `{filename}`）。
+`title_template` 占位符从 markdown frontmatter 或文件名读取（`{module}` / `{filename}`）。默认 PRD 发布使用 `{module} PRD`；没有 `module` frontmatter 时，手动传 `--title` 或把模板改成 `{filename}`。
 
 ## Preflight Check（脚本入口自动执行）
 
@@ -184,4 +179,4 @@ prd-writing 在沉淀阶段结束模板加：
 D) 发布到飞书—— 调 /pmai-publish-to-lark docs/modules/<模块>/prd.md --type prd
 ```
 
-future skill（analysis 等）类似集成。
+future skill（spec 等 PM 视图文档）类似集成。

@@ -8,7 +8,7 @@
 #   T4: §5.2 不再含"排序"列 / "历史 + 未来一张表" / "唯一规划视图"旧反模式
 #   T5: strategy B 场景表格行不再让 AI 扫 requirements/pmai-closed 反推 done 行
 #
-# 背景：PM 反馈 brownfield 方向讨论时 AI 从代码/竞品反推出一串 req 还替 PM 排好顺序，
+# 背景：PM 反馈 brownfield 方向讨论时 AI 从代码/竞品反推出一串待做项还替 PM 排好顺序，
 # 是 PM 没要的。ROADMAP「历史+未来一张表 / 排序 / 扫 closed 补 done 行」整套被砍，
 # 改成 TODO 无序待办池：只记 PM 提过/讨论过想做的，AI 不反推填充、不排序。
 set -uo pipefail

@@ -8,7 +8,7 @@
 
 - `CLAUDE.md` 里写的“驱动 Claude”，在 Codex 会话中等价理解为“驱动 Codex”。
 - `/pmai-*` 是 PMAI 的用户命令名。Codex 没有 Claude Code slash skill runtime 时，按对应 `~/.pmai/skills/<command-without-pmai-prefix>/SKILL.md` 的步骤执行。
-- 运行态只认 `build-*` 工作分支；不要创建 `req-*` 或通用 `work-*` 分支。
+- 运行态只创建并识别 `build-*` 工作分支。
 - build 阶段的实现改动应落在当前工作 worktree 或明确允许的轻量入口内，不要绕过分支护栏。
 
 ## Startup
