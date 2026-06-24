@@ -47,7 +47,7 @@ process.stdin.on('end', () => {
 
     // 本次提交的改动文件集
     let changed = git('diff --cached --name-only').split('\n').filter(Boolean);
-    if (/\s-[a-z]*a[a-z]*\b/.test(cmd)) {
+    if (/\s-[a-z]*a[a-z]*\b|\s--all\b/.test(cmd)) {
       // git commit -a / -am：补上已跟踪的未暂存改动
       changed = changed.concat(git('diff --name-only').split('\n').filter(Boolean));
     }

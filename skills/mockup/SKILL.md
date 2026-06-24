@@ -2,7 +2,7 @@
 name: pmai-mockup
 description: |
   据讨论定下来的信息设计结论，一口气出几版 mockup（AI 设计稿图 / HTML 草图）给 PM 提前用眼睛挑、并排比——取代在规格里画 ASCII。
-  借 gstack /pmai-design-shotgun「让 PM 选一次出几版、并排比稿」的做法；几版都落进 mocks/、登记进清单、刷新成单页看版（画面铺一页里比）；
+  借 gstack /design-shotgun「让 PM 选一次出几版、并排比稿」的做法；几版都落进 mocks/、登记进清单、刷新成单页看版（画面铺一页里比）；
   挑定方向再回 /pmai-design 定稿规格。轻量、不开 worktree、不动 prototype/ 主原型。是 /pmai-design 流程第 3 步调，PM 也可手动调。
 ---
 
@@ -33,12 +33,12 @@ echo "SKILL: mockup"
 
 本 skill 从**主仓 main** 触发（动的是探索设计稿，不进任何 build worktree）。`mocks/` 在 main 上随时可写（属探索草稿、`check-branch.sh` 已豁免），所以**不开分支、不开 worktree、不拉 PM 进工作区**。
 
-## 借 gstack /pmai-design-shotgun
+## 借 gstack /design-shotgun
 
-让 PM 选一次出几版、并排比稿，是 gstack `/pmai-design-shotgun` 趟熟的做法。本 skill **借它的做法、不抄它的实现**：
+让 PM 选一次出几版、并排比稿，是 gstack `/design-shotgun` 趟熟的做法。本 skill **借它的做法、不抄它的实现**：
 
 - **让 PM 定出几版**：像 shotgun 那样，先问 PM 这轮出几版（默认 3，重要界面到 5-8），再一次性批量生成并排比（步骤 2-3）。
-- **HTML 路能调 design-shotgun 就调**：gstack 装了、`/pmai-design-shotgun` 可用时，HTML 草图**直接用 Skill 工具调它**（接受它写的产物、跟随它升级，不解析不重写）；调不动就 AI 自己用 `frontend-design` 出 HTML。
+- **HTML 路能调 design-shotgun 就调**：gstack 装了、`/design-shotgun` 可用时，HTML 草图**直接用 Skill 工具调它**（接受它写的产物、跟随它升级，不解析不重写）；调不动就 AI 自己用 `frontend-design` 出 HTML。
 - **图片路用框架自带的出图脚本**：`scripts/gen-mockup-image.sh`（codex 出图，见步骤 3），不依赖 OpenAI API key。
 - **挑定后统一收口**：不管哪条路出的设计稿，**都落进框架的 `mocks/` + 清单 + 单页看版**（步骤 3），别留在 gstack 自己的 `~/.gstack/...` 里——那会"探过的设计稿找不回"。
 
@@ -75,7 +75,7 @@ echo "SKILL: mockup"
 | 看什么 | 视觉风格 / 密度 / 气质 / 第一眼感觉 | 布局结构 / 交互 / 字段内容 |
 | 文字 | **装饰性、不准**（只看气质） | 真的、准的 |
 | 速度 | **~3min/张**（批量后台跑） | 秒级 |
-| 怎么生成 | `scripts/gen-mockup-image.sh` | 调 `/pmai-design-shotgun` 或 `frontend-design` 写静态 HTML |
+| 怎么生成 | `scripts/gen-mockup-image.sh` | 调 `/design-shotgun` 或 `frontend-design` 写静态 HTML |
 
 1. **生成 N 版**（N = 步骤 2 PM 定的数）：
 
@@ -87,7 +87,7 @@ echo "SKILL: mockup"
    ```
    脚本钉 codex 0.135.0（0.141 无头出图回归、不可用）、走 ChatGPT 订阅免 API key；**复制由脚本自己做**（出图前后 diff `~/.codex/generated_images/` 挑新增那张），所以"新增文件 = 真生成"，天然防 codex 拷旧图冒充，没新图就明确报错、不留假图。批量时给 PM 一句「约 N×3 分钟后一起看」，别让 PM 干等。
 
-   **HTML 路** —— 能调 `/pmai-design-shotgun` 就调，调不动就 `frontend-design` 写静态 HTML，每版存 `mocks/<界面>-b/index.html`。
+   **HTML 路** —— 能调 `/design-shotgun` 就调，调不动就 `frontend-design` 写静态 HTML，每版存 `mocks/<界面>-b/index.html`。
 
 2. **落进 `mocks/`**：图片每版一个 `mocks/<界面>-x.png`，HTML 每版一个 `mocks/<界面>-x/index.html`。**所有生成的都留下、都进版本库——包括待会儿被否掉的那几版**（否掉不等于删掉，留着下次还能翻回来看）。
 

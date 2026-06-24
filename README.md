@@ -306,6 +306,31 @@ git push
 | [`docs/归档/废弃/框架同步-SOP.md`](./docs/归档/废弃/框架同步-SOP.md) | 生成器 → 业务仓 hotfix 同步流程（**DEPRECATED + 已归档**；pmai install/upgrade 承接）|
 | [`docs/归档/完成/v0/`](./docs/归档/完成/v0/) | v0 原始档案（需求.md / 设计.md / 需求-v0-原始草稿.md；不再活跃，归档保留作历史）|
 | [`docs/归档/完成/`](./docs/归档/完成/) | 历史设计文档（21 份，2026-04~05 阶段决策档案；v3.5 收口后归档） |
+| [`CONTRIBUTING.md`](./CONTRIBUTING.md) | 贡献者入口：改代码前读什么、跑什么验证、怎么报 bug |
+
+### 开发者自检入口
+
+| 你要确认 | 命令 |
+|---|---|
+| 当前安装状态 / skill 暴露是否漂移 | `pmai status` |
+| 全局安装完整性 | `pmai doctor` |
+| 测试整个生成器仓 | `bash tests/run-all.sh` |
+| 旧 `requirements/active|closed` 仓库是否还需要人工迁移 | `python3 scripts/migrate-reqs-to-modules.py --dry-run <repo>` |
+
+在本仓里直接跑 `bash bin/pmai status` / `bash bin/pmai doctor` 时，它检查的仍是
+`PMAI_HOME`（默认 `~/.pmai`）这个安装目标；输出顶部会标明 `CLI source` 和
+`Status/Audit target`。如果你想测真实用户入口，直接跑 `~/.pmai/bin/pmai status`
+或 `~/.pmai/bin/pmai doctor`。
+
+### 反馈与问题报告
+
+有 bug 时优先开 GitHub issue，使用
+[`bug_report.md`](./.github/ISSUE_TEMPLATE/bug_report.md) 模板。请贴：
+
+- 你跑的是 repo-local `bash bin/pmai ...` 还是 installed `~/.pmai/bin/pmai ...`
+- 完整命令 / slash skill 名
+- `pmai status` 或 `pmai doctor` 输出
+- 如果问题发生在生成器仓，附 `bash tests/run-all.sh` 汇总
 
 ---
 

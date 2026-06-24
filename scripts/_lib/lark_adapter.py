@@ -240,7 +240,8 @@ def docs_create_from_markdown(
         cmd = [
             "lark-cli", "docs", "+create",
             "--title", title,
-            "--markdown", f"@./{send_path.name}",
+            "--content", f"@./{send_path.name}",
+            "--doc-format", "markdown",
         ]
         if kind == "wiki":
             cmd.extend(["--wiki-node", token])
@@ -272,8 +273,9 @@ def docs_update_from_markdown(
         cmd = [
             "lark-cli", "docs", "+update",
             "--doc", doc_id,
-            "--markdown", f"@./{send_path.name}",
-            "--mode", mode,
+            "--content", f"@./{send_path.name}",
+            "--doc-format", "markdown",
+            "--command", mode,
         ]
         _run(cmd, cwd=send_path.parent, check=True)
 

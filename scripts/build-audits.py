@@ -2,7 +2,7 @@
 """build 三道审编排 —— 确定性收集 + 合成（模块 build 完成后）。
 
 三道审本身由 build skill 编排 AI 调起：覆盖审计 = `coverage-reviewer` agent /
-视觉门 = gstack `/pmai-design-review` / 行为审 = 浏览器/脚本化验收。**其中两道是 LLM skill/agent，
+视觉门 = gstack `/design-review` / 行为审 = 浏览器/脚本化验收。**其中两道是 LLM skill/agent，
 无法当子进程脚本调起** —— 所以本脚本不“跑”三道审，只固化能确定性固化的两件事：
 
   - **resolve**：解析 + 校验输入（模块规格 `spec.md` / `prototype/` / dev 端口），
@@ -176,7 +176,7 @@ def cmd_resolve(anchor_file: Path, repo_root: Path,
     print(f"     → 写 {cov}")
     print(f"        schema: {{\"items\":[{{\"name\",\"status\":\"built|missing|degraded\",\"note\"}}]}}")
     print()
-    print(f"  ② 视觉门（gstack /pmai-design-review，只截图不改；复用同一次 dev server）")
+    print(f"  ② 视觉门（gstack /design-review，只截图不改；复用同一次 dev server）")
     print(f"     对照：{repo_root / 'docs' / 'DESIGN.md'}")
     print(f"     → 写 {vis}")
     print(f"        schema: {{\"findings\":[{{\"severity\":\"P0|P1|P2\",\"desc\"}}]}}（空 findings = 通过）")

@@ -24,6 +24,16 @@ SKILL_PREFIX="pmai-"
 REMOTE="${PMAI_REMOTE:-git@github.com:YYG501/PMAI_Workflow.git}"
 DOCTOR_BIN="$(dirname "$0")/pmai-doctor"
 
+# timeout 兜底：stock macOS 无 GNU timeout（仅 Homebrew coreutils 才有）。
+# 缺失时优先用 gtimeout，再退化为直接执行（不加超时），避免 `timeout ... || {...}` 误触失败分支中断升级。
+if ! command -v timeout >/dev/null 2>&1; then
+  if command -v gtimeout >/dev/null 2>&1; then
+    timeout() { gtimeout "$@"; }
+  else
+    timeout() { shift; "$@"; }
+  fi
+fi
+
 usage() {
   cat <<EOF
 Usage:

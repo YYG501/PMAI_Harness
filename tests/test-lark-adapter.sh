@@ -96,8 +96,14 @@ PY
     rm -rf "$tmp"
     return
   fi
-  if ! grep -q -- "--markdown @./foo.md" "$log"; then
-    _fail "expected '--markdown @./foo.md' in ARGV; got: $(grep ARGV: "$log")"
+  if ! grep -q -- "--content @./foo.md" "$log"; then
+    _fail "expected '--content @./foo.md' in ARGV; got: $(grep ARGV: "$log")"
+    cat "$log" >&2
+    rm -rf "$tmp"
+    return
+  fi
+  if ! grep -q -- "--doc-format markdown" "$log"; then
+    _fail "expected '--doc-format markdown' in ARGV"
     cat "$log" >&2
     rm -rf "$tmp"
     return
@@ -146,8 +152,9 @@ from pathlib import Path
 from _lib.lark_adapter import docs_update_from_markdown
 docs_update_from_markdown(Path("$tmp/bar.md"), doc_id="docY")
 PY
-  if grep -q "CWD: $tmp_real" "$log" && grep -q -- "--markdown @./bar.md" "$log" \
-     && grep -q -- "--doc docY" "$log" && grep -q -- "--mode overwrite" "$log"; then
+  if grep -q "CWD: $tmp_real" "$log" && grep -q -- "--content @./bar.md" "$log" \
+     && grep -q -- "--doc docY" "$log" && grep -q -- "--command overwrite" "$log" \
+     && grep -q -- "--doc-format markdown" "$log"; then
     pass_test
   else
     _fail "shim log 缺关键参数"
@@ -365,7 +372,7 @@ from _lib.lark_adapter import docs_create_from_markdown
 docs_create_from_markdown(Path("$tmp/plain.md"), title="t",
                           target={"kind": "wiki", "token": "w"})
 PY
-  if grep -q -- "--markdown @./plain.md" "$log" && ! ls "$tmp" | grep -q 'lark-'; then
+  if grep -q -- "--content @./plain.md" "$log" && ! ls "$tmp" | grep -q 'lark-'; then
     pass_test
   else
     _fail "无 frontmatter 应直接用原文件；argv: $(grep ARGV "$log")；目录: $(ls "$tmp")"

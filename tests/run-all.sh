@@ -18,6 +18,7 @@ SUITES=(
   test-no-duplicate-questioning.sh
   test-shared-files-exist.sh
   test-doctor-skills.sh
+  test-migrate-reqs-to-modules-compat.sh
   test-banner-label.sh
   test-narrative-mode.sh
           test-checks-diff.sh

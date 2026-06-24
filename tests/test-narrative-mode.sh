@@ -79,7 +79,7 @@ test_narrative_range_descoped() {
   start_test "T5: render_narrative 不含 commit hash / 「§四」/「N 天前」（codex C-4 降级）"
   # 提取 render_narrative 函数体到下一个 def
   local body
-  body=$(awk '/^def render_narrative/,/^def [a-z]/' "$STATUS_VIEW" | head -n -1)
+  body=$(awk '/^def render_narrative/,/^def [a-z]/' "$STATUS_VIEW" | sed '$d')
   if echo "$body" | grep -qE '§[一二三四五六七八九十0-9]+|commit_hash|abc123|"[0-9]+ 天前"' 2>/dev/null; then
     _fail "render_narrative 含小节级 / commit hash / 相对时间字串（codex C-4 范围降级要求）"
     return

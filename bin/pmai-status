@@ -12,6 +12,8 @@ set -uo pipefail
 PMAI_HOME="${PMAI_HOME:-$HOME/.pmai}"
 CLAUDE_SKILLS="$HOME/.claude/skills"
 SKILL_PREFIX="pmai-"
+BIN_DIR="$(cd "$(dirname "$0")" && pwd)"
+CLI_ROOT="$(cd "$BIN_DIR/.." && pwd)"
 
 usage() {
   cat <<EOF
@@ -58,6 +60,13 @@ actual_exposed_skill_names() {
 echo "════════════════════════════════════════════════════════════"
 echo "  PMAI Status"
 echo "════════════════════════════════════════════════════════════"
+echo "CLI source:     $CLI_ROOT"
+echo "Status target:  $PMAI_HOME"
+if [ "$CLI_ROOT" != "$PMAI_HOME" ] && [ -x "$PMAI_HOME/bin/pmai" ]; then
+  echo "Note: repo-local CLI is inspecting the installed PMAI_HOME."
+  echo "      To inspect the installed user-facing CLI, run: $PMAI_HOME/bin/pmai status"
+fi
+echo ""
 
 if [ -d "$PMAI_HOME/.git" ]; then
   cd "$PMAI_HOME"

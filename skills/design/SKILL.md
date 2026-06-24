@@ -121,7 +121,7 @@ PM 拿"想要的方案"来，先还原成"要解决的真问题"——这是上�
 python3 "$PMAI_HOME/scripts/check-open-questions.py" "$MODULE_DIR/discussion.md"
 ```
 
-**（可选）调 /mockup 确认设计**（降回可选第三档，不是信息密集类默认动作）：视觉 / 布局靠文字掰不清时才调 `/mockup` 借 `/pmai-design-shotgun` 出多变体让 PM 挑。纯后端 / 无界面 / 小改、或文字已讲清的，**不调**。mock 是探索草稿建在 `mocks/`、和 `prototype/` 分开；规格不嵌 ASCII、只引用确认的 mock 路径。PM 选定后记住路径，段③引用。
+**（可选）调 /mockup 确认设计**（降回可选第三档，不是信息密集类默认动作）：视觉 / 布局靠文字掰不清时才调 `/mockup` 借 `/design-shotgun` 出多变体让 PM 挑。纯后端 / 无界面 / 小改、或文字已讲清的，**不调**。mock 是探索草稿建在 `mocks/`、和 `prototype/` 分开；规格不嵌 ASCII、只引用确认的 mock 路径。PM 选定后记住路径，段③引用。
 
 > **护栏（防机械化）**：什么时候多问、什么时候轻过、什么时候调 mock——AI 临场判断，不得写成"每个需求必跑全部特化问题"的死流程。框架只管两头（记忆进场 + 三件套落盘），中间收敛交给判断。
 

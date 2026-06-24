@@ -34,4 +34,4 @@
 
 ## 本轮验证
 
-- `tests/run-all.sh`：272 passed / 0 failed。
+- `tests/run-all.sh`：278 passed / 0 failed。

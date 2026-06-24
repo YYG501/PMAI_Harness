@@ -135,7 +135,7 @@ if [ -f "$DESIGN_MD" ]; then
   cat "$DESIGN_MD"
   echo "════════ END docs/DESIGN.md ════════"
 else
-  echo "ℹ️  $DESIGN_MD 不存在；建议 PM 跑 gstack /pmai-design-consultation 建项目级视觉规范。"
+  echo "ℹ️  $DESIGN_MD 不存在；建议 PM 跑 gstack /design-consultation 建项目级视觉规范。"
 fi
 ```
 
@@ -242,18 +242,18 @@ done
 > **锚点已敲死**：覆盖审计锚点统一是**模块规格 `spec.md`**。`build-audits.py` 已参数化锚点（`--range-list` / `--audit-dir` / `--label`）。统一接脚本，复用其 fail-loud「三道齐全」校验——覆盖审计是防残承重墙，不走纯 AI 自跑（避免静默漏一道审还往下走）：
 > ```bash
 > SPEC="$BUILD_DIR/docs/modules/<模块>/spec.md"   # 锚点文件=模块规格（定位仓根 + 覆盖审计逐项锚点）
-> python3 "$PMAI_HOME/scripts/pmai-build-audits.py" resolve "$SPEC" \
+> python3 "$PMAI_HOME/scripts/build-audits.py" resolve "$SPEC" \
 >     --repo-root "$BUILD_DIR" --range-list "$SPEC" \
 >     --audit-dir ".pm-workflow/audits/<模块>" --label "<模块>"
 > # …三道审各写 coverage.json / visual.json / behavior.json 进 $BUILD_DIR/.pm-workflow/audits/<模块>/…
-> python3 "$PMAI_HOME/scripts/pmai-build-audits.py" synthesize "$SPEC" \
+> python3 "$PMAI_HOME/scripts/build-audits.py" synthesize "$SPEC" \
 >     --repo-root "$BUILD_DIR" --audit-dir ".pm-workflow/audits/<模块>" --label "<模块>"
 > ```
 
 三道审抓三种不同的病：
 
 - **① 覆盖审计**（白纸新鲜视角，对标 `coverage-reviewer` agent）：拿**模块规格 spec.md** 对 `prototype/` 代码逐项 diff，报每条规格点：✅ 建了 / ❌ 丢了 / ⚠️ 降级占位（空壳 / 假数据 / 交互没接）。故意不让建代码的 AI 自审，避盲区。静态读码，不需 dev server，先跑。
-- **② 视觉门**（gstack `/pmai-design-review`，只截图不改）：对照 `docs/DESIGN.md` 审视觉一致性（间距 / 层级 / 配色 / AI slop）。用 `/browse`（headless），禁 `mcp__claude-in-chrome__*`。出口是 PM 一句话 pass / 打回，**AI 不替 PM 改视觉**。复用步骤 5 的 dev server。
+- **② 视觉门**（gstack `/design-review`，只截图不改）：对照 `docs/DESIGN.md` 审视觉一致性（间距 / 层级 / 配色 / AI slop）。用 `/browse`（headless），禁 `mcp__claude-in-chrome__*`。出口是 PM 一句话 pass / 打回，**AI 不替 PM 改视觉**。复用步骤 5 的 dev server。
 - **③ 行为审**（验收流程驱动 `/browse` 走确定性路径）：从模块规格的核心动作 / 状态机派生验收流程，`/browse` 逐流程跑，验证「跑得通不通」（明确 pass/fail，区别于 `/qa` 的 AI 探索）。复用步骤 5 的 dev server。
 
 ### 步骤 7：review loop（看原型挑错、AI 改）

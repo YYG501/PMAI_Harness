@@ -26,7 +26,7 @@
 
 ## review/audit 类 skill 执行强制约束
 
-跑 `/plan-ceo-review` `/plan-eng-review` `/plan-design-review` `/plan-devex-review` `/review` `/qa` `/qa-only` `/pmai-design-review` `/devex-review` `/autoplan` 等 review/audit 类 skill 时：
+跑 `/plan-ceo-review` `/plan-eng-review` `/plan-design-review` `/plan-devex-review` `/review` `/qa` `/qa-only` `/design-review` `/devex-review` `/autoplan` 等 review/audit 类 skill 时：
 
 1. **完整跑官方 skill 的所有 required sections**（11/11，不是 5/11）
 2. **禁止给 PM 出"A 简化 / B 中等 / C 完整"程度门** —— 把"是否偷工"推给 PM 是反模式

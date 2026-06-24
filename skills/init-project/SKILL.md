@@ -234,7 +234,7 @@ agent 收到脚本退出码 0 后**汇报**：「✅ 骨架已就绪 / 上下文
      1. PRODUCT.md 写一句话定位（这产品给谁、解决什么——一句话即可，想清楚了再用 /pmai-strategy 过透）
      2. DESIGN.md 视觉基线（颜色 / 字体 / 布局 / 动效 / UI 习惯，build 时的硬约束）
      3. prototype/ 起一版能跑的主原型（默认 Next.js + TS + Tailwind + shadcn，想换栈现在说）
-   视觉基线可以我陪你过一遍模板填，也可以借 gstack /pmai-design-consultation 出初稿。
+   视觉基线可以我陪你过一遍模板填，也可以借 gstack /design-consultation 出初稿。
    ```
 
 2. **PRODUCT.md 写一句话定位**：AskUser 问 PM 一句话（这产品给谁、解决什么），写进 `<target-dir>/docs/PRODUCT.md` 的定位节 + 业务术语表起一个空架（方向清晰后随 `/pmai-design` / `/pmai-strategy` 长厚）。**不在这里跑 5 节方向问卷**——一句话定位够 AI 进项目读上下文、陪 PM 探索即可。同时写 `<target-dir>/docs/TODO.md`（PM 把脑子里的待办先记下，无序）。
@@ -245,7 +245,7 @@ agent 收到脚本退出码 0 后**汇报**：「✅ 骨架已就绪 / 上下文
    - UI 习惯（不用浏览器原生弹框 / 宽表横向滚动 / 状态要全）
    - 组件 / token 来源（指向 prototype/ 的 `components/ui` shadcn + 本文件 token）
 
-   > **想借 gstack 出初稿**：调 gstack `/pmai-design-consultation`（用 Skill 工具），让它接管对话定视觉方向并写 `docs/DESIGN.md`。**不抄 gstack** —— 直接调它的 skill、接受它写的内容、跟随它升级；不解析、不映射、不重写。gstack 不可用就回到本步用模板手填（见失败兜底）。
+   > **想借 gstack 出初稿**：调 gstack `/design-consultation`（用 Skill 工具），让它接管对话定视觉方向并写 `docs/DESIGN.md`。**不抄 gstack** —— 直接调它的 skill、接受它写的内容、跟随它升级；不解析、不映射、不重写。gstack 不可用就回到本步用模板手填（见失败兜底）。
 
 4. **起主原型 `prototype/`**：在 `<target-dir>/prototype/` 用脚手架起一版能跑的（默认 Next.js + TS + Tailwind + shadcn；PM 在 step 1 说要换栈就按 PM 的）。约定（来自 `prototype-README.md.tmpl`）：每页 self-contained、视觉照 DESIGN.md、按 step A5 选的项目类型档走实现深度（prototype 档全 mock / system 档真后端 / custom 档按层混搭）。
    **prototype/README.md 在脚手架之后写**：`create-next-app` 会生成自己的默认 README，脚手架跑完后 AI 用 `$PMAI_HOME/templates/prototype-README.md.tmpl` 覆盖 `prototype/README.md`（占位符按项目替换）—— 不在 B 步铺，避免与 `create-next-app` 的非空目录冲突。
@@ -276,7 +276,7 @@ agent 收到脚本退出码 0 后**汇报**：「✅ 骨架已就绪 / 上下文
 
 7. 进 D 步。
 
-**失败兜底（gstack / 脚手架不可用）**：gstack 未装或 `/pmai-design-consultation` 调用失败 → 回到 step 3 用 `DESIGN.md.tmpl` 模板手填；脚手架起不来 → 跟 PM 说「主原型先留空，第一个 `/pmai-design` build 时再起」，DESIGN.md 仍要填（它是 build 硬约束，不能空）。直接进 D 步。
+**失败兜底（gstack / 脚手架不可用）**：gstack 未装或 `/design-consultation` 调用失败 → 回到 step 3 用 `DESIGN.md.tmpl` 模板手填；脚手架起不来 → 跟 PM 说「主原型先留空，第一个 `/pmai-design` build 时再起」，DESIGN.md 仍要填（它是 build 硬约束，不能空）。直接进 D 步。
 
 **失败兜底（PM 中途停）**：PM 在 C 步答"停 / 等下" → 已写的 PRODUCT.md 一句话 / DESIGN.md / prototype/ 留写到一半的 unstaged 状态，提示 PM "下次想续可以直接陪你过 DESIGN.md，或第一个 `/pmai-design` 时补主原型。"
 
@@ -312,7 +312,7 @@ agent 输出 Next Up 块：
 - **起项目 = 只建骨架、不锁流程**：C 步只填一句话定位，**不在这里跑完整方向问卷**（5 节定位 / 用户 / 角色 / 路线讨论是 `/pmai-strategy` 的活，PM 准备好了主动调）。早期靠自由探索想清楚方向，比开局答问卷更有效
 - PRODUCT.md 不能完全空交付，但**只要一句话定位即可**（够 AI 进项目读上下文、陪 PM 探索）；术语表起空架，方向清晰后随 `/pmai-design` / `/pmai-strategy` 长厚
 - **DESIGN.md 是 build 硬约束，不能空交付** —— C 步即使主原型起不来，视觉基线也要填好（第一个 `/pmai-design` build 就靠它）
-- 借 gstack `/pmai-design-consultation` 出 DESIGN.md 初稿时**不抄、不映射、不重写** —— 直接接受它写的内容，跟随它升级
+- 借 gstack `/design-consultation` 出 DESIGN.md 初稿时**不抄、不映射、不重写** —— 直接接受它写的内容，跟随它升级
 
 ### PM-facing 输出禁词（[[feedback_pm_chat_no_engineering_jargon]]）
 

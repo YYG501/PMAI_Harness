@@ -93,7 +93,7 @@ test_b_scenario_no_scan_closed() {
   # 反向断言：B 场景行不该再让 AI 扫 closed 写 done 行（旧反模式：「先扫 ... 作 done 行回填」）。
   # 注意：行内允许出现「AI 不扫 requirements/pmai-closed 反推历史」这种否定指令，
   # 所以只拦旧的「done 行回填 / 写 done 行」正向措辞，不裸匹配 requirements/pmai-closed。
-  if echo "$row" | grep -qE 'done 行(回填|)|作 done 行|写 done 行'; then
+  if echo "$row" | grep -qE 'done 行回填|作 done 行|写 done 行'; then
     _fail "B 场景表格行仍让 AI 反推 done 行（旧 ROADMAP 反模式，应已删）"
     return
   fi

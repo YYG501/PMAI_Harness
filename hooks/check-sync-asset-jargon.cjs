@@ -65,7 +65,7 @@ process.stdin.on('end', () => {
 
     // 拿 staged + worktree（git commit -a 场景）的 unified diff
     let diff = git('diff --cached -U0');
-    if (/\s-[a-z]*a[a-z]*\b/.test(cmd)) {
+    if (/\s-[a-z]*a[a-z]*\b|\s--all\b/.test(cmd)) {
       diff += '\n' + git('diff -U0');
     }
     if (!diff) process.exit(0);

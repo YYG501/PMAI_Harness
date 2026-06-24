@@ -1,7 +1,7 @@
 # banner-rules：视觉锚点与 Decision gate label 规范（M2 单一真相源）
 
 > **职责**：banner 格式 + Next Up 块格式 + Decision gate label 3 硬规则（M3 砍后整合到 M2）。
-> **调用方**：next / init-project / design / build / close / cancel（所有用户面 skill）。
+> **调用方**：init-project / design / build / close / cancel（所有用户面 skill）。
 > **设计来源**：gsd `autonomous.md:62-69, 155-163` / `execute-phase.md:1725-1730` / `transition.md:494-509`（banner + Next Up）+ gsd `new-project.md:368-380` "Ready?" Decision gate。
 
 ---
