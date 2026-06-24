@@ -2,7 +2,7 @@
 # pmai-install — Install PMAI framework
 #
 # 2 模式：
-#   1) default 全局：clone 远程到 ~/.pmai/ + symlink 23 个 skill 到 ~/.claude/skills/pmai-*
+#   1) default 全局：clone 远程到 ~/.pmai/ + symlink 当前 skill 到 ~/.claude/skills/pmai-*
 #   2) --local <dir>：不依赖 ~/.pmai/，<dir>/.claude/{scripts,skills,agents}/ 实体副本
 
 set -euo pipefail
@@ -23,7 +23,7 @@ Env override:
   PMAI_HOME=<path>            # Override default ~/.pmai/
 
 Notes:
-  - All 23 skills get 'pmai-' prefix at registration (e.g., /pmai-init-project).
+  - Skills get 'pmai-' prefix at registration (e.g., /pmai-init-project).
   - skills/_shared/ is a shared resource (not a skill); skipped from prefix routing
     but still copied/linked alongside other skills so SKILL.md cross-refs work.
 EOF
@@ -80,6 +80,16 @@ install_skills() {
   echo "   installed $count skill entries → $dst_skills"
 }
 
+remove_managed_skill_symlinks() {
+  local dst_skills="$1"
+  local old
+
+  mkdir -p "$dst_skills"
+  for old in "$dst_skills"/${SKILL_PREFIX}* "$dst_skills/_shared"; do
+    [ -L "$old" ] && rm "$old" || true
+  done
+}
+
 if [ "$MODE" = "global" ]; then
   echo "→ Installing PMAI globally..."
   if [ -d "$PMAI_HOME/.git" ]; then
@@ -94,6 +104,7 @@ if [ "$MODE" = "global" ]; then
   echo "→ git clone $REMOTE → $PMAI_HOME"
   git clone "$REMOTE" "$PMAI_HOME"
   echo "→ Symlink skills to $CLAUDE_SKILLS/pmai-*"
+  remove_managed_skill_symlinks "$CLAUDE_SKILLS"
   install_skills "$PMAI_HOME/skills" "$CLAUDE_SKILLS" symlink
   VER=$(cat "$PMAI_HOME/VERSION" 2>/dev/null || echo unknown)
   echo ""

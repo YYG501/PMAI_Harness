@@ -13,6 +13,48 @@ PMAI_HOME="${PMAI_HOME:-$HOME/.pmai}"
 CLAUDE_SKILLS="$HOME/.claude/skills"
 SKILL_PREFIX="pmai-"
 
+usage() {
+  cat <<EOF
+Usage:
+  pmai status
+
+Shows global PMAI install state:
+  - source location, version, branch, remote
+  - skill exposure count and drift against current ~/.pmai/skills
+  - local install note
+EOF
+}
+
+case "${1:-}" in
+  --help|-h|help) usage; exit 0 ;;
+  "") ;;
+  *) echo "❌ unknown flag: $1" >&2; usage >&2; exit 2 ;;
+esac
+
+expected_exposed_skill_names() {
+  local skill_dir skill_name
+
+  [ -d "$PMAI_HOME/skills" ] || return 0
+  for skill_dir in "$PMAI_HOME"/skills/*/; do
+    [ -d "$skill_dir" ] || continue
+    skill_name=$(basename "$skill_dir")
+    case "$skill_name" in
+      _shared) ;;
+      pmai-*) echo "$skill_name" ;;
+      *) echo "${SKILL_PREFIX}${skill_name}" ;;
+    esac
+  done | sort -u
+}
+
+actual_exposed_skill_names() {
+  local s
+
+  for s in "$CLAUDE_SKILLS"/${SKILL_PREFIX}*; do
+    [ -e "$s" ] || [ -L "$s" ] || continue
+    basename "$s"
+  done | sort -u
+}
+
 echo "════════════════════════════════════════════════════════════"
 echo "  PMAI Status"
 echo "════════════════════════════════════════════════════════════"
@@ -72,6 +114,15 @@ elif [ "$INSTALLED" = "0" ] && [ "$SYMLINK_COUNT" = "0" ]; then
 else
   echo "  Global (~/.claude/skills/pmai-*):  $SYMLINK_COUNT symlinks"
   echo "  _shared linked:                    $SHARED_LINK"
+  STALE_EXPOSED=$(comm -23 <(actual_exposed_skill_names) <(expected_exposed_skill_names) || true)
+  MISSING_EXPOSED=$(comm -13 <(actual_exposed_skill_names) <(expected_exposed_skill_names) || true)
+  if [ -z "$STALE_EXPOSED" ] && [ -z "$MISSING_EXPOSED" ]; then
+    echo "  Exposure drift:                    ✅ matches current skills"
+  else
+    echo "  Exposure drift:                    ⚠️  stale/missing entries (run: pmai upgrade)"
+    [ -n "$STALE_EXPOSED" ] && echo "    stale:  $(echo "$STALE_EXPOSED" | tr '\n' ' ')"
+    [ -n "$MISSING_EXPOSED" ] && echo "    missing: $(echo "$MISSING_EXPOSED" | tr '\n' ' ')"
+  fi
 fi
 
 # 装好时才列具体 skill；没装时悬空名单意义不大

@@ -21,9 +21,27 @@ PASS_COUNT=0
 WARN_COUNT=0
 FAIL_COUNT=0
 
+usage() {
+  cat <<EOF
+Usage:
+  pmai doctor
+
+Checks global PMAI install integrity:
+  - ~/.pmai source, VERSION, expected skills
+  - ~/.claude/skills/pmai-* exposure drift and dangling symlinks
+  - working tree, remote reachability, Claude Code bash PATH
+EOF
+}
+
 ok()   { echo "  ✅ $*"; PASS_COUNT=$((PASS_COUNT + 1)); }
 warn() { echo "  ⚠️  $*"; WARN_COUNT=$((WARN_COUNT + 1)); }
 fail() { echo "  ❌ $*"; FAIL_COUNT=$((FAIL_COUNT + 1)); EXIT_CODE=1; }
+
+case "${1:-}" in
+  --help|-h|help) usage; exit 0 ;;
+  "") ;;
+  *) echo "❌ unknown flag: $1" >&2; usage >&2; exit 2 ;;
+esac
 
 echo "════════════════════════════════════════════════════════════"
 echo "  PMAI Doctor — integrity self-check"
@@ -78,6 +96,25 @@ EXPECTED_SKILLS=(
   # 框架自身维护
   pmai-upgrade skill-improve
 )
+
+expected_exposed_skill_names() {
+  local sk
+  for sk in "${EXPECTED_SKILLS[@]}"; do
+    case "$sk" in
+      pmai-*) echo "$sk" ;;
+      *) echo "${SKILL_PREFIX}${sk}" ;;
+    esac
+  done | sort -u
+}
+
+actual_exposed_skill_names() {
+  local s
+  for s in "$CLAUDE_SKILLS"/${SKILL_PREFIX}*; do
+    [ -e "$s" ] || [ -L "$s" ] || continue
+    basename "$s"
+  done | sort -u
+}
+
 MISSING=()
 for sk in "${EXPECTED_SKILLS[@]}"; do
   if [ ! -d "$PMAI_HOME/skills/$sk" ]; then
@@ -110,6 +147,20 @@ elif [ ${#DANGLING[@]} -gt 0 ]; then
   fail "Dangling symlinks: ${DANGLING[*]} (~/.pmai/ 可能被损坏；建议 pmai uninstall && pmai install)"
 else
   ok "$COUNT skill symlink(s) all resolve"
+fi
+
+if [ "$COUNT" != "0" ]; then
+  STALE_EXPOSED=$(comm -23 <(actual_exposed_skill_names) <(expected_exposed_skill_names) || true)
+  MISSING_EXPOSED=$(comm -13 <(actual_exposed_skill_names) <(expected_exposed_skill_names) || true)
+  if [ -n "$STALE_EXPOSED" ]; then
+    fail "Stale exposed skill symlink(s): $(echo "$STALE_EXPOSED" | tr '\n' ' ') — run pmai upgrade to resync"
+  fi
+  if [ -n "$MISSING_EXPOSED" ]; then
+    fail "Missing exposed skill symlink(s): $(echo "$MISSING_EXPOSED" | tr '\n' ' ') — run pmai upgrade to resync"
+  fi
+  if [ -z "$STALE_EXPOSED" ] && [ -z "$MISSING_EXPOSED" ] && [ ${#DANGLING[@]} -eq 0 ]; then
+    ok "$(expected_exposed_skill_names | wc -l | tr -d ' ') exposed skill name(s) match current skills"
+  fi
 fi
 
 # 5. Working tree clean

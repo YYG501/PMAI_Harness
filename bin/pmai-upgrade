@@ -121,6 +121,12 @@ install_skills_copy() {
   echo "$count"
 }
 
+expected_exposed_skill_count() {
+  local src_skills="$1"
+  find "$src_skills" -mindepth 1 -maxdepth 1 -type d ! -name _shared 2>/dev/null \
+    | wc -l | tr -d ' '
+}
+
 # ─────────────────────────────────────────────────────────────
 # 回滚状态（global / local 共用 flag 防重入）
 # ─────────────────────────────────────────────────────────────
@@ -219,10 +225,11 @@ if [ "$LOCAL_MODE" = "1" ]; then
   cp -R "$SRC/agents" "$LOCAL_DIR/.claude/agents.new"
   SKILL_COUNT=$(install_skills_copy "$SRC/skills" "$LOCAL_DIR/.claude/skills.new")
 
-  # 1.5 staging 自检（skill 数 < 23 当失败）
+  # 1.5 staging 自检：暴露 skill 数必须与当前源 skills/ 全等（除 _shared）
+  EXPECTED_STAGED_SKILLS=$(expected_exposed_skill_count "$SRC/skills")
   STAGED_SKILLS=$(find "$LOCAL_DIR/.claude/skills.new" -maxdepth 1 -name 'pmai-*' -type d 2>/dev/null | wc -l | tr -d ' ')
-  if [ "$STAGED_SKILLS" -lt 23 ]; then
-    echo "❌ Staging 自检失败：skill 数 $STAGED_SKILLS < 23" >&2
+  if [ "$STAGED_SKILLS" != "$EXPECTED_STAGED_SKILLS" ]; then
+    echo "❌ Staging 自检失败：skill 暴露数 $STAGED_SKILLS != 当前源 $EXPECTED_STAGED_SKILLS" >&2
     local_rollback
   fi
 

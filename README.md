@@ -19,21 +19,19 @@ PMAI 不和 Claude Design、design-html 或 Claude Code 比"谁更快生成第�
 定位是 **PM 单人生产力工具**，不是团队 SOP / CI 平台 / 多租户基础设施。完整产品意义、非目标和成功标准见 [`PRODUCT.md`](./PRODUCT.md)。
 
 **分发形态**：
-- **全局安装**（默认推荐，单人多项目场景）：框架装到 `~/.pmai/`，22+ skill symlink 到 `~/.claude/skills/pmai-*`；任意 cwd 跑 `/pmai-init-project` 起新业务项目；`pmai upgrade` 一键升级所有项目自动跟随
+- **全局安装**（默认推荐，单人多项目场景）：框架装到 `~/.pmai/`，当前 skill symlink 到 `~/.claude/skills/pmai-*`；任意 cwd 跑 `/pmai-init-project` 起新业务项目；`pmai upgrade` 一键升级所有项目自动跟随
 - **`--local` 项目安装**（团队仓场景）：框架实体副本 commit 进业务仓 `.claude/`；队友 `git clone` 后 0 setup 即可用 `/pmai-*` skill；升级靠 `pmai upgrade --local <dir>` 或 cwd 内跑 `/pmai-upgrade` 自动重克隆+覆盖
 
 ---
 
 ## 如何使用？
 
-> 当前命令说明反映现有框架能力。后续流程改造以 [`PRODUCT.md`](./PRODUCT.md) 的定位为准：PRD 应从"原型前重规格门"逐步转为"原型确认后的正式沉淀物"。
-
 用户反馈：「希望加个批量审核功能，一次能审多个待审项。」
 
 ```
 # 起项目（只跑一次，整个产品的根基）
 
-/pmai-init-project    起业务项目（AI 自动判断空仓 / 已有代码，聊清做什么 / 为谁做，写 PROJECT.md）
+/pmai-init-project    起业务项目（AI 自动判断空仓 / 已有代码，聊清做什么 / 为谁做，搭起 PRODUCT/TODO/DESIGN/prototype 底座）
 
 # 日常循环（模块规格先行，必要时再建）
 
@@ -162,14 +160,14 @@ skill 自动检测 cwd 是 `--local` 安装目录还是全局环境，按 mode �
 
 agent 内部一气呵成 **4 阶段**：
 
-- **阶段 A · 参数收集 + 已有内容判断** —— AskUserQuestion 5 步问 PM（项目名 → 落地路径 → 已有内容判断 → 一句话背景 → 项目意图）。**这一步 AI 自动扫目录分诊，PM 不用预先判断**：空目录直接建；扫到已有源码 / 已 init 过 → AI 在方案里**主动建议**改走 `/pmai-codebase-audit`（接旧代码）或 `/pmai-project-solution`（重做方向），但**不硬拦**，PM 坚持 init 也接住（不删代码、可逆）
+- **阶段 A · 参数收集 + 已有内容判断** —— AskUserQuestion 5 步问 PM（项目名 → 落地路径 → 已有内容判断 → 一句话背景 → 项目意图）。**这一步 AI 自动扫目录分诊，PM 不用预先判断**：空目录直接建；扫到已有源码 / 已 init 过 → AI 在方案里**主动建议**改走 `/pmai-codebase-audit`（接旧代码）或 `/pmai-strategy`（重做方向），但**不硬拦**，PM 坚持 init 也接住（不删代码、可逆）
 - **阶段 B · 骨架建设** —— agent 用 Bash 调 `init-project.sh`，创建业务仓 + git init + 首 commit `init: <name>`
-- **阶段 C · QUESTIONING（方向讨论）** —— @读 `skills/_shared/project-questioning.md`（单一真相源），按提问纪律跑讨论 + Decision gate「创建 PROJECT.md / 继续探索」二选一 + Loop 回路，最后写 `docs/PROJECT.md` + `docs/ROADMAP.md` + atomic commit `docs: project direction settled`
+- **阶段 C · 方向与底座落档** —— @读 `skills/_shared/project-questioning.md`（单一真相源），按提问纪律确认产品定位 / 业务术语 / 首批待办，最后写入 `docs/PRODUCT.md`、`docs/TODO.md`、`docs/DESIGN.md` 和 `prototype/` 骨架
 - **阶段 D · 终态汇总 + Next Up** —— 输出「✅ <name> 已就绪 / cd <target> && /pmai-design "..."」
 
 > `/pmai-init-project` 在装了 pmai 的任意 cwd 都能跑（无需在本仓）。
 
-**非交互参数化 CLI**（`measure-tthw.sh` / smoke / 批量自动化依赖）：
+**非交互参数化 CLI**（smoke / 批量自动化依赖）：
 
 ```bash
 # 优先：从 ~/.pmai/ 调用
@@ -189,12 +187,14 @@ bash scripts/init-project.sh ...
 - `<background>` — 一句话项目背景
 - `<project-intent>` — 工程结构意图（默认 `unknown`）：`prototype` / `system` / `custom` / `unknown`
 
-> 脚本是骨架构建器，**不带方向讨论**（PROJECT.md / ROADMAP.md 留空骨架）；直接调脚本适合自动化场景，PM 主动起项目走 `/pmai-init-project` skill 拿到完整体验。
+> 脚本是骨架构建器，**不带方向讨论**；直接调脚本适合自动化场景，PM 主动起项目走 `/pmai-init-project` skill 拿到完整体验。
 
 可量测 TTHW（从空项目到第一个 `status-view.py` 可识别的 active work）：
 
 ```bash
-bash scripts/measure-tthw.sh
+tmp=$(mktemp -d)
+bash scripts/init-project.sh Demo "$tmp/Demo" "一句话项目背景" prototype
+python3 scripts/status-view.py "$tmp/Demo" --narrative
 ```
 
 ### 2. PM 在业务仓里的日常循环
@@ -258,7 +258,7 @@ git push
 | Skill | 用途 |
 |---|---|
 | `/pmai-init-project` | **项目级入口**：起一个新业务项目，4 阶段一气呵成（参数 → 骨架 → 方向 → Next Up）；装了 pmai 后**任意 cwd** 可跑 |
-| `/pmai-project-solution` | **项目方向规划**：4 个独立场景（重做 / 产品路线规划 / 老板新方向 / brownfield 接入） |
+| `/pmai-strategy` | **项目方向规划**：4 个独立场景（重做 / 产品路线规划 / 老板新方向 / brownfield 接入） |
 | `/pmai-design` | **模块设计入口**：起新功能 / 重做模块，写 discussion / decisions / spec |
 | `/pmai-quick-fix` | 不走完整流程的小补丁（适合改文案、修小 bug） |
 

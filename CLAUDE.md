@@ -16,7 +16,7 @@
 **框架分发与全局安装**（2026-05-26 v1.1 落地）：
 
 - 本仓现已通过 GitHub remote `git@github.com:YYG501/PMAI_Workflow.git` 分发
-- `pmai install` 一次全局安装到 `~/.pmai/` + symlink 23 个 skill 到 `~/.claude/skills/pmai-*`（任意 cwd 可调 `/pmai-init-project`）
+- `pmai install` 一次全局安装到 `~/.pmai/` + symlink 当前 skill 到 `~/.claude/skills/pmai-*`（任意 cwd 可调 `/pmai-init-project`）
 - `pmai install --local <dir>` 项目级实体副本（兼容老消费仓 / clone 场景）
 - 升级 `pmai upgrade`（main）/ `pmai upgrade --stable`（tag）/ `pmai upgrade --to v0.x.0`（pin）
 - 安装和升级以 `README.md`、`bin/pmai`、`bin/pmai-doctor` 为当前真相源。
