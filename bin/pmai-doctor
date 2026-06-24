@@ -99,8 +99,8 @@ EXPECTED_SKILLS=(
   init-project design mockup build close publish-to-lark status
   # 按需主动调（brownfield / 项目方向 / 照站对齐）
   strategy codebase-audit mirror-site
-  # 按需辅助：小改 / 轻沉淀 / 放弃当前工作 / 反向 PRD
-  quick-fix deposit cancel prd-writing
+  # 按需辅助：小改 / 轻沉淀 / 放弃当前工作 / 反向 PRD / 说人话磨文
+  quick-fix deposit cancel prd-writing humanize
   # 框架自身维护
   pmai-upgrade skill-improve
 )
