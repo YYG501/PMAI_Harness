@@ -1,7 +1,7 @@
 ---
 name: pmai-skill-improve
 description: |
-  把 PM 写的 skill 反馈消化到对应 skill 的 SKILL.md / references。流程化执行：读反馈 + 对账现状 + PM 逐条决策 + 改 SKILL + 归档反馈到 skill-feedback/。
+  将 PM 对某 skill 的使用反馈消化至其 SKILL.md 与参考文档：读取反馈、核对现状、PM 逐条决策、修改 SKILL，并归档反馈。
 ---
 
 # /pmai-skill-improve

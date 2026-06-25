@@ -1,9 +1,7 @@
 ---
 name: pmai-init-project
 description: |
-  PM 主动入口 —— 起一个新业务项目时只建骨架、不锁流程：参数收集（含已有内容判断）→ 建骨架
-  → 上下文脊柱（PRODUCT-STATE + PRODUCT + DESIGN + prototype/ 主原型）→ Next Up。早期自由探索，
-  方向清晰后再用 /pmai-design 立第一个模块、纳入结构。在生成器仓里跑。
+  新建业务项目：搭建骨架而不锁定流程——收集基础信息、创建目录结构、建立产品定位、现状、设计约定与主原型等上下文基线。早期支持自由探索，方向明确后再经 /pmai-design 立项首个模块。
 ---
 
 # /pmai-init-project（起项目骨架，不锁流程）

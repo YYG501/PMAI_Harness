@@ -2,9 +2,8 @@
 name: pmai-upgrade
 version: 1.1.0
 description: |
-  升级 PMAI 框架到最新版本：自动检测全局 vs --local 模式、拉远程 commit、re-sync 副本、
-  AI 智能摘要 CHANGELOG。PM 主动调 /pmai-upgrade 用此 skill。
-  Voice triggers: 升级 PMAI / 升级框架 / pmai upgrade / 更新 pmai。
+  将 PMAI 框架升级至最新版本：自动识别全局或项目级安装模式，拉取远程更新、重新同步副本，并生成本次更新的智能摘要。
+  触发词：升级 PMAI / 升级框架 / pmai upgrade / 更新 pmai。
 triggers:
   - 升级 PMAI
   - 升级框架

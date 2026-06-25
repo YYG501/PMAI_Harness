@@ -1,6 +1,6 @@
 ---
 name: pmai-publish-to-lark
-description: 把本地 markdown 文档发布到飞书云文档，发布后自动合并表格中相邻相同内容的 cell。首次发布回填飞书 URL 到 markdown frontmatter，下次按 URL 覆盖原文档。通用发布编排层，被 prd-writing 等 skill 调用；PM 也可手动 `/pmai-publish-to-lark <markdown 路径> [--type prd|spec|other]`。
+description: 将本地 markdown 文档发布至飞书云文档，发布后自动合并表格中相邻的相同单元格。首次发布将飞书链接回写至文档，后续按链接覆盖更新。作为通用发布编排层供其他 skill 调用，亦支持手动执行 `/pmai-publish-to-lark <文件路径>`。
 ---
 
 # /pmai-publish-to-lark

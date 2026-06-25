@@ -1,7 +1,7 @@
 ---
 name: pmai-build
 description: |
-  只用于大需求：把 /pmai-design 定稿的模块规格，在主原型 prototype/ 里真正建出来。PM 选用什么工具建（Claude Code / Codex / cursor / 手动）+ 选要不要开 worktree 隔离；建完看原型挑错让 AI 改（review loop）+ 跑三道审（覆盖 / 视觉 / 行为）；完了 merge 回 main。讨论和小改不走这（无 worktree、直接改）。
+  大需求的构建入口：将 /pmai-design 定稿的模块规格在主原型中实际构建。由 PM 选择构建工具与是否启用隔离环境；构建后经原型评审迭代修正，并执行覆盖、视觉、行为三项审查，确认后合并回主线。仅用于大需求，讨论与小改动直接进行、不经此流程。
 ---
 
 # /pmai-build

@@ -1,17 +1,8 @@
 ---
 name: pmai-strategy
 description: |
-  项目方向校准 / 重做入口：项目跑起来之后，PM 主动回头**重定 / 校准已定的顶层方向**（产品定位 / 用户 / 路线 / 技术栈 / 术语 + TODO 待办池）。
-  与起步定方向分工清楚：首次定方向走 /pmai-init-project（greenfield 起步）或 /pmai-codebase-audit（brownfield 接入）；本 skill 专管**事后回头改方向**，不重复起步那道门。
-  **4 个独立调用场景**：
-    A 项目方向重做（跑过几轮模块工作后发现产品定位偏了）
-    B 产品路线规划（主动校准 PRODUCT 5 节 + 刷新 TODO 待办池，含季度 / 半年节奏）
-    C 老板 / 市场新方向（外部输入逼着改路线）
-    D brownfield 接入方向恢复（接入时 /pmai-codebase-audit 内联方向讨论被打断 / 想重定方向时手动补跑）
-  内部逻辑：场景判断 + @读 _shared/project-questioning.md 跑讨论（提问顺序场景特定）。
-  不占活跃工作阶段，不调用推进脚本。
-  Always trigger when the user says 重定方向 / 校准方向 / 项目方向偏了 / 产品路线规划 / 季度规划 / 老板给了新方向 / 项目方向重做。
-  do NOT use for 首次起项目定方向（那走 /pmai-init-project 或 /pmai-codebase-audit）。
+  项目方向校准与重做：项目运行一段时间后，由 PM 主动重定或校准顶层方向（产品定位、用户、路线、技术栈、术语及待办池）。负责事后的方向调整，首次方向确立请使用 /pmai-init-project 或 /pmai-codebase-audit。
+  触发词：重定方向 / 校准方向 / 项目方向偏了 / 产品路线规划 / 季度规划 / 老板给新方向。
 ---
 
 # /pmai-strategy

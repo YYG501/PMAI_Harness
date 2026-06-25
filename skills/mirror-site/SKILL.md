@@ -1,13 +1,8 @@
 ---
 name: pmai-mirror-site
 description: |
-  照参考站对齐原型：把一个站每页每弹窗走一遍当参照，在主原型 prototype/ 栈内对齐到它。两种模式：
-    ①照站重建（mode=rebuild）：从外部目标站起原型 / 照某站补几页 —— 建增量
-    ②对齐线上（mode=align）：把已有主原型对齐到自己线上真实产品 —— 改存量
-  共用 gstack /browse 爬 + checks-diff 引擎验，两阶段 Plan→PM 批→Execute。不是无损拷贝
-  （跨栈重建必然近似，「只看不导」纪律）。按需 skill（PM 手动调 / design 里 AI 判断该爬 / 该对齐时建议）。
-  Always trigger when the user says 照某站起原型 / 照它补几页 / 爬站点重建 / 原型对齐线上 / 对齐真实产品 / mirror 某站。
-  do NOT use for 不参照任何站的纯新建（走 /pmai-design + /pmai-build）。
+  对照参考站点对齐原型：逐页逐弹窗走查目标站点作为参照，在主原型中对齐。支持两种模式——依外部站点重建或补充页面、将既有原型对齐至线上真实产品。非无损复制（跨技术栈重建为近似实现）。不参照任何站点的纯新建请使用 /pmai-design 与 /pmai-build。
+  触发词：照某站起原型 / 照它补几页 / 爬站重建 / 原型对齐线上。
 ---
 
 # /pmai-mirror-site —— 照参考站对齐原型（§7.A/B 合并）

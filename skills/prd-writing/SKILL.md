@@ -1,12 +1,8 @@
 ---
 name: pmai-prd-writing
 description: |
-  PM 视图成文器：统一负责模块规格 spec.md 的生成/修改，以及 PRD 的结构和语言质量。
-  (a) 模块规格模式 — 由 /pmai-design 在探索/设计拍板后调用，也由 /pmai-close 在收尾修订规格时按需调用，输出/更新 docs/modules/<模块>/spec.md；
-  (b) 当前工作 PRD 模式 — 由 /pmai-close 在 PM 需要评审/留档 PRD 时按需调用，基于 spec/decisions/prototype 反向合成 docs/modules/<模块>/prd.md；
-  (c) 手动模式 — PM 手动 /pmai-prd-writing，写独立 PRD 或补齐/规范已有 PRD/spec。
-  Always trigger when the user says 'prd', 'PRD', '写需求文档', '写需求方案', '写评审 PRD', '写规格',
-  '规范一下 PRD/规格', '补齐 PRD/规格', or asks to turn confirmed design decisions into a PM-facing spec/PRD.
+  规格与 PRD 成文器：负责模块规格文档的生成与修改，并可基于规格反向合成可评审 PRD，保障结构与文字质量。通常由 /pmai-design、/pmai-close 流程按需调用，亦支持 PM 手动撰写独立 PRD 或规范既有文档。
+  触发词：写 PRD / 写需求文档 / 写规格 / 规范 PRD。
 ---
 
 # /pmai-prd-writing · PM 视图成文器（模块规格 + PRD）

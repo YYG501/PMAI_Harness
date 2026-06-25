@@ -1,10 +1,7 @@
 ---
 name: pmai-codebase-audit
 description: |
-  Brownfield 一气呵成入口：已有代码库接入框架时，一个命令走完——扫码产出「代码现状档」
-  （7 维度：技术栈 / 集成 / 架构 / 结构 / 约定 / 测试 / 隐患；带防 secret 扫描），PM 过目现状档后，
-  在同一流程内内联跑项目方向讨论（被现状档喂着，和新项目一样），产出 docs/PRODUCT.md + docs/TODO.md。
-  与 GSD 的 map-codebase → new-project 同构。新项目（无已有代码）不用本 skill。
+  存量代码库接入框架的入口：单条命令完成代码扫描并产出「代码现状档」（技术栈、集成、架构、结构、约定、测试、隐患七个维度，含密钥防护扫描）；PM 审阅后在同一流程内梳理产品方向，产出产品定位与待办清单。全新项目无需使用。
 ---
 
 # /pmai-codebase-audit

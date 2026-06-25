@@ -1,9 +1,7 @@
 ---
 name: pmai-mockup
 description: |
-  据讨论定下来的信息设计结论，一口气出几版 mockup（AI 设计稿图 / HTML 草图）给 PM 提前用眼睛挑、并排比——取代在规格里画 ASCII。
-  借 gstack /design-shotgun「让 PM 选一次出几版、并排比稿」的做法；几版都落进 mocks/、登记进清单、刷新成单页看版（画面铺一页里比）；
-  挑定方向再回 /pmai-design 定稿规格。轻量、不开 worktree、不动 prototype/ 主原型。是 /pmai-design 流程第 3 步调，PM 也可手动调。
+  依据讨论确定的信息设计，一次产出多版设计草图（AI 设计图或 HTML 草图）供 PM 并排比选，替代在规格中绘制 ASCII 示意。各版本归入 mocks/ 并汇总为单页对比视图；选定方向后返回 /pmai-design 定稿。轻量流程，不改动主原型。
 ---
 
 # /mockup
