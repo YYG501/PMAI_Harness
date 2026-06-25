@@ -4,9 +4,6 @@
 # 用法：
 #   curl -fsSL https://raw.githubusercontent.com/YYG501/PMAI_Workflow/main/install.sh | bash
 #
-# 或带 flag 透传给 pmai install（如 --local <dir>）：
-#   curl -fsSL https://raw.githubusercontent.com/YYG501/PMAI_Workflow/main/install.sh | bash -s -- --local /Users/me/myproj
-#
 # 做的事：
 #   1. 检查依赖（git / bash / python3）
 #   2. git clone PMAI 到临时目录（SSH 失败 fallback HTTPS）

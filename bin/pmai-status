@@ -2,7 +2,7 @@
 # pmai-status — Show current PMAI install state
 #
 # 显示：
-#   - install 模式（全局装了没 / 哪些项目有 --local 副本）
+#   - 全局安装状态（~/.pmai/ 装了没）
 #   - 当前 VERSION + 远程 main HEAD diff（多少 commit 落后）
 #   - skill 符号链接清单
 #   - update-check 提示
@@ -141,7 +141,4 @@ if [ "$INSTALLED" = "1" ] && [ "$SYMLINK_COUNT" -gt 0 ]; then
   ls -d "$CLAUDE_SKILLS"/${SKILL_PREFIX}* 2>/dev/null | xargs -n 1 basename | sed 's/^/    /'
 fi
 
-echo ""
-echo "─── Local installs (--local consumers) ───"
-echo "  (No tracking registry yet. Use 'pmai doctor' to validate known projects.)"
 echo "════════════════════════════════════════════════════════════"

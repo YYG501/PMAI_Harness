@@ -18,9 +18,7 @@ PMAI 不和 Claude Design、design-html 或 Claude Code 比"谁更快生成第�
 
 定位是 **PM 单人生产力工具**，不是团队 SOP / CI 平台 / 多租户基础设施。完整产品意义、非目标和成功标准见 [`PRODUCT.md`](./PRODUCT.md)。
 
-**分发形态**：
-- **全局安装**（默认推荐，单人多项目场景）：框架装到 `~/.pmai/`，当前 skill symlink 到 `~/.claude/skills/pmai-*`；任意 cwd 跑 `/pmai-init-project` 起新业务项目；`pmai upgrade` 一键升级所有项目自动跟随
-- **`--local` 项目安装**（团队仓场景）：框架实体副本 commit 进业务仓 `.claude/`；队友 `git clone` 后 0 setup 即可用 `/pmai-*` skill；升级靠 `pmai upgrade --local <dir>` 或 cwd 内跑 `/pmai-upgrade` 自动重克隆+覆盖
+**分发形态**：全局安装（单人多项目）。框架装到 `~/.pmai/`，当前 skill symlink 到 `~/.claude/skills/pmai-*`；任意 cwd 跑 `/pmai-init-project` 起新业务项目；`pmai upgrade` 一键升级，所有项目自动跟随。skill 只装全局一处，项目里只放非 skill 资产（`hooks/` / `.claude/settings.json` / `.work-meta.json`）——这样每个 `/pmai-*` 命令永远唯一，不会和项目副本重复。
 
 ---
 
@@ -71,12 +69,6 @@ PMAI 用全局 CLI 形态分发。一次性安装，全局生效。
 curl -fsSL https://raw.githubusercontent.com/YYG501/PMAI_Workflow/main/install.sh | bash
 ```
 
-或带 `--local <dir>` 跑项目级实体副本模式：
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/YYG501/PMAI_Workflow/main/install.sh | bash -s -- --local /path/to/your/project
-```
-
 `install.sh` 做的事：
 - 依赖检查（git / bash / python3）
 - git clone PMAI 到临时位置（SSH 优先，失败自动 fallback HTTPS）
@@ -93,8 +85,7 @@ curl -fsSL https://raw.githubusercontent.com/YYG501/PMAI_Workflow/main/install.s
 git clone git@github.com:YYG501/PMAI_Workflow.git /tmp/pmai-src
 
 # 2. install
-bash /tmp/pmai-src/bin/pmai install                       # default 全局
-# 或：bash /tmp/pmai-src/bin/pmai install --local <dir>   # 项目级实体副本
+bash /tmp/pmai-src/bin/pmai install                       # 全局安装
 
 # 3. 按 install 末尾的「📌 一步加 PATH」提示加 ~/.pmai/bin 到 PATH
 
@@ -104,17 +95,11 @@ pmai doctor    # 7 段自检
 
 > 临时 `/tmp/pmai-src` clone 只是 installer 容器，装完可删；真正稳定的副本在 `~/.pmai/`（pmai 自己 clone 的，`pmai upgrade` 拉它）。
 
-### 两种安装模式
+### 安装模式：仅全局
 
-| 模式 | 命令 | 消费仓内 framework | 跨机器 clone 消费仓 | 升级方式 |
-|---|---|---|---|---|
-| **default 全局**（推荐）| `pmai install` | 0（消费仓干净）| ❌ 失效（symlink 指 `~/.pmai/`）| `pmai upgrade` 或 `/pmai-upgrade` skill；所有消费仓自动跟 |
-| **--local 项目级** | `pmai install --local <dir>` | 实体副本（~3MB）| ✅ 自含可用 | `pmai upgrade --local <dir>` 或 cwd 内 `/pmai-upgrade` skill 自动按 local 模式重克隆覆盖；需手动 commit + push |
+PMAI 只有全局安装一种形态（`pmai install` → clone `~/.pmai/` + symlink `~/.claude/skills/pmai-*`）。消费仓保持干净，skill 不进项目；升级一处 `pmai upgrade`，所有项目自动跟随。
 
-**怎么选**：
-- **单人多项目** → default 全局
-- **团队共享仓**（队友不愿装 pmai CLI） → `--local`
-- **CI / 离线机器 / 想锁定框架版本随项目走** → `--local`
+> 旧的 `--local`（往项目 `.claude/` 拷实体副本）已移除：它和全局并存时会让每个 `/pmai-*` 命令在菜单里重复，且副本不跟随升级而陈旧。消费仓需要的 hooks / `settings.json` 仍单独放项目里（不是 skill，不会重复）。已有遗留副本用 `pmai uninstall --local <dir>` 清理。
 
 **升级 / 卸载 / 状态**：
 
@@ -124,15 +109,10 @@ pmai upgrade                          # 拉 main 最新（吃滚动版）
 pmai upgrade --stable                 # 跳到最新 git tag（PM 打过的稳定 baseline）
 pmai upgrade --to v0.1.0              # 锁定指定版本（回滚）
 
-# --local 模式（团队仓重克隆 + 覆盖副本 + 提示 commit/push）
-pmai upgrade --local /path/to/team-repo
-pmai upgrade --local /path/to/team-repo --stable
-pmai upgrade --local /path/to/team-repo --to v0.1.0
-
 # 其他
-pmai status               # 当前 install 模式 + VERSION + main HEAD diff
+pmai status               # VERSION + main HEAD diff
 pmai doctor               # 完整性自检
-pmai uninstall            # 清掉全局装；--local <dir> 清项目级
+pmai uninstall            # 清掉全局装；--local <dir> 清理遗留项目副本
 ```
 
 **Claude Code 内升级（推荐 — 带 AI 智能 What's New 摘要）**：
@@ -141,7 +121,7 @@ pmai uninstall            # 清掉全局装；--local <dir> 清项目级
 /pmai-upgrade
 ```
 
-skill 自动检测 cwd 是 `--local` 安装目录还是全局环境，按 mode 走对应升级命令；升级完读 CHANGELOG diff + 用自然语言 5-7 bullet 总结新内容。`--local` 模式升级完会打印 `git add .claude/ + commit + push` 提示让 PM 自己执行（团队仓 commit message 由 PM 拍板）。
+skill 跑全局升级命令；升级完读 CHANGELOG diff + 用自然语言 5-7 bullet 总结新内容。
 
 ---
 
@@ -213,39 +193,11 @@ python3 scripts/status-view.py "$tmp/Demo" --narrative
 
 简单改动可以跳过完整流程：直接改完后用 `/pmai-close` 或 `/pmai-deposit` 做轻量沉淀。大需求才进入 `/pmai-build`。
 
-### 3. 团队仓使用（`--local` 模式）
+### 3. 多机 / 团队仓
 
-如果你的业务仓是团队共享仓（队友不愿装 pmai CLI），用 `--local` 把框架副本 commit 进仓：
+PMAI 走纯全局：每台要用的机器各自 `pmai install` 一次（全局），消费仓里不放 skill 副本。换机器 clone 业务仓后，在该机跑一次全局安装即可用 `/pmai-*`。
 
-```bash
-# 你（PM）首装
-cd /path/to/team-repo
-curl -fsSL https://raw.githubusercontent.com/YYG501/PMAI_Workflow/main/install.sh | bash -s -- --local .
-git add .claude/
-git commit -m "chore: add PMAI framework (--local install)"
-git push
-
-# 队友
-git clone <team-repo>
-cd <team-repo>
-# → 直接 Claude Code 里用 /pmai-* skill，0 setup
-
-# 你（PM）升级
-cd /path/to/team-repo
-# 方式 A：Claude Code 内（推荐，带 AI 摘要）
-/pmai-upgrade        # skill 自动按 --local 模式重克隆 + 覆盖副本
-# 方式 B：shell
-pmai upgrade --local .
-# 然后按提示 commit + push：
-git add .claude/
-git commit -m "chore: upgrade PMAI to v<NEW>"
-git push
-```
-
-**注意事项**：
-- 检查 `.gitignore` 没把 `.claude/scripts/skills/agents/` ignore（默认不 ignore，但本仓如有自定义 `.gitignore` 需确认）
-- 业务实例 template（如配过 token 的 `templates/lark-publish.json.tmpl`）重装前 backup 一份，重装后放回
-- 升级建议由你一人负责，避免队友各自跑导致 commit 冲突
+> 旧的 `--local`（把框架副本 commit 进业务仓 `.claude/`）已移除——它和全局并存会让命令重复、副本陈旧。若仓里还有遗留副本，清理：`pmai uninstall --local <仓目录>`（只删项目内副本，不动全局）。需要的 `hooks/` + `.claude/settings.json` 保留（那些不是 skill，不会重复）。
 
 ---
 
@@ -288,7 +240,7 @@ git push
 
 | Skill | 用途 |
 |---|---|
-| `/pmai-upgrade` | 升级 PMAI 框架（自动检测 global / `--local` 模式 + AI 智能 What's New 摘要 + AskUser 4 选项：main / stable tag / 锁版本 / 暂缓） |
+| `/pmai-upgrade` | 升级 PMAI 框架（全局；AI 智能 What's New 摘要 + AskUser 4 选项：main / stable tag / 锁版本 / 暂缓） |
 | `/pmai-skill-improve` | PM 用 AI 协作改 skill（限生成器仓内用） |
 
 ---

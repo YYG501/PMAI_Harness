@@ -8,13 +8,13 @@
 #   ~/.claude/skills/_shared      (if it's a symlink we created)
 #
 # What is NOT removed:
-#   --local 模式下消费仓的实体副本 → 单独用 `pmai uninstall --local <dir>` 清
+#   项目里的遗留实体副本 → 单独用 `pmai uninstall --local <dir>` 清
 #   ~/.claude/settings.json       项目级 settings 不动（hook 注册在消费仓内）
 #
 # Flags:
 #   --force                       不问确认（preview 仍打印）
 #   --keep-state                  保留 ~/.pmai-state/ 配置 / cache（重装时偏好不丢）
-#   --local <dir>                 只清 <dir> 的实体副本，~/.pmai/ 全局不动
+#   --local <dir>                 清理遗留项目副本（旧 install --local 已移除；此项专供迁移清场）
 
 set -uo pipefail  # 注意：no -e，uninstall 必须能跑完
 
@@ -29,7 +29,7 @@ Usage:
   pmai uninstall                # Preview + [y/N] confirm + remove global install
   pmai uninstall --force        # Skip [y/N]（preview 仍打印）
   pmai uninstall --keep-state   # 保留 ~/.pmai-state/（config / cache / marker）
-  pmai uninstall --local <dir>  # Remove only <dir>'s local copy, keep ~/.pmai/
+  pmai uninstall --local <dir>  # 清理遗留项目副本（迁移用），~/.pmai/ 全局不动
 
 Removed:
   ~/.pmai/
@@ -156,7 +156,7 @@ fi
 
 echo ""
 echo "NOT removed:"
-echo "  - --local installs (项目级实体副本)；用 'pmai uninstall --local <dir>' 单独清"
+echo "  - 项目里遗留的实体副本；用 'pmai uninstall --local <dir>' 单独清"
 echo "  - 消费仓内 .claude/settings.json（项目自管）"
 [ "$KEEP_STATE" = "1" ] && echo "  - ~/.pmai-state/ (--keep-state)"
 
@@ -205,5 +205,5 @@ else
 fi
 echo "   ~/.claude/skills/pmai-* removed ($REMOVED_COUNT symlinks)"
 echo "═══════════════════════════════════════"
-echo "Note: --local installs (project-local copies) NOT touched."
-echo "      Use 'pmai uninstall --local <dir>' to remove those individually."
+echo "Note: 项目里遗留的实体副本不动。"
+echo "      用 'pmai uninstall --local <dir>' 单独清理。"

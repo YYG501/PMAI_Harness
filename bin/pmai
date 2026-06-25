@@ -14,12 +14,11 @@ PMAI — PM-AI-Workflow framework CLI
 Usage: pmai <subcommand> [args...]
 
 Subcommands:
-  install              Install PMAI globally (default) or locally
-                       Flags: --local <dir>
+  install              Install PMAI globally (clone → ~/.pmai/ + skill symlinks)
   upgrade              Pull latest framework code
-                       Flags: --stable | --to <tag> | --local <dir>
+                       Flags: --stable | --to <tag>
   uninstall            Remove PMAI install
-                       Flags: --force | --local <dir>
+                       Flags: --force | --local <dir> (清理遗留项目副本)
   status               Show install state + version diff
   doctor               Run integrity self-check
   update-check         Check if newer stable tag available (silent if up-to-date)
@@ -33,11 +32,9 @@ Meta:
   --help, -h           This help
 
 Examples:
-  pmai install                              # Default global install
-  pmai install --local ~/Desktop/example-consumer-app
-  pmai upgrade                              # Pull main (global)
-  pmai upgrade --stable                     # Jump to latest tag (global)
-  pmai upgrade --local ~/Desktop/team-repo  # Re-clone + overwrite team repo's .claude/
+  pmai install                              # Global install
+  pmai upgrade                              # Pull main
+  pmai upgrade --stable                     # Jump to latest tag
   pmai status                               # Show current state
 
 Source: $BIN_DIR

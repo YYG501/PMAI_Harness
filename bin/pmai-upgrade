@@ -5,15 +5,14 @@
 #   pmai upgrade                          # 全局：cd ~/.pmai && git pull origin main
 #   pmai upgrade --stable                 # 全局：跳到最新 git tag
 #   pmai upgrade --to v0.1.0              # 全局：锁定指定 tag
-#   pmai upgrade --local <dir>            # --local 模式：重克隆 + 覆盖 <dir>/.claude/ 副本（无需 ~/.pmai/）
-#   pmai upgrade --local <dir> --stable   # --local + stable tag
-#   pmai upgrade --local <dir> --to v0.x  # --local + 锁定 tag
+#
+# 注：旧的 `--local <dir>` 升级模式已移除（连同 install --local）。skill 一律走全局，
+#     不再往项目里拷副本，所以也不存在"升级项目副本"这回事。
 #
 # 安全保证：
 #   1. 升级前 dirty 自动 stash（保护 PM 在 ~/.pmai 的本地改动）
 #   2. 失败自动回滚到 OLD_HEAD + symlink 按 OLD_HEAD 重建（trap ERR）
-#   3. --local 模式 mv-swap 原子切换 + .bak 兜底
-#   4. 升完跑 pmai-doctor 自检；不通触发回滚
+#   3. 升完跑 pmai-doctor 自检；不通触发回滚
 
 set -Eeuo pipefail
 
@@ -40,9 +39,6 @@ Usage:
   pmai upgrade                        # Pull latest main commit (global ~/.pmai/)
   pmai upgrade --stable               # Jump to latest git tag (stable baseline)
   pmai upgrade --to v0.1.0            # Pin to specific tag (rollback / freeze)
-  pmai upgrade --local <dir>          # --local mode: re-clone + overwrite <dir>/.claude/
-  pmai upgrade --local <dir> --stable # --local + stable tag
-  pmai upgrade --local <dir> --to vX  # --local + pin
   pmai upgrade --no-whats-new         # 升级后跳过 pmai-whats-new 自动展示（skill 接管时用）
 
 Env override:
@@ -53,8 +49,6 @@ EOF
 MODE="main"
 TARGET_TAG=""
 NO_WHATS_NEW=0
-LOCAL_MODE=0
-LOCAL_DIR=""
 
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -67,15 +61,6 @@ while [ $# -gt 0 ]; do
       MODE="to"
       shift
       ;;
-    --local)
-      shift
-      LOCAL_DIR="${1:-}"
-      [ -z "$LOCAL_DIR" ] && { echo "❌ --local needs <dir>" >&2; usage >&2; exit 2; }
-      [ ! -d "$LOCAL_DIR" ] && { echo "❌ <dir> not found: $LOCAL_DIR" >&2; exit 2; }
-      LOCAL_DIR=$(cd "$LOCAL_DIR" && pwd)
-      LOCAL_MODE=1
-      shift
-      ;;
     --no-whats-new) NO_WHATS_NEW=1; shift ;;
     "") shift ;;
     *) echo "❌ unknown flag: $1" >&2; usage >&2; exit 2 ;;
@@ -83,7 +68,7 @@ while [ $# -gt 0 ]; do
 done
 
 # ─────────────────────────────────────────────────────────────
-# 共享 helper：把 src_skills 装到 dst_skills（symlink / copy）
+# 共享 helper：把 src_skills 装到 dst_skills（symlink）
 # ─────────────────────────────────────────────────────────────
 rebuild_symlinks() {
   local src_skills="$1"
@@ -110,35 +95,8 @@ rebuild_symlinks() {
   echo "$count"
 }
 
-install_skills_copy() {
-  local src_skills="$1"
-  local dst_skills="$2"
-  local count=0
-  mkdir -p "$dst_skills"
-  for skill_dir in "$src_skills"/*/; do
-    [ -d "$skill_dir" ] || continue
-    local skill_name dst
-    skill_name=$(basename "$skill_dir")
-    case "$skill_name" in
-      _shared)  dst="$dst_skills/_shared" ;;
-      pmai-*)   dst="$dst_skills/$skill_name" ;;
-      *)        dst="$dst_skills/${SKILL_PREFIX}${skill_name}" ;;
-    esac
-    [ -e "$dst" ] || [ -L "$dst" ] && rm -rf "$dst" || true
-    cp -R "${skill_dir%/}/." "$dst/"
-    count=$((count + 1))
-  done
-  echo "$count"
-}
-
-expected_exposed_skill_count() {
-  local src_skills="$1"
-  find "$src_skills" -mindepth 1 -maxdepth 1 -type d ! -name _shared 2>/dev/null \
-    | wc -l | tr -d ' '
-}
-
 # ─────────────────────────────────────────────────────────────
-# 回滚状态（global / local 共用 flag 防重入）
+# 回滚状态
 # ─────────────────────────────────────────────────────────────
 ROLLBACK_DONE=0
 STASHED=0
@@ -162,128 +120,6 @@ global_rollback() {
   fi
   exit 1
 }
-
-local_rollback() {
-  [ "$ROLLBACK_DONE" = "1" ] && return
-  ROLLBACK_DONE=1
-  trap - ERR EXIT
-  echo "" >&2
-  echo "❌ --local 升级失败，回滚 $LOCAL_DIR/.claude/..." >&2
-  for d in scripts agents skills; do
-    if [ -d "$LOCAL_DIR/.claude/$d.bak" ]; then
-      rm -rf "$LOCAL_DIR/.claude/$d" 2>/dev/null || true
-      mv "$LOCAL_DIR/.claude/$d.bak" "$LOCAL_DIR/.claude/$d" 2>/dev/null || true
-    fi
-    rm -rf "$LOCAL_DIR/.claude/$d.new" 2>/dev/null || true
-  done
-  exit 1
-}
-
-# ─────────────────────────────────────────────────────────────
-# --local 模式：staging clone + mv swap
-# ─────────────────────────────────────────────────────────────
-if [ "$LOCAL_MODE" = "1" ]; then
-  if [ ! -f "$LOCAL_DIR/.claude/.pmai-version" ]; then
-    echo "❌ $LOCAL_DIR/.claude/.pmai-version 不存在" >&2
-    echo "   这不是 --local 安装目录。要从头装：" >&2
-    echo "   curl -fsSL https://raw.githubusercontent.com/YYG501/PMAI_Workflow/main/install.sh | bash -s -- --local $LOCAL_DIR" >&2
-    exit 1
-  fi
-
-  OLD_VER=$(cat "$LOCAL_DIR/.claude/.pmai-version" 2>/dev/null || echo unknown)
-
-  SRC=$(mktemp -d "/tmp/pmai-upgrade-local-XXXXXX")
-  trap "rm -rf '$SRC' 2>/dev/null || true" EXIT
-  echo "→ Cloning fresh source to $SRC ..."
-  timeout 120 git clone "$REMOTE" "$SRC" 2>&1 | tail -3 || {
-    echo "❌ git clone 超时（120s）或失败。网络 / SSH 不通？" >&2
-    exit 1
-  }
-
-  cd "$SRC"
-  case "$MODE" in
-    main) ;;  # 默认在 main
-    stable)
-      LATEST_TAG=$(git tag -l 'v*' | sort -V | tail -1)
-      [ -z "$LATEST_TAG" ] && { echo "❌ 远程无 v* tag" >&2; exit 1; }
-      echo "→ Checkout stable tag: $LATEST_TAG"
-      git checkout "$LATEST_TAG" 2>&1 | tail -3
-      ;;
-    to)
-      if ! git rev-parse "refs/tags/$TARGET_TAG" >/dev/null 2>&1; then
-        echo "❌ tag $TARGET_TAG 不存在。可用 tag:" >&2
-        git tag -l 'v*' | sort -V | tail -10 >&2
-        exit 1
-      fi
-      echo "→ Checkout tag: $TARGET_TAG"
-      git checkout "$TARGET_TAG" 2>&1 | tail -3
-      ;;
-  esac
-
-  NEW_VER=$(cat VERSION 2>/dev/null || echo unknown)
-  NEW_HEAD=$(git rev-parse --short HEAD)
-
-  # D：staging + mv swap（原子）
-  echo "→ Staging $LOCAL_DIR/.claude/{scripts,agents,skills} (atomic swap)..."
-
-  # 装 trap（staging 期间挂掉清 .new；swap 后挂掉回 .bak）
-  trap local_rollback ERR
-
-  # 1. cp 到 .new staging dir
-  rm -rf "$LOCAL_DIR/.claude/scripts.new" "$LOCAL_DIR/.claude/agents.new" "$LOCAL_DIR/.claude/skills.new"
-  cp -R "$SRC/scripts" "$LOCAL_DIR/.claude/scripts.new"
-  cp -R "$SRC/agents" "$LOCAL_DIR/.claude/agents.new"
-  SKILL_COUNT=$(install_skills_copy "$SRC/skills" "$LOCAL_DIR/.claude/skills.new")
-
-  # 1.5 staging 自检：暴露 skill 数必须与当前源 skills/ 全等（除 _shared）
-  EXPECTED_STAGED_SKILLS=$(expected_exposed_skill_count "$SRC/skills")
-  STAGED_SKILLS=$(find "$LOCAL_DIR/.claude/skills.new" -maxdepth 1 -name 'pmai-*' -type d 2>/dev/null | wc -l | tr -d ' ')
-  if [ "$STAGED_SKILLS" != "$EXPECTED_STAGED_SKILLS" ]; then
-    echo "❌ Staging 自检失败：skill 暴露数 $STAGED_SKILLS != 当前源 $EXPECTED_STAGED_SKILLS" >&2
-    local_rollback
-  fi
-
-  # 2. mv swap：原 → .bak，staging → 正式
-  for d in scripts agents skills; do
-    [ -d "$LOCAL_DIR/.claude/$d" ] && mv "$LOCAL_DIR/.claude/$d" "$LOCAL_DIR/.claude/$d.bak"
-    mv "$LOCAL_DIR/.claude/$d.new" "$LOCAL_DIR/.claude/$d"
-  done
-
-  # 3. 写 version + 拷 CHANGELOG（这两个失败也能回滚，trap 还在）
-  echo "$NEW_VER" > "$LOCAL_DIR/.claude/.pmai-version"
-  [ -f "$SRC/CHANGELOG.md" ] && cp "$SRC/CHANGELOG.md" "$LOCAL_DIR/.claude/CHANGELOG.md"
-
-  # 4. 成功，清 .bak + 解除 trap
-  for d in scripts agents skills; do
-    rm -rf "$LOCAL_DIR/.claude/$d.bak" 2>/dev/null || true
-  done
-  trap - ERR
-  trap "rm -rf '$SRC' 2>/dev/null || true" EXIT  # 重设只清 SRC
-
-  echo ""
-  echo "═══════════════════════════════════════"
-  if [ "$OLD_VER" = "$NEW_VER" ]; then
-    echo "✅ PMAI (--local) 已是最新（v${NEW_VER} @ ${NEW_HEAD}）"
-  else
-    echo "✅ PMAI (--local) 升级：v${OLD_VER} → v${NEW_VER} (${NEW_HEAD})"
-    mkdir -p "$PMAI_STATE"
-    echo "$OLD_VER" > "$PMAI_STATE/just-upgraded-from"
-  fi
-  echo "   target: $LOCAL_DIR"
-  echo "   skill:  $SKILL_COUNT entries copied"
-  echo "═══════════════════════════════════════"
-
-  if [ "$OLD_VER" != "$NEW_VER" ]; then
-    echo ""
-    echo "📋 team 仓需 commit + push 让队友拿到新版："
-    echo "   cd $LOCAL_DIR"
-    echo "   git add .claude/"
-    echo "   git commit -m 'chore: upgrade PMAI to v${NEW_VER}'"
-    echo "   git push"
-  fi
-
-  exit 0
-fi
 
 # ─────────────────────────────────────────────────────────────
 # 全局模式：A stash + B trap rollback + fetch / checkout + symlink + E doctor

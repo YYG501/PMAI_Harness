@@ -4,7 +4,7 @@
 # Output: {} on allow (exit 0), {"decision":"deny","reason":"..."} on deny (exit 2)
 set -euo pipefail
 
-# 脚本所在目录（用于找 sibling python3 helpers，I-mini 全局 / --local 副本两种模式都对）
+# 脚本所在目录（用于找 sibling python3 helpers，全局安装模式）
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # --- Read JSON from stdin (one-shot) ---

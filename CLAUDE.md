@@ -17,7 +17,7 @@
 
 - 本仓现已通过 GitHub remote `git@github.com:YYG501/PMAI_Workflow.git` 分发
 - `pmai install` 一次全局安装到 `~/.pmai/` + symlink 当前 skill 到 `~/.claude/skills/pmai-*`（任意 cwd 可调 `/pmai-init-project`）
-- `pmai install --local <dir>` 项目级实体副本（兼容老消费仓 / clone 场景）
+- **仅全局安装**：skill 只装 `~/.claude/skills/` 一处，不往项目里拷副本；项目里只放非 skill 资产（`hooks/` / `.claude/settings.json` / `.work-meta.json`）。旧 `--local`（项目实体副本）已移除——和全局并存会让 `/pmai-*` 命令重复且副本陈旧；遗留副本用 `pmai uninstall --local <dir>` 清理
 - 升级 `pmai upgrade`（main）/ `pmai upgrade --stable`（tag）/ `pmai upgrade --to v0.x.0`（pin）
 - 安装和升级以 `README.md`、`bin/pmai`、`bin/pmai-doctor` 为当前真相源。
 - 老的手动同步 SOP：[`框架同步-SOP.md`](./docs/归档/废弃/框架同步-SOP.md) **DEPRECATED + 已归档**（pmai install/upgrade 承接；`pmai sync` 落地后彻底退役）

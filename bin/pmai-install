@@ -1,9 +1,13 @@
 #!/usr/bin/env bash
-# pmai-install — Install PMAI framework
+# pmai-install — Install PMAI framework (global only)
 #
-# 2 模式：
-#   1) default 全局：clone 远程到 ~/.pmai/ + symlink 当前 skill 到 ~/.claude/skills/pmai-*
-#   2) --local <dir>：不依赖 ~/.pmai/，<dir>/.claude/{scripts,skills,agents}/ 实体副本
+# 全局安装：clone 远程到 ~/.pmai/ + symlink 当前 skill 到 ~/.claude/skills/pmai-*
+# 装一次，任意 cwd 可用 /pmai-* skill。
+#
+# 注：旧的 `--local <dir>`（往项目 .claude/ 拷实体副本）已移除——它和全局安装并存时
+#     会让每个 /pmai-* 命令在菜单里重复，且副本不跟随升级而变陈旧。skill 一律走全局，
+#     项目里只放非 skill 资产（hooks / .claude/settings.json / .work-meta.json）。
+#     清理遗留的项目副本：`pmai uninstall --local <dir>`。
 
 set -euo pipefail
 
@@ -15,8 +19,7 @@ SKILL_PREFIX="pmai-"
 usage() {
   cat <<EOF
 Usage:
-  pmai install                # Default global: clone → ~/.pmai/ + symlink ~/.claude/skills/pmai-*
-  pmai install --local <dir>  # No ~/.pmai/, copy entity to <dir>/.claude/{scripts,skills,agents}/
+  pmai install                # Global: clone → ~/.pmai/ + symlink ~/.claude/skills/pmai-*
 
 Env override:
   PMAI_REMOTE=<git-url>       # Override default github remote
@@ -25,33 +28,20 @@ Env override:
 Notes:
   - Skills get 'pmai-' prefix at registration (e.g., /pmai-init-project).
   - skills/_shared/ is a shared resource (not a skill); skipped from prefix routing
-    but still copied/linked alongside other skills so SKILL.md cross-refs work.
+    but still linked alongside other skills so SKILL.md cross-refs work.
 EOF
 }
 
-MODE="global"
-LOCAL_DIR=""
-
 case "${1:-}" in
   --help|-h) usage; exit 0 ;;
-  --local)
-    shift
-    LOCAL_DIR="${1:-}"
-    [ -z "$LOCAL_DIR" ] && { echo "❌ --local needs <dir>" >&2; usage >&2; exit 2; }
-    [ ! -d "$LOCAL_DIR" ] && { echo "❌ <dir> not found: $LOCAL_DIR" >&2; exit 2; }
-    LOCAL_DIR=$(cd "$LOCAL_DIR" && pwd)  # 绝对路径
-    MODE="local"
-    ;;
-  "") MODE="global" ;;
+  "") ;;
   *) echo "❌ unknown flag: $1" >&2; usage >&2; exit 2 ;;
 esac
 
-# 子函数：把 src_skills 下的目录装到 dst_skills，加 pmai- 前缀
-# link_mode: "symlink" | "copy"
+# 子函数：把 src_skills 下的目录 symlink 到 dst_skills，加 pmai- 前缀
 install_skills() {
   local src_skills="$1"
   local dst_skills="$2"
-  local link_mode="$3"
   local count=0
 
   mkdir -p "$dst_skills"
@@ -59,8 +49,8 @@ install_skills() {
     [ -d "$skill_dir" ] || continue
     skill_name=$(basename "$skill_dir")
 
-    # _shared 不是 skill，但 SKILL.md 内部交叉引用 → 跟随拷/链但不加前缀
-    # pmai-* 已带前缀的目录（如 skills/pmai-upgrade/）→ 不再加前缀（防 pmai-pmai-upgrade 双前缀 bug）
+    # _shared 不是 skill，但 SKILL.md 内部交叉引用 → 跟随链接但不加前缀
+    # pmai-* 已带前缀的目录（如 skills/pmai-upgrade/）→ 不再加前缀（防双前缀 bug）
     case "$skill_name" in
       _shared)  dst="$dst_skills/_shared" ;;
       pmai-*)   dst="$dst_skills/$skill_name" ;;
@@ -70,11 +60,7 @@ install_skills() {
     # 已存在则清掉重做
     [ -e "$dst" ] || [ -L "$dst" ] && rm -rf "$dst"
 
-    if [ "$link_mode" = "symlink" ]; then
-      ln -s "${skill_dir%/}" "$dst"
-    else
-      cp -R "$skill_dir." "$dst/"
-    fi
+    ln -s "${skill_dir%/}" "$dst"
     count=$((count + 1))
   done
   echo "   installed $count skill entries → $dst_skills"
@@ -90,120 +76,85 @@ remove_managed_skill_symlinks() {
   done
 }
 
-if [ "$MODE" = "global" ]; then
-  echo "→ Installing PMAI globally..."
-  if [ -d "$PMAI_HOME/.git" ]; then
-    echo "⚠️  $PMAI_HOME 已存在。要升级跑: pmai upgrade" >&2
-    echo "   或先 pmai uninstall 清理后重装。" >&2
-    exit 1
-  fi
-  if [ -e "$PMAI_HOME" ]; then
-    echo "❌ $PMAI_HOME 存在但不是 git 仓。手动清理后重试。" >&2
-    exit 1
-  fi
-  echo "→ git clone $REMOTE → $PMAI_HOME"
-  git clone "$REMOTE" "$PMAI_HOME"
-  echo "→ Symlink skills to $CLAUDE_SKILLS/pmai-*"
-  remove_managed_skill_symlinks "$CLAUDE_SKILLS"
-  install_skills "$PMAI_HOME/skills" "$CLAUDE_SKILLS" symlink
-  VER=$(cat "$PMAI_HOME/VERSION" 2>/dev/null || echo unknown)
-  echo ""
-  echo "═══════════════════════════════════════"
-  echo "✅ PMAI v$VER installed globally"
-  echo "   ~/.pmai/         framework source"
-  echo "   ~/.claude/skills/pmai-*   skill exposure"
-  echo "═══════════════════════════════════════"
-
-  # PATH 检测：~/.pmai/bin 不在 PATH 就提示 oneshot（不自动改用户 rc 文件，避免破坏配置）
-  #
-  # 双 rc 提示：zsh 用户的 terminal 走 .zshrc，但 Claude Code 内 AI 用 bash 子进程
-  # 读 .bash_profile/.bashrc，光加 .zshrc 时 chat 里跑 pmai 仍 not found。
-  PMAI_BIN="$PMAI_HOME/bin"
-  if [ -d "$PMAI_BIN" ] && ! echo ":$PATH:" | grep -q ":$PMAI_BIN:"; then
-    # primary rc：当前 shell 用（terminal 场景）
-    case "${SHELL##*/}" in
-      zsh)  PRIMARY_RC="$HOME/.zshrc" ;;
-      bash) [ -f "$HOME/.bashrc" ] && PRIMARY_RC="$HOME/.bashrc" || PRIMARY_RC="$HOME/.bash_profile" ;;
-      *)    PRIMARY_RC="$HOME/.profile" ;;
-    esac
-
-    # secondary rc：仅 zsh 用户需要。Claude Code Bash 工具开 bash 子进程，
-    # macOS 上 login bash 读 .bash_profile，没有则 .bashrc。
-    CC_BASH_RC=""
-    if [ "${SHELL##*/}" = "zsh" ]; then
-      if [ -f "$HOME/.bash_profile" ]; then
-        CC_BASH_RC="$HOME/.bash_profile"
-      elif [ -f "$HOME/.bashrc" ]; then
-        CC_BASH_RC="$HOME/.bashrc"
-      fi
-    fi
-
-    PRIMARY_NEED=0
-    CC_BASH_NEED=0
-    if [ -f "$PRIMARY_RC" ] && grep -q "\.pmai/bin" "$PRIMARY_RC" 2>/dev/null; then
-      echo "ℹ️  $PRIMARY_RC 已含 ~/.pmai/bin export — 若当前 shell 没生效，开新窗口或 source 即可"
-    else
-      PRIMARY_NEED=1
-    fi
-    if [ -n "$CC_BASH_RC" ]; then
-      if [ -f "$CC_BASH_RC" ] && grep -q "\.pmai/bin" "$CC_BASH_RC" 2>/dev/null; then
-        : # 已有，沉默跳过（避免 PM 屏幕被两条 ℹ️ 刷屏）
-      else
-        CC_BASH_NEED=1
-      fi
-    fi
-
-    if [ "$PRIMARY_NEED" = "1" ] || [ "$CC_BASH_NEED" = "1" ]; then
-      echo ""
-      echo "📌 加 PATH（pmai 命令立即可用）："
-      if [ "$PRIMARY_NEED" = "1" ]; then
-        echo "   echo 'export PATH=\"\$HOME/.pmai/bin:\$PATH\"' >> $PRIMARY_RC    # terminal 用"
-      fi
-      if [ "$CC_BASH_NEED" = "1" ]; then
-        echo "   echo 'export PATH=\"\$HOME/.pmai/bin:\$PATH\"' >> $CC_BASH_RC    # Claude Code 内 bash 子进程用"
-      fi
-      if [ "$PRIMARY_NEED" = "1" ]; then
-        if [ "$CC_BASH_NEED" = "1" ]; then
-          echo "   source $PRIMARY_RC    # terminal 立即生效；Claude Code 下次启动 session 生效"
-        else
-          echo "   source $PRIMARY_RC"
-        fi
-      fi
-    fi
-  fi
-
-  echo "Next: cd <any-project> && /pmai-init-project"
-else
-  echo "→ Installing PMAI locally → $LOCAL_DIR"
-  if [ -d "$PMAI_HOME/.git" ]; then
-    SRC="$PMAI_HOME"
-    CLEANUP_SRC=0
-    echo "   (复用已存在 $PMAI_HOME 作源)"
-  else
-    SRC=$(mktemp -d /tmp/pmai-local-src-XXXXXX)
-    CLEANUP_SRC=1
-    echo "→ git clone $REMOTE → $SRC (临时)"
-    git clone "$REMOTE" "$SRC"
-  fi
-  mkdir -p "$LOCAL_DIR/.claude"
-  echo "→ Copy scripts → $LOCAL_DIR/.claude/scripts/"
-  rm -rf "$LOCAL_DIR/.claude/scripts"
-  cp -R "$SRC/scripts" "$LOCAL_DIR/.claude/scripts"
-  echo "→ Copy agents → $LOCAL_DIR/.claude/agents/"
-  rm -rf "$LOCAL_DIR/.claude/agents"
-  cp -R "$SRC/agents" "$LOCAL_DIR/.claude/agents"
-  echo "→ Copy skills (with $SKILL_PREFIX prefix) → $LOCAL_DIR/.claude/skills/"
-  rm -rf "$LOCAL_DIR/.claude/skills"
-  install_skills "$SRC/skills" "$LOCAL_DIR/.claude/skills" copy
-  VER=$(cat "$SRC/VERSION" 2>/dev/null || echo unknown)
-  echo "$VER" > "$LOCAL_DIR/.claude/.pmai-version"
-  if [ "$CLEANUP_SRC" = "1" ]; then
-    rm -rf "$SRC"
-  fi
-  echo ""
-  echo "═══════════════════════════════════════"
-  echo "✅ PMAI v$VER installed locally"
-  echo "   $LOCAL_DIR/.claude/{scripts,skills,agents}"
-  echo "═══════════════════════════════════════"
-  echo "Next: cd $LOCAL_DIR && /pmai-init-project"
+echo "→ Installing PMAI globally..."
+if [ -d "$PMAI_HOME/.git" ]; then
+  echo "⚠️  $PMAI_HOME 已存在。要升级跑: pmai upgrade" >&2
+  echo "   或先 pmai uninstall 清理后重装。" >&2
+  exit 1
 fi
+if [ -e "$PMAI_HOME" ]; then
+  echo "❌ $PMAI_HOME 存在但不是 git 仓。手动清理后重试。" >&2
+  exit 1
+fi
+echo "→ git clone $REMOTE → $PMAI_HOME"
+git clone "$REMOTE" "$PMAI_HOME"
+echo "→ Symlink skills to $CLAUDE_SKILLS/pmai-*"
+remove_managed_skill_symlinks "$CLAUDE_SKILLS"
+install_skills "$PMAI_HOME/skills" "$CLAUDE_SKILLS"
+VER=$(cat "$PMAI_HOME/VERSION" 2>/dev/null || echo unknown)
+echo ""
+echo "═══════════════════════════════════════"
+echo "✅ PMAI v$VER installed globally"
+echo "   ~/.pmai/         framework source"
+echo "   ~/.claude/skills/pmai-*   skill exposure"
+echo "═══════════════════════════════════════"
+
+# PATH 检测：~/.pmai/bin 不在 PATH 就提示 oneshot（不自动改用户 rc 文件，避免破坏配置）
+#
+# 双 rc 提示：zsh 用户的 terminal 走 .zshrc，但 Claude Code 内 AI 用 bash 子进程
+# 读 .bash_profile/.bashrc，光加 .zshrc 时 chat 里跑 pmai 仍 not found。
+PMAI_BIN="$PMAI_HOME/bin"
+if [ -d "$PMAI_BIN" ] && ! echo ":$PATH:" | grep -q ":$PMAI_BIN:"; then
+  # primary rc：当前 shell 用（terminal 场景）
+  case "${SHELL##*/}" in
+    zsh)  PRIMARY_RC="$HOME/.zshrc" ;;
+    bash) [ -f "$HOME/.bashrc" ] && PRIMARY_RC="$HOME/.bashrc" || PRIMARY_RC="$HOME/.bash_profile" ;;
+    *)    PRIMARY_RC="$HOME/.profile" ;;
+  esac
+
+  # secondary rc：仅 zsh 用户需要。Claude Code Bash 工具开 bash 子进程，
+  # macOS 上 login bash 读 .bash_profile，没有则 .bashrc。
+  CC_BASH_RC=""
+  if [ "${SHELL##*/}" = "zsh" ]; then
+    if [ -f "$HOME/.bash_profile" ]; then
+      CC_BASH_RC="$HOME/.bash_profile"
+    elif [ -f "$HOME/.bashrc" ]; then
+      CC_BASH_RC="$HOME/.bashrc"
+    fi
+  fi
+
+  PRIMARY_NEED=0
+  CC_BASH_NEED=0
+  if [ -f "$PRIMARY_RC" ] && grep -q "\.pmai/bin" "$PRIMARY_RC" 2>/dev/null; then
+    echo "ℹ️  $PRIMARY_RC 已含 ~/.pmai/bin export — 若当前 shell 没生效，开新窗口或 source 即可"
+  else
+    PRIMARY_NEED=1
+  fi
+  if [ -n "$CC_BASH_RC" ]; then
+    if [ -f "$CC_BASH_RC" ] && grep -q "\.pmai/bin" "$CC_BASH_RC" 2>/dev/null; then
+      : # 已有，沉默跳过（避免 PM 屏幕被两条 ℹ️ 刷屏）
+    else
+      CC_BASH_NEED=1
+    fi
+  fi
+
+  if [ "$PRIMARY_NEED" = "1" ] || [ "$CC_BASH_NEED" = "1" ]; then
+    echo ""
+    echo "📌 加 PATH（pmai 命令立即可用）："
+    if [ "$PRIMARY_NEED" = "1" ]; then
+      echo "   echo 'export PATH=\"\$HOME/.pmai/bin:\$PATH\"' >> $PRIMARY_RC    # terminal 用"
+    fi
+    if [ "$CC_BASH_NEED" = "1" ]; then
+      echo "   echo 'export PATH=\"\$HOME/.pmai/bin:\$PATH\"' >> $CC_BASH_RC    # Claude Code 内 bash 子进程用"
+    fi
+    if [ "$PRIMARY_NEED" = "1" ]; then
+      if [ "$CC_BASH_NEED" = "1" ]; then
+        echo "   source $PRIMARY_RC    # terminal 立即生效；Claude Code 下次启动 session 生效"
+      else
+        echo "   source $PRIMARY_RC"
+      fi
+    fi
+  fi
+fi
+
+echo "Next: cd <any-project> && /pmai-init-project"
