@@ -13,6 +13,7 @@
 #   T6: pmai-status 报告 stale 暴露入口，提示 upgrade 重同步
 #   T7: pmai-doctor 缺 Codex 暴露入口时失败
 #   T8: install / upgrade / uninstall 覆盖 Codex skill dir
+#   T9: pmai-doctor 可自愈 Codex 首次空暴露目录（兼容旧 upgrader）
 set -uo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -216,6 +217,41 @@ test_lifecycle_scripts_cover_codex_skills() {
   pass_test
 }
 
+test_doctor_repairs_empty_codex_exposure() {
+  start_test "T9: pmai-doctor 自愈 Codex 首次空暴露目录"
+  local setup tmp pmai_home fake_home out rc
+
+  setup=$(setup_fake_global_install)
+  IFS='|' read -r tmp pmai_home fake_home <<< "$setup"
+  rm -rf "$fake_home/.codex/skills"
+  mkdir -p "$fake_home/.codex/skills"
+
+  out=$(PMAI_HOME="$pmai_home" HOME="$fake_home" bash "$DOCTOR" 2>&1)
+  rc=$?
+
+  if [ "$rc" != "0" ]; then
+    _fail "Codex 暴露目录为空时 doctor 应自愈并通过"
+    echo "$out" >&2
+    rm -rf "$tmp"
+    return
+  fi
+  if ! echo "$out" | grep -q "Codex initial skill exposure repaired"; then
+    _fail "doctor 未报告 Codex 初始暴露自愈"
+    echo "$out" >&2
+    rm -rf "$tmp"
+    return
+  fi
+  if [ ! -L "$fake_home/.codex/skills/pmai-design" ]; then
+    _fail "doctor 未创建 Codex pmai-design symlink"
+    echo "$out" >&2
+    rm -rf "$tmp"
+    return
+  fi
+
+  rm -rf "$tmp"
+  pass_test
+}
+
 test_doctor_exists
 test_no_stale_in_expected
 test_no_missing_in_expected
@@ -225,5 +261,6 @@ test_status_help_is_help_only
 test_status_reports_stale_exposed_skill
 test_doctor_requires_codex_exposure
 test_lifecycle_scripts_cover_codex_skills
+test_doctor_repairs_empty_codex_exposure
 
 report_results "doctor-skills"

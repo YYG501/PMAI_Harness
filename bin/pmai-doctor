@@ -125,6 +125,37 @@ actual_exposed_skill_names() {
   done | sort -u
 }
 
+repair_empty_exposure_dir() {
+  local label="$1"
+  local exposure_dir="$2"
+  local skill_dir skill_name dst count
+
+  [ -d "$PMAI_HOME/skills" ] || return 1
+  mkdir -p "$exposure_dir" || return 1
+
+  count=0
+  for skill_dir in "$PMAI_HOME"/skills/*/; do
+    [ -d "$skill_dir" ] || continue
+    skill_name=$(basename "$skill_dir")
+    case "$skill_name" in
+      _shared)  dst="$exposure_dir/_shared" ;;
+      pmai-*)   dst="$exposure_dir/$skill_name" ;;
+      *)        dst="$exposure_dir/${SKILL_PREFIX}${skill_name}" ;;
+    esac
+
+    if [ -e "$dst" ] && [ ! -L "$dst" ]; then
+      warn "$label exposure repair skipped non-symlink path: $dst"
+      return 1
+    fi
+    rm -f "$dst" 2>/dev/null || return 1
+    ln -s "${skill_dir%/}" "$dst" || return 1
+    count=$((count + 1))
+  done
+
+  ok "$label initial skill exposure repaired ($count symlink(s) created)"
+  return 0
+}
+
 check_skill_exposure_dir() {
   local label="$1"
   local exposure_dir="$2"
@@ -144,6 +175,21 @@ check_skill_exposure_dir() {
       count=$((count + 1))
     fi
   done
+  if [ "$count" = "0" ]; then
+    if repair_empty_exposure_dir "$label" "$exposure_dir"; then
+      dangling=()
+      count=0
+      for s in "$exposure_dir"/${SKILL_PREFIX}* "$exposure_dir/_shared"; do
+        [ -e "$s" ] || [ -L "$s" ] || continue
+        if [ -L "$s" ]; then
+          if [ ! -e "$s" ]; then
+            dangling+=("$s")
+          fi
+          count=$((count + 1))
+        fi
+      done
+    fi
+  fi
   if [ "$count" = "0" ]; then
     fail "No skill symlinks found (${display_path}/${SKILL_PREFIX}*). 跑 pmai install 或 pmai upgrade。"
   elif [ ${#dangling[@]} -gt 0 ]; then
