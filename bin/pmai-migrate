@@ -18,9 +18,10 @@
 #   3. 清 templates/ 内旧 framework runtime .tmpl（含历史 task/req 产物模板）；
 #      保留业务实例（lark-publish.json.tmpl 等）
 #   4. 重写 .claude/settings.json（占位符替换 framework 模板）
-#   5. 重装 .git/hooks/pre-commit
-#   6. 删 .framework-sync-state.json（不再 vendored，I-mini 不需要）
-#   7. 提示 PM commit migration
+#   5. 安装 / 合并 .codex/hooks.json（项目级 Codex hooks）
+#   6. 重装 .git/hooks/pre-commit
+#   7. 删 .framework-sync-state.json（不再 vendored，I-mini 不需要）
+#   8. 提示 PM commit migration
 
 set -uo pipefail
 
@@ -84,10 +85,10 @@ fi
 # working tree clean 检查（仅限 framework 资产路径；业务路径 untracked 不算）
 cd "$CONSUMER"
 FRAMEWORK_DIRTY=$(git status --porcelain 2>/dev/null \
-  | grep -E '^.. (\.claude/|hooks/|templates/|\.framework-sync-state\.json)' \
+  | grep -E '^.. (\.claude/|\.codex/hooks\.json|hooks/|templates/|\.framework-sync-state\.json)' \
   | head -10)
 if [ -n "$FRAMEWORK_DIRTY" ]; then
-  echo "❌ $CONSUMER 的 framework 路径（.claude/ / hooks/ / templates/）有未提交改动：" >&2
+  echo "❌ $CONSUMER 的 framework / host 配置路径（.claude/ / .codex/hooks.json / hooks/ / templates/）有未提交改动：" >&2
   echo "$FRAMEWORK_DIRTY" >&2
   echo "" >&2
   echo "framework 路径必须 clean 才能 git rm。请先 commit 或 stash 这些 framework 改动。" >&2
@@ -118,9 +119,10 @@ echo "  1. git rm -rf .claude/scripts (实体 $(ls "$CONSUMER/.claude/scripts" 2
 [ -d "$CONSUMER/hooks" ]           && echo "  4. git rm -rf hooks/         (实体 $(ls "$CONSUMER/hooks" 2>/dev/null | wc -l | tr -d ' ') items)"
 echo "  5. templates/: 清 framework runtime .tmpl（保留业务实例 lark-publish.json.tmpl 等）"
 echo "  6. 重写 .claude/settings.json（用 framework 模板，PROJECT_NAME 不变）"
-echo "  7. 重装 .git/hooks/pre-commit（从 $PMAI_HOME/templates/git-hooks/）"
-echo "  8. git rm .framework-sync-state.json（I-mini 不需要 sync state）"
-echo "  9. 提示 PM 审 diff + commit"
+echo "  7. 安装 / 合并 .codex/hooks.json（从 $PMAI_HOME/templates/codex-hooks.json.tmpl）"
+echo "  8. 重装 .git/hooks/pre-commit（从 $PMAI_HOME/templates/git-hooks/）"
+echo "  9. git rm .framework-sync-state.json（I-mini 不需要 sync state）"
+echo "  10. 提示 PM 审 diff + commit"
 echo ""
 
 if [ "$DRY_RUN" = "1" ]; then
@@ -157,6 +159,7 @@ FRAMEWORK_TMPLS=(
   task-plan.md.tmpl
   module.md.tmpl
   settings.json.tmpl
+  codex-hooks.json.tmpl
   gitignore.tmpl
   pm-workflow.config.yml.tmpl
 )
@@ -195,7 +198,16 @@ cp "$PMAI_HOME/templates/settings.json.tmpl" "$CONSUMER/.claude/settings.json"
 git add "$CONSUMER/.claude/settings.json"
 
 echo ""
-echo "→ 7. 重装 .git/hooks/pre-commit..."
+echo "→ 7. 安装 / 合并 .codex/hooks.json..."
+if [ -f "$PMAI_HOME/scripts/install-codex-hooks.sh" ]; then
+  PMAI_HOME="$PMAI_HOME" bash "$PMAI_HOME/scripts/install-codex-hooks.sh" 2>&1 | tail -5
+  git add "$CONSUMER/.codex/hooks.json"
+else
+  echo "⚠️  $PMAI_HOME/scripts/install-codex-hooks.sh 不存在；.codex/hooks.json 未安装" >&2
+fi
+
+echo ""
+echo "→ 8. 重装 .git/hooks/pre-commit..."
 if [ -x "$PMAI_HOME/scripts/install-hooks.sh" ]; then
   PMAI_HOME="$PMAI_HOME" bash "$PMAI_HOME/scripts/install-hooks.sh" 2>&1 | tail -5
 else
@@ -203,7 +215,7 @@ else
 fi
 
 echo ""
-echo "→ 8. 清 .framework-sync-state.json（I-mini 不再 vendored）..."
+echo "→ 9. 清 .framework-sync-state.json（I-mini 不再 vendored）..."
 [ -f .framework-sync-state.json ] && git rm .framework-sync-state.json 2>&1 | tail -1
 
 echo ""

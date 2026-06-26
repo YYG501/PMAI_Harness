@@ -71,6 +71,21 @@ test_main_allows_claude_settings() {
   fixture_teardown
 }
 
+test_main_allows_codex_hooks() {
+  start_test "I-CB3 main allows .codex/hooks.json (whitelisted host config)"
+  fixture_setup
+  cd "$FIXTURE_DIR"
+  mkdir -p .codex
+  capture_check "Write" ".codex/hooks.json" "" "" "{}"
+  if [ "$RC" = "0" ] && ! echo "$OUT" | grep -q '"deny"'; then
+    pass_test
+  else
+    _fail "should allow .codex/hooks.json on main (rc=$RC, out=$OUT)"
+  fi
+  fixture_teardown
+}
+
+
 test_main_allows_module_meta_create() {
   # 批 2：真相源迁 docs/modules/*；旧 requirements/active 白名单已删。模块 .work-meta.json
   # 在 main 上首建（/pmai-design 开工）放行——走 docs/* 全放行；stage 字段直改仍由 GATE2 拦。
@@ -258,6 +273,7 @@ test_main_still_rejects_prototype_code() {
 
 test_main_rejects_src_write
 test_main_allows_claude_settings
+test_main_allows_codex_hooks
 test_main_allows_module_meta_create
 test_main_rejects_random_toplevel
 test_build_branch_allows_prototype_write

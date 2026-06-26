@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 # init-project.sh 测试（I-mini 模式 — 2026-05-26 起）
 #
-# I-mini 不变量：消费仓 .claude/ **不**含 framework 资产（scripts/skills/agents/templates/hooks）。
-# 所有 skill 通过全局 ~/.claude/skills/pmai-* symlink 暴露（指向 $PMAI_HOME/skills/），
-# skill 内部调用走 $PMAI_HOME 全局路径。跨机器 clone 消费仓后只需 pmai install → 立即可用。
+# I-mini 不变量：消费仓 .claude/ **不**含 framework 源资产（scripts/skills/agents/templates/hooks）。
+# 所有 skill 通过全局 host skill dirs 的 pmai-* symlink 暴露（指向 $PMAI_HOME/skills/），
+# skill / hook 内部调用走 $PMAI_HOME 全局路径。跨机器 clone 消费仓后只需 pmai install → 立即可用。
 #
 # T1（静态）：init-project.sh 不应再有 cp -R skills 等 framework 资产复制行（旧模式守反向回归）
 # T2（e2e）：真跑 init-project.sh，断言生成项目 .claude/ 不含 framework 资产

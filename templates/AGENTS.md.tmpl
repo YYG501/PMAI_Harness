@@ -22,7 +22,8 @@
 
 1. 读 `CLAUDE.md`，把其中的 Claude host 名称按上面的 Host Mapping 映射到 Codex。
 2. 运行 `bash -lc 'source "${PMAI_HOME:-$HOME/.pmai}/scripts/skill-preamble.sh"'` 检测 PMAI_HOME、当前 worktree 和 active work；如果文件不存在，先提示 PM 运行 `pmai install` 或检查 `PMAI_HOME`。
-3. 按 `/pmai-status` 等价流程判断当前下一步；没有 active work 时，引导 PM 运行 `/pmai-design`。
+3. 检查 `.codex/hooks.json` 是否存在；缺失时提示在项目根运行 `bash "${PMAI_HOME:-$HOME/.pmai}/scripts/install-codex-hooks.sh"` 补装。Codex 首次启用项目 hooks 时可能要求信任确认。
+4. 按 `/pmai-status` 等价流程判断当前下一步；没有 active work 时，引导 PM 运行 `/pmai-design`。
 
 ## Command Resolution
 
@@ -52,6 +53,6 @@ Codex 收到 PM 输入的 `/pmai-xxx` 时：
 ## Guardrails
 
 - 不要改 `CLAUDE.md` 的框架规则区，除非 PM 明确要求更新项目规则。
-- 不要把 `~/.pmai/skills`、`~/.pmai/scripts` 或其他 framework 资产复制进消费仓。
+- 不要把 `~/.pmai/skills`、`~/.pmai/scripts` 或其他 framework 源资产复制进消费仓；`.codex/hooks.json` 是允许存在的 host 配置，命令必须指向 `~/.pmai`。
 - 不要绕过 `check-branch.sh` 在 main 上直接改业务代码。
 - 派发外部执行器前，build worktree 必须干净；dirty 时先交还 PM 决策。

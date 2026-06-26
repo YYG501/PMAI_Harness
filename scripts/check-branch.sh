@@ -173,7 +173,7 @@ if [ "$BRANCH" = "main" ] || [ "$BRANCH" = "master" ]; then
 
   case "$REL_PATH" in
     # 框架元数据：init-project 和框架更新时需要写
-    .claude/*|CLAUDE.md|.gitignore|README.md)
+    .claude/*|.codex/hooks.json|CLAUDE.md|.gitignore|README.md)
       MAIN_WRITE_ALLOWED=true
       ;;
     # 旧 requirements/active|closed/* 不再是状态真相源，也不在 main 写入白名单内。

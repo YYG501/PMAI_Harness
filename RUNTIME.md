@@ -4,7 +4,7 @@
 
 ## 当前位置
 
-- 日期：2026-06-23
+- 日期：2026-06-27
 - 分支：`main`
 - 旧主分支备份：`codex/backup-main-before-task-cleanup-20260622-221253`
 - 当前清理目标：移除旧 `req` / `task` / 阶段推进残留，不保留兼容层。
@@ -34,4 +34,4 @@
 
 ## 本轮验证
 
-- `tests/run-all.sh`：278 passed / 0 failed。
+- `tests/run-all.sh`：290 passed / 0 failed。

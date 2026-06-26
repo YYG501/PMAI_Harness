@@ -1,0 +1,37 @@
+{
+  "hooks": {
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"./hooks/review-skill-guard.cjs\"",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"./hooks/check-doc-currency.cjs\"",
+            "timeout": 10
+          },
+          {
+            "type": "command",
+            "command": "node \"./hooks/check-sync-asset-jargon.cjs\"",
+            "timeout": 10
+          },
+          {
+            "type": "command",
+            "command": "node \"./hooks/check-stage-number-jargon.cjs\"",
+            "timeout": 10
+          }
+        ]
+      }
+    ]
+  }
+}

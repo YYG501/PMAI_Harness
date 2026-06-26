@@ -10,6 +10,7 @@ source "$SCRIPT_DIR/helpers/assert.sh"
 
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 AGENTS_MD="$REPO_ROOT/AGENTS.md"
+CODEX_HOOKS="$REPO_ROOT/.codex/hooks.json"
 
 test_root_agents_exists() {
   start_test "T1: 根目录 AGENTS.md 存在"
@@ -59,10 +60,30 @@ test_root_agents_defends_install_mode_boundary() {
   pass_test
 }
 
+test_generator_codex_hooks_exist() {
+  start_test "T6: 生成器仓提供项目级 Codex hooks"
+
+  assert_file_exists "$CODEX_HOOKS" "generator repo should expose .codex/hooks.json" || return
+  assert_file_contains "$CODEX_HOOKS" "review-skill-guard.cjs" "generator Codex hooks should wire review guard" || return
+  assert_file_contains "$CODEX_HOOKS" "check-doc-currency.cjs" "generator Codex hooks should wire doc currency guard" || return
+  assert_file_contains "$CODEX_HOOKS" "check-sync-asset-jargon.cjs" "generator Codex hooks should wire sync jargon guard" || return
+  assert_file_contains "$CODEX_HOOKS" "check-stage-number-jargon.cjs" "generator Codex hooks should wire stage jargon guard" || return
+  if grep -q "check-branch.sh" "$CODEX_HOOKS"; then
+    _fail "生成器仓 Codex hooks 不应套消费仓 check-branch 写保护"
+    return
+  fi
+  python3 -m json.tool "$CODEX_HOOKS" >/dev/null || {
+    _fail ".codex/hooks.json 不是合法 JSON"
+    return
+  }
+  pass_test
+}
+
 test_root_agents_exists
 test_root_agents_points_to_truth_sources
 test_root_agents_uses_repo_local_assets
 test_root_agents_covers_three_codex_paths
 test_root_agents_defends_install_mode_boundary
+test_generator_codex_hooks_exist
 
 report_results "generator-codex-entry"

@@ -16,8 +16,8 @@
 **框架分发与全局安装**（2026-05-26 v1.1 落地）：
 
 - 本仓现已通过 GitHub remote `git@github.com:YYG501/PMAI_Workflow.git` 分发
-- `pmai install` 一次全局安装到 `~/.pmai/` + symlink 当前 skill 到 `~/.claude/skills/pmai-*`（任意 cwd 可调 `/pmai-init-project`）
-- **仅全局安装**：skill 只装 `~/.claude/skills/` 一处，不往项目里拷副本；项目里只放非 skill 资产（`hooks/` / `.claude/settings.json` / `.work-meta.json`）。旧 `--local`（项目实体副本）已移除——和全局并存会让 `/pmai-*` 命令重复且副本陈旧；遗留副本用 `pmai uninstall --local <dir>` 清理
+- `pmai install` 一次全局安装到 `~/.pmai/` + symlink 当前 skill 到 `~/.claude/skills/pmai-*` / `~/.codex/skills/pmai-*`（任意 cwd 可调 `/pmai-init-project`）
+- **仅全局安装**：skill 只装 host skill dirs，不往项目里拷副本；项目里只放 host 配置 / 状态资产（`.claude/settings.json` / `.codex/hooks.json` / `.work-meta.json`）。旧 `--local`（项目实体副本）已移除——和全局并存会让 `/pmai-*` 命令重复且副本陈旧；遗留副本用 `pmai uninstall --local <dir>` 清理
 - 升级 `pmai upgrade`（main）/ `pmai upgrade --stable`（tag）/ `pmai upgrade --to v0.x.0`（pin）
 - 安装和升级以 `README.md`、`bin/pmai`、`bin/pmai-doctor` 为当前真相源。
 - 老的手动同步 SOP：[`框架同步-SOP.md`](./docs/归档/废弃/框架同步-SOP.md) **DEPRECATED + 已归档**（pmai install/upgrade 承接；`pmai sync` 落地后彻底退役）
@@ -35,9 +35,9 @@
 5. **禁把 BLOCKER finding 降级 WARNING** 避免显得苛刻 —— 保留原 severity
 6. 真有 section 不适用 → 默认跑完整版，跑完在完整度标记里写原因；PM 觉得多余事后会让你砍
 
-每次触发上述 skill 时，[`hooks/review-skill-guard.cjs`](./hooks/review-skill-guard.cjs) 通过 `.claude/settings.json` 注册的 UserPromptSubmit hook 自动注入完整约束清单。**hook 跟项目走（git 跟踪），换机器 clone 即生效；不依赖全局 `~/.claude/`**。
+每次触发上述 skill 时，[`hooks/review-skill-guard.cjs`](./hooks/review-skill-guard.cjs) 通过 `.claude/settings.json` / `.codex/hooks.json` 注册的 UserPromptSubmit hook 自动注入完整约束清单。**hook 配置跟项目走（git 跟踪），脚本本体来自本仓或已安装的 `~/.pmai/`；不依赖全局 `~/.claude/`**。
 
-消费仓如果想享受同款保护：把 `hooks/review-skill-guard.cjs` + `.claude/settings.json` 的 hook 注册段复制过去即可（路径用 `$CLAUDE_PROJECT_DIR`，无需改）。后续考虑放进 `scripts/init-project.sh` 自动分发。
+消费仓由 `scripts/init-project.sh` 自动生成 `.claude/settings.json` 和 `.codex/hooks.json`。已有 I-mini 消费仓缺 Codex hooks 时，在项目根运行 `bash ~/.pmai/scripts/install-codex-hooks.sh` 补装；Codex 首次看到新增 hook 时可能要求信任确认。
 
 ---
 
@@ -51,7 +51,7 @@
 
 测试基线 / 当前状态 / 下一步只在 `RUNTIME.md`「当前位置」写一处；CLAUDE.md / README.md 只放指针，不复制数字 —— 别处再出现基线数字即是漂移。
 
-[`hooks/check-doc-currency.cjs`](./hooks/check-doc-currency.cjs)（`.claude/settings.json` 注册的 PreToolUse hook）在 `git commit` 时检查：动了框架资产但 CHANGELOG 没进本次提交 → 拦下并把提醒喂回。纯生成器内部改动（注释 / 测试微调 / 本仓自身工作流）确实不需要动文档时，commit message 加 `[skip-doc-check]` 跳过。
+[`hooks/check-doc-currency.cjs`](./hooks/check-doc-currency.cjs)（`.claude/settings.json` / `.codex/hooks.json` 注册的 PreToolUse(Bash) hook）在 `git commit` 时检查：动了框架资产但 CHANGELOG 没进本次提交 → 拦下并把提醒喂回。纯生成器内部改动（注释 / 测试微调 / 本仓自身工作流）确实不需要动文档时，commit message 加 `[skip-doc-check]` 跳过。
 
 ---
 

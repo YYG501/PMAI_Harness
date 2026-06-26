@@ -11,7 +11,7 @@
 #
 # What is NOT removed:
 #   项目里的遗留实体副本 → 单独用 `pmai uninstall --local <dir>` 清
-#   ~/.claude/settings.json       项目级 settings 不动（hook 注册在消费仓内）
+#   项目级 .claude/settings.json / .codex/hooks.json 不动（hook 注册在消费仓内）
 #
 # Flags:
 #   --force                       不问确认（preview 仍打印）
@@ -180,7 +180,7 @@ fi
 echo ""
 echo "NOT removed:"
 echo "  - 项目里遗留的实体副本；用 'pmai uninstall --local <dir>' 单独清"
-echo "  - 消费仓内 .claude/settings.json（项目自管）"
+echo "  - 消费仓内 .claude/settings.json / .codex/hooks.json（项目自管）"
 [ "$KEEP_STATE" = "1" ] && echo "  - ~/.pmai-state/ (--keep-state)"
 
 echo ""
