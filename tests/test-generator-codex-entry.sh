@@ -11,6 +11,7 @@ source "$SCRIPT_DIR/helpers/assert.sh"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 AGENTS_MD="$REPO_ROOT/AGENTS.md"
 CODEX_HOOKS="$REPO_ROOT/.codex/hooks.json"
+CLAUDE_MD="$REPO_ROOT/CLAUDE.md"
 
 test_root_agents_exists() {
   start_test "T1: 根目录 AGENTS.md 存在"
@@ -79,11 +80,23 @@ test_generator_codex_hooks_exist() {
   pass_test
 }
 
+test_generator_runtime_paths_are_i_mini_safe() {
+  start_test "T7: 生成器入口不引用旧 .claude/scripts runtime"
+
+  assert_file_contains "$CLAUDE_MD" 'python3 "$HOME/.pmai/scripts/status-view.py" --narrative' "CLAUDE.md should use installed status-view path" || return
+  if grep -qF 'bash .claude/scripts/status-view.py' "$CLAUDE_MD"; then
+    _fail "CLAUDE.md 不应引用 I-mini 已移除的 .claude/scripts/status-view.py"
+    return
+  fi
+  pass_test
+}
+
 test_root_agents_exists
 test_root_agents_points_to_truth_sources
 test_root_agents_uses_repo_local_assets
 test_root_agents_covers_three_codex_paths
 test_root_agents_defends_install_mode_boundary
 test_generator_codex_hooks_exist
+test_generator_runtime_paths_are_i_mini_safe
 
 report_results "generator-codex-entry"

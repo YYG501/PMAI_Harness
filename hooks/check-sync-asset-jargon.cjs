@@ -120,7 +120,7 @@ ${sample}${more}
 → 修完重新 git add + commit。
 → 若确认这次确实是内部测试 / 设计草稿 / 不进消费仓的实验，commit message 加 [skip-jargon-check] 跳过。
 
-(hook 来源: hooks/check-sync-asset-jargon.cjs；禁用方式: 删 .claude/settings.json 里 PreToolUse 对应条目)`;
+(hook 来源: 项目级 .claude/settings.json / .codex/hooks.json；禁用方式: 删除对应 PreToolUse 条目)`;
 
     process.stdout.write(
       JSON.stringify({

@@ -33,6 +33,15 @@ assert_grep "偏差扫描" "偏差扫描 关键词存在"
 assert_grep "越界时拒绝 quick-fix" "越界拒绝规则存在"
 assert_grep "当前合同" "当前合同分类存在"
 assert_grep "历史档案" "历史档案分类存在"
+assert_grep 'source "$HOME/.pmai/scripts/skill-preamble.sh"' "preamble 使用全局 PMAI 入口"
+
+if grep -qF '.claude/scripts/skill-preamble.sh' "$SKILL"; then
+  echo "  ❌ FAIL: quick-fix 不应引用 I-mini 已移除的 .claude/scripts/skill-preamble.sh"
+  FAIL=$((FAIL + 1))
+else
+  echo "  ✅ quick-fix 不引用旧 .claude/scripts preamble"
+  PASS=$((PASS + 1))
+fi
 
 echo "─────────────────────────────────────────"
 echo "  Suite: quick-fix-skill-lint"

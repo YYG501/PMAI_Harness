@@ -160,7 +160,7 @@ ${sample}${more}
 → 改完重新 git add + commit。
 → 若确实是不进消费仓的实验 / 历史承接注记，commit message 加 [skip-stage-check] 跳过。
 
-(hook 来源: hooks/check-stage-number-jargon.cjs；禁用方式: 删 .claude/settings.json 里 PreToolUse 对应条目)`;
+(hook 来源: 项目级 .claude/settings.json / .codex/hooks.json；禁用方式: 删除对应 PreToolUse 条目)`;
 
     process.stdout.write(
       JSON.stringify({

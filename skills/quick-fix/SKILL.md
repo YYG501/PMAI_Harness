@@ -27,7 +27,7 @@ quick-fix 只面向当前主线的小改。脚本创建 `tmp-quick-*` worktree�
 ## Preamble
 
 ```bash
-source "$(git rev-parse --show-toplevel)/.claude/scripts/skill-preamble.sh"
+source "$HOME/.pmai/scripts/skill-preamble.sh"
 echo "SKILL: quick-fix"
 ```
 

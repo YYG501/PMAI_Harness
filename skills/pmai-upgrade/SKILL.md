@@ -22,7 +22,7 @@ allowed-tools:
 
 升级 PMAI 框架到最新 main / git tag 版本。**Standalone 用法**：PM 主动调用，AI 内部跑 `bin/pmai-upgrade` + 升级后用自然语言 5-7 bullet 总结 What's New。
 
-PMAI 一律走**全局安装**（`~/.pmai/` + `~/.claude/skills/pmai-*` symlink）。升级只对全局生效，所有项目随之更新。
+PMAI 一律走**全局安装**（`~/.pmai/` + `~/.claude/skills/pmai-*` / `~/.codex/skills/pmai-*` symlink）。升级只对全局生效，所有项目随之更新。
 
 > **Inline 触发未实现**：当其他 skill preamble 检测 `UPGRADE_AVAILABLE` 时不会自动 invoke 本 skill；PM 需自己跑 `/pmai-upgrade`。
 
@@ -119,7 +119,7 @@ pmai upgrade --stable --no-whats-new
 pmai upgrade --to v0.x.0 --no-whats-new
 ```
 
-bin/pmai-upgrade 跑完会：拉远程 commit / checkout tag、re-sync `~/.claude/skills/pmai-*` symlink、写 marker、清 update-check 缓存。因 `--no-whats-new`，**不**调 `bin/pmai-whats-new`。
+bin/pmai-upgrade 跑完会：拉远程 commit / checkout tag、re-sync `~/.claude/skills/pmai-*` / `~/.codex/skills/pmai-*` symlink、写 marker、清 update-check 缓存。因 `--no-whats-new`，**不**调 `bin/pmai-whats-new`。
 
 ### Step 4：读 CHANGELOG OLD..NEW 段 + AI 智能摘要
 

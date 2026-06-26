@@ -57,7 +57,7 @@
 
 ## Session 起始播报（M5 / D-iv M1 vp-11）
 
-**PM 第一条 message 后（任何内容），AI 必须先跑** `bash .claude/scripts/status-view.py --narrative` **输出播报**，再回应 PM 的具体请求。
+**PM 第一条 message 后（任何内容），AI 必须先跑** `python3 "$HOME/.pmai/scripts/status-view.py" --narrative` **输出播报**，再回应 PM 的具体请求。
 
 - **触发**：每个新 chat session 的 PM 第一条 user message。**AI 不会在 PM 没说话前自动播报**（LLM chat 模型固有限制；codex C-3 校准）。
 - **目的**：PM 切窗口 / 隔天回来时不用主动问"我在哪"，AI 主动结构化报告当前 active work / 当前模块 / 下一步建议。
