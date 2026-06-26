@@ -4,8 +4,10 @@
 # What gets removed:
 #   ~/.pmai/                      framework source (git clone)
 #   ~/.pmai-state/                配置 + cache + just-upgraded marker（--keep-state 保留）
-#   ~/.claude/skills/pmai-*       global skill symlinks
+#   ~/.claude/skills/pmai-*       global Claude skill symlinks
 #   ~/.claude/skills/_shared      (if it's a symlink we created)
+#   ~/.codex/skills/pmai-*        global Codex skill symlinks
+#   ~/.codex/skills/_shared       (if it's a symlink we created)
 #
 # What is NOT removed:
 #   项目里的遗留实体副本 → 单独用 `pmai uninstall --local <dir>` 清
@@ -21,6 +23,7 @@ set -uo pipefail  # 注意：no -e，uninstall 必须能跑完
 PMAI_HOME="${PMAI_HOME:-$HOME/.pmai}"
 PMAI_STATE="${PMAI_STATE:-$HOME/.pmai-state}"
 CLAUDE_SKILLS="$HOME/.claude/skills"
+CODEX_SKILLS="${CODEX_HOME:-$HOME/.codex}/skills"
 SKILL_PREFIX="pmai-"
 
 usage() {
@@ -36,6 +39,8 @@ Removed:
   ~/.pmai-state/         (unless --keep-state)
   ~/.claude/skills/pmai-*
   ~/.claude/skills/_shared (if pmai-managed symlink)
+  ~/.codex/skills/pmai-*
+  ~/.codex/skills/_shared  (if pmai-managed symlink)
 EOF
 }
 
@@ -137,21 +142,39 @@ else
   echo "  - $PMAI_STATE (not present)"
 fi
 
-SYMLINKS=()
+CLAUDE_SYMLINKS=()
 for s in "$CLAUDE_SKILLS"/${SKILL_PREFIX}* "$CLAUDE_SKILLS/_shared"; do
-  [ -L "$s" ] && SYMLINKS+=("$s")
+  [ -L "$s" ] && CLAUDE_SYMLINKS+=("$s")
 done
+CODEX_SYMLINKS=()
+for s in "$CODEX_SKILLS"/${SKILL_PREFIX}* "$CODEX_SKILLS/_shared"; do
+  [ -L "$s" ] && CODEX_SYMLINKS+=("$s")
+done
+SYMLINKS=("${CLAUDE_SYMLINKS[@]}" "${CODEX_SYMLINKS[@]}")
 SYMLINK_COUNT=${#SYMLINKS[@]}
-echo "  ✓ $CLAUDE_SKILLS/${SKILL_PREFIX}* ($SYMLINK_COUNT symlinks)"
-if [ "$SYMLINK_COUNT" -gt 0 ] && [ "$SYMLINK_COUNT" -le 10 ]; then
-  for s in "${SYMLINKS[@]}"; do
+CLAUDE_SYMLINK_COUNT=${#CLAUDE_SYMLINKS[@]}
+CODEX_SYMLINK_COUNT=${#CODEX_SYMLINKS[@]}
+echo "  ✓ $CLAUDE_SKILLS/${SKILL_PREFIX}* ($CLAUDE_SYMLINK_COUNT symlinks)"
+if [ "$CLAUDE_SYMLINK_COUNT" -gt 0 ] && [ "$CLAUDE_SYMLINK_COUNT" -le 10 ]; then
+  for s in "${CLAUDE_SYMLINKS[@]}"; do
     echo "      - $(basename "$s")"
   done
-elif [ "$SYMLINK_COUNT" -gt 10 ]; then
-  for s in "${SYMLINKS[@]:0:5}"; do
+elif [ "$CLAUDE_SYMLINK_COUNT" -gt 10 ]; then
+  for s in "${CLAUDE_SYMLINKS[@]:0:5}"; do
     echo "      - $(basename "$s")"
   done
-  echo "      … (+$((SYMLINK_COUNT - 5)) more)"
+  echo "      … (+$((CLAUDE_SYMLINK_COUNT - 5)) more)"
+fi
+echo "  ✓ $CODEX_SKILLS/${SKILL_PREFIX}* ($CODEX_SYMLINK_COUNT symlinks)"
+if [ "$CODEX_SYMLINK_COUNT" -gt 0 ] && [ "$CODEX_SYMLINK_COUNT" -le 10 ]; then
+  for s in "${CODEX_SYMLINKS[@]}"; do
+    echo "      - $(basename "$s")"
+  done
+elif [ "$CODEX_SYMLINK_COUNT" -gt 10 ]; then
+  for s in "${CODEX_SYMLINKS[@]:0:5}"; do
+    echo "      - $(basename "$s")"
+  done
+  echo "      … (+$((CODEX_SYMLINK_COUNT - 5)) more)"
 fi
 
 echo ""
@@ -184,6 +207,11 @@ for s in "$CLAUDE_SKILLS"/${SKILL_PREFIX}* "$CLAUDE_SKILLS/_shared"; do
     echo "⚠️  $s 是实体目录不是 symlink，跳过（手动清）" >&2
   fi
 done
+for s in "$CODEX_SKILLS"/${SKILL_PREFIX}* "$CODEX_SKILLS/_shared"; do
+  if [ -d "$s" ] && [ ! -L "$s" ]; then
+    echo "⚠️  $s 是实体目录不是 symlink，跳过（手动清）" >&2
+  fi
+done
 
 # 清 ~/.pmai/
 if [ -d "$PMAI_HOME" ]; then
@@ -203,7 +231,9 @@ if [ "$KEEP_STATE" = "1" ]; then
 else
   [ "$STATE_PRESENT" = "1" ] && echo "   ~/.pmai-state/ removed"
 fi
-echo "   ~/.claude/skills/pmai-* removed ($REMOVED_COUNT symlinks)"
+echo "   host skill symlinks removed ($REMOVED_COUNT total)"
+echo "     ~/.claude/skills/pmai-* ($CLAUDE_SYMLINK_COUNT)"
+echo "     ~/.codex/skills/pmai-*  ($CODEX_SYMLINK_COUNT)"
 echo "═══════════════════════════════════════"
 echo "Note: 项目里遗留的实体副本不动。"
 echo "      用 'pmai uninstall --local <dir>' 单独清理。"

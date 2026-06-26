@@ -20,6 +20,8 @@ PM-AI-Workflow 生成器仓的演进记录。本文件**只记影响下游业务
 
 ### 框架瘦身改造（吸收 ExampleAgentProject 设计方法）—— 进行中
 
+- `fix(codex)`: **PMAI skill 同步到 Codex skill 目录，修复 Codex 里调不起 `/pmai-*`**。根因是安装/升级链路只重建 `~/.claude/skills/pmai-*`，Codex 只能靠 `AGENTS.md` 手工 fallback，无法在 Codex skill 列表里发现 PMAI。改动：`pmai install` / `pmai upgrade` 同步重建 `~/.claude/skills/pmai-*` 和 `~/.codex/skills/pmai-*`（支持 `CODEX_HOME` 覆盖）；`pmai doctor` / `pmai status` 同时检查 Claude + Codex 两边的 stale/missing/dangling 暴露；`pmai uninstall` 同时清理两边 symlink。消费仓 `pmai upgrade` 后，新 Codex 会话可发现 `pmai-*` skills；当前已打开的 Codex 会话可能需要新开线程/重启以刷新 skill 列表。
+
 - `feat(codex)`: **补齐 Codex 三条使用链路入口**——生成器仓根新增 `AGENTS.md`，让 Codex 进本仓时能按 repo-local `skills/` / `scripts/` 协同改造框架，并可从本 checkout 执行 `/pmai-init-project` 初始化消费仓；消费仓 `templates/AGENTS.md.tmpl` 强化为明确的 Codex 主控入口，声明默认中文、消费仓定位、`PMAI_HOME` / `~/.pmai` 解析规则、`pmai-*` 特殊 skill 目录 fallback，并明确消费仓内不能重复跑 `/pmai-init-project`，后续走 `/pmai-design` / `/pmai-build` / `/pmai-close` / `/pmai-status`。新增 generator / consumer 两组 Codex 回归测试并纳入 run-all。
 
 - `fix(skills)`: **`/pmai-meta` 输出纪律改「脑子里走流程、嘴上说大白话」——根治方法论黑话漏给 PM**。独立三 agent A/B 盲评（带 skill vs 无 skill 基线、第三方盲评不知情）实测：带 skill 答案更可落地、闸门也正确挡住不该拔高的小问题（综合 8.5 vs 7.5），但盲评挖出真缺陷——答案把"过闸门 / 升维 / 第一性原理 / 降回设计 / 哪张账"这些**内部方法论标签当章节标题漏给 PM**，被判工程黑话噪音、扣分（违反 PM chat 禁黑话铁律）。修法：把「输出格式」从带方法论标签的章节模板，改成两层——闸门 / 升维 / 第一性原理 / 五问是**脑子里走的流程**，**对 PM 只输出**①一句重定位结论（大白话 + 经营词，禁方法论词和黑话）②具体落地（出现 / 强调 / 隐藏 / 默认 / 第一步）；闸门没过直接答不摆流程；PM 主动要推导才亮过程。纯输出表达约束，不改思维流程本身。

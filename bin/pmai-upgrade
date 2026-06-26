@@ -19,6 +19,7 @@ set -Eeuo pipefail
 PMAI_HOME="${PMAI_HOME:-$HOME/.pmai}"
 PMAI_STATE="${PMAI_STATE:-$HOME/.pmai-state}"
 CLAUDE_SKILLS="$HOME/.claude/skills"
+CODEX_SKILLS="${CODEX_HOME:-$HOME/.codex}/skills"
 SKILL_PREFIX="pmai-"
 REMOTE="${PMAI_REMOTE:-git@github.com:YYG501/PMAI_Workflow.git}"
 DOCTOR_BIN="$(dirname "$0")/pmai-doctor"
@@ -112,6 +113,7 @@ global_rollback() {
     (cd "$PMAI_HOME" && git reset --hard "$OLD_HEAD" >/dev/null 2>&1) || true
     # symlink 按回退后的 ~/.pmai/skills 重建
     rebuild_symlinks "$PMAI_HOME/skills" "$CLAUDE_SKILLS" >/dev/null 2>&1 || true
+    rebuild_symlinks "$PMAI_HOME/skills" "$CODEX_SKILLS" >/dev/null 2>&1 || true
   fi
   if [ "$STASHED" = "1" ]; then
     echo "" >&2
@@ -188,8 +190,12 @@ NEW_VER=$(cat VERSION 2>/dev/null || echo unknown)
 NEW_HEAD=$(git rev-parse --short HEAD)
 
 # 重建 symlink
-echo "→ Re-syncing skill symlinks to $CLAUDE_SKILLS/pmai-*"
-count=$(rebuild_symlinks "$PMAI_HOME/skills" "$CLAUDE_SKILLS")
+echo "→ Re-syncing skill symlinks to host skill directories"
+claude_count=$(rebuild_symlinks "$PMAI_HOME/skills" "$CLAUDE_SKILLS")
+codex_count=$(rebuild_symlinks "$PMAI_HOME/skills" "$CODEX_SKILLS")
+count=$((claude_count + codex_count))
+echo "   $CLAUDE_SKILLS: $claude_count"
+echo "   $CODEX_SKILLS: $codex_count"
 
 # E：跑 doctor 自检（FAIL → 回滚；WARN 不触发）
 if [ -x "$DOCTOR_BIN" ]; then

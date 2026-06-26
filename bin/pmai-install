@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # pmai-install — Install PMAI framework (global only)
 #
-# 全局安装：clone 远程到 ~/.pmai/ + symlink 当前 skill 到 ~/.claude/skills/pmai-*
+# 全局安装：clone 远程到 ~/.pmai/ + symlink 当前 skill 到 host skill dirs
 # 装一次，任意 cwd 可用 /pmai-* skill。
 #
 # 注：旧的 `--local <dir>`（往项目 .claude/ 拷实体副本）已移除——它和全局安装并存时
@@ -14,16 +14,18 @@ set -euo pipefail
 REMOTE="${PMAI_REMOTE:-git@github.com:YYG501/PMAI_Workflow.git}"
 PMAI_HOME="${PMAI_HOME:-$HOME/.pmai}"
 CLAUDE_SKILLS="$HOME/.claude/skills"
+CODEX_SKILLS="${CODEX_HOME:-$HOME/.codex}/skills"
 SKILL_PREFIX="pmai-"
 
 usage() {
   cat <<EOF
 Usage:
-  pmai install                # Global: clone → ~/.pmai/ + symlink ~/.claude/skills/pmai-*
+  pmai install                # Global: clone → ~/.pmai/ + symlink host skills
 
 Env override:
   PMAI_REMOTE=<git-url>       # Override default github remote
   PMAI_HOME=<path>            # Override default ~/.pmai/
+  CODEX_HOME=<path>           # Override default ~/.codex
 
 Notes:
   - Skills get 'pmai-' prefix at registration (e.g., /pmai-init-project).
@@ -88,15 +90,18 @@ if [ -e "$PMAI_HOME" ]; then
 fi
 echo "→ git clone $REMOTE → $PMAI_HOME"
 git clone "$REMOTE" "$PMAI_HOME"
-echo "→ Symlink skills to $CLAUDE_SKILLS/pmai-*"
-remove_managed_skill_symlinks "$CLAUDE_SKILLS"
-install_skills "$PMAI_HOME/skills" "$CLAUDE_SKILLS"
+echo "→ Symlink skills to host skill directories"
+for dst_skills in "$CLAUDE_SKILLS" "$CODEX_SKILLS"; do
+  remove_managed_skill_symlinks "$dst_skills"
+  install_skills "$PMAI_HOME/skills" "$dst_skills"
+done
 VER=$(cat "$PMAI_HOME/VERSION" 2>/dev/null || echo unknown)
 echo ""
 echo "═══════════════════════════════════════"
 echo "✅ PMAI v$VER installed globally"
 echo "   ~/.pmai/         framework source"
 echo "   ~/.claude/skills/pmai-*   skill exposure"
+echo "   ~/.codex/skills/pmai-*    skill exposure"
 echo "═══════════════════════════════════════"
 
 # PATH 检测：~/.pmai/bin 不在 PATH 就提示 oneshot（不自动改用户 rc 文件，避免破坏配置）

@@ -11,6 +11,7 @@ set -uo pipefail
 
 PMAI_HOME="${PMAI_HOME:-$HOME/.pmai}"
 CLAUDE_SKILLS="$HOME/.claude/skills"
+CODEX_SKILLS="${CODEX_HOME:-$HOME/.codex}/skills"
 SKILL_PREFIX="pmai-"
 BIN_DIR="$(cd "$(dirname "$0")" && pwd)"
 CLI_ROOT="$(cd "$BIN_DIR/.." && pwd)"
@@ -22,7 +23,7 @@ Usage:
 
 Shows global PMAI install state:
   - source location, version, branch, remote
-  - skill exposure count and drift against current ~/.pmai/skills
+  - skill exposure count and drift against current ~/.pmai/skills for Claude and Codex
   - local install note
 EOF
 }
@@ -49,12 +50,52 @@ expected_exposed_skill_names() {
 }
 
 actual_exposed_skill_names() {
+  local exposure_dir="$1"
   local s
 
-  for s in "$CLAUDE_SKILLS"/${SKILL_PREFIX}*; do
+  for s in "$exposure_dir"/${SKILL_PREFIX}*; do
     [ -e "$s" ] || [ -L "$s" ] || continue
     basename "$s"
   done | sort -u
+}
+
+report_skill_exposure() {
+  local label="$1"
+  local exposure_dir="$2"
+  local display_path="$3"
+  local symlink_count shared_link stale_exposed missing_exposed
+
+  symlink_count=$(ls -d "$exposure_dir"/${SKILL_PREFIX}* 2>/dev/null | wc -l | tr -d ' ')
+  shared_link="❌ no"
+  if [ -L "$exposure_dir/_shared" ]; then shared_link="✅ yes"; fi
+
+  # 没装时 symlink 都是悬空（指向不存在的 ~/.pmai/），明示而不是假装存在
+  if [ "$INSTALLED" = "0" ] && [ "$symlink_count" -gt 0 ]; then
+    echo "  $label (${display_path}/${SKILL_PREFIX}*):  $symlink_count symlinks ⚠️  悬空（指向不存在的 ${PMAI_HOME}；pmai install 后才生效）"
+    echo "  $label _shared linked:                    $shared_link"
+  elif [ "$INSTALLED" = "0" ] && [ "$symlink_count" = "0" ]; then
+    echo "  $label (${display_path}/${SKILL_PREFIX}*):  $symlink_count symlinks"
+    echo "  $label _shared linked:                    $shared_link"
+  else
+    echo "  $label (${display_path}/${SKILL_PREFIX}*):  $symlink_count symlinks"
+    echo "  $label _shared linked:                    $shared_link"
+    stale_exposed=$(comm -23 <(actual_exposed_skill_names "$exposure_dir") <(expected_exposed_skill_names) || true)
+    missing_exposed=$(comm -13 <(actual_exposed_skill_names "$exposure_dir") <(expected_exposed_skill_names) || true)
+    if [ -z "$stale_exposed" ] && [ -z "$missing_exposed" ]; then
+      echo "  $label drift:                             ✅ matches current skills"
+    else
+      echo "  $label drift:                             ⚠️  stale/missing entries (run: pmai upgrade)"
+      [ -n "$stale_exposed" ] && echo "    stale:  $(echo "$stale_exposed" | tr '\n' ' ')"
+      [ -n "$missing_exposed" ] && echo "    missing: $(echo "$missing_exposed" | tr '\n' ' ')"
+    fi
+  fi
+
+  # 装好时才列具体 skill；没装时悬空名单意义不大
+  if [ "$INSTALLED" = "1" ] && [ "$symlink_count" -gt 0 ]; then
+    echo ""
+    echo "  $label skills exposed (pmai-* prefix):"
+    ls -d "$exposure_dir"/${SKILL_PREFIX}* 2>/dev/null | xargs -n 1 basename | sed 's/^/    /'
+  fi
 }
 
 echo "════════════════════════════════════════════════════════════"
@@ -109,36 +150,8 @@ fi
 
 echo ""
 echo "─── Skill exposure ───"
-SYMLINK_COUNT=$(ls -d "$CLAUDE_SKILLS"/${SKILL_PREFIX}* 2>/dev/null | wc -l | tr -d ' ')
-SHARED_LINK="❌ no"
-if [ -L "$CLAUDE_SKILLS/_shared" ]; then SHARED_LINK="✅ yes"; fi
-
-# 没装时 symlink 都是悬空（指向不存在的 ~/.pmai/），明示而不是假装存在
-if [ "$INSTALLED" = "0" ] && [ "$SYMLINK_COUNT" -gt 0 ]; then
-  echo "  Global (~/.claude/skills/pmai-*):  $SYMLINK_COUNT symlinks ⚠️  悬空（指向不存在的 ${PMAI_HOME}；pmai install 后才生效）"
-  echo "  _shared linked:                    $SHARED_LINK"
-elif [ "$INSTALLED" = "0" ] && [ "$SYMLINK_COUNT" = "0" ]; then
-  echo "  Global (~/.claude/skills/pmai-*):  $SYMLINK_COUNT symlinks"
-  echo "  _shared linked:                    $SHARED_LINK"
-else
-  echo "  Global (~/.claude/skills/pmai-*):  $SYMLINK_COUNT symlinks"
-  echo "  _shared linked:                    $SHARED_LINK"
-  STALE_EXPOSED=$(comm -23 <(actual_exposed_skill_names) <(expected_exposed_skill_names) || true)
-  MISSING_EXPOSED=$(comm -13 <(actual_exposed_skill_names) <(expected_exposed_skill_names) || true)
-  if [ -z "$STALE_EXPOSED" ] && [ -z "$MISSING_EXPOSED" ]; then
-    echo "  Exposure drift:                    ✅ matches current skills"
-  else
-    echo "  Exposure drift:                    ⚠️  stale/missing entries (run: pmai upgrade)"
-    [ -n "$STALE_EXPOSED" ] && echo "    stale:  $(echo "$STALE_EXPOSED" | tr '\n' ' ')"
-    [ -n "$MISSING_EXPOSED" ] && echo "    missing: $(echo "$MISSING_EXPOSED" | tr '\n' ' ')"
-  fi
-fi
-
-# 装好时才列具体 skill；没装时悬空名单意义不大
-if [ "$INSTALLED" = "1" ] && [ "$SYMLINK_COUNT" -gt 0 ]; then
-  echo ""
-  echo "  Skills exposed (pmai-* prefix):"
-  ls -d "$CLAUDE_SKILLS"/${SKILL_PREFIX}* 2>/dev/null | xargs -n 1 basename | sed 's/^/    /'
-fi
+report_skill_exposure "Claude Code" "$CLAUDE_SKILLS" "~/.claude/skills"
+echo ""
+report_skill_exposure "Codex" "$CODEX_SKILLS" "~/.codex/skills"
 
 echo "════════════════════════════════════════════════════════════"
