@@ -20,6 +20,8 @@ PM-AI-Workflow 生成器仓的演进记录。本文件**只记影响下游业务
 
 ### 框架瘦身改造（吸收 ExampleAgentProject 设计方法）—— 进行中
 
+- `fix(dx)`: **私有仓 onboarding 改成可验证路径**。README 默认安装入口从 public raw curl 改为 `gh repo clone` / SSH clone 后 `bash bin/pmai install`，raw curl 仅保留为 public mirror 路径；`install.sh` clone 失败文案补私有仓鉴权复核命令；`pmai install` / `pmai doctor` 增加非阻塞 gstack readiness 提示，提前暴露 `/pmai-init-project` 的外部依赖；新增 `test-private-onboarding.sh`，用当前工作树 snapshot 模拟私有仓安装、doctor、缺 gstack 阻塞和补齐 gstack 后初始化消费仓。
+
 - `fix(i-mini)`: **清掉 I-mini / 双 host 入口里的旧 `.claude/scripts` 残留**。`/pmai-quick-fix` preamble 改回全局 `~/.pmai/scripts/skill-preamble.sh`，避免新消费仓没有 `.claude/scripts/` 时启动失败；生成器 `CLAUDE.md` 的 session 播报改为 `~/.pmai/scripts/status-view.py`；review/doc/jargon hooks 的注入文案改成 `.claude/settings.json` / `.codex/hooks.json` 双 host 表述；`/pmai-upgrade` 文案同步说明升级会重连 Claude + Codex 两边 skill symlink。新增回归断言防止旧 runtime 路径回流。
 
 - `feat(codex)`: **补项目级 Codex hooks，完成 host hook 接入链路**。此前 Codex 只补了 `~/.codex/skills/pmai-*` skill 暴露和 `AGENTS.md` fallback，但消费仓仍只生成 `.claude/settings.json`，Codex 不会读取 Claude Code 的 hook 配置，导致 `check-branch.sh` 写保护和 `review-skill-guard.cjs` review/audit 约束注入在 Codex 主控下不完整。改动：新增 `templates/codex-hooks.json.tmpl` + `scripts/install-codex-hooks.sh`（merge 项目 `.codex/hooks.json`，保留既有非 PMAI hooks，幂等刷新 PMAI managed entries）；`init-project.sh` 新消费仓自动安装 `.codex/hooks.json`；`pmai migrate` 迁 I-mini 时同步安装；生成器仓根新增 `.codex/hooks.json`，Codex 协同改框架仓时也启用 review/doc/jargon hooks（不套消费仓 `check-branch.sh`）。文档和测试同步区分 Git hook、Claude Code hooks、Codex 项目 hooks；Codex 首次启用新增 hook 时可能要求信任确认。

@@ -68,6 +68,29 @@ install_skills() {
   echo "   installed $count skill entries → $dst_skills"
 }
 
+check_gstack_readiness() {
+  local gstack_bin version
+
+  gstack_bin=$(command -v gstack 2>/dev/null || true)
+  if [ -n "$gstack_bin" ]; then
+    echo "✅ gstack command detected: $gstack_bin"
+    return 0
+  fi
+
+  if [ -d "$HOME/.claude/skills/gstack" ]; then
+    version=""
+    if [ -f "$HOME/.claude/skills/gstack/VERSION" ]; then
+      version=" ($(cat "$HOME/.claude/skills/gstack/VERSION" 2>/dev/null || echo unknown))"
+    fi
+    echo "✅ gstack skill detected: ~/.claude/skills/gstack$version"
+    return 0
+  fi
+
+  echo "⚠️  gstack 未检测到：/pmai-init-project 起项目时会阻塞"
+  echo "   先安装 gstack：参考 https://github.com/garrytan/gstack"
+  echo "   PMAI 已安装完成；补齐 gstack 后再跑 /pmai-init-project。"
+}
+
 remove_managed_skill_symlinks() {
   local dst_skills="$1"
   local old
@@ -162,4 +185,9 @@ if [ -d "$PMAI_BIN" ] && ! echo ":$PATH:" | grep -q ":$PMAI_BIN:"; then
   fi
 fi
 
+echo ""
+echo "→ Checking gstack prerequisite..."
+check_gstack_readiness
+
+echo ""
 echo "Next: cd <any-project> && /pmai-init-project"

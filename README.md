@@ -49,13 +49,13 @@ PM 全程**只做决策**（方向 / 结构 / 建造方式 / 验收 / 沉淀）�
 |---|---|---|
 | **Claude Code** | 推荐 | 一等主控入口（slash skill 原生在这里跑） |
 | **Codex** | 支持 | skill 暴露到 `~/.codex/skills/pmai-*`；读生成器仓 / 消费仓 `AGENTS.md` 作为主控入口；消费仓生成项目级 `.codex/hooks.json`；也可作为 build 执行器 |
-| **gstack** | 必需 | `/qa` `/review` `/codex` 等子流程依赖；`init-project.sh` 入口会检测 | 
+| **gstack** | 必需 | `/qa` `/review` `/codex` 等子流程依赖；`pmai install` / `pmai doctor` 会提示 readiness，`init-project.sh` 起项目时会硬检测 |
 | **git** ≥ 2.30 | 必需 | worktree 是核心隔离机制 |
 | **python3** ≥ 3.10 | 必需 | scripts 大多用 python（zero-dep stdlib） |
 | **bash** ≥ 4 | 必需 | scripts 入口语言（macOS 自带 3.x 已知坑见 INVARIANTS） |
 | **codex CLI** | 可选 | build 执行器；不装走 `cursor-agent` / `claude` / `manual` |
 
-未装 gstack 时 `init-project.sh`（起新业务项目）会直接报错并指向 `https://github.com/garrytan/gstack`。`pmai install` 本身不检 gstack —— 你可以先装 PMAI、需要起项目时再补装 gstack。
+未装 gstack 时 `pmai install` / `pmai doctor` 会给 warning，但不阻塞 PMAI 安装；真正起新业务项目时，`init-project.sh` 会直接报错并指向 `https://github.com/garrytan/gstack`。这让私有仓 onboarding 可以先把 PMAI 装好，再补齐 gstack。
 
 ---
 
@@ -63,37 +63,59 @@ PM 全程**只做决策**（方向 / 结构 / 建造方式 / 验收 / 沉淀）�
 
 PMAI 用全局 CLI 形态分发。一次性安装，全局生效。
 
-### 一行安装（推荐）
+### 私有仓安装（推荐）
+
+本仓是私有仓时，先确认当前 GitHub 账号有 `YYG501/PMAI_Workflow` 访问权限，再 clone 后安装。推荐 `gh` 路径：
+
+```bash
+gh auth status || gh auth login
+rm -rf /tmp/pmai-src
+gh repo clone YYG501/PMAI_Workflow /tmp/pmai-src
+bash /tmp/pmai-src/bin/pmai install
+~/.pmai/bin/pmai doctor
+```
+
+或走 SSH：
+
+```bash
+ssh -T git@github.com
+git clone git@github.com:YYG501/PMAI_Workflow.git /tmp/pmai-src
+bash /tmp/pmai-src/bin/pmai install
+~/.pmai/bin/pmai doctor
+```
+
+安装成功后，`pmai install` 末尾会：
+- clone 到 `~/.pmai/` + symlink skill 到 `~/.claude/skills/pmai-*` / `~/.codex/skills/pmai-*`
+- 自动检测 shell（zsh/bash）+ 给 `~/.pmai/bin` 加 PATH 的 oneshot 命令
+- 提示 gstack readiness；缺 gstack 只 warning，起项目前补齐即可
+
+### 公开镜像安装（仅 public repo / public mirror）
+
+如果仓库或镜像是 public，才适合 raw curl 一行安装：
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/YYG501/PMAI_Workflow/main/install.sh | bash
 ```
 
-`install.sh` 做的事：
-- 依赖检查（git / bash / python3）
-- git clone PMAI 到临时位置（SSH 优先，失败自动 fallback HTTPS）
-- 跑 `bash bin/pmai install [args]`（自动 clone 到 `~/.pmai/` + symlink skill 到 `~/.claude/skills/pmai-*` / `~/.codex/skills/pmai-*`）
-- install 末尾自动检测 shell（zsh/bash）+ 给 `~/.pmai/bin` 加 PATH 的 oneshot 命令
-- 清理临时安装容器
+私有仓直接用上面的 clone 安装；raw URL 在未公开时通常只会返回 404。
 
-### 手工模式（不走 curl）
+### 手工模式（本地 checkout）
 
 如果你想自己 clone + 检查脚本再装：
 
 ```bash
-# 1. clone 到临时位置
-git clone git@github.com:YYG501/PMAI_Workflow.git /tmp/pmai-src
+# 1. 已有本仓 checkout 时，直接在 checkout 内安装
 
 # 2. install
-bash /tmp/pmai-src/bin/pmai install                       # 全局安装
+bash bin/pmai install                       # 全局安装
 
 # 3. 按 install 末尾的「📌 一步加 PATH」提示加 ~/.pmai/bin 到 PATH
 
 # 4. 校验
-pmai doctor    # 完整性自检
+~/.pmai/bin/pmai doctor    # 完整性自检
 ```
 
-> 临时 `/tmp/pmai-src` clone 只是 installer 容器，装完可删；真正稳定的副本在 `~/.pmai/`（pmai 自己 clone 的，`pmai upgrade` 拉它）。
+> 临时 `/tmp/pmai-src` clone 只是 installer 容器，装完可删；真正稳定的副本在 `~/.pmai/`（pmai 自己 clone 的，`pmai upgrade` 拉它）。如果你在本仓 checkout 内直接 `bash bin/pmai install`，`pmai install` 仍会按 `PMAI_REMOTE` / 默认 remote 另 clone 一份到 `~/.pmai/`。
 
 ### 安装模式：仅全局
 

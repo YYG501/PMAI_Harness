@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 # install.sh — PMAI 一行安装入口
 #
-# 用法：
+# 用法（公开镜像才适合 raw curl；私有仓优先先 clone 再跑 bin/pmai install）：
 #   curl -fsSL https://raw.githubusercontent.com/YYG501/PMAI_Workflow/main/install.sh | bash
+#   gh repo clone YYG501/PMAI_Workflow /tmp/pmai-src && bash /tmp/pmai-src/bin/pmai install
 #
 # 做的事：
 #   1. 检查依赖（git / bash / python3）
@@ -67,10 +68,11 @@ else
     echo "   HTTPS stderr：" >&2
     sed 's/^/     /' "$SRC/.https-err" >&2
     echo "" >&2
-    echo "   常见原因：" >&2
-    echo "     1. 网络不通" >&2
-    echo "     2. SSH key 未配（私有仓只能 SSH 拉 → 先在 GitHub 加 SSH key）" >&2
-    echo "     3. private repo 但 HTTPS 也需要 token" >&2
+    echo "   常见原因 / 复核命令：" >&2
+    echo "     1. 没有私有仓权限或 gh 未登录：gh auth status && gh repo view YYG501/PMAI_Workflow" >&2
+    echo "     2. SSH key 未配或未授权：ssh -T git@github.com && git ls-remote git@github.com:YYG501/PMAI_Workflow.git HEAD" >&2
+    echo "     3. HTTPS 拉私有仓需要 token / gh 凭证；raw.githubusercontent.com 不能当公开安装入口" >&2
+    echo "     4. 网络不通或 GitHub 访问受限" >&2
     exit 1
   fi
 fi
