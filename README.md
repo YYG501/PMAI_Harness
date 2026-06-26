@@ -48,7 +48,7 @@ PM 全程**只做决策**（方向 / 结构 / 建造方式 / 验收 / 沉淀）�
 | 工具 | 必需性 | 用途 |
 |---|---|---|
 | **Claude Code** | 推荐 | 一等主控入口（slash skill 原生在这里跑） |
-| **Codex** | 实验支持 | 可读消费仓 `AGENTS.md` 作为主控入口；也可作为 build 执行器 |
+| **Codex** | 支持 | 可读生成器仓 / 消费仓 `AGENTS.md` 作为主控入口；也可作为 build 执行器 |
 | **gstack** | 必需 | `/qa` `/review` `/codex` 等子流程依赖；`init-project.sh` 入口会检测 | 
 | **git** ≥ 2.30 | 必需 | worktree 是核心隔离机制 |
 | **python3** ≥ 3.10 | 必需 | scripts 大多用 python（zero-dep stdlib） |
@@ -146,6 +146,12 @@ agent 内部一气呵成 **4 阶段**：
 - **阶段 D · 终态汇总 + Next Up** —— 输出「✅ <name> 已就绪 / cd <target> && /pmai-design "..."」
 
 > `/pmai-init-project` 在装了 pmai 的任意 cwd 都能跑（无需在本仓）。
+
+**Codex 主控入口**：
+
+- 在本生成器仓协同改框架：Codex 先读根目录 `AGENTS.md`，按 repo-local `skills/` / `scripts/` 工作。
+- 在本生成器仓初始化消费仓：让 Codex 执行 `/pmai-init-project` 等价流程，内部读取 `skills/init-project/SKILL.md`，最后调用 `bash scripts/init-project.sh ...`。
+- 在消费仓继续使用：`init-project.sh` 会生成消费仓根目录 `AGENTS.md`；Codex 进入消费仓后先读它，再把 `/pmai-*` 解析到 `PMAI_HOME` / `~/.pmai` 下的已安装 skill。
 
 **非交互参数化 CLI**（smoke / 批量自动化依赖）：
 

@@ -4,10 +4,15 @@
 
 本文件是 Codex / OpenAI agent 的项目入口。PMAI 的完整工作流规则仍以 `CLAUDE.md` 为主真相源；Codex 作为主控时必须先读本文件，再读 `CLAUDE.md`。
 
+默认用中文和 PM 沟通；只有用户明确要求英文或引用原文时才切换。
+
+本仓是 PMAI 消费仓，不是 PMAI 生成器仓。不要在这里复制或修改 framework 源资产；需要框架能力时走已安装的 `PMAI_HOME` / `~/.pmai`。
+
 ## Host Mapping
 
 - `CLAUDE.md` 里写的“驱动 Claude”，在 Codex 会话中等价理解为“驱动 Codex”。
 - `/pmai-*` 是 PMAI 的用户命令名。Codex 没有 Claude Code slash skill runtime 时，按对应 `~/.pmai/skills/<command-without-pmai-prefix>/SKILL.md` 的步骤执行。
+- 如果 skill 目录名本身带 `pmai-` 前缀，例如 `/pmai-upgrade`，对应 `~/.pmai/skills/pmai-upgrade/SKILL.md`。
 - 运行态只创建并识别 `build-*` 工作分支。
 - build 阶段的实现改动应落在当前工作 worktree 或明确允许的轻量入口内，不要绕过分支护栏。
 
@@ -16,17 +21,26 @@
 会话开始时按顺序做：
 
 1. 读 `CLAUDE.md`，把其中的 Claude host 名称按上面的 Host Mapping 映射到 Codex。
-2. 运行 `source $HOME/.pmai/scripts/skill-preamble.sh` 检测 PMAI_HOME、当前 worktree 和 active work。
+2. 运行 `bash -lc 'source "${PMAI_HOME:-$HOME/.pmai}/scripts/skill-preamble.sh"'` 检测 PMAI_HOME、当前 worktree 和 active work；如果文件不存在，先提示 PM 运行 `pmai install` 或检查 `PMAI_HOME`。
 3. 按 `/pmai-status` 等价流程判断当前下一步；没有 active work 时，引导 PM 运行 `/pmai-design`。
 
 ## Command Resolution
 
 Codex 收到 PM 输入的 `/pmai-xxx` 时：
 
-1. 去掉 `pmai-` 前缀，定位 `~/.pmai/skills/xxx/SKILL.md`。
-2. 按该 skill 的步骤执行；遇到引用 `_shared/...` 时，从 `~/.pmai/skills/_shared/...` 读取。
-3. 需要调用脚本时，优先用 `PMAI_HOME` 或 `~/.pmai` 下的脚本路径。
-4. 如果 skill 要求 Claude Code 专属工具，而 Codex runtime 没有等价工具，按“Runtime Fallback”处理，不要假装已执行。
+1. 先设 `PMAI_HOME="${PMAI_HOME:-$HOME/.pmai}"`。
+2. 去掉 `pmai-` 前缀，定位 `$PMAI_HOME/skills/xxx/SKILL.md`；如果该文件不存在，再尝试 `$PMAI_HOME/skills/pmai-xxx/SKILL.md`。
+3. 按该 skill 的步骤执行；遇到引用 `_shared/...` 时，从 `$PMAI_HOME/skills/_shared/...` 读取。
+4. 需要调用脚本时，优先用 `$PMAI_HOME/scripts/...` 或 `$PMAI_HOME/bin/...`。
+5. 如果 skill 要求 Claude Code 专属工具，而 Codex runtime 没有等价工具，按“Runtime Fallback”处理，不要假装已执行。
+
+## Consumer Workflow
+
+- 本仓已经初始化完成，不能在这里再跑 `/pmai-init-project`。
+- 起新模块或讨论新功能：读 `/pmai-design` 对应 skill。
+- 推进实现：读 `/pmai-build` 对应 skill，遵守 worktree / dirty check 护栏。
+- 收尾沉淀：读 `/pmai-close` 对应 skill。
+- 迷路或续跑：读 `/pmai-status` 对应 skill，先报告当前状态再行动。
 
 ## Runtime Fallback
 

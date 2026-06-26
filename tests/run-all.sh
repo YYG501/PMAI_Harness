@@ -13,6 +13,7 @@ SUITES=(
   test-detect-project-structure.sh
   test-inject-structure.sh
   test-init-project.sh
+  test-generator-codex-entry.sh
   test-init-project-codex-compat.sh
   test-brownfield-detect.sh
   test-no-duplicate-questioning.sh

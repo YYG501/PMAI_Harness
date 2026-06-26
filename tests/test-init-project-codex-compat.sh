@@ -21,6 +21,10 @@ test_agents_template_exists_and_maps_codex() {
   assert_file_contains "$AGENTS_TMPL" "驱动 Codex" "AGENTS.md.tmpl should map driver role to Codex" || return
   assert_file_contains "$AGENTS_TMPL" "skill-preamble.sh" "AGENTS.md.tmpl should use neutral PMAI preamble" || return
   assert_file_contains "$AGENTS_TMPL" "AskUserQuestion 不可用" "AGENTS.md.tmpl should define AskUser fallback" || return
+  assert_file_contains "$AGENTS_TMPL" "默认用中文" "AGENTS.md.tmpl should preserve Chinese default" || return
+  assert_file_contains "$AGENTS_TMPL" "PMAI 消费仓" "AGENTS.md.tmpl should identify consumer repo" || return
+  assert_file_contains "$AGENTS_TMPL" "PMAI_HOME" "AGENTS.md.tmpl should resolve installed framework path" || return
+  assert_file_contains "$AGENTS_TMPL" "不能在这里再跑" "AGENTS.md.tmpl should prevent re-init inside consumer repo" || return
   pass_test
 }
 
@@ -45,7 +49,7 @@ test_e2e_generates_agents_md_without_framework_assets() {
   base=$(mktemp -d)
   proj="$base/codex-compat-proj"
 
-  if ! bash "$INIT_PROJECT_SH" "codex-compat-proj" "$proj" "Codex 主控兼容测试" prototype \
+  if ! PMAI_HOME="$REPO_ROOT" bash "$INIT_PROJECT_SH" "codex-compat-proj" "$proj" "Codex 主控兼容测试" prototype \
        >/tmp/test-init-project-codex-compat.out 2>&1; then
     _fail "init-project.sh 执行失败 —— 见 /tmp/test-init-project-codex-compat.out"
     tail -20 /tmp/test-init-project-codex-compat.out >&2
@@ -61,6 +65,18 @@ test_e2e_generates_agents_md_without_framework_assets() {
 
   if ! grep -q "Codex 主控" "$proj/AGENTS.md"; then
     _fail "生成的 AGENTS.md 缺 Codex 主控说明"
+    rm -rf "$base"
+    return
+  fi
+
+  if ! grep -q "PMAI 消费仓" "$proj/AGENTS.md"; then
+    _fail "生成的 AGENTS.md 缺消费仓定位"
+    rm -rf "$base"
+    return
+  fi
+
+  if ! grep -q "不能在这里再跑" "$proj/AGENTS.md" || ! grep -q "/pmai-init-project" "$proj/AGENTS.md"; then
+    _fail "生成的 AGENTS.md 未阻止消费仓重复 init"
     rm -rf "$base"
     return
   fi
