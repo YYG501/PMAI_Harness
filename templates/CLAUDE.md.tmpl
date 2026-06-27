@@ -16,7 +16,7 @@
 |---|---|
 | PM | 决策、确认、验收。不写代码。默认一个窗口 |
 | 驱动 AI | PM 这个窗口里的 AI：范围确认 / design、派发 build、跑复审、呈交验收、close 沉淀 |
-| 执行器 | `/pmai-build` 时可选的独立执行器（Claude Code / Codex / Cursor / Gemini / PM 手动），按模块 `spec.md` 在 `prototype/` 里建 |
+| 执行器 | `/pmai-build` 时可选的独立执行器（Claude Code / Codex / Cursor / Gemini / PM 手动），按当前功能锚点在 `prototype/` 里建 |
 
 ### 状态与文件真相源
 
@@ -26,9 +26,11 @@
 - 模块讨论：`docs/modules/<模块>/discussion.md`
 - 模块决策：`docs/modules/<模块>/decisions.md`
 - 模块规格：`docs/modules/<模块>/spec.md`
+- 功能型文档：`docs/modules/<按内容命名>.md`
 - 项目现状：`docs/PRODUCT-STATE.md`
 - 跨模块规则：`docs/PRODUCT-RULES.md`
 - 视觉规范：`docs/DESIGN.md`
+- 文档索引：`docs/INDEX.md`
 - 主原型：`prototype/`
 - 输入材料：`docs/inputs/<类别>/`
 
@@ -40,18 +42,19 @@
 |---|---|---|---|
 | 轻 | typo、链接、格式、很小代码修补 | `/pmai-quick-fix` 或 main 上直接小改 | `/pmai-deposit` 或 `/pmai-close` |
 | 中 | 一个模块内的完整讨论 / 规格演进 | `/pmai-design` / `/pmai-status` | `/pmai-close` |
-| 重 | 需要实际建一片原型功能 | `/pmai-design` 定稿模块 `spec.md` → `/pmai-build <模块>` → 复审 | `/pmai-close` |
+| 重 | 需要实际建一片原型功能 | `/pmai-design` 定稿模块 `spec.md` 或确认功能型文档 → `/pmai-build <模块或文档>` → 复审 | `/pmai-close` |
 
 ### 主入口
 
 - `/pmai-init-project` — 起新项目，建项目底座。
 - `/pmai-design "<一句话需求>"` — 起新功能 / 重做模块，写模块三件套。
 - `/pmai-design <模块>` — 讨论、收范围、写模块三件套。
-- `/pmai-build <模块>` — 对着 `docs/modules/<模块>/spec.md` 在 `prototype/` 建。
+- `/pmai-build <模块或功能文档>` — 对着模块 `spec.md` 或 `docs/modules/<按内容命名>.md` 在 `prototype/` 建。
 - `/pmai-status` — 读当前状态，提示下一步并拉起对应入口。
 - `/pmai-close` — 收尾沉淀：现状、决策、术语、模块规格、输入材料归位；有 build worktree 则合回 main。
 - `/pmai-status` — 只读现状视图。
-- `/pmai-prd-writing` — 模块 `spec.md` / PRD 的统一成文与语言把关；`spec.md` 的生成和修改都走它。
+- `/pmai-prd-writing` — 功能型文档成文器；PRD、功能需求、功能描述、功能规格、功能评审稿都走它。
+- `/pmai-doc-writing` — 介绍型文档成文器；产品介绍、功能清单、优势说明、一页纸、汇报材料默认落 `docs/deliverables/`。
 
 ### 确认门
 
@@ -61,7 +64,7 @@
 
 ### build 纪律
 
-- build 的功能锚点是 `docs/modules/<模块>/spec.md`，不是 task 文件。
+- build 的功能锚点是模块 `spec.md` 或 `docs/modules/<按内容命名>.md` 的功能型文档，不是 task 文件。
 - 动手前必须读 `docs/DESIGN.md`。
 - 代码改动集中在 `prototype/`。执行器如改了 `docs/**`，必须呈交 PM 决定保留还是回退。
 - 大需求可开 `.worktrees/pmai-build-*` 隔离环境；小改可直接在 main 上做。
@@ -83,13 +86,15 @@ Subagent 适合一次性读文件、第二视角评审、独立查询；不适�
 | 产品现状 | `docs/PRODUCT-STATE.md` | 当前产品长什么样、做到哪、哪些真哪些 mock |
 | 视觉规范 | `docs/DESIGN.md` | 颜色、字体、组件、交互规范 |
 | 跨模块规则 | `docs/PRODUCT-RULES.md` | 全项目产品行为规则 |
-| 模块索引 | `docs/modules/INDEX.md` | 每个模块一句话用途 |
+| 文档索引 | `docs/INDEX.md` | 消费仓文档入口，说明各类材料去哪找 |
+| 模块索引 | `docs/modules/INDEX.md` | 模块上下文与功能型文档索引 |
 | 模块三件套 | `docs/modules/<模块>/discussion.md` / `decisions.md` / `spec.md` | 讨论、决策、规格 |
-| 项目决策记录 | `docs/decisions/` | 项目级理路冻结档 |
+| 功能型文档 | `docs/modules/<按内容命名>.md` | PRD、功能需求、功能描述、功能规格、功能评审稿 |
+| 项目决策档案 | `docs/project-decisions/` | 重大项目级决策 / 理路冻结档，默认不写 |
 | 输入材料 | `docs/inputs/<类别>/` | PM 上传 / 调研 / 竞品 / 旧文档等材料 |
 | 探索变体 | `mocks/` | 探索期 mock，看版与退役记录 |
 | 待办池 | `docs/TODO.md` | PM 真说过想做但未开工的事项 |
-| 按需 PRD | `docs/独立PRD/` 或 PM 指定路径 | 对外评审材料，不是每个工作必产 |
+| 介绍型材料 | `docs/deliverables/` | 产品介绍、产品功能清单、产品优势说明、一页纸等，默认 Markdown |
 
 ## 项目背景
 
@@ -105,10 +110,10 @@ Subagent 适合一次性读文件、第二视角评审、独立查询；不适�
 
 ## 文档治理（读取策略）
 
-**脊柱分两层**：
+**文档入口分两层**：
 
 - **必读核心** = `docs/PRODUCT-STATE.md`：进项目就读，是当前产品现状 hub。
-- **索引展开** = `PRODUCT` / `DESIGN` / `PRODUCT-RULES` / `modules/` / `decisions/` + 主原型：被 hub 索引着，查到或当前范围触及时才读。
+- **文档索引** = `docs/INDEX.md`：要找模块、功能型文档、输入材料、项目决策档案、介绍型材料时先看这里。
 
 新建任何文档前，对照 `$PMAI_HOME/templates/文档地图.md` 判断归位。
 
@@ -118,13 +123,14 @@ Subagent 适合一次性读文件、第二视角评审、独立查询；不适�
 
 - `PRODUCT.md`
 - `PRODUCT-STATE.md`
+- `INDEX.md`
 - `DESIGN.md`
 - `PRODUCT-RULES.md`
 - `TODO.md`
-- `prd.md`
 - `modules/`
-- `decisions/`
+- `project-decisions/`
 - `inputs/`
+- `deliverables/`
 - `归档/`
 
 ❌ 不在顶层：
@@ -132,8 +138,10 @@ Subagent 适合一次性读文件、第二视角评审、独立查询；不适�
 | 文件类型 | 归位 |
 |---|---|
 | 模块级讨论 / 决策 / 规格 | `docs/modules/<模块>/` |
+| PRD / 功能需求 / 功能描述 / 功能规格 / 功能评审稿 | `docs/modules/<按内容命名>.md` |
 | 一次性 review / 临时分析 / scratch | `docs/归档/` |
 | PM 上传材料 / 调研材料 | `docs/inputs/<类别>/` |
+| 产品介绍 / 功能清单 / 优势说明 / 一页纸 | `docs/deliverables/` |
 | 探索期 mock 变体 | `mocks/` |
 
 写新文档前 AI 自问 3 题：

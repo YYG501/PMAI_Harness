@@ -37,9 +37,10 @@ make_source_snapshot() {
 
   mkdir -p "$src"
   while IFS= read -r -d '' file; do
+    [ -f "$REPO_ROOT/$file" ] || continue
     mkdir -p "$src/$(dirname "$file")"
     cp "$REPO_ROOT/$file" "$src/$file"
-  done < <(git -C "$REPO_ROOT" ls-files -z)
+  done < <(git -C "$REPO_ROOT" ls-files -z --cached --others --exclude-standard)
 
   git -C "$src" init -q
   git -C "$src" config user.email "pmai-test@example.com"

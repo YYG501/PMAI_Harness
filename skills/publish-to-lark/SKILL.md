@@ -7,7 +7,7 @@ description: 将本地 markdown 文档发布至飞书云文档，发布后自动
 
 ## When To Use
 
-- 由 prd-writing 在沉淀阶段结束模板调用（D 选项），用于发布当前工作 PRD
+- 由 prd-writing 在沉淀阶段结束模板调用（D 选项），用于发布 PRD 体例功能型文档
 - 未来可被 spec 等其它 PM 视图文档复用
 - PM 手动调用：`/pmai-publish-to-lark <markdown 路径> [--type <type>] [--target-token <token>] [--title <title>]`
 
@@ -176,7 +176,7 @@ URL: https://xxx.feishu.cn/docx/doxcnxxxxxx
 prd-writing 在沉淀阶段结束模板加：
 
 ```markdown
-D) 发布到飞书—— 调 /pmai-publish-to-lark docs/modules/<模块>/prd.md --type prd
+D) 发布到飞书—— 调 /pmai-publish-to-lark docs/modules/<按内容命名>.md --type prd
 ```
 
 future skill（spec 等 PM 视图文档）类似集成。

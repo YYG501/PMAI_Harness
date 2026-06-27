@@ -191,14 +191,14 @@ test_main_allows_mocks_write() {
 }
 
 test_main_allows_decisions_write() {
-  start_test "GATE3 main ALLOWS docs/decisions/ write (冻结档豁免)"
+  start_test "GATE3 main ALLOWS docs/project-decisions/ write (冻结档豁免)"
   fixture_setup
   cd "$FIXTURE_DIR"
-  capture_check "Write" "docs/decisions/2026-06-04-foo.md" "" "" "# 冻结档"
+  capture_check "Write" "docs/project-decisions/2026-06-04-foo.md" "" "" "# 冻结档"
   if [ "$RC" = "0" ] && ! echo "$OUT" | grep -q '"deny"'; then
     pass_test
   else
-    _fail "should allow docs/decisions/ on main unconditionally (rc=$RC, out=$OUT)"
+    _fail "should allow docs/project-decisions/ on main unconditionally (rc=$RC, out=$OUT)"
   fi
   fixture_teardown
 }

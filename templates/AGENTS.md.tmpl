@@ -47,7 +47,7 @@ Codex 收到 PM 输入的 `/pmai-xxx` 时：
 
 - AskUserQuestion 不可用时，输出编号列表并要求 PM 回复编号或自由文本；没有明确回答前停止推进。
 - 没拿到 PM 答案前，不能写 PM 视图文件、commit 或收尾当前工作。
-- Claude Code subagent 不可用时，不能用临时 ad hoc prompt 替代标明“必须完整执行”的 skill；应说明 runtime 限制并请求 PM 选择可用路径。
+- Claude Code subagent 不可用时，不能用临时 ad hoc prompt 替代标明“必须完整执行”的 skill；`/pmai-build` 选择 Claude Code 时优先走 `~/.pmai/scripts/exec-adapters/claude-code.sh` 调本机 `claude -p`，如果本机 CLI / adapter 也不可用，再说明 runtime 限制并请求 PM 选择 Codex / Gemini / 手动等可用路径。
 - review / qa / design-review 类工具仍由 PM 主动触发；Codex 主控只列推荐清单和记录 PM 明确报告的结果。
 
 ## Guardrails

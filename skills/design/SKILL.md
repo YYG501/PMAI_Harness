@@ -76,12 +76,12 @@ python3 "$PMAI_HOME/scripts/status-view.py" --banner-only --skill DESIGN || true
 | 改动范围 | 读什么 |
 |---|---|
 | **小改 / 单模块** | 本模块 `spec.md`（当前真相源）+ `decisions.md`（拍过 / 否过什么）+ `PRODUCT-RULES.md` 里 **scope=全局** 的规则（全局铁律，始终读）+ `PRODUCT.md` 业务术语表 |
-| **跨模块 / 新模块** | 上面全部 + **全量** `PRODUCT-RULES.md` + 相关 `docs/decisions/` 理路冻结档（查"为什么"按需读）+ `PRODUCT-STATE.md` 现状 |
+| **跨模块 / 新模块** | 上面全部 + **全量** `PRODUCT-RULES.md` + 相关 `docs/project-decisions/` 理路冻结档（查"为什么"按需读）+ `PRODUCT-STATE.md` 现状 |
 | **拿不准是否触及跨模块约束** | 升档按"跨模块"全量读（两道兜防漏读全局规则：铁律节始终读 + 拿不准升档） |
 
-**进场侧闭环（治"回写做实了进场没接住"）**：开场顺手读 `docs/TODO.md`——本需求若命中某条遗留（上一轮 close 推下来的），浮出来提醒 PM。理路（护城河 / 机制咬合 / 演进故事）在 `docs/decisions/` 冻结档，**查"为什么这么定"时按需读**，不每次全载。
+**进场侧闭环（治"回写做实了进场没接住"）**：开场顺手读 `docs/TODO.md`——本需求若命中某条遗留（上一轮 close 推下来的），浮出来提醒 PM。理路（护城河 / 机制咬合 / 演进故事）在 `docs/project-decisions/` 冻结档，**查"为什么这么定"时按需读**，不每次全载。
 
-> **落点口径（⑤理路拆家后）**：`PRODUCT-RULES.md` 只装**跨模块规则**（活、scope）；**理路**在 `docs/decisions/` 冻结档（按需读）；单模块决策在模块 `decisions.md`。别再把 PRODUCT-RULES 当"规则 + 理路混装"读。
+> **落点口径（⑤理路拆家后）**：`PRODUCT-RULES.md` 只装**跨模块规则**（活、scope）；**理路**在 `docs/project-decisions/` 冻结档（按需读）；单模块决策在模块 `decisions.md`。别再把 PRODUCT-RULES 当"规则 + 理路混装"读。
 
 顺手查索引漂移（advisory、不阻塞）：
 
@@ -169,8 +169,8 @@ python3 "$PMAI_HOME/scripts/check-open-questions.py" "$MODULE_DIR/discussion.md"
 - **全程在 main 上只动文档、不开 worktree、不建原型**。开 worktree 是 `/pmai-build` 的事、merge 定稿是 `/pmai-close` 的事。
 - **唯一组织单位 = 功能模块**；一模块一文件夹 `docs/modules/<模块>/`，三件套 `discussion.md` / `decisions.md` / `spec.md`，文件名英文、正文中文。
 - **重做模块 = 就地升版同一文件夹**（版本 + 变更日志 + supersede + git 留痕），不 per-版本另开文件夹；身份变了才另起 + 归档旧的（例外，PM 拍）。
-- **开场分档加载跨需求记忆（开放4）**：小改读本模块 spec+decisions + PRODUCT-RULES 全局 scope + 术语表；跨模块 / 新模块全量读 PRODUCT-RULES + 相关 docs/decisions 理路 + PRODUCT-STATE；拿不准升档。顺手读 TODO（遗留浮出）。别让 PM 重复说历史决策和术语。
-- **落点口径（⑤理路拆家）**：PRODUCT-RULES 只装跨模块规则、理路在 docs/decisions 冻结档（按需读）、单模块决策在模块 decisions.md。
+- **开场分档加载跨需求记忆（开放4）**：小改读本模块 spec+decisions + PRODUCT-RULES 全局 scope + 术语表；跨模块 / 新模块全量读 PRODUCT-RULES + 相关 docs/project-decisions 理路 + PRODUCT-STATE；拿不准升档。顺手读 TODO（遗留浮出）。别让 PM 重复说历史决策和术语。
+- **落点口径（⑤理路拆家）**：PRODUCT-RULES 只装跨模块规则、理路在 docs/project-decisions 冻结档（按需读）、单模块决策在模块 decisions.md。
 - **按需求类型选方法（开放3）**：真通用内核 3 条任何需求都过；类型分**两面**——逻辑面（后端规则 / 算法 / 引擎 / 流程）+ 呈现面（信息密集 UI 卡 / 管理页 / 数据产物），各配特化问题集。**先判逻辑面、再判有没有呈现面；结果给人看 → 呈现面必做（落点 / 卡面 / 抽屉 / 交互）+ PM 确认 + 视觉调 /mockup，别把引擎判定只当后端就收工**。三身份只在信息密集 UI 卡。判新型逐类说理由 + PM 拍 + 沉淀回 info-design。**不再"5 问对任何需求成立"**。
 - **深度自适应、AI 提议 PM 拍**：信息密集走全套讨论、后端规则 / 流程 / 小改轻过。不机械化成"每需求必跑全部问题"。
 - **设计确认靠 mock（可选档）**：视觉 / 布局文字掰不清时才调 `/mockup`；纯后端 / 无界面 / 小改、或文字已讲清可省。规格不嵌 ASCII，只引用确认的 mock。

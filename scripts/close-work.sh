@@ -26,7 +26,6 @@ WORK_DIR="${1:?用法: close-work.sh <模块目录>}"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/_lib/_setup-pythonpath.sh"
 source "$SCRIPT_DIR/_lib/worktree.sh"
-source "$SCRIPT_DIR/_lib/symlink-prd.sh"
 
 # --- 找到主仓根目录 ---
 GIT_COMMON=$(git rev-parse --git-common-dir 2>/dev/null || echo "")
@@ -241,22 +240,6 @@ else
     exit 1
   fi
   echo "✅ 收尾改动已 commit 到 main"
-fi
-
-# --- PRD 收口 symlink：让 PM 一处查所有正常 close 的 work PRD ---
-# 此时已在 main（路径 A merge 后 / 路径 B 本就在 main），模块 prd.md（若有）已在场。
-# 若模块没写过 prd.md（少见：未走完方案设计就 close）则 silent skip。
-cd "$REPO_ROOT"
-MODULE_BASENAME=$(basename "$WORK_DIR")
-if ! create_prd_symlink "$REPO_ROOT" "$MODULE_BASENAME" closed; then
-  echo "❌ 创建 docs/prds/ symlink 失败。" >&2
-  exit 1
-fi
-if [ -d "$REPO_ROOT/docs/prds" ]; then
-  git add -A -- "docs/prds" 2>/dev/null || true
-  if [ -n "$(git diff --cached --name-only)" ]; then
-    git commit -q -m "close: PRD 收口 symlink $WORK_ID" 2>/dev/null || true
-  fi
 fi
 
 # --- 兜底清孤儿 worktree（按模块 .work-meta 定向；历史漏清 / 中断 close 留下的）---

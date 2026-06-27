@@ -31,12 +31,12 @@ from pathlib import Path
 
 # 项目级真相源（CLAUDE.md.tmpl §docs/ 归档约定 正面清单）
 STATIC_ALLOW = {
+    "INDEX.md",
     "PRODUCT.md",
     "PRODUCT-STATE.md",
     "DESIGN.md",
     "PRODUCT-RULES.md",
     "TODO.md",
-    "prd.md",
     "CONTEXT.md",  # 老项目兼容（migrate-context-to-project.py 跑前）
 }
 
@@ -113,7 +113,11 @@ def check(repo_root: Path, paths: list[str]) -> int:
         file=sys.stderr,
     )
     print(
-        "     • 模块级决策 / 用户故事 / 模块功能清单 → docs/modules/<模块>/",
+        "     • 模块级讨论 / 决策 / 规格 → docs/modules/<模块>/",
+        file=sys.stderr,
+    )
+    print(
+        "     • PRD / 功能需求 / 功能描述 / 功能规格 / 功能评审稿 → docs/modules/<按内容命名>.md",
         file=sys.stderr,
     )
     print(

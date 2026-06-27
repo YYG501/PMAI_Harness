@@ -46,11 +46,11 @@ echo "SKILL: deposit"
 | 类 | 这次有没有 | 落点 |
 |---|---|---|
 | ① 耐久事实（现状 / 规则 / 稳定结构）| 多数轻档有 | `docs/PRODUCT-STATE.md`（+ 按需 `PRODUCT-RULES.md` / `docs/modules/`）|
-| ② 理路（为什么这么拼）| 真有跨文件整体意图才有 | `docs/decisions/<日期>-<slug>.md`（@读 `_shared/decision-record.md` 判门槛 + 写法）|
+| ② 理路（为什么这么拼）| 真有跨文件整体意图才有 | `docs/project-decisions/<日期>-<slug>.md`（@读 `_shared/decision-record.md` 判门槛 + 写法）|
 | ③ 遗留（想做没做的）| 有就记 | `docs/TODO.md` 加一条**自包含**（建议目标 + 涉及文件）|
 | ④ 探索变体（mock）| 这次探过视觉草图才有 | `mocks/manifest.json` 加一条 → 重生成看版 |
 
-**顺手补索引**：本次新建了 `docs/decisions/<…>.md` / 新 mock 等 → 在 `docs/PRODUCT-STATE.md` 索引节挂一条。
+**顺手补索引**：本次新建了 `docs/project-decisions/<…>.md` / 新 mock 等 → 确认 `docs/INDEX.md` 或对应索引里能找到它；`PRODUCT-STATE.md` 只写当前产品现状，不再兼职总索引。
 
 ### 步骤 3：落盘（marker 门控的合法写入口）
 
@@ -66,7 +66,7 @@ touch "$REPO_ROOT/.runs/deposit-in-progress"
 然后用 **Edit / Write** 写各落点（GATE 3 见 marker 放行）：
 
 - ① `docs/PRODUCT-STATE.md`：patch 真正变了的行（当前功能 / 主原型现状 / mock→真）。**PRODUCT-STATE 是唯一现状写入点**——轻沉淀是它的轻量同构原子写，不是"随手改活文档"。
-- ② 真有理路 → 按 `$PMAI_HOME/templates/decision-record.md.tmpl` 写 `docs/decisions/<日期>-<slug>.md`。
+- ② 真有理路 → 按 `$PMAI_HOME/templates/decision-record.md.tmpl` 写 `docs/project-decisions/<日期>-<slug>.md`。
 - ③ 有遗留 → 往 `docs/TODO.md` 加一行（带一句话自包含）。
 - ④ 探了变体 → 往 `mocks/manifest.json` 的 `variants` 加一条，然后重生成看版：
   ```bash
@@ -77,7 +77,7 @@ touch "$REPO_ROOT/.runs/deposit-in-progress"
 
 按这次实际动了什么，分两挡：
 
-**(a) 纯静默档**——只 ①（PRODUCT-STATE 补一句 / 挂索引 / 纯文字订正），无理路、无新变体、无规则变化：AI **静默写 + 单独 commit**，回执一行，**不强制总审**（套确认门只给路径的惯例）。
+**(a) 纯静默档**——只 ①（PRODUCT-STATE 补一句 / docs/INDEX.md 补指针 / 纯文字订正），无理路、无新变体、无规则变化：AI **静默写 + 单独 commit**，回执一行，**不强制总审**（套确认门只给路径的惯例）。
 
 **(b) 需审档**——碰了 ② 决策记录 / ④ 新变体 / 改了 `PRODUCT-RULES` / `docs/modules`：写完**呈 PM 总审 diff**（`git -C "$REPO_ROOT" diff` 给 PM 看动了哪些），PM `通过 / 改`。打回 → 按反馈改后重审。
 

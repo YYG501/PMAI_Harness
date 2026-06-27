@@ -1,37 +1,36 @@
 ---
 name: pmai-prd-writing
 description: |
-  规格与 PRD 成文器：负责模块规格文档的生成与修改，并可基于规格反向合成可评审 PRD，保障结构与文字质量。通常由 /pmai-design、/pmai-close 流程按需调用，亦支持 PM 手动撰写独立 PRD 或规范既有文档。
-  触发词：写 PRD / 写需求文档 / 写规格 / 规范 PRD。
+  功能型文档成文器：负责模块规格文档的生成与修改，也负责 PRD、功能需求、功能描述、功能规格、功能评审稿等功能型文档的成稿、补差与整体优化。通常由 /pmai-design、/pmai-close 流程按需调用，亦支持 PM 手动撰写跨模块功能型文档或优化既有功能型文档。
+  触发词：写 PRD / 写功能需求 / 写功能描述 / 写功能规格 / 写评审稿 / 写需求文档 / 写规格 / 规范 PRD / 优化功能文档。
 ---
 
-# /pmai-prd-writing · PM 视图成文器（模块规格 + PRD）
+# /pmai-prd-writing · PM 视图成文器（模块规格 + 功能型文档）
 
-> **PM 答题规则（M4）**：所有 AskUserQuestion 调用按 `_shared/pm-view/askuser-rules.md` §1 四条硬规则走（空答 STOP / 没拿到答案禁止落盘 prd.md / runtime 退化保留 wait / 多决策拆开顺序问）。**Runtime 兜底**：本 skill 各门写的都是 picker 形态；runtime 不支持时 AI 按 §1.3 自动退化为编号列表，仍 wait。
+> **PM 答题规则（M4）**：所有 AskUserQuestion 调用按 `_shared/pm-view/askuser-rules.md` §1 四条硬规则走（空答 STOP / 没拿到答案禁止落盘 PM 视图文档 / runtime 退化保留 wait / 多决策拆开顺序问）。**Runtime 兜底**：本 skill 各门写的都是 picker 形态；runtime 不支持时 AI 按 §1.3 自动退化为编号列表，仍 wait。
 
 ## What This Skill Produces
 
-prd-writing 是**统一成文器**，负责把已经拍板的信息写成 `spec.md` 或 PRD，并集中把关结构、语言风格和 lint。它覆盖四种产物形态：
+prd-writing 是**统一成文器**，负责把已经拍板的信息写成模块 `spec.md` 或功能型文档，并集中把关结构、语言风格和 lint。它覆盖三种产物形态：
 
 | 文档类型 | 何时写 | 产物路径 | 用途 |
 |---|---|---|---|
 | **模块规格** | `/pmai-design` 探索 + 设计拍板后；或 `/pmai-close` 收尾发现规格需要按最终结果修订时 | `docs/modules/<模块>/spec.md` | build 的权威契约；写产品行为、规则、字段口径、验收路径 |
-| **当前工作 PRD** | `/pmai-close` 收尾时 PM 按需选择 | `docs/modules/<模块>/prd.md` | 给研发/业务评审或留档的完整需求方案 |
-| **独立 PRD** | PM 手动要求跨模块/专题评审材料 | 默认 `docs/独立PRD/<slug>.md`，可由 PM 指定 | 不绑定当前工作的一份 PRD |
-| **补差/规范** | PM 已有 PRD 或规格，需要补齐、改结构、统一语言 | 原文件同路径覆盖或 PM 指定路径 | 修已有文档，不重做设计 |
+| **功能型文档** | `/pmai-close` 收尾时 PM 按需选择；或 PM 手动要求 PRD / 功能需求 / 功能描述 / 功能规格 / 功能评审稿 | `docs/modules/<按内容命名>.md` | 给研发、业务、评审或后续 build 使用的功能方案；文件名按实际内容定 |
+| **优化已有功能型文档** | PM 已有 PRD / 功能需求 / 规格，要求整体优化结构、内容、文风 | 原文件同路径覆盖或 PM 指定路径 | 修已有文档，不重做设计 |
 
-本 skill **只负责 `spec.md` / PRD 成文，不负责替 PM 或 `/pmai-design` 重新做产品决策，也不负责生成 `discussion.md` / `decisions.md`**。`discussion.md` / `decisions.md` 是输入、证据和留痕位置；如果写作时发现信息结构没想清、范围没拍板、规则互相矛盾，必须停下把问题交回 `/pmai-design`、`/pmai-close` 或 PM 确认，不能在写作阶段补拍脑袋决策。
+本 skill **只负责模块 `spec.md` / 功能型文档成文，不负责替 PM 或 `/pmai-design` 重新做产品决策，也不负责生成 `discussion.md` / `decisions.md`**。`discussion.md` / `decisions.md` 是输入、证据和留痕位置；如果写作时发现信息结构没想清、范围没拍板、规则互相矛盾，必须停下把问题交回 `/pmai-design`、`/pmai-close` 或 PM 确认，不能在写作阶段补拍脑袋决策。
 
-当前工作 PRD 是**反向合成**，不是「把代码翻译成文档」，更**不从 mock 原型随手的实现反推业务规则**：
+功能型文档可以是 PRD 体例，也可以是功能需求 / 功能规格 / 功能评审稿体例；默认落 `docs/modules/` 根目录，文件名按内容取，比如 `批量审核-PRD.md`、`权限模型-功能规格.md`、`组织角色数据范围-联动评审稿.md`。它是**反向合成**，不是「把代码翻译成文档」，更**不从 mock 原型随手的实现反推业务规则**：
 
 - **结构 / 字段 / 交互** ← 最终原型（`prototype/`）+ 模块规格（`docs/modules/<模块>/spec.md`）
 - **业务规则 / 权限语义 / 审批口径** ← 模块 `spec.md` + `decisions.md`
 
 **铁律（真系统口径）**：哪怕这版原型是 mock 壳，PRD 也按**真实系统口径**写 —— 需求、业务规则、权限语义都面向生产系统，绝不从 mock 原型的临时实现反推。权限 / 审批这类「为什么」规则代码本来就反映不出来，从模块规格和决策记录锁定。
 
-当前工作 PRD 内含**原型覆盖范围表**：列出本次模块工作覆盖了哪些功能 / 页面、哪些仍是 mock 占位 / 未覆盖（见下方 PRD 结构「§九 附件」+ 步骤 2 原型覆盖范围表）。
+当功能型文档采用 PRD / 评审稿体例时，内含**原型覆盖范围表**：列出本次模块工作覆盖了哪些功能 / 页面、哪些仍是 mock 占位 / 未覆盖（见下方 PRD 结构「§九 附件」+ 步骤 2 原型覆盖范围表）。
 
-## When To Use（四种模式）
+## When To Use（三种模式）
 
 prd-writing 是多模式 skill。先判**文档目标**，再判**触发方式**。
 
@@ -44,25 +43,19 @@ prd-writing 是多模式 skill。先判**文档目标**，再判**触发方式**
 - **产物**：`docs/modules/<模块>/spec.md`。
 - **边界**：只生成/修改 `spec.md`；不写 `discussion.md` / `decisions.md`。发现未决问题就停止落盘，交回调用方继续问清。
 
-### 模式 B — 当前工作 PRD（由 `/pmai-close` 按需调用）
+### 模式 B — 功能型文档（由 `/pmai-close` 或 PM 手动调用）
 
-- **触发**：`/pmai-close` 收尾时，PM 选择「当前工作要出一份评审 / 留档 PRD」。**不是每次工作都必跑**，避免文档税。
+- **触发**：`/pmai-close` 收尾时，PM 选择「当前工作要出一份 PRD / 功能需求 / 功能规格 / 功能评审稿」；或 PM 手动要求跨模块 / 专题功能文档。**不是每次工作都必跑**，避免文档税。
 - **输入**：涉及模块的 `spec.md` / `decisions.md` + 最终 `prototype/` + `docs/PRODUCT-STATE.md` + `docs/PRODUCT.md` + `docs/PRODUCT-RULES.md`。
-- **产物**：`docs/modules/<模块>/prd.md`。
+- **产物**：`docs/modules/<按内容命名>.md`，文件名按实际内容取，不固定叫 `prd.md` / `spec.md`。
 - **确认门**：P2.5 §六拆分必有 PM 确认门；最终成品确认归 `/pmai-close` 的收尾确认。
 
-### 模式 C — 独立 PRD（PM 手动 `/pmai-prd-writing`）
+### 模式 C — 优化已有功能型文档（PM 手动 `/pmai-prd-writing`）
 
-- **触发**：PM 说「独立 PRD」/「给 X、Y 模块写一份评审 PRD」/「不绑定当前工作」。
-- **输入**：PM 指定范围对应的模块 `spec.md` / `decisions.md` + 项目底座；如评审已落地功能，可按需读 `prototype/`。
-- **产物**：默认 `docs/独立PRD/<slug>.md`，也可由 PM 指定。
-
-### 模式 D — 补差 / 规范已有文档（PM 手动 `/pmai-prd-writing`）
-
-- **触发**：PM 已有 PRD 或规格，要求「补某节」「规范一下语言」「按我们的结构重写」。
+- **触发**：PM 已有 PRD、功能需求、功能描述、功能规格、功能评审稿或模块 `spec.md`，要求「看这个文件」「整体优化结构 / 内容 / 文风」「补某节」「规范一下语言」「按我们的结构重写」。
 - **输入**：现有文档 + 补差范围相关的模块 `spec.md` / `decisions.md` / 项目底座。
 - **产物**：原文件同路径覆盖或 PM 指定路径。
-- **边界**：只补结构、语言、遗漏的已知信息；发现产品口径未拍板时停下问，不自行新增规则。
+- **边界**：可以重组结构、补齐已知内容、统一语言；发现产品口径未拍板时停下问，不自行新增规则。纯文风收口可调用 `/pmai-humanize`，但不要让 humanize 接管结构和内容判断。
 
 ## 步骤 0 · 开场确认（仅 PM 手动调用时走）
 
@@ -75,18 +68,18 @@ PM 手动调用时，AI 第一件事是确认文档目标。AI 调 AskUserQuesti
 - `options`:
   - `label`: `模块规格`
     `description`: `生成或修改 docs/modules/<模块>/spec.md`
-  - `label`: `当前工作 PRD`
-    `description`: `基于当前模块工作生成完整 PRD`
-  - `label`: `独立 PRD`
-    `description`: `跨模块评审，回答时告诉我覆盖哪几个模块`
+  - `label`: `PRD`
+    `description`: `基于当前模块工作生成完整 PRD，落 docs/modules/<按内容命名>.md`
+  - `label`: `功能型文档`
+    `description`: `功能需求 / 功能描述 / 功能规格 / 功能评审稿，回答时告诉我覆盖范围`
   - `label`: `补差`
-    `description`: `已有 PRD 或规格，补充某节 / 某模块 / 规范语言`
+    `description`: `已有 PRD 或规格，整体优化结构、内容、文风`
 
 **第二题（PM 答完第一题后问）：产物路径？**
-- `question`: "PRD 产物放哪？"
+- `question`: "文档产物放哪？"
 - `options`:
   - `label`: `默认路径`
-    `description`: `模块规格 → docs/modules/<模块>/spec.md；当前工作 PRD → docs/modules/<模块>/prd.md；独立 → docs/独立PRD/<slug>.md；补差 → 原文件覆盖`
+    `description`: `模块规格 → docs/modules/<模块>/spec.md；功能型文档 → docs/modules/<按内容命名>.md；补差 → 原文件覆盖`
   - `label`: `我指定`
     `description`: `贴绝对路径`
 
@@ -105,26 +98,26 @@ AI 先在 prose 里列出按"输入推荐表"对应场景的推荐输入清单�
 | 场景 | 推荐输入 |
 |---|---|
 | 模块规格 | `/pmai-design` 已收敛的 discussion/decisions + docs/PRODUCT-STATE.md + docs/PRODUCT.md + docs/PRODUCT-RULES.md + docs/modules/INDEX.md + 已确认 mock/原型线索；如是 `/pmai-close` 收尾修订，还要读最终 prototype/ 与验收结论 |
-| 当前工作 PRD | 最终 prototype/ + docs/PRODUCT-STATE.md + docs/PRODUCT.md + docs/PRODUCT-RULES.md + docs/modules/INDEX.md + 涉及模块的 docs/modules/<模块>/spec.md / decisions.md |
-| 独立 PRD（PM 指定模块清单 X/Y/Z） | docs/PRODUCT-STATE.md + docs/PRODUCT.md + docs/PRODUCT-RULES.md + docs/modules/INDEX.md + docs/modules/X/spec.md + docs/modules/Y/spec.md + docs/modules/Z/spec.md |
-| 补差 | 现有 PRD/spec + 补差范围相关的 module spec / decisions 子集 |
+| 功能型文档（当前工作） | 最终 prototype/ + docs/PRODUCT-STATE.md + docs/PRODUCT.md + docs/PRODUCT-RULES.md + docs/modules/INDEX.md + 涉及模块的 docs/modules/<模块>/spec.md / decisions.md |
+| 功能型文档（PM 指定模块清单 X/Y/Z） | docs/PRODUCT-STATE.md + docs/PRODUCT.md + docs/PRODUCT-RULES.md + docs/modules/INDEX.md + docs/modules/X/spec.md + docs/modules/Y/spec.md + docs/modules/Z/spec.md |
+| 优化已有功能型文档 | 现有 PRD/spec + 补差范围相关的 module spec / decisions 子集 |
 
 三题答完后进入实际写作（步骤 1）。
 
 **禁止**：
-- 当 PM 在 prompt 里明确说「独立 PRD」或「覆盖 X/Y 模块」时仍按当前工作流程跑（要识别独立模式跳过当前工作上下文必读）
-- 推荐清单僵化（PM 选独立 PRD 后仍读无关模块或旧工作上下文）
-- 把「规范语言」当成重新设计：未获 PM 确认不得新增产品规则、改范围、改模块归属
+- 当 PM 在 prompt 里明确说「覆盖 X/Y 模块」或「不绑定当前工作」时仍按当前工作流程跑（要识别跨模块功能型文档，跳过无关旧工作上下文必读）
+- 推荐清单僵化（PM 选跨模块功能型文档后仍读无关模块或旧工作上下文）
+- 把「优化文档」当成重新设计：未获 PM 确认不得新增产品规则、改范围、改模块归属
 
 ## PM 视图规则（必读）
 
-本 skill 产出 `spec.md` 或 `prd.md`，须遵守 `skills/_shared/PM-VIEW-RULES.md`（主索引）。具体读以下子文件：
+本 skill 产出模块 `spec.md` 或功能型文档，须遵守 `skills/_shared/PM-VIEW-RULES.md`（主索引）。具体读以下子文件：
 - `_shared/pm-view/writing-rules.md`（§三 写作规则：含 §3.1-§3.11 通用规则 + **§3.12 描述风格规则**：6 类违规 + 生僻描述词 framework + PM 视角原则 + 流程式步骤 + 精简原则 + 引号风格统一）
 - `_shared/PM-VIEW-RULES.md` §五（功能清单格式：4 列表格 + 续行 rowspan + 需求描述列内联编号；业务规则只说 what，禁 how/why/字段口径混入）
-- `_shared/pm-view/doc-strictness.md`（§四 严格度对照表 — prd.md 行）
+- `_shared/pm-view/doc-strictness.md`（§四 严格度对照表 — PRD 体例功能型文档行）
 - `_shared/pm-view/cross-skill.md`（§9.7 跨 skill 共享原则,§3.12 描述风格规则跨 skill 适用）
 
-PRD 模式下的 `prd.md` 不拆文件，是 PM 视图链路的核心交付层；模块规格模式下的 `spec.md` 只写产品行为和规则，不写实现过程。
+PRD 体例的功能型文档不按模块再拆子文件，是 PM 视图链路的核心交付层；模块规格模式下的 `spec.md` 只写产品行为和规则，不写实现过程。
 
 prd-writing 历史上自带的写作规则（禁用清单 / UI 元素指代规则 / 抽象动词使用规则）现已统一搬到 `_shared/pm-view/writing-rules.md` §三作为单一真相源；本 skill 内的同名章节保留作为本文位置参照，但权威以共享规则为准。
 
@@ -143,7 +136,7 @@ prd-writing 历史上自带的写作规则（禁用清单 / UI 元素指代规�
 - 🟡 已确认的 mock / 原型线索；由 `/pmai-close` 调用时读最终 `prototype/` 与验收结论（只作为规格修订 evidence；规格不嵌 ASCII、不描述像素布局）
 - ❌ 任何 `.engineering.md`
 
-### 当前工作 PRD 模式（模式 B）
+### 功能型文档模式（模式 B）
 
 沉淀阶段原型已建完 —— 反向合成多源拼齐：**结构 / 字段 / 交互**看最终原型 + 模块规格，**业务规则 / 权限语义**看模块 `spec.md` 与 `decisions.md`。
 
@@ -155,20 +148,45 @@ prd-writing 历史上自带的写作规则（禁用清单 / UI 元素指代规�
 - ❌ `docs/DESIGN.md`（视觉规范，归 build 阶段读；PRD 写需求方案不写像素颜色，DESIGN.md 在本 skill 只作**反向边界提示**用，不作正向源材料 —— 见 §六「原型」节 / §六 lint 视觉细节越界）
 - ❌ 任何 `.engineering.md`
 
-### 独立 PRD / 补差模式（模式 C/D）
+### 跨模块功能型文档 / 优化已有文档模式（模式 B/C）
 
-按步骤 0 与 PM 对话确认的清单读入，参考上方「输入推荐表」。独立 PRD 不读旧工作上下文。
+按步骤 0 与 PM 对话确认的清单读入，参考上方「输入推荐表」。不绑定当前工作时，不读无关旧工作上下文。
 
 特别遵守：
-- 手动模式如读 `prototype/`（独立 PRD 评审已落地模块时有原型），遵守 `input-flow.md` §9.3.1 原型读取强约束（>500 行禁整文件 Read）
+- 手动模式如读 `prototype/`（跨模块功能型文档评审已落地模块时有原型），遵守 `input-flow.md` §9.3.1 原型读取强约束（>500 行禁整文件 Read）
 
 ## Workflow
 
-> 模块规格模式走 S1-S5；PRD 模式走 P1-P7。PM 手动调用先走步骤 0，`/pmai-design` 和 `/pmai-close` 调用时跳过步骤 0。
+> 模块规格模式走 S1-S5；功能型文档模式走 P1-P6。PM 手动调用先走步骤 0，`/pmai-design` 和 `/pmai-close` 调用时跳过步骤 0。
+
+### C1-C5 · 优化已有功能型文档流程（模式 C）
+
+PM 给了既有文档并要求"整体优化结构、内容、文风"时，按三层处理，**不要把它降级成 `/pmai-humanize` 纯润色**：
+
+| 层级 | 谁负责 | 处理方式 |
+|---|---|---|
+| 结构 | `/pmai-prd-writing` | 重排章节、合并重复段、把功能需求改成可评审结构 |
+| 内容 | `/pmai-prd-writing` | 基于模块 `spec.md` / `decisions.md` / 项目底座补已知事实；无依据就问 PM |
+| 文风 | `/pmai-humanize` 规则 | 最后一遍去 AI 味、去黑话、改顺句子 |
+
+C1. **判文档类型**：确认它是功能型文档。若其实是产品方向 / 产品介绍 / 一页纸 / 汇报材料，停止本 skill，转 `/pmai-doc-writing`。
+
+C2. **读原文 + 读最小真相源**：先读原文，再按涉及范围读 `docs/INDEX.md`、`docs/modules/INDEX.md`、相关模块 `spec.md` / `decisions.md`、`docs/PRODUCT-STATE.md`、`docs/PRODUCT.md`、`docs/PRODUCT-RULES.md`。不整仓乱读。
+
+C3. **先出改稿计划**：用 3 段给 PM 看清楚要改什么：
+- 结构问题：章节顺序、重复、缺少功能需求 / 验收 / 边界等。
+- 内容问题：缺事实、缺规则、与模块规格冲突、引用过期口径。
+- 文风问题：AI 腔、黑话、啰嗦、无法执行的泛词。
+
+PM 已明确说"直接改"时可跳过确认；否则等 PM 确认改稿方向后落盘。
+
+C4. **重写 / 覆盖**：在原路径覆盖或写到 PM 指定路径。允许重排结构和补齐已知内容，但禁止新增未拍板的产品规则；遇到缺口用 TODO / 待 PM 确认标注，不把猜测写成事实。
+
+C5. **收口**：PRD 体例文档跑 P3.5 lint；所有模式最后按 `/pmai-humanize` 的表达层规则做一遍文字收口。若文档落在 `docs/modules/<按内容命名>.md`，同步更新 `docs/modules/INDEX.md`。
 
 ### attachments AI 接管 hook（trigger 0 — 任何步骤期间生效；手动独立模式不启）
 
-**模块规格模式 / 当前工作 PRD 模式启用 trigger 0**；**独立 PRD / 补差模式默认不启**（不一定绑定当前模块状态 → 不写 `.work-meta.json`）。
+**模块规格模式 / 绑定当前工作的功能型文档模式启用 trigger 0**；**不绑定当前工作的跨模块功能型文档 / 补差模式默认不启**（不一定绑定当前模块状态 → 不写 `.work-meta.json`）。
 
 PM 在 chat 任何位置自然描述 "我有 X 在 ~/Downloads/foo.pdf，重点 Y" → AI first-principle 识别（chat 含绝对路径 + 描述材料）→ 调 helper：
 
@@ -179,21 +197,21 @@ from _lib.attachments import copy_attachment
 result = copy_attachment(work_dir, Path("~/Downloads/foo.pdf"),
                         stage_prefix="spec", hint="Y 重点")
 
-# 当前工作 PRD 模式
+# 绑定当前工作的功能型文档模式
 result = copy_attachment(work_dir, Path("~/Downloads/foo.pdf"),
                         stage_prefix="prd", hint="Y 重点")
 ```
 
-stage_prefix 按模式取值：模块规格模式用 `"spec"`，当前工作 PRD 模式用 `"prd"`。chat 一行确认 `已归档（docs/inputs/attachments/<spec|prd>-foo.pdf），Y 重点。继续。`（禁 cp / 绝对路径全文 / 字段名等工程黑话）。
+stage_prefix 按模式取值：模块规格模式用 `"spec"`，绑定当前工作的功能型文档模式用 `"prd"`。chat 一行确认 `已归档（docs/inputs/attachments/<spec|prd>-foo.pdf），Y 重点。继续。`（禁 cp / 绝对路径全文 / 字段名等工程黑话）。
 
 异常 catch：
 - `FileNotFoundError` → "路径不可读：<src>。"
 - `SensitivePathError` → "路径含敏感关键词，拒纳：<src>。"
 - `FileSizeError` → "文件 X MB 超 50MB 上限。"
 
-**trigger 2 fallback**：写 `spec.md` / `prd.md` 前扫 `docs/inputs/attachments/`，`is_seen(work_dir, filename)` 判定（真相源 `.work-meta.json:attachments_seen`，非引用 section）。
+**trigger 2 fallback**：写模块 `spec.md` / 功能型文档前扫 `docs/inputs/attachments/`，`is_seen(work_dir, filename)` 判定（真相源 `.work-meta.json:attachments_seen`，非引用 section）。
 
-**引用 section 渲染**：写 `spec.md` / `prd.md` 时 `list_attachments_seen(work_dir)` 按 `registered_at` 升序渲染到文档物理末尾 `## 📎 参考材料` section。
+**引用 section 渲染**：写模块 `spec.md` / 功能型文档时 `list_attachments_seen(work_dir)` 按 `registered_at` 升序渲染到文档物理末尾 `## 📎 参考材料` section。
 
 **单一真相源**：`skills/_shared/pm-view/attachments-upload.md`（完整 prose / 替换 / 删除 / batch / 失败兜底）。
 
@@ -228,14 +246,14 @@ S5. **规格自检（机械关口 + 冷读语体，PM 看到前先扫干净）**
 - **冷读语体（必做）**：通读一遍自问——"这读起来像待办那种**大白话产品规格**，还是像**咨询报告 / 方法论白皮书**？"。若后者，标出最像白皮书的 2–3 处，对照风格卡 6 条改。**打磨文字可直接调 `/pmai-humanize <spec 路径>`** 当统一引擎（按"简要易懂 / 规格平实"语气跑改写 + 二次自审）；也可派 subagent 冷读：给它风格卡 6 条 + 待办实例，让它只回答"像哪一类、哪几处不像大白话"。
 - **结构 / 4 问自检**：对照 `skills/_shared/info-design.md`「规格 4 问」和 `skills/_shared/pm-view/checklist.md`；发现结构问题回调用方补拍，发现表达问题直接修文。
 
-模块规格模式到这里结束，不进入下方 PRD §六重组、原型覆盖表和独立 PRD symlink 流程。
+模块规格模式到这里结束，不进入下方 PRD §六重组和原型覆盖表流程。
 
-### P0.5 · 项目级文档强制 echo（当前工作 PRD 模式必跑；不依赖 LLM 自觉 Read）
+### P0.5 · 项目级文档强制 echo（绑定当前工作的功能型文档模式必跑；不依赖 LLM 自觉 Read）
 
 PRD 漏读 / 浅读项目级文档（PRODUCT-STATE / PRODUCT.md / PRODUCT-RULES.md / modules INDEX）是 LLM 自觉 Read tool 触发不稳的典型踩坑。本子步骤用 Bash `cat` 把项目级文档无条件 echo 到 transcript，**保证内容进入 working context** —— 比依赖 Read tool 自觉触发硬。冗余于上方「Required Inputs」prose 列表也无害。
 
-**当前工作 PRD 模式：必跑本步骤**（`/pmai-close` 调用时已确定当前工作和默认路径 → 直接进 P0.5）。
-**独立 PRD / 补差模式**：步骤 0 已与 PM 对齐清单 / PM 在线会立刻拦漏读，本步骤可省。
+**绑定当前工作的功能型文档模式：必跑本步骤**（`/pmai-close` 调用时已确定当前工作和默认路径 → 直接进 P0.5）。
+**跨模块功能型文档 / 补差模式**：步骤 0 已与 PM 对齐清单 / PM 在线会立刻拦漏读，本步骤可省。
 
 最终 `prototype/`（结构 / 字段 / 交互来源）按 `input-flow.md` §9.3.1 强约束选读，不在本步全文 echo（原型代码量大，全文 echo 会污染 context；步骤 2 派生 §六时按目录 / 入口选读）。
 
@@ -266,9 +284,9 @@ done
 
 本步骤只保证内容到位，不做 echo 后语义校验（语义校验靠 LLM 在步骤 1 拆决策 / 步骤 2 派生 §六时自然消化）。
 
-P1. **识别涉及模块 + 拆决策**（基于 P0.5 已 echo 的内容）——从 `docs/modules/INDEX.md`、当前 `.work-meta.json`、本次改动与 PM 说明识别模块清单，落到 `MODULES` 变量供 P1.5 使用；从模块 `decisions.md` 拆出「已确认决策」和「待补口径」。有待补口径则先编号提问 PM，确认后再写 PRD。**PRD 的需求方案从模块 spec / decisions + 最终原型的结构反向拼** —— 真系统口径，不从 mock 实现反推规则。
+P1. **识别涉及模块 + 拆决策**（基于 P0.5 已 echo 的内容）——从 `docs/modules/INDEX.md`、当前 `.work-meta.json`、本次改动与 PM 说明识别模块清单，落到 `MODULES` 变量供 P1.5 使用；从模块 `decisions.md` 拆出「已确认决策」和「待补口径」。有待补口径则先编号提问 PM，确认后再写功能型文档。**需求方案从模块 spec / decisions + 最终原型的结构反向拼** —— 真系统口径，不从 mock 实现反推规则。
 
-P1.5. **涉及模块 spec 强制 echo**（当前工作 PRD 模式必跑；同 P0.5 同源理由）——P1 识别完本次工作涉及模块后，把对应 module spec 文件无条件 echo 到 transcript。一个模块可能含多个 spec 文件（如 `功能清单.md` / `prd.md`），echo **当前有效的模块 spec 主文件**即可（历史实现记录 PRD 写作不需要重读所有），LLM 基于 INDEX.md 的"当前文档路径"列识别主文件：
+P1.5. **涉及模块 spec 强制 echo**（绑定当前工作的功能型文档模式必跑；同 P0.5 同源理由）——P1 识别完本次工作涉及模块后，把对应 module spec 文件无条件 echo 到 transcript。一个模块可能含多个功能型文档，echo **模块上下文目录里的 `spec.md` 主文件**即可；必要时再按 `docs/modules/INDEX.md` 追加读取相关功能型文档：
 
    ```bash
    # 步骤 1 识别出的涉及模块（LLM 填）
@@ -301,9 +319,9 @@ P1.5. **涉及模块 spec 强制 echo**（当前工作 PRD 模式必跑；同 P0
    边界：
    - 涉及模块为空（如 IA 重整类工作改的是框架配置不绑某模块）→ 跳过本步骤
    - 单模块 spec > 1500 行 → 仍 echo 全文（PRD 写作要全局视野，截读会漏）
-   - 独立 PRD / 补差模式跳过（同 P0.5 理由）
+   - 跨模块功能型文档 / 补差模式跳过（同 P0.5 理由）
 
-P2. **功能分解派生 §六层级 + 原型覆盖范围表**——当前工作 PRD 模式下，§六功能需求的层级**从模块 `spec.md` + 最终原型的实际结构派生**：把规格里列出的功能 / 页面 / 字段，对照原型里**真实建出来的**结构，按用户动作重组为 §六的一级 / 二级 / 三级层级。动词锚定规则不变（见 P2.5），重组对象是「模块规格功能项 + 原型真实结构」。
+P2. **功能分解派生 §六层级 + 原型覆盖范围表**——功能型文档采用 PRD / 评审稿体例时，§六功能需求的层级**从模块 `spec.md` + 最终原型的实际结构派生**：把规格里列出的功能 / 页面 / 字段，对照原型里**真实建出来的**结构，按用户动作重组为 §六的一级 / 二级 / 三级层级。动词锚定规则不变（见 P2.5），重组对象是「模块规格功能项 + 原型真实结构」。
    - **模块规格（`spec.md`）**：规格是功能项的权威来源；§六层级从它派生。
    - **最终原型（`prototype/`）**：实际页面 / 弹窗 / 字段 / 按钮按它落 §六行 + 原型节。**只取结构，不从 mock 实现反推业务规则** —— 权限 / 审批 / 校验等口径从模块 `spec.md` + `decisions.md` 锁定（真系统口径铁律）。
    - **原型覆盖范围表**——反向 PRD 必含一张「原型覆盖范围表」，落到 §九 附件：列出范围清单里每个功能 / 页面，对照原型标注覆盖状态（已完整覆盖 / mock 占位 / 未覆盖）。让评审一眼看出本次工作把哪些做实了、哪些还是壳。表结构与示例见下方「PRD 结构」§九 附件。
@@ -314,7 +332,7 @@ P2. **功能分解派生 §六层级 + 原型覆盖范围表**——当前工作
      - **格式**：截图用标准 markdown 图片；ASCII 兜底用 markdown fenced code block 包裹（` ``` ` 标记），保证等宽对齐不被渲染破坏。
      - 示例见 prd-writing skill few-shots「§六 原型节 ASCII 示例」段。
 
-P2.5. **§六功能拆分预处理（reorg pass）**——写 §六表格之前做一次结构预处理；目的是把「按 UI 容器组织」重组为「按业务本质对应的一致维度组织」。当前工作 PRD 的重组对象是 **模块 `spec.md` 功能项 + 最终原型的真实结构**；维度选取规则见 a。
+P2.5. **§六功能拆分预处理（reorg pass）**——写 §六表格之前做一次结构预处理；目的是把「按 UI 容器组织」重组为「按业务本质对应的一致维度组织」。功能型文档的重组对象是 **模块 `spec.md` 功能项 + 最终原型的真实结构**；维度选取规则见 a。
 
    **a. 选定组织维度**——先认定本次模块工作业务本质对应的**一致维度**作为二级 / 三级层级的组织轴；选定后所有二级 / 三级命名围绕同一维度展开。常见维度（不限于这些，AI 看 spec / decisions 业务本质临场判断）：
 
@@ -384,9 +402,9 @@ P2.5. **§六功能拆分预处理（reorg pass）**——写 §六表格之前�
 
    跳过条件：本次工作不含 §六功能需求章节内容（极少见，几乎不发生）。
 
-P3. **生成 PRD**——按下方「PRD 结构」生成完整 PRD 到**产物路径 `$PRD_PATH`**（骨架见 `$PMAI_HOME/skills/prd-writing/templates/prd.md.tmpl`），语言风格对齐「写作规则」与「few-shots」。**`$PRD_PATH` 按 mode 解析**：当前工作 PRD = `docs/modules/<模块>/prd.md`；独立 PRD = 步骤 0 PM 指定路径（默认 `docs/独立PRD/<slug>.md`）；补差 = 现有 PRD 同路径覆盖。**§六功能需求表格的二级 / 三级命名严格按 P2.5 的版本写入；不允许在写表格时再发明新的二级 / 三级名。** §六「原型」节按 P2 现画 ASCII（每模块下每个页面 / 弹窗 / 抽屉一张 + 1 句文字兜底）。
+P3. **生成功能型文档**——如果 PM 要 PRD / 评审稿，按下方「PRD 结构」生成完整 PRD 体例文档到**产物路径 `$PRD_PATH`**（骨架见 `$PMAI_HOME/skills/prd-writing/templates/prd.md.tmpl`）；如果 PM 要功能需求 / 功能描述 / 功能规格，则在保留功能清单、规则、验收标准的前提下精简非必要 PRD 元信息。语言风格对齐「写作规则」与「few-shots」。**`$PRD_PATH` 按 mode 解析**：功能型文档默认 `docs/modules/<按内容命名>.md`；补差 = 现有文档同路径覆盖；PM 明确指定路径则用 PM 指定路径。**§六功能需求表格的二级 / 三级命名严格按 P2.5 的版本写入；不允许在写表格时再发明新的二级 / 三级名。** §六「原型」节按 P2 现画 ASCII（每模块下每个页面 / 弹窗 / 抽屉一张 + 1 句文字兜底）。
 
-P3.5. **lint（自动兜底，必跑）**——写完 PRD 后跑 `python3 $REPO_ROOT/scripts/check-prd-hierarchy.py "$PRD_PATH"`（`$PRD_PATH` = P3 按 mode 解析的产物路径；独立 PRD 时是 PM 指定路径）。脚本做两类机械检查：
+P3.5. **lint（自动兜底，必跑）**——写完 PRD 体例功能型文档后跑 `python3 $REPO_ROOT/scripts/check-prd-hierarchy.py "$PRD_PATH"`（`$PRD_PATH` = P3 按 mode 解析的产物路径；补差模式时是 PM 指定或原文件路径）。脚本做两类机械检查：
 
    **类 1 — §六层级**：扫描 §六表格的二级 / 三级 cell 是否含 UI 词违规（弹窗 / 面板 / 视图 / 视角 / 入口 / 字段 / 段 / 区块 / 菜单 / 顶部 / 行级 / 池行 / Tab / Drawer / 紧凑形态 + 启发式形态如「X弹窗」「X字段」「顶部X」「行级X」等）。
 
@@ -406,62 +424,35 @@ P3.5. **lint（自动兜底，必跑）**——写完 PRD 后跑 `python3 $REPO_
 
 P3.6. **PRD §三 名词解释 = 本次工作临时词典**——本次工作范围内引入的新业务术语 / 角色由 AI 写 §三时落地（见 §三章节写作要求 + `references/few-shots.md` 三、名词解释示例）。
 
-   `prd.md §三` 可作下游评审 / 后续工作的**词典参考**。**不再在本步跑 `term-detector.py` patch `docs/PRODUCT.md`** —— 业务实体稳定后向 PRODUCT.md 业务术语表的沉淀统一收敛到 `/pmai-close`。
+   功能型文档的 §三 名词解释可作下游评审 / 后续工作的**词典参考**。**不再在本步跑 `term-detector.py` patch `docs/PRODUCT.md`** —— 业务实体稳定后向 PRODUCT.md 业务术语表的沉淀统一收敛到 `/pmai-close`。
 
 P3.7. **关键产品决策候选清单**——PRD 成文后，检查 §四里的关键产品决策是否已经存在于模块 `decisions.md` 或项目级 `PRODUCT-RULES.md`。
 
    - 已存在：PRD 只引用结果，不重复写一套备选和理由。
-   - 不存在：列成「建议回写」候选交给调用方；当前工作 PRD 由 `/pmai-close` 统一处理基线回写，独立 PRD / 补差模式只在文档内保留决策结果。
+   - 不存在：列成「建议回写」候选交给调用方；绑定当前工作的功能型文档由 `/pmai-close` 统一处理基线回写，跨模块功能型文档 / 补差模式只在文档内保留决策结果。
    - 本 skill 不在写 PRD 时直接改 `decisions.md` / `PRODUCT-RULES.md`，避免和 `/pmai-close` 的基线回写职责重叠。
 
 P3.8. **候选跨功能产品规则清单**——写 PRD 过程中，若规划期讨论里浮出**全项目跨功能产品行为规则**（不是某次实现反馈、而是「产品在 X 情况下应 / 不应 Y」、适用范围超出本次工作单个模块的规则），列成候选交给 `/pmai-close` 或 PM 手动确认：
 
    - AI 预判候选 + 拟写条目（标题 / 规则 / scope 全局或域限定 / 来源工作）逐条列出
-   - 当前工作 PRD → 交回 `/pmai-close`，由 close 的决策 / 规则回写门统一问 PM 并落盘
-   - 独立 PRD / 补差 → 只在 PRD 内保留，不自动改项目基线；PM 明确要求记录时另走 `/pmai-record` 或 `/pmai-close`
+   - 绑定当前工作的功能型文档 → 交回 `/pmai-close`，由 close 的决策 / 规则回写门统一问 PM 并落盘
+   - 跨模块功能型文档 / 补差 → 只在文档内保留，不自动改项目基线；PM 明确要求记录时另走 `/pmai-close` 或 `/pmai-deposit`
    - `docs/PRODUCT-RULES.md` 不存在 / 无候选 → silent skip
    - **边界**：用词术语 → PRODUCT.md；模块级规则 → modulespec；视觉规范 → DESIGN.md。本步只捞全项目跨功能产品行为规则。
 
    > 补「规划期发现的规则无沉淀路径」缺口：prd-writing 捞范围确认 / 沉淀讨论里的跨功能规则候选。
 
-## 当前工作 PRD 收尾 — 交回 /pmai-close
+## 功能型文档收尾
 
-当前工作 PRD 模式下，PRD 写完（含 P3.5 lint / P3.7-P3.8 候选清单）后，**不自带最终收尾门** —— 控制权交回 `/pmai-close`，由 close 的收尾确认统一处理 PRD 定稿、基线回写和 merge。
+绑定当前工作的功能型文档写完（含 P3.5 lint / P3.7-P3.8 候选清单）后，**不自带最终收尾门** —— 控制权交回 `/pmai-close`，由 close 的收尾确认统一处理文档定稿、基线回写和 merge。
 
 交回时向 `/pmai-close` 提供：
-- PRD 产物路径 `docs/modules/<模块>/prd.md`
+- 功能型文档产物路径 `docs/modules/<按内容命名>.md`
 - P3.7/P3.8 发现的决策 / 规则候选摘要（标题 / 建议落点 / 理由），供 close 的 PM 确认门合并处理。
 
-反向 PRD 是**沉淀产物**，定稿后随当前工作留档；它已是基于最终原型反向合成的真系统口径方案，本身不再做二次反向对齐。
+反向功能型文档是**沉淀产物**，定稿后随当前工作留档；它已是基于最终原型反向合成的真系统口径方案，本身不再做二次反向对齐。
 
-> 独立 PRD / 补差模式：写完 PRD 后在对话中请 PM 确认、确认后写入文件 → 独立 PRD 按下方 P7 建收口 symlink → 结束；无 `/pmai-close` 衔接。
-
-### P7 · 独立 PRD 收口 symlink（仅独立 PRD 分支）
-
-**仅在**独立 PRD 分支跑；当前工作 PRD / 补差分支跳过；当前工作 PRD 由 `/pmai-close` 和 `scripts/close-work.sh` 自动建 `docs/prds/<模块>.md` symlink。
-
-**目的**：让 PM 在 `docs/prds/独立/` 一处看到所有独立 PRD，和 `/pmai-close` 建的 `docs/prds/<模块>.md`、`/pmai-cancel` 建的 `docs/prds/废弃/` 三类来源统一收口。
-
-**条件**：PRD 真正写入 `docs/独立PRD/<slug>.md` 默认路径才建 symlink；PM 指定其他自定义路径（如 `docs/某专题/<slug>.md`）不动 —— 自定义路径已表达 PM 不想走默认收口。
-
-**执行**（PRD 写入文件成功后跑）：
-
-```bash
-REPO_ROOT="$(git rev-parse --show-toplevel)"
-PRD_PATH="<刚写入的 PRD 绝对路径>"
-PRD_DIR="$(dirname "$PRD_PATH")"
-PRD_NAME="$(basename "$PRD_PATH")"
-
-if [ "$PRD_DIR" = "$REPO_ROOT/docs/独立PRD" ]; then
-  mkdir -p "$REPO_ROOT/docs/prds/独立"
-  ln -sfn "../../独立PRD/$PRD_NAME" "$REPO_ROOT/docs/prds/独立/$PRD_NAME"
-  echo "🔗 PRD 收口: docs/prds/独立/$PRD_NAME -> ../../独立PRD/$PRD_NAME"
-fi
-```
-
-边界：
-- 不 git add / commit ——手动模式 PM 决定何时 commit
-- 同名 symlink 用 `ln -sfn` 幂等覆盖；同名普通文件存在时 `ln -sfn` 会报错，PM 自决
+跨模块功能型文档 / 优化已有文档模式：写完后在对话中请 PM 确认、确认后写入文件；若落在 `docs/modules/<按内容命名>.md`，同步更新 `docs/modules/INDEX.md` 的「功能型文档」表。无 `/pmai-close` 衔接时，不自动 commit。
 
 ---
 
@@ -761,13 +752,13 @@ ASCII 原型示例见 `references/few-shots.md`「§六 原型节 ASCII 示例�
 
 ## 成文边界：规格 / PRD 定稿
 
-- 允许产出：`docs/modules/<模块>/spec.md`（模块规格模式）/ `docs/modules/<模块>/prd.md`（当前工作 PRD）/ PM 指定路径（独立 PRD 或补差模式）
-- 允许动作：把已拍板的设计结论写成模块规格；或基于模块 `spec.md` / `decisions.md` + 最终 `prototype/` + `docs/PRODUCT-STATE.md` + `docs/PRODUCT.md` + `docs/PRODUCT-RULES.md` 反向合成当前工作真系统口径 PRD；§三 名词解释承担本次工作临时词典职责（业务词向 PRODUCT.md 业务术语表的沉淀收敛到 `/pmai-close`）；为关键产品决策 / 跨功能规则列候选清单
+- 允许产出：`docs/modules/<模块>/spec.md`（模块规格模式）/ `docs/modules/<按内容命名>.md`（功能型文档）/ PM 指定路径（优化已有文档模式）
+- 允许动作：把已拍板的设计结论写成模块规格；或基于模块 `spec.md` / `decisions.md` + 最终 `prototype/` + `docs/PRODUCT-STATE.md` + `docs/PRODUCT.md` + `docs/PRODUCT-RULES.md` 反向合成真系统口径功能型文档；§三 名词解释承担本次工作临时词典职责（业务词向 PRODUCT.md 业务术语表的沉淀收敛到 `/pmai-close`）；为关键产品决策 / 跨功能规则列候选清单
 - 禁止顺手推进：不要在成文时新增产品范围、重做设计、反向改模块 `spec.md` 的范围边界；**不从 mock 原型的临时实现反推业务规则**（真系统口径铁律）；本 skill 不动 build / 复审产物
 - 退出条件：
   - **模块规格模式**：`spec.md` 写完/修完 + 自检通过 → 控制权交回调用方（`/pmai-design` 或 `/pmai-close`）
-  - **当前工作 PRD 模式**：PRD 写完 + lint 通过 + 候选清单整理完 → 控制权交回 `/pmai-close`
-  - **独立 PRD / 补差模式**：文档经 PM 在对话中确认并写入文件
+  - **功能型文档模式**：文档写完 + lint 通过 + 候选清单整理完 → 绑定当前工作时交回 `/pmai-close`，手动模式则更新索引后结束
+  - **优化已有文档模式**：文档经 PM 在对话中确认并写入文件
 
 ## PRD 质检 prompt（可选）
 
@@ -775,13 +766,13 @@ prd-writing 产出初稿后，定稿前可运行以下 prompt 做一轮质检：
 
 ```
 你现在是一个资深产品总监，正在用挑剔的眼光审查一份当前工作反向 PRD 草稿。
-读取 `docs/modules/<模块>/prd.md`、模块 `spec.md` 和 `decisions.md`（功能口径 WHAT + 决策 WHY），然后找出：
+读取本次功能型文档 `docs/modules/<按内容命名>.md`、相关模块 `spec.md` 和 `decisions.md`（功能口径 WHAT + 决策 WHY），然后找出：
 
 1. 逻辑矛盾或自相冲突的地方
 2. 遗漏的边界情况（error state、empty state、权限边界、异常流）
 3. 验收标准模糊、无法测量的条目
 4. 功能需求描述里有"支持/优化/提升体验"等无法执行的泛词
-5. prd.md 与模块 spec.md 的范围不一致的地方；§九 原型覆盖范围表是否对照最终原型如实标注（已覆盖 / mock 占位 / 未覆盖），有没有把 mock 壳写成已落地
+5. 功能型文档与模块 spec.md 的范围不一致的地方；§九 原型覆盖范围表是否对照最终原型如实标注（已覆盖 / mock 占位 / 未覆盖），有没有把 mock 壳写成已落地
 6. 是否包含代码常量名（如 TENANT_ADMIN）/ 文件路径（如 prototype/src/...）/ 文档章节引用 / 数据库字段名（如 enabled、createdBy）/ UI 实现术语（如扁平区、Badge、按钮置灰）
 7. §4.1 业务诉求是否从用户视角（而非"PM 讲不清"等团队内部诱因），是否每条以"**加粗短句。**"开头并配段落说明（不是单纯 bullet 列表）
 8. §4.2 设计原则是否表格化（编号 / 原则 / 内容 / 可选「对应业务诉求」列），原则名是否 4-8 字短句，内容是否写产品规则而非"本 PRD 是规格交付层"等元描述；正文「N 条设计原则」中的 N 是否与表格行数一致

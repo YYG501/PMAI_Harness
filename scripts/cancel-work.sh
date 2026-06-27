@@ -20,7 +20,6 @@ WORK_DIR="${1:?用法: cancel-work.sh <模块目录>}"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/_lib/_setup-pythonpath.sh"
 source "$SCRIPT_DIR/_lib/worktree.sh"
-source "$SCRIPT_DIR/_lib/symlink-prd.sh"
 
 # --- 找到主仓根目录 ---
 GIT_COMMON=$(git rev-parse --git-common-dir 2>/dev/null || echo "")
@@ -75,15 +74,9 @@ if [ -n "$DIRTY" ]; then
   fi
 fi
 
-# --- Step 2: 在 main 上删模块 .work-meta（方案 A）+ PRD 收口 symlink + 路径级 commit ---
+# --- Step 2: 在 main 上删模块 .work-meta（方案 A）+ 路径级 commit ---
 MAIN_MODULE="$REPO_ROOT/$REL_MODULE"
 MAIN_MODULE_META="$MAIN_MODULE/.work-meta.json"
-
-# 在 docs/prds/废弃/ 下建 PRD 收口 symlink（仅当模块真的写过 prd.md；stage 1/2 cancel 时 silent skip）
-if ! create_prd_symlink "$REPO_ROOT" "$MODULE_BASENAME" cancelled; then
-  echo "❌ 创建 docs/prds/废弃/ symlink 失败。" >&2
-  exit 1
-fi
 
 # 删模块 .work-meta（若在 main 上）；不在 main（只在 worktree）则无需删——cancel 不 merge，
 # work branch随 worktree 一起被清，主仓本就没这份工作状态。
@@ -91,7 +84,6 @@ if [ -f "$MAIN_MODULE_META" ]; then
   git rm -q -- "$REL_MODULE/.work-meta.json" 2>/dev/null || rm -f "$MAIN_MODULE_META"
 fi
 git add -A -- "$REL_MODULE" 2>/dev/null || true
-[ -d "$REPO_ROOT/docs/prds/废弃" ] && git add "docs/prds/废弃/$MODULE_BASENAME.md" 2>/dev/null || true
 
 # commit：如果没有暂存改动（main 上本就没这份工作状态），跳过
 if [ -n "$(git diff --cached --name-only)" ]; then

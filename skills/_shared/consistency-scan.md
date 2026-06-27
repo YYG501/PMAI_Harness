@@ -39,7 +39,7 @@
 可以借框架现成脚本辅助（都是 advisory、`|| true`，不阻塞）：
 
 ```bash
-# 索引漂移：docs/ 实存文档 vs PRODUCT-STATE 索引（顶层文档漏挂）
+# 索引漂移：docs/ 实存文档 vs docs/INDEX.md（顶层文档漏挂）
 python3 "$PMAI_HOME/scripts/check-state-index-drift.py" "$REPO_ROOT" || true
 ```
 

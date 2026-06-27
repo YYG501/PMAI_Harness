@@ -20,18 +20,19 @@ SUITES=(
   test-no-duplicate-questioning.sh
   test-shared-files-exist.sh
   test-doctor-skills.sh
+  test-writing-skill-routing.sh
   test-migrate-reqs-to-modules-compat.sh
   test-banner-label.sh
   test-narrative-mode.sh
           test-checks-diff.sh
   test-build-audits.sh
+  test-exec-adapters.sh
   test-mock-board.sh
     test-state-lib.sh
   test-attachments-helper.sh
   test-close-work.sh
   test-cleanup-pending.sh
   test-cancel-work.sh
-  test-symlink-prd.sh
   test-status-view.sh
   test-todo-guidance.sh
   test-docs-archive-convention.sh

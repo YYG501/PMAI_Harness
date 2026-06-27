@@ -3,14 +3,14 @@
 #
 # 验证消费仓 docs/ 归档约定（PM 实测踩坑修复 — example-consumer-app 顶层有错位文件）：
 #   T1: templates/CLAUDE.md.tmpl 含「docs/ 归档约定」节
-#   T2: 约定含顶层正面清单（PROJECT/DESIGN/PRODUCT-RULES/TODO/prd）
+#   T2: 约定含顶层正面清单（INDEX/PROJECT/DESIGN/PRODUCT-RULES/TODO）
 #   T3: 约定含顶层负面清单 + 归位规则（模块决策 → modules/；过程档案 → 归档/完成/）
 #   T4: 约定含「写新文档前 AI 自问 3 题」
 #   T5: init-project.sh 创建 docs/归档/{完成,旧版}/ 骨架 + .gitkeep
 #   T6: init-project 端到端：新项目跑完后 docs/归档/ 子目录确实存在
 #
 # 背景：PM 实测 example-consumer-app docs/ 顶层有错位（product-principles.md /
-# user-stories-permission.md 是模块决策却放顶层）+ 重复（prd.md 跟 PRODUCT.md
+# user-stories-permission.md 是模块决策却放顶层）+ 重复（旧 prd.md 跟 PRODUCT.md
 # 重叠）+ 过程档案（PROTOTYPE_CLEANUP.md 放根目录）。framework 无约定 = AI
 # 新建文档时随手放顶层 → 长期积累混乱。
 set -uo pipefail
@@ -35,7 +35,7 @@ test_tmpl_has_archive_convention_section() {
 # -----------------------------------------------------------------
 test_tmpl_has_positive_list() {
   start_test "T2: 约定含顶层正面清单"
-  for f in PRODUCT.md DESIGN.md PRODUCT-RULES.md TODO.md prd.md; do
+  for f in INDEX.md PRODUCT.md DESIGN.md PRODUCT-RULES.md TODO.md; do
     if ! grep -q "$f" "$CLAUDE_TMPL"; then
       _fail "约定缺正面清单项: $f"
       return

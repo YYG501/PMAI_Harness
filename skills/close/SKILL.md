@@ -22,7 +22,7 @@ description: |
 
 | | 干什么 | 落到哪 |
 |---|---|---|
-| **① 跨工作记忆回写** | 本次拍的**决策**、造的**新术语**沉进基线 | 单模块决策 → 模块 `decisions.md`；跨模块**规则** → `PRODUCT-RULES.md`；跨文件**理路** → `docs/decisions/`（冻结）；新术语 → `PRODUCT.md` 业务术语表 |
+| **① 跨工作记忆回写** | 本次拍的**决策**、造的**新术语**沉进基线 | 单模块决策 → 模块 `decisions.md`；跨模块**规则** → `PRODUCT-RULES.md`；跨文件**理路** → `docs/project-decisions/`（冻结）；新术语 → `PRODUCT.md` 业务术语表 |
 | **② 规格定稿 / 就地升版** | 把这次的设计结论固化成规格真相源 | `docs/modules/<模块>/spec.md`（同文件夹就地演进：升版本号 + 变更日志 + 老条目 supersede） |
 | **③ 老规格 vs 新原型对账** | 防 review 改原型时把规格信息悄悄删了 | 逐条 flag「确认删 / 还是漏实现」，PM 拍；不盲目重写 |
 | **④ 文档自动归位 + 现状更新 + merge** | 产出落各自的家、根目录不留游离；现状档更新；有 worktree 则合回 main | `docs/PRODUCT-STATE.md` / `docs/inputs/<类别>/` / `mocks/`；`.worktrees/<分支>/` → main |
@@ -34,8 +34,8 @@ description: |
 本 skill 是 `close-work` 在框架瘦身 v2（吸收 ExampleAgentProject 设计方法）下的演进。落点按 v2 文档体系走，**不照搬旧 close-work 的目录动作**：
 
 - **不再移目录到 `closed/`**。v2 取消了 `requirements/active|closed/` 整棵树——文档全进 `docs/` 一棵树（模块三件套在 `docs/modules/<模块>/`，附件按类别在 `docs/inputs/<类别>/`，worktree 挂 `.worktrees/<分支>/`）。所以 `/pmai-close` **没有"整目录搬家"这一步**；它做的是"把散落的产出归到各自的家 + merge 分支"。
-- **决策 / 理路 3 个正交的家**（2026-06-21 开放 5 拍板：撤销原"3 减 2 折叠"，理路单独冻结落点）：① 单模块决策 → 模块 `decisions.md`（活）；② 跨模块 / 全局**规则**（产品行为约束）→ 项目级 `PRODUCT-RULES.md`（活、scope）；③ 跨文件 / 项目级**理路**（护城河 / 机制咬合 / 演进故事）→ `docs/decisions/<日期>-<slug>.md`（**冻结**、写一次、不维护）。理路与规则维度正交——一份文件没法半冻半活、防腐铁律没法对半执行，**别混塞 PRODUCT-RULES 一份**。
-  > 单一真相源对齐：理路落点 + 门槛 @读 `_shared/decision-record.md`（`docs/decisions/` 冻结档）、四类分流 @读 `_shared/deposit-routing.md`（已反转回 3 家）。本 skill 与二者口径已统一，**不再需要"以本 skill 为准"的例外**（原例外是折叠期 lifecycle 未对齐的产物，开放 5 拍板后消解）。
+- **决策 / 理路 3 个正交的家**（2026-06-21 开放 5 拍板：撤销原"3 减 2 折叠"，理路单独冻结落点）：① 单模块决策 → 模块 `decisions.md`（活）；② 跨模块 / 全局**规则**（产品行为约束）→ 项目级 `PRODUCT-RULES.md`（活、scope）；③ 跨文件 / 项目级**理路**（护城河 / 机制咬合 / 演进故事）→ `docs/project-decisions/<日期>-<slug>.md`（**冻结**、写一次、不维护）。理路与规则维度正交——一份文件没法半冻半活、防腐铁律没法对半执行，**别混塞 PRODUCT-RULES 一份**。
+  > 单一真相源对齐：理路落点 + 门槛 @读 `_shared/decision-record.md`（`docs/project-decisions/` 冻结档）、四类分流 @读 `_shared/deposit-routing.md`（已反转回 3 家）。本 skill 与二者口径已统一，**不再需要"以本 skill 为准"的例外**（原例外是折叠期 lifecycle 未对齐的产物，开放 5 拍板后消解）。
 - **规格就地升版，不 per-版本开新文件夹**：重做一个模块 = 在同一 `docs/modules/<模块>/` 里演进 `spec.md`（版本号 + 变更日志 + 老条目 supersede 删除线 + git）；只有"模块身份本身变了"才另起 + 归档旧的（例外，PM 拍）。
 
 ## Preamble
@@ -105,7 +105,7 @@ git -C "$WORK_ROOT" diff --stat "$BASE" HEAD
 | 决策的作用范围 | 落点 | 怎么写 |
 |---|---|---|
 | **只管本模块**（这张卡放什么字段 / 这个状态机怎么转 / 这个模块某行为定哪样） | 该模块 `docs/modules/<模块>/decisions.md` | 追加一条：**结论 + 为什么 + 否过什么**；若 supersede 了旧决策，老条目打**删除线**并标"被 <日期/本次> 取代"，不删除（留痕） |
-| **跨模块 / 全局**（跨功能产品规则 / 几个机制怎么整体咬合 / 护城河论证 / 演进方向） | 规则 → `docs/PRODUCT-RULES.md`（活）；理路 → `docs/decisions/`（冻结） | 跨功能**规则**按 `PRODUCT-RULES.md.tmpl` 的「规则清单」格式（标题 + 规则 + scope + 来源日期）写进 `PRODUCT-RULES`；跨文件**整体理路**（为什么这么拼：护城河 / 机制咬合 / 演进故事）→ `docs/decisions/<日期>-<slug>.md` **冻结档**（@读 `decision-record.md`）。**理路与规则维度正交、分家落、不混塞一份**（开放 5·已拍 B） |
+| **跨模块 / 全局**（跨功能产品规则 / 几个机制怎么整体咬合 / 护城河论证 / 演进方向） | 规则 → `docs/PRODUCT-RULES.md`（活）；理路 → `docs/project-decisions/`（冻结） | 跨功能**规则**按 `PRODUCT-RULES.md.tmpl` 的「规则清单」格式（标题 + 规则 + scope + 来源日期）写进 `PRODUCT-RULES`；跨文件**整体理路**（为什么这么拼：护城河 / 机制咬合 / 演进故事）→ `docs/project-decisions/<日期>-<slug>.md` **冻结档**（@读 `decision-record.md`）。**理路与规则维度正交、分家落、不混塞一份**（开放 5·已拍 B） |
 
 **找候选 + PM 逐条拍**（@读 `_shared/deposit-routing.md` ②；理路门槛 @读 `_shared/decision-record.md` 判"有实质理路才记 / 纯微调不记"）。每条候选给：一句话决策 + 建议落点 + **一行自审反证**「这条不该回写的理由」（强制给否定理由，防过度推荐）。
 
@@ -116,7 +116,7 @@ git -C "$WORK_ROOT" diff --stat "$BASE" HEAD
 - `options`:
   - `记进本模块`：写进 `docs/modules/<模块>/decisions.md`（后面做这个模块时 `/pmai-design` 会读到）
   - `记成跨模块规则`：写进 `docs/PRODUCT-RULES.md`（产品行为约束、管整个产品、所有模块都受约束、活档）
-  - `冻结成项目理路`：写进 `docs/decisions/<日期>-<slug>.md`（护城河 / 机制咬合 / 演进故事这类叙事性"为什么"，**冻结档**、写一次不维护、挂 PRODUCT-STATE 索引）
+  - `冻结成项目理路`：写进 `docs/project-decisions/<日期>-<slug>.md`（护城河 / 机制咬合 / 演进故事这类叙事性"为什么"，**冻结档**、写一次不维护；从 `docs/INDEX.md` 展开）
   - `不记`：本次没有要传给后面的决策（自审反证成立）
 
 > **为什么补这处**：旧 close-work 沉淀只收"整体意图"，**单条决策会漏在已关需求里**、下一个工作的 `/pmai-design` 读不到 → PM 被迫重复说。本步把"决策回写"显式化、绑死在收尾这一刻。
@@ -166,7 +166,7 @@ rm -f "$TMPFILE"
 这是 v2 治规格 4 问之第 4 问（review 改原型时规格信息被悄悄删 / drift）的**关键收口**。借现成轻量脚本扫一遍，**不盲目重写、每条对不上都 flag 让 PM 拍**：
 
 ```bash
-# 索引漂移：docs/ 顶层野文档没挂进 PRODUCT-STATE 索引（advisory，不阻塞）
+# 索引漂移：docs/ 顶层野文档没挂进 docs/INDEX.md（advisory，不阻塞）
 python3 "$PMAI_HOME/scripts/check-state-index-drift.py" "$REPO_ROOT" || true
 ```
 
@@ -211,7 +211,7 @@ python3 "$PMAI_HOME/scripts/gen-mock-board.py" "$REPO_ROOT"
 
 ### 5.4 顺手补索引 + 更新工作状态
 
-- 本次新建了 `docs/modules/<新模块>/` → 在 `docs/PRODUCT-STATE.md` 索引节挂一条；刷 `docs/modules/INDEX.md`（`check-index-lint.py` 校验，失败两次则空 diff 跳过、不阻塞）。
+- 本次新建了 `docs/modules/<新模块>/` 或 `docs/modules/<按内容命名>.md` → 刷 `docs/modules/INDEX.md`；如新增顶层文档类别，补 `docs/INDEX.md`。`check-index-lint.py` 校验失败两次则空 diff 跳过、不阻塞。
 - 更新本模块 `.work-meta`（当前工作状态：本次分支/阶段收尾、置为已收口）。
 
 > **silent skip**：纯非业务工作（只动工具脚本 / 基础设施）→ 步骤 2–5 可整体 silent skip，回执记「本次无产品级文档变更」。
@@ -255,13 +255,13 @@ merge 回 main（具体的 merge / 删 worktree / 删分支编排由 lifecycle �
 ## Rules
 
 - **形态自适应**：小改/讨论在 main 上直接 `/pmai-close`（无 merge 步）；大需求只要当前工作开过 build worktree，就走步骤 6 merge（推荐 cwd 仍在主仓）。入口先判形态。
-- **决策 / 理路 3 个正交的家**（开放 5 拍板，撤销原 3→2 折叠）：单模块决策 → 模块 `decisions.md`（活）；跨模块**规则** → `PRODUCT-RULES.md`（活、scope）；跨文件**理路** → `docs/decisions/<日期>-<slug>.md`（**冻结**）。理路与规则分家、不混塞一份。
+- **决策 / 理路 3 个正交的家**（开放 5 拍板，撤销原 3→2 折叠）：单模块决策 → 模块 `decisions.md`（活）；跨模块**规则** → `PRODUCT-RULES.md`（活、scope）；跨文件**理路** → `docs/project-decisions/<日期>-<slug>.md`（**冻结**）。理路与规则分家、不混塞一份。
 - **术语回写**：新定义的概念/角色/业务词 → `PRODUCT.md` 业务术语表；纯文字微调不算。
 - **规格就地升版**：重做模块 = 同 `docs/modules/<模块>/` 演进 `spec.md`（版本号 + 变更日志 + 老条目 supersede 留痕）；身份变了才另起 + 归档旧的（例外，PM 拍）。规格只留 normative、不嵌原型 ASCII、顶部钉"规格为权威"。
 - **老规格 vs 新原型对账**：每条对不上的都 flag「确认删 / 还是漏实现」让 PM 拍，不盲目重写——根除"规格被 review 悄悄删"。脚本 advisory（`|| true`），**不升格强制门**（I-RV1）。
 - **`docs/PRODUCT-STATE.md` 只在沉淀这刻写**（防腐铁律）：`/pmai-close`（重档）+ `/deposit`（轻档，已 dormant 但保留）是仅有的 sanctioned 写入口，收敛点触发的原子写。
 - **不再移目录到 `closed/`**：v2 取消 `requirements/active|closed/` 树；`/pmai-close` 没有"整目录搬家"步，只做归位 + merge。
-- **四类分流 @读 `_shared/deposit-routing.md`**（单一真相源，已反转回 3 家）；理路门槛 + 冻结落点 @读 `_shared/decision-record.md`（`docs/decisions/` 冻结档）。三者口径已统一，无"以本 skill 为准"例外。
+- **四类分流 @读 `_shared/deposit-routing.md`**（单一真相源，已反转回 3 家）；理路门槛 + 冻结落点 @读 `_shared/decision-record.md`（`docs/project-decisions/` 冻结档）。三者口径已统一，无"以本 skill 为准"例外。
 - **merge 终态**：合回主线后不可回退；merge 前任何 PM 决策门没拿到答案 → STOP，禁止 merge。
 - **PM 话术纪律**（F-G4）：回执/提议只用 PM 视图语言，不出现"四类分流 / 出口①②③④ / 派生 4 环 / 三身份 / supersede / 一致性扫描 / manifest / featured"等内部词。
 - **不删代码**：瘦身 = 缩小活跃集；本 skill 是 close-work 的活跃演进，`close-work` 转 dormant 保留不删。

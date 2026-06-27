@@ -57,8 +57,7 @@ bash "$PMAI_HOME/scripts/cancel-work.sh" "$ACTIVE_WORK_DIR"
 
 1. 切回 main，并拒绝污染 main 上无关改动。
 2. 删除当前模块在 main 上的 `.work-meta.json`（如果存在），清掉“正在做”的状态。
-3. 如模块已有 `prd.md`，在 `docs/prds/废弃/` 下建立入口。
-4. 把关联 worktree/branch 写入 `.runs/pending-cleanup.json`，不立即删除，避免当前会话 cwd 失效。
+3. 把关联 worktree/branch 写入 `.runs/pending-cleanup.json`，不立即删除，避免当前会话 cwd 失效。
 
 ### 步骤 3：提示清理
 

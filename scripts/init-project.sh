@@ -165,13 +165,15 @@ for TMPL in "$FRAMEWORK_DIR/templates/"*.tmpl; do
     AGENTS.md)              DEST="$TARGET_DIR/AGENTS.md" ;;
     PRODUCT.md)             DEST="$TARGET_DIR/docs/PRODUCT.md" ;;
     PRODUCT-STATE.md)       DEST="$TARGET_DIR/docs/PRODUCT-STATE.md" ;;   # 六步项目底座：现状层 hub（下游 FORCE READ docs/PRODUCT-STATE.md）
+    docs-INDEX.md)           DEST="$TARGET_DIR/docs/INDEX.md" ;;
     DESIGN.md)              DEST="$TARGET_DIR/docs/DESIGN.md" ;;          # 六步项目底座：正向视觉约束（build 前 AI 必读 docs/DESIGN.md）
     PRODUCT-RULES.md)       DEST="$TARGET_DIR/docs/PRODUCT-RULES.md" ;;
     TODO.md)                DEST="$TARGET_DIR/docs/TODO.md" ;;
     modules-INDEX.md)       DEST="$TARGET_DIR/docs/modules/INDEX.md" ;;
+    deliverables-INDEX.md)   DEST="$TARGET_DIR/docs/deliverables/INDEX.md" ;;
     lark-publish.json)
       # lark-publish.json: 业务实例配置，下方 f3 段独立 cp（不走主 loop 占位符替换）
-      # 注：当前流程的模块/PRD/审计模板由对应 skill 自带，不在本 loop。
+  # 注：当前流程的功能型文档/审计模板由对应 skill 自带，不在本 loop。
       continue ;;
     settings.json)          DEST="$TARGET_DIR/.claude/settings.json" ;;
     codex-hooks.json)
@@ -236,10 +238,13 @@ echo "📦 I-mini 模式：消费仓 0 framework 源资产；skill / scripts / h
 
 # --- h. 创建目录结构 ---
 mkdir -p "$TARGET_DIR/docs/modules"
+mkdir -p "$TARGET_DIR/docs/inputs"
+touch "$TARGET_DIR/docs/inputs/.gitkeep"
+mkdir -p "$TARGET_DIR/docs/deliverables"
 mkdir -p "$TARGET_DIR/docs/归档"   # 扁平：过程档案 / 一次性 review / 被取代旧文件全装这里，文件名说明为啥归档
 touch "$TARGET_DIR/docs/归档/.gitkeep"
-mkdir -p "$TARGET_DIR/docs/decisions"   # 项目决策记录（冻结档）：理路"为什么这么拼"的家；沉淀时按需冻
-touch "$TARGET_DIR/docs/decisions/.gitkeep"
+mkdir -p "$TARGET_DIR/docs/project-decisions"   # 项目决策档案：重大项目级"为什么这么定"，沉淀时按需冻
+touch "$TARGET_DIR/docs/project-decisions/.gitkeep"
 mkdir -p "$TARGET_DIR/prototype"   # 单一主原型（单数）；SKILL C.5 用 create-next-app 在此起栈
 mkdir -p "$TARGET_DIR/.runs/events"
 mkdir -p "$TARGET_DIR/.worktrees"

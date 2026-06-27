@@ -1,12 +1,12 @@
 ---
 name: pmai-build
 description: |
-  大需求的构建入口：将 /pmai-design 定稿的模块规格在主原型中实际构建。由 PM 选择构建工具与是否启用隔离环境；构建后经原型评审迭代修正，并执行覆盖、视觉、行为三项审查，确认后合并回主线。仅用于大需求，讨论与小改动直接进行、不经此流程。
+  大需求的构建入口：将 /pmai-design 定稿的模块规格，或 /pmai-prd-writing 产出的功能型文档，在主原型中实际构建。由 PM 选择构建工具与是否启用隔离环境；构建后经原型评审迭代修正，并执行覆盖、视觉、行为三项审查，确认后合并回主线。仅用于大需求，讨论与小改动直接进行、不经此流程。
 ---
 
 # /pmai-build
 
-> 这是改造后的 **大需求建造入口**。它不拆任务卡、不走独立任务状态机。它对着**模块规格** `docs/modules/<模块>/spec.md` 建，建完 review loop + 三道审，再 merge 回 main。
+> 这是改造后的 **大需求建造入口**。它不拆任务卡、不走独立任务状态机。它对着**功能锚点**建：模块规格 `docs/modules/<模块>/spec.md`，或功能型文档 `docs/modules/<按内容命名>.md`。建完 review loop + 三道审，再 merge 回 main。
 >
 > 本 skill 只依赖两类通用资产：**exec-adapter**（可插拔执行器）和 **build-audits.py**（三道审编排）。二者不绑定任务卡。
 
@@ -16,7 +16,7 @@ description: |
 - **不走这的**（在 main 上直接动，本 skill 不介入）：
   - **讨论** = 改文档（模块三件套 discussion / decisions / spec）→ `/pmai-design` 里做，无 worktree。
   - **小改** = 改一两个字段 / 文案 / 一个组件的小调整 → 直接改 prototype/，无 worktree。main 写保护已放宽，允许直接改文档 + 小代码。
-- 上游：`/pmai-design` 把模块规格 `spec.md` 定稿（信息模型理清、mock 已确认）→ 交给 `/pmai-build` 建。
+- 上游：`/pmai-design` 把模块规格 `spec.md` 定稿（信息模型理清、mock 已确认），或 `/pmai-prd-writing` 写出功能型文档 → 交给 `/pmai-build` 建。
 - 下游：建完 + PM 验收通过 → `/pmai-close` 收尾（决策 / 术语回写基线、文档归位、有 worktree 则 merge 回 main）。
 
 ## PM 视图规则（必读）
@@ -41,19 +41,24 @@ preamble 会解析出 `PMAI_HOME` / `MAIN_REPO_ROOT` / `REPO_ROOT` / `BRANCH`。
 
 ## Workflow
 
-### 步骤 0：定位模块规格 + 确认是大需求
+### 步骤 0：定位功能锚点 + 确认是大需求
 
-1. 接参数：`/pmai-build <模块名>` 或 `/pmai-build`（无参时让 PM 一句话说要建哪个模块的什么）。
-2. 定位模块规格：
+1. 接参数：`/pmai-build <模块名>`、`/pmai-build docs/modules/<文档名>.md` 或 `/pmai-build`（无参时让 PM 一句话说要建哪个模块 / 哪份功能型文档）。
+2. 定位功能锚点：
    ```bash
+   # 模块模式
    MODULE_DIR="$REPO_ROOT/docs/modules/<模块>"
-   SPEC="$MODULE_DIR/spec.md"
+   BUILD_ANCHOR="$MODULE_DIR/spec.md"
+
+   # 功能型文档模式
+   BUILD_ANCHOR="$REPO_ROOT/docs/modules/<按内容命名>.md"
    ```
-   - `spec.md` 不存在 → 这个模块还没设计。提示 PM 先跑 `/pmai-design <模块>` 把规格定稿再来 `/pmai-build`。不在 build 里临时设计。
-   - `spec.md` 在 → `@读` 它（信息模型 + 业务规则 + 字段口径 + 状态机 + 文案就是建造契约），再 `@读` 同模块 `decisions.md`（为什么这么定，避免建造时推翻已拍的决策）。
+   - 模块模式下 `spec.md` 不存在 → 这个模块还没设计。提示 PM 先跑 `/pmai-design <模块>` 把规格定稿再来 `/pmai-build`。不在 build 里临时设计。
+   - 功能型文档路径不存在 → 提示 PM 先用 `/pmai-prd-writing` 写清功能型文档，或重新给出正确路径。
+   - `BUILD_ANCHOR` 在 → `@读` 它（功能范围 + 业务规则 + 字段口径 + 验收标准就是建造契约）。若锚点是模块 `spec.md`，再 `@读` 同模块 `decisions.md`；若锚点是功能型文档，则按其覆盖范围读取相关模块的 `spec.md` / `decisions.md` 和 `docs/modules/INDEX.md`。
 3. **确认这是大需求**。如果看下来其实是小改（一两处字段 / 文案 / 局部调整），一句话提示 PM「这个改动不大，直接在 prototype/ 改掉就行、不用单开建造流程」，征得同意后**退出 /pmai-build**，按小改直接动 prototype/（main 上，无 worktree）。大需求才继续步骤 1。
 
-> 为什么对着 spec.md：改造后唯一组织单位是功能模块，模块规格 = 唯一真相源（信息模型理清的结论就写在里面，不另起文件）。build 的覆盖审计锚点是「模块规格」。
+> 为什么对着功能锚点：模块规格是长期真相源；功能型文档是 PM 明确要求的 PRD / 功能需求 / 功能规格成稿。build 的覆盖审计锚点必须和 PM 选定的建造依据一致。
 
 ### 步骤 1：PM 选要不要开隔离环境建（worktree 可选）
 
@@ -61,8 +66,8 @@ preamble 会解析出 `PMAI_HOME` / `MAIN_REPO_ROOT` / `REPO_ROOT` / `BRANCH`。
 
 prose 头部（大白话，不出现 worktree / 分支字样）：
 ```
-准备建：<模块名> —— <一句话这次要建什么>
-规格已定稿（docs/modules/<模块>/spec.md），可以开建。
+准备建：<模块或文档名> —— <一句话这次要建什么>
+功能锚点已确认（<BUILD_ANCHOR 相对路径>），可以开建。
 ```
 
 AskUserQuestion：
@@ -85,7 +90,7 @@ worktree 统一挂 `.worktrees/<分支>/`（repo 根下单一挂载目录，框�
 BUILD_BRANCH="build-<模块 slug>"        # 例 build-capability-match
 BUILD_DIR="$MAIN_REPO_ROOT/.worktrees/$BUILD_BRANCH"
 
-# 从 main 拉（带上 main 上已定稿的 spec.md / PRODUCT.md / DESIGN.md）
+# 从 main 拉（带上 main 上已定稿的功能锚点 / PRODUCT.md / DESIGN.md）
 git -C "$MAIN_REPO_ROOT" worktree add -b "$BUILD_BRANCH" "$BUILD_DIR" main
 ```
 
@@ -102,7 +107,7 @@ git -C "$MAIN_REPO_ROOT" worktree add -b "$BUILD_BRANCH" "$BUILD_DIR" main
 
 ### 步骤 2：PM 选用什么工具建（执行器可选）
 
-改造后的核心灵活点：**PM 选谁来建**。`/pmai-build` 提供通用执行器入口（`scripts/exec-adapters/{codex,cursor-agent,gemini,manual}.sh` + claude-code 的独立 subagent 路径），执行器只负责按 prompt 改 `BUILD_DIR/prototype/`，不碰阶段状态。
+改造后的核心灵活点：**PM 选谁来建**。`/pmai-build` 提供通用执行器入口（`scripts/exec-adapters/{claude-code,codex,cursor-agent,gemini,manual}.sh` + Claude Code host 可用时的独立 subagent 路径），执行器只负责按 prompt 改 `BUILD_DIR/prototype/`，不碰阶段状态。
 
 AskUserQuestion：
 - `question`: "用什么来建？"
@@ -113,6 +118,8 @@ AskUserQuestion：
     `description`: `用 OpenAI Codex CLI 建`
   - `label`: `Cursor`
     `description`: `用 cursor-agent 建`
+  - `label`: `Gemini`
+    `description`: `用 Gemini CLI 建`
   - `label`: `我自己建`
     `description`: `你手动改，我只在建完帮你跑检查`
 
@@ -120,7 +127,8 @@ AskUserQuestion：
 - `Claude Code` / 输 `1` → `EXECUTOR=claude-code`
 - `Codex` / 输 `2` → `EXECUTOR=codex`
 - `Cursor` / 输 `3` → `EXECUTOR=cursor-agent`
-- `我自己建` / 输 `4` → `EXECUTOR=manual`
+- `Gemini` / 输 `4` → `EXECUTOR=gemini`
+- `我自己建` / 输 `5` → `EXECUTOR=manual`
 
 > **executor 来源**：本 skill **直接问 PM** 用什么工具建。settings.json 里若配了 `executor.default` 可作为 AskUserQuestion 的默认高亮项，但仍由 PM 当场拍。`executor_model` 留空走 settings 默认（不另外问 PM 模型，除非 PM 主动提）。
 
@@ -139,7 +147,7 @@ else
 fi
 ```
 
-同时把模块规格 `spec.md`（步骤 0 已读）作为功能契约：信息模型 / 业务规则 / 字段口径 / 状态机 / 文案是「做什么」的硬约束；DESIGN.md 是「长什么样」的硬约束。先用 Glob 扫 `prototype/` 已有页面和组件，能复用就 import、不重写。
+同时把 `BUILD_ANCHOR`（步骤 0 已读）作为功能契约：信息模型 / 业务规则 / 字段口径 / 状态机 / 验收标准 / 文案是「做什么」的硬约束；DESIGN.md 是「长什么样」的硬约束。先用 Glob 扫 `prototype/` 已有页面和组件，能复用就 import、不重写。
 
 ### 步骤 4：派执行器在 prototype/ 里建（含越界 + 零改动兜底）
 
@@ -152,26 +160,30 @@ DIRTY=$(git -C "$BUILD_DIR" status --porcelain 2>/dev/null)
 BASELINE_SHA=$(git -C "$BUILD_DIR" rev-parse HEAD)
 ```
 
-#### 4a：claude-code（默认）= 派独立 build subagent
+#### 4a：claude-code（默认）= 优先派独立 build subagent；不可用时走 CLI adapter
 
-用 **Agent 工具** spawn 一个独立 Claude subagent 去 `BUILD_DIR` 里建（不在驱动自己的上下文 inline 建：保隔离 + 角色分离 + PM 窗口不被建码刷屏）。subagent prompt = 模块规格 `spec.md` 全文 + DESIGN.md 约束 + 一段隔离纪律：
+如果当前 host 支持 **Agent 工具**（典型是 Claude Code 主控），spawn 一个独立 Claude subagent 去 `BUILD_DIR` 里建（不在驱动自己的上下文 inline 建：保隔离 + 角色分离 + PM 窗口不被建码刷屏）。subagent prompt = `BUILD_ANCHOR` 全文 + DESIGN.md 约束 + 一段隔离纪律：
 
 - 「你在 `$BUILD_DIR` 里建 <模块> 这一片：所有文件用**绝对路径**写到 `$BUILD_DIR/prototype/...`；先 Glob 扫已有页面 / 组件，相似的先读源码复用其布局和组件，优先 import 不重写；遵循已有样式模式和目录约定；**禁止 git add / git commit**（commit 由我统一做）。」
 - `executor_model` 非空时按它选 subagent 的 model（opus / sonnet / haiku）。
 
 subagent 返回后回到本驱动跑 4c / 4d。
 
-#### 4b：codex / cursor-agent / gemini / manual = 走 build adapter
+如果当前 runtime 没有 Claude subagent 工具（典型是 Codex 主控），不要假装已派 subagent；改走 `scripts/exec-adapters/claude-code.sh` 调本机 `claude -p` 非交互执行器。这样满足两种使用方式：
+- PM 手动切到 Claude Code 后跑 `/pmai-build`：走原生 subagent 体验。
+- PM 留在 Codex 窗口里选择 `Claude Code`：走 Claude Code CLI adapter，建完仍由当前驱动继续检查和呈交。
+
+#### 4b：claude-code / codex / cursor-agent / gemini / manual = 走 build adapter
 
 调用通用 build adapter（独立 CLI 进程；adapter 约定改动落 `BUILD_DIR` 且 unstaged，不自己 commit）：
 
 ```bash
 PROMPT_FILE=$(mktemp)
-# prompt 用模块规格当契约。直接把 spec.md + DESIGN.md + 上面那段隔离纪律
+# prompt 用功能锚点当契约。直接把 BUILD_ANCHOR + DESIGN.md + 上面那段隔离纪律
 # 拼成 prompt 写进 $PROMPT_FILE。
 
 if [ "$EXECUTOR" = "manual" ]; then
-  echo "请在 $BUILD_DIR/prototype/ 里按 docs/modules/<模块>/spec.md 建，建完回来发 /pmai-build 继续（我跳过执行器、直接帮你跑检查）。"
+  echo "请在 $BUILD_DIR/prototype/ 里按 <BUILD_ANCHOR 相对路径> 建，建完回来发 /pmai-build 继续（我跳过执行器、直接帮你跑检查）。"
   # PM 手动改完重新进 /pmai-build → 检测到 manual 选择，跳过派发，直接进 4c/4d 检查 + 步骤 5
   exit 0
 fi
@@ -206,7 +218,7 @@ done
 
 ```bash
 CHANGE_COUNT=$(git -C "$BUILD_DIR" status --porcelain | wc -l | tr -d ' ')
-[ "$CHANGE_COUNT" -eq 0 ] && { echo "⚠️ 执行器退出但 prototype/ 无改动。可能 prompt 被误解为「只分析」——检查 spec.md 是否给够了可建的结构。换工具或「我自己建」。"; exit 0; }
+[ "$CHANGE_COUNT" -eq 0 ] && { echo "⚠️ 执行器退出但 prototype/ 无改动。可能 prompt 被误解为「只分析」——检查功能锚点是否给够了可建的结构。换工具或「我自己建」。"; exit 0; }
 ```
 
 ### 步骤 5：起 dev server（UI 类）
@@ -231,7 +243,7 @@ done
 ( cd "$BUILD_DIR/prototype" && <dev 命令> --port "$PORT" )   # Bash run_in_background 后台跑；记下 $PORT 给视觉门 / 行为审复用
 ```
 
-> **并行 build 心智**：worktree = 真实 build 的并行隔离（不同分支各挂一个 worktree、同时改、互不串）；① 复用 pnpm store 让 N 个 worktree 不各装一遍依赖、② 端口错开让 N 个 dev server 不抢端口。worktree 从 main 拉天然带定稿的 `spec.md` / `PRODUCT-*` / `DESIGN.md`（决策文档读得到），无需另同步。
+> **并行 build 心智**：worktree = 真实 build 的并行隔离（不同分支各挂一个 worktree、同时改、互不串）；① 复用 pnpm store 让 N 个 worktree 不各装一遍依赖、② 端口错开让 N 个 dev server 不抢端口。worktree 从 main 拉天然带定稿的功能锚点 / `PRODUCT-*` / `DESIGN.md`（决策文档读得到），无需另同步。
 
 非 UI 类需求跳过。
 
@@ -239,22 +251,22 @@ done
 
 建完 AI **自动**跑三道机器审，走 `build-audits.py` 编排（确定性收集 + 合成一份给 PM；只报不改，是给 PM 看的证据，不替 PM 拍板）。
 
-> **锚点已敲死**：覆盖审计锚点统一是**模块规格 `spec.md`**。`build-audits.py` 已参数化锚点（`--range-list` / `--audit-dir` / `--label`）。统一接脚本，复用其 fail-loud「三道齐全」校验——覆盖审计是防残承重墙，不走纯 AI 自跑（避免静默漏一道审还往下走）：
+> **锚点已敲死**：覆盖审计锚点统一是步骤 0 选定的 **`BUILD_ANCHOR`**（模块 `spec.md` 或 `docs/modules/<按内容命名>.md`）。`build-audits.py` 已参数化锚点（`--range-list` / `--audit-dir` / `--label`）。统一接脚本，复用其 fail-loud「三道齐全」校验——覆盖审计是防残承重墙，不走纯 AI 自跑（避免静默漏一道审还往下走）：
 > ```bash
-> SPEC="$BUILD_DIR/docs/modules/<模块>/spec.md"   # 锚点文件=模块规格（定位仓根 + 覆盖审计逐项锚点）
-> python3 "$PMAI_HOME/scripts/build-audits.py" resolve "$SPEC" \
->     --repo-root "$BUILD_DIR" --range-list "$SPEC" \
+> BUILD_ANCHOR="$BUILD_DIR/<docs/modules/... 实际锚点路径>"   # 模块 spec 或功能型文档
+> python3 "$PMAI_HOME/scripts/build-audits.py" resolve "$BUILD_ANCHOR" \
+>     --repo-root "$BUILD_DIR" --range-list "$BUILD_ANCHOR" \
 >     --audit-dir ".pm-workflow/audits/<模块>" --label "<模块>"
 > # …三道审各写 coverage.json / visual.json / behavior.json 进 $BUILD_DIR/.pm-workflow/audits/<模块>/…
-> python3 "$PMAI_HOME/scripts/build-audits.py" synthesize "$SPEC" \
+> python3 "$PMAI_HOME/scripts/build-audits.py" synthesize "$BUILD_ANCHOR" \
 >     --repo-root "$BUILD_DIR" --audit-dir ".pm-workflow/audits/<模块>" --label "<模块>"
 > ```
 
 三道审抓三种不同的病：
 
-- **① 覆盖审计**（白纸新鲜视角，对标 `coverage-reviewer` agent）：拿**模块规格 spec.md** 对 `prototype/` 代码逐项 diff，报每条规格点：✅ 建了 / ❌ 丢了 / ⚠️ 降级占位（空壳 / 假数据 / 交互没接）。故意不让建代码的 AI 自审，避盲区。静态读码，不需 dev server，先跑。
+- **① 覆盖审计**（白纸新鲜视角，对标 `coverage-reviewer` agent）：拿**功能锚点 BUILD_ANCHOR** 对 `prototype/` 代码逐项 diff，报每条规格点：✅ 建了 / ❌ 丢了 / ⚠️ 降级占位（空壳 / 假数据 / 交互没接）。故意不让建代码的 AI 自审，避盲区。静态读码，不需 dev server，先跑。
 - **② 视觉门**（gstack `/design-review`，只截图不改）：对照 `docs/DESIGN.md` 审视觉一致性（间距 / 层级 / 配色 / AI slop）。用 `/browse`（headless），禁 `mcp__claude-in-chrome__*`。出口是 PM 一句话 pass / 打回，**AI 不替 PM 改视觉**。复用步骤 5 的 dev server。
-- **③ 行为审**（验收流程驱动 `/browse` 走确定性路径）：从模块规格的核心动作 / 状态机派生验收流程，`/browse` 逐流程跑，验证「跑得通不通」（明确 pass/fail，区别于 `/qa` 的 AI 探索）。复用步骤 5 的 dev server。
+- **③ 行为审**（验收流程驱动 `/browse` 走确定性路径）：从功能锚点的核心动作 / 状态机 / 验收标准派生验收流程，`/browse` 逐流程跑，验证「跑得通不通」（明确 pass/fail，区别于 `/qa` 的 AI 探索）。复用步骤 5 的 dev server。
 
 ### 步骤 7：review loop（看原型挑错、AI 改）
 
@@ -317,18 +329,18 @@ PM 拍 `可以，收尾` → build 的活到此为止，**merge 回 main + 文�
 
 | 环节 | 谁做 | 交给 build / build 交出去的 |
 |---|---|---|
-| 上游 `/pmai-design` | 在 main 上理清信息模型、`/mock` 确认设计、产 / 演进模块规格 `spec.md` | build 拿 `spec.md` 当建造契约（覆盖审计锚点）+ `decisions.md` 当背景 |
+| 上游 `/pmai-design` / `/pmai-prd-writing` | 在 main 上理清信息模型、`/mock` 确认设计、产 / 演进模块规格 `spec.md`；或写功能型文档 | build 拿模块 `spec.md` 或 `docs/modules/<按内容命名>.md` 当建造契约（覆盖审计锚点）+ 相关 `decisions.md` 当背景 |
 | 本 skill `/pmai-build` | 仅大需求：PM 选工具 + 选要不要 worktree → 派执行器在 prototype/ 建 → review loop + 三道审 → commit + 呈交 | 建好的 prototype/ 改动（worktree 或 main 上）+ PM 验收通过信号 |
 | 下游 `/pmai-close` | 决策 / 术语回写基线、文档归位、有 worktree 则 merge 回 main 并删 | 把 build 产物收口进基线 + 主线 |
 
 ## Rules
 
 - **只大需求走 build**。讨论（改文档）/ 小改（一两处字段 / 文案 / 局部）不走这——在 main 上由 `/pmai-design` 或直接改 prototype/ 完成，无 worktree。步骤 0 判出是小改 → 退出 build。
-- **对着模块规格建**。覆盖审计锚点 = `docs/modules/<模块>/spec.md`。不拆任务卡、不走独立任务状态机。
-- **PM 选工具**（claude-code / codex / cursor-agent / manual，复用 exec-adapter）**+ PM 选要不要 worktree**（步骤 1 / 步骤 2 两道 PM 决策）。executor 从问 PM 拿。
+- **对着功能锚点建**。覆盖审计锚点 = `docs/modules/<模块>/spec.md` 或 `docs/modules/<按内容命名>.md`。不拆任务卡、不走独立任务状态机。
+- **PM 选工具**（claude-code / codex / cursor-agent / gemini / manual，复用 exec-adapter）**+ PM 选要不要 worktree**（步骤 1 / 步骤 2 两道 PM 决策）。executor 从问 PM 拿。
 - **worktree 可选、统一挂 `.worktrees/<分支>/`**。开了就用 `git -C "$BUILD_DIR"` / subshell，禁 `cd` 进 worktree（cwd 护栏）；没开则 `BUILD_DIR="$REPO_ROOT"`、main 上直接建（main 写保护已放宽）。
-- **claude-code = 派独立 build subagent**（Agent 工具），不在驱动上下文 inline 建（隔离 + 角色分离 + 不刷 PM 屏）；codex / cursor-agent / gemini / manual 走现成 exec-adapter。一次只建本模块这一片。
-- **建之前必读 DESIGN.md**（cat echo 进 context）+ 模块规格当契约；先扫已有组件复用、不重写。
+- **claude-code = 优先派独立 build subagent**（Agent 工具），不在驱动上下文 inline 建（隔离 + 角色分离 + 不刷 PM 屏）；当前 runtime 没有 subagent 时走 `exec-adapters/claude-code.sh` 调 Claude Code CLI。codex / cursor-agent / gemini / manual 走现成 exec-adapter。一次只建本模块这一片。
+- **建之前必读 DESIGN.md**（cat echo 进 context）+ 功能锚点当契约；先扫已有组件复用、不重写。
 - **三道审 AI 自动跑、只报不改**（覆盖 / 视觉 / 行为，复用 build-audits.py 编排或等价自跑；三道审复用同一次 dev server）；出口都是给 PM 看的证据，不替 PM 拍板。探索式 review（`/review` `/qa` `/qa-only`）是 PM 手动旁路，AI 不自动调（守 I-RV1）。
 - **review loop 只动 prototype/ 代码**，不改 spec.md / decisions.md（模块文档对齐归 `/pmai-close`；build 期不改文档）。AI 主动批量 flag、PM 勾改；每轮改完重跑三道审。
 - **commit 用 `git -C "$BUILD_DIR"`**；执行器禁自己 commit（claude-code subagent prompt 里写死、adapter 约定 unstaged）。

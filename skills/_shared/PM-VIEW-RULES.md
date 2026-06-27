@@ -1,6 +1,6 @@
 # PM 视图通用规则（PM-VIEW-RULES）
 
-> 适用范围：所有 PM 视角的当前产物 — `docs/modules/<模块>/discussion.md` / `decisions.md` / `spec.md` / `PRODUCT-STATE.md` / 按需 `prd.md`。
+> 适用范围：所有 PM 视角的当前产物 — `docs/modules/<模块>/discussion.md` / `decisions.md` / `spec.md` / `PRODUCT-STATE.md` / `docs/modules/<按内容命名>.md` 功能型文档。
 >
 > 本文件是 **单一真相源**。下列 skill 都引用本文件，不在 skill 内部独立维护：
 > `design` · `build` · `close` · `prd-writing`
@@ -235,7 +235,7 @@ PM 创建 / 审核 / 验收时直接看的内容。回答 PM 关心的问题：
 
 ## 六、关键产品决策格式（prd / 模块 spec 必填）
 
-每份 `prd.md` 和涉及关键产品选择的模块 `spec.md` 必须有「关键产品决策」节：
+每份 PRD 体例功能型文档和涉及关键产品选择的模块 `spec.md` 必须有「关键产品决策」节：
 
 ```markdown
 ## 🎯 关键产品决策
@@ -253,7 +253,7 @@ PM 创建 / 审核 / 验收时直接看的内容。回答 PM 关心的问题：
 - "备选方案"列 1-2 种合理替代，注明为什么没选
 - "共同理由"放表格下方，集中表达决策依据；不在每行的"备选方案"里重复
 
-如果某 task 是纯执行型（无 PM 决策点）：本节填一行 `本 task 无关键产品决策（执行 prd.md §X.Y 已确定方案）`。
+如果某工作是纯执行型（无 PM 决策点）：本节填一行 `本次工作无关键产品决策（执行对应功能型文档已确定方案）`。
 
 ---
 

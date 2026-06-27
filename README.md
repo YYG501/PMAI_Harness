@@ -62,7 +62,7 @@ PMAI 不和 Claude Design、design-html 或 Claude Code 比"谁更快生成第�
 # 日常循环（模块规格先行，必要时再建）
 
 /pmai-design "批量审核"    讨论清楚，写模块三件套：discussion.md / decisions.md / spec.md
-/pmai-build 批量审核       大需求才建：对着 spec.md 在 prototype/ 里实现，可选隔离环境和执行器
+/pmai-build 批量审核       大需求才建：对着 spec.md 或功能型文档在 prototype/ 里实现，可选隔离环境和执行器
 /pmai-close                PM 验收后沉淀：更新 PRODUCT-STATE / PRODUCT-RULES / 模块规格，必要时合回 main
 /pmai-status          产品现状视图（产品长什么样 / 当前模块做到哪 / 下一步）
 ```
@@ -75,13 +75,14 @@ PM 全程**只做决策**（方向 / 结构 / 建造方式 / 验收 / 沉淀）�
 
 | 工具 | 必需性 | 用途 |
 |---|---|---|
-| **Claude Code** | 推荐 | 一等主控入口（slash skill 原生在这里跑） |
+| **Claude Code** | 推荐 | 一等主控入口（slash skill 原生在这里跑）；也可作为 `/pmai-build` 执行器 |
 | **Codex** | 支持 | skill 暴露到 `~/.codex/skills/pmai-*`；读生成器仓 / 消费仓 `AGENTS.md` 作为主控入口；消费仓生成项目级 `.codex/hooks.json`；也可作为 build 执行器 |
+| **Gemini CLI** | 可选 | `/pmai-build` 执行器；适合在 Codex / Claude 主控下交给 Gemini 建 |
 | **gstack** | 必需 | `/qa` `/review` `/codex` 等子流程依赖；`pmai install` / `pmai doctor` 会提示 readiness，`init-project.sh` 起项目时会硬检测 |
 | **git** ≥ 2.30 | 必需 | worktree 是核心隔离机制 |
 | **python3** ≥ 3.10 | 必需 | scripts 大多用 python（zero-dep stdlib） |
 | **bash** ≥ 4 | 必需 | scripts 入口语言（macOS 自带 3.x 已知坑见 INVARIANTS） |
-| **codex CLI** | 可选 | build 执行器；不装走 `cursor-agent` / `claude` / `manual` |
+| **codex CLI** | 可选 | `/pmai-build` 执行器；不装可走 Claude Code / Gemini / cursor-agent / 手动 |
 
 未装 gstack 时 `pmai install` / `pmai doctor` 会给 warning，但不阻塞 PMAI 安装；真正起新业务项目时，`init-project.sh` 会直接报错并指向 `https://github.com/garrytan/gstack`。这让私有仓 onboarding 可以先把 PMAI 装好，再补齐 gstack。
 
@@ -242,7 +243,7 @@ python3 scripts/status-view.py "$tmp/Demo" --narrative
 ```
 /pmai-design "<一句话>"      → 探索真问题、理清信息结构、写模块三件套
   ↓
-/pmai-build <模块>          → 大需求才建；对着 docs/modules/<模块>/spec.md 改 prototype/
+/pmai-build <模块或文档>     → 大需求才建；对着模块 spec 或 docs/modules/<按内容命名>.md 改 prototype/
   ↓
 /pmai-status             → 忘了当前停在哪时，用它读状态并提示下一步
   ↓
@@ -277,8 +278,9 @@ PMAI 走纯全局：每台要用的机器各自 `pmai install` 一次（全局�
 | Skill | 用途 |
 |---|---|
 | `/pmai-status` | **续跑辅助**：读当前阶段做下一步（设计 → build → 复审 → 沉淀），先说再动 |
-| `/pmai-build` | 对着模块 `spec.md` 在 `prototype/` 建；PM 选择执行器和是否开隔离环境 |
-| `/pmai-prd-writing` | 模块 `spec.md` / PRD 的统一成文器：生成或修改规格，也可按需反向出可评审 PRD |
+| `/pmai-build` | 对着模块 `spec.md` 或功能型文档在 `prototype/` 建；PM 选择执行器和是否开隔离环境 |
+| `/pmai-prd-writing` | 功能型文档成文器：生成/修改模块规格；PRD、功能需求、功能描述、功能规格、功能评审稿都走这里 |
+| `/pmai-doc-writing` | 介绍型文档成文器：产品介绍、产品功能清单、优势说明、一页纸、汇报材料，默认落 `docs/deliverables/` |
 
 ### 收尾 / 放弃
 
