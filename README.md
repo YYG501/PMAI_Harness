@@ -10,6 +10,34 @@ PM AI 工作流框架的**生成器**仓库。
 
 ---
 
+## 最快路径
+
+私有仓首次安装走这一条；其它安装方式放在后面作为备选：
+
+```bash
+gh auth status || gh auth login
+rm -rf /tmp/pmai-src
+gh repo clone YYG501/PMAI_Workflow /tmp/pmai-src
+bash /tmp/pmai-src/bin/pmai install
+~/.pmai/bin/pmai doctor
+```
+
+装好后，在任意业务项目目录里发：
+
+```text
+/pmai-init-project
+```
+
+如果只是要验证骨架脚本，不走完整 PM 交互：
+
+```bash
+tmp=$(mktemp -d)
+bash ~/.pmai/scripts/init-project.sh Demo "$tmp/Demo" "一句话项目背景" prototype
+python3 ~/.pmai/scripts/status-view.py "$tmp/Demo" --narrative
+```
+
+---
+
 ## 这是什么
 
 PMAI 是面向 PM 的**产品上下文统一层**：它把产品文档、原型、反馈、决策和后续实现上下文接起来，让 AI 在每次协作时都知道这个产品是什么、已有原型长什么样、哪些规则和取舍已经确认。
@@ -149,8 +177,10 @@ skill 跑全局升级命令；升级完读 CHANGELOG diff + 用自然语言 5-7 
 
 ## 快速开始
 
-> **TTHW 期望**：从 pmai install 跑通到第一个模块规格草稿 ≤ 30 分钟。
-> install 自身 ~5 秒（git clone + symlink），init-project 跑 ~10 秒，其余时间是 PM 思考第一个需求。
+> **TTHW 口径拆分**：
+> - **骨架 smoke**：`init-project.sh` 从空目录建出业务仓骨架，目标 ≤ 10 秒，可自动量。
+> - **第一个模块规格草稿**：从 `/pmai-init-project` 到 `/pmai-design` 落出 `spec.md`，目标 ≤ 30 分钟；这一步包含 PM 决策，只能通过 dogfood 记录，不适合作无交互脚本硬测。
+> - install 自身通常约 5 秒（git clone + symlink），剩余时间主要是 PM 思考第一个需求。
 
 ### 1. 初始化新业务项目
 
@@ -197,7 +227,7 @@ bash scripts/init-project.sh ...
 
 > 脚本是骨架构建器，**不带方向讨论**；直接调脚本适合自动化场景，PM 主动起项目走 `/pmai-init-project` skill 拿到完整体验。
 
-可量测 TTHW（从空项目到第一个 `status-view.py` 可识别的 active work）：
+可量测骨架 smoke（从空目录到 `status-view.py` 可识别的项目骨架）：
 
 ```bash
 tmp=$(mktemp -d)

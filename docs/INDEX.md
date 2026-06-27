@@ -8,6 +8,17 @@
 |---|---|
 | [`build-audits-编排与自测.md`](./build-audits-编排与自测.md) | `/pmai-build` 三道审编排、规范化结果 schema 和自测留档 |
 
+## 常见问题索引
+
+| 想确认 | 看哪里 |
+|---|---|
+| 私有仓怎么首次安装 | [`../README.md#最快路径`](../README.md#最快路径) / [`../README.md#安装`](../README.md#安装) |
+| 怎么升级或回滚 | [`../README.md#安装模式仅全局`](../README.md#安装模式仅全局) |
+| `pmai doctor` / `pmai status` 看什么 | [`../README.md#开发者自检入口`](../README.md#开发者自检入口) |
+| 怎么起一个新业务项目 | [`../README.md#快速开始`](../README.md#快速开始) |
+| 怎么接已有代码仓 | [`../README.md#完整-skill-命令汇总`](../README.md#完整-skill-命令汇总) 里的 `/pmai-codebase-audit` |
+| 怎么报告 bug | [`../README.md#反馈与问题报告`](../README.md#反馈与问题报告) / [`../.github/ISSUE_TEMPLATE/bug_report.md`](../.github/ISSUE_TEMPLATE/bug_report.md) |
+
 ## 归档
 
 | 目录 | 说明 |
@@ -25,4 +36,3 @@
 | [`../RUNTIME.md`](../RUNTIME.md) | 当前状态和下一步 |
 | [`../INVARIANTS.md`](../INVARIANTS.md) | 当前架构不变式 |
 | [`../TODOS.md`](../TODOS.md) | 开放项 |
-
