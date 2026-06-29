@@ -19,6 +19,8 @@ SUITES=(
   test-brownfield-detect.sh
   test-no-duplicate-questioning.sh
   test-shared-files-exist.sh
+  test-shared-currentness.sh
+  test-design-shared-boundary.sh
   test-doctor-skills.sh
   test-writing-skill-routing.sh
   test-migrate-reqs-to-modules-compat.sh
@@ -26,6 +28,7 @@ SUITES=(
   test-narrative-mode.sh
           test-checks-diff.sh
   test-build-audits.sh
+  test-build-contract.sh
   test-exec-adapters.sh
   test-mock-board.sh
     test-state-lib.sh

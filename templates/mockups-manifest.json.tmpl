@@ -1,0 +1,16 @@
+{
+  "_comment": "mockups/ 变体清单 —— 这一份是 mock 看版的唯一真相源。看版页 index.html 由 scripts/gen-mock-board.py 从本文件生成，不要手写看版。每生成一个值得留的探索变体，往 variants 加一条，再重跑 gen-mock-board.py 重生成看版。",
+  "_fields": {
+    "path": "相对 mockups/ 的路径，点开能直接看这个 mock（如 approach-b/index.html 或 todo-skeleton.html）",
+    "requirement": "来自哪个需求 / 模块（如 宠物导入与创作）。看版按这个字段分组；新条目必须填",
+    "title": "可选。卡片标题；不填时看版用 explores 作为标题",
+    "explores": "这一版在探索什么 —— 一句话",
+    "good_parts": "这一版的好东西 / 值得合并进主原型的候选 —— 一句话",
+    "status": "状态，枚举：活跃 / 待合并 / 已退役。活跃·待合并 在看版高亮在上；已退役 折叠灰显在下、留存不删",
+    "round": "出自哪一轮探索（如 第一轮 / 第二轮）。需求归类用 requirement，不再只靠 round",
+    "featured": "true/false。true = 收敛时挑定值得留的精选版，看版里高亮突出；false 仍在目录可翻、看版不高亮",
+    "retired_note": "可选。status 为已退役时，记一句『已并入主原型（位置 / commit）』"
+  },
+  "_status_enum": ["活跃", "待合并", "已退役"],
+  "variants": []
+}

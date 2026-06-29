@@ -1,4 +1,9 @@
-<!-- 共享参考 · 需求探索 / 对话诊断（/pmai-design 三段式的第一段「探索」内核）。
+<!-- Legacy reference · 旧需求探索 / 对话诊断细节。
+     已从 skills/_shared/ 移出：当前只有 /pmai-design 一个真实消费者。
+     新的执行正本见 skills/design/references/design-method.md；本文件只保留历史细节和话术素材。
+
+     原说明：
+     共享参考 · 需求探索 / 对话诊断（/pmai-design 三段式的第一段「探索」内核）。
      谁读：/pmai-design 探索段（@读本文件）。什么时候：每个需求开工，先过探索段的"闻味判断"。
      产物：探索结论结晶进该模块 discussion.md 第一节（不另起文件）。
      来历：吸收原探索深问能力 + gstack office-hours（对话诊断），
@@ -24,7 +29,7 @@
 - **方案先行措辞**：「加个 X 按钮 / 做个 Y 弹窗 / 做个页面 / 加个字段」——PM 给的是**解法**不是问题，先还原到"要解决什么"。
 - **伪需求信号**：「感觉应该有 / 别人都有 / 顺便加一下 / 以防万一」——动机可能站不住。
 - **跨模块措辞**：动到的东西牵动其他模块 / 触及全局约束（@读 PRODUCT-RULES 全局 scope）。
-- **推翻已有决策**：和模块 `decisions.md` / `PRODUCT-RULES` / `docs/project-decisions/` 已拍的冲突。
+- **推翻已有决策**：和模块 `decisions.md` / `PRODUCT-RULES` / `docs/decisions/` 已拍的冲突。
 - **根本目标模糊**：PM 自己都说不清要解决啥、或一句话里塞了三件事。
 
 ### 三档深度（深度自适应·内核6）

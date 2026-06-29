@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
-"""Pre-commit gate: 拦截 docs/ 顶层新增文件不在归档约定白名单内。
+"""Pre-commit gate: 拦截 docs/ 顶层新增文件不在归位约定白名单内。
 
-防消费仓 docs/ 顶层积累错位 / 重复 / 过期文件（参考 CLAUDE.md 「## docs/ 归档约定」）。
+防消费仓 docs/ 顶层积累错位 / 重复 / 过期文件（参考 CLAUDE.md 「## 根目录与 docs/ 归位约定」）。
 
 逻辑：
-  对每个 staged 的新增 `docs/<basename>.md`（不含 docs/modules/, docs/归档/, 子目录文件）：
-    1. 在静态白名单（项目级真相源）→ 跳过
+  对每个 staged 的新增 `docs/<basename>.md`（不含 docs/modules/, docs/archive/, 子目录文件）：
+    1. 在静态白名单（docs/ 顶层索引）→ 跳过
     2. 在 .docs-toplevel-allow 自定义白名单（每行一个 basename，#开头注释）→ 跳过
     3. 否则拦下 + 提示三种归位路径
 
@@ -29,14 +29,9 @@ import subprocess
 import sys
 from pathlib import Path
 
-# 项目级真相源（CLAUDE.md.tmpl §docs/ 归档约定 正面清单）
+# docs/ 顶层只保留索引；项目主文件放仓库根目录。
 STATIC_ALLOW = {
     "INDEX.md",
-    "PRODUCT.md",
-    "PRODUCT-STATE.md",
-    "DESIGN.md",
-    "PRODUCT-RULES.md",
-    "TODO.md",
     "CONTEXT.md",  # 老项目兼容（migrate-context-to-project.py 跑前）
 }
 
@@ -73,7 +68,7 @@ def filter_toplevel_docs(paths: list[str]) -> list[str]:
 
     排除：
       - docs/modules/... 子目录
-      - docs/归档/... 子目录
+      - docs/archive/... 子目录
       - 任意 docs/<子目录>/... 子目录文件（深度 ≥ 2）
       - 非 .md 文件（图片等）
     """
@@ -109,7 +104,7 @@ def check(repo_root: Path, paths: list[str]) -> int:
     for v in violators:
         print(f"    docs/{v}", file=sys.stderr)
     print(
-        "\n   按 CLAUDE.md 「## docs/ 归档约定」归位：",
+        "\n   按 CLAUDE.md 「## 根目录与 docs/ 归位约定」归位：",
         file=sys.stderr,
     )
     print(
@@ -121,7 +116,11 @@ def check(repo_root: Path, paths: list[str]) -> int:
         file=sys.stderr,
     )
     print(
-        "     • 过程档案 / 一次性 review / 临时分析 / 被取代旧文件 → docs/归档/",
+        "     • 过程档案 / 一次性 review / 临时分析 / 被取代旧文件 → docs/archive/",
+        file=sys.stderr,
+    )
+    print(
+        "     • 产品定位 / 现状 / 规则 / 视觉 / 待办主文件 → 仓库根目录",
         file=sys.stderr,
     )
     print(

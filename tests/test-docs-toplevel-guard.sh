@@ -3,10 +3,10 @@
 #
 # 验证 docs/ 顶层归档约定守卫（PM 选 B 方案 — pre-commit hook 强制拦截）：
 #   T1: check-docs-toplevel.py 存在
-#   T2: 白名单文件被允许（INDEX/PRODUCT-STATE/DESIGN/PRODUCT-RULES/TODO/CONTEXT）
+#   T2: 白名单文件被允许（INDEX/CONTEXT）
 #   T3: 错位文件被拦下（exit 1）
 #   T4: docs/modules/ 下文件不影响（不算顶层）
-#   T5: docs/归档/ 下文件不影响
+#   T5: docs/archive/ 下文件不影响
 #   T6: .docs-toplevel-allow 自定义白名单生效
 #   T7: pre-commit.tmpl 含调用 check-docs-toplevel.py
 #   T8: 非 .md 文件（如图片）不被拦
@@ -31,11 +31,17 @@ test_checker_exists() {
 
 # -----------------------------------------------------------------
 test_whitelist_passes() {
-  start_test "T2: 白名单文件（INDEX/PROJECT/PRODUCT-STATE/DESIGN/PRODUCT-RULES/TODO/CONTEXT）被允许"
+  start_test "T2: 白名单文件（INDEX/CONTEXT）被允许"
   local tmp; tmp=$(mktemp -d)
-  for f in INDEX.md PRODUCT.md PRODUCT-STATE.md DESIGN.md PRODUCT-RULES.md TODO.md CONTEXT.md; do
+  for f in INDEX.md CONTEXT.md; do
     if ! python3 "$CHECKER" --repo-root "$tmp" --from-paths "docs/$f" >/dev/null 2>&1; then
       _fail "白名单 docs/$f 应被允许，实际被拦下"
+      rm -rf "$tmp"; return
+    fi
+  done
+  for f in PRODUCT.md PRODUCT-STATE.md DESIGN.md PRODUCT-RULES.md TODO.md; do
+    if python3 "$CHECKER" --repo-root "$tmp" --from-paths "docs/$f" >/dev/null 2>&1; then
+      _fail "主文件 docs/$f 不应被允许，应放仓库根目录"
       rm -rf "$tmp"; return
     fi
   done
@@ -56,7 +62,7 @@ test_misplaced_blocked() {
     _fail "拦下提示缺白名单引导，输出：$out"
     rm -rf "$tmp"; return
   fi
-  if ! echo "$out" | grep -q 'docs/归档/'; then
+  if ! echo "$out" | grep -q 'docs/archive/'; then
     _fail "拦下提示缺归位路径，输出：$out"
     rm -rf "$tmp"; return
   fi
@@ -82,10 +88,10 @@ test_modules_subdir_unaffected() {
 
 # -----------------------------------------------------------------
 test_archive_subdir_unaffected() {
-  start_test "T5: docs/归档/ 下文件不被拦"
+  start_test "T5: docs/archive/ 下文件不被拦"
   local tmp; tmp=$(mktemp -d)
-  if ! python3 "$CHECKER" --repo-root "$tmp" --from-paths "docs/归档/PROTOTYPE_CLEANUP.md" >/dev/null 2>&1; then
-    _fail "docs/归档/PROTOTYPE_CLEANUP.md 不该被拦"
+  if ! python3 "$CHECKER" --repo-root "$tmp" --from-paths "docs/archive/PROTOTYPE_CLEANUP.md" >/dev/null 2>&1; then
+    _fail "docs/archive/PROTOTYPE_CLEANUP.md 不该被拦"
     rm -rf "$tmp"; return
   fi
   rm -rf "$tmp"

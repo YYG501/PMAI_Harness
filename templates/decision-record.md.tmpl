@@ -1,21 +1,21 @@
 <!-- 项目决策记录（冻结档）模板 · runtime framework .tmpl
-     skill 内部按 $PMAI_HOME/templates/ 直接调用（strategy / init-project step C / close 共用），不拷进消费仓。
+     skill 内部按 $PMAI_HOME/templates/ 直接调用（direction / init-project step C / build-close / record 共用），不拷进消费仓。
      项目级冻结决策记录：写一次、带日期、不维护，当前真相仍回到脊柱文档。
-     落点：消费仓 docs/project-decisions/<日期>-<slug>.md（中文类名「项目决策记录」）。
+     落点：消费仓 docs/decisions/<日期>-<slug>.md（中文类名「项目决策记录」）。
      用法：把所有 <尖括号占位符> 填掉；写一次就不动（方向变写新的一份，旧的留作历史坐标）。 -->
 
 <!-- ╔══════════════════════════════════════════════════════════════╗
      ║  冻结档 · 写于 <日期> · 之后不维护                            ║
      ║  这不是"现状"——它是 <日期> 那一刻的判断快照。               ║
-     ║  当前产品长什么样永远以 docs/PRODUCT-STATE.md（脊柱）为准。   ║
+     ║  当前产品长什么样永远以 PRODUCT-STATE.md（脊柱）为准。   ║
      ║  本档只装"为什么这么拼"的理路；事实一律用指针指向脊柱。       ║
      ╚══════════════════════════════════════════════════════════════╝ -->
 
 # 项目决策记录：<一句话主题> （冻结于 <日期>）
 
 > **性质**：冻结档，写一次不维护。读者看到的是「<日期> 那时的判断」——是历史坐标，不是当前真相。
-> **当前真相去哪看**：产品现状 → `docs/PRODUCT-STATE.md`；定位/角色/术语 → `docs/PRODUCT.md`；视觉 → `docs/DESIGN.md`；跨功能规则 → `docs/PRODUCT-RULES.md`。
-> **出自**：<strategy 方向讨论 / init-project 奠基 / 模块工作收尾产出的项目级理路>。
+> **当前真相去哪看**：产品现状 → `PRODUCT-STATE.md`；定位/角色/术语 → `PRODUCT.md`；视觉 → `DESIGN.md`；跨功能规则 → `PRODUCT-RULES.md`。
+> **出自**：<direction 方向校准 / init-project 奠基 / build-close 或 record 产出的项目级理路>。
 
 ---
 
@@ -48,10 +48,10 @@
 
 | 当时的事实（<日期> 快照） | 当前真相源（可能已变） |
 |---|---|
-| <例：主角色是「部门管理员」，24 字段 ontology，owner 用颜色区分> | 以 `docs/PRODUCT.md` 用户画像 / `docs/modules/<模块>.md` 为准 |
+| <例：主角色是「部门管理员」，24 字段 ontology，owner 用颜色区分> | 以 `PRODUCT.md` 用户画像 / `docs/modules/<模块>/spec.md` 为准 |
 | <...> | <...> |
 
 ---
 
-<!-- 写完落 docs/project-decisions/<日期>-<slug>.md。这份不进"每次必读核心"，从 docs/INDEX.md 展开：
+<!-- 写完落 docs/decisions/<日期>-<slug>.md。这份不进"每次必读核心"，从 docs/INDEX.md 展开：
      后续 AI 查"为什么这么拼"、范围触及本主题时才按需读回（见 templates/文档地图.md §二/§三）。 -->

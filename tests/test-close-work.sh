@@ -9,8 +9,8 @@ CLOSE_WORK="$FRAMEWORK_ROOT/scripts/close-work.sh"
 
 # close-work（方案 A）后真相源是 docs/modules/<模块>/。
 # work_dir = docs/modules/<分支>（fixture_create_work 现返回模块目录）。
-# 收尾语义：模块 .work-meta.json 被删（清工作状态），模块三件套留场；有 worktree 走 merge，
-# 无 worktree/无分支直接在 main 清。
+# 收尾语义：模块 .work-meta.json 被删（清工作状态），模块三件套留场；
+# build.mode=worktree 走 merge，build.mode=main 直接在 main 清。
 
 # Helper: 模块 .work-meta 是否还在（在 = 未收尾）
 _module_meta_path_on_main() {
@@ -18,24 +18,13 @@ _module_meta_path_on_main() {
 }
 
 # =================================================
-# I-CR3/CR5（方案 A 新语义）：无分支 → 走 main 直接清 .work-meta，不再拒绝
+# I-CR3/CR5：build.mode=main → 走 main 直接清 .work-meta
 # =================================================
-test_no_branch_closes_via_main() {
-  start_test "I-CR3 no branch → main 直接清 .work-meta（不拒绝）"
+test_main_mode_closes_via_main() {
+  start_test "I-CR3 main-mode build → main 直接清 .work-meta"
   fixture_setup
 
-  work_dir=$(fixture_create_work "work-001" "test" 4)
-
-  # 把模块三件套 + .work-meta 落到 main（无 worktree 路径要求模块已在 main）
-  main_module="$FIXTURE_DIR/docs/modules/build-work-001-test"
-  mkdir -p "$main_module"
-  cp -R "$work_dir/." "$main_module/"
-  (cd "$FIXTURE_DIR" && git add -A && git commit -q -m "mirror module on main")
-
-  # 删 work branch + worktree
-  git -C "$FIXTURE_DIR" worktree remove "$FIXTURE_DIR/.worktrees/build-work-001-test" --force 2>/dev/null || \
-    rm -rf "$FIXTURE_DIR/.worktrees/build-work-001-test"
-  git -C "$FIXTURE_DIR" branch -D "build-work-001-test" 2>/dev/null || true
+  main_module=$(fixture_create_main_work "work-001" "test" 4)
 
   if (cd "$FIXTURE_DIR" && bash "$CLOSE_WORK" "$main_module") >/tmp/out.$$ 2>/tmp/err.$$; then
     # 模块 .work-meta 已被清
@@ -57,33 +46,64 @@ test_no_branch_closes_via_main() {
 }
 
 # =================================================
-# I-CR4（方案 A 新语义）：无 worktree（分支在但 worktree 没了）→ main 直接清
+# I-CR4：build.mode=worktree 但 worktree 缺失 → 拒绝，不退化 main 直收
 # =================================================
-test_no_worktree_closes_via_main() {
-  start_test "I-CR4 no worktree → main 直接清 .work-meta（不拒绝）"
+test_worktree_contract_rejects_missing_worktree() {
+  start_test "I-CR4 worktree contract rejects missing worktree"
   fixture_setup
 
   work_dir=$(fixture_create_work "work-001" "test" 4)
-
-  # 模块三件套落 main
   main_module="$FIXTURE_DIR/docs/modules/build-work-001-test"
   mkdir -p "$main_module"
   cp -R "$work_dir/." "$main_module/"
   (cd "$FIXTURE_DIR" && git add -A && git commit -q -m "mirror module on main")
 
-  # 删 worktree 目录但保留分支
   git -C "$FIXTURE_DIR" worktree remove "$FIXTURE_DIR/.worktrees/build-work-001-test" --force 2>/dev/null || \
     rm -rf "$FIXTURE_DIR/.worktrees/build-work-001-test"
 
   if (cd "$FIXTURE_DIR" && bash "$CLOSE_WORK" "$main_module") >/tmp/out.$$ 2>/tmp/err.$$; then
-    if [ -f "$main_module/.work-meta.json" ]; then
-      _fail "module .work-meta should be cleared on no-worktree path"
-    else
-      pass_test
-    fi
+    _fail "close-work should reject missing worktree when build contract says worktree"
   else
-    _fail "close-work should succeed on no-worktree path (main clear)"
-    cat /tmp/err.$$ >&2
+    if grep -q "build 合同要求隔离环境" /tmp/err.$$; then
+      pass_test
+    else
+      _fail "stderr missing build-contract missing worktree guidance"
+      cat /tmp/err.$$ >&2
+    fi
+  fi
+
+  rm -f /tmp/out.$$ /tmp/err.$$
+  fixture_teardown
+}
+
+test_reject_missing_build_contract() {
+  start_test "I-CR12 reject close when .work-meta lacks build contract"
+  fixture_setup
+
+  work_dir=$(fixture_create_work "work-001" "test" 4)
+  python3 - "$work_dir/.work-meta.json" <<'PY'
+import json, sys
+from pathlib import Path
+p = Path(sys.argv[1])
+meta = json.loads(p.read_text())
+meta.pop("build", None)
+p.write_text(json.dumps(meta, ensure_ascii=False, indent=2) + "\n")
+PY
+  (
+    cd "$FIXTURE_DIR/.worktrees/build-work-001-test"
+    git add docs/modules/build-work-001-test/.work-meta.json
+    git commit -q -m "remove build contract"
+  )
+
+  if (cd "$FIXTURE_DIR" && bash "$CLOSE_WORK" "$work_dir") >/tmp/out.$$ 2>/tmp/err.$$; then
+    _fail "close-work should reject missing build contract"
+  else
+    if grep -q "缺少 build 合同" /tmp/err.$$; then
+      pass_test
+    else
+      _fail "stderr missing missing-build-contract guidance"
+      cat /tmp/err.$$ >&2
+    fi
   fi
 
   rm -f /tmp/out.$$ /tmp/err.$$
@@ -333,8 +353,9 @@ test_reject_if_work_worktree_has_unrelated_dirty_changes() {
 # =================================================
 # Run all tests
 # =================================================
-test_no_branch_closes_via_main
-test_no_worktree_closes_via_main
+test_main_mode_closes_via_main
+test_worktree_contract_rejects_missing_worktree
+test_reject_missing_build_contract
 test_reject_when_cwd_inside_work_worktree
 test_reject_if_work_worktree_has_unrelated_dirty_changes
 test_reject_on_merge_conflict_no_partial_state

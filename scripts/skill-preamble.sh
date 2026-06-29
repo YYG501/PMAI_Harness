@@ -74,6 +74,34 @@ CURRENT_WORKTREE_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
 
 REPO_ROOT="$CURRENT_WORKTREE_ROOT"
 
+# --- 2b. 检测当前业务仓是否已接入 PMAI ---
+# 用 marker 判断，不用 "docs/ 是否存在"：已有代码库常自带 docs/，但仍未初始化 PMAI。
+_pmai_is_generator_repo() {
+  [ -f "$REPO_ROOT/scripts/init-project.sh" ]
+}
+
+_pmai_file_mentions_pmai() {
+  local file="$1"
+  [ -f "$file" ] || return 1
+  grep -qE 'PMAI|/pmai-' "$file" 2>/dev/null
+}
+
+_pmai_has_project_marker() {
+  [ -f "$REPO_ROOT/PRODUCT.md" ] && return 0
+  [ -f "$REPO_ROOT/PRODUCT-STATE.md" ] && return 0
+  [ -f "$REPO_ROOT/docs/CONTEXT.md" ] && return 0
+  [ -f "$REPO_ROOT/.pm-workflow/config.yml" ] && return 0
+  [ -f "$REPO_ROOT/.codex/hooks.json" ] && return 0
+  _pmai_file_mentions_pmai "$REPO_ROOT/AGENTS.md" && return 0
+  _pmai_file_mentions_pmai "$REPO_ROOT/CLAUDE.md" && return 0
+  return 1
+}
+
+PMAI_PROJECT_INITIALIZED=1
+if ! _pmai_is_generator_repo && ! _pmai_has_project_marker; then
+  PMAI_PROJECT_INITIALIZED=0
+fi
+
 # --- 3. 检测 worktree 类型 ---
 WORKTREE_TYPE="main"
 if [[ "$BRANCH" == build-* ]]; then
@@ -206,6 +234,12 @@ echo "MAIN_REPO_ROOT: $MAIN_REPO_ROOT"
 echo "REPO_ROOT: $REPO_ROOT"
 echo "BRANCH: $BRANCH"
 echo "WORKTREE_TYPE: $WORKTREE_TYPE"
+echo "PMAI_PROJECT_INITIALIZED: $PMAI_PROJECT_INITIALIZED"
+if [ "$PMAI_PROJECT_INITIALIZED" = "0" ]; then
+  echo "⚠️ 当前目录还没有 PMAI 初始化。"
+  echo "下一步：先发 /pmai-init-project；它会自动判断全新项目 / 已有代码库。"
+  echo "在完成初始化或接入前，其它 /pmai-* skill 不应继续写项目产物。"
+fi
 if [ "$ACTIVE_WORK_COUNT" -eq 1 ]; then
   echo "ACTIVE_WORK: $ACTIVE_WORK (当前进度 $ACTIVE_WORK_STAGE)"
 elif [ "$ACTIVE_WORK_COUNT" -gt 1 ]; then
@@ -221,4 +255,5 @@ if [ -n "$ACTIVE_WORK" ] || ls "$MAIN_REPO_ROOT"/.worktrees/build-* >/dev/null 2
 fi
 
 export MAIN_REPO_ROOT REPO_ROOT CURRENT_WORKTREE_ROOT BRANCH WORKTREE_TYPE
+export PMAI_PROJECT_INITIALIZED
 export ACTIVE_WORK ACTIVE_WORK_STAGE ACTIVE_WORK_DIR ACTIVE_WORK_COUNT

@@ -41,7 +41,7 @@ done
 [ -n "$BRIEF" ] || { echo "缺 --brief" >&2; exit 2; }
 [ -n "$OUT" ]   || { echo "缺 --out" >&2; exit 2; }
 
-# --out 相对路径按 --cwd 解析（让图落进项目 mocks/，而非 ~/.codex/generated_images）
+# --out 相对路径按 --cwd 解析（让图落进项目 mockups/，而非 ~/.codex/generated_images）
 case "$OUT" in
   /*) OUT_ABS="$OUT" ;;
   *)  OUT_ABS="$CWD/$OUT" ;;

@@ -21,8 +21,8 @@ CORE_SKILLS=(
   init-project
   design
   build
-  close
-  cancel
+  build-close
+  build-cancel
 )
 
 # -----------------------------------------------------------------

@@ -21,7 +21,7 @@ quick-fix 只面向当前主线的小改。脚本创建 `tmp-quick-*` worktree�
 | 启动位置 | 行为 |
 |---|---|
 | 主仓根 + 当前 main | 允许，base = main |
-| `.worktrees/pmai-build-*` | 拒绝；先回主仓或完成 `/pmai-build` / `/pmai-close` |
+| `.worktrees/pmai-build-*` | 拒绝；先回主仓或完成 `/pmai-build` / `/pmai-build-close` |
 | 其他分支 / 历史 worktree | 拒绝；避免把小修合进错误基线 |
 
 ## Preamble
@@ -84,7 +84,7 @@ short-circuit：仅 typo / 格式 / 引用更新时，可输出简化版扫描�
 **越界时拒绝 quick-fix**：
 - 改动会改变模块 `spec.md` 的核心产品决策 → 走 `/pmai-design` 重新拍板，并由 `/pmai-prd-writing` 模块规格模式修订 `spec.md`。
 - 改动会新增或大改 `prototype/` 一片功能 → 走 `/pmai-build`。
-- 改动会改项目级规则 / 术语并需要 PM 逐条拍 → 走 `/pmai-close` 或 `/pmai-design`。
+- 改动会改项目级规则 / 术语并需要 PM 逐条拍 → 走 `/pmai-record` 或 `/pmai-design`；已经进入 build 且 PM 验收通过才走 `/pmai-build-close`。
 
 ### 步骤 4：完成改动后让脚本收口
 
@@ -123,12 +123,12 @@ bash "$PMAI_HOME/scripts/quick-fix.sh" --snapshot
 
 | 改对象 | 同时要考虑 |
 |---|---|
-| `prototype/**` | 对应 `docs/modules/<模块>/spec.md`、`docs/modules/<模块>/decisions.md`、`docs/DESIGN.md`、`docs/PRODUCT-STATE.md` |
-| `docs/modules/<模块>/spec.md` | `prototype/**` 是否已反映、`docs/modules/<模块>/decisions.md` 是否需要记录为什么、`docs/PRODUCT-RULES.md` 是否有跨模块规则冲突 |
+| `prototype/**` | 对应 `docs/modules/<模块>/spec.md`、`docs/modules/<模块>/decisions.md`、`DESIGN.md`、`PRODUCT-STATE.md` |
+| `docs/modules/<模块>/spec.md` | `prototype/**` 是否已反映、`docs/modules/<模块>/decisions.md` 是否需要记录为什么、`PRODUCT-RULES.md` 是否有跨模块规则冲突 |
 | `docs/modules/<模块>/decisions.md` | `spec.md` 是否要同步结论、`PRODUCT-RULES.md` 是否已有更高层规则 |
-| `docs/PRODUCT-STATE.md` | `docs/modules/INDEX.md`、相关模块 `spec.md`、主原型是否一致 |
-| `docs/PRODUCT-RULES.md` | 相关模块 `decisions.md` / `spec.md` 是否需要引用或避免冲突 |
-| `docs/DESIGN.md` | `prototype/**` 是否遵循；若只是视觉规则文字修订，不强制改原型 |
+| `PRODUCT-STATE.md` | `docs/modules/INDEX.md`、相关模块 `spec.md`、主原型是否一致 |
+| `PRODUCT-RULES.md` | 相关模块 `decisions.md` / `spec.md` 是否需要引用或避免冲突 |
+| `DESIGN.md` | `prototype/**` 是否遵循；若只是视觉规则文字修订，不强制改原型 |
 | `docs/inputs/**` | 只改材料归档 / 引用，不反向改产品合同 |
 | `templates/` / `scripts/` / `skills/` | 这是框架自身改动；小修可做，但要跑相关测试，不按产品合同扫描 |
 | 其他 target | 按 §3.5.2 概念分类自行推断 |
@@ -137,13 +137,13 @@ bash "$PMAI_HOME/scripts/quick-fix.sh" --snapshot
 
 ```text
 当前合同（被改动撤销/修订时必须同步，扫描必扫）：
-- 项目级活合同：docs/PRODUCT-STATE.md / docs/PRODUCT-RULES.md / docs/DESIGN.md
+- 项目级活合同：PRODUCT-STATE.md / PRODUCT-RULES.md / DESIGN.md
 - 模块合同：docs/modules/<模块>/discussion.md / decisions.md / spec.md
 - 项目代码：prototype/
 
 历史档案（只作叙述维护，不强制反向扫）：
-- docs/归档/**
-- docs/归档/** 中明确标为历史或已废弃的设计稿
+- docs/archive/**
+- docs/archive/** 中明确标为历史或已废弃的设计稿
 
 输入材料（证据，不是产品合同）：
 - docs/inputs/**

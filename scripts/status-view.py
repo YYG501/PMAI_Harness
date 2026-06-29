@@ -120,47 +120,191 @@ def _product_oneliner(repo_root: Path) -> str:
     return ""
 
 
+def _git_status_lines(repo_root: Path) -> list[str]:
+    try:
+        result = subprocess.run(
+            ["git", "-C", str(repo_root), "status", "--short", "--untracked-files=all"],
+            check=False,
+            text=True,
+            capture_output=True,
+        )
+    except Exception:
+        return []
+    if result.returncode != 0:
+        return []
+    return [line for line in result.stdout.splitlines() if line.strip()]
+
+
+def _dirty_module_names(status_lines: list[str]) -> list[str]:
+    names: list[str] = []
+    seen: set[str] = set()
+    for line in status_lines:
+        path = line[3:] if len(line) > 3 else line
+        path = path.strip()
+        if path.startswith("docs/modules/"):
+            parts = path.split("/")
+            if len(parts) >= 3 and parts[2] and parts[2] not in seen:
+                seen.add(parts[2])
+                names.append(parts[2])
+    return names
+
+
+def _work_display_name(work_view: dict) -> str:
+    meta = work_view["meta"] or {}
+    name = str(meta.get("name") or "").strip()
+    work_id = str(meta.get("id") or "").strip()
+    if name and name != "?":
+        return name
+    if work_id and work_id != "?":
+        return work_id
+    return work_view["work_dir"].name
+
+
+def _stage_status_text(stage: int) -> str:
+    if stage <= 1:
+        return "还在设计讨论。"
+    if stage == 2:
+        return "等待实现或正在实现。"
+    if stage == 3:
+        return "正在复审。"
+    if stage >= 4:
+        return "等待收尾。"
+    return "状态不明确。"
+
+
+def _work_priority(work_view: dict) -> tuple[int, str]:
+    meta = work_view["meta"] or {}
+    stage = int(meta.get("stage", 0) or 0)
+    if stage >= 4:
+        priority = 0
+    elif stage == 3:
+        priority = 1
+    elif stage == 2:
+        priority = 2
+    else:
+        priority = 3
+    return priority, _work_display_name(work_view)
+
+
+def _is_generator_repo(repo_root: Path) -> bool:
+    """The PMAI framework repo is not a consumer project."""
+    return (repo_root / "scripts" / "init-project.sh").exists()
+
+
+def _file_mentions_pmai(path: Path) -> bool:
+    try:
+        text = path.read_text(encoding="utf-8", errors="ignore")
+    except OSError:
+        return False
+    return "PMAI" in text or "/pmai-" in text
+
+
+def _has_pmai_project_marker(repo_root: Path) -> bool:
+    """Detect whether a directory is already a PMAI consumer project.
+
+    This is intentionally marker-based rather than "does docs/ exist": existing
+    codebases often have their own docs directory, and those still need the
+    init-project entry to choose the brownfield path.
+    """
+    docs_dir = repo_root / "docs"
+    marker_paths = [
+        repo_root / "PRODUCT.md",
+        repo_root / "PRODUCT-STATE.md",
+        docs_dir / "PRODUCT.md",
+        docs_dir / "PRODUCT-STATE.md",
+        docs_dir / "CONTEXT.md",
+        repo_root / ".pm-workflow" / "config.yml",
+        repo_root / ".codex" / "hooks.json",
+    ]
+    if any(path.exists() for path in marker_paths):
+        return True
+    return _file_mentions_pmai(repo_root / "AGENTS.md") or _file_mentions_pmai(
+        repo_root / "CLAUDE.md"
+    )
+
+
+def is_uninitialized_project(repo_root: Path) -> bool:
+    """True when a non-framework repo has no PMAI project markers yet."""
+    return not _is_generator_repo(repo_root) and not _has_pmai_project_marker(repo_root)
+
+
+def render_uninitialized_project_hint(repo_root: Path) -> None:
+    print()
+    print("💡 项目体检：这个目录还没有 PMAI 初始化")
+    print("  下一步：发 /pmai-init-project。")
+    print("  如果这是已有代码库，/pmai-init-project 会自动进入代码现状盘点；不需要手动改跑其它 skill。")
+    print("  在完成初始化或接入前，其它 /pmai-* skill 不应继续写项目产物。")
+
+
 def render_narrative(state: dict, repo_root: Path) -> None:
     """M5 /  : AI 可直接念的进度叙述（产品轴）。
 
     范围（codex C-4 降级）：当前 active work / 当前 stage / 产物文件 / 最近 transition；
     **不到小节级**（如「§四」/ commit hash 全文 不写，伪精确）。
 
-    无 active work → 输出"目前没有 active work"，**不编造**（review R7 防幻觉）。
+    无进行中工作 → 输出"没有进行中的工作"；若工作区有未提交改动，
+    优先提示"有一轮改动还没收口"，**不编造**（review R7 防幻觉）。
     """
-    active = state["active_work"]
+    active = sorted(state["active_work"], key=_work_priority)
+    dirty_lines = [] if _is_generator_repo(repo_root) else _git_status_lines(repo_root)
     if not active:
-        print("目前没有 active work。可以发 /pmai-design 设计新功能，或发 /pmai-init-project 起新项目。")
+        if dirty_lines:
+            dirty_modules = _dirty_module_names(dirty_lines)
+            print("当前状态：有一轮改动还没收口")
+            if dirty_modules:
+                print()
+                print("涉及模块：" + "、".join(dirty_modules))
+            print()
+            print("需要注意：当前有未提交改动，它们不是已经完成的稳定状态。")
+            print("建议下一步：先把这轮改动固定到独立分支或提交点，再继续验证和收口。")
+        else:
+            print("当前状态：没有进行中的工作")
+            print()
+            print("建议下一步：发 /pmai-design 起一个模块工作。")
         return
 
     # 单个工作场景：直接念
     if len(active) == 1:
         work = active[0]
         meta = work["meta"] or {}
-        work_id = work["work_dir"].name
         stage = meta.get("stage", 0)
         stage_name = STAGE_NAMES.get(int(stage), "未知") if stage else "未知"
         # 不写 commit hash / 时间细节；只点 stage 状态
         prod = _product_oneliner(repo_root)
         prod_line = f"你的产品：{prod}\n" if prod else ""
+        dirty_suffix = "，且主线工作区有未提交改动" if dirty_lines else ""
         print(
-            f"{prod_line}当前在做 {work_id}。\n当前进度：{stage_name}。"
-            f"\n下一步：{suggest_next_action(work)}"
+            f"当前状态：有 1 个进行中的工作{dirty_suffix}\n\n"
+            f"{prod_line}正在处理：{_work_display_name(work)}。\n"
+            f"状态：{_stage_status_text(int(stage or 0))}\n"
+            f"当前步骤：{stage_name}。\n"
+            f"下一步：{suggest_next_action(work)}"
         )
+        if dirty_lines:
+            print("\n需要注意：主线工作区有未提交改动，先确认这些改动是否属于当前工作。")
         return
 
     # 多个工作场景：产品轴 lead + 列各工作概况
     prod = _product_oneliner(repo_root)
+    dirty_suffix = "，且主线工作区有未提交改动" if dirty_lines else ""
+    print(f"当前状态：有 {len(active)} 个进行中的工作{dirty_suffix}")
     if prod:
+        print()
         print(f"你的产品：{prod}")
-    print(f"目前有 {len(active)} 个 active work：")
-    for work in active:
+    print()
+    print("进行中的工作：")
+    for idx, work in enumerate(active, 1):
         meta = work["meta"] or {}
-        work_id = work["work_dir"].name
         stage = meta.get("stage", 0)
         stage_name = STAGE_NAMES.get(int(stage), "未知") if stage else "未知"
-        print(f"  - {work_id}：当前进度 {stage_name}")
-    print("\n下一步：发 /pmai-status 看详细；推进时按具体工作选择 /pmai-design、/pmai-build 或 /pmai-close。")
+        print()
+        print(f"{idx}. {_work_display_name(work)}")
+        print(f"   状态：{_stage_status_text(int(stage or 0))}")
+        print(f"   当前步骤：{stage_name}。")
+        print(f"   下一步：{suggest_next_action(work)}")
+    if dirty_lines:
+        print()
+        print("需要注意：主线工作区有未提交改动，先处理这部分，再继续其它 build。")
 
 
 def render_health_check(repo_root: Path) -> None:
@@ -176,7 +320,11 @@ def render_health_check(repo_root: Path) -> None:
     生成器仓自身（根有 `scripts/init-project.sh`，framework 资产在根而非 `.claude/`）
     不是业务仓，跳过；只在业务仓里跑。
     """
-    if (repo_root / "scripts" / "init-project.sh").exists():
+    if _is_generator_repo(repo_root):
+        return
+
+    if is_uninitialized_project(repo_root):
+        render_uninitialized_project_hint(repo_root)
         return
 
     docs_dir = repo_root / "docs"
@@ -185,19 +333,28 @@ def render_health_check(repo_root: Path) -> None:
 
     missing: list = []
 
-    if not (docs_dir / "PRODUCT.md").exists():
+    if not (repo_root / "PRODUCT.md").exists():
         if (docs_dir / "CONTEXT.md").exists():
             missing.append(
-                ("docs/PRODUCT.md", "可能漏跑 migrate-context-to-project.py — docs/CONTEXT.md 还在")
+                ("PRODUCT.md", "可能漏跑 migrate-context-to-project.py — docs/CONTEXT.md 还在")
             )
+        elif (docs_dir / "PRODUCT.md").exists():
+            missing.append(("PRODUCT.md", "旧布局里还在 docs/PRODUCT.md；新布局应放仓库根目录"))
         else:
-            missing.append(("docs/PRODUCT.md", "项目级文档主真相源；跑 /pmai-init-project 或 /pmai-strategy 起新建"))
+            missing.append(("PRODUCT.md", "项目级文档主真相源；未初始化跑 /pmai-init-project，已初始化重定方向跑 /pmai-direction"))
 
-    if not (docs_dir / "PRODUCT-RULES.md").exists():
-        missing.append(("docs/PRODUCT-RULES.md", "GSD §8 新增的产品规则文档"))
+    for filename, hint in (
+        ("PRODUCT-STATE.md", "产品现状 hub"),
+        ("DESIGN.md", "视觉和交互基线"),
+        ("PRODUCT-RULES.md", "跨模块产品规则文档"),
+        ("TODO.md", "PM 待办池"),
+    ):
+        if not (repo_root / filename).exists():
+            if (docs_dir / filename).exists():
+                missing.append((filename, f"旧布局里还在 docs/{filename}；新布局应放仓库根目录"))
+            else:
+                missing.append((filename, hint))
 
-    if not (docs_dir / "TODO.md").exists():
-        missing.append(("docs/TODO.md", "PM 待办池"))
 
     if not missing:
         return
@@ -206,7 +363,7 @@ def render_health_check(repo_root: Path) -> None:
     print("💡 项目体检：缺以下产品级文档")
     for path, hint in missing:
         print(f"  - {path}（{hint}）")
-    print("  补法：发 /pmai-strategy（skill 会按场景引导补全）")
+    print("  补法：未初始化发 /pmai-init-project；已初始化项目发 /pmai-direction 校准方向")
 
 
 def suggest_next_action(work_view: dict) -> str:
@@ -225,11 +382,11 @@ def suggest_next_action(work_view: dict) -> str:
 
     # 复审（3）
     if stage == 3:
-        return "当前进度：复审；继续 /pmai-build 的复审与验收；通过后发 /pmai-close"
+        return "当前进度：复审；继续 /pmai-build 的复审与验收；通过后发 /pmai-build-close"
 
-    # 沉淀（≥4 = MAX_STAGE）
+    # build-close（≥4 = MAX_STAGE）
     if stage >= 4:
-        return "当前进度：沉淀；运行 /pmai-close 沉淀产品现状 + 收尾当前工作"
+        return "当前进度：build-close；运行 /pmai-build-close 对齐产品现状、规则和模块规格"
 
     return "运行 /pmai-status 查看详情"
 
@@ -434,6 +591,12 @@ def main() -> None:
         repo_root = Path(args.repo_root)
     else:
         repo_root = find_repo_root()
+
+    if is_uninitialized_project(repo_root):
+        if args.banner_only:
+            print(f"━━━ PMAI ► {args.skill} ▸ 项目未初始化 ━━━")
+        render_uninitialized_project_hint(repo_root)
+        return
 
     if args.timeline:
         limit = None if args.all else args.limit

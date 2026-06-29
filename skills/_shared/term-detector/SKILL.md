@@ -1,14 +1,13 @@
 ---
 name: _shared/term-detector
 description: |
-  业务词 / 角色发现检测器（共享逻辑）。当前由 `/pmai-close` 调用，识别本次工作真实落地的新业务词 / 角色，
+  业务词 / 角色发现检测器（共享逻辑）。当前由 `/pmai-build-close` 调用，识别本次工作真实落地的新业务词 / 角色，
   patch 进 PRODUCT 业务术语表 / 用户画像。
 ---
 
 # _shared/term-detector
 
-> ** 共享 detector**。不是 user-facing skill，而是写作 skill 的共
-> 享逻辑落点。
+> **共享 detector**。不是 user-facing skill，而是写作 skill 的共享逻辑落点。
 >
 > **设计**：业务实体真正稳定要等 design/pmai-build/复审完成后再沉淀；PRD 写作阶段不直接 patch 长期术语表。本次工作内的临时词典职责由模块 `discussion.md` / `decisions.md` 或 PRD §三名词解释承担。
 
@@ -16,22 +15,22 @@ description: |
 
 | 调用 skill | 调用位置 | 输入文件 |
 |---|---|---|
-| `/pmai-close` | 术语回写步骤 | 涉及模块 `discussion.md` / `decisions.md` / `spec.md` + 按需功能型文档 |
+| `/pmai-build-close` | 术语回写步骤 | 涉及模块 `discussion.md` / `decisions.md` / `spec.md` + 按需功能型文档 |
 
 **禁止位置**：
 - `design` 刚开始：PM 修辞密度高、业务词还没沉淀
 - `/pmai-design` 探索中：业务词还在变
 - `prd-writing` 写功能型文档：功能型文档是评审 / build 产物，不直接升级长期术语
-- 写工程合同（`.engineering.md`）：工程层允许技术词，误报率高
+- 写实现深水区 / 技术约束内容：工程层允许技术词，误报率高
 
 ## 临时词典 vs 长期词典
 
 | 层级 | 文件 | 谁写 | 谁读 |
 |---|---|---|---|
-| **本次工作临时词典** | 模块 `discussion.md` / `decisions.md` 或功能型文档 §三 名词解释 | design / prd-writing | build / close 按需读 |
-| **跨工作长期词典** | `docs/PRODUCT.md ## 业务术语表` | `/pmai-close` detector + PM 确认 → patch | design / build / prd-writing 必读 |
+| **本次工作临时词典** | 模块 `discussion.md` / `decisions.md` 或功能型文档 §三 名词解释 | design / prd-writing | build / build-close 按需读 |
+| **跨工作长期词典** | `PRODUCT.md ## 业务术语表` | `/pmai-build-close` detector + PM 确认 → patch | design / build / prd-writing 必读 |
 
-两份词典在 build 阶段是**并集读**：PRODUCT 是已沉淀的稳定基线，模块 discussion/decisions 或 PRD §三是本次新引入还未升级的临时词。`/pmai-close` 时 detector 把真稳定下来的词 promote 到长期词典。
+两份词典在 build 阶段是**并集读**：PRODUCT 是已沉淀的稳定基线，模块 discussion/decisions 或 PRD §三是本次新引入还未升级的临时词。`/pmai-build-close` 时 detector 把真稳定下来的词 promote 到长期词典。
 
 ## 如何调用
 
@@ -96,7 +95,7 @@ with open('$SKIP_FILE', 'w') as f: json.dump(data, f, ensure_ascii=False, indent
 "
 ```
 
-**生命周期**：随当前工作；/pmai-close 或 /pmai-cancel 后清空（不持久跨工作）。
+**生命周期**：随当前工作；/pmai-build-close 或 /pmai-build-cancel 后清空（不持久跨工作）。
 
 ## 决策依据
 
@@ -105,4 +104,4 @@ with open('$SKIP_FILE', 'w') as f: json.dump(data, f, ensure_ascii=False, indent
 ## 不另起新 skill
 
 本 detector 是**内部共享逻辑**（`_shared/`），不出现在 PM 的 user-facing
-skill 列表里。PM 看到的是 4 个写作 skill 各自的产出 + 业务词提示。
+skill 列表里。PM 看到的是业务流程里的产出 + 业务词提示。

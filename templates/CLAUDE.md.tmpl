@@ -15,7 +15,7 @@
 | 角色 | 职责 |
 |---|---|
 | PM | 决策、确认、验收。不写代码。默认一个窗口 |
-| 驱动 AI | PM 这个窗口里的 AI：范围确认 / design、派发 build、跑复审、呈交验收、close 沉淀 |
+| 驱动 AI | PM 这个窗口里的 AI：范围确认 / design、派发 build、跑复审、呈交验收、build-close 收尾 |
 | 执行器 | `/pmai-build` 时可选的独立执行器（Claude Code / Codex / Cursor / Gemini / PM 手动），按当前功能锚点在 `prototype/` 里建 |
 
 ### 状态与文件真相源
@@ -27,12 +27,12 @@
 - 模块决策：`docs/modules/<模块>/decisions.md`
 - 模块规格：`docs/modules/<模块>/spec.md`
 - 功能型文档：`docs/modules/<按内容命名>.md`
-- 项目现状：`docs/PRODUCT-STATE.md`
-- 跨模块规则：`docs/PRODUCT-RULES.md`
-- 视觉规范：`docs/DESIGN.md`
+- 项目现状：`PRODUCT-STATE.md`
+- 跨模块规则：`PRODUCT-RULES.md`
+- 视觉规范：`DESIGN.md`
 - 文档索引：`docs/INDEX.md`
 - 主原型：`prototype/`
-- 输入材料：`docs/inputs/<类别>/`
+- 输入材料：`docs/inputs/<类别>/`（材料按类型留存；当前模块引用记录在模块 `.work-meta.json`）
 
 不要创建 `requirements/active|closed`、`task-plan.md` 或 `tasks/task-NNN.md`。历史仓库里如果还有这些文件，只作归档/迁移证据，不作为新流程入口。
 
@@ -40,18 +40,19 @@
 
 | 档 | 什么时候 | 怎么走 | 收尾 |
 |---|---|---|---|
-| 轻 | typo、链接、格式、很小代码修补 | `/pmai-quick-fix` 或 main 上直接小改 | `/pmai-deposit` 或 `/pmai-close` |
-| 中 | 一个模块内的完整讨论 / 规格演进 | `/pmai-design` / `/pmai-status` | `/pmai-close` |
-| 重 | 需要实际建一片原型功能 | `/pmai-design` 定稿模块 `spec.md` 或确认功能型文档 → `/pmai-build <模块或文档>` → 复审 | `/pmai-close` |
+| 轻 | typo、链接、格式、很小代码修补 | `/pmai-quick-fix` 或 main 上直接小改 | 需要沉淀长期基线时 `/pmai-record` |
+| 中 | 一个模块内的完整讨论 / 规格演进 | `/pmai-design` / `/pmai-status` | 可先停住；需要沉淀术语 / 规则 / 当前设计状态时 `/pmai-record` |
+| 重 | 需要实际建一片原型功能 | `/pmai-design` 定稿模块 `spec.md` 或确认功能型文档 → `/pmai-build <模块或文档>` → 复审 | PM 验收后 `/pmai-build-close` |
 
 ### 主入口
 
-- `/pmai-init-project` — 起新项目，建项目底座。
+- `/pmai-init-project` — 项目初始化统一入口：全新项目建底座，已有代码库自动盘点现状。
+- `/pmai-direction` — 项目方向校准：已接入项目的方向重定 / 路线规划。
 - `/pmai-design "<一句话需求>"` — 起新功能 / 重做模块，写模块三件套。
 - `/pmai-design <模块>` — 讨论、收范围、写模块三件套。
 - `/pmai-build <模块或功能文档>` — 对着模块 `spec.md` 或 `docs/modules/<按内容命名>.md` 在 `prototype/` 建。
 - `/pmai-status` — 读当前状态，提示下一步并拉起对应入口。
-- `/pmai-close` — 收尾沉淀：现状、决策、术语、模块规格、输入材料归位；有 build worktree 则合回 main。
+- `/pmai-build-close` — build 验收后的收尾：提交 / 合并实现改动，按最终原型对齐模块决策与规格，更新产品现状、术语和跨模块规则。
 - `/pmai-status` — 只读现状视图。
 - `/pmai-prd-writing` — 功能型文档成文器；PRD、功能需求、功能描述、功能规格、功能评审稿都走它。
 - `/pmai-doc-writing` — 介绍型文档成文器；产品介绍、功能清单、优势说明、一页纸、汇报材料默认落 `docs/deliverables/`。
@@ -60,15 +61,18 @@
 
 - AI 任何阶段都必须先说清「要做 X / 要你拍 Y」，PM 答完再动手。
 - PM 没答确认门之前，不写 PM 视图文件、不提交、不合并、不推进状态。
-- 关键拍板点：范围定稿、结构/命名决策、build 执行方式、复审验收、close 沉淀。
+- 关键拍板点：范围定稿、结构/命名决策、build 执行方式、复审验收、build-close 收尾。
 
 ### build 纪律
 
 - build 的功能锚点是模块 `spec.md` 或 `docs/modules/<按内容命名>.md` 的功能型文档，不是 task 文件。
-- 动手前必须读 `docs/DESIGN.md`。
+- 动手前必须读 `DESIGN.md`。
+- `/pmai-build` 动手前必须先问完两道 PM 选择：执行方式（开隔离环境 / 直接主线）和执行器（Claude Code / Codex / Cursor / Gemini / PM 手动）。没拿到两个答案前，只能读文件和查状态，不得修改 `prototype/`、`Sources/` 或任何业务代码。
+- 如果模块 `spec.md` / `decisions.md` / `mockups/` 看版 / 功能型文档还在未提交或未跟踪状态，先固定本次设计上下文或停住；不得以“隔离环境拿不到这些未跟踪文件”为由跳过选择、直接改 main。
+- `/pmai-build` 拿到两道 PM 答案后必须写入当前模块 `.work-meta.json:build` 合同；`/pmai-build-close` 只按该合同收尾。缺合同、缺实现提交或缺 PM 验收记录时，先补上下文，不得把分支提交误报成已收尾。
 - 代码改动集中在 `prototype/`。执行器如改了 `docs/**`，必须呈交 PM 决定保留还是回退。
 - 大需求可开 `.worktrees/pmai-build-*` 隔离环境；小改可直接在 main 上做。
-- 使用外部执行器前，目标 worktree 必须 clean；dirty 时先让 PM决定提交 checkpoint、清理或取消。
+- 使用外部执行器前，目标 worktree 必须 clean；dirty 时先让 PM 决定提交 checkpoint、清理或取消。
 
 ### Review 工具
 
@@ -82,18 +86,18 @@ Subagent 适合一次性读文件、第二视角评审、独立查询；不适�
 
 | 文档 | 路径 | 说明 |
 |---|---|---|
-| 产品背景 | `docs/PRODUCT.md` | 产品定位 / 用户画像 / 技术栈 / 业务术语表 |
-| 产品现状 | `docs/PRODUCT-STATE.md` | 当前产品长什么样、做到哪、哪些真哪些 mock |
-| 视觉规范 | `docs/DESIGN.md` | 颜色、字体、组件、交互规范 |
-| 跨模块规则 | `docs/PRODUCT-RULES.md` | 全项目产品行为规则 |
+| 产品背景 | `PRODUCT.md` | 产品定位 / 用户画像 / 技术栈 / 业务术语表 |
+| 产品现状 | `PRODUCT-STATE.md` | 当前产品长什么样、做到哪、哪些真哪些 mock |
+| 视觉规范 | `DESIGN.md` | 颜色、字体、组件、交互规范 |
+| 跨模块规则 | `PRODUCT-RULES.md` | 全项目产品行为规则 |
 | 文档索引 | `docs/INDEX.md` | 消费仓文档入口，说明各类材料去哪找 |
 | 模块索引 | `docs/modules/INDEX.md` | 模块上下文与功能型文档索引 |
 | 模块三件套 | `docs/modules/<模块>/discussion.md` / `decisions.md` / `spec.md` | 讨论、决策、规格 |
 | 功能型文档 | `docs/modules/<按内容命名>.md` | PRD、功能需求、功能描述、功能规格、功能评审稿 |
-| 项目决策档案 | `docs/project-decisions/` | 重大项目级决策 / 理路冻结档，默认不写 |
-| 输入材料 | `docs/inputs/<类别>/` | PM 上传 / 调研 / 竞品 / 旧文档等材料 |
-| 探索变体 | `mocks/` | 探索期 mock，看版与退役记录 |
-| 待办池 | `docs/TODO.md` | PM 真说过想做但未开工的事项 |
+| 项目决策档案 | `docs/decisions/` | 重大项目级决策 / 理路冻结档，默认不写 |
+| 输入材料 | `docs/inputs/<类别>/` | PM 上传 / 调研 / 竞品 / 旧文档等材料；当前模块引用记录在模块 `.work-meta.json` |
+| 探索变体 | `mockups/` | 探索期 mock，看版与退役记录 |
+| 待办池 | `TODO.md` | PM 真说过想做但未开工的事项 |
 | 介绍型材料 | `docs/deliverables/` | 产品介绍、产品功能清单、产品优势说明、一页纸等，默认 Markdown |
 
 ## 项目背景
@@ -112,40 +116,47 @@ Subagent 适合一次性读文件、第二视角评审、独立查询；不适�
 
 **文档入口分两层**：
 
-- **必读核心** = `docs/PRODUCT-STATE.md`：进项目就读，是当前产品现状 hub。
+- **必读核心** = `PRODUCT-STATE.md`：进项目就读，是当前产品现状 hub。
 - **文档索引** = `docs/INDEX.md`：要找模块、功能型文档、输入材料、项目决策档案、介绍型材料时先看这里。
 
 新建任何文档前，对照 `$PMAI_HOME/templates/文档地图.md` 判断归位。
 
-## docs/ 归档约定
+## 根目录与 docs/ 归位约定
 
-✅ 顶层 `docs/` 只放项目级真相源：
+✅ 仓库根目录放 PM 和 AI 每次进项目都要认的项目脊柱：
 
+- `AGENTS.md`
+- `CLAUDE.md`
 - `PRODUCT.md`
 - `PRODUCT-STATE.md`
-- `INDEX.md`
 - `DESIGN.md`
 - `PRODUCT-RULES.md`
 - `TODO.md`
+
+✅ 顶层 `docs/` 只放资料索引和会增长的文档集合：
+
+- `INDEX.md`
 - `modules/`
-- `project-decisions/`
+- `decisions/`
 - `inputs/`
 - `deliverables/`
-- `归档/`
+- `archive/`
 
 ❌ 不在顶层：
 
 | 文件类型 | 归位 |
 |---|---|
+| 产品定位 / 现状 / 规则 / 视觉 / 待办主文件 | 仓库根目录 |
 | 模块级讨论 / 决策 / 规格 | `docs/modules/<模块>/` |
 | PRD / 功能需求 / 功能描述 / 功能规格 / 功能评审稿 | `docs/modules/<按内容命名>.md` |
-| 一次性 review / 临时分析 / scratch | `docs/归档/` |
+| 一次性 review / 临时分析 / scratch | `docs/archive/` |
 | PM 上传材料 / 调研材料 | `docs/inputs/<类别>/` |
 | 产品介绍 / 功能清单 / 优势说明 / 一页纸 | `docs/deliverables/` |
-| 探索期 mock 变体 | `mocks/` |
+| 项目级理路冻结档 | `docs/decisions/<日期>-<slug>.md` |
+| 探索期 mock 变体 | `mockups/` |
 
 写新文档前 AI 自问 3 题：
 
 1. 这是长期真相源、过程档案、输入材料，还是按需产物？
 2. 读者下次会从哪个入口找它？
-3. 如果放顶层 `docs/`，是否会和现有脊柱文件竞争真相源？
+3. 如果放顶层 `docs/`，是否会和根目录项目脊柱竞争真相源？

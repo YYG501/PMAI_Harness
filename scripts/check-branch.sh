@@ -167,13 +167,17 @@ deny() {
 # GATE 1: Main 分支写保护（白名单模式，默认拒绝）
 # ======================================================
 # main 分支上，只允许写入以下白名单路径。其他所有路径都拒绝。
-# 业务代码必须走 build 分支隔离；docs/** 是当前文档真相源。
+# 业务代码必须走 build 分支隔离；根目录项目脊柱和 docs/** 可在 main 上维护。
 if [ "$BRANCH" = "main" ] || [ "$BRANCH" = "master" ]; then
   MAIN_WRITE_ALLOWED=false
 
   case "$REL_PATH" in
     # 框架元数据：init-project 和框架更新时需要写
-    .claude/*|.codex/hooks.json|CLAUDE.md|.gitignore|README.md)
+    .claude/*|.codex/hooks.json|AGENTS.md|CLAUDE.md|.gitignore|README.md)
+      MAIN_WRITE_ALLOWED=true
+      ;;
+    # 项目脊柱：PM 和 AI 每次进项目都要认的主上下文，放仓库根目录。
+    PRODUCT.md|PRODUCT-STATE.md|PRODUCT-RULES.md|DESIGN.md|TODO.md)
       MAIN_WRITE_ALLOWED=true
       ;;
     # 旧 requirements/active|closed/* 不再是状态真相源，也不在 main 写入白名单内。
@@ -181,16 +185,20 @@ if [ "$BRANCH" = "main" ] || [ "$BRANCH" = "master" ]; then
     .runs/*|.worktrees/*|.dev-port)
       MAIN_WRITE_ALLOWED=true
       ;;
-    # 探索变体目录：mocks/ 是探索草稿的家（连当场否掉的草图都留），与产品真相源（prototype/ + docs/）
+    # 探索变体目录：mockups/ 是探索草稿的家（连当场否掉的草图都留），与产品真相源（prototype/ + docs/）
     # 两回事——探索发生在 main 上（design 期视觉变体探）、本就该随时可写。manifest + 生成的看版页同此。
-    mocks/*)
+    mockups/*)
       MAIN_WRITE_ALLOWED=true
       ;;
     # 文档全树：docs/** 一律放行 main 直接写。
     # 「讨论=无 worktree、小改直接改」的前提是文档可在 main 上动——含 docs/modules 三件套、
-    # .work-meta.json、PRODUCT-STATE、PRODUCT-RULES、TODO、decisions、PRODUCT、DESIGN。
+    # .work-meta.json、输入材料、交付物、归档和 docs/decisions 冻结档。
     # 边界：prototype/ 及业务代码目录仍走 worktree（默认拒绝，见下方 deny）。
     docs/*)
+      MAIN_WRITE_ALLOWED=true
+      ;;
+    # PMAI 内部运行态：审计、镜像站点走查和本地流程状态，允许写。
+    .pm-workflow/*)
       MAIN_WRITE_ALLOWED=true
       ;;
   esac

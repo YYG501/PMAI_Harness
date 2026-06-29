@@ -85,6 +85,7 @@ rebuild_symlinks() {
     local skill_name dst
     skill_name=$(basename "$skill_dir")
     case "$skill_name" in
+      _internal) continue ;;
       _shared)  dst="$dst_skills/_shared" ;;
       pmai-*)   dst="$dst_skills/$skill_name" ;;
       *)        dst="$dst_skills/${SKILL_PREFIX}${skill_name}" ;;

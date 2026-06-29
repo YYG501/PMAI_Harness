@@ -12,13 +12,13 @@ build 完三道机器审，各查一种病、对照不同参照物，合成一�
 | 道 | 查 | 工具 | 参照 |
 |---|---|---|---|
 | ① 覆盖审计 | 建全没 | `coverage-reviewer` agent（白纸视角、非自审） | 模块 `spec.md` |
-| ② 视觉门 | 长得对不对 | gstack `/design-review`（只截图不改） | `docs/DESIGN.md` |
+| ② 视觉门 | 长得对不对 | gstack `/design-review`（只截图不改） | `DESIGN.md` |
 | ③ 行为审 | 跑得通不通 | 浏览器 / 脚本化验收 | 模块 `spec.md` 派生的验收流程 |
 
 **覆盖审计是 agent、视觉门是 gstack skill —— 都是 LLM 驱动，脚本没法当子进程调起。** 所以 `build-audits.py`
 **不"跑"三道审**，只固化能确定性固化的部分（这几块原本靠 AI 自觉、易漏跑/各起 dev server/不合成）：
 
-- `resolve <task>`：校验输入（范围清单 / `prototype/` / dev 端口）→ 缺则 **fail-loud**；建 `audits/`；打印三道 manifest（每道读什么、把规范化结果写哪、dev server 复用约定）。
+- `resolve <task>`：校验输入（范围清单 / `prototype/` / dev 端口）→ 缺则 **fail-loud**；建 `.pm-workflow/audits/<模块>/` 内部审计目录；打印三道 manifest（每道读什么、把规范化结果写哪、dev server 复用约定）。
 - `synthesize <task>`：读三道规范化结果 → **校验三道齐全**（漏跑 fail-loud 点名）→ 合成 `synthesis.md` + 机器 summary（计数 + `gate=clean|needs-review`，门禁仅作给 PM 的**建议**、不替 PM 拍板）。
 
 接线：`skills/build/SKILL.md` 在三道审前跑 `resolve`，每道审各写规范化 json，最后调 `synthesize`。
@@ -38,10 +38,11 @@ build 完三道机器审，各查一种病、对照不同参照物，合成一�
 ### resolve 输出（manifest 摘录）
 
 ```
-[build-audits] 输入已校验，audits/ 已就绪。按下面 manifest 跑三道审，各写规范化结果：
-  ① 覆盖审计（coverage-reviewer agent，静态读码、不需 dev server）→ 写 .../audits/coverage.json
-  ② 视觉门（gstack /design-review，只截图不改；复用同一次 dev server）→ 写 .../audits/visual.json
-  ③ 行为审（浏览器 / 脚本化验收；复用同一次 dev server）→ 写 .../audits/behavior.json
+[build-audits] 输入已校验，内部审计目录已就绪：.../.pm-workflow/audits/<模块>
+按下面 manifest 跑三道审，各写规范化结果：
+  ① 覆盖审计（coverage-reviewer agent，静态读码、不需 dev server）→ 写 .../.pm-workflow/audits/<模块>/coverage.json
+  ② 视觉门（gstack /design-review，只截图不改；复用同一次 dev server）→ 写 .../.pm-workflow/audits/<模块>/visual.json
+  ③ 行为审（浏览器 / 脚本化验收；复用同一次 dev server）→ 写 .../.pm-workflow/audits/<模块>/behavior.json
   dev server：覆盖审计不需要；视觉门 + 行为审复用 build 阶段启动的同一个（端口候选 3000, 5173），别各起各的。
 ```
 
@@ -75,7 +76,7 @@ build 完三道机器审，各查一种病、对照不同参照物，合成一�
 
 ### 守卫验证
 
-- **漏跑一道** → `synthesize` fail-loud（exit 2）：`三道审不完整：行为审未跑（缺 .../behavior.json）`。
+- **漏跑一道** → `synthesize` fail-loud（exit 2）：`三道审不完整：行为审未跑（缺 .../.pm-workflow/audits/<模块>/behavior.json）`。
 - **三道全过** → `gate=clean`、synthesis 一句话「三道审均无待办……可看 demo 拍板」。
 - **缺输入**（范围清单 / 端口）→ `resolve` fail-loud。
 - **`--fail-on-gate`** + needs-review → 非零退出码。

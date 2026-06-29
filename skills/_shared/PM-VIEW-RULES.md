@@ -3,7 +3,7 @@
 > 适用范围：所有 PM 视角的当前产物 — `docs/modules/<模块>/discussion.md` / `decisions.md` / `spec.md` / `PRODUCT-STATE.md` / `docs/modules/<按内容命名>.md` 功能型文档。
 >
 > 本文件是 **单一真相源**。下列 skill 都引用本文件，不在 skill 内部独立维护：
-> `design` · `build` · `close` · `prd-writing`
+> `design` · `build` · `build-close` · `prd-writing`
 >
 > AI 在生成、修改任何上述文档前，先读完本文件 + 它指引的相关子文件。
 
@@ -15,13 +15,13 @@
 
 | 节 | 内容 | 文件 | 主要消费 skill |
 |---|---|---|---|
-| §三 | PM 视图写作规则（10 条硬约束 + UI 骨架细则）| [`pm-view/writing-rules.md`](./pm-view/writing-rules.md) | design · close · prd-writing |
-| §四 | 文档级严格度对照表 | [`pm-view/doc-strictness.md`](./pm-view/doc-strictness.md) | PM 视图 skill |
-| §七 | 章节顺序约束（按文档类型）| [`pm-view/section-order.md`](./pm-view/section-order.md) | design · close · prd-writing |
-| §八 | 自检清单（生成 / 修改 PM 视图后）| [`pm-view/checklist.md`](./pm-view/checklist.md) | prd-writing · design |
-| §九 9.0 - 9.5 | 输入流约束 / PM 反馈分流 / 信息流图（§9.6 双文件 lazy sync 已废）| [`pm-view/input-flow.md`](./pm-view/input-flow.md) | 全部 PM 视图 skill |
-| §9.7 | 跨 skill 共享原则 | [`pm-view/cross-skill.md`](./pm-view/cross-skill.md) | skill 作者 / 框架维护者 |
-| §10 | attachments AI 接管（trigger 0）— LLM 识别 PM chat 上传意图 + caller 调 `_lib.attachments` helper + 主路径通用规则 | [`pm-view/attachments-upload.md`](./pm-view/attachments-upload.md) | 主路径 SKILL（next / design / build / close / prd-writing）|
+| §三 | PM 视图写作规则（10 条硬约束 + UI 骨架细则）| [`pm-view/writing-rules.md`](./pm-view/writing-rules.md) | design · build-close · prd-writing |
+| §四 | 文档级严格度对照表 | [`pm-view/doc-strictness.md`](./pm-view/doc-strictness.md) | prd-writing 直接读；其它 PM 视图 skill 按需读 |
+| §七 | 章节顺序约束（按文档类型）| [`pm-view/section-order.md`](./pm-view/section-order.md) | prd-writing 直接读；design / build-close 通过 prd-writing 写规格 |
+| §八 | 自检清单（生成 / 修改 PM 视图后）| [`pm-view/checklist.md`](./pm-view/checklist.md) | prd-writing 直接读；其它 PM 视图 skill 按需读 |
+| §九 9.0 - 9.5 | 输入流约束 / PM 反馈分流 / 信息流图（§9.6 双文件 lazy sync 已废）| [`pm-view/input-flow.md`](./pm-view/input-flow.md) | PM 视图规则 corpus；具体 skill 按本索引或自身必读清单选读 |
+| §9.7 | 跨 skill 共享原则 | [`pm-view/cross-skill.md`](./pm-view/cross-skill.md) | prd-writing / skill 作者 / 框架维护者 |
+| §10 | attachments AI 接管（trigger 0）— LLM 识别 PM chat 上传意图 + caller 调 `_lib.attachments` helper + 主路径通用规则 | [`pm-view/attachments-upload.md`](./pm-view/attachments-upload.md) | 主路径 SKILL（design / build / build-close / prd-writing / record）|
 
 **读法约定**：
 - skill 步骤里写"按 §三"或"按 PM-VIEW-RULES §三" → 表示读对应子文件
@@ -42,8 +42,8 @@ PM 创建 / 审核 / 验收时直接看的内容。回答 PM 关心的问题：
 - 哪些会被改 / 哪些不动？
 - 怎么验收？
 
-### 2. 工程合同（PM 默认折叠 / 拆文件）
-给执行 agent 的实现规范。回答工程问题：
+### 2. 实现深水区（不放 PM 首屏）
+给执行 agent 的实现约束，可以来自 `DESIGN.md`、模块规格里的执行提示或 build 阶段上下文；不要求新建固定的工程孪生文件。回答工程问题：
 - 启动前必读哪些文件？
 - 实现时用哪些函数 / 组件 / 字段？
 - 反向禁止哪些做法？
@@ -76,7 +76,7 @@ PM 创建 / 审核 / 验收时直接看的内容。回答 PM 关心的问题：
 
 适用：模块 `spec.md` / `prd` 中描述具体功能时。
 
-参照模板：`docs/modules/部门+用户+角色设计/department-group-role-design-v4.1.md` §五数据模型 / §十一鉴权规则 的节奏 — 先角色定位、再列业务规则、再独立给字段口径。
+本节以下方「正例」作为当前内置模板：先角色定位、再列业务规则、再把字段口径内联到需求描述列。不要引用仓库里不存在的历史样例文件作为规范来源。
 
 ### 5.1 单功能节结构
 
@@ -133,19 +133,19 @@ PM 创建 / 审核 / 验收时直接看的内容。回答 PM 关心的问题：
 
 | 类别 | 反例 | 怎么处理 |
 |---|---|---|
-| **UI 排版 / 视觉容器** | "顶部固定展示一块灰底信息块" / "按 2 列 grid 排版" / "信息块上方保留页面标题区" | 进「📐 产物预览」章节（线框图）+ `*.engineering.md` §8 视觉规范 |
-| **元素位置 / 顺序 / 区块结构** | "字段顺序：第 1 行 X / Y / Z；第 2 行 A / B / C" / "右侧依次是 [+ 分配额度] 主按钮、[返回产品列表] 二级按钮" | 进「📐 产物预览」+ `*.engineering.md` §8 |
-| **UI 控件类型** | "用 segmented control 切换" / "操作列折叠为 kebab 下拉" / "树形 connector 字符（├ └）" | 进「📐 产物预览」+ `*.engineering.md` §8 |
-| **样式参照 / 视觉对齐** | "与 X 详情页的 topContent 样式对齐" / "灰底圆角容器" | 进 `*.engineering.md` §8 |
-| how — 实现步骤 / 组件路径 / 代码引用 | "复用 SegmentedControl 组件" / "使用 `topContent` 同款" | 进 `*.engineering.md` §3 / §4 |
+| **UI 排版 / 视觉容器** | "顶部固定展示一块灰底信息块" / "按 2 列 grid 排版" / "信息块上方保留页面标题区" | 进「产物预览」章节或 `DESIGN.md` 视觉基线，不进功能清单 |
+| **元素位置 / 顺序 / 区块结构** | "字段顺序：第 1 行 X / Y / Z；第 2 行 A / B / C" / "右侧依次是 [+ 分配额度] 主按钮、[返回产品列表] 二级按钮" | 进「产物预览」或 build 执行上下文，不进需求描述列 |
+| **UI 控件类型** | "用 segmented control 切换" / "操作列折叠为 kebab 下拉" / "树形 connector 字符（├ └）" | 进「产物预览」或实现深水区，不进业务规则 |
+| **样式参照 / 视觉对齐** | "与 X 详情页的 topContent 样式对齐" / "灰底圆角容器" | 进 `DESIGN.md` 或本轮 build 执行提示 |
+| how — 实现步骤 / 组件路径 / 代码引用 | "复用 SegmentedControl 组件" / "使用 `topContent` 同款" | 进实现深水区，不进 PM 视图功能清单 |
 | why — 设计意图解释 | "便于不同详情页之间视觉一致" / "避免视觉认知负担过重" | 进「🎯 关键产品决策」的"决策的共同理由" |
 | 字段值口径用工程英文 | "总席位 = 跨所有 active 证的产品级总席位 sum" | 改为业务语言写在需求描述列编号项里："总席位 = 累加所有已激活许可证的产品级总席位"（业务动词 + 中文状态词）|
-| 反向约束 | "禁止 X" / "不允许 Y" | 进 `*.engineering.md` §6 |
-| 工程参数 | 像素值 / 颜色码 / 字号 / 反引号代码 | 进 `*.engineering.md` §8 |
+| 反向约束 | "禁止 X" / "不允许 Y" | 如是产品边界，用正向业务规则写；如是实现限制，进实现深水区 |
+| 工程参数 | 像素值 / 颜色码 / 字号 / 反引号代码 | 进 `DESIGN.md` 或 build 执行上下文 |
 
 **判别简则**：写完一条后问自己——"这条规则换一套 UI（不同页面布局、不同控件）还成立吗？"
 - **成立** → 它是业务规则，留下
-- **不成立**（描述了具体怎么排、怎么呈现）→ 它是 UI 描述，移到「📐 产物预览」或工程合同
+- **不成立**（描述了具体怎么排、怎么呈现）→ 它是 UI 描述，移到「产物预览」或实现深水区
 
 ### 5.3 字段值口径写作（在需求描述列内）
 
@@ -154,7 +154,7 @@ PM 创建 / 审核 / 验收时直接看的内容。回答 PM 关心的问题：
 - 数学 / 集合 / 函数：`sum` / `count` / `reduce` / `map` / `filter` → 用「累加」/「统计」/「按 X 归并」
 - 状态 / 字面量：`active` / `null` / `undefined` → 用「已激活」/「无值」/「未设置」
 - 数据结构：`schema` / `record` / `Array<T>` → 用「数据结构」/「记录」（避免直接说结构）
-- UI 实现词：`segmented control` / `kebab` / `topContent` / `props` / `hook` → 全部驱逐到工程合同
+- UI 实现词：`segmented control` / `kebab` / `topContent` / `props` / `hook` → 全部驱逐到实现深水区
 
 **写法示例**（在需求描述列编号项里）：
 > 3. 字段：产品 ID（直接取产品记录的标识值）、来源许可证数（统计本产品下所有许可证数量含已失效）、总席位（累加所有已激活许可证的产品级总席位）、剩余席位（总席位 减 已用席位 减 已分配给各部门但未用的额度）。

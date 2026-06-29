@@ -174,60 +174,71 @@ test_outside_repo_tmp_allowed() {
 }
 
 # ---------------------------------------------------------------
-# GATE 3 沉淀分档：mocks/ + decisions/ 无条件可写 main；PRODUCT-STATE marker 门控
+# GATE3 沉淀分档：mockups/ + decisions/ + docs/** 可写 main；业务代码仍走 worktree
 # ---------------------------------------------------------------
 
-test_main_allows_mocks_write() {
-  start_test "GATE3 main ALLOWS mocks/ write (探索草稿豁免)"
+test_main_allows_mockups_write() {
+  start_test "GATE3 main ALLOWS mockups/ write (探索草稿豁免)"
   fixture_setup
   cd "$FIXTURE_DIR"
-  capture_check "Write" "mocks/manifest.json" "" "" '{"variants":[]}'
+  capture_check "Write" "mockups/manifest.json" "" "" '{"variants":[]}'
   if [ "$RC" = "0" ] && ! echo "$OUT" | grep -q '"deny"'; then
     pass_test
   else
-    _fail "should allow mocks/ on main unconditionally (rc=$RC, out=$OUT)"
+    _fail "should allow mockups/ on main unconditionally (rc=$RC, out=$OUT)"
   fi
   fixture_teardown
 }
 
 test_main_allows_decisions_write() {
-  start_test "GATE3 main ALLOWS docs/project-decisions/ write (冻结档豁免)"
+  start_test "GATE3 main ALLOWS docs/decisions/ write (冻结档豁免)"
   fixture_setup
   cd "$FIXTURE_DIR"
-  capture_check "Write" "docs/project-decisions/2026-06-04-foo.md" "" "" "# 冻结档"
+  capture_check "Write" "docs/decisions/2026-06-04-foo.md" "" "" "# 冻结档"
   if [ "$RC" = "0" ] && ! echo "$OUT" | grep -q '"deny"'; then
     pass_test
   else
-    _fail "should allow docs/project-decisions/ on main unconditionally (rc=$RC, out=$OUT)"
+    _fail "should allow docs/decisions/ on main unconditionally (rc=$RC, out=$OUT)"
   fi
   fixture_teardown
 }
 
-# 批1（lifecycle 迁移）：docs/** 全放行 main 直接写、删 deposit marker 门控。
-# 原 test_main_rejects_product_state_without_marker（无 marker 拒绝）翻成放行；
-# 原 marker 在场放行 / marker blast radius 两例删除（marker 门控已删）。
-
-test_main_allows_product_state_no_marker() {
-  start_test "GATE3 (批1) main ALLOWS PRODUCT-STATE write WITHOUT marker (docs/** 全放行)"
+test_main_allows_pm_workflow_audits_write() {
+  start_test "GATE3 main ALLOWS .pm-workflow/audits/ write (内部审计记录)"
   fixture_setup
   cd "$FIXTURE_DIR"
-  rm -f .runs/deposit-in-progress 2>/dev/null || true
-  capture_check "Write" "docs/PRODUCT-STATE.md" "old" "new" ""
+  capture_check "Write" ".pm-workflow/audits/demo/coverage.json" "" "" '{"items":[]}'
   if [ "$RC" = "0" ] && ! echo "$OUT" | grep -q '"deny"'; then
     pass_test
   else
-    _fail "批1 后 docs/PRODUCT-STATE 应放行 main（无 marker）(rc=$RC, out=$OUT)"
+    _fail "should allow .pm-workflow/audits/ on main (rc=$RC, out=$OUT)"
+  fi
+  fixture_teardown
+}
+
+# 批1（lifecycle 迁移）：docs/** 全放行 main 直接写。
+# 原 test_main_rejects_product_state_without_marker（无 marker 拒绝）翻成放行。
+
+test_main_allows_product_state_no_marker() {
+  start_test "GATE3 main ALLOWS root PRODUCT-STATE write WITHOUT marker"
+  fixture_setup
+  cd "$FIXTURE_DIR"
+  capture_check "Write" "PRODUCT-STATE.md" "old" "new" ""
+  if [ "$RC" = "0" ] && ! echo "$OUT" | grep -q '"deny"'; then
+    pass_test
+  else
+    _fail "根目录 PRODUCT-STATE 应放行 main（无 marker）(rc=$RC, out=$OUT)"
   fi
   fixture_teardown
 }
 
 test_main_allows_product_rules_and_todo() {
-  start_test "GATE3 (批1) main ALLOWS docs/PRODUCT-RULES.md + docs/TODO.md (docs/** 全放行)"
+  start_test "GATE3 main ALLOWS root PRODUCT-RULES.md + TODO.md"
   fixture_setup
   cd "$FIXTURE_DIR"
-  capture_check "Write" "docs/PRODUCT-RULES.md" "old" "new" ""
+  capture_check "Write" "PRODUCT-RULES.md" "old" "new" ""
   local rc1="$RC" out1="$OUT"
-  capture_check "Write" "docs/TODO.md" "old" "new" ""
+  capture_check "Write" "TODO.md" "old" "new" ""
   if [ "$rc1" = "0" ] && ! echo "$out1" | grep -q '"deny"' \
      && [ "$RC" = "0" ] && ! echo "$OUT" | grep -q '"deny"'; then
     pass_test
@@ -279,8 +290,9 @@ test_main_rejects_random_toplevel
 test_build_branch_allows_prototype_write
 test_outside_repo_non_tmp_denied
 test_outside_repo_tmp_allowed
-test_main_allows_mocks_write
+test_main_allows_mockups_write
 test_main_allows_decisions_write
+test_main_allows_pm_workflow_audits_write
 test_main_allows_product_state_no_marker
 test_main_allows_product_rules_and_todo
 test_main_allows_docs_modules_triplet

@@ -23,7 +23,7 @@ description: |
 共同点（为什么是一个 skill）：
 
 - **不是无损拷贝**：参照站是它那套栈，主原型是 Next.js + TS + Tailwind + shadcn —— 跨栈"录入"= 重写一遍 = 引入残版 + 视觉失真。所以**只看不导**：拿截图 / 结构当参考，代码在栈内建 / 改（同 Claude Design「只看不导」纪律）。
-- 落地照 `docs/DESIGN.md` + `工程结构约束-*.md`（mock / 真按层）；视觉照 DESIGN。
+- 落地照 `DESIGN.md` + `工程结构约束-*.md`（mock / 真按层）；视觉照 DESIGN。
 - 引擎 = `scripts/checks-diff.py`（§7.C），checks-spec 格式见 `skills/_shared/checks-spec.md`。
 - 区别于覆盖审计（参照=范围清单）/ 视觉门（参照=DESIGN）/ 行为审（参照=验收流程）：本 skill 参照 = **参考站点 / 线上真实产品**（第四条 diff 轴）。
 
@@ -46,7 +46,7 @@ description: |
 
 ### 步骤 0：banner + @读项目底座
 
-入口 echo banner。**先读项目底座**（`docs/PRODUCT-STATE.md` → `prototype/` 现状 / `docs/DESIGN.md` / `工程结构约束-*.md`），知道原型现在有什么、按哪档建，才能判「参照站有而原型缺」是 delta 还是本就不做，且重建 / 对齐都落在同一条主原型线上、不另起风格。
+入口 echo banner。**先读项目底座**（`PRODUCT-STATE.md` → `prototype/` 现状 / `DESIGN.md` / `工程结构约束-*.md`），知道原型现在有什么、按哪档建，才能判「参照站有而原型缺」是 delta 还是本就不做，且重建 / 对齐都落在同一条主原型线上、不另起风格。
 
 ### 步骤 1：Plan —— 爬参照站派生 checks-spec（产出，不改代码）
 
@@ -75,7 +75,7 @@ python3 "$PMAI_HOME/scripts/checks-diff.py" \
 
 - rebuild：起 dev server 抓 `local/<check_id>.json`，爬出来的结构当 `reference/`，按 P0/P1 补齐重建（漏的页 / 文案 / 按钮），P2 视觉照 DESIGN。
 - align：重抓 local → 重跑 diff 直到 P0 清零（或 PM 接受残留）。
-- 视觉细则（sticky / 横滚 / 禁 native alert·confirm 用包装组件 / 留白密度 / 四态）照 `docs/DESIGN.md` + `工程结构约束-*.md`，不在引擎里硬判。每完成一个核心步骤回报「进展 / 验证 / 下一步」。
+- 视觉细则（sticky / 横滚 / 禁 native alert·confirm 用包装组件 / 留白密度 / 四态）照 `DESIGN.md` + `工程结构约束-*.md`，不在引擎里硬判。每完成一个核心步骤回报「进展 / 验证 / 下一步」。
 
 ### 步骤 4：呈交 PM
 

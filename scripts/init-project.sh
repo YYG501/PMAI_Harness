@@ -124,21 +124,23 @@ if [ -n "$MISSING" ]; then
   exit 2
 fi
 
-# --- a. 检测 gstack ---
-if ! command -v gstack &>/dev/null; then
-  # 检查 gstack skill 目录
-  if [ ! -d "$HOME/.claude/skills/gstack" ]; then
-    echo "❌ gstack 未安装。请先安装 gstack：" >&2
-    echo "   参考：https://github.com/garrytan/gstack" >&2
-    exit 1
-  fi
+# --- a. 检测 gstack 能力（CLI 或全局 skill 任一可用即可） ---
+GSTACK_BIN=$(command -v gstack 2>/dev/null || true)
+GSTACK_SKILL_DIR="$HOME/.claude/skills/gstack"
+if [ -n "$GSTACK_BIN" ]; then
+  echo "✅ gstack CLI 已检测到: $GSTACK_BIN"
+elif [ -d "$GSTACK_SKILL_DIR" ]; then
+  echo "✅ gstack skill 已检测到: ~/.claude/skills/gstack"
+else
+  echo "❌ gstack 未安装（CLI 和 ~/.claude/skills/gstack 都未检测到）。请先安装 gstack：" >&2
+  echo "   参考：https://github.com/garrytan/gstack" >&2
+  exit 1
 fi
-echo "✅ gstack 已检测到"
 
 # --- b. 检测 gstack 版本（警告但不阻塞）---
 GSTACK_VERSION=""
-if [ -f "$HOME/.claude/skills/gstack/VERSION" ]; then
-  GSTACK_VERSION=$(cat "$HOME/.claude/skills/gstack/VERSION" 2>/dev/null || echo "unknown")
+if [ -f "$GSTACK_SKILL_DIR/VERSION" ]; then
+  GSTACK_VERSION=$(cat "$GSTACK_SKILL_DIR/VERSION" 2>/dev/null || echo "unknown")
   echo "📦 gstack 版本: $GSTACK_VERSION"
 fi
 
@@ -163,12 +165,12 @@ for TMPL in "$FRAMEWORK_DIR/templates/"*.tmpl; do
   case "$BASENAME" in
     CLAUDE.md)              DEST="$TARGET_DIR/CLAUDE.md" ;;
     AGENTS.md)              DEST="$TARGET_DIR/AGENTS.md" ;;
-    PRODUCT.md)             DEST="$TARGET_DIR/docs/PRODUCT.md" ;;
-    PRODUCT-STATE.md)       DEST="$TARGET_DIR/docs/PRODUCT-STATE.md" ;;   # 六步项目底座：现状层 hub（下游 FORCE READ docs/PRODUCT-STATE.md）
+    PRODUCT.md)             DEST="$TARGET_DIR/PRODUCT.md" ;;
+    PRODUCT-STATE.md)       DEST="$TARGET_DIR/PRODUCT-STATE.md" ;;   # 六步项目底座：现状层 hub（下游 FORCE READ PRODUCT-STATE.md）
     docs-INDEX.md)           DEST="$TARGET_DIR/docs/INDEX.md" ;;
-    DESIGN.md)              DEST="$TARGET_DIR/docs/DESIGN.md" ;;          # 六步项目底座：正向视觉约束（build 前 AI 必读 docs/DESIGN.md）
-    PRODUCT-RULES.md)       DEST="$TARGET_DIR/docs/PRODUCT-RULES.md" ;;
-    TODO.md)                DEST="$TARGET_DIR/docs/TODO.md" ;;
+    DESIGN.md)              DEST="$TARGET_DIR/DESIGN.md" ;;          # 六步项目底座：正向视觉约束（build 前 AI 必读 DESIGN.md）
+    PRODUCT-RULES.md)       DEST="$TARGET_DIR/PRODUCT-RULES.md" ;;
+    TODO.md)                DEST="$TARGET_DIR/TODO.md" ;;
     modules-INDEX.md)       DEST="$TARGET_DIR/docs/modules/INDEX.md" ;;
     deliverables-INDEX.md)   DEST="$TARGET_DIR/docs/deliverables/INDEX.md" ;;
     lark-publish.json)
@@ -241,22 +243,22 @@ mkdir -p "$TARGET_DIR/docs/modules"
 mkdir -p "$TARGET_DIR/docs/inputs"
 touch "$TARGET_DIR/docs/inputs/.gitkeep"
 mkdir -p "$TARGET_DIR/docs/deliverables"
-mkdir -p "$TARGET_DIR/docs/归档"   # 扁平：过程档案 / 一次性 review / 被取代旧文件全装这里，文件名说明为啥归档
-touch "$TARGET_DIR/docs/归档/.gitkeep"
-mkdir -p "$TARGET_DIR/docs/project-decisions"   # 项目决策档案：重大项目级"为什么这么定"，沉淀时按需冻
-touch "$TARGET_DIR/docs/project-decisions/.gitkeep"
+mkdir -p "$TARGET_DIR/docs/archive"   # 扁平：过程档案 / 一次性 review / 被取代旧文件全装这里，文件名说明为啥归档
+touch "$TARGET_DIR/docs/archive/.gitkeep"
+mkdir -p "$TARGET_DIR/docs/decisions"   # 项目决策档案：重大项目级"为什么这么定"，沉淀时按需冻
+touch "$TARGET_DIR/docs/decisions/.gitkeep"
 mkdir -p "$TARGET_DIR/prototype"   # 单一主原型（单数）；SKILL C.5 用 create-next-app 在此起栈
 mkdir -p "$TARGET_DIR/.runs/events"
 mkdir -p "$TARGET_DIR/.worktrees"
-mkdir -p "$TARGET_DIR/.pm-workflow/audits"   # build 三道审报告 / artifact 根目录
+mkdir -p "$TARGET_DIR/.pm-workflow/audits"   # build 三道审内部记录根目录
 echo "📂 目录结构已创建"
 
-# --- h2. mocks/ 探索变体目录（manifest 真相源 + 生成的看版页）---
+# --- h2. mockups/ 探索变体目录（manifest 真相源 + 生成的看版页）---
 # manifest + README 实体落消费仓（每项目自己的变体清单）；index.html 由 gen-mock-board.py 生成（勿手改）。
-mkdir -p "$TARGET_DIR/mocks"
-for MK in mocks-manifest.json:manifest.json mocks-README.md:README.md; do
+mkdir -p "$TARGET_DIR/mockups"
+for MK in mockups-manifest.json:manifest.json mockups-README.md:README.md; do
   SRC_TMPL="$FRAMEWORK_DIR/templates/${MK%%:*}.tmpl"
-  DEST_FILE="$TARGET_DIR/mocks/${MK##*:}"
+  DEST_FILE="$TARGET_DIR/mockups/${MK##*:}"
   if [ -f "$SRC_TMPL" ]; then
     TMPL="$SRC_TMPL" DEST="$DEST_FILE" PN="$PROJECT_NAME" BG="$BACKGROUND" python3 - <<'PY'
 import os
@@ -269,7 +271,7 @@ PY
 done
 # 生成初始空看版（manifest 暂无变体 → "暂无变体"空看版，不报错）
 python3 "$FRAMEWORK_DIR/scripts/gen-mock-board.py" "$TARGET_DIR" >/dev/null 2>&1 || true
-echo "🎨 mocks/ 探索变体目录已建（manifest + 看版）"
+echo "🎨 mockups/ 探索变体目录已建（manifest + 看版）"
 
 # --- i. .gitignore 已在模板复制时创建 ---
 

@@ -1,11 +1,12 @@
 """Attachments helper — AI 接管层。
 
-PM mental model：PM 在 chat 自然描述 "我有 X 在路径 Y"，AI 后台 cp + 命名 +
-归入 docs/inputs/attachments/ + 登记到 .work-meta.json:attachments_seen +
-caller SKILL 在产出文档末尾追加 `## 📎 参考材料` 引用。
+PM mental model：PM 在 chat 自然描述 "我有 X 在路径 Y"，AI 判断材料类型后
+后台 cp + 命名 + 归入 docs/inputs/<类别>/ + 登记到
+.work-meta.json:attachments_seen + caller SKILL 在产出文档末尾追加
+`## 参考材料` 引用。
 
 状态真相源 = .work-meta.json:attachments_seen，不是产出文档里的
-## 📎 参考材料 section（该 section 仅作 PM 可见展示）。
+## 参考材料 section（该 section 仅作 PM 可见展示）。
 
 调用流（caller SKILL 视角）::
 
@@ -20,7 +21,8 @@ caller SKILL 在产出文档末尾追加 `## 📎 参考材料` 引用。
     |   from _lib.attachments import copy_attachment             |
     |   r = copy_attachment(work_dir, Path("~/Downloads/foo.pdf"),|
     |                       stage_prefix="spec",                 |
-    |                       hint="Y 重点")                         |
+    |                       hint="Y 重点",                         |
+    |                       input_category="interviews")           |
     +-----------------------------------------------------------+
                             |
                             v
@@ -30,14 +32,14 @@ caller SKILL 在产出文档末尾追加 `## 📎 参考材料` 引用。
     |    2. _check_sensitive(src) → SensitivePathError            |
     |    3. size > MAX_FILE_SIZE_MB → FileSizeError                |
     |    4. _next_available_name → 冲突 -2/-3 后缀                 |
-    |    5. shutil.copy2 落盘 docs/inputs/attachments/<新名>       |
+    |    5. shutil.copy2 落盘 docs/inputs/<类别>/<新名>            |
     |    6. register_attachment → .work-meta.json 登记              |
     +-----------------------------------------------------------+
                             |
                             v
     +-----------------------------------------------------------+
     |  CopyResult(new_name, abs_path, size_mb, pending_inject)   |
-    |  caller chat 一行确认；后续按需渲染 ## 📎 参考材料 引用     |
+    |  caller chat 一行确认；后续按需渲染 ## 参考材料 引用        |
     +-----------------------------------------------------------+
 
 非典型场景：
@@ -86,6 +88,10 @@ SENSITIVE_PATH_PATTERNS: list[str] = [
 # 单文件 hard cap（MB）。超 → FileSizeError，不依赖 pre-commit warn fail-open。
 # pre-commit hook warn 阈值 10MB；hard cap 50MB 是经验值（v2 §5.1.3 待验）。
 MAX_FILE_SIZE_MB: int = 50
+
+# 兼容旧调用：caller 没传类型时不失败，但落 uncategorized 兜底。新 PM-facing
+# 流程应由 caller 先按 PM 描述 / 内容判断类型，再显式传 input_category。
+DEFAULT_INPUT_CATEGORY: str = "uncategorized"
 
 
 # ============================================================================
@@ -136,14 +142,16 @@ class AttachmentSeenEntry(TypedDict, total=False):
     """`.work-meta.json:attachments_seen` 列表元素 schema。
 
     Fields:
-        name: repo 内相对路径（如 `docs/inputs/attachments/spec-interview.pdf`）—— 真相源
+        name: repo 内相对路径（如 `docs/inputs/interviews/spec-interview.pdf`）—— 真相源
+        input_category: docs/inputs/<类别> 的类别目录名
         src_origin: PM 给的源绝对路径（追溯用；replace 后会更新）
         hint: PM 给的"重点"描述（追溯用，可空）
-        stage_prefix: 上传时 stage 前缀（命名时的 stage 上下文）
+        stage_prefix: 上传时产物前缀（spec / prd / close / unknown）
         registered_at: ISO 8601 UTC 登记时间
     """
 
     name: str
+    input_category: str
     src_origin: str
     hint: Optional[str]
     stage_prefix: str
@@ -157,7 +165,8 @@ class CopyResult(TypedDict):
         new_name: 落盘后的工作内相对路径（机械命名 + 冲突 -N 后缀后）
         abs_path: 落盘绝对路径
         size_mb: 文件大小（MB）
-        pending_inject: True 表示当前 stage 产出文档不存在 → helper 仅 register
+        input_category: docs/inputs/<类别> 的类别目录名
+        pending_inject: True 表示当前产物文档不存在 → helper 仅 register
                         attachments_seen 不触发引用 section 渲染；caller SKILL
                         后续写产出时应主动读 attachments_seen 渲染。
     """
@@ -165,6 +174,7 @@ class CopyResult(TypedDict):
     new_name: str
     abs_path: Path
     size_mb: float
+    input_category: str
     pending_inject: bool
 
 
@@ -205,6 +215,30 @@ def _validate_attachment_name(filename: str) -> str:
     return filename
 
 
+def _validate_input_category(input_category: str) -> str:
+    """Return a safe single path segment for docs/inputs/<category>."""
+    if not isinstance(input_category, str):
+        raise AttachmentError("input_category 必须是字符串")
+    category = input_category.strip()
+    if not category:
+        raise AttachmentError("input_category 不能为空")
+    if (
+        "\x00" in category
+        or "/" in category
+        or "\\" in category
+        or ".." in category
+        or category in {".", ".."}
+        or Path(category).is_absolute()
+    ):
+        raise AttachmentError(f"非法 input_category：{input_category!r}")
+    return category
+
+
+def _category_from_attachment_name(filename: str) -> str:
+    safe_name = _validate_attachment_name(filename)
+    return Path(safe_name).parts[2]
+
+
 def _validate_stage_prefix(stage_prefix: str) -> str:
     """Restrict stage_prefix to current product artifact prefixes."""
     if not isinstance(stage_prefix, str):
@@ -240,30 +274,30 @@ def _repo_root_from_work_dir(work_dir: Path) -> Path:
 
 
 def _next_available_name(
-    attachments_dir: Path, base_name: str, ext: str
+    input_dir: Path, base_name: str, ext: str
 ) -> str:
     """同名冲突时返回 `<base>-2.ext` / `<base>-3.ext` / ... 直到不冲突。
 
     Args:
-        attachments_dir: 已 mkdir 的 docs/inputs/attachments/ 目录
+        input_dir: 已 mkdir 的 docs/inputs/<类别>/ 目录
         base_name: 候选基名（不含扩展名，如 `spec-foo`）
         ext: 扩展名（含点，如 `.pdf`）；可空字符串
 
     Deterministic：相同输入相同输出（C7 防 race）。
     """
     candidate = f"{base_name}{ext}"
-    if not (attachments_dir / candidate).exists():
+    if not (input_dir / candidate).exists():
         return candidate
     counter = 2
     while True:
         candidate = f"{base_name}-{counter}{ext}"
-        if not (attachments_dir / candidate).exists():
+        if not (input_dir / candidate).exists():
             return candidate
         counter += 1
 
 
 def _stage_doc_exists(work_dir: Path, stage_prefix: str) -> bool:
-    """判断当前 stage 产出文档是否存在（C5 pending reference fix）。
+    """判断当前产物文档是否存在（C5 pending reference fix）。
 
     stage_prefix → 期望文档映射：
         spec     → spec.md（模块规格，build 锚点）
@@ -298,17 +332,19 @@ def copy_attachment(
     src: Path,
     stage_prefix: str,
     hint: Optional[str] = None,
+    input_category: str = DEFAULT_INPUT_CATEGORY,
 ) -> CopyResult:
-    """复制源文件到 docs/inputs/attachments/ + 登记到 `.work-meta.json:attachments_seen`。
+    """复制源文件到 docs/inputs/<类别>/ + 登记到 `.work-meta.json:attachments_seen`。
 
     Args:
         work_dir: 当前模块工作目录绝对路径（含 `.work-meta.json`）
         src: PM 给的源路径（支持 `~` / `~user` 展开）
         stage_prefix: 产物前缀（spec / prd / close）—— 决定命名前缀 + pending 判定
         hint: PM 给的"重点"描述（追溯用，可空）
+        input_category: 归档类别目录（如 interviews / competitors / brainstorming）
 
     Returns:
-        CopyResult(new_name, abs_path, size_mb, pending_inject)
+        CopyResult(new_name, abs_path, size_mb, input_category, pending_inject)
 
     Raises:
         FileNotFoundError: src 不存在或不是 file
@@ -316,9 +352,10 @@ def copy_attachment(
         FileSizeError: src 超 MAX_FILE_SIZE_MB hard cap
         StateReadError: `.work-meta.json` 不存在或解析失败（register_attachment 抛）
 
-    >>> # copy_attachment(Path("/module"), Path("~/foo.pdf"), "spec", "重点 X")
+    >>> # copy_attachment(Path("/module"), Path("~/foo.pdf"), "spec", "重点 X", input_category="interviews")
     """
     stage_prefix = _validate_stage_prefix(stage_prefix)
+    input_category = _validate_input_category(input_category)
 
     # 1. expanduser + 校验可读
     src = src.expanduser().resolve()
@@ -336,11 +373,11 @@ def copy_attachment(
 
     # 4. 命名 + 冲突 -2 后缀
     repo_root = _repo_root_from_work_dir(work_dir)
-    attachments_dir = repo_root / "docs" / "inputs" / "attachments"
-    attachments_dir.mkdir(parents=True, exist_ok=True)
+    input_dir = repo_root / "docs" / "inputs" / input_category
+    input_dir.mkdir(parents=True, exist_ok=True)
     base_name = f"{stage_prefix}-{src.stem}"
-    basename = _next_available_name(attachments_dir, base_name, src.suffix)
-    new_name = f"docs/inputs/attachments/{basename}"
+    basename = _next_available_name(input_dir, base_name, src.suffix)
+    new_name = f"docs/inputs/{input_category}/{basename}"
     dst = _attachment_path(work_dir, new_name)
 
     # 5. shutil.copy2 保留 mtime（C7 Python，不靠 Bash cp）
@@ -353,6 +390,7 @@ def copy_attachment(
         src_origin=str(src),
         hint=hint,
         stage_prefix=stage_prefix,
+        input_category=input_category,
     )
 
     # 7. 判断当前 stage 产出文档是否存在 → pending_inject 标记（C5）
@@ -362,6 +400,7 @@ def copy_attachment(
         new_name=new_name,
         abs_path=dst,
         size_mb=size_mb,
+        input_category=input_category,
         pending_inject=pending_inject,
     )
 
@@ -372,26 +411,38 @@ def register_attachment(
     src_origin: Optional[str] = None,
     hint: Optional[str] = None,
     stage_prefix: str = "unknown",
+    input_category: Optional[str] = None,
 ) -> None:
     """append 到 `.work-meta.json:attachments_seen` 列表。
 
     Args:
         work_dir: 当前模块工作目录绝对路径
-        filename: repo 内相对路径（如 `docs/inputs/attachments/spec-foo.pdf`）—— 真相源 key
+        filename: repo 内相对路径（如 `docs/inputs/interviews/spec-foo.pdf`）—— 真相源 key
         src_origin: PM 给的源绝对路径（追溯用，可空）
         hint: PM 给的"重点"描述（追溯用，可空）
-        stage_prefix: 上传时 stage 前缀（追溯用）
+        stage_prefix: 上传时产物前缀（追溯用）
+        input_category: 可选；不传则从 filename 的 docs/inputs/<类别>/ 推导
 
     Raises:
         StateReadError: `.work-meta.json` 不存在或解析失败
     """
     filename = _validate_attachment_name(filename)
+    file_category = _category_from_attachment_name(filename)
+    if input_category is None:
+        input_category = file_category
+    else:
+        input_category = _validate_input_category(input_category)
+        if input_category != file_category:
+            raise AttachmentError(
+                f"input_category 与 filename 类别不一致：{input_category!r} != {file_category!r}"
+            )
     stage_prefix = _validate_stage_prefix(stage_prefix)
     meta = read_work_meta(work_dir, strict=True)
     assert meta is not None  # strict=True 保证非 None
     seen: list = meta.get("attachments_seen", [])
     entry: AttachmentSeenEntry = {
         "name": filename,
+        "input_category": input_category,
         "src_origin": src_origin or "",
         "hint": hint,
         "stage_prefix": stage_prefix,
@@ -418,7 +469,7 @@ def is_seen(work_dir: Path, filename: str) -> bool:
     """trigger 2 改造判定：filename 是否已在 attachments_seen 列表。
 
     用法（trigger 2 SKILL prose）：
-        AI 扫 docs/inputs/attachments/ 发现 `<file>`：
+        AI 扫 docs/inputs/<类别>/ 发现 `<file>`：
         - is_seen(work_dir, file) == True  → 跳过（已注册）
         - is_seen(work_dir, file) == False → 主动问 PM "要不要纳入？"
           PM 答 OK 后 caller 调 register_attachment 补登记。
@@ -459,12 +510,12 @@ def replace_attachment(
 
     设计选择：
     - 保留 old_filename 不重新命名 → 引用 section / docs 内的引用行不需要改
-    - stage_prefix 沿用旧条目（保持文件名一致性）
+    - stage_prefix / input_category 沿用旧条目（保持文件名一致性）
     - 同款 denylist + size cap 检查
 
     Args:
         work_dir: 当前模块工作目录绝对路径
-        old_filename: attachments_seen 中已注册的旧文件名（如 `docs/inputs/attachments/spec-foo.pdf`）
+        old_filename: attachments_seen 中已注册的旧文件名（如 `docs/inputs/interviews/spec-foo.pdf`）
         new_src: 新源路径（PM 给的）
 
     Returns: CopyResult（new_name = old_filename，pending_inject 同 stage 判定）
@@ -501,17 +552,20 @@ def replace_attachment(
 
     # 重新 register（用旧 stage_prefix）
     stage_prefix = old_entry.get("stage_prefix", "unknown")
+    input_category = old_entry.get("input_category") or _category_from_attachment_name(old_filename)
     register_attachment(
         work_dir,
         filename=old_filename,
         src_origin=str(new_src),
         hint=old_entry.get("hint"),
         stage_prefix=stage_prefix,
+        input_category=input_category,
     )
 
     return CopyResult(
         new_name=old_filename,
         abs_path=dst,
         size_mb=size_mb,
+        input_category=input_category,
         pending_inject=not _stage_doc_exists(work_dir, stage_prefix),
     )

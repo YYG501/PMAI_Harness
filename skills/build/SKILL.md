@@ -17,7 +17,7 @@ description: |
   - **讨论** = 改文档（模块三件套 discussion / decisions / spec）→ `/pmai-design` 里做，无 worktree。
   - **小改** = 改一两个字段 / 文案 / 一个组件的小调整 → 直接改 prototype/，无 worktree。main 写保护已放宽，允许直接改文档 + 小代码。
 - 上游：`/pmai-design` 把模块规格 `spec.md` 定稿（信息模型理清、mock 已确认），或 `/pmai-prd-writing` 写出功能型文档 → 交给 `/pmai-build` 建。
-- 下游：建完 + PM 验收通过 → `/pmai-close` 收尾（决策 / 术语回写基线、文档归位、有 worktree 则 merge 回 main）。
+- 下游：建完 + PM 验收通过 → `/pmai-build-close` 收尾（决策 / 术语回写基线、文档归位、有 worktree 则 merge 回 main）。
 
 ## PM 视图规则（必读）
 
@@ -60,6 +60,38 @@ preamble 会解析出 `PMAI_HOME` / `MAIN_REPO_ROOT` / `REPO_ROOT` / `BRANCH`。
 
 > 为什么对着功能锚点：模块规格是长期真相源；功能型文档是 PM 明确要求的 PRD / 功能需求 / 功能规格成稿。build 的覆盖审计锚点必须和 PM 选定的建造依据一致。
 
+### 步骤 0.5：构建前硬门：先固定建造依据，再问两道选择
+
+`/pmai-build` 不是“读完 spec 就直接动手”的入口。进入任何实现改动前，必须先过两个硬门：
+
+1. **建造依据可被后续环境读到**：模块 `spec.md` / `decisions.md` / 已确认 mock 或功能型文档不能只停在未跟踪 / 未提交状态。
+2. **PM 已回答两道构建选择**：先答“要不要开隔离环境”，再答“用什么工具建”。
+
+先跑一次真实状态：
+
+```bash
+git -C "$REPO_ROOT" status --short --untracked-files=all
+```
+
+如果 `BUILD_ANCHOR`、同模块 `decisions.md`、`mockups/` 看版或本次功能型文档还在未跟踪 / 未提交状态，说明刚才 `/pmai-design` 产出的建造依据还没固定。**未提交的规格 / mock / 文档不是跳过 PM 选择的理由**，更不能说“开隔离环境拿不到这些文件，所以我直接在 main 上实现”。
+
+正确处理只有两种：
+
+AskUserQuestion：
+- `question`: "这次建造依据还没固定，先怎么处理？"
+- `options`:
+  - `label`: `先固定设计上下文（推荐）`
+    `description`: `只把本模块规格、决策和已确认看版做成建造起点；不碰无关未跟踪文件`
+  - `label`: `先停住`
+    `description`: `暂不实现，保留当前讨论结果，等你确认后再 build`
+
+**PM 答题处理**：
+- 选 `先固定设计上下文` / 输 `1` → 只提交当前模块相关的 `docs/modules/<模块>/`、相关功能型文档、`mockups/` 看版 / manifest、必要索引；**不要**把无关未跟踪文件（如 `Guides/`、`Scripts/`、下载素材、临时文件）顺手带进提交。提交后继续步骤 1 / 步骤 2。
+- 选 `先停住` / 输 `2` → STOP，不进入 build。
+- runtime 不支持 AskUserQuestion → 输出编号列表并 wait。PM 没答前禁止继续。
+
+**两道构建选择是硬门**：步骤 1 和步骤 2 必须按顺序问。没拿到“执行方式”和“执行器”两个答案之前，读文件 / 跑 `status` 可以，**禁止修改 `prototype/`、`Sources/` 或任何业务代码**，也禁止输出“我会直接在当前主仓实现”这类替 PM 拍板的话。
+
 ### 步骤 1：PM 选要不要开隔离环境建（worktree 可选）
 
 大需求默认建议开隔离环境（worktree），但**由 PM 拍**——这是改造后的灵活点：讨论 / 小改本就不开，大需求 PM 可选直接在 main 上建（单人 PM、改动可控时）或开隔离。
@@ -81,6 +113,7 @@ AskUserQuestion：
 **PM 答题处理**：
 - 选 `开隔离环境` / 输 `1` / 输 "隔离 / 开 / 推荐" → 进步骤 1A（拉 worktree），`BUILD_DIR` = worktree 路径。
 - 选 `直接在主线上建` / 输 `2` / 输 "直接 / 不隔离 / 在主线" → 跳过 1A，`BUILD_DIR="$REPO_ROOT"`（main 上建）。main 写保护已放宽，prototype/ 与文档可直接写。
+- PM 没答 / 空答 / runtime 没返回 → 按 `_shared/pm-view/askuser-rules.md` STOP。**禁止默认选“直接在主线上建”**。
 
 #### 1A：拉 worktree（PM 选了隔离时）
 
@@ -129,19 +162,61 @@ AskUserQuestion：
 - `Cursor` / 输 `3` → `EXECUTOR=cursor-agent`
 - `Gemini` / 输 `4` → `EXECUTOR=gemini`
 - `我自己建` / 输 `5` → `EXECUTOR=manual`
+- PM 没答 / 空答 / runtime 没返回 → 按 `_shared/pm-view/askuser-rules.md` STOP。**禁止把当前主控 AI 当默认执行器直接改代码**。
 
 > **executor 来源**：本 skill **直接问 PM** 用什么工具建。settings.json 里若配了 `executor.default` 可作为 AskUserQuestion 的默认高亮项，但仍由 PM 当场拍。`executor_model` 留空走 settings 默认（不另外问 PM 模型，除非 PM 主动提）。
 
-### 步骤 3：建之前先把 DESIGN.md 读进 context（硬规则）
+### 步骤 2.5：写入 build 合同（给 build-close 用）
 
-动手写代码前，把项目 `docs/DESIGN.md`（视觉规范单一来源 + 共享组件 inventory）读进 context。这是栈内 build 的硬规则——UI 漏读 DESIGN.md 是早期反复迭代踩坑的根因。用 `cat` 无条件 echo 到 transcript（比依赖 Read tool 自觉触发硬）：
+拿到「要不要隔离环境」和「执行器」两个答案后，先把本次 build 的执行合同写进当前模块 `.work-meta.json`，再开始实现。`/pmai-build-close` 只按这份合同收尾，不再根据当前 cwd / 分支名字猜。
 
 ```bash
-DESIGN_MD="$BUILD_DIR/docs/DESIGN.md"
+MODULE_WORK_DIR="$BUILD_DIR/docs/modules/<模块>"
+BUILD_MODE="<worktree|main>"   # PM 选隔离环境 => worktree；PM 选直接主线 => main
+BASELINE_SHA=$(git -C "$BUILD_DIR" rev-parse HEAD)
+
+python3 "$PMAI_HOME/scripts/build-contract.py" start "$MODULE_WORK_DIR" \
+  --anchor "$BUILD_ANCHOR" \
+  --mode "$BUILD_MODE" \
+  --executor "$EXECUTOR" \
+  --branch "${BUILD_BRANCH:-main}" \
+  --worktree "$([ "$BUILD_MODE" = "worktree" ] && printf '%s' "$BUILD_DIR" || true)" \
+  --baseline-sha "$BASELINE_SHA" \
+  --audit-dir ".pm-workflow/audits/<模块>"
+
+git -C "$BUILD_DIR" add "$MODULE_WORK_DIR/.work-meta.json"
+git -C "$BUILD_DIR" commit -m "build(<模块>): record build contract"
+```
+
+合同最少包含：
+
+```json
+{
+  "build": {
+    "anchor": "docs/modules/<模块>/spec.md",
+    "mode": "worktree | main",
+    "executor": "claude-code | codex | cursor-agent | gemini | manual",
+    "branch": "build-<模块> | main",
+    "worktree": ".worktrees/build-<模块> | null",
+    "baseline_sha": "<build 前 HEAD>",
+    "implementation_commit": null,
+    "pm_accepted_at": null
+  }
+}
+```
+
+若 `MODULE_WORK_DIR/.work-meta.json` 不存在，说明当前模块还没有进入 PMAI 工作状态：STOP，先回 `/pmai-design` 建模块三件套 / 工作状态，或由 PM 明确确认当前功能型文档归属哪个模块后再写合同。禁止临时靠当前分支名猜模块。
+
+### 步骤 3：建之前先把 DESIGN.md 读进 context（硬规则）
+
+动手写代码前，把项目 `DESIGN.md`（视觉规范单一来源 + 共享组件 inventory）读进 context。这是栈内 build 的硬规则——UI 漏读 DESIGN.md 是早期反复迭代踩坑的根因。用 `cat` 无条件 echo 到 transcript（比依赖 Read tool 自觉触发硬）：
+
+```bash
+DESIGN_MD="$BUILD_DIR/DESIGN.md"
 if [ -f "$DESIGN_MD" ]; then
-  echo "════════ docs/DESIGN.md（视觉规范单一来源，build 必须遵循）════════"
+  echo "════════ DESIGN.md（视觉规范单一来源，build 必须遵循）════════"
   cat "$DESIGN_MD"
-  echo "════════ END docs/DESIGN.md ════════"
+  echo "════════ END DESIGN.md ════════"
 else
   echo "ℹ️  $DESIGN_MD 不存在；建议 PM 跑 gstack /design-consultation 建项目级视觉规范。"
 fi
@@ -159,6 +234,8 @@ DIRTY=$(git -C "$BUILD_DIR" status --porcelain 2>/dev/null)
 [ -n "$DIRTY" ] && { echo "❌ 工作区有未提交改动，先提交或丢弃再建。"; git -C "$BUILD_DIR" status --short; exit 1; }
 BASELINE_SHA=$(git -C "$BUILD_DIR" rev-parse HEAD)
 ```
+
+若 dirty 来自刚生成的模块规格 / mock / 功能型文档，回到步骤 0.5 做设计上下文 checkpoint；不要绕过 dirty check，也不要改口成“所以直接在 main 上建”。
 
 #### 4a：claude-code（默认）= 优先派独立 build subagent；不可用时走 CLI adapter
 
@@ -204,11 +281,11 @@ EXIT_CODE=$?
 
 #### 4c：越界写保护（轻量）
 
-build 改动应集中在 `prototype/`。`docs/*` 改动**默认不属于 build 边界**（文档归位是 `/pmai-close` 的事）。扫一遍，越界就提示 PM：
+build 改动应集中在 `prototype/`。`docs/*` 改动**默认不属于 build 边界**（文档归位是 `/pmai-build-close` 的事）。扫一遍，越界就提示 PM：
 
 ```bash
 ( cd "$BUILD_DIR" && git status --porcelain | awk '{print $2}' ) | while read -r p; do
-  case "$p" in docs/*) echo "⚠️ 越界：执行器改了 $p（build 只该动 prototype/，文档改动归 /pmai-close）。" ;; esac
+  case "$p" in docs/*) echo "⚠️ 越界：执行器改了 $p（build 只该动 prototype/，文档改动归 /pmai-build-close）。" ;; esac
 done
 ```
 
@@ -261,11 +338,13 @@ done
 > python3 "$PMAI_HOME/scripts/build-audits.py" synthesize "$BUILD_ANCHOR" \
 >     --repo-root "$BUILD_DIR" --audit-dir ".pm-workflow/audits/<模块>" --label "<模块>"
 > ```
+>
+> `coverage.json` / `visual.json` / `behavior.json` 是 `.pm-workflow/` 下的内部证据，不写进 `docs/`，也不作为消费仓主目录结构对 PM 展开；给 PM 看的是合成后的结论和待改项。
 
 三道审抓三种不同的病：
 
 - **① 覆盖审计**（白纸新鲜视角，对标 `coverage-reviewer` agent）：拿**功能锚点 BUILD_ANCHOR** 对 `prototype/` 代码逐项 diff，报每条规格点：✅ 建了 / ❌ 丢了 / ⚠️ 降级占位（空壳 / 假数据 / 交互没接）。故意不让建代码的 AI 自审，避盲区。静态读码，不需 dev server，先跑。
-- **② 视觉门**（gstack `/design-review`，只截图不改）：对照 `docs/DESIGN.md` 审视觉一致性（间距 / 层级 / 配色 / AI slop）。用 `/browse`（headless），禁 `mcp__claude-in-chrome__*`。出口是 PM 一句话 pass / 打回，**AI 不替 PM 改视觉**。复用步骤 5 的 dev server。
+- **② 视觉门**（gstack `/design-review`，只截图不改）：对照 `DESIGN.md` 审视觉一致性（间距 / 层级 / 配色 / AI slop）。用 `/browse`（headless），禁 `mcp__claude-in-chrome__*`。出口是 PM 一句话 pass / 打回，**AI 不替 PM 改视觉**。复用步骤 5 的 dev server。
 - **③ 行为审**（验收流程驱动 `/browse` 走确定性路径）：从功能锚点的核心动作 / 状态机 / 验收标准派生验收流程，`/browse` 逐流程跑，验证「跑得通不通」（明确 pass/fail，区别于 `/qa` 的 AI 探索）。复用步骤 5 的 dev server。
 
 ### 步骤 7：review loop（看原型挑错、AI 改）
@@ -285,7 +364,7 @@ done
 ```
 
 - PM 勾的项 → AI 改 `BUILD_DIR/prototype/` 代码 → **重新跑步骤 6 三道审**（每轮改完重审，别只改不验）。
-- review loop 只动 prototype/ 代码，**不动 spec.md / decisions.md**（文档对齐是 `/pmai-close` 的事；改造后讨论 / 定稿在 main 上由 /pmai-design 做，build 期不改模块文档）。
+- review loop 只动 prototype/ 代码，**不动 spec.md / decisions.md**（文档对齐是 `/pmai-build-close` 的事；改造后讨论 / 定稿在 main 上由 /pmai-design 做，build 期不改模块文档）。
 - 行为审 fail → 进本 loop 修代码，不往下走；连续磨不动（反复改不到位）→ 上抛，提示 PM 可能要回 `/pmai-design` 重收规格，别在 build 里死磕。
 - **停止条件**：demo 达到 PM 心里的成功标准 + PM 在步骤 8 拍板。
 
@@ -308,22 +387,28 @@ dev server 保持运行（PM 验收要访问）。呈交块 + AskUserQuestion（
     `description`: `说哪里要改，我接着改`
 
 **PM 答题处理**：
-- 选 `可以，收尾` / 输 `1` / 输 "OK / 通过 / 可以" → 进步骤 9（接 `/pmai-close`）。
+- 选 `可以，收尾` / 输 `1` / 输 "OK / 通过 / 可以" → 先把最新实现提交和 PM 验收写回 build 合同，再进步骤 9（接 `/pmai-build-close`）：
+  ```bash
+  IMPLEMENTATION_COMMIT=$(git -C "$BUILD_DIR" rev-parse HEAD)
+  python3 "$PMAI_HOME/scripts/build-contract.py" commit "$MODULE_WORK_DIR" \
+    --implementation-commit "$IMPLEMENTATION_COMMIT"
+  python3 "$PMAI_HOME/scripts/build-contract.py" accept "$MODULE_WORK_DIR"
+  ```
 - 选 `还要改` / 输 `2` / 提具体反馈 → 回步骤 7 review loop 按反馈改 → 重审 → 追加 fix commit（`build(<模块>) fixup: <一句话>`）→ 重新呈交。
 
-### 步骤 9：交接 /pmai-close 收尾（含 merge）
+### 步骤 9：交接 /pmai-build-close 收尾（含 merge）
 
-PM 拍 `可以，收尾` → build 的活到此为止，**merge 回 main + 文档归位 + 决策 / 术语回写基线 由 `/pmai-close` 做**（不在 build 里 merge：`/pmai-close` 是改造后的收尾原子动作，把决策 / 术语沉淀和 merge 焊在一起，绕不过）。
+PM 拍 `可以，收尾` → build 的活到此为止，**merge 回 main + 文档归位 + 决策 / 术语回写基线 由 `/pmai-build-close` 做**（不在 build 里 merge：`/pmai-build-close` 是改造后的收尾原子动作，把决策 / 术语沉淀和 merge 焊在一起，绕不过）。
 
 输出 Next Up（不写 worktree / merge / 分支字样，按 banner-rules §2.5）：
 
 ```
 ✅ <模块> 这版建好了，你确认通过。
 
-▶ Next Up：发 /pmai-close 收尾这个模块 —— 把这次拍的决策和新术语沉淀进基线，文档归位<，改动合回主线>。
+▶ Next Up：发 /pmai-build-close 收尾这个模块 —— 把这次拍的决策和新术语沉淀进基线，文档归位<，改动合回主线>。
 ```
 
-> 括号里「改动合回主线」仅在开了隔离环境（步骤 1 选了 worktree）时出现；PM 在 main 上直接建的，无 merge、`/pmai-close` 只做沉淀 + 文档归位。`/pmai-close` 自己会判断有没有 worktree。
+> 括号里「改动合回主线」仅在开了隔离环境（步骤 1 选了 worktree）时出现；PM 在 main 上直接建的，无 merge、`/pmai-build-close` 只做沉淀 + 文档归位。`/pmai-build-close` 按步骤 2.5 写入的 build 合同决定收尾方式。
 
 ## 与上下游的衔接（一句话）
 
@@ -331,19 +416,23 @@ PM 拍 `可以，收尾` → build 的活到此为止，**merge 回 main + 文�
 |---|---|---|
 | 上游 `/pmai-design` / `/pmai-prd-writing` | 在 main 上理清信息模型、`/mock` 确认设计、产 / 演进模块规格 `spec.md`；或写功能型文档 | build 拿模块 `spec.md` 或 `docs/modules/<按内容命名>.md` 当建造契约（覆盖审计锚点）+ 相关 `decisions.md` 当背景 |
 | 本 skill `/pmai-build` | 仅大需求：PM 选工具 + 选要不要 worktree → 派执行器在 prototype/ 建 → review loop + 三道审 → commit + 呈交 | 建好的 prototype/ 改动（worktree 或 main 上）+ PM 验收通过信号 |
-| 下游 `/pmai-close` | 决策 / 术语回写基线、文档归位、有 worktree 则 merge 回 main 并删 | 把 build 产物收口进基线 + 主线 |
+| 下游 `/pmai-build-close` | 决策 / 术语回写基线、文档归位，按 build 合同决定是否 merge 回 main 并清理隔离环境 | 把 build 产物收口进基线 + 主线 |
 
 ## Rules
 
 - **只大需求走 build**。讨论（改文档）/ 小改（一两处字段 / 文案 / 局部）不走这——在 main 上由 `/pmai-design` 或直接改 prototype/ 完成，无 worktree。步骤 0 判出是小改 → 退出 build。
 - **对着功能锚点建**。覆盖审计锚点 = `docs/modules/<模块>/spec.md` 或 `docs/modules/<按内容命名>.md`。不拆任务卡、不走独立任务状态机。
 - **PM 选工具**（claude-code / codex / cursor-agent / gemini / manual，复用 exec-adapter）**+ PM 选要不要 worktree**（步骤 1 / 步骤 2 两道 PM 决策）。executor 从问 PM 拿。
+- **两道构建选择是硬门**：没拿到“要不要隔离环境”和“用什么工具建”两个 PM 答案前，只能读文件 / 查状态，不能改 `prototype/` / `Sources/` / 业务代码。runtime 不支持 AskUserQuestion 就编号列表 wait，禁止默认选择。
+- **build 合同是 build-close 的唯一收尾依据**：两道 PM 选择拿到后立即写 `.work-meta.json:build` 并提交；PM 验收通过后写入 `implementation_commit` 与 `pm_accepted_at`。`/pmai-build-close` 不再靠当前 cwd、分支名或有没有 worktree 猜执行方式。
+- **未提交上下文先固定，不准绕过**：未提交的规格 / mock / 文档不是跳过 PM 选择的理由；先只 checkpoint 当前模块建造依据，或停住。禁止用“worktree 拿不到未跟踪文件”为理由自行决定直接在 main 上实现。
 - **worktree 可选、统一挂 `.worktrees/<分支>/`**。开了就用 `git -C "$BUILD_DIR"` / subshell，禁 `cd` 进 worktree（cwd 护栏）；没开则 `BUILD_DIR="$REPO_ROOT"`、main 上直接建（main 写保护已放宽）。
 - **claude-code = 优先派独立 build subagent**（Agent 工具），不在驱动上下文 inline 建（隔离 + 角色分离 + 不刷 PM 屏）；当前 runtime 没有 subagent 时走 `exec-adapters/claude-code.sh` 调 Claude Code CLI。codex / cursor-agent / gemini / manual 走现成 exec-adapter。一次只建本模块这一片。
 - **建之前必读 DESIGN.md**（cat echo 进 context）+ 功能锚点当契约；先扫已有组件复用、不重写。
 - **三道审 AI 自动跑、只报不改**（覆盖 / 视觉 / 行为，复用 build-audits.py 编排或等价自跑；三道审复用同一次 dev server）；出口都是给 PM 看的证据，不替 PM 拍板。探索式 review（`/review` `/qa` `/qa-only`）是 PM 手动旁路，AI 不自动调（守 I-RV1）。
-- **review loop 只动 prototype/ 代码**，不改 spec.md / decisions.md（模块文档对齐归 `/pmai-close`；build 期不改文档）。AI 主动批量 flag、PM 勾改；每轮改完重跑三道审。
+- **`/pmai-meta` 不进默认 build 门**：如果 PM 在 build 前怀疑功能锚点本身不稳，可先旁路跑 `/pmai-meta` 对焦 / 推导；如果已有规格 / 方案且想多视角找盲区，由 `/pmai-meta` 走压测模式。build 流程本身仍只按功能锚点 + 三道审推进；功能锚点不稳时也可回 `/pmai-design` 重理。
+- **review loop 只动 prototype/ 代码**，不改 spec.md / decisions.md（模块文档对齐归 `/pmai-build-close`；build 期不改文档）。AI 主动批量 flag、PM 勾改；每轮改完重跑三道审。
 - **commit 用 `git -C "$BUILD_DIR"`**；执行器禁自己 commit（claude-code subagent prompt 里写死、adapter 约定 unstaged）。
-- **PM 验收是唯一决策点**（步骤 8）；通过后**不在 build 里 merge**，交 `/pmai-close` 做 merge + 沉淀（决策 / 术语回写基线焊在 close 里绕不过）。
+- **PM 验收是唯一决策点**（步骤 8）；通过后**不在 build 里 merge**，交 `/pmai-build-close` 做提交 / 合并 + 沉淀（决策 / 术语回写基线绑定在 build-close，绕不过）。
 - 越界（执行器改了 docs/*）/ 零改动 / 执行器失败都给 PM 看、不静默吞；失败可换工具或改「我自己建」。
 - 所有路径用绝对路径（`BUILD_DIR` / `MAIN_REPO_ROOT` / `REPO_ROOT`），不依赖会话 cwd。

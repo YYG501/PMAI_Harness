@@ -2,7 +2,7 @@
 # pre-commit hook (PM-AI-Workflow)
 # 由 init-project.sh / install-hooks.sh 安装到 .git/hooks/pre-commit。
 # 职责：
-#   1. 拦截 docs/ 顶层错位文件 (check-docs-toplevel.py，按 CLAUDE.md 「docs/ 归档约定」)
+#   1. 拦截 docs/ 顶层错位文件 (check-docs-toplevel.py，按 CLAUDE.md 「根目录与 docs/ 归位约定」)
 #   2. 对 attachments/ 大文件给出 warning（不阻塞）
 #
 # 绕过：git commit --no-verify（git 内置；hook 不会被调到）。

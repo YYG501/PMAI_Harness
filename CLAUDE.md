@@ -62,7 +62,7 @@
 - **触发**：每个新 chat session 的 PM 第一条 user message。**AI 不会在 PM 没说话前自动播报**（LLM chat 模型固有限制；codex C-3 校准）。
 - **目的**：PM 切窗口 / 隔天回来时不用主动问"我在哪"，AI 主动结构化报告当前 active work / 当前模块 / 下一步建议。
 - **数据源**：`status-view.py --narrative` 内部走 `.work-meta.json` + `_lib.state.get_overall_state()`，严格基于现有字段；不写小节级、commit hash 全文或相对时间这种伪精确内容。
-- **失败兜底**（无 active work）：直接输出"目前没有 active work。可以发 /pmai-design 起一个模块工作，或发 /pmai-init-project 起新项目"，**不编造**。
+- **失败兜底**：未初始化目录由 `status-view.py` 先提示 `/pmai-init-project`；已初始化但无 active work 时，直接输出"目前没有 active work。可以发 /pmai-design 起一个模块工作"，**不编造**。
 
 **生成器仓 vs 业务仓**：本规则只在业务仓有 `.work-meta.json` 时生效；生成器仓自己开发跑无意义（没有 PM 视图 active work），跳过即可。
 

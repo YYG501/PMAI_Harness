@@ -31,8 +31,8 @@ fixture_setup() {
   ln -s "$FRAMEWORK_ROOT/scripts" "$FIXTURE_DIR/.claude/scripts"
 
   # Minimal docs skeleton
-  touch "$FIXTURE_DIR/docs/PRODUCT.md"
-  touch "$FIXTURE_DIR/docs/DESIGN.md"
+  touch "$FIXTURE_DIR/PRODUCT.md"
+  touch "$FIXTURE_DIR/DESIGN.md"
   echo "# Fixture Project" > "$FIXTURE_DIR/CLAUDE.md"
   echo ".runs/" > "$FIXTURE_DIR/.gitignore"
   echo ".worktrees/" >> "$FIXTURE_DIR/.gitignore"
@@ -92,7 +92,19 @@ fixture_create_work() {
   "worktree": ".worktrees/$work_branch",
   "stage": $stage,
   "stage_history": [{"stage": 1, "entered_at": "2026-04-12T10:00:00+08:00"}],
-  "status": "active"
+  "status": "active",
+  "build": {
+    "anchor": "docs/modules/$work_branch/spec.md",
+    "mode": "worktree",
+    "executor": "codex",
+    "branch": "$work_branch",
+    "worktree": ".worktrees/$work_branch",
+    "baseline_sha": "fixture-baseline",
+    "audit_dir": ".pm-workflow/audits/$work_branch",
+    "started_at": "2026-04-12T10:00:00+08:00",
+    "implementation_commit": "fixture-implementation",
+    "pm_accepted_at": "2026-04-12T10:30:00+08:00"
+  }
 }
 EOF
 )
@@ -106,6 +118,56 @@ EOF
     cd "$wt"
     git add -A
     git commit -q -m "create $work_id"
+  )
+
+  echo "$module_dir"
+}
+
+# Create a fake active build that was done directly on main.
+# Usage: fixture_create_main_work <work-id> <name> <stage>
+fixture_create_main_work() {
+  local work_id="$1"
+  local name="$2"
+  local stage="${3:-2}"
+  local module_name="build-$work_id-$name"
+  local module_dir="$FIXTURE_DIR/docs/modules/$module_name"
+
+  mkdir -p "$module_dir"
+  local head
+  head=$(git -C "$FIXTURE_DIR" rev-parse HEAD)
+
+  local meta_json
+  meta_json=$(cat <<EOF
+{
+  "id": "$work_id",
+  "name": "$name",
+  "branch": "main",
+  "worktree": null,
+  "stage": $stage,
+  "stage_history": [{"stage": 1, "entered_at": "2026-04-12T10:00:00+08:00"}],
+  "status": "active",
+  "build": {
+    "anchor": "docs/modules/$module_name/spec.md",
+    "mode": "main",
+    "executor": "codex",
+    "branch": "main",
+    "worktree": null,
+    "baseline_sha": "$head",
+    "audit_dir": ".pm-workflow/audits/$module_name",
+    "started_at": "2026-04-12T10:00:00+08:00",
+    "implementation_commit": "$head",
+    "pm_accepted_at": "2026-04-12T10:30:00+08:00"
+  }
+}
+EOF
+)
+  printf '%s\n' "$meta_json" > "$module_dir/.work-meta.json"
+  echo "# Discussion" > "$module_dir/discussion.md"
+
+  (
+    cd "$FIXTURE_DIR"
+    git add -A
+    git commit -q -m "create main work $work_id"
   )
 
   echo "$module_dir"

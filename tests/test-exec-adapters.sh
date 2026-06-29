@@ -9,6 +9,7 @@ FRAMEWORK_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 ADAPTER_DIR="$FRAMEWORK_ROOT/scripts/exec-adapters"
 BUILD_SKILL="$FRAMEWORK_ROOT/skills/build/SKILL.md"
 AGENTS_TMPL="$FRAMEWORK_ROOT/templates/AGENTS.md.tmpl"
+CLAUDE_TMPL="$FRAMEWORK_ROOT/templates/CLAUDE.md.tmpl"
 README="$FRAMEWORK_ROOT/README.md"
 
 _setup_fake_executor() {
@@ -119,6 +120,23 @@ test_build_skill_exposes_claude_and_gemini() {
   pass_test
 }
 
+test_build_skill_requires_pm_gates_before_editing() {
+  start_test "build skill: 未提交上下文不能跳过 PM 执行方式/执行器选择"
+
+  assert_file_contains "$BUILD_SKILL" "两道构建选择是硬门" "build should name the two PM choices as a hard gate" || return
+  assert_file_contains "$BUILD_SKILL" "未提交的规格 / mock / 文档不是跳过 PM 选择的理由" "dirty design context should not bypass PM choices" || return
+  assert_file_contains "$BUILD_SKILL" '禁止修改 `prototype/`、`Sources/` 或任何业务代码' "build should forbid code edits before both PM choices" || return
+  assert_file_contains "$BUILD_SKILL" "禁止默认选“直接在主线上建”" "build should not default to direct-main mode" || return
+  assert_file_contains "$BUILD_SKILL" "禁止把当前主控 AI 当默认执行器直接改代码" "build should not default to the current host as executor" || return
+  assert_file_contains "$BUILD_SKILL" "build 合同是 build-close 的唯一收尾依据" "build should record a contract for build-close" || return
+  assert_file_contains "$BUILD_SKILL" "build-contract.py" "build should call the build contract helper" || return
+  assert_file_contains "$AGENTS_TMPL" "必须先完成两道 PM 门" "consumer AGENTS should preserve the build PM gate" || return
+  assert_file_contains "$AGENTS_TMPL" "隔离环境拿不到未跟踪文件" "consumer AGENTS should block dirty-context direct-main rationalization" || return
+  assert_file_contains "$AGENTS_TMPL" ".work-meta.json:build" "consumer AGENTS should require build contract handoff" || return
+  assert_file_contains "$CLAUDE_TMPL" ".work-meta.json:build" "consumer CLAUDE should require build contract handoff" || return
+  pass_test
+}
+
 test_consumer_entry_documents_fallback() {
   start_test "consumer AGENTS: Codex runtime 下 Claude subagent 不可用时先走 adapter"
 
@@ -140,6 +158,7 @@ test_adapter_files_are_executable
 test_claude_code_adapter_invokes_print_mode
 test_gemini_adapter_invokes_yolo_prompt_mode
 test_build_skill_exposes_claude_and_gemini
+test_build_skill_requires_pm_gates_before_editing
 test_consumer_entry_documents_fallback
 test_readme_lists_build_executors
 

@@ -1,7 +1,7 @@
 ---
 name: pmai-mockup
 description: |
-  依据讨论确定的信息设计，一次产出多版设计草图（AI 设计图或 HTML 草图）供 PM 并排比选，替代在规格中绘制 ASCII 示意。各版本归入 mocks/ 并汇总为单页对比视图；选定方向后返回 /pmai-design 定稿。轻量流程，不改动主原型。
+  依据讨论确定的信息设计，一次产出多版设计草图（AI 设计图或 HTML 草图）供 PM 并排比选，替代在规格中绘制 ASCII 示意。各版本归入 mockups/ 并汇总为单页对比视图；选定方向后返回 /pmai-design 定稿。轻量流程，不改动主原型。
 ---
 
 # /mockup
@@ -10,7 +10,7 @@ description: |
 > **两种设计稿**：① **AI 图片**（codex 出的设计稿图，看视觉风格 / 密度 / 气质，快但文字是装饰性的）；② **HTML 草图**（真线框、能点、文字是真的，看布局 / 交互 / 内容）。按要挑什么取舍，详见步骤 3。
 > **和 /pmai-design 的关系**：`/pmai-design` 把信息设计讨论清楚后，到"该让 PM 看看长什么样"那一步**调本 skill**；PM 挑定方向，`/pmai-design` 接着把规格写定（规格里只留文字定义 + 指一句"长什么样见 mockup 看版第 N 版"，不再画线框）。
 > **和 /pmai-build 的关系**：两码事。`/mockup` 出的是**便宜的比稿**（设计稿图 / HTML 线框，不接数据、不进主原型），只为挑方向；`/pmai-build` 才是在 `prototype/` 主原型里**真建**那一份能跑的实现。挑定方向走 `/pmai-build`（大需求）或直接在主原型里改（小改）。
-> **不动主原型**：`mocks/` 是摊在桌上比来比去的设计稿集，和 `prototype/`（跑着的那一份主原型）是分开的两个家。本 skill 只写 `mocks/`，不碰 `prototype/`。
+> **不动主原型**：`mockups/` 是摊在桌上比来比去的设计稿集，和 `prototype/`（跑着的那一份主原型）是分开的两个家。本 skill 只写 `mockups/`，不碰 `prototype/`。
 
 ## When To Use
 
@@ -29,7 +29,7 @@ source "$HOME/.pmai/scripts/skill-preamble.sh"
 echo "SKILL: mockup"
 ```
 
-本 skill 从**主仓 main** 触发（动的是探索设计稿，不进任何 build worktree）。`mocks/` 在 main 上随时可写（属探索草稿、`check-branch.sh` 已豁免），所以**不开分支、不开 worktree、不拉 PM 进工作区**。
+本 skill 从**主仓 main** 触发（动的是探索设计稿，不进任何 build worktree）。`mockups/` 在 main 上随时可写（属探索草稿、`check-branch.sh` 已豁免），所以**不开分支、不开 worktree、不拉 PM 进工作区**。
 
 ## 借 gstack /design-shotgun
 
@@ -38,7 +38,7 @@ echo "SKILL: mockup"
 - **让 PM 定出几版**：像 shotgun 那样，先问 PM 这轮出几版（默认 3，重要界面到 5-8），再一次性批量生成并排比（步骤 2-3）。
 - **HTML 路能调 design-shotgun 就调**：gstack 装了、`/design-shotgun` 可用时，HTML 草图**直接用 Skill 工具调它**（接受它写的产物、跟随它升级，不解析不重写）；调不动就 AI 自己用 `frontend-design` 出 HTML。
 - **图片路用框架自带的出图脚本**：`scripts/gen-mockup-image.sh`（codex 出图，见步骤 3），不依赖 OpenAI API key。
-- **挑定后统一收口**：不管哪条路出的设计稿，**都落进框架的 `mocks/` + 清单 + 单页看版**（步骤 3），别留在 gstack 自己的 `~/.gstack/...` 里——那会"探过的设计稿找不回"。
+- **挑定后统一收口**：不管哪条路出的设计稿，**都落进框架的 `mockups/` + 清单 + 单页看版**（步骤 3），别留在 gstack 自己的 `~/.gstack/...` 里——那会"探过的设计稿找不回"。
 
 ## Workflow
 
@@ -81,31 +81,32 @@ echo "SKILL: mockup"
    ```bash
    "$PMAI_HOME/scripts/gen-mockup-image.sh" \
      --brief "<这版的设计稿描述：界面 + 1440px 桌面端 + 风格方向 + 关键区块>" \
-     --out "mocks/<界面>-a.png" --cwd "$REPO_ROOT"
+     --out "mockups/<界面>-a.png" --cwd "$REPO_ROOT"
    ```
    脚本钉 codex 0.135.0（0.141 无头出图回归、不可用）、走 ChatGPT 订阅免 API key；**复制由脚本自己做**（出图前后 diff `~/.codex/generated_images/` 挑新增那张），所以"新增文件 = 真生成"，天然防 codex 拷旧图冒充，没新图就明确报错、不留假图。批量时给 PM 一句「约 N×3 分钟后一起看」，别让 PM 干等。
 
-   **HTML 路** —— 能调 `/design-shotgun` 就调，调不动就 `frontend-design` 写静态 HTML，每版存 `mocks/<界面>-b/index.html`。
+   **HTML 路** —— 能调 `/design-shotgun` 就调，调不动就 `frontend-design` 写静态 HTML，每版存 `mockups/<界面>-b/index.html`。
 
-2. **落进 `mocks/`**：图片每版一个 `mocks/<界面>-x.png`，HTML 每版一个 `mocks/<界面>-x/index.html`。**所有生成的都留下、都进版本库——包括待会儿被否掉的那几版**（否掉不等于删掉，留着下次还能翻回来看）。
+2. **落进 `mockups/`**：图片每版一个 `mockups/<界面>-x.png`，HTML 每版一个 `mockups/<界面>-x/index.html`。**所有生成的都留下、都进版本库——包括待会儿被否掉的那几版**（否掉不等于删掉，留着下次还能翻回来看）。
 
-3. **登记进清单**：往 `mocks/manifest.json` 的 `variants` 数组**每版追加一条对象**。**key 必须英文**（`gen-mock-board.py` 只认英文 key，中文 key 会被静默渲染成"—"），值可中文：
+3. **登记进清单**：往 `mockups/manifest.json` 的 `variants` 数组**每版追加一条对象**。**key 必须英文**（`gen-mock-board.py` 只认英文 key，中文 key 会被静默渲染成"—"），值可中文：
 
    ```json
-   { "path": "<界面>-a.png", "explores": "决策流水线式布局",
+   { "path": "<界面>-a.png", "requirement": "<需求/模块名>", "title": "方案 A：流水线看板",
+     "explores": "决策流水线式布局",
      "good_parts": "阶段从左到右、信息密度高", "status": "活跃",
-     "round": "<本轮/模块标识>", "featured": false, "retired_note": "" }
+     "round": "第一轮", "featured": false, "retired_note": "" }
    ```
 
-   字段含义见 `templates/mocks-manifest.json.tmpl` 的 `_fields`；`status` 枚举 `活跃` / `待合并` / `已退役`（这一步新出的都填 `活跃`）。`path` 指图片（`.png` 等）或 HTML 页（`.html`），看版会自动按类型内联预览。
+   字段含义见 `templates/mockups-manifest.json.tmpl` 的 `_fields`；`requirement` 写这版来自哪个需求 / 模块（看版按它归类），`round` 只写第几轮探索；`status` 枚举 `活跃` / `待合并` / `已退役`（这一步新出的都填 `活跃`）。`path` 指图片（`.png` 等）或 HTML 页（`.html`），看版会自动按类型内联预览。
 
 4. **刷新看版**：
    ```bash
    python3 "$PMAI_HOME/scripts/gen-mock-board.py" "$REPO_ROOT"
    ```
-   读 `mocks/manifest.json`、重生成 `mocks/index.html`（**单页看版**：各版画面内联铺在同一页并排比，图片嵌缩略图、HTML 嵌缩放预览，点画面看大图；**纯生成物、别手改**）。
+   读 `mockups/manifest.json`、重生成 `mockups/index.html`（**单页看版**：各版画面内联铺在同一页并排比，图片嵌缩略图、HTML 嵌缩放预览，点画面看大图；**纯生成物、别手改**）。
 
-5. **打开给 PM 看**：把单页看版 `mocks/index.html` 打开给 PM——几版并排在一页里，点开能看每一版大图 / 原页。
+5. **打开给 PM 看**：把单页看版 `mockups/index.html` 打开给 PM——几版并排在一页里，点开能看每一版大图 / 原页。
 
 ### 步骤 4：PM 挑定方向
 
@@ -124,12 +125,12 @@ PM 挑哪版/哪些块好。用 AskUserQuestion 让 PM 选（每版一个选项 
 - **/pmai-design 调进来的**：把"挑定了哪版方向 / 哪几块怎么拼"作为结论交回 `/pmai-design`，它接着把规格写定。
 - **PM 手动调的**：告诉 PM 设计稿都留在看版里翻得到、挑定的那版已标出，给一个 Next Up：方向定了就 `/pmai-design` 把这块写进规格（小改）或 `/pmai-build` 去真建（大需求）。
 
-> **设计稿怎么收尾不归本 skill**："探了哪几版、为何选这版"的最终收口在沉淀那一步（`/pmai-close` 或 `/deposit` 的探索变体归位）——挑定的标 `featured`、并进主原型的标 `已退役` 留存。本 skill 这一步只登记不删、不做最终收口。
+> **设计稿怎么收尾不归本 skill**："探了哪几版、为何选这版"的最终收口在沉淀那一步（build 验收后 `/pmai-build-close`，或暂不 build 时 `/pmai-record` 的探索变体归位）——挑定的标 `featured`、并进主原型的标 `已退役` 留存。本 skill 这一步只登记不删、不做最终收口。
 
 ## Rules
 
-- **只动 `mocks/`、不碰 `prototype/`**：设计稿是静态比稿的家，主原型是另一回事。本 skill 不往主原型写任何东西。
-- **不开 worktree、不开分支、不拉 PM 进工作区**：在 main 上直接出设计稿（`mocks/` 探索草稿豁免）。这是它"轻"的根本，别给它套 build 的隔离仪式。
+- **只动 `mockups/`、不碰 `prototype/`**：设计稿是静态比稿的家，主原型是另一回事。本 skill 不往主原型写任何东西。
+- **不开 worktree、不开分支、不拉 PM 进工作区**：在 main 上直接出设计稿（`mockups/` 探索草稿豁免）。这是它"轻"的根本，别给它套 build 的隔离仪式。
 - **设计稿是便宜的比稿**：图片 / HTML 线框即可，不接真数据、不搭真组件树、不追求能跑——只为让 PM 用眼睛挑方向。要真能跑的实现是 `/pmai-build` 的事。
 - **图片 vs HTML 按要挑什么选**：挑**视觉风格 / 密度 / 气质** → 图片路；挑**布局 / 交互 / 字段内容** → HTML 路（图片里的中文字是装饰性的、不准，别拿图片定文案 / 内容）。
 - **图片出图钉 codex 0.135.0**：0.141 无头 image_gen 回归、出不了图；出图脚本已钉版本，且复制由脚本做（新增文件验真），别绕过脚本直接调 codex（会踩"不落盘 / 拷旧图冒充"坑）。
@@ -137,7 +138,7 @@ PM 挑哪版/哪些块好。用 AskUserQuestion 让 PM 选（每版一个选项 
 - **多变体要真不一样**：变体之间是不同方向（导航/密度/分块/风格），不是同一版改色。同质的几版让 PM 无从取舍。
 - **生成的都留下、否掉≠删掉**：所有设计稿都进版本库、进清单；没挑中的留在看版折叠区、翻得到。治"上次那版找不回"。
 - **`manifest.json` 是唯一真相源，`index.html` 是纯生成物**：永远改清单、重生成看版，别手改看版页。
-- **清单 key 必须英文**：`path` / `explores` / `good_parts` / `status` / `round` / `featured` / `retired_note`（中文 key 会被 `gen-mock-board.py` 静默丢成"—"）。
+- **清单 key 必须英文**：`path` / `requirement` / `title` / `explores` / `good_parts` / `status` / `round` / `featured` / `retired_note`（中文 key 会被 `gen-mock-board.py` 静默丢成"—"）。
 - **没想清楚不画**：信息设计（放什么、谁看、怎么分块）没定就回 `/pmai-design`，别瞎画凑数。
 
 ### PM-facing 输出禁词

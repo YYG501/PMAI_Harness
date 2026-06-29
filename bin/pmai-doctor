@@ -93,17 +93,17 @@ fi
 # 3. Skills 全勤
 echo ""
 echo "─── 3. Skills in ~/.pmai/skills/ ───"
-# 期望全勤的 skill —— 必须与 skills/ 目录（除 _shared）完全一致。
+# 期望全勤的公开 skill —— 必须与 skills/ 目录（除 _shared / _internal）完全一致。
 # ⚠️ 加 / 删 skill 时必须同步本清单 —— 否则 pmai upgrade 的 doctor 自检会误判「缺 skill」触发回滚
-#    （reshape 删 req-analysis、加 build/pmai-close/pmai-design/mockup/status 时漏改本清单的教训）。
+#    （reshape 删 req-analysis、加 build/build-close/design/mockup/status 时漏改本清单的教训）。
 #    tests/test-doctor-skills.sh 对本清单与 skills/ 目录做全等校验，漏同步会在 run-all 红掉。
 EXPECTED_SKILLS=(
   # 活跃集（reshape 后 PM 日常入口）
-  init-project design mockup build close publish-to-lark status
-  # 按需主动调（brownfield / 项目方向 / 照站对齐）
-  strategy codebase-audit mirror-site
-  # 按需辅助：小改 / 轻沉淀 / 放弃当前工作 / 功能型文档 / 介绍型文档 / 说人话磨文 / 讨论换高度
-  quick-fix deposit cancel prd-writing doc-writing humanize meta
+  init-project design mockup build build-close publish-to-lark status
+  # 按需主动调（项目方向 / 照站对齐）
+  direction mirror-site
+  # 按需辅助：小改 / 轻记录 / 放弃 build / 功能型文档 / 介绍型文档 / 说人话磨文 / 讨论对焦
+  quick-fix record build-cancel prd-writing doc-writing humanize meta
   # 框架自身维护
   pmai-upgrade skill-improve
 )
@@ -140,6 +140,7 @@ repair_empty_exposure_dir() {
     [ -d "$skill_dir" ] || continue
     skill_name=$(basename "$skill_dir")
     case "$skill_name" in
+      _internal) continue ;;
       _shared)  dst="$exposure_dir/_shared" ;;
       pmai-*)   dst="$exposure_dir/$skill_name" ;;
       *)        dst="$exposure_dir/${SKILL_PREFIX}${skill_name}" ;;
@@ -292,7 +293,7 @@ elif [ -d "$HOME/.claude/skills/gstack" ]; then
     ok "gstack skill found at ~/.claude/skills/gstack"
   fi
 else
-  warn "gstack 未检测到 — /pmai-init-project 会失败；参考：https://github.com/garrytan/gstack"
+  warn "gstack 未检测到 — /pmai-init-project 建全新项目骨架会失败；已有代码库接入不受阻塞；参考：https://github.com/garrytan/gstack"
 fi
 
 echo ""

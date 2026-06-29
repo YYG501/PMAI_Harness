@@ -5,7 +5,7 @@
 PM 纯手动新建的 docs/ 野文档仍会漏挂。本检测独立扫一遍，把"实存但 docs/INDEX.md
 索引没引到"的顶层文档报出来，由 design 起步顺带跑、提示 PM 是否补挂（不阻塞、advisory）。
 
-判定：扫 docs/ 顶层 *.md（不含已知核心、不含点开头、不含归档/requirements），
+判定：扫 docs/ 顶层 *.md（不含索引和旧布局核心文件、不含点开头），
       若其文件名在 docs/INDEX.md 全文里找不到提及 → 算"未挂索引"。
 
 输出：每行一个未挂索引的文件相对路径 + 末尾一句话汇总。
@@ -18,7 +18,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-# docs/ 顶层永远已知的核心真相源（CLAUDE.md 文档位置表里列着，不算野文档）
+# 新布局下 docs/ 顶层只应有 INDEX.md；其余主文件名只作为旧布局兼容跳过。
 KNOWN_CORE = {
     "INDEX.md",
     "PRODUCT.md",

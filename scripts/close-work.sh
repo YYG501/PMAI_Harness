@@ -7,9 +7,9 @@
 #   「在做的工作」由模块内 .work-meta.json（status=active）标记；收尾 = 删掉 .work-meta.json，
 #   模块文件夹本身不消失（不再 git mv active→closed，不再留 status=closed 占位）。
 #
-# 两条 close 路径：
-#   有 worktree + 分支 → 在 worktree 内删 .work-meta + commit → merge 回 main（ancestor 验证）。
-#   无 worktree / 无分支（讨论 / 小改直接在 main 改的）→ 直接在 main 删 .work-meta + commit，跳 merge。
+# 两条 close 路径由 /pmai-build 写入的 build 合同决定：
+#   build.mode=worktree → 在记录的 build 分支内删 .work-meta + commit → merge 回 main（ancestor 验证）。
+#   build.mode=main     → 直接在 main 删 .work-meta + commit，跳 merge。
 #
 # 前置条件：
 #   1. 在主仓 cwd 运行（不在 worktree 内）
@@ -44,16 +44,28 @@ fi
 
 # --- 读取模块工作信息（走 _lib.state.read_work_meta CLI；单次读全部字段）---
 WORK_META_JSON=$(python3 -m _lib.state read_work_meta "$WORK_DIR" 2>/dev/null || echo "{}")
-WORK_BRANCH=$(printf '%s' "$WORK_META_JSON" | python3 -c "import sys,json; print(json.load(sys.stdin).get('branch',''))")
 WORK_ID=$(printf '%s' "$WORK_META_JSON" | python3 -c "import sys,json; print(json.load(sys.stdin).get('id',''))")
 
-# --- 判定 close 路径：有无分支 / worktree ---
-# I-CR3/4 改语义（lifecycle 迁移批 3）：分支 / worktree 可选。
-#   分支存在 + worktree 存在 → merge 路径（先 commit 清 .work-meta 到 work branch，再 merge main）。
-#   分支不存在 或 worktree 不存在 → main 直接清 .work-meta（讨论 / 小改无 worktree 的常态）。
+if ! BUILD_CONTRACT_JSON=$(python3 "$SCRIPT_DIR/build-contract.py" validate-close "$WORK_DIR" 2>/tmp/pmai-build-contract.err.$$); then
+  cat /tmp/pmai-build-contract.err.$$ >&2
+  rm -f /tmp/pmai-build-contract.err.$$
+  exit 1
+fi
+rm -f /tmp/pmai-build-contract.err.$$
+
+BUILD_MODE=$(printf '%s' "$BUILD_CONTRACT_JSON" | python3 -c "import sys,json; print(json.load(sys.stdin).get('mode',''))")
+WORK_BRANCH=$(printf '%s' "$BUILD_CONTRACT_JSON" | python3 -c "import sys,json; print(json.load(sys.stdin).get('branch',''))")
+
+# --- 判定 close 路径：只看 build 合同，不从当前 cwd / 分支形态猜 ---
 HAVE_BRANCH=false
-if [ -n "$WORK_BRANCH" ] && git show-ref --verify --quiet "refs/heads/$WORK_BRANCH" 2>/dev/null; then
-  HAVE_BRANCH=true
+if [ "$BUILD_MODE" = "worktree" ]; then
+  if [ -n "$WORK_BRANCH" ] && git show-ref --verify --quiet "refs/heads/$WORK_BRANCH" 2>/dev/null; then
+    HAVE_BRANCH=true
+  else
+    echo "❌ build 合同要求隔离环境收尾，但找不到记录的分支: ${WORK_BRANCH:-<empty>}。" >&2
+    echo "   请先恢复本次 build 分支，或补全/修正 build 合同后再收尾。" >&2
+    exit 1
+  fi
 fi
 
 WORK_WORKTREE=""
@@ -61,7 +73,13 @@ if [ "$HAVE_BRANCH" = "true" ]; then
   WORK_WORKTREE=$(resolve_worktree_path "$WORK_BRANCH" "$REPO_ROOT" || true)
 fi
 
-if [ "$HAVE_BRANCH" = "true" ] && [ -n "$WORK_WORKTREE" ] && [ -d "$WORK_WORKTREE" ]; then
+if [ "$BUILD_MODE" = "worktree" ] && { [ -z "$WORK_WORKTREE" ] || [ ! -d "$WORK_WORKTREE" ]; }; then
+  echo "❌ build 合同要求隔离环境收尾，但找不到记录分支对应的 worktree: $WORK_BRANCH。" >&2
+  echo "   close 不会退化成主线直收；请先恢复 worktree，或补全本次 build 上下文。" >&2
+  exit 1
+fi
+
+if [ "$BUILD_MODE" = "worktree" ]; then
   # ======================================================
   # 路径 A：有 worktree + 分支 → 在 work branch清 .work-meta + commit → merge main
   # ======================================================
@@ -81,7 +99,7 @@ if [ "$HAVE_BRANCH" = "true" ] && [ -n "$WORK_WORKTREE" ] && [ -d "$WORK_WORKTRE
       echo "   换个地方跑 close 就行（二选一）：" >&2
       echo "   · 推荐：到主仓窗口（位置 = ${REPO_ROOT}）跑 —— 主仓会话本就能远程操作 worktree：" >&2
       echo "       bash scripts/close-work.sh $WORK_DIR" >&2
-      echo "   · 或：当前工作先不收尾、worktree 留着继续干，等回到主仓窗口再 /pmai-close。" >&2
+      echo "   · 或：当前工作先不收尾、worktree 留着继续干，等回到主仓窗口再 /pmai-build-close。" >&2
       exit 1
     fi
   fi
@@ -193,7 +211,7 @@ if [ "$HAVE_BRANCH" = "true" ] && [ -n "$WORK_WORKTREE" ] && [ -d "$WORK_WORKTRE
 
 else
   # ======================================================
-  # 路径 B：无 worktree / 无分支 → 直接在 main 清 .work-meta + commit（不 merge）
+  # 路径 B：build.mode=main → 直接在 main 清 .work-meta + commit（不 merge）
   # ======================================================
   cd "$REPO_ROOT"
 

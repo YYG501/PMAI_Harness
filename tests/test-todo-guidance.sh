@@ -6,7 +6,7 @@
 #   T2: §5.2 含三态 todo / doing / done（无序池三态，不是 planned/active/done）
 #   T3: §5.2 明写 AI 不反推填充（不从代码/竞品/requirements/pmai-closed 反推）—— 反向断言
 #   T4: §5.2 不再含"排序"列 / "历史 + 未来一张表" / "唯一规划视图"旧反模式
-#   T5: strategy B 场景表格行不再让 AI 扫 requirements/pmai-closed 反推 done 行
+#   T5: direction 路线规划行不再让 AI 扫 requirements/pmai-closed 反推 done 行
 #
 # 背景：PM 反馈 brownfield 方向讨论时 AI 从代码/竞品反推出一串待做项还替 PM 排好顺序，
 # 是 PM 没要的。ROADMAP「历史+未来一张表 / 排序 / 扫 closed 补 done 行」整套被砍，
@@ -18,7 +18,7 @@ source "$SCRIPT_DIR/helpers/assert.sh"
 
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 QUESTIONING="$REPO_ROOT/skills/_shared/project-questioning.md"
-SKILL_SOLUTION="$REPO_ROOT/skills/strategy/SKILL.md"
+DIRECTION_SKILL="$REPO_ROOT/skills/direction/SKILL.md"
 
 # §5.2 段提取（到 §5.3 之前）—— 锚点已改 TODO.md
 _section_5_2() {
@@ -83,11 +83,11 @@ test_section_5_2_drops_old_antipatterns() {
 
 # -----------------------------------------------------------------
 test_b_scenario_no_scan_closed() {
-  start_test "T5: strategy B 场景不再扫 closed 反推 done 行"
+  start_test "T5: direction 路线规划不再扫 closed 反推 done 行"
   local row
-  row=$(grep -E '^\| \*\*B 产品路线规划\*\*' "$SKILL_SOLUTION" || true)
+  row=$(grep -E '^\| \*\*路线规划\*\*' "$DIRECTION_SKILL" || true)
   if [ -z "$row" ]; then
-    _fail "找不到 B 产品路线规划表格行"
+    _fail "找不到 路线规划 表格行"
     return
   fi
   # 反向断言：B 场景行不该再让 AI 扫 closed 写 done 行（旧反模式：「先扫 ... 作 done 行回填」）。

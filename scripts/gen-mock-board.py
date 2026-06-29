@@ -4,25 +4,28 @@
 设计真相源：「分档运行与沉淀层」设计 §1.3（四叉已拍定）。
 
 核心纪律：
-  - `<repo>/mocks/manifest.json` 是变体清单，**唯一真相源**。
-  - `<repo>/mocks/index.html` 是**纯生成物**，永远不手改 —— 改 manifest.json 再重生成。
+  - `<repo>/mockups/manifest.json` 是变体清单，**唯一真相源**。
+  - `<repo>/mockups/index.html` 是**纯生成物**，永远不手改 —— 改 manifest.json 再重生成。
   - 看版 = **单页比稿画廊**：各变体的画面**内联铺在同一页并排比**（图片嵌缩略图、
     HTML 嵌缩放预览），点击放大看原图 / 开原页。不再只给跳转链接（治"做成两个页面"）。
-  - 按状态分组：活跃 / 待合并 高亮在上；已退役 折叠灰显在下（<details>）。
+  - 按需求分组：同一需求下的多版设计稿放在一起，避免跨需求混成一堆。
+  - 每个需求内：活跃 / 待合并 放上面；已退役 折叠在下（<details>）。
   - featured 变体视觉突出。
 
 用法：
   python3 scripts/gen-mock-board.py <repo_root>
 
-  默认读 <repo_root>/mocks/manifest.json，写 <repo_root>/mocks/index.html。
+  默认读 <repo_root>/mockups/manifest.json，写 <repo_root>/mockups/index.html。
   manifest 不存在或无变体 → 生成"暂无变体"的空看版，不报错（exit 0）。
 
 manifest schema（每条变体）：
-  path        相对 mocks/ 的路径（图片 .png/.jpg/.webp/.svg 或页面 .html / 目录）
+  path        相对 mockups/ 的路径（图片 .png/.jpg/.webp/.svg 或页面 .html / 目录）
   explores    探索什么（一句话）
   good_parts  好东西 / 可合并候选（一句话）
   status      状态：活跃 / 待合并 / 已退役
-  round       出自哪轮（探索轮次 / 工作标识）
+  requirement 来自哪个需求 / 模块（看版按它分组；旧数据可从 round 兜底推断）
+  title       可选，卡片标题
+  round       出自哪轮（只表示探索轮次，不再承担需求分组）
   featured    bool，是否值得留的精选版（看版高亮）
   retired_note  可选，状态=已退役 时记"已并入主原型(位置/commit)"
 
@@ -31,6 +34,7 @@ manifest schema（每条变体）：
 import argparse
 import html
 import json
+import re
 import sys
 from pathlib import Path
 
@@ -48,7 +52,7 @@ IMAGE_EXTS = {".png", ".jpg", ".jpeg", ".webp", ".gif", ".svg", ".avif"}
 HTML_EXTS = {".html", ".htm"}
 
 GENERATED_BANNER = (
-    "本文件由 scripts/gen-mock-board.py 从 mocks/manifest.json 生成。"
+    "本文件由 scripts/gen-mock-board.py 从 mockups/manifest.json 生成。"
     "勿手改 —— 改 manifest.json 再重新生成。"
 )
 
@@ -99,6 +103,82 @@ def _field(variant: dict, key: str) -> str:
     return _esc(val)
 
 
+def _raw_field(variant: dict, key: str) -> str:
+    val = variant.get(key)
+    if val is None:
+        return ""
+    if isinstance(val, str):
+        return val.strip()
+    return str(val).strip()
+
+
+def _derive_requirement_from_round(round_value: str) -> str:
+    """老清单只有 round 时，尽量从“宠物导入与创作第一轮”里提取需求名。"""
+    value = (round_value or "").strip()
+    if not value:
+        return ""
+    derived = re.sub(
+        r"\s*第?\s*([0-9]+|[一二三四五六七八九十百]+)\s*轮\s*(探索|设计稿|方案)?\s*$",
+        "",
+        value,
+    ).strip()
+    if derived and derived != value:
+        return derived
+    if re.fullmatch(r"r\d+|round\s*\d+", value, flags=re.IGNORECASE):
+        return ""
+    return value
+
+
+def _requirement_label(variant: dict) -> str:
+    return (
+        _raw_field(variant, "requirement")
+        or _raw_field(variant, "module")
+        or _derive_requirement_from_round(_raw_field(variant, "round"))
+        or "未归类需求"
+    )
+
+
+def _round_label(variant: dict) -> str:
+    round_value = _raw_field(variant, "round")
+    if not round_value:
+        return ""
+    requirement = _requirement_label(variant)
+    if requirement and round_value.startswith(requirement):
+        suffix = round_value[len(requirement):].strip(" ：:-")
+        if suffix:
+            return suffix
+    return round_value
+
+
+def _card_title(variant: dict) -> str:
+    explicit = _raw_field(variant, "title")
+    if explicit:
+        return explicit
+    explores = _raw_field(variant, "explores")
+    if explores:
+        return explores
+    path = _raw_field(variant, "path")
+    if not path:
+        return "未命名设计稿"
+    name = Path(path.rstrip("/")).stem or Path(path.rstrip("/")).name
+    return name or path
+
+
+def _search_text(variant: dict) -> str:
+    keys = [
+        "requirement",
+        "module",
+        "title",
+        "explores",
+        "good_parts",
+        "status",
+        "round",
+        "path",
+        "retired_note",
+    ]
+    return " ".join(_raw_field(variant, key) for key in keys if _raw_field(variant, key))
+
+
 def _preview_kind(path: str) -> str:
     """据扩展名判内联预览方式：image / html / other（目录、无扩展名等）。"""
     ext = ("." + path.rsplit(".", 1)[1].lower()) if "." in path.rsplit("/", 1)[-1] else ""
@@ -132,20 +212,24 @@ def _preview_html(path: str) -> str:
             f'<a class="preview preview-html" href="{href}" target="_blank" rel="noopener" '
             f'title="点开看完整页面">'
             f'<iframe src="{href}" loading="lazy" tabindex="-1" scrolling="no"></iframe>'
-            f'<span class="preview-html-hint">HTML 页 · 点开看完整</span></a>'
+            f'<span class="preview-html-hint">点开看完整稿</span></a>'
         )
     # 目录 / 未知类型：给个可点占位
     return (
         f'<a class="preview preview-other" href="{href}" target="_blank" rel="noopener">'
-        f'<span>📄 {_esc(path)}<br><small>点开查看</small></span></a>'
+        f'<span>{_esc(path)}<br><small>点开查看</small></span></a>'
     )
 
 
 def render_variant_card(variant: dict) -> str:
-    """渲染单条变体卡片：内联画面 + 路径 + 状态徽标 + 字段。"""
+    """渲染单条变体卡片：内联画面 + 方案标题 + 少量 PM 需要看的字段。"""
     path = variant.get("path") or ""
     featured = _is_featured(variant)
     status = variant.get("status") or ""
+    title = _card_title(variant)
+    explores = _raw_field(variant, "explores")
+    good_parts = _raw_field(variant, "good_parts")
+    round_label = _round_label(variant)
 
     card_classes = ["variant-card"]
     if featured:
@@ -153,38 +237,65 @@ def render_variant_card(variant: dict) -> str:
     if status == STATUS_RETIRED:
         card_classes.append("retired")
 
-    featured_badge = '<span class="badge badge-featured">★ 精选</span>' if featured else ""
-    status_badge = (
-        f'<span class="badge badge-status status-{_status_slug(status)}">{_esc(status)}</span>'
-        if status
-        else ""
-    )
+    badges = []
+    if featured:
+        badges.append('<span class="badge badge-featured">已选方向</span>')
+    status_badge = _status_badge(status)
+    if status_badge:
+        badges.append(status_badge)
+    if round_label:
+        badges.append(f'<span class="badge badge-round">{_esc(round_label)}</span>')
+    badge_html = f'<span class="badges">{"".join(badges)}</span>' if badges else ""
 
     if path:
-        path_html = f'<a class="variant-path" href="{_esc_attr(path)}" target="_blank" rel="noopener">{_esc(path)}</a>'
+        open_link = f'<a class="open-link" href="{_esc_attr(path)}" target="_blank" rel="noopener">打开完整稿</a>'
     else:
-        path_html = '<span class="variant-path variant-path-missing">（未登记路径）</span>'
+        open_link = '<span class="open-link open-link-missing">未登记路径</span>'
+
+    direction = ""
+    if explores and explores != title:
+        direction = (
+            f'<div class="field"><span class="field-label">方向</span>'
+            f'<span class="field-value">{_esc(explores)}</span></div>'
+        )
+
+    good_parts_html = ""
+    if good_parts:
+        good_parts_html = (
+            f'<div class="field"><span class="field-label">可取之处</span>'
+            f'<span class="field-value">{_esc(good_parts)}</span></div>'
+        )
 
     retired_note = ""
     if status == STATUS_RETIRED and variant.get("retired_note"):
         retired_note = (
             f'<div class="field retired-note">'
-            f'<span class="field-label">退役说明</span>'
+            f'<span class="field-label">归档说明</span>'
             f'<span class="field-value">{_field(variant, "retired_note")}</span></div>'
         )
 
-    return f"""          <article class="{' '.join(card_classes)}">
+    search_text = _search_text(variant)
+
+    return f"""          <article class="{' '.join(card_classes)}" data-search-text="{_esc_attr(search_text)}">
             {_preview_html(path)}
             <div class="variant-body">
               <header class="variant-head">
-                {path_html}
-                <span class="badges">{status_badge}{featured_badge}</span>
+                <h3>{_esc(title)}</h3>
+                {badge_html}
               </header>
-              <div class="field"><span class="field-label">探索什么</span><span class="field-value">{_field(variant, "explores")}</span></div>
-              <div class="field"><span class="field-label">好东西</span><span class="field-value">{_field(variant, "good_parts")}</span></div>
-              <div class="field"><span class="field-label">出自哪轮</span><span class="field-value">{_field(variant, "round")}</span></div>
-{retired_note}            </div>
+{direction}{good_parts_html}{retired_note}              <div class="card-actions">{open_link}</div>
+            </div>
           </article>"""
+
+
+def _status_badge(status: str) -> str:
+    if status == STATUS_PENDING_MERGE:
+        return '<span class="badge badge-status status-pending">准备纳入</span>'
+    if status == STATUS_RETIRED:
+        return '<span class="badge badge-status status-retired">已归档</span>'
+    if status and status != STATUS_ACTIVE:
+        return f'<span class="badge badge-status status-{_status_slug(status)}">{_esc(status)}</span>'
+    return ""
 
 
 def _status_slug(status: str) -> str:
@@ -227,11 +338,24 @@ def _split_by_status(variants: list):
     return highlight, retired, other
 
 
+def _group_by_requirement(variants: list):
+    groups = []
+    seen = {}
+    for variant in variants:
+        if not isinstance(variant, dict):
+            continue
+        label = _requirement_label(variant)
+        if label not in seen:
+            seen[label] = []
+            groups.append((label, seen[label]))
+        seen[label].append(variant)
+    return groups
+
+
 def render_board(data: dict, manifest_rel: str) -> str:
     """生成完整 index.html 文本。"""
     variants = [v for v in data.get("variants", []) if isinstance(v, dict)]
-    highlight, retired, other = _split_by_status(variants)
-    active_like = highlight + other  # 未知状态也当"非退役"放上面（不静默吞）
+    groups = _group_by_requirement(variants)
 
     total = len(variants)
     parse_error = data.get("_parse_error")
@@ -239,55 +363,83 @@ def render_board(data: dict, manifest_rel: str) -> str:
     if total == 0:
         body = _render_empty(parse_error)
     else:
-        sections = []
-        if active_like:
-            cards = "\n".join(render_variant_card(v) for v in active_like)
-            sections.append(
-                f'      <section class="group group-active">\n'
-                f'        <h2>活跃 · 待合并 <span class="count">{len(active_like)}</span></h2>\n'
-                f'        <div class="grid">\n{cards}\n        </div>\n'
-                f"      </section>"
-            )
-        else:
-            sections.append(
-                '      <section class="group group-active">\n'
-                '        <h2>活跃 · 待合并 <span class="count">0</span></h2>\n'
-                '        <p class="empty-note">暂无活跃 / 待合并变体。</p>\n'
-                "      </section>"
-            )
-        if retired:
-            cards = "\n".join(render_variant_card(v) for v in retired)
-            sections.append(
-                f'      <section class="group group-retired">\n'
-                f'        <details>\n'
-                f'          <summary>已退役 <span class="count">{len(retired)}</span>（留存可翻，不进活跃高亮）</summary>\n'
-                f'          <div class="grid">\n{cards}\n          </div>\n'
-                f"        </details>\n"
-                f"      </section>"
-            )
+        sections = [
+            _render_requirement_group(index, label, group_variants)
+            for index, (label, group_variants) in enumerate(groups, start=1)
+        ]
         body = "\n".join(sections)
 
-    return _html_shell(body, total, manifest_rel)
+    sidebar = _render_sidebar(groups)
+    return _html_shell(body, total, manifest_rel, sidebar)
+
+
+def _render_requirement_group(index: int, label: str, variants: list) -> str:
+    highlight, retired, other = _split_by_status(variants)
+    active_like = highlight + other
+    group_id = f"req-{index}"
+    parts = [
+        f'      <section class="group requirement-group" id="{group_id}" data-group="{_esc_attr(group_id)}">',
+        '        <div class="requirement-head">',
+        f'          <h2>{_esc(label)} <span class="count">{len(variants)} 版</span></h2>',
+        "        </div>",
+    ]
+    if active_like:
+        cards = "\n".join(render_variant_card(v) for v in active_like)
+        parts.append(f'        <div class="grid">\n{cards}\n        </div>')
+    if retired:
+        cards = "\n".join(render_variant_card(v) for v in retired)
+        parts.append(
+            f'        <details class="retired-drawer">\n'
+            f'          <summary>已归档设计稿 <span class="count">{len(retired)}</span></summary>\n'
+            f'          <div class="grid">\n{cards}\n          </div>\n'
+            f"        </details>"
+        )
+    parts.append("      </section>")
+    return "\n".join(parts)
+
+
+def _render_sidebar(groups: list) -> str:
+    if not groups:
+        items = '<li class="nav-empty">暂无设计稿</li>'
+    else:
+        items = "\n".join(
+            f'            <li data-nav-for="req-{index}">'
+            f'<a href="#req-{index}">{_esc(label)}'
+            f'<span>{len(group_variants)}</span></a></li>'
+            for index, (label, group_variants) in enumerate(groups, start=1)
+        )
+    return f"""    <aside class="board-sidebar" aria-label="设计稿目录">
+      <div class="sidebar-title">目录</div>
+      <label class="search-box">
+        <span>搜索</span>
+        <input type="search" data-search placeholder="输入方向、亮点或轮次" autocomplete="off">
+      </label>
+      <nav>
+        <ul>
+{items}
+        </ul>
+      </nav>
+      <p class="no-results" data-empty-results hidden>没有匹配的设计稿</p>
+    </aside>"""
 
 
 def _render_empty(parse_error: bool) -> str:
     note = ""
     if parse_error:
         note = (
-            '        <p class="parse-error">⚠️ manifest.json 解析失败（JSON 语法错误），'
-            "已按空看版渲染。修好 manifest.json 再重新生成。</p>\n"
+            '        <p class="parse-error">设计稿清单解析失败，'
+            "已按空看版渲染。修好清单后再刷新。</p>\n"
         )
     return (
         '      <section class="group group-empty">\n'
         f"{note}"
         '        <p class="empty-note">暂无变体。<br>'
-        "探索期生成 mockup 后，往 <code>manifest.json</code> 加一条、"
-        "重跑 <code>gen-mock-board.py</code>，这里就会列出来。</p>\n"
+        "出完设计稿后，这里会按需求自动归类。</p>\n"
         "      </section>"
     )
 
 
-def _html_shell(body: str, total: int, manifest_rel: str) -> str:
+def _html_shell(body: str, total: int, manifest_rel: str, sidebar: str) -> str:
     return f"""<!DOCTYPE html>
 <!--
   {GENERATED_BANNER}
@@ -296,7 +448,7 @@ def _html_shell(body: str, total: int, manifest_rel: str) -> str:
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Mockup 看版 · 多方案并排比</title>
+<title>设计稿看板</title>
 <style>
   :root {{
     --bg: #f4f5f7;
@@ -308,27 +460,63 @@ def _html_shell(body: str, total: int, manifest_rel: str) -> str:
     --accent: #2563eb;
     --featured: #f59e0b;
     --preview-bg: #fbfcfd;
-    --radius: 14px;
+    --radius: 8px;
   }}
   * {{ box-sizing: border-box; }}
   body {{
-    margin: 0; padding: 2.2rem 2rem 4rem; background: var(--bg); color: var(--ink);
+    margin: 0; padding: 0 2rem 2rem 0; background: var(--bg); color: var(--ink);
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
                  "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
-    line-height: 1.55; max-width: 1400px; margin-inline: auto;
+    line-height: 1.55;
   }}
+  [hidden] {{ display: none !important; }}
+  .board-shell {{
+    max-width: none; margin: 0; display: grid;
+    grid-template-columns: 250px minmax(0, 1fr); gap: 1.6rem; align-items: start;
+  }}
+  .board-sidebar {{
+    position: sticky; top: 0; min-height: 100vh; background: var(--card);
+    border: 1px solid var(--line); border-left: 0;
+    border-radius: 0 var(--radius) var(--radius) 0;
+    padding: 2rem 1rem 1rem; box-shadow: 0 1px 2px rgba(20,24,29,.04);
+  }}
+  .sidebar-title {{
+    font-size: .85rem; font-weight: 700; color: var(--ink);
+    margin-bottom: .8rem;
+  }}
+  .search-box {{ display: block; margin-bottom: 1rem; }}
+  .search-box span {{
+    display: block; color: var(--muted); font-size: .76rem; margin-bottom: .35rem;
+  }}
+  .search-box input {{
+    width: 100%; height: 2.35rem; border: 1px solid var(--line);
+    border-radius: var(--radius); padding: 0 .75rem; background: #fff;
+    color: var(--ink); font: inherit; font-size: .88rem; outline: none;
+  }}
+  .search-box input:focus {{
+    border-color: var(--accent); box-shadow: 0 0 0 3px rgba(37,99,235,.12);
+  }}
+  .board-sidebar ul {{ list-style: none; padding: 0; margin: 0; display: grid; gap: .25rem; }}
+  .board-sidebar a {{
+    display: flex; align-items: center; justify-content: space-between; gap: .75rem;
+    min-height: 2.1rem; padding: .35rem .45rem; border-radius: 6px;
+    color: var(--ink); text-decoration: none; font-size: .9rem;
+  }}
+  .board-sidebar a:hover {{ background: #eef3ff; color: var(--accent); }}
+  .board-sidebar a span {{
+    flex-shrink: 0; color: var(--muted); font-size: .74rem;
+    background: var(--line-soft); border-radius: 999px; padding: .05rem .45rem;
+  }}
+  .nav-empty, .no-results {{ color: var(--muted); font-size: .86rem; margin: .5rem 0 0; }}
+  .board-main {{ min-width: 0; max-width: 1260px; padding-top: 2rem; }}
   header.board-head {{ margin-bottom: 2rem; }}
-  header.board-head h1 {{ margin: 0 0 .4rem; font-size: 1.6rem; letter-spacing: -.01em; }}
+  header.board-head h1 {{ margin: 0 0 .4rem; font-size: 1.6rem; letter-spacing: 0; }}
   header.board-head .sub {{ color: var(--muted); font-size: .9rem; }}
-  header.board-head .sub code {{
-    background: #e9ebee; padding: .05rem .4rem; border-radius: 5px; font-size: .85em;
-  }}
   .group {{ margin-bottom: 2.4rem; }}
-  .group h2 {{
+  .requirement-head h2 {{
     font-size: 1.05rem; margin: 0 0 1.1rem; padding-bottom: .45rem;
-    border-bottom: 2px solid var(--line);
+    border-bottom: 2px solid var(--accent);
   }}
-  .group-active h2 {{ border-bottom-color: var(--accent); }}
   .count {{
     display: inline-block; min-width: 1.4em; text-align: center;
     background: var(--line); color: var(--muted); border-radius: 999px;
@@ -389,15 +577,12 @@ def _html_shell(body: str, total: int, manifest_rel: str) -> str:
 
   .variant-body {{ padding: .85rem 1rem 1rem; display: flex; flex-direction: column; gap: .1rem; }}
   .variant-head {{
-    display: flex; align-items: baseline; justify-content: space-between;
+    display: flex; align-items: flex-start; justify-content: space-between;
     gap: .6rem; flex-wrap: wrap; margin-bottom: .55rem;
   }}
-  .variant-path {{
-    font-weight: 600; font-size: .92rem; color: var(--accent); text-decoration: none;
-    word-break: break-all;
+  .variant-head h3 {{
+    margin: 0; font-size: .98rem; line-height: 1.35; font-weight: 650; color: var(--ink);
   }}
-  .variant-path:hover {{ text-decoration: underline; }}
-  .variant-path-missing {{ color: var(--muted); font-style: italic; }}
   .badges {{ display: inline-flex; gap: .35rem; flex-shrink: 0; }}
   .badge {{ font-size: .7rem; padding: .12rem .5rem; border-radius: 999px; white-space: nowrap; }}
   .badge-featured {{ background: var(--featured); color: #fff; }}
@@ -405,22 +590,82 @@ def _html_shell(body: str, total: int, manifest_rel: str) -> str:
   .badge-status.status-active {{ background: #dcfce7; border-color: #86efac; color: #166534; }}
   .badge-status.status-pending {{ background: #dbeafe; border-color: #93c5fd; color: #1e40af; }}
   .badge-status.status-retired {{ background: #f3f4f6; color: #6b7280; }}
+  .badge-round {{ background: #eef0f2; color: var(--muted); }}
   .field {{ display: flex; gap: .55rem; font-size: .86rem; padding: .12rem 0; }}
-  .field-label {{ flex-shrink: 0; width: 4.5em; color: var(--muted); }}
+  .field-label {{ flex-shrink: 0; width: 4.75em; color: var(--muted); }}
   .field-value {{ color: var(--ink); }}
+  .card-actions {{ margin-top: .7rem; }}
+  .open-link {{
+    color: var(--accent); font-size: .86rem; font-weight: 600; text-decoration: none;
+  }}
+  .open-link:hover {{ text-decoration: underline; }}
+  .open-link-missing {{ color: var(--muted); font-weight: 400; }}
   .empty-note {{ color: var(--muted); background: var(--card); border: 1px dashed var(--line);
     border-radius: var(--radius); padding: 1.8rem; text-align: center; }}
   .empty-note code {{ background: #eef0f2; padding: .05rem .35rem; border-radius: 4px; }}
   .parse-error {{ color: #b91c1c; background: #fef2f2; border: 1px solid #fecaca;
     border-radius: 8px; padding: .75rem 1rem; }}
+  @media (max-width: 860px) {{
+    body {{ padding: 1rem; }}
+    .board-shell {{ display: block; }}
+    .board-sidebar {{
+      position: static; min-height: auto; margin-bottom: 1.2rem;
+      border-left: 1px solid var(--line); border-radius: var(--radius); padding: 1rem;
+    }}
+    .board-main {{ max-width: none; padding-top: 0; }}
+    .grid {{ grid-template-columns: 1fr; }}
+  }}
 </style>
 </head>
 <body>
-  <header class="board-head">
-    <h1>Mockup 看版</h1>
-    <p class="sub">多方案并排比 · 共 {total} 个变体 · 点画面看大图 · 真相源 <code>{_esc(manifest_rel)}</code>（本页自动生成，勿手改）</p>
-  </header>
+  <div class="board-shell">
+{sidebar}
+    <main class="board-main">
+      <header class="board-head">
+        <h1>设计稿看板</h1>
+        <p class="sub">这里收着 {total} 版设计稿。先按左侧需求定位，也可以直接搜索方案方向或亮点。</p>
+      </header>
 {body}
+    </main>
+  </div>
+  <script>
+    (() => {{
+      const input = document.querySelector("[data-search]");
+      if (!input) return;
+      const cards = Array.from(document.querySelectorAll(".variant-card"));
+      const groups = Array.from(document.querySelectorAll(".requirement-group"));
+      const empty = document.querySelector("[data-empty-results]");
+      const normalize = (text) => (text || "").trim().toLowerCase();
+
+      const applyFilter = () => {{
+        const query = normalize(input.value);
+        let visibleCards = 0;
+
+        cards.forEach((card) => {{
+          const haystack = normalize(card.dataset.searchText + " " + card.textContent);
+          const matched = !query || haystack.includes(query);
+          card.hidden = !matched;
+          if (matched) visibleCards += 1;
+        }});
+
+        groups.forEach((group) => {{
+          const hasVisibleCard = !!group.querySelector(".variant-card:not([hidden])");
+          group.hidden = !hasVisibleCard;
+          const navItem = document.querySelector(`[data-nav-for="${{group.dataset.group}}"]`);
+          if (navItem) navItem.hidden = !hasVisibleCard;
+          group.querySelectorAll("details").forEach((details) => {{
+            if (query && details.querySelector(".variant-card:not([hidden])")) {{
+              details.open = true;
+            }}
+          }});
+        }});
+
+        if (empty) empty.hidden = visibleCards !== 0;
+      }};
+
+      input.addEventListener("input", applyFilter);
+    }})();
+  </script>
 </body>
 </html>
 """
@@ -428,32 +673,43 @@ def _html_shell(body: str, total: int, manifest_rel: str) -> str:
 
 def main():
     parser = argparse.ArgumentParser(
-        description="从 mocks/manifest.json 生成 mocks/index.html 看版导航页"
+        description="从 mockups/manifest.json 生成 mockups/index.html 看版导航页"
     )
-    parser.add_argument("repo_root", help="项目根目录（读 <repo_root>/mocks/manifest.json）")
+    parser.add_argument("repo_root", help="项目根目录（读 <repo_root>/mockups/manifest.json）")
     parser.add_argument(
         "--manifest",
         default=None,
-        help="覆盖 manifest 路径（默认 <repo_root>/mocks/manifest.json）",
+        help="覆盖 manifest 路径（默认 <repo_root>/mockups/manifest.json）",
     )
     parser.add_argument(
         "--out",
         default=None,
-        help="覆盖输出路径（默认 <repo_root>/mocks/index.html）",
+        help="覆盖输出路径（默认 <repo_root>/mockups/index.html）",
     )
     args = parser.parse_args()
 
     repo_root = Path(args.repo_root).resolve()
-    mocks_dir = repo_root / "mocks"
-    manifest_path = Path(args.manifest).resolve() if args.manifest else mocks_dir / "manifest.json"
-    out_path = Path(args.out).resolve() if args.out else mocks_dir / "index.html"
+    mockups_dir = repo_root / "mockups"
+    manifest_path = Path(args.manifest).resolve() if args.manifest else mockups_dir / "manifest.json"
+    out_path = Path(args.out).resolve() if args.out else mockups_dir / "index.html"
 
     data = load_manifest(manifest_path)
 
     # 机器关口：变体若用了非英文 key（如中文「路径/探索什么」），这里只认英文 key →
     # 会被静默渲染成"—"占位。检测"既无 path 又无任何已知英文 key"的条目并 stderr 报警，
     # 不静默吞（防结构化底料漂移，见 memory build_fidelity_two_causes）。
-    _KNOWN_KEYS = {"path", "explores", "good_parts", "status", "round", "featured", "retired_note"}
+    _KNOWN_KEYS = {
+        "path",
+        "requirement",
+        "module",
+        "title",
+        "explores",
+        "good_parts",
+        "status",
+        "round",
+        "featured",
+        "retired_note",
+    }
     _suspect = [
         i
         for i, v in enumerate(data.get("variants", []))
@@ -462,12 +718,12 @@ def main():
     if _suspect:
         print(
             f"⚠️ manifest.json：第 {_suspect} 条变体没有任何已知英文 key"
-            f"（应为 path/explores/good_parts/status/round/featured）——"
+            f"（应为 path/requirement/title/explores/good_parts/status/round/featured）——"
             f"可能误用了中文 key，会渲染成空。请改成英文 key。",
             file=sys.stderr,
         )
 
-    # 看版页与 manifest 同在 mocks/ 时，引用名用 manifest.json；否则用相对/绝对名
+    # 看版页与 manifest 同在 mockups/ 时，引用名用 manifest.json；否则用相对/绝对名
     try:
         manifest_rel = manifest_path.relative_to(out_path.parent).as_posix()
     except ValueError:

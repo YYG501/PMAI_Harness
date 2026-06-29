@@ -57,13 +57,13 @@ PMAI 不和 Claude Design、design-html 或 Claude Code 比"谁更快生成第�
 ```
 # 起项目（只跑一次，整个产品的根基）
 
-/pmai-init-project    起业务项目（AI 自动判断空仓 / 已有代码，聊清做什么 / 为谁做，搭起 PRODUCT/TODO/DESIGN/prototype 底座）
+/pmai-init-project    项目初始化统一入口（AI 自动判断全新项目 / 资料目录 / 已有代码；全新项目搭底座，已有代码直接盘点现状）
 
 # 日常循环（模块规格先行，必要时再建）
 
 /pmai-design "批量审核"    讨论清楚，写模块三件套：discussion.md / decisions.md / spec.md
 /pmai-build 批量审核       大需求才建：对着 spec.md 或功能型文档在 prototype/ 里实现，可选隔离环境和执行器
-/pmai-close                PM 验收后沉淀：更新 PRODUCT-STATE / PRODUCT-RULES / 模块规格，必要时合回 main
+/pmai-build-close                build 验收后收尾：提交/合并实现改动，对齐现状 / 规则 / 模块规格
 /pmai-status          产品现状视图（产品长什么样 / 当前模块做到哪 / 下一步）
 ```
 
@@ -78,13 +78,13 @@ PM 全程**只做决策**（方向 / 结构 / 建造方式 / 验收 / 沉淀）�
 | **Claude Code** | 推荐 | 一等主控入口（slash skill 原生在这里跑）；也可作为 `/pmai-build` 执行器 |
 | **Codex** | 支持 | skill 暴露到 `~/.codex/skills/pmai-*`；读生成器仓 / 消费仓 `AGENTS.md` 作为主控入口；消费仓生成项目级 `.codex/hooks.json`；也可作为 build 执行器 |
 | **Gemini CLI** | 可选 | `/pmai-build` 执行器；适合在 Codex / Claude 主控下交给 Gemini 建 |
-| **gstack** | 必需 | `/qa` `/review` `/codex` 等子流程依赖；`pmai install` / `pmai doctor` 会提示 readiness，`init-project.sh` 起项目时会硬检测 |
+| **gstack** | 必需 | `/qa` `/review` `/codex` 等子流程依赖；`pmai install` / `pmai doctor` 会提示 readiness，`init-project.sh` 建全新项目骨架时检测 gstack CLI 或 `~/.claude/skills/gstack`；已有代码库盘点分支不应被 gstack 缺失阻塞 |
 | **git** ≥ 2.30 | 必需 | worktree 是核心隔离机制 |
 | **python3** ≥ 3.10 | 必需 | scripts 大多用 python（zero-dep stdlib） |
 | **bash** ≥ 4 | 必需 | scripts 入口语言（macOS 自带 3.x 已知坑见 INVARIANTS） |
 | **codex CLI** | 可选 | `/pmai-build` 执行器；不装可走 Claude Code / Gemini / cursor-agent / 手动 |
 
-未装 gstack 时 `pmai install` / `pmai doctor` 会给 warning，但不阻塞 PMAI 安装；真正起新业务项目时，`init-project.sh` 会直接报错并指向 `https://github.com/garrytan/gstack`。这让私有仓 onboarding 可以先把 PMAI 装好，再补齐 gstack。
+未检测到 gstack CLI 且没有 `~/.claude/skills/gstack` 时，`pmai install` / `pmai doctor` 会给 warning，但不阻塞 PMAI 安装；真正建全新项目骨架时，`init-project.sh` 会直接报错并指向 `https://github.com/garrytan/gstack`。如果只是 `command -v gstack` 找不到，但全局 gstack skill 目录存在，PMAI 视为 gstack 能力可用。已有代码库接入走现状盘点分支，不调用 `init-project.sh`，所以不能因为 gstack 缺失卡在“判断项目情况”这一步。
 
 ---
 
@@ -191,14 +191,16 @@ skill 跑全局升级命令；升级完读 CHANGELOG diff + 用自然语言 5-7 
 /pmai-init-project
 ```
 
-agent 内部一气呵成 **4 阶段**：
+agent 内部先判断项目情况，再进入对应分支：
 
-- **阶段 A · 参数收集 + 已有内容判断** —— AskUserQuestion 5 步问 PM（项目名 → 落地路径 → 已有内容判断 → 一句话背景 → 项目意图）。**这一步 AI 自动扫目录分诊，PM 不用预先判断**：空目录直接建；扫到已有源码 / 已 init 过 → AI 在方案里**主动建议**改走 `/pmai-codebase-audit`（接旧代码）或 `/pmai-strategy`（重做方向），但**不硬拦**，PM 坚持 init 也接住（不删代码、可逆）
-- **阶段 B · 骨架建设** —— agent 用 Bash 调 `init-project.sh`，创建业务仓 + git init + 首 commit `init: <name>`
-- **阶段 C · 方向与底座落档** —— @读 `skills/_shared/project-questioning.md`（单一真相源），按提问纪律确认产品定位 / 业务术语 / 首批待办，最后写入 `docs/PRODUCT.md`、`docs/TODO.md`、`docs/DESIGN.md` 和 `prototype/` 骨架
-- **阶段 D · 终态汇总 + Next Up** —— 输出「✅ <name> 已就绪 / cd <target> && /pmai-design "..."」
+- **阶段 A · 参数收集 + 项目情况判断** —— AskUserQuestion 拿项目名 / 落地路径后，AI 直接扫目录。PM 不需要预先判断，也不需要在“初始化 / 代码盘点”之间选命令。
+- **全新项目 / 资料目录分支** —— B/C/D 一气呵成：用 `init-project.sh` 建上下文底座，填一句话方向、视觉基线和主原型，再输出 Next Up。
+- **已有代码库分支** —— 自动进入已有项目接入子流程：先整理真实代码现状，产 `docs/CODEBASE-AUDIT.md`，PM 过目后在同一流程内定项目方向；不补空骨架、不起空 `prototype/`、不调用 `init-project.sh`。
+- **已接入过 PMAI 的项目** —— 不重跑 init；先看 `/pmai-status`，PM 明确要重定方向再走 `/pmai-direction`。
 
 > `/pmai-init-project` 在装了 pmai 的任意 cwd 都能跑（无需在本仓）。
+
+如果一个目录还没有 PMAI 初始化，任何其它 `/pmai-*` skill 被调用时都应先引导 PM 回到 `/pmai-init-project`；该入口会自动判断全新项目、资料目录或已有代码库，不要求 PM 手动选择另一个接入口。
 
 **Codex 主控入口**：
 
@@ -247,10 +249,10 @@ python3 scripts/status-view.py "$tmp/Demo" --narrative
   ↓
 /pmai-status             → 忘了当前停在哪时，用它读状态并提示下一步
   ↓
-/pmai-close                 → PM 验收后沉淀产品现状、规则、模块规格；有隔离环境则合回 main
+/pmai-build-close                 → build 经 PM 验收后，提交/合并实现改动并对齐产品现状、规则、模块规格
 ```
 
-简单改动可以跳过完整流程：直接改完后用 `/pmai-close` 或 `/pmai-deposit` 做轻量沉淀。大需求才进入 `/pmai-build`。
+简单改动可以跳过完整流程：直接改完后用 `/pmai-record` 做轻量记录；大需求才进入 `/pmai-build`，build 验收后再用 `/pmai-build-close`。
 
 ### 3. 多机 / 团队仓
 
@@ -268,8 +270,8 @@ PMAI 走纯全局：每台要用的机器各自 `pmai install` 一次（全局�
 
 | Skill | 用途 |
 |---|---|
-| `/pmai-init-project` | **项目级入口**：起一个新业务项目，4 阶段一气呵成（参数 → 骨架 → 方向 → Next Up）；装了 pmai 后**任意 cwd** 可跑 |
-| `/pmai-strategy` | **项目方向规划**：4 个独立场景（重做 / 产品路线规划 / 老板新方向 / brownfield 接入） |
+| `/pmai-init-project` | **项目级入口**：全新项目建底座，已有代码库自动盘点现状；装了 pmai 后**任意 cwd** 可跑 |
+| `/pmai-direction` | **项目方向校准**：已接入项目的方向重定 / 路线规划；已有代码首次接入由 `/pmai-init-project` 自动分流，不需要手动来这里 |
 | `/pmai-design` | **模块设计入口**：起新功能 / 重做模块，写 discussion / decisions / spec |
 | `/pmai-quick-fix` | 不走完整流程的小补丁（适合改文案、修小 bug） |
 
@@ -286,14 +288,15 @@ PMAI 走纯全局：每台要用的机器各自 `pmai install` 一次（全局�
 
 | Skill | 用途 |
 |---|---|
-| `/pmai-close` | 完成当前模块工作，沉淀产品现状 / 规则 / 模块规格，有隔离环境则合回 main |
-| `/pmai-cancel` | 放弃当前工作，不合并，清活跃状态并排队清理隔离环境 |
+| `/pmai-build-close` | build 验收后的收尾：提交 / 合并实现改动，按最终原型对齐模块决策与规格，更新产品现状 / 规则 / 术语 |
+| `/pmai-record` | 轻量记录：main 小改或 design 后暂不 build 时，把稳定术语 / 规则 / 当前设计状态写回项目底座 |
+| `/pmai-build-cancel` | 放弃当前 build，不合并，清活跃状态并排队清理隔离环境 |
 
 ### 旁路 / 文档维护
 
 | Skill | 用途 |
 |---|---|
-| `/pmai-codebase-audit` | brownfield 项目代码现状审计 |
+| `/pmai-meta` | 讨论前对焦与压力测试：没靶子时找本质 / 判断标准 / 根因，有靶子时用少量多视角找盲区、冲突和风险 |
 | `/pmai-publish-to-lark` | 把文档发布到飞书 |
 
 ### 框架维护（PM 操作 PMAI 本身）

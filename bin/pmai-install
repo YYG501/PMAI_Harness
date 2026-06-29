@@ -31,6 +31,7 @@ Notes:
   - Skills get 'pmai-' prefix at registration (e.g., /pmai-init-project).
   - skills/_shared/ is a shared resource (not a skill); skipped from prefix routing
     but still linked alongside other skills so SKILL.md cross-refs work.
+  - skills/_internal/ is implementation detail; it is not exposed as /pmai-*.
 EOF
 }
 
@@ -52,8 +53,10 @@ install_skills() {
     skill_name=$(basename "$skill_dir")
 
     # _shared 不是 skill，但 SKILL.md 内部交叉引用 → 跟随链接但不加前缀
+    # _internal 是 init-project 等公开入口的内部子流程集合 → 不暴露给 host
     # pmai-* 已带前缀的目录（如 skills/pmai-upgrade/）→ 不再加前缀（防双前缀 bug）
     case "$skill_name" in
+      _internal) continue ;;
       _shared)  dst="$dst_skills/_shared" ;;
       pmai-*)   dst="$dst_skills/$skill_name" ;;
       *)        dst="$dst_skills/${SKILL_PREFIX}${skill_name}" ;;
@@ -86,9 +89,9 @@ check_gstack_readiness() {
     return 0
   fi
 
-  echo "⚠️  gstack 未检测到：/pmai-init-project 起项目时会阻塞"
+  echo "⚠️  gstack 未检测到：/pmai-init-project 建全新项目骨架时会阻塞"
   echo "   先安装 gstack：参考 https://github.com/garrytan/gstack"
-  echo "   PMAI 已安装完成；补齐 gstack 后再跑 /pmai-init-project。"
+  echo "   PMAI 已安装完成；已有代码库接入会由 /pmai-init-project 自动进入现状盘点，不因 gstack 阻塞。"
 }
 
 remove_managed_skill_symlinks() {

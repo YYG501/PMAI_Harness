@@ -22,7 +22,7 @@ dev_server:
   ready_check: /
 EOF
   echo "# demo 规格" > "$MOD/spec.md"
-  echo "# DESIGN" > "$T/docs/DESIGN.md"
+  echo "# DESIGN" > "$T/DESIGN.md"
   SPEC="$MOD/spec.md"
   AUD="$T/.pm-workflow/audits/spec"
 }
@@ -34,13 +34,13 @@ _write_visual()   { mkdir -p "$AUD"; echo "$1" > "$AUD/visual.json"; }
 _write_behavior() { mkdir -p "$AUD"; echo "$1" > "$AUD/behavior.json"; }
 
 test_resolve_ok() {
-  start_test "resolve: 输入齐全 → 建 audits/ + 打印三道 manifest"
+  start_test "resolve: 输入齐全 → 建 .pm-workflow/audits/ + 打印三道 manifest"
   _setup
   out=$(python3 "$AUDITS" resolve "$SPEC" --repo-root "$T" 2>&1)
   if [ -d "$AUD" ] && echo "$out" | grep -q "覆盖审计" && echo "$out" | grep -q "视觉门" && echo "$out" | grep -q "行为审" && echo "$out" | grep -q "3000"; then
     pass_test
   else
-    _fail "resolve 应建 audits/ + 打印三道 + 端口。Output: $out"
+    _fail "resolve 应建 .pm-workflow/audits/ + 打印三道 + 端口。Output: $out"
   fi
   _teardown
 }
@@ -139,13 +139,13 @@ test_resolve_override_spec_anchor() {
   _setup
   SPEC="$T/docs/modules/demo/spec.md"
   out=$(python3 "$AUDITS" resolve "$SPEC" --repo-root "$T" --range-list "$SPEC" --audit-dir ".pm-workflow/audits/demo" --label "demo" 2>&1)
-  # 范围清单锚到 spec.md + audits 落点按模块名 demo
+  # 范围清单锚到 spec.md + 内部审计落点按模块名 demo
   if echo "$out" | grep -q "modules/demo/spec.md" \
      && [ -d "$T/.pm-workflow/audits/demo" ] \
      && [ ! -d "$T/.pm-workflow/audits/spec" ]; then
     pass_test
   else
-    _fail "override 应锚 spec.md + audits/demo。Output: $out"
+    _fail "override 应锚 spec.md + .pm-workflow/audits/demo。Output: $out"
   fi
   _teardown
 }

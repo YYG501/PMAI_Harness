@@ -6,7 +6,7 @@
     1 设计      —— `/pmai-design` 产出模块三件套，`spec.md` 是 build 锚点
     2 build     —— `/pmai-build` 对着模块 `spec.md` 在 prototype/ 建
     3 复审      —— 覆盖审计 / 视觉门 / 行为审 + PM 体验迭代
-    4 沉淀      —— `/pmai-close` 更新 PRODUCT-STATE / PRODUCT-RULES / 模块规格并收尾
+    4 沉淀      —— `/pmai-build-close` 更新 PRODUCT-STATE / PRODUCT-RULES / 模块规格并收尾
 
 stage 名供 status-view / banner / skills 文案复用。不存在单独的 stage 推进脚本。
 

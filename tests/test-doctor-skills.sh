@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # test-doctor-skills.sh
 #
-# 防回归：bin/pmai-doctor 的 EXPECTED_SKILLS 必须与 skills/ 目录（除 _shared）完全一致。
+# 防回归：bin/pmai-doctor 的 EXPECTED_SKILLS 必须与公开 skills/ 目录（除 _shared / _internal）完全一致。
 # 背景（2026-06-22 事故）：reshape 删旧探索 skill / 加 design 等漏改本清单 →
 #   pmai upgrade 的 doctor 自检把正确的升级误判成「缺 skill」触发回滚。
 #   T0: bin/pmai-doctor 存在且含 EXPECTED_SKILLS 数组
@@ -34,10 +34,10 @@ expected_skills() {
     | sed 's/#.*//' | tr ' \t' '\n\n' | grep -v '^$' | sort -u
 }
 
-# skills/ 目录下实际 skill（除 _shared），排序去重
+# skills/ 目录下实际公开 skill（除 _shared / _internal），排序去重
 actual_skills() {
   find "$SKILLS_DIR" -mindepth 1 -maxdepth 1 -type d -exec basename {} \; \
-    | grep -v '^_shared$' | sort -u
+    | grep -vE '^(_shared|_internal)$' | sort -u
 }
 
 exposed_name_for_skill() {
@@ -64,7 +64,7 @@ setup_fake_global_install() {
     exposed=$(exposed_name_for_skill "$name")
     ln -s "$sk" "$fake_home/.claude/skills/$exposed"
     ln -s "$sk" "$fake_home/.codex/skills/$exposed"
-  done < <(find "$SKILLS_DIR" -mindepth 1 -maxdepth 1 -type d ! -name _shared | sort)
+  done < <(find "$SKILLS_DIR" -mindepth 1 -maxdepth 1 -type d ! -name _shared ! -name _internal | sort)
   ln -s "$SKILLS_DIR/_shared" "$fake_home/.claude/skills/_shared"
   ln -s "$SKILLS_DIR/_shared" "$fake_home/.codex/skills/_shared"
 
@@ -243,6 +243,12 @@ test_doctor_repairs_empty_codex_exposure() {
   fi
   if [ ! -L "$fake_home/.codex/skills/pmai-design" ]; then
     _fail "doctor 未创建 Codex pmai-design symlink"
+    echo "$out" >&2
+    rm -rf "$tmp"
+    return
+  fi
+  if [ -e "$fake_home/.codex/skills/pmai-_internal" ] || [ -L "$fake_home/.codex/skills/pmai-_internal" ]; then
+    _fail "doctor 不应把 skills/_internal 暴露成 pmai-_internal"
     echo "$out" >&2
     rm -rf "$tmp"
     return

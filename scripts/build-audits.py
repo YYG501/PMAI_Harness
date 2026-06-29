@@ -6,15 +6,15 @@
 无法当子进程脚本调起** —— 所以本脚本不“跑”三道审，只固化能确定性固化的两件事：
 
   - **resolve**：解析 + 校验输入（模块规格 `spec.md` / `prototype/` / dev 端口），
-    建 `audits/` 目录，打印 manifest（每道审读什么、把规范化结果写到哪、dev server 复用约定），
+    建 `.pm-workflow/audits/<模块>/` 内部审计目录，打印 manifest（每道审读什么、把规范化结果写到哪、dev server 复用约定），
     **缺输入 fail-loud**（防对着缺失锚点跑审、防覆盖审计无范围清单可比）。
-  - **synthesize**：读 `audits/` 下三道规范化结果，**校验三道齐全**（漏跑 fail-loud，
+  - **synthesize**：读 `.pm-workflow/audits/<模块>/` 下三道规范化结果，**校验三道齐全**（漏跑 fail-loud，
     防 AI 漏跑一道还往下走），合成一份 `synthesis.md` 给 PM + 打印机器门禁 summary。
 
 规范化结果 schema（build 跑完每道后写，= 本脚本的输入契约）：
-  audits/coverage.json : {"items":[{"name","status":"built|missing|degraded","note"}]}
-  audits/visual.json   : {"findings":[{"severity":"P0|P1|P2","desc"}]}    (findings 空 = 视觉通过)
-  audits/behavior.json : {"status":"pass|fail|skipped","passed":int,"total":int,"note"}
+  .pm-workflow/audits/<模块>/coverage.json : {"items":[{"name","status":"built|missing|degraded","note"}]}
+  .pm-workflow/audits/<模块>/visual.json   : {"findings":[{"severity":"P0|P1|P2","desc"}]}    (findings 空 = 视觉通过)
+  .pm-workflow/audits/<模块>/behavior.json : {"status":"pass|fail|skipped","passed":int,"total":int,"note"}
 
 门禁（gate）只产**给 PM 看的建议**，不替 PM 拍板：clean / needs-review。
 
@@ -168,7 +168,8 @@ def cmd_resolve(anchor_file: Path, repo_root: Path,
     vis = audit_dir / AUDIT_FILES["visual"]
     beh = audit_dir / AUDIT_FILES["behavior"]
 
-    print("[build-audits] 输入已校验，audits/ 已就绪。按下面 manifest 跑三道审，各写规范化结果：")
+    print(f"[build-audits] 输入已校验，内部审计目录已就绪：{audit_dir}")
+    print("按下面 manifest 跑三道审，各写规范化结果：")
     print()
     print(f"  ① 覆盖审计（coverage-reviewer agent，静态读码、不需 dev server）")
     print(f"     范围清单：{range_list}")
@@ -308,7 +309,7 @@ def main() -> int:
         sp.add_argument("--range-list", default=None,
                         help="覆盖审计锚点路径（build skill 传模块规格 spec.md；默认用传入锚点）")
         sp.add_argument("--audit-dir", default=None,
-                        help="audits/ 目录（build skill 按模块名锚定；默认 .pm-workflow/audits/<锚点 stem>）")
+                        help="内部审计结果目录（build skill 按模块名锚定；默认 .pm-workflow/audits/<锚点 stem>）")
         sp.add_argument("--label", default=None,
                         help="合成报告标题用的名字（build skill 传模块名；默认用锚点文件名）")
         if name == "synthesize":

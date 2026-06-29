@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
-# cleanup-pending-worktrees.sh — 清理由 cancel/pmai-close 标记的待清理 build worktree + branch
+# cleanup-pending-worktrees.sh — 清理由 cancel/pmai-build-close 标记的待清理 build worktree + branch
 # 用法: bash scripts/cleanup-pending-worktrees.sh [--dry-run]
 #
 # 背景：
-# cancel/pmai-close 不再总是直接删 worktree/branch。原因是 PM 可能在被废弃的
+# cancel/pmai-build-close 不再总是直接删 worktree/branch。原因是 PM 可能在被废弃的
 # worktree 内（即 cwd = .worktrees/<branch>）执行 close，删除会让 Claude Code
 # 父进程的 cwd 变成 dangling，下一次 Stop hook 的 posix_spawn 报 ENOENT。
 # 解决办法是把删除推迟，由本脚本在主仓 cwd 的会话里统一执行。

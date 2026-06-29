@@ -1,4 +1,11 @@
-<!-- 共享方法论 · 信息设计（理结构 → 写规格 → 磨文字 → 自检）。
+<!-- Legacy reference · 旧信息设计混合方法。
+     已从 skills/_shared/ 移出：现役入口不再直接读本文件。
+     设计方法正本见 skills/design/references/design-method.md。
+     模块规格写作 / 磨文 / 规格 4 问正本见 skills/prd-writing/references/writing-rules.md。
+     本文件只保留历史素材，供后续人工回查。
+
+     原说明：
+     共享方法论 · 信息设计（理结构 → 写规格 → 磨文字 → 自检）。
      被 /pmai-design 段②设计 + /pmai-prd-writing 模块规格模式 @读，不内嵌进 SKILL.md（红线 §7.1：方法论文本落 _shared/，防漂移）。
      源头：ExampleAgentProject design-card 7 步法 + spec-polish 9 条 + prd-writing writing-rules，三方 reconcile 为一份。
      2026-06-21 改（开放3 + 总纲内核2）：删"5 问对任何需求成立"，拆成「很小的真通用内核（3 条）+ 按需求类型选方法（七类，开放分类）」。

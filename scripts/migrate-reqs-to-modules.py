@@ -79,9 +79,9 @@ def main() -> int:
     print("")
     print("Recommended path:")
     print("  1. Keep requirements/ as archive evidence.")
-    print("  2. Open each live item with /pmai-design or /pmai-strategy and write the")
+    print("  2. Open each live item with /pmai-design or /pmai-direction and write the")
     print("     current truth into docs/modules/<module>/discussion.md, decisions.md, spec.md.")
-    print("  3. Use /pmai-close to deposit durable product state after PM acceptance.")
+    print("  3. Use /pmai-build-close to record durable product state after PM acceptance.")
 
     if args.apply:
         print("")

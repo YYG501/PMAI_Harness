@@ -42,6 +42,7 @@ expected_exposed_skill_names() {
     [ -d "$skill_dir" ] || continue
     skill_name=$(basename "$skill_dir")
     case "$skill_name" in
+      _internal) ;;
       _shared) ;;
       pmai-*) echo "$skill_name" ;;
       *) echo "${SKILL_PREFIX}${skill_name}" ;;

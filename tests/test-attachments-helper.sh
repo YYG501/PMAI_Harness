@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # D-iii v2 vp-4：attachments AI 接管 helper + path-contract 回归。
-# 覆盖（11 case）：
+# 覆盖：
 #   ① copy_attachment 成功（机械命名 + attachments_seen append + pending_inject）
 #   ② SensitivePathError 触发（.env / .ssh / token denylist）
 #   ③ FileSizeError 触发（>50MB hard cap）
@@ -46,12 +46,14 @@ test_copy_attachment_happy_path() {
   out=$(_run_py "
 from _lib.attachments import copy_attachment
 r = copy_attachment(Path('$work_dir'), Path('$src'), 'spec', 'test hint')
-assert r['new_name'] == 'docs/inputs/attachments/spec-source-mock.pdf', r['new_name']
+assert r['new_name'] == 'docs/inputs/uncategorized/spec-source-mock.pdf', r['new_name']
+assert r['input_category'] == 'uncategorized', r
 assert r['abs_path'].exists()
 meta = json.loads((Path('$work_dir') / '.work-meta.json').read_text())
 seen = meta['attachments_seen']
 assert len(seen) == 1, seen
-assert seen[0]['name'] == 'docs/inputs/attachments/spec-source-mock.pdf'
+assert seen[0]['name'] == 'docs/inputs/uncategorized/spec-source-mock.pdf'
+assert seen[0]['input_category'] == 'uncategorized'
 assert seen[0]['hint'] == 'test hint'
 assert seen[0]['stage_prefix'] == 'spec'
 # pending_inject: spec.md 不存在
@@ -78,7 +80,7 @@ test_copy_attachment_spec_anchor() {
 from _lib.attachments import copy_attachment
 # spec.md 不存在 → pending_inject True + 命名前缀 spec
 r = copy_attachment(Path('$work_dir'), Path('$src'), 'spec', 'h')
-assert r['new_name'] == 'docs/inputs/attachments/spec-spec-mock.pdf', r['new_name']
+assert r['new_name'] == 'docs/inputs/uncategorized/spec-spec-mock.pdf', r['new_name']
 assert r['pending_inject'] == True, r
 # 建 spec.md 后 → pending_inject False（证明模块规格锚点在映射里）
 (Path('$work_dir') / 'spec.md').write_text('# spec')
@@ -91,6 +93,35 @@ print('OK')
     pass_test
   else
     _fail "spec 锚点回归失败"
+    echo "$out" >&2
+  fi
+  fixture_teardown
+}
+
+test_copy_attachment_typed_input_category() {
+  start_test "copy_attachment: input_category 归档到 docs/inputs/<类别>/"
+  fixture_setup
+  work_dir=$(fixture_create_work "work-001b" "test" 2)
+  src="$work_dir/interview.pdf"
+  printf 'interview content' > "$src"
+
+  out=$(_run_py "
+from _lib.attachments import copy_attachment
+r = copy_attachment(Path('$work_dir'), Path('$src'), 'spec', '访谈重点', input_category='interviews')
+assert r['new_name'] == 'docs/inputs/interviews/spec-interview.pdf', r
+assert r['input_category'] == 'interviews', r
+assert r['abs_path'].exists()
+meta = json.loads((Path('$work_dir') / '.work-meta.json').read_text())
+seen = meta['attachments_seen']
+assert seen[0]['name'] == 'docs/inputs/interviews/spec-interview.pdf', seen
+assert seen[0]['input_category'] == 'interviews', seen
+assert seen[0]['stage_prefix'] == 'spec', seen
+print('OK')
+")
+  if echo "$out" | grep -q "^OK$"; then
+    pass_test
+  else
+    _fail "input_category 归档失败"
     echo "$out" >&2
   fi
   fixture_teardown
@@ -164,12 +195,14 @@ test_register_list_round_trip() {
 
   out=$(_run_py "
 from _lib.attachments import register_attachment, list_attachments_seen
-register_attachment(Path('$work_dir'), 'docs/inputs/attachments/spec-x.pdf', src_origin='/orig/x.pdf', hint='hint X', stage_prefix='spec')
-register_attachment(Path('$work_dir'), 'docs/inputs/attachments/spec-y.pdf', src_origin='/orig/y.pdf', hint='hint Y', stage_prefix='spec')
+register_attachment(Path('$work_dir'), 'docs/inputs/interviews/spec-x.pdf', src_origin='/orig/x.pdf', hint='hint X', stage_prefix='spec')
+register_attachment(Path('$work_dir'), 'docs/inputs/competitors/spec-y.pdf', src_origin='/orig/y.pdf', hint='hint Y', stage_prefix='spec')
 seen = list_attachments_seen(Path('$work_dir'))
 assert len(seen) == 2, seen
-assert seen[0]['name'] == 'docs/inputs/attachments/spec-x.pdf'
-assert seen[1]['name'] == 'docs/inputs/attachments/spec-y.pdf'
+assert seen[0]['name'] == 'docs/inputs/interviews/spec-x.pdf'
+assert seen[0]['input_category'] == 'interviews'
+assert seen[1]['name'] == 'docs/inputs/competitors/spec-y.pdf'
+assert seen[1]['input_category'] == 'competitors'
 assert seen[0]['src_origin'] == '/orig/x.pdf'
 assert seen[0]['hint'] == 'hint X'
 print('OK')
@@ -195,7 +228,7 @@ test_is_seen_missing_field() {
 
   out=$(_run_py "
 from _lib.attachments import is_seen, list_attachments_seen
-assert is_seen(Path('$work_dir'), 'docs/inputs/attachments/spec-x.pdf') == False
+assert is_seen(Path('$work_dir'), 'docs/inputs/interviews/spec-x.pdf') == False
 assert list_attachments_seen(Path('$work_dir')) == []
 print('OK')
 ")
@@ -222,7 +255,7 @@ test_remove_attachment() {
   out=$(_run_py "
 from _lib.attachments import copy_attachment, remove_attachment, is_seen
 copy_attachment(Path('$work_dir'), Path('$src'), 'spec', 'hint')
-name = 'docs/inputs/attachments/spec-source.pdf'
+name = 'docs/inputs/uncategorized/spec-source.pdf'
 assert is_seen(Path('$work_dir'), name)
 remove_attachment(Path('$work_dir'), name)
 assert not (Path('$work_dir').parents[2] / name).exists()
@@ -303,13 +336,38 @@ try:
     copy_attachment(Path('$work_dir'), Path('$src'), '../spec')
     print('FAIL: unsafe stage_prefix should be rejected')
 except AttachmentError:
-    assert not (Path('$FIXTURE_DIR') / 'docs/inputs/attachments').exists()
+    assert not (Path('$FIXTURE_DIR') / 'docs/inputs/uncategorized').exists()
     print('OK')
 ")
   if echo "$out" | grep -q "^OK$"; then
     pass_test
   else
     _fail "copy_attachment 应拒绝 unsafe stage_prefix"
+    echo "$out" >&2
+  fi
+  fixture_teardown
+}
+
+test_copy_attachment_rejects_unsafe_input_category() {
+  start_test "copy_attachment: input_category traversal 被拒绝"
+  fixture_setup
+  work_dir=$(fixture_create_work "work-013b" "test" 2)
+  src="$work_dir/source.pdf"
+  printf 'content' > "$src"
+
+  out=$(_run_py "
+from _lib.attachments import copy_attachment, AttachmentError
+try:
+    copy_attachment(Path('$work_dir'), Path('$src'), 'spec', input_category='../evil')
+    print('FAIL: unsafe input_category should be rejected')
+except AttachmentError:
+    assert not (Path('$FIXTURE_DIR') / 'docs/inputs/evil').exists()
+    print('OK')
+")
+  if echo "$out" | grep -q "^OK$"; then
+    pass_test
+  else
+    _fail "copy_attachment 应拒绝 unsafe input_category"
     echo "$out" >&2
   fi
   fixture_teardown
@@ -331,7 +389,7 @@ test_replace_attachment() {
   out=$(_run_py "
 from _lib.attachments import copy_attachment, replace_attachment, list_attachments_seen
 copy_attachment(Path('$work_dir'), Path('$src_old'), 'spec', 'v1 hint')
-old_name = 'docs/inputs/attachments/spec-v1.pdf'
+old_name = 'docs/inputs/uncategorized/spec-v1.pdf'
 r = replace_attachment(Path('$work_dir'), old_name, Path('$src_new'))
 assert r['new_name'] == old_name, r  # 保留旧 filename
 dst = r['abs_path']
@@ -369,7 +427,7 @@ test_path_expanduser() {
   out=$(_run_py "
 from _lib.attachments import copy_attachment
 r = copy_attachment(Path('$work_dir'), Path('~/.pmaiwf-test-expand-$$.pdf'), 'spec')
-assert r['new_name'] == 'docs/inputs/attachments/spec-.pmaiwf-test-expand-$$.pdf' or '.pmaiwf-test-expand-' in r['new_name'], r
+assert r['new_name'] == 'docs/inputs/uncategorized/spec-.pmaiwf-test-expand-$$.pdf' or '.pmaiwf-test-expand-' in r['new_name'], r
 assert r['abs_path'].exists()
 print('OK')
 ")
@@ -397,7 +455,7 @@ test_filename_with_spaces() {
   out=$(_run_py "
 from _lib.attachments import copy_attachment
 r = copy_attachment(Path('$work_dir'), Path('$src'), 'spec')
-assert r['new_name'] == 'docs/inputs/attachments/spec-foo bar.pdf', r
+assert r['new_name'] == 'docs/inputs/uncategorized/spec-foo bar.pdf', r
 assert r['abs_path'].exists()
 content = r['abs_path'].read_text()
 assert content == 'space content'
@@ -417,19 +475,19 @@ print('OK')
 # -----------------------------------------------------------------
 
 test_trigger2_regression_manual_cp_detection() {
-  start_test "trigger 2 regression: PM 手动 cp 进 docs/inputs/attachments/ + is_seen 判定（基于 attachments_seen 真相源）"
+  start_test "trigger 2 regression: PM 手动 cp 进 typed input 目录 + is_seen 判定"
   fixture_setup
   work_dir=$(fixture_create_work "work-010" "test" 2)
 
   # 模拟 PM 手动 cp（绕过 trigger 0）—— 文件落盘但 attachments_seen 无登记
-  mkdir -p "$FIXTURE_DIR/docs/inputs/attachments"
-  printf 'manual cp content' > "$FIXTURE_DIR/docs/inputs/attachments/spec-manual.pdf"
+  mkdir -p "$FIXTURE_DIR/docs/inputs/interviews"
+  printf 'manual cp content' > "$FIXTURE_DIR/docs/inputs/interviews/spec-manual.pdf"
 
   out=$(_run_py "
 from _lib.attachments import is_seen, register_attachment, list_attachments_seen
 # regression 关键：is_seen 是 False（因 attachments_seen 列表无该条目，即使文件已落盘）
 # 这正是 trigger 2 改造的核心 —— 不用引用 section 判，用 attachments_seen 真相源判
-name = 'docs/inputs/attachments/spec-manual.pdf'
+name = 'docs/inputs/interviews/spec-manual.pdf'
 assert is_seen(Path('$work_dir'), name) == False
 # trigger 2 流程：caller 扫到 + is_seen=False → 问 PM → 答 OK 后补登记
 register_attachment(Path('$work_dir'), name, src_origin='manual-cp', hint='补登记', stage_prefix='spec')
@@ -481,6 +539,7 @@ test_skill_prose_design_inputs_path() {
 
 test_copy_attachment_happy_path
 test_copy_attachment_spec_anchor
+test_copy_attachment_typed_input_category
 test_sensitive_path_error
 test_file_size_error
 test_register_list_round_trip
@@ -489,6 +548,7 @@ test_remove_attachment
 test_register_attachment_rejects_traversal_name
 test_remove_attachment_rejects_traversal_and_keeps_file
 test_copy_attachment_rejects_unsafe_stage_prefix
+test_copy_attachment_rejects_unsafe_input_category
 test_replace_attachment
 test_path_expanduser
 test_filename_with_spaces
