@@ -137,6 +137,16 @@ test_build_skill_requires_pm_gates_before_editing() {
   pass_test
 }
 
+test_build_skill_handles_fallback_design_baseline() {
+  start_test "build skill: DESIGN 兜底骨架时要求 PM 选择视觉基线处理方式"
+
+  assert_file_contains "$BUILD_SKILL" "视觉基线段未建" "build should detect fallback DESIGN skeleton" || return
+  assert_file_contains "$BUILD_SKILL" "gstack /design-consultation" "build should offer filling DESIGN via gstack design-consultation" || return
+  assert_file_contains "$BUILD_SKILL" "低置信" "build should label visual review as low-confidence when baseline is missing" || return
+  assert_file_contains "$BUILD_SKILL" "不能输出“视觉一致性通过”" "build should forbid strong visual pass without baseline" || return
+  pass_test
+}
+
 test_consumer_entry_documents_fallback() {
   start_test "consumer AGENTS: Codex runtime 下 Claude subagent 不可用时先走 adapter"
 
@@ -159,6 +169,7 @@ test_claude_code_adapter_invokes_print_mode
 test_gemini_adapter_invokes_yolo_prompt_mode
 test_build_skill_exposes_claude_and_gemini
 test_build_skill_requires_pm_gates_before_editing
+test_build_skill_handles_fallback_design_baseline
 test_consumer_entry_documents_fallback
 test_readme_lists_build_executors
 

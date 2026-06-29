@@ -6,7 +6,8 @@
 # skill / hook 内部调用走 $PMAI_HOME 全局路径。跨机器 clone 消费仓后只需 pmai install → 立即可用。
 #
 # T1（静态）：init-project.sh 不应再有 cp -R skills 等 framework 资产复制行（旧模式守反向回归）
-# T2（e2e）：真跑 init-project.sh，断言生成项目 .claude/ 不含 framework 资产
+# T2（静态）：PRODUCT-RULES.md 属于根目录项目脊柱，init-project 必须铺根目录文件
+# T3（e2e）：真跑 init-project.sh，断言生成项目 .claude/ 不含 framework 资产
 set -uo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -31,10 +32,23 @@ test_no_framework_asset_copy() {
 }
 
 # -----------------------------------------------------------------
-# T2: e2e —— 真跑 init-project.sh，断言生成项目 .claude/ 不含 framework 资产
+# T2: 静态 —— PRODUCT-RULES.md 是根目录项目脊柱
+# -----------------------------------------------------------------
+test_product_rules_root_spine_route() {
+  start_test "T2: init-project.sh 默认生成根目录 PRODUCT-RULES.md"
+
+  assert_file_exists "$REPO_ROOT/templates/PRODUCT-RULES.md.tmpl" "PRODUCT-RULES template should exist" || return
+  assert_file_contains "$INIT_PROJECT_SH" 'PRODUCT-RULES.md)' "init-project should route PRODUCT-RULES template" || return
+  assert_file_contains "$INIT_PROJECT_SH" 'DEST="$TARGET_DIR/PRODUCT-RULES.md"' "PRODUCT-RULES should be generated at repo root" || return
+  assert_file_contains "$REPO_ROOT/templates/docs-INDEX.md.tmpl" '../PRODUCT-RULES.md' "docs index should link root PRODUCT-RULES" || return
+  pass_test
+}
+
+# -----------------------------------------------------------------
+# T3: e2e —— 真跑 init-project.sh，断言生成项目 .claude/ 不含 framework 资产
 # -----------------------------------------------------------------
 test_e2e_no_framework_assets_in_consumer() {
-  start_test "T2: init-project 生成的消费仓 .claude/ 不含 framework 资产（I-mini）"
+  start_test "T3: init-project 生成根目录脊柱且 .claude/ 不含 framework 资产（I-mini）"
 
   if ! command -v gstack &>/dev/null && [ ! -d "$HOME/.claude/skills/gstack" ]; then
     echo "  ⏭️  SKIP: gstack 不可用，跳过 e2e（T1 静态断言已守反向回归）"
@@ -62,20 +76,28 @@ test_e2e_no_framework_assets_in_consumer() {
   # 框架自用工具不该分发到消费仓
   [ -f "$proj/.claude/scripts/measure-tthw.sh" ] && leaked="$leaked measure-tthw.sh"
 
+  local spine_error=""
+  [ ! -f "$proj/PRODUCT-RULES.md" ] && spine_error="$spine_error missing-root-PRODUCT-RULES.md"
+  [ -f "$proj/docs/PRODUCT-RULES.md" ] && spine_error="$spine_error stale-docs-PRODUCT-RULES.md"
+
   rm -rf "$base"
 
   if [ -n "$leaked" ]; then
     _fail "消费仓含 framework 资产泄漏（I-mini 应 0 framework）：$leaked"
     return
   fi
+  if [ -n "$spine_error" ]; then
+    _fail "PRODUCT-RULES.md 应作为根目录项目脊柱生成：$spine_error"
+    return
+  fi
   pass_test
 }
 
 # -----------------------------------------------------------------
-# T3: e2e —— background 含 sed 元字符（& | \）不污染生成文件
+# T4: e2e —— background 含 sed 元字符（& | \）不污染生成文件
 # -----------------------------------------------------------------
 test_e2e_special_chars_in_background() {
-  start_test "T3: init-project background 含 & | \\ 不污染生成的 CLAUDE.md"
+  start_test "T4: init-project background 含 & | \\ 不污染生成的 CLAUDE.md"
 
   if ! command -v gstack &>/dev/null && [ ! -d "$HOME/.claude/skills/gstack" ]; then
     echo "  ⏭️  SKIP: gstack 不可用，跳过 e2e"
@@ -110,6 +132,7 @@ test_e2e_special_chars_in_background() {
 # Run
 # -----------------------------------------------------------------
 test_no_framework_asset_copy
+test_product_rules_root_spine_route
 test_e2e_no_framework_assets_in_consumer
 test_e2e_special_chars_in_background
 

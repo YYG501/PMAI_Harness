@@ -217,10 +217,18 @@ if [ -f "$DESIGN_MD" ]; then
   echo "════════ DESIGN.md（视觉规范单一来源，build 必须遵循）════════"
   cat "$DESIGN_MD"
   echo "════════ END DESIGN.md ════════"
+  if grep -qE "状态：兜底骨架|视觉基线段未建" "$DESIGN_MD"; then
+    echo "⚠️  DESIGN.md 只有已有代码接入时的兜底骨架，视觉基线还没建。"
+    echo "   先让 PM 选："
+    echo "   1. 暂停 build，跑 gstack /design-consultation 或手填 DESIGN.md 视觉基线后再建。"
+    echo "   2. 继续 build，但视觉门只能做低置信检查：只报明显 AI slop / 组件违和 / 可用性问题，不判定视觉一致性通过。"
+  fi
 else
   echo "ℹ️  $DESIGN_MD 不存在；建议 PM 跑 gstack /design-consultation 建项目级视觉规范。"
 fi
 ```
+
+如果命中 `状态：兜底骨架` / `视觉基线段未建`，**不要假装视觉标准已存在**。先把上面两种选择给 PM：补视觉基线再建，或继续但把视觉门标成低置信。PM 选继续时，执行器仍要按已有 inventory / 组件复用规则建；后续视觉门只能挑明显问题，不能输出“视觉一致性通过”这种强结论。
 
 同时把 `BUILD_ANCHOR`（步骤 0 已读）作为功能契约：信息模型 / 业务规则 / 字段口径 / 状态机 / 验收标准 / 文案是「做什么」的硬约束；DESIGN.md 是「长什么样」的硬约束。先用 Glob 扫 `prototype/` 已有页面和组件，能复用就 import、不重写。
 
@@ -428,7 +436,7 @@ PM 拍 `可以，收尾` → build 的活到此为止，**merge 回 main + 文�
 - **未提交上下文先固定，不准绕过**：未提交的规格 / mock / 文档不是跳过 PM 选择的理由；先只 checkpoint 当前模块建造依据，或停住。禁止用“worktree 拿不到未跟踪文件”为理由自行决定直接在 main 上实现。
 - **worktree 可选、统一挂 `.worktrees/<分支>/`**。开了就用 `git -C "$BUILD_DIR"` / subshell，禁 `cd` 进 worktree（cwd 护栏）；没开则 `BUILD_DIR="$REPO_ROOT"`、main 上直接建（main 写保护已放宽）。
 - **claude-code = 优先派独立 build subagent**（Agent 工具），不在驱动上下文 inline 建（隔离 + 角色分离 + 不刷 PM 屏）；当前 runtime 没有 subagent 时走 `exec-adapters/claude-code.sh` 调 Claude Code CLI。codex / cursor-agent / gemini / manual 走现成 exec-adapter。一次只建本模块这一片。
-- **建之前必读 DESIGN.md**（cat echo 进 context）+ 功能锚点当契约；先扫已有组件复用、不重写。
+- **建之前必读 DESIGN.md**（cat echo 进 context）+ 功能锚点当契约；若 DESIGN.md 只有“兜底骨架 / 视觉基线段未建”，先让 PM 选择补视觉基线或继续低置信视觉门；先扫已有组件复用、不重写。
 - **三道审 AI 自动跑、只报不改**（覆盖 / 视觉 / 行为，复用 build-audits.py 编排或等价自跑；三道审复用同一次 dev server）；出口都是给 PM 看的证据，不替 PM 拍板。探索式 review（`/review` `/qa` `/qa-only`）是 PM 手动旁路，AI 不自动调（守 I-RV1）。
 - **`/pmai-meta` 不进默认 build 门**：如果 PM 在 build 前怀疑功能锚点本身不稳，可先旁路跑 `/pmai-meta` 对焦 / 推导；如果已有规格 / 方案且想多视角找盲区，由 `/pmai-meta` 走压测模式。build 流程本身仍只按功能锚点 + 三道审推进；功能锚点不稳时也可回 `/pmai-design` 重理。
 - **review loop 只动 prototype/ 代码**，不改 spec.md / decisions.md（模块文档对齐归 `/pmai-build-close`；build 期不改文档）。AI 主动批量 flag、PM 勾改；每轮改完重跑三道审。
