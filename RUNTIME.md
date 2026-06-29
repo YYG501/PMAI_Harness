@@ -41,12 +41,12 @@
 - `tests/test-doctor-skills.sh`：10 passed / 0 failed（含 `_internal` 不暴露回归）。
 - `tests/test-brownfield-detect.sh`：6 passed / 0 failed（含 README 不暴露 `/pmai-codebase-audit` 回归）。
 - `tests/test-banner-label.sh`：9 passed / 0 failed（核心入口改为 build-cancel）。
-- `tests/test-check-branch.sh`：14 passed / 0 failed（record 不再依赖 marker 门控）。
-- `tests/test-exec-adapters.sh`：7 passed / 0 failed（含 build 门禁回归）。
+- `tests/test-check-branch.sh`：15 passed / 0 failed（record 不再依赖 marker 门控）。
+- `tests/test-exec-adapters.sh`：8 passed / 0 failed（含 build 门禁回归）。
 - `tests/test-status-view.sh`：7 passed / 0 failed（含 status PM 视图回归）。
 - `tests/test-init-project-codex-compat.sh`：5 passed / 0 failed。
 - `tests/test-private-onboarding.sh`：4 passed / 0 failed。
 - `tests/test-mock-board.sh`：8 passed / 0 failed。
-- `tests/run-all.sh`：307 passed / 0 failed。
+- `tests/run-all.sh`：324 passed / 0 failed。
 - `git diff --check`：通过。
 - 同类残留扫描：当前有效文件未再发现 `/pmai-close` / `pmai-close` / `skills/close` 的用户入口残留；仅保留历史 `requirements/pmai-closed` 路径名和内部 `close-work.sh` 实现脚本名。

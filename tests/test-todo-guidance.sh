@@ -74,7 +74,7 @@ test_section_5_2_drops_old_antipatterns() {
   section=$(_section_5_2)
   for bad in '历史 + 未来一张表' '唯一规划视图' '排序（数字小先做'; do
     if echo "$section" | grep -qF "$bad"; then
-      _fail "§5.2 仍含旧反模式: $bad（应已随 TODO 改造删除）"
+      _fail "§5.2 仍含旧反模式: ${bad}（应已随 TODO 改造删除）"
       return
     fi
   done

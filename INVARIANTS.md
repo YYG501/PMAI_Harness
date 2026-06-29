@@ -77,6 +77,6 @@
 ## I-BA：build 审计
 
 - **I-BA1**：`/pmai-build` 的功能锚点是 `docs/modules/<模块>/spec.md`，不是 task 文件。
-- **I-BA2**：build 写入边界默认是 `prototype/**`；文档归位在 `/pmai-close`。
+- **I-BA2**：build 写入边界默认是 `prototype/**`；文档归位在 `/pmai-build-close`。
 - **I-BA3**：覆盖审计、视觉门、行为审三道结果必须齐全后才能进入 PM 验收。
 - **I-BA4**：三道审只报告证据和问题，不替 PM 自动修改或拍板。

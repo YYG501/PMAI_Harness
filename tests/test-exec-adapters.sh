@@ -65,7 +65,7 @@ test_claude_code_adapter_invokes_print_mode() {
     PATH="$FAKE_BIN:$PATH" bash "$ADAPTER_DIR/claude-code.sh" >/tmp/exec-adapter.$$ 2>&1
   local rc=$?
   if [ "$rc" -ne 0 ]; then
-    _fail "adapter 应返回 0，实际 $rc：$(cat /tmp/exec-adapter.$$)"
+    _fail "adapter 应返回 0，实际 ${rc}：$(cat /tmp/exec-adapter.$$)"
     rm -f /tmp/exec-adapter.$$
     _teardown_fake_executor
     return
@@ -93,7 +93,7 @@ test_gemini_adapter_invokes_yolo_prompt_mode() {
     PATH="$FAKE_BIN:$PATH" bash "$ADAPTER_DIR/gemini.sh" >/tmp/exec-adapter.$$ 2>&1
   local rc=$?
   if [ "$rc" -ne 0 ]; then
-    _fail "adapter 应返回 0，实际 $rc：$(cat /tmp/exec-adapter.$$)"
+    _fail "adapter 应返回 0，实际 ${rc}：$(cat /tmp/exec-adapter.$$)"
     rm -f /tmp/exec-adapter.$$
     _teardown_fake_executor
     return

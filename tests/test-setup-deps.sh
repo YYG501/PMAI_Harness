@@ -60,7 +60,7 @@ assert_linked() {
   local resolved
   resolved=$(readlink "$link")
   if [ "$resolved" != "$target" ]; then
-    fail_test "$link → $resolved，期望 $target"; return 1
+    fail_test "${link} → ${resolved}，期望 ${target}"; return 1
   fi
   return 0
 }

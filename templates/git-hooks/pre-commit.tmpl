@@ -23,7 +23,7 @@ fi
 # --- 0. 解析 PMAI_HOME（I-mini 入口）---
 PMAI_HOME="${PMAI_HOME:-$HOME/.pmai}"
 if [ ! -d "$PMAI_HOME/scripts" ]; then
-  echo "⚠️  pre-commit: PMAI 未安装在 $PMAI_HOME。所有 checker 跳过（fail-open）。" >&2
+  echo "⚠️  pre-commit: PMAI 未安装在 ${PMAI_HOME}。所有 checker 跳过（fail-open）。" >&2
   echo "    修复：跑 pmai install" >&2
   # fail-open：不阻塞 commit，但跳过后续 checker
   exit 0

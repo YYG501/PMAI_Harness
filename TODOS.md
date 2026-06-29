@@ -4,4 +4,4 @@
 
 ## 后续验证
 
-- 在一个真实业务模块上跑完整 `/pmai-design` → `/pmai-build` → `/pmai-close`，验证三道 build 审计、dev server 复用、worktree 创建/合并/清理闭环。
+- 在一个真实业务模块上跑完整 `/pmai-design` → `/pmai-build` → `/pmai-build-close`，验证三道 build 审计、dev server 复用、worktree 创建/合并/清理闭环。

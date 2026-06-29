@@ -50,7 +50,7 @@ fi
 [ -z "$TO" ] && TO=$(cat "$PMAI_HOME/VERSION" 2>/dev/null || echo "current")
 
 if [ ! -f "$CHANGELOG" ]; then
-  echo "（CHANGELOG.md 不在 $PMAI_HOME，跳过）" >&2
+  echo "（CHANGELOG.md 不在 ${PMAI_HOME}，跳过）" >&2
   exit 0
 fi
 

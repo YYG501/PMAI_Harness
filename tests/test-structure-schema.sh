@@ -71,7 +71,7 @@ test_prototype_template_has_depth_prose() {
   fi
   for label in "数据层" "权限层" "API 契约" "测试" "边界态" "多端覆盖" "演示路径"; do
     if ! grep -q "$label" "$PROTO_TMPL"; then
-      _fail "prototype 模板缺「$label」prose"
+      _fail "prototype 模板缺「${label}」prose"
       return
     fi
   done

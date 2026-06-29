@@ -33,7 +33,7 @@ python3 "$PMAI_HOME/scripts/status-view.py" --banner-only --skill BUILD-CANCEL |
 先向 PM 确认：
 
 ```text
-即将放弃当前 build：$ACTIVE_WORK（当前阶段：$ACTIVE_WORK_STAGE_NAME）
+即将放弃当前 build：${ACTIVE_WORK}（当前阶段：${ACTIVE_WORK_STAGE_NAME}）
 
 此操作会：
 - 不合并当前工作分支

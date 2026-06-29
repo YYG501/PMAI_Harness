@@ -282,7 +282,7 @@ LOG="$MAIN_REPO_ROOT/.runs/pmai-build-${EXECUTOR}.log"; mkdir -p "$MAIN_REPO_ROO
 MAIN_REPO_ROOT="$MAIN_REPO_ROOT" BUILD_DIR="$BUILD_DIR" MODULE_NAME="<模块>" PROMPT_FILE="$PROMPT_FILE" \
   bash "$ADAPTER" > "$LOG" 2>&1
 EXIT_CODE=$?
-[ "$EXIT_CODE" -ne 0 ] && { echo "❌ 执行器失败（exit $EXIT_CODE），日志：$LOG。可换工具重建或改用「我自己建」。"; git -C "$BUILD_DIR" restore . 2>/dev/null; git -C "$BUILD_DIR" clean -fd 2>/dev/null; exit 0; }
+[ "$EXIT_CODE" -ne 0 ] && { echo "❌ 执行器失败（exit ${EXIT_CODE}），日志：${LOG}。可换工具重建或改用「我自己建」。"; git -C "$BUILD_DIR" restore . 2>/dev/null; git -C "$BUILD_DIR" clean -fd 2>/dev/null; exit 0; }
 ```
 
 > 超 10 分钟会被 Bash tool timeout：改用 `scripts/run-bg.sh` 后台跑 + Bash run_in_background 起 waiter（`until [ -f "$LOG.exit" ] || [ -f "$LOG.stall" ]; do sleep 60; done`）。
@@ -293,7 +293,7 @@ build 改动应集中在 `prototype/`。`docs/*` 改动**默认不属于 build �
 
 ```bash
 ( cd "$BUILD_DIR" && git status --porcelain | awk '{print $2}' ) | while read -r p; do
-  case "$p" in docs/*) echo "⚠️ 越界：执行器改了 $p（build 只该动 prototype/，文档改动归 /pmai-build-close）。" ;; esac
+  case "$p" in docs/*) echo "⚠️ 越界：执行器改了 ${p}（build 只该动 prototype/，文档改动归 /pmai-build-close）。" ;; esac
 done
 ```
 

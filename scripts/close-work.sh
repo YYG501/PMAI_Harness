@@ -74,7 +74,7 @@ if [ "$HAVE_BRANCH" = "true" ]; then
 fi
 
 if [ "$BUILD_MODE" = "worktree" ] && { [ -z "$WORK_WORKTREE" ] || [ ! -d "$WORK_WORKTREE" ]; }; then
-  echo "❌ build 合同要求隔离环境收尾，但找不到记录分支对应的 worktree: $WORK_BRANCH。" >&2
+  echo "❌ build 合同要求隔离环境收尾，但找不到记录分支对应的 worktree: ${WORK_BRANCH}。" >&2
   echo "   close 不会退化成主线直收；请先恢复 worktree，或补全本次 build 上下文。" >&2
   exit 1
 fi

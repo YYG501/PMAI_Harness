@@ -20,6 +20,8 @@ PM-AI-Workflow 生成器仓的演进记录。本文件**只记影响下游业务
 
 ### 框架瘦身改造（吸收 ExampleAgentProject 设计方法）—— 进行中
 
+- `fix(shell)`: **补齐 shell 输出里 `$VAR` 紧跟中文标点的变量边界**。macOS bash 3.2 + UTF-8 locale + `set -u` 下，`$VAR。` / `$VAR）` 会被解析成被 UTF-8 字节污染的变量名并触发 `unbound variable`。本次把 `/pmai-build-close` 缺 worktree 提示、`pmai-whats-new`、消费仓 pre-commit 模板、`/pmai-build` 执行器提示、`/pmai-build-cancel` 提示和测试诊断里的高风险输出统一改为 `${VAR}`，避免错误提示路径自身崩掉；同步修正 `RUNTIME.md` 测试基线数字。
+
 - `fix(build)`: **`/pmai-build` 识别 DESIGN.md 兜底骨架，不再把缺视觉基线当成已可审标准**。已有代码接入会无条件兜底生成 `DESIGN.md` inventory 段，但视觉基线可能仍是“未建”状态；build 现在在动手前检测 `状态：兜底骨架` / `视觉基线段未建`，要求 PM 选择先跑 gstack `/design-consultation` 或手填视觉基线，或继续但将视觉门标成低置信，只挑明显 AI slop / 组件违和 / 可用性问题，禁止输出“视觉一致性通过”的强结论。同步补 `test-exec-adapters.sh` 回归；`test-init-project.sh` 也固化根目录 `PRODUCT-RULES.md` 初始化契约，防止真实安装态回退到旧 `docs/PRODUCT-RULES.md` 口径。
 
 - `feat(skills)`: **增强 `/pmai-meta`：加入多视角压力测试模式**。`/pmai-meta` 统一为讨论前的对焦与压力测试入口：没锚点时先对焦或第一性原理推导，有锚点且 PM 想“多角度看看 / 找盲区 / 让几个 agent 分别看 / 对抗分析”时，生成少量互补视角做压测，再由主控合成根因、冲突和下一步。内置 agent 数护栏：默认 3-5 个、上限 7 个，简单问题可退化为主控多视角分析。框架不新增独立多 AI skill 入口，避免思考类命令膨胀。
