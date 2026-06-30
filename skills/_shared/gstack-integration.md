@@ -6,9 +6,10 @@
 
 ### 1. 方法吸收
 
-适用：PMAI 借鉴 gstack / office-hours / grillme 的工作纪律，但不运行 gstack。
+适用：PMAI 吸收 gstack / office-hours / grillme 的方法素材，但不运行 gstack，不把外部方法当 PMAI 主品牌。
 
-- `/pmai-meta` 吸收先读资料、一题一问、追问表层答案、挑战危险前提、给 alternatives、停住等 PM 选择。
+- `/pmai-meta` 的最终产物是 PMAI 自己的**产品判断模型**：判断句、地基账本、判断标准、模型轴、分路。gstack / office-hours 提供需求证据、现状对手、具体用户、最小切口、观察意外、未来适配等产品想法素材；grillme 提供一题一问、沿依赖决策树、推荐默认答案、短答追问、能从文件查到的不问 PM 等问法纪律。
+- `/pmai-meta` 不 runtime 调 gstack，不把 office-hours / grillme 作为 PMAI 主品牌，不把 gstack 输出当 PMAI 真相源。
 - PM 视图规则可借鉴 banner、Next Up、Decision gate pattern。
 - 输出必须用 PMAI 的业务语言，不把外部方法名当成前台流程。
 

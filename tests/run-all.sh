@@ -24,6 +24,7 @@ SUITES=(
   test-design-shared-boundary.sh
   test-gstack-integration-contract.sh
   test-gstack-doc-return.sh
+  test-meta-product-meta-thinking.sh
   test-meta-problem-framing.sh
   test-meta-v2-routes.sh
   test-doctor-skills.sh

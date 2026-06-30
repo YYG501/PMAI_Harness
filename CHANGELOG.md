@@ -20,6 +20,8 @@ PM-AI-Workflow 生成器仓的演进记录。本文件**只记影响下游业务
 
 ### 框架瘦身改造（吸收 ExampleAgentProject 设计方法）—— 进行中
 
+- `refactor(meta)`: **`/pmai-meta` 收敛为产品判断模型**。PM 进一步反馈：Office Hours 化、grill 分层和“会话纪律 + 三个思考引擎”仍像外部方法拼装，没有形成 PMAI 自己的内核。改动：① 主方法论定为“产品元思考 = 用追问和压测，把表层诉求建成产品判断模型”；② 模型固定为判断句、地基账本、判断标准、模型轴、分路；③ 保留旧 meta 原词和逻辑：第一性原理建地基账本，升维 / 换高度找判断标准，多视角压测模型和分路，UI 信息 / 任务 / 判断层服务页面模型轴；④ gstack / office-hours 的需求证据、现状对手、具体用户、最小切口、观察意外、未来适配只作为产品想法素材，grill 的一题一问、依赖决策树、推荐默认答案、短答追问、能从文件查到的不问 PM 只作为问法纪律；⑤ `/pmai-meta` 不 runtime 调 gstack，不把 office-hours / grillme 作为 PMAI 主品牌；⑥ design / doc-writing / spec-writing 边界和 meta 静态测试同步更新。
+
 - `refactor(gstack)`: **补齐 gstack 旁路文档接回 PMAI 文档地图的执行门禁**。上一版结合合同只把 `/document-generate` / `/document-release` 定位为工程文档旁路，但“采用后必须回到 PMAI 文档地图”还停在规则层，直接跑 gstack 仍可能留下未索引文档或只引用 `~/.gstack/...`。本次补齐：新增 `docs/engineering/` + `docs/engineering/INDEX.md` 作为 README/API/CLI/架构/how-to/tutorial/reference 的接收点；消费仓 `CLAUDE.md` / `AGENTS.md` / 文档地图 / docs 索引模板写明旁路接回规则；新增 `check-engineering-docs-index.py` 并接入 pre-commit，采用后的工程文档未登记索引会阻塞 commit；README 和测试同步。
 
 - `refactor(gstack)`: **新增 PMAI × gstack 结合合同，统一“专项能力层”边界**。PM 复盘发现 gstack 结合点分散：meta 是方法吸收、mockup 是视觉探索、build 是审计证据、doc-writing 的 PDF 出口又只写成模糊的“Markdown 转 PDF skill”，`document-generate` 也容易被误当成产品文档生成器。改动：① 新增 `skills/_shared/gstack-integration.md`，把结合方式分成方法吸收、能力调用、证据生产、可选旁路；② 现有 meta / init-project / codebase-audit / mockup / build / build-close / mirror-site / doc-writing 引用统一合同；③ doc-writing 和 deliverables 模板明确 PDF 出口是 gstack `/make-pdf`，源 Markdown 仍是 PMAI 真相源；④ `document-generate` 定位为工程文档旁路，不承接产品介绍、PRD、模块规格或 PM 汇报材料；⑤ README 把 gstack 从无条件硬依赖改为“能力层（部分流程必需）”，并说明已有代码库接入不阻塞。
