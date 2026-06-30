@@ -5,7 +5,7 @@
 # - 含 2 活跃/待合并 + 1 已退役 + 1 featured 的样例 manifest → 生成 index.html
 # - 生成的看版按需求分组，含所有变体的链接 / 字段
 # - 看版含左侧目录和搜索
-# - 路径渲染成可点 <a href>
+# - 卡片路径渲染成统一查看页，查看页含返回目录 / 打开页面
 # - 已退役变体在 <details> 折叠块里
 # - 旧 round 文案可兜底推导需求分组
 # - featured 变体带高亮标记
@@ -78,11 +78,14 @@ JSON
   assert_equal "0" "$rc" "gen should exit 0 on full manifest" || { echo "$out"; rm -rf "$repo"; return; }
 
   local html="$repo/mockups/index.html"
+  local viewer="$repo/mockups/viewer.html"
   assert_file_exists "$html" || { rm -rf "$repo"; return; }
+  assert_file_exists "$viewer" || { rm -rf "$repo"; return; }
 
   # 生成物注释（勿手改）
   assert_file_contains "$html" "勿手改" || { rm -rf "$repo"; return; }
   assert_file_contains "$html" "gen-mock-board.py" || { rm -rf "$repo"; return; }
+  assert_file_contains "$viewer" "勿手改" || { rm -rf "$repo"; return; }
 
   # 按需求分组，三个变体的链接都出现
   assert_file_contains "$html" "board-sidebar" || { rm -rf "$repo"; return; }
@@ -94,8 +97,12 @@ JSON
   assert_file_contains "$html" "approach-b/index.html" || { rm -rf "$repo"; return; }
   assert_file_contains "$html" "skeleton-v0.html" || { rm -rf "$repo"; return; }
 
-  # 路径渲染成可点 <a href>
-  assert_file_contains "$html" 'href="approach-a/index.html"' || { rm -rf "$repo"; return; }
+  # 卡片点击先进统一查看页，查看页提供返回目录 / 打开页面
+  assert_file_contains "$html" 'href="viewer.html?path=approach-a%2Findex.html' || { rm -rf "$repo"; return; }
+  assert_file_contains "$html" 'iframe src="approach-a/index.html"' || { rm -rf "$repo"; return; }
+  assert_file_contains "$viewer" "返回目录" || { rm -rf "$repo"; return; }
+  assert_file_contains "$viewer" "打开页面" || { rm -rf "$repo"; return; }
+  assert_file_contains "$viewer" 'href="index.html"' || { rm -rf "$repo"; return; }
 
   # 字段内容渲染
   assert_file_contains "$html" "方案 A：左侧导航" || { rm -rf "$repo"; return; }
@@ -189,6 +196,7 @@ test_missing_manifest() {
 
   local html="$repo/mockups/index.html"
   assert_file_exists "$html" || { rm -rf "$repo"; return; }
+  assert_file_exists "$repo/mockups/viewer.html" || { rm -rf "$repo"; return; }
   assert_file_contains "$html" "暂无变体" || { rm -rf "$repo"; return; }
 
   rm -rf "$repo"
@@ -264,6 +272,27 @@ test_readme_template_exists() {
 }
 
 # -----------------------------------------------------------------
+# Scenario 7: mockup skill 画之前必须对齐已有界面
+# -----------------------------------------------------------------
+test_mockup_skill_aligns_existing_ui() {
+  start_test "mockup skill 默认先对齐已有界面"
+  local skill="$REPO_ROOT/skills/mockup/SKILL.md"
+  assert_file_exists "$skill" || return
+
+  assert_file_contains "$skill" "### 步骤 1.5：先对齐已有界面" || return
+  assert_file_contains "$skill" '读根目录 `DESIGN.md`' || return
+  assert_file_contains "$skill" '读已有 `prototype/` 关键页面' || return
+  assert_file_contains "$skill" "已挑定 / 待合并的设计稿" || return
+  assert_file_contains "$skill" "贴合现有界面" || return
+  assert_file_contains "$skill" "探索新风格" || return
+  assert_file_contains "$skill" "先定基调" || return
+  assert_file_contains "$skill" "现有界面约束" || return
+  assert_file_contains "$skill" "默认贴合现有界面" || return
+
+  pass_test
+}
+
+# -----------------------------------------------------------------
 # Run
 # -----------------------------------------------------------------
 
@@ -275,5 +304,6 @@ test_empty_variants
 test_bad_json
 test_template_valid
 test_readme_template_exists
+test_mockup_skill_aligns_existing_ui
 
 report_results "mock-board"

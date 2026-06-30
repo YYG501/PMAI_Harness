@@ -5,6 +5,7 @@
 #   T1: design-only / mixed 方法文件不留在 skills/_shared/
 #   T2: 现役入口不再引用 _shared/module-questioning.md 或 _shared/info-design.md
 #   T3: design / prd-writing / build-close 各自引用正确真相源
+#   T4: design 后台驾驶内核包含工作类型、目标绑定、事实底座和顺手动作边界
 set -uo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -66,8 +67,53 @@ test_current_truth_sources_are_wired() {
   pass_test
 }
 
+test_design_driver_kernel_is_documented() {
+  start_test "T4: /pmai-design 后台驾驶内核已文档化"
+  local skill="$REPO_ROOT/skills/design/SKILL.md"
+  local method="$REPO_ROOT/skills/design/references/design-method.md"
+
+  if ! grep -q "后台判断工作类型" "$skill"; then
+    _fail "skills/design/SKILL.md 缺后台工作类型判断"
+    return
+  fi
+  if ! grep -q "本轮目标绑定" "$skill"; then
+    _fail "skills/design/SKILL.md 缺本轮目标绑定"
+    return
+  fi
+  if ! grep -q "规格冲突对齐" "$skill"; then
+    _fail "skills/design/SKILL.md 缺规格冲突对齐类型"
+    return
+  fi
+  if ! grep -q "补齐未决口径" "$skill"; then
+    _fail "skills/design/SKILL.md 缺补齐未决口径类型"
+    return
+  fi
+  if ! grep -q "不得把相关工作扩展成本轮默认范围" "$skill"; then
+    _fail "skills/design/SKILL.md 缺顺手动作范围边界"
+    return
+  fi
+  if ! grep -q "事实底座" "$method"; then
+    _fail "design-method.md 缺事实底座"
+    return
+  fi
+  if ! grep -q "当前权威口径" "$method"; then
+    _fail "design-method.md 缺当前权威口径"
+    return
+  fi
+  if ! grep -q "讨论顺序按产品结构走" "$method"; then
+    _fail "design-method.md 缺产品结构推进顺序"
+    return
+  fi
+  if ! grep -q "不要把这套后台顺序包装成" "$method"; then
+    _fail "design-method.md 缺禁止固定前台模板边界"
+    return
+  fi
+  pass_test
+}
+
 test_design_only_files_not_in_shared
 test_no_active_refs_to_old_shared_design_files
 test_current_truth_sources_are_wired
+test_design_driver_kernel_is_documented
 
 report_results "design-shared-boundary"

@@ -20,6 +20,12 @@ PM-AI-Workflow 生成器仓的演进记录。本文件**只记影响下游业务
 
 ### 框架瘦身改造（吸收 ExampleAgentProject 设计方法）—— 进行中
 
+- `refactor(design)`: **`/pmai-design` 补后台驾驶内核，减少设计讨论跑题**。PM 反馈重做规格时 AI 容易在相关模块同步、mockup 和规格成文之间跳转，根因是 skill 有“读上下文 / 一步一停 / 必要时 mock”的原则，但缺少后台工作类型判断和本轮目标绑定。改动：`/pmai-design` 准备阶段新增工作类型判断（新建、重做、冲突对齐、补齐口径、呈现确认、成文写规格）和顺手动作边界；`design-method.md` 补事实底座与产品结构推进顺序，要求先分清当前权威口径、历史理由、引用材料和待确认缺口，再按服务谁的判断 / 动作、边界、触发、字段、状态、动作、消失条件、跨模块权威关系推进。PM 侧不新增固定流程汇报模板，回归测试锁定通用内核。
+
+- `fix(mockups)`: **`/pmai-mockup` 生成前默认先对齐已有界面**。PM 反馈 mockup 不看现有代码 / 原型样式，导致设计稿和已有界面接不上。根因是 skill 只要求确认“放什么、谁看、怎么分块”，没有强制先看现有产品长什么样。改动：`/pmai-mockup` 新增步骤 1.5，生成前必须读取 `DESIGN.md`、相关 `prototype/` 页面 / 组件 / 样式、已挑定 / 待合并设计稿和模块约束；默认模式改为“贴合现有界面”，只有 PM 明确要求才探索新风格；无可参考界面时必须说明这轮是在先定基调。回归测试锁定该流程约束。
+
+- `fix(mockups)`: **mockup 看版卡片点开后提供返回目录入口**。PM 反馈看版卡片进入单个设计稿后没有回到目录页的按钮。根因是卡片直接打开原设计稿文件，原页不由看版生成器控制。改动：`gen-mock-board.py` 现在额外生成统一查看页 `mockups/viewer.html`，卡片先进入查看页，顶部固定提供“返回目录”和“打开页面”；缩略预览仍直接内联原设计稿。`/pmai-mockup` 和 mockups README 模板同步说明，回归测试覆盖查看页生成和返回入口。
+
 - `fix(shell)`: **补齐 shell 输出里 `$VAR` 紧跟中文标点的变量边界**。macOS bash 3.2 + UTF-8 locale + `set -u` 下，`$VAR。` / `$VAR）` 会被解析成被 UTF-8 字节污染的变量名并触发 `unbound variable`。本次把 `/pmai-build-close` 缺 worktree 提示、`pmai-whats-new`、消费仓 pre-commit 模板、`/pmai-build` 执行器提示、`/pmai-build-cancel` 提示和测试诊断里的高风险输出统一改为 `${VAR}`，避免错误提示路径自身崩掉；同步修正 `RUNTIME.md` 测试基线数字。
 
 - `fix(build)`: **`/pmai-build` 识别 DESIGN.md 兜底骨架，不再把缺视觉基线当成已可审标准**。已有代码接入会无条件兜底生成 `DESIGN.md` inventory 段，但视觉基线可能仍是“未建”状态；build 现在在动手前检测 `状态：兜底骨架` / `视觉基线段未建`，要求 PM 选择先跑 gstack `/design-consultation` 或手填视觉基线，或继续但将视觉门标成低置信，只挑明显 AI slop / 组件违和 / 可用性问题，禁止输出“视觉一致性通过”的强结论。同步补 `test-exec-adapters.sh` 回归；`test-init-project.sh` 也固化根目录 `PRODUCT-RULES.md` 初始化契约，防止真实安装态回退到旧 `docs/PRODUCT-RULES.md` 口径。

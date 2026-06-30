@@ -7,7 +7,7 @@
   - `<repo>/mockups/manifest.json` 是变体清单，**唯一真相源**。
   - `<repo>/mockups/index.html` 是**纯生成物**，永远不手改 —— 改 manifest.json 再重生成。
   - 看版 = **单页比稿画廊**：各变体的画面**内联铺在同一页并排比**（图片嵌缩略图、
-    HTML 嵌缩放预览），点击放大看原图 / 开原页。不再只给跳转链接（治"做成两个页面"）。
+    HTML 嵌缩放预览），点击进入统一查看页；查看页带返回目录和打开页面入口。
   - 按需求分组：同一需求下的多版设计稿放在一起，避免跨需求混成一堆。
   - 每个需求内：活跃 / 待合并 放上面；已退役 折叠在下（<details>）。
   - featured 变体视觉突出。
@@ -37,6 +37,7 @@ import json
 import re
 import sys
 from pathlib import Path
+from urllib.parse import quote
 
 
 # 状态枚举（设计 §1.3 拍定）。活跃 / 待合并 进高亮区，已退役 进折叠区。
@@ -55,6 +56,8 @@ GENERATED_BANNER = (
     "本文件由 scripts/gen-mock-board.py 从 mockups/manifest.json 生成。"
     "勿手改 —— 改 manifest.json 再重新生成。"
 )
+
+VIEWER_FILENAME = "viewer.html"
 
 
 def load_manifest(manifest_path: Path) -> dict:
@@ -189,29 +192,38 @@ def _preview_kind(path: str) -> str:
     return "other"
 
 
-def _preview_html(path: str) -> str:
+def _viewer_href(path: str, title: str = "") -> str:
+    """统一查看页地址。path/title 放 query，避免给每个变体生成独立壳页。"""
+    href = f"{VIEWER_FILENAME}?path={quote(path or '', safe='')}"
+    if title:
+        href += f"&title={quote(title, safe='')}"
+    return href
+
+
+def _preview_html(path: str, title: str = "") -> str:
     """渲染卡片顶部的内联画面。图片→<img>；HTML→缩放 <iframe>；其它→占位。
 
-    外层是指向原文件的 <a>（新标签打开），点画面即看大图 / 开原页。
+    外层是指向统一查看页的 <a>（新标签打开），点画面后可返回目录。
     """
     if not path:
         return (
             '<div class="preview preview-missing"><span>（未登记路径）</span></div>'
         )
-    href = _esc_attr(path)
+    href = _esc_attr(_viewer_href(path, title))
+    source = _esc_attr(path)
     kind = _preview_kind(path)
     if kind == "image":
         return (
             f'<a class="preview" href="{href}" target="_blank" rel="noopener" '
             f'title="点开看原图">'
-            f'<img src="{href}" loading="lazy" alt=""></a>'
+            f'<img src="{source}" loading="lazy" alt=""></a>'
         )
     if kind == "html":
         # iframe 缩放成缩略图；pointer-events:none 让外层 <a> 接住点击。
         return (
             f'<a class="preview preview-html" href="{href}" target="_blank" rel="noopener" '
             f'title="点开看完整页面">'
-            f'<iframe src="{href}" loading="lazy" tabindex="-1" scrolling="no"></iframe>'
+            f'<iframe src="{source}" loading="lazy" tabindex="-1" scrolling="no"></iframe>'
             f'<span class="preview-html-hint">点开看完整稿</span></a>'
         )
     # 目录 / 未知类型：给个可点占位
@@ -248,7 +260,7 @@ def render_variant_card(variant: dict) -> str:
     badge_html = f'<span class="badges">{"".join(badges)}</span>' if badges else ""
 
     if path:
-        open_link = f'<a class="open-link" href="{_esc_attr(path)}" target="_blank" rel="noopener">打开完整稿</a>'
+        open_link = f'<a class="open-link" href="{_esc_attr(_viewer_href(path, title))}" target="_blank" rel="noopener">查看完整稿</a>'
     else:
         open_link = '<span class="open-link open-link-missing">未登记路径</span>'
 
@@ -277,7 +289,7 @@ def render_variant_card(variant: dict) -> str:
     search_text = _search_text(variant)
 
     return f"""          <article class="{' '.join(card_classes)}" data-search-text="{_esc_attr(search_text)}">
-            {_preview_html(path)}
+            {_preview_html(path, title)}
             <div class="variant-body">
               <header class="variant-head">
                 <h3>{_esc(title)}</h3>
@@ -671,6 +683,131 @@ def _html_shell(body: str, total: int, manifest_rel: str, sidebar: str) -> str:
 """
 
 
+def render_viewer() -> str:
+    """生成统一查看页：所有卡片点进来都有返回目录和打开页面。"""
+    return f"""<!DOCTYPE html>
+<!--
+  {GENERATED_BANNER}
+-->
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>查看设计稿</title>
+<style>
+  :root {{
+    --bg: #f4f5f7;
+    --card: #ffffff;
+    --ink: #14181d;
+    --muted: #6a737d;
+    --line: #e3e6ea;
+    --accent: #2563eb;
+    --danger: #b91c1c;
+  }}
+  * {{ box-sizing: border-box; }}
+  body {{
+    margin: 0; background: var(--bg); color: var(--ink);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
+                 "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+    min-height: 100vh; display: grid; grid-template-rows: auto 1fr;
+  }}
+  .viewer-bar {{
+    position: sticky; top: 0; z-index: 10; min-height: 56px;
+    display: flex; align-items: center; gap: .75rem; padding: .65rem 1rem;
+    background: rgba(255,255,255,.96); border-bottom: 1px solid var(--line);
+    box-shadow: 0 1px 2px rgba(20,24,29,.04);
+  }}
+  .viewer-title {{
+    min-width: 0; flex: 1; font-size: .95rem; font-weight: 650;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }}
+  .viewer-actions {{ display: inline-flex; gap: .5rem; flex-shrink: 0; }}
+  .viewer-actions a {{
+    display: inline-flex; align-items: center; min-height: 2.1rem;
+    padding: 0 .75rem; border: 1px solid var(--line); border-radius: 6px;
+    color: var(--ink); background: #fff; text-decoration: none; font-size: .86rem;
+    font-weight: 600;
+  }}
+  .viewer-actions a.primary {{
+    border-color: var(--accent); background: var(--accent); color: #fff;
+  }}
+  .viewer-actions a:hover {{ filter: brightness(.98); }}
+  .stage {{
+    min-height: 0; display: flex; align-items: stretch; justify-content: center;
+    padding: 1rem;
+  }}
+  .stage iframe, .stage img {{
+    width: 100%; height: calc(100vh - 88px); border: 1px solid var(--line);
+    border-radius: 8px; background: #fff; box-shadow: 0 1px 2px rgba(20,24,29,.04);
+  }}
+  .stage img {{ object-fit: contain; padding: 1rem; }}
+  .error {{
+    margin: auto; max-width: 560px; background: #fff; border: 1px solid #fecaca;
+    border-radius: 8px; padding: 1rem; color: var(--danger);
+  }}
+  @media (max-width: 680px) {{
+    .viewer-bar {{ align-items: stretch; flex-direction: column; }}
+    .viewer-actions {{ width: 100%; }}
+    .viewer-actions a {{ flex: 1; justify-content: center; }}
+    .stage {{ padding: .75rem; }}
+    .stage iframe, .stage img {{ height: calc(100vh - 130px); }}
+  }}
+</style>
+</head>
+<body>
+  <header class="viewer-bar">
+    <div class="viewer-title" data-title>查看设计稿</div>
+    <nav class="viewer-actions" aria-label="查看操作">
+      <a href="index.html">返回目录</a>
+      <a class="primary" href="#" target="_blank" rel="noopener" data-open>打开页面</a>
+    </nav>
+  </header>
+  <main class="stage" data-stage></main>
+  <script>
+    (() => {{
+      const params = new URLSearchParams(window.location.search);
+      const path = (params.get("path") || "").trim();
+      const title = (params.get("title") || "查看设计稿").trim();
+      const stage = document.querySelector("[data-stage]");
+      const titleNode = document.querySelector("[data-title]");
+      const open = document.querySelector("[data-open]");
+      const imageExt = /\\.(png|jpe?g|webp|gif|svg|avif)$/i;
+
+      titleNode.textContent = title || "查看设计稿";
+
+      const showError = (message) => {{
+        stage.innerHTML = "";
+        const box = document.createElement("div");
+        box.className = "error";
+        box.textContent = message;
+        stage.appendChild(box);
+        open.removeAttribute("href");
+      }};
+
+      if (!path || path.includes("..") || path.startsWith("/") || /^[a-z]+:/i.test(path)) {{
+        showError("这个设计稿路径无效，请回到目录页重新打开。");
+        return;
+      }}
+
+      open.href = path;
+      if (imageExt.test(path)) {{
+        const img = document.createElement("img");
+        img.src = path;
+        img.alt = title || "";
+        stage.appendChild(img);
+      }} else {{
+        const frame = document.createElement("iframe");
+        frame.src = path;
+        frame.title = title || "设计稿";
+        stage.appendChild(frame);
+      }}
+    }})();
+  </script>
+</body>
+</html>
+"""
+
+
 def main():
     parser = argparse.ArgumentParser(
         description="从 mockups/manifest.json 生成 mockups/index.html 看版导航页"
@@ -730,12 +867,15 @@ def main():
         manifest_rel = manifest_path.name
 
     board_html = render_board(data, manifest_rel)
+    viewer_html = render_viewer()
 
     out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_text(board_html, encoding="utf-8")
+    viewer_path = out_path.parent / VIEWER_FILENAME
+    viewer_path.write_text(viewer_html, encoding="utf-8")
 
     n = len([v for v in data.get("variants", []) if isinstance(v, dict)])
-    print(f"✅ 看版已生成: {out_path}（{n} 个变体）")
+    print(f"✅ 看版已生成: {out_path}（{n} 个变体，含查看页 {viewer_path.name}）")
 
 
 if __name__ == "__main__":

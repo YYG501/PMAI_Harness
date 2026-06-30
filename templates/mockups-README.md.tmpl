@@ -10,6 +10,7 @@
 - **变体本身**（各个 mock 文件 / 目录）—— 所有生成出来的都落这儿、都进版本库，**包括当场被你否掉的草图**。否掉不等于删掉，留着是为了下次还能翻回来看。
 - **`manifest.json`** —— **清单，唯一的真相源**。每个值得留的变体在这儿登记一条：来自哪个需求、标题、路径、探索什么、好东西、状态、出自哪轮。
 - **`index.html`** —— **看版导航页**，从 `manifest.json` 自动生成。**别手改它**（手改下次重生成就被覆盖）；要调内容改 `manifest.json` 再重生成。
+- **`viewer.html`** —— **查看页**，从 `manifest.json` 自动生成。卡片点进去先到这里，顶部有“返回目录”和“打开页面”。
 
 > 一句话：**清单是底账，看版是它的展示面。** 永远改账、不改面。
 
@@ -44,4 +45,4 @@
 python3 "$PMAI_HOME/scripts/gen-mock-board.py" <项目根目录>
 ```
 
-读 `mockups/manifest.json`、写 `mockups/index.html`。清单空的也不报错，生成一张"暂无变体"的空看版。
+读 `mockups/manifest.json`、写 `mockups/index.html` 和 `mockups/viewer.html`。清单空的也不报错，生成一张"暂无变体"的空看版。
