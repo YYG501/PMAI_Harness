@@ -470,7 +470,7 @@ PM 拍 `可以，收尾` → build 的活到此为止，**merge 回 main + 文�
 - **claude-code = 优先派独立 build subagent**（Agent 工具），不在驱动上下文 inline 建（隔离 + 角色分离 + 不刷 PM 屏）；当前 runtime 没有 subagent 时走 `exec-adapters/claude-code.sh` 调 Claude Code CLI。codex / cursor-agent / gemini / manual 走现成 exec-adapter。一次只建本模块这一片。执行器运行过程写日志和状态文件，PM 窗口只报阶段摘要。
 - **建之前必读 DESIGN.md**（cat echo 进 context）+ 功能锚点当契约；若 DESIGN.md 只有“兜底骨架 / 视觉基线段未建”，先让 PM 选择补视觉基线或继续低置信视觉门；先扫已有组件复用、不重写。
 - **三道审 AI 自动跑、只报不改**（覆盖 / 视觉 / 行为，复用 build-audits.py 编排或等价自跑；三道审复用同一次 dev server）；出口都是给 PM 看的证据，不替 PM 拍板。探索式 review（`/review` `/qa` `/qa-only`）是 PM 手动旁路，AI 不自动调（守 I-RV1）。
-- **`/pmai-meta` 不进默认 build 门**：如果 PM 在 build 前怀疑功能锚点本身不稳，可先旁路跑 `/pmai-meta` 对焦 / 推导；如果已有规格 / 方案且想多视角找盲区，由 `/pmai-meta` 走压测模式。build 流程本身仍只按功能锚点 + 三道审推进；功能锚点不稳时也可回 `/pmai-design` 重理。
+- **`/pmai-meta` 不进默认 build 门**：如果 PM 在 build 前怀疑功能锚点本身不稳，可先旁路跑 `/pmai-meta` 做问题会诊；如果已有规格 / 方案且想多视角找盲区，由 `/pmai-meta` 走已有材料压测。build 流程本身仍只按功能锚点 + 三道审推进；功能锚点不稳时也可回 `/pmai-design` 重理。
 - **review loop 只动 prototype/ 代码**，不改 spec.md / decisions.md（模块文档对齐归 `/pmai-build-close`；build 期不改文档）。AI 主动批量 flag、PM 勾改；每轮改完重跑三道审。
 - **commit 用 `git -C "$BUILD_DIR"`**；执行器禁自己 commit（claude-code subagent prompt 里写死、adapter 约定 unstaged）。
 - **PM 验收是唯一决策点**（步骤 8）；通过后**不在 build 里 merge**，交 `/pmai-build-close` 做提交 / 合并 + 沉淀（决策 / 术语回写基线绑定在 build-close，绕不过）。

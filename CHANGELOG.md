@@ -20,6 +20,8 @@ PM-AI-Workflow 生成器仓的演进记录。本文件**只记影响下游业务
 
 ### 框架瘦身改造（吸收 ExampleAgentProject 设计方法）—— 进行中
 
+- `refactor(meta)`: **`/pmai-meta` v2 改为问题会诊入口，拆分产品想法、PMAI workflow 与已有材料压测三条路径**。PM 反馈第一版 Office Hours 化仍然像小修补：没有真正吸收 gstack / grillme 的 gate 和测试，且把 `lark-doc-edit / publish-to-lark / pmai-lark-sync` 这类 PMAI workflow 决策误导到 `/pmai-design`。本次改动：① 主 skill 改为薄入口，先读资料，再选择产品想法会诊、PMAI workflow 决策或已有材料压测；② 新增 `product-idea-framing.md`，承接产品想法沉淀里的现状对手、需求证据、具体用户、最小切口和失败预演；③ 新增 `pmai-workflow-decision.md`，要求先读相关 skill，再比较调用现有、改现有、新建入口、先不做，skill 改造落点明确为 `/pmai-skill-improve`；④ `problem-framing.md` 收敛为 Read / One Question / Premise / Alternatives / Coverage / Handoff 六道门禁，Alternatives 后必须停住让 PM 选；⑤ 下游 design / build / spec-writing / doc-writing 引用同步为问题会诊和已有材料压测口径；⑥ 新增 `test-meta-v2-routes.sh`，防止新 skill 偏置、Alternatives 抢跑和 workflow 改造误入 design。
+
 - `refactor(mockups)`: **`/pmai-mockup` 改为 PMAI 编排 + gstack 视觉探索 + 本地看版接回**。PM 反馈 mockup 发散性不够，且内置 codex 出图路径不稳定、容易把 PMAI 拖成设计工作台。改动：① mockup 生成前先列几条产品设计方向，要求方向在结构 / 密度 / 路径 / 气质上真不同，并让 PM 先拍要画哪些方向；② 视觉气质探索优先调 gstack `/design-shotgun`，但 gstack 只负责生成和反馈，最终必须接回 PMAI `mockups/`；③ 新增 `scripts/import-mockup-variants.py`，把 gstack designs 目录或 PM 上传图片复制进 `mockups/`、更新清单并供看版生成器展示；④ 暂时移除 `/pmai-mockup` 内置图片生成能力，不再在 skill 中调用 `scripts/gen-mockup-image.sh` / codex image_gen；⑤ 允许 PM 上传截图 / 设计图作为设计素材进入看版，但不绕过 `/pmai-design` 直接变成规格事实。
 
 - `feat(lark-sync)`: **新增 `/pmai-lark-sync`，把本地规格与飞书在线文档同步做成安全分流入口**。飞书文档不再默认等同发布缓存：skill 先判断真相源和同步方向，再选择精细修改飞书、整篇覆盖发布、飞书回拉本地或只 diff。精细修改复用 `lark-doc-edit` 的块级编辑和回读方法；整篇覆盖继续调用 `/pmai-publish-to-lark`；飞书回拉只保留本地追踪 frontmatter 并以飞书正文为准。`/pmai-publish-to-lark` 定位收窄为整篇发布 / overwrite 执行能力，README、doctor 清单和 spec-writing 飞书出口同步。

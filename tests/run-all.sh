@@ -23,6 +23,7 @@ SUITES=(
   test-shared-currentness.sh
   test-design-shared-boundary.sh
   test-meta-problem-framing.sh
+  test-meta-v2-routes.sh
   test-doctor-skills.sh
   test-writing-skill-routing.sh
   test-migrate-reqs-to-modules-compat.sh
