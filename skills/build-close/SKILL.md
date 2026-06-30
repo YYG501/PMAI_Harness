@@ -68,6 +68,11 @@ python3 "$PMAI_HOME/scripts/status-view.py" --banner-only --skill BUILD-CLOSE 2>
     "branch": "build-<模块> | main",
     "worktree": ".worktrees/build-<模块> | null",
     "baseline_sha": "<build 前 HEAD>",
+    "audit_dir": ".pm-workflow/audits/<模块>",
+    "audit_exception": {
+      "accepted_at": "<视觉 / 浏览器审受限时，PM 明确接受的时间>",
+      "reason": "<为什么允许带着受限审计收尾>"
+    },
     "implementation_commit": "<PM 验收时 HEAD>",
     "pm_accepted_at": "<PM 验收时间>"
   }
@@ -95,6 +100,8 @@ python3 "$PMAI_HOME/scripts/build-contract.py" validate-close "$MODULE_WORK_DIR"
   - 如果没有明确验收信号 → STOP，不能进入 build-close。
 - 合同是 `mode=worktree` 但分支或 worktree 找不到 → 不退化成 main 直收，先恢复 worktree 或补合同。
 - 合同是 `mode=main` 但当前不在 main/master → 停止，回主仓主线再收尾。
+- 缺三道审证据（`coverage.json` / `visual.json` / `behavior.json` / `synthesis.md`）→ STOP，回 `/pmai-build` 补跑覆盖、视觉和行为审；不能只靠 PM 说“通过”跳过 browser / gstack 验收。
+- 视觉门或行为审是 `limited` / `skipped` → 必须有 `audit_exception` 记录 PM 明确接受的原因；行为审 `fail` 一律 STOP。
 
 ```bash
 REPO_ROOT="$(cd "$(git rev-parse --git-common-dir 2>/dev/null)/.." && pwd)"
@@ -304,7 +311,8 @@ merge 回 main（具体的 merge / 删 worktree / 删分支编排由 lifecycle �
 - **build 合同优先**：`/pmai-build-close` 必须先读 `.work-meta.json:build`；执行方式、执行器、分支/worktree、实现提交和 PM 验收都以合同为准。没有合同或合同不完整时 STOP，先补 build 上下文，不做“沉淀但未落地”的假 close。
 - **合同补录必须原子化**：PM 已明确验收但合同缺实现提交 / 验收时间时，只能用 `build-contract.py complete` 一次写齐；禁止并行或交错跑 `commit` / `accept` 两步，避免字段互相覆盖。
 - **不靠分支形态猜收尾**：当前在非 main 分支、普通 `codex/*` 分支、或 worktree 丢失，都不是新的 PM 分流菜单；只说明合同与现场不一致，停止并给出恢复上下文的最短动作。
-- **未落主线不写完成态**：还没按合同合回主线，或验证/验收缺口没有明确记录前，不得输出“已收口 / 时间线已完成”。若选择 PR/保留分支，那是待合回状态，不是 build-close 完成。
+- **未落主线不写完成态**：还没按合同合回主线，或三道审 / 验证 / 验收缺口没有明确记录前，不得输出“已收口 / 时间线已完成”。若选择 PR/保留分支，那是待合回状态，不是 build-close 完成。
+- **三道审证据是 close 硬门**：`build-contract.py validate-close` 必须看到覆盖、视觉、行为三份结果和合成报告。browser / gstack 没跑就是缺证据；工具受限只能记录为 `limited` / `skipped`，并经 PM 明确接受后继续，不能静默当通过。
 - **形态自适应**：`/pmai-build` 可以直接在 main 上建，也可以开隔离环境建；`/pmai-build-close` 只在 build 经 PM 验收后使用，并根据 build 合同 `mode` 决定是否合并。只完成讨论但暂不实现时，不需要 build-close。
 - **决策 / 理路 3 个正交的家**（开放 5 拍板，撤销原 3→2 折叠）：单模块决策 → 模块 `decisions.md`（活）；跨模块**规则** → `PRODUCT-RULES.md`（活、scope）；跨文件**理路** → `docs/decisions/<日期>-<slug>.md`（**冻结**）。理路与规则分家、不混塞一份。
 - **术语回写**：新定义的概念/角色/业务词 → `PRODUCT.md` 业务术语表；纯文字微调不算。

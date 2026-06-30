@@ -201,6 +201,8 @@ git -C "$BUILD_DIR" commit -m "build(<模块>): record build contract"
     "branch": "build-<模块> | main",
     "worktree": ".worktrees/build-<模块> | null",
     "baseline_sha": "<build 前 HEAD>",
+    "audit_dir": ".pm-workflow/audits/<模块>",
+    "audit_exception": null,
     "implementation_commit": null,
     "pm_accepted_at": null
   }
@@ -369,6 +371,7 @@ DEV_CMD="<config.yml dev_server.command，替换 {port}>"
 > ```
 >
 > `coverage.json` / `visual.json` / `behavior.json` 是 `.pm-workflow/` 下的内部证据，不写进 `docs/`，也不作为消费仓主目录结构对 PM 展开；给 PM 看的是合成后的结论和待改项。
+> `visual.json` 必须写 `status`：`pass` / `needs-review` / `limited` / `skipped`。`behavior.json` 必须写 `status`：`pass` / `fail` / `skipped` / `limited`。`limited` / `skipped` 不是通过；如果工具受限但 PM 明确接受风险，必须用 `build-contract.py audit-exception` 记录原因，否则 `/pmai-build-close` 会拒绝收尾。
 
 三道审抓三种不同的病：
 
@@ -377,9 +380,9 @@ DEV_CMD="<config.yml dev_server.command，替换 {port}>"
 - **③ 行为审**（验收流程驱动 `/browse` 走确定性路径）：从功能锚点的核心动作 / 状态机 / 验收标准派生验收流程，`/browse` 逐流程跑，验证「跑得通不通」（明确 pass/fail，区别于 `/qa` 的 AI 探索）。复用步骤 5 的 dev server。
 
 视觉 / 浏览器工具受限时按三态呈交，不展开底层工具报错：
-- `已完成视觉检查`：给截图 / 关键观察 / 问题清单。
-- `视觉检查受限但页面可访问`：说明已完成构建和页面返回检查，列出未覆盖的视觉风险。
-- `视觉检查未完成`：说明阻塞原因、日志路径和下一步选择。
+- `已完成视觉检查`：写 `visual.status=pass|needs-review`，给截图 / 关键观察 / 问题清单。
+- `视觉检查受限但页面可访问`：写 `visual.status=limited`，说明已完成构建和页面返回检查，列出未覆盖的视觉风险。PM 若接受，记录 `audit-exception`。
+- `视觉检查未完成`：写 `visual.status=skipped` 或停止，说明阻塞原因、日志路径和下一步选择。PM 若仍要收尾，必须记录 `audit-exception`。
 
 ### 步骤 7：review loop（看原型挑错、AI 改）
 
@@ -421,12 +424,15 @@ dev server 保持运行（PM 验收要访问）。呈交块 + AskUserQuestion（
     `description`: `说哪里要改，我接着改`
 
 **PM 答题处理**：
-- 选 `可以，收尾` / 输 `1` / 输 "OK / 通过 / 可以" → 先把最新实现提交和 PM 验收写回 build 合同，再进步骤 9（接 `/pmai-build-close`）：
+- 选 `可以，收尾` / 输 `1` / 输 "OK / 通过 / 可以" → 先确认三道审合成报告已生成；若视觉 / 浏览器审是 `limited` / `skipped`，先让 PM 明确接受这个缺口并记录原因，再把最新实现提交和 PM 验收写回 build 合同，最后进步骤 9（接 `/pmai-build-close`）：
   ```bash
   IMPLEMENTATION_COMMIT=$(git -C "$BUILD_DIR" rev-parse HEAD)
-  python3 "$PMAI_HOME/scripts/build-contract.py" commit "$MODULE_WORK_DIR" \
+  # 仅当视觉 / 浏览器审受限或跳过，且 PM 明确接受风险时执行：
+  python3 "$PMAI_HOME/scripts/build-contract.py" audit-exception "$MODULE_WORK_DIR" \
+    --reason "<PM 接受的受限原因>"
+
+  python3 "$PMAI_HOME/scripts/build-contract.py" complete "$MODULE_WORK_DIR" \
     --implementation-commit "$IMPLEMENTATION_COMMIT"
-  python3 "$PMAI_HOME/scripts/build-contract.py" accept "$MODULE_WORK_DIR"
   ```
 - 选 `还要改` / 输 `2` / 提具体反馈 → 回步骤 7 review loop 按反馈改 → 重审 → 追加 fix commit（`build(<模块>) fixup: <一句话>`）→ 重新呈交。
 

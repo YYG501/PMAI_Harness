@@ -26,6 +26,8 @@ PM-AI-Workflow 生成器仓的演进记录。本文件**只记影响下游业务
 
 - `fix(build-close)`: **收顺 `/pmai-build-close` 的合同补录、main WIP 和 PM 视图**。PM 反馈真实 close 里出现合同字段分两步补录互相覆盖、主仓有无关脏改仍被当成风险展开、沙箱验证失败刷屏、mock 看版是否退役不清楚等问题。改动：① `build-contract.py complete` 一次写齐 `implementation_commit` 和 `pm_accepted_at`，禁止并行跑 `commit` / `accept`；② `close-work.sh` 合并时用 `git merge --autostash`，main 上无关未提交 WIP 不再阻塞 close，也不会被塞进 close 提交；③ build-close skill 明确 PM 窗口只报阶段结果，不直播读文件、进程、日志和命令流水；④ mock 退役只改本次明确吸收的变体，不能猜着重写整份历史看版；⑤ 生成器入口和消费仓模板新增“禁止机器绑定路径”项目原则。
 
+- `fix(build-close)`: **三道审证据接入 build 合同，没跑 browser / gstack 不再能 close**。PM 复盘发现真实 close 只跑了 `pnpm build`，没有正常调用浏览器验收也能合并。根因是三道审只写在 `/pmai-build` prose 里，没有进入 `build-contract.py validate-close`。改动：`validate-close` 现在要求 `.pm-workflow/audits/<模块>/coverage.json`、`visual.json`、`behavior.json` 和 `synthesis.md` 齐全；行为审 `fail` 直接阻断；视觉 / 行为审 `limited` 或 `skipped` 必须用 `build-contract.py audit-exception` 记录 PM 明确接受原因后才能收尾。`close-work.sh` 复用合同校验自动获得该硬门，测试 fixture 和 close 回归同步补证据。
+
 - `refactor(spec-writing)`: **`/pmai-prd-writing` 收口为 `/pmai-spec-writing`，不保留兼容别名**。历史上已经把 PRD / spec 并入同一套“简要易懂”的规格写作模型；本次把未收干净的入口、目录、引用、doctor 暴露和测试收口：skill 目录迁到 `skills/spec-writing`，公开命令改为 `/pmai-spec-writing`，PRD 只保留为功能型规格文档的一种体例。
 
 - `refactor(spec-writing)`: **重做 `/pmai-spec-writing` 的规格文档模型，PRD 和 4 列表格降为 preset**。PM 反馈改名后内部仍被 PRD 表格默认心智带偏。改动：spec-writing 改为“文档目标 → 规格模块 → 功能需求写法 → preset”的流程；规则收口、状态分类、流程、字段、权限、CRUD 分别选最清楚的写法；PRD 体例保留完整章节、§六 4 列功能表和 `check-prd-hierarchy.py` lint，但只在 PRD / 4 列功能表场景触发。共享 PM-VIEW §五从强制功能清单改为功能需求写法选择与表格 preset；few-shots 先锚定模块 spec / 待办风格，再给 PRD preset 示例；自定义产物路径和飞书发布路径提示统一优先仓内相对路径；测试锁定旧入口不存在、4 列表不再全局强制、PRD lint 不扩成模块 spec 通用 lint。

@@ -112,6 +112,17 @@ EOF
 
   # Create minimal discussion.md（模块三件套之一；占位让 git 有内容可 commit）
   echo "# Discussion" > "$module_dir/discussion.md"
+  mkdir -p "$wt/.pm-workflow/audits/$work_branch"
+  cat > "$wt/.pm-workflow/audits/$work_branch/coverage.json" <<'JSON'
+{"items":[{"name":"fixture coverage","status":"built","note":""}]}
+JSON
+  cat > "$wt/.pm-workflow/audits/$work_branch/visual.json" <<'JSON'
+{"status":"pass","findings":[]}
+JSON
+  cat > "$wt/.pm-workflow/audits/$work_branch/behavior.json" <<'JSON'
+{"status":"pass","passed":1,"total":1,"note":""}
+JSON
+  echo "# 三道审合成报告" > "$wt/.pm-workflow/audits/$work_branch/synthesis.md"
 
   # Commit on build branch
   (
@@ -163,6 +174,17 @@ EOF
 )
   printf '%s\n' "$meta_json" > "$module_dir/.work-meta.json"
   echo "# Discussion" > "$module_dir/discussion.md"
+  mkdir -p "$FIXTURE_DIR/.pm-workflow/audits/$module_name"
+  cat > "$FIXTURE_DIR/.pm-workflow/audits/$module_name/coverage.json" <<'JSON'
+{"items":[{"name":"fixture coverage","status":"built","note":""}]}
+JSON
+  cat > "$FIXTURE_DIR/.pm-workflow/audits/$module_name/visual.json" <<'JSON'
+{"status":"pass","findings":[]}
+JSON
+  cat > "$FIXTURE_DIR/.pm-workflow/audits/$module_name/behavior.json" <<'JSON'
+{"status":"pass","passed":1,"total":1,"note":""}
+JSON
+  echo "# 三道审合成报告" > "$FIXTURE_DIR/.pm-workflow/audits/$module_name/synthesis.md"
 
   (
     cd "$FIXTURE_DIR"

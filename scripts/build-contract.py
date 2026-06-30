@@ -13,10 +13,20 @@ import json
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
+import subprocess
 
 
 VALID_MODES = {"worktree", "main"}
 VALID_EXECUTORS = {"claude-code", "codex", "cursor-agent", "gemini", "manual"}
+AUDIT_FILES = {
+    "coverage": "coverage.json",
+    "visual": "visual.json",
+    "behavior": "behavior.json",
+}
+VISUAL_LIMITED_STATUSES = {"limited", "skipped", "blocked", "not-run"}
+VISUAL_ALLOWED_STATUSES = {"pass", "needs-review", *VISUAL_LIMITED_STATUSES}
+BEHAVIOR_ALLOWED_STATUSES = {"pass", "fail", "skipped", "limited", "blocked"}
+BEHAVIOR_LIMITED_STATUSES = {"skipped", "limited", "blocked"}
 
 
 def now_iso() -> str:
@@ -70,6 +80,109 @@ def validate_mode_executor(mode: str, executor: str | None) -> None:
     if executor and executor not in VALID_EXECUTORS:
         raise SystemExit(
             f"build.executor 必须是 {' / '.join(sorted(VALID_EXECUTORS))}: {executor}"
+        )
+
+
+def repo_root_for(module_dir: Path) -> Path:
+    resolved = module_dir.expanduser().resolve()
+    try:
+        top = subprocess.check_output(
+            ["git", "-C", str(resolved), "rev-parse", "--show-toplevel"],
+            text=True,
+            stderr=subprocess.DEVNULL,
+        ).strip()
+        if top:
+            return Path(top)
+    except Exception:
+        pass
+
+    for parent in [resolved, *resolved.parents]:
+        if (parent / ".pm-workflow").is_dir():
+            return parent
+
+    # Expected module shape: <repo>/docs/modules/<module>
+    if resolved.parent.name == "modules" and resolved.parent.parent.name == "docs":
+        return resolved.parent.parent.parent
+    return resolved.parent
+
+
+def resolve_repo_path(repo_root: Path, value: str | None, field_name: str) -> Path:
+    raw = optional(value)
+    if not raw:
+        raise SystemExit(f"build 合同缺少 {field_name}，不能收尾。")
+    path = Path(raw).expanduser()
+    return path if path.is_absolute() else repo_root / path
+
+
+def load_audit_json(path: Path, label: str) -> dict:
+    if not path.exists():
+        raise SystemExit(f"三道审证据不完整：缺少 {label} 结果 {path}，不能收尾。")
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as exc:
+        raise SystemExit(f"{label} 结果不是合法 JSON：{path}: {exc}") from exc
+    if not isinstance(data, dict):
+        raise SystemExit(f"{label} 结果顶层必须是 JSON 对象：{path}")
+    return data
+
+
+def require_object_list(data: dict, key: str, label: str) -> list[dict]:
+    value = data.get(key)
+    if not isinstance(value, list) or any(not isinstance(item, dict) for item in value):
+        raise SystemExit(f"{label} 结果字段 {key} 必须是对象数组。")
+    return value
+
+
+def audit_exception(build: dict) -> dict | None:
+    value = build.get("audit_exception")
+    return value if isinstance(value, dict) else None
+
+
+def has_audit_exception(build: dict) -> bool:
+    exc = audit_exception(build)
+    return bool(exc and exc.get("accepted_at") and exc.get("reason"))
+
+
+def validate_audit_evidence(module_dir: Path, build: dict) -> None:
+    repo_root = repo_root_for(module_dir)
+    audit_dir = resolve_repo_path(repo_root, build.get("audit_dir"), "audit_dir")
+    coverage = load_audit_json(audit_dir / AUDIT_FILES["coverage"], "覆盖审计")
+    visual = load_audit_json(audit_dir / AUDIT_FILES["visual"], "视觉门")
+    behavior = load_audit_json(audit_dir / AUDIT_FILES["behavior"], "行为审")
+    synthesis = audit_dir / "synthesis.md"
+    if not synthesis.exists():
+        raise SystemExit(f"三道审证据不完整：缺少合成报告 {synthesis}，不能收尾。")
+
+    require_object_list(coverage, "items", "覆盖审计")
+    visual_findings = require_object_list(visual, "findings", "视觉门")
+
+    visual_status = str(
+        visual.get("status")
+        or ("pass" if not visual_findings else "needs-review")
+    )
+    if visual_status not in VISUAL_ALLOWED_STATUSES:
+        raise SystemExit(
+            f"视觉门 status 不合法：{visual_status}（允许 {', '.join(sorted(VISUAL_ALLOWED_STATUSES))}）。"
+        )
+
+    behavior_status = str(behavior.get("status", ""))
+    if behavior_status not in BEHAVIOR_ALLOWED_STATUSES:
+        raise SystemExit(
+            f"行为审 status 不合法：{behavior_status}（允许 {', '.join(sorted(BEHAVIOR_ALLOWED_STATUSES))}）。"
+        )
+    if behavior_status == "fail":
+        raise SystemExit("行为审未通过：不能收尾。请先修到通过，或重新跑 build 验收。")
+
+    limited = []
+    if visual_status in VISUAL_LIMITED_STATUSES:
+        limited.append("视觉门")
+    if behavior_status in BEHAVIOR_LIMITED_STATUSES:
+        limited.append("行为审")
+    if limited and not has_audit_exception(build):
+        raise SystemExit(
+            "三道审存在受限/跳过项："
+            + "、".join(limited)
+            + "。必须记录 PM 明确接受该缺口后才能收尾。"
         )
 
 
@@ -166,6 +279,22 @@ def cmd_complete(args: argparse.Namespace) -> None:
     print(json.dumps(build, ensure_ascii=False))
 
 
+def cmd_audit_exception(args: argparse.Namespace) -> None:
+    module_dir = Path(args.module_dir)
+    meta = read_meta(module_dir)
+    build = require_build(meta)
+    reason = optional(args.reason)
+    if not reason:
+        raise SystemExit("必须提供 PM 接受三道审受限/跳过的原因")
+    build["audit_exception"] = {
+        "accepted_at": optional(args.accepted_at) or now_iso(),
+        "reason": reason,
+    }
+    meta["build"] = build
+    write_meta(module_dir, meta)
+    print(json.dumps(build, ensure_ascii=False))
+
+
 def cmd_validate_close(args: argparse.Namespace) -> None:
     module_dir = Path(args.module_dir)
     meta = read_meta(module_dir)
@@ -185,6 +314,7 @@ def cmd_validate_close(args: argparse.Namespace) -> None:
         raise SystemExit("build 合同要求隔离环境，但缺少 branch。")
     if mode == "main" and build.get("branch") not in (None, "", "main", "master"):
         raise SystemExit("build 合同是 main 模式，但 branch 不是 main/master，不能按主线直收。")
+    validate_audit_evidence(module_dir, build)
 
     print(json.dumps(build, ensure_ascii=False))
 
@@ -219,6 +349,15 @@ def build_parser() -> argparse.ArgumentParser:
     complete.add_argument("--implementation-commit", required=True)
     complete.add_argument("--accepted-at")
     complete.set_defaults(func=cmd_complete)
+
+    audit_exception = sub.add_parser(
+        "audit-exception",
+        help="record PM acceptance for limited/skipped visual or browser audit evidence",
+    )
+    audit_exception.add_argument("module_dir")
+    audit_exception.add_argument("--reason", required=True)
+    audit_exception.add_argument("--accepted-at")
+    audit_exception.set_defaults(func=cmd_audit_exception)
 
     validate = sub.add_parser("validate-close", help="validate that build-close may proceed")
     validate.add_argument("module_dir")

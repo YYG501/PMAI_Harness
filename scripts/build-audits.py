@@ -13,7 +13,7 @@
 
 规范化结果 schema（build 跑完每道后写，= 本脚本的输入契约）：
   .pm-workflow/audits/<模块>/coverage.json : {"items":[{"name","status":"built|missing|degraded","note"}]}
-  .pm-workflow/audits/<模块>/visual.json   : {"findings":[{"severity":"P0|P1|P2","desc"}]}    (findings 空 = 视觉通过)
+  .pm-workflow/audits/<模块>/visual.json   : {"status":"pass|needs-review|limited|skipped","findings":[{"severity":"P0|P1|P2","desc"}]}
   .pm-workflow/audits/<模块>/behavior.json : {"status":"pass|fail|skipped","passed":int,"total":int,"note"}
 
 门禁（gate）只产**给 PM 看的建议**，不替 PM 拍板：clean / needs-review。
@@ -180,7 +180,7 @@ def cmd_resolve(anchor_file: Path, repo_root: Path,
     print(f"  ② 视觉门（gstack /design-review，只截图不改；复用同一次 dev server）")
     print(f"     对照：{repo_root / 'docs' / 'DESIGN.md'}")
     print(f"     → 写 {vis}")
-    print(f"        schema: {{\"findings\":[{{\"severity\":\"P0|P1|P2\",\"desc\"}}]}}（空 findings = 通过）")
+    print(f"        schema: {{\"status\":\"pass|needs-review|limited|skipped\",\"findings\":[{{\"severity\":\"P0|P1|P2\",\"desc\"}}]}}")
     print()
     print(f"  ③ 行为审（浏览器/脚本化验收；复用同一次 dev server）")
     print(f"     → 写 verify/report.md + 本道规范化结果 {beh}")

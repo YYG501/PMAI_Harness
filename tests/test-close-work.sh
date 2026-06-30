@@ -57,6 +57,9 @@ test_worktree_contract_rejects_missing_worktree() {
   main_module="$FIXTURE_DIR/docs/modules/build-work-001-test"
   mkdir -p "$main_module"
   cp -R "$work_dir/." "$main_module/"
+  mkdir -p "$FIXTURE_DIR/.pm-workflow/audits"
+  cp -R "$FIXTURE_DIR/.worktrees/build-work-001-test/.pm-workflow/audits/build-work-001-test" \
+    "$FIXTURE_DIR/.pm-workflow/audits/"
   (cd "$FIXTURE_DIR" && git add -A && git commit -q -m "mirror module on main")
 
   git -C "$FIXTURE_DIR" worktree remove "$FIXTURE_DIR/.worktrees/build-work-001-test" --force 2>/dev/null || \
@@ -103,6 +106,33 @@ PY
       pass_test
     else
       _fail "stderr missing missing-build-contract guidance"
+      cat /tmp/err.$$ >&2
+    fi
+  fi
+
+  rm -f /tmp/out.$$ /tmp/err.$$
+  fixture_teardown
+}
+
+test_reject_missing_audit_evidence() {
+  start_test "I-CR14 reject close when build audit evidence is missing"
+  fixture_setup
+
+  work_dir=$(fixture_create_work "work-001" "test" 4)
+  (
+    cd "$FIXTURE_DIR/.worktrees/build-work-001-test"
+    rm -f ".pm-workflow/audits/build-work-001-test/behavior.json"
+    git add -A
+    git commit -q -m "remove behavior audit evidence"
+  )
+
+  if (cd "$FIXTURE_DIR" && bash "$CLOSE_WORK" "$work_dir") >/tmp/out.$$ 2>/tmp/err.$$; then
+    _fail "close-work should reject missing browser/behavior audit evidence"
+  else
+    if grep -q "三道审证据不完整" /tmp/err.$$; then
+      pass_test
+    else
+      _fail "stderr missing audit evidence guidance"
       cat /tmp/err.$$ >&2
     fi
   fi
@@ -403,6 +433,7 @@ test_build_close_skill_documents_contract_and_wip_rules() {
   assert_file_contains "$BUILD_CLOSE_SKILL" "主仓 main 上允许保留其它未提交 WIP" "build-close should allow unrelated main WIP" || return
   assert_file_contains "$BUILD_CLOSE_SKILL" "autostash" "build-close should document autostash merge behavior" || return
   assert_file_contains "$BUILD_CLOSE_SKILL" "PM 窗口只报阶段结果" "build-close should keep command chatter out of PM view" || return
+  assert_file_contains "$BUILD_CLOSE_SKILL" "三道审证据是 close 硬门" "build-close should gate close on audit evidence" || return
   pass_test
 }
 
@@ -412,6 +443,7 @@ test_build_close_skill_documents_contract_and_wip_rules() {
 test_main_mode_closes_via_main
 test_worktree_contract_rejects_missing_worktree
 test_reject_missing_build_contract
+test_reject_missing_audit_evidence
 test_reject_when_cwd_inside_work_worktree
 test_reject_if_work_worktree_has_unrelated_dirty_changes
 test_allows_unrelated_dirty_changes_on_main
