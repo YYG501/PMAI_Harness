@@ -43,7 +43,7 @@ PM mental model：PM 在 chat 自然描述 "我有 X 在路径 Y"，AI 判断材
     +-----------------------------------------------------------+
 
 非典型场景：
-- B 分支 office-hours 选源期间 caller SKILL **不调** copy_attachment
+- B 分支外部讨论稿选源期间 caller SKILL **不调** copy_attachment
 - /pmai-spec-writing 跨模块功能型规格文档 / 既有规格补差目标 caller SKILL **不调** copy_attachment
   （跨模块功能型规格文档 / 既有规格补差目标不绑定当前工作 → 不入 attachments_seen）
 """

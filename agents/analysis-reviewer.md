@@ -163,7 +163,7 @@ PASS/FAIL 一刀切容易把 nit 混进必改；置信度阈值能机械化挡�
 
 ## 边界（防滥用）
 
-主线 AI **不允许**用我替代 `/plan-ceo-review`、`/plan-eng-review`、`/office-hours` 等 skill。
+主线 AI **不允许**用我替代 `/plan-ceo-review`、`/plan-eng-review` 等 skill。
 如果传入的不是探索段 discussion 第一节评审（比如 spec.md、架构图、代码），第一行写：
 
 ```

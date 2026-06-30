@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Static regression tests for /pmai-meta as PMAI Office Hours.
+# Static regression tests for /pmai-meta as PMAI 问题对焦.
 set -uo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -12,18 +12,24 @@ TOOLBOX="$REPO_ROOT/skills/meta/references/thinking-toolbox.md"
 LEXICON="$REPO_ROOT/skills/meta/references/词表与句式.md"
 DESIGN_SKILL="$REPO_ROOT/skills/design/SKILL.md"
 CHANGELOG="$REPO_ROOT/CHANGELOG.md"
-FORBIDDEN_REF="office-hours-"
-FORBIDDEN_REF="${FORBIDDEN_REF}method.md"
+LEGACY_WORD="office"
+FORBIDDEN_REF="${LEGACY_WORD}-hours-method.md"
+FORBIDDEN_PATTERN="${LEGACY_WORD}[ _-]?hours?"
 
-test_meta_skill_is_office_hours_entry() {
-  start_test "meta skill: 保留 /pmai-meta，定位为 Office Hours"
+test_meta_skill_is_problem_framing_entry() {
+  start_test "meta skill: 保留 /pmai-meta，定位为问题对焦"
 
   assert_file_contains "$META_SKILL" "name: pmai-meta" "command name should stay pmai-meta" || return
-  assert_file_contains "$META_SKILL" "/pmai-meta · Office Hours" "skill title should expose Office Hours positioning" || return
+  assert_file_contains "$META_SKILL" "/pmai-meta · 问题对焦" "skill title should expose problem-framing positioning" || return
+  assert_file_contains "$META_SKILL" "PMAI 问题对焦" "description should use PMAI's own naming" || return
   assert_file_contains "$META_SKILL" "升维分析输出器" "skill should reject analysis-generator behavior" || return
   assert_file_contains "$META_SKILL" "只是复述" "trigger should include shallow-restatement feedback" || return
   assert_file_contains "$META_SKILL" "没新思路" "trigger should include no-new-thinking feedback" || return
   assert_file_contains "$META_SKILL" "grillme" "trigger should include grillme wording" || return
+  if grep -Eiq "$FORBIDDEN_PATTERN" "$META_SKILL" "$PROBLEM_FRAMING" "$TOOLBOX" 2>/dev/null; then
+    _fail "当前 meta 文件不应再出现外部英文命名"
+    return
+  fi
   pass_test
 }
 
@@ -72,20 +78,20 @@ test_toolbox_preserves_existing_meta_assets() {
 }
 
 test_design_and_changelog_reference_new_positioning() {
-  start_test "design/changelog: 对齐 meta Office Hours 定位"
+  start_test "design/changelog: 对齐 meta 问题对焦定位"
 
   assert_file_contains "$DESIGN_SKILL" "问题对焦入口（/pmai-meta）" "design should call meta problem-framing entry" || return
   assert_file_contains "$DESIGN_SKILL" "不是新阶段、也不是分析段落生成器" "design should not treat meta as default phase" || return
   assert_file_contains "$DESIGN_SKILL" "只作问题对焦旁路" "design should keep meta optional" || return
   assert_file_contains "$CHANGELOG" "/pmai-meta" "changelog should mention meta" || return
-  assert_file_contains "$CHANGELOG" "Office Hours" "changelog should mention Office Hours redesign" || return
+  assert_file_contains "$CHANGELOG" "问题对焦" "changelog should mention problem-framing redesign" || return
   pass_test
 }
 
-test_meta_skill_is_office_hours_entry
+test_meta_skill_is_problem_framing_entry
 test_meta_references_are_neutral_and_complete
 test_problem_framing_contains_hard_conversation_rules
 test_toolbox_preserves_existing_meta_assets
 test_design_and_changelog_reference_new_positioning
 
-report_results "meta-office-hours"
+report_results "meta-problem-framing"

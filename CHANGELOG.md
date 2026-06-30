@@ -32,7 +32,7 @@ PM-AI-Workflow 生成器仓的演进记录。本文件**只记影响下游业务
 
 - `fix(spec-writing)`: **变更说明收成简要硬约束**。PM 反馈规格文档的变更说明必须简要写。改动：`/pmai-spec-writing` 在模块 `spec.md` 变更日志和 PRD §二变更日志两处明确“每条一句，通常 20 字内、最多不超过 30 字；只写改了什么，不写原因、过程、背景”，并同步 PRD 模板和写作规则，防止变更日志变成版本过程说明。
 
-- `refactor(meta)`: **`/pmai-meta` 重做为 PMAI Office Hours，停止复述式升维输出**。PM 反馈消费仓 meta 只是复述、没有主动追问和新思路；根因不是少一个 grill 分支，而是 meta 被写成分析工具箱，AI 容易直接套“对焦 / 推导 / 压测”模板输出。改动：保留 `/pmai-meta` 命令名，主定位改为 Office Hours 对话入口；先读资料、再一题一问、追问表层答案、挑战最危险前提、给 2-3 个替代方向，并在 Coverage Check 后降回 `/pmai-design`、`/pmai-doc-writing`、`/pmai-spec-writing` 或 `/pmai-build`。旧的升维、第一性原理、多视角压测和 UI 信息 / 任务 / 判断层能力不丢弃，收进 `thinking-toolbox.md`；访谈方法用中性 `problem-framing.md` 命名，只借鉴 gstack office-hours / grillme 的优秀经验，不把外部概念当成 PMAI 文件名。
+- `refactor(meta)`: **`/pmai-meta` 重做为 PMAI 问题对焦，停止复述式升维输出**。PM 反馈消费仓 meta 只是复述、没有主动追问和新思路；根因不是少一个 grill 分支，而是 meta 被写成分析工具箱，AI 容易直接套“对焦 / 推导 / 压测”模板输出。改动：保留 `/pmai-meta` 命令名，主定位改为问题对焦对话入口；先读资料、再一题一问、追问表层答案、挑战最危险前提、给 2-3 个替代方向，并在 Coverage Check 后降回 `/pmai-design`、`/pmai-doc-writing`、`/pmai-spec-writing` 或 `/pmai-build`。旧的升维、第一性原理、多视角压测和 UI 信息 / 任务 / 判断层能力不丢弃，收进 `thinking-toolbox.md`；访谈方法用中性 `problem-framing.md` 命名，只吸收深度访谈、反方挑战和带资料追问这类方法的有效部分，不把外部概念当成 PMAI 文件名。
 
 - `refactor(design)`: **`/pmai-design` 补后台驾驶内核，减少设计讨论跑题**。PM 反馈重做规格时 AI 容易在相关模块同步、mockup 和规格成文之间跳转，根因是 skill 有“读上下文 / 一步一停 / 必要时 mock”的原则，但缺少后台工作类型判断和本轮目标绑定。改动：`/pmai-design` 准备阶段新增工作类型判断（新建、重做、冲突对齐、补齐口径、呈现确认、成文写规格）和顺手动作边界；`design-method.md` 补事实底座与产品结构推进顺序，要求先分清当前权威口径、历史理由、引用材料和待确认缺口，再按服务谁的判断 / 动作、边界、触发、字段、状态、动作、消失条件、跨模块权威关系推进。PM 侧不新增固定流程汇报模板，回归测试锁定通用内核。
 

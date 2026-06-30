@@ -89,7 +89,7 @@ echo "SKILL: direction"
 
 按段 0 的意图选择提问顺序。
 
-可选 —— **PM 自跑第二视角**：项目方向需要更多视角时，先按问题选择工具：想找盲区 / 反方挑战 / 多角度看当前方向 → 建议 PM 跑 `/pmai-meta`，由 meta 判断先对焦、推导还是多视角压测；想做外部经营视角挑战 → PM 自跑 `/office-hours`（值不值得做）或 `/plan-ceo-review`（挑战范围）。本 skill 不自动调它们。
+可选 —— **PM 自跑第二视角**：项目方向需要更多视角时，先按问题选择工具：想找盲区 / 反方挑战 / 多角度看当前方向 → 建议 PM 跑 `/pmai-meta`，由 meta 判断先对焦、推导还是多视角压测；想做外部经营视角挑战 → PM 自跑 `/plan-ceo-review`。本 skill 不自动调它们。
 
 #### 步骤 3：未决问题闸门
 
@@ -175,7 +175,7 @@ PM 选「创建 / 更新方向文档」+ 定稿后：
 
 - 走活跃模块工作流 —— 本 skill 是项目级，不占模块工作阶段。
 - 产工程孪生文件（`solution.engineering.md` 之类）—— 单文件，只写 PM 视角。
-- 自动调 `/pmai-meta` / `/office-hours` / `/plan-ceo-review` —— 第二视角由 PM 可选自跑。
+- 自动调 `/pmai-meta` / `/plan-ceo-review` —— 第二视角由 PM 可选自跑。
 - 设 analysis-reviewer 式第二视角强制评审 —— 项目方向第二视角只在 PM 要求时启用，不做默认门。
 - 对 `PRODUCT.md` 直接跑未决问题闸门 —— PRODUCT.md 无 `## 未决问题` section；必须对 `docs/.project-solution-open-questions.md` 暂存文件跑（@读 §4）。
 - PM chat 出现工程黑话（hash / reconcile / stale / 步骤编号）—— 给 PM 看的话只用 PM 视图语言。
