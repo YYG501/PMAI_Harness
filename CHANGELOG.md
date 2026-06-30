@@ -20,6 +20,8 @@ PM-AI-Workflow 生成器仓的演进记录。本文件**只记影响下游业务
 
 ### 框架瘦身改造（吸收 ExampleAgentProject 设计方法）—— 进行中
 
+- `refactor(meta)`: **`/pmai-meta` 重做为 PMAI Office Hours，停止复述式升维输出**。PM 反馈消费仓 meta 只是复述、没有主动追问和新思路；根因不是少一个 grill 分支，而是 meta 被写成分析工具箱，AI 容易直接套“对焦 / 推导 / 压测”模板输出。改动：保留 `/pmai-meta` 命令名，主定位改为 Office Hours 对话入口；先读资料、再一题一问、追问表层答案、挑战最危险前提、给 2-3 个替代方向，并在 Coverage Check 后降回 `/pmai-design`、`/pmai-doc-writing`、`/pmai-prd-writing` 或 `/pmai-build`。旧的升维、第一性原理、多视角压测和 UI 信息 / 任务 / 判断层能力不丢弃，收进 `thinking-toolbox.md`；访谈方法用中性 `problem-framing.md` 命名，只借鉴 gstack office-hours / grillme 的优秀经验，不把外部概念当成 PMAI 文件名。
+
 - `refactor(design)`: **`/pmai-design` 补后台驾驶内核，减少设计讨论跑题**。PM 反馈重做规格时 AI 容易在相关模块同步、mockup 和规格成文之间跳转，根因是 skill 有“读上下文 / 一步一停 / 必要时 mock”的原则，但缺少后台工作类型判断和本轮目标绑定。改动：`/pmai-design` 准备阶段新增工作类型判断（新建、重做、冲突对齐、补齐口径、呈现确认、成文写规格）和顺手动作边界；`design-method.md` 补事实底座与产品结构推进顺序，要求先分清当前权威口径、历史理由、引用材料和待确认缺口，再按服务谁的判断 / 动作、边界、触发、字段、状态、动作、消失条件、跨模块权威关系推进。PM 侧不新增固定流程汇报模板，回归测试锁定通用内核。
 
 - `fix(mockups)`: **`/pmai-mockup` 生成前默认先对齐已有界面**。PM 反馈 mockup 不看现有代码 / 原型样式，导致设计稿和已有界面接不上。根因是 skill 只要求确认“放什么、谁看、怎么分块”，没有强制先看现有产品长什么样。改动：`/pmai-mockup` 新增步骤 1.5，生成前必须读取 `DESIGN.md`、相关 `prototype/` 页面 / 组件 / 样式、已挑定 / 待合并设计稿和模块约束；默认模式改为“贴合现有界面”，只有 PM 明确要求才探索新风格；无可参考界面时必须说明这轮是在先定基调。回归测试锁定该流程约束。

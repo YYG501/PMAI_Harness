@@ -21,6 +21,7 @@ SUITES=(
   test-shared-files-exist.sh
   test-shared-currentness.sh
   test-design-shared-boundary.sh
+  test-meta-office-hours.sh
   test-doctor-skills.sh
   test-writing-skill-routing.sh
   test-migrate-reqs-to-modules-compat.sh
