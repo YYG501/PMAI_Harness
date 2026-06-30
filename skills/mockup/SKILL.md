@@ -130,7 +130,7 @@ echo "SKILL: mockup"
 PM 挑哪版/哪些块好。用 AskUserQuestion 让 PM 选（每版一个选项 + 一句话说清这版试的方向和取舍）。允许的结果：
 
 - **挑定一版**：那版标 `featured: true`（看版里会突出）。
-- **挑某几版的某几块拼**：记下"取 A 的导航 + B 的抽屉"这类结论，作为回 `/pmai-design` 拍板、再交 `/pmai-prd-writing` 成文规格的依据。
+- **挑某几版的某几块拼**：记下"取 A 的导航 + B 的抽屉"这类结论，作为回 `/pmai-design` 拍板、再交 `/pmai-spec-writing` 成文规格的依据。
 - **都不行 / 想再试**：按 PM 反馈调方向，回步骤 2 再出一轮（新一轮的 `round` 标清楚，老的留着不删）。
 
 挑定后把 `featured` / 必要的 `status` 改进 `manifest.json`，重跑 `gen-mock-board.py` 刷新看版。

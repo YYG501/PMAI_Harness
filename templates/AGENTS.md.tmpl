@@ -8,6 +8,10 @@
 
 本仓是 PMAI 消费仓，不是 PMAI 生成器仓。不要在这里复制或修改 framework 源资产；需要框架能力时走已安装的 `PMAI_HOME` / `~/.pmai`。
 
+## Project Principles
+
+- **不写死机器绑定路径**：项目文档、业务代码、prompt 记录和框架规则里，不得写死 `/Users/<某人>/...` 这类本地路径。需要定位文件时，用 `PMAI_HOME` / `REPO_ROOT` / `MAIN_REPO_ROOT` / `BUILD_DIR` 等运行时变量和仓内相对路径组合；PM 上传本机材料时可临时读取其路径，但不要把源路径全文沉淀进产品文档或代码。
+
 ## Host Mapping
 
 - `CLAUDE.md` 里写的“驱动 Claude”，在 Codex 会话中等价理解为“驱动 Codex”。
@@ -49,9 +53,9 @@ Codex 收到 PM 输入的 `/pmai-xxx` 时：
 - AskUserQuestion 不可用时，输出编号列表并要求 PM 回复编号或自由文本；没有明确回答前停止推进。
 - 没拿到 PM 答案前，不能写 PM 视图文件、commit 或收尾当前工作。
 - `/pmai-build` 在修改 `prototype/`、`Sources/` 或任何业务代码前，必须先完成两道 PM 门：要不要开隔离环境、用什么执行器。AskUserQuestion 不可用时用编号列表 wait；不能默认“直接在主线上建”，也不能默认当前主控 AI 自己建。
-- `/pmai-build` 遇到未提交 / 未跟踪的规格、决策、mock 或功能型文档时，先只固定本次建造依据或停住；不能用“隔离环境拿不到未跟踪文件”作为跳过 PM 两道选择、直接在 main 上实现的理由。
-- `/pmai-build` 拿到两道 PM 答案后必须写入当前模块 `.work-meta.json:build` 合同；`/pmai-build-close` 只按该合同收尾，缺合同或合同不完整时停止补上下文，不能靠当前分支 / worktree 形态猜测执行方式。
-- Claude Code subagent 不可用时，不能用临时 ad hoc prompt 替代标明“必须完整执行”的 skill；`/pmai-build` 选择 Claude Code 时优先走 `~/.pmai/scripts/exec-adapters/claude-code.sh` 调本机 `claude -p`，如果本机 CLI / adapter 也不可用，再说明 runtime 限制并请求 PM 选择 Codex / Gemini / 手动等可用路径。
+- `/pmai-build` 遇到未提交 / 未跟踪的规格、决策、mock 或功能型规格文档时，先只保存本次建造依据或停住；不能用“隔离环境拿不到未跟踪文件”作为跳过 PM 两道选择、直接在 main 上实现的理由。
+- `/pmai-build` 拿到两道 PM 答案后必须写入当前模块 `.work-meta.json:build` 合同；如果模块和功能锚点已经明确但 `.work-meta.json` 缺失，自动补最小状态记录，不再向 PM 追加确认。`/pmai-build-close` 只按该合同收尾，缺合同或合同不完整时停止补上下文，不能靠当前分支 / worktree 形态猜测执行方式。
+- Claude Code subagent 不可用时，不能用临时 ad hoc prompt 替代标明“必须完整执行”的 skill；`/pmai-build` 选择 Claude Code 时优先走 `~/.pmai/scripts/exec-adapters/claude-code.sh` 调本机 `claude -p`，如果本机 CLI / adapter 也不可用，再说明 runtime 限制并请求 PM 选择 Codex / Gemini / 手动等可用路径。执行器过程写日志和状态文件，PM 窗口只报阶段摘要；失败默认保留半成品，由 PM 选接手、换工具或丢弃重来。
 - review / qa / design-review 类工具仍由 PM 主动触发；Codex 主控只列推荐清单和记录 PM 明确报告的结果。
 
 ## Guardrails

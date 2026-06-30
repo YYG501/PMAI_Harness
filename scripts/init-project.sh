@@ -36,7 +36,7 @@ _print_help() {
 例子:
   bash scripts/init-project.sh \\
     ExampleConsumerApp \\
-    ${CONSUMER_REPO_ROOT} \\
+    ~/Projects/ExampleConsumerApp \\
     "B 端 admin console 重构" \\
     prototype
 
@@ -175,7 +175,7 @@ for TMPL in "$FRAMEWORK_DIR/templates/"*.tmpl; do
     deliverables-INDEX.md)   DEST="$TARGET_DIR/docs/deliverables/INDEX.md" ;;
     lark-publish.json)
       # lark-publish.json: 业务实例配置，下方 f3 段独立 cp（不走主 loop 占位符替换）
-  # 注：当前流程的功能型文档/审计模板由对应 skill 自带，不在本 loop。
+  # 注：当前流程的功能型规格文档/审计模板由对应 skill 自带，不在本 loop。
       continue ;;
     settings.json)          DEST="$TARGET_DIR/.claude/settings.json" ;;
     codex-hooks.json)

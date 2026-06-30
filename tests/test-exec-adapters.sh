@@ -11,6 +11,7 @@ BUILD_SKILL="$FRAMEWORK_ROOT/skills/build/SKILL.md"
 AGENTS_TMPL="$FRAMEWORK_ROOT/templates/AGENTS.md.tmpl"
 CLAUDE_TMPL="$FRAMEWORK_ROOT/templates/CLAUDE.md.tmpl"
 README="$FRAMEWORK_ROOT/README.md"
+CONFIG_TMPL="$FRAMEWORK_ROOT/templates/pm-workflow.config.yml.tmpl"
 
 _setup_fake_executor() {
   T=$(mktemp -d)
@@ -61,7 +62,9 @@ test_claude_code_adapter_invokes_print_mode() {
 
   _setup_fake_executor
   _install_fake_command claude
+  local status_dir="$T/status"
   BUILD_DIR="$BUILD_DIR" PROMPT_FILE="$PROMPT_FILE" EXECUTOR_MODEL="sonnet" \
+    EXECUTOR_STATUS_DIR="$status_dir" \
     PATH="$FAKE_BIN:$PATH" bash "$ADAPTER_DIR/claude-code.sh" >/tmp/exec-adapter.$$ 2>&1
   local rc=$?
   if [ "$rc" -ne 0 ]; then
@@ -80,6 +83,8 @@ test_claude_code_adapter_invokes_print_mode() {
   assert_file_contains "$FAKE_LOG" "<--no-session-persistence>" "should avoid persisting adapter sessions" || { _teardown_fake_executor; return; }
   assert_file_contains "$FAKE_LOG" "<--model><sonnet>" "should pass EXECUTOR_MODEL" || { _teardown_fake_executor; return; }
   assert_file_contains "$FAKE_LOG" "<Build the module from spec and design.>" "should pass prompt body" || { _teardown_fake_executor; return; }
+  assert_file_contains "$status_dir/status.json" '"state": "completed"' "should write completed adapter status" || { _teardown_fake_executor; return; }
+  assert_file_contains "$status_dir/exit" "0" "should write adapter exit code" || { _teardown_fake_executor; return; }
   _teardown_fake_executor
   pass_test
 }
@@ -113,7 +118,7 @@ test_build_skill_exposes_claude_and_gemini() {
   start_test "build skill: PM 选项露出 Claude Code + Gemini，并说明 CLI 兜底"
 
   assert_file_contains "$BUILD_SKILL" "claude-code,codex,cursor-agent,gemini,manual" "executor list should include claude-code and gemini" || return
-  assert_file_contains "$BUILD_SKILL" '`label`: `Gemini`' "PM options should expose Gemini" || return
+  assert_file_contains "$BUILD_SKILL" '`label`: `独立 Gemini CLI`' "PM options should expose Gemini" || return
   assert_file_contains "$BUILD_SKILL" "EXECUTOR=gemini" "Gemini option should map to executor" || return
   assert_file_contains "$BUILD_SKILL" "exec-adapters/claude-code.sh" "Claude Code should have CLI adapter fallback" || return
   assert_file_contains "$BUILD_SKILL" '留在 Codex 窗口里选择 `Claude Code`' "Codex-host Claude Code path should be documented" || return
@@ -125,15 +130,29 @@ test_build_skill_requires_pm_gates_before_editing() {
 
   assert_file_contains "$BUILD_SKILL" "两道构建选择是硬门" "build should name the two PM choices as a hard gate" || return
   assert_file_contains "$BUILD_SKILL" "未提交的规格 / mock / 文档不是跳过 PM 选择的理由" "dirty design context should not bypass PM choices" || return
+  assert_file_contains "$BUILD_SKILL" "保存本次建造依据" "dirty design context wording should be PM-facing" || return
   assert_file_contains "$BUILD_SKILL" '禁止修改 `prototype/`、`Sources/` 或任何业务代码' "build should forbid code edits before both PM choices" || return
   assert_file_contains "$BUILD_SKILL" "禁止默认选“直接在主线上建”" "build should not default to direct-main mode" || return
   assert_file_contains "$BUILD_SKILL" "禁止把当前主控 AI 当默认执行器直接改代码" "build should not default to the current host as executor" || return
   assert_file_contains "$BUILD_SKILL" "build 合同是 build-close 的唯一收尾依据" "build should record a contract for build-close" || return
+  assert_file_contains "$BUILD_SKILL" "自动补最小状态记录" "build should not ask PM to approve internal state file creation" || return
   assert_file_contains "$BUILD_SKILL" "build-contract.py" "build should call the build contract helper" || return
   assert_file_contains "$AGENTS_TMPL" "必须先完成两道 PM 门" "consumer AGENTS should preserve the build PM gate" || return
   assert_file_contains "$AGENTS_TMPL" "隔离环境拿不到未跟踪文件" "consumer AGENTS should block dirty-context direct-main rationalization" || return
   assert_file_contains "$AGENTS_TMPL" ".work-meta.json:build" "consumer AGENTS should require build contract handoff" || return
+  assert_file_contains "$AGENTS_TMPL" "自动补最小状态记录" "consumer AGENTS should preserve auto-init guidance" || return
   assert_file_contains "$CLAUDE_TMPL" ".work-meta.json:build" "consumer CLAUDE should require build contract handoff" || return
+  pass_test
+}
+
+test_build_skill_keeps_executor_noise_out_of_pm_view() {
+  start_test "build skill: 执行器过程不刷 PM 屏，失败保留半成品"
+
+  assert_file_contains "$BUILD_SKILL" "PM 窗口只报阶段摘要" "build should keep executor internals out of PM view" || return
+  assert_file_contains "$BUILD_SKILL" "默认保留半成品" "build should preserve partial executor output by default" || return
+  assert_file_contains "$BUILD_SKILL" '禁止自动 `git restore .` / `git clean -fd`' "build should forbid destructive auto-clean on executor failure" || return
+  assert_file_contains "$BUILD_SKILL" "EXECUTOR_STATUS_DIR" "build should use adapter status protocol" || return
+  assert_file_contains "$CLAUDE_TMPL" "失败默认保留半成品" "consumer CLAUDE should preserve failure recovery guidance" || return
   pass_test
 }
 
@@ -164,13 +183,36 @@ test_readme_lists_build_executors() {
   pass_test
 }
 
+test_config_template_uses_port_placeholder() {
+  start_test "config template: dev server command carries explicit port placeholder"
+
+  assert_file_contains "$CONFIG_TMPL" "{port}" "config template should make port injection explicit" || return
+  assert_file_contains "$BUILD_SKILL" '不临时猜 `-- --hostname`' "build should avoid guessing framework-specific dev flags" || return
+  pass_test
+}
+
+test_build_skill_avoids_machine_bound_absolute_path_rules() {
+  start_test "build skill: 不要求写死机器绑定的本地绝对路径"
+
+  assert_file_contains "$BUILD_SKILL" "运行时变量" "build should anchor paths through runtime variables" || return
+  assert_file_contains "$BUILD_SKILL" '禁止写死 `/Users/...`' "build should forbid machine-bound local paths" || return
+  if grep -q '所有路径用绝对路径\|绝对路径.*BUILD_DIR/prototype' "$BUILD_SKILL"; then
+    _fail "build skill should not require absolute path writes"
+    return
+  fi
+  pass_test
+}
+
 test_adapter_files_are_executable
 test_claude_code_adapter_invokes_print_mode
 test_gemini_adapter_invokes_yolo_prompt_mode
 test_build_skill_exposes_claude_and_gemini
 test_build_skill_requires_pm_gates_before_editing
+test_build_skill_keeps_executor_noise_out_of_pm_view
 test_build_skill_handles_fallback_design_baseline
 test_consumer_entry_documents_fallback
 test_readme_lists_build_executors
+test_config_template_uses_port_placeholder
+test_build_skill_avoids_machine_bound_absolute_path_rules
 
 report_results "exec-adapters"

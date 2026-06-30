@@ -1,19 +1,31 @@
 ---
 name: pmai-publish-to-lark
-description: 将本地 markdown 文档发布至飞书云文档，发布后自动合并表格中相邻的相同单元格。首次发布将飞书链接回写至文档，后续按链接覆盖更新。作为通用发布编排层供其他 skill 调用，亦支持手动执行 `/pmai-publish-to-lark <文件路径>`。
+description: 将本地 markdown 文档整篇发布或覆盖至飞书云文档，发布后自动合并表格中相邻的相同单元格。首次发布将飞书链接回写至文档，后续按链接覆盖更新。需要判断同步方向或保留飞书图片、评论、白板、附件时，先用 `/pmai-lark-sync`。
 ---
 
 # /pmai-publish-to-lark
 
 ## When To Use
 
-- 由 prd-writing 在沉淀阶段结束模板调用（D 选项），用于发布 PRD 体例功能型文档
+- 由 `/pmai-lark-sync` 判定为"整篇覆盖发布"后调用
+- 由 spec-writing 在沉淀阶段结束模板调用（D 选项），用于首次发布 PRD 体例功能型规格文档
 - 未来可被 spec 等其它 PM 视图文档复用
 - PM 手动调用：`/pmai-publish-to-lark <markdown 路径> [--type <type>] [--target-token <token>] [--title <title>]`
 
+## 与 `/pmai-lark-sync` 的关系
+
+本 skill 是**整篇发布 / overwrite 执行能力**。它默认认为本地 markdown 是 source of truth，飞书只是发布面。
+
+以下情况不要直接调用本 skill，先走 `/pmai-lark-sync` 判定同步方向：
+
+- PM 说"同步飞书"、"更新飞书"，但没有明确允许覆盖
+- 飞书在线文档可能已经被 PM 或协作者改成最终稿
+- 需要保留飞书侧图片、评论、白板、附件或复杂表格
+- 只想比较本地和飞书哪里不一致
+
 ## Required Inputs
 
-1. `markdown_path`：要发布的 markdown 文件绝对路径
+1. `markdown_path`：要发布的 markdown 文件路径；优先用仓内相对路径，仓外文件才用完整路径
 2. `--type`（可选）：文档类型，决定默认目标位置和命名规则（`prd` / `spec` / `other`）
 3. `--target-token`（可选）：覆盖默认目标位置（wiki node token 或 folder token）
 4. `--target-kind`（可选）：`wiki` 或 `folder`，与 `--target-token` 配套
@@ -149,6 +161,7 @@ URL: https://xxx.feishu.cn/docx/doxcnxxxxxx
 ## Rules
 
 - **单向同步**：本地 markdown 是 source of truth；飞书侧的修改下次发布会被覆盖
+- **覆盖发布需明确意图**：如果用户只说"同步 / 更新"，不能默认调用本 skill；先用 `/pmai-lark-sync` 判断是精细同步、回拉、diff 还是覆盖
 - **合并是 fail-soft**：合并失败不阻塞主发布，只输出警告
 - **merge cell 判定（前 N-1 列）**：非空 anchor 吸收下方相同内容 cell + 下方空 cell（续行 rowspan 语义）；range > 1 行才合并
 - **merge cell 判定（末列 / 需求描述）**：识别续行 row group（前 N-1 列全空的连续行），先把非锚点 cell 的 children blocks 拷贝到锚点 cell，删原 cell children，再 merge_table_cells；保留富文本格式
@@ -173,10 +186,10 @@ URL: https://xxx.feishu.cn/docx/doxcnxxxxxx
 
 ## 集成示例
 
-prd-writing 在沉淀阶段结束模板加：
+spec-writing 在沉淀阶段结束模板加：
 
 ```markdown
-D) 发布到飞书—— 调 /pmai-publish-to-lark docs/modules/<按内容命名>.md --type prd
+D) 同步到飞书—— 调 /pmai-lark-sync docs/modules/<按内容命名>.md，由它判断首次发布、精细同步、覆盖发布或只 diff
 ```
 
 future skill（spec 等 PM 视图文档）类似集成。

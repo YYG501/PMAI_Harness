@@ -8,6 +8,7 @@ SUITES=(
     test-check-open-questions.sh
   test-lark-adapter.sh
   test-lark-cli-lint.sh
+  test-lark-sync-skill.sh
   test-publish-to-lark-e2e.sh
     test-structure-schema.sh
   test-detect-project-structure.sh

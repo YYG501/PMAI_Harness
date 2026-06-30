@@ -61,6 +61,16 @@ test_root_agents_defends_install_mode_boundary() {
   pass_test
 }
 
+test_generator_documents_machine_bound_path_principle() {
+  start_test "T5b: 生成器入口声明不写死机器绑定路径"
+
+  assert_file_contains "$AGENTS_MD" "不写死机器绑定路径" "AGENTS.md should state portable path principle" || return
+  assert_file_contains "$AGENTS_MD" "/Users/<某人>/..." "AGENTS.md should forbid user-specific local paths" || return
+  assert_file_contains "$CLAUDE_MD" "不写死机器绑定路径" "CLAUDE.md should state portable path principle" || return
+  assert_file_contains "$CLAUDE_MD" "仓内相对路径" "CLAUDE.md should prefer repo-relative paths with runtime variables" || return
+  pass_test
+}
+
 test_generator_codex_hooks_exist() {
   start_test "T6: 生成器仓提供项目级 Codex hooks"
 
@@ -96,6 +106,7 @@ test_root_agents_points_to_truth_sources
 test_root_agents_uses_repo_local_assets
 test_root_agents_covers_three_codex_paths
 test_root_agents_defends_install_mode_boundary
+test_generator_documents_machine_bound_path_principle
 test_generator_codex_hooks_exist
 test_generator_runtime_paths_are_i_mini_safe
 

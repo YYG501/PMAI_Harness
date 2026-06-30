@@ -26,7 +26,7 @@
 
 > **②⑤ 合流说明**：②（沉淀本轮理路）和 ⑤（回写后续工作该知道的决策）落点完全相同（同 ② 的 3 家分流），只是触发问法不同——②问"本轮有没有实质理路要留底"，⑤问"本次工作拍的决策里有没有后续工作该知道的"。实现时一道沉淀问把两者一起收。
 
-**分流完顺手补索引**：本次新建了 `docs/modules/<…>/` 模块文件夹 / `docs/modules/<按内容命名>.md` 功能型文档 / `docs/decisions/<…>.md` / 新 mock 看版等 → 补 `docs/modules/INDEX.md`、`docs/INDEX.md` 或对应目录索引（治"入口看不到实存文档 / index lag"）。`PRODUCT-STATE.md` 只写当前产品现状，不再兼职总索引。
+**分流完顺手补索引**：本次新建了 `docs/modules/<…>/` 模块文件夹 / `docs/modules/<按内容命名>.md` 功能型规格文档 / `docs/decisions/<…>.md` / 新 mock 看版等 → 补 `docs/modules/INDEX.md`、`docs/INDEX.md` 或对应目录索引（治"入口看不到实存文档 / index lag"）。`PRODUCT-STATE.md` 只写当前产品现状，不再兼职总索引。
 
 > **④ manifest 条目必须用英文 key（gen-mock-board.py 只认这些，中文 key 会被静默丢成"—"）**。往 `mockups/manifest.json` 的 `variants` 数组**追加一个对象**，照此结构（值用中文没问题，**key 必须英文**）：
 > ```json

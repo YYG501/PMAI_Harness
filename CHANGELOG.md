@@ -20,7 +20,19 @@ PM-AI-Workflow 生成器仓的演进记录。本文件**只记影响下游业务
 
 ### 框架瘦身改造（吸收 ExampleAgentProject 设计方法）—— 进行中
 
-- `refactor(meta)`: **`/pmai-meta` 重做为 PMAI Office Hours，停止复述式升维输出**。PM 反馈消费仓 meta 只是复述、没有主动追问和新思路；根因不是少一个 grill 分支，而是 meta 被写成分析工具箱，AI 容易直接套“对焦 / 推导 / 压测”模板输出。改动：保留 `/pmai-meta` 命令名，主定位改为 Office Hours 对话入口；先读资料、再一题一问、追问表层答案、挑战最危险前提、给 2-3 个替代方向，并在 Coverage Check 后降回 `/pmai-design`、`/pmai-doc-writing`、`/pmai-prd-writing` 或 `/pmai-build`。旧的升维、第一性原理、多视角压测和 UI 信息 / 任务 / 判断层能力不丢弃，收进 `thinking-toolbox.md`；访谈方法用中性 `problem-framing.md` 命名，只借鉴 gstack office-hours / grillme 的优秀经验，不把外部概念当成 PMAI 文件名。
+- `feat(lark-sync)`: **新增 `/pmai-lark-sync`，把本地规格与飞书在线文档同步做成安全分流入口**。飞书文档不再默认等同发布缓存：skill 先判断真相源和同步方向，再选择精细修改飞书、整篇覆盖发布、飞书回拉本地或只 diff。精细修改复用 `lark-doc-edit` 的块级编辑和回读方法；整篇覆盖继续调用 `/pmai-publish-to-lark`；飞书回拉只保留本地追踪 frontmatter 并以飞书正文为准。`/pmai-publish-to-lark` 定位收窄为整篇发布 / overwrite 执行能力，README、doctor 清单和 spec-writing 飞书出口同步。
+
+- `fix(build)`: **收顺 `/pmai-build` 的 PM 视图和执行器失败恢复**。PM 反馈真实 build 里连续被“固定设计上下文”、缺 `.work-meta.json`、执行器卡住、kill 进程、dev server 参数试错和浏览器失败刷屏打断。根因是 build 把内部状态、执行器排障和工具细节当成 PM 决策暴露。改动：① 构建前提示从“固定设计上下文”改为“保存本次建造依据”，只把本模块规格 / 决策 / 已确认看版做成建造起点；② `build-contract.py start` 在模块和功能锚点明确时自动补最小 `.work-meta.json`，不再要求 PM 额外确认内部状态文件；③ 执行器选择改成“独立建造工具”，明确 Codex 是另起 CLI、不是当前对话；④ `claude-code` adapter 增加状态目录、heartbeat、退出码文件和超时控制，build 流程要求 PM 窗口只报阶段摘要；⑤ 执行器失败默认保留半成品，由 PM 选接手补完 / 换工具 / 丢弃重来，禁止自动 `git restore .` / `git clean -fd` 清空落盘改动；⑥ dev server 命令改为以 `.pm-workflow/config.yml` 的 `{port}` 占位为准，不临场猜框架参数；⑦ build skill 路径口径改为“运行时变量 + 仓内相对路径”，禁止在框架规则、模板、prompt 或业务代码里写死 `/Users/...` 这类机器绑定路径。
+
+- `fix(build-close)`: **收顺 `/pmai-build-close` 的合同补录、main WIP 和 PM 视图**。PM 反馈真实 close 里出现合同字段分两步补录互相覆盖、主仓有无关脏改仍被当成风险展开、沙箱验证失败刷屏、mock 看版是否退役不清楚等问题。改动：① `build-contract.py complete` 一次写齐 `implementation_commit` 和 `pm_accepted_at`，禁止并行跑 `commit` / `accept`；② `close-work.sh` 合并时用 `git merge --autostash`，main 上无关未提交 WIP 不再阻塞 close，也不会被塞进 close 提交；③ build-close skill 明确 PM 窗口只报阶段结果，不直播读文件、进程、日志和命令流水；④ mock 退役只改本次明确吸收的变体，不能猜着重写整份历史看版；⑤ 生成器入口和消费仓模板新增“禁止机器绑定路径”项目原则。
+
+- `refactor(spec-writing)`: **`/pmai-prd-writing` 收口为 `/pmai-spec-writing`，不保留兼容别名**。历史上已经把 PRD / spec 并入同一套“简要易懂”的规格写作模型；本次把未收干净的入口、目录、引用、doctor 暴露和测试收口：skill 目录迁到 `skills/spec-writing`，公开命令改为 `/pmai-spec-writing`，PRD 只保留为功能型规格文档的一种体例。
+
+- `refactor(spec-writing)`: **重做 `/pmai-spec-writing` 的规格文档模型，PRD 和 4 列表格降为 preset**。PM 反馈改名后内部仍被 PRD 表格默认心智带偏。改动：spec-writing 改为“文档目标 → 规格模块 → 功能需求写法 → preset”的流程；规则收口、状态分类、流程、字段、权限、CRUD 分别选最清楚的写法；PRD 体例保留完整章节、§六 4 列功能表和 `check-prd-hierarchy.py` lint，但只在 PRD / 4 列功能表场景触发。共享 PM-VIEW §五从强制功能清单改为功能需求写法选择与表格 preset；few-shots 先锚定模块 spec / 待办风格，再给 PRD preset 示例；自定义产物路径和飞书发布路径提示统一优先仓内相对路径；测试锁定旧入口不存在、4 列表不再全局强制、PRD lint 不扩成模块 spec 通用 lint。
+
+- `fix(spec-writing)`: **变更说明收成简要硬约束**。PM 反馈规格文档的变更说明必须简要写。改动：`/pmai-spec-writing` 在模块 `spec.md` 变更日志和 PRD §二变更日志两处明确“每条一句，通常 20 字内、最多不超过 30 字；只写改了什么，不写原因、过程、背景”，并同步 PRD 模板和写作规则，防止变更日志变成版本过程说明。
+
+- `refactor(meta)`: **`/pmai-meta` 重做为 PMAI Office Hours，停止复述式升维输出**。PM 反馈消费仓 meta 只是复述、没有主动追问和新思路；根因不是少一个 grill 分支，而是 meta 被写成分析工具箱，AI 容易直接套“对焦 / 推导 / 压测”模板输出。改动：保留 `/pmai-meta` 命令名，主定位改为 Office Hours 对话入口；先读资料、再一题一问、追问表层答案、挑战最危险前提、给 2-3 个替代方向，并在 Coverage Check 后降回 `/pmai-design`、`/pmai-doc-writing`、`/pmai-spec-writing` 或 `/pmai-build`。旧的升维、第一性原理、多视角压测和 UI 信息 / 任务 / 判断层能力不丢弃，收进 `thinking-toolbox.md`；访谈方法用中性 `problem-framing.md` 命名，只借鉴 gstack office-hours / grillme 的优秀经验，不把外部概念当成 PMAI 文件名。
 
 - `refactor(design)`: **`/pmai-design` 补后台驾驶内核，减少设计讨论跑题**。PM 反馈重做规格时 AI 容易在相关模块同步、mockup 和规格成文之间跳转，根因是 skill 有“读上下文 / 一步一停 / 必要时 mock”的原则，但缺少后台工作类型判断和本轮目标绑定。改动：`/pmai-design` 准备阶段新增工作类型判断（新建、重做、冲突对齐、补齐口径、呈现确认、成文写规格）和顺手动作边界；`design-method.md` 补事实底座与产品结构推进顺序，要求先分清当前权威口径、历史理由、引用材料和待确认缺口，再按服务谁的判断 / 动作、边界、触发、字段、状态、动作、消失条件、跨模块权威关系推进。PM 侧不新增固定流程汇报模板，回归测试锁定通用内核。
 

@@ -86,7 +86,7 @@ test_record_routing_typed_upload_current() {
     grep -R -n "docs/inputs/attachments/" \
       "$REPO_ROOT/skills/_shared" \
       "$REPO_ROOT/skills/design/SKILL.md" \
-      "$REPO_ROOT/skills/prd-writing/SKILL.md" \
+      "$REPO_ROOT/skills/spec-writing/SKILL.md" \
       "$REPO_ROOT/skills/build-close/SKILL.md" \
       "$REPO_ROOT/templates" 2>/dev/null || true
   )"

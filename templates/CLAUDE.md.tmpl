@@ -26,7 +26,7 @@
 - 模块讨论：`docs/modules/<模块>/discussion.md`
 - 模块决策：`docs/modules/<模块>/decisions.md`
 - 模块规格：`docs/modules/<模块>/spec.md`
-- 功能型文档：`docs/modules/<按内容命名>.md`
+- 功能型规格文档：`docs/modules/<按内容命名>.md`
 - 项目现状：`PRODUCT-STATE.md`
 - 跨模块规则：`PRODUCT-RULES.md`
 - 视觉规范：`DESIGN.md`
@@ -36,13 +36,17 @@
 
 不要创建 `requirements/active|closed`、`task-plan.md` 或 `tasks/task-NNN.md`。历史仓库里如果还有这些文件，只作归档/迁移证据，不作为新流程入口。
 
+### 路径原则
+
+- 不写死机器绑定路径：项目文档、业务代码、prompt 记录和框架规则里，不得写死 `/Users/<某人>/...` 这类本地路径。需要定位文件时，用 `PMAI_HOME` / `REPO_ROOT` / `MAIN_REPO_ROOT` / `BUILD_DIR` 等运行时变量和仓内相对路径组合；PM 上传本机材料时可临时读取其路径，但不要把源路径全文沉淀进产品文档或代码。
+
 ### 工作分档
 
 | 档 | 什么时候 | 怎么走 | 收尾 |
 |---|---|---|---|
 | 轻 | typo、链接、格式、很小代码修补 | `/pmai-quick-fix` 或 main 上直接小改 | 需要沉淀长期基线时 `/pmai-record` |
 | 中 | 一个模块内的完整讨论 / 规格演进 | `/pmai-design` / `/pmai-status` | 可先停住；需要沉淀术语 / 规则 / 当前设计状态时 `/pmai-record` |
-| 重 | 需要实际建一片原型功能 | `/pmai-design` 定稿模块 `spec.md` 或确认功能型文档 → `/pmai-build <模块或文档>` → 复审 | PM 验收后 `/pmai-build-close` |
+| 重 | 需要实际建一片原型功能 | `/pmai-design` 定稿模块 `spec.md` 或确认功能型规格文档 → `/pmai-build <模块或文档>` → 复审 | PM 验收后 `/pmai-build-close` |
 
 ### 主入口
 
@@ -54,7 +58,7 @@
 - `/pmai-status` — 读当前状态，提示下一步并拉起对应入口。
 - `/pmai-build-close` — build 验收后的收尾：提交 / 合并实现改动，按最终原型对齐模块决策与规格，更新产品现状、术语和跨模块规则。
 - `/pmai-status` — 只读现状视图。
-- `/pmai-prd-writing` — 功能型文档成文器；PRD、功能需求、功能描述、功能规格、功能评审稿都走它。
+- `/pmai-spec-writing` — 功能型规格文档成文器；PRD、功能需求、功能描述、功能规格、功能评审稿都走它。
 - `/pmai-doc-writing` — 介绍型文档成文器；产品介绍、功能清单、优势说明、一页纸、汇报材料默认落 `docs/deliverables/`。
 
 ### 确认门
@@ -65,14 +69,14 @@
 
 ### build 纪律
 
-- build 的功能锚点是模块 `spec.md` 或 `docs/modules/<按内容命名>.md` 的功能型文档，不是 task 文件。
+- build 的功能锚点是模块 `spec.md` 或 `docs/modules/<按内容命名>.md` 的功能型规格文档，不是 task 文件。
 - 动手前必须读 `DESIGN.md`。
 - `/pmai-build` 动手前必须先问完两道 PM 选择：执行方式（开隔离环境 / 直接主线）和执行器（Claude Code / Codex / Cursor / Gemini / PM 手动）。没拿到两个答案前，只能读文件和查状态，不得修改 `prototype/`、`Sources/` 或任何业务代码。
-- 如果模块 `spec.md` / `decisions.md` / `mockups/` 看版 / 功能型文档还在未提交或未跟踪状态，先固定本次设计上下文或停住；不得以“隔离环境拿不到这些未跟踪文件”为由跳过选择、直接改 main。
-- `/pmai-build` 拿到两道 PM 答案后必须写入当前模块 `.work-meta.json:build` 合同；`/pmai-build-close` 只按该合同收尾。缺合同、缺实现提交或缺 PM 验收记录时，先补上下文，不得把分支提交误报成已收尾。
+- 如果模块 `spec.md` / `decisions.md` / `mockups/` 看版 / 功能型规格文档还在未提交或未跟踪状态，先保存本次建造依据或停住；不得以“隔离环境拿不到这些未跟踪文件”为由跳过选择、直接改 main。
+- `/pmai-build` 拿到两道 PM 答案后必须写入当前模块 `.work-meta.json:build` 合同；模块和功能锚点明确但 `.work-meta.json` 缺失时自动补最小状态记录，不再向 PM 追加确认。`/pmai-build-close` 只按该合同收尾。缺合同、缺实现提交或缺 PM 验收记录时，先补上下文，不得把分支提交误报成已收尾。
 - 代码改动集中在 `prototype/`。执行器如改了 `docs/**`，必须呈交 PM 决定保留还是回退。
 - 大需求可开 `.worktrees/pmai-build-*` 隔离环境；小改可直接在 main 上做。
-- 使用外部执行器前，目标 worktree 必须 clean；dirty 时先让 PM 决定提交 checkpoint、清理或取消。
+- 使用外部执行器前，目标 worktree 必须 clean；dirty 时先让 PM 决定提交 checkpoint、清理或取消。执行器过程写日志和状态文件，PM 窗口只报阶段摘要；失败默认保留半成品，由 PM 选接手、换工具或丢弃重来。
 
 ### Review 工具
 
@@ -91,9 +95,9 @@ Subagent 适合一次性读文件、第二视角评审、独立查询；不适�
 | 视觉规范 | `DESIGN.md` | 颜色、字体、组件、交互规范 |
 | 跨模块规则 | `PRODUCT-RULES.md` | 全项目产品行为规则 |
 | 文档索引 | `docs/INDEX.md` | 消费仓文档入口，说明各类材料去哪找 |
-| 模块索引 | `docs/modules/INDEX.md` | 模块上下文与功能型文档索引 |
+| 模块索引 | `docs/modules/INDEX.md` | 模块上下文与功能型规格文档索引 |
 | 模块三件套 | `docs/modules/<模块>/discussion.md` / `decisions.md` / `spec.md` | 讨论、决策、规格 |
-| 功能型文档 | `docs/modules/<按内容命名>.md` | PRD、功能需求、功能描述、功能规格、功能评审稿 |
+| 功能型规格文档 | `docs/modules/<按内容命名>.md` | PRD、功能需求、功能描述、功能规格、功能评审稿 |
 | 项目决策档案 | `docs/decisions/` | 重大项目级决策 / 理路冻结档，默认不写 |
 | 输入材料 | `docs/inputs/<类别>/` | PM 上传 / 调研 / 竞品 / 旧文档等材料；当前模块引用记录在模块 `.work-meta.json` |
 | 探索变体 | `mockups/` | 探索期 mock，看版与退役记录 |
@@ -117,7 +121,7 @@ Subagent 适合一次性读文件、第二视角评审、独立查询；不适�
 **文档入口分两层**：
 
 - **必读核心** = `PRODUCT-STATE.md`：进项目就读，是当前产品现状 hub。
-- **文档索引** = `docs/INDEX.md`：要找模块、功能型文档、输入材料、项目决策档案、介绍型材料时先看这里。
+- **文档索引** = `docs/INDEX.md`：要找模块、功能型规格文档、输入材料、项目决策档案、介绍型材料时先看这里。
 
 新建任何文档前，对照 `$PMAI_HOME/templates/文档地图.md` 判断归位。
 

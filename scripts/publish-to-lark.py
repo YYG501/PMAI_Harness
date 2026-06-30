@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """publish-to-lark: 把本地 markdown 发布到飞书云文档，自动合并表格相同内容 cell。
 
-由 prd-writing 等 skill 调用，PM 也可手动运行。详细行为见
+由 spec-writing 等 skill 调用，PM 也可手动运行。详细行为见
 skills/publish-to-lark/SKILL.md。
 
 所有 `lark-cli` 子进程调用走 `scripts/_lib/lark_adapter.py`（v3 §1 #1 实施）；
@@ -132,7 +132,7 @@ def warn_if_html_tables(text: str) -> None:
 
     扫到就大声警告 + 给行号（先剔除 ``` 围栏代码块，避免代码示例里的 <table> 误报）。
     不阻断发布：旧 PRD 可能仍含 HTML 表格，硬拦会让它们发不出去；警告 + 行号
-    确保 PM 看见、不再"悄悄塌掉"。新写的 PRD 一律用管道表格（见 prd-writing）。
+    确保 PM 看见、不再"悄悄塌掉"。新写的 PRD 一律用管道表格（见 spec-writing）。
     """
     masked = _FENCE_RE.sub(lambda m: "\n" * m.group(0).count("\n"), text)
     hits = [i + 1 for i, line in enumerate(masked.splitlines())

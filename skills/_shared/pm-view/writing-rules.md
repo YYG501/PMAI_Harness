@@ -2,7 +2,7 @@
 
 > 本文件是 [`PM-VIEW-RULES.md`](../PM-VIEW-RULES.md) §三 的物理拆分。配套阅读：[`doc-strictness.md`](./doc-strictness.md)（§四 文档级严格度对照表）。
 
-适用：所有 PM 视图层当前文档 — `docs/modules/<模块>/discussion.md` / `decisions.md` / `spec.md` / `docs/modules/<按内容命名>.md` 功能型文档。
+适用：所有 PM 视图层当前文档 — `docs/modules/<模块>/discussion.md` / `decisions.md` / `spec.md` / `docs/modules/<按内容命名>.md` 功能型规格文档。
 
 ---
 
@@ -11,12 +11,12 @@
 当 PM 复审 PRD / 模块规格等产物发现新违规词时，按以下 5 步补：
 
 1. **加规则**：到本文件对应子段（§3.1-§3.12）的 ❌/✅ 对照表，加一行违规词 + 正确写法。
-2. **加 lint pattern**：到 `scripts/check-prd-hierarchy.py` 对应 PATTERN 列表（VISUAL/URL/PUNCT/NEG/JARGON_PATTERNS）。pattern 用 `(regex, reason_with_hint)` tuple，让 lint 输出能给具体改写建议。
-3. **（可选）加 few-shots 反例对照**：到 `skills/prd-writing/references/few-shots.md` §描述风格修订对照 对应子段，加反例 → 正例 pair（LLM 风格学习用，不机械抓）。
+2. **加 lint pattern**：如果违规适合机械检查，到 `scripts/check-prd-hierarchy.py` 对应 PATTERN 列表（VISUAL/URL/PUNCT/NEG/JARGON_PATTERNS）。该脚本只绑定 PRD 体例 / 4 列功能表 preset；模块 `spec.md` 的自由写法不因为这个脚本存在而改成 PRD 表格。pattern 用 `(regex, reason_with_hint)` tuple，让 lint 输出能给具体改写建议。
+3. **（可选）加 few-shots 反例对照**：到 `skills/spec-writing/references/few-shots.md` §描述风格修订对照 对应子段，加反例 → 正例 pair（LLM 风格学习用，不机械抓）。
 4. **跑回归测试**：`scripts/tests/run-tests.sh` 确保旧规则不破坏。
 5. **跑回测**：用本次发现违规的真实 PRD 跑新 lint，验证抓得到；抓到的处数写到 commit message。
 
-跨 skill 复用：本文件改动自动覆盖所有 PM 视图 skill（design / prd-writing / publish-to-lark 等），无需逐个改。
+跨 skill 复用：本文件改动自动覆盖所有 PM 视图 skill（design / spec-writing / publish-to-lark 等），无需逐个改。
 
 ---
 
@@ -234,7 +234,7 @@ PM 视图文档（prd / analysis 等）描述的都是**最终产物形态**，�
 
 ## 3.12 描述风格规则（历史 PRD 修订经验沉淀）
 
-适用：所有 PM 视图层文档,但 PRD §六 表格 / §五 用户故事 / §4.1 业务诉求 等 prose 段最常踩。lint `scripts/check-prd-hierarchy.py` 类 2 全篇扫描机械违规;LLM 在生成时按本段 framework 自检。
+适用：所有 PM 视图层文档,但 PRD §六 表格 / §五 用户故事 / §4.1 业务诉求 等 prose 段最常踩。`scripts/check-prd-hierarchy.py` 只在 PRD 体例 / 4 列功能表 preset 中做机械扫描;其它规格文档由 LLM 在生成时按本段 framework 自检。
 
 ### 3.12.1 判定 framework：生僻描述词 = 工程黑话
 
@@ -343,17 +343,17 @@ PRD 是产品规格描述,不是给读者的 how-to 指南。**禁用 PM 指令�
 
 ### 3.12.8 流程式步骤要求
 
-涉及多步操作 (弹窗填写、功能流程) 时,先用 "先 X → 再 Y → 然后 Z → 最后 W" 明确流程概述,再用独立条目展开每步细节。**禁止**把流程步骤、过滤规则、字段细节混在一个长复合句里。**编号条目放在 4 列表格的「需求描述」列时按 PM-VIEW-RULES.md §5.1 的「续行 rowspan」模式渲染** —— 每条编号一行、前 3 列留空；**禁止**用 `<br/>` / `<br>` 把多条塞同一格（违反 §5.1，lint 类 3 会拦）。
+涉及多步操作 (弹窗填写、功能流程) 时,先用 "先 X → 再 Y → 然后 Z → 最后 W" 明确流程概述,再用独立条目展开每步细节。**禁止**把流程步骤、过滤规则、字段细节混在一个长复合句里。**编号条目放在 4 列表格的「需求描述」列时按 PM-VIEW-RULES.md §5.2 的「续行 rowspan」模式渲染** —— 每条编号一行、前 3 列留空；**禁止**用 `<br/>` / `<br>` 把多条塞同一格（违反 §5.2，lint 类 3 会拦）。
 
 ❌ 流程混杂（一句长复合句）：
 
 > 弹窗内先选目标部门,再选来源许可证 (单证场景自动选定...多证场景展示候选项,每行展示...),再填多维度数字。多维度数字输入区按当前产品维度集动态生成;不可分配状态的证不展示在候选项中。
 
-❌ 流程式但用 `<br>` 塞单格（违反 §5.1 续行 rowspan，lint 类 3 拦）：
+❌ 流程式但用 `<br>` 塞单格（违反 §5.2 续行 rowspan，lint 类 3 拦）：
 
 > 1. 弹窗的填写流程:先选目标部门 → 再选来源许可证 → 最后填多维度数字。\<br>2. 选证规则:单证自动选定;多证展示候选项...\<br>3. 多维度数字输入区按当前产品维度集动态生成。
 
-✅ 流程式 + 续行 rowspan（PM-VIEW-RULES.md §5.1 正例）：
+✅ 流程式 + 续行 rowspan（PM-VIEW-RULES.md §5.2 正例）：
 
 ```markdown
 | 二级功能 | 三级功能 | 使用角色 | 需求描述 |
@@ -390,8 +390,8 @@ PRD 是产品规格描述,不是给读者的 how-to 指南。**禁用 PM 指令�
 ## 3.13 定稿磨文纪律（吸收 ExampleAgentProject spec-polish · 对账 + 补缺）
 
 > **分工说明（避免三处并存）**：
-> - **模块规格的磨文操作正本**在 [`prd-writing/references/writing-rules.md`](../../prd-writing/references/writing-rules.md)「定稿磨文纪律 / 规格 4 问自检」——`/pmai-prd-writing` 模块规格模式写规格时读那份、照着逐条扫。
-> - **L1-L6 + 8 类禁用**也在 [`prd-writing/references/writing-rules.md`](../../prd-writing/references/writing-rules.md)。
+> - **模块规格的磨文操作正本**在 [`spec-writing/references/writing-rules.md`](../../spec-writing/references/writing-rules.md)「定稿磨文纪律 / 规格 4 问自检」——`/pmai-spec-writing` 模块规格目标写规格时读那份、照着逐条扫。
+> - **L1-L6 + 8 类禁用**也在 [`spec-writing/references/writing-rules.md`](../../spec-writing/references/writing-rules.md)。
 > - **本段 §3.13** = **跨 PM 视图的逐条对账记录 + 框架原本缺的三条的详细展开**。不要再从设计方法文件里借磨文规则。
 >
 > **适用扩展**：本段不只覆盖 PM 视图层文档，也覆盖模块三件套的 `spec.md`（规格收口定稿时）。其余 §3.1-§3.12 的硬约束（指代 / 正向 / 禁工程黑话等）对 `spec.md` 同样适用。
@@ -442,7 +442,7 @@ PRD 是产品规格描述,不是给读者的 how-to 指南。**禁用 PM 指令�
 | spec-polish 原条 | 处置 | 落点 |
 | --- | --- | --- |
 | 1. 只写最终事实（不写改动标注 / 元信息） | **补为新规则**（§3.9 只禁自指，不禁过程注脚） | §3.13.1 |
-| 2. 不造词，一个概念一个词 | **已并入**（被 L6 名词表锁定 / §3.8 中英混杂覆盖；本条不重列） | L6（`prd-writing/references/writing-rules.md`）+ §3.8 |
+| 2. 不造词，一个概念一个词 | **已并入**（被 L6 名词表锁定 / §3.8 中英混杂覆盖；本条不重列） | L6（`spec-writing/references/writing-rules.md`）+ §3.8 |
 | 3. 去 AI 腔（不用对仗小标题、不用 亮点/露头/赋能/抓手/闭环） | **合并**：AI 腔工程黑话词典补进 §3.12.6，对仗小标题并入 §3.12.6"抽象学院派命名" | §3.12.6（见下方补录） |
 | 4. 去行话动词（圈定/拉/撑起/收口） | **合并**：行话动词补进 §3.12.6 工程黑话词典 | §3.12.6（见下方补录） |
 | 5. 多步流程用叙述、别塞表格 | **补为新规则 + 与 §3.12.8 划边界**（PRD 4 列表用续行 rowspan，自由文档首选叙述） | §3.13.2 |

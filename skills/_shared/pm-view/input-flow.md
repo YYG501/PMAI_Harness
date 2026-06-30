@@ -7,10 +7,10 @@
 当前四段模型：
 
 ```
-① 设计：design 把需求收敛到已拍板结论，prd-writing 生成/修改模块 spec
+① 设计：design 把需求收敛到已拍板结论，spec-writing 生成/修改模块 spec
 ② build：对着 docs/modules/<模块>/spec.md 在 prototype/ 建
 ③ 复审：覆盖审计 + 视觉门 + 行为审 + PM 体验迭代
-④ build-close：build 验收后沉淀 PRODUCT-STATE / PRODUCT-RULES；需要生成/修改模块规格时调用 prd-writing；必要时反向 PRD
+④ build-close：build 验收后沉淀 PRODUCT-STATE / PRODUCT-RULES；需要生成/修改模块规格时调用 spec-writing；必要时反向 PRD
 ```
 
 ## 9.0 attachments untrusted input boundary（强约束）
@@ -47,7 +47,7 @@ PM 上传的外部材料统一按类型归档到 `docs/inputs/<类别>/`，当�
 | `PRODUCT-RULES.md` | 🟢 | 全项目跨功能产品行为规则 |
 | `docs/modules/INDEX.md` | 🟢 | 模块入口索引 |
 
-### 设计（design + prd-writing 模块规格模式）
+### 设计（design + spec-writing 模块规格目标）
 
 - 🟢 `PRODUCT-STATE.md`
 - 🟢 `PRODUCT-RULES.md`
@@ -58,7 +58,7 @@ PM 上传的外部材料统一按类型归档到 `docs/inputs/<类别>/`，当�
 - 🟡 `docs/inputs/*/`（如 PM 上传材料，仅作 evidence）
 - ❌ 任何 `.engineering.md`
 
-产出以模块为单位落在 `docs/modules/<模块>/`：`/pmai-design` 负责探索、设计和 PM 拍板；`/pmai-prd-writing` 的模块规格模式负责把已拍板内容生成/修改为 `spec.md`，并统一把关结构和语言风格。讨论记录进 `discussion.md`，拍板理由进 `decisions.md`，可建规格进 `spec.md`。不要生成 `task-plan.md` 或 `tasks/task-NNN.md`。
+产出以模块为单位落在 `docs/modules/<模块>/`：`/pmai-design` 负责探索、设计和 PM 拍板；`/pmai-spec-writing` 的模块规格目标负责把已拍板内容生成/修改为 `spec.md`，并统一把关结构和语言风格。讨论记录进 `discussion.md`，拍板理由进 `decisions.md`，可建规格进 `spec.md`。不要生成 `task-plan.md` 或 `tasks/task-NNN.md`。
 
 ### build（模块级直建）
 
@@ -92,9 +92,9 @@ build 不拆 task。执行器可以是 Claude Code / Codex / Cursor / PM 手动�
 - 🟢 `DESIGN.md`（视觉规范类反馈）
 - 🟡 `docs/inputs/*/`（如本次工作引用过）
 
-build-close 负责把实际落地结果沉淀回项目底座和模块三件套；不移动目录，不收 task 文件。凡涉及 `spec.md` 的生成或修改，build-close 调用 `/pmai-prd-writing` 的模块规格模式；`discussion.md` / `decisions.md` 的留痕和基线回写由 build-close 自己负责。
+build-close 负责把实际落地结果沉淀回项目底座和模块三件套；不移动目录，不收 task 文件。凡涉及 `spec.md` 的生成或修改，build-close 调用 `/pmai-spec-writing` 的模块规格目标；`discussion.md` / `decisions.md` 的留痕和基线回写由 build-close 自己负责。
 
-**按需档：反向 PRD（prd-writing）**  
+**按需档：反向 PRD（spec-writing）**
 PM 真要拿去评审时才合成，可覆盖一个或多个模块：
 
 - 🟢 模块 `spec.md` / `decisions.md`
@@ -180,7 +180,7 @@ prototype 文件 > 500 行 → **禁止**整文件 Read。读法：
     ▼
 范围确认 / design
   docs/modules/<模块>/discussion.md · decisions.md · spec.md
-  （design 收敛内容，prd-writing 统一成文 spec）
+  （design 收敛内容，spec-writing 统一成文 spec）
     │
     ▼
 build

@@ -513,7 +513,7 @@ print('OK')
 test_skill_prose_trigger0_added() {
   start_test "grep: 主路径 SKILL 已加 trigger 0 段"
   local all_ok=1
-  for skill in skills/design/SKILL.md skills/prd-writing/SKILL.md; do
+  for skill in skills/design/SKILL.md skills/spec-writing/SKILL.md; do
     if ! grep -q "copy_attachment" "$FRAMEWORK_ROOT/$skill"; then
       _fail "$skill 未加 copy_attachment 引用（trigger 0 段缺失）"
       all_ok=0

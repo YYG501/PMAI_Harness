@@ -28,6 +28,8 @@ test_agents_template_exists_and_maps_codex() {
   assert_file_contains "$AGENTS_TMPL" "PMAI_HOME" "AGENTS.md.tmpl should resolve installed framework path" || return
   assert_file_contains "$AGENTS_TMPL" "不能在这里再跑" "AGENTS.md.tmpl should prevent re-init inside consumer repo" || return
   assert_file_contains "$AGENTS_TMPL" "install-codex-hooks.sh" "AGENTS.md.tmpl should tell Codex how to repair missing hooks" || return
+  assert_file_contains "$AGENTS_TMPL" "不写死机器绑定路径" "AGENTS.md.tmpl should carry portable path principle" || return
+  assert_file_contains "$AGENTS_TMPL" "/Users/<某人>/..." "AGENTS.md.tmpl should forbid user-specific local paths" || return
   pass_test
 }
 
@@ -102,6 +104,11 @@ test_e2e_generates_agents_md_without_framework_assets() {
 
   if ! grep -q "不能在这里再跑" "$proj/AGENTS.md" || ! grep -q "/pmai-init-project" "$proj/AGENTS.md"; then
     _fail "生成的 AGENTS.md 未阻止消费仓重复 init"
+    rm -rf "$base"
+    return
+  fi
+  if ! grep -q "不写死机器绑定路径" "$proj/AGENTS.md"; then
+    _fail "生成的 AGENTS.md 缺路径可迁移原则"
     rm -rf "$base"
     return
   fi

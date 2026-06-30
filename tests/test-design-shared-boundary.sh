@@ -4,7 +4,7 @@
 # 验证 /pmai-design 的方法论边界：
 #   T1: design-only / mixed 方法文件不留在 skills/_shared/
 #   T2: 现役入口不再引用 _shared/module-questioning.md 或 _shared/info-design.md
-#   T3: design / prd-writing / build-close 各自引用正确真相源
+#   T3: design / spec-writing / build-close 各自引用正确真相源
 #   T4: design 后台驾驶内核包含工作类型、目标绑定、事实底座和顺手动作边界
 set -uo pipefail
 
@@ -51,13 +51,13 @@ test_no_active_refs_to_old_shared_design_files() {
 }
 
 test_current_truth_sources_are_wired() {
-  start_test "T3: design / prd-writing / build-close 引用当前真相源"
+  start_test "T3: design / spec-writing / build-close 引用当前真相源"
   if ! grep -q "skills/design/references/design-method.md" "$REPO_ROOT/skills/design/SKILL.md"; then
     _fail "skills/design/SKILL.md 未引用 design-method.md"
     return
   fi
-  if ! grep -q "规格 4 问自检" "$REPO_ROOT/skills/prd-writing/references/writing-rules.md"; then
-    _fail "prd-writing/references/writing-rules.md 缺规格 4 问自检"
+  if ! grep -q "规格 4 问自检" "$REPO_ROOT/skills/spec-writing/references/writing-rules.md"; then
+    _fail "spec-writing/references/writing-rules.md 缺规格 4 问自检"
     return
   fi
   if ! grep -q "skills/_shared/consistency-scan.md" "$REPO_ROOT/skills/build-close/SKILL.md"; then

@@ -1,14 +1,14 @@
 ---
 name: pmai-meta
 description: |
-  PMAI Office Hours：当 PM 觉得不对、感觉方案只是补丁、AI 只是在复述、缺少新思路，或需要在设计 / 写作 / build 前把真问题、前提、替代方向和下一步想清楚时使用。保留 /pmai-meta 命令名，但不要把它当成“升维分析输出器”；它是先读资料、再一题一问、挑战前提、给出替代方向，最后降回 /pmai-design、/pmai-doc-writing、/pmai-prd-writing 或 /pmai-build 的对话入口。
+  PMAI Office Hours：当 PM 觉得不对、感觉方案只是补丁、AI 只是在复述、缺少新思路，或需要在设计 / 写作 / build 前把真问题、前提、替代方向和下一步想清楚时使用。保留 /pmai-meta 命令名，但不要把它当成“升维分析输出器”；它是先读资料、再一题一问、挑战前提、给出替代方向，最后降回 /pmai-design、/pmai-doc-writing、/pmai-spec-writing 或 /pmai-build 的对话入口。
   触发词：Office Hours / office hours / grillme / grill me / 只是复述 / 没新思路 / 不够深入 / 继续问我 / 帮我深想 / 不合理 / 感觉不对 / 这东西到底改变了什么 / 本质是什么问题 / 第一性原理 / 升维 / 拔高 / 语义坐标 / 多角度看看 / 找盲区 / 反方 / 对抗分析 / 多 AI / multi ai / multiai。
 ---
 
 # /pmai-meta · Office Hours
 
 > **它是什么**：一个把 PM 和 AI 从低质量讨论里拉出来的对话入口。先问清真问题、挑战前提、逼出替代方向，再决定下一步交给哪个产出型 skill。
-> **它不是什么**：不是“高级分析段落生成器”，不是替 PM 拍板，不替代 `/pmai-design`、`/pmai-doc-writing`、`/pmai-prd-writing`、`/pmai-build`。
+> **它不是什么**：不是“高级分析段落生成器”，不是替 PM 拍板，不替代 `/pmai-design`、`/pmai-doc-writing`、`/pmai-spec-writing`、`/pmai-build`。
 > **金标准**：结束时 PM 拿到的不是一段复述，而是“这轮到底在判断什么、哪些前提站不住、有哪些可比较方向、下一步该怎么做”。
 
 ---
@@ -44,7 +44,7 @@ Office Hours 的输出不是“分析段落”，必须收敛到四件事：
 1. **真问题**：这轮到底在判断什么，不要停在 PM 一开始给的解法。
 2. **前提账本**：哪些是已读资料或 PM 已确认的事实，哪些只是 PM / AI 的假设。
 3. **替代方向**：至少 2 个可比较走法；不能只有“建议这样做”。
-4. **下一步落点**：回到 `/pmai-design`、`/pmai-doc-writing`、`/pmai-prd-writing`、`/pmai-build`，或明确停住。
+4. **下一步落点**：回到 `/pmai-design`、`/pmai-doc-writing`、`/pmai-spec-writing`、`/pmai-build`，或明确停住。
 
 如果无法给出四件事，说明还没问够，继续按 `problem-framing.md` 追问。
 
@@ -151,7 +151,7 @@ PM 说有，就继续追问；PM 说没有，再收束。
 <回到哪个 skill 或明确停住>
 ```
 
-不要输出空泛总结，不生成长期产品文档。文档成文仍交给 `/pmai-design`、`/pmai-doc-writing` 或 `/pmai-prd-writing`。
+不要输出空泛总结，不生成长期产品文档。文档成文仍交给 `/pmai-design`、`/pmai-doc-writing` 或 `/pmai-spec-writing`。
 
 ---
 
@@ -172,7 +172,7 @@ PM 说有，就继续追问；PM 说没有，再收束。
 
 - `/pmai-design`：负责模块结构、信息模型、状态、动作、规格三件套。Meta 只负责把问题模型想清楚。
 - `/pmai-doc-writing`：负责产品方向、介绍、定位、标题、对外表达成文。Meta 只给重定位结论和判断标准。
-- `/pmai-prd-writing`：负责功能型文档和模块规格成文。Meta 不写完整 PRD。
+- `/pmai-spec-writing`：负责功能型规格文档和模块规格成文。Meta 不写完整 PRD。
 - `/pmai-build`：只在功能锚点稳定后执行。Meta 可以帮判断锚点稳不稳，但不进入默认 build 门。
 
 一句话：Meta 让“要解决什么、为什么这样、还有哪些方向”变清楚；下游 skill 才把它写成文档、规格或原型。
@@ -186,4 +186,4 @@ PM 说有，就继续追问；PM 说没有，再收束。
 - 只给一个推荐方向，没有替代方向和被排除方向。
 - 用“升维 / 第一性原理 / 多视角”当章节标题给 PM 看。
 - 把 PM 的话整理得更顺，但没有新增判断、前提挑战或下一步落点。
-- 把 Office Hours 产物写成长期文档，越过 design / doc-writing / prd-writing。
+- 把 Office Hours 产物写成长期文档，越过 design / doc-writing / spec-writing。

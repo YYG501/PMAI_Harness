@@ -44,8 +44,8 @@ PM mental model：PM 在 chat 自然描述 "我有 X 在路径 Y"，AI 判断材
 
 非典型场景：
 - B 分支 office-hours 选源期间 caller SKILL **不调** copy_attachment
-- /pmai-prd-writing 跨模块功能型文档 / 补差模式 caller SKILL **不调** copy_attachment
-  （跨模块功能型文档 / 补差模式不绑定当前工作 → 不入 attachments_seen）
+- /pmai-spec-writing 跨模块功能型规格文档 / 既有规格补差目标 caller SKILL **不调** copy_attachment
+  （跨模块功能型规格文档 / 既有规格补差目标不绑定当前工作 → 不入 attachments_seen）
 """
 
 from __future__ import annotations
@@ -301,7 +301,7 @@ def _stage_doc_exists(work_dir: Path, stage_prefix: str) -> bool:
 
     stage_prefix → 期望文档映射：
         spec     → spec.md（模块规格，build 锚点）
-        prd      → 功能型文档（prd-writing）
+        prd      → 功能型规格文档（spec-writing）
         close    → close-report.md（沉淀收尾，如有）
 
     返回 False 表示产出文档还没生成 → CopyResult.pending_inject=True，caller
@@ -309,7 +309,7 @@ def _stage_doc_exists(work_dir: Path, stage_prefix: str) -> bool:
     """
     mapping = {
         "spec": [work_dir / "spec.md"],
-        "prd": [work_dir / "prd.md"],            # 旧项目兼容：历史当前工作 PRD（prd-writing）
+        "prd": [work_dir / "prd.md"],            # 旧项目兼容：历史当前工作 PRD（spec-writing）
         "close": [work_dir / "close-report.md"],  # 沉淀收尾（如有）
     }
     candidates = mapping.get(stage_prefix, [])

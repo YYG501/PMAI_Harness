@@ -1,6 +1,6 @@
 # attachments AI 接管（trigger 0 LLM 识别 + typed input）
 
-> **caller**：主路径 SKILL（design / build / prd-writing / build-close；record 仅在绑定现有模块工作时适用）。
+> **caller**：主路径 SKILL（design / build / spec-writing / build-close；record 仅在绑定现有模块工作时适用）。
 > **目标目录**：`docs/inputs/<category>/`。
 > **状态登记**：当前模块 `docs/modules/<模块>/.work-meta.json:attachments_seen`。
 > **真实 helper**：`scripts/_lib/attachments.py`。helper 负责安全复制 / 命名 / 登记；LLM caller 负责根据 PM 描述和材料内容判断类别。
@@ -44,7 +44,7 @@ AI 不确信是否要归档时，反问一句：`是否要把 <path> 归档进�
 
 ### §3.2 禁用例外
 
-1. `prd-writing` 跨模块功能型文档 / 补差模式不绑定当前模块工作时，不写当前模块 `.work-meta.json`；PM 可使用外部引用。
+1. `spec-writing` 跨模块功能型规格文档 / 既有规格补差目标不绑定当前模块工作时，不写当前模块 `.work-meta.json`；PM 可使用外部引用。
 2. `record` 只有绑定现有模块工作时才调 helper；项目级轻量记录不借本 helper 伪造模块附件。
 3. 当前还没有模块目录 / `.work-meta.json` 时，只做轻量预检并记录待处理列表；等模块创建后批量归档。
 4. PM 给的是仓库内已有 source-of-truth 路径时，不复制为附件；直接按来源文件读取。
@@ -112,7 +112,7 @@ helper 参数仍叫 `stage_prefix`，但当前语义是**产物前缀**，不是
 | 场景 | helper stage_prefix | 说明 |
 |---|---|---|
 | design / 模块规格 / build 继续读模块规格 | `spec` | 附件服务当前模块 `discussion.md` / `decisions.md` / `spec.md` |
-| 反向 PRD / 功能型文档且绑定当前模块工作 | `prd` | 只在 caller 确认有模块工作目录时使用 |
+| 反向 PRD / 功能型规格文档且绑定当前模块工作 | `prd` | 只在 caller 确认有模块工作目录时使用 |
 | build-close 收尾沉淀 | `close` | 附件服务 close-report / 沉淀检查 |
 | caller 已确认可归档但产物类型暂不可判 | `unknown` | 兜底值；后续引用时必须补说明 |
 

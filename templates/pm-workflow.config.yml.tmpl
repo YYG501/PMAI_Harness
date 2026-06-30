@@ -7,9 +7,9 @@
 # 改了哪个字段会影响什么：见每段注释。
 
 dev_server:
-  # 启动 dev server 的命令；任意 shell 命令（pnpm / npm / yarn / make / ...）
-  # build / 复审会用这个命令在 build worktree 或主仓内启动 dev server（如未在跑）
-  command: pnpm dev
+  # 启动 dev server 的命令；`{port}` 会替换为下方 ports 中选出的可用端口。
+  # 不同框架的端口参数不同，请在这里写真实命令，build 不临场猜 `--port` / `--host`。
+  command: pnpm dev --hostname 127.0.0.1 --port {port}
 
   # 端口探测顺序：build / 复审按列表顺序对 ready_check 发 HTTP，第一个返回 200 的胜出
   # 列表里写你项目实际可能监听的端口；不存在的端口跳过

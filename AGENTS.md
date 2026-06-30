@@ -17,6 +17,10 @@
 - Claude Code 章程、文档同步和 review 约束以 `CLAUDE.md` 为真相源。
 - 本仓已有流程优先于临时发明的新流程。
 
+## 项目原则
+
+- **不写死机器绑定路径**：框架代码、模板、skill 文档、prompt 示例和生成到消费仓的规则里，不得写死 `/Users/<某人>/...` 这类本地路径。需要定位文件时，用运行时变量（`PMAI_HOME` / `REPO_ROOT` / `MAIN_REPO_ROOT` / `BUILD_DIR`）和仓内相对路径组合；PM 上传本机材料时可临时读取其路径，但不得沉淀进框架规则或业务代码。
+
 ## Host Mapping
 
 - `CLAUDE.md` 里写的「Claude Code」「Claude host」「驱动 Claude」，在 Codex 会话中等价理解为当前 Codex 主控。

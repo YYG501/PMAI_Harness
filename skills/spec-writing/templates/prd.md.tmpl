@@ -1,6 +1,6 @@
 # {{MODULE}} PRD
 
-> **本次工作的需求方案（WHAT）** —— 由 `/pmai-prd-writing` 在 `/pmai-build-close` 收尾时**按需**反向合成
+> **本次工作的需求方案（WHAT）** —— 由 `/pmai-spec-writing` 在 `/pmai-build-close` 收尾时**按需**反向合成
 > （PM 真要拿去评审 / 留档时才出；不是每次工作都硬产，避免文档税）。
 > **真系统口径**：结构 / 字段 / 交互 来自最终原型（`prototype/`）+ 模块规格（`spec.md`）；
 > 业务规则 / 权限语义 来自模块 `spec.md` + `decisions.md`。哪怕这版原型是 mock 壳，也按真实系统口径写，
@@ -21,6 +21,8 @@
 | 对应原型版本号 | V（如无则留空） |
 
 ## 二、变更日志
+
+<!-- 主要变更内容必须简要：每条一句，通常 20 字内、最多不超过 30 字；只写"改了什么"，不写原因、过程、背景。 -->
 
 | 时间 | 版本号 | 对应原型版本 | 变更人 | 主要变更内容 |
 | --- | --- | --- | --- | --- |
@@ -65,7 +67,7 @@
 多平台 / 多层场景（租户 / 主运营 / 下级运营三层等）改用 4 列分组表：
 角色归属 / 角色 / 描述 / 与本模块的关系。一律用管道表格（| ... |），禁用 HTML <table>
 （飞书发布只认管道表格，HTML 表会塌成纯文本）。"角色归属" 列同一归属下第一行写名称、
-其余行该格留空，发布到飞书自动合并成跨行单元格——示例见 prd-writing skill few-shots §5.1。
+其余行该格留空，发布到飞书自动合并成跨行单元格——示例见 spec-writing skill few-shots §5.1。
 -->
 
 | 角色名 | 描述 | 与本功能的关系 |
@@ -93,7 +95,7 @@
   3) 功能需求表格（下方默认 4 列：二级功能 / 三级功能 / 使用角色 / 需求描述 —— 一级功能写在
      §6.X 章节标题里，表内不复读；新需求场景可选加 "优先级" 列；范围外功能行用 <del> 划线整行保留，不删除）。
 
-ASCII 原型示例与写法详见 prd-writing skill few-shots "§六 原型节 ASCII 示例" 段。
+ASCII 原型示例与写法详见 spec-writing skill few-shots "§六 原型节 ASCII 示例" 段。
 -->
 
 | 二级功能 | 三级功能 | 使用角色 | 需求描述 |
@@ -108,7 +110,7 @@ ASCII 原型示例与写法详见 prd-writing skill few-shots "§六 原型节 A
 ## 八、角色权限清单
 （权限矩阵大表：一级 / 二级 / 三级功能 × 各角色，✅/空 三档）
 
-详见 prd-writing skill "身份 / 权限类 PRD 专属可选章节" 段。
+详见 spec-writing skill "身份 / 权限类 PRD 专属可选章节" 段。
 -->
 
 ## 七、验收标准（Acceptance Criteria）
@@ -131,7 +133,7 @@ ASCII 原型示例与写法详见 prd-writing skill few-shots "§六 原型节 A
 ## 参考材料
 
 <!--
- attachments AI 接管引用 section。caller SKILL（prd-writing）按
+ attachments AI 接管引用 section。caller SKILL（spec-writing）按
 `.work-meta.json:attachments_seen` 列表渲染本 section（按 registered_at 升序），
 PM chat 上传过的附件自动出现在这里；无引用则整段省略不写。
 

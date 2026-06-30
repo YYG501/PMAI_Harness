@@ -11,6 +11,8 @@ description: |
 > **和 `/pmai-design` 的关系**：`/pmai-design` 开场**读**基线（`PRODUCT-RULES` + 相关模块 `decisions.md` + `PRODUCT.md` 业务术语表）；`/pmai-build-close` 收尾**写**这三处。一读一写，闭环。
 >
 > **PM 视图**：收尾用 PM 看得懂的话——「现状更新了 / 决策记下了 / 术语进表了 / 探的几版视觉留着了 / 改动并回主线了」。不出现"四类分流 / 派生 4 环 / 三身份 / supersede / 一致性扫描"等内部词。
+>
+> **执行纪律**：合同校验、字段补录、读文件、验证命令、tmux / 进程清理都属于内部动作。PM 窗口只报阶段结果和需要 PM 拍的产品问题，不直播命令流水、进程号、tail 日志或“我读了 N 个文件”。
 
 ## 什么时候用
 
@@ -82,8 +84,15 @@ python3 "$PMAI_HOME/scripts/build-contract.py" validate-close "$MODULE_WORK_DIR"
 校验失败时 STOP：
 
 - 缺 `build` 字段 → 不是一个可 close 的 build；先恢复/补全本次 build 上下文，不能直接沉淀成已完成。
-- 缺 `implementation_commit` → 实现提交没有被 `/pmai-build` 记录；先回 build 补提交记录。
-- 缺 `pm_accepted_at` → PM 验收没有记录；不能进入 build-close。
+- 缺 `implementation_commit` 或 `pm_accepted_at`：
+  - 如果 PM 在当前对话已经明确说“通过 / 可以收尾 / close”，且当前 build worktree HEAD 就是已验收版本，用一次原子命令补齐合同：
+    ```bash
+    IMPLEMENTATION_COMMIT=$(git -C "$BUILD_DIR" rev-parse HEAD)
+    python3 "$PMAI_HOME/scripts/build-contract.py" complete "$MODULE_WORK_DIR" \
+      --implementation-commit "$IMPLEMENTATION_COMMIT"
+    ```
+    禁止并行跑 `commit` / `accept` 两条命令，避免字段互相覆盖。
+  - 如果没有明确验收信号 → STOP，不能进入 build-close。
 - 合同是 `mode=worktree` 但分支或 worktree 找不到 → 不退化成 main 直收，先恢复 worktree 或补合同。
 - 合同是 `mode=main` 但当前不在 main/master → 停止，回主仓主线再收尾。
 
@@ -188,9 +197,9 @@ rm -f "$TMPFILE"
 3. 被取代的老条目打**删除线** + 标"被 v<新版> 取代"（supersede 留痕，不直接删——读者能看到演进）。
 4. 顶部声明保持钉死："本规格是权威定义；与原型不一致以规格为准；没说清的先确认"（治规格 4 问之"分不清原型/规格"）。
 
-**写规格纪律**（@读 `/pmai-prd-writing` 模块规格模式的写作纪律 / `_shared/pm-view/writing-rules.md`）：规格只留 normative 文字——"为什么"甩 `decisions.md` / `PRODUCT-RULES`，"原型长什么样"甩 `DESIGN.md` / mock，**规格里不嵌原型 ASCII**（设计确认靠 mock，不靠规格画图）。
+**写规格纪律**（@读 `/pmai-spec-writing` 模块规格目标的写作纪律 / `_shared/pm-view/writing-rules.md`）：规格只留 normative 文字——"为什么"甩 `decisions.md` / `PRODUCT-RULES`，"原型长什么样"甩 `DESIGN.md` / mock，**规格里不嵌原型 ASCII**（设计确认靠 mock，不靠规格画图）。
 
-> **`spec.md` 的生成和修改一律走 `/pmai-prd-writing` 模块规格模式**。设计拍板在 `/pmai-design`；`/pmai-build-close` 只提供最终原型、验收结论和收尾对账结果作为输入，调用 prd-writing 把已定结论写入/修订 `spec.md`。若发现规格还有没理清的信息结构 → 不在 `/pmai-build-close` 硬写，回 `/pmai-design` 补。
+> **`spec.md` 的生成和修改一律走 `/pmai-spec-writing` 模块规格目标**。设计拍板在 `/pmai-design`；`/pmai-build-close` 只提供最终原型、验收结论和收尾对账结果作为输入，调用 spec-writing 把已定结论写入/修订 `spec.md`。若发现规格还有没理清的信息结构 → 不在 `/pmai-build-close` 硬写，回 `/pmai-design` 补。
 
 ---
 
@@ -203,7 +212,7 @@ rm -f "$TMPFILE"
 python3 "$PMAI_HOME/scripts/check-state-index-drift.py" "$REPO_ROOT" || true
 ```
 
-**对账动作**：按 `consistency-scan.md` 的三步走，把本次改动涉及的字段 / 规则 / 概念，在 `spec.md`、`prototype/`、`DESIGN.md`、`PRODUCT.md` 术语表之间互查。只输出三类 PM 可拍的问题：哪个口径算数、有意删还是漏实现、术语是否统一。PM 逐条拍后，再把规格修订输入交给 `/pmai-prd-writing` 模块规格模式更新 `spec.md` / 记 TODO（漏实现 → 推下个工作）/ 更新术语表。
+**对账动作**：按 `consistency-scan.md` 的三步走，把本次改动涉及的字段 / 规则 / 概念，在 `spec.md`、`prototype/`、`DESIGN.md`、`PRODUCT.md` 术语表之间互查。只输出三类 PM 可拍的问题：哪个口径算数、有意删还是漏实现、术语是否统一。PM 逐条拍后，再把规格修订输入交给 `/pmai-spec-writing` 模块规格目标更新 `spec.md` / 记 TODO（漏实现 → 推下个工作）/ 更新术语表。
 
 > 这是 **silent 自检 + 并入收尾呈交**的轻行为，**不升格成强制门**（守红线 I-RV1：不升格 AI 自动 review）。脚本 advisory（`|| true`），最终判断在 PM。
 
@@ -235,6 +244,8 @@ python3 "$PMAI_HOME/scripts/check-state-index-drift.py" "$REPO_ROOT" || true
 python3 "$PMAI_HOME/scripts/gen-mock-board.py" "$REPO_ROOT"
 ```
 
+只改**本次 build 明确使用 / PM 确认吸收**的那一个变体条目；不要为了退役一个 mock 顺手重写整份历史看版描述。如果无法确定是哪条变体，宁可在模块规格附件里说明“主原型为已验收口径，mock 为讨论留痕”，不要猜着改 manifest。
+
 ### 5.4 顺手补索引
 
 - 本次新建了 `docs/modules/<新模块>/` 或 `docs/modules/<按内容命名>.md` → 刷 `docs/modules/INDEX.md`；如新增顶层文档类别，补 `docs/INDEX.md`。`check-index-lint.py` 校验失败两次则空 diff 跳过、不阻塞。
@@ -248,6 +259,8 @@ python3 "$PMAI_HOME/scripts/gen-mock-board.py" "$REPO_ROOT"
 
 **只在 build 合同是 `mode=worktree` 时走本步**；`mode=main` 无 merge 步。推荐在**主仓会话**跑——`git -C "$BUILD_DIR"` 远程 commit + merge + 删 worktree，cwd 始终在主仓、删 worktree 不触 ENOENT。
 
+主仓 main 上允许保留其它未提交 WIP。它们不是 build-close 的处理对象，不能被提交、清理或拿来要求 PM 先处理。`close-work.sh` 合并时使用 Git autostash 临时挪开 tracked WIP，合并后放回；若真的会覆盖同一路径，Git 会失败，脚本回滚 build 分支的清状态提交并停止。
+
 ```bash
 # 1) commit worktree 里所有改动（主仓会话用 git -C 远程操作，不必把会话切进 worktree）
 git -C "$BUILD_DIR" add -A
@@ -259,6 +272,14 @@ merge 回 main（具体的 merge / 删 worktree / 删分支编排由 lifecycle �
 - 把 `.worktrees/<分支>/` 的改动 merge 回 `main`（合回主线后不可回退，收尾是终态）。
 - 删该 worktree + 分支（无中转文件）。
 - merge 回 main 后，若步骤 5.3 有待退役的 mock 变体 → 此刻（cwd 在 main）补标 `已退役` + 重生成看版。
+- 如果 main 上已有无关脏改，回执里只说“仍保留你原有的未提交改动”，不要把它当成 close 风险反复展开。只有路径冲突 / Git 拒绝合并时，才提示 PM 先保存或移开冲突文件。
+
+### 6.1 验证失败处理
+
+合并前后按项目配置跑必要验证。验证失败先判定是**代码失败**还是**运行环境失败**：
+
+- 代码失败 → 停止，不 merge / 不清理 worktree，先修到通过。
+- 运行环境失败（例如 sandbox 禁止子进程 / 端口绑定 / 浏览器权限）→ 用同一条命令在允许的环境重跑；PM 窗口只报“验证环境受限，已用同一命令重跑”，不要展开底层报错流水。
 
 > **AskUser 硬约束**：merge 前若任何 PM 决策门没拿到答案（空答 / runtime 退化未 wait）→ **STOP，禁止 merge 到主线**（`askuser-rules.md §1`）。
 
@@ -281,6 +302,7 @@ merge 回 main（具体的 merge / 删 worktree / 删分支编排由 lifecycle �
 ## Rules
 
 - **build 合同优先**：`/pmai-build-close` 必须先读 `.work-meta.json:build`；执行方式、执行器、分支/worktree、实现提交和 PM 验收都以合同为准。没有合同或合同不完整时 STOP，先补 build 上下文，不做“沉淀但未落地”的假 close。
+- **合同补录必须原子化**：PM 已明确验收但合同缺实现提交 / 验收时间时，只能用 `build-contract.py complete` 一次写齐；禁止并行或交错跑 `commit` / `accept` 两步，避免字段互相覆盖。
 - **不靠分支形态猜收尾**：当前在非 main 分支、普通 `codex/*` 分支、或 worktree 丢失，都不是新的 PM 分流菜单；只说明合同与现场不一致，停止并给出恢复上下文的最短动作。
 - **未落主线不写完成态**：还没按合同合回主线，或验证/验收缺口没有明确记录前，不得输出“已收口 / 时间线已完成”。若选择 PR/保留分支，那是待合回状态，不是 build-close 完成。
 - **形态自适应**：`/pmai-build` 可以直接在 main 上建，也可以开隔离环境建；`/pmai-build-close` 只在 build 经 PM 验收后使用，并根据 build 合同 `mode` 决定是否合并。只完成讨论但暂不实现时，不需要 build-close。
@@ -292,6 +314,7 @@ merge 回 main（具体的 merge / 删 worktree / 删分支编排由 lifecycle �
 - **不再移目录到 `closed/`**：v2 取消 `requirements/active|closed/` 树；`/pmai-build-close` 没有"整目录搬家"步，只做归位 + merge。
 - **四类分流 @读 `_shared/record-routing.md`**（单一真相源，已反转回 3 家）；理路门槛 + 冻结落点 @读 `_shared/decision-record.md`（`docs/decisions/` 冻结档）。三者口径已统一，无"以本 skill 为准"例外。
 - **merge 终态**：合回主线后不可回退；merge 前任何 PM 决策门没拿到答案 → STOP，禁止 merge。
+- **不因 main 无关 WIP 阻塞**：消费仓 main 上允许有其它未提交改动；close 不能提交、清理或要求先处理这些无关 WIP。只有 Git 判定会覆盖同一路径或发生真实冲突时才停止。
 - **PM 话术纪律**（F-G4）：回执/提议只用 PM 视图语言，不出现"四类分流 / 出口①②③④ / 派生 4 环 / 三身份 / supersede / 一致性扫描 / manifest / featured"等内部词。
 - **不删代码**：瘦身 = 缩小活跃集；本 skill 是 close-work 的活跃演进，`close-work` 转 dormant 保留不删。
 ```

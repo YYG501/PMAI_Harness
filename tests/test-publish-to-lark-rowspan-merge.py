@@ -5,7 +5,7 @@
 锚点 cell + 清空原 cell + 调 merge_table_cells 实现"合并为一个单元格"语义)。
 
 运行:
-    cd ${REPO_ROOT}
+    cd <PM-AI-Workflow 仓库路径>
     python3 tests/test-publish-to-lark-rowspan-merge.py -v
 """
 

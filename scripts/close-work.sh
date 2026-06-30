@@ -172,7 +172,10 @@ if [ "$BUILD_MODE" = "worktree" ]; then
     echo "🔙 已切到 main 分支"
   fi
 
-  if ! git merge "$WORK_BRANCH" --no-edit -m "close: $WORK_ID" 2>&1; then
+  # 消费仓 main 上可能有其它 WIP。不要因为无关未提交改动阻塞 close；
+  # 用 autostash 临时挪开 tracked WIP，merge 后自动放回。若路径真实冲突，
+  # git merge 仍会失败，下面回滚 work branch 的清状态提交。
+  if ! git merge --autostash "$WORK_BRANCH" --no-edit -m "close: $WORK_ID" 2>&1; then
     # merge 失败：先 abort merge，再把 work branch reset 回 pre-close，避免半关闭状态
     git merge --abort 2>/dev/null || true
     if ! git -C "$WORK_WORKTREE" reset --hard "$PRE_CLOSE_HEAD" 2>&1; then

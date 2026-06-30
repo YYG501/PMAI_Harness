@@ -1,6 +1,6 @@
 # §七 章节顺序约束（按文档类型）
 
-> 本文件是 [`PM-VIEW-RULES.md`](../PM-VIEW-RULES.md) §七 的物理拆分。配套阅读：主文件 §五（功能清单格式）/ §六（关键产品决策格式）。
+> 本文件是 [`PM-VIEW-RULES.md`](../PM-VIEW-RULES.md) §七 的物理拆分。配套阅读：主文件 §五（功能需求写法选择与表格 preset）/ §六（关键产品决策格式）。
 
 ## `docs/modules/<模块>/discussion.md`
 
@@ -35,6 +35,6 @@
 7. 边界与非目标
 8. 参考材料
 
-## PRD 体例功能型文档
+## PRD 体例功能型规格文档
 
-PRD 是按需产物，由 `/pmai-prd-writing` 定义章节，本文件不重复约束。
+PRD 是按需产物，由 `/pmai-spec-writing` 定义章节，本文件不重复约束。

@@ -1,7 +1,7 @@
 ---
 name: pmai-doc-writing
 description: |
-  产品方向与介绍型文档成文器：负责产品方向 memo、产品定位说明、产品介绍、产品功能清单、产品优势说明、一页纸、对外汇报材料等表达型材料，默认生成 Markdown 到 docs/deliverables/。PRD、功能需求、功能描述、功能规格、功能评审稿不走本 skill，改走 /pmai-prd-writing。
+  产品方向与介绍型文档成文器：负责产品方向 memo、产品定位说明、产品介绍、产品功能清单、产品优势说明、一页纸、对外汇报材料等表达型材料，默认生成 Markdown 到 docs/deliverables/。PRD、功能需求、功能描述、功能规格、功能评审稿不走本 skill，改走 /pmai-spec-writing。
   触发词：产品方向 / 产品定位 / 产品介绍 / 产品功能清单 / 产品优势说明 / 一页纸 / 对外材料 / 汇报材料 / 介绍文档。
 ---
 
@@ -9,7 +9,7 @@ description: |
 
 > **这是什么**：写产品方向 / 产品叙事 / 介绍型材料的入口。它面向"把产品判断讲清楚"，不是"把功能规格定下来"。
 >
-> **边界**：PM 要 PRD、功能需求、功能描述、功能规格、功能评审稿时，直接转 `/pmai-prd-writing`。这些是功能型文档，落 `docs/modules/<按内容命名>.md`，不放 `docs/deliverables/`。
+> **边界**：PM 要 PRD、功能需求、功能描述、功能规格、功能评审稿时，直接转 `/pmai-spec-writing`。这些是功能型规格文档，落 `docs/modules/<按内容命名>.md`，不放 `docs/deliverables/`。
 
 ## 产物
 
@@ -51,7 +51,7 @@ description: |
 - `PRODUCT-STATE.md`：当前产品现状，只取"现在做到哪、哪些是真系统哪些是 mock"。
 - `PRODUCT.md`：定位、用户画像、业务术语表。
 - `PRODUCT-RULES.md`：跨模块产品规则，避免介绍材料和已定规则冲突。
-- `docs/modules/INDEX.md`：需要讲具体能力时，从这里挑相关模块 / 功能型文档。
+- `docs/modules/INDEX.md`：需要讲具体能力时，从这里挑相关模块 / 功能型规格文档。
 - 相关 `docs/modules/<模块>/spec.md` / `decisions.md`：只读和本材料相关的模块。
 - `docs/decisions/`：只有写产品方向、定位、重大取舍时才按索引/文件名点读相关冻结档；默认不扫全目录全文。
 - `TODO.md`：只有写路线、下一步、阶段重点时读取。
@@ -73,7 +73,7 @@ description: |
 - 对外说明 / 老板汇报 / 客户沟通材料
 - 查看某份介绍型材料并整体优化结构、内容、文风
 
-如果 PM 的目标是以下任一类，停止本 skill，转 `/pmai-prd-writing`：
+如果 PM 的目标是以下任一类，停止本 skill，转 `/pmai-spec-writing`：
 
 - PRD
 - 功能需求
@@ -199,7 +199,7 @@ PM 没说清时，只问必要问题：
 
 PM 说"帮我看某个文件，整体优化结构、内容、文风"时，按这条走：
 
-1. 先判断文档类型。功能型文档转 `/pmai-prd-writing`；介绍型 / 产品方向材料留在本 skill。
+1. 先判断文档类型。功能型规格文档转 `/pmai-spec-writing`；介绍型 / 产品方向材料留在本 skill。
 2. 读原文和最小真相源。
 3. 先给三类诊断：
    - 结构：主张是否前置、章节是否重复、读者路径是否顺。
@@ -248,6 +248,6 @@ PM 说"帮我看某个文件，整体优化结构、内容、文风"时，按这
 ## Rules
 
 - 本 skill 不写 `docs/modules/<模块>/discussion.md` / `decisions.md` / `spec.md`。
-- 本 skill 不写 `docs/modules/<按内容命名>.md` 的功能型文档；那些走 `/pmai-prd-writing`。
+- 本 skill 不写 `docs/modules/<按内容命名>.md` 的功能型规格文档；那些走 `/pmai-spec-writing`。
 - 本 skill 默认产出 Markdown；docx / PDF 是后续转换动作，不在这里手写二进制文件。
-- `docs/deliverables/` 是对外交付物 / 汇报材料 / 独立评审文档的容器，但"独立评审文档"只有在它是介绍型/表达型材料时才放这里；功能范围评审稿仍归 `/pmai-prd-writing`。
+- `docs/deliverables/` 是对外交付物 / 汇报材料 / 独立评审文档的容器，但"独立评审文档"只有在它是介绍型/表达型材料时才放这里；功能范围评审稿仍归 `/pmai-spec-writing`。

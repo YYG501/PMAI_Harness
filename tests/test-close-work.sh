@@ -6,6 +6,7 @@ source "$SCRIPT_DIR/helpers/assert.sh"
 source "$SCRIPT_DIR/helpers/fixture.sh"
 
 CLOSE_WORK="$FRAMEWORK_ROOT/scripts/close-work.sh"
+BUILD_CLOSE_SKILL="$FRAMEWORK_ROOT/skills/build-close/SKILL.md"
 
 # close-work（方案 A）后真相源是 docs/modules/<模块>/。
 # work_dir = docs/modules/<分支>（fixture_create_work 现返回模块目录）。
@@ -350,6 +351,61 @@ test_reject_if_work_worktree_has_unrelated_dirty_changes() {
   fixture_teardown
 }
 
+test_allows_unrelated_dirty_changes_on_main() {
+  start_test "I-CR13 allow unrelated dirty changes on main during worktree close"
+  fixture_setup
+
+  work_dir=$(fixture_create_work "work-001" "test" 4)
+
+  (
+    cd "$FIXTURE_DIR"
+    echo "main history" > main-history.txt
+    git add main-history.txt
+    git commit -q -m "main: unrelated history"
+    echo "staged local wip" > local-staged.txt
+    git add local-staged.txt
+    echo "untracked local wip" > local-untracked.txt
+  )
+
+  if ! (cd "$FIXTURE_DIR" && bash "$CLOSE_WORK" "$work_dir") >/tmp/out.$$ 2>/tmp/err.$$; then
+    _fail "close-work should allow unrelated dirty changes on main"
+    echo "--- stdout ---" >&2; cat /tmp/out.$$ >&2
+    echo "--- stderr ---" >&2; cat /tmp/err.$$ >&2
+    rm -f /tmp/out.$$ /tmp/err.$$; fixture_teardown; return
+  fi
+
+  status=$(git -C "$FIXTURE_DIR" status --short --untracked-files=all)
+  if ! printf '%s\n' "$status" | grep -q '^A  local-staged.txt$'; then
+    _fail "staged local WIP should remain staged after close"
+    printf '%s\n' "$status" >&2
+    rm -f /tmp/out.$$ /tmp/err.$$; fixture_teardown; return
+  fi
+  if ! printf '%s\n' "$status" | grep -q '^?? local-untracked.txt$'; then
+    _fail "untracked local WIP should remain untracked after close"
+    printf '%s\n' "$status" >&2
+    rm -f /tmp/out.$$ /tmp/err.$$; fixture_teardown; return
+  fi
+  if git -C "$FIXTURE_DIR" show HEAD:local-staged.txt >/dev/null 2>&1; then
+    _fail "staged local WIP should not be included in close merge commit"
+    rm -f /tmp/out.$$ /tmp/err.$$; fixture_teardown; return
+  fi
+
+  pass_test
+  rm -f /tmp/out.$$ /tmp/err.$$
+  fixture_teardown
+}
+
+test_build_close_skill_documents_contract_and_wip_rules() {
+  start_test "build-close skill documents atomic contract completion and main WIP handling"
+
+  assert_file_contains "$BUILD_CLOSE_SKILL" "build-contract.py\" complete" "build-close should use atomic contract completion" || return
+  assert_file_contains "$BUILD_CLOSE_SKILL" '禁止并行跑 `commit` / `accept`' "build-close should forbid split contract writes" || return
+  assert_file_contains "$BUILD_CLOSE_SKILL" "主仓 main 上允许保留其它未提交 WIP" "build-close should allow unrelated main WIP" || return
+  assert_file_contains "$BUILD_CLOSE_SKILL" "autostash" "build-close should document autostash merge behavior" || return
+  assert_file_contains "$BUILD_CLOSE_SKILL" "PM 窗口只报阶段结果" "build-close should keep command chatter out of PM view" || return
+  pass_test
+}
+
 # =================================================
 # Run all tests
 # =================================================
@@ -358,6 +414,8 @@ test_worktree_contract_rejects_missing_worktree
 test_reject_missing_build_contract
 test_reject_when_cwd_inside_work_worktree
 test_reject_if_work_worktree_has_unrelated_dirty_changes
+test_allows_unrelated_dirty_changes_on_main
+test_build_close_skill_documents_contract_and_wip_rules
 test_reject_on_merge_conflict_no_partial_state
 test_archive_committed_before_merge
 test_happy_path_close_work

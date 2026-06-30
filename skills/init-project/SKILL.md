@@ -120,7 +120,7 @@ description: |
      - 选项 ① "用 `<DEFAULT_PATH>`<DEFAULT_NOTE>"（推荐）
      - 选项 ② "换别的路径"（PM 选 ② 再补一道 AskUser 让 PM 给绝对路径）
 
-   **PM 在 cwd 直接 init 的常见场景**：PM `cd /Users/x/Projects/my-app && claude` → cwd = `/Users/x/Projects/my-app` → 走 else 分支 default = cwd → step 3 检查 cwd 内容。空目录走全新项目；资料目录用 `--allow-existing` 接住；已有源码自动进入已有项目接入。
+   **PM 在 cwd 直接 init 的常见场景**：PM 先 `cd <target-project-dir>` 再启动 Claude / Codex → cwd = `<target-project-dir>` → 走 else 分支 default = cwd → step 3 检查 cwd 内容。空目录走全新项目；资料目录用 `--allow-existing` 接住；已有源码自动进入已有项目接入。
 
 3. **AI 主动诊断 + 自动分流**（PM 既然在 cwd 启 claude → AI 直接看；不要给“init / audit / 改方案”三选菜单）：
 

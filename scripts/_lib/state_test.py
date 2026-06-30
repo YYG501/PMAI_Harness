@@ -1,7 +1,7 @@
 """state（前 task_parser）双兼容单测。
 
 运行：
-    cd ${REPO_ROOT}
+    cd <PM-AI-Workflow 仓库路径>
     PYTHONPATH=scripts python3 -m unittest scripts._lib.state_test -v
 
 原 task_parser 兼容读取 + work state 扩展 API 单测。

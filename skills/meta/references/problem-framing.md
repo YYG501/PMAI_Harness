@@ -14,7 +14,7 @@
 6. **先挑战前提，再给方向**：任何推荐前都要点名最危险前提，并说明什么证据会推翻它。
 7. **Alternatives 必须出现**：至少 2 个可比较方向。没有替代方向，就不是判断，只是附和。
 8. **Coverage Check 后再收束**：输出前确认“有没有没问到但会改变判断的点”。没确认，不做最终结论。
-9. **降回下一步**：结束时必须指向 `/pmai-design`、`/pmai-doc-writing`、`/pmai-prd-writing`、`/pmai-build` 或停住，不停在高空讨论。
+9. **降回下一步**：结束时必须指向 `/pmai-design`、`/pmai-doc-writing`、`/pmai-spec-writing`、`/pmai-build` 或停住，不停在高空讨论。
 
 ---
 

@@ -135,7 +135,7 @@ design-card 不是通用逻辑，它是信息密集卡沉淀出来的一套特�
 
 ## 四、成文和收口
 
-`/pmai-design` 只负责把问题、结构和 PM 决策讨论清楚；`spec.md` 的成文由 `/pmai-prd-writing` 模块规格模式执行。
+`/pmai-design` 只负责把问题、结构和 PM 决策讨论清楚；`spec.md` 的成文由 `/pmai-spec-writing` 模块规格目标执行。
 
 成文前必须满足：
 

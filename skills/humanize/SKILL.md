@@ -1,7 +1,7 @@
 ---
 name: pmai-humanize
 description: |
-  文字润色与去 AI 化：识别并修正中文文档中的冗余、AI 腔、术语堆砌与表达不畅，使其清晰易读。保留独立入口，也可被 /pmai-prd-writing 和 /pmai-doc-writing 作为最后一遍文字收口调用。仅调整表达，不负责结构重组和内容补差。
+  文字润色与去 AI 化：识别并修正中文文档中的冗余、AI 腔、术语堆砌与表达不畅，使其清晰易读。保留独立入口，也可被 /pmai-spec-writing 和 /pmai-doc-writing 作为最后一遍文字收口调用。仅调整表达，不负责结构重组和内容补差。
   触发词：说人话 / 打磨文字 / 润色 / 去 AI 味 / 去黑话 / 读着别扭。
 ---
 
@@ -9,7 +9,7 @@ description: |
 
 > **它是什么**：一个文字层的纠错器。把文档里读着像机器写的、绕的、堆黑话的地方挑出来，改成简要易懂、一遍就懂的人话。
 > **入口保留**：PM 仍然可以直接用 `/pmai-humanize <文件>` 做标注、改写或就地改；它不是废弃入口。
-> **它不做什么**：不加新内容、不改信息结构、不改事实。**只动表达，不动信息**——一旦发现要改的其实是结构（某段该不该在、两件事该不该合）或内容补差（缺规则、缺范围、缺证据），停下来转对应写作入口：功能型文档走 `/pmai-prd-writing`，产品方向 / 介绍型材料走 `/pmai-doc-writing`。
+> **它不做什么**：不加新内容、不改信息结构、不改事实。**只动表达，不动信息**——一旦发现要改的其实是结构（某段该不该在、两件事该不该合）或内容补差（缺规则、缺范围、缺证据），停下来转对应写作入口：功能型规格文档走 `/pmai-spec-writing`，产品方向 / 介绍型材料走 `/pmai-doc-writing`。
 > **金标准**：改完读起来像产品同事当面跟你讲，不像咨询报告 / 白皮书 / 营销稿。
 
 ## 治哪四样（PM 的原话）
@@ -132,7 +132,7 @@ fi
 
 - `/pmai-humanize` 是**表达层入口**。PM 只想"说人话 / 去 AI 味 / 润色 / 改顺"时，可以单独使用。
 - PM 说"帮我看某个文件，整体优化结构、内容、文风"时，**不要优先走本 skill**。先按文档类型分流：
-  - PRD、功能需求、功能描述、功能规格、功能评审稿、模块 `spec.md` → `/pmai-prd-writing`
+  - PRD、功能需求、功能描述、功能规格、功能评审稿、模块 `spec.md` → `/pmai-spec-writing`
   - 产品方向、产品介绍、功能清单、优势说明、一页纸、汇报材料 → `/pmai-doc-writing`
-- `/pmai-prd-writing` 和 `/pmai-doc-writing` 负责结构重组、内容补差和文档类型判断；它们在最后一遍文字收口时可调用本 skill 的规则。
-- pattern 目录与 prd-writing 的禁用清单 / 风格卡同源：`references/patterns.md` 引用 `skills/prd-writing/references/writing-rules.md`（8 类禁用 + 简要易懂语体）和 `skills/_shared/pm-view/writing-rules.md`（§3.12 工程黑话词典）为权威，不另立矛盾的一套。
+- `/pmai-spec-writing` 和 `/pmai-doc-writing` 负责结构重组、内容补差和文档类型判断；它们在最后一遍文字收口时可调用本 skill 的规则。
+- pattern 目录与 spec-writing 的禁用清单 / 风格卡同源：`references/patterns.md` 引用 `skills/spec-writing/references/writing-rules.md`（8 类禁用 + 简要易懂语体）和 `skills/_shared/pm-view/writing-rules.md`（§3.12 工程黑话词典）为权威，不另立矛盾的一套。

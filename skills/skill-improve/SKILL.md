@@ -11,7 +11,7 @@ description: |
 ## When To Use
 
 **模式 A（显式反馈文件）**：PM 已写好反馈文件，显式调用：
-- `/pmai-skill-improve prd-writing skill-feedback/prd-writing-2026-04-27.md`
+- `/pmai-skill-improve spec-writing skill-feedback/spec-writing-2026-04-27.md`
 - 或反馈文件在业务仓（如 `ExampleConsumerApp/<skill>-skill-feedback.md`），参数给路径，本 skill 自动归档
 
 **模式 B（会话内直接反馈）**：PM 在会话里直接说某 skill 有问题（"这里不对"、"这个 skill 应该…"、"每次跑 X skill 都会出现…"），AI 主动识别并走本 skill 流程，无需 PM 先写反馈文件。
@@ -92,7 +92,7 @@ ls "$SKILL_DIR/references/" 2>/dev/null && cat "$SKILL_DIR/references/"*.md
 
 **禁止**：
 - AI 替决"这条反馈不合理，跳过" — 反馈是 PM 经验，AI 不能替决
-- 把所有 gap 默认全做 — 部分 gap 可能跟其它 skill / 工具职责重叠（如 prd-writing 反馈四里"AI 自动合并表格 cell"实际归 publish-to-lark），PM 决定归位
+- 把所有 gap 默认全做 — 部分 gap 可能跟其它 skill / 工具职责重叠（如 spec-writing 反馈四里"AI 自动合并表格 cell"实际归 publish-to-lark），PM 决定归位
 
 ### 步骤 5：改 SKILL.md / references
 
@@ -139,7 +139,7 @@ PM 反馈来源：skill-feedback/<skill-name>-<YYYY-MM-DD>.md
 
 2. **照单全收** —— PM 反馈 9 大类 → AI 改 9 处 → 与现状重复 5 处。**对账永远先于改动**。
 
-3. **跨 skill 改动不归位** —— 反馈写"prd-writing 应该自动合并表格 cell"，但实际能力归 publish-to-lark。AI 应识别归位，不硬塞 prd-writing。
+3. **跨 skill 改动不归位** —— 反馈写"spec-writing 应该自动合并表格 cell"，但实际能力归 publish-to-lark。AI 应识别归位，不硬塞 spec-writing。
 
 4. **归档不带对账** —— 光把反馈文件复制到 `skill-feedback/`、不在文件顶部加消化对账表。未来回看的人 → 重新做对账。
 

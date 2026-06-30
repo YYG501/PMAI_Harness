@@ -67,7 +67,7 @@ test_misplaced_blocked() {
     rm -rf "$tmp"; return
   fi
   if ! echo "$out" | grep -q 'docs/modules/<按内容命名>.md'; then
-    _fail "拦下提示缺功能型文档归位路径，输出：$out"
+    _fail "拦下提示缺功能型规格文档归位路径，输出：$out"
     rm -rf "$tmp"; return
   fi
   rm -rf "$tmp"

@@ -27,6 +27,19 @@ def meta_path(module_dir: Path) -> Path:
     return module_dir / ".work-meta.json"
 
 
+def default_meta(module_dir: Path, branch: str | None = None) -> dict:
+    module_name = module_dir.name
+    branch_value = branch.strip() if branch else ""
+    return {
+        "id": f"work-{module_name}",
+        "name": module_name,
+        "branch": branch_value,
+        "stage": 1,
+        "status": "active",
+        "created_at": now_iso(),
+    }
+
+
 def read_meta(module_dir: Path) -> dict:
     path = meta_path(module_dir)
     if not path.exists():
@@ -62,7 +75,12 @@ def validate_mode_executor(mode: str, executor: str | None) -> None:
 
 def cmd_start(args: argparse.Namespace) -> None:
     module_dir = Path(args.module_dir)
-    meta = read_meta(module_dir)
+    path = meta_path(module_dir)
+    if path.exists():
+        meta = read_meta(module_dir)
+    else:
+        module_dir.mkdir(parents=True, exist_ok=True)
+        meta = default_meta(module_dir, args.branch)
 
     mode = args.mode
     executor = args.executor
@@ -132,6 +150,22 @@ def cmd_accept(args: argparse.Namespace) -> None:
     print(json.dumps(build, ensure_ascii=False))
 
 
+def cmd_complete(args: argparse.Namespace) -> None:
+    module_dir = Path(args.module_dir)
+    meta = read_meta(module_dir)
+    build = require_build(meta)
+    commit = optional(args.implementation_commit)
+    if not commit:
+        raise SystemExit("必须提供 implementation_commit")
+    accepted_at = optional(args.accepted_at) or now_iso()
+    build["implementation_commit"] = commit
+    build["implementation_committed_at"] = now_iso()
+    build["pm_accepted_at"] = accepted_at
+    meta["build"] = build
+    write_meta(module_dir, meta)
+    print(json.dumps(build, ensure_ascii=False))
+
+
 def cmd_validate_close(args: argparse.Namespace) -> None:
     module_dir = Path(args.module_dir)
     meta = read_meta(module_dir)
@@ -179,6 +213,12 @@ def build_parser() -> argparse.ArgumentParser:
     accept.add_argument("module_dir")
     accept.add_argument("--accepted-at")
     accept.set_defaults(func=cmd_accept)
+
+    complete = sub.add_parser("complete", help="record implementation commit and PM acceptance atomically")
+    complete.add_argument("module_dir")
+    complete.add_argument("--implementation-commit", required=True)
+    complete.add_argument("--accepted-at")
+    complete.set_defaults(func=cmd_complete)
 
     validate = sub.add_parser("validate-close", help="validate that build-close may proceed")
     validate.add_argument("module_dir")

@@ -15,20 +15,20 @@ description: |
 
 | 调用 skill | 调用位置 | 输入文件 |
 |---|---|---|
-| `/pmai-build-close` | 术语回写步骤 | 涉及模块 `discussion.md` / `decisions.md` / `spec.md` + 按需功能型文档 |
+| `/pmai-build-close` | 术语回写步骤 | 涉及模块 `discussion.md` / `decisions.md` / `spec.md` + 按需功能型规格文档 |
 
 **禁止位置**：
 - `design` 刚开始：PM 修辞密度高、业务词还没沉淀
 - `/pmai-design` 探索中：业务词还在变
-- `prd-writing` 写功能型文档：功能型文档是评审 / build 产物，不直接升级长期术语
+- `spec-writing` 写功能型规格文档：功能型规格文档是评审 / build 产物，不直接升级长期术语
 - 写实现深水区 / 技术约束内容：工程层允许技术词，误报率高
 
 ## 临时词典 vs 长期词典
 
 | 层级 | 文件 | 谁写 | 谁读 |
 |---|---|---|---|
-| **本次工作临时词典** | 模块 `discussion.md` / `decisions.md` 或功能型文档 §三 名词解释 | design / prd-writing | build / build-close 按需读 |
-| **跨工作长期词典** | `PRODUCT.md ## 业务术语表` | `/pmai-build-close` detector + PM 确认 → patch | design / build / prd-writing 必读 |
+| **本次工作临时词典** | 模块 `discussion.md` / `decisions.md` 或功能型规格文档 §三 名词解释 | design / spec-writing | build / build-close 按需读 |
+| **跨工作长期词典** | `PRODUCT.md ## 业务术语表` | `/pmai-build-close` detector + PM 确认 → patch | design / build / spec-writing 必读 |
 
 两份词典在 build 阶段是**并集读**：PRODUCT 是已沉淀的稳定基线，模块 discussion/decisions 或 PRD §三是本次新引入还未升级的临时词。`/pmai-build-close` 时 detector 把真稳定下来的词 promote 到长期词典。
 

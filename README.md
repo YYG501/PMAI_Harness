@@ -6,7 +6,7 @@ PM AI 工作流框架的**生成器**仓库。
 
 产品定位真相源：[`PRODUCT.md`](./PRODUCT.md)。
 
-> 旧仓（参考用，不复用流程）：`${LEGACY_REPO_ROOT}`
+> 旧仓（参考用，不复用流程）：`<旧版 PMAI 仓库路径>`
 
 ---
 
@@ -62,7 +62,7 @@ PMAI 不和 Claude Design、design-html 或 Claude Code 比"谁更快生成第�
 # 日常循环（模块规格先行，必要时再建）
 
 /pmai-design "批量审核"    讨论清楚，写模块三件套：discussion.md / decisions.md / spec.md
-/pmai-build 批量审核       大需求才建：对着 spec.md 或功能型文档在 prototype/ 里实现，可选隔离环境和执行器
+/pmai-build 批量审核       大需求才建：对着 spec.md 或功能型规格文档在 prototype/ 里实现，可选隔离环境和执行器
 /pmai-build-close                build 验收后收尾：提交/合并实现改动，对齐现状 / 规则 / 模块规格
 /pmai-status          产品现状视图（产品长什么样 / 当前模块做到哪 / 下一步）
 ```
@@ -280,8 +280,8 @@ PMAI 走纯全局：每台要用的机器各自 `pmai install` 一次（全局�
 | Skill | 用途 |
 |---|---|
 | `/pmai-status` | **续跑辅助**：读当前阶段做下一步（设计 → build → 复审 → 沉淀），先说再动 |
-| `/pmai-build` | 对着模块 `spec.md` 或功能型文档在 `prototype/` 建；PM 选择执行器和是否开隔离环境 |
-| `/pmai-prd-writing` | 功能型文档成文器：生成/修改模块规格；PRD、功能需求、功能描述、功能规格、功能评审稿都走这里 |
+| `/pmai-build` | 对着模块 `spec.md` 或功能型规格文档在 `prototype/` 建；PM 选择执行器和是否开隔离环境 |
+| `/pmai-spec-writing` | 功能型规格文档成文器：生成/修改模块规格；PRD、功能需求、功能描述、功能规格、功能评审稿都走这里 |
 | `/pmai-doc-writing` | 介绍型文档成文器：产品介绍、产品功能清单、优势说明、一页纸、汇报材料，默认落 `docs/deliverables/` |
 
 ### 收尾 / 放弃
@@ -297,7 +297,8 @@ PMAI 走纯全局：每台要用的机器各自 `pmai install` 一次（全局�
 | Skill | 用途 |
 |---|---|
 | `/pmai-meta` | 讨论前对焦与压力测试：没靶子时找本质 / 判断标准 / 根因，有靶子时用少量多视角找盲区、冲突和风险 |
-| `/pmai-publish-to-lark` | 把文档发布到飞书 |
+| `/pmai-lark-sync` | 本地规格与飞书在线文档安全同步：先判断真相源，再选择精细修改、覆盖发布、飞书回拉或只 diff |
+| `/pmai-publish-to-lark` | 把本地 markdown 整篇发布 / 覆盖到飞书 |
 
 ### 框架维护（PM 操作 PMAI 本身）
 

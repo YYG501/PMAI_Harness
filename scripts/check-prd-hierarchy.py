@@ -1,7 +1,10 @@
 #!/usr/bin/env python3
-"""check-prd-hierarchy.py: 扫描 prd.md 的层级 + 描述风格 + 表格结构违规。
+"""check-prd-hierarchy.py: 扫描 PRD 体例 / 4 列功能表 preset 的层级 + 描述风格 + 表格结构违规。
 
-类 1 — §六 层级（按 skills/prd-writing/SKILL.md「层级划分原则」+ UI 词汇黑名单）：
+本脚本不作为模块 spec.md、规则收口、状态分类、流程叙述或字段口径文档的通用 lint；
+这些文档先按 spec-writing 的功能需求写法选择器决定组织方式。
+
+类 1 — §六 层级（按 skills/spec-writing/SKILL.md「层级划分原则」+ UI 词汇黑名单）：
 二级功能应是用户动作组（列表 / 搜索 / 筛选 / 操作 / 创建 / 导入 / 详情）；
 三级功能应是动作子项，命名以动词锚定（分配 / 调整 / 撤销 / 启用 / 吊销 / 查看）。
 含 UI 容器词（弹窗 / 面板 / 视图 / 视角 / 入口 / 字段 / 段 / 区块 / 菜单 / 顶部 /
@@ -19,7 +22,7 @@
 第 2 条起的前 3 列留空（视觉等同 rowspan，纯 markdown 也能渲染）。
 
 用法:
-    python3 scripts/check-prd-hierarchy.py <prd.md 路径>
+    python3 scripts/check-prd-hierarchy.py <PRD 体例或 4 列功能表文档路径>
 
 退出码:
     0 = 无违规
@@ -368,7 +371,7 @@ def scan(path: Path) -> int:
             hits_str = " | ".join(v["hits"])
             print(f'  L{v["line"]:>4}  {v["level"]}: "{v["value"]}"  ← {hits_str}')
         print()
-        print("修正方向 (详见 skills/prd-writing/SKILL.md「层级划分原则」):")
+        print("修正方向 (详见 skills/spec-writing/SKILL.md「层级划分原则」):")
         print("  · 二级功能 = 用户动作组（列表 / 搜索 / 筛选 / 操作 / 创建 / 导入 / 详情）")
         print("  · 三级功能 = 动作子项，命名以动词锚定（分配 / 调整 / 撤销 / 启用 / 吊销 / 查看）")
         print("  · 角色视角差异 / UI 视图切换 / UI 形态规则 / 弹窗实现细节 → 写进需求描述列编号项")

@@ -11,7 +11,7 @@
 
 ## 当前活跃模型
 
-- 用户入口：`/pmai-init-project` → `/pmai-design` → `/pmai-build` → `/pmai-build-close`，旁路入口为 `/pmai-status`、`/pmai-direction`、`/pmai-record`、`/pmai-build-cancel`、`/pmai-quick-fix`、`/pmai-prd-writing`、`/pmai-doc-writing`、`/pmai-meta`（讨论换高度：升维 / 第一性原理，`/pmai-design` 段①②按需调）。
+- 用户入口：`/pmai-init-project` → `/pmai-design` → `/pmai-build` → `/pmai-build-close`，旁路入口为 `/pmai-status`、`/pmai-direction`、`/pmai-record`、`/pmai-build-cancel`、`/pmai-quick-fix`、`/pmai-spec-writing`、`/pmai-doc-writing`、`/pmai-meta`（讨论换高度：升维 / 第一性原理，`/pmai-design` 段①②按需调）。
 - 不再使用：`/pmai-next`、`/pmai-new-req`、`/pmai-req-stage-gate`、`/pmai-close`、`/pmai-strategy`、`/pmai-codebase-audit`、`/pmai-deposit`、`/pmai-cancel`、旧 task 状态机。
 - 模块真相源：`docs/modules/<模块>/discussion.md`、`decisions.md`、`spec.md`。
 - 临时工作状态：`docs/modules/<模块>/.work-meta.json`。该文件只表示“正在做”，build-close/build-cancel 后删除，不留下 `closed` / `cancelled` 占位。
