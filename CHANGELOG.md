@@ -20,6 +20,8 @@ PM-AI-Workflow 生成器仓的演进记录。本文件**只记影响下游业务
 
 ### 框架瘦身改造（吸收 ExampleAgentProject 设计方法）—— 进行中
 
+- `refactor(mockups)`: **`/pmai-mockup` 改为 PMAI 编排 + gstack 视觉探索 + 本地看版接回**。PM 反馈 mockup 发散性不够，且内置 codex 出图路径不稳定、容易把 PMAI 拖成设计工作台。改动：① mockup 生成前先列几条产品设计方向，要求方向在结构 / 密度 / 路径 / 气质上真不同，并让 PM 先拍要画哪些方向；② 视觉气质探索优先调 gstack `/design-shotgun`，但 gstack 只负责生成和反馈，最终必须接回 PMAI `mockups/`；③ 新增 `scripts/import-mockup-variants.py`，把 gstack designs 目录或 PM 上传图片复制进 `mockups/`、更新清单并供看版生成器展示；④ 暂时移除 `/pmai-mockup` 内置图片生成能力，不再在 skill 中调用 `scripts/gen-mockup-image.sh` / codex image_gen；⑤ 允许 PM 上传截图 / 设计图作为设计素材进入看版，但不绕过 `/pmai-design` 直接变成规格事实。
+
 - `feat(lark-sync)`: **新增 `/pmai-lark-sync`，把本地规格与飞书在线文档同步做成安全分流入口**。飞书文档不再默认等同发布缓存：skill 先判断真相源和同步方向，再选择精细修改飞书、整篇覆盖发布、飞书回拉本地或只 diff。精细修改复用 `lark-doc-edit` 的块级编辑和回读方法；整篇覆盖继续调用 `/pmai-publish-to-lark`；飞书回拉只保留本地追踪 frontmatter 并以飞书正文为准。`/pmai-publish-to-lark` 定位收窄为整篇发布 / overwrite 执行能力，README、doctor 清单和 spec-writing 飞书出口同步。
 
 - `fix(build)`: **收顺 `/pmai-build` 的 PM 视图和执行器失败恢复**。PM 反馈真实 build 里连续被“固定设计上下文”、缺 `.work-meta.json`、执行器卡住、kill 进程、dev server 参数试错和浏览器失败刷屏打断。根因是 build 把内部状态、执行器排障和工具细节当成 PM 决策暴露。改动：① 构建前提示从“固定设计上下文”改为“保存本次建造依据”，只把本模块规格 / 决策 / 已确认看版做成建造起点；② `build-contract.py start` 在模块和功能锚点明确时自动补最小 `.work-meta.json`，不再要求 PM 额外确认内部状态文件；③ 执行器选择改成“独立建造工具”，明确 Codex 是另起 CLI、不是当前对话；④ `claude-code` adapter 增加状态目录、heartbeat、退出码文件和超时控制，build 流程要求 PM 窗口只报阶段摘要；⑤ 执行器失败默认保留半成品，由 PM 选接手补完 / 换工具 / 丢弃重来，禁止自动 `git restore .` / `git clean -fd` 清空落盘改动；⑥ dev server 命令改为以 `.pm-workflow/config.yml` 的 `{port}` 占位为准，不临场猜框架参数；⑦ build skill 路径口径改为“运行时变量 + 仓内相对路径”，禁止在框架规则、模板、prompt 或业务代码里写死 `/Users/...` 这类机器绑定路径。

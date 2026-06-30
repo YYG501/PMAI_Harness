@@ -21,6 +21,7 @@ source "$SCRIPT_DIR/helpers/assert.sh"
 
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 GEN="$REPO_ROOT/scripts/gen-mock-board.py"
+IMPORT="$REPO_ROOT/scripts/import-mockup-variants.py"
 
 # 每个场景用独立临时 repo 根；跑完清理
 _make_repo() {
@@ -293,6 +294,112 @@ test_mockup_skill_aligns_existing_ui() {
 }
 
 # -----------------------------------------------------------------
+# Scenario 8: gstack design-shotgun 输出可接回 PMAI mockups/
+# -----------------------------------------------------------------
+test_import_gstack_shotgun_results() {
+  start_test "gstack 输出 → 复制进 mockups + 登记挑定方向"
+  local repo; repo=$(_make_repo)
+  cp "$REPO_ROOT/templates/mockups-manifest.json.tmpl" "$repo/mockups/manifest.json"
+
+  local source; source=$(mktemp -d)
+  printf 'fake-png-a' > "$source/variant-A.png"
+  printf 'fake-png-b' > "$source/variant-B.png"
+  cat > "$source/feedback.json" <<'JSON'
+{
+  "preferred": "B",
+  "ratings": {"A": 3, "B": 5},
+  "comments": {"B": "信息密度更合适"},
+  "overall": "选 B，保留右侧详情"
+}
+JSON
+  cat > "$source/approved.json" <<'JSON'
+{"approved_variant": "B", "screen": "pipeline"}
+JSON
+  local concepts="$source/concepts.json"
+  cat > "$concepts" <<'JSON'
+{
+  "A": {"title": "方案 A：低风险贴合", "explores": "沿用现有卡片结构", "good_parts": "落地风险低"},
+  "B": {"title": "方案 B：任务流优先", "explores": "先看任务流再展开详情", "good_parts": "处理路径更清楚"}
+}
+JSON
+
+  local out; out=$(python3 "$IMPORT" \
+    --repo "$repo" \
+    --source-dir "$source" \
+    --requirement "商机工作台" \
+    --round "第一轮" \
+    --concepts "$concepts" \
+    --dest-slug "deal-workspace" 2>&1)
+  local rc=$?
+  assert_equal "0" "$rc" "import should exit 0" || { echo "$out"; rm -rf "$repo" "$source"; return; }
+  assert_file_exists "$repo/mockups/deal-workspace/round-1/variant-A.png" || { rm -rf "$repo" "$source"; return; }
+  assert_file_exists "$repo/mockups/deal-workspace/round-1/variant-B.png" || { rm -rf "$repo" "$source"; return; }
+
+  local manifest="$repo/mockups/manifest.json"
+  assert_file_contains "$manifest" "方案 B：任务流优先" || { rm -rf "$repo" "$source"; return; }
+  assert_file_contains "$manifest" "信息密度更合适" || { rm -rf "$repo" "$source"; return; }
+  assert_file_contains "$manifest" '"status": "待合并"' || { rm -rf "$repo" "$source"; return; }
+  assert_file_contains "$manifest" '"featured": true' || { rm -rf "$repo" "$source"; return; }
+
+  python3 "$GEN" "$repo" >/dev/null 2>&1
+  assert_file_contains "$repo/mockups/index.html" "商机工作台" || { rm -rf "$repo" "$source"; return; }
+  assert_file_contains "$repo/mockups/index.html" "已选方向" || { rm -rf "$repo" "$source"; return; }
+
+  rm -rf "$repo" "$source"
+  pass_test
+}
+
+# -----------------------------------------------------------------
+# Scenario 9: PM 上传图片可导入 mockups/
+# -----------------------------------------------------------------
+test_import_uploaded_images() {
+  start_test "用户上传图片 → 复制进 mockups + 登记为活跃设计稿"
+  local repo; repo=$(_make_repo)
+  local upload; upload=$(mktemp -d)
+  printf 'uploaded-image' > "$upload/customer.png"
+
+  local out; out=$(python3 "$IMPORT" \
+    --repo "$repo" \
+    --image "$upload/customer.png" \
+    --requirement "客户导入" \
+    --round "第二轮" \
+    --dest-slug "customer-import" 2>&1)
+  local rc=$?
+  assert_equal "0" "$rc" "upload import should exit 0" || { echo "$out"; rm -rf "$repo" "$upload"; return; }
+
+  assert_file_exists "$repo/mockups/customer-import/round-2/variant-A.png" || { rm -rf "$repo" "$upload"; return; }
+  assert_file_contains "$repo/mockups/manifest.json" "外部设计稿 A" || { rm -rf "$repo" "$upload"; return; }
+  assert_file_contains "$repo/mockups/manifest.json" '"status": "活跃"' || { rm -rf "$repo" "$upload"; return; }
+  assert_file_contains "$repo/mockups/manifest.json" '"featured": false' || { rm -rf "$repo" "$upload"; return; }
+
+  rm -rf "$repo" "$upload"
+  pass_test
+}
+
+# -----------------------------------------------------------------
+# Scenario 10: mockup skill 发散 / gstack / 上传图片 / 禁内置出图
+# -----------------------------------------------------------------
+test_mockup_skill_gstack_or_upload_only_for_images() {
+  start_test "mockup skill 用 gstack 或上传图片，不恢复内置出图"
+  local skill="$REPO_ROOT/skills/mockup/SKILL.md"
+  assert_file_contains "$skill" "先打开设计空间" || return
+  assert_file_contains "$skill" "反同质化硬门" || return
+  assert_file_contains "$skill" "PMAI 自己编排，gstack 作为可用引擎" || return
+  assert_file_contains "$skill" "scripts/import-mockup-variants.py" || return
+  assert_file_contains "$skill" "用户上传图片允许进入看版" || return
+
+  local legacy_count
+  legacy_count=$(grep -c "scripts/gen-mockup-image.sh" "$skill" || true)
+  assert_equal "1" "$legacy_count" "旧出图脚本只允许作为禁止项出现" || return
+  if grep -q "用框架自带的出图脚本\\|每版调一次出图脚本\\|codex@\\|codex 0.135.0" "$skill"; then
+    _fail "mockup skill should not keep built-in image generation workflow"
+    return
+  fi
+
+  pass_test
+}
+
+# -----------------------------------------------------------------
 # Run
 # -----------------------------------------------------------------
 
@@ -305,5 +412,8 @@ test_bad_json
 test_template_valid
 test_readme_template_exists
 test_mockup_skill_aligns_existing_ui
+test_import_gstack_shotgun_results
+test_import_uploaded_images
+test_mockup_skill_gstack_or_upload_only_for_images
 
 report_results "mock-board"
