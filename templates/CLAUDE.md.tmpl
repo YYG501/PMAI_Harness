@@ -33,6 +33,7 @@
 - 文档索引：`docs/INDEX.md`
 - 主原型：`prototype/`
 - 输入材料：`docs/inputs/<类别>/`（材料按类型留存；当前模块引用记录在模块 `.work-meta.json`）
+- 工程文档：`docs/engineering/`（README/API/CLI/架构/how-to/tutorial/reference；INDEX.md 是接回索引）
 
 不要创建 `requirements/active|closed`、`task-plan.md` 或 `tasks/task-NNN.md`。历史仓库里如果还有这些文件，只作归档/迁移证据，不作为新流程入口。
 
@@ -82,6 +83,16 @@
 
 AI 可以推荐 review / QA / design-review 工具，但不替 PM 假执行。PM 主动调用 review 类工具时，AI 按当前模块和改动对象推断评审目标；推断失败只问一个澄清问题。
 
+### gstack 旁路文档接回
+
+PM 或 AI 调用 gstack `/document-generate` / `/document-release` 后，先判断文档类型，再接回 PMAI 文档地图：
+
+- 工程文档（README/API/CLI/架构说明/how-to/tutorial/reference）→ 落 `docs/engineering/`，同步更新 `docs/engineering/INDEX.md`，回执接回路径。
+- 产品介绍 / 功能清单 / 优势说明 / 一页纸 / 汇报材料 → 不用 gstack 旁路承接，转 `/pmai-doc-writing`。
+- PRD / 功能需求 / 功能描述 / 功能规格 / 功能评审稿 / 模块规格 → 不用 gstack 旁路承接，转 `/pmai-spec-writing` 或 `/pmai-design`。
+
+只引用 `~/.gstack/...`、浏览器下载目录或临时路径不算 PMAI 已接收；采用后的文件必须落进本仓并补索引。
+
 ### Subagent 使用边界
 
 Subagent 适合一次性读文件、第二视角评审、独立查询；不适合长期协调、跨 turn 等待、替代 skill 主流程。任何会启动后台长跑执行器的动作，都由驱动 AI 负责收口。
@@ -100,6 +111,7 @@ Subagent 适合一次性读文件、第二视角评审、独立查询；不适�
 | 功能型规格文档 | `docs/modules/<按内容命名>.md` | PRD、功能需求、功能描述、功能规格、功能评审稿 |
 | 项目决策档案 | `docs/decisions/` | 重大项目级决策 / 理路冻结档，默认不写 |
 | 输入材料 | `docs/inputs/<类别>/` | PM 上传 / 调研 / 竞品 / 旧文档等材料；当前模块引用记录在模块 `.work-meta.json` |
+| 工程文档 | `docs/engineering/` | README、API、CLI、架构说明、how-to、tutorial、reference；旁路接回后登记 `INDEX.md` |
 | 探索变体 | `mockups/` | 探索期 mock，看版与退役记录 |
 | 待办池 | `TODO.md` | PM 真说过想做但未开工的事项 |
 | 介绍型材料 | `docs/deliverables/` | 产品介绍、产品功能清单、产品优势说明、一页纸等，默认 Markdown |
@@ -143,6 +155,7 @@ Subagent 适合一次性读文件、第二视角评审、独立查询；不适�
 - `modules/`
 - `decisions/`
 - `inputs/`
+- `engineering/`
 - `deliverables/`
 - `archive/`
 
@@ -155,6 +168,7 @@ Subagent 适合一次性读文件、第二视角评审、独立查询；不适�
 | PRD / 功能需求 / 功能描述 / 功能规格 / 功能评审稿 | `docs/modules/<按内容命名>.md` |
 | 一次性 review / 临时分析 / scratch | `docs/archive/` |
 | PM 上传材料 / 调研材料 | `docs/inputs/<类别>/` |
+| README / API / CLI / 架构说明 / how-to / tutorial / reference | `docs/engineering/` |
 | 产品介绍 / 功能清单 / 优势说明 / 一页纸 | `docs/deliverables/` |
 | 项目级理路冻结档 | `docs/decisions/<日期>-<slug>.md` |
 | 探索期 mock 变体 | `mockups/` |

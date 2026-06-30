@@ -278,6 +278,7 @@ agent 收到脚本退出码 0 后**汇报**：「✅ 骨架已就绪 / 上下文
    - 组件 / token 来源（指向 prototype/ 的 `components/ui` shadcn + 本文件 token）
 
    > **想借 gstack 出初稿**：调 gstack `/design-consultation`（用 Skill 工具），让它接管对话定视觉方向并写 `DESIGN.md`。**不抄 gstack** —— 直接调它的 skill、接受它写的内容、跟随它升级；不解析、不映射、不重写。gstack 不可用就回到本步用模板手填（见失败兜底）。
+   > 本调用遵守 `skills/_shared/gstack-integration.md`：`/design-consultation` 只负责视觉基线，PMAI 仍负责 `DESIGN.md` 的框架 inventory、项目脊柱和 build 约束。
 
 4. **起主原型 `prototype/`**：在 `<target-dir>/prototype/` 用脚手架起一版能跑的（默认 Next.js + TS + Tailwind + shadcn；PM 在 step 1 说要换栈就按 PM 的）。约定（来自 `prototype-README.md.tmpl`）：每页 self-contained、视觉照 DESIGN.md、按 step A5 选的项目类型档走实现深度（prototype 档全 mock / system 档真后端 / custom 档按层混搭）。
    **prototype/README.md 在脚手架之后写**：`create-next-app` 会生成自己的默认 README，脚手架跑完后 AI 用 `$PMAI_HOME/templates/prototype-README.md.tmpl` 覆盖 `prototype/README.md`（占位符按项目替换）—— 不在 B 步铺，避免与 `create-next-app` 的非空目录冲突。
@@ -346,6 +347,7 @@ agent 输出 Next Up 块：
 - PRODUCT.md 不能完全空交付，但**只要一句话定位即可**（够 AI 进项目读上下文、陪 PM 探索）；术语表起空架，方向清晰后随 `/pmai-design` / `/pmai-direction` 长厚
 - **DESIGN.md 是 build 硬约束，不能空交付** —— C 步即使主原型起不来，视觉基线也要填好（第一个 `/pmai-design` build 就靠它）
 - 借 gstack `/design-consultation` 出 DESIGN.md 初稿时**不抄、不映射、不重写** —— 直接接受它写的内容，跟随它升级
+- gstack 结合边界见 `skills/_shared/gstack-integration.md`；全新项目可借 `/design-consultation`，已有代码库接入不因 gstack 缺失阻塞。
 
 ### PM-facing 输出禁词（[[feedback_pm_chat_no_engineering_jargon]]）
 

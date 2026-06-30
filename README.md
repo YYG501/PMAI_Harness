@@ -78,13 +78,13 @@ PM 全程**只做决策**（方向 / 结构 / 建造方式 / 验收 / 沉淀）�
 | **Claude Code** | 推荐 | 一等主控入口（slash skill 原生在这里跑）；也可作为 `/pmai-build` 执行器 |
 | **Codex** | 支持 | skill 暴露到 `~/.codex/skills/pmai-*`；读生成器仓 / 消费仓 `AGENTS.md` 作为主控入口；消费仓生成项目级 `.codex/hooks.json`；也可作为 build 执行器 |
 | **Gemini CLI** | 可选 | `/pmai-build` 执行器；适合在 Codex / Claude 主控下交给 Gemini 建 |
-| **gstack** | 必需 | `/qa` `/review` `/codex` 等子流程依赖；`pmai install` / `pmai doctor` 会提示 readiness，`init-project.sh` 建全新项目骨架时检测 gstack CLI 或 `~/.claude/skills/gstack`；已有代码库盘点分支不应被 gstack 缺失阻塞 |
+| **gstack** | 能力层（部分流程必需） | 消费仓可直接调用的专项能力层：全新项目骨架 / 视觉基线、mockup 视觉探索、browser / visual audit、mirror-site 抓站、PDF 出口、工程文档旁路会用到；`pmai install` / `pmai doctor` 会提示 readiness，已有代码库接入不因 gstack 缺失阻塞 |
 | **git** ≥ 2.30 | 必需 | worktree 是核心隔离机制 |
 | **python3** ≥ 3.10 | 必需 | scripts 大多用 python（zero-dep stdlib） |
 | **bash** ≥ 4 | 必需 | scripts 入口语言（macOS 自带 3.x 已知坑见 INVARIANTS） |
 | **codex CLI** | 可选 | `/pmai-build` 执行器；不装可走 Claude Code / Gemini / cursor-agent / 手动 |
 
-未检测到 gstack CLI 且没有 `~/.claude/skills/gstack` 时，`pmai install` / `pmai doctor` 会给 warning，但不阻塞 PMAI 安装；真正建全新项目骨架时，`init-project.sh` 会直接报错并指向 `https://github.com/garrytan/gstack`。如果只是 `command -v gstack` 找不到，但全局 gstack skill 目录存在，PMAI 视为 gstack 能力可用。已有代码库接入走现状盘点分支，不调用 `init-project.sh`，所以不能因为 gstack 缺失卡在“判断项目情况”这一步。
+未检测到 gstack CLI 且没有 `~/.claude/skills/gstack` 时，`pmai install` / `pmai doctor` 会给 warning，但不阻塞 PMAI 安装；真正建全新项目骨架时，`init-project.sh` 会直接报错并指向 `https://github.com/garrytan/gstack`。如果只是 `command -v gstack` 找不到，但全局 gstack skill 目录存在，PMAI 视为 gstack 能力可用。已有代码库接入走现状盘点分支，不调用 `init-project.sh`，所以不能因为 gstack 缺失卡在“判断项目情况”这一步。gstack 输出必须按 PMAI 规则接回 `DESIGN.md`、`mockups/`、`.pm-workflow/audits/`、`.pm-workflow/mirror/`、`docs/deliverables/` 或 `docs/engineering/`；工程文档旁路的 PMAI 接收点是 `docs/engineering/` + `docs/engineering/INDEX.md`，不能把 `~/.gstack/...` 当长期真相源。
 
 ---
 

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# 测试 pre-commit hook：docs 顶层约定 + attachments warning。
+# 测试 pre-commit hook：docs 顶层约定 + engineering index + attachments warning。
 set -uo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -160,6 +160,31 @@ test_attachments_big_file_warn_but_pass() {
 }
 
 # -----------------------------------------------------------------
+# T7: engineering 文档接回后未登记 INDEX 会被 hook 拦
+# -----------------------------------------------------------------
+
+test_engineering_doc_requires_index_entry() {
+  start_test "I-PCH7 engineering 文档未登记 INDEX 时 commit 被拦"
+  fixture_setup
+  _install_hook
+
+  mkdir -p "$FIXTURE_DIR/docs/engineering"
+  printf '# 工程文档索引\n' > "$FIXTURE_DIR/docs/engineering/INDEX.md"
+  printf '# API Auth\n' > "$FIXTURE_DIR/docs/engineering/api-auth.md"
+
+  if (cd "$FIXTURE_DIR" && git add -A && git commit -q -m "add engineering doc") >/tmp/out.$$ 2>/tmp/err.$$; then
+    _fail "未登记 engineering 文档应被 pre-commit 拦下"
+  elif grep -q "docs/engineering/INDEX.md" /tmp/err.$$; then
+    pass_test
+  else
+    _fail "拦截提示应指向 docs/engineering/INDEX.md"
+    cat /tmp/err.$$ >&2
+  fi
+  rm -f /tmp/out.$$ /tmp/err.$$
+  fixture_teardown
+}
+
+# -----------------------------------------------------------------
 # Run
 # -----------------------------------------------------------------
 
@@ -169,5 +194,6 @@ test_install_idempotent
 test_install_backs_up_existing
 test_attachments_small_file_no_silent_fail
 test_attachments_big_file_warn_but_pass
+test_engineering_doc_requires_index_entry
 
 report_results "pre-commit-hook"

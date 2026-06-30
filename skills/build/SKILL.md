@@ -9,6 +9,8 @@ description: |
 > 这是改造后的 **大需求建造入口**。它不拆任务卡、不走独立任务状态机。它对着**功能锚点**建：模块规格 `docs/modules/<模块>/spec.md`，或功能型规格文档 `docs/modules/<按内容命名>.md`。建完 review loop + 三道审，再 merge 回 main。
 >
 > 本 skill 只依赖两类通用资产：**exec-adapter**（可插拔执行器）和 **build-audits.py**（三道审编排）。二者不绑定任务卡。
+>
+> gstack / browser 在本 skill 里只按 `skills/_shared/gstack-integration.md` 作为**证据生产**能力使用：它们产出视觉和行为证据，PMAI build contract 决定能不能收尾。
 
 ## When To Use
 
@@ -378,6 +380,8 @@ DEV_CMD="<config.yml dev_server.command，替换 {port}>"
 - **① 覆盖审计**（白纸新鲜视角，对标 `coverage-reviewer` agent）：拿**功能锚点 BUILD_ANCHOR** 对 `prototype/` 代码逐项 diff，报每条规格点：✅ 建了 / ❌ 丢了 / ⚠️ 降级占位（空壳 / 假数据 / 交互没接）。故意不让建代码的 AI 自审，避盲区。静态读码，不需 dev server，先跑。
 - **② 视觉门**（gstack `/design-review`，只截图不改）：对照 `DESIGN.md` 审视觉一致性（间距 / 层级 / 配色 / AI slop）。用 `/browse`（headless），禁 `mcp__claude-in-chrome__*`。出口是 PM 一句话 pass / 打回，**AI 不替 PM 改视觉**。复用步骤 5 的 dev server。
 - **③ 行为审**（验收流程驱动 `/browse` 走确定性路径）：从功能锚点的核心动作 / 状态机 / 验收标准派生验收流程，`/browse` 逐流程跑，验证「跑得通不通」（明确 pass/fail，区别于 `/qa` 的 AI 探索）。复用步骤 5 的 dev server。
+
+这些 gstack / browser 产物只是证据来源，不是 close authority；证据必须写入 PMAI 约定的 audit JSON，后续由 `/pmai-build-close` 读取 build contract。
 
 视觉 / 浏览器工具受限时按三态呈交，不展开底层工具报错：
 - `已完成视觉检查`：写 `visual.status=pass|needs-review`，给截图 / 关键观察 / 问题清单。

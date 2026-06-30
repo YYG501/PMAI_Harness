@@ -172,6 +172,7 @@ for TMPL in "$FRAMEWORK_DIR/templates/"*.tmpl; do
     PRODUCT-RULES.md)       DEST="$TARGET_DIR/PRODUCT-RULES.md" ;;
     TODO.md)                DEST="$TARGET_DIR/TODO.md" ;;
     modules-INDEX.md)       DEST="$TARGET_DIR/docs/modules/INDEX.md" ;;
+    engineering-INDEX.md)   DEST="$TARGET_DIR/docs/engineering/INDEX.md" ;;
     deliverables-INDEX.md)   DEST="$TARGET_DIR/docs/deliverables/INDEX.md" ;;
     lark-publish.json)
       # lark-publish.json: 业务实例配置，下方 f3 段独立 cp（不走主 loop 占位符替换）
@@ -242,6 +243,7 @@ echo "📦 I-mini 模式：消费仓 0 framework 源资产；skill / scripts / h
 mkdir -p "$TARGET_DIR/docs/modules"
 mkdir -p "$TARGET_DIR/docs/inputs"
 touch "$TARGET_DIR/docs/inputs/.gitkeep"
+mkdir -p "$TARGET_DIR/docs/engineering"
 mkdir -p "$TARGET_DIR/docs/deliverables"
 mkdir -p "$TARGET_DIR/docs/archive"   # 扁平：过程档案 / 一次性 review / 被取代旧文件全装这里，文件名说明为啥归档
 touch "$TARGET_DIR/docs/archive/.gitkeep"

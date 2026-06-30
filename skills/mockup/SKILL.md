@@ -35,6 +35,7 @@ echo "SKILL: mockup"
 
 让 PM 选一次出几版、并排比稿，是 gstack `/design-shotgun` 趟熟的做法。本 skill **PMAI 自己编排，gstack 作为可用引擎**：
 
+- **共享合同**：本节遵守 `skills/_shared/gstack-integration.md`。这是“能力调用”：PMAI 定方向和接回路径，gstack 只产视觉探索素材。
 - **PMAI 先定方向**：先读产品 / 模块 / 已有界面，列出几条要探索的产品设计方向；不是把一句需求原样丢给 gstack。
 - **gstack 做视觉探索**：gstack 装了、`/design-shotgun` 可用且这轮是在挑视觉气质 / 密度 / 第一眼感觉时，调用它生成和收反馈；接受它的对比看板、反馈循环和 taste memory。
 - **PMAI 接回真相源**：gstack 产物默认在 `~/.gstack/projects/...`，不能停在那里。跑完后必须用 `scripts/import-mockup-variants.py` 把所有候选稿和挑定结果复制进本项目 `mockups/`，登记清单并刷新 PMAI 看版。

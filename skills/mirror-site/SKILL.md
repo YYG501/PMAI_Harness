@@ -50,6 +50,8 @@ description: |
 
 ### 步骤 1：Plan —— 爬参照站派生 checks-spec（产出，不改代码）
 
+本步骤按 `skills/_shared/gstack-integration.md` 调用 gstack：`/setup-browser-cookies`、`/browse`、`/scrape` 只是抓取能力，长期记录落 `.pm-workflow/mirror/` 和 checks-diff 报告。
+
 1. **登录态**（参照站需登录时）：用 Skill tool 调 gstack `/setup-browser-cookies` 导真 cookie（⚠️ macOS Keychain 弹窗、PM 手动选域，仅必要时），让后续 `/browse` 带登录态。
 2. 用 gstack `/browse` 逐页 / 逐弹窗走参照站（**细到每个弹窗、每个 tab、每个状态**；L1/L2/L3 + modal），抓 `url/title/textPreview/buttons[{text,disabled}]` + 截图。rebuild 模式数据要填进 mock 让 demo 更真 → 可选 gstack `/scrape` 抓真实内容。
 3. AI 据此**派生 checks-spec**（`skills/_shared/checks-spec.md` 格式：每页 / 弹窗一个 check，must_have_text / must_check_buttons[disabled] / must_cover_states / reference_path / local_path），落 `.pm-workflow/mirror/<module>/checks.json`。**checks 由 AI 派生、不让 PM 手写 JSON。**

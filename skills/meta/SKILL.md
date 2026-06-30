@@ -24,6 +24,8 @@ description: |
 
 表达收口时再读 `references/词表与句式.md`。词表只用于最后表达校验，不承担思考流程。
 
+涉及 gstack / grillme 或外部会诊式方法时，读 `skills/_shared/gstack-integration.md`：`/pmai-meta` 只做**方法吸收**，不 runtime 调 gstack，不把 gstack 输出当 PMAI 真相源。
+
 ---
 
 ## 入口判断
@@ -208,6 +210,7 @@ PM 说有，就继续追问；PM 说没有，再收束。
 
 - PM 说“不合理”，AI 继续在原方案上加字段、加提示、加解释。
 - 没问 PM 关键判断，就输出一段“本质是……”的分析。
+- 把外部会诊式方法、grillme 或 gstack 当成要直接调用的 runtime，而不是吸收到 PMAI 问题会诊纪律里。
 - 只给一个推荐方向，没有替代方向和被排除方向。
 - Alternatives 后没有停住，推荐完就继续写最终方案或路由下游。
 - workflow / skill 边界问题没读现有 skill，就建议新建 skill。

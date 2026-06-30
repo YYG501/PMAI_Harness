@@ -48,6 +48,12 @@ Codex 收到 PM 输入的 `/pmai-xxx` 时：
 - build 验收后收尾：读 `/pmai-build-close` 对应 skill。
 - 迷路或续跑：读 `/pmai-status` 对应 skill，先报告当前状态再行动。
 
+## gstack Side Paths
+
+- gstack `/document-generate` / `/document-release` 只能作为工程文档旁路。Codex 看到这类输出时，不能只引用 `~/.gstack/...`、下载目录或临时路径。
+- 采用后的工程文档必须按 `CLAUDE.md` 和 `$PMAI_HOME/templates/文档地图.md` 接回 `docs/engineering/`，同步更新 `docs/engineering/INDEX.md`，再向 PM 回执接回路径。
+- 产品介绍、PM 汇报材料、PRD、模块规格和功能型规格不走 gstack 文档旁路；分别转 `/pmai-doc-writing`、`/pmai-spec-writing` 或 `/pmai-design`。
+
 ## Runtime Fallback
 
 - AskUserQuestion 不可用时，输出编号列表并要求 PM 回复编号或自由文本；没有明确回答前停止推进。

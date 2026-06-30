@@ -3,7 +3,8 @@
 # 由 init-project.sh / install-hooks.sh 安装到 .git/hooks/pre-commit。
 # 职责：
 #   1. 拦截 docs/ 顶层错位文件 (check-docs-toplevel.py，按 CLAUDE.md 「根目录与 docs/ 归位约定」)
-#   2. 对 attachments/ 大文件给出 warning（不阻塞）
+#   2. 拦截 docs/engineering/ 工程文档未登记 INDEX
+#   3. 对 attachments/ 大文件给出 warning（不阻塞）
 #
 # 绕过：git commit --no-verify（git 内置；hook 不会被调到）。
 #
@@ -33,6 +34,12 @@ fi
 DOCS_CHECKER="$PMAI_HOME/scripts/check-docs-toplevel.py"
 if [ -f "$DOCS_CHECKER" ]; then
   python3 "$DOCS_CHECKER"
+fi  # 脚本缺失 fail-open（老消费仓还没 sync 进新 framework 时不应阻塞）
+
+# --- 2. 工程文档索引检测（gstack 旁路文档接回后必须可被 docs/engineering/INDEX.md 找到）---
+ENGINEERING_INDEX_CHECKER="$PMAI_HOME/scripts/check-engineering-docs-index.py"
+if [ -f "$ENGINEERING_INDEX_CHECKER" ]; then
+  python3 "$ENGINEERING_INDEX_CHECKER"
 fi  # 脚本缺失 fail-open（老消费仓还没 sync 进新 framework 时不应阻塞）
 
 # v5 attachments large file warn (>10MB) — fail-open，仅警告

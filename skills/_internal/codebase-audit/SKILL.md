@@ -187,6 +187,8 @@ $HAS_FILE && grep -q "^## 共享组件 inventory" "$DESIGN_MD" && HAS_INVENTORY=
 > **视觉基线段未建** —— 建议 PM 跑 gstack `/design-consultation` 补全 8 段（颜色 / 字体 / 间距 / 布局 / 动效 / 美学方向 / 竞品研究 / 视觉预览板）。本框架不替 gstack 写视觉基线，本骨架只兜 inventory 段（build 阶段读 DESIGN / 复审的覆盖审计·视觉门硬依赖）。
 >
 > **inventory 段**由本框架管，复审累积，gstack 不写。
+>
+> **gstack 结合合同**：见 `skills/_shared/gstack-integration.md`。已有代码库接入阶段，gstack 只补视觉基线；PMAI 负责代码现状、inventory 和后续 build 约束。
 
 <!-- 套入上方 inventory 空段模板 -->
 ```

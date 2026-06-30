@@ -103,6 +103,8 @@ python3 "$PMAI_HOME/scripts/build-contract.py" validate-close "$MODULE_WORK_DIR"
 - 缺三道审证据（`coverage.json` / `visual.json` / `behavior.json` / `synthesis.md`）→ STOP，回 `/pmai-build` 补跑覆盖、视觉和行为审；不能只靠 PM 说“通过”跳过 browser / gstack 验收。
 - 视觉门或行为审是 `limited` / `skipped` → 必须有 `audit_exception` 记录 PM 明确接受的原因；行为审 `fail` 一律 STOP。
 
+gstack / browser 证据按 `skills/_shared/gstack-integration.md` 处理：它们只是 evidence producer，`build-contract.py validate-close` 才是收口判断入口。
+
 ```bash
 REPO_ROOT="$(cd "$(git rev-parse --git-common-dir 2>/dev/null)/.." && pwd)"
 CURRENT_WT="$(git rev-parse --show-toplevel 2>/dev/null)"
@@ -313,6 +315,7 @@ merge 回 main（具体的 merge / 删 worktree / 删分支编排由 lifecycle �
 - **不靠分支形态猜收尾**：当前在非 main 分支、普通 `codex/*` 分支、或 worktree 丢失，都不是新的 PM 分流菜单；只说明合同与现场不一致，停止并给出恢复上下文的最短动作。
 - **未落主线不写完成态**：还没按合同合回主线，或三道审 / 验证 / 验收缺口没有明确记录前，不得输出“已收口 / 时间线已完成”。若选择 PR/保留分支，那是待合回状态，不是 build-close 完成。
 - **三道审证据是 close 硬门**：`build-contract.py validate-close` 必须看到覆盖、视觉、行为三份结果和合成报告。browser / gstack 没跑就是缺证据；工具受限只能记录为 `limited` / `skipped`，并经 PM 明确接受后继续，不能静默当通过。
+- **gstack 不是收口权威**：`/design-review`、`/browse` 可以产视觉 / 行为证据，但是否能 close 只看 PMAI build contract 和 PM 验收记录。
 - **形态自适应**：`/pmai-build` 可以直接在 main 上建，也可以开隔离环境建；`/pmai-build-close` 只在 build 经 PM 验收后使用，并根据 build 合同 `mode` 决定是否合并。只完成讨论但暂不实现时，不需要 build-close。
 - **决策 / 理路 3 个正交的家**（开放 5 拍板，撤销原 3→2 折叠）：单模块决策 → 模块 `decisions.md`（活）；跨模块**规则** → `PRODUCT-RULES.md`（活、scope）；跨文件**理路** → `docs/decisions/<日期>-<slug>.md`（**冻结**）。理路与规则分家、不混塞一份。
 - **术语回写**：新定义的概念/角色/业务词 → `PRODUCT.md` 业务术语表；纯文字微调不算。

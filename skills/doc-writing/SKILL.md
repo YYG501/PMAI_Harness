@@ -26,7 +26,7 @@ description: |
 默认格式是 Markdown。
 
 - PM 要 doc / docx：先写 Markdown 初稿，再调用文档类 skill 转 docx。
-- PM 要 PDF：先写 Markdown 初稿，再调用 gstack 的 Markdown 转 PDF skill。
+- PM 要 PDF：先写 Markdown 初稿，再调用 gstack `/make-pdf`；源 Markdown 仍是 PMAI 真相源，PDF 只是导出物。
 - PM 要飞书：写完 Markdown 后可走 `/pmai-publish-to-lark`。
 
 ## 高质量标准
@@ -249,5 +249,5 @@ PM 说"帮我看某个文件，整体优化结构、内容、文风"时，按这
 
 - 本 skill 不写 `docs/modules/<模块>/discussion.md` / `decisions.md` / `spec.md`。
 - 本 skill 不写 `docs/modules/<按内容命名>.md` 的功能型规格文档；那些走 `/pmai-spec-writing`。
-- 本 skill 默认产出 Markdown；docx / PDF 是后续转换动作，不在这里手写二进制文件。
+- 本 skill 默认产出 Markdown；docx / PDF 是后续转换动作，不在这里手写二进制文件。PDF 出口按 `skills/_shared/gstack-integration.md` 调 gstack `/make-pdf`。
 - `docs/deliverables/` 是对外交付物 / 汇报材料 / 独立评审文档的容器，但"独立评审文档"只有在它是介绍型/表达型材料时才放这里；功能范围评审稿仍归 `/pmai-spec-writing`。
