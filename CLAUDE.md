@@ -16,7 +16,7 @@
 **框架分发与全局安装**（2026-05-26 v1.1 落地）：
 
 - 本仓现已通过 GitHub remote `git@github.com:YYG501/PMAI_Workflow.git` 分发
-- `pmai install` 一次全局安装到 `~/.pmai/` + symlink 当前 skill 到 `~/.claude/skills/pmai-*` / `~/.codex/skills/pmai-*`（任意 cwd 可调 `/pmai-init-project`）
+- `pmai install` 一次全局安装到 `~/.pmai/` + symlink 当前 skill 到 `~/.claude/skills/pmai-*` / `~/.codex/skills/pmai-*` + 生成 Codex CLI slash prompts 到 `~/.codex/prompts/pmai-*.md`（任意 cwd 可调 `/pmai-init-project`）
 - **仅全局安装**：skill 只装 host skill dirs，不往项目里拷副本；项目里只放 host 配置 / 状态资产（`.claude/settings.json` / `.codex/hooks.json` / `.work-meta.json`）。旧 `--local`（项目实体副本）已移除——和全局并存会让 `/pmai-*` 命令重复且副本陈旧；遗留副本用 `pmai uninstall --local <dir>` 清理
 - 升级 `pmai upgrade`（main）/ `pmai upgrade --stable`（tag）/ `pmai upgrade --to v0.x.0`（pin）
 - 安装和升级以 `README.md`、`bin/pmai`、`bin/pmai-doctor` 为当前真相源。

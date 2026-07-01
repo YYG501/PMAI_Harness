@@ -46,7 +46,7 @@ PMAI 不和 Claude Design、design-html 或 Claude Code 比"谁更快生成第�
 
 定位是 **PM 单人生产力工具**，不是团队 SOP / CI 平台 / 多租户基础设施。完整产品意义、非目标和成功标准见 [`PRODUCT.md`](./PRODUCT.md)。
 
-**分发形态**：全局安装（单人多项目）。框架装到 `~/.pmai/`，当前 skill symlink 到 `~/.claude/skills/pmai-*` 和 `~/.codex/skills/pmai-*`；任意 cwd 跑 `/pmai-init-project` 起新业务项目；`pmai upgrade` 一键升级，所有项目自动跟随。skill 只装全局一处，项目里只放 host 配置 / 状态资产（`.claude/settings.json` / `.codex/hooks.json` / `.work-meta.json`）——这样每个 `/pmai-*` 命令永远唯一，不会和项目副本重复。
+**分发形态**：全局安装（单人多项目）。框架装到 `~/.pmai/`，当前 skill symlink 到 `~/.claude/skills/pmai-*` 和 `~/.codex/skills/pmai-*`；同时生成 `~/.codex/prompts/pmai-*.md`，让 Codex CLI 可以直接输入 `/pmai-*`。任意 cwd 跑 `/pmai-init-project` 起新业务项目；`pmai upgrade` 一键升级，所有项目自动跟随。skill 只装全局一处，项目里只放 host 配置 / 状态资产（`.claude/settings.json` / `.codex/hooks.json` / `.work-meta.json`）——这样每个 `/pmai-*` 命令永远唯一，不会和项目副本重复。
 
 ---
 
@@ -76,7 +76,7 @@ PM 全程**只做决策**（方向 / 结构 / 建造方式 / 验收 / 沉淀）�
 | 工具 | 必需性 | 用途 |
 |---|---|---|
 | **Claude Code** | 推荐 | 一等主控入口（slash skill 原生在这里跑）；也可作为 `/pmai-build` 执行器 |
-| **Codex** | 支持 | skill 暴露到 `~/.codex/skills/pmai-*`；读生成器仓 / 消费仓 `AGENTS.md` 作为主控入口；消费仓生成项目级 `.codex/hooks.json`；也可作为 build 执行器 |
+| **Codex** | 支持 | skill 暴露到 `~/.codex/skills/pmai-*`；Codex CLI slash prompt 暴露到 `~/.codex/prompts/pmai-*.md`，可直接输入 `/pmai-*`；读生成器仓 / 消费仓 `AGENTS.md` 作为主控入口；消费仓生成项目级 `.codex/hooks.json`；也可作为 build 执行器 |
 | **Gemini CLI** | 可选 | `/pmai-build` 执行器；适合在 Codex / Claude 主控下交给 Gemini 建 |
 | **gstack** | 能力层（部分流程必需） | 消费仓可直接调用的专项能力层：全新项目骨架 / 视觉基线、mockup 视觉探索、browser / visual audit、mirror-site 抓站、PDF 出口、工程文档旁路会用到；`pmai install` / `pmai doctor` 会提示 readiness，已有代码库接入不因 gstack 缺失阻塞 |
 | **git** ≥ 2.30 | 必需 | worktree 是核心隔离机制 |
@@ -114,7 +114,7 @@ bash /tmp/pmai-src/bin/pmai install
 ```
 
 安装成功后，`pmai install` 末尾会：
-- clone 到 `~/.pmai/` + symlink skill 到 `~/.claude/skills/pmai-*` / `~/.codex/skills/pmai-*`
+- clone 到 `~/.pmai/` + symlink skill 到 `~/.claude/skills/pmai-*` / `~/.codex/skills/pmai-*` + 生成 Codex CLI slash prompts 到 `~/.codex/prompts/pmai-*.md`
 - 自动检测 shell（zsh/bash）+ 给 `~/.pmai/bin` 加 PATH 的 oneshot 命令
 - 提示 gstack readiness；缺 gstack 只 warning，起项目前补齐即可
 
@@ -148,7 +148,7 @@ bash bin/pmai install                       # 全局安装
 
 ### 安装模式：仅全局
 
-PMAI 只有全局安装一种形态（`pmai install` → clone `~/.pmai/` + symlink `~/.claude/skills/pmai-*` / `~/.codex/skills/pmai-*`）。消费仓保持干净，skill 不进项目；升级一处 `pmai upgrade`，所有项目自动跟随。
+PMAI 只有全局安装一种形态（`pmai install` → clone `~/.pmai/` + symlink `~/.claude/skills/pmai-*` / `~/.codex/skills/pmai-*` + 生成 `~/.codex/prompts/pmai-*.md`）。消费仓保持干净，skill 不进项目；升级一处 `pmai upgrade`，所有项目自动跟随。
 
 > 旧的 `--local`（往项目 `.claude/` 拷实体副本）已移除：它和全局并存时会让每个 `/pmai-*` 命令在菜单里重复，且副本不跟随升级而陈旧。消费仓需要的 host 配置（`.claude/settings.json` / `.codex/hooks.json`）仍单独放项目里（不是 skill，不会重复）；hook 脚本本体仍走 `~/.pmai/hooks` / `~/.pmai/scripts`。已有遗留副本用 `pmai uninstall --local <dir>` 清理。
 
@@ -206,7 +206,7 @@ agent 内部先判断项目情况，再进入对应分支：
 
 - 在本生成器仓协同改框架：Codex 先读根目录 `AGENTS.md`，按 repo-local `skills/` / `scripts/` 工作。
 - 在本生成器仓初始化消费仓：让 Codex 执行 `/pmai-init-project` 等价流程，内部读取 `skills/init-project/SKILL.md`，最后调用 `bash scripts/init-project.sh ...`。
-- 在消费仓继续使用：`init-project.sh` 会生成消费仓根目录 `AGENTS.md` 和项目级 `.codex/hooks.json`；Codex 进入消费仓后先读 `AGENTS.md`。`pmai install/upgrade` 会把 `pmai-*` 暴露到 `~/.codex/skills/`；如果当前 Codex runtime 没有 slash skill UI，再按 `AGENTS.md` 把 `/pmai-*` 解析到 `PMAI_HOME` / `~/.pmai` 下的已安装 skill。Codex 首次启用项目 hooks 时可能要求信任确认，这是 Codex 自身的安全机制。
+- 在消费仓继续使用：`init-project.sh` 会生成消费仓根目录 `AGENTS.md` 和项目级 `.codex/hooks.json`；Codex 进入消费仓后先读 `AGENTS.md`。`pmai install/upgrade` 会把 `pmai-*` 暴露到 `~/.codex/skills/`，并生成 `~/.codex/prompts/pmai-*.md` 让 Codex CLI 可直接输入 `/pmai-*`；prompt 入口只负责把命令路由回 `PMAI_HOME` / `~/.pmai` 下的已安装 `SKILL.md`。Codex 首次启用项目 hooks 时可能要求信任确认，这是 Codex 自身的安全机制。
 
 **非交互参数化 CLI**（smoke / 批量自动化依赖）：
 
@@ -328,7 +328,7 @@ PMAI 走纯全局：每台要用的机器各自 `pmai install` 一次（全局�
 
 | 你要确认 | 命令 |
 |---|---|
-| 当前安装状态 / Claude+Codex skill 暴露是否漂移 | `pmai status` |
+| 当前安装状态 / Claude+Codex skill 暴露 / Codex CLI slash prompt 是否漂移 | `pmai status` |
 | 全局安装完整性（含 Claude+Codex 暴露） | `pmai doctor` |
 | 测试整个生成器仓 | `bash tests/run-all.sh` |
 | 旧 `requirements/active|closed` 仓库是否还需要人工迁移 | `python3 scripts/migrate-reqs-to-modules.py --dry-run <repo>` |

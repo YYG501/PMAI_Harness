@@ -6,8 +6,8 @@ description: |
 
 # /mockup
 
-> **这是什么**：把讨论里定下来的"这张卡/这一页放什么、谁看、信息怎么分块"先拆成**几条真正不同的设计方向**，再做成能看的设计稿，一页里并排摊给 PM 挑——挑定哪版方向，再回去把规格写定。**用看得见的设计稿代替规格里那段 ASCII 线框**，省掉"PM 看规格里的方框想象不出来→建出来才说不对→返工"。
-> **三种来源**：① **gstack 设计探索**（适合视觉气质 / 密度 / 第一眼感觉，带对比看板和反馈循环）；② **HTML 草图**（真线框、能点、文字是真的，看布局 / 交互 / 内容）；③ **PM 上传图片**（PM 已经有截图 / 设计图时，直接登记进看版比选）。按要挑什么取舍，详见步骤 3。
+> **这是什么**：把讨论里定下来的"这张卡/这一页放什么、谁看、信息怎么分块"先拆成**几条真正不同的设计方向**，再做成能看的设计稿，一页里并排摊给 PM 挑——挑定哪版方向，再回去把规格写定。它的定位是**发散探索 + 对比看板**，不是单方案 HTML 草图。**用看得见的设计稿代替规格里那段 ASCII 线框**，省掉"PM 看规格里的方框想象不出来→建出来才说不对→返工"。
+> **三种来源**：① **gstack 设计探索**（默认优先，适合视觉气质 / 密度 / 第一眼感觉，带对比看板和反馈循环）；② **PMAI 内部发散草图**（gstack 不可用时，先出多方向 concept，再用 HTML / 静态稿形成同页对比）；③ **PM 上传图片**（PM 已经有截图 / 设计图时，直接登记进看版比选）。按要挑什么取舍，详见步骤 3。
 > **和 /pmai-design 的关系**：`/pmai-design` 把信息设计讨论清楚后，到"该让 PM 看看长什么样"那一步**调本 skill**；PM 挑定方向，`/pmai-design` 接着把规格写定（规格里只留文字定义 + 指一句"长什么样见 mockup 看版第 N 版"，不再画线框）。
 > **和 /pmai-build 的关系**：两码事。`/mockup` 出的是**便宜的比稿**（设计稿图 / HTML 线框，不接数据、不进主原型），只为挑方向；`/pmai-build` 才是在 `prototype/` 主原型里**真建**那一份能跑的实现。挑定方向走 `/pmai-build`（大需求）或直接在主原型里改（小改）。
 > **不动主原型**：`mockups/` 是摊在桌上比来比去的设计稿集，和 `prototype/`（跑着的那一份主原型）是分开的两个家。本 skill 只写 `mockups/`，不碰 `prototype/`。
@@ -33,13 +33,15 @@ echo "SKILL: mockup"
 
 ## 借 gstack /design-shotgun
 
-让 PM 选一次出几版、并排比稿，是 gstack `/design-shotgun` 趟熟的做法。本 skill **PMAI 自己编排，gstack 作为可用引擎**：
+让 PM 选一次出几版、并排比稿，是 gstack `/design-shotgun` 趟熟的做法。本 skill **PMAI 自己编排，gstack 作为优先引擎**：
 
 - **共享合同**：本节遵守 `skills/_shared/gstack-integration.md`。这是“能力调用”：PMAI 定方向和接回路径，gstack 只产视觉探索素材。
 - **PMAI 先定方向**：先读产品 / 模块 / 已有界面，列出几条要探索的产品设计方向；不是把一句需求原样丢给 gstack。
+- **先探测能力再选择引擎**：生成前先跑 gstack browser / design 诊断（优先用 `$PMAI_HOME/scripts/check-gstack-browser.sh`），确认 browse/design binary、localhost 权限、headless/headed 可用性和 compare board 能力。Codex sandbox 里 localhost `EPERM` 只能说明沙箱限制，不等于 gstack 坏了。
 - **gstack 做视觉探索**：gstack 装了、`/design-shotgun` 可用且这轮是在挑视觉气质 / 密度 / 第一眼感觉时，调用它生成和收反馈；接受它的对比看板、反馈循环和 taste memory。
 - **PMAI 接回真相源**：gstack 产物默认在 `~/.gstack/projects/...`，不能停在那里。跑完后必须用 `scripts/import-mockup-variants.py` 把所有候选稿和挑定结果复制进本项目 `mockups/`，登记清单并刷新 PMAI 看版。
-- **不自建图片生成**：本 skill 暂不再调用 PMAI 自带图片生成脚本；没有 gstack 时，走 HTML 草图或接收 PM 上传图片。
+- **gstack 不可用就把 shotgun 搬进来**：不因为 gstack 不可用就退成单稿。PMAI 内部 fallback 必须先列多方向 concept，再为每个 concept 出 HTML / 静态草图，最后生成同页看版。
+- **不自建图片生成**：本 skill 暂不再调用 PMAI 自带图片生成脚本；没有 gstack 时，走 PMAI 内部发散草图或接收 PM 上传图片。
 
 ## Workflow
 
@@ -96,26 +98,47 @@ echo "SKILL: mockup"
 
 > **边界靠判断、不机械**：出几版、围绕哪些岔路，是 AI 看讨论结论 + PM 选的数量定，不是"每次必出 N 版"。
 
+### 步骤 2.5：gstack 能力探测 + 引擎选择
+
+生成前必须先选引擎，不能嘴上说 gstack、实际手写单稿。
+
+1. **优先跑诊断**：
+   ```bash
+   bash "$PMAI_HOME/scripts/check-gstack-browser.sh"
+   ```
+   诊断要看：browse binary、design binary、localhost bind、是否处在 Codex sandbox `EPERM`、是否可做 smoke。**不要把 `browse status` 当无副作用检查**，它会主动启动 daemon。
+2. **选择引擎并告诉 PM**：
+   - `gstack-shotgun`：诊断可用，且这轮主要挑视觉气质 / 密度 / 第一眼感觉 / 多方向结构。
+   - `pmai-internal-shotgun`：gstack 缺失、沙箱限制、未授权、或 PM 不想触发外部生成成本；仍然要多方向，不退成单稿。
+   - `html-wireframe`：主要验证布局、字段、交互和真实文字；可作为内部 shotgun 的每版载体。
+   - `image-import`：PM 已有图，登记进看版参与比选。
+3. **能力不足时明确退化**：如果 gstack 因 sandbox localhost `EPERM` 不可用，要说“当前 runtime 限制 gstack browser，改走 PMAI 内部发散草图”；不要说“gstack browser 坏了”。
+
 ### 步骤 3：生成设计稿 + 落进单页看版
 
 **先选这轮走哪条路**（可混排比，但每条路最后都要接回 PMAI 看版）：
 
-| | gstack 设计探索 | HTML 草图 | PM 上传图片 |
+| | gstack 设计探索 | PMAI 内部发散草图 / HTML | PM 上传图片 |
 |---|---|---|
-| 看什么 | 视觉风格 / 密度 / 气质 / 第一眼感觉 | 布局结构 / 交互 / 字段内容 | PM 已有截图 / 设计图 / 竞品图 |
+| 看什么 | 视觉风格 / 密度 / 气质 / 第一眼感觉 / 多方案探索 | 布局结构 / 交互 / 字段内容 / gstack 不可用时的多方向替代 | PM 已有截图 / 设计图 / 竞品图 |
 | 文字 | 图片中文字只作参考，不能定文案 | 真的、准的 | 看图片来源；不把截图文案直接当规格 |
-| 怎么来 | 调 gstack `/design-shotgun` | `frontend-design` 写静态 HTML | PM 提供本机图片路径或附件 |
-| 怎么收口 | 导入 gstack 输出目录 | 直接放 `mockups/` | 复制进 `mockups/` |
+| 怎么来 | 调 gstack `/design-shotgun` | 先写多方向 concept，再为每版写静态 HTML / 图片稿 | PM 提供本机图片路径或附件 |
+| 怎么收口 | 导入 gstack 输出目录 | 直接放 `mockups/` 并登记 | 复制进 `mockups/` |
 
 1. **生成 / 收集 N 版**（N = 步骤 2 PM 定的数）：
 
    **gstack 路** —— 调 `/design-shotgun`：
    - 把步骤 1.5 的界面对齐约束、步骤 2 的方向清单、谁看 / 放什么字段 / 哪些信息一组，一次性交给 gstack。
+   - 要求 gstack 生成 3-8 个真实差异方向，使用 compare board 收 PM 评分 / 评论 / remix / regenerate。
    - 让 gstack 负责生成、打开对比看板、收评分 / 评论 / remix / regenerate。
    - 等 PM 在 gstack 看板提交最终反馈后，记录本轮 gstack designs 目录（含 `variant-*.png`、`feedback.json`、`approved.json`）。
    - 不要让 gstack 目录成为产品记录；它只是临时来源。
 
-   **HTML 路** —— `frontend-design` 写静态 HTML。写 HTML 前把步骤 1.5 的界面约束给进去；项目里已有可复用的 CSS / token / class 命名时优先沿用。每版存 `mockups/<界面>-b/index.html`。
+   **PMAI 内部 shotgun / HTML 路** —— gstack 不可用或这轮需要真实文字 / 交互时使用：
+   - 先把步骤 2 的每个方向写成 concept，不少于 PM 已选 N 版；每个 concept 必须说明“试什么 / 故意改变什么 / 适合判断什么 / 风险”。
+   - 每个 concept 各自生成一份静态 HTML / 图片稿，不允许把一个方案换色凑多版。
+   - 写 HTML 前把步骤 1.5 的界面约束给进去；项目里已有可复用的 CSS / token / class 命名时优先沿用。每版存 `mockups/<界面>-<方向>/index.html`。
+   - 生成后同样登记 `mockups/manifest.json`、刷新单页看版；PM 看到的是多稿对比，不需要知道内部没有跑 gstack。
 
    **PM 上传图片路** —— 如果 PM 已有图片，让 PM 给本机路径或附件；复制进 `mockups/` 后登记。上传图片可以参与比选，但只作为设计素材 / 方向参照，不自动变成规格事实。
 
@@ -188,6 +211,8 @@ PM 挑哪版/哪些块好。用 AskUserQuestion 让 PM 选（每版一个选项 
 - **默认贴合现有界面**：画之前必须先看 `DESIGN.md`、相关 `prototype/` 页面 / 组件 / 样式、已挑定设计稿和模块约束；没有 PM 明确要求，不得凭空换一套风格。
 - **无参考时先说清楚**：如果项目还没有可参考界面，这轮就是先定基调；不要假装已经贴合现有产品。
 - **gstack / HTML / 上传图片按要挑什么选**：挑**视觉风格 / 密度 / 气质** → gstack；挑**布局 / 交互 / 字段内容** → HTML 路；PM 已经有图 → 上传图片接回看版。
+- **先探测 gstack，再选择引擎**：默认优先 gstack-shotgun，但必须先诊断 browse/design/localhost/compare board；Codex sandbox 的 localhost `EPERM` 是 runtime 限制，不是 gstack 损坏。不能把 `browse status` 当无副作用检查。
+- **gstack 不可用也要发散**：fallback 是 PMAI 内部 shotgun（多 concept + 多 HTML / 静态稿 + 同页看版），不是退回单方案草图。
 - **HTML 草图优先复用现有语言**：已有 CSS / token / class / 组件样式可参考时，静态 HTML 也要沿用它们的视觉语言；不要另造一套不相干的卡片、按钮、颜色和间距。
 - **不调用 PMAI 自带图片生成脚本**：本 skill 暂时移除内置图片生成能力；不要在 mockup 流程里调用 `scripts/gen-mockup-image.sh` 或直接让 codex image_gen 出图。
 - **gstack 结果必须接回 PMAI**：gstack 负责生成和收反馈，但最终所有候选稿、挑定稿和 PM 反馈必须复制进 `mockups/` 并登记清单；规格和 build 只引用 PMAI 看版路径，不引用 `~/.gstack/...`。

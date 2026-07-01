@@ -18,6 +18,12 @@ PM-AI-Workflow 生成器仓的演进记录。本文件**只记影响下游业务
 
 ## 未发布
 
+- `fix(build)`: **补落地 / build / close 硬门，阻止混合交付绕过收尾**。真实会话复盘发现 PM 说“落地”后，AI 会把它解释成小改，直接把 `docs/modules/`、`mockups/`、`prototype/` 混在一条主会话里推进和提交，没有规范进入 `/pmai-build`，也没有 `/pmai-build-close`。改动：① `/pmai-design` 增加“落地意图识别”和 prototype 分流门，PM 说“落地 / 实现 / 提交”等必须先判断小改 prototype-only 还是转 build；② `/pmai-build` 收紧小改分支，只有单字段 / 单文案 / 局部样式 / 已确认弹窗微调且不改 docs/mockups 才能退出 build；③ `/pmai-build-close` 明确为主原型 + 模块文档 / mockup 的混合交付唯一收口，缺 build contract / 三道审 / PM 验收时不能伪装 close；④ 新增 `scripts/check-mixed-delivery.py` 并接入消费仓 pre-commit，普通提交同时 staged `prototype/` 或 `Sources/` 与 `docs/modules/` 或 `mockups/` 时会被拦下，正式 close 用 `PMAI_ALLOW_MIXED_DELIVERY=build-close` 放行。
+
+- `fix(codex)`: **补 Codex CLI 直输 `/pmai-*` 的 slash prompt 暴露**。此前 `pmai install/upgrade` 只把 PMAI 暴露到 `~/.codex/skills/pmai-*`，Codex Desktop runtime 能发现 skill，但 Codex CLI 直打 `/pmai-status` 这类命令仍可能不走 slash prompt 入口。改动：安装 / 升级时同步生成 `~/.codex/prompts/pmai-*.md`，每个 prompt 只负责把 `/pmai-*` 路由回 `PMAI_HOME` / `~/.pmai` 下的权威 `SKILL.md` 并要求完整读取执行；`pmai doctor` 可自愈缺失 prompts，`pmai status` 报告 prompt drift，`pmai uninstall` 只清理 PMAI 管理的 `pmai-*.md`，不碰其它 Codex prompts。
+
+- `refactor(design)`: **把 `/pmai-design` 收紧为设计主入口和分流中枢**。真实会话复盘发现 AI 容易跳过业务对象建模，直接进入 A/B 页面方案、文档成文或原型修改。改动：① design 增加“业务对象建模硬门”，进入方案前必须讲清原始输入、业务对象、对象关系、状态、下游判断和真相源；② 现有工作类型判断升级为分流硬门，产品判断不清转 `/pmai-meta`，视觉 / 结构有岔路转 `/pmai-mockup`，主原型修改转 `/pmai-build` 或 PM 明确小改确认，workflow / skill 问题转 `/pmai-skill-improve`；③ 强制停顿点覆盖对象链、需求类型、meta、mockup、spec、build；④ mockup 明确默认优先 gstack shotgun，gstack 不可用时走 PMAI 内部多方向比稿；⑤ meta 区分单主控多视角和多 Agent 压测，不可用子 Agent 时必须声明退化；⑥ 新增 `scripts/check-gstack-browser.sh` 并接入 `pmai doctor`，识别 Codex sandbox localhost `EPERM`，避免把 runtime 限制误判为 gstack browser 损坏。
+
 ### 框架瘦身改造（吸收 ExampleAgentProject 设计方法）—— 进行中
 
 - `refactor(meta)`: **`/pmai-meta` 收敛为产品判断模型**。PM 进一步反馈：Office Hours 化、grill 分层和“会话纪律 + 三个思考引擎”仍像外部方法拼装，没有形成 PMAI 自己的内核。改动：① 主方法论定为“产品元思考 = 用追问和压测，把表层诉求建成产品判断模型”；② 模型固定为判断句、地基账本、判断标准、模型轴、分路；③ 保留旧 meta 原词和逻辑：第一性原理建地基账本，升维 / 换高度找判断标准，多视角压测模型和分路，UI 信息 / 任务 / 判断层服务页面模型轴；④ gstack / office-hours 的需求证据、现状对手、具体用户、最小切口、观察意外、未来适配只作为产品想法素材，grill 的一题一问、依赖决策树、推荐默认答案、短答追问、能从文件查到的不问 PM 只作为问法纪律；⑤ `/pmai-meta` 不 runtime 调 gstack，不把 office-hours / grillme 作为 PMAI 主品牌；⑥ design / doc-writing / spec-writing 边界和 meta 静态测试同步更新。

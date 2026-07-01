@@ -22,7 +22,9 @@ SUITES=(
   test-shared-files-exist.sh
   test-shared-currentness.sh
   test-design-shared-boundary.sh
+  test-design-mockup-meta-routing.sh
   test-gstack-integration-contract.sh
+  test-gstack-browser-diagnostics.sh
   test-gstack-doc-return.sh
   test-meta-product-meta-thinking.sh
   test-meta-problem-framing.sh
@@ -35,6 +37,7 @@ SUITES=(
           test-checks-diff.sh
   test-build-audits.sh
   test-build-contract.sh
+  test-build-close-hard-gates.sh
   test-exec-adapters.sh
   test-mock-board.sh
     test-state-lib.sh
@@ -49,6 +52,7 @@ SUITES=(
   test-setup-deps.sh
   test-run-bg.sh
   test-pre-commit-hook.sh
+  test-mixed-delivery-guard.sh
   test-prd-hierarchy-lint.sh
   test-publish-to-lark-rowspan-merge.sh
   test-quick-fix-skill.sh

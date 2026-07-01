@@ -8,6 +8,7 @@
 #   ~/.claude/skills/_shared      (if it's a symlink we created)
 #   ~/.codex/skills/pmai-*        global Codex skill symlinks
 #   ~/.codex/skills/_shared       (if it's a symlink we created)
+#   ~/.codex/prompts/pmai-*.md    Codex CLI slash prompt files
 #
 # What is NOT removed:
 #   项目里的遗留实体副本 → 单独用 `pmai uninstall --local <dir>` 清
@@ -24,6 +25,7 @@ PMAI_HOME="${PMAI_HOME:-$HOME/.pmai}"
 PMAI_STATE="${PMAI_STATE:-$HOME/.pmai-state}"
 CLAUDE_SKILLS="$HOME/.claude/skills"
 CODEX_SKILLS="${CODEX_HOME:-$HOME/.codex}/skills"
+CODEX_PROMPTS="${CODEX_HOME:-$HOME/.codex}/prompts"
 SKILL_PREFIX="pmai-"
 
 usage() {
@@ -41,6 +43,7 @@ Removed:
   ~/.claude/skills/_shared (if pmai-managed symlink)
   ~/.codex/skills/pmai-*
   ~/.codex/skills/_shared  (if pmai-managed symlink)
+  ~/.codex/prompts/pmai-*.md
 EOF
 }
 
@@ -154,6 +157,11 @@ SYMLINKS=("${CLAUDE_SYMLINKS[@]}" "${CODEX_SYMLINKS[@]}")
 SYMLINK_COUNT=${#SYMLINKS[@]}
 CLAUDE_SYMLINK_COUNT=${#CLAUDE_SYMLINKS[@]}
 CODEX_SYMLINK_COUNT=${#CODEX_SYMLINKS[@]}
+CODEX_PROMPT_FILES=()
+for s in "$CODEX_PROMPTS"/${SKILL_PREFIX}*.md; do
+  [ -e "$s" ] && CODEX_PROMPT_FILES+=("$s")
+done
+CODEX_PROMPT_COUNT=${#CODEX_PROMPT_FILES[@]}
 echo "  ✓ $CLAUDE_SKILLS/${SKILL_PREFIX}* ($CLAUDE_SYMLINK_COUNT symlinks)"
 if [ "$CLAUDE_SYMLINK_COUNT" -gt 0 ] && [ "$CLAUDE_SYMLINK_COUNT" -le 10 ]; then
   for s in "${CLAUDE_SYMLINKS[@]}"; do
@@ -176,6 +184,17 @@ elif [ "$CODEX_SYMLINK_COUNT" -gt 10 ]; then
   done
   echo "      … (+$((CODEX_SYMLINK_COUNT - 5)) more)"
 fi
+echo "  ✓ $CODEX_PROMPTS/${SKILL_PREFIX}*.md ($CODEX_PROMPT_COUNT prompt files)"
+if [ "$CODEX_PROMPT_COUNT" -gt 0 ] && [ "$CODEX_PROMPT_COUNT" -le 10 ]; then
+  for s in "${CODEX_PROMPT_FILES[@]}"; do
+    echo "      - $(basename "$s")"
+  done
+elif [ "$CODEX_PROMPT_COUNT" -gt 10 ]; then
+  for s in "${CODEX_PROMPT_FILES[@]:0:5}"; do
+    echo "      - $(basename "$s")"
+  done
+  echo "      … (+$((CODEX_PROMPT_COUNT - 5)) more)"
+fi
 
 echo ""
 echo "NOT removed:"
@@ -186,7 +205,7 @@ echo "  - 消费仓内 .claude/settings.json / .codex/hooks.json（项目自管�
 echo ""
 echo "════════════════════════════════════════════════════════════"
 
-if [ "$PMAI_PRESENT" = "0" ] && [ "$SYMLINK_COUNT" = "0" ] && [ "$STATE_PRESENT" = "0" ]; then
+if [ "$PMAI_PRESENT" = "0" ] && [ "$SYMLINK_COUNT" = "0" ] && [ "$CODEX_PROMPT_COUNT" = "0" ] && [ "$STATE_PRESENT" = "0" ]; then
   echo "⚠️  没找到 PMAI 全局安装。已经卸载或从未安装。"
   exit 0
 fi
@@ -200,6 +219,10 @@ REMOVED_COUNT=0
 # 清 skill symlink
 for s in "${SYMLINKS[@]}"; do
   rm -f "$s" && REMOVED_COUNT=$((REMOVED_COUNT + 1))
+done
+REMOVED_PROMPT_COUNT=0
+for s in "${CODEX_PROMPT_FILES[@]}"; do
+  rm -f "$s" && REMOVED_PROMPT_COUNT=$((REMOVED_PROMPT_COUNT + 1))
 done
 # 老实体目录残留（罕见 — install 路径几乎不会创建实体）警告不删
 for s in "$CLAUDE_SKILLS"/${SKILL_PREFIX}* "$CLAUDE_SKILLS/_shared"; do
@@ -234,6 +257,7 @@ fi
 echo "   host skill symlinks removed ($REMOVED_COUNT total)"
 echo "     ~/.claude/skills/pmai-* ($CLAUDE_SYMLINK_COUNT)"
 echo "     ~/.codex/skills/pmai-*  ($CODEX_SYMLINK_COUNT)"
+echo "   Codex CLI slash prompts removed ($REMOVED_PROMPT_COUNT)"
 echo "═══════════════════════════════════════"
 echo "Note: 项目里遗留的实体副本不动。"
 echo "      用 'pmai uninstall --local <dir>' 单独清理。"

@@ -13,12 +13,15 @@ description: |
 > **PM 视图**：收尾用 PM 看得懂的话——「现状更新了 / 决策记下了 / 术语进表了 / 探的几版视觉留着了 / 改动并回主线了」。不出现"四类分流 / 派生 4 环 / 三身份 / supersede / 一致性扫描"等内部词。
 >
 > **执行纪律**：合同校验、字段补录、读文件、验证命令、tmux / 进程清理都属于内部动作。PM 窗口只报阶段结果和需要 PM 拍的产品问题，不直播命令流水、进程号、tail 日志或“我读了 N 个文件”。
+>
+> **混合交付唯一收口**：凡一次工作同时包含主原型改动和模块文档 / mockup 归位或退役，最终只能由 `/pmai-build-close` 收口。直接把 `prototype/`、`docs/modules/`、`mockups/` 混在一个普通提交里，是绕过 build/close。
 
 ## 什么时候用
 
 - `/pmai-build` 已经把功能做进主原型，PM 明确验收通过。
 - build 过程中出现了实现侧产品调整，需要把最终原型、模块决策和模块规格对齐。
 - 有隔离环境时，把已验收改动合回主线并清理。
+- 本次交付同时涉及 `prototype/` / `Sources/` 与 `docs/modules/` 或 `mockups/`，需要把实现、规格、决策和探索稿状态一起收口。
 - 不适用：只完成了 `/pmai-design` 讨论但还没实现 → 要么 `/pmai-build`，要么先放着；若只是想先沉淀项目级术语 / 跨模块规则 / 当前设计状态，走 `/pmai-record`。
 
 ## 这一步干四件事
@@ -102,6 +105,7 @@ python3 "$PMAI_HOME/scripts/build-contract.py" validate-close "$MODULE_WORK_DIR"
 - 合同是 `mode=main` 但当前不在 main/master → 停止，回主仓主线再收尾。
 - 缺三道审证据（`coverage.json` / `visual.json` / `behavior.json` / `synthesis.md`）→ STOP，回 `/pmai-build` 补跑覆盖、视觉和行为审；不能只靠 PM 说“通过”跳过 browser / gstack 验收。
 - 视觉门或行为审是 `limited` / `skipped` → 必须有 `audit_exception` 记录 PM 明确接受的原因；行为审 `fail` 一律 STOP。
+- 缺 build contract 时，即使文件已经改完、PM 说“提交吧”，也不能把它包装成已完成 close；先回 `/pmai-build` 补齐合同、三道审和验收记录。
 
 gstack / browser 证据按 `skills/_shared/gstack-integration.md` 处理：它们只是 evidence producer，`build-contract.py validate-close` 才是收口判断入口。
 
@@ -259,6 +263,7 @@ python3 "$PMAI_HOME/scripts/gen-mock-board.py" "$REPO_ROOT"
 
 - 本次新建了 `docs/modules/<新模块>/` 或 `docs/modules/<按内容命名>.md` → 刷 `docs/modules/INDEX.md`；如新增顶层文档类别，补 `docs/INDEX.md`。`check-index-lint.py` 校验失败两次则空 diff 跳过、不阻塞。
 - 不写 `status=closed` / `已收口` 到 `.work-meta.json`。当前模型里 `.work-meta.json` 只表示“正在做”；真正收尾由 `close-work.sh` 在最后删除该文件。若还没合回主线或验收缺口未解决，就保持 active，不伪装成完成时间线。
+- 正式 close 提交混合交付时，内部可用 `PMAI_ALLOW_MIXED_DELIVERY=build-close` 放行 pre-commit 的混合提交守卫；这个放行口只能在合同校验和三道审通过后使用，不能用于普通手工提交。
 
 > **silent skip**：纯非业务工作（只动工具脚本 / 基础设施）→ 步骤 2–5 可整体 silent skip，回执记「本次无产品级文档变更」。
 
@@ -311,6 +316,7 @@ merge 回 main（具体的 merge / 删 worktree / 删分支编排由 lifecycle �
 ## Rules
 
 - **build 合同优先**：`/pmai-build-close` 必须先读 `.work-meta.json:build`；执行方式、执行器、分支/worktree、实现提交和 PM 验收都以合同为准。没有合同或合同不完整时 STOP，先补 build 上下文，不做“沉淀但未落地”的假 close。
+- **混合交付唯一收口**：凡 staged / 本轮改动同时包含 `prototype/` 或 `Sources/`，以及 `docs/modules/` 或 `mockups/`，必须由 `/pmai-build-close` 在合同、三道审和 PM 验收齐全后放行；没有 build contract 就停止，不能把“已经改完了”伪装成 close。
 - **合同补录必须原子化**：PM 已明确验收但合同缺实现提交 / 验收时间时，只能用 `build-contract.py complete` 一次写齐；禁止并行或交错跑 `commit` / `accept` 两步，避免字段互相覆盖。
 - **不靠分支形态猜收尾**：当前在非 main 分支、普通 `codex/*` 分支、或 worktree 丢失，都不是新的 PM 分流菜单；只说明合同与现场不一致，停止并给出恢复上下文的最短动作。
 - **未落主线不写完成态**：还没按合同合回主线，或三道审 / 验证 / 验收缺口没有明确记录前，不得输出“已收口 / 时间线已完成”。若选择 PR/保留分支，那是待合回状态，不是 build-close 完成。

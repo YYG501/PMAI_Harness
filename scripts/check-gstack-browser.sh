@@ -1,0 +1,259 @@
+#!/usr/bin/env bash
+# check-gstack-browser.sh — lightweight diagnostics for gstack browse/design.
+#
+# Default mode avoids starting the gstack browse daemon. Use --smoke only when
+# the user explicitly wants an active browser/design-board probe.
+set -uo pipefail
+
+RUN_SMOKE=0
+DOCTOR_MODE=0
+PASS_COUNT=0
+WARN_COUNT=0
+FAIL_COUNT=0
+BROWSE_BIN=""
+DESIGN_BIN=""
+
+usage() {
+  cat <<EOF
+Usage:
+  check-gstack-browser.sh [--smoke] [--doctor]
+
+Checks:
+  - gstack browse/design binaries
+  - localhost bind permission without starting browse
+  - optional active smoke for local file navigation and design compare board
+
+Notes:
+  - Codex sandbox may block localhost bind with EPERM. That means runtime
+    restriction, not necessarily a broken gstack browser.
+  - This script intentionally does not use "browse status" as a passive check,
+    because that command can start a daemon.
+EOF
+}
+
+ok() {
+  echo "  OK: $*"
+  PASS_COUNT=$((PASS_COUNT + 1))
+}
+
+warn() {
+  echo "  WARN: $*"
+  WARN_COUNT=$((WARN_COUNT + 1))
+}
+
+fail() {
+  echo "  FAIL: $*"
+  FAIL_COUNT=$((FAIL_COUNT + 1))
+}
+
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --smoke) RUN_SMOKE=1 ;;
+    --doctor) DOCTOR_MODE=1 ;;
+    --help|-h) usage; exit 0 ;;
+    *) echo "unknown flag: $1" >&2; usage >&2; exit 2 ;;
+  esac
+  shift
+done
+
+find_first_executable() {
+  local env_name="$1"
+  shift
+  local value candidate
+
+  value="${!env_name:-}"
+  if [ -n "$value" ] && [ -x "$value" ]; then
+    echo "$value"
+    return 0
+  fi
+
+  for candidate in "$@"; do
+    if [ -n "$candidate" ] && [ -x "$candidate" ]; then
+      echo "$candidate"
+      return 0
+    fi
+  done
+  return 1
+}
+
+check_binaries() {
+  local command_browse command_design
+
+  command_browse=$(command -v browse 2>/dev/null || true)
+  command_design=$(command -v design 2>/dev/null || true)
+
+  BROWSE_BIN=$(find_first_executable GSTACK_BROWSE_BIN \
+    "$command_browse" \
+    "$HOME/.Codex/skills/gstack/browse/dist/browse" \
+    "$HOME/.agents/skills/gstack/browse/dist/browse" \
+    "$HOME/.claude/skills/gstack/browse/dist/browse" \
+    "$HOME/.claude/skills/gstack/.agents/skills/gstack-browse/dist/browse" \
+    2>/dev/null || true)
+
+  DESIGN_BIN=$(find_first_executable GSTACK_DESIGN_BIN \
+    "$command_design" \
+    "$HOME/.agents/skills/gstack/design/dist/design" \
+    "$HOME/.claude/skills/gstack/design/dist/design" \
+    "$HOME/.claude/skills/gstack/.agents/skills/gstack-design-shotgun/dist/design" \
+    2>/dev/null || true)
+
+  if [ -n "$BROWSE_BIN" ]; then
+    ok "gstack browse binary found: $BROWSE_BIN"
+  else
+    warn "gstack browse binary not found; browser-backed mockup checks will fall back"
+  fi
+
+  if [ -n "$DESIGN_BIN" ]; then
+    ok "gstack design binary found: $DESIGN_BIN"
+  else
+    warn "gstack design binary not found; /design-shotgun compare board is unavailable"
+  fi
+}
+
+probe_localhost_bind() {
+  local out rc
+
+  if ! command -v python3 >/dev/null 2>&1; then
+    warn "python3 not found; cannot probe localhost bind permission"
+    return
+  fi
+
+  out=$(python3 - <<'PY'
+import errno
+import socket
+import sys
+
+s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+try:
+    s.bind(("127.0.0.1", 0))
+    print("OK")
+    sys.exit(0)
+except PermissionError as exc:
+    print(f"EPERM: {exc}")
+    sys.exit(13)
+except OSError as exc:
+    if exc.errno == errno.EPERM:
+        print(f"EPERM: {exc}")
+        sys.exit(13)
+    print(f"OSERROR:{exc.errno}: {exc}")
+    sys.exit(1)
+finally:
+    try:
+        s.close()
+    except Exception:
+        pass
+PY
+)
+  rc=$?
+
+  case "$rc" in
+    0) ok "localhost bind probe passed (127.0.0.1)" ;;
+    13) warn "localhost bind blocked with EPERM; likely Codex sandbox/runtime restriction, not a broken gstack browser" ;;
+    *) warn "localhost bind probe failed: $out" ;;
+  esac
+}
+
+run_browser_smoke() {
+  local tmp html shot text_out snapshot_out
+
+  if [ -z "$BROWSE_BIN" ]; then
+    warn "--smoke requested but browse binary is unavailable"
+    return
+  fi
+
+  tmp=$(mktemp -d "${TMPDIR:-/tmp}/pmai-gstack-browser-smoke.XXXXXX") || {
+    warn "could not create smoke temp dir"
+    return
+  }
+  html="$tmp/smoke.html"
+  shot="$tmp/smoke.png"
+
+  cat > "$html" <<'HTML'
+<!doctype html>
+<html>
+  <body>
+    <h1>GStack Browser Smoke OK</h1>
+    <button>Test Button</button>
+  </body>
+</html>
+HTML
+
+  if ! "$BROWSE_BIN" goto "file://$html" >/dev/null 2>&1; then
+    warn "browse smoke failed at file:// navigation"
+    return
+  fi
+
+  text_out=$("$BROWSE_BIN" text 2>/dev/null || true)
+  if printf "%s\n" "$text_out" | grep -q "GStack Browser Smoke OK"; then
+    ok "browse smoke text extraction passed"
+  else
+    warn "browse smoke text extraction did not include expected text"
+  fi
+
+  snapshot_out=$("$BROWSE_BIN" snapshot -i 2>/dev/null || true)
+  if printf "%s\n" "$snapshot_out" | grep -q "Test Button"; then
+    ok "browse smoke snapshot passed"
+  else
+    warn "browse smoke snapshot did not include expected button"
+  fi
+
+  if "$BROWSE_BIN" screenshot "$shot" >/dev/null 2>&1 && [ -s "$shot" ]; then
+    ok "browse smoke screenshot saved"
+  else
+    warn "browse smoke screenshot failed"
+  fi
+
+  run_design_board_smoke "$shot" "$tmp"
+}
+
+run_design_board_smoke() {
+  local image="$1"
+  local tmp="$2"
+  local out rc
+
+  if [ -z "$DESIGN_BIN" ]; then
+    warn "--smoke requested but design binary is unavailable"
+    return
+  fi
+  if [ ! -s "$image" ]; then
+    warn "design board smoke skipped because browser screenshot is missing"
+    return
+  fi
+  if ! command -v timeout >/dev/null 2>&1; then
+    warn "design board smoke skipped because timeout command is unavailable"
+    return
+  fi
+
+  out=$(timeout 12 "$DESIGN_BIN" compare \
+    --images "$image,$image" \
+    --output "$tmp/design-board.html" \
+    --serve \
+    --no-daemon 2>&1)
+  rc=$?
+
+  if printf "%s\n" "$out" | grep -q "SERVE_STARTED" && [ -s "$tmp/design-board.html" ]; then
+    ok "design compare board smoke started successfully"
+  elif [ "$rc" = "124" ] && [ -s "$tmp/design-board.html" ]; then
+    ok "design compare board smoke produced board before timeout"
+  else
+    warn "design compare board smoke failed: $(printf "%s" "$out" | tail -1)"
+  fi
+}
+
+echo "gstack browser/design diagnostics"
+check_binaries
+probe_localhost_bind
+
+if [ "$RUN_SMOKE" = "1" ]; then
+  run_browser_smoke
+elif [ "$DOCTOR_MODE" = "0" ]; then
+  echo "  INFO: active browse/design smoke skipped; pass --smoke to start browser checks"
+fi
+
+if [ "$FAIL_COUNT" -gt 0 ]; then
+  exit 2
+fi
+if [ "$WARN_COUNT" -gt 0 ]; then
+  exit 1
+fi
+exit 0

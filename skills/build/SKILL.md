@@ -17,7 +17,7 @@ description: |
 - **只用于大需求**。判据由 PM 在 `/pmai-design` 收尾时拍：要新建 / 大改一片功能、改动量大到值得隔离 → 走 `/pmai-build`。
 - **不走这的**（在 main 上直接动，本 skill 不介入）：
   - **讨论** = 改文档（模块三件套 discussion / decisions / spec）→ `/pmai-design` 里做，无 worktree。
-  - **小改** = 改一两个字段 / 文案 / 一个组件的小调整 → 直接改 prototype/，无 worktree。main 写保护已放宽，允许直接改文档 + 小代码。
+  - **小改** = PM 明确确认的 prototype-only 微调：单字段、单文案、局部样式、已确认弹窗微调 → 直接改 `prototype/`，无 worktree。小改不得同时改 `docs/modules/` 或 `mockups/`。
 - 上游：`/pmai-design` 把模块规格 `spec.md` 定稿（信息模型理清、mock 已确认），或 `/pmai-spec-writing` 写出功能型规格文档 → 交给 `/pmai-build` 建。
 - 下游：建完 + PM 验收通过 → `/pmai-build-close` 收尾（决策 / 术语回写基线、文档归位、有 worktree 则 merge 回 main）。
 
@@ -58,7 +58,9 @@ preamble 会解析出 `PMAI_HOME` / `MAIN_REPO_ROOT` / `REPO_ROOT` / `BRANCH`。
    - 模块锚点下 `spec.md` 不存在 → 这个模块还没设计。提示 PM 先跑 `/pmai-design <模块>` 把规格定稿再来 `/pmai-build`。不在 build 里临时设计。
    - 功能型规格文档路径不存在 → 提示 PM 先用 `/pmai-spec-writing` 写清功能型规格文档，或重新给出正确路径。
    - `BUILD_ANCHOR` 在 → `@读` 它（功能范围 + 业务规则 + 字段口径 + 验收标准就是建造契约）。若锚点是模块 `spec.md`，再 `@读` 同模块 `decisions.md`；若锚点是功能型规格文档，则按其覆盖范围读取相关模块的 `spec.md` / `decisions.md` 和 `docs/modules/INDEX.md`。
-3. **确认这是大需求**。如果看下来其实是小改（一两处字段 / 文案 / 局部调整），一句话提示 PM「这个改动不大，直接在 prototype/ 改掉就行、不用单开建造流程」，征得同意后**退出 /pmai-build**，按小改直接动 prototype/（main 上，无 worktree）。大需求才继续步骤 1。
+3. **确认这是大需求**。如果看下来其实是小改（一两处字段 / 文案 / 局部样式 / 已确认弹窗微调），还必须确认它是 **prototype-only**：本次提交不改 `docs/modules/`、不吸收 / 更新 `mockups/`、不升版规格、不改变信息结构。满足这些条件时，一句话提示 PM「这个改动不大，可以直接改主原型，不用单开建造流程」，征得同意后**退出 /pmai-build**，按小改直接动 `prototype/`（main 上，无 worktree）。否则继续本 build 流程。
+
+> **小改不得同时改 docs/mockups**：如果本次要把 mockup / spec 做进主原型，或实现后还需要文档对账、规格升版、决策记录、mockup 退役 / 归位，就不是小改；必须保留在 `/pmai-build` 内，后续交 `/pmai-build-close` 收口。
 
 > 为什么对着功能锚点：模块规格是长期真相源；功能型规格文档是 PM 明确要求的 PRD / 功能需求 / 功能规格成稿。build 的覆盖审计锚点必须和 PM 选定的建造依据一致。
 
@@ -93,6 +95,8 @@ AskUserQuestion：
 - runtime 不支持 AskUserQuestion → 输出编号列表并 wait。PM 没答前禁止继续。
 
 **两道构建选择是硬门**：步骤 1 和步骤 2 必须按顺序问。没拿到“执行方式”和“执行器”两个答案之前，读文件 / 跑 `status` 可以，**禁止修改 `prototype/`、`Sources/` 或任何业务代码**，也禁止输出“我会直接在当前主仓实现”这类替 PM 拍板的话。
+
+当 PM 已确认要把已选 mockup、模块规格或功能型规格做进主原型时，不得再退回“我直接在当前主控里改”。必须继续问完这两道门，并写 build 合同。
 
 ### 步骤 1：PM 选要不要开隔离环境建（worktree 可选）
 
@@ -444,6 +448,8 @@ dev server 保持运行（PM 验收要访问）。呈交块 + AskUserQuestion（
 
 PM 拍 `可以，收尾` → build 的活到此为止，**merge 回 main + 文档归位 + 决策 / 术语回写基线 由 `/pmai-build-close` 做**（不在 build 里 merge：`/pmai-build-close` 是改造后的收尾原子动作，把决策 / 术语沉淀和 merge 焊在一起，绕不过）。
 
+**不得在 build 里混合提交收尾**：build 可以提交实现改动和合同状态，但不能把 `docs/modules/`、`mockups/`、`prototype/` 一起当作“本轮落地结果”直接 commit。文档对账、规格升版、决策记录、mockup 退役 / 归位和最终收口都交给 `/pmai-build-close`。
+
 输出 Next Up（不写 worktree / merge / 分支字样，按 banner-rules §2.5）：
 
 ```
@@ -464,10 +470,11 @@ PM 拍 `可以，收尾` → build 的活到此为止，**merge 回 main + 文�
 
 ## Rules
 
-- **只大需求走 build**。讨论（改文档）/ 小改（一两处字段 / 文案 / 局部）不走这——在 main 上由 `/pmai-design` 或直接改 prototype/ 完成，无 worktree。步骤 0 判出是小改 → 退出 build。
+- **只大需求走 build；小改必须 prototype-only**。讨论（改文档）在 `/pmai-design`；小改只能是 PM 明确确认的单字段 / 单文案 / 局部样式 / 已确认弹窗微调，且只改 `prototype/` 或同等主原型代码。步骤 0 判出小改但发现同时需要 `docs/modules/` 或 `mockups/` 改动时，不得退出 build。
 - **对着功能锚点建**。覆盖审计锚点 = `docs/modules/<模块>/spec.md` 或 `docs/modules/<按内容命名>.md`。不拆任务卡、不走独立任务状态机。
 - **PM 选独立建造工具**（claude-code / codex / cursor-agent / gemini / manual，复用 exec-adapter）**+ PM 选要不要 worktree**（步骤 1 / 步骤 2 两道 PM 决策）。executor 从问 PM 拿；当前主控 AI 只编排、检查和呈交，不把自己默认为执行器。
 - **两道构建选择是硬门**：没拿到“要不要隔离环境”和“用什么工具建”两个 PM 答案前，只能读文件 / 查状态，不能改 `prototype/` / `Sources/` / 业务代码。runtime 不支持 AskUserQuestion 就编号列表 wait，禁止默认选择。
+- **落地不能绕过 build**：PM 已确认要把 mockup / spec 做进主原型，或本轮会产生主原型 + 模块文档 / mockup 的混合交付时，必须走 `/pmai-build` 两道门和 build 合同；不能由当前主控在 design 会话里直接改。
 - **build 合同是 build-close 的唯一收尾依据**：两道 PM 选择拿到后立即写 `.work-meta.json:build` 并提交；缺 `.work-meta.json` 但模块和锚点明确时自动补最小状态，不再问 PM；PM 验收通过后写入 `implementation_commit` 与 `pm_accepted_at`。`/pmai-build-close` 不再靠当前 cwd、分支名或有没有 worktree 猜执行方式。
 - **未提交上下文先保存，不准绕过**：未提交的规格 / mock / 文档不是跳过 PM 选择的理由；先只保存当前模块建造依据，或停住。禁止用“worktree 拿不到未跟踪文件”为理由自行决定直接在 main 上实现。
 - **worktree 可选、统一挂 `.worktrees/<分支>/`**。开了就用 `git -C "$BUILD_DIR"` / subshell，禁 `cd` 进 worktree（cwd 护栏）；没开则 `BUILD_DIR="$REPO_ROOT"`、main 上直接建（main 写保护已放宽）。
@@ -478,5 +485,6 @@ PM 拍 `可以，收尾` → build 的活到此为止，**merge 回 main + 文�
 - **review loop 只动 prototype/ 代码**，不改 spec.md / decisions.md（模块文档对齐归 `/pmai-build-close`；build 期不改文档）。AI 主动批量 flag、PM 勾改；每轮改完重跑三道审。
 - **commit 用 `git -C "$BUILD_DIR"`**；执行器禁自己 commit（claude-code subagent prompt 里写死、adapter 约定 unstaged）。
 - **PM 验收是唯一决策点**（步骤 8）；通过后**不在 build 里 merge**，交 `/pmai-build-close` 做提交 / 合并 + 沉淀（决策 / 术语回写基线绑定在 build-close，绕不过）。
+- **混合交付只由 build-close 收口**：`prototype/` + `docs/modules/` / `mockups/` 同时进入同一轮交付时，build 只负责实现和验收，不负责最终混合提交；最终提交必须由 `/pmai-build-close` 在合同和三道审通过后完成。
 - 越界（执行器改了 docs/*）/ 零改动 / 执行器失败都给 PM 看、不静默吞；执行器失败默认保留半成品，由 PM 选“接手补完 / 换工具重跑 / 丢弃重来”，禁止自动 `restore/clean` 清空已落盘改动。
 - 路径定位用运行时变量（`BUILD_DIR` / `MAIN_REPO_ROOT` / `REPO_ROOT`）和仓内相对路径组合；框架、模板、prompt 和业务代码里禁止写死 `/Users/...` 这类机器绑定路径。

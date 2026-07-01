@@ -42,6 +42,21 @@ description: |
 
 不命中时直接回到对应产出型 skill：小文案交 `/pmai-doc-writing`，模块结构交 `/pmai-design`，构建交 `/pmai-build`，不要强行深想。
 
+## 多视角 vs 多 Agent 口径
+
+`/pmai-meta` 可以做两种压测，必须分清，不能偷换概念：
+
+- **单主控多视角**：当前主控按不同视角检查同一份材料，适合快速找盲区。输出时如果 PM 说“多角度看看”，可以称“多视角压测”，但不能说已经跑了多个 agent。
+- **多 Agent 压测**：PM 明确说“多 AI / multi ai / 子 Agent / 让几个 agent 分别看 / 独立视角”时，必须尝试当前 runtime 可用的子 Agent / multi-agent 工具，让每个子 Agent 独立给出观点，再由主控合成冲突、根因和建议。
+
+如果当前 runtime 没有可用子 Agent / multi-agent 工具，必须明说：
+
+```text
+当前 runtime 没有可用子 Agent，我只能按单主控多视角退化执行；这不等同于多 Agent 复审。
+```
+
+退化后仍可继续做产品判断模型，但最终输出必须保留这句限制说明。禁止把一个主控模型换几个角度想，说成“已用多 Agent 分析”。
+
 ---
 
 ## 三条会诊路径
@@ -54,7 +69,7 @@ description: |
 | PMAI workflow 决策 | skill / workflow / 文档同步 / 真相源 / 工具边界问题 | 真相源、模型轴、分路、下一步 | `pmai-workflow-decision.md` + `problem-framing.md` |
 | 已有材料压测 | 已有稿子、页面、规格、方案，需要判断根上是否成立 | 判断句、危险假设、模型轴、分路压测 | `problem-framing.md` + `thinking-toolbox.md` |
 
-路径可以切换：产品想法如果已经有页面稿，转已有材料压测；压测发现缺的是 PM 判断，转一题一问；workflow 决策发现其实是模块结构问题，才回 `/pmai-design`。
+路径可以切换：产品想法如果已经有页面稿，转已有材料压测；压测发现缺的是 PM 判断，转一题一问；workflow 决策发现其实是模块结构问题，才回 `/pmai-design`。**只要卡点是 PMAI skill / workflow 本身，就不回 design 兜圈子**；先读相关 skill 和 references，再按 workflow 决策比较“调用现有 / 改现有 / 新建入口 / 先不做”，需要沉淀时交 `/pmai-skill-improve`。
 
 ---
 
@@ -140,7 +155,7 @@ PMAI workflow 决策还必须包含“调用现有 / 改现有 / 新建入口 / 
 1. 根本原因是什么？
 2. 最直接的解法是什么？
 
-不要在原方案上连续打补丁。
+不要在原方案上连续打补丁。第一次质疑就停，不输出“修订版 / 再改一版”；先判断根因是产品判断模型缺口、对象关系错误、状态 / 真相源漏了，还是 PMAI workflow / skill 边界错了。
 
 ### 2. 补齐产品判断模型
 
@@ -151,6 +166,7 @@ PMAI workflow 决策还必须包含“调用现有 / 改现有 / 新建入口 / 
 - 判断标准不清 → 用升维 / 换高度找更高判断标准。
 - 模型轴不清 → 先分对象、责任、状态、统计、动作语义、真相源、验证路径。
 - 分路不清 → 用多视角压测找 2-3 个模型级 alternatives。
+- PM 要求多 AI / 子 Agent → 先尝试多 Agent 压测；不可用时声明“单主控多视角退化执行”。
 
 ### 3. 不足处一题一问
 

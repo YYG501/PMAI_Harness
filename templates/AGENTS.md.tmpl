@@ -43,7 +43,9 @@ Codex 收到 PM 输入的 `/pmai-xxx` 时：
 ## Consumer Workflow
 
 - 本仓已经初始化完成，不能在这里再跑 `/pmai-init-project`。
-- 起新模块或讨论新功能：读 `/pmai-design` 对应 skill。
+- 起新模块或讨论新功能：读 `/pmai-design` 对应 skill。`/pmai-design` 是设计主入口：先还原业务对象链和下游判断，再决定继续设计、调 `/pmai-meta`、调 `/pmai-mockup`、转 `/pmai-build`，还是转 `/pmai-skill-improve`。
+- `/pmai-mockup` 只做发散探索和对比看板，默认优先用 gstack shotgun；gstack 不可用时走 PMAI 内部多方向草图。它只写 `mockups/`，不等于改主原型。
+- PM 说“落地 / 实现 / 做进主原型 / 提交 / 可以做了”时，不等于直接改主原型；必须先在 `/pmai-design` 内过 prototype 分流门，明确是小改 prototype-only，还是转 `/pmai-build`。
 - 推进实现：读 `/pmai-build` 对应 skill，遵守 worktree / dirty check 护栏。
 - build 验收后收尾：读 `/pmai-build-close` 对应 skill。
 - 迷路或续跑：读 `/pmai-status` 对应 skill，先报告当前状态再行动。
@@ -58,15 +60,21 @@ Codex 收到 PM 输入的 `/pmai-xxx` 时：
 
 - AskUserQuestion 不可用时，输出编号列表并要求 PM 回复编号或自由文本；没有明确回答前停止推进。
 - 没拿到 PM 答案前，不能写 PM 视图文件、commit 或收尾当前工作。
+- 小改直接落主原型必须是 PM 明确确认的 prototype-only 小改：单字段、单文案、局部样式、已确认弹窗微调；不得同时改 `docs/modules/` 或 `mockups/`。
 - `/pmai-build` 在修改 `prototype/`、`Sources/` 或任何业务代码前，必须先完成两道 PM 门：要不要开隔离环境、用什么执行器。AskUserQuestion 不可用时用编号列表 wait；不能默认“直接在主线上建”，也不能默认当前主控 AI 自己建。
 - `/pmai-build` 遇到未提交 / 未跟踪的规格、决策、mock 或功能型规格文档时，先只保存本次建造依据或停住；不能用“隔离环境拿不到未跟踪文件”作为跳过 PM 两道选择、直接在 main 上实现的理由。
 - `/pmai-build` 拿到两道 PM 答案后必须写入当前模块 `.work-meta.json:build` 合同；如果模块和功能锚点已经明确但 `.work-meta.json` 缺失，自动补最小状态记录，不再向 PM 追加确认。`/pmai-build-close` 只按该合同收尾，缺合同或合同不完整时停止补上下文，不能靠当前分支 / worktree 形态猜测执行方式。
+- 混合交付必须 build/close：staged 或本轮改动同时包含 `prototype/` 或 `Sources/`，以及 `docs/modules/` 或 `mockups/` 时，不能普通提交；必须由 `/pmai-build-close` 在 build contract、三道审和 PM 验收齐全后收口。
 - Claude Code subagent 不可用时，不能用临时 ad hoc prompt 替代标明“必须完整执行”的 skill；`/pmai-build` 选择 Claude Code 时优先走 `~/.pmai/scripts/exec-adapters/claude-code.sh` 调本机 `claude -p`，如果本机 CLI / adapter 也不可用，再说明 runtime 限制并请求 PM 选择 Codex / Gemini / 手动等可用路径。执行器过程写日志和状态文件，PM 窗口只报阶段摘要；失败默认保留半成品，由 PM 选接手、换工具或丢弃重来。
+- `/pmai-meta` 的“多视角”不等于“多 Agent”。PM 明确要求多 AI / 子 Agent / 独立视角时，先尝试可用 multi-agent 工具；不可用时必须声明“单主控多视角退化执行”，不能假装跑过子 Agent。
+- gstack browser 在 Codex 沙箱内可能因 localhost `EPERM` 不可用；这说明 runtime 限制，不等于 gstack 损坏。需要诊断时优先运行 `bash "${PMAI_HOME:-$HOME/.pmai}/scripts/check-gstack-browser.sh"`，不要把 `browse status` 当无副作用检查。
 - review / qa / design-review 类工具仍由 PM 主动触发；Codex 主控只列推荐清单和记录 PM 明确报告的结果。
 
 ## Guardrails
 
 - 不要改 `CLAUDE.md` 的框架规则区，除非 PM 明确要求更新项目规则。
 - 不要把 `~/.pmai/skills`、`~/.pmai/scripts` 或其他 framework 源资产复制进消费仓；`.codex/hooks.json` 是允许存在的 host 配置，命令必须指向 `~/.pmai`。
+- 未经 PM 明确确认，不要在 `/pmai-design` 或 `/pmai-mockup` 中改 `prototype/`；design 先定对象和规格，mockup 只出探索稿，主原型改动走 `/pmai-build` 或 PM 明确确认的小改。
+- “落地”不是改原型的许可；小改必须 prototype-only，混合交付必须走 `/pmai-build` → `/pmai-build-close`。
 - 不要绕过 `check-branch.sh` 在 main 上直接改业务代码。
 - 派发外部执行器前，build worktree 必须干净；dirty 时先交还 PM 决策。

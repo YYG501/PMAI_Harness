@@ -154,7 +154,7 @@ if [ "$BUILD_MODE" = "worktree" ]; then
     echo "🧹 已清模块工作状态: $REL_MODULE/.work-meta.json"
   fi
 
-  if ! git commit -m "close: 收尾 ${WORK_ID}（清模块 .work-meta）" 2>&1; then
+  if ! PMAI_ALLOW_MIXED_DELIVERY=build-close git commit -m "close: 收尾 ${WORK_ID}（清模块 .work-meta）" 2>&1; then
     echo "❌ 提交清状态改动到 work branch失败（可能是 git 身份未配置或 hook 拒绝）。" >&2
     exit 1
   fi
@@ -256,7 +256,7 @@ else
   }
   echo "🧹 已清模块工作状态（main 直接清，无 worktree）: $REL_MODULE/.work-meta.json"
 
-  if ! git commit -m "close: 收尾 ${WORK_ID}（清模块 .work-meta·无 worktree）" 2>&1; then
+  if ! PMAI_ALLOW_MIXED_DELIVERY=build-close git commit -m "close: 收尾 ${WORK_ID}（清模块 .work-meta·无 worktree）" 2>&1; then
     echo "❌ 提交收尾改动到 main 失败（可能是 git 身份未配置或 hook 拒绝）。" >&2
     exit 1
   fi

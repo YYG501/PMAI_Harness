@@ -384,7 +384,9 @@ test_mockup_skill_gstack_or_upload_only_for_images() {
   local skill="$REPO_ROOT/skills/mockup/SKILL.md"
   assert_file_contains "$skill" "先打开设计空间" || return
   assert_file_contains "$skill" "反同质化硬门" || return
-  assert_file_contains "$skill" "PMAI 自己编排，gstack 作为可用引擎" || return
+  assert_file_contains "$skill" "PMAI 自己编排，gstack 作为优先引擎" || return
+  assert_file_contains "$skill" "gstack 不可用也要发散" || return
+  assert_file_contains "$skill" "PMAI 内部 shotgun" || return
   assert_file_contains "$skill" "scripts/import-mockup-variants.py" || return
   assert_file_contains "$skill" "用户上传图片允许进入看版" || return
 
