@@ -17,7 +17,7 @@ import subprocess
 
 
 VALID_MODES = {"worktree", "main"}
-VALID_EXECUTORS = {"claude-code", "codex", "cursor-agent", "gemini", "manual"}
+VALID_EXECUTORS = {"claude-code", "codex", "cursor-agent", "gemini", "opencode", "manual"}
 AUDIT_FILES = {
     "coverage": "coverage.json",
     "visual": "visual.json",
@@ -81,6 +81,41 @@ def validate_mode_executor(mode: str, executor: str | None) -> None:
         raise SystemExit(
             f"build.executor 必须是 {' / '.join(sorted(VALID_EXECUTORS))}: {executor}"
         )
+
+
+def parse_builder_json(value: str | None) -> dict:
+    raw = optional(value)
+    if not raw:
+        return {}
+    try:
+        data = json.loads(raw)
+    except json.JSONDecodeError as exc:
+        raise SystemExit(f"builder 必须是合法 JSON 对象: {exc}") from exc
+    if not isinstance(data, dict):
+        raise SystemExit("builder 必须是 JSON 对象")
+    return data
+
+
+def validate_builder(builder: dict) -> None:
+    for key in ("model", "thinking"):
+        value = builder.get(key)
+        if value is not None and not isinstance(value, str):
+            raise SystemExit(f"builder.{key} 必须是字符串")
+    overrides = builder.get("overrides")
+    if overrides is not None and not isinstance(overrides, dict):
+        raise SystemExit("builder.overrides 必须是对象")
+
+
+def build_snapshot(args: argparse.Namespace) -> dict:
+    builder = parse_builder_json(args.builder_json)
+    model = optional(args.builder_model)
+    thinking = optional(args.builder_thinking)
+    if model:
+        builder["model"] = model
+    if thinking:
+        builder["thinking"] = thinking
+    validate_builder(builder)
+    return builder
 
 
 def repo_root_for(module_dir: Path) -> Path:
@@ -206,6 +241,7 @@ def cmd_start(args: argparse.Namespace) -> None:
     if mode == "main":
         worktree = None
 
+    builder = build_snapshot(args)
     build = {
         "anchor": args.anchor,
         "mode": mode,
@@ -218,6 +254,11 @@ def cmd_start(args: argparse.Namespace) -> None:
         "implementation_commit": None,
         "pm_accepted_at": None,
     }
+    builder_profile = optional(args.builder_profile)
+    if builder_profile:
+        build["builder_profile"] = builder_profile
+    if builder:
+        build["builder"] = builder
 
     meta["status"] = "active"
     meta["stage"] = 2
@@ -314,6 +355,11 @@ def cmd_validate_close(args: argparse.Namespace) -> None:
         raise SystemExit("build 合同要求隔离环境，但缺少 branch。")
     if mode == "main" and build.get("branch") not in (None, "", "main", "master"):
         raise SystemExit("build 合同是 main 模式，但 branch 不是 main/master，不能按主线直收。")
+    builder = build.get("builder")
+    if builder is not None:
+        if not isinstance(builder, dict):
+            raise SystemExit("build 合同里的 builder 必须是对象。")
+        validate_builder(builder)
     validate_audit_evidence(module_dir, build)
 
     print(json.dumps(build, ensure_ascii=False))
@@ -332,6 +378,10 @@ def build_parser() -> argparse.ArgumentParser:
     start.add_argument("--worktree")
     start.add_argument("--baseline-sha")
     start.add_argument("--audit-dir")
+    start.add_argument("--builder-profile")
+    start.add_argument("--builder-json")
+    start.add_argument("--builder-model")
+    start.add_argument("--builder-thinking")
     start.set_defaults(func=cmd_start)
 
     commit = sub.add_parser("commit", help="record the implementation commit produced by build")

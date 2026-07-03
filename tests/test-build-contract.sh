@@ -65,6 +65,8 @@ test_contract_lifecycle() {
     --anchor "docs/modules/pet-import/spec.md" \
     --mode worktree \
     --executor codex \
+    --builder-profile codex \
+    --builder-json '{"model":"gpt-5.4","thinking":"high","sandbox":"workspace-write"}' \
     --branch build-pet-import \
     --worktree ".worktrees/build-pet-import" \
     --baseline-sha "abc123" \
@@ -120,6 +122,10 @@ build = meta["build"]
 assert meta["stage"] == 2
 assert build["mode"] == "worktree"
 assert build["executor"] == "codex"
+assert build["builder_profile"] == "codex"
+assert build["builder"]["model"] == "gpt-5.4"
+assert build["builder"]["thinking"] == "high"
+assert build["builder"]["sandbox"] == "workspace-write"
 assert build["implementation_commit"] == "def456"
 assert build["pm_accepted_at"] == "2026-06-28T10:00:00+08:00"
 PY

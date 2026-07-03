@@ -16,8 +16,8 @@
 **框架分发与全局安装**（2026-05-26 v1.1 落地）：
 
 - 本仓现已通过 GitHub remote `git@github.com:YYG501/PMAI_Workflow.git` 分发
-- `pmai install` 一次全局安装到 `~/.pmai/` + symlink 当前 skill 到 `~/.claude/skills/pmai-*` / `~/.codex/skills/pmai-*` + 生成 Codex CLI slash prompts 到 `~/.codex/prompts/pmai-*.md`（任意 cwd 可调 `/pmai-init-project`）
-- **仅全局安装**：skill 只装 host skill dirs，不往项目里拷副本；项目里只放 host 配置 / 状态资产（`.claude/settings.json` / `.codex/hooks.json` / `.work-meta.json`）。旧 `--local`（项目实体副本）已移除——和全局并存会让 `/pmai-*` 命令重复且副本陈旧；遗留副本用 `pmai uninstall --local <dir>` 清理
+- `pmai install` 一次全局安装到 `~/.pmai/` + symlink 当前 skill 到 `~/.claude/skills/pmai-*` / `~/.codex/skills/pmai-*` + 生成 Codex CLI slash prompts 到 `~/.codex/prompts/pmai-*.md` + 生成 OpenCode slash commands 到 `~/.config/opencode/commands/pmai-*.md`（任意 cwd 可调 `/pmai-init-project`）
+- **仅全局安装**：skill 只装 host skill dirs / slash command dirs，不往项目里拷副本；项目里只放 host 配置 / 状态资产（`.claude/settings.json` / `.codex/hooks.json` / `.opencode/commands` / `opencode.json` / `.work-meta.json`）。旧 `--local`（项目实体副本）已移除——和全局并存会让 `/pmai-*` 命令重复且副本陈旧；遗留副本用 `pmai uninstall --local <dir>` 清理
 - 升级 `pmai upgrade`（main）/ `pmai upgrade --stable`（tag）/ `pmai upgrade --to v0.x.0`（pin）
 - 安装和升级以 `README.md`、`bin/pmai`、`bin/pmai-doctor` 为当前真相源。
 - 老的手动同步 SOP：[`框架同步-SOP.md`](./docs/归档/废弃/框架同步-SOP.md) **DEPRECATED + 已归档**（pmai install/upgrade 承接；`pmai sync` 落地后彻底退役）
@@ -39,9 +39,9 @@
 5. **禁把 BLOCKER finding 降级 WARNING** 避免显得苛刻 —— 保留原 severity
 6. 真有 section 不适用 → 默认跑完整版，跑完在完整度标记里写原因；PM 觉得多余事后会让你砍
 
-每次触发上述 skill 时，[`hooks/review-skill-guard.cjs`](./hooks/review-skill-guard.cjs) 通过 `.claude/settings.json` / `.codex/hooks.json` 注册的 UserPromptSubmit hook 自动注入完整约束清单。**hook 配置跟项目走（git 跟踪），脚本本体来自本仓或已安装的 `~/.pmai/`；不依赖全局 `~/.claude/`**。
+每次触发上述 skill 时，[`hooks/review-skill-guard.cjs`](./hooks/review-skill-guard.cjs) 通过 `.claude/settings.json` / `.codex/hooks.json` 注册的 UserPromptSubmit hook 自动注入完整约束清单。**hook 配置跟项目走（git 跟踪），脚本本体来自本仓或已安装的 `~/.pmai/`；不依赖全局 `~/.claude/`**。OpenCode 第一版只生成 `.opencode/commands` / `opencode.json` 主控配置，不伪装成 Codex hooks。
 
-消费仓由 `scripts/init-project.sh` 自动生成 `.claude/settings.json` 和 `.codex/hooks.json`。已有 I-mini 消费仓缺 Codex hooks 时，在项目根运行 `bash ~/.pmai/scripts/install-codex-hooks.sh` 补装；Codex 首次看到新增 hook 时可能要求信任确认。
+消费仓由 `scripts/init-project.sh` 自动生成 `.claude/settings.json`、`.codex/hooks.json`、`.opencode/commands` 和 `opencode.json`。已有 I-mini 消费仓缺 Codex hooks 时，在项目根运行 `bash ~/.pmai/scripts/install-codex-hooks.sh` 补装；缺 OpenCode commands 时运行 `bash ~/.pmai/scripts/install-opencode-commands.sh --project "$PWD"` 补装。Codex 首次看到新增 hook 时可能要求信任确认。
 
 ---
 

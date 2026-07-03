@@ -162,6 +162,7 @@ is_redline_path() {
     .claude/skills|.claude/skills/*) return 0 ;;
     .claude/settings.json) return 0 ;;
     .codex/hooks.json) return 0 ;;
+    .opencode|.opencode/*|opencode.json) return 0 ;;
   esac
   return 1
 }

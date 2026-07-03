@@ -68,7 +68,7 @@ PM 上传的外部材料统一按类型归档到 `docs/inputs/<类别>/`，当�
 - 🟢 `prototype/` 相关页面 / 组件（实现参考，可全文读小文件；大文件按结构局部读）
 - ⚪ `PRODUCT-RULES.md`（命中跨功能规则时回查）
 
-build 不拆 task。执行器可以是 Claude Code / Codex / Cursor / PM 手动，但输入契约都是模块 `spec.md`，改动目标集中在 `prototype/`。
+build 不拆 task。建造工具可以是 Claude Code / Codex / Cursor / Gemini / OpenCode / PM 手动，但输入契约都是模块 `spec.md`，改动目标集中在 `prototype/`。
 
 ### 复审（build 后）
 

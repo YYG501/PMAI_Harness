@@ -15,10 +15,15 @@ PROMPT="$(cat "$PROMPT_FILE")"
 MODEL_ARGS=()
 [ -n "${EXECUTOR_MODEL:-}" ] && MODEL_ARGS=(--model "$EXECUTOR_MODEL")
 
+YOLO_ARGS=()
+if [ -z "${EXECUTOR_YOLO+x}" ] || adapter_truthy "$EXECUTOR_YOLO"; then
+  YOLO_ARGS=(--yolo)
+fi
+
 EXEC_EXIT=0
 (
   cd "$BUILD_DIR_RESOLVED"
-  gemini --yolo ${MODEL_ARGS[@]+"${MODEL_ARGS[@]}"} --prompt "$PROMPT"
+  gemini ${YOLO_ARGS[@]+"${YOLO_ARGS[@]}"} ${MODEL_ARGS[@]+"${MODEL_ARGS[@]}"} --prompt "$PROMPT"
 ) || EXEC_EXIT=$?
 
 adapter_postcheck "$EXEC_EXIT"

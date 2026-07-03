@@ -31,3 +31,10 @@ adapter_postcheck() {
   local executor_exit="${1:-0}"
   return "$executor_exit"
 }
+
+adapter_truthy() {
+  case "${1:-}" in
+    1|true|TRUE|yes|YES|on|ON) return 0 ;;
+    *) return 1 ;;
+  esac
+}

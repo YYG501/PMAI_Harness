@@ -85,6 +85,23 @@ test_main_allows_codex_hooks() {
   fixture_teardown
 }
 
+test_main_allows_opencode_config() {
+  start_test "I-CB3 main allows OpenCode host config"
+  fixture_setup
+  cd "$FIXTURE_DIR"
+  mkdir -p .opencode/commands
+  capture_check "Write" ".opencode/commands/pmai-build.md" "" "" "route"
+  local rc1="$RC" out1="$OUT"
+  capture_check "Write" "opencode.json" "" "" "{}"
+  if [ "$rc1" = "0" ] && ! echo "$out1" | grep -q '"deny"' \
+     && [ "$RC" = "0" ] && ! echo "$OUT" | grep -q '"deny"'; then
+    pass_test
+  else
+    _fail "should allow OpenCode host config on main (command rc=$rc1 out=$out1; json rc=$RC out=$OUT)"
+  fi
+  fixture_teardown
+}
+
 
 test_main_allows_module_meta_create() {
   # 批 2：真相源迁 docs/modules/*；旧 requirements/active 白名单已删。模块 .work-meta.json
@@ -285,6 +302,7 @@ test_main_still_rejects_prototype_code() {
 test_main_rejects_src_write
 test_main_allows_claude_settings
 test_main_allows_codex_hooks
+test_main_allows_opencode_config
 test_main_allows_module_meta_create
 test_main_rejects_random_toplevel
 test_build_branch_allows_prototype_write

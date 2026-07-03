@@ -1,8 +1,8 @@
 # {{PROJECT_NAME}}
 
-## PMAI Codex Entry
+## PMAI Agent Entry
 
-本文件是 Codex / OpenAI agent 的项目入口。PMAI 的完整工作流规则仍以 `CLAUDE.md` 为主真相源；Codex 作为主控时必须先读本文件，再读 `CLAUDE.md`。
+本文件是 Claude Code / Codex / OpenCode 等 agent 的项目入口。PMAI 的完整工作流规则仍以 `CLAUDE.md` 为主真相源；任一主控进入项目后必须先读本文件，再读 `CLAUDE.md`。
 
 默认用中文和 PM 沟通；只有用户明确要求英文或引用原文时才切换。
 
@@ -14,8 +14,8 @@
 
 ## Host Mapping
 
-- `CLAUDE.md` 里写的“驱动 Claude”，在 Codex 会话中等价理解为“驱动 Codex”。
-- `/pmai-*` 是 PMAI 的用户命令名。Codex skill 列表已暴露 `pmai-*` 时优先按该 skill 执行；如果当前 Codex runtime 没有 slash / skill UI，再按对应 `~/.pmai/skills/<command-without-pmai-prefix>/SKILL.md` 的步骤执行。
+- `CLAUDE.md` 里写的“Claude Code”“Claude host”“驱动 Claude”，在 Codex / OpenCode 会话中等价理解为当前主控 agent。
+- `/pmai-*` 是 PMAI 的用户命令名。Codex skill / prompt 列表已暴露 `pmai-*` 时优先按该入口执行；OpenCode 已暴露 `.opencode/commands/pmai-*.md` 或 `~/.config/opencode/commands/pmai-*.md` 时优先按该入口执行；如果当前 runtime 没有 slash / skill UI，再按对应 `~/.pmai/skills/<command-without-pmai-prefix>/SKILL.md` 的步骤执行。
 - 如果 skill 目录名本身带 `pmai-` 前缀，例如 `/pmai-upgrade`，对应 `~/.pmai/skills/pmai-upgrade/SKILL.md`。
 - 运行态只创建并识别 `build-*` 工作分支。
 - build 阶段的实现改动应落在当前工作 worktree 或明确允许的轻量入口内，不要绕过分支护栏。
@@ -24,15 +24,16 @@
 
 会话开始时按顺序做：
 
-1. 读 `CLAUDE.md`，把其中的 Claude host 名称按上面的 Host Mapping 映射到 Codex。
+1. 读 `CLAUDE.md`，把其中的 Claude host 名称按上面的 Host Mapping 映射到当前主控。
 2. 运行 `bash -lc 'source "${PMAI_HOME:-$HOME/.pmai}/scripts/skill-preamble.sh"'` 检测 PMAI_HOME、当前 worktree、active work 和项目初始化状态；如果文件不存在，先提示 PM 运行 `pmai install` 或检查 `PMAI_HOME`。
    如果 preamble 提示当前目录还没有 PMAI 初始化，停止当前非 init skill，引导 PM 先发 `/pmai-init-project`。它会自动判断全新项目 / 资料目录 / 已有代码库，不需要 PM 手动改跑其它 skill。
-3. 检查 `.codex/hooks.json` 是否存在；缺失时提示在项目根运行 `bash "${PMAI_HOME:-$HOME/.pmai}/scripts/install-codex-hooks.sh"` 补装。Codex 首次启用项目 hooks 时可能要求信任确认。
-4. 按 `/pmai-status` 等价流程判断当前下一步；已初始化且没有 active work 时，引导 PM 运行 `/pmai-design`。
+3. 如果当前主控是 Codex，检查 `.codex/hooks.json` 是否存在；缺失时提示在项目根运行 `bash "${PMAI_HOME:-$HOME/.pmai}/scripts/install-codex-hooks.sh"` 补装。Codex 首次启用项目 hooks 时可能要求信任确认。
+4. 如果当前主控是 OpenCode，检查 `.opencode/commands/` 或 `opencode.json` 是否存在；缺失时提示在项目根运行 `bash "${PMAI_HOME:-$HOME/.pmai}/scripts/install-opencode-commands.sh" --project "$PWD"` 补装。OpenCode 不使用 Codex hooks，不能声称 Codex hooks 已在 OpenCode 中生效。
+5. 按 `/pmai-status` 等价流程判断当前下一步；已初始化且没有 active work 时，引导 PM 运行 `/pmai-design`。
 
 ## Command Resolution
 
-Codex 收到 PM 输入的 `/pmai-xxx` 时：
+当前 agent 收到 PM 输入的 `/pmai-xxx` 时：
 
 1. 先设 `PMAI_HOME="${PMAI_HOME:-$HOME/.pmai}"`。
 2. 去掉 `pmai-` 前缀，定位 `$PMAI_HOME/skills/xxx/SKILL.md`；如果该文件不存在，再尝试 `$PMAI_HOME/skills/pmai-xxx/SKILL.md`。
@@ -61,19 +62,20 @@ Codex 收到 PM 输入的 `/pmai-xxx` 时：
 - AskUserQuestion 不可用时，输出编号列表并要求 PM 回复编号或自由文本；没有明确回答前停止推进。
 - 没拿到 PM 答案前，不能写 PM 视图文件、commit 或收尾当前工作。
 - 小改直接落主原型必须是 PM 明确确认的 prototype-only 小改：单字段、单文案、局部样式、已确认弹窗微调；不得同时改 `docs/modules/` 或 `mockups/`。
-- `/pmai-build` 在修改 `prototype/`、`Sources/` 或任何业务代码前，必须先完成两道 PM 门：要不要开隔离环境、用什么执行器。AskUserQuestion 不可用时用编号列表 wait；不能默认“直接在主线上建”，也不能默认当前主控 AI 自己建。
+- `/pmai-build` 在修改 `prototype/`、`Sources/` 或任何业务代码前，必须先完成两道 PM 门：要不要开隔离环境、用哪套建造工具档位。建造工具选项只展示 `工具名（model, thinking）`。AskUserQuestion 不可用时用编号列表 wait；不能默认“直接在主线上建”，也不能默认当前主控 AI 自己建。
 - `/pmai-build` 遇到未提交 / 未跟踪的规格、决策、mock 或功能型规格文档时，先只保存本次建造依据或停住；不能用“隔离环境拿不到未跟踪文件”作为跳过 PM 两道选择、直接在 main 上实现的理由。
 - `/pmai-build` 拿到两道 PM 答案后必须写入当前模块 `.work-meta.json:build` 合同；如果模块和功能锚点已经明确但 `.work-meta.json` 缺失，自动补最小状态记录，不再向 PM 追加确认。`/pmai-build-close` 只按该合同收尾，缺合同或合同不完整时停止补上下文，不能靠当前分支 / worktree 形态猜测执行方式。
 - 混合交付必须 build/close：staged 或本轮改动同时包含 `prototype/` 或 `Sources/`，以及 `docs/modules/` 或 `mockups/` 时，不能普通提交；必须由 `/pmai-build-close` 在 build contract、三道审和 PM 验收齐全后收口。
-- Claude Code subagent 不可用时，不能用临时 ad hoc prompt 替代标明“必须完整执行”的 skill；`/pmai-build` 选择 Claude Code 时优先走 `~/.pmai/scripts/exec-adapters/claude-code.sh` 调本机 `claude -p`，如果本机 CLI / adapter 也不可用，再说明 runtime 限制并请求 PM 选择 Codex / Gemini / 手动等可用路径。执行器过程写日志和状态文件，PM 窗口只报阶段摘要；失败默认保留半成品，由 PM 选接手、换工具或丢弃重来。
+- Claude Code subagent 不可用时，不能用临时 ad hoc prompt 替代标明“必须完整执行”的 skill；`/pmai-build` 选择 Claude Code 时优先走 `~/.pmai/scripts/exec-adapters/claude-code.sh` 调本机 `claude -p`，如果本机 CLI / adapter 也不可用，再说明 runtime 限制并请求 PM 选择 Codex / Gemini / OpenCode / Cursor / 手动等可用路径。执行器过程写日志和状态文件，PM 窗口只报阶段摘要；失败默认保留半成品，由 PM 选接手、换工具或丢弃重来。
 - `/pmai-meta` 的“多视角”不等于“多 Agent”。PM 明确要求多 AI / 子 Agent / 独立视角时，先尝试可用 multi-agent 工具；不可用时必须声明“单主控多视角退化执行”，不能假装跑过子 Agent。
 - gstack browser 在 Codex 沙箱内可能因 localhost `EPERM` 不可用；这说明 runtime 限制，不等于 gstack 损坏。需要诊断时优先运行 `bash "${PMAI_HOME:-$HOME/.pmai}/scripts/check-gstack-browser.sh"`，不要把 `browse status` 当无副作用检查。
-- review / qa / design-review 类工具仍由 PM 主动触发；Codex 主控只列推荐清单和记录 PM 明确报告的结果。
+- OpenCode 主控第一版不复刻 Codex hooks；涉及写入保护时，使用 OpenCode 自身 permission、PMAI git hooks、build contract 和 changed-path review 兜底。
+- review / qa / design-review 类工具仍由 PM 主动触发；当前主控只列推荐清单和记录 PM 明确报告的结果。
 
 ## Guardrails
 
 - 不要改 `CLAUDE.md` 的框架规则区，除非 PM 明确要求更新项目规则。
-- 不要把 `~/.pmai/skills`、`~/.pmai/scripts` 或其他 framework 源资产复制进消费仓；`.codex/hooks.json` 是允许存在的 host 配置，命令必须指向 `~/.pmai`。
+- 不要把 `~/.pmai/skills`、`~/.pmai/scripts` 或其他 framework 源资产复制进消费仓；`.codex/hooks.json`、`.opencode/commands`、`opencode.json` 是允许存在的 host 配置，命令必须指向 `~/.pmai`。
 - 未经 PM 明确确认，不要在 `/pmai-design` 或 `/pmai-mockup` 中改 `prototype/`；design 先定对象和规格，mockup 只出探索稿，主原型改动走 `/pmai-build` 或 PM 明确确认的小改。
 - “落地”不是改原型的许可；小改必须 prototype-only，混合交付必须走 `/pmai-build` → `/pmai-build-close`。
 - 不要绕过 `check-branch.sh` 在 main 上直接改业务代码。

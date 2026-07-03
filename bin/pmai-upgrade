@@ -21,6 +21,7 @@ PMAI_STATE="${PMAI_STATE:-$HOME/.pmai-state}"
 CLAUDE_SKILLS="$HOME/.claude/skills"
 CODEX_SKILLS="${CODEX_HOME:-$HOME/.codex}/skills"
 CODEX_PROMPTS="${CODEX_HOME:-$HOME/.codex}/prompts"
+OPENCODE_CONFIG_DIR="${OPENCODE_CONFIG_DIR:-$HOME/.config/opencode}"
 SKILL_PREFIX="pmai-"
 REMOTE="${PMAI_REMOTE:-git@github.com:YYG501/PMAI_Workflow.git}"
 DOCTOR_BIN="$(dirname "$0")/pmai-doctor"
@@ -45,6 +46,7 @@ Usage:
 
 Env override:
   PMAI_REMOTE=<git-url>               # Override default github remote
+  OPENCODE_CONFIG_DIR=<path>          # Override default ~/.config/opencode
 EOF
 }
 
@@ -175,6 +177,10 @@ global_rollback() {
     rebuild_symlinks "$PMAI_HOME/skills" "$CLAUDE_SKILLS" >/dev/null 2>&1 || true
     rebuild_symlinks "$PMAI_HOME/skills" "$CODEX_SKILLS" >/dev/null 2>&1 || true
     rebuild_codex_prompts "$PMAI_HOME/skills" "$CODEX_PROMPTS" >/dev/null 2>&1 || true
+    if [ -f "$PMAI_HOME/scripts/install-opencode-commands.sh" ]; then
+      PMAI_HOME="$PMAI_HOME" OPENCODE_CONFIG_DIR="$OPENCODE_CONFIG_DIR" \
+        bash "$PMAI_HOME/scripts/install-opencode-commands.sh" --global >/dev/null 2>&1 || true
+    fi
   fi
   if [ "$STASHED" = "1" ]; then
     echo "" >&2
@@ -260,6 +266,9 @@ echo "   $CODEX_SKILLS: $codex_count"
 echo "→ Re-syncing Codex CLI slash prompts"
 codex_prompt_count=$(rebuild_codex_prompts "$PMAI_HOME/skills" "$CODEX_PROMPTS")
 echo "   $CODEX_PROMPTS: $codex_prompt_count"
+echo "→ Re-syncing OpenCode slash commands"
+PMAI_HOME="$PMAI_HOME" OPENCODE_CONFIG_DIR="$OPENCODE_CONFIG_DIR" \
+  bash "$PMAI_HOME/scripts/install-opencode-commands.sh" --global
 
 # E：跑 doctor 自检（FAIL → 回滚；WARN 不触发）
 if [ -x "$DOCTOR_BIN" ]; then
@@ -289,6 +298,7 @@ else
 fi
 echo "   skill: $count symlinks re-synced"
 echo "   codex prompts: $codex_prompt_count files re-synced"
+echo "   opencode commands: re-synced"
 echo "═══════════════════════════════════════"
 
 # stash 恢复提示

@@ -9,10 +9,11 @@
 #   ~/.codex/skills/pmai-*        global Codex skill symlinks
 #   ~/.codex/skills/_shared       (if it's a symlink we created)
 #   ~/.codex/prompts/pmai-*.md    Codex CLI slash prompt files
+#   ~/.config/opencode/commands/pmai-*.md OpenCode slash command files
 #
 # What is NOT removed:
 #   项目里的遗留实体副本 → 单独用 `pmai uninstall --local <dir>` 清
-#   项目级 .claude/settings.json / .codex/hooks.json 不动（hook 注册在消费仓内）
+#   项目级 .claude/settings.json / .codex/hooks.json / .opencode/commands / opencode.json 不动（host 配置注册在消费仓内）
 #
 # Flags:
 #   --force                       不问确认（preview 仍打印）
@@ -26,6 +27,8 @@ PMAI_STATE="${PMAI_STATE:-$HOME/.pmai-state}"
 CLAUDE_SKILLS="$HOME/.claude/skills"
 CODEX_SKILLS="${CODEX_HOME:-$HOME/.codex}/skills"
 CODEX_PROMPTS="${CODEX_HOME:-$HOME/.codex}/prompts"
+OPENCODE_CONFIG_DIR="${OPENCODE_CONFIG_DIR:-$HOME/.config/opencode}"
+OPENCODE_COMMANDS="$OPENCODE_CONFIG_DIR/commands"
 SKILL_PREFIX="pmai-"
 
 usage() {
@@ -44,6 +47,7 @@ Removed:
   ~/.codex/skills/pmai-*
   ~/.codex/skills/_shared  (if pmai-managed symlink)
   ~/.codex/prompts/pmai-*.md
+  ~/.config/opencode/commands/pmai-*.md
 EOF
 }
 
@@ -162,6 +166,11 @@ for s in "$CODEX_PROMPTS"/${SKILL_PREFIX}*.md; do
   [ -e "$s" ] && CODEX_PROMPT_FILES+=("$s")
 done
 CODEX_PROMPT_COUNT=${#CODEX_PROMPT_FILES[@]}
+OPENCODE_COMMAND_FILES=()
+for s in "$OPENCODE_COMMANDS"/${SKILL_PREFIX}*.md; do
+  [ -e "$s" ] && OPENCODE_COMMAND_FILES+=("$s")
+done
+OPENCODE_COMMAND_COUNT=${#OPENCODE_COMMAND_FILES[@]}
 echo "  ✓ $CLAUDE_SKILLS/${SKILL_PREFIX}* ($CLAUDE_SYMLINK_COUNT symlinks)"
 if [ "$CLAUDE_SYMLINK_COUNT" -gt 0 ] && [ "$CLAUDE_SYMLINK_COUNT" -le 10 ]; then
   for s in "${CLAUDE_SYMLINKS[@]}"; do
@@ -195,17 +204,28 @@ elif [ "$CODEX_PROMPT_COUNT" -gt 10 ]; then
   done
   echo "      … (+$((CODEX_PROMPT_COUNT - 5)) more)"
 fi
+echo "  ✓ $OPENCODE_COMMANDS/${SKILL_PREFIX}*.md ($OPENCODE_COMMAND_COUNT command files)"
+if [ "$OPENCODE_COMMAND_COUNT" -gt 0 ] && [ "$OPENCODE_COMMAND_COUNT" -le 10 ]; then
+  for s in "${OPENCODE_COMMAND_FILES[@]}"; do
+    echo "      - $(basename "$s")"
+  done
+elif [ "$OPENCODE_COMMAND_COUNT" -gt 10 ]; then
+  for s in "${OPENCODE_COMMAND_FILES[@]:0:5}"; do
+    echo "      - $(basename "$s")"
+  done
+  echo "      … (+$((OPENCODE_COMMAND_COUNT - 5)) more)"
+fi
 
 echo ""
 echo "NOT removed:"
 echo "  - 项目里遗留的实体副本；用 'pmai uninstall --local <dir>' 单独清"
-echo "  - 消费仓内 .claude/settings.json / .codex/hooks.json（项目自管）"
+echo "  - 消费仓内 .claude/settings.json / .codex/hooks.json / .opencode/commands / opencode.json（项目自管）"
 [ "$KEEP_STATE" = "1" ] && echo "  - ~/.pmai-state/ (--keep-state)"
 
 echo ""
 echo "════════════════════════════════════════════════════════════"
 
-if [ "$PMAI_PRESENT" = "0" ] && [ "$SYMLINK_COUNT" = "0" ] && [ "$CODEX_PROMPT_COUNT" = "0" ] && [ "$STATE_PRESENT" = "0" ]; then
+if [ "$PMAI_PRESENT" = "0" ] && [ "$SYMLINK_COUNT" = "0" ] && [ "$CODEX_PROMPT_COUNT" = "0" ] && [ "$OPENCODE_COMMAND_COUNT" = "0" ] && [ "$STATE_PRESENT" = "0" ]; then
   echo "⚠️  没找到 PMAI 全局安装。已经卸载或从未安装。"
   exit 0
 fi
@@ -223,6 +243,10 @@ done
 REMOVED_PROMPT_COUNT=0
 for s in "${CODEX_PROMPT_FILES[@]}"; do
   rm -f "$s" && REMOVED_PROMPT_COUNT=$((REMOVED_PROMPT_COUNT + 1))
+done
+REMOVED_OPENCODE_COMMAND_COUNT=0
+for s in "${OPENCODE_COMMAND_FILES[@]}"; do
+  rm -f "$s" && REMOVED_OPENCODE_COMMAND_COUNT=$((REMOVED_OPENCODE_COMMAND_COUNT + 1))
 done
 # 老实体目录残留（罕见 — install 路径几乎不会创建实体）警告不删
 for s in "$CLAUDE_SKILLS"/${SKILL_PREFIX}* "$CLAUDE_SKILLS/_shared"; do
@@ -258,6 +282,7 @@ echo "   host skill symlinks removed ($REMOVED_COUNT total)"
 echo "     ~/.claude/skills/pmai-* ($CLAUDE_SYMLINK_COUNT)"
 echo "     ~/.codex/skills/pmai-*  ($CODEX_SYMLINK_COUNT)"
 echo "   Codex CLI slash prompts removed ($REMOVED_PROMPT_COUNT)"
+echo "   OpenCode slash commands removed ($REMOVED_OPENCODE_COMMAND_COUNT)"
 echo "═══════════════════════════════════════"
 echo "Note: 项目里遗留的实体副本不动。"
 echo "      用 'pmai uninstall --local <dir>' 单独清理。"

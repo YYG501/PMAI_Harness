@@ -144,37 +144,63 @@ git -C "$MAIN_REPO_ROOT" worktree add -b "$BUILD_BRANCH" "$BUILD_DIR" main
 
 > **PM 在 main 上建时（没开 worktree）**：`BUILD_DIR="$REPO_ROOT"`，命令直接在主仓跑，无 cwd 护栏问题。
 
-### 步骤 2：PM 选用哪个独立工具建（执行器可选）
+### 步骤 2：PM 选用哪套建造工具（builder profile）
 
-改造后的核心灵活点：**PM 选谁来建**。当前窗口里的 AI 只负责编排、检查和呈交；下面选择的是独立建造工具。`/pmai-build` 提供通用执行器入口（`scripts/exec-adapters/{claude-code,codex,cursor-agent,gemini,manual}.sh` + Claude Code host 可用时的独立 subagent 路径），执行器只负责按 prompt 改 `BUILD_DIR/prototype/`，不碰阶段状态。
+改造后的核心灵活点：**PM 选哪套建造工具档位**。当前窗口里的 AI 只负责编排、检查和呈交；下面选择的是独立建造工具。`/pmai-build` 提供通用执行器入口（`scripts/exec-adapters/{claude-code,codex,cursor-agent,gemini,opencode,manual}.sh` + Claude Code host 可用时的独立 subagent 路径），执行器只负责按 prompt 改 `BUILD_DIR/prototype/`，不碰阶段状态。
+
+建造工具档位从消费仓 `.pm-workflow/config.yml` 的 `builder.profiles` 读取；PM 视图只展示 `工具名（model, thinking）`，不要把 timeout / sandbox / auto / trust_workspace 等内部执行参数塞给 PM。先解析档位：
+
+```bash
+BUILDER_CONFIG="$BUILD_DIR/.pm-workflow/config.yml"
+python3 "$PMAI_HOME/scripts/builder-profile.py" list "$BUILDER_CONFIG"
+```
 
 AskUserQuestion：
-- `question`: "用哪个独立工具来建？"
+- `question`: "这次用哪套建造工具？"
 - `options`:
-  - `label`: `独立 Claude Code（推荐）`
+  - `label`: `Claude Code（sonnet, standard）`
     `description`: `后台建，过程不刷屏；完成后我只汇报结果和预览入口`
-  - `label`: `独立 Codex CLI`
+  - `label`: `Codex（gpt-5.4, high）`
     `description`: `另起一个 Codex CLI 进程建，不是当前对话自己改`
-  - `label`: `独立 Cursor Agent`
+  - `label`: `Cursor Agent（gemini-3.1-pro, standard）`
     `description`: `用 cursor-agent 建`
-  - `label`: `独立 Gemini CLI`
+  - `label`: `Gemini CLI（gemini-3.1-pro, high）`
     `description`: `用 Gemini CLI 建`
+  - `label`: `OpenCode（deepseek-v4-flash, max）`
+    `description`: `用 OpenCode 建`
   - `label`: `我手动建`
     `description`: `你建完后，我只帮你跑检查`
 
-**PM 答题处理**（映射到 build executor 名）：
-- `独立 Claude Code` / `Claude Code` / 输 `1` → `EXECUTOR=claude-code`
-- `独立 Codex CLI` / `Codex` / 输 `2` → `EXECUTOR=codex`
-- `独立 Cursor Agent` / `Cursor` / 输 `3` → `EXECUTOR=cursor-agent`
-- `独立 Gemini CLI` / `Gemini` / 输 `4` → `EXECUTOR=gemini`
-- `我手动建` / `我自己建` / 输 `5` → `EXECUTOR=manual`
+**PM 答题处理**（映射到 builder profile）：
+- `Claude Code` / 输 `1` → `BUILDER_PROFILE=claude-code`
+- `Codex` / 输 `2` → `BUILDER_PROFILE=codex`
+- `Cursor Agent` / `Cursor` / 输 `3` → `BUILDER_PROFILE=cursor-agent`
+- `Gemini CLI` / `Gemini` / 输 `4` → `BUILDER_PROFILE=gemini`
+- `OpenCode` / 输 `5` → `BUILDER_PROFILE=opencode`
+- `我手动建` / `我自己建` / 输 `6` → `EXECUTOR=manual`
+- 手动建时设 `BUILDER_PROFILE=manual`、`BUILDER_JSON='{"model":"manual","thinking":"manual"}'`
+- PM 可以在同一句覆盖模型和思考深度：`2, gpt-5.4, max` → `BUILDER_PROFILE=codex` + `MODEL_OVERRIDE=gpt-5.4` + `THINKING_OVERRIDE=max`。只接受这两个 PM 可见覆盖项；其它内部执行参数走 profile。
 - PM 没答 / 空答 / runtime 没返回 → 按 `_shared/pm-view/askuser-rules.md` STOP。**禁止把当前主控 AI 当默认执行器直接改代码**。
 
-> **executor 来源**：本 skill **直接问 PM** 用什么工具建。settings.json 里若配了 `executor.default` 可作为 AskUserQuestion 的默认高亮项，但仍由 PM 当场拍。`executor_model` 留空走 settings 默认（不另外问 PM 模型，除非 PM 主动提）。
+> **builder 来源**：本 skill **直接问 PM** 用哪套建造工具档位。`.pm-workflow/config.yml` 里的 `builder.default_profile` 可作为 AskUserQuestion 的默认高亮项，但仍由 PM 当场拍。PM 选项只显示 `工具名（model, thinking）`；timeout / sandbox / auto / trust_workspace 等内部参数只进入执行器，不出现在 PM 选项里。
+
+解析 PM 答案后，用 helper 固定本轮 snapshot；手动建直接使用上面的 `BUILDER_JSON`，不用调用 helper：
+
+```bash
+if [ "${EXECUTOR:-}" != "manual" ]; then
+  PROFILE_ARGS=(--profile "$BUILDER_PROFILE")
+  [ -n "${MODEL_OVERRIDE:-}" ] && PROFILE_ARGS+=(--model "$MODEL_OVERRIDE")
+  [ -n "${THINKING_OVERRIDE:-}" ] && PROFILE_ARGS+=(--thinking "$THINKING_OVERRIDE")
+
+  RESOLVED_BUILDER_JSON=$(python3 "$PMAI_HOME/scripts/builder-profile.py" resolve "$BUILDER_CONFIG" "${PROFILE_ARGS[@]}")
+  EXECUTOR=$(python3 -c 'import json,sys; print(json.loads(sys.argv[1])["executor"])' "$RESOLVED_BUILDER_JSON")
+  BUILDER_JSON=$(python3 -c 'import json,sys; print(json.dumps(json.loads(sys.argv[1])["builder"], ensure_ascii=False))' "$RESOLVED_BUILDER_JSON")
+fi
+```
 
 ### 步骤 2.5：写入 build 合同（给 build-close 用）
 
-拿到「要不要隔离环境」和「执行器」两个答案后，先把本次 build 的执行合同写进当前模块 `.work-meta.json`，再开始实现。`/pmai-build-close` 只按这份合同收尾，不再根据当前 cwd / 分支名字猜。
+拿到「要不要隔离环境」和「建造工具档位」两个答案后，先把本次 build 的执行合同写进当前模块 `.work-meta.json`，再开始实现。`/pmai-build-close` 只按这份合同收尾，不再根据当前 cwd / 分支名字猜。
 
 如果当前模块还没有 `.work-meta.json`，但 `MODULE_WORK_DIR` 和 `BUILD_ANCHOR` 已明确，`build-contract.py start` 会自动补最小状态记录并写入 build 合同。这是框架内部状态，不再向 PM 追加确认。只有功能型规格文档无法判断归属哪个模块时，才问 PM“这次 build 归到哪个模块？”。
 
@@ -187,6 +213,8 @@ python3 "$PMAI_HOME/scripts/build-contract.py" start "$MODULE_WORK_DIR" \
   --anchor "$BUILD_ANCHOR" \
   --mode "$BUILD_MODE" \
   --executor "$EXECUTOR" \
+  --builder-profile "${BUILDER_PROFILE:-manual}" \
+  --builder-json "$BUILDER_JSON" \
   --branch "${BUILD_BRANCH:-main}" \
   --worktree "$([ "$BUILD_MODE" = "worktree" ] && printf '%s' "$BUILD_DIR" || true)" \
   --baseline-sha "$BASELINE_SHA" \
@@ -203,7 +231,12 @@ git -C "$BUILD_DIR" commit -m "build(<模块>): record build contract"
   "build": {
     "anchor": "docs/modules/<模块>/spec.md",
     "mode": "worktree | main",
-    "executor": "claude-code | codex | cursor-agent | gemini | manual",
+    "executor": "claude-code | codex | cursor-agent | gemini | opencode | manual",
+    "builder_profile": "claude-code | codex | cursor-agent | gemini | opencode | manual",
+    "builder": {
+      "model": "gpt-5.4",
+      "thinking": "high"
+    },
     "branch": "build-<模块> | main",
     "worktree": ".worktrees/build-<模块> | null",
     "baseline_sha": "<build 前 HEAD>",
@@ -260,7 +293,7 @@ BASELINE_SHA=$(git -C "$BUILD_DIR" rev-parse HEAD)
 如果当前 host 支持 **Agent 工具**（典型是 Claude Code 主控），spawn 一个独立 Claude subagent 去 `BUILD_DIR` 里建（不在驱动自己的上下文 inline 建：保隔离 + 角色分离 + PM 窗口不被建码刷屏）。subagent prompt = `BUILD_ANCHOR` 全文 + DESIGN.md 约束 + 一段隔离纪律：
 
 - 「你在 `$BUILD_DIR` 里建 <模块> 这一片：改动只落在 `$BUILD_DIR/prototype/` 下，代码和文档里不要写入机器绑定的本地路径；先 Glob 扫已有页面 / 组件，相似的先读源码复用其布局和组件，优先 import 不重写；遵循已有样式模式和目录约定；**禁止 git add / git commit**（commit 由我统一做）。」
-- `executor_model` 非空时按它选 subagent 的 model（opus / sonnet / haiku）。
+- `builder.model` 非空时按它选 subagent 的 model（opus / sonnet / haiku）；`builder.thinking` 只作为合同记录，Claude Code subagent 模型能力不支持时不强行映射。
 
 subagent 返回后回到本驱动跑 4c / 4d。
 
@@ -268,7 +301,7 @@ subagent 返回后回到本驱动跑 4c / 4d。
 - PM 手动切到 Claude Code 后跑 `/pmai-build`：走原生 subagent 体验。
 - PM 留在 Codex 窗口里选择 `Claude Code`：走 Claude Code CLI adapter，建完仍由当前驱动继续检查和呈交。
 
-#### 4b：claude-code / codex / cursor-agent / gemini / manual = 走 build adapter
+#### 4b：claude-code / codex / cursor-agent / gemini / opencode / manual = 走 build adapter
 
 调用通用 build adapter（独立 CLI 进程；adapter 约定改动落 `BUILD_DIR` 且 unstaged，不自己 commit）。执行过程只写日志和状态文件；PM 窗口只报阶段摘要，不直播读文件、进程号、日志 tail、临时命令试错。
 
@@ -290,8 +323,20 @@ LOG="$RUN_DIR/output.log"; mkdir -p "$RUN_DIR"
 
 # adapter 入参用环境变量。build 自己负责 clean tree、越界检查和零改动检查；
 # adapter 只负责把执行器跑起来。
+EXECUTOR_MODEL=$(python3 -c 'import json,sys; print(json.loads(sys.argv[1]).get("model",""))' "$BUILDER_JSON")
+EXECUTOR_THINKING=$(python3 -c 'import json,sys; print(json.loads(sys.argv[1]).get("thinking",""))' "$BUILDER_JSON")
+EXECUTOR_VARIANT=$(python3 -c 'import json,sys; print(json.loads(sys.argv[1]).get("variant",""))' "$BUILDER_JSON")
+EXECUTOR_AUTO=$(python3 -c 'import json,sys; print(str(json.loads(sys.argv[1]).get("auto","")).lower())' "$BUILDER_JSON")
+EXECUTOR_SANDBOX=$(python3 -c 'import json,sys; print(json.loads(sys.argv[1]).get("sandbox",""))' "$BUILDER_JSON")
+EXECUTOR_FORCE=$(python3 -c 'import json,sys; print(str(json.loads(sys.argv[1]).get("force","")).lower())' "$BUILDER_JSON")
+EXECUTOR_TRUST_WORKSPACE=$(python3 -c 'import json,sys; print(str(json.loads(sys.argv[1]).get("trust_workspace","")).lower())' "$BUILDER_JSON")
+EXECUTOR_YOLO=$(python3 -c 'import json,sys; print(str(json.loads(sys.argv[1]).get("yolo","")).lower())' "$BUILDER_JSON")
+EXECUTOR_TIMEOUT_SECONDS=$(python3 -c 'import json,sys; print(json.loads(sys.argv[1]).get("timeout_seconds",900))' "$BUILDER_JSON")
+
 MAIN_REPO_ROOT="$MAIN_REPO_ROOT" BUILD_DIR="$BUILD_DIR" MODULE_NAME="<模块>" PROMPT_FILE="$PROMPT_FILE" \
-  EXECUTOR_STATUS_DIR="$RUN_DIR" EXECUTOR_TIMEOUT_SECONDS="${EXECUTOR_TIMEOUT_SECONDS:-900}" \
+  EXECUTOR_MODEL="$EXECUTOR_MODEL" EXECUTOR_THINKING="$EXECUTOR_THINKING" EXECUTOR_VARIANT="$EXECUTOR_VARIANT" EXECUTOR_AUTO="$EXECUTOR_AUTO" \
+  EXECUTOR_SANDBOX="$EXECUTOR_SANDBOX" EXECUTOR_FORCE="$EXECUTOR_FORCE" EXECUTOR_TRUST_WORKSPACE="$EXECUTOR_TRUST_WORKSPACE" EXECUTOR_YOLO="$EXECUTOR_YOLO" \
+  EXECUTOR_STATUS_DIR="$RUN_DIR" EXECUTOR_TIMEOUT_SECONDS="$EXECUTOR_TIMEOUT_SECONDS" \
   bash "$ADAPTER" > "$LOG" 2>&1
 EXIT_CODE=$?
 ```
@@ -472,13 +517,13 @@ PM 拍 `可以，收尾` → build 的活到此为止，**merge 回 main + 文�
 
 - **只大需求走 build；小改必须 prototype-only**。讨论（改文档）在 `/pmai-design`；小改只能是 PM 明确确认的单字段 / 单文案 / 局部样式 / 已确认弹窗微调，且只改 `prototype/` 或同等主原型代码。步骤 0 判出小改但发现同时需要 `docs/modules/` 或 `mockups/` 改动时，不得退出 build。
 - **对着功能锚点建**。覆盖审计锚点 = `docs/modules/<模块>/spec.md` 或 `docs/modules/<按内容命名>.md`。不拆任务卡、不走独立任务状态机。
-- **PM 选独立建造工具**（claude-code / codex / cursor-agent / gemini / manual，复用 exec-adapter）**+ PM 选要不要 worktree**（步骤 1 / 步骤 2 两道 PM 决策）。executor 从问 PM 拿；当前主控 AI 只编排、检查和呈交，不把自己默认为执行器。
+- **PM 选独立建造工具档位**（Claude Code（sonnet, standard）/ Codex（gpt-5.4, high）/ Cursor Agent（gemini-3.1-pro, standard）/ Gemini CLI（gemini-3.1-pro, high）/ OpenCode（deepseek-v4-flash, max）/ 手动，复用 exec-adapter）**+ PM 选要不要 worktree**（步骤 1 / 步骤 2 两道 PM 决策）。builder profile 从问 PM 拿；当前主控 AI 只编排、检查和呈交，不把自己默认为执行器。
 - **两道构建选择是硬门**：没拿到“要不要隔离环境”和“用什么工具建”两个 PM 答案前，只能读文件 / 查状态，不能改 `prototype/` / `Sources/` / 业务代码。runtime 不支持 AskUserQuestion 就编号列表 wait，禁止默认选择。
 - **落地不能绕过 build**：PM 已确认要把 mockup / spec 做进主原型，或本轮会产生主原型 + 模块文档 / mockup 的混合交付时，必须走 `/pmai-build` 两道门和 build 合同；不能由当前主控在 design 会话里直接改。
 - **build 合同是 build-close 的唯一收尾依据**：两道 PM 选择拿到后立即写 `.work-meta.json:build` 并提交；缺 `.work-meta.json` 但模块和锚点明确时自动补最小状态，不再问 PM；PM 验收通过后写入 `implementation_commit` 与 `pm_accepted_at`。`/pmai-build-close` 不再靠当前 cwd、分支名或有没有 worktree 猜执行方式。
 - **未提交上下文先保存，不准绕过**：未提交的规格 / mock / 文档不是跳过 PM 选择的理由；先只保存当前模块建造依据，或停住。禁止用“worktree 拿不到未跟踪文件”为理由自行决定直接在 main 上实现。
 - **worktree 可选、统一挂 `.worktrees/<分支>/`**。开了就用 `git -C "$BUILD_DIR"` / subshell，禁 `cd` 进 worktree（cwd 护栏）；没开则 `BUILD_DIR="$REPO_ROOT"`、main 上直接建（main 写保护已放宽）。
-- **claude-code = 优先派独立 build subagent**（Agent 工具），不在驱动上下文 inline 建（隔离 + 角色分离 + 不刷 PM 屏）；当前 runtime 没有 subagent 时走 `exec-adapters/claude-code.sh` 调 Claude Code CLI。codex / cursor-agent / gemini / manual 走现成 exec-adapter。一次只建本模块这一片。执行器运行过程写日志和状态文件，PM 窗口只报阶段摘要。
+- **claude-code = 优先派独立 build subagent**（Agent 工具），不在驱动上下文 inline 建（隔离 + 角色分离 + 不刷 PM 屏）；当前 runtime 没有 subagent 时走 `exec-adapters/claude-code.sh` 调 Claude Code CLI。codex / cursor-agent / gemini / opencode / manual 走现成 exec-adapter。一次只建本模块这一片。执行器运行过程写日志和状态文件，PM 窗口只报阶段摘要。
 - **建之前必读 DESIGN.md**（cat echo 进 context）+ 功能锚点当契约；若 DESIGN.md 只有“兜底骨架 / 视觉基线段未建”，先让 PM 选择补视觉基线或继续低置信视觉门；先扫已有组件复用、不重写。
 - **三道审 AI 自动跑、只报不改**（覆盖 / 视觉 / 行为，复用 build-audits.py 编排或等价自跑；三道审复用同一次 dev server）；出口都是给 PM 看的证据，不替 PM 拍板。探索式 review（`/review` `/qa` `/qa-only`）是 PM 手动旁路，AI 不自动调（守 I-RV1）。
 - **`/pmai-meta` 不进默认 build 门**：如果 PM 在 build 前怀疑功能锚点本身不稳，可先旁路跑 `/pmai-meta` 做问题会诊；如果已有规格 / 方案且想多视角找盲区，由 `/pmai-meta` 走已有材料压测。build 流程本身仍只按功能锚点 + 三道审推进；功能锚点不稳时也可回 `/pmai-design` 重理。

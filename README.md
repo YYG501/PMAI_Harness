@@ -46,7 +46,7 @@ PMAI 不和 Claude Design、design-html 或 Claude Code 比"谁更快生成第�
 
 定位是 **PM 单人生产力工具**，不是团队 SOP / CI 平台 / 多租户基础设施。完整产品意义、非目标和成功标准见 [`PRODUCT.md`](./PRODUCT.md)。
 
-**分发形态**：全局安装（单人多项目）。框架装到 `~/.pmai/`，当前 skill symlink 到 `~/.claude/skills/pmai-*` 和 `~/.codex/skills/pmai-*`；同时生成 `~/.codex/prompts/pmai-*.md`，让 Codex CLI 可以直接输入 `/pmai-*`。任意 cwd 跑 `/pmai-init-project` 起新业务项目；`pmai upgrade` 一键升级，所有项目自动跟随。skill 只装全局一处，项目里只放 host 配置 / 状态资产（`.claude/settings.json` / `.codex/hooks.json` / `.work-meta.json`）——这样每个 `/pmai-*` 命令永远唯一，不会和项目副本重复。
+**分发形态**：全局安装（单人多项目）。框架装到 `~/.pmai/`，当前 skill symlink 到 `~/.claude/skills/pmai-*` 和 `~/.codex/skills/pmai-*`；同时生成 `~/.codex/prompts/pmai-*.md` 和 `~/.config/opencode/commands/pmai-*.md`，让 Codex CLI / OpenCode 可以直接输入 `/pmai-*`。任意 cwd 跑 `/pmai-init-project` 起新业务项目；`pmai upgrade` 一键升级，所有项目自动跟随。skill 只装全局一处，项目里只放 host 配置 / 状态资产（`.claude/settings.json` / `.codex/hooks.json` / `.opencode/commands` / `opencode.json` / `.work-meta.json`）——这样每个 `/pmai-*` 命令永远唯一，不会和项目副本重复。
 
 ---
 
@@ -62,7 +62,7 @@ PMAI 不和 Claude Design、design-html 或 Claude Code 比"谁更快生成第�
 # 日常循环（模块规格先行，必要时再建）
 
 /pmai-design "批量审核"    讨论清楚，写模块三件套：discussion.md / decisions.md / spec.md
-/pmai-build 批量审核       大需求才建：对着 spec.md 或功能型规格文档在 prototype/ 里实现，可选隔离环境和执行器
+/pmai-build 批量审核       大需求才建：对着 spec.md 或功能型规格文档在 prototype/ 里实现，可选隔离环境和建造工具档位
 /pmai-build-close                build 验收后收尾：提交/合并实现改动，对齐现状 / 规则 / 模块规格
 /pmai-status          产品现状视图（产品长什么样 / 当前模块做到哪 / 下一步）
 ```
@@ -78,11 +78,12 @@ PM 全程**只做决策**（方向 / 结构 / 建造方式 / 验收 / 沉淀）�
 | **Claude Code** | 推荐 | 一等主控入口（slash skill 原生在这里跑）；也可作为 `/pmai-build` 执行器 |
 | **Codex** | 支持 | skill 暴露到 `~/.codex/skills/pmai-*`；Codex CLI slash prompt 暴露到 `~/.codex/prompts/pmai-*.md`，可直接输入 `/pmai-*`；读生成器仓 / 消费仓 `AGENTS.md` 作为主控入口；消费仓生成项目级 `.codex/hooks.json`；也可作为 build 执行器 |
 | **Gemini CLI** | 可选 | `/pmai-build` 执行器；适合在 Codex / Claude 主控下交给 Gemini 建 |
+| **OpenCode CLI** | 支持 | OpenCode commands 暴露到 `~/.config/opencode/commands/pmai-*.md`，可直接打开消费仓输入 `/pmai-*`；读 `AGENTS.md` 作为主控入口；消费仓生成 `.opencode/commands` 和 `opencode.json`；也可作为 build 执行器。第一版不复刻 Codex hooks，保护依赖 OpenCode permission、git hooks、build contract 和 changed-path review |
 | **gstack** | 能力层（部分流程必需） | 消费仓可直接调用的专项能力层：全新项目骨架 / 视觉基线、mockup 视觉探索、browser / visual audit、mirror-site 抓站、PDF 出口、工程文档旁路会用到；`pmai install` / `pmai doctor` 会提示 readiness，已有代码库接入不因 gstack 缺失阻塞 |
 | **git** ≥ 2.30 | 必需 | worktree 是核心隔离机制 |
 | **python3** ≥ 3.10 | 必需 | scripts 大多用 python（zero-dep stdlib） |
 | **bash** ≥ 4 | 必需 | scripts 入口语言（macOS 自带 3.x 已知坑见 INVARIANTS） |
-| **codex CLI** | 可选 | `/pmai-build` 执行器；不装可走 Claude Code / Gemini / cursor-agent / 手动 |
+| **codex CLI** | 可选 | `/pmai-build` 执行器；不装可走 Claude Code / Gemini / OpenCode / cursor-agent / 手动 |
 
 未检测到 gstack CLI 且没有 `~/.claude/skills/gstack` 时，`pmai install` / `pmai doctor` 会给 warning，但不阻塞 PMAI 安装；真正建全新项目骨架时，`init-project.sh` 会直接报错并指向 `https://github.com/garrytan/gstack`。如果只是 `command -v gstack` 找不到，但全局 gstack skill 目录存在，PMAI 视为 gstack 能力可用。已有代码库接入走现状盘点分支，不调用 `init-project.sh`，所以不能因为 gstack 缺失卡在“判断项目情况”这一步。gstack 输出必须按 PMAI 规则接回 `DESIGN.md`、`mockups/`、`.pm-workflow/audits/`、`.pm-workflow/mirror/`、`docs/deliverables/` 或 `docs/engineering/`；工程文档旁路的 PMAI 接收点是 `docs/engineering/` + `docs/engineering/INDEX.md`，不能把 `~/.gstack/...` 当长期真相源。
 
@@ -114,7 +115,7 @@ bash /tmp/pmai-src/bin/pmai install
 ```
 
 安装成功后，`pmai install` 末尾会：
-- clone 到 `~/.pmai/` + symlink skill 到 `~/.claude/skills/pmai-*` / `~/.codex/skills/pmai-*` + 生成 Codex CLI slash prompts 到 `~/.codex/prompts/pmai-*.md`
+- clone 到 `~/.pmai/` + symlink skill 到 `~/.claude/skills/pmai-*` / `~/.codex/skills/pmai-*` + 生成 Codex CLI slash prompts 到 `~/.codex/prompts/pmai-*.md` + 生成 OpenCode slash commands 到 `~/.config/opencode/commands/pmai-*.md`
 - 自动检测 shell（zsh/bash）+ 给 `~/.pmai/bin` 加 PATH 的 oneshot 命令
 - 提示 gstack readiness；缺 gstack 只 warning，起项目前补齐即可
 
@@ -148,9 +149,9 @@ bash bin/pmai install                       # 全局安装
 
 ### 安装模式：仅全局
 
-PMAI 只有全局安装一种形态（`pmai install` → clone `~/.pmai/` + symlink `~/.claude/skills/pmai-*` / `~/.codex/skills/pmai-*` + 生成 `~/.codex/prompts/pmai-*.md`）。消费仓保持干净，skill 不进项目；升级一处 `pmai upgrade`，所有项目自动跟随。
+PMAI 只有全局安装一种形态（`pmai install` → clone `~/.pmai/` + symlink `~/.claude/skills/pmai-*` / `~/.codex/skills/pmai-*` + 生成 `~/.codex/prompts/pmai-*.md` / `~/.config/opencode/commands/pmai-*.md`）。消费仓保持干净，skill 不进项目；升级一处 `pmai upgrade`，所有项目自动跟随。
 
-> 旧的 `--local`（往项目 `.claude/` 拷实体副本）已移除：它和全局并存时会让每个 `/pmai-*` 命令在菜单里重复，且副本不跟随升级而陈旧。消费仓需要的 host 配置（`.claude/settings.json` / `.codex/hooks.json`）仍单独放项目里（不是 skill，不会重复）；hook 脚本本体仍走 `~/.pmai/hooks` / `~/.pmai/scripts`。已有遗留副本用 `pmai uninstall --local <dir>` 清理。
+> 旧的 `--local`（往项目 `.claude/` 拷实体副本）已移除：它和全局并存时会让每个 `/pmai-*` 命令在菜单里重复，且副本不跟随升级而陈旧。消费仓需要的 host 配置（`.claude/settings.json` / `.codex/hooks.json` / `.opencode/commands` / `opencode.json`）仍单独放项目里（不是 skill，不会重复）；hook 脚本本体仍走 `~/.pmai/hooks` / `~/.pmai/scripts`。已有遗留副本用 `pmai uninstall --local <dir>` 清理。
 
 **升级 / 卸载 / 状态**：
 
@@ -185,7 +186,7 @@ skill 跑全局升级命令；升级完读 CHANGELOG diff + 用自然语言 5-7 
 
 ### 1. 初始化新业务项目
 
-**PM 主动入口**：装好 pmai 后，**在任意 cwd**（不要求在本仓）的 Claude Code 或 Codex 窗口里发：
+**PM 主动入口**：装好 pmai 后，**在任意 cwd**（不要求在本仓）的 Claude Code、Codex 或 OpenCode 窗口里发：
 
 ```
 /pmai-init-project
@@ -202,11 +203,12 @@ agent 内部先判断项目情况，再进入对应分支：
 
 如果一个目录还没有 PMAI 初始化，任何其它 `/pmai-*` skill 被调用时都应先引导 PM 回到 `/pmai-init-project`；该入口会自动判断全新项目、资料目录或已有代码库，不要求 PM 手动选择另一个接入口。
 
-**Codex 主控入口**：
+**Codex / OpenCode 主控入口**：
 
 - 在本生成器仓协同改框架：Codex 先读根目录 `AGENTS.md`，按 repo-local `skills/` / `scripts/` 工作。
 - 在本生成器仓初始化消费仓：让 Codex 执行 `/pmai-init-project` 等价流程，内部读取 `skills/init-project/SKILL.md`，最后调用 `bash scripts/init-project.sh ...`。
 - 在消费仓继续使用：`init-project.sh` 会生成消费仓根目录 `AGENTS.md` 和项目级 `.codex/hooks.json`；Codex 进入消费仓后先读 `AGENTS.md`。`pmai install/upgrade` 会把 `pmai-*` 暴露到 `~/.codex/skills/`，并生成 `~/.codex/prompts/pmai-*.md` 让 Codex CLI 可直接输入 `/pmai-*`；prompt 入口只负责把命令路由回 `PMAI_HOME` / `~/.pmai` 下的已安装 `SKILL.md`。Codex 首次启用项目 hooks 时可能要求信任确认，这是 Codex 自身的安全机制。
+- OpenCode 进入消费仓后同样先读 `AGENTS.md`。`pmai install/upgrade` 会生成全局 `~/.config/opencode/commands/pmai-*.md`；`init-project.sh` 会生成项目级 `.opencode/commands/pmai-*.md` 和 `opencode.json`，命令同样只路由回 `PMAI_HOME` / `~/.pmai` 下的已安装 `SKILL.md`。OpenCode 第一版不做 PMAI 专属 plugin hooks，也不假装 Codex hooks 生效。
 
 **非交互参数化 CLI**（smoke / 批量自动化依赖）：
 
@@ -240,7 +242,7 @@ python3 scripts/status-view.py "$tmp/Demo" --narrative
 
 ### 2. PM 在业务仓里的日常循环
 
-> **注意**：装好 pmai 后，所有 skill 在 Claude Code / Codex 的 host skill 目录里都以 `pmai-` 前缀注册（防与 gstack / 其他框架命名冲突）。下面例子中的 `/pmai-*` 是真实的命令名。
+> **注意**：装好 pmai 后，所有 skill 在 Claude Code / Codex 的 host skill 目录和 OpenCode commands 里都以 `pmai-` 前缀注册（防与 gstack / 其他框架命名冲突）。下面例子中的 `/pmai-*` 是真实的命令名。
 
 ```
 /pmai-design "<一句话>"      → 探索真问题、理清信息结构、写模块三件套
@@ -256,9 +258,9 @@ python3 scripts/status-view.py "$tmp/Demo" --narrative
 
 ### 3. 多机 / 团队仓
 
-PMAI 走纯全局：每台要用的机器各自 `pmai install` 一次（全局），消费仓里不放 skill 副本。换机器 clone 业务仓后，在该机跑一次全局安装即可在 Claude Code / Codex 里用 `/pmai-*`。
+PMAI 走纯全局：每台要用的机器各自 `pmai install` 一次（全局），消费仓里不放 skill 副本。换机器 clone 业务仓后，在该机跑一次全局安装即可在 Claude Code / Codex / OpenCode 里用 `/pmai-*`。
 
-> 旧的 `--local`（把框架副本 commit 进业务仓 `.claude/`）已移除——它和全局并存会让命令重复、副本陈旧。若仓里还有遗留副本，清理：`pmai uninstall --local <仓目录>`（只删项目内副本，不动全局）。需要的 `.claude/settings.json` + `.codex/hooks.json` 保留（那些不是 skill，不会重复）。
+> 旧的 `--local`（把框架副本 commit 进业务仓 `.claude/`）已移除——它和全局并存会让命令重复、副本陈旧。若仓里还有遗留副本，清理：`pmai uninstall --local <仓目录>`（只删项目内副本，不动全局）。需要的 `.claude/settings.json` + `.codex/hooks.json` + `.opencode/commands` + `opencode.json` 保留（那些不是 skill，不会重复）。
 
 ---
 
@@ -280,7 +282,7 @@ PMAI 走纯全局：每台要用的机器各自 `pmai install` 一次（全局�
 | Skill | 用途 |
 |---|---|
 | `/pmai-status` | **续跑辅助**：读当前阶段做下一步（设计 → build → 复审 → 沉淀），先说再动 |
-| `/pmai-build` | 对着模块 `spec.md` 或功能型规格文档在 `prototype/` 建；PM 选择执行器和是否开隔离环境 |
+| `/pmai-build` | 对着模块 `spec.md` 或功能型规格文档在 `prototype/` 建；PM 选择建造工具档位和是否开隔离环境 |
 | `/pmai-spec-writing` | 功能型规格文档成文器：生成/修改模块规格；PRD、功能需求、功能描述、功能规格、功能评审稿都走这里 |
 | `/pmai-doc-writing` | 介绍型文档成文器：产品介绍、产品功能清单、优势说明、一页纸、汇报材料，默认落 `docs/deliverables/` |
 
@@ -328,8 +330,8 @@ PMAI 走纯全局：每台要用的机器各自 `pmai install` 一次（全局�
 
 | 你要确认 | 命令 |
 |---|---|
-| 当前安装状态 / Claude+Codex skill 暴露 / Codex CLI slash prompt 是否漂移 | `pmai status` |
-| 全局安装完整性（含 Claude+Codex 暴露） | `pmai doctor` |
+| 当前安装状态 / Claude+Codex skill 暴露 / Codex CLI slash prompt / OpenCode command 是否漂移 | `pmai status` |
+| 全局安装完整性（含 Claude+Codex 暴露和 OpenCode commands） | `pmai doctor` |
 | 测试整个生成器仓 | `bash tests/run-all.sh` |
 | 旧 `requirements/active|closed` 仓库是否还需要人工迁移 | `python3 scripts/migrate-reqs-to-modules.py --dry-run <repo>` |
 

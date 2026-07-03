@@ -4,7 +4,7 @@
 # 显示：
 #   - 全局安装状态（~/.pmai/ 装了没）
 #   - 当前 VERSION + 远程 main HEAD diff（多少 commit 落后）
-#   - skill 符号链接清单
+#   - skill / slash command 暴露清单
 #   - update-check 提示
 
 set -uo pipefail
@@ -13,6 +13,8 @@ PMAI_HOME="${PMAI_HOME:-$HOME/.pmai}"
 CLAUDE_SKILLS="$HOME/.claude/skills"
 CODEX_SKILLS="${CODEX_HOME:-$HOME/.codex}/skills"
 CODEX_PROMPTS="${CODEX_HOME:-$HOME/.codex}/prompts"
+OPENCODE_CONFIG_DIR="${OPENCODE_CONFIG_DIR:-$HOME/.config/opencode}"
+OPENCODE_COMMANDS="$OPENCODE_CONFIG_DIR/commands"
 SKILL_PREFIX="pmai-"
 BIN_DIR="$(cd "$(dirname "$0")" && pwd)"
 CLI_ROOT="$(cd "$BIN_DIR/.." && pwd)"
@@ -26,6 +28,7 @@ Shows global PMAI install state:
   - source location, version, branch, remote
   - skill exposure count and drift against current ~/.pmai/skills for Claude and Codex
   - Codex CLI slash prompt count and drift against current ~/.pmai/skills
+  - OpenCode slash command count and drift against current ~/.pmai/skills
   - local install note
 EOF
 }
@@ -82,6 +85,28 @@ count_codex_prompts() {
 
   count=0
   for s in "$prompt_dir"/${SKILL_PREFIX}*.md; do
+    [ -e "$s" ] || continue
+    count=$((count + 1))
+  done
+  echo "$count"
+}
+
+actual_opencode_command_names() {
+  local command_dir="$1"
+  local s
+
+  for s in "$command_dir"/${SKILL_PREFIX}*.md; do
+    [ -e "$s" ] || continue
+    basename "$s"
+  done | sort -u
+}
+
+count_opencode_commands() {
+  local command_dir="$1"
+  local s count
+
+  count=0
+  for s in "$command_dir"/${SKILL_PREFIX}*.md; do
     [ -e "$s" ] || continue
     count=$((count + 1))
   done
@@ -151,6 +176,37 @@ report_codex_prompt_exposure() {
   fi
 }
 
+report_opencode_command_exposure() {
+  local command_dir="$1"
+  local display_path="$2"
+  local command_count stale_commands missing_commands opencode_bin
+
+  opencode_bin=$(command -v opencode 2>/dev/null || true)
+  if [ -n "$opencode_bin" ]; then
+    echo "  OpenCode CLI:                              ✅ $opencode_bin"
+  else
+    echo "  OpenCode CLI:                              ⚠️  not found (commands can still be installed)"
+  fi
+
+  command_count=$(count_opencode_commands "$command_dir")
+
+  if [ "$INSTALLED" = "0" ]; then
+    echo "  OpenCode (${display_path}/${SKILL_PREFIX}*.md):  $command_count command files"
+    return
+  fi
+
+  echo "  OpenCode (${display_path}/${SKILL_PREFIX}*.md):  $command_count command files"
+  stale_commands=$(comm -23 <(actual_opencode_command_names "$command_dir") <(expected_codex_prompt_names) || true)
+  missing_commands=$(comm -13 <(actual_opencode_command_names "$command_dir") <(expected_codex_prompt_names) || true)
+  if [ -z "$stale_commands" ] && [ -z "$missing_commands" ]; then
+    echo "  OpenCode command drift:                    ✅ matches current skills"
+  else
+    echo "  OpenCode command drift:                    ⚠️  stale/missing entries (run: pmai upgrade)"
+    [ -n "$stale_commands" ] && echo "    stale:  $(echo "$stale_commands" | tr '\n' ' ')"
+    [ -n "$missing_commands" ] && echo "    missing: $(echo "$missing_commands" | tr '\n' ' ')"
+  fi
+}
+
 echo "════════════════════════════════════════════════════════════"
 echo "  PMAI Status"
 echo "════════════════════════════════════════════════════════════"
@@ -209,5 +265,8 @@ report_skill_exposure "Codex" "$CODEX_SKILLS" "~/.codex/skills"
 echo ""
 echo "─── Codex CLI slash prompts ───"
 report_codex_prompt_exposure "$CODEX_PROMPTS" "~/.codex/prompts"
+echo ""
+echo "─── OpenCode slash commands ───"
+report_opencode_command_exposure "$OPENCODE_COMMANDS" "~/.config/opencode/commands"
 
 echo "════════════════════════════════════════════════════════════"

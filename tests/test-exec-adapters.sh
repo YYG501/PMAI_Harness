@@ -12,6 +12,7 @@ AGENTS_TMPL="$FRAMEWORK_ROOT/templates/AGENTS.md.tmpl"
 CLAUDE_TMPL="$FRAMEWORK_ROOT/templates/CLAUDE.md.tmpl"
 README="$FRAMEWORK_ROOT/README.md"
 CONFIG_TMPL="$FRAMEWORK_ROOT/templates/pm-workflow.config.yml.tmpl"
+BUILDER_PROFILE="$FRAMEWORK_ROOT/scripts/builder-profile.py"
 
 _setup_fake_executor() {
   T=$(mktemp -d)
@@ -46,14 +47,60 @@ EOF
 }
 
 test_adapter_files_are_executable() {
-  start_test "adapter inventory: claude-code/codex/cursor/gemini/manual 都可执行"
+  start_test "adapter inventory: claude-code/codex/cursor/gemini/opencode/manual 都可执行"
 
-  for adapter in claude-code codex cursor-agent gemini manual; do
+  for adapter in claude-code codex cursor-agent gemini opencode manual; do
     if [ ! -x "$ADAPTER_DIR/$adapter.sh" ]; then
       _fail "$adapter.sh 不存在或不可执行"
       return
     fi
   done
+  pass_test
+}
+
+test_builder_profile_helper_resolves_pm_choice() {
+  start_test "builder-profile: PM 视图只露工具名（model, thinking），resolve 输出 snapshot"
+
+  if ! python3 "$BUILDER_PROFILE" list "$CONFIG_TMPL" >/tmp/builder-profile.$$ 2>/tmp/builder-profile.err.$$; then
+    _fail "builder-profile list should succeed"
+    cat /tmp/builder-profile.err.$$ >&2
+    rm -f /tmp/builder-profile.$$ /tmp/builder-profile.err.$$
+    return
+  fi
+  assert_file_contains /tmp/builder-profile.$$ "Codex（gpt-5.4, high）" "Codex display should be compact" || {
+    rm -f /tmp/builder-profile.$$ /tmp/builder-profile.err.$$; return;
+  }
+  assert_file_contains /tmp/builder-profile.$$ "OpenCode（deepseek-v4-flash, max）" "OpenCode display should use display_model" || {
+    rm -f /tmp/builder-profile.$$ /tmp/builder-profile.err.$$; return;
+  }
+
+  if ! python3 "$BUILDER_PROFILE" resolve "$CONFIG_TMPL" \
+    --profile opencode \
+    --model gpt-5.4 \
+    --thinking max >/tmp/builder-profile.$$ 2>/tmp/builder-profile.err.$$; then
+    _fail "builder-profile resolve should succeed"
+    cat /tmp/builder-profile.err.$$ >&2
+    rm -f /tmp/builder-profile.$$ /tmp/builder-profile.err.$$
+    return
+  fi
+  python3 - /tmp/builder-profile.$$ <<'PY' || {
+import json, sys
+data = json.load(open(sys.argv[1]))
+assert data["builder_profile"] == "opencode"
+assert data["executor"] == "opencode"
+assert data["display"] == "OpenCode（gpt-5.4, max）"
+assert data["builder"]["model"] == "gpt-5.4"
+assert data["builder"]["thinking"] == "max"
+assert data["builder"]["overrides"]["model"] is True
+assert data["builder"]["overrides"]["thinking"] is True
+PY
+    _fail "resolved builder snapshot mismatch"
+    cat /tmp/builder-profile.$$ >&2
+    rm -f /tmp/builder-profile.$$ /tmp/builder-profile.err.$$
+    return
+  }
+
+  rm -f /tmp/builder-profile.$$ /tmp/builder-profile.err.$$
   pass_test
 }
 
@@ -114,12 +161,44 @@ test_gemini_adapter_invokes_yolo_prompt_mode() {
   pass_test
 }
 
-test_build_skill_exposes_claude_and_gemini() {
-  start_test "build skill: PM 选项露出 Claude Code + Gemini，并说明 CLI 兜底"
+test_opencode_adapter_invokes_run_with_profile_args() {
+  start_test "opencode adapter: 用 opencode run --dir 执行并传 model/thinking/auto"
 
-  assert_file_contains "$BUILD_SKILL" "claude-code,codex,cursor-agent,gemini,manual" "executor list should include claude-code and gemini" || return
-  assert_file_contains "$BUILD_SKILL" '`label`: `独立 Gemini CLI`' "PM options should expose Gemini" || return
-  assert_file_contains "$BUILD_SKILL" "EXECUTOR=gemini" "Gemini option should map to executor" || return
+  _setup_fake_executor
+  _install_fake_command opencode
+  BUILD_DIR="$BUILD_DIR" PROMPT_FILE="$PROMPT_FILE" EXECUTOR_MODEL="opencode-go/deepseek-v4-flash" \
+    EXECUTOR_THINKING="max" EXECUTOR_AUTO="true" \
+    PATH="$FAKE_BIN:$PATH" bash "$ADAPTER_DIR/opencode.sh" >/tmp/exec-adapter.$$ 2>&1
+  local rc=$?
+  if [ "$rc" -ne 0 ]; then
+    _fail "adapter 应返回 0，实际 ${rc}：$(cat /tmp/exec-adapter.$$)"
+    rm -f /tmp/exec-adapter.$$
+    _teardown_fake_executor
+    return
+  fi
+  rm -f /tmp/exec-adapter.$$
+
+  assert_file_contains "$FAKE_LOG" "cmd=opencode" "should invoke opencode binary" || { _teardown_fake_executor; return; }
+  assert_file_contains "$FAKE_LOG" "<run>" "should use run command" || { _teardown_fake_executor; return; }
+  assert_file_contains "$FAKE_LOG" "<--dir><$BUILD_DIR>" "should run in BUILD_DIR via --dir" || { _teardown_fake_executor; return; }
+  assert_file_contains "$FAKE_LOG" "<--model><opencode-go/deepseek-v4-flash>" "should pass EXECUTOR_MODEL" || { _teardown_fake_executor; return; }
+  assert_file_contains "$FAKE_LOG" "<--variant><max>" "should map thinking to variant" || { _teardown_fake_executor; return; }
+  assert_file_contains "$FAKE_LOG" "<--auto>" "should pass auto approval when configured" || { _teardown_fake_executor; return; }
+  assert_file_contains "$FAKE_LOG" "<Build the module from spec and design.>" "should pass prompt body" || { _teardown_fake_executor; return; }
+  _teardown_fake_executor
+  pass_test
+}
+
+test_build_skill_exposes_builder_profiles() {
+  start_test "build skill: PM 选项露出 builder profile 和 OpenCode"
+
+  assert_file_contains "$BUILD_SKILL" "claude-code,codex,cursor-agent,gemini,opencode,manual" "executor list should include opencode" || return
+  assert_file_contains "$BUILD_SKILL" '`label`: `Codex（gpt-5.4, high）`' "PM options should show compact Codex profile" || return
+  assert_file_contains "$BUILD_SKILL" '`label`: `OpenCode（deepseek-v4-flash, max）`' "PM options should expose OpenCode" || return
+  assert_file_contains "$BUILD_SKILL" "2, gpt-5.4, max" "PM can override model/thinking in one answer" || return
+  assert_file_contains "$BUILD_SKILL" "builder-profile.py" "build should resolve builder profiles through helper" || return
+  assert_file_contains "$BUILD_SKILL" "BUILDER_PROFILE=opencode" "OpenCode option should map to builder profile" || return
+  assert_file_contains "$BUILD_SKILL" "BUILDER_PROFILE=gemini" "Gemini option should map to builder profile" || return
   assert_file_contains "$BUILD_SKILL" "exec-adapters/claude-code.sh" "Claude Code should have CLI adapter fallback" || return
   assert_file_contains "$BUILD_SKILL" '留在 Codex 窗口里选择 `Claude Code`' "Codex-host Claude Code path should be documented" || return
   pass_test
@@ -170,16 +249,17 @@ test_consumer_entry_documents_fallback() {
   start_test "consumer AGENTS: Codex runtime 下 Claude subagent 不可用时先走 adapter"
 
   assert_file_contains "$AGENTS_TMPL" "exec-adapters/claude-code.sh" "AGENTS fallback should mention Claude Code adapter" || return
-  assert_file_contains "$AGENTS_TMPL" "Codex / Gemini / 手动" "AGENTS fallback should list alternative paths" || return
+  assert_file_contains "$AGENTS_TMPL" "Codex / Gemini / OpenCode / Cursor / 手动" "AGENTS fallback should list alternative paths" || return
   pass_test
 }
 
 test_readme_lists_build_executors() {
-  start_test "README: 依赖表说明 Claude Code / Gemini / Codex 都可作 build 执行器"
+  start_test "README: 依赖表说明 Claude Code / Gemini / Codex / OpenCode 都可作 build 执行器"
 
   assert_file_contains "$README" '也可作为 `/pmai-build` 执行器' "README should state Claude Code build role" || return
   assert_file_contains "$README" "Gemini CLI" "README should list Gemini CLI" || return
-  assert_file_contains "$README" "Claude Code / Gemini / cursor-agent / 手动" "README should list non-Codex build fallback" || return
+  assert_file_contains "$README" "OpenCode CLI" "README should list OpenCode CLI" || return
+  assert_file_contains "$README" "Claude Code / Gemini / OpenCode / cursor-agent / 手动" "README should list non-Codex build fallback" || return
   pass_test
 }
 
@@ -188,6 +268,19 @@ test_config_template_uses_port_placeholder() {
 
   assert_file_contains "$CONFIG_TMPL" "{port}" "config template should make port injection explicit" || return
   assert_file_contains "$BUILD_SKILL" '不临时猜 `-- --hostname`' "build should avoid guessing framework-specific dev flags" || return
+  pass_test
+}
+
+test_config_template_has_builder_profiles() {
+  start_test "config template: builder profiles include compact model/thinking choices"
+
+  assert_file_contains "$CONFIG_TMPL" "default_profile: claude-code" "config should define default builder profile" || return
+  assert_file_contains "$CONFIG_TMPL" "model: gpt-5.4" "config should define Codex model" || return
+  assert_file_contains "$CONFIG_TMPL" "thinking: high" "config should define thinking depth" || return
+  assert_file_contains "$CONFIG_TMPL" "model: opencode-go/deepseek-v4-flash" "config should set OpenCode DeepSeek model" || return
+  assert_file_contains "$CONFIG_TMPL" "display_model: deepseek-v4-flash" "config should keep OpenCode PM display short" || return
+  assert_file_contains "$CONFIG_TMPL" "variant: max" "config should map OpenCode thinking to max variant" || return
+  assert_file_contains "$CONFIG_TMPL" "executor: opencode" "config should define OpenCode executor" || return
   pass_test
 }
 
@@ -204,15 +297,18 @@ test_build_skill_avoids_machine_bound_absolute_path_rules() {
 }
 
 test_adapter_files_are_executable
+test_builder_profile_helper_resolves_pm_choice
 test_claude_code_adapter_invokes_print_mode
 test_gemini_adapter_invokes_yolo_prompt_mode
-test_build_skill_exposes_claude_and_gemini
+test_opencode_adapter_invokes_run_with_profile_args
+test_build_skill_exposes_builder_profiles
 test_build_skill_requires_pm_gates_before_editing
 test_build_skill_keeps_executor_noise_out_of_pm_view
 test_build_skill_handles_fallback_design_baseline
 test_consumer_entry_documents_fallback
 test_readme_lists_build_executors
 test_config_template_uses_port_placeholder
+test_config_template_has_builder_profiles
 test_build_skill_avoids_machine_bound_absolute_path_rules
 
 report_results "exec-adapters"

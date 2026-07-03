@@ -36,7 +36,12 @@ test_claude_scripts_redline() {
   _assert_redline_blocks "scenario 13 blocks claude scripts" "rm .claude/scripts && mkdir -p .claude/scripts && echo bad > .claude/scripts/bad.sh"
 }
 
+test_opencode_config_redline() {
+  _assert_redline_blocks "scenario 14 blocks opencode host config" "mkdir -p .opencode/commands && echo bad > .opencode/commands/pmai-build.md"
+}
+
 test_task_file_redline
 test_meta_redline
 test_claude_scripts_redline
+test_opencode_config_redline
 report_results "quick-fix redline enforcement"

@@ -6,7 +6,7 @@
 #
 # 注：旧的 `--local <dir>`（往项目 .claude/ 拷实体副本）已移除——它和全局安装并存时
 #     会让每个 /pmai-* 命令在菜单里重复，且副本不跟随升级而变陈旧。skill 一律走全局，
-#     项目里只放 host 配置 / 状态资产（.claude/settings.json / .codex/hooks.json / .work-meta.json）。
+#     项目里只放 host 配置 / 状态资产（.claude/settings.json / .codex/hooks.json / .opencode/commands / opencode.json / .work-meta.json）。
 #     清理遗留的项目副本：`pmai uninstall --local <dir>`。
 
 set -euo pipefail
@@ -16,6 +16,7 @@ PMAI_HOME="${PMAI_HOME:-$HOME/.pmai}"
 CLAUDE_SKILLS="$HOME/.claude/skills"
 CODEX_SKILLS="${CODEX_HOME:-$HOME/.codex}/skills"
 CODEX_PROMPTS="${CODEX_HOME:-$HOME/.codex}/prompts"
+OPENCODE_CONFIG_DIR="${OPENCODE_CONFIG_DIR:-$HOME/.config/opencode}"
 SKILL_PREFIX="pmai-"
 
 usage() {
@@ -27,6 +28,7 @@ Env override:
   PMAI_REMOTE=<git-url>       # Override default github remote
   PMAI_HOME=<path>            # Override default ~/.pmai/
   CODEX_HOME=<path>           # Override default ~/.codex
+  OPENCODE_CONFIG_DIR=<path>  # Override default ~/.config/opencode
 
 Notes:
   - Skills get 'pmai-' prefix at registration (e.g., /pmai-init-project).
@@ -190,6 +192,9 @@ done
 echo "→ Install Codex CLI slash prompts"
 remove_managed_codex_prompts "$CODEX_PROMPTS"
 install_codex_prompts "$PMAI_HOME/skills" "$CODEX_PROMPTS"
+echo "→ Install OpenCode slash commands"
+PMAI_HOME="$PMAI_HOME" OPENCODE_CONFIG_DIR="$OPENCODE_CONFIG_DIR" \
+  bash "$PMAI_HOME/scripts/install-opencode-commands.sh" --global
 VER=$(cat "$PMAI_HOME/VERSION" 2>/dev/null || echo unknown)
 echo ""
 echo "═══════════════════════════════════════"
@@ -198,6 +203,7 @@ echo "   ~/.pmai/         framework source"
 echo "   ~/.claude/skills/pmai-*   skill exposure"
 echo "   ~/.codex/skills/pmai-*    skill exposure"
 echo "   ~/.codex/prompts/pmai-*.md Codex CLI slash prompts"
+echo "   $OPENCODE_CONFIG_DIR/commands/pmai-*.md OpenCode slash commands"
 echo "═══════════════════════════════════════"
 
 # PATH 检测：~/.pmai/bin 不在 PATH 就提示 oneshot（不自动改用户 rc 文件，避免破坏配置）

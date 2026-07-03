@@ -16,7 +16,7 @@
 |---|---|
 | PM | 决策、确认、验收。不写代码。默认一个窗口 |
 | 驱动 AI | PM 这个窗口里的 AI：范围确认 / design、派发 build、跑复审、呈交验收、build-close 收尾 |
-| 执行器 | `/pmai-build` 时可选的独立执行器（Claude Code / Codex / Cursor / Gemini / PM 手动），按当前功能锚点在 `prototype/` 里建 |
+| 执行器 | `/pmai-build` 时可选的独立建造工具档位（Claude Code / Codex / Cursor / Gemini / OpenCode / PM 手动），按当前功能锚点在 `prototype/` 里建 |
 
 ### 状态与文件真相源
 
@@ -72,7 +72,7 @@
 
 - build 的功能锚点是模块 `spec.md` 或 `docs/modules/<按内容命名>.md` 的功能型规格文档，不是 task 文件。
 - 动手前必须读 `DESIGN.md`。
-- `/pmai-build` 动手前必须先问完两道 PM 选择：执行方式（开隔离环境 / 直接主线）和执行器（Claude Code / Codex / Cursor / Gemini / PM 手动）。没拿到两个答案前，只能读文件和查状态，不得修改 `prototype/`、`Sources/` 或任何业务代码。
+- `/pmai-build` 动手前必须先问完两道 PM 选择：执行方式（开隔离环境 / 直接主线）和建造工具档位（Claude Code / Codex / Cursor / Gemini / OpenCode / PM 手动）。建造工具选项只展示 `工具名（model, thinking）`；没拿到两个答案前，只能读文件和查状态，不得修改 `prototype/`、`Sources/` 或任何业务代码。
 - 如果模块 `spec.md` / `decisions.md` / `mockups/` 看版 / 功能型规格文档还在未提交或未跟踪状态，先保存本次建造依据或停住；不得以“隔离环境拿不到这些未跟踪文件”为由跳过选择、直接改 main。
 - `/pmai-build` 拿到两道 PM 答案后必须写入当前模块 `.work-meta.json:build` 合同；模块和功能锚点明确但 `.work-meta.json` 缺失时自动补最小状态记录，不再向 PM 追加确认。`/pmai-build-close` 只按该合同收尾。缺合同、缺实现提交或缺 PM 验收记录时，先补上下文，不得把分支提交误报成已收尾。
 - 代码改动集中在 `prototype/`。执行器如改了 `docs/**`，必须呈交 PM 决定保留还是回退。

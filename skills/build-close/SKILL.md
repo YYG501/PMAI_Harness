@@ -67,7 +67,12 @@ python3 "$PMAI_HOME/scripts/status-view.py" --banner-only --skill BUILD-CLOSE 2>
   "build": {
     "anchor": "docs/modules/<模块>/spec.md",
     "mode": "worktree | main",
-    "executor": "codex | claude-code | cursor-agent | gemini | manual",
+    "executor": "codex | claude-code | cursor-agent | gemini | opencode | manual",
+    "builder_profile": "codex | claude-code | cursor-agent | gemini | opencode | manual",
+    "builder": {
+      "model": "gpt-5.4",
+      "thinking": "high"
+    },
     "branch": "build-<模块> | main",
     "worktree": ".worktrees/build-<模块> | null",
     "baseline_sha": "<build 前 HEAD>",

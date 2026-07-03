@@ -6,6 +6,55 @@
 #
 # 改了哪个字段会影响什么：见每段注释。
 
+builder:
+  # /pmai-build 的默认建造工具档位。
+  # PM 视图只展示：工具名（model, thinking）；其它字段只给执行器使用。
+  default_profile: claude-code
+
+  profiles:
+    claude-code:
+      label: Claude Code
+      executor: claude-code
+      model: sonnet
+      thinking: standard
+      permission_mode: bypassPermissions
+      timeout_seconds: 900
+
+    codex:
+      label: Codex
+      executor: codex
+      model: gpt-5.4
+      thinking: high
+      sandbox: workspace-write
+      timeout_seconds: 900
+
+    cursor-agent:
+      label: Cursor Agent
+      executor: cursor-agent
+      model: gemini-3.1-pro
+      thinking: standard
+      force: true
+      trust_workspace: true
+      timeout_seconds: 900
+
+    gemini:
+      label: Gemini CLI
+      executor: gemini
+      model: gemini-3.1-pro
+      thinking: high
+      yolo: true
+      timeout_seconds: 900
+
+    opencode:
+      label: OpenCode
+      executor: opencode
+      model: opencode-go/deepseek-v4-flash
+      display_model: deepseek-v4-flash
+      thinking: max
+      variant: max
+      auto: true
+      timeout_seconds: 900
+
 dev_server:
   # 启动 dev server 的命令；`{port}` 会替换为下方 ports 中选出的可用端口。
   # 不同框架的端口参数不同，请在这里写真实命令，build 不临场猜 `--port` / `--host`。

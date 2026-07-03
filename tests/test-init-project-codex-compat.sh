@@ -2,7 +2,7 @@
 # Codex 主控入口兼容性测试：
 # - framework 提供 AGENTS.md.tmpl
 # - init-project 会把 AGENTS.md 和 .codex/hooks.json 生成到消费仓根目录
-# - AGENTS.md 是薄入口，hooks 是 host 配置，二者引用 CLAUDE.md / PMAI_HOME，不复制 framework 源资产
+# - AGENTS.md 是通用薄入口，hooks / OpenCode commands 是 host 配置，引用 CLAUDE.md / PMAI_HOME，不复制 framework 源资产
 set -uo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -15,12 +15,14 @@ CODEX_HOOKS_TMPL="$REPO_ROOT/templates/codex-hooks.json.tmpl"
 INSTALL_CODEX_HOOKS="$REPO_ROOT/scripts/install-codex-hooks.sh"
 
 test_agents_template_exists_and_maps_codex() {
-  start_test "T1: AGENTS.md.tmpl 存在并声明 Codex host mapping"
+  start_test "T1: AGENTS.md.tmpl 存在并声明通用 host mapping"
 
   assert_file_exists "$AGENTS_TMPL" "AGENTS.md.tmpl should exist" || return
-  assert_file_contains "$AGENTS_TMPL" "PMAI Codex Entry" "AGENTS.md.tmpl should name Codex entry" || return
+  assert_file_contains "$AGENTS_TMPL" "PMAI Agent Entry" "AGENTS.md.tmpl should name generic agent entry" || return
   assert_file_contains "$AGENTS_TMPL" "CLAUDE.md" "AGENTS.md.tmpl should reference CLAUDE.md truth source" || return
-  assert_file_contains "$AGENTS_TMPL" "驱动 Codex" "AGENTS.md.tmpl should map driver role to Codex" || return
+  assert_file_contains "$AGENTS_TMPL" "当前主控 agent" "AGENTS.md.tmpl should map driver role to current host" || return
+  assert_file_contains "$AGENTS_TMPL" "Codex" "AGENTS.md.tmpl should still mention Codex" || return
+  assert_file_contains "$AGENTS_TMPL" "OpenCode" "AGENTS.md.tmpl should mention OpenCode" || return
   assert_file_contains "$AGENTS_TMPL" "skill-preamble.sh" "AGENTS.md.tmpl should use neutral PMAI preamble" || return
   assert_file_contains "$AGENTS_TMPL" "AskUserQuestion 不可用" "AGENTS.md.tmpl should define AskUser fallback" || return
   assert_file_contains "$AGENTS_TMPL" "默认用中文" "AGENTS.md.tmpl should preserve Chinese default" || return
@@ -28,16 +30,18 @@ test_agents_template_exists_and_maps_codex() {
   assert_file_contains "$AGENTS_TMPL" "PMAI_HOME" "AGENTS.md.tmpl should resolve installed framework path" || return
   assert_file_contains "$AGENTS_TMPL" "不能在这里再跑" "AGENTS.md.tmpl should prevent re-init inside consumer repo" || return
   assert_file_contains "$AGENTS_TMPL" "install-codex-hooks.sh" "AGENTS.md.tmpl should tell Codex how to repair missing hooks" || return
+  assert_file_contains "$AGENTS_TMPL" "install-opencode-commands.sh" "AGENTS.md.tmpl should tell OpenCode how to repair missing commands" || return
   assert_file_contains "$AGENTS_TMPL" "不写死机器绑定路径" "AGENTS.md.tmpl should carry portable path principle" || return
   assert_file_contains "$AGENTS_TMPL" "/Users/<某人>/..." "AGENTS.md.tmpl should forbid user-specific local paths" || return
   pass_test
 }
 
 test_init_project_knows_agents_template() {
-  start_test "T2: init-project.sh 白名单生成 AGENTS.md 并安装 Codex hooks"
+  start_test "T2: init-project.sh 白名单生成 AGENTS.md 并安装 host 配置"
 
   assert_file_contains "$INIT_PROJECT_SH" "templates/AGENTS.md.tmpl" "init-project should require AGENTS template" || return
   assert_file_contains "$INIT_PROJECT_SH" "templates/codex-hooks.json.tmpl" "init-project should require Codex hooks template" || return
+  assert_file_contains "$INIT_PROJECT_SH" "install-opencode-commands.sh" "init-project should require OpenCode command installer" || return
   assert_file_contains "$INIT_PROJECT_SH" 'AGENTS.md)' "init-project should route AGENTS.md template" || return
   assert_file_contains "$INIT_PROJECT_SH" 'DEST="$TARGET_DIR/AGENTS.md"' "init-project should write root AGENTS.md" || return
   assert_file_contains "$INIT_PROJECT_SH" "install-codex-hooks.sh" "init-project should install project-level Codex hooks" || return
@@ -89,9 +93,25 @@ test_e2e_generates_agents_md_without_framework_assets() {
     rm -rf "$base"
     return
   fi
+  if [ ! -f "$proj/.opencode/commands/pmai-build.md" ]; then
+    _fail "消费仓根目录未生成 .opencode/commands/pmai-build.md"
+    rm -rf "$base"
+    return
+  fi
+  if [ ! -f "$proj/opencode.json" ]; then
+    _fail "消费仓根目录未生成 opencode.json"
+    rm -rf "$base"
+    return
+  fi
 
-  if ! grep -q "Codex 主控" "$proj/AGENTS.md"; then
-    _fail "生成的 AGENTS.md 缺 Codex 主控说明"
+  if ! grep -q "PMAI Agent Entry" "$proj/AGENTS.md"; then
+    _fail "生成的 AGENTS.md 缺通用主控入口标题"
+    rm -rf "$base"
+    return
+  fi
+
+  if ! grep -q "OpenCode" "$proj/AGENTS.md"; then
+    _fail "生成的 AGENTS.md 缺 OpenCode 主控说明"
     rm -rf "$base"
     return
   fi
@@ -122,9 +142,19 @@ test_e2e_generates_agents_md_without_framework_assets() {
     rm -rf "$base"
     return
   }
+  python3 -m json.tool "$proj/opencode.json" >/dev/null || {
+    _fail "生成的 opencode.json 不是合法 JSON"
+    rm -rf "$base"
+    return
+  }
 
   if [ -d "$proj/.claude/skills" ] || [ -d "$proj/.claude/scripts" ] || [ -d "$proj/.claude/agents" ]; then
     _fail "消费仓 .claude/ 泄漏 framework 资产"
+    rm -rf "$base"
+    return
+  fi
+  if [ -d "$proj/skills" ] || [ -d "$proj/scripts" ] || [ -d "$proj/.cursor" ]; then
+    _fail "消费仓泄漏 framework 源资产或生成了 Cursor 配置"
     rm -rf "$base"
     return
   fi

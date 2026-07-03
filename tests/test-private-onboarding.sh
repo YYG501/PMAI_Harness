@@ -84,6 +84,10 @@ test_private_repo_install_surfaces_prereqs() {
     _fail "Codex skill 暴露缺 pmai-init-project"
     return
   fi
+  if [ ! -f "$FAKE_HOME/.config/opencode/commands/pmai-init-project.md" ]; then
+    _fail "OpenCode command 暴露缺 pmai-init-project"
+    return
+  fi
   pass_test
 }
 
@@ -116,6 +120,11 @@ test_doctor_reports_private_onboarding_state() {
   fi
   if ! echo "$out" | grep -q "已有代码库接入不受阻塞"; then
     _fail "doctor 的 gstack warning 应说明已有代码库接入不受阻塞"
+    echo "$out" >&2
+    return
+  fi
+  if ! echo "$out" | grep -q "OpenCode slash commands"; then
+    _fail "doctor 应检查 OpenCode slash commands"
     echo "$out" >&2
     return
   fi
@@ -174,8 +183,20 @@ test_init_project_passes_after_gstack_skill_exists() {
     _fail "消费仓缺 .codex/hooks.json"
     return
   fi
+  if [ ! -f "$target/.opencode/commands/pmai-build.md" ]; then
+    _fail "消费仓缺 .opencode/commands/pmai-build.md"
+    return
+  fi
+  if [ ! -f "$target/opencode.json" ]; then
+    _fail "消费仓缺 opencode.json"
+    return
+  fi
   if [ ! -f "$target/PRODUCT.md" ]; then
     _fail "消费仓缺 PRODUCT.md"
+    return
+  fi
+  if [ -d "$target/.cursor" ]; then
+    _fail "本轮不应生成 .cursor 配置"
     return
   fi
 

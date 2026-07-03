@@ -12,9 +12,10 @@
 #   T5: pmai-status --help 只打印帮助，不执行状态扫描
 #   T6: pmai-status 报告 stale 暴露入口，提示 upgrade 重同步
 #   T7: pmai-doctor 缺 Codex 暴露入口时失败
-#   T8: install / upgrade / uninstall 覆盖 Codex skill dir + Codex CLI prompts
+#   T8: install / upgrade / uninstall 覆盖 Codex skill dir + Codex CLI prompts + OpenCode commands
 #   T9: pmai-doctor 可自愈 Codex 首次空暴露目录（兼容旧 upgrader）
 #   T10: pmai-doctor 可自愈 Codex CLI slash prompts
+#   T11: pmai-doctor 可自愈 OpenCode slash commands
 set -uo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -55,8 +56,9 @@ setup_fake_global_install() {
   pmai_home="$tmp/pmai"
   fake_home="$tmp/home"
 
-  mkdir -p "$pmai_home" "$fake_home/.claude/skills" "$fake_home/.codex/skills" "$fake_home/.codex/prompts"
+  mkdir -p "$pmai_home/scripts" "$fake_home/.claude/skills" "$fake_home/.codex/skills" "$fake_home/.codex/prompts"
   ln -s "$SKILLS_DIR" "$pmai_home/skills"
+  ln -s "$REPO_ROOT/scripts/install-opencode-commands.sh" "$pmai_home/scripts/install-opencode-commands.sh"
   cp "$VERSION_FILE" "$pmai_home/VERSION"
   git -C "$pmai_home" init -q
 
@@ -207,7 +209,7 @@ test_doctor_requires_codex_exposure() {
 }
 
 test_lifecycle_scripts_cover_codex_skills() {
-  start_test "T8: install / upgrade / uninstall 覆盖 Codex skill dir + Codex CLI prompts"
+  start_test "T8: install / upgrade / uninstall 覆盖 Codex skill dir + Codex CLI prompts + OpenCode commands"
   local file
 
   for file in "$INSTALL" "$UPGRADE" "$UNINSTALL" "$DOCTOR" "$STATUS"; do
@@ -222,6 +224,16 @@ test_lifecycle_scripts_cover_codex_skills() {
       return
     fi
   done
+  for file in "$INSTALL" "$UPGRADE" "$UNINSTALL" "$DOCTOR" "$STATUS"; do
+    if ! grep -q "OPENCODE_CONFIG_DIR" "$file"; then
+      _fail "$(basename "$file") 未声明 OPENCODE_CONFIG_DIR，OpenCode command 暴露会漂移"
+      return
+    fi
+  done
+  if ! grep -q "install-opencode-commands.sh" "$INSTALL" || ! grep -q "install-opencode-commands.sh" "$UPGRADE"; then
+    _fail "install / upgrade 应调用 install-opencode-commands.sh"
+    return
+  fi
   pass_test
 }
 
@@ -312,6 +324,52 @@ test_doctor_repairs_codex_prompts() {
   pass_test
 }
 
+test_doctor_repairs_opencode_commands() {
+  start_test "T11: pmai-doctor 自愈 OpenCode slash commands"
+  local setup tmp pmai_home fake_home out rc
+
+  setup=$(setup_fake_global_install)
+  IFS='|' read -r tmp pmai_home fake_home <<< "$setup"
+  rm -rf "$fake_home/.config/opencode/commands"
+  mkdir -p "$fake_home/.config/opencode/commands"
+
+  out=$(PMAI_HOME="$pmai_home" HOME="$fake_home" bash "$DOCTOR" 2>&1)
+  rc=$?
+
+  if [ "$rc" != "0" ]; then
+    _fail "OpenCode command 目录为空时 doctor 应自愈并通过"
+    echo "$out" >&2
+    rm -rf "$tmp"
+    return
+  fi
+  if ! echo "$out" | grep -q "OpenCode slash commands repaired"; then
+    _fail "doctor 未报告 OpenCode command 自愈"
+    echo "$out" >&2
+    rm -rf "$tmp"
+    return
+  fi
+  if [ ! -f "$fake_home/.config/opencode/commands/pmai-design.md" ]; then
+    _fail "doctor 未创建 OpenCode /pmai-design command"
+    echo "$out" >&2
+    rm -rf "$tmp"
+    return
+  fi
+  if ! grep -q '$PMAI_HOME/skills/design/SKILL.md' "$fake_home/.config/opencode/commands/pmai-design.md"; then
+    _fail "生成的 /pmai-design OpenCode command 未路由到 PMAI skill"
+    cat "$fake_home/.config/opencode/commands/pmai-design.md" >&2
+    rm -rf "$tmp"
+    return
+  fi
+  if [ -e "$fake_home/.config/opencode/commands/pmai-_internal.md" ]; then
+    _fail "doctor 不应把 skills/_internal 暴露成 OpenCode command"
+    rm -rf "$tmp"
+    return
+  fi
+
+  rm -rf "$tmp"
+  pass_test
+}
+
 test_doctor_exists
 test_no_stale_in_expected
 test_no_missing_in_expected
@@ -323,5 +381,6 @@ test_doctor_requires_codex_exposure
 test_lifecycle_scripts_cover_codex_skills
 test_doctor_repairs_empty_codex_exposure
 test_doctor_repairs_codex_prompts
+test_doctor_repairs_opencode_commands
 
 report_results "doctor-skills"

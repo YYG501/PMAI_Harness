@@ -173,7 +173,7 @@ if [ "$BRANCH" = "main" ] || [ "$BRANCH" = "master" ]; then
 
   case "$REL_PATH" in
     # 框架元数据：init-project 和框架更新时需要写
-    .claude/*|.codex/hooks.json|AGENTS.md|CLAUDE.md|.gitignore|README.md)
+    .claude/*|.codex/hooks.json|.opencode/*|opencode.json|AGENTS.md|CLAUDE.md|.gitignore|README.md)
       MAIN_WRITE_ALLOWED=true
       ;;
     # 项目脊柱：PM 和 AI 每次进项目都要认的主上下文，放仓库根目录。
