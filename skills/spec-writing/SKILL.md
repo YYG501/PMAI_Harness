@@ -7,6 +7,16 @@ description: |
 
 # /pmai-spec-writing · 规格文档成文器（模块规格 + 功能型规格文档）
 
+## 入口护栏
+
+执行本 skill 前先运行：
+
+```bash
+source "${PMAI_HOME:-$HOME/.pmai}/scripts/skill-preamble.sh"
+```
+
+如果输出 `PMAI_PROJECT_INITIALIZED: 0`，停止本 skill，只引导 PM 先发 `/pmai-init-project`。初始化或已有代码接入完成前，不要读取项目底座或生成/改写规格文档。
+
 > **PM 答题规则（M4）**：所有 AskUserQuestion 调用按 `_shared/pm-view/askuser-rules.md` §1 四条硬规则走（空答 STOP / 没拿到答案禁止落盘 PM 视图文档 / runtime 退化保留 wait / 多决策拆开顺序问）。**Runtime 兜底**：本 skill 各门写的都是 picker 形态；runtime 不支持时 AI 按 §1.3 自动退化为编号列表，仍 wait。
 
 ## What This Skill Produces

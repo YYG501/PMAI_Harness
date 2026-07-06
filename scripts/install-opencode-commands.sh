@@ -94,10 +94,11 @@ description: Run PMAI /${exposed_name} workflow
 
 1. 定位 PMAI_HOME：优先使用环境变量 \`PMAI_HOME\`；没有则使用 \`~/.pmai\`。
 2. 如果当前项目根目录有 \`AGENTS.md\`，先遵守其中的 PMAI Host Mapping 和 Startup 规则。
-3. 完整读取 \`\$PMAI_HOME/skills/${skill_name}/SKILL.md\`。
-4. 如果该 \`SKILL.md\` 引用 \`_shared/...\`、\`references/...\`、\`templates/...\` 或脚本，按文件路径继续读取必要内容。
-5. 严格按 skill workflow 执行；不要只凭本 command 或记忆模拟。
-6. 默认用中文和 PM 沟通。
+3. 如果当前命令不是 \`/pmai-init-project\` 或 \`/pmai-upgrade\`，先运行 \`bash -lc 'source "\${PMAI_HOME:-\$HOME/.pmai}/scripts/skill-preamble.sh"'\`。如果输出 \`PMAI_PROJECT_INITIALIZED: 0\`，停止当前 skill，只引导 PM 先发 \`/pmai-init-project\`。 \`/pmai-humanize\` 仅在处理粘贴文本或仓外文件、且不写 PMAI 项目产物时可继续；要读取或改写仓内文档时同样停止。
+4. 完整读取 \`\$PMAI_HOME/skills/${skill_name}/SKILL.md\`。
+5. 如果该 \`SKILL.md\` 引用 \`_shared/...\`、\`references/...\`、\`templates/...\` 或脚本，按文件路径继续读取必要内容。
+6. 严格按 skill workflow 执行；不要只凭本 command 或记忆模拟。
+7. 默认用中文和 PM 沟通。
 
 OpenCode 不使用 Codex hooks；涉及保护时以 OpenCode permission、PMAI git hooks、build contract 和 changed-path review 为准。
 

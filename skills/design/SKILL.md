@@ -7,6 +7,16 @@ description: |
 
 # /pmai-design · 设计驾驶舱（三段式）
 
+## 入口护栏
+
+执行本 skill 前先运行：
+
+```bash
+source "${PMAI_HOME:-$HOME/.pmai}/scripts/skill-preamble.sh"
+```
+
+如果输出 `PMAI_PROJECT_INITIALIZED: 0`，停止本 skill，只引导 PM 先发 `/pmai-init-project`。初始化或已有代码接入完成前，不要创建模块三件套。
+
 > 本 skill 是设计的"驾驶舱"。三段式：**①探索 → ②设计 → ③交给 spec-writing 成文**——先懂问题再设计（探索和信息设计是两个正交阶段）。方法论全文不内嵌在这——开工前 `@读`：
 > - `skills/design/references/design-method.md`（**①探索 + ②设计**：真问题、Meta 触发、信息底线、按需求两面选方法、design-card 边界、PM 输出模板）
 > - `skills/_shared/consistency-scan.md`（收口：改原型 / 规格 → 对账 → flag）

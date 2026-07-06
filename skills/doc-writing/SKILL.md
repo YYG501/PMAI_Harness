@@ -7,6 +7,16 @@ description: |
 
 # /pmai-doc-writing
 
+## 入口护栏
+
+执行本 skill 前先运行：
+
+```bash
+source "${PMAI_HOME:-$HOME/.pmai}/scripts/skill-preamble.sh"
+```
+
+如果输出 `PMAI_PROJECT_INITIALIZED: 0`，停止本 skill，只引导 PM 先发 `/pmai-init-project`。初始化或已有代码接入完成前，不要读取项目底座或生成 `docs/deliverables/` 产物。
+
 > **这是什么**：写产品方向 / 产品叙事 / 介绍型材料的入口。它面向"把产品判断讲清楚"，不是"把功能规格定下来"。
 >
 > **边界**：PM 要 PRD、功能需求、功能描述、功能规格、功能评审稿时，直接转 `/pmai-spec-writing`。这些是功能型规格文档，落 `docs/modules/<按内容命名>.md`，不放 `docs/deliverables/`。

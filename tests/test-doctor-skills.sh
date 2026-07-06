@@ -314,6 +314,13 @@ test_doctor_repairs_codex_prompts() {
     rm -rf "$tmp"
     return
   fi
+  if ! grep -q "skill-preamble.sh" "$fake_home/.codex/prompts/pmai-design.md" \
+     || ! grep -q "PMAI_PROJECT_INITIALIZED: 0" "$fake_home/.codex/prompts/pmai-design.md"; then
+    _fail "生成的 /pmai-design prompt 缺未初始化项目护栏"
+    cat "$fake_home/.codex/prompts/pmai-design.md" >&2
+    rm -rf "$tmp"
+    return
+  fi
   if [ -e "$fake_home/.codex/prompts/pmai-_internal.md" ]; then
     _fail "doctor 不应把 skills/_internal 暴露成 Codex prompt"
     rm -rf "$tmp"
@@ -356,6 +363,13 @@ test_doctor_repairs_opencode_commands() {
   fi
   if ! grep -q '$PMAI_HOME/skills/design/SKILL.md' "$fake_home/.config/opencode/commands/pmai-design.md"; then
     _fail "生成的 /pmai-design OpenCode command 未路由到 PMAI skill"
+    cat "$fake_home/.config/opencode/commands/pmai-design.md" >&2
+    rm -rf "$tmp"
+    return
+  fi
+  if ! grep -q "skill-preamble.sh" "$fake_home/.config/opencode/commands/pmai-design.md" \
+     || ! grep -q "PMAI_PROJECT_INITIALIZED: 0" "$fake_home/.config/opencode/commands/pmai-design.md"; then
+    _fail "生成的 /pmai-design OpenCode command 缺未初始化项目护栏"
     cat "$fake_home/.config/opencode/commands/pmai-design.md" >&2
     rm -rf "$tmp"
     return

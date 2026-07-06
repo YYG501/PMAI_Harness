@@ -7,6 +7,16 @@ description: |
 
 # /pmai-mirror-site —— 照参考站对齐原型（§7.A/B 合并）
 
+## 入口护栏
+
+执行本 skill 前先运行：
+
+```bash
+source "${PMAI_HOME:-$HOME/.pmai}/scripts/skill-preamble.sh"
+```
+
+如果输出 `PMAI_PROJECT_INITIALIZED: 0`，停止本 skill，只引导 PM 先发 `/pmai-init-project`。初始化或已有代码接入完成前，不要读取/改写 `prototype/`、`mockups/` 或 mirror 审计产物。
+
 > **PM 视图**：入口 banner（`status-view.py --banner-only --skill MIRROR-SITE`，无 active work 时用字面值）；Plan 阶段出确认门（PM 批了才动 `prototype/`）；产物只给路径 + 一句话，按 `_shared/PM-VIEW-RULES.md`。
 > **PM 答题规则**：AskUserQuestion 按 `_shared/pm-view/askuser-rules.md`（空答 STOP，不默认走通过）。
 

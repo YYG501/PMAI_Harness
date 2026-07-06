@@ -7,6 +7,16 @@ description: |
 
 # /pmai-meta · 产品元思考
 
+## 入口护栏
+
+执行本 skill 前先运行：
+
+```bash
+source "${PMAI_HOME:-$HOME/.pmai}/scripts/skill-preamble.sh"
+```
+
+如果输出 `PMAI_PROJECT_INITIALIZED: 0`，停止本 skill，只引导 PM 先发 `/pmai-init-project`。初始化或已有代码接入完成前，不要把项目方向、模块设计或 PMAI workflow 判断沉淀进项目产物。
+
 > **它是什么**：PMAI 里处理产品判断、workflow 判断、材料根基判断的产品元思考入口。
 > **它不是什么**：不是高级分析段落生成器，不替 PM 拍板，不替代 `/pmai-design`、`/pmai-doc-writing`、`/pmai-spec-writing`、`/pmai-build`，也不把 skill / workflow 改造误交给 design。
 > **核心方法**：产品元思考 = 用追问和压测，把表层诉求建成**产品判断模型**。

@@ -6,6 +6,16 @@ description: |
 
 # /pmai-build-close
 
+## 入口护栏
+
+执行本 skill 前先运行：
+
+```bash
+source "${PMAI_HOME:-$HOME/.pmai}/scripts/skill-preamble.sh"
+```
+
+如果输出 `PMAI_PROJECT_INITIALIZED: 0`，停止本 skill，只引导 PM 先发 `/pmai-init-project`。初始化或已有代码接入完成前，不要合并、补合同、跑三道审或写沉淀产物。
+
 > **这是什么**：`/pmai-build` 之后的收尾。实现已经做完、PM 已验收，才用它把最终结果收进主线和长期基线：提交 / 合并 / 清理隔离环境，对齐模块 `decisions.md` 与 `spec.md`，更新产品现状、术语和跨模块规则。
 >
 > **和 `/pmai-design` 的关系**：`/pmai-design` 开场**读**基线（`PRODUCT-RULES` + 相关模块 `decisions.md` + `PRODUCT.md` 业务术语表）；`/pmai-build-close` 收尾**写**这三处。一读一写，闭环。

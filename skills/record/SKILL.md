@@ -6,6 +6,16 @@ description: |
 
 # /pmai-record
 
+## 入口护栏
+
+执行本 skill 前先运行：
+
+```bash
+source "${PMAI_HOME:-$HOME/.pmai}/scripts/skill-preamble.sh"
+```
+
+如果输出 `PMAI_PROJECT_INITIALIZED: 0`，停止本 skill，只引导 PM 先发 `/pmai-init-project`。初始化或已有代码接入完成前，不要沉淀记录或更新项目文档。
+
 > **这是什么**：分档运行里**最轻那一档**（main 直接改 / 聊定直落、设计讨论后暂不 build）的记录入口。让轻档产出也有一个地方归位，不再"飘着没进库 / 真相源乱 / 决策不进库 / mock 找不回"。
 > **和 /pmai-build-close 的关系**：同一套四类分流（@读 `_shared/record-routing.md`），但 `/pmai-build-close` 是 build 验收后的完整收尾，本 skill 是 main 上或 design 后暂不 build 时的轻量同构（重量随产出缩放）。
 > **和 quick-fix 的关系**：quick-fix 管"在 main 上改一处"，本 skill 管"把改完的成果沉淀进底座"——两件事，可前后脚发生。

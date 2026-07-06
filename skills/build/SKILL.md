@@ -6,6 +6,16 @@ description: |
 
 # /pmai-build
 
+## 入口护栏
+
+执行本 skill 前先运行：
+
+```bash
+source "${PMAI_HOME:-$HOME/.pmai}/scripts/skill-preamble.sh"
+```
+
+如果输出 `PMAI_PROJECT_INITIALIZED: 0`，停止本 skill，只引导 PM 先发 `/pmai-init-project`。初始化或已有代码接入完成前，不要读取或创建 build 合同、worktree、原型或项目产物。
+
 > 这是改造后的 **大需求建造入口**。它不拆任务卡、不走独立任务状态机。它对着**功能锚点**建：模块规格 `docs/modules/<模块>/spec.md`，或功能型规格文档 `docs/modules/<按内容命名>.md`。建完 review loop + 三道审，再 merge 回 main。
 >
 > 本 skill 只依赖两类通用资产：**exec-adapter**（可插拔执行器）和 **build-audits.py**（三道审编排）。二者不绑定任务卡。

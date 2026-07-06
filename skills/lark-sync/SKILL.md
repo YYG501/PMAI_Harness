@@ -6,6 +6,16 @@ description: |
 
 # /pmai-lark-sync
 
+## 入口护栏
+
+执行本 skill 前先运行：
+
+```bash
+source "${PMAI_HOME:-$HOME/.pmai}/scripts/skill-preamble.sh"
+```
+
+如果输出 `PMAI_PROJECT_INITIALIZED: 0`，停止本 skill，只引导 PM 先发 `/pmai-init-project`。初始化或已有代码接入完成前，不要判断本地/飞书真相源或写同步追踪信息。
+
 ## When To Use
 
 - PM 要把本地规格、PRD、功能型文档同步到飞书，但没有明确说可以整篇覆盖

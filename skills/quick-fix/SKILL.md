@@ -6,6 +6,16 @@ description: |
 
 # /pmai-quick-fix
 
+## 入口护栏
+
+执行本 skill 前先运行：
+
+```bash
+source "${PMAI_HOME:-$HOME/.pmai}/scripts/skill-preamble.sh"
+```
+
+如果输出 `PMAI_PROJECT_INITIALIZED: 0`，停止本 skill，只引导 PM 先发 `/pmai-init-project`。初始化或已有代码接入完成前，不要开启轻量修复隔离环境或改业务代码。
+
 > **PM 答题规则**：所有 AskUserQuestion 调用按 `_shared/pm-view/askuser-rules.md` §1 四条硬规则走（空答 STOP / 没拿到答案禁止合入 / runtime 退化保留 wait / 多决策拆开顺序问）。
 
 ## When To Use

@@ -31,6 +31,7 @@ SUITES=(
   test-meta-problem-framing.sh
   test-meta-v2-routes.sh
   test-doctor-skills.sh
+  test-skill-init-guard.sh
   test-writing-skill-routing.sh
   test-migrate-reqs-to-modules-compat.sh
   test-banner-label.sh

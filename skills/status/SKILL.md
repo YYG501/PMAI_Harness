@@ -6,6 +6,16 @@ description: |
 
 # /pmai-status
 
+## 入口护栏
+
+执行本 skill 前先运行：
+
+```bash
+source "${PMAI_HOME:-$HOME/.pmai}/scripts/skill-preamble.sh"
+```
+
+如果输出 `PMAI_PROJECT_INITIALIZED: 0`，本 skill 只报告未初始化并引导 PM 先发 `/pmai-init-project`，不要继续读取不存在的 PMAI 项目文档。
+
 > 轻量现状视图。复用 `status-view.py`，**只读、不改任何状态**。
 
 ## When To Use

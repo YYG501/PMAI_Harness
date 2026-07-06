@@ -18,6 +18,8 @@ PM-AI-Workflow 生成器仓的演进记录。本文件**只记影响下游业务
 
 ## 未发布
 
+- `fix(skills)`: **补全未初始化项目的全入口护栏**。此前 `status-view.py` / `skill-preamble.sh` / 消费仓 `AGENTS.md` 已能提示“当前目录还没有 PMAI 初始化”，但部分公开 skill 和 Codex/OpenCode 直达 slash 路由仍可能绕过项目入口，继续尝试读取或写入项目产物。本次把 Codex prompts、OpenCode commands 统一改为先读项目 `AGENTS.md`、再跑 `skill-preamble.sh`，命中 `PMAI_PROJECT_INITIALIZED: 0` 时停止并引导 `/pmai-init-project`；同时给除 `/pmai-init-project`、`/pmai-upgrade` 外的公开项目型 skill 增加入口护栏。`/pmai-humanize` 保留窄例外：只处理粘贴文本或仓外文件且不写 PMAI 项目产物时可继续。
+
 - `fix(init-project)`: **脚本层阻止重复初始化已接入 PMAI 的消费仓**。`init-project.sh` 现在会在 gstack 检测和模板写入前识别目标目录里的 PMAI marker（如 `AGENTS.md` / `CLAUDE.md` 中的 PMAI 入口、`PRODUCT-STATE.md`、`.pm-workflow/config.yml`、`.codex/hooks.json`、OpenCode PMAI commands 等）；命中后即使调用方误传 `--allow-existing` 也会退出，避免覆盖 `PRODUCT.md`、`AGENTS.md` 和 host 配置。正常资料目录接住逻辑保持不变。
 
 - `feat(opencode)`: **新增 OpenCode 主控入口与 slash commands 安装**。PMAI 现在不只把 OpenCode 当 `/pmai-build` 执行器，也支持 PM 在消费仓直接用 OpenCode 打开项目并输入 `/pmai-*`。`pmai install/upgrade` 会生成 `~/.config/opencode/commands/pmai-*.md`，每个 command 只路由到 `PMAI_HOME` / `~/.pmai` 下的权威 `SKILL.md`；`init-project.sh` 会在消费仓生成 `.opencode/commands/pmai-*.md` 和 `opencode.json`，同时 `AGENTS.md` 改为 Claude / Codex / OpenCode 通用 agent 入口。OpenCode 第一版不伪装 Codex hooks，不生成 `.cursor/`；保护策略用 OpenCode permission、PMAI git hooks、build contract 和 changed-path review 兜底。`pmai doctor/status/uninstall` 同步检查和清理 OpenCode commands。

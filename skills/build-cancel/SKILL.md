@@ -6,6 +6,16 @@ description: |
 
 # /pmai-build-cancel
 
+## 入口护栏
+
+执行本 skill 前先运行：
+
+```bash
+source "${PMAI_HOME:-$HOME/.pmai}/scripts/skill-preamble.sh"
+```
+
+如果输出 `PMAI_PROJECT_INITIALIZED: 0`，停止本 skill，只引导 PM 先发 `/pmai-init-project`。初始化或已有代码接入完成前，不要尝试取消 build、清理 worktree 或改项目状态。
+
 > 本 skill 是 build 工作的退出口。它不判断需求是否“正确”，只在 PM 明确说这轮 build 不要继续时，把活跃状态清掉，避免后续 `/pmai-status` 继续把它当进行中工作。
 >
 > PM 视图规则按 `_shared/pm-view/banner-rules.md` 和 `_shared/pm-view/askuser-rules.md`：先确认，再执行；PM 未确认前不写文件、不 commit、不清理。

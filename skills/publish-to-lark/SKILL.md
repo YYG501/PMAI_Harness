@@ -5,6 +5,16 @@ description: 将本地 markdown 文档整篇发布或覆盖至飞书云文档，
 
 # /pmai-publish-to-lark
 
+## 入口护栏
+
+执行本 skill 前先运行：
+
+```bash
+source "${PMAI_HOME:-$HOME/.pmai}/scripts/skill-preamble.sh"
+```
+
+如果输出 `PMAI_PROJECT_INITIALIZED: 0`，停止本 skill，只引导 PM 先发 `/pmai-init-project`。初始化或已有代码接入完成前，不要读取项目发布配置、写 frontmatter 或覆盖飞书文档。
+
 ## When To Use
 
 - 由 `/pmai-lark-sync` 判定为"整篇覆盖发布"后调用
