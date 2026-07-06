@@ -42,6 +42,7 @@ test_init_project_knows_agents_template() {
   assert_file_contains "$INIT_PROJECT_SH" "templates/AGENTS.md.tmpl" "init-project should require AGENTS template" || return
   assert_file_contains "$INIT_PROJECT_SH" "templates/codex-hooks.json.tmpl" "init-project should require Codex hooks template" || return
   assert_file_contains "$INIT_PROJECT_SH" "install-opencode-commands.sh" "init-project should require OpenCode command installer" || return
+  assert_file_contains "$INIT_PROJECT_SH" "已阻止重复初始化" "init-project should hard-stop already initialized PMAI projects" || return
   assert_file_contains "$INIT_PROJECT_SH" 'AGENTS.md)' "init-project should route AGENTS.md template" || return
   assert_file_contains "$INIT_PROJECT_SH" 'DEST="$TARGET_DIR/AGENTS.md"' "init-project should write root AGENTS.md" || return
   assert_file_contains "$INIT_PROJECT_SH" "install-codex-hooks.sh" "init-project should install project-level Codex hooks" || return
@@ -232,10 +233,57 @@ JSON
   pass_test
 }
 
+test_init_project_blocks_reinitialize_even_with_allow_existing() {
+  start_test "T6: init-project.sh 即使带 --allow-existing 也拒绝已初始化 PMAI 目录"
+
+  local base proj out
+  base=$(mktemp -d)
+  proj="$base/already-pmai"
+  out="/tmp/test-init-project-reinit-guard.out"
+  mkdir -p "$proj"
+  cat > "$proj/AGENTS.md" <<'MD'
+# already-pmai
+
+## PMAI Agent Entry
+
+本仓已经初始化完成，不能在这里再跑 /pmai-init-project。
+MD
+
+  if PMAI_HOME="$REPO_ROOT" bash "$INIT_PROJECT_SH" "already-pmai" "$proj" "重复初始化保护测试" prototype --allow-existing \
+       >"$out" 2>&1; then
+    _fail "init-project.sh 不应允许已初始化 PMAI 目录带 --allow-existing 重跑"
+    cat "$out" >&2
+    rm -rf "$base"
+    return
+  fi
+
+  if ! grep -q "目标目录已经接入 PMAI" "$out"; then
+    _fail "重复初始化保护未输出 PMAI marker 提示"
+    cat "$out" >&2
+    rm -rf "$base"
+    return
+  fi
+  if ! grep -q "已阻止重复初始化" "$out"; then
+    _fail "重复初始化保护未输出阻止说明"
+    cat "$out" >&2
+    rm -rf "$base"
+    return
+  fi
+  if [ -f "$proj/PRODUCT.md" ] || [ -f "$proj/.pm-workflow/config.yml" ]; then
+    _fail "重复初始化保护失败：脚本仍写入了 PMAI 模板"
+    rm -rf "$base"
+    return
+  fi
+
+  rm -rf "$base"
+  pass_test
+}
+
 test_agents_template_exists_and_maps_codex
 test_init_project_knows_agents_template
 test_codex_hooks_template_shape
 test_e2e_generates_agents_md_without_framework_assets
 test_install_codex_hooks_merges_existing_hooks
+test_init_project_blocks_reinitialize_even_with_allow_existing
 
 report_results "init-project-codex-compat"

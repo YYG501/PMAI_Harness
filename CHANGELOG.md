@@ -18,6 +18,8 @@ PM-AI-Workflow 生成器仓的演进记录。本文件**只记影响下游业务
 
 ## 未发布
 
+- `fix(init-project)`: **脚本层阻止重复初始化已接入 PMAI 的消费仓**。`init-project.sh` 现在会在 gstack 检测和模板写入前识别目标目录里的 PMAI marker（如 `AGENTS.md` / `CLAUDE.md` 中的 PMAI 入口、`PRODUCT-STATE.md`、`.pm-workflow/config.yml`、`.codex/hooks.json`、OpenCode PMAI commands 等）；命中后即使调用方误传 `--allow-existing` 也会退出，避免覆盖 `PRODUCT.md`、`AGENTS.md` 和 host 配置。正常资料目录接住逻辑保持不变。
+
 - `feat(opencode)`: **新增 OpenCode 主控入口与 slash commands 安装**。PMAI 现在不只把 OpenCode 当 `/pmai-build` 执行器，也支持 PM 在消费仓直接用 OpenCode 打开项目并输入 `/pmai-*`。`pmai install/upgrade` 会生成 `~/.config/opencode/commands/pmai-*.md`，每个 command 只路由到 `PMAI_HOME` / `~/.pmai` 下的权威 `SKILL.md`；`init-project.sh` 会在消费仓生成 `.opencode/commands/pmai-*.md` 和 `opencode.json`，同时 `AGENTS.md` 改为 Claude / Codex / OpenCode 通用 agent 入口。OpenCode 第一版不伪装 Codex hooks，不生成 `.cursor/`；保护策略用 OpenCode permission、PMAI git hooks、build contract 和 changed-path review 兜底。`pmai doctor/status/uninstall` 同步检查和清理 OpenCode commands。
 
 - `feat(build)`: **新增 builder profile 建造工具档位并接入 OpenCode 执行器**。PM 反馈 build 只问“用哪个执行器”不够，模型和思考深度等建造参数没有清晰确认；继续只补 `model` 会变成症状补丁。本次把 `/pmai-build` 的选择改为建造工具档位，PM 视图只展示 `工具名（model, thinking）`，例如 `Codex（gpt-5.4, high）`，并允许同一句回复覆盖模型和 thinking。`.pm-workflow/config.yml` 新增 `builder.profiles`，底层继续记录 timeout / sandbox / auto / trust 等执行参数；`builder-profile.py` 负责解析 profile 并生成结构化 snapshot；`build-contract.py` 写入 `builder_profile` 和 `builder`，供 `/pmai-build-close` 复盘。本次同时新增 `scripts/exec-adapters/opencode.sh`，并把 codex / cursor-agent / gemini adapter 接上对应隐藏参数。

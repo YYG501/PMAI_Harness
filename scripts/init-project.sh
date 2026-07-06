@@ -125,6 +125,32 @@ if [ -n "$MISSING" ]; then
   exit 2
 fi
 
+# --- 0.5. 阻止已接入 PMAI 的目录被重复初始化 ---
+_pmai_file_mentions_pmai() {
+  local file="$1"
+  [ -f "$file" ] || return 1
+  grep -qE 'PMAI|/pmai-' "$file" 2>/dev/null
+}
+
+_pmai_target_has_project_marker() {
+  [ -f "$TARGET_DIR/PRODUCT-STATE.md" ] && return 0
+  [ -f "$TARGET_DIR/docs/CONTEXT.md" ] && return 0
+  [ -f "$TARGET_DIR/.pm-workflow/config.yml" ] && return 0
+  [ -f "$TARGET_DIR/.codex/hooks.json" ] && return 0
+  [ -f "$TARGET_DIR/.opencode/commands/pmai-build.md" ] && return 0
+  _pmai_file_mentions_pmai "$TARGET_DIR/AGENTS.md" && return 0
+  _pmai_file_mentions_pmai "$TARGET_DIR/CLAUDE.md" && return 0
+  _pmai_file_mentions_pmai "$TARGET_DIR/opencode.json" && return 0
+  return 1
+}
+
+if [ -d "$TARGET_DIR" ] && _pmai_target_has_project_marker; then
+  echo "❌ 目标目录已经接入 PMAI: $TARGET_DIR" >&2
+  echo "   已阻止重复初始化，避免覆盖 PRODUCT.md / AGENTS.md / host 配置。" >&2
+  echo "   下一步：在该目录使用 /pmai-status；需要重整方向走 /pmai-direction；需要刷新框架配置走 pmai upgrade。" >&2
+  exit 1
+fi
+
 # --- a. 检测 gstack 能力（CLI 或全局 skill 任一可用即可） ---
 GSTACK_BIN=$(command -v gstack 2>/dev/null || true)
 GSTACK_SKILL_DIR="$HOME/.claude/skills/gstack"
