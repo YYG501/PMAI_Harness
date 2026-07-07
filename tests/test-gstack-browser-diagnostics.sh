@@ -42,6 +42,16 @@ test_diagnostic_script_has_optional_smoke() {
   pass_test
 }
 
+test_diagnostic_script_classifies_browser_launch_failures() {
+  start_test "gstack diagnostics: smoke classifies browser launch failures"
+
+  assert_file_contains "$SCRIPT" "Playwright Chromium is missing" "script should explain missing Playwright browser cache" || return
+  assert_file_contains "$SCRIPT" "npx playwright install chromium" "script should print a concrete Playwright install hint" || return
+  assert_file_contains "$SCRIPT" "macOS app bundle permission" "script should explain system Chrome app bundle EPERM" || return
+  assert_file_contains "$SCRIPT" "passive diagnostics only" "doctor mode should not overclaim active browser readiness" || return
+  pass_test
+}
+
 test_doctor_and_mockup_reference_diagnostic() {
   start_test "gstack diagnostics: doctor and mockup wiring"
 
@@ -55,6 +65,7 @@ test_doctor_and_mockup_reference_diagnostic() {
 test_diagnostic_script_exists_and_documents_sandbox
 test_diagnostic_script_avoids_browse_status
 test_diagnostic_script_has_optional_smoke
+test_diagnostic_script_classifies_browser_launch_failures
 test_doctor_and_mockup_reference_diagnostic
 
 report_results "gstack-browser-diagnostics"

@@ -18,6 +18,8 @@ PM-AI-Workflow 生成器仓的演进记录。本文件**只记影响下游业务
 
 ## 未发布
 
+- `fix(dx)`: **补齐 devex-review 暴露的 4 个开发者体验缺口**。新增 `scripts/measure-tthw.sh`，把可自动量的骨架 smoke 和必须真实 dogfood 的首模块规格 TTHW 分开：`smoke` 跑 `init-project.sh` + `status-view.py --narrative`，`record` 把人工起止时间写到消费仓 `.pm-workflow/audits/tthw.jsonl`。`pmai whats-new` 规范版本展示，避免 `vv0.2.0`，默认输出收短并支持 `--max-lines` / `--full`。`detect-project-structure.py` 接受位置参数 repo 路径并为不存在路径输出 PM 可读修复提示。`check-gstack-browser.sh --smoke` 捕获并分类 Playwright Chromium 缺失、系统 Chrome app bundle 权限等真实浏览器启动失败；`--doctor` 明确只是 passive check，不再暗示 browse 一定可启动。
+
 - `fix(skills)`: **补全未初始化项目的全入口护栏**。此前 `status-view.py` / `skill-preamble.sh` / 消费仓 `AGENTS.md` 已能提示“当前目录还没有 PMAI 初始化”，但部分公开 skill 和 Codex/OpenCode 直达 slash 路由仍可能绕过项目入口，继续尝试读取或写入项目产物。本次把 Codex prompts、OpenCode commands 统一改为先读项目 `AGENTS.md`、再跑 `skill-preamble.sh`，命中 `PMAI_PROJECT_INITIALIZED: 0` 时停止并引导 `/pmai-init-project`；同时给除 `/pmai-init-project`、`/pmai-upgrade` 外的公开项目型 skill 增加入口护栏。`/pmai-humanize` 保留窄例外：只处理粘贴文本或仓外文件且不写 PMAI 项目产物时可继续。
 
 - `fix(init-project)`: **脚本层阻止重复初始化已接入 PMAI 的消费仓**。`init-project.sh` 现在会在 gstack 检测和模板写入前识别目标目录里的 PMAI marker（如 `AGENTS.md` / `CLAUDE.md` 中的 PMAI 入口、`PRODUCT-STATE.md`、`.pm-workflow/config.yml`、`.codex/hooks.json`、OpenCode PMAI commands 等）；命中后即使调用方误传 `--allow-existing` 也会退出，避免覆盖 `PRODUCT.md`、`AGENTS.md` 和 host 配置。正常资料目录接住逻辑保持不变。

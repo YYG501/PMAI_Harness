@@ -23,7 +23,7 @@ Subcommands:
   doctor               Run integrity self-check
   update-check         Check if newer stable tag available (silent if up-to-date)
   whats-new            Show CHANGELOG diff since last upgrade
-                       Flags: --from <ver>
+                       Flags: --from <ver> [--to <ver>] [--max-lines N] [--full]
   migrate              Migrate consumer from vendored mode to I-mini mode
                        Flags: <consumer-dir> [--dry-run] [--force]
 

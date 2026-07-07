@@ -17,23 +17,46 @@ CHANGELOG="$PMAI_HOME/CHANGELOG.md"
 FROM=""
 TO=""
 SILENT_IF_NO_MARKER=0
+MAX_LINES=40
+FULL=0
 
 while [ $# -gt 0 ]; do
   case "$1" in
     --from) FROM="${2:?--from needs version}"; shift 2 ;;
     --to)   TO="${2:?--to needs version}"; shift 2 ;;
+    --max-lines) MAX_LINES="${2:?--max-lines needs number}"; shift 2 ;;
+    --full) FULL=1; shift ;;
     --silent-if-no-marker) SILENT_IF_NO_MARKER=1; shift ;;
     --help|-h)
       cat <<EOF
-Usage: pmai-whats-new [--from VER] [--to VER] [--silent-if-no-marker]
+Usage: pmai-whats-new [--from VER] [--to VER] [--max-lines N] [--full] [--silent-if-no-marker]
 
   Show CHANGELOG entries since last upgrade.
   Default: read ~/.pmai-state/just-upgraded-from marker (clears after read).
+  Default output is capped for readability; use --full to print the full unreleased section.
 EOF
       exit 0 ;;
     *) echo "❌ unknown flag: $1" >&2; exit 2 ;;
   esac
 done
+
+if ! [[ "$MAX_LINES" =~ ^[0-9]+$ ]] || [ "$MAX_LINES" -lt 1 ]; then
+  echo "❌ --max-lines 必须是正整数: $MAX_LINES" >&2
+  exit 2
+fi
+
+if [ "$FULL" = "1" ]; then
+  MAX_LINES=999999
+fi
+
+display_version() {
+  local version="$1"
+  case "$version" in
+    current|unknown) echo "$version" ;;
+    v*) echo "$version" ;;
+    *) echo "v$version" ;;
+  esac
+}
 
 # 无显式 --from 时从 marker 读
 if [ -z "$FROM" ]; then
@@ -57,13 +80,16 @@ fi
 # 显示「未发布」段（永远显示，因为正在迭代到最新）
 # 加上自从 $FROM 到 $TO 之间的所有 ### 日期 段
 echo "════════════════════════════════════════════════════════════"
-echo "  PMAI v${TO} — upgraded from v${FROM}"
+echo "  PMAI $(display_version "$TO") — upgraded from $(display_version "$FROM")"
 echo "════════════════════════════════════════════════════════════"
 echo ""
 
 # 提取「未发布」段（从「## 未发布」到下一个「## 」之间）；NR 限制避免 SIGPIPE
 echo "📝 未发布段："
-awk '/^## 未发布/{flag=1; printed=0; next} /^## /{flag=0} flag && printed<80 {print; printed++}' "$CHANGELOG"
+awk -v max_lines="$MAX_LINES" '/^## 未发布/{flag=1; printed=0; next} /^## /{flag=0} flag && printed<max_lines {print; printed++}' "$CHANGELOG"
+if [ "$FULL" != "1" ]; then
+  echo "（默认最多显示 ${MAX_LINES} 行；完整内容用 --full 或直接看 CHANGELOG.md）"
+fi
 echo ""
 
 # 如果 FROM != TO 而且 CHANGELOG 有「## v$FROM」段 → 列 $FROM 到 $TO 之间的 ### 日期段

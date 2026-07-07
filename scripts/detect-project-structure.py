@@ -19,7 +19,7 @@ fnmatch 命中，输出多维度报告 + 总判定 + 置信度 + 实际证据。
 `compute_judgment`）。
 
 用法：
-    python3 scripts/detect-project-structure.py [--repo PATH] [--json]
+    python3 scripts/detect-project-structure.py [PATH] [--repo PATH] [--json]
 
 退出码：
     0 = 探测成功（判定 + 置信度写到 stdout）
@@ -228,9 +228,15 @@ def load_schema(schema_path: Path) -> Optional[dict]:
 def main() -> int:
     parser = argparse.ArgumentParser(description="Detect project engineering structure")
     parser.add_argument(
+        "repo_arg",
+        nargs="?",
+        type=Path,
+        help="Repo root（位置参数别名；等价于 --repo PATH）",
+    )
+    parser.add_argument(
         "--repo",
         type=Path,
-        default=REPO_ROOT_DEFAULT,
+        default=None,
         help=f"Repo root（默认 {REPO_ROOT_DEFAULT}）",
     )
     parser.add_argument(
@@ -246,7 +252,20 @@ def main() -> int:
     )
     args = parser.parse_args()
 
-    repo = args.repo.resolve()
+    if args.repo_arg is not None and args.repo is not None:
+        parser.error("不要同时传位置参数 PATH 和 --repo；二选一即可。")
+
+    repo_input = args.repo_arg or args.repo or REPO_ROOT_DEFAULT
+    repo = repo_input.resolve()
+    if not repo.exists():
+        print(f"❌ repo 不存在: {repo}", file=sys.stderr)
+        print("   修复：传真实项目根目录，或使用 --repo <path>。", file=sys.stderr)
+        return 1
+    if not repo.is_dir():
+        print(f"❌ repo 不是目录: {repo}", file=sys.stderr)
+        print("   修复：传项目根目录，而不是文件路径。", file=sys.stderr)
+        return 1
+
     schema_path = args.schema if args.schema else (repo / SCHEMA_REL)
     schema = load_schema(schema_path)
     if schema is None:

@@ -164,6 +164,8 @@ pmai upgrade --to v0.1.0              # 锁定指定版本（回滚）
 # 其他
 pmai status               # VERSION + main HEAD diff
 pmai doctor               # 完整性自检
+pmai whats-new --from v0.2.0 --max-lines 40
+pmai whats-new --from v0.2.0 --full
 pmai uninstall            # 清掉全局装；--local <dir> 清理遗留项目副本
 ```
 
@@ -235,9 +237,17 @@ bash scripts/init-project.sh ...
 可量测骨架 smoke（从空目录到 `status-view.py` 可识别的项目骨架）：
 
 ```bash
-tmp=$(mktemp -d)
-bash scripts/init-project.sh Demo "$tmp/Demo" "一句话项目背景" prototype
-python3 scripts/status-view.py "$tmp/Demo" --narrative
+bash ~/.pmai/scripts/measure-tthw.sh smoke
+# 本仓调试时也可：bash scripts/measure-tthw.sh smoke
+```
+
+首个模块规格草稿的 TTHW 只能在真实 dogfood 后记录。跑完 `/pmai-init-project` → `/pmai-design` 并落出 `spec.md` 后，在业务仓外用框架脚本写一条记录：
+
+```bash
+bash ~/.pmai/scripts/measure-tthw.sh record /path/to/project \
+  --module "<module-name>" \
+  --started-at "2026-07-07T10:00:00+08:00" \
+  --ended-at "2026-07-07T10:25:00+08:00"
 ```
 
 ### 2. PM 在业务仓里的日常循环

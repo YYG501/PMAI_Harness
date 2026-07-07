@@ -12,6 +12,7 @@ SUITES=(
   test-publish-to-lark-e2e.sh
     test-structure-schema.sh
   test-detect-project-structure.sh
+  test-measure-tthw.sh
   test-inject-structure.sh
   test-init-project.sh
   test-private-onboarding.sh
@@ -26,6 +27,7 @@ SUITES=(
   test-design-mockup-meta-routing.sh
   test-gstack-integration-contract.sh
   test-gstack-browser-diagnostics.sh
+  test-whats-new.sh
   test-gstack-doc-return.sh
   test-meta-product-meta-thinking.sh
   test-meta-problem-framing.sh

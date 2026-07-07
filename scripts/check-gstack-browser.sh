@@ -24,6 +24,8 @@ Checks:
   - optional active smoke for local file navigation and design compare board
 
 Notes:
+  - --doctor is a passive check. It does not prove the browser can launch.
+    Run --smoke before browser-backed visual or behavior audits.
   - Codex sandbox may block localhost bind with EPERM. That means runtime
     restriction, not necessarily a broken gstack browser.
   - This script intentionally does not use "browse status" as a passive check,
@@ -153,8 +155,30 @@ PY
   esac
 }
 
+classify_browse_error() {
+  local out="$1"
+  local last_line
+  last_line=$(printf "%s\n" "$out" | tail -1)
+
+  if printf "%s\n" "$out" | grep -qiE "Executable doesn't exist|ms-playwright|playwright.*install|browserType\\.launch"; then
+    warn "browse smoke failed: Playwright Chromium is missing. Install browser deps for gstack browse (for example: npx playwright install chromium) or run in a runtime with bundled Chromium."
+    return
+  fi
+
+  if printf "%s\n" "$out" | grep -qiE "app\\.icns|/Applications/.+Operation not permitted|/Applications/.+EPERM"; then
+    warn "browse smoke failed: system Chrome headed fallback hit macOS app bundle permission. Prefer Playwright Chromium, or fix the gstack headed Chrome icon-copy path before relying on browse evidence."
+    return
+  fi
+
+  if [ -n "$last_line" ]; then
+    warn "browse smoke failed at file:// navigation: $last_line"
+  else
+    warn "browse smoke failed at file:// navigation"
+  fi
+}
+
 run_browser_smoke() {
-  local tmp html shot text_out snapshot_out
+  local tmp html shot text_out snapshot_out goto_out rc
 
   if [ -z "$BROWSE_BIN" ]; then
     warn "--smoke requested but browse binary is unavailable"
@@ -178,8 +202,10 @@ run_browser_smoke() {
 </html>
 HTML
 
-  if ! "$BROWSE_BIN" goto "file://$html" >/dev/null 2>&1; then
-    warn "browse smoke failed at file:// navigation"
+  goto_out=$("$BROWSE_BIN" goto "file://$html" 2>&1 >/dev/null)
+  rc=$?
+  if [ "$rc" != "0" ]; then
+    classify_browse_error "$goto_out"
     return
   fi
 
@@ -246,6 +272,8 @@ probe_localhost_bind
 
 if [ "$RUN_SMOKE" = "1" ]; then
   run_browser_smoke
+elif [ "$DOCTOR_MODE" = "1" ]; then
+  echo "  INFO: passive diagnostics only; run check-gstack-browser.sh --smoke before browser-backed visual/behavior audits"
 elif [ "$DOCTOR_MODE" = "0" ]; then
   echo "  INFO: active browse/design smoke skipped; pass --smoke to start browser checks"
 fi

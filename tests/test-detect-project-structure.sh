@@ -176,6 +176,48 @@ test_self_repo_is_unknown() {
   pass_test
 }
 
+test_positional_repo_arg_alias() {
+  start_test "位置参数 repo 路径等价于 --repo"
+  local repo
+  repo=$(_make_repo)
+  _commit_file "$repo" "src/components/ui/Button.tsx"
+  _commit_file "$repo" "src/framework/layout/Shell.tsx"
+  _commit_file "$repo" "src/app/page.tsx"
+  _finalize_repo "$repo"
+
+  local result
+  result=$(python3 "$DETECT" "$repo" --schema "$SCHEMA" --json 2>/dev/null \
+    | python3 -c "import json,sys; d=json.load(sys.stdin); print(d['judgment'])")
+  if [ "$result" != "prototype" ]; then
+    _fail "位置参数 repo 应可被识别，得：$result"
+    rm -rf "$repo"
+    return
+  fi
+  rm -rf "$repo"
+  pass_test
+}
+
+test_missing_repo_path_is_friendly() {
+  start_test "不存在 repo 路径给 PM 可读错误"
+  local missing out rc
+  missing="${TMPDIR:-/tmp}/detect-missing-$$"
+  rm -rf "$missing"
+
+  out=$(python3 "$DETECT" "$missing" --schema "$SCHEMA" 2>&1)
+  rc=$?
+  if [ "$rc" != "1" ]; then
+    _fail "不存在 repo 应 exit 1，得：$rc"
+    echo "$out" >&2
+    return
+  fi
+  if ! echo "$out" | grep -q "repo 不存在" || ! echo "$out" | grep -q -- "--repo <path>"; then
+    _fail "不存在 repo 应输出可读修复提示"
+    echo "$out" >&2
+    return
+  fi
+  pass_test
+}
+
 # -----------------------------------------------------------------
 # Run
 # -----------------------------------------------------------------
@@ -186,5 +228,7 @@ test_hybrid_project
 test_non_product_repo_falls_to_unknown
 test_unknown_project
 test_self_repo_is_unknown
+test_positional_repo_arg_alias
+test_missing_repo_path_is_friendly
 
 report_results "detect-project-structure"
