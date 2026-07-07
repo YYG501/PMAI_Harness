@@ -129,7 +129,7 @@ test_reject_missing_audit_evidence() {
   if (cd "$FIXTURE_DIR" && bash "$CLOSE_WORK" "$work_dir") >/tmp/out.$$ 2>/tmp/err.$$; then
     _fail "close-work should reject missing browser/behavior audit evidence"
   else
-    if grep -q "三道审证据不完整" /tmp/err.$$; then
+    if grep -q "build 验收证据不完整" /tmp/err.$$; then
       pass_test
     else
       _fail "stderr missing audit evidence guidance"
@@ -433,7 +433,7 @@ test_build_close_skill_documents_contract_and_wip_rules() {
   assert_file_contains "$BUILD_CLOSE_SKILL" "主仓 main 上允许保留其它未提交 WIP" "build-close should allow unrelated main WIP" || return
   assert_file_contains "$BUILD_CLOSE_SKILL" "autostash" "build-close should document autostash merge behavior" || return
   assert_file_contains "$BUILD_CLOSE_SKILL" "PM 窗口只报阶段结果" "build-close should keep command chatter out of PM view" || return
-  assert_file_contains "$BUILD_CLOSE_SKILL" "三道审证据是 close 硬门" "build-close should gate close on audit evidence" || return
+  assert_file_contains "$BUILD_CLOSE_SKILL" "build 验收证据是 close 硬门" "build-close should gate close on audit evidence" || return
   pass_test
 }
 

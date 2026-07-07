@@ -35,7 +35,11 @@ test_diagnostic_script_has_optional_smoke() {
   start_test "gstack diagnostics: optional active smoke"
 
   assert_success "diagnostic --help should succeed" bash "$SCRIPT" --help || return
+  assert_file_contains "$SCRIPT" "--browser-smoke" "script should expose browser-only active smoke flag" || return
   assert_file_contains "$SCRIPT" "--smoke" "script should expose explicit smoke flag" || return
+  assert_file_contains "$SCRIPT" "--json-out" "script should write machine-readable browser smoke evidence" || return
+  assert_file_contains "$SCRIPT" "active_browser_smoke" "json evidence should mark active browser smoke" || return
+  assert_file_contains "$SCRIPT" 'status="skipped"' "passive json output should not claim active browser pass" || return
   assert_file_contains "$SCRIPT" "file://" "script should test local file navigation in smoke" || return
   assert_file_contains "$SCRIPT" "snapshot -i" "script should test interactive snapshot in smoke" || return
   assert_file_contains "$SCRIPT" "design compare" "script should smoke design compare board" || return
@@ -49,6 +53,7 @@ test_diagnostic_script_classifies_browser_launch_failures() {
   assert_file_contains "$SCRIPT" "npx playwright install chromium" "script should print a concrete Playwright install hint" || return
   assert_file_contains "$SCRIPT" "macOS app bundle permission" "script should explain system Chrome app bundle EPERM" || return
   assert_file_contains "$SCRIPT" "passive diagnostics only" "doctor mode should not overclaim active browser readiness" || return
+  assert_file_contains "$SCRIPT" "cannot write json result" "script should fail loudly if smoke evidence cannot be written" || return
   pass_test
 }
 
@@ -56,6 +61,8 @@ test_doctor_and_mockup_reference_diagnostic() {
   start_test "gstack diagnostics: doctor and mockup wiring"
 
   assert_file_contains "$DOCTOR" "check-gstack-browser.sh" "doctor should call browser diagnostics" || return
+  assert_file_contains "$DOCTOR" "--browser-smoke" "doctor should expose active browser smoke" || return
+  assert_file_contains "$DOCTOR" "active smoke not run" "default doctor should avoid overclaiming active browser readiness" || return
   assert_file_contains "$DOCTOR" "gstack browser/design diagnostics" "doctor should expose diagnostic section" || return
   assert_file_contains "$MOCKUP" "check-gstack-browser.sh" "mockup should route through diagnostic script" || return
   assert_file_contains "$MOCKUP" '不要把 `browse status` 当无副作用检查' "mockup should warn about browse status side effect" || return

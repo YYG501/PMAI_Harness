@@ -26,8 +26,10 @@
 
 适用：gstack / browser 产出检查证据，PMAI 决定能不能收口。
 
+- 浏览器类验收前先跑 `check-gstack-browser.sh --browser-smoke --json-out .pm-workflow/audits/<模块>/browser-smoke.json`。`status=pass` 且 `active_browser_smoke=true` 才能证明当前 runtime 里 `/browse` 已主动可用。
 - `/design-review` 产出视觉门证据，写入 `.pm-workflow/audits/<模块>/visual.json`。
 - `/browse` 或脚本化浏览器验收产出行为证据，写入 `.pm-workflow/audits/<模块>/behavior.json`。
+- 如果主动 browser smoke 不是 `pass`，视觉门 / 行为审不能静默当通过，只能记录为受限、跳过或阻塞；PM 明确接受风险时，用 `build-contract.py audit-exception` 写入原因。行为审自身 `fail` 一律先修，不能靠例外放行。
 - `/pmai-build-close` 只认 PMAI build contract；gstack/browser 没跑就是缺证据，不能静默当通过。
 
 ### 4. 可选旁路

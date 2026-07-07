@@ -1,12 +1,14 @@
 #!/usr/bin/env bash
 # check-gstack-browser.sh — lightweight diagnostics for gstack browse/design.
 #
-# Default mode avoids starting the gstack browse daemon. Use --smoke only when
-# the user explicitly wants an active browser/design-board probe.
+# Default mode avoids starting the gstack browse daemon. Use --browser-smoke or
+# --smoke only when the user explicitly wants an active probe.
 set -uo pipefail
 
-RUN_SMOKE=0
+RUN_BROWSER_SMOKE=0
+RUN_DESIGN_SMOKE=0
 DOCTOR_MODE=0
+JSON_OUT=""
 PASS_COUNT=0
 WARN_COUNT=0
 FAIL_COUNT=0
@@ -16,16 +18,18 @@ DESIGN_BIN=""
 usage() {
   cat <<EOF
 Usage:
-  check-gstack-browser.sh [--smoke] [--doctor]
+  check-gstack-browser.sh [--doctor] [--browser-smoke|--smoke] [--json-out PATH]
 
 Checks:
   - gstack browse/design binaries
   - localhost bind permission without starting browse
-  - optional active smoke for local file navigation and design compare board
+  - optional active browser smoke for local file navigation
+  - optional active design compare-board smoke with --smoke
 
 Notes:
   - --doctor is a passive check. It does not prove the browser can launch.
-    Run --smoke before browser-backed visual or behavior audits.
+    Run --browser-smoke before browser-backed visual or behavior audits.
+  - --smoke includes --browser-smoke plus the design compare-board smoke.
   - Codex sandbox may block localhost bind with EPERM. That means runtime
     restriction, not necessarily a broken gstack browser.
   - This script intentionally does not use "browse status" as a passive check,
@@ -50,7 +54,9 @@ fail() {
 
 while [ $# -gt 0 ]; do
   case "$1" in
-    --smoke) RUN_SMOKE=1 ;;
+    --browser-smoke) RUN_BROWSER_SMOKE=1 ;;
+    --smoke) RUN_BROWSER_SMOKE=1; RUN_DESIGN_SMOKE=1 ;;
+    --json-out) JSON_OUT="${2:?--json-out needs path}"; shift ;;
     --doctor) DOCTOR_MODE=1 ;;
     --help|-h) usage; exit 0 ;;
     *) echo "unknown flag: $1" >&2; usage >&2; exit 2 ;;
@@ -181,7 +187,7 @@ run_browser_smoke() {
   local tmp html shot text_out snapshot_out goto_out rc
 
   if [ -z "$BROWSE_BIN" ]; then
-    warn "--smoke requested but browse binary is unavailable"
+    warn "--browser-smoke requested but browse binary is unavailable"
     return
   fi
 
@@ -229,7 +235,9 @@ HTML
     warn "browse smoke screenshot failed"
   fi
 
-  run_design_board_smoke "$shot" "$tmp"
+  if [ "$RUN_DESIGN_SMOKE" = "1" ]; then
+    run_design_board_smoke "$shot" "$tmp"
+  fi
 }
 
 run_design_board_smoke() {
@@ -270,13 +278,50 @@ echo "gstack browser/design diagnostics"
 check_binaries
 probe_localhost_bind
 
-if [ "$RUN_SMOKE" = "1" ]; then
+if [ "$RUN_BROWSER_SMOKE" = "1" ]; then
   run_browser_smoke
 elif [ "$DOCTOR_MODE" = "1" ]; then
-  echo "  INFO: passive diagnostics only; run check-gstack-browser.sh --smoke before browser-backed visual/behavior audits"
+  echo "  INFO: passive diagnostics only; run check-gstack-browser.sh --browser-smoke before browser-backed visual/behavior audits"
 elif [ "$DOCTOR_MODE" = "0" ]; then
-  echo "  INFO: active browse/design smoke skipped; pass --smoke to start browser checks"
+  echo "  INFO: active browse/design smoke skipped; pass --browser-smoke to start browser checks"
 fi
+
+write_json_result() {
+  [ -n "$JSON_OUT" ] || return
+  local status tmp active_browser active_design out_dir
+  status="pass"
+  if [ "$RUN_BROWSER_SMOKE" != "1" ]; then
+    status="skipped"
+  elif [ "$FAIL_COUNT" -gt 0 ]; then
+    status="fail"
+  elif [ "$WARN_COUNT" -gt 0 ]; then
+    status="limited"
+  fi
+  active_browser=false
+  active_design=false
+  [ "$RUN_BROWSER_SMOKE" = "1" ] && active_browser=true
+  [ "$RUN_DESIGN_SMOKE" = "1" ] && active_design=true
+  out_dir="$(dirname "$JSON_OUT")"
+  if ! mkdir -p "$out_dir"; then
+    fail "cannot create json output directory: $out_dir"
+    return
+  fi
+  tmp="${JSON_OUT}.tmp"
+  if ! cat > "$tmp" <<JSON
+{"status":"$status","active_browser_smoke":$active_browser,"active_design_smoke":$active_design,"pass_count":$PASS_COUNT,"warn_count":$WARN_COUNT,"fail_count":$FAIL_COUNT,"checked_at":"$(date -u +%Y-%m-%dT%H:%M:%SZ)"}
+JSON
+  then
+    fail "cannot write json result: $JSON_OUT"
+    rm -f "$tmp" 2>/dev/null || true
+    return
+  fi
+  if ! mv "$tmp" "$JSON_OUT"; then
+    fail "cannot move json result into place: $JSON_OUT"
+    rm -f "$tmp" 2>/dev/null || true
+  fi
+}
+
+write_json_result
 
 if [ "$FAIL_COUNT" -gt 0 ]; then
   exit 2

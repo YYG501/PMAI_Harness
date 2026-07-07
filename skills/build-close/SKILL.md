@@ -118,8 +118,8 @@ python3 "$PMAI_HOME/scripts/build-contract.py" validate-close "$MODULE_WORK_DIR"
   - 如果没有明确验收信号 → STOP，不能进入 build-close。
 - 合同是 `mode=worktree` 但分支或 worktree 找不到 → 不退化成 main 直收，先恢复 worktree 或补合同。
 - 合同是 `mode=main` 但当前不在 main/master → 停止，回主仓主线再收尾。
-- 缺三道审证据（`coverage.json` / `visual.json` / `behavior.json` / `synthesis.md`）→ STOP，回 `/pmai-build` 补跑覆盖、视觉和行为审；不能只靠 PM 说“通过”跳过 browser / gstack 验收。
-- 视觉门或行为审是 `limited` / `skipped` → 必须有 `audit_exception` 记录 PM 明确接受的原因；行为审 `fail` 一律 STOP。
+- 缺 build 验收证据（`browser-smoke.json` / `coverage.json` / `visual.json` / `behavior.json` / `synthesis.md`）→ STOP，回 `/pmai-build` 补跑主动 browser smoke、覆盖、视觉和行为审；不能只靠 PM 说“通过”跳过 browser / gstack 验收。
+- 主动 browser smoke 是 `limited` / `skipped` / `fail` / `blocked`，或视觉门 / 行为审是 `limited` / `skipped` / `blocked` → 必须有 `audit_exception` 记录 PM 明确接受的原因；行为审 `fail` 一律 STOP；`browser-smoke.json` 若写 `pass` 但没有 `active_browser_smoke=true` 也一律不能收尾。
 - 缺 build contract 时，即使文件已经改完、PM 说“提交吧”，也不能把它包装成已完成 close；先回 `/pmai-build` 补齐合同、三道审和验收记录。
 
 gstack / browser 证据按 `skills/_shared/gstack-integration.md` 处理：它们只是 evidence producer，`build-contract.py validate-close` 才是收口判断入口。
@@ -335,7 +335,7 @@ merge 回 main（具体的 merge / 删 worktree / 删分支编排由 lifecycle �
 - **合同补录必须原子化**：PM 已明确验收但合同缺实现提交 / 验收时间时，只能用 `build-contract.py complete` 一次写齐；禁止并行或交错跑 `commit` / `accept` 两步，避免字段互相覆盖。
 - **不靠分支形态猜收尾**：当前在非 main 分支、普通 `codex/*` 分支、或 worktree 丢失，都不是新的 PM 分流菜单；只说明合同与现场不一致，停止并给出恢复上下文的最短动作。
 - **未落主线不写完成态**：还没按合同合回主线，或三道审 / 验证 / 验收缺口没有明确记录前，不得输出“已收口 / 时间线已完成”。若选择 PR/保留分支，那是待合回状态，不是 build-close 完成。
-- **三道审证据是 close 硬门**：`build-contract.py validate-close` 必须看到覆盖、视觉、行为三份结果和合成报告。browser / gstack 没跑就是缺证据；工具受限只能记录为 `limited` / `skipped`，并经 PM 明确接受后继续，不能静默当通过。
+- **build 验收证据是 close 硬门**：`build-contract.py validate-close` 必须看到主动 browser smoke、覆盖、视觉、行为四份结果和合成报告。browser / gstack 没跑就是缺证据；工具受限、跳过、失败或阻塞只能按对应状态记录，并经 PM 明确接受后继续，不能静默当通过。
 - **gstack 不是收口权威**：`/design-review`、`/browse` 可以产视觉 / 行为证据，但是否能 close 只看 PMAI build contract 和 PM 验收记录。
 - **形态自适应**：`/pmai-build` 可以直接在 main 上建，也可以开隔离环境建；`/pmai-build-close` 只在 build 经 PM 验收后使用，并根据 build 合同 `mode` 决定是否合并。只完成讨论但暂不实现时，不需要 build-close。
 - **决策 / 理路 3 个正交的家**（开放 5 拍板，撤销原 3→2 折叠）：单模块决策 → 模块 `decisions.md`（活）；跨模块**规则** → `PRODUCT-RULES.md`（活、scope）；跨文件**理路** → `docs/decisions/<日期>-<slug>.md`（**冻结**）。理路与规则分家、不混塞一份。

@@ -33,6 +33,9 @@ write_clean_audits() {
   cat > "$AUDIT_DIR/coverage.json" <<'JSON'
 {"items":[{"name":"导入入口","status":"built","note":""}]}
 JSON
+  cat > "$AUDIT_DIR/browser-smoke.json" <<'JSON'
+{"status":"pass","active_browser_smoke":true,"active_design_smoke":false}
+JSON
   cat > "$AUDIT_DIR/visual.json" <<'JSON'
 {"status":"pass","findings":[]}
 JSON
@@ -47,6 +50,9 @@ write_limited_browser_audits() {
   mkdir -p "$AUDIT_DIR"
   cat > "$AUDIT_DIR/coverage.json" <<'JSON'
 {"items":[{"name":"导入入口","status":"built","note":""}]}
+JSON
+  cat > "$AUDIT_DIR/browser-smoke.json" <<'JSON'
+{"status":"limited","active_browser_smoke":true,"active_design_smoke":false,"note":"browser 工具不可用"}
 JSON
   cat > "$AUDIT_DIR/visual.json" <<'JSON'
 {"status":"limited","findings":[],"note":"sandbox 无法启动浏览器截图"}
@@ -102,7 +108,7 @@ test_contract_lifecycle() {
     _fail "validate-close should fail before audit evidence exists"
     rm -f /tmp/build-contract.$$ /tmp/build-contract.err.$$; teardown_contract_fixture; return
   fi
-  if ! grep -q "三道审证据不完整" /tmp/build-contract.err.$$; then
+  if ! grep -q "build 验收证据不完整" /tmp/build-contract.err.$$; then
     _fail "missing audit evidence guidance"
     cat /tmp/build-contract.err.$$ >&2
     rm -f /tmp/build-contract.$$ /tmp/build-contract.err.$$; teardown_contract_fixture; return
@@ -272,7 +278,7 @@ test_contract_limited_browser_requires_pm_exception() {
     _fail "validate-close should reject skipped browser evidence without PM exception"
     rm -f /tmp/build-contract.$$ /tmp/build-contract.err.$$; teardown_contract_fixture; return
   fi
-  if ! grep -q "受限/跳过" /tmp/build-contract.err.$$; then
+  if ! grep -q "受限/跳过/失败/阻塞" /tmp/build-contract.err.$$; then
     _fail "stderr should explain audit exception requirement"
     cat /tmp/build-contract.err.$$ >&2
     rm -f /tmp/build-contract.$$ /tmp/build-contract.err.$$; teardown_contract_fixture; return
@@ -293,6 +299,98 @@ test_contract_limited_browser_requires_pm_exception() {
   fi
 
   pass_test
+  rm -f /tmp/build-contract.$$ /tmp/build-contract.err.$$
+  teardown_contract_fixture
+}
+
+test_contract_missing_browser_smoke_blocks_clean_audits() {
+  start_test "build-contract: clean visual/behavior still require active browser smoke"
+  setup_contract_fixture
+
+  python3 "$BUILD_CONTRACT" start "$MODULE_DIR" \
+    --anchor "docs/modules/pet-import/spec.md" \
+    --mode worktree \
+    --executor codex \
+    --branch build-pet-import \
+    --worktree ".worktrees/build-pet-import" \
+    --baseline-sha "abc123" \
+    --audit-dir ".pm-workflow/audits/pet-import" >/tmp/build-contract.$$ 2>/tmp/build-contract.err.$$ || {
+      _fail "start should succeed"
+      cat /tmp/build-contract.err.$$ >&2
+      rm -f /tmp/build-contract.$$ /tmp/build-contract.err.$$; teardown_contract_fixture; return
+    }
+  python3 "$BUILD_CONTRACT" complete "$MODULE_DIR" \
+    --implementation-commit "def456" \
+    --accepted-at "2026-06-28T10:00:00+08:00" >/tmp/build-contract.$$ 2>/tmp/build-contract.err.$$ || {
+      _fail "complete should succeed"
+      cat /tmp/build-contract.err.$$ >&2
+      rm -f /tmp/build-contract.$$ /tmp/build-contract.err.$$; teardown_contract_fixture; return
+    }
+
+  write_clean_audits
+  rm -f "$T/.pm-workflow/audits/pet-import/browser-smoke.json"
+  if python3 "$BUILD_CONTRACT" validate-close "$MODULE_DIR" >/tmp/build-contract.$$ 2>/tmp/build-contract.err.$$; then
+    _fail "validate-close should reject missing browser-smoke.json"
+    rm -f /tmp/build-contract.$$ /tmp/build-contract.err.$$; teardown_contract_fixture; return
+  fi
+  if grep -q "浏览器主动 smoke" /tmp/build-contract.err.$$; then
+    pass_test
+  else
+    _fail "stderr should explain missing active browser smoke"
+    cat /tmp/build-contract.err.$$ >&2
+  fi
+
+  rm -f /tmp/build-contract.$$ /tmp/build-contract.err.$$
+  teardown_contract_fixture
+}
+
+test_contract_browser_smoke_limited_blocks_passed_browser_audits() {
+  start_test "build-contract: limited browser smoke cannot coexist with passed browser audits"
+  setup_contract_fixture
+
+  python3 "$BUILD_CONTRACT" start "$MODULE_DIR" \
+    --anchor "docs/modules/pet-import/spec.md" \
+    --mode worktree \
+    --executor codex \
+    --branch build-pet-import \
+    --worktree ".worktrees/build-pet-import" \
+    --baseline-sha "abc123" \
+    --audit-dir ".pm-workflow/audits/pet-import" >/tmp/build-contract.$$ 2>/tmp/build-contract.err.$$ || {
+      _fail "start should succeed"
+      cat /tmp/build-contract.err.$$ >&2
+      rm -f /tmp/build-contract.$$ /tmp/build-contract.err.$$; teardown_contract_fixture; return
+    }
+  python3 "$BUILD_CONTRACT" complete "$MODULE_DIR" \
+    --implementation-commit "def456" \
+    --accepted-at "2026-06-28T10:00:00+08:00" >/tmp/build-contract.$$ 2>/tmp/build-contract.err.$$ || {
+      _fail "complete should succeed"
+      cat /tmp/build-contract.err.$$ >&2
+      rm -f /tmp/build-contract.$$ /tmp/build-contract.err.$$; teardown_contract_fixture; return
+    }
+
+  write_clean_audits
+  cat > "$T/.pm-workflow/audits/pet-import/browser-smoke.json" <<'JSON'
+{"status":"limited","active_browser_smoke":true,"active_design_smoke":false,"note":"browser 工具不可用"}
+JSON
+  python3 "$BUILD_CONTRACT" audit-exception "$MODULE_DIR" \
+    --reason "PM 确认本轮浏览器工具受限，先接受风险" \
+    --accepted-at "2026-06-28T10:05:00+08:00" >/tmp/build-contract.$$ 2>/tmp/build-contract.err.$$ || {
+      _fail "audit-exception should record PM acceptance"
+      cat /tmp/build-contract.err.$$ >&2
+      rm -f /tmp/build-contract.$$ /tmp/build-contract.err.$$; teardown_contract_fixture; return
+    }
+
+  if python3 "$BUILD_CONTRACT" validate-close "$MODULE_DIR" >/tmp/build-contract.$$ 2>/tmp/build-contract.err.$$; then
+    _fail "validate-close should reject passed browser audits when browser smoke is limited"
+    rm -f /tmp/build-contract.$$ /tmp/build-contract.err.$$; teardown_contract_fixture; return
+  fi
+  if grep -q "视觉门不能写 pass" /tmp/build-contract.err.$$; then
+    pass_test
+  else
+    _fail "stderr should explain browser smoke/pass contradiction"
+    cat /tmp/build-contract.err.$$ >&2
+  fi
+
   rm -f /tmp/build-contract.$$ /tmp/build-contract.err.$$
   teardown_contract_fixture
 }
@@ -347,6 +445,8 @@ test_contract_rejects_missing_build
 test_contract_start_initializes_missing_meta
 test_contract_complete_records_commit_and_acceptance_atomically
 test_contract_limited_browser_requires_pm_exception
+test_contract_missing_browser_smoke_blocks_clean_audits
+test_contract_browser_smoke_limited_blocks_passed_browser_audits
 test_contract_behavior_fail_blocks_close
 
 report_results "build-contract"

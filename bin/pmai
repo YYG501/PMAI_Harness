@@ -21,6 +21,7 @@ Subcommands:
                        Flags: --force | --local <dir> (清理遗留项目副本)
   status               Show install state + version diff
   doctor               Run integrity self-check
+                       Flags: [--browser-smoke]
   update-check         Check if newer stable tag available (silent if up-to-date)
   whats-new            Show CHANGELOG diff since last upgrade
                        Flags: --from <ver> [--to <ver>] [--max-lines N] [--full]

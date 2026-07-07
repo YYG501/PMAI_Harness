@@ -20,6 +20,8 @@ rm -rf /tmp/pmai-src
 gh repo clone YYG501/PMAI_Workflow /tmp/pmai-src
 bash /tmp/pmai-src/bin/pmai install
 ~/.pmai/bin/pmai doctor
+# 需要确认 /browse runtime 真能启动时再跑主动 smoke：
+~/.pmai/bin/pmai doctor --browser-smoke
 ```
 
 装好后，在任意业务项目目录里发：
@@ -117,7 +119,7 @@ bash /tmp/pmai-src/bin/pmai install
 安装成功后，`pmai install` 末尾会：
 - clone 到 `~/.pmai/` + symlink skill 到 `~/.claude/skills/pmai-*` / `~/.codex/skills/pmai-*` + 生成 Codex CLI slash prompts 到 `~/.codex/prompts/pmai-*.md` + 生成 OpenCode slash commands 到 `~/.config/opencode/commands/pmai-*.md`
 - 自动检测 shell（zsh/bash）+ 给 `~/.pmai/bin` 加 PATH 的 oneshot 命令
-- 提示 gstack readiness；缺 gstack 只 warning，起项目前补齐即可
+- 提示 gstack readiness；缺 gstack 只 warning，起项目前补齐即可。`pmai doctor` 默认只做 passive diagnostics；`pmai doctor --browser-smoke` 会主动启动 gstack browse，用于确认 browser-backed 视觉 / 行为验收真的可跑。
 
 ### 公开镜像安装（仅 public repo / public mirror）
 

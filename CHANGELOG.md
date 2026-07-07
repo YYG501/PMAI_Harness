@@ -18,6 +18,8 @@ PM-AI-Workflow 生成器仓的演进记录。本文件**只记影响下游业务
 
 ## 未发布
 
+- `fix(build)`: **把主动 browser smoke 纳入 build-close 硬门**。PM 担心“gstack 安装/被 doctor 看见”不等于 runtime 里 `/browse` 真能启动；本次新增 `pmai doctor --browser-smoke` 和 `check-gstack-browser.sh --browser-smoke --json-out .../browser-smoke.json`，主动打开本地页面并写机器证据。`build-contract.py validate-close` 现在要求 `.pm-workflow/audits/<模块>/browser-smoke.json` 与覆盖 / 视觉 / 行为 / 合成报告一起齐全；`pass` 必须带 `active_browser_smoke=true`。主动 smoke 受限、跳过、失败或阻塞时，视觉 / 行为验收不能静默当通过，必须经 PM 明确接受并记录 `audit_exception` 后才能收尾；行为审 `fail` 仍一律阻断。
+
 - `fix(dx)`: **补齐 devex-review 暴露的 4 个开发者体验缺口**。新增 `scripts/measure-tthw.sh`，把可自动量的骨架 smoke 和必须真实 dogfood 的首模块规格 TTHW 分开：`smoke` 跑 `init-project.sh` + `status-view.py --narrative`，`record` 把人工起止时间写到消费仓 `.pm-workflow/audits/tthw.jsonl`。`pmai whats-new` 规范版本展示，避免 `vv0.2.0`，默认输出收短并支持 `--max-lines` / `--full`。`detect-project-structure.py` 接受位置参数 repo 路径并为不存在路径输出 PM 可读修复提示。`check-gstack-browser.sh --smoke` 捕获并分类 Playwright Chromium 缺失、系统 Chrome app bundle 权限等真实浏览器启动失败；`--doctor` 明确只是 passive check，不再暗示 browse 一定可启动。
 
 - `fix(skills)`: **补全未初始化项目的全入口护栏**。此前 `status-view.py` / `skill-preamble.sh` / 消费仓 `AGENTS.md` 已能提示“当前目录还没有 PMAI 初始化”，但部分公开 skill 和 Codex/OpenCode 直达 slash 路由仍可能绕过项目入口，继续尝试读取或写入项目产物。本次把 Codex prompts、OpenCode commands 统一改为先读项目 `AGENTS.md`、再跑 `skill-preamble.sh`，命中 `PMAI_PROJECT_INITIALIZED: 0` 时停止并引导 `/pmai-init-project`；同时给除 `/pmai-init-project`、`/pmai-upgrade` 外的公开项目型 skill 增加入口护栏。`/pmai-humanize` 保留窄例外：只处理粘贴文本或仓外文件且不写 PMAI 项目产物时可继续。

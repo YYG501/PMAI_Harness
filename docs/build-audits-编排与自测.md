@@ -21,17 +21,20 @@ build 完三道机器审，各查一种病、对照不同参照物，合成一�
 - `resolve <task>`：校验输入（范围清单 / `prototype/` / dev 端口）→ 缺则 **fail-loud**；建 `.pm-workflow/audits/<模块>/` 内部审计目录；打印三道 manifest（每道读什么、把规范化结果写哪、dev server 复用约定）。
 - `synthesize <task>`：读三道规范化结果 → **校验三道齐全**（漏跑 fail-loud 点名）→ 合成 `synthesis.md` + 机器 summary（计数 + `gate=clean|needs-review`，门禁仅作给 PM 的**建议**、不替 PM 拍板）。
 
-接线：`skills/build/SKILL.md` 在三道审前跑 `resolve`，每道审各写规范化 json，最后调 `synthesize`。
+接线：`skills/build/SKILL.md` 在三道审前先跑 `check-gstack-browser.sh --browser-smoke --json-out .../browser-smoke.json`，再跑 `resolve`，每道审各写规范化 json，最后调 `synthesize`。`build-audits.py` 不负责启动浏览器 smoke；`build-contract.py validate-close` 负责把 `browser-smoke.json` 和三道审证据一起作为 close 硬门。
 
-## 2. 输入契约（三道规范化结果，build 跑完每道写一份）
+## 2. 输入契约（主动 smoke + 三道规范化结果）
 
 | 文件（`<worktree>/.pm-workflow/audits/<模块>/`）| schema |
 |---|---|
+| `browser-smoke.json` | `{"status":"pass\|limited\|skipped\|fail\|blocked","active_browser_smoke":true,"active_design_smoke":bool,"note"}`；`pass` 必须来自主动 browser smoke |
 | `coverage.json` | `{"items":[{"name","status":"built\|missing\|degraded","note"}]}` |
-| `visual.json` | `{"findings":[{"severity":"P0\|P1\|P2","desc"}]}`（空 findings = 视觉通过）|
-| `behavior.json` | `{"status":"pass\|fail\|skipped","passed":int,"total":int,"note"}` |
+| `visual.json` | `{"status":"pass\|needs-review\|limited\|skipped\|blocked","findings":[{"severity":"P0\|P1\|P2","desc"}]}`（空 findings = 视觉通过）|
+| `behavior.json` | `{"status":"pass\|fail\|skipped\|limited\|blocked","passed":int,"total":int,"note"}` |
 
 `gate = needs-review` 当：有 missing/degraded、或有视觉 finding、或行为 fail；否则 `clean`。
+
+`gate` 只来自三道审合成，不代表 close 可以绕过 browser smoke。主动 smoke 非 `pass` 时，视觉/行为类证据不能写通过，只能按受限、跳过或阻塞呈交，并由 PM 明确接受后记录 `audit_exception` 才能收尾；行为审自身 `fail` 仍一律阻断。
 
 ## 3. 自测留档（2026-05-31，仿真数据跑通）
 

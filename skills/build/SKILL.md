@@ -416,22 +416,26 @@ DEV_CMD="<config.yml dev_server.command，替换 {port}>"
 
 非 UI 类需求跳过。
 
-### 步骤 6：建完三道审（覆盖 / 视觉 / 行为，复用 build-audits.py）
+### 步骤 6：建完 browser smoke + 三道审（覆盖 / 视觉 / 行为）
 
-建完 AI **自动**跑三道机器审，走 `build-audits.py` 编排（确定性收集 + 合成一份给 PM；只报不改，是给 PM 看的证据，不替 PM 拍板）。
+建完 AI **自动**先跑主动 browser smoke，再跑三道机器审。`browser-smoke.json` 证明当前 runtime 真的能启动 `/browse` 并做本地页面导航；`build-audits.py` 编排覆盖 / 视觉 / 行为三道审（确定性收集 + 合成一份给 PM；只报不改，是给 PM 看的证据，不替 PM 拍板）。
 
 > **锚点已敲死**：覆盖审计锚点统一是步骤 0 选定的 **`BUILD_ANCHOR`**（模块 `spec.md` 或 `docs/modules/<按内容命名>.md`）。`build-audits.py` 已参数化锚点（`--range-list` / `--audit-dir` / `--label`）。统一接脚本，复用其 fail-loud「三道齐全」校验——覆盖审计是防残承重墙，不走纯 AI 自跑（避免静默漏一道审还往下走）：
 > ```bash
 > BUILD_ANCHOR="$BUILD_DIR/<docs/modules/... 实际锚点路径>"   # 模块 spec 或功能型规格文档
+> AUDIT_DIR=".pm-workflow/audits/<模块>"
+> bash "$PMAI_HOME/scripts/check-gstack-browser.sh" --browser-smoke \
+>     --json-out "$BUILD_DIR/$AUDIT_DIR/browser-smoke.json"
 > python3 "$PMAI_HOME/scripts/build-audits.py" resolve "$BUILD_ANCHOR" \
 >     --repo-root "$BUILD_DIR" --range-list "$BUILD_ANCHOR" \
->     --audit-dir ".pm-workflow/audits/<模块>" --label "<模块>"
+>     --audit-dir "$AUDIT_DIR" --label "<模块>"
 > # …三道审各写 coverage.json / visual.json / behavior.json 进 $BUILD_DIR/.pm-workflow/audits/<模块>/…
 > python3 "$PMAI_HOME/scripts/build-audits.py" synthesize "$BUILD_ANCHOR" \
->     --repo-root "$BUILD_DIR" --audit-dir ".pm-workflow/audits/<模块>" --label "<模块>"
+>     --repo-root "$BUILD_DIR" --audit-dir "$AUDIT_DIR" --label "<模块>"
 > ```
 >
-> `coverage.json` / `visual.json` / `behavior.json` 是 `.pm-workflow/` 下的内部证据，不写进 `docs/`，也不作为消费仓主目录结构对 PM 展开；给 PM 看的是合成后的结论和待改项。
+> `browser-smoke.json` / `coverage.json` / `visual.json` / `behavior.json` 是 `.pm-workflow/` 下的内部证据，不写进 `docs/`，也不作为消费仓主目录结构对 PM 展开；给 PM 看的是合成后的结论和待改项。
+> `browser-smoke.json` 必须是 `status=pass` 且 `active_browser_smoke=true`，才可以把后续 `/browse` 视觉 / 行为审当作真实浏览器验收。若主动 smoke 是 `limited` / `skipped` / `fail` / `blocked`，视觉门或行为审不能静默写 `pass`；PM 明确接受风险时必须用 `build-contract.py audit-exception` 记录原因，否则 `/pmai-build-close` 会拒绝收尾。
 > `visual.json` 必须写 `status`：`pass` / `needs-review` / `limited` / `skipped`。`behavior.json` 必须写 `status`：`pass` / `fail` / `skipped` / `limited`。`limited` / `skipped` 不是通过；如果工具受限但 PM 明确接受风险，必须用 `build-contract.py audit-exception` 记录原因，否则 `/pmai-build-close` 会拒绝收尾。
 
 三道审抓三种不同的病：
@@ -446,6 +450,7 @@ DEV_CMD="<config.yml dev_server.command，替换 {port}>"
 - `已完成视觉检查`：写 `visual.status=pass|needs-review`，给截图 / 关键观察 / 问题清单。
 - `视觉检查受限但页面可访问`：写 `visual.status=limited`，说明已完成构建和页面返回检查，列出未覆盖的视觉风险。PM 若接受，记录 `audit-exception`。
 - `视觉检查未完成`：写 `visual.status=skipped` 或停止，说明阻塞原因、日志路径和下一步选择。PM 若仍要收尾，必须记录 `audit-exception`。
+- `主动 browser smoke 未通过`：`browser-smoke.json` 写 `limited` / `fail` / `blocked`，视觉门和行为审只能按受限/跳过呈交；PM 若仍要收尾，必须记录 `audit-exception`。
 
 ### 步骤 7：review loop（看原型挑错、AI 改）
 
@@ -487,7 +492,7 @@ dev server 保持运行（PM 验收要访问）。呈交块 + AskUserQuestion（
     `description`: `说哪里要改，我接着改`
 
 **PM 答题处理**：
-- 选 `可以，收尾` / 输 `1` / 输 "OK / 通过 / 可以" → 先确认三道审合成报告已生成；若视觉 / 浏览器审是 `limited` / `skipped`，先让 PM 明确接受这个缺口并记录原因，再把最新实现提交和 PM 验收写回 build 合同，最后进步骤 9（接 `/pmai-build-close`）：
+- 选 `可以，收尾` / 输 `1` / 输 "OK / 通过 / 可以" → 先确认主动 browser smoke 和三道审合成报告已生成；若主动 browser smoke 是 `limited` / `skipped` / `fail` / `blocked`，或视觉 / 行为审是 `limited` / `skipped` / `blocked`，先让 PM 明确接受这个缺口并记录原因；行为审 `fail` 必须先修，不能用例外放行。然后把最新实现提交和 PM 验收写回 build 合同，最后进步骤 9（接 `/pmai-build-close`）：
   ```bash
   IMPLEMENTATION_COMMIT=$(git -C "$BUILD_DIR" rev-parse HEAD)
   # 仅当视觉 / 浏览器审受限或跳过，且 PM 明确接受风险时执行：

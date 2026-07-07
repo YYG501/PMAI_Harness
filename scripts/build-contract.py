@@ -19,10 +19,13 @@ import subprocess
 VALID_MODES = {"worktree", "main"}
 VALID_EXECUTORS = {"claude-code", "codex", "cursor-agent", "gemini", "opencode", "manual"}
 AUDIT_FILES = {
+    "browser_smoke": "browser-smoke.json",
     "coverage": "coverage.json",
     "visual": "visual.json",
     "behavior": "behavior.json",
 }
+BROWSER_SMOKE_ALLOWED_STATUSES = {"pass", "limited", "skipped", "fail", "blocked"}
+BROWSER_SMOKE_LIMITED_STATUSES = {"limited", "skipped", "fail", "blocked"}
 VISUAL_LIMITED_STATUSES = {"limited", "skipped", "blocked", "not-run"}
 VISUAL_ALLOWED_STATUSES = {"pass", "needs-review", *VISUAL_LIMITED_STATUSES}
 BEHAVIOR_ALLOWED_STATUSES = {"pass", "fail", "skipped", "limited", "blocked"}
@@ -151,7 +154,7 @@ def resolve_repo_path(repo_root: Path, value: str | None, field_name: str) -> Pa
 
 def load_audit_json(path: Path, label: str) -> dict:
     if not path.exists():
-        raise SystemExit(f"三道审证据不完整：缺少 {label} 结果 {path}，不能收尾。")
+        raise SystemExit(f"build 验收证据不完整：缺少 {label} 结果 {path}，不能收尾。")
     try:
         data = json.loads(path.read_text(encoding="utf-8"))
     except json.JSONDecodeError as exc:
@@ -181,15 +184,27 @@ def has_audit_exception(build: dict) -> bool:
 def validate_audit_evidence(module_dir: Path, build: dict) -> None:
     repo_root = repo_root_for(module_dir)
     audit_dir = resolve_repo_path(repo_root, build.get("audit_dir"), "audit_dir")
+    browser_smoke = load_audit_json(
+        audit_dir / AUDIT_FILES["browser_smoke"], "浏览器主动 smoke"
+    )
     coverage = load_audit_json(audit_dir / AUDIT_FILES["coverage"], "覆盖审计")
     visual = load_audit_json(audit_dir / AUDIT_FILES["visual"], "视觉门")
     behavior = load_audit_json(audit_dir / AUDIT_FILES["behavior"], "行为审")
     synthesis = audit_dir / "synthesis.md"
     if not synthesis.exists():
-        raise SystemExit(f"三道审证据不完整：缺少合成报告 {synthesis}，不能收尾。")
+        raise SystemExit(f"build 验收证据不完整：缺少合成报告 {synthesis}，不能收尾。")
 
     require_object_list(coverage, "items", "覆盖审计")
     visual_findings = require_object_list(visual, "findings", "视觉门")
+
+    browser_smoke_status = str(browser_smoke.get("status", ""))
+    if browser_smoke_status not in BROWSER_SMOKE_ALLOWED_STATUSES:
+        raise SystemExit(
+            f"浏览器主动 smoke status 不合法：{browser_smoke_status}"
+            f"（允许 {', '.join(sorted(BROWSER_SMOKE_ALLOWED_STATUSES))}）。"
+        )
+    if browser_smoke_status == "pass" and browser_smoke.get("active_browser_smoke") is not True:
+        raise SystemExit("浏览器主动 smoke 证据不是 active browser smoke，不能当作 browser 验收前提。")
 
     visual_status = str(
         visual.get("status")
@@ -207,15 +222,28 @@ def validate_audit_evidence(module_dir: Path, build: dict) -> None:
         )
     if behavior_status == "fail":
         raise SystemExit("行为审未通过：不能收尾。请先修到通过，或重新跑 build 验收。")
+    if browser_smoke_status in BROWSER_SMOKE_LIMITED_STATUSES:
+        if visual_status not in VISUAL_LIMITED_STATUSES:
+            raise SystemExit(
+                "浏览器主动 smoke 未通过：视觉门不能写 pass/needs-review。"
+                "请改为 limited/skipped/blocked，并记录 PM 明确接受的风险。"
+            )
+        if behavior_status not in BEHAVIOR_LIMITED_STATUSES:
+            raise SystemExit(
+                "浏览器主动 smoke 未通过：行为审不能写 pass。"
+                "请改为 limited/skipped/blocked，并记录 PM 明确接受的风险。"
+            )
 
     limited = []
+    if browser_smoke_status in BROWSER_SMOKE_LIMITED_STATUSES:
+        limited.append("浏览器主动 smoke")
     if visual_status in VISUAL_LIMITED_STATUSES:
         limited.append("视觉门")
     if behavior_status in BEHAVIOR_LIMITED_STATUSES:
         limited.append("行为审")
     if limited and not has_audit_exception(build):
         raise SystemExit(
-            "三道审存在受限/跳过项："
+            "build 验收存在受限/跳过/失败/阻塞项："
             + "、".join(limited)
             + "。必须记录 PM 明确接受该缺口后才能收尾。"
         )

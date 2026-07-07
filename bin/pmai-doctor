@@ -29,11 +29,12 @@ EXIT_CODE=0
 PASS_COUNT=0
 WARN_COUNT=0
 FAIL_COUNT=0
+BROWSER_SMOKE=0
 
 usage() {
   cat <<EOF
 Usage:
-  pmai doctor
+  pmai doctor [--browser-smoke]
 
 Checks global PMAI install integrity:
   - ~/.pmai source, VERSION, expected skills
@@ -42,7 +43,8 @@ Checks global PMAI install integrity:
   - ~/.config/opencode/commands/pmai-*.md OpenCode slash command exposure
   - working tree, remote reachability, Claude Code bash PATH
   - gstack readiness for /pmai-init-project
-  - gstack browser/design diagnostics for /pmai-mockup
+  - passive gstack browser/design diagnostics for /pmai-mockup
+  - with --browser-smoke: actively launch gstack browse and fail if unusable
 EOF
 }
 
@@ -50,11 +52,14 @@ ok()   { echo "  ✅ $*"; PASS_COUNT=$((PASS_COUNT + 1)); }
 warn() { echo "  ⚠️  $*"; WARN_COUNT=$((WARN_COUNT + 1)); }
 fail() { echo "  ❌ $*"; FAIL_COUNT=$((FAIL_COUNT + 1)); EXIT_CODE=1; }
 
-case "${1:-}" in
-  --help|-h|help) usage; exit 0 ;;
-  "") ;;
-  *) echo "❌ unknown flag: $1" >&2; usage >&2; exit 2 ;;
-esac
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --help|-h|help) usage; exit 0 ;;
+    --browser-smoke) BROWSER_SMOKE=1 ;;
+    *) echo "❌ unknown flag: $1" >&2; usage >&2; exit 2 ;;
+  esac
+  shift
+done
 
 echo "════════════════════════════════════════════════════════════"
 echo "  PMAI Doctor — integrity self-check"
@@ -506,8 +511,14 @@ echo ""
 echo "─── 9. gstack browser/design diagnostics ───"
 GSTACK_BROWSER_CHECK="$PMAI_HOME/scripts/check-gstack-browser.sh"
 if [ -f "$GSTACK_BROWSER_CHECK" ]; then
-  if bash "$GSTACK_BROWSER_CHECK" --doctor; then
-    ok "gstack browser/design diagnostics passed"
+  if [ "$BROWSER_SMOKE" = "1" ]; then
+    if bash "$GSTACK_BROWSER_CHECK" --browser-smoke; then
+      ok "active gstack browser smoke passed"
+    else
+      fail "active gstack browser smoke failed — browser-backed visual/behavior audits cannot be treated as passed"
+    fi
+  elif bash "$GSTACK_BROWSER_CHECK" --doctor; then
+    ok "passive gstack browser/design diagnostics passed (active smoke not run)"
   else
     warn "gstack browser/design diagnostics reported warnings — this may be a Codex sandbox localhost restriction, not a broken gstack install"
   fi

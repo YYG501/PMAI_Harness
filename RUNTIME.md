@@ -4,7 +4,7 @@
 
 ## 当前位置
 
-- 日期：2026-06-28
+- 日期：2026-07-07
 - 分支：`main`
 - 旧主分支备份：`codex/backup-main-before-task-cleanup-20260622-221253`
 - 当前清理目标：移除旧 `req` / `task` / 阶段推进残留，不保留兼容层。
@@ -30,12 +30,13 @@
 
 ## 剩余验证
 
-- 在一个真实业务模块上跑完整 `/pmai-design` → `/pmai-build` → `/pmai-build-close`，验证三道 build 审计、dev server 复用、worktree 创建/合并/清理闭环。
+- 在一个真实业务模块上跑完整 `/pmai-design` → `/pmai-build` → `/pmai-build-close`，验证主动 browser smoke、三道 build 审计、dev server 复用、worktree 创建/合并/清理闭环。
 
 ## 本轮验证
 
 - `/pmai-build` 已补构建前硬门：未提交规格 / mock / 文档先固定建造依据或停住；修改 `prototype/`、`Sources/` 或业务代码前必须拿到“执行方式”和“执行器”两道 PM 答案。
 - `/pmai-build` / `/pmai-build-close` 已补 build 合同：build 在两道 PM 选择后写入 `.work-meta.json:build`，验收后记录实现提交和 PM 验收时间；build-close 只按合同收尾，缺合同 / 缺验收 / worktree 丢失时停止补上下文，不再把分支提交误报为已收口。
+- `/pmai-build` / `/pmai-build-close` 已把主动 browser smoke 纳入 build 验收证据：`browser-smoke.json` 必须存在，`pass` 必须带 `active_browser_smoke=true`；主动 smoke 非 pass 时，视觉 / 行为审不能写通过，需 PM 明确接受风险并记录 `audit_exception`。
 - `/pmai-status` 已改为 PM 行动视图：无 active 但有未提交改动时输出“有一轮改动还没收口”；多个进行中工作按编号列状态、当前步骤和下一步；禁止把内部诊断当现状汇报。
 - 公开入口已收敛：`codebase-audit` 移入 `skills/_internal/`，不再暴露 `/pmai-codebase-audit`；`/pmai-deposit` 改为 `/pmai-record`；`/pmai-cancel` 改为 `/pmai-build-cancel`。
 - `tests/test-doctor-skills.sh`：10 passed / 0 failed（含 `_internal` 不暴露回归）。
@@ -47,6 +48,6 @@
 - `tests/test-init-project-codex-compat.sh`：5 passed / 0 failed。
 - `tests/test-private-onboarding.sh`：4 passed / 0 failed。
 - `tests/test-mock-board.sh`：8 passed / 0 failed。
-- `tests/run-all.sh`：324 passed / 0 failed。
+- `tests/run-all.sh`：437 passed / 0 failed。
 - `git diff --check`：通过。
 - 同类残留扫描：当前有效文件未再发现 `/pmai-close` / `pmai-close` / `skills/close` 的用户入口残留；仅保留历史 `requirements/pmai-closed` 路径名和内部 `close-work.sh` 实现脚本名。

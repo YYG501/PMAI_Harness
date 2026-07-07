@@ -116,6 +116,9 @@ EOF
   cat > "$wt/.pm-workflow/audits/$work_branch/coverage.json" <<'JSON'
 {"items":[{"name":"fixture coverage","status":"built","note":""}]}
 JSON
+  cat > "$wt/.pm-workflow/audits/$work_branch/browser-smoke.json" <<'JSON'
+{"status":"pass","active_browser_smoke":true,"active_design_smoke":false}
+JSON
   cat > "$wt/.pm-workflow/audits/$work_branch/visual.json" <<'JSON'
 {"status":"pass","findings":[]}
 JSON
@@ -177,6 +180,9 @@ EOF
   mkdir -p "$FIXTURE_DIR/.pm-workflow/audits/$module_name"
   cat > "$FIXTURE_DIR/.pm-workflow/audits/$module_name/coverage.json" <<'JSON'
 {"items":[{"name":"fixture coverage","status":"built","note":""}]}
+JSON
+  cat > "$FIXTURE_DIR/.pm-workflow/audits/$module_name/browser-smoke.json" <<'JSON'
+{"status":"pass","active_browser_smoke":true,"active_design_smoke":false}
 JSON
   cat > "$FIXTURE_DIR/.pm-workflow/audits/$module_name/visual.json" <<'JSON'
 {"status":"pass","findings":[]}
