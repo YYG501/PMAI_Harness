@@ -18,7 +18,7 @@
 - `/pmai-*` 是 PMAI 的用户命令名。Codex skill / prompt 列表已暴露 `pmai-*` 时优先按该入口执行；OpenCode 已暴露 `.opencode/commands/pmai-*.md` 或 `~/.config/opencode/commands/pmai-*.md` 时优先按该入口执行；如果当前 runtime 没有 slash / skill UI，再按对应 `~/.pmai/skills/<command-without-pmai-prefix>/SKILL.md` 的步骤执行。
 - 如果 skill 目录名本身带 `pmai-` 前缀，例如 `/pmai-upgrade`，对应 `~/.pmai/skills/pmai-upgrade/SKILL.md`。
 - 运行态只创建并识别 `build-*` 工作分支。
-- 完整 build 的实现改动自动落在当前工作 worktree；轻量修补走 `/pmai-quick-fix`，不要绕过分支护栏。
+- 完整 build 的实现改动落在 PM 开工前确认的工作环境；选择独立环境时使用 `build-*` worktree，选择当前环境时只允许合同声明的目标路径。轻量修补走 `/pmai-quick-fix`。
 
 ## Startup
 
@@ -46,7 +46,7 @@
 - 本仓已经初始化完成，不能在这里再跑 `/pmai-init-project`。
 - 起新模块或讨论新功能：读 `/pmai-design`。它先编译 context pack、浮现相关旧决定，再按真实未知项讨论；`meta`、`mockup`、`spec-writing` 是 design 按需调用后返回主线的内部能力，不让 PM 手动拼接。
 - design 定稿后自动提交本模块建造依据并进入 `ready_to_build`；不弹“是否保存建造依据”菜单。
-- 推进实现：读 `/pmai-build`。框架自动判断 build 对象是 `prototype` 还是 `product`，自动创建 worktree、选择可用执行器并生成对应验收档案。
+- 推进实现：读 `/pmai-build`。框架静默读取 `.pm-workflow/config.yml:project.type`，后台生成默认验收；AI 只向 PM 推荐工作环境和构建工具，PM 一次确认或调整后开工。开工卡不得显示项目类型或验收方案。
 - PM 看结果后直接说哪里要改；每轮只跑受影响的快速检查。PM 说“可以提交 / 定稿 / 可以合并”即授权进入最终检查、合入 main 和主线后的文档同步，不再要求手动 `/pmai-build-close`。
 - `/pmai-build-close` 保留为兼容与恢复入口，用于中断续跑、merge 冲突后重试或 `landed/docs_pending` 文档恢复。
 - 迷路或续跑：读 `/pmai-status` 对应 skill，先报告当前状态再行动。
@@ -59,14 +59,14 @@
 
 ## Runtime Fallback
 
-- AskUserQuestion 不可用时，只对真实产品模型岔路、不可逆动作或改变 PM 已明确方向的问题输出编号列表并等待；机械项和可逆偏好由 AI 按推荐推进。
+- AskUserQuestion 不可用时，只对真实产品模型岔路、不可逆动作、改变 PM 已明确方向的问题，以及 build 开工前的“工作环境 + 构建工具”确认输出编号列表并等待；机械项和其它可逆偏好由 AI 按推荐推进。
 - PM 已说“可以提交 / 定稿 / 可以合并”时，该表达就是合入主线授权，不得二次确认。
 - 小改直接落主原型必须是 PM 明确确认的 prototype-only 小改：单字段、单文案、局部样式、已确认弹窗微调；不得同时改 `docs/modules/` 或 `mockups/`。
-- `/pmai-build` 默认自动开 worktree；执行器和工具档位按 build 对象、消费仓配置与本机可用性自动选择，不向 PM 暴露工程菜单。
+- `/pmai-build` 按项目定义后台确定构建对象和默认验收。新 build 由 AI 推荐工作环境与构建工具，PM 只确认这两项；卡片不得显示项目类型、验收方案、worktree、合同或证据数据。
 - 未提交的规格、决定和选定 mockup 由 design 自动做 scoped checkpoint；只能提交本轮相关文件，不能带入无关脏改。
 - `/pmai-build` 在实现前必须写入版本化 `.work-meta.json:build` 合同；`/pmai-build-close` 与自动 finalize 只按该合同和 lifecycle state 续跑，不能靠当前分支 / worktree 形态猜测。
 - 混合交付必须走完整 build：staged 或本轮改动同时包含 `prototype/` 或 `Sources/`，以及 `docs/modules/` 或 `mockups/` 时，不能普通提交；必须由 `/pmai-build` 在目标适配验收和 PM 定稿后自动 finalize。`/pmai-build-close` 只作为兼容与恢复入口。
-- 首选执行器不可用时，自动选择仓库内其它可用 profile；都不可用时由当前主控在隔离环境实现。执行器过程写日志和状态文件，PM 窗口只报阶段摘要；失败默认保留半成品，禁止自动清空。
+- 推荐工具不可用时，推荐其它可用 profile 或当前主控，并重新让 PM 确认；不得静默替换已确认工具。执行器过程写日志和状态文件，PM 窗口只报阶段摘要；失败默认保留半成品，禁止自动清空。
 - `/pmai-meta` 的“多视角”不等于“多 Agent”。PM 明确要求多 AI / 子 Agent / 独立视角时，先尝试可用 multi-agent 工具；不可用时必须声明“单主控多视角退化执行”，不能假装跑过子 Agent。
 - gstack browser 在 Codex 沙箱内可能因 localhost `EPERM` 不可用；这说明 runtime 限制，不等于 gstack 损坏。需要诊断时优先运行 `bash "${PMAI_HOME:-$HOME/.pmai}/scripts/check-gstack-browser.sh"`，不要把 `browse status` 当无副作用检查。
 - OpenCode 主控第一版不复刻 Codex hooks；涉及写入保护时，使用 OpenCode 自身 permission、PMAI git hooks、build contract 和 changed-path review 兜底。
@@ -78,5 +78,5 @@
 - 不要把 `~/.pmai/skills`、`~/.pmai/scripts` 或其他 framework 源资产复制进消费仓；`.codex/hooks.json`、`.opencode/commands`、`opencode.json` 是允许存在的 host 配置，命令必须指向 `~/.pmai`。
 - 未经 PM 明确确认，不要在 `/pmai-design` 或 `/pmai-mockup` 中改 `prototype/`；design 先定对象和规格，mockup 只出探索稿，主原型改动走 `/pmai-build` 或 PM 明确确认的小改。
 - “落地”不是绕过 build 的许可；小改走 quick-fix，完整交付走 `/pmai-build` 并自动 finalize。
-- 不要绕过 `check-branch.sh` 在 main 上直接改业务代码。
-- 派发外部执行器前，build worktree 必须干净；dirty 时先区分本轮改动与无关改动，能机械拆分就后台处理，无法安全拆分才说明具体冲突。
+- 不要绕过 `check-branch.sh` 在 main 上直接改业务代码；只有 PM 已确认“当前环境”且 v2 合同为 `mode=main` 时，才允许修改合同声明的目标路径。
+- 派发外部执行器前，PM 已确认的工作环境必须干净；dirty 时先区分本轮改动与无关改动，能机械拆分就后台处理，无法安全拆分才说明具体冲突。

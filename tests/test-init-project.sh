@@ -79,6 +79,7 @@ test_e2e_no_framework_assets_in_consumer() {
   local spine_error=""
   [ ! -f "$proj/PRODUCT-RULES.md" ] && spine_error="$spine_error missing-root-PRODUCT-RULES.md"
   [ -f "$proj/docs/PRODUCT-RULES.md" ] && spine_error="$spine_error stale-docs-PRODUCT-RULES.md"
+  grep -q '^  type: prototype$' "$proj/.pm-workflow/config.yml" || spine_error="$spine_error missing-project-type"
 
   rm -rf "$base"
 

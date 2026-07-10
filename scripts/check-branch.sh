@@ -163,11 +163,57 @@ deny() {
   exit 2
 }
 
+# A full build may run in the current main environment only after /pmai-build
+# has shown the PM confirmation card and written a v2 contract with mode=main.
+# Keep the exception scoped to that contract's declared target paths; docs and
+# framework metadata continue to use the ordinary whitelist below.
+active_main_build_allows_path() {
+  local rel_path="$1"
+  python3 - "$MAIN_REPO_ROOT" "$rel_path" <<'PY'
+import json
+import sys
+from pathlib import Path, PurePosixPath
+
+repo = Path(sys.argv[1])
+
+def normalize(raw: str) -> str:
+    raw = raw.strip()
+    while raw.startswith("./"):
+        raw = raw[2:]
+    return PurePosixPath(raw).as_posix().rstrip("/")
+
+requested = normalize(sys.argv[2])
+allowed_states = {"building", "iterating", "final_check"}
+
+for meta_path in (repo / "docs" / "modules").glob("*/.work-meta.json"):
+    try:
+        build = json.loads(meta_path.read_text(encoding="utf-8")).get("build", {})
+    except Exception:
+        continue
+    if build.get("contract_version") != 2 or build.get("mode") != "main":
+        continue
+    if build.get("lifecycle_state") not in allowed_states:
+        continue
+    target = build.get("target", {})
+    paths = target.get("paths", []) if isinstance(target, dict) else []
+    for raw in paths:
+        if not isinstance(raw, str) or not raw.strip() or raw.startswith("/"):
+            continue
+        normalized = normalize(raw)
+        if normalized in {"", "."}:
+            continue
+        if requested == normalized or requested.startswith(normalized + "/"):
+            raise SystemExit(0)
+raise SystemExit(1)
+PY
+}
+
 # ======================================================
 # GATE 1: Main 分支写保护（白名单模式，默认拒绝）
 # ======================================================
 # main 分支上，只允许写入以下白名单路径。其他所有路径都拒绝。
-# 业务代码必须走 build 分支隔离；根目录项目脊柱和 docs/** 可在 main 上维护。
+# 业务代码默认走 build 分支隔离；PM 明确确认当前环境且已有 mode=main
+# 合同时，仅合同 target.paths 可写。根目录项目脊柱和 docs/** 可在 main 上维护。
 if [ "$BRANCH" = "main" ] || [ "$BRANCH" = "master" ]; then
   MAIN_WRITE_ALLOWED=false
 
@@ -203,8 +249,12 @@ if [ "$BRANCH" = "main" ] || [ "$BRANCH" = "master" ]; then
       ;;
   esac
 
+  if [ "$MAIN_WRITE_ALLOWED" != "true" ] && active_main_build_allows_path "$REL_PATH"; then
+    MAIN_WRITE_ALLOWED=true
+  fi
+
   if [ "$MAIN_WRITE_ALLOWED" != "true" ]; then
-    deny "main 分支写保护：不允许直接修改 ${REL_PATH}。业务代码必须通过 build-* worktree 操作。如需初始化新项目，请用 /pmai-init-project 创建新的业务项目仓。"
+    deny "main 分支写保护：不允许直接修改 ${REL_PATH}。完整 build 需要先由 PM 确认工作环境，并由 /pmai-build 写入目标范围；否则请使用独立环境。如需初始化新项目，请用 /pmai-init-project 创建新的业务项目仓。"
   fi
 fi
 

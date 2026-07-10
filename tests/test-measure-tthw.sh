@@ -30,7 +30,7 @@ test_skeleton_smoke_runs_init_and_status() {
   out=$(HOME="$fake_home" \
     GIT_AUTHOR_NAME="PMAI Test" GIT_AUTHOR_EMAIL="pmai-test@example.com" \
     GIT_COMMITTER_NAME="PMAI Test" GIT_COMMITTER_EMAIL="pmai-test@example.com" \
-    bash "$SCRIPT" smoke --project-name MeasuredDemo --target-dir "$target" --background "TTHW test" --intent prototype 2>&1)
+    bash "$SCRIPT" smoke --project-name MeasuredDemo --target-dir "$target" --background "TTHW test" --project-type prototype 2>&1)
   rc=$?
   if [ "$rc" != "0" ]; then
     _fail "skeleton smoke 应成功"

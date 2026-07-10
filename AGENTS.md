@@ -45,11 +45,11 @@ Codex 在本仓工作时，按普通软件项目方式协同：
 PM 在本生成器仓里让 Codex 起新业务项目时，等价执行 `/pmai-init-project`：
 
 1. 读取 `skills/init-project/SKILL.md`。
-2. 按 skill 的 A 步收集项目名、落地路径、背景和项目类型。Codex 没有 AskUserQuestion 时，用编号问题向 PM 收集答案。
+2. 按 skill 的 A 步收集项目名、落地路径、背景和项目类型（`prototype` 或 `product`）。Codex 没有 AskUserQuestion 时，用编号问题向 PM 收集答案。
 3. B 步优先调用本 checkout 的脚本搭骨架：
 
    ```bash
-   bash scripts/init-project.sh "<project-name>" "<target-dir>" "<background>" "<mode>"
+   bash scripts/init-project.sh "<project-name>" "<target-dir>" "<background>" "<project-type>"
    ```
 
    如果 PM 明确同意接住已有目录，再加 `--allow-existing`。

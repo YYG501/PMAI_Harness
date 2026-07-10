@@ -68,7 +68,7 @@ PM 上传的外部材料统一按类型归档到 `docs/inputs/<类别>/`，当�
 - 🟢 target paths（`prototype/` 或真实 product 源码；实现参考，可全文读小文件，大文件按结构局部读）
 - 🟢 `PRODUCT-RULES.md`（跨功能规则）
 
-build 不拆 task。建造工具由框架按目标、消费仓配置和本机可用性自动选择；输入契约都是 design 已提交的建造依据，一次 build 只有一个主要对象：`prototype` 或 `product`。
+build 不拆 task。项目类型从 `.pm-workflow/config.yml` 静默读取，默认验收在后台生成；AI 按项目类型、消费仓配置和本机可用性推荐工作环境与构建工具，由 PM 一次确认。输入契约都是 design 已提交的建造依据。
 
 ### PM 体验迭代与最终检查
 
@@ -184,7 +184,7 @@ prototype 文件 > 500 行 → **禁止**整文件 Read。读法：
     │
     ▼
 build
-  对 spec.md 构建 prototype 或 product；执行器和验收适配器自动选择
+  对 spec.md 按项目级类型构建；PM 确认工作环境与构建工具，验收适配器后台确定
     │
     ▼
 PM 体验迭代

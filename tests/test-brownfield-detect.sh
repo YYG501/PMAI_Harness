@@ -107,6 +107,11 @@ test_skill_describes_brownfield_gate() {
     _fail "SKILL.md 缺已有代码分支不调用 init-project.sh / 不被 gstack 阻塞的约定"
     return
   fi
+  if ! grep -q '.pm-workflow/config.yml:project.type' "$INIT_PROJECT_SKILL" \
+     || ! grep -qE 'prototype.*product' "$CODEBASE_AUDIT_SKILL"; then
+    _fail "已有代码首次接入应让 PM 确认两种项目类型并写入项目定义"
+    return
+  fi
   # 接住 PM 拍方案的脚本 flag 必须存在
   if ! grep -q "allow-existing" "$INIT_PROJECT_SKILL"; then
     _fail "SKILL.md 缺 --allow-existing flag 描述（PM 拍方案接住通路）"

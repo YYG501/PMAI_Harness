@@ -1,7 +1,7 @@
 ---
 name: pmai-build
 description: |
-  统一构建前台：读取 design 已提交的建造依据，自动判断构建 prototype 或真实 product，自动创建隔离环境并选择可用执行器；PM 看结果多轮修改，明确说“定稿 / 可以提交 / 可以合并”后自动完成最终检查、落地主线和主线后的文档同步。
+  统一构建前台：读取 design 已提交的建造依据和项目级构建类型，后台生成默认验收；AI 推荐工作环境和构建工具，PM 一次确认后开工。PM 看结果多轮修改，明确说“定稿 / 可以提交 / 可以合并”后自动完成最终检查、落地主线和主线后的文档同步。
 ---
 
 # /pmai-build · 统一构建与迭代主线
@@ -36,9 +36,9 @@ ready_to_build → building → iterating → final_check
 
 它们只切换 build 对象和验收适配器，不分叉成两套工作流。
 
-PM 的主体验只有：看构建结果 → 提修改 → 再看 → 明确定稿。worktree、执行器档位、合同、证据和文档影响地图都是后台基础设施，不向 PM 出工程菜单。
+PM 的主体验是：开工前只确认一次工作环境和构建工具 → 看构建结果 → 提修改 → 再看 → 明确定稿。项目类型和验收方案不出现在开工确认卡；worktree、合同、hash、证据和文档影响地图等内部实现也不向 PM 展示。
 
-纯错字、单文案、局部样式或不改变产品行为的极小修补走 `/pmai-quick-fix`。把 mockup / spec 做进主原型、改变信息结构或同时涉及实现和正式文档，不得伪装成小改；只要进入本 skill，就按完整 build 默认隔离。
+纯错字、单文案、局部样式或不改变产品行为的极小修补走 `/pmai-quick-fix`。把 mockup / spec 做进主原型、改变信息结构或同时涉及实现和正式文档，不得伪装成小改；只要进入本 skill，就按完整 build 执行，并在开工前确认工作环境。
 
 所有持久化路径必须由 `PMAI_HOME`、`REPO_ROOT`、`MAIN_REPO_ROOT`、`BUILD_DIR` 等运行时变量与仓内相对路径组合，禁止写死 `/Users/...` 这类机器绑定路径。
 
@@ -64,78 +64,112 @@ python3 "$PMAI_HOME/scripts/context-pack.py" \
 
 如果还有会改变产品模型的未决问题，停止 build，返回 design。若规格已经闭合但旧项目没有 `ready_to_build` 记录，后台执行 design 的规格编译、范围提交和 `build-contract.py ready`，不弹“是否保存建造依据”。
 
-## 2. 自动确定 build 对象
+## 2. 静默读取项目类型并生成默认验收
 
-按 PM 的目标、锚点、仓库结构和改动路径判断：
+build 不根据本轮话术、锚点或改动路径临时猜构建对象，也不在每次开工时重新询问。项目类型只读项目定义：
 
-- `prototype`：目标是主原型、演示应用、mock 可运行实现或 PM 明确说“先建原型”；
-- `product`：目标是真实产品代码、接口、数据库、迁移、生产行为或 PM 明确说“做进真实产品”。
+```bash
+PROJECT_TYPE=$(python3 "$PMAI_HOME/scripts/project-type.py" "$REPO_ROOT")
+```
 
-一次 build 只有一个主要对象。若 PM 已明确对象，直接采用；若仓库事实只能推出一个对象，后台采用；只有两个对象都会显著改变交付结果且无法从上下文判断时，才把它视为产品范围岔路让 PM 拍。
+- 新项目的真相源是 `.pm-workflow/config.yml:project.type`，只能是 `prototype` 或 `product`；
+- 旧消费仓缺该字段时，helper 只兼容读取 `CLAUDE.md` 的既有 `auto-detected` 标记；`system` 映射为 `product`；
+- `custom / unknown` 或无法读取时停止 build，要求 PM 先修改 `.pm-workflow/config.yml`；不得在本轮对话中临时选一个继续；
+- PM 想改变项目性质时，直接修改该定义文件，再按新类型校准项目结构。
 
-确定目标路径与入口后生成自适应验收档案：
+根据项目类型、目标路径、入口和风险后台生成默认验收档案：
 
 ```bash
 PROFILE="$REPO_ROOT/.pm-workflow/audits/<模块>/acceptance-profile.json"
 python3 "$PMAI_HOME/scripts/acceptance-profile.py" \
   --repo-root "$REPO_ROOT" \
-  --target "<prototype|product>" \
+  --target "$PROJECT_TYPE" \
   --path "<目标路径>" \
   <涉及迁移时 --data-migration> \
   <涉及权限/安全时 --security-sensitive> > "$PROFILE"
 ```
 
-## 3. 自动建立隔离环境和 build contract
+验收方案由框架默认规则决定，不让 PM 选择，也不展示在开工确认卡。工具受限、检查失败或出现 exception 时仍按 §7 如实记录，不能因为“不展示”而跳过。
 
-完整 build 默认从 design checkpoint 自动创建 worktree；不再让 PM 选择“是否隔离”。若正在恢复既有 v2 build，则复用合同记录的 worktree，不重复创建。
+## 3. 推荐工作环境与构建工具，由 PM 一次确认
+
+恢复既有 v2 build 时，沿用合同里已确认的工作环境和构建工具，不重复确认。新 build 才执行本节：
+
+1. **推荐工作环境**：默认推荐“独立环境”；若当前已经是本模块有效的 `build-*` 环境，则推荐“继续当前独立环境”。PM 也可以明确改为“当前环境”。
+2. **推荐构建工具**：按项目级类型、消费仓配置和本机可用性只生成推荐，不视为最终选择：
+
+   ```bash
+   RECOMMENDED_BUILDER_JSON=$(python3 "$PMAI_HOME/scripts/builder-profile.py" recommend \
+     "$REPO_ROOT/.pm-workflow/config.yml" --target "$PROJECT_TYPE")
+   ```
+
+3. **只展示这张确认卡**：
+
+   ```text
+   准备构建：<模块或目标>
+
+   工作环境：<独立环境 | 继续当前独立环境 | 当前环境>
+   构建工具：<工具名（model, thinking）>
+
+   [按这个方案构建]
+   [调整工作环境]
+   [调整构建工具]
+   ```
+
+   卡片中禁止出现项目类型、验收方案、检查清单、worktree、build contract、hash、evidence JSON 等内容。`prototype / product` 只在后台参与适配，不作为本轮待确认项。
+
+4. PM 调整工作环境时，只用 PM 语言展示“独立环境 / 当前环境”；选择当前环境代表本轮直接在当前主线工作，写入 `build.mode=main`。选择独立环境写入 `build.mode=worktree`。若当前环境不是 main/master，也不是本模块已记录的 `build-*` 环境，不提供“当前环境”这个无效选项。
+5. PM 调整构建工具时，运行 `builder-profile.py list <config> --available-only`，只列本机可用工具；PM 选定后用 `resolve --profile <name>` 固化 snapshot。
+6. 任一项调整后重新展示同一张卡；只有 PM 选择“按这个方案构建”才继续。AskUserQuestion 不可用时退化为三项编号选择并等待，不得把推荐自动当成确认。
+
+确认后再建立或复用工作环境：
 
 ```bash
-BUILD_BRANCH="build-<模块>-<时间戳>"
-BUILD_DIR="$MAIN_REPO_ROOT/.worktrees/$BUILD_BRANCH"
-git -C "$MAIN_REPO_ROOT" worktree add -b "$BUILD_BRANCH" "$BUILD_DIR" main
+if [ "$BUILD_MODE" = "worktree" ]; then
+  BUILD_BRANCH="build-<模块>-<时间戳>"
+  BUILD_DIR="$MAIN_REPO_ROOT/.worktrees/$BUILD_BRANCH"
+  git -C "$MAIN_REPO_ROOT" worktree add -b "$BUILD_BRANCH" "$BUILD_DIR" main
+else
+  BUILD_BRANCH="$(git -C "$REPO_ROOT" branch --show-current)"
+  BUILD_DIR="$REPO_ROOT"
+fi
 ```
 
 所有 git 命令使用 `git -C "$BUILD_DIR"`；必须切目录的非 git 命令只在 subshell 中运行，不把主控 cwd 留在 worktree。
 
-框架按构建对象和消费仓配置自动选择建造工具：
-
-```bash
-BUILDER_JSON=$(python3 "$PMAI_HOME/scripts/builder-profile.py" auto \
-  "$BUILD_DIR/.pm-workflow/config.yml" --target "<prototype|product>")
-```
-
-优先使用仓库为该对象配置且本机可用的 profile；不可用时自动选择其它可用 profile；均不可用时由当前主控在隔离环境实现。只在工具真正失败且替代工具会改变结果或权限时向 PM说明，不让 PM预选执行器。
-
-执行器使用 `EXECUTOR_STATUS_DIR`、heartbeat、退出码和日志文件回报进度；PM 窗口只报阶段摘要，不直播命令、日志和进程排障。支持的独立执行器包括 Claude Code、Codex、Cursor Agent、Gemini 和 OpenCode；它们是自动候选，不是 PM 菜单。
+执行器使用 `EXECUTOR_STATUS_DIR`、heartbeat、退出码和日志文件回报进度；PM 窗口只报阶段摘要，不直播命令、日志和进程排障。可确认的构建工具包括当前主控、Claude Code、Codex、Cursor Agent、Gemini 和 OpenCode；卡片只显示当前推荐，PM 点“调整构建工具”时才展开可用项。
 
 从 acceptance profile 取 `required_checks`，写合同 v2：
 
 ```bash
-python3 "$PMAI_HOME/scripts/build-contract.py" start "$BUILD_DIR/docs/modules/<模块>" \
-  --anchor "<仓内建造锚点>" \
-  --mode worktree \
-  --executor "<auto 结果>" \
-  --builder-profile "<auto 结果>" \
-  --builder-json "<auto builder snapshot>" \
-  --branch "$BUILD_BRANCH" \
-  --worktree "$BUILD_DIR" \
-  --baseline-sha "$(git -C "$BUILD_DIR" rev-parse HEAD)" \
-  --target-kind "<prototype|product>" \
-  --target-path "<目标路径>" \
-  --entrypoint "<入口>" \
-  --approved-source-hash "<ready 记录的 hash>" \
-  --design-revision "<ready 记录的 revision>" \
+START_ARGS=(
+  "$BUILD_DIR/docs/modules/<模块>"
+  --anchor "<仓内建造锚点>"
+  --mode "$BUILD_MODE"
+  --executor "<PM 已确认的结果>"
+  --builder-profile "<PM 已确认的结果>"
+  --builder-json "<PM 已确认的 builder snapshot>"
+  --branch "$BUILD_BRANCH"
+  --baseline-sha "$(git -C "$BUILD_DIR" rev-parse HEAD)"
+  --target-kind "$PROJECT_TYPE"
+  --target-path "<目标路径>"
+  --entrypoint "<入口>"
+  --approved-source-hash "<ready 记录的 hash>"
+  --design-revision "<ready 记录的 revision>"
   --required-check "<检查名>"
+)
+[ "$BUILD_MODE" = "worktree" ] && START_ARGS+=(--worktree "$BUILD_DIR")
+python3 "$PMAI_HOME/scripts/build-contract.py" start "${START_ARGS[@]}"
 
 git -C "$BUILD_DIR" add -- "docs/modules/<模块>/.work-meta.json"
 git -C "$BUILD_DIR" commit -m "build(<模块>): start adaptive build"
 ```
 
-`--required-check` 按档案逐项重复传入。合同只扩展现有 `.work-meta.json:build`，不新增平行状态系统。
+`--required-check` 按后台档案逐项重复传入。合同只扩展现有 `.work-meta.json:build`，不新增平行状态系统，也不把合同内容展示给 PM。
 
 ## 4. 构建指定对象
 
-把下面内容一次性交给自动选择的执行器或当前主控：
+把下面内容一次性交给 PM 已确认的构建工具：
 
 - 建造锚点全文；
 - context pack 中相关 active 决定和 accepted deltas；
@@ -158,7 +192,7 @@ git -C "$BUILD_DIR" commit -m "build(<模块>): start adaptive build"
 - 涉及 UI 时复用真实产品组件并准备浏览器验收；
 - 涉及迁移、安全或破坏性数据动作时追加相应检查。
 
-执行器失败默认保留半成品，先检查已落改动与日志，再自动尝试安全的可用替代或由当前主控接手。只有丢弃会破坏可用改动时才让 PM授权；禁止自动 `git restore .` / `git clean -fd`。
+构建工具失败时默认保留半成品，先检查已落改动与日志；若要换工具，给出新的推荐并重新展示只含工作环境和构建工具的确认卡，不能静默替换 PM 已确认的工具。只有丢弃会破坏可用改动时才让 PM 授权；禁止自动 `git restore .` / `git clean -fd`。
 
 启动页面时只读取 `.pm-workflow/config.yml:dev_server.command` 并替换 `{port}`，不临时猜 `-- --hostname`、`--port` 或其它框架参数。
 
@@ -255,7 +289,7 @@ python3 "$PMAI_HOME/scripts/build-contract.py" complete \
 python3 "$PMAI_HOME/scripts/build-contract.py" iterating "$BUILD_DIR/docs/modules/<模块>"
 ```
 
-保留 worktree，修复后再由 PM 看结果；不 merge、不清理。
+保留当前工作环境，修复后再由 PM 看结果；不 merge、不清理。
 
 完整检查通过后提交 audit artifacts 与合同状态，再运行：
 
@@ -272,7 +306,7 @@ python3 "$PMAI_HOME/scripts/build-contract.py" validate-land \
 bash "$PMAI_HOME/scripts/close-work.sh" "$BUILD_DIR/docs/modules/<模块>"
 ```
 
-- merge 冲突：停止在可恢复的 `final_check`，保留分支和 worktree；
+- 独立环境发生 merge 冲突：停止在可恢复的 `final_check`，保留分支和 worktree；
 - 不清理或回退用户无关脏改动；
 - 实现落主线后进入 `landed + docs_pending`；
 - `/pmai-build-close` 只作为兼容或恢复入口，正常链路无需 PM 再调用。
@@ -323,8 +357,10 @@ python3 "$PMAI_HOME/scripts/build-contract.py" docs-fail \
 ## Rules
 
 - prototype / product 共用同一生命周期，只切换目标和验收适配器。
-- 完整 build 默认自动 worktree；执行器与档位按目标和消费仓配置自动选择。
-- PM 不需要理解 worktree、执行器、合同、hash、证据 JSON 或手动 close。
+- 项目类型由 `.pm-workflow/config.yml` 项目级定义；build 只读，不按本轮需求猜，也不在开工确认卡展示。
+- 验收方案按项目类型和风险后台生成默认值；不让 PM 选择，也不在开工确认卡展示。
+- 新 build 开工前，AI 推荐工作环境和构建工具，PM 只确认这两项；调整后必须重显同一张确认卡。
+- PM 不需要理解 worktree、合同、hash、证据 JSON 或手动 close；构建工具只以名称、模型和思考档展示。
 - 迭代中只跑受影响快速检查；PM 定稿后才跑全部 required checks。
 - 新产品决定进入 accepted deltas 并使旧证据失效；实现 commit 变化也使旧证据失效。
 - PM 明确说“可以提交 / 定稿 / 可以合并”就是落地主线授权，不二次确认。

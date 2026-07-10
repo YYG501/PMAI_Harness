@@ -28,7 +28,8 @@ test_build_small_change_tightened() {
 
   assert_file_contains "$BUILD_SKILL" "把 mockup / spec 做进主原型" "build should force full gate for mock/spec landing" || return
   assert_file_contains "$BUILD_SKILL" "不得伪装成小改" "build should forbid mixed quick-fix" || return
-  assert_file_contains "$BUILD_SKILL" "完整 build 默认隔离" "full build should stay isolated" || return
+  assert_file_contains "$BUILD_SKILL" "只要进入本 skill，就按完整 build 执行" "mock/spec landing should keep the full lifecycle" || return
+  assert_file_contains "$BUILD_SKILL" "开工前确认工作环境" "full build should confirm its work environment" || return
   assert_file_contains "$BUILD_SKILL" "自动落地主线" "build should own automatic finalize" || return
   pass_test
 }

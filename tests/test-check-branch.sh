@@ -58,6 +58,33 @@ test_main_rejects_src_write() {
   fixture_teardown
 }
 
+test_main_allows_confirmed_current_environment_target_only() {
+  start_test "I-CB3 main allows only target paths from active mode=main build contract"
+  fixture_setup
+  cd "$FIXTURE_DIR"
+  mkdir -p docs/modules/demo src/access src/other
+  cat > docs/modules/demo/.work-meta.json <<'JSON'
+{
+  "build": {
+    "contract_version": 2,
+    "mode": "main",
+    "lifecycle_state": "building",
+    "target": {"kind": "product", "paths": ["src/access"], "entrypoints": []}
+  }
+}
+JSON
+  capture_check "Write" "src/access/index.ts" "" "" "allowed"
+  local allowed_rc="$RC" allowed_out="$OUT"
+  capture_check "Write" "src/other/index.ts" "" "" "denied"
+  if [ "$allowed_rc" = "0" ] && ! echo "$allowed_out" | grep -q '"deny"' \
+     && [ "$RC" = "2" ] && echo "$OUT" | grep -q '"deny"'; then
+    pass_test
+  else
+    _fail "mode=main contract should allow only declared target (allowed rc=$allowed_rc out=$allowed_out; other rc=$RC out=$OUT)"
+  fi
+  fixture_teardown
+}
+
 test_main_allows_claude_settings() {
   start_test "I-CB3 main allows .claude/settings.json (whitelisted)"
   fixture_setup
@@ -300,6 +327,7 @@ test_main_still_rejects_prototype_code() {
 }
 
 test_main_rejects_src_write
+test_main_allows_confirmed_current_environment_target_only
 test_main_allows_claude_settings
 test_main_allows_codex_hooks
 test_main_allows_opencode_config

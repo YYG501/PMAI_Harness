@@ -104,8 +104,8 @@ PY
   pass_test
 }
 
-test_builder_profile_auto_selects_target_and_handles_legacy_missing_config() {
-  start_test "builder-profile: auto uses target preference and missing config falls back to native"
+test_builder_profile_recommends_target_and_handles_legacy_missing_config() {
+  start_test "builder-profile: recommend uses target preference and missing config falls back to native"
   _setup_fake_executor
   _install_fake_command codex
   local config="$T/config.yml"
@@ -128,7 +128,7 @@ builder:
 YAML
   local python_bin
   python_bin=$(command -v python3)
-  PATH="$FAKE_BIN:/usr/bin:/bin" "$python_bin" "$BUILDER_PROFILE" auto "$config" --target product > /tmp/builder-profile.$$
+  PATH="$FAKE_BIN:/usr/bin:/bin" "$python_bin" "$BUILDER_PROFILE" recommend "$config" --target product > /tmp/builder-profile.$$
   python3 - /tmp/builder-profile.$$ <<'PY' || {
 import json, sys
 data = json.load(open(sys.argv[1]))
@@ -136,10 +136,10 @@ assert data["builder_profile"] == "codex"
 assert data["executor"] == "codex"
 assert data["builder"]["model"] == "gpt-test"
 PY
-    _fail "auto should select the available product profile"
+    _fail "recommend should select the available product profile"
     rm -f /tmp/builder-profile.$$; _teardown_fake_executor; return
   }
-  "$python_bin" "$BUILDER_PROFILE" auto "$T/missing.yml" --target prototype > /tmp/builder-profile.$$
+  "$python_bin" "$BUILDER_PROFILE" recommend "$T/missing.yml" --target prototype > /tmp/builder-profile.$$
   python3 - /tmp/builder-profile.$$ <<'PY' || {
 import json, sys
 data = json.load(open(sys.argv[1]))
@@ -239,27 +239,28 @@ test_opencode_adapter_invokes_run_with_profile_args() {
   pass_test
 }
 
-test_build_skill_auto_selects_builder_profiles() {
-  start_test "build skill: 按对象和可用性自动选择 builder profile"
+test_build_skill_recommends_then_confirms_builder_profile() {
+  start_test "build skill: 推荐 builder profile 后由 PM 确认"
 
-  assert_file_contains "$BUILD_SKILL" "builder-profile.py\" auto" "build should auto-resolve builder profiles" || return
+  assert_file_contains "$BUILD_SKILL" "builder-profile.py\" recommend" "build should recommend builder profiles" || return
   assert_file_contains "$BUILD_SKILL" "Claude Code、Codex、Cursor Agent、Gemini 和 OpenCode" "automatic candidates should include all adapters" || return
-  assert_file_contains "$BUILD_SKILL" "不是 PM 菜单" "builder profiles must stay internal" || return
-  assert_file_contains "$BUILD_SKILL" "均不可用时由当前主控" "build should fall back to current runtime" || return
+  assert_file_contains "$BUILD_SKILL" "调整构建工具" "PM should be able to adjust the recommended builder" || return
+  assert_file_contains "$BUILD_SKILL" "只有 PM 选择“按这个方案构建”才继续" "build must wait for PM confirmation" || return
+  assert_file_contains "$BUILD_SKILL" "不能静默替换 PM 已确认的工具" "builder fallback must be reconfirmed" || return
   pass_test
 }
 
-test_build_skill_requires_automatic_gates_before_editing() {
-  start_test "build skill: 建造依据、worktree 和 v2 合同是自动硬门"
+test_build_skill_confirms_only_environment_and_tool_before_editing() {
+  start_test "build skill: 建造依据后台固定，只确认工作环境和构建工具"
 
   assert_file_contains "$BUILD_SKILL" "后台执行 design 的规格编译、范围提交" "dirty design context should be checkpointed automatically" || return
-  assert_file_contains "$BUILD_SKILL" "完整 build 默认从 design checkpoint 自动创建 worktree" "build should auto-create isolation" || return
-  assert_file_contains "$BUILD_SKILL" "不再让 PM 选择“是否隔离”" "worktree must not become a PM choice" || return
-  assert_file_contains "$BUILD_SKILL" "不让 PM预选执行器" "executor must not become a PM choice" || return
+  assert_file_contains "$BUILD_SKILL" "工作环境：<独立环境 | 继续当前独立环境 | 当前环境>" "confirmation card should expose work environment" || return
+  assert_file_contains "$BUILD_SKILL" "构建工具：<工具名（model, thinking）>" "confirmation card should expose builder" || return
+  assert_file_contains "$BUILD_SKILL" "卡片中禁止出现项目类型、验收方案" "confirmation card should hide project type and acceptance" || return
   assert_file_contains "$BUILD_SKILL" "合同 v2" "build should write the versioned contract" || return
   assert_file_contains "$BUILD_SKILL" "build-contract.py" "build should call the build contract helper" || return
-  assert_file_contains "$AGENTS_TMPL" "默认自动开 worktree" "consumer AGENTS should preserve automatic isolation" || return
-  assert_file_contains "$AGENTS_TMPL" "不向 PM 暴露工程菜单" "consumer AGENTS should hide executor choices" || return
+  assert_file_contains "$AGENTS_TMPL" "PM 只确认这两项" "consumer AGENTS should preserve the two-item confirmation" || return
+  assert_file_contains "$AGENTS_TMPL" "卡片不得显示项目类型、验收方案" "consumer AGENTS should hide type and acceptance" || return
   assert_file_contains "$AGENTS_TMPL" ".work-meta.json:build" "consumer AGENTS should require build contract handoff" || return
   assert_file_contains "$CLAUDE_TMPL" ".work-meta.json:build" "consumer CLAUDE should require build contract handoff" || return
   pass_test
@@ -288,10 +289,10 @@ test_build_skill_handles_fallback_design_baseline() {
 }
 
 test_consumer_entry_documents_fallback() {
-  start_test "consumer AGENTS: 自动 profile 不可用时回退当前主控"
+  start_test "consumer AGENTS: 推荐 profile 不可用时重新确认"
 
-  assert_file_contains "$AGENTS_TMPL" "自动选择仓库内其它可用 profile" "AGENTS should define automatic fallback" || return
-  assert_file_contains "$AGENTS_TMPL" "都不可用时由当前主控" "AGENTS should fall back to the current runtime" || return
+  assert_file_contains "$AGENTS_TMPL" "推荐其它可用 profile 或当前主控" "AGENTS should recommend a fallback" || return
+  assert_file_contains "$AGENTS_TMPL" "重新让 PM 确认" "AGENTS should require reconfirmation" || return
   pass_test
 }
 
@@ -340,12 +341,12 @@ test_build_skill_avoids_machine_bound_absolute_path_rules() {
 
 test_adapter_files_are_executable
 test_builder_profile_helper_resolves_pm_choice
-test_builder_profile_auto_selects_target_and_handles_legacy_missing_config
+test_builder_profile_recommends_target_and_handles_legacy_missing_config
 test_claude_code_adapter_invokes_print_mode
 test_gemini_adapter_invokes_yolo_prompt_mode
 test_opencode_adapter_invokes_run_with_profile_args
-test_build_skill_auto_selects_builder_profiles
-test_build_skill_requires_automatic_gates_before_editing
+test_build_skill_recommends_then_confirms_builder_profile
+test_build_skill_confirms_only_environment_and_tool_before_editing
 test_build_skill_keeps_executor_noise_out_of_pm_view
 test_build_skill_handles_fallback_design_baseline
 test_consumer_entry_documents_fallback

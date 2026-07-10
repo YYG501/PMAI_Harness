@@ -1,6 +1,6 @@
 # Decision policy（PMAI 共用）
 
-design、meta、mockup、spec-writing、build 和自动收尾共用这一套决策分类。目标是只让 PM 回答会改变产品方向或授权不可逆动作的问题，其余判断由 AI 承担并在自然收口点汇总。
+design、meta、mockup、spec-writing、build 和自动收尾共用这一套决策分类。目标是只让 PM 回答会改变产品方向、授权不可逆动作，以及 build 开工前固定的“工作环境 + 构建工具”确认；其余判断由 AI 承担并在自然收口点汇总。
 
 | 类别 | 判据 | 默认处理 |
 |---|---|---|
@@ -18,6 +18,16 @@ design、meta、mockup、spec-writing、build 和自动收尾共用这一套决�
 4. 无论产品模型是否已定，只要动作不可逆，归 `one-way door`。
 5. AI 若在反对 PM 已明确方向，额外标为 `user challenge`，不能把自己的建议伪装成未决问题。
 
+## Build 开工确认例外
+
+工作环境和构建工具本身通常属于可逆执行偏好，但 PM 已明确要求每个新 build 开工前确认一次，因此它们是本 policy 的窄例外：
+
+- 项目类型从 `.pm-workflow/config.yml` 静默读取，不进入确认卡；
+- 验收方案按项目类型和风险后台生成，不进入确认卡；
+- AI 只推荐工作环境和构建工具，PM 确认或调整后才开工；
+- 卡片使用“独立环境 / 当前环境”和工具显示名，不展示 worktree、合同、hash、证据等内部实现；
+- 已进入同一 build 的迭代与恢复不重复确认；更换已确认工具时必须重新确认。
+
 ## 问句不是决定
 
 - `discussion.md` 中的问号、TODO、假设、AI 推荐、未被回答的选项都不能写进 active decisions 或规范性规格。
@@ -26,11 +36,11 @@ design、meta、mockup、spec-writing、build 和自动收尾共用这一套决�
 
 ## 提问合同
 
-只在 `product-model fork`、`one-way door`、`user challenge` 三类立即打断。题目必须说明：
+只在 `product-model fork`、`one-way door`、`user challenge` 三类，以及上述 build 开工确认例外立即打断。题目必须说明：
 
 - 这次具体要拍什么；
 - 两个方向各改变什么业务结果；
 - AI 的默认建议及依据；
 - 不回答时为什么不能安全继续。
 
-不要把每个 finding 拆成一道题，也不要问 PM 是否调用 meta、mockup、spec-writing、worktree 或执行器；这些是框架内部编排。
+不要把每个 finding 拆成一道题，也不要问 PM 是否调用 meta、mockup、spec-writing 或手动 close。build 开工只用一张卡确认“工作环境 + 构建工具”，不得把 worktree、项目类型或验收适配器做成额外问题。

@@ -420,11 +420,13 @@ test_path_expanduser() {
   start_test "expanduser: ~/x.pdf 自动展开"
   fixture_setup
   work_dir=$(fixture_create_work "work-008" "test" 2)
-  # 在 $HOME 下放一个临时文件
-  src_file="$HOME/.pmaiwf-test-expand-$$.pdf"
+  # 用 fixture 内的临时 HOME 验证 expanduser，避免测试向真实用户目录写文件。
+  fake_home="$work_dir/test-home"
+  mkdir -p "$fake_home"
+  src_file="$fake_home/.pmaiwf-test-expand-$$.pdf"
   printf 'expand test' > "$src_file"
 
-  out=$(_run_py "
+  out=$(HOME="$fake_home" _run_py "
 from _lib.attachments import copy_attachment
 r = copy_attachment(Path('$work_dir'), Path('~/.pmaiwf-test-expand-$$.pdf'), 'spec')
 assert r['new_name'] == 'docs/inputs/uncategorized/spec-.pmaiwf-test-expand-$$.pdf' or '.pmaiwf-test-expand-' in r['new_name'], r

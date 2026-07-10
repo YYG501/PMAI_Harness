@@ -120,8 +120,8 @@ Next Up 块 / skill 退出提示 / 错误退出提示 —— 任何 PM **直接�
 
 | 形态 | 是否走 §3 | 例子 |
 |---|---|---|
-| **真实 PM 决策门**（产品模型岔路 / one-way door / AI 改变 PM 已明确方向）| 必须用 AskUserQuestion / picker（runtime 不支持时按 askuser-rules.md §1.3 退化为编号列表）| `/pmai-design` 的对象或权限模型岔路；发布 / 删除 / 安全例外授权 |
-| **框架内部编排**（meta / mockup / spec-writing / worktree / 执行器 / 保存依据 / close）| 不问 PM，按共用 decision policy 自动处理 | `/pmai-build` 自动 worktree 和工具选择；定稿后自动 finalize |
+| **真实 PM 决策门**（产品模型岔路 / one-way door / AI 改变 PM 已明确方向 / build 开工确认）| 必须用 AskUserQuestion / picker（runtime 不支持时按 askuser-rules.md §1.3 退化为编号列表）| `/pmai-design` 的对象或权限模型岔路；发布 / 删除 / 安全例外授权；build 只确认工作环境和构建工具 |
+| **框架内部编排**（meta / mockup / spec-writing / 项目类型读取 / 默认验收 / 保存依据 / close）| 不问 PM，按共用 decision policy 自动处理 | `/pmai-build` 静默读取项目类型并生成验收方案；定稿后自动 finalize |
 | AI 主动告知 / 状态播报（不要 PM 答）| prose 输出即可 | banner / Next Up 块 / skill 启动播报 / 进展告知 |
 | 反问澄清（PM 输入语义模糊，AI 需 PM 补一句话再决定走 A/B/C，不是闸门决策）| prose 反问即可 | "你说的'改原型'指本次范围里的改动，还是想新起一个需求？" |
 

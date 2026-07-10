@@ -64,11 +64,11 @@ PMAI 不和 Claude Design、design-html 或 Claude Code 比"谁更快生成第�
 # 日常循环（design 讨论，build 看结果）
 
 /pmai-design "批量审核"    恢复旧上下文，讨论清楚并自动形成建造依据
-/pmai-build 批量审核       自动判断构建 prototype 或 product；PM 看结果、多轮修改、说“可以提交”后自动收尾
+/pmai-build 批量审核       后台读取项目定义和默认验收；PM 只确认工作环境与构建工具，然后看结果、多轮修改、说“可以提交”后自动收尾
 /pmai-status          产品现状视图（产品长什么样 / 当前模块做到哪 / 下一步）
 ```
 
-PM 全程**只做产品决策、看结果和明确定稿**；meta / mockup / spec-writing 分流、代码、commit、worktree、执行器、验收证据和文档同步由框架兜。
+PM 全程**只做产品决策、开工时确认工作环境与构建工具、看结果和明确定稿**；meta / mockup / spec-writing 分流、项目类型读取、默认验收、合同、证据和文档同步由框架兜。
 
 ---
 
@@ -197,9 +197,9 @@ skill 跑全局升级命令；升级完读 CHANGELOG diff + 用自然语言 5-7 
 
 agent 内部先判断项目情况，再进入对应分支：
 
-- **阶段 A · 参数收集 + 项目情况判断** —— AskUserQuestion 拿项目名 / 落地路径后，AI 直接扫目录。PM 不需要预先判断，也不需要在“初始化 / 代码盘点”之间选命令。
+- **阶段 A · 参数收集 + 项目情况判断** —— AskUserQuestion 拿项目名 / 落地路径后，AI 直接扫目录。全新项目再确认 `prototype / product`；PM 不需要预先判断目录情况，也不需要在“初始化 / 代码盘点”之间选命令。
 - **全新项目 / 资料目录分支** —— B/C/D 一气呵成：用 `init-project.sh` 建上下文底座，填一句话方向、视觉基线和主原型，再输出 Next Up。
-- **已有代码库分支** —— 自动进入已有项目接入子流程：先整理真实代码现状，产 `docs/CODEBASE-AUDIT.md`，PM 过目后在同一流程内定项目方向；不补空骨架、不起空 `prototype/`、不调用 `init-project.sh`。
+- **已有代码库分支** —— 自动进入已有项目接入子流程：先整理真实代码现状，产 `docs/CODEBASE-AUDIT.md`，PM 过目后在同一流程内确认 `prototype / product` 并定项目方向；类型写入 `.pm-workflow/config.yml`。不补空骨架、不起空 `prototype/`、不调用 `init-project.sh`。
 - **已接入过 PMAI 的项目** —— 不重跑 init；先看 `/pmai-status`，PM 明确要重定方向再走 `/pmai-direction`。
 
 > `/pmai-init-project` 在装了 pmai 的任意 cwd 都能跑（无需在本仓）。
@@ -221,7 +221,7 @@ bash ~/.pmai/scripts/init-project.sh \
   <project-name> \
   <target-dir> \
   "<background>" \
-  [prototype|system|custom|unknown]
+  <prototype|product>
 
 # 或在本仓内调用（fallback 路径，自动推 FRAMEWORK_DIR）
 bash scripts/init-project.sh ...
@@ -231,7 +231,7 @@ bash scripts/init-project.sh ...
 - `<project-name>` — 业务项目名（也是 git 仓的名字）
 - `<target-dir>` — 业务项目落地路径（**不能已存在**）
 - `<background>` — 一句话项目背景
-- `<project-intent>` — 工程结构意图（默认 `unknown`）：`prototype` / `system` / `custom` / `unknown`
+- `<project-type>` — 项目级构建类型（必填）：`prototype` / `product`；写入 `.pm-workflow/config.yml`，后续 build 只读取
 
 > 脚本是骨架构建器，**不带方向讨论**；直接调脚本适合自动化场景，PM 主动起项目走 `/pmai-init-project` skill 拿到完整体验。
 
@@ -291,7 +291,7 @@ PMAI 走纯全局：每台要用的机器各自 `pmai install` 一次（全局�
 | Skill | 用途 |
 |---|---|
 | `/pmai-status` | **续跑辅助**：读当前状态和建议下一步；不向 PM 暴露 worktree、合同或证据 JSON |
-| `/pmai-build` | 统一构建前台：自动判断 prototype / product、创建或复用隔离环境、选择建造与验收工具；PM 定稿后自动落地主线并更新正式文档 |
+| `/pmai-build` | 统一构建前台：静默读取项目级类型和默认验收，推荐工作环境与构建工具；PM 一次确认后构建，定稿后自动落地主线并更新正式文档 |
 | `/pmai-spec-writing` | 功能型规格文档成文器：生成/修改模块规格；PRD、功能需求、功能描述、功能规格、功能评审稿都走这里 |
 | `/pmai-doc-writing` | 介绍型文档成文器：产品介绍、产品功能清单、优势说明、一页纸、汇报材料，默认落 `docs/deliverables/` |
 

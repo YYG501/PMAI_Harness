@@ -148,6 +148,8 @@ PMAI 的主要用户是单人 PM，尤其是要持续推进一个复杂业务产
 
 初始化完成后，AI 应能主动复述当前产品上下文。
 
+初始化同时在 `.pm-workflow/config.yml` 明确项目是 `prototype` 还是 `product`。这是项目级定义，不是每轮 build 的临时选择；要改变项目性质，应修改该定义文件并重新校准项目结构。
+
 ### 2. 新需求开始
 
 新需求不是从空白问题开始，而是先加载已有上下文：
@@ -157,8 +159,8 @@ PMAI 的主要用户是单人 PM，尤其是要持续推进一个复杂业务产
 已有模块和原型有哪些？
 这次需求影响哪些对象 / 页面 / 规则？
 哪些既有决策不能破坏？
-本次 build 对象是 prototype 还是真实 product？
-这个结果需要用什么方式验收？
+项目定义的 build 对象是什么？
+按该对象和本轮风险，默认验收需要覆盖什么？
 哪些可以 mock？
 哪些不能 mock，因为会误导决策？
 ```
@@ -177,14 +179,14 @@ PMAI 的主要用户是单人 PM，尤其是要持续推进一个复杂业务产
 
 ### 4. 统一 build 和看结果修改
 
-一次 build 只有一个主要对象：`prototype` 或 `product`。两者走同一条生命周期，只切换验收工具与方法：
+一次 build 只有一个主要对象：`prototype` 或 `product`，由项目初始化时的定义决定。两者走同一条生命周期，只切换验收工具与方法：
 
 - prototype 看可启动性、任务路径、页面 / 弹窗、边界状态、视觉和交互行为；
 - product 看仓库测试、typecheck / build、接口和数据行为、迁移兼容性，并按风险追加 UI、权限、安全或数据检查。
 
-PM 的体验始终是：看结果、指出哪里不对、AI 修改、再看。每轮修改只跑受影响的快速检查；PM 说“定稿 / 可以提交 / 可以合并”后才跑完整 required checks。
+开工前 AI 根据项目定义和本机能力推荐工作环境与构建工具，PM 一次确认或调整。确认卡只展示这两项，不展示项目类型、验收方案或内部合同。之后 PM 的体验始终是：看结果、指出哪里不对、AI 修改、再看。每轮修改只跑受影响的快速检查；PM 说“定稿 / 可以提交 / 可以合并”后才跑完整 required checks。
 
-worktree、build contract、执行器、source hash 和证据 JSON 都是后台基础设施，不形成第二条用户流程。
+worktree 的具体实现、build contract、source hash 和证据 JSON 都是后台基础设施，不形成第二条用户流程；PM 只看到可理解的“工作环境”和“构建工具”。
 
 ### 5. 自动落地主线和文档编译
 
@@ -223,7 +225,7 @@ design、build、恢复、最终检查和文档更新共用同一份编译上下
 
 ### 3. Unified Build Loop
 
-prototype 和 product 共用 `designing → ready_to_build → building → iterating → final_check → landed → documenting → complete`。PM 看结果多轮修改，内部自动处理隔离环境、工具选择、证据失效和恢复。
+prototype 和 product 共用 `designing → ready_to_build → building → iterating → final_check → landed → documenting → complete`。AI 推荐工作环境和构建工具，PM 一次确认；之后 PM 看结果多轮修改，框架处理证据失效和恢复。
 
 ### 4. Adaptive Acceptance And Post-Land Docs
 
@@ -248,6 +250,7 @@ PMAI 成功时，PM 的体验应该是：
 - "AI 知道已有文档和已有原型。"
 - "我给一个新需求，AI 会先基于上下文讨论，而不是从零猜。"
 - "不管这次建的是原型还是真实产品，我都能看着结果改。"
+- "开工前我只确认工作环境和构建工具，不需要每轮重新选项目类型或验收方案。"
 - "我说可以提交后，AI 会完成检查、合入主线并把正式文档整体对齐。"
 - "大系统可以一个模块一个模块地做，不会一口气全做乱。"
 - "我做决策，AI 管执行细节。"
@@ -261,8 +264,8 @@ PMAI 成功时，PM 的体验应该是：
 后续改造应以本文为准：
 
 - design 是需求讨论主入口；meta、mockup、spec-writing 按需后台调用并返回主线。
-- prototype 与 product 共用同一构建、迭代、定稿和收尾链路，只切换 build 对象和验收适配器。
-- build contract、worktree、执行器和验收证据全部后台化。
+- prototype 与 product 由项目级定义确定，共用同一构建、迭代、定稿和收尾链路，只切换验收适配器。
+- build contract、worktree 细节和验收证据后台化；工作环境与构建工具由 AI 推荐、PM 一次确认。
 - 正式文档只在实现落入 main 后更新，并只保留当前事实；历史进入 Git 和 decisions。
 - `/pmai-build-close` 不再是正常用户必经命令，只保留兼容与恢复。
 - Claude Design / design-html / Claude Code 等仍可作为原型或构建能力来源，PMAI 负责统一上下文、验收和后续事实沉淀。

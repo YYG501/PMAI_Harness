@@ -9,7 +9,7 @@
     "context": []
   },
   "expected": {
-    "behaviors": ["合同允许 prototype 或 product", "两类对象共用统一状态序列"],
+    "behaviors": ["项目定义只允许 prototype 或 product", "合同允许 prototype 或 product", "两类对象共用统一状态序列"],
     "observations": [],
     "lifecycle_order": []
   },
@@ -18,6 +18,8 @@
     "observations": []
   },
   "assertions": [
+    {"type": "file_contains", "path": "scripts/project-type.py", "value": "project.type"},
+    {"type": "file_contains", "path": "templates/pm-workflow.config.yml.tmpl", "value": "type: {{PROJECT_TYPE}}"},
     {"type": "file_contains", "path": "scripts/acceptance-profile.py", "value": "prototype"},
     {"type": "file_contains", "path": "scripts/acceptance-profile.py", "value": "product"},
     {"type": "file_contains", "path": "scripts/build-contract.py", "value": "ready_to_build"},

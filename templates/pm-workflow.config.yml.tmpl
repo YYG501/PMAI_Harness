@@ -6,11 +6,16 @@
 #
 # 改了哪个字段会影响什么：见每段注释。
 
+project:
+  # 项目级构建对象。初始化时确定；后续 build 只读取，不按单次需求重新推断。
+  # 如需改变项目性质，直接修改本字段，并按新的项目类型重新校准项目结构。
+  type: {{PROJECT_TYPE}}
+
 builder:
-  # /pmai-build 的默认建造工具档位。框架按 build 对象和本机可用性自动选择；
-  # 这些字段只给执行器使用，不形成 PM 菜单。
+  # /pmai-build 的建造工具推荐档位。框架会先按项目类型和本机可用性给出推荐，
+  # PM 在开工确认卡中确认或调整；这里不是每次 build 的最终选择记录。
   default_profile: claude-code
-  # 完整 build 由框架按对象自动选择；旧消费仓缺这两项时回退 default_profile。
+  # 旧消费仓缺这两项时回退 default_profile。
   prototype_profile: claude-code
   product_profile: codex
 

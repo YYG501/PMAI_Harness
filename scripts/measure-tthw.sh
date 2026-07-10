@@ -13,7 +13,7 @@ FRAMEWORK_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 usage() {
   cat <<'EOF'
 Usage:
-  bash scripts/measure-tthw.sh smoke [--project-name NAME] [--target-dir DIR] [--background TEXT] [--intent prototype|system|custom|unknown]
+  bash scripts/measure-tthw.sh smoke [--project-name NAME] [--target-dir DIR] [--background TEXT] [--project-type prototype|product]
   bash scripts/measure-tthw.sh record <project-dir> --module NAME --started-at ISO --ended-at ISO [--spec PATH] [--note TEXT]
 
 Modes:
@@ -43,7 +43,7 @@ run_smoke() {
   local project_name="PMAI-TTHW-Smoke"
   local target_dir=""
   local background="TTHW skeleton smoke project"
-  local intent="prototype"
+  local project_type="prototype"
   local cleanup_dir=""
 
   while [ $# -gt 0 ]; do
@@ -51,15 +51,16 @@ run_smoke() {
       --project-name) project_name="${2:?--project-name needs value}"; shift 2 ;;
       --target-dir) target_dir="${2:?--target-dir needs value}"; shift 2 ;;
       --background) background="${2:?--background needs value}"; shift 2 ;;
-      --intent) intent="${2:?--intent needs value}"; shift 2 ;;
+      --project-type) project_type="${2:?--project-type needs value}"; shift 2 ;;
+      --intent) project_type="${2:?--intent needs value}"; shift 2 ;; # legacy alias
       --help|-h) usage; exit 0 ;;
       *) echo "❌ unknown smoke flag: $1" >&2; usage >&2; exit 2 ;;
     esac
   done
 
-  case "$intent" in
-    prototype|system|custom|unknown) ;;
-    *) echo "❌ intent 非法: $intent（必须是 prototype/system/custom/unknown）" >&2; exit 2 ;;
+  case "$project_type" in
+    prototype|product) ;;
+    *) echo "❌ project-type 非法: $project_type（必须是 prototype 或 product）" >&2; exit 2 ;;
   esac
 
   if [ -z "$target_dir" ]; then
@@ -70,7 +71,7 @@ run_smoke() {
   local started ended elapsed log_file
   log_file="${TMPDIR:-/tmp}/pmai-measure-tthw.$$.log"
   started=$(date +%s)
-  if ! bash "$FRAMEWORK_DIR/scripts/init-project.sh" "$project_name" "$target_dir" "$background" "$intent" >"$log_file" 2>&1; then
+  if ! bash "$FRAMEWORK_DIR/scripts/init-project.sh" "$project_name" "$target_dir" "$background" "$project_type" >"$log_file" 2>&1; then
     echo "❌ skeleton smoke failed during init-project.sh" >&2
     echo "   log: $log_file" >&2
     tail -20 "$log_file" >&2 || true

@@ -15,6 +15,7 @@ SUITES=(
   test-measure-tthw.sh
   test-inject-structure.sh
   test-init-project.sh
+  test-project-type.sh
   test-private-onboarding.sh
   test-generator-codex-entry.sh
   test-init-project-codex-compat.sh

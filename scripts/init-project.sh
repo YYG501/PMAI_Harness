@@ -9,17 +9,15 @@ set -euo pipefail
 _print_help() {
   cat <<HELP
 用法:
-  bash scripts/init-project.sh <project-name> <target-dir> <background> [<project-intent>] [--allow-existing]
+  bash scripts/init-project.sh <project-name> <target-dir> <background> <project-type> [--allow-existing]
 
 参数:
   <project-name>      业务项目名（也是 git 仓的名字）
   <target-dir>        业务项目落地路径（默认不能已存在；加 --allow-existing 可复用已有目录）
   <background>        一句话项目背景（写进生成的 CLAUDE.md）
-  <project-intent>    工程结构意图（默认 unknown）：
-                        prototype  Next.js 单页原型 / Demo 仓
-                        system     完整业务系统（多模块、有后端契约）
-                        custom     PM 自由编辑骨架
-                        unknown    探测兜底档（先 init，跑通后再分类）
+  <project-type>      项目级构建对象（必填）：
+                        prototype  原型 / Demo 项目
+                        product    真实产品项目
 
 可选 flag:
   --allow-existing    放过"目标目录已存在"检查。仅当 PM 在 /pmai-init-project skill 阶段 A
@@ -65,9 +63,9 @@ done
 # set -- 重置位置参数；空数组 fallback 防 set -u
 set -- "${_POSITIONAL[@]+"${_POSITIONAL[@]}"}"
 
-if [ $# -lt 2 ]; then
-  echo "❌ 缺少必填参数（至少需要 <project-name> 和 <target-dir>）" >&2
-  echo "   正确形态：bash scripts/init-project.sh <项目名> <落地路径> <一句话背景> [intent] [--allow-existing]" >&2
+if [ $# -lt 4 ]; then
+  echo "❌ 缺少必填参数（需要 <project-name> <target-dir> <background> <project-type>）" >&2
+  echo "   正确形态：bash scripts/init-project.sh <项目名> <落地路径> <一句话背景> <prototype|product> [--allow-existing]" >&2
   echo "" >&2
   _print_help >&2
   exit 2
@@ -75,18 +73,25 @@ fi
 
 PROJECT_NAME="$1"
 TARGET_DIR="$2"
-BACKGROUND="${3:-}"
-PROJECT_INTENT="${4:-unknown}"
+BACKGROUND="$3"
+PROJECT_TYPE="$4"
 
-case "$PROJECT_INTENT" in
-  prototype|system|custom|unknown) ;;
+case "$PROJECT_TYPE" in
+  prototype|product) ;;
   *)
-    echo "❌ project-intent 非法: ${PROJECT_INTENT}（必须 ∈ prototype/system/custom/unknown）" >&2
-    echo "   修复：参数 4 必须是 prototype / system / custom / unknown 之一；不传走默认 unknown。" >&2
+    echo "❌ project-type 非法: ${PROJECT_TYPE}（必须是 prototype 或 product）" >&2
+    echo "   修复：参数 4 明确传 prototype / product；项目类型不在后续 build 中临时猜测。" >&2
     echo "        跑 'bash scripts/init-project.sh --help' 看完整说明。" >&2
     exit 2
     ;;
 esac
+
+# 工程结构模板仍复用已有 prototype / system 两档；product 只在内部映射到 system。
+if [ "$PROJECT_TYPE" = "product" ]; then
+  STRUCTURE_INTENT="system"
+else
+  STRUCTURE_INTENT="prototype"
+fi
 
 # 框架源路径解析顺序：
 #   1. PMAI_HOME 环境变量（pmai install 后用，或 /pmai-init-project skill 显式传）
@@ -218,11 +223,12 @@ for TMPL in "$FRAMEWORK_DIR/templates/"*.tmpl; do
   mkdir -p "$(dirname "$DEST")"
   # 占位符替换用 Python .replace()，不解释 replacement 元字符 —— sed 会把
   # background 里的 | 当分隔符报错、& 当「整段匹配」展开，静默污染生成文件。
-  TMPL="$TMPL" DEST="$DEST" PN="$PROJECT_NAME" BG="$BACKGROUND" python3 - <<'PY'
+  TMPL="$TMPL" DEST="$DEST" PN="$PROJECT_NAME" BG="$BACKGROUND" PT="$PROJECT_TYPE" python3 - <<'PY'
 import os
 text = open(os.environ["TMPL"], encoding="utf-8").read()
 text = text.replace("{{PROJECT_NAME}}", os.environ["PN"])
 text = text.replace("{{PROJECT_BACKGROUND}}", os.environ["BG"])
+text = text.replace("{{PROJECT_TYPE}}", os.environ["PT"])
 open(os.environ["DEST"], "w", encoding="utf-8").write(text)
 PY
 done
@@ -236,7 +242,7 @@ echo "📋 模板已复制并替换占位符"
 
 # --- d2. 注入工程结构约束段（4.5c）---
 python3 "$FRAMEWORK_DIR/scripts/inject-structure-segment.py" \
-  "$TARGET_DIR/CLAUDE.md" "$PROJECT_INTENT" \
+  "$TARGET_DIR/CLAUDE.md" "$STRUCTURE_INTENT" \
   --framework-root "$FRAMEWORK_DIR" \
   || {
     echo "⚠️  工程结构约束注入失败（项目仍可用，PM 后续可手动跑 detect-project-structure.py）" >&2

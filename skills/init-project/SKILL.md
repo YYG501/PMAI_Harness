@@ -173,7 +173,7 @@ description: |
    mv "$TARGET_DIR/<source-file>" "$TARGET_DIR/<归档目标路径>/"
    # 2. 配置合并（如 .gitignore 跟 PMAI 模板并集去重）
    # 3. 调 init-project.sh --allow-existing 接住非空目录
-   bash "$SCRIPT" "<project-name>" "<target-dir>" "<background>" "<mode>" --allow-existing
+   bash "$SCRIPT" "<project-name>" "<target-dir>" "<background>" "<project-type>" --allow-existing
    ```
 
    **3.6 已有代码库：自动进入 E 步**：
@@ -182,6 +182,7 @@ description: |
    - 只做必要的审计范围确认，例如是否排除 `vendor/`、`node_modules/`、`.build/`、`DerivedData/`；没有明确排除就用默认跳过规则。
    - 不调用 `init-project.sh`，因此不会被 gstack 缺失卡住。
    - 不改业务代码；写 PMAI 接入文档前按 codebase-audit 的确认要求执行。
+   - 本分支不走 A5；codebase-audit 的首次接入方向讨论会让 PM 确认 `prototype / product`，并写入 `.pm-workflow/config.yml:project.type`，确保后续 build 只读项目定义。
    - 如果 PM 明确说“我不是要接已有代码，就是要在这个目录叠全新 PMAI 骨架”，才按 PM 决定回到 3.4/3.5，用 `--allow-existing` 接住。这个 override 需要 PM 明确说出，不作为默认选项展示。
 
    **退化捷径**：
@@ -194,16 +195,16 @@ description: |
 
 4. **一句话项目背景**（仅全新项目 / 资料目录分支需要，写进生成的 CLAUDE.md）—— AskUser
 
-5. **项目类型 / mode 基线**（仅全新项目 / 资料目录分支需要，决定主原型按哪一档实现深度走 + 注入哪份「工程结构约束」段；AskUser 四选）：
-   - `prototype` — Next.js 单页原型 / Demo 仓（每页 self-contained，全 mock，不抽 Template / hook / context）—— 起步默认
-   - `system` — 完整业务系统（多模块 + 后端契约 / 真实持久化 / 完整权限 / 完整测试）
-   - `custom` — PM 自由编辑（按层混搭，不预设深度）
-   - `unknown` — 先 init 跑通后再分类（探测兜底档）
+5. **项目类型**（仅全新项目 / 资料目录分支需要；AskUser 二选）：
+   - `prototype` — 原型 / Demo 项目，主要构建可运行原型和 mock 行为；
+   - `product` — 真实产品项目，主要构建真实代码、数据、接口和生产行为。
 
-   > 这个选项决定主原型 `prototype/` 默认按哪一档建（mode 中立：原型档全 mock / 真系统档真后端），以及 `工程结构约束-{档}.md` 注入哪份。某层以后从 mock 转真，是一次显式拍板的需求，在主原型里原地重写那层，不另开分叉。
+   该选择写入 `.pm-workflow/config.yml:project.type`，成为后续 build 的项目级真相源。build 只在后台读取，不会每轮重新询问或在开工确认卡展示。PM 日后要改变项目性质，必须明确修改这个字段；不能靠某轮对话临时切换。
+
+   工程结构模板在内部映射：`prototype` 使用现有 prototype 档，`product` 使用现有 system 档；这只是代码组织模板，不形成第三种项目类型。
 
 **已有内容接口约定**：
-- **AI 主动诊断并分流**：本 skill step 3 由 AI `ls -A` + 逐条标注 + 判断项目类型；不给 PM 三选菜单装懂事。
+- **AI 主动诊断并分流**：本 skill step 3 由 AI `ls -A` + 逐条标注 + 判断目录情况；不给 PM 三选菜单装懂事。`prototype / product` 项目类型由 PM 在对应分支确认并写入定义文件。
 - **已有代码库自动进入代码现状盘点子流程**：代码盘点是本入口的内部子流程，不是 PM 初始化时要主动选择的第二个公开入口。
 - **PM 决定仍优先**：PM 明确坚持在已有代码库叠全新骨架时可以接住；AI 不能把这个 override 当默认选项展示。
 - **脚本层默认仍拒**：`init-project.sh` 默认拒已存在目录；本 skill 只在全新项目 / 资料目录分支经 PM 拍板后加 `--allow-existing`。脚本本身不判断内容是否真是 codebase（那是 skill 层 AI 诊断的责任）。
@@ -218,17 +219,17 @@ SCRIPT="${PMAI_HOME:-$HOME/.pmai}/scripts/init-project.sh"
 [ ! -f "$SCRIPT" ] && [ -f "$(pwd)/scripts/init-project.sh" ] && SCRIPT="$(pwd)/scripts/init-project.sh"
 
 # 默认（目标目录不存在 / A 步 step 3 完全空 / 只有 .DS_Store 的退化捷径）
-bash "$SCRIPT" "<project-name>" "<target-dir>" "<background>" "<mode>"
+bash "$SCRIPT" "<project-name>" "<target-dir>" "<background>" "<project-type>"
 
 # A 步 step 3.5 PM 拍方案后（cwd 非空 / 含资料 / 含已有内容）
-bash "$SCRIPT" "<project-name>" "<target-dir>" "<background>" "<mode>" --allow-existing
+bash "$SCRIPT" "<project-name>" "<target-dir>" "<background>" "<project-type>" --allow-existing
 ```
 
 脚本会：
 - 检测 gstack 能力（`gstack` CLI 或 `~/.claude/skills/gstack` 任一可用即可；两者都缺 → 报错退出）
 - 默认：拒已存在目录；命中 `--allow-existing` → 跳过该检查，目录可非空
 - 创建目标目录（已存在则用现有）+ 铺上下文脊柱模板（PRODUCT-STATE / DESIGN / PRODUCT-RULES / TODO + prototype/ README 等）
-- 按 `<mode>`（项目类型）注入对应的「工程结构约束」段进 CLAUDE.md
+- 把 `<project-type>` 写入 `.pm-workflow/config.yml`，并在内部映射后注入对应的「工程结构约束」段进 CLAUDE.md
 - 初始化 git（main 分支）+ 首 commit `init: <project-name>`（命中 `--allow-existing` 时首 commit 也包含 PM 原本就放在目录里的资料文件）
 
 agent 收到脚本退出码 0 后**汇报**：「✅ 骨架已就绪 / 上下文脊柱模板 + scripts + 工程结构约束段全部到位」→ 进 C 步。
@@ -280,7 +281,7 @@ agent 收到脚本退出码 0 后**汇报**：「✅ 骨架已就绪 / 上下文
    > **想借 gstack 出初稿**：调 gstack `/design-consultation`（用 Skill 工具），让它接管对话定视觉方向并写 `DESIGN.md`。**不抄 gstack** —— 直接调它的 skill、接受它写的内容、跟随它升级；不解析、不映射、不重写。gstack 不可用就回到本步用模板手填（见失败兜底）。
    > 本调用遵守 `skills/_shared/gstack-integration.md`：`/design-consultation` 只负责视觉基线，PMAI 仍负责 `DESIGN.md` 的框架 inventory、项目脊柱和 build 约束。
 
-4. **起主原型 `prototype/`**：在 `<target-dir>/prototype/` 用脚手架起一版能跑的（默认 Next.js + TS + Tailwind + shadcn；PM 在 step 1 说要换栈就按 PM 的）。约定（来自 `prototype-README.md.tmpl`）：每页 self-contained、视觉照 DESIGN.md、按 step A5 选的项目类型档走实现深度（prototype 档全 mock / system 档真后端 / custom 档按层混搭）。
+4. **起主原型 `prototype/`**：在 `<target-dir>/prototype/` 用脚手架起一版能跑的（默认 Next.js + TS + Tailwind + shadcn；PM 在 step 1 说要换栈就按 PM 的）。约定（来自 `prototype-README.md.tmpl`）：每页 self-contained、视觉照 DESIGN.md；prototype 项目以 mock 可运行体验为主，product 项目按真实产品的工程和数据约束实现。
    **prototype/README.md 在脚手架之后写**：`create-next-app` 会生成自己的默认 README，脚手架跑完后 AI 用 `$PMAI_HOME/templates/prototype-README.md.tmpl` 覆盖 `prototype/README.md`（占位符按项目替换）—— 不在 B 步铺，避免与 `create-next-app` 的非空目录冲突。
 
 5. **PM 定稿确认门**（AskUserQuestion，按 `_shared/pm-view/askuser-rules.md` 走）：
@@ -359,7 +360,7 @@ AI 跟 PM 对话时**禁出现**下列工程黑话：`brownfield` / `greenfield`
 |---|---|
 | `brownfield` / `brownfield 检测` | 「已有 codebase」/「已有内容判断」 |
 | `greenfield` | 「全新项目」 |
-| `intent` / `project-intent` | 「项目类型」/「mode 基线」 |
+| `intent` / `project-intent` | 「项目类型」 |
 | `gate` / `闸门` | 「确认」/「判断」/ 直接砍 |
 | `name → path → ... → intent` | 「项目名 → 落地路径 → 已有内容判断 → 一句话背景 → 项目类型」 |
 

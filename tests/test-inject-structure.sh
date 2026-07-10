@@ -223,40 +223,36 @@ PM_HANDFILLED
 # -----------------------------------------------------------------
 
 test_init_project_skill_asks_intent() {
-  start_test "init-project SKILL 步骤 1 询问项目类型（4 项信息）"
+  start_test "init-project SKILL 只询问 prototype / product 两种项目类型"
   if ! grep -q "项目类型" "$INIT_PROJECT_SKILL"; then
     _fail "init-project SKILL 应询问 PM「项目类型」"
     return
   fi
-  # 应列出 prototype / system / custom / unknown 四选项
-  for opt in "prototype" "system" "custom" "unknown"; do
+  for opt in "prototype" "product"; do
     if ! grep -q "\`$opt\`" "$INIT_PROJECT_SKILL"; then
       _fail "init-project SKILL 应含 \`$opt\` 选项"
       return
     fi
   done
-  if grep -q "\`framework\`" "$INIT_PROJECT_SKILL"; then
-    _fail "init-project SKILL 不应再含 framework 选项（4.5d.1 删除）"
+  if grep -qE '^   - `system`|^   - `custom`|^   - `unknown`' "$INIT_PROJECT_SKILL"; then
+    _fail "init-project SKILL 不应把 system/custom/unknown 暴露为项目类型"
     return
   fi
   pass_test
 }
 
 test_init_project_sh_accepts_intent_arg() {
-  start_test "init-project.sh 接受 4th 参数 project-intent + 校验非法值"
-  # 用法 string 应含 project-intent
-  if ! grep -q "project-intent" "$INIT_PROJECT_SH"; then
-    _fail "init-project.sh 用法应含 project-intent"
+  start_test "init-project.sh 要求 4th 参数 project-type 并只接受两种值"
+  if ! grep -q "project-type" "$INIT_PROJECT_SH"; then
+    _fail "init-project.sh 用法应含 project-type"
     return
   fi
-  # 应有 case 校验（4.5d.2：4 档 prototype/system/custom/unknown）
-  if ! grep -q 'prototype|system|custom|unknown' "$INIT_PROJECT_SH"; then
-    _fail "init-project.sh 应校验 intent ∈ {prototype/system/custom/unknown}"
+  if ! grep -q 'prototype|product' "$INIT_PROJECT_SH"; then
+    _fail "init-project.sh 应校验 project-type ∈ {prototype,product}"
     return
   fi
-  # 注意：--framework-root 参数（指框架仓库根目录）保留，跟 framework 档无关
-  if grep -E '\|framework\||framework\)|=\\?"framework\\?"' "$INIT_PROJECT_SH" >/dev/null; then
-    _fail "init-project.sh case 校验不应再含 framework 档"
+  if grep -q 'prototype|system|custom|unknown' "$INIT_PROJECT_SH"; then
+    _fail "init-project.sh 不应再接受旧四档项目类型"
     return
   fi
   pass_test

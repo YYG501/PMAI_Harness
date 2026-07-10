@@ -121,7 +121,10 @@ test_init_e2e_archive_dir_exists() {
 
   local tmp; tmp=$(mktemp -d)
   local target="$tmp/test-archive-proj"
-  bash "$INIT_SH" "test-archive-proj" "$target" "test bg" >/dev/null 2>&1
+  if ! bash "$INIT_SH" "test-archive-proj" "$target" "test bg" prototype >/dev/null 2>&1; then
+    _fail "init-project.sh 执行失败"
+    rm -rf "$tmp"; return
+  fi
   if [ ! -d "$target/docs/archive" ]; then
     _fail "init 后 docs/archive 目录不存在"
     rm -rf "$tmp"; return

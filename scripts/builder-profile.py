@@ -159,14 +159,27 @@ def cmd_list(args: argparse.Namespace) -> None:
     config = load_builder_config(Path(args.config))
     rows = []
     for name, profile in config["profiles"].items():
+        available = profile_available(profile)
+        if args.available_only and not available:
+            continue
         rows.append(
             {
                 "name": name,
                 "executor": profile.get("executor"),
                 "display": profile_display(name, profile),
                 "default": name == config["default_profile"],
+                "available": available,
             }
         )
+    rows.append(
+        {
+            "name": "native",
+            "executor": "native",
+            "display": "当前主控（runtime）",
+            "default": False,
+            "available": True,
+        }
+    )
     print(json.dumps({"default_profile": config["default_profile"], "profiles": rows}, ensure_ascii=False))
 
 
@@ -175,6 +188,24 @@ def cmd_resolve(args: argparse.Namespace) -> None:
     profile_name = args.profile or config["default_profile"]
     if not profile_name:
         raise SystemExit("builder.default_profile 为空，请明确指定 --profile")
+    if profile_name == "native":
+        builder: dict[str, Any] = {"model": "runtime", "thinking": "adaptive"}
+        if args.model:
+            builder["model"] = args.model
+        if args.thinking:
+            builder["thinking"] = args.thinking
+        print(
+            json.dumps(
+                {
+                    "builder_profile": "native",
+                    "executor": "native",
+                    "display": "当前主控（runtime）",
+                    "builder": builder,
+                },
+                ensure_ascii=False,
+            )
+        )
+        return
     resolved = resolve_profile(config, profile_name, args.model, args.thinking)
     print(json.dumps(resolved, ensure_ascii=False))
 
@@ -194,8 +225,8 @@ def profile_available(profile: dict[str, Any]) -> bool:
     return bool(binary and shutil.which(binary))
 
 
-def cmd_auto(args: argparse.Namespace) -> None:
-    """Resolve the repo-configured profile without exposing a PM menu."""
+def cmd_recommend(args: argparse.Namespace) -> None:
+    """Recommend an available profile before the PM confirms the build card."""
 
     config_path = Path(args.config)
     if not config_path.exists():
@@ -206,7 +237,7 @@ def cmd_auto(args: argparse.Namespace) -> None:
                     "executor": "native",
                     "display": "当前主控（runtime）",
                     "builder": {"model": "runtime", "thinking": "adaptive"},
-                    "selection_reason": "旧消费仓没有 builder 配置，由当前主控在隔离环境中实现",
+                    "selection_reason": "旧消费仓没有 builder 配置，推荐由当前主控实现",
                 },
                 ensure_ascii=False,
             )
@@ -228,7 +259,7 @@ def cmd_auto(args: argparse.Namespace) -> None:
         resolved["selection_reason"] = (
             f"仓库为 {args.target} build 配置的默认档位可用"
             if selected == preferred
-            else f"首选档位不可用，自动选择仓库内可用的 {selected}"
+            else f"首选档位不可用，推荐仓库内可用的 {selected}"
         )
     else:
         resolved = {
@@ -236,7 +267,7 @@ def cmd_auto(args: argparse.Namespace) -> None:
             "executor": "native",
             "display": "当前主控（runtime）",
             "builder": {"model": "runtime", "thinking": "adaptive"},
-            "selection_reason": "仓库配置的独立执行器均不可用，由当前主控在隔离环境中实现",
+            "selection_reason": "仓库配置的独立执行器均不可用，推荐由当前主控实现",
         }
     print(json.dumps(resolved, ensure_ascii=False))
 
@@ -247,6 +278,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     list_cmd = sub.add_parser("list", help="list configured builder profiles for diagnostics")
     list_cmd.add_argument("config")
+    list_cmd.add_argument("--available-only", action="store_true")
     list_cmd.set_defaults(func=cmd_list)
 
     resolve = sub.add_parser("resolve", help="resolve a profile into executor + builder snapshot")
@@ -256,10 +288,17 @@ def build_parser() -> argparse.ArgumentParser:
     resolve.add_argument("--thinking")
     resolve.set_defaults(func=cmd_resolve)
 
-    auto = sub.add_parser("auto", help="select the configured available profile for a build target")
+    recommend = sub.add_parser("recommend", help="recommend an available profile for PM confirmation")
+    recommend.add_argument("config")
+    recommend.add_argument("--target", required=True, choices=("prototype", "product"))
+    recommend.set_defaults(func=cmd_recommend)
+
+    # Backward-compatible internal alias for callers installed before the
+    # confirmation-card flow. New skills must call `recommend`, not `auto`.
+    auto = sub.add_parser("auto", help=argparse.SUPPRESS)
     auto.add_argument("config")
     auto.add_argument("--target", required=True, choices=("prototype", "product"))
-    auto.set_defaults(func=cmd_auto)
+    auto.set_defaults(func=cmd_recommend)
 
     return parser
 
