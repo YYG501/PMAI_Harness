@@ -28,7 +28,28 @@ from _lib.state import (  # noqa: E402
     get_overall_state,
     get_timeline_state,
 )
-from _lib.stages import STAGE_NAMES, MAX_STAGE  # noqa: E402  ( F13 单一真相源)
+from _lib.stages import LIFECYCLE_NAMES, STAGE_NAMES, MAX_STAGE  # noqa: E402  ( F13 单一真相源)
+
+
+def _lifecycle(meta: dict) -> str:
+    build = meta.get("build")
+    if isinstance(build, dict) and build.get("lifecycle_state"):
+        return str(build["lifecycle_state"])
+    return str(meta.get("lifecycle_state") or "")
+
+
+def _docs_status(meta: dict) -> str:
+    build = meta.get("build")
+    if isinstance(build, dict):
+        return str(build.get("docs_status") or "")
+    return ""
+
+
+def _progress_name(meta: dict) -> str:
+    lifecycle = _lifecycle(meta)
+    if lifecycle in LIFECYCLE_NAMES:
+        return LIFECYCLE_NAMES[lifecycle]
+    return STAGE_NAMES.get(int(meta.get("stage", 0) or 0), "未知")
 
 
 def find_repo_root() -> Path:
@@ -73,8 +94,7 @@ def render_summary(state: dict, repo_root: Path) -> None:
     for work in active:
         meta = work["meta"]
         work_id = meta.get("id", "?")
-        stage = meta.get("stage", 0)
-        parts.append(f"{work_id}:{STAGE_NAMES.get(stage, '?')}")
+        parts.append(f"{work_id}:{_progress_name(meta)}")
     print("📋 active work: " + " / ".join(parts))
 
 
@@ -160,7 +180,21 @@ def _work_display_name(work_view: dict) -> str:
     return work_view["work_dir"].name
 
 
-def _stage_status_text(stage: int) -> str:
+def _stage_status_text(stage: int, lifecycle: str = "") -> str:
+    if lifecycle == "designing":
+        return "正在讨论并收敛建造依据。"
+    if lifecycle == "ready_to_build":
+        return "设计已定，可以开始构建。"
+    if lifecycle == "building":
+        return "正在构建指定对象。"
+    if lifecycle == "iterating":
+        return "正在看结果并做多轮修改。"
+    if lifecycle == "final_check":
+        return "已经定稿，正在做最终检查。"
+    if lifecycle in {"landed", "documenting"}:
+        return "实现已进入主线，正在更新正式文档。"
+    if lifecycle == "complete":
+        return "本轮已经完成。"
     if stage <= 1:
         return "还在设计讨论。"
     if stage == 2:
@@ -174,6 +208,18 @@ def _stage_status_text(stage: int) -> str:
 
 def _work_priority(work_view: dict) -> tuple[int, str]:
     meta = work_view["meta"] or {}
+    lifecycle = _lifecycle(meta)
+    lifecycle_priority = {
+        "landed": 0,
+        "documenting": 0,
+        "final_check": 1,
+        "iterating": 2,
+        "building": 3,
+        "ready_to_build": 4,
+        "designing": 5,
+    }
+    if lifecycle in lifecycle_priority:
+        return lifecycle_priority[lifecycle], _work_display_name(work_view)
     stage = int(meta.get("stage", 0) or 0)
     if stage >= 4:
         priority = 0
@@ -268,7 +314,8 @@ def render_narrative(state: dict, repo_root: Path) -> None:
         work = active[0]
         meta = work["meta"] or {}
         stage = meta.get("stage", 0)
-        stage_name = STAGE_NAMES.get(int(stage), "未知") if stage else "未知"
+        lifecycle = _lifecycle(meta)
+        stage_name = _progress_name(meta)
         # 不写 commit hash / 时间细节；只点 stage 状态
         prod = _product_oneliner(repo_root)
         prod_line = f"你的产品：{prod}\n" if prod else ""
@@ -276,7 +323,7 @@ def render_narrative(state: dict, repo_root: Path) -> None:
         print(
             f"当前状态：有 1 个进行中的工作{dirty_suffix}\n\n"
             f"{prod_line}正在处理：{_work_display_name(work)}。\n"
-            f"状态：{_stage_status_text(int(stage or 0))}\n"
+            f"状态：{_stage_status_text(int(stage or 0), lifecycle)}\n"
             f"当前步骤：{stage_name}。\n"
             f"下一步：{suggest_next_action(work)}"
         )
@@ -296,10 +343,11 @@ def render_narrative(state: dict, repo_root: Path) -> None:
     for idx, work in enumerate(active, 1):
         meta = work["meta"] or {}
         stage = meta.get("stage", 0)
-        stage_name = STAGE_NAMES.get(int(stage), "未知") if stage else "未知"
+        lifecycle = _lifecycle(meta)
+        stage_name = _progress_name(meta)
         print()
         print(f"{idx}. {_work_display_name(work)}")
-        print(f"   状态：{_stage_status_text(int(stage or 0))}")
+        print(f"   状态：{_stage_status_text(int(stage or 0), lifecycle)}")
         print(f"   当前步骤：{stage_name}。")
         print(f"   下一步：{suggest_next_action(work)}")
     if dirty_lines:
@@ -371,6 +419,22 @@ def suggest_next_action(work_view: dict) -> str:
     四步：1 设计 / 2 build / 3 复审 / 4 沉淀（MAX_STAGE=4）。"""
     meta = work_view["meta"]
     stage = meta.get("stage", 0)
+    lifecycle = _lifecycle(meta)
+
+    lifecycle_actions = {
+        "designing": "继续 /pmai-design，把产品问题讨论清楚",
+        "ready_to_build": "继续 /pmai-build；框架会自动准备隔离环境和构建工具",
+        "building": "继续当前 /pmai-build，等构建结果可查看",
+        "iterating": "继续看构建结果并直接说要改哪里；定稿后框架会自动收尾",
+        "final_check": "继续当前构建的最终检查；通过后自动进入主线",
+        "landed": "实现已在主线，继续当前工作的正式文档更新",
+        "documenting": "继续完成文档影响地图和一致性检查",
+        "complete": "本轮已完成，可以开始下一个模块",
+    }
+    if lifecycle == "landed" and _docs_status(meta) == "failed":
+        return "实现已经在主线；从上次失败处继续正式文档更新，不重复合并"
+    if lifecycle in lifecycle_actions:
+        return lifecycle_actions[lifecycle]
 
     # 设计（≤1）：定 / 细化模块规格
     if stage <= 1:
@@ -382,11 +446,11 @@ def suggest_next_action(work_view: dict) -> str:
 
     # 复审（3）
     if stage == 3:
-        return "当前进度：复审；继续 /pmai-build 的复审与验收；通过后发 /pmai-build-close"
+        return "当前进度：复审；继续 /pmai-build 看结果并修改，定稿后自动收尾"
 
-    # build-close（≥4 = MAX_STAGE）
+    # v1 兼容：stage ≥4 对应 finalize / 沉淀
     if stage >= 4:
-        return "当前进度：build-close；运行 /pmai-build-close 对齐产品现状、规则和模块规格"
+        return "当前进度：收尾；继续当前工作对齐主线事实与正式文档"
 
     return "运行 /pmai-status 查看详情"
 
@@ -426,12 +490,9 @@ def _render_single_work(work_view: dict) -> None:
     work_id = meta.get("id", "?")
     work_name = meta.get("name", "?")
     stage = meta.get("stage", 0)
-    stage_name = STAGE_NAMES.get(stage, "?")
-    work_dir = work_view["work_dir"]
-
+    stage_name = _progress_name(meta)
     print(f"当前工作：{work_id}（{work_name}）")
     print(f"当前进度：{stage_name}")
-    print(f"Worktree：{work_dir.parent.parent.parent}")
     print()
 
     print(f"下一步：{suggest_next_action(work_view)}")
@@ -451,7 +512,7 @@ def render_status(state: dict, repo_root: Path) -> None:
         work_id = meta.get("id", "?")
         work_name = meta.get("name", "?")
         stage = meta.get("stage", 0)
-        stage_name = STAGE_NAMES.get(stage, "?")
+        stage_name = _progress_name(meta)
         print(f"当前工作：{work_id}（{work_name}）")
         print(f"当前进度：{stage_name}")
         print()
@@ -470,7 +531,7 @@ def render_status(state: dict, repo_root: Path) -> None:
         print()
 
     render_quickfix_section(repo_root)
-    print("提示：操作具体工作请先 cd 进对应 worktree 再跑 skill；主仓视角不默选某个工作。")
+    print("提示：继续某个工作时直接说模块名；框架会恢复对应环境，不需要手动切目录。")
 
 
 def render_timeline(timeline_state: dict, repo_root: Path) -> None:

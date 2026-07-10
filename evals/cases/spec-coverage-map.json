@@ -1,0 +1,32 @@
+{
+  "schema_version": 1,
+  "id": "spec-coverage-map",
+  "title": "spec-writing 不遗漏关联页面和状态",
+  "layer": "session",
+  "skills": ["spec-writing"],
+  "source": {
+    "session_id": "019f3c20-5bbb-7423-a18f-dab2c1a90fff",
+    "evidence": [
+      {"turn": 159, "excerpt": "现在的规格文档，把我们上面所有的改动都写清楚了吗"},
+      {"turn": 162, "excerpt": "为什么没有重新理一下用户详情页和部门详情页的规格"}
+    ]
+  },
+  "input": {
+    "prompt": "把已经确认的角色与数据范围设计编译成当前模块规格。",
+    "context": ["决定已闭合", "变更影响入口页、角色详情、用户详情、部门详情、弹窗和异常状态"]
+  },
+  "expected": {
+    "behaviors": ["先建立对象动作状态权限页面覆盖矩阵", "所有受影响页面有文档落点", "遗漏或未决项返回 design"],
+    "observations": ["coverage_matrix_created", "related_pages_documented", "edge_states_documented"],
+    "lifecycle_order": ["designing", "ready_to_build"],
+    "stopping_point": "ready_to_build"
+  },
+  "forbidden": {
+    "behaviors": ["只更新当前页面", "在写作阶段默默补产品决定"],
+    "observations": ["related_page_omitted", "decision_invented_during_writing"]
+  },
+  "judge": {
+    "enabled": true,
+    "rubric": ["入口、详情、关联页面和异常状态均被检查", "规格只编译已确认决定"]
+  }
+}

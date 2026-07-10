@@ -11,45 +11,45 @@ DESIGN_METHOD="$REPO_ROOT/skills/design/references/design-method.md"
 BUILD_SKILL="$REPO_ROOT/skills/build/SKILL.md"
 BUILD_CLOSE_SKILL="$REPO_ROOT/skills/build-close/SKILL.md"
 AGENTS_TEMPLATE="$REPO_ROOT/templates/AGENTS.md.tmpl"
+LAND_WORK="$REPO_ROOT/scripts/land-work.sh"
 
 test_design_landing_gate() {
-  start_test "design: 落地意图必须过 prototype 分流门"
+  start_test "design: 落地意图进入统一 build，不在 design 直改"
 
-  assert_file_contains "$DESIGN_SKILL" "落地意图识别" "design should identify landing intent" || return
-  assert_file_contains "$DESIGN_SKILL" "小改 prototype-only" "design should define prototype-only small change" || return
-  assert_file_contains "$DESIGN_SKILL" "混合交付转 build" "design should route mixed delivery to build" || return
-  assert_file_contains "$DESIGN_SKILL" "落地 / 实现 / 做进主原型 / 提交 / 可以做了" "design should catch PM landing phrases" || return
+  assert_file_contains "$DESIGN_SKILL" "落地 / 实现 / 做进主原型 / 提交 / 可以做了" "design should identify landing intent" || return
+  assert_file_contains "$DESIGN_SKILL" "不等于授权 design 直接改主原型或真实产品" "design must not edit build targets" || return
+  assert_file_contains "$DESIGN_SKILL" '自动交给 `/pmai-build`' "design should route landing to build" || return
   assert_file_contains "$DESIGN_METHOD" "混合交付转 build" "method should mirror mixed delivery route" || return
   pass_test
 }
 
 test_build_small_change_tightened() {
-  start_test "build: 小改不得同时改 docs/mockups"
+  start_test "build: mockup/spec 落地不能伪装成 quick-fix"
 
-  assert_file_contains "$BUILD_SKILL" "小改不得同时改 docs/mockups" "build should forbid mixed small change" || return
-  assert_file_contains "$BUILD_SKILL" "PM 明确确认的 prototype-only 微调" "build should require prototype-only small change" || return
   assert_file_contains "$BUILD_SKILL" "把 mockup / spec 做进主原型" "build should force full gate for mock/spec landing" || return
-  assert_file_contains "$BUILD_SKILL" "交接 /pmai-build-close 收尾" "build should hand off to build-close" || return
+  assert_file_contains "$BUILD_SKILL" "不得伪装成小改" "build should forbid mixed quick-fix" || return
+  assert_file_contains "$BUILD_SKILL" "完整 build 默认隔离" "full build should stay isolated" || return
+  assert_file_contains "$BUILD_SKILL" "自动落地主线" "build should own automatic finalize" || return
   pass_test
 }
 
 test_build_close_mixed_delivery_authority() {
-  start_test "build-close: 混合交付唯一收口"
+  start_test "finalize: build 自动收口，build-close 仅兼容恢复"
 
-  assert_file_contains "$BUILD_CLOSE_SKILL" "混合交付唯一收口" "build-close should own mixed delivery close" || return
-  assert_file_contains "$BUILD_CLOSE_SKILL" "PMAI_ALLOW_MIXED_DELIVERY=build-close" "build-close should document guard bypass" || return
-  assert_file_contains "$BUILD_CLOSE_SKILL" "缺 build contract" "build-close should stop without contract" || return
-  assert_file_contains "$BUILD_CLOSE_SKILL" "不能把“已经改完了”伪装成 close" "build-close should reject fake close" || return
+  assert_file_contains "$BUILD_CLOSE_SKILL" "正常用户链路不再要求 PM 额外运行本命令" "build-close should not be a normal user step" || return
+  assert_file_contains "$BUILD_CLOSE_SKILL" "只按 build contract 和 lifecycle state" "recovery must use the same contract" || return
+  assert_file_contains "$BUILD_CLOSE_SKILL" "文档失败不重复 merge" "docs recovery must not repeat merge" || return
+  assert_file_contains "$LAND_WORK" "PMAI_ALLOW_MIXED_DELIVERY=build-close" "automatic finalize should use the mixed-delivery guard token internally" || return
   pass_test
 }
 
 test_consumer_template_landing_rules() {
-  start_test "template: 消费仓落地分流和混合提交规则"
+  start_test "template: 消费仓完整 build 自动 finalize"
 
-  assert_file_contains "$AGENTS_TEMPLATE" "不等于直接改主原型" "template should say landing is not direct prototype edit" || return
-  assert_file_contains "$AGENTS_TEMPLATE" "prototype-only 小改" "template should define small change" || return
-  assert_file_contains "$AGENTS_TEMPLATE" "混合交付必须 build/close" "template should require build/close for mixed delivery" || return
-  assert_file_contains "$AGENTS_TEMPLATE" '混合交付必须走 `/pmai-build` → `/pmai-build-close`' "template should repeat guardrail" || return
+  assert_file_contains "$AGENTS_TEMPLATE" '完整交付走 `/pmai-build` 并自动 finalize' "template should say landing uses build" || return
+  assert_file_contains "$AGENTS_TEMPLATE" "混合交付必须走完整 build" "template should require the full lifecycle" || return
+  assert_file_contains "$AGENTS_TEMPLATE" '`/pmai-build-close` 只作为兼容与恢复入口' "template should keep close as compatibility only" || return
+  assert_file_contains "$AGENTS_TEMPLATE" "PM 说“可以提交 / 定稿 / 可以合并”即授权" "template should recognize natural-language finalization" || return
   pass_test
 }
 

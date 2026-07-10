@@ -104,6 +104,56 @@ PY
   pass_test
 }
 
+test_builder_profile_auto_selects_target_and_handles_legacy_missing_config() {
+  start_test "builder-profile: auto uses target preference and missing config falls back to native"
+  _setup_fake_executor
+  _install_fake_command codex
+  local config="$T/config.yml"
+  cat > "$config" <<'YAML'
+builder:
+  default_profile: claude-code
+  prototype_profile: claude-code
+  product_profile: codex
+  profiles:
+    claude-code:
+      label: Claude Code
+      executor: claude-code
+      model: sonnet
+      thinking: standard
+    codex:
+      label: Codex
+      executor: codex
+      model: gpt-test
+      thinking: high
+YAML
+  local python_bin
+  python_bin=$(command -v python3)
+  PATH="$FAKE_BIN:/usr/bin:/bin" "$python_bin" "$BUILDER_PROFILE" auto "$config" --target product > /tmp/builder-profile.$$
+  python3 - /tmp/builder-profile.$$ <<'PY' || {
+import json, sys
+data = json.load(open(sys.argv[1]))
+assert data["builder_profile"] == "codex"
+assert data["executor"] == "codex"
+assert data["builder"]["model"] == "gpt-test"
+PY
+    _fail "auto should select the available product profile"
+    rm -f /tmp/builder-profile.$$; _teardown_fake_executor; return
+  }
+  "$python_bin" "$BUILDER_PROFILE" auto "$T/missing.yml" --target prototype > /tmp/builder-profile.$$
+  python3 - /tmp/builder-profile.$$ <<'PY' || {
+import json, sys
+data = json.load(open(sys.argv[1]))
+assert data["builder_profile"] == "native"
+assert data["executor"] == "native"
+PY
+    _fail "missing legacy config should fall back to native"
+    rm -f /tmp/builder-profile.$$; _teardown_fake_executor; return
+  }
+  rm -f /tmp/builder-profile.$$
+  _teardown_fake_executor
+  pass_test
+}
+
 test_claude_code_adapter_invokes_print_mode() {
   start_test "claude-code adapter: 用 claude -p 非交互执行并传 model/prompt"
 
@@ -189,37 +239,28 @@ test_opencode_adapter_invokes_run_with_profile_args() {
   pass_test
 }
 
-test_build_skill_exposes_builder_profiles() {
-  start_test "build skill: PM 选项露出 builder profile 和 OpenCode"
+test_build_skill_auto_selects_builder_profiles() {
+  start_test "build skill: 按对象和可用性自动选择 builder profile"
 
-  assert_file_contains "$BUILD_SKILL" "claude-code,codex,cursor-agent,gemini,opencode,manual" "executor list should include opencode" || return
-  assert_file_contains "$BUILD_SKILL" '`label`: `Codex（gpt-5.4, high）`' "PM options should show compact Codex profile" || return
-  assert_file_contains "$BUILD_SKILL" '`label`: `OpenCode（deepseek-v4-flash, max）`' "PM options should expose OpenCode" || return
-  assert_file_contains "$BUILD_SKILL" "2, gpt-5.4, max" "PM can override model/thinking in one answer" || return
-  assert_file_contains "$BUILD_SKILL" "builder-profile.py" "build should resolve builder profiles through helper" || return
-  assert_file_contains "$BUILD_SKILL" "BUILDER_PROFILE=opencode" "OpenCode option should map to builder profile" || return
-  assert_file_contains "$BUILD_SKILL" "BUILDER_PROFILE=gemini" "Gemini option should map to builder profile" || return
-  assert_file_contains "$BUILD_SKILL" "exec-adapters/claude-code.sh" "Claude Code should have CLI adapter fallback" || return
-  assert_file_contains "$BUILD_SKILL" '留在 Codex 窗口里选择 `Claude Code`' "Codex-host Claude Code path should be documented" || return
+  assert_file_contains "$BUILD_SKILL" "builder-profile.py\" auto" "build should auto-resolve builder profiles" || return
+  assert_file_contains "$BUILD_SKILL" "Claude Code、Codex、Cursor Agent、Gemini 和 OpenCode" "automatic candidates should include all adapters" || return
+  assert_file_contains "$BUILD_SKILL" "不是 PM 菜单" "builder profiles must stay internal" || return
+  assert_file_contains "$BUILD_SKILL" "均不可用时由当前主控" "build should fall back to current runtime" || return
   pass_test
 }
 
-test_build_skill_requires_pm_gates_before_editing() {
-  start_test "build skill: 未提交上下文不能跳过 PM 执行方式/执行器选择"
+test_build_skill_requires_automatic_gates_before_editing() {
+  start_test "build skill: 建造依据、worktree 和 v2 合同是自动硬门"
 
-  assert_file_contains "$BUILD_SKILL" "两道构建选择是硬门" "build should name the two PM choices as a hard gate" || return
-  assert_file_contains "$BUILD_SKILL" "未提交的规格 / mock / 文档不是跳过 PM 选择的理由" "dirty design context should not bypass PM choices" || return
-  assert_file_contains "$BUILD_SKILL" "保存本次建造依据" "dirty design context wording should be PM-facing" || return
-  assert_file_contains "$BUILD_SKILL" '禁止修改 `prototype/`、`Sources/` 或任何业务代码' "build should forbid code edits before both PM choices" || return
-  assert_file_contains "$BUILD_SKILL" "禁止默认选“直接在主线上建”" "build should not default to direct-main mode" || return
-  assert_file_contains "$BUILD_SKILL" "禁止把当前主控 AI 当默认执行器直接改代码" "build should not default to the current host as executor" || return
-  assert_file_contains "$BUILD_SKILL" "build 合同是 build-close 的唯一收尾依据" "build should record a contract for build-close" || return
-  assert_file_contains "$BUILD_SKILL" "自动补最小状态记录" "build should not ask PM to approve internal state file creation" || return
+  assert_file_contains "$BUILD_SKILL" "后台执行 design 的规格编译、范围提交" "dirty design context should be checkpointed automatically" || return
+  assert_file_contains "$BUILD_SKILL" "完整 build 默认从 design checkpoint 自动创建 worktree" "build should auto-create isolation" || return
+  assert_file_contains "$BUILD_SKILL" "不再让 PM 选择“是否隔离”" "worktree must not become a PM choice" || return
+  assert_file_contains "$BUILD_SKILL" "不让 PM预选执行器" "executor must not become a PM choice" || return
+  assert_file_contains "$BUILD_SKILL" "合同 v2" "build should write the versioned contract" || return
   assert_file_contains "$BUILD_SKILL" "build-contract.py" "build should call the build contract helper" || return
-  assert_file_contains "$AGENTS_TMPL" "必须先完成两道 PM 门" "consumer AGENTS should preserve the build PM gate" || return
-  assert_file_contains "$AGENTS_TMPL" "隔离环境拿不到未跟踪文件" "consumer AGENTS should block dirty-context direct-main rationalization" || return
+  assert_file_contains "$AGENTS_TMPL" "默认自动开 worktree" "consumer AGENTS should preserve automatic isolation" || return
+  assert_file_contains "$AGENTS_TMPL" "不向 PM 暴露工程菜单" "consumer AGENTS should hide executor choices" || return
   assert_file_contains "$AGENTS_TMPL" ".work-meta.json:build" "consumer AGENTS should require build contract handoff" || return
-  assert_file_contains "$AGENTS_TMPL" "自动补最小状态记录" "consumer AGENTS should preserve auto-init guidance" || return
   assert_file_contains "$CLAUDE_TMPL" ".work-meta.json:build" "consumer CLAUDE should require build contract handoff" || return
   pass_test
 }
@@ -236,20 +277,21 @@ test_build_skill_keeps_executor_noise_out_of_pm_view() {
 }
 
 test_build_skill_handles_fallback_design_baseline() {
-  start_test "build skill: DESIGN 兜底骨架时要求 PM 选择视觉基线处理方式"
+  start_test "build skill: DESIGN 兜底骨架自动降级但不伪装视觉通过"
 
   assert_file_contains "$BUILD_SKILL" "视觉基线段未建" "build should detect fallback DESIGN skeleton" || return
-  assert_file_contains "$BUILD_SKILL" "gstack /design-consultation" "build should offer filling DESIGN via gstack design-consultation" || return
-  assert_file_contains "$BUILD_SKILL" "低置信" "build should label visual review as low-confidence when baseline is missing" || return
+  assert_file_contains "$BUILD_SKILL" '自动调用 gstack `/design-consultation`' "build should use design consultation when available" || return
+  assert_file_contains "$BUILD_SKILL" '视觉检查只能记为 `limited`' "build should label visual review as limited when baseline is missing" || return
   assert_file_contains "$BUILD_SKILL" "不能输出“视觉一致性通过”" "build should forbid strong visual pass without baseline" || return
+  assert_file_contains "$BUILD_SKILL" "不是让 PM 选择工具" "visual fallback must not expose an engineering menu" || return
   pass_test
 }
 
 test_consumer_entry_documents_fallback() {
-  start_test "consumer AGENTS: Codex runtime 下 Claude subagent 不可用时先走 adapter"
+  start_test "consumer AGENTS: 自动 profile 不可用时回退当前主控"
 
-  assert_file_contains "$AGENTS_TMPL" "exec-adapters/claude-code.sh" "AGENTS fallback should mention Claude Code adapter" || return
-  assert_file_contains "$AGENTS_TMPL" "Codex / Gemini / OpenCode / Cursor / 手动" "AGENTS fallback should list alternative paths" || return
+  assert_file_contains "$AGENTS_TMPL" "自动选择仓库内其它可用 profile" "AGENTS should define automatic fallback" || return
+  assert_file_contains "$AGENTS_TMPL" "都不可用时由当前主控" "AGENTS should fall back to the current runtime" || return
   pass_test
 }
 
@@ -298,11 +340,12 @@ test_build_skill_avoids_machine_bound_absolute_path_rules() {
 
 test_adapter_files_are_executable
 test_builder_profile_helper_resolves_pm_choice
+test_builder_profile_auto_selects_target_and_handles_legacy_missing_config
 test_claude_code_adapter_invokes_print_mode
 test_gemini_adapter_invokes_yolo_prompt_mode
 test_opencode_adapter_invokes_run_with_profile_args
-test_build_skill_exposes_builder_profiles
-test_build_skill_requires_pm_gates_before_editing
+test_build_skill_auto_selects_builder_profiles
+test_build_skill_requires_automatic_gates_before_editing
 test_build_skill_keeps_executor_noise_out_of_pm_view
 test_build_skill_handles_fallback_design_baseline
 test_consumer_entry_documents_fallback

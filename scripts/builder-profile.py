@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import shutil
 import sys
 from pathlib import Path
 from typing import Any
@@ -52,6 +53,7 @@ def load_builder_config(path: Path) -> dict[str, Any]:
         raise SystemExit(f"找不到配置文件: {path}")
 
     default_profile = ""
+    target_profiles: dict[str, str] = {}
     profiles: dict[str, dict[str, Any]] = {}
     in_builder = False
     in_profiles = False
@@ -77,8 +79,12 @@ def load_builder_config(path: Path) -> dict[str, Any]:
         if not in_builder:
             continue
 
-        if indent == 2 and key == "default_profile":
-            default_profile = str(parse_scalar(value))
+        if indent == 2 and key.endswith("_profile"):
+            parsed = str(parse_scalar(value))
+            if key == "default_profile":
+                default_profile = parsed
+            elif key in {"prototype_profile", "product_profile"}:
+                target_profiles[key.removesuffix("_profile")] = parsed
             continue
         if indent == 2 and key == "profiles":
             in_profiles = True
@@ -93,7 +99,11 @@ def load_builder_config(path: Path) -> dict[str, Any]:
         if indent == 6 and current_profile:
             profiles[current_profile][key] = parse_scalar(value)
 
-    return {"default_profile": default_profile, "profiles": profiles}
+    return {
+        "default_profile": default_profile,
+        "target_profiles": target_profiles,
+        "profiles": profiles,
+    }
 
 
 def profile_display(name: str, profile: dict[str, Any]) -> str:
@@ -169,11 +179,73 @@ def cmd_resolve(args: argparse.Namespace) -> None:
     print(json.dumps(resolved, ensure_ascii=False))
 
 
+EXECUTOR_BINARIES = {
+    "claude-code": "claude",
+    "codex": "codex",
+    "cursor-agent": "cursor-agent",
+    "gemini": "gemini",
+    "opencode": "opencode",
+}
+
+
+def profile_available(profile: dict[str, Any]) -> bool:
+    executor = profile.get("executor")
+    binary = EXECUTOR_BINARIES.get(str(executor))
+    return bool(binary and shutil.which(binary))
+
+
+def cmd_auto(args: argparse.Namespace) -> None:
+    """Resolve the repo-configured profile without exposing a PM menu."""
+
+    config_path = Path(args.config)
+    if not config_path.exists():
+        print(
+            json.dumps(
+                {
+                    "builder_profile": "native",
+                    "executor": "native",
+                    "display": "当前主控（runtime）",
+                    "builder": {"model": "runtime", "thinking": "adaptive"},
+                    "selection_reason": "旧消费仓没有 builder 配置，由当前主控在隔离环境中实现",
+                },
+                ensure_ascii=False,
+            )
+        )
+        return
+    config = load_builder_config(config_path)
+    profiles = config["profiles"]
+    preferred = config.get("target_profiles", {}).get(args.target) or config["default_profile"]
+    candidates = []
+    if preferred:
+        candidates.append(preferred)
+    candidates.extend(name for name in profiles if name not in candidates)
+    selected = next(
+        (name for name in candidates if name in profiles and profile_available(profiles[name])),
+        None,
+    )
+    if selected:
+        resolved = resolve_profile(config, selected, None, None)
+        resolved["selection_reason"] = (
+            f"仓库为 {args.target} build 配置的默认档位可用"
+            if selected == preferred
+            else f"首选档位不可用，自动选择仓库内可用的 {selected}"
+        )
+    else:
+        resolved = {
+            "builder_profile": "native",
+            "executor": "native",
+            "display": "当前主控（runtime）",
+            "builder": {"model": "runtime", "thinking": "adaptive"},
+            "selection_reason": "仓库配置的独立执行器均不可用，由当前主控在隔离环境中实现",
+        }
+    print(json.dumps(resolved, ensure_ascii=False))
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     sub = parser.add_subparsers(dest="cmd", required=True)
 
-    list_cmd = sub.add_parser("list", help="list builder profiles for PM choice")
+    list_cmd = sub.add_parser("list", help="list configured builder profiles for diagnostics")
     list_cmd.add_argument("config")
     list_cmd.set_defaults(func=cmd_list)
 
@@ -183,6 +255,11 @@ def build_parser() -> argparse.ArgumentParser:
     resolve.add_argument("--model")
     resolve.add_argument("--thinking")
     resolve.set_defaults(func=cmd_resolve)
+
+    auto = sub.add_parser("auto", help="select the configured available profile for a build target")
+    auto.add_argument("config")
+    auto.add_argument("--target", required=True, choices=("prototype", "product"))
+    auto.set_defaults(func=cmd_auto)
 
     return parser
 

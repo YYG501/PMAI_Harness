@@ -1,12 +1,12 @@
 <!-- 共享参考 · 项目决策记录（冻结档）何时冻 / 怎么写。
-     被 direction / codebase-audit step 4 / build-close 或 record（理路类记录）@读，单一真相源避免三处漂移。
+     被 direction / codebase-audit step 4 / landed 后文档编译或 record（理路类记录）@读，单一真相源避免三处漂移。
      真相源设计见生成器仓设计文档「项目奠基决策记录」。模板：$PMAI_HOME/templates/decision-record.md.tmpl。 -->
 
 # 共享参考：项目决策记录（冻结档）
 
 ## 这是什么
 
-项目级方向讨论或收尾沉淀（`/pmai-direction` 方向校准、已有代码首次接入的 codebase-audit step 4、build 验收后的 `/pmai-build-close`，或 design 后暂不 build 的 `/pmai-record` 产出的**项目级理路**）会产生一层"为什么这么拼"的内容——护城河论证、机制整体设计意图、交互咬合推导、演进故事。脊柱五件套按"离散事实"切，**装不下跨文件理路**；防腐铁律又（正确地）禁止"活的并行综合稿"。所以这层理路逃成野文档。
+项目级方向讨论或事实沉淀（`/pmai-direction` 方向校准、已有代码首次接入的 codebase-audit step 4、完整 build 落地主线后的文档编译，或 design 后暂不 build 的 `/pmai-record` 产出的**项目级理路**）会产生一层"为什么这么拼"的内容——护城河论证、机制整体设计意图、交互咬合推导、演进故事。脊柱五件套按"离散事实"切，**装不下跨文件理路**；防腐铁律又（正确地）禁止"活的并行综合稿"。所以这层理路逃成野文档。
 
 **冻结档接住它**：`docs/decisions/<日期>-<slug>.md`，写一次、带日期、不维护。它**从不假装是现状**（当前真相永远看脊柱），所以结构上无法和脊柱竞争"当前真相"的名分 → 防腐铁律杀不到它。和模块 `decisions.md` 同构，只是尺度从单模块抬到项目奠基。
 

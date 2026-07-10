@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Block mixed prototype + docs/mockups commits outside build-close."""
+"""Block mixed build-target + docs/mockups commits outside automatic finalize."""
 
 from __future__ import annotations
 
@@ -79,8 +79,8 @@ def main() -> int:
             for path in matched:
                 print(f"    - {path}", file=sys.stderr)
     print("", file=sys.stderr)
-    print("请先走 /pmai-build → /pmai-build-close，让 close 在合同、三道审和 PM 验收齐全后收口。", file=sys.stderr)
-    print(f"正式 build-close 内部会用 {ALLOW_ENV}={ALLOW_VALUE} 放行；普通提交不要手动绕过。", file=sys.stderr)
+    print("请回到 /pmai-build：PM 定稿后会自动完成最终检查、合入主线和主线后的文档同步。", file=sys.stderr)
+    print(f"统一 finalize 内部会用 {ALLOW_ENV}={ALLOW_VALUE} 放行；普通提交不要手动绕过。", file=sys.stderr)
     return 1
 
 

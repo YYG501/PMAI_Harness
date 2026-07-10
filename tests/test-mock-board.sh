@@ -280,15 +280,14 @@ test_mockup_skill_aligns_existing_ui() {
   local skill="$REPO_ROOT/skills/mockup/SKILL.md"
   assert_file_exists "$skill" || return
 
-  assert_file_contains "$skill" "### 步骤 1.5：先对齐已有界面" || return
-  assert_file_contains "$skill" '读根目录 `DESIGN.md`' || return
-  assert_file_contains "$skill" '读已有 `prototype/` 关键页面' || return
-  assert_file_contains "$skill" "已挑定 / 待合并的设计稿" || return
-  assert_file_contains "$skill" "贴合现有界面" || return
-  assert_file_contains "$skill" "探索新风格" || return
-  assert_file_contains "$skill" "先定基调" || return
-  assert_file_contains "$skill" "现有界面约束" || return
-  assert_file_contains "$skill" "默认贴合现有界面" || return
+  assert_file_contains "$skill" "### 1. 先对齐现有产品" || return
+  assert_file_contains "$skill" '读 `DESIGN.md`' || return
+  assert_file_contains "$skill" '读相关 `prototype/` 或真实产品页面' || return
+  assert_file_contains "$skill" "已选、待合并和已退役方向" || return
+  assert_file_contains "$skill" "默认贴合当前产品" || return
+  assert_file_contains "$skill" "换风格" || return
+  assert_file_contains "$skill" "在定基调" || return
+  assert_file_contains "$skill" "不重新发明一套视觉语言" || return
 
   pass_test
 }
@@ -382,17 +381,17 @@ test_import_uploaded_images() {
 test_mockup_skill_gstack_or_upload_only_for_images() {
   start_test "mockup skill 用 gstack 或上传图片，不恢复内置出图"
   local skill="$REPO_ROOT/skills/mockup/SKILL.md"
-  assert_file_contains "$skill" "先打开设计空间" || return
-  assert_file_contains "$skill" "反同质化硬门" || return
-  assert_file_contains "$skill" "PMAI 自己编排，gstack 作为优先引擎" || return
-  assert_file_contains "$skill" "gstack 不可用也要发散" || return
-  assert_file_contains "$skill" "PMAI 内部 shotgun" || return
+  assert_file_contains "$skill" "判断是否存在真实交互岔路" || return
+  assert_file_contains "$skill" "只是颜色、字体、圆角或左右换位" || return
+  assert_file_contains "$skill" "框架自动选择工具" || return
+  assert_file_contains "$skill" "gstack 受限：走 PMAI 内部 HTML / 静态稿" || return
+  assert_file_contains "$skill" "有真实岔路" || return
   assert_file_contains "$skill" "scripts/import-mockup-variants.py" || return
-  assert_file_contains "$skill" "用户上传图片允许进入看版" || return
+  assert_file_contains "$skill" "PM 已给截图/设计图" || return
 
   local legacy_count
   legacy_count=$(grep -c "scripts/gen-mockup-image.sh" "$skill" || true)
-  assert_equal "1" "$legacy_count" "旧出图脚本只允许作为禁止项出现" || return
+  assert_equal "0" "$legacy_count" "旧出图脚本不应回到 mockup workflow" || return
   if grep -q "用框架自带的出图脚本\\|每版调一次出图脚本\\|codex@\\|codex 0.135.0" "$skill"; then
     _fail "mockup skill should not keep built-in image generation workflow"
     return

@@ -1,0 +1,32 @@
+{
+  "schema_version": 1,
+  "id": "iterative-fast-final-full",
+  "title": "多轮修改只快检，定稿后完整检查",
+  "layer": "session",
+  "skills": ["build"],
+  "source": {
+    "session_id": "019f3c20-5bbb-7423-a18f-dab2c1a90fff",
+    "evidence": [
+      {"turn": 94, "excerpt": "总结一下这次改动的所有页面或者弹窗、按钮，我一个一个来验收"},
+      {"turn": 108, "excerpt": "还不如原来的，恢复吧"}
+    ]
+  },
+  "input": {
+    "prompt": "我先逐页看结果并继续修改，暂时还没有定稿。",
+    "context": ["build target 已有实现提交", "本轮只改一个弹窗布局"]
+  },
+  "expected": {
+    "behaviors": ["保持 iterating", "只运行受影响的快速检查", "PM 明确定稿后才运行全部 required checks"],
+    "observations": ["iterating_preserved", "affected_fast_checks_only", "full_checks_deferred"],
+    "lifecycle_order": ["building", "iterating"],
+    "stopping_point": "pm_review"
+  },
+  "forbidden": {
+    "behaviors": ["每轮修改都跑完整发布门", "未定稿就合入 main"],
+    "observations": ["full_checks_each_iteration", "landed_before_acceptance"]
+  },
+  "judge": {
+    "enabled": true,
+    "rubric": ["检查强度与迭代阶段匹配", "PM 可继续看结果而不被收尾流程打断"]
+  }
+}

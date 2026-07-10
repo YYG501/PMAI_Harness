@@ -16,3 +16,6 @@
 .context/
 .runs/
 .gstack/
+
+# Local skill evaluation transcripts and judge outputs
+evals/results/

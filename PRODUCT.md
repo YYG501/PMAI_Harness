@@ -1,7 +1,7 @@
 # PMAI 产品意义与目标
 
 > **状态**：产品定位真相源。人读 README 时应能找到；AI 读 CLAUDE.md 时必须按本文判断流程取舍。
-> **日期**：2026-05-28
+> **日期**：2026-07-10
 
 ---
 
@@ -13,10 +13,10 @@ PMAI 是面向 PM 的 **产品上下文统一层**。
 
 - 这个产品是什么。
 - 已有文档说了什么。
-- 已有原型长什么样。
+- 已有原型和真实产品现在是什么样。
 - 哪些需求、页面、对象、规则已经确认。
 - 这次新需求会影响哪些已有上下文。
-- 原型确认后，如何反向沉淀成可评审 PRD 和决策包。
+- 构建结果定稿并进入主线后，如何把真实产品事实、规格和决定整体对齐。
 
 ---
 
@@ -30,8 +30,8 @@ PMAI 最初要解决的核心问题不是"快速画一个原型"，而是 **上�
 - `PROJECT.md` / `DESIGN.md` / `PRODUCT-RULES.md` / `ROADMAP.md`。
 - 每个模块的 discussion、decisions、spec，以及原型和反馈记录。
 - Claude Design / design-html / Claude Code 产出的原型。
-- PM 看原型后的反馈和取舍。
-- 代码仓、worktree、测试结果和最终 close 报告。
+- PM 看 prototype 或真实 product 后的反馈和取舍。
+- 代码仓、worktree、测试结果、验收证据和 landed 后文档结果。
 
 如果这些上下文不能统一，AI 就会在新需求里反复失忆：某一屏原型可能很好，但它不知道这个页面属于哪个模块、哪些字段是产品对象的一部分、哪些只是 mock、哪些决策已经被 PM 确认、最后 PRD 应该怎么写给决策者看。
 
@@ -73,7 +73,7 @@ Claude 模型
 - 不能用重规格流程去抢第一版原型探索。
 - 应该吸收 Claude Design 的短反馈回路：更快看到原型，看着原型改。
 - 应该允许 Claude Design、design-html、Claude Code 都成为原型来源。
-- PMAI 的主价值应放在原型进入产品上下文之后：登记、对齐、评审、PRD 回填、后续模块继承和真实实现落地。
+- PMAI 的主价值应放在方向进入持续构建之后：统一设计依据、构建对象、反馈、验收证据、主线事实和后续模块继承。
 
 一句话：
 
@@ -98,21 +98,21 @@ Claude Design 这类工具更适合早期发散：
 PMAI 更适合在方向逐渐明确后接管上下文、边界、文档和可持续迭代：
 
 ```text
-已认可的方向 / 原型
-  -> 纳入产品上下文
-  -> 明确本次模块工作边界
-  -> 继续拆 demo 单元
-  -> 看原型调整
-  -> 原型确认
-  -> 反向生成 PRD / decision packet
-  -> 进入后续实现或新模块工作
+加载现有产品上下文
+  -> design 讨论并形成建造依据
+  -> build prototype 或真实 product
+  -> PM 看结果并多轮修改
+  -> PM 明确定稿
+  -> 最终检查并合入 main
+  -> 基于 main 更新正式文档
+  -> 进入后续模块工作
 ```
 
 所以 PMAI 的非目标是：
 
 - 不做通用设计工作台。
 - 不追求首版原型生成速度超过专门设计工具。
-- 不把完整 PRD 放在原型探索之前当重门。
+- 不把完整 PRD 放在探索之前当重门，也不在 merge 前把正式文档写成已经落地。
 - 不为团队 SOP、CI 平台、多租户基础设施设计。
 - 不让 PM 管理 worktree、build 执行合同、执行器细节。
 
@@ -157,63 +157,57 @@ PMAI 的主要用户是单人 PM，尤其是要持续推进一个复杂业务产
 已有模块和原型有哪些？
 这次需求影响哪些对象 / 页面 / 规则？
 哪些既有决策不能破坏？
-本次原型要验证什么？
+本次 build 对象是 prototype 还是真实 product？
+这个结果需要用什么方式验收？
 哪些可以 mock？
 哪些不能 mock，因为会误导决策？
 ```
 
 前置文档只做轻量 brief。完整 PRD 不应该过早冻结探索。
 
-### 3. 快速原型和看图调整
+### 3. design 讨论和内部能力编排
 
-PMAI 可以使用或接收多种原型来源：
+`/pmai-design` 是需求讨论前台。它先恢复旧决定和相关实现，再按真实未知项理清真问题、对象关系、动作、状态、权限、页面和异常路径。
 
-- Claude Design。
-- design-html。
-- Claude Code。
-- PM 手工提供的截图、HTML、页面代码或设计文件。
+- 产品模型不稳、补丁味或 PM 说“感觉不对”时，内部调用 `meta` 产出产品判断模型。
+- 存在真实信息结构、任务路径或交互岔路时，内部调用 `mockup`；没有真实岔路只给一套推荐稿。
+- 决定闭合后，内部调用 `spec-writing` 把已确认决定编译为规格。
 
-无论原型来自哪里，PMAI 都要登记：
+这三项能力完成后都返回 design 主线，不让 PM 手动拼接命令。design 定稿时自动保存并提交建造依据。
 
-- 对应哪个模块工作。
-- 涉及哪些模块 / 页面 / 对象。
-- 原型当前状态：草稿、PM 确认、废弃、已转 PRD。
-- 哪些是真实需求，哪些是 mock，哪些是简化。
+### 4. 统一 build 和看结果修改
 
-### 4. 原型确认后反向沉淀
+一次 build 只有一个主要对象：`prototype` 或 `product`。两者走同一条生命周期，只切换验收工具与方法：
 
-PM 看着原型确认后，PMAI 生成或更新：
+- prototype 看可启动性、任务路径、页面 / 弹窗、边界状态、视觉和交互行为；
+- product 看仓库测试、typecheck / build、接口和数据行为、迁移兼容性，并按风险追加 UI、权限、安全或数据检查。
 
-- 模块 PRD。
-- 原型覆盖范围。
-- mock / 简化 / 本轮不实现说明。
-- 未决问题。
-- 后续模块建议。
-- decision packet：给决策者看的评审包。
+PM 的体验始终是：看结果、指出哪里不对、AI 修改、再看。每轮修改只跑受影响的快速检查；PM 说“定稿 / 可以提交 / 可以合并”后才跑完整 required checks。
 
-PRD 在这里是交付物，不是压制原型探索的前置重门。
+worktree、build contract、执行器、source hash 和证据 JSON 都是后台基础设施，不形成第二条用户流程。
 
-### 5. 后续实现和新模块工作
+### 5. 自动落地主线和文档编译
 
-当需要进入真实实现时，PMAI 再启用更强的工程约束：
+PM 明确定稿后，同一个 finalize 自动完成：
 
-- `build-*` worktree 隔离。
-- build 执行合同。
-- 测试和验收证据。
-- `/pmai-build-close` 收尾。
-- 文档回填和状态归档。
+1. 检查未决产品问题和最终 commit；
+2. 运行完整目标适配验收；
+3. 提交实现并合入 main；
+4. 基于 main 的 landed diff、build contract 和 accepted deltas 生成文档影响地图；
+5. 更新模块规格、决定、产品现状、跨模块规则、术语、设计基线、TODO、mockup 清单和索引；
+6. 做一致性检查并提交文档同步。
 
-这些是 AI 内部和工程安全机制，不应该变成 PM 的主要体感流程。
+正式文档只描述 main 已经存在的事实。merge 冲突保留可恢复的 `final_check`；文档失败保留 `landed/docs_pending`，修复时不重复 merge。`/pmai-build-close` 只作为兼容与恢复入口。
 
 ---
 
 ## 核心能力目标
 
-PMAI 应逐步形成 5 个核心能力。
+PMAI 应形成 5 个核心能力。
 
-### 1. Context Pack
+### 1. Product Context Spine
 
-每次新需求开始，AI 自动整理产品上下文：
+项目持续维护一套可被每次工作读取的产品脊柱：
 
 - 当前产品定位。
 - 已有模块和页面。
@@ -223,50 +217,26 @@ PMAI 应逐步形成 5 个核心能力。
 - 最近确认的决策。
 - 本次需求可能影响范围。
 
-### 2. Prototype Registry
+### 2. Deterministic Context Pack
 
-每个原型都要被登记和追踪：
+design、build、恢复、最终检查和文档更新共用同一份编译上下文：当前目标与 build 对象、权威事实、相关源码 / 原型证据、active / superseded 决定、未决问题、输入 hash、design revision 和实现 commit。它只编译现有真相源，不另建决定账本。
 
-- 来源。
-- 对应模块工作。
-- 页面路径或文件路径。
-- 截图或可打开地址。
-- 当前状态。
-- 与 PRD / decision packet 的关系。
+### 3. Unified Build Loop
 
-### 3. Prototype Review Loop
+prototype 和 product 共用 `designing → ready_to_build → building → iterating → final_check → landed → documenting → complete`。PM 看结果多轮修改，内部自动处理隔离环境、工具选择、证据失效和恢复。
 
-PM 应该看着原型反馈，而不是围绕命令和规格文件劳动：
+### 4. Adaptive Acceptance And Post-Land Docs
 
-```text
-看原型
-  -> 说哪里不对
-  -> AI 修改
-  -> AI 记录取舍
-  -> PM 再看
-  -> PM 确认
-```
+验收随 build 对象和风险自适应，证据绑定当前 source hash 与 implementation commit；工具受限只能记 exception，不能伪装 pass。实现进入 main 后再把当前事实编译回正式文档，并要求每个对象、动作、状态、权限、页面和术语都有文档落点。
 
-### 4. PRD Backfill
-
-原型确认后，PMAI 要能从原型和反馈反向生成可评审 PRD：
-
-- 真实需求。
-- 原型覆盖范围。
-- 用户路径。
-- 页面和交互。
-- 业务规则。
-- mock / 简化 / 后续项。
-- 决策者需要知道的风险和限制。
-
-### 5. Continuity Across Req
+### 5. Continuity Across Modules
 
 多个模块工作之间要连续：
 
 - 后续模块工作继承前序对象模型和设计基线。
-- 新原型不应无意推翻旧决策。
+- 新构建结果不应无意推翻旧决策。
 - 大后台可以按用户、角色、部门、资产等模块分批做。
-- 每个模块工作以可看 demo 和模块规格为确认单元，不让 PM 管理工程 ticket。
+- 每个模块工作以可看结果和当前规格为确认单元，不让 PM 管理工程 ticket。
 
 ---
 
@@ -277,8 +247,8 @@ PMAI 成功时，PM 的体验应该是：
 - "我不用每次重新解释产品。"
 - "AI 知道已有文档和已有原型。"
 - "我给一个新需求，AI 会先基于上下文讨论，而不是从零猜。"
-- "原型出来后，我能看着原型改。"
-- "我确认原型后，AI 能把它变成 PRD 和评审包。"
+- "不管这次建的是原型还是真实产品，我都能看着结果改。"
+- "我说可以提交后，AI 会完成检查、合入主线并把正式文档整体对齐。"
 - "大系统可以一个模块一个模块地做，不会一口气全做乱。"
 - "我做决策，AI 管执行细节。"
 
@@ -290,10 +260,9 @@ PMAI 成功时，PM 的体验应该是：
 
 后续改造应以本文为准：
 
-- PRD 从"原型前重规格门"转向"原型确认后的正式沉淀物"。
-- `task` 转为 PM 可确认的 demo 单元。
-- build 执行合同转为 AI 内部合同。
-- `implementation-design` 保留，但后台化，只有结构性取舍才问 PM。
-- worktree 保留为工程隔离能力，但不暴露为 PM 的主要操作流程。
-- 新增或强化 context pack、prototype registry、prototype review loop、PRD backfill。
-- Claude Design / design-html / Claude Code 都可以成为原型来源，PMAI 负责统一上下文和后续沉淀。
+- design 是需求讨论主入口；meta、mockup、spec-writing 按需后台调用并返回主线。
+- prototype 与 product 共用同一构建、迭代、定稿和收尾链路，只切换 build 对象和验收适配器。
+- build contract、worktree、执行器和验收证据全部后台化。
+- 正式文档只在实现落入 main 后更新，并只保留当前事实；历史进入 Git 和 decisions。
+- `/pmai-build-close` 不再是正常用户必经命令，只保留兼容与恢复。
+- Claude Design / design-html / Claude Code 等仍可作为原型或构建能力来源，PMAI 负责统一上下文、验收和后续事实沉淀。

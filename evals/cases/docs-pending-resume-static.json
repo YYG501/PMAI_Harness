@@ -1,0 +1,25 @@
+{
+  "schema_version": 1,
+  "id": "docs-pending-resume-static",
+  "title": "文档失败从 landed 续跑且不重复 merge",
+  "layer": "static",
+  "skills": ["build", "spec-writing", "build-close"],
+  "input": {
+    "prompt": "检查 landed/docs_pending 的恢复路径。",
+    "context": []
+  },
+  "expected": {
+    "behaviors": ["实现已落地时只重做文档阶段", "文档完成后进入 complete"],
+    "observations": [],
+    "lifecycle_order": []
+  },
+  "forbidden": {
+    "behaviors": ["文档失败后重做 merge", "回滚已落地主线实现"],
+    "observations": []
+  },
+  "assertions": [
+    {"type": "file_contains", "path": "scripts/land-work.sh", "value": "landed:*|documenting:*) start_docs"},
+    {"type": "file_contains", "path": "skills/build-close/SKILL.md", "value": "文档失败不重复 merge"},
+    {"type": "file_contains", "path": "scripts/build-contract.py", "value": "VALID_DOCS_STATUSES = {\"pending\", \"complete\", \"failed\"}"}
+  ]
+}

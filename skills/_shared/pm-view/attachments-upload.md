@@ -1,6 +1,6 @@
 # attachments AI 接管（trigger 0 LLM 识别 + typed input）
 
-> **caller**：主路径 SKILL（design / build / spec-writing / build-close；record 仅在绑定现有模块工作时适用）。
+> **caller**：主路径 SKILL（design / build / spec-writing / 自动 finalize；build-close 兼容恢复、record 仅在绑定现有模块工作时适用）。
 > **目标目录**：`docs/inputs/<category>/`。
 > **状态登记**：当前模块 `docs/modules/<模块>/.work-meta.json:attachments_seen`。
 > **真实 helper**：`scripts/_lib/attachments.py`。helper 负责安全复制 / 命名 / 登记；LLM caller 负责根据 PM 描述和材料内容判断类别。
@@ -113,7 +113,7 @@ helper 参数仍叫 `stage_prefix`，但当前语义是**产物前缀**，不是
 |---|---|---|
 | design / 模块规格 / build 继续读模块规格 | `spec` | 附件服务当前模块 `discussion.md` / `decisions.md` / `spec.md` |
 | 反向 PRD / 功能型规格文档且绑定当前模块工作 | `prd` | 只在 caller 确认有模块工作目录时使用 |
-| build-close 收尾沉淀 | `close` | 附件服务 close-report / 沉淀检查 |
+| landed 后自动文档编译 | `close`（兼容字段） | 附件服务文档影响 / 沉淀检查 |
 | caller 已确认可归档但产物类型暂不可判 | `unknown` | 兜底值；后续引用时必须补说明 |
 
 不支持 `build` / `review` 作为前缀；build 和复审阶段仍围绕模块规格产物，使用 `spec`。找不到当前模块上下文时，不调 helper，提示 PM 在需求流程内重提或使用外部引用。

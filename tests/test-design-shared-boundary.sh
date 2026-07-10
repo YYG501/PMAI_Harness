@@ -52,7 +52,7 @@ test_no_active_refs_to_old_shared_design_files() {
 
 test_current_truth_sources_are_wired() {
   start_test "T3: design / spec-writing / build-close 引用当前真相源"
-  if ! grep -q "skills/design/references/design-method.md" "$REPO_ROOT/skills/design/SKILL.md"; then
+  if ! grep -q "references/design-method.md" "$REPO_ROOT/skills/design/SKILL.md"; then
     _fail "skills/design/SKILL.md 未引用 design-method.md"
     return
   fi
@@ -72,24 +72,24 @@ test_design_driver_kernel_is_documented() {
   local skill="$REPO_ROOT/skills/design/SKILL.md"
   local method="$REPO_ROOT/skills/design/references/design-method.md"
 
-  if ! grep -q "后台判断工作类型" "$skill"; then
-    _fail "skills/design/SKILL.md 缺后台工作类型判断"
+  if ! grep -q "工作类型" "$method"; then
+    _fail "design-method.md 缺后台工作类型判断"
     return
   fi
-  if ! grep -q "本轮目标绑定" "$skill"; then
-    _fail "skills/design/SKILL.md 缺本轮目标绑定"
+  if ! grep -q "本轮目标绑定" "$method"; then
+    _fail "design-method.md 缺本轮目标绑定"
     return
   fi
-  if ! grep -q "规格冲突对齐" "$skill"; then
-    _fail "skills/design/SKILL.md 缺规格冲突对齐类型"
+  if ! grep -q "冲突对齐" "$method"; then
+    _fail "design-method.md 缺规格冲突对齐类型"
     return
   fi
-  if ! grep -q "补齐未决口径" "$skill"; then
-    _fail "skills/design/SKILL.md 缺补齐未决口径类型"
+  if ! grep -q "补齐口径" "$method"; then
+    _fail "design-method.md 缺补齐未决口径类型"
     return
   fi
-  if ! grep -q "不得把相关工作扩展成本轮默认范围" "$skill"; then
-    _fail "skills/design/SKILL.md 缺顺手动作范围边界"
+  if ! grep -q "不把范围越扩越大" "$method"; then
+    _fail "design-method.md 缺顺手动作范围边界"
     return
   fi
   if ! grep -q "事实底座" "$method"; then

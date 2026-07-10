@@ -15,13 +15,13 @@ BUILD_SKILL="$REPO_ROOT/skills/build/SKILL.md"
 SPEC_SKILL="$REPO_ROOT/skills/spec-writing/SKILL.md"
 DOC_SKILL="$REPO_ROOT/skills/doc-writing/SKILL.md"
 
-test_meta_declares_three_routes() {
-  start_test "meta v2: 三条会诊路径"
+test_meta_uses_context_specific_references() {
+  start_test "meta v2: 按问题缺口调用产品想法、workflow 与压测素材"
 
-  assert_file_contains "$META_SKILL" "产品想法会诊" "should include product idea route" || return
-  assert_file_contains "$META_SKILL" "PMAI workflow 决策" "should include workflow decision route" || return
-  assert_file_contains "$META_SKILL" "已有材料压测" "should include pressure-test route" || return
-  assert_file_contains "$META_SKILL" "三条会诊路径" "should make route selection explicit" || return
+  assert_file_contains "$META_SKILL" "references/product-idea-framing.md" "should include product idea material" || return
+  assert_file_contains "$META_SKILL" "references/pmai-workflow-decision.md" "should include workflow decision material" || return
+  assert_file_contains "$META_SKILL" "references/thinking-toolbox.md" "should include pressure-test tools" || return
+  assert_file_contains "$META_SKILL" "小文案、明确机械动作" "should smart-skip meta when no model issue exists" || return
   pass_test
 }
 
@@ -55,28 +55,28 @@ test_workflow_route_guards_against_new_skill_bias() {
 test_alternatives_gate_requires_stop() {
   start_test "meta v2: Alternatives 后必须停住"
 
-  assert_file_contains "$META_SKILL" "Alternatives 输出后必须停住" "main skill should stop after alternatives" || return
-  assert_file_contains "$META_SKILL" "不能推荐完继续写最终结论" "main skill should forbid continuing after recommendation" || return
+  assert_file_contains "$META_SKILL" "然后停住让 PM 选择" "main skill should stop after real alternatives" || return
+  assert_file_contains "$META_SKILL" "不强制凑 2–3 个方案" "main skill should not invent fake alternatives" || return
   assert_file_contains "$PROBLEM_FRAMING" "输出 alternatives 后必须停住" "reference should stop after alternatives" || return
   assert_file_contains "$PROBLEM_FRAMING" "推荐完直接改文件" "reference should forbid mutating after alternatives" || return
   pass_test
 }
 
-test_downstream_skills_use_v2_language() {
+test_downstream_skills_use_internal_capability_language() {
   start_test "meta v2: 下游 skill 路由口径"
 
-  assert_file_contains "$DESIGN_SKILL" "skill / workflow 改造问题不属于 design" "design should not own workflow changes" || return
-  assert_file_contains "$BUILD_SKILL" "问题会诊" "build should reference diagnosis, not old focus wording" || return
-  assert_file_contains "$BUILD_SKILL" "已有材料压测" "build should reference material pressure-test" || return
-  assert_file_contains "$SPEC_SKILL" "已有材料压测" "spec-writing should reference material pressure-test" || return
-  assert_file_contains "$DOC_SKILL" "已有材料压测" "doc-writing should reference material pressure-test" || return
+  assert_file_contains "$DESIGN_SKILL" "处理 PMAI skill / workflow 自身的反馈" "design should not own workflow changes" || return
+  assert_file_contains "$DESIGN_SKILL" '交 `/pmai-skill-improve`' "workflow feedback should route to skill-improve" || return
+  assert_file_contains "$BUILD_SKILL" "未决问题，停止 build，返回 design" "build should return unresolved product questions" || return
+  assert_file_contains "$SPEC_SKILL" "多视角冷读（可选）" "spec-writing should preserve optional pressure testing" || return
+  assert_file_contains "$DOC_SKILL" "已有材料压测" "doc-writing should preserve material pressure testing" || return
   pass_test
 }
 
-test_meta_declares_three_routes
+test_meta_uses_context_specific_references
 test_product_idea_route_has_real_forcing_questions
 test_workflow_route_guards_against_new_skill_bias
 test_alternatives_gate_requires_stop
-test_downstream_skills_use_v2_language
+test_downstream_skills_use_internal_capability_language
 
 report_results "meta-v2-routes"

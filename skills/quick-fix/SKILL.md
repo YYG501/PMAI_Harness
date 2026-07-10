@@ -31,7 +31,7 @@ quick-fix 只面向当前主线的小改。脚本创建 `tmp-quick-*` worktree�
 | 启动位置 | 行为 |
 |---|---|
 | 主仓根 + 当前 main | 允许，base = main |
-| `.worktrees/pmai-build-*` | 拒绝；先回主仓或完成 `/pmai-build` / `/pmai-build-close` |
+| `.worktrees/pmai-build-*` | 拒绝；先回主仓，并在原 `/pmai-build` 会话继续或用 `/pmai-status` 恢复 |
 | 其他分支 / 历史 worktree | 拒绝；避免把小修合进错误基线 |
 
 ## Preamble
@@ -94,7 +94,7 @@ short-circuit：仅 typo / 格式 / 引用更新时，可输出简化版扫描�
 **越界时拒绝 quick-fix**：
 - 改动会改变模块 `spec.md` 的核心产品决策 → 走 `/pmai-design` 重新拍板，并由 `/pmai-spec-writing` 模块规格目标修订 `spec.md`。
 - 改动会新增或大改 `prototype/` 一片功能 → 走 `/pmai-build`。
-- 改动会改项目级规则 / 术语并需要 PM 逐条拍 → 走 `/pmai-record` 或 `/pmai-design`；已经进入 build 且 PM 验收通过才走 `/pmai-build-close`。
+- 改动会改项目级规则 / 术语并需要产品判断 → 走 `/pmai-record` 或 `/pmai-design`；已经进入 build 则回原 `/pmai-build` 继续统一 lifecycle。
 
 ### 步骤 4：完成改动后让脚本收口
 

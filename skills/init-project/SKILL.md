@@ -66,9 +66,9 @@ description: |
 |---|---|---|
 | `PRODUCT.md` | 一句话定位 + 业务术语表（项目方向真相源；起步只留一句话，方向清晰后随 `/pmai-design` / `/pmai-direction` 长厚） | C 步写一句话；每次进项目读 |
 | `TODO.md` | PM 待办池（无序，不排序） | C 步写 |
-| `PRODUCT-STATE.md` | 产品**现状层**（现在长什么样、做到哪、哪些真哪些 mock）；模板已就位，内容随每次沉淀累积 | 只在 `/pmai-build-close` 沉淀那刻更新；开 `/pmai-design` 时先读 |
+| `PRODUCT-STATE.md` | 产品**现状层**（现在长什么样、做到哪、哪些真哪些 mock）；模板已就位，内容随每次沉淀累积 | 完整 build 落地主线后的自动文档编译，或 `/pmai-record` 轻量记录时更新；开 `/pmai-design` 时先读 |
 | `DESIGN.md` | 视觉与交互约定（**正向约束**：该怎么做，不是禁止清单） | C 步起草；build 前 AI 必读再动手 |
-| `PRODUCT-RULES.md` | 跨模块的规则 + 关键决策 + 奠基理路（项目级基线） | 随产品演进 PM 调；`/pmai-build-close` 沉淀时回写跨模块决策 |
+| `PRODUCT-RULES.md` | 跨模块的规则 + 关键决策 + 奠基理路（项目级基线） | 随产品演进 PM 调；完整 build 落地主线后的文档编译回写跨模块决定 |
 | `prototype/` | **单一主原型**（默认 Next.js + TS + Tailwind + shadcn，init 时可改栈）；所有探索 / 需求的原型都在这一条线上演进 | C 步起一版能跑的；早期自由探索直接在 main 上改它，大需求才在 worktree 改、确认后并回 main |
 
 > 模板源：`templates/PRODUCT-STATE.md.tmpl` / `templates/DESIGN.md.tmpl` / `templates/PRODUCT-RULES.md.tmpl` / `templates/prototype-README.md.tmpl`。建骨架（B 步）由 `init-project.sh` 把这些铺到位，本 skill 负责把一句话定位 / 视觉基线填进去。

@@ -1,12 +1,12 @@
 """Single source of truth for active work stage display metadata.
 
-当前 stage 只是 UI 展示提示：
-- 「项目底座」是项目级、init 时建（PRODUCT-STATE / DESIGN / 主原型），不是 per-work stage。
-- 活跃工作展示收敛成 4 个阶段：
-    1 设计      —— `/pmai-design` 产出模块三件套，`spec.md` 是 build 锚点
-    2 build     —— `/pmai-build` 对着模块 `spec.md` 在 prototype/ 建
-    3 复审      —— 覆盖审计 / 视觉门 / 行为审 + PM 体验迭代
-    4 沉淀      —— `/pmai-build-close` 更新 PRODUCT-STATE / PRODUCT-RULES / 模块规格并收尾
+当前 stage 只是 v1 兼容展示提示：
+- 「项目底座」是项目级、init 时建，不是 per-work stage。
+- v2 权威状态是 lifecycle：designing → ready_to_build → building → iterating
+  → final_check → landed → documenting → complete。
+- prototype / product 共用 lifecycle，只切换 build target 和验收适配器。
+- PM 定稿后 `/pmai-build` 自动完成 final_check、landing 和 landed 后文档编译；
+  `/pmai-build-close` 只作为兼容与恢复入口。
 
 stage 名供 status-view / banner / skills 文案复用。不存在单独的 stage 推进脚本。
 
@@ -16,7 +16,7 @@ stage 名供 status-view / banner / skills 文案复用。不存在单独的 sta
 
 from __future__ import annotations
 
-# per-work 展示阶段数。项目底座不计入（项目级）。
+# v1 per-work 展示阶段数。项目底座不计入（项目级）。
 MAX_STAGE: int = 4
 
 STAGE_NAMES: dict[int, str] = {
@@ -24,6 +24,19 @@ STAGE_NAMES: dict[int, str] = {
     2: "build",
     3: "复审",
     4: "沉淀",
+}
+
+# build contract v2 lifecycle is the preferred PM-facing state. `stage` stays
+# readable for v1 consumer repositories and old timeline fixtures.
+LIFECYCLE_NAMES: dict[str, str] = {
+    "designing": "需求讨论",
+    "ready_to_build": "设计已定",
+    "building": "构建中",
+    "iterating": "看结果并修改",
+    "final_check": "最终检查",
+    "landed": "已进入主线，待更新文档",
+    "documenting": "更新正式文档",
+    "complete": "完成",
 }
 
 # Stage N 的默认文档产物映射，仅供展示/提示代码引用。

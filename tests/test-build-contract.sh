@@ -43,6 +43,10 @@ JSON
 {"status":"pass","passed":2,"total":2,"note":""}
 JSON
   echo "# 三道审合成报告" > "$AUDIT_DIR/synthesis.md"
+  python3 "$BUILD_CONTRACT" record-evidence "$MODULE_DIR" --name browser-smoke --status pass --artifact ".pm-workflow/audits/pet-import/browser-smoke.json" >/dev/null
+  python3 "$BUILD_CONTRACT" record-evidence "$MODULE_DIR" --name coverage --status pass --artifact ".pm-workflow/audits/pet-import/coverage.json" >/dev/null
+  python3 "$BUILD_CONTRACT" record-evidence "$MODULE_DIR" --name visual --status pass --artifact ".pm-workflow/audits/pet-import/visual.json" >/dev/null
+  python3 "$BUILD_CONTRACT" record-evidence "$MODULE_DIR" --name behavior --status pass --artifact ".pm-workflow/audits/pet-import/behavior.json" >/dev/null
 }
 
 write_limited_browser_audits() {
@@ -61,6 +65,10 @@ JSON
 {"status":"skipped","passed":0,"total":2,"note":"browser 工具不可用"}
 JSON
   echo "# 三道审合成报告" > "$AUDIT_DIR/synthesis.md"
+  python3 "$BUILD_CONTRACT" record-evidence "$MODULE_DIR" --name browser-smoke --status limited --artifact ".pm-workflow/audits/pet-import/browser-smoke.json" >/dev/null
+  python3 "$BUILD_CONTRACT" record-evidence "$MODULE_DIR" --name coverage --status pass --artifact ".pm-workflow/audits/pet-import/coverage.json" >/dev/null
+  python3 "$BUILD_CONTRACT" record-evidence "$MODULE_DIR" --name visual --status limited --artifact ".pm-workflow/audits/pet-import/visual.json" >/dev/null
+  python3 "$BUILD_CONTRACT" record-evidence "$MODULE_DIR" --name behavior --status skipped --artifact ".pm-workflow/audits/pet-import/behavior.json" >/dev/null
 }
 
 test_contract_lifecycle() {
@@ -127,6 +135,12 @@ meta = json.load(open(sys.argv[1]))
 build = meta["build"]
 assert meta["stage"] == 2
 assert build["mode"] == "worktree"
+assert build["contract_version"] == 2
+assert build["target"]["kind"] == "prototype"
+assert build["lifecycle_state"] == "final_check"
+assert build["design_revision"] == 1
+assert build["approved_source_hash"]
+assert build["docs_status"] == "pending"
 assert build["executor"] == "codex"
 assert build["builder_profile"] == "codex"
 assert build["builder"]["model"] == "gpt-5.4"
@@ -216,6 +230,7 @@ test_contract_complete_records_commit_and_acceptance_atomically() {
     rm -f /tmp/build-contract.$$ /tmp/build-contract.err.$$; teardown_contract_fixture; return
   fi
 
+  python3 "$BUILD_CONTRACT" commit "$MODULE_DIR" --implementation-commit "draft123" >/dev/null
   if ! python3 "$BUILD_CONTRACT" complete "$MODULE_DIR" \
     --implementation-commit "def456" \
     --accepted-at "2026-06-28T10:00:00+08:00" >/tmp/build-contract.$$ 2>/tmp/build-contract.err.$$; then
@@ -265,6 +280,7 @@ test_contract_limited_browser_requires_pm_exception() {
     rm -f /tmp/build-contract.$$ /tmp/build-contract.err.$$; teardown_contract_fixture; return
   fi
 
+  python3 "$BUILD_CONTRACT" commit "$MODULE_DIR" --implementation-commit "def456" >/dev/null
   python3 "$BUILD_CONTRACT" complete "$MODULE_DIR" \
     --implementation-commit "def456" \
     --accepted-at "2026-06-28T10:00:00+08:00" >/tmp/build-contract.$$ 2>/tmp/build-contract.err.$$ || {
@@ -319,6 +335,7 @@ test_contract_missing_browser_smoke_blocks_clean_audits() {
       cat /tmp/build-contract.err.$$ >&2
       rm -f /tmp/build-contract.$$ /tmp/build-contract.err.$$; teardown_contract_fixture; return
     }
+  python3 "$BUILD_CONTRACT" commit "$MODULE_DIR" --implementation-commit "def456" >/dev/null
   python3 "$BUILD_CONTRACT" complete "$MODULE_DIR" \
     --implementation-commit "def456" \
     --accepted-at "2026-06-28T10:00:00+08:00" >/tmp/build-contract.$$ 2>/tmp/build-contract.err.$$ || {
@@ -360,6 +377,7 @@ test_contract_browser_smoke_limited_blocks_passed_browser_audits() {
       cat /tmp/build-contract.err.$$ >&2
       rm -f /tmp/build-contract.$$ /tmp/build-contract.err.$$; teardown_contract_fixture; return
     }
+  python3 "$BUILD_CONTRACT" commit "$MODULE_DIR" --implementation-commit "def456" >/dev/null
   python3 "$BUILD_CONTRACT" complete "$MODULE_DIR" \
     --implementation-commit "def456" \
     --accepted-at "2026-06-28T10:00:00+08:00" >/tmp/build-contract.$$ 2>/tmp/build-contract.err.$$ || {
@@ -372,6 +390,8 @@ test_contract_browser_smoke_limited_blocks_passed_browser_audits() {
   cat > "$T/.pm-workflow/audits/pet-import/browser-smoke.json" <<'JSON'
 {"status":"limited","active_browser_smoke":true,"active_design_smoke":false,"note":"browser 工具不可用"}
 JSON
+  python3 "$BUILD_CONTRACT" record-evidence "$MODULE_DIR" --name browser-smoke --status limited \
+    --artifact ".pm-workflow/audits/pet-import/browser-smoke.json" >/dev/null
   python3 "$BUILD_CONTRACT" audit-exception "$MODULE_DIR" \
     --reason "PM 确认本轮浏览器工具受限，先接受风险" \
     --accepted-at "2026-06-28T10:05:00+08:00" >/tmp/build-contract.$$ 2>/tmp/build-contract.err.$$ || {
@@ -411,6 +431,7 @@ test_contract_behavior_fail_blocks_close() {
       cat /tmp/build-contract.err.$$ >&2
       rm -f /tmp/build-contract.$$ /tmp/build-contract.err.$$; teardown_contract_fixture; return
     }
+  python3 "$BUILD_CONTRACT" commit "$MODULE_DIR" --implementation-commit "def456" >/dev/null
   python3 "$BUILD_CONTRACT" complete "$MODULE_DIR" \
     --implementation-commit "def456" \
     --accepted-at "2026-06-28T10:00:00+08:00" >/tmp/build-contract.$$ 2>/tmp/build-contract.err.$$ || {
@@ -422,6 +443,8 @@ test_contract_behavior_fail_blocks_close() {
   cat > "$T/.pm-workflow/audits/pet-import/behavior.json" <<'JSON'
 {"status":"fail","passed":1,"total":2,"note":"确认按钮点击无反应"}
 JSON
+  python3 "$BUILD_CONTRACT" record-evidence "$MODULE_DIR" --name behavior --status fail \
+    --artifact ".pm-workflow/audits/pet-import/behavior.json" >/dev/null
 
   if python3 "$BUILD_CONTRACT" audit-exception "$MODULE_DIR" \
     --reason "PM 接受浏览器工具受限" >/tmp/build-contract.$$ 2>/tmp/build-contract.err.$$ \
@@ -440,6 +463,134 @@ JSON
   teardown_contract_fixture
 }
 
+test_contract_v2_rejects_stale_evidence_and_invalidates_on_delta() {
+  start_test "build-contract v2: evidence binds source hash + commit; accepted delta invalidates it"
+  setup_contract_fixture
+
+  python3 "$BUILD_CONTRACT" start "$MODULE_DIR" \
+    --anchor "docs/modules/pet-import/spec.md" \
+    --mode worktree --executor codex --branch build-pet-import \
+    --worktree ".worktrees/build-pet-import" --baseline-sha abc123 \
+    --target-kind product --target-path "src/pets/" \
+    --approved-source-hash "source-v1" --required-check tests >/dev/null || {
+      _fail "v2 start should succeed"; teardown_contract_fixture; return;
+    }
+  python3 "$BUILD_CONTRACT" commit "$MODULE_DIR" --implementation-commit commit-v1 >/dev/null
+  python3 "$BUILD_CONTRACT" complete "$MODULE_DIR" --implementation-commit commit-v1 >/dev/null
+  python3 "$BUILD_CONTRACT" record-evidence "$MODULE_DIR" --name tests --status pass \
+    --source-hash source-v1 --commit stale-commit >/dev/null
+
+  if python3 "$BUILD_CONTRACT" validate-land "$MODULE_DIR" >/tmp/build-contract.$$ 2>/tmp/build-contract.err.$$; then
+    _fail "stale evidence commit should block landing"
+  elif ! grep -q "commit 与当前 implementation_commit 不一致" /tmp/build-contract.err.$$; then
+    _fail "stale commit guidance missing"
+    cat /tmp/build-contract.err.$$ >&2
+  else
+    python3 "$BUILD_CONTRACT" record-evidence "$MODULE_DIR" --name tests --status pass \
+      --source-hash source-v1 --commit commit-v1 >/dev/null
+    python3 "$BUILD_CONTRACT" validate-land "$MODULE_DIR" >/dev/null || {
+      _fail "fresh product evidence should pass"; teardown_contract_fixture; return;
+    }
+    python3 "$BUILD_CONTRACT" add-delta "$MODULE_DIR" --kind product-model \
+      --summary "角色模型改为能力与数据范围分离" --affected-surface "角色详情页" >/dev/null
+    python3 - "$MODULE_DIR/.work-meta.json" <<'PY' || {
+import json, sys
+build = json.load(open(sys.argv[1]))["build"]
+assert build["design_revision"] == 2
+assert build["approved_source_hash"] != "source-v1"
+assert build["acceptance"]["evidence"] == []
+assert build["implementation_commit"] is None
+assert build["lifecycle_state"] == "iterating"
+PY
+      _fail "accepted delta should increment revision and invalidate evidence"
+      teardown_contract_fixture; return
+    }
+    pass_test
+  fi
+  rm -f /tmp/build-contract.$$ /tmp/build-contract.err.$$
+  teardown_contract_fixture
+}
+
+test_contract_v2_post_land_docs_resume() {
+  start_test "build-contract v2: landed → documenting/failed → documenting/complete"
+  setup_contract_fixture
+  python3 "$BUILD_CONTRACT" start "$MODULE_DIR" \
+    --anchor "docs/modules/pet-import/spec.md" --mode worktree --executor codex \
+    --branch build-pet-import --worktree ".worktrees/build-pet-import" \
+    --baseline-sha abc123 --target-kind product --approved-source-hash source-v1 \
+    --required-check tests >/dev/null
+  python3 "$BUILD_CONTRACT" commit "$MODULE_DIR" --implementation-commit commit-v1 >/dev/null
+  python3 "$BUILD_CONTRACT" complete "$MODULE_DIR" --implementation-commit commit-v1 >/dev/null
+  python3 "$BUILD_CONTRACT" record-evidence "$MODULE_DIR" --name tests --status pass \
+    --source-hash source-v1 --commit commit-v1 >/dev/null
+  python3 "$BUILD_CONTRACT" landed "$MODULE_DIR" --landed-commit commit-v1 >/dev/null
+  python3 "$BUILD_CONTRACT" docs-start "$MODULE_DIR" >/dev/null
+  python3 "$BUILD_CONTRACT" docs-fail "$MODULE_DIR" --reason "规格覆盖表缺一页" >/dev/null
+  python3 "$BUILD_CONTRACT" docs-start "$MODULE_DIR" >/dev/null
+  python3 "$BUILD_CONTRACT" docs-complete "$MODULE_DIR" >/dev/null
+  if python3 "$BUILD_CONTRACT" validate-docs "$MODULE_DIR" >/dev/null; then
+    pass_test
+  else
+    _fail "post-land docs should resume without re-landing"
+  fi
+  teardown_contract_fixture
+}
+
+test_contract_v2_new_implementation_invalidates_evidence() {
+  start_test "build-contract v2: new implementation commit clears old evidence"
+  setup_contract_fixture
+  python3 "$BUILD_CONTRACT" start "$MODULE_DIR" \
+    --anchor "docs/modules/pet-import/spec.md" --mode worktree --executor codex \
+    --branch build-pet-import --worktree ".worktrees/build-pet-import" \
+    --baseline-sha abc123 --target-kind product --approved-source-hash source-v1 \
+    --required-check tests >/dev/null
+  python3 "$BUILD_CONTRACT" commit "$MODULE_DIR" --implementation-commit commit-v1 >/dev/null
+  python3 "$BUILD_CONTRACT" record-evidence "$MODULE_DIR" --name tests --status pass \
+    --source-hash source-v1 --commit commit-v1 >/dev/null
+  python3 "$BUILD_CONTRACT" commit "$MODULE_DIR" --implementation-commit commit-v2 >/dev/null
+
+  python3 - "$MODULE_DIR/.work-meta.json" <<'PY' || {
+import json, sys
+build = json.load(open(sys.argv[1]))["build"]
+assert build["implementation_commit"] == "commit-v2"
+assert build["acceptance"]["evidence"] == []
+assert build["pm_accepted_at"] is None
+assert build["lifecycle_state"] == "iterating"
+PY
+    _fail "new implementation commit should invalidate evidence"
+    teardown_contract_fixture; return
+  }
+  pass_test
+  teardown_contract_fixture
+}
+
+test_contract_v2_rejects_illegal_lifecycle_jumps() {
+  start_test "build-contract v2: cannot document or land before final_check"
+  setup_contract_fixture
+  python3 "$BUILD_CONTRACT" start "$MODULE_DIR" \
+    --anchor "docs/modules/pet-import/spec.md" --mode worktree --executor codex \
+    --branch build-pet-import --worktree ".worktrees/build-pet-import" \
+    --baseline-sha abc123 --target-kind product --approved-source-hash source-v1 \
+    --required-check tests >/dev/null
+
+  if python3 "$BUILD_CONTRACT" docs-complete "$MODULE_DIR" >/tmp/build-contract.$$ 2>/tmp/build-contract.err.$$; then
+    _fail "docs-complete must not jump from building"
+    rm -f /tmp/build-contract.$$ /tmp/build-contract.err.$$; teardown_contract_fixture; return
+  fi
+  if python3 "$BUILD_CONTRACT" landed "$MODULE_DIR" --landed-commit commit-v1 >/tmp/build-contract.$$ 2>/tmp/build-contract.err.$$; then
+    _fail "landed must not jump from building"
+    rm -f /tmp/build-contract.$$ /tmp/build-contract.err.$$; teardown_contract_fixture; return
+  fi
+  if python3 "$BUILD_CONTRACT" record-evidence "$MODULE_DIR" --name tests --status pretending \
+    --source-hash source-v1 --commit commit-v1 >/tmp/build-contract.$$ 2>/tmp/build-contract.err.$$; then
+    _fail "invalid evidence status must be rejected"
+    rm -f /tmp/build-contract.$$ /tmp/build-contract.err.$$; teardown_contract_fixture; return
+  fi
+  pass_test
+  rm -f /tmp/build-contract.$$ /tmp/build-contract.err.$$
+  teardown_contract_fixture
+}
+
 test_contract_lifecycle
 test_contract_rejects_missing_build
 test_contract_start_initializes_missing_meta
@@ -448,5 +599,9 @@ test_contract_limited_browser_requires_pm_exception
 test_contract_missing_browser_smoke_blocks_clean_audits
 test_contract_browser_smoke_limited_blocks_passed_browser_audits
 test_contract_behavior_fail_blocks_close
+test_contract_v2_rejects_stale_evidence_and_invalidates_on_delta
+test_contract_v2_post_land_docs_resume
+test_contract_v2_new_implementation_invalidates_evidence
+test_contract_v2_rejects_illegal_lifecycle_jumps
 
 report_results "build-contract"

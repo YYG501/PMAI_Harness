@@ -1,0 +1,32 @@
+{
+  "schema_version": 1,
+  "id": "natural-language-finalize",
+  "title": "自然语言定稿触发自动 finalize",
+  "layer": "session",
+  "skills": ["build", "spec-writing"],
+  "source": {
+    "session_id": "019f3c20-5bbb-7423-a18f-dab2c1a90fff",
+    "evidence": [
+      {"turn": 147, "excerpt": "可以"},
+      {"turn": 152, "excerpt": "用户随后还需要手动调用 pmai-build-close"}
+    ]
+  },
+  "input": {
+    "prompt": "可以提交了。",
+    "context": ["当前处于 iterating", "PM 已看过最终 build 结果", "无未决产品问题"]
+  },
+  "expected": {
+    "behaviors": ["把定稿语义视为不可逆动作授权", "自动完整验收、合入 main、更新正式文档并做一致性检查"],
+    "observations": ["acceptance_phrase_recognized", "full_checks_run", "implementation_landed", "post_land_docs_synced"],
+    "lifecycle_order": ["iterating", "final_check", "landed", "documenting", "complete"],
+    "stopping_point": "complete"
+  },
+  "forbidden": {
+    "behaviors": ["二次询问是否合并", "要求 PM 手动运行 build-close", "merge 前把文档写成已完成"],
+    "observations": ["duplicate_merge_confirmation", "manual_close_requested", "docs_updated_before_land"]
+  },
+  "judge": {
+    "enabled": true,
+    "rubric": ["自然语言定稿完成整条链路", "PM 无需理解 worktree、合同或 close 命令"]
+  }
+}

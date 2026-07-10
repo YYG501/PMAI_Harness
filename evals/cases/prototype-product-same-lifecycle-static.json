@@ -1,0 +1,26 @@
+{
+  "schema_version": 1,
+  "id": "prototype-product-same-lifecycle-static",
+  "title": "prototype 与 product 共用生命周期",
+  "layer": "static",
+  "skills": ["build"],
+  "input": {
+    "prompt": "检查 build 对象只切换验收适配器，不分叉生命周期。",
+    "context": []
+  },
+  "expected": {
+    "behaviors": ["合同允许 prototype 或 product", "两类对象共用统一状态序列"],
+    "observations": [],
+    "lifecycle_order": []
+  },
+  "forbidden": {
+    "behaviors": ["为 prototype 另建状态机"],
+    "observations": []
+  },
+  "assertions": [
+    {"type": "file_contains", "path": "scripts/acceptance-profile.py", "value": "prototype"},
+    {"type": "file_contains", "path": "scripts/acceptance-profile.py", "value": "product"},
+    {"type": "file_contains", "path": "scripts/build-contract.py", "value": "ready_to_build"},
+    {"type": "file_contains", "path": "scripts/build-contract.py", "value": "documenting"}
+  ]
+}

@@ -366,6 +366,16 @@ def get_current_stage_banner(work_dir: Path, skill: str = "WORK") -> str:
     """
     meta = read_work_meta(work_dir, strict=True)
     assert meta is not None
+    lifecycle = meta.get("lifecycle_state")
+    build = meta.get("build")
+    if isinstance(build, dict):
+        lifecycle = build.get("lifecycle_state") or lifecycle
+    if lifecycle:
+        from .stages import LIFECYCLE_NAMES
+        lifecycle_name = LIFECYCLE_NAMES.get(str(lifecycle))
+        if lifecycle_name:
+            return f"━━━ PMAI ► {skill} ▸ {lifecycle_name} ━━━"
+
     stage = meta.get("stage")
     if stage is None:
         raise StateReadError(work_dir / ".work-meta.json", "缺 stage 字段")

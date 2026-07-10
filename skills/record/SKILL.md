@@ -17,7 +17,7 @@ source "${PMAI_HOME:-$HOME/.pmai}/scripts/skill-preamble.sh"
 如果输出 `PMAI_PROJECT_INITIALIZED: 0`，停止本 skill，只引导 PM 先发 `/pmai-init-project`。初始化或已有代码接入完成前，不要沉淀记录或更新项目文档。
 
 > **这是什么**：分档运行里**最轻那一档**（main 直接改 / 聊定直落、设计讨论后暂不 build）的记录入口。让轻档产出也有一个地方归位，不再"飘着没进库 / 真相源乱 / 决策不进库 / mock 找不回"。
-> **和 /pmai-build-close 的关系**：同一套四类分流（@读 `_shared/record-routing.md`），但 `/pmai-build-close` 是 build 验收后的完整收尾，本 skill 是 main 上或 design 后暂不 build 时的轻量同构（重量随产出缩放）。
+> **和自动 finalize 的关系**：同一套四类分流（@读 `_shared/record-routing.md`），但完整 build 在落地主线后自动编译文档，本 skill 是 main 上或 design 后暂不 build 时的轻量同构（重量随产出缩放）。
 > **和 quick-fix 的关系**：quick-fix 管"在 main 上改一处"，本 skill 管"把改完的成果沉淀进底座"——两件事，可前后脚发生。
 
 ## When To Use
@@ -25,7 +25,7 @@ source "${PMAI_HOME:-$HOME/.pmai}/scripts/skill-preamble.sh"
 - PM 在 main 上聊定一个方向 / 顺手改了点东西（小到不值得起完整设计-build 流程），想把"产品现在变成什么样 / 为什么这么定 / 还差什么 / 探了哪些视觉"收一下。
 - PM 显式说「沉淀一下」「记一下」「归位」。
 - AI 在回 PM 的某一轮里识别到收敛点（聊定 / 改完）且真有耐久产出时，**主动提议**记录；PM 点头后走本流程。
-- **不适用**：要完整设计 / 建造 → `/pmai-design` / `/pmai-build`；只是在 main 改一处文件 → `/pmai-quick-fix`；已经在完整工作里推进 → `/pmai-status` 或 `/pmai-build-close`。
+- **不适用**：要完整设计 / 建造 → `/pmai-design` / `/pmai-build`；只是在 main 改一处文件 → `/pmai-quick-fix`；已经在完整工作里推进 → 回原 `/pmai-build` 或用 `/pmai-status` 恢复。
 
 ## Preamble
 
@@ -34,7 +34,7 @@ source "$HOME/.pmai/scripts/skill-preamble.sh"
 echo "SKILL: record"
 ```
 
-本 skill 从**主仓 main** 触发（cwd 在主仓根、分支 = main）。若当前在隔离工作区内 → 告诉 PM「沉淀走对应流程：发 /pmai-status 推到沉淀，或 /pmai-build-close」，退出。
+本 skill 从**主仓 main** 触发（cwd 在主仓根、分支 = main）。若当前在隔离工作区内 → 告诉 PM「这轮仍在完整 build 里，回原 build 会话继续；迷路时发 /pmai-status」，退出。
 
 ## Workflow
 
@@ -112,4 +112,4 @@ git -C "$REPO_ROOT" commit -m "记录: <一句话本次归位了什么>"
 - **单独 commit、不卷 WIP**：`git add` 逐个列本次记录动的文件，禁 `git add -A`；commit message 一律 `记录: <一句话>`。
 - **F3 切两挡**：纯静默档（补一句 / 挂索引 / 纯订正）静默写 + 回执一行不强制总审；需审档（决策记录 / 新变体 / 改规则·模块）才总审 diff。
 - **PM 话术纪律**（F-G4）：回执 / 提议只用 PM 视图语言，不出现"四类分流 / 出口①②③④ / manifest / featured / 冻结档 / 索引展开层"等内部词。
-- **防腐铁律不破**：轻记录是 PRODUCT-STATE 的合法原子写入口之一（与 `/pmai-build-close` 并列），不是退回"随手改活文档"；写入仍是收敛点触发的原子动作。
+- **防腐铁律不破**：轻记录是 PRODUCT-STATE 的合法原子写入口之一（与 landed 后自动文档编译并列），不是退回"随手改活文档"；写入仍是收敛点触发的原子动作。

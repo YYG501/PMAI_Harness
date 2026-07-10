@@ -24,7 +24,7 @@ source "${PMAI_HOME:-$HOME/.pmai}/scripts/skill-preamble.sh"
 
 - PM 明确说当前 build 不要继续、废弃、取消、放弃。
 - 当前模块已有 `.work-meta.json` 活跃状态，且已经进入 build / 隔离实现，需要清掉。
-- 不用于完成收尾；build 已验收要收尾走 `/pmai-build-close`，只做轻量记录走 `/pmai-record`。
+- 不用于完成收尾；PM 已验收时应回原 `/pmai-build` 续跑自动 finalize，只有兼容或恢复场景才用 `/pmai-build-close`；轻量记录走 `/pmai-record`。
 - 不用于“设计讨论完先不实现”；这种情况不用取消 build，停住即可，若有稳定基线再走 `/pmai-record`。
 
 ## Preamble
@@ -80,7 +80,8 @@ bash "$PMAI_HOME/scripts/cancel-work.sh" "$ACTIVE_WORK_DIR"
     bash scripts/cleanup-pending-worktrees.sh
 
   新功能 / 重做模块：发 /pmai-design
-  build 已验收要收尾：发 /pmai-build-close
+  build 已验收：回原 /pmai-build 会话继续自动收尾
+  中断恢复：可发 /pmai-build-close 复用同一 finalize
 ```
 
 ## Rules

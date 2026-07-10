@@ -20,7 +20,7 @@ test_meta_skill_declares_product_judgment_model() {
 
   assert_file_contains "$META_SKILL" "/pmai-meta · 产品元思考" "skill title should expose product meta thinking" || return
   assert_file_contains "$META_SKILL" "产品判断模型" "skill should use product judgment model as artifact" || return
-  assert_file_contains "$META_SKILL" "用追问和压测，把表层诉求建成" "skill should define core method" || return
+  assert_file_contains "$MODEL" "用追问和压测，把表层诉求建成" "model reference should define core method" || return
   assert_file_contains "$META_SKILL" "product-meta-thinking.md" "skill should reference model methodology" || return
   assert_file_contains "$META_SKILL" "problem-framing.md" "skill should reference question discipline" || return
   assert_file_contains "$META_SKILL" "thinking-toolbox.md" "skill should reference thinking toolbox" || return
@@ -101,9 +101,9 @@ test_boundaries_and_changelog_are_updated() {
   assert_file_contains "$GSTACK_CONTRACT" "产品判断模型" "gstack contract should name PMAI artifact" || return
   assert_file_contains "$GSTACK_CONTRACT" "不 runtime 调 gstack" "gstack contract should forbid runtime meta call" || return
   assert_file_contains "$GSTACK_CONTRACT" "不把 office-hours / grillme 作为 PMAI 主品牌" "gstack contract should reject external branding" || return
-  assert_file_contains "$DESIGN_SKILL" "产品元思考旁路" "design should call meta a side path" || return
-  assert_file_contains "$DESIGN_SKILL" "产品判断模型" "design should mention model artifact" || return
-  assert_file_contains "$DESIGN_SKILL" "不自动插入每次 design" "design should not make meta default phase" || return
+  assert_file_contains "$DESIGN_SKILL" "按需自动进入 meta，再返回 design" "design should call meta internally" || return
+  assert_file_contains "$DESIGN_SKILL" "危险前提、反例和推荐" "design should require model-level output" || return
+  assert_file_contains "$DESIGN_SKILL" "出现任一信号时" "design should not make meta a default phase" || return
   assert_file_contains "$CHANGELOG" "收敛为产品判断模型" "changelog should record this convergence" || return
   pass_test
 }

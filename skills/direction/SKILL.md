@@ -31,7 +31,7 @@ PM 主动调用，只有两个主场景：
 > **不在 scope**：
 > - 首次起步 / 首次接入 → 走 `/pmai-init-project`。它会自动判断全新项目 / 资料目录 / 已有代码库。
 > - 已有代码库接入中断 → 回 `/pmai-init-project` 续跑；如果已经有 `docs/CODEBASE-AUDIT.md` 且 PM 明确要重扫 / 恢复现状盘点，也由 `/pmai-init-project` 读取内部盘点子流程处理。
-> - 模块设计 / build / 功能型规格文档 / 沉淀 → 走 `/pmai-design`、`/pmai-build`、`/pmai-build-close`、`/pmai-spec-writing`。
+> - 模块设计 / build / 功能型规格文档 → 走 `/pmai-design`、`/pmai-build`、`/pmai-spec-writing`；完整 build 的正式沉淀由 landed 后自动文档编译完成。
 
 ## Preamble
 
@@ -166,7 +166,7 @@ PM 选「创建 / 更新方向文档」+ 定稿后：
 
 纯微调 / 只整理 TODO → silent skip 本步。
 
-> **本 skill 不写 PRODUCT-STATE**：direction 不是 PRODUCT-STATE 的 sanctioned 写口（防腐铁律只认 `/pmai-build-close` + `/pmai-record`）。冻的决策记录靠 `/pmai-design` 进场按需扫 `docs/decisions/` 发现。
+> **本 skill 不写 PRODUCT-STATE**：direction 不是 PRODUCT-STATE 的 sanctioned 写口（防腐铁律只认 landed 后自动文档编译 + `/pmai-record`）。冻结的决定记录靠 `/pmai-design` 进场按需扫 `docs/decisions/` 发现。
 
 #### 步骤 8.6：atomic commit + 引导下一步
 

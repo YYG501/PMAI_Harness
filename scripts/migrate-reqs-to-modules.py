@@ -81,7 +81,7 @@ def main() -> int:
     print("  1. Keep requirements/ as archive evidence.")
     print("  2. Open each live item with /pmai-design or /pmai-direction and write the")
     print("     current truth into docs/modules/<module>/discussion.md, decisions.md, spec.md.")
-    print("  3. Use /pmai-build-close to record durable product state after PM acceptance.")
+    print("  3. Continue with /pmai-build; PM acceptance automatically lands the result and records durable product state.")
 
     if args.apply:
         print("")

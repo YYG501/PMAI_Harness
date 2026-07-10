@@ -20,12 +20,12 @@ test_meta_skill_is_product_meta_entry() {
   start_test "meta skill: 保留 /pmai-meta，定位为产品元思考"
 
   assert_file_contains "$META_SKILL" "name: pmai-meta" "command name should stay pmai-meta" || return
-  assert_file_contains "$META_SKILL" "/pmai-meta · 产品元思考" "skill title should expose product meta thinking" || return
+  assert_file_contains "$META_SKILL" "/pmai-meta · 产品元思考与判断模型" "skill title should expose product meta thinking" || return
   assert_file_contains "$META_SKILL" "产品判断模型" "description should use PMAI's own artifact" || return
-  assert_file_contains "$META_SKILL" "升维分析输出器" "skill should reject analysis-generator behavior" || return
+  assert_file_contains "$META_SKILL" "不是升维分析输出器" "skill should reject analysis-generator behavior" || return
   assert_file_contains "$META_SKILL" "只是复述" "trigger should include shallow-restatement feedback" || return
   assert_file_contains "$META_SKILL" "没新思路" "trigger should include no-new-thinking feedback" || return
-  assert_file_contains "$META_SKILL" "grillme" "trigger should include grillme wording" || return
+  assert_file_contains "$META_SKILL" "grillme" "skill should retain grillme questioning discipline" || return
   assert_file_contains "$META_SKILL" "不 runtime 调 gstack" "skill should not runtime call gstack" || return
   pass_test
 }
@@ -58,7 +58,7 @@ test_problem_framing_contains_hard_conversation_rules() {
   assert_file_contains "$PROBLEM_FRAMING" "短答追后果" "must pursue consequences after short answers" || return
   assert_file_contains "$PROBLEM_FRAMING" "Premise Gate" "must include premise gate" || return
   assert_file_contains "$PROBLEM_FRAMING" "Alternatives Gate" "must include alternatives gate" || return
-  assert_file_contains "$PROBLEM_FRAMING" "Coverage Gate" "must include coverage gate" || return
+  assert_file_contains "$PROBLEM_FRAMING" "Coverage Check" "must include coverage check" || return
   assert_file_contains "$PROBLEM_FRAMING" "Handoff Gate" "must force handoff to next step" || return
   assert_file_contains "$PROBLEM_FRAMING" "输出 alternatives 后必须停住" "must stop after alternatives" || return
   assert_file_contains "$PROBLEM_FRAMING" "能从项目资料" "must avoid asking what files can answer" || return
@@ -82,10 +82,10 @@ test_toolbox_preserves_existing_meta_assets() {
 test_design_and_changelog_reference_new_positioning() {
   start_test "design/changelog: 对齐 meta 产品判断模型定位"
 
-  assert_file_contains "$DESIGN_SKILL" "产品元思考旁路" "design should call meta side path" || return
-  assert_file_contains "$DESIGN_SKILL" "产品判断模型" "design should mention product judgment model" || return
-  assert_file_contains "$DESIGN_SKILL" "不是新阶段、也不是分析段落生成器" "design should not treat meta as default phase" || return
-  assert_file_contains "$DESIGN_SKILL" "不自动插入每次 design" "design should keep meta optional" || return
+  assert_file_contains "$DESIGN_SKILL" "按需自动进入 meta，再返回 design" "design should call meta as an internal capability" || return
+  assert_file_contains "$DESIGN_SKILL" "危险前提、反例和推荐" "design should require new product judgment" || return
+  assert_file_contains "$DESIGN_SKILL" "meta 不生成平行状态或长期文档" "design should not treat meta as a parallel stage" || return
+  assert_file_contains "$DESIGN_SKILL" "出现任一信号时" "design should keep meta conditional" || return
   assert_file_contains "$DESIGN_SKILL" "pmai-skill-improve" "design should route skill/workflow changes away from design" || return
   assert_file_contains "$CHANGELOG" "/pmai-meta" "changelog should mention meta" || return
   assert_file_contains "$CHANGELOG" "产品判断模型" "changelog should mention model convergence" || return

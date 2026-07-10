@@ -4,50 +4,47 @@
 
 ## 当前位置
 
-- 日期：2026-07-07
-- 分支：`main`
-- 旧主分支备份：`codex/backup-main-before-task-cleanup-20260622-221253`
-- 当前清理目标：移除旧 `req` / `task` / 阶段推进残留，不保留兼容层。
+- 日期：2026-07-10
+- 开发分支：`codex/unified-build-lifecycle`
+- 当前目标：完成统一构建链路、关键 Skill 重构、评测基线和消费仓模板收口。
+- gstack 参考基线：`v1.58.5.0`，commit `11de390`；只参考本地 `gstack-clean` checkout，没有升级用户目录中的安装副本。
 
 ## 当前活跃模型
 
-- 用户入口：`/pmai-init-project` → `/pmai-design` → `/pmai-build` → `/pmai-build-close`，旁路入口为 `/pmai-status`、`/pmai-direction`、`/pmai-record`、`/pmai-build-cancel`、`/pmai-quick-fix`、`/pmai-spec-writing`、`/pmai-doc-writing`、`/pmai-meta`（讨论换高度：升维 / 第一性原理，`/pmai-design` 段①②按需调）。
-- 不再使用：`/pmai-next`、`/pmai-new-req`、`/pmai-req-stage-gate`、`/pmai-close`、`/pmai-strategy`、`/pmai-codebase-audit`、`/pmai-deposit`、`/pmai-cancel`、旧 task 状态机。
-- 模块真相源：`docs/modules/<模块>/discussion.md`、`decisions.md`、`spec.md`。
-- 临时工作状态：`docs/modules/<模块>/.work-meta.json`。该文件只表示“正在做”，build-close/build-cancel 后删除，不留下 `closed` / `cancelled` 占位。
-- 分支/worktree：实现隔离只认 `build-*`。不再创建 `req-*`，也不保留通用 `work-*` 兼容分支。
-- stage 字段：只作状态展示提示，不再有单独 transition helper，不作为 build-close 硬门。
+- 正常用户主链路：`/pmai-design` 讨论并形成建造依据 → `/pmai-build` 构建指定对象 → PM 看结果多轮修改 → PM 明确定稿 → 自动最终检查、合入 main、主线后文档编译和一致性检查。
+- `meta`、`mockup`、`spec-writing` 是 design 按需调用后返回主线的内部能力；仍保留手动入口用于兼容和专项使用，但不要求 PM 拼接命令。
+- `/pmai-build-close` 只作为兼容与恢复入口；正常链路不再要求 PM 手动调用。
+- lifecycle v2：`designing → ready_to_build → building → iterating → final_check → landed → documenting → complete`。旧 `stage` 字段仅为 v1 消费仓兼容展示。
+- build target：一次 build 只选一个主要对象，`prototype` 或 `product`；生命周期相同，只切换验收适配器。
+- 模块真相源：`docs/modules/<模块>/discussion.md`、`decisions.md`、`spec.md`；跨模块现行规则为 `PRODUCT-RULES.md`，项目级冻结理路为 `docs/decisions/`。
+- `.work-meta.json:build` 使用合同 v2，记录 build target、approved source hash、design revision、accepted deltas、implementation commit、required checks、证据和 docs status。
+- 完整 build 自动使用或复用 worktree，并按目标、消费仓配置和本机可用性选择执行器；PM 不管理工程菜单。
 
-## 已完成清理
+## 已实现
 
-- 删除旧入口和脚本：`skills/next`、`create-req-*`、`req-transition.py`、`req-events.py`、旧迁移脚本、TTHW smoke、stage-source helper 测试。
-- `cancel-req.sh` / `close-req.sh` 改名为 `cancel-work.sh` / `close-work.sh`，测试同步为 `test-cancel-work.sh` / `test-close-work.sh`。
-- `status-view`、`skill-preamble`、`state.py` 改为扫描 `build-*`。
-- `check-branch` 删除旧 stage 直改拦截，只保留 main 业务代码写保护。
-- `close-work` 删除 stage=4 硬门，改为 PM 明确确认后收尾。
-- `cleanup-pending-worktrees` pending 项改为 `kind=work` + `build-*` 安全校验。
-- 删除活跃 `docs/设计/` 旧设计稿，避免把过期方案当当前真相源。
+- 新增 `context-pack.py`：design、build、恢复、最终检查和文档更新共用确定性上下文，并区分 active / superseded / 冲突决定、未决问题和输入 hash。
+- 新增共用 `decision-policy`：机械项自动处理，可逆偏好给推荐并推进，产品模型岔路和 one-way door 立即让 PM 拍板；问句和讨论草稿不得成为决定。
+- `build-contract.py` 升级为合同 v2：accepted delta 或新 implementation commit 会使旧证据失效；`validate-land` 拒绝 source hash / commit 不匹配的陈旧证据。
+- 新增 prototype / product 验收 profile；iterating 只跑受影响快检，final_check 才跑完整 required checks。
+- 新增自动 landing 和恢复：merge 冲突保留 `final_check` 与隔离环境；文档失败保留 `landed/docs_pending`，续跑不重复 merge。
+- 新增 landed 后文档影响地图，要求对象、动作、状态、权限、页面、术语和受影响文件都有 covered 或明确 no-change。
+- design、meta、mockup、spec-writing、build、build-close 与消费仓 AGENTS / CLAUDE 模板已按统一链路重构。
+- 新增 `evals/cases/*.json`、`evals/touchfiles.json` 和 `scripts/skill-eval.py`；静态案例可作为提交门，session runner / LLM judge 缺失时明确 skip，require 模式明确 fail。
 
-## 剩余验证
+## 兼容与边界
 
-- 在一个真实业务模块上跑完整 `/pmai-design` → `/pmai-build` → `/pmai-build-close`，验证主动 browser smoke、三道 build 审计、dev server 复用、worktree 创建/合并/清理闭环。
+- 合同 v1 继续可读；已有消费仓不批量重写，下次 design / build 时渐进进入 v2。
+- 不新增 decisions JSONL 或第二套状态机；context pack 只编译现有真相源。
+- 正式文档不在 merge 前更新，不因文档失败回滚已落地主线实现。
+- gstack 只是方法参考与可选证据生产工具，不成为 PMAI 的状态、决定或收尾权威。
+- `/pmai-record`、`/pmai-quick-fix`、`/pmai-build-cancel`、`/pmai-status` 继续作为轻量旁路，不分叉完整 build 生命周期。
 
-## 本轮验证
+## 当前验证
 
-- `/pmai-build` 已补构建前硬门：未提交规格 / mock / 文档先固定建造依据或停住；修改 `prototype/`、`Sources/` 或业务代码前必须拿到“执行方式”和“执行器”两道 PM 答案。
-- `/pmai-build` / `/pmai-build-close` 已补 build 合同：build 在两道 PM 选择后写入 `.work-meta.json:build`，验收后记录实现提交和 PM 验收时间；build-close 只按合同收尾，缺合同 / 缺验收 / worktree 丢失时停止补上下文，不再把分支提交误报为已收口。
-- `/pmai-build` / `/pmai-build-close` 已把主动 browser smoke 纳入 build 验收证据：`browser-smoke.json` 必须存在，`pass` 必须带 `active_browser_smoke=true`；主动 smoke 非 pass 时，视觉 / 行为审不能写通过，需 PM 明确接受风险并记录 `audit_exception`。
-- `/pmai-status` 已改为 PM 行动视图：无 active 但有未提交改动时输出“有一轮改动还没收口”；多个进行中工作按编号列状态、当前步骤和下一步；禁止把内部诊断当现状汇报。
-- 公开入口已收敛：`codebase-audit` 移入 `skills/_internal/`，不再暴露 `/pmai-codebase-audit`；`/pmai-deposit` 改为 `/pmai-record`；`/pmai-cancel` 改为 `/pmai-build-cancel`。
-- `tests/test-doctor-skills.sh`：10 passed / 0 failed（含 `_internal` 不暴露回归）。
-- `tests/test-brownfield-detect.sh`：6 passed / 0 failed（含 README 不暴露 `/pmai-codebase-audit` 回归）。
-- `tests/test-banner-label.sh`：9 passed / 0 failed（核心入口改为 build-cancel）。
-- `tests/test-check-branch.sh`：15 passed / 0 failed（record 不再依赖 marker 门控）。
-- `tests/test-exec-adapters.sh`：8 passed / 0 failed（含 build 门禁回归）。
-- `tests/test-status-view.sh`：7 passed / 0 failed（含 status PM 视图回归）。
-- `tests/test-init-project-codex-compat.sh`：5 passed / 0 failed。
-- `tests/test-private-onboarding.sh`：4 passed / 0 failed。
-- `tests/test-mock-board.sh`：8 passed / 0 failed。
-- `tests/run-all.sh`：437 passed / 0 failed。
-- `git diff --check`：通过。
-- 同类残留扫描：当前有效文件未再发现 `/pmai-close` / `pmai-close` / `skills/close` 的用户入口残留；仅保留历史 `requirements/pmai-closed` 路径名和内部 `close-work.sh` 实现脚本名。
+- 新增和改造的 context pack、acceptance profile、build contract、landing、文档影响地图、status、关键 Skill 路由与 skill-eval targeted tests 已通过。
+- 完整 `tests/run-all.sh` 已通过：`459 passed / 0 failed`。
+
+## 下一步
+
+- 提交统一构建链路主实现。
+- 按 `pmai-skill-improve` 归档本次真实会话反馈并引用主实现 commit。

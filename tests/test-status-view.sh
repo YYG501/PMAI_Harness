@@ -117,6 +117,48 @@ test_narrative_multiple_active_work_pm_view() {
   fixture_teardown
 }
 
+test_default_multi_work_hides_worktree_instructions() {
+  start_test "status: 多工作默认视图不暴露 worktree 和 cd 指令"
+  fixture_setup
+  fixture_create_work "work-001" "import" 2 >/dev/null
+  fixture_create_work "work-002" "bubble" 1 >/dev/null
+  local out
+  out=$(cd "$FIXTURE_DIR" && python3 "$STATUS_VIEW" 2>&1)
+  if echo "$out" | grep -q "当前工作" \
+     && ! echo "$out" | grep -q "Worktree" \
+     && ! echo "$out" | grep -q "cd 进" \
+     && echo "$out" | grep -q "直接说模块名"; then
+    pass_test
+  else
+    _fail "default multi-work status leaked infrastructure: $out"
+  fi
+  fixture_teardown
+}
+
+test_landed_docs_failure_resumes_without_merge() {
+  start_test "status: landed/docs failed 提示只恢复文档、不重复合并"
+  fixture_setup
+  local work_dir
+  work_dir=$(fixture_create_work "work-001" "import" 4)
+  python3 - "$work_dir/.work-meta.json" <<'PY'
+import json, sys
+path = sys.argv[1]
+meta = json.load(open(path))
+meta["lifecycle_state"] = "landed"
+meta["build"].update({"contract_version": 2, "lifecycle_state": "landed", "docs_status": "failed"})
+json.dump(meta, open(path, "w"), ensure_ascii=False, indent=2)
+PY
+  local out
+  out=$(cd "$FIXTURE_DIR" && python3 "$STATUS_VIEW" --narrative 2>&1)
+  if echo "$out" | grep -q "从上次失败处继续正式文档更新" \
+     && echo "$out" | grep -q "不重复合并"; then
+    pass_test
+  else
+    _fail "docs recovery guidance mismatch: $out"
+  fi
+  fixture_teardown
+}
+
 test_status_skill_blocks_internal_diagnostics() {
   start_test "status skill: 禁止把内部诊断当 PM 现状汇报"
 
@@ -132,6 +174,8 @@ test_banner_only_renders_active_work
 test_timeline_has_no_task_counts
 test_narrative_dirty_main_has_pm_action
 test_narrative_multiple_active_work_pm_view
+test_default_multi_work_hides_worktree_instructions
+test_landed_docs_failure_resumes_without_merge
 test_status_skill_blocks_internal_diagnostics
 
 report_results "status-view"

@@ -1,0 +1,32 @@
+{
+  "schema_version": 1,
+  "id": "patch-smell-routes-meta",
+  "title": "补丁味需求自动进入 meta",
+  "layer": "session",
+  "skills": ["design", "meta"],
+  "source": {
+    "session_id": "019f3c20-5bbb-7423-a18f-dab2c1a90fff",
+    "evidence": [
+      {"turn": 121, "excerpt": "再想想，我觉得有些信息没有必要重复放两个不同的地方"},
+      {"turn": 122, "excerpt": "不太好，角色授权就应该放在角色页面呀"}
+    ]
+  },
+  "input": {
+    "prompt": "感觉现在是在不同页面继续补相同信息，不太对。",
+    "context": ["当前方案在多个页面重复同一产品关系", "PM 明确质疑方案根基"]
+  },
+  "expected": {
+    "behaviors": ["design 自动调用 meta", "给出最危险前提、反例和替代产品模型", "结论返回 design"],
+    "observations": ["meta_auto_routed", "dangerous_assumption_identified", "counterexample_produced", "model_returned_to_design"],
+    "lifecycle_order": ["designing"],
+    "stopping_point": "awaiting_product_model_choice"
+  },
+  "forbidden": {
+    "behaviors": ["继续在症状上加字段或页面", "只复述 PM 的不满"],
+    "observations": ["symptom_patch_added", "meta_only_paraphrased"]
+  },
+  "judge": {
+    "enabled": true,
+    "rubric": ["meta 产生了新的判断或反例", "只有真实产品模型岔路才要求 PM 选择"]
+  }
+}

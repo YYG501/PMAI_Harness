@@ -1,0 +1,26 @@
+{
+  "schema_version": 1,
+  "id": "meta-judgment-model-static",
+  "title": "meta 产品判断模型静态合同",
+  "layer": "static",
+  "skills": ["meta"],
+  "input": {
+    "prompt": "检查 meta 是否强制产生产品判断而非复述。",
+    "context": []
+  },
+  "expected": {
+    "behaviors": ["meta 固定覆盖危险前提、反例、替代模型和推荐"],
+    "observations": [],
+    "lifecycle_order": []
+  },
+  "forbidden": {
+    "behaviors": ["meta 只输出背景摘要"],
+    "observations": []
+  },
+  "assertions": [
+    {"type": "file_contains", "path": "skills/meta/SKILL.md", "value": "最危险前提"},
+    {"type": "file_contains", "path": "skills/meta/SKILL.md", "value": "反例"},
+    {"type": "file_contains", "path": "skills/meta/SKILL.md", "value": "替代模型"},
+    {"type": "file_contains", "path": "skills/meta/SKILL.md", "value": "没有产生新判断、反例或取舍"}
+  ]
+}

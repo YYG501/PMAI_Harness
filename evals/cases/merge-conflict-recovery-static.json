@@ -1,0 +1,24 @@
+{
+  "schema_version": 1,
+  "id": "merge-conflict-recovery-static",
+  "title": "merge 冲突保留 final_check 与隔离环境",
+  "layer": "static",
+  "skills": ["build", "build-close"],
+  "input": {
+    "prompt": "检查冲突恢复不会清理工作区。",
+    "context": []
+  },
+  "expected": {
+    "behaviors": ["merge 冲突后仍可恢复", "不清理实现或 worktree"],
+    "observations": [],
+    "lifecycle_order": []
+  },
+  "forbidden": {
+    "behaviors": ["冲突时删除 worktree", "把状态推进到 landed"],
+    "observations": []
+  },
+  "assertions": [
+    {"type": "file_contains", "path": "scripts/land-work.sh", "value": "状态仍在 final_check"},
+    {"type": "file_contains", "path": "scripts/land-work.sh", "value": "实现和隔离环境均保留"}
+  ]
+}

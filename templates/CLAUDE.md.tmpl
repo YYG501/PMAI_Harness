@@ -15,8 +15,8 @@
 | 角色 | 职责 |
 |---|---|
 | PM | 决策、确认、验收。不写代码。默认一个窗口 |
-| 驱动 AI | PM 这个窗口里的 AI：范围确认 / design、派发 build、跑复审、呈交验收、build-close 收尾 |
-| 执行器 | `/pmai-build` 时可选的独立建造工具档位（Claude Code / Codex / Cursor / Gemini / OpenCode / PM 手动），按当前功能锚点在 `prototype/` 里建 |
+| 驱动 AI | PM 这个窗口里的 AI：恢复上下文、推进 design、派发 build、呈交结果、多轮修改并在 PM 定稿后自动收尾 |
+| 执行器 | `/pmai-build` 根据 build 对象、消费仓配置和本机可用性自动选择的建造能力；PM 不管理执行器菜单 |
 
 ### 状态与文件真相源
 
@@ -47,37 +47,38 @@
 |---|---|---|---|
 | 轻 | typo、链接、格式、很小代码修补 | `/pmai-quick-fix` 或 main 上直接小改 | 需要沉淀长期基线时 `/pmai-record` |
 | 中 | 一个模块内的完整讨论 / 规格演进 | `/pmai-design` / `/pmai-status` | 可先停住；需要沉淀术语 / 规则 / 当前设计状态时 `/pmai-record` |
-| 重 | 需要实际建一片原型功能 | `/pmai-design` 定稿模块 `spec.md` 或确认功能型规格文档 → `/pmai-build <模块或文档>` → 复审 | PM 验收后 `/pmai-build-close` |
+| 重 | 需要实际建原型或真实产品能力 | `/pmai-design` 定稿并自动固定建造依据 → `/pmai-build <模块或文档>` → 看结果多轮修改 | PM 明确定稿后自动最终检查、合入 main、更新正式文档 |
 
 ### 主入口
 
 - `/pmai-init-project` — 项目初始化统一入口：全新项目建底座，已有代码库自动盘点现状。
 - `/pmai-direction` — 项目方向校准：已接入项目的方向重定 / 路线规划。
-- `/pmai-design "<一句话需求>"` — 起新功能 / 重做模块，写模块三件套。
+- `/pmai-design "<一句话需求>"` — 起新功能 / 重做模块；按需自动调用 meta、mockup、spec-writing，提交建造依据。
 - `/pmai-design <模块>` — 讨论、收范围、写模块三件套。
-- `/pmai-build <模块或功能文档>` — 对着模块 `spec.md` 或 `docs/modules/<按内容命名>.md` 在 `prototype/` 建。
+- `/pmai-build <模块或功能文档>` — 对着建造依据自动选择 `prototype` 或 `product`，构建、迭代、最终检查并自动收尾。
 - `/pmai-status` — 读当前状态，提示下一步并拉起对应入口。
-- `/pmai-build-close` — build 验收后的收尾：提交 / 合并实现改动，按最终原型对齐模块决策与规格，更新产品现状、术语和跨模块规则。
+- `/pmai-build-close` — 兼容与恢复入口：中断续跑、merge 冲突后重试、或实现已落主线但文档待完成。
 - `/pmai-status` — 只读现状视图。
 - `/pmai-spec-writing` — 功能型规格文档成文器；PRD、功能需求、功能描述、功能规格、功能评审稿都走它。
 - `/pmai-doc-writing` — 介绍型文档成文器；产品介绍、功能清单、优势说明、一页纸、汇报材料默认落 `docs/deliverables/`。
 
 ### 确认门
 
-- AI 任何阶段都必须先说清「要做 X / 要你拍 Y」，PM 答完再动手。
-- PM 没答确认门之前，不写 PM 视图文件、不提交、不合并、不推进状态。
-- 关键拍板点：范围定稿、结构/命名决策、build 执行方式、复审验收、build-close 收尾。
+- 按共用 decision policy 处理：机械项后台完成；可逆偏好由 AI 给推荐并推进；只有产品模型岔路、不可逆动作或 AI 要改变 PM 已明确方向时立即让 PM 拍。
+- 不把是否调用 meta/mockup/spec-writing、worktree、执行器、保存依据或手动 close 变成 PM 问题。
+- PM 在看到构建结果后说“可以提交 / 定稿 / 可以合并”，即是合入 main 的明确授权，不二次确认。
 
 ### build 纪律
 
-- build 的功能锚点是模块 `spec.md` 或 `docs/modules/<按内容命名>.md` 的功能型规格文档，不是 task 文件。
-- 动手前必须读 `DESIGN.md`。
-- `/pmai-build` 动手前必须先问完两道 PM 选择：执行方式（开隔离环境 / 直接主线）和建造工具档位（Claude Code / Codex / Cursor / Gemini / OpenCode / PM 手动）。建造工具选项只展示 `工具名（model, thinking）`；没拿到两个答案前，只能读文件和查状态，不得修改 `prototype/`、`Sources/` 或任何业务代码。
-- 如果模块 `spec.md` / `decisions.md` / `mockups/` 看版 / 功能型规格文档还在未提交或未跟踪状态，先保存本次建造依据或停住；不得以“隔离环境拿不到这些未跟踪文件”为由跳过选择、直接改 main。
-- `/pmai-build` 拿到两道 PM 答案后必须写入当前模块 `.work-meta.json:build` 合同；模块和功能锚点明确但 `.work-meta.json` 缺失时自动补最小状态记录，不再向 PM 追加确认。`/pmai-build-close` 只按该合同收尾。缺合同、缺实现提交或缺 PM 验收记录时，先补上下文，不得把分支提交误报成已收尾。
-- 代码改动集中在 `prototype/`。执行器如改了 `docs/**`，必须呈交 PM 决定保留还是回退。
-- 大需求可开 `.worktrees/pmai-build-*` 隔离环境；小改可直接在 main 上做。
-- 使用外部执行器前，目标 worktree 必须 clean；dirty 时先让 PM 决定提交 checkpoint、清理或取消。执行器过程写日志和状态文件，PM 窗口只报阶段摘要；失败默认保留半成品，由 PM 选接手、换工具或丢弃重来。
+- build 的功能锚点是 design 已提交的模块 `spec.md` 或功能型规格文档，不是 task 文件；开工和关键恢复点先编译 context pack。
+- 一次 build 只有一个主要对象：`prototype` 或 `product`。两者共用生命周期，只切换验收适配器。
+- 完整 build 默认自动创建 `.worktrees/build-*`；工具档位按目标与仓库配置自动选择。小改走 `/pmai-quick-fix`，不把完整 build 降成 main 直改。
+- `.work-meta.json:build` 中的 contract v2 记录 target、source hash、design revision、accepted deltas、implementation commit、required checks、evidence 和 docs status。
+- 每轮修改只跑受影响快速检查；产品决定变化写 accepted delta 并让旧证据失效；PM 定稿后才跑完整 required checks。
+- prototype 验收覆盖可启动性、任务路径、页面/弹窗、边界状态、视觉和行为；product 验收覆盖现有测试、typecheck/build、接口数据、迁移兼容，并按需追加 UI、权限与安全检查。
+- 证据必须绑定当前 source hash 和 implementation commit；limited/skipped/blocked 不能伪装 pass。
+- 最终检查通过后先合入 main，再基于 landed diff 和文档影响地图更新正式文档；文档失败保留 `landed/docs_pending`，续跑不重复 merge。
+- 使用外部执行器前目标 worktree 必须 clean；失败默认保留半成品，禁止自动 restore/clean。
 
 ### Review 工具
 

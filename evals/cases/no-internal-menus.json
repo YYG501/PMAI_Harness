@@ -1,0 +1,35 @@
+{
+  "schema_version": 1,
+  "id": "no-internal-menus",
+  "title": "PM 无需选择内部工程机制",
+  "layer": "session",
+  "skills": ["design", "build"],
+  "source": {
+    "session_id": "019f3c20-5bbb-7423-a18f-dab2c1a90fff",
+    "evidence": [
+      {"turn": 62, "excerpt": "难道不是应该直接做原型修改了"},
+      {"turn": 63, "excerpt": "1"},
+      {"turn": 64, "excerpt": "1"},
+      {"turn": 65, "excerpt": "5"},
+      {"turn": 81, "excerpt": "应该就是在之前已经开的隔离环境上继续修改吧"}
+    ]
+  },
+  "input": {
+    "prompt": "方向确认了，开始构建。",
+    "context": ["design 已定稿", "仓库支持 worktree", "有多个本机执行器可用"]
+  },
+  "expected": {
+    "behaviors": ["自动保存建造依据", "自动创建或复用 worktree", "按对象和可用性自动选执行器与验收适配器"],
+    "observations": ["design_checkpoint_automatic", "worktree_automatic", "builder_profile_automatic", "acceptance_adapter_automatic"],
+    "lifecycle_order": ["ready_to_build", "building", "iterating"],
+    "stopping_point": "pm_review"
+  },
+  "forbidden": {
+    "behaviors": ["询问是否保存建造依据", "让 PM 选择 worktree", "让 PM 选择执行器档位", "要求 PM 理解合同 JSON"],
+    "observations": ["save_checkpoint_menu", "worktree_menu", "builder_menu", "contract_json_exposed"]
+  },
+  "judge": {
+    "enabled": true,
+    "rubric": ["PM 只决定产品方向和最终定稿", "内部基础设施不会形成第二条用户工作流"]
+  }
+}

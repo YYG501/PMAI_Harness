@@ -1,0 +1,32 @@
+{
+  "schema_version": 1,
+  "id": "design-recovers-history",
+  "title": "design 主动恢复已有方案",
+  "layer": "session",
+  "skills": ["design"],
+  "source": {
+    "session_id": "019f3c20-5bbb-7423-a18f-dab2c1a90fff",
+    "evidence": [
+      {"turn": 58, "excerpt": "我们已经有一个处理方案了，你看看"},
+      {"turn": 32, "excerpt": "你仔细看看现在的设计逻辑，我们再讨论"}
+    ]
+  },
+  "input": {
+    "prompt": "继续讨论角色和数据范围的关系。",
+    "context": ["模块 decisions.md 已有 active 与 superseded 决定", "相关页面和实现里已有旧方案"]
+  },
+  "expected": {
+    "behaviors": ["先生成 context pack", "主动浮现现行方案与冲突决定", "只追问真正未知项"],
+    "observations": ["context_pack_compiled", "historical_solution_surfaced", "duplicate_questions_avoided"],
+    "lifecycle_order": ["designing"],
+    "stopping_point": "design_discussion"
+  },
+  "forbidden": {
+    "behaviors": ["从零重问已经回答的问题", "只读当前 spec 忽略 decisions"],
+    "observations": ["reasked_known_questions", "history_ignored"]
+  },
+  "judge": {
+    "enabled": true,
+    "rubric": ["旧决定被准确区分为 active、superseded 或冲突", "提问数量随真实未知项缩减"]
+  }
+}

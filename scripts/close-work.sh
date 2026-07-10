@@ -42,6 +42,20 @@ if [ ! -f "$WORK_META" ]; then
   exit 1
 fi
 
+# v2 先落实现、再在 main 更新文档；旧合同继续走下方兼容收尾路径。
+CONTRACT_VERSION=$(python3 - "$WORK_META" <<'PY'
+import json, sys
+try:
+    data = json.load(open(sys.argv[1]))
+    print(data.get("build", {}).get("contract_version", 1))
+except Exception:
+    print(1)
+PY
+)
+if [ "${CONTRACT_VERSION:-1}" -ge 2 ]; then
+  exec bash "$SCRIPT_DIR/land-work.sh" "$WORK_DIR"
+fi
+
 # --- 读取模块工作信息（走 _lib.state.read_work_meta CLI；单次读全部字段）---
 WORK_META_JSON=$(python3 -m _lib.state read_work_meta "$WORK_DIR" 2>/dev/null || echo "{}")
 WORK_ID=$(printf '%s' "$WORK_META_JSON" | python3 -c "import sys,json; print(json.load(sys.stdin).get('id',''))")
@@ -96,10 +110,11 @@ if [ "$BUILD_MODE" = "worktree" ]; then
       echo "   当前位置：    $CALLER_CWD" >&2
       echo "   要收尾的 worktree：$WORK_WORKTREE_REAL" >&2
       echo "" >&2
-      echo "   换个地方跑 close 就行（二选一）：" >&2
-      echo "   · 推荐：到主仓窗口（位置 = ${REPO_ROOT}）跑 —— 主仓会话本就能远程操作 worktree：" >&2
+      echo "   请回到主仓里的 build 会话继续自动收尾：" >&2
+      echo "   · 主仓位置：${REPO_ROOT}（主仓会话可以远程操作 worktree）" >&2
+      echo "   · 兼容恢复时可在主仓运行内部 helper：" >&2
       echo "       bash scripts/close-work.sh $WORK_DIR" >&2
-      echo "   · 或：当前工作先不收尾、worktree 留着继续干，等回到主仓窗口再 /pmai-build-close。" >&2
+      echo "   当前 worktree 会原样保留，不会自动清理。" >&2
       exit 1
     fi
   fi

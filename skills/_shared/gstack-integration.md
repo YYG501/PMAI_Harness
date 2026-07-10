@@ -30,7 +30,7 @@
 - `/design-review` 产出视觉门证据，写入 `.pm-workflow/audits/<模块>/visual.json`。
 - `/browse` 或脚本化浏览器验收产出行为证据，写入 `.pm-workflow/audits/<模块>/behavior.json`。
 - 如果主动 browser smoke 不是 `pass`，视觉门 / 行为审不能静默当通过，只能记录为受限、跳过或阻塞；PM 明确接受风险时，用 `build-contract.py audit-exception` 写入原因。行为审自身 `fail` 一律先修，不能靠例外放行。
-- `/pmai-build-close` 只认 PMAI build contract；gstack/browser 没跑就是缺证据，不能静默当通过。
+- 统一 final_check 只认 PMAI build contract；gstack/browser 没跑就是缺证据，不能静默当通过。`/pmai-build-close` 兼容恢复复用同一合同。
 
 ### 4. 可选旁路
 
@@ -39,7 +39,7 @@
 - `/qa`、`/qa-only`、`/review`：额外复审或 QA，不替代 build 三道审。
 - `/plan-ceo-review`、`/plan-design-review`、`/plan-eng-review`、`/plan-devex-review`：方案第二视角，结果需要 PM 逐条拍。
 - `/document-generate`：工程文档生成旁路，只用于 README、API、CLI、架构说明、how-to、tutorial、reference；不用于产品介绍、PRD、模块规格或 PM 汇报材料。
-- `/document-release`：post-ship 工程文档同步旁路，不替代 `/pmai-build-close` 的产品真相源沉淀。
+- `/document-release`：post-ship 工程文档同步旁路，不替代 landed 后 PMAI 产品真相源编译。
 
 ## 二、旁路文档接回协议
 

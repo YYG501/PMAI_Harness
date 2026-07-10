@@ -426,14 +426,15 @@ test_allows_unrelated_dirty_changes_on_main() {
 }
 
 test_build_close_skill_documents_contract_and_wip_rules() {
-  start_test "build-close skill documents atomic contract completion and main WIP handling"
+  start_test "build-close compatibility uses atomic finalization and preserves main WIP"
 
   assert_file_contains "$BUILD_CLOSE_SKILL" "build-contract.py\" complete" "build-close should use atomic contract completion" || return
   assert_file_contains "$BUILD_CLOSE_SKILL" '禁止并行跑 `commit` / `accept`' "build-close should forbid split contract writes" || return
   assert_file_contains "$BUILD_CLOSE_SKILL" "主仓 main 上允许保留其它未提交 WIP" "build-close should allow unrelated main WIP" || return
   assert_file_contains "$BUILD_CLOSE_SKILL" "autostash" "build-close should document autostash merge behavior" || return
   assert_file_contains "$BUILD_CLOSE_SKILL" "PM 窗口只报阶段结果" "build-close should keep command chatter out of PM view" || return
-  assert_file_contains "$BUILD_CLOSE_SKILL" "build 验收证据是 close 硬门" "build-close should gate close on audit evidence" || return
+  assert_file_contains "$BUILD_CLOSE_SKILL" "build 验收证据是落地主线硬门" "build-close should gate landing on audit evidence" || return
+  assert_file_contains "$BUILD_CLOSE_SKILL" "正常链路由 build 自动 finalize" "build-close should stay a recovery entry" || return
   pass_test
 }
 

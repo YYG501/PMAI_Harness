@@ -1,0 +1,33 @@
+{
+  "schema_version": 1,
+  "id": "mockup-covers-full-task",
+  "title": "mockup 覆盖完整任务和关联页面",
+  "layer": "session",
+  "skills": ["design", "mockup"],
+  "source": {
+    "session_id": "019f3c20-5bbb-7423-a18f-dab2c1a90fff",
+    "evidence": [
+      {"turn": 69, "excerpt": "给我几个角色管理的界面设计方案"},
+      {"turn": 97, "excerpt": "用户管理中的用户详情是不是也需要修改，请你一起看一下"},
+      {"turn": 162, "excerpt": "我们不是修改了用户详情页和部门详情页来着"}
+    ]
+  },
+  "input": {
+    "prompt": "为角色管理的新逻辑做可比设计稿。",
+    "context": ["角色管理会影响用户详情、部门详情和产品开通弹窗", "已有产品页面与 DESIGN.md"]
+  },
+  "expected": {
+    "behaviors": ["读取现有设计和上下游页面", "覆盖完整用户任务和相关边界状态", "只有真实交互岔路才出多稿"],
+    "observations": ["existing_design_read", "related_pages_covered", "boundary_states_covered", "real_interaction_forks_only"],
+    "lifecycle_order": ["designing"],
+    "stopping_point": "mockup_direction_selection"
+  },
+  "forbidden": {
+    "behaviors": ["只画当前卡片", "用字体颜色差异凑三套", "直接修改主原型"],
+    "observations": ["current_card_only", "cosmetic_variants_only", "prototype_modified_by_mockup"]
+  },
+  "judge": {
+    "enabled": true,
+    "rubric": ["设计稿覆盖入口页、详情页、关联页与必要状态", "多方向差异位于交互模型、信息层级或任务路径"]
+  }
+}

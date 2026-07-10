@@ -40,6 +40,9 @@ SUITES=(
   test-narrative-mode.sh
           test-checks-diff.sh
   test-build-audits.sh
+  test-context-pack.sh
+  test-acceptance-profile.sh
+  test-doc-impact.sh
   test-build-contract.sh
   test-build-close-hard-gates.sh
   test-exec-adapters.sh
@@ -47,6 +50,8 @@ SUITES=(
     test-state-lib.sh
   test-attachments-helper.sh
   test-close-work.sh
+  test-land-work-v2.sh
+  test-skill-eval.sh
   test-cleanup-pending.sh
   test-cancel-work.sh
   test-status-view.sh

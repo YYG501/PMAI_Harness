@@ -75,10 +75,10 @@ test_prototype_plus_docs_blocks() {
 
   if _run_checker >/tmp/mixed.$$ 2>/tmp/mixed.err.$$; then
     _fail "prototype + docs/modules 应被拦"
-  elif grep -q "/pmai-build-close" /tmp/mixed.err.$$ && grep -q "混合交付" /tmp/mixed.err.$$; then
+  elif grep -q "/pmai-build" /tmp/mixed.err.$$ && grep -q "自动完成最终检查" /tmp/mixed.err.$$ && grep -q "混合交付" /tmp/mixed.err.$$; then
     pass_test
   else
-    _fail "阻断提示应说明混合交付和 /pmai-build-close"
+    _fail "阻断提示应说明混合交付由 /pmai-build 自动 finalize"
     cat /tmp/mixed.err.$$ >&2
   fi
   rm -f /tmp/mixed.$$ /tmp/mixed.err.$$
@@ -93,7 +93,7 @@ test_prototype_plus_mockups_blocks() {
 
   if _run_checker >/tmp/mixed.$$ 2>/tmp/mixed.err.$$; then
     _fail "prototype + mockups 应被拦"
-  elif grep -q "/pmai-build-close" /tmp/mixed.err.$$ && grep -q "mockup" /tmp/mixed.err.$$; then
+  elif grep -q "/pmai-build" /tmp/mixed.err.$$ && grep -q "mockup" /tmp/mixed.err.$$; then
     pass_test
   else
     _fail "阻断提示应说明 mockup 混合交付"

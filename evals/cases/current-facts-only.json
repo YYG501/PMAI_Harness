@@ -1,0 +1,31 @@
+{
+  "schema_version": 1,
+  "id": "current-facts-only",
+  "title": "正式文档只保留当前事实",
+  "layer": "session",
+  "skills": ["spec-writing"],
+  "source": {
+    "session_id": "019f3c20-5bbb-7423-a18f-dab2c1a90fff",
+    "evidence": [
+      {"turn": 160, "excerpt": "我们不需要描述去掉了什么，修改了什么，我们只需要维护一个最新的事实状态"}
+    ]
+  },
+  "input": {
+    "prompt": "实现已经合入 main，请对账并更新模块规格。",
+    "context": ["landed diff 可用", "decisions.md 保留历史理由", "旧 spec 含变更流水账"]
+  },
+  "expected": {
+    "behaviors": ["spec 正文只写当前目标事实", "历史保留在 Git 和 decisions.md", "文档描述 main 已存在能力"],
+    "observations": ["current_facts_compiled", "history_kept_out_of_spec", "main_used_as_truth"],
+    "lifecycle_order": ["landed", "documenting", "complete"],
+    "stopping_point": "complete"
+  },
+  "forbidden": {
+    "behaviors": ["保留删除线旧正文", "写修改过程流水账", "把未落地能力写成已完成"],
+    "observations": ["strikethrough_history_in_spec", "change_log_in_normative_body", "future_fact_promoted"]
+  },
+  "judge": {
+    "enabled": true,
+    "rubric": ["文档回答现在是什么而非怎么改过来", "决定历史与规范事实分家"]
+  }
+}

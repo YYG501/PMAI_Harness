@@ -7,9 +7,12 @@
 # 改了哪个字段会影响什么：见每段注释。
 
 builder:
-  # /pmai-build 的默认建造工具档位。
-  # PM 视图只展示：工具名（model, thinking）；其它字段只给执行器使用。
+  # /pmai-build 的默认建造工具档位。框架按 build 对象和本机可用性自动选择；
+  # 这些字段只给执行器使用，不形成 PM 菜单。
   default_profile: claude-code
+  # 完整 build 由框架按对象自动选择；旧消费仓缺这两项时回退 default_profile。
+  prototype_profile: claude-code
+  product_profile: codex
 
   profiles:
     claude-code:

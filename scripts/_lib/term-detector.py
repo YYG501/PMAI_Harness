@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """term-detector.py — 业务词 / 角色检测器
 
-当前由 `/pmai-build-close` 调用。业务词真正稳定要等 design/build/复审完成后再沉淀；
+当前由 landed 后自动文档编译调用，兼容 build-close 恢复入口复用。业务词真正稳定要等 design/build/复审完成后再沉淀；
 早期讨论里 PM 用 `**` 多为修辞，detector 信噪比差，故不调。
 
 检测策略（保守，避免 Clippy 风险）：

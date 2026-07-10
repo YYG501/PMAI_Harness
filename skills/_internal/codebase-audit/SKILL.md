@@ -82,9 +82,9 @@ PM 提修正 → 改现状档 → 重新呈交。
 
 > **brownfield 项目专属步骤**：老代码库的模块边界往往已经稳定在代码里（菜单 / 路由 / 模块目录结构）。本步骤提取「产品模块清单」+ 按 `$PMAI_HOME/skills/_internal/codebase-audit/templates/module.md.tmpl` 生成 `docs/modules/<m>/spec.md` 主规格骨架。
 >
-> **为什么有这步**：不建 modulespec → 后续 build / build-close 无 baseline 可 diff →「本次新建/改了稳定结构但 `docs/modules/` 无对应规格文件」常态化。一次性建好 = 反查退化成真正的兜底。
+> **为什么有这步**：不建 modulespec → 后续 build / landed 后事实对账无 baseline 可 diff →「本次新建/改了稳定结构但 `docs/modules/` 无对应规格文件」常态化。一次性建好 = 反查退化成真正的兜底。
 >
-> **新项目（greenfield）不需要本步骤** —— IA 还没定，过早建会写一堆空 placeholder；走 `/pmai-design` / `/pmai-build-close` 按需生长。
+> **新项目（greenfield）不需要本步骤** —— IA 还没定，过早建会写一堆空 placeholder；走 `/pmai-design` / `/pmai-build` 按需生长。
 
 **PM 触发**：步骤 3 现状档确认后问 PM：
 
@@ -94,11 +94,11 @@ PM 提修正 → 改现状档 → 重新呈交。
 你这个老项目已经有稳定的产品模块边界（基于代码扫描识别出 N 个候选模块）。
 要不要现在建 docs/modules/<m>/spec.md 主规格骨架？
 
-✅ 好处：后续 build / build-close 能直接 diff，不会反复问「这次稳定结构要不要沉淀」
+✅ 好处：后续 build / landed 后文档编译能直接 diff，不会反复问「这次稳定结构要不要沉淀」
 ⚠️ 代价：现在多花 N 分钟过一遍模块清单 + 看 AI 生成的骨架
 
 [Y] 现在建（推荐 —— 项目 IA 已经稳定的老项目都应该建）
-[N] 跳过（IA 还在演化，按需走，靠 /pmai-design / /pmai-build-close 兜底）
+[N] 跳过（IA 还在演化，按需走，靠 /pmai-design / /pmai-build 兜底）
 ```
 
 **PM 选 Y 时执行**：
@@ -131,7 +131,7 @@ PM 提修正 → 改现状档 → 重新呈交。
 
    - **§摘要**：AI 写 1-3 句（基于代码扫到的功能形态 + PRODUCT.md / 代码现状档）
    - **§一 模块定位 1.1-1.4**：AI 填能扫到的部分；**1.4 职责边界末尾追加「**稳定结构指针**」sub-bullet 列菜单 / 路由 / schema / config 文件路径**（指针不抄内容，防漂移）
-   - **§二 功能清单**：保持模板空（后续 design / build-close 按需填）
+   - **§二 功能清单**：保持模板空（后续 design / landed 后文档编译按需填）
    - **§三 页面与交互范围**：AI 填能扫到的（路由表 / 页面文件）
    - **§四 硬约束** / **§五 跨模块依赖与占位策略**：保持空，PM 后续按需补
    - **顶部状态行**：保留模板的「草稿 | 未经 PM 确认 | 生成时间」标记 —— 让 PM 后续知道哪些段是 AI bootstrap 的、哪些是后续模块沉淀的
@@ -140,7 +140,7 @@ PM 提修正 → 改现状档 → 重新呈交。
 
 5. **PM 审 diff**：呈交 `git diff docs/modules/`，PM 满意 → 本步骤结束。不满意 → AI 调整。PM 大改 → 可以中止 step 3.5 走 [N] 路径。
 
-**PM 选 N 时**：跳过本步骤；step 4 交接时提示「modulespec 骨架未建，后续 /pmai-design / /pmai-build-close 反查会兜底」。
+**PM 选 N 时**：跳过本步骤；step 4 交接时提示「modulespec 骨架未建，后续 /pmai-design / /pmai-build 反查会兜底」。
 
 ### 步骤 3.5.5：DESIGN.md inventory 段兜底（无条件兜底，独立于 step 3.5 选择）
 
@@ -206,7 +206,7 @@ $HAS_FILE && grep -q "^## 共享组件 inventory" "$DESIGN_MD" && HAS_INVENTORY=
 
 **为什么有这步**：`PRODUCT-STATE.md` 是产品「现状层」hub，下游 `/pmai-design` 开头**强制读它**（当前功能 / 主原型现状 / mock-真状态位）。greenfield 的 `init-project.sh` 会铺这个模板，但 brownfield 走 codebase-audit 从不建它 → PM 第一个模块设计退化成「白纸起步」，audit 已扫到的全部现状在 `/pmai-design` 入场时丢失。本步骤兜底建 + 从现状档反推填充。
 
-> **防腐豁免（必读，否则 review 会误判 BLOCKER）**：`PRODUCT-STATE.md` 模板写「只在 /pmai-build-close 沉淀那刻更新」（防腐铁律）。**brownfield 首次 bootstrap 不违反**——首次建档 vs 后续随手改是两回事（类比 greenfield init-project 也在 /pmai-build-close 之外先铺模板，codebase-audit 只是多一步反推填，填的是 audit 已扫到的**现状事实**，不是凭空编未来）。bootstrap 态由顶部状态行明确标出，与 /pmai-build-close 沉淀态区分。**反推只引用 `CODEBASE-AUDIT.md` 已落事实 + 可验证代码扫描；扫不到的层填「未知 / 待确认」不猜测**（防 narrative 幻觉）。
+> **防腐豁免（必读，否则 review 会误判 BLOCKER）**：`PRODUCT-STATE.md` 模板写「只在 landed 后自动文档编译或 record 的收敛点更新」（防腐铁律）。**brownfield 首次 bootstrap 不违反**——首次建档 vs 后续随手改是两回事；codebase-audit 填的是 audit 已扫到的**现状事实**，不是凭空编未来。bootstrap 态由顶部状态行明确标出，与后续事实编译态区分。**反推只引用 `CODEBASE-AUDIT.md` 已落事实 + 可验证代码扫描；扫不到的层填「未知 / 待确认」不猜测**（防 narrative 幻觉）。
 
 ```bash
 PRODUCT_STATE_MD="$REPO_ROOT/PRODUCT-STATE.md"

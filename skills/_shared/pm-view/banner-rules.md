@@ -73,7 +73,7 @@
 
 ## ▶ Next Up — /pmai-build "<模块名>"
 
-## ▶ Next Up — /pmai-build-close（验收通过后收尾沉淀）
+## ▶ Next Up — 构建结果定稿后自动最终检查并收尾
 ```
 
 ### §2.3 何时打
@@ -100,7 +100,7 @@ Next Up 块 / skill 退出提示 / 错误退出提示 —— 任何 PM **直接�
 
 **禁"AI 为啥这样安排"的原理解释**：PM 不需要懂内部机制 / 不需要 AI 自证流程合理。给 PM 的应该是「现在做啥 + 一句话目的」，不是「AI 为啥选这条路径」。
 
-**允许保留**：命令名（如 `/pmai-build` / `/pmai-build-close`）和必要路径提示；这些是 PM 必须知道的操作信息。
+**允许保留**：前台命令名（如 `/pmai-design` / `/pmai-build`）和必要路径提示。`/pmai-build-close` 只在兼容或恢复场景提示，正常链路不要求 PM 手动运行。
 
 **改写公式**：
 - 工程版："启动复审脚本、合并分支、删除隔离环境" → PM 版："我会把这次建好的内容检查完，确认后收尾到主线。"
@@ -120,7 +120,8 @@ Next Up 块 / skill 退出提示 / 错误退出提示 —— 任何 PM **直接�
 
 | 形态 | 是否走 §3 | 例子 |
 |---|---|---|
-| **任何 PM 决策门**（选择分流 / 推进确认 / 验收 / 留守 vs 推进 / 多分支选择）| 必须用 AskUserQuestion / picker（runtime 不支持时按 askuser-rules.md §1.3 退化为编号列表）| `/pmai-design` 结构决策门；`/pmai-build` 执行器选择；`/pmai-build-close` 沉淀确认 |
+| **真实 PM 决策门**（产品模型岔路 / one-way door / AI 改变 PM 已明确方向）| 必须用 AskUserQuestion / picker（runtime 不支持时按 askuser-rules.md §1.3 退化为编号列表）| `/pmai-design` 的对象或权限模型岔路；发布 / 删除 / 安全例外授权 |
+| **框架内部编排**（meta / mockup / spec-writing / worktree / 执行器 / 保存依据 / close）| 不问 PM，按共用 decision policy 自动处理 | `/pmai-build` 自动 worktree 和工具选择；定稿后自动 finalize |
 | AI 主动告知 / 状态播报（不要 PM 答）| prose 输出即可 | banner / Next Up 块 / skill 启动播报 / 进展告知 |
 | 反问澄清（PM 输入语义模糊，AI 需 PM 补一句话再决定走 A/B/C，不是闸门决策）| prose 反问即可 | "你说的'改原型'指本次范围里的改动，还是想新起一个需求？" |
 

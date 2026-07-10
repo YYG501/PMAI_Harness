@@ -15,13 +15,13 @@
 
 | 节 | 内容 | 文件 | 主要消费 skill |
 |---|---|---|---|
-| §三 | PM 视图写作规则（10 条硬约束 + UI 骨架细则）| [`pm-view/writing-rules.md`](./pm-view/writing-rules.md) | design · build-close · spec-writing |
+| §三 | PM 视图写作规则（10 条硬约束 + UI 骨架细则）| [`pm-view/writing-rules.md`](./pm-view/writing-rules.md) | design · 自动 finalize · spec-writing |
 | §四 | 文档级严格度对照表 | [`pm-view/doc-strictness.md`](./pm-view/doc-strictness.md) | spec-writing 直接读；其它 PM 视图 skill 按需读 |
-| §七 | 章节顺序约束（按文档类型）| [`pm-view/section-order.md`](./pm-view/section-order.md) | spec-writing 直接读；design / build-close 通过 spec-writing 写规格 |
+| §七 | 章节顺序约束（按文档类型）| [`pm-view/section-order.md`](./pm-view/section-order.md) | spec-writing 直接读；design / 自动 finalize 通过 spec-writing 写规格 |
 | §八 | 自检清单（生成 / 修改 PM 视图后）| [`pm-view/checklist.md`](./pm-view/checklist.md) | spec-writing 直接读；其它 PM 视图 skill 按需读 |
 | §九 9.0 - 9.5 | 输入流约束 / PM 反馈分流 / 信息流图（§9.6 双文件 lazy sync 已废）| [`pm-view/input-flow.md`](./pm-view/input-flow.md) | PM 视图规则 corpus；具体 skill 按本索引或自身必读清单选读 |
 | §9.7 | 跨 skill 共享原则 | [`pm-view/cross-skill.md`](./pm-view/cross-skill.md) | spec-writing / skill 作者 / 框架维护者 |
-| §10 | attachments AI 接管（trigger 0）— LLM 识别 PM chat 上传意图 + caller 调 `_lib.attachments` helper + 主路径通用规则 | [`pm-view/attachments-upload.md`](./pm-view/attachments-upload.md) | 主路径 SKILL（design / build / build-close / spec-writing / record）|
+| §10 | attachments AI 接管（trigger 0）— LLM 识别 PM chat 上传意图 + caller 调 `_lib.attachments` helper + 主路径通用规则 | [`pm-view/attachments-upload.md`](./pm-view/attachments-upload.md) | 主路径 SKILL（design / build / 自动 finalize / spec-writing / record）|
 
 **读法约定**：
 - skill 步骤里写"按 §三"或"按 PM-VIEW-RULES §三" → 表示读对应子文件
@@ -141,27 +141,11 @@ PM 创建 / 审核 / 验收时直接看的内容。回答 PM 关心的问题：
 
 ---
 
-## 六、关键产品决策格式（prd / 模块 spec 必填）
+## 六、关键产品决策的文档边界
 
-每份 PRD 体例功能型规格文档和涉及关键产品选择的模块 `spec.md` 必须有「关键产品决策」节：
+模块 `spec.md` 和功能型规格正文只写当前有效的产品事实、规则和行为。备选方案、被否方向、共同理由与 supersede 关系只写模块 `decisions.md`；跨模块现行规则写 `PRODUCT-RULES.md`；项目级冻结理路写 `docs/decisions/`。
 
-```markdown
-## 🎯 关键产品决策
-
-| # | 决策项 | 当前选择 | 备选方案 |
-|---|---|---|---|
-| 1 | [在「具体页面 - 区域」对什么对象做什么决策] | [当前选择，含完整业务描述] | [1-2 种备选，标明取舍] |
-
-> 决策的共同理由：[一段话集中说明，不在每行重复]
-```
-
-**填写要求**：
-- "决策项"列必须明确"在哪个页面 / 哪个 Tab / 哪个区域，对什么对象，做什么决策"
-- "当前选择"用一句完整业务描述，不写实现细节
-- "备选方案"列 1-2 种合理替代，注明为什么没选
-- "共同理由"放表格下方，集中表达决策依据；不在每行的"备选方案"里重复
-
-如果某工作是纯执行型（无 PM 决策点）：本节填一行 `本次工作无关键产品决策（执行对应功能型规格文档已确定方案）`。
+禁止在规格正文里保留“关键产品决策”历史表、旧版本正文、删除线方案或迭代流水账。若读者需要理解为什么，链接到相应决定记录；若决定尚未确认，返回 design，不得在 spec-writing 阶段补成规范。
 
 ---
 

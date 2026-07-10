@@ -44,7 +44,7 @@ python3 ~/.pmai/scripts/status-view.py "$tmp/Demo" --narrative
 
 PMAI 是面向 PM 的**产品上下文统一层**：它把产品文档、原型、反馈、决策和后续实现上下文接起来，让 AI 在每次协作时都知道这个产品是什么、已有原型长什么样、哪些规则和取舍已经确认。
 
-PMAI 不和 Claude Design、design-html 或 Claude Code 比"谁更快生成第一版原型"。它更适合在方向逐渐明确后接管上下文、边界、文档和持续迭代：新需求基于已有产品上下文继续生长，PM 看着原型调整，原型确认后反向生成可评审 PRD 和 decision packet。
+PMAI 不和 Claude Design、design-html 或 Claude Code 比"谁更快生成第一版原型"。它负责把方向讨论、prototype / product 构建、PM 看结果多轮修改、最终验收、合入 main 和正式文档对齐接成同一条链路。新需求从已有产品上下文继续生长，PM 只处理产品判断、看结果和明确定稿。
 
 定位是 **PM 单人生产力工具**，不是团队 SOP / CI 平台 / 多租户基础设施。完整产品意义、非目标和成功标准见 [`PRODUCT.md`](./PRODUCT.md)。
 
@@ -61,15 +61,14 @@ PMAI 不和 Claude Design、design-html 或 Claude Code 比"谁更快生成第�
 
 /pmai-init-project    项目初始化统一入口（AI 自动判断全新项目 / 资料目录 / 已有代码；全新项目搭底座，已有代码直接盘点现状）
 
-# 日常循环（模块规格先行，必要时再建）
+# 日常循环（design 讨论，build 看结果）
 
-/pmai-design "批量审核"    讨论清楚，写模块三件套：discussion.md / decisions.md / spec.md
-/pmai-build 批量审核       大需求才建：对着 spec.md 或功能型规格文档在 prototype/ 里实现，可选隔离环境和建造工具档位
-/pmai-build-close                build 验收后收尾：提交/合并实现改动，对齐现状 / 规则 / 模块规格
+/pmai-design "批量审核"    恢复旧上下文，讨论清楚并自动形成建造依据
+/pmai-build 批量审核       自动判断构建 prototype 或 product；PM 看结果、多轮修改、说“可以提交”后自动收尾
 /pmai-status          产品现状视图（产品长什么样 / 当前模块做到哪 / 下一步）
 ```
 
-PM 全程**只做决策**（方向 / 结构 / 建造方式 / 验收 / 沉淀）；代码、commit、worktree 隔离、文档同步由框架兜。
+PM 全程**只做产品决策、看结果和明确定稿**；meta / mockup / spec-writing 分流、代码、commit、worktree、执行器、验收证据和文档同步由框架兜。
 
 ---
 
@@ -257,16 +256,14 @@ bash ~/.pmai/scripts/measure-tthw.sh record /path/to/project \
 > **注意**：装好 pmai 后，所有 skill 在 Claude Code / Codex 的 host skill 目录和 OpenCode commands 里都以 `pmai-` 前缀注册（防与 gstack / 其他框架命名冲突）。下面例子中的 `/pmai-*` 是真实的命令名。
 
 ```
-/pmai-design "<一句话>"      → 探索真问题、理清信息结构、写模块三件套
+/pmai-design "<一句话>"      → 恢复上下文、探索真问题、按需调 meta / mockup / spec-writing，并提交建造依据
   ↓
-/pmai-build <模块或文档>     → 大需求才建；对着模块 spec 或 docs/modules/<按内容命名>.md 改 prototype/
+/pmai-build <模块或文档>     → 构建 prototype 或 product；PM 看结果多轮修改，定稿后自动检查、合入 main 并更新文档
   ↓
 /pmai-status             → 忘了当前停在哪时，用它读状态并提示下一步
-  ↓
-/pmai-build-close                 → build 经 PM 验收后，提交/合并实现改动并对齐产品现状、规则、模块规格
 ```
 
-简单改动可以跳过完整流程：直接改完后用 `/pmai-record` 做轻量记录；大需求才进入 `/pmai-build`，build 验收后再用 `/pmai-build-close`。
+简单改动可以跳过完整流程：用 `/pmai-quick-fix` 修复，需要长期归位时再用 `/pmai-record`。完整需求进入 `/pmai-build` 后，PM 说“定稿 / 可以提交 / 可以合并”即触发自动 finalize；`/pmai-build-close` 只用于兼容或中断恢复。
 
 ### 3. 多机 / 团队仓
 
@@ -293,8 +290,8 @@ PMAI 走纯全局：每台要用的机器各自 `pmai install` 一次（全局�
 
 | Skill | 用途 |
 |---|---|
-| `/pmai-status` | **续跑辅助**：读当前阶段做下一步（设计 → build → 复审 → 沉淀），先说再动 |
-| `/pmai-build` | 对着模块 `spec.md` 或功能型规格文档在 `prototype/` 建；PM 选择建造工具档位和是否开隔离环境 |
+| `/pmai-status` | **续跑辅助**：读当前状态和建议下一步；不向 PM 暴露 worktree、合同或证据 JSON |
+| `/pmai-build` | 统一构建前台：自动判断 prototype / product、创建或复用隔离环境、选择建造与验收工具；PM 定稿后自动落地主线并更新正式文档 |
 | `/pmai-spec-writing` | 功能型规格文档成文器：生成/修改模块规格；PRD、功能需求、功能描述、功能规格、功能评审稿都走这里 |
 | `/pmai-doc-writing` | 介绍型文档成文器：产品介绍、产品功能清单、优势说明、一页纸、汇报材料，默认落 `docs/deliverables/` |
 
@@ -302,7 +299,7 @@ PMAI 走纯全局：每台要用的机器各自 `pmai install` 一次（全局�
 
 | Skill | 用途 |
 |---|---|
-| `/pmai-build-close` | build 验收后的收尾：提交 / 合并实现改动，按最终原型对齐模块决策与规格，更新产品现状 / 规则 / 术语 |
+| `/pmai-build-close` | **兼容与恢复入口**：中断续跑、merge 冲突恢复或 `landed/docs_pending` 文档恢复；正常链路不需要手动调用 |
 | `/pmai-record` | 轻量记录：main 小改或 design 后暂不 build 时，把稳定术语 / 规则 / 当前设计状态写回项目底座 |
 | `/pmai-build-cancel` | 放弃当前 build，不合并，清活跃状态并排队清理隔离环境 |
 

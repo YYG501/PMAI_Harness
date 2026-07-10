@@ -1,7 +1,7 @@
 ---
 name: _shared/term-detector
 description: |
-  业务词 / 角色发现检测器（共享逻辑）。当前由 `/pmai-build-close` 调用，识别本次工作真实落地的新业务词 / 角色，
+  业务词 / 角色发现检测器（共享逻辑）。由 landed 后自动文档编译调用，识别本次工作真实落地的新业务词 / 角色，
   patch 进 PRODUCT 业务术语表 / 用户画像。
 ---
 
@@ -15,7 +15,7 @@ description: |
 
 | 调用 skill | 调用位置 | 输入文件 |
 |---|---|---|
-| `/pmai-build-close` | 术语回写步骤 | 涉及模块 `discussion.md` / `decisions.md` / `spec.md` + 按需功能型规格文档 |
+| 自动 finalize（兼容 `/pmai-build-close` 恢复） | landed 后术语回写 | context pack + accepted deltas + 涉及模块 `discussion.md` / `decisions.md` / `spec.md` + 按需功能型规格文档 |
 
 **禁止位置**：
 - `design` 刚开始：PM 修辞密度高、业务词还没沉淀
@@ -27,10 +27,12 @@ description: |
 
 | 层级 | 文件 | 谁写 | 谁读 |
 |---|---|---|---|
-| **本次工作临时词典** | 模块 `discussion.md` / `decisions.md` 或功能型规格文档 §三 名词解释 | design / spec-writing | build / build-close 按需读 |
-| **跨工作长期词典** | `PRODUCT.md ## 业务术语表` | `/pmai-build-close` detector + PM 确认 → patch | design / build / spec-writing 必读 |
+| **本次工作临时词典** | 模块 `discussion.md` / `decisions.md` 或功能型规格文档 §三 名词解释 | design / spec-writing | build / finalize 按需读 |
+| **跨工作长期词典** | `PRODUCT.md ## 业务术语表` | landed 后 detector 按 decision policy → patch | design / build / spec-writing 必读 |
 
-两份词典在 build 阶段是**并集读**：PRODUCT 是已沉淀的稳定基线，模块 discussion/decisions 或 PRD §三是本次新引入还未升级的临时词。`/pmai-build-close` 时 detector 把真稳定下来的词 promote 到长期词典。
+两份词典在 build 阶段是**并集读**：PRODUCT 是已沉淀的稳定基线，模块 discussion/decisions 或 PRD §三是本次新引入还未升级的临时词。实现落入 main 后，detector 把真稳定下来的词提升到长期词典；兼容恢复入口复用同一逻辑。
+
+普通术语定义属于可逆表达：AI 给推荐并推进，在自然收口点汇总。新角色、新对象或一个定义会改变产品模型时，才立即让 PM 拍板。不得把每个 detector finding 都变成 PM 问题。
 
 ## 如何调用
 
@@ -95,7 +97,7 @@ with open('$SKIP_FILE', 'w') as f: json.dump(data, f, ensure_ascii=False, indent
 "
 ```
 
-**生命周期**：随当前工作；/pmai-build-close 或 /pmai-build-cancel 后清空（不持久跨工作）。
+**生命周期**：随当前工作；自动 finalize 完成或 `/pmai-build-cancel` 后清空（不持久跨工作）。
 
 ## 决策依据
 
