@@ -10,7 +10,7 @@
 #   6. ~/.pmai/ working tree clean (or warn if dirty — affects consumers)
 #   7. Remote reachable (short network check, non-fatal)
 #   8. Claude Code Bash 工具子进程 PATH 能调到 pmai（zsh 用户常踩盲点）
-#   9. gstack readiness（init-project 的外部依赖，缺失时 warning）
+#   9. gstack readiness（可选浏览器/设计适配器，缺失时 warning）
 #   10. gstack browser/design diagnostics（mockup 的可选外部能力）
 
 set -uo pipefail
@@ -42,7 +42,7 @@ Checks global PMAI install integrity:
   - ~/.codex/prompts/pmai-*.md Codex CLI slash prompt exposure
   - ~/.config/opencode/commands/pmai-*.md OpenCode slash command exposure
   - working tree, remote reachability, Claude Code bash PATH
-  - gstack readiness for /pmai-init-project
+  - optional gstack/browser readiness
   - passive gstack browser/design diagnostics for /pmai-mockup
   - with --browser-smoke: actively launch gstack browse and fail if unusable
 EOF
@@ -503,7 +503,7 @@ elif [ -d "$HOME/.claude/skills/gstack" ]; then
     ok "gstack skill found at ~/.claude/skills/gstack"
   fi
 else
-  warn "gstack 未检测到 — /pmai-init-project 建全新项目骨架会失败；已有代码库接入不受阻塞；参考：https://github.com/garrytan/gstack"
+  warn "gstack 未检测到 — 初始化和非 Web build 不受影响；Web 验收需使用 gstack 或其它主动浏览器适配器；参考：https://github.com/garrytan/gstack"
 fi
 
 # 9. gstack browser/design diagnostics

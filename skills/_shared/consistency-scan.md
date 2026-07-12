@@ -29,10 +29,10 @@
 
 ### 第二步 · grep 相关文档
 
-拿锚点去权威来源、build target 和文档落点里搜：
+拿锚点去规范性来源、build target 和文档落点里搜：
 
-- **规格** `docs/modules/<模块>/spec.md` —— 这个字段 / 规则在规格里怎么定义的？
-- **build target**：`prototype/` 或真实产品源码 / 接口 / 数据层 —— 最终 commit 实际实现了什么？
+- **规格** `docs/modules/<模块>/spec.md` —— 最终目标要求如何定义？
+- **build target**：合同 `target.paths` 与 `project.yml` 入口对应的源码 / 接口 / 数据层 —— 最终 commit 实际实现了什么？
 - **DESIGN.md** —— 涉及视觉 / 组件的，DESIGN 里的约定还对得上吗？
 - **术语表** `PRODUCT.md` 业务术语表 —— 改了某个词，有没有近义词散落各处该统一？
 
@@ -76,9 +76,10 @@ python3 "$PMAI_HOME/scripts/check-state-index-drift.py" "$REPO_ROOT" || true
 ### 4.2 landed：只编译 main 已有事实
 
 - 从 main 的 landed diff、build contract、accepted deltas 和验收证据生成文档影响地图；
-- `spec-writing` 用“落地主线后的事实对账”模式更新 `spec.md` 与决定；
+- `spec-writing` 用“落地主线后的目标对账”模式分类实现差异；
 - 每个新增或改变的对象、动作、状态、权限、页面、术语都有 covered 或带理由的 no-change；
-- `spec.md` 只保留当前事实，历史留在 Git 与 `decisions.md`；
+- `spec.md` 只保留当前有效的最终目标，历史留在 Git 与 `decisions.md`；
+- build target 与规格不一致时先分类：符合、accepted delta、实现遗漏、无依据实现；只有 accepted delta 可以改变规格目标；
 - 文档失败只记录 `landed/docs_pending`，不回滚或重复 merge。
 
 ---

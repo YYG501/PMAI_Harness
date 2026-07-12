@@ -5,52 +5,81 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 source "$SCRIPT_DIR/helpers/assert.sh"
 FRAMEWORK_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 PROFILE="$FRAMEWORK_ROOT/scripts/acceptance-profile.py"
+PROJECT_DEFINITION="$FRAMEWORK_ROOT/scripts/project-definition.py"
 
-test_prototype_profile() {
-  start_test "acceptance-profile: prototype uses browser/coverage/visual/behavior"
-  out=$(python3 "$PROFILE" --repo-root "$FRAMEWORK_ROOT" --target prototype)
-  python3 -c 'import json,sys; n=[x["name"] for x in json.load(sys.stdin)["required_checks"]]; assert n==["browser-smoke","coverage","visual","behavior"]' <<<"$out" \
-    && pass_test || _fail "prototype checks mismatch"
+write_definition() {
+  local repo="$1" type="$2" root="$3" entrypoint="$4" web="$5"
+  mkdir -p "$repo/docs/modules/demo"
+  echo '# Demo' > "$repo/docs/modules/demo/spec.md"
+  local args=(
+    write "$repo" --source docs/modules/demo/spec.md --type "$type"
+    --root "$root" --entrypoint "$entrypoint"
+    --language typescript --runtime node --framework nextjs --package-manager pnpm
+    --build-command "pnpm run build" --test-command "pnpm run test"
+    --typecheck-command "pnpm run typecheck"
+  )
+  if [ "$web" = "yes" ]; then
+    args+=(--web-start "pnpm dev --port {port}" --web-port 3000)
+  fi
+  python3 "$PROJECT_DEFINITION" "${args[@]}" >/dev/null
 }
 
-test_product_profile_detects_repo_commands_and_risk_adapters() {
-  start_test "acceptance-profile: product detects scripts + UI/migration/security checks"
+test_project_definition_profiles() {
+  start_test "acceptance-profile: project.yml drives prototype/web-product/non-web-product checks"
+  local t proto web_product backend
+  t=$(mktemp -d "${TMPDIR:-/tmp}/pmai-acceptance.XXXXXX")
+  write_definition "$t" prototype prototype/ prototype/ yes
+  proto=$(python3 "$PROFILE" --repo-root "$t" --project-definition "$t/.pm-workflow/project.yml" --path prototype/page.tsx)
+  rm -f "$t/.pm-workflow/project.yml"
+  write_definition "$t" product . app/ yes
+  web_product=$(python3 "$PROFILE" --repo-root "$t" --project-definition "$t/.pm-workflow/project.yml" --path app/page.tsx)
+  backend=$(python3 "$PROFILE" --repo-root "$t" --project-definition "$t/.pm-workflow/project.yml" --path server/api.ts)
+  rm -rf "$t"
+  if python3 -c 'import json,sys; n=[x["name"] for x in json.load(sys.stdin)["required_checks"]]; assert n==["browser-smoke","coverage","visual","behavior"]' <<<"$proto" \
+    && python3 -c 'import json,sys; n={x["name"] for x in json.load(sys.stdin)["required_checks"]}; assert {"scope-coverage","tests","build","browser-smoke","visual","behavior"} <= n' <<<"$web_product" \
+    && python3 -c 'import json,sys; n={x["name"] for x in json.load(sys.stdin)["required_checks"]}; assert not ({"browser-smoke","visual","behavior"} & n)' <<<"$backend"; then
+    pass_test
+  else
+    _fail "project.yml adaptive checks mismatch"
+  fi
+}
+
+test_missing_project_definition_fails() {
+  start_test "acceptance-profile: missing project.yml fails closed"
   T=$(mktemp -d "${TMPDIR:-/tmp}/pmai-acceptance.XXXXXX")
-  cat > "$T/package.json" <<'JSON'
-{"scripts":{"test":"vitest run","typecheck":"tsc --noEmit","build":"vite build"}}
-JSON
-  touch "$T/pnpm-lock.yaml"
-  out=$(python3 "$PROFILE" --repo-root "$T" --target product --path src/app/page.tsx --ui yes --data-migration --security-sensitive)
+  if python3 "$PROFILE" --repo-root "$T" --project-definition .pm-workflow/project.yml >/tmp/acceptance.$$ 2>/tmp/acceptance.err.$$; then
+    _fail "missing project.yml should block acceptance compilation"
+  elif grep -q '/pmai-design' /tmp/acceptance.err.$$; then
+    pass_test
+  else
+    _fail "missing project.yml guidance should route to design"
+  fi
+  rm -f /tmp/acceptance.$$ /tmp/acceptance.err.$$
+  rm -rf "$T"
+}
+
+test_product_profile_uses_declared_commands_and_risk_adapters() {
+  start_test "acceptance-profile: product uses project.yml commands + UI/migration/security checks"
+  T=$(mktemp -d "${TMPDIR:-/tmp}/pmai-acceptance.XXXXXX")
+  write_definition "$T" product . app/ yes
+  out=$(python3 "$PROFILE" --repo-root "$T" --project-definition "$T/.pm-workflow/project.yml" --path app/page.tsx --data-migration --security-sensitive)
   python3 -c 'import json,sys; d=json.load(sys.stdin); n={x["name"]:x for x in d["required_checks"]}; assert {"scope-coverage","tests","typecheck","build","browser-smoke","visual","behavior","migration","security"} <= set(n); assert n["tests"]["command"]=="pnpm run test"' <<<"$out" \
     && pass_test || _fail "product checks mismatch"
   rm -rf "$T"
 }
 
-test_product_profile_does_not_add_ui_checks_for_backend_target() {
-  start_test "acceptance-profile: explicit backend path does not inherit unrelated repo UI checks"
+test_non_web_product_does_not_require_browser() {
+  start_test "acceptance-profile: non-Web product does not require browser"
   T=$(mktemp -d "${TMPDIR:-/tmp}/pmai-acceptance.XXXXXX")
-  mkdir -p "$T/src/app" "$T/server/api"
-  cat > "$T/package.json" <<'JSON'
-{"scripts":{"test":"vitest run"}}
-JSON
-  out=$(python3 "$PROFILE" --repo-root "$T" --target product --path server/api/roles.ts)
-  python3 -c 'import json,sys; n={x["name"] for x in json.load(sys.stdin)["required_checks"]}; assert "tests" in n; assert not ({"browser-smoke","visual","behavior"} & n)' <<<"$out" \
-    && pass_test || _fail "backend target should not add UI checks"
-  rm -rf "$T"
-}
-
-test_product_profile_does_not_treat_sources_as_browser_ui() {
-  start_test "acceptance-profile: Sources backend target does not imply browser UI"
-  T=$(mktemp -d "${TMPDIR:-/tmp}/pmai-acceptance.XXXXXX")
-  mkdir -p "$T/Sources/Service"
-  out=$(python3 "$PROFILE" --repo-root "$T" --target product --path Sources/Service/API.swift)
+  write_definition "$T" product . Sources/Service/ no
+  out=$(python3 "$PROFILE" --repo-root "$T" --project-definition "$T/.pm-workflow/project.yml" --path Sources/Service/API.swift)
   python3 -c 'import json,sys; n={x["name"] for x in json.load(sys.stdin)["required_checks"]}; assert not ({"browser-smoke","visual","behavior"} & n)' <<<"$out" \
-    && pass_test || _fail "Sources backend should not add browser UI checks"
+    && pass_test || _fail "non-Web product should not add browser checks"
   rm -rf "$T"
 }
 
-test_prototype_profile
-test_product_profile_detects_repo_commands_and_risk_adapters
-test_product_profile_does_not_add_ui_checks_for_backend_target
-test_product_profile_does_not_treat_sources_as_browser_ui
+test_project_definition_profiles
+test_missing_project_definition_fails
+test_product_profile_uses_declared_commands_and_risk_adapters
+test_non_web_product_does_not_require_browser
 report_results "acceptance-profile"

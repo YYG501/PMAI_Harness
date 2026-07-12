@@ -109,7 +109,7 @@ AI 在后台依次检查下面八个面，但只询问会改变产品模型的�
 
 禁止把“是否调 meta / mockup / spec-writing”“是否保存建造依据”变成 PM 问题。
 
-新决定必须能回锚到 PM 明确回答或 PM 接受 AI 推荐的证据。推翻旧决定时在 `decisions.md` 明确写被哪条新决定取代；`spec.md` 只写当前事实。
+新决定必须能回锚到 PM 明确回答或 PM 接受 AI 推荐的证据。推翻旧决定时在 `decisions.md` 明确写被哪条新决定取代；`spec.md` 只写当前有效的最终目标，不记录讨论过程或实现进度。
 
 ### 4. 按需自动进入 meta，再返回 design
 
@@ -144,13 +144,70 @@ meta 必须产生新判断、危险前提、反例和推荐；若存在真实产
 
 然后自动调用 `/pmai-spec-writing` 的“建造前规格编译”模式。它只把已确认决定编译为当前 `spec.md`，并建立对象—动作—状态—权限—页面覆盖矩阵。发现遗漏或问题句时立即回到 design，不在成文阶段猜答案。
 
-### 7. 自动固定建造依据
+### 7. 首次定稿时生成项目建造定义
+
+先检查 `.pm-workflow/project.yml`：
+
+```bash
+PROJECT_DEFINITION="$REPO_ROOT/.pm-workflow/project.yml"
+if [ -f "$PROJECT_DEFINITION" ]; then
+  python3 "$PMAI_HOME/scripts/project-definition.py" validate "$REPO_ROOT"
+fi
+```
+
+#### 首次生成
+
+当文件不存在，且本轮已经达到可建造状态时，AI 根据已确认需求、现有代码和设计基线推荐：
+
+- 建造对象：`prototype` 或 `product`；
+- 代码根目录和入口；
+- language、runtime、framework、package manager；
+- 仓库实际可执行的 install/build/test/typecheck 命令；
+- 是否包含 Web 页面，以及真实启动命令、ready path 和候选端口。
+
+这是一项会影响后续所有 build 的项目级决定，向 PM 展示一次业务可理解的确认：
+
+```text
+这个项目后续将按 <可交互原型 | 真实产品> 构建。
+技术方案：<框架 + 语言 + 运行环境>
+代码位置：<仓内相对路径>
+
+[按这个方案固定]
+[调整建造对象]
+[调整技术方案]
+```
+
+PM 确认后调用 helper 原子写入定义；不得让 AI 手写不经校验的 YAML：
+
+```bash
+python3 "$PMAI_HOME/scripts/project-definition.py" write "$REPO_ROOT" \
+  --source "docs/modules/<模块>/spec.md" \
+  --type "<prototype|product>" \
+  --root "<仓内相对代码根>" \
+  --entrypoint "<仓内相对入口>" \
+  --language "<language>" \
+  --runtime "<runtime>" \
+  --framework "<framework>" \
+  --package-manager "<package-manager>" \
+  <按真实方案追加 --install-command/--build-command/--test-command/--typecheck-command> \
+  <Web 项目追加 --web-start/--web-ready-path/--web-port>
+```
+
+设计只是探索、尚未准备 build 时，不生成该文件。
+
+#### 后续复用或重定义
+
+文件已存在时默认复用，不因单个模块重新选择类型或技术栈。只有当前定义确实无法承载新需求时，design 才把差异作为项目级产品决定交 PM 确认；确认后传 `--allow-redefinition`，helper 自动要求 `design_revision` 递增并更新来源 hash。
+
+旧消费仓若只有 `.pm-workflow/config.yml:project.type` 或 `CLAUDE.md auto-detected`，本轮 design 可读取兼容值，但定稿时必须生成新 `project.yml`，之后新文件是唯一真相源。
+
+### 8. 自动固定建造依据
 
 规格编译完成后：
 
 1. 跑开放问题与一致性检查；
 2. 重新生成 context pack；
-3. 只暂存本模块 `discussion.md`、`decisions.md`、`spec.md`、必要索引和本轮确认的 `mockups/` 记录；
+3. 只暂存本模块 `discussion.md`、`decisions.md`、`spec.md`、必要索引、本轮确认的 `mockups/` 记录，以及本轮首次生成或明确重定义的 `.pm-workflow/project.yml`；
 4. 保护无关脏改动，不顺手提交其它文件；
 5. 自动提交建造依据，不再弹“是否保存”菜单；
 6. 把 source hash、revision 和 checkpoint 记录为 `ready_to_build`，再提交状态记录。
@@ -169,7 +226,8 @@ APPROVED_SOURCE_HASH=$(python3 -c 'import json,sys; print(json.load(open(sys.arg
 git -C "$REPO_ROOT" add -- \
   "docs/modules/<模块>/discussion.md" \
   "docs/modules/<模块>/decisions.md" \
-  "docs/modules/<模块>/spec.md"
+  "docs/modules/<模块>/spec.md" \
+  ".pm-workflow/project.yml"  # 仅本轮创建或重定义时加入
 git -C "$REPO_ROOT" commit -m "design(<模块>): approve build basis"
 CHECKPOINT_COMMIT=$(git -C "$REPO_ROOT" rev-parse HEAD)
 
@@ -199,7 +257,7 @@ git -C "$REPO_ROOT" commit -m "design(<模块>): mark ready to build"
 
 这轮沿用了：<相关旧决定>。
 这轮新拍了：<新增/替代决定>。
-建造对象建议：<prototype | product>，因为 <一句话依据>。
+项目建造定义：<本轮首次固定 / 沿用既有定义 / 经 PM 确认后更新>。
 
 ▶ Next Up：可以直接继续 /pmai-build <模块>；构建细节由框架自动选择。
 ```
@@ -211,7 +269,8 @@ git -C "$REPO_ROOT" commit -m "design(<模块>): mark ready to build"
 - PM 第一次说“不合理 / 感觉不对”就回根因，并自动调用 meta。
 - meta、mockup、spec-writing 是 design 的内部能力；完成后返回同一主线。
 - 只有真实产品模型岔路才立即问 PM；机械判断和可逆偏好由 AI 承担。
-- spec 只保留当前事实；历史只进 Git 和 `decisions.md`。
+- spec 只保留当前有效的最终目标；历史只进 Git 和 `decisions.md`，原型和代码只作证据与缺口检查。
 - design 定稿自动提交建造依据并进入 `ready_to_build`，不要求 PM 理解保存依据、worktree 或合同字段。
+- 首次可建造 design 必须生成并校验 `.pm-workflow/project.yml`；之后默认复用，重定义必须由 PM 明确确认。
 - 全程不改主原型或真实产品代码；实现进入 `/pmai-build`。
 - 给 PM 的话使用业务语言，不出现 context pack、hash、revision、worktree、执行器或证据 JSON。

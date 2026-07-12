@@ -85,6 +85,30 @@ test_prototype_plus_docs_blocks() {
   fixture_teardown
 }
 
+test_project_definition_entrypoint_plus_docs_blocks() {
+  start_test "mixed guard: project.yml product entrypoint + docs/modules 阻止"
+  fixture_setup
+  mkdir -p "$FIXTURE_DIR/docs/modules/capability"
+  echo '# Spec' > "$FIXTURE_DIR/docs/modules/capability/spec.md"
+  python3 "$FRAMEWORK_ROOT/scripts/project-definition.py" write "$FIXTURE_DIR" \
+    --source docs/modules/capability/spec.md --type product --root . --entrypoint app/ \
+    --language typescript --runtime node --framework nextjs --package-manager pnpm \
+    --build-command "pnpm run build" >/dev/null
+  _stage_file "app/page.tsx"
+  _stage_file "docs/modules/capability/spec.md"
+
+  if _run_checker >/tmp/mixed.$$ 2>/tmp/mixed.err.$$; then
+    _fail "project implementation + docs/modules should be blocked"
+  elif grep -q "项目实现" /tmp/mixed.err.$$ && grep -q "/pmai-build" /tmp/mixed.err.$$; then
+    pass_test
+  else
+    _fail "guard should use project.yml entrypoints"
+    cat /tmp/mixed.err.$$ >&2
+  fi
+  rm -f /tmp/mixed.$$ /tmp/mixed.err.$$
+  fixture_teardown
+}
+
 test_prototype_plus_mockups_blocks() {
   start_test "mixed guard: prototype + mockups 阻止"
   fixture_setup
@@ -171,6 +195,7 @@ test_prototype_only_passes
 test_docs_only_passes
 test_mockups_only_passes
 test_prototype_plus_docs_blocks
+test_project_definition_entrypoint_plus_docs_blocks
 test_prototype_plus_mockups_blocks
 test_prototype_plus_docs_plus_mockups_blocks
 test_build_close_allow_env_passes

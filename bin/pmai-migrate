@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# pmai-migrate — 消费仓 vendored → I-mini 一键迁移
+# pmai-migrate — LEGACY COMPATIBILITY：消费仓 vendored → I-mini 一键迁移
 #
 # 用法：
 #   pmai-migrate <consumer-dir>             # preview + [y/N] + 真跑
@@ -22,6 +22,8 @@
 #   6. 重装 .git/hooks/pre-commit
 #   7. 删 .framework-sync-state.json（不再 vendored，I-mini 不需要）
 #   8. 提示 PM commit migration
+#
+# 仅用于读取和清理旧 vendored 布局，不是 v2 新项目或日常工作入口。
 
 set -uo pipefail
 

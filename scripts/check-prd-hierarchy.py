@@ -283,8 +283,8 @@ def check_table_structure(
 def check_style(lines: list[str]) -> list[dict]:
     """全篇扫描描述风格违规。返回违规列表。
 
-    Fenced code block (```) 内的行整体跳过 —— §六「原型」节 ASCII 原型图
-    包在 fenced block 里，会含 ▾ / · 等界面字符（界面元素，非工程黑话）。
+    Fenced code block (```) 内的行整体跳过。规格正文通常不含代码块；
+    附件或引用材料可能包含示例文本，不参与本 lint。
     """
     violations: list[dict] = []
     in_fenced = False

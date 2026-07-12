@@ -22,7 +22,8 @@ design、meta、mockup、spec-writing、build 和自动收尾共用这一套决�
 
 工作环境和构建工具本身通常属于可逆执行偏好，但 PM 已明确要求每个新 build 开工前确认一次，因此它们是本 policy 的窄例外：
 
-- 项目类型从 `.pm-workflow/config.yml` 静默读取，不进入确认卡；
+- 首个可建造 design 确定项目类型、技术栈和代码入口时属于项目级产品决定，由 PM 一次确认并写入 `.pm-workflow/project.yml`；
+- 后续 build 只读已经确认的 `project.yml`，不在开工卡重复询问；
 - 验收方案按项目类型和风险后台生成，不进入确认卡；
 - AI 只推荐工作环境和构建工具，PM 确认或调整后才开工；
 - 卡片使用“独立环境 / 当前环境”和工具显示名，不展示 worktree、合同、hash、证据等内部实现；
@@ -32,7 +33,8 @@ design、meta、mockup、spec-writing、build 和自动收尾共用这一套决�
 
 - `discussion.md` 中的问号、TODO、假设、AI 推荐、未被回答的选项都不能写进 active decisions 或规范性规格。
 - 新决定必须能指向 PM 的明确回答，或 PM 明确接受 AI 推荐的语句。
-- 推翻旧决定时在 `decisions.md` 标明 supersede 关系；`spec.md` 直接改成当前事实，不保留删除线和旧正文。
+- 推翻旧决定时在 `decisions.md` 标明 supersede 关系；`spec.md` 只在 PM 已确认新目标或 accepted delta 后改成最终要求，不保留删除线和旧正文。
+- 原型、mockup、代码和 landed diff 只是实现证据，不能自行覆盖已确认规格；实现少做判为缺口，多做但无依据则返回 design 确认。
 
 ## 提问合同
 
@@ -43,4 +45,4 @@ design、meta、mockup、spec-writing、build 和自动收尾共用这一套决�
 - AI 的默认建议及依据；
 - 不回答时为什么不能安全继续。
 
-不要把每个 finding 拆成一道题，也不要问 PM 是否调用 meta、mockup、spec-writing 或手动 close。build 开工只用一张卡确认“工作环境 + 构建工具”，不得把 worktree、项目类型或验收适配器做成额外问题。
+不要把每个 finding 拆成一道题，也不要问 PM 是否调用 meta、mockup、spec-writing 或手动 close。首次 project definition 在 design 收口点确认；build 开工只用一张卡确认“工作环境 + 构建工具”，不得把 worktree、项目类型或验收适配器再次做成问题。

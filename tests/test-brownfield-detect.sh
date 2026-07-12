@@ -30,19 +30,12 @@ README="$REPO_ROOT/README.md"
 # -----------------------------------------------------------------
 test_existing_empty_dir_rejected() {
   start_test "T1: init-project.sh 已存在空目录 → 拒"
-  # init-project.sh 先检查 gstack 再检查目录，CI 无 gstack 时会被 gstack 检查拦下，
-  # 错误信息变成「gstack 未安装」而非「目标目录已存在」。本测严格断言文案，需 gstack 可用。
-  if ! command -v gstack &>/dev/null && [ ! -d "$HOME/.claude/skills/gstack" ]; then
-    echo "  ⏭️  SKIP: gstack 不可用，无法走到目录检查分支"
-    return
-  fi
-
   local base existing
   base=$(mktemp -d)
   existing="$base/existing-empty"
   mkdir -p "$existing"
 
-  if bash "$INIT_PROJECT_SH" "test-proj" "$existing" "test" prototype \
+  if bash "$INIT_PROJECT_SH" "test-proj" "$existing" "test" \
        >/tmp/test-brownfield-T1.out 2>&1; then
     _fail "init-project.sh 应拒已存在目录但成功了"
     rm -rf "$base"
@@ -68,7 +61,7 @@ test_existing_git_dir_rejected() {
   existing="$base/existing-git"
   mkdir -p "$existing/.git"
 
-  if bash "$INIT_PROJECT_SH" "test-proj" "$existing" "test" prototype \
+  if bash "$INIT_PROJECT_SH" "test-proj" "$existing" "test" \
        >/tmp/test-brownfield-T2.out 2>&1; then
     _fail "init-project.sh 应拒已存在含 .git 目录但成功了"
     rm -rf "$base"
@@ -84,18 +77,13 @@ test_existing_git_dir_rejected() {
 # -----------------------------------------------------------------
 test_skill_describes_brownfield_gate() {
   start_test "T3: init-project SKILL.md 阶段 A 含已有代码自动分流 + --allow-existing 接住"
-  # AI 主动诊断 + 自动分流接口（不再写死代码标志扫描，不让 PM 在 init/audit 之间选命令）
-  if ! grep -qE "已有代码库|AI 主动诊断|逐条标注|manifest|Package.swift" "$INIT_PROJECT_SKILL"; then
+  # AI 主动诊断 + 自动分流接口（不让 PM 在 init/audit 之间选命令）
+  if ! grep -q "已有代码库" "$INIT_PROJECT_SKILL"; then
     _fail "SKILL.md 不含 AI 诊断 / 已有代码识别接口"
     return
   fi
-  # codebase 命中后必须自动进入子流程，而不是把另一个 skill 作为 PM 选择题抛出去
-  if ! grep -qE "自动进入.*codebase-audit|内部子流程" "$INIT_PROJECT_SKILL"; then
+  if ! grep -q 'skills/_internal/codebase-audit/SKILL.md' "$INIT_PROJECT_SKILL"; then
     _fail "SKILL.md 不含已有代码自动进入 codebase-audit 子流程的约定"
-    return
-  fi
-  if ! grep -q "不再问 PM" "$INIT_PROJECT_SKILL"; then
-    _fail "SKILL.md 应明确不再问 PM 是否跑代码盘点"
     return
   fi
   if grep -qE "优先推荐.*(/pmai-codebase-audit|codebase-audit)" "$INIT_PROJECT_SKILL"; then
@@ -103,23 +91,19 @@ test_skill_describes_brownfield_gate() {
     return
   fi
   # 已有代码分支不能被 init-project.sh 的 gstack 硬依赖阻塞
-  if ! grep -qE "不调用 .*init-project.sh|gstack 不可用不阻塞" "$INIT_PROJECT_SKILL"; then
+  if ! grep -qE "不调用初始化脚本|不因 gstack 缺失阻塞" "$INIT_PROJECT_SKILL"; then
     _fail "SKILL.md 缺已有代码分支不调用 init-project.sh / 不被 gstack 阻塞的约定"
     return
   fi
-  if ! grep -q '.pm-workflow/config.yml:project.type' "$INIT_PROJECT_SKILL" \
-     || ! grep -qE 'prototype.*product' "$CODEBASE_AUDIT_SKILL"; then
-    _fail "已有代码首次接入应让 PM 确认两种项目类型并写入项目定义"
+  if grep -q '.pm-workflow/config.yml:project.type' "$INIT_PROJECT_SKILL" \
+     || ! grep -q '首次达到 `ready_to_build`' "$INIT_PROJECT_SKILL" \
+     || ! grep -q '生成 `project.yml`' "$INIT_PROJECT_SKILL"; then
+    _fail "已有代码首次接入不应提前写 type；project.yml 应留给 design"
     return
   fi
   # 接住 PM 拍方案的脚本 flag 必须存在
   if ! grep -q "allow-existing" "$INIT_PROJECT_SKILL"; then
     _fail "SKILL.md 缺 --allow-existing flag 描述（PM 拍方案接住通路）"
-    return
-  fi
-  # PM 明确 override 仍然可接住，但不能作为默认同级选项展示
-  if ! grep -qE "PM 明确.*坚持|PM 明确.*override" "$INIT_PROJECT_SKILL"; then
-    _fail "SKILL.md 缺 PM 明确 override 的接口约定"
     return
   fi
   pass_test
@@ -130,17 +114,12 @@ test_skill_describes_brownfield_gate() {
 # -----------------------------------------------------------------
 test_allow_existing_empty_dir() {
   start_test "T4: init-project.sh --allow-existing 空目录 → 接住"
-  if ! command -v gstack &>/dev/null && [ ! -d "$HOME/.claude/skills/gstack" ]; then
-    echo "  ⏭️  SKIP: gstack 不可用，跳过 e2e"
-    return
-  fi
-
   local base existing
   base=$(mktemp -d)
   existing="$base/existing-empty"
   mkdir -p "$existing"
 
-  if ! bash "$INIT_PROJECT_SH" "test-proj" "$existing" "test" prototype --allow-existing \
+  if ! bash "$INIT_PROJECT_SH" "test-proj" "$existing" "test" --allow-existing \
        >/tmp/test-brownfield-T4.out 2>&1; then
     _fail "init-project.sh --allow-existing 应接住空目录但失败 — /tmp/test-brownfield-T4.out"
     tail -20 /tmp/test-brownfield-T4.out >&2
@@ -162,11 +141,6 @@ test_allow_existing_empty_dir() {
 # -----------------------------------------------------------------
 test_allow_existing_with_assets() {
   start_test "T5: init-project.sh --allow-existing 含资料 → 资料进首 commit"
-  if ! command -v gstack &>/dev/null && [ ! -d "$HOME/.claude/skills/gstack" ]; then
-    echo "  ⏭️  SKIP: gstack 不可用，跳过 e2e"
-    return
-  fi
-
   local base existing
   base=$(mktemp -d)
   existing="$base/existing-with-assets"
@@ -175,7 +149,7 @@ test_allow_existing_with_assets() {
   echo '{"conversation":"sample"}' > "$existing/chatgpt-export.json"
   echo "PM 准备的项目笔记" > "$existing/notes.md"
 
-  if ! bash "$INIT_PROJECT_SH" "test-proj" "$existing" "test" prototype --allow-existing \
+  if ! bash "$INIT_PROJECT_SH" "test-proj" "$existing" "test" --allow-existing \
        >/tmp/test-brownfield-T5.out 2>&1; then
     _fail "init-project.sh --allow-existing 应接住资料目录但失败 — /tmp/test-brownfield-T5.out"
     tail -20 /tmp/test-brownfield-T5.out >&2

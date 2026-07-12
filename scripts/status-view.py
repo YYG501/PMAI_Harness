@@ -28,6 +28,7 @@ from _lib.state import (  # noqa: E402
     get_overall_state,
     get_timeline_state,
 )
+from _lib.project_definition import ProjectDefinitionError, load_project_definition  # noqa: E402
 from _lib.stages import LIFECYCLE_NAMES, STAGE_NAMES, MAX_STAGE  # noqa: E402  ( F13 单一真相源)
 
 
@@ -375,6 +376,14 @@ def render_health_check(repo_root: Path) -> None:
         render_uninitialized_project_hint(repo_root)
         return
 
+    project_definition = repo_root / ".pm-workflow" / "project.yml"
+    if project_definition.exists():
+        try:
+            load_project_definition(project_definition)
+        except ProjectDefinitionError:
+            print("需要注意：项目建造定义无效。继续 build 前请回到 /pmai-design 修复并重新确认。")
+            print()
+
     docs_dir = repo_root / "docs"
     if not docs_dir.exists():
         return
@@ -440,7 +449,7 @@ def suggest_next_action(work_view: dict) -> str:
     if stage <= 1:
         return f"继续{STAGE_NAMES.get(stage, '设计')}：发 /pmai-design 细化模块规格"
 
-    # build（2）：对模块 spec 直建 + 三道审 + PM 验收
+    # v1 stage 2 compatibility: module build + recorded acceptance
     if stage == 2:
         return "当前进度：build；发 /pmai-build <模块> 对着 spec 建"
 

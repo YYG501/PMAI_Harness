@@ -7,7 +7,6 @@ source "$SCRIPT_DIR/helpers/assert.sh"
 
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 PROJECT_TYPE="$REPO_ROOT/scripts/project-type.py"
-INIT_PROJECT="$REPO_ROOT/scripts/init-project.sh"
 CONFIG_TMPL="$REPO_ROOT/templates/pm-workflow.config.yml.tmpl"
 
 test_reads_explicit_project_type() {
@@ -73,12 +72,14 @@ test_invalid_explicit_type_never_falls_back() {
   rm -rf "$t"
 }
 
-test_init_contract_writes_type_and_maps_product_structure() {
-  start_test "init-project: writes project.type and maps product to system structure internally"
-  assert_file_contains "$CONFIG_TMPL" 'type: {{PROJECT_TYPE}}' "config template should persist project type" || return
-  assert_file_contains "$INIT_PROJECT" 'PROJECT_TYPE="$4"' "init should require project type" || return
-  assert_file_contains "$INIT_PROJECT" 'STRUCTURE_INTENT="system"' "product should map to system structure template" || return
-  assert_file_contains "$INIT_PROJECT" 'text.replace("{{PROJECT_TYPE}}"' "init should replace project type placeholder" || return
+test_builder_config_has_no_project_or_stack_defaults() {
+  start_test "builder config: does not duplicate project type or technology defaults"
+  if grep -qE '^project:|dev_server:|screenshot_tool:|\{\{PROJECT_TYPE\}\}' "$CONFIG_TMPL"; then
+    _fail "config template still contains project definition or stack defaults"
+    return
+  fi
+  assert_file_contains "$CONFIG_TMPL" 'builder:' "config template should keep builder preferences" || return
+  assert_file_contains "$CONFIG_TMPL" '.pm-workflow/project.yml' "config template should point to project definition" || return
   pass_test
 }
 
@@ -86,6 +87,6 @@ test_reads_explicit_project_type
 test_legacy_markers_map_without_guessing
 test_unknown_legacy_requires_definition_file
 test_invalid_explicit_type_never_falls_back
-test_init_contract_writes_type_and_maps_product_structure
+test_builder_config_has_no_project_or_stack_defaults
 
 report_results "project-type"

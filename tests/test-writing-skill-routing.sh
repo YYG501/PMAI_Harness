@@ -103,12 +103,24 @@ test_prd_lint_is_scoped_to_prd_preset() {
   pass_test
 }
 
-test_four_column_preset_does_not_trigger_prd_artifacts() {
-  start_test "spec-writing: 4 列表格不自动触发 PRD 原型覆盖"
+test_spec_is_final_target_contract_not_implementation_inventory() {
+  start_test "spec-writing: 规格是最终目标合同，不按实现覆盖裁剪"
 
-  assert_file_contains "$SPEC" "显式选择 4 列功能表 preset 但未选择 PRD 体例时，只走 P2.5 的二级 / 三级拆分确认和 P3.5 lint" "4-column preset should only trigger split confirmation and lint" || return
-  assert_file_contains "$SPEC" "原型覆盖范围表、§六原型节或完整 PRD 附件" "4-column preset should not imply PRD artifact requirements" || return
-  assert_file_contains "$SPEC" "原型覆盖范围表和 §六原型节只属于 PRD 体例" "PRD-only artifacts should be explicitly scoped" || return
+  assert_file_contains "$SPEC" "最终目标合同" "spec-writing should define the normative document contract" || return
+  assert_file_contains "$SPEC" "规范性来源" "spec-writing should distinguish normative sources" || return
+  assert_file_contains "$SPEC" "设计与实现证据" "spec-writing should treat prototypes and code as evidence" || return
+  assert_file_contains "$SPEC" "漏实现" "spec-writing should keep requirements when implementation misses them" || return
+  assert_file_contains "$SPEC" "无依据实现" "spec-writing should not promote undocumented code behavior" || return
+  assert_file_contains "$SPEC_TMPL" "指导研发实现和验收的最终目标合同" "PRD template should carry the normative contract" || return
+  assert_file_contains "$SPEC_TMPL" "不按原型或当前代码的实现覆盖状态删减" "PRD template should preserve confirmed requirements" || return
+  if grep -q -- "原型覆盖范围表" "$SPEC" "$SPEC_TMPL" "$SPEC_FEWSHOTS"; then
+    _fail "spec-writing should not require a prototype coverage table"
+    return
+  fi
+  if grep -q -- "§六 原型节 ASCII 示例" "$SPEC_FEWSHOTS"; then
+    _fail "few-shots should not teach mandatory ASCII prototype sections"
+    return
+  fi
   pass_test
 }
 
@@ -215,7 +227,7 @@ test_spec_writing_keeps_change_notes_brief
 test_spec_writing_uses_presets_not_prd_default
 test_pm_view_does_not_force_four_column_tables
 test_prd_lint_is_scoped_to_prd_preset
-test_four_column_preset_does_not_trigger_prd_artifacts
+test_spec_is_final_target_contract_not_implementation_inventory
 test_l1_l5_remain_optional_writing_tools
 test_pm_view_section_references_follow_new_numbering
 test_few_shots_anchor_spec_before_prd_examples

@@ -182,9 +182,9 @@ $HAS_FILE && grep -q "^## 共享组件 inventory" "$DESIGN_MD" && HAS_INVENTORY=
 
 # 设计系统
 
-> **本文件目的**：项目级设计系统约束。build 阶段读 DESIGN / 复审的覆盖审计·视觉门查这里的「共享组件 inventory」段；task executor 写代码时按视觉基线段（gstack 写的 8 段）做硬约束。
+> **本文件目的**：项目级设计系统约束。Web build 的 adaptive visual / behavior 检查读取这里的「共享组件 inventory」与视觉基线；构建工具写代码时按已确认基线执行。
 >
-> **视觉基线段未建** —— 建议 PM 跑 gstack `/design-consultation` 补全 8 段（颜色 / 字体 / 间距 / 布局 / 动效 / 美学方向 / 竞品研究 / 视觉预览板）。本框架不替 gstack 写视觉基线，本骨架只兜 inventory 段（build 阶段读 DESIGN / 复审的覆盖审计·视觉门硬依赖）。
+> **视觉基线段未建** —— 可用 gstack `/design-consultation` 或当前 runtime 的设计能力补全 8 段（颜色 / 字体 / 间距 / 布局 / 动效 / 美学方向 / 竞品研究 / 视觉预览板）。本骨架只兜 inventory；Web build 仍按 acceptance profile 选中的视觉检查 fail-closed。
 >
 > **inventory 段**由本框架管，复审累积，gstack 不写。
 >
@@ -224,7 +224,7 @@ HAS_PS=false
 | PRODUCT-STATE 段 | 从哪反推 |
 |---|---|
 | 当前功能 / 能力 | `CODEBASE-AUDIT.md` §3 架构 + §4 目录结构 + 路由 / 菜单扫描的功能面，每条 ≤ 一行 |
-| 主原型现状 | brownfield 无 `prototype/` 脚手架 → 按 audit §4 页面 / 路由列已有页面区域，备注统一标「源自现有 codebase，非 prototype/ 脚手架」；若连页面都没有，如实写「主原型尚未立」 |
+| 当前产品形态 | 按 audit §4 页面 / 路由列已有页面区域，备注「源自现有 codebase」；若连页面都没有，如实写「尚无可运行界面」。此处不预设未来代码根。 |
 | 实现深度状态（mock / 真） | 按 audit §1 技术栈 + §2 外部集成反推每层真 / mock（brownfield 有真 DB / 真后端的层填「真系统」，何时转列填「接入时已是」或「—」；扫不到的层填「未知」） |
 | 产品定位一句话 | **留空占位**，step 4 拍定 PRODUCT.md 产品定位后回填（要对齐 PRODUCT.md，而它 step 4 才产出） |
 
@@ -241,7 +241,7 @@ HAS_PS=false
   产品定位一句话留空，step 4 定方向后回填
 ```
 
-### 步骤 4：内联方向讨论（产项目定义 + PRODUCT.md + TODO.md）
+### 步骤 4：内联方向讨论（只产产品脊柱）
 
 PM 在 step 3 轻停顿说「继续」后，**在本流程内直接接着跑项目方向讨论**——不交接出去、不让 PM 手敲 `/pmai-direction`。这是已有代码首次接入的专用方向讨论，走共享真相源；全新项目的 `/pmai-init-project` 不再跑完整 5 节方向问卷。
 
@@ -250,29 +250,25 @@ PM 在 step 3 轻停顿说「继续」后，**在本流程内直接接着跑项�
 1. **@读 `skills/_shared/project-questioning.md`**（**单一真相源**——提问纪律 / 问题库 / 写作规则 / Decision gate / 5 节检查）。
 2. **全文读 `docs/CODEBASE-AUDIT.md`**（刚产出的现状档，作已有代码库的实况语境，AI 不准跳）。
 3. 按 **已有代码接入提问顺序**问 PM（由 init-project 的已有代码分支触发，和 `project-questioning` 的首次接入约定一致；这不是 `/pmai-direction` 的公开分类）：
-   - (0) 项目类型：基于现状档推荐 `prototype`（原型 / Demo 项目）或 `product`（真实产品项目），由 PM 二选确认；不保留 `system / custom / unknown` 第三档
    - (1) 产品定位（**从 codebase 反推 + PM 确认**）
    - (2) 用户画像（从代码层级 / API 角色反推 + PM 补）
-   - (3) 技术栈（**从现状档抄**，PM 确认）
+   - (3) 现有技术事实（只从现状档抄进 audit，不在初始化阶段把它冻结成新建造方案）
    - (4) 业务术语表（**从 model / API 命名反推 + PM 补**）
    - (5) TODO 待办池（PM 给，AI 不反推填充——只记 PM 提过/讨论过想做的，不排序）
 4. **未决问题闸门**（@读 `_shared/project-questioning.md` §4）：暂存文件 `docs/.project-solution-open-questions.md`，闸门必过。
-5. **Decision gate 确认门**（@读 §6）：label = 动作描述，PM 选「创建项目定义与 PRODUCT.md」才落盘；选「继续探索」回提问 Loop。
-6. **写项目定义 + `PRODUCT.md` + `TODO.md`**（@读 §5 写作规则）：
-   - 新建 `.pm-workflow/config.yml`，至少写入 `project.type: <prototype|product>`；
-   - 可从 `$PMAI_HOME/templates/pm-workflow.config.yml.tmpl` 起草，但必须按现状档把 `dev_server.command / ports` 改成真实仓库命令，不能把模板默认值伪装成已探测事实；
-   - builder profiles 可保留框架默认推荐；项目类型是后续 build 的唯一对象定义，build 不按单次需求重新猜。
+5. **Decision gate 确认门**（@读 §6）：label = 动作描述，PM 选「创建产品上下文」才落盘；选「继续探索」回提问 Loop。
+6. **写 `PRODUCT.md` + `TODO.md`**（@读 §5 写作规则）。现有技术栈、入口和运行命令只保留在 `CODEBASE-AUDIT.md`，供首个 `/pmai-design` 形成建造方案时取证；本步不生成 `.pm-workflow/project.yml`，也不向旧 `config.yml` 写 `project.type`。
 7. **5 节齐不齐检查**（@读 §7）：跑 `check-project-sections.py`，有空节逐节补。
 8. **PM 定稿**（@读 §8）：展示路径 + 摘要，PM 答「OK / 定了」。
 9. **回填 PRODUCT-STATE 产品定位**：把 step 3.5.7 留空的 `PRODUCT-STATE.md` 产品定位一句话按 PRODUCT.md 拍定的定位填上，去掉顶部状态行里「产品定位待回填」那句。
-10. **atomic commit**（@读 §9）：`git commit -m "docs: project direction settled"`（含 `.pm-workflow/config.yml` / PRODUCT.md / TODO.md / PRODUCT-STATE.md 回填）。
+10. **atomic commit**（@读 §9）：`git commit -m "docs: project direction settled"`（含 PRODUCT.md / TODO.md / PRODUCT-STATE.md 回填）。
 11. 收尾向 PM 一句话说明 TODO 是 PM 自己维护的待办池（AI 不反推填充），给 ▶ Next Up 块引到第一个功能：`/pmai-design "<一句话>"`。
 
 > **为什么内联而不是交接**：已有代码首次接入的方向讨论逻辑已沉淀在共享的 `_shared/project-questioning.md`；brownfield 现状档此刻已在手，没有必要再拆成第二个手敲命令。轻停顿（step 3）已经给了 PM 消化现状档的时间——「留消化时间」和「逼 PM 手敲命令」是两件事，本 skill 只保留前者。
 
 ## Rules
 
-- **扫码阶段只读**：步骤 1-3（扫码 + 产现状档）只读代码、不改代码。step 4 内联方向讨论才写项目定义、`PRODUCT.md` + `TODO.md`（PM 在 Decision gate 拍板后落盘）。
+- **扫码阶段只读**：步骤 1-3（扫码 + 产现状档）只读代码、不改代码。step 4 内联方向讨论只写 `PRODUCT.md` + `TODO.md`（PM 在 Decision gate 拍板后落盘）。
 - **防 secret 是硬约束**：见上方「防 secret 扫描」段，违反 = 严重错误。
 - **方向讨论走共享真相源**：step 4 内联方向讨论必须 @读 `skills/_shared/project-questioning.md`，**不要**在本 skill 里重抄提问法 / 写作规则（必漂移；真相源单一，和 direction 共用同一套方向讨论内核）。
 - **与 `/pmai-init-project` 分工**：本 skill 是 init 的已有项目分支，不是初始化时让 PM 手动选择的并列入口。
@@ -286,11 +282,10 @@ PM 在 step 3 轻停顿说「继续」后，**在本流程内直接接着跑项�
   - `docs/CODEBASE-AUDIT.md`（默认）
   - `PRODUCT-STATE.md` 兜底建骨架（**step 3.5.7 无条件**，反推填现状三段，产品定位一句话 step 4 回填）
   - `PRODUCT.md` + `TODO.md`（**step 4 内联方向讨论，PM 在 Decision gate 拍板后**）
-  - `.pm-workflow/config.yml`（**step 4 记录 PM 确认的 `project.type`，并按现有仓库校准运行命令**）
   - `docs/.project-solution-open-questions.md`（step 4 未决问题闸门暂存文件）
   - `docs/modules/<m>/spec.md` 主规格骨架（**仅当 step 3.5 PM 选 [Y]**）
   - `docs/modules/INDEX.md` 刷新（**仅当 step 3.5 PM 选 [Y]**）
   - `DESIGN.md` 兜底建 / 追加 inventory 段（**step 3.5.5 无条件，跟 step 3.5 选择无关**）
-- **允许动作**：read-only 扫码、7 维度盘点、防 secret redact、step 3.5 选 [Y] 时按 `$PMAI_HOME/skills/_internal/codebase-audit/templates/module.md.tmpl` 生成主规格骨架、step 3.5.5 兜底 DESIGN.md inventory 段、step 3.5.7 兜底 PRODUCT-STATE.md（反推填现状三段，定位 step 4 回填）、step 4 内联方向讨论并写项目类型定义（@读 `_shared/project-questioning.md`）
+- **允许动作**：read-only 扫码、7 维度盘点、防 secret redact、step 3.5 选 [Y] 时按 `$PMAI_HOME/skills/_internal/codebase-audit/templates/module.md.tmpl` 生成主规格骨架、step 3.5.5 兜底 DESIGN.md inventory 段、step 3.5.7 兜底 PRODUCT-STATE.md（反推填现状三段，定位 step 4 回填）、step 4 内联方向讨论并写产品脊柱（@读 `_shared/project-questioning.md`）
 - **禁止**：改代码 / 改 step 3.5 / 3.5.5 范围外的业务文档 / step 4 替 PM 做方向决策（必过 Decision gate）/ step 3.5 跳过模块清单 PM 确认环节 / step 3.5.5 替 gstack 写视觉基线 8 段（视觉基线由 PM 主动调 `/design-consultation`）/ 在 step 4 重抄 `_shared/project-questioning.md` 的提问法与写作规则
-- **退出条件**：现状档经 PM 确认 + step 3.5 完成（建或跳过）+ step 3.5.5 兜底跑过 + step 3.5.7 PRODUCT-STATE 兜底跑过 + step 4 方向讨论定稿（`.pm-workflow/config.yml:project.type` / PRODUCT.md / TODO.md 已落 + PRODUCT-STATE 产品定位已回填 + atomic commit）+ 给出 ▶ Next Up（`/pmai-design`）
+- **退出条件**：现状档经 PM 确认 + step 3.5 完成（建或跳过）+ step 3.5.5 兜底跑过 + step 3.5.7 PRODUCT-STATE 兜底跑过 + step 4 方向讨论定稿（PRODUCT.md / TODO.md 已落 + PRODUCT-STATE 产品定位已回填 + atomic commit）+ 给出 ▶ Next Up（`/pmai-design`）。`project.yml` 留给首个可建造 design 生成。

@@ -38,7 +38,7 @@ ready_to_build → building → iterating → final_check
 
 PM 的主体验是：开工前只确认一次工作环境和构建工具 → 看构建结果 → 提修改 → 再看 → 明确定稿。项目类型和验收方案不出现在开工确认卡；worktree、合同、hash、证据和文档影响地图等内部实现也不向 PM 展示。
 
-纯错字、单文案、局部样式或不改变产品行为的极小修补走 `/pmai-quick-fix`。把 mockup / spec 做进主原型、改变信息结构或同时涉及实现和正式文档，不得伪装成小改；只要进入本 skill，就按完整 build 执行，并在开工前确认工作环境。
+纯错字、单文案、局部样式或不改变产品行为的极小修补走 `/pmai-quick-fix`。把 mockup / spec 做进最终 build target、改变信息结构或同时涉及实现和正式文档，不得伪装成小改；只要进入本 skill，就按完整 build 执行，并在开工前确认工作环境。
 
 所有持久化路径必须由 `PMAI_HOME`、`REPO_ROOT`、`MAIN_REPO_ROOT`、`BUILD_DIR` 等运行时变量与仓内相对路径组合，禁止写死 `/Users/...` 这类机器绑定路径。
 
@@ -64,29 +64,41 @@ python3 "$PMAI_HOME/scripts/context-pack.py" \
 
 如果还有会改变产品模型的未决问题，停止 build，返回 design。若规格已经闭合但旧项目没有 `ready_to_build` 记录，后台执行 design 的规格编译、范围提交和 `build-contract.py ready`，不弹“是否保存建造依据”。
 
-## 2. 静默读取项目类型并生成默认验收
+## 2. 读取 design 已确认的项目建造定义
 
-build 不根据本轮话术、锚点或改动路径临时猜构建对象，也不在每次开工时重新询问。项目类型只读项目定义：
+build 不根据本轮话术、锚点或改动路径临时猜构建对象、技术栈或运行命令。先完整校验 design 已提交的项目定义：
 
 ```bash
-PROJECT_TYPE=$(python3 "$PMAI_HOME/scripts/project-type.py" "$REPO_ROOT")
+PROJECT_DEFINITION_JSON=$(python3 "$PMAI_HOME/scripts/project-definition.py" show "$REPO_ROOT")
+PROJECT_TYPE=$(python3 -c 'import json,sys; print(json.load(sys.stdin)["project"]["type"])' <<<"$PROJECT_DEFINITION_JSON")
+IMPLEMENTATION_ROOT=$(python3 -c 'import json,sys; print(json.load(sys.stdin)["implementation"]["root"])' <<<"$PROJECT_DEFINITION_JSON")
+PROJECT_ENTRYPOINTS=()
+while IFS= read -r path; do
+  PROJECT_ENTRYPOINTS+=("$path")
+done < <(python3 -c 'import json,sys; print(*json.load(sys.stdin)["implementation"]["entrypoints"], sep="\n")' <<<"$PROJECT_DEFINITION_JSON")
 ```
 
-- 新项目的真相源是 `.pm-workflow/config.yml:project.type`，只能是 `prototype` 或 `product`；
-- 旧消费仓缺该字段时，helper 只兼容读取 `CLAUDE.md` 的既有 `auto-detected` 标记；`system` 映射为 `product`；
-- `custom / unknown` 或无法读取时停止 build，要求 PM 先修改 `.pm-workflow/config.yml`；不得在本轮对话中临时选一个继续；
-- PM 想改变项目性质时，直接修改该定义文件，再按新类型校准项目结构。
+- 新项目唯一真相源是 `.pm-workflow/project.yml`，其中同时定义 type、代码根、入口、技术栈、真实命令和 Web 能力；
+- 文件缺失或校验失败时停止 build，返回 `/pmai-design` 完成或修复定稿；build 不提供临时补选菜单；
+- 旧消费仓仅由 `project-type.py` 兼容读取旧 config/marker；下一次 design 定稿时必须生成新文件；
+- 改变 type、framework 或 root 必须回 design 由 PM 明确确认并递增 revision。
 
-根据项目类型、目标路径、入口和风险后台生成默认验收档案：
+从模块建造依据取本轮实际目标路径 `TARGET_PATHS`。每一项都必须是仓内相对路径、位于 `implementation.root` 内；Web 页面目标还必须命中 `PROJECT_ENTRYPOINTS` 中的 Web 入口。不得用整仓 `.` 或从当前文件树猜一个替代路径。
+
+根据项目类型、本轮目标路径、项目入口和风险后台生成默认验收档案：
 
 ```bash
 PROFILE="$REPO_ROOT/.pm-workflow/audits/<模块>/acceptance-profile.json"
-python3 "$PMAI_HOME/scripts/acceptance-profile.py" \
-  --repo-root "$REPO_ROOT" \
-  --target "$PROJECT_TYPE" \
-  --path "<目标路径>" \
-  <涉及迁移时 --data-migration> \
-  <涉及权限/安全时 --security-sensitive> > "$PROFILE"
+PROFILE_ARGS=(
+  --repo-root "$REPO_ROOT"
+  --project-definition "$REPO_ROOT/.pm-workflow/project.yml"
+)
+for path in "${TARGET_PATHS[@]}"; do
+  PROFILE_ARGS+=(--path "$path")
+done
+<涉及迁移时 PROFILE_ARGS+=(--data-migration)>
+<涉及权限/安全时 PROFILE_ARGS+=(--security-sensitive)>
+python3 "$PMAI_HOME/scripts/acceptance-profile.py" "${PROFILE_ARGS[@]}" > "$PROFILE"
 ```
 
 验收方案由框架默认规则决定，不让 PM 选择，也不展示在开工确认卡。工具受限、检查失败或出现 exception 时仍按 §7 如实记录，不能因为“不展示”而跳过。
@@ -100,7 +112,8 @@ python3 "$PMAI_HOME/scripts/acceptance-profile.py" \
 
    ```bash
    RECOMMENDED_BUILDER_JSON=$(python3 "$PMAI_HOME/scripts/builder-profile.py" recommend \
-     "$REPO_ROOT/.pm-workflow/config.yml" --target "$PROJECT_TYPE")
+     "$REPO_ROOT/.pm-workflow/config.yml" \
+     --project-definition "$REPO_ROOT/.pm-workflow/project.yml")
    ```
 
 3. **只展示这张确认卡**：
@@ -142,6 +155,11 @@ fi
 从 acceptance profile 取 `required_checks`，写合同 v2：
 
 ```bash
+REQUIRED_CHECKS=()
+while IFS= read -r check; do
+  REQUIRED_CHECKS+=("$check")
+done < <(python3 -c 'import json,sys; print(*(item["name"] for item in json.load(open(sys.argv[1]))["required_checks"]), sep="\n")' "$PROFILE")
+
 START_ARGS=(
   "$BUILD_DIR/docs/modules/<模块>"
   --anchor "<仓内建造锚点>"
@@ -152,12 +170,15 @@ START_ARGS=(
   --branch "$BUILD_BRANCH"
   --baseline-sha "$(git -C "$BUILD_DIR" rev-parse HEAD)"
   --target-kind "$PROJECT_TYPE"
-  --target-path "<目标路径>"
-  --entrypoint "<入口>"
   --approved-source-hash "<ready 记录的 hash>"
   --design-revision "<ready 记录的 revision>"
-  --required-check "<检查名>"
 )
+[ "${#TARGET_PATHS[@]}" -gt 0 ] || { echo "build target paths 为空，返回 design 修复建造依据" >&2; exit 1; }
+[ "${#PROJECT_ENTRYPOINTS[@]}" -gt 0 ] || { echo "project.yml entrypoints 为空，返回 design 修复项目定义" >&2; exit 1; }
+[ "${#REQUIRED_CHECKS[@]}" -gt 0 ] || { echo "acceptance profile 未生成 required_checks，停止 build" >&2; exit 1; }
+for path in "${TARGET_PATHS[@]}"; do START_ARGS+=(--target-path "$path"); done
+for entrypoint in "${PROJECT_ENTRYPOINTS[@]}"; do START_ARGS+=(--entrypoint "$entrypoint"); done
+for check in "${REQUIRED_CHECKS[@]}"; do START_ARGS+=(--required-check "$check"); done
 [ "$BUILD_MODE" = "worktree" ] && START_ARGS+=(--worktree "$BUILD_DIR")
 python3 "$PMAI_HOME/scripts/build-contract.py" start "${START_ARGS[@]}"
 
@@ -194,7 +215,7 @@ git -C "$BUILD_DIR" commit -m "build(<模块>): start adaptive build"
 
 构建工具失败时默认保留半成品，先检查已落改动与日志；若要换工具，给出新的推荐并重新展示只含工作环境和构建工具的确认卡，不能静默替换 PM 已确认的工具。只有丢弃会破坏可用改动时才让 PM 授权；禁止自动 `git restore .` / `git clean -fd`。
 
-启动页面时只读取 `.pm-workflow/config.yml:dev_server.command` 并替换 `{port}`，不临时猜 `-- --hostname`、`--port` 或其它框架参数。
+启动页面时只读取 `.pm-workflow/project.yml:web.start` 并替换 `{port}`；ready path 和端口候选同样来自 `project.yml`。不得从 builder config 猜 Next.js、`--hostname`、`--port` 或其它框架参数。
 
 ## 5. 进入 PM 看结果的迭代循环
 
@@ -259,6 +280,8 @@ python3 "$PMAI_HOME/scripts/build-contract.py" complete \
 
 只在 final_check 跑 acceptance profile 的全部 `required_checks`。
 
+若 required checks 包含 `browser-smoke`，先在后台解析可实际操作页面的主动浏览器适配器：gstack `/browse`、当前 runtime browser 或 Playwright。找不到任何适配器时立即把 final_check 标为 blocked 并说明缺失能力；不得继续生成 visual/behavior 的假证据，也不得让 PM 用 exception 放行。
+
 ### prototype 完整检查
 
 - 可启动性和主动 browser smoke；
@@ -268,7 +291,7 @@ python3 "$PMAI_HOME/scripts/build-contract.py" complete \
 - 对照 `DESIGN.md` 的视觉一致性；
 - 实际交互行为。
 
-优先使用 browser/gstack 生成证据。
+优先使用已可用的主动 browser 适配器生成证据；工具选择不展示给 PM。
 
 若 `DESIGN.md` 的视觉基线段未建，先以现有产品页面和组件为事实基线，并在可用时自动调用 gstack `/design-consultation` 补充检查依据；仍不足时视觉检查只能记为 `limited`，不能输出“视觉一致性通过”。这不是让 PM 选择工具或补工程配置的菜单。
 
@@ -281,7 +304,7 @@ python3 "$PMAI_HOME/scripts/build-contract.py" complete \
 - UI 浏览器检查（涉及时）；
 - 权限、安全、越权和破坏性数据检查（涉及时）。
 
-每项都用 `record-evidence` 绑定同一个 `approved_source_hash + implementation_commit + checked_at`。工具受限只能写 `limited / skipped / blocked` 并记录 exception；不得伪装 `pass`。行为检查 `fail` 不能例外放行。
+每项都用 `record-evidence` 绑定同一个 `approved_source_hash + implementation_commit + checked_at`。非浏览器检查受限时如实写 `limited / skipped / blocked`，只有合同允许的具名检查才可记录 exception；`browser-smoke` 在 v2 必须是 active pass，行为检查 `fail` 也不能例外放行。
 
 完整检查失败：
 
@@ -291,7 +314,7 @@ python3 "$PMAI_HOME/scripts/build-contract.py" iterating "$BUILD_DIR/docs/module
 
 保留当前工作环境，修复后再由 PM 看结果；不 merge、不清理。
 
-完整检查通过后提交 audit artifacts 与合同状态，再运行：
+完整检查通过后提交 evidence artifacts 与合同状态，再运行：
 
 ```bash
 python3 "$PMAI_HOME/scripts/build-contract.py" validate-land \
@@ -311,13 +334,13 @@ bash "$PMAI_HOME/scripts/close-work.sh" "$BUILD_DIR/docs/modules/<模块>"
 - 实现落主线后进入 `landed + docs_pending`；
 - `/pmai-build-close` 只作为兼容或恢复入口，正常链路无需 PM 再调用。
 
-## 9. 基于 main 编译正式文档
+## 9. 基于 main 对账规格目标与产品现状
 
 第一次 finalize 返回 doc impact map 后，必须在 main 上完成：
 
 1. 重新生成 context pack；
 2. 读取 landed diff、build contract、accepted deltas 和 doc impact map；
-3. 调用 spec-writing 的“落地主线后的事实对账”模式更新模块 `spec.md` 与 `decisions.md`；
+3. 调用 spec-writing 的“落地主线后的目标对账”模式，按符合 / accepted delta / 漏实现 / 无依据实现分类；
 4. 按影响地图更新 `PRODUCT-STATE.md`、`PRODUCT-RULES.md`、`PRODUCT.md` 术语、`DESIGN.md`、`TODO.md`、mockup manifest 和索引；
 5. 未受影响文件标 `no-change` 并写原因；
 6. 检查新增或改变的对象、动作、状态、权限、页面和术语都有文档落点；
@@ -325,7 +348,7 @@ bash "$PMAI_HOME/scripts/close-work.sh" "$BUILD_DIR/docs/modules/<模块>"
 8. `doc-impact.py validate` 通过后执行 `build-contract.py docs-complete`；
 9. 再次调用 `close-work.sh`，单独提交文档同步、删除临时 `.work-meta.json` 并进入 `complete`。
 
-正式文档只描述 main 已经存在的事实。不得在 merge 前提前改成“已完成”。
+`spec.md` / PRD 保留最终目标，只有 accepted delta 可以修改；`PRODUCT-STATE.md` 等现状文档只描述 main 已经存在的事实。不得在 merge 前把目标要求提前写成“已完成”。
 
 文档失败时：
 
@@ -357,7 +380,7 @@ python3 "$PMAI_HOME/scripts/build-contract.py" docs-fail \
 ## Rules
 
 - prototype / product 共用同一生命周期，只切换目标和验收适配器。
-- 项目类型由 `.pm-workflow/config.yml` 项目级定义；build 只读，不按本轮需求猜，也不在开工确认卡展示。
+- 项目类型、技术栈、入口和真实运行命令由 `.pm-workflow/project.yml` 定义；build 只读，不按本轮需求猜，也不在开工确认卡重复展示。
 - 验收方案按项目类型和风险后台生成默认值；不让 PM 选择，也不在开工确认卡展示。
 - 新 build 开工前，AI 推荐工作环境和构建工具，PM 只确认这两项；调整后必须重显同一张确认卡。
 - PM 不需要理解 worktree、合同、hash、证据 JSON 或手动 close；构建工具只以名称、模型和思考档展示。
@@ -367,4 +390,5 @@ python3 "$PMAI_HOME/scripts/build-contract.py" docs-fail \
 - 最终检查失败回 iterating；merge 冲突保留 final_check 和 worktree。
 - 实现先落 main，正式文档后更新；文档失败不重复 merge。
 - skipped / limited / blocked 不能伪装 pass；证据必须绑定 source hash 和 implementation commit。
+- UI required checks 缺主动浏览器能力时必须阻塞；v2 的 `browser-smoke` 不接受 exception。
 - 正式文档无迭代流水账，历史只在 Git 与 decisions 中。

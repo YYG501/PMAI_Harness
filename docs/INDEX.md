@@ -6,7 +6,6 @@
 
 | 文件 | 说明 |
 |---|---|
-| [`build-audits-编排与自测.md`](./build-audits-编排与自测.md) | `/pmai-build` 三道审编排、规范化结果 schema 和自测留档 |
 
 ## 常见问题索引
 

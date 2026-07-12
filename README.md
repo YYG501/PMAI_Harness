@@ -34,7 +34,7 @@ bash /tmp/pmai-src/bin/pmai install
 
 ```bash
 tmp=$(mktemp -d)
-bash ~/.pmai/scripts/init-project.sh Demo "$tmp/Demo" "一句话项目背景" prototype
+bash ~/.pmai/scripts/init-project.sh Demo "$tmp/Demo" "一句话项目背景"
 python3 ~/.pmai/scripts/status-view.py "$tmp/Demo" --narrative
 ```
 
@@ -68,7 +68,7 @@ PMAI 不和 Claude Design、design-html 或 Claude Code 比"谁更快生成第�
 /pmai-status          产品现状视图（产品长什么样 / 当前模块做到哪 / 下一步）
 ```
 
-PM 全程**只做产品决策、开工时确认工作环境与构建工具、看结果和明确定稿**；meta / mockup / spec-writing 分流、项目类型读取、默认验收、合同、证据和文档同步由框架兜。
+PM 全程**只做产品决策、确认首个建造方案、开工时确认工作环境与构建工具、看结果和明确定稿**；meta / mockup / spec-writing 分流、默认验收、合同、证据和文档同步由框架兜。
 
 ---
 
@@ -80,13 +80,13 @@ PM 全程**只做产品决策、开工时确认工作环境与构建工具、看
 | **Codex** | 支持 | skill 暴露到 `~/.codex/skills/pmai-*`；Codex CLI slash prompt 暴露到 `~/.codex/prompts/pmai-*.md`，可直接输入 `/pmai-*`；读生成器仓 / 消费仓 `AGENTS.md` 作为主控入口；消费仓生成项目级 `.codex/hooks.json`；也可作为 build 执行器 |
 | **Gemini CLI** | 可选 | `/pmai-build` 执行器；适合在 Codex / Claude 主控下交给 Gemini 建 |
 | **OpenCode CLI** | 支持 | OpenCode commands 暴露到 `~/.config/opencode/commands/pmai-*.md`，可直接打开消费仓输入 `/pmai-*`；读 `AGENTS.md` 作为主控入口；消费仓生成 `.opencode/commands` 和 `opencode.json`；也可作为 build 执行器。第一版不复刻 Codex hooks，保护依赖 OpenCode permission、git hooks、build contract 和 changed-path review |
-| **gstack** | 能力层（部分流程必需） | 消费仓可直接调用的专项能力层：全新项目骨架 / 视觉基线、mockup 视觉探索、browser / visual audit、mirror-site 抓站、PDF 出口、工程文档旁路会用到；`pmai install` / `pmai doctor` 会提示 readiness，已有代码库接入不因 gstack 缺失阻塞 |
+| **gstack** | 可选能力层 | 可辅助视觉基线、mockup、browser/visual evidence、抓站和文档导出；初始化不依赖它。UI 验收需要主动浏览器能力，但可以由 gstack、runtime browser 或 Playwright 任一适配器提供 |
 | **git** ≥ 2.30 | 必需 | worktree 是核心隔离机制 |
 | **python3** ≥ 3.10 | 必需 | scripts 大多用 python（zero-dep stdlib） |
 | **bash** ≥ 4 | 必需 | scripts 入口语言（macOS 自带 3.x 已知坑见 INVARIANTS） |
 | **codex CLI** | 可选 | `/pmai-build` 执行器；不装可走 Claude Code / Gemini / OpenCode / cursor-agent / 手动 |
 
-未检测到 gstack CLI 且没有 `~/.claude/skills/gstack` 时，`pmai install` / `pmai doctor` 会给 warning，但不阻塞 PMAI 安装；真正建全新项目骨架时，`init-project.sh` 会直接报错并指向 `https://github.com/garrytan/gstack`。如果只是 `command -v gstack` 找不到，但全局 gstack skill 目录存在，PMAI 视为 gstack 能力可用。已有代码库接入走现状盘点分支，不调用 `init-project.sh`，所以不能因为 gstack 缺失卡在“判断项目情况”这一步。gstack 输出必须按 PMAI 规则接回 `DESIGN.md`、`mockups/`、`.pm-workflow/audits/`、`.pm-workflow/mirror/`、`docs/deliverables/` 或 `docs/engineering/`；工程文档旁路的 PMAI 接收点是 `docs/engineering/` + `docs/engineering/INDEX.md`，不能把 `~/.gstack/...` 当长期真相源。
+未检测到 gstack 时，`pmai install` / `pmai doctor` 只给 readiness warning，初始化和非 Web build 都不受阻塞。Web required checks 会在 final_check 前解析可用的主动浏览器适配器；完全没有适配器时 UI 验收阻塞，不能伪装通过。gstack 输出仍必须按 PMAI 规则接回 `DESIGN.md`、`mockups/`、evidence artifacts、`.pm-workflow/mirror/`、`docs/deliverables/` 或 `docs/engineering/`，不能把 `~/.gstack/...` 当长期真相源。
 
 ---
 
@@ -118,7 +118,7 @@ bash /tmp/pmai-src/bin/pmai install
 安装成功后，`pmai install` 末尾会：
 - clone 到 `~/.pmai/` + symlink skill 到 `~/.claude/skills/pmai-*` / `~/.codex/skills/pmai-*` + 生成 Codex CLI slash prompts 到 `~/.codex/prompts/pmai-*.md` + 生成 OpenCode slash commands 到 `~/.config/opencode/commands/pmai-*.md`
 - 自动检测 shell（zsh/bash）+ 给 `~/.pmai/bin` 加 PATH 的 oneshot 命令
-- 提示 gstack readiness；缺 gstack 只 warning，起项目前补齐即可。`pmai doctor` 默认只做 passive diagnostics；`pmai doctor --browser-smoke` 会主动启动 gstack browse，用于确认 browser-backed 视觉 / 行为验收真的可跑。
+- 提示 gstack readiness；缺 gstack 只 warning，不影响起项。`pmai doctor --browser-smoke` 可主动验证 gstack browse，但 UI build 也可使用其它受支持的主动浏览器适配器。
 
 ### 公开镜像安装（仅 public repo / public mirror）
 
@@ -197,10 +197,12 @@ skill 跑全局升级命令；升级完读 CHANGELOG diff + 用自然语言 5-7 
 
 agent 内部先判断项目情况，再进入对应分支：
 
-- **阶段 A · 参数收集 + 项目情况判断** —— AskUserQuestion 拿项目名 / 落地路径后，AI 直接扫目录。全新项目再确认 `prototype / product`；PM 不需要预先判断目录情况，也不需要在“初始化 / 代码盘点”之间选命令。
-- **全新项目 / 资料目录分支** —— B/C/D 一气呵成：用 `init-project.sh` 建上下文底座，填一句话方向、视觉基线和主原型，再输出 Next Up。
-- **已有代码库分支** —— 自动进入已有项目接入子流程：先整理真实代码现状，产 `docs/CODEBASE-AUDIT.md`，PM 过目后在同一流程内确认 `prototype / product` 并定项目方向；类型写入 `.pm-workflow/config.yml`。不补空骨架、不起空 `prototype/`、不调用 `init-project.sh`。
+- **阶段 A · 参数收集 + 项目情况判断** —— 只拿项目名、落地路径和一句话背景，再判断全新项目、资料目录、已有代码库或已接入项目；不询问类型和技术栈。
+- **全新项目 / 资料目录分支** —— 用 `init-project.sh` 只建上下文脊柱和 host 配置，不创建代码、prototype、mockup 看板或 `project.yml`。
+- **已有代码库分支** —— 自动整理真实代码现状并补产品脊柱；现有技术事实进入 `docs/CODEBASE-AUDIT.md`，不在接入阶段提前冻结新的建造方案。
 - **已接入过 PMAI 的项目** —— 不重跑 init；先看 `/pmai-status`，PM 明确要重定方向再走 `/pmai-direction`。
+
+两类初始化完成后都只进入 `/pmai-design`。首个可建造 design 定稿时，PM 一次确认 `prototype / product`、技术栈、代码入口和运行命令，框架生成 `.pm-workflow/project.yml`。
 
 > `/pmai-init-project` 在装了 pmai 的任意 cwd 都能跑（无需在本仓）。
 
@@ -220,8 +222,7 @@ agent 内部先判断项目情况，再进入对应分支：
 bash ~/.pmai/scripts/init-project.sh \
   <project-name> \
   <target-dir> \
-  "<background>" \
-  <prototype|product>
+  "<background>"
 
 # 或在本仓内调用（fallback 路径，自动推 FRAMEWORK_DIR）
 bash scripts/init-project.sh ...
@@ -231,7 +232,8 @@ bash scripts/init-project.sh ...
 - `<project-name>` — 业务项目名（也是 git 仓的名字）
 - `<target-dir>` — 业务项目落地路径（**不能已存在**）
 - `<background>` — 一句话项目背景
-- `<project-type>` — 项目级构建类型（必填）：`prototype` / `product`；写入 `.pm-workflow/config.yml`，后续 build 只读取
+
+项目类型和技术栈不属于初始化参数；旧第四参数会报迁移提示。首个可建造 design 定稿后才生成 `.pm-workflow/project.yml`。
 
 > 脚本是骨架构建器，**不带方向讨论**；直接调脚本适合自动化场景，PM 主动起项目走 `/pmai-init-project` skill 拿到完整体验。
 
@@ -291,8 +293,8 @@ PMAI 走纯全局：每台要用的机器各自 `pmai install` 一次（全局�
 | Skill | 用途 |
 |---|---|
 | `/pmai-status` | **续跑辅助**：读当前状态和建议下一步；不向 PM 暴露 worktree、合同或证据 JSON |
-| `/pmai-build` | 统一构建前台：静默读取项目级类型和默认验收，推荐工作环境与构建工具；PM 一次确认后构建，定稿后自动落地主线并更新正式文档 |
-| `/pmai-spec-writing` | 功能型规格文档成文器：生成/修改模块规格；PRD、功能需求、功能描述、功能规格、功能评审稿都走这里 |
+| `/pmai-build` | 统一构建前台：读取 design 定稿的项目建造定义和默认验收，推荐工作环境与构建工具；PM 一次确认后构建，定稿后自动落地主线并完成文档对账 |
+| `/pmai-spec-writing` | 最终目标规格成文器：把已确认决定编译成指导研发实现的模块规格、PRD、功能需求、功能描述、功能规格或功能评审稿 |
 | `/pmai-doc-writing` | 介绍型文档成文器：产品介绍、产品功能清单、优势说明、一页纸、汇报材料，默认落 `docs/deliverables/` |
 
 ### 收尾 / 放弃
@@ -328,7 +330,7 @@ PMAI 走纯全局：每台要用的机器各自 `pmai install` 一次（全局�
 | [`RUNTIME.md`](./RUNTIME.md) | 项目运行时状态（当前进度 / 已知坑 / 新窗口续接入口）|
 | [`CHANGELOG.md`](./CHANGELOG.md) | 影响业务仓的改动记录（按 commit 时间倒序；业务仓 sync 前看顶部）|
 | [`docs/归档/完成/DX-AUDIT-2026-05-08.md`](./docs/归档/完成/DX-AUDIT-2026-05-08.md) | 2026-05-08 DX 审计档案（已收尾，保留作历史）|
-| [`INVARIANTS.md`](./INVARIANTS.md) | 框架不变量清单（I-CT / I-TT / I-AD 等编号约束） |
+| [`INVARIANTS.md`](./INVARIANTS.md) | 框架当前不变量（初始化、project definition、生命周期、验收、分支与文档边界） |
 | [`TODOS.md`](./TODOS.md) | 待决项 / 延迟决策（v2/v4/UP/DX/Eng/TD-1~4） |
 | [`docs/归档/废弃/框架同步-SOP.md`](./docs/归档/废弃/框架同步-SOP.md) | 生成器 → 业务仓 hotfix 同步流程（**DEPRECATED + 已归档**；pmai install/upgrade 承接）|
 | [`docs/归档/完成/v0/`](./docs/归档/完成/v0/) | v0 原始档案（需求.md / 设计.md / 需求-v0-原始草稿.md；不再活跃，归档保留作历史）|

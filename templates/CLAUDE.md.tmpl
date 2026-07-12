@@ -31,7 +31,7 @@
 - 跨模块规则：`PRODUCT-RULES.md`
 - 视觉规范：`DESIGN.md`
 - 文档索引：`docs/INDEX.md`
-- 主原型：`prototype/`
+- 项目建造定义：`.pm-workflow/project.yml`（首个可建造 design 才生成；代码根与入口以其中 `implementation` 为准）
 - 输入材料：`docs/inputs/<类别>/`（材料按类型留存；当前模块引用记录在模块 `.work-meta.json`）
 - 工程文档：`docs/engineering/`（README/API/CLI/架构/how-to/tutorial/reference；INDEX.md 是接回索引）
 
@@ -45,7 +45,7 @@
 
 | 档 | 什么时候 | 怎么走 | 收尾 |
 |---|---|---|---|
-| 轻 | typo、链接、格式、很小代码修补 | `/pmai-quick-fix` 或 main 上直接小改 | 需要沉淀长期基线时 `/pmai-record` |
+| 轻 | typo、链接、格式、很小代码修补 | 代码走 `/pmai-quick-fix`；纯文档记录可在 main 由 `/pmai-record` 归位 | 需要沉淀长期基线时 `/pmai-record` |
 | 中 | 一个模块内的完整讨论 / 规格演进 | `/pmai-design` / `/pmai-status` | 可先停住；需要沉淀术语 / 规则 / 当前设计状态时 `/pmai-record` |
 | 重 | 需要实际建原型或真实产品能力 | `/pmai-design` 定稿并自动固定建造依据 → `/pmai-build <模块或文档>` → 看结果多轮修改 | PM 明确定稿后自动最终检查、合入 main、更新正式文档 |
 
@@ -71,7 +71,7 @@
 ### build 纪律
 
 - build 的功能锚点是 design 已提交的模块 `spec.md` 或功能型规格文档，不是 task 文件；开工和关键恢复点先编译 context pack。
-- 一次 build 只有一个主要对象：`prototype` 或 `product`，由 `.pm-workflow/config.yml:project.type` 项目级定义。两者共用生命周期，只切换后台验收适配器；build 不按本轮需求临时猜。
+- 一次 build 只有一个主要对象：`prototype` 或 `product`，由首个可建造 design 定稿后生成的 `.pm-workflow/project.yml` 定义。技术栈、代码入口和运行命令也只从该文件读取；build 不临时猜。
 - 新 build 由 AI 推荐独立/当前工作环境和构建工具，PM 一次确认后执行；项目类型和默认验收不展示。选择当前环境时，main 只放行 v2 合同声明的目标路径。小改仍走 `/pmai-quick-fix`。
 - `.work-meta.json:build` 中的 contract v2 记录 target、source hash、design revision、accepted deltas、implementation commit、required checks、evidence 和 docs status。
 - 每轮修改只跑受影响快速检查；产品决定变化写 accepted delta 并让旧证据失效；PM 定稿后才跑完整 required checks。
@@ -102,7 +102,7 @@ Subagent 适合一次性读文件、第二视角评审、独立查询；不适�
 
 | 文档 | 路径 | 说明 |
 |---|---|---|
-| 产品背景 | `PRODUCT.md` | 产品定位 / 用户画像 / 技术栈 / 业务术语表 |
+| 产品背景 | `PRODUCT.md` | 产品定位 / 用户画像 / 产品边界 / 业务术语表 |
 | 产品现状 | `PRODUCT-STATE.md` | 当前产品长什么样、做到哪、哪些真哪些 mock |
 | 视觉规范 | `DESIGN.md` | 颜色、字体、组件、交互规范 |
 | 跨模块规则 | `PRODUCT-RULES.md` | 全项目产品行为规则 |
@@ -121,13 +121,11 @@ Subagent 适合一次性读文件、第二视角评审、独立查询；不适�
 
 {{PROJECT_BACKGROUND}}
 
-## 工程结构约束
+## 项目建造定义
 
-<!-- auto-detected by scripts/detect-project-structure.py — PM 可改。
-     标记被删除后视为 PM 手填，框架不再覆盖。
-     unknown 档：PM 暂未选定时保留占位，后续可重新检测并选择 prototype/system/custom。 -->
-
-{{STRUCTURE_CONSTRAINTS}}
+初始化不提前决定项目类型、技术栈或代码目录。首个可建造需求在 `/pmai-design`
+定稿后生成 `.pm-workflow/project.yml`，其中记录 `prototype / product`、技术栈、
+代码入口和真实运行命令；`/pmai-build` 只读取该文件，不临时猜测。
 
 ## 文档治理（读取策略）
 

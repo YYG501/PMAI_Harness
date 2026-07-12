@@ -67,16 +67,11 @@ test_codex_hooks_template_shape() {
 test_e2e_generates_agents_md_without_framework_assets() {
   start_test "T4: init-project e2e 生成 AGENTS.md / .codex/hooks.json 且不泄漏 framework 资产"
 
-  if ! command -v gstack &>/dev/null && [ ! -d "$HOME/.claude/skills/gstack" ]; then
-    echo "  ⏭️  SKIP: gstack 不可用，跳过 e2e（T1/T2 静态断言已覆盖生成路径）"
-    return
-  fi
-
   local base proj
   base=$(mktemp -d)
   proj="$base/codex-compat-proj"
 
-  if ! PMAI_HOME="$REPO_ROOT" bash "$INIT_PROJECT_SH" "codex-compat-proj" "$proj" "Codex 主控兼容测试" prototype \
+  if ! PMAI_HOME="$REPO_ROOT" bash "$INIT_PROJECT_SH" "codex-compat-proj" "$proj" "Codex 主控兼容测试" \
        >/tmp/test-init-project-codex-compat.out 2>&1; then
     _fail "init-project.sh 执行失败 —— 见 /tmp/test-init-project-codex-compat.out"
     tail -20 /tmp/test-init-project-codex-compat.out >&2
@@ -249,7 +244,7 @@ test_init_project_blocks_reinitialize_even_with_allow_existing() {
 本仓已经初始化完成，不能在这里再跑 /pmai-init-project。
 MD
 
-  if PMAI_HOME="$REPO_ROOT" bash "$INIT_PROJECT_SH" "already-pmai" "$proj" "重复初始化保护测试" prototype --allow-existing \
+  if PMAI_HOME="$REPO_ROOT" bash "$INIT_PROJECT_SH" "already-pmai" "$proj" "重复初始化保护测试" --allow-existing \
        >"$out" 2>&1; then
     _fail "init-project.sh 不应允许已初始化 PMAI 目录带 --allow-existing 重跑"
     cat "$out" >&2

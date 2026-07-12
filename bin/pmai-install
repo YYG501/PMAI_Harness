@@ -149,9 +149,9 @@ check_gstack_readiness() {
     return 0
   fi
 
-  echo "⚠️  gstack 未检测到：/pmai-init-project 建全新项目骨架时会阻塞"
+  echo "⚠️  gstack 未检测到：初始化不受影响；需要 Web 验收时可使用 gstack 或其它主动浏览器适配器"
   echo "   先安装 gstack：参考 https://github.com/garrytan/gstack"
-  echo "   PMAI 已安装完成；已有代码库接入会由 /pmai-init-project 自动进入现状盘点，不因 gstack 阻塞。"
+  echo "   PMAI 已安装完成；/pmai-init-project 的任何分支都不因 gstack 阻塞。"
 }
 
 remove_managed_skill_symlinks() {

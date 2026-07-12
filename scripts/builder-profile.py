@@ -16,6 +16,8 @@ import sys
 from pathlib import Path
 from typing import Any
 
+from _lib.project_definition import ProjectDefinitionError, load_project_definition
+
 
 def strip_comment(line: str) -> str:
     in_single = False
@@ -228,6 +230,15 @@ def profile_available(profile: dict[str, Any]) -> bool:
 def cmd_recommend(args: argparse.Namespace) -> None:
     """Recommend an available profile before the PM confirms the build card."""
 
+    if args.project_definition:
+        try:
+            definition = load_project_definition(Path(args.project_definition).expanduser())
+        except ProjectDefinitionError as exc:
+            raise SystemExit(str(exc)) from exc
+        target = definition["project"]["type"]
+    else:
+        # Hidden legacy `auto` alias only. Active callers must pass project.yml.
+        target = args.target
     config_path = Path(args.config)
     if not config_path.exists():
         print(
@@ -245,7 +256,7 @@ def cmd_recommend(args: argparse.Namespace) -> None:
         return
     config = load_builder_config(config_path)
     profiles = config["profiles"]
-    preferred = config.get("target_profiles", {}).get(args.target) or config["default_profile"]
+    preferred = config.get("target_profiles", {}).get(target) or config["default_profile"]
     candidates = []
     if preferred:
         candidates.append(preferred)
@@ -257,7 +268,7 @@ def cmd_recommend(args: argparse.Namespace) -> None:
     if selected:
         resolved = resolve_profile(config, selected, None, None)
         resolved["selection_reason"] = (
-            f"仓库为 {args.target} build 配置的默认档位可用"
+            f"仓库为 {target} build 配置的默认档位可用"
             if selected == preferred
             else f"首选档位不可用，推荐仓库内可用的 {selected}"
         )
@@ -290,7 +301,8 @@ def build_parser() -> argparse.ArgumentParser:
 
     recommend = sub.add_parser("recommend", help="recommend an available profile for PM confirmation")
     recommend.add_argument("config")
-    recommend.add_argument("--target", required=True, choices=("prototype", "product"))
+    recommend.add_argument("--project-definition", required=True)
+    recommend.set_defaults(target=None)
     recommend.set_defaults(func=cmd_recommend)
 
     # Backward-compatible internal alias for callers installed before the
@@ -298,6 +310,7 @@ def build_parser() -> argparse.ArgumentParser:
     auto = sub.add_parser("auto", help=argparse.SUPPRESS)
     auto.add_argument("config")
     auto.add_argument("--target", required=True, choices=("prototype", "product"))
+    auto.set_defaults(project_definition=None)
     auto.set_defaults(func=cmd_recommend)
 
     return parser

@@ -162,7 +162,7 @@ def render_report(plan: dict[str, Any], issues: list[Issue]) -> str:
             "3. 最后 P2（视觉细节与状态演示补齐）。",
             "",
             "> 视觉细则（sticky/横滚/禁 native alert·confirm 用包装组件/留白密度/四态覆盖）"
-            "照项目 `DESIGN.md` + `工程结构约束-*.md`，本引擎只查结构/文案/按钮态。", ""]
+            "照项目 `DESIGN.md` + 模块规格检查视觉和实现深度；本引擎只查结构/文案/按钮态。", ""]
     return "\n".join(out) + "\n"
 
 

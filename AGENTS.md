@@ -45,16 +45,16 @@ Codex 在本仓工作时，按普通软件项目方式协同：
 PM 在本生成器仓里让 Codex 起新业务项目时，等价执行 `/pmai-init-project`：
 
 1. 读取 `skills/init-project/SKILL.md`。
-2. 按 skill 的 A 步收集项目名、落地路径、背景和项目类型（`prototype` 或 `product`）。Codex 没有 AskUserQuestion 时，用编号问题向 PM 收集答案。
+2. 按 skill 的 A 步只收集项目名、落地路径和一句话背景；初始化阶段不询问项目类型、技术栈或框架。
 3. B 步优先调用本 checkout 的脚本搭骨架：
 
    ```bash
-   bash scripts/init-project.sh "<project-name>" "<target-dir>" "<background>" "<project-type>"
+   bash scripts/init-project.sh "<project-name>" "<target-dir>" "<background>"
    ```
 
    如果 PM 明确同意接住已有目录，再加 `--allow-existing`。
 
-4. 脚本返回 0 只代表 B 步完成，不代表完整 `/pmai-init-project` 已完成。必须继续按 `skills/init-project/SKILL.md` 的 C/D 步执行：写 `PRODUCT.md` 一句话定位、填 `DESIGN.md`、尽量起 `prototype/` 主原型、按 skill 要求 commit，并输出 Next Up。
+4. 脚本返回 0 只代表骨架完成。继续按 skill 写 `PRODUCT.md` 一句话定位并输出唯一 Next Up：`/pmai-design`。不得创建代码、prototype、mockup 看板或 `project.yml`。
 5. C/D 步完成后，消费仓根目录应生成 `AGENTS.md`、`CLAUDE.md` 和 `.codex/hooks.json`。后续在消费仓继续工作时，以消费仓自己的 `AGENTS.md` 为入口；Codex 首次启用项目 hooks 时可能要求信任确认。
 
 ### 3. 在消费仓中使用 PMAI
@@ -64,7 +64,7 @@ PM 在本生成器仓里让 Codex 起新业务项目时，等价执行 `/pmai-in
 1. 先读消费仓根 `AGENTS.md`，再读 `CLAUDE.md`。
 2. `/pmai-*` 命令按消费仓 `AGENTS.md` 解析到 `~/.pmai/skills/...`。
 3. 需要脚本时走 `PMAI_HOME` 或 `~/.pmai`，不要把 framework 源资产复制进消费仓；`.codex/hooks.json` 只是 host 配置，hook 命令仍指向 `~/.pmai`。
-4. 消费仓中不要再跑 `/pmai-init-project`；起模块工作走 `/pmai-design`，推进走 `/pmai-build` / `/pmai-build-close` / `/pmai-status`。
+4. 消费仓中不要再跑 `/pmai-init-project`；起模块工作走 `/pmai-design`。首个可建造 design 定稿时生成 `.pm-workflow/project.yml`，推进走 `/pmai-build`，`/pmai-build-close` 仅用于兼容恢复。
 
 ## 工作方式
 

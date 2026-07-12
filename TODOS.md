@@ -4,4 +4,5 @@
 
 ## 后续验证
 
-- 在一个真实业务模块上跑完整 `/pmai-design` → `/pmai-build` → `/pmai-build-close`，验证三道 build 审计、dev server 复用、worktree 创建/合并/清理闭环。
+- 在一个全新消费仓真实跑 `/pmai-init-project` → 首个 `/pmai-design` 生成 `project.yml` → `/pmai-build` 自动 finalize，验证定义生成、工作环境、adaptive acceptance、合入 main 和文档编译闭环。
+- 分别 dogfood 一次 Web product 和非 Web product：前者验证主动浏览器硬门，后者验证无 prototype/dev port/browser 仍可合法完成。

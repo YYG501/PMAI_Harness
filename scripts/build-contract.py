@@ -400,6 +400,11 @@ def validate_fresh_evidence(module_dir: Path, build: dict) -> None:
             )
         if not item.get("checked_at"):
             raise SystemExit(f"验收证据 {name} 缺少 checked_at。")
+        if name == "browser-smoke" and status not in PASSING_EVIDENCE_STATUSES:
+            raise SystemExit(
+                "UI 验收缺少可用的主动浏览器能力：browser-smoke 必须通过，"
+                "v2 不能用 exception 跳过。请启用 gstack/browse、browser 或 Playwright 后重跑。"
+            )
         if status in PASSING_EVIDENCE_STATUSES:
             pass
         elif status in LIMITED_EVIDENCE_STATUSES:
@@ -468,13 +473,15 @@ def cmd_start(args: argparse.Namespace) -> None:
         worktree = None
 
     builder = build_snapshot(args)
-    target_kind = optional(args.target_kind) or "prototype"
+    target_kind = optional(args.target_kind)
     if target_kind not in VALID_TARGET_KINDS:
         raise SystemExit(f"target.kind 必须是 {' / '.join(sorted(VALID_TARGET_KINDS))}: {target_kind}")
     target_paths = normalize_string_list(args.target_path)
     if not target_paths:
-        target_paths = ["prototype/"] if target_kind == "prototype" else []
+        raise SystemExit("v2 build 必须显式记录 acceptance profile 对应的 target.paths。")
     entrypoints = normalize_string_list(args.entrypoint)
+    if not entrypoints:
+        raise SystemExit("v2 build 必须记录 project.yml 声明的 implementation.entrypoints。")
     source_hash = optional(args.approved_source_hash) or optional(meta.get("approved_source_hash"))
     if not source_hash:
         anchor_path = Path(args.anchor).expanduser()
@@ -486,11 +493,7 @@ def cmd_start(args: argparse.Namespace) -> None:
             source_hash = sha256_value({"anchor": args.anchor, "baseline": optional(args.baseline_sha)})
     required_checks = normalize_string_list(args.required_check)
     if not required_checks:
-        required_checks = (
-            ["browser-smoke", "coverage", "visual", "behavior"]
-            if target_kind == "prototype"
-            else ["scope-coverage", "tests"]
-        )
+        raise SystemExit("v2 build 必须记录 acceptance profile 生成的 required_checks。")
 
     build = {
         "contract_version": 2,
@@ -659,12 +662,17 @@ def cmd_audit_exception(args: argparse.Namespace) -> None:
     build = require_build(meta)
     reason = optional(args.reason)
     if not reason:
-        raise SystemExit("必须提供 PM 接受三道审受限/跳过的原因")
+        raise SystemExit("必须提供 PM 接受验收受限/跳过项的原因")
+    checks = normalize_string_list(args.check)
+    if contract_version(build) >= 2:
+        if not checks:
+            raise SystemExit("v2 audit-exception 必须用 --check 点名受限检查。")
+        if "browser-smoke" in checks:
+            raise SystemExit("v2 UI 验收不能跳过主动浏览器能力；browser-smoke 不允许 exception。")
     build["audit_exception"] = {
         "accepted_at": optional(args.accepted_at) or now_iso(),
         "reason": reason,
     }
-    checks = normalize_string_list(args.check)
     if checks:
         build["audit_exception"]["checks"] = checks
     meta["build"] = build
@@ -933,12 +941,12 @@ def build_parser() -> argparse.ArgumentParser:
     start.add_argument("--builder-json")
     start.add_argument("--builder-model")
     start.add_argument("--builder-thinking")
-    start.add_argument("--target-kind", choices=sorted(VALID_TARGET_KINDS), default="prototype")
-    start.add_argument("--target-path", action="append", default=[])
-    start.add_argument("--entrypoint", action="append", default=[])
+    start.add_argument("--target-kind", choices=sorted(VALID_TARGET_KINDS), required=True)
+    start.add_argument("--target-path", action="append", required=True)
+    start.add_argument("--entrypoint", action="append", required=True)
     start.add_argument("--approved-source-hash")
     start.add_argument("--design-revision", type=int, default=1)
-    start.add_argument("--required-check", action="append", default=[])
+    start.add_argument("--required-check", action="append", required=True)
     start.set_defaults(func=cmd_start)
 
     commit = sub.add_parser("commit", help="record the implementation commit produced by build")
@@ -959,7 +967,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     audit_exception = sub.add_parser(
         "audit-exception",
-        help="record PM acceptance for limited/skipped visual or browser audit evidence",
+        help="record PM acceptance for named limited checks; v2 browser-smoke cannot be excepted",
     )
     audit_exception.add_argument("module_dir")
     audit_exception.add_argument("--reason", required=True)

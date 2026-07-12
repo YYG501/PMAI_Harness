@@ -42,7 +42,7 @@ PM 上传的外部材料统一按类型归档到 `docs/inputs/<类别>/`，当�
 |---|---|---|
 | `PRODUCT-STATE.md` | 🟢 | 产品现状、已落地能力、mock 到真实系统的状态位 |
 | `DESIGN.md` | 🟢 | 视觉规范单一来源，build / 视觉门必须遵循 |
-| `prototype/` / 真实产品源码 | 🟢 | 当前实现证据；不能单独覆盖规格和已确认决定 |
+| `project.yml` 声明的实现入口 | 🟡 | 实现证据与缺口检查；不能单独覆盖规格和已确认决定 |
 | `PRODUCT-RULES.md` | 🟢 | 全项目跨功能产品行为规则 |
 | `docs/modules/INDEX.md` | 🟢 | 模块入口索引 |
 
@@ -53,7 +53,7 @@ PM 上传的外部材料统一按类型归档到 `docs/inputs/<类别>/`，当�
 - 🟢 `DESIGN.md`
 - 🟢 `docs/modules/INDEX.md`
 - 🟢 相关 `docs/modules/<模块>/discussion.md` / `decisions.md` / `spec.md`（没有则创建骨架）
-- 🟢 `prototype/`（跑主原型 + 按 §9.3 反向校验现有行为）
+- 🟢 `.pm-workflow/project.yml` 已声明的实现入口（文件不存在时说明首个 design 尚未定稿，不猜代码路径）
 - 🟡 `docs/inputs/*/`（如 PM 上传材料，仅作 evidence）
 - ❌ 任何 `.engineering.md`
 
@@ -65,10 +65,10 @@ PM 上传的外部材料统一按类型归档到 `docs/inputs/<类别>/`，当�
 - 🟢 `docs/modules/<模块>/decisions.md`（为什么这么定）
 - 🟢 `DESIGN.md`（动手前全文读）
 - 🟢 context pack（当前权威事实、active/superseded 决定、未决问题、目标路径）
-- 🟢 target paths（`prototype/` 或真实 product 源码；实现参考，可全文读小文件，大文件按结构局部读）
+- 🟢 `project.yml` 的 target entrypoints（实现参考，可全文读小文件，大文件按结构局部读）
 - 🟢 `PRODUCT-RULES.md`（跨功能规则）
 
-build 不拆 task。项目类型从 `.pm-workflow/config.yml` 静默读取，默认验收在后台生成；AI 按项目类型、消费仓配置和本机可用性推荐工作环境与构建工具，由 PM 一次确认。输入契约都是 design 已提交的建造依据。
+build 不拆 task。项目类型、技术栈、入口和真实命令从 design 已提交的 `.pm-workflow/project.yml` 读取，默认验收在后台生成；AI 按项目定义、消费仓 builder 配置和本机可用性推荐工作环境与构建工具，由 PM 一次确认。
 
 ### PM 体验迭代与最终检查
 
@@ -86,19 +86,19 @@ build 不拆 task。项目类型从 `.pm-workflow/config.yml` 静默读取，默
 
 - 🟢 `docs/modules/<模块>/spec.md`
 - 🟢 `docs/modules/<模块>/decisions.md`
-- 🟢 `prototype/` 实际改动
+- 🟢 build contract `target.paths` 的实际改动
 - 🟢 `PRODUCT-STATE.md`
 - 🟢 `PRODUCT-RULES.md`
 - 🟢 `DESIGN.md`（视觉规范类反馈）
 - 🟡 `docs/inputs/*/`（如本次工作引用过）
 
-PM 定稿后的同一 finalize 先把通过最终检查的实现合入 main，再根据 landed diff、build contract、accepted deltas 和文档影响地图更新项目底座与模块三件套。凡涉及 `spec.md` 的生成或修改，调用 `/pmai-spec-writing` 的“落地主线后的事实对账”模式。文档失败保留 `landed/docs_pending`，续跑不重复 merge；`/pmai-build-close` 只作为兼容与恢复入口。
+PM 定稿后的同一 finalize 先把通过最终检查的实现合入 main，再根据 landed diff、build contract、accepted deltas 和文档影响地图更新项目底座与模块三件套。凡涉及 `spec.md` 的生成或修改，调用 `/pmai-spec-writing` 的“落地主线后的目标对账”模式；实现差异按符合、accepted delta、漏实现、无依据实现分类。文档失败保留 `landed/docs_pending`，续跑不重复 merge；`/pmai-build-close` 只作为兼容与恢复入口。
 
-**按需档：反向 PRD（spec-writing）**
-PM 真要拿去评审时才合成，可覆盖一个或多个模块：
+**按需档：功能型规格文档（spec-writing）**
+PM 真要拿去研发评审时才生成，可覆盖一个或多个模块：
 
 - 🟢 模块 `spec.md` / `decisions.md`
-- 🟢 `prototype/`
+- 🟢 `project.yml` 声明的实现入口
 - 🟢 `PRODUCT-STATE.md` / `DESIGN.md` / `PRODUCT-RULES.md`
 - 🟡 `docs/inputs/*/`
 - ❌ 任何 `.engineering.md`
@@ -126,14 +126,14 @@ PM 真要拿去评审时才合成，可覆盖一个或多个模块：
 
 工程内容只进入 build 执行 prompt 和代码实现，不回流到 PM 视图文档。PM 视图写功能行为、业务规则、验收口径；像素、组件内部名、hook、reducer、dispatch、文件路径等实现细节留在代码或执行 prompt。
 
-## 9.3 原型代码作为反向校验源（范围确认 / 反向 PRD 必读）
+## 9.3 实现作为证据源（范围确认 / 规格对账按需读）
 
-范围确认、模块规格修订、反向 PRD 必须读 `prototype/` 主原型代码。
+范围确认和 landed 后规格对账按相关范围读取 build contract `target.paths` 与 `project.yml` 声明的实现入口；建造前没有代码时不阻塞规格成文。
 
-**目的**：用主原型实际行为反向校验文档描述。
+**目的**：理解已验证的结构与交互，并检查实现是否覆盖规格。实现证据不得反向缩小或改写最终需求。
 
 **读法**：
-- 按"所属模块 + 文件路径"匹配，不全量读整个原型。
+- 按"所属模块 + 文件路径"匹配，不全量读整个实现目录。
 - 重点关注：现有页面字段、交互方式、已落地组件、UI 文案。
 
 **发现不一致时的处理**：

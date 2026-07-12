@@ -2,7 +2,7 @@
 """check-project-sections.py — PRODUCT.md 5 节状态检测器
 
 被项目方向 / 健康检查流程调用，检测 PRODUCT.md 5 节
-（项目名称 / 产品定位 / 用户画像 / 技术栈 / 业务术语表）
+（项目名称 / 产品定位 / 用户画像 / 产品边界 / 业务术语表）
 是否为空骨架（HTML 注释占位 / 无实质内容）。
 
 复用旧设计检查逻辑的有效部分：只判断 DESIGN.md 关键章节是否有正文。
@@ -17,7 +17,7 @@
     "用户画像": {"present": false, "substantial": false},  // 节缺失
     ...
   },
-  "empty_sections": ["产品定位", "用户画像", "技术栈", "业务术语表"],
+  "empty_sections": ["产品定位", "用户画像", "产品边界", "业务术语表"],
   "all_filled": false  // 5 节全 substantial
 }
 
@@ -36,7 +36,7 @@ REQUIRED_SECTIONS = [
     "项目名称",
     "产品定位",
     "用户画像",
-    "技术栈",
+    "产品边界",
     "业务术语表",
 ]
 
@@ -81,8 +81,8 @@ def is_substantial(body: str, section: str) -> bool:
     if section == "项目名称":
         return bool(stripped) and "{{" not in stripped and stripped != ""
 
-    # 产品定位 / 技术栈：去 HTML 注释后非空即可
-    if section in ("产品定位", "技术栈"):
+    # 产品定位 / 产品边界：去 HTML 注释后非空即可
+    if section in ("产品定位", "产品边界"):
         return bool(stripped) and "{{" not in stripped
 
     # 用户画像 / 业务术语表：必须有数据行（不止表头）
@@ -94,7 +94,7 @@ def is_substantial(body: str, section: str) -> bool:
 
 def check_project(repo_root: Path, target_section: str = None) -> dict:
     """检测 PRODUCT 5 节状态。"""
-    project_path = repo_root / "docs" / "PRODUCT.md"
+    project_path = repo_root / "PRODUCT.md"
     result = {
         "project_path": str(project_path),
         "exists": project_path.exists(),
@@ -125,7 +125,7 @@ def check_project(repo_root: Path, target_section: str = None) -> dict:
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Check PROJECT.md 5 sections state")
+    parser = argparse.ArgumentParser(description="Check root PRODUCT.md 5 sections state")
     parser.add_argument("repo_root", help="repository root path")
     parser.add_argument("--section", help="check only specific section", default=None)
     parser.add_argument("--exit-code", action="store_true",

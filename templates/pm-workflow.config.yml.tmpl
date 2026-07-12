@@ -1,15 +1,8 @@
 # PM-AI-Workflow 消费仓配置
 #
-# 读取者：
-# - skills/pmai-build  — 起 dev server / 探测端口 / 决定截图工具
-# - 后续 hook（待扩展）   — build/typecheck/lint 命令
-#
-# 改了哪个字段会影响什么：见每段注释。
-
-project:
-  # 项目级构建对象。初始化时确定；后续 build 只读取，不按单次需求重新推断。
-  # 如需改变项目性质，直接修改本字段，并按新的项目类型重新校准项目结构。
-  type: {{PROJECT_TYPE}}
+# 本文件只保存 AI 构建执行器偏好。
+# 项目类型、技术栈、代码入口和运行命令由首次 design 定稿后写入
+# `.pm-workflow/project.yml`，不得在这里重复定义。
 
 builder:
   # /pmai-build 的建造工具推荐档位。框架会先按项目类型和本机可用性给出推荐，
@@ -62,33 +55,3 @@ builder:
       variant: max
       auto: true
       timeout_seconds: 900
-
-dev_server:
-  # 启动 dev server 的命令；`{port}` 会替换为下方 ports 中选出的可用端口。
-  # 不同框架的端口参数不同，请在这里写真实命令，build 不临场猜 `--port` / `--host`。
-  command: pnpm dev --hostname 127.0.0.1 --port {port}
-
-  # 端口探测顺序：build / 复审按列表顺序对 ready_check 发 HTTP，第一个返回 200 的胜出
-  # 列表里写你项目实际可能监听的端口；不存在的端口跳过
-  ports:
-    - 3000
-    - 5173
-    - 8080
-
-  # 健康检查路径（相对 dev server 根）
-  # 用 curl http://localhost:<port>${ready_check} 判断 dev server 是否 ready
-  # 默认 / —— 一般首页 200 就够；后端项目可改 /api/health 之类
-  ready_check: /
-
-  # dev server 启动超时（秒）；超时仍未 ready → build / 复审视为 fail
-  startup_timeout: 30
-
-verify:
-  # 截图 / 浏览器交互工具；当前仅支持 gstack-browse
-  # 未来扩展 mcp-playwright / playwright-cli 等再列别的值
-  screenshot_tool: gstack-browse
-
-  # 截图分辨率（宽 x 高）
-  viewport:
-    - 1440
-    - 900

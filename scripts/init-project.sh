@@ -9,16 +9,12 @@ set -euo pipefail
 _print_help() {
   cat <<HELP
 用法:
-  bash scripts/init-project.sh <project-name> <target-dir> <background> <project-type> [--allow-existing]
+  bash scripts/init-project.sh <project-name> <target-dir> <background> [--allow-existing]
 
 参数:
   <project-name>      业务项目名（也是 git 仓的名字）
   <target-dir>        业务项目落地路径（默认不能已存在；加 --allow-existing 可复用已有目录）
   <background>        一句话项目背景（写进生成的 CLAUDE.md）
-  <project-type>      项目级构建对象（必填）：
-                        prototype  原型 / Demo 项目
-                        product    真实产品项目
-
 可选 flag:
   --allow-existing    放过"目标目录已存在"检查。仅当 PM 在 /pmai-init-project skill 阶段 A
                       step 3b 明确选了「资料档接住」分流时由 skill 加入；脚本本身不判断目录
@@ -35,8 +31,7 @@ _print_help() {
   bash scripts/init-project.sh \\
     ExampleConsumerApp \\
     ~/Projects/ExampleConsumerApp \\
-    "B 端 admin console 重构" \\
-    prototype
+    "B 端 admin console 重构"
 
 说明:
   本脚本是 /pmai-init-project skill 阶段 B 的骨架构建器（agent 用 Bash 调）。
@@ -63,9 +58,15 @@ done
 # set -- 重置位置参数；空数组 fallback 防 set -u
 set -- "${_POSITIONAL[@]+"${_POSITIONAL[@]}"}"
 
-if [ $# -lt 4 ]; then
-  echo "❌ 缺少必填参数（需要 <project-name> <target-dir> <background> <project-type>）" >&2
-  echo "   正确形态：bash scripts/init-project.sh <项目名> <落地路径> <一句话背景> <prototype|product> [--allow-existing]" >&2
+if [ $# -gt 3 ] && { [ "${4:-}" = "prototype" ] || [ "${4:-}" = "product" ]; }; then
+  echo "❌ 初始化不再接收 project-type。" >&2
+  echo "   请移除第 4 个参数；项目类型、技术栈和框架会在首次 /pmai-design 定稿时写入 .pm-workflow/project.yml。" >&2
+  exit 2
+fi
+
+if [ $# -ne 3 ]; then
+  echo "❌ 参数数量不正确（需要 <project-name> <target-dir> <background>）" >&2
+  echo "   正确形态：bash scripts/init-project.sh <项目名> <落地路径> <一句话背景> [--allow-existing]" >&2
   echo "" >&2
   _print_help >&2
   exit 2
@@ -74,24 +75,6 @@ fi
 PROJECT_NAME="$1"
 TARGET_DIR="$2"
 BACKGROUND="$3"
-PROJECT_TYPE="$4"
-
-case "$PROJECT_TYPE" in
-  prototype|product) ;;
-  *)
-    echo "❌ project-type 非法: ${PROJECT_TYPE}（必须是 prototype 或 product）" >&2
-    echo "   修复：参数 4 明确传 prototype / product；项目类型不在后续 build 中临时猜测。" >&2
-    echo "        跑 'bash scripts/init-project.sh --help' 看完整说明。" >&2
-    exit 2
-    ;;
-esac
-
-# 工程结构模板仍复用已有 prototype / system 两档；product 只在内部映射到 system。
-if [ "$PROJECT_TYPE" = "product" ]; then
-  STRUCTURE_INTENT="system"
-else
-  STRUCTURE_INTENT="prototype"
-fi
 
 # 框架源路径解析顺序：
 #   1. PMAI_HOME 环境变量（pmai install 后用，或 /pmai-init-project skill 显式传）
@@ -110,13 +93,12 @@ fi
 export PMAI_HOME="$FRAMEWORK_DIR"
 
 # --- 0. 位置 sanity check（DX I2）---
-# FRAMEWORK_DIR 必须含 host entry 模板 + skills/init-project + scripts/inject-structure-segment.py
+# FRAMEWORK_DIR 必须含 host entry 模板 + skills/init-project。
 MISSING=""
 [ -f "$FRAMEWORK_DIR/templates/CLAUDE.md.tmpl" ] || MISSING="$MISSING templates/CLAUDE.md.tmpl"
 [ -f "$FRAMEWORK_DIR/templates/AGENTS.md.tmpl" ] || MISSING="$MISSING templates/AGENTS.md.tmpl"
 [ -f "$FRAMEWORK_DIR/templates/codex-hooks.json.tmpl" ] || MISSING="$MISSING templates/codex-hooks.json.tmpl"
 [ -d "$FRAMEWORK_DIR/skills/init-project" ] || MISSING="$MISSING skills/init-project/"
-[ -f "$FRAMEWORK_DIR/scripts/inject-structure-segment.py" ] || MISSING="$MISSING scripts/inject-structure-segment.py"
 [ -f "$FRAMEWORK_DIR/scripts/install-codex-hooks.sh" ] || MISSING="$MISSING scripts/install-codex-hooks.sh"
 [ -f "$FRAMEWORK_DIR/scripts/install-opencode-commands.sh" ] || MISSING="$MISSING scripts/install-opencode-commands.sh"
 if [ -n "$MISSING" ]; then
@@ -154,26 +136,6 @@ if [ -d "$TARGET_DIR" ] && _pmai_target_has_project_marker; then
   echo "   已阻止重复初始化，避免覆盖 PRODUCT.md / AGENTS.md / host 配置。" >&2
   echo "   下一步：在该目录使用 /pmai-status；需要重整方向走 /pmai-direction；需要刷新框架配置走 pmai upgrade。" >&2
   exit 1
-fi
-
-# --- a. 检测 gstack 能力（CLI 或全局 skill 任一可用即可） ---
-GSTACK_BIN=$(command -v gstack 2>/dev/null || true)
-GSTACK_SKILL_DIR="$HOME/.claude/skills/gstack"
-if [ -n "$GSTACK_BIN" ]; then
-  echo "✅ gstack CLI 已检测到: $GSTACK_BIN"
-elif [ -d "$GSTACK_SKILL_DIR" ]; then
-  echo "✅ gstack skill 已检测到: ~/.claude/skills/gstack"
-else
-  echo "❌ gstack 未安装（CLI 和 ~/.claude/skills/gstack 都未检测到）。请先安装 gstack：" >&2
-  echo "   参考：https://github.com/garrytan/gstack" >&2
-  exit 1
-fi
-
-# --- b. 检测 gstack 版本（警告但不阻塞）---
-GSTACK_VERSION=""
-if [ -f "$GSTACK_SKILL_DIR/VERSION" ]; then
-  GSTACK_VERSION=$(cat "$GSTACK_SKILL_DIR/VERSION" 2>/dev/null || echo "unknown")
-  echo "📦 gstack 版本: $GSTACK_VERSION"
 fi
 
 # --- c. 创建项目目录 ---
@@ -223,30 +185,15 @@ for TMPL in "$FRAMEWORK_DIR/templates/"*.tmpl; do
   mkdir -p "$(dirname "$DEST")"
   # 占位符替换用 Python .replace()，不解释 replacement 元字符 —— sed 会把
   # background 里的 | 当分隔符报错、& 当「整段匹配」展开，静默污染生成文件。
-  TMPL="$TMPL" DEST="$DEST" PN="$PROJECT_NAME" BG="$BACKGROUND" PT="$PROJECT_TYPE" python3 - <<'PY'
+  TMPL="$TMPL" DEST="$DEST" PN="$PROJECT_NAME" BG="$BACKGROUND" python3 - <<'PY'
 import os
 text = open(os.environ["TMPL"], encoding="utf-8").read()
 text = text.replace("{{PROJECT_NAME}}", os.environ["PN"])
 text = text.replace("{{PROJECT_BACKGROUND}}", os.environ["BG"])
-text = text.replace("{{PROJECT_TYPE}}", os.environ["PT"])
 open(os.environ["DEST"], "w", encoding="utf-8").write(text)
 PY
 done
 echo "📋 模板已复制并替换占位符"
-
-# --- d1.5. 工程结构约束源文件（symlink 模式：通过 templates/ symlink 跟随）---
-# 旧版 cp 工程结构约束-*.md / schema.json 到 consumer/templates/。
-# 方案 A symlink 模式后，consumer/templates/ 整体 symlink → $FRAMEWORK_DIR/templates/，
-# 这些文件随 framework 升级自动跟，不再单独拷。
-# 注：工程结构约束.schema.json 由 detect-project-structure.py 读，路径同样走 templates/ symlink。
-
-# --- d2. 注入工程结构约束段（4.5c）---
-python3 "$FRAMEWORK_DIR/scripts/inject-structure-segment.py" \
-  "$TARGET_DIR/CLAUDE.md" "$STRUCTURE_INTENT" \
-  --framework-root "$FRAMEWORK_DIR" \
-  || {
-    echo "⚠️  工程结构约束注入失败（项目仍可用，PM 后续可手动跑 detect-project-structure.py）" >&2
-  }
 
 # --- e/f/f2/templates/hooks. I-mini 模式：消费仓 0 framework 源资产 ---
 # 旧版方案 A symlink 5 块到 framework（绝对路径硬编码，跨机器 dangling）。
@@ -282,31 +229,9 @@ mkdir -p "$TARGET_DIR/docs/archive"   # 扁平：过程档案 / 一次性 review
 touch "$TARGET_DIR/docs/archive/.gitkeep"
 mkdir -p "$TARGET_DIR/docs/decisions"   # 项目决策档案：重大项目级"为什么这么定"，沉淀时按需冻
 touch "$TARGET_DIR/docs/decisions/.gitkeep"
-mkdir -p "$TARGET_DIR/prototype"   # 单一主原型（单数）；SKILL C.5 用 create-next-app 在此起栈
 mkdir -p "$TARGET_DIR/.runs/events"
 mkdir -p "$TARGET_DIR/.worktrees"
-mkdir -p "$TARGET_DIR/.pm-workflow/audits"   # build 三道审内部记录根目录
 echo "📂 目录结构已创建"
-
-# --- h2. mockups/ 探索变体目录（manifest 真相源 + 生成的看版页）---
-# manifest + README 实体落消费仓（每项目自己的变体清单）；index.html 由 gen-mock-board.py 生成（勿手改）。
-mkdir -p "$TARGET_DIR/mockups"
-for MK in mockups-manifest.json:manifest.json mockups-README.md:README.md; do
-  SRC_TMPL="$FRAMEWORK_DIR/templates/${MK%%:*}.tmpl"
-  DEST_FILE="$TARGET_DIR/mockups/${MK##*:}"
-  if [ -f "$SRC_TMPL" ]; then
-    TMPL="$SRC_TMPL" DEST="$DEST_FILE" PN="$PROJECT_NAME" BG="$BACKGROUND" python3 - <<'PY'
-import os
-text = open(os.environ["TMPL"], encoding="utf-8").read()
-text = text.replace("{{PROJECT_NAME}}", os.environ["PN"])
-text = text.replace("{{PROJECT_BACKGROUND}}", os.environ["BG"])
-open(os.environ["DEST"], "w", encoding="utf-8").write(text)
-PY
-  fi
-done
-# 生成初始空看版（manifest 暂无变体 → "暂无变体"空看版，不报错）
-python3 "$FRAMEWORK_DIR/scripts/gen-mock-board.py" "$TARGET_DIR" >/dev/null 2>&1 || true
-echo "🎨 mockups/ 探索变体目录已建（manifest + 看版）"
 
 # --- i. .gitignore 已在模板复制时创建 ---
 
@@ -315,15 +240,7 @@ cd "$TARGET_DIR"
 git init -b main >/dev/null 2>&1
 echo "🔀 Git 仓库已初始化（main 分支）"
 
-# --- k. 推导基础端口 ---
 PROJECT_PATH=$(pwd)
-BASE_PORT=$(python3 -c "
-import hashlib, sys
-h = int(hashlib.md5(sys.argv[1].encode()).hexdigest(), 16)
-print(3000 + (h % 7000))
-" "$PROJECT_PATH" 2>/dev/null || echo "3000")
-echo "$BASE_PORT" > .dev-port
-echo "🔌 基础端口: $BASE_PORT"
 
 # --- k1. Host hooks（I-mini：消费仓不放 hooks/ 源目录，配置指向 $HOME/.pmai/...）---
 # 旧版方案 A 把 hooks/ symlink 到 framework，settings.json 用 $CLAUDE_PROJECT_DIR/hooks/...
@@ -359,7 +276,5 @@ echo ""
 echo "═══════════════════════════════════════"
 echo "✅ 项目初始化完成: $PROJECT_NAME"
 echo "📁 位置: $TARGET_DIR"
+echo "▶ Next Up: cd \"$TARGET_DIR\" && /pmai-design \"<第一个需求>\""
 echo "═══════════════════════════════════════"
-# 注：本脚本作为 /pmai-init-project skill 阶段 B 调用时，下一步由 skill 阶段 C/D 接管；
-# 非交互直接调用时（measure-tthw / smoke），下一步由调用方编排。
-# 不在脚本里 echo 具体的下一步命令 —— 入口语义已迁移到 /pmai-init-project skill。

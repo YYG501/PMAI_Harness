@@ -19,7 +19,8 @@
   },
   "assertions": [
     {"type": "file_contains", "path": "scripts/project-type.py", "value": "project.type"},
-    {"type": "file_contains", "path": "templates/pm-workflow.config.yml.tmpl", "value": "type: {{PROJECT_TYPE}}"},
+    {"type": "file_contains", "path": "scripts/_lib/project_definition.py", "value": "VALID_PROJECT_TYPES = {\"prototype\", \"product\"}"},
+    {"type": "file_contains", "path": "templates/pm-workflow.config.yml.tmpl", "value": "不得在这里重复定义"},
     {"type": "file_contains", "path": "scripts/acceptance-profile.py", "value": "prototype"},
     {"type": "file_contains", "path": "scripts/acceptance-profile.py", "value": "product"},
     {"type": "file_contains", "path": "scripts/build-contract.py", "value": "ready_to_build"},

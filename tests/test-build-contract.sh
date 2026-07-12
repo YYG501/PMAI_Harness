@@ -7,6 +7,15 @@ source "$SCRIPT_DIR/helpers/assert.sh"
 
 FRAMEWORK_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 BUILD_CONTRACT="$FRAMEWORK_ROOT/scripts/build-contract.py"
+PROTOTYPE_CONTRACT_ARGS=(
+  --target-kind prototype
+  --target-path prototype/
+  --entrypoint prototype/
+  --required-check browser-smoke
+  --required-check coverage
+  --required-check visual
+  --required-check behavior
+)
 
 setup_contract_fixture() {
   T=$(mktemp -d "${TMPDIR:-/tmp}/pmai-build-contract.XXXXXX")
@@ -42,7 +51,7 @@ JSON
   cat > "$AUDIT_DIR/behavior.json" <<'JSON'
 {"status":"pass","passed":2,"total":2,"note":""}
 JSON
-  echo "# 三道审合成报告" > "$AUDIT_DIR/synthesis.md"
+  echo "# Legacy v1 acceptance report" > "$AUDIT_DIR/synthesis.md"
   python3 "$BUILD_CONTRACT" record-evidence "$MODULE_DIR" --name browser-smoke --status pass --artifact ".pm-workflow/audits/pet-import/browser-smoke.json" >/dev/null
   python3 "$BUILD_CONTRACT" record-evidence "$MODULE_DIR" --name coverage --status pass --artifact ".pm-workflow/audits/pet-import/coverage.json" >/dev/null
   python3 "$BUILD_CONTRACT" record-evidence "$MODULE_DIR" --name visual --status pass --artifact ".pm-workflow/audits/pet-import/visual.json" >/dev/null
@@ -64,7 +73,7 @@ JSON
   cat > "$AUDIT_DIR/behavior.json" <<'JSON'
 {"status":"skipped","passed":0,"total":2,"note":"browser 工具不可用"}
 JSON
-  echo "# 三道审合成报告" > "$AUDIT_DIR/synthesis.md"
+  echo "# Legacy v1 acceptance report" > "$AUDIT_DIR/synthesis.md"
   python3 "$BUILD_CONTRACT" record-evidence "$MODULE_DIR" --name browser-smoke --status limited --artifact ".pm-workflow/audits/pet-import/browser-smoke.json" >/dev/null
   python3 "$BUILD_CONTRACT" record-evidence "$MODULE_DIR" --name coverage --status pass --artifact ".pm-workflow/audits/pet-import/coverage.json" >/dev/null
   python3 "$BUILD_CONTRACT" record-evidence "$MODULE_DIR" --name visual --status limited --artifact ".pm-workflow/audits/pet-import/visual.json" >/dev/null
@@ -84,7 +93,8 @@ test_contract_lifecycle() {
     --branch build-pet-import \
     --worktree ".worktrees/build-pet-import" \
     --baseline-sha "abc123" \
-    --audit-dir ".pm-workflow/audits/pet-import" >/tmp/build-contract.$$ 2>/tmp/build-contract.err.$$; then
+    --audit-dir ".pm-workflow/audits/pet-import" \
+    "${PROTOTYPE_CONTRACT_ARGS[@]}" >/tmp/build-contract.$$ 2>/tmp/build-contract.err.$$; then
     _fail "start should succeed"
     cat /tmp/build-contract.err.$$ >&2
     rm -f /tmp/build-contract.$$ /tmp/build-contract.err.$$; teardown_contract_fixture; return
@@ -175,6 +185,27 @@ test_contract_rejects_missing_build() {
   teardown_contract_fixture
 }
 
+test_contract_start_requires_adaptive_inputs() {
+  start_test "build-contract v2: start has no prototype or fixed-check defaults"
+  setup_contract_fixture
+
+  if python3 "$BUILD_CONTRACT" start "$MODULE_DIR" \
+    --anchor "docs/modules/pet-import/spec.md" \
+    --mode worktree --executor codex --branch build-pet-import \
+    --worktree ".worktrees/build-pet-import" --baseline-sha abc123 \
+    >/tmp/build-contract.$$ 2>/tmp/build-contract.err.$$; then
+    _fail "v2 start without adaptive target/check inputs should fail"
+  elif grep -q -- '--target-kind' /tmp/build-contract.err.$$; then
+    pass_test
+  else
+    _fail "missing adaptive inputs should fail with explicit argument guidance"
+    cat /tmp/build-contract.err.$$ >&2
+  fi
+
+  rm -f /tmp/build-contract.$$ /tmp/build-contract.err.$$
+  teardown_contract_fixture
+}
+
 test_contract_start_initializes_missing_meta() {
   start_test "build-contract: start auto-initializes missing .work-meta.json"
   T=$(mktemp -d "${TMPDIR:-/tmp}/pmai-build-contract.XXXXXX")
@@ -187,7 +218,8 @@ test_contract_start_initializes_missing_meta() {
     --executor claude-code \
     --branch main \
     --baseline-sha "abc123" \
-    --audit-dir ".pm-workflow/audits/pet-import" >/tmp/build-contract.$$ 2>/tmp/build-contract.err.$$; then
+    --audit-dir ".pm-workflow/audits/pet-import" \
+    "${PROTOTYPE_CONTRACT_ARGS[@]}" >/tmp/build-contract.$$ 2>/tmp/build-contract.err.$$; then
     _fail "start should create missing .work-meta.json"
     cat /tmp/build-contract.err.$$ >&2
     rm -f /tmp/build-contract.$$ /tmp/build-contract.err.$$; teardown_contract_fixture; return
@@ -224,7 +256,8 @@ test_contract_complete_records_commit_and_acceptance_atomically() {
     --branch build-pet-import \
     --worktree ".worktrees/build-pet-import" \
     --baseline-sha "abc123" \
-    --audit-dir ".pm-workflow/audits/pet-import" >/tmp/build-contract.$$ 2>/tmp/build-contract.err.$$; then
+    --audit-dir ".pm-workflow/audits/pet-import" \
+    "${PROTOTYPE_CONTRACT_ARGS[@]}" >/tmp/build-contract.$$ 2>/tmp/build-contract.err.$$; then
     _fail "start should succeed"
     cat /tmp/build-contract.err.$$ >&2
     rm -f /tmp/build-contract.$$ /tmp/build-contract.err.$$; teardown_contract_fixture; return
@@ -263,8 +296,8 @@ PY
   teardown_contract_fixture
 }
 
-test_contract_limited_browser_requires_pm_exception() {
-  start_test "build-contract: browser/visual skipped needs explicit PM audit exception"
+test_contract_limited_browser_cannot_be_excepted() {
+  start_test "build-contract: v2 UI requires active browser even after other exceptions"
   setup_contract_fixture
 
   if ! python3 "$BUILD_CONTRACT" start "$MODULE_DIR" \
@@ -274,7 +307,8 @@ test_contract_limited_browser_requires_pm_exception() {
     --branch build-pet-import \
     --worktree ".worktrees/build-pet-import" \
     --baseline-sha "abc123" \
-    --audit-dir ".pm-workflow/audits/pet-import" >/tmp/build-contract.$$ 2>/tmp/build-contract.err.$$; then
+    --audit-dir ".pm-workflow/audits/pet-import" \
+    "${PROTOTYPE_CONTRACT_ARGS[@]}" >/tmp/build-contract.$$ 2>/tmp/build-contract.err.$$; then
     _fail "start should succeed"
     cat /tmp/build-contract.err.$$ >&2
     rm -f /tmp/build-contract.$$ /tmp/build-contract.err.$$; teardown_contract_fixture; return
@@ -294,22 +328,27 @@ test_contract_limited_browser_requires_pm_exception() {
     _fail "validate-close should reject skipped browser evidence without PM exception"
     rm -f /tmp/build-contract.$$ /tmp/build-contract.err.$$; teardown_contract_fixture; return
   fi
-  if ! grep -q "受限/跳过/失败/阻塞" /tmp/build-contract.err.$$; then
-    _fail "stderr should explain audit exception requirement"
+  if ! grep -q "主动浏览器能力" /tmp/build-contract.err.$$; then
+    _fail "stderr should explain active browser requirement"
     cat /tmp/build-contract.err.$$ >&2
     rm -f /tmp/build-contract.$$ /tmp/build-contract.err.$$; teardown_contract_fixture; return
   fi
 
   if ! python3 "$BUILD_CONTRACT" audit-exception "$MODULE_DIR" \
     --reason "PM 确认本轮浏览器工具受限，先接受页面返回检查风险" \
+    --check visual --check behavior \
     --accepted-at "2026-06-28T10:05:00+08:00" >/tmp/build-contract.$$ 2>/tmp/build-contract.err.$$; then
     _fail "audit-exception should record PM acceptance"
     cat /tmp/build-contract.err.$$ >&2
     rm -f /tmp/build-contract.$$ /tmp/build-contract.err.$$; teardown_contract_fixture; return
   fi
 
-  if ! python3 "$BUILD_CONTRACT" validate-close "$MODULE_DIR" >/tmp/build-contract.$$ 2>/tmp/build-contract.err.$$; then
-    _fail "validate-close should allow limited/skipped audit after PM exception"
+  if python3 "$BUILD_CONTRACT" validate-close "$MODULE_DIR" >/tmp/build-contract.$$ 2>/tmp/build-contract.err.$$; then
+    _fail "validate-close must not allow limited browser after exception"
+    rm -f /tmp/build-contract.$$ /tmp/build-contract.err.$$; teardown_contract_fixture; return
+  fi
+  if ! grep -q "主动浏览器能力" /tmp/build-contract.err.$$; then
+    _fail "browser hard gate should remain after exception"
     cat /tmp/build-contract.err.$$ >&2
     rm -f /tmp/build-contract.$$ /tmp/build-contract.err.$$; teardown_contract_fixture; return
   fi
@@ -330,7 +369,8 @@ test_contract_missing_browser_smoke_blocks_clean_audits() {
     --branch build-pet-import \
     --worktree ".worktrees/build-pet-import" \
     --baseline-sha "abc123" \
-    --audit-dir ".pm-workflow/audits/pet-import" >/tmp/build-contract.$$ 2>/tmp/build-contract.err.$$ || {
+    --audit-dir ".pm-workflow/audits/pet-import" \
+    "${PROTOTYPE_CONTRACT_ARGS[@]}" >/tmp/build-contract.$$ 2>/tmp/build-contract.err.$$ || {
       _fail "start should succeed"
       cat /tmp/build-contract.err.$$ >&2
       rm -f /tmp/build-contract.$$ /tmp/build-contract.err.$$; teardown_contract_fixture; return
@@ -362,7 +402,7 @@ test_contract_missing_browser_smoke_blocks_clean_audits() {
 }
 
 test_contract_browser_smoke_limited_blocks_passed_browser_audits() {
-  start_test "build-contract: limited browser smoke cannot coexist with passed browser audits"
+  start_test "build-contract: limited browser smoke triggers v2 active-browser hard gate"
   setup_contract_fixture
 
   python3 "$BUILD_CONTRACT" start "$MODULE_DIR" \
@@ -372,7 +412,8 @@ test_contract_browser_smoke_limited_blocks_passed_browser_audits() {
     --branch build-pet-import \
     --worktree ".worktrees/build-pet-import" \
     --baseline-sha "abc123" \
-    --audit-dir ".pm-workflow/audits/pet-import" >/tmp/build-contract.$$ 2>/tmp/build-contract.err.$$ || {
+    --audit-dir ".pm-workflow/audits/pet-import" \
+    "${PROTOTYPE_CONTRACT_ARGS[@]}" >/tmp/build-contract.$$ 2>/tmp/build-contract.err.$$ || {
       _fail "start should succeed"
       cat /tmp/build-contract.err.$$ >&2
       rm -f /tmp/build-contract.$$ /tmp/build-contract.err.$$; teardown_contract_fixture; return
@@ -394,6 +435,7 @@ JSON
     --artifact ".pm-workflow/audits/pet-import/browser-smoke.json" >/dev/null
   python3 "$BUILD_CONTRACT" audit-exception "$MODULE_DIR" \
     --reason "PM 确认本轮浏览器工具受限，先接受风险" \
+    --check visual --check behavior \
     --accepted-at "2026-06-28T10:05:00+08:00" >/tmp/build-contract.$$ 2>/tmp/build-contract.err.$$ || {
       _fail "audit-exception should record PM acceptance"
       cat /tmp/build-contract.err.$$ >&2
@@ -404,10 +446,10 @@ JSON
     _fail "validate-close should reject passed browser audits when browser smoke is limited"
     rm -f /tmp/build-contract.$$ /tmp/build-contract.err.$$; teardown_contract_fixture; return
   fi
-  if grep -q "视觉门不能写 pass" /tmp/build-contract.err.$$; then
+  if grep -q "主动浏览器能力" /tmp/build-contract.err.$$; then
     pass_test
   else
-    _fail "stderr should explain browser smoke/pass contradiction"
+    _fail "stderr should explain active browser hard gate"
     cat /tmp/build-contract.err.$$ >&2
   fi
 
@@ -426,7 +468,8 @@ test_contract_behavior_fail_blocks_close() {
     --branch build-pet-import \
     --worktree ".worktrees/build-pet-import" \
     --baseline-sha "abc123" \
-    --audit-dir ".pm-workflow/audits/pet-import" >/tmp/build-contract.$$ 2>/tmp/build-contract.err.$$ || {
+    --audit-dir ".pm-workflow/audits/pet-import" \
+    "${PROTOTYPE_CONTRACT_ARGS[@]}" >/tmp/build-contract.$$ 2>/tmp/build-contract.err.$$ || {
       _fail "start should succeed"
       cat /tmp/build-contract.err.$$ >&2
       rm -f /tmp/build-contract.$$ /tmp/build-contract.err.$$; teardown_contract_fixture; return
@@ -447,7 +490,7 @@ JSON
     --artifact ".pm-workflow/audits/pet-import/behavior.json" >/dev/null
 
   if python3 "$BUILD_CONTRACT" audit-exception "$MODULE_DIR" \
-    --reason "PM 接受浏览器工具受限" >/tmp/build-contract.$$ 2>/tmp/build-contract.err.$$ \
+    --reason "PM 接受行为检查缺口" --check behavior >/tmp/build-contract.$$ 2>/tmp/build-contract.err.$$ \
     && python3 "$BUILD_CONTRACT" validate-close "$MODULE_DIR" >/tmp/build-contract.$$ 2>/tmp/build-contract.err.$$; then
     _fail "validate-close should reject behavior fail even with audit exception"
     rm -f /tmp/build-contract.$$ /tmp/build-contract.err.$$; teardown_contract_fixture; return
@@ -471,7 +514,7 @@ test_contract_v2_rejects_stale_evidence_and_invalidates_on_delta() {
     --anchor "docs/modules/pet-import/spec.md" \
     --mode worktree --executor codex --branch build-pet-import \
     --worktree ".worktrees/build-pet-import" --baseline-sha abc123 \
-    --target-kind product --target-path "src/pets/" \
+    --target-kind product --target-path "src/pets/" --entrypoint "src/pets/" \
     --approved-source-hash "source-v1" --required-check tests >/dev/null || {
       _fail "v2 start should succeed"; teardown_contract_fixture; return;
     }
@@ -517,7 +560,7 @@ test_contract_v2_post_land_docs_resume() {
   python3 "$BUILD_CONTRACT" start "$MODULE_DIR" \
     --anchor "docs/modules/pet-import/spec.md" --mode worktree --executor codex \
     --branch build-pet-import --worktree ".worktrees/build-pet-import" \
-    --baseline-sha abc123 --target-kind product --approved-source-hash source-v1 \
+    --baseline-sha abc123 --target-kind product --target-path src/pets/ --entrypoint src/pets/ --approved-source-hash source-v1 \
     --required-check tests >/dev/null
   python3 "$BUILD_CONTRACT" commit "$MODULE_DIR" --implementation-commit commit-v1 >/dev/null
   python3 "$BUILD_CONTRACT" complete "$MODULE_DIR" --implementation-commit commit-v1 >/dev/null
@@ -542,7 +585,7 @@ test_contract_v2_new_implementation_invalidates_evidence() {
   python3 "$BUILD_CONTRACT" start "$MODULE_DIR" \
     --anchor "docs/modules/pet-import/spec.md" --mode worktree --executor codex \
     --branch build-pet-import --worktree ".worktrees/build-pet-import" \
-    --baseline-sha abc123 --target-kind product --approved-source-hash source-v1 \
+    --baseline-sha abc123 --target-kind product --target-path src/pets/ --entrypoint src/pets/ --approved-source-hash source-v1 \
     --required-check tests >/dev/null
   python3 "$BUILD_CONTRACT" commit "$MODULE_DIR" --implementation-commit commit-v1 >/dev/null
   python3 "$BUILD_CONTRACT" record-evidence "$MODULE_DIR" --name tests --status pass \
@@ -570,7 +613,7 @@ test_contract_v2_rejects_illegal_lifecycle_jumps() {
   python3 "$BUILD_CONTRACT" start "$MODULE_DIR" \
     --anchor "docs/modules/pet-import/spec.md" --mode worktree --executor codex \
     --branch build-pet-import --worktree ".worktrees/build-pet-import" \
-    --baseline-sha abc123 --target-kind product --approved-source-hash source-v1 \
+    --baseline-sha abc123 --target-kind product --target-path src/pets/ --entrypoint src/pets/ --approved-source-hash source-v1 \
     --required-check tests >/dev/null
 
   if python3 "$BUILD_CONTRACT" docs-complete "$MODULE_DIR" >/tmp/build-contract.$$ 2>/tmp/build-contract.err.$$; then
@@ -593,9 +636,10 @@ test_contract_v2_rejects_illegal_lifecycle_jumps() {
 
 test_contract_lifecycle
 test_contract_rejects_missing_build
+test_contract_start_requires_adaptive_inputs
 test_contract_start_initializes_missing_meta
 test_contract_complete_records_commit_and_acceptance_atomically
-test_contract_limited_browser_requires_pm_exception
+test_contract_limited_browser_cannot_be_excepted
 test_contract_missing_browser_smoke_blocks_clean_audits
 test_contract_browser_smoke_limited_blocks_passed_browser_audits
 test_contract_behavior_fail_blocks_close

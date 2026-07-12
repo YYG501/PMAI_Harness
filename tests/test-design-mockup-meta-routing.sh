@@ -45,7 +45,7 @@ test_mockup_preserves_adaptive_divergence() {
   assert_file_contains "$MOCKUP_SKILL" "check-gstack-browser.sh" "mockup should call gstack diagnostics" || return
   assert_file_contains "$MOCKUP_SKILL" "gstack 受限：走 PMAI 内部 HTML / 静态稿" "mockup should have a local fallback" || return
   assert_file_contains "$MOCKUP_SKILL" "交互模型、信息层级或任务路径" "variants should differ materially" || return
-  assert_file_contains "$MOCKUP_SKILL" '不修改 `prototype/`' "mockup should not touch main prototype" || return
+  assert_file_contains "$MOCKUP_SKILL" '不修改 `project.yml` 声明的实现入口' "mockup should not touch build target" || return
   pass_test
 }
 
@@ -66,7 +66,7 @@ test_consumer_template_carries_runtime_rules() {
   assert_file_contains "$AGENTS_TEMPLATE" 'mockup 只出探索稿' "template should keep mockup out of prototype" || return
   assert_file_contains "$AGENTS_TEMPLATE" "单主控多视角退化执行" "template should require meta degradation statement" || return
   assert_file_contains "$AGENTS_TEMPLATE" 'localhost `EPERM`' "template should explain sandbox restriction" || return
-  assert_file_contains "$AGENTS_TEMPLATE" "未经 PM 明确确认" "template should require prototype confirmation" || return
+  assert_file_contains "$AGENTS_TEMPLATE" "由 PM 一次确认建造对象与技术方案" "template should require design-time project definition confirmation" || return
   pass_test
 }
 

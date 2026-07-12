@@ -71,8 +71,8 @@ test_private_repo_install_surfaces_prereqs() {
     echo "$out" >&2
     return
   fi
-  if ! echo "$out" | grep -q "建全新项目骨架"; then
-    _fail "install 的 gstack warning 应限定为全新项目骨架分支"
+  if ! echo "$out" | grep -q "初始化不受影响"; then
+    _fail "install 的 gstack warning 应说明初始化不受影响"
     echo "$out" >&2
     return
   fi
@@ -86,6 +86,12 @@ test_private_repo_install_surfaces_prereqs() {
   fi
   if [ ! -f "$FAKE_HOME/.config/opencode/commands/pmai-init-project.md" ]; then
     _fail "OpenCode command 暴露缺 pmai-init-project"
+    return
+  fi
+  if [ ! -f "$PMAI_HOME/scripts/project-definition.py" ] \
+     || [ -e "$PMAI_HOME/scripts/build-audits.py" ] \
+     || [ -e "$PMAI_HOME/agents/coverage-reviewer.md" ]; then
+    _fail "隔离安装的 project definition / retired audit assets 不符合当前仓"
     return
   fi
   pass_test
@@ -118,8 +124,8 @@ test_doctor_reports_private_onboarding_state() {
     echo "$out" >&2
     return
   fi
-  if ! echo "$out" | grep -q "已有代码库接入不受阻塞"; then
-    _fail "doctor 的 gstack warning 应说明已有代码库接入不受阻塞"
+  if ! echo "$out" | grep -q "初始化和非 Web build 不受影响"; then
+    _fail "doctor 的 gstack warning 应说明初始化和非 Web build 不受影响"
     echo "$out" >&2
     return
   fi
@@ -131,29 +137,31 @@ test_doctor_reports_private_onboarding_state() {
   pass_test
 }
 
-test_init_project_blocks_without_gstack() {
-  start_test "T3: 缺 gstack 时 init-project 明确阻塞"
+test_init_project_runs_without_gstack() {
+  start_test "T3: 缺 gstack 时 init-project 仍建立上下文"
   local out rc target
 
   target="$WORK_DIR/MissingGstack"
   out=$(HOME="$FAKE_HOME" CODEX_HOME="$FAKE_CODEX_HOME" PMAI_HOME="$PMAI_HOME" PATH="$FAKE_PATH" \
-    bash "$PMAI_HOME/scripts/init-project.sh" MissingGstack "$target" "private onboarding smoke" prototype 2>&1)
+    GIT_AUTHOR_NAME="PMAI Test" GIT_AUTHOR_EMAIL="pmai-test@example.com" \
+    GIT_COMMITTER_NAME="PMAI Test" GIT_COMMITTER_EMAIL="pmai-test@example.com" \
+    bash "$PMAI_HOME/scripts/init-project.sh" MissingGstack "$target" "private onboarding smoke" 2>&1)
   rc=$?
-  if [ "$rc" = "0" ]; then
-    _fail "缺 gstack 时 init-project 不应成功"
+  if [ "$rc" != "0" ]; then
+    _fail "缺 gstack 时 init-project 应成功"
     echo "$out" >&2
     return
   fi
-  if ! echo "$out" | grep -q "gstack 未安装"; then
-    _fail "init-project 应点名 gstack 未安装"
+  if [ -e "$target/.pm-workflow/project.yml" ] || [ -d "$target/prototype" ]; then
+    _fail "初始化不应生成 project.yml 或 prototype"
     echo "$out" >&2
     return
   fi
   pass_test
 }
 
-test_init_project_passes_after_gstack_skill_exists() {
-  start_test "T4: 补齐 gstack skill 后可初始化消费仓"
+test_init_project_output_is_same_with_gstack_skill() {
+  start_test "T4: 有 gstack 时初始化仍只建立上下文"
   local out rc target status_out
 
   mkdir -p "$FAKE_HOME/.claude/skills/gstack"
@@ -163,15 +171,10 @@ test_init_project_passes_after_gstack_skill_exists() {
   out=$(HOME="$FAKE_HOME" CODEX_HOME="$FAKE_CODEX_HOME" PMAI_HOME="$PMAI_HOME" PATH="$FAKE_PATH" \
     GIT_AUTHOR_NAME="PMAI Test" GIT_AUTHOR_EMAIL="pmai-test@example.com" \
     GIT_COMMITTER_NAME="PMAI Test" GIT_COMMITTER_EMAIL="pmai-test@example.com" \
-    bash "$PMAI_HOME/scripts/init-project.sh" PrivateDemo "$target" "private onboarding smoke" prototype 2>&1)
+    bash "$PMAI_HOME/scripts/init-project.sh" PrivateDemo "$target" "private onboarding smoke" 2>&1)
   rc=$?
   if [ "$rc" != "0" ]; then
     _fail "补齐 gstack skill 后 init-project 应成功"
-    echo "$out" >&2
-    return
-  fi
-  if ! echo "$out" | grep -q "gstack skill 已检测到"; then
-    _fail "init-project 应把 gstack skill 识别为可用能力"
     echo "$out" >&2
     return
   fi
@@ -225,7 +228,7 @@ make_source_snapshot "$SOURCE_REPO"
 
 test_private_repo_install_surfaces_prereqs
 test_doctor_reports_private_onboarding_state
-test_init_project_blocks_without_gstack
-test_init_project_passes_after_gstack_skill_exists
+test_init_project_runs_without_gstack
+test_init_project_output_is_same_with_gstack_skill
 
 report_results "private-onboarding"

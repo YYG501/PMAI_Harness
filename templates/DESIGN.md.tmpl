@@ -2,8 +2,8 @@
 
 > **这是什么**：产品的视觉与交互约定 —— 界面该长什么样、什么风格、哪些 UI 习惯必须守。
 > **为什么写成"正向约束"而不是"禁止清单"**：告诉 AI"该怎么做"（用什么组件、什么节奏、什么密度）比列一堆"别做什么"更能逼出好视觉。**build 前 AI 必读它再动手。**
-> **谁读**：原型 build（照着建）、视觉门（对照它审 + 截图给 PM）。
-> **谁写**：项目 init 时起草（可借 gstack `design-consultation` 出初稿，也可手写），随产品演进 PM 手动调。
+> **谁读**：涉及界面的 design、build 和 visual evidence 生产者。
+> **谁写**：初始化只铺空骨架；首个涉及界面的 `/pmai-design` 按真实需求和现有产品补全，随后随 landed 事实演进。gstack `design-consultation` 可作为辅助，但不是依赖。
 
 ---
 
@@ -16,9 +16,9 @@
 - 字号阶梯 <…>，正文 <N px> / 行高 <…>
 - 间距统一用 4 / 8 的倍数 -->
 
-## 二、产品化 demo 目标
+## 二、界面体验目标
 
-<!-- build 出来的原型要达到的"可用感"门槛，不是线框稿： -->
+<!-- build 出来的 prototype 或 product 界面要达到的体验门槛： -->
 
 - **首屏见价值**：打开就能看懂这个页面是干嘛的，核心信息在最显眼处。
 - **每个主按钮最低可用闭环**：主操作点下去有真实反馈（哪怕是 mock 的成功态），不留死按钮。
@@ -33,7 +33,7 @@
 
 ## 四、组件 / token 来源
 
-- UI primitive：`prototype/` 里的 `components/ui`（shadcn）。
+- UI primitive：首个 UI design 定稿时，按 `.pm-workflow/project.yml` 的 implementation root 和 framework 写入真实组件来源；初始化阶段不预设 shadcn 或代码路径。
 - 视觉 token（色 / 间距 / 字号）：以本文件为准，组件实现引用它。
 
 ## 共享组件 inventory

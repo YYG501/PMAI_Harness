@@ -19,6 +19,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Iterable
 
+from _lib.project_definition import ProjectDefinitionError, load_project_definition
+
 
 ROOT_SOURCES = (
     ("PRODUCT.md", "product_definition"),
@@ -269,7 +271,18 @@ def relevant_implementation_paths(repo_root: Path, keywords: list[str], meta: di
         if isinstance(value, str):
             paths.add(value)
     tracked = git_output(repo_root, "ls-files").splitlines()
-    roots = ("prototype/", "src/", "app/", "apps/", "packages/", "Sources/")
+    definition_path = repo_root / ".pm-workflow" / "project.yml"
+    if definition_path.exists():
+        try:
+            definition = load_project_definition(definition_path)
+        except ProjectDefinitionError as exc:
+            raise SystemExit(str(exc)) from exc
+        roots = tuple(path.rstrip("/") + "/" for path in definition["implementation"]["entrypoints"])
+    else:
+        # Before the first buildable design, or for legacy consumers, scan the
+        # conventional code roots as read-only context. This does not define a
+        # new project's build shape.
+        roots = ("prototype/", "src/", "app/", "apps/", "packages/", "Sources/")
     for rel in tracked:
         lowered = rel.lower()
         if not rel.startswith(roots):
@@ -325,7 +338,17 @@ def build_pack(args: argparse.Namespace) -> dict:
     meta = load_work_meta(module_dir)
     build = meta.get("build") if isinstance(meta.get("build"), dict) else {}
     target = build.get("target") if isinstance(build.get("target"), dict) else {}
-    target_kind = args.target or target.get("kind")
+    definition_path = repo_root / ".pm-workflow" / "project.yml"
+    if definition_path.exists():
+        try:
+            project_definition = load_project_definition(definition_path)
+        except ProjectDefinitionError as exc:
+            raise SystemExit(str(exc)) from exc
+        target_kind = project_definition["project"]["type"]
+        target_entrypoints = project_definition["implementation"]["entrypoints"]
+    else:
+        target_kind = target.get("kind")
+        target_entrypoints = target.get("entrypoints", [])
     sources = collect_sources(repo_root, module_dir, meta)
     records, input_hashes, source_hash, hash_scope = source_records(repo_root, sources)
     decisions, question_like = parse_decisions(repo_root, sources)
@@ -342,7 +365,7 @@ def build_pack(args: argparse.Namespace) -> dict:
         "target": {
             "kind": target_kind,
             "paths": target.get("paths", []),
-            "entrypoints": target.get("entrypoints", []),
+            "entrypoints": target_entrypoints,
         },
         "lifecycle_state": build.get("lifecycle_state") or meta.get("lifecycle_state") or "designing",
         "design_revision": int(build.get("design_revision") or meta.get("design_revision") or 1),
@@ -376,7 +399,6 @@ def parser() -> argparse.ArgumentParser:
     result = argparse.ArgumentParser(description=__doc__)
     result.add_argument("--repo-root", default=".")
     result.add_argument("--module", help="模块名或 docs/modules/<模块> 路径；省略时自动选择唯一 active work")
-    result.add_argument("--target", choices=("prototype", "product"))
     result.add_argument("--goal")
     result.add_argument("--output", help="内部 JSON 输出路径；省略时写 stdout")
     return result

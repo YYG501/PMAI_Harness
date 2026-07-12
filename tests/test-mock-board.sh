@@ -68,7 +68,7 @@ test_full_manifest() {
       "status": "已退役",
       "round": "r0",
       "featured": false,
-      "retired_note": "已并入主原型（prototype/app/page.tsx, commit abc123）"
+      "retired_note": "已进入建造结果（app/page.tsx, commit abc123）"
     }
   ]
 }
@@ -117,7 +117,7 @@ JSON
   # 已退役在 <details> 折叠块
   assert_file_contains "$html" "<details" || { rm -rf "$repo"; return; }
   assert_file_contains "$html" "已归档设计稿" || { rm -rf "$repo"; return; }
-  assert_file_contains "$html" "已并入主原型" || { rm -rf "$repo"; return; }
+  assert_file_contains "$html" "已进入建造结果" || { rm -rf "$repo"; return; }
 
   rm -rf "$repo"
   pass_test
@@ -282,7 +282,7 @@ test_mockup_skill_aligns_existing_ui() {
 
   assert_file_contains "$skill" "### 1. 先对齐现有产品" || return
   assert_file_contains "$skill" '读 `DESIGN.md`' || return
-  assert_file_contains "$skill" '读相关 `prototype/` 或真实产品页面' || return
+  assert_file_contains "$skill" '读 `project.yml` 声明的相关实现入口' || return
   assert_file_contains "$skill" "已选、待合并和已退役方向" || return
   assert_file_contains "$skill" "默认贴合当前产品" || return
   assert_file_contains "$skill" "换风格" || return

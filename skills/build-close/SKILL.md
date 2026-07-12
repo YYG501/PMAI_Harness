@@ -104,7 +104,7 @@ bash "$PMAI_HOME/scripts/close-work.sh" \
 1. 在 main 重新编译 context pack；
 2. 读取 `.pm-workflow/audits/<模块>/doc-impact.json`；
 3. 若 impact map 缺失，用 landed diff、build contract 和 accepted deltas 重新生成；
-4. 调用 spec-writing 的“落地主线后的事实对账”模式；
+4. 调用 spec-writing 的“落地主线后的目标对账”模式；
 5. 按影响地图更新受影响的 `PRODUCT-STATE.md`、`PRODUCT-RULES.md`、`PRODUCT.md`、`DESIGN.md`、`TODO.md`、mockup manifest 和索引；
 6. 未受影响项标 `no-change` 并写原因；
 7. 校验每个新增或改变的对象、动作、状态、权限、页面和术语都有文档落点；
@@ -129,8 +129,9 @@ python3 "$PMAI_HOME/scripts/build-contract.py" docs-fail \
 
 ## 4. 文档规则
 
-- 正式文档只描述 main 已存在的事实；
-- `spec.md` 正文只保留当前口径，不保留删除线旧正文、老版/新版对照或迭代流水账；
+- `spec.md` / PRD 只描述当前有效的最终目标；landed 后只有 accepted delta 可以修改目标，漏实现保留为实现缺口；
+- `PRODUCT-STATE.md` 等现状文档只描述 main 已存在的事实；
+- `spec.md` 正文不保留删除线旧正文、老版/新版对照或迭代流水账；
 - 历史决定与 supersede 关系留在 `decisions.md`，完整文件演进留在 Git；
 - 单模块决定进模块 `decisions.md`；跨模块现行规则进 `PRODUCT-RULES.md`；项目级冻结理路进 `docs/decisions/`；
 - 只有 build 期间 PM 明确接受的新决定才能进入 accepted deltas 和决定记录；问句、AI 推测、讨论草稿不得落为决定；
@@ -163,4 +164,4 @@ PM 窗口只报阶段结果，不直播 context pack、合同 JSON、git 命令�
 - merge 冲突不清理 worktree；文档失败不重复 merge。
 - 正式文档在实现落 main 后更新，单独提交。
 - 不向 PM 再问 worktree、执行器、手动 close 或逐条“要不要保存”菜单。
-- gstack/browser 只是证据生产者，PMAI contract 才是落地主线判断入口。
+- gstack/browser/Playwright 只是证据生产者，PMAI contract 才是落地主线判断入口；v2 UI 验收必须有 active browser-smoke，不能用 exception 跳过。

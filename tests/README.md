@@ -40,4 +40,4 @@ tests/
 
 ## 不变式覆盖矩阵
 
-参考 `INVARIANTS.md`。每个不变式（I-CT1, I-CR3 等）对应至少一个测试。
+参考 `INVARIANTS.md`。关键不变式（如 I-INIT、I-PD、I-ACC、I-CB、I-CR）均由正例和反例测试覆盖。

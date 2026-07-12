@@ -112,7 +112,7 @@ helper 参数仍叫 `stage_prefix`，但当前语义是**产物前缀**，不是
 | 场景 | helper stage_prefix | 说明 |
 |---|---|---|
 | design / 模块规格 / build 继续读模块规格 | `spec` | 附件服务当前模块 `discussion.md` / `decisions.md` / `spec.md` |
-| 反向 PRD / 功能型规格文档且绑定当前模块工作 | `prd` | 只在 caller 确认有模块工作目录时使用 |
+| PRD / 功能型规格文档且绑定当前模块工作 | `prd` | 只在 caller 确认有模块工作目录时使用 |
 | landed 后自动文档编译 | `close`（兼容字段） | 附件服务文档影响 / 沉淀检查 |
 | caller 已确认可归档但产物类型暂不可判 | `unknown` | 兜底值；后续引用时必须补说明 |
 

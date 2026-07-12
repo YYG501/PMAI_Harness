@@ -6,6 +6,9 @@ from __future__ import annotations
 import os
 import subprocess
 import sys
+from pathlib import Path
+
+from _lib.project_definition import ProjectDefinitionError, load_project_definition
 
 
 ALLOW_ENV = "PMAI_ALLOW_MIXED_DELIVERY"
@@ -25,16 +28,34 @@ def run_git(args: list[str]) -> subprocess.CompletedProcess[str] | None:
         return None
 
 
-def staged_files() -> list[str]:
+def repository_root() -> Path | None:
     root = run_git(["rev-parse", "--show-toplevel"])
     if root is None or root.returncode != 0:
-        return []
+        return None
+    return Path(root.stdout.strip())
+
+
+def staged_files() -> list[str]:
 
     result = run_git(["diff", "--cached", "--name-only", "--diff-filter=ACMRD"])
     if result is None or result.returncode != 0:
         return []
 
     return [line.strip() for line in result.stdout.splitlines() if line.strip()]
+
+
+def implementation_prefixes(root: Path | None) -> tuple[str, ...]:
+    if root is not None:
+        definition_path = root / ".pm-workflow" / "project.yml"
+        if definition_path.exists():
+            try:
+                definition = load_project_definition(definition_path)
+            except ProjectDefinitionError as exc:
+                print(f"❌ project.yml 无效，无法判断混合交付：{exc}", file=sys.stderr)
+                raise
+            return tuple(path.rstrip("/") + "/" for path in definition["implementation"]["entrypoints"])
+    # Legacy compatibility for consumers that have not completed a new design.
+    return ("prototype/", "Sources/")
 
 
 def has_prefix(paths: list[str], prefixes: tuple[str, ...]) -> bool:
@@ -50,26 +71,30 @@ def main() -> int:
     if os.environ.get(ALLOW_ENV) == ALLOW_VALUE:
         return 0
 
+    root = repository_root()
     paths = staged_files()
     if not paths:
         return 0
 
-    prototype_prefixes = ("prototype/", "Sources/")
+    try:
+        target_prefixes = implementation_prefixes(root)
+    except ProjectDefinitionError:
+        return 1
     docs_prefixes = ("docs/modules/",)
     mockup_prefixes = ("mockups/",)
 
-    has_prototype = has_prefix(paths, prototype_prefixes)
+    has_implementation = has_prefix(paths, target_prefixes)
     has_docs = has_prefix(paths, docs_prefixes)
     has_mockups = has_prefix(paths, mockup_prefixes)
 
-    if not has_prototype or not (has_docs or has_mockups):
+    if not has_implementation or not (has_docs or has_mockups):
         return 0
 
     print("❌ 这次暂存内容是混合交付，不能直接提交。", file=sys.stderr)
     print("", file=sys.stderr)
-    print("它同时包含主原型改动和模块文档 / mockup 改动：", file=sys.stderr)
+    print("它同时包含项目实现和模块文档 / mockup 改动：", file=sys.stderr)
     for label, prefixes in (
-        ("主原型", prototype_prefixes),
+        ("项目实现", target_prefixes),
         ("模块文档", docs_prefixes),
         ("mockup", mockup_prefixes),
     ):

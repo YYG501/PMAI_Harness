@@ -30,7 +30,7 @@ setup_fixture() {
   echo '# access spec' > "$MODULE/spec.md"
   python3 "$CONTRACT" start "$MODULE" --anchor docs/modules/access/spec.md \
     --mode worktree --executor codex --branch build-access --worktree .worktrees/build-access \
-    --baseline-sha "$BASE" --target-kind product --target-path src/access \
+    --baseline-sha "$BASE" --target-kind product --target-path src/access --entrypoint src/access \
     --approved-source-hash source-v1 --required-check tests >/dev/null
   git -C "$WT" add -A && git -C "$WT" commit -q -m 'design checkpoint and contract'
   mkdir -p "$WT/src/access"

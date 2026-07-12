@@ -1,7 +1,7 @@
 ---
 name: pmai-record
 description: |
-  轻量记录：将 PM 在主线上完成、或设计讨论后暂不进入 build 的稳定结论，按四类归位至项目底座（现状、决策记录、待办、设计草图），单独提交。支持 PM 主动触发，亦承接 AI 在工作收敛时的记录提议。
+  轻量记录：将 PM 在主线上完成、或 design 后暂不进入 build 的稳定结论，按共享六类模型归位至产品现状、规则、决定、待办、探索稿和术语，单独提交。
 ---
 
 # /pmai-record
@@ -16,8 +16,8 @@ source "${PMAI_HOME:-$HOME/.pmai}/scripts/skill-preamble.sh"
 
 如果输出 `PMAI_PROJECT_INITIALIZED: 0`，停止本 skill，只引导 PM 先发 `/pmai-init-project`。初始化或已有代码接入完成前，不要沉淀记录或更新项目文档。
 
-> **这是什么**：分档运行里**最轻那一档**（main 直接改 / 聊定直落、设计讨论后暂不 build）的记录入口。让轻档产出也有一个地方归位，不再"飘着没进库 / 真相源乱 / 决策不进库 / mock 找不回"。
-> **和自动 finalize 的关系**：同一套四类分流（@读 `_shared/record-routing.md`），但完整 build 在落地主线后自动编译文档，本 skill 是 main 上或 design 后暂不 build 时的轻量同构（重量随产出缩放）。
+> **这是什么**：分档运行里**最轻那一档**（main 上的文档记录 / 聊定直落、设计讨论后暂不 build）的记录入口。让轻档产出也有一个地方归位，不再"飘着没进库 / 真相源乱 / 决策不进库 / mock 找不回"。
+> **和自动 finalize 的关系**：同一套六类归位模型（@读 `_shared/record-routing.md`），但完整 build 在落地主线后自动编译文档，本 skill 是 main 上或 design 后暂不 build 时的轻量同构（重量随产出缩放）。
 > **和 quick-fix 的关系**：quick-fix 管"在 main 上改一处"，本 skill 管"把改完的成果沉淀进底座"——两件事，可前后脚发生。
 
 ## When To Use
@@ -40,7 +40,7 @@ echo "SKILL: record"
 
 ### 步骤 1：识别沉淀什么（两道闸）
 
-从最近这段工作 / 讨论里，按四类盘一下有没有耐久产出。**两道闸都要过才提**：
+从最近这段工作 / 讨论里，按共享六类模型盘一下有没有耐久产出。**两道判断都要过才提**：
 
 - **闸①·收敛点**：只在「聊定了 / 改完了」这种收敛时刻沉淀，不逐条沉淀（PM 还在来回讨论时不打断）。
 - **闸②·有耐久产出**：只在真有新事实 / 新决策理路 / 新变体时沉淀；纯文字微调、还没定的方向、临时想法 → **不沉淀**。
@@ -49,9 +49,9 @@ echo "SKILL: record"
 
 > 判断准度做不到 100%（人在环，不追全自动）。AI 拿不准"算不算耐久产出"时，宁可问 PM 一句，不擅自沉淀也不擅自跳。
 
-### 步骤 2：按四类分流（@读共享参考）
+### 步骤 2：按六类归位（@读共享参考）
 
-**@读 `skills/_shared/record-routing.md`**，按四类把本次产出分流，**重量随产出缩放**——多数轻档只动 ①：
+**@读 `skills/_shared/record-routing.md`**，按六类把本次产出归位，**重量随产出缩放**——多数轻档只动 ①：
 
 | 类 | 这次有没有 | 落点 |
 |---|---|---|
@@ -59,6 +59,8 @@ echo "SKILL: record"
 | ② 理路（为什么这么拼）| 真有跨文件整体意图才有 | `docs/decisions/<日期>-<slug>.md`（@读 `_shared/decision-record.md` 判门槛 + 写法）|
 | ③ 遗留（想做没做的）| 有就记 | `TODO.md` 加一条**自包含**（建议目标 + 涉及文件）|
 | ④ 探索变体（mock）| 这次探过视觉草图才有 | `mockups/manifest.json` 加一条 → 重生成看版 |
+| ⑤ 跨工作决定 | 后续模块需要继承的决定 | 按 ② 的三类落点归位，不另建决定账本 |
+| ⑥ 稳定术语 | 本次明确了新业务概念 | `PRODUCT.md` 业务术语表 |
 
 **顺手补索引**：本次新建了 `docs/decisions/<…>.md` / 新 mock 等 → 确认 `docs/INDEX.md` 或对应索引里能找到它；`PRODUCT-STATE.md` 只写当前产品现状，不再兼职总索引。
 
@@ -75,6 +77,8 @@ echo "SKILL: record"
   ```bash
   python3 "$PMAI_HOME/scripts/gen-mock-board.py" "$REPO_ROOT"
   ```
+- ⑤ 跨工作决定 → 和 ② 合流：奠基理路进 `docs/decisions/`，跨模块现行规则进 `PRODUCT-RULES.md`，单模块决定进模块 `decisions.md`。
+- ⑥ 稳定术语 → patch `PRODUCT.md` 业务术语表；仍在讨论中的临时叫法不写。
 
 ### 步骤 4：切两挡 commit（F3：纯静默档 vs 需审档）
 
@@ -107,9 +111,9 @@ git -C "$REPO_ROOT" commit -m "记录: <一句话本次归位了什么>"
 
 - 从主仓 main 触发（cwd 主仓根、分支 main）；在 build worktree 内 → 引导走对应收尾流程，不在此处理。
 - **两道闸**：只在收敛点 + 只在有耐久产出时记录；一道不过 → 不动 + 告诉 PM 一句，不空跑不编造。
-- 四类分流 @读 `_shared/record-routing.md`（单一真相源）；理路冻结 @读 `_shared/decision-record.md`；**重量随产出缩放**，多数轻档只动 PRODUCT-STATE。
+- 六类归位 @读 `_shared/record-routing.md`（单一真相源）；理路冻结 @读 `_shared/decision-record.md`；**重量随产出缩放**，多数轻档只动 PRODUCT-STATE。
 - **写入边界**：只写 `docs/**`、`mockups/**` 等记录落点；不借 record 修改业务代码。
 - **单独 commit、不卷 WIP**：`git add` 逐个列本次记录动的文件，禁 `git add -A`；commit message 一律 `记录: <一句话>`。
 - **F3 切两挡**：纯静默档（补一句 / 挂索引 / 纯订正）静默写 + 回执一行不强制总审；需审档（决策记录 / 新变体 / 改规则·模块）才总审 diff。
-- **PM 话术纪律**（F-G4）：回执 / 提议只用 PM 视图语言，不出现"四类分流 / 出口①②③④ / manifest / featured / 冻结档 / 索引展开层"等内部词。
+- **PM 话术纪律**（F-G4）：回执 / 提议只用 PM 视图语言，不出现"六类归位 / manifest / featured / 冻结档 / 索引展开层"等内部词。
 - **防腐铁律不破**：轻记录是 PRODUCT-STATE 的合法原子写入口之一（与 landed 后自动文档编译并列），不是退回"随手改活文档"；写入仍是收敛点触发的原子动作。

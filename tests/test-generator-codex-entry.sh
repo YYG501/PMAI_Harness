@@ -47,8 +47,8 @@ test_root_agents_covers_three_codex_paths() {
   assert_file_contains "$AGENTS_MD" "从本 checkout 初始化消费仓" "AGENTS.md should cover consumer init from checkout" || return
   assert_file_contains "$AGENTS_MD" "在消费仓中使用 PMAI" "AGENTS.md should cover consumer usage" || return
   assert_file_contains "$AGENTS_MD" "bash scripts/init-project.sh" "AGENTS.md should show repo-local init command" || return
-  assert_file_contains "$AGENTS_MD" "脚本返回 0 只代表 B 步完成" "AGENTS.md should not equate init script with full pmai-init-project" || return
-  assert_file_contains "$AGENTS_MD" "C/D 步执行" "AGENTS.md should require C/D continuation after skeleton creation" || return
+  assert_file_contains "$AGENTS_MD" "脚本返回 0 只代表骨架完成" "AGENTS.md should not equate init script with full pmai-init-project" || return
+  assert_file_contains "$AGENTS_MD" '继续按 skill 写 `PRODUCT.md` 一句话定位' "AGENTS.md should require skill continuation after skeleton creation" || return
   pass_test
 }
 

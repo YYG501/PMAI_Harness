@@ -5,7 +5,7 @@
 # 输出环境变量:
 #   PMAI_HOME            - 框架代码根目录（~/.pmai/ 或 env 覆盖），I-mini 后 skill 内部用此路径调脚本
 #   MAIN_REPO_ROOT       - 主仓根目录（共享元数据：.runs/、.worktrees/）
-#   REPO_ROOT            - 当前 worktree 根目录（业务数据：docs/、prototype/）
+#   REPO_ROOT            - 当前 worktree 根目录（业务数据：docs/ 与 project.yml 声明的实现入口）
 #   BRANCH               - 当前分支
 #   WORKTREE_TYPE        - main / work / legacy-task
 #   ACTIVE_WORK          - 活跃工作 ID（cwd 唯一确定工作时设值；main + 多 active 时留空）

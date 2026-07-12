@@ -5,6 +5,7 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 source "$SCRIPT_DIR/helpers/assert.sh"
 FRAMEWORK_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 CONTEXT_PACK="$FRAMEWORK_ROOT/scripts/context-pack.py"
+PROJECT_DEFINITION="$FRAMEWORK_ROOT/scripts/project-definition.py"
 
 setup_fixture() {
   T=$(mktemp -d "${TMPDIR:-/tmp}/pmai-context-pack.XXXXXX")
@@ -35,6 +36,11 @@ EOF
 - 待确认：用户详情页是否展示授权记录？
 EOF
   echo '# 当前规格' > "$T/docs/modules/access/spec.md"
+  python3 "$PROJECT_DEFINITION" write "$T" \
+    --source docs/modules/access/spec.md --type prototype \
+    --root prototype/ --entrypoint prototype/ \
+    --language typescript --runtime node --framework nextjs --package-manager pnpm \
+    --build-command "pnpm run build" >/dev/null
   cat > "$T/docs/modules/access/.work-meta.json" <<'EOF'
 {"id":"work-access","name":"access","stage":1,"status":"active","lifecycle_state":"designing"}
 EOF
@@ -49,7 +55,7 @@ test_context_pack_compiles_authority_and_rejects_questions() {
   start_test "context-pack: active/superseded decisions + question rejection + unresolved questions"
   setup_fixture
   OUT="$T/context.json"
-  python3 "$CONTEXT_PACK" --repo-root "$T" --module access --target prototype \
+  python3 "$CONTEXT_PACK" --repo-root "$T" --module access \
     --goal "权限角色" --output "$OUT" >/dev/null || {
       _fail "context pack should compile"; teardown_fixture; return;
     }

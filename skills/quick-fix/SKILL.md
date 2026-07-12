@@ -93,7 +93,7 @@ short-circuit：仅 typo / 格式 / 引用更新时，可输出简化版扫描�
 
 **越界时拒绝 quick-fix**：
 - 改动会改变模块 `spec.md` 的核心产品决策 → 走 `/pmai-design` 重新拍板，并由 `/pmai-spec-writing` 模块规格目标修订 `spec.md`。
-- 改动会新增或大改 `prototype/` 一片功能 → 走 `/pmai-build`。
+- 改动会在 `.pm-workflow/project.yml` 声明的实现入口新增或大改一片功能 → 走 `/pmai-build`。
 - 改动会改项目级规则 / 术语并需要产品判断 → 走 `/pmai-record` 或 `/pmai-design`；已经进入 build 则回原 `/pmai-build` 继续统一 lifecycle。
 
 ### 步骤 4：完成改动后让脚本收口
@@ -133,12 +133,12 @@ bash "$PMAI_HOME/scripts/quick-fix.sh" --snapshot
 
 | 改对象 | 同时要考虑 |
 |---|---|
-| `prototype/**` | 对应 `docs/modules/<模块>/spec.md`、`docs/modules/<模块>/decisions.md`、`DESIGN.md`、`PRODUCT-STATE.md` |
-| `docs/modules/<模块>/spec.md` | `prototype/**` 是否已反映、`docs/modules/<模块>/decisions.md` 是否需要记录为什么、`PRODUCT-RULES.md` 是否有跨模块规则冲突 |
+| `project.yml` 声明的实现路径 | 对应 `docs/modules/<模块>/spec.md`、`docs/modules/<模块>/decisions.md`、`DESIGN.md`、`PRODUCT-STATE.md` |
+| `docs/modules/<模块>/spec.md` | 当前 build target 是否已反映、`docs/modules/<模块>/decisions.md` 是否需要记录为什么、`PRODUCT-RULES.md` 是否有跨模块规则冲突 |
 | `docs/modules/<模块>/decisions.md` | `spec.md` 是否要同步结论、`PRODUCT-RULES.md` 是否已有更高层规则 |
 | `PRODUCT-STATE.md` | `docs/modules/INDEX.md`、相关模块 `spec.md`、主原型是否一致 |
 | `PRODUCT-RULES.md` | 相关模块 `decisions.md` / `spec.md` 是否需要引用或避免冲突 |
-| `DESIGN.md` | `prototype/**` 是否遵循；若只是视觉规则文字修订，不强制改原型 |
+| `DESIGN.md` | Web build target 是否遵循；若只是视觉规则文字修订，不强制改实现 |
 | `docs/inputs/**` | 只改材料归档 / 引用，不反向改产品合同 |
 | `templates/` / `scripts/` / `skills/` | 这是框架自身改动；小修可做，但要跑相关测试，不按产品合同扫描 |
 | 其他 target | 按 §3.5.2 概念分类自行推断 |
@@ -149,7 +149,7 @@ bash "$PMAI_HOME/scripts/quick-fix.sh" --snapshot
 当前合同（被改动撤销/修订时必须同步，扫描必扫）：
 - 项目级活合同：PRODUCT-STATE.md / PRODUCT-RULES.md / DESIGN.md
 - 模块合同：docs/modules/<模块>/discussion.md / decisions.md / spec.md
-- 项目代码：prototype/
+- 项目代码：`.pm-workflow/project.yml:implementation.entrypoints`
 
 历史档案（只作叙述维护，不强制反向扫）：
 - docs/archive/**

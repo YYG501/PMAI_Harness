@@ -32,7 +32,7 @@ PMAI 一律走**全局安装**（`~/.pmai/` + `~/.claude/skills/pmai-*` / `~/.co
 - 升级类型：默认拉 `main` 最新 commit；可选 `--stable` 跳最新 git tag；可选 `--to v0.x.0` 锁定版本
 - **不要**用此 skill 来：
   - 在消费仓 init 新项目 → 走 `/pmai-init-project`
-  - vendored 老消费仓迁 I-mini → 走 `bin/pmai-migrate <consumer>` CLI
+  - legacy compatibility only：确实仍是 vendored 布局的老消费仓迁 I-mini，才走 `bin/pmai-migrate <consumer>`；不向新项目或日常升级暴露为主入口
 
 ## Workflow
 

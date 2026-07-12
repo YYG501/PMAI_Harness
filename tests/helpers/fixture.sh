@@ -125,7 +125,7 @@ JSON
   cat > "$wt/.pm-workflow/audits/$work_branch/behavior.json" <<'JSON'
 {"status":"pass","passed":1,"total":1,"note":""}
 JSON
-  echo "# 三道审合成报告" > "$wt/.pm-workflow/audits/$work_branch/synthesis.md"
+  echo "# Legacy v1 acceptance report" > "$wt/.pm-workflow/audits/$work_branch/synthesis.md"
 
   # Commit on build branch
   (
@@ -190,7 +190,7 @@ JSON
   cat > "$FIXTURE_DIR/.pm-workflow/audits/$module_name/behavior.json" <<'JSON'
 {"status":"pass","passed":1,"total":1,"note":""}
 JSON
-  echo "# 三道审合成报告" > "$FIXTURE_DIR/.pm-workflow/audits/$module_name/synthesis.md"
+  echo "# Legacy v1 acceptance report" > "$FIXTURE_DIR/.pm-workflow/audits/$module_name/synthesis.md"
 
   (
     cd "$FIXTURE_DIR"

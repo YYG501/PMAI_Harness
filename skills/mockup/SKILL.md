@@ -26,7 +26,7 @@ source "${PMAI_HOME:-$HOME/.pmai}/scripts/skill-preamble.sh"
 mockup 负责把已经讲清的产品问题变成可看的交互方向，帮助 PM 判断信息层级、任务路径和交互模型。它通常由 design 自动调用，也保留手动入口。
 
 - 只写 `mockups/`、`mockups/manifest.json` 和生成的看版；
-- 不修改 `prototype/`、真实产品代码或模块 `spec.md`；
+- 不修改 `project.yml` 声明的实现入口或模块 `spec.md`；
 - 不创建 worktree，不成为第二条 build 链路；
 - PM 选定方向后立即返回 design，由 design 把选择变成决定和规格。
 
@@ -52,7 +52,7 @@ mockup 负责把已经讲清的产品问题变成可看的交互方向，帮助 
 默认贴合当前产品，不重新发明一套视觉语言：
 
 - 读 `DESIGN.md` 的导航、页面模式、组件、层级、密度和交互约定；
-- 读相关 `prototype/` 或真实产品页面，只取本轮 slice；
+- 读 `project.yml` 声明的相关实现入口（若尚未生成则只读现有产品页面），只取本轮 slice；
 - 读 `mockups/manifest.json` 中已选、待合并和已退役方向；
 - 读本模块 discussion / decisions / spec 的界面约束。
 
@@ -160,5 +160,5 @@ python3 "$PMAI_HOME/scripts/gen-mock-board.py" "$REPO_ROOT"
 - 不问 PM 要画几版，不把工具选择变成 PM 菜单。
 - 多稿必须在交互模型、信息层级或任务路径上真不同，不允许视觉换皮。
 - 覆盖主路径、关联页面和相关边界状态；工具受限不伪装成已覆盖。
-- 只写 `mockups/` 与清单，不改主原型；选定后返回 design。
+- 只写 `mockups/` 与清单，不改 build target；选定后返回 design。
 - PM 视图不出现 manifest、variant、worktree、context pack 等内部词。

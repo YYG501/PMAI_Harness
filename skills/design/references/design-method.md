@@ -55,9 +55,9 @@
 
 - 目标、取舍标准、危险前提、页面判断标准不清 → design 内部自动调用 `/pmai-meta`，结论返回本流程。
 - 页面结构、信息密度、用户路径、卡面 / 抽屉分层或整体气质有多个方向 → design 内部自动调用 `/pmai-mockup`，选定结果返回本流程。
-- PM 说“落地 / 实现 / 做进主原型 / 提交 / 可以做了” → 先过落地意图识别，判断是否涉及 `prototype/` / `Sources/`；涉及主原型时，不允许自动解释成直接改。
-- PM 要改主原型或业务代码 → 停止 design，大需求转 `/pmai-build`；小改也要先确认“小改 prototype-only”身份，且本次不能同时改 `docs/modules/` 或 `mockups/`。
-- 主原型 + 模块文档 / mockup 同时变动、规格升版、mockup 方向吸收、主卡片结构重做或信息结构变化 → 混合交付转 build，PM 定稿后由 build 自动 finalize。
+- PM 说“落地 / 实现 / 做进产品 / 提交 / 可以做了” → 先过落地意图识别；design 只收口建造依据，不直接改 `project.yml` 声明的实现入口。
+- PM 要改业务代码 → 停止 design，大需求转 `/pmai-build`；极小修补走 `/pmai-quick-fix`，且本次不能同时改模块规格或 mockup。
+- build target + 模块文档 / mockup 同时变动、规格升版、mockup 方向吸收、主卡片结构重做或信息结构变化 → 混合交付转 build，PM 定稿后由 build 自动 finalize。
 - PMAI skill / workflow / 工具调用 / gstack browser 等问题 → `/pmai-skill-improve` 或 meta 的 workflow 决策路径，不交给 design。
 - 已经只剩成文 → 自动调用 `/pmai-spec-writing`；成文时发现结构问题，退回 design。
 

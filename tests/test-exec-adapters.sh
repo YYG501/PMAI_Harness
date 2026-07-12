@@ -13,6 +13,8 @@ CLAUDE_TMPL="$FRAMEWORK_ROOT/templates/CLAUDE.md.tmpl"
 README="$FRAMEWORK_ROOT/README.md"
 CONFIG_TMPL="$FRAMEWORK_ROOT/templates/pm-workflow.config.yml.tmpl"
 BUILDER_PROFILE="$FRAMEWORK_ROOT/scripts/builder-profile.py"
+PROJECT_DEFINITION="$FRAMEWORK_ROOT/scripts/project-definition.py"
+PROJECT_DEFINITION_LIB="$FRAMEWORK_ROOT/scripts/_lib/project_definition.py"
 
 _setup_fake_executor() {
   T=$(mktemp -d)
@@ -128,7 +130,14 @@ builder:
 YAML
   local python_bin
   python_bin=$(command -v python3)
-  PATH="$FAKE_BIN:/usr/bin:/bin" "$python_bin" "$BUILDER_PROFILE" recommend "$config" --target product > /tmp/builder-profile.$$
+  mkdir -p "$T/project/docs/modules/demo"
+  printf '# Demo\n' > "$T/project/docs/modules/demo/spec.md"
+  "$python_bin" "$PROJECT_DEFINITION" write "$T/project" \
+    --source docs/modules/demo/spec.md --type product --root . --entrypoint app/ \
+    --language typescript --runtime node --framework nextjs --package-manager pnpm \
+    --build-command "pnpm run build" >/dev/null
+  PATH="$FAKE_BIN:/usr/bin:/bin" "$python_bin" "$BUILDER_PROFILE" recommend "$config" \
+    --project-definition "$T/project/.pm-workflow/project.yml" > /tmp/builder-profile.$$
   python3 - /tmp/builder-profile.$$ <<'PY' || {
 import json, sys
 data = json.load(open(sys.argv[1]))
@@ -139,7 +148,13 @@ PY
     _fail "recommend should select the available product profile"
     rm -f /tmp/builder-profile.$$; _teardown_fake_executor; return
   }
-  "$python_bin" "$BUILDER_PROFILE" recommend "$T/missing.yml" --target prototype > /tmp/builder-profile.$$
+  rm -f "$T/project/.pm-workflow/project.yml"
+  "$python_bin" "$PROJECT_DEFINITION" write "$T/project" \
+    --source docs/modules/demo/spec.md --type prototype --root . --entrypoint app/ \
+    --language typescript --runtime node --framework nextjs --package-manager pnpm \
+    --build-command "pnpm run build" >/dev/null
+  "$python_bin" "$BUILDER_PROFILE" recommend "$T/missing.yml" \
+    --project-definition "$T/project/.pm-workflow/project.yml" > /tmp/builder-profile.$$
   python3 - /tmp/builder-profile.$$ <<'PY' || {
 import json, sys
 data = json.load(open(sys.argv[1]))
@@ -306,11 +321,15 @@ test_readme_lists_build_executors() {
   pass_test
 }
 
-test_config_template_uses_port_placeholder() {
-  start_test "config template: dev server command carries explicit port placeholder"
+test_project_definition_owns_port_placeholder() {
+  start_test "project definition: config has no dev server; web.start owns port placeholder"
 
-  assert_file_contains "$CONFIG_TMPL" "{port}" "config template should make port injection explicit" || return
-  assert_file_contains "$BUILD_SKILL" '不临时猜 `-- --hostname`' "build should avoid guessing framework-specific dev flags" || return
+  if grep -qE 'dev_server:|\{port\}|screenshot_tool:' "$CONFIG_TMPL"; then
+    _fail "builder config should not duplicate Web runtime definition"
+    return
+  fi
+  assert_file_contains "$PROJECT_DEFINITION_LIB" 'web.start 必须包含 {port} 占位符' "project definition should require explicit port injection" || return
+  assert_file_contains "$BUILD_SKILL" '不得从 builder config 猜 Next.js' "build should avoid guessing framework-specific dev flags" || return
   pass_test
 }
 
@@ -351,7 +370,7 @@ test_build_skill_keeps_executor_noise_out_of_pm_view
 test_build_skill_handles_fallback_design_baseline
 test_consumer_entry_documents_fallback
 test_readme_lists_build_executors
-test_config_template_uses_port_placeholder
+test_project_definition_owns_port_placeholder
 test_config_template_has_builder_profiles
 test_build_skill_avoids_machine_bound_absolute_path_rules
 

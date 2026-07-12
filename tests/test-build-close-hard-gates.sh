@@ -26,7 +26,7 @@ test_design_landing_gate() {
 test_build_small_change_tightened() {
   start_test "build: mockup/spec 落地不能伪装成 quick-fix"
 
-  assert_file_contains "$BUILD_SKILL" "把 mockup / spec 做进主原型" "build should force full gate for mock/spec landing" || return
+  assert_file_contains "$BUILD_SKILL" "把 mockup / spec 做进最终 build target" "build should force full gate for mock/spec landing" || return
   assert_file_contains "$BUILD_SKILL" "不得伪装成小改" "build should forbid mixed quick-fix" || return
   assert_file_contains "$BUILD_SKILL" "只要进入本 skill，就按完整 build 执行" "mock/spec landing should keep the full lifecycle" || return
   assert_file_contains "$BUILD_SKILL" "开工前确认工作环境" "full build should confirm its work environment" || return
@@ -49,7 +49,7 @@ test_consumer_template_landing_rules() {
 
   assert_file_contains "$AGENTS_TEMPLATE" '完整交付走 `/pmai-build` 并自动 finalize' "template should say landing uses build" || return
   assert_file_contains "$AGENTS_TEMPLATE" "混合交付必须走完整 build" "template should require the full lifecycle" || return
-  assert_file_contains "$AGENTS_TEMPLATE" '`/pmai-build-close` 只作为兼容与恢复入口' "template should keep close as compatibility only" || return
+  assert_file_contains "$AGENTS_TEMPLATE" '`/pmai-build-close` 保留为兼容与恢复入口' "template should keep close as compatibility only" || return
   assert_file_contains "$AGENTS_TEMPLATE" "PM 说“可以提交 / 定稿 / 可以合并”即授权" "template should recognize natural-language finalization" || return
   pass_test
 }

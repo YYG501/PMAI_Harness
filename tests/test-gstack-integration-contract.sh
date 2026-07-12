@@ -65,7 +65,7 @@ test_key_skills_reference_or_encode_contract() {
   assert_file_contains "$REPO_ROOT/skills/mockup/SKILL.md" "gstack-integration.md" "mockup should reference contract" || return
   assert_file_contains "$REPO_ROOT/skills/build/SKILL.md" "gstack-integration.md" "build should reference contract" || return
   assert_file_contains "$REPO_ROOT/skills/build-close/SKILL.md" "gstack-integration.md" "build-close should reference contract" || return
-  assert_file_contains "$REPO_ROOT/skills/init-project/SKILL.md" "gstack-integration.md" "init-project should reference contract" || return
+  assert_file_contains "$REPO_ROOT/skills/init-project/SKILL.md" "初始化阶段完全可选" "init-project should make gstack optional" || return
   assert_file_contains "$REPO_ROOT/skills/mirror-site/SKILL.md" "gstack-integration.md" "mirror-site should reference contract" || return
   assert_file_contains "$REPO_ROOT/skills/_internal/codebase-audit/SKILL.md" "gstack-integration.md" "codebase-audit should reference contract" || return
   pass_test
@@ -78,8 +78,8 @@ test_readme_dependency_is_not_unconditional() {
     _fail "README should not describe gstack as unconditional 必需"
     return
   fi
-  assert_file_contains "$REPO_ROOT/README.md" "能力层（部分流程必需）" "README should describe gstack as capability layer" || return
-  assert_file_contains "$REPO_ROOT/README.md" "已有代码库接入不因 gstack 缺失阻塞" "README should preserve brownfield fallback" || return
+  assert_file_contains "$REPO_ROOT/README.md" "可选能力层" "README should describe gstack as optional capability layer" || return
+  assert_file_contains "$REPO_ROOT/README.md" "初始化和非 Web build 都不受阻塞" "README should preserve init/non-web fallback" || return
   pass_test
 }
 

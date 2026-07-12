@@ -13,7 +13,7 @@
     "natural-language-finalize": ["skills/build/SKILL.md", "scripts/land-work.sh", "scripts/doc-impact.py"],
     "no-internal-menus": ["skills/design/SKILL.md", "skills/build/SKILL.md", "scripts/builder-profile.py"],
     "patch-smell-routes-meta": ["skills/design/SKILL.md", "skills/meta/SKILL.md"],
-    "prototype-product-same-lifecycle-static": ["scripts/build-contract.py", "scripts/acceptance-profile.py"],
+    "prototype-product-same-lifecycle-static": ["scripts/_lib/project_definition.py", "scripts/build-contract.py", "scripts/acceptance-profile.py"],
     "spec-coverage-map": ["skills/spec-writing/SKILL.md", "scripts/doc-impact.py"]
   }
 }

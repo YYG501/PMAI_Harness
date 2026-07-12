@@ -104,7 +104,7 @@ PMAI 更适合在方向逐渐明确后接管上下文、边界、文档和可持
   -> PM 看结果并多轮修改
   -> PM 明确定稿
   -> 最终检查并合入 main
-  -> 基于 main 更新正式文档
+  -> 基于 main 对账规格目标并更新产品现状文档
   -> 进入后续模块工作
 ```
 
@@ -112,7 +112,7 @@ PMAI 更适合在方向逐渐明确后接管上下文、边界、文档和可持
 
 - 不做通用设计工作台。
 - 不追求首版原型生成速度超过专门设计工具。
-- 不把完整 PRD 放在探索之前当重门，也不在 merge 前把正式文档写成已经落地。
+- 不把完整 PRD 放在探索之前当重门，也不在 merge 前把目标要求写成已经落地。
 - 不为团队 SOP、CI 平台、多租户基础设施设计。
 - 不让 PM 管理 worktree、build 执行合同、执行器细节。
 
@@ -146,9 +146,7 @@ PMAI 的主要用户是单人 PM，尤其是要持续推进一个复杂业务产
 - `PRODUCT-RULES.md`：跨模块都要遵守的产品规则。
 - `TODO.md`：后续模块工作候选队列。
 
-初始化完成后，AI 应能主动复述当前产品上下文。
-
-初始化同时在 `.pm-workflow/config.yml` 明确项目是 `prototype` 还是 `product`。这是项目级定义，不是每轮 build 的临时选择；要改变项目性质，应修改该定义文件并重新校准项目结构。
+初始化完成后，AI 应能主动复述当前产品上下文，并把 PM 带到第一个 `/pmai-design`。初始化不创建代码、prototype、mockup 看板或 dev server，也不要求 PM 在没有需求方案时先选项目类型和技术栈。
 
 ### 2. 新需求开始
 
@@ -159,7 +157,7 @@ PMAI 的主要用户是单人 PM，尤其是要持续推进一个复杂业务产
 已有模块和原型有哪些？
 这次需求影响哪些对象 / 页面 / 规则？
 哪些既有决策不能破坏？
-项目定义的 build 对象是什么？
+项目是否已经有 design 定稿后的建造定义？
 按该对象和本轮风险，默认验收需要覆盖什么？
 哪些可以 mock？
 哪些不能 mock，因为会误导决策？
@@ -175,14 +173,16 @@ PMAI 的主要用户是单人 PM，尤其是要持续推进一个复杂业务产
 - 存在真实信息结构、任务路径或交互岔路时，内部调用 `mockup`；没有真实岔路只给一套推荐稿。
 - 决定闭合后，内部调用 `spec-writing` 把已确认决定编译为规格。
 
-这三项能力完成后都返回 design 主线，不让 PM 手动拼接命令。design 定稿时自动保存并提交建造依据。
+这三项能力完成后都返回 design 主线，不让 PM 手动拼接命令。首个可建造 design 定稿时，AI 基于需求和已有代码推荐 `prototype / product`、技术栈、代码入口和真实运行命令；PM 一次确认后写入 `.pm-workflow/project.yml`。后续 design 默认复用，只有定义确实无法承载新需求时才重新校准。
 
 ### 4. 统一 build 和看结果修改
 
-一次 build 只有一个主要对象：`prototype` 或 `product`，由项目初始化时的定义决定。两者走同一条生命周期，只切换验收工具与方法：
+一次 build 只有一个主要对象：`prototype` 或 `product`，由 design 已提交的 `.pm-workflow/project.yml` 决定。两者走同一条生命周期，只切换验收工具与方法：
 
 - prototype 看可启动性、任务路径、页面 / 弹窗、边界状态、视觉和交互行为；
 - product 看仓库测试、typecheck / build、接口和数据行为、迁移兼容性，并按风险追加 UI、权限、安全或数据检查。
+
+只要本轮包含 Web 页面，主动浏览器能力就是验收硬条件。gstack 可以缺席初始化，也可以由其它 browser/Playwright 适配器替代；但没有任何工具实际打开并操作页面时，UI final check 不能通过。
 
 开工前 AI 根据项目定义和本机能力推荐工作环境与构建工具，PM 一次确认或调整。确认卡只展示这两项，不展示项目类型、验收方案或内部合同。之后 PM 的体验始终是：看结果、指出哪里不对、AI 修改、再看。每轮修改只跑受影响的快速检查；PM 说“定稿 / 可以提交 / 可以合并”后才跑完整 required checks。
 
@@ -196,10 +196,11 @@ PM 明确定稿后，同一个 finalize 自动完成：
 2. 运行完整目标适配验收；
 3. 提交实现并合入 main；
 4. 基于 main 的 landed diff、build contract 和 accepted deltas 生成文档影响地图；
-5. 更新模块规格、决定、产品现状、跨模块规则、术语、设计基线、TODO、mockup 清单和索引；
-6. 做一致性检查并提交文档同步。
+5. 按“符合 / accepted delta / 漏实现 / 无依据实现”对账模块规格，只让 accepted delta 改写最终目标；
+6. 更新产品现状、跨模块规则、术语、设计基线、TODO、mockup 清单和索引；
+7. 做一致性检查并提交文档同步。
 
-正式文档只描述 main 已经存在的事实。merge 冲突保留可恢复的 `final_check`；文档失败保留 `landed/docs_pending`，修复时不重复 merge。`/pmai-build-close` 只作为兼容与恢复入口。
+模块 `spec.md` 和 PRD 描述已确认的最终产品目标，是研发实现和验收合同；`PRODUCT-STATE.md` 等现状文档才只描述 main 已经存在的事实。原型、mockup 和代码是证据，不得反向缩小规格。merge 冲突保留可恢复的 `final_check`；文档失败保留 `landed/docs_pending`，修复时不重复 merge。`/pmai-build-close` 只作为兼容与恢复入口。
 
 ---
 
@@ -229,7 +230,7 @@ prototype 和 product 共用 `designing → ready_to_build → building → iter
 
 ### 4. Adaptive Acceptance And Post-Land Docs
 
-验收随 build 对象和风险自适应，证据绑定当前 source hash 与 implementation commit；工具受限只能记 exception，不能伪装 pass。实现进入 main 后再把当前事实编译回正式文档，并要求每个对象、动作、状态、权限、页面和术语都有文档落点。
+验收随 build 对象和风险自适应，证据绑定当前 source hash 与 implementation commit；工具受限只能记 exception，不能伪装 pass。实现进入 main 后对账目标规格与实现，更新已落地现状，并要求每个对象、动作、状态、权限、页面和术语都有正确文档落点。
 
 ### 5. Continuity Across Modules
 
@@ -264,8 +265,10 @@ PMAI 成功时，PM 的体验应该是：
 后续改造应以本文为准：
 
 - design 是需求讨论主入口；meta、mockup、spec-writing 按需后台调用并返回主线。
-- prototype 与 product 由项目级定义确定，共用同一构建、迭代、定稿和收尾链路，只切换验收适配器。
+- 初始化只建立上下文；首个可建造 design 生成唯一 `.pm-workflow/project.yml`，其中分开记录建造对象与技术栈。
+- prototype 与 product 共用同一构建、迭代、定稿和收尾链路，只切换验收适配器。
 - build contract、worktree 细节和验收证据后台化；工作环境与构建工具由 AI 推荐、PM 一次确认。
-- 正式文档只在实现落入 main 后更新，并只保留当前事实；历史进入 Git 和 decisions。
+- 模块规格在 design 定稿时形成最终目标合同；landed 后只有 accepted delta 能修改目标，漏实现不得反向删需求。
+- `PRODUCT-STATE.md` 等现状文档只在实现落入 main 后更新；过程和历史进入 Git 与 decisions。
 - `/pmai-build-close` 不再是正常用户必经命令，只保留兼容与恢复。
 - Claude Design / design-html / Claude Code 等仍可作为原型或构建能力来源，PMAI 负责统一上下文、验收和后续事实沉淀。

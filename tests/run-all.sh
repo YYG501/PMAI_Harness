@@ -10,12 +10,11 @@ SUITES=(
   test-lark-cli-lint.sh
   test-lark-sync-skill.sh
   test-publish-to-lark-e2e.sh
-    test-structure-schema.sh
-  test-detect-project-structure.sh
   test-measure-tthw.sh
-  test-inject-structure.sh
   test-init-project.sh
+  test-project-definition.sh
   test-project-type.sh
+  test-project-sections-root.sh
   test-private-onboarding.sh
   test-generator-codex-entry.sh
   test-init-project-codex-compat.sh
@@ -24,6 +23,7 @@ SUITES=(
   test-no-duplicate-questioning.sh
   test-shared-files-exist.sh
   test-shared-currentness.sh
+  test-v2-currentness.sh
   test-design-shared-boundary.sh
   test-design-mockup-meta-routing.sh
   test-gstack-integration-contract.sh
@@ -40,7 +40,6 @@ SUITES=(
   test-banner-label.sh
   test-narrative-mode.sh
           test-checks-diff.sh
-  test-build-audits.sh
   test-context-pack.sh
   test-acceptance-profile.sh
   test-doc-impact.sh

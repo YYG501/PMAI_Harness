@@ -1,7 +1,7 @@
 ---
 name: pmai-mirror-site
 description: |
-  对照参考站点对齐原型：逐页逐弹窗走查目标站点作为参照，在主原型中对齐。支持两种模式——依外部站点重建或补充页面、将既有原型对齐至线上真实产品。非无损复制（跨技术栈重建为近似实现）。不参照任何站点的纯新建请使用 /pmai-design 与 /pmai-build。
+  对照参考站点校准可运行 Web 结果：逐页逐弹窗走查目标站点，形成可由 design 收口、由 build 执行的对齐依据。支持依外部站点重建或补充页面、将既有界面对齐至线上真实产品。非无损复制（跨技术栈重建为近似实现），不形成独立于 design → build 的代码链。
   触发词：照某站起原型 / 照它补几页 / 爬站重建 / 原型对齐线上。
 ---
 
@@ -15,25 +15,27 @@ description: |
 source "${PMAI_HOME:-$HOME/.pmai}/scripts/skill-preamble.sh"
 ```
 
-如果输出 `PMAI_PROJECT_INITIALIZED: 0`，停止本 skill，只引导 PM 先发 `/pmai-init-project`。初始化或已有代码接入完成前，不要读取/改写 `prototype/`、`mockups/` 或 mirror 审计产物。
+如果输出 `PMAI_PROJECT_INITIALIZED: 0`，停止本 skill，只引导 PM 先发 `/pmai-init-project`。初始化或已有代码接入完成前，不要读取/改写业务代码、`mockups/` 或 mirror 产物。
 
-> **PM 视图**：入口 banner（`status-view.py --banner-only --skill MIRROR-SITE`，无 active work 时用字面值）；Plan 阶段出确认门（PM 批了才动 `prototype/`）；产物只给路径 + 一句话，按 `_shared/PM-VIEW-RULES.md`。
+先校验 `.pm-workflow/project.yml`；缺失时返回 `/pmai-design`，不在本 skill 临时决定代码根、框架或启动方式。仅 `web.enabled=true` 时继续，代码根、入口和启动合同全部从该文件读取。
+
+> **PM 视图**：入口 banner（`status-view.py --banner-only --skill MIRROR-SITE`，无 active work 时用字面值）；Plan 阶段只确认参考范围，代码改动仍由 `/pmai-build` 执行；产物只给路径 + 一句话，按 `_shared/PM-VIEW-RULES.md`。
 > **PM 答题规则**：AskUserQuestion 按 `_shared/pm-view/askuser-rules.md`（空答 STOP，不默认走通过）。
 
 ## 定位
 
-主原型 `prototype/` 要参照**某个站**长成 / 对齐成那样时用。把参照站当参照物，逐页 / 逐弹窗对比文案 / 按钮 / 禁用态 / 状态覆盖，出 P0/P1/P2 报告，AI 据此在栈内建 / 改、PM 拍板。**两种模式只差一个轴：参照来源 + 建增量 / 改存量。**
+项目定义里的 Web 入口要参照**某个站**构建或对齐时使用。逐页 / 逐弹窗对比文案、按钮、禁用态和状态覆盖，产出 checks 与 P0/P1/P2 报告；产品取舍回到 design，代码改动进入 build。**两种模式只差一个轴：参照来源 + 建增量 / 改存量。**
 
 | | **mode=rebuild 照站重建（原 §7.A）** | **mode=align 对齐线上（原 §7.B）** |
 |---|---|---|
 | 参照来源 | 外部目标站（别人的站） | 自己的线上真实产品 |
-| 动作 | 在 `prototype/` 栈内**重建近似**（建增量） | 把**已有原型**对齐到参照（改存量） |
+| 动作 | 在 `project.yml` 声明的 Web 入口内**重建近似**（建增量） | 把**已有界面**对齐到参照（改存量） |
 | 场景 | 从现有站起原型 / 照某站补几页 | 原型先贴线上现实、再在上面设计改动（brownfield 关键） |
 
 共同点（为什么是一个 skill）：
 
-- **不是无损拷贝**：参照站是它那套栈，主原型是 Next.js + TS + Tailwind + shadcn —— 跨栈"录入"= 重写一遍 = 引入残版 + 视觉失真。所以**只看不导**：拿截图 / 结构当参考，代码在栈内建 / 改（同 Claude Design「只看不导」纪律）。
-- 落地照 `DESIGN.md` + `工程结构约束-*.md`（mock / 真按层）；视觉照 DESIGN。
+- **不是无损拷贝**：参照站和当前项目可能是不同技术栈。只拿截图 / 结构当参考，代码遵守 `project.yml:implementation.stack` 与现有组件，不复制对方源码。
+- 落地照 `DESIGN.md`、模块规格与 `project.type` 的真实性要求。
 - 引擎 = `scripts/checks-diff.py`（§7.C），checks-spec 格式见 `skills/_shared/checks-spec.md`。
 - 区别于覆盖审计（参照=范围清单）/ 视觉门（参照=DESIGN）/ 行为审（参照=验收流程）：本 skill 参照 = **参考站点 / 线上真实产品**（第四条 diff 轴）。
 
@@ -45,18 +47,18 @@ source "${PMAI_HOME:-$HOME/.pmai}/scripts/skill-preamble.sh"
 
 ## 红线（吸收自 prototype-live-align）
 
-**Plan 阶段 PM 没批之前，绝对禁止改 / 建 `prototype/` 任何代码。** 每个 Execute 核心步骤完成回报「进展 / 验证 / 下一步」。
+**Plan 阶段只生成参考范围与 checks，绝对禁止修改业务代码。** PM 批的是对齐范围；design 把范围变成建造依据，build 才能修改实现。
 
 ## 输入
 
 1. 参照站入口 URL（rebuild=外部目标站；align=线上路由）。登录后页面见步骤 1 cookie。
-2. 对应的本地路由（align 模式必给 / 不给则 AI 从 `prototype/` 路由结构推 + 跟 PM 确认范围；rebuild 模式新建则按参照站结构落点）。
+2. 对应的本地路由（align 模式必给 / 不给则 AI 从 `project.yml` 声明的 Web 入口推断并让 PM 确认范围；rebuild 模式新建则在 design 中确定落点）。
 
 ## Workflow
 
 ### 步骤 0：banner + @读项目底座
 
-入口 echo banner。**先读项目底座**（`PRODUCT-STATE.md` → `prototype/` 现状 / `DESIGN.md` / `工程结构约束-*.md`），知道原型现在有什么、按哪档建，才能判「参照站有而原型缺」是 delta 还是本就不做，且重建 / 对齐都落在同一条主原型线上、不另起风格。
+入口 echo banner。**先读项目底座**（`PRODUCT-STATE.md`、`DESIGN.md`、模块规格、`.pm-workflow/project.yml` 和相关 Web 入口），判断参照站有而本地缺的是 delta 还是本就不做。
 
 ### 步骤 1：Plan —— 爬参照站派生 checks-spec（产出，不改代码）
 
@@ -69,11 +71,11 @@ source "${PMAI_HOME:-$HOME/.pmai}/scripts/skill-preamble.sh"
 
 **Plan 确认门**：把 checks-spec 计划表（PM 视图：要建 / 对齐哪些页 + 各页关键文案·按钮·状态）给 PM，AskUserQuestion 让 PM 圈定范围 / 批 / 改。**批了才进步骤 2。**
 
-### 步骤 2：Execute —— 按模式建 / 改（PM 批后）
+### 步骤 2：接回 design / build
 
-1. 起 / 复用 prototype dev server（在隔离副本里、显式带目录，单窗口不 cd 会话）。
-2. **mode=rebuild**：AI 照截图 + checks-spec 在 `prototype/` 里**重建近似页面**（Next.js 栈、视觉照 DESIGN、复用已有 `components/ui` 不重写同功能组件）。重建是 build —— 走正常 build 纪律（强制读 DESIGN、可派给 PM 指定的独立执行器）。
-   **mode=align**：逐 check 用 `/browse` 抓两份 `reference/<check_id>.json`（线上）+ `local/<check_id>.json`（prototype）放 `.pm-workflow/mirror/<module>/artifacts/`，跑引擎出 patch_todo，AI 按 patch_todo **改 `prototype/`**（P0 先 / 再 P1 / P2 视觉照 DESIGN）。
+1. 如果当前还在 design，把已确认 checks 记录进模块 discussion / decisions / spec，按正常 design checkpoint 进入 `/pmai-build`；本 skill 不直接改代码。
+2. 如果由活跃 `/pmai-build` 调用，构建工具按合同 target paths 执行：rebuild 新建近似页面；align 先抓 `reference/<check_id>.json` 与 `local/<check_id>.json`，跑引擎出 patch todo，再在合同范围内修改。
+3. 启动命令、ready path 和端口只取 `project.yml:web`；不得猜 Next.js 或固定目录。
 
 ### 步骤 3：验（checks-diff）
 
@@ -86,8 +88,8 @@ python3 "$PMAI_HOME/scripts/checks-diff.py" \
 ```
 
 - rebuild：起 dev server 抓 `local/<check_id>.json`，爬出来的结构当 `reference/`，按 P0/P1 补齐重建（漏的页 / 文案 / 按钮），P2 视觉照 DESIGN。
-- align：重抓 local → 重跑 diff 直到 P0 清零（或 PM 接受残留）。
-- 视觉细则（sticky / 横滚 / 禁 native alert·confirm 用包装组件 / 留白密度 / 四态）照 `DESIGN.md` + `工程结构约束-*.md`，不在引擎里硬判。每完成一个核心步骤回报「进展 / 验证 / 下一步」。
+- align：重抓 local → 重跑 diff 直到 P0 清零；若 PM 明确决定保留差异，回写为模块决定，不能用它跳过 build 的 required checks。
+- 视觉细则（sticky / 横滚 / 禁 native alert·confirm 用包装组件 / 留白密度 / 四态）照 `DESIGN.md` + 模块规格，进入 adaptive visual 检查，不在引擎里硬判。
 
 ### 步骤 4：呈交 PM
 
@@ -96,9 +98,9 @@ python3 "$PMAI_HOME/scripts/checks-diff.py" \
 ## Rules
 
 - **只看不导**：截图 / 结构当参考，代码栈内建 / 改，不跨栈录入
-- Plan 没批前不动 `prototype/`（红线）；checks 由 AI 派生不让 PM 写 JSON
+- Plan 只产 checks、不动业务代码；checks 由 AI 派生，不让 PM 写 JSON
 - 单窗口：dev server / browse / 建改 显式带目录，不 cd 会话、不切窗口
-- 引擎只查结构 / 文案 / 按钮态；视觉归 DESIGN + `/design-review`，状态覆盖演示归行为审 `/browse`
+- 引擎只查结构 / 文案 / 按钮态；视觉和行为进入 acceptance profile 选中的检查
 - rebuild 重建是 build：强制读 DESIGN、复用已有组件、可派独立执行器；抓真实数据填 mock 用 `/scrape`
 - 参照站登录后页面才用 `/setup-browser-cookies`（无人值守会被 Keychain 弹窗打断，仅必要时）
-- 全走 `/browse`（headless），禁 `mcp__claude-in-chrome__*`
+- 主动浏览器优先用可用的 gstack `/browse`，也可用当前 runtime browser / Playwright 适配器；不把底层工具选择交给 PM

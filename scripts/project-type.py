@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 """Resolve the project-level PMAI build type.
 
-The source of truth is `.pm-workflow/config.yml:project.type`.  Legacy
-consumer repos created before that field existed may fall back to the
-`auto-detected: ...` marker in CLAUDE.md, but the helper never guesses from
-the current request or changed paths.
+The source of truth is `.pm-workflow/project.yml:project.type`. Legacy
+consumer repos may fall back to `.pm-workflow/config.yml:project.type` and
+then the `auto-detected: ...` marker in CLAUDE.md. The helper never guesses
+from the current request or changed paths.
 """
 
 from __future__ import annotations
@@ -13,6 +13,8 @@ import argparse
 import re
 import sys
 from pathlib import Path
+
+from _lib.project_definition import ProjectDefinitionError, load_project_definition
 
 
 VALID_TYPES = {"prototype", "product"}
@@ -94,6 +96,12 @@ def legacy_type(claude_path: Path) -> str | None:
 
 def resolve_project_type(repo_root: Path) -> str:
     repo_root = repo_root.expanduser().resolve()
+    project_path = repo_root / ".pm-workflow" / "project.yml"
+    if project_path.exists():
+        try:
+            return str(load_project_definition(project_path)["project"]["type"])
+        except ProjectDefinitionError as exc:
+            raise SystemExit(str(exc)) from exc
     config_path = repo_root / ".pm-workflow" / "config.yml"
     project_type = configured_type(config_path)
     if project_type:
@@ -102,8 +110,8 @@ def resolve_project_type(repo_root: Path) -> str:
     if project_type:
         return project_type
     raise SystemExit(
-        "项目尚未定义 PMAI 项目类型。请在 .pm-workflow/config.yml 增加 "
-        "project.type: prototype 或 project.type: product；build 不会按本轮需求临时猜测。"
+        "项目尚未生成 PMAI 建造定义。请先完成 /pmai-design，由定稿需求生成 "
+        ".pm-workflow/project.yml；build 不会按本轮需求临时猜测。"
     )
 
 
