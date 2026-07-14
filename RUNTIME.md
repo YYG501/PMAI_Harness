@@ -4,9 +4,9 @@
 
 ## 当前位置
 
-- 日期：2026-07-12
+- 日期：2026-07-14
 - 开发分支：`codex/unified-build-lifecycle`
-- 当前目标：v2 口径统一与项目建造定义重构已完成实现和全量回归，等待 PM 决定是否提交与分发。
+- 当前目标：v2 口径统一、项目建造定义重构、Codex host 入口与 design 交互收口已完成实现和全量回归，作为当前 main 分发基线。
 - gstack 参考基线：`v1.58.5.0`，commit `11de390`；只参考本地 `gstack-clean` checkout，没有升级用户目录中的安装副本。
 
 ## 当前活跃模型
@@ -18,7 +18,7 @@
 - 项目建造定义：初始化时不存在；首个达到 `ready_to_build` 的 design 将 `prototype / product`、技术栈、代码入口、真实命令和 Web 能力写入 `.pm-workflow/project.yml`。后续 build 只读该文件。
 - 模块真相源：`docs/modules/<模块>/discussion.md`、`decisions.md`、`spec.md`；跨模块现行规则为 `PRODUCT-RULES.md`，项目级冻结理路为 `docs/decisions/`。
 - 文档语义：`spec.md` / PRD 是指导研发实现的最终目标合同；`PRODUCT-STATE.md` 描述 main 已落地现状；原型、mockup 和代码只作设计 / 实现证据。
-- `.work-meta.json:build` 使用合同 v2，记录 build target、approved source hash、design revision、accepted deltas、implementation commit、required checks、证据和 docs status。
+- design 的 `ready_to_build` 状态同时记录 approved source hash、design checkpoint 和精确目标路径；build 开工前重新编译上下文并验证 currentness，过期依据不能继续显示或进入构建。`.work-meta.json:build` 使用合同 v2，继续记录 build target、design revision、accepted deltas、implementation commit、required checks、证据和 docs status。
 - 新 build 由 AI 推荐工作环境和构建工具，PM 只确认这两项；项目类型和验收方案不显示。选择当前环境时，main 只放行合同声明的目标路径。
 
 ## 已实现
@@ -38,6 +38,10 @@
 - spec-writing landed 对账固定分为符合、accepted delta、漏实现、无依据实现；只有 accepted delta 修改规格目标，漏实现保留为实现缺口。
 - design、meta、mockup、spec-writing、build、build-close 与消费仓 AGENTS / CLAUDE 模板已按统一链路重构。
 - 新增 `evals/cases/*.json`、`evals/touchfiles.json` 和 `scripts/skill-eval.py`；静态案例可作为提交门，session runner / LLM judge 缺失时明确 skip，require 模式明确 fail。
+- Codex 只暴露 `~/.codex/skills/pmai-*` 原生 skills；不再生成会在 Desktop 显示为 `prompts:pmai-*` 的 custom prompts。install / upgrade 清理旧 prompt 文件，doctor / status 不再生成或检查它们；Claude Code skills 与 OpenCode commands 保持原入口。
+- design 直接必读 AskUser 共享规则，首题前收敛真实决策并报告总量，用业务结果提问；跨日、模型切换或会话恢复时重读当前 skill 与必读规则；管理类方案同时检查持续新增、自动来源和属性变化带来的重复运营成本。跨模块设计只留下一个明确 build 入口，相同建造方案重复写入 `project.yml` 保持完整文件不变。
+- context pack 对旧消费仓自动写入 Git 本地 exclude，不再制造未跟踪缓存；build 在创建环境前阻断批准目标路径上的既有脏改动，同时保留无关 WIP。
+- context pack 只把 D 编号模块决定和真实产品规则编入 active；共同理由、否过方案、待复核、变更记录与注释模板不再伪装成决定，已确认标题也不再误报未决。
 
 ## 兼容与边界
 
@@ -49,10 +53,10 @@
 
 ## 当前验证
 
-- 新增和改造的 context pack、acceptance profile、build contract、landing、文档影响地图、status、关键 Skill 路由与 skill-eval targeted tests 已通过。
-- 完整 `tests/run-all.sh` 已通过：`444 passed / 0 failed`。用例数下降来自固定审计链、工程结构探测/注入资产及其测试的正式退役，不是漏跑；本轮新增规格目标 currentness 回归。
+- 新增和改造的 context pack、acceptance profile、build contract、landing、文档影响地图、status、关键 Skill 路由、design 决策收敛与 project definition 幂等 targeted tests 已通过。
+- 完整 `tests/run-all.sh` 已通过：`451 passed / 0 failed`。相比上一轮 `448 passed / 0 failed` 新增 3 条，覆盖长会话 / 持续运营规则、context 决策与未决过滤，以及新模块 designing 自动建目录；前两轮 design 提问、跨模块收口、ready currentness 与目标范围回归继续通过。
 
 ## 下一步
 
-- 当前工作树尚未提交、未 push、未发布，也没有修改用户目录中的 PMAI 安装副本。
-- PM 确认后再单独决定 commit、合入 main 与隔离分发；installed upgrade 仍是后续独立动作。
+- 继续用真实消费仓会话观察 design 决策收敛、ready currentness、目标范围交接和长会话规则刷新是否稳定。
+- 后续框架修改继续先在开发分支完成 targeted / full regression，再进入 main 分发基线并升级全局安装副本。

@@ -1,0 +1,33 @@
+{
+  "schema_version": 1,
+  "id": "design-ready-handoff-currentness",
+  "title": "design 固定当前建造依据与目标页面，过期后不能继续 build",
+  "layer": "session",
+  "skills": ["design", "build", "status"],
+  "source": {
+    "session_id": "019f49b7-088b-75c3-a0e4-0c05ca61f3fd",
+    "evidence": [
+      {"turn": 1, "excerpt": "切回权限模块后更新并提交了权限规格，但没有重新建立该模块的正式工作状态。"},
+      {"turn": 2, "excerpt": "Product Manifest 的 ready_to_build 仍然有效展示，但关联权威来源已经被权限规格更新改变。"},
+      {"turn": 3, "excerpt": "权限 build 没有明确具体覆盖哪些现有页面，目标页面上还留有三份更早的未提交原型改动。"}
+    ]
+  },
+  "input": {
+    "prompt": "从已经定稿的权限设计进入 build。",
+    "context": ["仓库同时有另一个模块的旧 ready_to_build 状态", "权限规格和项目级权威来源刚刚更新", "目标页面存在早于本轮设计的未提交改动"]
+  },
+  "expected": {
+    "behaviors": ["重新编译当前上下文并校验 approved source hash", "只读取 design 批准的目标路径", "过期 ready 返回 design 重新核对", "目标路径既有脏改动在创建构建环境前阻断", "无关 WIP 保持不动"],
+    "observations": ["stale_ready_rejected", "approved_target_paths_reused", "overlapping_dirty_paths_blocked", "unrelated_dirty_paths_preserved"],
+    "lifecycle_order": ["ready_to_build", "designing"],
+    "stopping_point": "ready_to_build_revalidation"
+  },
+  "forbidden": {
+    "behaviors": ["只看 lifecycle 字段就宣称可以构建", "从当前文件树临时猜目标路径", "默认把旧原型改动带入本轮", "要求清空整仓无关改动"],
+    "observations": ["stale_ready_presented_as_current", "target_scope_guessed_at_build", "dirty_target_silently_included", "unrelated_wip_removed"]
+  },
+  "judge": {
+    "enabled": true,
+    "rubric": ["design 到 build 的依据和目标范围都是可验证合同", "status 与 build 对 ready currentness 给出同一结论", "既有改动按目标重叠关系处理而不是粗暴清仓"]
+  }
+}

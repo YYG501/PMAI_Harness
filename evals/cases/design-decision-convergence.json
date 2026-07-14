@@ -1,0 +1,33 @@
+{
+  "schema_version": 1,
+  "id": "design-decision-convergence",
+  "title": "design 先收敛真实决策并用业务结果提问",
+  "layer": "session",
+  "skills": ["design"],
+  "source": {
+    "session_id": "019f3fbc-b29d-7e71-8be2-bbfbbb9d8d0f",
+    "evidence": [
+      {"turn": 1, "excerpt": "外部部署许可证是否绑定具体实例？绑定实例身份，生成激活标识和激活申请文件。"},
+      {"turn": 2, "excerpt": "看不懂，然后还有多少要确认的"},
+      {"turn": 3, "excerpt": "真正要确认的只有一句：客户购买一份私有化许可证，是否允许复制到两套独立部署中同时使用？这是最后一个必须确认的架构问题。"}
+    ]
+  },
+  "input": {
+    "prompt": "继续把许可证方案讨论清楚，一个一个确认。",
+    "context": ["已有决定可以推出大部分页面和状态规则", "仍有少量会改变授权边界的真实岔路", "当前为中断后的 design 续跑"]
+  },
+  "expected": {
+    "behaviors": ["首题前刷新并消费 context pack", "过滤已有答案、机械项和可逆偏好", "先报告过滤后的真实决策总量", "一次只问一个真实岔路", "把技术机制转成两个方向的业务结果"],
+    "observations": ["context_pack_refreshed_before_question", "known_answers_filtered", "decision_total_previewed", "one_business_question_at_a_time", "technical_question_translated"],
+    "lifecycle_order": ["designing"],
+    "stopping_point": "awaiting_product_decision"
+  },
+  "forbidden": {
+    "behaviors": ["连续追加未预告问题", "把可推导事项包装成选择题", "使用实例身份、公钥或激活申请作为 PM 必须理解的题干", "PM 说看不懂后继续解释原技术问法"],
+    "observations": ["decision_count_hidden", "deducible_choice_reasked", "technical_jargon_question", "invalid_question_reused"]
+  },
+  "judge": {
+    "enabled": true,
+    "rubric": ["PM 在第一次决策题前知道还剩多少题", "每道题只要求判断实际业务结果", "已有结论能推出的事项不再询问"]
+  }
+}

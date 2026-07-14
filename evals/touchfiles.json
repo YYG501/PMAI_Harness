@@ -3,6 +3,10 @@
   "cases": {
     "current-facts-only": ["skills/spec-writing/SKILL.md", "skills/_shared/PM-VIEW-RULES.md"],
     "decision-question-not-fact": ["skills/_shared/decision-policy.md", "skills/design/SKILL.md", "skills/spec-writing/SKILL.md"],
+    "design-cross-module-build-entry": ["skills/design/SKILL.md", "skills/design/references/design-method.md"],
+    "design-decision-convergence": ["skills/design/SKILL.md", "skills/design/references/design-method.md", "skills/_shared/pm-view/askuser-rules.md", "skills/_shared/decision-policy.md"],
+    "design-long-session-operations-recovery": ["skills/design/SKILL.md", "skills/design/references/design-method.md", "skills/mockup/SKILL.md", "skills/spec-writing/SKILL.md", "scripts/context-pack.py", "scripts/build-contract.py"],
+    "design-ready-handoff-currentness": ["skills/design/SKILL.md", "skills/build/SKILL.md", "scripts/build-contract.py", "scripts/context-pack.py", "scripts/status-view.py", "scripts/_lib/ready_contract.py", "tests/test-ready-contract.sh"],
     "design-recovers-history": ["scripts/context-pack.py", "skills/design/SKILL.md"],
     "docs-pending-resume-static": ["scripts/build-contract.py", "scripts/land-work.sh", "skills/build-close/SKILL.md"],
     "evidence-invalidation-static": ["scripts/build-contract.py", "tests/test-build-contract.sh"],
@@ -14,6 +18,7 @@
     "no-internal-menus": ["skills/design/SKILL.md", "skills/build/SKILL.md", "scripts/builder-profile.py"],
     "patch-smell-routes-meta": ["skills/design/SKILL.md", "skills/meta/SKILL.md"],
     "prototype-product-same-lifecycle-static": ["scripts/_lib/project_definition.py", "scripts/build-contract.py", "scripts/acceptance-profile.py"],
+    "project-definition-reuse": ["scripts/project-definition.py", "tests/test-project-definition.sh", "skills/design/SKILL.md"],
     "spec-coverage-map": ["skills/spec-writing/SKILL.md", "scripts/doc-impact.py"]
   }
 }

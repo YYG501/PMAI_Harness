@@ -114,10 +114,12 @@ test_active_helpers_require_project_definition() {
   local acceptance="$REPO_ROOT/scripts/acceptance-profile.py"
   local contract="$REPO_ROOT/scripts/build-contract.py"
   local context="$REPO_ROOT/scripts/context-pack.py"
+  local reconstruction="$REPO_ROOT/skills/_shared/context-reconstruction.md"
   local builder="$REPO_ROOT/scripts/builder-profile.py"
   if grep -q 'add_argument("--target"' "$acceptance" \
      || grep -q 'target_paths = \["prototype/"\]' "$contract" \
-     || grep -q 'result.add_argument("--target"' "$context"; then
+     || grep -q 'result.add_argument("--target"' "$context" \
+     || grep -q -- '--target "<prototype|product>"' "$reconstruction"; then
     _fail "active helper still has a pre-project.yml target shortcut"
     return
   fi

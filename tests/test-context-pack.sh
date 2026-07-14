@@ -17,6 +17,11 @@ setup_fixture() {
   echo '# 现状' > "$T/PRODUCT-STATE.md"
   cat > "$T/PRODUCT-RULES.md" <<'EOF'
 # 产品规则
+## 规则清单
+<!--
+### <一句话标题>
+- 规则：<产品在 X 情况下应 / 不应 Y>
+-->
 ## R1 权限不随部门自动继承
 加入部门不会自动获得管理权限。
 EOF
@@ -30,6 +35,14 @@ EOF
 这是尚未回答的问题？
 ## ~~D3 部门自动带角色~~
 已被 D1 取代。
+## 2. 共同理由
+角色与范围分开维护。
+## 3. 否过的方案
+- 部门自动带角色。
+## 4. 待复核决策
+本轮没有待复核决策。
+## 5. 变更记录
+- 2026-07-14：确认角色边界。
 EOF
   cat > "$T/docs/modules/access/discussion.md" <<'EOF'
 # 讨论
@@ -84,6 +97,37 @@ test_context_pack_hash_changes_with_authority_source() {
   echo '补一条当前规则' >> "$T/PRODUCT-RULES.md"
   H2=$(python3 "$CONTEXT_PACK" --repo-root "$T" --module access | python3 -c 'import json,sys; print(json.load(sys.stdin)["source_hash"])')
   if [ "$H1" != "$H2" ]; then pass_test; else _fail "source_hash should change"; fi
+  teardown_fixture
+}
+
+test_context_pack_ignores_resolved_headings_and_non_decision_sections() {
+  start_test "context-pack: resolved heading and decision metadata are not product decisions"
+  setup_fixture
+  cat > "$T/docs/modules/access/discussion.md" <<'EOF'
+# 讨论
+## 待确认问题
+本轮全部已确认。
+EOF
+  OUT="$T/context-filtered.json"
+  python3 "$CONTEXT_PACK" --repo-root "$T" --module access --output "$OUT" >/dev/null || {
+    _fail "context pack should compile filtered decisions"; teardown_fixture; return;
+  }
+  python3 - "$OUT" <<'PY' || {
+import json, sys
+data = json.load(open(sys.argv[1]))
+active = [item["title"] for item in data["decisions"]["active"]]
+assert any(title.startswith("D1") for title in active)
+assert any(title.startswith("R1") for title in active)
+assert not any("共同理由" in title for title in active)
+assert not any("否过" in title for title in active)
+assert not any("待复核" in title for title in active)
+assert not any("变更记录" in title for title in active)
+assert not any("一句话标题" in title for title in active)
+assert data["unresolved_questions"] == []
+PY
+    _fail "resolved headings or metadata leaked into context decisions"; teardown_fixture; return;
+  }
+  pass_test
   teardown_fixture
 }
 
@@ -142,6 +186,7 @@ PY
 
 test_context_pack_compiles_authority_and_rejects_questions
 test_context_pack_hash_changes_with_authority_source
+test_context_pack_ignores_resolved_headings_and_non_decision_sections
 test_context_pack_lifecycle_state_does_not_drift_approved_source
 test_context_pack_includes_registered_input_evidence
 report_results "context-pack"

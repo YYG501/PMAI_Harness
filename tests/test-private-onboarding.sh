@@ -53,6 +53,10 @@ test_private_repo_install_surfaces_prereqs() {
   start_test "T1: 私有仓式 clone install 会安装并提示 gstack readiness"
   local out rc
 
+  mkdir -p "$FAKE_CODEX_HOME/prompts"
+  printf "legacy\n" > "$FAKE_CODEX_HOME/prompts/pmai-build.md"
+  printf "keep\n" > "$FAKE_CODEX_HOME/prompts/my-own-prompt.md"
+
   out=$(HOME="$FAKE_HOME" CODEX_HOME="$FAKE_CODEX_HOME" PMAI_HOME="$PMAI_HOME" PMAI_REMOTE="$SOURCE_REPO" PATH="$FAKE_PATH" \
     bash "$REPO_ROOT/bin/pmai" install 2>&1)
   rc=$?
@@ -82,6 +86,14 @@ test_private_repo_install_surfaces_prereqs() {
   fi
   if [ ! -L "$FAKE_CODEX_HOME/skills/pmai-init-project" ]; then
     _fail "Codex skill 暴露缺 pmai-init-project"
+    return
+  fi
+  if [ -e "$FAKE_CODEX_HOME/prompts/pmai-build.md" ]; then
+    _fail "install 应清理旧版遗留的 pmai-* Codex prompt"
+    return
+  fi
+  if [ ! -f "$FAKE_CODEX_HOME/prompts/my-own-prompt.md" ]; then
+    _fail "install 不应清理非 PMAI 的 Codex prompt"
     return
   fi
   if [ ! -f "$FAKE_HOME/.config/opencode/commands/pmai-init-project.md" ]; then

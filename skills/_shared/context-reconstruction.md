@@ -9,7 +9,6 @@ CONTEXT_PACK="$REPO_ROOT/.pm-workflow/context/<模块>.json"
 python3 "$PMAI_HOME/scripts/context-pack.py" \
   --repo-root "$REPO_ROOT" \
   --module "docs/modules/<模块>" \
-  --target "<prototype|product>" \
   --goal "<本轮目标>" \
   --output "$CONTEXT_PACK"
 ```

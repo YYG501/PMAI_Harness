@@ -1,0 +1,33 @@
+{
+  "schema_version": 1,
+  "id": "design-cross-module-build-entry",
+  "title": "跨模块 design 只留下一个明确 build 入口",
+  "layer": "session",
+  "skills": ["design"],
+  "source": {
+    "session_id": "019f3fbc-b29d-7e71-8be2-bbfbbb9d8d0f",
+    "evidence": [
+      {"turn": 1, "excerpt": "本轮已经把 Product Manifest 与本地部署配置拆开，我会同时更新这两个模块的文档。"},
+      {"turn": 2, "excerpt": "平台许可证三件套已经完成重写；Product Manifest 三件套也已更新。"},
+      {"turn": 3, "excerpt": "最终只把 Product Manifest 第 3 版重新标记为可建造，并把 /pmai-build product-onboarding-product-manifest 作为 Next Up。"}
+    ]
+  },
+  "input": {
+    "prompt": "把平台许可证和 Product Manifest 的关系一起收口，之后进入 build。",
+    "context": ["两个模块都存在完整三件套", "两者可能共同服务一个建造结果，也可能各有独立建造结果", "仓库中还有其它 active work"]
+  },
+  "expected": {
+    "behaviors": ["开场绑定一个主模块", "把相关模块归为既有约束、同步规则或独立后续工作", "共同服务同一结果时把关联影响写进主模块规格", "只让一个主模块进入 ready_to_build", "完成回执说明本次包含范围和后续范围"],
+    "observations": ["primary_module_bound", "related_modules_classified", "single_ready_to_build_entry", "build_scope_receipt_complete"],
+    "lifecycle_order": ["designing", "ready_to_build"],
+    "stopping_point": "ready_to_build"
+  },
+  "forbidden": {
+    "behaviors": ["两个完整规格改完后只给其中一个模糊状态", "同时留下多个无范围说明的 build 入口", "把仓库其它 active work 当成本轮 build 范围"],
+    "observations": ["orphaned_module_docs", "ambiguous_build_entry", "unrelated_active_work_included"]
+  },
+  "judge": {
+    "enabled": true,
+    "rubric": ["当前一轮只有一个明确可执行的 build 入口", "所有被修改的相关模块都有清楚归属", "完成回执能让执行器直接判断本次范围"]
+  }
+}

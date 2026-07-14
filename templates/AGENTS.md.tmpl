@@ -15,7 +15,7 @@
 ## Host Mapping
 
 - `CLAUDE.md` 里写的“Claude Code”“Claude host”“驱动 Claude”，在 Codex / OpenCode 会话中等价理解为当前主控 agent。
-- `/pmai-*` 是 PMAI 的用户命令名。Codex skill / prompt 列表已暴露 `pmai-*` 时优先按该入口执行；OpenCode 已暴露 `.opencode/commands/pmai-*.md` 或 `~/.config/opencode/commands/pmai-*.md` 时优先按该入口执行；如果当前 runtime 没有 slash / skill UI，再按对应 `~/.pmai/skills/<command-without-pmai-prefix>/SKILL.md` 的步骤执行。
+- `/pmai-*` 是 PMAI 的用户命令名。Codex 通过原生 skill 列表调用对应的 `$pmai-*`；OpenCode 已暴露 `.opencode/commands/pmai-*.md` 或 `~/.config/opencode/commands/pmai-*.md` 时优先按该入口执行。PMAI 不生成 Codex custom prompts；如果当前 runtime 没有 skill UI，再按对应 `~/.pmai/skills/<command-without-pmai-prefix>/SKILL.md` 的步骤执行。
 - 如果 skill 目录名本身带 `pmai-` 前缀，例如 `/pmai-upgrade`，对应 `~/.pmai/skills/pmai-upgrade/SKILL.md`。
 - 运行态只创建并识别 `build-*` 工作分支。
 - 完整 build 的实现改动落在 PM 开工前确认的工作环境；选择独立环境时使用 `build-*` worktree，选择当前环境时只允许合同声明的目标路径。轻量修补走 `/pmai-quick-fix`。

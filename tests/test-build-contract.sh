@@ -245,6 +245,33 @@ PY
   teardown_contract_fixture
 }
 
+test_contract_designing_creates_new_module_directory() {
+  start_test "build-contract: designing creates a missing module directory"
+  T=$(mktemp -d "${TMPDIR:-/tmp}/pmai-build-contract.XXXXXX")
+  MODULE_DIR="$T/docs/modules/new-access-flow"
+
+  if ! python3 "$BUILD_CONTRACT" designing "$MODULE_DIR" \
+    >/tmp/build-contract.$$ 2>/tmp/build-contract.err.$$; then
+    _fail "designing should create a new module directory"
+    cat /tmp/build-contract.err.$$ >&2
+    rm -f /tmp/build-contract.$$ /tmp/build-contract.err.$$; teardown_contract_fixture; return
+  fi
+  python3 - "$MODULE_DIR/.work-meta.json" <<'PY' || {
+import json, sys
+meta = json.load(open(sys.argv[1]))
+assert meta["id"] == "work-new-access-flow"
+assert meta["name"] == "new-access-flow"
+assert meta["status"] == "active"
+assert meta["lifecycle_state"] == "designing"
+PY
+    _fail "designing meta fields mismatch"
+    rm -f /tmp/build-contract.$$ /tmp/build-contract.err.$$; teardown_contract_fixture; return
+  }
+  pass_test
+  rm -f /tmp/build-contract.$$ /tmp/build-contract.err.$$
+  teardown_contract_fixture
+}
+
 test_contract_complete_records_commit_and_acceptance_atomically() {
   start_test "build-contract: complete records implementation + acceptance in one write"
   setup_contract_fixture
@@ -638,6 +665,7 @@ test_contract_lifecycle
 test_contract_rejects_missing_build
 test_contract_start_requires_adaptive_inputs
 test_contract_start_initializes_missing_meta
+test_contract_designing_creates_new_module_directory
 test_contract_complete_records_commit_and_acceptance_atomically
 test_contract_limited_browser_cannot_be_excepted
 test_contract_missing_browser_smoke_blocks_clean_audits

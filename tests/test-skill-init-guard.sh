@@ -62,19 +62,6 @@ test_allowed_entrypoint_exceptions_are_explicit() {
   pass_test
 }
 
-test_codex_prompt_templates_guard_uninitialized_repos() {
-  start_test "Codex prompt templates run preamble before project skills"
-
-  local file
-  for file in "$REPO_ROOT/bin/pmai-install" "$REPO_ROOT/bin/pmai-upgrade" "$REPO_ROOT/bin/pmai-doctor"; do
-    assert_file_contains "$file" 'AGENTS.md' "Codex prompt should read project AGENTS entry" || return
-    assert_file_contains "$file" 'skill-preamble.sh' "Codex prompt should run PMAI preamble" || return
-    assert_file_contains "$file" 'PMAI_PROJECT_INITIALIZED: 0' "Codex prompt should stop uninitialized projects" || return
-    assert_file_contains "$file" '/pmai-init-project' "Codex prompt should guide initialization" || return
-  done
-  pass_test
-}
-
 test_opencode_command_template_guards_uninitialized_repos() {
   start_test "OpenCode command template runs preamble before project skills"
 
@@ -88,7 +75,6 @@ test_opencode_command_template_guards_uninitialized_repos() {
 
 test_project_skills_guard_uninitialized_repos
 test_allowed_entrypoint_exceptions_are_explicit
-test_codex_prompt_templates_guard_uninitialized_repos
 test_opencode_command_template_guards_uninitialized_repos
 
 report_results "skill-init-guard"

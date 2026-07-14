@@ -18,7 +18,6 @@ set -uo pipefail
 PMAI_HOME="${PMAI_HOME:-$HOME/.pmai}"
 CLAUDE_SKILLS="$HOME/.claude/skills"
 CODEX_SKILLS="${CODEX_HOME:-$HOME/.codex}/skills"
-CODEX_PROMPTS="${CODEX_HOME:-$HOME/.codex}/prompts"
 OPENCODE_CONFIG_DIR="${OPENCODE_CONFIG_DIR:-$HOME/.config/opencode}"
 OPENCODE_COMMANDS="$OPENCODE_CONFIG_DIR/commands"
 SKILL_PREFIX="pmai-"
@@ -39,7 +38,6 @@ Usage:
 Checks global PMAI install integrity:
   - ~/.pmai source, VERSION, expected skills
   - ~/.claude/skills/pmai-* and ~/.codex/skills/pmai-* exposure drift and dangling symlinks
-  - ~/.codex/prompts/pmai-*.md Codex CLI slash prompt exposure
   - ~/.config/opencode/commands/pmai-*.md OpenCode slash command exposure
   - working tree, remote reachability, Claude Code bash PATH
   - optional gstack/browser readiness
@@ -140,29 +138,8 @@ actual_exposed_skill_names() {
   done | sort -u
 }
 
-expected_codex_prompt_names() {
+expected_opencode_command_names() {
   expected_exposed_skill_names | sed 's/$/.md/' | sort -u
-}
-
-actual_codex_prompt_names() {
-  local prompt_dir="$1"
-  local s
-  for s in "$prompt_dir"/${SKILL_PREFIX}*.md; do
-    [ -e "$s" ] || continue
-    basename "$s"
-  done | sort -u
-}
-
-count_codex_prompts() {
-  local prompt_dir="$1"
-  local s count
-
-  count=0
-  for s in "$prompt_dir"/${SKILL_PREFIX}*.md; do
-    [ -e "$s" ] || continue
-    count=$((count + 1))
-  done
-  echo "$count"
 }
 
 actual_opencode_command_names() {
@@ -184,65 +161,6 @@ count_opencode_commands() {
     count=$((count + 1))
   done
   echo "$count"
-}
-
-exposed_name_for_skill() {
-  case "$1" in
-    pmai-*) echo "$1" ;;
-    *) echo "${SKILL_PREFIX}$1" ;;
-  esac
-}
-
-write_codex_prompt() {
-  local prompt_dir="$1"
-  local skill_name="$2"
-  local exposed_name="$3"
-  local dst="$prompt_dir/${exposed_name}.md"
-
-  cat > "$dst" <<EOF
----
-description: Run PMAI /${exposed_name} workflow
-argument-hint: command arguments
----
-
-执行 PMAI /${exposed_name}。
-
-输入：本 slash command 后面的文字就是 /${exposed_name} 的参数。
-
-必须按以下步骤执行：
-
-1. 定位 PMAI_HOME：优先使用环境变量 \`PMAI_HOME\`；没有则使用 \`~/.pmai\`。
-2. 如果当前项目根目录有 \`AGENTS.md\`，先遵守其中的 PMAI Host Mapping 和 Startup 规则。
-3. 如果当前命令不是 \`/pmai-init-project\` 或 \`/pmai-upgrade\`，先运行 \`bash -lc 'source "\${PMAI_HOME:-\$HOME/.pmai}/scripts/skill-preamble.sh"'\`。如果输出 \`PMAI_PROJECT_INITIALIZED: 0\`，停止当前 skill，只引导 PM 先发 \`/pmai-init-project\`。 \`/pmai-humanize\` 仅在处理粘贴文本或仓外文件、且不写 PMAI 项目产物时可继续；要读取或改写仓内文档时同样停止。
-4. 完整读取 \`\$PMAI_HOME/skills/${skill_name}/SKILL.md\`。
-5. 如果该 \`SKILL.md\` 引用 \`_shared/...\`、\`references/...\`、\`templates/...\` 或脚本，按文件路径继续读取必要内容。
-6. 严格按 skill workflow 执行；不要只凭本 prompt 或记忆模拟。
-7. 默认用中文和 PM 沟通。
-
-如果 skill 文件不存在，先说明 PMAI 未安装或安装损坏，并建议运行 \`pmai doctor\`。
-EOF
-}
-
-repair_codex_prompts() {
-  local prompt_dir="$1"
-  local skill_dir skill_name exposed_name count
-
-  [ -d "$PMAI_HOME/skills" ] || return 1
-  mkdir -p "$prompt_dir" || return 1
-
-  count=0
-  for skill_dir in "$PMAI_HOME"/skills/*/; do
-    [ -d "$skill_dir" ] || continue
-    skill_name=$(basename "$skill_dir")
-    case "$skill_name" in
-      _internal|_shared) continue ;;
-    esac
-    exposed_name=$(exposed_name_for_skill "$skill_name")
-    write_codex_prompt "$prompt_dir" "$skill_name" "$exposed_name" || return 1
-    count=$((count + 1))
-  done
-  ok "Codex CLI slash prompts repaired ($count file(s) written)"
-  return 0
 }
 
 repair_opencode_commands() {
@@ -348,54 +266,23 @@ check_skill_exposure_dir() {
   fi
 }
 
-check_codex_prompt_dir() {
-  local prompt_dir="$1"
-  local display_path="$2"
-  local count stale_prompts missing_prompts
-
-  echo ""
-  echo "─── 4b. Codex CLI slash prompts (${display_path}/${SKILL_PREFIX}*.md) ───"
-  count=$(count_codex_prompts "$prompt_dir")
-
-  stale_prompts=$(comm -23 <(actual_codex_prompt_names "$prompt_dir") <(expected_codex_prompt_names) || true)
-  missing_prompts=$(comm -13 <(actual_codex_prompt_names "$prompt_dir") <(expected_codex_prompt_names) || true)
-
-  if [ "$count" = "0" ] || [ -n "$missing_prompts" ]; then
-    if repair_codex_prompts "$prompt_dir"; then
-      count=$(count_codex_prompts "$prompt_dir")
-      stale_prompts=$(comm -23 <(actual_codex_prompt_names "$prompt_dir") <(expected_codex_prompt_names) || true)
-      missing_prompts=$(comm -13 <(actual_codex_prompt_names "$prompt_dir") <(expected_codex_prompt_names) || true)
-    fi
-  fi
-
-  if [ "$count" = "0" ]; then
-    fail "No Codex CLI slash prompts found (${display_path}/${SKILL_PREFIX}*.md). 跑 pmai install 或 pmai upgrade。"
-  elif [ -n "$stale_prompts" ]; then
-    fail "Codex stale slash prompt file(s): $(echo "$stale_prompts" | tr '\n' ' ') — run pmai upgrade to resync"
-  elif [ -n "$missing_prompts" ]; then
-    fail "Codex missing slash prompt file(s): $(echo "$missing_prompts" | tr '\n' ' ') — run pmai upgrade to resync"
-  else
-    ok "Codex $(expected_codex_prompt_names | wc -l | tr -d ' ') slash prompt file(s) match current skills"
-  fi
-}
-
 check_opencode_command_dir() {
   local command_dir="$1"
   local display_path="$2"
   local count stale_commands missing_commands
 
   echo ""
-  echo "─── 4c. OpenCode slash commands (${display_path}/${SKILL_PREFIX}*.md) ───"
+  echo "─── 4b. OpenCode slash commands (${display_path}/${SKILL_PREFIX}*.md) ───"
   count=$(count_opencode_commands "$command_dir")
 
-  stale_commands=$(comm -23 <(actual_opencode_command_names "$command_dir") <(expected_codex_prompt_names) || true)
-  missing_commands=$(comm -13 <(actual_opencode_command_names "$command_dir") <(expected_codex_prompt_names) || true)
+  stale_commands=$(comm -23 <(actual_opencode_command_names "$command_dir") <(expected_opencode_command_names) || true)
+  missing_commands=$(comm -13 <(actual_opencode_command_names "$command_dir") <(expected_opencode_command_names) || true)
 
   if [ "$count" = "0" ] || [ -n "$missing_commands" ]; then
     if repair_opencode_commands; then
       count=$(count_opencode_commands "$command_dir")
-      stale_commands=$(comm -23 <(actual_opencode_command_names "$command_dir") <(expected_codex_prompt_names) || true)
-      missing_commands=$(comm -13 <(actual_opencode_command_names "$command_dir") <(expected_codex_prompt_names) || true)
+      stale_commands=$(comm -23 <(actual_opencode_command_names "$command_dir") <(expected_opencode_command_names) || true)
+      missing_commands=$(comm -13 <(actual_opencode_command_names "$command_dir") <(expected_opencode_command_names) || true)
     fi
   fi
 
@@ -406,7 +293,7 @@ check_opencode_command_dir() {
   elif [ -n "$missing_commands" ]; then
     fail "OpenCode missing slash command file(s): $(echo "$missing_commands" | tr '\n' ' ') — run pmai upgrade to resync"
   else
-    ok "OpenCode $(expected_codex_prompt_names | wc -l | tr -d ' ') slash command file(s) match current skills"
+    ok "OpenCode $(expected_opencode_command_names | wc -l | tr -d ' ') slash command file(s) match current skills"
   fi
 }
 
@@ -414,7 +301,7 @@ check_opencode_cli() {
   local opencode_bin
 
   echo ""
-  echo "─── 4d. OpenCode CLI ───"
+  echo "─── 4c. OpenCode CLI ───"
   opencode_bin=$(command -v opencode 2>/dev/null || true)
   if [ -n "$opencode_bin" ]; then
     ok "opencode command found: $opencode_bin"
@@ -437,7 +324,6 @@ fi
 
 check_skill_exposure_dir "Claude Code" "$CLAUDE_SKILLS" "~/.claude/skills"
 check_skill_exposure_dir "Codex" "$CODEX_SKILLS" "~/.codex/skills"
-check_codex_prompt_dir "$CODEX_PROMPTS" "~/.codex/prompts"
 check_opencode_command_dir "$OPENCODE_COMMANDS" "~/.config/opencode/commands"
 check_opencode_cli
 

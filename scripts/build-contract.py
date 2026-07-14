@@ -17,6 +17,17 @@ from datetime import datetime, timezone
 from pathlib import Path
 import subprocess
 
+from _lib.project_definition import ProjectDefinitionError, load_project_definition
+from _lib.ready_contract import (
+    ReadyContractError,
+    approved_target_paths,
+    classify_dirty_paths,
+    load_context_pack,
+    normalize_paths,
+    ready_currentness,
+    validate_ready_pack,
+)
+
 
 VALID_MODES = {"worktree", "main"}
 VALID_EXECUTORS = {"claude-code", "codex", "cursor-agent", "gemini", "opencode", "manual", "native"}
@@ -452,6 +463,49 @@ def current_source_hash(build: dict, delta: dict | None = None) -> str:
     return sha256_value({"previous": previous, "delta": delta})
 
 
+def _path_within(path: str, parent: str) -> bool:
+    if parent == ".":
+        return True
+    return path == parent or path.startswith(parent.rstrip("/") + "/")
+
+
+def validate_target_paths(repo_root: Path, values: list[str]) -> list[str]:
+    target_paths = normalize_paths(values, "approved_target.paths")
+    try:
+        definition = load_project_definition(repo_root / ".pm-workflow" / "project.yml")
+    except ProjectDefinitionError as exc:
+        raise SystemExit(str(exc)) from exc
+    root = str(definition["implementation"]["root"])
+    entrypoints = [str(value) for value in definition["implementation"]["entrypoints"]]
+    for path in target_paths:
+        if not _path_within(path, root):
+            raise SystemExit(f"目标路径不在 project.yml implementation.root 内：{path}")
+        if not any(_path_within(path, entrypoint) for entrypoint in entrypoints):
+            raise SystemExit(f"目标路径没有命中 project.yml implementation.entrypoints：{path}")
+    return target_paths
+
+
+def _validate_ready_for_start(module_dir: Path, meta: dict) -> dict | None:
+    if str(meta.get("lifecycle_state") or "") != "ready_to_build":
+        return None
+    repo_root = repo_root_for(module_dir)
+    result = ready_currentness(repo_root, module_dir, meta)
+    if result.get("state") != "current":
+        raise SystemExit(result.get("reason") or "ready 建造依据已经过期。")
+    return result
+
+
+def ensure_target_paths_clean(repo_root: Path, target_paths: list[str]) -> dict:
+    result = classify_dirty_paths(repo_root, target_paths)
+    if result["overlapping"]:
+        paths = "\n".join(f"- {path}" for path in result["overlapping"])
+        raise SystemExit(
+            "本轮目标路径已有未提交改动，不能默认带入或丢弃：\n"
+            f"{paths}\n请先明确这些改动是否属于本轮，并固定到可恢复的提交点后再开始 build。"
+        )
+    return result
+
+
 def cmd_start(args: argparse.Namespace) -> None:
     module_dir = Path(args.module_dir)
     path = meta_path(module_dir)
@@ -460,6 +514,8 @@ def cmd_start(args: argparse.Namespace) -> None:
     else:
         module_dir.mkdir(parents=True, exist_ok=True)
         meta = default_meta(module_dir, args.branch)
+
+    ready_result = _validate_ready_for_start(module_dir, meta)
 
     mode = args.mode
     executor = args.executor
@@ -479,10 +535,16 @@ def cmd_start(args: argparse.Namespace) -> None:
     target_paths = normalize_string_list(args.target_path)
     if not target_paths:
         raise SystemExit("v2 build 必须显式记录 acceptance profile 对应的 target.paths。")
+    if ready_result is not None and target_paths != ready_result["target_paths"]:
+        raise SystemExit("build target paths 与 design 批准范围不一致；请勿在 build 开工时临时改写目标。")
+    if ready_result is not None:
+        ensure_target_paths_clean(repo_root_for(module_dir), ready_result["target_paths"])
     entrypoints = normalize_string_list(args.entrypoint)
     if not entrypoints:
         raise SystemExit("v2 build 必须记录 project.yml 声明的 implementation.entrypoints。")
     source_hash = optional(args.approved_source_hash) or optional(meta.get("approved_source_hash"))
+    if ready_result is not None and source_hash != ready_result["approved_source_hash"]:
+        raise SystemExit("build 使用的 approved_source_hash 与 design 批准依据不一致。")
     if not source_hash:
         anchor_path = Path(args.anchor).expanduser()
         repo_root = repo_root_for(module_dir)
@@ -551,6 +613,7 @@ def require_build(meta: dict) -> dict:
 
 def cmd_designing(args: argparse.Namespace) -> None:
     module_dir = Path(args.module_dir)
+    module_dir.mkdir(parents=True, exist_ok=True)
     path = meta_path(module_dir)
     meta = read_meta(module_dir) if path.exists() else default_meta(module_dir)
     meta["status"] = "active"
@@ -568,14 +631,56 @@ def cmd_ready(args: argparse.Namespace) -> None:
     checkpoint = optional(args.checkpoint_commit)
     if not source_hash or not checkpoint:
         raise SystemExit("ready 必须提供 approved_source_hash 和 checkpoint_commit。")
+    repo_root = repo_root_for(module_dir)
+    pack = load_context_pack(Path(args.context_pack))
+    expected_module = module_dir.expanduser().resolve().relative_to(repo_root.resolve()).as_posix()
+    if pack.get("module") != expected_module:
+        raise SystemExit("ready 使用的 context pack 不属于当前模块。")
+    if str(pack.get("source_hash") or "") != source_hash:
+        raise SystemExit("ready 的 approved_source_hash 与最新 context pack 不一致。")
+    target_paths = validate_target_paths(repo_root, args.target_path)
     meta["status"] = "active"
     meta["stage"] = 1
     meta["lifecycle_state"] = "ready_to_build"
     meta["design_revision"] = args.design_revision
     meta["approved_source_hash"] = source_hash
     meta["design_checkpoint_commit"] = checkpoint
+    meta["approved_target"] = {"paths": target_paths}
     write_meta(module_dir, meta)
     print(json.dumps(meta, ensure_ascii=False))
+
+
+def cmd_validate_ready(args: argparse.Namespace) -> None:
+    module_dir = Path(args.module_dir)
+    meta = read_meta(module_dir)
+    repo_root = repo_root_for(module_dir)
+    try:
+        if args.context_pack:
+            result = validate_ready_pack(
+                repo_root,
+                module_dir,
+                meta,
+                load_context_pack(Path(args.context_pack)),
+            )
+        else:
+            result = ready_currentness(repo_root, module_dir, meta)
+            if result.get("state") != "current":
+                raise ReadyContractError(result.get("reason") or "ready 建造依据已经过期。")
+    except ReadyContractError as exc:
+        raise SystemExit(str(exc)) from exc
+    print(json.dumps(result, ensure_ascii=False))
+
+
+def cmd_check_dirty(args: argparse.Namespace) -> None:
+    module_dir = Path(args.module_dir)
+    meta = read_meta(module_dir)
+    repo_root = repo_root_for(module_dir)
+    try:
+        target_paths = approved_target_paths(meta)
+        result = ensure_target_paths_clean(repo_root, target_paths)
+    except ReadyContractError as exc:
+        raise SystemExit(str(exc)) from exc
+    print(json.dumps(result, ensure_ascii=False))
 
 
 def cmd_commit(args: argparse.Namespace) -> None:
@@ -925,8 +1030,19 @@ def build_parser() -> argparse.ArgumentParser:
     ready.add_argument("module_dir")
     ready.add_argument("--approved-source-hash", required=True)
     ready.add_argument("--checkpoint-commit", required=True)
+    ready.add_argument("--context-pack", required=True)
+    ready.add_argument("--target-path", action="append", required=True)
     ready.add_argument("--design-revision", type=int, default=1)
     ready.set_defaults(func=cmd_ready)
+
+    validate_ready = sub.add_parser("validate-ready", help="verify that an approved design is current")
+    validate_ready.add_argument("module_dir")
+    validate_ready.add_argument("--context-pack")
+    validate_ready.set_defaults(func=cmd_validate_ready)
+
+    check_dirty = sub.add_parser("check-dirty", help="block target-overlapping uncommitted changes")
+    check_dirty.add_argument("module_dir")
+    check_dirty.set_defaults(func=cmd_check_dirty)
 
     start = sub.add_parser("start", help="record the adaptive build contract before implementation")
     start.add_argument("module_dir")

@@ -24,7 +24,7 @@
 ## Host Mapping
 
 - `CLAUDE.md` 里写的「Claude Code」「Claude host」「驱动 Claude」，在 Codex 会话中等价理解为当前 Codex 主控。
-- `/pmai-*` 是 PMAI 的用户命令名。Codex skill 列表已暴露 `pmai-*` 时优先按该 skill 执行；Codex CLI 直输 slash 由 `~/.codex/prompts/pmai-*.md` 路由回对应 `SKILL.md`。如果当前 runtime 仍没有 slash / skill UI，再按本仓 `skills/<command-without-pmai-prefix>/SKILL.md` 的步骤执行。
+- `/pmai-*` 是 PMAI 的用户命令名。Codex 通过原生 skill 列表调用对应的 `$pmai-*`；不再生成 `~/.codex/prompts/pmai-*.md`，避免 Codex Desktop 出现重复的 `prompts:pmai-*` 入口。如果当前 runtime 没有 skill UI，再按本仓 `skills/<command-without-pmai-prefix>/SKILL.md` 的步骤执行。
 - 如果 skill 目录名本身带 `pmai-` 前缀，例如 `/pmai-upgrade`，对应 `skills/pmai-upgrade/SKILL.md`。
 - skill 内引用 `_shared/...` 时，从本仓 `skills/_shared/...` 读取。
 - 需要调用脚本时，优先用本仓 checkout 内的 `scripts/`、`bin/`、`hooks/`，不要默认改用已安装的 `~/.pmai/`。

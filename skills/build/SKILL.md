@@ -49,7 +49,8 @@ PM 的主体验是：开工前只确认一次工作环境和构建工具 → 看
 - `lifecycle_state=ready_to_build`；
 - `approved_source_hash`；
 - `design_revision`；
-- `design_checkpoint_commit`。
+- `design_checkpoint_commit`；
+- `approved_target.paths`。
 
 重新编译 context pack 并实际消费 active 决定、未决问题、相关页面/源码入口：
 
@@ -60,9 +61,20 @@ CONTEXT_PACK="$REPO_ROOT/.pm-workflow/context/<模块>.json"
 python3 "$PMAI_HOME/scripts/context-pack.py" \
   --repo-root "$REPO_ROOT" --module "$MODULE_DIR" \
   --goal "<本轮建造目标>" --output "$CONTEXT_PACK"
+
+READY_JSON=$(python3 "$PMAI_HOME/scripts/build-contract.py" validate-ready \
+  "$MODULE_DIR" --context-pack "$CONTEXT_PACK")
+TARGET_PATHS=()
+while IFS= read -r path; do
+  TARGET_PATHS+=("$path")
+done < <(python3 -c 'import json,sys; print(*json.load(sys.stdin)["target_paths"], sep="\n")' <<<"$READY_JSON")
+
+python3 "$PMAI_HOME/scripts/build-contract.py" check-dirty "$MODULE_DIR"
 ```
 
-如果还有会改变产品模型的未决问题，停止 build，返回 design。若规格已经闭合但旧项目没有 `ready_to_build` 记录，后台执行 design 的规格编译、范围提交和 `build-contract.py ready`，不弹“是否保存建造依据”。
+`validate-ready` 必须确认当前 source hash 与 design 批准依据一致，并取得 design 已固定的目标路径；不一致时停止 build，返回 design 重新核对。`check-dirty` 只阻断目标路径上已有的未提交改动，防止旧原型改动被默认带入或丢失；其它路径的用户改动继续保护，不要求清空整仓。给 PM 说明时翻译成受影响页面，不展示 hash 或内部文件清单。
+
+如果还有会改变产品模型的未决问题，停止 build，返回 design。若规格已经闭合但旧项目没有完整 `ready_to_build + approved_target` 记录，后台执行 design 的规格编译、目标路径固定、范围提交和 `build-contract.py ready`，不弹“是否保存建造依据”。
 
 ## 2. 读取 design 已确认的项目建造定义
 
@@ -83,7 +95,7 @@ done < <(python3 -c 'import json,sys; print(*json.load(sys.stdin)["implementatio
 - 旧消费仓仅由 `project-type.py` 兼容读取旧 config/marker；下一次 design 定稿时必须生成新文件；
 - 改变 type、framework 或 root 必须回 design 由 PM 明确确认并递增 revision。
 
-从模块建造依据取本轮实际目标路径 `TARGET_PATHS`。每一项都必须是仓内相对路径、位于 `implementation.root` 内；Web 页面目标还必须命中 `PROJECT_ENTRYPOINTS` 中的 Web 入口。不得用整仓 `.` 或从当前文件树猜一个替代路径。
+`TARGET_PATHS` 只取自上一步通过 currentness 校验的 design 批准范围。每一项都必须是仓内相对路径、位于 `implementation.root` 内，并命中 `PROJECT_ENTRYPOINTS` 中的实现入口。不得用整仓 `.`、context pack 搜索结果或当前文件树猜一个替代路径。
 
 根据项目类型、本轮目标路径、项目入口和风险后台生成默认验收档案：
 
@@ -381,6 +393,7 @@ python3 "$PMAI_HOME/scripts/build-contract.py" docs-fail \
 
 - prototype / product 共用同一生命周期，只切换目标和验收适配器。
 - 项目类型、技术栈、入口和真实运行命令由 `.pm-workflow/project.yml` 定义；build 只读，不按本轮需求猜，也不在开工确认卡重复展示。
+- build 开工前必须确认 design 依据仍有效，并严格复用 design 批准的目标路径；依据过期、范围缺失或目标路径有未提交改动时先停止处理，不创建工作环境。
 - 验收方案按项目类型和风险后台生成默认值；不让 PM 选择，也不在开工确认卡展示。
 - 新 build 开工前，AI 推荐工作环境和构建工具，PM 只确认这两项；调整后必须重显同一张确认卡。
 - PM 不需要理解 worktree、合同、hash、证据 JSON 或手动 close；构建工具只以名称、模型和思考档展示。

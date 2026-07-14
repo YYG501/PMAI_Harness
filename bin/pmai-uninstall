@@ -8,7 +8,7 @@
 #   ~/.claude/skills/_shared      (if it's a symlink we created)
 #   ~/.codex/skills/pmai-*        global Codex skill symlinks
 #   ~/.codex/skills/_shared       (if it's a symlink we created)
-#   ~/.codex/prompts/pmai-*.md    Codex CLI slash prompt files
+#   ~/.codex/prompts/pmai-*.md    legacy Codex slash prompt files（兼容清理）
 #   ~/.config/opencode/commands/pmai-*.md OpenCode slash command files
 #
 # What is NOT removed:
@@ -46,7 +46,7 @@ Removed:
   ~/.claude/skills/_shared (if pmai-managed symlink)
   ~/.codex/skills/pmai-*
   ~/.codex/skills/_shared  (if pmai-managed symlink)
-  ~/.codex/prompts/pmai-*.md
+  ~/.codex/prompts/pmai-*.md (legacy cleanup)
   ~/.config/opencode/commands/pmai-*.md
 EOF
 }
@@ -193,7 +193,7 @@ elif [ "$CODEX_SYMLINK_COUNT" -gt 10 ]; then
   done
   echo "      … (+$((CODEX_SYMLINK_COUNT - 5)) more)"
 fi
-echo "  ✓ $CODEX_PROMPTS/${SKILL_PREFIX}*.md ($CODEX_PROMPT_COUNT prompt files)"
+echo "  ✓ $CODEX_PROMPTS/${SKILL_PREFIX}*.md ($CODEX_PROMPT_COUNT legacy prompt files)"
 if [ "$CODEX_PROMPT_COUNT" -gt 0 ] && [ "$CODEX_PROMPT_COUNT" -le 10 ]; then
   for s in "${CODEX_PROMPT_FILES[@]}"; do
     echo "      - $(basename "$s")"
@@ -281,7 +281,7 @@ fi
 echo "   host skill symlinks removed ($REMOVED_COUNT total)"
 echo "     ~/.claude/skills/pmai-* ($CLAUDE_SYMLINK_COUNT)"
 echo "     ~/.codex/skills/pmai-*  ($CODEX_SYMLINK_COUNT)"
-echo "   Codex CLI slash prompts removed ($REMOVED_PROMPT_COUNT)"
+echo "   legacy Codex slash prompts removed ($REMOVED_PROMPT_COUNT)"
 echo "   OpenCode slash commands removed ($REMOVED_OPENCODE_COMMAND_COUNT)"
 echo "═══════════════════════════════════════"
 echo "Note: 项目里遗留的实体副本不动。"

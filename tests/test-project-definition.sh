@@ -104,6 +104,61 @@ test_redefinition_requires_explicit_flag_and_revision() {
   fi
 }
 
+test_identical_plan_is_a_noop() {
+  start_test "project-definition: identical construction plan keeps project.yml unchanged"
+  local t before after repeated
+  t=$(mktemp -d)
+  write_spec "$t"
+  write_definition "$t" product --decided-at "2026-07-14T00:00:00+00:00" >/dev/null || {
+    _fail "initial definition write failed"
+    rm -rf "$t"
+    return
+  }
+  before=$(cat "$t/.pm-workflow/project.yml")
+  printf '# Demo changed without a construction-plan change\n' > "$t/docs/modules/demo/spec.md"
+  repeated=$(write_definition "$t" product \
+    --allow-redefinition --design-revision 3 \
+    --decided-at "2026-07-14T01:00:00+00:00") || {
+      _fail "identical definition write should succeed as a no-op"
+      rm -rf "$t"
+      return
+    }
+  after=$(cat "$t/.pm-workflow/project.yml")
+  if [ "$before" = "$after" ] \
+     && python3 -c 'import json,sys; d=json.load(sys.stdin); assert d["definition"]["design_revision"]==1; assert d["definition"]["decided_at"]=="2026-07-14T00:00:00+00:00"' <<<"$repeated"; then
+    pass_test
+  else
+    _fail "same construction plan must preserve the complete project definition"
+  fi
+  rm -rf "$t"
+}
+
+test_any_plan_change_requires_explicit_redefinition() {
+  start_test "project-definition: any construction-plan change requires explicit redefinition"
+  local t blocked updated
+  t=$(mktemp -d)
+  write_spec "$t"
+  write_definition "$t" product >/dev/null || {
+    _fail "initial definition write failed"
+    rm -rf "$t"
+    return
+  }
+  write_definition "$t" product --test-command "pnpm test" >/dev/null 2>&1
+  blocked=$?
+  updated=$(write_definition "$t" product --test-command "pnpm test" --allow-redefinition) || {
+    _fail "explicit command-plan redefinition failed"
+    rm -rf "$t"
+    return
+  }
+  if [ "$blocked" != "0" ] \
+     && python3 -c 'import json,sys; d=json.load(sys.stdin); assert d["definition"]["design_revision"]==2; assert d["commands"]["test"]=="pnpm test"' <<<"$updated"; then
+    pass_test
+  else
+    _fail "all construction-plan changes must require approval and bump revision"
+  fi
+  rm -rf "$t"
+}
+
 test_commands_can_be_explicitly_empty() {
   start_test "project-definition: inapplicable commands may all be omitted"
   local t out
@@ -170,6 +225,8 @@ test_missing_definition_points_to_design() {
 test_valid_prototype_and_product
 test_paths_and_web_fail_closed
 test_redefinition_requires_explicit_flag_and_revision
+test_identical_plan_is_a_noop
+test_any_plan_change_requires_explicit_redefinition
 test_commands_can_be_explicitly_empty
 test_project_type_precedence_and_legacy
 test_missing_definition_points_to_design

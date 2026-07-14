@@ -37,15 +37,23 @@ MODULE_SOURCES = (
     (".work-meta.json", "work_state"),
 )
 QUESTION_MARKERS = ("待确认", "未决", "待回答", "TODO", "FIXME")
+QUESTION_RESOLVED_MARKERS = ("全部已确认", "本轮没有待确认", "本次工作无未决问题", "无待确认事项", "没有未决问题")
 SUPERSEDE_MARKERS = ("supersede", "superseded", "被取代", "已取代", "已废弃", "不再有效")
 GENERIC_HEADINGS = {
+    "已拍板决策",
+    "共同理由",
+    "否过的方案",
+    "待复核决策",
+    "规则清单",
     "参考材料",
     "变更日志",
+    "变更记录",
     "版本信息",
     "名词解释",
     "讨论记录",
     "未决问题",
 }
+SUPERSEDED_SECTION_HEADINGS = {"被取代的决定"}
 
 
 def now_iso() -> str:
@@ -129,6 +137,9 @@ def collect_sources(repo_root: Path, module_dir: Path | None, meta: dict) -> lis
         path = repo_root / rel
         if path.is_file():
             sources.append(Source(path, role))
+    project_definition = repo_root / ".pm-workflow" / "project.yml"
+    if project_definition.is_file():
+        sources.append(Source(project_definition, "project_definition"))
     if module_dir is not None:
         for name, role in MODULE_SOURCES:
             path = module_dir / name
@@ -156,6 +167,7 @@ def collect_sources(repo_root: Path, module_dir: Path | None, meta: dict) -> lis
 
 
 def split_markdown_sections(text: str) -> list[tuple[str, str]]:
+    text = re.sub(r"<!--.*?-->", "", text, flags=re.DOTALL)
     matches = list(re.finditer(r"^(#{2,4})\s+(.+?)\s*$", text, re.MULTILINE))
     sections: list[tuple[str, str]] = []
     for index, match in enumerate(matches):
@@ -169,6 +181,16 @@ def normalize_title(title: str) -> str:
     title = re.sub(r"^D\d+[.：:\s-]*", "", title, flags=re.IGNORECASE)
     title = re.sub(r"[`*_~]", "", title)
     return re.sub(r"\s+", "", title).lower()
+
+
+def heading_label(title: str) -> str:
+    value = re.sub(r"[`*_~]", "", title).strip()
+    return re.sub(r"^\d+[.、：:\s-]*", "", value).strip()
+
+
+def is_module_decision_heading(title: str) -> bool:
+    value = re.sub(r"[`*_~]", "", title).strip()
+    return re.match(r"^D\d+(?:[.、：:\s-]|$)", value, re.IGNORECASE) is not None
 
 
 def decision_status(title: str, body: str, role: str) -> str:
@@ -193,7 +215,13 @@ def parse_decisions(repo_root: Path, sources: Iterable[Source]) -> tuple[list[di
             sections = [(source.path.stem, text)]
         for title, body in sections:
             cleaned = normalize_title(title)
-            if not cleaned or title in GENERIC_HEADINGS or not body:
+            label = heading_label(title)
+            if not cleaned or label in GENERIC_HEADINGS or not body:
+                continue
+            if source.role == "module_decisions" and not is_module_decision_heading(title):
+                if label not in SUPERSEDED_SECTION_HEADINGS:
+                    continue
+            if source.role == "active_product_rules" and label == "规则清单":
                 continue
             item = {
                 "id": sha256_bytes(f"{source.path}:{title}".encode("utf-8"))[:12],
@@ -243,7 +271,12 @@ def unresolved_questions(repo_root: Path, module_dir: Path | None) -> list[dict]
         stripped = line.strip()
         if not stripped:
             continue
-        if stripped.endswith(("?", "？")) or any(marker in stripped for marker in QUESTION_MARKERS):
+        if any(marker in stripped for marker in QUESTION_RESOLVED_MARKERS):
+            continue
+        is_heading = re.match(r"^#{1,6}\s+", stripped) is not None
+        if stripped.endswith(("?", "？")) or (
+            not is_heading and any(marker in stripped for marker in QUESTION_MARKERS)
+        ):
             questions.append(
                 {
                     "source": repo_relative(repo_root, path),
@@ -337,7 +370,8 @@ def build_pack(args: argparse.Namespace) -> dict:
         repo_relative(repo_root, module_dir)
     meta = load_work_meta(module_dir)
     build = meta.get("build") if isinstance(meta.get("build"), dict) else {}
-    target = build.get("target") if isinstance(build.get("target"), dict) else {}
+    approved_target = meta.get("approved_target") if isinstance(meta.get("approved_target"), dict) else {}
+    target = build.get("target") if isinstance(build.get("target"), dict) else approved_target
     definition_path = repo_root / ".pm-workflow" / "project.yml"
     if definition_path.exists():
         try:
@@ -369,7 +403,7 @@ def build_pack(args: argparse.Namespace) -> dict:
         },
         "lifecycle_state": build.get("lifecycle_state") or meta.get("lifecycle_state") or "designing",
         "design_revision": int(build.get("design_revision") or meta.get("design_revision") or 1),
-        "approved_source_hash": build.get("approved_source_hash"),
+        "approved_source_hash": build.get("approved_source_hash") or meta.get("approved_source_hash"),
         "source_hash": source_hash,
         "source_hash_scope": hash_scope,
         "implementation_commit": build.get("implementation_commit") or git_output(repo_root, "rev-parse", "HEAD"),
@@ -395,6 +429,51 @@ def write_output(path: Path, payload: dict) -> None:
     tmp.replace(path)
 
 
+def ensure_context_cache_ignored(repo_root: Path, output_path: Path) -> None:
+    """Keep runtime context cache out of Git for both new and legacy consumers.
+
+    New projects already receive the tracked `.gitignore` rule.  Older projects
+    are repaired locally through `.git/info/exclude`, avoiding an unrelated
+    tracked-file edit during design.
+    """
+    cache_root = (repo_root / ".pm-workflow" / "context").resolve()
+    try:
+        output_path.expanduser().resolve().relative_to(cache_root)
+    except ValueError:
+        return
+
+    probe = ".pm-workflow/context/.pmai-ignore-probe"
+    ignored = subprocess.run(
+        ["git", "-C", str(repo_root), "check-ignore", "-q", "--", probe],
+        check=False,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+    if ignored.returncode == 0:
+        return
+
+    git_path = subprocess.run(
+        ["git", "-C", str(repo_root), "rev-parse", "--git-path", "info/exclude"],
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    if git_path.returncode != 0 or not git_path.stdout.strip():
+        return
+    exclude_path = Path(git_path.stdout.strip())
+    if not exclude_path.is_absolute():
+        exclude_path = repo_root / exclude_path
+    try:
+        exclude_path.parent.mkdir(parents=True, exist_ok=True)
+        existing = exclude_path.read_text(encoding="utf-8") if exclude_path.exists() else ""
+        rule = ".pm-workflow/context/"
+        if rule not in {line.strip() for line in existing.splitlines()}:
+            prefix = "" if not existing or existing.endswith("\n") else "\n"
+            exclude_path.write_text(existing + prefix + rule + "\n", encoding="utf-8")
+    except OSError as exc:
+        print(f"warning: 无法自动排除 context cache：{exc}", file=sys.stderr)
+
+
 def parser() -> argparse.ArgumentParser:
     result = argparse.ArgumentParser(description=__doc__)
     result.add_argument("--repo-root", default=".")
@@ -408,7 +487,10 @@ def main(argv: list[str] | None = None) -> int:
     args = parser().parse_args(argv)
     payload = build_pack(args)
     if args.output:
-        write_output(Path(args.output).expanduser(), payload)
+        repo_root = Path(args.repo_root).expanduser().resolve()
+        output_path = Path(args.output).expanduser()
+        ensure_context_cache_ignored(repo_root, output_path)
+        write_output(output_path, payload)
         print(args.output)
     else:
         json.dump(payload, sys.stdout, ensure_ascii=False, indent=2)

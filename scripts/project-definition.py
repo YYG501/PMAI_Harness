@@ -22,6 +22,17 @@ def definition_path(repo_root: Path) -> Path:
     return repo_root.expanduser().resolve() / ".pm-workflow" / "project.yml"
 
 
+def build_plan(data: dict[str, object]) -> dict[str, object]:
+    """Return only the durable construction plan, excluding decision metadata."""
+
+    return {
+        "project": data["project"],
+        "implementation": data["implementation"],
+        "commands": data["commands"],
+        "web": data["web"],
+    }
+
+
 def cmd_validate(args: argparse.Namespace) -> int:
     data = load_project_definition(definition_path(Path(args.repo_root)))
     print(json.dumps(data, ensure_ascii=False, indent=2))
@@ -42,29 +53,6 @@ def cmd_write(args: argparse.Namespace) -> int:
     if not source_path.is_file():
         raise ProjectDefinitionError(f"definition.source 不存在：{source_path}")
 
-    existing = load_project_definition(output) if output.exists() else None
-    revision = args.design_revision
-    if existing:
-        changed_identity = any(
-            (
-                existing["project"]["type"] != args.project_type,
-                existing["implementation"]["root"] != args.root,
-                existing["implementation"]["stack"]["framework"] != args.framework,
-            )
-        )
-        if changed_identity and not args.allow_redefinition:
-            raise ProjectDefinitionError(
-                "修改 project.type、implementation.root 或 framework 必须有 PM 明确确认，"
-                "并传 --allow-redefinition。"
-            )
-        minimum = existing["definition"]["design_revision"] + 1
-        if revision is None:
-            revision = minimum
-        if revision < minimum:
-            raise ProjectDefinitionError(f"design_revision 必须至少递增到 {minimum}。")
-    elif revision is None:
-        revision = 1
-
     commands = {
         key: value
         for key, value in {
@@ -84,15 +72,23 @@ def cmd_write(args: argparse.Namespace) -> int:
                 "ports": args.web_port,
             }
         )
+    existing = load_project_definition(output) if output.exists() else None
+    if existing:
+        initial_revision = existing["definition"]["design_revision"]
+        initial_decided_at = existing["definition"]["decided_at"]
+    else:
+        initial_revision = args.design_revision if args.design_revision is not None else 1
+        initial_decided_at = args.decided_at or datetime.now(timezone.utc).astimezone().isoformat(
+            timespec="seconds"
+        )
     data = validate_project_definition(
         {
             "schema_version": 1,
             "definition": {
                 "source": source_path.relative_to(repo_root).as_posix(),
                 "source_hash": source_sha256(source_path),
-                "design_revision": revision,
-                "decided_at": args.decided_at
-                or datetime.now(timezone.utc).astimezone().isoformat(timespec="seconds"),
+                "design_revision": initial_revision,
+                "decided_at": initial_decided_at,
             },
             "project": {"type": args.project_type},
             "implementation": {
@@ -109,6 +105,29 @@ def cmd_write(args: argparse.Namespace) -> int:
             "web": web,
         }
     )
+
+    if existing and build_plan(existing) == build_plan(data):
+        print(json.dumps(existing, ensure_ascii=False, indent=2))
+        return 0
+
+    if existing:
+        if not args.allow_redefinition:
+            raise ProjectDefinitionError(
+                "修改既有项目建造方案必须有 PM 明确确认，并传 --allow-redefinition。"
+            )
+        minimum = existing["definition"]["design_revision"] + 1
+        revision = args.design_revision if args.design_revision is not None else minimum
+        if revision < minimum:
+            raise ProjectDefinitionError(f"design_revision 必须至少递增到 {minimum}。")
+        data["definition"] = {
+            "source": source_path.relative_to(repo_root).as_posix(),
+            "source_hash": source_sha256(source_path),
+            "design_revision": revision,
+            "decided_at": args.decided_at
+            or datetime.now(timezone.utc).astimezone().isoformat(timespec="seconds"),
+        }
+        data = validate_project_definition(data)
+
     output.parent.mkdir(parents=True, exist_ok=True)
     temporary = output.with_name(f".{output.name}.tmp")
     temporary.write_text(render_project_definition(data), encoding="utf-8")

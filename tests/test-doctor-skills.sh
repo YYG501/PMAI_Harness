@@ -12,9 +12,9 @@
 #   T5: pmai-status --help 只打印帮助，不执行状态扫描
 #   T6: pmai-status 报告 stale 暴露入口，提示 upgrade 重同步
 #   T7: pmai-doctor 缺 Codex 暴露入口时失败
-#   T8: install / upgrade / uninstall 覆盖 Codex skill dir + Codex CLI prompts + OpenCode commands
+#   T8: install / upgrade / uninstall 覆盖 Codex skill dir + legacy prompt cleanup + OpenCode commands
 #   T9: pmai-doctor 可自愈 Codex 首次空暴露目录（兼容旧 upgrader）
-#   T10: pmai-doctor 可自愈 Codex CLI slash prompts
+#   T10: pmai-doctor 不再生成 Codex slash prompts
 #   T11: pmai-doctor 可自愈 OpenCode slash commands
 set -uo pipefail
 
@@ -56,7 +56,7 @@ setup_fake_global_install() {
   pmai_home="$tmp/pmai"
   fake_home="$tmp/home"
 
-  mkdir -p "$pmai_home/scripts" "$fake_home/.claude/skills" "$fake_home/.codex/skills" "$fake_home/.codex/prompts"
+  mkdir -p "$pmai_home/scripts" "$fake_home/.claude/skills" "$fake_home/.codex/skills"
   ln -s "$SKILLS_DIR" "$pmai_home/skills"
   ln -s "$REPO_ROOT/scripts/install-opencode-commands.sh" "$pmai_home/scripts/install-opencode-commands.sh"
   cp "$VERSION_FILE" "$pmai_home/VERSION"
@@ -67,7 +67,6 @@ setup_fake_global_install() {
     exposed=$(exposed_name_for_skill "$name")
     ln -s "$sk" "$fake_home/.claude/skills/$exposed"
     ln -s "$sk" "$fake_home/.codex/skills/$exposed"
-    printf -- "---\ndescription: fake %s\n---\n" "$exposed" > "$fake_home/.codex/prompts/$exposed.md"
   done < <(find "$SKILLS_DIR" -mindepth 1 -maxdepth 1 -type d ! -name _shared ! -name _internal | sort)
   ln -s "$SKILLS_DIR/_shared" "$fake_home/.claude/skills/_shared"
   ln -s "$SKILLS_DIR/_shared" "$fake_home/.codex/skills/_shared"
@@ -209,7 +208,7 @@ test_doctor_requires_codex_exposure() {
 }
 
 test_lifecycle_scripts_cover_codex_skills() {
-  start_test "T8: install / upgrade / uninstall 覆盖 Codex skill dir + Codex CLI prompts + OpenCode commands"
+  start_test "T8: install / upgrade / uninstall 覆盖 Codex skill dir + legacy prompt cleanup + OpenCode commands"
   local file
 
   for file in "$INSTALL" "$UPGRADE" "$UNINSTALL" "$DOCTOR" "$STATUS"; do
@@ -218,12 +217,22 @@ test_lifecycle_scripts_cover_codex_skills() {
       return
     fi
   done
-  for file in "$INSTALL" "$UPGRADE" "$UNINSTALL" "$DOCTOR" "$STATUS"; do
+  for file in "$INSTALL" "$UPGRADE" "$UNINSTALL"; do
     if ! grep -q "CODEX_PROMPTS" "$file"; then
-      _fail "$(basename "$file") 未声明 CODEX_PROMPTS，Codex CLI slash prompt 暴露会漂移"
+      _fail "$(basename "$file") 未声明 CODEX_PROMPTS，无法清理 legacy Codex prompts"
       return
     fi
   done
+  for file in "$DOCTOR" "$STATUS"; do
+    if grep -q "CODEX_PROMPTS" "$file"; then
+      _fail "$(basename "$file") 不应继续把 legacy Codex prompts 当成当前 host surface"
+      return
+    fi
+  done
+  if ! grep -q "remove_managed_codex_prompts" "$INSTALL" || ! grep -q "remove_managed_codex_prompts" "$UPGRADE"; then
+    _fail "install / upgrade 应清理 legacy Codex prompts"
+    return
+  fi
   for file in "$INSTALL" "$UPGRADE" "$UNINSTALL" "$DOCTOR" "$STATUS"; do
     if ! grep -q "OPENCODE_CONFIG_DIR" "$file"; then
       _fail "$(basename "$file") 未声明 OPENCODE_CONFIG_DIR，OpenCode command 暴露会漂移"
@@ -278,8 +287,8 @@ test_doctor_repairs_empty_codex_exposure() {
   pass_test
 }
 
-test_doctor_repairs_codex_prompts() {
-  start_test "T10: pmai-doctor 自愈 Codex CLI slash prompts"
+test_doctor_does_not_generate_codex_prompts() {
+  start_test "T10: pmai-doctor 不再生成 Codex slash prompts"
   local setup tmp pmai_home fake_home out rc
 
   setup=$(setup_fake_global_install)
@@ -291,38 +300,19 @@ test_doctor_repairs_codex_prompts() {
   rc=$?
 
   if [ "$rc" != "0" ]; then
-    _fail "Codex prompt 目录为空时 doctor 应自愈并通过"
+    _fail "Codex prompt 目录为空时 doctor 应忽略该目录并通过"
     echo "$out" >&2
     rm -rf "$tmp"
     return
   fi
-  if ! echo "$out" | grep -q "Codex CLI slash prompts repaired"; then
-    _fail "doctor 未报告 Codex prompt 自愈"
+  if echo "$out" | grep -q "Codex CLI slash prompts"; then
+    _fail "doctor 不应再报告 Codex prompt 状态"
     echo "$out" >&2
     rm -rf "$tmp"
     return
   fi
-  if [ ! -f "$fake_home/.codex/prompts/pmai-design.md" ]; then
-    _fail "doctor 未创建 Codex /pmai-design prompt"
-    echo "$out" >&2
-    rm -rf "$tmp"
-    return
-  fi
-  if ! grep -q "PMAI /pmai-design" "$fake_home/.codex/prompts/pmai-design.md"; then
-    _fail "生成的 /pmai-design prompt 内容不指向 PMAI workflow"
-    cat "$fake_home/.codex/prompts/pmai-design.md" >&2
-    rm -rf "$tmp"
-    return
-  fi
-  if ! grep -q "skill-preamble.sh" "$fake_home/.codex/prompts/pmai-design.md" \
-     || ! grep -q "PMAI_PROJECT_INITIALIZED: 0" "$fake_home/.codex/prompts/pmai-design.md"; then
-    _fail "生成的 /pmai-design prompt 缺未初始化项目护栏"
-    cat "$fake_home/.codex/prompts/pmai-design.md" >&2
-    rm -rf "$tmp"
-    return
-  fi
-  if [ -e "$fake_home/.codex/prompts/pmai-_internal.md" ]; then
-    _fail "doctor 不应把 skills/_internal 暴露成 Codex prompt"
+  if find "$fake_home/.codex/prompts" -maxdepth 1 -name 'pmai-*.md' -print -quit | grep -q .; then
+    _fail "doctor 不应创建任何 pmai-* Codex prompt"
     rm -rf "$tmp"
     return
   fi
@@ -394,7 +384,7 @@ test_status_reports_stale_exposed_skill
 test_doctor_requires_codex_exposure
 test_lifecycle_scripts_cover_codex_skills
 test_doctor_repairs_empty_codex_exposure
-test_doctor_repairs_codex_prompts
+test_doctor_does_not_generate_codex_prompts
 test_doctor_repairs_opencode_commands
 
 report_results "doctor-skills"

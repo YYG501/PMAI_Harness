@@ -268,7 +268,7 @@ test_build_skill_recommends_then_confirms_builder_profile() {
 test_build_skill_confirms_only_environment_and_tool_before_editing() {
   start_test "build skill: 建造依据后台固定，只确认工作环境和构建工具"
 
-  assert_file_contains "$BUILD_SKILL" "后台执行 design 的规格编译、范围提交" "dirty design context should be checkpointed automatically" || return
+  assert_file_contains "$BUILD_SKILL" "后台执行 design 的规格编译、目标路径固定、范围提交" "legacy design context should be checkpointed with an approved target" || return
   assert_file_contains "$BUILD_SKILL" "工作环境：<独立环境 | 继续当前独立环境 | 当前环境>" "confirmation card should expose work environment" || return
   assert_file_contains "$BUILD_SKILL" "构建工具：<工具名（model, thinking）>" "confirmation card should expose builder" || return
   assert_file_contains "$BUILD_SKILL" "卡片中禁止出现项目类型、验收方案" "confirmation card should hide project type and acceptance" || return

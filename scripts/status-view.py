@@ -29,6 +29,7 @@ from _lib.state import (  # noqa: E402
     get_timeline_state,
 )
 from _lib.project_definition import ProjectDefinitionError, load_project_definition  # noqa: E402
+from _lib.ready_contract import ready_currentness  # noqa: E402
 from _lib.stages import LIFECYCLE_NAMES, STAGE_NAMES, MAX_STAGE  # noqa: E402  ( F13 单一真相源)
 
 
@@ -181,10 +182,12 @@ def _work_display_name(work_view: dict) -> str:
     return work_view["work_dir"].name
 
 
-def _stage_status_text(stage: int, lifecycle: str = "") -> str:
+def _stage_status_text(stage: int, lifecycle: str = "", currentness: dict | None = None) -> str:
     if lifecycle == "designing":
         return "正在讨论并收敛建造依据。"
     if lifecycle == "ready_to_build":
+        if currentness and currentness.get("state") != "current":
+            return "设计依据有变化，需要重新确认后才能构建。"
         return "设计已定，可以开始构建。"
     if lifecycle == "building":
         return "正在构建指定对象。"
@@ -324,7 +327,7 @@ def render_narrative(state: dict, repo_root: Path) -> None:
         print(
             f"当前状态：有 1 个进行中的工作{dirty_suffix}\n\n"
             f"{prod_line}正在处理：{_work_display_name(work)}。\n"
-            f"状态：{_stage_status_text(int(stage or 0), lifecycle)}\n"
+            f"状态：{_stage_status_text(int(stage or 0), lifecycle, work.get('ready_currentness'))}\n"
             f"当前步骤：{stage_name}。\n"
             f"下一步：{suggest_next_action(work)}"
         )
@@ -348,7 +351,9 @@ def render_narrative(state: dict, repo_root: Path) -> None:
         stage_name = _progress_name(meta)
         print()
         print(f"{idx}. {_work_display_name(work)}")
-        print(f"   状态：{_stage_status_text(int(stage or 0), lifecycle)}")
+        print(
+            f"   状态：{_stage_status_text(int(stage or 0), lifecycle, work.get('ready_currentness'))}"
+        )
         print(f"   当前步骤：{stage_name}。")
         print(f"   下一步：{suggest_next_action(work)}")
     if dirty_lines:
@@ -430,6 +435,11 @@ def suggest_next_action(work_view: dict) -> str:
     stage = meta.get("stage", 0)
     lifecycle = _lifecycle(meta)
 
+    if lifecycle == "ready_to_build":
+        currentness = work_view.get("ready_currentness")
+        if currentness and currentness.get("state") != "current":
+            return "继续 /pmai-design，重新核对变化并固定本轮建造范围"
+
     lifecycle_actions = {
         "designing": "继续 /pmai-design，把产品问题讨论清楚",
         "ready_to_build": "继续 /pmai-build；框架会自动准备隔离环境和构建工具",
@@ -462,6 +472,19 @@ def suggest_next_action(work_view: dict) -> str:
         return "当前进度：收尾；继续当前工作对齐主线事实与正式文档"
 
     return "运行 /pmai-status 查看详情"
+
+
+def annotate_ready_currentness(state: dict, repo_root: Path) -> None:
+    """Attach one shared ready verdict without changing persisted state."""
+    for work_view in state.get("active_work", []):
+        meta = work_view.get("meta") or {}
+        if _lifecycle(meta) != "ready_to_build":
+            continue
+        work_view["ready_currentness"] = ready_currentness(
+            repo_root,
+            Path(work_view["work_dir"]),
+            meta,
+        )
 
 
 def render_quickfix_section(repo_root: Path) -> None:
@@ -683,6 +706,8 @@ def main() -> None:
     if args.banner_only:
         render_banner_only(state, repo_root, args.skill)
         return
+
+    annotate_ready_currentness(state, repo_root)
 
     if args.narrative:
         render_narrative(state, repo_root)

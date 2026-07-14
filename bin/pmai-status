@@ -12,7 +12,6 @@ set -uo pipefail
 PMAI_HOME="${PMAI_HOME:-$HOME/.pmai}"
 CLAUDE_SKILLS="$HOME/.claude/skills"
 CODEX_SKILLS="${CODEX_HOME:-$HOME/.codex}/skills"
-CODEX_PROMPTS="${CODEX_HOME:-$HOME/.codex}/prompts"
 OPENCODE_CONFIG_DIR="${OPENCODE_CONFIG_DIR:-$HOME/.config/opencode}"
 OPENCODE_COMMANDS="$OPENCODE_CONFIG_DIR/commands"
 SKILL_PREFIX="pmai-"
@@ -27,7 +26,6 @@ Usage:
 Shows global PMAI install state:
   - source location, version, branch, remote
   - skill exposure count and drift against current ~/.pmai/skills for Claude and Codex
-  - Codex CLI slash prompt count and drift against current ~/.pmai/skills
   - OpenCode slash command count and drift against current ~/.pmai/skills
   - local install note
 EOF
@@ -65,30 +63,8 @@ actual_exposed_skill_names() {
   done | sort -u
 }
 
-expected_codex_prompt_names() {
+expected_opencode_command_names() {
   expected_exposed_skill_names | sed 's/$/.md/' | sort -u
-}
-
-actual_codex_prompt_names() {
-  local prompt_dir="$1"
-  local s
-
-  for s in "$prompt_dir"/${SKILL_PREFIX}*.md; do
-    [ -e "$s" ] || continue
-    basename "$s"
-  done | sort -u
-}
-
-count_codex_prompts() {
-  local prompt_dir="$1"
-  local s count
-
-  count=0
-  for s in "$prompt_dir"/${SKILL_PREFIX}*.md; do
-    [ -e "$s" ] || continue
-    count=$((count + 1))
-  done
-  echo "$count"
 }
 
 actual_opencode_command_names() {
@@ -152,30 +128,6 @@ report_skill_exposure() {
   fi
 }
 
-report_codex_prompt_exposure() {
-  local prompt_dir="$1"
-  local display_path="$2"
-  local prompt_count stale_prompts missing_prompts
-
-  prompt_count=$(count_codex_prompts "$prompt_dir")
-
-  if [ "$INSTALLED" = "0" ]; then
-    echo "  Codex CLI (${display_path}/${SKILL_PREFIX}*.md):  $prompt_count prompt files"
-    return
-  fi
-
-  echo "  Codex CLI (${display_path}/${SKILL_PREFIX}*.md):  $prompt_count prompt files"
-  stale_prompts=$(comm -23 <(actual_codex_prompt_names "$prompt_dir") <(expected_codex_prompt_names) || true)
-  missing_prompts=$(comm -13 <(actual_codex_prompt_names "$prompt_dir") <(expected_codex_prompt_names) || true)
-  if [ -z "$stale_prompts" ] && [ -z "$missing_prompts" ]; then
-    echo "  Codex CLI prompt drift:                    ✅ matches current skills"
-  else
-    echo "  Codex CLI prompt drift:                    ⚠️  stale/missing entries (run: pmai upgrade)"
-    [ -n "$stale_prompts" ] && echo "    stale:  $(echo "$stale_prompts" | tr '\n' ' ')"
-    [ -n "$missing_prompts" ] && echo "    missing: $(echo "$missing_prompts" | tr '\n' ' ')"
-  fi
-}
-
 report_opencode_command_exposure() {
   local command_dir="$1"
   local display_path="$2"
@@ -196,8 +148,8 @@ report_opencode_command_exposure() {
   fi
 
   echo "  OpenCode (${display_path}/${SKILL_PREFIX}*.md):  $command_count command files"
-  stale_commands=$(comm -23 <(actual_opencode_command_names "$command_dir") <(expected_codex_prompt_names) || true)
-  missing_commands=$(comm -13 <(actual_opencode_command_names "$command_dir") <(expected_codex_prompt_names) || true)
+  stale_commands=$(comm -23 <(actual_opencode_command_names "$command_dir") <(expected_opencode_command_names) || true)
+  missing_commands=$(comm -13 <(actual_opencode_command_names "$command_dir") <(expected_opencode_command_names) || true)
   if [ -z "$stale_commands" ] && [ -z "$missing_commands" ]; then
     echo "  OpenCode command drift:                    ✅ matches current skills"
   else
@@ -262,9 +214,6 @@ echo "─── Skill exposure ───"
 report_skill_exposure "Claude Code" "$CLAUDE_SKILLS" "~/.claude/skills"
 echo ""
 report_skill_exposure "Codex" "$CODEX_SKILLS" "~/.codex/skills"
-echo ""
-echo "─── Codex CLI slash prompts ───"
-report_codex_prompt_exposure "$CODEX_PROMPTS" "~/.codex/prompts"
 echo ""
 echo "─── OpenCode slash commands ───"
 report_opencode_command_exposure "$OPENCODE_COMMANDS" "~/.config/opencode/commands"
