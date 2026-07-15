@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+# User-level PMAI personal experience controls.
+set -euo pipefail
+
+BIN_DIR="$(cd "$(dirname "$0")" && pwd)"
+PMAI_HOME="${PMAI_HOME:-$(cd "$BIN_DIR/.." && pwd)}"
+
+exec python3 "$PMAI_HOME/scripts/personal-memory.py" "$@"

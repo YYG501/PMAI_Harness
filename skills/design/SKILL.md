@@ -22,6 +22,7 @@ python3 "$PMAI_HOME/scripts/status-view.py" --banner-only --skill DESIGN || true
 
 - `references/design-method.md`
 - `skills/_shared/context-reconstruction.md`
+- `skills/_shared/personal-memory.md`
 - `skills/_shared/decision-policy.md`
 - `skills/_shared/consistency-scan.md`
 - `skills/_shared/pm-view/attachments-upload.md`
@@ -85,7 +86,19 @@ python3 "$PMAI_HOME/scripts/context-pack.py" \
 
 先主动告诉 PM 与本轮最相关的 1–3 条旧决定及其影响。已有答案不重复问；问句、猜测和讨论草稿不当决定。
 
-每次重新进入、续跑、切换主模块，或权威文件在会话中发生变化后，都要在提出第一个新产品问题前重新运行上面的编译步骤并实际消费结果，不得沿用旧会话摘要。进场时同时记录 `.pm-workflow/project.yml` 是否存在及其文件 hash，供收口时确认本轮是否误改项目建造定义。
+context pack 实际消费完成后，按 `personal-memory.md` 单独召回个人经验：
+
+```bash
+python3 "$PMAI_HOME/scripts/personal-memory.py" recall \
+  --context-pack "$CONTEXT_PACK" \
+  --query "<本轮目标与当前用户反馈>" \
+  --limit 3 \
+  --format markdown
+```
+
+个人经验只作后台检查，不展示成项目事实，不直接变成 PM 问题，也不参与 `source_hash`。数据库不存在、无相关经验或召回失败时继续 design，不能把用户级经验变成新阻塞。与当前项目决定、当前 Skill 或 PM 明确方向冲突的提醒直接丢弃。
+
+每次重新进入、续跑、切换主模块，或权威文件在会话中发生变化后，都要在提出第一个新产品问题前重新运行上面的编译步骤、实际消费结果并重新召回相关个人经验，不得沿用旧会话摘要。进场时同时记录 `.pm-workflow/project.yml` 是否存在及其文件 hash，供收口时确认本轮是否误改项目建造定义。
 
 ### 2. 按未知项讨论，不跑固定问题清单
 
@@ -125,6 +138,14 @@ AI 在后台依次检查下面八个面，但只询问会改变产品模型的�
 禁止把“是否调 meta / mockup / spec-writing”“是否保存建造依据”变成 PM 问题。
 
 新决定必须能回锚到 PM 明确回答或 PM 接受 AI 推荐的证据。推翻旧决定时在 `decisions.md` 明确写被哪条新决定取代；`spec.md` 只写当前有效的最终目标，不记录讨论过程或实现进度。
+
+PM 的高信号纠偏已经闭合后，按 `personal-memory.md` 在后台归位并记录，不新增确认题：
+
+- 只影响当前模块或项目的事实与偏好，回到现有项目真相源，不写个人经验；
+- 跨项目仍成立、且当前 Skill 没有明确覆盖的判断经验，调用 `personal-memory.py capture --stdin` 创建或更新个人经验；
+- 当前 Skill 已明确覆盖但本次没有执行，只记录 `disposition=execution_gap` 的精简证据，不制造重复经验；
+- 未闭合争论、普通产品选择、项目名和具体页面事实不记录；
+- 个人经验不能自动改 `SKILL.md`，框架变化仍由 PM 明确触发 `/pmai-skill-improve`。
 
 ### 4. 按需自动进入 meta，再返回 design
 
@@ -292,6 +313,7 @@ git -C "$REPO_ROOT" commit -m "design(<模块>): mark ready to build"
 ## Rules
 
 - 先恢复上下文，再问问题；已有决定不让 PM 重复交代。
+- context pack 之后单独召回最多 3 条个人经验；个人经验不参与项目权威 hash，失败时不阻塞。
 - 只围绕实际未知项推进，不跑固定六问或固定停顿点。
 - PM 第一次说“不合理 / 感觉不对”就回根因，并自动调用 meta。
 - meta、mockup、spec-writing 是 design 的内部能力；完成后返回同一主线。
@@ -304,3 +326,4 @@ git -C "$REPO_ROOT" commit -m "design(<模块>): mark ready to build"
 - 一轮 design 只留下一个明确 build 入口；跨模块影响要么纳入主模块规格，要么成为有独立状态的后续 design 工作。
 - 全程不改主原型或真实产品代码；实现进入 `/pmai-build`。
 - 给 PM 的话使用业务语言，不出现 context pack、hash、revision、worktree、执行器或证据 JSON。
+- PM 高信号纠偏闭合后自动归位：项目事实回项目真相源，跨项目经验进用户级个人记忆，已有规则未执行只留执行失败证据。

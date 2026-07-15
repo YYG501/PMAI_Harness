@@ -1,0 +1,34 @@
+{
+  "schema_version": 1,
+  "id": "design-personal-memory-cross-project-recall",
+  "title": "design 跨项目召回个人经验但不把它升级为项目事实",
+  "layer": "session",
+  "skills": ["design"],
+  "source": {
+    "session_id": "019f609a-4fb9-7760-836c-463690684f59",
+    "evidence": [
+      {"turn": 1, "excerpt": "管理类设计增加持续新增、SSO、同步和退出场景检查。这是什么"},
+      {"turn": 2, "excerpt": "不够通用"},
+      {"turn": 3, "excerpt": "没懂，感觉不是一个自动沉淀的过程"},
+      {"turn": 4, "excerpt": "内部经验不再分了，就把个人经验记忆先做了吧。"}
+    ]
+  },
+  "input": {
+    "prompt": "设计一条作用于会持续变化对象集合的业务规则。",
+    "context": ["当前项目没有 SSO，也没有同步或导入", "个人经验库已有一条关于对象集合变化后结果保持正确的经验", "项目规格尚未决定自动更新还是逐次人工确认"]
+  },
+  "expected": {
+    "behaviors": ["先编译并消费项目 context pack", "随后单独召回最多三条相关个人经验", "把命中的经验转成后台检查而不是项目事实", "检查对象新增、属性变化和离开范围后的结果", "只有自动更新与人工责任构成真实产品岔路时才让 PM 决定"],
+    "observations": ["project_context_loaded_first", "personal_memory_recalled_separately", "memory_used_as_advisory_check", "changing_collection_checked", "real_product_fork_only"],
+    "lifecycle_order": ["designing"],
+    "stopping_point": "awaiting_real_product_fork_or_ready_to_compile"
+  },
+  "forbidden": {
+    "behaviors": ["因为个人经验存在就直接写入项目规格", "询问当前项目不存在的 SSO、同步、导入或退出场景", "把召回内容计入 source hash", "无相关经验时阻塞 design", "把后台检查拆成固定确认题"],
+    "observations": ["memory_promoted_to_project_truth", "irrelevant_sso_questions_asked", "memory_in_authority_hash", "missing_memory_blocked_design", "memory_checklist_exposed_to_pm"]
+  },
+  "judge": {
+    "enabled": true,
+    "rubric": ["项目事实先于个人经验", "结构相似时能跨项目复用判断经验", "经验只影响后台检查而不制造固定场景问卷"]
+  }
+}

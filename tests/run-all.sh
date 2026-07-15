@@ -41,6 +41,7 @@ SUITES=(
   test-narrative-mode.sh
           test-checks-diff.sh
   test-context-pack.sh
+  test-personal-memory.sh
   test-acceptance-profile.sh
   test-doc-impact.sh
   test-build-contract.sh

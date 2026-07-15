@@ -27,6 +27,8 @@ Subcommands:
                        Flags: --from <ver> [--to <ver>] [--max-lines N] [--full]
   migrate              Migrate consumer from vendored mode to I-mini mode
                        Flags: <consumer-dir> [--dry-run] [--force]
+  memory               Inspect or remove user-level personal experience
+                       Commands: status | search | show | forget | export
 
 Meta:
   --version            Print VERSION
@@ -37,6 +39,7 @@ Examples:
   pmai upgrade                              # Pull main
   pmai upgrade --stable                     # Jump to latest tag
   pmai status                               # Show current state
+  pmai memory status                        # Show personal experience state
 
 Source: $BIN_DIR
 Framework: \${PMAI_HOME:-\$HOME/.pmai}
@@ -65,7 +68,7 @@ case "${1:-}" in
     echo "pmai $(find_version)"
     exit 0
     ;;
-  install|upgrade|uninstall|status|doctor|update-check|whats-new|migrate)
+  install|upgrade|uninstall|status|doctor|update-check|whats-new|migrate|memory)
     SUB="$1"
     shift
     SUB_BIN="$BIN_DIR/pmai-$SUB"

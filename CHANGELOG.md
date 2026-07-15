@@ -18,7 +18,9 @@ PM-AI-Workflow 生成器仓的演进记录。本文件**只记影响下游业务
 
 ## 未发布
 
-- `fix(design)`: **跨日恢复时刷新执行规则，并把持续运营成本纳入设计硬检查。** 第三次真实消费仓复盘发现，同一 design 会话从 7 月 8 日延续到 7 月 14 日并切换模型后，只刷新了对话上下文，没有重读已经升级的 skill，因而继续沿用旧版“一步一停”；第一版又只验证首位成员建立，没有走通管理员持续新增成员和 SSO 用户持续首次进入。现在跨日、主控切换、会话压缩恢复或安装版本可能变化时，必须重新读取当前 design skill 和必读规则；管理、授权、成员和配置类方案必须检查首次建立、持续新增、自动来源和属性变化，逐人重复操作默认视为危险信号。同时修复 context reconstruction 残留退役 `--target`、新模块 `designing` 不建目录、已确认标题误报未决、非决定章节混入 active decision 四项漂移，并以真实会话 eval 和确定性测试固化。
+- `feat(memory+design)`: **新增用户级个人经验记忆，并把 SSO 场景清单从通用 design 规则迁出。** 项目事实、决定和偏好继续留在消费仓现有真相源；跨项目仍成立的高信号纠偏在闭合后写入 `${PMAI_STATE_HOME:-$HOME/.pmai-state}/personal-memory.sqlite3`，后续 design 在确定性 context pack 之后单独召回最多 3 条，只作后台检查，不参与 `source_hash`，缺库或失败时继续运行。重复证据会合并增权，明确“以后都这样”直接高权重生效，错误经验可降权、取代或遗忘；`pmai memory status/search/show/forget/export` 提供旁路控制。此前写入 design 的“持续新增、SSO / 导入 / 同步、属性变化与退出”固定清单已删除；其背后的集合变化经验只迁入当前用户存储，不作为新用户默认 seed。
+
+- `fix(design)`: **跨日恢复时刷新执行规则，并修复第三次消费仓复盘暴露的辅助漂移。** 同一 design 会话跨日、切换主控、会话压缩恢复或安装版本可能变化时，必须重新读取当前 design skill 和必读规则，不能继续沿用旧消息中的快照。同时修复 context reconstruction 残留退役 `--target`、新模块 `designing` 不建目录、已确认标题误报未决、非决定章节混入 active decision 四项漂移，并以真实会话 eval 和确定性测试固化。第三次复盘中的 SSO / 持续运营经验已按上条归入用户级个人经验，不再作为通用设计硬检查。
 
 - `fix(design+build)`: **把可建造状态升级为可验证的依据与目标范围合同。** 第二次真实消费仓复盘发现，权限规格已经更新但模块没有重新建立正式 design 状态，旧 Product Manifest 仍显示“可以构建”；同时 build 要求精确目标路径，design 的 ready 记录却只存 hash / revision / checkpoint，导致执行器只能临时猜页面。现在 design 在 ready 时必须同时提交最新 context pack 和精确 `approved_target.paths`；build 开工前重新编译上下文，通过共享 currentness 校验确认 source hash 未变化，并只能复用 design 批准路径；status 使用同一结论，过期 ready 改为引导回 design。目标路径已有未提交改动时在创建环境前阻断，无关 WIP 继续保护。context pack 对缺少新 `.gitignore` 规则的旧消费仓自动写入 Git 本地 exclude，不再制造未跟踪缓存。
 

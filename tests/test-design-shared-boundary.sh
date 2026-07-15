@@ -9,7 +9,7 @@
 #   T5: design 直接读取提问规则并执行决策总量 / 业务转译门
 #   T6: 跨模块设计只留下一个明确 build 入口，并复用未变化的 project.yml
 #   T7: ready 同时固定 current source 与目标路径，build 不临时猜范围
-#   T8: 长会话重读当前 skill，管理类设计检查持续运营与重复成本
+#   T8: 长会话重读当前 skill，个人经验独立召回且不写死 SSO 场景
 set -uo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -134,10 +134,11 @@ test_design_ready_handoff_is_documented() {
   pass_test
 }
 
-test_design_long_session_and_operations_are_documented() {
-  start_test "T8: design 长会话规则新鲜度与持续运营检查已文档化"
+test_design_long_session_and_personal_memory_are_documented() {
+  start_test "T8: design 长会话规则新鲜度与个人经验边界已文档化"
   local skill="$REPO_ROOT/skills/design/SKILL.md"
   local method="$REPO_ROOT/skills/design/references/design-method.md"
+  local memory="$REPO_ROOT/skills/_shared/personal-memory.md"
 
   if ! grep -q "跨日继续、模型或主控切换、会话压缩后恢复" "$skill" \
      || ! grep -q "不能继续使用更早消息中注入的 skill 快照" "$skill" \
@@ -145,11 +146,15 @@ test_design_long_session_and_operations_are_documented() {
     _fail "design SKILL 缺长会话重读当前规则的硬门"
     return
   fi
-  if ! grep -q "持续运营与重复成本" "$method" \
-     || ! grep -q "后续对象、成员持续新增" "$method" \
-     || ! grep -q "逐人重复操作" "$method" \
-     || ! grep -q "不把四种场景机械变成四道确认题" "$method"; then
-    _fail "design-method.md 缺持续运营、自动来源或防机械提问检查"
+  if ! grep -q "skills/_shared/personal-memory.md" "$skill" \
+     || ! grep -q 'personal-memory.py" recall' "$skill" \
+     || ! grep -q "不参与.*source_hash\|不参与.*项目权威 hash" "$skill" \
+     || ! grep -q "当前 Skill 已经明确覆盖" "$memory"; then
+    _fail "design 缺个人经验召回、权威隔离或重复规则归位边界"
+    return
+  fi
+  if grep -qE "持续运营与重复成本|后续对象、成员持续新增|SSO、导入、同步|逐人重复操作" "$method"; then
+    _fail "design-method.md 仍把 SSO / 持续运营具体场景写成所有用户的固定规则"
     return
   fi
   pass_test
@@ -206,6 +211,6 @@ test_design_driver_kernel_is_documented
 test_design_question_convergence_is_documented
 test_design_cross_module_close_is_documented
 test_design_ready_handoff_is_documented
-test_design_long_session_and_operations_are_documented
+test_design_long_session_and_personal_memory_are_documented
 
 report_results "design-shared-boundary"
