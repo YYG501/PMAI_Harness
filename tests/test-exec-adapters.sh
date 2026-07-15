@@ -15,6 +15,8 @@ CONFIG_TMPL="$FRAMEWORK_ROOT/templates/pm-workflow.config.yml.tmpl"
 BUILDER_PROFILE="$FRAMEWORK_ROOT/scripts/builder-profile.py"
 PROJECT_DEFINITION="$FRAMEWORK_ROOT/scripts/project-definition.py"
 PROJECT_DEFINITION_LIB="$FRAMEWORK_ROOT/scripts/_lib/project_definition.py"
+BUILD_CONTRACT="$FRAMEWORK_ROOT/scripts/build-contract.py"
+SETTINGS_TMPL="$FRAMEWORK_ROOT/templates/settings.json.tmpl"
 
 _setup_fake_executor() {
   T=$(mktemp -d)
@@ -49,21 +51,23 @@ EOF
 }
 
 test_adapter_files_are_executable() {
-  start_test "adapter inventory: claude-code/codex/cursor/gemini/opencode/manual 都可执行"
+  start_test "adapter inventory: claude-code/codex/cursor/opencode/manual 可执行且 Gemini 已移除"
 
-  for adapter in claude-code codex cursor-agent gemini opencode manual; do
+  for adapter in claude-code codex cursor-agent opencode manual; do
     if [ ! -x "$ADAPTER_DIR/$adapter.sh" ]; then
       _fail "$adapter.sh 不存在或不可执行"
       return
     fi
   done
+  assert_file_missing "$ADAPTER_DIR/gemini.sh" "Gemini CLI adapter should be removed" || return
   pass_test
 }
 
 test_builder_profile_helper_resolves_pm_choice() {
   start_test "builder-profile: PM 视图只露工具名（model, thinking），resolve 输出 snapshot"
 
-  if ! python3 "$BUILDER_PROFILE" list "$CONFIG_TMPL" >/tmp/builder-profile.$$ 2>/tmp/builder-profile.err.$$; then
+  if ! python3 "$BUILDER_PROFILE" list "$CONFIG_TMPL" --current-host claude-code \
+      >/tmp/builder-profile.$$ 2>/tmp/builder-profile.err.$$; then
     _fail "builder-profile list should succeed"
     cat /tmp/builder-profile.err.$$ >&2
     rm -f /tmp/builder-profile.$$ /tmp/builder-profile.err.$$
@@ -75,11 +79,17 @@ test_builder_profile_helper_resolves_pm_choice() {
   assert_file_contains /tmp/builder-profile.$$ "OpenCode（deepseek-v4-flash, max）" "OpenCode display should use display_model" || {
     rm -f /tmp/builder-profile.$$ /tmp/builder-profile.err.$$; return;
   }
+  if grep -q "Claude Code" /tmp/builder-profile.$$; then
+    _fail "builder list should exclude the current Claude Code host"
+    rm -f /tmp/builder-profile.$$ /tmp/builder-profile.err.$$
+    return
+  fi
 
   if ! python3 "$BUILDER_PROFILE" resolve "$CONFIG_TMPL" \
     --profile opencode \
     --model gpt-5.4 \
-    --thinking max >/tmp/builder-profile.$$ 2>/tmp/builder-profile.err.$$; then
+    --thinking max \
+    --current-host codex >/tmp/builder-profile.$$ 2>/tmp/builder-profile.err.$$; then
     _fail "builder-profile resolve should succeed"
     cat /tmp/builder-profile.err.$$ >&2
     rm -f /tmp/builder-profile.$$ /tmp/builder-profile.err.$$
@@ -102,6 +112,17 @@ PY
     return
   }
 
+  if python3 "$BUILDER_PROFILE" resolve "$CONFIG_TMPL" \
+      --profile codex --current-host codex \
+      >/tmp/builder-profile.$$ 2>/tmp/builder-profile.err.$$; then
+    _fail "resolve should reject a builder matching the current host"
+    rm -f /tmp/builder-profile.$$ /tmp/builder-profile.err.$$
+    return
+  fi
+  assert_file_contains /tmp/builder-profile.err.$$ "构建工具不能与当前主控相同" "resolve should explain the host conflict" || {
+    rm -f /tmp/builder-profile.$$ /tmp/builder-profile.err.$$; return;
+  }
+
   rm -f /tmp/builder-profile.$$ /tmp/builder-profile.err.$$
   pass_test
 }
@@ -110,6 +131,7 @@ test_builder_profile_recommends_target_and_handles_legacy_missing_config() {
   start_test "builder-profile: recommend uses target preference and missing config falls back to native"
   _setup_fake_executor
   _install_fake_command codex
+  _install_fake_command claude
   local config="$T/config.yml"
   cat > "$config" <<'YAML'
 builder:
@@ -137,34 +159,131 @@ YAML
     --language typescript --runtime node --framework nextjs --package-manager pnpm \
     --build-command "pnpm run build" >/dev/null
   PATH="$FAKE_BIN:/usr/bin:/bin" "$python_bin" "$BUILDER_PROFILE" recommend "$config" \
-    --project-definition "$T/project/.pm-workflow/project.yml" > /tmp/builder-profile.$$
+    --project-definition "$T/project/.pm-workflow/project.yml" \
+    --current-host codex > /tmp/builder-profile.$$
   python3 - /tmp/builder-profile.$$ <<'PY' || {
 import json, sys
 data = json.load(open(sys.argv[1]))
-assert data["builder_profile"] == "codex"
-assert data["executor"] == "codex"
-assert data["builder"]["model"] == "gpt-test"
+assert data["builder_profile"] == "claude-code"
+assert data["executor"] == "claude-code"
+assert "当前主控 codex 相同" in data["selection_reason"]
 PY
-    _fail "recommend should select the available product profile"
+    _fail "recommend should exclude the current Codex host and select Claude Code"
     rm -f /tmp/builder-profile.$$; _teardown_fake_executor; return
   }
+  PATH="$FAKE_BIN:/usr/bin:/bin" "$python_bin" "$BUILDER_PROFILE" list "$config" \
+    --available-only --current-host codex > /tmp/builder-profile-list.$$
+  python3 - /tmp/builder-profile-list.$$ <<'PY' || {
+import json, sys
+data = json.load(open(sys.argv[1]))
+assert data["current_host"] == "codex"
+assert [item["executor"] for item in data["profiles"]] == ["claude-code"]
+PY
+    _fail "available list should expose all usable external tools except the current host"
+    rm -f /tmp/builder-profile.$$ /tmp/builder-profile-list.$$; _teardown_fake_executor; return
+  }
+  rm -f /tmp/builder-profile-list.$$
+  local self_only_config="$T/self-only.yml"
+  cat > "$self_only_config" <<'YAML'
+builder:
+  default_profile: codex
+  product_profile: codex
+  profiles:
+    codex:
+      label: Codex
+      executor: codex
+      model: gpt-test
+      thinking: high
+YAML
+  PATH="$FAKE_BIN:/usr/bin:/bin" "$python_bin" "$BUILDER_PROFILE" list "$self_only_config" \
+    --available-only --current-host codex > /tmp/builder-profile-list.$$
+  python3 - /tmp/builder-profile-list.$$ <<'PY' || {
+import json, sys
+data = json.load(open(sys.argv[1]))
+assert len(data["profiles"]) == 1
+assert data["profiles"][0]["executor"] == "native"
+assert data["profiles"][0]["display"] == "当前会话直接构建"
+assert data["profiles"][0]["fallback"] is True
+PY
+    _fail "current-session build should appear only when no external tool remains"
+    rm -f /tmp/builder-profile.$$ /tmp/builder-profile-list.$$; _teardown_fake_executor; return
+  }
+  rm -f /tmp/builder-profile-list.$$
   rm -f "$T/project/.pm-workflow/project.yml"
   "$python_bin" "$PROJECT_DEFINITION" write "$T/project" \
     --source docs/modules/demo/spec.md --type prototype --root . --entrypoint app/ \
     --language typescript --runtime node --framework nextjs --package-manager pnpm \
     --build-command "pnpm run build" >/dev/null
   "$python_bin" "$BUILDER_PROFILE" recommend "$T/missing.yml" \
-    --project-definition "$T/project/.pm-workflow/project.yml" > /tmp/builder-profile.$$
+    --project-definition "$T/project/.pm-workflow/project.yml" \
+    --current-host codex > /tmp/builder-profile.$$
   python3 - /tmp/builder-profile.$$ <<'PY' || {
 import json, sys
 data = json.load(open(sys.argv[1]))
 assert data["builder_profile"] == "native"
 assert data["executor"] == "native"
+assert data["display"] == "当前会话直接构建"
 PY
     _fail "missing legacy config should fall back to native"
     rm -f /tmp/builder-profile.$$; _teardown_fake_executor; return
   }
+  "$python_bin" "$BUILDER_PROFILE" list "$T/missing.yml" \
+    --available-only --current-host codex > /tmp/builder-profile-list.$$
+  python3 - /tmp/builder-profile-list.$$ <<'PY' || {
+import json, sys
+data = json.load(open(sys.argv[1]))
+assert data["default_profile"] == ""
+assert data["profiles"][0]["executor"] == "native"
+assert data["profiles"][0]["fallback"] is True
+PY
+    _fail "missing legacy config should still render a native-only option list"
+    rm -f /tmp/builder-profile.$$ /tmp/builder-profile-list.$$; _teardown_fake_executor; return
+  }
+  "$python_bin" "$BUILDER_PROFILE" resolve "$T/missing.yml" \
+    --profile native --current-host codex > /tmp/builder-profile-native.$$
+  python3 - /tmp/builder-profile-native.$$ <<'PY' || {
+import json, sys
+data = json.load(open(sys.argv[1]))
+assert data["builder_profile"] == "native"
+assert data["display"] == "当前会话直接构建"
+PY
+    _fail "native fallback should resolve without a legacy config file"
+    rm -f /tmp/builder-profile.$$ /tmp/builder-profile-list.$$ /tmp/builder-profile-native.$$; _teardown_fake_executor; return
+  }
+  rm -f /tmp/builder-profile-list.$$ /tmp/builder-profile-native.$$
   rm -f /tmp/builder-profile.$$
+  _teardown_fake_executor
+  pass_test
+}
+
+test_builder_profile_rejects_removed_executor() {
+  start_test "builder-profile: 旧配置也不能重新选择已移除的 Gemini CLI"
+  _setup_fake_executor
+  local config="$T/config.yml"
+  cat > "$config" <<'YAML'
+builder:
+  default_profile: gemini
+  profiles:
+    gemini:
+      label: Gemini CLI
+      executor: gemini
+      model: gemini-3.1-pro
+      thinking: high
+YAML
+  if python3 "$BUILDER_PROFILE" resolve "$config" \
+      --profile gemini --current-host codex \
+      >/tmp/builder-profile.$$ 2>/tmp/builder-profile.err.$$; then
+    _fail "removed Gemini CLI profile should not resolve"
+    rm -f /tmp/builder-profile.$$ /tmp/builder-profile.err.$$
+    _teardown_fake_executor
+    return
+  fi
+  assert_file_contains /tmp/builder-profile.err.$$ "不受支持的 executor: gemini" "removed executor should fail closed" || {
+    rm -f /tmp/builder-profile.$$ /tmp/builder-profile.err.$$
+    _teardown_fake_executor
+    return
+  }
+  rm -f /tmp/builder-profile.$$ /tmp/builder-profile.err.$$
   _teardown_fake_executor
   pass_test
 }
@@ -201,31 +320,6 @@ test_claude_code_adapter_invokes_print_mode() {
   pass_test
 }
 
-test_gemini_adapter_invokes_yolo_prompt_mode() {
-  start_test "gemini adapter: 用 gemini --yolo --prompt 执行并传 model"
-
-  _setup_fake_executor
-  _install_fake_command gemini
-  BUILD_DIR="$BUILD_DIR" PROMPT_FILE="$PROMPT_FILE" EXECUTOR_MODEL="gemini-3.1-pro" \
-    PATH="$FAKE_BIN:$PATH" bash "$ADAPTER_DIR/gemini.sh" >/tmp/exec-adapter.$$ 2>&1
-  local rc=$?
-  if [ "$rc" -ne 0 ]; then
-    _fail "adapter 应返回 0，实际 ${rc}：$(cat /tmp/exec-adapter.$$)"
-    rm -f /tmp/exec-adapter.$$
-    _teardown_fake_executor
-    return
-  fi
-  rm -f /tmp/exec-adapter.$$
-
-  assert_file_contains "$FAKE_LOG" "cmd=gemini" "should invoke gemini binary" || { _teardown_fake_executor; return; }
-  assert_file_contains "$FAKE_LOG" "cwd=$BUILD_DIR" "should run in BUILD_DIR" || { _teardown_fake_executor; return; }
-  assert_file_contains "$FAKE_LOG" "<--yolo>" "should run unattended" || { _teardown_fake_executor; return; }
-  assert_file_contains "$FAKE_LOG" "<--model><gemini-3.1-pro>" "should pass EXECUTOR_MODEL" || { _teardown_fake_executor; return; }
-  assert_file_contains "$FAKE_LOG" "<--prompt><Build the module from spec and design.>" "should pass prompt body" || { _teardown_fake_executor; return; }
-  _teardown_fake_executor
-  pass_test
-}
-
 test_opencode_adapter_invokes_run_with_profile_args() {
   start_test "opencode adapter: 用 opencode run --dir 执行并传 model/thinking/auto"
 
@@ -258,8 +352,9 @@ test_build_skill_recommends_then_confirms_builder_profile() {
   start_test "build skill: 推荐 builder profile 后由 PM 确认"
 
   assert_file_contains "$BUILD_SKILL" "builder-profile.py\" recommend" "build should recommend builder profiles" || return
-  assert_file_contains "$BUILD_SKILL" "Claude Code、Codex、Cursor Agent、Gemini 和 OpenCode" "automatic candidates should include all adapters" || return
-  assert_file_contains "$BUILD_SKILL" "调整构建工具" "PM should be able to adjust the recommended builder" || return
+  assert_file_contains "$BUILD_SKILL" "Claude Code、Codex、Cursor Agent 和 OpenCode" "automatic candidates should include supported adapters" || return
+  assert_file_contains "$BUILD_SKILL" "必须排除当前主控" "build should exclude the current host" || return
+  assert_file_contains "$BUILD_SKILL" "本机可用工具" "build should expose available tools in the first card" || return
   assert_file_contains "$BUILD_SKILL" "只有 PM 选择“按这个方案构建”才继续" "build must wait for PM confirmation" || return
   assert_file_contains "$BUILD_SKILL" "不能静默替换 PM 已确认的工具" "builder fallback must be reconfirmed" || return
   pass_test
@@ -269,8 +364,10 @@ test_build_skill_confirms_only_environment_and_tool_before_editing() {
   start_test "build skill: 建造依据后台固定，只确认工作环境和构建工具"
 
   assert_file_contains "$BUILD_SKILL" "后台执行 design 的规格编译、目标路径固定、范围提交" "legacy design context should be checkpointed with an approved target" || return
-  assert_file_contains "$BUILD_SKILL" "工作环境：<独立环境 | 继续当前独立环境 | 当前环境>" "confirmation card should expose work environment" || return
-  assert_file_contains "$BUILD_SKILL" "构建工具：<工具名（model, thinking）>" "confirmation card should expose builder" || return
+  assert_file_contains "$BUILD_SKILL" "工作环境（已选）：<独立环境 | 继续当前独立环境 | 当前环境>" "confirmation card should expose selected environment" || return
+  assert_file_contains "$BUILD_SKILL" "可选环境：" "confirmation card should expose environment choices" || return
+  assert_file_contains "$BUILD_SKILL" "构建工具（已选）：<工具名（model, thinking） | 当前会话直接构建>" "confirmation card should expose selected builder" || return
+  assert_file_contains "$BUILD_SKILL" "本机可用工具：" "confirmation card should expose all usable builders" || return
   assert_file_contains "$BUILD_SKILL" "卡片中禁止出现项目类型、验收方案" "confirmation card should hide project type and acceptance" || return
   assert_file_contains "$BUILD_SKILL" "合同 v2" "build should write the versioned contract" || return
   assert_file_contains "$BUILD_SKILL" "build-contract.py" "build should call the build contract helper" || return
@@ -306,18 +403,23 @@ test_build_skill_handles_fallback_design_baseline() {
 test_consumer_entry_documents_fallback() {
   start_test "consumer AGENTS: 推荐 profile 不可用时重新确认"
 
-  assert_file_contains "$AGENTS_TMPL" "推荐其它可用 profile 或当前主控" "AGENTS should recommend a fallback" || return
+  assert_file_contains "$AGENTS_TMPL" "全部不可用时才回退为“当前会话直接构建”" "AGENTS should reserve native build for fallback" || return
+  assert_file_contains "$AGENTS_TMPL" "候选必须排除当前主控" "AGENTS should exclude the current host" || return
   assert_file_contains "$AGENTS_TMPL" "重新让 PM 确认" "AGENTS should require reconfirmation" || return
   pass_test
 }
 
 test_readme_lists_build_executors() {
-  start_test "README: 依赖表说明 Claude Code / Gemini / Codex / OpenCode 都可作 build 执行器"
+  start_test "README: 依赖表只保留受支持且非当前主控的 build 执行器"
 
   assert_file_contains "$README" '也可作为 `/pmai-build` 执行器' "README should state Claude Code build role" || return
-  assert_file_contains "$README" "Gemini CLI" "README should list Gemini CLI" || return
+  assert_file_contains "$README" "Cursor Agent" "README should list Cursor Agent" || return
   assert_file_contains "$README" "OpenCode CLI" "README should list OpenCode CLI" || return
-  assert_file_contains "$README" "Claude Code / Gemini / OpenCode / cursor-agent / 手动" "README should list non-Codex build fallback" || return
+  assert_file_contains "$README" "Codex 作为当前主控时不进入候选" "README should document current-host exclusion" || return
+  if grep -q "Gemini CLI" "$README"; then
+    _fail "README should not expose the removed Gemini CLI"
+    return
+  fi
   pass_test
 }
 
@@ -343,6 +445,10 @@ test_config_template_has_builder_profiles() {
   assert_file_contains "$CONFIG_TMPL" "display_model: deepseek-v4-flash" "config should keep OpenCode PM display short" || return
   assert_file_contains "$CONFIG_TMPL" "variant: max" "config should map OpenCode thinking to max variant" || return
   assert_file_contains "$CONFIG_TMPL" "executor: opencode" "config should define OpenCode executor" || return
+  if grep -qE '^    gemini:|executor: gemini|"gemini":' "$CONFIG_TMPL" "$SETTINGS_TMPL" "$BUILD_CONTRACT"; then
+    _fail "active config and contract should not retain the removed Gemini CLI executor"
+    return
+  fi
   pass_test
 }
 
@@ -361,8 +467,8 @@ test_build_skill_avoids_machine_bound_absolute_path_rules() {
 test_adapter_files_are_executable
 test_builder_profile_helper_resolves_pm_choice
 test_builder_profile_recommends_target_and_handles_legacy_missing_config
+test_builder_profile_rejects_removed_executor
 test_claude_code_adapter_invokes_print_mode
-test_gemini_adapter_invokes_yolo_prompt_mode
 test_opencode_adapter_invokes_run_with_profile_args
 test_build_skill_recommends_then_confirms_builder_profile
 test_build_skill_confirms_only_environment_and_tool_before_editing

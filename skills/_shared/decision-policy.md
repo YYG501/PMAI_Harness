@@ -26,7 +26,9 @@ design、meta、mockup、spec-writing、build 和自动收尾共用这一套决�
 - 后续 build 只读已经确认的 `project.yml`，不在开工卡重复询问；
 - 验收方案按项目类型和风险后台生成，不进入确认卡；
 - AI 只推荐工作环境和构建工具，PM 确认或调整后才开工；
-- 卡片使用“独立环境 / 当前环境”和工具显示名，不展示 worktree、合同、hash、证据等内部实现；
+- 卡片一次列出“独立环境 / 当前环境”中的有效选项，以及本机可用的外部构建工具；不要求 PM 先点“调整”才能看到选择；
+- 当前主控对应的工具必须从推荐和可选项中排除；没有其它外部工具可用时，才回退为“当前会话直接构建”；
+- 卡片使用 PM 可读的环境说明和工具显示名，不展示 worktree、合同、hash、证据等内部实现；
 - 已进入同一 build 的迭代与恢复不重复确认；更换已确认工具时必须重新确认。
 
 ## 问句不是决定
@@ -45,4 +47,4 @@ design、meta、mockup、spec-writing、build 和自动收尾共用这一套决�
 - AI 的默认建议及依据；
 - 不回答时为什么不能安全继续。
 
-不要把每个 finding 拆成一道题，也不要问 PM 是否调用 meta、mockup、spec-writing 或手动 close。首次 project definition 在 design 收口点确认；build 开工只用一张卡确认“工作环境 + 构建工具”，不得把 worktree、项目类型或验收适配器再次做成问题。
+不要把每个 finding 拆成一道题，也不要问 PM 是否调用 meta、mockup、spec-writing 或手动 close。首次 project definition 在 design 收口点确认；build 开工只用一张完整卡展示并确认“工作环境 + 构建工具”的推荐与有效选项，不得把 worktree、项目类型或验收适配器再次做成问题。

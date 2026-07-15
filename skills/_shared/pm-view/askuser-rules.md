@@ -40,7 +40,7 @@
 
 ### §1.3 规则 3：runtime 不支持 AskUserQuestion 时退化为编号列表，仍 wait
 
-**适用**：跨 runtime 兼容（Claude Code 原生支持 AskUserQuestion；Codex CLI / Gemini CLI 等不支持）。
+**适用**：跨 runtime 兼容（Claude Code 原生支持 AskUserQuestion；Codex CLI 等不支持）。
 
 **AI 行为**：
 

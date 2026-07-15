@@ -16,20 +16,20 @@
   },
   "input": {
     "prompt": "方向确认了，开始构建。",
-    "context": ["design 已定稿", "项目级类型已定义", "仓库支持独立环境", "有多个本机构建工具可用"]
+    "context": ["design 已定稿", "项目级类型已定义", "仓库支持独立环境", "当前主控是 Codex", "本机有多个外部构建工具可用"]
   },
   "expected": {
-    "behaviors": ["自动保存建造依据", "静默读取项目级类型", "后台生成默认验收", "推荐工作环境和构建工具", "等待 PM 一次确认或调整"],
-    "observations": ["design_checkpoint_automatic", "project_type_hidden", "acceptance_adapter_automatic", "environment_builder_confirmation"],
+    "behaviors": ["自动保存建造依据", "静默读取项目级类型", "后台生成默认验收", "一张卡展示推荐环境与全部有效环境", "一张卡展示推荐工具与全部本机可用外部工具", "排除当前 Codex 主控", "等待 PM 一次确认或直接改选"],
+    "observations": ["design_checkpoint_automatic", "project_type_hidden", "acceptance_adapter_automatic", "environment_builder_options_visible", "current_host_excluded", "environment_builder_confirmation"],
     "lifecycle_order": ["ready_to_build", "building", "iterating"],
     "stopping_point": "pm_review"
   },
   "forbidden": {
-    "behaviors": ["询问是否保存建造依据", "展示项目类型", "展示验收方案或检查清单", "要求 PM 理解 worktree 或合同 JSON", "未确认环境和工具就开工"],
-    "observations": ["save_checkpoint_menu", "project_type_exposed", "acceptance_plan_exposed", "contract_json_exposed", "build_started_without_confirmation"]
+    "behaviors": ["询问是否保存建造依据", "展示项目类型", "展示验收方案或检查清单", "要求 PM 理解 worktree 或合同 JSON", "把当前 Codex 主控列为 Codex 外部构建工具", "要求 PM 先点调整才能看到选项", "未确认环境和工具就开工"],
+    "observations": ["save_checkpoint_menu", "project_type_exposed", "acceptance_plan_exposed", "contract_json_exposed", "current_host_offered_as_builder", "options_hidden_behind_adjustment", "build_started_without_confirmation"]
   },
   "judge": {
     "enabled": true,
-    "rubric": ["PM 开工前只看到工作环境和构建工具", "项目类型和默认验收均不显示", "内部基础设施不会形成第二条用户工作流"]
+    "rubric": ["PM 开工前只看到工作环境和构建工具", "同一张卡能看到推荐项和全部有效选项", "当前主控不作为外部构建工具", "项目类型和默认验收均不显示", "内部基础设施不会形成第二条用户工作流"]
   }
 }

@@ -120,32 +120,46 @@ python3 "$PMAI_HOME/scripts/acceptance-profile.py" "${PROFILE_ARGS[@]}" > "$PROF
 恢复既有 v2 build 时，沿用合同里已确认的工作环境和构建工具，不重复确认。新 build 才执行本节：
 
 1. **推荐工作环境**：默认推荐“独立环境”；若当前已经是本模块有效的 `build-*` 环境，则推荐“继续当前独立环境”。PM 也可以明确改为“当前环境”。
-2. **推荐构建工具**：按项目级类型、消费仓配置和本机可用性只生成推荐，不视为最终选择：
+2. **识别当前主控并推荐构建工具**：把当前 runtime 映射成 `claude-code / codex / opencode / cursor-agent`；无法识别时用 `unknown`。构建工具必须和当前主控不同，不能让 Codex 主控再启动 Codex，也不能让 Claude Code / OpenCode 主控把自己列为外部工具。按项目级类型、消费仓配置和本机可用性生成推荐与完整可选列表：
 
    ```bash
+   CURRENT_HOST="<claude-code | codex | opencode | cursor-agent | unknown>"
    RECOMMENDED_BUILDER_JSON=$(python3 "$PMAI_HOME/scripts/builder-profile.py" recommend \
      "$REPO_ROOT/.pm-workflow/config.yml" \
-     --project-definition "$REPO_ROOT/.pm-workflow/project.yml")
+     --project-definition "$REPO_ROOT/.pm-workflow/project.yml" \
+     --current-host "$CURRENT_HOST")
+   AVAILABLE_BUILDERS_JSON=$(python3 "$PMAI_HOME/scripts/builder-profile.py" list \
+     "$REPO_ROOT/.pm-workflow/config.yml" \
+     --available-only \
+     --current-host "$CURRENT_HOST")
    ```
 
-3. **只展示这张确认卡**：
+   `list` 和 `recommend` 都必须排除当前主控对应的 profile。只有其它外部构建工具全部不可用时，才回退为“当前会话直接构建”；该兜底不与外部工具并列成常规选项。
+
+3. **一次展示推荐结果和全部有效选项**：
 
    ```text
    准备构建：<模块或目标>
 
-   工作环境：<独立环境 | 继续当前独立环境 | 当前环境>
-   构建工具：<工具名（model, thinking）>
+   工作环境（已选）：<独立环境 | 继续当前独立环境 | 当前环境>
+   可选环境：
+   - 独立环境：在单独环境构建，不影响当前工作；已有本模块独立环境时继续使用
+   - 当前环境：直接在当前目录构建
 
-   [按这个方案构建]
-   [调整工作环境]
-   [调整构建工具]
+   构建工具（已选）：<工具名（model, thinking） | 当前会话直接构建>
+   本机可用工具：
+   - <工具名（model, thinking）>（已选）
+   - <其它可用工具（逐项列出）>
+
+   回复“按这个方案构建”即可开始；
+   也可以直接回复“工作环境改为<选项>”或“构建工具改为<工具名>”。
    ```
 
-   卡片中禁止出现项目类型、验收方案、检查清单、worktree、build contract、hash、evidence JSON 等内容。`prototype / product` 只在后台参与适配，不作为本轮待确认项。
+   “当前环境”只在当前环境有效时列出；若当前环境不是 main/master，也不是本模块已记录的 `build-*` 环境，就不显示这个无效选项。工具列表只取 `AVAILABLE_BUILDERS_JSON`，逐项展示本机实际可用且非当前主控的工具。卡片中禁止出现项目类型、验收方案、检查清单、worktree、build contract、hash、evidence JSON 等内容。`prototype / product` 只在后台参与适配，不作为本轮待确认项。
 
 4. PM 调整工作环境时，只用 PM 语言展示“独立环境 / 当前环境”；选择当前环境代表本轮直接在当前主线工作，写入 `build.mode=main`。选择独立环境写入 `build.mode=worktree`。若当前环境不是 main/master，也不是本模块已记录的 `build-*` 环境，不提供“当前环境”这个无效选项。
-5. PM 调整构建工具时，运行 `builder-profile.py list <config> --available-only`，只列本机可用工具；PM 选定后用 `resolve --profile <name>` 固化 snapshot。
-6. 任一项调整后重新展示同一张卡；只有 PM 选择“按这个方案构建”才继续。AskUserQuestion 不可用时退化为三项编号选择并等待，不得把推荐自动当成确认。
+5. PM 调整构建工具时，只接受卡片已经列出的工具；选定后用 `resolve --profile <name> --current-host "$CURRENT_HOST"` 固化 snapshot。`resolve` 再次拒绝与当前主控相同的 profile，不能靠 PM 文本或旧配置绕过。
+6. 任一项调整后重新展示同一张完整卡；只有 PM 选择“按这个方案构建”才继续。AskUserQuestion 不可用时仍展示完整卡并等待自然语言回复，不得把推荐自动当成确认，也不得再让 PM 先点“调整”才能看到选项。
 
 确认后再建立或复用工作环境：
 
@@ -162,7 +176,7 @@ fi
 
 所有 git 命令使用 `git -C "$BUILD_DIR"`；必须切目录的非 git 命令只在 subshell 中运行，不把主控 cwd 留在 worktree。
 
-执行器使用 `EXECUTOR_STATUS_DIR`、heartbeat、退出码和日志文件回报进度；PM 窗口只报阶段摘要，不直播命令、日志和进程排障。可确认的构建工具包括当前主控、Claude Code、Codex、Cursor Agent、Gemini 和 OpenCode；卡片只显示当前推荐，PM 点“调整构建工具”时才展开可用项。
+执行器使用 `EXECUTOR_STATUS_DIR`、heartbeat、退出码和日志文件回报进度；PM 窗口只报阶段摘要，不直播命令、日志和进程排障。可确认的外部构建工具包括 Claude Code、Codex、Cursor Agent 和 OpenCode，但必须排除当前主控；开工卡一次列出推荐项和其它本机可用项。没有外部工具可用时，才由当前会话直接构建。
 
 从 acceptance profile 取 `required_checks`，写合同 v2：
 

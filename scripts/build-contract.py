@@ -30,7 +30,7 @@ from _lib.ready_contract import (
 
 
 VALID_MODES = {"worktree", "main"}
-VALID_EXECUTORS = {"claude-code", "codex", "cursor-agent", "gemini", "opencode", "manual", "native"}
+VALID_EXECUTORS = {"claude-code", "codex", "cursor-agent", "opencode", "manual", "native"}
 VALID_TARGET_KINDS = {"prototype", "product"}
 VALID_LIFECYCLE_STATES = {
     "designing",

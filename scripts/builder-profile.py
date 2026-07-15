@@ -144,6 +144,8 @@ def resolve_profile(
     executor = profile.get("executor")
     if not isinstance(executor, str) or not executor:
         raise SystemExit(f"builder profile 缺少 executor: {profile_name}")
+    if executor not in EXECUTOR_BINARIES:
+        raise SystemExit(f"builder profile 使用了不受支持的 executor: {executor}")
 
     return {
         "builder_profile": profile_name,
@@ -157,10 +159,51 @@ def resolve_profile(
     }
 
 
+CURRENT_HOSTS = {"claude-code", "codex", "cursor-agent", "opencode", "unknown"}
+
+
+def profile_matches_current_host(profile: dict[str, Any], current_host: str) -> bool:
+    return current_host != "unknown" and profile.get("executor") == current_host
+
+
+def native_fallback(reason: str) -> dict[str, Any]:
+    return {
+        "builder_profile": "native",
+        "executor": "native",
+        "display": "当前会话直接构建",
+        "builder": {"model": "runtime", "thinking": "adaptive"},
+        "selection_reason": reason,
+    }
+
+
 def cmd_list(args: argparse.Namespace) -> None:
-    config = load_builder_config(Path(args.config))
+    config_path = Path(args.config)
+    if not config_path.exists():
+        print(
+            json.dumps(
+                {
+                    "default_profile": "",
+                    "current_host": args.current_host,
+                    "profiles": [
+                        {
+                            "name": "native",
+                            "executor": "native",
+                            "display": "当前会话直接构建",
+                            "default": False,
+                            "available": True,
+                            "fallback": True,
+                        }
+                    ],
+                },
+                ensure_ascii=False,
+            )
+        )
+        return
+    config = load_builder_config(config_path)
     rows = []
     for name, profile in config["profiles"].items():
+        if profile_matches_current_host(profile, args.current_host):
+            continue
         available = profile_available(profile)
         if args.available_only and not available:
             continue
@@ -173,23 +216,31 @@ def cmd_list(args: argparse.Namespace) -> None:
                 "available": available,
             }
         )
-    rows.append(
-        {
-            "name": "native",
-            "executor": "native",
-            "display": "当前主控（runtime）",
-            "default": False,
-            "available": True,
-        }
+    if args.available_only and not rows:
+        rows.append(
+            {
+                "name": "native",
+                "executor": "native",
+                "display": "当前会话直接构建",
+                "default": False,
+                "available": True,
+                "fallback": True,
+            }
+        )
+    print(
+        json.dumps(
+            {
+                "default_profile": config["default_profile"],
+                "current_host": args.current_host,
+                "profiles": rows,
+            },
+            ensure_ascii=False,
+        )
     )
-    print(json.dumps({"default_profile": config["default_profile"], "profiles": rows}, ensure_ascii=False))
 
 
 def cmd_resolve(args: argparse.Namespace) -> None:
-    config = load_builder_config(Path(args.config))
-    profile_name = args.profile or config["default_profile"]
-    if not profile_name:
-        raise SystemExit("builder.default_profile 为空，请明确指定 --profile")
+    profile_name = args.profile
     if profile_name == "native":
         builder: dict[str, Any] = {"model": "runtime", "thinking": "adaptive"}
         if args.model:
@@ -201,13 +252,22 @@ def cmd_resolve(args: argparse.Namespace) -> None:
                 {
                     "builder_profile": "native",
                     "executor": "native",
-                    "display": "当前主控（runtime）",
+                    "display": "当前会话直接构建",
                     "builder": builder,
                 },
                 ensure_ascii=False,
             )
         )
         return
+    config = load_builder_config(Path(args.config))
+    profile_name = profile_name or config["default_profile"]
+    if not profile_name:
+        raise SystemExit("builder.default_profile 为空，请明确指定 --profile")
+    profile = config["profiles"].get(profile_name)
+    if profile is not None and profile_matches_current_host(profile, args.current_host):
+        raise SystemExit(
+            f"构建工具不能与当前主控相同: {profile_display(profile_name, profile)}"
+        )
     resolved = resolve_profile(config, profile_name, args.model, args.thinking)
     print(json.dumps(resolved, ensure_ascii=False))
 
@@ -216,7 +276,6 @@ EXECUTOR_BINARIES = {
     "claude-code": "claude",
     "codex": "codex",
     "cursor-agent": "cursor-agent",
-    "gemini": "gemini",
     "opencode": "opencode",
 }
 
@@ -243,13 +302,7 @@ def cmd_recommend(args: argparse.Namespace) -> None:
     if not config_path.exists():
         print(
             json.dumps(
-                {
-                    "builder_profile": "native",
-                    "executor": "native",
-                    "display": "当前主控（runtime）",
-                    "builder": {"model": "runtime", "thinking": "adaptive"},
-                    "selection_reason": "旧消费仓没有 builder 配置，推荐由当前主控实现",
-                },
+                native_fallback("旧消费仓没有 builder 配置，由当前会话直接构建"),
                 ensure_ascii=False,
             )
         )
@@ -262,24 +315,29 @@ def cmd_recommend(args: argparse.Namespace) -> None:
         candidates.append(preferred)
     candidates.extend(name for name in profiles if name not in candidates)
     selected = next(
-        (name for name in candidates if name in profiles and profile_available(profiles[name])),
+        (
+            name
+            for name in candidates
+            if name in profiles
+            and not profile_matches_current_host(profiles[name], args.current_host)
+            and profile_available(profiles[name])
+        ),
         None,
     )
     if selected:
         resolved = resolve_profile(config, selected, None, None)
-        resolved["selection_reason"] = (
-            f"仓库为 {target} build 配置的默认档位可用"
-            if selected == preferred
-            else f"首选档位不可用，推荐仓库内可用的 {selected}"
-        )
+        if selected == preferred:
+            resolved["selection_reason"] = f"仓库为 {target} build 配置的默认档位可用"
+        elif preferred in profiles and profile_matches_current_host(
+            profiles[preferred], args.current_host
+        ):
+            resolved["selection_reason"] = (
+                f"首选档位与当前主控 {args.current_host} 相同，已改用 {selected}"
+            )
+        else:
+            resolved["selection_reason"] = f"首选档位不可用，推荐仓库内可用的 {selected}"
     else:
-        resolved = {
-            "builder_profile": "native",
-            "executor": "native",
-            "display": "当前主控（runtime）",
-            "builder": {"model": "runtime", "thinking": "adaptive"},
-            "selection_reason": "仓库配置的独立执行器均不可用，推荐由当前主控实现",
-        }
+        resolved = native_fallback("没有其它可用构建工具，由当前会话直接构建")
     print(json.dumps(resolved, ensure_ascii=False))
 
 
@@ -290,6 +348,7 @@ def build_parser() -> argparse.ArgumentParser:
     list_cmd = sub.add_parser("list", help="list configured builder profiles for diagnostics")
     list_cmd.add_argument("config")
     list_cmd.add_argument("--available-only", action="store_true")
+    list_cmd.add_argument("--current-host", required=True, choices=sorted(CURRENT_HOSTS))
     list_cmd.set_defaults(func=cmd_list)
 
     resolve = sub.add_parser("resolve", help="resolve a profile into executor + builder snapshot")
@@ -297,11 +356,13 @@ def build_parser() -> argparse.ArgumentParser:
     resolve.add_argument("--profile")
     resolve.add_argument("--model")
     resolve.add_argument("--thinking")
+    resolve.add_argument("--current-host", required=True, choices=sorted(CURRENT_HOSTS))
     resolve.set_defaults(func=cmd_resolve)
 
     recommend = sub.add_parser("recommend", help="recommend an available profile for PM confirmation")
     recommend.add_argument("config")
     recommend.add_argument("--project-definition", required=True)
+    recommend.add_argument("--current-host", required=True, choices=sorted(CURRENT_HOSTS))
     recommend.set_defaults(target=None)
     recommend.set_defaults(func=cmd_recommend)
 
@@ -310,6 +371,7 @@ def build_parser() -> argparse.ArgumentParser:
     auto = sub.add_parser("auto", help=argparse.SUPPRESS)
     auto.add_argument("config")
     auto.add_argument("--target", required=True, choices=("prototype", "product"))
+    auto.add_argument("--current-host", choices=sorted(CURRENT_HOSTS), default="unknown")
     auto.set_defaults(project_definition=None)
     auto.set_defaults(func=cmd_recommend)
 

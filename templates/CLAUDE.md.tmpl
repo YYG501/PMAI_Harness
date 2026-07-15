@@ -55,7 +55,7 @@
 - `/pmai-direction` — 项目方向校准：已接入项目的方向重定 / 路线规划。
 - `/pmai-design "<一句话需求>"` — 起新功能 / 重做模块；按需自动调用 meta、mockup、spec-writing，提交建造依据。
 - `/pmai-design <模块>` — 讨论、收范围、写模块三件套。
-- `/pmai-build <模块或功能文档>` — 静默读取项目级构建类型和默认验收，推荐工作环境与构建工具；PM 一次确认后构建、迭代、最终检查并自动收尾。
+- `/pmai-build <模块或功能文档>` — 静默读取项目级构建类型和默认验收，在一张卡中展示推荐的工作环境、构建工具及全部有效选项；PM 一次确认后构建、迭代、最终检查并自动收尾。
 - `/pmai-status` — 读当前状态，提示下一步并拉起对应入口。
 - `/pmai-build-close` — 兼容与恢复入口：中断续跑、merge 冲突后重试、或实现已落主线但文档待完成。
 - `/pmai-status` — 只读现状视图。
@@ -65,14 +65,14 @@
 ### 确认门
 
 - 按共用 decision policy 处理：机械项后台完成；可逆偏好由 AI 给推荐并推进；只有产品模型岔路、不可逆动作、AI 要改变 PM 已明确方向，以及 build 开工前的工作环境与构建工具需要 PM 拍。
-- 不把是否调用 meta/mockup/spec-writing、项目类型、验收方案、保存依据或手动 close 变成每轮 build 问题。开工卡只显示工作环境和构建工具。
+- 不把是否调用 meta/mockup/spec-writing、项目类型、验收方案、保存依据或手动 close 变成每轮 build 问题。开工卡只显示工作环境和构建工具，但必须一次列出这两项的全部有效选择。
 - PM 在看到构建结果后说“可以提交 / 定稿 / 可以合并”，即是合入 main 的明确授权，不二次确认。
 
 ### build 纪律
 
 - build 的功能锚点是 design 已提交的模块 `spec.md` 或功能型规格文档，不是 task 文件；开工和关键恢复点先编译 context pack。
 - 一次 build 只有一个主要对象：`prototype` 或 `product`，由首个可建造 design 定稿后生成的 `.pm-workflow/project.yml` 定义。技术栈、代码入口和运行命令也只从该文件读取；build 不临时猜。
-- 新 build 由 AI 推荐独立/当前工作环境和构建工具，PM 一次确认后执行；项目类型和默认验收不展示。选择当前环境时，main 只放行 v2 合同声明的目标路径。小改仍走 `/pmai-quick-fix`。
+- 新 build 由 AI 推荐独立/当前工作环境和构建工具，并在同一张卡列出全部有效选项；构建工具排除当前主控，只有其它外部工具均不可用时才回退为当前会话直接构建。PM 一次确认后执行；项目类型和默认验收不展示。选择当前环境时，main 只放行 v2 合同声明的目标路径。小改仍走 `/pmai-quick-fix`。
 - `.work-meta.json:build` 中的 contract v2 记录 target、source hash、design revision、accepted deltas、implementation commit、required checks、evidence 和 docs status。
 - 每轮修改只跑受影响快速检查；产品决定变化写 accepted delta 并让旧证据失效；PM 定稿后才跑完整 required checks。
 - prototype 验收覆盖可启动性、任务路径、页面/弹窗、边界状态、视觉和行为；product 验收覆盖现有测试、typecheck/build、接口数据、迁移兼容，并按需追加 UI、权限与安全检查。

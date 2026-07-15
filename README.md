@@ -76,15 +76,15 @@ PM 全程**只做产品决策、确认首个建造方案、开工时确认工作
 
 | 工具 | 必需性 | 用途 |
 |---|---|---|
-| **Claude Code** | 推荐 | 一等主控入口（slash skill 原生在这里跑）；也可作为 `/pmai-build` 执行器 |
-| **Codex** | 支持 | 原生 skill 暴露到 `~/.codex/skills/pmai-*`，通过 `$pmai-*`、skill 选择器或自然语言调用；不生成 custom prompts；读生成器仓 / 消费仓 `AGENTS.md` 作为主控入口；消费仓生成项目级 `.codex/hooks.json`；也可作为 build 执行器 |
-| **Gemini CLI** | 可选 | `/pmai-build` 执行器；适合在 Codex / Claude 主控下交给 Gemini 建 |
-| **OpenCode CLI** | 支持 | OpenCode commands 暴露到 `~/.config/opencode/commands/pmai-*.md`，可直接打开消费仓输入 `/pmai-*`；读 `AGENTS.md` 作为主控入口；消费仓生成 `.opencode/commands` 和 `opencode.json`；也可作为 build 执行器。第一版不复刻 Codex hooks，保护依赖 OpenCode permission、git hooks、build contract 和 changed-path review |
+| **Claude Code** | 推荐 | 一等主控入口（slash skill 原生在这里跑）；当前主控不是 Claude Code 时，也可作为 `/pmai-build` 执行器 |
+| **Codex** | 支持 | 原生 skill 暴露到 `~/.codex/skills/pmai-*`，通过 `$pmai-*`、skill 选择器或自然语言调用；不生成 custom prompts；读生成器仓 / 消费仓 `AGENTS.md` 作为主控入口；消费仓生成项目级 `.codex/hooks.json`；当前主控不是 Codex 时，也可作为 build 执行器 |
+| **Cursor Agent** | 可选 | `/pmai-build` 外部执行器；当前主控不是 Cursor Agent 时可选 |
+| **OpenCode CLI** | 支持 | OpenCode commands 暴露到 `~/.config/opencode/commands/pmai-*.md`，可直接打开消费仓输入 `/pmai-*`；读 `AGENTS.md` 作为主控入口；消费仓生成 `.opencode/commands` 和 `opencode.json`；当前主控不是 OpenCode 时，也可作为 build 执行器。第一版不复刻 Codex hooks，保护依赖 OpenCode permission、git hooks、build contract 和 changed-path review |
 | **gstack** | 可选能力层 | 可辅助视觉基线、mockup、browser/visual evidence、抓站和文档导出；初始化不依赖它。UI 验收需要主动浏览器能力，但可以由 gstack、runtime browser 或 Playwright 任一适配器提供 |
 | **git** ≥ 2.30 | 必需 | worktree 是核心隔离机制 |
 | **python3** ≥ 3.10 | 必需 | scripts 大多用 python（zero-dep stdlib） |
 | **bash** ≥ 4 | 必需 | scripts 入口语言（macOS 自带 3.x 已知坑见 INVARIANTS） |
-| **codex CLI** | 可选 | `/pmai-build` 执行器；不装可走 Claude Code / Gemini / OpenCode / cursor-agent / 手动 |
+| **codex CLI** | 可选 | `/pmai-build` 执行器；Codex 作为当前主控时不进入候选，不装可走 Claude Code / OpenCode / Cursor Agent / 手动 |
 
 未检测到 gstack 时，`pmai install` / `pmai doctor` 只给 readiness warning，初始化和非 Web build 都不受阻塞。Web required checks 会在 final_check 前解析可用的主动浏览器适配器；完全没有适配器时 UI 验收阻塞，不能伪装通过。gstack 输出仍必须按 PMAI 规则接回 `DESIGN.md`、`mockups/`、evidence artifacts、`.pm-workflow/mirror/`、`docs/deliverables/` 或 `docs/engineering/`，不能把 `~/.gstack/...` 当长期真相源。
 

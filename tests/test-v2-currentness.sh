@@ -125,6 +125,7 @@ test_active_helpers_require_project_definition() {
   fi
   if ! grep -q 'add_argument("--project-definition", required=True)' "$acceptance" \
      || ! grep -q 'recommend.add_argument("--project-definition", required=True)' "$builder" \
+     || ! grep -q 'recommend.add_argument("--current-host", required=True' "$builder" \
      || ! grep -q 'required_checks。' "$contract"; then
     _fail "project.yml / adaptive checks are not fail-closed"
     return
