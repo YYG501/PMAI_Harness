@@ -92,11 +92,10 @@ context pack 实际消费完成后，按 `personal-memory.md` 单独召回个人
 python3 "$PMAI_HOME/scripts/personal-memory.py" recall \
   --context-pack "$CONTEXT_PACK" \
   --query "<本轮目标与当前用户反馈>" \
-  --limit 3 \
   --format markdown
 ```
 
-个人经验只作后台检查，不展示成项目事实，不直接变成 PM 问题，也不参与 `source_hash`。数据库不存在、无相关经验或召回失败时继续 design，不能把用户级经验变成新阻塞。与当前项目决定、当前 Skill 或 PM 明确方向冲突的提醒直接丢弃。
+个人经验只作后台检查，不展示成项目事实，不直接变成 PM 问题，也不参与 `source_hash`。数据库不存在、无相关经验或召回失败时继续 design，不能把用户级经验变成新阻塞。与当前项目决定、当前 Skill 或 PM 明确方向冲突的提醒直接丢弃；表达同一判断的候选合并，使用过滤后所有仍有独立检查价值的经验。正常召回不按固定条数裁剪；上下文预算只作安全保护，频繁超出预算时优先合并碎片经验。
 
 每次重新进入、续跑、切换主模块，或权威文件在会话中发生变化后，都要在提出第一个新产品问题前重新运行上面的编译步骤、实际消费结果并重新召回相关个人经验，不得沿用旧会话摘要。进场时同时记录 `.pm-workflow/project.yml` 是否存在及其文件 hash，供收口时确认本轮是否误改项目建造定义。
 
@@ -313,7 +312,7 @@ git -C "$REPO_ROOT" commit -m "design(<模块>): mark ready to build"
 ## Rules
 
 - 先恢复上下文，再问问题；已有决定不让 PM 重复交代。
-- context pack 之后单独召回最多 3 条个人经验；个人经验不参与项目权威 hash，失败时不阻塞。
+- context pack 之后单独召回相关个人经验；按适用性与独立检查价值过滤，不设正常条数上限。个人经验不参与项目权威 hash，失败时不阻塞。
 - 只围绕实际未知项推进，不跑固定六问或固定停顿点。
 - PM 第一次说“不合理 / 感觉不对”就回根因，并自动调用 meta。
 - meta、mockup、spec-writing 是 design 的内部能力；完成后返回同一主线。

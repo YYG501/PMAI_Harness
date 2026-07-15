@@ -157,6 +157,10 @@ test_design_long_session_and_personal_memory_are_documented() {
     _fail "design-method.md 仍把 SSO / 持续运营具体场景写成所有用户的固定规则"
     return
   fi
+  if grep -qE "最多 3 条|最多三条|--limit 3" "$skill" "$memory"; then
+    _fail "design 个人经验召回仍使用未经验证的固定条数"
+    return
+  fi
   pass_test
 }
 

@@ -21,8 +21,9 @@ from typing import Any, Iterable
 
 
 SCHEMA_VERSION = 1
-DEFAULT_LIMIT = 3
-MAX_RECALL_LIMIT = 3
+DEFAULT_CONTEXT_BUDGET = 8000
+SAFETY_MAX_CANDIDATES = 512
+RECALL_DUPLICATE_THRESHOLD = 0.86
 ACTIVE = "active"
 SUPERSEDED = "superseded"
 FORGOTTEN = "forgotten"
@@ -428,7 +429,7 @@ def context_pack_query(path: str | None) -> str:
 
 
 def ranked_memories(
-    conn: sqlite3.Connection, query: str, *, limit: int, minimum: float
+    conn: sqlite3.Connection, query: str, *, limit: int | None, minimum: float
 ) -> list[tuple[sqlite3.Row, float]]:
     ranked: list[tuple[sqlite3.Row, float]] = []
     for row in conn.execute("SELECT * FROM memories WHERE status = ?", (ACTIVE,)):
@@ -441,7 +442,57 @@ def ranked_memories(
         if semantic >= minimum:
             ranked.append((row, score))
     ranked.sort(key=lambda item: (item[1], item[0]["updated_at"]), reverse=True)
-    return ranked[:limit]
+    return ranked[:limit] if limit is not None else ranked
+
+
+def recall_basis(row: sqlite3.Row) -> str:
+    return " ".join([row["applies_when"], row["lesson"], row["boundaries"]])
+
+
+def recall_context_cost(row: sqlite3.Row) -> int:
+    # Markdown renderer only injects these three fields plus a small fixed prefix.
+    return len(row["applies_when"]) + len(row["lesson"]) + len(row["boundaries"]) + 80
+
+
+def select_recall_memories(
+    ranked: list[tuple[sqlite3.Row, float]],
+    *,
+    context_budget: int,
+    explicit_limit: int | None,
+) -> tuple[list[tuple[sqlite3.Row, float]], dict[str, int | bool]]:
+    selected: list[tuple[sqlite3.Row, float]] = []
+    selected_basis: list[str] = []
+    used_chars = 0
+    duplicate_count = 0
+    budget_count = 0
+    explicit_limit_count = 0
+
+    for row, score in ranked:
+        basis = recall_basis(row)
+        if any(similarity(basis, existing) >= RECALL_DUPLICATE_THRESHOLD for existing in selected_basis):
+            duplicate_count += 1
+            continue
+        if explicit_limit is not None and len(selected) >= explicit_limit:
+            explicit_limit_count += 1
+            continue
+        cost = recall_context_cost(row)
+        if used_chars + cost > context_budget:
+            budget_count += 1
+            continue
+        selected.append((row, score))
+        selected_basis.append(basis)
+        used_chars += cost
+
+    return selected, {
+        "candidate_count": len(ranked),
+        "selected_count": len(selected),
+        "used_context_chars": used_chars,
+        "context_budget_chars": context_budget,
+        "omitted_duplicate_count": duplicate_count,
+        "omitted_budget_count": budget_count,
+        "omitted_explicit_limit_count": explicit_limit_count,
+        "truncated_by_budget": budget_count > 0,
+    }
 
 
 def recall(args: argparse.Namespace) -> dict[str, Any]:
@@ -452,12 +503,26 @@ def recall(args: argparse.Namespace) -> dict[str, Any]:
     query = sanitize_text(f"{args.query or ''} {context_pack_query(args.context_pack)}", limit=10000)
     if not query:
         raise MemoryError("recall 需要 --query 或 --context-pack")
-    limit = min(max(1, int(args.limit)), MAX_RECALL_LIMIT)
-    ranked = ranked_memories(conn, query, limit=limit, minimum=float(args.minimum_relevance))
+    explicit_limit = int(args.limit) if args.limit is not None else None
+    if explicit_limit is not None and explicit_limit < 1:
+        raise MemoryError("--limit 必须大于 0")
+    context_budget = int(args.max_context_chars)
+    if context_budget < 1:
+        raise MemoryError("--max-context-chars 必须大于 0")
+
+    all_ranked = ranked_memories(conn, query, limit=None, minimum=float(args.minimum_relevance))
+    safety_omitted = max(0, len(all_ranked) - SAFETY_MAX_CANDIDATES)
+    selected, selection = select_recall_memories(
+        all_ranked[:SAFETY_MAX_CANDIDATES],
+        context_budget=context_budget,
+        explicit_limit=explicit_limit,
+    )
+    selection["eligible_count"] = len(all_ranked)
+    selection["omitted_safety_count"] = safety_omitted
     timestamp = now_iso()
-    if not args.no_mark and ranked:
+    if not args.no_mark and selected:
         with conn:
-            for row, _ in ranked:
+            for row, _ in selected:
                 conn.execute(
                     """
                     UPDATE memories
@@ -471,7 +536,8 @@ def recall(args: argparse.Namespace) -> dict[str, Any]:
         "advisory": True,
         "authority": "personal experience cannot override current project truth or skill rules",
         "query": query,
-        "memories": [row_to_memory(row, score=score) for row, score in ranked],
+        "selection": selection,
+        "memories": [row_to_memory(row, score=score) for row, score in selected],
         "database": str(path),
     }
 
@@ -620,6 +686,15 @@ def render_markdown(payload: dict[str, Any], command: str) -> str:
             if item.get("boundaries"):
                 line += f"；不适用边界：{item['boundaries']}"
             lines.append(line)
+        selection = payload.get("selection", {})
+        omitted = int(selection.get("omitted_budget_count", 0)) + int(
+            selection.get("omitted_safety_count", 0)
+        )
+        if omitted:
+            lines.append(
+                f"召回说明：另有 {omitted} 条候选因上下文预算或异常保护未注入；"
+                "应优先合并碎片经验，不要机械扩大条数。"
+            )
         return "\n".join(lines)
     if command == "status":
         memories = payload["memories"]
@@ -667,11 +742,19 @@ def build_parser() -> argparse.ArgumentParser:
     capture_parser.add_argument("--format", choices=("json", "markdown"), default="json")
     add_capture_arguments(capture_parser)
 
-    recall_parser = subparsers.add_parser("recall", help="按当前任务召回最多 3 条个人经验")
+    recall_parser = subparsers.add_parser("recall", help="按当前任务召回并自适应筛选个人经验")
     recall_parser.add_argument("--format", choices=("json", "markdown"), default="json")
     recall_parser.add_argument("--query", default="")
     recall_parser.add_argument("--context-pack")
-    recall_parser.add_argument("--limit", type=int, default=DEFAULT_LIMIT)
+    recall_parser.add_argument(
+        "--limit", type=int, help="显式诊断上限；正常 design 不传，避免固定条数裁剪"
+    )
+    recall_parser.add_argument(
+        "--max-context-chars",
+        type=int,
+        default=DEFAULT_CONTEXT_BUDGET,
+        help="召回内容字符预算，默认 8000；只作上下文保护",
+    )
     recall_parser.add_argument("--minimum-relevance", type=float, default=0.04)
     recall_parser.add_argument("--no-mark", action="store_true")
 

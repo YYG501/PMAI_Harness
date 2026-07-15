@@ -80,8 +80,8 @@ test_execution_gap_does_not_duplicate_memory() {
   pass_test
 }
 
-test_explicit_generalization_and_recall_cap() {
-  start_test "T4: 明确以后都这样时高权重生效，召回硬限制最多 3 条"
+test_explicit_generalization_and_adaptive_recall() {
+  start_test "T4: 明确以后都这样时高权重生效，正常召回不按固定条数裁剪"
   local payload out recall count confidence index applies lesson
   for index in 1 2 3 4; do
     case "$index" in
@@ -97,10 +97,26 @@ test_explicit_generalization_and_recall_cap() {
     }
   done
   confidence=$(printf '%s' "$out" | json_value 'data["memory"]["confidence"]')
-  recall=$(python3 "$MEMORY_SCRIPT" recall --query "设计共通检查 权限 列表 导出 失败" --limit 20)
+  recall=$(python3 "$MEMORY_SCRIPT" recall --query "设计共通检查 权限 列表 导出 失败")
   count=$(printf '%s' "$recall" | json_value 'len(data["memories"])')
-  if [ "$confidence" != "0.9" ] || [ "$count" != "3" ]; then
-    _fail "明确经验置信度应为 0.9，recall 应硬限制 3 条；实际 confidence=$confidence count=$count"
+  if [ "$confidence" != "0.9" ] || [ "$count" -lt 4 ]; then
+    _fail "明确经验置信度应为 0.9，4 条独立相关经验不应被固定裁成 3 条；实际 confidence=$confidence count=$count"
+    return
+  fi
+  pass_test
+}
+
+test_context_budget_is_safety_not_semantic_count() {
+  start_test "T9: 字符预算只作上下文保护，并显式报告被省略候选"
+  local recall candidates selected omitted
+  recall=$(python3 "$MEMORY_SCRIPT" recall \
+    --query "设计共通检查 权限 列表 导出 失败" \
+    --max-context-chars 250)
+  candidates=$(printf '%s' "$recall" | json_value 'data["selection"]["candidate_count"]')
+  selected=$(printf '%s' "$recall" | json_value 'data["selection"]["selected_count"]')
+  omitted=$(printf '%s' "$recall" | json_value 'data["selection"]["omitted_budget_count"]')
+  if [ "$candidates" -lt 4 ] || [ "$selected" -ge "$candidates" ] || [ "$omitted" -lt 1 ]; then
+    _fail "预算保护没有显式报告裁剪：candidates=$candidates selected=$selected omitted=$omitted"
     return
   fi
   pass_test
@@ -176,10 +192,11 @@ test_cli_exposes_optional_user_controls() {
 test_missing_store_is_fail_open
 test_capture_and_merge_personal_memory
 test_execution_gap_does_not_duplicate_memory
-test_explicit_generalization_and_recall_cap
+test_explicit_generalization_and_adaptive_recall
 test_supersede_and_forget
 test_feedback_updates_confidence
 test_personal_memory_is_outside_context_authority
 test_cli_exposes_optional_user_controls
+test_context_budget_is_safety_not_semantic_count
 
 report_results "personal-memory"
