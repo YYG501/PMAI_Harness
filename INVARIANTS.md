@@ -31,8 +31,8 @@
 
 - **I-LC1**：prototype 和 product 共用 `designing → ready_to_build → building → iterating → final_check → landed → documenting → complete`。
 - **I-LC2**：design 提交建造依据后才能进入 build；build 不临时补选类型、技术栈或框架。
-- **I-LC3**：PM 定稿后由 build 自动执行 final_check、落地主线和文档编译；`/pmai-build-close` 只兼容恢复。
-- **I-LC4**：实现 commit 或 accepted delta 变化会使旧 evidence 失效。
+- **I-LC3**：build 候选在 PM 定稿前完成验收就绪快照；PM 定稿后由 build 自动校验快照、落地主线和编译文档，`/pmai-build-close` 只兼容恢复。
+- **I-LC4**：实现 commit、accepted delta 或 evidence 变化会使验收就绪快照失效。
 - **I-LC5**：模块规格在 design 定稿时描述最终目标；landed 后按符合 / accepted delta / 漏实现 / 无依据实现对账，只有 accepted delta 可改目标。现状文档只根据已经 landed 的 main 事实更新；文档失败不得重复 merge。
 
 ## I-ACC：自适应验收
@@ -44,6 +44,7 @@
 - **I-ACC5**：v2 不允许用 exception 跳过 browser-smoke；行为检查 fail 也不能放行。
 - **I-ACC6**：非 Web product build 不要求 prototype、dev port 或浏览器。
 - **I-ACC7**：contract v1 validator 只承担历史 close 兼容，不得被新流程调用或展示。
+- **I-ACC8**：v2 只有完整 required evidence 通过 `review-ready` 后才能记录 PM 定稿；`final_check` 不首次跑完整验收或修改业务代码。
 
 ## I-BR / I-CB：分支与写入边界
 
@@ -57,12 +58,13 @@
 
 ## I-CR：自动 finalize 与恢复
 
-- **I-CR1**：finalize 前必须有有效 build contract、最终 implementation commit、PM 定稿记录和全部 required evidence。
+- **I-CR1**：finalize 前必须有有效 build contract、最终 implementation commit、绑定同一 commit/hash 的验收就绪快照、PM 定稿记录和全部 required evidence。
 - **I-CR2**：worktree 模式先在 build 分支提交实现，再 merge main；main 模式只处理合同声明路径。
 - **I-CR3**：merge 必须做 ancestor 验证；冲突时保留 `final_check` 和隔离环境。
 - **I-CR4**：实现 landed 后对账目标规格并编译现状文档；失败记录 `landed/docs_pending`，恢复时不重复 merge。
 - **I-CR5**：完成后模块三件套保留，临时 `.work-meta.json` 按收尾合同清理。
 - **I-CR6**：`close-work.sh` / `/pmai-build-close` 只作为旧合同和中断恢复入口，不构成正常用户主链。
+- **I-CR7**：worktree 清理失败若不影响已落地实现，必须进入安全待清理队列，不得阻塞 landed 后文档编译。
 
 ## I-CA：取消
 

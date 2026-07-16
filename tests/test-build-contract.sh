@@ -80,6 +80,10 @@ JSON
   python3 "$BUILD_CONTRACT" record-evidence "$MODULE_DIR" --name behavior --status skipped --artifact ".pm-workflow/audits/pet-import/behavior.json" >/dev/null
 }
 
+mark_review_ready() {
+  python3 "$BUILD_CONTRACT" review-ready "$MODULE_DIR" >/dev/null
+}
+
 test_contract_lifecycle() {
   start_test "build-contract: start → commit → accept → validate-close"
   setup_contract_fixture
@@ -121,18 +125,22 @@ test_contract_lifecycle() {
     rm -f /tmp/build-contract.$$ /tmp/build-contract.err.$$; teardown_contract_fixture; return
   fi
 
-  python3 "$BUILD_CONTRACT" accept "$MODULE_DIR" --accepted-at "2026-06-28T10:00:00+08:00" >/tmp/build-contract.$$ 2>/tmp/build-contract.err.$$
-  if python3 "$BUILD_CONTRACT" validate-close "$MODULE_DIR" >/tmp/build-contract.$$ 2>/tmp/build-contract.err.$$; then
-    _fail "validate-close should fail before audit evidence exists"
+  if python3 "$BUILD_CONTRACT" accept "$MODULE_DIR" --accepted-at "2026-06-28T10:00:00+08:00" >/tmp/build-contract.$$ 2>/tmp/build-contract.err.$$; then
+    _fail "accept should fail before review-ready"
     rm -f /tmp/build-contract.$$ /tmp/build-contract.err.$$; teardown_contract_fixture; return
   fi
-  if ! grep -q "build 验收证据不完整" /tmp/build-contract.err.$$; then
-    _fail "missing audit evidence guidance"
+  if ! grep -q "验收就绪快照" /tmp/build-contract.err.$$; then
+    _fail "missing review-ready guidance"
     cat /tmp/build-contract.err.$$ >&2
     rm -f /tmp/build-contract.$$ /tmp/build-contract.err.$$; teardown_contract_fixture; return
   fi
 
   write_clean_audits
+  mark_review_ready || {
+    _fail "review-ready should succeed after fresh evidence"
+    rm -f /tmp/build-contract.$$ /tmp/build-contract.err.$$; teardown_contract_fixture; return
+  }
+  python3 "$BUILD_CONTRACT" accept "$MODULE_DIR" --accepted-at "2026-06-28T10:00:00+08:00" >/dev/null
   if ! python3 "$BUILD_CONTRACT" validate-close "$MODULE_DIR" >/tmp/build-contract.$$ 2>/tmp/build-contract.err.$$; then
     _fail "validate-close should succeed after commit and acceptance"
     cat /tmp/build-contract.err.$$ >&2
@@ -158,6 +166,8 @@ assert build["builder"]["thinking"] == "high"
 assert build["builder"]["sandbox"] == "workspace-write"
 assert build["implementation_commit"] == "def456"
 assert build["pm_accepted_at"] == "2026-06-28T10:00:00+08:00"
+assert build["acceptance"]["ready_commit"] == "def456"
+assert build["acceptance"]["ready_source_hash"] == build["approved_source_hash"]
 PY
     _fail "written build contract fields mismatch"
     rm -f /tmp/build-contract.$$ /tmp/build-contract.err.$$; teardown_contract_fixture; return
@@ -272,8 +282,8 @@ PY
   teardown_contract_fixture
 }
 
-test_contract_complete_records_commit_and_acceptance_atomically() {
-  start_test "build-contract: complete records implementation + acceptance in one write"
+test_contract_complete_accepts_only_ready_candidate() {
+  start_test "build-contract: complete accepts only the already checked candidate"
   setup_contract_fixture
 
   if ! python3 "$BUILD_CONTRACT" start "$MODULE_DIR" \
@@ -291,6 +301,12 @@ test_contract_complete_records_commit_and_acceptance_atomically() {
   fi
 
   python3 "$BUILD_CONTRACT" commit "$MODULE_DIR" --implementation-commit "draft123" >/dev/null
+  python3 "$BUILD_CONTRACT" commit "$MODULE_DIR" --implementation-commit "def456" >/dev/null
+  write_clean_audits
+  mark_review_ready || {
+    _fail "review-ready should succeed"
+    rm -f /tmp/build-contract.$$ /tmp/build-contract.err.$$; teardown_contract_fixture; return
+  }
   if ! python3 "$BUILD_CONTRACT" complete "$MODULE_DIR" \
     --implementation-commit "def456" \
     --accepted-at "2026-06-28T10:00:00+08:00" >/tmp/build-contract.$$ 2>/tmp/build-contract.err.$$; then
@@ -299,7 +315,6 @@ test_contract_complete_records_commit_and_acceptance_atomically() {
     rm -f /tmp/build-contract.$$ /tmp/build-contract.err.$$; teardown_contract_fixture; return
   fi
 
-  write_clean_audits
   if ! python3 "$BUILD_CONTRACT" validate-close "$MODULE_DIR" >/tmp/build-contract.$$ 2>/tmp/build-contract.err.$$; then
     _fail "validate-close should succeed after complete"
     cat /tmp/build-contract.err.$$ >&2
@@ -342,17 +357,10 @@ test_contract_limited_browser_cannot_be_excepted() {
   fi
 
   python3 "$BUILD_CONTRACT" commit "$MODULE_DIR" --implementation-commit "def456" >/dev/null
-  python3 "$BUILD_CONTRACT" complete "$MODULE_DIR" \
-    --implementation-commit "def456" \
-    --accepted-at "2026-06-28T10:00:00+08:00" >/tmp/build-contract.$$ 2>/tmp/build-contract.err.$$ || {
-      _fail "complete should succeed"
-      cat /tmp/build-contract.err.$$ >&2
-      rm -f /tmp/build-contract.$$ /tmp/build-contract.err.$$; teardown_contract_fixture; return
-    }
   write_limited_browser_audits
 
-  if python3 "$BUILD_CONTRACT" validate-close "$MODULE_DIR" >/tmp/build-contract.$$ 2>/tmp/build-contract.err.$$; then
-    _fail "validate-close should reject skipped browser evidence without PM exception"
+  if python3 "$BUILD_CONTRACT" review-ready "$MODULE_DIR" >/tmp/build-contract.$$ 2>/tmp/build-contract.err.$$; then
+    _fail "review-ready should reject skipped browser evidence without PM exception"
     rm -f /tmp/build-contract.$$ /tmp/build-contract.err.$$; teardown_contract_fixture; return
   fi
   if ! grep -q "主动浏览器能力" /tmp/build-contract.err.$$; then
@@ -370,8 +378,8 @@ test_contract_limited_browser_cannot_be_excepted() {
     rm -f /tmp/build-contract.$$ /tmp/build-contract.err.$$; teardown_contract_fixture; return
   fi
 
-  if python3 "$BUILD_CONTRACT" validate-close "$MODULE_DIR" >/tmp/build-contract.$$ 2>/tmp/build-contract.err.$$; then
-    _fail "validate-close must not allow limited browser after exception"
+  if python3 "$BUILD_CONTRACT" review-ready "$MODULE_DIR" >/tmp/build-contract.$$ 2>/tmp/build-contract.err.$$; then
+    _fail "review-ready must not allow limited browser after exception"
     rm -f /tmp/build-contract.$$ /tmp/build-contract.err.$$; teardown_contract_fixture; return
   fi
   if ! grep -q "主动浏览器能力" /tmp/build-contract.err.$$; then
@@ -401,20 +409,13 @@ test_contract_missing_browser_smoke_blocks_clean_audits() {
       _fail "start should succeed"
       cat /tmp/build-contract.err.$$ >&2
       rm -f /tmp/build-contract.$$ /tmp/build-contract.err.$$; teardown_contract_fixture; return
-    }
+  }
   python3 "$BUILD_CONTRACT" commit "$MODULE_DIR" --implementation-commit "def456" >/dev/null
-  python3 "$BUILD_CONTRACT" complete "$MODULE_DIR" \
-    --implementation-commit "def456" \
-    --accepted-at "2026-06-28T10:00:00+08:00" >/tmp/build-contract.$$ 2>/tmp/build-contract.err.$$ || {
-      _fail "complete should succeed"
-      cat /tmp/build-contract.err.$$ >&2
-      rm -f /tmp/build-contract.$$ /tmp/build-contract.err.$$; teardown_contract_fixture; return
-    }
 
   write_clean_audits
   rm -f "$T/.pm-workflow/audits/pet-import/browser-smoke.json"
-  if python3 "$BUILD_CONTRACT" validate-close "$MODULE_DIR" >/tmp/build-contract.$$ 2>/tmp/build-contract.err.$$; then
-    _fail "validate-close should reject missing browser-smoke.json"
+  if python3 "$BUILD_CONTRACT" review-ready "$MODULE_DIR" >/tmp/build-contract.$$ 2>/tmp/build-contract.err.$$; then
+    _fail "review-ready should reject missing browser-smoke.json"
     rm -f /tmp/build-contract.$$ /tmp/build-contract.err.$$; teardown_contract_fixture; return
   fi
   if grep -q "浏览器主动 smoke" /tmp/build-contract.err.$$; then
@@ -444,15 +445,8 @@ test_contract_browser_smoke_limited_blocks_passed_browser_audits() {
       _fail "start should succeed"
       cat /tmp/build-contract.err.$$ >&2
       rm -f /tmp/build-contract.$$ /tmp/build-contract.err.$$; teardown_contract_fixture; return
-    }
+  }
   python3 "$BUILD_CONTRACT" commit "$MODULE_DIR" --implementation-commit "def456" >/dev/null
-  python3 "$BUILD_CONTRACT" complete "$MODULE_DIR" \
-    --implementation-commit "def456" \
-    --accepted-at "2026-06-28T10:00:00+08:00" >/tmp/build-contract.$$ 2>/tmp/build-contract.err.$$ || {
-      _fail "complete should succeed"
-      cat /tmp/build-contract.err.$$ >&2
-      rm -f /tmp/build-contract.$$ /tmp/build-contract.err.$$; teardown_contract_fixture; return
-    }
 
   write_clean_audits
   cat > "$T/.pm-workflow/audits/pet-import/browser-smoke.json" <<'JSON'
@@ -469,8 +463,8 @@ JSON
       rm -f /tmp/build-contract.$$ /tmp/build-contract.err.$$; teardown_contract_fixture; return
     }
 
-  if python3 "$BUILD_CONTRACT" validate-close "$MODULE_DIR" >/tmp/build-contract.$$ 2>/tmp/build-contract.err.$$; then
-    _fail "validate-close should reject passed browser audits when browser smoke is limited"
+  if python3 "$BUILD_CONTRACT" review-ready "$MODULE_DIR" >/tmp/build-contract.$$ 2>/tmp/build-contract.err.$$; then
+    _fail "review-ready should reject passed browser audits when browser smoke is limited"
     rm -f /tmp/build-contract.$$ /tmp/build-contract.err.$$; teardown_contract_fixture; return
   fi
   if grep -q "主动浏览器能力" /tmp/build-contract.err.$$; then
@@ -500,15 +494,8 @@ test_contract_behavior_fail_blocks_close() {
       _fail "start should succeed"
       cat /tmp/build-contract.err.$$ >&2
       rm -f /tmp/build-contract.$$ /tmp/build-contract.err.$$; teardown_contract_fixture; return
-    }
+  }
   python3 "$BUILD_CONTRACT" commit "$MODULE_DIR" --implementation-commit "def456" >/dev/null
-  python3 "$BUILD_CONTRACT" complete "$MODULE_DIR" \
-    --implementation-commit "def456" \
-    --accepted-at "2026-06-28T10:00:00+08:00" >/tmp/build-contract.$$ 2>/tmp/build-contract.err.$$ || {
-      _fail "complete should succeed"
-      cat /tmp/build-contract.err.$$ >&2
-      rm -f /tmp/build-contract.$$ /tmp/build-contract.err.$$; teardown_contract_fixture; return
-    }
   write_clean_audits
   cat > "$T/.pm-workflow/audits/pet-import/behavior.json" <<'JSON'
 {"status":"fail","passed":1,"total":2,"note":"确认按钮点击无反应"}
@@ -518,8 +505,8 @@ JSON
 
   if python3 "$BUILD_CONTRACT" audit-exception "$MODULE_DIR" \
     --reason "PM 接受行为检查缺口" --check behavior >/tmp/build-contract.$$ 2>/tmp/build-contract.err.$$ \
-    && python3 "$BUILD_CONTRACT" validate-close "$MODULE_DIR" >/tmp/build-contract.$$ 2>/tmp/build-contract.err.$$; then
-    _fail "validate-close should reject behavior fail even with audit exception"
+    && python3 "$BUILD_CONTRACT" review-ready "$MODULE_DIR" >/tmp/build-contract.$$ 2>/tmp/build-contract.err.$$; then
+    _fail "review-ready should reject behavior fail even with audit exception"
     rm -f /tmp/build-contract.$$ /tmp/build-contract.err.$$; teardown_contract_fixture; return
   fi
   if grep -q "行为审未通过" /tmp/build-contract.err.$$; then
@@ -544,20 +531,23 @@ test_contract_v2_rejects_stale_evidence_and_invalidates_on_delta() {
     --target-kind product --target-path "src/pets/" --entrypoint "src/pets/" \
     --approved-source-hash "source-v1" --required-check tests >/dev/null || {
       _fail "v2 start should succeed"; teardown_contract_fixture; return;
-    }
+  }
   python3 "$BUILD_CONTRACT" commit "$MODULE_DIR" --implementation-commit commit-v1 >/dev/null
-  python3 "$BUILD_CONTRACT" complete "$MODULE_DIR" --implementation-commit commit-v1 >/dev/null
   python3 "$BUILD_CONTRACT" record-evidence "$MODULE_DIR" --name tests --status pass \
     --source-hash source-v1 --commit stale-commit >/dev/null
 
-  if python3 "$BUILD_CONTRACT" validate-land "$MODULE_DIR" >/tmp/build-contract.$$ 2>/tmp/build-contract.err.$$; then
-    _fail "stale evidence commit should block landing"
+  if python3 "$BUILD_CONTRACT" review-ready "$MODULE_DIR" >/tmp/build-contract.$$ 2>/tmp/build-contract.err.$$; then
+    _fail "stale evidence commit should block review readiness"
   elif ! grep -q "commit 与当前 implementation_commit 不一致" /tmp/build-contract.err.$$; then
     _fail "stale commit guidance missing"
     cat /tmp/build-contract.err.$$ >&2
   else
     python3 "$BUILD_CONTRACT" record-evidence "$MODULE_DIR" --name tests --status pass \
       --source-hash source-v1 --commit commit-v1 >/dev/null
+    mark_review_ready || {
+      _fail "fresh product evidence should become review-ready"; teardown_contract_fixture; return;
+    }
+    python3 "$BUILD_CONTRACT" accept "$MODULE_DIR" >/dev/null
     python3 "$BUILD_CONTRACT" validate-land "$MODULE_DIR" >/dev/null || {
       _fail "fresh product evidence should pass"; teardown_contract_fixture; return;
     }
@@ -590,9 +580,10 @@ test_contract_v2_post_land_docs_resume() {
     --baseline-sha abc123 --target-kind product --target-path src/pets/ --entrypoint src/pets/ --approved-source-hash source-v1 \
     --required-check tests >/dev/null
   python3 "$BUILD_CONTRACT" commit "$MODULE_DIR" --implementation-commit commit-v1 >/dev/null
-  python3 "$BUILD_CONTRACT" complete "$MODULE_DIR" --implementation-commit commit-v1 >/dev/null
   python3 "$BUILD_CONTRACT" record-evidence "$MODULE_DIR" --name tests --status pass \
     --source-hash source-v1 --commit commit-v1 >/dev/null
+  mark_review_ready
+  python3 "$BUILD_CONTRACT" accept "$MODULE_DIR" >/dev/null
   python3 "$BUILD_CONTRACT" landed "$MODULE_DIR" --landed-commit commit-v1 >/dev/null
   python3 "$BUILD_CONTRACT" docs-start "$MODULE_DIR" >/dev/null
   python3 "$BUILD_CONTRACT" docs-fail "$MODULE_DIR" --reason "规格覆盖表缺一页" >/dev/null
@@ -624,10 +615,70 @@ import json, sys
 build = json.load(open(sys.argv[1]))["build"]
 assert build["implementation_commit"] == "commit-v2"
 assert build["acceptance"]["evidence"] == []
+assert build["acceptance"]["ready_at"] is None
+assert build["acceptance"]["ready_commit"] is None
 assert build["pm_accepted_at"] is None
 assert build["lifecycle_state"] == "iterating"
 PY
     _fail "new implementation commit should invalidate evidence"
+    teardown_contract_fixture; return
+  }
+  pass_test
+  teardown_contract_fixture
+}
+
+test_contract_v2_new_evidence_invalidates_review_ready() {
+  start_test "build-contract v2: changed evidence invalidates review-ready snapshot"
+  setup_contract_fixture
+  python3 "$BUILD_CONTRACT" start "$MODULE_DIR" \
+    --anchor "docs/modules/pet-import/spec.md" --mode worktree --executor codex \
+    --branch build-pet-import --worktree ".worktrees/build-pet-import" \
+    --baseline-sha abc123 --target-kind product --target-path src/pets/ --entrypoint src/pets/ \
+    --approved-source-hash source-v1 --required-check tests >/dev/null
+  python3 "$BUILD_CONTRACT" commit "$MODULE_DIR" --implementation-commit commit-v1 >/dev/null
+  python3 "$BUILD_CONTRACT" record-evidence "$MODULE_DIR" --name tests --status pass \
+    --source-hash source-v1 --commit commit-v1 >/dev/null
+  mark_review_ready
+  python3 "$BUILD_CONTRACT" record-evidence "$MODULE_DIR" --name tests --status pass \
+    --source-hash source-v1 --commit commit-v1 >/dev/null
+
+  if python3 "$BUILD_CONTRACT" accept "$MODULE_DIR" >/tmp/build-contract.$$ 2>/tmp/build-contract.err.$$; then
+    _fail "accept must reject a snapshot invalidated by changed evidence"
+  elif ! grep -q "验收就绪快照" /tmp/build-contract.err.$$; then
+    _fail "changed evidence should report missing review-ready snapshot"
+    cat /tmp/build-contract.err.$$ >&2
+  else
+    pass_test
+  fi
+  rm -f /tmp/build-contract.$$ /tmp/build-contract.err.$$
+  teardown_contract_fixture
+}
+
+test_contract_v2_iterating_clears_acceptance_and_readiness() {
+  start_test "build-contract v2: returning to iterating clears acceptance and readiness"
+  setup_contract_fixture
+  python3 "$BUILD_CONTRACT" start "$MODULE_DIR" \
+    --anchor "docs/modules/pet-import/spec.md" --mode worktree --executor codex \
+    --branch build-pet-import --worktree ".worktrees/build-pet-import" \
+    --baseline-sha abc123 --target-kind product --target-path src/pets/ --entrypoint src/pets/ \
+    --approved-source-hash source-v1 --required-check tests >/dev/null
+  python3 "$BUILD_CONTRACT" commit "$MODULE_DIR" --implementation-commit commit-v1 >/dev/null
+  python3 "$BUILD_CONTRACT" record-evidence "$MODULE_DIR" --name tests --status pass \
+    --source-hash source-v1 --commit commit-v1 >/dev/null
+  mark_review_ready
+  python3 "$BUILD_CONTRACT" accept "$MODULE_DIR" >/dev/null
+  python3 "$BUILD_CONTRACT" iterating "$MODULE_DIR" >/dev/null
+
+  python3 - "$MODULE_DIR/.work-meta.json" <<'PY' || {
+import json, sys
+build = json.load(open(sys.argv[1]))["build"]
+assert build["lifecycle_state"] == "iterating"
+assert build["pm_accepted_at"] is None
+assert build["acceptance"]["ready_at"] is None
+assert build["acceptance"]["ready_commit"] is None
+assert len(build["acceptance"]["evidence"]) == 1
+PY
+    _fail "iterating should clear acceptance/readiness while preserving reusable evidence"
     teardown_contract_fixture; return
   }
   pass_test
@@ -666,7 +717,7 @@ test_contract_rejects_missing_build
 test_contract_start_requires_adaptive_inputs
 test_contract_start_initializes_missing_meta
 test_contract_designing_creates_new_module_directory
-test_contract_complete_records_commit_and_acceptance_atomically
+test_contract_complete_accepts_only_ready_candidate
 test_contract_limited_browser_cannot_be_excepted
 test_contract_missing_browser_smoke_blocks_clean_audits
 test_contract_browser_smoke_limited_blocks_passed_browser_audits
@@ -674,6 +725,8 @@ test_contract_behavior_fail_blocks_close
 test_contract_v2_rejects_stale_evidence_and_invalidates_on_delta
 test_contract_v2_post_land_docs_resume
 test_contract_v2_new_implementation_invalidates_evidence
+test_contract_v2_new_evidence_invalidates_review_ready
+test_contract_v2_iterating_clears_acceptance_and_readiness
 test_contract_v2_rejects_illegal_lifecycle_jumps
 
 report_results "build-contract"

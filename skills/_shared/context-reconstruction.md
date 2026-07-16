@@ -13,7 +13,7 @@ python3 "$PMAI_HOME/scripts/context-pack.py" \
   --output "$CONTEXT_PACK"
 ```
 
-design 开场、build 开始、恢复中断工作、PM 定稿后的最终检查、merge 后文档更新前都重新编译。不得沿用更早会话里凭记忆整理的摘要。
+design 开场、build 开始、候选版本准备验收就绪快照、恢复中断工作、PM 定稿后的轻量 currentness 校验、merge 后文档更新前都重新编译。不得沿用更早会话里凭记忆整理的摘要。
 
 ## 读取顺序
 

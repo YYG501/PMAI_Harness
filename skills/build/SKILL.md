@@ -120,7 +120,7 @@ python3 "$PMAI_HOME/scripts/acceptance-profile.py" "${PROFILE_ARGS[@]}" > "$PROF
 恢复既有 v2 build 时，沿用合同里已确认的工作环境和构建工具，不重复确认。新 build 才执行本节：
 
 1. **推荐工作环境**：默认推荐“独立环境”；若当前已经是本模块有效的 `build-*` 环境，则推荐“继续当前独立环境”。PM 也可以明确改为“当前环境”。
-2. **识别当前主控并推荐构建工具**：把当前 runtime 映射成 `claude-code / codex / opencode / cursor-agent`；无法识别时用 `unknown`。构建工具必须和当前主控不同，不能让 Codex 主控再启动 Codex，也不能让 Claude Code / OpenCode 主控把自己列为外部工具。按项目级类型、消费仓配置和本机可用性生成推荐与完整可选列表：
+2. **识别当前主控并推荐构建工具**：把当前 runtime 映射成 `claude-code / codex / opencode / cursor-agent`；无法识别时用 `unknown`。外部构建工具 profile 必须和当前主控不同，不能让 Codex 主控再启动 Codex，也不能让 Claude Code / OpenCode 主控把自己列为外部工具；“当前会话直接构建”不是外部 profile，始终作为有效选项。按项目级类型、消费仓配置和本机可用性生成推荐与完整可选列表：
 
    ```bash
    CURRENT_HOST="<claude-code | codex | opencode | cursor-agent | unknown>"
@@ -134,7 +134,7 @@ python3 "$PMAI_HOME/scripts/acceptance-profile.py" "${PROFILE_ARGS[@]}" > "$PROF
      --current-host "$CURRENT_HOST")
    ```
 
-   `list` 和 `recommend` 都必须排除当前主控对应的 profile。只有其它外部构建工具全部不可用时，才回退为“当前会话直接构建”；该兜底不与外部工具并列成常规选项。
+   `list` 和 `recommend` 都必须排除当前主控对应的外部 profile。`list` 在其它可用外部工具之外始终包含“当前会话直接构建”；`recommend` 仍优先按项目配置选择可用外部 profile，没有可用外部工具时才推荐当前会话直接构建。
 
 3. **一次展示推荐结果和全部有效选项**：
 
@@ -148,6 +148,7 @@ python3 "$PMAI_HOME/scripts/acceptance-profile.py" "${PROFILE_ARGS[@]}" > "$PROF
 
    构建工具（已选）：<工具名（model, thinking） | 当前会话直接构建>
    本机可用工具：
+   - 当前会话直接构建
    - <工具名（model, thinking）>（已选）
    - <其它可用工具（逐项列出）>
 
@@ -155,7 +156,7 @@ python3 "$PMAI_HOME/scripts/acceptance-profile.py" "${PROFILE_ARGS[@]}" > "$PROF
    也可以直接回复“工作环境改为<选项>”或“构建工具改为<工具名>”。
    ```
 
-   “当前环境”只在当前环境有效时列出；若当前环境不是 main/master，也不是本模块已记录的 `build-*` 环境，就不显示这个无效选项。工具列表只取 `AVAILABLE_BUILDERS_JSON`，逐项展示本机实际可用且非当前主控的工具。卡片中禁止出现项目类型、验收方案、检查清单、worktree、build contract、hash、evidence JSON 等内容。`prototype / product` 只在后台参与适配，不作为本轮待确认项。
+   “当前环境”只在当前环境有效时列出；若当前环境不是 main/master，也不是本模块已记录的 `build-*` 环境，就不显示这个无效选项。工具列表只取 `AVAILABLE_BUILDERS_JSON`：始终展示“当前会话直接构建”，并逐项展示本机实际可用且非当前主控的外部工具。卡片中禁止出现项目类型、验收方案、检查清单、worktree、build contract、hash、evidence JSON 等内容。`prototype / product` 只在后台参与适配，不作为本轮待确认项。
 
 4. PM 调整工作环境时，只用 PM 语言展示“独立环境 / 当前环境”；选择当前环境代表本轮直接在当前主线工作，写入 `build.mode=main`。选择独立环境写入 `build.mode=worktree`。若当前环境不是 main/master，也不是本模块已记录的 `build-*` 环境，不提供“当前环境”这个无效选项。
 5. PM 调整构建工具时，只接受卡片已经列出的工具；选定后用 `resolve --profile <name> --current-host "$CURRENT_HOST"` 固化 snapshot。`resolve` 再次拒绝与当前主控相同的 profile，不能靠 PM 文本或旧配置绕过。
@@ -176,7 +177,7 @@ fi
 
 所有 git 命令使用 `git -C "$BUILD_DIR"`；必须切目录的非 git 命令只在 subshell 中运行，不把主控 cwd 留在 worktree。
 
-执行器使用 `EXECUTOR_STATUS_DIR`、heartbeat、退出码和日志文件回报进度；PM 窗口只报阶段摘要，不直播命令、日志和进程排障。可确认的外部构建工具包括 Claude Code、Codex、Cursor Agent 和 OpenCode，但必须排除当前主控；开工卡一次列出推荐项和其它本机可用项。没有外部工具可用时，才由当前会话直接构建。
+执行器使用 `EXECUTOR_STATUS_DIR`、heartbeat、退出码和日志文件回报进度；PM 窗口只报阶段摘要，不直播命令、日志和进程排障。可确认的外部构建工具包括 Claude Code、Codex、Cursor Agent 和 OpenCode，但必须排除当前主控对应的外部 profile；“当前会话直接构建”始终与这些外部工具一起列为有效选项。没有外部工具可用时，推荐当前会话直接构建。
 
 从 acceptance profile 取 `required_checks`，写合同 v2：
 
@@ -258,13 +259,14 @@ git -C "$BUILD_DIR" add -- "docs/modules/<模块>/.work-meta.json"
 git -C "$BUILD_DIR" commit -m "build(<模块>): record iteration"
 ```
 
-给 PM 看结果，不先跑完整发布门。PM 每轮反馈后：
+先给 PM 看结果，不把完整验收的等待挡在“能看到页面/功能”之前。PM 每轮反馈后：
 
 1. 判断是实现修正，还是新的产品决定；
 2. 只改受影响路径；
 3. 只跑受影响的快速检查；
 4. 提交该轮修改；
-5. 再给 PM 看。
+5. 再给 PM 看；
+6. 当当前候选没有已知缺口时，在 PM 查看结果期间后台准备“验收就绪快照”。
 
 如果反馈改变对象、动作、状态、权限、真相源、页面任务或产品规则，记录 accepted delta：
 
@@ -279,34 +281,19 @@ python3 "$PMAI_HOME/scripts/build-contract.py" add-delta \
 
 实现修正不改变产品决定时，不递增 revision；但实现 commit 变化后，绑定旧 commit 的证据不能复用。
 
-## 6. 识别 PM 定稿语义，自动进入 final_check
+## 6. 在 build 阶段准备验收就绪候选
 
-下列表达在 PM 已看到当前结果的语境中，视为对提交并合入 main 的明确授权：
+`final_check` 不是第一次发现规格漏项、第一次走完整浏览器路径或第一次跑 production build 的地方。当前实现形成候选 commit 后，在仍处于 `iterating` 时完成：
 
-- “可以提交”
-- “定稿”
-- “可以合并”
-- “这版可以了”
-- “提交吧 / 合进去吧”
+1. 重新编译 context pack，确认没有未决产品问题；
+2. 对候选 commit 跑 acceptance profile 的全部 `required_checks`；
+3. 从最终规格的功能项、流程、权限和验收标准逐项生成覆盖证据，不能沿用只覆盖旧页面的手工概括；
+4. 每项用 `record-evidence` 绑定同一个 `approved_source_hash + implementation_commit + checked_at`；
+5. 生成 landed 后文档影响地图草案，先定位可能更新的规格、产品现状、规则、术语、设计基线、TODO 和索引，但不在 merge 前把正式文档写成“已落地”；
+6. 运行 `review-ready`，把完整证据冻结为与当前 source hash 和 implementation commit 绑定的验收就绪快照；
+7. 提交 evidence artifacts、文档影响草案和合同状态。
 
-该表达本身就是 one-way door 授权，不再二次问“是否收尾”，也不要求 PM 手动发 `/pmai-build-close`。
-
-先提交最后一轮目标改动，记录该实现 commit 和 PM 验收：
-
-```bash
-IMPLEMENTATION_COMMIT=$(git -C "$BUILD_DIR" rev-parse HEAD)
-python3 "$PMAI_HOME/scripts/build-contract.py" complete \
-  "$BUILD_DIR/docs/modules/<模块>" \
-  --implementation-commit "$IMPLEMENTATION_COMMIT"
-```
-
-重新编译 context pack。若出现未决产品问题，回 `iterating`；不得带着问题落主线。
-
-## 7. 对最终 commit 跑完整验收
-
-只在 final_check 跑 acceptance profile 的全部 `required_checks`。
-
-若 required checks 包含 `browser-smoke`，先在后台解析可实际操作页面的主动浏览器适配器：gstack `/browse`、当前 runtime browser 或 Playwright。找不到任何适配器时立即把 final_check 标为 blocked 并说明缺失能力；不得继续生成 visual/behavior 的假证据，也不得让 PM 用 exception 放行。
+若 required checks 包含 `browser-smoke`，先在后台解析可实际操作页面的主动浏览器适配器：gstack `/browse`、当前 runtime browser 或 Playwright。找不到任何适配器时保留 `iterating` 并说明缺失能力；不得生成 visual/behavior 的假证据，也不得让 PM 用 exception 放行。
 
 ### prototype 完整检查
 
@@ -330,22 +317,58 @@ python3 "$PMAI_HOME/scripts/build-contract.py" complete \
 - UI 浏览器检查（涉及时）；
 - 权限、安全、越权和破坏性数据检查（涉及时）。
 
-每项都用 `record-evidence` 绑定同一个 `approved_source_hash + implementation_commit + checked_at`。非浏览器检查受限时如实写 `limited / skipped / blocked`，只有合同允许的具名检查才可记录 exception；`browser-smoke` 在 v2 必须是 active pass，行为检查 `fail` 也不能例外放行。
+非浏览器检查受限时如实写 `limited / skipped / blocked`，只有合同允许的具名检查才可记录 exception；`browser-smoke` 在 v2 必须是 active pass，行为检查 `fail` 也不能例外放行。
 
-完整检查失败：
+完整检查失败时保持 `iterating`。这是 build 缺口：修复后重新给 PM 看结果并生成新快照；不得带着失败进入 close。
+
+完整检查通过后：
 
 ```bash
-python3 "$PMAI_HOME/scripts/build-contract.py" iterating "$BUILD_DIR/docs/modules/<模块>"
+python3 "$PMAI_HOME/scripts/doc-impact.py" init \
+  "$BUILD_DIR/docs/modules/<模块>" \
+  --repo-root "$BUILD_DIR" \
+  --base "<baseline sha>" \
+  --head "$IMPLEMENTATION_COMMIT" \
+  --output "$BUILD_DIR/.pm-workflow/audits/<模块>/doc-impact.json"
+
+python3 "$PMAI_HOME/scripts/build-contract.py" review-ready \
+  "$BUILD_DIR/docs/modules/<模块>"
+
+git -C "$BUILD_DIR" add -- \
+  ".pm-workflow/audits/<模块>" \
+  "docs/modules/<模块>/.work-meta.json"
+git -C "$BUILD_DIR" commit -m "build(<模块>): record acceptance-ready candidate"
 ```
 
-保留当前工作环境，修复后再由 PM 看结果；不 merge、不清理。
+实现 commit、accepted delta 或任一验收证据变化都会使该快照失效。只有当前快照有效时，才向 PM 表达“这版已经验收就绪，可以直接定稿”。
 
-完整检查通过后提交 evidence artifacts 与合同状态，再运行：
+## 7. 识别 PM 定稿语义，自动进入 final_check
+
+下列表达在 PM 已看到当前结果的语境中，视为对提交并合入 main 的明确授权：
+
+- “可以提交”
+- “定稿”
+- “可以合并”
+- “这版可以了”
+- “提交吧 / 合进去吧”
+
+该表达本身就是 one-way door 授权，不再二次问“是否收尾”，也不要求 PM 手动发 `/pmai-build-close`。
+
+如果 PM 在快照尚未完成时就说定稿，先在 `iterating` 完成上节；检查失败就回 build 修复，不能先写入验收时间再一边 close 一边补功能。快照有效后只记录 PM 对同一候选 commit 的定稿授权：
+
+```bash
+python3 "$PMAI_HOME/scripts/build-contract.py" accept \
+  "$BUILD_DIR/docs/modules/<模块>"
+```
+
+`final_check` 只做确定性校验，不重新跑已经绑定同一 commit/hash 的完整验收，也不修改业务代码：
 
 ```bash
 python3 "$PMAI_HOME/scripts/build-contract.py" validate-land \
   "$BUILD_DIR/docs/modules/<模块>"
 ```
+
+若快照缺失、过期或发现实现缺口，立即回 `iterating`；不 merge、不清理，也不在 close 内修代码。
 
 ## 8. 自动落地主线
 
@@ -357,12 +380,13 @@ bash "$PMAI_HOME/scripts/close-work.sh" "$BUILD_DIR/docs/modules/<模块>"
 
 - 独立环境发生 merge 冲突：停止在可恢复的 `final_check`，保留分支和 worktree；
 - 不清理或回退用户无关脏改动；
+- 隔离环境仍被开发服务或缓存占用时，把 worktree/branch 记入安全待清理队列，继续文档同步，不让纯清理失败阻塞已经完成的落地；
 - 实现落主线后进入 `landed + docs_pending`；
 - `/pmai-build-close` 只作为兼容或恢复入口，正常链路无需 PM 再调用。
 
 ## 9. 基于 main 对账规格目标与产品现状
 
-第一次 finalize 返回 doc impact map 后，必须在 main 上完成：
+第一次 finalize 使用 build 阶段已经生成的 doc impact 草案；若旧合同没有草案才在 main 补生成。随后必须在 main 上完成：
 
 1. 重新生成 context pack；
 2. 读取 landed diff、build contract、accepted deltas 和 doc impact map；
@@ -392,7 +416,7 @@ python3 "$PMAI_HOME/scripts/build-contract.py" docs-fail \
 ```text
 这版已经可以看：<入口>。
 这轮完成了：<主路径和关键状态>。
-你直接看结果说哪里要改；我会继续改并只复查受影响部分。
+你直接看结果说哪里要改；我会继续改并只复查受影响部分。完整验收会在你查看期间后台准备好。
 ```
 
 完成后：
@@ -411,10 +435,11 @@ python3 "$PMAI_HOME/scripts/build-contract.py" docs-fail \
 - 验收方案按项目类型和风险后台生成默认值；不让 PM 选择，也不在开工确认卡展示。
 - 新 build 开工前，AI 推荐工作环境和构建工具，PM 只确认这两项；调整后必须重显同一张确认卡。
 - PM 不需要理解 worktree、合同、hash、证据 JSON 或手动 close；构建工具只以名称、模型和思考档展示。
-- 迭代中只跑受影响快速检查；PM 定稿后才跑全部 required checks。
+- 迭代修改后先跑受影响快速检查并尽快给 PM 看；候选结果在 PM 定稿前完成全部 required checks 并形成验收就绪快照。
 - 新产品决定进入 accepted deltas 并使旧证据失效；实现 commit 变化也使旧证据失效。
 - PM 明确说“可以提交 / 定稿 / 可以合并”就是落地主线授权，不二次确认。
-- 最终检查失败回 iterating；merge 冲突保留 final_check 和 worktree。
+- final_check 只校验同一 source hash + implementation commit 的验收就绪快照，不首次跑完整验收、不修改业务代码；失败回 iterating。
+- merge 冲突保留 final_check 和 worktree；纯清理失败进入待清理队列，不阻塞 landed 后文档同步。
 - 实现先落 main，正式文档后更新；文档失败不重复 merge。
 - skipped / limited / blocked 不能伪装 pass；证据必须绑定 source hash 和 implementation commit。
 - UI required checks 缺主动浏览器能力时必须阻塞；v2 的 `browser-smoke` 不接受 exception。

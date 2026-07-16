@@ -18,6 +18,10 @@ PM-AI-Workflow 生成器仓的演进记录。本文件**只记影响下游业务
 
 ## 未发布
 
+- `fix(build-close)`: **把完整验收前移为 build 的验收就绪候选，close 只做确定性落地。** 真实消费仓中一次 `/pmai-build-close` 从调用到完成约 30 分钟；实际 merge 只需数秒，主要耗时来自 close 才首次走完整浏览器路径、发现规格漏项后补业务代码、重跑 production build、重新分析文档影响，以及开发服务占用 worktree 导致清理失败。现在 contract v2 新增 `review-ready`：候选实现必须在 `iterating` 阶段完成全部 required checks、逐项规格覆盖和文档影响草案，形成绑定当前 source hash / implementation commit 的快照；`accept` / `complete` / `validate-land` 拒绝缺失或过期快照，`final_check` 不首次跑完整验收也不修改业务代码。`land-work.sh` 会把运行进程或缓存占用导致的 worktree 清理失败转入安全待清理队列，不再阻塞 landed 后文档同步；文档提交会自动纳入 `doc-impact.json`，不再需要 amend 补交。
+
+- `fix(build)`: **把“当前会话直接构建”恢复为常驻选项。** 上一轮为避免 Codex 主控再次启动 Codex CLI，把当前主控对应的外部 profile 从候选中排除；实现同时把当前会话亲自构建误降成了“外部工具全不可用时才出现”的兜底。现在继续排除与当前主控相同的外部 CLI，但 `builder-profile.py list` 始终返回 `native`，开工卡无论本机还有多少外部工具都会展示“当前会话直接构建”；推荐逻辑仍优先遵循项目 builder 配置，没有可用外部工具时才默认推荐当前会话。
+
 - `fix(build)`: **开工卡一次展示有效环境与工具，并排除当前主控。** 真实 Codex 消费仓会话中，`builder-profile.py` 只检查本机命令是否存在，导致 Codex 主控把 `Codex（gpt-5.4, high）` 推荐成外部构建工具；同时 PM 必须先点“调整”才能看到其它选项。现在 `recommend / list / resolve` 都要求当前主控，推荐和候选统一排除同名执行器；开工卡直接展示环境说明、推荐工具和全部本机可用工具，没有其它外部工具时才回退为“当前会话直接构建”。Gemini CLI 的 profile、适配器、合同枚举、模板、文档和测试一并移除。
 
 - `feat(memory+design)`: **新增用户级个人经验记忆，并把 SSO 场景清单从通用 design 规则迁出。** 项目事实、决定和偏好继续留在消费仓现有真相源；跨项目仍成立的高信号纠偏在闭合后写入 `${PMAI_STATE_HOME:-$HOME/.pmai-state}/personal-memory.sqlite3`，后续 design 在确定性 context pack 之后单独召回候选，按相关性、适用性、重复关系和独立检查价值自适应选择，只作后台检查，不参与 `source_hash`，缺库或失败时继续运行。正常召回不设固定条数；字符预算和高位候选上限只作异常保护，频繁超限应合并碎片经验。重复证据会合并增权，明确“以后都这样”直接高权重生效，错误经验可降权、取代或遗忘；`pmai memory status/search/show/forget/export` 提供旁路控制。此前写入 design 的“持续新增、SSO / 导入 / 同步、属性变化与退出”固定清单已删除；其背后的集合变化经验只迁入当前用户存储，不作为新用户默认 seed。

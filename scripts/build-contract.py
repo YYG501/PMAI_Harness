@@ -367,6 +367,37 @@ def evidence_exception_for(build: dict, check_name: str) -> bool:
     return isinstance(checks, list) and check_name in checks
 
 
+def clear_review_ready(build: dict) -> None:
+    """Invalidate the pre-acceptance readiness snapshot without deleting evidence."""
+
+    acceptance = build.setdefault("acceptance", {"required_checks": [], "evidence": []})
+    if not isinstance(acceptance, dict):
+        raise SystemExit("build.acceptance 必须是对象。")
+    acceptance["ready_at"] = None
+    acceptance["ready_commit"] = None
+    acceptance["ready_source_hash"] = None
+
+
+def validate_review_ready(build: dict) -> None:
+    """Require a readiness snapshot bound to the current source and implementation."""
+
+    acceptance = build.get("acceptance")
+    if not isinstance(acceptance, dict):
+        raise SystemExit("build.acceptance 必须是对象。")
+    ready_at = optional(acceptance.get("ready_at"))
+    ready_commit = optional(acceptance.get("ready_commit"))
+    ready_source_hash = optional(acceptance.get("ready_source_hash"))
+    if not ready_at or not ready_commit or not ready_source_hash:
+        raise SystemExit(
+            "当前实现尚未形成验收就绪快照：先在 build 阶段对候选提交完成全部 required checks，"
+            "再运行 review-ready；build-close 不在 PM 定稿后临时补实现或首次跑完整验收。"
+        )
+    if ready_commit != optional(build.get("implementation_commit")):
+        raise SystemExit("验收就绪快照已过期：implementation commit 已变化，请回 build 重新检查。")
+    if ready_source_hash != optional(build.get("approved_source_hash")):
+        raise SystemExit("验收就绪快照已过期：approved source 已变化，请回 build 重新检查。")
+
+
 def validate_fresh_evidence(module_dir: Path, build: dict) -> None:
     """Validate v2 adaptive acceptance and evidence freshness."""
 
@@ -581,6 +612,9 @@ def cmd_start(args: argparse.Namespace) -> None:
         "acceptance": {
             "required_checks": required_checks,
             "evidence": [],
+            "ready_at": None,
+            "ready_commit": None,
+            "ready_source_hash": None,
         },
         "docs_status": "pending",
     }
@@ -701,6 +735,7 @@ def cmd_commit(args: argparse.Namespace) -> None:
         if not isinstance(acceptance, dict):
             raise SystemExit("build.acceptance 必须是对象。")
         acceptance["evidence"] = []
+        clear_review_ready(build)
         build["pm_accepted_at"] = None
     build["implementation_commit"] = commit
     build["implementation_committed_at"] = now_iso()
@@ -721,6 +756,9 @@ def cmd_accept(args: argparse.Namespace) -> None:
         "final_check",
     }:
         raise SystemExit("只有 PM 看过构建结果后才能进入 final_check。")
+    if contract_version(build) >= 2:
+        ensure_v2_shape(build)
+        validate_review_ready(build)
     accepted_at = optional(args.accepted_at) or now_iso()
     build["pm_accepted_at"] = accepted_at
     if contract_version(build) >= 2:
@@ -744,11 +782,14 @@ def cmd_complete(args: argparse.Namespace) -> None:
     }:
         raise SystemExit("只有 iterating / final_check 状态可以记录定稿。")
     previous_commit = optional(build.get("implementation_commit"))
-    if contract_version(build) >= 2 and previous_commit != commit:
-        acceptance = build.setdefault("acceptance", {"required_checks": [], "evidence": []})
-        if not isinstance(acceptance, dict):
-            raise SystemExit("build.acceptance 必须是对象。")
-        acceptance["evidence"] = []
+    if contract_version(build) >= 2:
+        if previous_commit != commit:
+            raise SystemExit(
+                "v2 定稿不能同时换 implementation commit：先用 commit 记录候选提交，"
+                "完成 required checks 和 review-ready，再记录 PM 定稿。"
+            )
+        ensure_v2_shape(build)
+        validate_review_ready(build)
     accepted_at = optional(args.accepted_at) or now_iso()
     build["implementation_commit"] = commit
     build["implementation_committed_at"] = now_iso()
@@ -780,6 +821,8 @@ def cmd_audit_exception(args: argparse.Namespace) -> None:
     }
     if checks:
         build["audit_exception"]["checks"] = checks
+    if contract_version(build) >= 2:
+        clear_review_ready(build)
     meta["build"] = build
     write_meta(module_dir, meta)
     print(json.dumps(build, ensure_ascii=False))
@@ -810,6 +853,7 @@ def cmd_add_delta(args: argparse.Namespace) -> None:
     if not isinstance(acceptance, dict):
         raise SystemExit("build.acceptance 必须是对象。")
     acceptance["evidence"] = []
+    clear_review_ready(build)
     build["implementation_commit"] = None
     build["pm_accepted_at"] = None
     build["lifecycle_state"] = "iterating"
@@ -853,9 +897,33 @@ def cmd_record_evidence(args: argparse.Namespace) -> None:
         raise SystemExit("build.acceptance.evidence 必须是数组。")
     acceptance["evidence"] = [entry for entry in evidence if entry.get("name") != name]
     acceptance["evidence"].append(item)
+    clear_review_ready(build)
     meta["build"] = build
     write_meta(module_dir, meta)
     print(json.dumps(item, ensure_ascii=False))
+
+
+def cmd_review_ready(args: argparse.Namespace) -> None:
+    """Freeze a fully checked candidate before PM finalization."""
+
+    module_dir = Path(args.module_dir)
+    meta = read_meta(module_dir)
+    build = require_build(meta)
+    if contract_version(build) < 2:
+        raise SystemExit("review-ready 只适用于 build contract v2。")
+    if build.get("lifecycle_state") not in {"iterating", "final_check"}:
+        raise SystemExit("只有 iterating / final_check 的候选实现可以标记为验收就绪。")
+    if not optional(build.get("implementation_commit")):
+        raise SystemExit("候选实现尚未记录 implementation_commit，不能标记为验收就绪。")
+    ensure_v2_shape(build)
+    validate_fresh_evidence(module_dir, build)
+    acceptance = build["acceptance"]
+    acceptance["ready_at"] = optional(args.checked_at) or now_iso()
+    acceptance["ready_commit"] = build["implementation_commit"]
+    acceptance["ready_source_hash"] = build["approved_source_hash"]
+    meta["build"] = build
+    write_meta(module_dir, meta)
+    print(json.dumps(acceptance, ensure_ascii=False))
 
 
 def transition(
@@ -894,16 +962,24 @@ def transition(
 
 
 def cmd_iterating(args: argparse.Namespace) -> None:
-    print(
-        json.dumps(
-            transition(
-                Path(args.module_dir),
-                "iterating",
-                allowed_from={"iterating", "final_check"},
-            ),
-            ensure_ascii=False,
+    module_dir = Path(args.module_dir)
+    meta = read_meta(module_dir)
+    build = require_build(meta)
+    if contract_version(build) < 2:
+        raise SystemExit("显式 lifecycle transition 只适用于 build contract v2。")
+    current = str(build.get("lifecycle_state") or "")
+    if current not in {"iterating", "final_check"}:
+        raise SystemExit(
+            f"lifecycle 不能从 {current or '<empty>'} 进入 iterating；"
+            "允许来源：final_check、iterating。"
         )
-    )
+    build["lifecycle_state"] = "iterating"
+    build["pm_accepted_at"] = None
+    clear_review_ready(build)
+    meta["lifecycle_state"] = "iterating"
+    meta["build"] = build
+    write_meta(module_dir, meta)
+    print(json.dumps(build, ensure_ascii=False))
 
 
 def cmd_landed(args: argparse.Namespace) -> None:
@@ -1011,6 +1087,7 @@ def cmd_validate_close(args: argparse.Namespace) -> None:
             raise SystemExit("build 合同里的 builder 必须是对象。")
         validate_builder(builder)
     if version >= 2:
+        validate_review_ready(build)
         validate_fresh_evidence(module_dir, build)
     else:
         validate_audit_evidence(module_dir, build)
@@ -1075,7 +1152,10 @@ def build_parser() -> argparse.ArgumentParser:
     accept.add_argument("--accepted-at")
     accept.set_defaults(func=cmd_accept)
 
-    complete = sub.add_parser("complete", help="record implementation commit and PM acceptance atomically")
+    complete = sub.add_parser(
+        "complete",
+        help="compatibility command: accept the already recorded and review-ready implementation commit",
+    )
     complete.add_argument("module_dir")
     complete.add_argument("--implementation-commit", required=True)
     complete.add_argument("--accepted-at")
@@ -1108,6 +1188,14 @@ def build_parser() -> argparse.ArgumentParser:
     evidence.add_argument("--checked-at")
     evidence.add_argument("--artifact")
     evidence.set_defaults(func=cmd_record_evidence)
+
+    review_ready = sub.add_parser(
+        "review-ready",
+        help="validate all fresh evidence and freeze the candidate before PM finalization",
+    )
+    review_ready.add_argument("module_dir")
+    review_ready.add_argument("--checked-at")
+    review_ready.set_defaults(func=cmd_review_ready)
 
     iterating = sub.add_parser("iterating", help="return a failed final check to the review loop")
     iterating.add_argument("module_dir")

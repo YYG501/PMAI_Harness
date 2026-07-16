@@ -6,7 +6,7 @@
 
 设计依据、build target 和正式文档会漂移：实现可能漏掉已确认规则，文档也可能漏掉已经落地主线的页面或状态。这份扫描把三者重新对齐，**不静默吞、不盲目重写**。
 
-它不是第二条工作流。design 收口时做轻量扫描；PM 定稿后的最终检查和 landed 后文档编译按同一套口径执行。机械缺口自动处理，只有产品模型岔路、不可逆动作或要改变 PM 已确认方向时才打断 PM。
+它不是第二条工作流。design 收口时做轻量扫描；build 候选在 PM 定稿前做完整扫描并冻结验收就绪快照，final_check 只校验快照，landed 后文档编译继续沿用同一口径。机械缺口自动处理，只有产品模型岔路、不可逆动作或要改变 PM 已确认方向时才打断 PM。
 
 ---
 
@@ -14,7 +14,7 @@
 
 - **design 决定闭合** → 对 `spec.md`、决定、相关页面 / 源码证据和项目底座做轻量对账，再提交建造依据。
 - **build 迭代产生已接受变化** → 记入 `accepted_deltas`、递增 `design_revision` 并使旧证据失效；此时不提前改正式文档。
-- **PM 定稿进入 final_check** → 对最终 commit 与 approved source、accepted deltas 做完整目标适配检查。
+- **build 候选准备验收就绪** → 在 `iterating` 对最终 commit 与 approved source、accepted deltas 做完整目标适配检查；PM 定稿后的 `final_check` 只校验快照 currentness。
 - **实现进入 main** → 基于 landed diff 和文档影响地图更新正式文档；文档失败保留 `landed/docs_pending`，只续跑文档。
 
 简单到一两行的小改、纯文案错字，不用每次都扫——AI 临场判断改动是否触及字段 / 规则 / 概念 / 状态，触及了才扫。
@@ -66,12 +66,13 @@ python3 "$PMAI_HOME/scripts/check-state-index-drift.py" "$REPO_ROOT" || true
 
 ## 四、统一 finalize 的两次对账
 
-### 4.1 final_check：先验证，再落地主线
+### 4.1 验收就绪候选与 final_check：先完整验证，再快速定稿
 
-- 逐项核对 approved source、accepted deltas 与最终 commit；
+- 在 `iterating` 逐项核对 approved source、accepted deltas 与候选 commit；
 - prototype 走任务路径、页面 / 弹窗、状态、视觉和交互验收；product 走仓库测试、类型 / 构建、接口 / 数据和风险适配检查；
-- 已确认条款在 build target 中找不到时，不删规格：没有 accepted delta 就回 `iterating`；需要改产品模型则回 design；
-- 完整 required checks 通过且证据绑定当前 source hash 与 implementation commit，才进入 landing。
+- 已确认条款在 build target 中找不到时，不删规格：没有 accepted delta 就继续 `iterating` 修复；需要改产品模型则回 design，不能进入 close 后再补；
+- 完整 required checks 通过且证据绑定当前 source hash 与 implementation commit 后，生成文档影响草案并记录 `review-ready`；
+- PM 定稿后的 final_check 只校验同一快照仍有效，不修改业务代码、不重复跑同一版本的完整验收。
 
 ### 4.2 landed：只编译 main 已有事实
 

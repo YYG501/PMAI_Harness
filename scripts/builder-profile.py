@@ -166,13 +166,23 @@ def profile_matches_current_host(profile: dict[str, Any], current_host: str) -> 
     return current_host != "unknown" and profile.get("executor") == current_host
 
 
-def native_fallback(reason: str) -> dict[str, Any]:
+def native_selection(reason: str) -> dict[str, Any]:
     return {
         "builder_profile": "native",
         "executor": "native",
         "display": "当前会话直接构建",
         "builder": {"model": "runtime", "thinking": "adaptive"},
         "selection_reason": reason,
+    }
+
+
+def native_list_row() -> dict[str, Any]:
+    return {
+        "name": "native",
+        "executor": "native",
+        "display": "当前会话直接构建",
+        "default": False,
+        "available": True,
     }
 
 
@@ -184,23 +194,14 @@ def cmd_list(args: argparse.Namespace) -> None:
                 {
                     "default_profile": "",
                     "current_host": args.current_host,
-                    "profiles": [
-                        {
-                            "name": "native",
-                            "executor": "native",
-                            "display": "当前会话直接构建",
-                            "default": False,
-                            "available": True,
-                            "fallback": True,
-                        }
-                    ],
+                    "profiles": [native_list_row()],
                 },
                 ensure_ascii=False,
             )
         )
         return
     config = load_builder_config(config_path)
-    rows = []
+    rows = [native_list_row()]
     for name, profile in config["profiles"].items():
         if profile_matches_current_host(profile, args.current_host):
             continue
@@ -214,17 +215,6 @@ def cmd_list(args: argparse.Namespace) -> None:
                 "display": profile_display(name, profile),
                 "default": name == config["default_profile"],
                 "available": available,
-            }
-        )
-    if args.available_only and not rows:
-        rows.append(
-            {
-                "name": "native",
-                "executor": "native",
-                "display": "当前会话直接构建",
-                "default": False,
-                "available": True,
-                "fallback": True,
             }
         )
     print(
@@ -302,7 +292,7 @@ def cmd_recommend(args: argparse.Namespace) -> None:
     if not config_path.exists():
         print(
             json.dumps(
-                native_fallback("旧消费仓没有 builder 配置，由当前会话直接构建"),
+                native_selection("旧消费仓没有 builder 配置，推荐当前会话直接构建"),
                 ensure_ascii=False,
             )
         )
@@ -337,7 +327,7 @@ def cmd_recommend(args: argparse.Namespace) -> None:
         else:
             resolved["selection_reason"] = f"首选档位不可用，推荐仓库内可用的 {selected}"
     else:
-        resolved = native_fallback("没有其它可用构建工具，由当前会话直接构建")
+        resolved = native_selection("没有可用的外部构建工具，推荐当前会话直接构建")
     print(json.dumps(resolved, ensure_ascii=False))
 
 

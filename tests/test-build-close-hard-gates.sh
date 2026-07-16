@@ -40,6 +40,7 @@ test_build_close_mixed_delivery_authority() {
   assert_file_contains "$BUILD_CLOSE_SKILL" "正常用户链路不再要求 PM 额外运行本命令" "build-close should not be a normal user step" || return
   assert_file_contains "$BUILD_CLOSE_SKILL" "只按 build contract 和 lifecycle state" "recovery must use the same contract" || return
   assert_file_contains "$BUILD_CLOSE_SKILL" "文档失败不重复 merge" "docs recovery must not repeat merge" || return
+  assert_file_contains "$BUILD_CLOSE_SKILL" "不修改业务代码" "final_check should be deterministic instead of fixing implementation" || return
   assert_file_contains "$LAND_WORK" "PMAI_ALLOW_MIXED_DELIVERY=build-close" "automatic finalize should use the mixed-delivery guard token internally" || return
   pass_test
 }
@@ -51,6 +52,7 @@ test_consumer_template_landing_rules() {
   assert_file_contains "$AGENTS_TEMPLATE" "混合交付必须走完整 build" "template should require the full lifecycle" || return
   assert_file_contains "$AGENTS_TEMPLATE" '`/pmai-build-close` 保留为兼容与恢复入口' "template should keep close as compatibility only" || return
   assert_file_contains "$AGENTS_TEMPLATE" "PM 说“可以提交 / 定稿 / 可以合并”即授权" "template should recognize natural-language finalization" || return
+  assert_file_contains "$AGENTS_TEMPLATE" 'PM 定稿前通过 `review-ready`' "template should require a ready candidate before close" || return
   pass_test
 }
 

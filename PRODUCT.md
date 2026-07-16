@@ -184,21 +184,20 @@ PMAI 的主要用户是单人 PM，尤其是要持续推进一个复杂业务产
 
 只要本轮包含 Web 页面，主动浏览器能力就是验收硬条件。gstack 可以缺席初始化，也可以由其它 browser/Playwright 适配器替代；但没有任何工具实际打开并操作页面时，UI final check 不能通过。
 
-开工前 AI 根据项目定义、本机能力和当前主控推荐工作环境与构建工具，并在一张确认卡中同时列出两项的全部有效选择。构建工具候选排除当前主控，避免 Codex 再启动 Codex、Claude Code 再启动 Claude Code 或 OpenCode 再启动 OpenCode；只有其它外部工具都不可用时，才由当前会话直接构建。确认卡不展示项目类型、验收方案或内部合同。之后 PM 的体验始终是：看结果、指出哪里不对、AI 修改、再看。每轮修改只跑受影响的快速检查；PM 说“定稿 / 可以提交 / 可以合并”后才跑完整 required checks。
+开工前 AI 根据项目定义、本机能力和当前主控推荐工作环境与构建工具，并在一张确认卡中同时列出两项的全部有效选择。外部构建工具候选排除当前主控对应的 profile，避免 Codex 再启动 Codex、Claude Code 再启动 Claude Code 或 OpenCode 再启动 OpenCode；当前会话亲自完成构建不是递归调用，因此“当前会话直接构建”始终可选。没有可用外部工具时，默认推荐当前会话直接构建。确认卡不展示项目类型、验收方案或内部合同。之后 PM 的体验始终是：看结果、指出哪里不对、AI 修改、再看。每轮修改先跑受影响的快速检查并尽快展示结果；候选版本在 PM 查看期间完成完整 required checks、规格覆盖和文档影响草案，形成绑定当前 source hash 与 implementation commit 的验收就绪快照。
 
 worktree 的具体实现、build contract、source hash 和证据 JSON 都是后台基础设施，不形成第二条用户流程；PM 只看到可理解的“工作环境”和“构建工具”。
 
 ### 5. 自动落地主线和文档编译
 
-PM 明确定稿后，同一个 finalize 自动完成：
+PM 明确定稿后，同一个 finalize 复用未过期的验收就绪快照，不在 close 内首次发现产品缺口或补业务代码：
 
-1. 检查未决产品问题和最终 commit；
-2. 运行完整目标适配验收；
-3. 提交实现并合入 main；
-4. 基于 main 的 landed diff、build contract 和 accepted deltas 生成文档影响地图；
-5. 按“符合 / accepted delta / 漏实现 / 无依据实现”对账模块规格，只让 accepted delta 改写最终目标；
-6. 更新产品现状、跨模块规则、术语、设计基线、TODO、mockup 清单和索引；
-7. 做一致性检查并提交文档同步。
+1. 校验未决产品问题、最终 commit 和验收就绪快照仍一致；
+2. 提交实现并合入 main；
+3. 复用 build 阶段的文档影响草案，并用 main 的 landed diff、build contract 和 accepted deltas 校准；
+4. 按“符合 / accepted delta / 漏实现 / 无依据实现”对账模块规格，只让 accepted delta 改写最终目标；
+5. 更新产品现状、跨模块规则、术语、设计基线、TODO、mockup 清单和索引；
+6. 做一致性检查并提交文档同步。
 
 模块 `spec.md` 和 PRD 描述已确认的最终产品目标，是研发实现和验收合同；`PRODUCT-STATE.md` 等现状文档才只描述 main 已经存在的事实。原型、mockup 和代码是证据，不得反向缩小规格。merge 冲突保留可恢复的 `final_check`；文档失败保留 `landed/docs_pending`，修复时不重复 merge。`/pmai-build-close` 只作为兼容与恢复入口。
 
@@ -226,7 +225,7 @@ design、build、恢复、最终检查和文档更新共用同一份编译上下
 
 ### 3. Unified Build Loop
 
-prototype 和 product 共用 `designing → ready_to_build → building → iterating → final_check → landed → documenting → complete`。AI 推荐工作环境和构建工具，PM 一次确认；之后 PM 看结果多轮修改，框架处理证据失效和恢复。
+prototype 和 product 共用 `designing → ready_to_build → building → iterating → final_check → landed → documenting → complete`。验收就绪快照是 `iterating` 内部的候选门，不新增 PM 可见状态；AI 推荐工作环境和构建工具，PM 一次确认，之后 PM 看结果多轮修改，框架处理证据失效和恢复。
 
 ### 4. Adaptive Acceptance And Post-Land Docs
 

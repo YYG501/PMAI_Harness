@@ -38,9 +38,10 @@ setup_fixture() {
   git -C "$WT" add -A && git -C "$WT" commit -q -m 'build(access): implementation'
   IMPL=$(git -C "$WT" rev-parse HEAD)
   python3 "$CONTRACT" commit "$MODULE" --implementation-commit "$IMPL" >/dev/null
-  python3 "$CONTRACT" complete "$MODULE" --implementation-commit "$IMPL" >/dev/null
   python3 "$CONTRACT" record-evidence "$MODULE" --name tests --status pass \
     --source-hash source-v1 --commit "$IMPL" >/dev/null
+  python3 "$CONTRACT" review-ready "$MODULE" >/dev/null
+  python3 "$CONTRACT" accept "$MODULE" >/dev/null
 }
 
 teardown_fixture() {
@@ -90,6 +91,10 @@ test_land_then_document_then_complete() {
     _fail "complete should remove transient work meta"
   elif ! git -C "$T" log -1 --format=%s | grep -q 'docs(access): sync landed product truth'; then
     _fail "final commit should be the separate documentation commit"
+  elif ! git -C "$T" show HEAD:.pm-workflow/audits/access/doc-impact.json >/dev/null 2>&1; then
+    _fail "final documentation commit should include doc-impact.json"
+  elif [ -n "$(git -C "$T" status --short --untracked-files=all)" ]; then
+    _fail "completed landing should leave the fixture clean"
   else
     pass_test
   fi
@@ -103,9 +108,12 @@ test_merge_conflict_keeps_final_check_and_worktree() {
   echo 'branch value' > "$WT/conflict.txt"
   git -C "$WT" add conflict.txt && git -C "$WT" commit -q -m 'branch conflict'
   NEW_IMPL=$(git -C "$WT" rev-parse HEAD)
-  python3 "$CONTRACT" complete "$MODULE" --implementation-commit "$NEW_IMPL" >/dev/null
+  python3 "$CONTRACT" iterating "$MODULE" >/dev/null
+  python3 "$CONTRACT" commit "$MODULE" --implementation-commit "$NEW_IMPL" >/dev/null
   python3 "$CONTRACT" record-evidence "$MODULE" --name tests --status pass \
     --source-hash source-v1 --commit "$NEW_IMPL" >/dev/null
+  python3 "$CONTRACT" review-ready "$MODULE" >/dev/null
+  python3 "$CONTRACT" accept "$MODULE" >/dev/null
   echo 'main value' > "$T/conflict.txt"
   git -C "$T" add conflict.txt && git -C "$T" commit -q -m 'main conflict'
   if (cd "$T" && bash "$CLOSE" "$MODULE") >/tmp/land-v2.$$ 2>/tmp/land-v2.err.$$; then
@@ -129,6 +137,10 @@ test_merge_conflict_keeps_final_check_and_worktree() {
 test_landed_docs_collision_preserves_wip_and_skips_remerge() {
   start_test "land v2: landed docs collision preserves WIP and resumes without remerge"
   setup_fixture
+  python3 "$IMPACT" init "$MODULE" --repo-root "$WT" --base "$BASE" --head "$IMPL" \
+    --output "$WT/.pm-workflow/audits/access/doc-impact.json" >/dev/null
+  git -C "$WT" add .pm-workflow/audits/access/doc-impact.json
+  git -C "$WT" commit -q -m 'build(access): prepare documentation impact draft'
   echo 'user docs wip' >> "$T/PRODUCT-STATE.md"
   if (cd "$T" && bash "$CLOSE" "$MODULE") >/tmp/land-v2.$$ 2>/tmp/land-v2.err.$$; then
     _fail "pre-existing dirty documentation destination should stop docs phase"
@@ -162,7 +174,45 @@ test_landed_docs_collision_preserves_wip_and_skips_remerge() {
   teardown_fixture
 }
 
+test_cleanup_failure_is_queued_without_blocking_docs() {
+  start_test "land v2: worktree cleanup failure is queued and docs still start"
+  setup_fixture
+  REAL_GIT=$(command -v git)
+  mkdir -p "$T/fakebin"
+  cat > "$T/fakebin/git" <<'SH'
+#!/usr/bin/env bash
+if [ "${3:-}" = "worktree" ] && [ "${4:-}" = "remove" ]; then
+  echo "simulated worktree cleanup failure" >&2
+  exit 1
+fi
+exec "$REAL_GIT_FOR_TEST" "$@"
+SH
+  chmod +x "$T/fakebin/git"
+
+  if ! (cd "$T" && PATH="$T/fakebin:$PATH" REAL_GIT_FOR_TEST="$REAL_GIT" bash "$CLOSE" "$MODULE") >/tmp/land-v2.$$ 2>/tmp/land-v2.err.$$; then
+    _fail "cleanup failure should not block landing or docs start"
+    cat /tmp/land-v2.err.$$ >&2
+    teardown_fixture; return
+  fi
+  MAIN_MODULE="$T/docs/modules/access"
+  state=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["build"]["lifecycle_state"])' "$MAIN_MODULE/.work-meta.json")
+  if [ "$state" != "documenting" ]; then
+    _fail "cleanup failure should still reach documenting"
+  elif [ ! -f "$T/.runs/pending-cleanup.json" ]; then
+    _fail "cleanup failure should create a pending cleanup entry"
+  elif ! git -C "$T" show-ref --verify --quiet refs/heads/build-access; then
+    _fail "queued cleanup should preserve the merged branch for later cleanup"
+  elif [ ! -f "$T/src/access/index.ts" ]; then
+    _fail "implementation should already be landed before cleanup is queued"
+  else
+    pass_test
+  fi
+  rm -f /tmp/land-v2.$$ /tmp/land-v2.err.$$
+  teardown_fixture
+}
+
 test_land_then_document_then_complete
 test_merge_conflict_keeps_final_check_and_worktree
 test_landed_docs_collision_preserves_wip_and_skips_remerge
+test_cleanup_failure_is_queued_without_blocking_docs
 report_results "land-work-v2"

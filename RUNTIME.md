@@ -4,14 +4,14 @@
 
 ## 当前位置
 
-- 日期：2026-07-15
+- 日期：2026-07-17
 - 开发分支：`codex/unified-build-lifecycle`
-- 当前目标：v2 统一生命周期和 design 交互收口保持稳定；项目记忆 / 个人经验两层边界与用户级自动召回已完成实现和全量回归，作为当前开发分支候选基线。
+- 当前目标：v2 统一生命周期继续以真实消费仓会话收口；当前主控直接构建已恢复为常驻选项，build-close 已改为复用 build 阶段的验收就绪候选，并完成全量回归。
 - gstack 参考基线：`v1.58.5.0`，commit `11de390`；只参考本地 `gstack-clean` checkout，没有升级用户目录中的安装副本。
 
 ## 当前活跃模型
 
-- 正常用户主链路：`/pmai-init-project` 只建上下文 → `/pmai-design` 讨论需求并在首次定稿时生成项目建造定义 → `/pmai-build` → PM 看结果多轮修改 → PM 明确定稿 → 自动最终检查、合入 main、主线后文档编译和一致性检查。
+- 正常用户主链路：`/pmai-init-project` 只建上下文 → `/pmai-design` 讨论需求并在首次定稿时生成项目建造定义 → `/pmai-build` → PM 看结果多轮修改，同时后台形成验收就绪候选 → PM 明确定稿 → 快速校验快照、合入 main、主线后文档编译和一致性检查。
 - `meta`、`mockup`、`spec-writing` 是 design 按需调用后返回主线的内部能力；仍保留手动入口用于兼容和专项使用，但不要求 PM 拼接命令。
 - `/pmai-build-close` 只作为兼容与恢复入口；正常链路不再要求 PM 手动调用。
 - lifecycle v2：`designing → ready_to_build → building → iterating → final_check → landed → documenting → complete`。旧 `stage` 字段仅为 v1 消费仓兼容展示。
@@ -19,23 +19,23 @@
 - 模块真相源：`docs/modules/<模块>/discussion.md`、`decisions.md`、`spec.md`；跨模块现行规则为 `PRODUCT-RULES.md`，项目级冻结理路为 `docs/decisions/`。
 - 文档语义：`spec.md` / PRD 是指导研发实现的最终目标合同；`PRODUCT-STATE.md` 描述 main 已落地现状；原型、mockup 和代码只作设计 / 实现证据。
 - design 的 `ready_to_build` 状态同时记录 approved source hash、design checkpoint 和精确目标路径；build 开工前重新编译上下文并验证 currentness，过期依据不能继续显示或进入构建。`.work-meta.json:build` 使用合同 v2，继续记录 build target、design revision、accepted deltas、implementation commit、required checks、证据和 docs status。
-- 新 build 由 AI 在一张卡中展示推荐的工作环境、构建工具和两项的全部有效选择，PM 只确认这两项；工具候选排除当前主控，没有其它外部工具时才由当前会话直接构建。项目类型和验收方案不显示。选择当前环境时，main 只放行合同声明的目标路径。
+- 新 build 由 AI 在一张卡中展示推荐的工作环境、构建工具和两项的全部有效选择，PM 只确认这两项；外部工具候选排除当前主控对应的 profile，“当前会话直接构建”始终可选，没有可用外部工具时默认推荐它。项目类型和验收方案不显示。选择当前环境时，main 只放行合同声明的目标路径。
 - 记忆分两层：项目事实、决定和偏好继续由消费仓现有真相源承担；个人经验保存在用户级状态目录，跨项目召回但只作建议。个人经验不进入 context pack、项目 hash 或 Git，也不能自动修改 Skill。
 
 ## 已实现
 
 - 新增 `context-pack.py`：design、build、恢复、最终检查和文档更新共用确定性上下文，并区分 active / superseded / 冲突决定、未决问题和输入 hash；项目定义存在时只从其中的 entrypoints 取实现上下文。
 - 新增共用 `decision-policy`：机械项自动处理，可逆偏好给推荐并推进，产品模型岔路和 one-way door 立即让 PM 拍板；问句和讨论草稿不得成为决定。
-- `build-contract.py` 升级为合同 v2：accepted delta 或新 implementation commit 会使旧证据失效；`validate-land` 拒绝 source hash / commit 不匹配的陈旧证据。
-- 新增 prototype / product 验收 profile；iterating 只跑受影响快检，final_check 才跑完整 required checks。
+- `build-contract.py` 升级为合同 v2：accepted delta、新 implementation commit 或证据更新会使验收就绪快照失效；`review-ready` 只冻结完整且绑定当前 source hash / commit 的候选，`accept` 和 `validate-land` 拒绝缺失或过期快照。
+- 新增 prototype / product 验收 profile；迭代修改先跑受影响快检并尽快展示，候选在 PM 定稿前跑完整 required checks，`final_check` 只校验快照 currentness，不首次补实现或重跑完整验收。
 - 新增 `project-definition.py` 和严格 schema validator；路径、类型、技术栈、Web 运行配置与 revision 变更全部 fail-closed。
 - `project-type.py` 保留为兼容包装器：优先读新 `project.yml`，再读旧 config 和旧 `auto-detected: system` marker。
 - 初始化脚本不再接收 project type，不创建代码、prototype、mockup 看板、dev server 或 gstack 依赖。
 - 固定 build 审计编排和 coverage reviewer 已退出活跃链路；v2 只认 adaptive required checks/evidence。
 - Web required checks 必须有 active browser-smoke；gstack 可由其它 browser/Playwright 适配器替代，但 v2 不能 exception 掉浏览器能力。
-- builder profile 按项目定义、配置、本机可用性和当前主控推荐；开工卡一次列出有效环境与工具，当前主控不再作为外部执行器候选，Gemini CLI 已退出构建工具面。验收 profile 仍后台生成，不进入开工卡。
-- 新增自动 landing 和恢复：merge 冲突保留 `final_check` 与隔离环境；文档失败保留 `landed/docs_pending`，续跑不重复 merge。
-- 新增 landed 后文档影响地图，要求对象、动作、状态、权限、页面、术语和受影响文件都有 covered 或明确 no-change。
+- builder profile 按项目定义、配置、本机可用性和当前主控推荐；开工卡一次列出有效环境与工具，当前主控不再作为外部执行器候选，但当前会话直接构建始终可选；Gemini CLI 已退出构建工具面。验收 profile 仍后台生成，不进入开工卡。
+- 新增自动 landing 和恢复：merge 冲突保留 `final_check` 与隔离环境；文档失败保留 `landed/docs_pending`，续跑不重复 merge；运行进程或缓存导致的 worktree 清理失败进入安全待清理队列，不阻塞文档阶段。
+- 文档影响地图在验收就绪候选阶段先生成草案，landed 后按 main 事实完成覆盖；对象、动作、状态、权限、页面、术语和受影响文件都必须 covered 或明确 no-change，最终提交自动纳入影响地图本身。
 - spec-writing landed 对账固定分为符合、accepted delta、漏实现、无依据实现；只有 accepted delta 修改规格目标，漏实现保留为实现缺口。
 - design、meta、mockup、spec-writing、build、build-close 与消费仓 AGENTS / CLAUDE 模板已按统一链路重构。
 - 新增 `evals/cases/*.json`、`evals/touchfiles.json` 和 `scripts/skill-eval.py`；静态案例可作为提交门，session runner / LLM judge 缺失时明确 skip，require 模式明确 fail。
@@ -55,9 +55,9 @@
 ## 当前验证
 
 - 新增和改造的 context pack、acceptance profile、build contract、landing、文档影响地图、status、关键 Skill 路由、design 决策收敛、project definition 幂等与个人经验 targeted tests 已通过。
-- 完整 `tests/run-all.sh` 已通过：`460 passed / 0 failed`。个人经验回归覆盖缺库 fail-open、自动合并、执行失败归位、自适应召回、字符预算保护、取代 / 遗忘、使用反馈、项目权威隔离和 CLI 控制；4 条独立相关经验不会再被固定裁成 3 条，原有 lifecycle 与 design 回归继续通过。
+- 完整 `tests/run-all.sh` 已通过：`463 passed / 0 failed`。新增回归覆盖验收就绪快照的生成、失效和 PM 定稿门，worktree 清理失败不阻塞文档阶段，以及 `doc-impact.json` 自动进入最终文档提交；原有 lifecycle、design、个人经验与执行器回归继续通过。
 
 ## 下一步
 
-- 继续用真实消费仓会话观察 design 决策收敛、ready currentness、目标范围交接、长会话规则刷新和个人经验召回是否稳定。
+- 继续用真实消费仓会话观察 design 决策收敛、验收就绪候选能否在 PM 查看期间完成，以及正常 close 是否稳定收敛为轻量校验、merge、文档提交和清理。
 - 后续框架修改继续先在开发分支完成 targeted / full regression，再进入 main 分发基线并升级全局安装副本。

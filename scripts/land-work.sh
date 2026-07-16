@@ -39,6 +39,44 @@ IMPLEMENTATION_COMMIT=$(printf '%s' "$BUILD_JSON" | python3 -c 'import json,sys;
 MODULE_NAME=$(basename "$WORK_DIR")
 MAIN_MODULE="$REPO_ROOT/docs/modules/$MODULE_NAME"
 IMPACT_MAP="$REPO_ROOT/.pm-workflow/audits/$MODULE_NAME/doc-impact.json"
+IMPACT_MAP_REL=".pm-workflow/audits/$MODULE_NAME/doc-impact.json"
+
+queue_pending_cleanup() {
+  local worktree="$1"
+  local branch="$2"
+  local pending_file="$REPO_ROOT/.runs/pending-cleanup.json"
+  mkdir -p "$REPO_ROOT/.runs"
+  python3 - "$pending_file" "$branch" "$worktree" "$MAIN_MODULE" <<'PY'
+import datetime
+import json
+import os
+import sys
+
+pending_file, branch, worktree, work_dir = sys.argv[1:5]
+entries = []
+if os.path.exists(pending_file):
+    try:
+        with open(pending_file, encoding="utf-8") as handle:
+            loaded = json.load(handle)
+        if isinstance(loaded, list):
+            entries = loaded
+    except (OSError, json.JSONDecodeError):
+        entries = []
+entries = [entry for entry in entries if entry.get("branch") != branch]
+entries.append(
+    {
+        "kind": "work",
+        "branch": branch,
+        "worktree": worktree,
+        "work_dir": work_dir,
+        "queued_at": datetime.datetime.now().astimezone().isoformat(timespec="seconds"),
+    }
+)
+with open(pending_file, "w", encoding="utf-8") as handle:
+    json.dump(entries, handle, indent=2, ensure_ascii=False)
+    handle.write("\n")
+PY
+}
 
 current_main_branch() {
   local branch
@@ -64,7 +102,6 @@ for item in data.get("items", []):
     path = item.get("destination")
     if isinstance(path, str) and path:
         print(path)
-print(str(sys.argv[1]))
 PY
   )
 
@@ -83,6 +120,7 @@ PY
       git -C "$REPO_ROOT" add -A -- "$path"
     fi
   done
+  git -C "$REPO_ROOT" add -A -- "$IMPACT_MAP_REL"
   git -C "$REPO_ROOT" rm -q -f -- "docs/modules/$MODULE_NAME/.work-meta.json"
   if git -C "$REPO_ROOT" diff --cached --quiet; then
     echo "❌ 没有可提交的文档变化，不能把工作伪装成 complete。" >&2
@@ -98,47 +136,43 @@ start_docs() {
     echo "❌ main 上找不到 landed 状态: $MAIN_MODULE/.work-meta.json" >&2
     exit 1
   fi
-  NEW_IMPACT_MAP=false
   if [ ! -f "$IMPACT_MAP" ]; then
     python3 "$SCRIPT_DIR/doc-impact.py" init "$MAIN_MODULE" \
       --repo-root "$REPO_ROOT" \
       ${BASELINE:+--base "$BASELINE"} \
       --head HEAD \
       --output "$IMPACT_MAP" >/dev/null
-    NEW_IMPACT_MAP=true
   fi
-  if [ "$NEW_IMPACT_MAP" = "true" ]; then
-    DOC_DESTINATIONS=()
-    while IFS= read -r path; do
-      [ -n "$path" ] && DOC_DESTINATIONS[${#DOC_DESTINATIONS[@]}]="$path"
-    done < <(python3 - "$IMPACT_MAP" <<'PY'
+  DOC_DESTINATIONS=()
+  while IFS= read -r path; do
+    [ -n "$path" ] && DOC_DESTINATIONS[${#DOC_DESTINATIONS[@]}]="$path"
+  done < <(python3 - "$IMPACT_MAP" <<'PY'
 import json, sys
 for item in json.load(open(sys.argv[1])).get("items", []):
     path = item.get("destination")
     if isinstance(path, str) and path and not path.startswith("/"):
         print(path)
 PY
-    )
-    COLLISIONS=()
-    while IFS= read -r line; do
-      [ -n "$line" ] || continue
-      path="${line:3}"
-      case "$path" in
-        *" -> "*) path="${path##* -> }" ;;
-      esac
-      for destination in "${DOC_DESTINATIONS[@]}"; do
-        if [ "$path" = "$destination" ]; then
-          COLLISIONS[${#COLLISIONS[@]}]="$path"
-          break
-        fi
-      done
-    done < <(git -C "$REPO_ROOT" status --porcelain --untracked-files=all)
-    if [ "${#COLLISIONS[@]}" -gt 0 ]; then
-      echo "❌ 实现已经落到主线，但正式文档目标里有此前未提交的改动；为避免混入本次文档提交，先保留 landed/docs_pending。" >&2
-      printf '  - %s\n' "${COLLISIONS[@]}" >&2
-      echo "   处理这些已有改动后重试，只会继续文档阶段，不会重复 merge。" >&2
-      exit 1
-    fi
+  )
+  COLLISIONS=()
+  while IFS= read -r line; do
+    [ -n "$line" ] || continue
+    path="${line:3}"
+    case "$path" in
+      *" -> "*) path="${path##* -> }" ;;
+    esac
+    for destination in "${DOC_DESTINATIONS[@]}"; do
+      if [ "$path" = "$destination" ]; then
+        COLLISIONS[${#COLLISIONS[@]}]="$path"
+        break
+      fi
+    done
+  done < <(git -C "$REPO_ROOT" status --porcelain --untracked-files=all)
+  if [ "${#COLLISIONS[@]}" -gt 0 ]; then
+    echo "❌ 实现已经落到主线，但正式文档目标里有此前未提交的改动；为避免混入本次文档提交，先保留 landed/docs_pending。" >&2
+    printf '  - %s\n' "${COLLISIONS[@]}" >&2
+    echo "   处理这些已有改动后重试，只会继续文档阶段，不会重复 merge。" >&2
+    exit 1
   fi
   python3 "$SCRIPT_DIR/build-contract.py" docs-start "$MAIN_MODULE" >/dev/null
   echo "✅ 实现已落到主线。继续按文档影响地图更新当前事实；完成后由同一流程提交文档。"
@@ -183,8 +217,16 @@ land_implementation() {
       --landed-commit "$IMPLEMENTATION_COMMIT" >/dev/null
     git -C "$REPO_ROOT" add -- "docs/modules/$MODULE_NAME/.work-meta.json"
     PMAI_ALLOW_MIXED_DELIVERY=build-close git -C "$REPO_ROOT" commit -m "build($MODULE_NAME): land accepted implementation"
-    git -C "$REPO_ROOT" worktree remove "$WORKTREE"
-    git -C "$REPO_ROOT" branch -d "$BRANCH" >/dev/null
+    CLEANUP_PENDING=false
+    if ! git -C "$REPO_ROOT" worktree remove "$WORKTREE"; then
+      CLEANUP_PENDING=true
+    elif ! git -C "$REPO_ROOT" branch -d "$BRANCH" >/dev/null; then
+      CLEANUP_PENDING=true
+    fi
+    if [ "$CLEANUP_PENDING" = "true" ]; then
+      queue_pending_cleanup "$WORKTREE" "$BRANCH"
+      echo "⚠️ 实现已落主线；隔离环境仍被运行进程或缓存占用，已转入安全待清理队列，不阻塞文档同步。" >&2
+    fi
   elif [ "$MODE" = "main" ]; then
     python3 "$SCRIPT_DIR/build-contract.py" landed "$MAIN_MODULE" \
       --landed-commit "$IMPLEMENTATION_COMMIT" >/dev/null

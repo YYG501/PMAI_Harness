@@ -79,6 +79,9 @@ test_builder_profile_helper_resolves_pm_choice() {
   assert_file_contains /tmp/builder-profile.$$ "OpenCode（deepseek-v4-flash, max）" "OpenCode display should use display_model" || {
     rm -f /tmp/builder-profile.$$ /tmp/builder-profile.err.$$; return;
   }
+  assert_file_contains /tmp/builder-profile.$$ "当前会话直接构建" "builder list should always expose native execution" || {
+    rm -f /tmp/builder-profile.$$ /tmp/builder-profile.err.$$; return;
+  }
   if grep -q "Claude Code" /tmp/builder-profile.$$; then
     _fail "builder list should exclude the current Claude Code host"
     rm -f /tmp/builder-profile.$$ /tmp/builder-profile.err.$$
@@ -177,9 +180,9 @@ PY
 import json, sys
 data = json.load(open(sys.argv[1]))
 assert data["current_host"] == "codex"
-assert [item["executor"] for item in data["profiles"]] == ["claude-code"]
+assert [item["executor"] for item in data["profiles"]] == ["native", "claude-code"]
 PY
-    _fail "available list should expose all usable external tools except the current host"
+    _fail "available list should expose native plus usable external tools except the current host"
     rm -f /tmp/builder-profile.$$ /tmp/builder-profile-list.$$; _teardown_fake_executor; return
   }
   rm -f /tmp/builder-profile-list.$$
@@ -203,9 +206,9 @@ data = json.load(open(sys.argv[1]))
 assert len(data["profiles"]) == 1
 assert data["profiles"][0]["executor"] == "native"
 assert data["profiles"][0]["display"] == "当前会话直接构建"
-assert data["profiles"][0]["fallback"] is True
+assert "fallback" not in data["profiles"][0]
 PY
-    _fail "current-session build should appear only when no external tool remains"
+    _fail "current-session build should remain available when the current host is the only configured tool"
     rm -f /tmp/builder-profile.$$ /tmp/builder-profile-list.$$; _teardown_fake_executor; return
   }
   rm -f /tmp/builder-profile-list.$$
@@ -234,7 +237,7 @@ import json, sys
 data = json.load(open(sys.argv[1]))
 assert data["default_profile"] == ""
 assert data["profiles"][0]["executor"] == "native"
-assert data["profiles"][0]["fallback"] is True
+assert "fallback" not in data["profiles"][0]
 PY
     _fail "missing legacy config should still render a native-only option list"
     rm -f /tmp/builder-profile.$$ /tmp/builder-profile-list.$$; _teardown_fake_executor; return
@@ -353,7 +356,8 @@ test_build_skill_recommends_then_confirms_builder_profile() {
 
   assert_file_contains "$BUILD_SKILL" "builder-profile.py\" recommend" "build should recommend builder profiles" || return
   assert_file_contains "$BUILD_SKILL" "Claude Code、Codex、Cursor Agent 和 OpenCode" "automatic candidates should include supported adapters" || return
-  assert_file_contains "$BUILD_SKILL" "必须排除当前主控" "build should exclude the current host" || return
+  assert_file_contains "$BUILD_SKILL" "必须排除当前主控对应的外部 profile" "build should exclude the current host profile" || return
+  assert_file_contains "$BUILD_SKILL" "当前会话直接构建”始终" "build should always expose native execution" || return
   assert_file_contains "$BUILD_SKILL" "本机可用工具" "build should expose available tools in the first card" || return
   assert_file_contains "$BUILD_SKILL" "只有 PM 选择“按这个方案构建”才继续" "build must wait for PM confirmation" || return
   assert_file_contains "$BUILD_SKILL" "不能静默替换 PM 已确认的工具" "builder fallback must be reconfirmed" || return
@@ -400,11 +404,11 @@ test_build_skill_handles_fallback_design_baseline() {
   pass_test
 }
 
-test_consumer_entry_documents_fallback() {
-  start_test "consumer AGENTS: 推荐 profile 不可用时重新确认"
+test_consumer_entry_documents_native_option() {
+  start_test "consumer AGENTS: 当前会话直接构建始终可选"
 
-  assert_file_contains "$AGENTS_TMPL" "全部不可用时才回退为“当前会话直接构建”" "AGENTS should reserve native build for fallback" || return
-  assert_file_contains "$AGENTS_TMPL" "候选必须排除当前主控" "AGENTS should exclude the current host" || return
+  assert_file_contains "$AGENTS_TMPL" "“当前会话直接构建”始终作为有效选项" "AGENTS should always expose native execution" || return
+  assert_file_contains "$AGENTS_TMPL" "外部构建工具候选必须排除当前主控对应的 profile" "AGENTS should exclude the current host profile" || return
   assert_file_contains "$AGENTS_TMPL" "重新让 PM 确认" "AGENTS should require reconfirmation" || return
   pass_test
 }
@@ -415,7 +419,7 @@ test_readme_lists_build_executors() {
   assert_file_contains "$README" '也可作为 `/pmai-build` 执行器' "README should state Claude Code build role" || return
   assert_file_contains "$README" "Cursor Agent" "README should list Cursor Agent" || return
   assert_file_contains "$README" "OpenCode CLI" "README should list OpenCode CLI" || return
-  assert_file_contains "$README" "Codex 作为当前主控时不进入候选" "README should document current-host exclusion" || return
+  assert_file_contains "$README" "Codex 作为当前主控时不重复进入外部候选" "README should document current-host profile exclusion" || return
   if grep -q "Gemini CLI" "$README"; then
     _fail "README should not expose the removed Gemini CLI"
     return
@@ -474,7 +478,7 @@ test_build_skill_recommends_then_confirms_builder_profile
 test_build_skill_confirms_only_environment_and_tool_before_editing
 test_build_skill_keeps_executor_noise_out_of_pm_view
 test_build_skill_handles_fallback_design_baseline
-test_consumer_entry_documents_fallback
+test_consumer_entry_documents_native_option
 test_readme_lists_build_executors
 test_project_definition_owns_port_placeholder
 test_config_template_has_builder_profiles

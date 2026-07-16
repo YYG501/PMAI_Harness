@@ -84,9 +84,9 @@ PM 全程**只做产品决策、确认首个建造方案、开工时确认工作
 | **git** ≥ 2.30 | 必需 | worktree 是核心隔离机制 |
 | **python3** ≥ 3.10 | 必需 | scripts 大多用 python（zero-dep stdlib） |
 | **bash** ≥ 4 | 必需 | scripts 入口语言（macOS 自带 3.x 已知坑见 INVARIANTS） |
-| **codex CLI** | 可选 | `/pmai-build` 执行器；Codex 作为当前主控时不进入候选，不装可走 Claude Code / OpenCode / Cursor Agent / 手动 |
+| **codex CLI** | 可选 | `/pmai-build` 外部执行器；Codex 作为当前主控时不重复进入外部候选，但当前主控直接构建始终可选。不装可走 Claude Code / OpenCode / Cursor Agent，或由当前会话直接构建 |
 
-未检测到 gstack 时，`pmai install` / `pmai doctor` 只给 readiness warning，初始化和非 Web build 都不受阻塞。Web required checks 会在 final_check 前解析可用的主动浏览器适配器；完全没有适配器时 UI 验收阻塞，不能伪装通过。gstack 输出仍必须按 PMAI 规则接回 `DESIGN.md`、`mockups/`、evidence artifacts、`.pm-workflow/mirror/`、`docs/deliverables/` 或 `docs/engineering/`，不能把 `~/.gstack/...` 当长期真相源。
+未检测到 gstack 时，`pmai install` / `pmai doctor` 只给 readiness warning，初始化和非 Web build 都不受阻塞。Web required checks 会在候选结果进入验收就绪前解析可用的主动浏览器适配器；完全没有适配器时 UI 验收阻塞，不能伪装通过。gstack 输出仍必须按 PMAI 规则接回 `DESIGN.md`、`mockups/`、evidence artifacts、`.pm-workflow/mirror/`、`docs/deliverables/` 或 `docs/engineering/`，不能把 `~/.gstack/...` 当长期真相源。
 
 ---
 
@@ -265,7 +265,7 @@ bash ~/.pmai/scripts/measure-tthw.sh record /path/to/project \
 /pmai-status             → 忘了当前停在哪时，用它读状态并提示下一步
 ```
 
-简单改动可以跳过完整流程：用 `/pmai-quick-fix` 修复，需要长期归位时再用 `/pmai-record`。完整需求进入 `/pmai-build` 后，PM 说“定稿 / 可以提交 / 可以合并”即触发自动 finalize；`/pmai-build-close` 只用于兼容或中断恢复。
+简单改动可以跳过完整流程：用 `/pmai-quick-fix` 修复，需要长期归位时再用 `/pmai-record`。完整需求进入 `/pmai-build` 后，AI 会在 PM 看结果期间把候选版本准备成验收就绪；PM 说“定稿 / 可以提交 / 可以合并”即触发快速校验、自动落地主线和文档同步。`/pmai-build-close` 只用于兼容或中断恢复，不在收尾阶段首次跑完整验收或补业务代码。
 
 ### 3. 多机 / 团队仓
 
@@ -293,7 +293,7 @@ PMAI 走纯全局：每台要用的机器各自 `pmai install` 一次（全局�
 | Skill | 用途 |
 |---|---|
 | `/pmai-status` | **续跑辅助**：读当前状态和建议下一步；不向 PM 暴露 worktree、合同或证据 JSON |
-| `/pmai-build` | 统一构建前台：读取 design 定稿的项目建造定义和默认验收，推荐工作环境与构建工具；PM 一次确认后构建，定稿后自动落地主线并完成文档对账 |
+| `/pmai-build` | 统一构建前台：读取 design 定稿的项目建造定义和默认验收，推荐工作环境与构建工具；PM 一次确认后构建，在看结果期间准备验收就绪候选，定稿后快速落地主线并完成文档对账 |
 | `/pmai-spec-writing` | 最终目标规格成文器：把已确认决定编译成指导研发实现的模块规格、PRD、功能需求、功能描述、功能规格或功能评审稿 |
 | `/pmai-doc-writing` | 介绍型文档成文器：产品介绍、产品功能清单、优势说明、一页纸、汇报材料，默认落 `docs/deliverables/` |
 
@@ -301,7 +301,7 @@ PMAI 走纯全局：每台要用的机器各自 `pmai install` 一次（全局�
 
 | Skill | 用途 |
 |---|---|
-| `/pmai-build-close` | **兼容与恢复入口**：中断续跑、merge 冲突恢复或 `landed/docs_pending` 文档恢复；正常链路不需要手动调用 |
+| `/pmai-build-close` | **兼容与恢复入口**：中断续跑、merge 冲突恢复或 `landed/docs_pending` 文档恢复；正常链路不需要手动调用，也不在 close 内改业务代码 |
 | `/pmai-record` | 轻量记录：main 小改或 design 后暂不 build 时，把稳定术语 / 规则 / 当前设计状态写回项目底座 |
 | `/pmai-build-cancel` | 放弃当前 build，不合并，清活跃状态并排队清理隔离环境 |
 
