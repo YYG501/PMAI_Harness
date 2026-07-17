@@ -73,11 +73,12 @@
 - build 的功能锚点是 design 已提交的模块 `spec.md` 或功能型规格文档，不是 task 文件；开工和关键恢复点先编译 context pack。
 - 一次 build 只有一个主要对象：`prototype` 或 `product`，由首个可建造 design 定稿后生成的 `.pm-workflow/project.yml` 定义。技术栈、代码入口和运行命令也只从该文件读取；build 不临时猜。
 - 新 build 由 AI 推荐独立/当前工作环境和构建工具，并在同一张卡列出全部有效选项；外部构建工具排除当前主控对应的 profile，“当前会话直接构建”始终可选，外部工具均不可用时推荐它。PM 一次确认后执行；项目类型和默认验收不展示。选择当前环境时，main 只放行 v2 合同声明的目标路径。小改仍走 `/pmai-quick-fix`。
-- `.work-meta.json:build` 中的 contract v2 记录 target、source hash、design revision、accepted deltas、implementation commit、required checks、evidence 和 docs status。
-- 每轮修改先跑受影响快速检查并尽快给 PM 看；产品决定变化写 accepted delta 并让旧证据及验收就绪快照失效；候选版本在 PM 定稿前跑完整 required checks 并通过 `review-ready`。
+- `.work-meta.json:build` 中的 contract v4 记录 target、source hash、design revision、accepted deltas、implementation commit、`iteration_checks / final_checks`、两层 evidence、定稿请求和 docs status；v2/v3 仅用于旧 build 恢复。
+- 每轮修改由当前会话优先处理，只跑热更新、typecheck 和当前页面走查，保留同一 dev server 与浏览器连接并立即回“已修改，可刷新查看”；外部 builder 只用于首次实现或大型重构。产品决定变化写 accepted delta，并让旧证据和定稿请求失效。
+- PM 明确请求定稿后，才冻结 commit、在 validation worktree 运行一次 production build 和完整 final checks，再通过 `review-ready`。2–5 / 5–10 分钟是 time-to-preview 预警目标，不是阻断门。
 - prototype 验收覆盖可启动性、任务路径、页面/弹窗、边界状态、视觉和行为；product 验收覆盖现有测试、typecheck/build、接口数据、迁移兼容，并按需追加 UI、权限与安全检查。
 - 证据必须绑定当前 source hash 和 implementation commit；limited/skipped/blocked 不能伪装 pass。
-- PM 定稿后的 final_check 只校验同一 source hash / implementation commit 的验收就绪快照，不首次补实现或重跑完整验收；通过后先合入 main，再基于 landed diff 和预生成的文档影响草案更新正式文档。文档失败保留 `landed/docs_pending`，纯清理失败进入待清理队列，续跑不重复 merge。
+- PM 定稿后的 final_check 只校验同一 source hash / implementation commit / finalization request 的验收就绪快照，不首次补实现或重跑完整验收；通过后先合入 main，再基于 landed diff 和预生成的文档影响草案更新正式文档。文档失败保留 `landed/docs_pending`，纯清理失败进入待清理队列，续跑不重复 merge。
 - 使用外部构建工具前，PM 已确认的工作环境必须 clean；失败默认保留半成品，禁止自动 restore/clean，换工具需重新确认。
 
 ### Review 工具

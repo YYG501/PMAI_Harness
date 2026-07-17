@@ -5,20 +5,20 @@
 ## 当前位置
 
 - 日期：2026-07-17
-- 开发分支：`codex/unified-build-lifecycle`
-- 当前目标：统一生命周期继续以真实消费仓会话收口；prototype 实现深度已进入 build contract v3，首次构建、反馈迭代和恢复都会重载边界，避免按最终规格把原型静默建成真实系统。
+- 开发分支：`main`
+- 当前目标：统一生命周期继续以真实消费仓会话收口；build contract v4 已把 PM 看结果期间的快速迭代与定稿后的完整验收拆开，避免小改重复承担 production build、完整浏览器验收和服务恢复成本。
 - gstack 参考基线：`v1.58.5.0`，commit `11de390`；只参考本地 `gstack-clean` checkout，没有升级用户目录中的安装副本。
 
 ## 当前活跃模型
 
-- 正常用户主链路：`/pmai-init-project` 只建上下文 → `/pmai-design` 讨论需求并在首次定稿时生成项目建造定义 → `/pmai-build` → PM 看结果多轮修改，同时后台形成验收就绪候选 → PM 明确定稿 → 快速校验快照、合入 main、主线后文档编译和一致性检查。
+- 正常用户主链路：`/pmai-init-project` 只建上下文 → `/pmai-design` 讨论需求并在首次定稿时生成项目建造定义 → `/pmai-build` → PM 看结果多轮快速修改 → PM 明确定稿 → 冻结 commit 并统一运行一次 final checks → 形成验收就绪快照、合入 main、主线后文档编译和一致性检查。
 - `meta`、`mockup`、`spec-writing` 是 design 按需调用后返回主线的内部能力；仍保留手动入口用于兼容和专项使用，但不要求 PM 拼接命令。
 - `/pmai-build-close` 只作为兼容与恢复入口；正常链路不再要求 PM 手动调用。
 - lifecycle v2：`designing → ready_to_build → building → iterating → final_check → landed → documenting → complete`。旧 `stage` 字段仅为 v1 消费仓兼容展示。
 - 项目建造定义：初始化时不存在；首个达到 `ready_to_build` 的 design 将 `prototype / product`、技术栈、代码入口、真实命令和 Web 能力写入 `.pm-workflow/project.yml`。后续 build 只读该文件。
 - 模块真相源：`docs/modules/<模块>/discussion.md`、`decisions.md`、`spec.md`；跨模块现行规则为 `PRODUCT-RULES.md`，项目级冻结理路为 `docs/decisions/`。
 - 文档语义：`spec.md` / PRD 是指导研发实现的最终目标合同；`PRODUCT-STATE.md` 描述 main 已落地现状；原型、mockup 和代码只作设计 / 实现证据。
-- design 的 `ready_to_build` 状态同时记录 approved source hash、design checkpoint 和精确目标路径；build 开工前重新编译上下文并验证 currentness，过期依据不能继续显示或进入构建。新 `.work-meta.json:build` 使用合同 v3，在 v2 字段之上固化 `delivery_policy + delivery_policy_hash`；旧 v2 合同继续用于中断恢复兼容。
+- design 的 `ready_to_build` 状态同时记录 approved source hash、design checkpoint 和精确目标路径；build 开工前重新编译上下文并验证 currentness，过期依据不能继续显示或进入构建。新 `.work-meta.json:build` 使用合同 v4，在 v3 实现深度合同之上增加 `iteration_checks / final_checks`、两层 evidence 和定稿请求；旧 v2/v3 合同继续用于中断恢复兼容。
 - 新 build 由 AI 在一张卡中展示推荐的工作环境、构建工具和两项的全部有效选择，PM 只确认这两项；外部工具候选排除当前主控对应的 profile，“当前会话直接构建”始终可选，没有可用外部工具时默认推荐它。项目类型和验收方案不显示。选择当前环境时，main 只放行合同声明的目标路径。
 - 记忆分两层：项目事实、决定和偏好继续由消费仓现有真相源承担；个人经验保存在用户级状态目录，跨项目召回但只作建议。个人经验不进入 context pack、项目 hash 或 Git，也不能自动修改 Skill。
 
@@ -26,14 +26,16 @@
 
 - 新增 `context-pack.py`：design、build、恢复、最终检查和文档更新共用确定性上下文，并区分 active / superseded / 冲突决定、未决问题和输入 hash；项目定义存在时只从其中的 entrypoints 取实现上下文。
 - 新增共用 `decision-policy`：机械项自动处理，可逆偏好给推荐并推进，产品模型岔路和 one-way door 立即让 PM 拍板；问句和讨论草稿不得成为决定。
-- `build-contract.py` 新 build 使用合同 v3：accepted delta、新 implementation commit 或证据更新仍会使验收就绪快照失效；prototype 额外固化 `interactive-simulation` 实现深度，并要求不可 exception 的 `prototype-boundary` 证据。`review-ready` 只冻结完整且绑定当前 source hash / commit 的候选，`accept` 和 `validate-land` 拒绝缺失或过期快照。
-- prototype / product 验收 profile 同时编译实现深度；迭代修改先重载 `target + delivery_policy`、跑受影响快检并尽快展示，候选在 PM 定稿前跑完整 required checks，`final_check` 只校验快照 currentness，不首次补实现或重跑完整验收。
+- `build-contract.py` 新 build 使用合同 v4：`request-finalization` 是 final evidence 和 `review-ready` 的硬门；accepted delta 清除定稿请求，验收发现缺口后的修复 commit 自动重绑原定稿意图，PM 新反馈用 `resume-iteration` 回快速车道。prototype 继续固化 `interactive-simulation` 和不可 exception 的 `prototype-boundary`。
+- prototype / product 验收 profile schema v2 同时编译实现深度、`iteration_checks` 和 `final_checks`。快速迭代只跑热更新、typecheck 与当前页面走查；外部 builder 只用于首次实现或大型重构。
+- 新增 `final-validation.py`：对定稿请求绑定的 implementation commit 创建 detached validation worktree，运行 project.yml 的 test/typecheck/build，写结构化 artifact 后安全清理；不停止 active dev server，不改写其构建缓存。
+- 新增 `build-timing.py`：记录 prepare、implement、fast-check、preview、final-typecheck、production-build、browser-acceptance、documentation 阶段和 time-to-preview；2–5 / 5–10 分钟只预警，不阻断 PM 查看。
 - 新增 `prototype-boundary.py`：从 baseline 到候选实现扫描批准范围外改动、数据库 migration、生产基础设施、密钥配置、真实鉴权和外部副作用信号；静态信号无缺口后仍要求 AI 明确完成语义复核，artifact 才能写 `pass`。
 - 新增 `project-definition.py` 和严格 schema validator；路径、类型、技术栈、Web 运行配置与 revision 变更全部 fail-closed。
 - `project-type.py` 保留为兼容包装器：优先读新 `project.yml`，再读旧 config 和旧 `auto-detected: system` marker。
 - 初始化脚本不再接收 project type，不创建代码、prototype、mockup 看板、dev server 或 gstack 依赖。
-- 固定 build 审计编排和 coverage reviewer 已退出活跃链路；v2 只认 adaptive required checks/evidence。
-- Web required checks 必须有 active browser-smoke；gstack 可由其它 browser/Playwright 适配器替代，但 v2 不能 exception 掉浏览器能力。
+- 固定 build 审计编排和 coverage reviewer 已退出活跃链路；v4 只认 adaptive iteration/final checks 与对应 evidence。
+- Web final checks 必须有 active browser-smoke；gstack 可由其它 browser/Playwright 适配器替代，不能 exception 掉浏览器能力。
 - builder profile 按项目定义、配置、本机可用性和当前主控推荐；开工卡一次列出有效环境与工具，当前主控不再作为外部执行器候选，但当前会话直接构建始终可选；Gemini CLI 已退出构建工具面。验收 profile 仍后台生成，不进入开工卡。
 - 新增自动 landing 和恢复：merge 冲突保留 `final_check` 与隔离环境；文档失败保留 `landed/docs_pending`，续跑不重复 merge；运行进程或缓存导致的 worktree 清理失败进入安全待清理队列，不阻塞文档阶段。
 - 文档影响地图在验收就绪候选阶段先生成草案，landed 后按 main 事实完成覆盖；对象、动作、状态、权限、页面、术语和受影响文件都必须 covered 或明确 no-change，最终提交自动纳入影响地图本身。
@@ -56,9 +58,9 @@
 ## 当前验证
 
 - 新增和改造的 context pack、acceptance profile、build contract、landing、文档影响地图、status、关键 Skill 路由、design 决策收敛、project definition 幂等与个人经验 targeted tests 已通过。
-- 完整 `tests/run-all.sh` 已通过：`467 passed / 0 failed`。新增回归覆盖验收就绪快照的生成与失效、PM 定稿门、prototype 实现深度合同与边界检查，worktree 清理失败不阻塞文档阶段，以及 `doc-impact.json` 自动进入最终文档提交；原有 lifecycle、design、个人经验与执行器回归继续通过。
+- 完整 `tests/run-all.sh` 已通过：`470 passed / 0 failed`。新增回归覆盖 iteration/final 双车道、PM 定稿请求硬门、隔离 validation worktree、time-to-preview 预警，以及验收修复提交重绑定稿意图；原有 lifecycle、prototype 边界、landing/docs 恢复、design、个人经验与执行器回归继续通过。
 
 ## 下一步
 
-- 继续用真实消费仓会话观察 design 决策收敛、验收就绪候选能否在 PM 查看期间完成，以及正常 close 是否稳定收敛为轻量校验、merge、文档提交和清理。
+- 继续用真实消费仓会话观察 active build 的小改能否稳定在 2–5 分钟内可刷新、交互改动能否稳定在 5–10 分钟内可刷新，以及定稿请求是否只触发一次隔离 production validation。
 - 后续框架修改继续先在开发分支完成 targeted / full regression，再进入 main 分发基线并升级全局安装副本。

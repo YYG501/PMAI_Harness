@@ -52,7 +52,7 @@ test_consumer_template_landing_rules() {
   assert_file_contains "$AGENTS_TEMPLATE" "混合交付必须走完整 build" "template should require the full lifecycle" || return
   assert_file_contains "$AGENTS_TEMPLATE" '`/pmai-build-close` 保留为兼容与恢复入口' "template should keep close as compatibility only" || return
   assert_file_contains "$AGENTS_TEMPLATE" "PM 说“可以提交 / 定稿 / 可以合并”即授权" "template should recognize natural-language finalization" || return
-  assert_file_contains "$AGENTS_TEMPLATE" 'PM 定稿前通过 `review-ready`' "template should require a ready candidate before close" || return
+  assert_file_contains "$AGENTS_TEMPLATE" 'PM 请求定稿前禁止 final evidence 与 `review-ready`' "template should gate final evidence on PM finalization" || return
   pass_test
 }
 

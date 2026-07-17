@@ -48,7 +48,7 @@ VALID_LIFECYCLE_STATES = {
     "complete",
 }
 VALID_DOCS_STATUSES = {"pending", "complete", "failed"}
-CURRENT_CONTRACT_VERSION = 3
+CURRENT_CONTRACT_VERSION = 4
 PASSING_EVIDENCE_STATUSES = {"pass", "passed", "clean", "built"}
 LIMITED_EVIDENCE_STATUSES = {"limited", "skipped", "blocked", "needs-review"}
 VALID_EVIDENCE_STATUSES = {
@@ -57,6 +57,10 @@ VALID_EVIDENCE_STATUSES = {
     "fail",
 }
 EVIDENCE_LABELS = {
+    "current-page": "当前页面走查",
+    "tests": "测试",
+    "typecheck": "类型检查",
+    "build": "生产构建",
     "browser-smoke": "浏览器主动 smoke",
     "prototype-boundary": "原型实现边界",
     "coverage": "覆盖审计",
@@ -194,6 +198,28 @@ def ensure_v2_shape(build: dict) -> None:
             raise SystemExit("build.delivery_policy_hash 与实现深度合同不一致。")
         if target["kind"] == "prototype" and "prototype-boundary" not in required_checks:
             raise SystemExit("prototype build 必须把 prototype-boundary 作为不可跳过的检查。")
+    if contract_version(build) >= 4:
+        iteration_checks = acceptance.get("iteration_checks")
+        final_checks = acceptance.get("final_checks")
+        for label, checks in (
+            ("iteration_checks", iteration_checks),
+            ("final_checks", final_checks),
+        ):
+            if not isinstance(checks, list) or any(
+                not isinstance(item, str) or not item.strip() for item in checks
+            ):
+                raise SystemExit(f"build.acceptance.{label} 必须是字符串数组。")
+            if len(set(checks)) != len(checks):
+                raise SystemExit(f"build.acceptance.{label} 不能包含重复检查。")
+        if not final_checks or final_checks != required_checks:
+            raise SystemExit(
+                "build.acceptance.final_checks 必须是非空数组，且与兼容字段 required_checks 一致。"
+            )
+        if not isinstance(acceptance.get("iteration_evidence", []), list):
+            raise SystemExit("build.acceptance.iteration_evidence 必须是数组。")
+        finalization = build.get("finalization")
+        if not isinstance(finalization, dict):
+            raise SystemExit("build.finalization 必须是对象。")
     docs_status = build.get("docs_status")
     if docs_status not in VALID_DOCS_STATUSES:
         raise SystemExit(
@@ -394,6 +420,39 @@ def clear_review_ready(build: dict) -> None:
     acceptance["ready_source_hash"] = None
 
 
+def clear_finalization(build: dict) -> None:
+    """Return a v4 contract to the PM-facing rapid-iteration lane."""
+
+    if contract_version(build) < 4:
+        return
+    build["finalization"] = {
+        "requested_at": None,
+        "requested_commit": None,
+        "rebound_at": None,
+    }
+
+
+def validate_finalization_requested(build: dict) -> None:
+    """Require a PM finalization request bound to the current implementation."""
+
+    if contract_version(build) < 4:
+        return
+    finalization = build.get("finalization")
+    if not isinstance(finalization, dict):
+        raise SystemExit("build.finalization 必须是对象。")
+    requested_at = optional(finalization.get("requested_at"))
+    requested_commit = optional(finalization.get("requested_commit"))
+    if not requested_at or not requested_commit:
+        raise SystemExit(
+            "PM 尚未请求定稿：快速迭代期间不能生成 review-ready 或运行完整 final checks。"
+        )
+    if requested_commit != optional(build.get("implementation_commit")):
+        raise SystemExit(
+            "定稿请求绑定的 implementation commit 已变化；先记录验收修复提交，"
+            "由合同重新绑定后再运行 final checks。"
+        )
+
+
 def validate_review_ready(build: dict) -> None:
     """Require a readiness snapshot bound to the current source and implementation."""
 
@@ -405,8 +464,8 @@ def validate_review_ready(build: dict) -> None:
     ready_source_hash = optional(acceptance.get("ready_source_hash"))
     if not ready_at or not ready_commit or not ready_source_hash:
         raise SystemExit(
-            "当前实现尚未形成验收就绪快照：先在 build 阶段对候选提交完成全部 required checks，"
-            "再运行 review-ready；build-close 不在 PM 定稿后临时补实现或首次跑完整验收。"
+            "当前实现尚未形成验收就绪快照：PM 请求定稿后，先对冻结提交完成全部 final checks，"
+            "再运行 review-ready；final_check 不临时补实现或首次跑完整验收。"
         )
     if ready_commit != optional(build.get("implementation_commit")):
         raise SystemExit("验收就绪快照已过期：implementation commit 已变化，请回 build 重新检查。")
@@ -650,11 +709,15 @@ def cmd_start(args: argparse.Namespace) -> None:
             source_hash = hashlib.sha256(anchor_path.read_bytes()).hexdigest()
         else:
             source_hash = sha256_value({"anchor": args.anchor, "baseline": optional(args.baseline_sha)})
-    required_checks = normalize_string_list(args.required_check)
-    if not required_checks:
-        raise SystemExit("v2+ build 必须记录 acceptance profile 生成的 required_checks。")
+    compatibility_checks = normalize_string_list(args.required_check)
+    final_checks = normalize_string_list(args.final_check) or compatibility_checks
+    if not final_checks:
+        raise SystemExit("v2+ build 必须记录 acceptance profile 生成的 final_checks。")
+    if compatibility_checks and compatibility_checks != final_checks:
+        raise SystemExit("--required-check 与 --final-check 同时提供时必须一致。")
+    iteration_checks = normalize_string_list(args.iteration_check)
     delivery_policy = delivery_policy_for(target_kind)
-    if target_kind == "prototype" and "prototype-boundary" not in required_checks:
+    if target_kind == "prototype" and "prototype-boundary" not in final_checks:
         raise SystemExit("prototype build 必须由 acceptance profile 生成 prototype-boundary 检查。")
 
     build = {
@@ -680,8 +743,16 @@ def cmd_start(args: argparse.Namespace) -> None:
         "started_at": now_iso(),
         "implementation_commit": None,
         "pm_accepted_at": None,
+        "finalization": {
+            "requested_at": None,
+            "requested_commit": None,
+            "rebound_at": None,
+        },
         "acceptance": {
-            "required_checks": required_checks,
+            "iteration_checks": iteration_checks,
+            "final_checks": final_checks,
+            "required_checks": final_checks,
+            "iteration_evidence": [],
             "evidence": [],
             "ready_at": None,
             "ready_commit": None,
@@ -806,8 +877,18 @@ def cmd_commit(args: argparse.Namespace) -> None:
         if not isinstance(acceptance, dict):
             raise SystemExit("build.acceptance 必须是对象。")
         acceptance["evidence"] = []
+        if contract_version(build) >= 4:
+            acceptance["iteration_evidence"] = []
         clear_review_ready(build)
         build["pm_accepted_at"] = None
+        finalization = build.get("finalization")
+        if (
+            contract_version(build) >= 4
+            and isinstance(finalization, dict)
+            and optional(finalization.get("requested_at"))
+        ):
+            finalization["requested_commit"] = commit
+            finalization["rebound_at"] = now_iso()
     build["implementation_commit"] = commit
     build["implementation_committed_at"] = now_iso()
     if contract_version(build) >= 2:
@@ -829,6 +910,7 @@ def cmd_accept(args: argparse.Namespace) -> None:
         raise SystemExit("只有 PM 看过构建结果后才能进入 final_check。")
     if contract_version(build) >= 2:
         ensure_v2_shape(build)
+        validate_finalization_requested(build)
         validate_review_ready(build)
     accepted_at = optional(args.accepted_at) or now_iso()
     build["pm_accepted_at"] = accepted_at
@@ -856,10 +938,11 @@ def cmd_complete(args: argparse.Namespace) -> None:
     if contract_version(build) >= 2:
         if previous_commit != commit:
             raise SystemExit(
-                "v2 定稿不能同时换 implementation commit：先用 commit 记录候选提交，"
-                "完成 required checks 和 review-ready，再记录 PM 定稿。"
+                "定稿不能同时换 implementation commit：先用 commit 记录候选提交，"
+                "完成 final checks 和 review-ready，再记录 PM 定稿。"
             )
         ensure_v2_shape(build)
+        validate_finalization_requested(build)
         validate_review_ready(build)
     accepted_at = optional(args.accepted_at) or now_iso()
     build["implementation_commit"] = commit
@@ -927,7 +1010,10 @@ def cmd_add_delta(args: argparse.Namespace) -> None:
     if not isinstance(acceptance, dict):
         raise SystemExit("build.acceptance 必须是对象。")
     acceptance["evidence"] = []
+    if contract_version(build) >= 4:
+        acceptance["iteration_evidence"] = []
     clear_review_ready(build)
+    clear_finalization(build)
     build["implementation_commit"] = None
     build["pm_accepted_at"] = None
     build["lifecycle_state"] = "iterating"
@@ -955,30 +1041,102 @@ def cmd_record_evidence(args: argparse.Namespace) -> None:
             "record-evidence status 不合法："
             f"{status}（允许 {', '.join(sorted(VALID_EVIDENCE_STATUSES))}）。"
         )
+    lane = args.lane
+    acceptance = build.setdefault("acceptance", {"required_checks": [], "evidence": []})
+    if not isinstance(acceptance, dict):
+        raise SystemExit("build.acceptance 必须是对象。")
+    if contract_version(build) >= 4:
+        checks_key = "iteration_checks" if lane == "iteration" else "final_checks"
+        allowed_checks = acceptance.get(checks_key, [])
+        if name not in allowed_checks:
+            raise SystemExit(f"{name} 不在 acceptance.{checks_key} 中。")
+        if lane == "final":
+            validate_finalization_requested(build)
     item = {
         "name": name,
+        "lane": lane,
         "status": status,
         "source_hash": source_hash,
         "commit": commit,
         "checked_at": optional(args.checked_at) or now_iso(),
         "artifact": optional(args.artifact),
     }
-    acceptance = build.setdefault("acceptance", {"required_checks": [], "evidence": []})
-    if not isinstance(acceptance, dict):
-        raise SystemExit("build.acceptance 必须是对象。")
-    evidence = acceptance.setdefault("evidence", [])
+    evidence_key = "iteration_evidence" if lane == "iteration" else "evidence"
+    evidence = acceptance.setdefault(evidence_key, [])
     if not isinstance(evidence, list):
-        raise SystemExit("build.acceptance.evidence 必须是数组。")
-    acceptance["evidence"] = [entry for entry in evidence if entry.get("name") != name]
-    acceptance["evidence"].append(item)
-    clear_review_ready(build)
+        raise SystemExit(f"build.acceptance.{evidence_key} 必须是数组。")
+    acceptance[evidence_key] = [entry for entry in evidence if entry.get("name") != name]
+    acceptance[evidence_key].append(item)
+    if lane == "final":
+        clear_review_ready(build)
     meta["build"] = build
     write_meta(module_dir, meta)
     print(json.dumps(item, ensure_ascii=False))
 
 
+def cmd_request_finalization(args: argparse.Namespace) -> None:
+    """Record the PM's explicit request to freeze and fully validate this candidate."""
+
+    module_dir = Path(args.module_dir)
+    meta = read_meta(module_dir)
+    build = require_build(meta)
+    if contract_version(build) < 4:
+        raise SystemExit("request-finalization 只适用于 build contract v4+。")
+    if build.get("lifecycle_state") != "iterating":
+        raise SystemExit("只有 iterating 状态可以请求定稿。")
+    commit = optional(build.get("implementation_commit"))
+    if not commit:
+        raise SystemExit("候选实现尚未记录 implementation_commit，不能请求定稿。")
+    ensure_v2_shape(build)
+    existing = build.get("finalization")
+    if (
+        isinstance(existing, dict)
+        and optional(existing.get("requested_at"))
+        and optional(existing.get("requested_commit")) == commit
+    ):
+        print(json.dumps(existing, ensure_ascii=False))
+        return
+    requested_at = optional(args.requested_at) or now_iso()
+    build["finalization"] = {
+        "requested_at": requested_at,
+        "requested_commit": commit,
+        "rebound_at": None,
+    }
+    acceptance = build["acceptance"]
+    acceptance["evidence"] = []
+    clear_review_ready(build)
+    build["pm_accepted_at"] = None
+    meta["build"] = build
+    write_meta(module_dir, meta)
+    print(json.dumps(build["finalization"], ensure_ascii=False))
+
+
+def cmd_resume_iteration(args: argparse.Namespace) -> None:
+    """Cancel finalization when the PM asks for another product iteration."""
+
+    module_dir = Path(args.module_dir)
+    meta = read_meta(module_dir)
+    build = require_build(meta)
+    if contract_version(build) < 4:
+        raise SystemExit("resume-iteration 只适用于 build contract v4+。")
+    if build.get("lifecycle_state") not in {"iterating", "final_check"}:
+        raise SystemExit("只有 iterating / final_check 可以恢复快速迭代。")
+    build["lifecycle_state"] = "iterating"
+    build["pm_accepted_at"] = None
+    acceptance = build.get("acceptance")
+    if not isinstance(acceptance, dict):
+        raise SystemExit("build.acceptance 必须是对象。")
+    acceptance["evidence"] = []
+    clear_review_ready(build)
+    clear_finalization(build)
+    meta["lifecycle_state"] = "iterating"
+    meta["build"] = build
+    write_meta(module_dir, meta)
+    print(json.dumps(build, ensure_ascii=False))
+
+
 def cmd_review_ready(args: argparse.Namespace) -> None:
-    """Freeze a fully checked candidate before PM finalization."""
+    """Freeze a fully checked candidate after the PM finalization request."""
 
     module_dir = Path(args.module_dir)
     meta = read_meta(module_dir)
@@ -990,6 +1148,7 @@ def cmd_review_ready(args: argparse.Namespace) -> None:
     if not optional(build.get("implementation_commit")):
         raise SystemExit("候选实现尚未记录 implementation_commit，不能标记为验收就绪。")
     ensure_v2_shape(build)
+    validate_finalization_requested(build)
     validate_fresh_evidence(module_dir, build)
     acceptance = build["acceptance"]
     acceptance["ready_at"] = optional(args.checked_at) or now_iso()
@@ -1213,7 +1372,14 @@ def build_parser() -> argparse.ArgumentParser:
     start.add_argument("--entrypoint", action="append", required=True)
     start.add_argument("--approved-source-hash")
     start.add_argument("--design-revision", type=int, default=1)
-    start.add_argument("--required-check", action="append", required=True)
+    start.add_argument("--iteration-check", action="append", default=[])
+    start.add_argument("--final-check", action="append", default=[])
+    start.add_argument(
+        "--required-check",
+        action="append",
+        default=[],
+        help="compatibility alias for --final-check",
+    )
     start.set_defaults(func=cmd_start)
 
     commit = sub.add_parser("commit", help="record the implementation commit produced by build")
@@ -1261,11 +1427,27 @@ def build_parser() -> argparse.ArgumentParser:
     evidence.add_argument("--commit")
     evidence.add_argument("--checked-at")
     evidence.add_argument("--artifact")
+    evidence.add_argument("--lane", choices=("iteration", "final"), default="final")
     evidence.set_defaults(func=cmd_record_evidence)
+
+    request_finalization = sub.add_parser(
+        "request-finalization",
+        help="record the PM request that opens the frozen final-validation lane",
+    )
+    request_finalization.add_argument("module_dir")
+    request_finalization.add_argument("--requested-at")
+    request_finalization.set_defaults(func=cmd_request_finalization)
+
+    resume_iteration = sub.add_parser(
+        "resume-iteration",
+        help="cancel finalization because the PM requested another product iteration",
+    )
+    resume_iteration.add_argument("module_dir")
+    resume_iteration.set_defaults(func=cmd_resume_iteration)
 
     review_ready = sub.add_parser(
         "review-ready",
-        help="validate all fresh evidence and freeze the candidate before PM finalization",
+        help="validate fresh final evidence and freeze the PM-requested candidate",
     )
     review_ready.add_argument("module_dir")
     review_ready.add_argument("--checked-at")

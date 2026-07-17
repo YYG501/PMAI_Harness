@@ -37,7 +37,21 @@ teardown_contract_fixture() {
   rm -rf "$T"
 }
 
+request_finalization() {
+  if python3 - "$MODULE_DIR/.work-meta.json" <<'PY' >/dev/null 2>&1
+import json, sys
+build = json.load(open(sys.argv[1]))["build"]
+finalization = build.get("finalization") or {}
+raise SystemExit(0 if finalization.get("requested_at") else 1)
+PY
+  then
+    return 0
+  fi
+  python3 "$BUILD_CONTRACT" request-finalization "$MODULE_DIR" >/dev/null
+}
+
 write_prototype_boundary_audit() {
+  request_finalization
   AUDIT_DIR="$T/.pm-workflow/audits/pet-import"
   mkdir -p "$AUDIT_DIR"
   python3 - "$MODULE_DIR/.work-meta.json" "$AUDIT_DIR/prototype-boundary.json" <<'PY'
@@ -150,6 +164,7 @@ test_contract_lifecycle() {
   fi
 
   python3 "$BUILD_CONTRACT" commit "$MODULE_DIR" --implementation-commit "def456" >/tmp/build-contract.$$ 2>/tmp/build-contract.err.$$
+  request_finalization
   if python3 "$BUILD_CONTRACT" validate-close "$MODULE_DIR" >/tmp/build-contract.$$ 2>/tmp/build-contract.err.$$; then
     _fail "validate-close should fail before PM acceptance"
     rm -f /tmp/build-contract.$$ /tmp/build-contract.err.$$; teardown_contract_fixture; return
@@ -188,7 +203,7 @@ meta = json.load(open(sys.argv[1]))
 build = meta["build"]
 assert meta["stage"] == 2
 assert build["mode"] == "worktree"
-assert build["contract_version"] == 3
+assert build["contract_version"] == 4
 assert build["target"]["kind"] == "prototype"
 assert build["delivery_policy"]["implementation_mode"] == "interactive-simulation"
 assert build["delivery_policy"]["required_check"] == "prototype-boundary"
@@ -206,6 +221,7 @@ assert build["implementation_commit"] == "def456"
 assert build["pm_accepted_at"] == "2026-06-28T10:00:00+08:00"
 assert build["acceptance"]["ready_commit"] == "def456"
 assert build["acceptance"]["ready_source_hash"] == build["approved_source_hash"]
+assert build["finalization"]["requested_commit"] == "def456"
 PY
     _fail "written build contract fields mismatch"
     rm -f /tmp/build-contract.$$ /tmp/build-contract.err.$$; teardown_contract_fixture; return
@@ -571,6 +587,7 @@ test_contract_v2_rejects_stale_evidence_and_invalidates_on_delta() {
       _fail "v2 start should succeed"; teardown_contract_fixture; return;
   }
   python3 "$BUILD_CONTRACT" commit "$MODULE_DIR" --implementation-commit commit-v1 >/dev/null
+  request_finalization
   python3 "$BUILD_CONTRACT" record-evidence "$MODULE_DIR" --name tests --status pass \
     --source-hash source-v1 --commit stale-commit >/dev/null
 
@@ -618,6 +635,7 @@ test_contract_v2_post_land_docs_resume() {
     --baseline-sha abc123 --target-kind product --target-path src/pets/ --entrypoint src/pets/ --approved-source-hash source-v1 \
     --required-check tests >/dev/null
   python3 "$BUILD_CONTRACT" commit "$MODULE_DIR" --implementation-commit commit-v1 >/dev/null
+  request_finalization
   python3 "$BUILD_CONTRACT" record-evidence "$MODULE_DIR" --name tests --status pass \
     --source-hash source-v1 --commit commit-v1 >/dev/null
   mark_review_ready
@@ -644,6 +662,7 @@ test_contract_v2_new_implementation_invalidates_evidence() {
     --baseline-sha abc123 --target-kind product --target-path src/pets/ --entrypoint src/pets/ --approved-source-hash source-v1 \
     --required-check tests >/dev/null
   python3 "$BUILD_CONTRACT" commit "$MODULE_DIR" --implementation-commit commit-v1 >/dev/null
+  request_finalization
   python3 "$BUILD_CONTRACT" record-evidence "$MODULE_DIR" --name tests --status pass \
     --source-hash source-v1 --commit commit-v1 >/dev/null
   python3 "$BUILD_CONTRACT" commit "$MODULE_DIR" --implementation-commit commit-v2 >/dev/null
@@ -674,6 +693,7 @@ test_contract_v2_new_evidence_invalidates_review_ready() {
     --baseline-sha abc123 --target-kind product --target-path src/pets/ --entrypoint src/pets/ \
     --approved-source-hash source-v1 --required-check tests >/dev/null
   python3 "$BUILD_CONTRACT" commit "$MODULE_DIR" --implementation-commit commit-v1 >/dev/null
+  request_finalization
   python3 "$BUILD_CONTRACT" record-evidence "$MODULE_DIR" --name tests --status pass \
     --source-hash source-v1 --commit commit-v1 >/dev/null
   mark_review_ready
@@ -701,6 +721,7 @@ test_contract_v2_iterating_clears_acceptance_and_readiness() {
     --baseline-sha abc123 --target-kind product --target-path src/pets/ --entrypoint src/pets/ \
     --approved-source-hash source-v1 --required-check tests >/dev/null
   python3 "$BUILD_CONTRACT" commit "$MODULE_DIR" --implementation-commit commit-v1 >/dev/null
+  request_finalization
   python3 "$BUILD_CONTRACT" record-evidence "$MODULE_DIR" --name tests --status pass \
     --source-hash source-v1 --commit commit-v1 >/dev/null
   mark_review_ready
@@ -750,8 +771,79 @@ test_contract_v2_rejects_illegal_lifecycle_jumps() {
   teardown_contract_fixture
 }
 
-test_contract_v3_requires_and_validates_prototype_boundary() {
-  start_test "build-contract v3: prototype boundary is required, current, and non-exceptable"
+test_contract_v4_finalization_gate_and_iteration_lane() {
+  start_test "build-contract v4: final checks require PM request; validation fixes rebind; PM feedback resumes iteration"
+  setup_contract_fixture
+  python3 "$BUILD_CONTRACT" start "$MODULE_DIR" \
+    --anchor "docs/modules/pet-import/spec.md" --mode worktree --executor codex \
+    --branch build-pet-import --worktree ".worktrees/build-pet-import" \
+    --baseline-sha abc123 --target-kind product --target-path src/pets/ --entrypoint src/pets/ \
+    --approved-source-hash source-v1 --iteration-check typecheck --final-check tests >/dev/null
+  python3 "$BUILD_CONTRACT" commit "$MODULE_DIR" --implementation-commit commit-v1 >/dev/null
+  python3 "$BUILD_CONTRACT" record-evidence "$MODULE_DIR" --lane iteration \
+    --name typecheck --status pass --source-hash source-v1 --commit commit-v1 >/dev/null || {
+      _fail "iteration evidence should be recordable before finalization"; teardown_contract_fixture; return;
+    }
+  if python3 "$BUILD_CONTRACT" record-evidence "$MODULE_DIR" --name tests --status pass \
+    --source-hash source-v1 --commit commit-v1 >/tmp/build-contract.$$ 2>/tmp/build-contract.err.$$; then
+    _fail "final evidence must be blocked before PM requests finalization"
+    rm -f /tmp/build-contract.$$ /tmp/build-contract.err.$$; teardown_contract_fixture; return
+  elif ! grep -q "PM 尚未请求定稿" /tmp/build-contract.err.$$; then
+    _fail "missing finalization-gate guidance"
+    cat /tmp/build-contract.err.$$ >&2
+    rm -f /tmp/build-contract.$$ /tmp/build-contract.err.$$; teardown_contract_fixture; return
+  fi
+
+  python3 "$BUILD_CONTRACT" request-finalization "$MODULE_DIR" \
+    --requested-at "2026-07-17T10:00:00+08:00" >/dev/null
+  python3 "$BUILD_CONTRACT" record-evidence "$MODULE_DIR" --name tests --status pass \
+    --source-hash source-v1 --commit commit-v1 >/dev/null
+  python3 "$BUILD_CONTRACT" request-finalization "$MODULE_DIR" >/dev/null
+  python3 - "$MODULE_DIR/.work-meta.json" <<'PY' || {
+import json, sys
+build = json.load(open(sys.argv[1]))["build"]
+assert len(build["acceptance"]["evidence"]) == 1
+assert build["finalization"]["requested_at"] == "2026-07-17T10:00:00+08:00"
+PY
+    _fail "repeated finalization request should be idempotent"
+    teardown_contract_fixture; return
+  }
+  mark_review_ready || {
+    _fail "requested finalization should allow a complete final snapshot"; teardown_contract_fixture; return;
+  }
+
+  python3 "$BUILD_CONTRACT" commit "$MODULE_DIR" --implementation-commit commit-v2 >/dev/null
+  python3 - "$MODULE_DIR/.work-meta.json" <<'PY' || {
+import json, sys
+build = json.load(open(sys.argv[1]))["build"]
+assert build["finalization"]["requested_at"] == "2026-07-17T10:00:00+08:00"
+assert build["finalization"]["requested_commit"] == "commit-v2"
+assert build["finalization"]["rebound_at"]
+assert build["acceptance"]["evidence"] == []
+assert build["acceptance"]["iteration_evidence"] == []
+PY
+    _fail "validation-fix commit should rebind finalization and invalidate old checks"
+    teardown_contract_fixture; return
+  }
+  python3 "$BUILD_CONTRACT" resume-iteration "$MODULE_DIR" >/dev/null
+  python3 - "$MODULE_DIR/.work-meta.json" <<'PY' || {
+import json, sys
+build = json.load(open(sys.argv[1]))["build"]
+assert build["lifecycle_state"] == "iterating"
+assert build["finalization"]["requested_at"] is None
+assert build["finalization"]["requested_commit"] is None
+assert build["acceptance"]["evidence"] == []
+PY
+    _fail "PM feedback should cancel the finalization request"
+    teardown_contract_fixture; return
+  }
+  pass_test
+  rm -f /tmp/build-contract.$$ /tmp/build-contract.err.$$
+  teardown_contract_fixture
+}
+
+test_contract_v4_requires_and_validates_prototype_boundary() {
+  start_test "build-contract v4: prototype boundary is required, current, and non-exceptable"
   setup_contract_fixture
   if python3 "$BUILD_CONTRACT" start "$MODULE_DIR" \
     --anchor "docs/modules/pet-import/spec.md" --mode worktree --executor codex \
@@ -805,6 +897,7 @@ test_contract_v2_new_implementation_invalidates_evidence
 test_contract_v2_new_evidence_invalidates_review_ready
 test_contract_v2_iterating_clears_acceptance_and_readiness
 test_contract_v2_rejects_illegal_lifecycle_jumps
-test_contract_v3_requires_and_validates_prototype_boundary
+test_contract_v4_finalization_gate_and_iteration_lane
+test_contract_v4_requires_and_validates_prototype_boundary
 
 report_results "build-contract"

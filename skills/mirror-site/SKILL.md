@@ -88,7 +88,7 @@ python3 "$PMAI_HOME/scripts/checks-diff.py" \
 ```
 
 - rebuild：起 dev server 抓 `local/<check_id>.json`，爬出来的结构当 `reference/`，按 P0/P1 补齐重建（漏的页 / 文案 / 按钮），P2 视觉照 DESIGN。
-- align：重抓 local → 重跑 diff 直到 P0 清零；若 PM 明确决定保留差异，回写为模块决定，不能用它跳过 build 的 required checks。
+- align：重抓 local → 重跑 diff 直到 P0 清零；若 PM 明确决定保留差异，回写为模块决定，不能用它跳过 build 的 final checks。
 - 视觉细则（sticky / 横滚 / 禁 native alert·confirm 用包装组件 / 留白密度 / 四态）照 `DESIGN.md` + 模块规格，进入 adaptive visual 检查，不在引擎里硬判。
 
 ### 步骤 4：呈交 PM

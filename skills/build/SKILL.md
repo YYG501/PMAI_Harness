@@ -117,7 +117,7 @@ python3 "$PMAI_HOME/scripts/acceptance-profile.py" "${PROFILE_ARGS[@]}" > "$PROF
 
 ## 3. 推荐工作环境与构建工具，由 PM 一次确认
 
-恢复既有 v2 / v3 build 时，沿用合同里已确认的工作环境和构建工具，不重复确认。新 build 才执行本节：
+恢复既有 v2 / v3 / v4 build 时，沿用合同里已确认的工作环境和构建工具，不重复确认。新 build 才执行本节：
 
 1. **推荐工作环境**：默认推荐“独立环境”；若当前已经是本模块有效的 `build-*` 环境，则推荐“继续当前独立环境”。PM 也可以明确改为“当前环境”。
 2. **识别当前主控并推荐构建工具**：把当前 runtime 映射成 `claude-code / codex / opencode / cursor-agent`；无法识别时用 `unknown`。外部构建工具 profile 必须和当前主控不同，不能让 Codex 主控再启动 Codex，也不能让 Claude Code / OpenCode 主控把自己列为外部工具；“当前会话直接构建”不是外部 profile，始终作为有效选项。按项目级类型、消费仓配置和本机可用性生成推荐与完整可选列表：
@@ -179,13 +179,17 @@ fi
 
 执行器使用 `EXECUTOR_STATUS_DIR`、heartbeat、退出码和日志文件回报进度；PM 窗口只报阶段摘要，不直播命令、日志和进程排障。可确认的外部构建工具包括 Claude Code、Codex、Cursor Agent 和 OpenCode，但必须排除当前主控对应的外部 profile；“当前会话直接构建”始终与这些外部工具一起列为有效选项。没有外部工具可用时，推荐当前会话直接构建。
 
-从 acceptance profile 取 `required_checks`，写版本化合同。当前新合同为 v3，并由 `target.kind` 自动固化 `delivery_policy + delivery_policy_hash`；旧 v2 合同只作中断恢复兼容：
+从 acceptance profile 分别取快速迭代和定稿验收两组检查，写版本化合同。当前新合同为 v4：`iteration_checks` 只服务 PM 看结果期间的快循环，`final_checks` 只有 PM 明确请求定稿后才允许运行；同时由 `target.kind` 自动固化 `delivery_policy + delivery_policy_hash`。旧 v2/v3 合同只作中断恢复兼容：
 
 ```bash
-REQUIRED_CHECKS=()
+ITERATION_CHECKS=()
+FINAL_CHECKS=()
 while IFS= read -r check; do
-  REQUIRED_CHECKS+=("$check")
-done < <(python3 -c 'import json,sys; print(*(item["name"] for item in json.load(open(sys.argv[1]))["required_checks"]), sep="\n")' "$PROFILE")
+  ITERATION_CHECKS+=("$check")
+done < <(python3 -c 'import json,sys; print(*(item["name"] for item in json.load(open(sys.argv[1]))["iteration_checks"]), sep="\n")' "$PROFILE")
+while IFS= read -r check; do
+  FINAL_CHECKS+=("$check")
+done < <(python3 -c 'import json,sys; print(*(item["name"] for item in json.load(open(sys.argv[1]))["final_checks"]), sep="\n")' "$PROFILE")
 
 START_ARGS=(
   "$BUILD_DIR/docs/modules/<模块>"
@@ -202,10 +206,11 @@ START_ARGS=(
 )
 [ "${#TARGET_PATHS[@]}" -gt 0 ] || { echo "build target paths 为空，返回 design 修复建造依据" >&2; exit 1; }
 [ "${#PROJECT_ENTRYPOINTS[@]}" -gt 0 ] || { echo "project.yml entrypoints 为空，返回 design 修复项目定义" >&2; exit 1; }
-[ "${#REQUIRED_CHECKS[@]}" -gt 0 ] || { echo "acceptance profile 未生成 required_checks，停止 build" >&2; exit 1; }
+[ "${#FINAL_CHECKS[@]}" -gt 0 ] || { echo "acceptance profile 未生成 final_checks，停止 build" >&2; exit 1; }
 for path in "${TARGET_PATHS[@]}"; do START_ARGS+=(--target-path "$path"); done
 for entrypoint in "${PROJECT_ENTRYPOINTS[@]}"; do START_ARGS+=(--entrypoint "$entrypoint"); done
-for check in "${REQUIRED_CHECKS[@]}"; do START_ARGS+=(--required-check "$check"); done
+for check in "${ITERATION_CHECKS[@]}"; do START_ARGS+=(--iteration-check "$check"); done
+for check in "${FINAL_CHECKS[@]}"; do START_ARGS+=(--final-check "$check"); done
 [ "$BUILD_MODE" = "worktree" ] && START_ARGS+=(--worktree "$BUILD_DIR")
 python3 "$PMAI_HOME/scripts/build-contract.py" start "${START_ARGS[@]}"
 
@@ -213,7 +218,7 @@ git -C "$BUILD_DIR" add -- "docs/modules/<模块>/.work-meta.json"
 git -C "$BUILD_DIR" commit -m "build(<模块>): start adaptive build"
 ```
 
-`--required-check` 按后台档案逐项重复传入。合同只扩展现有 `.work-meta.json:build`，不新增平行状态系统，也不把合同内容展示给 PM。
+两组检查都按后台档案逐项重复传入。`required_checks` 只保留为 `final_checks` 的旧 host 兼容别名。合同只扩展现有 `.work-meta.json:build`，不新增平行状态系统，也不把合同内容展示给 PM。
 
 ## 4. 构建指定对象
 
@@ -244,6 +249,8 @@ git -C "$BUILD_DIR" commit -m "build(<模块>): start adaptive build"
 - 涉及 UI 时复用真实产品组件并准备浏览器验收；
 - 涉及迁移、安全或破坏性数据动作时追加相应检查。
 
+外部构建工具只用于首次实现或 PM 已确认的大型重构。active build 内的文案、间距、布局、按钮命名和局部交互反馈默认由当前会话直接修改，不重新派发外部 builder，也不让外部执行器重新读取整套规格和仓库；只有改动已经扩成跨模块架构重构时，才重新展示构建工具确认卡。
+
 构建工具失败时默认保留半成品，先检查已落改动与日志；若要换工具，给出新的推荐并重新展示只含工作环境和构建工具的确认卡，不能静默替换 PM 已确认的工具。只有丢弃会破坏可用改动时才让 PM 授权；禁止自动 `git restore .` / `git clean -fd`。
 
 启动页面时只读取 `.pm-workflow/project.yml:web.start` 并替换 `{port}`；ready path 和端口候选同样来自 `project.yml`。不得从 builder config 猜 Next.js、`--hostname`、`--port` 或其它框架参数。
@@ -263,16 +270,34 @@ git -C "$BUILD_DIR" add -- "docs/modules/<模块>/.work-meta.json"
 git -C "$BUILD_DIR" commit -m "build(<模块>): record iteration"
 ```
 
-先给 PM 看结果，不把完整验收的等待挡在“能看到页面/功能”之前。PM 每轮反馈后：
+首次实现只完成能支持 PM 查看结果的必要检查，不在这里运行 production build 或完整浏览器验收。启动并持续保留同一个 dev server 与浏览器连接；不得在每轮修改后重建服务、重开浏览器，或让 production build 与 dev server 共用并改写同一个构建缓存目录。
+
+先给 PM 看结果，不把定稿验收挡在“能刷新看到页面/功能”之前。PM 每轮反馈后进入快速迭代车道：
 
 1. 重新读取当前 build 合同的 `target + delivery_policy`，并把实现深度放在本轮修改指令首部；
 2. 判断是实现修正、新的产品决定，还是要求原型接入真实底层能力；
 3. 原型反馈若要求真实数据库、鉴权、外部写入、生产基础设施等，停止实现并回 design：由 PM 明确批准一个 prototype real edge，或把项目建造对象改为 product；不得在迭代中静默升级；
-4. 只改受影响路径；
-5. 只跑受影响的快速检查；
-6. 提交该轮修改；
-7. 再给 PM 看；
-8. 当当前候选没有已知缺口时，在 PM 查看结果期间后台准备“验收就绪快照”。
+4. 文案、布局、按钮和局部交互由当前会话直接修改；只有跨模块大型重构才重新确认并调用外部 builder；
+5. 只跑 profile 的 `iteration_checks`：热更新、typecheck 和当前页面/受影响交互走查；不得运行 production build、全路径浏览器验收或重启仍健康的 dev server；
+6. 提交该轮修改并用 `build-contract.py commit` 记录新实现 commit；
+7. 用 `record-evidence --lane iteration` 绑定该 commit 记录快检，不得把 iteration evidence 冒充 final evidence；
+8. 立即告诉 PM“已修改，可刷新查看”，继续复用同一个页面与浏览器连接；定稿请求前不准备 `review-ready`，也不在后台偷跑完整 `final_checks`。
+
+每轮同时把阶段耗时写入 `$BUILD_DIR/.pm-workflow/audits/<模块>/timing.json`。阶段至少覆盖 `prepare / implement / fast-check / preview`；反馈收到到 preview ready 的 time-to-preview 按改动标记为 `minor` 或 `interaction`：
+
+```bash
+TIMING_FILE="$BUILD_DIR/.pm-workflow/audits/<模块>/timing.json"
+TIMING_JSON=$(python3 "$PMAI_HOME/scripts/build-timing.py" start \
+  --audit-file "$TIMING_FILE" --phase preview --kind "<minor|interaction>" \
+  --feedback-at "<收到本轮反馈的 ISO 时间>")
+TIMING_ID=$(python3 -c 'import json,sys; print(json.load(sys.stdin)["id"])' <<<"$TIMING_JSON")
+
+# 快改完成、PM 已可刷新时；超过目标只会 warning，不阻断回执
+python3 "$PMAI_HOME/scripts/build-timing.py" finish \
+  --audit-file "$TIMING_FILE" --id "$TIMING_ID" --preview-ready
+```
+
+`minor` 的 2–5 分钟、`interaction` 的 5–10 分钟是目标与超时预警，不是质量硬门。预警出现时先让 PM 刷新查看，再定位慢在准备、实现、快检还是 preview；不能为了补齐完整验收继续阻塞 PM。
 
 如果反馈改变对象、动作、状态、权限、真相源、页面任务或产品规则，记录 accepted delta：
 
@@ -283,23 +308,42 @@ python3 "$PMAI_HOME/scripts/build-contract.py" add-delta \
   --affected-surface "<受影响文档/页面>"
 ```
 
-这会递增 `design_revision`、更新 source hash、清空旧证据并回到 `iterating`。正式文档仍等实现落到 main 后统一更新。
+这会递增 `design_revision`、更新 source hash、清空旧证据和已有定稿请求，并回到 `iterating`。正式文档仍等实现落到 main 后统一更新。
 
 实现修正不改变产品决定时，不递增 revision；但实现 commit 变化后，绑定旧 commit 的证据不能复用。
 
-## 6. 在 build 阶段准备验收就绪候选
+## 6. PM 请求定稿后，只对冻结提交运行一次完整验收
 
-`final_check` 不是第一次发现规格漏项、第一次走完整浏览器路径或第一次跑 production build 的地方。当前实现形成候选 commit 后，在仍处于 `iterating` 时完成：
+PM 明确说“定稿 / 可以提交 / 可以合并 / 这版可以了”之前，本节不得执行：v4 合同会拒绝 final evidence 和 `review-ready`。收到该表达后，不二次询问，把 PM 最后看到的 implementation commit 冻结为定稿候选：
+
+```bash
+python3 "$PMAI_HOME/scripts/build-contract.py" request-finalization \
+  "$BUILD_DIR/docs/modules/<模块>"
+```
+
+请求定稿只打开最终验收车道，不先写 `pm_accepted_at`。随后在仍处于 `iterating` 时完成：
 
 1. 重新编译 context pack，确认没有未决产品问题；
-2. 对候选 commit 跑 acceptance profile 的全部 `required_checks`；
-3. 从最终规格的功能项、流程、权限和验收标准逐项生成覆盖证据，不能沿用只覆盖旧页面的手工概括；
-4. 每项用 `record-evidence` 绑定同一个 `approved_source_hash + implementation_commit + checked_at`；
-5. 生成 landed 后文档影响地图草案，先定位可能更新的规格、产品现状、规则、术语、设计基线、TODO 和索引，但不在 merge 前把正式文档写成“已落地”；
-6. 运行 `review-ready`，把完整证据冻结为与当前 source hash 和 implementation commit 绑定的验收就绪快照；
-7. 提交 evidence artifacts、文档影响草案和合同状态。
+2. 对冻结 commit 运行 acceptance profile 的全部 `final_checks`；
+3. project.yml 声明的 test/typecheck/production build 必须在 detached validation worktree 执行，不能停止 dev server，也不能改写 active worktree 的构建缓存：
 
-若 required checks 包含 `browser-smoke`，先在后台解析可实际操作页面的主动浏览器适配器：gstack `/browse`、当前 runtime browser 或 Playwright。找不到任何适配器时保留 `iterating` 并说明缺失能力；不得生成 visual/behavior 的假证据，也不得让 PM 用 exception 放行。
+   ```bash
+   python3 "$PMAI_HOME/scripts/final-validation.py" \
+     --repo-root "$BUILD_DIR" \
+     --module-dir "$BUILD_DIR/docs/modules/<模块>" \
+     --audit "$BUILD_DIR/.pm-workflow/audits/<模块>/final-validation.json"
+   ```
+
+4. 从最终规格的功能项、流程、权限和验收标准逐项生成覆盖证据，不能沿用只覆盖旧页面的手工概括；
+5. 每项用默认 `lane=final` 的 `record-evidence` 绑定同一个 `approved_source_hash + implementation_commit + checked_at`；
+6. 复用现有 dev server 和浏览器连接做完整浏览器验收；production build 不接管或重启该 dev server；
+7. 生成 landed 后文档影响地图草案，先定位可能更新的规格、产品现状、规则、术语、设计基线、TODO 和索引，但不在 merge 前把正式文档写成“已落地”；
+8. 运行 `review-ready`，把完整证据冻结为与定稿请求、source hash 和 implementation commit 绑定的验收就绪快照；
+9. 提交 evidence artifacts、文档影响草案和合同状态。
+
+`prepare / final-typecheck / production-build / browser-acceptance / documentation` 继续写入同一个 `timing.json`。这些阶段耗时用于定位瓶颈，不阻断 PM 已经可见的 dev 页面。
+
+若 `final_checks` 包含 `browser-smoke`，解析可实际操作页面的主动浏览器适配器：gstack `/browse`、当前 runtime browser 或 Playwright。找不到任何适配器时保留 `iterating` 并说明缺失能力；不得生成 visual/behavior 的假证据，也不得让 PM 用 exception 放行。
 
 ### prototype 完整检查
 
@@ -347,9 +391,9 @@ python3 "$PMAI_HOME/scripts/build-contract.py" record-evidence \
 - UI 浏览器检查（涉及时）；
 - 权限、安全、越权和破坏性数据检查（涉及时）。
 
-非浏览器检查受限时如实写 `limited / skipped / blocked`，只有合同允许的具名检查才可记录 exception；`browser-smoke` 在 v2 必须是 active pass，行为检查 `fail` 也不能例外放行。
+非浏览器检查受限时如实写 `limited / skipped / blocked`，只有合同允许的具名检查才可记录 exception；`browser-smoke` 必须是 active pass，行为检查 `fail` 也不能例外放行。
 
-完整检查失败时保持 `iterating`。这是 build 缺口：修复后重新给 PM 看结果并生成新快照；不得带着失败进入 close。
+完整检查失败时保持 `iterating`。若只是验收发现实现缺口，用当前会话修复并记录新 implementation commit；v4 会保留原定稿意图并把 `requested_commit` 自动重绑到修复提交，无需让 PM 再说一次“定稿”，但所有 final evidence 必须重跑。若 PM 在这期间又提出新的产品/体验反馈，则先运行 `resume-iteration` 清掉定稿请求，回到快速迭代车道；不得带着失败进入 close。
 
 完整检查通过后：
 
@@ -370,9 +414,9 @@ git -C "$BUILD_DIR" add -- \
 git -C "$BUILD_DIR" commit -m "build(<模块>): record acceptance-ready candidate"
 ```
 
-实现 commit、accepted delta 或任一验收证据变化都会使该快照失效。只有当前快照有效时，才向 PM 表达“这版已经验收就绪，可以直接定稿”。
+实现 commit、accepted delta 或任一 final evidence 变化都会使该快照失效。定稿请求前没有 review-ready；快照形成后直接继续 §7，不再要求 PM 再确认一次。
 
-## 7. 识别 PM 定稿语义，自动进入 final_check
+## 7. 验收就绪后自动进入 final_check
 
 下列表达在 PM 已看到当前结果的语境中，视为对提交并合入 main 的明确授权：
 
@@ -382,9 +426,9 @@ git -C "$BUILD_DIR" commit -m "build(<模块>): record acceptance-ready candidat
 - “这版可以了”
 - “提交吧 / 合进去吧”
 
-该表达本身就是 one-way door 授权，不再二次问“是否收尾”，也不要求 PM 手动发 `/pmai-build-close`。
+该表达本身就是 one-way door 授权：先按 §6 写入一次 `request-finalization` 并完成冻结提交的 final checks，不再二次问“是否收尾”，也不要求 PM 手动发 `/pmai-build-close`。
 
-如果 PM 在快照尚未完成时就说定稿，先在 `iterating` 完成上节；检查失败就回 build 修复，不能先写入验收时间再一边 close 一边补功能。快照有效后只记录 PM 对同一候选 commit 的定稿授权：
+`review-ready` 形成后，只记录 PM 对同一候选 commit 的定稿授权：
 
 ```bash
 python3 "$PMAI_HOME/scripts/build-contract.py" accept \
@@ -398,7 +442,7 @@ python3 "$PMAI_HOME/scripts/build-contract.py" validate-land \
   "$BUILD_DIR/docs/modules/<模块>"
 ```
 
-若快照缺失、过期或发现实现缺口，立即回 `iterating`；不 merge、不清理，也不在 close 内修代码。
+若快照缺失、过期或发现实现缺口，立即回 `iterating`；验收缺口保留定稿意图并在修复提交上重跑 final checks，PM 新反馈则用 `resume-iteration` 取消定稿请求。不 merge、不清理，也不在 close 内修代码。
 
 ## 8. 自动落地主线
 
@@ -446,7 +490,7 @@ python3 "$PMAI_HOME/scripts/build-contract.py" docs-fail \
 ```text
 这版已经可以看：<入口>。
 这轮完成了：<主路径和关键状态>。
-你直接看结果说哪里要改；我会继续改并只复查受影响部分。完整验收会在你查看期间后台准备好。
+已修改，可刷新查看。你直接说哪里还要改；我会继续改并只复查受影响部分。你明确说定稿后，我再对冻结版本统一跑一次完整验收。
 ```
 
 完成后：
@@ -468,13 +512,16 @@ python3 "$PMAI_HOME/scripts/build-contract.py" docs-fail \
 - 验收方案按项目类型和风险后台生成默认值；不让 PM 选择，也不在开工确认卡展示。
 - 新 build 开工前，AI 推荐工作环境和构建工具，PM 只确认这两项；调整后必须重显同一张确认卡。
 - PM 不需要理解 worktree、合同、hash、证据 JSON 或手动 close；构建工具只以名称、模型和思考档展示。
-- 迭代修改后先跑受影响快速检查并尽快给 PM 看；候选结果在 PM 定稿前完成全部 required checks 并形成验收就绪快照。
+- v4 验收档案分 `iteration_checks / final_checks`：迭代修改只跑快检并尽快给 PM 看；PM 请求定稿前不得写 final evidence 或形成验收就绪快照。
+- active build 内的文案、布局、按钮和局部交互由当前会话直接处理；外部 builder 只用于首次实现或大型重构。
+- dev server 与浏览器连接跨轮保留；production build 只在冻结 commit 的 validation worktree 运行，不污染 active worktree 的构建缓存。
+- `timing.json` 记录阶段耗时与 time-to-preview；2–5 / 5–10 分钟只作预警，不阻断“已修改，可刷新查看”。
 - 新产品决定进入 accepted deltas 并使旧证据失效；实现 commit 变化也使旧证据失效。
-- PM 明确说“可以提交 / 定稿 / 可以合并”就是落地主线授权，不二次确认。
+- PM 明确说“可以提交 / 定稿 / 可以合并”就是打开一次性 final checks 并落地主线的授权，不二次确认。
 - final_check 只校验同一 source hash + implementation commit 的验收就绪快照，不首次跑完整验收、不修改业务代码；失败回 iterating。
 - merge 冲突保留 final_check 和 worktree；纯清理失败进入待清理队列，不阻塞 landed 后文档同步。
 - 实现先落 main，正式文档后更新；文档失败不重复 merge。
 - skipped / limited / blocked 不能伪装 pass；证据必须绑定 source hash 和 implementation commit。
-- UI required checks 缺主动浏览器能力时必须阻塞；v2+ 的 `browser-smoke` 不接受 exception。
-- v3 prototype 的 `prototype-boundary` 必须有绑定当前 source hash 和 implementation commit 的 active pass artifact，不接受 exception。
+- UI final checks 缺主动浏览器能力时必须阻塞；`browser-smoke` 不接受 exception。
+- v4 prototype 的 `prototype-boundary` 必须有绑定当前 source hash 和 implementation commit 的 active pass artifact，不接受 exception。
 - 正式文档无迭代流水账，历史只在 Git 与 decisions 中。

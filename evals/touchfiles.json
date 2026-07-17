@@ -11,7 +11,7 @@
     "design-recovers-history": ["scripts/context-pack.py", "skills/design/SKILL.md"],
     "docs-pending-resume-static": ["scripts/build-contract.py", "scripts/land-work.sh", "skills/build-close/SKILL.md"],
     "evidence-invalidation-static": ["scripts/build-contract.py", "tests/test-build-contract.sh"],
-    "iterative-fast-final-full": ["skills/build/SKILL.md", "scripts/acceptance-profile.py"],
+    "iterative-fast-final-full": ["skills/build/SKILL.md", "skills/build-close/SKILL.md", "skills/_shared/consistency-scan.md", "skills/_shared/pm-view/input-flow.md", "scripts/acceptance-profile.py", "scripts/build-contract.py", "scripts/final-validation.py", "scripts/build-timing.py", "templates/AGENTS.md.tmpl", "templates/CLAUDE.md.tmpl", "tests/test-build-contract.sh", "tests/test-final-validation.sh", "tests/test-build-timing.sh"],
     "merge-conflict-recovery-static": ["scripts/land-work.sh", "tests/test-land-work-v2.sh"],
     "meta-judgment-model-static": ["skills/meta/SKILL.md", "skills/meta/references/problem-framing.md"],
     "mockup-covers-full-task": ["skills/mockup/SKILL.md", "skills/design/SKILL.md"],

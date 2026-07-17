@@ -38,6 +38,7 @@ setup_fixture() {
   git -C "$WT" add -A && git -C "$WT" commit -q -m 'build(access): implementation'
   IMPL=$(git -C "$WT" rev-parse HEAD)
   python3 "$CONTRACT" commit "$MODULE" --implementation-commit "$IMPL" >/dev/null
+  python3 "$CONTRACT" request-finalization "$MODULE" >/dev/null
   python3 "$CONTRACT" record-evidence "$MODULE" --name tests --status pass \
     --source-hash source-v1 --commit "$IMPL" >/dev/null
   python3 "$CONTRACT" review-ready "$MODULE" >/dev/null

@@ -31,20 +31,21 @@
 
 - **I-LC1**：prototype 和 product 共用 `designing → ready_to_build → building → iterating → final_check → landed → documenting → complete`。
 - **I-LC2**：design 提交建造依据后才能进入 build；build 不临时补选类型、技术栈或框架。
-- **I-LC3**：build 候选在 PM 定稿前完成验收就绪快照；PM 定稿后由 build 自动校验快照、落地主线和编译文档，`/pmai-build-close` 只兼容恢复。
-- **I-LC4**：实现 commit、accepted delta 或 evidence 变化会使验收就绪快照失效。
+- **I-LC3**：PM 看结果期间只走快速迭代；PM 请求定稿后，build 冻结 implementation commit、运行一次 final checks、形成验收就绪快照，再自动落地主线和编译文档。`/pmai-build-close` 只兼容恢复。
+- **I-LC4**：实现 commit、accepted delta 或 final evidence 变化会使验收就绪快照失效；accepted delta 和 PM 新反馈同时清除定稿请求。
 - **I-LC5**：模块规格在 design 定稿时描述最终目标；landed 后按符合 / accepted delta / 漏实现 / 无依据实现对账，只有 accepted delta 可改目标。现状文档只根据已经 landed 的 main 事实更新；文档失败不得重复 merge。
 
 ## I-ACC：自适应验收
 
-- **I-ACC1**：唯一活跃验收链是 `acceptance-profile.py → build.acceptance.required_checks/evidence`。
-- **I-ACC2**：required checks 按 project definition、目标入口和风险生成，不存在适用于所有 build 的固定检查组合。
-- **I-ACC3**：证据必须绑定当前 approved source hash 与 implementation commit。
-- **I-ACC4**：Web required checks 必须有 `status=pass` 且 `active_browser_smoke=true` 的主动浏览器证据。
+- **I-ACC1**：唯一活跃验收链是 `acceptance-profile.py → build.acceptance.iteration_checks/final_checks → 两层 evidence`；`required_checks` 只作 final checks 的旧 host 兼容别名。
+- **I-ACC2**：iteration/final checks 按 project definition、目标入口和风险生成，不存在适用于所有 build 的固定检查组合。
+- **I-ACC3**：iteration evidence 与 final evidence 分开；final evidence 必须绑定定稿请求、当前 approved source hash 与 implementation commit。
+- **I-ACC4**：Web final checks 必须有 `status=pass` 且 `active_browser_smoke=true` 的主动浏览器证据。
 - **I-ACC5**：v2 不允许用 exception 跳过 browser-smoke；行为检查 fail 也不能放行。
 - **I-ACC6**：非 Web product build 不要求 prototype、dev port 或浏览器。
 - **I-ACC7**：contract v1 validator 只承担历史 close 兼容，不得被新流程调用或展示。
-- **I-ACC8**：v2 只有完整 required evidence 通过 `review-ready` 后才能记录 PM 定稿；`final_check` 不首次跑完整验收或修改业务代码。
+- **I-ACC8**：v4 在 PM `request-finalization` 前拒绝 final evidence 和 `review-ready`；完整 final evidence 通过后才能记录 PM 定稿，`final_check` 不首次跑完整验收或修改业务代码。
+- **I-ACC9**：project.yml 声明的定稿 test/typecheck/build 在冻结 commit 的 detached validation worktree 执行，不停止 active dev server，不改写其构建缓存。
 
 ## I-BR / I-CB：分支与写入边界
 
@@ -55,10 +56,11 @@
 - **I-CB3**：v2 `mode=main` 只允许写合同声明的 target paths。
 - **I-CB4**：hook 无法判断时 fail-closed，且 hook 本身只读。
 - **I-CB5**：完整 build 的业务实现只能落在已确认的当前环境或 `build-*` worktree。
+- **I-CB6**：active build 的 dev server 与浏览器连接跨反馈轮次保留；小改不得因 production validation 重启或重建。
 
 ## I-CR：自动 finalize 与恢复
 
-- **I-CR1**：finalize 前必须有有效 build contract、最终 implementation commit、绑定同一 commit/hash 的验收就绪快照、PM 定稿记录和全部 required evidence。
+- **I-CR1**：finalize 前必须有有效 build contract、绑定最终 implementation commit 的定稿请求、同一 commit/hash 的验收就绪快照、PM 定稿记录和全部 final evidence。
 - **I-CR2**：worktree 模式先在 build 分支提交实现，再 merge main；main 模式只处理合同声明路径。
 - **I-CR3**：merge 必须做 ancestor 验证；冲突时保留 `final_check` 和隔离环境。
 - **I-CR4**：实现 landed 后对账目标规格并编译现状文档；失败记录 `landed/docs_pending`，恢复时不重复 merge。

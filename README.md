@@ -86,7 +86,7 @@ PM 全程**只做产品决策、确认首个建造方案、开工时确认工作
 | **bash** ≥ 4 | 必需 | scripts 入口语言（macOS 自带 3.x 已知坑见 INVARIANTS） |
 | **codex CLI** | 可选 | `/pmai-build` 外部执行器；Codex 作为当前主控时不重复进入外部候选，但当前主控直接构建始终可选。不装可走 Claude Code / OpenCode / Cursor Agent，或由当前会话直接构建 |
 
-未检测到 gstack 时，`pmai install` / `pmai doctor` 只给 readiness warning，初始化和非 Web build 都不受阻塞。Web required checks 会在候选结果进入验收就绪前解析可用的主动浏览器适配器；完全没有适配器时 UI 验收阻塞，不能伪装通过。gstack 输出仍必须按 PMAI 规则接回 `DESIGN.md`、`mockups/`、evidence artifacts、`.pm-workflow/mirror/`、`docs/deliverables/` 或 `docs/engineering/`，不能把 `~/.gstack/...` 当长期真相源。
+未检测到 gstack 时，`pmai install` / `pmai doctor` 只给 readiness warning，初始化和非 Web build 都不受阻塞。Web final checks 会在 PM 请求定稿后解析可用的主动浏览器适配器；完全没有适配器时 UI 验收阻塞，不能伪装通过。gstack 输出仍必须按 PMAI 规则接回 `DESIGN.md`、`mockups/`、evidence artifacts、`.pm-workflow/mirror/`、`docs/deliverables/` 或 `docs/engineering/`，不能把 `~/.gstack/...` 当长期真相源。
 
 ---
 
@@ -293,7 +293,7 @@ PMAI 走纯全局：每台要用的机器各自 `pmai install` 一次（全局�
 | Skill | 用途 |
 |---|---|
 | `/pmai-status` | **续跑辅助**：读当前状态和建议下一步；不向 PM 暴露 worktree、合同或证据 JSON |
-| `/pmai-build` | 统一构建前台：读取 design 定稿的项目建造定义和默认验收，推荐工作环境与构建工具；PM 一次确认后构建，在看结果期间准备验收就绪候选，定稿后快速落地主线并完成文档对账 |
+| `/pmai-build` | 统一构建前台：PM 一次确认工作环境与构建工具；看结果期间由当前会话快速修改、复用 dev server 并先回“可刷新”，PM 请求定稿后才对冻结 commit 隔离运行一次完整验收、落地主线并完成文档对账 |
 | `/pmai-spec-writing` | 最终目标规格成文器：把已确认决定编译成指导研发实现的模块规格、PRD、功能需求、功能描述、功能规格或功能评审稿 |
 | `/pmai-doc-writing` | 介绍型文档成文器：产品介绍、产品功能清单、优势说明、一页纸、汇报材料，默认落 `docs/deliverables/` |
 

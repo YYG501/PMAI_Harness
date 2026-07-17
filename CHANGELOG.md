@@ -18,6 +18,8 @@ PM-AI-Workflow 生成器仓的演进记录。本文件**只记影响下游业务
 
 ## 未发布
 
+- `fix(build)`: **把 PM 看原型期间的快速修改与定稿后的完整验收拆成两条执行车道。** 真实消费仓会话表明耗时主要来自每轮小改都重复 production build、完整浏览器验收、dev server 恢复和外部 builder 启动，而不是 Next.js 编译本身。acceptance profile schema v2 现在分别输出 `iteration_checks / final_checks`；build contract v4 新增 PM `request-finalization` 硬门、两层 evidence 和 `resume-iteration`，定稿前机器拒绝 final evidence 与 `review-ready`。active build 的文案、布局、按钮和局部交互默认由当前会话直接处理，只做热更新、typecheck 与当前页面走查，复用同一 dev server / 浏览器并先回“已修改，可刷新查看”；外部 builder 只用于首次实现或大型重构。PM 明确定稿后，`final-validation.py` 才在冻结 commit 的 detached worktree 运行一次 project.yml test/typecheck/build，避免污染 active 构建缓存；`build-timing.py` 记录分阶段耗时和 time-to-preview，2–5 / 5–10 分钟只作预警。
+
 - `fix(build)`: **给 prototype 增加持久的实现深度合同，阻止 AI 按最终规格静默建设真实系统。** `spec.md` / PRD 继续定义最终产品语义，不另造“原型规格”；`acceptance-profile.py` 根据 `project.type` 编译 `delivery_policy`，新 build contract v3 固化 policy 与 hash。`/pmai-build` 在首次实现、每轮反馈修改和中断恢复时都把实现深度置于规格之前重新交给构建工具：原型的用户可见路径与交互做真，数据库、鉴权、外部集成、异步任务等底层默认模拟。新增不可 exception 的 `prototype-boundary` required check 与 `prototype-boundary.py`，候选定稿前扫描批准范围外改动、数据库 migration、生产基础设施、密钥配置、真实鉴权和外部副作用信号，并要求 AI 明确完成 diff 语义复核；模拟底层能力不再被原型 coverage 误判为漏实现。旧 v2 合同继续用于中断恢复兼容。
 
 - `fix(build-close)`: **把完整验收前移为 build 的验收就绪候选，close 只做确定性落地。** 真实消费仓中一次 `/pmai-build-close` 从调用到完成约 30 分钟；实际 merge 只需数秒，主要耗时来自 close 才首次走完整浏览器路径、发现规格漏项后补业务代码、重跑 production build、重新分析文档影响，以及开发服务占用 worktree 导致清理失败。现在 contract v2 新增 `review-ready`：候选实现必须在 `iterating` 阶段完成全部 required checks、逐项规格覆盖和文档影响草案，形成绑定当前 source hash / implementation commit 的快照；`accept` / `complete` / `validate-land` 拒绝缺失或过期快照，`final_check` 不首次跑完整验收也不修改业务代码。`land-work.sh` 会把运行进程或缓存占用导致的 worktree 清理失败转入安全待清理队列，不再阻塞 landed 后文档同步；文档提交会自动纳入 `doc-impact.json`，不再需要 amend 补交。

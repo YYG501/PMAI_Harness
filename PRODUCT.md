@@ -188,15 +188,17 @@ PMAI 的主要用户是单人 PM，尤其是要持续推进一个复杂业务产
 
 只要本轮包含 Web 页面，主动浏览器能力就是验收硬条件。gstack 可以缺席初始化，也可以由其它 browser/Playwright 适配器替代；但没有任何工具实际打开并操作页面时，UI final check 不能通过。
 
-开工前 AI 根据项目定义、本机能力和当前主控推荐工作环境与构建工具，并在一张确认卡中同时列出两项的全部有效选择。外部构建工具候选排除当前主控对应的 profile，避免 Codex 再启动 Codex、Claude Code 再启动 Claude Code 或 OpenCode 再启动 OpenCode；当前会话亲自完成构建不是递归调用，因此“当前会话直接构建”始终可选。没有可用外部工具时，默认推荐当前会话直接构建。确认卡不展示项目类型、验收方案或内部合同。之后 PM 的体验始终是：看结果、指出哪里不对、AI 修改、再看。每轮修改先跑受影响的快速检查并尽快展示结果；候选版本在 PM 查看期间完成完整 required checks、规格覆盖和文档影响草案，形成绑定当前 source hash 与 implementation commit 的验收就绪快照。
+开工前 AI 根据项目定义、本机能力和当前主控推荐工作环境与构建工具，并在一张确认卡中同时列出两项的全部有效选择。外部构建工具候选排除当前主控对应的 profile，避免 Codex 再启动 Codex、Claude Code 再启动 Claude Code 或 OpenCode 再启动 OpenCode；当前会话亲自完成构建不是递归调用，因此“当前会话直接构建”始终可选。没有可用外部工具时，默认推荐当前会话直接构建。确认卡不展示项目类型、验收方案或内部合同。外部 builder 只用于首次实现或大型重构；active build 内的文案、布局、按钮和局部交互由当前会话直接处理。
+
+PM 看结果期间走快速迭代车道：复用同一个 dev server 和浏览器连接，每轮只做热更新、typecheck 与当前页面/受影响交互走查，完成后先回“已修改，可刷新查看”。build contract v4 把验收档案拆成 `iteration_checks / final_checks`；PM 明确说“定稿 / 可以提交 / 可以合并”前，机器不允许写 final evidence 或生成 `review-ready`。小改 2–5 分钟、交互改动 5–10 分钟是 time-to-preview 目标和超时预警，不是阻断门。
 
 worktree 的具体实现、build contract、source hash 和证据 JSON 都是后台基础设施，不形成第二条用户流程；PM 只看到可理解的“工作环境”和“构建工具”。
 
 ### 5. 自动落地主线和文档编译
 
-PM 明确定稿后，同一个 finalize 复用未过期的验收就绪快照，不在 close 内首次发现产品缺口或补业务代码：
+PM 明确定稿后，合同冻结 PM 最后看到的 implementation commit，并只运行一次完整 final checks：project.yml 声明的 test/typecheck/production build 在 detached validation worktree 执行，不改写 active dev worktree 的构建缓存；完整浏览器验收继续复用现有 dev server 与浏览器连接。通过后形成验收就绪快照，再由同一个 finalize 确定性落地：
 
-1. 校验未决产品问题、最终 commit 和验收就绪快照仍一致；
+1. 校验定稿请求、未决产品问题、最终 commit 和验收就绪快照仍一致；
 2. 提交实现并合入 main；
 3. 复用 build 阶段的文档影响草案，并用 main 的 landed diff、build contract 和 accepted deltas 校准；
 4. 按“符合 / accepted delta / 漏实现 / 无依据实现”对账模块规格，只让 accepted delta 改写最终目标；
@@ -229,11 +231,11 @@ design、build、恢复、最终检查和文档更新共用同一份编译上下
 
 ### 3. Unified Build Loop
 
-prototype 和 product 共用 `designing → ready_to_build → building → iterating → final_check → landed → documenting → complete`。验收就绪快照是 `iterating` 内部的候选门，不新增 PM 可见状态；AI 推荐工作环境和构建工具，PM 一次确认，之后 PM 看结果多轮修改，框架处理证据失效和恢复。
+prototype 和 product 共用 `designing → ready_to_build → building → iterating → final_check → landed → documenting → complete`。快速迭代和定稿验收是 `iterating` 内部的两条执行车道，不新增 PM 可见状态：PM 看结果多轮修改时不跑完整验收，PM 请求定稿后才冻结 commit、生成验收就绪快照；框架处理证据失效和恢复。
 
 ### 4. Adaptive Acceptance And Post-Land Docs
 
-验收随 build 对象和风险自适应，证据绑定当前 source hash 与 implementation commit；工具受限只能记 exception，不能伪装 pass。实现进入 main 后对账目标规格与实现，更新已落地现状，并要求每个对象、动作、状态、权限、页面和术语都有正确文档落点。
+验收随 build 对象和风险自适应，快速与最终证据分层，final evidence 绑定定稿请求、当前 source hash 与 implementation commit；工具受限只能记 exception，不能伪装 pass。实现进入 main 后对账目标规格与实现，更新已落地现状，并要求每个对象、动作、状态、权限、页面和术语都有正确文档落点。
 
 ### 5. Continuity Across Modules
 
@@ -271,6 +273,7 @@ PMAI 成功时，PM 的体验应该是：
 - 初始化只建立上下文；首个可建造 design 生成唯一 `.pm-workflow/project.yml`，其中分开记录建造对象与技术栈。
 - prototype 与 product 共用同一构建、迭代、定稿和收尾链路，只切换验收适配器。
 - build contract、worktree 细节和验收证据后台化；工作环境与构建工具由 AI 推荐、PM 一次确认。
+- active build 默认走当前会话快速迭代；定稿请求前不跑 production build，定稿后在隔离 validation worktree 对冻结提交统一验收一次。
 - 模块规格在 design 定稿时形成最终目标合同；landed 后只有 accepted delta 能修改目标，漏实现不得反向删需求。
 - `PRODUCT-STATE.md` 等现状文档只在实现落入 main 后更新；过程和历史进入 Git 与 decisions。
 - `/pmai-build-close` 不再是正常用户必经命令，只保留兼容与恢复。

@@ -78,7 +78,7 @@ build 不拆 task。项目类型、技术栈、入口和真实命令从 design �
 | prototype 视觉/行为 | `DESIGN.md` + 渲染结果 + 关键任务路径 | 目标为 prototype 或 product UI 时 🟢 |
 | product 工程行为 | 仓库已有测试、typecheck/build、接口/数据/迁移/权限检查 | 目标为 product 时 🟢 |
 
-每轮修改先跑受影响的快速检查并尽快给 PM 看；当前候选在 PM 查看期间完成完整 required checks 和文档影响草案，形成绑定当前 source hash / implementation commit 的验收就绪快照。PM 定稿后的 final_check 只校验快照是否仍有效，不首次补实现或重跑同一版本的完整验收。检查只报告业务结果和真正需要 PM 拍的产品问题，不把工程过程写回 PM 视图。
+每轮修改由当前会话优先处理，只跑 `iteration_checks` 并尽快给 PM 看，复用同一个 dev server 和浏览器连接，先回“已修改，可刷新查看”。PM 请求定稿前不运行 production build、不写 final evidence、不形成 `review-ready`；请求后才冻结 implementation commit，在 validation worktree 统一运行一次 `final_checks`、生成文档影响草案和验收就绪快照。`final_check` 只校验快照是否仍有效，不首次补实现或重跑同一版本的完整验收。检查只报告业务结果和真正需要 PM 拍的产品问题，不把工程过程写回 PM 视图。
 
 ### 自动 finalize（实现先落 main，文档后更新）
 

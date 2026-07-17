@@ -5,10 +5,10 @@
   "layer": "session",
   "skills": ["build"],
   "source": {
-    "session_id": "019f3c20-5bbb-7423-a18f-dab2c1a90fff",
+    "session_id": "019f49b7-088b-75c3-a0e4-0c05ca61f3fd",
     "evidence": [
-      {"turn": 94, "excerpt": "总结一下这次改动的所有页面或者弹窗、按钮，我一个一个来验收"},
-      {"turn": 108, "excerpt": "还不如原来的，恢复吧"}
+      {"turn": 1, "excerpt": "PMAI 把 PM 查看原型期间的快速修改和定稿后的完整验收处理得太像了"},
+      {"turn": 2, "excerpt": "小改 2–5 分钟可看，交互改动 5–10 分钟可看，完整生产验证只在定稿时跑一次"}
     ]
   },
   "input": {
@@ -16,13 +16,13 @@
     "context": ["build target 已有实现提交", "本轮只改一个弹窗布局"]
   },
   "expected": {
-    "behaviors": ["保持 iterating", "只运行受影响的快速检查", "PM 明确定稿后才运行全部 required checks"],
+    "behaviors": ["保持 iterating", "只运行受影响的 iteration checks", "复用 dev server 和浏览器", "PM 明确定稿后才冻结提交并运行 final checks"],
     "observations": ["iterating_preserved", "affected_fast_checks_only", "full_checks_deferred"],
     "lifecycle_order": ["building", "iterating"],
     "stopping_point": "pm_review"
   },
   "forbidden": {
-    "behaviors": ["每轮修改都跑完整发布门", "未定稿就合入 main"],
+    "behaviors": ["每轮修改都跑 production build 或完整发布门", "未定稿就生成 review-ready", "未定稿就合入 main"],
     "observations": ["full_checks_each_iteration", "landed_before_acceptance"]
   },
   "judge": {

@@ -45,7 +45,7 @@ python3 "$PMAI_HOME/scripts/status-view.py" --banner-only --skill BUILD-CLOSE ||
 
 - `contract_version=1`：调用 `close-work.sh` 的旧兼容路径；
 - `building`：实现尚未形成可查看的提交，返回 `/pmai-build` 继续构建；
-- `iterating`：PM 主动调用本入口表示希望定稿；先在 build 边界补齐验收就绪快照，全部通过后才记录定稿并进入 `final_check`；
+- `iterating`：PM 主动调用本入口表示希望定稿；v4 先记录 `request-finalization`，再在冻结 commit 的 validation worktree 完成一次 `final_checks`，全部通过后才生成验收就绪快照并进入 `final_check`；
 - `final_check`：验证最新证据后落地主线；
 - `landed + docs_status=pending|failed`：只恢复文档编译，不重复 merge；
 - `documenting + docs_status=complete`：提交文档并完成清理；
@@ -59,7 +59,7 @@ bash "$PMAI_HOME/scripts/close-work.sh" "docs/modules/<模块>"
 
 `close-work.sh` 根据同一合同自动转 `land-work.sh`，不靠 cwd、分支名字或碰巧存在的 worktree 猜流程。
 
-若从 `iterating` 进入，不能先写 `pm_accepted_at` 再临时跑完整验收。先记录候选实现 commit，在 `iterating` 状态完成 `/pmai-build` 的全部 required checks、逐项规格覆盖和文档影响草案：
+若从 `iterating` 进入，不能先写 `pm_accepted_at` 再临时跑完整验收。先记录候选实现 commit；v4 把本次兼容入口视为 PM 的明确定稿请求，然后在 `iterating` 状态按 `/pmai-build` 完成一次 `final_checks`、逐项规格覆盖和文档影响草案。production build 必须在冻结 commit 的 validation worktree 执行，不停止仍在运行的 dev server：
 
 ```bash
 IMPLEMENTATION_COMMIT=$(git -C "<build worktree>" rev-parse HEAD)
@@ -67,7 +67,15 @@ python3 "$PMAI_HOME/scripts/build-contract.py" commit \
   "<build worktree>/docs/modules/<模块>" \
   --implementation-commit "$IMPLEMENTATION_COMMIT"
 
-# 按 /pmai-build 记录全部 fresh evidence，并生成 doc-impact 草案后：
+# v4；v2/v3 恢复合同没有此命令，仍按旧快照合同续跑
+python3 "$PMAI_HOME/scripts/build-contract.py" request-finalization \
+  "<build worktree>/docs/modules/<模块>"
+python3 "$PMAI_HOME/scripts/final-validation.py" \
+  --repo-root "<build worktree>" \
+  --module-dir "<build worktree>/docs/modules/<模块>" \
+  --audit "<build worktree>/.pm-workflow/audits/<模块>/final-validation.json"
+
+# 按 /pmai-build 记录全部 fresh final evidence，并生成 doc-impact 草案后：
 python3 "$PMAI_HOME/scripts/build-contract.py" review-ready \
   "<build worktree>/docs/modules/<模块>"
 python3 "$PMAI_HOME/scripts/build-contract.py" accept \
@@ -83,7 +91,7 @@ build 验收证据是落地主线硬门，不能因为使用兼容入口而跳�
 - 没有未决产品问题；
 - `implementation_commit` 是 PM 最后看到的版本；
 - 验收就绪快照与当前 implementation commit、source hash 一致；
-- 所有 required checks 都已有新鲜证据，不重复跑同一 commit 的完整验收；
+- 所有 final checks 都已有新鲜证据，不重复跑同一 commit 的完整验收；
 - 每份证据的 `source_hash` 和 `commit` 与合同一致；
 - `limited / skipped / blocked` 有 PM 明确接受记录；
 - 行为检查不是 `fail`。
@@ -169,7 +177,7 @@ PM 窗口只报阶段结果，不直播 context pack、合同 JSON、git 命令�
 - 正常链路由 build 自动 finalize；本 skill 只兼容和恢复。
 - 只按 build contract 和 lifecycle state 续跑，不从 cwd / 分支形态猜。
 - `final_check` 只接受绑定最终 source hash 与 implementation commit 的新鲜证据。
-- `iterating` 必须先通过 `review-ready` 再记录 PM 定稿；`final_check` 不首次跑完整验收、不修改业务代码。
+- v4 `iterating` 必须先有 PM 定稿请求，再运行一次 final checks 并通过 `review-ready`；`final_check` 不首次跑完整验收、不修改业务代码。
 - merge 冲突不清理 worktree；文档失败不重复 merge。
 - 运行进程或缓存导致的 worktree 清理失败进入待清理队列，不阻塞文档阶段。
 - 正式文档在实现落 main 后更新，单独提交。

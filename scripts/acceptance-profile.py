@@ -39,38 +39,64 @@ def compile_profile(args: argparse.Namespace) -> dict:
     delivery_policy = delivery_policy_for(target)
     has_ui = definition_ui_selected(definition, paths)
     configured_commands = definition["commands"]
-    checks: list[dict] = []
+    iteration_checks: list[dict] = []
+    final_checks: list[dict] = []
+    if "typecheck" in configured_commands:
+        iteration_checks.append(
+            {
+                "name": "typecheck",
+                "purpose": "快速确认本轮修改仍通过类型检查",
+                "command": configured_commands["typecheck"],
+            }
+        )
+    if has_ui:
+        iteration_checks.append(
+            {
+                "name": "current-page",
+                "purpose": "只走查 PM 当前查看的页面和本轮受影响交互",
+                "command": None,
+            }
+        )
     if target == "prototype":
-        checks.append(
+        final_checks.append(
             {
                 "name": "prototype-boundary",
                 "purpose": "确认本轮仍是可交互原型，未越界建设真实系统",
                 "command": None,
             }
         )
+        for name, key in (("tests", "test"), ("typecheck", "typecheck"), ("build", "build")):
+            if key in configured_commands:
+                final_checks.append(
+                    {
+                        "name": name,
+                        "purpose": f"在冻结提交上运行 project.yml 声明的 {name} 检查",
+                        "command": configured_commands[key],
+                    }
+                )
         if has_ui:
-            checks.append({"name": "browser-smoke", "purpose": "用主动浏览器能力确认原型可访问", "command": None})
-        checks.append({"name": "coverage", "purpose": "逐项核对建造依据、页面和状态覆盖", "command": None})
+            final_checks.append({"name": "browser-smoke", "purpose": "用主动浏览器能力确认原型可访问", "command": None})
+        final_checks.append({"name": "coverage", "purpose": "逐项核对建造依据、页面和状态覆盖", "command": None})
         if has_ui:
-            checks.extend(
+            final_checks.extend(
                 [
                     {"name": "visual", "purpose": "对照 DESIGN.md 检查视觉一致性", "command": None},
                     {"name": "behavior", "purpose": "用主动浏览器走通关键任务和异常路径", "command": None},
                 ]
             )
     else:
-        checks.append({"name": "scope-coverage", "purpose": "逐项核对规格与真实实现", "command": None})
+        final_checks.append({"name": "scope-coverage", "purpose": "逐项核对规格与真实实现", "command": None})
         for name, key in (("tests", "test"), ("typecheck", "typecheck"), ("build", "build")):
             if key in configured_commands:
-                checks.append(
+                final_checks.append(
                     {
                         "name": name,
-                        "purpose": f"运行 project.yml 声明的 {name} 检查",
+                        "purpose": f"在冻结提交上运行 project.yml 声明的 {name} 检查",
                         "command": configured_commands[key],
                     }
                 )
         if has_ui:
-            checks.extend(
+            final_checks.extend(
                 [
                     {"name": "browser-smoke", "purpose": "用主动浏览器能力确认真实产品 UI 可访问", "command": None},
                     {"name": "visual", "purpose": "检查 UI 与现有设计基线一致", "command": None},
@@ -78,22 +104,30 @@ def compile_profile(args: argparse.Namespace) -> dict:
                 ]
             )
         if args.data_migration:
-            checks.append({"name": "migration", "purpose": "验证迁移、回滚和兼容读取", "command": None})
+            final_checks.append({"name": "migration", "purpose": "验证迁移、回滚和兼容读取", "command": None})
         if args.security_sensitive:
-            checks.append({"name": "security", "purpose": "验证权限、安全和越权边界", "command": None})
+            final_checks.append({"name": "security", "purpose": "验证权限、安全和越权边界", "command": None})
 
-    deduped: list[dict] = []
-    seen: set[str] = set()
-    for check in checks:
-        if check["name"] not in seen:
-            seen.add(check["name"])
-            deduped.append(check)
+    def dedupe(checks: list[dict]) -> list[dict]:
+        result: list[dict] = []
+        seen: set[str] = set()
+        for check in checks:
+            if check["name"] not in seen:
+                seen.add(check["name"])
+                result.append(check)
+        return result
+
+    iteration_checks = dedupe(iteration_checks)
+    final_checks = dedupe(final_checks)
     return {
-        "schema_version": 1,
+        "schema_version": 2,
         "target": {"kind": target, "paths": paths},
         "delivery_policy": delivery_policy,
         "delivery_policy_hash": delivery_policy_hash(delivery_policy),
-        "required_checks": deduped,
+        "iteration_checks": iteration_checks,
+        "final_checks": final_checks,
+        # Compatibility alias for older build hosts. New hosts consume final_checks.
+        "required_checks": final_checks,
     }
 
 
