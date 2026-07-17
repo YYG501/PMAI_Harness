@@ -179,8 +179,12 @@ PMAI 的主要用户是单人 PM，尤其是要持续推进一个复杂业务产
 
 一次 build 只有一个主要对象：`prototype` 或 `product`，由 design 已提交的 `.pm-workflow/project.yml` 决定。两者走同一条生命周期，只切换验收工具与方法：
 
-- prototype 看可启动性、任务路径、页面 / 弹窗、边界状态、视觉和交互行为；
+- prototype 把用户可见的任务路径、页面 / 弹窗、边界状态和操作反馈做成可交互结果；数据库、鉴权、外部集成、异步任务等底层能力默认模拟，不因规格描述最终目标就自动建成真实系统；
 - product 看仓库测试、typecheck / build、接口和数据行为、迁移兼容性，并按风险追加 UI、权限、安全或数据检查。
+
+规格与建造对象分工明确：`spec.md` / PRD 继续定义最终产品应该具备什么，build 的实现深度合同决定这一轮做到哪一层。原型的“完整”是已确认的用户可观察行为能够真实交互和验证，不是底层能力生产化；真实数据库、鉴权、外部副作用或生产基础设施只有在 active decision 明确批准 prototype real edge，或项目建造对象改为 `product` 后才能进入实现。
+
+实现深度合同写入版本化 build contract，并在首次构建、每轮反馈修改和中断恢复时重新交给构建工具。prototype 候选定稿前必须通过不可 exception 的 `prototype-boundary`：候选 diff 只能在批准目标内，生产建设信号必须有决定依据，AI 还要明确完成一次语义复核。这样不依赖模型记住首轮 prompt。
 
 只要本轮包含 Web 页面，主动浏览器能力就是验收硬条件。gstack 可以缺席初始化，也可以由其它 browser/Playwright 适配器替代；但没有任何工具实际打开并操作页面时，UI final check 不能通过。
 

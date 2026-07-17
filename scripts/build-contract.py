@@ -17,6 +17,11 @@ from datetime import datetime, timezone
 from pathlib import Path
 import subprocess
 
+from _lib.delivery_policy import (
+    delivery_policy_for,
+    delivery_policy_hash,
+    validate_delivery_policy,
+)
 from _lib.project_definition import ProjectDefinitionError, load_project_definition
 from _lib.ready_contract import (
     ReadyContractError,
@@ -43,6 +48,7 @@ VALID_LIFECYCLE_STATES = {
     "complete",
 }
 VALID_DOCS_STATUSES = {"pending", "complete", "failed"}
+CURRENT_CONTRACT_VERSION = 3
 PASSING_EVIDENCE_STATUSES = {"pass", "passed", "clean", "built"}
 LIMITED_EVIDENCE_STATUSES = {"limited", "skipped", "blocked", "needs-review"}
 VALID_EVIDENCE_STATUSES = {
@@ -52,6 +58,7 @@ VALID_EVIDENCE_STATUSES = {
 }
 EVIDENCE_LABELS = {
     "browser-smoke": "浏览器主动 smoke",
+    "prototype-boundary": "原型实现边界",
     "coverage": "覆盖审计",
     "visual": "视觉门",
     "behavior": "行为审",
@@ -178,6 +185,15 @@ def ensure_v2_shape(build: dict) -> None:
         raise SystemExit("build.acceptance.required_checks 不能包含重复检查。")
     if not isinstance(acceptance.get("evidence", []), list):
         raise SystemExit("build.acceptance.evidence 必须是数组。")
+    if contract_version(build) >= 3:
+        try:
+            policy = validate_delivery_policy(build.get("delivery_policy"), target["kind"])
+        except ValueError as exc:
+            raise SystemExit(str(exc)) from exc
+        if build.get("delivery_policy_hash") != delivery_policy_hash(policy):
+            raise SystemExit("build.delivery_policy_hash 与实现深度合同不一致。")
+        if target["kind"] == "prototype" and "prototype-boundary" not in required_checks:
+            raise SystemExit("prototype build 必须把 prototype-boundary 作为不可跳过的检查。")
     docs_status = build.get("docs_status")
     if docs_status not in VALID_DOCS_STATUSES:
         raise SystemExit(
@@ -486,6 +502,56 @@ def validate_fresh_evidence(module_dir: Path, build: dict) -> None:
     if behavior and str(behavior.get("status", "")) == "fail":
         raise SystemExit("行为审未通过：不能落地主线。请先修到通过。")
 
+    if contract_version(build) >= 3 and build.get("target", {}).get("kind") == "prototype":
+        artifact = resolved_artifacts.get("prototype-boundary")
+        if artifact is None:
+            raise SystemExit("原型实现边界缺少 JSON artifact，不能形成验收就绪快照。")
+        validate_prototype_boundary_artifact(build, artifact)
+
+
+def validate_prototype_boundary_artifact(build: dict, artifact: dict) -> None:
+    """Require an explicit diff review proving the prototype did not become a product."""
+
+    required_values = {
+        "schema_version": 1,
+        "check": "prototype-boundary",
+        "status": "pass",
+        "target_kind": "prototype",
+        "implementation_mode": "interactive-simulation",
+        "policy_hash": build.get("delivery_policy_hash"),
+        "source_hash": build.get("approved_source_hash"),
+        "baseline_sha": build.get("baseline_sha"),
+        "implementation_commit": build.get("implementation_commit"),
+        "target_paths": build.get("target", {}).get("paths"),
+    }
+    for key, expected in required_values.items():
+        if artifact.get(key) != expected:
+            raise SystemExit(f"原型实现边界证据字段不一致：{key}。")
+    for key in (
+        "changed_paths",
+        "outside_target_paths",
+        "detected_signals",
+        "unapproved_signals",
+        "approved_real_edges",
+        "simulated_capabilities",
+    ):
+        if not isinstance(artifact.get(key), list):
+            raise SystemExit(f"原型实现边界证据 {key} 必须是数组。")
+    if artifact["outside_target_paths"]:
+        raise SystemExit("原型实现边界发现批准范围外改动，不能定稿。")
+    if artifact["unapproved_signals"]:
+        raise SystemExit("原型实现边界发现未经决定允许的真实系统建设信号，不能定稿。")
+    semantic_review = artifact.get("semantic_review")
+    if not isinstance(semantic_review, dict) or semantic_review.get(
+        "confirmed_no_real_system_changes"
+    ) is not True:
+        raise SystemExit("原型实现边界尚未完成语义复核，不能定稿。")
+    if not semantic_review.get("reviewed_at"):
+        raise SystemExit("原型实现边界语义复核缺少 reviewed_at。")
+    for edge in artifact["approved_real_edges"]:
+        if not isinstance(edge, dict) or not str(edge.get("decision_reference") or "").strip():
+            raise SystemExit("原型真实边缘能力缺少 active decision reference。")
+
 
 def current_source_hash(build: dict, delta: dict | None = None) -> str:
     previous = str(build.get("approved_source_hash", ""))
@@ -565,14 +631,14 @@ def cmd_start(args: argparse.Namespace) -> None:
         raise SystemExit(f"target.kind 必须是 {' / '.join(sorted(VALID_TARGET_KINDS))}: {target_kind}")
     target_paths = normalize_string_list(args.target_path)
     if not target_paths:
-        raise SystemExit("v2 build 必须显式记录 acceptance profile 对应的 target.paths。")
+        raise SystemExit("v2+ build 必须显式记录 acceptance profile 对应的 target.paths。")
     if ready_result is not None and target_paths != ready_result["target_paths"]:
         raise SystemExit("build target paths 与 design 批准范围不一致；请勿在 build 开工时临时改写目标。")
     if ready_result is not None:
         ensure_target_paths_clean(repo_root_for(module_dir), ready_result["target_paths"])
     entrypoints = normalize_string_list(args.entrypoint)
     if not entrypoints:
-        raise SystemExit("v2 build 必须记录 project.yml 声明的 implementation.entrypoints。")
+        raise SystemExit("v2+ build 必须记录 project.yml 声明的 implementation.entrypoints。")
     source_hash = optional(args.approved_source_hash) or optional(meta.get("approved_source_hash"))
     if ready_result is not None and source_hash != ready_result["approved_source_hash"]:
         raise SystemExit("build 使用的 approved_source_hash 与 design 批准依据不一致。")
@@ -586,10 +652,13 @@ def cmd_start(args: argparse.Namespace) -> None:
             source_hash = sha256_value({"anchor": args.anchor, "baseline": optional(args.baseline_sha)})
     required_checks = normalize_string_list(args.required_check)
     if not required_checks:
-        raise SystemExit("v2 build 必须记录 acceptance profile 生成的 required_checks。")
+        raise SystemExit("v2+ build 必须记录 acceptance profile 生成的 required_checks。")
+    delivery_policy = delivery_policy_for(target_kind)
+    if target_kind == "prototype" and "prototype-boundary" not in required_checks:
+        raise SystemExit("prototype build 必须由 acceptance profile 生成 prototype-boundary 检查。")
 
     build = {
-        "contract_version": 2,
+        "contract_version": CURRENT_CONTRACT_VERSION,
         "anchor": args.anchor,
         "target": {
             "kind": target_kind,
@@ -598,6 +667,8 @@ def cmd_start(args: argparse.Namespace) -> None:
         },
         "approved_source_hash": source_hash,
         "design_revision": args.design_revision or int(meta.get("design_revision") or 1),
+        "delivery_policy": delivery_policy,
+        "delivery_policy_hash": delivery_policy_hash(delivery_policy),
         "accepted_deltas": [],
         "lifecycle_state": "building",
         "mode": mode,
@@ -813,8 +884,11 @@ def cmd_audit_exception(args: argparse.Namespace) -> None:
     if contract_version(build) >= 2:
         if not checks:
             raise SystemExit("v2 audit-exception 必须用 --check 点名受限检查。")
-        if "browser-smoke" in checks:
-            raise SystemExit("v2 UI 验收不能跳过主动浏览器能力；browser-smoke 不允许 exception。")
+        protected = sorted({"browser-smoke", "prototype-boundary"} & set(checks))
+        if protected:
+            raise SystemExit(
+                "v2+ 验收不能跳过硬检查：" + "、".join(protected) + " 不允许 exception。"
+            )
     build["audit_exception"] = {
         "accepted_at": optional(args.accepted_at) or now_iso(),
         "reason": reason,
@@ -833,7 +907,7 @@ def cmd_add_delta(args: argparse.Namespace) -> None:
     meta = read_meta(module_dir)
     build = require_build(meta)
     if contract_version(build) < 2:
-        raise SystemExit("accepted delta 只适用于 build contract v2。")
+        raise SystemExit("accepted delta 只适用于 build contract v2+。")
     summary = optional(args.summary)
     if not summary:
         raise SystemExit("必须提供 delta summary。")
@@ -869,7 +943,7 @@ def cmd_record_evidence(args: argparse.Namespace) -> None:
     meta = read_meta(module_dir)
     build = require_build(meta)
     if contract_version(build) < 2:
-        raise SystemExit("fresh evidence 只适用于 build contract v2。")
+        raise SystemExit("fresh evidence 只适用于 build contract v2+。")
     name = optional(args.name)
     status = optional(args.status)
     commit = optional(args.commit) or optional(build.get("implementation_commit"))
@@ -910,7 +984,7 @@ def cmd_review_ready(args: argparse.Namespace) -> None:
     meta = read_meta(module_dir)
     build = require_build(meta)
     if contract_version(build) < 2:
-        raise SystemExit("review-ready 只适用于 build contract v2。")
+        raise SystemExit("review-ready 只适用于 build contract v2+。")
     if build.get("lifecycle_state") not in {"iterating", "final_check"}:
         raise SystemExit("只有 iterating / final_check 的候选实现可以标记为验收就绪。")
     if not optional(build.get("implementation_commit")):
@@ -938,7 +1012,7 @@ def transition(
     meta = read_meta(module_dir)
     build = require_build(meta)
     if contract_version(build) < 2:
-        raise SystemExit("显式 lifecycle transition 只适用于 build contract v2。")
+        raise SystemExit("显式 lifecycle transition 只适用于 build contract v2+。")
     current = str(build.get("lifecycle_state") or "")
     if allowed_from is not None and current not in allowed_from:
         raise SystemExit(
@@ -966,7 +1040,7 @@ def cmd_iterating(args: argparse.Namespace) -> None:
     meta = read_meta(module_dir)
     build = require_build(meta)
     if contract_version(build) < 2:
-        raise SystemExit("显式 lifecycle transition 只适用于 build contract v2。")
+        raise SystemExit("显式 lifecycle transition 只适用于 build contract v2+。")
     current = str(build.get("lifecycle_state") or "")
     if current not in {"iterating", "final_check"}:
         raise SystemExit(
@@ -1048,7 +1122,7 @@ def cmd_validate_docs(args: argparse.Namespace) -> None:
     meta = read_meta(module_dir)
     build = require_build(meta)
     if contract_version(build) < 2:
-        raise SystemExit("validate-docs 只适用于 build contract v2。")
+        raise SystemExit("validate-docs 只适用于 build contract v2+。")
     if build.get("lifecycle_state") not in {"landed", "documenting"}:
         raise SystemExit("实现尚未落到 main，不能完成正式文档更新。")
     if build.get("docs_status") != "complete":

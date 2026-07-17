@@ -11,6 +11,7 @@ PROTOTYPE_CONTRACT_ARGS=(
   --target-kind prototype
   --target-path prototype/
   --entrypoint prototype/
+  --required-check prototype-boundary
   --required-check browser-smoke
   --required-check coverage
   --required-check visual
@@ -36,6 +37,38 @@ teardown_contract_fixture() {
   rm -rf "$T"
 }
 
+write_prototype_boundary_audit() {
+  AUDIT_DIR="$T/.pm-workflow/audits/pet-import"
+  mkdir -p "$AUDIT_DIR"
+  python3 - "$MODULE_DIR/.work-meta.json" "$AUDIT_DIR/prototype-boundary.json" <<'PY'
+import json, sys
+meta = json.load(open(sys.argv[1]))
+build = meta["build"]
+artifact = {
+    "schema_version": 1,
+    "check": "prototype-boundary",
+    "status": "pass",
+    "target_kind": "prototype",
+    "implementation_mode": "interactive-simulation",
+    "policy_hash": build["delivery_policy_hash"],
+    "source_hash": build["approved_source_hash"],
+    "baseline_sha": build.get("baseline_sha"),
+    "implementation_commit": build["implementation_commit"],
+    "target_paths": build["target"]["paths"],
+    "changed_paths": ["prototype/page.tsx"],
+    "outside_target_paths": [],
+    "detected_signals": [],
+    "unapproved_signals": [],
+    "approved_real_edges": [],
+    "simulated_capabilities": ["数据持久化"],
+    "semantic_review": {"confirmed_no_real_system_changes": True, "reviewed_at": "2026-07-17T10:00:00+08:00"},
+}
+json.dump(artifact, open(sys.argv[2], "w"), ensure_ascii=False)
+PY
+  python3 "$BUILD_CONTRACT" record-evidence "$MODULE_DIR" --name prototype-boundary --status pass \
+    --artifact ".pm-workflow/audits/pet-import/prototype-boundary.json" >/dev/null
+}
+
 write_clean_audits() {
   AUDIT_DIR="$T/.pm-workflow/audits/pet-import"
   mkdir -p "$AUDIT_DIR"
@@ -52,6 +85,7 @@ JSON
 {"status":"pass","passed":2,"total":2,"note":""}
 JSON
   echo "# Legacy v1 acceptance report" > "$AUDIT_DIR/synthesis.md"
+  write_prototype_boundary_audit
   python3 "$BUILD_CONTRACT" record-evidence "$MODULE_DIR" --name browser-smoke --status pass --artifact ".pm-workflow/audits/pet-import/browser-smoke.json" >/dev/null
   python3 "$BUILD_CONTRACT" record-evidence "$MODULE_DIR" --name coverage --status pass --artifact ".pm-workflow/audits/pet-import/coverage.json" >/dev/null
   python3 "$BUILD_CONTRACT" record-evidence "$MODULE_DIR" --name visual --status pass --artifact ".pm-workflow/audits/pet-import/visual.json" >/dev/null
@@ -74,6 +108,7 @@ JSON
 {"status":"skipped","passed":0,"total":2,"note":"browser 工具不可用"}
 JSON
   echo "# Legacy v1 acceptance report" > "$AUDIT_DIR/synthesis.md"
+  write_prototype_boundary_audit
   python3 "$BUILD_CONTRACT" record-evidence "$MODULE_DIR" --name browser-smoke --status limited --artifact ".pm-workflow/audits/pet-import/browser-smoke.json" >/dev/null
   python3 "$BUILD_CONTRACT" record-evidence "$MODULE_DIR" --name coverage --status pass --artifact ".pm-workflow/audits/pet-import/coverage.json" >/dev/null
   python3 "$BUILD_CONTRACT" record-evidence "$MODULE_DIR" --name visual --status limited --artifact ".pm-workflow/audits/pet-import/visual.json" >/dev/null
@@ -153,8 +188,11 @@ meta = json.load(open(sys.argv[1]))
 build = meta["build"]
 assert meta["stage"] == 2
 assert build["mode"] == "worktree"
-assert build["contract_version"] == 2
+assert build["contract_version"] == 3
 assert build["target"]["kind"] == "prototype"
+assert build["delivery_policy"]["implementation_mode"] == "interactive-simulation"
+assert build["delivery_policy"]["required_check"] == "prototype-boundary"
+assert len(build["delivery_policy_hash"]) == 64
 assert build["lifecycle_state"] == "final_check"
 assert build["design_revision"] == 1
 assert build["approved_source_hash"]
@@ -712,6 +750,45 @@ test_contract_v2_rejects_illegal_lifecycle_jumps() {
   teardown_contract_fixture
 }
 
+test_contract_v3_requires_and_validates_prototype_boundary() {
+  start_test "build-contract v3: prototype boundary is required, current, and non-exceptable"
+  setup_contract_fixture
+  if python3 "$BUILD_CONTRACT" start "$MODULE_DIR" \
+    --anchor "docs/modules/pet-import/spec.md" --mode worktree --executor codex \
+    --branch build-pet-import --worktree ".worktrees/build-pet-import" \
+    --baseline-sha abc123 --target-kind prototype --target-path prototype/ --entrypoint prototype/ \
+    --required-check browser-smoke --required-check coverage --required-check visual --required-check behavior \
+    >/tmp/build-contract.$$ 2>/tmp/build-contract.err.$$; then
+    _fail "prototype start without boundary check should fail"
+    rm -f /tmp/build-contract.$$ /tmp/build-contract.err.$$; teardown_contract_fixture; return
+  elif ! grep -q "prototype-boundary" /tmp/build-contract.err.$$; then
+    _fail "missing prototype-boundary guidance"
+    cat /tmp/build-contract.err.$$ >&2
+    rm -f /tmp/build-contract.$$ /tmp/build-contract.err.$$; teardown_contract_fixture; return
+  fi
+
+  python3 "$BUILD_CONTRACT" start "$MODULE_DIR" \
+    --anchor "docs/modules/pet-import/spec.md" --mode worktree --executor codex \
+    --branch build-pet-import --worktree ".worktrees/build-pet-import" \
+    --baseline-sha abc123 "${PROTOTYPE_CONTRACT_ARGS[@]}" >/dev/null || {
+      _fail "prototype start with boundary check should succeed"
+      teardown_contract_fixture; return
+    }
+  if python3 "$BUILD_CONTRACT" audit-exception "$MODULE_DIR" \
+    --reason "尝试跳过原型边界" --check prototype-boundary \
+    >/tmp/build-contract.$$ 2>/tmp/build-contract.err.$$; then
+    _fail "prototype-boundary must not accept an exception"
+    rm -f /tmp/build-contract.$$ /tmp/build-contract.err.$$; teardown_contract_fixture; return
+  elif ! grep -q "不允许 exception" /tmp/build-contract.err.$$; then
+    _fail "prototype-boundary exception rejection guidance missing"
+    cat /tmp/build-contract.err.$$ >&2
+    rm -f /tmp/build-contract.$$ /tmp/build-contract.err.$$; teardown_contract_fixture; return
+  fi
+  pass_test
+  rm -f /tmp/build-contract.$$ /tmp/build-contract.err.$$
+  teardown_contract_fixture
+}
+
 test_contract_lifecycle
 test_contract_rejects_missing_build
 test_contract_start_requires_adaptive_inputs
@@ -728,5 +805,6 @@ test_contract_v2_new_implementation_invalidates_evidence
 test_contract_v2_new_evidence_invalidates_review_ready
 test_contract_v2_iterating_clears_acceptance_and_readiness
 test_contract_v2_rejects_illegal_lifecycle_jumps
+test_contract_v3_requires_and_validates_prototype_boundary
 
 report_results "build-contract"

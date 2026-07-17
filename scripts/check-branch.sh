@@ -164,7 +164,7 @@ deny() {
 }
 
 # A full build may run in the current main environment only after /pmai-build
-# has shown the PM confirmation card and written a v2 contract with mode=main.
+# has shown the PM confirmation card and written a versioned contract with mode=main.
 # Keep the exception scoped to that contract's declared target paths; docs and
 # framework metadata continue to use the ordinary whitelist below.
 active_main_build_allows_path() {
@@ -190,7 +190,11 @@ for meta_path in (repo / "docs" / "modules").glob("*/.work-meta.json"):
         build = json.loads(meta_path.read_text(encoding="utf-8")).get("build", {})
     except Exception:
         continue
-    if build.get("contract_version") != 2 or build.get("mode") != "main":
+    try:
+        version = int(build.get("contract_version", 1))
+    except (TypeError, ValueError):
+        continue
+    if version < 2 or build.get("mode") != "main":
         continue
     if build.get("lifecycle_state") not in allowed_states:
         continue

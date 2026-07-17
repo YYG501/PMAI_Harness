@@ -19,6 +19,7 @@
     "no-internal-menus": ["skills/design/SKILL.md", "skills/build/SKILL.md", "scripts/builder-profile.py"],
     "patch-smell-routes-meta": ["skills/design/SKILL.md", "skills/meta/SKILL.md"],
     "prototype-product-same-lifecycle-static": ["scripts/_lib/project_definition.py", "scripts/build-contract.py", "scripts/acceptance-profile.py"],
+    "prototype-implementation-depth-static": ["skills/build/SKILL.md", "scripts/_lib/delivery_policy.py", "scripts/acceptance-profile.py", "scripts/build-contract.py", "scripts/prototype-boundary.py", "tests/test-prototype-boundary.sh"],
     "project-definition-reuse": ["scripts/project-definition.py", "tests/test-project-definition.sh", "skills/design/SKILL.md"],
     "spec-coverage-map": ["skills/spec-writing/SKILL.md", "scripts/doc-impact.py"]
   }

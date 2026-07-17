@@ -1,0 +1,28 @@
+{
+  "schema_version": 1,
+  "id": "prototype-implementation-depth-static",
+  "title": "prototype 不得在迭代中漂移成真实系统",
+  "layer": "static",
+  "skills": ["build"],
+  "input": {
+    "prompt": "检查完整规格进入 prototype build 后，是否仍有持久的实现深度边界。",
+    "context": []
+  },
+  "expected": {
+    "behaviors": ["规格与实现深度分工", "每轮重新读取 delivery policy", "prototype-boundary 不可例外"],
+    "observations": [],
+    "lifecycle_order": []
+  },
+  "forbidden": {
+    "behaviors": ["只在首次 prompt 提醒原型", "把模拟底层能力判为漏实现", "原型静默新增真实数据库或外部副作用"],
+    "observations": []
+  },
+  "assertions": [
+    {"type": "file_contains", "path": "scripts/_lib/delivery_policy.py", "value": "规格决定最终产品语义；本合同决定本轮实现深度。"},
+    {"type": "file_contains", "path": "scripts/acceptance-profile.py", "value": "prototype-boundary"},
+    {"type": "file_contains", "path": "scripts/build-contract.py", "value": "prototype-boundary 作为不可跳过的检查"},
+    {"type": "file_contains", "path": "skills/build/SKILL.md", "value": "每次调用构建工具——包括首次实现、每轮反馈修改和中断恢复——都先"},
+    {"type": "file_contains", "path": "skills/build/SKILL.md", "value": "底层按 `delivery_policy.simulate_by_default` 模拟不算漏实现"},
+    {"type": "file_contains", "path": "scripts/prototype-boundary.py", "value": "--confirm-no-real-system-changes"}
+  ]
+}

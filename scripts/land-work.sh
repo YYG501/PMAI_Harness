@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# v2 implementation landing + post-land documentation finalization.
+# Versioned implementation landing + post-land documentation finalization.
 
 set -euo pipefail
 
@@ -26,7 +26,7 @@ META_JSON=$(python3 -m json.tool "$WORK_DIR/.work-meta.json")
 BUILD_JSON=$(printf '%s' "$META_JSON" | python3 -c 'import json,sys; print(json.dumps(json.load(sys.stdin).get("build",{}), ensure_ascii=False))')
 VERSION=$(printf '%s' "$BUILD_JSON" | python3 -c 'import json,sys; print(json.load(sys.stdin).get("contract_version",1))')
 if [ "$VERSION" -lt 2 ]; then
-  echo "❌ land-work.sh 只处理 build contract v2；v1 由 close-work.sh 兼容路径处理。" >&2
+  echo "❌ land-work.sh 只处理 build contract v2+；v1 由 close-work.sh 兼容路径处理。" >&2
   exit 1
 fi
 

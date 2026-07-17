@@ -43,6 +43,7 @@ SUITES=(
   test-context-pack.sh
   test-personal-memory.sh
   test-acceptance-profile.sh
+  test-prototype-boundary.sh
   test-doc-impact.sh
   test-build-contract.sh
   test-build-close-hard-gates.sh

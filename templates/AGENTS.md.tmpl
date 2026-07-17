@@ -46,7 +46,7 @@
 - 本仓已经初始化完成，不能在这里再跑 `/pmai-init-project`。
 - 起新模块或讨论新功能：读 `/pmai-design`。它先编译 context pack、浮现相关旧决定，再按真实未知项讨论；`meta`、`mockup`、`spec-writing` 是 design 按需调用后返回主线的内部能力，不让 PM 手动拼接。
 - 首个可建造 design 定稿时，由 PM 一次确认建造对象与技术方案，生成 `.pm-workflow/project.yml`；后续默认复用。design 自动提交定义与本模块建造依据并进入 `ready_to_build`。
-- 推进实现：读 `/pmai-build`。框架校验 `.pm-workflow/project.yml` 并后台生成默认验收；AI 用一张卡向 PM 展示推荐的工作环境、构建工具及全部有效选项，PM 一次确认或直接改选后开工。工具列表必须排除当前主控；开工卡不得重复展示项目类型或验收方案。
+- 推进实现：读 `/pmai-build`。框架校验 `.pm-workflow/project.yml`，把项目类型编译成实现深度合同并后台生成默认验收；AI 用一张卡向 PM 展示推荐的工作环境、构建工具及全部有效选项，PM 一次确认或直接改选后开工。工具列表必须排除当前主控；开工卡不得重复展示项目类型或验收方案。
 - PM 看结果后直接说哪里要改；每轮先跑受影响的快速检查并尽快展示，当前候选在 PM 查看期间完成完整 required checks 和文档影响草案，形成验收就绪快照。PM 说“可以提交 / 定稿 / 可以合并”即授权校验同一快照、合入 main 和同步文档，不再要求手动 `/pmai-build-close`。
 - `/pmai-build-close` 保留为兼容与恢复入口，用于中断续跑、merge 冲突后重试或 `landed/docs_pending` 文档恢复。
 - 迷路或续跑：读 `/pmai-status` 对应 skill，先报告当前状态再行动。
@@ -63,6 +63,7 @@
 - PM 已说“可以提交 / 定稿 / 可以合并”时，该表达就是合入主线授权，不得二次确认。
 - 小改走 `/pmai-quick-fix`，完整需求走 design → build；不得以“小改”为由让 design/mockup 在 main 直接修改业务代码。
 - `/pmai-build` 按项目定义后台确定构建对象和默认验收。新 build 由 AI 推荐工作环境与构建工具，并在同一张卡列出全部有效选项，PM 只确认这两项；卡片不得显示项目类型、验收方案、worktree、合同或证据数据。
+- `project.type=prototype` 时，每次首次构建、反馈修改和中断恢复都必须重新读取实现深度合同：用户可见路径与交互做真，数据库、鉴权、外部集成、异步任务等底层默认模拟；未经 active decision 批准，不得静默建设真实系统。候选定稿前必须通过不可 exception 的 `prototype-boundary` 检查。
 - 未提交的规格、决定和选定 mockup 由 design 自动做 scoped checkpoint；只能提交本轮相关文件，不能带入无关脏改。
 - `/pmai-build` 在实现前必须写入版本化 `.work-meta.json:build` 合同；候选结果必须在 PM 定稿前通过 `review-ready`。`/pmai-build-close` 与自动 finalize 只按合同、验收就绪快照和 lifecycle state 续跑，不能靠当前分支 / worktree 形态猜测，也不能在 close 内首次跑完整验收或补业务代码。
 - 混合交付必须走完整 build：本轮同时包含 `project.yml` 声明的实现路径和模块文档/mockups 时，不能普通提交；必须由 `/pmai-build` 在目标适配验收和 PM 定稿后自动 finalize。

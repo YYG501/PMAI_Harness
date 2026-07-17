@@ -18,6 +18,8 @@ PM-AI-Workflow 生成器仓的演进记录。本文件**只记影响下游业务
 
 ## 未发布
 
+- `fix(build)`: **给 prototype 增加持久的实现深度合同，阻止 AI 按最终规格静默建设真实系统。** `spec.md` / PRD 继续定义最终产品语义，不另造“原型规格”；`acceptance-profile.py` 根据 `project.type` 编译 `delivery_policy`，新 build contract v3 固化 policy 与 hash。`/pmai-build` 在首次实现、每轮反馈修改和中断恢复时都把实现深度置于规格之前重新交给构建工具：原型的用户可见路径与交互做真，数据库、鉴权、外部集成、异步任务等底层默认模拟。新增不可 exception 的 `prototype-boundary` required check 与 `prototype-boundary.py`，候选定稿前扫描批准范围外改动、数据库 migration、生产基础设施、密钥配置、真实鉴权和外部副作用信号，并要求 AI 明确完成 diff 语义复核；模拟底层能力不再被原型 coverage 误判为漏实现。旧 v2 合同继续用于中断恢复兼容。
+
 - `fix(build-close)`: **把完整验收前移为 build 的验收就绪候选，close 只做确定性落地。** 真实消费仓中一次 `/pmai-build-close` 从调用到完成约 30 分钟；实际 merge 只需数秒，主要耗时来自 close 才首次走完整浏览器路径、发现规格漏项后补业务代码、重跑 production build、重新分析文档影响，以及开发服务占用 worktree 导致清理失败。现在 contract v2 新增 `review-ready`：候选实现必须在 `iterating` 阶段完成全部 required checks、逐项规格覆盖和文档影响草案，形成绑定当前 source hash / implementation commit 的快照；`accept` / `complete` / `validate-land` 拒绝缺失或过期快照，`final_check` 不首次跑完整验收也不修改业务代码。`land-work.sh` 会把运行进程或缓存占用导致的 worktree 清理失败转入安全待清理队列，不再阻塞 landed 后文档同步；文档提交会自动纳入 `doc-impact.json`，不再需要 amend 补交。
 
 - `fix(build)`: **把“当前会话直接构建”恢复为常驻选项。** 上一轮为避免 Codex 主控再次启动 Codex CLI，把当前主控对应的外部 profile 从候选中排除；实现同时把当前会话亲自构建误降成了“外部工具全不可用时才出现”的兜底。现在继续排除与当前主控相同的外部 CLI，但 `builder-profile.py list` 始终返回 `native`，开工卡无论本机还有多少外部工具都会展示“当前会话直接构建”；推荐逻辑仍优先遵循项目 builder 配置，没有可用外部工具时才默认推荐当前会话。

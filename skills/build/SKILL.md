@@ -113,11 +113,11 @@ done
 python3 "$PMAI_HOME/scripts/acceptance-profile.py" "${PROFILE_ARGS[@]}" > "$PROFILE"
 ```
 
-验收方案由框架默认规则决定，不让 PM 选择，也不展示在开工确认卡。工具受限、检查失败或出现 exception 时仍按 §7 如实记录，不能因为“不展示”而跳过。
+验收档案同时编译 `delivery_policy`：规格继续决定最终产品语义，`project.type` 决定本轮实现深度。`prototype` 固定为 `interactive-simulation`，`product` 固定为 `production-implementation`；build 不得把“完整规格”误解成“原型也要把底层建实”。验收方案和实现深度合同都由框架后台决定，不让 PM 重选，也不展示在开工确认卡。工具受限、检查失败或出现 exception 时仍按 §7 如实记录，不能因为“不展示”而跳过。
 
 ## 3. 推荐工作环境与构建工具，由 PM 一次确认
 
-恢复既有 v2 build 时，沿用合同里已确认的工作环境和构建工具，不重复确认。新 build 才执行本节：
+恢复既有 v2 / v3 build 时，沿用合同里已确认的工作环境和构建工具，不重复确认。新 build 才执行本节：
 
 1. **推荐工作环境**：默认推荐“独立环境”；若当前已经是本模块有效的 `build-*` 环境，则推荐“继续当前独立环境”。PM 也可以明确改为“当前环境”。
 2. **识别当前主控并推荐构建工具**：把当前 runtime 映射成 `claude-code / codex / opencode / cursor-agent`；无法识别时用 `unknown`。外部构建工具 profile 必须和当前主控不同，不能让 Codex 主控再启动 Codex，也不能让 Claude Code / OpenCode 主控把自己列为外部工具；“当前会话直接构建”不是外部 profile，始终作为有效选项。按项目级类型、消费仓配置和本机可用性生成推荐与完整可选列表：
@@ -179,7 +179,7 @@ fi
 
 执行器使用 `EXECUTOR_STATUS_DIR`、heartbeat、退出码和日志文件回报进度；PM 窗口只报阶段摘要，不直播命令、日志和进程排障。可确认的外部构建工具包括 Claude Code、Codex、Cursor Agent 和 OpenCode，但必须排除当前主控对应的外部 profile；“当前会话直接构建”始终与这些外部工具一起列为有效选项。没有外部工具可用时，推荐当前会话直接构建。
 
-从 acceptance profile 取 `required_checks`，写合同 v2：
+从 acceptance profile 取 `required_checks`，写版本化合同。当前新合同为 v3，并由 `target.kind` 自动固化 `delivery_policy + delivery_policy_hash`；旧 v2 合同只作中断恢复兼容：
 
 ```bash
 REQUIRED_CHECKS=()
@@ -217,8 +217,9 @@ git -C "$BUILD_DIR" commit -m "build(<模块>): start adaptive build"
 
 ## 4. 构建指定对象
 
-把下面内容一次性交给 PM 已确认的构建工具：
+每次调用构建工具——包括首次实现、每轮反馈修改和中断恢复——都先从当前 `.work-meta.json:build` 重新读取 `target + delivery_policy`，不能依赖首轮 prompt 记忆。把下面内容一次性交给 PM 已确认的构建工具，且**实现深度合同必须放在规格全文之前**：
 
+- 当前 `target.kind`、`delivery_policy` 全文及其不可违反的实现深度；
 - 建造锚点全文；
 - context pack 中相关 active 决定和 accepted deltas；
 - build target、目标路径和入口；
@@ -228,9 +229,12 @@ git -C "$BUILD_DIR" commit -m "build(<模块>): start adaptive build"
 
 ### prototype 适配器
 
+- **规格管最终产品做什么，原型合同管本轮做到哪一层**：不得因为规格完整就把原型升级成真实系统；
 - 优先复用当前原型组件与现有界面语言；
 - 建主路径、关联页面、弹窗/抽屉和相关边界状态；
-- 允许 mock 数据，但必须标清哪些是 mock、哪些行为已建实；
+- 用户能看到和操作的页面、状态、反馈必须真实可交互；数据持久化、后端接口、鉴权/权限执行、外部集成、AI 引擎、异步任务和通知默认用 fixture、内存状态、localStorage 或无副作用 mock adapter 模拟；
+- 未经 active decision 明确批准，不得新增生产数据库/schema/migration、真实鉴权账号体系、外部写入或密钥接入、生产基础设施/部署编排和迁移兼容代码；
+- 必须列清本轮模拟了哪些底层能力、哪些用户可见行为已建成；“做得更真”不是原型的完成标准；
 - 建完启动原型，给 PM 可访问入口。
 
 ### product 适配器
@@ -261,12 +265,14 @@ git -C "$BUILD_DIR" commit -m "build(<模块>): record iteration"
 
 先给 PM 看结果，不把完整验收的等待挡在“能看到页面/功能”之前。PM 每轮反馈后：
 
-1. 判断是实现修正，还是新的产品决定；
-2. 只改受影响路径；
-3. 只跑受影响的快速检查；
-4. 提交该轮修改；
-5. 再给 PM 看；
-6. 当当前候选没有已知缺口时，在 PM 查看结果期间后台准备“验收就绪快照”。
+1. 重新读取当前 build 合同的 `target + delivery_policy`，并把实现深度放在本轮修改指令首部；
+2. 判断是实现修正、新的产品决定，还是要求原型接入真实底层能力；
+3. 原型反馈若要求真实数据库、鉴权、外部写入、生产基础设施等，停止实现并回 design：由 PM 明确批准一个 prototype real edge，或把项目建造对象改为 product；不得在迭代中静默升级；
+4. 只改受影响路径；
+5. 只跑受影响的快速检查；
+6. 提交该轮修改；
+7. 再给 PM 看；
+8. 当当前候选没有已知缺口时，在 PM 查看结果期间后台准备“验收就绪快照”。
 
 如果反馈改变对象、动作、状态、权限、真相源、页面任务或产品规则，记录 accepted delta：
 
@@ -297,12 +303,36 @@ python3 "$PMAI_HOME/scripts/build-contract.py" add-delta \
 
 ### prototype 完整检查
 
+- 原型实现边界：候选 diff 只在批准目标内，且没有未经决定允许的真实系统建设；
 - 可启动性和主动 browser smoke；
-- 建造依据逐项覆盖；
+- 建造依据逐项覆盖；对原型来说，“覆盖”指用户可观察的行为、状态和结果能够交互演示，底层按 `delivery_policy.simulate_by_default` 模拟不算漏实现；
 - 关键任务路径、页面、弹窗/抽屉；
 - 空态、错误态、长内容、权限差异等相关状态；
 - 对照 `DESIGN.md` 的视觉一致性；
 - 实际交互行为。
+
+先生成边界检查 artifact。第一次不带确认参数运行，用它列出候选 diff、批准范围外改动和生产建设信号；AI 对照 `delivery_policy` 与 active decisions 完成语义复核后，确认没有越界才重跑并写 `pass`：
+
+```bash
+BOUNDARY="$BUILD_DIR/.pm-workflow/audits/<模块>/prototype-boundary.json"
+python3 "$PMAI_HOME/scripts/prototype-boundary.py" \
+  "$BUILD_DIR/docs/modules/<模块>" \
+  --output "$BOUNDARY"
+
+# 完整查看 candidate diff，确认底层能力均为模拟后才允许追加：
+python3 "$PMAI_HOME/scripts/prototype-boundary.py" \
+  "$BUILD_DIR/docs/modules/<模块>" \
+  --output "$BOUNDARY" \
+  --confirm-no-real-system-changes \
+  <逐项追加 --simulated-capability "<能力>"> \
+  <仅当 active decision 明确批准时追加 --approved-real-edge "<category>=<decision reference>">
+
+python3 "$PMAI_HOME/scripts/build-contract.py" record-evidence \
+  "$BUILD_DIR/docs/modules/<模块>" \
+  --name prototype-boundary --status pass --artifact "$BOUNDARY"
+```
+
+`prototype-boundary` 和 `browser-smoke` 都是不可 exception 的硬检查。artifact 出现批准范围外改动、未经决定允许的 database/auth/external side effect/infrastructure 信号，或 AI 尚未明确完成语义复核时保持 `iterating`；不得把 `blocked / needs-review` 手写成 `pass`。
 
 优先使用已可用的主动 browser 适配器生成证据；工具选择不展示给 PM。
 
@@ -398,7 +428,7 @@ bash "$PMAI_HOME/scripts/close-work.sh" "$BUILD_DIR/docs/modules/<模块>"
 8. `doc-impact.py validate` 通过后执行 `build-contract.py docs-complete`；
 9. 再次调用 `close-work.sh`，单独提交文档同步、删除临时 `.work-meta.json` 并进入 `complete`。
 
-`spec.md` / PRD 保留最终目标，只有 accepted delta 可以修改；`PRODUCT-STATE.md` 等现状文档只描述 main 已经存在的事实。不得在 merge 前把目标要求提前写成“已完成”。
+`spec.md` / PRD 保留最终目标，只有 accepted delta 可以修改；`PRODUCT-STATE.md` 等现状文档只描述 main 已经存在的事实。`target.kind=prototype` 落地后只能记为“原型演示”，模拟的数据库、权限、集成或引擎不得写成“已落地产品能力”。不得在 merge 前把目标要求提前写成“已完成”。
 
 文档失败时：
 
@@ -430,6 +460,9 @@ python3 "$PMAI_HOME/scripts/build-contract.py" docs-fail \
 ## Rules
 
 - prototype / product 共用同一生命周期，只切换目标和验收适配器。
+- 规格定义最终产品语义，`delivery_policy` 定义本轮实现深度；prototype 的完整度看用户可观察行为，不看底层是否生产化。
+- 每次首次构建、反馈迭代和中断恢复都重新读取并优先传递 `target + delivery_policy`，不得依赖模型记住首轮原型边界。
+- prototype 默认模拟底层能力；真实数据库、鉴权、外部副作用或生产基础设施必须有 active decision 明确批准，否则回 design，不得静默升级成 product。
 - 项目类型、技术栈、入口和真实运行命令由 `.pm-workflow/project.yml` 定义；build 只读，不按本轮需求猜，也不在开工确认卡重复展示。
 - build 开工前必须确认 design 依据仍有效，并严格复用 design 批准的目标路径；依据过期、范围缺失或目标路径有未提交改动时先停止处理，不创建工作环境。
 - 验收方案按项目类型和风险后台生成默认值；不让 PM 选择，也不在开工确认卡展示。
@@ -442,5 +475,6 @@ python3 "$PMAI_HOME/scripts/build-contract.py" docs-fail \
 - merge 冲突保留 final_check 和 worktree；纯清理失败进入待清理队列，不阻塞 landed 后文档同步。
 - 实现先落 main，正式文档后更新；文档失败不重复 merge。
 - skipped / limited / blocked 不能伪装 pass；证据必须绑定 source hash 和 implementation commit。
-- UI required checks 缺主动浏览器能力时必须阻塞；v2 的 `browser-smoke` 不接受 exception。
+- UI required checks 缺主动浏览器能力时必须阻塞；v2+ 的 `browser-smoke` 不接受 exception。
+- v3 prototype 的 `prototype-boundary` 必须有绑定当前 source hash 和 implementation commit 的 active pass artifact，不接受 exception。
 - 正式文档无迭代流水账，历史只在 Git 与 decisions 中。

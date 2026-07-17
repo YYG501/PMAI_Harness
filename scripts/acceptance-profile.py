@@ -7,6 +7,7 @@ import argparse
 import json
 from pathlib import Path
 
+from _lib.delivery_policy import delivery_policy_for, delivery_policy_hash
 from _lib.project_definition import ProjectDefinitionError, load_project_definition
 
 
@@ -35,10 +36,18 @@ def compile_profile(args: argparse.Namespace) -> dict:
     except ProjectDefinitionError as exc:
         raise SystemExit(str(exc)) from exc
     target = definition["project"]["type"]
+    delivery_policy = delivery_policy_for(target)
     has_ui = definition_ui_selected(definition, paths)
     configured_commands = definition["commands"]
     checks: list[dict] = []
     if target == "prototype":
+        checks.append(
+            {
+                "name": "prototype-boundary",
+                "purpose": "确认本轮仍是可交互原型，未越界建设真实系统",
+                "command": None,
+            }
+        )
         if has_ui:
             checks.append({"name": "browser-smoke", "purpose": "用主动浏览器能力确认原型可访问", "command": None})
         checks.append({"name": "coverage", "purpose": "逐项核对建造依据、页面和状态覆盖", "command": None})
@@ -82,6 +91,8 @@ def compile_profile(args: argparse.Namespace) -> dict:
     return {
         "schema_version": 1,
         "target": {"kind": target, "paths": paths},
+        "delivery_policy": delivery_policy,
+        "delivery_policy_hash": delivery_policy_hash(delivery_policy),
         "required_checks": deduped,
     }
 

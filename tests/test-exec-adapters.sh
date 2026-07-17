@@ -373,7 +373,7 @@ test_build_skill_confirms_only_environment_and_tool_before_editing() {
   assert_file_contains "$BUILD_SKILL" "构建工具（已选）：<工具名（model, thinking） | 当前会话直接构建>" "confirmation card should expose selected builder" || return
   assert_file_contains "$BUILD_SKILL" "本机可用工具：" "confirmation card should expose all usable builders" || return
   assert_file_contains "$BUILD_SKILL" "卡片中禁止出现项目类型、验收方案" "confirmation card should hide project type and acceptance" || return
-  assert_file_contains "$BUILD_SKILL" "合同 v2" "build should write the versioned contract" || return
+  assert_file_contains "$BUILD_SKILL" "当前新合同为 v3" "build should write the implementation-depth contract" || return
   assert_file_contains "$BUILD_SKILL" "build-contract.py" "build should call the build contract helper" || return
   assert_file_contains "$AGENTS_TMPL" "PM 只确认这两项" "consumer AGENTS should preserve the two-item confirmation" || return
   assert_file_contains "$AGENTS_TMPL" "卡片不得显示项目类型、验收方案" "consumer AGENTS should hide type and acceptance" || return

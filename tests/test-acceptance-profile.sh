@@ -35,7 +35,7 @@ test_project_definition_profiles() {
   web_product=$(python3 "$PROFILE" --repo-root "$t" --project-definition "$t/.pm-workflow/project.yml" --path app/page.tsx)
   backend=$(python3 "$PROFILE" --repo-root "$t" --project-definition "$t/.pm-workflow/project.yml" --path server/api.ts)
   rm -rf "$t"
-  if python3 -c 'import json,sys; n=[x["name"] for x in json.load(sys.stdin)["required_checks"]]; assert n==["browser-smoke","coverage","visual","behavior"]' <<<"$proto" \
+  if python3 -c 'import json,sys; d=json.load(sys.stdin); n=[x["name"] for x in d["required_checks"]]; assert n==["prototype-boundary","browser-smoke","coverage","visual","behavior"]; assert d["delivery_policy"]["implementation_mode"]=="interactive-simulation"; assert d["delivery_policy"]["required_check"]=="prototype-boundary"; assert len(d["delivery_policy_hash"])==64' <<<"$proto" \
     && python3 -c 'import json,sys; n={x["name"] for x in json.load(sys.stdin)["required_checks"]}; assert {"scope-coverage","tests","build","browser-smoke","visual","behavior"} <= n' <<<"$web_product" \
     && python3 -c 'import json,sys; n={x["name"] for x in json.load(sys.stdin)["required_checks"]}; assert not ({"browser-smoke","visual","behavior"} & n)' <<<"$backend"; then
     pass_test
