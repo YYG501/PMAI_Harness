@@ -19,6 +19,7 @@ SUITES=(
   test-generator-codex-entry.sh
   test-init-project-codex-compat.sh
   test-opencode-host-compat.sh
+  test-kimi-host-compat.sh
   test-brownfield-detect.sh
   test-no-duplicate-questioning.sh
   test-shared-files-exist.sh

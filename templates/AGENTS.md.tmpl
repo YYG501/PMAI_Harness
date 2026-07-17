@@ -2,7 +2,7 @@
 
 ## PMAI Agent Entry
 
-本文件是 Claude Code / Codex / OpenCode 等 agent 的项目入口。PMAI 的完整工作流规则仍以 `CLAUDE.md` 为主真相源；任一主控进入项目后必须先读本文件，再读 `CLAUDE.md`。
+本文件是 Claude Code / Codex / Kimi Code / OpenCode 等 agent 的项目入口。PMAI 的完整工作流规则仍以 `CLAUDE.md` 为主真相源；任一主控进入项目后必须先读本文件，再读 `CLAUDE.md`。
 
 默认用中文和 PM 沟通；只有用户明确要求英文或引用原文时才切换。
 
@@ -14,8 +14,8 @@
 
 ## Host Mapping
 
-- `CLAUDE.md` 里写的“Claude Code”“Claude host”“驱动 Claude”，在 Codex / OpenCode 会话中等价理解为当前主控 agent。
-- `/pmai-*` 是 PMAI 的用户命令名。Codex 通过原生 skill 列表调用对应的 `$pmai-*`；OpenCode 已暴露 `.opencode/commands/pmai-*.md` 或 `~/.config/opencode/commands/pmai-*.md` 时优先按该入口执行。PMAI 不生成 Codex custom prompts；如果当前 runtime 没有 skill UI，再按对应 `~/.pmai/skills/<command-without-pmai-prefix>/SKILL.md` 的步骤执行。
+- `CLAUDE.md` 里写的“Claude Code”“Claude host”“驱动 Claude”，在 Codex / Kimi Code / OpenCode 会话中等价理解为当前主控 agent。
+- `/pmai-*` 是跨宿主文档中的 PMAI 命令名。Codex 通过原生 skill 列表调用对应的 `$pmai-*`；Kimi Code 使用原生命令 `/skill:pmai-*`（例如 `/skill:pmai-build`）；OpenCode 使用 `.opencode/commands/pmai-*.md` 或 `~/.config/opencode/commands/pmai-*.md`。PMAI 不生成 Codex custom prompts，也不为 Kimi 模拟 `/pmai-*` slash command；runtime 没有对应 UI 时，再按 `~/.pmai/skills/<command-without-pmai-prefix>/SKILL.md` 执行。
 - 如果 skill 目录名本身带 `pmai-` 前缀，例如 `/pmai-upgrade`，对应 `~/.pmai/skills/pmai-upgrade/SKILL.md`。
 - 运行态只创建并识别 `build-*` 工作分支。
 - 完整 build 的实现改动落在 PM 开工前确认的工作环境；选择独立环境时使用 `build-*` worktree，选择当前环境时只允许合同声明的目标路径。轻量修补走 `/pmai-quick-fix`。
@@ -28,18 +28,19 @@
 2. 运行 `bash -lc 'source "${PMAI_HOME:-$HOME/.pmai}/scripts/skill-preamble.sh"'` 检测 PMAI_HOME、当前 worktree、active work 和项目初始化状态；如果文件不存在，先提示 PM 运行 `pmai install` 或检查 `PMAI_HOME`。
    如果 preamble 提示当前目录还没有 PMAI 初始化，停止当前非 init skill，引导 PM 先发 `/pmai-init-project`。它会自动判断全新项目 / 资料目录 / 已有代码库，不需要 PM 手动改跑其它 skill。
 3. 如果当前主控是 Codex，检查 `.codex/hooks.json` 是否存在；缺失时提示在项目根运行 `bash "${PMAI_HOME:-$HOME/.pmai}/scripts/install-codex-hooks.sh"` 补装。Codex 首次启用项目 hooks 时可能要求信任确认。
-4. 如果当前主控是 OpenCode，检查 `.opencode/commands/` 或 `opencode.json` 是否存在；缺失时提示在项目根运行 `bash "${PMAI_HOME:-$HOME/.pmai}/scripts/install-opencode-commands.sh" --project "$PWD"` 补装。OpenCode 不使用 Codex hooks，不能声称 Codex hooks 已在 OpenCode 中生效。
-5. 按 `/pmai-status` 等价流程判断当前下一步；已初始化且没有 active work 时，引导 PM 运行 `/pmai-design`。
+4. 如果当前主控是 Kimi Code，确认 `${KIMI_CODE_HOME:-$HOME/.kimi-code}/skills/pmai-status` 可解析，并运行 `python3 "${PMAI_HOME:-$HOME/.pmai}/scripts/manage-kimi-hooks.py" check` 检查原生 hooks；缺失或漂移时提示运行 `pmai doctor` 修复。Kimi 不读取 `.codex/hooks.json`。
+5. 如果当前主控是 OpenCode，检查 `.opencode/commands/` 或 `opencode.json` 是否存在；缺失时提示在项目根运行 `bash "${PMAI_HOME:-$HOME/.pmai}/scripts/install-opencode-commands.sh" --project "$PWD"` 补装。OpenCode 不使用 Codex hooks，不能声称 Codex hooks 已在 OpenCode 中生效。
+6. 按 `/pmai-status` 等价流程判断当前下一步；Kimi Code 对应 `/skill:pmai-status`。已初始化且没有 active work时，引导 PM 进入 design。
 
 ## Command Resolution
 
-当前 agent 收到 PM 输入的 `/pmai-xxx` 时：
+当前 agent 收到 PM 输入的 `/pmai-xxx` 时按下列规则解析；Kimi Code 收到 `/skill:pmai-xxx` 时优先使用宿主原生 Skill 解析，加载结果仍必须遵守同一 `PMAI_HOME`：
 
 1. 先设 `PMAI_HOME="${PMAI_HOME:-$HOME/.pmai}"`。
 2. 去掉 `pmai-` 前缀，定位 `$PMAI_HOME/skills/xxx/SKILL.md`；如果该文件不存在，再尝试 `$PMAI_HOME/skills/pmai-xxx/SKILL.md`。
 3. 按该 skill 的步骤执行；遇到引用 `_shared/...` 时，从 `$PMAI_HOME/skills/_shared/...` 读取。
 4. 需要调用脚本时，优先用 `$PMAI_HOME/scripts/...` 或 `$PMAI_HOME/bin/...`。
-5. 如果 skill 要求 Claude Code 专属工具，而 Codex runtime 没有等价工具，按“Runtime Fallback”处理，不要假装已执行。
+5. 如果 skill 要求某个宿主专属工具，而当前 runtime 没有等价工具，按“Runtime Fallback”处理，不要假装已执行。
 
 ## Consumer Workflow
 
@@ -77,7 +78,7 @@
 ## Guardrails
 
 - 不要改 `CLAUDE.md` 的框架规则区，除非 PM 明确要求更新项目规则。
-- 不要把 `~/.pmai/skills`、`~/.pmai/scripts` 或其他 framework 源资产复制进消费仓；`.codex/hooks.json`、`.opencode/commands`、`opencode.json` 是允许存在的 host 配置，命令必须指向 `~/.pmai`。
+- 不要把 `~/.pmai/skills`、`~/.pmai/scripts` 或其他 framework 源资产复制进消费仓；`.codex/hooks.json`、`.opencode/commands`、`opencode.json` 是允许存在的项目级 host 配置。Kimi skills 与 hooks 留在 `$KIMI_CODE_HOME` 的用户级宿主面，命令必须指向 `~/.pmai`。
 - `/pmai-design` 和 `/pmai-mockup` 不修改业务实现；design 先定对象和规格，mockup 只出探索稿，任何代码改动走 `/pmai-build` 或 `/pmai-quick-fix`。
 - “落地”不是绕过 build 的许可；小改走 quick-fix，完整交付走 `/pmai-build` 并自动 finalize。
 - 不要绕过 `check-branch.sh` 在 main 上直接改业务代码；只有 PM 已确认“当前环境”且 v2 合同为 `mode=main` 时，才允许修改合同声明的目标路径。

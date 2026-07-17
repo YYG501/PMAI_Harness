@@ -355,7 +355,8 @@ test_build_skill_recommends_then_confirms_builder_profile() {
   start_test "build skill: 推荐 builder profile 后由 PM 确认"
 
   assert_file_contains "$BUILD_SKILL" "builder-profile.py\" recommend" "build should recommend builder profiles" || return
-  assert_file_contains "$BUILD_SKILL" "Claude Code、Codex、Cursor Agent 和 OpenCode" "automatic candidates should include supported adapters" || return
+  assert_file_contains "$BUILD_SKILL" "claude-code / codex / kimi-code / opencode / cursor-agent" "current host mapping should include Kimi Code" || return
+  assert_file_contains "$BUILD_SKILL" "Kimi Code 本轮只作为主控" "Kimi should not be silently added as an external builder" || return
   assert_file_contains "$BUILD_SKILL" "必须排除当前主控对应的外部 profile" "build should exclude the current host profile" || return
   assert_file_contains "$BUILD_SKILL" "当前会话直接构建”始终" "build should always expose native execution" || return
   assert_file_contains "$BUILD_SKILL" "本机可用工具" "build should expose available tools in the first card" || return

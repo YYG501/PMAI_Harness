@@ -61,7 +61,7 @@ const GUARD_TEXT = `⚠️ REVIEW SKILL 执行强制约束（review-skill-guard 
 不要出选项门，**默认跑完整版**。判断某 section 真的不适用 → 跑完后在完整度标记的"跳过原因"里写具体不适用原因，PM 觉得多余事后会让你砍。
 
 ---
-(hook 来源: 项目级 .claude/settings.json / .codex/hooks.json；禁用方式: 删除对应 hook 条目)`;
+(hook 来源: 项目级 .claude/settings.json / .codex/hooks.json，或 Kimi Code 的 PMAI 托管 hooks；禁用方式: 删除对应 hook 条目)`;
 
 let input = '';
 const stdinTimeout = setTimeout(() => process.exit(0), 3000);

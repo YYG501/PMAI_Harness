@@ -16,7 +16,7 @@
 **框架分发与全局安装**（2026-05-26 v1.1 落地）：
 
 - 本仓现已通过 GitHub remote `git@github.com:YYG501/PMAI_Workflow.git` 分发
-- `pmai install` 一次全局安装到 `~/.pmai/` + symlink 当前 skill 到 `~/.claude/skills/pmai-*` / `~/.codex/skills/pmai-*` + 生成 OpenCode slash commands 到 `~/.config/opencode/commands/pmai-*.md`（任意 cwd 可调 `/pmai-init-project`）；Codex 只使用原生 skills，不生成会在 Desktop 显示为 `prompts:pmai-*` 的 custom prompts
+- `pmai install` 一次全局安装到 `~/.pmai/` + symlink 当前 skill 到 `~/.claude/skills/pmai-*` / `~/.codex/skills/pmai-*` / `$KIMI_CODE_HOME/skills/pmai-*` + 生成 OpenCode slash commands 到 `~/.config/opencode/commands/pmai-*.md`。Kimi Code 使用原生 `/skill:pmai-*`，Codex 使用原生 skills；两者都不生成模拟 slash command 或重复 custom prompts
 - **仅全局安装**：skill 只装 host skill dirs / slash command dirs，不往项目里拷副本；项目里只放 host 配置 / 状态资产（`.claude/settings.json` / `.codex/hooks.json` / `.opencode/commands` / `opencode.json` / `.work-meta.json`）。旧 `--local`（项目实体副本）已移除——和全局并存会让 `/pmai-*` 命令重复且副本陈旧；遗留副本用 `pmai uninstall --local <dir>` 清理
 - 升级 `pmai upgrade`（main）/ `pmai upgrade --stable`（tag）/ `pmai upgrade --to v0.x.0`（pin）
 - 安装和升级以 `README.md`、`bin/pmai`、`bin/pmai-doctor` 为当前真相源。
@@ -39,9 +39,9 @@
 5. **禁把 BLOCKER finding 降级 WARNING** 避免显得苛刻 —— 保留原 severity
 6. 真有 section 不适用 → 默认跑完整版，跑完在完整度标记里写原因；PM 觉得多余事后会让你砍
 
-每次触发上述 skill 时，[`hooks/review-skill-guard.cjs`](./hooks/review-skill-guard.cjs) 通过 `.claude/settings.json` / `.codex/hooks.json` 注册的 UserPromptSubmit hook 自动注入完整约束清单。**hook 配置跟项目走（git 跟踪），脚本本体来自本仓或已安装的 `~/.pmai/`；不依赖全局 `~/.claude/`**。OpenCode 第一版只生成 `.opencode/commands` / `opencode.json` 主控配置，不伪装成 Codex hooks。
+每次触发上述 skill 时，[`hooks/review-skill-guard.cjs`](./hooks/review-skill-guard.cjs) 自动注入完整约束清单。Claude Code / Codex 的 hook 配置跟项目走（`.claude/settings.json` / `.codex/hooks.json`，git 跟踪）；Kimi Code 当前只有用户级 `config.toml` hooks，因此由 PMAI 标记区注册全局分发器，先识别 PMAI 生成器仓 / 消费仓，普通仓库直接跳过。脚本本体来自本仓或已安装的 `~/.pmai/`。OpenCode 第一版只生成 `.opencode/commands` / `opencode.json` 主控配置，不伪装成其它宿主 hooks。
 
-消费仓由 `scripts/init-project.sh` 自动生成 `.claude/settings.json`、`.codex/hooks.json`、`.opencode/commands` 和 `opencode.json`。已有 I-mini 消费仓缺 Codex hooks 时，在项目根运行 `bash ~/.pmai/scripts/install-codex-hooks.sh` 补装；缺 OpenCode commands 时运行 `bash ~/.pmai/scripts/install-opencode-commands.sh --project "$PWD"` 补装。Codex 首次看到新增 hook 时可能要求信任确认。
+消费仓由 `scripts/init-project.sh` 自动生成 `.claude/settings.json`、`.codex/hooks.json`、`.opencode/commands` 和 `opencode.json`。Kimi 不生成项目级配置，`pmai install/upgrade/doctor` 管理 `$KIMI_CODE_HOME/skills` 和用户级 PMAI hooks 标记区。已有 I-mini 消费仓缺 Codex hooks 时，在项目根运行 `bash ~/.pmai/scripts/install-codex-hooks.sh` 补装；缺 OpenCode commands 时运行 `bash ~/.pmai/scripts/install-opencode-commands.sh --project "$PWD"` 补装。Codex 首次看到新增 hook 时可能要求信任确认。
 
 ---
 

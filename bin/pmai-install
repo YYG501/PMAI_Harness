@@ -16,6 +16,9 @@ PMAI_HOME="${PMAI_HOME:-$HOME/.pmai}"
 CLAUDE_SKILLS="$HOME/.claude/skills"
 CODEX_SKILLS="${CODEX_HOME:-$HOME/.codex}/skills"
 CODEX_PROMPTS="${CODEX_HOME:-$HOME/.codex}/prompts"
+KIMI_CODE_HOME="${KIMI_CODE_HOME:-$HOME/.kimi-code}"
+KIMI_SKILLS="$KIMI_CODE_HOME/skills"
+KIMI_CONFIG="$KIMI_CODE_HOME/config.toml"
 OPENCODE_CONFIG_DIR="${OPENCODE_CONFIG_DIR:-$HOME/.config/opencode}"
 SKILL_PREFIX="pmai-"
 
@@ -28,6 +31,7 @@ Env override:
   PMAI_REMOTE=<git-url>       # Override default github remote
   PMAI_HOME=<path>            # Override default ~/.pmai/
   CODEX_HOME=<path>           # Override default ~/.codex
+  KIMI_CODE_HOME=<path>       # Override default ~/.kimi-code
   OPENCODE_CONFIG_DIR=<path>  # Override default ~/.config/opencode
 
 Notes:
@@ -135,7 +139,7 @@ fi
 echo "→ git clone $REMOTE → $PMAI_HOME"
 git clone "$REMOTE" "$PMAI_HOME"
 echo "→ Symlink skills to host skill directories"
-for dst_skills in "$CLAUDE_SKILLS" "$CODEX_SKILLS"; do
+for dst_skills in "$CLAUDE_SKILLS" "$CODEX_SKILLS" "$KIMI_SKILLS"; do
   remove_managed_skill_symlinks "$dst_skills"
   install_skills "$PMAI_HOME/skills" "$dst_skills"
 done
@@ -145,6 +149,10 @@ echo "   $CODEX_PROMPTS: $legacy_prompt_count legacy prompt file(s) removed"
 echo "→ Install OpenCode slash commands"
 PMAI_HOME="$PMAI_HOME" OPENCODE_CONFIG_DIR="$OPENCODE_CONFIG_DIR" \
   bash "$PMAI_HOME/scripts/install-opencode-commands.sh" --global
+echo "→ Install Kimi Code native hooks"
+if ! KIMI_CODE_HOME="$KIMI_CODE_HOME" python3 "$PMAI_HOME/scripts/manage-kimi-hooks.py" install --config "$KIMI_CONFIG"; then
+  echo "⚠️  Kimi Code hooks 安装失败；skills 仍可用，修复 config.toml 后运行 pmai doctor。" >&2
+fi
 VER=$(cat "$PMAI_HOME/VERSION" 2>/dev/null || echo unknown)
 echo ""
 echo "═══════════════════════════════════════"
@@ -152,6 +160,7 @@ echo "✅ PMAI v$VER installed globally"
 echo "   ~/.pmai/         framework source"
 echo "   ~/.claude/skills/pmai-*   skill exposure"
 echo "   ~/.codex/skills/pmai-*    Codex native skill exposure"
+echo "   $KIMI_SKILLS/pmai-*       Kimi Code native /skill:pmai-* exposure"
 echo "   $OPENCODE_CONFIG_DIR/commands/pmai-*.md OpenCode slash commands"
 echo "═══════════════════════════════════════"
 

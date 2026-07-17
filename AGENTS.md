@@ -1,8 +1,8 @@
 # PM-AI-Workflow
 
-## Codex 入口
+## Agent 入口
 
-本文件是 Codex / OpenAI agent 打开本生成器仓库时的项目入口。请先读本文件，再读 `CLAUDE.md`、`PRODUCT.md`、`RUNTIME.md`。
+本文件是 Codex / Kimi Code 等 agent 打开本生成器仓库时的项目入口。请先读本文件，再读 `CLAUDE.md`、`PRODUCT.md`、`RUNTIME.md`。
 
 默认用中文和 PM 沟通；只有用户明确要求英文或引用原文时才切换。
 
@@ -23,8 +23,10 @@
 
 ## Host Mapping
 
-- `CLAUDE.md` 里写的「Claude Code」「Claude host」「驱动 Claude」，在 Codex 会话中等价理解为当前 Codex 主控。
-- `/pmai-*` 是 PMAI 的用户命令名。Codex 通过原生 skill 列表调用对应的 `$pmai-*`；不再生成 `~/.codex/prompts/pmai-*.md`，避免 Codex Desktop 出现重复的 `prompts:pmai-*` 入口。如果当前 runtime 没有 skill UI，再按本仓 `skills/<command-without-pmai-prefix>/SKILL.md` 的步骤执行。
+- `CLAUDE.md` 里写的「Claude Code」「Claude host」「驱动 Claude」，在 Codex / Kimi Code 会话中等价理解为当前主控。
+- `/pmai-*` 是跨宿主文档中的 PMAI 命令名。Codex 通过原生 `$pmai-*` skill 调用；Kimi Code 使用原生命令 `/skill:pmai-*`，例如 `/skill:pmai-build`。PMAI 不为 Kimi 模拟 `/pmai-*` slash command。
+- 在本生成器仓中，即使 Kimi 原生命令先加载了已安装的 `$KIMI_CODE_HOME/skills/pmai-*`，也必须重新完整读取本 checkout 的 `skills/<command-without-pmai-prefix>/SKILL.md` 并按本 checkout 执行，不能让旧安装副本覆盖正在开发的框架源。
+- Codex 不再生成 `~/.codex/prompts/pmai-*.md`，避免 Desktop 出现重复的 `prompts:pmai-*` 入口。如果当前 runtime 没有 skill UI，再按本仓 `skills/<command-without-pmai-prefix>/SKILL.md` 的步骤执行。
 - 如果 skill 目录名本身带 `pmai-` 前缀，例如 `/pmai-upgrade`，对应 `skills/pmai-upgrade/SKILL.md`。
 - skill 内引用 `_shared/...` 时，从本仓 `skills/_shared/...` 读取。
 - 需要调用脚本时，优先用本仓 checkout 内的 `scripts/`、`bin/`、`hooks/`，不要默认改用已安装的 `~/.pmai/`。
@@ -33,7 +35,7 @@
 
 ### 1. 协同改造本框架仓
 
-Codex 在本仓工作时，按普通软件项目方式协同：
+Codex / Kimi Code 在本仓工作时，按普通软件项目方式协同：
 
 1. 先确认 `git status --short --branch`，保护用户已有改动。
 2. 读相关真相源：产品取舍读 `PRODUCT.md`，当前进度读 `RUNTIME.md`，框架开发规则读 `CLAUDE.md`。
@@ -55,14 +57,14 @@ PM 在本生成器仓里让 Codex 起新业务项目时，等价执行 `/pmai-in
    如果 PM 明确同意接住已有目录，再加 `--allow-existing`。
 
 4. 脚本返回 0 只代表骨架完成。继续按 skill 写 `PRODUCT.md` 一句话定位并输出唯一 Next Up：`/pmai-design`。不得创建代码、prototype、mockup 看板或 `project.yml`。
-5. C/D 步完成后，消费仓根目录应生成 `AGENTS.md`、`CLAUDE.md` 和 `.codex/hooks.json`。后续在消费仓继续工作时，以消费仓自己的 `AGENTS.md` 为入口；Codex 首次启用项目 hooks 时可能要求信任确认。
+5. C/D 步完成后，消费仓根目录应生成 `AGENTS.md`、`CLAUDE.md` 和 `.codex/hooks.json`。后续在消费仓继续工作时，以消费仓自己的 `AGENTS.md` 为入口；Codex 使用项目 hooks，Kimi Code 使用 `pmai install/upgrade` 写入的用户级原生 hooks 分发器。
 
 ### 3. 在消费仓中使用 PMAI
 
-消费仓的 Codex 入口由 `templates/AGENTS.md.tmpl` 生成。进入消费仓后：
+消费仓的通用 agent 入口由 `templates/AGENTS.md.tmpl` 生成。进入消费仓后：
 
 1. 先读消费仓根 `AGENTS.md`，再读 `CLAUDE.md`。
-2. `/pmai-*` 命令按消费仓 `AGENTS.md` 解析到 `~/.pmai/skills/...`。
+2. Codex 按 `$pmai-*` 调用；Kimi Code 按 `/skill:pmai-*` 调用。两者最终都执行 `~/.pmai/skills/...` 的同一权威 Skill。
 3. 需要脚本时走 `PMAI_HOME` 或 `~/.pmai`，不要把 framework 源资产复制进消费仓；`.codex/hooks.json` 只是 host 配置，hook 命令仍指向 `~/.pmai`。
 4. 消费仓中不要再跑 `/pmai-init-project`；起模块工作走 `/pmai-design`。首个可建造 design 定稿时生成 `.pm-workflow/project.yml`，推进走 `/pmai-build`，`/pmai-build-close` 仅用于兼容恢复。
 
@@ -74,7 +76,7 @@ PM 在本生成器仓里让 Codex 起新业务项目时，等价执行 `/pmai-in
 4. 手工编辑用 `apply_patch`，保持改动聚焦，不做无关重构。
 5. 优先运行 targeted test，再按风险运行 `bash tests/run-all.sh`。
 
-## Codex Runtime Fallback
+## Runtime Fallback
 
 - AskUserQuestion 不可用时，用简短编号问题向 PM 收集答案；没拿到明确答案前不要代替 PM 拍板。
 - Claude Code subagent 不可用时，不要假装已经完整跑过 subagent review；应说明 runtime 限制，并用可验证的本地检查补位。

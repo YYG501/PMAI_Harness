@@ -6,7 +6,7 @@
 #   2. VERSION file is valid semver
 #   3. All expected skills present (~/.pmai/skills/*)
 #   4. All symlinks under host skill dirs resolve (no dangling)
-#   5. OpenCode slash commands installed and aligned
+#   5. OpenCode slash commands and Kimi Code native host surface aligned
 #   6. ~/.pmai/ working tree clean (or warn if dirty — affects consumers)
 #   7. Remote reachable (short network check, non-fatal)
 #   8. Claude Code Bash 工具子进程 PATH 能调到 pmai（zsh 用户常踩盲点）
@@ -18,6 +18,9 @@ set -uo pipefail
 PMAI_HOME="${PMAI_HOME:-$HOME/.pmai}"
 CLAUDE_SKILLS="$HOME/.claude/skills"
 CODEX_SKILLS="${CODEX_HOME:-$HOME/.codex}/skills"
+KIMI_CODE_HOME="${KIMI_CODE_HOME:-$HOME/.kimi-code}"
+KIMI_SKILLS="$KIMI_CODE_HOME/skills"
+KIMI_CONFIG="$KIMI_CODE_HOME/config.toml"
 OPENCODE_CONFIG_DIR="${OPENCODE_CONFIG_DIR:-$HOME/.config/opencode}"
 OPENCODE_COMMANDS="$OPENCODE_CONFIG_DIR/commands"
 SKILL_PREFIX="pmai-"
@@ -38,6 +41,7 @@ Usage:
 Checks global PMAI install integrity:
   - ~/.pmai source, VERSION, expected skills
   - ~/.claude/skills/pmai-* and ~/.codex/skills/pmai-* exposure drift and dangling symlinks
+  - $KIMI_CODE_HOME/skills/pmai-* native /skill:pmai-* exposure and PMAI-managed hooks
   - ~/.config/opencode/commands/pmai-*.md OpenCode slash command exposure
   - working tree, remote reachability, Claude Code bash PATH
   - optional gstack/browser readiness
@@ -310,6 +314,60 @@ check_opencode_cli() {
   fi
 }
 
+find_kimi_bin() {
+  local kimi_bin
+  kimi_bin=$(command -v kimi 2>/dev/null || true)
+  if [ -z "$kimi_bin" ] && [ -x "$KIMI_CODE_HOME/bin/kimi" ]; then
+    kimi_bin="$KIMI_CODE_HOME/bin/kimi"
+  fi
+  echo "$kimi_bin"
+}
+
+check_kimi_host() {
+  local kimi_bin manager_out manager_rc
+
+  echo ""
+  echo "─── 4d. Kimi Code native host ───"
+  kimi_bin=$(find_kimi_bin)
+  if [ -n "$kimi_bin" ]; then
+    ok "Kimi Code command found: $kimi_bin"
+  else
+    warn "Kimi Code command not found — native /skill:pmai-* exposure 已安装，但本机还不能直接运行 Kimi Code"
+  fi
+
+  if [ ! -f "$KIMI_CONFIG" ]; then
+    warn "Kimi config 不存在：${KIMI_CONFIG}；先启动一次 Kimi Code，再运行 pmai doctor 安装原生 hooks"
+    return
+  fi
+
+  if [ -n "$kimi_bin" ]; then
+    if "$kimi_bin" doctor config "$KIMI_CONFIG" >/dev/null 2>&1; then
+      ok "Kimi config.toml is valid"
+    else
+      warn "Kimi config.toml 无法通过 kimi doctor；未自动改写 hooks"
+      return
+    fi
+  fi
+
+  if [ ! -f "$PMAI_HOME/scripts/manage-kimi-hooks.py" ]; then
+    fail "Kimi hook manager 缺失：$PMAI_HOME/scripts/manage-kimi-hooks.py"
+    return
+  fi
+
+  manager_out=$(KIMI_CODE_HOME="$KIMI_CODE_HOME" python3 "$PMAI_HOME/scripts/manage-kimi-hooks.py" check --config "$KIMI_CONFIG" 2>&1)
+  manager_rc=$?
+  if [ "$manager_rc" = "0" ]; then
+    ok "Kimi Code PMAI-managed hooks match current framework"
+    return
+  fi
+  if [ "$manager_rc" = "1" ] && \
+    KIMI_CODE_HOME="$KIMI_CODE_HOME" python3 "$PMAI_HOME/scripts/manage-kimi-hooks.py" install --config "$KIMI_CONFIG" >/dev/null 2>&1; then
+    ok "Kimi Code PMAI-managed hooks repaired"
+    return
+  fi
+  fail "Kimi Code hooks 未就绪：$manager_out"
+}
+
 MISSING=()
 for sk in "${EXPECTED_SKILLS[@]}"; do
   if [ ! -d "$PMAI_HOME/skills/$sk" ]; then
@@ -324,8 +382,10 @@ fi
 
 check_skill_exposure_dir "Claude Code" "$CLAUDE_SKILLS" "~/.claude/skills"
 check_skill_exposure_dir "Codex" "$CODEX_SKILLS" "~/.codex/skills"
+check_skill_exposure_dir "Kimi Code" "$KIMI_SKILLS" "\$KIMI_CODE_HOME/skills"
 check_opencode_command_dir "$OPENCODE_COMMANDS" "~/.config/opencode/commands"
 check_opencode_cli
+check_kimi_host
 
 # 5. Working tree clean
 echo ""

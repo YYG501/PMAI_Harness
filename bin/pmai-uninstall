@@ -9,6 +9,8 @@
 #   ~/.codex/skills/pmai-*        global Codex skill symlinks
 #   ~/.codex/skills/_shared       (if it's a symlink we created)
 #   ~/.codex/prompts/pmai-*.md    legacy Codex slash prompt files（兼容清理）
+#   ~/.kimi-code/skills/pmai-*    Kimi Code native skill symlinks
+#   ~/.kimi-code/config.toml      只移除 PMAI 托管的 Kimi hooks block
 #   ~/.config/opencode/commands/pmai-*.md OpenCode slash command files
 #
 # What is NOT removed:
@@ -27,6 +29,9 @@ PMAI_STATE="${PMAI_STATE:-$HOME/.pmai-state}"
 CLAUDE_SKILLS="$HOME/.claude/skills"
 CODEX_SKILLS="${CODEX_HOME:-$HOME/.codex}/skills"
 CODEX_PROMPTS="${CODEX_HOME:-$HOME/.codex}/prompts"
+KIMI_CODE_HOME="${KIMI_CODE_HOME:-$HOME/.kimi-code}"
+KIMI_SKILLS="$KIMI_CODE_HOME/skills"
+KIMI_CONFIG="$KIMI_CODE_HOME/config.toml"
 OPENCODE_CONFIG_DIR="${OPENCODE_CONFIG_DIR:-$HOME/.config/opencode}"
 OPENCODE_COMMANDS="$OPENCODE_CONFIG_DIR/commands"
 SKILL_PREFIX="pmai-"
@@ -47,6 +52,8 @@ Removed:
   ~/.codex/skills/pmai-*
   ~/.codex/skills/_shared  (if pmai-managed symlink)
   ~/.codex/prompts/pmai-*.md (legacy cleanup)
+  ~/.kimi-code/skills/pmai-*
+  ~/.kimi-code/config.toml 中的 PMAI managed Kimi Code hooks block
   ~/.config/opencode/commands/pmai-*.md
 EOF
 }
@@ -157,10 +164,15 @@ CODEX_SYMLINKS=()
 for s in "$CODEX_SKILLS"/${SKILL_PREFIX}* "$CODEX_SKILLS/_shared"; do
   [ -L "$s" ] && CODEX_SYMLINKS+=("$s")
 done
-SYMLINKS=("${CLAUDE_SYMLINKS[@]}" "${CODEX_SYMLINKS[@]}")
+KIMI_SYMLINKS=()
+for s in "$KIMI_SKILLS"/${SKILL_PREFIX}* "$KIMI_SKILLS/_shared"; do
+  [ -L "$s" ] && KIMI_SYMLINKS+=("$s")
+done
+SYMLINKS=("${CLAUDE_SYMLINKS[@]}" "${CODEX_SYMLINKS[@]}" "${KIMI_SYMLINKS[@]}")
 SYMLINK_COUNT=${#SYMLINKS[@]}
 CLAUDE_SYMLINK_COUNT=${#CLAUDE_SYMLINKS[@]}
 CODEX_SYMLINK_COUNT=${#CODEX_SYMLINKS[@]}
+KIMI_SYMLINK_COUNT=${#KIMI_SYMLINKS[@]}
 CODEX_PROMPT_FILES=()
 for s in "$CODEX_PROMPTS"/${SKILL_PREFIX}*.md; do
   [ -e "$s" ] && CODEX_PROMPT_FILES+=("$s")
@@ -171,6 +183,10 @@ for s in "$OPENCODE_COMMANDS"/${SKILL_PREFIX}*.md; do
   [ -e "$s" ] && OPENCODE_COMMAND_FILES+=("$s")
 done
 OPENCODE_COMMAND_COUNT=${#OPENCODE_COMMAND_FILES[@]}
+KIMI_HOOKS_PRESENT=0
+if [ -f "$KIMI_CONFIG" ] && grep -q '^# >>> PMAI managed Kimi Code hooks >>>$' "$KIMI_CONFIG" 2>/dev/null; then
+  KIMI_HOOKS_PRESENT=1
+fi
 echo "  ✓ $CLAUDE_SKILLS/${SKILL_PREFIX}* ($CLAUDE_SYMLINK_COUNT symlinks)"
 if [ "$CLAUDE_SYMLINK_COUNT" -gt 0 ] && [ "$CLAUDE_SYMLINK_COUNT" -le 10 ]; then
   for s in "${CLAUDE_SYMLINKS[@]}"; do
@@ -192,6 +208,22 @@ elif [ "$CODEX_SYMLINK_COUNT" -gt 10 ]; then
     echo "      - $(basename "$s")"
   done
   echo "      … (+$((CODEX_SYMLINK_COUNT - 5)) more)"
+fi
+echo "  ✓ $KIMI_SKILLS/${SKILL_PREFIX}* ($KIMI_SYMLINK_COUNT symlinks)"
+if [ "$KIMI_SYMLINK_COUNT" -gt 0 ] && [ "$KIMI_SYMLINK_COUNT" -le 10 ]; then
+  for s in "${KIMI_SYMLINKS[@]}"; do
+    echo "      - $(basename "$s")"
+  done
+elif [ "$KIMI_SYMLINK_COUNT" -gt 10 ]; then
+  for s in "${KIMI_SYMLINKS[@]:0:5}"; do
+    echo "      - $(basename "$s")"
+  done
+  echo "      … (+$((KIMI_SYMLINK_COUNT - 5)) more)"
+fi
+if [ "$KIMI_HOOKS_PRESENT" = "1" ]; then
+  echo "  ✓ $KIMI_CONFIG (remove PMAI-managed hooks only)"
+else
+  echo "  - $KIMI_CONFIG (no PMAI-managed hooks)"
 fi
 echo "  ✓ $CODEX_PROMPTS/${SKILL_PREFIX}*.md ($CODEX_PROMPT_COUNT legacy prompt files)"
 if [ "$CODEX_PROMPT_COUNT" -gt 0 ] && [ "$CODEX_PROMPT_COUNT" -le 10 ]; then
@@ -225,7 +257,7 @@ echo "  - 消费仓内 .claude/settings.json / .codex/hooks.json / .opencode/com
 echo ""
 echo "════════════════════════════════════════════════════════════"
 
-if [ "$PMAI_PRESENT" = "0" ] && [ "$SYMLINK_COUNT" = "0" ] && [ "$CODEX_PROMPT_COUNT" = "0" ] && [ "$OPENCODE_COMMAND_COUNT" = "0" ] && [ "$STATE_PRESENT" = "0" ]; then
+if [ "$PMAI_PRESENT" = "0" ] && [ "$SYMLINK_COUNT" = "0" ] && [ "$CODEX_PROMPT_COUNT" = "0" ] && [ "$OPENCODE_COMMAND_COUNT" = "0" ] && [ "$KIMI_HOOKS_PRESENT" = "0" ] && [ "$STATE_PRESENT" = "0" ]; then
   echo "⚠️  没找到 PMAI 全局安装。已经卸载或从未安装。"
   exit 0
 fi
@@ -248,6 +280,18 @@ REMOVED_OPENCODE_COMMAND_COUNT=0
 for s in "${OPENCODE_COMMAND_FILES[@]}"; do
   rm -f "$s" && REMOVED_OPENCODE_COMMAND_COUNT=$((REMOVED_OPENCODE_COMMAND_COUNT + 1))
 done
+REMOVED_KIMI_HOOKS=0
+KIMI_HOOK_MANAGER="$PMAI_HOME/scripts/manage-kimi-hooks.py"
+if [ ! -f "$KIMI_HOOK_MANAGER" ]; then
+  KIMI_HOOK_MANAGER="$(cd "$(dirname "$0")/.." && pwd)/scripts/manage-kimi-hooks.py"
+fi
+if [ "$KIMI_HOOKS_PRESENT" = "1" ] && [ -f "$KIMI_HOOK_MANAGER" ]; then
+  if KIMI_CODE_HOME="$KIMI_CODE_HOME" python3 "$KIMI_HOOK_MANAGER" remove --config "$KIMI_CONFIG" >/dev/null 2>&1; then
+    REMOVED_KIMI_HOOKS=1
+  else
+    echo "⚠️  未能从 $KIMI_CONFIG 移除 PMAI Kimi hooks；保留该文件供手动检查。" >&2
+  fi
+fi
 # 老实体目录残留（罕见 — install 路径几乎不会创建实体）警告不删
 for s in "$CLAUDE_SKILLS"/${SKILL_PREFIX}* "$CLAUDE_SKILLS/_shared"; do
   if [ -d "$s" ] && [ ! -L "$s" ]; then
@@ -255,6 +299,11 @@ for s in "$CLAUDE_SKILLS"/${SKILL_PREFIX}* "$CLAUDE_SKILLS/_shared"; do
   fi
 done
 for s in "$CODEX_SKILLS"/${SKILL_PREFIX}* "$CODEX_SKILLS/_shared"; do
+  if [ -d "$s" ] && [ ! -L "$s" ]; then
+    echo "⚠️  $s 是实体目录不是 symlink，跳过（手动清）" >&2
+  fi
+done
+for s in "$KIMI_SKILLS"/${SKILL_PREFIX}* "$KIMI_SKILLS/_shared"; do
   if [ -d "$s" ] && [ ! -L "$s" ]; then
     echo "⚠️  $s 是实体目录不是 symlink，跳过（手动清）" >&2
   fi
@@ -281,8 +330,10 @@ fi
 echo "   host skill symlinks removed ($REMOVED_COUNT total)"
 echo "     ~/.claude/skills/pmai-* ($CLAUDE_SYMLINK_COUNT)"
 echo "     ~/.codex/skills/pmai-*  ($CODEX_SYMLINK_COUNT)"
+echo "     $KIMI_SKILLS/pmai-* ($KIMI_SYMLINK_COUNT)"
 echo "   legacy Codex slash prompts removed ($REMOVED_PROMPT_COUNT)"
 echo "   OpenCode slash commands removed ($REMOVED_OPENCODE_COMMAND_COUNT)"
+echo "   Kimi Code managed hooks removed ($REMOVED_KIMI_HOOKS)"
 echo "═══════════════════════════════════════"
 echo "Note: 项目里遗留的实体副本不动。"
 echo "      用 'pmai uninstall --local <dir>' 单独清理。"

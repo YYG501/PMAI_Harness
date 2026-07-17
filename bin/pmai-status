@@ -12,6 +12,9 @@ set -uo pipefail
 PMAI_HOME="${PMAI_HOME:-$HOME/.pmai}"
 CLAUDE_SKILLS="$HOME/.claude/skills"
 CODEX_SKILLS="${CODEX_HOME:-$HOME/.codex}/skills"
+KIMI_CODE_HOME="${KIMI_CODE_HOME:-$HOME/.kimi-code}"
+KIMI_SKILLS="$KIMI_CODE_HOME/skills"
+KIMI_CONFIG="$KIMI_CODE_HOME/config.toml"
 OPENCODE_CONFIG_DIR="${OPENCODE_CONFIG_DIR:-$HOME/.config/opencode}"
 OPENCODE_COMMANDS="$OPENCODE_CONFIG_DIR/commands"
 SKILL_PREFIX="pmai-"
@@ -25,7 +28,8 @@ Usage:
 
 Shows global PMAI install state:
   - source location, version, branch, remote
-  - skill exposure count and drift against current ~/.pmai/skills for Claude and Codex
+  - skill exposure count and drift against current ~/.pmai/skills for Claude, Codex, and Kimi Code
+  - Kimi Code CLI readiness and PMAI-managed native hooks
   - OpenCode slash command count and drift against current ~/.pmai/skills
   - local install note
 EOF
@@ -159,6 +163,37 @@ report_opencode_command_exposure() {
   fi
 }
 
+report_kimi_host() {
+  local kimi_bin manager_rc
+
+  kimi_bin=$(command -v kimi 2>/dev/null || true)
+  if [ -z "$kimi_bin" ] && [ -x "$KIMI_CODE_HOME/bin/kimi" ]; then
+    kimi_bin="$KIMI_CODE_HOME/bin/kimi"
+  fi
+  if [ -n "$kimi_bin" ]; then
+    echo "  Kimi Code CLI:                             ✅ $kimi_bin"
+  else
+    echo "  Kimi Code CLI:                             ⚠️  not found (skills can still be installed)"
+  fi
+  echo "  Kimi native command:                       /skill:pmai-<name>"
+
+  if [ ! -f "$KIMI_CONFIG" ]; then
+    echo "  Kimi PMAI hooks:                           ⚠️  config.toml not found"
+    return
+  fi
+  if [ ! -f "$PMAI_HOME/scripts/manage-kimi-hooks.py" ]; then
+    echo "  Kimi PMAI hooks:                           ⚠️  manager missing"
+    return
+  fi
+  KIMI_CODE_HOME="$KIMI_CODE_HOME" python3 "$PMAI_HOME/scripts/manage-kimi-hooks.py" check --config "$KIMI_CONFIG" >/dev/null 2>&1
+  manager_rc=$?
+  if [ "$manager_rc" = "0" ]; then
+    echo "  Kimi PMAI hooks:                           ✅ matches current framework"
+  else
+    echo "  Kimi PMAI hooks:                           ⚠️  missing/drifted (run: pmai doctor)"
+  fi
+}
+
 echo "════════════════════════════════════════════════════════════"
 echo "  PMAI Status"
 echo "════════════════════════════════════════════════════════════"
@@ -214,6 +249,11 @@ echo "─── Skill exposure ───"
 report_skill_exposure "Claude Code" "$CLAUDE_SKILLS" "~/.claude/skills"
 echo ""
 report_skill_exposure "Codex" "$CODEX_SKILLS" "~/.codex/skills"
+echo ""
+report_skill_exposure "Kimi Code" "$KIMI_SKILLS" "\$KIMI_CODE_HOME/skills"
+echo ""
+echo "─── Kimi Code native host ───"
+report_kimi_host
 echo ""
 echo "─── OpenCode slash commands ───"
 report_opencode_command_exposure "$OPENCODE_COMMANDS" "~/.config/opencode/commands"

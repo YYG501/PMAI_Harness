@@ -159,7 +159,14 @@ def resolve_profile(
     }
 
 
-CURRENT_HOSTS = {"claude-code", "codex", "cursor-agent", "opencode", "unknown"}
+CURRENT_HOSTS = {
+    "claude-code",
+    "codex",
+    "cursor-agent",
+    "kimi-code",
+    "opencode",
+    "unknown",
+}
 
 
 def profile_matches_current_host(profile: dict[str, Any], current_host: str) -> bool:

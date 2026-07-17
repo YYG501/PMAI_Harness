@@ -18,6 +18,8 @@ PM-AI-Workflow 生成器仓的演进记录。本文件**只记影响下游业务
 
 ## 未发布
 
+- `feat(kimi)`: **Kimi Code 成为 PMAI 一等主控，并完全使用宿主原生 Skill 入口。** `pmai install/upgrade` 现在把公开 Skill 暴露到 `$KIMI_CODE_HOME/skills/pmai-*`，Kimi 中直接输入 `/skill:pmai-init-project`、`/skill:pmai-design`、`/skill:pmai-build` 等命令，不模拟 `/pmai-*` slash command。生成器仓与消费仓的 `AGENTS.md` 明确三条使用链路；当前主控识别新增 `kimi-code`，会排除同宿主外部 profile，但本轮不新增 Kimi 外部 builder。Kimi 只有用户级 `config.toml` hooks，因此新增带标记区的原生 hooks 管理器和按仓库类型路由的全局分发器：普通仓 no-op，生成器仓接文档/review 护栏，消费仓接写保护/review guard；安装、升级、卸载、doctor、status 全链路同步管理且保留用户原配置。
+
 - `fix(build)`: **把 PM 看原型期间的快速修改与定稿后的完整验收拆成两条执行车道。** 真实消费仓会话表明耗时主要来自每轮小改都重复 production build、完整浏览器验收、dev server 恢复和外部 builder 启动，而不是 Next.js 编译本身。acceptance profile schema v2 现在分别输出 `iteration_checks / final_checks`；build contract v4 新增 PM `request-finalization` 硬门、两层 evidence 和 `resume-iteration`，定稿前机器拒绝 final evidence 与 `review-ready`。active build 的文案、布局、按钮和局部交互默认由当前会话直接处理，只做热更新、typecheck 与当前页面走查，复用同一 dev server / 浏览器并先回“已修改，可刷新查看”；外部 builder 只用于首次实现或大型重构。PM 明确定稿后，`final-validation.py` 才在冻结 commit 的 detached worktree 运行一次 project.yml test/typecheck/build，避免污染 active 构建缓存；`build-timing.py` 记录分阶段耗时和 time-to-preview，2–5 / 5–10 分钟只作预警。
 
 - `fix(build)`: **给 prototype 增加持久的实现深度合同，阻止 AI 按最终规格静默建设真实系统。** `spec.md` / PRD 继续定义最终产品语义，不另造“原型规格”；`acceptance-profile.py` 根据 `project.type` 编译 `delivery_policy`，新 build contract v3 固化 policy 与 hash。`/pmai-build` 在首次实现、每轮反馈修改和中断恢复时都把实现深度置于规格之前重新交给构建工具：原型的用户可见路径与交互做真，数据库、鉴权、外部集成、异步任务等底层默认模拟。新增不可 exception 的 `prototype-boundary` required check 与 `prototype-boundary.py`，候选定稿前扫描批准范围外改动、数据库 migration、生产基础设施、密钥配置、真实鉴权和外部副作用信号，并要求 AI 明确完成 diff 语义复核；模拟底层能力不再被原型 coverage 误判为漏实现。旧 v2 合同继续用于中断恢复兼容。

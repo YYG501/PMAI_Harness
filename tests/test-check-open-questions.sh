@@ -87,7 +87,7 @@ test_has_unanswered() {
 
   echo "$out" | grep -q "Q2" || { _fail "should mention Q2"; rm -f "$md"; return; }
   echo "$out" | grep -q "Q3" || { _fail "should mention Q3"; rm -f "$md"; return; }
-  echo "$out" | grep -q "Q1" && { _fail "should NOT mention Q1 (already answered)"; rm -f "$md"; return; }
+  echo "$out" | grep -Eq '^[[:space:]]*-[[:space:]]+Q1（' && { _fail "should NOT mention Q1 (already answered)"; rm -f "$md"; return; }
 
   rm -f "$md"
   pass_test

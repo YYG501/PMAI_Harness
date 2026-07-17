@@ -120,10 +120,10 @@ python3 "$PMAI_HOME/scripts/acceptance-profile.py" "${PROFILE_ARGS[@]}" > "$PROF
 恢复既有 v2 / v3 / v4 build 时，沿用合同里已确认的工作环境和构建工具，不重复确认。新 build 才执行本节：
 
 1. **推荐工作环境**：默认推荐“独立环境”；若当前已经是本模块有效的 `build-*` 环境，则推荐“继续当前独立环境”。PM 也可以明确改为“当前环境”。
-2. **识别当前主控并推荐构建工具**：把当前 runtime 映射成 `claude-code / codex / opencode / cursor-agent`；无法识别时用 `unknown`。外部构建工具 profile 必须和当前主控不同，不能让 Codex 主控再启动 Codex，也不能让 Claude Code / OpenCode 主控把自己列为外部工具；“当前会话直接构建”不是外部 profile，始终作为有效选项。按项目级类型、消费仓配置和本机可用性生成推荐与完整可选列表：
+2. **识别当前主控并推荐构建工具**：把当前 runtime 映射成 `claude-code / codex / kimi-code / opencode / cursor-agent`；无法识别时用 `unknown`。外部构建工具 profile 必须和当前主控不同，不能让 Codex 主控再启动 Codex，也不能让 Claude Code / Kimi Code / OpenCode 主控把自己列为外部工具；“当前会话直接构建”不是外部 profile，始终作为有效选项。Kimi Code 本轮只作为主控，不自动新增 Kimi 外部 builder profile。按项目级类型、消费仓配置和本机可用性生成推荐与完整可选列表：
 
    ```bash
-   CURRENT_HOST="<claude-code | codex | opencode | cursor-agent | unknown>"
+   CURRENT_HOST="<claude-code | codex | kimi-code | opencode | cursor-agent | unknown>"
    RECOMMENDED_BUILDER_JSON=$(python3 "$PMAI_HOME/scripts/builder-profile.py" recommend \
      "$REPO_ROOT/.pm-workflow/config.yml" \
      --project-definition "$REPO_ROOT/.pm-workflow/project.yml" \

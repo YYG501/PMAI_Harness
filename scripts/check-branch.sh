@@ -20,7 +20,7 @@ import sys, json
 try:
     data = json.load(sys.stdin)
     ti = data.get('tool_input', data)
-    fp = ti.get('file_path', '')
+    fp = ti.get('file_path', '') or ti.get('path', '')
     old = ti.get('old_string', '')
     new = ti.get('new_string', '')
     content = ti.get('content', '')  # Write tool
@@ -117,6 +117,7 @@ if [ "$SCOPE" = "__OUTSIDE_REPO__" ]; then
     *)
       reason="写仓库外的路径被拒绝：${FILE_PATH}。业务改动必须在 main 或 build worktree 内进行。如需写临时文件请用 /tmp/ 或 /var/tmp/。"
       reason_escaped=$(echo "$reason" | python3 -c "import sys,json; print(json.dumps(sys.stdin.read().strip())[1:-1])")
+      echo "$reason" >&2
       printf '{"decision": "deny", "reason": "%s"}\n' "$reason_escaped"
       exit 2
       ;;
@@ -158,6 +159,7 @@ fi
 # --- Helper: deny with reason ---
 deny() {
   local reason="$1"
+  echo "$reason" >&2
   reason=$(echo "$reason" | python3 -c "import sys,json; print(json.dumps(sys.stdin.read().strip())[1:-1])")
   printf '{"decision": "deny", "reason": "%s"}\n' "$reason"
   exit 2
@@ -223,7 +225,7 @@ if [ "$BRANCH" = "main" ] || [ "$BRANCH" = "master" ]; then
 
   case "$REL_PATH" in
     # 框架元数据：init-project 和框架更新时需要写
-    .claude/*|.codex/hooks.json|.opencode/*|opencode.json|AGENTS.md|CLAUDE.md|.gitignore|README.md)
+    .claude/*|.codex/hooks.json|.kimi-code/*|.opencode/*|opencode.json|AGENTS.md|CLAUDE.md|.gitignore|README.md)
       MAIN_WRITE_ALLOWED=true
       ;;
     # 项目脊柱：PM 和 AI 每次进项目都要认的主上下文，放仓库根目录。

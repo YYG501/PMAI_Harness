@@ -12,10 +12,11 @@
 #   T5: pmai-status --help 只打印帮助，不执行状态扫描
 #   T6: pmai-status 报告 stale 暴露入口，提示 upgrade 重同步
 #   T7: pmai-doctor 缺 Codex 暴露入口时失败
-#   T8: install / upgrade / uninstall 覆盖 Codex skill dir + legacy prompt cleanup + OpenCode commands
+#   T8: install / upgrade / uninstall 覆盖 Codex/Kimi skill dir + legacy prompt cleanup + OpenCode commands
 #   T9: pmai-doctor 可自愈 Codex 首次空暴露目录（兼容旧 upgrader）
 #   T10: pmai-doctor 不再生成 Codex slash prompts
 #   T11: pmai-doctor 可自愈 OpenCode slash commands
+#   T12: pmai-doctor 可自愈 Kimi 原生 Skill 暴露和 managed hooks
 set -uo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -56,9 +57,11 @@ setup_fake_global_install() {
   pmai_home="$tmp/pmai"
   fake_home="$tmp/home"
 
-  mkdir -p "$pmai_home/scripts" "$fake_home/.claude/skills" "$fake_home/.codex/skills"
+  mkdir -p "$pmai_home/scripts" "$fake_home/.claude/skills" "$fake_home/.codex/skills" "$fake_home/.kimi-code/skills"
   ln -s "$SKILLS_DIR" "$pmai_home/skills"
   ln -s "$REPO_ROOT/scripts/install-opencode-commands.sh" "$pmai_home/scripts/install-opencode-commands.sh"
+  ln -s "$REPO_ROOT/scripts/manage-kimi-hooks.py" "$pmai_home/scripts/manage-kimi-hooks.py"
+  ln -s "$REPO_ROOT/scripts/kimi-hook-dispatch.sh" "$pmai_home/scripts/kimi-hook-dispatch.sh"
   cp "$VERSION_FILE" "$pmai_home/VERSION"
   git -C "$pmai_home" init -q
 
@@ -67,9 +70,11 @@ setup_fake_global_install() {
     exposed=$(exposed_name_for_skill "$name")
     ln -s "$sk" "$fake_home/.claude/skills/$exposed"
     ln -s "$sk" "$fake_home/.codex/skills/$exposed"
+    ln -s "$sk" "$fake_home/.kimi-code/skills/$exposed"
   done < <(find "$SKILLS_DIR" -mindepth 1 -maxdepth 1 -type d ! -name _shared ! -name _internal | sort)
   ln -s "$SKILLS_DIR/_shared" "$fake_home/.claude/skills/_shared"
   ln -s "$SKILLS_DIR/_shared" "$fake_home/.codex/skills/_shared"
+  ln -s "$SKILLS_DIR/_shared" "$fake_home/.kimi-code/skills/_shared"
 
   echo "$tmp|$pmai_home|$fake_home"
 }
@@ -208,12 +213,16 @@ test_doctor_requires_codex_exposure() {
 }
 
 test_lifecycle_scripts_cover_codex_skills() {
-  start_test "T8: install / upgrade / uninstall 覆盖 Codex skill dir + legacy prompt cleanup + OpenCode commands"
+  start_test "T8: install / upgrade / uninstall 覆盖 Codex/Kimi skill dir + legacy prompt cleanup + OpenCode commands"
   local file
 
   for file in "$INSTALL" "$UPGRADE" "$UNINSTALL" "$DOCTOR" "$STATUS"; do
     if ! grep -q "CODEX_SKILLS" "$file"; then
       _fail "$(basename "$file") 未声明 CODEX_SKILLS，Codex skill 暴露会漂移"
+      return
+    fi
+    if ! grep -q "KIMI_CODE_HOME" "$file" || ! grep -q "KIMI_SKILLS" "$file"; then
+      _fail "$(basename "$file") 未声明 Kimi 宿主面，原生 Skill 暴露会漂移"
       return
     fi
   done
@@ -374,6 +383,53 @@ test_doctor_repairs_opencode_commands() {
   pass_test
 }
 
+test_doctor_repairs_kimi_native_surface() {
+  start_test "T12: pmai-doctor 自愈 Kimi 原生 Skill 暴露和 managed hooks"
+  local setup tmp pmai_home fake_home out rc config
+
+  setup=$(setup_fake_global_install)
+  IFS='|' read -r tmp pmai_home fake_home <<< "$setup"
+  rm -rf "$fake_home/.kimi-code/skills"
+  mkdir -p "$fake_home/.kimi-code/skills"
+  config="$fake_home/.kimi-code/config.toml"
+  printf '%s\n' 'default_model = "demo"' > "$config"
+
+  out=$(PMAI_HOME="$pmai_home" HOME="$fake_home" KIMI_CODE_HOME="$fake_home/.kimi-code" bash "$DOCTOR" 2>&1)
+  rc=$?
+
+  if [ "$rc" != "0" ]; then
+    _fail "Kimi 宿主面为空时 doctor 应自愈并通过"
+    echo "$out" >&2
+    rm -rf "$tmp"
+    return
+  fi
+  if ! echo "$out" | grep -q "Kimi Code initial skill exposure repaired"; then
+    _fail "doctor 未报告 Kimi 原生 Skill 暴露自愈"
+    echo "$out" >&2
+    rm -rf "$tmp"
+    return
+  fi
+  if ! echo "$out" | grep -q "Kimi Code PMAI-managed hooks repaired"; then
+    _fail "doctor 未报告 Kimi managed hooks 自愈"
+    echo "$out" >&2
+    rm -rf "$tmp"
+    return
+  fi
+  if [ ! -L "$fake_home/.kimi-code/skills/pmai-build" ]; then
+    _fail "doctor 未创建 Kimi pmai-build symlink"
+    rm -rf "$tmp"
+    return
+  fi
+  if ! grep -q '^# >>> PMAI managed Kimi Code hooks >>>$' "$config"; then
+    _fail "doctor 未在 Kimi config 中安装 PMAI managed hooks"
+    rm -rf "$tmp"
+    return
+  fi
+
+  rm -rf "$tmp"
+  pass_test
+}
+
 test_doctor_exists
 test_no_stale_in_expected
 test_no_missing_in_expected
@@ -386,5 +442,6 @@ test_lifecycle_scripts_cover_codex_skills
 test_doctor_repairs_empty_codex_exposure
 test_doctor_does_not_generate_codex_prompts
 test_doctor_repairs_opencode_commands
+test_doctor_repairs_kimi_native_surface
 
 report_results "doctor-skills"

@@ -21,6 +21,9 @@ PMAI_STATE="${PMAI_STATE:-$HOME/.pmai-state}"
 CLAUDE_SKILLS="$HOME/.claude/skills"
 CODEX_SKILLS="${CODEX_HOME:-$HOME/.codex}/skills"
 CODEX_PROMPTS="${CODEX_HOME:-$HOME/.codex}/prompts"
+KIMI_CODE_HOME="${KIMI_CODE_HOME:-$HOME/.kimi-code}"
+KIMI_SKILLS="$KIMI_CODE_HOME/skills"
+KIMI_CONFIG="$KIMI_CODE_HOME/config.toml"
 OPENCODE_CONFIG_DIR="${OPENCODE_CONFIG_DIR:-$HOME/.config/opencode}"
 SKILL_PREFIX="pmai-"
 REMOTE="${PMAI_REMOTE:-git@github.com:YYG501/PMAI_Workflow.git}"
@@ -46,6 +49,7 @@ Usage:
 
 Env override:
   PMAI_REMOTE=<git-url>               # Override default github remote
+  KIMI_CODE_HOME=<path>               # Override default ~/.kimi-code
   OPENCODE_CONFIG_DIR=<path>          # Override default ~/.config/opencode
 EOF
 }
@@ -121,6 +125,7 @@ remove_managed_codex_prompts() {
 ROLLBACK_DONE=0
 STASHED=0
 OLD_HEAD=""
+KIMI_CONFIG_BACKUP=""
 
 global_rollback() {
   [ "$ROLLBACK_DONE" = "1" ] && return
@@ -133,11 +138,16 @@ global_rollback() {
     # symlink 按回退后的 ~/.pmai/skills 重建
     rebuild_symlinks "$PMAI_HOME/skills" "$CLAUDE_SKILLS" >/dev/null 2>&1 || true
     rebuild_symlinks "$PMAI_HOME/skills" "$CODEX_SKILLS" >/dev/null 2>&1 || true
+    rebuild_symlinks "$PMAI_HOME/skills" "$KIMI_SKILLS" >/dev/null 2>&1 || true
     if [ -f "$PMAI_HOME/scripts/install-opencode-commands.sh" ]; then
       PMAI_HOME="$PMAI_HOME" OPENCODE_CONFIG_DIR="$OPENCODE_CONFIG_DIR" \
         bash "$PMAI_HOME/scripts/install-opencode-commands.sh" --global >/dev/null 2>&1 || true
     fi
+    if [ -n "$KIMI_CONFIG_BACKUP" ] && [ -f "$KIMI_CONFIG_BACKUP" ]; then
+      cp -p "$KIMI_CONFIG_BACKUP" "$KIMI_CONFIG" >/dev/null 2>&1 || true
+    fi
   fi
+  [ -n "$KIMI_CONFIG_BACKUP" ] && rm -f "$KIMI_CONFIG_BACKUP"
   if [ "$STASHED" = "1" ]; then
     echo "" >&2
     echo "💡 你的本地改动还在 stash 里。恢复：" >&2
@@ -159,6 +169,13 @@ cd "$PMAI_HOME"
 OLD_VER=$(cat VERSION 2>/dev/null || echo unknown)
 OLD_HEAD=$(git rev-parse HEAD)          # 全 hash，rollback 用
 OLD_HEAD_SHORT=$(git rev-parse --short HEAD)
+
+# Kimi hooks live in a user config outside ~/.pmai. Keep an exact snapshot so
+# an upgrade rollback cannot leave hooks pointing at a reverted dispatcher.
+if [ -f "$KIMI_CONFIG" ]; then
+  KIMI_CONFIG_BACKUP=$(mktemp)
+  cp -p "$KIMI_CONFIG" "$KIMI_CONFIG_BACKUP"
+fi
 
 # A：dirty 自动 stash
 if [ -n "$(git status --porcelain)" ]; then
@@ -216,17 +233,23 @@ NEW_HEAD=$(git rev-parse --short HEAD)
 echo "→ Re-syncing skill symlinks to host skill directories"
 claude_count=$(rebuild_symlinks "$PMAI_HOME/skills" "$CLAUDE_SKILLS")
 codex_count=$(rebuild_symlinks "$PMAI_HOME/skills" "$CODEX_SKILLS")
-count=$((claude_count + codex_count))
+kimi_count=$(rebuild_symlinks "$PMAI_HOME/skills" "$KIMI_SKILLS")
+count=$((claude_count + codex_count + kimi_count))
 echo "   $CLAUDE_SKILLS: $claude_count"
 echo "   $CODEX_SKILLS: $codex_count"
+echo "   $KIMI_SKILLS: $kimi_count"
 echo "→ Re-syncing OpenCode slash commands"
 PMAI_HOME="$PMAI_HOME" OPENCODE_CONFIG_DIR="$OPENCODE_CONFIG_DIR" \
   bash "$PMAI_HOME/scripts/install-opencode-commands.sh" --global
+echo "→ Re-syncing Kimi Code native hooks"
+if ! KIMI_CODE_HOME="$KIMI_CODE_HOME" python3 "$PMAI_HOME/scripts/manage-kimi-hooks.py" install --config "$KIMI_CONFIG"; then
+  echo "⚠️  Kimi Code hooks 未能同步；skills 已同步，pmai doctor 将报告具体状态。" >&2
+fi
 
 # E：跑 doctor 自检（FAIL → 回滚；WARN 不触发）
 if [ -x "$DOCTOR_BIN" ]; then
   echo "→ Running pmai-doctor self-check..."
-  if ! "$DOCTOR_BIN" >/tmp/pmai-upgrade-doctor.log 2>&1; then
+  if ! KIMI_CODE_HOME="$KIMI_CODE_HOME" "$DOCTOR_BIN" >/tmp/pmai-upgrade-doctor.log 2>&1; then
     echo "❌ pmai-doctor 自检失败，触发回滚。日志：/tmp/pmai-upgrade-doctor.log" >&2
     tail -20 /tmp/pmai-upgrade-doctor.log >&2 || true
     global_rollback
@@ -236,6 +259,7 @@ fi
 
 # 全部成功，解除 trap
 trap - ERR
+[ -n "$KIMI_CONFIG_BACKUP" ] && rm -f "$KIMI_CONFIG_BACKUP"
 
 echo "→ Removing legacy Codex slash prompts"
 legacy_prompt_count=$(remove_managed_codex_prompts "$CODEX_PROMPTS")
@@ -255,8 +279,10 @@ else
 fi
 echo "   skill: $count symlinks re-synced"
 echo "   codex native skills: $codex_count symlinks re-synced"
+echo "   kimi native skills: $kimi_count symlinks re-synced"
 echo "   legacy codex prompts: $legacy_prompt_count files removed"
 echo "   opencode commands: re-synced"
+echo "   kimi hooks: re-synced when config.toml exists"
 echo "═══════════════════════════════════════"
 
 # stash 恢复提示

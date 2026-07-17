@@ -6,7 +6,7 @@
 
 - 日期：2026-07-17
 - 开发分支：`main`
-- 当前目标：统一生命周期继续以真实消费仓会话收口；build contract v4 已把 PM 看结果期间的快速迭代与定稿后的完整验收拆开，避免小改重复承担 production build、完整浏览器验收和服务恢复成本。
+- 当前目标：统一生命周期继续以真实消费仓会话收口；build contract v4 已拆开快速迭代与定稿验收，Kimi Code 也已按宿主原生 `/skill:pmai-*` 入口接成一等主控。
 - gstack 参考基线：`v1.58.5.0`，commit `11de390`；只参考本地 `gstack-clean` checkout，没有升级用户目录中的安装副本。
 
 ## 当前活跃模型
@@ -20,6 +20,7 @@
 - 文档语义：`spec.md` / PRD 是指导研发实现的最终目标合同；`PRODUCT-STATE.md` 描述 main 已落地现状；原型、mockup 和代码只作设计 / 实现证据。
 - design 的 `ready_to_build` 状态同时记录 approved source hash、design checkpoint 和精确目标路径；build 开工前重新编译上下文并验证 currentness，过期依据不能继续显示或进入构建。新 `.work-meta.json:build` 使用合同 v4，在 v3 实现深度合同之上增加 `iteration_checks / final_checks`、两层 evidence 和定稿请求；旧 v2/v3 合同继续用于中断恢复兼容。
 - 新 build 由 AI 在一张卡中展示推荐的工作环境、构建工具和两项的全部有效选择，PM 只确认这两项；外部工具候选排除当前主控对应的 profile，“当前会话直接构建”始终可选，没有可用外部工具时默认推荐它。项目类型和验收方案不显示。选择当前环境时，main 只放行合同声明的目标路径。
+- 主控宿主面：Claude Code 使用 `/pmai-*`，Codex 使用原生 `$pmai-*`，Kimi Code 使用原生 `/skill:pmai-*`，OpenCode 使用生成的 `/pmai-*` commands；四者消费同一份权威 Skill。Kimi 本轮只作为主控，不新增外部 builder。
 - 记忆分两层：项目事实、决定和偏好继续由消费仓现有真相源承担；个人经验保存在用户级状态目录，跨项目召回但只作建议。个人经验不进入 context pack、项目 hash 或 Git，也不能自动修改 Skill。
 
 ## 已实现
@@ -43,6 +44,7 @@
 - design、meta、mockup、spec-writing、build、build-close 与消费仓 AGENTS / CLAUDE 模板已按统一链路重构。
 - 新增 `evals/cases/*.json`、`evals/touchfiles.json` 和 `scripts/skill-eval.py`；静态案例可作为提交门，session runner / LLM judge 缺失时明确 skip，require 模式明确 fail。
 - Codex 只暴露 `~/.codex/skills/pmai-*` 原生 skills；不再生成会在 Desktop 显示为 `prompts:pmai-*` 的 custom prompts。install / upgrade 清理旧 prompt 文件，doctor / status 不再生成或检查它们；Claude Code skills 与 OpenCode commands 保持原入口。
+- Kimi Code 通过 `$KIMI_CODE_HOME/skills/pmai-*` 暴露原生 `/skill:pmai-*`；用户级 `config.toml` 中只维护 PMAI 标记的 hooks 区块，全局分发器在普通仓 no-op，并把生成器仓 / 消费仓分别路由到已有护栏。install / upgrade / uninstall / doctor / status 已覆盖 Kimi 宿主面。
 - design 直接必读 AskUser 共享规则，首题前收敛真实决策并报告总量，用业务结果提问；跨日、模型切换或会话恢复时重读当前 skill 与必读规则。context pack 消费后单独召回个人经验候选，按适用性、去重和独立检查价值自适应选择，不设正常条数上限；高信号纠偏闭合后自动归位。项目事实回项目真相源，跨项目经验进入用户级存储，已有 Skill 规则未执行只留执行失败证据。跨模块设计只留下一个明确 build 入口，相同建造方案重复写入 `project.yml` 保持完整文件不变。
 - context pack 对旧消费仓自动写入 Git 本地 exclude，不再制造未跟踪缓存；build 在创建环境前阻断批准目标路径上的既有脏改动，同时保留无关 WIP。
 - context pack 只把 D 编号模块决定和真实产品规则编入 active；共同理由、否过方案、待复核、变更记录与注释模板不再伪装成决定，已确认标题也不再误报未决。
@@ -58,7 +60,7 @@
 ## 当前验证
 
 - 新增和改造的 context pack、acceptance profile、build contract、landing、文档影响地图、status、关键 Skill 路由、design 决策收敛、project definition 幂等与个人经验 targeted tests 已通过。
-- 完整 `tests/run-all.sh` 已通过：`470 passed / 0 failed`。新增回归覆盖 iteration/final 双车道、PM 定稿请求硬门、隔离 validation worktree、time-to-preview 预警，以及验收修复提交重绑定稿意图；原有 lifecycle、prototype 边界、landing/docs 恢复、design、个人经验与执行器回归继续通过。
+- 完整 `tests/run-all.sh` 已通过：`478 passed / 0 failed`。新增回归覆盖 Kimi 原生 Skill 命名、用户配置保留、全局 Hook 仓库分流、主控识别、安装生命周期和 doctor 自愈；iteration/final 双车道、prototype 边界、landing/docs 恢复、design、个人经验与执行器回归继续通过。
 
 ## 下一步
 
