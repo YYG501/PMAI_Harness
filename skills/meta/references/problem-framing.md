@@ -126,7 +126,7 @@
 禁止：
 
 - 推荐完继续写最终方案。
-- 推荐完直接路由 `/pmai-design`、`/pmai-build` 或 `/pmai-skill-improve`。
+- 推荐完直接路由 `/pmai-design`、`/pmai-build` 或 `/pmai-feedback`。
 - 推荐完直接改文件。
 - 把陪跑方案写成明显不成立的假选项。
 
@@ -176,7 +176,7 @@
 - 产品方向、介绍、定位、标题、对外表达成文 → `/pmai-doc-writing`。
 - 功能型规格或模块规格成文 → `/pmai-spec-writing`。
 - 功能锚点稳定后构建 → `/pmai-build`。
-- skill / workflow 反馈消化 → `/pmai-skill-improve`。
+- skill / workflow 反馈 → `/pmai-feedback` 完整复盘当前消费仓会话并生成框架交接 Prompt。
 - 存在真实模型岔路且 PM 没拍方向 → 明确停住；没有真实岔路时给推荐并返回 design。
 
 ---

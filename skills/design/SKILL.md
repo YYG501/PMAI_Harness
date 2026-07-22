@@ -49,7 +49,7 @@ python3 "$PMAI_HOME/scripts/status-view.py" --banner-only --skill DESIGN || true
 - 修改主原型或真实产品代码；
 - 让 PM 选择 worktree、执行器或是否调用内部 Skill；
 - 在问题没闭合时用文档措辞掩盖缺口。
-- 处理 PMAI skill / workflow 自身的反馈；这类问题交 `/pmai-skill-improve`，不包装成业务模块设计。
+- 处理 PMAI skill / workflow 自身的反馈；这类问题交 `/pmai-feedback` 复盘当前消费仓会话并生成框架交接 Prompt，不包装成业务模块设计。
 
 纯错字、单文案、局部样式和不改变信息结构的缺陷走 `/pmai-quick-fix`。
 
@@ -144,7 +144,7 @@ PM 的高信号纠偏已经闭合后，按 `personal-memory.md` 在后台归位�
 - 跨项目仍成立、且当前 Skill 没有明确覆盖的判断经验，调用 `personal-memory.py capture --stdin` 创建或更新个人经验；
 - 当前 Skill 已明确覆盖但本次没有执行，只记录 `disposition=execution_gap` 的精简证据，不制造重复经验；
 - 未闭合争论、普通产品选择、项目名和具体页面事实不记录；
-- 个人经验不能自动改 `SKILL.md`，框架变化仍由 PM 明确触发 `/pmai-skill-improve`。
+- 个人经验不能自动改 `SKILL.md`；需要推动框架变化时，由 PM 明确触发 `/pmai-feedback`，带当前原始会话证据交给框架仓判断。
 
 ### 4. 按需自动进入 meta，再返回 design
 

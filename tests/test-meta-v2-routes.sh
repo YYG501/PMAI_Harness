@@ -47,7 +47,7 @@ test_workflow_route_guards_against_new_skill_bias() {
   assert_file_contains "$WORKFLOW_DECISION" "新建入口" "workflow route should include new entry option" || return
   assert_file_contains "$WORKFLOW_DECISION" "先不做" "workflow route should include do nothing option" || return
   assert_file_contains "$WORKFLOW_DECISION" "新建入口”不是默认答案" "workflow route should reject new-skill bias" || return
-  assert_file_contains "$WORKFLOW_DECISION" "pmai-skill-improve" "workflow skill changes should route to skill-improve" || return
+  assert_file_contains "$WORKFLOW_DECISION" "pmai-feedback" "workflow feedback should route to session evidence handoff" || return
   assert_file_contains "$WORKFLOW_DECISION" "禁止把 skill / workflow 改造问题交给" "workflow changes should not route to design" || return
   pass_test
 }
@@ -66,7 +66,7 @@ test_downstream_skills_use_internal_capability_language() {
   start_test "meta v2: 下游 skill 路由口径"
 
   assert_file_contains "$DESIGN_SKILL" "处理 PMAI skill / workflow 自身的反馈" "design should not own workflow changes" || return
-  assert_file_contains "$DESIGN_SKILL" '交 `/pmai-skill-improve`' "workflow feedback should route to skill-improve" || return
+  assert_file_contains "$DESIGN_SKILL" '交 `/pmai-feedback`' "workflow feedback should route to feedback" || return
   assert_file_contains "$BUILD_SKILL" "未决问题，停止 build，返回 design" "build should return unresolved product questions" || return
   assert_file_contains "$SPEC_SKILL" "多视角冷读（可选）" "spec-writing should preserve optional pressure testing" || return
   assert_file_contains "$DOC_SKILL" "已有材料压测" "doc-writing should preserve material pressure testing" || return

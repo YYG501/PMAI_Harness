@@ -320,6 +320,7 @@ PMAI 走纯全局：每台要用的机器各自 `pmai install` 一次（全局�
 | Skill | 用途 |
 |---|---|
 | `/pmai-meta` | 讨论前对焦与压力测试：没靶子时找本质 / 判断标准 / 根因，有靶子时用少量多视角找盲区、冲突和风险 |
+| `/pmai-feedback` | **消费仓会话反馈出口**：完整复盘当前原始会话，对照已确认设计和使用体验，生成带会话文件地址的框架优化 Prompt |
 | `/pmai-lark-sync` | 本地规格与飞书在线文档安全同步：先判断真相源，再选择精细修改、覆盖发布、飞书回拉或只 diff |
 | `/pmai-publish-to-lark` | 把本地 markdown 整篇发布 / 覆盖到飞书 |
 
@@ -328,7 +329,6 @@ PMAI 走纯全局：每台要用的机器各自 `pmai install` 一次（全局�
 | Skill | 用途 |
 |---|---|
 | `/pmai-upgrade` | 升级 PMAI 框架（全局；AI 智能 What's New 摘要 + AskUser 4 选项：main / stable tag / 锁版本 / 暂缓） |
-| `/pmai-skill-improve` | PM 用 AI 协作改 skill（限生成器仓内用） |
 
 ---
 

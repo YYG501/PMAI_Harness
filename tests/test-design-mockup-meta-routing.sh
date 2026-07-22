@@ -26,13 +26,13 @@ test_design_has_object_modeling_gate() {
 }
 
 test_design_routes_to_downstream_skills() {
-  start_test "design: meta/mockup/build/skill-improve 分流"
+  start_test "design: meta/mockup/build/feedback 分流"
 
   assert_file_contains "$DESIGN_SKILL" "按需自动进入 meta" "design should define meta routing" || return
   assert_file_contains "$DESIGN_SKILL" "/pmai-meta" "design should route product judgment to meta" || return
   assert_file_contains "$DESIGN_SKILL" "/pmai-mockup" "design should route visual forks to mockup" || return
   assert_file_contains "$DESIGN_SKILL" "/pmai-build" "design should route prototype work to build" || return
-  assert_file_contains "$DESIGN_SKILL" "/pmai-skill-improve" "design should route workflow issues to skill-improve" || return
+  assert_file_contains "$DESIGN_SKILL" "/pmai-feedback" "design should route workflow issues to feedback" || return
   assert_file_contains "$DESIGN_SKILL" "不等于授权 design 直接改主原型" "design should never edit the build target" || return
   pass_test
 }

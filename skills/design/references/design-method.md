@@ -96,7 +96,7 @@ PM 说“看不懂”时，当前问法立即作废，不把之前的题干或�
 - PM 说“落地 / 实现 / 做进产品 / 提交 / 可以做了” → 先过落地意图识别；design 只收口建造依据，不直接改 `project.yml` 声明的实现入口。
 - PM 要改业务代码 → 停止 design，大需求转 `/pmai-build`；极小修补走 `/pmai-quick-fix`，且本次不能同时改模块规格或 mockup。
 - build target + 模块文档 / mockup 同时变动、规格升版、mockup 方向吸收、主卡片结构重做或信息结构变化 → 混合交付转 build，PM 定稿后由 build 自动 finalize。
-- PMAI skill / workflow / 工具调用 / gstack browser 等问题 → `/pmai-skill-improve` 或 meta 的 workflow 决策路径，不交给 design。
+- PMAI skill / workflow / 工具调用 / gstack browser 等问题 → `/pmai-feedback` 复盘当前消费仓会话，或进入 meta 的 workflow 决策路径，不交给 design。
 - 已经只剩成文 → 自动调用 `/pmai-spec-writing`；成文时发现结构问题，退回 design。
 
 提问边界遵守共用 `decision-policy`：只有真实产品模型岔路、不可逆动作或 AI 要挑战 PM 已明确方向时立即停住。需求类型、是否调用 meta / mockup / spec-writing、保存建造依据、worktree 和执行器都由框架判断，不向 PM 提问。
@@ -128,7 +128,7 @@ PM 说“看不懂”时，当前问法立即作废，不把之前的题干或�
 
 Meta 固定产出当前判断、隐含前提、最危险前提、反例、替代模型、代价和推荐。只有真实产品模型岔路才让 PM 选择；调完必须回到本文件的设计步骤，不能停在高空讨论。
 
-如果卡点其实是 PMAI 自己的 skill、workflow、文档同步、工具调用或 gstack/browser 能力，不能把它包装成产品模块设计；应转 `/pmai-skill-improve` 或 workflow 决策路径。
+如果卡点其实是 PMAI 自己的 skill、workflow、文档同步、工具调用或 gstack/browser 能力，不能把它包装成产品模块设计；应转 `/pmai-feedback` 或 workflow 决策路径。
 
 ### 4. 理清信息
 

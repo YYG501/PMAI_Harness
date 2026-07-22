@@ -226,4 +226,4 @@ PMAI 原有方法如何进入：
 
 如果存在真实分路且 PM 尚未选择，停在可选分路，不输出“PM 已选”和“下一步”的最终结论。没有真实分路时写明“无真实模型岔路”，给推荐并返回 design。
 
-`/pmai-meta` 不生成长期产品文档。会诊结论需要成文、设计、规格或构建时，交给 `/pmai-design`、`/pmai-doc-writing`、`/pmai-spec-writing`、`/pmai-build` 或 `/pmai-skill-improve`。
+`/pmai-meta` 不生成长期产品文档。会诊结论需要成文、设计、规格或构建时，交给 `/pmai-design`、`/pmai-doc-writing`、`/pmai-spec-writing` 或 `/pmai-build`；PMAI skill / workflow 反馈交 `/pmai-feedback`，由消费仓生成带原始会话证据的框架交接 Prompt。

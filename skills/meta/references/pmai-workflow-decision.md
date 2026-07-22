@@ -47,7 +47,7 @@ PMAI workflow 决策问的不是“要不要加一个 skill”，而是：
 | 方向 | 何时成立 | 常见落点 |
 |---|---|---|
 | 调用现有 | 现有 skill 已覆盖，只是本轮没按它走 | 更新调用说明或当前任务改走现有 skill |
-| 改现有 | 边界正确，但门禁、测试、问法或 PM 视图不稳 | `/pmai-skill-improve <skill>` |
+| 改现有 | 边界正确，但门禁、测试、问法或 PM 视图不稳 | 在消费仓走 `/pmai-feedback`，把完整会话证据交给框架仓对账 |
 | 新建入口 | 现有 skill 都太底层，确实缺上层决策入口 | 新 skill + doctor / README / tests |
 | 先不做 | 价值不稳、会污染菜单、或只是一次性任务 | 记录触发条件，停住 |
 
@@ -77,7 +77,7 @@ workflow 决策常见危险前提：
 
 ## Handoff 规则
 
-- skill / workflow 反馈消化 → `/pmai-skill-improve`。
+- skill / workflow 反馈 → `/pmai-feedback` 完整复盘当前消费仓会话，并生成框架交接 Prompt。
 - 模块结构、信息模型、状态、动作 → `/pmai-design`。
 - 文档成文 → `/pmai-doc-writing` 或 `/pmai-spec-writing`。
 - 构建实现 → `/pmai-build`。

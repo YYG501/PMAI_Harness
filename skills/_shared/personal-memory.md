@@ -6,7 +6,7 @@
 
 - **项目记忆**继续留在消费仓真相源：模块 `decisions.md` / `spec.md`、`PRODUCT-RULES.md`、`DESIGN.md`、`docs/decisions/`、`PRODUCT-STATE.md`。
 - **个人经验**保存在 `${PMAI_STATE_HOME:-$HOME/.pmai-state}/personal-memory.sqlite3`，跨消费仓召回。
-- **框架进化**不属于记忆。个人经验不得自动修改 `SKILL.md`；只有 PM 明确发起 `/pmai-skill-improve` 后，才能把多次证据带到框架仓做提案、回归和版本化发布。
+- **框架进化**不属于记忆。个人经验不得自动修改 `SKILL.md`；只有 PM 明确发起 `/pmai-feedback` 后，才能把当前原始会话和相关证据带到框架仓做提案、回归和版本化发布。
 
 权威顺序：当前 PM 明确指令与决定、当前项目真相源、PMAI Skill 与安全规则，都高于个人经验。个人经验与任一上层依据冲突时直接忽略。
 

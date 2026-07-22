@@ -117,10 +117,10 @@ EXPECTED_SKILLS=(
   init-project design mockup build build-close publish-to-lark lark-sync status
   # 按需主动调（项目方向 / 照站对齐）
   direction mirror-site
-  # 按需辅助：小改 / 轻记录 / 放弃 build / 功能型规格文档 / 介绍型文档 / 说人话磨文 / 讨论对焦
-  quick-fix record build-cancel spec-writing doc-writing humanize meta
+  # 按需辅助：小改 / 轻记录 / 放弃 build / 功能型规格文档 / 介绍型文档 / 说人话磨文 / 讨论对焦 / 会话反馈
+  quick-fix record build-cancel spec-writing doc-writing humanize meta feedback
   # 框架自身维护
-  pmai-upgrade skill-improve
+  pmai-upgrade
 )
 
 expected_exposed_skill_names() {

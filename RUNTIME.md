@@ -4,15 +4,16 @@
 
 ## 当前位置
 
-- 日期：2026-07-17
+- 日期：2026-07-22
 - 开发分支：`main`
-- 当前目标：统一生命周期继续以真实消费仓会话收口；build contract v4 已拆开快速迭代与定稿验收，Kimi Code 也已按宿主原生 `/skill:pmai-*` 入口接成一等主控。
+- 当前目标：统一生命周期继续以真实消费仓会话收口；build contract v4 已拆开快速迭代与定稿验收，Kimi Code 也已按宿主原生 `/skill:pmai-*` 入口接成一等主控；新增 `/pmai-feedback`，把消费仓当前会话中的流程卡点转成交给框架仓的可追溯优化 Prompt。
 - gstack 参考基线：`v1.58.5.0`，commit `11de390`；只参考本地 `gstack-clean` checkout，没有升级用户目录中的安装副本。
 
 ## 当前活跃模型
 
 - 正常用户主链路：`/pmai-init-project` 只建上下文 → `/pmai-design` 讨论需求并在首次定稿时生成项目建造定义 → `/pmai-build` → PM 看结果多轮快速修改 → PM 明确定稿 → 冻结 commit 并统一运行一次 final checks → 形成验收就绪快照、合入 main、主线后文档编译和一致性检查。
 - `meta`、`mockup`、`spec-writing` 是 design 按需调用后返回主线的内部能力；仍保留手动入口用于兼容和专项使用，但不要求 PM 拼接命令。
+- `/pmai-feedback` 是消费仓到框架仓的只读反馈出口：完整复盘当前原始会话、对照消费仓真相源、判断问题归属，并输出包含会话文件地址和证据的框架优化 Prompt；它不在消费仓直接修改产品或 PMAI 框架。
 - `/pmai-build-close` 只作为兼容与恢复入口；正常链路不再要求 PM 手动调用。
 - lifecycle v2：`designing → ready_to_build → building → iterating → final_check → landed → documenting → complete`。旧 `stage` 字段仅为 v1 消费仓兼容展示。
 - 项目建造定义：初始化时不存在；首个达到 `ready_to_build` 的 design 将 `prototype / product`、技术栈、代码入口、真实命令和 Web 能力写入 `.pm-workflow/project.yml`。后续 build 只读该文件。
@@ -48,6 +49,7 @@
 - design 直接必读 AskUser 共享规则，首题前收敛真实决策并报告总量，用业务结果提问；跨日、模型切换或会话恢复时重读当前 skill 与必读规则。context pack 消费后单独召回个人经验候选，按适用性、去重和独立检查价值自适应选择，不设正常条数上限；高信号纠偏闭合后自动归位。项目事实回项目真相源，跨项目经验进入用户级存储，已有 Skill 规则未执行只留执行失败证据。跨模块设计只留下一个明确 build 入口，相同建造方案重复写入 `project.yml` 保持完整文件不变。
 - context pack 对旧消费仓自动写入 Git 本地 exclude，不再制造未跟踪缓存；build 在创建环境前阻断批准目标路径上的既有脏改动，同时保留无关 WIP。
 - context pack 只把 D 编号模块决定和真实产品规则编入 active；共同理由、否过方案、待复核、变更记录与注释模板不再伪装成决定，已确认标题也不再误报未决。
+- 新增 `scripts/current-session.py` 和 `/pmai-feedback`：Codex 通过 `CODEX_THREAD_ID` 精确定位 active / archived 原始 JSONL，校验会话唯一性、session ID 与 cwd 归属；Skill 完整读取会话并区分消费仓产品问题、执行偏差、Skill 缺口、框架合同缺口、宿主限制和证据不足，最后生成带消费仓路径、会话 ID、原始文件路径及证据的框架交接 Prompt。公开 `/pmai-skill-improve` 已移除，历史 `skill-feedback/` 资料继续保留。
 
 ## 兼容与边界
 
@@ -56,13 +58,15 @@
 - 目标规格在 design 定稿时生成；描述已落地现状的文档在 merge 后更新，不因文档失败回滚已落地主线实现。
 - gstack 只是方法参考与可选证据生产工具，不成为 PMAI 的状态、决定或收尾权威。
 - `/pmai-record`、`/pmai-quick-fix`、`/pmai-build-cancel`、`/pmai-status` 继续作为轻量旁路，不分叉完整 build 生命周期。
+- 当前只有 Codex 的精确当前会话定位链路已经验证；其他宿主没有可验证的精确会话标识或定位适配时，`/pmai-feedback` 必须阻断，不能按文件修改时间或“最近会话”猜测。
 
 ## 当前验证
 
 - 新增和改造的 context pack、acceptance profile、build contract、landing、文档影响地图、status、关键 Skill 路由、design 决策收敛、project definition 幂等与个人经验 targeted tests 已通过。
-- 完整 `tests/run-all.sh` 已通过：`478 passed / 0 failed`。新增回归覆盖 Kimi 原生 Skill 命名、用户配置保留、全局 Hook 仓库分流、主控识别、安装生命周期和 doctor 自愈；iteration/final 双车道、prototype 边界、landing/docs 恢复、design、个人经验与执行器回归继续通过。
+- 完整 `tests/run-all.sh` 已通过：`485 passed / 0 failed`。新增回归覆盖 `/pmai-feedback` 的入口、只读合同、精确会话定位、失败关闭和旧公开 Skill 移除；Kimi 原生 Skill 命名、用户配置保留、全局 Hook 仓库分流、主控识别、安装生命周期和 doctor 自愈，以及 iteration/final 双车道、prototype 边界、landing/docs 恢复、design、个人经验与执行器回归继续通过。
 
 ## 下一步
 
 - 继续用真实消费仓会话观察 active build 的小改能否稳定在 2–5 分钟内可刷新、交互改动能否稳定在 5–10 分钟内可刷新，以及定稿请求是否只触发一次隔离 production validation。
+- 在真实消费仓 dogfood `/pmai-feedback`，核对完整会话复盘、问题归属和交接 Prompt 是否能直接驱动框架仓分析；再按宿主能力补充 Kimi Code、Claude Code 和 OpenCode 的精确当前会话定位适配，不提供猜测式降级。
 - 后续框架修改继续先在开发分支完成 targeted / full regression，再进入 main 分发基线并升级全局安装副本。

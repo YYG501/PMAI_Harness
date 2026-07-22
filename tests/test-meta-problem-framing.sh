@@ -86,7 +86,7 @@ test_design_and_changelog_reference_new_positioning() {
   assert_file_contains "$DESIGN_SKILL" "危险前提、反例和推荐" "design should require new product judgment" || return
   assert_file_contains "$DESIGN_SKILL" "meta 不生成平行状态或长期文档" "design should not treat meta as a parallel stage" || return
   assert_file_contains "$DESIGN_SKILL" "出现任一信号时" "design should keep meta conditional" || return
-  assert_file_contains "$DESIGN_SKILL" "pmai-skill-improve" "design should route skill/workflow changes away from design" || return
+  assert_file_contains "$DESIGN_SKILL" "pmai-feedback" "design should route skill/workflow feedback away from design" || return
   assert_file_contains "$CHANGELOG" "/pmai-meta" "changelog should mention meta" || return
   assert_file_contains "$CHANGELOG" "产品判断模型" "changelog should mention model convergence" || return
   pass_test

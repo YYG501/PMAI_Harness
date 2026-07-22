@@ -137,7 +137,7 @@ meta 是 design 按需调用的内部产品判断能力，也保留手动入口�
 - 视觉或交互模型的可视化岔路：返回 design 后自动调用 `/pmai-mockup`。
 - 模块规格 / 功能型规格成文：返回 design 后自动调用 `/pmai-spec-writing`。
 - 产品介绍、方向 memo：交 `/pmai-doc-writing`。
-- PMAI skill / workflow 反馈：交 `/pmai-skill-improve`。
+- PMAI skill / workflow 反馈：交 `/pmai-feedback`，在消费仓完整复盘当前会话并生成框架交接 Prompt。
 - 功能锚点稳定后的实现：交 `/pmai-build`。
 
 ## Rules
