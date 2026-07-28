@@ -18,9 +18,11 @@ PM-AI-Workflow 生成器仓的演进记录。本文件**只记影响下游业务
 
 ## 未发布
 
+- `feat(build)`: **Kimi Code 加入外部构建工具选择，同时保留当前主控排除规则。** 消费仓默认 builder 配置新增 `Kimi Code（k3, adaptive）`；`builder-profile.py`、build contract 和执行器适配器现可识别 `kimi-code`，通过 Kimi 原生 `--prompt + --auto` 在已确认的构建环境中非交互执行。旧消费仓缺少该 profile 时由运行时补齐，不改写项目配置。Codex、Claude Code、Cursor Agent 或 OpenCode 作为主控时，本机 Kimi 可进入 build 卡片；Kimi 自己作为主控时仍排除同名外部 profile，只保留“当前会话直接构建”和其它工具，避免递归启动。
+
 - `feat(feedback)`: **新增 `/pmai-feedback` 作为消费仓到 PMAI 框架仓的唯一会话反馈出口，并移除职责漂移的公开 `/pmai-skill-improve`。** 新入口只读复盘当前原始会话，对照消费仓已确认设计和实际使用体验，区分项目问题、执行偏差、Skill 缺口、框架合同缺口与宿主限制，再生成一段带消费仓路径、会话 ID、原始会话绝对路径、证据位置和框架冷读要求的可复制 Prompt。新增 `current-session.py` 通过当前宿主确定会话 ID 精确定位原始记录；Codex 使用 `CODEX_THREAD_ID` 并同时检查 active / archived，会话不唯一、cwd 不匹配或宿主链路未验证时直接阻断，禁止按最近修改时间猜测。旧 `skill-feedback/` 历史档案保留，其现状对账、问题归位和 PM 拍板纪律已吸收到新交接合同；design / meta 路由、README、doctor 和安装暴露面同步切换到 `/pmai-feedback`。
 
-- `feat(kimi)`: **Kimi Code 成为 PMAI 一等主控，并完全使用宿主原生 Skill 入口。** `pmai install/upgrade` 现在把公开 Skill 暴露到 `$KIMI_CODE_HOME/skills/pmai-*`，Kimi 中直接输入 `/skill:pmai-init-project`、`/skill:pmai-design`、`/skill:pmai-build` 等命令，不模拟 `/pmai-*` slash command。生成器仓与消费仓的 `AGENTS.md` 明确三条使用链路；当前主控识别新增 `kimi-code`，会排除同宿主外部 profile，但本轮不新增 Kimi 外部 builder。Kimi 只有用户级 `config.toml` hooks，因此新增带标记区的原生 hooks 管理器和按仓库类型路由的全局分发器：普通仓 no-op，生成器仓接文档/review 护栏，消费仓接写保护/review guard；安装、升级、卸载、doctor、status 全链路同步管理且保留用户原配置。
+- `feat(kimi)`: **Kimi Code 成为 PMAI 一等主控，并完全使用宿主原生 Skill 入口。** `pmai install/upgrade` 现在把公开 Skill 暴露到 `$KIMI_CODE_HOME/skills/pmai-*`，Kimi 中直接输入 `/skill:pmai-init-project`、`/skill:pmai-design`、`/skill:pmai-build` 等命令，不模拟 `/pmai-*` slash command。生成器仓与消费仓的 `AGENTS.md` 明确三条使用链路；当前主控识别新增 `kimi-code`，会排除同宿主外部 profile。Kimi 只有用户级 `config.toml` hooks，因此新增带标记区的原生 hooks 管理器和按仓库类型路由的全局分发器：普通仓 no-op，生成器仓接文档/review 护栏，消费仓接写保护/review guard；安装、升级、卸载、doctor、status 全链路同步管理且保留用户原配置。
 
 - `fix(build)`: **把 PM 看原型期间的快速修改与定稿后的完整验收拆成两条执行车道。** 真实消费仓会话表明耗时主要来自每轮小改都重复 production build、完整浏览器验收、dev server 恢复和外部 builder 启动，而不是 Next.js 编译本身。acceptance profile schema v2 现在分别输出 `iteration_checks / final_checks`；build contract v4 新增 PM `request-finalization` 硬门、两层 evidence 和 `resume-iteration`，定稿前机器拒绝 final evidence 与 `review-ready`。active build 的文案、布局、按钮和局部交互默认由当前会话直接处理，只做热更新、typecheck 与当前页面走查，复用同一 dev server / 浏览器并先回“已修改，可刷新查看”；外部 builder 只用于首次实现或大型重构。PM 明确定稿后，`final-validation.py` 才在冻结 commit 的 detached worktree 运行一次 project.yml test/typecheck/build，避免污染 active 构建缓存；`build-timing.py` 记录分阶段耗时和 time-to-preview，2–5 / 5–10 分钟只作预警。
 

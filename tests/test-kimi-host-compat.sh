@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Kimi Code first-class host regression: native skills, managed hooks, entry
-# templates, lifecycle coverage, and current-host mapping.
+# Kimi Code first-class host and external builder regression: native skills,
+# managed hooks, entry templates, lifecycle coverage, and current-host mapping.
 
 set -uo pipefail
 
@@ -117,29 +117,39 @@ test_kimi_lifecycle_surface_is_complete() {
   pass_test
 }
 
-test_builder_accepts_kimi_as_current_host_only() {
-  start_test "K5: build 识别 Kimi 主控但不静默新增外部 builder"
-  local tmp out
+test_builder_supports_kimi_with_current_host_exclusion() {
+  start_test "K5: Kimi 可作外部 builder，作为当前主控时排除同名 profile"
+  local out
 
-  tmp=$(mktemp -d)
-  out=$(python3 "$REPO_ROOT/scripts/builder-profile.py" list "$tmp/missing.yml" --current-host kimi-code 2>&1) || {
-    _fail "builder-profile should accept --current-host kimi-code"
+  out=$(python3 "$REPO_ROOT/scripts/builder-profile.py" list \
+    "$REPO_ROOT/templates/pm-workflow.config.yml.tmpl" --current-host codex 2>&1) || {
+    _fail "builder-profile should list Kimi for other hosts"
     echo "$out" >&2
-    rm -rf "$tmp"
     return
   }
-  if ! echo "$out" | grep -q '"current_host": "kimi-code"'; then
-    _fail "builder-profile output should preserve kimi-code current host"
-    rm -rf "$tmp"
+  if ! echo "$out" | grep -q '"executor": "kimi-code"'; then
+    _fail "Kimi should be available as an external builder for Codex"
     return
   fi
+
+  out=$(python3 "$REPO_ROOT/scripts/builder-profile.py" list \
+    "$REPO_ROOT/templates/pm-workflow.config.yml.tmpl" --current-host kimi-code 2>&1) || {
+    _fail "builder-profile should accept --current-host kimi-code"
+    echo "$out" >&2
+    return
+  }
   if ! echo "$out" | grep -q '"executor": "native"'; then
     _fail "Kimi host should keep current-session native build available"
-    rm -rf "$tmp"
     return
   fi
-  assert_file_contains "$REPO_ROOT/skills/build/SKILL.md" "Kimi Code 本轮只作为主控" "build skill should keep executor scope explicit" || { rm -rf "$tmp"; return; }
-  rm -rf "$tmp"
+  if echo "$out" | grep -q '"executor": "kimi-code"'; then
+    _fail "Kimi current host should exclude the same external profile"
+    return
+  fi
+  if [ ! -x "$REPO_ROOT/scripts/exec-adapters/kimi-code.sh" ]; then
+    _fail "Kimi external builder adapter should be executable"
+    return
+  fi
   pass_test
 }
 
@@ -176,7 +186,7 @@ test_kimi_native_entry_is_documented
 test_kimi_hook_manager_preserves_user_config
 test_kimi_dispatch_is_scoped_and_maps_write_path
 test_kimi_lifecycle_surface_is_complete
-test_builder_accepts_kimi_as_current_host_only
+test_builder_supports_kimi_with_current_host_exclusion
 test_public_skill_names_match_kimi_native_commands
 test_no_machine_bound_kimi_paths
 

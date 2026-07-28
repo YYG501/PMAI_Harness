@@ -82,7 +82,7 @@ Kimi Code 中把上述入口原生写成 `/skill:pmai-design`、`/skill:pmai-bui
 |---|---|---|
 | **Claude Code** | 推荐 | 一等主控入口（slash skill 原生在这里跑）；当前主控不是 Claude Code 时，也可作为 `/pmai-build` 执行器 |
 | **Codex** | 支持 | 原生 skill 暴露到 `~/.codex/skills/pmai-*`，通过 `$pmai-*`、skill 选择器或自然语言调用；不生成 custom prompts；读生成器仓 / 消费仓 `AGENTS.md` 作为主控入口；消费仓生成项目级 `.codex/hooks.json`；当前主控不是 Codex 时，也可作为 build 执行器 |
-| **Kimi Code** | 支持 | 一等主控入口；原生 skill 暴露到 `$KIMI_CODE_HOME/skills/pmai-*`，使用 `/skill:pmai-*`；读生成器仓 / 消费仓 `AGENTS.md`，用户级 hooks 通过仓库识别分发器接入 PMAI 护栏。本轮不新增 Kimi 外部 builder |
+| **Kimi Code** | 支持 | 一等主控入口；原生 skill 暴露到 `$KIMI_CODE_HOME/skills/pmai-*`，使用 `/skill:pmai-*`；读生成器仓 / 消费仓 `AGENTS.md`，用户级 hooks 通过仓库识别分发器接入 PMAI 护栏；当前主控不是 Kimi Code 时，也可作为 build 执行器，旧消费仓缺少该 profile 时由当前框架运行时补齐 |
 | **Cursor Agent** | 可选 | `/pmai-build` 外部执行器；当前主控不是 Cursor Agent 时可选 |
 | **OpenCode CLI** | 支持 | OpenCode commands 暴露到 `~/.config/opencode/commands/pmai-*.md`，可直接打开消费仓输入 `/pmai-*`；读 `AGENTS.md` 作为主控入口；消费仓生成 `.opencode/commands` 和 `opencode.json`；当前主控不是 OpenCode 时，也可作为 build 执行器。第一版不复刻 Codex hooks，保护依赖 OpenCode permission、git hooks、build contract 和 changed-path review |
 | **gstack** | 可选能力层 | 可辅助视觉基线、mockup、browser/visual evidence、抓站和文档导出；初始化不依赖它。UI 验收需要主动浏览器能力，但可以由 gstack、runtime browser 或 Playwright 任一适配器提供 |

@@ -4,7 +4,7 @@
 
 ## 当前位置
 
-- 日期：2026-07-22
+- 日期：2026-07-28
 - 开发分支：`main`
 - 当前目标：统一生命周期继续以真实消费仓会话收口；build contract v4 已拆开快速迭代与定稿验收，Kimi Code 也已按宿主原生 `/skill:pmai-*` 入口接成一等主控；新增 `/pmai-feedback`，把消费仓当前会话中的流程卡点转成交给框架仓的可追溯优化 Prompt。
 - gstack 参考基线：`v1.58.5.0`，commit `11de390`；只参考本地 `gstack-clean` checkout，没有升级用户目录中的安装副本。
@@ -21,7 +21,7 @@
 - 文档语义：`spec.md` / PRD 是指导研发实现的最终目标合同；`PRODUCT-STATE.md` 描述 main 已落地现状；原型、mockup 和代码只作设计 / 实现证据。
 - design 的 `ready_to_build` 状态同时记录 approved source hash、design checkpoint 和精确目标路径；build 开工前重新编译上下文并验证 currentness，过期依据不能继续显示或进入构建。新 `.work-meta.json:build` 使用合同 v4，在 v3 实现深度合同之上增加 `iteration_checks / final_checks`、两层 evidence 和定稿请求；旧 v2/v3 合同继续用于中断恢复兼容。
 - 新 build 由 AI 在一张卡中展示推荐的工作环境、构建工具和两项的全部有效选择，PM 只确认这两项；外部工具候选排除当前主控对应的 profile，“当前会话直接构建”始终可选，没有可用外部工具时默认推荐它。项目类型和验收方案不显示。选择当前环境时，main 只放行合同声明的目标路径。
-- 主控宿主面：Claude Code 使用 `/pmai-*`，Codex 使用原生 `$pmai-*`，Kimi Code 使用原生 `/skill:pmai-*`，OpenCode 使用生成的 `/pmai-*` commands；四者消费同一份权威 Skill。Kimi 本轮只作为主控，不新增外部 builder。
+- 主控宿主面：Claude Code 使用 `/pmai-*`，Codex 使用原生 `$pmai-*`，Kimi Code 使用原生 `/skill:pmai-*`，OpenCode 使用生成的 `/pmai-*` commands；四者消费同一份权威 Skill。Kimi Code 同时提供外部 builder profile，但在 Kimi 作为当前主控时按同宿主排除规则隐藏。
 - 记忆分两层：项目事实、决定和偏好继续由消费仓现有真相源承担；个人经验保存在用户级状态目录，跨项目召回但只作建议。个人经验不进入 context pack、项目 hash 或 Git，也不能自动修改 Skill。
 
 ## 已实现
@@ -38,7 +38,7 @@
 - 初始化脚本不再接收 project type，不创建代码、prototype、mockup 看板、dev server 或 gstack 依赖。
 - 固定 build 审计编排和 coverage reviewer 已退出活跃链路；v4 只认 adaptive iteration/final checks 与对应 evidence。
 - Web final checks 必须有 active browser-smoke；gstack 可由其它 browser/Playwright 适配器替代，不能 exception 掉浏览器能力。
-- builder profile 按项目定义、配置、本机可用性和当前主控推荐；开工卡一次列出有效环境与工具，当前主控不再作为外部执行器候选，但当前会话直接构建始终可选；Gemini CLI 已退出构建工具面。验收 profile 仍后台生成，不进入开工卡。
+- builder profile 按项目定义、配置、本机可用性和当前主控推荐；Claude Code、Codex、Kimi Code、Cursor Agent、OpenCode 都可作为外部执行器，当前主控对应的同名工具不进入候选，但当前会话直接构建始终可选；旧消费仓缺少 `kimi-code` profile 时由 `builder-profile.py` 运行时补齐，不改写项目配置；Gemini CLI 已退出构建工具面。验收 profile 仍后台生成，不进入开工卡。
 - 新增自动 landing 和恢复：merge 冲突保留 `final_check` 与隔离环境；文档失败保留 `landed/docs_pending`，续跑不重复 merge；运行进程或缓存导致的 worktree 清理失败进入安全待清理队列，不阻塞文档阶段。
 - 文档影响地图在验收就绪候选阶段先生成草案，landed 后按 main 事实完成覆盖；对象、动作、状态、权限、页面、术语和受影响文件都必须 covered 或明确 no-change，最终提交自动纳入影响地图本身。
 - spec-writing landed 对账固定分为符合、accepted delta、漏实现、无依据实现；只有 accepted delta 修改规格目标，漏实现保留为实现缺口。
@@ -63,7 +63,7 @@
 ## 当前验证
 
 - 新增和改造的 context pack、acceptance profile、build contract、landing、文档影响地图、status、关键 Skill 路由、design 决策收敛、project definition 幂等与个人经验 targeted tests 已通过。
-- 完整 `tests/run-all.sh` 已通过：`485 passed / 0 failed`。新增回归覆盖 `/pmai-feedback` 的入口、只读合同、精确会话定位、失败关闭和旧公开 Skill 移除；Kimi 原生 Skill 命名、用户配置保留、全局 Hook 仓库分流、主控识别、安装生命周期和 doctor 自愈，以及 iteration/final 双车道、prototype 边界、landing/docs 恢复、design、个人经验与执行器回归继续通过。
+- 完整 `tests/run-all.sh` 已通过：`486 passed / 0 failed`。新增回归覆盖 Kimi 外部 builder 的 profile、非交互适配器、老消费仓运行时补齐和当前主控排除；`/pmai-feedback` 的入口、只读合同、精确会话定位、失败关闭，Kimi 原生 Skill 与 hooks 生命周期，以及 iteration/final 双车道、prototype 边界、landing/docs 恢复、design、个人经验和其它执行器回归继续通过。
 
 ## 下一步
 

@@ -29,6 +29,17 @@ builder:
       sandbox: workspace-write
       timeout_seconds: 900
 
+    # 框架也会为缺少该项的旧消费仓补充 Kimi 默认档位；这里显式保留，
+    # 方便 PM 查看和按项目覆盖模型参数。
+    kimi-code:
+      label: Kimi Code
+      executor: kimi-code
+      model: kimi-code/k3
+      display_model: k3
+      thinking: adaptive
+      auto: true
+      timeout_seconds: 900
+
     cursor-agent:
       label: Cursor Agent
       executor: cursor-agent

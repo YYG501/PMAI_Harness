@@ -51,9 +51,9 @@ EOF
 }
 
 test_adapter_files_are_executable() {
-  start_test "adapter inventory: claude-code/codex/cursor/opencode/manual 可执行且 Gemini 已移除"
+  start_test "adapter inventory: claude-code/codex/kimi/cursor/opencode/manual 可执行且 Gemini 已移除"
 
-  for adapter in claude-code codex cursor-agent opencode manual; do
+  for adapter in claude-code codex kimi-code cursor-agent opencode manual; do
     if [ ! -x "$ADAPTER_DIR/$adapter.sh" ]; then
       _fail "$adapter.sh 不存在或不可执行"
       return
@@ -77,6 +77,9 @@ test_builder_profile_helper_resolves_pm_choice() {
     rm -f /tmp/builder-profile.$$ /tmp/builder-profile.err.$$; return;
   }
   assert_file_contains /tmp/builder-profile.$$ "OpenCode（deepseek-v4-flash, max）" "OpenCode display should use display_model" || {
+    rm -f /tmp/builder-profile.$$ /tmp/builder-profile.err.$$; return;
+  }
+  assert_file_contains /tmp/builder-profile.$$ "Kimi Code（k3, adaptive）" "Kimi display should use the compact K3 profile" || {
     rm -f /tmp/builder-profile.$$ /tmp/builder-profile.err.$$; return;
   }
   assert_file_contains /tmp/builder-profile.$$ "当前会话直接构建" "builder list should always expose native execution" || {
@@ -135,6 +138,7 @@ test_builder_profile_recommends_target_and_handles_legacy_missing_config() {
   _setup_fake_executor
   _install_fake_command codex
   _install_fake_command claude
+  _install_fake_command kimi
   local config="$T/config.yml"
   cat > "$config" <<'YAML'
 builder:
@@ -180,12 +184,13 @@ PY
 import json, sys
 data = json.load(open(sys.argv[1]))
 assert data["current_host"] == "codex"
-assert [item["executor"] for item in data["profiles"]] == ["native", "claude-code"]
+assert [item["executor"] for item in data["profiles"]] == ["native", "claude-code", "kimi-code"]
 PY
     _fail "available list should expose native plus usable external tools except the current host"
     rm -f /tmp/builder-profile.$$ /tmp/builder-profile-list.$$; _teardown_fake_executor; return
   }
   rm -f /tmp/builder-profile-list.$$
+  rm -f "$FAKE_BIN/kimi"
   local self_only_config="$T/self-only.yml"
   cat > "$self_only_config" <<'YAML'
 builder:
@@ -351,12 +356,39 @@ test_opencode_adapter_invokes_run_with_profile_args() {
   pass_test
 }
 
+test_kimi_code_adapter_invokes_prompt_mode() {
+  start_test "kimi-code adapter: 用 kimi --prompt 非交互执行并传 model/auto"
+
+  _setup_fake_executor
+  _install_fake_command kimi
+  BUILD_DIR="$BUILD_DIR" PROMPT_FILE="$PROMPT_FILE" EXECUTOR_MODEL="kimi-code/k3" \
+    EXECUTOR_AUTO="true" \
+    PATH="$FAKE_BIN:$PATH" bash "$ADAPTER_DIR/kimi-code.sh" >/tmp/exec-adapter.$$ 2>&1
+  local rc=$?
+  if [ "$rc" -ne 0 ]; then
+    _fail "adapter 应返回 0，实际 ${rc}：$(cat /tmp/exec-adapter.$$)"
+    rm -f /tmp/exec-adapter.$$
+    _teardown_fake_executor
+    return
+  fi
+  rm -f /tmp/exec-adapter.$$
+
+  assert_file_contains "$FAKE_LOG" "cmd=kimi" "should invoke kimi binary" || { _teardown_fake_executor; return; }
+  assert_file_contains "$FAKE_LOG" "cwd=$BUILD_DIR" "should run in BUILD_DIR" || { _teardown_fake_executor; return; }
+  assert_file_contains "$FAKE_LOG" "<--prompt><Build the module from spec and design.>" "should pass prompt body" || { _teardown_fake_executor; return; }
+  assert_file_contains "$FAKE_LOG" "<--output-format><text>" "should request text output" || { _teardown_fake_executor; return; }
+  assert_file_contains "$FAKE_LOG" "<--model><kimi-code/k3>" "should pass EXECUTOR_MODEL" || { _teardown_fake_executor; return; }
+  assert_file_contains "$FAKE_LOG" "<--auto>" "should enable unattended execution" || { _teardown_fake_executor; return; }
+  _teardown_fake_executor
+  pass_test
+}
+
 test_build_skill_recommends_then_confirms_builder_profile() {
   start_test "build skill: 推荐 builder profile 后由 PM 确认"
 
   assert_file_contains "$BUILD_SKILL" "builder-profile.py\" recommend" "build should recommend builder profiles" || return
   assert_file_contains "$BUILD_SKILL" "claude-code / codex / kimi-code / opencode / cursor-agent" "current host mapping should include Kimi Code" || return
-  assert_file_contains "$BUILD_SKILL" "Kimi Code 本轮只作为主控" "Kimi should not be silently added as an external builder" || return
+  assert_file_contains "$BUILD_SKILL" "Claude Code、Codex、Kimi Code、Cursor Agent 和 OpenCode 都可以作为外部构建工具" "build should expose Kimi as an external builder" || return
   assert_file_contains "$BUILD_SKILL" "必须排除当前主控对应的外部 profile" "build should exclude the current host profile" || return
   assert_file_contains "$BUILD_SKILL" "当前会话直接构建”始终" "build should always expose native execution" || return
   assert_file_contains "$BUILD_SKILL" "本机可用工具" "build should expose available tools in the first card" || return
@@ -420,6 +452,7 @@ test_readme_lists_build_executors() {
   assert_file_contains "$README" '也可作为 `/pmai-build` 执行器' "README should state Claude Code build role" || return
   assert_file_contains "$README" "Cursor Agent" "README should list Cursor Agent" || return
   assert_file_contains "$README" "OpenCode CLI" "README should list OpenCode CLI" || return
+  assert_file_contains "$README" "当前主控不是 Kimi Code 时，也可作为 build 执行器" "README should document Kimi external builder role" || return
   assert_file_contains "$README" "Codex 作为当前主控时不重复进入外部候选" "README should document current-host profile exclusion" || return
   if grep -q "Gemini CLI" "$README"; then
     _fail "README should not expose the removed Gemini CLI"
@@ -450,6 +483,11 @@ test_config_template_has_builder_profiles() {
   assert_file_contains "$CONFIG_TMPL" "display_model: deepseek-v4-flash" "config should keep OpenCode PM display short" || return
   assert_file_contains "$CONFIG_TMPL" "variant: max" "config should map OpenCode thinking to max variant" || return
   assert_file_contains "$CONFIG_TMPL" "executor: opencode" "config should define OpenCode executor" || return
+  assert_file_contains "$CONFIG_TMPL" "model: kimi-code/k3" "config should define Kimi K3 model" || return
+  assert_file_contains "$CONFIG_TMPL" "executor: kimi-code" "config should define Kimi executor" || return
+  assert_file_contains "$CONFIG_TMPL" "auto: true" "config should run Kimi non-interactively" || return
+  assert_file_contains "$BUILD_CONTRACT" '"kimi-code"' "build contract should accept Kimi executor" || return
+  assert_file_contains "$BUILDER_PROFILE" "BUILTIN_PROFILES" "legacy consumer configs should receive the Kimi profile at runtime" || return
   if grep -qE '^    gemini:|executor: gemini|"gemini":' "$CONFIG_TMPL" "$SETTINGS_TMPL" "$BUILD_CONTRACT"; then
     _fail "active config and contract should not retain the removed Gemini CLI executor"
     return
@@ -475,6 +513,7 @@ test_builder_profile_recommends_target_and_handles_legacy_missing_config
 test_builder_profile_rejects_removed_executor
 test_claude_code_adapter_invokes_print_mode
 test_opencode_adapter_invokes_run_with_profile_args
+test_kimi_code_adapter_invokes_prompt_mode
 test_build_skill_recommends_then_confirms_builder_profile
 test_build_skill_confirms_only_environment_and_tool_before_editing
 test_build_skill_keeps_executor_noise_out_of_pm_view

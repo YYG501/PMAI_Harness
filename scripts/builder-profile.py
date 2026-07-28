@@ -4,7 +4,8 @@
 This intentionally parses only the small YAML subset used by
 templates/pm-workflow.config.yml.tmpl: builder.default_profile and
 builder.profiles.<name> scalar fields. Keeping it stdlib-only lets consumer
-repos use the helper without installing PyYAML.
+repos use the helper without installing PyYAML. Framework-added profiles may
+also be supplied as backward-compatible defaults for existing consumer repos.
 """
 
 from __future__ import annotations
@@ -17,6 +18,19 @@ from pathlib import Path
 from typing import Any
 
 from _lib.project_definition import ProjectDefinitionError, load_project_definition
+
+
+BUILTIN_PROFILES: dict[str, dict[str, Any]] = {
+    "kimi-code": {
+        "label": "Kimi Code",
+        "executor": "kimi-code",
+        "model": "kimi-code/k3",
+        "display_model": "k3",
+        "thinking": "adaptive",
+        "auto": True,
+        "timeout_seconds": 900,
+    }
+}
 
 
 def strip_comment(line: str) -> str:
@@ -100,6 +114,9 @@ def load_builder_config(path: Path) -> dict[str, Any]:
             continue
         if indent == 6 and current_profile:
             profiles[current_profile][key] = parse_scalar(value)
+
+    for name, profile in BUILTIN_PROFILES.items():
+        profiles.setdefault(name, dict(profile))
 
     return {
         "default_profile": default_profile,
@@ -273,6 +290,7 @@ EXECUTOR_BINARIES = {
     "claude-code": "claude",
     "codex": "codex",
     "cursor-agent": "cursor-agent",
+    "kimi-code": "kimi",
     "opencode": "opencode",
 }
 
