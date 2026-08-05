@@ -16,6 +16,8 @@ source "${PMAI_HOME:-$HOME/.pmai}/scripts/skill-preamble.sh"
 
 如果输出 `PMAI_PROJECT_INITIALIZED: 0`，停止本 skill，只引导 PM 先发 `/pmai-init-project`。初始化或已有代码接入完成前，不要开启轻量修复隔离环境或改业务代码。
 
+若由 `/pmai-lark-review` 进入，先完整读取 `skills/lark-review/references/lifecycle-handoff.md`。本批正式规格先在 T 中完成并由 lark-review apply；apply 前不启动 quick-fix worktree。apply 后本 skill 只处理规格之外的文件，正式规格不得进入 quick-fix diff；本批只有规格文字变化时跳过空 worktree和空提交。
+
 > **PM 答题规则**：所有 AskUserQuestion 调用按 `_shared/pm-view/askuser-rules.md` §1 四条硬规则走（空答 STOP / 没拿到答案禁止合入 / runtime 退化保留 wait / 多决策拆开顺序问）。
 
 ## When To Use

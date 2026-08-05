@@ -12,10 +12,10 @@
 2. 拉取飞书当前内容：
 
    ```bash
-   lark-cli docs +fetch --api-version v2 --doc <doc_id>
+   lark-cli docs +fetch --doc <doc_id> --detail full --as user
    ```
 
-3. 记录当前 revision。若返回内容含图片、白板、附件或复杂表格，记录数量作为验收基线。
+3. 记录当前 revision 和待同步本地正文 hash。若由 `/pmai-lark-review` 进入，当前 revision 必须等于 ready apply plan 的 `remote_revision_id`；不等则回到 review 重新 collect。若返回内容含图片、白板、附件或复杂表格，记录数量作为验收基线。
 4. 对比本地正文与飞书正文，按章节列出差异。
 5. 为每处差异选择最小动作：
 
@@ -26,13 +26,24 @@
 | 表格、列表、图文混排附近 | `fetch --detail with-ids` 后用 `block_replace` / `block_insert_after` / `block_delete` |
 | 图片、白板、附件附近 | 默认不碰，除非 PM 明确要改 |
 
-6. 分批执行，每批修改后立即 fetch 回读。
+6. 分批执行。第一笔 `lark-cli docs +update` 携带步骤 3 的 `--revision-id`；后续每笔携带上一笔返回的 revision。每批修改后立即 fetch 回读，revision 冲突时停止，不用 `-1` 或重试覆盖。
 7. 终检通过后，更新本地 frontmatter 的 `lark_synced_at` 和 `lark_revision_id`，不改正文。
+8. 用回读确认后的 revision 刷新下一轮评审基线：
+
+   ```bash
+   python3 "${PMAI_HOME:-$HOME/.pmai}/scripts/lark-review.py" baseline \
+     "<markdown_path>" \
+     --revision-id "<revision_id>" \
+     --expected-source-hash "<步骤 3 的本地正文 hash>"
+   ```
+
+   该命令同时记录规范化本地正文 hash；revision 与 hash 必须一起更新，不能只改一项。
 
 ## 操作纪律
 
 - `str_replace` 是全局替换，pattern 必须唯一；不唯一就改用更长锚点或 block 操作。
 - `block_replace` 会生成新 id；后续还要动相邻块时先重新 fetch。
+- 每笔写入必须使用明确的 base revision，不能依赖默认 latest。
 - 图片相邻块要保守处理；改完必须比较图片数量。
 - 列表项通常是独立块；替换段落不会自动替换后续列表项。
 - 临时内容文件必须放 cwd 下，并用相对路径传给 `--content @file`。
@@ -45,4 +56,5 @@
 - 必须删除的旧文案已经消失。
 - 图片、附件、白板数量没有减少。
 - revision 已更新。
+- `lark_published_revision_id` 与 `lark_published_source_hash` 已刷新为最终对齐点。
 - 飞书回读内容与本轮预期一致。

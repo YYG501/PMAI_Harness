@@ -114,7 +114,7 @@ echo "─── 3. Skills in ~/.pmai/skills/ ───"
 #    tests/test-doctor-skills.sh 对本清单与 skills/ 目录做全等校验，漏同步会在 run-all 红掉。
 EXPECTED_SKILLS=(
   # 活跃集（reshape 后 PM 日常入口）
-  init-project design mockup build build-close publish-to-lark lark-sync status
+  init-project design mockup build build-close publish-to-lark lark-sync lark-review status
   # 按需主动调（项目方向 / 照站对齐）
   direction mirror-site
   # 按需辅助：小改 / 轻记录 / 放弃 build / 功能型规格文档 / 介绍型文档 / 说人话磨文 / 讨论对焦 / 会话反馈

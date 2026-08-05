@@ -9,6 +9,7 @@ SUITES=(
   test-lark-adapter.sh
   test-lark-cli-lint.sh
   test-lark-sync-skill.sh
+  test-lark-review.sh
   test-publish-to-lark-e2e.sh
   test-measure-tthw.sh
   test-init-project.sh

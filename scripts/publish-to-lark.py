@@ -18,6 +18,7 @@ import re
 import sys
 from datetime import datetime
 from pathlib import Path
+from urllib.parse import urlparse
 
 # 让 _lib 可以 import（publish-to-lark.py 自身在 scripts/，_lib 是同级子目录）
 _SCRIPTS_DIR = str(Path(__file__).resolve().parent)
@@ -31,9 +32,12 @@ from _lib.lark_adapter import (  # noqa: E402
     auth_check,
     auth_status,
     docs_create_from_markdown,
+    docs_fetch,
     docs_update_from_markdown,
+    markdown_body_hash,
     parse_frontmatter,
     version,
+    write_frontmatter,
 )
 
 CONFIG_PATH = Path(".claude/lark-publish.json")
@@ -183,18 +187,84 @@ def parse_table_skip_flags(body: str) -> list[bool]:
     return flags
 
 
-# ---------- Frontmatter ----------
-# parse_frontmatter 已上移到 _lib.lark_adapter（frontmatter 拆分单一实现，
-# adapter 发送前也用它剥离 frontmatter）；本文件只保留回写侧的 write_frontmatter。
+# ---------- Review baseline ----------
 
 
-def write_frontmatter(path: Path, fm: dict, body: str) -> None:
-    lines = ["---"]
-    for k, v in fm.items():
-        lines.append(f"{k}: {v}")
-    lines.append("---")
-    text = "\n".join(lines) + "\n" + (body if body.startswith("\n") else "\n" + body)
-    path.write_text(text, encoding="utf-8")
+def _document_from_fetch(payload: dict) -> dict:
+    data = payload.get("data") if isinstance(payload, dict) else None
+    if not isinstance(data, dict):
+        data = payload
+    document = data.get("document") if isinstance(data, dict) else None
+    return document if isinstance(document, dict) else {}
+
+
+def _revision_id(value: object) -> int | None:
+    try:
+        return int(value)  # type: ignore[arg-type]
+    except (TypeError, ValueError):
+        return None
+
+
+def _docx_token(value: object) -> str | None:
+    text = str(value or "").strip()
+    if "://" not in text:
+        return None
+    parts = [part for part in urlparse(text).path.split("/") if part]
+    if "docx" not in parts:
+        return None
+    index = parts.index("docx")
+    return parts[index + 1] if index + 1 < len(parts) else None
+
+
+def capture_review_baseline(
+    doc_id: str,
+    body: str,
+    *,
+    written_revision: int | None,
+) -> tuple[int | None, str]:
+    """确认写入 revision 仍是当前版本，并绑定本次本地源正文 hash。"""
+    source_hash = markdown_body_hash(body)
+    if written_revision is None:
+        warn(
+            "写操作未返回可验证 revision；本次发布已成功，但不建立评审基线，"
+            "避免把未知飞书版本与本地正文配成一对"
+        )
+        return None, source_hash
+    try:
+        document = _document_from_fetch(docs_fetch(doc_id))
+        fetched_doc_id = str(document.get("document_id") or "")
+        if fetched_doc_id != doc_id:
+            raise LarkAdapterError(
+                "validation",
+                f"发布后回读返回了其它文档: expected={doc_id}, actual={fetched_doc_id or 'unknown'}",
+            )
+        fetched_revision = _revision_id(document.get("revision_id"))
+        if fetched_revision != written_revision:
+            raise LarkAdapterError(
+                "concurrent_update",
+                "发布后飞书 revision 已变化，可能发生了远端并发编辑",
+            )
+    except LarkAdapterError as exc:
+        warn(f"未能记录飞书评审 revision；本次发布已成功，后续评审将按旧文档降级处理。详情: {exc}")
+        return None, source_hash
+    return written_revision, source_hash
+
+
+def clear_review_baseline(markdown_path: Path, *, expected_text: str) -> None:
+    """远端已可能部分写入时，清除不再可信的旧发布基线。"""
+    try:
+        frontmatter, body = parse_frontmatter(expected_text)
+        next_frontmatter = dict(frontmatter)
+        next_frontmatter.pop("lark_published_revision_id", None)
+        next_frontmatter.pop("lark_published_source_hash", None)
+        write_frontmatter(
+            markdown_path,
+            next_frontmatter,
+            body,
+            expected_text=expected_text,
+        )
+    except (LarkAdapterError, OSError) as exc:
+        warn(f"远端更新不完整，且无法清除旧评审基线: {exc}")
 
 
 # ---------- 配置 / 目标解析 ----------
@@ -285,26 +355,95 @@ def publish_first_time(markdown_path: Path, target: dict):
         die(f"无法从 lark-cli docs +create 返回提取 doc_id: {data}")
 
     url = inner.get("doc_url") or build_doc_url(doc_id)
+    document = (
+        inner.get("document")
+        or data.get("document")
+        or {}
+    )
+    revision = _revision_id(document.get("revision_id")) if isinstance(document, dict) else None
     info(f"文档已创建: {url}")
-    return doc_id, url
+    return doc_id, url, revision
 
 
-def publish_overwrite(markdown_path: Path, doc_id: str):
+def publish_overwrite(
+    markdown_path: Path,
+    doc_id: str,
+    *,
+    expected_revision: int | None,
+    expected_local_text: str,
+):
     info(f"覆盖飞书文档: doc_id={doc_id}")
     try:
-        docs_update_from_markdown(markdown_path, doc_id=doc_id, mode="overwrite")
+        if expected_revision is None:
+            current = _document_from_fetch(docs_fetch(doc_id))
+            if str(current.get("document_id") or "") != doc_id:
+                raise LarkAdapterError("validation", "覆盖前回读返回了其它文档")
+            expected_revision = _revision_id(current.get("revision_id"))
+            if expected_revision is None:
+                raise LarkAdapterError("validation", "覆盖前无法取得飞书 revision")
+        if markdown_path.read_text(encoding="utf-8") != expected_local_text:
+            raise LarkAdapterError(
+                "concurrent_update",
+                "覆盖前本地 markdown 已变化，拒绝发送混合版本",
+            )
+        update_result = docs_update_from_markdown(
+            markdown_path,
+            doc_id=doc_id,
+            mode="overwrite",
+            revision_id=expected_revision,
+        )
     except LarkAdapterError as e:
+        if e.kind == "incomplete_update":
+            clear_review_baseline(markdown_path, expected_text=expected_local_text)
         die(f"lark-cli docs +update 失败: {e.detail}")
-    return doc_id, build_doc_url(doc_id)
+    update_document = _document_from_fetch(update_result or {})
+    written_revision = _revision_id(update_document.get("revision_id"))
+    return doc_id, build_doc_url(doc_id), written_revision
 
 
 # ---------- Cell 合并 ----------
 
 def lark_api(method: str, path: str, params: dict | None = None, data: dict | None = None):
     try:
-        return api_json(method, path, params=params, data=data)
+        response = api_json(method, path, params=params, data=data)
     except LarkAdapterError as e:
         raise RuntimeError(f"lark-cli api {method} {path} failed: {e.detail}") from e
+    if not isinstance(response, dict):
+        raise RuntimeError(f"lark-cli api {method} {path} 返回的 JSON 顶层不是对象")
+    code = response.get("code")
+    if response.get("ok") is False or code not in (None, 0):
+        raise RuntimeError(f"lark-cli api {method} {path} 返回失败 envelope: {response}")
+    return response
+
+
+def revisioned_lark_write(
+    method: str,
+    path: str,
+    *,
+    revision_id: int,
+    data: dict,
+    label: str,
+) -> int:
+    """用当前 revision 写一次，并只返回响应中可验证的新 revision。"""
+    response = lark_api(
+        method,
+        path,
+        params={"document_revision_id": revision_id},
+        data=data,
+    )
+    response_data = response.get("data")
+    next_revision = _revision_id(
+        response_data.get("document_revision_id")
+        if isinstance(response_data, dict)
+        else None
+    )
+    if next_revision is None:
+        raise RuntimeError(f"{label} 未返回 document_revision_id")
+    if next_revision <= revision_id:
+        raise RuntimeError(
+            f"{label} 返回的 revision 未前进: before={revision_id}, after={next_revision}"
+        )
+    return next_revision
 
 
 def get_all_blocks(doc_id: str) -> list[dict]:
@@ -468,7 +607,8 @@ def merge_leading_with_clear(
     cols: int,
     blocks_by_id: dict,
     rng: dict,
-) -> bool:
+    revision_id: int,
+) -> int:
     """前 N-1 列合并:清空非锚点 cell children + merge_table_cells。
 
     飞书 merge_table_cells API 只设 row_span / col_span,被合并的非锚点 cell 内容仍存在,
@@ -490,26 +630,22 @@ def merge_leading_with_clear(
         count = len(non_anchor_cell.get("children", []) or [])
         if count == 0:
             continue
-        try:
-            lark_api(
-                "DELETE",
-                f"/open-apis/docx/v1/documents/{doc_id}/blocks/{non_anchor_id}/children/batch_delete",
-                data={"start_index": 0, "end_index": count},
-            )
-        except RuntimeError as e:
-            warn(f"清空 leading cell children 失败 cell={non_anchor_id}: {e};继续 merge")
+        revision_id = revisioned_lark_write(
+            "DELETE",
+            f"/open-apis/docx/v1/documents/{doc_id}/blocks/{non_anchor_id}/children/batch_delete",
+            revision_id=revision_id,
+            data={"start_index": 0, "end_index": count},
+            label=f"清空 leading cell children cell={non_anchor_id}",
+        )
 
     # 2) merge_table_cells
-    try:
-        lark_api(
-            "PATCH",
-            f"/open-apis/docx/v1/documents/{doc_id}/blocks/{table_block_id}",
-            data={"merge_table_cells": rng},
-        )
-        return True
-    except RuntimeError as e:
-        warn(f"merge_table_cells (leading) 失败 range={rng}: {e}")
-        return False
+    return revisioned_lark_write(
+        "PATCH",
+        f"/open-apis/docx/v1/documents/{doc_id}/blocks/{table_block_id}",
+        revision_id=revision_id,
+        data={"merge_table_cells": rng},
+        label=f"merge_table_cells (leading) range={rng}",
+    )
 
 
 def merge_desc_group_with_content(
@@ -519,7 +655,8 @@ def merge_desc_group_with_content(
     cols: int,
     blocks_by_id: dict,
     rng: dict,
-) -> bool:
+    revision_id: int,
+) -> int:
     """把 desc col row group 的非锚点 cell 的内容拷贝到锚点 cell，清空原 cell，再 merge。"""
     start = rng["row_start_index"]
     end = rng["row_end_index"]
@@ -528,8 +665,7 @@ def merge_desc_group_with_content(
     anchor_cell_id = cells_array[start * cols + desc_col]
     anchor_cell = blocks_by_id.get(anchor_cell_id)
     if not anchor_cell:
-        warn(f"找不到锚点 cell block: {anchor_cell_id}")
-        return False
+        raise RuntimeError(f"找不到锚点 cell block: {anchor_cell_id}")
 
     # 1) 一次性收集所有非锚点 cell 的 child specs（含富文本 elements）
     all_specs: list[dict] = []
@@ -548,49 +684,49 @@ def merge_desc_group_with_content(
     # 2) 锚点 cell 末尾追加所有非锚点的 children 拷贝（一次 POST）
     if all_specs:
         anchor_child_count = len(anchor_cell.get("children", []) or [])
-        try:
-            lark_api(
-                "POST",
-                f"/open-apis/docx/v1/documents/{doc_id}/blocks/{anchor_cell_id}/children",
-                data={"children": all_specs, "index": anchor_child_count},
-            )
-        except RuntimeError as e:
-            warn(f"拷贝 children 到锚点 cell 失败: {e}；跳过本 group merge")
-            return False
+        revision_id = revisioned_lark_write(
+            "POST",
+            f"/open-apis/docx/v1/documents/{doc_id}/blocks/{anchor_cell_id}/children",
+            revision_id=revision_id,
+            data={"children": all_specs, "index": anchor_child_count},
+            label=f"拷贝 children 到锚点 cell={anchor_cell_id}",
+        )
 
         # 3) 清空非锚点 cell 的 children（Feishu batch_delete = DELETE + start_index/end_index）
         for cell_id, count in cells_to_clear:
             if count == 0:
                 continue
-            try:
-                lark_api(
-                    "DELETE",
-                    f"/open-apis/docx/v1/documents/{doc_id}/blocks/{cell_id}/children/batch_delete",
-                    data={"start_index": 0, "end_index": count},
-                )
-            except RuntimeError as e:
-                warn(f"清空原 cell children 失败 cell={cell_id}: {e}；锚点已含拷贝，继续 merge")
+            revision_id = revisioned_lark_write(
+                "DELETE",
+                f"/open-apis/docx/v1/documents/{doc_id}/blocks/{cell_id}/children/batch_delete",
+                revision_id=revision_id,
+                data={"start_index": 0, "end_index": count},
+                label=f"清空原 cell children cell={cell_id}",
+            )
 
     # 4) merge_table_cells
-    try:
-        lark_api(
-            "PATCH",
-            f"/open-apis/docx/v1/documents/{doc_id}/blocks/{table_block_id}",
-            data={"merge_table_cells": rng},
-        )
-    except RuntimeError as e:
-        warn(f"merge_table_cells（需求描述列）失败 range={rng}: {e}")
-        return False
-
-    return True
+    return revisioned_lark_write(
+        "PATCH",
+        f"/open-apis/docx/v1/documents/{doc_id}/blocks/{table_block_id}",
+        revision_id=revision_id,
+        data={"merge_table_cells": rng},
+        label=f"merge_table_cells（需求描述列）range={rng}",
+    )
 
 
-def merge_cells_for_doc(doc_id: str, skip_flags: list[bool] | None = None):
+def merge_cells_for_doc(
+    doc_id: str,
+    skip_flags: list[bool] | None,
+    revision_id: int | None,
+) -> tuple[int, int, int | None]:
+    if revision_id is None:
+        warn("写操作未返回 revision；跳过表格合并，避免在未知版本上继续写入")
+        return 0, 1, None
     try:
         blocks = get_all_blocks(doc_id)
     except RuntimeError as e:
         warn(f"拉 block 列表失败: {e}；跳过合并步骤")
-        return 0, 0
+        return 0, 1, None
 
     blocks_by_id = {b["block_id"]: b for b in blocks}
     table_blocks = [b for b in blocks if "table" in b]
@@ -638,25 +774,41 @@ def merge_cells_for_doc(doc_id: str, skip_flags: list[bool] | None = None):
         # 否则飞书 docx 渲染时 rowspan 内所有非锚点 cell 内容会叠加显示在锚点 cell
         cells_array = (table.get("table") or {}).get("cells") or []
         for rng in find_merge_ranges(grid, existing):
-            ok = merge_leading_with_clear(
-                doc_id, table["block_id"], cells_array, cols, blocks_by_id, rng,
-            )
-            if ok:
+            try:
+                revision_id = merge_leading_with_clear(
+                    doc_id,
+                    table["block_id"],
+                    cells_array,
+                    cols,
+                    blocks_by_id,
+                    rng,
+                    revision_id,
+                )
                 success += 1
-            else:
+            except RuntimeError as exc:
+                warn(f"表格合并写入失败，停止后续写入: {exc}")
                 failure += 1
+                return success, failure, None
 
         # 末列（需求描述）：续行 row group 需要先把 children 拷贝到锚点 cell 再 merge
         for rng in find_desc_group_ranges(grid, existing):
-            ok = merge_desc_group_with_content(
-                doc_id, table["block_id"], cells_array, cols, blocks_by_id, rng,
-            )
-            if ok:
+            try:
+                revision_id = merge_desc_group_with_content(
+                    doc_id,
+                    table["block_id"],
+                    cells_array,
+                    cols,
+                    blocks_by_id,
+                    rng,
+                    revision_id,
+                )
                 success += 1
-            else:
+            except RuntimeError as exc:
+                warn(f"表格合并写入失败，停止后续写入: {exc}")
                 failure += 1
+                return success, failure, None
 
-    return success, failure
+    return success, failure, revision_id
 
 
 # ---------- Main ----------
@@ -680,7 +832,14 @@ def main() -> None:
     fm, body = parse_frontmatter(text)
     warn_if_html_tables(text)
     filename = md_path.stem
-    existing_doc_id = fm.get("lark_doc_id")
+    frontmatter_doc_id = fm.get("lark_doc_id")
+    existing_url_token = _docx_token(fm.get("lark_doc_url"))
+    if frontmatter_doc_id and existing_url_token and frontmatter_doc_id != existing_url_token:
+        die(
+            "frontmatter 的 lark_doc_id 与 lark_doc_url 指向不同文档，"
+            "请先修正文档绑定再发布"
+        )
+    existing_doc_id = frontmatter_doc_id or existing_url_token
 
     args_complete = bool(args.target_token and args.target_kind and args.title)
     config_present = CONFIG_PATH.exists()
@@ -696,11 +855,16 @@ def main() -> None:
 
     if existing_doc_id:
         info(f"检测到 frontmatter 中 lark_doc_id={existing_doc_id}，走覆盖路径")
-        doc_id, url = publish_overwrite(md_path, existing_doc_id)
+        doc_id, url, written_revision = publish_overwrite(
+            md_path,
+            existing_doc_id,
+            expected_revision=_revision_id(fm.get("lark_published_revision_id")),
+            expected_local_text=text,
+        )
         first_time = False
     else:
         target = resolve_target(args, fm, md_path)
-        doc_id, url = publish_first_time(md_path, target)
+        doc_id, url, written_revision = publish_first_time(md_path, target)
         first_time = True
 
     if args.no_merge_cells:
@@ -708,26 +872,61 @@ def main() -> None:
         merge_s, merge_f = 0, 0
     else:
         info("扫描表格 cell 合并...")
-        merge_s, merge_f = merge_cells_for_doc(doc_id, parse_table_skip_flags(body))
-
+        merge_s, merge_f, written_revision = merge_cells_for_doc(
+            doc_id,
+            parse_table_skip_flags(body),
+            written_revision,
+        )
+    baseline_revision, baseline_source_hash = capture_review_baseline(
+        doc_id,
+        body,
+        written_revision=written_revision,
+    )
     fm_written = False
-    if first_time:
-        new_fm = dict(fm)
-        new_fm["lark_doc_id"] = doc_id
-        new_fm["lark_doc_url"] = url
-        new_fm["lark_published_at"] = datetime.now().astimezone().isoformat(timespec="seconds")
-        try:
-            write_frontmatter(md_path, new_fm, body)
+    try:
+        latest_text = md_path.read_text(encoding="utf-8")
+        latest_fm, latest_body = parse_frontmatter(latest_text)
+        latest_doc_id = latest_fm.get("lark_doc_id")
+        latest_url_token = _docx_token(latest_fm.get("lark_doc_url"))
+        identity_conflict = (
+            (bool(latest_doc_id) and latest_doc_id != doc_id)
+            or (bool(latest_url_token) and latest_url_token != doc_id)
+        )
+        if identity_conflict:
+            warn(
+                "发布期间本地文档绑定已变化，跳过 frontmatter 回填以免写到错误文档；"
+                f"飞书侧文档已发布，URL={url}"
+            )
+        else:
+            new_fm = dict(latest_fm)
+            new_fm["lark_doc_id"] = doc_id
+            if first_time:
+                new_fm["lark_doc_url"] = url
+                new_fm["lark_published_at"] = datetime.now().astimezone().isoformat(timespec="seconds")
+            if baseline_revision is not None and markdown_body_hash(latest_body) != baseline_source_hash:
+                warn(
+                    "发布后本地正文又发生变化；保留本地修改，但不把旧飞书 revision 与新正文绑定"
+                )
+                baseline_revision = None
+            if baseline_revision is not None:
+                new_fm["lark_published_revision_id"] = baseline_revision
+                new_fm["lark_published_source_hash"] = baseline_source_hash
+            else:
+                # 新发布已经成功，旧基线不再代表当前发布点；清掉整对字段才能安全降级。
+                new_fm.pop("lark_published_revision_id", None)
+                new_fm.pop("lark_published_source_hash", None)
+            write_frontmatter(md_path, new_fm, latest_body, expected_text=latest_text)
             fm_written = True
-        except OSError as e:
-            warn(f"frontmatter 回写失败: {e}；飞书侧文档已发布，URL={url}，请手动回填")
+    except (LarkAdapterError, OSError) as e:
+        warn(f"frontmatter 回写失败: {e}；飞书侧文档已发布，URL={url}，请手动回填")
 
     info("")
     info("飞书文档已发布")
     info(f"URL: {url}")
     info(f"合并 cell: 成功 {merge_s} 处 / 失败 {merge_f} 处")
-    if first_time:
-        info(f"本地 frontmatter: {'已回填' if fm_written else '回填失败 — 见上方警告'}")
+    info(f"本地 frontmatter: {'已回填' if fm_written else '未更新 — 见上方警告'}")
+    if baseline_revision is not None:
+        info(f"评审基线: revision {baseline_revision} / source hash {baseline_source_hash[:12]}")
 
 
 if __name__ == "__main__":

@@ -17,6 +17,8 @@ source "${PMAI_HOME:-$HOME/.pmai}/scripts/skill-preamble.sh"
 
 如果输出 `PMAI_PROJECT_INITIALIZED: 0`，停止本 skill，只引导 PM 先发 `/pmai-init-project`。初始化或已有代码接入完成前，不要读取项目底座或生成/改写规格文档。
 
+若由 `/pmai-lark-review` 携带当前评审批次调用，先完整读取 `skills/lark-review/references/lifecycle-handoff.md`。当本次产物就是 review.json 绑定的正式规格时，实际输出必须改为同批次 `target.md`：只写正文、不带 frontmatter，所有 lint 和文字检查针对 T；不得同时修改正式规格。T 改变后同步更新 `resolutions.json:target` 的派生依据。apply 成功后，其它调用恢复本 skill 的默认路径。
+
 > **PM 答题规则（M4）**：所有 AskUserQuestion 调用按 `_shared/pm-view/askuser-rules.md` §1 四条硬规则走（空答 STOP / 没拿到答案禁止落盘 PM 视图文档 / runtime 退化保留 wait / 多决策拆开顺序问）。**Runtime 兜底**：本 skill 各门写的都是 picker 形态；runtime 不支持时 AI 按 §1.3 自动退化为编号列表，仍 wait。
 
 ## What This Skill Produces

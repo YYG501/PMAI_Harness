@@ -15,6 +15,8 @@ python3 "$PMAI_HOME/scripts/status-view.py" --banner-only --skill BUILD || true
 
 如果输出 `PMAI_PROJECT_INITIALIZED: 0`，停止并引导 PM 先发 `/pmai-init-project`。
 
+若由 `/pmai-lark-review` 进入，先完整读取 `skills/lark-review/references/lifecycle-handoff.md`。新 build 只能在 T 已 seal/apply、候选决定正式归位、飞书精细同步、design 重新生成 context pack 并提交建造依据后启动；已有 active build 也不得在 apply 前写 accepted delta，只把候选 delta 留在评审批次账本。apply 成功后先调用一次 `add-delta`，再同步飞书并继续实现。这样 build 仍只读取正式规格和当前 source hash，不读取仓外临时快照，也不会在旧批次失效时残留半套决定。
+
 执行前完整读取：
 
 - `skills/_shared/context-reconstruction.md`

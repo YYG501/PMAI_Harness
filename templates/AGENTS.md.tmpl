@@ -52,6 +52,7 @@
 - `/pmai-build-close` 保留为兼容与恢复入口，用于中断续跑、merge 冲突后重试或 `landed/docs_pending` 文档恢复。
 - 迷路或续跑：读 `/pmai-status` 对应 skill，先报告当前状态再行动。
 - PM 要复盘本次 PMAI 协作、反馈流程卡点或把问题交给框架仓时：读 `/pmai-feedback`。它只读当前完整原始会话和项目真相源，生成带会话 ID 与文件地址的框架交接 Prompt；不在消费仓直接改框架。
+- PM 在已发布飞书规格中 review、修改正文或添加批注，并要求反向更新规格 / 决定 / 原型时：读 `/pmai-lark-review`。它先把发布基线、本地和飞书固定为只读证据，归位独立目标版本后再按最高影响接回 quick-fix、active build 或 design/build；不得用任一证据版直接覆盖正式规格。普通单向 / 双向正文同步仍走 `/pmai-lark-sync`。
 
 ## gstack Side Paths
 

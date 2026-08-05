@@ -8,9 +8,12 @@
 - 强制封装 frontmatter 剥离：lark-cli / 飞书不识别 YAML frontmatter，直接发
   原文件会把 `---\n...\n---` 块当正文渲染。docs_* 发送前统一剥掉 frontmatter，
   只发正文（与 cwd workaround 同属"lark-cli markdown 发送怪癖"收口）
-- API surface ~6 核心：version / auth_status / auth_check(scopes) /
-  docs_create_from_markdown / docs_update_from_markdown / api_json；
-  另导出 parse_frontmatter（frontmatter 拆分单一实现，publish-to-lark 复用）
+- API surface：version / auth_status / auth_check(scopes) /
+  docs_create_from_markdown / docs_update_from_markdown / docs_fetch /
+  drive_comments_page / drive_comment_replies_page /
+  drive_comment_reply_create / drive_comment_set_solved / api_json；
+  另导出 parse_frontmatter / write_frontmatter / replace_markdown_body
+  （保留原 YAML 的 frontmatter 单一实现）
 - 故障语义统一：可恢复用返回值 `(ok, detail)`；硬错抛 `LarkAdapterError`
 
 调用方约定：
@@ -26,7 +29,9 @@ doctor 子命令：`python3 -m _lib.lark_adapter doctor` 自检 version + auth_s
 
 from __future__ import annotations
 
+import hashlib
 import json
+import os
 import re
 import subprocess
 import tempfile
@@ -36,6 +41,7 @@ from typing import Optional
 
 
 MIN_LARK_CLI_VERSION = (1, 0, 27)
+MIN_IM_MARKDOWN_CLI_VERSION = (1, 0, 58)
 
 
 class LarkAdapterError(Exception):
@@ -100,6 +106,7 @@ def _parse_version(s: str) -> Optional[tuple[int, int, int]]:
 # 此正则是 frontmatter 拆分的单一定义 —— publish-to-lark 的回写逻辑也 import
 # parse_frontmatter 复用，避免两份正则各自漂移。
 _FRONTMATTER_RE = re.compile(r"\A---\n(.*?)\n---\n?(.*)\Z", re.DOTALL)
+_FRONTMATTER_KEY_RE = re.compile(r"^([A-Za-z_][A-Za-z0-9_.-]*):(.*)$")
 
 
 def parse_frontmatter(text: str) -> tuple[dict[str, str], str]:
@@ -114,11 +121,138 @@ def parse_frontmatter(text: str) -> tuple[dict[str, str], str]:
     fm: dict[str, str] = {}
     for line in m.group(1).splitlines():
         line = line.rstrip()
-        if not line or line.lstrip().startswith("#") or ":" not in line:
+        match = _FRONTMATTER_KEY_RE.match(line)
+        if not match:
             continue
-        k, v = line.split(":", 1)
-        fm[k.strip()] = v.strip()
+        fm[match.group(1)] = match.group(2).strip()
     return fm, m.group(2)
+
+
+def _atomic_replace(path: Path, text: str, *, expected_text: str) -> None:
+    """同目录写临时文件后替换；目标在准备期间变化则拒绝覆盖。"""
+    mode = path.stat().st_mode
+    tmp = tempfile.NamedTemporaryFile(
+        mode="w",
+        encoding="utf-8",
+        prefix=f".{path.name}.frontmatter-",
+        dir=path.parent,
+        delete=False,
+    )
+    tmp_path = Path(tmp.name)
+    try:
+        tmp.write(text)
+        tmp.flush()
+        os.fsync(tmp.fileno())
+        tmp.close()
+        os.chmod(tmp_path, mode)
+        if path.read_text(encoding="utf-8") != expected_text:
+            raise LarkAdapterError(
+                "concurrent_update",
+                f"frontmatter 回写前文件已变化，拒绝覆盖: {path}",
+            )
+        os.replace(tmp_path, path)
+    finally:
+        if not tmp.closed:
+            tmp.close()
+        tmp_path.unlink(missing_ok=True)
+
+
+def _patch_frontmatter_text(
+    text: str,
+    updates: dict[str, object],
+    removals: set[str],
+) -> str:
+    """只修改指定顶层标量 key，原样保留未知 YAML、注释与嵌套块。"""
+    if set(updates) & removals:
+        raise LarkAdapterError("validation", "frontmatter key 不能同时更新和删除")
+    for key, value in updates.items():
+        if not _FRONTMATTER_KEY_RE.match(f"{key}:") or "\n" in str(value):
+            raise LarkAdapterError("validation", f"不安全的 frontmatter 标量: {key}")
+
+    match = _FRONTMATTER_RE.match(text)
+    if match:
+        lines = match.group(1).splitlines()
+        body = match.group(2)
+    else:
+        lines = []
+        body = text
+
+    output: list[str] = []
+    seen: set[str] = set()
+    for line in lines:
+        key_match = _FRONTMATTER_KEY_RE.match(line)
+        key = key_match.group(1) if key_match else None
+        if key in removals:
+            seen.add(key)
+            continue
+        if key in updates:
+            if key not in seen:
+                output.append(f"{key}: {updates[key]}")
+                seen.add(key)
+            continue
+        output.append(line)
+    for key, value in updates.items():
+        if key not in seen:
+            output.append(f"{key}: {value}")
+
+    frontmatter = "\n".join(output)
+    return f"---\n{frontmatter}\n---\n" + body
+
+
+def write_frontmatter(
+    path: Path,
+    fm: dict[str, object],
+    body: str,
+    *,
+    expected_text: str | None = None,
+) -> None:
+    """以补丁方式写 frontmatter；保留未知 YAML，并拒绝覆盖并发正文修改。"""
+    original = path.read_text(encoding="utf-8")
+    if expected_text is not None and original != expected_text:
+        raise LarkAdapterError(
+            "concurrent_update",
+            f"frontmatter 回写前文件已变化，拒绝覆盖: {path}",
+        )
+    current_fm, current_body = parse_frontmatter(original)
+    if current_body != body:
+        raise LarkAdapterError(
+            "concurrent_update",
+            f"frontmatter 回写使用了过期正文，拒绝覆盖: {path}",
+        )
+    updates = {
+        key: value
+        for key, value in fm.items()
+        if current_fm.get(key) != str(value)
+    }
+    removals = set(current_fm) - set(fm)
+    if not updates and not removals:
+        return
+    patched = _patch_frontmatter_text(original, updates, removals)
+    _atomic_replace(path, patched, expected_text=original)
+
+
+def replace_markdown_body(
+    path: Path,
+    body: str,
+    *,
+    expected_text: str | None = None,
+) -> None:
+    """原子替换正文，逐字保留已有 frontmatter。"""
+    original = path.read_text(encoding="utf-8")
+    if expected_text is not None and original != expected_text:
+        raise LarkAdapterError(
+            "concurrent_update",
+            f"正文写入前文件已变化，拒绝覆盖: {path}",
+        )
+    match = _FRONTMATTER_RE.match(original)
+    prefix = original[: match.start(2)] if match else ""
+    _atomic_replace(path, prefix + body, expected_text=original)
+
+
+def markdown_body_hash(body: str) -> str:
+    """计算忽略换行风格和首尾空行的稳定正文 SHA-256。"""
+    canonical = body.replace("\r\n", "\n").replace("\r", "\n").strip("\n") + "\n"
+    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
 
 
 # ============================================================================
@@ -258,13 +392,16 @@ def docs_create_from_markdown(
 
 
 def docs_update_from_markdown(
-    markdown_path: Path, *, doc_id: str, mode: str = "overwrite"
-) -> None:
+    markdown_path: Path,
+    *,
+    doc_id: str,
+    mode: str = "overwrite",
+    revision_id: Optional[int] = None,
+) -> dict:
     """`lark-cli docs +update` 覆盖模式（adapter 内部强制 cwd workaround）。
 
-    None 语义：
-    - 子进程失败 → 抛 LarkAdapterError("subprocess")
-    - 成功 → 返回 None（lark-cli 该子命令 stdout 不带稳定 JSON）
+    只有 `data.result=success` 视为完整成功；无返回、partial_success 或 failed
+    都抛错，避免调用方建立无法证明的发布基线。
     """
     _validate_markdown_arg(markdown_path)
     if not doc_id:
@@ -277,7 +414,223 @@ def docs_update_from_markdown(
             "--doc-format", "markdown",
             "--command", mode,
         ]
-        _run(cmd, cwd=send_path.parent, check=True)
+        if revision_id is not None:
+            cmd.extend(["--revision-id", str(revision_id)])
+        res = _run(cmd, cwd=send_path.parent, check=True)
+    if not res.stdout.strip():
+        raise LarkAdapterError(
+            "incomplete_update",
+            "lark-cli docs +update 未返回可验证的成功结果",
+        )
+    try:
+        payload = json.loads(res.stdout)
+    except json.JSONDecodeError:
+        raise LarkAdapterError(
+            "non_json",
+            f"lark-cli docs +update 返回非 JSON: {res.stdout[:300]}",
+        )
+    if not isinstance(payload, dict):
+        raise LarkAdapterError("non_json", "lark-cli docs +update 返回的 JSON 顶层不是对象")
+    if payload.get("ok") is False:
+        error = payload.get("error") or payload.get("message") or payload
+        raise LarkAdapterError("subprocess", f"lark-cli docs +update 返回失败 envelope: {error}")
+    data = payload.get("data")
+    result = data.get("result") if isinstance(data, dict) else None
+    if result != "success":
+        warnings = data.get("warnings") if isinstance(data, dict) else None
+        raise LarkAdapterError(
+            "incomplete_update",
+            "lark-cli docs +update 未完整成功: "
+            f"result={result or 'missing'}, warnings={warnings or []}",
+        )
+    return payload
+
+
+def _json_command(cmd: list[str], *, label: str) -> dict:
+    """运行一个返回 JSON 的 lark-cli 命令并统一错误语义。"""
+    res = _run(cmd, check=True)
+    try:
+        payload = json.loads(res.stdout)
+    except json.JSONDecodeError:
+        raise LarkAdapterError(
+            "non_json",
+            f"{label} 返回非 JSON: {res.stdout[:300]}",
+        )
+    if not isinstance(payload, dict):
+        raise LarkAdapterError("non_json", f"{label} 返回的 JSON 顶层不是对象")
+    if payload.get("ok") is False:
+        error = payload.get("error") or payload.get("message") or payload
+        raise LarkAdapterError("subprocess", f"{label} 返回失败 envelope: {error}")
+    return payload
+
+
+def docs_fetch(
+    doc: str,
+    *,
+    doc_format: str = "markdown",
+    detail: str = "simple",
+    revision_id: Optional[int] = None,
+    identity: str = "user",
+) -> dict:
+    """读取飞书文档正文和 revision，返回 lark-cli 原始 JSON。"""
+    if not doc:
+        raise LarkAdapterError("validation", "docs_fetch 的 doc 不能为空")
+    if doc_format not in ("xml", "markdown", "im-markdown"):
+        raise LarkAdapterError("validation", f"不支持的 doc_format: {doc_format}")
+    if detail not in ("simple", "with-ids", "full"):
+        raise LarkAdapterError("validation", f"不支持的 detail: {detail}")
+    if identity not in ("user", "bot"):
+        raise LarkAdapterError("validation", f"不支持的 identity: {identity}")
+    if doc_format == "im-markdown":
+        current = version()
+        if current is None or current < MIN_IM_MARKDOWN_CLI_VERSION:
+            minimum = ".".join(str(value) for value in MIN_IM_MARKDOWN_CLI_VERSION)
+            actual = "无法解析" if current is None else ".".join(str(value) for value in current)
+            raise LarkAdapterError(
+                "validation",
+                f"docs_fetch(im-markdown) 需要 lark-cli >= {minimum}，当前为 {actual}",
+            )
+
+    cmd = [
+        "lark-cli", "docs", "+fetch",
+        "--doc", doc,
+        "--doc-format", doc_format,
+        "--detail", detail,
+        "--as", identity,
+        "--format", "json",
+    ]
+    if revision_id is not None:
+        cmd.extend(["--revision-id", str(revision_id)])
+    return _json_command(cmd, label="lark-cli docs +fetch")
+
+
+def drive_comments_page(
+    file_token: str,
+    *,
+    page_token: Optional[str] = None,
+    is_solved: bool = False,
+    need_relation: bool = True,
+    identity: str = "user",
+) -> dict:
+    """按明确的 solved 状态读取一页 Docx 评论，避免依赖 CLI 默认值。"""
+    if not file_token:
+        raise LarkAdapterError("validation", "评论 file_token 不能为空")
+    params: dict[str, object] = {
+        "file_token": file_token,
+        "file_type": "docx",
+        "page_size": 100,
+        "user_id_type": "open_id",
+        "is_solved": is_solved,
+    }
+    if need_relation:
+        params["need_relation"] = True
+    if page_token:
+        params["page_token"] = page_token
+    cmd = [
+        "lark-cli", "drive", "file.comments", "list",
+        "--params", json.dumps(params, ensure_ascii=False, separators=(",", ":")),
+        "--as", identity,
+        "--format", "json",
+    ]
+    return _json_command(cmd, label="lark-cli drive file.comments list")
+
+
+def drive_comment_replies_page(
+    file_token: str,
+    comment_id: str,
+    *,
+    page_token: Optional[str] = None,
+    identity: str = "user",
+) -> dict:
+    """读取一页评论回复，用于补齐 comment.has_more 的截断内容。"""
+    if not file_token or not comment_id:
+        raise LarkAdapterError("validation", "回复查询需要 file_token 和 comment_id")
+    params: dict[str, object] = {
+        "file_token": file_token,
+        "file_type": "docx",
+        "comment_id": comment_id,
+        "page_size": 100,
+        "user_id_type": "open_id",
+    }
+    if page_token:
+        params["page_token"] = page_token
+    cmd = [
+        "lark-cli", "drive", "file.comment.replys", "list",
+        "--params", json.dumps(params, ensure_ascii=False, separators=(",", ":")),
+        "--as", identity,
+        "--format", "json",
+    ]
+    return _json_command(cmd, label="lark-cli drive file.comment.replys list")
+
+
+def drive_comment_reply_create(
+    file_token: str,
+    comment_id: str,
+    text: str,
+    *,
+    identity: str = "user",
+) -> dict:
+    """为一条 Docx 评论创建文本回复，并返回 lark-cli 原始 JSON。"""
+    if not file_token or not comment_id:
+        raise LarkAdapterError("validation", "回复创建需要 file_token 和 comment_id")
+    if not isinstance(text, str) or not text.strip():
+        raise LarkAdapterError("validation", "回复正文不能为空")
+    if identity not in ("user", "bot"):
+        raise LarkAdapterError("validation", f"不支持的 identity: {identity}")
+    escaped_text = text.replace("<", "&lt;").replace(">", "&gt;")
+    params = {
+        "file_token": file_token,
+        "file_type": "docx",
+        "comment_id": comment_id,
+        "user_id_type": "open_id",
+    }
+    data = {
+        "content": {
+            "elements": [
+                {
+                    "type": "text_run",
+                    "text_run": {"text": escaped_text},
+                }
+            ]
+        }
+    }
+    cmd = [
+        "lark-cli", "drive", "file.comment.replys", "create",
+        "--params", json.dumps(params, ensure_ascii=False, separators=(",", ":")),
+        "--data", json.dumps(data, ensure_ascii=False, separators=(",", ":")),
+        "--as", identity,
+        "--format", "json",
+    ]
+    return _json_command(cmd, label="lark-cli drive file.comment.replys create")
+
+
+def drive_comment_set_solved(
+    file_token: str,
+    comment_id: str,
+    *,
+    is_solved: bool,
+    identity: str = "user",
+) -> dict:
+    """切换单条 Docx 评论的解决状态，并返回 lark-cli 原始 JSON。"""
+    if not file_token or not comment_id:
+        raise LarkAdapterError("validation", "评论状态写入需要 file_token 和 comment_id")
+    if identity not in ("user", "bot"):
+        raise LarkAdapterError("validation", f"不支持的 identity: {identity}")
+    params = {
+        "comment_id": comment_id,
+        "file_token": file_token,
+        "file_type": "docx",
+    }
+    cmd = [
+        "lark-cli", "drive", "file.comments", "patch",
+        "--params", json.dumps(params, ensure_ascii=False, separators=(",", ":")),
+        "--data", json.dumps(
+            {"is_solved": is_solved}, ensure_ascii=False, separators=(",", ":")
+        ),
+        "--as", identity,
+        "--format", "json",
+    ]
+    return _json_command(cmd, label="lark-cli drive file.comments patch")
 
 
 def api_json(

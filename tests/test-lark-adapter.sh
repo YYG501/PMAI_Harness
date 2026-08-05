@@ -150,17 +150,43 @@ test_docs_update_cwd_workaround() {
   FAKE_LARK_LOG="$log" python3 - <<PY
 from pathlib import Path
 from _lib.lark_adapter import docs_update_from_markdown
-docs_update_from_markdown(Path("$tmp/bar.md"), doc_id="docY")
+docs_update_from_markdown(Path("$tmp/bar.md"), doc_id="docY", revision_id=42)
 PY
   if grep -q "CWD: $tmp_real" "$log" && grep -q -- "--content @./bar.md" "$log" \
      && grep -q -- "--doc docY" "$log" && grep -q -- "--command overwrite" "$log" \
-     && grep -q -- "--doc-format markdown" "$log"; then
+     && grep -q -- "--doc-format markdown" "$log" \
+     && grep -q -- "--revision-id 42" "$log"; then
     pass_test
   else
     _fail "shim log 缺关键参数"
     cat "$log" >&2
   fi
   rm -rf "$tmp"
+}
+
+test_docs_update_rejects_partial_success() {
+  start_test "docs_update_from_markdown 拒绝 partial_success"
+  local tmp; tmp=$(mktemp -d)
+  echo "# Partial" > "$tmp/partial.md"
+  export FAKE_LARK_DOCS_UPDATE_OUT='{"ok":true,"data":{"document":{"document_id":"docY","revision_id":43},"result":"partial_success","updated_blocks_count":1,"warnings":["one block failed"]}}'
+  out=$(python3 - "$tmp/partial.md" <<'PY' 2>&1
+import sys
+from pathlib import Path
+from _lib.lark_adapter import LarkAdapterError, docs_update_from_markdown
+try:
+    docs_update_from_markdown(Path(sys.argv[1]), doc_id="docY", revision_id=42)
+    print("OOPS")
+except LarkAdapterError as exc:
+    print(f"OK: {exc.kind}")
+PY
+)
+  unset FAKE_LARK_DOCS_UPDATE_OUT
+  rm -rf "$tmp"
+  if [ "$out" = "OK: incomplete_update" ]; then
+    pass_test
+  else
+    _fail "expected incomplete_update, got: $out"
+  fi
 }
 
 test_markdown_must_be_path() {
@@ -216,6 +242,86 @@ PY
   else
     _fail "expected b1, got: $out"
   fi
+}
+
+test_docs_fetch_im_markdown_requires_1_0_58() {
+  start_test "docs_fetch(im-markdown) 使用格式级最低版本"
+  export FAKE_LARK_VERSION="lark-cli 1.0.57"
+  out=$(python3 - <<'PY' 2>&1
+from _lib.lark_adapter import LarkAdapterError, docs_fetch
+try:
+    docs_fetch("docX", doc_format="im-markdown")
+    print("OOPS")
+except LarkAdapterError as exc:
+    print(f"{exc.kind}: {exc.detail}")
+PY
+)
+  unset FAKE_LARK_VERSION
+  if [ "$out" = "validation: docs_fetch(im-markdown) 需要 lark-cli >= 1.0.58，当前为 1.0.57" ]; then
+    pass_test
+  else
+    _fail "expected im-markdown version gate, got: $out"
+  fi
+}
+
+test_drive_comment_set_solved_uses_patch_contract() {
+  start_test "drive_comment_set_solved() 使用 Docx comment patch 合同"
+  local tmp; tmp=$(mktemp -d)
+  local log="$tmp/calls.log"
+  out=$(FAKE_LARK_LOG="$log" python3 - <<'PY'
+from _lib.lark_adapter import drive_comment_set_solved
+payload = drive_comment_set_solved("docX", "c1", is_solved=False)
+print(payload["data"]["is_solved"])
+PY
+)
+  if [ "$out" = "False" ] \
+    && grep -q 'ARGV: drive file.comments patch' "$log" \
+    && grep -q -- '--params {"comment_id":"c1","file_token":"docX","file_type":"docx"}' "$log" \
+    && grep -q -- '--data {"is_solved":false}' "$log"; then
+    pass_test
+  else
+    _fail "comment patch contract mismatch: out=$out log=$(cat "$log")"
+  fi
+  rm -rf "$tmp"
+}
+
+test_drive_comment_reply_create_uses_reply_contract() {
+  start_test "drive_comment_reply_create() 使用 Docx comment reply create 合同"
+  local tmp; tmp=$(mktemp -d)
+  local log="$tmp/calls.log"
+  out=$(FAKE_LARK_LOG="$log" python3 - <<'PY'
+from _lib.lark_adapter import drive_comment_reply_create
+payload = drive_comment_reply_create("docX", "c1", "Updated and verified")
+print(payload["data"]["reply_id"], payload["data"]["user_id"])
+PY
+)
+  if [ "$out" = "r-result ou-agent" ] \
+    && grep -q 'ARGV: drive file.comment.replys create' "$log" \
+    && grep -q -- '--params {"file_token":"docX","file_type":"docx","comment_id":"c1","user_id_type":"open_id"}' "$log" \
+    && grep -q -- '--data {"content":{"elements":\[{"type":"text_run","text_run":{"text":"Updated and verified"}}\]}}' "$log"; then
+    pass_test
+  else
+    _fail "comment reply create contract mismatch: out=$out log=$(cat "$log")"
+  fi
+  rm -rf "$tmp"
+}
+
+test_drive_comments_page_passes_explicit_solved_filter() {
+  start_test "drive_comments_page() 不依赖 is_solved 默认值"
+  local tmp; tmp=$(mktemp -d)
+  local log="$tmp/calls.log"
+  FAKE_LARK_LOG="$log" python3 - <<'PY'
+from _lib.lark_adapter import drive_comments_page
+drive_comments_page("docX", is_solved=False)
+drive_comments_page("docX", is_solved=True)
+PY
+  if grep -q -- '--params {"file_token":"docX","file_type":"docx","page_size":100,"user_id_type":"open_id","is_solved":false,"need_relation":true}' "$log" \
+    && grep -q -- '--params {"file_token":"docX","file_type":"docx","page_size":100,"user_id_type":"open_id","is_solved":true,"need_relation":true}' "$log"; then
+    pass_test
+  else
+    _fail "comment list must pass both solved filters explicitly: $(cat "$log")"
+  fi
+  rm -rf "$tmp"
 }
 
 test_subprocess_failure_raises() {
@@ -300,6 +406,91 @@ PY
   else
     _fail "expected '0 True', got: $out"
   fi
+}
+
+test_write_frontmatter_preserves_unknown_yaml() {
+  start_test "write_frontmatter 只补丁标量并保留嵌套 YAML / 注释 / 正文"
+  local tmp; tmp=$(mktemp -d)
+  cat > "$tmp/preserve.md" <<'MD'
+---
+# keep this comment
+owners:
+  - alice
+metadata:
+  team: platform
+summary: |
+  line one
+  line two
+lark_doc_id: docOld
+---
+
+# Body
+
+Keep me.
+MD
+  out=$(python3 - "$tmp/preserve.md" <<'PY'
+import sys
+from pathlib import Path
+from _lib.lark_adapter import parse_frontmatter, write_frontmatter
+path = Path(sys.argv[1])
+raw = path.read_text(encoding="utf-8")
+fm, body = parse_frontmatter(raw)
+fm["lark_published_revision_id"] = 12
+fm["lark_published_source_hash"] = "abc123"
+write_frontmatter(path, fm, body)
+print("OK")
+PY
+)
+  if [ "$out" != "OK" ] \
+    || ! grep -q '^# keep this comment$' "$tmp/preserve.md" \
+    || ! grep -q '^  - alice$' "$tmp/preserve.md" \
+    || ! grep -q '^  team: platform$' "$tmp/preserve.md" \
+    || ! grep -q '^  line two$' "$tmp/preserve.md" \
+    || ! grep -q '^lark_published_revision_id: 12$' "$tmp/preserve.md" \
+    || ! grep -q '^Keep me\.$' "$tmp/preserve.md"; then
+    _fail "frontmatter 补丁破坏了未知 YAML 或正文: $(cat "$tmp/preserve.md")"
+    rm -rf "$tmp"
+    return
+  fi
+  pass_test
+  rm -rf "$tmp"
+}
+
+test_replace_markdown_body_preserves_frontmatter() {
+  start_test "replace_markdown_body 原子替换正文并逐字保留 frontmatter"
+  local tmp; tmp=$(mktemp -d)
+  cat > "$tmp/body.md" <<'MD'
+---
+# keep comment
+owners:
+  - alice
+lark_doc_id: docOld
+---
+
+# Old
+MD
+  out=$(python3 - "$tmp/body.md" <<'PY'
+import sys
+from pathlib import Path
+from _lib.lark_adapter import replace_markdown_body
+path = Path(sys.argv[1])
+raw = path.read_text(encoding="utf-8")
+replace_markdown_body(path, "# New\n", expected_text=raw)
+print("OK")
+PY
+)
+  if [ "$out" != "OK" ] \
+    || ! grep -q '^# keep comment$' "$tmp/body.md" \
+    || ! grep -q '^  - alice$' "$tmp/body.md" \
+    || ! grep -q '^lark_doc_id: docOld$' "$tmp/body.md" \
+    || ! grep -q '^# New$' "$tmp/body.md" \
+    || grep -q '^# Old$' "$tmp/body.md"; then
+    _fail "正文替换破坏了 frontmatter 或保留了旧正文: $(cat "$tmp/body.md")"
+    rm -rf "$tmp"
+    return
+  fi
+  pass_test
+  rm -rf "$tmp"
 }
 
 test_docs_create_strips_frontmatter() {
@@ -388,14 +579,21 @@ test_auth_status_fail
 test_docs_create_cwd_workaround
 test_docs_create_folder_kind
 test_docs_update_cwd_workaround
+test_docs_update_rejects_partial_success
 test_markdown_must_be_path
 test_markdown_missing_file_rejected
 test_api_json_passthrough
+test_docs_fetch_im_markdown_requires_1_0_58
+test_drive_comment_set_solved_uses_patch_contract
+test_drive_comment_reply_create_uses_reply_contract
+test_drive_comments_page_passes_explicit_solved_filter
 test_subprocess_failure_raises
 test_missing_cli_in_path
 test_doctor_subcommand_happy
 test_parse_frontmatter
 test_parse_frontmatter_none
+test_write_frontmatter_preserves_unknown_yaml
+test_replace_markdown_body_preserves_frontmatter
 test_docs_create_strips_frontmatter
 test_docs_update_strips_frontmatter
 test_docs_create_no_frontmatter_uses_original

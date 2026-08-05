@@ -4,9 +4,9 @@
 
 ## 当前位置
 
-- 日期：2026-07-28
+- 日期：2026-08-05
 - 开发分支：`main`
-- 当前目标：统一生命周期继续以真实消费仓会话收口；build contract v4 已拆开快速迭代与定稿验收，Kimi Code 也已按宿主原生 `/skill:pmai-*` 入口接成一等主控；新增 `/pmai-feedback`，把消费仓当前会话中的流程卡点转成交给框架仓的可追溯优化 Prompt。
+- 当前目标：统一生命周期继续以真实消费仓会话收口；在 build contract v4、Kimi Code 一等主控和 `/pmai-feedback` 之外，新增 `/pmai-lark-review`，把规格发布后的飞书正文修改与批注可靠接回本地规格、决定和原型。
 - gstack 参考基线：`v1.58.5.0`，commit `11de390`；只参考本地 `gstack-clean` checkout，没有升级用户目录中的安装副本。
 
 ## 当前活跃模型
@@ -14,6 +14,7 @@
 - 正常用户主链路：`/pmai-init-project` 只建上下文 → `/pmai-design` 讨论需求并在首次定稿时生成项目建造定义 → `/pmai-build` → PM 看结果多轮快速修改 → PM 明确定稿 → 冻结 commit 并统一运行一次 final checks → 形成验收就绪快照、合入 main、主线后文档编译和一致性检查。
 - `meta`、`mockup`、`spec-writing` 是 design 按需调用后返回主线的内部能力；仍保留手动入口用于兼容和专项使用，但不要求 PM 拼接命令。
 - `/pmai-feedback` 是消费仓到框架仓的只读反馈出口：完整复盘当前原始会话、对照消费仓真相源、判断问题归属，并输出包含会话文件地址和证据的框架优化 Prompt；它不在消费仓直接修改产品或 PMAI 框架。
+- `/pmai-lark-review` 是归档后飞书评审回流入口：先把发布基线 B、采集时本地 L、采集时飞书 R 固定为只读证据，归位出唯一可写目标 T，再读取未解决评论的完整回复并按整批最高影响接回 quick-fix、active build 迭代或 design/build；正文作者 / 认可状态无法由 revision 证明时整批只问一次，批次在项目私有 context cache 中跨轮恢复。T 写回后先归位决定，再精细同步同一篇文档并继续实现，验证完成后以受控回执处理本批评论。普通正文同步仍走 `/pmai-lark-sync`。
 - `/pmai-build-close` 只作为兼容与恢复入口；正常链路不再要求 PM 手动调用。
 - lifecycle v2：`designing → ready_to_build → building → iterating → final_check → landed → documenting → complete`。旧 `stage` 字段仅为 v1 消费仓兼容展示。
 - 项目建造定义：初始化时不存在；首个达到 `ready_to_build` 的 design 将 `prototype / product`、技术栈、代码入口、真实命令和 Web 能力写入 `.pm-workflow/project.yml`。后续 build 只读该文件。
@@ -50,6 +51,8 @@
 - context pack 对旧消费仓自动写入 Git 本地 exclude，不再制造未跟踪缓存；build 在创建环境前阻断批准目标路径上的既有脏改动，同时保留无关 WIP。
 - context pack 只把 D 编号模块决定和真实产品规则编入 active；共同理由、否过方案、待复核、变更记录与注释模板不再伪装成决定，已确认标题也不再误报未决。
 - 新增 `scripts/current-session.py` 和 `/pmai-feedback`：Codex 通过 `CODEX_THREAD_ID` 精确定位 active / archived 原始 JSONL，校验会话唯一性、session ID 与 cwd 归属；Skill 完整读取会话并区分消费仓产品问题、执行偏差、Skill 缺口、框架合同缺口、宿主限制和证据不足，最后生成带消费仓路径、会话 ID、原始文件路径及证据的框架交接 Prompt。公开 `/pmai-skill-improve` 已移除，历史 `skill-feedback/` 资料继续保留。
+- 新增 `scripts/lark-review.py` 和 `/pmai-lark-review`：采集同一 revision 的 Markdown / with-ids XML、历史发布版和完整分页评论，输出三方 diff 与可靠定位；B/L/R 快照只读，独立 T 经 resolutions 账本 seal 后才可原子写入正式规格。批次写入 Git 已忽略的 `.pm-workflow/context/lark-review/`，中断后可恢复，完成后才清理。正文 revision 只证明变化，不证明作者或认可；缺少 PM 本轮明确依据时一次展示整批差异并统一确认。采集结束和 apply 前复核本地正文、远端 revision 与稳定评论围栏；apply 后先正式归位决定 / accepted delta，精细同步写前重新 fetch 并以 apply plan revision 作为首笔 expected revision。评论由 `complete-comment` 受控回复 / 解决 / 回读，`comment-actions.json` 绑定本批操作；checkpoint / reopen 只消费回执，不能用自由填写的作者身份把 PM 手工操作冒充系统完成。文档身份、历史 revision、分页 envelope / token、并发变化或 checkpoint 冲突时失败关闭，且不提供 force；旧版缺基线文档只做 legacy 降级并要求 PM 明确归位。
+- 飞书 frontmatter 回写改为补丁指定顶层标量、保留嵌套 YAML / 注释 / 正文并原子替换；发布后只有文档身份、写操作返回 revision、回读 revision 一致且本地发送源未变化时才建立新基线，避免绑定错文档、旧 revision 或本地并发版本。
 
 ## 兼容与边界
 
@@ -63,10 +66,11 @@
 ## 当前验证
 
 - 新增和改造的 context pack、acceptance profile、build contract、landing、文档影响地图、status、关键 Skill 路由、design 决策收敛、project definition 幂等与个人经验 targeted tests 已通过。
-- 完整 `tests/run-all.sh` 已通过：`486 passed / 0 failed`。新增回归覆盖 Kimi 外部 builder 的 profile、非交互适配器、老消费仓运行时补齐和当前主控排除；`/pmai-feedback` 的入口、只读合同、精确会话定位、失败关闭，Kimi 原生 Skill 与 hooks 生命周期，以及 iteration/final 双车道、prototype 边界、landing/docs 恢复、design、个人经验和其它执行器回归继续通过。
+- 完整 `tests/run-all.sh` 已通过：`535 passed / 0 failed`。新增回归覆盖飞书三方正文比较、稳定全量评论扫描、严格分页合同、受控评论完成回执、PM 手工回复 / 解决隔离、同步前 revision 栅栏、relation 定位、同秒评论水位、URL / revision / checkpoint 身份冲突、发布 T 与远端 revision 终态、已解决 / deferred / 批次外评论门禁、checkpoint 竞态后的受控 reopen、legacy PM 确认、`applied` 实际进入 T、手工 `merged` 不退化为整份 L/R、YAML 保真、格式级 CLI 版本门禁及本地 / 远端并发；Kimi 原生 Skill 与 hooks、`/pmai-feedback`、iteration/final 双车道、prototype 边界、landing/docs 恢复、design、个人经验和其它既有回归继续通过。
 
 ## 下一步
 
 - 继续用真实消费仓会话观察 active build 的小改能否稳定在 2–5 分钟内可刷新、交互改动能否稳定在 5–10 分钟内可刷新，以及定稿请求是否只触发一次隔离 production validation。
 - 在真实消费仓 dogfood `/pmai-feedback`，核对完整会话复盘、问题归属和交接 Prompt 是否能直接驱动框架仓分析；再按宿主能力补充 Kimi Code、Claude Code 和 OpenCode 的精确当前会话定位适配，不提供猜测式降级。
+- 在真实 Docx 规格上 dogfood `/pmai-lark-review`：覆盖正文直改、局部 / 全文评论、回复后要求变化、active build accepted delta、精细回写与评论解决；确认飞书 Markdown 回读规范化不会让正常发布误降级，再决定是否扩展旧版 `/doc/` 兼容。
 - 后续框架修改继续先在开发分支完成 targeted / full regression，再进入 main 分发基线并升级全局安装副本。

@@ -275,7 +275,7 @@ bash ~/.pmai/scripts/measure-tthw.sh record /path/to/project \
 /pmai-status             → 忘了当前停在哪时，用它读状态并提示下一步
 ```
 
-简单改动可以跳过完整流程：用 `/pmai-quick-fix` 修复，需要长期归位时再用 `/pmai-record`。完整需求进入 `/pmai-build` 后，AI 会在 PM 看结果期间把候选版本准备成验收就绪；PM 说“定稿 / 可以提交 / 可以合并”即触发快速校验、自动落地主线和文档同步。`/pmai-build-close` 只用于兼容或中断恢复，不在收尾阶段首次跑完整验收或补业务代码。
+简单改动可以跳过完整流程：用 `/pmai-quick-fix` 修复，需要长期归位时再用 `/pmai-record`。规格发布到飞书后，如果 PM 在飞书完成二次 review、修改正文或添加批注，用 `/pmai-lark-review` 一次收回：AI 先把发布基线 B、采集时本地 L、采集时飞书 R 固定为只读证据，另建唯一目标版 T；只有 T 完成归位并通过门禁后才更新正式规格。然后整批按影响接回 quick-fix、active build 或 design/build，真实产品岔路才提问。完整需求进入 `/pmai-build` 后，AI 会在 PM 看结果期间把候选版本准备成验收就绪；PM 说“定稿 / 可以提交 / 可以合并”即触发快速校验、自动落地主线和文档同步。`/pmai-build-close` 只用于兼容或中断恢复，不在收尾阶段首次跑完整验收或补业务代码。
 
 ### 3. 多机 / 团队仓
 
@@ -321,8 +321,9 @@ PMAI 走纯全局：每台要用的机器各自 `pmai install` 一次（全局�
 |---|---|
 | `/pmai-meta` | 讨论前对焦与压力测试：没靶子时找本质 / 判断标准 / 根因，有靶子时用少量多视角找盲区、冲突和风险 |
 | `/pmai-feedback` | **消费仓会话反馈出口**：完整复盘当前原始会话，对照已确认设计和使用体验，生成带会话文件地址的框架优化 Prompt |
+| `/pmai-lark-review` | **飞书评审回收**：先把发布基线、本地、飞书固定为只读证据并归位独立目标版；写回规格和决定后精细同步同一篇文档，再更新原型 / 产品并关闭已完成评论 |
 | `/pmai-lark-sync` | 本地规格与飞书在线文档安全同步：先判断真相源，再选择精细修改、覆盖发布、飞书回拉或只 diff |
-| `/pmai-publish-to-lark` | 把本地 markdown 整篇发布 / 覆盖到飞书 |
+| `/pmai-publish-to-lark` | 把本地 markdown 整篇发布 / 覆盖到飞书，并记录后续评审所需的 revision + 正文 hash 基线 |
 
 ### 框架维护（PM 操作 PMAI 本身）
 

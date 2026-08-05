@@ -32,6 +32,8 @@ python3 "$PMAI_HOME/scripts/status-view.py" --banner-only --skill DESIGN || true
 
 跨日继续、模型或主控切换、会话压缩后恢复，或 PMAI 安装 / 当前 checkout 可能已更新时，视为一次新的 skill 执行。在继续提问、形成结论或写文件前，必须重新完整读取本 `SKILL.md` 和上面的必读文件；不能继续使用更早消息中注入的 skill 快照。重读 skill 解决执行规则新鲜度，下面的 context pack 解决产品上下文新鲜度，两者不能互相替代。
 
+若由 `/pmai-lark-review` 携带当前评审批次进入，额外完整读取 `skills/lark-review/references/lifecycle-handoff.md`：先完成讨论和候选决定，把它们留在 `resolutions.json` 并只编译 T；此时不得改 `discussion.md` / `decisions.md`，也停在 `ready_to_build` 与建造依据提交之前。lark-review seal/apply 成功后，先把候选决定正式归位，再精细同步飞书；两步都成功后重新生成 context pack，并从步骤 7/8 按正常路径提交正式规格和进入 build。不得让本 skill 直接把本批内容写进正式 `spec.md`。
+
 ## 定位
 
 `/pmai-design` 是需求讨论前台，也是内部能力调度器。PM 只需要和 design 把问题讨论清楚；`meta`、`mockup`、`spec-writing` 由 design 根据实际缺口调用，完成后返回同一条主线。
@@ -177,7 +179,7 @@ meta 必须产生新判断、危险前提、反例和推荐；若存在真实产
 - 用户看得见的输出已确认入口、任务路径和相关边界状态；
 - 已拍板内容进入 `decisions.md`，讨论草稿不冒充决定。
 
-然后自动调用 `/pmai-spec-writing` 的“建造前规格编译”模式。它只把已确认决定编译为当前 `spec.md`，并建立对象—动作—状态—权限—页面覆盖矩阵。发现遗漏或问题句时立即回到 design，不在成文阶段猜答案。
+然后自动调用 `/pmai-spec-writing` 的“建造前规格编译”模式。通常把已确认决定编译为当前 `spec.md`；若当前由 lark-review 编排，则按交接合同改为编译到本批 T。两种路径都建立对象—动作—状态—权限—页面覆盖矩阵。发现遗漏或问题句时立即回到 design，不在成文阶段猜答案。
 
 ### 7. 首次定稿时生成项目建造定义
 

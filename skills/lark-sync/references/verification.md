@@ -16,19 +16,36 @@
 
 ## 本地 frontmatter 追踪字段
 
-首次发布仍由 `/pmai-publish-to-lark` 回填 `lark_published_at`。
+首次发布仍由 `/pmai-publish-to-lark` 回填文档身份和 `lark_published_at`。每次成功发布、精细同步或回拉完成后，都要记录下一轮三方比较所需的对齐基线。
 
 同步类动作使用：
 
 ```yaml
 lark_synced_at: <ISO timestamp>
 lark_revision_id: <revision_id>
+lark_published_revision_id: <revision_id>
+lark_published_source_hash: <规范化正文 SHA-256>
 ```
 
 含义：
 
 - `lark_synced_at`：最近一次本地与飞书完成同步的时间
 - `lark_revision_id`：同步完成后飞书侧 revision
+- `lark_published_revision_id`：本地和飞书最后一次确认对齐的 revision
+- `lark_published_source_hash`：该对齐点对应的本地正文 hash
+
+评审 checkpoint 另使用 `lark_reviewed_revision_id`、`lark_reviewed_comment_at`、`lark_reviewed_comment_ids` 和 `lark_reviewed_at`；时间与同秒互动 ID 必须一起保留，避免漏掉同一秒出现的新评论或回复。
+
+精细同步和回拉使用以下命令原子更新后两项：
+
+```bash
+python3 "${PMAI_HOME:-$HOME/.pmai}/scripts/lark-review.py" baseline \
+  "<markdown_path>" \
+  --revision-id "<回读确认后的 revision>" \
+  --expected-source-hash "<本次同步正文的规范化 SHA-256>"
+```
+
+该命令会同时确认本地正文仍是本次同步源、飞书当前 revision 仍是回读版本；任一侧变化都不得刷新基线。
 
 ## 产品口径检查
 
