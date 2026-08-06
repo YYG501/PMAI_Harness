@@ -540,10 +540,10 @@ def _init_repo_with_worktrees(root: Path) -> tuple[Path, Path, Path]:
 
     wt_root = root / "wts"
     wt_root.mkdir()
-    build001_wt = wt_root / "build-001-demo"
-    build002_wt = wt_root / "build-002-other"
-    _git(main, "worktree", "add", "-q", "-b", "build-001-demo", str(build001_wt))
-    _git(main, "worktree", "add", "-q", "-b", "build-002-other", str(build002_wt))
+    build001_wt = wt_root / "build-work-001-demo"
+    build002_wt = wt_root / "build-work-002-demo"
+    _git(main, "worktree", "add", "-q", "-b", "build-work-001-demo", str(build001_wt))
+    _git(main, "worktree", "add", "-q", "-b", "build-work-002-demo", str(build002_wt))
 
     # 在两个 build worktree 各放 active work（同名 id 模拟两项工作并行）
     _make_work(build001_wt, "work-001")
@@ -579,6 +579,45 @@ class TestListActiveWorkCwdAndWorktrees(unittest.TestCase):
             for i in out["items"]:
                 ids_count[i["meta"]["id"]] += 1
             self.assertEqual(ids_count.get("work-001"), 1)
+
+    def test_attached_build_worktree_overrides_stale_main_copy(self):
+        """同一 work id 以所属 build worktree 为权威，不能被 main 的旧副本遮蔽。"""
+        with tempfile.TemporaryDirectory() as d:
+            main, build_wt, _other_wt = _init_repo_with_worktrees(Path(d))
+            main_work = _make_work(main, "work-001", stage=1)
+            main_meta_path = main_work / ".work-meta.json"
+            main_meta = json.loads(main_meta_path.read_text(encoding="utf-8"))
+            main_meta["lifecycle_state"] = "ready_to_build"
+            main_meta_path.write_text(json.dumps(main_meta), encoding="utf-8")
+
+            worktree_meta_path = build_wt / "docs" / "modules" / "work-001" / ".work-meta.json"
+            worktree_meta = json.loads(worktree_meta_path.read_text(encoding="utf-8"))
+            worktree_meta["stage"] = 2
+            worktree_meta["lifecycle_state"] = "iterating"
+            worktree_meta_path.write_text(json.dumps(worktree_meta), encoding="utf-8")
+
+            out = list_active_work(main)
+            selected = [item for item in out["items"] if item["meta"]["id"] == "work-001"]
+            self.assertEqual(len(selected), 1)
+            self.assertEqual(
+                selected[0]["work_dir"].resolve(), worktree_meta_path.parent.resolve()
+            )
+            self.assertEqual(selected[0]["meta"]["lifecycle_state"], "iterating")
+
+    def test_finished_build_worktree_suppresses_stale_main_active_copy(self):
+        """worktree 已结束时，main 的旧 active 副本不能复活。"""
+        with tempfile.TemporaryDirectory() as d:
+            main, build_wt, _other_wt = _init_repo_with_worktrees(Path(d))
+            _make_work(main, "work-001", stage=1)
+
+            worktree_meta_path = build_wt / "docs" / "modules" / "work-001" / ".work-meta.json"
+            worktree_meta = json.loads(worktree_meta_path.read_text(encoding="utf-8"))
+            worktree_meta["status"] = "closed"
+            worktree_meta["lifecycle_state"] = "complete"
+            worktree_meta_path.write_text(json.dumps(worktree_meta), encoding="utf-8")
+
+            ids = [item["meta"]["id"] for item in list_active_work(main)["items"]]
+            self.assertNotIn("work-001", ids)
 
 
 class TestGetOverallState(unittest.TestCase):

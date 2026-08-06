@@ -186,7 +186,90 @@ test_ready_scope_and_dirty_preflight() {
   teardown_fixture
 }
 
+test_build_start_rejects_paths_outside_project_contract() {
+  start_test "ready-contract: build rejects traversal anchors and absolute entrypoints"
+  setup_fixture
+
+  if python3 "$BUILD_CONTRACT" start "$MODULE" \
+    --anchor ../../outside \
+    --mode worktree --executor codex --branch build-access --worktree .worktrees/build-access \
+    --target-kind prototype --target-path "$TARGET" --entrypoint prototype \
+    --required-check prototype-boundary >/tmp/ready-contract.$$ 2>/tmp/ready-contract.err.$$; then
+    _fail "build must reject an anchor outside the repository"
+    rm -f /tmp/ready-contract.$$ /tmp/ready-contract.err.$$
+    teardown_fixture
+    return
+  fi
+  if ! grep -q "仓内相对路径" /tmp/ready-contract.err.$$; then
+    _fail "traversal anchor guidance missing"
+    cat /tmp/ready-contract.err.$$ >&2
+    rm -f /tmp/ready-contract.$$ /tmp/ready-contract.err.$$
+    teardown_fixture
+    return
+  fi
+
+  if python3 "$BUILD_CONTRACT" start "$MODULE" \
+    --anchor docs/modules/access/spec.md \
+    --mode worktree --executor codex --branch build-access --worktree .worktrees/build-access \
+    --target-kind prototype --target-path "$TARGET" --entrypoint /tmp/outside \
+    --required-check prototype-boundary >/tmp/ready-contract.$$ 2>/tmp/ready-contract.err.$$; then
+    _fail "build must reject an absolute entrypoint"
+    rm -f /tmp/ready-contract.$$ /tmp/ready-contract.err.$$
+    teardown_fixture
+    return
+  fi
+  if ! grep -q "仓内相对路径" /tmp/ready-contract.err.$$; then
+    _fail "absolute entrypoint guidance missing"
+    cat /tmp/ready-contract.err.$$ >&2
+  elif ! python3 - "$MODULE/.work-meta.json" <<'PY'
+import json, sys
+meta = json.load(open(sys.argv[1]))
+assert meta["lifecycle_state"] == "ready_to_build"
+assert "build" not in meta
+PY
+  then
+    _fail "rejected starts must leave the ready contract unchanged"
+  else
+    pass_test
+  fi
+
+  rm -f /tmp/ready-contract.$$ /tmp/ready-contract.err.$$
+  teardown_fixture
+}
+
+test_build_start_requires_project_definition() {
+  start_test "ready-contract: build refuses a ready record without project.yml"
+  setup_fixture
+  rm -f "$T/.pm-workflow/project.yml"
+
+  if python3 "$BUILD_CONTRACT" start "$MODULE" \
+    --anchor docs/modules/access/spec.md \
+    --mode worktree --executor codex --branch build-access --worktree .worktrees/build-access \
+    --target-kind prototype --target-path "$TARGET" --entrypoint prototype \
+    --required-check prototype-boundary >/tmp/ready-contract.$$ 2>/tmp/ready-contract.err.$$; then
+    _fail "build must reject a missing project.yml"
+  elif ! grep -q "project.yml" /tmp/ready-contract.err.$$; then
+    _fail "missing project definition guidance absent"
+    cat /tmp/ready-contract.err.$$ >&2
+  elif ! python3 - "$MODULE/.work-meta.json" <<'PY'
+import json, sys
+meta = json.load(open(sys.argv[1]))
+assert meta["lifecycle_state"] == "ready_to_build"
+assert "build" not in meta
+PY
+  then
+    _fail "missing project.yml failure must leave ready state unchanged"
+  else
+    pass_test
+  fi
+
+  rm -f /tmp/ready-contract.$$ /tmp/ready-contract.err.$$
+  teardown_fixture
+}
+
 test_ready_currentness_and_legacy_cache_ignore
 test_ready_scope_and_dirty_preflight
+test_build_start_rejects_paths_outside_project_contract
+test_build_start_requires_project_definition
 
 report_results "ready-contract"

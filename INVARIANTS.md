@@ -9,6 +9,7 @@
 - **I-INIT3**：初始化不得创建 `.pm-workflow/project.yml`、代码、`prototype/`、mockup 看板、dev server 或端口配置。
 - **I-INIT4**：gstack/browser 不是初始化依赖；缺失不能阻塞项目建立。
 - **I-INIT5**：初始化完成后的正常入口只有 `/pmai-design`。
+- **I-INIT6**：`--allow-existing` 只接住无同名目标的资料目录；任何模板或配置冲突必须在首次写入前停止。
 
 ## I-PD：项目建造定义
 
@@ -26,11 +27,12 @@
 - **I-MOD2**：`status=active` 的模块 `.work-meta.json` 才代表进行中的工作。
 - **I-MOD3**：`requirements/active|closed` 不是状态真相源。
 - **I-MOD4**：旧 `stage` 只作无 lifecycle 项目的兼容展示，不是 v2 推进或收尾门。
+- **I-MOD5**：同一 work id 同时存在于 main 与 attached build worktree 时，以元数据声明所属分支的 build worktree 副本为权威。
 
 ## I-LC：统一生命周期
 
 - **I-LC1**：prototype 和 product 共用 `designing → ready_to_build → building → iterating → final_check → landed → documenting → complete`。
-- **I-LC2**：design 提交建造依据后才能进入 build；build 不临时补选类型、技术栈或框架。
+- **I-LC2**：design 提交 current `ready_to_build` 和 `project.yml` 后才能进入 build；`build-contract start` 必须硬校验，不能补造状态或临时选择类型、技术栈和框架。
 - **I-LC3**：PM 看结果期间只走快速迭代；PM 请求定稿后，build 冻结 implementation commit、运行一次 final checks、形成验收就绪快照，再自动落地主线和编译文档。`/pmai-build-close` 只兼容恢复。
 - **I-LC4**：实现 commit、accepted delta 或 final evidence 变化会使验收就绪快照失效；accepted delta 和 PM 新反馈同时清除定稿请求。
 - **I-LC5**：模块规格在 design 定稿时描述最终目标；landed 后按符合 / accepted delta / 漏实现 / 无依据实现对账，只有 accepted delta 可改目标。现状文档只根据已经 landed 的 main 事实更新；文档失败不得重复 merge。
@@ -73,7 +75,7 @@
 - **I-CA1**：cancel 不把 build 分支实现 merge 到 main。
 - **I-CA2**：cancel 清理临时状态，不删除已经进入 main 的模块长期文档。
 - **I-CA3**：cancel 和待清理 worktree 操作必须幂等。
-- **I-CA4**：存在无法安全隔离的脏改时停止，不能自动丢弃用户工作。
+- **I-CA4**：cancel 开始前 main 必须无未提交改动；cancel commit 只能包含当前模块 `.work-meta.json` 的删除，不能自动丢弃或顺带提交用户工作。
 
 ## I-DOC：文档归位
 

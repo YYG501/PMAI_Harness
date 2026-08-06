@@ -42,11 +42,26 @@ PY
 
 teardown_fixture() { rm -rf "$T"; }
 
-test_doc_impact_requires_every_surface() {
-  start_test "doc-impact: default coverage + semantic item + fail until all accounted"
+test_doc_impact_only_requires_affected_truth_sources() {
+  start_test "doc-impact: only affected truth sources require manual coverage"
   setup_fixture
   MAP="$T/.pm-workflow/audits/access/doc-impact.json"
   python3 "$DOC_IMPACT" init "$T/docs/modules/access" --repo-root "$T" --head HEAD --output "$MAP" >/dev/null
+  if ! python3 - "$MAP" <<'PY'
+import json, sys
+items = json.load(open(sys.argv[1]))["items"]
+destinations = {item["destination"] for item in items}
+assert destinations == {
+    "PRODUCT-STATE.md",
+    "PRODUCT-RULES.md",
+    "docs/modules/access/spec.md",
+    "docs/modules/access/decisions.md",
+}
+assert not ({"PRODUCT.md", "DESIGN.md", "TODO.md", "docs/modules/INDEX.md", "docs/INDEX.md"} & destinations)
+PY
+  then
+    _fail "unaffected fixed documents should not enter the map"; teardown_fixture; return
+  fi
   EXTRA=$(python3 "$DOC_IMPACT" add "$MAP" --kind page --name "用户详情页授权记录" \
     --destination "docs/modules/access/spec.md")
   if python3 "$DOC_IMPACT" validate "$MAP" >/tmp/doc-impact.$$ 2>&1; then
@@ -64,12 +79,38 @@ PY
     if [ "$id" = "$EXTRA" ]; then
       python3 "$DOC_IMPACT" cover "$MAP" --item "$id" --status covered --file "docs/modules/access/spec.md" >/dev/null
     else
-      python3 "$DOC_IMPACT" cover "$MAP" --item "$id" --status no-change --note "已核对，当前文件无需改" >/dev/null
+      python3 "$DOC_IMPACT" cover "$MAP" --item "$id" --status covered >/dev/null
     fi
   done
   if python3 "$DOC_IMPACT" validate "$MAP" >/dev/null; then pass_test; else _fail "covered map should pass"; fi
   teardown_fixture
 }
 
-test_doc_impact_requires_every_surface
+test_doc_impact_without_delta_only_updates_product_state() {
+  start_test "doc-impact: no accepted delta leaves one landed-state update"
+  setup_fixture
+  python3 - "$T/docs/modules/access/.work-meta.json" <<'PY'
+import json, sys
+path = sys.argv[1]
+data = json.load(open(path))
+data["build"]["accepted_deltas"] = []
+json.dump(data, open(path, "w"))
+PY
+  MAP="$T/.pm-workflow/audits/access/doc-impact.json"
+  python3 "$DOC_IMPACT" init "$T/docs/modules/access" --repo-root "$T" --head HEAD --output "$MAP" >/dev/null
+  if python3 - "$MAP" <<'PY'
+import json, sys
+items = json.load(open(sys.argv[1]))["items"]
+assert [(item["destination"], item["status"]) for item in items] == [("PRODUCT-STATE.md", "pending")]
+PY
+  then
+    pass_test
+  else
+    _fail "no-delta document map should contain only PRODUCT-STATE"
+  fi
+  teardown_fixture
+}
+
+test_doc_impact_only_requires_affected_truth_sources
+test_doc_impact_without_delta_only_updates_product_state
 report_results "doc-impact"

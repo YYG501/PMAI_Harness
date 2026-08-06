@@ -35,9 +35,9 @@ test_project_definition_profiles() {
   web_product=$(python3 "$PROFILE" --repo-root "$t" --project-definition "$t/.pm-workflow/project.yml" --path app/page.tsx)
   backend=$(python3 "$PROFILE" --repo-root "$t" --project-definition "$t/.pm-workflow/project.yml" --path server/api.ts)
   rm -rf "$t"
-  if python3 -c 'import json,sys; d=json.load(sys.stdin); final=[x["name"] for x in d["final_checks"]]; iteration=[x["name"] for x in d["iteration_checks"]]; assert d["schema_version"]==2; assert final==["prototype-boundary","tests","typecheck","build","browser-smoke","coverage","visual","behavior"]; assert iteration==["typecheck","current-page"]; assert d["required_checks"]==d["final_checks"]; assert d["delivery_policy"]["implementation_mode"]=="interactive-simulation"; assert d["delivery_policy"]["required_check"]=="prototype-boundary"; assert len(d["delivery_policy_hash"])==64' <<<"$proto" \
-    && python3 -c 'import json,sys; d=json.load(sys.stdin); n={x["name"] for x in d["final_checks"]}; i={x["name"] for x in d["iteration_checks"]}; assert {"scope-coverage","tests","typecheck","build","browser-smoke","visual","behavior"} <= n; assert i=={"typecheck","current-page"}' <<<"$web_product" \
-    && python3 -c 'import json,sys; d=json.load(sys.stdin); n={x["name"] for x in d["final_checks"]}; i={x["name"] for x in d["iteration_checks"]}; assert not ({"browser-smoke","visual","behavior"} & n); assert i=={"typecheck"}' <<<"$backend"; then
+  if python3 -c 'import json,sys; d=json.load(sys.stdin); final=[x["name"] for x in d["final_checks"]]; iteration=[x["name"] for x in d["iteration_checks"]]; assert d["schema_version"]==2; assert final==["prototype-boundary","tests","typecheck","build","browser-acceptance","coverage"]; assert iteration==["typecheck","current-page"]; assert d["required_checks"]==d["final_checks"]; assert d["delivery_policy"]["implementation_mode"]=="interactive-simulation"; assert d["delivery_policy"]["required_check"]=="prototype-boundary"; assert len(d["delivery_policy_hash"])==64' <<<"$proto" \
+    && python3 -c 'import json,sys; d=json.load(sys.stdin); n={x["name"] for x in d["final_checks"]}; i={x["name"] for x in d["iteration_checks"]}; assert {"scope-coverage","tests","typecheck","build","browser-acceptance"} <= n; assert not ({"browser-smoke","visual","behavior"} & n); assert i=={"typecheck","current-page"}' <<<"$web_product" \
+    && python3 -c 'import json,sys; d=json.load(sys.stdin); n={x["name"] for x in d["final_checks"]}; i={x["name"] for x in d["iteration_checks"]}; assert "browser-acceptance" not in n; assert i=={"typecheck"}' <<<"$backend"; then
     pass_test
   else
     _fail "project.yml adaptive checks mismatch"
@@ -63,7 +63,7 @@ test_product_profile_uses_declared_commands_and_risk_adapters() {
   T=$(mktemp -d "${TMPDIR:-/tmp}/pmai-acceptance.XXXXXX")
   write_definition "$T" product . app/ yes
   out=$(python3 "$PROFILE" --repo-root "$T" --project-definition "$T/.pm-workflow/project.yml" --path app/page.tsx --data-migration --security-sensitive)
-  python3 -c 'import json,sys; d=json.load(sys.stdin); n={x["name"]:x for x in d["final_checks"]}; assert {"scope-coverage","tests","typecheck","build","browser-smoke","visual","behavior","migration","security"} <= set(n); assert n["tests"]["command"]=="pnpm run test"' <<<"$out" \
+  python3 -c 'import json,sys; d=json.load(sys.stdin); n={x["name"]:x for x in d["final_checks"]}; assert {"scope-coverage","tests","typecheck","build","browser-acceptance","migration","security"} <= set(n); assert n["tests"]["command"]=="pnpm run test"' <<<"$out" \
     && pass_test || _fail "product checks mismatch"
   rm -rf "$T"
 }
@@ -73,7 +73,7 @@ test_non_web_product_does_not_require_browser() {
   T=$(mktemp -d "${TMPDIR:-/tmp}/pmai-acceptance.XXXXXX")
   write_definition "$T" product . Sources/Service/ no
   out=$(python3 "$PROFILE" --repo-root "$T" --project-definition "$T/.pm-workflow/project.yml" --path Sources/Service/API.swift)
-  python3 -c 'import json,sys; n={x["name"] for x in json.load(sys.stdin)["final_checks"]}; assert not ({"browser-smoke","visual","behavior"} & n)' <<<"$out" \
+  python3 -c 'import json,sys; n={x["name"] for x in json.load(sys.stdin)["final_checks"]}; assert "browser-acceptance" not in n' <<<"$out" \
     && pass_test || _fail "non-Web product should not add browser checks"
   rm -rf "$T"
 }

@@ -9,7 +9,7 @@ import json
 import subprocess
 import sys
 from datetime import datetime, timezone
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 
 VALID_KINDS = {"object", "action", "state", "permission", "page", "term", "rule", "fact", "index", "mockup"}
@@ -148,78 +148,50 @@ def cmd_init(args: argparse.Namespace) -> None:
     head = args.head or build.get("landed_commit") or "HEAD"
     changed_files = git_lines(repo_root, "diff", "--name-only", str(base), str(head)) if base else []
     module_rel = rel(repo_root, module_dir)
-    kinds, surfaces = delta_signals(build)
-    items = [
-        coverage_item(
+    changed_set = set(changed_files)
+    items_by_destination: dict[str, dict] = {}
+
+    def add_destination(kind: str, name: str, destination: str, reason: str) -> None:
+        existing = items_by_destination.get(destination)
+        if existing is not None:
+            if reason not in str(existing["reason"]):
+                existing["reason"] = f"{existing['reason']}；{reason}"
+            return
+        already_changed = destination in changed_set
+        items_by_destination[destination] = coverage_item(
+            kind,
+            name,
+            destination,
+            reason,
+            status="covered" if already_changed else "pending",
+            note="landed diff 已包含该真相源变化" if already_changed else "",
+        )
+
+    add_destination(
+        "fact",
+        f"{module_dir.name} 当前产品状态",
+        "PRODUCT-STATE.md",
+        "实现落地主线后，只更新本轮实际交付的产品现状",
+    )
+
+    accepted_deltas = (
+        build.get("accepted_deltas", []) if isinstance(build.get("accepted_deltas"), list) else []
+    )
+    if accepted_deltas:
+        add_destination(
             "fact",
             f"{module_dir.name} 当前规格",
             f"{module_rel}/spec.md",
-            "实现落地主线后，模块规格必须与当前产品行为一致",
-        ),
-        coverage_item(
-            "fact",
-            f"{module_dir.name} 当前产品状态",
-            "PRODUCT-STATE.md",
-            "当前产品事实只能在实现落地后更新",
-        ),
-        coverage_item(
-            "rule",
-            "跨模块现行规则",
-            "PRODUCT-RULES.md",
-            "确认 landed diff 是否改变跨模块产品行为；不影响时明确标记无需更新",
-        ),
-        coverage_item(
-            "term",
-            "产品定位与业务术语",
-            "PRODUCT.md",
-            "确认新增对象、角色和术语是否需要进入长期词典；不影响时明确标记无需更新",
-        ),
-        coverage_item(
-            "rule",
-            "设计与交互基线",
-            "DESIGN.md",
-            "确认最终实现是否形成可复用视觉或交互规则；不影响时明确标记无需更新",
-        ),
-        coverage_item(
-            "fact",
-            "后续事项",
-            "TODO.md",
-            "确认本轮是否明确留下未实现范围；没有时明确标记无需更新",
-        ),
-        coverage_item(
-            "index",
-            "模块索引",
-            "docs/modules/INDEX.md",
-            "确认模块或功能型规格索引是否变化；不影响时明确标记无需更新",
-        ),
-        coverage_item(
-            "index",
-            "文档总索引",
-            "docs/INDEX.md",
-            "确认是否新增文档类别或入口；不影响时明确标记无需更新",
-        ),
-    ]
-
-    if build.get("accepted_deltas"):
-        items.append(
-            coverage_item(
-                "rule",
-                f"{module_dir.name} build 期间确认的决定",
-                f"{module_rel}/decisions.md",
-                "build 期间 PM 接受的产品变化必须留下决定依据",
-            )
+            "build 期间存在 PM 接受的产品变化，规格必须对齐最终目标",
         )
-    if (repo_root / "mockups" / "manifest.json").exists():
-        items.append(
-            coverage_item(
-                "mockup",
-                "设计稿看版状态",
-                "mockups/manifest.json",
-                "确认本轮是否吸收了设计稿；未吸收时明确标记无需更新",
-            )
+        add_destination(
+            "rule",
+            f"{module_dir.name} build 期间确认的决定",
+            f"{module_rel}/decisions.md",
+            "build 期间 PM 接受的产品变化必须留下决定依据",
         )
 
-    for index, delta in enumerate(build.get("accepted_deltas", []), 1):
+    for index, delta in enumerate(accepted_deltas, 1):
         if not isinstance(delta, dict):
             continue
         delta_kind = str(delta.get("kind") or "fact")
@@ -230,18 +202,41 @@ def cmd_init(args: argparse.Namespace) -> None:
             for value in delta.get("affected_surfaces", [])
             if isinstance(value, str)
         ]
-        destination = next(
-            (value for value in delta_surfaces if value.endswith((".md", ".json"))),
-            f"{module_rel}/decisions.md",
-        )
-        items.append(
-            coverage_item(
+        for destination in delta_surfaces:
+            path = PurePosixPath(destination)
+            if (
+                not destination.endswith((".md", ".json"))
+                or path.is_absolute()
+                or ".." in path.parts
+            ):
+                continue
+            add_destination(
                 delta_kind,
                 str(delta.get("summary") or f"build 期间确认的变化 {index}"),
                 destination,
                 "PM 在 build 期间确认的产品变化必须有正式文档落点",
             )
-        )
+
+    durable_root_docs = {
+        "PRODUCT.md",
+        "PRODUCT-STATE.md",
+        "PRODUCT-RULES.md",
+        "DESIGN.md",
+        "TODO.md",
+        "mockups/manifest.json",
+    }
+    for destination in changed_files:
+        if destination in durable_root_docs or (
+            destination.startswith("docs/") and destination.endswith(".md")
+        ):
+            add_destination(
+                "fact",
+                destination,
+                destination,
+                "landed diff 已直接更新该正式真相源，自动纳入文档提交核验",
+            )
+
+    items = list(items_by_destination.values())
 
     payload = {
         "schema_version": 1,

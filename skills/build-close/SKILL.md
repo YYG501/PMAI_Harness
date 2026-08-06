@@ -23,6 +23,7 @@ python3 "$PMAI_HOME/scripts/status-view.py" --banner-only --skill BUILD-CLOSE ||
 - `skills/_shared/consistency-scan.md`
 - `skills/_shared/PM-VIEW-RULES.md` 及其引用的 PM 视图规则
 - `skills/_shared/pm-view/banner-rules.md`
+- `skills/build/references/finalization.md`
 - 当前模块 `.work-meta.json:build`
 
 ## 定位
@@ -59,7 +60,7 @@ bash "$PMAI_HOME/scripts/close-work.sh" "docs/modules/<模块>"
 
 `close-work.sh` 根据同一合同自动转 `land-work.sh`，不靠 cwd、分支名字或碰巧存在的 worktree 猜流程。
 
-若从 `iterating` 进入，不能先写 `pm_accepted_at` 再临时跑完整验收。先记录候选实现 commit；v4 把本次兼容入口视为 PM 的明确定稿请求，然后在 `iterating` 状态按 `/pmai-build` 完成一次 `final_checks`、逐项规格覆盖和文档影响草案。production build 必须在冻结 commit 的 validation worktree 执行，不停止仍在运行的 dev server：
+若从 `iterating` 进入，不能先写 `pm_accepted_at` 再临时跑完整验收。先记录候选实现 commit；v4 直接调用统一 runner，它会从 currentness 开始只执行缺失的机械项：
 
 ```bash
 IMPLEMENTATION_COMMIT=$(git -C "<build worktree>" rev-parse HEAD)
@@ -67,22 +68,12 @@ python3 "$PMAI_HOME/scripts/build-contract.py" commit \
   "<build worktree>/docs/modules/<模块>" \
   --implementation-commit "$IMPLEMENTATION_COMMIT"
 
-# v4；v2/v3 恢复合同没有此命令，仍按旧快照合同续跑
-python3 "$PMAI_HOME/scripts/build-contract.py" request-finalization \
-  "<build worktree>/docs/modules/<模块>"
-python3 "$PMAI_HOME/scripts/final-validation.py" \
-  --repo-root "<build worktree>" \
+python3 "$PMAI_HOME/scripts/finalize-work.py" \
   --module-dir "<build worktree>/docs/modules/<模块>" \
-  --audit "<build worktree>/.pm-workflow/audits/<模块>/final-validation.json"
-
-# 按 /pmai-build 记录全部 fresh final evidence，并生成 doc-impact 草案后：
-python3 "$PMAI_HOME/scripts/build-contract.py" review-ready \
-  "<build worktree>/docs/modules/<模块>"
-python3 "$PMAI_HOME/scripts/build-contract.py" accept \
-  "<build worktree>/docs/modules/<模块>"
+  <Web 项目追加 --browser-manifest "<build worktree>/.pm-workflow/audits/<模块>/browser-manifest.json">
 ```
 
-build 验收证据是落地主线硬门，不能因为使用兼容入口而跳过。任何检查发现规格漏项、实现缺口或业务代码需要修改，都保持/退回 `iterating` 并交还 `/pmai-build`；本 close 不补业务代码、不一边收尾一边重新验收。
+runner 返回 `3` 时，按 `skills/build/references/finalization.md` 完成当前主控负责的语义检查并记录 evidence，再重跑同一命令。v2/v3 没有统一 runner 状态时继续按旧合同证据恢复，不迁移。build 验收证据是落地主线硬门，不能因为使用兼容入口而跳过。任何检查发现规格漏项、实现缺口或业务代码需要修改，都保持/退回 `iterating` 并交还 `/pmai-build`；本 close 不补业务代码、不一边收尾一边重新验收。
 
 ## 2. final_check 恢复
 
@@ -119,11 +110,11 @@ bash "$PMAI_HOME/scripts/close-work.sh" \
 
 1. 在 main 重新编译 context pack；
 2. 读取 `.pm-workflow/audits/<模块>/doc-impact.json`；
-3. 优先复用 build 阶段生成的 impact map 草案；旧合同缺失时才用 landed diff、build contract 和 accepted deltas 重新生成；
+3. impact map 只在 landed 后按 implementation diff 和 accepted deltas 生成，不在 build 阶段提前准备；
 4. 调用 spec-writing 的“落地主线后的目标对账”模式；
-5. 按影响地图更新受影响的 `PRODUCT-STATE.md`、`PRODUCT-RULES.md`、`PRODUCT.md`、`DESIGN.md`、`TODO.md`、mockup manifest 和索引；
-6. 未受影响项标 `no-change` 并写原因；
-7. 校验每个新增或改变的对象、动作、状态、权限、页面和术语都有文档落点；
+5. 只更新影响地图实际列出的 pending 真相源；landed diff 已改文档由脚本自动记为 covered；
+6. 未受影响的 PRODUCT、RULES、DESIGN、TODO、mockup 和索引不进入清单，不逐份打开、不写 no-change；
+7. 校验 accepted delta 和实际交付状态都有文档落点；
 8. 完成覆盖后运行：
 
 ```bash
@@ -182,4 +173,4 @@ PM 窗口只报阶段结果，不直播 context pack、合同 JSON、git 命令�
 - 运行进程或缓存导致的 worktree 清理失败进入待清理队列，不阻塞文档阶段。
 - 正式文档在实现落 main 后更新，单独提交。
 - 不向 PM 再问 worktree、执行器、手动 close 或逐条“要不要保存”菜单。
-- gstack/browser/Playwright 只是证据生产者，PMAI contract 才是落地主线判断入口；v2 UI 验收必须有 active browser-smoke，不能用 exception 跳过。
+- gstack/browser/Playwright 只是证据生产者，PMAI contract 才是落地主线判断入口；新 build 的 browser-acceptance 与旧合同的 active browser-smoke 都不能用 exception 跳过。

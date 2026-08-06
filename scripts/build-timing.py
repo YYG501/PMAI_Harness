@@ -15,9 +15,13 @@ VALID_PHASES = {
     "implement",
     "fast-check",
     "preview",
+    "currentness",
+    "final-validation",
+    "semantic-validation",
     "final-typecheck",
     "production-build",
     "browser-acceptance",
+    "landing",
     "documentation",
 }
 VALID_KINDS = {"minor", "interaction", "initial", "final"}
@@ -79,6 +83,7 @@ def cmd_start(args: argparse.Namespace) -> int:
         "preview_ready_at": None,
         "time_to_preview_seconds": None,
         "warning": None,
+        "reason": None,
     }
     if any(item.get("id") == entry["id"] for item in data["entries"]):
         raise SystemExit(f"timing entry id 已存在：{entry['id']}")
@@ -104,6 +109,7 @@ def cmd_finish(args: argparse.Namespace) -> int:
     entry["status"] = args.status
     entry["ended_at"] = ended_at
     entry["duration_seconds"] = duration_seconds(str(entry["started_at"]), ended_at)
+    entry["reason"] = args.reason
     if args.preview_ready:
         feedback_at = entry.get("feedback_received_at")
         if not feedback_at:
@@ -131,6 +137,11 @@ def cmd_summary(args: argparse.Namespace) -> int:
         "running": len(data["entries"]) - len(completed),
         "phase_seconds": {},
         "previews": [],
+        "normal_path": {
+            "target_seconds": 600,
+            "status": "in_progress" if len(data["entries"]) != len(completed) else "pass",
+            "exit_reasons": [],
+        },
     }
     for item in completed:
         phase = str(item.get("phase"))
@@ -147,7 +158,42 @@ def cmd_summary(args: argparse.Namespace) -> int:
                     "warning": item.get("warning"),
                 }
             )
+        if item.get("status") == "fail":
+            summary["normal_path"]["status"] = "exited"
+            summary["normal_path"]["exit_reasons"].append(
+                {
+                    "phase": phase,
+                    "reason": item.get("reason") or "阶段失败",
+                }
+            )
     print(json.dumps(summary, ensure_ascii=False, indent=2))
+    return 0
+
+
+def cmd_validate_finalization(args: argparse.Namespace) -> int:
+    path = Path(args.audit_file).expanduser()
+    data = read_audit(path)
+    missing = []
+    running = []
+    for phase in dict.fromkeys(args.required_phase):
+        entries = [item for item in data["entries"] if item.get("phase") == phase]
+        if not any(item.get("status") == "pass" for item in entries):
+            missing.append(phase)
+        if any(item.get("status") == "running" for item in entries):
+            running.append(phase)
+    if missing or running:
+        details = []
+        if missing:
+            details.append("缺少通过记录：" + "、".join(missing))
+        if running:
+            details.append("仍在运行：" + "、".join(running))
+        raise SystemExit("最终化 timing 账本不完整；" + "；".join(details))
+    print(
+        json.dumps(
+            {"status": "pass", "required_phases": list(dict.fromkeys(args.required_phase))},
+            ensure_ascii=False,
+        )
+    )
     return 0
 
 
@@ -169,12 +215,23 @@ def parser() -> argparse.ArgumentParser:
     finish.add_argument("--id", required=True)
     finish.add_argument("--status", choices=("pass", "fail", "limited"), default="pass")
     finish.add_argument("--ended-at")
+    finish.add_argument("--reason")
     finish.add_argument("--preview-ready", action="store_true")
     finish.set_defaults(func=cmd_finish)
 
     summary = sub.add_parser("summary")
     summary.add_argument("--audit-file", required=True)
     summary.set_defaults(func=cmd_summary)
+
+    validate = sub.add_parser("validate-finalization")
+    validate.add_argument("--audit-file", required=True)
+    validate.add_argument(
+        "--required-phase",
+        action="append",
+        required=True,
+        choices=sorted(VALID_PHASES),
+    )
+    validate.set_defaults(func=cmd_validate_finalization)
     return result
 
 

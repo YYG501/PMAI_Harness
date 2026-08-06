@@ -36,6 +36,7 @@ SUITES=(
   test-meta-problem-framing.sh
   test-meta-v2-routes.sh
   test-doctor-skills.sh
+  test-skill-link-ownership.sh
   test-feedback-skill.sh
   test-skill-init-guard.sh
   test-writing-skill-routing.sh
@@ -46,11 +47,14 @@ SUITES=(
   test-context-pack.sh
   test-personal-memory.sh
   test-acceptance-profile.sh
+  test-browser-acceptance.sh
   test-build-timing.sh
   test-final-validation.sh
+  test-finalize-work.sh
   test-prototype-boundary.sh
   test-doc-impact.sh
   test-build-contract.sh
+  test-ready-contract.sh
   test-build-close-hard-gates.sh
   test-exec-adapters.sh
   test-mock-board.sh

@@ -77,9 +77,16 @@ def validate_ready_pack(
     module_dir: Path,
     meta: dict[str, Any],
     pack: dict[str, Any],
+    *,
+    allowed_states: set[str] | None = None,
 ) -> dict[str, Any]:
-    if lifecycle_state(meta) != "ready_to_build":
-        raise ReadyContractError("当前模块不是 ready_to_build；请先完成 /pmai-design。")
+    accepted_states = allowed_states or {"ready_to_build"}
+    current_lifecycle = lifecycle_state(meta)
+    if current_lifecycle not in accepted_states:
+        raise ReadyContractError(
+            f"当前模块 lifecycle={current_lifecycle or '<empty>'}；"
+            f"此校验只接受 {', '.join(sorted(accepted_states))}。"
+        )
 
     approved_hash = str(meta.get("approved_source_hash") or "").strip()
     if not approved_hash:

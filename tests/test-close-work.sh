@@ -428,7 +428,8 @@ test_allows_unrelated_dirty_changes_on_main() {
 test_build_close_skill_documents_contract_and_wip_rules() {
   start_test "build-close compatibility requires a ready candidate and preserves main WIP"
 
-  assert_file_contains "$BUILD_CLOSE_SKILL" "build-contract.py\" review-ready" "build-close should require a checked candidate before acceptance" || return
+  assert_file_contains "$BUILD_CLOSE_SKILL" "finalize-work.py" "build-close should use the resumable finalize runner" || return
+  assert_file_contains "$BUILD_CLOSE_SKILL" "review-ready" "build-close should still require a checked candidate before acceptance" || return
   assert_file_contains "$BUILD_CLOSE_SKILL" "本 close 不补业务代码" "build-close should not implement missing product behavior" || return
   assert_file_contains "$BUILD_CLOSE_SKILL" "主仓 main 上允许保留其它未提交 WIP" "build-close should allow unrelated main WIP" || return
   assert_file_contains "$BUILD_CLOSE_SKILL" "autostash" "build-close should document autostash merge behavior" || return

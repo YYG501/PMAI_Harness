@@ -27,6 +27,7 @@ from _lib.ready_contract import (
     ReadyContractError,
     approved_target_paths,
     classify_dirty_paths,
+    compile_current_context_pack,
     load_context_pack,
     normalize_paths,
     ready_currentness,
@@ -70,6 +71,7 @@ EVIDENCE_LABELS = {
     "typecheck": "类型检查",
     "build": "生产构建",
     "browser-smoke": "浏览器主动 smoke",
+    "browser-acceptance": "浏览器批量验收",
     "prototype-boundary": "原型实现边界",
     "coverage": "覆盖审计",
     "visual": "视觉门",
@@ -525,9 +527,9 @@ def validate_fresh_evidence(module_dir: Path, build: dict) -> None:
             )
         if not item.get("checked_at"):
             raise SystemExit(f"验收证据 {name} 缺少 checked_at。")
-        if name == "browser-smoke" and status not in PASSING_EVIDENCE_STATUSES:
+        if name in {"browser-smoke", "browser-acceptance"} and status not in PASSING_EVIDENCE_STATUSES:
             raise SystemExit(
-                "UI 验收缺少可用的主动浏览器能力：browser-smoke 必须通过，"
+                f"UI 验收缺少可用的主动浏览器能力：{name} 必须通过，"
                 "v2 不能用 exception 跳过。请启用 gstack/browse、browser 或 Playwright 后重跑。"
             )
         if status in PASSING_EVIDENCE_STATUSES:
@@ -568,6 +570,33 @@ def validate_fresh_evidence(module_dir: Path, build: dict) -> None:
                 raise SystemExit("浏览器主动 smoke 未通过：行为审不能写 pass。")
     if behavior and str(behavior.get("status", "")) == "fail":
         raise SystemExit("行为审未通过：不能落地主线。请先修到通过。")
+
+    batched_browser = by_name.get("browser-acceptance")
+    if batched_browser:
+        artifact = resolved_artifacts.get("browser-acceptance")
+        if artifact is None:
+            raise SystemExit("浏览器批量验收缺少 JSON artifact。")
+        expected = {
+            "schema_version": 1,
+            "check": "browser-acceptance",
+            "status": "pass",
+            "implementation_commit": implementation_commit,
+            "source_hash": approved_hash,
+            "active_browser_smoke": True,
+            "single_chain_invocation": True,
+        }
+        for key, value in expected.items():
+            if artifact.get(key) != value:
+                raise SystemExit(f"浏览器批量验收 artifact 字段不一致：{key}。")
+        if set(artifact.get("covers", [])) != {"smoke", "visual", "behavior"}:
+            raise SystemExit("浏览器批量验收没有同时覆盖 smoke、visual 和 behavior。")
+        flows = artifact.get("flows")
+        if (
+            not isinstance(flows, list)
+            or not flows
+            or any(not isinstance(flow, dict) or flow.get("status") != "pass" for flow in flows)
+        ):
+            raise SystemExit("浏览器批量验收存在未通过的受影响流程。")
 
     if contract_version(build) >= 3 and build.get("target", {}).get("kind") == "prototype":
         artifact = resolved_artifacts.get("prototype-boundary")
@@ -634,7 +663,10 @@ def _path_within(path: str, parent: str) -> bool:
 
 
 def validate_target_paths(repo_root: Path, values: list[str]) -> list[str]:
-    target_paths = normalize_paths(values, "approved_target.paths")
+    try:
+        target_paths = normalize_paths(values, "approved_target.paths")
+    except ReadyContractError as exc:
+        raise SystemExit(str(exc)) from exc
     try:
         definition = load_project_definition(repo_root / ".pm-workflow" / "project.yml")
     except ProjectDefinitionError as exc:
@@ -649,13 +681,70 @@ def validate_target_paths(repo_root: Path, values: list[str]) -> list[str]:
     return target_paths
 
 
-def _validate_ready_for_start(module_dir: Path, meta: dict) -> dict | None:
-    if str(meta.get("lifecycle_state") or "") != "ready_to_build":
-        return None
+def validate_implementation_commit_scope(module_dir: Path, build: dict, commit: str) -> None:
+    """Reject real Git commits that changed paths outside the approved build scope."""
+
     repo_root = repo_root_for(module_dir)
+    exists = subprocess.run(
+        ["git", "-C", str(repo_root), "cat-file", "-e", f"{commit}^{{commit}}"],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+        check=False,
+    )
+    if exists.returncode != 0:
+        # Older saved contracts and unit fixtures used symbolic commit ids. Final
+        # validation still rejects them; scope validation applies as soon as a
+        # resolvable Git commit is supplied.
+        return
+    baseline = optional(build.get("baseline_sha"))
+    if not baseline:
+        raise SystemExit("真实 implementation commit 缺少 baseline_sha，不能校验批准范围。")
+    result = subprocess.run(
+        ["git", "-C", str(repo_root), "diff", "--name-only", baseline, commit],
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        check=False,
+    )
+    if result.returncode != 0:
+        raise SystemExit(result.stderr.strip() or "无法计算 implementation commit 变更路径。")
+    target = build.get("target")
+    if not isinstance(target, dict):
+        raise SystemExit("build.target 必须是对象。")
+    target_paths = validate_target_paths(repo_root, target.get("paths", []))
+    module_rel = module_dir.resolve().relative_to(repo_root.resolve()).as_posix()
+    audit_dir = optional(build.get("audit_dir")) or f".pm-workflow/audits/{module_dir.name}"
+    allowed_exact = {f"{module_rel}/.work-meta.json"}
+    outside = [
+        path
+        for path in result.stdout.splitlines()
+        if path
+        and path not in allowed_exact
+        and not _path_within(path, audit_dir)
+        and not any(_path_within(path, target_path) for target_path in target_paths)
+    ]
+    if outside:
+        raise SystemExit(
+            "implementation commit 含批准范围外路径，已在迭代提交时阻断："
+            + "、".join(outside)
+        )
+
+
+def _validate_ready_for_start(module_dir: Path, meta: dict) -> dict:
+    if str(meta.get("lifecycle_state") or "") != "ready_to_build":
+        raise SystemExit("当前模块不是 ready_to_build；请先完成 /pmai-design 并固定建造依据。")
+    repo_root = repo_root_for(module_dir)
+    try:
+        project_definition = load_project_definition(
+            repo_root / ".pm-workflow" / "project.yml"
+        )
+    except ProjectDefinitionError as exc:
+        raise SystemExit(str(exc)) from exc
     result = ready_currentness(repo_root, module_dir, meta)
     if result.get("state") != "current":
         raise SystemExit(result.get("reason") or "ready 建造依据已经过期。")
+    result["target_paths"] = validate_target_paths(repo_root, result["target_paths"])
+    result["project_definition"] = project_definition
     return result
 
 
@@ -673,13 +762,21 @@ def ensure_target_paths_clean(repo_root: Path, target_paths: list[str]) -> dict:
 def cmd_start(args: argparse.Namespace) -> None:
     module_dir = Path(args.module_dir)
     path = meta_path(module_dir)
-    if path.exists():
-        meta = read_meta(module_dir)
-    else:
-        module_dir.mkdir(parents=True, exist_ok=True)
-        meta = default_meta(module_dir, args.branch)
+    if not path.exists():
+        raise SystemExit(
+            f"缺少 ready_to_build 合同：{path}。请先完成 /pmai-design，不能由 build 自动补状态。"
+        )
+    meta = read_meta(module_dir)
 
     ready_result = _validate_ready_for_start(module_dir, meta)
+    repo_root = repo_root_for(module_dir)
+    project_definition = ready_result["project_definition"]
+    try:
+        anchor = normalize_paths([args.anchor], "build.anchor")[0]
+    except ReadyContractError as exc:
+        raise SystemExit(str(exc)) from exc
+    if not (repo_root / anchor).is_file():
+        raise SystemExit(f"build.anchor 必须指向仓内已存在文件：{anchor}")
 
     mode = args.mode
     executor = args.executor
@@ -696,27 +793,28 @@ def cmd_start(args: argparse.Namespace) -> None:
     target_kind = optional(args.target_kind)
     if target_kind not in VALID_TARGET_KINDS:
         raise SystemExit(f"target.kind 必须是 {' / '.join(sorted(VALID_TARGET_KINDS))}: {target_kind}")
-    target_paths = normalize_string_list(args.target_path)
-    if not target_paths:
-        raise SystemExit("v2+ build 必须显式记录 acceptance profile 对应的 target.paths。")
-    if ready_result is not None and target_paths != ready_result["target_paths"]:
+    if target_kind != project_definition["project"]["type"]:
+        raise SystemExit("build target.kind 必须与 project.yml 的 project.type 一致。")
+    try:
+        target_paths = normalize_paths(args.target_path, "build.target.paths")
+    except ReadyContractError as exc:
+        raise SystemExit(str(exc)) from exc
+    if target_paths != ready_result["target_paths"]:
         raise SystemExit("build target paths 与 design 批准范围不一致；请勿在 build 开工时临时改写目标。")
-    if ready_result is not None:
-        ensure_target_paths_clean(repo_root_for(module_dir), ready_result["target_paths"])
-    entrypoints = normalize_string_list(args.entrypoint)
-    if not entrypoints:
-        raise SystemExit("v2+ build 必须记录 project.yml 声明的 implementation.entrypoints。")
+    ensure_target_paths_clean(repo_root, ready_result["target_paths"])
+    try:
+        entrypoints = normalize_paths(args.entrypoint, "build.target.entrypoints")
+    except ReadyContractError as exc:
+        raise SystemExit(str(exc)) from exc
+    expected_entrypoints = list(project_definition["implementation"]["entrypoints"])
+    if entrypoints != expected_entrypoints:
+        raise SystemExit("build entrypoints 必须完整复用 project.yml 的 implementation.entrypoints。")
     source_hash = optional(args.approved_source_hash) or optional(meta.get("approved_source_hash"))
-    if ready_result is not None and source_hash != ready_result["approved_source_hash"]:
+    if source_hash != ready_result["approved_source_hash"]:
         raise SystemExit("build 使用的 approved_source_hash 与 design 批准依据不一致。")
-    if not source_hash:
-        anchor_path = Path(args.anchor).expanduser()
-        repo_root = repo_root_for(module_dir)
-        anchor_path = anchor_path if anchor_path.is_absolute() else repo_root / anchor_path
-        if anchor_path.is_file():
-            source_hash = hashlib.sha256(anchor_path.read_bytes()).hexdigest()
-        else:
-            source_hash = sha256_value({"anchor": args.anchor, "baseline": optional(args.baseline_sha)})
+    design_revision = int(ready_result["design_revision"])
+    if args.design_revision is not None and args.design_revision != design_revision:
+        raise SystemExit("build design_revision 与 ready_to_build 合同不一致。")
     compatibility_checks = normalize_string_list(args.required_check)
     final_checks = normalize_string_list(args.final_check) or compatibility_checks
     if not final_checks:
@@ -730,14 +828,14 @@ def cmd_start(args: argparse.Namespace) -> None:
 
     build = {
         "contract_version": CURRENT_CONTRACT_VERSION,
-        "anchor": args.anchor,
+        "anchor": anchor,
         "target": {
             "kind": target_kind,
             "paths": target_paths,
             "entrypoints": entrypoints,
         },
         "approved_source_hash": source_hash,
-        "design_revision": args.design_revision or int(meta.get("design_revision") or 1),
+        "design_revision": design_revision,
         "delivery_policy": delivery_policy,
         "delivery_policy_hash": delivery_policy_hash(delivery_policy),
         "accepted_deltas": [],
@@ -855,6 +953,55 @@ def cmd_validate_ready(args: argparse.Namespace) -> None:
     print(json.dumps(result, ensure_ascii=False))
 
 
+def cmd_validate_final_currentness(args: argparse.Namespace) -> None:
+    module_dir = Path(args.module_dir)
+    meta = read_meta(module_dir)
+    build = require_build(meta)
+    repo_root = repo_root_for(module_dir)
+    try:
+        result = validate_ready_pack(
+            repo_root,
+            module_dir,
+            meta,
+            compile_current_context_pack(repo_root, module_dir),
+            allowed_states={"iterating", "final_check"},
+        )
+    except ReadyContractError as exc:
+        raise SystemExit(str(exc)) from exc
+
+    expected_hash = str(result["approved_source_hash"])
+    accepted_deltas = build.get("accepted_deltas", [])
+    if not isinstance(accepted_deltas, list) or any(
+        not isinstance(delta, dict) for delta in accepted_deltas
+    ):
+        raise SystemExit("build.accepted_deltas 必须是对象数组。")
+    for delta in accepted_deltas:
+        expected_hash = sha256_value({"previous": expected_hash, "delta": delta})
+    if expected_hash != str(build.get("approved_source_hash") or ""):
+        raise SystemExit("build approved_source_hash 与 design 依据 + accepted deltas 不一致。")
+
+    target = build.get("target")
+    if not isinstance(target, dict):
+        raise SystemExit("build.target 必须是对象。")
+    target_paths = validate_target_paths(repo_root, target.get("paths", []))
+    if target_paths != result["target_paths"]:
+        raise SystemExit("final target paths 与 design 批准范围不一致。")
+    try:
+        definition = load_project_definition(repo_root / ".pm-workflow" / "project.yml")
+    except ProjectDefinitionError as exc:
+        raise SystemExit(str(exc)) from exc
+    if str(target.get("kind") or "") != definition["project"]["type"]:
+        raise SystemExit("final target kind 与 project.yml 不一致。")
+    if [str(value) for value in target.get("entrypoints", [])] != definition["implementation"][
+        "entrypoints"
+    ]:
+        raise SystemExit("final entrypoints 与 project.yml 不一致。")
+    result["approved_source_hash"] = expected_hash
+    result["accepted_deltas"] = len(accepted_deltas)
+    result["project_definition"] = definition
+    print(json.dumps(result, ensure_ascii=False))
+
+
 def cmd_check_dirty(args: argparse.Namespace) -> None:
     module_dir = Path(args.module_dir)
     meta = read_meta(module_dir)
@@ -879,6 +1026,8 @@ def cmd_commit(args: argparse.Namespace) -> None:
         "iterating",
     }:
         raise SystemExit("只有 building / iterating 状态可以记录新的实现提交。")
+    if contract_version(build) >= 4:
+        validate_implementation_commit_scope(module_dir, build, commit)
     previous_commit = optional(build.get("implementation_commit"))
     if contract_version(build) >= 2 and previous_commit != commit:
         acceptance = build.setdefault("acceptance", {"required_checks": [], "evidence": []})
@@ -975,7 +1124,9 @@ def cmd_audit_exception(args: argparse.Namespace) -> None:
     if contract_version(build) >= 2:
         if not checks:
             raise SystemExit("v2 audit-exception 必须用 --check 点名受限检查。")
-        protected = sorted({"browser-smoke", "prototype-boundary"} & set(checks))
+        protected = sorted(
+            {"browser-smoke", "browser-acceptance", "prototype-boundary"} & set(checks)
+        )
         if protected:
             raise SystemExit(
                 "v2+ 验收不能跳过硬检查：" + "、".join(protected) + " 不允许 exception。"
@@ -1357,6 +1508,13 @@ def build_parser() -> argparse.ArgumentParser:
     validate_ready.add_argument("module_dir")
     validate_ready.add_argument("--context-pack")
     validate_ready.set_defaults(func=cmd_validate_ready)
+
+    validate_final = sub.add_parser(
+        "validate-final-currentness",
+        help="verify final design hash, accepted deltas, target paths, and project definition",
+    )
+    validate_final.add_argument("module_dir")
+    validate_final.set_defaults(func=cmd_validate_final_currentness)
 
     check_dirty = sub.add_parser("check-dirty", help="block target-overlapping uncommitted changes")
     check_dirty.add_argument("module_dir")

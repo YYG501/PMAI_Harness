@@ -24,6 +24,9 @@
 
 set -uo pipefail  # 注意：no -e，uninstall 必须能跑完
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$SCRIPT_DIR/../scripts/_lib/skill-links.sh"
+
 PMAI_HOME="${PMAI_HOME:-$HOME/.pmai}"
 PMAI_STATE="${PMAI_STATE:-$HOME/.pmai-state}"
 CLAUDE_SKILLS="$HOME/.claude/skills"
@@ -157,17 +160,26 @@ else
 fi
 
 CLAUDE_SYMLINKS=()
-for s in "$CLAUDE_SKILLS"/${SKILL_PREFIX}* "$CLAUDE_SKILLS/_shared"; do
+for s in "$CLAUDE_SKILLS"/${SKILL_PREFIX}*; do
   [ -L "$s" ] && CLAUDE_SYMLINKS+=("$s")
 done
+[ -L "$CLAUDE_SKILLS/_shared" ] \
+  && pmai_shared_link_is_managed "$PMAI_HOME/skills/_shared" "$CLAUDE_SKILLS/_shared" \
+  && CLAUDE_SYMLINKS+=("$CLAUDE_SKILLS/_shared")
 CODEX_SYMLINKS=()
-for s in "$CODEX_SKILLS"/${SKILL_PREFIX}* "$CODEX_SKILLS/_shared"; do
+for s in "$CODEX_SKILLS"/${SKILL_PREFIX}*; do
   [ -L "$s" ] && CODEX_SYMLINKS+=("$s")
 done
+[ -L "$CODEX_SKILLS/_shared" ] \
+  && pmai_shared_link_is_managed "$PMAI_HOME/skills/_shared" "$CODEX_SKILLS/_shared" \
+  && CODEX_SYMLINKS+=("$CODEX_SKILLS/_shared")
 KIMI_SYMLINKS=()
-for s in "$KIMI_SKILLS"/${SKILL_PREFIX}* "$KIMI_SKILLS/_shared"; do
+for s in "$KIMI_SKILLS"/${SKILL_PREFIX}*; do
   [ -L "$s" ] && KIMI_SYMLINKS+=("$s")
 done
+[ -L "$KIMI_SKILLS/_shared" ] \
+  && pmai_shared_link_is_managed "$PMAI_HOME/skills/_shared" "$KIMI_SKILLS/_shared" \
+  && KIMI_SYMLINKS+=("$KIMI_SKILLS/_shared")
 SYMLINKS=("${CLAUDE_SYMLINKS[@]}" "${CODEX_SYMLINKS[@]}" "${KIMI_SYMLINKS[@]}")
 SYMLINK_COUNT=${#SYMLINKS[@]}
 CLAUDE_SYMLINK_COUNT=${#CLAUDE_SYMLINKS[@]}

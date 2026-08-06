@@ -4,14 +4,14 @@
 
 ## 当前位置
 
-- 日期：2026-08-05
+- 日期：2026-08-06
 - 开发分支：`main`
-- 当前目标：统一生命周期继续以真实消费仓会话收口；在 build contract v4、Kimi Code 一等主控和 `/pmai-feedback` 之外，新增 `/pmai-lark-review`，把规格发布后的飞书正文修改与批注可靠接回本地规格、决定和原型。
+- 当前目标：Harness 第一阶段可靠性硬化与最终化减负已完成；继续以真实消费仓验证无缺陷正常路径 P95 是否接近 10 分钟。
 - gstack 参考基线：`v1.58.5.0`，commit `11de390`；只参考本地 `gstack-clean` checkout，没有升级用户目录中的安装副本。
 
 ## 当前活跃模型
 
-- 正常用户主链路：`/pmai-init-project` 只建上下文 → `/pmai-design` 讨论需求并在首次定稿时生成项目建造定义 → `/pmai-build` → PM 看结果多轮快速修改 → PM 明确定稿 → 冻结 commit 并统一运行一次 final checks → 形成验收就绪快照、合入 main、主线后文档编译和一致性检查。
+- 正常用户主链路：`/pmai-init-project` 只建上下文 → `/pmai-design` 讨论需求并在首次定稿时生成项目建造定义 → `/pmai-build` → PM 看结果多轮快速修改 → PM 明确定稿 → `finalize-work.py` 对冻结 commit 只执行缺失的代码门、范围门和受影响体验批次 → 合入 main → 只更新实际受影响的产品真相源。
 - `meta`、`mockup`、`spec-writing` 是 design 按需调用后返回主线的内部能力；仍保留手动入口用于兼容和专项使用，但不要求 PM 拼接命令。
 - `/pmai-feedback` 是消费仓到框架仓的只读反馈出口：完整复盘当前原始会话、对照消费仓真相源、判断问题归属，并输出包含会话文件地址和证据的框架优化 Prompt；它不在消费仓直接修改产品或 PMAI 框架。
 - `/pmai-lark-review` 是归档后飞书评审回流入口：先把发布基线 B、采集时本地 L、采集时飞书 R 固定为只读证据，归位出唯一可写目标 T，再读取未解决评论的完整回复并按整批最高影响接回 quick-fix、active build 迭代或 design/build；正文作者 / 认可状态无法由 revision 证明时整批只问一次，批次在项目私有 context cache 中跨轮恢复。T 写回后先归位决定，再精细同步同一篇文档并继续实现，验证完成后以受控回执处理本批评论。普通正文同步仍走 `/pmai-lark-sync`。
@@ -27,21 +27,23 @@
 
 ## 已实现
 
+- Harness 第一阶段五项 P1 已下沉为运行时硬门：host `_shared` 只按明确所有权替换；brownfield 初始化写入前列全同名冲突；attached build worktree 的所属分支副本压住 main 旧状态；build 必须消费 current `ready_to_build + project.yml` 且拒绝路径、类型、入口和 revision 漂移；cancel 要求 main 干净、只提交状态删除，并在提交失败时恢复原状态。
 - 新增 `context-pack.py`：design、build、恢复、最终检查和文档更新共用确定性上下文，并区分 active / superseded / 冲突决定、未决问题和输入 hash；项目定义存在时只从其中的 entrypoints 取实现上下文。
 - 新增共用 `decision-policy`：机械项自动处理，可逆偏好给推荐并推进，产品模型岔路和 one-way door 立即让 PM 拍板；问句和讨论草稿不得成为决定。
-- `build-contract.py` 新 build 使用合同 v4：`request-finalization` 是 final evidence 和 `review-ready` 的硬门；accepted delta 清除定稿请求，验收发现缺口后的修复 commit 自动重绑原定稿意图，PM 新反馈用 `resume-iteration` 回快速车道。prototype 继续固化 `interactive-simulation` 和不可 exception 的 `prototype-boundary`。
-- prototype / product 验收 profile schema v2 同时编译实现深度、`iteration_checks` 和 `final_checks`。快速迭代只跑热更新、typecheck 与当前页面走查；外部 builder 只用于首次实现或大型重构。
-- 新增 `final-validation.py`：对定稿请求绑定的 implementation commit 创建 detached validation worktree，运行 project.yml 的 test/typecheck/build，写结构化 artifact 后安全清理；不停止 active dev server，不改写其构建缓存。
-- 新增 `build-timing.py`：记录 prepare、implement、fast-check、preview、final-typecheck、production-build、browser-acceptance、documentation 阶段和 time-to-preview；2–5 / 5–10 分钟只预警，不阻断 PM 查看。
+- `build-contract.py` 新 build 继续使用合同 v4：`validate-final-currentness` 重新校验 design hash、accepted deltas、批准路径和 project.yml；真实 Git implementation commit 在每轮 `commit` 时立即阻断批准范围外路径。`request-finalization` 仍是 final evidence 和 `review-ready` 硬门；PM 新反馈用 `resume-iteration` 回快速车道。prototype 继续固化不可 exception 的 `prototype-boundary`。
+- prototype / product 验收 profile schema v2 同时编译 `iteration_checks / final_checks`。新 Web build 只生成一个不可 exception 的 `browser-acceptance`，一次持续浏览器 chain 覆盖受影响流程的 smoke、visual、behavior；旧合同的三项浏览器证据继续兼容恢复。
+- `final-validation.py` 对定稿请求绑定的 implementation commit 创建 detached validation worktree，在 `implementation.root` 运行命令；只对文本完全相同的 test/typecheck/build 去重，生产构建硬门不变。
+- `finalize-work.py` 按 v4 lifecycle 只补缺失机械项，并用绑定 commit/source hash 的 audit 游标从语义检查、`final_check / landed / documenting` 准确续跑；只提交当前模块状态和 audit 目录，合入后输出 main 模块恢复位置。coverage、prototype boundary、迁移和安全等语义判断不伪装成自动通过。
+- `build-timing.py` 自动记录 currentness、final-validation、browser-acceptance、semantic-validation、landing、documentation；统一 runner 完成前校验适用阶段都有 pass 且没有 running。真实 build/browser 缺陷、PM 新反馈、merge 冲突、未跟踪路径碰撞和文档碰撞把旧尝试标为 `exited` 或启动新尝试，不显示成 10 分钟成功。
 - 新增 `prototype-boundary.py`：从 baseline 到候选实现扫描批准范围外改动、数据库 migration、生产基础设施、密钥配置、真实鉴权和外部副作用信号；静态信号无缺口后仍要求 AI 明确完成语义复核，artifact 才能写 `pass`。
 - 新增 `project-definition.py` 和严格 schema validator；路径、类型、技术栈、Web 运行配置与 revision 变更全部 fail-closed。
 - `project-type.py` 保留为兼容包装器：优先读新 `project.yml`，再读旧 config 和旧 `auto-detected: system` marker。
 - 初始化脚本不再接收 project type，不创建代码、prototype、mockup 看板、dev server 或 gstack 依赖。
 - 固定 build 审计编排和 coverage reviewer 已退出活跃链路；v4 只认 adaptive iteration/final checks 与对应 evidence。
-- Web final checks 必须有 active browser-smoke；gstack 可由其它 browser/Playwright 适配器替代，不能 exception 掉浏览器能力。
+- Web final checks 必须有 active browser-acceptance；旧合同仍要求 active browser-smoke。gstack 可由其它可验证 browser 适配器替代，不能 exception 掉浏览器能力。
 - builder profile 按项目定义、配置、本机可用性和当前主控推荐；Claude Code、Codex、Kimi Code、Cursor Agent、OpenCode 都可作为外部执行器，当前主控对应的同名工具不进入候选，但当前会话直接构建始终可选；旧消费仓缺少 `kimi-code` profile 时由 `builder-profile.py` 运行时补齐，不改写项目配置；Gemini CLI 已退出构建工具面。验收 profile 仍后台生成，不进入开工卡。
-- 新增自动 landing 和恢复：merge 冲突保留 `final_check` 与隔离环境；文档失败保留 `landed/docs_pending`，续跑不重复 merge；运行进程或缓存导致的 worktree 清理失败进入安全待清理队列，不阻塞文档阶段。
-- 文档影响地图在验收就绪候选阶段先生成草案，landed 后按 main 事实完成覆盖；对象、动作、状态、权限、页面、术语和受影响文件都必须 covered 或明确 no-change，最终提交自动纳入影响地图本身。
+- 自动 landing 在 merge 前检查 incoming path 与 main 未跟踪文件交集；merge 冲突保留 `final_check`，文档失败保留 `landed/docs_pending`，续跑不重复 merge，清理失败继续进入待清理队列。
+- 文档影响地图只在 landed 后生成：默认更新 PRODUCT-STATE，accepted delta 才加入 spec、decisions 和明确受影响真相源；landed diff 已改文档自动 covered，未受影响文档不进入清单。
 - spec-writing landed 对账固定分为符合、accepted delta、漏实现、无依据实现；只有 accepted delta 修改规格目标，漏实现保留为实现缺口。
 - design、meta、mockup、spec-writing、build、build-close 与消费仓 AGENTS / CLAUDE 模板已按统一链路重构。
 - 新增 `evals/cases/*.json`、`evals/touchfiles.json` 和 `scripts/skill-eval.py`；静态案例可作为提交门，session runner / LLM judge 缺失时明确 skip，require 模式明确 fail。
@@ -57,6 +59,7 @@
 ## 兼容与边界
 
 - 合同 v1 继续可读；已有消费仓不批量重写，下次 design 定稿时生成 `project.yml`。
+- build contract 仍为 v4，project.yml schema 仍为 v1；旧 v2/v3/v4 的 browser-smoke / visual / behavior evidence 和恢复状态无需迁移，新 build 才采用 browser-acceptance 与统一 runner。旧 v4 已在 `final_check` 且没有 runner audit 时按原状态直接落地，不倒灌 timing 字段。
 - 不新增 decisions JSONL 或第二套状态机；context pack 只编译现有真相源。
 - 目标规格在 design 定稿时生成；描述已落地现状的文档在 merge 后更新，不因文档失败回滚已落地主线实现。
 - gstack 只是方法参考与可选证据生产工具，不成为 PMAI 的状态、决定或收尾权威。
@@ -65,8 +68,8 @@
 
 ## 当前验证
 
-- 新增和改造的 context pack、acceptance profile、build contract、landing、文档影响地图、status、关键 Skill 路由、design 决策收敛、project definition 幂等与个人经验 targeted tests 已通过。
-- 完整 `tests/run-all.sh` 已通过：`535 passed / 0 failed`。新增回归覆盖飞书三方正文比较、稳定全量评论扫描、严格分页合同、受控评论完成回执、PM 手工回复 / 解决隔离、同步前 revision 栅栏、relation 定位、同秒评论水位、URL / revision / checkpoint 身份冲突、发布 T 与远端 revision 终态、已解决 / deferred / 批次外评论门禁、checkpoint 竞态后的受控 reopen、legacy PM 确认、`applied` 实际进入 T、手工 `merged` 不退化为整份 L/R、YAML 保真、格式级 CLI 版本门禁及本地 / 远端并发；Kimi 原生 Skill 与 hooks、`/pmai-feedback`、iteration/final 双车道、prototype 边界、landing/docs 恢复、design、个人经验和其它既有回归继续通过。
+- Harness 第一阶段安装所有权、初始化冲突、状态权威、ready/build 合同和 cancel 原子性 targeted tests 已通过：`42 passed / 0 failed`。
+- 完整 `tests/run-all.sh` 已通过：`564 passed / 0 failed`。新增回归覆盖最终命令在子目录执行、同命令去重、同 commit/hash 的部分命令证据安全补全、批量浏览器验收、语义补验游标、PM 反馈重置且不复用旧 pass、受控验收提交、真实 worktree 合入与 main 文档恢复、旧 v4 无 runner audit 直接续跑、批准范围即时阻断、merge 前未跟踪路径碰撞、完整 timing 和异常退出 SLA；Harness 五项 P1、飞书评审、Kimi 原生 Skill 与 hooks、`/pmai-feedback`、design、个人经验和其它既有回归继续通过。
 
 ## 下一步
 

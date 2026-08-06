@@ -95,9 +95,39 @@ test_special_chars_in_background() {
   rm -rf "$base"
 }
 
+test_allow_existing_rejects_template_conflicts_before_writing() {
+  start_test "init-project: --allow-existing preserves conflicting source material"
+  local base proj out rc original
+  base=$(mktemp -d)
+  proj="$base/existing-materials"
+  mkdir -p "$proj"
+  original="# Existing product notes
+
+Do not overwrite this file."
+  printf '%s\n' "$original" > "$proj/PRODUCT.md"
+
+  out=$(PMAI_HOME="$REPO_ROOT" bash "$INIT_PROJECT_SH" \
+    "test-proj" "$proj" "资料目录接入" --allow-existing 2>&1)
+  rc=$?
+
+  if [ "$rc" = "0" ]; then
+    _fail "conflicting PRODUCT.md should block initialization"
+  elif [ "$(cat "$proj/PRODUCT.md")" != "$original" ]; then
+    _fail "existing PRODUCT.md was modified"
+  elif [ -e "$proj/AGENTS.md" ] || [ -e "$proj/.pm-workflow/config.yml" ]; then
+    _fail "initialization wrote files before reporting conflicts"
+  elif ! echo "$out" | grep -q "PRODUCT.md"; then
+    _fail "conflict output should identify PRODUCT.md: $out"
+  else
+    pass_test
+  fi
+  rm -rf "$base"
+}
+
 test_no_framework_asset_copy
 test_context_only_e2e_without_gstack
 test_legacy_fourth_type_fails_with_migration
 test_special_chars_in_background
+test_allow_existing_rejects_template_conflicts_before_writing
 
 report_results "init-project"

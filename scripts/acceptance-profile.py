@@ -75,15 +75,14 @@ def compile_profile(args: argparse.Namespace) -> dict:
                     }
                 )
         if has_ui:
-            final_checks.append({"name": "browser-smoke", "purpose": "用主动浏览器能力确认原型可访问", "command": None})
-        final_checks.append({"name": "coverage", "purpose": "逐项核对建造依据、页面和状态覆盖", "command": None})
-        if has_ui:
-            final_checks.extend(
-                [
-                    {"name": "visual", "purpose": "对照 DESIGN.md 检查视觉一致性", "command": None},
-                    {"name": "behavior", "purpose": "用主动浏览器走通关键任务和异常路径", "command": None},
-                ]
+            final_checks.append(
+                {
+                    "name": "browser-acceptance",
+                    "purpose": "在一个持续浏览器会话中批量验证受影响流程的可访问性、视觉和行为",
+                    "command": None,
+                }
             )
+        final_checks.append({"name": "coverage", "purpose": "逐项核对建造依据、页面和状态覆盖", "command": None})
     else:
         final_checks.append({"name": "scope-coverage", "purpose": "逐项核对规格与真实实现", "command": None})
         for name, key in (("tests", "test"), ("typecheck", "typecheck"), ("build", "build")):
@@ -96,12 +95,12 @@ def compile_profile(args: argparse.Namespace) -> dict:
                     }
                 )
         if has_ui:
-            final_checks.extend(
-                [
-                    {"name": "browser-smoke", "purpose": "用主动浏览器能力确认真实产品 UI 可访问", "command": None},
-                    {"name": "visual", "purpose": "检查 UI 与现有设计基线一致", "command": None},
-                    {"name": "behavior", "purpose": "用主动浏览器走通真实产品关键任务", "command": None},
-                ]
+            final_checks.append(
+                {
+                    "name": "browser-acceptance",
+                    "purpose": "在一个持续浏览器会话中批量验证受影响流程的可访问性、视觉和行为",
+                    "command": None,
+                }
             )
         if args.data_migration:
             final_checks.append({"name": "migration", "purpose": "验证迁移、回滚和兼容读取", "command": None})

@@ -24,6 +24,7 @@ python3 "$PMAI_HOME/scripts/status-view.py" --banner-only --skill BUILD || true
 - `skills/_shared/gstack-integration.md`
 - `skills/_shared/PM-VIEW-RULES.md` 及其引用的 PM 视图规则
 - `skills/_shared/pm-view/banner-rules.md`
+- `skills/build/references/finalization.md`
 - 当前仓 `DESIGN.md`（UI 相关时）
 - 当前模块 `spec.md` / `decisions.md` 与 context pack
 
@@ -221,6 +222,7 @@ git -C "$BUILD_DIR" commit -m "build(<模块>): start adaptive build"
 ```
 
 两组检查都按后台档案逐项重复传入。`required_checks` 只保留为 `final_checks` 的旧 host 兼容别名。合同只扩展现有 `.work-meta.json:build`，不新增平行状态系统，也不把合同内容展示给 PM。
+`start` 自身会再次强制校验 current `ready_to_build`、`project.yml`、批准目标与仓内路径；缺任一前置时只能返回 design，不能由 build 补造状态或临时合同。
 
 ## 4. 构建指定对象
 
@@ -314,38 +316,15 @@ python3 "$PMAI_HOME/scripts/build-contract.py" add-delta \
 
 实现修正不改变产品决定时，不递增 revision；但实现 commit 变化后，绑定旧 commit 的证据不能复用。
 
-## 6. PM 请求定稿后，只对冻结提交运行一次完整验收
+## 6. PM 请求定稿后，统一 runner 只执行缺失项
 
-PM 明确说“定稿 / 可以提交 / 可以合并 / 这版可以了”之前，本节不得执行：v4 合同会拒绝 final evidence 和 `review-ready`。收到该表达后，不二次询问，把 PM 最后看到的 implementation commit 冻结为定稿候选：
+PM 明确说“定稿 / 可以提交 / 可以合并 / 这版可以了”之前，本节不得执行。收到后不二次询问，也不准备 candidate evidence；完整执行 `skills/build/references/finalization.md`。
 
-```bash
-python3 "$PMAI_HOME/scripts/build-contract.py" request-finalization \
-  "$BUILD_DIR/docs/modules/<模块>"
-```
+统一入口先用 `validate-final-currentness` 校验当前 design、accepted delta、批准路径和 project.yml，再只补缺失的机械项。完全相同的 test/typecheck/build 命令只执行一次并在 artifact 中列出所覆盖检查；命令不同或无法证明相同就分别执行。所有命令在 detached validation worktree 的 `implementation.root` 下运行，production build 保持硬门。
 
-请求定稿只打开最终验收车道，不先写 `pm_accepted_at`。随后在仍处于 `iterating` 时完成：
+Web 新 build 用一个 `browser-acceptance` 批次覆盖受影响流程的 smoke、visual 和 behavior；一次 gstack `chain`、一个持续会话，不按三个检查或多个复用页面串行重跑。旧合同的 `browser-smoke / visual / behavior` 只用于兼容恢复。
 
-1. 重新编译 context pack，确认没有未决产品问题；
-2. 对冻结 commit 运行 acceptance profile 的全部 `final_checks`；
-3. project.yml 声明的 test/typecheck/production build 必须在 detached validation worktree 执行，不能停止 dev server，也不能改写 active worktree 的构建缓存：
-
-   ```bash
-   python3 "$PMAI_HOME/scripts/final-validation.py" \
-     --repo-root "$BUILD_DIR" \
-     --module-dir "$BUILD_DIR/docs/modules/<模块>" \
-     --audit "$BUILD_DIR/.pm-workflow/audits/<模块>/final-validation.json"
-   ```
-
-4. 从最终规格的功能项、流程、权限和验收标准逐项生成覆盖证据，不能沿用只覆盖旧页面的手工概括；
-5. 每项用默认 `lane=final` 的 `record-evidence` 绑定同一个 `approved_source_hash + implementation_commit + checked_at`；
-6. 复用现有 dev server 和浏览器连接做完整浏览器验收；production build 不接管或重启该 dev server；
-7. 生成 landed 后文档影响地图草案，先定位可能更新的规格、产品现状、规则、术语、设计基线、TODO 和索引，但不在 merge 前把正式文档写成“已落地”；
-8. 运行 `review-ready`，把完整证据冻结为与定稿请求、source hash 和 implementation commit 绑定的验收就绪快照；
-9. 提交 evidence artifacts、文档影响草案和合同状态。
-
-`prepare / final-typecheck / production-build / browser-acceptance / documentation` 继续写入同一个 `timing.json`。这些阶段耗时用于定位瓶颈，不阻断 PM 已经可见的 dev 页面。
-
-若 `final_checks` 包含 `browser-smoke`，解析可实际操作页面的主动浏览器适配器：gstack `/browse`、当前 runtime browser 或 Playwright。找不到任何适配器时保留 `iterating` 并说明缺失能力；不得生成 visual/behavior 的假证据，也不得让 PM 用 exception 放行。
+runner 返回仍缺语义检查时，由当前主控完成规格覆盖、prototype boundary、迁移或安全判断并记录 evidence，再重跑同一入口。实现缺陷仍回 `iterating` 修复；PM 新反馈执行 `resume-iteration`。final-validation 或 browser 真实失败会在 `timing.json` 标记正常路径退出，不得继续报 10 分钟成功。
 
 ### prototype 完整检查
 
@@ -378,7 +357,7 @@ python3 "$PMAI_HOME/scripts/build-contract.py" record-evidence \
   --name prototype-boundary --status pass --artifact "$BOUNDARY"
 ```
 
-`prototype-boundary` 和 `browser-smoke` 都是不可 exception 的硬检查。artifact 出现批准范围外改动、未经决定允许的 database/auth/external side effect/infrastructure 信号，或 AI 尚未明确完成语义复核时保持 `iterating`；不得把 `blocked / needs-review` 手写成 `pass`。
+`prototype-boundary` 和新合同的 `browser-acceptance` 都是不可 exception 的硬检查；旧合同的 `browser-smoke` 也继续不接受 exception。artifact 出现批准范围外改动、未经决定允许的 database/auth/external side effect/infrastructure 信号，或 AI 尚未明确完成语义复核时保持 `iterating`；不得把 `blocked / needs-review` 手写成 `pass`。
 
 优先使用已可用的主动 browser 适配器生成证据；工具选择不展示给 PM。
 
@@ -393,30 +372,11 @@ python3 "$PMAI_HOME/scripts/build-contract.py" record-evidence \
 - UI 浏览器检查（涉及时）；
 - 权限、安全、越权和破坏性数据检查（涉及时）。
 
-非浏览器检查受限时如实写 `limited / skipped / blocked`，只有合同允许的具名检查才可记录 exception；`browser-smoke` 必须是 active pass，行为检查 `fail` 也不能例外放行。
+非浏览器检查受限时如实写 `limited / skipped / blocked`，只有合同允许的具名检查才可记录 exception；`browser-acceptance` 必须是 active pass，旧合同的 `browser-smoke` 和行为 `fail` 也不能例外放行。
 
 完整检查失败时保持 `iterating`。若只是验收发现实现缺口，用当前会话修复并记录新 implementation commit；v4 会保留原定稿意图并把 `requested_commit` 自动重绑到修复提交，无需让 PM 再说一次“定稿”，但所有 final evidence 必须重跑。若 PM 在这期间又提出新的产品/体验反馈，则先运行 `resume-iteration` 清掉定稿请求，回到快速迭代车道；不得带着失败进入 close。
 
-完整检查通过后：
-
-```bash
-python3 "$PMAI_HOME/scripts/doc-impact.py" init \
-  "$BUILD_DIR/docs/modules/<模块>" \
-  --repo-root "$BUILD_DIR" \
-  --base "<baseline sha>" \
-  --head "$IMPLEMENTATION_COMMIT" \
-  --output "$BUILD_DIR/.pm-workflow/audits/<模块>/doc-impact.json"
-
-python3 "$PMAI_HOME/scripts/build-contract.py" review-ready \
-  "$BUILD_DIR/docs/modules/<模块>"
-
-git -C "$BUILD_DIR" add -- \
-  ".pm-workflow/audits/<模块>" \
-  "docs/modules/<模块>/.work-meta.json"
-git -C "$BUILD_DIR" commit -m "build(<模块>): record acceptance-ready candidate"
-```
-
-实现 commit、accepted delta 或任一 final evidence 变化都会使该快照失效。定稿请求前没有 review-ready；快照形成后直接继续 §7，不再要求 PM 再确认一次。
+完整检查通过后重跑统一 runner；它自动形成 review-ready、记录 accept 并继续 landing。实现 commit、accepted delta 或任一 final evidence 变化都会使快照失效；runner 只补失效项，不在 build 阶段生成 doc impact 草案。
 
 ## 7. 验收就绪后自动进入 final_check
 
@@ -428,31 +388,13 @@ git -C "$BUILD_DIR" commit -m "build(<模块>): record acceptance-ready candidat
 - “这版可以了”
 - “提交吧 / 合进去吧”
 
-该表达本身就是 one-way door 授权：先按 §6 写入一次 `request-finalization` 并完成冻结提交的 final checks，不再二次问“是否收尾”，也不要求 PM 手动发 `/pmai-build-close`。
-
-`review-ready` 形成后，只记录 PM 对同一候选 commit 的定稿授权：
-
-```bash
-python3 "$PMAI_HOME/scripts/build-contract.py" accept \
-  "$BUILD_DIR/docs/modules/<模块>"
-```
-
-`final_check` 只做确定性校验，不重新跑已经绑定同一 commit/hash 的完整验收，也不修改业务代码：
-
-```bash
-python3 "$PMAI_HOME/scripts/build-contract.py" validate-land \
-  "$BUILD_DIR/docs/modules/<模块>"
-```
+该表达本身就是 one-way door 授权：直接按 §6 调统一 runner，不再二次问“是否收尾”，也不要求 PM 手动发 `/pmai-build-close`。runner 才负责 `request-finalization → review-ready → accept → validate-land` 的状态推进，Skill 不再手工拼这四步。
 
 若快照缺失、过期或发现实现缺口，立即回 `iterating`；验收缺口保留定稿意图并在修复提交上重跑 final checks，PM 新反馈则用 `resume-iteration` 取消定稿请求。不 merge、不清理，也不在 close 内修代码。
 
 ## 8. 自动落地主线
 
-最终检查通过后直接调用同一 finalize 流程：
-
-```bash
-bash "$PMAI_HOME/scripts/close-work.sh" "$BUILD_DIR/docs/modules/<模块>"
-```
+统一 runner 在 final_check 自动调用 `close-work.sh`；中断后以同一命令续跑。
 
 - 独立环境发生 merge 冲突：停止在可恢复的 `final_check`，保留分支和 worktree；
 - 不清理或回退用户无关脏改动；
@@ -462,17 +404,16 @@ bash "$PMAI_HOME/scripts/close-work.sh" "$BUILD_DIR/docs/modules/<模块>"
 
 ## 9. 基于 main 对账规格目标与产品现状
 
-第一次 finalize 使用 build 阶段已经生成的 doc impact 草案；若旧合同没有草案才在 main 补生成。随后必须在 main 上完成：
+实现 landed 后，`land-work.sh` 才按准确 implementation diff 生成最小 doc impact map。随后在 main 上完成：
 
 1. 重新生成 context pack；
 2. 读取 landed diff、build contract、accepted deltas 和 doc impact map；
 3. 调用 spec-writing 的“落地主线后的目标对账”模式，按符合 / accepted delta / 漏实现 / 无依据实现分类；
-4. 按影响地图更新 `PRODUCT-STATE.md`、`PRODUCT-RULES.md`、`PRODUCT.md` 术语、`DESIGN.md`、`TODO.md`、mockup manifest 和索引；
-5. 未受影响文件标 `no-change` 并写原因；
-6. 检查新增或改变的对象、动作、状态、权限、页面和术语都有文档落点；
-7. 对 doc impact 每项执行 `doc-impact.py cover`；
-8. `doc-impact.py validate` 通过后执行 `build-contract.py docs-complete`；
-9. 再次调用 `close-work.sh`，单独提交文档同步、删除临时 `.work-meta.json` 并进入 `complete`。
+4. 只更新地图中的 pending 文档；已在 landed diff 修改的真相源由脚本自动 covered；
+5. 未受影响文件不进入地图，不打开、不写 no-change；
+6. 对 pending 项执行 `doc-impact.py cover`；
+7. `doc-impact.py validate` 通过后执行 `build-contract.py docs-complete`；
+8. 再次调用统一 runner，单独提交文档同步、删除临时 `.work-meta.json` 并进入 `complete`。
 
 `spec.md` / PRD 保留最终目标，只有 accepted delta 可以修改；`PRODUCT-STATE.md` 等现状文档只描述 main 已经存在的事实。`target.kind=prototype` 落地后只能记为“原型演示”，模拟的数据库、权限、集成或引擎不得写成“已落地产品能力”。不得在 merge 前把目标要求提前写成“已完成”。
 

@@ -58,20 +58,16 @@ if [ "$CURRENT" != "main" ]; then
   fi
 fi
 
-# --- Step 1.5: main 污染防护：如果 main 有任何在本模块路径之外的脏文件，拒绝 ---
-# 只允许 docs/modules/<模块> 下的改动参与 cancel commit
+# --- Step 1.5: main 污染防护：cancel 只允许自己产生 .work-meta 删除 ---
+# 开始前要求 main 干净。模块内 discussion/spec 等改动同样不能被 cancel 顺带提交。
 REL_MODULE="docs/modules/$MODULE_BASENAME"
-DIRTY=$(git status --porcelain 2>/dev/null || true)
+REL_META="$REL_MODULE/.work-meta.json"
+DIRTY=$(git status --porcelain --untracked-files=all 2>/dev/null || true)
 if [ -n "$DIRTY" ]; then
-  BAD=$(printf '%s\n' "$DIRTY" | awk -v prefix="$REL_MODULE/" '
-    { path = substr($0, 4); if (index(path, prefix) != 1) print $0 }
-  ')
-  if [ -n "$BAD" ]; then
-    echo "❌ main 分支有与当前工作无关的未提交改动，拒绝 cancel 以防污染 cancel commit：" >&2
-    echo "$BAD" >&2
-    echo "请先处理（commit、stash 或 reset）这些改动，然后重新运行 /pmai-build-cancel。" >&2
-    exit 1
-  fi
+  echo "❌ main 分支有未提交改动，拒绝 cancel；本操作只会提交 $REL_META 的删除：" >&2
+  echo "$DIRTY" >&2
+  echo "请先处理（commit 或 stash）这些改动，然后重新运行 /pmai-build-cancel。" >&2
+  exit 1
 fi
 
 # --- Step 2: 在 main 上删模块 .work-meta（方案 A）+ 路径级 commit ---
@@ -81,14 +77,17 @@ MAIN_MODULE_META="$MAIN_MODULE/.work-meta.json"
 # 删模块 .work-meta（若在 main 上）；不在 main（只在 worktree）则无需删——cancel 不 merge，
 # work branch随 worktree 一起被清，主仓本就没这份工作状态。
 if [ -f "$MAIN_MODULE_META" ]; then
-  git rm -q -- "$REL_MODULE/.work-meta.json" 2>/dev/null || rm -f "$MAIN_MODULE_META"
+  git rm -q -- "$REL_META"
 fi
-git add -A -- "$REL_MODULE" 2>/dev/null || true
 
 # commit：如果没有暂存改动（main 上本就没这份工作状态），跳过
-if [ -n "$(git diff --cached --name-only)" ]; then
-  if ! git commit -m "cancel: ${WORK_ID}（清模块 .work-meta）" 2>&1; then
-    echo "❌ commit cancelled 状态失败。中止以防数据丢失。" >&2
+if [ -n "$(git diff --cached --name-only -- "$REL_META")" ]; then
+  if ! git commit -m "cancel: ${WORK_ID}（清模块 .work-meta）" -- "$REL_META" 2>&1; then
+    if git restore --staged --worktree -- "$REL_META" 2>/dev/null; then
+      echo "❌ commit cancelled 状态失败；已恢复 $REL_META，未进入清理流程。" >&2
+    else
+      echo "❌ commit cancelled 状态失败，且无法自动恢复 $REL_META；请从 HEAD 恢复后再重试。" >&2
+    fi
     exit 1
   fi
   echo "✅ cancelled 状态已 commit 到 main（清模块 .work-meta）"

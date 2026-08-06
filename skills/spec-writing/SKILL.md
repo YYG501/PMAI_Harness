@@ -158,14 +158,12 @@ spec-writing 历史上自带的写作规则（禁用清单 / UI 元素指代规�
 
 ### 模块规格目标（目标 A）
 
-`/pmai-design` 调用时，输入已经来自同一模块的 `discussion.md` / `decisions.md` 和 context pack。自动收尾调用时，输入还包括 **main 上**的 landed diff、build contract、accepted deltas、最终实现、验收结论和文档影响地图。本 skill 要做的是把已确认的最终目标写成或修订 `spec.md`，不再展开 PRD §六重组，也不生成 `discussion.md` / `decisions.md`。
+`/pmai-design` 调用时，输入已经来自同一模块的 `discussion.md` / `decisions.md` 和 context pack。自动收尾调用时，输入还包括 **main 上**的 landed diff、build contract、accepted deltas、最终实现、验收结论和文档影响地图；只读取地图中 pending 的真相源以及 landed diff 已改的文档，不固定展开全部项目级文档。本 skill 要做的是把已确认的最终目标写成或修订 `spec.md`，不再展开 PRD §六重组，也不生成 `discussion.md` / `decisions.md`。
 
 - 🟢 本模块 `discussion.md`（探索结论 + 设计讨论收敛稿）
 - 🟢 本模块 `decisions.md`（已拍板决策、否过方案、术语定名）
-- 🟢 `PRODUCT-STATE.md`（产品现状，避免规格写成和当前产品脱节）
-- 🟢 `PRODUCT.md`（项目定位 / 用户画像 / 业务术语表）
-- 🟢 `PRODUCT-RULES.md`（跨功能产品行为规则）
-- 🟢 `docs/modules/INDEX.md`
+- 🟢 文档影响地图列出的 pending 真相源；正常 landed 对账至少包含 `PRODUCT-STATE.md`，accepted delta 才扩到 spec / decisions / 明确受影响的规则、术语或设计文档
+- 🟡 `PRODUCT.md`、`PRODUCT-RULES.md`、`DESIGN.md`、`TODO.md` 和索引只在 impact map 点名时读取，不做固定 no-change 巡检
 - 🟡 已确认的 mock / 原型线索；由自动 finalize 调用时读 main 上合同记录的最终 target 与验收结论（只作结构证据和缺口检查；规格不嵌 ASCII、不描述实现覆盖状态）
 - ❌ 任何 `.engineering.md`
 
@@ -290,7 +288,7 @@ S6. **规格自检（机械关口 + 冷读语体，PM 看到前先扫干净）**
 
 PRD 漏读 / 浅读项目级文档（PRODUCT-STATE / PRODUCT.md / PRODUCT-RULES.md / modules INDEX）是 LLM 自觉 Read tool 触发不稳的典型踩坑。本子步骤用 Bash `cat` 把项目级文档无条件 echo 到 transcript，**保证内容进入 working context** —— 比依赖 Read tool 自觉触发硬。冗余于上方「Required Inputs」prose 列表也无害。
 
-**绑定当前工作的功能型规格文档目标：必跑本步骤**（自动 finalize 已确定当前工作和默认路径 → 直接进 P0.5）。
+**绑定当前工作的功能型规格文档目标：必跑本步骤**。自动 finalize 只有在 doc impact map 实际点名既有功能型规格文档时才进入本目标；普通模块 landed 对账不再为了确认 no-change 强制 echo 全部项目级文档。
 **跨模块功能型规格文档 / 既有规格补差目标**：步骤 0 已与 PM 对齐清单 / PM 在线会立刻拦漏读，本步骤可省。
 
 最终 build target 只作实现证据，按 contract target paths / entrypoints 选读，不在本步全文 echo（代码量大，全文 echo 会污染 context；需要核对缺口时按目录 / 入口选读）。

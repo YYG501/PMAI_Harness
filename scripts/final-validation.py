@@ -11,6 +11,7 @@ import argparse
 import json
 import os
 import subprocess
+import sys
 import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
@@ -94,6 +95,53 @@ def run_command(command: str, cwd: Path, log_path: Path) -> dict:
     }
 
 
+def start_timing(audit_path: Path, phase: str) -> str:
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(Path(__file__).with_name("build-timing.py")),
+            "start",
+            "--audit-file",
+            str(audit_path.parent / "timing.json"),
+            "--phase",
+            phase,
+            "--kind",
+            "final",
+        ],
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        check=False,
+    )
+    if result.returncode != 0:
+        raise SystemExit(result.stderr.strip() or f"无法开始 {phase} timing。")
+    return str(json.loads(result.stdout)["id"])
+
+
+def finish_timing(audit_path: Path, entry_id: str, status: str, reason: str | None) -> str | None:
+    command = [
+        sys.executable,
+        str(Path(__file__).with_name("build-timing.py")),
+        "finish",
+        "--audit-file",
+        str(audit_path.parent / "timing.json"),
+        "--id",
+        entry_id,
+        "--status",
+        status,
+    ]
+    if reason:
+        command.extend(["--reason", reason])
+    result = subprocess.run(
+        command,
+        text=True,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.PIPE,
+        check=False,
+    )
+    return result.stderr.strip() or "timing finish failed" if result.returncode != 0 else None
+
+
 def run_validation(args: argparse.Namespace) -> int:
     repo_root = Path(args.repo_root).expanduser().resolve()
     module_dir = Path(args.module_dir).expanduser()
@@ -112,6 +160,7 @@ def run_validation(args: argparse.Namespace) -> int:
         "check": "final-validation",
         "status": "running",
         "implementation_commit": commit,
+        "source_hash": build.get("approved_source_hash"),
         "requested_at": build["finalization"]["requested_at"],
         "started_at": now_iso(),
         "ended_at": None,
@@ -121,6 +170,8 @@ def run_validation(args: argparse.Namespace) -> int:
         "cleanup": {"status": "pending", "path": str(worktree)},
     }
     write_json(audit_path, artifact)
+    timing_id = start_timing(audit_path, "final-validation")
+    artifact["timing_entry_id"] = timing_id
     added = False
     checks_passed = False
     try:
@@ -136,24 +187,68 @@ def run_validation(args: argparse.Namespace) -> int:
             artifact["status"] = "fail"
             artifact["error"] = str(exc)
             return 1
+        implementation_root = str(definition["implementation"]["root"])
+        execution_root = (worktree / implementation_root).resolve()
+        try:
+            execution_root.relative_to(worktree.resolve())
+        except ValueError:
+            artifact["status"] = "fail"
+            artifact["error"] = (
+                "project.yml implementation.root 通过 symlink 逃逸 validation worktree："
+                f"{implementation_root}"
+            )
+            return 1
+        if not execution_root.is_dir():
+            artifact["status"] = "fail"
+            artifact["error"] = (
+                "project.yml implementation.root 不存在或不是目录："
+                f"{implementation_root}"
+            )
+            return 1
+        artifact["implementation_root"] = implementation_root
+        artifact["execution_root"] = str(execution_root)
         configured = definition["commands"]
         selected = list(dict.fromkeys(args.check or VALID_CHECKS))
-        commands: list[tuple[str, str]] = []
+        commands: list[dict[str, object]] = []
         if configured.get("install"):
-            commands.append(("install", str(configured["install"])))
+            commands.append(
+                {
+                    "name": "install",
+                    "command": str(configured["install"]),
+                    "satisfies": ["install"],
+                }
+            )
         for name in selected:
             command = configured.get(name)
             if command:
-                commands.append((name, str(command)))
+                command_text = str(command)
+                duplicate = next(
+                    (
+                        item
+                        for item in commands
+                        if item["name"] != "install" and item["command"] == command_text
+                    ),
+                    None,
+                )
+                if duplicate is not None:
+                    duplicate["satisfies"].append(name)  # type: ignore[union-attr]
+                else:
+                    commands.append(
+                        {"name": name, "command": command_text, "satisfies": [name]}
+                    )
         if not commands:
             artifact["status"] = "fail"
             artifact["error"] = "project.yml 没有可运行的 final validation 命令。"
             return 1
 
         log_dir = audit_path.parent / "final-validation-logs"
-        for name, command in commands:
-            result = run_command(command, worktree, log_dir / f"{name}.log")
+        artifact["requested_checks"] = selected
+        for item in commands:
+            name = str(item["name"])
+            command = str(item["command"])
+            result = run_command(command, execution_root, log_dir / f"{name}.log")
             result["name"] = name
+            result["satisfies"] = item["satisfies"]
             artifact["commands"].append(result)
             write_json(audit_path, artifact)
             if result["status"] != "pass":
@@ -184,6 +279,16 @@ def run_validation(args: argparse.Namespace) -> int:
         artifact["ended_at"] = now_iso()
         if artifact["status"] == "running":
             artifact["status"] = "pass" if checks_passed else "fail"
+        failed_command = next(
+            (item for item in artifact["commands"] if item.get("status") == "fail"),
+            None,
+        )
+        reason = str(artifact.get("error") or "") or (
+            f"{failed_command.get('name')} failed" if failed_command else None
+        )
+        timing_error = finish_timing(audit_path, timing_id, artifact["status"], reason)
+        if timing_error:
+            artifact["timing_error"] = timing_error
         write_json(audit_path, artifact)
 
 

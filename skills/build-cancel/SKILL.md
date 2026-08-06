@@ -66,8 +66,8 @@ bash "$PMAI_HOME/scripts/cancel-work.sh" "$ACTIVE_WORK_DIR"
 
 脚本真实行为：
 
-1. 切回 main，并拒绝污染 main 上无关改动。
-2. 删除当前模块在 main 上的 `.work-meta.json`（如果存在），清掉“正在做”的状态。
+1. 切回 main，并拒绝 main 上任何未提交改动，包括当前模块里未确认的 discussion / spec 修改。
+2. 只暂存并提交当前模块 `.work-meta.json` 的删除（如果存在），清掉“正在做”的状态。
 3. 把关联 worktree/branch 写入 `.runs/pending-cleanup.json`，不立即删除，避免当前会话 cwd 失效。
 
 ### 步骤 3：提示清理
@@ -88,6 +88,7 @@ bash "$PMAI_HOME/scripts/cancel-work.sh" "$ACTIVE_WORK_DIR"
 
 - 必须先问 PM 确认，不能静默放弃。
 - 放弃不 merge 当前工作分支。
+- cancel commit 只允许包含 `.work-meta.json` 删除，不顺带提交模块文档或其它 WIP。
 - 不写 `status=cancelled`；新模型的语义是清掉活跃状态。
 - 不手动删除 worktree/branch；只通过 `cancel-work.sh` 写 pending，再由 `cleanup-pending-worktrees.sh` 清理。
 - PM 面前说“当前 build / 模块工作”，不要再使用旧流程名。

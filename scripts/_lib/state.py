@@ -427,7 +427,9 @@ def read_task_status(pm_view: Path, strict: bool = False) -> Optional[str]:
 # ---------------------------------------------------------------------------
 
 def _collect_from_modules(
-    modules_dir: Path, warnings: list[dict], statuses: tuple[str, ...]
+    modules_dir: Path,
+    warnings: list[dict],
+    statuses: Optional[tuple[str, ...]] = None,
 ) -> list[tuple[Path, dict]]:
     """扫 docs/modules/*/.work-meta.json，返回 status ∈ statuses 的 [(module_dir, meta), ...]。
 
@@ -448,9 +450,17 @@ def _collect_from_modules(
         except (OSError, json.JSONDecodeError) as e:
             warnings.append({"path": str(meta_file), "reason": str(e)})
             continue
-        if meta.get("status") in statuses:
+        if statuses is None or meta.get("status") in statuses:
             found.append((module_dir, meta))
     return found
+
+
+def _work_belongs_to_branch(meta: dict, branch: str) -> bool:
+    """Return whether a module state is owned by the attached build branch."""
+    if meta.get("branch") == branch:
+        return True
+    build = meta.get("build")
+    return isinstance(build, dict) and build.get("branch") == branch
 
 
 def list_active_work(
@@ -490,13 +500,14 @@ def list_active_work(
         rid = meta.get("id") if isinstance(meta, dict) else None
         return rid if isinstance(rid, str) and rid else work_dir.name
 
-    def _append(work_items: list[tuple[Path, dict]]) -> None:
+    def _append_authoritative(work_items: list[tuple[Path, dict]]) -> None:
         for work_dir, meta in work_items:
             key = _dedup_key(work_dir, meta)
             if key in seen:
                 continue
             seen.add(key)
-            items.append({"work_dir": work_dir, "meta": meta})
+            if meta.get("status") == "active":
+                items.append({"work_dir": work_dir, "meta": meta})
 
     # cwd 落在某个 worktree → 让 cwd 优先
     if cwd is not None:
@@ -513,21 +524,34 @@ def list_active_work(
         if cwd_root is not None:
             br = _branch_of(cwd_root)
             if br.startswith("build-"):
-                local = _collect_from_modules(
-                    cwd_root / "docs" / "modules", warnings, ("active",)
-                )
+                local = [
+                    item
+                    for item in _collect_from_modules(
+                        cwd_root / "docs" / "modules", warnings
+                    )
+                    if _work_belongs_to_branch(item[1], br)
+                ]
                 if local:
-                    _append(local)
+                    _append_authoritative(local)
                     if strict and warnings:
                         w = warnings[0]
                         raise StateReadError(Path(w["path"]), w["reason"])
                     return {"items": items, "warnings": warnings}
-    # 主仓 + 所有 git worktree 上的 build 分支。
-    _append(_collect_from_modules(repo_root / "docs" / "modules", warnings, ("active",)))
+
+    # Attached build worktree 是其 branch 对应 work id 的权威副本。先登记所有
+    # 状态（包括 closed/cancelled），再扫 main，避免 main 的旧 active 副本复活。
     for wt_branch, wt_path in _git_worktree_pairs(repo_root):
         if not wt_branch.startswith("build-"):
             continue
-        _append(_collect_from_modules(wt_path / "docs" / "modules", warnings, ("active",)))
+        owned = [
+            item
+            for item in _collect_from_modules(wt_path / "docs" / "modules", warnings)
+            if _work_belongs_to_branch(item[1], wt_branch)
+        ]
+        _append_authoritative(owned)
+    _append_authoritative(
+        _collect_from_modules(repo_root / "docs" / "modules", warnings)
+    )
 
     if strict and warnings:
         w = warnings[0]

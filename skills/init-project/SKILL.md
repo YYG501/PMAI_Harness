@@ -75,7 +75,7 @@ echo "━━━ PMAI ► INIT-PROJECT ▸ 项目识别 ━━━"
 
 已接入项目不重跑初始化：引导 `/pmai-status`；需要重定方向时走 `/pmai-direction`。
 
-资料目录只有在 PM 明确确认接住现有内容后，才给脚本传 `--allow-existing`。已有代码库进入 E，不调用初始化脚本。
+资料目录只有在 PM 明确确认接住现有内容后，才给脚本传 `--allow-existing`。脚本会在首次写入前列出与 PMAI 脊柱、索引或 host 配置同名的冲突并停止，不覆盖也不自动合并；已有代码库进入 E，不调用初始化脚本。
 
 ### B · 建立上下文脊柱
 
@@ -93,7 +93,7 @@ bash "$PMAI_HOME/scripts/init-project.sh" \
   "<project-name>" "<target-dir>" "<background>"
 ```
 
-资料目录追加 `--allow-existing`。脚本只完成脊柱、目录、host 配置和初始 commit；返回 0 不代表已经做过 design。
+资料目录追加 `--allow-existing`。若有同名目标，先保留原资料并停止，让 PM 决定重命名或归档；无冲突时脚本只完成脊柱、目录、host 配置和初始 commit。返回 0 不代表已经做过 design。
 
 ### C · 写入一句话产品背景
 
@@ -155,6 +155,7 @@ git -C "<target-dir>" commit -m "docs: establish initial product context"
 |---|---|
 | 目标目录已接入 PMAI | 停止，不覆盖；引导 `/pmai-status` |
 | 资料目录未获 PM 同意接住 | 不传 `--allow-existing`，不修改目录 |
+| 资料目录存在 PMAI 同名目标 | 写入前停止并列出冲突，不覆盖、不猜测合并 |
 | 脚本失败 | 报 stderr，停在 B，不继续写脊柱 |
 | gstack 不可用 | 忽略；初始化继续 |
 | PM 中途停止 | 保留已经提交的骨架；未提交内容保持可见，不删除目录 |

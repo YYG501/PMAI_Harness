@@ -16,6 +16,9 @@
 
 set -Eeuo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$SCRIPT_DIR/../scripts/_lib/skill-links.sh"
+
 PMAI_HOME="${PMAI_HOME:-$HOME/.pmai}"
 PMAI_STATE="${PMAI_STATE:-$HOME/.pmai-state}"
 CLAUDE_SKILLS="$HOME/.claude/skills"
@@ -83,7 +86,7 @@ rebuild_symlinks() {
   local dst_skills="$2"
   local count=0
   # 清旧
-  for old in "$dst_skills"/${SKILL_PREFIX}* "$dst_skills/_shared"; do
+  for old in "$dst_skills"/${SKILL_PREFIX}*; do
     [ -L "$old" ] && rm "$old" || true
   done
   # 重建
@@ -97,8 +100,12 @@ rebuild_symlinks() {
       pmai-*)   dst="$dst_skills/$skill_name" ;;
       *)        dst="$dst_skills/${SKILL_PREFIX}${skill_name}" ;;
     esac
-    [ -e "$dst" ] || [ -L "$dst" ] && rm -rf "$dst" || true
-    ln -s "${skill_dir%/}" "$dst"
+    if [ "$skill_name" = "_shared" ]; then
+      pmai_install_shared_link "${skill_dir%/}" "$dst"
+    else
+      [ -e "$dst" ] || [ -L "$dst" ] && rm -rf "$dst" || true
+      ln -s "${skill_dir%/}" "$dst"
+    fi
     count=$((count + 1))
   done
   echo "$count"
@@ -164,6 +171,10 @@ if [ ! -d "$PMAI_HOME/.git" ]; then
   echo "❌ $PMAI_HOME 不存在或不是 git 仓。先跑 pmai install。" >&2
   exit 1
 fi
+
+for dst_skills in "$CLAUDE_SKILLS" "$CODEX_SKILLS" "$KIMI_SKILLS"; do
+  pmai_assert_shared_link_available "$PMAI_HOME/skills/_shared" "$dst_skills/_shared"
+done
 
 cd "$PMAI_HOME"
 OLD_VER=$(cat VERSION 2>/dev/null || echo unknown)

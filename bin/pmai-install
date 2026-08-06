@@ -11,6 +11,9 @@
 
 set -euo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$SCRIPT_DIR/../scripts/_lib/skill-links.sh"
+
 REMOTE="${PMAI_REMOTE:-git@github.com:YYG501/PMAI_Workflow.git}"
 PMAI_HOME="${PMAI_HOME:-$HOME/.pmai}"
 CLAUDE_SKILLS="$HOME/.claude/skills"
@@ -69,10 +72,13 @@ install_skills() {
       *)        dst="$dst_skills/${SKILL_PREFIX}${skill_name}" ;;
     esac
 
-    # 已存在则清掉重做
-    [ -e "$dst" ] || [ -L "$dst" ] && rm -rf "$dst"
-
-    ln -s "${skill_dir%/}" "$dst"
+    if [ "$skill_name" = "_shared" ]; then
+      pmai_install_shared_link "${skill_dir%/}" "$dst"
+    else
+      # pmai-* 是 PMAI 的专属命名空间；升级时替换旧入口。
+      [ -e "$dst" ] || [ -L "$dst" ] && rm -rf "$dst"
+      ln -s "${skill_dir%/}" "$dst"
+    fi
     count=$((count + 1))
   done
   echo "   installed $count skill entries → $dst_skills"
@@ -106,7 +112,7 @@ remove_managed_skill_symlinks() {
   local old
 
   mkdir -p "$dst_skills"
-  for old in "$dst_skills"/${SKILL_PREFIX}* "$dst_skills/_shared"; do
+  for old in "$dst_skills"/${SKILL_PREFIX}*; do
     [ -L "$old" ] && rm "$old" || true
   done
 }
@@ -127,6 +133,9 @@ remove_managed_codex_prompts() {
 }
 
 echo "→ Installing PMAI globally..."
+for dst_skills in "$CLAUDE_SKILLS" "$CODEX_SKILLS" "$KIMI_SKILLS"; do
+  pmai_assert_shared_link_available "$PMAI_HOME/skills/_shared" "$dst_skills/_shared"
+done
 if [ -d "$PMAI_HOME/.git" ]; then
   echo "⚠️  $PMAI_HOME 已存在。要升级跑: pmai upgrade" >&2
   echo "   或先 pmai uninstall 清理后重装。" >&2

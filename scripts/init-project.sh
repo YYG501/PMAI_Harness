@@ -16,11 +16,11 @@ _print_help() {
   <target-dir>        业务项目落地路径（默认不能已存在；加 --allow-existing 可复用已有目录）
   <background>        一句话项目背景（写进生成的 CLAUDE.md）
 可选 flag:
-  --allow-existing    放过"目标目录已存在"检查。仅当 PM 在 /pmai-init-project skill 阶段 A
+  --allow-existing    允许接住现有资料目录，但任何 PMAI 同名目标都会在写入前阻断。
+                      仅当 PM 在 /pmai-init-project skill 阶段 A
                       step 3b 明确选了「资料档接住」分流时由 skill 加入；脚本本身不判断目录
                       内容是否真是非 codebase（那是 skill 层的 step 3a 代码标志扫描的责任）。
-                      命中后：mkdir 改 noop（用现有目录），git init 后 git add -A 会把现有文件
-                      一起 add 进首 commit。
+                      无同名冲突时，git init 后 git add -A 会把现有资料一起 add 进首 commit。
 
 期望时间:
   init-project 自身 ~10 秒（拷贝 + git init + commit）。
@@ -141,6 +141,36 @@ fi
 # --- c. 创建项目目录 ---
 if [ -d "$TARGET_DIR" ]; then
   if [ "$ALLOW_EXISTING" = "1" ]; then
+    # 资料目录可以保留原文件，但 PMAI 不接管任何同名目标。必须在第一次写入前
+    # 一次列全冲突，避免初始化到一半才发现资料已被模板覆盖。
+    _PMAI_INIT_CONFLICTS=()
+    for _tmpl in "$FRAMEWORK_DIR/templates/"*.tmpl; do
+      _basename=$(basename "$_tmpl" .tmpl)
+      case "$_basename" in
+        CLAUDE.md|AGENTS.md|PRODUCT.md|PRODUCT-STATE.md|DESIGN.md|PRODUCT-RULES.md|TODO.md)
+          _dest="$TARGET_DIR/$_basename" ;;
+        docs-INDEX.md)         _dest="$TARGET_DIR/docs/INDEX.md" ;;
+        modules-INDEX.md)      _dest="$TARGET_DIR/docs/modules/INDEX.md" ;;
+        engineering-INDEX.md)  _dest="$TARGET_DIR/docs/engineering/INDEX.md" ;;
+        deliverables-INDEX.md) _dest="$TARGET_DIR/docs/deliverables/INDEX.md" ;;
+        settings.json)         _dest="$TARGET_DIR/.claude/settings.json" ;;
+        gitignore)             _dest="$TARGET_DIR/.gitignore" ;;
+        pm-workflow.config.yml) _dest="$TARGET_DIR/.pm-workflow/config.yml" ;;
+        lark-publish.json)     _dest="$TARGET_DIR/templates/lark-publish.json.tmpl" ;;
+        *) continue ;;
+      esac
+      if [ -e "$_dest" ] || [ -L "$_dest" ]; then
+        _PMAI_INIT_CONFLICTS+=("${_dest#"$TARGET_DIR"/}")
+      fi
+    done
+    if [ "${#_PMAI_INIT_CONFLICTS[@]}" -gt 0 ]; then
+      echo "❌ 现有资料与 PMAI 初始化目标同名，已在写入前停止：" >&2
+      for _conflict in "${_PMAI_INIT_CONFLICTS[@]}"; do
+        echo "   - $_conflict" >&2
+      done
+      echo "   请先重命名或归档这些文件；PMAI 不会猜测如何合并现有内容。" >&2
+      exit 1
+    fi
     echo "📁 复用已存在目录: ${TARGET_DIR}（--allow-existing：资料档接住模式）"
   else
     echo "❌ 目标目录已存在: $TARGET_DIR" >&2

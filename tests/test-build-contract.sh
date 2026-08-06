@@ -7,6 +7,8 @@ source "$SCRIPT_DIR/helpers/assert.sh"
 
 FRAMEWORK_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 BUILD_CONTRACT="$FRAMEWORK_ROOT/scripts/build-contract.py"
+CONTEXT_PACK="$FRAMEWORK_ROOT/scripts/context-pack.py"
+PROJECT_DEFINITION="$FRAMEWORK_ROOT/scripts/project-definition.py"
 PROTOTYPE_CONTRACT_ARGS=(
   --target-kind prototype
   --target-path prototype/
@@ -19,18 +21,66 @@ PROTOTYPE_CONTRACT_ARGS=(
 )
 
 setup_contract_fixture() {
+  local project_type="${1:-prototype}"
   T=$(mktemp -d "${TMPDIR:-/tmp}/pmai-build-contract.XXXXXX")
   MODULE_DIR="$T/docs/modules/pet-import"
-  mkdir -p "$MODULE_DIR"
+  mkdir -p "$MODULE_DIR" "$T/.pm-workflow"
   cat > "$MODULE_DIR/.work-meta.json" <<'JSON'
 {
   "id": "work-001",
   "name": "pet import",
   "branch": "build-pet-import",
   "stage": 1,
-  "status": "active"
+  "status": "active",
+  "lifecycle_state": "designing"
 }
 JSON
+  printf '# Product\n' > "$T/PRODUCT.md"
+  printf '# State\n' > "$T/PRODUCT-STATE.md"
+  printf '# Rules\n' > "$T/PRODUCT-RULES.md"
+  printf '# Design\n' > "$T/DESIGN.md"
+  printf '# Todo\n' > "$T/TODO.md"
+  printf '# Modules\n' > "$T/docs/modules/INDEX.md"
+  printf '# Pet import spec\n' > "$MODULE_DIR/spec.md"
+  printf '# Discussion\n' > "$MODULE_DIR/discussion.md"
+  printf '# Decisions\n' > "$MODULE_DIR/decisions.md"
+  printf '.pm-workflow/context/\n' > "$T/.gitignore"
+
+  git -C "$T" init -q -b main
+  git -C "$T" config user.email "test@example.com"
+  git -C "$T" config user.name "PMAI Test"
+  if [ "$project_type" = "product" ]; then
+    mkdir -p "$T/src/pets"
+    printf 'export const pets = true\n' > "$T/src/pets/index.ts"
+    PROJECT_TARGET="src/pets"
+  else
+    mkdir -p "$T/prototype"
+    printf '<!doctype html>\n' > "$T/prototype/index.html"
+    PROJECT_TARGET="prototype"
+  fi
+  python3 "$PROJECT_DEFINITION" write "$T" \
+    --source docs/modules/pet-import/spec.md \
+    --type "$project_type" \
+    --root "$PROJECT_TARGET" \
+    --entrypoint "$PROJECT_TARGET" \
+    --language typescript \
+    --runtime node \
+    --framework test \
+    --package-manager none >/dev/null
+  git -C "$T" add -A
+  git -C "$T" commit -q -m "design basis"
+
+  local pack="$T/.pm-workflow/context/pet-import.json"
+  python3 "$CONTEXT_PACK" --repo-root "$T" --module "$MODULE_DIR" --output "$pack" >/dev/null
+  SOURCE_HASH=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["source_hash"])' "$pack")
+  local checkpoint
+  checkpoint=$(git -C "$T" rev-parse HEAD)
+  python3 "$BUILD_CONTRACT" ready "$MODULE_DIR" \
+    --approved-source-hash "$SOURCE_HASH" \
+    --checkpoint-commit "$checkpoint" \
+    --context-pack "$pack" \
+    --target-path "$PROJECT_TARGET" \
+    --design-revision 1 >/dev/null
 }
 
 teardown_contract_fixture() {
@@ -270,13 +320,13 @@ test_contract_start_requires_adaptive_inputs() {
   teardown_contract_fixture
 }
 
-test_contract_start_initializes_missing_meta() {
-  start_test "build-contract: start auto-initializes missing .work-meta.json"
+test_contract_start_rejects_missing_ready_meta() {
+  start_test "build-contract: start rejects missing ready contract"
   T=$(mktemp -d "${TMPDIR:-/tmp}/pmai-build-contract.XXXXXX")
   MODULE_DIR="$T/docs/modules/pet-import"
   mkdir -p "$MODULE_DIR"
 
-  if ! python3 "$BUILD_CONTRACT" start "$MODULE_DIR" \
+  if python3 "$BUILD_CONTRACT" start "$MODULE_DIR" \
     --anchor "docs/modules/pet-import/spec.md" \
     --mode main \
     --executor claude-code \
@@ -284,27 +334,15 @@ test_contract_start_initializes_missing_meta() {
     --baseline-sha "abc123" \
     --audit-dir ".pm-workflow/audits/pet-import" \
     "${PROTOTYPE_CONTRACT_ARGS[@]}" >/tmp/build-contract.$$ 2>/tmp/build-contract.err.$$; then
-    _fail "start should create missing .work-meta.json"
+    _fail "start should not create a build contract without ready_to_build"
+  elif [ -e "$MODULE_DIR/.work-meta.json" ]; then
+    _fail "failed start should not create .work-meta.json"
+  elif grep -q "ready_to_build" /tmp/build-contract.err.$$; then
+    pass_test
+  else
+    _fail "missing ready gate guidance"
     cat /tmp/build-contract.err.$$ >&2
-    rm -f /tmp/build-contract.$$ /tmp/build-contract.err.$$; teardown_contract_fixture; return
   fi
-
-  python3 - "$MODULE_DIR/.work-meta.json" <<'PY' || {
-import json, sys
-meta = json.load(open(sys.argv[1]))
-assert meta["id"] == "work-pet-import"
-assert meta["name"] == "pet-import"
-assert meta["status"] == "active"
-assert meta["stage"] == 2
-assert meta["branch"] == "main"
-assert meta["build"]["mode"] == "main"
-assert meta["build"]["executor"] == "claude-code"
-PY
-    _fail "auto-initialized meta fields mismatch"
-    rm -f /tmp/build-contract.$$ /tmp/build-contract.err.$$; teardown_contract_fixture; return
-  }
-
-  pass_test
   rm -f /tmp/build-contract.$$ /tmp/build-contract.err.$$
   teardown_contract_fixture
 }
@@ -576,20 +614,20 @@ JSON
 
 test_contract_v2_rejects_stale_evidence_and_invalidates_on_delta() {
   start_test "build-contract v2: evidence binds source hash + commit; accepted delta invalidates it"
-  setup_contract_fixture
+  setup_contract_fixture product
 
   python3 "$BUILD_CONTRACT" start "$MODULE_DIR" \
     --anchor "docs/modules/pet-import/spec.md" \
     --mode worktree --executor codex --branch build-pet-import \
     --worktree ".worktrees/build-pet-import" --baseline-sha abc123 \
     --target-kind product --target-path "src/pets/" --entrypoint "src/pets/" \
-    --approved-source-hash "source-v1" --required-check tests >/dev/null || {
+    --approved-source-hash "$SOURCE_HASH" --required-check tests >/dev/null || {
       _fail "v2 start should succeed"; teardown_contract_fixture; return;
   }
   python3 "$BUILD_CONTRACT" commit "$MODULE_DIR" --implementation-commit commit-v1 >/dev/null
   request_finalization
   python3 "$BUILD_CONTRACT" record-evidence "$MODULE_DIR" --name tests --status pass \
-    --source-hash source-v1 --commit stale-commit >/dev/null
+    --source-hash "$SOURCE_HASH" --commit stale-commit >/dev/null
 
   if python3 "$BUILD_CONTRACT" review-ready "$MODULE_DIR" >/tmp/build-contract.$$ 2>/tmp/build-contract.err.$$; then
     _fail "stale evidence commit should block review readiness"
@@ -598,7 +636,7 @@ test_contract_v2_rejects_stale_evidence_and_invalidates_on_delta() {
     cat /tmp/build-contract.err.$$ >&2
   else
     python3 "$BUILD_CONTRACT" record-evidence "$MODULE_DIR" --name tests --status pass \
-      --source-hash source-v1 --commit commit-v1 >/dev/null
+      --source-hash "$SOURCE_HASH" --commit commit-v1 >/dev/null
     mark_review_ready || {
       _fail "fresh product evidence should become review-ready"; teardown_contract_fixture; return;
     }
@@ -608,11 +646,11 @@ test_contract_v2_rejects_stale_evidence_and_invalidates_on_delta() {
     }
     python3 "$BUILD_CONTRACT" add-delta "$MODULE_DIR" --kind product-model \
       --summary "角色模型改为能力与数据范围分离" --affected-surface "角色详情页" >/dev/null
-    python3 - "$MODULE_DIR/.work-meta.json" <<'PY' || {
+    python3 - "$MODULE_DIR/.work-meta.json" "$SOURCE_HASH" <<'PY' || {
 import json, sys
 build = json.load(open(sys.argv[1]))["build"]
 assert build["design_revision"] == 2
-assert build["approved_source_hash"] != "source-v1"
+assert build["approved_source_hash"] != sys.argv[2]
 assert build["acceptance"]["evidence"] == []
 assert build["implementation_commit"] is None
 assert build["lifecycle_state"] == "iterating"
@@ -628,16 +666,16 @@ PY
 
 test_contract_v2_post_land_docs_resume() {
   start_test "build-contract v2: landed → documenting/failed → documenting/complete"
-  setup_contract_fixture
+  setup_contract_fixture product
   python3 "$BUILD_CONTRACT" start "$MODULE_DIR" \
     --anchor "docs/modules/pet-import/spec.md" --mode worktree --executor codex \
     --branch build-pet-import --worktree ".worktrees/build-pet-import" \
-    --baseline-sha abc123 --target-kind product --target-path src/pets/ --entrypoint src/pets/ --approved-source-hash source-v1 \
+    --baseline-sha abc123 --target-kind product --target-path src/pets/ --entrypoint src/pets/ --approved-source-hash "$SOURCE_HASH" \
     --required-check tests >/dev/null
   python3 "$BUILD_CONTRACT" commit "$MODULE_DIR" --implementation-commit commit-v1 >/dev/null
   request_finalization
   python3 "$BUILD_CONTRACT" record-evidence "$MODULE_DIR" --name tests --status pass \
-    --source-hash source-v1 --commit commit-v1 >/dev/null
+    --source-hash "$SOURCE_HASH" --commit commit-v1 >/dev/null
   mark_review_ready
   python3 "$BUILD_CONTRACT" accept "$MODULE_DIR" >/dev/null
   python3 "$BUILD_CONTRACT" landed "$MODULE_DIR" --landed-commit commit-v1 >/dev/null
@@ -655,16 +693,16 @@ test_contract_v2_post_land_docs_resume() {
 
 test_contract_v2_new_implementation_invalidates_evidence() {
   start_test "build-contract v2: new implementation commit clears old evidence"
-  setup_contract_fixture
+  setup_contract_fixture product
   python3 "$BUILD_CONTRACT" start "$MODULE_DIR" \
     --anchor "docs/modules/pet-import/spec.md" --mode worktree --executor codex \
     --branch build-pet-import --worktree ".worktrees/build-pet-import" \
-    --baseline-sha abc123 --target-kind product --target-path src/pets/ --entrypoint src/pets/ --approved-source-hash source-v1 \
+    --baseline-sha abc123 --target-kind product --target-path src/pets/ --entrypoint src/pets/ --approved-source-hash "$SOURCE_HASH" \
     --required-check tests >/dev/null
   python3 "$BUILD_CONTRACT" commit "$MODULE_DIR" --implementation-commit commit-v1 >/dev/null
   request_finalization
   python3 "$BUILD_CONTRACT" record-evidence "$MODULE_DIR" --name tests --status pass \
-    --source-hash source-v1 --commit commit-v1 >/dev/null
+    --source-hash "$SOURCE_HASH" --commit commit-v1 >/dev/null
   python3 "$BUILD_CONTRACT" commit "$MODULE_DIR" --implementation-commit commit-v2 >/dev/null
 
   python3 - "$MODULE_DIR/.work-meta.json" <<'PY' || {
@@ -686,19 +724,19 @@ PY
 
 test_contract_v2_new_evidence_invalidates_review_ready() {
   start_test "build-contract v2: changed evidence invalidates review-ready snapshot"
-  setup_contract_fixture
+  setup_contract_fixture product
   python3 "$BUILD_CONTRACT" start "$MODULE_DIR" \
     --anchor "docs/modules/pet-import/spec.md" --mode worktree --executor codex \
     --branch build-pet-import --worktree ".worktrees/build-pet-import" \
     --baseline-sha abc123 --target-kind product --target-path src/pets/ --entrypoint src/pets/ \
-    --approved-source-hash source-v1 --required-check tests >/dev/null
+    --approved-source-hash "$SOURCE_HASH" --required-check tests >/dev/null
   python3 "$BUILD_CONTRACT" commit "$MODULE_DIR" --implementation-commit commit-v1 >/dev/null
   request_finalization
   python3 "$BUILD_CONTRACT" record-evidence "$MODULE_DIR" --name tests --status pass \
-    --source-hash source-v1 --commit commit-v1 >/dev/null
+    --source-hash "$SOURCE_HASH" --commit commit-v1 >/dev/null
   mark_review_ready
   python3 "$BUILD_CONTRACT" record-evidence "$MODULE_DIR" --name tests --status pass \
-    --source-hash source-v1 --commit commit-v1 >/dev/null
+    --source-hash "$SOURCE_HASH" --commit commit-v1 >/dev/null
 
   if python3 "$BUILD_CONTRACT" accept "$MODULE_DIR" >/tmp/build-contract.$$ 2>/tmp/build-contract.err.$$; then
     _fail "accept must reject a snapshot invalidated by changed evidence"
@@ -714,16 +752,16 @@ test_contract_v2_new_evidence_invalidates_review_ready() {
 
 test_contract_v2_iterating_clears_acceptance_and_readiness() {
   start_test "build-contract v2: returning to iterating clears acceptance and readiness"
-  setup_contract_fixture
+  setup_contract_fixture product
   python3 "$BUILD_CONTRACT" start "$MODULE_DIR" \
     --anchor "docs/modules/pet-import/spec.md" --mode worktree --executor codex \
     --branch build-pet-import --worktree ".worktrees/build-pet-import" \
     --baseline-sha abc123 --target-kind product --target-path src/pets/ --entrypoint src/pets/ \
-    --approved-source-hash source-v1 --required-check tests >/dev/null
+    --approved-source-hash "$SOURCE_HASH" --required-check tests >/dev/null
   python3 "$BUILD_CONTRACT" commit "$MODULE_DIR" --implementation-commit commit-v1 >/dev/null
   request_finalization
   python3 "$BUILD_CONTRACT" record-evidence "$MODULE_DIR" --name tests --status pass \
-    --source-hash source-v1 --commit commit-v1 >/dev/null
+    --source-hash "$SOURCE_HASH" --commit commit-v1 >/dev/null
   mark_review_ready
   python3 "$BUILD_CONTRACT" accept "$MODULE_DIR" >/dev/null
   python3 "$BUILD_CONTRACT" iterating "$MODULE_DIR" >/dev/null
@@ -746,11 +784,11 @@ PY
 
 test_contract_v2_rejects_illegal_lifecycle_jumps() {
   start_test "build-contract v2: cannot document or land before final_check"
-  setup_contract_fixture
+  setup_contract_fixture product
   python3 "$BUILD_CONTRACT" start "$MODULE_DIR" \
     --anchor "docs/modules/pet-import/spec.md" --mode worktree --executor codex \
     --branch build-pet-import --worktree ".worktrees/build-pet-import" \
-    --baseline-sha abc123 --target-kind product --target-path src/pets/ --entrypoint src/pets/ --approved-source-hash source-v1 \
+    --baseline-sha abc123 --target-kind product --target-path src/pets/ --entrypoint src/pets/ --approved-source-hash "$SOURCE_HASH" \
     --required-check tests >/dev/null
 
   if python3 "$BUILD_CONTRACT" docs-complete "$MODULE_DIR" >/tmp/build-contract.$$ 2>/tmp/build-contract.err.$$; then
@@ -762,7 +800,7 @@ test_contract_v2_rejects_illegal_lifecycle_jumps() {
     rm -f /tmp/build-contract.$$ /tmp/build-contract.err.$$; teardown_contract_fixture; return
   fi
   if python3 "$BUILD_CONTRACT" record-evidence "$MODULE_DIR" --name tests --status pretending \
-    --source-hash source-v1 --commit commit-v1 >/tmp/build-contract.$$ 2>/tmp/build-contract.err.$$; then
+    --source-hash "$SOURCE_HASH" --commit commit-v1 >/tmp/build-contract.$$ 2>/tmp/build-contract.err.$$; then
     _fail "invalid evidence status must be rejected"
     rm -f /tmp/build-contract.$$ /tmp/build-contract.err.$$; teardown_contract_fixture; return
   fi
@@ -773,19 +811,19 @@ test_contract_v2_rejects_illegal_lifecycle_jumps() {
 
 test_contract_v4_finalization_gate_and_iteration_lane() {
   start_test "build-contract v4: final checks require PM request; validation fixes rebind; PM feedback resumes iteration"
-  setup_contract_fixture
+  setup_contract_fixture product
   python3 "$BUILD_CONTRACT" start "$MODULE_DIR" \
     --anchor "docs/modules/pet-import/spec.md" --mode worktree --executor codex \
     --branch build-pet-import --worktree ".worktrees/build-pet-import" \
     --baseline-sha abc123 --target-kind product --target-path src/pets/ --entrypoint src/pets/ \
-    --approved-source-hash source-v1 --iteration-check typecheck --final-check tests >/dev/null
+    --approved-source-hash "$SOURCE_HASH" --iteration-check typecheck --final-check tests >/dev/null
   python3 "$BUILD_CONTRACT" commit "$MODULE_DIR" --implementation-commit commit-v1 >/dev/null
   python3 "$BUILD_CONTRACT" record-evidence "$MODULE_DIR" --lane iteration \
-    --name typecheck --status pass --source-hash source-v1 --commit commit-v1 >/dev/null || {
+    --name typecheck --status pass --source-hash "$SOURCE_HASH" --commit commit-v1 >/dev/null || {
       _fail "iteration evidence should be recordable before finalization"; teardown_contract_fixture; return;
     }
   if python3 "$BUILD_CONTRACT" record-evidence "$MODULE_DIR" --name tests --status pass \
-    --source-hash source-v1 --commit commit-v1 >/tmp/build-contract.$$ 2>/tmp/build-contract.err.$$; then
+    --source-hash "$SOURCE_HASH" --commit commit-v1 >/tmp/build-contract.$$ 2>/tmp/build-contract.err.$$; then
     _fail "final evidence must be blocked before PM requests finalization"
     rm -f /tmp/build-contract.$$ /tmp/build-contract.err.$$; teardown_contract_fixture; return
   elif ! grep -q "PM 尚未请求定稿" /tmp/build-contract.err.$$; then
@@ -797,7 +835,7 @@ test_contract_v4_finalization_gate_and_iteration_lane() {
   python3 "$BUILD_CONTRACT" request-finalization "$MODULE_DIR" \
     --requested-at "2026-07-17T10:00:00+08:00" >/dev/null
   python3 "$BUILD_CONTRACT" record-evidence "$MODULE_DIR" --name tests --status pass \
-    --source-hash source-v1 --commit commit-v1 >/dev/null
+    --source-hash "$SOURCE_HASH" --commit commit-v1 >/dev/null
   python3 "$BUILD_CONTRACT" request-finalization "$MODULE_DIR" >/dev/null
   python3 - "$MODULE_DIR/.work-meta.json" <<'PY' || {
 import json, sys
@@ -881,10 +919,56 @@ test_contract_v4_requires_and_validates_prototype_boundary() {
   teardown_contract_fixture
 }
 
+test_contract_v4_accepts_one_hard_browser_batch() {
+  start_test "build-contract v4: one browser batch replaces three separate UI checks"
+  setup_contract_fixture product
+  python3 "$BUILD_CONTRACT" start "$MODULE_DIR" \
+    --anchor "docs/modules/pet-import/spec.md" --mode worktree --executor codex \
+    --branch build-pet-import --worktree ".worktrees/build-pet-import" \
+    --baseline-sha abc123 --target-kind product --target-path src/pets --entrypoint src/pets \
+    --final-check browser-acceptance >/dev/null || {
+      _fail "browser batch contract should start"; teardown_contract_fixture; return;
+    }
+  python3 "$BUILD_CONTRACT" commit "$MODULE_DIR" --implementation-commit commit-v1 >/dev/null
+  request_finalization
+  mkdir -p "$T/.pm-workflow/audits/pet-import"
+  python3 - "$MODULE_DIR/.work-meta.json" "$T/.pm-workflow/audits/pet-import/browser-acceptance.json" <<'PY'
+import json, sys
+build = json.load(open(sys.argv[1]))["build"]
+artifact = {
+    "schema_version": 1,
+    "check": "browser-acceptance",
+    "status": "pass",
+    "implementation_commit": build["implementation_commit"],
+    "source_hash": build["approved_source_hash"],
+    "active_browser_smoke": True,
+    "single_chain_invocation": True,
+    "covers": ["smoke", "visual", "behavior"],
+    "flows": [{"id": "pet-list", "status": "pass"}],
+}
+json.dump(artifact, open(sys.argv[2], "w"))
+PY
+  python3 "$BUILD_CONTRACT" record-evidence "$MODULE_DIR" \
+    --name browser-acceptance --status pass \
+    --artifact ".pm-workflow/audits/pet-import/browser-acceptance.json" >/dev/null
+  if ! python3 "$BUILD_CONTRACT" review-ready "$MODULE_DIR" >/tmp/build-contract.$$ 2>/tmp/build-contract.err.$$; then
+    _fail "one valid browser batch should satisfy the UI hard gate"
+    cat /tmp/build-contract.err.$$ >&2
+  elif python3 "$BUILD_CONTRACT" audit-exception "$MODULE_DIR" \
+    --reason "try skip" --check browser-acceptance \
+    >/tmp/build-contract.$$ 2>/tmp/build-contract.err.$$; then
+    _fail "browser-acceptance must remain non-exceptable"
+  else
+    pass_test
+  fi
+  rm -f /tmp/build-contract.$$ /tmp/build-contract.err.$$
+  teardown_contract_fixture
+}
+
 test_contract_lifecycle
 test_contract_rejects_missing_build
 test_contract_start_requires_adaptive_inputs
-test_contract_start_initializes_missing_meta
+test_contract_start_rejects_missing_ready_meta
 test_contract_designing_creates_new_module_directory
 test_contract_complete_accepts_only_ready_candidate
 test_contract_limited_browser_cannot_be_excepted
@@ -899,5 +983,6 @@ test_contract_v2_iterating_clears_acceptance_and_readiness
 test_contract_v2_rejects_illegal_lifecycle_jumps
 test_contract_v4_finalization_gate_and_iteration_lane
 test_contract_v4_requires_and_validates_prototype_boundary
+test_contract_v4_accepts_one_hard_browser_batch
 
 report_results "build-contract"

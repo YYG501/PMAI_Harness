@@ -36,10 +36,110 @@ MODE=$(printf '%s' "$BUILD_JSON" | python3 -c 'import json,sys; print(json.load(
 BRANCH=$(printf '%s' "$BUILD_JSON" | python3 -c 'import json,sys; print(json.load(sys.stdin).get("branch",""))')
 BASELINE=$(printf '%s' "$BUILD_JSON" | python3 -c 'import json,sys; print(json.load(sys.stdin).get("baseline_sha","") or "")')
 IMPLEMENTATION_COMMIT=$(printf '%s' "$BUILD_JSON" | python3 -c 'import json,sys; print(json.load(sys.stdin).get("implementation_commit","") or "")')
+SOURCE_HASH=$(printf '%s' "$BUILD_JSON" | python3 -c 'import json,sys; print(json.load(sys.stdin).get("approved_source_hash","") or "")')
 MODULE_NAME=$(basename "$WORK_DIR")
 MAIN_MODULE="$REPO_ROOT/docs/modules/$MODULE_NAME"
 IMPACT_MAP="$REPO_ROOT/.pm-workflow/audits/$MODULE_NAME/doc-impact.json"
 IMPACT_MAP_REL=".pm-workflow/audits/$MODULE_NAME/doc-impact.json"
+TIMING_FILE="$REPO_ROOT/.pm-workflow/audits/$MODULE_NAME/timing.json"
+TIMING_REL=".pm-workflow/audits/$MODULE_NAME/timing.json"
+CURRENT_TIMING_ID=""
+CURRENT_TIMING_PHASE=""
+
+timing_running_id() {
+  local phase="$1"
+  python3 - "$TIMING_FILE" "$phase" <<'PY'
+import json, os, sys
+path, phase = sys.argv[1:]
+if not os.path.exists(path):
+    raise SystemExit(0)
+data = json.load(open(path))
+matches = [item for item in data.get("entries", []) if item.get("phase") == phase and item.get("status") == "running"]
+if len(matches) > 1:
+    raise SystemExit(f"timing 中存在多个 running {phase} 阶段，拒绝猜测恢复点。")
+if matches:
+    print(matches[0]["id"])
+PY
+}
+
+timing_begin() {
+  local phase="$1"
+  local started_at="${2:-}"
+  local output
+  CURRENT_TIMING_PHASE="$phase"
+  CURRENT_TIMING_ID=$(timing_running_id "$phase")
+  if [ -z "$CURRENT_TIMING_ID" ]; then
+    if [ -n "$started_at" ]; then
+      output=$(python3 "$SCRIPT_DIR/build-timing.py" start \
+        --audit-file "$TIMING_FILE" --phase "$phase" --kind final \
+        --started-at "$started_at")
+    else
+      output=$(python3 "$SCRIPT_DIR/build-timing.py" start \
+        --audit-file "$TIMING_FILE" --phase "$phase" --kind final)
+    fi
+    CURRENT_TIMING_ID=$(printf '%s' "$output" | python3 -c 'import json,sys; print(json.load(sys.stdin)["id"])')
+  fi
+}
+
+timing_finish() {
+  local status="$1"
+  local reason="${2:-}"
+  [ -n "$CURRENT_TIMING_ID" ] || return 0
+  if [ -n "$reason" ]; then
+    python3 "$SCRIPT_DIR/build-timing.py" finish --audit-file "$TIMING_FILE" \
+      --id "$CURRENT_TIMING_ID" --status "$status" --reason "$reason" >/dev/null
+  else
+    python3 "$SCRIPT_DIR/build-timing.py" finish --audit-file "$TIMING_FILE" \
+      --id "$CURRENT_TIMING_ID" --status "$status" >/dev/null
+  fi
+  CURRENT_TIMING_ID=""
+  CURRENT_TIMING_PHASE=""
+}
+
+timing_on_exit() {
+  local status=$?
+  if [ "$status" -ne 0 ] && [ -n "$CURRENT_TIMING_ID" ]; then
+    set +e
+    timing_finish fail "${CURRENT_TIMING_PHASE:-finalize} interrupted or blocked"
+  fi
+  exit "$status"
+}
+
+trap timing_on_exit EXIT
+
+validate_final_timing() {
+  [ "${PMAI_REQUIRE_FINAL_TIMING:-0}" = "1" ] || return 0
+  local marker="$REPO_ROOT/.pm-workflow/audits/$MODULE_NAME/finalize-run.json"
+  [ -f "$marker" ] || return 0
+  local required=()
+  local phases_output
+  if ! phases_output=$(python3 - "$marker" "$IMPLEMENTATION_COMMIT" "$SOURCE_HASH" <<'PY'
+import json, sys
+path, commit, source_hash = sys.argv[1:]
+marker = json.load(open(path))
+if marker.get("schema_version") != 1 or marker.get("runner") != "finalize-work":
+    raise SystemExit("finalize timing 游标 schema 不兼容。")
+if marker.get("implementation_commit") != commit or marker.get("source_hash") != source_hash:
+    raise SystemExit("finalize timing 游标与当前 implementation commit/source hash 不一致。")
+phases = marker.get("required_timing_phases")
+if not isinstance(phases, list) or not phases:
+    raise SystemExit("finalize timing 游标缺少 required_timing_phases。")
+for phase in phases:
+    print(phase)
+PY
+  ); then
+    return 1
+  fi
+  while IFS= read -r phase; do
+    [ -n "$phase" ] && required[${#required[@]}]="$phase"
+  done <<< "$phases_output"
+  local command=(python3 "$SCRIPT_DIR/build-timing.py" validate-finalization --audit-file "$TIMING_FILE")
+  local phase
+  for phase in "${required[@]}"; do
+    command+=(--required-phase "$phase")
+  done
+  "${command[@]}" >/dev/null
+}
 
 queue_pending_cleanup() {
   local worktree="$1"
@@ -87,8 +187,56 @@ current_main_branch() {
   fi
 }
 
+preflight_untracked_overlap() {
+  local branch="$1"
+  local merge_base path candidate
+  local incoming_paths untracked_paths collisions
+
+  merge_base=$(git -C "$REPO_ROOT" merge-base HEAD "$branch")
+  incoming_paths=$(git -C "$REPO_ROOT" diff --name-only --diff-filter=ACMR "$merge_base" "$branch")
+  untracked_paths=$(git -C "$REPO_ROOT" ls-files --others --exclude-standard)
+  collisions=""
+  while IFS= read -r path; do
+    [ -n "$path" ] || continue
+    while IFS= read -r candidate; do
+      [ -n "$candidate" ] || continue
+      if [ "$path" = "$candidate" ]; then
+        collisions="${collisions}${path}"$'\n'
+        break
+      fi
+    done <<< "$untracked_paths"
+  done <<< "$incoming_paths"
+  if [ -n "$collisions" ]; then
+    echo "❌ merge 前发现 main 未跟踪文件会被本次实现覆盖；尚未开始 merge：" >&2
+    while IFS= read -r path; do
+      [ -n "$path" ] && printf '  - %s\n' "$path" >&2
+    done <<< "$collisions"
+    echo "   请先归位、移走或提交这些文件，再从 final_check 重试。" >&2
+    return 1
+  fi
+}
+
+record_landing_failure_worktree() {
+  local worktree="$1"
+  local started_at="$2"
+  local reason="$3"
+  local audit_file="$worktree/.pm-workflow/audits/$MODULE_NAME/timing.json"
+  local audit_rel=".pm-workflow/audits/$MODULE_NAME/timing.json"
+  local output entry_id
+  output=$(python3 "$SCRIPT_DIR/build-timing.py" start \
+    --audit-file "$audit_file" --phase landing --kind final \
+    --started-at "$started_at")
+  entry_id=$(printf '%s' "$output" | python3 -c 'import json,sys; print(json.load(sys.stdin)["id"])')
+  python3 "$SCRIPT_DIR/build-timing.py" finish --audit-file "$audit_file" \
+    --id "$entry_id" --status fail --reason "$reason" >/dev/null
+  git -C "$worktree" add -- "$audit_rel"
+  PMAI_ALLOW_MIXED_DELIVERY=build-close git -C "$worktree" commit \
+    -m "build($MODULE_NAME): record landing failure" -- "$audit_rel" >/dev/null
+}
+
 finish_docs() {
   current_main_branch
+  timing_begin documentation
   python3 "$SCRIPT_DIR/build-contract.py" validate-docs "$MAIN_MODULE" >/dev/null
   python3 "$SCRIPT_DIR/doc-impact.py" validate "$IMPACT_MAP" >/dev/null
 
@@ -115,12 +263,15 @@ PY
     exit 1
   fi
 
+  timing_finish pass
+  validate_final_timing
   for path in "${DOC_PATHS[@]}"; do
     if [ -e "$REPO_ROOT/$path" ] || git -C "$REPO_ROOT" ls-files --error-unmatch "$path" >/dev/null 2>&1; then
       git -C "$REPO_ROOT" add -A -- "$path"
     fi
   done
   git -C "$REPO_ROOT" add -A -- "$IMPACT_MAP_REL"
+  git -C "$REPO_ROOT" add -A -- "$TIMING_REL"
   git -C "$REPO_ROOT" rm -q -f -- "docs/modules/$MODULE_NAME/.work-meta.json"
   if git -C "$REPO_ROOT" diff --cached --quiet; then
     echo "❌ 没有可提交的文档变化，不能把工作伪装成 complete。" >&2
@@ -140,9 +291,10 @@ start_docs() {
     python3 "$SCRIPT_DIR/doc-impact.py" init "$MAIN_MODULE" \
       --repo-root "$REPO_ROOT" \
       ${BASELINE:+--base "$BASELINE"} \
-      --head HEAD \
+      --head "$IMPLEMENTATION_COMMIT" \
       --output "$IMPACT_MAP" >/dev/null
   fi
+  timing_begin documentation
   DOC_DESTINATIONS=()
   while IFS= read -r path; do
     [ -n "$path" ] && DOC_DESTINATIONS[${#DOC_DESTINATIONS[@]}]="$path"
@@ -175,13 +327,18 @@ PY
     exit 1
   fi
   python3 "$SCRIPT_DIR/build-contract.py" docs-start "$MAIN_MODULE" >/dev/null
+  # 文档更新跨进程继续；下次恢复会复用同一个 running timing entry。
+  CURRENT_TIMING_ID=""
+  CURRENT_TIMING_PHASE=""
   echo "✅ 实现已落到主线。继续按文档影响地图更新当前事实；完成后由同一流程提交文档。"
   echo "DOC_IMPACT_MAP=$IMPACT_MAP"
 }
 
 land_implementation() {
+  local landing_started_at
   python3 "$SCRIPT_DIR/build-contract.py" validate-land "$WORK_DIR" >/dev/null
   current_main_branch
+  landing_started_at=$(python3 -c 'from datetime import datetime; print(datetime.now().astimezone().isoformat(timespec="seconds"))')
 
   if [ "$MODE" = "worktree" ]; then
     if [ -z "$BRANCH" ] || ! git -C "$REPO_ROOT" show-ref --verify --quiet "refs/heads/$BRANCH"; then
@@ -203,6 +360,11 @@ land_implementation() {
       echo "$BAD" >&2
       exit 1
     fi
+    if ! preflight_untracked_overlap "$BRANCH"; then
+      record_landing_failure_worktree "$WORKTREE" "$landing_started_at" \
+        "main untracked path collision"
+      exit 1
+    fi
     if [ -n "$STATUS" ]; then
       git -C "$WORKTREE" add -- "$REL_MODULE/.work-meta.json"
       git -C "$WORKTREE" commit -m "build($MODULE_NAME): record final acceptance"
@@ -210,12 +372,15 @@ land_implementation() {
 
     if ! git -C "$REPO_ROOT" merge --autostash --no-ff --no-commit "$BRANCH"; then
       git -C "$REPO_ROOT" merge --abort 2>/dev/null || true
+      record_landing_failure_worktree "$WORKTREE" "$landing_started_at" "merge conflict"
       echo "❌ 合并发生冲突；实现和隔离环境均保留，状态仍在 final_check，解决冲突后可续跑。" >&2
       exit 1
     fi
     python3 "$SCRIPT_DIR/build-contract.py" landed "$MAIN_MODULE" \
       --landed-commit "$IMPLEMENTATION_COMMIT" >/dev/null
-    git -C "$REPO_ROOT" add -- "docs/modules/$MODULE_NAME/.work-meta.json"
+    timing_begin landing "$landing_started_at"
+    timing_finish pass
+    git -C "$REPO_ROOT" add -- "docs/modules/$MODULE_NAME/.work-meta.json" "$TIMING_REL"
     PMAI_ALLOW_MIXED_DELIVERY=build-close git -C "$REPO_ROOT" commit -m "build($MODULE_NAME): land accepted implementation"
     CLEANUP_PENDING=false
     if ! git -C "$REPO_ROOT" worktree remove "$WORKTREE"; then
@@ -230,6 +395,8 @@ land_implementation() {
   elif [ "$MODE" = "main" ]; then
     python3 "$SCRIPT_DIR/build-contract.py" landed "$MAIN_MODULE" \
       --landed-commit "$IMPLEMENTATION_COMMIT" >/dev/null
+    timing_begin landing "$landing_started_at"
+    timing_finish pass
   else
     echo "❌ build.mode 不合法: $MODE" >&2
     exit 1

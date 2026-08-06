@@ -244,6 +244,78 @@ test_cancel_rejects_dirty_main() {
   fixture_teardown
 }
 
+test_cancel_rejects_unconfirmed_module_changes() {
+  start_test "cancel only deletes .work-meta and rejects other module changes"
+  fixture_setup
+  work_dir=$(_setup_module_on_main "work-001" "test" 3)
+
+  printf '\nunconfirmed discussion\n' >> "$work_dir/discussion.md"
+
+  cd "$FIXTURE_DIR"
+  if bash "$CANCEL_WORK" "$work_dir" >/tmp/out.$$ 2>/tmp/err.$$; then
+    _fail "cancel should reject unconfirmed changes in the same module"
+    rm -f /tmp/out.$$ /tmp/err.$$
+    fixture_teardown; return
+  fi
+  if ! grep -q "discussion.md" /tmp/err.$$; then
+    _fail "cancel should identify the unconfirmed module change"
+    cat /tmp/err.$$ >&2
+    rm -f /tmp/out.$$ /tmp/err.$$
+    fixture_teardown; return
+  fi
+  if ! grep -q "unconfirmed discussion" "$work_dir/discussion.md"; then
+    _fail "cancel discarded the unconfirmed discussion change"
+    rm -f /tmp/out.$$ /tmp/err.$$
+    fixture_teardown; return
+  fi
+  if git -C "$FIXTURE_DIR" log main --oneline | grep -q "cancel:"; then
+    _fail "cancel commit should not be created after the guard fails"
+    rm -f /tmp/out.$$ /tmp/err.$$
+    fixture_teardown; return
+  fi
+
+  pass_test
+  rm -f /tmp/out.$$ /tmp/err.$$
+  fixture_teardown
+}
+
+test_cancel_restores_meta_when_commit_fails() {
+  start_test "cancel restores .work-meta when its commit is rejected"
+  fixture_setup
+  work_dir=$(_setup_module_on_main "work-001" "test" 3)
+
+  mkdir -p "$FIXTURE_DIR/.git/hooks"
+  printf '#!/bin/sh\nexit 1\n' > "$FIXTURE_DIR/.git/hooks/pre-commit"
+  chmod +x "$FIXTURE_DIR/.git/hooks/pre-commit"
+
+  cd "$FIXTURE_DIR"
+  if bash "$CANCEL_WORK" "$work_dir" >/tmp/out.$$ 2>/tmp/err.$$; then
+    _fail "cancel should fail when the commit hook rejects its commit"
+    rm -f /tmp/out.$$ /tmp/err.$$
+    fixture_teardown; return
+  fi
+  if [ ! -f "$work_dir/.work-meta.json" ]; then
+    _fail "cancel did not restore .work-meta after the commit failed"
+    rm -f /tmp/out.$$ /tmp/err.$$
+    fixture_teardown; return
+  fi
+  if [ -n "$(git -C "$FIXTURE_DIR" status --porcelain --untracked-files=all)" ]; then
+    _fail "cancel left staged or working-tree changes after the commit failed"
+    git -C "$FIXTURE_DIR" status --short >&2
+    rm -f /tmp/out.$$ /tmp/err.$$
+    fixture_teardown; return
+  fi
+  if [ -f "$FIXTURE_DIR/.runs/pending-cleanup.json" ]; then
+    _fail "cancel queued cleanup even though its state commit failed"
+    rm -f /tmp/out.$$ /tmp/err.$$
+    fixture_teardown; return
+  fi
+
+  pass_test
+  rm -f /tmp/out.$$ /tmp/err.$$
+  fixture_teardown
+}
+
 # ---------------------------------------------------------------
 # Run all
 # ---------------------------------------------------------------
@@ -254,5 +326,7 @@ test_cancel_clears_module_meta
 test_cancel_is_idempotent_after_partial_cleanup
 test_cancel_rerun_on_already_cleared_does_not_error
 test_cancel_rejects_dirty_main
+test_cancel_rejects_unconfirmed_module_changes
+test_cancel_restores_meta_when_commit_fails
 
 report_results "cancel-work"

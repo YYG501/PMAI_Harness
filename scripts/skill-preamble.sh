@@ -118,30 +118,48 @@ ACTIVE_WORK_COUNT=0
 _ACTIVE_WORK_IDS=()
 _ACTIVE_WORK_DIRS=()
 _ACTIVE_WORK_STAGES=()
+_SEEN_WORK_IDS=()
 
-# 把单个 root 下所有 status=active 的工作加进候选列表（按 id 去重）。
-# 真相源 = docs/modules/<模块>/.work-meta.json。
-_collect_active_work_in() {
+# 把单个 root 下属于 expected branch 的工作登记为权威副本；expected branch
+# 为空时登记 root 下全部工作。先去重再过滤 active，避免 worktree 中已结束的
+# 新状态被 main 的旧 active 副本重新显示。
+_collect_work_in() {
   local root="$1"
+  local expected_branch="${2:-}"
   local modules_dir="$root/docs/modules"
   [ -d "$modules_dir" ] || return 0
   for work_dir in "$modules_dir"/*/; do
     [ -d "$work_dir" ] || continue
     local meta="$work_dir/.work-meta.json"
     [ -f "$meta" ] || continue
-    local status id stage
-    status=$(python3 -c "import json; print(json.load(open('$meta')).get('status',''))" 2>/dev/null || echo "")
-    [ "$status" = "active" ] || continue
-    id=$(python3 -c "import json; print(json.load(open('$meta'))['id'])" 2>/dev/null || echo "")
-    stage=$(python3 -c "import json; print(json.load(open('$meta'))['stage'])" 2>/dev/null || echo "")
+    local fields status id stage meta_branch build_branch
+    fields=$(python3 - "$meta" <<'PY' 2>/dev/null || true
+import json, sys
+meta = json.load(open(sys.argv[1]))
+build = meta.get("build") if isinstance(meta.get("build"), dict) else {}
+print(meta.get("status", ""))
+print(meta.get("id", ""))
+print(meta.get("stage", ""))
+print(meta.get("branch", ""))
+print(build.get("branch", ""))
+PY
+)
+    status=$(printf '%s\n' "$fields" | sed -n '1p')
+    id=$(printf '%s\n' "$fields" | sed -n '2p')
+    stage=$(printf '%s\n' "$fields" | sed -n '3p')
+    meta_branch=$(printf '%s\n' "$fields" | sed -n '4p')
+    build_branch=$(printf '%s\n' "$fields" | sed -n '5p')
     [ -n "$id" ] || continue
+    [ -z "$expected_branch" ] || [ "$meta_branch" = "$expected_branch" ] || [ "$build_branch" = "$expected_branch" ] || continue
     local already=0
-    if [ "${#_ACTIVE_WORK_IDS[@]}" -gt 0 ]; then
-      for existing in "${_ACTIVE_WORK_IDS[@]}"; do
+    if [ "${#_SEEN_WORK_IDS[@]}" -gt 0 ]; then
+      for existing in "${_SEEN_WORK_IDS[@]}"; do
         [ "$existing" = "$id" ] && { already=1; break; }
       done
     fi
     [ "$already" = "1" ] && continue
+    _SEEN_WORK_IDS+=("$id")
+    [ "$status" = "active" ] || continue
     _ACTIVE_WORK_IDS+=("$id")
     _ACTIVE_WORK_DIRS+=("${work_dir%/}")
     _ACTIVE_WORK_STAGES+=("$stage")
@@ -151,23 +169,23 @@ _collect_active_work_in() {
 # 工作 worktree 里 cwd 唯一确定工作（自身 active work 优先）。
 # 主仓 main：扫主仓 + 所有 attached worktree，可能 0/1/多 active。
 if [ "$WORKTREE_TYPE" != "main" ]; then
-  _collect_active_work_in "$CURRENT_WORKTREE_ROOT"
-  if [ "${#_ACTIVE_WORK_IDS[@]}" -eq 0 ]; then
-    _collect_active_work_in "$MAIN_REPO_ROOT"
+  _collect_work_in "$CURRENT_WORKTREE_ROOT" "$BRANCH"
+  if [ "${#_SEEN_WORK_IDS[@]}" -eq 0 ]; then
+    _collect_work_in "$MAIN_REPO_ROOT"
   fi
 else
-  _collect_active_work_in "$MAIN_REPO_ROOT"
-  # 通过 git worktree list 遍历所有 attached 的 build worktree（不假设在 .worktrees/）
+  # 通过 git worktree list 先登记 attached build worktree 的权威副本，再扫 main。
   if command -v list_worktrees_by_branch_prefix >/dev/null 2>&1; then
     while IFS=$'\t' read -r _wt_branch _wt_path; do
-      [ -n "$_wt_path" ] && [ -d "$_wt_path" ] && _collect_active_work_in "$_wt_path"
+      [ -n "$_wt_path" ] && [ -d "$_wt_path" ] && _collect_work_in "$_wt_path" "$_wt_branch"
     done < <(list_worktrees_by_branch_prefix "build-" "$MAIN_REPO_ROOT" 2>/dev/null)
   else
     for _work_wt in "$MAIN_REPO_ROOT"/.worktrees/build-*; do
       [ -d "$_work_wt" ] || continue
-      _collect_active_work_in "$_work_wt"
+      _collect_work_in "$_work_wt" "$(git -C "$_work_wt" branch --show-current 2>/dev/null || true)"
     done
   fi
+  _collect_work_in "$MAIN_REPO_ROOT"
 fi
 
 ACTIVE_WORK_COUNT="${#_ACTIVE_WORK_IDS[@]}"
