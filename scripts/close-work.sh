@@ -42,6 +42,15 @@ if [ ! -f "$WORK_META" ]; then
   exit 1
 fi
 
+restore_removed_meta() {
+  local repo="$1"
+  local relative_meta="$2"
+  if ! git -C "$repo" restore --staged --worktree -- "$relative_meta" 2>/dev/null; then
+    echo "❌ commit 失败后无法自动恢复 $relative_meta，请在对应仓库中执行 git restore --staged --worktree -- $relative_meta" >&2
+    return 1
+  fi
+}
+
 # v2 先落实现、再在 main 更新文档；旧合同继续走下方兼容收尾路径。
 CONTRACT_VERSION=$(python3 - "$WORK_META" <<'PY'
 import json, sys
@@ -170,7 +179,11 @@ if [ "$BUILD_MODE" = "worktree" ]; then
   fi
 
   if ! PMAI_ALLOW_MIXED_DELIVERY=build-close git commit -m "close: 收尾 ${WORK_ID}（清模块 .work-meta）" 2>&1; then
-    echo "❌ 提交清状态改动到 work branch失败（可能是 git 身份未配置或 hook 拒绝）。" >&2
+    if restore_removed_meta "$WORK_WORKTREE" "$REL_MODULE/.work-meta.json"; then
+      echo "❌ 提交清状态改动到 work branch失败（可能是 git 身份未配置或 hook 拒绝）；.work-meta 已恢复，可重试。" >&2
+    else
+      echo "❌ 提交清状态改动失败，且 .work-meta 未能自动恢复；请按上方命令人工恢复后再重试。" >&2
+    fi
     exit 1
   fi
   echo "✅ 清状态改动已 commit 到 $WORK_BRANCH"
@@ -272,7 +285,11 @@ else
   echo "🧹 已清模块工作状态（main 直接清，无 worktree）: $REL_MODULE/.work-meta.json"
 
   if ! PMAI_ALLOW_MIXED_DELIVERY=build-close git commit -m "close: 收尾 ${WORK_ID}（清模块 .work-meta·无 worktree）" 2>&1; then
-    echo "❌ 提交收尾改动到 main 失败（可能是 git 身份未配置或 hook 拒绝）。" >&2
+    if restore_removed_meta "$REPO_ROOT" "$REL_MODULE/.work-meta.json"; then
+      echo "❌ 提交收尾改动到 main 失败（可能是 git 身份未配置或 hook 拒绝）；.work-meta 已恢复，可重试。" >&2
+    else
+      echo "❌ 提交收尾改动失败，且 .work-meta 未能自动恢复；请按上方命令人工恢复后再重试。" >&2
+    fi
     exit 1
   fi
   echo "✅ 收尾改动已 commit 到 main"

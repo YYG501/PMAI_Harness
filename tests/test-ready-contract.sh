@@ -62,6 +62,41 @@ teardown_fixture() {
   rm -rf "$T"
 }
 
+test_ready_to_build_starts_building() {
+  start_test "ready-contract: ready_to_build → build start → building"
+  setup_fixture
+
+  if ! python3 "$BUILD_CONTRACT" start "$MODULE" \
+    --anchor docs/modules/access/spec.md \
+    --mode main --executor native \
+    --target-kind prototype --target-path "$TARGET" --entrypoint prototype \
+    --iteration-check current-page --required-check prototype-boundary \
+    >/tmp/ready-contract.$$ 2>/tmp/ready-contract.err.$$; then
+    _fail "current ready contract should start a build"
+    cat /tmp/ready-contract.err.$$ >&2
+  elif ! python3 - "$MODULE/.work-meta.json" "$APPROVED" <<'PY'
+import json, sys
+meta = json.load(open(sys.argv[1]))
+build = meta["build"]
+assert meta["lifecycle_state"] == "building"
+assert build["lifecycle_state"] == "building"
+assert build["mode"] == "main"
+assert build["executor"] == "native"
+assert build["approved_source_hash"] == sys.argv[2]
+assert build["target"]["paths"] == ["prototype/src/access"]
+assert build["acceptance"]["iteration_checks"] == ["current-page"]
+assert build["acceptance"]["final_checks"] == ["prototype-boundary"]
+PY
+  then
+    _fail "build start should preserve the approved design contract"
+  else
+    pass_test
+  fi
+
+  rm -f /tmp/ready-contract.$$ /tmp/ready-contract.err.$$
+  teardown_fixture
+}
+
 test_ready_currentness_and_legacy_cache_ignore() {
   start_test "ready-contract: current design passes; authority drift blocks status/build"
   setup_fixture
@@ -267,6 +302,7 @@ PY
   teardown_fixture
 }
 
+test_ready_to_build_starts_building
 test_ready_currentness_and_legacy_cache_ignore
 test_ready_scope_and_dirty_preflight
 test_build_start_rejects_paths_outside_project_contract

@@ -64,11 +64,11 @@
 
 - **I-CR1**：finalize 前必须有有效 build contract、绑定最终 implementation commit 的定稿请求、同一 commit/hash 的验收就绪快照、PM 定稿记录和全部 final evidence。
 - **I-CR2**：worktree 模式先在 build 分支提交实现，再 merge main；main 模式只处理合同声明路径。
-- **I-CR3**：merge 必须做 ancestor 验证；冲突时保留 `final_check` 和隔离环境。
+- **I-CR3**：merge 必须做 ancestor 验证；冲突或 landing 状态 / commit 写入失败时必须退出半合并态，保留 `final_check` 和隔离环境，重跑不得重复验收提交或 merge。
 - **I-CR4**：实现 landed 后对账目标规格并编译现状文档；失败记录 `landed/docs_pending`，恢复时不重复 merge。
 - **I-CR5**：完成后模块三件套保留，临时 `.work-meta.json` 按收尾合同清理。
 - **I-CR6**：`close-work.sh` / `/pmai-build-close` 只作为旧合同和中断恢复入口，不构成正常用户主链。
-- **I-CR7**：worktree 清理失败若不影响已落地实现，必须进入安全待清理队列，不得阻塞 landed 后文档编译。
+- **I-CR7**：worktree 清理失败若不影响已落地实现，必须进入安全待清理队列，不得阻塞 landed 后文档编译；队列更新必须原子替换，损坏队列不得按空队列覆盖，重复 cleanup 必须幂等。
 
 ## I-CA：取消
 
@@ -83,3 +83,9 @@
 - **I-DOC2**：单模块决定进入模块 `decisions.md`；奠基理路进入 `docs/decisions/`。
 - **I-DOC3**：`PRODUCT-STATE.md` 只保存当前产品事实，不兼职历史索引。
 - **I-DOC4**：自动 finalize 与 `/pmai-record` 共用六类归位模型，不得维护平行分类。
+
+## I-TEST：验证可信度
+
+- **I-TEST1**：全量测试中的每个 suite 必须有独立超时；超时后终止该 suite 的进程组并记为失败。
+- **I-TEST2**：suite 缺失唯一 `Passed / Failed` 摘要、摘要与退出码矛盾或报告零用例时必须失败关闭，不得静默按 0 计数。
+- **I-TEST3**：全量入口必须实际运行静态 skill eval，并明确报告 session runner / judge 的通过、失败与跳过数量；要求 session gate 时，缺少外部 runner / judge 必须失败。

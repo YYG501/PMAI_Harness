@@ -35,7 +35,21 @@ if [ ! -f "$PENDING_FILE" ]; then
   exit 0
 fi
 
-COUNT=$(python3 -c "import json; print(len(json.load(open('$PENDING_FILE'))))" 2>/dev/null || echo 0)
+if ! COUNT=$(python3 - "$PENDING_FILE" <<'PY'
+import json, sys
+try:
+    with open(sys.argv[1], encoding="utf-8") as handle:
+        entries = json.load(handle)
+except (OSError, json.JSONDecodeError) as exc:
+    raise SystemExit(f"pending-cleanup.json 无法读取: {exc}") from exc
+if not isinstance(entries, list) or any(not isinstance(entry, dict) for entry in entries):
+    raise SystemExit("pending-cleanup.json 顶层必须是对象数组")
+print(len(entries))
+PY
+); then
+  echo "❌ 待清理队列不是合法 JSON 数组，拒绝按空队列继续: $PENDING_FILE" >&2
+  exit 1
+fi
 if [ "$COUNT" = "0" ]; then
   echo "✅ 无待清理项。"
   exit 0
@@ -80,7 +94,7 @@ TMP_RESULT=$(mktemp)
 trap 'rm -f "$TMP_RESULT"' EXIT
 
 python3 - "$PENDING_FILE" "$REPO_ROOT" "$DRY_RUN" "$TMP_RESULT" <<'PY'
-import json, os, re, shutil, subprocess, sys
+import json, os, re, shutil, subprocess, sys, tempfile
 
 pending_file, repo_root, dry_run_str, result_path = sys.argv[1:5]
 dry_run = dry_run_str == "true"
@@ -88,6 +102,8 @@ repo_root_real = os.path.realpath(repo_root)
 
 with open(pending_file) as f:
     entries = json.load(f)
+if not isinstance(entries, list) or any(not isinstance(entry, dict) for entry in entries):
+    raise SystemExit("pending-cleanup.json 顶层必须是对象数组")
 
 remaining = []
 ok_count = 0
@@ -219,8 +235,20 @@ for e in entries:
 
 if not dry_run:
     if remaining:
-        with open(pending_file, "w") as f:
-            json.dump(remaining, f, indent=2, ensure_ascii=False)
+        directory = os.path.dirname(pending_file)
+        fd, temp_path = tempfile.mkstemp(prefix=".pending-cleanup.", dir=directory)
+        try:
+            with os.fdopen(fd, "w", encoding="utf-8") as f:
+                json.dump(remaining, f, indent=2, ensure_ascii=False)
+                f.write("\n")
+                f.flush()
+                os.fsync(f.fileno())
+            os.replace(temp_path, pending_file)
+        finally:
+            try:
+                os.remove(temp_path)
+            except FileNotFoundError:
+                pass
     else:
         # 列表清空 → 删整个文件，避免误以为还有待清理
         try:

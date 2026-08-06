@@ -151,6 +151,7 @@ import datetime
 import json
 import os
 import sys
+import tempfile
 
 pending_file, branch, worktree, work_dir = sys.argv[1:5]
 entries = []
@@ -158,10 +159,11 @@ if os.path.exists(pending_file):
     try:
         with open(pending_file, encoding="utf-8") as handle:
             loaded = json.load(handle)
-        if isinstance(loaded, list):
-            entries = loaded
-    except (OSError, json.JSONDecodeError):
-        entries = []
+    except (OSError, json.JSONDecodeError) as exc:
+        raise SystemExit(f"待清理队列无法读取，拒绝覆盖 {pending_file}: {exc}") from exc
+    if not isinstance(loaded, list) or any(not isinstance(entry, dict) for entry in loaded):
+        raise SystemExit(f"待清理队列格式不合法，拒绝覆盖: {pending_file}")
+    entries = loaded
 entries = [entry for entry in entries if entry.get("branch") != branch]
 entries.append(
     {
@@ -172,9 +174,20 @@ entries.append(
         "queued_at": datetime.datetime.now().astimezone().isoformat(timespec="seconds"),
     }
 )
-with open(pending_file, "w", encoding="utf-8") as handle:
-    json.dump(entries, handle, indent=2, ensure_ascii=False)
-    handle.write("\n")
+directory = os.path.dirname(pending_file)
+fd, temp_path = tempfile.mkstemp(prefix=".pending-cleanup.", dir=directory)
+try:
+    with os.fdopen(fd, "w", encoding="utf-8") as handle:
+        json.dump(entries, handle, indent=2, ensure_ascii=False)
+        handle.write("\n")
+        handle.flush()
+        os.fsync(handle.fileno())
+    os.replace(temp_path, pending_file)
+finally:
+    try:
+        os.remove(temp_path)
+    except FileNotFoundError:
+        pass
 PY
 }
 
@@ -232,6 +245,22 @@ record_landing_failure_worktree() {
   git -C "$worktree" add -- "$audit_rel"
   PMAI_ALLOW_MIXED_DELIVERY=build-close git -C "$worktree" commit \
     -m "build($MODULE_NAME): record landing failure" -- "$audit_rel" >/dev/null
+}
+
+rollback_pending_merge() {
+  local worktree="$1"
+  local started_at="$2"
+  local reason="$3"
+  CURRENT_TIMING_ID=""
+  CURRENT_TIMING_PHASE=""
+  if ! git -C "$REPO_ROOT" merge --abort 2>/dev/null; then
+    echo "❌ main 半合并态无法自动中止；已停止后续操作，请先人工执行 git merge --abort。" >&2
+    return 1
+  fi
+  if ! record_landing_failure_worktree "$worktree" "$started_at" "$reason"; then
+    echo "❌ main 已回滚，但 landing 失败证据未能写入隔离分支；隔离环境仍保留。" >&2
+    return 1
+  fi
 }
 
 finish_docs() {
@@ -367,21 +396,48 @@ land_implementation() {
     fi
     if [ -n "$STATUS" ]; then
       git -C "$WORKTREE" add -- "$REL_MODULE/.work-meta.json"
-      git -C "$WORKTREE" commit -m "build($MODULE_NAME): record final acceptance"
+      if ! git -C "$WORKTREE" commit -m "build($MODULE_NAME): record final acceptance"; then
+        git -C "$WORKTREE" reset -q -- "$REL_MODULE/.work-meta.json" 2>/dev/null || true
+        echo "❌ 最终验收状态提交失败；状态文件已保留，可修复 hook 或 Git 配置后重试。" >&2
+        exit 1
+      fi
     fi
 
     if ! git -C "$REPO_ROOT" merge --autostash --no-ff --no-commit "$BRANCH"; then
-      git -C "$REPO_ROOT" merge --abort 2>/dev/null || true
+      if ! git -C "$REPO_ROOT" merge --abort 2>/dev/null; then
+        echo "❌ 合并冲突且无法自动中止半合并态；隔离环境保留，请先人工执行 git merge --abort。" >&2
+        exit 1
+      fi
       record_landing_failure_worktree "$WORKTREE" "$landing_started_at" "merge conflict"
       echo "❌ 合并发生冲突；实现和隔离环境均保留，状态仍在 final_check，解决冲突后可续跑。" >&2
       exit 1
     fi
-    python3 "$SCRIPT_DIR/build-contract.py" landed "$MAIN_MODULE" \
-      --landed-commit "$IMPLEMENTATION_COMMIT" >/dev/null
-    timing_begin landing "$landing_started_at"
-    timing_finish pass
-    git -C "$REPO_ROOT" add -- "docs/modules/$MODULE_NAME/.work-meta.json" "$TIMING_REL"
-    PMAI_ALLOW_MIXED_DELIVERY=build-close git -C "$REPO_ROOT" commit -m "build($MODULE_NAME): land accepted implementation"
+    if ! python3 "$SCRIPT_DIR/build-contract.py" landed "$MAIN_MODULE" \
+      --landed-commit "$IMPLEMENTATION_COMMIT" >/dev/null; then
+      rollback_pending_merge "$WORKTREE" "$landing_started_at" "landed state update failed" || exit 1
+      echo "❌ 合并后的状态写入失败；main 已回滚，隔离环境保留，可重试。" >&2
+      exit 1
+    fi
+    if ! timing_begin landing "$landing_started_at" || ! timing_finish pass; then
+      rollback_pending_merge "$WORKTREE" "$landing_started_at" "landing timing update failed" || exit 1
+      echo "❌ 落地计时写入失败；main 已回滚，隔离环境保留，可重试。" >&2
+      exit 1
+    fi
+    if ! git -C "$REPO_ROOT" add -- "docs/modules/$MODULE_NAME/.work-meta.json" "$TIMING_REL"; then
+      rollback_pending_merge "$WORKTREE" "$landing_started_at" "landing state staging failed" || exit 1
+      echo "❌ 落地状态暂存失败；main 已回滚，隔离环境保留，可重试。" >&2
+      exit 1
+    fi
+    if ! PMAI_ALLOW_MIXED_DELIVERY=build-close git -C "$REPO_ROOT" commit \
+      -m "build($MODULE_NAME): land accepted implementation"; then
+      rollback_pending_merge "$WORKTREE" "$landing_started_at" "landing commit failed" || exit 1
+      echo "❌ 落地主线提交失败；main 已回滚，隔离环境保留，可重试。" >&2
+      exit 1
+    fi
+    if ! git -C "$REPO_ROOT" merge-base --is-ancestor "$BRANCH" HEAD; then
+      echo "❌ 落地提交未包含 build 分支，停止清理隔离环境，请人工检查 main 历史。" >&2
+      exit 1
+    fi
     CLEANUP_PENDING=false
     if ! git -C "$REPO_ROOT" worktree remove "$WORKTREE"; then
       CLEANUP_PENDING=true

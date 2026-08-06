@@ -202,15 +202,19 @@ PY
     teardown_fixture; return
   fi
   first_land_count=$(git -C "$T" log --format=%s | grep -c 'build(access): land accepted implementation')
+  first_acceptance_count=$(git -C "$T" log --format=%s | grep -c 'build(access): record final acceptance')
   git -C "$T" restore PRODUCT-STATE.md
   if ! (cd "$T" && bash "$CLOSE" "$MAIN_MODULE") >/tmp/land-v2.$$ 2>/tmp/land-v2.err.$$; then
     _fail "retry should resume documentation"
     cat /tmp/land-v2.err.$$ >&2
   else
     second_land_count=$(git -C "$T" log --format=%s | grep -c 'build(access): land accepted implementation')
+    second_acceptance_count=$(git -C "$T" log --format=%s | grep -c 'build(access): record final acceptance')
     state=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["build"]["lifecycle_state"])' "$MAIN_MODULE/.work-meta.json")
-    if [ "$state" != "documenting" ] || [ "$first_land_count" != "$second_land_count" ]; then
-      _fail "retry should enter documenting without another merge commit"
+    if [ "$state" != "documenting" ] || \
+       [ "$first_land_count" != "$second_land_count" ] || \
+       [ "$first_acceptance_count" != "$second_acceptance_count" ]; then
+      _fail "retry should enter documenting without another acceptance or merge commit"
     else
       pass_test
     fi
@@ -256,6 +260,52 @@ SH
   teardown_fixture
 }
 
+test_landing_commit_failure_rolls_back_and_retries_once() {
+  start_test "land v2: main commit failure rolls back and retry does not duplicate landing"
+  setup_fixture
+  REAL_GIT=$(command -v git)
+  mkdir -p "$T/fakebin"
+  cat > "$T/fakebin/git" <<'SH'
+#!/usr/bin/env bash
+if [ "${3:-}" = "commit" ] && [[ "$*" == *"land accepted implementation"* ]]; then
+  echo "simulated main landing commit failure" >&2
+  exit 1
+fi
+exec "$REAL_GIT_FOR_TEST" "$@"
+SH
+  chmod +x "$T/fakebin/git"
+  BEFORE=$(git -C "$T" rev-parse HEAD)
+
+  if (cd "$T" && PATH="$T/fakebin:$PATH" REAL_GIT_FOR_TEST="$REAL_GIT" \
+      bash "$CLOSE" "$MODULE") >/tmp/land-v2.$$ 2>/tmp/land-v2.err.$$; then
+    _fail "simulated main commit failure should stop landing"
+    teardown_fixture; return
+  fi
+  AFTER=$(git -C "$T" rev-parse HEAD)
+  acceptance_count=$(git -C "$WT" log --format=%s | grep -c 'build(access): record final acceptance')
+  state=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["build"]["lifecycle_state"])' "$MODULE/.work-meta.json")
+  if [ "$BEFORE" != "$AFTER" ]; then
+    _fail "failed landing commit should restore the original main HEAD"
+  elif git -C "$T" rev-parse -q --verify MERGE_HEAD >/dev/null 2>&1; then
+    _fail "failed landing commit should abort the pending merge"
+  elif [ "$state" != "final_check" ] || [ ! -d "$WT" ] || [ "$acceptance_count" != "1" ]; then
+    _fail "failed landing should preserve one accepted build and its worktree"
+  elif ! (cd "$T" && bash "$CLOSE" "$MODULE") >/tmp/land-v2.$$ 2>/tmp/land-v2.err.$$; then
+    _fail "landing should recover on retry"
+    cat /tmp/land-v2.err.$$ >&2
+  else
+    land_count=$(git -C "$T" log --format=%s | grep -c 'build(access): land accepted implementation')
+    acceptance_count=$(git -C "$T" log --format=%s | grep -c 'build(access): record final acceptance')
+    if [ "$land_count" != "1" ] || [ "$acceptance_count" != "1" ]; then
+      _fail "retry should produce exactly one acceptance commit and one landing commit"
+    else
+      pass_test
+    fi
+  fi
+  rm -f /tmp/land-v2.$$ /tmp/land-v2.err.$$
+  teardown_fixture
+}
+
 test_untracked_incoming_path_fails_before_merge() {
   start_test "land v2: incoming path colliding with main untracked file fails before merge"
   setup_fixture
@@ -296,5 +346,6 @@ test_land_then_document_then_complete
 test_merge_conflict_keeps_final_check_and_worktree
 test_landed_docs_collision_preserves_wip_and_skips_remerge
 test_cleanup_failure_is_queued_without_blocking_docs
+test_landing_commit_failure_rolls_back_and_retries_once
 test_untracked_incoming_path_fails_before_merge
 report_results "land-work-v2"

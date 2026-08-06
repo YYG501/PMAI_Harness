@@ -326,6 +326,50 @@ test_merge_failure_rolls_back_work_branch() {
   fixture_teardown
 }
 
+test_close_commit_failure_restores_meta_and_retries_once() {
+  start_test "legacy close: commit failure restores .work-meta and retry commits once"
+  fixture_setup
+  work_dir=$(fixture_create_work "work-001" "retry" 4)
+  hook="$FIXTURE_DIR/.git/hooks/pre-commit"
+  cat > "$hook" <<'SH'
+#!/usr/bin/env bash
+common_dir=$(git rev-parse --git-common-dir)
+if [ ! -f "$common_dir/allow-close" ]; then
+  echo "simulated close hook failure" >&2
+  exit 1
+fi
+SH
+  chmod +x "$hook"
+
+  if (cd "$FIXTURE_DIR" && bash "$CLOSE_WORK" "$work_dir") >/tmp/out.$$ 2>/tmp/err.$$; then
+    _fail "hook failure should stop close"
+    rm -f /tmp/out.$$ /tmp/err.$$; fixture_teardown; return
+  fi
+  worktree="$FIXTURE_DIR/.worktrees/build-work-001-retry"
+  rel_meta="docs/modules/build-work-001-retry/.work-meta.json"
+  if [ ! -f "$worktree/$rel_meta" ]; then
+    _fail "commit failure should restore .work-meta in the worktree"
+  elif git -C "$worktree" diff --cached --name-only | grep -q "^$rel_meta$"; then
+    _fail "restored .work-meta should not remain staged for deletion"
+  else
+    touch "$FIXTURE_DIR/.git/allow-close"
+    if ! (cd "$FIXTURE_DIR" && bash "$CLOSE_WORK" "$work_dir") >/tmp/out.$$ 2>/tmp/err.$$; then
+      _fail "close should recover after the hook is fixed"
+      cat /tmp/err.$$ >&2
+    else
+      close_count=$(git -C "$FIXTURE_DIR" log --format=%s | grep -c 'close: 收尾 work-001')
+      if [ "$close_count" != "1" ]; then
+        _fail "retry should create exactly one close commit"
+      else
+        pass_test
+      fi
+    fi
+  fi
+
+  rm -f /tmp/out.$$ /tmp/err.$$
+  fixture_teardown
+}
+
 # =================================================
 # I-CR10: reject when cwd is inside the worktree
 # =================================================
@@ -455,5 +499,6 @@ test_reject_on_merge_conflict_no_partial_state
 test_archive_committed_before_merge
 test_happy_path_close_work
 test_merge_failure_rolls_back_work_branch
+test_close_commit_failure_restores_meta_and_retries_once
 
 report_results "close-work"

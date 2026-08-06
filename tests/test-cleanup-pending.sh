@@ -125,7 +125,7 @@ test_happy_path_removes_worktree_branch_and_file() {
 # C4: safety — caller cwd inside a pending worktree → reject
 # =================================================
 test_reject_when_cwd_inside_pending_worktree() {
-  start_test "C4 reject when cwd is inside a pending worktree"
+  start_test "C4 cwd failure → retry → repeated cleanup stays idempotent"
   fixture_setup
 
   fixture_create_work "work-002" "trap" 4 >/dev/null
@@ -135,18 +135,35 @@ test_reject_when_cwd_inside_pending_worktree() {
 
   if (cd "$work_wt" && bash "$CLEANUP") >/tmp/out.$$ 2>/tmp/err.$$; then
     _fail "should reject when cwd is inside pending worktree"
-  else
-    if grep -q "cwd 在以下待清理 worktree 内" /tmp/err.$$; then
-      pass_test
-    else
-      _fail "stderr missing cwd-in-pending message"
-      cat /tmp/err.$$ >&2
-    fi
+    rm -f /tmp/out.$$ /tmp/err.$$
+    fixture_teardown
+    return
+  elif ! grep -q "cwd 在以下待清理 worktree 内" /tmp/err.$$; then
+    _fail "stderr missing cwd-in-pending message"
+    cat /tmp/err.$$ >&2
+    rm -f /tmp/out.$$ /tmp/err.$$
+    fixture_teardown
+    return
   fi
 
-  # Pending file must still exist (cleanup aborted, nothing removed)
+  # Pending file must still exist after the failed attempt.
   if [ ! -f "$FIXTURE_DIR/.runs/pending-cleanup.json" ]; then
     _fail "pending-cleanup.json should remain after rejection"
+    rm -f /tmp/out.$$ /tmp/err.$$
+    fixture_teardown
+    return
+  fi
+
+  if ! (cd "$FIXTURE_DIR" && bash "$CLEANUP") >/tmp/out.$$ 2>/tmp/err.$$; then
+    _fail "cleanup should recover when retried from main"
+  elif [ -d "$work_wt" ] || \
+       git -C "$FIXTURE_DIR" show-ref --verify --quiet refs/heads/build-work-002-trap || \
+       [ -f "$FIXTURE_DIR/.runs/pending-cleanup.json" ]; then
+    _fail "successful retry should remove exactly the queued worktree, branch, and entry"
+  elif ! (cd "$FIXTURE_DIR" && bash "$CLEANUP") >/tmp/out.$$ 2>/tmp/err.$$; then
+    _fail "repeated cleanup should remain a no-op"
+  else
+    pass_test
   fi
 
   rm -f /tmp/out.$$ /tmp/err.$$
@@ -280,6 +297,27 @@ test_rejects_unregistered_existing_worktree_path() {
   fixture_teardown
 }
 
+test_rejects_corrupt_pending_file() {
+  start_test "C8 corrupt pending queue fails closed and is preserved"
+  fixture_setup
+  mkdir -p "$FIXTURE_DIR/.runs"
+  printf '{not-json\n' > "$FIXTURE_DIR/.runs/pending-cleanup.json"
+
+  if (cd "$FIXTURE_DIR" && bash "$CLEANUP") >/tmp/out.$$ 2>/tmp/err.$$; then
+    _fail "corrupt pending queue should fail"
+  elif ! grep -q "拒绝按空队列继续" /tmp/err.$$; then
+    _fail "corrupt queue guidance mismatch"
+    cat /tmp/err.$$ >&2
+  elif [ "$(cat "$FIXTURE_DIR/.runs/pending-cleanup.json")" != "{not-json" ]; then
+    _fail "corrupt queue should not be overwritten or discarded"
+  else
+    pass_test
+  fi
+
+  rm -f /tmp/out.$$ /tmp/err.$$
+  fixture_teardown
+}
+
 # =================================================
 test_no_pending_file_exits_zero
 test_empty_pending_list_exits_zero
@@ -288,5 +326,6 @@ test_reject_when_cwd_inside_pending_worktree
 test_partial_worktree_already_gone
 test_dry_run_does_not_remove
 test_rejects_unregistered_existing_worktree_path
+test_rejects_corrupt_pending_file
 
 report_results "cleanup-pending"
