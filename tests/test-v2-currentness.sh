@@ -16,7 +16,7 @@ test_fixed_audit_chain_is_not_exposed() {
       return
     fi
   done
-  stale=$(rg -n 'build-audits|coverage-reviewer|三道审|docs/DESIGN\.md' \
+  stale=$(grep -R -nE 'build-audits|coverage-reviewer|三道审|docs/DESIGN\.md' \
     "$REPO_ROOT/skills" "$REPO_ROOT/templates" "$REPO_ROOT/agents" \
     "$REPO_ROOT/README.md" "$REPO_ROOT/AGENTS.md" "$REPO_ROOT/PRODUCT.md" \
     "$REPO_ROOT/RUNTIME.md" "$REPO_ROOT/INVARIANTS.md" "$REPO_ROOT/TODOS.md" 2>/dev/null || true)
@@ -45,7 +45,7 @@ test_retired_structure_contract_is_not_exposed() {
       return
     fi
   done
-  stale=$(rg -n '工程结构约束-[*{]|工程结构约束\.schema|detect-project-structure|derive-structure-templates|inject-structure-segment' \
+  stale=$(grep -R -nE '工程结构约束-[*{]|工程结构约束\.schema|detect-project-structure|derive-structure-templates|inject-structure-segment' \
     "$REPO_ROOT/skills" "$REPO_ROOT/templates" "$REPO_ROOT/agents" "$REPO_ROOT/docs/INDEX.md" 2>/dev/null || true)
   if [ -n "$stale" ]; then
     _fail "active assets still reference the retired structure contract"
@@ -139,7 +139,7 @@ test_spec_contract_is_normative_not_implementation_inventory() {
   local template="$REPO_ROOT/skills/spec-writing/templates/prd.md.tmpl"
   local fewshots="$REPO_ROOT/skills/spec-writing/references/few-shots.md"
   local pmview="$REPO_ROOT/skills/_shared/PM-VIEW-RULES.md"
-  if rg -n '原型覆盖范围表|反向 PRD|§六.?原型.*ASCII|每个页面 / 弹窗 / 抽屉.*一张' \
+  if grep -E -n '原型覆盖范围表|反向 PRD|§六.?原型.*ASCII|每个页面 / 弹窗 / 抽屉.*一张' \
     "$spec" "$template" "$fewshots" >/dev/null 2>&1; then
     _fail "spec-writing still exposes implementation-coverage artifacts"
     return

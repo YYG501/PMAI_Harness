@@ -23,5 +23,10 @@ jobs:
           python3 --version
           git --version
 
+      - name: Configure test Git identity
+        run: |
+          git config --global user.name "PMAI CI"
+          git config --global user.email "pmai-ci@example.invalid"
+
       - name: Run all test suites
         run: bash tests/run-all.sh

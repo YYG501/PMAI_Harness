@@ -124,10 +124,46 @@ Do not overwrite this file."
   rm -rf "$base"
 }
 
+test_missing_git_identity_fails_before_writing() {
+  start_test "init-project: missing Git identity fails before writing target"
+  local base proj output rc
+  base=$(mktemp -d)
+  proj="$base/test-proj"
+  output="$base/init.out"
+
+  env \
+    -u GIT_AUTHOR_NAME \
+    -u GIT_AUTHOR_EMAIL \
+    -u GIT_COMMITTER_NAME \
+    -u GIT_COMMITTER_EMAIL \
+    -u EMAIL \
+    GIT_CONFIG_NOSYSTEM=1 \
+    GIT_CONFIG_GLOBAL=/dev/null \
+    GIT_CONFIG_COUNT=1 \
+    GIT_CONFIG_KEY_0=user.useConfigOnly \
+    GIT_CONFIG_VALUE_0=true \
+    PMAI_HOME="$REPO_ROOT" \
+    bash "$INIT_PROJECT_SH" "test-proj" "$proj" "test" >"$output" 2>&1
+  rc=$?
+
+  if [ "$rc" = "0" ]; then
+    _fail "initialization should fail without Git identity"
+  elif [ -e "$proj" ]; then
+    _fail "target directory should not be created before Git identity passes"
+  elif ! grep -q 'git config --global user.name' "$output" \
+    || ! grep -q 'git config --global user.email' "$output"; then
+    _fail "failure should provide Git identity recovery commands"
+  else
+    pass_test
+  fi
+  rm -rf "$base"
+}
+
 test_no_framework_asset_copy
 test_context_only_e2e_without_gstack
 test_legacy_fourth_type_fails_with_migration
 test_special_chars_in_background
 test_allow_existing_rejects_template_conflicts_before_writing
+test_missing_git_identity_fails_before_writing
 
 report_results "init-project"

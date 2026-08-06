@@ -179,12 +179,12 @@ test_skill_contract() {
   assert_file_contains "$BUILD_SKILL" "lifecycle-handoff.md" "build should honor review handoff" || return
   assert_file_contains "$QUICK_FIX_SKILL" "lifecycle-handoff.md" "quick-fix should honor review handoff" || return
   assert_file_contains "$SPEC_SKILL" "lifecycle-handoff.md" "spec-writing should output review target" || return
-  if rg -n '/Users/' "$REPO_ROOT/skills/lark-review" "$COLLECTOR" >/dev/null; then
+  if grep -R -n '/Users/' "$REPO_ROOT/skills/lark-review" "$COLLECTOR" >/dev/null; then
     _fail "lark-review assets must not contain machine-bound paths"
     return
   fi
   assert_file_contains "$SKILL" "没有.*--force" "skill should explicitly forbid force bypasses" || return
-  if rg -n 'add_argument\([^)]*--force' "$COLLECTOR" >/dev/null; then
+  if grep -E -n 'add_argument\([^)]*--force' "$COLLECTOR" >/dev/null; then
     _fail "lark-review CLI must not expose a force option"
     return
   fi

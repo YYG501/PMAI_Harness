@@ -112,6 +112,20 @@ if [ -n "$MISSING" ]; then
   exit 2
 fi
 
+_require_git_identity() {
+  if git var GIT_AUTHOR_IDENT >/dev/null 2>&1 \
+    && git var GIT_COMMITTER_IDENT >/dev/null 2>&1; then
+    return
+  fi
+
+  echo "❌ Git 提交身份未配置，PMAI 尚未写入目标目录。" >&2
+  echo "   请先配置 Git 身份：" >&2
+  echo '     git config --global user.name "你的名字"' >&2
+  echo '     git config --global user.email "you@example.com"' >&2
+  echo "   配置后重新运行本命令。" >&2
+  exit 1
+}
+
 # --- 0.5. 阻止已接入 PMAI 的目录被重复初始化 ---
 _pmai_file_mentions_pmai() {
   local file="$1"
@@ -171,6 +185,7 @@ if [ -d "$TARGET_DIR" ]; then
       echo "   请先重命名或归档这些文件；PMAI 不会猜测如何合并现有内容。" >&2
       exit 1
     fi
+    _require_git_identity
     echo "📁 复用已存在目录: ${TARGET_DIR}（--allow-existing：资料档接住模式）"
   else
     echo "❌ 目标目录已存在: $TARGET_DIR" >&2
@@ -178,6 +193,7 @@ if [ -d "$TARGET_DIR" ]; then
     exit 1
   fi
 else
+  _require_git_identity
   mkdir -p "$TARGET_DIR"
   echo "📁 创建项目目录: $TARGET_DIR"
 fi
@@ -299,7 +315,13 @@ fi
 
 # --- l. 初始 commit ---
 git add -A
-git commit -m "init: $PROJECT_NAME" >/dev/null 2>&1
+if ! git commit -m "init: $PROJECT_NAME"; then
+  echo "❌ 初始 commit 失败；项目文件已保留，但初始化尚未完成。" >&2
+  echo "   修复上方 Git 错误后，在项目目录运行：" >&2
+  echo "     git add -A" >&2
+  echo "     git commit -m \"init: $PROJECT_NAME\"" >&2
+  exit 1
+fi
 echo "📝 初始 commit 完成"
 
 echo ""

@@ -6,7 +6,7 @@
 
 - 日期：2026-08-06
 - 开发分支：`main`
-- 当前目标：Harness 第一优先级的运行时护栏、验证可信度与失败恢复已完成；继续以真实消费仓验证无缺陷正常路径 P95 是否接近 10 分钟。
+- 当前目标：Harness 第一优先级的运行时护栏、验证可信度、失败恢复与 CI 环境可重复性已完成；继续以真实消费仓验证无缺陷正常路径 P95 是否接近 10 分钟。
 - gstack 参考基线：`v1.58.5.0`，commit `11de390`；只参考本地 `gstack-clean` checkout，没有升级用户目录中的安装副本。
 
 ## 当前活跃模型
@@ -29,6 +29,7 @@
 
 - Harness 第一阶段五项 P1 已下沉为运行时硬门：host `_shared` 只按明确所有权替换；brownfield 初始化写入前列全同名冲突；attached build worktree 的所属分支副本压住 main 旧状态；build 必须消费 current `ready_to_build + project.yml` 且拒绝路径、类型、入口和 revision 漂移；cancel 要求 main 干净、只提交状态删除，并在提交失败时恢复原状态。
 - Harness 验证入口已失败关闭：每个 suite 有独立进程组超时，缺失 / 重复摘要、零用例、摘要与退出码矛盾都会计为失败；全量入口实际运行静态 skill eval，并明确显示 session runner / judge 的 pass、fail、skip。`PMAI_REQUIRE_SESSION_EVALS=1` 可将外部评测能力缺失升级为硬门。
+- 初始化与 CI 不再借用开发机隐含环境：`init-project.sh` 在写目标目录前预检 Git author / committer 身份，初始 commit 失败保留 Git 原始错误和恢复命令；GitHub Actions 显式配置测试身份，负向内容断言只依赖系统自带 `grep`，runner 缺少 `rg` 不会假绿。
 - 生命周期恢复已补齐：`ready_to_build` 正向进入 `building`；landing 状态、计时、暂存或 main commit 失败时 abort 半合并态并保留隔离环境；legacy close commit 失败恢复 `.work-meta.json`；待清理队列原子更新、损坏时失败关闭，cleanup 可从 cwd 阻断恢复且重复执行幂等。
 - 新增 `context-pack.py`：design、build、恢复、最终检查和文档更新共用确定性上下文，并区分 active / superseded / 冲突决定、未决问题和输入 hash；项目定义存在时只从其中的 entrypoints 取实现上下文。
 - 新增共用 `decision-policy`：机械项自动处理，可逆偏好给推荐并推进，产品模型岔路和 one-way door 立即让 PM 拍板；问句和讨论草稿不得成为决定。
@@ -71,7 +72,7 @@
 ## 当前验证
 
 - Harness 第一阶段安装所有权、初始化冲突、状态权威、ready/build 合同和 cancel 原子性 targeted tests 已通过：`42 passed / 0 failed`。
-- 完整 `tests/run-all.sh` 已通过：`574 passed / 0 failed`；同一次入口另有 skill eval `6 passed / 0 failed / 15 session skipped`（外部 runner 未配置，已显式报告）。新增回归覆盖 suite 超时与摘要失败关闭、`ready_to_build → building`、`final_check → merge → docs_pending → resume` 不重复验收 / 合入、main landing commit 失败回滚后重试、legacy close 状态恢复、cleanup 失败恢复 / 幂等和损坏队列保护；最终命令去重、浏览器验收、真实 worktree 合入、Harness 五项 P1、飞书评审、Kimi 原生 Skill 与 hooks、`/pmai-feedback`、design、个人经验和其它既有回归继续通过。
+- 完整 `tests/run-all.sh` 已通过：`575 passed / 0 failed`；同一次入口另有 skill eval `6 passed / 0 failed / 15 session skipped`（外部 runner 未配置，已显式报告）。新增回归覆盖无 Git 身份时初始化在写入前失败，以及 suite 超时与摘要失败关闭、`ready_to_build → building`、`final_check → merge → docs_pending → resume` 不重复验收 / 合入、main landing commit 失败回滚后重试、legacy close 状态恢复、cleanup 失败恢复 / 幂等和损坏队列保护；最终命令去重、浏览器验收、真实 worktree 合入、Harness 五项 P1、飞书评审、Kimi 原生 Skill 与 hooks、`/pmai-feedback`、design、个人经验和其它既有回归继续通过。
 
 ## 下一步
 
