@@ -4,9 +4,9 @@
 
 ## 当前位置
 
-- 日期：2026-08-07
+- 日期：2026-08-08
 - 开发分支：`main`
-- 当前目标：Harness 第一优先级的运行时护栏、验证可信度、失败恢复与 CI 环境可重复性已完成；继续以真实消费仓验证无缺陷正常路径 P95 是否接近 10 分钟。
+- 当前目标：active build 的自然语言续接与“无未决问题”误判已修复；继续以真实消费仓验证迭代检查始终沿用当前 build contract，并观察无缺陷正常路径 P95 是否接近 10 分钟。
 - gstack 参考基线：`v1.58.5.0`，commit `11de390`；只参考本地 `gstack-clean` checkout，没有升级用户目录中的安装副本。
 
 ## 当前活跃模型
@@ -16,6 +16,7 @@
 - `/pmai-feedback` 是消费仓到框架仓的只读反馈出口：完整复盘当前原始会话、对照消费仓真相源、判断问题归属，并输出包含会话文件地址和证据的框架优化 Prompt；它不在消费仓直接修改产品或 PMAI 框架。
 - `/pmai-lark-review` 是归档后飞书评审回流入口：当前飞书 full XML 原生快照是 T 的唯一底稿，B/L 只用于定位本地补充和冲突，祖先格式兼容性不能把目标切回旧 L。R→T 的每个删除 / 改写进入远端覆盖账本，现有 block 的格式必须保留，随内容删除也要有明确依据；大规模差异强制 PM 预览，精细同步后逐 block 验证样式、资源和引用。每项变化通过 `decision_routing` 选择性写 / supersede `decisions.md`，措辞 / 排版明确标记不写。评论用整批首尾稳定围栏和逐笔 journal 收口，缺 `solved_time` 时保留 null；checkpoint 复用同 revision 格式验收。机器路径目标 10–15 分钟，阶段耗时与 API 往返写入批次产物。
 - `/pmai-build-close` 只作为兼容与恢复入口；正常链路不再要求 PM 手动调用。
+- `building / iterating / final_check` 中，PM 的“启动看看 / 还有什么问题 / 继续改当前结果”等自然语言继续当前 `/pmai-build`。Codex、Claude Code、Kimi Code 通过 prompt hook 注入 `status-view.py --execution-context`；OpenCode 由入口规则主动读取。该上下文只派生现有合同，不新增状态；多个 active build 返回歧义，合同或 policy 漂移时失败关闭。
 - lifecycle v2：`designing → ready_to_build → building → iterating → final_check → landed → documenting → complete`。旧 `stage` 字段仅为 v1 消费仓兼容展示。
 - 项目建造定义：初始化时不存在；首个达到 `ready_to_build` 的 design 将 `prototype / product`、技术栈、代码入口、真实命令和 Web 能力写入 `.pm-workflow/project.yml`。后续 build 只读该文件。
 - 模块真相源：`docs/modules/<模块>/discussion.md`、`decisions.md`、`spec.md`；跨模块现行规则为 `PRODUCT-RULES.md`，项目级冻结理路为 `docs/decisions/`。
@@ -54,6 +55,7 @@
 - Kimi Code 通过 `$KIMI_CODE_HOME/skills/pmai-*` 暴露原生 `/skill:pmai-*`；用户级 `config.toml` 中只维护 PMAI 标记的 hooks 区块，全局分发器在普通仓 no-op，并把生成器仓 / 消费仓分别路由到已有护栏。install / upgrade / uninstall / doctor / status 已覆盖 Kimi 宿主面。
 - design 直接必读 AskUser 共享规则，首题前收敛真实决策并报告总量，用业务结果提问；跨日、模型切换或会话恢复时重读当前 skill 与必读规则。context pack 消费后单独召回个人经验候选，按适用性、去重和独立检查价值自适应选择，不设正常条数上限；高信号纠偏闭合后自动归位。项目事实回项目真相源，跨项目经验进入用户级存储，已有 Skill 规则未执行只留执行失败证据。跨模块设计只留下一个明确 build 入口，相同建造方案重复写入 `project.yml` 保持完整文件不变。
 - context pack 对旧消费仓自动写入 Git 本地 exclude，不再制造未跟踪缓存；build 在创建环境前阻断批准目标路径上的既有脏改动，同时保留无关 WIP。
+- `context-pack.py` 与 `check-open-questions.py` 共用明确无未决问题的短语识别；“本轮工作无未决问题”在两条读取链路都表示空问题集。
 - context pack 只把 D 编号模块决定和真实产品规则编入 active；共同理由、否过方案、待复核、变更记录与注释模板不再伪装成决定，已确认标题也不再误报未决。
 - 新增 `scripts/current-session.py` 和 `/pmai-feedback`：Codex 通过 `CODEX_THREAD_ID` 精确定位 active / archived 原始 JSONL，校验会话唯一性、session ID 与 cwd 归属；Skill 完整读取会话并区分消费仓产品问题、执行偏差、Skill 缺口、框架合同缺口、宿主限制和证据不足，最后生成带消费仓路径、会话 ID、原始文件路径及证据的框架交接 Prompt。公开 `/pmai-skill-improve` 已移除，历史 `skill-feedback/` 资料继续保留。
 - `scripts/lark-review.py` 和 `/pmai-lark-review` 已升级到原生远端底稿合同：采集同一 revision 的 Markdown / full XML、历史发布版和完整分页评论；`remote-native.json` 保留 block/style/resource/reference，`remote-coverage.json` 与 PM 预览约束 R→T，`verify-sync` 在写回后做原生格式验收。comment-actions v2 支持无 `solved_time` 的可恢复证据，同时可继续消费旧 review/plan v2 与 comment-actions v1 批次完成评论恢复。
@@ -72,11 +74,12 @@
 ## 当前验证
 
 - Harness 第一阶段安装所有权、初始化冲突、状态权威、ready/build 合同和 cancel 原子性 targeted tests 已通过：`42 passed / 0 failed`。
-- 完整 `tests/run-all.sh` 已通过：`585 passed / 0 failed`；同一次入口另有 skill eval `6 passed / 0 failed / 15 session skipped`（外部 runner 未配置，已显式报告）。新增回归覆盖无 Git 身份时初始化在写入前失败，以及 suite 超时与摘要失败关闭、`ready_to_build → building`、`final_check → merge → docs_pending → resume` 不重复验收 / 合入、main landing commit 失败回滚后重试、legacy close 状态恢复、cleanup 失败恢复 / 幂等和损坏队列保护；最终命令去重、浏览器验收、真实 worktree 合入、Harness 五项 P1、飞书评审、Kimi 原生 Skill 与 hooks、`/pmai-feedback`、design、个人经验和其它既有回归继续通过。
+- 完整 `tests/run-all.sh` 已通过：`598 passed / 0 failed`；同一次入口另有 skill eval `6 passed / 0 failed / 16 session skipped`（外部 runner 未配置，已显式报告）。新增回归覆盖 active prototype/product 执行上下文、policy 漂移失败关闭、多 active build 歧义、legacy v2 恢复、Codex/Claude/Kimi prompt hook 接线与幂等，以及“本轮工作无未决问题”在 context pack 和未决问题闸门中的一致语义；原有最终命令去重、浏览器验收、真实 worktree 合入、Harness 五项 P1、飞书评审、`/pmai-feedback`、design、个人经验和其它回归继续通过。
 
 ## 下一步
 
 - 继续用真实消费仓会话观察 active build 的小改能否稳定在 2–5 分钟内可刷新、交互改动能否稳定在 5–10 分钟内可刷新，以及定稿请求是否只触发一次隔离 production validation。
+- 在 PM 确认分发后升级安装态，再用消费仓自然语言“启动看看 / 还有什么问题”验证各宿主自动注入；本轮只对 `ExampleAgentProject` 做了只读 dogfood，没有修改消费仓或用户级安装。
 - 在真实消费仓 dogfood `/pmai-feedback`，核对完整会话复盘、问题归属和交接 Prompt 是否能直接驱动框架仓分析；再按宿主能力补充 Kimi Code、Claude Code 和 OpenCode 的精确当前会话定位适配，不提供猜测式降级。
 - 在真实 Docx 规格上 dogfood `/pmai-lark-review`：覆盖正文直改、复杂格式 / 图片 / 引用、局部 / 全文评论、无 `solved_time`、active build accepted delta 和选择性 decision 归档；记录 collect / reconcile / 精细写回 / 评论收口的阶段耗时，确认机器路径进入 10–15 分钟。
 - 后续框架修改继续先在开发分支完成 targeted / full regression，再进入 main 分发基线并升级全局安装副本。

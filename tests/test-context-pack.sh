@@ -131,6 +131,30 @@ PY
   teardown_fixture
 }
 
+test_context_pack_recognizes_current_round_has_no_open_questions() {
+  start_test "context-pack: 本轮工作无未决问题不进入 unresolved_questions"
+  setup_fixture
+  cat > "$T/docs/modules/access/discussion.md" <<'EOF'
+# 讨论
+
+## 未决问题
+
+本轮工作无未决问题。
+EOF
+  local out
+  out=$(python3 "$CONTEXT_PACK" --repo-root "$T" --module access 2>&1) || {
+    _fail "context pack should compile explicit no-open statement"
+    teardown_fixture
+    return
+  }
+  if python3 -c 'import json,sys; assert json.load(sys.stdin)["unresolved_questions"] == []' <<<"$out"; then
+    pass_test
+  else
+    _fail "explicit no-open statement was reported as unresolved: $out"
+  fi
+  teardown_fixture
+}
+
 test_context_pack_lifecycle_state_does_not_drift_approved_source() {
   start_test "context-pack: lifecycle metadata hash is tracked but excluded from approved source hash"
   setup_fixture
@@ -187,6 +211,7 @@ PY
 test_context_pack_compiles_authority_and_rejects_questions
 test_context_pack_hash_changes_with_authority_source
 test_context_pack_ignores_resolved_headings_and_non_decision_sections
+test_context_pack_recognizes_current_round_has_no_open_questions
 test_context_pack_lifecycle_state_does_not_drift_approved_source
 test_context_pack_includes_registered_input_evidence
 report_results "context-pack"

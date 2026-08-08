@@ -14,9 +14,10 @@
 from __future__ import annotations
 
 import argparse
+import json
 import subprocess
 import sys
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 # 让 _lib 可以 import（status-view.py 自身在 scripts/，_lib 是同级子目录）
 _SCRIPTS_DIR = str(Path(__file__).resolve().parent)
@@ -24,11 +25,17 @@ if _SCRIPTS_DIR not in sys.path:
     sys.path.insert(0, _SCRIPTS_DIR)
 
 from _lib.state import (  # noqa: E402
+    StateReadError,
     get_current_stage_banner,
     get_overall_state,
     get_timeline_state,
 )
 from _lib.project_definition import ProjectDefinitionError, load_project_definition  # noqa: E402
+from _lib.delivery_policy import (  # noqa: E402
+    delivery_policy_for,
+    delivery_policy_hash,
+    validate_delivery_policy,
+)
 from _lib.ready_contract import ready_currentness  # noqa: E402
 from _lib.stages import LIFECYCLE_NAMES, STAGE_NAMES, MAX_STAGE  # noqa: E402  ( F13 单一真相源)
 
@@ -487,6 +494,267 @@ def annotate_ready_currentness(state: dict, repo_root: Path) -> None:
         )
 
 
+ACTIVE_BUILD_LIFECYCLES = {"building", "iterating", "final_check"}
+
+
+def _work_repo_root(work_dir: Path) -> Path:
+    try:
+        value = subprocess.check_output(
+            ["git", "-C", str(work_dir), "rev-parse", "--show-toplevel"],
+            text=True,
+            stderr=subprocess.DEVNULL,
+        ).strip()
+    except Exception as exc:
+        raise ValueError(f"无法定位 active build 所在仓库：{work_dir}") from exc
+    if not value:
+        raise ValueError(f"无法定位 active build 所在仓库：{work_dir}")
+    return Path(value).resolve()
+
+
+def _contract_path(value: object, label: str) -> str:
+    if not isinstance(value, str) or not value.strip():
+        raise ValueError(f"{label} 必须是非空仓内相对路径。")
+    normalized = value.strip()
+    path = PurePosixPath(normalized)
+    if "\\" in normalized or path.is_absolute() or ".." in path.parts:
+        raise ValueError(f"{label} 必须是仓内相对 POSIX 路径：{normalized}")
+    return normalized
+
+
+def _contract_paths(value: object, label: str, *, required: bool = True) -> list[str]:
+    if not isinstance(value, list) or (required and not value):
+        suffix = "非空" if required else ""
+        raise ValueError(f"{label} 必须是{suffix}路径数组。")
+    normalized = [
+        _contract_path(item, f"{label}[{index}]") for index, item in enumerate(value)
+    ]
+    if len(set(normalized)) != len(normalized):
+        raise ValueError(f"{label} 不能包含重复路径。")
+    return normalized
+
+
+def _path_within(path: str, parent: str) -> bool:
+    normalized_path = path.rstrip("/")
+    normalized_parent = parent.rstrip("/")
+    if normalized_parent in {"", "."}:
+        return True
+    return normalized_path == normalized_parent or normalized_path.startswith(
+        normalized_parent + "/"
+    )
+
+
+def _string_list(value: object, label: str, *, required: bool = False) -> list[str]:
+    if not isinstance(value, list) or (required and not value):
+        suffix = "非空" if required else ""
+        raise ValueError(f"{label} 必须是{suffix}字符串数组。")
+    if any(not isinstance(item, str) or not item.strip() for item in value):
+        raise ValueError(f"{label} 必须只包含非空字符串。")
+    result = [item.strip() for item in value]
+    if len(set(result)) != len(result):
+        raise ValueError(f"{label} 不能包含重复检查。")
+    return result
+
+
+def _build_execution_context(work_view: dict) -> dict:
+    work_dir = Path(work_view["work_dir"]).resolve()
+    work_root = _work_repo_root(work_dir)
+    meta = work_view.get("meta")
+    if not isinstance(meta, dict):
+        raise ValueError("active work metadata 必须是对象。")
+    build = meta.get("build")
+    if not isinstance(build, dict):
+        raise ValueError("active work 缺少 build contract。")
+
+    lifecycle = str(build.get("lifecycle_state") or meta.get("lifecycle_state") or "")
+    if lifecycle not in ACTIVE_BUILD_LIFECYCLES:
+        raise ValueError(f"active build lifecycle 不可续接：{lifecycle or 'missing'}")
+
+    try:
+        contract_version = int(build.get("contract_version", 1))
+    except (TypeError, ValueError) as exc:
+        raise ValueError("build.contract_version 必须是整数。") from exc
+    if contract_version < 2:
+        raise ValueError("active build contract 过旧；请通过 /pmai-build 恢复后再继续检查。")
+
+    target = build.get("target")
+    if not isinstance(target, dict):
+        raise ValueError("build.target 必须是对象。")
+    target_kind = target.get("kind")
+    if target_kind not in {"prototype", "product"}:
+        raise ValueError("build.target.kind 必须是 prototype 或 product。")
+    target_paths = _contract_paths(target.get("paths"), "build.target.paths")
+    target_entrypoints = _contract_paths(
+        target.get("entrypoints"), "build.target.entrypoints"
+    )
+    anchor = _contract_path(build.get("anchor"), "build.anchor")
+    if not (work_root / anchor).is_file():
+        raise ValueError(f"build.anchor 指向的文件不存在：{anchor}")
+
+    definition_path = work_root / ".pm-workflow" / "project.yml"
+    try:
+        definition = load_project_definition(definition_path)
+    except ProjectDefinitionError as exc:
+        raise ValueError(str(exc)) from exc
+    if definition["project"]["type"] != target_kind:
+        raise ValueError("build.target.kind 与 project.yml 的 project.type 不一致。")
+    project_entrypoints = list(definition["implementation"]["entrypoints"])
+    if target_entrypoints != project_entrypoints:
+        raise ValueError(
+            "build.target.entrypoints 与 project.yml 的 implementation.entrypoints 不一致。"
+        )
+    implementation_root = definition["implementation"]["root"]
+    for target_path in target_paths:
+        if not _path_within(target_path, implementation_root):
+            raise ValueError(
+                f"build.target.paths 超出 project.yml implementation.root：{target_path}"
+            )
+        if not any(_path_within(target_path, entrypoint) for entrypoint in project_entrypoints):
+            raise ValueError(
+                f"build.target.paths 未命中 project.yml implementation.entrypoints：{target_path}"
+            )
+
+    approved_source_hash = build.get("approved_source_hash")
+    if not isinstance(approved_source_hash, str) or not approved_source_hash.strip():
+        raise ValueError("build contract 缺少 approved_source_hash。")
+    design_revision = build.get("design_revision")
+    if not isinstance(design_revision, int) or isinstance(design_revision, bool) or design_revision < 1:
+        raise ValueError("build.design_revision 必须是正整数。")
+
+    if contract_version >= 3:
+        try:
+            policy = validate_delivery_policy(build.get("delivery_policy"), target_kind)
+        except ValueError as exc:
+            raise ValueError(str(exc)) from exc
+        if build.get("delivery_policy_hash") != delivery_policy_hash(policy):
+            raise ValueError("build.delivery_policy_hash 与实现深度合同不一致。")
+        policy_source = "contract"
+    else:
+        # v2 没有持久化 delivery_policy；恢复时按同一 project.type 编译保守策略。
+        policy = delivery_policy_for(target_kind)
+        policy_source = "legacy-v2-derived"
+
+    accepted_deltas = build.get("accepted_deltas", [])
+    if not isinstance(accepted_deltas, list) or any(
+        not isinstance(item, dict) for item in accepted_deltas
+    ):
+        raise ValueError("build.accepted_deltas 必须是对象数组。")
+
+    acceptance = build.get("acceptance")
+    if not isinstance(acceptance, dict):
+        raise ValueError("build.acceptance 必须是对象。")
+    final_checks = _string_list(
+        acceptance.get("final_checks", acceptance.get("required_checks")),
+        "build.acceptance.final_checks",
+        required=True,
+    )
+    if contract_version >= 4:
+        iteration_checks = _string_list(
+            acceptance.get("iteration_checks"),
+            "build.acceptance.iteration_checks",
+        )
+        required_checks = _string_list(
+            acceptance.get("required_checks"),
+            "build.acceptance.required_checks",
+            required=True,
+        )
+        if required_checks != final_checks:
+            raise ValueError(
+                "build.acceptance.final_checks 与兼容字段 required_checks 不一致。"
+            )
+    else:
+        iteration_checks = []
+    if (
+        contract_version >= 3
+        and target_kind == "prototype"
+        and "prototype-boundary" not in final_checks
+    ):
+        raise ValueError("prototype build 缺少不可跳过的 prototype-boundary 检查。")
+
+    lane_name = "final" if lifecycle == "final_check" else "iteration"
+    lane_checks = final_checks if lane_name == "final" else iteration_checks
+    try:
+        module = work_dir.relative_to(work_root).as_posix()
+    except ValueError as exc:
+        raise ValueError("active module 不在 build worktree 内。") from exc
+
+    return {
+        "id": str(meta.get("id") or work_dir.name),
+        "name": str(meta.get("name") or work_dir.name),
+        "module": module,
+        "lifecycle_state": lifecycle,
+        "contract_version": contract_version,
+        "anchor": anchor,
+        "target": {
+            "kind": target_kind,
+            "paths": target_paths,
+            "entrypoints": target_entrypoints,
+        },
+        "approved_paths": target_paths,
+        "approved_source_hash": approved_source_hash.strip(),
+        "design_revision": design_revision,
+        "delivery_policy": policy,
+        "delivery_policy_source": policy_source,
+        "accepted_deltas": accepted_deltas,
+        "acceptance_lane": {
+            "name": lane_name,
+            "checks": lane_checks,
+            "iteration_checks": iteration_checks,
+            "final_checks": final_checks,
+        },
+        "project": {
+            "type": definition["project"]["type"],
+            "implementation": definition["implementation"],
+            "commands": definition["commands"],
+            "web": definition["web"],
+        },
+    }
+
+
+def execution_context_payload(state: dict) -> tuple[dict, int]:
+    candidates = []
+    for work_view in state.get("active_work", []):
+        meta = work_view.get("meta") or {}
+        build = meta.get("build")
+        if isinstance(build, dict) and _lifecycle(meta) in ACTIVE_BUILD_LIFECYCLES:
+            candidates.append(work_view)
+
+    base = {"schema_version": 1, "route": "pmai-build"}
+    if not candidates:
+        return {**base, "status": "none", "active_builds": []}, 0
+    if len(candidates) > 1:
+        active_builds = [
+            {
+                "id": str((item.get("meta") or {}).get("id") or ""),
+                "name": _work_display_name(item),
+                "lifecycle_state": _lifecycle(item.get("meta") or {}),
+            }
+            for item in candidates
+        ]
+        return {
+            **base,
+            "status": "ambiguous",
+            "reason": "存在多个可续接的 active build，必须先让 PM 指明模块。",
+            "active_builds": active_builds,
+        }, 0
+    try:
+        context = _build_execution_context(candidates[0])
+    except ValueError as exc:
+        meta = candidates[0].get("meta") or {}
+        return {
+            **base,
+            "status": "invalid",
+            "reason": str(exc),
+            "active_builds": [
+                {
+                    "id": str(meta.get("id") or ""),
+                    "name": _work_display_name(candidates[0]),
+                    "lifecycle_state": _lifecycle(meta),
+                }
+            ],
+        }, 2
+    return {**base, "status": "active", "active_builds": [context]}, 0
+
+
 def render_quickfix_section(repo_root: Path) -> None:
     try:
         result = subprocess.run(
@@ -644,6 +912,7 @@ def main() -> None:
 示例:
   status-view.py                          当前工作概览
   status-view.py --summary                一行 active work 概览
+  status-view.py --execution-context      当前 active build 的只读执行上下文 JSON
   status-view.py --timeline               全局时间线（active + closed + cancelled）
   status-view.py --timeline --module auth 只看 auth 模块相关工作
   status-view.py --timeline --all         时间线显示全部 archived
@@ -657,6 +926,11 @@ def main() -> None:
     )
     parser.add_argument(
         "--summary", action="store_true", help="Print one-line active work overview"
+    )
+    parser.add_argument(
+        "--execution-context",
+        action="store_true",
+        help="输出当前 active build 的只读、已校验执行上下文 JSON",
     )
     parser.add_argument(
         "--timeline", action="store_true",
@@ -686,6 +960,19 @@ def main() -> None:
         repo_root = find_repo_root()
 
     if is_uninitialized_project(repo_root):
+        if args.execution_context:
+            print(
+                json.dumps(
+                    {
+                        "schema_version": 1,
+                        "route": "pmai-build",
+                        "status": "none",
+                        "active_builds": [],
+                    },
+                    ensure_ascii=False,
+                )
+            )
+            return
         if args.banner_only:
             print(f"━━━ PMAI ► {args.skill} ▸ 项目未初始化 ━━━")
         render_uninitialized_project_hint(repo_root)
@@ -701,7 +988,32 @@ def main() -> None:
         render_timeline(timeline_state, repo_root)
         return
 
-    state = get_overall_state(repo_root, cwd=Path.cwd(), strict=False)
+    try:
+        state = get_overall_state(repo_root, cwd=Path.cwd(), strict=args.execution_context)
+    except StateReadError as exc:
+        if not args.execution_context:
+            raise
+        print(
+            json.dumps(
+                {
+                    "schema_version": 1,
+                    "route": "pmai-build",
+                    "status": "invalid",
+                    "reason": str(exc),
+                    "active_builds": [],
+                },
+                ensure_ascii=False,
+                indent=2,
+            )
+        )
+        raise SystemExit(2) from exc
+
+    if args.execution_context:
+        payload, exit_code = execution_context_payload(state)
+        print(json.dumps(payload, ensure_ascii=False, indent=2))
+        if exit_code:
+            raise SystemExit(exit_code)
+        return
 
     if args.banner_only:
         render_banner_only(state, repo_root, args.skill)

@@ -22,7 +22,7 @@ source "${PMAI_HOME:-$HOME/.pmai}/scripts/skill-preamble.sh"
 
 - PM 想看：当前产品现状 / 在做哪个模块 / 最近的重要决策。
 - 开新窗口、隔天回来，想一眼知道"我在哪、上次做到哪、下一步建议"。
-- 不适用：要推进工作 → `/pmai-design`。
+- 不适用：没有 active work 时要推进新工作 → `/pmai-design`。已有 `building / iterating / final_check` 时，继续查看、检查或修改当前结果属于原 `/pmai-build`，不是新 design。
 
 ## Preamble
 
@@ -40,6 +40,8 @@ echo "SKILL: status"
    ```bash
    python3 "$PMAI_HOME/scripts/status-view.py" --narrative 2>/dev/null || true
    ```
+
+   若状态是 `building / iterating / final_check`，PM 随后说“启动看看”“还有什么问题”“改一下当前结果”等自然语言时，按当前 `/pmai-build` 续接：先读取 `status-view.py --execution-context` 的只读合同，再重新编译 context pack。不要把它路由成通用 QA，也不要重新发明 PM 未决问题。
 
 3. @读 `PRODUCT-STATE.md`（现状）+ `PRODUCT-RULES.md`（跨模块规则与最近重要决策；不存在就跳过，不把“不存在”当成近期决策汇报）+ 当前涉及模块的 `discussion.md` / `decisions.md` / `spec.md`，必要时看 `git status --short --untracked-files=all` 判断是否有未提交改动。用 PM 视图大白话报一段，按下面合同输出：
 

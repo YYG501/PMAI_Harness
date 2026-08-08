@@ -41,6 +41,12 @@ ready_to_build → building → iterating → final_check
 
 PM 的主体验是：开工前只确认一次工作环境和构建工具 → 看构建结果 → 提修改 → 再看 → 明确定稿。项目类型和验收方案不出现在开工确认卡；worktree、合同、hash、证据和文档影响地图等内部实现也不向 PM 展示。
 
+### 已有 build 的自然语言续接
+
+当已有 `building / iterating / final_check`，PM 不必重复输入命令。“启动起来看看”“检查当前结果”“还有什么没有解决”“按刚才结果继续改”等都沿用当前 `/pmai-build`。只有 PM 明确开启无关的新工作时才转其它入口；多个可续接 build 时只问本轮模块，不静默猜测。
+
+续接时先读取 `status-view.py --execution-context`，再按 §1 重新编译并消费 context pack。该输出只派生现有 `spec + decisions + build contract + project.yml`，不写状态。合同无效或 policy 漂移时停止无范围检查并按 build 恢复；不得绕过当前 `target + delivery_policy + acceptance lane` 转成通用 QA。
+
 纯错字、单文案、局部样式或不改变产品行为的极小修补走 `/pmai-quick-fix`。把 mockup / spec 做进最终 build target、改变信息结构或同时涉及实现和正式文档，不得伪装成小改；只要进入本 skill，就按完整 build 执行，并在开工前确认工作环境。
 
 所有持久化路径必须由 `PMAI_HOME`、`REPO_ROOT`、`MAIN_REPO_ROOT`、`BUILD_DIR` 等运行时变量与仓内相对路径组合，禁止写死 `/Users/...` 这类机器绑定路径。
@@ -281,11 +287,12 @@ git -C "$BUILD_DIR" commit -m "build(<模块>): record iteration"
 1. 重新读取当前 build 合同的 `target + delivery_policy`，并把实现深度放在本轮修改指令首部；
 2. 判断是实现修正、新的产品决定，还是要求原型接入真实底层能力；
 3. 原型反馈若要求真实数据库、鉴权、外部写入、生产基础设施等，停止实现并回 design：由 PM 明确批准一个 prototype real edge，或把项目建造对象改为 product；不得在迭代中静默升级；
-4. 文案、布局、按钮和局部交互由当前会话直接修改；只有跨模块大型重构才重新确认并调用外部 builder；
-5. 只跑 profile 的 `iteration_checks`：热更新、typecheck 和当前页面/受影响交互走查；不得运行 production build、全路径浏览器验收或重启仍健康的 dev server；
-6. 提交该轮修改并用 `build-contract.py commit` 记录新实现 commit；
-7. 用 `record-evidence --lane iteration` 绑定该 commit 记录快检，不得把 iteration evidence 冒充 final evidence；
-8. 立即告诉 PM“已修改，可刷新查看”，继续复用同一个页面与浏览器连接；定稿请求前不准备 `review-ready`，也不在后台偷跑完整 `final_checks`。
+4. “还有什么问题”的检查只对账当前 spec、active decisions、accepted deltas 和批准路径，并应用当前实现深度合同；原型默认模拟的底层能力不算缺口，规格已经明确的行为也不得重新包装成 PM 开放问题；
+5. 文案、布局、按钮和局部交互由当前会话直接修改；只有跨模块大型重构才重新确认并调用外部 builder；
+6. 只跑 profile 的 `iteration_checks`：热更新、typecheck 和当前页面/受影响交互走查；不得运行 production build、全路径浏览器验收或重启仍健康的 dev server；
+7. 提交该轮修改并用 `build-contract.py commit` 记录新实现 commit；
+8. 用 `record-evidence --lane iteration` 绑定该 commit 记录快检，不得把 iteration evidence 冒充 final evidence；
+9. 立即告诉 PM“已修改，可刷新查看”，继续复用同一个页面与浏览器连接；定稿请求前不准备 `review-ready`，也不在后台偷跑完整 `final_checks`。
 
 每轮同时把阶段耗时写入 `$BUILD_DIR/.pm-workflow/audits/<模块>/timing.json`。阶段至少覆盖 `prepare / implement / fast-check / preview`；反馈收到到 preview ready 的 time-to-preview 按改动标记为 `minor` 或 `interaction`：
 

@@ -8,6 +8,11 @@
             "type": "command",
             "command": "node \"$CLAUDE_PROJECT_DIR/hooks/review-skill-guard.cjs\"",
             "timeout": 5
+          },
+          {
+            "type": "command",
+            "command": "node \"$CLAUDE_PROJECT_DIR/hooks/active-build-guard.cjs\"",
+            "timeout": 5
           }
         ]
       }

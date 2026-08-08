@@ -133,6 +133,23 @@ test_explicit_none() {
   pass_test
 }
 
+test_current_round_explicit_none() {
+  start_test "section 写「本轮工作无未决问题」→ exit 0"
+  local md
+  md=$(_write_md '# X
+
+## 未决问题
+
+本轮工作无未决问题。
+')
+  python3 "$CHECKER" "$md" >/dev/null
+  local rc=$?
+  assert_equal "0" "$rc" "current-round explicit none should exit 0" || { rm -f "$md"; return; }
+
+  rm -f "$md"
+  pass_test
+}
+
 # -----------------------------------------------------------------
 # Scenario 5: 同行答案 / 后续行答案两种格式
 # -----------------------------------------------------------------
@@ -241,6 +258,7 @@ test_all_answered
 test_has_unanswered
 test_no_section
 test_explicit_none
+test_current_round_explicit_none
 test_inline_and_follow_up_answer
 test_blank_answer_before_next_question
 test_missing_file

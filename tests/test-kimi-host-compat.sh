@@ -42,6 +42,15 @@ test_kimi_hook_manager_preserves_user_config() {
   assert_file_contains "$config" 'event = "PreToolUse"' "Kimi hooks should include PreToolUse" || { rm -rf "$tmp"; return; }
   assert_file_contains "$config" 'event = "UserPromptSubmit"' "Kimi hooks should include UserPromptSubmit" || { rm -rf "$tmp"; return; }
   assert_file_contains "$config" 'kimi-hook-dispatch.sh' "Kimi hooks should route through scoped dispatcher" || { rm -rf "$tmp"; return; }
+  assert_file_contains "$config" 'prompt-review' "Kimi hooks should keep review injection separate" || { rm -rf "$tmp"; return; }
+  assert_file_contains "$config" 'prompt-build' "Kimi hooks should keep active build injection separate" || { rm -rf "$tmp"; return; }
+  local prompt_hook_count
+  prompt_hook_count=$(grep -c 'event = "UserPromptSubmit"' "$config")
+  if [ "$prompt_hook_count" != "2" ]; then
+    _fail "Kimi should install two independent prompt hooks, got $prompt_hook_count"
+    rm -rf "$tmp"
+    return
+  fi
 
   before_without_block=$(sed -n '1,/^# >>> PMAI managed Kimi Code hooks >>>$/p' "$config" | sed '$d' | sed '/^[[:space:]]*$/d')
   python3 "$MANAGER" remove --config "$config" >/dev/null || {
@@ -182,6 +191,17 @@ test_no_machine_bound_kimi_paths() {
   pass_test
 }
 
+test_kimi_dispatch_keeps_prompt_outputs_separate() {
+  start_test "K8: Kimi prompt review 与 active build 分别分发"
+  assert_file_contains "$DISPATCH" 'prompt-review' "dispatcher should expose review prompt mode" || return
+  assert_file_contains "$DISPATCH" 'prompt-build' "dispatcher should expose active build prompt mode" || return
+  if grep -Eq 'write\|bash\|prompt\)' "$DISPATCH"; then
+    _fail "dispatcher should not concatenate two hook outputs through one prompt mode"
+    return
+  fi
+  pass_test
+}
+
 test_kimi_native_entry_is_documented
 test_kimi_hook_manager_preserves_user_config
 test_kimi_dispatch_is_scoped_and_maps_write_path
@@ -189,5 +209,6 @@ test_kimi_lifecycle_surface_is_complete
 test_builder_supports_kimi_with_current_host_exclusion
 test_public_skill_names_match_kimi_native_commands
 test_no_machine_bound_kimi_paths
+test_kimi_dispatch_keeps_prompt_outputs_separate
 
 report_results "kimi-host-compat"

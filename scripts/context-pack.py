@@ -20,6 +20,7 @@ from pathlib import Path
 from typing import Iterable
 
 from _lib.project_definition import ProjectDefinitionError, load_project_definition
+from _lib.open_questions import explicitly_no_open_questions
 
 
 ROOT_SOURCES = (
@@ -37,7 +38,6 @@ MODULE_SOURCES = (
     (".work-meta.json", "work_state"),
 )
 QUESTION_MARKERS = ("待确认", "未决", "待回答", "TODO", "FIXME")
-QUESTION_RESOLVED_MARKERS = ("全部已确认", "本轮没有待确认", "本次工作无未决问题", "无待确认事项", "没有未决问题")
 SUPERSEDE_MARKERS = ("supersede", "superseded", "被取代", "已取代", "已废弃", "不再有效")
 GENERIC_HEADINGS = {
     "已拍板决策",
@@ -271,7 +271,7 @@ def unresolved_questions(repo_root: Path, module_dir: Path | None) -> list[dict]
         stripped = line.strip()
         if not stripped:
             continue
-        if any(marker in stripped for marker in QUESTION_RESOLVED_MARKERS):
+        if explicitly_no_open_questions(stripped):
             continue
         is_heading = re.match(r"^#{1,6}\s+", stripped) is not None
         if stripped.endswith(("?", "？")) or (

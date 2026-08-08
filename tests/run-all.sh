@@ -72,6 +72,7 @@ SUITES=(
   test-cleanup-pending.sh
   test-cancel-work.sh
   test-status-view.sh
+  test-active-build-guard.sh
   test-todo-guidance.sh
   test-docs-archive-convention.sh
   test-docs-toplevel-guard.sh

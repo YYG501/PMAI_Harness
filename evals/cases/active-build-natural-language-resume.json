@@ -1,0 +1,64 @@
+{
+  "schema_version": 1,
+  "id": "active-build-natural-language-resume",
+  "title": "自然语言查看问题继续沿用 active build contract",
+  "layer": "session",
+  "skills": ["build", "status"],
+  "source": {
+    "session_id": "019fdb65-d295-7450-80eb-62695bdff74d",
+    "evidence": [
+      {"turn": 28, "excerpt": "当前是主原型，lifecycle 已处于 iterating"},
+      {"turn": 35, "excerpt": "合同已包含 prototype、interactive-simulation 和 simulate_by_default"},
+      {"turn": 303, "excerpt": "仍把真实能力匹配引擎、窄屏和测试入口混入未解决问题"},
+      {"turn": 330, "excerpt": "重新要求 PM 确认桌面范围和新材料动态演示"},
+      {"turn": 337, "excerpt": "PM 明确两点都不需要"}
+    ]
+  },
+  "input": {
+    "prompt": "启动起来看看，现在还有什么没有解决的问题吗",
+    "context": [
+      "当前模块已有 lifecycle=iterating 的 prototype build contract",
+      "delivery policy 为 interactive-simulation",
+      "discussion 明确本轮工作无未决问题"
+    ]
+  },
+  "expected": {
+    "behaviors": [
+      "继续当前 build 而不是转成通用 QA",
+      "重新读取 target 和 delivery policy 并重新编译 context pack",
+      "只对账现有 spec、active decisions、accepted deltas 和批准路径",
+      "把 simulate_by_default 的底层能力排除出 prototype 缺口",
+      "把规格已有要求作为覆盖要求而不是开放问题"
+    ],
+    "observations": [
+      "active_build_resumed",
+      "prototype_depth_preserved",
+      "existing_scope_reused",
+      "no_duplicate_pm_questions"
+    ],
+    "lifecycle_order": ["iterating"],
+    "stopping_point": "pm_review"
+  },
+  "forbidden": {
+    "behaviors": [
+      "把没有真实后端、鉴权、持久化或 AI 引擎列为 prototype 缺口",
+      "在没有 active decision 时追问移动端范围",
+      "把规格内行为重新包装成 PM 待确认问题",
+      "绕过 build contract 发起无范围约束的通用 QA"
+    ],
+    "observations": [
+      "generic_qa_route",
+      "production_gap_reported_for_prototype",
+      "mobile_scope_reopened",
+      "existing_requirement_reopened"
+    ]
+  },
+  "judge": {
+    "enabled": true,
+    "rubric": [
+      "自然语言续接仍受当前 build contract 约束",
+      "prototype 与 product 的实现深度没有混淆",
+      "没有制造规格和决定之外的新 PM 问题"
+    ]
+  }
+}

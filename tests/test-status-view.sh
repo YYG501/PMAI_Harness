@@ -5,6 +5,7 @@ set -uo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 source "$SCRIPT_DIR/helpers/assert.sh"
 source "$SCRIPT_DIR/helpers/fixture.sh"
+source "$SCRIPT_DIR/helpers/active-build-fixture.sh"
 
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 STATUS_VIEW="$REPO_ROOT/scripts/status-view.py"
@@ -168,6 +169,139 @@ test_status_skill_blocks_internal_diagnostics() {
   pass_test
 }
 
+test_execution_context_reuses_prototype_contract() {
+  start_test "execution-context: build lifecycle 优先并输出 prototype 合同"
+  active_build_fixture_setup prototype iterating
+  python3 - "$ACTIVE_BUILD_FIXTURE/docs/modules/demo/.work-meta.json" <<'PY'
+import json
+import sys
+from pathlib import Path
+path = Path(sys.argv[1])
+meta = json.loads(path.read_text(encoding="utf-8"))
+meta["lifecycle_state"] = "designing"
+path.write_text(json.dumps(meta, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+PY
+  local out
+  out=$(cd "$ACTIVE_BUILD_FIXTURE" && python3 "$STATUS_VIEW" --execution-context 2>&1)
+  if python3 -c '
+import json, sys
+data = json.load(sys.stdin)
+work = data["active_builds"][0]
+assert data["status"] == "active"
+assert work["target"]["kind"] == "prototype"
+assert work["delivery_policy"]["implementation_mode"] == "interactive-simulation"
+assert work["approved_paths"] == ["src/index.ts"]
+assert work["acceptance_lane"]["name"] == "iteration"
+assert work["acceptance_lane"]["checks"] == ["typecheck"]
+assert work["project"]["commands"]["build"] == "npm run build"
+' <<<"$out"; then
+    pass_test
+  else
+    _fail "prototype execution context mismatch: $out"
+  fi
+  active_build_fixture_teardown
+}
+
+test_execution_context_keeps_product_depth() {
+  start_test "execution-context: product 保持 production implementation"
+  active_build_fixture_setup product final_check
+  local out
+  out=$(cd "$ACTIVE_BUILD_FIXTURE" && python3 "$STATUS_VIEW" --execution-context 2>&1)
+  if python3 -c '
+import json, sys
+work = json.load(sys.stdin)["active_builds"][0]
+assert work["delivery_policy"]["implementation_mode"] == "production-implementation"
+assert work["acceptance_lane"]["name"] == "final"
+assert "scope-coverage" in work["acceptance_lane"]["checks"]
+' <<<"$out"; then
+    pass_test
+  else
+    _fail "product execution context mismatch: $out"
+  fi
+  active_build_fixture_teardown
+}
+
+test_execution_context_fails_closed_on_policy_drift() {
+  start_test "execution-context: delivery policy 漂移时失败关闭"
+  active_build_fixture_setup prototype iterating
+  python3 - "$ACTIVE_BUILD_FIXTURE/docs/modules/demo/.work-meta.json" <<'PY'
+import json
+import sys
+from pathlib import Path
+path = Path(sys.argv[1])
+meta = json.loads(path.read_text(encoding="utf-8"))
+meta["build"]["delivery_policy"]["implementation_mode"] = "production-implementation"
+path.write_text(json.dumps(meta, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+PY
+  local out rc
+  out=$(cd "$ACTIVE_BUILD_FIXTURE" && python3 "$STATUS_VIEW" --execution-context 2>&1)
+  rc=$?
+  if [ "$rc" = "2" ] \
+     && echo "$out" | grep -q '"status": "invalid"' \
+     && echo "$out" | grep -q "delivery_policy 与当前 target"; then
+    pass_test
+  else
+    _fail "policy drift should fail closed rc=$rc out=$out"
+  fi
+  active_build_fixture_teardown
+}
+
+test_execution_context_does_not_guess_multiple_builds() {
+  start_test "execution-context: 多个 active build 返回歧义"
+  active_build_fixture_setup prototype iterating
+  active_build_fixture_add_second
+  local out
+  out=$(cd "$ACTIVE_BUILD_FIXTURE" && python3 "$STATUS_VIEW" --execution-context 2>&1)
+  if python3 -c '
+import json, sys
+data = json.load(sys.stdin)
+assert data["status"] == "ambiguous"
+assert len(data["active_builds"]) == 2
+assert {item["name"] for item in data["active_builds"]} == {"demo", "second"}
+' <<<"$out"; then
+    pass_test
+  else
+    _fail "multiple builds should be ambiguous: $out"
+  fi
+  active_build_fixture_teardown
+}
+
+test_execution_context_supports_legacy_v2_recovery() {
+  start_test "execution-context: legacy v2 从 project type 派生保守恢复策略"
+  active_build_fixture_setup prototype iterating
+  python3 - "$ACTIVE_BUILD_FIXTURE/docs/modules/demo/.work-meta.json" <<'PY'
+import json
+import sys
+from pathlib import Path
+path = Path(sys.argv[1])
+meta = json.loads(path.read_text(encoding="utf-8"))
+build = meta["build"]
+build["contract_version"] = 2
+build.pop("delivery_policy")
+build.pop("delivery_policy_hash")
+build["acceptance"] = {
+    "required_checks": ["typecheck", "browser-smoke"],
+    "evidence": [],
+}
+path.write_text(json.dumps(meta, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+PY
+  local out
+  out=$(cd "$ACTIVE_BUILD_FIXTURE" && python3 "$STATUS_VIEW" --execution-context 2>&1)
+  if python3 -c '
+import json, sys
+work = json.load(sys.stdin)["active_builds"][0]
+assert work["contract_version"] == 2
+assert work["delivery_policy_source"] == "legacy-v2-derived"
+assert work["delivery_policy"]["implementation_mode"] == "interactive-simulation"
+assert work["acceptance_lane"]["checks"] == []
+' <<<"$out"; then
+    pass_test
+  else
+    _fail "legacy v2 recovery context mismatch: $out"
+  fi
+  active_build_fixture_teardown
+}
+
 test_summary_lists_active_work
 test_status_suggests_build_not_task
 test_banner_only_renders_active_work
@@ -177,5 +311,10 @@ test_narrative_multiple_active_work_pm_view
 test_default_multi_work_hides_worktree_instructions
 test_landed_docs_failure_resumes_without_merge
 test_status_skill_blocks_internal_diagnostics
+test_execution_context_reuses_prototype_contract
+test_execution_context_keeps_product_depth
+test_execution_context_fails_closed_on_policy_drift
+test_execution_context_does_not_guess_multiple_builds
+test_execution_context_supports_legacy_v2_recovery
 
 report_results "status-view"

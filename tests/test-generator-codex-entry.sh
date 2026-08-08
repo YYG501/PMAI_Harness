@@ -76,6 +76,7 @@ test_generator_codex_hooks_exist() {
 
   assert_file_exists "$CODEX_HOOKS" "generator repo should expose .codex/hooks.json" || return
   assert_file_contains "$CODEX_HOOKS" "review-skill-guard.cjs" "generator Codex hooks should wire review guard" || return
+  assert_file_contains "$CODEX_HOOKS" "active-build-guard.cjs" "generator Codex hooks should wire active build guard" || return
   assert_file_contains "$CODEX_HOOKS" "check-doc-currency.cjs" "generator Codex hooks should wire doc currency guard" || return
   assert_file_contains "$CODEX_HOOKS" "check-sync-asset-jargon.cjs" "generator Codex hooks should wire sync jargon guard" || return
   assert_file_contains "$CODEX_HOOKS" "check-stage-number-jargon.cjs" "generator Codex hooks should wire stage jargon guard" || return

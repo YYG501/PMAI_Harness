@@ -71,6 +71,7 @@ if not isinstance(current.get("hooks"), dict):
 managed_tokens = (
     "check-branch.sh",
     "review-skill-guard.cjs",
+    "active-build-guard.cjs",
 )
 
 def hook_commands(group):
@@ -126,5 +127,5 @@ mv "$TMP" "$DEST"
 trap - EXIT
 chmod 0644 "$DEST"
 echo "✅ Codex hooks 已安装：$DEST"
-echo "   职责：PreToolUse(Edit|Write) 分支护栏 + UserPromptSubmit review/audit 约束注入。"
+echo "   职责：PreToolUse(Edit|Write) 分支护栏 + UserPromptSubmit review/audit 与 active build 续接上下文。"
 echo "   Codex 首次看到新增 hook 时可能要求信任确认。"

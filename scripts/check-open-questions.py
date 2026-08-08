@@ -40,6 +40,8 @@ import re
 import sys
 from pathlib import Path
 
+from _lib.open_questions import explicitly_no_open_questions
+
 # `## 未决问题` 二级标题匹配（容忍前后空白 / 中文标点）
 H2_OPEN_QUESTIONS = re.compile(r"^##\s+未决问题\s*$")
 # 下一个二级标题（任何 ## 开头），用于界定 section 范围
@@ -48,8 +50,6 @@ H2_ANY = re.compile(r"^##\s+")
 Q_HEADER = re.compile(r"^###\s+(Q\d+)[:：]\s*(.*)$")
 # `**PM 回答：**` 前缀（容忍中英冒号 + 全/半角空格）
 PM_ANSWER_PREFIX = re.compile(r"^\*\*PM\s*回答\s*[:：]\*\*\s*(.*)$")
-# section 内显式声明无未决问题
-NO_OPEN_QUESTIONS = re.compile(r"本\s*(次工作|轮工作|工作)\s*无未决问题")
 
 
 def find_section(lines):
@@ -110,7 +110,7 @@ def find_open_questions(path):
 
     # 显式声明无未决问题 → 全部视为已答
     section_body = "\n".join(lines[start:end])
-    if NO_OPEN_QUESTIONS.search(section_body):
+    if explicitly_no_open_questions(section_body):
         return []
 
     unanswered = []

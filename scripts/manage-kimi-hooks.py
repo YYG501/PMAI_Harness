@@ -38,7 +38,12 @@ timeout = 10
 
 [[hooks]]
 event = "UserPromptSubmit"
-command = "bash \\"${{PMAI_HOME:-$HOME/.pmai}}/scripts/kimi-hook-dispatch.sh\\" prompt"
+command = "bash \\"${{PMAI_HOME:-$HOME/.pmai}}/scripts/kimi-hook-dispatch.sh\\" prompt-review"
+timeout = 5
+
+[[hooks]]
+event = "UserPromptSubmit"
+command = "bash \\"${{PMAI_HOME:-$HOME/.pmai}}/scripts/kimi-hook-dispatch.sh\\" prompt-build"
 timeout = 5
 {END_MARKER}
 '''

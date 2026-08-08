@@ -7,7 +7,7 @@ set -uo pipefail
 
 MODE="${1:-}"
 case "$MODE" in
-  write|bash|prompt) ;;
+  write|bash|prompt-review|prompt-build) ;;
   *) exit 0 ;;
 esac
 
@@ -77,11 +77,18 @@ PY
     run_node_hook "$REPO_ROOT/hooks/check-sync-asset-jargon.cjs"
     run_node_hook "$REPO_ROOT/hooks/check-stage-number-jargon.cjs"
     ;;
-  prompt)
+  prompt-review)
     if [ "$IS_GENERATOR" = "1" ]; then
       run_node_hook "$REPO_ROOT/hooks/review-skill-guard.cjs"
     else
       run_node_hook "$PMAI_HOME/hooks/review-skill-guard.cjs"
+    fi
+    ;;
+  prompt-build)
+    if [ "$IS_GENERATOR" = "1" ]; then
+      run_node_hook "$REPO_ROOT/hooks/active-build-guard.cjs"
+    else
+      run_node_hook "$PMAI_HOME/hooks/active-build-guard.cjs"
     fi
     ;;
 esac

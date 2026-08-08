@@ -57,6 +57,7 @@ test_codex_hooks_template_shape() {
   assert_file_contains "$CODEX_HOOKS_TMPL" '"UserPromptSubmit"' "Codex hooks should include UserPromptSubmit" || return
   assert_file_contains "$CODEX_HOOKS_TMPL" "check-branch.sh" "Codex hooks should wire check-branch" || return
   assert_file_contains "$CODEX_HOOKS_TMPL" "review-skill-guard.cjs" "Codex hooks should wire review guard" || return
+  assert_file_contains "$CODEX_HOOKS_TMPL" "active-build-guard.cjs" "Codex hooks should wire active build continuation" || return
   python3 -m json.tool "$CODEX_HOOKS_TMPL" >/dev/null || {
     _fail "codex-hooks.json.tmpl 不是合法 JSON"
     return
@@ -128,7 +129,9 @@ test_e2e_generates_agents_md_without_framework_assets() {
     rm -rf "$base"
     return
   fi
-  if ! grep -q "check-branch.sh" "$proj/.codex/hooks.json" || ! grep -q "review-skill-guard.cjs" "$proj/.codex/hooks.json"; then
+  if ! grep -q "check-branch.sh" "$proj/.codex/hooks.json" \
+     || ! grep -q "review-skill-guard.cjs" "$proj/.codex/hooks.json" \
+     || ! grep -q "active-build-guard.cjs" "$proj/.codex/hooks.json"; then
     _fail "生成的 .codex/hooks.json 未注册 PMAI hooks"
     rm -rf "$base"
     return
@@ -208,6 +211,11 @@ JSON
     rm -rf "$base"
     return
   fi
+  if ! grep -q "active-build-guard.cjs" "$repo/.codex/hooks.json"; then
+    _fail "PMAI active build guard hook 未安装"
+    rm -rf "$base"
+    return
+  fi
 
   (cd "$repo" && PMAI_HOME="$REPO_ROOT" bash "$INSTALL_CODEX_HOOKS") >/tmp/test-install-codex-hooks-2.out 2>&1 || {
     _fail "install-codex-hooks.sh 第二次执行失败"
@@ -220,6 +228,12 @@ JSON
   guard_count=$(grep -c "review-skill-guard.cjs" "$repo/.codex/hooks.json")
   if [ "$guard_count" != "1" ]; then
     _fail "install-codex-hooks.sh 非幂等，review guard 出现 $guard_count 次"
+    rm -rf "$base"
+    return
+  fi
+  guard_count=$(grep -c "active-build-guard.cjs" "$repo/.codex/hooks.json")
+  if [ "$guard_count" != "1" ]; then
+    _fail "install-codex-hooks.sh 非幂等，active build guard 出现 $guard_count 次"
     rm -rf "$base"
     return
   fi
