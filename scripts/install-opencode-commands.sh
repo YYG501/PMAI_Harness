@@ -56,6 +56,7 @@ fi
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 SELF_FRAMEWORK_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+source "$SCRIPT_DIR/_lib/skill-links.sh"
 if [ -n "${PMAI_HOME:-}" ] && [ -d "$PMAI_HOME/skills" ]; then
   FRAMEWORK_DIR="$PMAI_HOME"
 elif [ -d "$SELF_FRAMEWORK_DIR/skills" ]; then
@@ -122,6 +123,7 @@ install_commands_to_dir() {
     case "$skill_name" in
       _internal|_shared) continue ;;
     esac
+    pmai_skill_is_host_exposed "$skill_name" || continue
     exposed_name=$(exposed_name_for_skill "$skill_name")
     write_opencode_command "$command_dir" "$skill_name" "$exposed_name"
     count=$((count + 1))

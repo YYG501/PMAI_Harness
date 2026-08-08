@@ -46,9 +46,12 @@
 - 固定 build 审计编排和 coverage reviewer 已退出活跃链路；v4 只认 adaptive iteration/final checks 与对应 evidence。
 - Web final checks 必须有 active browser-acceptance；旧合同仍要求 active browser-smoke。gstack 可由其它可验证 browser 适配器替代，不能 exception 掉浏览器能力。
 - builder profile 按项目定义、配置、本机可用性和当前主控推荐；Claude Code、Codex、Kimi Code、Cursor Agent、OpenCode 都可作为外部执行器，当前主控对应的同名工具不进入候选，但当前会话直接构建始终可选；旧消费仓缺少 `kimi-code` profile 时由 `builder-profile.py` 运行时补齐，不改写项目配置；Gemini CLI 已退出构建工具面。验收 profile 仍后台生成，不进入开工卡。
-- 自动 landing 在 merge 前检查 incoming path 与 main 未跟踪文件交集；merge 冲突保留 `final_check`，文档失败保留 `landed/docs_pending`，续跑不重复 merge，清理失败继续进入待清理队列。
-- 文档影响地图只在 landed 后生成：默认更新 PRODUCT-STATE，accepted delta 才加入 spec、decisions 和明确受影响真相源；landed diff 已改文档自动 covered，未受影响文档不进入清单。
+- 自动 landing 在 merge 前检查 incoming path 与 main 未跟踪文件交集；merge 冲突保留 `final_check`，文档失败保留 `landed/docs_pending`，续跑不重复 merge。清理失败或其它会话仍以待清理 worktree 为 cwd 时保留队列，后续从 main 自动重试。
+- 文档影响地图只在 landed 后生成：默认更新 PRODUCT-STATE，accepted delta 才加入 spec、decisions 和明确受影响真相源；landed diff 已改文档自动 covered，未受影响文档不进入清单。业务术语和角色只从 build 规格锚点、landed 的模块 / 功能型规格、明确定名决定和 `kind=term/role` 的 accepted delta 对账；讨论稿、索引、引号、加粗和代码不参与猜词。detector 已确认仍缺失的术语不会因 PRODUCT.md 恰有其它 landed 改动而自动 covered。
 - spec-writing landed 对账固定分为符合、accepted delta、漏实现、无依据实现；只有 accepted delta 修改规格目标，漏实现保留为实现缺口。
+- design / spec-writing 现在按“产品决定是否闭合”分流：对象、规则、信息结构、任务路径、权限或关键交互仍未定时由 design 讨论；只有已确认内容的整理、补差和改写进 spec-writing。
+- 宿主入口暴露由 `scripts/_lib/skill-links.sh::pmai_skill_is_host_exposed` 统一判断。`build-close` 和 `publish-to-lark` 保留源码供前台流程恢复 / 执行，不再注册为宿主入口；meta、mockup、spec-writing 默认由 design 调用，但保留独立专项意图的可发现入口。旧 updater 跨版本升级时由新版 doctor 迁移 PMAI 自有的已隐藏链接，升级和回滚分别重载对应版本的暴露策略。
+- brownfield 接入只把代码盘点写入 `CODEBASE-AUDIT.md` 和首次 `PRODUCT-STATE.md` 现状；不从代码生成目标 `spec.md`，不再把已退役的 coverage reviewer、固定视觉门或“补 8 段基线”当作 build 前置。
 - design、meta、mockup、spec-writing、build、build-close 与消费仓 AGENTS / CLAUDE 模板已按统一链路重构。
 - 新增 `evals/cases/*.json`、`evals/touchfiles.json` 和 `scripts/skill-eval.py`；静态案例可作为提交门，session runner / LLM judge 缺失时明确 skip，require 模式明确 fail。
 - Codex 只暴露 `~/.codex/skills/pmai-*` 原生 skills；不再生成会在 Desktop 显示为 `prompts:pmai-*` 的 custom prompts。install / upgrade 清理旧 prompt 文件，doctor / status 不再生成或检查它们；Claude Code skills 与 OpenCode commands 保持原入口。
@@ -74,7 +77,7 @@
 ## 当前验证
 
 - Harness 第一阶段安装所有权、初始化冲突、状态权威、ready/build 合同和 cancel 原子性 targeted tests 已通过：`42 passed / 0 failed`。
-- 完整 `tests/run-all.sh` 已通过：`598 passed / 0 failed`；同一次入口另有 skill eval `6 passed / 0 failed / 16 session skipped`（外部 runner 未配置，已显式报告）。新增回归覆盖 active prototype/product 执行上下文、policy 漂移失败关闭、多 active build 歧义、legacy v2 恢复、Codex/Claude/Kimi prompt hook 接线与幂等，以及“本轮工作无未决问题”在 context pack 和未决问题闸门中的一致语义；原有最终命令去重、浏览器验收、真实 worktree 合入、Harness 五项 P1、飞书评审、`/pmai-feedback`、design、个人经验和其它回归继续通过。
+- 完整 `tests/run-all.sh` 已通过：`620 passed / 0 failed`；同一次入口另有 skill eval `6 passed / 0 failed / 17 session skipped`（外部 runner 未配置，已显式报告）。新增回归覆盖 design / spec-writing 按产品决定闭合性分流、PM 前台入口与回执、active build 下 quick-fix 零副作用拒绝、稳定术语来源与缺失覆盖、跨会话 worktree 清理延迟、旧 updater 跨入口策略升级及失败回滚；原有 active build 续接、浏览器验收、真实 worktree 合入、飞书评审、`/pmai-feedback`、design、个人经验和其它回归继续通过。
 
 ## 下一步
 

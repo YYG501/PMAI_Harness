@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
 # skill-preamble.sh — 统一 preamble，所有 skill 的 preamble 调用它
-# 用法: source "$PMAI_HOME/scripts/skill-preamble.sh"（I-mini 模式，推荐）
-#       或 source $HOME/.pmai/scripts/skill-preamble.sh
+# 用法: source "${PMAI_HOME:-$HOME/.pmai}/scripts/skill-preamble.sh"
 # 输出环境变量:
 #   PMAI_HOME            - 框架代码根目录（~/.pmai/ 或 env 覆盖），I-mini 后 skill 内部用此路径调脚本
 #   MAIN_REPO_ROOT       - 主仓根目录（共享元数据：.runs/、.worktrees/）
@@ -108,6 +107,20 @@ if [[ "$BRANCH" == build-* ]]; then
   WORKTREE_TYPE="work"
 elif [[ "$BRANCH" == task-* ]]; then
   WORKTREE_TYPE="legacy-task"
+fi
+
+# --- 3b. 在安全 cwd 后台消费待清理工作环境 ---
+# cancel/land 可能从即将删除的 worktree 发起，因此只排队。后续任意 Skill 从
+# main 启动时在扫描 active work 之前静默清理；失败保留队列，不能中断被 source 的调用方。
+_PENDING_CLEANUP_FILE="$MAIN_REPO_ROOT/.runs/pending-cleanup.json"
+_PENDING_CLEANUP_SCRIPT="$PMAI_HOME/scripts/cleanup-pending-worktrees.sh"
+if [ "$WORKTREE_TYPE" = "main" ] \
+  && [ "$BRANCH" = "main" ] \
+  && [ -f "$_PENDING_CLEANUP_FILE" ] \
+  && [ -f "$_PENDING_CLEANUP_SCRIPT" ]; then
+  if ! (cd "$MAIN_REPO_ROOT" && bash "$_PENDING_CLEANUP_SCRIPT") >/dev/null 2>&1; then
+    echo "⚠️ 后台工作环境清理暂未完成；队列已保留，后续会自动重试。" >&2
+  fi
 fi
 
 # --- 4. 读取活跃工作（cwd 优先；main 时可能多 active） ---

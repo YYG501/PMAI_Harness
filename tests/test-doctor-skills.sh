@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # test-doctor-skills.sh
 #
-# 防回归：bin/pmai-doctor 的 EXPECTED_SKILLS 必须与公开 skills/ 目录（除 _shared / _internal）完全一致。
+# 防回归：bin/pmai-doctor 的 EXPECTED_SKILLS 必须与 skill 源目录（除 _shared / _internal）完全一致。
+# 宿主暴露是该源清单经 pmai_skill_is_host_exposed 过滤后的子集。
 # 背景（2026-06-22 事故）：reshape 删旧探索 skill / 加 design 等漏改本清单 →
 #   pmai upgrade 的 doctor 自检把正确的升级误判成「缺 skill」触发回滚。
 #   T0: bin/pmai-doctor 存在且含 EXPECTED_SKILLS 数组
@@ -17,6 +18,7 @@
 #   T10: pmai-doctor 不再生成 Codex slash prompts
 #   T11: pmai-doctor 可自愈 OpenCode slash commands
 #   T12: pmai-doctor 可自愈 Kimi 原生 Skill 暴露和 managed hooks
+#   T15: 旧 updater 进程可迁移隐藏入口；后续失败回滚恢复旧暴露策略
 set -uo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -30,6 +32,7 @@ VERSION_FILE="$REPO_ROOT/VERSION"
 INSTALL="$REPO_ROOT/bin/pmai-install"
 UPGRADE="$REPO_ROOT/bin/pmai-upgrade"
 UNINSTALL="$REPO_ROOT/bin/pmai-uninstall"
+source "$REPO_ROOT/scripts/_lib/skill-links.sh"
 
 # 解析 doctor 里 EXPECTED_SKILLS=( ... ) 之间的 skill 名（去注释 / 空行，排序去重）
 expected_skills() {
@@ -37,7 +40,7 @@ expected_skills() {
     | sed 's/#.*//' | tr ' \t' '\n\n' | grep -v '^$' | sort -u
 }
 
-# skills/ 目录下实际公开 skill（除 _shared / _internal），排序去重
+# skills/ 目录下实际 skill 源（除 _shared / _internal），排序去重
 actual_skills() {
   find "$SKILLS_DIR" -mindepth 1 -maxdepth 1 -type d -exec basename {} \; \
     | grep -vE '^(_shared|_internal)$' | sort -u
@@ -57,16 +60,18 @@ setup_fake_global_install() {
   pmai_home="$tmp/pmai"
   fake_home="$tmp/home"
 
-  mkdir -p "$pmai_home/scripts" "$fake_home/.claude/skills" "$fake_home/.codex/skills" "$fake_home/.kimi-code/skills"
+  mkdir -p "$pmai_home/scripts/_lib" "$fake_home/.claude/skills" "$fake_home/.codex/skills" "$fake_home/.kimi-code/skills"
   ln -s "$SKILLS_DIR" "$pmai_home/skills"
   ln -s "$REPO_ROOT/scripts/install-opencode-commands.sh" "$pmai_home/scripts/install-opencode-commands.sh"
   ln -s "$REPO_ROOT/scripts/manage-kimi-hooks.py" "$pmai_home/scripts/manage-kimi-hooks.py"
   ln -s "$REPO_ROOT/scripts/kimi-hook-dispatch.sh" "$pmai_home/scripts/kimi-hook-dispatch.sh"
+  ln -s "$REPO_ROOT/scripts/_lib/skill-links.sh" "$pmai_home/scripts/_lib/skill-links.sh"
   cp "$VERSION_FILE" "$pmai_home/VERSION"
   git -C "$pmai_home" init -q
 
   while IFS= read -r sk; do
     name=$(basename "$sk")
+    pmai_skill_is_host_exposed "$name" || continue
     exposed=$(exposed_name_for_skill "$name")
     ln -s "$sk" "$fake_home/.claude/skills/$exposed"
     ln -s "$sk" "$fake_home/.codex/skills/$exposed"
@@ -77,6 +82,38 @@ setup_fake_global_install() {
   ln -s "$SKILLS_DIR/_shared" "$fake_home/.kimi-code/skills/_shared"
 
   echo "$tmp|$pmai_home|$fake_home"
+}
+
+test_internal_workflows_are_not_host_entries() {
+  start_test "T13: 恢复和底层执行能力不暴露为宿主入口"
+
+  if pmai_skill_is_host_exposed build-close || pmai_skill_is_host_exposed publish-to-lark; then
+    _fail "build-close / publish-to-lark should remain internal-only"
+    return
+  fi
+  if ! pmai_skill_is_host_exposed design || ! pmai_skill_is_host_exposed spec-writing; then
+    _fail "independently useful design/spec-writing skills should stay exposed"
+    return
+  fi
+  for file in "$INSTALL" "$UPGRADE" "$DOCTOR" "$STATUS" "$REPO_ROOT/scripts/install-opencode-commands.sh"; do
+    if ! grep -q "pmai_skill_is_host_exposed" "$file"; then
+      _fail "$(basename "$file") should use the shared exposure policy"
+      return
+    fi
+  done
+  pass_test
+}
+
+test_skill_frontmatter_does_not_claim_framework_version() {
+  start_test "T14: Skill frontmatter 不维护孤立框架版本"
+  local hits
+  hits=$(grep -R -n --include='SKILL.md' '^version:' "$SKILLS_DIR" 2>/dev/null || true)
+  if [ -n "$hits" ]; then
+    _fail "Skill frontmatter should not duplicate the framework VERSION source"
+    echo "$hits" >&2
+    return
+  fi
+  pass_test
 }
 
 test_doctor_exists() {
@@ -430,6 +467,137 @@ test_doctor_repairs_kimi_native_surface() {
   pass_test
 }
 
+test_upgrade_migrates_legacy_links_and_restores_rollback_policy() {
+  start_test "T15: 旧 updater 迁移隐藏入口，失败回滚恢复旧策略"
+  local tmp source_repo remote install fake_home state doctor_log current_upgrade
+  local out rc candidate_head rollback_out rollback_rc final_head retired_count host_dir
+
+  tmp=$(mktemp -d /tmp/pmai-upgrade-transition-XXXXXX)
+  source_repo="$tmp/source"
+  remote="$tmp/origin.git"
+  install="$tmp/pmai-home"
+  fake_home="$tmp/home"
+  state="$tmp/state"
+  doctor_log="$tmp/doctor.log"
+  current_upgrade="$tmp/pmai-upgrade-current"
+
+  if ! git clone -q --no-hardlinks "$REPO_ROOT" "$source_repo"; then
+    _fail "无法创建升级源 fixture"
+    rm -rf "$tmp"
+    return
+  fi
+  cp "$UPGRADE" "$current_upgrade"
+  cp "$DOCTOR" "$source_repo/bin/pmai-doctor"
+  cp "$REPO_ROOT/scripts/_lib/skill-links.sh" "$source_repo/scripts/_lib/skill-links.sh"
+  cp "$REPO_ROOT/scripts/install-opencode-commands.sh" "$source_repo/scripts/install-opencode-commands.sh"
+
+  # 旧进程在 merge 前已载入不含暴露过滤的 rebuild_symlinks。
+  sed \
+    -e '/pmai_skill_is_host_exposed "$skill_name" || continue/d' \
+    "$current_upgrade" > "$source_repo/bin/pmai-upgrade"
+  chmod +x "$source_repo/bin/pmai-upgrade" "$source_repo/bin/pmai-doctor"
+  git -C "$source_repo" add bin/pmai-upgrade bin/pmai-doctor \
+    scripts/_lib/skill-links.sh scripts/install-opencode-commands.sh
+  if ! git -C "$source_repo" -c user.name=PMAI-Test -c user.email=pmai-test@example.invalid \
+    commit -q -m "legacy updater fixture"; then
+    _fail "无法提交旧 updater fixture"
+    rm -rf "$tmp"
+    return
+  fi
+  if ! git clone -q --bare "$source_repo" "$remote" \
+    || ! git clone -q "$remote" "$install"; then
+    _fail "无法创建本地升级 origin/install"
+    rm -rf "$tmp"
+    return
+  fi
+
+  cp "$current_upgrade" "$source_repo/bin/pmai-upgrade"
+  git -C "$source_repo" add bin/pmai-upgrade
+  if ! git -C "$source_repo" -c user.name=PMAI-Test -c user.email=pmai-test@example.invalid \
+    commit -q -m "current updater fixture" \
+    || ! git -C "$source_repo" push -q "$remote" main; then
+    _fail "无法发布当前 updater fixture"
+    rm -rf "$tmp"
+    return
+  fi
+  candidate_head=$(git -C "$source_repo" rev-parse HEAD)
+
+  mkdir -p "$fake_home/.claude/skills" "$fake_home/.codex/skills" \
+    "$fake_home/.kimi-code/skills" "$fake_home/.config/opencode/commands" "$state"
+  out=$(HOME="$fake_home" PMAI_HOME="$install" PMAI_STATE="$state" \
+    CODEX_HOME="$fake_home/.codex" KIMI_CODE_HOME="$fake_home/.kimi-code" \
+    OPENCODE_CONFIG_DIR="$fake_home/.config/opencode" PMAI_REMOTE="$remote" \
+    PMAI_UPGRADE_DOCTOR_LOG="$doctor_log" \
+    bash "$install/bin/pmai-upgrade" --no-whats-new 2>&1)
+  rc=$?
+
+  if [ "$rc" != "0" ] || [ "$(git -C "$install" rev-parse HEAD)" != "$candidate_head" ]; then
+    _fail "旧 updater 应升级成功且停在当前 candidate"
+    echo "$out" >&2
+    [ -f "$doctor_log" ] && cat "$doctor_log" >&2
+    rm -rf "$tmp"
+    return
+  fi
+  retired_count=$(grep -c 'retired 2 PMAI-managed hidden skill link(s)' "$doctor_log" || true)
+  if [ "$retired_count" != "3" ]; then
+    _fail "doctor 应分别迁移 Claude/Codex/Kimi 的两个隐藏入口"
+    cat "$doctor_log" >&2
+    rm -rf "$tmp"
+    return
+  fi
+  for host_dir in "$fake_home/.claude/skills" "$fake_home/.codex/skills" "$fake_home/.kimi-code/skills"; do
+    if [ -e "$host_dir/pmai-build-close" ] || [ -L "$host_dir/pmai-build-close" ] \
+      || [ -e "$host_dir/pmai-publish-to-lark" ] || [ -L "$host_dir/pmai-publish-to-lark" ]; then
+      _fail "旧 updater 遗留的隐藏入口未清理: $host_dir"
+      rm -rf "$tmp"
+      return
+    fi
+  done
+
+  # 模拟下一版改变暴露策略后 doctor 失败。回滚必须 reset 后重载旧 helper，
+  # 否则 pmai-design 会继续被未来策略过滤，旧安装状态恢复不完整。
+  sed 's/_internal|_shared|build-close|publish-to-lark/_internal|_shared|design|build-close|publish-to-lark/' \
+    "$source_repo/scripts/_lib/skill-links.sh" > "$tmp/skill-links.future"
+  mv "$tmp/skill-links.future" "$source_repo/scripts/_lib/skill-links.sh"
+  printf '%s\n' '#!/usr/bin/env bash' 'exit 1' > "$source_repo/bin/pmai-doctor"
+  chmod +x "$source_repo/bin/pmai-doctor"
+  git -C "$source_repo" add bin/pmai-doctor scripts/_lib/skill-links.sh
+  if ! git -C "$source_repo" -c user.name=PMAI-Test -c user.email=pmai-test@example.invalid \
+    commit -q -m "future policy failure fixture" \
+    || ! git -C "$source_repo" push -q "$remote" main; then
+    _fail "无法发布失败回滚 fixture"
+    rm -rf "$tmp"
+    return
+  fi
+
+  rollback_out=$(HOME="$fake_home" PMAI_HOME="$install" PMAI_STATE="$state" \
+    CODEX_HOME="$fake_home/.codex" KIMI_CODE_HOME="$fake_home/.kimi-code" \
+    OPENCODE_CONFIG_DIR="$fake_home/.config/opencode" PMAI_REMOTE="$remote" \
+    PMAI_UPGRADE_DOCTOR_LOG="$doctor_log" \
+    bash "$install/bin/pmai-upgrade" --no-whats-new 2>&1)
+  rollback_rc=$?
+  final_head=$(git -C "$install" rev-parse HEAD)
+
+  if [ "$rollback_rc" = "0" ] || [ "$final_head" != "$candidate_head" ]; then
+    _fail "future doctor 失败时应回滚到升级前 candidate"
+    echo "$rollback_out" >&2
+    rm -rf "$tmp"
+    return
+  fi
+  for host_dir in "$fake_home/.claude/skills" "$fake_home/.codex/skills" "$fake_home/.kimi-code/skills"; do
+    if [ ! -L "$host_dir/pmai-design" ] \
+      || [ "$(readlink "$host_dir/pmai-design")" != "$install/skills/design" ]; then
+      _fail "回滚未按旧策略恢复 pmai-design: $host_dir"
+      echo "$rollback_out" >&2
+      rm -rf "$tmp"
+      return
+    fi
+  done
+
+  rm -rf "$tmp"
+  pass_test
+}
+
 test_doctor_exists
 test_no_stale_in_expected
 test_no_missing_in_expected
@@ -443,5 +611,8 @@ test_doctor_repairs_empty_codex_exposure
 test_doctor_does_not_generate_codex_prompts
 test_doctor_repairs_opencode_commands
 test_doctor_repairs_kimi_native_surface
+test_internal_workflows_are_not_host_entries
+test_skill_frontmatter_does_not_claim_framework_version
+test_upgrade_migrates_legacy_links_and_restores_rollback_policy
 
 report_results "doctor-skills"

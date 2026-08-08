@@ -6,7 +6,7 @@
 #   T2: §5.2 含三态 todo / doing / done（无序池三态，不是 planned/active/done）
 #   T3: §5.2 明写 AI 不反推填充（不从代码/竞品/requirements/pmai-closed 反推）—— 反向断言
 #   T4: §5.2 不再含"排序"列 / "历史 + 未来一张表" / "唯一规划视图"旧反模式
-#   T5: direction 路线规划行不再让 AI 扫 requirements/pmai-closed 反推 done 行
+#   T5: direction 只承诺无序待办整理，不再把 TODO 包装成路线规划
 #
 # 背景：PM 反馈 brownfield 方向讨论时 AI 从代码/竞品反推出一串待做项还替 PM 排好顺序，
 # 是 PM 没要的。ROADMAP「历史+未来一张表 / 排序 / 扫 closed 补 done 行」整套被砍，
@@ -82,24 +82,20 @@ test_section_5_2_drops_old_antipatterns() {
 }
 
 # -----------------------------------------------------------------
-test_b_scenario_no_scan_closed() {
-  start_test "T5: direction 路线规划不再扫 closed 反推 done 行"
+test_direction_only_promises_unordered_todo() {
+  start_test "T5: direction 只承诺无序待办整理"
   local row
-  row=$(grep -E '^\| \*\*路线规划\*\*' "$DIRECTION_SKILL" || true)
+  row=$(grep -E '^\| \*\*待办整理\*\*' "$DIRECTION_SKILL" || true)
   if [ -z "$row" ]; then
-    _fail "找不到 路线规划 表格行"
+    _fail "找不到待办整理表格行"
     return
   fi
-  # 反向断言：B 场景行不该再让 AI 扫 closed 写 done 行（旧反模式：「先扫 ... 作 done 行回填」）。
-  # 注意：行内允许出现「AI 不扫 requirements/pmai-closed 反推历史」这种否定指令，
-  # 所以只拦旧的「done 行回填 / 写 done 行」正向措辞，不裸匹配 requirements/pmai-closed。
-  if echo "$row" | grep -qE 'done 行回填|作 done 行|写 done 行'; then
-    _fail "B 场景表格行仍让 AI 反推 done 行（旧 ROADMAP 反模式，应已删）"
+  if grep -qE '路线规划|季度规划|半年规划' "$DIRECTION_SKILL"; then
+    _fail "direction 仍承诺当前没有产物支撑的路线规划能力"
     return
   fi
-  # 正向断言：B 场景应转成刷新 TODO 待办池
-  if ! echo "$row" | grep -q 'TODO'; then
-    _fail "B 场景表格行缺 TODO 待办池语义"
+  if ! echo "$row" | grep -q 'TODO' || ! echo "$row" | grep -q '不排序'; then
+    _fail "待办整理应明确写入无序 TODO 且不排序"
     return
   fi
   pass_test
@@ -111,6 +107,6 @@ test_section_5_2_is_todo_pool
 test_section_5_2_lists_todo_states
 test_section_5_2_says_no_backfill
 test_section_5_2_drops_old_antipatterns
-test_b_scenario_no_scan_closed
+test_direction_only_promises_unordered_todo
 
 report_results "todo-guidance"

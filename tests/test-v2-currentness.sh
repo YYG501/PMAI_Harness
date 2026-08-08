@@ -139,6 +139,7 @@ test_spec_contract_is_normative_not_implementation_inventory() {
   local template="$REPO_ROOT/skills/spec-writing/templates/prd.md.tmpl"
   local fewshots="$REPO_ROOT/skills/spec-writing/references/few-shots.md"
   local pmview="$REPO_ROOT/skills/_shared/PM-VIEW-RULES.md"
+  local codebase_audit="$REPO_ROOT/skills/_internal/codebase-audit/SKILL.md"
   if grep -E -n '原型覆盖范围表|反向 PRD|§六.?原型.*ASCII|每个页面 / 弹窗 / 抽屉.*一张' \
     "$spec" "$template" "$fewshots" >/dev/null 2>&1; then
     _fail "spec-writing still exposes implementation-coverage artifacts"
@@ -149,6 +150,11 @@ test_spec_contract_is_normative_not_implementation_inventory() {
      || ! grep -q '漏实现' "$spec" \
      || ! grep -q '无依据实现' "$spec"; then
     _fail "normative source boundary or landed four-way reconciliation is missing"
+    return
+  fi
+  if grep -qE '生成主规格骨架|module\.md\.tmpl|覆盖审计·视觉门|补全 8 段' "$codebase_audit" \
+     || ! grep -q '不生成 `docs/modules/<m>/spec.md`' "$codebase_audit"; then
+    _fail "codebase-audit 不得把代码现状提升为目标规格或恢复固定视觉审计"
     return
   fi
   pass_test

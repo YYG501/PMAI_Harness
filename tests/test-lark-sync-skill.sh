@@ -10,6 +10,7 @@ source "$SCRIPT_DIR/helpers/assert.sh"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 SKILL="$REPO_ROOT/skills/lark-sync/SKILL.md"
 REF_DIR="$REPO_ROOT/skills/lark-sync/references"
+VERIFICATION="$REF_DIR/verification.md"
 DOCTOR="$REPO_ROOT/bin/pmai-doctor"
 README="$REPO_ROOT/README.md"
 PUBLISH_SKILL="$REPO_ROOT/skills/publish-to-lark/SKILL.md"
@@ -35,8 +36,8 @@ test_safety_rules_are_locked() {
   assert_file_contains "$SKILL" "不能默认 overwrite" "should ban default overwrite" || return
   assert_file_contains "$SKILL" "每次写飞书后必须 fetch 回读" "should require fetch verification after writes" || return
   assert_file_contains "$SKILL" "不能从原型反推规格" "should ban deriving spec from prototype" || return
-  assert_file_contains "$SKILL" "lark_revision_id" "should track lark revision" || return
-  assert_file_contains "$SKILL" "lark_synced_at" "should track sync timestamp" || return
+  assert_file_contains "$VERIFICATION" "lark_revision_id" "verification reference should track lark revision" || return
+  assert_file_contains "$VERIFICATION" "lark_synced_at" "verification reference should track sync timestamp" || return
   pass_test
 }
 
@@ -60,9 +61,9 @@ test_no_machine_bound_paths() {
 }
 
 test_framework_exposure_docs_updated() {
-  start_test "doctor / README / publish-to-lark 已接入 lark-sync"
+  start_test "doctor / README 场景 / publish-to-lark 已接入 lark-sync"
   assert_file_contains "$DOCTOR" "lark-sync" "doctor EXPECTED_SKILLS should include lark-sync" || return
-  assert_file_contains "$README" "/pmai-lark-sync" "README should list /pmai-lark-sync" || return
+  assert_file_contains "$README" "飞书文档同步或评审回收" "README should describe the Lark scenario without requiring command selection" || return
   assert_file_contains "$PUBLISH_SKILL" "/pmai-lark-sync" "publish-to-lark should point ambiguous sync to lark-sync" || return
   pass_test
 }

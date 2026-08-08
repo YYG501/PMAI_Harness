@@ -111,6 +111,91 @@ PY
   teardown_fixture
 }
 
+test_doc_impact_adds_structured_term_coverage() {
+  start_test "doc-impact: landed structured terms require PRODUCT coverage"
+  setup_fixture
+  cat > "$T/docs/modules/access/spec.md" <<'MARKDOWN'
+# Access
+
+## 三、名词解释
+
+| 术语 | 说明 |
+| --- | --- |
+| 授权批次 | 同一次授权操作产生的一组记录 |
+
+## 五、用户与场景
+
+### 5.1 用户角色
+
+| 角色名 | 描述 |
+| --- | --- |
+| 授权审核员 | 审核高风险授权 |
+MARKDOWN
+  MAP="$T/.pm-workflow/audits/access/doc-impact.json"
+  python3 "$DOC_IMPACT" init "$T/docs/modules/access" --repo-root "$T" --head HEAD --output "$MAP" >/dev/null
+  if python3 - "$MAP" <<'PY'
+import json, sys
+data = json.load(open(sys.argv[1]))
+items = data["items"]
+product = next(item for item in items if item["destination"] == "PRODUCT.md")
+assert product["kind"] == "term"
+assert product["status"] == "pending"
+assert data["term_reconciliation"]["new_terms"] == ["授权批次"]
+assert data["term_reconciliation"]["new_roles"] == ["授权审核员"]
+PY
+  then
+    pass_test
+  else
+    _fail "structured terms should create a pending PRODUCT.md impact"
+  fi
+  teardown_fixture
+}
+
+test_doc_impact_does_not_promote_discussion_terms_or_auto_cover_missing_terms() {
+  start_test "doc-impact: draft terms stay out and unrelated PRODUCT edits do not cover missing terms"
+  setup_fixture
+  cat > "$T/docs/modules/access/discussion.md" <<'MARKDOWN'
+# Discussion
+
+## 名词解释
+
+| 术语 | 说明 |
+| --- | --- |
+| 临时讨论名 | 尚未拍板的叫法 |
+MARKDOWN
+  cat > "$T/docs/modules/access/spec.md" <<'MARKDOWN'
+# Access
+
+## 名词解释
+
+| 术语 | 说明 |
+| --- | --- |
+| 稳定授权单 | 一次已确认授权的正式记录 |
+MARKDOWN
+  printf '\n补充无关项目背景。\n' >> "$T/PRODUCT.md"
+  git -C "$T" add docs/modules/access/discussion.md docs/modules/access/spec.md PRODUCT.md
+  git -C "$T" commit -q -m "land docs"
+
+  MAP="$T/.pm-workflow/audits/access/doc-impact.json"
+  python3 "$DOC_IMPACT" init "$T/docs/modules/access" --repo-root "$T" --head HEAD --output "$MAP" >/dev/null
+  if python3 - "$MAP" <<'PY'
+import json, sys
+data = json.load(open(sys.argv[1]))
+assert data["term_reconciliation"]["new_terms"] == ["稳定授权单"]
+product = next(item for item in data["items"] if item["destination"] == "PRODUCT.md")
+assert product["status"] == "pending"
+assert product["note"] == ""
+PY
+  then
+    pass_test
+  else
+    _fail "draft term leaked or unrelated PRODUCT edit auto-covered a missing term"
+  fi
+  teardown_fixture
+}
+
 test_doc_impact_only_requires_affected_truth_sources
 test_doc_impact_without_delta_only_updates_product_state
+test_doc_impact_adds_structured_term_coverage
+test_doc_impact_does_not_promote_discussion_terms_or_auto_cover_missing_terms
 report_results "doc-impact"

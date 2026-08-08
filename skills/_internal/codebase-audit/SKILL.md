@@ -1,7 +1,7 @@
 ---
 name: pmai-internal-codebase-audit
 description: |
-  已有代码库接入 PMAI 的内部子流程：由 /pmai-init-project 检测到源码后自动进入；扫码产出「代码现状档」（技术栈、集成、架构、结构、约定、测试、隐患七个维度，含密钥防护扫描），PM 审阅后在同一流程内梳理产品方向。全新项目无需使用，且不作为公开 /pmai-* 命令暴露。
+  已有代码库接入 PMAI 的内部子流程：由 /pmai-init-project 检测到源码后自动进入；扫码产出「代码现状档」（技术栈、集成、架构、结构、约定、测试、隐患七个维度，含密钥防护扫描）和经 PM 确认的模块现状清单，再在同一流程内梳理产品方向。代码只作为现状证据，不反向生成目标规格。全新项目无需使用，且不作为公开 /pmai-* 命令暴露。
 ---
 
 # codebase-audit（内部子流程）
@@ -14,12 +14,12 @@ description: |
 
 本流程是 `/pmai-init-project` 的已有项目分支：一个入口完成判断 → 现状盘点 → PM 过目 → 方向讨论。中间保留「PM 过目现状档」的轻停顿（现状档是方向决策的输入材料，PM 点头再继续），但不要求 PM 手敲第二个命令。方向讨论这一段走 `_shared/project-questioning.md`；全新项目的 init 只做轻量起步，不跑这套完整问卷。
 
-> **与 `/pmai-direction` 的分工**：本流程内联跑的是已有项目**首次接入定方向**；`/pmai-direction` 是**事后校准方向**的按需入口（跑过几轮模块工作发现定位偏了，或 PM 想整理接下来的路线规划）。接入用 init 自动分流的一条龙，不再需要先 audit 再手动 direction。
+> **与 `/pmai-direction` 的分工**：本流程内联跑的是已有项目**首次接入定方向**；`/pmai-direction` 是**事后校准方向**的按需入口（跑过几轮模块工作发现定位偏了，或 PM 想整理待办）。接入用 init 自动分流的一条龙，不再需要先 audit 再手动 direction。
 
 ## Preamble
 
 ```bash
-source "$HOME/.pmai/scripts/skill-preamble.sh"
+source "${PMAI_HOME:-$HOME/.pmai}/scripts/skill-preamble.sh"
 echo "SKILL: codebase-audit"
 ```
 
@@ -78,131 +78,31 @@ PM 提修正 → 改现状档 → 重新呈交。
 
 > **这是一个轻停顿，不是流程终点**：现状档是方向决策的输入材料，留这个停顿让 PM 先把它看准（可以离线慢慢读）。PM 说「继续 / 接着定方向 / OK」→ 进 step 3.5 / 3.5.5 兜底，再进 step 4 内联方向讨论。**不要**让 PM 去手敲 `/pmai-direction`——首次接入的方向讨论就在本流程内接着跑。
 
-### 步骤 3.5：产品模块清单 + modulespec 主规格骨架（PM 选择性触发）
+### 步骤 3.5：确认模块现状清单（只记代码事实）
 
-> **brownfield 项目专属步骤**：老代码库的模块边界往往已经稳定在代码里（菜单 / 路由 / 模块目录结构）。本步骤提取「产品模块清单」+ 按 `$PMAI_HOME/skills/_internal/codebase-audit/templates/module.md.tmpl` 生成 `docs/modules/<m>/spec.md` 主规格骨架。
->
-> **为什么有这步**：不建 modulespec → 后续 build / landed 后事实对账无 baseline 可 diff →「本次新建/改了稳定结构但 `docs/modules/` 无对应规格文件」常态化。一次性建好 = 反查退化成真正的兜底。
->
-> **新项目（greenfield）不需要本步骤** —— IA 还没定，过早建会写一堆空 placeholder；走 `/pmai-design` / `/pmai-build` 按需生长。
+代码目录、菜单和路由能证明当前实现分成哪些区域，但不能证明未来应该怎样划分产品模块，也不能证明角色、业务规则和目标边界。本步骤只把可核验的当前形态补进 `docs/CODEBASE-AUDIT.md`，不创建或更新任何模块 `spec.md`。
 
-**PM 触发**：步骤 3 现状档确认后问 PM：
+1. **抽候选区域**：扫描 `src/modules/*`、`src/pages/*`、`src/features/*`、`apps/*`、`packages/*`，以及路由 / 菜单配置里的顶级分组；合并明显重复的代码命名，但不把技术目录直接宣布为产品模块。
+2. **请 PM 校准现状**：逐项展示当前名称、可见入口 / 页面、代码证据和不确定边界。明确说明“这是现状清单，不是目标规格”；PM 可以合并、拆分、改名、排除或补充。
+3. **写回现状档**：PM 确认后，把清单写入 `docs/CODEBASE-AUDIT.md` 的“模块现状清单”段。每项只写当前可观察职责、入口和证据路径；无法确认的边界标“待后续 design 确认”。若没有稳定区域，如实写“暂未识别”，不要强凑模块。
+4. **保持目标合同为空**：本流程不生成 `docs/modules/<m>/spec.md`，不刷新 `docs/modules/INDEX.md`。后续 `/pmai-design` 可把现状清单作为证据，但只有 PM 确认的产品判断才能进入目标规格。
 
-```
-✅ 现状档已确认。
+### 步骤 3.5.5：缺失时建立统一 DESIGN.md 骨架
 
-你这个老项目已经有稳定的产品模块边界（基于代码扫描识别出 N 个候选模块）。
-要不要现在建 docs/modules/<m>/spec.md 主规格骨架？
-
-✅ 好处：后续 build / landed 后文档编译能直接 diff，不会反复问「这次稳定结构要不要沉淀」
-⚠️ 代价：现在多花 N 分钟过一遍模块清单 + 看 AI 生成的骨架
-
-[Y] 现在建（推荐 —— 项目 IA 已经稳定的老项目都应该建）
-[N] 跳过（IA 还在演化，按需走，靠 /pmai-design / /pmai-build 兜底）
-```
-
-**PM 选 Y 时执行**：
-
-1. **抽候选模块清单**：AI 扫代码识别候选模块 ——
-
-   - 子目录信号：`src/modules/*` / `src/pages/*` / `src/features/*` / `apps/*` / `packages/*`
-   - 多 app 项目：每个 app 当一个 module
-   - 路由表 / 菜单配置里的顶级分组（找 `routes`/`navigation`/`menu`/`sidebar` 关键词文件）
-   - `PRODUCT.md` 已有的「业务模块」段（若之前 direction 跑过）
-   - 候选清单去重 / 合并明显同义的（如 `user-management` 和 `user-mgmt`）
-
-2. **PM 确认候选清单**：呈交清单格式 ——
-
-   ```
-   候选模块清单（基于代码扫描）：
-
-   1. <module-name>
-      证据：<src/ 路径 + 文件数 + 关键文件>
-      建议主规格路径：docs/modules/<module-name>/spec.md
-      简短定位（AI 草拟，≤30 字）：<...>
-      检测到的稳定结构：菜单(src/.../X.ts) / 路由(src/.../Y.ts) / schema(src/.../Z.ts)
-
-   2. ...
-   ```
-
-   PM 可以：合并 / 拆分 / 改名 / 排除某条 / 增加 AI 漏掉的。PM 修正 → AI 调整 → 重新呈交 → PM 确认。
-
-3. **生成主规格骨架**：按 `$PMAI_HOME/skills/_internal/codebase-audit/templates/module.md.tmpl` 为每个确认模块建 `docs/modules/<m>/spec.md` ——
-
-   - **§摘要**：AI 写 1-3 句（基于代码扫到的功能形态 + PRODUCT.md / 代码现状档）
-   - **§一 模块定位 1.1-1.4**：AI 填能扫到的部分；**1.4 职责边界末尾追加「**稳定结构指针**」sub-bullet 列菜单 / 路由 / schema / config 文件路径**（指针不抄内容，防漂移）
-   - **§二 功能清单**：保持模板空（后续 design / landed 后文档编译按需填）
-   - **§三 页面与交互范围**：AI 填能扫到的（路由表 / 页面文件）
-   - **§四 硬约束** / **§五 跨模块依赖与占位策略**：保持空，PM 后续按需补
-   - **顶部状态行**：保留模板的「草稿 | 未经 PM 确认 | 生成时间」标记 —— 让 PM 后续知道哪些段是 AI bootstrap 的、哪些是后续模块沉淀的
-
-4. **刷新 INDEX.md**：按生成的模块清单 patch `docs/modules/INDEX.md`（每个新模块一行：名称 / 路径 / 一句话定位），跑 `check-index-lint.py` 校验。
-
-5. **PM 审 diff**：呈交 `git diff docs/modules/`，PM 满意 → 本步骤结束。不满意 → AI 调整。PM 大改 → 可以中止 step 3.5 走 [N] 路径。
-
-**PM 选 N 时**：跳过本步骤；step 4 交接时提示「modulespec 骨架未建，后续 /pmai-design / /pmai-build 反查会兜底」。
-
-### 步骤 3.5.5：DESIGN.md inventory 段兜底（无条件兜底，独立于 step 3.5 选择）
-
-> **跟 step 3.5 的关系**：3.5 是 PM 选择性建 modulespec 骨架；3.5.5 是**无条件**建 / 修复 DESIGN.md（不让 PM 选择 —— 它是 build 阶段读 DESIGN / 复审的覆盖审计·视觉门硬依赖，PM 没法绕过；3.5 [N] 也照样跑本步骤）。
-
-**为什么有这步**：DESIGN.md 是 build 执行写代码时的硬约束（build 阶段读 DESIGN / 复审的覆盖审计·视觉门强制读「共享组件 inventory」段）。老项目接入框架前通常没建过这个文件，或建了但没 inventory 段 → build 阶段隐性 break，PM 第一个模块工作推不到复审。本步骤兜底建 / 修复。
-
-```bash
-DESIGN_MD="$REPO_ROOT/DESIGN.md"
-HAS_FILE=false; HAS_INVENTORY=false
-[ -f "$DESIGN_MD" ] && HAS_FILE=true
-$HAS_FILE && grep -q "^## 共享组件 inventory" "$DESIGN_MD" && HAS_INVENTORY=true
-```
+`DESIGN.md` 是涉及界面工作时的项目级设计上下文。codebase-audit 只保证基础文件存在，不从现有代码反推未来视觉规则，也不补写已有文件。
 
 | 状态 | 行为 |
 |---|---|
-| HAS_FILE=true + HAS_INVENTORY=true | silent skip |
-| HAS_FILE=true + HAS_INVENTORY=false | AI 用 Edit 在末尾追加 inventory 空段（模板见下方） |
-| HAS_FILE=false | AI 用 Write 建空骨架（含顶部状态行 + inventory 空段，模板见下方） |
+| 已有 `DESIGN.md` | 保持原文件不动；缺什么由后续真实 UI design 按需处理 |
+| 缺少 `DESIGN.md` | 按 `$PMAI_HOME/templates/DESIGN.md.tmpl` 建立统一空骨架，只替换项目名占位符 |
 
-**inventory 空段模板**（追加 / 包含在新建骨架）：
+统一模板已经说明 gstack `design-consultation` 只是可选辅助、不是依赖；结合边界见 `skills/_shared/gstack-integration.md`。本流程不要求 PM 另跑设计工具。
 
-```markdown
+告知 PM：`DESIGN.md` 已存在并保持不动，或已按统一模板建立空骨架。不要追加固定段落清单或额外操作建议。
 
-## 共享组件 inventory
+### 步骤 3.5.7：PRODUCT-STATE.md 首次接入兜底
 
-> **这是什么**：build 阶段读 DESIGN / 复审的覆盖审计·视觉门的查询底座。每个模块工作动手前逐组件查这里：
-> **有 → 复用**；**没有 → 新建并加进本表**。跨模块工作持续累积，越来越全，reuse 率随之上升。
-
-| 组件名 | 用途 | 视觉 | 状态 | 交互 | 出处工作 |
-|---|---|---|---|---|---|
-| <!-- 复审累积，目前为空 --> | | | | | |
-```
-
-**新建 DESIGN.md 时的空骨架**（仅当 HAS_FILE=false 时，套上方 inventory 模板）：
-
-```markdown
-<!-- 状态：兜底骨架 | 由 codebase-audit step 3.5.5 建 | 视觉基线段未建 -->
-
-# 设计系统
-
-> **本文件目的**：项目级设计系统约束。Web build 的 adaptive visual / behavior 检查读取这里的「共享组件 inventory」与视觉基线；构建工具写代码时按已确认基线执行。
->
-> **视觉基线段未建** —— 可用 gstack `/design-consultation` 或当前 runtime 的设计能力补全 8 段（颜色 / 字体 / 间距 / 布局 / 动效 / 美学方向 / 竞品研究 / 视觉预览板）。本骨架只兜 inventory；Web build 仍按 acceptance profile 选中的视觉检查 fail-closed。
->
-> **inventory 段**由本框架管，复审累积，gstack 不写。
->
-> **gstack 结合合同**：见 `skills/_shared/gstack-integration.md`。已有代码库接入阶段，gstack 只补视觉基线；PMAI 负责代码现状、inventory 和后续 build 约束。
-
-<!-- 套入上方 inventory 空段模板 -->
-```
-
-**告知 PM**：
-
-```
-📝 DESIGN.md 兜底：<已建空骨架 / 追加 inventory 段 / 已是完整态>
-  视觉基线段建议：跑 gstack `/design-consultation` 补全 8 段（PM 主动入口）
-```
-
-### 步骤 3.5.7：PRODUCT-STATE.md 兜底（无条件兜底，独立于 step 3.5 选择）
-
-> **跟 step 3.5 / 3.5.5 的关系**：和 step 3.5.5（DESIGN.md inventory 兜底）同款**无条件**模式——PM 没法绕过、跟 step 3.5 的 Y/N 无关。
+> **跟 step 3.5 / 3.5.5 的关系**：同属首次接入的基础上下文准备；模块现状确认、DESIGN.md 缺失兜底和本步骤依次完成，不另设流程选择。
 
 **为什么有这步**：`PRODUCT-STATE.md` 是产品「现状层」hub，下游 `/pmai-design` 开头**强制读它**（当前功能 / 主原型现状 / mock-真状态位）。greenfield 的 `init-project.sh` 会铺这个模板，但 brownfield 走 codebase-audit 从不建它 → PM 第一个模块设计退化成「白纸起步」，audit 已扫到的全部现状在 `/pmai-design` 入场时丢失。本步骤兜底建 + 从现状档反推填充。
 
@@ -250,10 +150,10 @@ PM 在 step 3 轻停顿说「继续」后，**在本流程内直接接着跑项�
 1. **@读 `skills/_shared/project-questioning.md`**（**单一真相源**——提问纪律 / 问题库 / 写作规则 / Decision gate / 5 节检查）。
 2. **全文读 `docs/CODEBASE-AUDIT.md`**（刚产出的现状档，作已有代码库的实况语境，AI 不准跳）。
 3. 按 **已有代码接入提问顺序**问 PM（由 init-project 的已有代码分支触发，和 `project-questioning` 的首次接入约定一致；这不是 `/pmai-direction` 的公开分类）：
-   - (1) 产品定位（**从 codebase 反推 + PM 确认**）
-   - (2) 用户画像（从代码层级 / API 角色反推 + PM 补）
+   - (1) 产品定位（现状档只提供当前产品形态线索；PM 确认或重新定义目标定位）
+   - (2) 用户画像（代码层级 / API 角色只作为当前使用者证据；目标用户由 PM 确认）
    - (3) 现有技术事实（只从现状档抄进 audit，不在初始化阶段把它冻结成新建造方案）
-   - (4) 业务术语表（**从 model / API 命名反推 + PM 补**）
+   - (4) 业务术语表（**由 PM 定义**；model / API 命名只作为待核对的当前用词证据，不自动写入稳定术语）
    - (5) TODO 待办池（PM 给，AI 不反推填充——只记 PM 提过/讨论过想做的，不排序）
 4. **未决问题闸门**（@读 `_shared/project-questioning.md` §4）：暂存文件 `docs/.project-solution-open-questions.md`，闸门必过。
 5. **Decision gate 确认门**（@读 §6）：label = 动作描述，PM 选「创建产品上下文」才落盘；选「继续探索」回提问 Loop。
@@ -268,13 +168,13 @@ PM 在 step 3 轻停顿说「继续」后，**在本流程内直接接着跑项�
 
 ## Rules
 
-- **扫码阶段只读**：步骤 1-3（扫码 + 产现状档）只读代码、不改代码。step 4 内联方向讨论只写 `PRODUCT.md` + `TODO.md`（PM 在 Decision gate 拍板后落盘）。
+- **代码只作现状证据**：步骤 1-3.5 只读代码，不改业务实现；代码扫描结果只进入 `docs/CODEBASE-AUDIT.md`，不得反向生成或改写目标 `spec.md`。
 - **防 secret 是硬约束**：见上方「防 secret 扫描」段，违反 = 严重错误。
 - **方向讨论走共享真相源**：step 4 内联方向讨论必须 @读 `skills/_shared/project-questioning.md`，**不要**在本 skill 里重抄提问法 / 写作规则（必漂移；真相源单一，和 direction 共用同一套方向讨论内核）。
 - **与 `/pmai-init-project` 分工**：本 skill 是 init 的已有项目分支，不是初始化时让 PM 手动选择的并列入口。
-- **与 `/pmai-direction` 分工**：本流程管已有项目**首次接入定方向**（内联跑完）；`/pmai-direction` 管**事后方向校准**（方向重定 / 路线规划）。接入不再需要 PM 手敲 direction。
+- **与 `/pmai-direction` 分工**：本流程管已有项目**首次接入定方向**（内联跑完）；`/pmai-direction` 管**事后方向校准**（方向重定 / 待办整理）。接入不再需要 PM 手敲 direction。
 - 新项目不用本 skill（无已有代码可审）。
-- step 3.5 模块清单由 PM 确认 —— AI 不替 PM 决定模块边界（候选清单 PM 必须过一遍）。
+- step 3.5 模块现状清单由 PM 确认；它仍只是当前证据，不替 PM 决定目标模块边界。
 
 ## 边界
 
@@ -283,9 +183,7 @@ PM 在 step 3 轻停顿说「继续」后，**在本流程内直接接着跑项�
   - `PRODUCT-STATE.md` 兜底建骨架（**step 3.5.7 无条件**，反推填现状三段，产品定位一句话 step 4 回填）
   - `PRODUCT.md` + `TODO.md`（**step 4 内联方向讨论，PM 在 Decision gate 拍板后**）
   - `docs/.project-solution-open-questions.md`（step 4 未决问题闸门暂存文件）
-  - `docs/modules/<m>/spec.md` 主规格骨架（**仅当 step 3.5 PM 选 [Y]**）
-  - `docs/modules/INDEX.md` 刷新（**仅当 step 3.5 PM 选 [Y]**）
-  - `DESIGN.md` 兜底建 / 追加 inventory 段（**step 3.5.5 无条件，跟 step 3.5 选择无关**）
-- **允许动作**：read-only 扫码、7 维度盘点、防 secret redact、step 3.5 选 [Y] 时按 `$PMAI_HOME/skills/_internal/codebase-audit/templates/module.md.tmpl` 生成主规格骨架、step 3.5.5 兜底 DESIGN.md inventory 段、step 3.5.7 兜底 PRODUCT-STATE.md（反推填现状三段，定位 step 4 回填）、step 4 内联方向讨论并写产品脊柱（@读 `_shared/project-questioning.md`）
-- **禁止**：改代码 / 改 step 3.5 / 3.5.5 范围外的业务文档 / step 4 替 PM 做方向决策（必过 Decision gate）/ step 3.5 跳过模块清单 PM 确认环节 / step 3.5.5 替 gstack 写视觉基线 8 段（视觉基线由 PM 主动调 `/design-consultation`）/ 在 step 4 重抄 `_shared/project-questioning.md` 的提问法与写作规则
-- **退出条件**：现状档经 PM 确认 + step 3.5 完成（建或跳过）+ step 3.5.5 兜底跑过 + step 3.5.7 PRODUCT-STATE 兜底跑过 + step 4 方向讨论定稿（PRODUCT.md / TODO.md 已落 + PRODUCT-STATE 产品定位已回填 + atomic commit）+ 给出 ▶ Next Up（`/pmai-design`）。`project.yml` 留给首个可建造 design 生成。
+  - `DESIGN.md` 统一空骨架（**仅在文件缺失时**；已有文件不动）
+- **允许动作**：read-only 扫码、7 维度盘点、防 secret redact、把 PM 确认的模块现状清单写回 `CODEBASE-AUDIT.md`、缺失时按统一模板建立 `DESIGN.md`、step 3.5.7 兜底 PRODUCT-STATE.md（反推填现状三段，定位 step 4 回填）、step 4 内联方向讨论并写产品脊柱（@读 `_shared/project-questioning.md`）
+- **禁止**：改代码 / 从代码生成或改写 `docs/modules/<m>/spec.md` / 刷新模块规格索引 / 补写已有 `DESIGN.md` / step 4 替 PM 做方向决策（必过 Decision gate）/ step 3.5 跳过模块现状清单 PM 确认环节 / 在 step 4 重抄 `_shared/project-questioning.md` 的提问法与写作规则
+- **退出条件**：现状档经 PM 确认 + step 3.5 模块现状清单已确认并写回 + step 3.5.5 检查完成（缺失时建统一骨架）+ step 3.5.7 PRODUCT-STATE 兜底跑过 + step 4 方向讨论定稿（PRODUCT.md / TODO.md 已落 + PRODUCT-STATE 产品定位已回填 + atomic commit）+ 给出 ▶ Next Up（`/pmai-design`）。目标 `spec.md` 与 `project.yml` 留给首个可建造 design 生成。

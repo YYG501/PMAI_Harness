@@ -20,6 +20,8 @@ INIT_PROJECT_SKILL="$REPO_ROOT/skills/init-project/SKILL.md"
 DIRECTION_SKILL="$REPO_ROOT/skills/direction/SKILL.md"
 CODEBASE_AUDIT_SKILL="$REPO_ROOT/skills/_internal/codebase-audit/SKILL.md"
 CODEBASE_AUDIT_TMPL="$REPO_ROOT/skills/_internal/codebase-audit/templates/codebase-audit.md.tmpl"
+CODEBASE_MODULE_TMPL="$REPO_ROOT/skills/_internal/codebase-audit/templates/module.md.tmpl"
+DESIGN_TMPL="$REPO_ROOT/templates/DESIGN.md.tmpl"
 PROJECT_QUESTIONING="$REPO_ROOT/skills/_shared/project-questioning.md"
 DOCS_INDEX="$REPO_ROOT/docs/INDEX.md"
 TODO_TMPL="$REPO_ROOT/templates/TODO.md.tmpl"
@@ -192,8 +194,8 @@ test_brownfield_routing_consistent_across_docs() {
     _fail "direction 仍暴露接入恢复 / D brownfield / 四场景分类"
     return
   fi
-  if ! grep -q "方向重定" "$DIRECTION_SKILL" || ! grep -q "路线规划" "$DIRECTION_SKILL"; then
-    _fail "direction 应只保留方向重定 / 路线规划两类意图"
+  if ! grep -q "方向重定" "$DIRECTION_SKILL" || ! grep -q "待办整理" "$DIRECTION_SKILL"; then
+    _fail "direction 应只保留方向重定 / 待办整理两类意图"
     return
   fi
   if ! grep -q "/pmai-init-project" "$DOCS_INDEX" || grep -q "里的 \`/pmai-codebase-audit\`" "$DOCS_INDEX"; then
@@ -224,6 +226,41 @@ test_brownfield_routing_consistent_across_docs() {
 }
 
 # -----------------------------------------------------------------
+# T7: codebase-audit 只产出现状证据，不从代码生成目标规格或恢复固定视觉门
+# -----------------------------------------------------------------
+test_codebase_audit_keeps_code_as_current_state_evidence() {
+  start_test "T7: codebase-audit 不从代码生成 spec，不恢复固定视觉门"
+
+  if [ -e "$CODEBASE_MODULE_TMPL" ]; then
+    _fail "codebase-audit 专用 module spec 模板应随 code-derived spec 流程退出"
+    return
+  fi
+  if grep -qE '生成主规格骨架|module\.md\.tmpl|视觉门硬依赖|覆盖审计·视觉门|补全 8 段|PM 主动入口|追加 inventory' "$CODEBASE_AUDIT_SKILL"; then
+    _fail "codebase-audit 仍含从代码生成目标规格或已退役固定视觉流程"
+    return
+  fi
+  if ! grep -q '这是现状清单，不是目标规格' "$CODEBASE_AUDIT_SKILL" \
+     || ! grep -q '不生成 `docs/modules/<m>/spec.md`' "$CODEBASE_AUDIT_SKILL" \
+     || ! grep -q '## 8. 模块现状清单（PM 确认）' "$CODEBASE_AUDIT_TMPL"; then
+    _fail "模块扫描结果应经 PM 确认后留在 CODEBASE-AUDIT，而不是进入目标规格"
+    return
+  fi
+  if grep -qE '从 (model|模型) ?/ ?API 命名反推.*术语' "$CODEBASE_AUDIT_SKILL" \
+     || ! grep -q 'model / API 命名只作为待核对的当前用词证据' "$CODEBASE_AUDIT_SKILL"; then
+    _fail "代码命名只能作为术语核对证据，不能自动成为稳定业务术语"
+    return
+  fi
+  if ! grep -qF '$PMAI_HOME/templates/DESIGN.md.tmpl' "$CODEBASE_AUDIT_SKILL" \
+     || ! grep -q '已有 `DESIGN.md` | 保持原文件不动' "$CODEBASE_AUDIT_SKILL" \
+     || ! grep -q '不要求 PM 另跑设计工具' "$CODEBASE_AUDIT_SKILL" \
+     || [ ! -f "$DESIGN_TMPL" ]; then
+    _fail "DESIGN.md 应只在缺失时使用统一模板，已有文件保持不动"
+    return
+  fi
+  pass_test
+}
+
+# -----------------------------------------------------------------
 
 test_existing_empty_dir_rejected
 test_existing_git_dir_rejected
@@ -231,5 +268,6 @@ test_skill_describes_brownfield_gate
 test_allow_existing_empty_dir
 test_allow_existing_with_assets
 test_brownfield_routing_consistent_across_docs
+test_codebase_audit_keeps_code_as_current_state_evidence
 
 report_results "brownfield-detect"

@@ -6,7 +6,8 @@
 # cancel/pmai-build-close 不再总是直接删 worktree/branch。原因是 PM 可能在被废弃的
 # worktree 内（即 cwd = .worktrees/<branch>）执行 close，删除会让 Claude Code
 # 父进程的 cwd 变成 dangling，下一次 Stop hook 的 posix_spawn 报 ENOENT。
-# 解决办法是把删除推迟，由本脚本在主仓 cwd 的会话里统一执行。
+# 解决办法是把删除推迟，由本脚本从主仓执行，并确认没有其它进程仍以待删
+# worktree 为 cwd 后再清理。
 
 set -euo pipefail
 
@@ -137,6 +138,51 @@ def registered_worktrees():
 WORKTREES_BY_BRANCH = registered_worktrees()
 
 
+def proc_cwd_users(worktree):
+    """Return PIDs whose cwd is inside worktree, or None when /proc is unavailable."""
+    proc_root = "/proc"
+    if not os.path.isdir(proc_root):
+        return None
+    users = []
+    observed = False
+    for name in os.listdir(proc_root):
+        if not name.isdigit():
+            continue
+        try:
+            cwd = os.path.realpath(os.readlink(os.path.join(proc_root, name, "cwd")))
+        except (FileNotFoundError, PermissionError, OSError):
+            continue
+        observed = True
+        if cwd == worktree or cwd.startswith(worktree + os.sep):
+            users.append(name)
+    return users if observed else None
+
+
+def lsof_cwd_users(worktree):
+    """macOS/BSD fallback: inspect process cwd entries without traversing the worktree."""
+    lsof = shutil.which("lsof")
+    if not lsof:
+        return None
+    result = run([lsof, "-nP", "-d", "cwd", "-Fn"])
+    if result.returncode not in (0, 1):
+        return None
+    users = []
+    pid = "unknown"
+    for line in result.stdout.splitlines():
+        if line.startswith("p"):
+            pid = line[1:] or "unknown"
+        elif line.startswith("n"):
+            cwd = os.path.realpath(line[1:])
+            if cwd == worktree or cwd.startswith(worktree + os.sep):
+                users.append(pid)
+    return users
+
+
+def cwd_users(worktree):
+    users = proc_cwd_users(worktree)
+    return users if users is not None else lsof_cwd_users(worktree)
+
+
 def validate_pending_entry(entry):
     """Fail closed before deleting anything from a pending-cleanup entry."""
     kind = entry.get("kind", "")
@@ -168,6 +214,11 @@ def validate_pending_entry(entry):
             "worktree path is not registered for branch "
             f"{branch}: path={real}, registered={registered or '<none>'}"
         )
+    users = cwd_users(real)
+    if users is None:
+        return False, "cannot verify whether another process is using the worktree as cwd"
+    if users:
+        return False, f"worktree is still used as cwd by pid(s): {', '.join(users)}"
     return True, ""
 
 

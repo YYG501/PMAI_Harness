@@ -31,6 +31,7 @@ OPENCODE_CONFIG_DIR="${OPENCODE_CONFIG_DIR:-$HOME/.config/opencode}"
 SKILL_PREFIX="pmai-"
 REMOTE="${PMAI_REMOTE:-git@github.com:YYG501/PMAI_Workflow.git}"
 DOCTOR_BIN="$(dirname "$0")/pmai-doctor"
+DOCTOR_LOG="${PMAI_UPGRADE_DOCTOR_LOG:-/tmp/pmai-upgrade-doctor.log}"
 
 # timeout 兜底：stock macOS 无 GNU timeout（仅 Homebrew coreutils 才有）。
 # 缺失时优先用 gtimeout，再退化为直接执行（不加超时），避免 `timeout ... || {...}` 误触失败分支中断升级。
@@ -97,8 +98,13 @@ rebuild_symlinks() {
     case "$skill_name" in
       _internal) continue ;;
       _shared)  dst="$dst_skills/_shared" ;;
-      pmai-*)   dst="$dst_skills/$skill_name" ;;
-      *)        dst="$dst_skills/${SKILL_PREFIX}${skill_name}" ;;
+      *)
+        pmai_skill_is_host_exposed "$skill_name" || continue
+        case "$skill_name" in
+          pmai-*) dst="$dst_skills/$skill_name" ;;
+          *)      dst="$dst_skills/${SKILL_PREFIX}${skill_name}" ;;
+        esac
+        ;;
     esac
     if [ "$skill_name" = "_shared" ]; then
       pmai_install_shared_link "${skill_dir%/}" "$dst"
@@ -142,6 +148,10 @@ global_rollback() {
   echo "❌ 升级失败，回滚到 ${OLD_HEAD:-原状态}..." >&2
   if [ -n "$OLD_HEAD" ] && [ -d "$PMAI_HOME/.git" ]; then
     (cd "$PMAI_HOME" && git reset --hard "$OLD_HEAD" >/dev/null 2>&1) || true
+    # reset 后恢复旧版本的暴露策略，不能用升级目标的策略重建旧版入口。
+    if [ -f "$PMAI_HOME/scripts/_lib/skill-links.sh" ]; then
+      source "$PMAI_HOME/scripts/_lib/skill-links.sh"
+    fi
     # symlink 按回退后的 ~/.pmai/skills 重建
     rebuild_symlinks "$PMAI_HOME/skills" "$CLAUDE_SKILLS" >/dev/null 2>&1 || true
     rebuild_symlinks "$PMAI_HOME/skills" "$CODEX_SKILLS" >/dev/null 2>&1 || true
@@ -240,6 +250,10 @@ esac
 NEW_VER=$(cat VERSION 2>/dev/null || echo unknown)
 NEW_HEAD=$(git rev-parse --short HEAD)
 
+# 当前进程在 fetch 前已 source 过 helper；升级策略本身可能发生变化，必须重载
+# 刚落盘的版本后再重建宿主入口。
+source "$PMAI_HOME/scripts/_lib/skill-links.sh"
+
 # 重建 symlink
 echo "→ Re-syncing skill symlinks to host skill directories"
 claude_count=$(rebuild_symlinks "$PMAI_HOME/skills" "$CLAUDE_SKILLS")
@@ -260,9 +274,9 @@ fi
 # E：跑 doctor 自检（FAIL → 回滚；WARN 不触发）
 if [ -x "$DOCTOR_BIN" ]; then
   echo "→ Running pmai-doctor self-check..."
-  if ! KIMI_CODE_HOME="$KIMI_CODE_HOME" "$DOCTOR_BIN" >/tmp/pmai-upgrade-doctor.log 2>&1; then
-    echo "❌ pmai-doctor 自检失败，触发回滚。日志：/tmp/pmai-upgrade-doctor.log" >&2
-    tail -20 /tmp/pmai-upgrade-doctor.log >&2 || true
+  if ! KIMI_CODE_HOME="$KIMI_CODE_HOME" "$DOCTOR_BIN" >"$DOCTOR_LOG" 2>&1; then
+    echo "❌ pmai-doctor 自检失败，触发回滚。日志：$DOCTOR_LOG" >&2
+    tail -20 "$DOCTOR_LOG" >&2 || true
     global_rollback
   fi
   echo "  ✅ doctor passed"

@@ -63,14 +63,13 @@ PMAI 不和 Claude Design、design-html 或 Claude Code 比"谁更快生成第�
 
 /pmai-init-project    项目初始化统一入口（AI 自动判断全新项目 / 资料目录 / 已有代码；全新项目搭底座，已有代码直接盘点现状）
 
-# 日常循环（design 讨论，build 看结果）
+# 正常循环（design 讨论，build 看结果）
 
 /pmai-design "批量审核"    恢复旧上下文，讨论清楚并自动形成建造依据
 /pmai-build 批量审核       后台读取项目定义和默认验收；PM 只确认工作环境与构建工具，然后看结果、多轮修改、说“可以提交”后自动收尾
-/pmai-status          产品现状视图（产品长什么样 / 当前模块做到哪 / 下一步）
 ```
 
-PM 全程**只做产品决策、确认首个建造方案、开工时确认工作环境与构建工具、看结果和明确定稿**；meta / mockup / spec-writing 分流、默认验收、合同、证据和文档同步由框架兜。
+PM 全程**只做产品决策、确认首个建造方案、开工时确认工作环境与构建工具、看结果和明确定稿**；meta / mockup / spec-writing 分流、默认验收、合同、证据和文档同步由框架兜。忘了当前停在哪里时再用 `/pmai-status` 恢复现状，它不是日常循环的一步。
 
 Kimi Code 中把上述入口原生写成 `/skill:pmai-design`、`/skill:pmai-build`、`/skill:pmai-status`；工作流语义不变。
 
@@ -263,73 +262,25 @@ bash ~/.pmai/scripts/measure-tthw.sh record /path/to/project \
   --ended-at "2026-07-07T10:25:00+08:00"
 ```
 
-### 2. PM 在业务仓里的日常循环
+### 2. PM 在业务仓里的主路径
 
 > **注意**：装好 pmai 后，所有 Skill 都以 `pmai-` 前缀注册（防与其它框架命名冲突）。下面用 `/pmai-*` 表示跨宿主工作流名；Kimi Code 对应原生 `/skill:pmai-*`，Codex 对应 `$pmai-*`。
 
 ```
-/pmai-design "<一句话>"      → 恢复上下文、探索真问题、按需调 meta / mockup / spec-writing，并提交建造依据
+/pmai-init-project           → 每个项目只在首次初始化或首次接入已有代码时使用
+  ↓
+/pmai-design "<一句话>"      → 恢复上下文、探索真问题，内部按需完成产品判断、界面探索和规格成文
   ↓
 /pmai-build <模块或文档>     → 构建 prototype 或 product；PM 看结果多轮修改，定稿后自动检查、合入 main 并更新文档
-  ↓
-/pmai-status             → 忘了当前停在哪时，用它读状态并提示下一步
 ```
 
-简单改动可以跳过完整流程：用 `/pmai-quick-fix` 修复，需要长期归位时再用 `/pmai-record`。规格发布到飞书后，如果 PM 在飞书完成二次 review、修改正文或添加批注，用 `/pmai-lark-review` 一次收回：当前飞书原生版本是唯一目标底稿，本地旧版只用于定位需要补回的变化；内容和格式都经覆盖账本与写回后验证，未归位项会阻止更新正式规格。产品规则变化选择性写入决定，措辞和格式不制造 decision；评论按整批首尾围栏收口，不再逐条反复扫描整篇评论。然后整批按影响接回 quick-fix、active build 或 design/build，真实产品岔路才提问。完整需求进入 `/pmai-build` 后，AI 会在 PM 看结果期间把候选版本准备成验收就绪；PM 说“定稿 / 可以提交 / 可以合并”即触发快速校验、自动落地主线和文档同步。`/pmai-build-close` 只用于兼容或中断恢复，不在收尾阶段首次跑完整验收或补业务代码。
+这是正常协作的完整主路径，不需要再从 Skill 菜单里挑下一步。忘了当前停在哪里时，用 `/pmai-status` 只读恢复现状；它不是主流程的固定一步。简单改动、轻量记录、方向重定、文档成文、飞书文档同步或评审回收等专项场景，PM 直接说明想做什么即可，AI 负责选择对应能力并接回当前产品上下文。完整需求进入 `/pmai-build` 后，AI 会在 PM 看结果期间持续修改；PM 说“定稿 / 可以提交 / 可以合并”即触发最终检查、自动落地主线和文档同步。
 
 ### 3. 多机 / 团队仓
 
 PMAI 走纯全局：每台要用的机器各自 `pmai install` 一次（全局），消费仓里不放 skill 副本。换机器 clone 业务仓后，在该机跑一次全局安装即可使用同一批 Skill：Claude Code / OpenCode 输入 `/pmai-*`，Codex 使用 `$pmai-*`，Kimi Code 使用 `/skill:pmai-*`。
 
 > 旧的 `--local`（把框架副本 commit 进业务仓 `.claude/`）已移除——它和全局并存会让命令重复、副本陈旧。若仓里还有遗留副本，清理：`pmai uninstall --local <仓目录>`（只删项目内副本，不动全局）。需要的 `.claude/settings.json` + `.codex/hooks.json` + `.opencode/commands` + `opencode.json` 保留（那些不是 skill，不会重复）。
-
----
-
-## 完整 Skill 命令汇总
-
-按 PM 使用频率分组。表内使用跨宿主工作流名 `/pmai-*`；Kimi Code 将同名 Skill 写成 `/skill:pmai-*`，例如表内 `/pmai-build` 对应 `/skill:pmai-build`。
-
-### 启动新工作
-
-| Skill | 用途 |
-|---|---|
-| `/pmai-init-project` | **项目级入口**：全新项目建底座，已有代码库自动盘点现状；装了 pmai 后**任意 cwd** 可跑 |
-| `/pmai-direction` | **项目方向校准**：已接入项目的方向重定 / 路线规划；已有代码首次接入由 `/pmai-init-project` 自动分流，不需要手动来这里 |
-| `/pmai-design` | **模块设计入口**：起新功能 / 重做模块，写 discussion / decisions / spec |
-| `/pmai-quick-fix` | 不走完整流程的小补丁（适合改文案、修小 bug） |
-
-### 推进模块工作
-
-| Skill | 用途 |
-|---|---|
-| `/pmai-status` | **续跑辅助**：读当前状态和建议下一步；不向 PM 暴露 worktree、合同或证据 JSON |
-| `/pmai-build` | 统一构建前台：PM 一次确认工作环境与构建工具；看结果期间由当前会话快速修改、复用 dev server 并先回“可刷新”，PM 请求定稿后才对冻结 commit 隔离运行一次完整验收、落地主线并完成文档对账 |
-| `/pmai-spec-writing` | 最终目标规格成文器：把已确认决定编译成指导研发实现的模块规格、PRD、功能需求、功能描述、功能规格或功能评审稿 |
-| `/pmai-doc-writing` | 介绍型文档成文器：产品介绍、产品功能清单、优势说明、一页纸、汇报材料，默认落 `docs/deliverables/` |
-
-### 收尾 / 放弃
-
-| Skill | 用途 |
-|---|---|
-| `/pmai-build-close` | **兼容与恢复入口**：中断续跑、merge 冲突恢复或 `landed/docs_pending` 文档恢复；正常链路不需要手动调用，也不在 close 内改业务代码 |
-| `/pmai-record` | 轻量记录：main 小改或 design 后暂不 build 时，把稳定术语 / 规则 / 当前设计状态写回项目底座 |
-| `/pmai-build-cancel` | 放弃当前 build，不合并，清活跃状态并排队清理隔离环境 |
-
-### 旁路 / 文档维护
-
-| Skill | 用途 |
-|---|---|
-| `/pmai-meta` | 讨论前对焦与压力测试：没靶子时找本质 / 判断标准 / 根因，有靶子时用少量多视角找盲区、冲突和风险 |
-| `/pmai-feedback` | **消费仓会话反馈出口**：完整复盘当前原始会话，对照已确认设计和使用体验，生成带会话文件地址的框架优化 Prompt |
-| `/pmai-lark-review` | **飞书评审回收**：以飞书最新原生版本为唯一底稿，逐项保证内容与格式不丢；产品规则变化选择性归入决定，精细同步并验证后再更新产品和关闭评论 |
-| `/pmai-lark-sync` | 本地规格与飞书在线文档安全同步：先判断真相源，再选择精细修改、覆盖发布、飞书回拉或只 diff |
-| `/pmai-publish-to-lark` | 把本地 markdown 整篇发布 / 覆盖到飞书，并记录后续评审所需的 revision + 正文 hash 基线 |
-
-### 框架维护（PM 操作 PMAI 本身）
-
-| Skill | 用途 |
-|---|---|
-| `/pmai-upgrade` | 升级 PMAI 框架（全局；AI 智能 What's New 摘要 + AskUser 4 选项：main / stable tag / 锁版本 / 暂缓） |
 
 ---
 
@@ -363,6 +314,8 @@ PMAI 走纯全局：每台要用的机器各自 `pmai install` 一次（全局�
 或 `~/.pmai/bin/pmai doctor`。
 
 ### 反馈与问题报告
+
+需要复盘一次 PMAI 协作、把流程问题交给框架仓时，PM 直接说“复盘这次对话”。当前只有 Codex 的消费仓当前会话精确定位已经验证；其它宿主在没有经过验证的定位适配前，不按“最近会话”猜测。
 
 有 bug 时优先开 GitHub issue，使用
 [`bug_report.md`](./.github/ISSUE_TEMPLATE/bug_report.md) 模板。请贴：

@@ -8,6 +8,7 @@
 #   T4: PM-VIEW-RULES 不引用不存在的历史样例
 #   T5: record-routing 声明 typed input + 模块引用登记
 #   T6: term-detector markdown 头部不回退成断裂格式
+#   T7: 所有 Skill preamble 尊重自定义 PMAI_HOME
 set -uo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -108,11 +109,42 @@ test_term_detector_heading_clean() {
   pass_test
 }
 
+test_skill_preambles_respect_pmai_home() {
+  start_test "T7: Skill preamble 尊重自定义 PMAI_HOME"
+  local expected fixed_hits file
+  local -a callers=(
+    "$REPO_ROOT/skills/build-cancel/SKILL.md"
+    "$REPO_ROOT/skills/quick-fix/SKILL.md"
+    "$REPO_ROOT/skills/direction/SKILL.md"
+    "$REPO_ROOT/skills/record/SKILL.md"
+    "$REPO_ROOT/skills/status/SKILL.md"
+    "$REPO_ROOT/skills/_internal/codebase-audit/SKILL.md"
+    "$REPO_ROOT/templates/CLAUDE.md.tmpl"
+  )
+  expected='source "${PMAI_HOME:-$HOME/.pmai}/scripts/skill-preamble.sh"'
+
+  for file in "${callers[@]}"; do
+    if ! grep -qF "$expected" "$file"; then
+      _fail "Skill preamble 未使用 PMAI_HOME fallback: $file"
+      return
+    fi
+  done
+
+  fixed_hits="$(find "$REPO_ROOT/skills" -name SKILL.md -type f -exec grep -nH -F 'source "$HOME/.pmai/scripts/skill-preamble.sh"' {} + 2>/dev/null || true)"
+  if [ -n "$fixed_hits" ]; then
+    _fail "Skill 仍写死 ~/.pmai，覆盖自定义 PMAI_HOME"
+    echo "$fixed_hits" >&2
+    return
+  fi
+  pass_test
+}
+
 test_project_questioning_current_callers
 test_banner_rules_no_legacy_next_stage
 test_attachments_prefix_mapping_matches_helper
 test_pm_view_rules_no_missing_example_path
 test_record_routing_typed_upload_current
 test_term_detector_heading_clean
+test_skill_preambles_respect_pmai_home
 
 report_results "shared-currentness"

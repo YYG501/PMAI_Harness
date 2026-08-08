@@ -78,7 +78,7 @@ build 不拆 task。项目类型、技术栈、入口和真实命令从 design �
 | prototype 视觉/行为 | `DESIGN.md` + 渲染结果 + 关键任务路径 | 目标为 prototype 或 product UI 时 🟢 |
 | product 工程行为 | 仓库已有测试、typecheck/build、接口/数据/迁移/权限检查 | 目标为 product 时 🟢 |
 
-每轮修改由当前会话优先处理，只跑 `iteration_checks` 并尽快给 PM 看，复用同一个 dev server 和浏览器连接，先回“已修改，可刷新查看”。PM 请求定稿前不运行 production build、不写 final evidence、不形成 `review-ready`；请求后才冻结 implementation commit，在 validation worktree 统一运行一次 `final_checks`、生成文档影响草案和验收就绪快照。`final_check` 只校验快照是否仍有效，不首次补实现或重跑同一版本的完整验收。检查只报告业务结果和真正需要 PM 拍的产品问题，不把工程过程写回 PM 视图。
+每轮修改由当前会话优先处理，只跑 `iteration_checks` 并尽快给 PM 看，复用同一个 dev server 和浏览器连接，先回“已修改，可刷新查看”。PM 请求定稿前不运行 production build、不写 final evidence、不形成 `review-ready`；请求后才冻结 implementation commit，在 validation worktree 统一运行一次 `final_checks` 并生成验收就绪快照。此时还没有 landed diff，不生成文档影响地图或草案。`final_check` 只校验快照是否仍有效，不首次补实现或重跑同一版本的完整验收。检查只报告业务结果和真正需要 PM 拍的产品问题，不把工程过程写回 PM 视图。
 
 ### 自动 finalize（实现先落 main，文档后更新）
 
@@ -92,7 +92,7 @@ build 不拆 task。项目类型、技术栈、入口和真实命令从 design �
 - 🟢 `DESIGN.md`（视觉规范类反馈）
 - 🟡 `docs/inputs/*/`（如本次工作引用过）
 
-PM 定稿后的同一 finalize 校验验收就绪快照后把实现合入 main，再根据 landed diff、build contract、accepted deltas 和 build 阶段预生成的文档影响草案更新项目底座与模块三件套。凡涉及 `spec.md` 的生成或修改，调用 `/pmai-spec-writing` 的“落地主线后的目标对账”模式；实现差异按符合、accepted delta、漏实现、无依据实现分类。文档失败保留 `landed/docs_pending`，纯 worktree 清理失败进入待清理队列，续跑不重复 merge；`/pmai-build-close` 只作为兼容与恢复入口。
+PM 定稿后的同一 finalize 校验验收就绪快照后把实现合入 main，再根据 landed diff、build contract 和 accepted deltas 生成文档影响地图，只更新地图中的真相源。凡涉及 `spec.md` 的生成或修改，调用 `/pmai-spec-writing` 的“落地主线后的目标对账”模式；实现差异按符合、accepted delta、漏实现、无依据实现分类。文档失败保留 `landed/docs_pending`，纯 worktree 清理失败进入待清理队列，续跑不重复 merge；`/pmai-build-close` 只作为兼容与恢复入口。
 
 **按需档：功能型规格文档（spec-writing）**
 PM 真要拿去研发评审时才生成，可覆盖一个或多个模块：

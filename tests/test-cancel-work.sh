@@ -71,6 +71,31 @@ test_cancel_happy_path() {
   fixture_teardown
 }
 
+test_cancel_receipt_only_reports_background_queue() {
+  start_test "cancel receipt queues cleanup without delegating a command to PM"
+  fixture_setup
+  work_dir=$(_setup_module_on_main "work-001" "receipt" 3)
+
+  cd "$FIXTURE_DIR"
+  if ! bash "$CANCEL_WORK" "$work_dir" >/tmp/out.$$ 2>/tmp/err.$$; then
+    _fail "cancel failed while checking receipt"
+    cat /tmp/err.$$ >&2
+  elif [ ! -f "$FIXTURE_DIR/.runs/pending-cleanup.json" ]; then
+    _fail "cancel should queue the related work environment"
+  elif ! grep -q "后台清理队列" /tmp/out.$$; then
+    _fail "cancel receipt should report queued background cleanup"
+    cat /tmp/out.$$ >&2
+  elif grep -qE 'cleanup-pending-worktrees|bash scripts|请.*执行|回主仓.*运行' /tmp/out.$$; then
+    _fail "cancel receipt still delegates cleanup mechanics to PM"
+    cat /tmp/out.$$ >&2
+  else
+    pass_test
+  fi
+
+  rm -f /tmp/out.$$ /tmp/err.$$
+  fixture_teardown
+}
+
 # ---------------------------------------------------------------
 # I-CA1: main 零污染
 # ---------------------------------------------------------------
@@ -321,6 +346,7 @@ test_cancel_restores_meta_when_commit_fails() {
 # ---------------------------------------------------------------
 
 test_cancel_happy_path
+test_cancel_receipt_only_reports_background_queue
 test_cancel_does_not_merge_to_main
 test_cancel_clears_module_meta
 test_cancel_is_idempotent_after_partial_cleanup

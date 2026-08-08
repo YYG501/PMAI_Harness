@@ -1,8 +1,8 @@
 # project-questioning：项目方向讨论的共享真相源
 
 > **职责**：项目方向讨论的**提问纪律 / 问题库 / 写作规则 / Decision gate / 5 节检查**的**单一真相源**。
-> **调用方**：`/pmai-init-project` 已有代码分支触发的 codebase-audit step 4（已有代码首次接入定方向，内联）+ `/pmai-direction`（事后方向校准：方向重定 / 路线规划）。
-> **§2.5 抽取边界**：本文件含**写作规则 + 话术问题库 + 收敛条件 + Decision gate 模板 + 检查清单**（跨场景共享）；调用方各自判断输入态和问题顺序：codebase-audit 管已有代码首次接入，`/pmai-direction` 管已接入项目的方向重定 / 路线规划。
+> **调用方**：`/pmai-init-project` 已有代码分支触发的 codebase-audit step 4（已有代码首次接入定方向，内联）+ `/pmai-direction`（事后方向校准：方向重定 / 待办整理）。
+> **§2.5 抽取边界**：本文件含**写作规则 + 话术问题库 + 收敛条件 + Decision gate 模板 + 检查清单**（跨场景共享）；调用方各自判断输入态和问题顺序：codebase-audit 管已有代码首次接入，`/pmai-direction` 管已接入项目的方向重定 / 待办整理。
 > **复用 pattern**：跟 `skills/_shared/PM-VIEW-RULES.md` 同款 shared reference 机制。
 
 ---
@@ -13,11 +13,11 @@
 
 1. **判断场景**（调用方自己做）：
    - `/pmai-init-project` 已有代码分支触发的 codebase-audit step 4 → 已有代码首次接入（输入 = 刚产出的 `docs/CODEBASE-AUDIT.md` 现状档）
-   - `/pmai-direction` → 已接入项目的事后方向校准（方向重定 / 路线规划）
+   - `/pmai-direction` → 已接入项目的事后方向校准（方向重定 / 待办整理）
 2. **决定问题顺序**（调用方自己排）：
    - 已有代码首次接入：先读 `docs/CODEBASE-AUDIT.md` 作实况语境，再问产品定位 → 用户画像 → 产品边界 → 业务术语表 → TODO 待办池；现有技术只作首个 design 的证据
    - 方向重定：按 PM 提的变化切入，必要时重写产品定位 / 用户画像 / 产品边界 / 业务术语表 / TODO
-   - 路线规划：跳过产品定位 / 用户画像 / 产品边界（除非 PM 明确说这些也变了），只刷新 TODO 待办池和必要的业务术语
+   - 待办整理：跳过产品定位 / 用户画像 / 产品边界（除非 PM 明确说这些也变了），只把 PM 已经提过、讨论过想做的事整理进无序 TODO 待办池，并按需补业务术语
 3. **跑提问 + 闸门 + 写作 + 确认门**（按 §2-§7 走）
 4. **PM 定稿后**：调用方按自己语境继续（codebase-audit 首次接入给 ▶ Next Up 引到 `/pmai-design`；direction skill 退出）
 
@@ -48,7 +48,7 @@
 
 > **项目名称节**通常 `/pmai-init-project` 已填（参数 1），调用方确认即可。
 
-**调用方挑用**：调用方按场景挑 5 节里的子集 + 顺序（codebase-audit 首次接入按 5 节顺序；direction 按方向重定 / 路线规划挑用）。**叙事性里程碑不另开节** —— TODO 是 PM 的待办池，只记 PM 提过 / 讨论过想做的，AI 不从代码 / 竞品 / 已收尾历史反推填充。
+**调用方挑用**：调用方按场景挑 5 节里的子集 + 顺序（codebase-audit 首次接入按 5 节顺序；direction 按方向重定 / 待办整理挑用）。**叙事性里程碑不另开节** —— TODO 是 PM 的待办池，只记 PM 提过 / 讨论过想做的，AI 不从代码 / 竞品 / 已收尾历史反推填充。
 
 ---
 
@@ -153,7 +153,7 @@ header: "Ready?"
 question: "我想我大致明白你想做什么了。准备好写 PRODUCT.md 了吗？"
 options:
   - label: "创建 PRODUCT.md"
-    description: "我会开始写 PRODUCT.md，进入后续配置、需求和路线图流程。"
+    description: "我会开始写 PRODUCT.md，进入后续配置和需求流程。"
   - label: "继续探索"
     description: "你还想补充行业、客户类型、典型流程、Demo 形态或内部协作方式。"
 ```
@@ -231,14 +231,14 @@ git commit -m "docs: project direction settled"
 9. §9 atomic commit
 10. 返回 codebase-audit 收尾提示，并给 ▶ Next Up 引到第一个 `/pmai-design`
 
-### §10.2 `/pmai-direction`（方向重定 / 路线规划）
+### §10.2 `/pmai-direction`（方向重定 / 待办整理）
 
 1. agent 按 SKILL.md 步骤 1 读已有输入（CLAUDE.md / `PRODUCT.md` / `TODO.md`，存在 `docs/CODEBASE-AUDIT.md` 时只作为背景材料）
-2. **判断意图**（方向重定 / 路线规划）—— 调用方 `/pmai-direction` SKILL.md 的“意图判断”表给出触发条件 + 输入态 + 提问顺序
+2. **判断意图**（方向重定 / 待办整理）—— 调用方 `/pmai-direction` SKILL.md 的“意图判断”表给出触发条件 + 输入态 + 提问顺序
 3. agent @读 本文件
 4. 按 `/pmai-direction` SKILL.md 的“提问顺序”列问 PM：
    - 方向重定：变化来源 / 旧方向哪里不成立 → 产品定位 → 用户画像 → 产品边界 → 业务术语 → 刷新 TODO 待办池
-   - 路线规划：问 PM 现在想做什么，记进 TODO 待办池（**AI 不扫 `requirements/pmai-closed/` 反推历史、不排序**）→ 业务术语增量（默认跳过产品定位 / 用户画像 / 产品边界）
+   - 待办整理：把 PM 已经提过、讨论过想做的事记进 TODO 待办池（**AI 不扫 `requirements/pmai-closed/` 反推历史、不排序**）→ 业务术语增量（默认跳过产品定位 / 用户画像 / 产品边界）
 5. §4 未决问题闸门
 6. §6 Decision gate
 7. §5 写 / 改 PRODUCT.md + TODO.md
@@ -251,4 +251,4 @@ git commit -m "docs: project direction settled"
 
 ---
 
-**End of `_shared/project-questioning.md`**（项目方向讨论共享内核；方向重定 / 路线规划顺序细化已落 `direction/SKILL.md`）
+**End of `_shared/project-questioning.md`**（项目方向讨论共享内核；方向重定 / 待办整理顺序细化已落 `direction/SKILL.md`）

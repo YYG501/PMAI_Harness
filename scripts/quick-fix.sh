@@ -64,11 +64,8 @@ current_branch() {
   git -C "$1" branch --show-current 2>/dev/null || true
 }
 
-# 设全局 BASE_BRANCH + BASE_WORKTREE，决定 quick-fix 改的目标分支与合并工作树。
-# 三种合法启动位置：
-#   1) 主仓根 + branch=main           → BASE_BRANCH=main、BASE_WORKTREE=repo_root（main mode）
-#   2) build-* worktree（任意分支）   → BASE_BRANCH=该 worktree 当前分支、BASE_WORKTREE=该 worktree（build mode）
-#   3) task-* worktree                → 拒绝（历史 task worktree，不再作为当前入口）
+# 设全局 BASE_BRANCH + BASE_WORKTREE。quick-fix 只允许从主仓根的 main 启动；
+# active build 的小改继续走原 build lifecycle，避免另开一条合并链路。
 ensure_quickfix_root() {
   local repo_root="$1"
   local current_root branch
@@ -94,14 +91,14 @@ ensure_quickfix_root() {
     return 0
   fi
 
-  # 在 worktree 内（current_root != repo_root）
+  # 在 worktree 内（current_root != repo_root）一律拒绝。
   case "$branch" in
     build-*)
-      BASE_BRANCH="$branch"
-      BASE_WORKTREE="$current_root"
+      echo "错误：/pmai-quick-fix 不能在 build worktree 内启动。请回原 /pmai-build 会话继续当前 build，或回主仓 main 处理独立小修。" >&2
+      exit 1
       ;;
     task-*)
-      echo "错误：/pmai-quick-fix 不能在历史 task worktree 内启动。请回 main 或 build-* worktree。" >&2
+      echo "错误：/pmai-quick-fix 不能在历史 task worktree 内启动。请回主仓 main。" >&2
       exit 1
       ;;
     main)
@@ -109,7 +106,7 @@ ensure_quickfix_root() {
       exit 1
       ;;
     *)
-      echo "错误：/pmai-quick-fix 只能从 main 分支或 build-* worktree 启动，当前分支：$branch" >&2
+      echo "错误：/pmai-quick-fix 只能从主仓根的 main 分支启动，当前 worktree 分支：$branch" >&2
       exit 1
       ;;
   esac
@@ -206,7 +203,7 @@ check_preflight_redlines() {
   fi
 }
 
-warn_active_work() {
+reject_active_work() {
   local repo_root="$1"
   local found=()
   local meta work_dir status id
@@ -241,8 +238,10 @@ PY
   shopt -u nullglob
 
   if [ "${#found[@]}" -gt 0 ]; then
-    echo "警告：当前有活跃 work，ff-only merge 可能需要自动 rebase：" >&2
+    echo "错误：检测到活跃 build，/pmai-quick-fix 拒绝启动：" >&2
     printf '  - %s\n' "${found[@]}" >&2
+    echo "请回原 /pmai-build 会话继续迭代，避免绕过当前 build 合同改动 main。" >&2
+    return 1
   fi
 }
 
@@ -555,7 +554,7 @@ cmd_main() {
   # 设置 BASE_BRANCH / BASE_WORKTREE（全局）
   ensure_quickfix_root "$repo_root"
   check_preflight_redlines "$BASE_WORKTREE"
-  warn_active_work "$repo_root"
+  reject_active_work "$repo_root"
   warn_leftovers "$repo_root"
 
   local base_head ts branch worktree worktree_parent

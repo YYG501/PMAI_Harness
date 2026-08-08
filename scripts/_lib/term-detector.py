@@ -1,184 +1,392 @@
 #!/usr/bin/env python3
-"""term-detector.py — 业务词 / 角色检测器
+"""Reconcile explicitly declared business terms and roles after landing.
 
-当前由 landed 后自动文档编译调用，兼容 build-close 恢复入口复用。业务词真正稳定要等 design/build/复审完成后再沉淀；
-早期讨论里 PM 用 `**` 多为修辞，detector 信噪比差，故不调。
+Candidates only come from durable, structured product evidence:
 
-检测策略（保守，避免 Clippy 风险）：
-- 候选业务词来源（仅这两处显式术语标记，不全文 NLP）：
-  - 「X」/『X』 (中文引号 — 术语 / 专名专用标记)
-  - "X" / "X" (中文双引号)
-- **不再扫 markdown 加粗 `**X**`**：中文 markdown 里 `**` 几乎只用于修辞强调
-  （"**真正的痛点**" / "**核心**" / "**必须**"），全抓进来 = 噪音爆炸；
-  即便偶有真业务词，PM 用 `**` 标的概率远低于裸写
-- 角色识别：候选词以「员 / 管理员 / 运营 / 客服 / 财务 / 经理 / 主管」结尾
-- 过滤层：
-  1. 白名单（whitelist.json，含技术词 + 通用业务/产品词）
-  2. PROJECT 已登记（业务术语表 / 用户画像表）
-  3. .term-skip.json（本次工作已被 PM 拒绝的）
+- terminology and user-role tables in the active module/spec documents;
+- explicit ``术语：...`` / ``角色：...`` declarations in ``decisions.md``;
+- accepted deltas whose kind is ``term`` or ``role``.
 
-用法（被 skill 调用）：
-  python3 scripts/_lib/term-detector.py <text-file> <repo-root> [--work-dir <work-dir>]
-
-输出 JSON：
-{
-  "new_terms": ["商品池", "售后单"],
-  "new_roles": ["平台审核员"],
-  "skipped": ["X"],  // 在 .term-skip.json 里的，PM 已拒绝
-  "whitelisted": ["用户"],  // 在白名单的，silent
-  "registered": ["管理员"]  // 已在 PROJECT 的
-}
-
-调用 skill 据此输出 §2.7 话术（单词 / 多词批量 / 角色）让 PM 处理。
+The detector deliberately does not infer terminology from quotes, bold text, or
+implementation files. Its output feeds the post-land documentation impact map;
+it never edits PRODUCT.md itself.
 """
+
+from __future__ import annotations
+
 import argparse
 import json
+import os
 import re
 import sys
 from pathlib import Path
 
 
-def load_whitelist(repo_root: Path) -> set:
-    """Load hardcode whitelist from skills/_shared/term-detector/whitelist.json."""
-    wl_path = repo_root / "skills" / "_shared" / "term-detector" / "whitelist.json"
-    if not wl_path.exists():
-        # 容错：消费仓如未同步该文件，返回 minimal 白名单
-        return {"用户", "产品", "数据", "API", "JSON"}
-    data = json.loads(wl_path.read_text(encoding="utf-8"))
-    terms = set()
-    for k, v in data.items():
-        if isinstance(v, list):
-            terms.update(v)
-    return terms
+MINIMAL_WHITELIST = {"用户", "产品", "数据", "API", "JSON"}
+TERM_KINDS = {"term"}
+ROLE_KINDS = {"role"}
+EMPTY_VALUES = {"", "-", "/", "无", "暂无", "待定", "待补充", "术语", "术语 / 缩略词", "角色", "角色名"}
+SUPERSEDE_MARKERS = ("supersede", "superseded", "被取代", "已取代", "已废弃", "不再有效")
 
 
-def load_registered(project_path: Path) -> dict:
-    """Load registered terms from PRODUCT.md 业务术语表 / 用户画像表."""
-    result = {"terms": set(), "roles": set()}
-    if not project_path.exists():
-        return result
-    content = project_path.read_text(encoding="utf-8")
+def framework_root() -> Path:
+    """Resolve framework assets from PMAI_HOME or this installed script."""
+    candidates: list[Path] = []
+    configured = os.environ.get("PMAI_HOME")
+    if configured:
+        candidates.append(Path(configured).expanduser())
+    candidates.append(Path(__file__).resolve().parents[2])
+    for candidate in candidates:
+        if (candidate / "skills" / "_shared" / "term-detector" / "whitelist.json").is_file():
+            return candidate
+    return candidates[-1]
 
-    # 提取 ## 用户画像 表的「角色」列
-    m = re.search(r"##\s+用户画像\s*\n(.+?)(?=^##\s|\Z)", content, re.MULTILINE | re.DOTALL)
-    if m:
-        for line in m.group(1).splitlines():
-            if "|" in line and not re.match(r"^\|[\s\-\|]+\|$", line.strip()):
-                cells = [c.strip() for c in line.strip().strip("|").split("|")]
-                if cells and cells[0] not in ("角色", "", "-"):
-                    result["roles"].add(cells[0])
 
-    # 提取 ## 业务术语表 表的「术语」列
-    m = re.search(r"##\s+业务术语表\s*\n(.+?)(?=^##\s|\Z)", content, re.MULTILINE | re.DOTALL)
-    if m:
-        for line in m.group(1).splitlines():
-            if "|" in line and not re.match(r"^\|[\s\-\|]+\|$", line.strip()):
-                cells = [c.strip() for c in line.strip().strip("|").split("|")]
-                if cells and cells[0] not in ("术语", "", "-"):
-                    result["terms"].add(cells[0])
+def load_whitelist() -> set[str]:
+    path = framework_root() / "skills" / "_shared" / "term-detector" / "whitelist.json"
+    if not path.is_file():
+        return set(MINIMAL_WHITELIST)
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return set(MINIMAL_WHITELIST)
+    terms: set[str] = set()
+    if isinstance(data, dict):
+        for values in data.values():
+            if isinstance(values, list):
+                terms.update(str(value).strip() for value in values if str(value).strip())
+    return terms or set(MINIMAL_WHITELIST)
 
+
+def strip_markup(value: str) -> str:
+    value = re.sub(r"<!--.*?-->", "", value, flags=re.DOTALL)
+    value = re.sub(r"[`*_~]", "", value)
+    value = re.sub(r"<br\s*/?>", " ", value, flags=re.IGNORECASE)
+    value = value.strip().strip('"“”「」『』')
+    return re.sub(r"\s+", " ", value).strip()
+
+
+def valid_name(value: str) -> bool:
+    if value in EMPTY_VALUES or len(value) > 64:
+        return False
+    return not bool(re.search(r"[。！？!?；;\n]", value))
+
+
+def split_sections(text: str) -> list[tuple[str, str]]:
+    text = re.sub(r"<!--.*?-->", "", text, flags=re.DOTALL)
+    matches = list(re.finditer(r"^(#{1,6})\s+(.+?)\s*$", text, re.MULTILINE))
+    result: list[tuple[str, str]] = []
+    for index, match in enumerate(matches):
+        end = matches[index + 1].start() if index + 1 < len(matches) else len(text)
+        result.append((strip_markup(match.group(2)), text[match.end() : end].strip()))
     return result
 
 
-def load_skip_list(work_dir: Path) -> set:
-    """Load .term-skip.json for current work (PM 本次工作已拒绝的词)."""
-    skip_path = work_dir / ".term-skip.json"
-    if not skip_path.exists():
-        return set()
-    try:
-        data = json.loads(skip_path.read_text(encoding="utf-8"))
-        terms = set(data.get("skipped_terms", []))
-        terms.update(data.get("skipped_roles", []))
-        return terms
-    except Exception:
-        return set()
+def normalized_heading(value: str) -> str:
+    value = re.sub(r"^[一二三四五六七八九十0-9.、：:\s-]+", "", strip_markup(value))
+    return re.sub(r"\s+", "", value)
 
 
-def extract_candidates(text: str) -> list:
-    """提取候选业务词：「X」 / 『X』 / "X" / "X"。
-
-    刻意不抓 `**X**`（markdown 加粗）—— 中文场景 `**` 几乎只用于修辞强调，
-    误报率压倒任何真业务词收益（见模块 docstring）。"""
-    candidates = []
-    # 中文单引号
-    for m in re.finditer(r"「([^「」\n]{2,15})」", text):
-        candidates.append(m.group(1).strip())
-    # 中文书名号
-    for m in re.finditer(r"『([^『』\n]{2,15})』", text):
-        candidates.append(m.group(1).strip())
-    # 中文双引号
-    for m in re.finditer(r"[“”]([^“”\n]{2,15})[“”]", text):
-        candidates.append(m.group(1).strip())
-    return candidates
+def split_table_row(line: str) -> list[str]:
+    value = line.strip()
+    if value.startswith("|"):
+        value = value[1:]
+    if value.endswith("|"):
+        value = value[:-1]
+    return [strip_markup(cell.replace(r"\|", "|")) for cell in re.split(r"(?<!\\)\|", value)]
 
 
-def is_role(term: str) -> bool:
-    """判断是不是角色词（启发式：以「员 / 管理员 / 运营 / 客服 / 财务 / 经理 / 主管 / 师」结尾）。"""
-    role_suffixes = ("员", "运营", "客服", "财务", "经理", "主管", "师")
-    return term.endswith(role_suffixes)
+def is_separator_row(line: str) -> bool:
+    cells = split_table_row(line)
+    return bool(cells) and all(re.fullmatch(r":?-{3,}:?", cell.replace(" ", "")) for cell in cells)
 
 
-def detect(text: str, whitelist: set, registered: dict, skip: set) -> dict:
-    """检测文本中的新业务词 / 角色，按四层过滤。"""
-    candidates = extract_candidates(text)
-    # dedup 保序
-    seen = set()
-    unique = []
-    for c in candidates:
-        if c not in seen:
-            seen.add(c)
-            unique.append(c)
+def tables(body: str) -> list[tuple[list[str], list[list[str]]]]:
+    lines = body.splitlines()
+    result: list[tuple[list[str], list[list[str]]]] = []
+    index = 0
+    while index + 1 < len(lines):
+        if "|" not in lines[index] or not is_separator_row(lines[index + 1]):
+            index += 1
+            continue
+        header = split_table_row(lines[index])
+        rows: list[list[str]] = []
+        index += 2
+        while index < len(lines) and "|" in lines[index] and lines[index].strip().startswith("|"):
+            rows.append(split_table_row(lines[index]))
+            index += 1
+        result.append((header, rows))
+    return result
 
-    result = {
-        "new_terms": [],
-        "new_roles": [],
-        "skipped": [],
-        "whitelisted": [],
-        "registered": [],
+
+def repo_relative(repo_root: Path, path: Path) -> str:
+    return path.resolve().relative_to(repo_root.resolve()).as_posix()
+
+
+def candidate(kind: str, name: str, definition: str, source: str) -> dict | None:
+    name = strip_markup(name)
+    if not valid_name(name):
+        return None
+    return {
+        "kind": kind,
+        "name": name,
+        "definition": strip_markup(definition),
+        "source": source,
     }
 
-    for term in unique:
-        if term in whitelist:
-            result["whitelisted"].append(term)
-            continue
-        if term in registered["terms"] or term in registered["roles"]:
-            result["registered"].append(term)
-            continue
-        if term in skip:
-            result["skipped"].append(term)
-            continue
-        if is_role(term):
-            result["new_roles"].append(term)
-        else:
-            result["new_terms"].append(term)
 
+def table_candidates(path: Path, repo_root: Path) -> list[dict]:
+    if not path.is_file():
+        return []
+    source = repo_relative(repo_root, path)
+    result: list[dict] = []
+    for title, body in split_sections(path.read_text(encoding="utf-8")):
+        heading = normalized_heading(title)
+        term_section = "名词解释" in heading or "业务术语" in heading or heading == "术语表"
+        role_section = "用户角色" in heading or "角色清单" in heading or heading == "用户画像"
+        if not term_section and not role_section:
+            continue
+        for header, rows in tables(body):
+            normalized = [re.sub(r"\s+", "", value) for value in header]
+            if term_section:
+                name_index = next((i for i, value in enumerate(normalized) if "术语" in value or value == "名词"), None)
+                kind = "term"
+            else:
+                name_index = next(
+                    (
+                        i
+                        for i, value in enumerate(normalized)
+                        if value in {"角色", "角色名", "用户角色"}
+                    ),
+                    None,
+                )
+                kind = "role"
+            if name_index is None:
+                continue
+            definition_index = next(
+                (
+                    i
+                    for i, value in enumerate(normalized)
+                    if any(marker in value for marker in ("说明", "定义", "描述", "含义"))
+                ),
+                None,
+            )
+            for row in rows:
+                if name_index >= len(row):
+                    continue
+                definition = row[definition_index] if definition_index is not None and definition_index < len(row) else ""
+                item = candidate(kind, row[name_index], definition, source)
+                if item:
+                    result.append(item)
     return result
 
 
-def main():
-    parser = argparse.ArgumentParser(description="Detect new business terms / roles in stage output")
-    parser.add_argument("text_file", help="path to file containing the stage output text")
-    parser.add_argument("repo_root", help="repository root path")
-    parser.add_argument("--work-dir", default=None, help="active work dir (for .term-skip.json)")
+def decision_candidates(path: Path, repo_root: Path) -> list[dict]:
+    if not path.is_file():
+        return []
+    source = repo_relative(repo_root, path)
+    result: list[dict] = []
+    pattern = re.compile(
+        r"^\s*(?:[-*]\s*)?(?:\*\*)?(业务术语|术语|用户角色|角色)(?:\*\*)?\s*[：:]\s*(.+?)\s*$"
+    )
+    for title, body in split_sections(path.read_text(encoding="utf-8")):
+        if not re.match(r"^D\d+(?:[.、：:\s-]|$)", strip_markup(title), re.IGNORECASE):
+            continue
+        lowered = f"{title}\n{body}".lower()
+        if "~~" in title or "~~" in body or any(marker in lowered for marker in SUPERSEDE_MARKERS):
+            continue
+        for line in body.splitlines():
+            match = pattern.match(line)
+            if not match:
+                continue
+            value = match.group(2).split("|", 1)[0].strip()
+            kind = "role" if "角色" in match.group(1) else "term"
+            item = candidate(kind, value, "", source)
+            if item:
+                result.append(item)
+    return result
+
+
+def accepted_delta_candidates(build: dict, source: str) -> list[dict]:
+    result: list[dict] = []
+    deltas = build.get("accepted_deltas", [])
+    if not isinstance(deltas, list):
+        return result
+    for delta in deltas:
+        if not isinstance(delta, dict):
+            continue
+        raw_kind = str(delta.get("kind", "")).strip().lower()
+        if raw_kind in TERM_KINDS:
+            kind = "term"
+        elif raw_kind in ROLE_KINDS:
+            kind = "role"
+        else:
+            continue
+        summary = delta.get("summary")
+        if not isinstance(summary, str):
+            continue
+        value = re.sub(r"^(?:业务术语|术语|用户角色|角色)\s*[：:]\s*", "", summary).strip()
+        item = candidate(kind, value, "", source)
+        if item:
+            result.append(item)
+    return result
+
+
+def load_build(module_dir: Path) -> dict:
+    path = module_dir / ".work-meta.json"
+    if not path.is_file():
+        return {}
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {}
+    build = data.get("build") if isinstance(data, dict) else None
+    return build if isinstance(build, dict) else {}
+
+
+def safe_spec_source(repo_root: Path, value: str) -> Path | None:
+    path = Path(value).expanduser()
+    path = path if path.is_absolute() else repo_root / path
+    try:
+        relative = path.resolve().relative_to(repo_root.resolve())
+    except ValueError:
+        return None
+    parts = relative.parts
+    if len(parts) < 3 or parts[:2] != ("docs", "modules") or path.suffix.lower() != ".md":
+        return None
+    # Durable product specs are either docs/modules/<name>.md functional specs
+    # or a module's docs/modules/<module>/spec.md. Process notes and indexes
+    # must never promote draft terminology into PRODUCT.md.
+    if len(parts) == 3:
+        return path.resolve() if path.name != "INDEX.md" else None
+    return path.resolve() if path.name == "spec.md" else None
+
+
+def collect_spec_sources(repo_root: Path, module_dir: Path, build: dict, extras: list[str]) -> list[Path]:
+    result = [module_dir / "spec.md"]
+    anchor = build.get("anchor")
+    if isinstance(anchor, str):
+        path = safe_spec_source(repo_root, anchor)
+        if path:
+            result.append(path)
+    for value in extras:
+        path = safe_spec_source(repo_root, value)
+        if path:
+            result.append(path)
+    seen: set[Path] = set()
+    unique: list[Path] = []
+    for path in result:
+        if path in seen:
+            continue
+        seen.add(path)
+        unique.append(path)
+    return unique
+
+
+def load_registered(product_path: Path) -> dict[str, set[str]]:
+    registered = {"terms": set(), "roles": set()}
+    if not product_path.is_file():
+        return registered
+    for item in table_candidates(product_path, product_path.parent):
+        key = "roles" if item["kind"] == "role" else "terms"
+        registered[key].add(item["name"])
+    return registered
+
+
+def load_skip_list(work_dir: Path) -> set[str]:
+    path = work_dir / ".term-skip.json"
+    if not path.is_file():
+        return set()
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return set()
+    if not isinstance(data, dict):
+        return set()
+    result: set[str] = set()
+    for field in ("skipped_terms", "skipped_roles"):
+        values = data.get(field, [])
+        if isinstance(values, list):
+            result.update(str(value).strip() for value in values if str(value).strip())
+    return result
+
+
+def reconcile(repo_root: Path, module_dir: Path, extras: list[str], work_dir: Path) -> dict:
+    build = load_build(module_dir)
+    candidates: list[dict] = []
+    for path in collect_spec_sources(repo_root, module_dir, build, extras):
+        candidates.extend(table_candidates(path, repo_root))
+    candidates.extend(decision_candidates(module_dir / "decisions.md", repo_root))
+    candidates.extend(accepted_delta_candidates(build, repo_relative(repo_root, module_dir / ".work-meta.json")))
+
+    deduped: list[dict] = []
+    indexes: dict[str, int] = {}
+    for item in candidates:
+        name = item["name"]
+        if name in indexes:
+            existing = deduped[indexes[name]]
+            if item["kind"] == "role" and existing["kind"] != "role":
+                existing["kind"] = "role"
+            if not existing["definition"] and item["definition"]:
+                existing["definition"] = item["definition"]
+            continue
+        indexes[name] = len(deduped)
+        deduped.append(item)
+
+    whitelist = load_whitelist()
+    registered = load_registered(repo_root / "PRODUCT.md")
+    skipped_names = load_skip_list(work_dir)
+    new_terms: list[str] = []
+    new_roles: list[str] = []
+    whitelisted: list[str] = []
+    registered_names: list[str] = []
+    skipped: list[str] = []
+    new_candidates: list[dict] = []
+    for item in deduped:
+        name = item["name"]
+        if name in whitelist:
+            whitelisted.append(name)
+        elif name in registered["terms"] or name in registered["roles"]:
+            registered_names.append(name)
+        elif name in skipped_names:
+            skipped.append(name)
+        else:
+            new_candidates.append(item)
+            (new_roles if item["kind"] == "role" else new_terms).append(name)
+
+    return {
+        "new_terms": new_terms,
+        "new_roles": new_roles,
+        "skipped": skipped,
+        "whitelisted": whitelisted,
+        "registered": registered_names,
+        "candidates": new_candidates,
+    }
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("module_dir", help="active docs/modules/<module> directory")
+    parser.add_argument("repo_root", help="consumer repository root")
+    parser.add_argument("--source", action="append", default=[], help="additional landed markdown source")
+    parser.add_argument("--work-dir", help="directory containing optional .term-skip.json")
     args = parser.parse_args()
 
-    repo_root = Path(args.repo_root).resolve()
-    text_path = Path(args.text_file)
-    if not text_path.exists():
-        print(json.dumps({"error": f"text file not found: {text_path}"}, ensure_ascii=False), file=sys.stderr)
-        sys.exit(2)
-
-    text = text_path.read_text(encoding="utf-8")
-    whitelist = load_whitelist(repo_root)
-    project_path = repo_root / "docs" / "PRODUCT.md"
-    registered = load_registered(project_path)
-
-    work_dir = Path(args.work_dir) if args.work_dir else None
-    skip = load_skip_list(work_dir) if work_dir else set()
-
-    result = detect(text, whitelist, registered, skip)
+    repo_root = Path(args.repo_root).expanduser().resolve()
+    module_dir = Path(args.module_dir).expanduser().resolve()
+    try:
+        module_dir.relative_to(repo_root)
+    except ValueError:
+        print(json.dumps({"error": f"module is outside repository: {module_dir}"}, ensure_ascii=False), file=sys.stderr)
+        return 2
+    if not module_dir.is_dir():
+        print(json.dumps({"error": f"module directory not found: {module_dir}"}, ensure_ascii=False), file=sys.stderr)
+        return 2
+    work_dir = Path(args.work_dir).expanduser().resolve() if args.work_dir else module_dir
+    result = reconcile(repo_root, module_dir, args.source, work_dir)
     print(json.dumps(result, ensure_ascii=False, indent=2))
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())

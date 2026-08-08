@@ -26,6 +26,7 @@ OPENCODE_COMMANDS="$OPENCODE_CONFIG_DIR/commands"
 SKILL_PREFIX="pmai-"
 BIN_DIR="$(cd "$(dirname "$0")" && pwd)"
 CLI_ROOT="$(cd "$BIN_DIR/.." && pwd)"
+source "$CLI_ROOT/scripts/_lib/skill-links.sh"
 
 EXIT_CODE=0
 PASS_COUNT=0
@@ -105,10 +106,11 @@ else
   fi
 fi
 
-# 3. Skills 全勤
+# 3. Skill 源资产完整性
 echo ""
-echo "─── 3. Skills in ~/.pmai/skills/ ───"
-# 期望全勤的公开 skill —— 必须与 skills/ 目录（除 _shared / _internal）完全一致。
+echo "─── 3. Skill sources in $PMAI_HOME/skills/ ───"
+# 期望完整的 skill 源资产 —— 必须与 skills/ 目录（除 _shared / _internal）完全一致。
+# 宿主是否暴露由 pmai_skill_is_host_exposed 另行过滤，两者不是同一清单。
 # ⚠️ 加 / 删 skill 时必须同步本清单 —— 否则 pmai upgrade 的 doctor 自检会误判「缺 skill」触发回滚
 #    （reshape 删 req-analysis、加 build/build-close/design/mockup/status 时漏改本清单的教训）。
 #    tests/test-doctor-skills.sh 对本清单与 skills/ 目录做全等校验，漏同步会在 run-all 红掉。
@@ -126,6 +128,7 @@ EXPECTED_SKILLS=(
 expected_exposed_skill_names() {
   local sk
   for sk in "${EXPECTED_SKILLS[@]}"; do
+    pmai_skill_is_host_exposed "$sk" || continue
     case "$sk" in
       pmai-*) echo "$sk" ;;
       *) echo "${SKILL_PREFIX}${sk}" ;;
@@ -196,8 +199,13 @@ repair_empty_exposure_dir() {
     case "$skill_name" in
       _internal) continue ;;
       _shared)  dst="$exposure_dir/_shared" ;;
-      pmai-*)   dst="$exposure_dir/$skill_name" ;;
-      *)        dst="$exposure_dir/${SKILL_PREFIX}${skill_name}" ;;
+      *)
+        pmai_skill_is_host_exposed "$skill_name" || continue
+        case "$skill_name" in
+          pmai-*) dst="$exposure_dir/$skill_name" ;;
+          *)      dst="$exposure_dir/${SKILL_PREFIX}${skill_name}" ;;
+        esac
+        ;;
     esac
 
     if [ -e "$dst" ] && [ ! -L "$dst" ]; then
@@ -217,11 +225,18 @@ check_skill_exposure_dir() {
   local label="$1"
   local exposure_dir="$2"
   local display_path="$3"
-  local s count stale_exposed missing_exposed
+  local s count stale_exposed missing_exposed retired_count
   local dangling=()
 
   echo ""
   echo "─── 4. Skill symlinks ($label: ${display_path}/${SKILL_PREFIX}*) ───"
+  if retired_count=$(pmai_prune_managed_hidden_skill_links "$PMAI_HOME/skills" "$exposure_dir"); then
+    if [ "$retired_count" -gt 0 ]; then
+      ok "$label retired $retired_count PMAI-managed hidden skill link(s)"
+    fi
+  else
+    fail "$label could not remove retired PMAI-managed hidden skill links"
+  fi
   count=0
   for s in "$exposure_dir"/${SKILL_PREFIX}* "$exposure_dir/_shared"; do
     [ -e "$s" ] || [ -L "$s" ] || continue
@@ -375,7 +390,7 @@ for sk in "${EXPECTED_SKILLS[@]}"; do
   fi
 done
 if [ ${#MISSING[@]} -eq 0 ]; then
-  ok "All ${#EXPECTED_SKILLS[@]} expected skills present"
+  ok "All ${#EXPECTED_SKILLS[@]} expected skill source directories present"
 else
   fail "Missing ${#MISSING[@]} skill(s): ${MISSING[*]}"
 fi

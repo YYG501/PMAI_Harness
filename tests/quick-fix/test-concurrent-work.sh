@@ -7,16 +7,23 @@ source "$SCRIPT_DIR/helpers/fixture.sh"
 
 QF="$FRAMEWORK_ROOT/scripts/quick-fix.sh"
 
-test_active_work_warns_but_merges() {
-  start_test "scenario 7 active work warns and ff-only succeeds"
+test_active_work_rejects_without_side_effects() {
+  start_test "scenario 7 active build rejects before creating quick-fix work"
   fixture_setup
   fixture_create_work "work-001" "test" 6 >/dev/null
-  if (cd "$FIXTURE_DIR" && QUICK_FIX_COMMAND="mkdir -p docs && echo warn > docs/warn.md" QUICK_FIX_APPROVE=1 bash "$QF" "warn active" >/tmp/qf.out.$$ 2>/tmp/qf.err.$$) \
-    && [ -f "$FIXTURE_DIR/docs/warn.md" ] \
-    && grep -q "活跃 work" /tmp/qf.err.$$; then
+  before=$(git -C "$FIXTURE_DIR" rev-parse HEAD)
+  marker="$FIXTURE_DIR/quick-fix-command-ran"
+  if (cd "$FIXTURE_DIR" && QUICK_FIX_COMMAND="touch '$marker'" QUICK_FIX_APPROVE=1 bash "$QF" "reject active" >/tmp/qf.out.$$ 2>/tmp/qf.err.$$); then
+    _fail "active build should reject quick-fix"
+  elif [ "$(git -C "$FIXTURE_DIR" rev-parse HEAD)" = "$before" ] \
+    && [ ! -e "$marker" ] \
+    && [ -z "$(git -C "$FIXTURE_DIR" branch --list 'tmp-quick-*')" ] \
+    && ! find "$FIXTURE_DIR/.worktrees" -mindepth 1 -maxdepth 1 -type d -name 'tmp-quick-*' -print -quit 2>/dev/null | grep -q . \
+    && grep -q "活跃 build" /tmp/qf.err.$$ \
+    && grep -q "/pmai-build" /tmp/qf.err.$$; then
     pass_test
   else
-    _fail "active work warn path failed"
+    _fail "active build rejection left side effects or missed recovery guidance"
     cat /tmp/qf.out.$$ /tmp/qf.err.$$ >&2
   fi
   rm -f /tmp/qf.out.$$ /tmp/qf.err.$$
@@ -76,7 +83,7 @@ test_same_second_unique_branches() {
   fixture_teardown
 }
 
-test_active_work_warns_but_merges
+test_active_work_rejects_without_side_effects
 test_ff_only_rebase_retry_success
 test_rebase_conflict_keeps_worktree
 test_same_second_unique_branches

@@ -1,109 +1,73 @@
 ---
 name: _shared/term-detector
 description: |
-  业务词 / 角色发现检测器（共享逻辑）。由 landed 后自动文档编译调用，识别本次工作真实落地的新业务词 / 角色，
-  patch 进 PRODUCT 业务术语表 / 用户画像。
+  landed 后的业务术语 / 角色结构化对账规则。只从规格、决定和 accepted deltas 中明确声明的术语与角色生成 PRODUCT.md 文档影响项。
 ---
 
 # _shared/term-detector
 
-> **共享 detector**。不是 user-facing skill，而是写作 skill 的共享逻辑落点。
->
-> **设计**：业务实体真正稳定要等 design/pmai-build/复审完成后再沉淀；PRD 写作阶段不直接 patch 长期术语表。本次工作内的临时词典职责由模块 `discussion.md` / `decisions.md` 或 PRD §三名词解释承担。
+> 内部共享能力，不是 PM 入口。`doc-impact.py init` 在实现 landed 后自动调用。
 
-## 何时调用
+## 产品职责
 
-| 调用 skill | 调用位置 | 输入文件 |
-|---|---|---|
-| 自动 finalize（兼容 `/pmai-build-close` 恢复） | landed 后术语回写 | context pack + accepted deltas + 涉及模块 `discussion.md` / `decisions.md` / `spec.md` + 按需功能型规格文档 |
+模块工作中的临时词典留在 `spec.md` / 功能型规格的“名词解释”和“用户角色”表中。实现进入 main 后，本能力把已经稳定、但根 `PRODUCT.md` 尚未登记的业务术语和角色加入文档影响地图；它只报告差异，不直接改写长期真相源。
 
-**禁止位置**：
-- `design` 刚开始：PM 修辞密度高、业务词还没沉淀
-- `/pmai-design` 探索中：业务词还在变
-- `spec-writing` 写功能型规格文档：功能型规格文档是评审 / build 产物，不直接升级长期术语
-- 写实现深水区 / 技术约束内容：工程层允许技术词，误报率高
+这一步解决的是跨模块复用问题：后续 design / build 能从 `PRODUCT.md` 继续使用已稳定的对象名称和角色定义，而不是每个模块重新命名。
 
-## 临时词典 vs 长期词典
+## 候选来源
 
-| 层级 | 文件 | 谁写 | 谁读 |
-|---|---|---|---|
-| **本次工作临时词典** | 模块 `discussion.md` / `decisions.md` 或功能型规格文档 §三 名词解释 | design / spec-writing | build / finalize 按需读 |
-| **跨工作长期词典** | `PRODUCT.md ## 业务术语表` | landed 后 detector 按 decision policy → patch | design / build / spec-writing 必读 |
+只接受可追溯的结构化声明：
 
-两份词典在 build 阶段是**并集读**：PRODUCT 是已沉淀的稳定基线，模块 discussion/decisions 或 PRD §三是本次新引入还未升级的临时词。实现落入 main 后，detector 把真稳定下来的词提升到长期词典；兼容恢复入口复用同一逻辑。
+1. 当前模块 `spec.md`、build 合同明确记录的规格锚点，以及本轮 landed diff 直接改动的模块 `spec.md` / 功能型规格中“名词解释 / 业务术语”表的术语列；
+2. 上述规格中“用户角色 / 角色清单”表的角色列；
+3. 当前模块 `decisions.md` 的有效 `D<number>` 决定中，单独一行声明的 `术语：<名称>` 或 `角色：<名称>`；
+4. `accepted_deltas` 中 `kind=term` / `kind=role` 的条目。沿用现有 `add-delta` 合同，此时 `summary` 写准确名称。
 
-普通术语定义属于可逆表达：AI 给推荐并推进，在自然收口点汇总。新角色、新对象或一个定义会改变产品模型时，才立即让 PM 拍板。不得把每个 detector finding 都变成 PM 问题。
+不要扫描引号、加粗、普通正文或代码来猜术语。它们无法区分正式命名和修辞强调，也与规格统一使用 ASCII 引号的规则冲突。
 
-## 如何调用
+## 对账顺序
+
+1. 从脚本所在的 PMAI 安装目录（或显式 `PMAI_HOME`）读取 `whitelist.json`，不读取消费仓的 `skills/`；
+2. 从消费仓根 `PRODUCT.md` 的“业务术语表 / 用户画像”读取已登记项；
+3. 应用当前工作目录的可选 `.term-skip.json`；
+4. 只把剩余的新术语 / 新角色交给 `doc-impact.py`，生成 `kind=term`、目标为 `PRODUCT.md` 的 pending 项；
+5. 文档编译根据规格里的定义更新 `PRODUCT.md`，或说明无需更新后标记 `no-change`；`doc-impact.py validate` 前必须收口。
+
+普通新名称如果已有清楚定义，AI 直接按现有决定和文档影响流程更新，不逐词打断 PM。缺少定义或会改变产品对象 / 角色模型时，才回到 design 让 PM 拍板，不能在 landed 收尾时猜。
+
+## 调用
 
 ```bash
-# 把即将写的内容存临时文件
-TMPFILE=$(mktemp)
-# ...写内容到 $TMPFILE...
-
-RESULT=$(python3 "$PMAI_HOME/scripts/_lib/term-detector.py" \
-  "$TMPFILE" "$REPO_ROOT" \
-  --work-dir "$ACTIVE_WORK_DIR")
-
-rm "$TMPFILE"
-echo "$RESULT"
+python3 "$PMAI_HOME/scripts/_lib/term-detector.py" \
+  "$ACTIVE_MODULE_DIR" "$REPO_ROOT" \
+  --work-dir "$ACTIVE_MODULE_DIR"
 ```
 
-返回 JSON：
+`doc-impact.py init` 会额外传入本轮 landed diff 中直接改动的模块 `spec.md` 和 `docs/modules/<按内容命名>.md` 功能型规格。`discussion.md`、`decisions.md` 与索引即使出现同名表格也不会作为规格来源；决定只按上面的显式 `D<number>` 声明读取。
+
+返回示例：
+
 ```json
 {
-  "new_terms": ["探测档延迟项"],
+  "new_terms": ["结算批次"],
   "new_roles": ["平台审核员"],
-  "skipped": ["售后单"],      // 本次工作已被 PM 拒绝（.term-skip.json）
-  "whitelisted": ["用户"],    // 通用词，silent
-  "registered": ["商品池"]    // PRODUCT 已有
+  "skipped": ["旧叫法"],
+  "whitelisted": ["用户"],
+  "registered": ["商品池"],
+  "candidates": [
+    {
+      "kind": "term",
+      "name": "结算批次",
+      "definition": "同一结算周期内的一组待结算订单",
+      "source": "docs/modules/settlement/spec.md"
+    }
+  ]
 }
 ```
 
-## 话术模板（PM 视图，禁工程黑话）
+## 边界
 
-### 单业务词（<3 新词时）
-
-> 📖 你说的「<term>」AI 不在术语表里，给我一句话定义我加一条？（≤30 字）
-> 不想加 → 说「跳过」（本次工作不再问这个词）
-
-### 多业务词批量（≥3 新词时，autoplan DX F3 共识）
-
-> 📖 发现 <N> 个新业务词：「<t1>」/「<t2>」/「<t3>」...。一次性处理：
-> - 全加：每个给我一句话定义
-> - 挑几个：说「加 <ti>」「跳过 <tj>」
-> - 全跳过：本次工作不再问这些词
-
-### 新角色
-
-> 📖 内容里出现「<role>」这个新角色，画像表还没收录。要不要加？
-> 建议：描述 = "..."，关键诉求 = "..."。你改/确认/跳过。
-
-## SKIP 列表存储
-
-PM 答「跳过 / 忽略 / 不重要」→ 写入：
-
-```bash
-SKIP_FILE="$ACTIVE_WORK_DIR/.term-skip.json"
-# 初始化（如不存在）
-[ ! -f "$SKIP_FILE" ] && echo '{"skipped_terms": [], "skipped_roles": []}' > "$SKIP_FILE"
-
-# 追加（用 python -c 或 jq）
-python3 -c "
-import json
-with open('$SKIP_FILE') as f: data = json.load(f)
-data['skipped_terms'].append('<term>')  # 或 skipped_roles
-with open('$SKIP_FILE', 'w') as f: json.dump(data, f, ensure_ascii=False, indent=2)
-"
-```
-
-**生命周期**：随当前工作；自动 finalize 完成或 `/pmai-build-cancel` 后清空（不持久跨工作）。
-
-## 决策依据
-
-- 锁定：不给全局 toggle（与 MEMORY 第 2「不留 FORCE」一致）
-
-## 不另起新 skill
-
-本 detector 是**内部共享逻辑**（`_shared/`），不出现在 PM 的 user-facing
-skill 列表里。PM 看到的是业务流程里的产出 + 业务词提示。
+- 不在 design 探索中调用，不把未定稿用词提前升级为长期术语；
+- 不从代码现状反推产品词典；
+- 不新建第二套术语账本，长期真相仍是根 `PRODUCT.md`；
+- 不向 PM 展示 detector、白名单、impact item 等后台名词，只说明需要补充或已更新的产品术语 / 角色。

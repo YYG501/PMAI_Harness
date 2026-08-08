@@ -10,6 +10,7 @@
     "design-personal-memory-cross-project-recall": ["skills/design/SKILL.md", "skills/_shared/personal-memory.md", "scripts/personal-memory.py", "scripts/context-pack.py", "tests/test-personal-memory.sh"],
     "design-ready-handoff-currentness": ["skills/design/SKILL.md", "skills/build/SKILL.md", "scripts/build-contract.py", "scripts/context-pack.py", "scripts/status-view.py", "scripts/_lib/ready_contract.py", "tests/test-ready-contract.sh"],
     "design-recovers-history": ["scripts/context-pack.py", "skills/design/SKILL.md"],
+    "design-spec-routing": ["skills/design/SKILL.md", "skills/spec-writing/SKILL.md", "tests/test-writing-skill-routing.sh"],
     "docs-pending-resume-static": ["scripts/build-contract.py", "scripts/land-work.sh", "skills/build-close/SKILL.md"],
     "evidence-invalidation-static": ["scripts/build-contract.py", "tests/test-build-contract.sh"],
     "iterative-fast-final-full": ["skills/build/SKILL.md", "skills/build-close/SKILL.md", "skills/_shared/consistency-scan.md", "skills/_shared/pm-view/input-flow.md", "scripts/acceptance-profile.py", "scripts/build-contract.py", "scripts/final-validation.py", "scripts/build-timing.py", "templates/AGENTS.md.tmpl", "templates/CLAUDE.md.tmpl", "tests/test-build-contract.sh", "tests/test-final-validation.sh", "tests/test-build-timing.sh"],

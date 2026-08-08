@@ -30,7 +30,7 @@ source "${PMAI_HOME:-$HOME/.pmai}/scripts/skill-preamble.sh"
 ## Preamble
 
 ```bash
-source "$HOME/.pmai/scripts/skill-preamble.sh"
+source "${PMAI_HOME:-$HOME/.pmai}/scripts/skill-preamble.sh"
 echo "SKILL: record"
 ```
 

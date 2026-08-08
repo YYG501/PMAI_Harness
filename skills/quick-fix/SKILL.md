@@ -32,14 +32,16 @@ quick-fix 只面向当前主线的小改。脚本创建 `tmp-quick-*` worktree�
 
 | 启动位置 | 行为 |
 |---|---|
-| 主仓根 + 当前 main | 允许，base = main |
+| 主仓根 + 当前 main，且仓库没有 active build | 允许，base = main |
 | `.worktrees/pmai-build-*` | 拒绝；先回主仓，并在原 `/pmai-build` 会话继续或用 `/pmai-status` 恢复 |
 | 其他分支 / 历史 worktree | 拒绝；避免把小修合进错误基线 |
+
+即使当前位于主仓 main，只要任一模块存在 active build，也拒绝启动 quick-fix；小改回原 `/pmai-build` 会话继续，不能绕过当前 build 合同直接合入 main。
 
 ## Preamble
 
 ```bash
-source "$HOME/.pmai/scripts/skill-preamble.sh"
+source "${PMAI_HOME:-$HOME/.pmai}/scripts/skill-preamble.sh"
 echo "SKILL: quick-fix"
 ```
 

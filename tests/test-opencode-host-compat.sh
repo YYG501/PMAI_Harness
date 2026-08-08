@@ -17,10 +17,13 @@ make_fake_pmai_home() {
   local base="$1"
   local home="$base/pmai"
 
-  mkdir -p "$home/skills/build" "$home/skills/init-project" "$home/skills/pmai-upgrade" "$home/skills/_shared"
+  mkdir -p "$home/skills/build" "$home/skills/init-project" "$home/skills/pmai-upgrade" \
+    "$home/skills/build-close" "$home/skills/publish-to-lark" "$home/skills/_shared"
   printf "# Build\n" > "$home/skills/build/SKILL.md"
   printf "# Init\n" > "$home/skills/init-project/SKILL.md"
   printf "# Upgrade\n" > "$home/skills/pmai-upgrade/SKILL.md"
+  printf "# Close\n" > "$home/skills/build-close/SKILL.md"
+  printf "# Publish\n" > "$home/skills/publish-to-lark/SKILL.md"
   printf "%s\n" "$home"
 }
 
@@ -65,6 +68,12 @@ test_global_opencode_commands_are_thin_routes() {
 
   if [ -e "$opencode_dir/commands/pmai-_shared.md" ]; then
     _fail "_shared should not become a slash command"
+    rm -rf "$base"
+    return
+  fi
+  if [ -e "$opencode_dir/commands/pmai-build-close.md" ] \
+     || [ -e "$opencode_dir/commands/pmai-publish-to-lark.md" ]; then
+    _fail "internal recovery/execution workflows should not become OpenCode commands"
     rm -rf "$base"
     return
   fi

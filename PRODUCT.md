@@ -200,7 +200,7 @@ PM 明确定稿后，合同冻结 PM 最后看到的 implementation commit，并
 
 1. 校验定稿请求、未决产品问题、最终 commit 和验收就绪快照仍一致；
 2. 提交实现并合入 main；
-3. 复用 build 阶段的文档影响草案，并用 main 的 landed diff、build contract 和 accepted deltas 校准；
+3. 实现 landed 后，用 main 的 landed diff、build contract 和 accepted deltas 生成准确的文档影响地图；
 4. 按“符合 / accepted delta / 漏实现 / 无依据实现”对账模块规格，只让 accepted delta 改写最终目标；
 5. 更新产品现状、跨模块规则、术语、设计基线、TODO、mockup 清单和索引；
 6. 做一致性检查并提交文档同步。
@@ -273,6 +273,8 @@ PMAI 成功时，PM 的体验应该是：
 后续改造应以本文为准：
 
 - design 是需求讨论主入口；meta、mockup、spec-writing 按需后台调用并返回主线。
+- 一个 Skill 只有在承接独立用户意图时才注册为宿主入口；恢复和底层执行能力保留在框架内，由前台 Skill 自动调用，不要求 PM 记住或编排。meta、mockup、spec-writing 默认后台调用，但保留明确专项意图下的手动入口。
+- 面向 PM 的上手文档只讲初始化、design → build 和迷路时的 status，不把全部 Skill 铺成命令导航。
 - 初始化只建立上下文；首个可建造 design 生成唯一 `.pm-workflow/project.yml`，其中分开记录建造对象与技术栈。
 - prototype 与 product 共用同一构建、迭代、定稿和收尾链路，只切换验收适配器。
 - build contract、worktree 细节和验收证据后台化；工作环境与构建工具由 AI 推荐、PM 一次确认。

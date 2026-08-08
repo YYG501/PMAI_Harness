@@ -30,6 +30,7 @@ SUITES=(
   test-no-duplicate-questioning.sh
   test-shared-files-exist.sh
   test-shared-currentness.sh
+  test-term-detector.sh
   test-v2-currentness.sh
   test-design-shared-boundary.sh
   test-design-mockup-meta-routing.sh
@@ -43,6 +44,7 @@ SUITES=(
   test-doctor-skills.sh
   test-skill-link-ownership.sh
   test-feedback-skill.sh
+  test-pm-facing-surface.sh
   test-skill-init-guard.sh
   test-writing-skill-routing.sh
   test-migrate-reqs-to-modules-compat.sh

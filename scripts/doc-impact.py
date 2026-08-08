@@ -140,6 +140,48 @@ def delta_signals(build: dict) -> tuple[set[str], set[str]]:
     return kinds, surfaces
 
 
+def reconcile_terms(repo_root: Path, module_dir: Path, changed_files: list[str]) -> dict:
+    """Run the installed structured term reconciler before building the map."""
+    detector = Path(__file__).resolve().parent / "_lib" / "term-detector.py"
+    if not detector.is_file():
+        raise SystemExit(f"术语对账脚本不存在: {detector}")
+    command = [
+        sys.executable,
+        str(detector),
+        str(module_dir),
+        str(repo_root),
+        "--work-dir",
+        str(module_dir),
+    ]
+    for destination in changed_files:
+        path = PurePosixPath(destination)
+        parts = path.parts
+        is_functional_spec = (
+            len(parts) == 3
+            and parts[:2] == ("docs", "modules")
+            and path.name != "INDEX.md"
+            and path.suffix == ".md"
+        )
+        is_module_spec = (
+            len(parts) >= 4
+            and parts[:2] == ("docs", "modules")
+            and path.name == "spec.md"
+        )
+        if is_functional_spec or is_module_spec:
+            command.extend(["--source", destination])
+    completed = subprocess.run(command, text=True, capture_output=True, check=False)
+    if completed.returncode != 0:
+        detail = completed.stderr.strip() or completed.stdout.strip() or "unknown error"
+        raise SystemExit(f"术语对账失败: {detail}")
+    try:
+        result = json.loads(completed.stdout)
+    except json.JSONDecodeError as exc:
+        raise SystemExit(f"术语对账输出不是合法 JSON: {exc}") from exc
+    if not isinstance(result, dict):
+        raise SystemExit("术语对账输出顶层必须是对象。")
+    return result
+
+
 def cmd_init(args: argparse.Namespace) -> None:
     module_dir = Path(args.module_dir).expanduser().resolve()
     repo_root = repo_root_for(module_dir, args.repo_root)
@@ -147,17 +189,25 @@ def cmd_init(args: argparse.Namespace) -> None:
     base = args.base or build.get("baseline_sha")
     head = args.head or build.get("landed_commit") or "HEAD"
     changed_files = git_lines(repo_root, "diff", "--name-only", str(base), str(head)) if base else []
+    term_reconciliation = reconcile_terms(repo_root, module_dir, changed_files)
     module_rel = rel(repo_root, module_dir)
     changed_set = set(changed_files)
     items_by_destination: dict[str, dict] = {}
 
-    def add_destination(kind: str, name: str, destination: str, reason: str) -> None:
+    def add_destination(
+        kind: str,
+        name: str,
+        destination: str,
+        reason: str,
+        *,
+        changed_counts_as_covered: bool = True,
+    ) -> None:
         existing = items_by_destination.get(destination)
         if existing is not None:
             if reason not in str(existing["reason"]):
                 existing["reason"] = f"{existing['reason']}；{reason}"
             return
-        already_changed = destination in changed_set
+        already_changed = changed_counts_as_covered and destination in changed_set
         items_by_destination[destination] = coverage_item(
             kind,
             name,
@@ -173,6 +223,19 @@ def cmd_init(args: argparse.Namespace) -> None:
         "PRODUCT-STATE.md",
         "实现落地主线后，只更新本轮实际交付的产品现状",
     )
+
+    new_terms = [str(value) for value in term_reconciliation.get("new_terms", [])]
+    new_roles = [str(value) for value in term_reconciliation.get("new_roles", [])]
+    if new_terms or new_roles:
+        labels = [f"术语 {value}" for value in new_terms]
+        labels.extend(f"角色 {value}" for value in new_roles)
+        add_destination(
+            "term",
+            "、".join(labels),
+            "PRODUCT.md",
+            "本轮稳定规格或决定出现新的业务术语 / 角色，需对账长期产品词典",
+            changed_counts_as_covered=False,
+        )
 
     accepted_deltas = (
         build.get("accepted_deltas", []) if isinstance(build.get("accepted_deltas"), list) else []
@@ -247,6 +310,7 @@ def cmd_init(args: argparse.Namespace) -> None:
         "base": base,
         "head": head,
         "changed_files": changed_files,
+        "term_reconciliation": term_reconciliation,
         "items": items,
     }
     path = output_path(repo_root, module_dir, args.output)

@@ -71,7 +71,7 @@ python3 "$PMAI_HOME/scripts/check-state-index-drift.py" "$REPO_ROOT" || true
 - PM 请求定稿前只做 iteration checks，不提前运行本段；请求后在 `iterating` 逐项核对 approved source、accepted deltas 与冻结 commit；
 - prototype 走任务路径、页面 / 弹窗、状态、视觉和交互验收；product 走仓库测试、类型 / 构建、接口 / 数据和风险适配检查；
 - 已确认条款在 build target 中找不到时，不删规格：没有 accepted delta 就继续 `iterating` 修复；需要改产品模型则回 design，不能进入 close 后再补；
-- 完整 final checks 通过且证据绑定定稿请求、当前 source hash 与 implementation commit 后，生成文档影响草案并记录 `review-ready`；
+- 完整 final checks 通过且证据绑定定稿请求、当前 source hash 与 implementation commit 后，记录 `review-ready`；此时尚无 landed diff，不生成文档影响地图或草案；
 - PM 定稿后的 final_check 只校验同一快照仍有效，不修改业务代码、不重复跑同一版本的完整验收。
 
 ### 4.2 landed：只编译 main 已有事实

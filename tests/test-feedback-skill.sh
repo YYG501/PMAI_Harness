@@ -182,7 +182,8 @@ test_public_surface_replaces_skill_improve() {
     _fail "doctor should not expose skill-improve"
     return
   fi
-  assert_file_contains "$README" "/pmai-feedback" "README should list feedback" || return
+  assert_file_contains "$README" "复盘这次对话" "README should describe the feedback scenario without requiring command selection" || return
+  assert_file_contains "$README" "当前只有 Codex" "README should bound the verified feedback host" || return
   if grep -q "/pmai-skill-improve" "$README"; then
     _fail "README should not list old public entry"
     return

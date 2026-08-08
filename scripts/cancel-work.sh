@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # cancel-work.sh — 废弃当前工作（方案 A·清模块 .work-meta，不 merge main）
-# 用法: bash $HOME/.pmai/scripts/cancel-work.sh <模块目录>  （= docs/modules/<模块>/）
+# 用法: bash "${PMAI_HOME:-$HOME/.pmai}/scripts/cancel-work.sh" <模块目录>  （= docs/modules/<模块>/）
 #
 # 新模型（lifecycle 迁移批 3，方案 A）：
 #   废弃 = 在 main 上删模块 .work-meta.json（清掉「在做的工作」标记），不 merge work branch到 main。
@@ -136,5 +136,4 @@ echo "🕓 标记待清理当前工作: $WORK_BRANCH"
 
 echo "✅ 当前工作已放弃: ${WORK_ID}（未 merge 到 main，模块 .work-meta 已清）"
 echo ""
-echo "📋 worktree 和 branch 待清理。请退出当前会话，回主仓 ($REPO_ROOT) 执行："
-echo "   bash scripts/cleanup-pending-worktrees.sh"
+echo "🕓 相关工作环境已进入后台清理队列，无需手工操作。"

@@ -1,7 +1,7 @@
 ---
 name: pmai-build-cancel
 description: |
-  放弃已经进入 build 的模块工作：确认后不合并工作分支，清除模块的活跃状态，并将关联隔离分支标记为待清理。
+  放弃已经进入 build 的模块工作：确认后不让本轮候选进入主线，清除进行中状态，相关工作环境由系统在安全时机自动清理。
 ---
 
 # /pmai-build-cancel
@@ -30,7 +30,7 @@ source "${PMAI_HOME:-$HOME/.pmai}/scripts/skill-preamble.sh"
 ## Preamble
 
 ```bash
-source "$HOME/.pmai/scripts/skill-preamble.sh"
+source "${PMAI_HOME:-$HOME/.pmai}/scripts/skill-preamble.sh"
 echo "SKILL: build-cancel"
 
 python3 "$PMAI_HOME/scripts/status-view.py" --banner-only --skill BUILD-CANCEL || true
@@ -46,10 +46,9 @@ python3 "$PMAI_HOME/scripts/status-view.py" --banner-only --skill BUILD-CANCEL |
 即将放弃当前 build：${ACTIVE_WORK}（当前阶段：${ACTIVE_WORK_STAGE_NAME}）
 
 此操作会：
-- 不合并当前工作分支
-- 清掉模块的活跃状态文件
-- 把关联的隔离工作区标记为待清理
-- 如果已有 PRD，会在废弃区保留入口
+- 本轮候选不会进入主线
+- 本轮尚未进入主线的实现改动会被放弃
+- 已经在主线中的产品文档和历史决定会保留
 
 确认放弃？（Y/N）
 ```
@@ -68,20 +67,16 @@ bash "$PMAI_HOME/scripts/cancel-work.sh" "$ACTIVE_WORK_DIR"
 
 1. 切回 main，并拒绝 main 上任何未提交改动，包括当前模块里未确认的 discussion / spec 修改。
 2. 只暂存并提交当前模块 `.work-meta.json` 的删除（如果存在），清掉“正在做”的状态。
-3. 把关联 worktree/branch 写入 `.runs/pending-cleanup.json`，不立即删除，避免当前会话 cwd 失效。
+3. 把关联 worktree/branch 写入 `.runs/pending-cleanup.json`；后台确认没有会话仍停在该工作环境后再自动清理。
 
-### 步骤 3：提示清理
+### 步骤 3：回执
 
 ```text
 当前 build 已放弃。
+本轮候选未进入主线，相关工作环境会在安全时机自动清理，不需要你运行清理命令。
 
 ▶ Next Up：
-  回主仓后运行：
-    bash scripts/cleanup-pending-worktrees.sh
-
   新功能 / 重做模块：发 /pmai-design
-  build 已验收：回原 /pmai-build 会话继续自动收尾
-  中断恢复：可发 /pmai-build-close 复用同一 finalize
 ```
 
 ## Rules
@@ -90,5 +85,6 @@ bash "$PMAI_HOME/scripts/cancel-work.sh" "$ACTIVE_WORK_DIR"
 - 放弃不 merge 当前工作分支。
 - cancel commit 只允许包含 `.work-meta.json` 删除，不顺带提交模块文档或其它 WIP。
 - 不写 `status=cancelled`；新模型的语义是清掉活跃状态。
-- 不手动删除 worktree/branch；只通过 `cancel-work.sh` 写 pending，再由 `cleanup-pending-worktrees.sh` 清理。
+- 不手动删除 worktree/branch；只通过 `cancel-work.sh` 写 pending，再由后台清理机制在安全位置处理。
+- PM 回执不得要求复制或运行清理命令，也不得让 PM 管理待清理队列。
 - PM 面前说“当前 build / 模块工作”，不要再使用旧流程名。

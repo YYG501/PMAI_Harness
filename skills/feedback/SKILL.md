@@ -1,7 +1,7 @@
 ---
 name: pmai-feedback
 description: |
-  复盘当前消费仓的完整会话，找出与已确认设计不一致的地方和 PM 使用卡点，生成一段可交给 PMAI 框架仓的优化 Prompt，并附原始会话文件地址。
+  复盘当前消费仓的完整会话，找出与已确认设计不一致的地方和 PM 使用卡点，生成一段可交给 PMAI 框架仓的优化 Prompt，并附原始会话文件地址。当前只有 Codex 的精确当前会话定位已经验证；其它宿主暂不提供猜测式复盘。
   触发词：复盘这次对话 / 反馈给 PMAI / 看看流程哪里有问题 / 优化这个工作流 / 生成框架改进 Prompt。
 ---
 
@@ -28,6 +28,8 @@ source "${PMAI_HOME:-$HOME/.pmai}/scripts/skill-preamble.sh"
 ## 定位
 
 `/pmai-feedback` 是消费仓到 PMAI 框架仓的**只读反馈出口**。
+
+当前支持范围是 Codex 会话。Claude Code、Kimi Code 和 OpenCode 尚未具备经过验证的精确当前会话定位时，必须直接说明暂不支持并停止，不能把公开入口写成已经跨宿主可用。
 
 它负责：
 

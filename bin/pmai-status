@@ -20,6 +20,7 @@ OPENCODE_COMMANDS="$OPENCODE_CONFIG_DIR/commands"
 SKILL_PREFIX="pmai-"
 BIN_DIR="$(cd "$(dirname "$0")" && pwd)"
 CLI_ROOT="$(cd "$BIN_DIR/.." && pwd)"
+source "$CLI_ROOT/scripts/_lib/skill-links.sh"
 
 usage() {
   cat <<EOF
@@ -51,8 +52,13 @@ expected_exposed_skill_names() {
     case "$skill_name" in
       _internal) ;;
       _shared) ;;
-      pmai-*) echo "$skill_name" ;;
-      *) echo "${SKILL_PREFIX}${skill_name}" ;;
+      *)
+        pmai_skill_is_host_exposed "$skill_name" || continue
+        case "$skill_name" in
+          pmai-*) echo "$skill_name" ;;
+          *) echo "${SKILL_PREFIX}${skill_name}" ;;
+        esac
+        ;;
     esac
   done | sort -u
 }

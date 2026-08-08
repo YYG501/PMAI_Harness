@@ -68,8 +68,13 @@ install_skills() {
     case "$skill_name" in
       _internal) continue ;;
       _shared)  dst="$dst_skills/_shared" ;;
-      pmai-*)   dst="$dst_skills/$skill_name" ;;
-      *)        dst="$dst_skills/${SKILL_PREFIX}${skill_name}" ;;
+      *)
+        pmai_skill_is_host_exposed "$skill_name" || continue
+        case "$skill_name" in
+          pmai-*) dst="$dst_skills/$skill_name" ;;
+          *)      dst="$dst_skills/${SKILL_PREFIX}${skill_name}" ;;
+        esac
+        ;;
     esac
 
     if [ "$skill_name" = "_shared" ]; then

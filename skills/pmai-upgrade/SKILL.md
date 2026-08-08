@@ -1,6 +1,5 @@
 ---
 name: pmai-upgrade
-version: 1.1.0
 description: |
   将 PMAI 框架升级至最新版本：拉取远程更新、重新同步全局 skill，并生成本次更新的智能摘要。
   触发词：升级 PMAI / 升级框架 / pmai upgrade / 更新 pmai。

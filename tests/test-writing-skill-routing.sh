@@ -7,6 +7,7 @@ source "$SCRIPT_DIR/helpers/assert.sh"
 
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 HUMANIZE="$REPO_ROOT/skills/humanize/SKILL.md"
+HUMANIZE_PATTERNS="$REPO_ROOT/skills/humanize/references/patterns.md"
 SPEC="$REPO_ROOT/skills/spec-writing/SKILL.md"
 SPEC_TMPL="$REPO_ROOT/skills/spec-writing/templates/prd.md.tmpl"
 SPEC_RULES="$REPO_ROOT/skills/spec-writing/references/writing-rules.md"
@@ -38,6 +39,25 @@ test_spec_writing_replaces_prd_writing_entry() {
   assert_file_missing "$OLD_WRITING_DIR" "old writing skill directory should not exist" || return
   if grep -q -- "$OLD_WRITING_COMMAND" "$SPEC"; then
     _fail "spec-writing should not keep old command fallback text"
+    return
+  fi
+  pass_test
+}
+
+test_design_spec_trigger_boundary() {
+  start_test "design/spec-writing: 按产品决定是否闭合分流"
+  local design="$REPO_ROOT/skills/design/SKILL.md"
+
+  assert_file_contains "$design" "产品决定尚未闭合" "design description should own unresolved spec requests" || return
+  assert_file_contains "$design" "改卡片 / 改页面" "design should qualify broad page-change triggers" || return
+  assert_file_contains "$SPEC" "已确认产品内容的规格成文器" "spec-writing should declare confirmed-input boundary" || return
+  assert_file_contains "$SPEC" "入口归属只看产品决定是否闭合" "spec-writing should route by decision closure" || return
+  assert_file_contains "$SPEC" "无法证明决定已经闭合" "unknown closure should default to design" || return
+  assert_file_contains "$SPEC" "补需求 / 把需求补完整" "spec-writing should distinguish requirement gaps from document gaps" || return
+  assert_file_contains "$SPEC" "不得先让 PM 选文档类型、路径和输入" "closure check should happen before document setup questions" || return
+  assert_file_contains "$SPEC" "不用 \`TODO / 待 PM 确认\` 把产品缺口留在正式规格里" "product gaps should return to design instead of lingering in the document" || return
+  if sed -n '1,8p' "$SPEC" | grep -q '写需求文档 / 写规格'; then
+    _fail "spec-writing description should not claim ambiguous raw spec triggers"
     return
   fi
   pass_test
@@ -220,8 +240,115 @@ test_path_guidance_prefers_repo_relative_paths() {
   pass_test
 }
 
+test_writing_rules_keep_precise_contract_language() {
+  start_test "writing rules: plain product language does not erase precise contracts"
+
+  assert_file_contains "$SPEC_RULES" "UI 行业词的使用边界" "writing rules should scope UI terms by use" || return
+  assert_file_contains "$SPEC_RULES" "安全、权限、性能和可用性合同" "writing rules should preserve precise contracts" || return
+  assert_file_contains "$SPEC_RULES" "服务端鉴权（由服务端校验当前用户身份和权限）" "authentication should be explained, not banned" || return
+  assert_file_contains "$SPEC_RULES" "RBAC（按角色分配操作权限）" "RBAC should carry a business explanation" || return
+  assert_file_contains "$SPEC_RULES" "SLA（服务可用性目标）" "SLA should carry a business explanation" || return
+  assert_file_contains "$SPEC_RULES" "IDOR（通过篡改资源编号访问无权资源）" "IDOR should carry a business explanation" || return
+  assert_file_contains "$SPEC_FEWSHOTS" "服务端鉴权（校验当前用户身份和权限）" "few-shots should model the scoped rule" || return
+  assert_file_contains "$HUMANIZE_PATTERNS" "精确合同例外" "humanize must not undo precise contract language" || return
+  if grep -qF '死锁 / 互锁 / 悬挂引用 / 鉴权 / 三件套——改成业务语言。' "$SPEC_RULES"; then
+    _fail "writing rules should not blanket-ban authentication terminology"
+    return
+  fi
+  if grep -qF '| 鉴权 | 权限判断 |' "$HUMANIZE_PATTERNS"; then
+    _fail "humanize should not mark every authentication term as mandatory replacement"
+    return
+  fi
+  if grep -qE '[89] 类禁用' "$SPEC" "$SPEC_RULES" "$PMVIEW_WRITING" "$HUMANIZE"; then
+    _fail "active writing rules should not maintain drifting numeric ban counts"
+    return
+  fi
+  pass_test
+}
+
+test_prd_lint_scopes_ui_terms_to_real_misuse() {
+  start_test "lint: referenced UI terms pass while hierarchy and visual misuse fail"
+  local tmp pass_doc hierarchy_doc visual_doc
+  tmp=$(mktemp -d "${TMPDIR:-/tmp}/pmai-writing-boundary.XXXXXX")
+  pass_doc="$tmp/pass.md"
+  hierarchy_doc="$tmp/hierarchy.md"
+  visual_doc="$tmp/visual.md"
+
+  cat > "$pass_doc" <<'MARKDOWN'
+# 权限规格
+
+## 六、功能需求
+
+| 二级功能 | 三级功能 | 使用角色 | 需求描述 |
+| --- | --- | --- | --- |
+| 配置 | 查看详情 | 管理员 | "许可证状态 Badge"展示当前状态；服务端鉴权（校验当前用户身份和权限）为最终判断。 |
+
+## 七、验收标准
+
+- RBAC（按角色分配操作权限）变更后立即生效。
+- SLA（服务可用性目标）不低于 99.9%。
+- 阻止 IDOR（通过篡改资源编号访问无权资源）。
+MARKDOWN
+  if ! python3 "$CHECK_PRD" "$pass_doc" >"$tmp/pass.out" 2>&1; then
+    _fail "fully referenced UI terms and explained contract terms should pass lint"
+    cat "$tmp/pass.out" >&2
+    rm -rf "$tmp"
+    return
+  fi
+
+  cat > "$hierarchy_doc" <<'MARKDOWN'
+# 权限规格
+
+## 六、功能需求
+
+| 二级功能 | 三级功能 | 使用角色 | 需求描述 |
+| --- | --- | --- | --- |
+| 权限 Tab | 查看详情 | 管理员 | 展示权限详情。 |
+
+## 七、验收标准
+MARKDOWN
+  if python3 "$CHECK_PRD" "$hierarchy_doc" >"$tmp/hierarchy.out" 2>&1; then
+    _fail "UI components used as feature hierarchy should fail lint"
+    rm -rf "$tmp"
+    return
+  fi
+  if ! grep -q "权限 Tab" "$tmp/hierarchy.out"; then
+    _fail "hierarchy lint should identify the misused UI component"
+    cat "$tmp/hierarchy.out" >&2
+    rm -rf "$tmp"
+    return
+  fi
+
+  cat > "$visual_doc" <<'MARKDOWN'
+# 权限规格
+
+## 六、功能需求
+
+| 二级功能 | 三级功能 | 使用角色 | 需求描述 |
+| --- | --- | --- | --- |
+| 配置 | 查看详情 | 管理员 | 许可证状态使用 Badge 红色展示。 |
+
+## 七、验收标准
+MARKDOWN
+  if python3 "$CHECK_PRD" "$visual_doc" >"$tmp/visual.out" 2>&1; then
+    _fail "Badge color styling should still fail lint"
+    rm -rf "$tmp"
+    return
+  fi
+  if ! grep -q "Badge 视觉样式" "$tmp/visual.out"; then
+    _fail "visual lint should explain the Badge style violation"
+    cat "$tmp/visual.out" >&2
+    rm -rf "$tmp"
+    return
+  fi
+
+  rm -rf "$tmp"
+  pass_test
+}
+
 test_humanize_remains_entry_but_expression_only
 test_spec_writing_replaces_prd_writing_entry
+test_design_spec_trigger_boundary
 test_spec_writing_owns_functional_doc_optimization
 test_spec_writing_keeps_change_notes_brief
 test_spec_writing_uses_presets_not_prd_default
@@ -235,5 +362,7 @@ test_doc_writing_supports_product_direction_docs
 test_doc_writing_has_product_direction_reference
 test_humanize_not_primary_for_whole_doc_rewrite
 test_path_guidance_prefers_repo_relative_paths
+test_writing_rules_keep_precise_contract_language
+test_prd_lint_scopes_ui_terms_to_real_misuse
 
 report_results "writing-skill-routing"

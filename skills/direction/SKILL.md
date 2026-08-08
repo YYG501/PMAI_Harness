@@ -1,8 +1,8 @@
 ---
 name: pmai-direction
 description: |
-  项目方向校准：项目运行一段时间后，由 PM 主动重定产品方向或整理路线规划。用于产品定位、用户、边界、业务术语和待办池的顶层调整；首次起步 / 首次接入统一走 /pmai-init-project。
-  触发词：方向重定 / 校准方向 / 项目方向偏了 / 产品路线规划 / 季度规划 / 半年规划 / 老板给新方向。
+  项目方向校准：项目运行一段时间后，由 PM 主动重定产品方向或整理已经提出的待办。用于产品定位、用户、边界、业务术语和无序待办池的顶层调整；首次起步 / 首次接入统一走 /pmai-init-project。
+  触发词：方向重定 / 校准方向 / 项目方向偏了 / 整理待办 / 梳理接下来想做的事 / 老板给新方向。
 ---
 
 # /pmai-direction
@@ -17,7 +17,7 @@ source "${PMAI_HOME:-$HOME/.pmai}/scripts/skill-preamble.sh"
 
 如果输出 `PMAI_PROJECT_INITIALIZED: 0`，停止本 skill，只引导 PM 先发 `/pmai-init-project`。初始化或已有代码接入完成前，不要把未初始化包装成方向校准。
 
-> **一句话定位**：项目跑起来后回头校准方向。它只处理两类 PM 意图：**方向重定**和**路线规划**。首次起步、首次接已有代码库都不走这里，统一走 `/pmai-init-project`。
+> **一句话定位**：项目跑起来后回头校准方向。它只处理两类 PM 意图：**方向重定**和**待办整理**。首次起步、首次接已有代码库都不走这里，统一走 `/pmai-init-project`。
 
 > **PM 答题规则（M4）**：所有 AskUserQuestion 调用按 `_shared/pm-view/askuser-rules.md` §1 四条硬规则走（空答 STOP / 没拿到答案禁止落盘 PRODUCT.md / TODO.md / runtime 退化保留 wait / 多决策拆开顺序问）。**Runtime 兜底**：runtime 不支持时 AI 按 §1.3 自动退化为编号列表，仍 wait。
 
@@ -26,7 +26,9 @@ source "${PMAI_HOME:-$HOME/.pmai}/scripts/skill-preamble.sh"
 PM 主动调用，只有两个主场景：
 
 - **方向重定**：产品定位、用户、边界或关键业务概念变了。包括“方向偏了”、“要重做定位”、“老板 / 客户 / 市场给了新方向”。
-- **路线规划**：接下来做什么、季度 / 半年节奏、待办池怎么整理。默认只刷新 `TODO.md` 和必要的业务术语，不重做产品定位。
+- **待办整理**：把 PM 已经提过、讨论过想做的事收进 `TODO.md`。默认只刷新无序待办池和必要的业务术语，不重做产品定位，也不替 PM 排优先级或阶段。
+
+需要阶段目标、优先级、依赖或验证节点时，本 skill 当前不产出这类计划；不要把无序 `TODO.md` 包装成计划。
 
 > **不在 scope**：
 > - 首次起步 / 首次接入 → 走 `/pmai-init-project`。它会自动判断全新项目 / 资料目录 / 已有代码库。
@@ -36,7 +38,7 @@ PM 主动调用，只有两个主场景：
 ## Preamble
 
 ```bash
-source "$HOME/.pmai/scripts/skill-preamble.sh"
+source "${PMAI_HOME:-$HOME/.pmai}/scripts/skill-preamble.sh"
 echo "SKILL: direction"
 ```
 
@@ -46,7 +48,7 @@ echo "SKILL: direction"
 
 | | `/pmai-init-project` | `/pmai-direction` |
 |---|---|---|
-| 干什么 | 项目初始化统一入口：全新项目建底座，已有代码库自动盘点现状 | 已接入项目的方向重定 / 路线规划 |
+| 干什么 | 项目初始化统一入口：全新项目建底座，已有代码库自动盘点现状 | 已接入项目的方向重定 / 待办整理 |
 | 何时 | 首次起步 / 首次接入时（一次性） | 项目跑起来后，按需多次 |
 | 在哪跑 | 任意 cwd 发起，落到目标业务仓 | 已接入的业务仓 |
 | 跑几次 | 一次 | N 次（按场景需要） |
@@ -55,7 +57,7 @@ echo "SKILL: direction"
 
 ## 产出
 
-- `PRODUCT.md` —— 项目顶层方向，5 节（方向重定时会改；路线规划默认不重写定位）
+- `PRODUCT.md` —— 项目顶层方向，5 节（方向重定时会改；待办整理默认不重写定位）
 - `TODO.md` —— PM 待办池（无序，只记 PM 主动提过 / 讨论过的事）
 - `docs/decisions/<日期>-<slug>.md` —— **按需**：本轮方向讨论若产出了项目级理路（护城河 / 机制整体 / 演进），冻一份项目决策记录留作历史坐标。纯微调不冻。
 
@@ -74,7 +76,7 @@ echo "SKILL: direction"
 | 意图 | 触发 | 输入态 | 提问顺序（按 _shared §3 问题库挑用） |
 |---|---|---|---|
 | **方向重定** | PM 说“方向偏了 / 要重定 / 定位不对 / 老板或客户给了新方向” | `PRODUCT.md` 已有内容 | (1) 先问旧方向哪里失效 / 新方向从哪来 → (2) 产品定位 → (3) 用户画像 → (4) 产品边界 → (5) 业务术语表 → (6) 刷新 TODO 待办池 |
-| **路线规划** | PM 说“产品路线规划 / 季度规划 / 半年规划 / 接下来做什么 / 整理待办” | `PRODUCT.md` 已有；`TODO.md` 可有可无 | (1) 问 PM 现在想做什么，记进 TODO 待办池 → (2) 如出现新业务概念，补业务术语表。默认跳过产品定位 / 用户画像 / 产品边界 |
+| **待办整理** | PM 说“整理待办 / 梳理接下来想做的事 / 把这些先记下来” | `PRODUCT.md` 已有；`TODO.md` 可有可无 | (1) 收集 PM 已经提过、讨论过想做的事，记进无序 TODO 待办池，不排序 → (2) 如出现新业务概念，补业务术语表。默认跳过产品定位 / 用户画像 / 产品边界 |
 
 判断不清时，只问一个澄清问题：“你这次是要重定产品方向，还是只整理接下来做什么？”
 
@@ -99,7 +101,7 @@ echo "SKILL: direction"
 
 按段 0 的意图选择提问顺序。
 
-可选 —— **PM 自跑第二视角**：项目方向需要更多视角时，先按问题选择工具：想沉淀新想法、找盲区 / 反方挑战 / 多角度看当前方向 → 建议 PM 跑 `/pmai-meta`，由 meta 判断走产品想法会诊还是已有材料压测；想做外部经营视角挑战 → PM 自跑 `/plan-ceo-review`。本 skill 不自动调它们。
+需要更多产品判断视角时，在当前 direction 流程里内部调用 `/pmai-meta`，拿到结论后回到本流程继续收敛，不要求 PM 切入口。`/plan-ceo-review` 等外部 review 只有 PM 明确要求时才作为独立旁路，本 skill 不替 PM 自动触发。
 
 #### 步骤 3：未决问题闸门
 
@@ -111,7 +113,7 @@ echo "SKILL: direction"
 
 **方向重定**：按 `_shared/project-questioning.md` §5.1 PRODUCT.md 5 节写作规则 + §5.4 PM 视图规则更新 `PRODUCT.md`。
 
-**路线规划**：默认不重写产品定位 / 用户画像 / 产品边界；只有 PM 明确说这些也变了，才升级为“方向重定”。技术栈变化进入下一次 design 的 project definition 重校准，不写进 `PRODUCT.md`。
+**待办整理**：默认不重写产品定位 / 用户画像 / 产品边界；只有 PM 明确说这些也变了，才升级为“方向重定”。技术栈变化进入下一次 design 的 project definition 重校准，不写进 `PRODUCT.md`。
 
 #### 步骤 5：写 / 改 TODO.md
 
@@ -148,7 +150,7 @@ Runtime 不支持 AskUserQuestion 时按 `_shared/pm-view/askuser-rules.md §1.3
 
 **方向重定**：@读 `skills/_shared/project-questioning.md` §7 5 节齐不齐检查。
 
-**路线规划**：如果本轮没有改 `PRODUCT.md`，只检查 `TODO.md` 是否按 PM 的待办落好；不强行补 PRODUCT 5 节。
+**待办整理**：如果本轮没有改 `PRODUCT.md`，只检查 `TODO.md` 是否按 PM 的原意落好且保持无序；不强行补 PRODUCT 5 节。
 
 #### 步骤 8：Decision gate 确认门 + PM 定稿
 
@@ -193,7 +195,7 @@ PM 选「创建 / 更新方向文档」+ 定稿后：
 
 **必做项**：
 
-- 段 0 显式判断“方向重定 / 路线规划”。
+- 段 0 显式判断“方向重定 / 待办整理”。
 - 段 1 @读 `_shared/project-questioning.md` §2-§4 跑提问 + 闸门。
 - 段 2 @读 §5 跑写作。
 - 确认门 @读 §6 Decision gate + §7 检查 + §8 PM 定稿 + §9 atomic commit。

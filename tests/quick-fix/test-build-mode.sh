@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# quick-fix build mode + task reject 回归测试。
-# Covers ensure_quickfix_root 三种分支：build-* 接受、task-* 拒绝、weird 分支拒绝。
+# quick-fix 启动位置回归测试。
+# Covers ensure_quickfix_root 三种拒绝分支：build-* worktree、task-* worktree、主仓非 main。
 
 set -uo pipefail
 
@@ -10,40 +10,34 @@ source "$SCRIPT_DIR/helpers/fixture.sh"
 
 QF="$FRAMEWORK_ROOT/scripts/quick-fix.sh"
 
-test_build_mode_merges_to_build_branch() {
-  start_test "scenario QB1 build mode merges to build branch, leaves main untouched"
+test_build_worktree_rejected_without_side_effects() {
+  start_test "scenario QR1 build worktree rejects quick-fix without side effects"
   fixture_setup
   fixture_create_work work-001 test 1 >/dev/null 2>&1
 
   local build_wt="$FIXTURE_DIR/.worktrees/build-work-001-test"
-  # Pre-state: main has empty prototypes/, build branch has same
-  echo "# main version" > "$FIXTURE_DIR/prototypes/page.md"
-  (cd "$FIXTURE_DIR" && git add -A && git commit -q -m "main page")
-  # build branch picks it up via merge
-  (cd "$build_wt" && git merge -q --no-edit main 2>/dev/null || true)
+  local before_branches after_branches err marker
+  before_branches=$(git -C "$FIXTURE_DIR" branch --format='%(refname:short)' | sort)
+  err=$(mktemp)
+  marker="$build_wt/quick-fix-must-not-run.txt"
 
-  # Run quick-fix from build worktree
-  local out err
-  out=$(mktemp); err=$(mktemp)
-  (cd "$build_wt" && QUICK_FIX_COMMAND='echo "build-only fix" >> prototypes/page.md' \
+  if (cd "$build_wt" && QUICK_FIX_COMMAND='touch quick-fix-must-not-run.txt' \
     QUICK_FIX_DECISION=pass QUICK_FIX_ASSUME_YES=1 \
-    bash "$QF" "build mode test" >"$out" 2>"$err")
-  local rc=$?
-
-  local base_branch
-  base_branch=$(awk '/^BASE_BRANCH:/{print $2}' "$out")
-
-  if [ "$rc" -eq 0 ] \
-    && [ "$base_branch" = "build-work-001-test" ] \
-    && grep -q "build-only fix" "$build_wt/prototypes/page.md" \
-    && ! grep -q "build-only fix" "$FIXTURE_DIR/prototypes/page.md"; then
-    pass_test
+    bash "$QF" "build mode must reject" 2>"$err"); then
+    _fail "build worktree should have been rejected but exit=0"
   else
-    _fail "build mode failed: rc=$rc base=$base_branch"
-    echo "--stdout--" >&2; cat "$out" >&2
-    echo "--stderr--" >&2; cat "$err" >&2
+    after_branches=$(git -C "$FIXTURE_DIR" branch --format='%(refname:short)' | sort)
+    if grep -q "build worktree" "$err" \
+      && [ ! -e "$marker" ] \
+      && [ "$before_branches" = "$after_branches" ] \
+      && ! find "$FIXTURE_DIR/.worktrees" -maxdepth 1 -type d -name 'tmp-quick-*' | grep -q .; then
+      pass_test
+    else
+      _fail "build worktree rejection had wrong message or side effects"
+      cat "$err" >&2
+    fi
   fi
-  rm -f "$out" "$err"
+  rm -f "$err"
   fixture_teardown
 }
 
@@ -90,7 +84,7 @@ test_weird_branch_rejected() {
   fixture_teardown
 }
 
-test_build_mode_merges_to_build_branch
+test_build_worktree_rejected_without_side_effects
 test_task_worktree_rejected
 test_weird_branch_rejected
-report_results "quick-fix build mode"
+report_results "quick-fix start location"

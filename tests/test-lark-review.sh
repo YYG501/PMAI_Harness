@@ -194,7 +194,7 @@ test_skill_contract() {
   assert_file_contains "$SKILL" "lark-review.py.*apply" "skill should require guarded target apply" || return
   assert_file_contains "$SKILL" "remote_native_snapshot" "review target must be based on the native remote snapshot" || return
   assert_file_contains "$SKILL" "remote-coverage.json" "review must expose remote content/format coverage" || return
-  assert_file_contains "$SKILL" "内容覆盖率.*格式保真率" "final receipt must report both content and format preservation" || return
+  assert_file_contains "$SKILL" "内容与格式：.*核对" "final receipt must report content and format preservation as a PM-readable outcome" || return
   assert_file_contains "$SKILL" "lark-review.py.*verify-sync" "review must verify native format after writeback" || return
   assert_file_contains "$SKILL" "10–15 分钟" "review must define a machine-time performance target" || return
   assert_file_contains "$SKILL" "产品规则变化写.*decisions.md.*措辞和格式变化不得" "decision recording must be selective" || return
@@ -221,7 +221,6 @@ test_skill_contract() {
   assert_file_contains "$ROUTING" "只问一次是否全部认可" "unattributed body edits should use one batch confirmation" || return
   assert_file_contains "$ROUTING" "产品变化" "routing should distinguish product changes" || return
   assert_file_contains "$DOCTOR" "lark-review" "doctor should expose lark-review" || return
-  assert_file_contains "$README" "/pmai-lark-review" "README should list lark-review" || return
   assert_file_contains "$AGENTS_TEMPLATE" "/pmai-lark-review" "consumer AGENTS should route lark review" || return
   assert_file_contains "$CLAUDE_TEMPLATE" "/pmai-lark-review" "consumer CLAUDE should list lark-review" || return
   assert_file_contains "$PUBLISH_SKILL" "lark_published_revision_id" "publisher should record review revision" || return
