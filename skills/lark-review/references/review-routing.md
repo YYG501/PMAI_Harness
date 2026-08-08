@@ -30,10 +30,12 @@
 
 始终把 `B / L / R / T` 当作不同身份：B 是比较证据，L 和 R 是采集快照，T 才是目标正文。不得用路径名、文件新旧时间或“看起来更完整”猜真相源。
 
-- B 与本地发布 source hash 兼容时，才允许做逐项三方合并；
-- local-only 保留 L，remote-only 只能纳入候选 B→R 增量；能机械合并不等于已经获得 PM 认可；
+- T 的唯一内容与格式底稿始终是当前飞书 R 的 `remote_native_snapshot`；B/L 只用于识别需要补回或冲突的本地增量；
+- B 与本地发布 source hash 兼容时，才允许用三方差异机械定位不重叠项；兼容性不参与底稿选择；
+- local-only 作为对 R 的显式补充归位，remote-only 默认保留 R；能机械定位不等于已经获得 PM 认可；
 - 同一区域双边变化必须显式选择 local / remote / merged；
-- B 缺失或与本地源格式不兼容时，T 从 L 初始化，R 的每项变化显式归位；没有本轮明确依据时仍走一次整批确认；
+- B 缺失或与本地源格式不兼容时，禁止 raw Markdown 三方合并，但 T 仍从 R 初始化；没有本轮明确依据时仍走一次整批确认；
+- 每个 R→T 删除或改写必须在 `remote_coverage` 绑定格式规则、评论、已确认决定或 PM 例外；内容和原生格式存在未归位项时不能 seal；
 - 评论只改变 T 或其它受影响对象，不改写 B / L / R；
 - 评论标记 `applied` 时，T 必须经过生命周期重新编译并产生实际正文变化；已有口径用 `already_satisfied`，不改规格用 `no_spec_change`；
 - 手工 `merged` 必须形成独立合并结果，不能把完整 L 或完整 R 复制成 T 后冒充合并；
@@ -86,7 +88,15 @@
 
 这样同一轮评审只产生一版规格、一组决定和一个可验收结果。
 
-## 6. Legacy 基线
+## 6. 决定归档
+
+飞书变化不等于都要写 `decisions.md`。只在变化新增、改变或推翻产品对象、状态、权限、业务规则、真相源、异常处理或成功标准时，写一条新决定或 supersede 旧决定；记录 batch ID、飞书 URL 和相关 comment ID。
+
+错字、措辞、排版、格式、示例补充，以及不改变既有产品规则的解释，只更新 T / spec，不写 decision。active build 若产品规则和实现合同同时变化，`decisions.md` 与 accepted delta 都写，各自承担稳定产品口径和本轮实现范围，不能二选一。
+
+上述判断必须逐正文归位项 / 评论写进 `resolutions.json:decision_routing`。`not_required` 也必须说明为什么不构成产品决定；`create / supersede` 必须绑定仓内 `decisions.md`、决定 ID、摘要和原因，supersede 还要列旧决定 ID。不得用空路由把“选择性归档”退化成口头判断。
+
+## 7. Legacy 基线
 
 没有 `lark_published_revision_id` / `lark_published_source_hash` 的旧文档不能稳定区分：
 
@@ -98,7 +108,7 @@
 
 如果 frontmatter 已记录发布 revision，但历史 revision 无法读取，这不是 legacy：它表示权限、版本或文档身份出现异常，必须停止，不能静默退化。
 
-## 7. 评论完成条件
+## 8. 评论完成条件
 
 一条评论只有同时满足以下条件才可解决：
 
@@ -108,6 +118,6 @@
 4. 飞书最终正文已精细同步并回读；
 5. 重新读取评论后没有改变要求的新回复。
 
-满足条件后只能用 `lark-review.py complete-comment` 完成评论，由命令写回复、解决并在同批 `comment-actions.json` 留下受控回执。局部评论必须提供结果文本；仅当 `whole_document` 评论明确无法回复时，才允许 solve-only。PM / 协作者手工回复或解决不构成本批受控完成证据，手工解决的评论也不能被本批 reopen；若评论先由 `complete-comment` 受控解决、随后 PM 新增回复，checkpoint 必须失败，但在原结果 reply、`solver_user_id` 与 `solved_time` 仍匹配回执时可受控 reopen。
+满足条件后正常路径只能用 `lark-review.py complete-comments` 整批完成评论：局部评论的结果文本在 seal 前固化到 resolution，命令只做一次批次初始稳定围栏和一次最终稳定围栏，中间逐笔保存回复 / solve 写回执。仅当 `whole_document` 评论明确无法回复时，才允许 solve-only；旧 `complete-comment` 只用于旧批次或单项中断恢复。PM / 协作者手工回复或解决不构成本批受控完成证据，手工解决的评论也不能被本批 reopen；若评论由受控命令解决后 PM 新增回复，checkpoint 必须失败，但在原结果 reply、`solver_user_id` 与服务端实际 `solved_time` 仍匹配回执时可受控 reopen。
 
 回复只写结果和落点，例如“已按该意见更新权限规则，并同步修改成员详情页；本轮验证通过”。不要回复内部 worktree、hash、合同或测试编排细节。

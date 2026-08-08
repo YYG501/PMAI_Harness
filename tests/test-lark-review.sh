@@ -54,6 +54,26 @@ Old rule
   } > "$path"
 }
 
+complete_decision_routing() {
+  python3 - "$1" <<'PY'
+import json, sys
+path = sys.argv[1]
+data = json.load(open(path, encoding="utf-8"))
+for item in data["decision_routing"]:
+    item.update(
+        outcome="not_required",
+        target_path="",
+        decision_id="",
+        supersedes=[],
+        summary="",
+        reason="测试项不改变稳定产品规则",
+    )
+with open(path, "w", encoding="utf-8") as handle:
+    json.dump(data, handle, ensure_ascii=False, indent=2)
+    handle.write("\n")
+PY
+}
+
 seal_simple_review() {
   local work="$1"
   python3 "$COLLECTOR" reconcile --manifest "$work/out/review.json" >/dev/null || return 1
@@ -66,11 +86,13 @@ for item in data["comments"]:
         "decision": "no_spec_change",
         "authority": "existing_spec",
         "reason": "测试中确认评论不需要额外修改规格",
+        "result_text": "Updated and verified",
     })
 with open(path, "w", encoding="utf-8") as handle:
     json.dump(data, handle, ensure_ascii=False, indent=2)
     handle.write("\n")
 PY
+  complete_decision_routing "$work/out/resolutions.json" || return 1
   python3 "$COLLECTOR" reconcile \
     --manifest "$work/out/review.json" \
     --resolutions "$work/out/resolutions.json" \
@@ -90,6 +112,7 @@ for item in data["comments"]:
             "decision": "no_spec_change",
             "authority": "existing_spec",
             "reason": "测试中确认评论不需要额外修改规格",
+            "result_text": "Updated and verified",
         })
     else:
         item.update({
@@ -101,6 +124,7 @@ with open(path, "w", encoding="utf-8") as handle:
     json.dump(data, handle, ensure_ascii=False, indent=2)
     handle.write("\n")
 PY
+  complete_decision_routing "$work/out/resolutions.json" || return 1
   python3 "$COLLECTOR" reconcile \
     --manifest "$work/out/review.json" \
     --resolutions "$work/out/resolutions.json" \
@@ -116,6 +140,25 @@ prepare_controlled_review() {
   python3 "$COLLECTOR" apply "$work/spec.md" \
     --plan "$work/out/apply-plan.json" >/dev/null || return 1
   refresh_review_baseline "$work" || return 1
+  FAKE_REVIEW_SYNCED_REMOTE=1 \
+    python3 "$COLLECTOR" verify-sync \
+      --manifest "$work/out/review.json" \
+      --plan "$work/out/apply-plan.json" >/dev/null || return 1
+}
+
+prepare_batch_review() {
+  local work="$1"
+  mkdir -p "$work/out" "$work/remote-state"
+  make_review_doc "$work/spec.md"
+  python3 "$COLLECTOR" collect "$work/spec.md" --output-dir "$work/out" >/dev/null || return 1
+  seal_simple_review "$work" || return 1
+  python3 "$COLLECTOR" apply "$work/spec.md" \
+    --plan "$work/out/apply-plan.json" >/dev/null || return 1
+  refresh_review_baseline "$work" || return 1
+  FAKE_REVIEW_SYNCED_REMOTE=1 \
+    python3 "$COLLECTOR" verify-sync \
+      --manifest "$work/out/review.json" \
+      --plan "$work/out/apply-plan.json" >/dev/null || return 1
 }
 
 complete_controlled_c1() {
@@ -149,13 +192,23 @@ test_skill_contract() {
   assert_file_contains "$SKILL" "lark-review.py.*collect" "skill should call deterministic collector" || return
   assert_file_contains "$SKILL" "lark-review.py.*reconcile" "skill should require deterministic reconciliation" || return
   assert_file_contains "$SKILL" "lark-review.py.*apply" "skill should require guarded target apply" || return
+  assert_file_contains "$SKILL" "remote_native_snapshot" "review target must be based on the native remote snapshot" || return
+  assert_file_contains "$SKILL" "remote-coverage.json" "review must expose remote content/format coverage" || return
+  assert_file_contains "$SKILL" "内容覆盖率.*格式保真率" "final receipt must report both content and format preservation" || return
+  assert_file_contains "$SKILL" "lark-review.py.*verify-sync" "review must verify native format after writeback" || return
+  assert_file_contains "$SKILL" "10–15 分钟" "review must define a machine-time performance target" || return
+  assert_file_contains "$SKILL" "产品规则变化写.*decisions.md.*措辞和格式变化不得" "decision recording must be selective" || return
+  assert_file_contains "$SKILL" "decision_routing" "decision archival routing must be explicit before seal" || return
   assert_file_contains "$SKILL" "B / L / R.*只读证据" "skill should keep source versions read-only" || return
   assert_file_contains "$SKILL" "只有已 seal 的 T" "skill should make T the only writable target" || return
   assert_file_contains "$SKILL" "整批只走一条主执行路径" "mixed batch should use one lifecycle" || return
   assert_file_contains "$SKILL" "未验证完成前不解决评论" "comments must remain open before verification" || return
   assert_file_contains "$SKILL" "全量评论围栏" "checkpoint should bind all comments, including solved comments" || return
   assert_file_contains "$SKILL" "is_solved=false.*is_solved=true" "full comment fence must query both solved states explicitly" || return
-  assert_file_contains "$SKILL" "lark-review.py.*complete-comment" "comments should be completed through the controlled command" || return
+  assert_file_contains "$SKILL" "lark-review.py.*complete-comments" "new batches should complete comments through one controlled batch command" || return
+  assert_file_contains "$SKILL" "comments\[\].result_text" "comment result text should be sealed before batch completion" || return
+  assert_file_contains "$SKILL" "批次开始.*全部写入结束.*稳定全量评论围栏" "batch completion should use stable boundary scans" || return
+  assert_file_contains "$SKILL" "checkpoint.*复用.*不重复下载 full XML" "checkpoint should reuse revision-bound native verification" || return
   assert_file_contains "$SKILL" "comment-actions.json" "checkpoint should consume controlled comment receipts" || return
   assert_file_contains "$SKILL" "lark-review.py.*reopen" "checkpoint recovery should reopen system-solved batch comments" || return
   assert_file_contains "$SKILL" "不接受自由填写.*reply.*author.*solver" "comment recovery must not trust caller-supplied identities" || return
@@ -246,7 +299,14 @@ assert data["body"]["baseline_status"] == "revision"
 assert data["body"]["common_ancestor_compatible"] is True
 assert len(data["body"]["remote_source_hash"]) == 64
 assert data["batch_id"]
-assert set(data["artifacts"]) == {"baseline.md", "local.md", "remote.md"}
+assert set(data["artifacts"]) == {
+    "baseline.md", "local.md", "remote.md", "remote-native.json"
+}
+assert data["body"]["target_base"] == "remote_native_snapshot"
+assert data["performance"]["document_full_fetches"] == 1
+assert data["performance"]["document_snapshot_pairs"] == 1
+assert data["performance"]["document_revision_fence_fetches"] == 1
+assert data["performance"]["document_fetch_api_calls"] == 4
 assert data["document"]["published_revision_id"] == 7
 assert data["document"]["current_revision_id"] == 9
 comments = data["comments"]
@@ -572,6 +632,193 @@ PY
   pass_test
 }
 
+test_complete_comments_batches_full_scans_and_checkpoint_reuses_verification() {
+  start_test "lark-review: 整批评论只在首尾全量扫描且 checkpoint 复用格式验收"
+  local work="$BASE/comment-batch"
+  prepare_batch_review "$work" || { _fail "failed to prepare batch review"; return; }
+  : > "$work/lark.log"
+
+  local out rc
+  out=$(FAKE_LARK_LOG="$work/lark.log" \
+    FAKE_REVIEW_SYNCED_REMOTE=1 \
+    FAKE_REVIEW_CONTROLLED_ACTIONS=1 \
+    FAKE_REVIEW_NO_SOLVED_TIME=1 \
+    FAKE_REVIEW_STATE_DIR="$work/remote-state" \
+    python3 "$COLLECTOR" complete-comments \
+      --manifest "$work/out/review.json" \
+      --plan "$work/out/apply-plan.json" 2>&1)
+  rc=$?
+  if [ "$rc" -ne 0 ] || ! echo "$out" | grep -q '"execution_mode": "batch"'; then
+    _fail "batch completion failed: rc=$rc out=$out"
+    return
+  fi
+  if ! python3 - "$work/out/comment-actions.json" <<'PY'
+import json, sys
+value = json.load(open(sys.argv[1], encoding="utf-8"))
+assert value["execution_mode"] == "batch"
+assert [item["comment_id"] for item in value["actions"]] == ["c1", "c2"]
+assert all(item["status"] == "completed" for item in value["actions"])
+assert all(item["solved_time"] is None for item in value["actions"])
+assert all(item["solve_evidence_mode"] == "write_ack_and_stable_readback" for item in value["actions"])
+perf = value["performance"]
+assert perf["attempt_count"] == 1, perf
+assert perf["comment_full_scans"] == 4, perf
+assert perf["comment_list_api_calls"] == 10, perf
+assert perf["reply_write_api_calls"] == 2, perf
+assert perf["solve_write_api_calls"] == 2, perf
+PY
+  then
+    _fail "batch receipt or performance counters are incorrect"
+    return
+  fi
+  local list_calls
+  list_calls=$(grep -c 'file.comments list' "$work/lark.log")
+  if [ "$list_calls" -ne 10 ]; then
+    _fail "batch should use 10 list page calls for two stable boundary scans, got $list_calls"
+    return
+  fi
+
+  : > "$work/lark.log"
+  out=$(FAKE_LARK_LOG="$work/lark.log" \
+    FAKE_REVIEW_SYNCED_REMOTE=1 \
+    FAKE_REVIEW_CONTROLLED_ACTIONS=1 \
+    FAKE_REVIEW_NO_SOLVED_TIME=1 \
+    FAKE_REVIEW_STATE_DIR="$work/remote-state" \
+    python3 "$COLLECTOR" checkpoint "$work/spec.md" \
+      --manifest "$work/out/review.json" \
+      --plan "$work/out/apply-plan.json" \
+      --reviewed-at '2026-08-07T12:00:00+08:00' 2>&1)
+  rc=$?
+  if [ "$rc" -ne 0 ] || grep -q -- '--doc-format xml' "$work/lark.log"; then
+    _fail "checkpoint should reuse native verification without full XML: rc=$rc out=$out"
+    return
+  fi
+  if [ "$(grep -c 'file.comments list' "$work/lark.log")" -ne 4 ] \
+    || [ "$(grep -c 'docs +fetch' "$work/lark.log")" -ne 1 ]; then
+    _fail "checkpoint should use one stable comment scan and one markdown fence: $(cat "$work/lark.log")"
+    return
+  fi
+  pass_test
+}
+
+test_complete_comments_recovers_partial_batch_without_duplicate_replies() {
+  start_test "lark-review: 整批评论中断后按 journal 恢复且不重复回复"
+  local work="$BASE/comment-batch-recovery"
+  prepare_batch_review "$work" || { _fail "failed to prepare batch review"; return; }
+  : > "$work/lark.log"
+
+  local out rc
+  out=$(FAKE_LARK_LOG="$work/lark.log" \
+    FAKE_REVIEW_SYNCED_REMOTE=1 \
+    FAKE_REVIEW_CONTROLLED_ACTIONS=1 \
+    FAKE_REVIEW_PATCH_FAIL=1 \
+    FAKE_REVIEW_STATE_DIR="$work/remote-state" \
+    python3 "$COLLECTOR" complete-comments \
+      --manifest "$work/out/review.json" \
+      --plan "$work/out/apply-plan.json" 2>&1)
+  rc=$?
+  if [ "$rc" -eq 0 ] || ! echo "$out" | grep -q 'journal 已保留'; then
+    _fail "batch patch failure should retain journal: rc=$rc out=$out"
+    return
+  fi
+  out=$(FAKE_LARK_LOG="$work/lark.log" \
+    FAKE_REVIEW_SYNCED_REMOTE=1 \
+    FAKE_REVIEW_CONTROLLED_ACTIONS=1 \
+    FAKE_REVIEW_STATE_DIR="$work/remote-state" \
+    python3 "$COLLECTOR" complete-comments \
+      --manifest "$work/out/review.json" \
+      --plan "$work/out/apply-plan.json" 2>&1)
+  rc=$?
+  if [ "$rc" -ne 0 ]; then
+    _fail "batch recovery failed: rc=$rc out=$out"
+    return
+  fi
+  if [ "$(grep -c 'file.comment.replys create' "$work/lark.log")" -ne 2 ]; then
+    _fail "batch recovery duplicated a result reply: $(cat "$work/lark.log")"
+    return
+  fi
+  if ! python3 - "$work/out/comment-actions.json" <<'PY'
+import json, sys
+value = json.load(open(sys.argv[1], encoding="utf-8"))
+assert value["performance"]["attempt_count"] == 2
+assert all(item["status"] == "completed" for item in value["actions"])
+PY
+  then
+    _fail "recovered batch receipt is incomplete"
+    return
+  fi
+  pass_test
+}
+
+test_batch_final_read_failure_can_recover_and_reopen() {
+  start_test "lark-review: 批量 solve 已确认但最终回读中断后仍可受控 reopen"
+  local work="$BASE/comment-batch-reopen-recovery"
+  prepare_batch_review "$work" || { _fail "failed to prepare batch review"; return; }
+  : > "$work/lark.log"
+
+  local out rc
+  out=$(FAKE_LARK_LOG="$work/lark.log" \
+    FAKE_REVIEW_SYNCED_REMOTE=1 \
+    FAKE_REVIEW_CONTROLLED_ACTIONS=1 \
+    FAKE_REVIEW_NO_SOLVED_TIME=1 \
+    FAKE_REVIEW_FINAL_READ_FAIL=1 \
+    FAKE_REVIEW_STATE_DIR="$work/remote-state" \
+    python3 "$COLLECTOR" complete-comments \
+      --manifest "$work/out/review.json" \
+      --plan "$work/out/apply-plan.json" 2>&1)
+  rc=$?
+  if [ "$rc" -eq 0 ] || ! echo "$out" | grep -q 'journal 已保留'; then
+    _fail "batch final read failure should retain journal: rc=$rc out=$out"
+    return
+  fi
+  if ! python3 - "$work/out/comment-actions.json" <<'PY'
+import json, sys
+value = json.load(open(sys.argv[1], encoding="utf-8"))
+assert all(item["status"] == "solve_requested" for item in value["actions"])
+assert all(item["solve_write_ack_sha256"] for item in value["actions"])
+PY
+  then
+    _fail "failed batch did not retain solve write acknowledgements"
+    return
+  fi
+
+  : > "$work/remote-state/pm-after-result-c1"
+  out=$(FAKE_LARK_LOG="$work/lark.log" \
+    FAKE_REVIEW_SYNCED_REMOTE=1 \
+    FAKE_REVIEW_CONTROLLED_ACTIONS=1 \
+    FAKE_REVIEW_NO_SOLVED_TIME=1 \
+    FAKE_REVIEW_STATE_DIR="$work/remote-state" \
+    python3 "$COLLECTOR" reopen "$work/spec.md" \
+      --manifest "$work/out/review.json" \
+      --plan "$work/out/apply-plan.json" \
+      --comment-id 'c1' 2>&1)
+  rc=$?
+  if [ "$rc" -ne 0 ] || ! echo "$out" | grep -q '"status": "reopened"'; then
+    _fail "solve_requested batch action could not recover and reopen: rc=$rc out=$out"
+    return
+  fi
+  if ! python3 - "$work/out/comment-actions.json" <<'PY'
+import json, sys
+value = json.load(open(sys.argv[1], encoding="utf-8"))
+actions = {item["comment_id"]: item for item in value["actions"]}
+assert actions["c1"]["status"] == "reopened"
+assert actions["c2"]["status"] == "completed"
+assert actions["c1"]["solved_time"] is None
+assert actions["c2"]["solved_time"] is None
+assert actions["c1"]["solve_evidence_mode"] == "write_ack_and_stable_readback"
+assert actions["c2"]["solve_evidence_mode"] == "write_ack_and_stable_readback"
+PY
+  then
+    _fail "reopen recovery did not persist controlled completion evidence"
+    return
+  fi
+  if [ "$(grep -c 'file.comment.replys create' "$work/lark.log")" -ne 2 ]; then
+    _fail "reopen recovery duplicated result replies: $(cat "$work/lark.log")"
+    return
+  fi
+  pass_test
+}
+
 test_checkpoint_failure_can_recollect_solved_comment() {
   start_test "lark-review: 结果回复竞态失败后先受控 reopen 再重新采集"
   local work="$BASE/checkpoint-solved-recovery"
@@ -743,11 +990,12 @@ import json, sys
 path = sys.argv[1]
 data = json.load(open(path, encoding="utf-8"))
 for item in data["comments"]:
-    item.update(decision="no_spec_change", authority="existing_spec", reason="无需改规格")
+    item.update(decision="no_spec_change", authority="existing_spec", reason="无需改规格", result_text="Updated and verified")
 with open(path, "w", encoding="utf-8") as handle:
     json.dump(data, handle, ensure_ascii=False, indent=2)
     handle.write("\n")
 PY
+  complete_decision_routing "$work/out/resolutions.json"
   python3 "$COLLECTOR" reconcile --manifest "$work/out/review.json" \
     --resolutions "$work/out/resolutions.json" --seal >/dev/null
   python3 "$COLLECTOR" apply "$work/spec.md" --plan "$work/out/apply-plan.json" >/dev/null
@@ -769,6 +1017,82 @@ PY
   pass_test
 }
 
+test_decision_routing_is_explicit_and_selective() {
+  start_test "lark-review: 每个飞书变化显式路由 decision 且只沉淀产品规则"
+  local work="$BASE/decision-routing"
+  mkdir -p "$work/out"
+  make_review_doc "$work/spec.md"
+  python3 "$COLLECTOR" collect "$work/spec.md" --output-dir "$work/out" >/dev/null
+  python3 "$COLLECTOR" reconcile --manifest "$work/out/review.json" >/dev/null
+  python3 - "$work/out/resolutions.json" <<'PY'
+import json, sys
+path = sys.argv[1]
+data = json.load(open(path, encoding="utf-8"))
+for item in data["comments"]:
+    item.update(
+        decision="no_spec_change",
+        authority="existing_spec",
+        reason="不改变规格规则",
+        result_text="Updated and verified",
+    )
+with open(path, "w", encoding="utf-8") as handle:
+    json.dump(data, handle, ensure_ascii=False, indent=2)
+    handle.write("\n")
+PY
+  local out rc
+  out=$(python3 "$COLLECTOR" reconcile --manifest "$work/out/review.json" \
+    --resolutions "$work/out/resolutions.json" --seal 2>&1)
+  rc=$?
+  if [ "$rc" -eq 0 ] || ! echo "$out" | grep -q '尚未完成 decision 归档路由'; then
+    _fail "pending decision routing must block seal: rc=$rc out=$out"
+    return
+  fi
+  python3 - "$work/out/resolutions.json" <<'PY'
+import json, sys
+path = sys.argv[1]
+data = json.load(open(path, encoding="utf-8"))
+for item in data["decision_routing"]:
+    if item["source_type"] == "body":
+        item.update(
+            outcome="supersede",
+            target_path="docs/modules/example/decisions.md",
+            decision_id="D-NEW-RULE",
+            supersedes=["D-OLD-RULE"],
+            summary="飞书确认采用新业务规则",
+            reason="正文修改改变稳定业务规则",
+        )
+    else:
+        item.update(
+            outcome="not_required",
+            target_path="",
+            decision_id="",
+            supersedes=[],
+            summary="",
+            reason="评论仅解释现有规则",
+        )
+with open(path, "w", encoding="utf-8") as handle:
+    json.dump(data, handle, ensure_ascii=False, indent=2)
+    handle.write("\n")
+PY
+  out=$(python3 "$COLLECTOR" reconcile --manifest "$work/out/review.json" \
+    --resolutions "$work/out/resolutions.json" --seal 2>&1)
+  rc=$?
+  if [ "$rc" -ne 0 ]; then
+    _fail "valid selective decision routing should seal: rc=$rc out=$out"
+    return
+  fi
+  python3 - "$work/out/apply-plan.json" <<'PY'
+import json, sys
+plan = json.load(open(sys.argv[1], encoding="utf-8"))
+assert plan["decision_write_count"] == 1
+route = next(item for item in plan["decision_routing"] if item["outcome"] == "supersede")
+assert route["decision_id"] == "D-NEW-RULE"
+assert route["supersedes"] == ["D-OLD-RULE"]
+PY
+  [ "$?" -eq 0 ] || { _fail "decision routing missing from ready plan"; return; }
+  pass_test
+}
+
 test_applied_comment_requires_changed_lifecycle_target() {
   start_test "lark-review: applied 评论必须实际编译进独立 T"
   local work="$BASE/applied-comment"
@@ -782,13 +1106,14 @@ path = sys.argv[1]
 data = json.load(open(path, encoding="utf-8"))
 for item in data["comments"]:
     if item["comment_id"] == "c1":
-        item.update(decision="applied", authority="pm_confirmed", reason="按评论补充完成条件")
+        item.update(decision="applied", authority="pm_confirmed", reason="按评论补充完成条件", result_text="Updated and verified")
     else:
-        item.update(decision="no_spec_change", authority="existing_spec", reason="无需额外修改")
+        item.update(decision="no_spec_change", authority="existing_spec", reason="无需额外修改", result_text="Updated and verified")
 with open(path, "w", encoding="utf-8") as handle:
     json.dump(data, handle, ensure_ascii=False, indent=2)
     handle.write("\n")
 PY
+  complete_decision_routing "$work/out/resolutions.json"
   local out rc
   out=$(python3 "$COLLECTOR" reconcile --manifest "$work/out/review.json" \
     --resolutions "$work/out/resolutions.json" --seal 2>&1)
@@ -914,11 +1239,13 @@ for item in data["comments"]:
         decision="no_spec_change",
         authority="existing_spec",
         reason="无需额外修改规格",
+        result_text="Updated and verified",
     )
 with open(path, "w", encoding="utf-8") as handle:
     json.dump(data, handle, ensure_ascii=False, indent=2)
     handle.write("\n")
 PY
+  complete_decision_routing "$work/out/resolutions.json"
   local out rc
   out=$(python3 "$COLLECTOR" reconcile \
     --manifest "$work/out/review.json" \
@@ -963,6 +1290,34 @@ PY
     return
   fi
   printf '# Spec\n\nMerged rule\n' > "$work/out/target.md"
+  PYTHONPATH="$REPO_ROOT/scripts" python3 - \
+    "$work/out/resolutions.json" "$work/out/remote.md" "$work/out/target.md" <<'PY'
+import json, sys
+from pathlib import Path
+from _lib.lark_review_semantics import markdown_semantic_units
+
+resolutions_path = Path(sys.argv[1])
+remote_units = markdown_semantic_units(Path(sys.argv[2]).read_text(encoding="utf-8"))
+target_units = markdown_semantic_units(Path(sys.argv[3]).read_text(encoding="utf-8"))
+remote_rule = next(item for item in remote_units if item.text == "New rule")
+target_rule = next(item for item in target_units if item.text == "Merged rule")
+data = json.loads(resolutions_path.read_text(encoding="utf-8"))
+data["remote_coverage"] = [{
+    "remote_unit_id": remote_rule.unit_id,
+    "disposition": "rewritten",
+    "target_unit_ids": [target_rule.unit_id],
+    "format_disposition": "preserved",
+    "evidence": {
+        "kind": "decision",
+        "id": data["body"][0]["change_id"],
+        "reason": "PM 已确认把双边规则合并为新口径",
+    },
+}]
+resolutions_path.write_text(
+    json.dumps(data, ensure_ascii=False, indent=2) + "\n",
+    encoding="utf-8",
+)
+PY
   out=$(python3 "$COLLECTOR" reconcile \
     --manifest "$work/out/review.json" \
     --resolutions "$work/out/resolutions.json" \
@@ -975,8 +1330,8 @@ PY
   pass_test
 }
 
-test_incompatible_baseline_starts_target_from_local() {
-  start_test "lark-review: B 与本地发布源格式不兼容时 T 从 L 初始化"
+test_incompatible_remote_only_starts_target_from_native_remote() {
+  start_test "lark-review: remote-only 即使祖先格式不兼容也从飞书原生快照初始化 T"
   local work="$BASE/incompatible"
   mkdir -p "$work/out"
   local body='# Spec
@@ -997,17 +1352,24 @@ Old [rule]
   } > "$work/spec.md"
   python3 "$COLLECTOR" collect "$work/spec.md" --output-dir "$work/out" >/dev/null
   python3 "$COLLECTOR" reconcile --manifest "$work/out/review.json" >/dev/null
-  python3 - "$work/out/review.json" "$work/out/apply-plan.json" <<'PY'
+  python3 - "$work/out/review.json" "$work/out/apply-plan.json" "$work/out/remote-native.json" <<'PY'
 import json, sys
 manifest = json.load(open(sys.argv[1], encoding="utf-8"))
 plan = json.load(open(sys.argv[2], encoding="utf-8"))
+native = json.load(open(sys.argv[3], encoding="utf-8"))
 assert manifest["body"]["common_ancestor_compatible"] is False
 assert plan["required_items"]["body"][0]["kind"] == "ancestor_incompatible"
-assert plan["required_items"]["body"][0]["decision"] == "pending"
+assert plan["target_base"] == "remote_native_snapshot"
+assert plan["target_base_revision"] == 9
+assert manifest["artifacts"]["remote-native.json"]["sha256"]
+assert native["document"]["revision_id"] == 9
+assert 'align="left"' in native["document"]["content"]
+assert '<b>New rule</b>' in native["document"]["content"]
+assert native["document"]["reference_map"]["doc:spec"] == "docR"
 PY
-  if [ "$?" -ne 0 ] || ! grep -Fq 'Old [rule]' "$work/out/target.md" \
-    || grep -q '^New rule$' "$work/out/target.md"; then
-    _fail "incompatible ancestor should keep L as draft target"
+  if [ "$?" -ne 0 ] || ! grep -q '^New rule$' "$work/out/target.md" \
+    || grep -Fq 'Old [rule]' "$work/out/target.md"; then
+    _fail "incompatible remote-only target must start from current remote"
     return
   fi
   python3 - "$work/out/resolutions.json" <<'PY'
@@ -1019,27 +1381,278 @@ data["body"][0].update(
 )
 for item in data["comments"]:
     item.update(
-        decision="no_spec_change", authority="existing_spec", reason="无需改规格"
+        decision="no_spec_change", authority="existing_spec", reason="无需改规格",
+        result_text="Updated and verified"
     )
 with open(path, "w", encoding="utf-8") as handle:
     json.dump(data, handle, ensure_ascii=False, indent=2)
     handle.write("\n")
 PY
+  complete_decision_routing "$work/out/resolutions.json"
   local out rc
   out=$(python3 "$COLLECTOR" reconcile --manifest "$work/out/review.json" \
     --resolutions "$work/out/resolutions.json" --seal 2>&1)
   rc=$?
-  if [ "$rc" -eq 0 ] || ! echo "$out" | grep -q '使用了不支持的归位决定'; then
-    _fail "incompatible ancestor must not permit whole-document remote-wins: rc=$rc out=$out"
+  if [ "$rc" -ne 0 ] || ! grep -q '^New rule$' "$work/out/target.md"; then
+    _fail "PM-confirmed remote target should seal from R: rc=$rc out=$out"
+    return
+  fi
+  pass_test
+}
+
+test_unassigned_remote_rewrite_blocks_seal() {
+  start_test "lark-review: R 到 T 的无依据改写阻止 seal"
+  local work="$BASE/remote-coverage"
+  mkdir -p "$work/out"
+  make_review_doc "$work/spec.md"
+  python3 "$COLLECTOR" collect "$work/spec.md" --output-dir "$work/out" >/dev/null
+  python3 "$COLLECTOR" reconcile --manifest "$work/out/review.json" >/dev/null
+  sed -i.bak 's/^New rule$/Rewritten without evidence/' "$work/out/target.md"
+  python3 - "$work/out/resolutions.json" <<'PY'
+import json, sys
+path = sys.argv[1]
+data = json.load(open(path, encoding="utf-8"))
+data["target"].update(
+    mode="lifecycle_compiled",
+    authority="pm_confirmed",
+    reason="测试远端覆盖门禁",
+)
+for item in data["comments"]:
+    item.update(decision="no_spec_change", authority="existing_spec", reason="无需改规格", result_text="Updated and verified")
+with open(path, "w", encoding="utf-8") as handle:
+    json.dump(data, handle, ensure_ascii=False, indent=2)
+    handle.write("\n")
+PY
+  complete_decision_routing "$work/out/resolutions.json"
+  local out rc
+  out=$(python3 "$COLLECTOR" reconcile --manifest "$work/out/review.json" \
+    --resolutions "$work/out/resolutions.json" --seal 2>&1)
+  rc=$?
+  if [ "$rc" -eq 0 ] || ! echo "$out" | grep -q '远端语义.*未归位'; then
+    _fail "unassigned remote rewrite must block seal: rc=$rc out=$out"
+    return
+  fi
+  python3 - "$work/out/remote-coverage.json" <<'PY'
+import json, sys
+coverage = json.load(open(sys.argv[1], encoding="utf-8"))
+assert coverage["summary"]["unassigned_count"] == 1, coverage
+assert coverage["summary"]["remote_accounted_ratio"] < 1
+assert coverage["summary"]["remote_format_accounted_ratio"] < 1
+PY
+  [ "$?" -eq 0 ] || { _fail "coverage ledger must expose the missing remote unit"; return; }
+  pass_test
+}
+
+test_duplicate_remote_units_keep_independent_native_format_accounts() {
+  start_test "lark-review: 同文重复段落的原生格式账本互不豁免"
+  PYTHONPATH="$REPO_ROOT/scripts" python3 - <<'PY'
+from _lib.lark_review_semantics import (
+    build_native_snapshot,
+    build_remote_coverage,
+    markdown_semantic_units,
+)
+
+remote = "# Spec\n\nRepeat\n\nRepeat\n"
+target = "# Spec\n\nRepeat\n"
+remote_repeats = [u for u in markdown_semantic_units(remote) if u.text == "Repeat"]
+snapshot = build_native_snapshot({
+    "document_id": "docR",
+    "revision_id": 9,
+    "content": '<?xml version="1.0" encoding="UTF-8"?><h1 id="b-title">Spec</h1><p id="b-repeat-1" align="left">Repeat</p><p id="b-repeat-2" align="right">Repeat</p>',
+})
+resolution = {
+    "remote_unit_id": remote_repeats[1].unit_id,
+    "disposition": "removed",
+    "target_unit_ids": [],
+    "format_disposition": "removed_with_content",
+    "evidence": {"kind": "pm_exception", "id": "remove-second", "reason": "PM 删除第二段"},
+}
+coverage = build_remote_coverage(
+    remote,
+    target,
+    native_snapshot=snapshot,
+    resolutions=[resolution],
+    batch_id="batch",
+    remote_revision_id=9,
+)
+native = {item["block_id"]: item for item in coverage["native_format_entries"]}
+assert native["b-repeat-1"]["format_disposition"] == "preserved", native
+assert native["b-repeat-2"]["format_disposition"] == "removed_with_content", native
+assert coverage["summary"]["format_unassigned_count"] == 0
+
+bad = {**resolution, "format_disposition": "intentional_change"}
+bad_coverage = build_remote_coverage(
+    remote,
+    target,
+    native_snapshot=snapshot,
+    resolutions=[bad],
+    batch_id="batch",
+    remote_revision_id=9,
+)
+assert bad_coverage["summary"]["unassigned_count"] == 1
+assert bad_coverage["summary"]["format_unassigned_count"] == 1
+
+semantic_remote = "# Spec\n\nUse [policy](https://remote.example) with `account_id` and **Required**.\n"
+semantic_target = "# Spec\n\nUse [policy](https://local.example) with `accountid` and Required.\n"
+semantic_snapshot = build_native_snapshot({
+    "document_id": "docR",
+    "revision_id": 9,
+    "content": '<h1 id="b-semantic-title">Spec</h1><p id="b-semantic"><a href="https://remote.example">policy</a><code>account_id</code><b>Required</b></p>',
+})
+semantic_coverage = build_remote_coverage(
+    semantic_remote,
+    semantic_target,
+    native_snapshot=semantic_snapshot,
+    resolutions=[],
+    batch_id="batch-semantic",
+    remote_revision_id=9,
+)
+assert semantic_coverage["summary"]["unassigned_count"] == 1, semantic_coverage
+PY
+  if [ "$?" -ne 0 ]; then
+    _fail "duplicate native format accounting is not independent"
+    return
+  fi
+  pass_test
+}
+
+test_comment_without_solved_time_can_checkpoint() {
+  start_test "lark-review: 缺少 solved_time 时以写回执和稳定回读收口"
+  local work="$BASE/comment-no-solved-time"
+  prepare_controlled_review "$work" || { _fail "failed to prepare review"; return; }
+  local out rc
+  out=$(FAKE_REVIEW_SYNCED_REMOTE=1 \
+    FAKE_REVIEW_CONTROLLED_ACTIONS=1 \
+    FAKE_REVIEW_NO_SOLVED_TIME=1 \
+    FAKE_REVIEW_STATE_DIR="$work/remote-state" \
+    python3 "$COLLECTOR" complete-comment \
+      --manifest "$work/out/review.json" \
+      --plan "$work/out/apply-plan.json" \
+      --comment-id c1 --result-text 'Updated and verified' 2>&1)
+  rc=$?
+  if [ "$rc" -ne 0 ] || ! echo "$out" | grep -q 'write_ack_and_stable_readback'; then
+    _fail "missing solved_time should use controlled readback evidence: rc=$rc out=$out"
+    return
+  fi
+  python3 - "$work/out/comment-actions.json" <<'PY'
+import json, sys
+action = json.load(open(sys.argv[1], encoding="utf-8"))["actions"][0]
+assert action["status"] == "completed"
+assert action["solved_time"] is None
+assert action["solve_evidence_mode"] == "write_ack_and_stable_readback"
+assert action["solve_write_ack_sha256"]
+PY
+  [ "$?" -eq 0 ] || { _fail "controlled receipt is incomplete"; return; }
+  out=$(FAKE_REVIEW_SYNCED_REMOTE=1 \
+    FAKE_REVIEW_CONTROLLED_ACTIONS=1 \
+    FAKE_REVIEW_NO_SOLVED_TIME=1 \
+    FAKE_REVIEW_STATE_DIR="$work/remote-state" \
+    python3 "$COLLECTOR" checkpoint "$work/spec.md" \
+      --manifest "$work/out/review.json" --plan "$work/out/apply-plan.json" \
+      --reviewed-at '2026-08-07T12:00:00+08:00' 2>&1)
+  rc=$?
+  if [ "$rc" -ne 0 ] || ! grep -q '^lark_reviewed_revision_id: 10$' "$work/spec.md"; then
+    _fail "checkpoint should accept stable no-time receipt: rc=$rc out=$out"
+    return
+  fi
+  pass_test
+}
+
+test_verify_sync_preserves_native_format_and_resources() {
+  start_test "lark-review: 精细写回后机器验证飞书原生格式和资源"
+  local work="$BASE/verify-sync"
+  prepare_controlled_review "$work" || { _fail "failed to prepare review"; return; }
+  local out rc
+  out=$(FAKE_REVIEW_SYNCED_REMOTE=1 \
+    python3 "$COLLECTOR" verify-sync \
+      --manifest "$work/out/review.json" \
+      --plan "$work/out/apply-plan.json" 2>&1)
+  rc=$?
+  if [ "$rc" -ne 0 ] || ! echo "$out" | grep -q '"format_coverage": 1.0'; then
+    _fail "native format verification should pass: rc=$rc out=$out"
+    return
+  fi
+  python3 - "$work/out/remote-verification.json" <<'PY'
+import json, sys
+value = json.load(open(sys.argv[1], encoding="utf-8"))
+assert value["target_base"] == "remote_native_snapshot"
+assert value["content_projection_match"] is True
+assert value["remote_format_accounted_ratio"] == 1.0
+assert value["preserved_native_block_count"] == 5
+assert value["original_references_preserved"] is True
+PY
+  [ "$?" -eq 0 ] || { _fail "remote verification receipt is incomplete"; return; }
+  out=$(FAKE_REVIEW_SYNCED_REMOTE=1 FAKE_REVIEW_FORMAT_LOSS=1 \
+    python3 "$COLLECTOR" verify-sync \
+      --manifest "$work/out/review.json" \
+      --plan "$work/out/apply-plan.json" 2>&1)
+  rc=$?
+  if [ "$rc" -eq 0 ] || ! echo "$out" | grep -Eq '格式或资源未被保留|引用映射未被完整保留'; then
+    _fail "format/resource loss must fail verification: rc=$rc out=$out"
+    return
+  fi
+  pass_test
+}
+
+test_structural_remote_change_requires_pm_preview() {
+  start_test "lark-review: 结构性 R 到 T 改写强制 PM 预览"
+  local work="$BASE/remote-preview"
+  mkdir -p "$work/out"
+  make_review_doc "$work/spec.md"
+  python3 "$COLLECTOR" collect "$work/spec.md" --output-dir "$work/out" >/dev/null
+  python3 "$COLLECTOR" reconcile --manifest "$work/out/review.json" >/dev/null
+  sed -i.bak 's/^# Spec$/# Updated spec/' "$work/out/target.md"
+  PYTHONPATH="$REPO_ROOT/scripts" python3 - \
+    "$work/out/resolutions.json" "$work/out/remote.md" "$work/out/target.md" <<'PY'
+import json, sys
+from pathlib import Path
+from _lib.lark_review_semantics import markdown_semantic_units
+
+path = Path(sys.argv[1])
+remote = markdown_semantic_units(Path(sys.argv[2]).read_text(encoding="utf-8"))
+target = markdown_semantic_units(Path(sys.argv[3]).read_text(encoding="utf-8"))
+old_heading = next(item for item in remote if item.kind == "heading")
+new_heading = next(item for item in target if item.kind == "heading")
+data = json.loads(path.read_text(encoding="utf-8"))
+data["target"] = {
+    "mode": "lifecycle_compiled",
+    "authority": "pm_confirmed",
+    "reason": "按 PM 确认更新标题",
+}
+for item in data["comments"]:
+    item.update(decision="no_spec_change", authority="existing_spec", reason="无需改规格", result_text="Updated and verified")
+data["remote_coverage"] = [{
+    "remote_unit_id": old_heading.unit_id,
+    "disposition": "rewritten",
+    "target_unit_ids": [new_heading.unit_id],
+    "format_disposition": "preserved",
+    "evidence": {
+        "kind": "pm_exception",
+        "id": "pm-heading-confirmation",
+        "reason": "PM 确认标题改写但保留原样式",
+    },
+}]
+path.write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+PY
+  complete_decision_routing "$work/out/resolutions.json"
+  local out rc
+  out=$(python3 "$COLLECTOR" reconcile --manifest "$work/out/review.json" \
+    --resolutions "$work/out/resolutions.json" --seal 2>&1)
+  rc=$?
+  if [ "$rc" -eq 0 ] || ! echo "$out" | grep -q '强制预览阈值' \
+    || ! grep -q 'remote-heading-' "$work/out/remote-preview.md"; then
+    _fail "structural rewrite should stop for PM preview: rc=$rc out=$out"
     return
   fi
   python3 - "$work/out/resolutions.json" <<'PY'
 import json, sys
 path = sys.argv[1]
 data = json.load(open(path, encoding="utf-8"))
-data["body"][0].update(
-    decision="local", authority="existing_spec", reason="保留当前本地规格"
-)
+data["preview"] = {
+    "approved": True,
+    "authority": "pm_confirmed",
+    "reason": "PM 已查看结构改写预览并确认",
+}
 with open(path, "w", encoding="utf-8") as handle:
     json.dump(data, handle, ensure_ascii=False, indent=2)
     handle.write("\n")
@@ -1047,28 +1660,86 @@ PY
   out=$(python3 "$COLLECTOR" reconcile --manifest "$work/out/review.json" \
     --resolutions "$work/out/resolutions.json" --seal 2>&1)
   rc=$?
-  if [ "$rc" -eq 0 ] || ! echo "$out" | grep -q '缺少 PM.*明确确认'; then
-    _fail "incompatible ancestor must not select L without PM confirmation: rc=$rc out=$out"
+  if [ "$rc" -ne 0 ] || ! echo "$out" | grep -q '"preview_required": true'; then
+    _fail "PM-approved structural preview should seal: rc=$rc out=$out"
     return
   fi
-  python3 - "$work/out/resolutions.json" <<'PY'
+  pass_test
+}
+
+test_legacy_receipt_recovers_without_solved_time() {
+  start_test "lark-review: v1 solve_requested 缺少 solved_time 时受控升级恢复"
+  local work="$BASE/legacy-no-solved-time"
+  prepare_controlled_review "$work" || { _fail "failed to prepare review"; return; }
+  python3 - "$work/out/review.json" "$work/out/apply-plan.json" <<'PY'
+import hashlib, json, sys
+manifest_path, plan_path = sys.argv[1:]
+manifest = json.load(open(manifest_path, encoding="utf-8"))
+manifest["schema_version"] = 2
+with open(manifest_path, "w", encoding="utf-8") as handle:
+    json.dump(manifest, handle, ensure_ascii=False, indent=2)
+    handle.write("\n")
+plan = json.load(open(plan_path, encoding="utf-8"))
+plan["schema_version"] = 2
+plan["manifest"]["sha256"] = hashlib.sha256(open(manifest_path, "rb").read()).hexdigest()
+plan.pop("ready_token", None)
+encoded = json.dumps(plan, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+plan["ready_token"] = hashlib.sha256(encoded.encode("utf-8")).hexdigest()
+with open(plan_path, "w", encoding="utf-8") as handle:
+    json.dump(plan, handle, ensure_ascii=False, indent=2)
+    handle.write("\n")
+PY
+  local out rc
+  out=$(FAKE_REVIEW_SYNCED_REMOTE=1 \
+    FAKE_REVIEW_CONTROLLED_ACTIONS=1 \
+    FAKE_REVIEW_NO_SOLVED_TIME=1 \
+    FAKE_REVIEW_FINAL_READ_FAIL=1 \
+    FAKE_REVIEW_STATE_DIR="$work/remote-state" \
+    python3 "$COLLECTOR" complete-comment \
+      --manifest "$work/out/review.json" \
+      --plan "$work/out/apply-plan.json" \
+      --comment-id c1 --result-text 'Updated and verified' 2>&1)
+  rc=$?
+  if [ "$rc" -eq 0 ] || ! echo "$out" | grep -q 'solve_requested'; then
+    _fail "failed readback should leave a recoverable solve request: rc=$rc out=$out"
+    return
+  fi
+  python3 - "$work/out/comment-actions.json" <<'PY'
 import json, sys
 path = sys.argv[1]
 data = json.load(open(path, encoding="utf-8"))
-data["body"][0].update(
-    decision="local", authority="pm_confirmed", reason="PM 明确确认保留本地规格"
-)
+data["schema_version"] = 1
+for action in data["actions"]:
+    action.pop("solve_evidence_mode", None)
+    action.pop("solve_write_ack_sha256", None)
 with open(path, "w", encoding="utf-8") as handle:
     json.dump(data, handle, ensure_ascii=False, indent=2)
     handle.write("\n")
 PY
-  out=$(python3 "$COLLECTOR" reconcile --manifest "$work/out/review.json" \
-    --resolutions "$work/out/resolutions.json" --seal 2>&1)
+  out=$(FAKE_REVIEW_SYNCED_REMOTE=1 \
+    FAKE_REVIEW_CONTROLLED_ACTIONS=1 \
+    FAKE_REVIEW_NO_SOLVED_TIME=1 \
+    FAKE_REVIEW_STATE_DIR="$work/remote-state" \
+    python3 "$COLLECTOR" complete-comment \
+      --manifest "$work/out/review.json" \
+      --plan "$work/out/apply-plan.json" \
+      --comment-id c1 --result-text 'Updated and verified' 2>&1)
   rc=$?
-  if [ "$rc" -ne 0 ]; then
-    _fail "PM-confirmed local target should seal: rc=$rc out=$out"
+  if [ "$rc" -ne 0 ] || ! echo "$out" | grep -q 'legacy_stable_readback'; then
+    _fail "legacy no-time receipt should recover: rc=$rc out=$out"
     return
   fi
+  python3 - "$work/out/comment-actions.json" <<'PY'
+import json, sys
+data = json.load(open(sys.argv[1], encoding="utf-8"))
+action = data["actions"][0]
+assert data["schema_version"] == 2
+assert action["status"] == "completed"
+assert action["solved_time"] is None
+assert action["solve_evidence_mode"] == "legacy_stable_readback"
+assert action["solve_write_ack_sha256"] is None
+PY
+  [ "$?" -eq 0 ] || { _fail "legacy receipt upgrade is incomplete"; return; }
   pass_test
 }
 
@@ -1397,17 +2068,27 @@ test_checkpoint_rejects_reopened_out_of_batch_comment
 test_checkpoint_rejects_solved_out_of_batch_comment
 test_checkpoint_binds_system_result_reply
 test_complete_comment_accepts_sparse_create_response
+test_complete_comments_batches_full_scans_and_checkpoint_reuses_verification
+test_complete_comments_recovers_partial_batch_without_duplicate_replies
+test_batch_final_read_failure_can_recover_and_reopen
 test_checkpoint_failure_can_recollect_solved_comment
 test_checkpoint_preserves_deferred_comments
 test_same_second_comment_uses_create_time_and_id_boundary
 test_baseline_refresh_is_atomic
 test_reconcile_seals_target_before_apply
+test_decision_routing_is_explicit_and_selective
 test_applied_comment_requires_changed_lifecycle_target
 test_apply_rejects_local_change_after_collect
 test_apply_rejects_remote_or_comment_change
 test_already_applied_rechecks_local_cas
 test_manual_merge_requires_compiled_target
-test_incompatible_baseline_starts_target_from_local
+test_incompatible_remote_only_starts_target_from_native_remote
+test_unassigned_remote_rewrite_blocks_seal
+test_duplicate_remote_units_keep_independent_native_format_accounts
+test_comment_without_solved_time_can_checkpoint
+test_verify_sync_preserves_native_format_and_resources
+test_structural_remote_change_requires_pm_preview
+test_legacy_receipt_recovers_without_solved_time
 test_review_requires_cli_with_versioned_docs_skills
 test_legacy_document_degrades_without_claiming_delta
 test_recorded_revision_failure_is_fail_closed

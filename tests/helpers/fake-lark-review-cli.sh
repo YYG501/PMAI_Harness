@@ -43,7 +43,11 @@ case "${1:-}" in
         fi
       elif [ "${FAKE_REVIEW_SYNCED_REMOTE:-0}" = "1" ]; then
         if [ "$format" = "xml" ]; then
-          printf '%s' "{\"ok\":true,\"data\":{\"document\":{\"document_id\":\"docR\",\"revision_id\":$synced_revision,\"content\":\"<h1 id=\\\"b-title\\\">Spec</h1><p id=\\\"b-rule\\\">New rule</p>\"}}}"
+          if [ "${FAKE_REVIEW_FORMAT_LOSS:-0}" = "1" ]; then
+            printf '%s' "{\"ok\":true,\"data\":{\"document\":{\"document_id\":\"docR\",\"revision_id\":$synced_revision,\"content\":\"<h1 id=\\\"b-title\\\">Spec</h1><p id=\\\"b-rule\\\">New rule</p>\",\"reference_map\":{}}}}"
+          else
+            printf '%s' "{\"ok\":true,\"data\":{\"document\":{\"document_id\":\"docR\",\"revision_id\":$synced_revision,\"content\":\"<h1 id=\\\"b-title\\\" align=\\\"left\\\">Spec</h1><p id=\\\"b-rule\\\" align=\\\"left\\\"><b>New rule</b></p><p id=\\\"b-repeat-1\\\">Repeat</p><p id=\\\"b-repeat-2\\\">Repeat</p><img id=\\\"b-image\\\" token=\\\"img-token\\\" width=\\\"640\\\" height=\\\"360\\\"/>\",\"reference_map\":{\"doc:spec\":\"docR\"}}}}"
+          fi
         else
           printf '%s' "{\"ok\":true,\"data\":{\"document\":{\"document_id\":\"docR\",\"revision_id\":$synced_revision,\"content\":\"# Spec\\n\\nNew rule\\n\"}}}"
         fi
@@ -55,7 +59,7 @@ case "${1:-}" in
           && [ -e "$FAKE_REVIEW_STATE_DIR/late-revision" ]; then
           printf '%s' '{"ok":true,"data":{"document":{"document_id":"docR","revision_id":10,"content":"<h1 id=\"b-title\">Spec</h1><p id=\"b-rule\">Late remote edit</p>"}}}'
         else
-          printf '%s' '{"ok":true,"data":{"document":{"document_id":"docR","revision_id":9,"content":"<h1 id=\"b-title\">Spec</h1><p id=\"b-rule\">New rule</p><p id=\"b-repeat-1\">Repeat</p><p id=\"b-repeat-2\">Repeat</p>"}}}'
+          printf '%s' '{"ok":true,"data":{"document":{"document_id":"docR","revision_id":9,"content":"<h1 id=\"b-title\" align=\"left\">Spec</h1><p id=\"b-rule\" align=\"left\"><b>New rule</b></p><p id=\"b-repeat-1\">Repeat</p><p id=\"b-repeat-2\">Repeat</p><img id=\"b-image\" token=\"img-token\" width=\"640\" height=\"360\"/>","reference_map":{"doc:spec":"docR"}}}}'
         fi
       else
         if [ "${FAKE_REVIEW_REMOTE_CHANGES_AFTER_FETCH:-0}" = "1" ] \
@@ -152,7 +156,11 @@ case "${1:-}" in
             c1_update=260
           fi
           if [ "$c1_solved" = true ]; then
-            c1_item="{\"comment_id\":\"c1\",\"user_id\":\"ou1\",\"create_time\":100,\"update_time\":270,\"is_solved\":true,\"solved_time\":270,\"solver_user_id\":\"ou-shared\",\"is_whole\":false,\"quote\":\"New rule\",\"has_more\":false,\"relation\":{\"content_deleted\":false,\"relation\":\"{\\\"22-docR\\\":{\\\"positionInfo\\\":{\\\"blockID\\\":\\\"b-rule\\\"}}}\"},\"reply_list\":{\"replies\":$c1_replies}}"
+            if [ "${FAKE_REVIEW_NO_SOLVED_TIME:-0}" = "1" ]; then
+              c1_item="{\"comment_id\":\"c1\",\"user_id\":\"ou1\",\"create_time\":100,\"update_time\":270,\"is_solved\":true,\"solver_user_id\":\"ou-shared\",\"is_whole\":false,\"quote\":\"New rule\",\"has_more\":false,\"relation\":{\"content_deleted\":false,\"relation\":\"{\\\"22-docR\\\":{\\\"positionInfo\\\":{\\\"blockID\\\":\\\"b-rule\\\"}}}\"},\"reply_list\":{\"replies\":$c1_replies}}"
+            else
+              c1_item="{\"comment_id\":\"c1\",\"user_id\":\"ou1\",\"create_time\":100,\"update_time\":270,\"is_solved\":true,\"solved_time\":270,\"solver_user_id\":\"ou-shared\",\"is_whole\":false,\"quote\":\"New rule\",\"has_more\":false,\"relation\":{\"content_deleted\":false,\"relation\":\"{\\\"22-docR\\\":{\\\"positionInfo\\\":{\\\"blockID\\\":\\\"b-rule\\\"}}}\"},\"reply_list\":{\"replies\":$c1_replies}}"
+            fi
           else
             c1_item="{\"comment_id\":\"c1\",\"user_id\":\"ou1\",\"create_time\":100,\"update_time\":$c1_update,\"is_solved\":false,\"is_whole\":false,\"quote\":\"New rule\",\"has_more\":false,\"relation\":{\"content_deleted\":false,\"relation\":\"{\\\"22-docR\\\":{\\\"positionInfo\\\":{\\\"blockID\\\":\\\"b-rule\\\"}}}\"},\"reply_list\":{\"replies\":$c1_replies}}"
           fi
@@ -160,8 +168,18 @@ case "${1:-}" in
           if [ -e "$state_dir/solved-c2" ]; then
             c2_solved=true
           fi
-          c2_item='{"comment_id":"c2","user_id":"ou2","create_time":120,"update_time":210,"is_solved":false,"is_whole":false,"quote":"Repeat","has_more":true,"reply_list":{"replies":[]}}'
-          c2_solved_item='{"comment_id":"c2","user_id":"ou2","create_time":120,"update_time":280,"is_solved":true,"solved_time":280,"solver_user_id":"ou-shared","is_whole":false,"quote":"Repeat","has_more":false,"reply_list":{"replies":[{"reply_id":"r2","user_id":"ou2","create_time":120,"update_time":210,"content":{"elements":[{"type":"text_run","text_run":{"text":"Question"}}]}},{"reply_id":"r3","user_id":"ou3","create_time":130,"update_time":230,"content":{"elements":[{"type":"text_run","text_run":{"text":"Second reply"}}]}}]}}'
+          c2_replies='[{"reply_id":"r2","user_id":"ou2","create_time":120,"update_time":210,"content":{"elements":[{"type":"text_run","text_run":{"text":"Question"}}]}},{"reply_id":"r3","user_id":"ou3","create_time":130,"update_time":230,"content":{"elements":[{"type":"text_run","text_run":{"text":"Second reply"}}]}}]'
+          c2_update=230
+          if [ -e "$state_dir/reply-created-c2" ]; then
+            c2_replies='[{"reply_id":"r2","user_id":"ou2","create_time":120,"update_time":210,"content":{"elements":[{"type":"text_run","text_run":{"text":"Question"}}]}},{"reply_id":"r3","user_id":"ou3","create_time":130,"update_time":230,"content":{"elements":[{"type":"text_run","text_run":{"text":"Second reply"}}]}},{"reply_id":"r-result-c2","user_id":"ou-shared","create_time":260,"update_time":260,"content":{"elements":[{"type":"text_run","text_run":{"text":"Updated and verified"}}]}}]'
+            c2_update=260
+          fi
+          c2_item="{\"comment_id\":\"c2\",\"user_id\":\"ou2\",\"create_time\":120,\"update_time\":$c2_update,\"is_solved\":false,\"is_whole\":false,\"quote\":\"Repeat\",\"has_more\":false,\"reply_list\":{\"replies\":$c2_replies}}"
+          if [ "${FAKE_REVIEW_NO_SOLVED_TIME:-0}" = "1" ]; then
+            c2_solved_item="{\"comment_id\":\"c2\",\"user_id\":\"ou2\",\"create_time\":120,\"update_time\":280,\"is_solved\":true,\"solver_user_id\":\"ou-shared\",\"is_whole\":false,\"quote\":\"Repeat\",\"has_more\":false,\"reply_list\":{\"replies\":$c2_replies}}"
+          else
+            c2_solved_item="{\"comment_id\":\"c2\",\"user_id\":\"ou2\",\"create_time\":120,\"update_time\":280,\"is_solved\":true,\"solved_time\":280,\"solver_user_id\":\"ou-shared\",\"is_whole\":false,\"quote\":\"Repeat\",\"has_more\":false,\"reply_list\":{\"replies\":$c2_replies}}"
+          fi
           if [ "$solved_filter" = true ]; then
             if [ "$c1_solved" = true ] && [ "$c2_solved" = true ]; then
               printf '%s' "{\"ok\":true,\"data\":{\"items\":[$c1_item,$c2_solved_item],\"has_more\":false}}"

@@ -4,7 +4,7 @@
 
 ## 当前位置
 
-- 日期：2026-08-06
+- 日期：2026-08-07
 - 开发分支：`main`
 - 当前目标：Harness 第一优先级的运行时护栏、验证可信度、失败恢复与 CI 环境可重复性已完成；继续以真实消费仓验证无缺陷正常路径 P95 是否接近 10 分钟。
 - gstack 参考基线：`v1.58.5.0`，commit `11de390`；只参考本地 `gstack-clean` checkout，没有升级用户目录中的安装副本。
@@ -14,7 +14,7 @@
 - 正常用户主链路：`/pmai-init-project` 只建上下文 → `/pmai-design` 讨论需求并在首次定稿时生成项目建造定义 → `/pmai-build` → PM 看结果多轮快速修改 → PM 明确定稿 → `finalize-work.py` 对冻结 commit 只执行缺失的代码门、范围门和受影响体验批次 → 合入 main → 只更新实际受影响的产品真相源。
 - `meta`、`mockup`、`spec-writing` 是 design 按需调用后返回主线的内部能力；仍保留手动入口用于兼容和专项使用，但不要求 PM 拼接命令。
 - `/pmai-feedback` 是消费仓到框架仓的只读反馈出口：完整复盘当前原始会话、对照消费仓真相源、判断问题归属，并输出包含会话文件地址和证据的框架优化 Prompt；它不在消费仓直接修改产品或 PMAI 框架。
-- `/pmai-lark-review` 是归档后飞书评审回流入口：先把发布基线 B、采集时本地 L、采集时飞书 R 固定为只读证据，归位出唯一可写目标 T，再读取未解决评论的完整回复并按整批最高影响接回 quick-fix、active build 迭代或 design/build；正文作者 / 认可状态无法由 revision 证明时整批只问一次，批次在项目私有 context cache 中跨轮恢复。T 写回后先归位决定，再精细同步同一篇文档并继续实现，验证完成后以受控回执处理本批评论。普通正文同步仍走 `/pmai-lark-sync`。
+- `/pmai-lark-review` 是归档后飞书评审回流入口：当前飞书 full XML 原生快照是 T 的唯一底稿，B/L 只用于定位本地补充和冲突，祖先格式兼容性不能把目标切回旧 L。R→T 的每个删除 / 改写进入远端覆盖账本，现有 block 的格式必须保留，随内容删除也要有明确依据；大规模差异强制 PM 预览，精细同步后逐 block 验证样式、资源和引用。每项变化通过 `decision_routing` 选择性写 / supersede `decisions.md`，措辞 / 排版明确标记不写。评论用整批首尾稳定围栏和逐笔 journal 收口，缺 `solved_time` 时保留 null；checkpoint 复用同 revision 格式验收。机器路径目标 10–15 分钟，阶段耗时与 API 往返写入批次产物。
 - `/pmai-build-close` 只作为兼容与恢复入口；正常链路不再要求 PM 手动调用。
 - lifecycle v2：`designing → ready_to_build → building → iterating → final_check → landed → documenting → complete`。旧 `stage` 字段仅为 v1 消费仓兼容展示。
 - 项目建造定义：初始化时不存在；首个达到 `ready_to_build` 的 design 将 `prototype / product`、技术栈、代码入口、真实命令和 Web 能力写入 `.pm-workflow/project.yml`。后续 build 只读该文件。
@@ -56,7 +56,7 @@
 - context pack 对旧消费仓自动写入 Git 本地 exclude，不再制造未跟踪缓存；build 在创建环境前阻断批准目标路径上的既有脏改动，同时保留无关 WIP。
 - context pack 只把 D 编号模块决定和真实产品规则编入 active；共同理由、否过方案、待复核、变更记录与注释模板不再伪装成决定，已确认标题也不再误报未决。
 - 新增 `scripts/current-session.py` 和 `/pmai-feedback`：Codex 通过 `CODEX_THREAD_ID` 精确定位 active / archived 原始 JSONL，校验会话唯一性、session ID 与 cwd 归属；Skill 完整读取会话并区分消费仓产品问题、执行偏差、Skill 缺口、框架合同缺口、宿主限制和证据不足，最后生成带消费仓路径、会话 ID、原始文件路径及证据的框架交接 Prompt。公开 `/pmai-skill-improve` 已移除，历史 `skill-feedback/` 资料继续保留。
-- 新增 `scripts/lark-review.py` 和 `/pmai-lark-review`：采集同一 revision 的 Markdown / with-ids XML、历史发布版和完整分页评论，输出三方 diff 与可靠定位；B/L/R 快照只读，独立 T 经 resolutions 账本 seal 后才可原子写入正式规格。批次写入 Git 已忽略的 `.pm-workflow/context/lark-review/`，中断后可恢复，完成后才清理。正文 revision 只证明变化，不证明作者或认可；缺少 PM 本轮明确依据时一次展示整批差异并统一确认。采集结束和 apply 前复核本地正文、远端 revision 与稳定评论围栏；apply 后先正式归位决定 / accepted delta，精细同步写前重新 fetch 并以 apply plan revision 作为首笔 expected revision。评论由 `complete-comment` 受控回复 / 解决 / 回读，`comment-actions.json` 绑定本批操作；checkpoint / reopen 只消费回执，不能用自由填写的作者身份把 PM 手工操作冒充系统完成。文档身份、历史 revision、分页 envelope / token、并发变化或 checkpoint 冲突时失败关闭，且不提供 force；旧版缺基线文档只做 legacy 降级并要求 PM 明确归位。
+- `scripts/lark-review.py` 和 `/pmai-lark-review` 已升级到原生远端底稿合同：采集同一 revision 的 Markdown / full XML、历史发布版和完整分页评论；`remote-native.json` 保留 block/style/resource/reference，`remote-coverage.json` 与 PM 预览约束 R→T，`verify-sync` 在写回后做原生格式验收。comment-actions v2 支持无 `solved_time` 的可恢复证据，同时可继续消费旧 review/plan v2 与 comment-actions v1 批次完成评论恢复。
 - 飞书 frontmatter 回写改为补丁指定顶层标量、保留嵌套 YAML / 注释 / 正文并原子替换；发布后只有文档身份、写操作返回 revision、回读 revision 一致且本地发送源未变化时才建立新基线，避免绑定错文档、旧 revision 或本地并发版本。
 
 ## 兼容与边界
@@ -72,11 +72,11 @@
 ## 当前验证
 
 - Harness 第一阶段安装所有权、初始化冲突、状态权威、ready/build 合同和 cancel 原子性 targeted tests 已通过：`42 passed / 0 failed`。
-- 完整 `tests/run-all.sh` 已通过：`575 passed / 0 failed`；同一次入口另有 skill eval `6 passed / 0 failed / 15 session skipped`（外部 runner 未配置，已显式报告）。新增回归覆盖无 Git 身份时初始化在写入前失败，以及 suite 超时与摘要失败关闭、`ready_to_build → building`、`final_check → merge → docs_pending → resume` 不重复验收 / 合入、main landing commit 失败回滚后重试、legacy close 状态恢复、cleanup 失败恢复 / 幂等和损坏队列保护；最终命令去重、浏览器验收、真实 worktree 合入、Harness 五项 P1、飞书评审、Kimi 原生 Skill 与 hooks、`/pmai-feedback`、design、个人经验和其它既有回归继续通过。
+- 完整 `tests/run-all.sh` 已通过：`585 passed / 0 failed`；同一次入口另有 skill eval `6 passed / 0 failed / 15 session skipped`（外部 runner 未配置，已显式报告）。新增回归覆盖无 Git 身份时初始化在写入前失败，以及 suite 超时与摘要失败关闭、`ready_to_build → building`、`final_check → merge → docs_pending → resume` 不重复验收 / 合入、main landing commit 失败回滚后重试、legacy close 状态恢复、cleanup 失败恢复 / 幂等和损坏队列保护；最终命令去重、浏览器验收、真实 worktree 合入、Harness 五项 P1、飞书评审、Kimi 原生 Skill 与 hooks、`/pmai-feedback`、design、个人经验和其它既有回归继续通过。
 
 ## 下一步
 
 - 继续用真实消费仓会话观察 active build 的小改能否稳定在 2–5 分钟内可刷新、交互改动能否稳定在 5–10 分钟内可刷新，以及定稿请求是否只触发一次隔离 production validation。
 - 在真实消费仓 dogfood `/pmai-feedback`，核对完整会话复盘、问题归属和交接 Prompt 是否能直接驱动框架仓分析；再按宿主能力补充 Kimi Code、Claude Code 和 OpenCode 的精确当前会话定位适配，不提供猜测式降级。
-- 在真实 Docx 规格上 dogfood `/pmai-lark-review`：覆盖正文直改、局部 / 全文评论、回复后要求变化、active build accepted delta、精细回写与评论解决；确认飞书 Markdown 回读规范化不会让正常发布误降级，再决定是否扩展旧版 `/doc/` 兼容。
+- 在真实 Docx 规格上 dogfood `/pmai-lark-review`：覆盖正文直改、复杂格式 / 图片 / 引用、局部 / 全文评论、无 `solved_time`、active build accepted delta 和选择性 decision 归档；记录 collect / reconcile / 精细写回 / 评论收口的阶段耗时，确认机器路径进入 10–15 分钟。
 - 后续框架修改继续先在开发分支完成 targeted / full regression，再进入 main 分发基线并升级全局安装副本。

@@ -11,6 +11,7 @@ import os
 import re
 import sys
 import tempfile
+import time
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
@@ -36,16 +37,30 @@ from _lib.lark_adapter import (  # noqa: E402
     version,
     write_frontmatter,
 )
+from _lib.lark_review_semantics import (  # noqa: E402
+    NATIVE_SNAPSHOT_KIND,
+    NATIVE_SNAPSHOT_SCHEMA_VERSION,
+    REMOTE_COVERAGE_KIND,
+    REMOTE_COVERAGE_SCHEMA_VERSION,
+    build_native_snapshot,
+    build_remote_coverage,
+    markdown_semantic_units,
+    render_remote_preview,
+)
 
 
-SCHEMA_VERSION = 2
-PLAN_SCHEMA_VERSION = 2
-RESOLUTION_SCHEMA_VERSION = 2
-COMMENT_ACTIONS_SCHEMA_VERSION = 1
+SCHEMA_VERSION = 3
+PLAN_SCHEMA_VERSION = 3
+RESOLUTION_SCHEMA_VERSION = 3
+COMMENT_ACTIONS_SCHEMA_VERSION = 2
+LEGACY_REVIEW_SCHEMA_VERSION = 2
+LEGACY_PLAN_SCHEMA_VERSION = 2
 MIN_LARK_REVIEW_CLI_VERSION = (1, 0, 49)
 MAX_PAGES = 100
 MAX_COMMENT_STABILITY_SCANS = 4
 COMMENT_ACTIONS_KIND = "pmai_lark_review_comment_actions"
+REMOTE_VERIFICATION_KIND = "pmai_lark_review_remote_verification"
+REMOTE_VERIFICATION_SCHEMA_VERSION = 1
 COMPLETED_COMMENT_DECISIONS = {
     "applied",
     "already_satisfied",
@@ -58,6 +73,23 @@ COMMENT_ACTION_STATUSES = {
     "completed",
     "reopen_requested",
     "reopened",
+}
+SOLVE_EVIDENCE_MODES = {
+    "server_time",
+    "write_ack_and_stable_readback",
+    "legacy_stable_readback",
+}
+REPLY_EVIDENCE_MODES = {
+    "write_ack",
+    "stable_readback",
+    "legacy_stable_readback",
+}
+COMMENT_EXECUTION_MODES = {"single", "batch"}
+_PERF_COUNTERS = {
+    "document_fetch_api_calls": 0,
+    "comment_full_scans": 0,
+    "comment_list_api_calls": 0,
+    "comment_reply_api_calls": 0,
 }
 
 
@@ -236,11 +268,13 @@ def _paginate(
     fetch_page: Callable[[str | None], dict[str, Any]],
     *,
     label: str,
+    metric: str,
 ) -> list[dict[str, Any]]:
     items: list[dict[str, Any]] = []
     page_token: str | None = None
     seen_tokens: set[str] = set()
     for _ in range(MAX_PAGES):
+        _PERF_COUNTERS[metric] = _PERF_COUNTERS.get(metric, 0) + 1
         page_items, has_more, next_token = _page(fetch_page(page_token))
         items.extend(page_items)
         if not has_more:
@@ -500,7 +534,10 @@ def _manifest_path(args_value: str) -> Path:
 
 def _load_manifest(path: Path) -> dict[str, Any]:
     manifest = _load_json_object(path, label="review.json")
-    if manifest.get("schema_version") != SCHEMA_VERSION:
+    if _int(manifest.get("schema_version")) not in {
+        LEGACY_REVIEW_SCHEMA_VERSION,
+        SCHEMA_VERSION,
+    }:
         raise ReviewError("review.json schema_version 不受支持，请重新 collect")
     return manifest
 
@@ -640,9 +677,16 @@ def _resolution_maps(
     path: Path | None,
     *,
     expected_batch_id: str | None = None,
-) -> tuple[dict[str, dict[str, Any]], dict[str, dict[str, Any]], dict[str, Any]]:
+) -> tuple[
+    dict[str, dict[str, Any]],
+    dict[str, dict[str, Any]],
+    dict[str, Any],
+    list[dict[str, Any]],
+    dict[str, Any],
+    list[dict[str, Any]],
+]:
     if path is None:
-        return {}, {}, _default_target_derivation()
+        return {}, {}, _default_target_derivation(), [], _default_preview_resolution(), []
     value = _load_json_object(path, label="resolutions.json")
     if value.get("schema_version") != RESOLUTION_SCHEMA_VERSION:
         raise ReviewError("resolutions.json schema_version 不受支持")
@@ -668,11 +712,158 @@ def _resolution_maps(
     target = value.get("target")
     if not isinstance(target, dict):
         raise ReviewError("resolutions.json 缺少 target 派生说明")
+    remote_coverage = value.get("remote_coverage")
+    if not isinstance(remote_coverage, list):
+        raise ReviewError("resolutions.json 的 remote_coverage 必须是数组")
+    preview = value.get("preview")
+    if not isinstance(preview, dict):
+        raise ReviewError("resolutions.json 缺少 preview 确认")
+    decision_routing = value.get("decision_routing")
+    if not isinstance(decision_routing, list):
+        raise ReviewError("resolutions.json 的 decision_routing 必须是数组")
     return (
         index(value.get("body"), "change_id", "body"),
         index(value.get("comments"), "comment_id", "comments"),
         target,
+        remote_coverage,
+        preview,
+        decision_routing,
     )
+
+
+def _default_preview_resolution() -> dict[str, Any]:
+    return {
+        "approved": False,
+        "authority": "pending",
+        "reason": "",
+    }
+
+
+def _decision_routing_template(
+    body_records: list[dict[str, Any]],
+    comment_records: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    output: list[dict[str, Any]] = []
+    for source_type, records, key in (
+        ("body", body_records, "change_id"),
+        ("comment", comment_records, "comment_id"),
+    ):
+        for record in records:
+            output.append(
+                {
+                    "source_type": source_type,
+                    "source_id": str(record.get(key) or ""),
+                    "outcome": "pending",
+                    "target_path": "",
+                    "decision_id": "",
+                    "supersedes": [],
+                    "summary": "",
+                    "reason": "",
+                }
+            )
+    return output
+
+
+def _validate_decision_routing(
+    routes: list[dict[str, Any]],
+    *,
+    body_records: list[dict[str, Any]],
+    comment_records: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    expected = {
+        *(
+            ("body", str(item.get("change_id") or ""))
+            for item in body_records
+        ),
+        *(
+            ("comment", str(item.get("comment_id") or ""))
+            for item in comment_records
+        ),
+    }
+    required_keys = {
+        "source_type",
+        "source_id",
+        "outcome",
+        "target_path",
+        "decision_id",
+        "supersedes",
+        "summary",
+        "reason",
+    }
+    grouped: dict[tuple[str, str], list[dict[str, Any]]] = {}
+    normalised: list[dict[str, Any]] = []
+    seen_decision_ids: set[str] = set()
+    for raw in routes:
+        if not isinstance(raw, dict) or set(raw) != required_keys:
+            raise ReviewError("decision_routing 条目 schema 不完整或包含未知字段")
+        source = (
+            str(raw.get("source_type") or ""),
+            str(raw.get("source_id") or ""),
+        )
+        if source not in expected:
+            raise ReviewError(f"decision_routing 包含当前批次之外的来源: {source}")
+        outcome = str(raw.get("outcome") or "")
+        target_path = str(raw.get("target_path") or "").strip()
+        decision_id = str(raw.get("decision_id") or "").strip()
+        summary = str(raw.get("summary") or "").strip()
+        reason = str(raw.get("reason") or "").strip()
+        supersedes_raw = raw.get("supersedes")
+        if not isinstance(supersedes_raw, list) or any(
+            not isinstance(item, str) or not item.strip() for item in supersedes_raw
+        ):
+            raise ReviewError("decision_routing.supersedes 必须是非空字符串数组或空数组")
+        supersedes = [item.strip() for item in supersedes_raw]
+        if len(set(supersedes)) != len(supersedes):
+            raise ReviewError("decision_routing.supersedes 不能重复")
+        if outcome == "pending":
+            raise ReviewError(f"{source[0]} {source[1]} 尚未完成 decision 归档路由")
+        if outcome == "not_required":
+            if target_path or decision_id or supersedes or summary or not reason:
+                raise ReviewError(
+                    f"{source[0]} {source[1]} 的 not_required 只能填写 reason"
+                )
+        elif outcome in {"create", "supersede"}:
+            path = Path(target_path)
+            if (
+                not target_path
+                or path.is_absolute()
+                or ".." in path.parts
+                or path.name != "decisions.md"
+                or not decision_id
+                or not summary
+                or not reason
+            ):
+                raise ReviewError(
+                    f"{source[0]} {source[1]} 的 decision 写入缺少安全目标、ID、摘要或原因"
+                )
+            if outcome == "create" and supersedes:
+                raise ReviewError("新建 decision 不能同时填写 supersedes")
+            if outcome == "supersede" and not supersedes:
+                raise ReviewError("supersede decision 必须列出被替代的决定 ID")
+            if decision_id in seen_decision_ids:
+                raise ReviewError(f"decision_routing 重复 decision_id: {decision_id}")
+            seen_decision_ids.add(decision_id)
+        else:
+            raise ReviewError(f"decision_routing.outcome 不受支持: {outcome}")
+        item = {
+            "source_type": source[0],
+            "source_id": source[1],
+            "outcome": outcome,
+            "target_path": target_path,
+            "decision_id": decision_id,
+            "supersedes": supersedes,
+            "summary": summary,
+            "reason": reason,
+        }
+        grouped.setdefault(source, []).append(item)
+        normalised.append(item)
+    missing = sorted(expected - set(grouped))
+    if missing:
+        raise ReviewError(f"decision_routing 未覆盖全部正文 / 评论来源: {missing}")
+    for source, items in grouped.items():
+        if len(items) > 1 and any(item["outcome"] == "not_required" for item in items):
+            raise ReviewError(f"{source} 不能同时标记 not_required 和写入 decision")
+    return normalised
 
 
 def _preflight() -> None:
@@ -687,11 +878,22 @@ def _preflight() -> None:
 
 
 def _fetch_current_pair(doc_ref: str) -> tuple[dict[str, Any], dict[str, Any]]:
-    """取得同一 revision 的 Markdown 与 with-ids XML，避免并发编辑撕裂快照。"""
+    """取得同一 revision 的 Markdown 与 full XML 原生快照。"""
     for _ in range(2):
+        _PERF_COUNTERS["document_fetch_api_calls"] += 1
         markdown = _document(docs_fetch(doc_ref, doc_format="markdown", detail="simple"))
-        xml = _document(docs_fetch(doc_ref, doc_format="xml", detail="with-ids"))
         markdown_revision = _int(markdown.get("revision_id"))
+        if markdown_revision is None:
+            continue
+        _PERF_COUNTERS["document_fetch_api_calls"] += 1
+        xml = _document(
+            docs_fetch(
+                doc_ref,
+                doc_format="xml",
+                detail="full",
+                revision_id=markdown_revision,
+            )
+        )
         xml_revision = _int(xml.get("revision_id"))
         markdown_id = str(markdown.get("document_id") or "")
         xml_id = str(xml.get("document_id") or "")
@@ -711,6 +913,7 @@ def _collect_comments_once(
     blocks: dict[str, dict[str, str]],
     token_to_block: dict[str, str],
 ) -> list[dict[str, Any]]:
+    _PERF_COUNTERS["comment_full_scans"] += 1
     comments: list[dict[str, Any]] = []
     seen_comment_ids: set[str] = set()
     for solved_state in (False, True):
@@ -722,6 +925,7 @@ def _collect_comments_once(
                 need_relation=True,
             ),
             label="已解决评论列表" if solved_state else "未解决评论列表",
+            metric="comment_list_api_calls",
         )
         if any(bool(comment.get("is_solved")) != solved_state for comment in state_comments):
             label = "已解决" if solved_state else "未解决"
@@ -755,6 +959,7 @@ def _collect_comments_once(
                     doc_id, cid, page_token=token
                 ),
                 label=f"评论 {comment_id} 回复",
+                metric="comment_reply_api_calls",
             )
         replies = _dedupe_replies(replies)
         comment_id = str(comment.get("comment_id") or "")
@@ -820,6 +1025,28 @@ def _with_comment_cursor(
     return output, max_update_time, sorted(max_update_ids)
 
 
+def _comment_cursor_from_snapshot(
+    items: list[dict[str, Any]],
+) -> tuple[int, list[str]]:
+    """从已稳定的公开评论快照计算 checkpoint 水位，不触发再次远端扫描。"""
+    max_update_time = 0
+    max_update_ids: set[str] = set()
+    for item in items:
+        comment_id = str(item.get("comment_id") or "")
+        update_time = _int(item.get("update_time")) or 0
+        event_ids = {f"comment:{comment_id}"} if comment_id else set()
+        replies = item.get("replies") if isinstance(item.get("replies"), list) else []
+        for reply in replies:
+            if isinstance(reply, dict) and _event_time(reply) == update_time:
+                event_ids.add(f"reply:{reply.get('reply_id')}")
+        if update_time > max_update_time:
+            max_update_time = update_time
+            max_update_ids = event_ids
+        elif update_time == max_update_time:
+            max_update_ids.update(event_ids)
+    return max_update_time, sorted(max_update_ids)
+
+
 def _stable_comments(
     doc_id: str,
     *,
@@ -877,6 +1104,7 @@ def _collect_comments(
 
 
 def collect(args: argparse.Namespace) -> int:
+    collect_started = time.monotonic()
     markdown_input = Path(args.markdown)
     if markdown_input.is_symlink() or not markdown_input.is_file():
         raise ReviewError(f"本地 markdown 不是普通文件: {markdown_input}")
@@ -903,7 +1131,9 @@ def collect(args: argparse.Namespace) -> int:
         raise ReviewError("lark-review 只支持飞书 Docx 链接；旧版 /doc/ 或 wiki 链接请先迁移")
 
     _preflight()
+    fetch_started = time.monotonic()
     current_markdown, current_xml = _fetch_current_pair(str(doc_ref))
+    initial_fetch_seconds = time.monotonic() - fetch_started
     remote_body = str(current_markdown["content"])
     current_revision = _int(current_markdown.get("revision_id"))
     doc_id = str(
@@ -948,6 +1178,7 @@ def collect(args: argparse.Namespace) -> int:
             baseline_status = "revision"
         else:
             try:
+                _PERF_COUNTERS["document_fetch_api_calls"] += 1
                 baseline_document = _document(
                     docs_fetch(
                         str(doc_ref),
@@ -984,8 +1215,8 @@ def collect(args: argparse.Namespace) -> int:
     )
     if baseline_body is not None and not common_ancestor_compatible:
         warnings.append(
-            "飞书历史版与本地发布源不是同格式公共祖先；归位时以本地版初始化目标，"
-            "远端增量必须显式处理"
+            "飞书历史版与本地发布源不是同格式公共祖先；只能禁止 raw Markdown 三方合并，"
+            "目标仍以当前飞书原生快照初始化"
         )
 
     local_changed = None if not published_hash else local_hash != published_hash
@@ -1009,11 +1240,13 @@ def collect(args: argparse.Namespace) -> int:
 
     reviewed_comment_at = _int(frontmatter.get("lark_reviewed_comment_at")) or 0
     reviewed_comment_ids = _checkpoint_ids(frontmatter.get("lark_reviewed_comment_ids"))
+    comments_started = time.monotonic()
     stable_comment_items = _stable_comments(
         doc_id,
         blocks=blocks,
         token_to_block=token_to_block,
     )
+    comments_seconds = time.monotonic() - comments_started
     fence_comments, full_comment_update_time, full_comment_update_ids = _with_comment_cursor(
         stable_comment_items,
         reviewed_comment_at=reviewed_comment_at,
@@ -1037,24 +1270,30 @@ def collect(args: argparse.Namespace) -> int:
     stable_raw = _read_regular_text(markdown_path, label="本地 markdown")
     if stable_raw != raw:
         raise ReviewError("本地 markdown 在评论采集期间变化，请重新 collect")
-    stable_markdown, stable_xml = _fetch_current_pair(str(doc_ref))
+    final_fetch_started = time.monotonic()
+    _PERF_COUNTERS["document_fetch_api_calls"] += 1
+    stable_markdown = _document(
+        docs_fetch(str(doc_ref), doc_format="markdown", detail="simple")
+    )
+    final_fetch_seconds = time.monotonic() - final_fetch_started
     initial_remote_fence = (
         str(current_markdown.get("document_id") or ""),
         _int(current_markdown.get("revision_id")),
         str(current_markdown.get("content") or ""),
-        str(current_xml.get("content") or ""),
     )
     stable_remote_fence = (
         str(stable_markdown.get("document_id") or ""),
         _int(stable_markdown.get("revision_id")),
         str(stable_markdown.get("content") or ""),
-        str(stable_xml.get("content") or ""),
     )
     if stable_remote_fence != initial_remote_fence:
         raise ReviewError("飞书正文在评论采集期间变化，请重新 collect")
 
     local_path = _write_text(output_dir / "local.md", local_body)
     remote_path = _write_text(output_dir / "remote.md", remote_body)
+    native_snapshot = build_native_snapshot(current_xml)
+    native_path = output_dir / "remote-native.json"
+    _write_json(native_path, native_snapshot)
     baseline_path = None
     remote_diff_path = None
     local_diff_path = None
@@ -1108,6 +1347,7 @@ def collect(args: argparse.Namespace) -> int:
             remote_exact_hash,
             comments_hash,
             comments_fence_hash,
+            _file_digest(native_path),
         ]
     )
     batch_id = hashlib.sha256(batch_seed.encode("utf-8")).hexdigest()[:24]
@@ -1135,6 +1375,7 @@ def collect(args: argparse.Namespace) -> int:
             "local_source_hash": local_hash,
             "remote_source_hash": remote_hash,
             "common_ancestor_compatible": common_ancestor_compatible,
+            "target_base": "remote_native_snapshot",
             "baseline_path": baseline_path,
             "local_path": local_path,
             "remote_path": remote_path,
@@ -1160,6 +1401,12 @@ def collect(args: argparse.Namespace) -> int:
                 "body_sha256": remote_hash,
                 "exact_body_sha256": remote_exact_hash,
             },
+            "remote-native.json": {
+                "sha256": _file_digest(native_path),
+                "content_sha256": native_snapshot["native"]["content_sha256"],
+                "block_count": native_snapshot["native"]["block_count"],
+                "resource_count": native_snapshot["native"]["resource_count"],
+            },
             **(
                 {
                     "baseline.md": {
@@ -1173,6 +1420,20 @@ def collect(args: argparse.Namespace) -> int:
             ),
         },
         "warnings": warnings,
+        "performance": {
+            "initial_document_fetch_seconds": round(initial_fetch_seconds, 6),
+            "comment_collection_seconds": round(comments_seconds, 6),
+            "final_document_fence_seconds": round(final_fetch_seconds, 6),
+            "total_seconds": round(time.monotonic() - collect_started, 6),
+            "document_full_fetches": 1,
+            "document_snapshot_pairs": 1,
+            "document_revision_fence_fetches": 1,
+            "document_fetch_api_calls": _PERF_COUNTERS[
+                "document_fetch_api_calls"
+            ],
+            **_comment_scan_counters(),
+            "target_base_cache": "remote-native.json",
+        },
     }
     manifest_path = output_dir / "review.json"
     _write_json(manifest_path, manifest)
@@ -1238,6 +1499,37 @@ def _source_artifacts(
     return output
 
 
+def _native_snapshot_artifact(
+    manifest_path: Path,
+    manifest: dict[str, Any],
+) -> dict[str, Any]:
+    artifacts = manifest.get("artifacts")
+    meta = artifacts.get("remote-native.json") if isinstance(artifacts, dict) else None
+    if not isinstance(meta, dict):
+        raise ReviewError("review.json 缺少 remote-native.json 摘要，请重新 collect")
+    path = _artifact_path(
+        manifest_path,
+        manifest_path.parent / "remote-native.json",
+        expected_name="remote-native.json",
+        label="remote-native.json",
+    )
+    if _file_digest(path) != str(meta.get("sha256") or ""):
+        raise ReviewError("remote-native.json 已被修改，拒绝混用评审批次")
+    value = _load_json_object(path, label="remote-native.json")
+    document = value.get("document")
+    manifest_document = manifest.get("document")
+    if (
+        value.get("kind") != NATIVE_SNAPSHOT_KIND
+        or value.get("schema_version") != NATIVE_SNAPSHOT_SCHEMA_VERSION
+        or not isinstance(document, dict)
+        or not isinstance(manifest_document, dict)
+        or str(document.get("document_id") or "") != str(manifest_document.get("doc_id") or "")
+        or _int(document.get("revision_id")) != _int(manifest_document.get("current_revision_id"))
+    ):
+        raise ReviewError("remote-native.json 与 review.json 文档基准不一致")
+    return {"path": path, "sha256": _file_digest(path), "value": value}
+
+
 def _segment_hash(lines: list[str]) -> str:
     return hashlib.sha256("".join(lines).encode("utf-8")).hexdigest()
 
@@ -1280,6 +1572,7 @@ def _build_body_reconciliation(
     local_body: str,
     remote_body: str,
     *,
+    body_status: str,
     common_ancestor_compatible: bool,
     resolutions: dict[str, dict[str, Any]],
     sealing: bool,
@@ -1292,18 +1585,19 @@ def _build_body_reconciliation(
         if _normalise(local_body) == _normalise(remote_body):
             if resolutions:
                 raise ReviewError("resolutions.json 包含当前批次不存在的正文项")
-            return local_body, records, template, unresolved
+            return remote_body, records, template, unresolved
         baseline_lines = _body_lines(baseline_body or "")
         local_lines = _body_lines(local_body)
         remote_lines = _body_lines(remote_body)
         change_id = _change_id(0, len(baseline_lines), baseline_lines, local_lines, remote_lines)
+        default_decision = "needs_pm" if body_status == "remote_only" else "pending"
         resolution = _resolution_value(
             resolutions.get(change_id),
-            default_decision="pending",
+            default_decision=default_decision,
             default_authority="pending",
             default_reason="",
         )
-        if resolution["decision"] not in {"local", "merged", "pending", "needs_pm"}:
+        if resolution["decision"] not in {"remote", "merged", "pending", "needs_pm"}:
             raise ReviewError(f"{change_id} 使用了不支持的归位决定")
         if resolution["decision"] in {"pending", "needs_pm"}:
             unresolved += 1
@@ -1327,17 +1621,7 @@ def _build_body_reconciliation(
         unknown_ids = set(resolutions) - {change_id}
         if unknown_ids:
             raise ReviewError(f"resolutions.json 包含其它批次的正文项: {sorted(unknown_ids)}")
-        chosen_body = local_body
-        if resolution["decision"] == "merged":
-            chosen_body = "".join(
-                _conflict_marker(
-                    change_id,
-                    baseline_lines,
-                    local_lines,
-                    remote_lines,
-                )
-            )
-        return chosen_body, records, template, unresolved
+        return remote_body, records, template, unresolved
 
     baseline_lines = _body_lines(baseline_body)
     local_lines = _body_lines(local_body)
@@ -1450,7 +1734,7 @@ def _comment_reconciliation(
     resolutions: dict[str, dict[str, Any]],
     *,
     sealing: bool,
-) -> tuple[list[dict[str, Any]], list[dict[str, str]], int]:
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]], int]:
     comments_meta = manifest.get("comments")
     items = comments_meta.get("items") if isinstance(comments_meta, dict) else None
     if not isinstance(items, list):
@@ -1472,7 +1756,7 @@ def _comment_reconciliation(
     if unknown_ids:
         raise ReviewError(f"resolutions.json 包含其它批次的评论: {sorted(unknown_ids)}")
     records: list[dict[str, Any]] = []
-    template: list[dict[str, str]] = []
+    template: list[dict[str, Any]] = []
     unresolved = 0
     for item in batch_items:
         comment_id = str(item["comment_id"])
@@ -1495,6 +1779,23 @@ def _comment_reconciliation(
             unresolved += 1
         elif not resolution["reason"] or resolution["authority"] in {"", "pending"}:
             raise ReviewError(f"评论 {comment_id} 缺少处置依据或原因")
+        supplied = resolutions.get(comment_id)
+        result_text = str(
+            supplied.get("result_text") if isinstance(supplied, dict) else ""
+            or ""
+        ).strip()
+        if resolution["decision"] in COMPLETED_COMMENT_DECISIONS:
+            if not bool(item.get("is_whole")) and not result_text:
+                if sealing:
+                    raise ReviewError(
+                        f"局部评论 {comment_id} 必须在 resolutions.json 固化 result_text"
+                    )
+            elif "\n" in result_text:
+                raise ReviewError(f"评论 {comment_id} 的 result_text 只能是单段文本")
+        elif result_text:
+            raise ReviewError(
+                f"评论 {comment_id} 尚不应完成，不能预填 result_text"
+            )
         if sealing and resolutions.get(comment_id) is None:
             raise ReviewError(f"评论 {comment_id} 没有处置记录")
         records.append(
@@ -1502,10 +1803,13 @@ def _comment_reconciliation(
                 "comment_id": comment_id,
                 "update_time": item.get("update_time"),
                 "location_accuracy": (item.get("location") or {}).get("accuracy"),
+                "result_text": result_text,
                 **resolution,
             }
         )
-        template.append({"comment_id": comment_id, **resolution})
+        template.append(
+            {"comment_id": comment_id, "result_text": result_text, **resolution}
+        )
     return records, template, unresolved
 
 
@@ -1541,9 +1845,11 @@ def _validate_target_derivation(
 
 
 def reconcile(args: argparse.Namespace) -> int:
+    reconcile_started = time.monotonic()
     manifest_path = _manifest_path(args.manifest)
     manifest = _load_manifest(manifest_path)
     sources = _source_artifacts(manifest_path, manifest)
+    native_snapshot = _native_snapshot_artifact(manifest_path, manifest)
     markdown_path = _manifest_markdown_path(manifest)
     current_raw = _read_regular_text(markdown_path, label="本地 markdown")
     _, current_body = parse_frontmatter(current_raw)
@@ -1553,6 +1859,8 @@ def reconcile(args: argparse.Namespace) -> int:
     resolutions_path = manifest_path.parent / "resolutions.json"
     target_path = manifest_path.parent / "target.md"
     plan_path = manifest_path.parent / "apply-plan.json"
+    coverage_path = manifest_path.parent / "remote-coverage.json"
+    preview_path = manifest_path.parent / "remote-preview.md"
     if args.resolutions:
         provided = Path(args.resolutions)
         if provided.is_symlink() or provided.resolve() != resolutions_path:
@@ -1562,18 +1870,28 @@ def reconcile(args: argparse.Namespace) -> int:
             raise ReviewError("seal 前必须完成本批次 resolutions.json")
         if target_path.is_symlink() or not target_path.is_file():
             raise ReviewError("seal 前必须完成本批次 target.md")
-        body_resolutions, comment_resolutions, target_derivation = _resolution_maps(
+        (
+            body_resolutions,
+            comment_resolutions,
+            target_derivation,
+            coverage_resolutions,
+            preview_resolution,
+            decision_routing_resolutions,
+        ) = _resolution_maps(
             resolutions_path,
             expected_batch_id=str(manifest.get("batch_id") or ""),
         )
     else:
         if args.resolutions:
             raise ReviewError("首次 reconcile 不接受 --resolutions；先生成批次模板")
-        for path in (resolutions_path, target_path, plan_path):
+        for path in (resolutions_path, target_path, plan_path, coverage_path, preview_path):
             if path.exists() or path.is_symlink():
                 raise ReviewError("本批次已开始归位；编辑现有产物后使用 reconcile --seal")
         body_resolutions, comment_resolutions = {}, {}
         target_derivation = _default_target_derivation()
+        coverage_resolutions = []
+        preview_resolution = _default_preview_resolution()
+        decision_routing_resolutions = []
 
     body_meta = manifest.get("body") or {}
     baseline_body = sources.get("baseline.md", {}).get("text")
@@ -1581,6 +1899,7 @@ def reconcile(args: argparse.Namespace) -> int:
         baseline_body if isinstance(baseline_body, str) else None,
         str(sources["local.md"]["text"]),
         str(sources["remote.md"]["text"]),
+        body_status=str(body_meta.get("status") or ""),
         common_ancestor_compatible=bool(body_meta.get("common_ancestor_compatible")),
         resolutions=body_resolutions,
         sealing=bool(args.seal),
@@ -1592,6 +1911,10 @@ def reconcile(args: argparse.Namespace) -> int:
     )
 
     if not args.seal:
+        decision_routing_resolutions = _decision_routing_template(
+            body_records,
+            comment_records,
+        )
         _write_text(target_path, draft)
         _write_json(
             resolutions_path,
@@ -1601,12 +1924,42 @@ def reconcile(args: argparse.Namespace) -> int:
                 "target": target_derivation,
                 "body": body_template,
                 "comments": comment_template,
+                "remote_coverage": coverage_resolutions,
+                "preview": preview_resolution,
+                "decision_routing": decision_routing_resolutions,
             },
         )
     target_body = _read_regular_text(target_path, label="target.md")
     target_frontmatter, _ = parse_frontmatter(target_body)
     if target_frontmatter:
         raise ReviewError("target.md 只能包含正文，不能带 frontmatter")
+    document = manifest.get("document") or {}
+    remote_revision = _int(document.get("current_revision_id"))
+    if remote_revision is None:
+        raise ReviewError("review.json 缺少远端 revision")
+    try:
+        coverage = build_remote_coverage(
+            str(sources["remote.md"]["text"]),
+            target_body,
+            native_snapshot=native_snapshot["value"],
+            resolutions=coverage_resolutions,
+            batch_id=str(manifest.get("batch_id") or ""),
+            remote_revision_id=remote_revision,
+        )
+    except ValueError as exc:
+        raise ReviewError(f"远端语义覆盖账本不合法: {exc}") from exc
+    _write_json(coverage_path, coverage)
+    _write_text(preview_path, render_remote_preview(coverage))
+    coverage_summary = coverage["summary"]
+    has_markers = any(
+        marker in target_body
+        for marker in ("<<<<<<< LOCAL ", "||||||| BASELINE ", ">>>>>>> REMOTE ")
+    )
+    unresolved = body_unresolved + comment_unresolved
+    if args.seal and (unresolved != 0 or has_markers):
+        raise ReviewError(
+            f"归位仍有 {unresolved} 个待决项或冲突标记，不能 seal"
+        )
     if args.seal:
         target_derivation = _validate_target_derivation(
             target_derivation,
@@ -1635,15 +1988,36 @@ def reconcile(args: argparse.Namespace) -> int:
                 "手工 merged 的 T 不能退化为完整 L 或完整 R；"
                 "若实际保留单边口径，请使用对应的单边决定，不要伪装成 merged"
             )
-    has_markers = any(
-        marker in target_body for marker in ("<<<<<<< LOCAL ", "||||||| BASELINE ", ">>>>>>> REMOTE ")
-    )
-    unresolved = body_unresolved + comment_unresolved
-    state = "ready" if args.seal and unresolved == 0 and not has_markers else "draft"
-    if args.seal and state != "ready":
-        raise ReviewError(
-            f"归位仍有 {unresolved} 个待决项或冲突标记，不能 seal"
+        if coverage.get("unknown_resolution_ids"):
+            raise ReviewError(
+                "远端语义覆盖账本包含不属于当前 R 的条目: "
+                f"{coverage['unknown_resolution_ids']}"
+            )
+        if (
+            int(coverage_summary.get("unassigned_count") or 0) != 0
+            or int(coverage_summary.get("format_unassigned_count") or 0) != 0
+            or float(coverage_summary.get("remote_accounted_ratio") or 0) != 1.0
+            or float(coverage_summary.get("remote_format_accounted_ratio") or 0) != 1.0
+        ):
+            raise ReviewError(
+                "远端语义或原生格式仍有未归位项，不能 seal；"
+                "请查看 remote-coverage.json 和 remote-preview.md"
+            )
+        if bool(coverage_summary.get("preview_required")):
+            if (
+                preview_resolution.get("approved") is not True
+                or str(preview_resolution.get("authority") or "") != "pm_confirmed"
+                or not str(preview_resolution.get("reason") or "").strip()
+            ):
+                raise ReviewError(
+                    "R→T 差异达到强制预览阈值；PM 确认 remote-preview.md 前不能 seal"
+                )
+        decision_routing_resolutions = _validate_decision_routing(
+            decision_routing_resolutions,
+            body_records=body_records,
+            comment_records=comment_records,
         )
+    state = "ready" if args.seal and unresolved == 0 and not has_markers else "draft"
 
     artifacts_for_plan = {
         name: {
@@ -1653,7 +2027,6 @@ def reconcile(args: argparse.Namespace) -> int:
         }
         for name, value in sources.items()
     }
-    document = manifest.get("document") or {}
     plan: dict[str, Any] = {
         "kind": "pmai_lark_review_apply_plan",
         "schema_version": PLAN_SCHEMA_VERSION,
@@ -1675,6 +2048,33 @@ def reconcile(args: argparse.Namespace) -> int:
             "source_hash": body_meta.get("published_source_hash"),
         },
         "common_ancestor_compatible": bool(body_meta.get("common_ancestor_compatible")),
+        "target_base": "remote_native_snapshot",
+        "target_base_revision": remote_revision,
+        "remote_native": {
+            "name": "remote-native.json",
+            "sha256": native_snapshot["sha256"],
+        },
+        "remote_coverage": {
+            "name": "remote-coverage.json",
+            "sha256": _file_digest(coverage_path),
+            "remote_accounted_ratio": coverage_summary["remote_accounted_ratio"],
+            "remote_format_accounted_ratio": coverage_summary[
+                "remote_format_accounted_ratio"
+            ],
+            "unassigned_count": coverage_summary["unassigned_count"],
+            "format_unassigned_count": coverage_summary["format_unassigned_count"],
+        },
+        "preview": {
+            "name": "remote-preview.md",
+            "sha256": _file_digest(preview_path),
+            "required": bool(coverage_summary.get("preview_required")),
+            **preview_resolution,
+        },
+        "writeback_contract": {
+            "mode": "native_block_patch",
+            "preserve_unmodified_native_blocks": True,
+            "forbid_markdown_overwrite": True,
+        },
         "sources": artifacts_for_plan,
         "comments_canonical_sha256": (manifest.get("comments") or {}).get("canonical_sha256"),
         "required_items": {
@@ -1682,6 +2082,12 @@ def reconcile(args: argparse.Namespace) -> int:
             "comments": comment_records,
         },
         "target_derivation": target_derivation,
+        "decision_routing": decision_routing_resolutions,
+        "decision_write_count": sum(
+            1
+            for item in decision_routing_resolutions
+            if item.get("outcome") in {"create", "supersede"}
+        ),
         "target": {
             "name": "target.md",
             "sha256": _file_digest(target_path),
@@ -1690,6 +2096,11 @@ def reconcile(args: argparse.Namespace) -> int:
         },
         "expected_local_exact_body_sha256": sources["local.md"]["exact_body_sha256"],
         "unresolved_count": unresolved,
+        "performance": {
+            "reconcile_seconds": round(time.monotonic() - reconcile_started, 6),
+            "remote_semantic_units": coverage_summary["remote_unit_count"],
+            "remote_native_blocks": coverage_summary["native_block_count"],
+        },
     }
     if state == "ready":
         plan["ready_token"] = _ready_token(plan)
@@ -1705,6 +2116,15 @@ def reconcile(args: argparse.Namespace) -> int:
                 "body_items": len(body_records),
                 "comment_items": len(comment_records),
                 "unresolved": unresolved,
+                "target_base": "remote_native_snapshot",
+                "target_base_revision": remote_revision,
+                "content_coverage": coverage_summary["remote_accounted_ratio"],
+                "format_coverage": coverage_summary["remote_format_accounted_ratio"],
+                "unassigned": coverage_summary["unassigned_count"],
+                "format_unassigned": coverage_summary["format_unassigned_count"],
+                "preview_required": coverage_summary["preview_required"],
+                "decision_writes": plan["decision_write_count"],
+                "elapsed_seconds": round(time.monotonic() - reconcile_started, 6),
             },
             ensure_ascii=False,
         )
@@ -1769,12 +2189,27 @@ def apply_target(args: argparse.Namespace) -> int:
     if int(plan.get("unresolved_count") or 0) != 0:
         raise ReviewError("apply-plan.json 仍包含待决项")
 
-    body_resolutions, comment_resolutions, target_derivation = _resolution_maps(
+    (
+        body_resolutions,
+        comment_resolutions,
+        target_derivation,
+        coverage_resolutions,
+        preview_resolution,
+        decision_routing_resolutions,
+    ) = _resolution_maps(
         resolutions_path,
         expected_batch_id=str(manifest.get("batch_id") or ""),
     )
     if target_derivation != plan.get("target_derivation"):
         raise ReviewError("T 的派生说明与 seal 结果不一致")
+    if preview_resolution != {
+        key: value
+        for key, value in (plan.get("preview") or {}).items()
+        if key in {"approved", "authority", "reason"}
+    }:
+        raise ReviewError("PM 预览确认与 seal 结果不一致")
+    if decision_routing_resolutions != plan.get("decision_routing"):
+        raise ReviewError("decision 归档路由与 seal 结果不一致")
     required = plan.get("required_items") or {}
     body_items = required.get("body") if isinstance(required, dict) else None
     comment_items = required.get("comments") if isinstance(required, dict) else None
@@ -1799,7 +2234,7 @@ def apply_target(args: argparse.Namespace) -> int:
         resolution = comment_resolutions[str(item.get("comment_id"))]
         if any(
             str(item.get(key) or "") != str(resolution.get(key) or "")
-            for key in ("decision", "authority", "reason")
+            for key in ("decision", "authority", "reason", "result_text")
         ):
             raise ReviewError("评论处置决定与 resolutions.json 不一致")
     if any(
@@ -1820,6 +2255,38 @@ def apply_target(args: argparse.Namespace) -> int:
     }
     if current_sources != plan.get("sources"):
         raise ReviewError("B/L/R 快照与 seal 结果不一致")
+    native_snapshot = _native_snapshot_artifact(manifest_path, manifest)
+    if (
+        plan.get("target_base") != "remote_native_snapshot"
+        or _int(plan.get("target_base_revision"))
+        != _int((manifest.get("document") or {}).get("current_revision_id"))
+        or (plan.get("remote_native") or {}).get("sha256")
+        != native_snapshot["sha256"]
+    ):
+        raise ReviewError("apply-plan.json 未绑定采集时飞书原生底稿")
+    coverage_path = plan_path.parent / "remote-coverage.json"
+    preview_path = plan_path.parent / "remote-preview.md"
+    if (
+        coverage_path.is_symlink()
+        or preview_path.is_symlink()
+        or not coverage_path.is_file()
+        or not preview_path.is_file()
+        or _file_digest(coverage_path)
+        != str((plan.get("remote_coverage") or {}).get("sha256") or "")
+        or _file_digest(preview_path)
+        != str((plan.get("preview") or {}).get("sha256") or "")
+    ):
+        raise ReviewError("远端覆盖账本或 PM 预览在 seal 后变化")
+    coverage = _load_json_object(coverage_path, label="remote-coverage.json")
+    if (
+        coverage.get("kind") != REMOTE_COVERAGE_KIND
+        or coverage.get("schema_version") != REMOTE_COVERAGE_SCHEMA_VERSION
+        or coverage.get("batch_id") != manifest.get("batch_id")
+        or coverage.get("unknown_resolution_ids")
+        or int((coverage.get("summary") or {}).get("unassigned_count") or 0) != 0
+        or int((coverage.get("summary") or {}).get("format_unassigned_count") or 0) != 0
+    ):
+        raise ReviewError("远端覆盖账本不是可执行的完整账本")
 
     markdown_input = Path(args.markdown)
     if markdown_input.is_symlink() or not markdown_input.is_file():
@@ -1926,7 +2393,14 @@ def apply_target(args: argparse.Namespace) -> int:
                 "batch_id": plan.get("batch_id"),
                 "target_sha256": target_exact_hash,
                 "expected_remote_revision_id": expected_revision,
-            },
+                "target_base": plan.get("target_base"),
+                "content_coverage": (plan.get("remote_coverage") or {}).get(
+                    "remote_accounted_ratio"
+                ),
+                "format_coverage": (plan.get("remote_coverage") or {}).get(
+                    "remote_format_accounted_ratio"
+                ),
+                },
             ensure_ascii=False,
         )
     )
@@ -1935,6 +2409,16 @@ def apply_target(args: argparse.Namespace) -> int:
 
 def _sha256_text(value: str) -> str:
     return hashlib.sha256(value.encode("utf-8")).hexdigest()
+
+
+def _payload_sha256(value: dict[str, Any]) -> str:
+    encoded = json.dumps(
+        value,
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+    )
+    return _sha256_text(encoded)
 
 
 def _require_sha256(value: object, *, label: str) -> str:
@@ -1962,9 +2446,17 @@ def _load_ready_batch(
         raise ReviewError(f"{label} 必须使用本批次的 apply-plan.json")
     plan_path = plan_input.resolve()
     plan = _load_json_object(plan_path, label="apply-plan.json")
+    schema_pair = (
+        _int(manifest.get("schema_version")),
+        _int(plan.get("schema_version")),
+    )
     if (
         plan.get("kind") != "pmai_lark_review_apply_plan"
-        or plan.get("schema_version") != PLAN_SCHEMA_VERSION
+        or schema_pair
+        not in {
+            (SCHEMA_VERSION, PLAN_SCHEMA_VERSION),
+            (LEGACY_REVIEW_SCHEMA_VERSION, LEGACY_PLAN_SCHEMA_VERSION),
+        }
         or plan.get("state") != "ready"
         or plan.get("batch_id") != manifest.get("batch_id")
         or plan.get("ready_token") != _ready_token(plan)
@@ -2011,7 +2503,7 @@ def _comment_index(
 def _batch_comment_contracts(
     manifest: dict[str, Any],
     plan: dict[str, Any],
-) -> tuple[dict[str, dict[str, Any]], dict[str, str]]:
+) -> tuple[dict[str, dict[str, Any]], dict[str, str], dict[str, str]]:
     manifest_comments = manifest.get("comments")
     collected_by_id = _comment_index(
         manifest_comments.get("fence_items")
@@ -2021,6 +2513,7 @@ def _batch_comment_contracts(
     )
     required = plan.get("required_items")
     decisions: dict[str, str] = {}
+    result_texts: dict[str, str] = {}
     comment_items = required.get("comments") if isinstance(required, dict) else None
     for comment_id, item in _comment_index(
         comment_items,
@@ -2032,7 +2525,15 @@ def _batch_comment_contracts(
         if decision not in COMPLETED_COMMENT_DECISIONS | {"deferred"}:
             raise ReviewError(f"评论 {comment_id} 尚未形成可执行的处置决定")
         decisions[comment_id] = decision
-    return collected_by_id, decisions
+        result_texts[comment_id] = str(item.get("result_text") or "").strip()
+        if (
+            _int(plan.get("schema_version")) == PLAN_SCHEMA_VERSION
+            and decision in COMPLETED_COMMENT_DECISIONS
+            and not bool(collected_by_id[comment_id].get("is_whole"))
+            and not result_texts[comment_id]
+        ):
+            raise ReviewError(f"评论 {comment_id} 的 ready plan 缺少 result_text")
+    return collected_by_id, decisions, result_texts
 
 
 def _published_target_context(
@@ -2086,8 +2587,270 @@ def _published_target_context(
     }
 
 
+def _remote_coverage_artifact(
+    manifest_path: Path,
+    manifest: dict[str, Any],
+    plan_path: Path,
+    plan: dict[str, Any],
+) -> dict[str, Any]:
+    coverage_path = manifest_path.parent / "remote-coverage.json"
+    binding = plan.get("remote_coverage")
+    if (
+        coverage_path.is_symlink()
+        or not coverage_path.is_file()
+        or not isinstance(binding, dict)
+        or binding.get("name") != "remote-coverage.json"
+        or _file_digest(coverage_path) != str(binding.get("sha256") or "")
+    ):
+        raise ReviewError("remote-coverage.json 与 ready plan 绑定不一致")
+    coverage = _load_json_object(coverage_path, label="remote-coverage.json")
+    summary = coverage.get("summary")
+    if (
+        coverage.get("kind") != REMOTE_COVERAGE_KIND
+        or coverage.get("schema_version") != REMOTE_COVERAGE_SCHEMA_VERSION
+        or coverage.get("batch_id") != manifest.get("batch_id")
+        or coverage.get("target_base") != "remote_native_snapshot"
+        or not isinstance(summary, dict)
+        or coverage.get("unknown_resolution_ids")
+        or int(summary.get("unassigned_count") or 0) != 0
+        or int(summary.get("format_unassigned_count") or 0) != 0
+    ):
+        raise ReviewError("remote-coverage.json 不是完整的远端覆盖账本")
+    return {"path": coverage_path, "value": coverage}
+
+
+def _sync_verification(
+    manifest_path: Path,
+    manifest: dict[str, Any],
+    plan_path: Path,
+    plan: dict[str, Any],
+    context: dict[str, Any],
+) -> dict[str, Any]:
+    started = time.monotonic()
+    document_fetches_before = _PERF_COUNTERS["document_fetch_api_calls"]
+    if (
+        _int(manifest.get("schema_version")) != SCHEMA_VERSION
+        or _int(plan.get("schema_version")) != PLAN_SCHEMA_VERSION
+    ):
+        raise ReviewError("旧版批次没有原生格式快照，不能生成格式保真验证")
+    native_artifact = _native_snapshot_artifact(manifest_path, manifest)
+    coverage_artifact = _remote_coverage_artifact(
+        manifest_path,
+        manifest,
+        plan_path,
+        plan,
+    )
+    doc_id = str(context.get("doc_id") or "")
+    published_revision = _int(context.get("published_revision_id"))
+    remote_markdown, remote_xml = _fetch_current_pair(doc_id)
+    if (
+        str(remote_markdown.get("document_id") or "") != doc_id
+        or _int(remote_markdown.get("revision_id")) != published_revision
+    ):
+        raise ReviewError("飞书当前 revision 与本地发布基线不一致，不能完成格式验收")
+
+    target_units = [
+        (unit.kind, unit.normalised_text)
+        for unit in markdown_semantic_units(str(context.get("body") or ""))
+    ]
+    remote_units = [
+        (unit.kind, unit.normalised_text)
+        for unit in markdown_semantic_units(str(remote_markdown.get("content") or ""))
+    ]
+    if remote_units != target_units:
+        raise ReviewError("飞书当前正文的稳定语义投影与 sealed T 不一致")
+
+    current_native = build_native_snapshot(remote_xml)
+    current_blocks = {
+        str(item.get("block_id") or ""): item
+        for item in (current_native.get("native") or {}).get("blocks") or []
+        if isinstance(item, dict) and str(item.get("block_id") or "")
+    }
+    format_entries = coverage_artifact["value"].get("native_format_entries")
+    if not isinstance(format_entries, list):
+        raise ReviewError("remote-coverage.json 缺少原生格式清单")
+    preserved_count = 0
+    for entry in format_entries:
+        if not isinstance(entry, dict) or not entry.get("accounted"):
+            raise ReviewError("远端原生格式清单包含未归位项")
+        if entry.get("format_disposition") != "preserved":
+            continue
+        block_id = str(entry.get("block_id") or "")
+        current = current_blocks.get(block_id)
+        if (
+            current is None
+            or current.get("format_sha256") != entry.get("format_sha256")
+            or current.get("resources") != entry.get("resources")
+        ):
+            raise ReviewError(f"飞书原生 block {block_id} 的格式或资源未被保留")
+        preserved_count += 1
+
+    original_document = native_artifact["value"].get("document") or {}
+    current_document = current_native.get("document") or {}
+    original_references = original_document.get("reference_map") or {}
+    current_references = current_document.get("reference_map") or {}
+    if not isinstance(original_references, dict) or not isinstance(current_references, dict):
+        raise ReviewError("飞书 reference_map 结构异常")
+    if any(current_references.get(key) != value for key, value in original_references.items()):
+        raise ReviewError("飞书原有引用映射未被完整保留")
+
+    summary = coverage_artifact["value"]["summary"]
+    return {
+        "kind": REMOTE_VERIFICATION_KIND,
+        "schema_version": REMOTE_VERIFICATION_SCHEMA_VERSION,
+        "batch_id": manifest.get("batch_id"),
+        "plan_ready_token": plan.get("ready_token"),
+        "document": {
+            "doc_id": doc_id,
+            "target_base_revision": plan.get("target_base_revision"),
+            "verified_revision_id": published_revision,
+        },
+        "target_base": "remote_native_snapshot",
+        "content_projection_match": True,
+        "remote_accounted_ratio": summary.get("remote_accounted_ratio"),
+        "remote_format_accounted_ratio": summary.get(
+            "remote_format_accounted_ratio"
+        ),
+        "preserved_native_block_count": preserved_count,
+        "original_reference_count": len(original_references),
+        "original_references_preserved": True,
+        "remote_markdown_exact_sha256": _sha256_text(
+            str(remote_markdown.get("content") or "")
+        ),
+        "current_native_content_sha256": (current_native.get("native") or {}).get(
+            "content_sha256"
+        ),
+        "elapsed_seconds": round(time.monotonic() - started, 6),
+        "document_fetch_api_calls": (
+            _PERF_COUNTERS["document_fetch_api_calls"] - document_fetches_before
+        ),
+    }
+
+
+def verify_sync(args: argparse.Namespace) -> int:
+    manifest_path, manifest, plan_path, plan = _load_ready_batch(
+        args.manifest,
+        args.plan,
+        label="verify-sync",
+    )
+    context = _published_target_context(manifest, plan, label="verify-sync")
+    _preflight()
+    verification = _sync_verification(
+        manifest_path,
+        manifest,
+        plan_path,
+        plan,
+        context,
+    )
+    verification_path = manifest_path.parent / "remote-verification.json"
+    _write_json(verification_path, verification)
+    print(json.dumps({
+        "status": "verified",
+        "target_base": verification["target_base"],
+        "revision_id": verification["document"]["verified_revision_id"],
+        "content_coverage": verification["remote_accounted_ratio"],
+        "format_coverage": verification["remote_format_accounted_ratio"],
+        "preserved_native_blocks": verification["preserved_native_block_count"],
+        "verification": str(verification_path),
+        "elapsed_seconds": verification["elapsed_seconds"],
+        "document_fetch_api_calls": verification["document_fetch_api_calls"],
+    }, ensure_ascii=False))
+    return 0
+
+
+def _remote_verification_artifact(
+    manifest_path: Path,
+    manifest: dict[str, Any],
+    plan: dict[str, Any],
+    *,
+    doc_id: str,
+    published_revision: int,
+) -> dict[str, Any]:
+    path = manifest_path.parent / "remote-verification.json"
+    if path.is_symlink() or not path.is_file():
+        raise ReviewError("缺少本批 remote-verification.json；请先运行 verify-sync")
+    value = _load_json_object(path, label="remote-verification.json")
+    document = value.get("document")
+    markdown_hash = str(value.get("remote_markdown_exact_sha256") or "")
+    if (
+        value.get("kind") != REMOTE_VERIFICATION_KIND
+        or value.get("schema_version") != REMOTE_VERIFICATION_SCHEMA_VERSION
+        or value.get("batch_id") != manifest.get("batch_id")
+        or value.get("plan_ready_token") != plan.get("ready_token")
+        or value.get("target_base") != "remote_native_snapshot"
+        or value.get("content_projection_match") is not True
+        or float(value.get("remote_accounted_ratio") or 0) != 1.0
+        or float(value.get("remote_format_accounted_ratio") or 0) != 1.0
+        or value.get("original_references_preserved") is not True
+        or not isinstance(document, dict)
+        or str(document.get("doc_id") or "") != doc_id
+        or _int(document.get("verified_revision_id")) != published_revision
+        or not re.fullmatch(r"[0-9a-f]{64}", markdown_hash)
+    ):
+        raise ReviewError("remote-verification.json 与当前 ready plan / 发布 revision 不一致")
+    return value
+
+
 def _comment_actions_path(manifest_path: Path) -> Path:
     return manifest_path.parent / "comment-actions.json"
+
+
+def _empty_comment_performance() -> dict[str, int | float]:
+    return {
+        "attempt_count": 0,
+        "elapsed_seconds": 0.0,
+        "document_fetch_api_calls": 0,
+        "comment_full_scans": 0,
+        "comment_list_api_calls": 0,
+        "comment_reply_api_calls": 0,
+        "reply_write_api_calls": 0,
+        "solve_write_api_calls": 0,
+    }
+
+
+def _comment_scan_counters() -> dict[str, int]:
+    return {
+        key: int(_PERF_COUNTERS.get(key, 0))
+        for key in (
+            "comment_full_scans",
+            "comment_list_api_calls",
+            "comment_reply_api_calls",
+        )
+    }
+
+
+def _record_comment_performance(
+    value: dict[str, Any],
+    *,
+    before_scan_counters: dict[str, int],
+    started: float,
+    document_fetches: int = 0,
+    reply_writes: int = 0,
+    solve_writes: int = 0,
+) -> None:
+    performance = value.get("performance")
+    if not isinstance(performance, dict):
+        raise ReviewError("comment-actions.json 缺少 performance 账本")
+    performance["attempt_count"] = int(performance.get("attempt_count") or 0) + 1
+    performance["elapsed_seconds"] = round(
+        float(performance.get("elapsed_seconds") or 0)
+        + (time.monotonic() - started),
+        6,
+    )
+    performance["document_fetch_api_calls"] = int(
+        performance.get("document_fetch_api_calls") or 0
+    ) + document_fetches
+    performance["reply_write_api_calls"] = int(
+        performance.get("reply_write_api_calls") or 0
+    ) + reply_writes
+    performance["solve_write_api_calls"] = int(
+        performance.get("solve_write_api_calls") or 0
+    ) + solve_writes
+    current = _comment_scan_counters()
+    for key, current_value in current.items():
+        performance[key] = int(performance.get(key) or 0) + (
+            current_value - int(before_scan_counters.get(key) or 0)
+        )
 
 
 def _new_comment_actions(
@@ -2098,6 +2861,7 @@ def _new_comment_actions(
     *,
     doc_id: str,
     published_revision_id: int,
+    execution_mode: str = "single",
 ) -> dict[str, Any]:
     comments = manifest.get("comments")
     initial_fence = _require_sha256(
@@ -2121,10 +2885,57 @@ def _new_comment_actions(
             "doc_id": doc_id,
             "published_revision_id": published_revision_id,
         },
+        "execution_mode": execution_mode,
         "initial_fence_sha256": initial_fence,
         "current_fence_sha256": initial_fence,
+        "performance": _empty_comment_performance(),
         "actions": [],
     }
+
+
+def _upgrade_comment_actions(value: dict[str, Any]) -> dict[str, Any]:
+    """Upgrade v1 receipts in memory without inventing missing server timestamps."""
+    schema_version = _int(value.get("schema_version"))
+    if schema_version == COMMENT_ACTIONS_SCHEMA_VERSION:
+        upgraded = json.loads(json.dumps(value, ensure_ascii=False))
+        upgraded.setdefault("execution_mode", "single")
+        upgraded.setdefault("performance", _empty_comment_performance())
+        actions = upgraded.get("actions")
+        if not isinstance(actions, list):
+            raise ReviewError("comment-actions.json actions 必须是数组")
+        for action in actions:
+            if not isinstance(action, dict):
+                raise ReviewError("comment-actions.json action 必须是对象")
+            action.setdefault("reply_write_ack_sha256", None)
+            action.setdefault(
+                "reply_evidence_mode",
+                "legacy_stable_readback" if action.get("reply") is not None else None,
+            )
+        return upgraded
+    if schema_version != 1:
+        raise ReviewError("comment-actions.json schema_version 不受支持")
+    upgraded = json.loads(json.dumps(value, ensure_ascii=False))
+    upgraded["schema_version"] = COMMENT_ACTIONS_SCHEMA_VERSION
+    upgraded["execution_mode"] = "single"
+    upgraded["performance"] = _empty_comment_performance()
+    actions = upgraded.get("actions")
+    if not isinstance(actions, list):
+        raise ReviewError("comment-actions.json actions 必须是数组")
+    for action in actions:
+        if not isinstance(action, dict):
+            raise ReviewError("comment-actions.json action 必须是对象")
+        status = str(action.get("status") or "")
+        solved_time = _int(action.get("solved_time"))
+        action["solve_evidence_mode"] = (
+            "server_time" if status in {"completed", "reopen_requested", "reopened"}
+            and solved_time is not None else None
+        )
+        action["reply_evidence_mode"] = (
+            "legacy_stable_readback" if action.get("reply") is not None else None
+        )
+        action["reply_write_ack_sha256"] = None
+        action["solve_write_ack_sha256"] = None
+    return upgraded
 
 
 def _validate_comment_actions(
@@ -2144,8 +2955,10 @@ def _validate_comment_actions(
         "manifest",
         "plan",
         "document",
+        "execution_mode",
         "initial_fence_sha256",
         "current_fence_sha256",
+        "performance",
         "actions",
     }
     if set(value) != expected_top_keys:
@@ -2153,6 +2966,9 @@ def _validate_comment_actions(
     manifest_binding = value.get("manifest")
     plan_binding = value.get("plan")
     document_binding = value.get("document")
+    execution_mode = str(value.get("execution_mode") or "")
+    performance = value.get("performance")
+    expected_performance_keys = set(_empty_comment_performance())
     if (
         value.get("kind") != COMMENT_ACTIONS_KIND
         or value.get("schema_version") != COMMENT_ACTIONS_SCHEMA_VERSION
@@ -2171,6 +2987,15 @@ def _validate_comment_actions(
         or document_binding.get("doc_id") != doc_id
         or _int(document_binding.get("published_revision_id"))
         != published_revision_id
+        or execution_mode not in COMMENT_EXECUTION_MODES
+        or not isinstance(performance, dict)
+        or set(performance) != expected_performance_keys
+        or any(
+            not isinstance(performance.get(key), (int, float))
+            or isinstance(performance.get(key), bool)
+            or float(performance.get(key) or 0) < 0
+            for key in expected_performance_keys
+        )
     ):
         raise ReviewError("comment-actions.json 与本批 review/plan/doc 绑定不一致")
     initial_fence = _require_sha256(
@@ -2189,7 +3014,7 @@ def _validate_comment_actions(
     ):
         raise ReviewError("comment-actions.json 的初始评论围栏与 review.json 不一致")
 
-    collected_by_id, decisions = _batch_comment_contracts(manifest, plan)
+    collected_by_id, decisions, _ = _batch_comment_contracts(manifest, plan)
     actions = value.get("actions")
     if not isinstance(actions, list):
         raise ReviewError("comment-actions.json actions 必须是数组")
@@ -2207,9 +3032,13 @@ def _validate_comment_actions(
         "before_other_fence_sha256",
         "before_comment",
         "reply",
+        "reply_evidence_mode",
+        "reply_write_ack_sha256",
         "reply_fence_sha256",
         "solver_user_id",
         "solved_time",
+        "solve_evidence_mode",
+        "solve_write_ack_sha256",
         "after_fence_sha256",
         "reopened_fence_sha256",
     }
@@ -2271,6 +3100,13 @@ def _validate_comment_actions(
         if result_hash is None and reply is not None:
             raise ReviewError(f"评论 {comment_id} 的 solve-only 回执不能绑定 reply")
         reply_fence = action.get("reply_fence_sha256")
+        reply_evidence_mode = str(action.get("reply_evidence_mode") or "")
+        reply_write_ack = action.get("reply_write_ack_sha256")
+        if reply_write_ack is not None:
+            _require_sha256(
+                reply_write_ack,
+                label=f"评论 {comment_id} reply_write_ack_sha256",
+            )
         if reply_fence is not None:
             _require_sha256(reply_fence, label=f"评论 {comment_id} reply_fence_sha256")
         if status in {
@@ -2283,18 +3119,64 @@ def _validate_comment_actions(
             reply_fence is None or (result_hash is not None and reply is None)
         ):
             raise ReviewError(f"评论 {comment_id} 缺少回复/解决前围栏证据")
+        if reply is not None:
+            if reply_evidence_mode not in REPLY_EVIDENCE_MODES:
+                raise ReviewError(f"评论 {comment_id} 缺少 reply 证据模式")
+            if reply_evidence_mode == "write_ack":
+                _require_sha256(
+                    reply_write_ack,
+                    label=f"评论 {comment_id} reply_write_ack_sha256",
+                )
+            elif reply_write_ack is not None:
+                raise ReviewError(f"评论 {comment_id} 的稳定回读不能伪造 reply 写回执")
+        elif reply_evidence_mode or reply_write_ack is not None:
+            raise ReviewError(f"评论 {comment_id} 尚未形成结果回复证据")
         solved_status = status in {"completed", "reopen_requested", "reopened"}
         solver_user_id = str(action.get("solver_user_id") or "")
         solved_time = _int(action.get("solved_time"))
+        solve_evidence_mode = str(action.get("solve_evidence_mode") or "")
+        solve_write_ack = action.get("solve_write_ack_sha256")
         after_fence = action.get("after_fence_sha256")
         if solved_status:
-            if not solver_user_id or solved_time is None or after_fence is None:
+            if (
+                not solver_user_id
+                or after_fence is None
+                or solve_evidence_mode not in SOLVE_EVIDENCE_MODES
+            ):
                 raise ReviewError(f"评论 {comment_id} 的 completed 证据不完整")
             _require_sha256(after_fence, label=f"评论 {comment_id} after_fence_sha256")
+            if solve_evidence_mode == "server_time":
+                if solved_time is None:
+                    raise ReviewError(f"评论 {comment_id} 的 server_time 证据缺少 solved_time")
+                if solve_write_ack is not None:
+                    _require_sha256(
+                        solve_write_ack,
+                        label=f"评论 {comment_id} solve_write_ack_sha256",
+                    )
+            elif solve_evidence_mode == "write_ack_and_stable_readback":
+                if solved_time is not None:
+                    raise ReviewError(f"评论 {comment_id} 的无时间回执不能伪造 solved_time")
+                _require_sha256(
+                    solve_write_ack,
+                    label=f"评论 {comment_id} solve_write_ack_sha256",
+                )
+            elif solved_time is not None or solve_write_ack is not None:
+                raise ReviewError(f"评论 {comment_id} 的 legacy 回执包含不存在的写入证据")
             if reply is not None and solver_user_id != str(reply.get("user_id") or ""):
                 raise ReviewError(f"评论 {comment_id} 的回复作者与 solver 不一致")
-        elif solver_user_id or solved_time is not None or after_fence is not None:
+        elif (
+            solver_user_id
+            or solved_time is not None
+            or after_fence is not None
+            or solve_evidence_mode
+            or (solve_write_ack is not None and status != "solve_requested")
+        ):
             raise ReviewError(f"评论 {comment_id} 尚未完成却包含完成证据")
+        elif solve_write_ack is not None:
+            _require_sha256(
+                solve_write_ack,
+                label=f"评论 {comment_id} solve_write_ack_sha256",
+            )
         reopened_fence = action.get("reopened_fence_sha256")
         if status == "reopened":
             _require_sha256(
@@ -2303,7 +3185,7 @@ def _validate_comment_actions(
             )
         elif reopened_fence is not None:
             raise ReviewError(f"评论 {comment_id} 尚未 reopen 却包含 reopen 围栏")
-    if in_progress > 1:
+    if execution_mode == "single" and in_progress > 1:
         raise ReviewError("comment-actions.json 同时存在多条未完成远端操作")
 
 
@@ -2324,7 +3206,9 @@ def _load_comment_actions(
         if required:
             raise ReviewError("缺少本批次 comment-actions.json 完成回执")
         return path, None
-    value = _load_json_object(path, label="comment-actions.json")
+    value = _upgrade_comment_actions(
+        _load_json_object(path, label="comment-actions.json")
+    )
     _validate_comment_actions(
         value,
         manifest_path=manifest_path,
@@ -2471,8 +3355,8 @@ def _verify_action_comment(
     if expect_solved:
         solver_user_id = str(current.get("solver_user_id") or "")
         solved_time = _int(current.get("solved_time"))
-        if not solver_user_id or solved_time is None:
-            raise ReviewError("评论解决后缺少 solver_user_id 或 solved_time")
+        if not solver_user_id:
+            raise ReviewError("评论解决后缺少 solver_user_id")
         recorded_solver = str(action.get("solver_user_id") or "")
         recorded_time = _int(action.get("solved_time"))
         if recorded_solver and solver_user_id != recorded_solver:
@@ -2512,15 +3396,87 @@ def _verify_reopen_action_comment(
         solved_time = _int(current.get("solved_time"))
         if (
             not solver_user_id
-            or solved_time is None
             or solver_user_id != str(action.get("solver_user_id") or "")
-            or solved_time != _int(action.get("solved_time"))
+            or (
+                _int(action.get("solved_time")) is not None
+                and solved_time != _int(action.get("solved_time"))
+            )
         ):
             raise ReviewError("评论当前 solver/solved_time 与受控完成回执不一致")
         if isinstance(expected_reply, dict) and solver_user_id != str(
             expected_reply.get("user_id") or ""
         ):
             raise ReviewError("评论结果回复作者与 solver 不一致")
+
+
+def _record_completed_action(
+    action: dict[str, Any],
+    current: dict[str, Any],
+    *,
+    after_fence_sha256: str,
+) -> None:
+    solver_user_id = str(current.get("solver_user_id") or "")
+    if not solver_user_id:
+        raise ReviewError("评论解决后缺少 solver_user_id")
+    solved_time = _int(current.get("solved_time"))
+    solve_write_ack = action.get("solve_write_ack_sha256")
+    action["solver_user_id"] = solver_user_id
+    action["solved_time"] = solved_time
+    if solved_time is not None:
+        action["solve_evidence_mode"] = "server_time"
+    elif solve_write_ack is not None:
+        action["solve_evidence_mode"] = "write_ack_and_stable_readback"
+    else:
+        action["solve_evidence_mode"] = "legacy_stable_readback"
+    action["after_fence_sha256"] = after_fence_sha256
+    action["status"] = "completed"
+
+
+def _recover_solve_requested_for_reopen(
+    action: dict[str, Any],
+    current: dict[str, Any],
+    *,
+    current_fence_sha256: str,
+    allow_new_replies: bool,
+) -> None:
+    """Promote a proven solve write when the batch's final readback was interrupted."""
+    if action.get("status") != "solve_requested":
+        return
+    if action.get("solve_write_ack_sha256") is None:
+        raise ReviewError("solve_requested 回执缺少系统解决写响应，不能由 reopen 接管")
+    if not bool(current.get("is_solved")):
+        raise ReviewError("solve_requested 评论当前未解决，请先重跑 complete-comments")
+
+    before = action.get("before_comment")
+    if not isinstance(before, dict):
+        raise ReviewError("solve_requested 回执缺少操作前评论证据")
+    new_replies = _new_comment_replies(before, current)
+    expected_reply = action.get("reply")
+    if expected_reply is None:
+        if not allow_new_replies and new_replies:
+            raise ReviewError("solve-only 评论在最终回读前出现未绑定的新回复")
+    else:
+        if not isinstance(expected_reply, dict):
+            raise ReviewError("solve_requested 回执的 reply 不是对象")
+        reply_id = str(expected_reply.get("reply_id") or "")
+        remote_reply = new_replies.get(reply_id)
+        if remote_reply is None or _reply_receipt(remote_reply) != expected_reply:
+            raise ReviewError("评论结果回复与 solve_requested 写回执不一致")
+        if not allow_new_replies and set(new_replies) != {reply_id}:
+            raise ReviewError("评论在最终回读前出现未绑定的新回复")
+
+    solver_user_id = str(current.get("solver_user_id") or "")
+    if not solver_user_id:
+        raise ReviewError("solve_requested 评论解决后缺少 solver_user_id")
+    if isinstance(expected_reply, dict) and solver_user_id != str(
+        expected_reply.get("user_id") or ""
+    ):
+        raise ReviewError("评论结果回复作者与 solver 不一致")
+    _record_completed_action(
+        action,
+        current,
+        after_fence_sha256=current_fence_sha256,
+    )
 
 
 def _recover_pending_reply(
@@ -2583,15 +3539,20 @@ def _new_comment_action(
         ),
         "before_comment": _comment_fence_view(collected),
         "reply": None,
+        "reply_evidence_mode": None,
+        "reply_write_ack_sha256": None,
         "reply_fence_sha256": None,
         "solver_user_id": None,
         "solved_time": None,
+        "solve_evidence_mode": None,
+        "solve_write_ack_sha256": None,
         "after_fence_sha256": None,
         "reopened_fence_sha256": None,
     }
 
 
 def complete_comment(args: argparse.Namespace) -> int:
+    complete_started = time.monotonic()
     manifest_path, manifest, plan_path, plan = _load_ready_batch(
         args.manifest,
         args.plan,
@@ -2604,7 +3565,7 @@ def complete_comment(args: argparse.Namespace) -> int:
     )
     doc_id = str(context["doc_id"])
     published_revision = int(context["published_revision_id"])
-    collected_by_id, decisions = _batch_comment_contracts(manifest, plan)
+    collected_by_id, decisions, result_texts = _batch_comment_contracts(manifest, plan)
     comment_id = str(args.comment_id or "").strip()
     if not comment_id:
         raise ReviewError("--comment-id 不能为空")
@@ -2614,7 +3575,11 @@ def complete_comment(args: argparse.Namespace) -> int:
         raise ReviewError("complete-comment 只能处理本批非 deferred 的已处置评论")
     if bool(collected.get("is_solved")):
         raise ReviewError("complete-comment 不能接管 collect 时已经解决的评论")
-    result_text = str(args.result_text or "").strip()
+    planned_result_text = result_texts.get(comment_id, "")
+    supplied_result_text = str(args.result_text or "").strip()
+    if planned_result_text and supplied_result_text and planned_result_text != supplied_result_text:
+        raise ReviewError("--result-text 与 ready plan 固化的评论结果不一致")
+    result_text = supplied_result_text or planned_result_text
     if not bool(collected.get("is_whole")) and not result_text:
         raise ReviewError("局部评论必须提供非空 --result-text")
     result_text = result_text.replace("<", "&lt;").replace(">", "&gt;")
@@ -2714,6 +3679,7 @@ def complete_comment(args: argparse.Namespace) -> int:
             "doc_id": doc_id,
             "comment_id": comment_id,
             "receipt": str(actions_path),
+            "elapsed_seconds": round(time.monotonic() - complete_started, 6),
         }, ensure_ascii=False))
         return 0
 
@@ -2721,6 +3687,8 @@ def complete_comment(args: argparse.Namespace) -> int:
         if current_hash != str(action.get("before_fence_sha256") or "") or action.get("reply") is not None:
             recovered = _recover_pending_reply(action, current_items)
             action["reply"] = recovered
+            if not action.get("reply_evidence_mode"):
+                action["reply_evidence_mode"] = "stable_readback"
             action["reply_fence_sha256"] = current_hash
             action["status"] = "reply_created"
             actions_value["current_fence_sha256"] = current_hash
@@ -2742,6 +3710,8 @@ def complete_comment(args: argparse.Namespace) -> int:
                     response,
                     expected_text_sha256=result_text_sha256,
                 )
+                action["reply_evidence_mode"] = "write_ack"
+                action["reply_write_ack_sha256"] = _payload_sha256(response)
                 _save_comment_actions(
                     actions_path,
                     actions_value,
@@ -2804,10 +3774,11 @@ def complete_comment(args: argparse.Namespace) -> int:
             raise ReviewError("解决操作恢复时批次外评论发生变化，请重新 collect")
         if bool(current.get("is_solved")):
             _verify_action_comment(action, current, expect_solved=True)
-            action["solver_user_id"] = str(current.get("solver_user_id") or "")
-            action["solved_time"] = _int(current.get("solved_time"))
-            action["after_fence_sha256"] = current_hash
-            action["status"] = "completed"
+            _record_completed_action(
+                action,
+                current,
+                after_fence_sha256=current_hash,
+            )
             actions_value["current_fence_sha256"] = current_hash
             _save_comment_actions(
                 actions_path,
@@ -2828,7 +3799,9 @@ def complete_comment(args: argparse.Namespace) -> int:
                 "reply_id": (action.get("reply") or {}).get("reply_id"),
                 "solver_user_id": action.get("solver_user_id"),
                 "solved_time": action.get("solved_time"),
+                "solve_evidence_mode": action.get("solve_evidence_mode"),
                 "receipt": str(actions_path),
+                "elapsed_seconds": round(time.monotonic() - complete_started, 6),
             }, ensure_ascii=False))
             return 0
         if current_hash != str(actions_value.get("current_fence_sha256") or ""):
@@ -2850,7 +3823,18 @@ def complete_comment(args: argparse.Namespace) -> int:
         published_revision_id=published_revision,
     )
     try:
-        drive_comment_set_solved(doc_id, comment_id, is_solved=True)
+        solve_response = drive_comment_set_solved(doc_id, comment_id, is_solved=True)
+        action["solve_write_ack_sha256"] = _payload_sha256(solve_response)
+        _save_comment_actions(
+            actions_path,
+            actions_value,
+            manifest_path=manifest_path,
+            manifest=manifest,
+            plan_path=plan_path,
+            plan=plan,
+            doc_id=doc_id,
+            published_revision_id=published_revision,
+        )
     except LarkAdapterError as exc:
         raise ReviewError(
             "评论解决写入未完成；已保留 solve_requested，"
@@ -2873,10 +3857,11 @@ def complete_comment(args: argparse.Namespace) -> int:
     ):
         raise ReviewError("评论解决期间批次外评论发生变化；回执保持 solve_requested")
     _verify_action_comment(action, final_comment, expect_solved=True)
-    action["solver_user_id"] = str(final_comment.get("solver_user_id") or "")
-    action["solved_time"] = _int(final_comment.get("solved_time"))
-    action["after_fence_sha256"] = final_hash
-    action["status"] = "completed"
+    _record_completed_action(
+        action,
+        final_comment,
+        after_fence_sha256=final_hash,
+    )
     actions_value["current_fence_sha256"] = final_hash
     _save_comment_actions(
         actions_path,
@@ -2897,9 +3882,384 @@ def complete_comment(args: argparse.Namespace) -> int:
         "reply_user_id": (action.get("reply") or {}).get("user_id"),
         "solver_user_id": action.get("solver_user_id"),
         "solved_time": action.get("solved_time"),
+        "solve_evidence_mode": action.get("solve_evidence_mode"),
+        "solve_write_ack_sha256": action.get("solve_write_ack_sha256"),
         "before_fence_sha256": action.get("before_fence_sha256"),
         "after_fence_sha256": action.get("after_fence_sha256"),
         "receipt": str(actions_path),
+        "elapsed_seconds": round(time.monotonic() - complete_started, 6),
+    }, ensure_ascii=False))
+    return 0
+
+
+def _batch_comment_targets(
+    manifest: dict[str, Any],
+    plan: dict[str, Any],
+) -> tuple[
+    dict[str, dict[str, Any]],
+    dict[str, str],
+    list[str],
+]:
+    collected_by_id, decisions, result_texts = _batch_comment_contracts(
+        manifest,
+        plan,
+    )
+    required = plan.get("required_items")
+    raw_comments = required.get("comments") if isinstance(required, dict) else []
+    ordered_ids = [
+        str(item.get("comment_id") or "")
+        for item in raw_comments
+        if isinstance(item, dict)
+        and str(item.get("decision") or "") in COMPLETED_COMMENT_DECISIONS
+    ]
+    for comment_id in ordered_ids:
+        collected = collected_by_id[comment_id]
+        if bool(collected.get("is_solved")):
+            raise ReviewError(
+                f"评论 {comment_id} 在 collect 时已经解决，不能由当前批次再次完成"
+            )
+        if not bool(collected.get("is_whole")) and not result_texts.get(comment_id):
+            raise ReviewError(f"局部评论 {comment_id} 缺少固化的 result_text")
+    return collected_by_id, result_texts, ordered_ids
+
+
+def _recover_batch_action(
+    action: dict[str, Any],
+    current: dict[str, Any],
+    *,
+    current_fence_sha256: str,
+) -> None:
+    status = str(action.get("status") or "")
+    if status == "pending":
+        before = action.get("before_comment")
+        if not isinstance(before, dict):
+            raise ReviewError("批量评论回执缺少操作前证据")
+        new_replies = _new_comment_replies(before, current)
+        if not new_replies:
+            if bool(current.get("is_solved")):
+                raise ReviewError("尚未执行的批量评论已被外部解决")
+            return
+        if action.get("result_text_sha256") is None or len(new_replies) != 1:
+            raise ReviewError("批量评论出现无法归因的新回复")
+        recovered = _reply_receipt(next(iter(new_replies.values())))
+        if recovered.get("text_sha256") != action.get("result_text_sha256"):
+            raise ReviewError("批量评论新增回复与固化结果文本不一致")
+        recorded = action.get("reply")
+        if recorded is not None and recovered != recorded:
+            raise ReviewError("批量评论远端回复与写回执不一致")
+        action["reply"] = recovered
+        action["reply_evidence_mode"] = "stable_readback"
+        action["reply_fence_sha256"] = current_fence_sha256
+        action["status"] = "reply_created"
+        status = "reply_created"
+    if status == "reply_created":
+        _verify_action_comment(action, current, expect_solved=False)
+        return
+    if status == "solve_requested":
+        if bool(current.get("is_solved")):
+            _verify_action_comment(action, current, expect_solved=True)
+            _record_completed_action(
+                action,
+                current,
+                after_fence_sha256=current_fence_sha256,
+            )
+        else:
+            _verify_action_comment(action, current, expect_solved=False)
+        return
+    if status == "completed":
+        _verify_action_comment(action, current, expect_solved=True)
+        return
+    raise ReviewError(f"批量评论不接受状态 {status or 'missing'}")
+
+
+def complete_comments(args: argparse.Namespace) -> int:
+    """整批回复并解决评论，只在批次首尾读取稳定全量围栏。"""
+    batch_started = time.monotonic()
+    scan_counters_before = _comment_scan_counters()
+    document_fetches = 0
+    reply_writes = 0
+    solve_writes = 0
+    manifest_path, manifest, plan_path, plan = _load_ready_batch(
+        args.manifest,
+        args.plan,
+        label="complete-comments",
+    )
+    context = _published_target_context(
+        manifest,
+        plan,
+        label="complete-comments",
+    )
+    doc_id = str(context["doc_id"])
+    published_revision = int(context["published_revision_id"])
+    collected_by_id, result_texts, ordered_ids = _batch_comment_targets(
+        manifest,
+        plan,
+    )
+    if not ordered_ids:
+        print(json.dumps({
+            "status": "nothing_to_complete",
+            "batch_id": manifest.get("batch_id"),
+            "comment_count": 0,
+        }, ensure_ascii=False))
+        return 0
+
+    _preflight()
+    document_fetches += 1
+    remote_document = _document(
+        docs_fetch(doc_id, doc_format="markdown", detail="simple")
+    )
+    if (
+        str(remote_document.get("document_id") or "") != doc_id
+        or _int(remote_document.get("revision_id")) != published_revision
+    ):
+        raise ReviewError("complete-comments 前飞书 revision 与本地发布基线不一致")
+    current_items = _read_comment_snapshot(doc_id)
+    current_hash = _comment_fence_hash(current_items)
+    current_by_id = _comment_index(current_items, label="批量评论初始围栏")
+    if set(current_by_id) != set(collected_by_id):
+        raise ReviewError("批量评论初始围栏出现新增或删除，请重新 collect")
+
+    actions_path, actions_value = _load_comment_actions(
+        manifest_path,
+        manifest,
+        plan_path,
+        plan,
+        doc_id=doc_id,
+        published_revision_id=published_revision,
+        required=False,
+    )
+    if actions_value is None:
+        actions_value = _new_comment_actions(
+            manifest_path,
+            manifest,
+            plan_path,
+            plan,
+            doc_id=doc_id,
+            published_revision_id=published_revision,
+            execution_mode="batch",
+        )
+    elif actions_value.get("execution_mode") != "batch":
+        raise ReviewError(
+            "当前 comment-actions.json 来自单项入口；请先用 complete-comment 恢复旧操作"
+        )
+    actions = actions_value["actions"]
+    action_by_id = {
+        str(action.get("comment_id") or ""): action
+        for action in actions
+        if isinstance(action, dict)
+    }
+    if set(action_by_id) - set(ordered_ids):
+        raise ReviewError("批量评论回执包含当前 ready plan 之外的评论")
+    if actions and set(action_by_id) != set(ordered_ids):
+        raise ReviewError("批量评论 journal 未原子建立全部 action，拒绝继续写入")
+
+    # 首笔远端写入前一次性建立全部 action，保证中断后知道尚未开始的范围。
+    for comment_id in ordered_ids:
+        current = current_by_id[comment_id]
+        action = action_by_id.get(comment_id)
+        result_text = result_texts.get(comment_id, "").replace("<", "&lt;").replace(
+            ">", "&gt;"
+        )
+        result_hash = _sha256_text(result_text) if result_text else None
+        if action is None:
+            if _comment_fence_view(current) != _comment_fence_view(
+                collected_by_id[comment_id]
+            ):
+                raise ReviewError(f"评论 {comment_id} 已在批量操作前变化")
+            action = _new_comment_action(
+                manifest=manifest,
+                plan=plan,
+                plan_sha256=str((actions_value.get("plan") or {}).get("sha256") or ""),
+                doc_id=doc_id,
+                comment_id=comment_id,
+                decision=str(
+                    next(
+                        item.get("decision")
+                        for item in (plan.get("required_items") or {}).get("comments") or []
+                        if isinstance(item, dict) and item.get("comment_id") == comment_id
+                    )
+                ),
+                collected=collected_by_id[comment_id],
+                current_items=current_items,
+                result_text_sha256=result_hash,
+            )
+            actions.append(action)
+            action_by_id[comment_id] = action
+        elif action.get("result_text_sha256") != result_hash:
+            raise ReviewError(f"评论 {comment_id} 的批量结果文本与现有回执不一致")
+        _recover_batch_action(
+            action,
+            current,
+            current_fence_sha256=current_hash,
+        )
+    for comment_id, collected in collected_by_id.items():
+        if comment_id not in ordered_ids and _comment_fence_view(
+            current_by_id[comment_id]
+        ) != _comment_fence_view(collected):
+            raise ReviewError(f"批次外或 deferred 评论 {comment_id} 已变化")
+    _save_comment_actions(
+        actions_path,
+        actions_value,
+        manifest_path=manifest_path,
+        manifest=manifest,
+        plan_path=plan_path,
+        plan=plan,
+        doc_id=doc_id,
+        published_revision_id=published_revision,
+    )
+
+    def save_failed_attempt(message: str, exc: Exception) -> ReviewError:
+        _record_comment_performance(
+            actions_value,
+            before_scan_counters=scan_counters_before,
+            started=batch_started,
+            document_fetches=document_fetches,
+            reply_writes=reply_writes,
+            solve_writes=solve_writes,
+        )
+        _save_comment_actions(
+            actions_path,
+            actions_value,
+            manifest_path=manifest_path,
+            manifest=manifest,
+            plan_path=plan_path,
+            plan=plan,
+            doc_id=doc_id,
+            published_revision_id=published_revision,
+        )
+        return ReviewError(f"{message}；批量 journal 已保留，重跑恢复。详情: {exc}")
+
+    for comment_id in ordered_ids:
+        action = action_by_id[comment_id]
+        if action.get("status") == "completed":
+            continue
+        if action.get("status") == "pending" and action.get("result_text_sha256") is not None:
+            result_text = result_texts[comment_id].replace("<", "&lt;").replace(
+                ">", "&gt;"
+            )
+            reply_writes += 1
+            try:
+                response = drive_comment_reply_create(doc_id, comment_id, result_text)
+                action["reply"] = _reply_from_create_response(
+                    response,
+                    expected_text_sha256=str(action["result_text_sha256"]),
+                )
+                action["reply_evidence_mode"] = "write_ack"
+                action["reply_write_ack_sha256"] = _payload_sha256(response)
+                action["reply_fence_sha256"] = str(
+                    action.get("before_fence_sha256") or ""
+                )
+                action["status"] = "reply_created"
+                _save_comment_actions(
+                    actions_path,
+                    actions_value,
+                    manifest_path=manifest_path,
+                    manifest=manifest,
+                    plan_path=plan_path,
+                    plan=plan,
+                    doc_id=doc_id,
+                    published_revision_id=published_revision,
+                )
+            except (LarkAdapterError, ReviewError) as exc:
+                raise save_failed_attempt(
+                    f"评论 {comment_id} 的结果回复创建失败",
+                    exc,
+                ) from exc
+        if action.get("status") == "pending":
+            action["reply_fence_sha256"] = str(action.get("before_fence_sha256") or "")
+        if action.get("status") in {"pending", "reply_created"}:
+            action["status"] = "solve_requested"
+            _save_comment_actions(
+                actions_path,
+                actions_value,
+                manifest_path=manifest_path,
+                manifest=manifest,
+                plan_path=plan_path,
+                plan=plan,
+                doc_id=doc_id,
+                published_revision_id=published_revision,
+            )
+        if action.get("status") == "solve_requested":
+            solve_writes += 1
+            try:
+                solve_response = drive_comment_set_solved(
+                    doc_id,
+                    comment_id,
+                    is_solved=True,
+                )
+                action["solve_write_ack_sha256"] = _payload_sha256(solve_response)
+                _save_comment_actions(
+                    actions_path,
+                    actions_value,
+                    manifest_path=manifest_path,
+                    manifest=manifest,
+                    plan_path=plan_path,
+                    plan=plan,
+                    doc_id=doc_id,
+                    published_revision_id=published_revision,
+                )
+            except LarkAdapterError as exc:
+                raise save_failed_attempt(
+                    f"评论 {comment_id} 的解决写入失败",
+                    exc,
+                ) from exc
+
+    try:
+        final_items = _read_comment_snapshot(doc_id)
+    except (LarkAdapterError, ReviewError) as exc:
+        raise save_failed_attempt("批量评论写入后的稳定回读失败", exc) from exc
+    final_hash = _comment_fence_hash(final_items)
+    final_by_id = _comment_index(final_items, label="批量评论最终围栏")
+    for comment_id in ordered_ids:
+        action = action_by_id[comment_id]
+        current = final_by_id.get(comment_id)
+        if current is None:
+            raise save_failed_attempt(
+                f"评论 {comment_id} 在最终围栏中缺失",
+                ReviewError("评论可能被删除"),
+            )
+        _verify_action_comment(action, current, expect_solved=True)
+        _record_completed_action(
+            action,
+            current,
+            after_fence_sha256=final_hash,
+        )
+    actions_value["current_fence_sha256"] = final_hash
+    _verify_batch_comment_snapshot(
+        manifest,
+        plan,
+        actions_value,
+        final_items,
+        require_all_completed=True,
+        allow_reopen_states=False,
+    )
+    _record_comment_performance(
+        actions_value,
+        before_scan_counters=scan_counters_before,
+        started=batch_started,
+        document_fetches=document_fetches,
+        reply_writes=reply_writes,
+        solve_writes=solve_writes,
+    )
+    _save_comment_actions(
+        actions_path,
+        actions_value,
+        manifest_path=manifest_path,
+        manifest=manifest,
+        plan_path=plan_path,
+        plan=plan,
+        doc_id=doc_id,
+        published_revision_id=published_revision,
+    )
+    print(json.dumps({
+        "status": "completed",
+        "execution_mode": "batch",
+        "batch_id": manifest.get("batch_id"),
+        "doc_id": doc_id,
+        "comment_ids": ordered_ids,
+        "comment_count": len(ordered_ids),
+        "receipt": str(actions_path),
+        "performance": actions_value["performance"],
     }, ensure_ascii=False))
     return 0
 
@@ -2914,7 +4274,7 @@ def _verify_batch_comment_snapshot(
     allow_reopen_states: bool,
     reopen_comment_ids: set[str] | None = None,
 ) -> None:
-    collected_by_id, decisions = _batch_comment_contracts(manifest, plan)
+    collected_by_id, decisions, _ = _batch_comment_contracts(manifest, plan)
     current_by_id = _comment_index(current_items, label="飞书当前全量评论围栏")
     if set(current_by_id) != set(collected_by_id):
         added = sorted(set(current_by_id) - set(collected_by_id))
@@ -3017,18 +4377,48 @@ def reopen(args: argparse.Namespace) -> int:
         for action in actions_value["actions"]
         if isinstance(action, dict)
     }
+    current_comments = _read_comment_snapshot(doc_id)
+    current_hash = _comment_fence_hash(current_comments)
+    current_by_id = _comment_index(current_comments, label="reopen 当前评论围栏")
     unknown = [
         comment_id
         for comment_id in requested_ids
         if comment_id not in action_by_id
         or action_by_id[comment_id].get("status")
-        not in {"completed", "reopen_requested"}
+        not in {"solve_requested", "completed", "reopen_requested"}
     ]
     if unknown:
         raise ReviewError(
-            "reopen 只接受本批 completed 回执: " + ", ".join(sorted(unknown))
+            "reopen 只接受本批可证明的 solve_requested 或 completed 回执: "
+            + ", ".join(sorted(unknown))
         )
-    current_comments = _read_comment_snapshot(doc_id)
+
+    recovered_solve_ids: list[str] = []
+    for comment_id, action in action_by_id.items():
+        if action.get("status") != "solve_requested":
+            continue
+        current = current_by_id.get(comment_id)
+        if current is None:
+            raise ReviewError(f"评论 {comment_id} 在 solve_requested 恢复时无法回读")
+        _recover_solve_requested_for_reopen(
+            action,
+            current,
+            current_fence_sha256=current_hash,
+            allow_new_replies=comment_id in requested_ids,
+        )
+        recovered_solve_ids.append(comment_id)
+    if recovered_solve_ids:
+        actions_value["current_fence_sha256"] = current_hash
+        _save_comment_actions(
+            actions_path,
+            actions_value,
+            manifest_path=manifest_path,
+            manifest=manifest,
+            plan_path=plan_path,
+            plan=plan,
+            doc_id=doc_id,
+            published_revision_id=published_revision,
+        )
     _verify_batch_comment_snapshot(
         manifest,
         plan,
@@ -3152,6 +4542,8 @@ def reopen(args: argparse.Namespace) -> int:
 
 
 def checkpoint(args: argparse.Namespace) -> int:
+    checkpoint_started = time.monotonic()
+    checkpoint_scan_counters = _comment_scan_counters()
     manifest_path, manifest, plan_path, plan = _load_ready_batch(
         args.manifest,
         args.plan,
@@ -3169,7 +4561,7 @@ def checkpoint(args: argparse.Namespace) -> int:
     body = str(context["body"])
     manifest_doc_id = str(context["doc_id"])
     published_revision = int(context["published_revision_id"])
-    _, decisions = _batch_comment_contracts(manifest, plan)
+    _, decisions, _ = _batch_comment_contracts(manifest, plan)
     completed_comment_ids = {
         comment_id
         for comment_id, decision in decisions.items()
@@ -3197,33 +4589,57 @@ def checkpoint(args: argparse.Namespace) -> int:
                 "comment-actions.json 未完整覆盖本批非 deferred 评论："
                 f"缺少={missing or '无'}，多余={extra or '无'}"
             )
-        expected_fence = str(actions_value.get("initial_fence_sha256") or "")
-        for action in actions_value["actions"]:
-            if action.get("status") != "completed":
-                raise ReviewError(
-                    f"评论 {action.get('comment_id')} 缺少 completed 回执"
-                )
-            if action.get("before_fence_sha256") != expected_fence:
-                raise ReviewError("comment-actions.json 的操作前后围栏链不连续")
-            expected_fence = str(action.get("after_fence_sha256") or "")
-        if expected_fence != str(actions_value.get("current_fence_sha256") or ""):
-            raise ReviewError("comment-actions.json 的最终围栏水位不一致")
+        initial_fence = str(actions_value.get("initial_fence_sha256") or "")
+        current_receipt_fence = str(actions_value.get("current_fence_sha256") or "")
+        if actions_value.get("execution_mode") == "batch":
+            for action in actions_value["actions"]:
+                if action.get("status") != "completed":
+                    raise ReviewError(
+                        f"评论 {action.get('comment_id')} 缺少 completed 回执"
+                    )
+                if action.get("before_fence_sha256") != initial_fence:
+                    raise ReviewError("批量评论回执没有绑定统一初始围栏")
+                if action.get("after_fence_sha256") != current_receipt_fence:
+                    raise ReviewError("批量评论回执没有绑定统一最终围栏")
+        else:
+            expected_fence = initial_fence
+            for action in actions_value["actions"]:
+                if action.get("status") != "completed":
+                    raise ReviewError(
+                        f"评论 {action.get('comment_id')} 缺少 completed 回执"
+                    )
+                if action.get("before_fence_sha256") != expected_fence:
+                    raise ReviewError("comment-actions.json 的操作前后围栏链不连续")
+                expected_fence = str(action.get("after_fence_sha256") or "")
+            if expected_fence != current_receipt_fence:
+                raise ReviewError("comment-actions.json 的最终围栏水位不一致")
     elif completed_comment_ids:
         raise ReviewError("本批非 deferred 评论缺少 comment-actions.json 完成回执")
 
     _preflight()
-    remote_document = _document(
-        docs_fetch(manifest_doc_id, doc_format="markdown", detail="simple")
-    )
-    remote_fence = (
-        str(remote_document.get("document_id") or ""),
-        _int(remote_document.get("revision_id")),
-        str(remote_document.get("content") or ""),
-    )
-    if remote_fence[0] != manifest_doc_id or remote_fence[1] != published_revision:
-        raise ReviewError(
-            "checkpoint 前飞书当前 revision 与本地发布基线不一致"
+    if _int(manifest.get("schema_version")) == SCHEMA_VERSION:
+        verification = _remote_verification_artifact(
+            manifest_path,
+            manifest,
+            plan,
+            doc_id=manifest_doc_id,
+            published_revision=published_revision,
         )
+        expected_remote_hash = str(verification["remote_markdown_exact_sha256"])
+        checkpoint_document_fetches = 1
+    else:
+        initial_remote_document = _document(
+            docs_fetch(manifest_doc_id, doc_format="markdown", detail="simple")
+        )
+        if (
+            str(initial_remote_document.get("document_id") or "") != manifest_doc_id
+            or _int(initial_remote_document.get("revision_id")) != published_revision
+        ):
+            raise ReviewError("checkpoint 前飞书当前 revision 与本地发布基线不一致")
+        expected_remote_hash = _sha256_text(
+            str(initial_remote_document.get("content") or "")
+        )
+        checkpoint_document_fetches = 2
 
     current_comments = _read_comment_snapshot(manifest_doc_id)
     current_fence_hash = _comment_fence_hash(current_comments)
@@ -3246,29 +4662,18 @@ def checkpoint(args: argparse.Namespace) -> int:
         require_all_completed=True,
         allow_reopen_states=False,
     )
-    final_comments, comment_time, final_comment_ids = _collect_comments(
-        manifest_doc_id,
-        include_solved=True,
-        blocks={},
-        token_to_block={},
-        reviewed_comment_at=0,
-        reviewed_comment_ids=set(),
-    )
-    if _comment_fence_hash(final_comments) != _comment_fence_hash(current_comments):
-        raise ReviewError("飞书评论在 checkpoint 复核期间变化")
-    if actions_value is not None and _comment_fence_hash(final_comments) != str(
-        actions_value.get("current_fence_sha256") or ""
-    ):
-        raise ReviewError("checkpoint 最终评论围栏与完成回执不一致")
+    comment_time, final_comment_ids = _comment_cursor_from_snapshot(current_comments)
     final_remote_document = _document(
         docs_fetch(manifest_doc_id, doc_format="markdown", detail="simple")
     )
     final_remote_fence = (
         str(final_remote_document.get("document_id") or ""),
         _int(final_remote_document.get("revision_id")),
-        str(final_remote_document.get("content") or ""),
+        _sha256_text(str(final_remote_document.get("content") or "")),
     )
-    if final_remote_fence != remote_fence:
+    if final_remote_fence[:2] != (manifest_doc_id, published_revision):
+        raise ReviewError("checkpoint 前飞书当前 revision 与本地发布基线不一致")
+    if final_remote_fence[2] != expected_remote_hash:
         raise ReviewError("飞书正文在 checkpoint 复核期间变化")
     revision = published_revision
     comment_ids = set(final_comment_ids)
@@ -3299,6 +4704,14 @@ def checkpoint(args: argparse.Namespace) -> int:
         "lark_reviewed_comment_ids": sorted(comment_ids),
         "lark_reviewed_at": reviewed_at,
         "comment_actions": str(actions_path) if actions_value is not None else None,
+        "performance": {
+            "elapsed_seconds": round(time.monotonic() - checkpoint_started, 6),
+            "document_fetch_api_calls": checkpoint_document_fetches,
+            **{
+                key: value - checkpoint_scan_counters[key]
+                for key, value in _comment_scan_counters().items()
+            },
+        },
     }, ensure_ascii=False))
     return 0
 
@@ -3389,6 +4802,14 @@ def build_parser() -> argparse.ArgumentParser:
     apply_parser.add_argument("--plan", required=True, help="seal 生成的 apply-plan.json")
     apply_parser.set_defaults(handler=apply_target)
 
+    verify_parser = subparsers.add_parser(
+        "verify-sync",
+        help="精细同步后验证飞书正文投影、原生格式和资源保真",
+    )
+    verify_parser.add_argument("--manifest", required=True, help="collect 生成的 review.json")
+    verify_parser.add_argument("--plan", required=True, help="已应用的 ready apply-plan.json")
+    verify_parser.set_defaults(handler=verify_sync)
+
     complete_parser = subparsers.add_parser(
         "complete-comment",
         help="为本批已验证评论创建结果回复并解决，或对全文评论直接解决",
@@ -3401,6 +4822,18 @@ def build_parser() -> argparse.ArgumentParser:
         help="结果回复正文；局部评论必填，全文评论可省略并直接解决",
     )
     complete_parser.set_defaults(handler=complete_comment)
+
+    complete_batch_parser = subparsers.add_parser(
+        "complete-comments",
+        help="按 ready plan 整批回复并解决评论，只在批次首尾读取稳定围栏",
+    )
+    complete_batch_parser.add_argument(
+        "--manifest", required=True, help="collect 生成的 review.json"
+    )
+    complete_batch_parser.add_argument(
+        "--plan", required=True, help="已应用的 ready apply-plan.json"
+    )
+    complete_batch_parser.set_defaults(handler=complete_comments)
 
     reopen_parser = subparsers.add_parser(
         "reopen",

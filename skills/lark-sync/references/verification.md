@@ -14,6 +14,8 @@
 - revision 是否更新
 - 本轮没有误伤未计划修改的章节
 
+若由 `/pmai-lark-review` 进入，数量检查不够：必须运行该批次的 `verify-sync`，逐个验证 `remote-coverage.json` 中 preserved 原生 block 的格式 hash、资源 token 和原引用映射，并证明飞书稳定语义投影等于 sealed T。未达到内容覆盖率 100%、格式保真率 100% 或未归位 0 时，不刷新 checkpoint。
+
 ## 本地 frontmatter 追踪字段
 
 首次发布仍由 `/pmai-publish-to-lark` 回填文档身份和 `lark_published_at`。每次成功发布、精细同步或回拉完成后，都要记录下一轮三方比较所需的对齐基线。

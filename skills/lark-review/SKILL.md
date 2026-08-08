@@ -25,7 +25,7 @@ source "${PMAI_HOME:-$HOME/.pmai}/scripts/skill-preamble.sh"
 - `skills/_shared/decision-policy.md`
 - `skills/lark-sync/references/verification.md`
 
-需要回复或解决飞书评论前，再读取当前 `lark-cli` 随附的 `lark-shared`、`lark-drive` 和评论规范；使用原生 API 前先运行对应 `lark-cli schema`，不要凭旧参数写评论。评论写操作统一交给 `lark-review.py complete-comment`；Agent 不直接拼回复、解决评论，也不向 checkpoint / reopen 自报 reply ID、作者或解决者。
+需要回复或解决飞书评论前，再读取当前 `lark-cli` 随附的 `lark-shared`、`lark-drive` 和评论规范；使用原生 API 前先运行对应 `lark-cli schema`，不要凭旧参数写评论。新批次评论写操作统一交给 `lark-review.py complete-comments`；`complete-comment` 只用于兼容恢复。Agent 不直接拼 API、解决评论，也不向 checkpoint / reopen 自报 reply ID、作者或解决者。
 
 ## 输入
 
@@ -68,7 +68,7 @@ python3 "${PMAI_HOME:-$HOME/.pmai}/scripts/lark-review.py" collect \
 
 新项目由模板忽略 `.pm-workflow/context/`；旧项目先按 context cache 的既有兼容规则把该目录写入本地 `.git/info/exclude`，再通过 `git check-ignore` 验证。不能验证为 ignored 时不创建批次。省略 `--doc` 时脚本读取 frontmatter。读取 `$REVIEW_DIR/review.json` 以及其中列出的 diff；评论定位必须保留准确度，不得把 quote 弱匹配说成精确 block。
 
-collector 只有在评论分页结束后复核本地文件仍是原文、飞书 Markdown / XML 仍是同一 revision 时才写批次产物；默认展示未解决评论，同时分别以 `is_solved=false` 和 `is_solved=true` 完整分页、合并并去重，连续两轮完整扫描的围栏完全相同后才接受，另存包含两种状态的全量只读围栏。不能通过省略 `is_solved` 猜测接口会返回全量评论；分页 envelope、item 或 token 畸形也必须失败关闭。期间任一版本变化都重新 collect，不能继续使用半新半旧的采集结果。
+collector 先取得同一 revision 的 Markdown / full XML；评论分页结束后复核本地文件仍是原文，并用一次轻量 Markdown 围栏确认飞书文档身份、revision 和正文仍未变化，才写批次产物，不重复下载同 revision 的整篇 XML。full XML 连同 block ID、样式、图片 / 附件 token 和 `reference_map` 固化为 `remote-native.json`，这是目标稿和格式验收的唯一原生底稿。默认展示未解决评论，同时分别以 `is_solved=false` 和 `is_solved=true` 完整分页、合并并去重，连续两轮完整扫描的围栏完全相同后才接受，另存包含两种状态的全量只读围栏。不能通过省略 `is_solved` 猜测接口会返回全量评论；分页 envelope、item 或 token 畸形也必须失败关闭。期间任一版本变化都重新 collect，不能继续使用半新半旧的采集结果。
 
 发布基线缺失时按 reference 的 legacy 规则降级。发布 revision 已记录但历史版本读取失败时停止，不能假装已经识别正文增量。
 
@@ -78,8 +78,8 @@ collector 只有在评论分页结束后复核本地文件仍是原文、飞书 
 
 - `B`：`baseline.md`，发布基线，只用于判断变化，永不写回；
 - `L`：`local.md`，采集时本地正文；
-- `R`：`remote.md`，采集时飞书正文；
-- `T`：`target.md`，本批唯一候选目标；只有 T 可以经 `apply` 写入正式规格。
+- `R`：`remote.md` + `remote-native.json`，采集时飞书正文的稳定语义投影和原生格式；
+- `T`：`target.md`，本批唯一候选目标；`target_base=remote_native_snapshot`，只有 T 可以经 `apply` 写入正式规格。
 
 先运行：
 
@@ -88,16 +88,17 @@ python3 "${PMAI_HOME:-$HOME/.pmai}/scripts/lark-review.py" reconcile \
   --manifest "$REVIEW_DIR/review.json"
 ```
 
-脚本在同一项目私有批次目录生成 `target.md`、`resolutions.json` 和 `state=draft` 的 `apply-plan.json`。按以下规则处理：
+脚本在同一项目私有批次目录生成 `target.md`、`resolutions.json`、`remote-coverage.json`、`remote-preview.md` 和 `state=draft` 的 `apply-plan.json`。按以下规则处理：
 
-- 仅本地变化自动保留 L；
-- 只有 B 与本地发布源可证明为同格式公共祖先时，才把不冲突的 R 增量机械纳入候选 T；这只证明变化可合并，不证明修改者身份或 PM 已认可；
-- B 与本地发布源格式不兼容、缺少 B，或本地 / 飞书修改同一语义时，以 L 初始化 T，并把对应项留为待归位；
-- 禁止整篇复制 B 或 R 到 T，禁止把 remote-wins / local-wins 当合并策略；
+- T 无条件从当前飞书 `remote_native_snapshot` 开始；本地变化只能作为对 R 的显式补充或改写归入 T，不能把旧 L 当底稿覆盖 R；
+- B 与本地发布源是否同格式，只决定能否机械识别不重叠差异，不影响内容底稿选择；`common_ancestor_compatible=false` 也必须从 R 开始；
+- 本地与飞书修改同一语义时显式归位冲突，但 PM 已认可的飞书内容仍是默认保留项；
+- `remote-coverage.json` 逐项记录 R→T 的保留、移动、改写、删除和格式处置。每一项删除或改写必须绑定格式规则、评论、已确认决定或 PM 明确例外；内容覆盖率和格式归位率必须都是 100%，未归位数量必须为 0；
+- 大规模改写、结构变化或高风险标题 / 表格变化会强制生成 `remote-preview.md`。PM 未确认预览时不能 seal；
 - 每条新评论或新回复都必须在 `resolutions.json` 有处置。`pending` / `needs_pm` 阻断写入；`deferred` 必须写明归属和原因，并在收口时保持评论未解决。
 - T 经评论、决定或 spec-writing 重新编译后，把 `resolutions.json:target.mode` 改为 `lifecycle_compiled`，并记录确认依据和原因；保持默认 `reconciled` 却修改 T 会被 seal 阻断。
 
-Agent 只能编辑 `$REVIEW_DIR/target.md` 和 `$REVIEW_DIR/resolutions.json`。正式规格正文保持 L，不得提前修改；未完成批次跨轮保留并优先恢复，目录丢失或任一快照摘要变化时才重新 collect，不凭记忆重建。
+Agent 只能编辑 `$REVIEW_DIR/target.md` 和 `$REVIEW_DIR/resolutions.json`。`remote-native.json`、`remote-coverage.json` 和 `remote-preview.md` 都由脚本生成；正式规格正文保持 L，不得提前修改。未完成批次跨轮保留并优先恢复，目录丢失或任一快照摘要变化时才重新 collect，不凭记忆重建。
 
 ### 3. 建立评审批次
 
@@ -114,7 +115,7 @@ Docx revision 只能证明正文发生变化，不能可靠证明是谁修改的
 
 批注按 `review-routing.md` 区分明确指令、问题 / 建议、冲突和无法定位项。问句、假设和建议不能直接写成 active decision。
 
-把上述判断写入 `resolutions.json`，形成一张批次账本：`来源 → 位置 → 候选结论 → 影响对象 → 执行路径 → 确认依据`。apply 成功前它只是绑定本批 B/L/R/T 的临时候选账本，不得先改 `discussion.md`、`decisions.md` 或 build accepted delta。不要先让 PM 逐条批准整张清单；只有真实产品岔路、相互冲突或本地/飞书双边修改无法合并时才提问。
+把上述判断写入 `resolutions.json`，形成一张批次账本：`来源 → 位置 → 候选结论 → 影响对象 → 执行路径 → 确认依据`，并补齐 `remote_coverage` 与强制预览确认。apply 成功前它只是绑定本批 B/L/R/T 的临时候选账本，不得先改 `discussion.md`、`decisions.md` 或 build accepted delta。不要先让 PM 逐条批准整张清单；只有真实产品岔路、相互冲突或本地/飞书双边修改无法合并时才提问。
 
 ### 4. 按最高影响分流
 
@@ -140,6 +141,8 @@ Docx revision 只能证明正文发生变化，不能可靠证明是谁修改的
 3. **active build**：把 PM 已接受的新口径、影响面、飞书来源和预期 accepted delta 先记在 `resolutions.json`，不得提前调用 `add-delta`。spec-writing 以该候选 delta 编译 T，暂不改变 build source hash，也不开始依赖新口径的实现。
 4. 飞书正文增量已有本轮明确依据或通过一次整批确认、真实产品分叉全部闭合、批次账本完整、T 已是最终目标正文后再 seal；不能为了先改原型而提前写正式规格，也不能让原型反向缩小 T。
 
+同时完成 `resolutions.json:decision_routing`：每个正文归位项和评论至少有一条来源绑定，结果只能是 `not_required / create / supersede`。只有新增、改变或推翻产品对象、状态、权限、业务规则、真相源、异常处理或成功标准时，才填写安全的仓内 `decisions.md` 目标、决定 ID、摘要、原因和需要替代的旧决定；纯措辞、排版、格式、示例补充和不改变规则的解释标为 `not_required` 并写原因。任何 `pending`、漏来源或不安全目标都阻止 seal。active build 若同时改变实现合同，还要写 accepted delta，不能用 delta 代替稳定产品决定。
+
 决定或 T 编译失败时不 apply；实现与验证在 apply 后继续，失败时保留评论为未解决且不写 checkpoint。
 
 ### 6. Seal 并受控写入正式规格
@@ -161,9 +164,19 @@ python3 "${PMAI_HOME:-$HOME/.pmai}/scripts/lark-review.py" apply \
 
 ### 7. 正式归位决定、精细同步，再继续原生命周期和处理评论
 
-apply 成功后，先把已应用的候选结论正式归入对应 `discussion.md` / `decisions.md`，或对 active build 调用一次 `add-delta`；记录同一批次 ID、飞书 URL 和 comment ID，不能重新解释 T。这是正文修改和评论结论的首个持久归位点；归位失败时停止，不同步飞书、不开始实现，也不靠重新 collect 猜回已经应用的决定。
+apply 成功后，按上一步的决定归档路由执行：产品规则变化正式写入对应 `decisions.md`（需要时 supersede 旧决定），active build 的实现合同变化再调用一次 `add-delta`；纯措辞和格式变化不制造 decision。记录同一批次 ID、飞书 URL 和 comment ID，不能重新解释 T。这是需要沉淀的产品决定首个持久归位点；归位失败时停止，不同步飞书、不开始实现，也不靠重新 collect 猜回已经应用的决定。
 
-决定归位成功后，立即调用 `/pmai-lark-sync` 模式 A，把最终本地口径精细同步回**同一篇**飞书文档并回读验证。第一笔写入前必须重新 fetch：文档身份不变，且最新 revision 必须同时等于 apply plan 的 `remote_revision_id` 和本次同步首笔采用的 expected revision；不一致时零写入，保留批次并重新 collect。确认通过后，第一笔 `lark-cli docs +update` 携带该 expected revision，后续每笔都携带上一笔写操作返回的 `--revision-id`；revision 冲突时停止。禁止为了省事 overwrite；评论、图片、白板和附件不得因收口丢失。
+决定归位成功后，立即调用 `/pmai-lark-sync` 模式 A，把最终本地口径精细同步回**同一篇**飞书文档并回读验证。同步必须消费 apply plan 的 `target_base=remote_native_snapshot` 和 `remote-coverage.json`，只用 XML `str_replace` / `block_*` 修补已归位差异；所有标记为 preserved 的原生 block ID、样式属性、图片 / 附件 token 和引用映射都不得重建。第一笔写入前必须重新 fetch：文档身份不变，且最新 revision 必须同时等于 apply plan 的 `remote_revision_id` 和本次同步首笔采用的 expected revision；不一致时零写入，保留批次并重新 collect。确认通过后，第一笔 `lark-cli docs +update` 携带该 expected revision，后续每笔都携带上一笔写操作返回的 `--revision-id`；revision 冲突时停止。禁止 Markdown overwrite 或整段重建来省事。
+
+基线刷新后立即做机器验收：
+
+```bash
+python3 "${PMAI_HOME:-$HOME/.pmai}/scripts/lark-review.py" verify-sync \
+  --manifest "$REVIEW_DIR/review.json" \
+  --plan "$REVIEW_DIR/apply-plan.json"
+```
+
+`verify-sync` 会重新取得同一 revision 的 Markdown 与 full XML，校验飞书正文的稳定语义投影等于 T，并逐个比较需保留 block 的格式 hash、资源 token 和原引用映射。任何一项不一致都不允许处理评论或 checkpoint；验收回执绑定 ready plan 与最终 revision，checkpoint 先确认飞书仍是该 revision，再复用回执，不重复下载 full XML。
 
 飞书正文回读通过后，按 `lifecycle-handoff.md` 继续已选路径：
 
@@ -174,19 +187,17 @@ apply 成功后，先把已应用的候选结论正式归入对应 `discussion.m
 
 规格已经是确认的目标合同。实现失败时不把规格回退成旧 L，也不把评论标为完成；把实现缺口留在原 lifecycle 恢复。
 
-实现与验证完成后重新查询目标评论及回复，防止处理期间出现新回复。对每条已经满足完成条件的评论，逐条运行受控命令：
+在 seal 前，为每条准备完成的局部评论把面向 PM 的最终回复写入 `resolutions.json:comments[].result_text`；`deferred` 不得预填。实现与验证完成后，一次运行整批受控命令：
 
 ```bash
-python3 "${PMAI_HOME:-$HOME/.pmai}/scripts/lark-review.py" complete-comment \
+python3 "${PMAI_HOME:-$HOME/.pmai}/scripts/lark-review.py" complete-comments \
   --manifest "$REVIEW_DIR/review.json" \
-  --plan "$REVIEW_DIR/apply-plan.json" \
-  --comment-id "<comment_id>" \
-  --result-text "<面向 PM 的结果与落点>"
+  --plan "$REVIEW_DIR/apply-plan.json"
 ```
 
-局部评论必须提供非空 `--result-text`。只有 `whole_document` 评论且飞书接口明确不支持回复时，才可省略 `--result-text` 做 solve-only；命令必须在回执里明确记录未回复原因，不得把它表述成已回复。
+局部评论必须有非空 `result_text`。只有 `whole_document` 评论且飞书接口明确不支持回复时，才可留空做 solve-only；账本必须明确记录未回复原因，不得把它表述成已回复。
 
-`complete-comment` 自己创建结果回复、解决评论并回读最终状态，成功后在同一批次的 `$REVIEW_DIR/comment-actions.json` 原子追加受控回执。回执绑定 batch、ready plan、文档、comment、结果 reply ID / 作者 / 正文 hash、`solver_user_id`、`solved_time` 和最终状态；任一步失败都不伪造完整回执，保留批次供恢复。Agent 不直接调用评论写 API。
+`complete-comments` 只在批次开始和全部写入结束时各读取一次稳定全量评论围栏，中间按 ready plan 顺序回复、解决，并把每笔写响应立即原子写入 `$REVIEW_DIR/comment-actions.json`。回执绑定 batch、ready plan、文档、comment、结果 reply ID / 作者 / 正文 hash、`solver_user_id`、服务端原样返回的 `solved_time` 和最终状态；中断后重跑同一命令按 journal 恢复，不重复回复。接口不返回 `solved_time` 时保持 `null`，改用 solve 写响应 hash + 最终稳定回读形成 `write_ack_and_stable_readback`。旧批次或单项中断才使用 `complete-comment --comment-id` 兼容恢复；`legacy_stable_readback` 仍可读取，但不作为新批次正常入口。Agent 不直接调用评论写 API。
 
 处理范围继续遵守：
 
@@ -213,7 +224,7 @@ python3 "${PMAI_HOME:-$HOME/.pmai}/scripts/lark-review.py" checkpoint \
   --plan "$REVIEW_DIR/apply-plan.json"
 ```
 
-`checkpoint` 只读取 manifest / plan 同目录的 `comment-actions.json`，不接受自由填写 reply、author 或 solver 的参数。它再次执行最终门禁，不能只靠 Agent 口头判断：本地正文必须仍为 sealed T；`lark_published_source_hash` 必须等于 T 的正文 hash；发布 revision 不得早于采集时 R，且飞书当前 revision 必须与本地发布基线相同；`applied / already_satisfied / no_spec_change` 必须有匹配 ready plan 的完成回执且当前已解决，`deferred` 必须仍未解决。当前回复、作者、解决者、解决时间与状态都必须和受控回执一致；PM / 协作者手工回复或解决不能冒充本批完成。任何其它评论的新建、重开、解决、删除、编辑或新回复，即使最终已解决，也停止并重新 collect。
+`checkpoint` 只读取 manifest / plan 同目录的 `comment-actions.json` 和 `remote-verification.json`，不接受自由填写 reply、author 或 solver 的参数。它再次执行最终门禁，不能只靠 Agent 口头判断：本地正文必须仍为 sealed T；`lark_published_source_hash` 必须等于 T 的正文 hash；飞书当前 revision 必须与原生格式验收回执和本地发布基线相同；`applied / already_satisfied / no_spec_change` 必须有匹配 ready plan 的完成回执且当前已解决，`deferred` 必须仍未解决。当前回复、作者、解决者、服务端实际返回的解决时间与状态都必须和受控回执一致；没有时间时验证证据模式和稳定围栏，不要求虚构时间。PM / 协作者手工回复或解决不能冒充本批完成。任何其它评论的新建、重开、解决、删除、编辑或新回复，即使最终已解决，也停止并重新 collect。
 
 如果 checkpoint 因新回复或其它评论竞态拒绝，而当前尝试已经由系统解决了本批评论，先对每个本次系统已解决的 comment ID 执行受批次约束的恢复：
 
@@ -231,16 +242,25 @@ checkpoint 不替代 quick-fix / build 的生命周期验收门禁，也不自�
 
 checkpoint 只记录本轮覆盖到的 revision、评论更新时间、同秒互动 ID 边界和完成时间，不代表未验证事项已完成。只有本批 checkpoint 成功、下游生命周期也完成后才清理 `$REVIEW_DIR`；中断、失败、等待 PM 或待恢复时全部保留，且不得清理仍被新批次 reopen 引用的旧批次。
 
+## 性能纪律
+
+机器处理目标是 10–15 分钟，不含等待 PM 决策、外部限流和下游 build / 浏览器验收。整批只做一次 collect、一次 draft reconcile、一次 seal、一次 apply 和一次最终同步；`remote-native.json` 是后续阶段的缓存底稿，不得为了重新理解格式反复下载整篇文档，也不得为每条评论重新 collect 或重跑生命周期。
+
+`review.json.performance`、`apply-plan.json.performance`、`verify-sync`、`comment-actions.json.performance` 与 checkpoint 分别输出阶段耗时和 API / 全量扫描次数。评论数增加时只能增加 reply / solve 写调用，稳定全量扫描固定为批次首尾各一轮；checkpoint 复用同 revision 的格式验收，只做一次稳定评论围栏和一次 Markdown revision 围栏。超过 15 分钟时先报告最慢阶段和 API 往返数量，再优化分页或远端限流；不能通过减少每轮稳定围栏、跳过 revision 门禁或省略格式验收换速度。
+
 ## 最终回执
 
 ```text
 飞书评审批次：<URL>
 批次现场：已清理 / 已保留 <仓内相对路径与恢复原因>
+目标底稿：remote_native_snapshot / revision <R>
 正文增量：N 处 / 无 / legacy 基线无法精确判断
+远端覆盖：内容覆盖率 <百分比> / 格式保真率 <百分比> / 未归位 <数量>
 评论：读取 N 条，完成 N 条，保留未解决 N 条
 执行路径：quick-fix / active build iteration / design → build
-本地更新：<规格、决定、原型或产品>
+本地更新：<规格、选择性写入的 decisions、原型或产品>
 飞书同步：revision <before> → <after>，回读通过
+机器耗时：<总耗时；超过 15 分钟时列最慢阶段>
 checkpoint：已记录 / 未记录（原因）
 ```
 
@@ -249,7 +269,9 @@ checkpoint：已记录 / 未记录（原因）
 - 飞书正文直接修改默认只是内容证据；只有 PM 本轮明确声明由自己修改 / 已认可，或看过整批差异后一次确认，才成为已确认口径。批注问句默认未确认。
 - 调用本 skill 是对本批完整回流的写入意图；PM 明确限制为只读或不处理评论时，以该限制为准。
 - 不把 `lark-sync` 的整篇回拉模式用于评审回收。
+- 当前飞书原生版本是唯一目标底稿；`common_ancestor_compatible` 只影响差异对齐，不得把 T 切回旧 L。
 - B / L / R 都是只读证据；只有已 seal 的 T 可以通过 apply 修改正式规格正文。
+- 只有产品规则变化写 `decisions.md`；措辞和格式变化不得制造 decision。
 - 下游 quick-fix、design、build 不得绕过 apply 直接编辑本批正式规格正文。
 - 不用原型或代码反推并覆盖规格。
 - 不按评论数量拆出多个并行生命周期。
@@ -266,13 +288,16 @@ checkpoint：已记录 / 未记录（原因）
 | 目标是旧版 `/doc/` 或非 Docx 链接 | 停止，引导迁移到 Docx；不得用 docx 评论接口猜读 |
 | 发布基线缺失 | 输出 legacy 降级，不自动覆盖本地正文 |
 | 已记录 revision 读取失败 | 停止，保留现场并报告版本 / 权限问题 |
-| 公共祖先格式不兼容 | T 从 L 初始化；逐项归入 R 增量，不复制整篇 R |
+| 公共祖先格式不兼容 | 禁止 raw Markdown 三方合并，但 T 仍从 R 的原生快照开始；本地增量逐项归位 |
+| 远端内容或格式覆盖率不足 100% | 保留 `remote-coverage.json` / `remote-preview.md`，未归位清零前不 seal |
+| 大规模 R→T 差异未确认预览 | 停在 draft，PM 明确确认 `remote-preview.md` 后再 seal |
 | 本地与飞书发布后都变化 | 只自动合并不重叠项；同处变化让 PM 拍冲突 |
 | 评论无法精确定位 | 保留 quote 与上下文并标明推断；有歧义时不修改 |
 | 飞书正文作者 / 认可状态无法证明 | 展示整批正文差异，只问一次是否认可；未答前不 seal / apply |
 | seal / apply 发现本地、飞书或评论变化 | 零写入，旧 plan 不再执行但保留批次现场；新建批次重新 collect |
 | 第一次同步前 fetch 的 revision 不等于 apply plan / expected revision | 零写入，保留批次并重新 collect |
-| `complete-comment` 部分写入或回读失败 | 不伪造回执、不写 checkpoint；保留批次并按命令回读结果恢复 |
+| `complete-comments` 部分写入或回读失败 | 不伪造回执、不写 checkpoint；保留整批 journal，原命令重跑恢复且不重复回复；若 solve 写入已有受控响应且随后出现 PM 新回复，`reopen` 先按稳定回读补齐完成证据再受控重开 |
+| 飞书不返回 `solved_time` | 保持时间为空，用写响应 hash + 稳定回读收口；旧回执走 legacy 稳定回读，不伪造时间 |
 | 解决评论后 checkpoint 发现新回复或批次外变化 | 不写 checkpoint；只按本批受控回执 `reopen` 本次完成的评论，再新建持久批次并 `collect --include-solved`，把新回复重新纳入归位 |
 | 下游 quick-fix / build 未完成 | 保持评论未解决，不写 checkpoint |
 | 飞书回写或回读失败 | 本地成果保留，评论未解决，报告可恢复步骤 |

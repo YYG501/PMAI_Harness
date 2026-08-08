@@ -18,6 +18,8 @@ PM-AI-Workflow 生成器仓的演进记录。本文件**只记影响下游业务
 
 ## 未发布
 
+- `fix(lark-review)`: **飞书最新原生版本成为评审回收的唯一底稿，并补齐内容 / 格式防丢与批量收口合同。** collector 固定同一 revision 的 Markdown 与 full XML，把 block ID、样式、资源 token 和引用映射写入 `remote-native.json`；评论采集后的版本围栏只重读轻量 Markdown，不重复下载同 revision 的整篇 XML。`common_ancestor_compatible` 只决定能否做 raw diff，不再允许从旧本地 L 初始化目标。reconcile 为每个 R→T 删除 / 改写建立 `remote-coverage.json`：改写必须保留原生格式，随内容删除格式也要绑定明确依据；内容、格式任一未达到 100% 即阻断 seal，结构性 / 大规模变化强制生成 PM 预览。`decision_routing` 要求每个正文 / 评论来源显式选择不写、新建或 supersede 决定，只有产品规则变化才绑定 `decisions.md`。apply plan 和回执输出 `target_base`、基准 revision、覆盖率和未归位数量；精细写回后 `verify-sync` 逐 block 验证语义投影、格式 hash、资源 token 与引用映射。新 `complete-comments` 在整批首尾各做一次稳定全量评论围栏，中间逐笔持久化 reply / solve 写回执，中断重跑不重复回复；接口缺 `solved_time` 时保持 null。checkpoint 复用同 ready plan、同 revision 的格式验收，不再重复 full XML 和第二轮评论稳定扫描。各阶段记录耗时、API 往返和全量扫描次数，机器路径目标 10–15 分钟。
+
 - `fix(harness)`: **初始化与 CI 不再依赖开发机隐含环境。** `init-project.sh` 在写入目标目录前校验 Git author / committer 身份，缺失时给出可直接执行的配置命令；初始 commit 的其它失败不再吞掉 Git 原始报错，并明确保留文件后的恢复步骤。GitHub Actions 显式配置测试身份；负向内容断言统一使用系统自带 `grep`，避免 runner 缺少 `rg` 时把“命令不存在”误判为“未发现违规”。
 
 - `fix(harness)`: **补齐第一优先级的验证可信度与失败恢复。** `tests/run-all.sh` 现在通过标准库 runner 为每个 suite 设置独立超时，严格校验唯一 `Passed / Failed` 摘要和退出码一致性；摘要缺失、零用例、超时或 runner 异常都会失败关闭。全量入口额外实际运行全部 static / session skill eval，默认明确列出未配置 runner / judge 的 skip，`PMAI_REQUIRE_SESSION_EVALS=1` 可把缺失外部能力升级为 gate failure。生命周期回归补齐 `ready_to_build → building` 正向开工、`final_check → merge → docs_pending → resume` 不重复验收 / 合入，以及 cleanup 失败恢复与重复执行幂等。`land-work.sh` 在 main 落地状态、计时、暂存或 commit 失败时 abort 半合并态并保留隔离环境；legacy `close-work.sh` 的 commit 失败会恢复 `.work-meta.json`；待清理队列改为原子替换，损坏 JSON 不再被当作空队列覆盖。
