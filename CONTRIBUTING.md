@@ -22,16 +22,14 @@ For install and exposure changes, also run:
 
 ```bash
 bash bin/pmai --help
-bash bin/pmai status
-bash bin/pmai doctor
+bash bin/pmai doctor --check
 ```
 
 If you want to test the installed user-facing CLI rather than this repo-local
 copy, run:
 
 ```bash
-~/.pmai/bin/pmai status
-~/.pmai/bin/pmai doctor
+~/.pmai/bin/pmai doctor --check
 ```
 
 ## Reporting Problems

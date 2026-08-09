@@ -19,9 +19,10 @@ Subcommands:
                        Flags: --stable | --to <tag>
   uninstall            Remove PMAI install
                        Flags: --force | --local <dir> (清理遗留项目副本)
-  status               Show install state + version diff
-  doctor               Run integrity self-check
-                       Flags: [--browser-smoke]
+  status               Deprecated alias for doctor --check
+                       Flags: [--json]
+  doctor               Check or repair framework and current consumer repo
+                       Flags: [--check] | --repair | [--json] | [--browser-smoke]
   update-check         Check if newer stable tag available (silent if up-to-date)
   whats-new            Show CHANGELOG diff since last upgrade
                        Flags: --from <ver> [--to <ver>] [--max-lines N] [--full]
@@ -38,7 +39,7 @@ Examples:
   pmai install                              # Global install
   pmai upgrade                              # Pull main
   pmai upgrade --stable                     # Jump to latest tag
-  pmai status                               # Show current state
+  pmai doctor --check                       # Read-only health check
   pmai memory status                        # Show personal experience state
 
 Source: $BIN_DIR
@@ -74,7 +75,7 @@ case "${1:-}" in
     SUB_BIN="$BIN_DIR/pmai-$SUB"
     if [ ! -x "$SUB_BIN" ]; then
       echo "❌ pmai-$SUB 不存在或不可执行: $SUB_BIN" >&2
-      echo "   (PMAI install 损坏？尝试 pmai doctor)" >&2
+      echo "   (PMAI install 损坏？尝试 pmai doctor --check)" >&2
       exit 1
     fi
     exec "$SUB_BIN" "$@"

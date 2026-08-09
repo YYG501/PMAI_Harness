@@ -117,10 +117,10 @@ test_kimi_dispatch_is_scoped_and_maps_write_path() {
 }
 
 test_kimi_lifecycle_surface_is_complete() {
-  start_test "K4: install/upgrade/uninstall/doctor/status 覆盖 Kimi 宿主面"
+  start_test "K4: 生命周期与 doctor 覆盖 Kimi，status 只作兼容包装"
   local file
 
-  for file in pmai-install pmai-upgrade pmai-uninstall pmai-doctor pmai-status; do
+  for file in pmai-install pmai-upgrade pmai-uninstall pmai-doctor; do
     assert_file_contains "$REPO_ROOT/bin/$file" "KIMI_CODE_HOME" "$file should honor KIMI_CODE_HOME" || return
     assert_file_contains "$REPO_ROOT/bin/$file" "KIMI_SKILLS" "$file should manage Kimi skills" || return
   done
@@ -128,7 +128,8 @@ test_kimi_lifecycle_surface_is_complete() {
   assert_file_contains "$REPO_ROOT/bin/pmai-upgrade" "manage-kimi-hooks.py" "upgrade should refresh Kimi hooks" || return
   assert_file_contains "$REPO_ROOT/bin/pmai-uninstall" "manage-kimi-hooks.py" "uninstall should remove only managed Kimi hooks" || return
   assert_file_contains "$REPO_ROOT/bin/pmai-doctor" "Kimi Code PMAI-managed hooks" "doctor should validate Kimi hooks" || return
-  assert_file_contains "$REPO_ROOT/bin/pmai-status" "Kimi native command" "status should show Kimi command syntax" || return
+  assert_file_contains "$REPO_ROOT/bin/pmai-status" "pmai-doctor" "status should delegate Kimi health to doctor" || return
+  assert_file_contains "$REPO_ROOT/bin/pmai-status" "--check" "status should use read-only doctor mode" || return
   pass_test
 }
 

@@ -148,7 +148,7 @@ _pmai_target_has_project_marker() {
 if [ -d "$TARGET_DIR" ] && _pmai_target_has_project_marker; then
   echo "❌ 目标目录已经接入 PMAI: $TARGET_DIR" >&2
   echo "   已阻止重复初始化，避免覆盖 PRODUCT.md / AGENTS.md / host 配置。" >&2
-  echo "   下一步：在该目录使用 /pmai-status；需要重整方向走 /pmai-direction；框架升级后用 install-project-hooks.sh 刷新项目宿主配置。" >&2
+  echo "   下一步：在该目录使用 /pmai-status；需要重整方向走 /pmai-direction；框架与消费仓健康检查使用 /pmai-doctor。" >&2
   exit 1
 fi
 

@@ -42,7 +42,7 @@ test_global_install_mutators_use_shared_lock_helper() {
 }
 
 test_global_install_lock_serializes_doctor_and_uninstall() {
-  start_test "global install lock: doctor and uninstall serialize one global install"
+  start_test "global install lock: doctor repair and uninstall serialize one global install"
   local t framework fake_bin doctor_pid uninstall_pid real_python rc=0
   t=$(mktemp -d "${TMPDIR:-/tmp}/pmai-global-install-lock.XXXXXX")
   framework="$t/framework"
@@ -123,7 +123,7 @@ EOF
       wait "$pid" 2>/dev/null || :
     }
 
-    "$REPO_ROOT/bin/pmai-doctor" > "$t/doctor.out" 2>&1 &
+    "$REPO_ROOT/bin/pmai-doctor" --repair > "$t/doctor.out" 2>&1 &
     doctor_pid=$!
     for _ in $(seq 1 100); do
       [ -e "$FAKE_GIT_ENTERED" ] && break
@@ -191,13 +191,19 @@ test_global_mutators_fail_closed_when_lock_verification_fails() {
 
   t=$(mktemp -d "${TMPDIR:-/tmp}/pmai-global-install-lock-invalid.XXXXXX")
   install="$t/install"
-  mkdir -p "$install" "$t/home"
+  mkdir -p "$install/bin" "$install/scripts/_lib" "$t/home"
+  cp "$REPO_ROOT/bin/pmai-doctor" "$install/bin/pmai-doctor"
+  cp "$REPO_ROOT/scripts/_lib/global-install-lock.sh" \
+    "$install/scripts/_lib/global-install-lock.sh"
+  cp "$REPO_ROOT/scripts/_lib/global_install_lock.py" \
+    "$install/scripts/_lib/global_install_lock.py"
+  chmod +x "$install/bin/pmai-doctor"
   printf 'keep-me\n' > "$install/sentinel.txt"
 
   out=$(HOME="$t/home" PMAI_HOME="$install" \
     PMAI_GLOBAL_INSTALL_LOCK_PATH="$t/global-install.lock" \
     PMAI_GLOBAL_INSTALL_LOCK_FD=999999 \
-    "$REPO_ROOT/bin/pmai-doctor" 2>&1)
+    "$REPO_ROOT/bin/pmai-doctor" --repair 2>&1)
   rc=$?
   if [ "$rc" != "2" ] || ! echo "$out" | grep -q "全局安装锁无法验证"; then
     _fail "doctor should stop on invalid inherited lock fd: rc=$rc out=$out"

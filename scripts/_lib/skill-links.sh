@@ -43,6 +43,48 @@ pmai_prune_managed_hidden_skill_links() {
   echo "$count"
 }
 
+pmai_count_managed_hidden_skill_links() {
+  local src_skills="$1"
+  local dst_skills="$2"
+  local count=0
+  local skill_dir skill_name dst
+
+  for skill_dir in "$src_skills"/*/; do
+    [ -d "$skill_dir" ] || continue
+    skill_name=$(basename "$skill_dir")
+    case "$skill_name" in
+      _internal|_shared) continue ;;
+    esac
+    pmai_skill_is_host_exposed "$skill_name" && continue
+    case "$skill_name" in
+      pmai-*) dst="$dst_skills/$skill_name" ;;
+      *)      dst="$dst_skills/pmai-$skill_name" ;;
+    esac
+    [ -L "$dst" ] || continue
+    [ "$(readlink "$dst")" = "${skill_dir%/}" ] || continue
+    count=$((count + 1))
+  done
+
+  echo "$count"
+}
+
+pmai_skill_link_is_managed() {
+  local src_skills="${1%/}"
+  local dst="$2"
+  local target relative
+
+  [ -L "$dst" ] || return 1
+  target=$(readlink "$dst") || return 1
+  case "$target" in
+    "$src_skills"/*) relative="${target#"$src_skills"/}" ;;
+    *) return 1 ;;
+  esac
+  case "$relative" in
+    ""|.|..|*/*) return 1 ;;
+  esac
+  return 0
+}
+
 pmai_shared_link_is_managed() {
   local src="$1"
   local dst="$2"

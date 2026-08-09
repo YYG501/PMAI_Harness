@@ -27,6 +27,7 @@ load_skill_link_policy() {
   # source 不会删除目标版本未定义的函数。先清空当前进程中的策略函数，避免
   # `--to` 降级时继续沿用新版本策略；旧 helper 没有暴露函数时恢复旧版全公开语义。
   unset -f pmai_skill_is_host_exposed pmai_prune_managed_hidden_skill_links \
+    pmai_count_managed_hidden_skill_links pmai_skill_link_is_managed \
     2>/dev/null || true
   if [ -f "$helper" ]; then
     source "$helper" || return 1
@@ -512,7 +513,8 @@ echo "════════════════════════�
 echo ""
 echo "ℹ️  全局升级只更新框架源和宿主 skill。"
 echo "   已有消费仓的 Claude Code / Codex 项目 hooks 不会被静默改写。"
-echo "   请在各消费仓运行 pmai status 检查；需要刷新时，在仓内运行："
+echo "   请在各消费仓使用 /pmai-doctor（Codex: \$pmai-doctor；Kimi: /skill:pmai-doctor）检查。"
+echo "   确认需要刷新后，在仓内运行："
 echo "   bash \"$PMAI_HOME/scripts/install-project-hooks.sh\""
 
 # stash 恢复提示

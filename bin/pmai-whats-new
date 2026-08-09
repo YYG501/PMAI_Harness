@@ -107,4 +107,4 @@ fi
 
 echo ""
 echo "════════════════════════════════════════════════════════════"
-echo "Happy shipping! 跑 pmai status 看当前状态。"
+echo "升级内容已展示。需要检查框架和当前消费仓时，运行 pmai doctor --check。"

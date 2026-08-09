@@ -14,6 +14,7 @@ Usage:
   bash scripts/install-opencode-commands.sh --global
   bash scripts/install-opencode-commands.sh --global --check
   bash scripts/install-opencode-commands.sh --project <repo-dir>
+  bash scripts/install-opencode-commands.sh --project <repo-dir> --check
 
 Env override:
   PMAI_HOME=<path>              # Override default ~/.pmai/
@@ -106,7 +107,7 @@ description: Run PMAI /${exposed_name} workflow
 
 1. 定位 PMAI_HOME：优先使用环境变量 \`PMAI_HOME\`；没有则使用 \`~/.pmai\`。
 2. 如果当前项目根目录有 \`AGENTS.md\`，先遵守其中的 PMAI Host Mapping 和 Startup 规则。
-3. 如果当前命令不是 \`/pmai-init-project\` 或 \`/pmai-upgrade\`，先运行 \`bash -lc '${preamble_env}source "\${PMAI_HOME:-\$HOME/.pmai}/scripts/skill-preamble.sh"'\`。如果输出 \`PMAI_PROJECT_INITIALIZED: 0\`，停止当前 skill，只引导 PM 先发 \`/pmai-init-project\`。 \`/pmai-humanize\` 仅在处理粘贴文本或仓外文件、且不写 PMAI 项目产物时可继续；要读取或改写仓内文档时同样停止。
+3. 如果当前命令不是 \`/pmai-init-project\`、\`/pmai-doctor\` 或 \`/pmai-upgrade\`，先运行 \`bash -lc '${preamble_env}source "\${PMAI_HOME:-\$HOME/.pmai}/scripts/skill-preamble.sh"'\`。如果输出 \`PMAI_PROJECT_INITIALIZED: 0\`，停止当前 skill，只引导 PM 先发 \`/pmai-init-project\`。 \`/pmai-humanize\` 仅在处理粘贴文本或仓外文件、且不写 PMAI 项目产物时可继续；要读取或改写仓内文档时同样停止。
 4. 完整读取 \`\$PMAI_HOME/skills/${skill_name}/SKILL.md\`。
 5. 如果该 \`SKILL.md\` 引用 \`_shared/...\`、\`references/...\`、\`templates/...\` 或脚本，按文件路径继续读取必要内容。
 6. 严格按 skill workflow 执行；不要只凭本 command 或记忆模拟。
@@ -114,7 +115,7 @@ description: Run PMAI /${exposed_name} workflow
 
 OpenCode 不使用 Codex hooks；涉及保护时以 OpenCode permission、PMAI git hooks、build contract 和 changed-path review 为准。
 
-如果 skill 文件不存在，先说明 PMAI 未安装或安装损坏，并建议运行 \`pmai doctor\`。
+如果 skill 文件不存在，先说明 PMAI 未安装或安装损坏，并建议运行 \`pmai doctor --check\`。
 EOF
 }
 
@@ -186,6 +187,35 @@ check_commands_in_dir() {
   return 0
 }
 
+check_project_opencode_json() {
+  local json_path="$1/opencode.json"
+
+  [ -f "$json_path" ] && [ ! -L "$json_path" ] || return 1
+  JSON_PATH="$json_path" python3 - <<'PY'
+import json
+import os
+import sys
+
+try:
+    with open(os.environ["JSON_PATH"], encoding="utf-8") as handle:
+        data = json.load(handle)
+except (OSError, json.JSONDecodeError):
+    raise SystemExit(1)
+if not isinstance(data, dict):
+    raise SystemExit(1)
+instructions = data.get("instructions")
+if isinstance(instructions, str):
+    instructions = [instructions]
+if not isinstance(instructions, list) or not all(
+    item in instructions for item in ("AGENTS.md", "CLAUDE.md")
+):
+    raise SystemExit(1)
+permission = data.get("permission")
+if not isinstance(permission, dict) or "edit" not in permission or "bash" not in permission:
+    raise SystemExit(1)
+PY
+}
+
 merge_project_opencode_json() {
   local project_dir="$1"
   local json_path="$project_dir/opencode.json"
@@ -250,8 +280,19 @@ case "$MODE" in
     ;;
   project)
     if [ "$CHECK_MODE" = "1" ]; then
-      echo "❌ --check 目前只支持 --global" >&2
-      exit 2
+      [ -d "$PROJECT_DIR" ] || {
+        echo "DRIFT: OpenCode project root does not exist" >&2
+        exit 1
+      }
+      PROJECT_DIR="$(cd "$PROJECT_DIR" && pwd -P)"
+      COMMAND_DIR="$PROJECT_DIR/.opencode/commands"
+      if check_commands_in_dir "$COMMAND_DIR" \
+        && check_project_opencode_json "$PROJECT_DIR"; then
+        echo "OK: OpenCode project entries match current PMAI contract"
+        exit 0
+      fi
+      echo "DRIFT: OpenCode project entries differ from current PMAI contract" >&2
+      exit 1
     fi
     mkdir -p "$PROJECT_DIR"
     PROJECT_DIR="$(cd "$PROJECT_DIR" && pwd)"

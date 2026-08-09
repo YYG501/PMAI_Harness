@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # install-hooks.sh — 给已 init 的项目（或本仓自身）补装 pre-commit hook。
 # 用法（在项目根运行）：
-#   bash $HOME/.pmai/scripts/install-hooks.sh
+#   bash $HOME/.pmai/scripts/install-hooks.sh [--check]
 # 或在框架仓里：
 #   bash scripts/install-hooks.sh
 #
@@ -16,6 +16,19 @@
 
 set -euo pipefail
 
+MODE="install"
+case "${1:-}" in
+  "") ;;
+  --check) MODE="check" ;;
+  --help|-h)
+    echo "Usage: install-hooks.sh [--check]"
+    echo "  --check  Read-only comparison; exit 0 when current, 1 when stale or missing."
+    exit 0
+    ;;
+  *) echo "❌ unknown flag: $1" >&2; exit 2 ;;
+esac
+[ "$#" -le 1 ] || { echo "❌ 参数过多" >&2; exit 2; }
+
 # 识别 git common dir（worktree 安全）
 GIT_COMMON_DIR="$(git rev-parse --git-common-dir 2>/dev/null)"
 if [ -z "$GIT_COMMON_DIR" ]; then
@@ -29,7 +42,9 @@ case "$GIT_COMMON_DIR" in
 esac
 
 HOOKS_DIR="$GIT_COMMON_DIR/hooks"
-mkdir -p "$HOOKS_DIR"
+if [ "$MODE" = "install" ]; then
+  mkdir -p "$HOOKS_DIR"
+fi
 
 # 找模板：3 candidate 兼容老 / 新 / I-mini 跨机器场景
 #   1. $SCRIPT_DIR/../../templates/git-hooks/  （老消费仓自带副本：$HOME/.pmai/scripts/install-hooks.sh）
@@ -54,6 +69,15 @@ if [ -z "$TMPL" ]; then
 fi
 
 DEST="$HOOKS_DIR/pre-commit"
+
+if [ "$MODE" = "check" ]; then
+  if [ -f "$DEST" ] && [ ! -L "$DEST" ] && [ -x "$DEST" ] && cmp -s "$TMPL" "$DEST"; then
+    echo "OK: PMAI pre-commit hook matches current template"
+    exit 0
+  fi
+  echo "DRIFT: PMAI pre-commit hook is missing, stale, non-executable, or a symlink" >&2
+  exit 1
+fi
 
 if [ -f "$DEST" ]; then
   # 已是同模板内容则跳过

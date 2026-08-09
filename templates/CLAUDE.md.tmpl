@@ -6,8 +6,10 @@
 
 1. 读取本文件了解项目上下文。
 2. 运行 `PMAI_PREAMBLE_READ_ONLY=1; export PMAI_PREAMBLE_READ_ONLY; source "${PMAI_HOME:-$HOME/.pmai}/scripts/skill-preamble.sh"; unset PMAI_PREAMBLE_READ_ONLY` 只读检测当前工作位置。
-3. Claude Code / Codex 运行 `bash "${PMAI_HOME:-$HOME/.pmai}/scripts/install-project-hooks.sh" --check` 只读检查项目 hooks；缺失或漂移时先向 PM 报告，再运行不带 `--check` 的同一命令刷新，不能只按配置文件存在就声称已更新。
+3. Claude Code / Codex 运行 `bash "${PMAI_HOME:-$HOME/.pmai}/scripts/install-project-hooks.sh" --check` 只读检查项目 hooks；缺失或漂移时先向 PM 报告，得到确认后才运行不带 `--check` 的同一命令刷新，不能只按配置文件存在就声称已更新。
 4. 运行当前宿主的 status 入口了解当前模块和下一步：Claude Code / OpenCode 使用 `/pmai-status`，Codex 使用 `$pmai-status`，Kimi Code 使用 `/skill:pmai-status`。
+
+框架、宿主入口或当前消费仓的文件归位、原型/实现入口与活动工作是否健康，只在 PM 要求诊断时使用 `/pmai-doctor`（Codex：`$pmai-doctor`；Kimi Code：`/skill:pmai-doctor`）。它不属于正常产品推进循环，默认只读；升级、修复和文件迁移必须另行确认。
 
 > Kimi Code 原生入口统一为 `/skill:pmai-*`，例如 `/skill:pmai-design`、`/skill:pmai-build`；本文其余 `/pmai-*` 写法是跨宿主工作流名称，在 Kimi 会话中按此前缀映射执行。
 
@@ -60,6 +62,7 @@
 - `/pmai-design <模块>` — 讨论、收范围、写模块三件套。
 - `/pmai-build <模块或功能文档>` — 静默读取项目级构建类型和默认验收，在一张卡中展示推荐的工作环境、构建工具及全部有效选项；PM 一次确认后构建、迭代、最终检查并自动收尾。
 - `/pmai-status` — 只读当前现状并建议下一步，不自动改变状态。
+- `/pmai-doctor` — 按需只读检查全局框架、宿主入口，以及当前消费仓的文件归位、mockups、正式实现入口和活动工作；不代替 status，不自动升级、修复或迁移文件。
 - 已有 `building / iterating / final_check` 时，“启动看看”“还有什么问题”“继续改当前结果”等自然语言继续当前 `/pmai-build`。先读取 `status-view.py --execution-context` 并重新编译 context pack；除非 PM 明确开启无关新工作，否则不转成无范围通用 QA。多个 active build 只问模块，不猜。
 - `/pmai-doc-writing` — 介绍型文档成文器；产品介绍、功能清单、优势说明、一页纸、汇报材料默认落 `docs/deliverables/`。
 - `/pmai-feedback` — 只读复盘当前完整会话，识别设计不一致与使用卡点，生成带原始会话文件地址的 PMAI 框架优化 Prompt；当前只有 Codex 的精确会话定位已验证，其它宿主不得猜测定位。

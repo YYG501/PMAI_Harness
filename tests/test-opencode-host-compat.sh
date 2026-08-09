@@ -257,14 +257,62 @@ test_project_opencode_config_is_lightweight() {
   pass_test
 }
 
+test_project_opencode_check_is_read_only_and_detects_drift() {
+  start_test "T5b: 项目级 OpenCode --check 只读检测 command 与配置漂移"
+
+  local base pmai_home project command before after rc
+  base=$(mktemp -d)
+  pmai_home=$(make_fake_pmai_home "$base")
+  project="$base/project"
+  mkdir -p "$project"
+  PMAI_HOME="$pmai_home" bash "$INSTALL_OPENCODE" --project "$project" >/dev/null 2>&1 || {
+    _fail "project OpenCode fixture install failed"
+    rm -rf "$base"
+    return
+  }
+  before=$(find "$project" -type f -exec shasum -a 256 {} \; | sort)
+  if ! PMAI_HOME="$pmai_home" bash "$INSTALL_OPENCODE" --project "$project" --check >/dev/null 2>&1; then
+    _fail "current project OpenCode entries should pass --check"
+    rm -rf "$base"
+    return
+  fi
+  after=$(find "$project" -type f -exec shasum -a 256 {} \; | sort)
+  if [ "$before" != "$after" ]; then
+    _fail "project OpenCode --check modified files"
+    rm -rf "$base"
+    return
+  fi
+
+  command="$project/.opencode/commands/pmai-build.md"
+  printf '\nlocal drift\n' >> "$command"
+  PMAI_HOME="$pmai_home" bash "$INSTALL_OPENCODE" --project "$project" --check >/dev/null 2>&1
+  rc=$?
+  if [ "$rc" != "1" ]; then
+    _fail "modified project command should return drift rc=1, got $rc"
+    rm -rf "$base"
+    return
+  fi
+  PMAI_HOME="$pmai_home" bash "$INSTALL_OPENCODE" --project "$project" >/dev/null 2>&1
+  printf '{"instructions": [], "permission": {}}\n' > "$project/opencode.json"
+  PMAI_HOME="$pmai_home" bash "$INSTALL_OPENCODE" --project "$project" --check >/dev/null 2>&1
+  rc=$?
+  if [ "$rc" = "1" ]; then
+    pass_test
+  else
+    _fail "invalid project opencode.json should return drift rc=1, got $rc"
+  fi
+  rm -rf "$base"
+}
+
 test_cli_scripts_reference_opencode_commands() {
-  start_test "T6: CLI install/upgrade/uninstall/status/doctor 接入 OpenCode commands"
+  start_test "T6: CLI 生命周期与 doctor 接入 OpenCode，status 只作兼容包装"
 
   assert_file_contains "$REPO_ROOT/bin/pmai-install" "install-opencode-commands.sh" "install should generate OpenCode commands" || return
   assert_file_contains "$REPO_ROOT/bin/pmai-upgrade" "install-opencode-commands.sh" "upgrade should refresh OpenCode commands" || return
   assert_file_contains "$REPO_ROOT/bin/pmai-uninstall" "OpenCode slash commands removed" "uninstall should clean OpenCode commands" || return
-  assert_file_contains "$REPO_ROOT/bin/pmai-status" "OpenCode slash commands" "status should report OpenCode commands" || return
   assert_file_contains "$REPO_ROOT/bin/pmai-doctor" "OpenCode slash commands" "doctor should check OpenCode commands" || return
+  assert_file_contains "$REPO_ROOT/bin/pmai-status" "pmai-doctor" "status should delegate health checks to doctor" || return
+  assert_file_contains "$REPO_ROOT/bin/pmai-status" "--check" "status should use the read-only doctor mode" || return
   assert_file_contains "$INIT_PROJECT_SH" "install-opencode-commands.sh" "init-project should install project OpenCode commands" || return
   pass_test
 }
@@ -284,6 +332,7 @@ test_global_opencode_commands_are_thin_routes
 test_global_opencode_check_detects_and_repairs_drift
 test_global_opencode_install_rejects_file_paths
 test_project_opencode_config_is_lightweight
+test_project_opencode_check_is_read_only_and_detects_drift
 test_cli_scripts_reference_opencode_commands
 test_template_and_scripts_do_not_add_cursor
 

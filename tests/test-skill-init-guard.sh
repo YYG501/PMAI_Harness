@@ -9,7 +9,7 @@ REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
 is_project_skill() {
   case "$1" in
-    init-project|pmai-upgrade) return 1 ;;
+    init-project|doctor|pmai-upgrade) return 1 ;;
     *) return 0 ;;
   esac
 }
@@ -44,7 +44,7 @@ test_project_skills_guard_uninitialized_repos() {
 }
 
 test_allowed_entrypoint_exceptions_are_explicit() {
-  start_test "init-project / upgrade remain explicit exceptions"
+  start_test "init-project / doctor / upgrade remain explicit exceptions"
 
   if grep -q 'PMAI_PROJECT_INITIALIZED: 0' "$REPO_ROOT/skills/init-project/SKILL.md"; then
     _fail "init-project should be able to run before PMAI initialization"
@@ -52,6 +52,12 @@ test_allowed_entrypoint_exceptions_are_explicit() {
   fi
   if grep -q 'PMAI_PROJECT_INITIALIZED: 0' "$REPO_ROOT/skills/pmai-upgrade/SKILL.md"; then
     _fail "pmai-upgrade should not depend on consumer repo initialization"
+    return
+  fi
+  if grep -q 'PMAI_PROJECT_INITIALIZED: 0' "$REPO_ROOT/skills/doctor/SKILL.md" \
+    || ! grep -q '不执行项目 preamble' "$REPO_ROOT/skills/doctor/SKILL.md" \
+    || ! grep -q '普通 Git 仓或未初始化目录' "$REPO_ROOT/skills/doctor/SKILL.md"; then
+    _fail "pmai-doctor should explicitly remain available outside initialized consumers"
     return
   fi
   if ! grep -q '仓外文件' "$REPO_ROOT/skills/humanize/SKILL.md" \
@@ -70,6 +76,7 @@ test_opencode_command_template_guards_uninitialized_repos() {
   assert_file_contains "$file" 'skill-preamble.sh' "OpenCode command should run PMAI preamble" || return
   assert_file_contains "$file" 'PMAI_PROJECT_INITIALIZED: 0' "OpenCode command should stop uninitialized projects" || return
   assert_file_contains "$file" '/pmai-init-project' "OpenCode command should guide initialization" || return
+  assert_file_contains "$file" '/pmai-doctor' "OpenCode doctor command should skip project preamble" || return
   pass_test
 }
 

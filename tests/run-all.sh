@@ -20,6 +20,7 @@ SUITES=(
   test-measure-tthw.sh
   test-init-project.sh
   test-project-definition.sh
+  test-consumer-doctor.sh
   test-project-type.sh
   test-project-sections-root.sh
   test-private-onboarding.sh

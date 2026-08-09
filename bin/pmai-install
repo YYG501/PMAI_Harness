@@ -62,6 +62,7 @@ load_target_skill_link_policy() {
   local helper="$1"
 
   unset -f pmai_skill_is_host_exposed pmai_prune_managed_hidden_skill_links \
+    pmai_count_managed_hidden_skill_links pmai_skill_link_is_managed \
     2>/dev/null || true
   if [ -f "$helper" ]; then
     source "$helper"

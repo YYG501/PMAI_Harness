@@ -571,7 +571,7 @@ PY
 }
 
 test_status_reports_current_project_hook_drift() {
-  start_test "T7: pmai status 真只读报告消费仓 hook 漂移且不误判同名脚本"
+  start_test "T7: status 兼容包装只读委托 doctor 检查消费仓 hooks"
 
   local base repo out
   base=$(mktemp -d)
@@ -586,10 +586,9 @@ test_status_reports_current_project_hook_drift() {
     PMAI_STATE="$base/status-state" \
     CODEX_HOME="$base/codex-home" KIMI_CODE_HOME="$base/kimi-home" \
     OPENCODE_CONFIG_DIR="$base/opencode" bash "$REPO_ROOT/bin/pmai-status" 2>&1)
-  if ! echo "$out" | grep -q "Current project hooks" \
-    || ! echo "$out" | grep -q "missing/drifted" \
-    || ! echo "$out" | grep -q "install-project-hooks.sh"; then
-    _fail "status should report project hook drift and exact repair command: $out"
+  if ! echo "$out" | grep -q "pmai status 已并入 pmai doctor --check" \
+    || ! echo "$out" | grep -q "Current consumer project hooks need refresh"; then
+    _fail "status compatibility wrapper should report consumer hook drift through doctor: $out"
     rm -rf "$base"
     return
   fi
@@ -609,8 +608,8 @@ test_status_reports_current_project_hook_drift() {
     PMAI_STATE="$base/status-state" \
     CODEX_HOME="$base/codex-home" KIMI_CODE_HOME="$base/kimi-home" \
     OPENCODE_CONFIG_DIR="$base/opencode" bash "$REPO_ROOT/bin/pmai-status" 2>&1)
-  if ! echo "$out" | grep -q "hooks:.*match current framework"; then
-    _fail "status should report refreshed project hooks as current: $out"
+  if ! echo "$out" | grep -q "Current consumer project hooks match the installed framework"; then
+    _fail "status compatibility wrapper should report refreshed hooks as current: $out"
     rm -rf "$base"
     return
   fi
@@ -897,41 +896,28 @@ test_codex_hook_wrapper_rejects_host_override() {
   pass_test
 }
 
-test_status_normalizes_relative_host_roots() {
-  start_test "T11: pmai status 在内部操作前归一化全部 Host 根目录"
+test_status_delegates_relative_target_to_its_doctor() {
+  start_test "T11: pmai status 把相对 PMAI_HOME 交给目标 doctor"
 
-  local base fake_home install expected_install out
+  local base fake_home install out rc
   base=$(mktemp -d)
   fake_home="$base/home"
   install="$base/install"
-  mkdir -p "$fake_home" "$install/.git" "$install/skills/design" \
-    "$install/codex-home/skills" "$install/kimi-home/skills" "$install/opencode/commands" \
-    "$base/codex-home/skills" "$base/kimi-home/skills" "$base/opencode/commands"
-  printf '%s\n' 'fixture' > "$install/VERSION"
-  touch "$install/codex-home/skills/pmai-design"
-  touch "$install/kimi-home/skills/pmai-design"
-  touch "$install/opencode/commands/pmai-design.md"
-  touch "$base/codex-home/skills/pmai-stale-only"
-  touch "$base/kimi-home/skills/pmai-stale-only"
-  touch "$base/opencode/commands/pmai-stale-only.md"
-  expected_install=$(cd "$install" && pwd -P)
+  mkdir -p "$fake_home" "$install/bin"
+  cat > "$install/bin/pmai-doctor" <<'SH'
+#!/usr/bin/env bash
+printf 'TARGET_RELATIVE:%s:%s\n' "$PMAI_HOME" "$*"
+exit 23
+SH
+  chmod +x "$install/bin/pmai-doctor"
 
   out=$(cd "$base" && HOME="$fake_home" PMAI_HOME=install \
     PMAI_STATE="$base/status-state" \
     CODEX_HOME=codex-home KIMI_CODE_HOME=kimi-home \
     OPENCODE_CONFIG_DIR=opencode bash "$REPO_ROOT/bin/pmai-status" 2>&1)
-  if ! echo "$out" | grep -Fq "Status target:  $expected_install"; then
-    _fail "status 应将相对 PMAI_HOME 归一化为绝对路径: $out"
-    rm -rf "$base"
-    return
-  fi
-  if ! echo "$out" | grep -q "Codex drift:.*stale/missing entries" \
-    || ! echo "$out" | grep -q "Kimi Code drift:.*stale/missing entries" \
-    || ! echo "$out" | grep -q "OpenCode command drift:.*stale/missing entries" \
-    || echo "$out" | grep -q "Codex drift:.*matches current skills" \
-    || echo "$out" | grep -q "Kimi Code drift:.*matches current skills" \
-    || echo "$out" | grep -q "OpenCode command drift:.*matches current skills"; then
-    _fail "相对 Host 根目录不应因 PMAI_HOME 操作改变解析基准: $out"
+  rc=$?
+  if [ "$rc" != "23" ] || ! echo "$out" | grep -q 'TARGET_RELATIVE:install:--check'; then
+    _fail "status 应保留 logical PMAI_HOME 并委托目标 doctor: rc=$rc out=$out"
     rm -rf "$base"
     return
   fi
@@ -941,7 +927,7 @@ test_status_normalizes_relative_host_roots() {
 }
 
 test_status_rejects_unreadable_host_root() {
-  start_test "T12: pmai status 对不可进入的 Host 根目录明确失败"
+  start_test "T12: pmai status 对不可用目标 doctor 失败关闭"
 
   local base install out rc
   base=$(mktemp -d)
@@ -959,8 +945,8 @@ test_status_rejects_unreadable_host_root() {
     rm -rf "$base"
     return
   fi
-  if ! echo "$out" | grep -q "PMAI_HOME 无法读取或进入"; then
-    _fail "不可进入的 PMAI_HOME 应输出明确错误: $out"
+  if ! echo "$out" | grep -q "目标 PMAI doctor 缺失或不可执行"; then
+    _fail "不可用目标必须明确报告 doctor 缺失或不可执行: $out"
     rm -rf "$base"
     return
   fi
@@ -1442,7 +1428,7 @@ test_status_reports_current_project_hook_drift
 test_project_hook_installer_rejects_invalid_event_atomically
 test_project_hook_installer_rolls_back_write_failure_and_preserves_modes
 test_codex_hook_wrapper_rejects_host_override
-test_status_normalizes_relative_host_roots
+test_status_delegates_relative_target_to_its_doctor
 test_status_rejects_unreadable_host_root
 test_project_hook_installer_preserves_concurrent_second_host_edit
 test_project_hook_installer_rolls_back_symlink_retarget

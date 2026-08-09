@@ -1,363 +1,51 @@
 #!/usr/bin/env bash
-# pmai-status — Show current PMAI install state
-#
-# 显示：
-#   - 全局安装状态（~/.pmai/ 装了没）
-#   - 当前 VERSION + 远程 main HEAD diff（多少 commit 落后）
-#   - skill / slash command 暴露清单
-#   - 从消费仓运行时，只读检查 Claude Code / Codex 项目 hooks 漂移
+# pmai-status — Compatibility alias for the read-only doctor contract.
 
-set -uo pipefail
+set -euo pipefail
+
+BIN_DIR="$(cd "$(dirname "$0")" && pwd)"
+DOCTOR="$BIN_DIR/pmai-doctor"
 
 usage() {
-  cat <<EOF
+  cat <<'EOF'
 Usage:
-  pmai status
+  pmai status [--json]
 
-Shows global PMAI install state:
-  - source location, version, branch, remote
-  - skill exposure count and drift against current ~/.pmai/skills for Claude, Codex, and Kimi Code
-  - Kimi Code CLI readiness and PMAI-managed native hooks
-  - OpenCode slash command count and drift against current ~/.pmai/skills
-  - Claude Code / Codex project hook drift when run inside a PMAI consumer repo
-  - local install note
+Compatibility alias for:
+  pmai doctor --check [--json]
+
+`pmai status` is deprecated. In chat, use /pmai-status for product progress and
+/pmai-doctor for framework and consumer-repository health.
 EOF
 }
 
-case "${1:-}" in
-  --help|-h|help) usage; exit 0 ;;
-  "") ;;
-  *) echo "❌ unknown flag: $1" >&2; usage >&2; exit 2 ;;
-esac
-
-if ! STATUS_START_CWD="$(pwd -P)"; then
-  echo "❌ 无法读取当前工作目录，不能执行 pmai status。" >&2
-  exit 2
-fi
-
-normalize_directory_path() {
-  local label="$1"
-  local raw_path="$2"
-  local absolute_path resolved_path
-
-  absolute_path="$(python3 - "$STATUS_START_CWD" "$raw_path" <<'PY'
-import os
-import sys
-
-start_cwd, raw_path = sys.argv[1:]
-if not os.path.isabs(raw_path):
-    raw_path = os.path.join(start_cwd, raw_path)
-print(os.path.normpath(raw_path))
-PY
-  )" || {
-    echo "❌ 无法归一化 $label：$raw_path" >&2
-    return 2
-  }
-
-  if [ -L "$absolute_path" ] && [ ! -e "$absolute_path" ]; then
-    echo "❌ $label 指向失效的符号链接：$absolute_path" >&2
-    return 2
-  fi
-  if [ -e "$absolute_path" ] && [ ! -d "$absolute_path" ]; then
-    echo "❌ $label 不是目录：$absolute_path" >&2
-    return 2
-  fi
-  if [ -d "$absolute_path" ]; then
-    if [ ! -r "$absolute_path" ] || [ ! -x "$absolute_path" ]; then
-      echo "❌ $label 无法读取或进入：$absolute_path" >&2
-      return 2
-    fi
-    resolved_path="$(cd "$absolute_path" 2>/dev/null && pwd -P)" || {
-      echo "❌ $label 无法读取或进入：$absolute_path" >&2
-      return 2
-    }
-    absolute_path="$resolved_path"
-  fi
-
-  printf '%s\n' "$absolute_path"
-}
-
-PMAI_HOME="$(normalize_directory_path "PMAI_HOME" "${PMAI_HOME:-$HOME/.pmai}")" || exit $?
-CODEX_HOME="$(normalize_directory_path "CODEX_HOME" "${CODEX_HOME:-$HOME/.codex}")" || exit $?
-KIMI_CODE_HOME="$(normalize_directory_path "KIMI_CODE_HOME" "${KIMI_CODE_HOME:-$HOME/.kimi-code}")" || exit $?
-OPENCODE_CONFIG_DIR="$(normalize_directory_path "OPENCODE_CONFIG_DIR" "${OPENCODE_CONFIG_DIR:-$HOME/.config/opencode}")" || exit $?
-
-CLAUDE_SKILLS="$HOME/.claude/skills"
-CODEX_SKILLS="$CODEX_HOME/skills"
-KIMI_SKILLS="$KIMI_CODE_HOME/skills"
-KIMI_CONFIG="$KIMI_CODE_HOME/config.toml"
-OPENCODE_COMMANDS="$OPENCODE_CONFIG_DIR/commands"
-SKILL_PREFIX="pmai-"
-BIN_DIR="$(cd "$(dirname "$0")" && pwd)"
-CLI_ROOT="$(cd "$BIN_DIR/.." && pwd)"
-STATUS_REPO_ROOT="$(git -C "$STATUS_START_CWD" rev-parse --show-toplevel 2>/dev/null || true)"
-TARGET_HIDDEN_SKILLS="$PMAI_HOME/scripts/_lib/host-hidden-skills.txt"
-
-target_skill_is_host_exposed() {
+JSON_ARG=""
+while [ $# -gt 0 ]; do
   case "$1" in
-    _internal|_shared) return 1 ;;
-  esac
-  [ -f "$TARGET_HIDDEN_SKILLS" ] || return 0
-  ! grep -Fqx -- "$1" "$TARGET_HIDDEN_SKILLS"
-}
-
-expected_exposed_skill_names() {
-  local skill_dir skill_name
-
-  [ -d "$PMAI_HOME/skills" ] || return 0
-  for skill_dir in "$PMAI_HOME"/skills/*/; do
-    [ -d "$skill_dir" ] || continue
-    skill_name=$(basename "$skill_dir")
-    case "$skill_name" in
-      _internal) ;;
-      _shared) ;;
-      *)
-        target_skill_is_host_exposed "$skill_name" || continue
-        case "$skill_name" in
-          pmai-*) echo "$skill_name" ;;
-          *) echo "${SKILL_PREFIX}${skill_name}" ;;
-        esac
-        ;;
-    esac
-  done | sort -u
-}
-
-actual_exposed_skill_names() {
-  local exposure_dir="$1"
-  local s
-
-  for s in "$exposure_dir"/${SKILL_PREFIX}*; do
-    [ -e "$s" ] || [ -L "$s" ] || continue
-    basename "$s"
-  done | sort -u
-}
-
-expected_opencode_command_names() {
-  expected_exposed_skill_names | sed 's/$/.md/' | sort -u
-}
-
-actual_opencode_command_names() {
-  local command_dir="$1"
-  local s
-
-  for s in "$command_dir"/${SKILL_PREFIX}*.md; do
-    [ -e "$s" ] || continue
-    basename "$s"
-  done | sort -u
-}
-
-count_opencode_commands() {
-  local command_dir="$1"
-  local s count
-
-  count=0
-  for s in "$command_dir"/${SKILL_PREFIX}*.md; do
-    [ -e "$s" ] || continue
-    count=$((count + 1))
-  done
-  echo "$count"
-}
-
-report_skill_exposure() {
-  local label="$1"
-  local exposure_dir="$2"
-  local display_path="$3"
-  local symlink_count shared_link stale_exposed missing_exposed
-
-  symlink_count=$(ls -d "$exposure_dir"/${SKILL_PREFIX}* 2>/dev/null | wc -l | tr -d ' ')
-  shared_link="❌ no"
-  if [ -L "$exposure_dir/_shared" ]; then shared_link="✅ yes"; fi
-
-  # 没装时 symlink 都是悬空（指向不存在的 ~/.pmai/），明示而不是假装存在
-  if [ "$INSTALLED" = "0" ] && [ "$symlink_count" -gt 0 ]; then
-    echo "  $label (${display_path}/${SKILL_PREFIX}*):  $symlink_count symlinks ⚠️  悬空（指向不存在的 ${PMAI_HOME}；pmai install 后才生效）"
-    echo "  $label _shared linked:                    $shared_link"
-  elif [ "$INSTALLED" = "0" ] && [ "$symlink_count" = "0" ]; then
-    echo "  $label (${display_path}/${SKILL_PREFIX}*):  $symlink_count symlinks"
-    echo "  $label _shared linked:                    $shared_link"
-  else
-    echo "  $label (${display_path}/${SKILL_PREFIX}*):  $symlink_count symlinks"
-    echo "  $label _shared linked:                    $shared_link"
-    stale_exposed=$(comm -23 <(actual_exposed_skill_names "$exposure_dir") <(expected_exposed_skill_names) || true)
-    missing_exposed=$(comm -13 <(actual_exposed_skill_names "$exposure_dir") <(expected_exposed_skill_names) || true)
-    if [ -z "$stale_exposed" ] && [ -z "$missing_exposed" ]; then
-      echo "  $label drift:                             ✅ matches current skills"
-    else
-      echo "  $label drift:                             ⚠️  stale/missing entries (run: pmai upgrade)"
-      [ -n "$stale_exposed" ] && echo "    stale:  $(echo "$stale_exposed" | tr '\n' ' ')"
-      [ -n "$missing_exposed" ] && echo "    missing: $(echo "$missing_exposed" | tr '\n' ' ')"
-    fi
-  fi
-
-  # 装好时才列具体 skill；没装时悬空名单意义不大
-  if [ "$INSTALLED" = "1" ] && [ "$symlink_count" -gt 0 ]; then
-    echo ""
-    echo "  $label skills exposed (pmai-* prefix):"
-    ls -d "$exposure_dir"/${SKILL_PREFIX}* 2>/dev/null | xargs -n 1 basename | sed 's/^/    /'
-  fi
-}
-
-report_opencode_command_exposure() {
-  local command_dir="$1"
-  local display_path="$2"
-  local command_count stale_commands missing_commands opencode_bin
-
-  opencode_bin=$(command -v opencode 2>/dev/null || true)
-  if [ -n "$opencode_bin" ]; then
-    echo "  OpenCode CLI:                              ✅ $opencode_bin"
-  else
-    echo "  OpenCode CLI:                              ⚠️  not found (commands can still be installed)"
-  fi
-
-  command_count=$(count_opencode_commands "$command_dir")
-
-  if [ "$INSTALLED" = "0" ]; then
-    echo "  OpenCode (${display_path}/${SKILL_PREFIX}*.md):  $command_count command files"
-    return
-  fi
-
-  echo "  OpenCode (${display_path}/${SKILL_PREFIX}*.md):  $command_count command files"
-  stale_commands=$(comm -23 <(actual_opencode_command_names "$command_dir") <(expected_opencode_command_names) || true)
-  missing_commands=$(comm -13 <(actual_opencode_command_names "$command_dir") <(expected_opencode_command_names) || true)
-  if [ -z "$stale_commands" ] && [ -z "$missing_commands" ]; then
-    echo "  OpenCode command drift:                    ✅ matches current skills"
-  else
-    echo "  OpenCode command drift:                    ⚠️  stale/missing entries (run: pmai upgrade)"
-    [ -n "$stale_commands" ] && echo "    stale:  $(echo "$stale_commands" | tr '\n' ' ')"
-    [ -n "$missing_commands" ] && echo "    missing: $(echo "$missing_commands" | tr '\n' ' ')"
-  fi
-}
-
-report_kimi_host() {
-  local kimi_bin manager_rc
-
-  kimi_bin=$(command -v kimi 2>/dev/null || true)
-  if [ -z "$kimi_bin" ] && [ -x "$KIMI_CODE_HOME/bin/kimi" ]; then
-    kimi_bin="$KIMI_CODE_HOME/bin/kimi"
-  fi
-  if [ -n "$kimi_bin" ]; then
-    echo "  Kimi Code CLI:                             ✅ $kimi_bin"
-  else
-    echo "  Kimi Code CLI:                             ⚠️  not found (skills can still be installed)"
-  fi
-  echo "  Kimi native command:                       /skill:pmai-<name>"
-
-  if [ ! -f "$KIMI_CONFIG" ]; then
-    echo "  Kimi PMAI hooks:                           ⚠️  config.toml not found"
-    return
-  fi
-  if [ ! -f "$CLI_ROOT/scripts/manage-kimi-hooks.py" ]; then
-    echo "  Kimi PMAI hooks:                           ⚠️  manager missing"
-    return
-  fi
-  KIMI_CODE_HOME="$KIMI_CODE_HOME" python3 "$CLI_ROOT/scripts/manage-kimi-hooks.py" check --config "$KIMI_CONFIG" >/dev/null 2>&1
-  manager_rc=$?
-  if [ "$manager_rc" = "0" ]; then
-    echo "  Kimi PMAI hooks:                           ✅ matches current framework"
-  else
-    echo "  Kimi PMAI hooks:                           ⚠️  missing/drifted (run: pmai doctor)"
-  fi
-}
-
-report_project_hook_drift() {
-  local manager rc
-
-  [ -n "$STATUS_REPO_ROOT" ] || return 0
-  # The framework repository has its own repo-local development hooks and must
-  # not be compared with consumer templates. Require the full generator
-  # signature: a consumer may legitimately have scripts/init-project.sh.
-  if [ -f "$STATUS_REPO_ROOT/RUNTIME.md" ] \
-    && [ -f "$STATUS_REPO_ROOT/skills/init-project/SKILL.md" ] \
-    && [ -f "$STATUS_REPO_ROOT/CLAUDE.md" ]; then
-    return 0
-  fi
-  if [ ! -f "$STATUS_REPO_ROOT/PRODUCT-STATE.md" ] \
-    && ! { [ -f "$STATUS_REPO_ROOT/AGENTS.md" ] && grep -qE 'PMAI|/pmai-' "$STATUS_REPO_ROOT/AGENTS.md" 2>/dev/null; }; then
-    return 0
-  fi
-
-  echo ""
-  echo "─── Current project hooks (read-only) ───"
-  echo "  Project: $STATUS_REPO_ROOT"
-  manager="$CLI_ROOT/scripts/install-project-hooks.sh"
-  if [ ! -f "$manager" ]; then
-    echo "  Claude Code / Codex hooks:              ⚠️  checker missing (run: pmai upgrade)"
-    return 0
-  fi
-
-  (cd "$STATUS_REPO_ROOT" && bash "$manager" --check) >/dev/null 2>&1
-  rc=$?
-  case "$rc" in
-    0) echo "  Claude Code / Codex hooks:              ✅ match current framework" ;;
-    1)
-      echo "  Claude Code / Codex hooks:              ⚠️  missing/drifted"
-      echo "    refresh: bash \"$manager\""
+    --help|-h|help)
+      usage
+      exit 0
+      ;;
+    --json)
+      if [ -n "$JSON_ARG" ]; then
+        echo "❌ duplicate flag: --json" >&2
+        exit 2
+      fi
+      JSON_ARG="--json"
       ;;
     *)
-      echo "  Claude Code / Codex hooks:              ❌ invalid or unreadable"
-      echo "    inspect: bash \"$manager\" --check"
+      echo "❌ unknown flag: $1" >&2
+      usage >&2
+      exit 2
       ;;
   esac
-}
+  shift
+done
 
-echo "════════════════════════════════════════════════════════════"
-echo "  PMAI Status"
-echo "════════════════════════════════════════════════════════════"
-echo "CLI source:     $CLI_ROOT"
-echo "Status target:  $PMAI_HOME"
-if [ "$CLI_ROOT" != "$PMAI_HOME" ] && [ -x "$PMAI_HOME/bin/pmai" ]; then
-  echo "Note: repo-local CLI is inspecting the installed PMAI_HOME."
-  echo "      To inspect the installed user-facing CLI, run: $PMAI_HOME/bin/pmai status"
-fi
-echo ""
-
-if [ -d "$PMAI_HOME/.git" ]; then
-  VER=$(cat "$PMAI_HOME/VERSION" 2>/dev/null || echo unknown)
-  HEAD=$(git -C "$PMAI_HOME" rev-parse --short HEAD 2>/dev/null || echo "?")
-  BRANCH=$(git -C "$PMAI_HOME" rev-parse --abbrev-ref HEAD 2>/dev/null || echo "?")
-  REMOTE=$(git -C "$PMAI_HOME" remote get-url origin 2>/dev/null || echo none)
-
-  echo "Global install:   ✅ installed"
-  echo "  Location:       $PMAI_HOME"
-  echo "  Version:        v$VER"
-  echo "  Branch:         $BRANCH @ $HEAD"
-  echo "  Remote:         $REMOTE"
-
-  # 跟远程比 commit 差
-  BEHIND=$(git -C "$PMAI_HOME" rev-list --count "HEAD..origin/main" 2>/dev/null || echo "?")
-  AHEAD=$(git -C "$PMAI_HOME" rev-list --count "origin/main..HEAD" 2>/dev/null || echo "?")
-  if [ "$BEHIND" != "?" ] && [ "$BEHIND" != "0" ]; then
-    echo "  Behind main:    $BEHIND commits (run: pmai upgrade)"
-  fi
-  if [ "$AHEAD" != "?" ] && [ "$AHEAD" != "0" ]; then
-    echo "  Ahead of main:  $AHEAD commits (uncommon — local edits?)"
-  fi
-
-  # 工作树脏检查
-  if ! git -C "$PMAI_HOME" diff --quiet 2>/dev/null \
-    || ! git -C "$PMAI_HOME" diff --cached --quiet 2>/dev/null; then
-    echo "  ⚠️  working tree dirty — 影响所有依赖 ~/.pmai/ 的消费仓"
-  fi
-
-  INSTALLED=1
-else
-  echo "Global install:   ❌ not installed (run: pmai install)"
-  INSTALLED=0
+if [ ! -x "$DOCTOR" ]; then
+  echo "❌ pmai-doctor 不存在或不可执行：$DOCTOR" >&2
+  exit 1
 fi
 
-echo ""
-echo "─── Skill exposure ───"
-report_skill_exposure "Claude Code" "$CLAUDE_SKILLS" "~/.claude/skills"
-echo ""
-report_skill_exposure "Codex" "$CODEX_SKILLS" "~/.codex/skills"
-echo ""
-report_skill_exposure "Kimi Code" "$KIMI_SKILLS" "\$KIMI_CODE_HOME/skills"
-echo ""
-echo "─── Kimi Code native host ───"
-report_kimi_host
-echo ""
-echo "─── OpenCode slash commands ───"
-report_opencode_command_exposure "$OPENCODE_COMMANDS" "~/.config/opencode/commands"
-report_project_hook_drift
-
-echo "════════════════════════════════════════════════════════════"
+echo "⚠️  pmai status 已并入 pmai doctor --check；当前按兼容入口执行。" >&2
+exec "$DOCTOR" --check ${JSON_ARG:+"$JSON_ARG"}

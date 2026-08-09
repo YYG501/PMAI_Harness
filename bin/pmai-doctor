@@ -33,13 +33,38 @@ PASS_COUNT=0
 WARN_COUNT=0
 FAIL_COUNT=0
 BROWSER_SMOKE=0
+MODE="check"
+MODE_EXPLICIT=0
+OUTPUT_FORMAT="human"
+CURRENT_CATEGORY="framework"
+RESULTS_FILE=""
+DOCTOR_START_CWD="$(pwd -P 2>/dev/null || true)"
+FRAMEWORK_INSTALLED=0
+FRAMEWORK_VERSION="unknown"
+FRAMEWORK_HEAD=""
+FRAMEWORK_BRANCH=""
+FRAMEWORK_REMOTE_URL=""
+FRAMEWORK_REMOTE_HEAD=""
+FRAMEWORK_WORKTREE="unknown"
+UPDATE_AVAILABLE="unknown"
+PROJECT_KIND="none"
+PROJECT_ROOT=""
+PROJECT_HOOKS="not_applicable"
+PROJECT_OPENCODE="not_applicable"
+PROJECT_GIT_HOOK="not_applicable"
+CONSUMER_TOPOLOGY="not_applicable"
+CONSUMER_PHASE="not_applicable"
+CONSUMER_AUDIT_FILE=""
+LEGACY_LOCAL_COPY="false"
+FRAMEWORK_BROKEN=0
 
 usage() {
   cat <<EOF
 Usage:
-  pmai doctor [--browser-smoke]
+  pmai doctor [--check] [--json] [--browser-smoke]
+  pmai doctor --repair [--json] [--browser-smoke]
 
-Checks global PMAI install integrity:
+Checks global PMAI install integrity and the current consumer repository:
   - ~/.pmai source, VERSION, expected skills
   - ~/.claude/skills/pmai-* and ~/.codex/skills/pmai-* exposure drift and dangling symlinks
   - $KIMI_CODE_HOME/skills/pmai-* native /skill:pmai-* exposure and PMAI-managed hooks
@@ -47,13 +72,218 @@ Checks global PMAI install integrity:
   - working tree, remote reachability, Claude Code bash PATH
   - optional gstack/browser readiness
   - passive gstack browser/design diagnostics for /pmai-mockup
+  - consumer document placement, project definition, mockups, lifecycle, and recovery structure
   - with --browser-smoke: actively launch gstack browse and fail if unusable
+
+Modes:
+  --check    Read-only diagnostics (default).
+  --repair   Repair PMAI-managed global host entries, then verify.
+  --json     Emit one stable JSON object on stdout.
 EOF
 }
 
-ok()   { echo "  ✅ $*"; PASS_COUNT=$((PASS_COUNT + 1)); }
-warn() { echo "  ⚠️  $*"; WARN_COUNT=$((WARN_COUNT + 1)); }
-fail() { echo "  ❌ $*"; FAIL_COUNT=$((FAIL_COUNT + 1)); EXIT_CODE=1; }
+record_result() {
+  local level="$1"
+  shift
+
+  [ "$OUTPUT_FORMAT" = "json" ] || return 0
+  printf '%s\0%s\0%s\0' "$level" "$CURRENT_CATEGORY" "$*" >> "$RESULTS_FILE"
+}
+
+ok() {
+  record_result "pass" "$*" || exit 2
+  echo "  ✅ $*"
+  PASS_COUNT=$((PASS_COUNT + 1))
+}
+
+warn() {
+  record_result "warning" "$*" || exit 2
+  echo "  ⚠️  $*"
+  WARN_COUNT=$((WARN_COUNT + 1))
+}
+
+fail() {
+  record_result "fail" "$*" || exit 2
+  echo "  ❌ $*"
+  FAIL_COUNT=$((FAIL_COUNT + 1))
+  if [ "$CURRENT_CATEGORY" != "consumer" ]; then
+    FRAMEWORK_BROKEN=1
+  fi
+  EXIT_CODE=1
+}
+
+emit_json() {
+  local conclusion recommended_action
+
+  if [ "$FRAMEWORK_BROKEN" = "1" ] || [ "$FRAMEWORK_INSTALLED" != "1" ]; then
+    conclusion="broken"
+    if [ "$FRAMEWORK_INSTALLED" = "0" ]; then
+      recommended_action="install"
+    else
+      recommended_action="repair"
+    fi
+  elif [ "$UPDATE_AVAILABLE" = "true" ]; then
+    conclusion="upgrade_available"
+    recommended_action="upgrade"
+  elif [ "$CONSUMER_TOPOLOGY" = "invalid" ]; then
+    conclusion="consumer_invalid"
+    recommended_action="review_consumer_structure"
+  elif { [ "$PROJECT_HOOKS" != "current" ] && [ "$PROJECT_HOOKS" != "not_applicable" ]; } \
+    || { [ "$PROJECT_OPENCODE" != "current" ] && [ "$PROJECT_OPENCODE" != "not_applicable" ]; } \
+    || { [ "$PROJECT_GIT_HOOK" != "current" ] && [ "$PROJECT_GIT_HOOK" != "not_applicable" ]; } \
+    || [ "$CONSUMER_TOPOLOGY" = "sync_required" ] \
+    || [ "$LEGACY_LOCAL_COPY" = "true" ]; then
+    conclusion="consumer_sync_required"
+    if [ "$LEGACY_LOCAL_COPY" = "true" ]; then
+      recommended_action="remove_legacy_copy"
+    elif [ "$PROJECT_HOOKS" = "checker_missing" ]; then
+      recommended_action="upgrade"
+    elif [ "$PROJECT_OPENCODE" = "checker_missing" ] \
+      || [ "$PROJECT_GIT_HOOK" = "checker_missing" ]; then
+      recommended_action="upgrade"
+    elif [ "$PROJECT_HOOKS" != "current" ] \
+      && [ "$PROJECT_HOOKS" != "not_applicable" ]; then
+      recommended_action="refresh_project_hooks"
+    elif [ "$PROJECT_OPENCODE" != "current" ] \
+      && [ "$PROJECT_OPENCODE" != "not_applicable" ]; then
+      recommended_action="refresh_opencode_project"
+    elif [ "$PROJECT_GIT_HOOK" != "current" ] \
+      && [ "$PROJECT_GIT_HOOK" != "not_applicable" ]; then
+      recommended_action="refresh_git_hook"
+    else
+      recommended_action="review_consumer_structure"
+    fi
+  else
+    conclusion="healthy"
+    recommended_action="none"
+  fi
+
+  python3 - "$RESULTS_FILE" "$MODE" "$conclusion" "$recommended_action" \
+    "$PASS_COUNT" "$WARN_COUNT" "$FAIL_COUNT" \
+    "$PMAI_HOME" "$FRAMEWORK_INSTALLED" "$FRAMEWORK_VERSION" \
+    "$FRAMEWORK_HEAD" "$FRAMEWORK_BRANCH" "$FRAMEWORK_REMOTE_URL" \
+    "$FRAMEWORK_REMOTE_HEAD" "$FRAMEWORK_WORKTREE" "$UPDATE_AVAILABLE" \
+    "$PROJECT_KIND" "$PROJECT_ROOT" "$PROJECT_HOOKS" "$PROJECT_OPENCODE" \
+    "$PROJECT_GIT_HOOK" "$CONSUMER_TOPOLOGY" "$CONSUMER_PHASE" \
+    "$LEGACY_LOCAL_COPY" "$CONSUMER_AUDIT_FILE" <<'PY'
+import json
+import sys
+
+(
+    results_path,
+    mode,
+    conclusion,
+    recommended_action,
+    passed,
+    warned,
+    failed,
+    framework_home,
+    framework_installed,
+    framework_version,
+    framework_head,
+    framework_branch,
+    framework_remote_url,
+    framework_remote_head,
+    framework_worktree,
+    update_available,
+    project_kind,
+    project_root,
+    project_hooks,
+    project_opencode,
+    project_git_hook,
+    consumer_topology,
+    consumer_phase,
+    legacy_local_copy,
+    consumer_audit_path,
+) = sys.argv[1:]
+
+with open(results_path, "rb") as handle:
+    fields = handle.read().split(b"\0")
+if fields and fields[-1] == b"":
+    fields.pop()
+if len(fields) % 3:
+    raise SystemExit("invalid doctor findings stream")
+findings = [
+    {
+        "level": fields[index].decode("utf-8"),
+        "category": fields[index + 1].decode("utf-8"),
+        "message": fields[index + 2].decode("utf-8"),
+    }
+    for index in range(0, len(fields), 3)
+]
+
+def tri_state(value):
+    if value == "true":
+        return True
+    if value == "false":
+        return False
+    return None
+
+payload = {
+    "schema_version": 1,
+    "mode": mode,
+    "conclusion": conclusion,
+    "recommended_action": recommended_action,
+    "summary": {
+        "pass": int(passed),
+        "warning": int(warned),
+        "fail": int(failed),
+    },
+    "framework": {
+        "home": framework_home,
+        "installed": framework_installed == "1",
+        "version": framework_version,
+        "head": framework_head or None,
+        "branch": framework_branch or None,
+        "remote_url": framework_remote_url or None,
+        "remote_head": framework_remote_head or None,
+        "working_tree": framework_worktree,
+        "update_available": tri_state(update_available),
+    },
+    "consumer": {
+        "kind": project_kind,
+        "root": project_root or None,
+        "project_hooks": project_hooks,
+        "opencode": project_opencode,
+        "git_hook": project_git_hook,
+        "topology_status": consumer_topology,
+        "phase": consumer_phase,
+        "legacy_local_copy": legacy_local_copy == "true",
+        "audit": None,
+    },
+    "findings": findings,
+}
+if consumer_audit_path:
+    try:
+        with open(consumer_audit_path, encoding="utf-8") as handle:
+            audit = json.load(handle)
+    except (OSError, json.JSONDecodeError) as exc:
+        raise SystemExit(f"invalid consumer audit JSON: {exc}") from exc
+    if not isinstance(audit, dict) or audit.get("schema_version") != 1:
+        raise SystemExit("invalid consumer audit schema")
+    payload["consumer"]["audit"] = audit
+print(json.dumps(payload, ensure_ascii=False, indent=2))
+PY
+}
+
+finish_doctor() {
+  local exit_code="$1"
+
+  if [ "$OUTPUT_FORMAT" = "json" ]; then
+    if ! emit_json >&3; then
+      exit_code=2
+    fi
+  fi
+  if [ -n "$RESULTS_FILE" ]; then
+    rm -f -- "$RESULTS_FILE"
+    RESULTS_FILE=""
+  fi
+  if [ -n "$CONSUMER_AUDIT_FILE" ]; then
+    rm -f -- "$CONSUMER_AUDIT_FILE"
+    CONSUMER_AUDIT_FILE=""
+  fi
+  exit "$exit_code"
+}
 
 # Help belongs to the CLI source the PM invoked and must remain available even
 # when the configured install is absent or incomplete. All other arguments are
@@ -63,14 +293,6 @@ for arg in "$@"; do
     --help|-h|help) usage; exit 0 ;;
   esac
 done
-
-if ! source "$CLI_ROOT/scripts/_lib/global-install-lock.sh"; then
-  echo "❌ 无法载入全局安装锁 helper，拒绝执行可能自愈的 doctor。" >&2
-  exit 2
-fi
-pmai_hold_global_install_lock \
-  "$CLI_ROOT" "${BASH_SOURCE[0]}" \
-  ${ORIGINAL_ARGS[@]+"${ORIGINAL_ARGS[@]}"} || exit $?
 
 PMAI_HOME_REAL="$PMAI_HOME"
 CLI_ROOT_REAL="$(cd "$CLI_ROOT" && pwd -P)"
@@ -83,24 +305,60 @@ if [ "$CLI_ROOT_REAL" != "$PMAI_HOME_REAL" ] && [ -d "$PMAI_HOME" ]; then
     echo "❌ 目标 PMAI doctor 缺失或不可执行：$TARGET_DOCTOR" >&2
     exit 2
   fi
-  # Doctor can repair host exposure. Cross-version repair must be owned by the
-  # installed target so a newer checkout cannot delete entries that are valid
-  # under the installed version (and vice versa).
+  # Cross-version diagnostics and repair are both owned by the installed
+  # target. A newer checkout must not interpret or mutate another version's
+  # host policy.
   export PMAI_HOME
-  exec "$TARGET_DOCTOR" "$@"
+  exec "$TARGET_DOCTOR" ${ORIGINAL_ARGS[@]+"${ORIGINAL_ARGS[@]}"}
 fi
 
 while [ $# -gt 0 ]; do
   case "$1" in
+    --check)
+      if [ "$MODE_EXPLICIT" = "1" ] && [ "$MODE" != "check" ]; then
+        echo "❌ --check 与 --repair 不能同时使用。" >&2
+        exit 2
+      fi
+      MODE="check"
+      MODE_EXPLICIT=1
+      ;;
+    --repair)
+      if [ "$MODE_EXPLICIT" = "1" ] && [ "$MODE" != "repair" ]; then
+        echo "❌ --check 与 --repair 不能同时使用。" >&2
+        exit 2
+      fi
+      MODE="repair"
+      MODE_EXPLICIT=1
+      ;;
+    --json) OUTPUT_FORMAT="json" ;;
     --browser-smoke) BROWSER_SMOKE=1 ;;
     *) echo "❌ unknown flag: $1" >&2; usage >&2; exit 2 ;;
   esac
   shift
 done
 
+if [ "$MODE" = "repair" ]; then
+  if ! source "$CLI_ROOT/scripts/_lib/global-install-lock.sh"; then
+    echo "❌ 无法载入全局安装锁 helper，拒绝执行 doctor 修复。" >&2
+    exit 2
+  fi
+  pmai_hold_global_install_lock \
+    "$CLI_ROOT" "${BASH_SOURCE[0]}" \
+    ${ORIGINAL_ARGS[@]+"${ORIGINAL_ARGS[@]}"} || exit $?
+fi
+
 if ! source "$CLI_ROOT/scripts/_lib/skill-links.sh"; then
   echo "❌ 无法载入 skill 入口策略，拒绝继续 doctor。" >&2
   exit 2
+fi
+
+if [ "$OUTPUT_FORMAT" = "json" ]; then
+  RESULTS_FILE=$(mktemp "${TMPDIR:-/tmp}/pmai-doctor-results.XXXXXX") || {
+    echo "❌ 无法创建 doctor JSON 临时文件。" >&2
+    exit 2
+  }
+  exec 3>&1
+  exec 1>/dev/null
 fi
 
 # stock macOS 没有 GNU timeout。优先使用 Homebrew 的 gtimeout；两者都
@@ -114,16 +372,21 @@ if ! command -v timeout >/dev/null 2>&1; then
 fi
 
 echo "════════════════════════════════════════════════════════════"
-echo "  PMAI Doctor — integrity self-check"
+if [ "$MODE" = "repair" ]; then
+  echo "  PMAI Doctor — repair and verify"
+else
+  echo "  PMAI Doctor — read-only check"
+fi
 echo "════════════════════════════════════════════════════════════"
 echo "  CLI source:   $CLI_ROOT"
 echo "  Audit target: $PMAI_HOME"
 if [ "$CLI_ROOT_REAL" != "$PMAI_HOME_REAL" ] && [ -x "$PMAI_HOME/bin/pmai" ]; then
   echo "  Note: repo-local CLI is validating the installed PMAI_HOME."
-  echo "        To test the installed user-facing CLI, run: $PMAI_HOME/bin/pmai doctor"
+  echo "        To test the installed user-facing CLI, run: $PMAI_HOME/bin/pmai doctor --check"
 fi
 
 # 1. ~/.pmai/ exists + is git repo
+CURRENT_CATEGORY="framework"
 echo ""
 echo "─── 1. Framework source ───"
 if [ ! -d "$PMAI_HOME" ]; then
@@ -131,13 +394,16 @@ if [ ! -d "$PMAI_HOME" ]; then
   echo ""
   echo "════════════════════════════════════════════════════════════"
   echo "Result: ❌ FAIL ($FAIL_COUNT) / ⚠️  $WARN_COUNT / ✅ $PASS_COUNT"
-  exit 1
+  finish_doctor 1
 fi
+FRAMEWORK_INSTALLED=1
 ok "$PMAI_HOME exists"
 
 if [ ! -d "$PMAI_HOME/.git" ]; then
   fail "$PMAI_HOME 不是 git 仓（损坏 / 半完整；建议重装：pmai uninstall && pmai install）"
 else
+  FRAMEWORK_HEAD=$(git -C "$PMAI_HOME" rev-parse HEAD 2>/dev/null || true)
+  FRAMEWORK_BRANCH=$(git -C "$PMAI_HOME" symbolic-ref --short -q HEAD 2>/dev/null || true)
   ok "$PMAI_HOME is a git repo"
 fi
 
@@ -148,6 +414,7 @@ if [ ! -f "$PMAI_HOME/VERSION" ]; then
   fail "VERSION 文件缺失"
 else
   VER=$(cat "$PMAI_HOME/VERSION")
+  FRAMEWORK_VERSION="$VER"
   if [[ "$VER" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
     ok "VERSION = $VER (valid semver)"
   else
@@ -165,7 +432,7 @@ echo "─── 3. Skill sources in $PMAI_HOME/skills/ ───"
 #    tests/test-doctor-skills.sh 对本清单与 skills/ 目录做全等校验，漏同步会在 run-all 红掉。
 EXPECTED_SKILLS=(
   # 活跃集（reshape 后 PM 日常入口）
-  init-project design mockup build build-close publish-to-lark lark-sync lark-review status
+  init-project design mockup build build-close publish-to-lark lark-sync lark-review status doctor
   # 按需主动调（项目方向 / 照站对齐）
   direction mirror-site
   # 按需辅助：小改 / 轻记录 / 放弃 build / 功能型规格文档 / 介绍型文档 / 说人话磨文 / 讨论对焦 / 会话反馈
@@ -252,40 +519,53 @@ opencode_commands_match() {
       --global --check >/dev/null 2>&1
 }
 
-repair_empty_exposure_dir() {
+repair_skill_exposure_dir() {
   local label="$1"
   local exposure_dir="$2"
-  local skill_dir skill_name dst count
+  local expected_name expected_target path actual_target stale count
 
   [ -d "$PMAI_HOME/skills" ] || return 1
   mkdir -p "$exposure_dir" || return 1
 
   count=0
-  for skill_dir in "$PMAI_HOME"/skills/*/; do
-    [ -d "$skill_dir" ] || continue
-    skill_name=$(basename "$skill_dir")
-    case "$skill_name" in
-      _internal) continue ;;
-      _shared)  dst="$exposure_dir/_shared" ;;
-      *)
-        pmai_skill_is_host_exposed "$skill_name" || continue
-        case "$skill_name" in
-          pmai-*) dst="$exposure_dir/$skill_name" ;;
-          *)      dst="$exposure_dir/${SKILL_PREFIX}${skill_name}" ;;
-        esac
-        ;;
-    esac
-
-    if [ -e "$dst" ] && [ ! -L "$dst" ]; then
-      warn "$label exposure repair skipped non-symlink path: $dst"
-      return 1
+  while IFS= read -r stale; do
+    [ -n "$stale" ] || continue
+    path="$exposure_dir/$stale"
+    if pmai_skill_link_is_managed "$PMAI_HOME/skills" "$path"; then
+      rm -- "$path" || return 1
+      count=$((count + 1))
     fi
-    rm -f "$dst" 2>/dev/null || return 1
-    ln -s "${skill_dir%/}" "$dst" || return 1
-    count=$((count + 1))
-  done
+  done < <(comm -23 <(actual_exposed_skill_names "$exposure_dir") <(expected_exposed_skill_names) || true)
 
-  ok "$label initial skill exposure repaired ($count symlink(s) created)"
+  while IFS=$'\t' read -r expected_name expected_target; do
+    path="$exposure_dir/$expected_name"
+    [ -d "$expected_target" ] || continue
+    if [ "$expected_name" = "_shared" ]; then
+      if [ -L "$path" ] && [ "$(readlink "$path")" = "$expected_target" ]; then
+        continue
+      fi
+      if pmai_install_shared_link "$expected_target" "$path"; then
+        count=$((count + 1))
+      fi
+      continue
+    fi
+    if [ -L "$path" ]; then
+      actual_target=$(readlink "$path")
+      if [ "$actual_target" = "$expected_target" ]; then
+        continue
+      fi
+      pmai_skill_link_is_managed "$PMAI_HOME/skills" "$path" || continue
+      rm -- "$path" || return 1
+    elif [ -e "$path" ]; then
+      continue
+    fi
+    ln -s "$expected_target" "$path" || return 1
+    count=$((count + 1))
+  done < <(expected_skill_link_entries)
+
+  if [ "$count" -gt 0 ]; then
+    ok "$label skill exposure repaired ($count managed link change(s))"
+  fi
   return 0
 }
 
@@ -299,12 +579,25 @@ check_skill_exposure_dir() {
 
   echo ""
   echo "─── 4. Skill symlinks ($label: ${display_path}/${SKILL_PREFIX}*) ───"
-  if retired_count=$(pmai_prune_managed_hidden_skill_links "$PMAI_HOME/skills" "$exposure_dir"); then
-    if [ "$retired_count" -gt 0 ]; then
-      ok "$label retired $retired_count PMAI-managed hidden skill link(s)"
+  if [ "$MODE" = "repair" ]; then
+    if retired_count=$(pmai_prune_managed_hidden_skill_links "$PMAI_HOME/skills" "$exposure_dir"); then
+      if [ "$retired_count" -gt 0 ]; then
+        ok "$label retired $retired_count PMAI-managed hidden skill link(s)"
+      fi
+    else
+      fail "$label could not remove retired PMAI-managed hidden skill links"
+    fi
+    if ! repair_skill_exposure_dir "$label" "$exposure_dir"; then
+      fail "$label could not repair PMAI-managed skill exposure"
     fi
   else
-    fail "$label could not remove retired PMAI-managed hidden skill links"
+    if retired_count=$(pmai_count_managed_hidden_skill_links "$PMAI_HOME/skills" "$exposure_dir"); then
+      if [ "$retired_count" -gt 0 ]; then
+        fail "$label has $retired_count PMAI-managed hidden skill link(s); run pmai doctor --repair"
+      fi
+    else
+      fail "$label could not inspect retired PMAI-managed hidden skill links"
+    fi
   fi
   entry_count=0
   for s in "$exposure_dir"/${SKILL_PREFIX}* "$exposure_dir/_shared"; do
@@ -312,12 +605,7 @@ check_skill_exposure_dir() {
     entry_count=$((entry_count + 1))
   done
   if [ "$entry_count" = "0" ]; then
-    if repair_empty_exposure_dir "$label" "$exposure_dir"; then
-      entry_count=1
-    fi
-  fi
-  if [ "$entry_count" = "0" ]; then
-    fail "No skill symlinks found (${display_path}/${SKILL_PREFIX}*). 跑 pmai install 或 pmai upgrade。"
+    fail "No skill symlinks found (${display_path}/${SKILL_PREFIX}*). Run pmai doctor --repair."
     return
   fi
 
@@ -367,12 +655,12 @@ check_opencode_command_dir() {
     ok "OpenCode $count slash command file(s) exactly match current PMAI render"
     return
   fi
-  if repair_opencode_commands && opencode_commands_match; then
+  if [ "$MODE" = "repair" ] && repair_opencode_commands && opencode_commands_match; then
     count=$(count_opencode_commands "$command_dir")
     ok "OpenCode slash commands repaired and verified ($count file(s))"
     return
   fi
-  fail "OpenCode slash commands are missing, stale, modified, or unreadable (${display_path}/${SKILL_PREFIX}*.md)"
+  fail "OpenCode slash commands are missing, stale, modified, or unreadable (${display_path}/${SKILL_PREFIX}*.md); run pmai doctor --repair"
 }
 
 check_opencode_cli() {
@@ -410,7 +698,7 @@ check_kimi_host() {
   fi
 
   if [ ! -f "$KIMI_CONFIG" ]; then
-    warn "Kimi config 不存在：${KIMI_CONFIG}；先启动一次 Kimi Code，再运行 pmai doctor 安装原生 hooks"
+    warn "Kimi config 不存在：${KIMI_CONFIG}；先启动一次 Kimi Code，再运行 pmai doctor --repair 安装原生 hooks"
     return
   fi
 
@@ -435,7 +723,7 @@ check_kimi_host() {
     return
   fi
   if [ "$manager_rc" = "1" ]; then
-    if KIMI_CODE_HOME="$KIMI_CODE_HOME" \
+    if [ "$MODE" = "repair" ] && KIMI_CODE_HOME="$KIMI_CODE_HOME" \
       python3 "$PMAI_HOME/scripts/manage-kimi-hooks.py" \
       install --config "$KIMI_CONFIG" >/dev/null 2>&1; then
       manager_out=$(KIMI_CODE_HOME="$KIMI_CODE_HOME" \
@@ -454,6 +742,7 @@ check_kimi_host() {
 }
 
 MISSING=()
+CURRENT_CATEGORY="skills"
 for sk in "${EXPECTED_SKILLS[@]}"; do
   if [ ! -d "$PMAI_HOME/skills/$sk" ]; then
     MISSING+=("$sk")
@@ -465,47 +754,306 @@ else
   fail "Missing ${#MISSING[@]} skill(s): ${MISSING[*]}"
 fi
 
+CURRENT_CATEGORY="claude"
 check_skill_exposure_dir "Claude Code" "$CLAUDE_SKILLS" "~/.claude/skills"
+CURRENT_CATEGORY="codex"
 check_skill_exposure_dir "Codex" "$CODEX_SKILLS" "~/.codex/skills"
+CURRENT_CATEGORY="kimi"
 check_skill_exposure_dir "Kimi Code" "$KIMI_SKILLS" "\$KIMI_CODE_HOME/skills"
+CURRENT_CATEGORY="opencode"
 check_opencode_command_dir "$OPENCODE_COMMANDS" "~/.config/opencode/commands"
 check_opencode_cli
+CURRENT_CATEGORY="kimi"
 check_kimi_host
 
 # 5. Working tree clean
+CURRENT_CATEGORY="framework"
 echo ""
 echo "─── 5. ~/.pmai/ working tree ───"
 if [ -d "$PMAI_HOME/.git" ]; then
   cd "$PMAI_HOME"
-  if git diff --quiet 2>/dev/null && git diff --cached --quiet 2>/dev/null; then
+  if ! GIT_STATUS=$(git status --porcelain 2>/dev/null); then
+    warn "Working tree state could not be read"
+  elif [ -z "$GIT_STATUS" ]; then
+    FRAMEWORK_WORKTREE="clean"
     ok "Working tree clean"
   else
+    FRAMEWORK_WORKTREE="dirty"
     warn "Working tree dirty — uncommitted changes in ~/.pmai/ 影响所有消费仓行为"
   fi
 fi
 
-# 6. Remote reachable
+# 6. Remote currentness
+CURRENT_CATEGORY="upgrade"
 echo ""
-echo "─── 6. Remote reachable ───"
+echo "─── 6. Remote currentness ───"
 if [ -d "$PMAI_HOME/.git" ]; then
   cd "$PMAI_HOME"
   REMOTE_URL=$(git remote get-url origin 2>/dev/null || echo "")
+  FRAMEWORK_REMOTE_URL="$REMOTE_URL"
   if [ -z "$REMOTE_URL" ]; then
     warn "No origin remote configured (升级会失败)"
-  elif timeout 10 git ls-remote origin HEAD >/dev/null 2>&1; then
-    ok "Remote $REMOTE_URL reachable"
   else
-    warn "Remote $REMOTE_URL unreachable (SSH key / network / repo access?)"
+    REMOTE_MAIN=$(timeout 10 git ls-remote --heads origin refs/heads/main 2>/dev/null)
+    REMOTE_RC=$?
+    if [ "$REMOTE_RC" = "0" ]; then
+      read -r FRAMEWORK_REMOTE_HEAD _ <<< "$REMOTE_MAIN"
+      if [ -z "$FRAMEWORK_REMOTE_HEAD" ]; then
+        warn "Remote $REMOTE_URL has no refs/heads/main"
+      elif [ -n "$FRAMEWORK_HEAD" ] && [ "$FRAMEWORK_HEAD" = "$FRAMEWORK_REMOTE_HEAD" ]; then
+        UPDATE_AVAILABLE="false"
+        ok "Framework matches remote main (${FRAMEWORK_HEAD:0:7})"
+      else
+        UPDATE_AVAILABLE="true"
+        warn "Framework differs from remote main; run /pmai-upgrade"
+      fi
+    else
+      warn "Remote $REMOTE_URL unreachable (SSH key / network / repo access?)"
+    fi
   fi
 fi
 
-# 7. Claude Code Bash 工具子进程 PATH
+project_has_legacy_copy() {
+  local root="$1"
+  local entry
+
+  if [ -f "$root/.framework-sync-state.json" ] \
+    || [ -f "$root/.claude/scripts/status-view.py" ] \
+    || [ -f "$root/.claude/scripts/init-project.sh" ]; then
+    return 0
+  fi
+  for entry in "$root"/.claude/skills/pmai-* "$root"/.codex/skills/pmai-*; do
+    if [ -e "$entry" ] || [ -L "$entry" ]; then
+      return 0
+    fi
+  done
+  return 1
+}
+
+project_has_consumer_marker() {
+  local root="$1"
+
+  [ -f "$root/PRODUCT-STATE.md" ] && return 0
+  [ -f "$root/docs/CONTEXT.md" ] && return 0
+  [ -f "$root/.pm-workflow/config.yml" ] && return 0
+  [ -f "$root/.codex/hooks.json" ] && return 0
+  [ -f "$root/.opencode/commands/pmai-build.md" ] && return 0
+  if [ -f "$root/AGENTS.md" ] \
+    && grep -qE 'PMAI|/pmai-' "$root/AGENTS.md" 2>/dev/null; then
+    return 0
+  fi
+  if [ -f "$root/CLAUDE.md" ] \
+    && grep -qE 'PMAI|/pmai-' "$root/CLAUDE.md" 2>/dev/null; then
+    return 0
+  fi
+  return 1
+}
+
+find_non_git_consumer_root() {
+  local candidate="$1"
+
+  while [ -n "$candidate" ] && [ "$candidate" != "/" ]; do
+    if project_has_consumer_marker "$candidate"; then
+      printf '%s\n' "$candidate"
+      return 0
+    fi
+    candidate=$(dirname "$candidate")
+  done
+  return 1
+}
+
+run_consumer_topology_check() {
+  local checker rc status phase finding_level finding_message
+
+  checker="$PMAI_HOME/scripts/consumer-doctor.py"
+  if [ ! -f "$checker" ]; then
+    CURRENT_CATEGORY="framework"
+    fail "消费仓结构检查器缺失：$checker"
+    CURRENT_CATEGORY="consumer"
+    return 0
+  fi
+  CONSUMER_AUDIT_FILE=$(mktemp "${TMPDIR:-/tmp}/pmai-consumer-audit.XXXXXX") || {
+    CURRENT_CATEGORY="framework"
+    fail "无法创建消费仓诊断临时文件"
+    CURRENT_CATEGORY="consumer"
+    return 0
+  }
+  python3 "$checker" --repo-root "$PROJECT_ROOT" > "$CONSUMER_AUDIT_FILE" 2>/dev/null
+  rc=$?
+  if ! python3 - "$CONSUMER_AUDIT_FILE" <<'PY' >/dev/null 2>&1
+import json
+import sys
+
+with open(sys.argv[1], encoding="utf-8") as handle:
+    payload = json.load(handle)
+if not isinstance(payload, dict) or payload.get("schema_version") != 1:
+    raise SystemExit(1)
+if payload.get("status") not in {"current", "sync_required", "invalid"}:
+    raise SystemExit(1)
+if not isinstance(payload.get("findings"), list):
+    raise SystemExit(1)
+PY
+  then
+    CURRENT_CATEGORY="framework"
+    fail "消费仓结构检查器没有返回可用的 schema v1 JSON"
+    CURRENT_CATEGORY="consumer"
+    return 0
+  fi
+  if [ "$rc" != "0" ] && [ "$rc" != "2" ]; then
+    CURRENT_CATEGORY="framework"
+    fail "消费仓结构检查器异常退出：$rc"
+    CURRENT_CATEGORY="consumer"
+    return 0
+  fi
+
+  CONSUMER_TOPOLOGY=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1], encoding="utf-8"))["status"])' "$CONSUMER_AUDIT_FILE")
+  CONSUMER_PHASE=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1], encoding="utf-8"))["phase"])' "$CONSUMER_AUDIT_FILE")
+  while IFS=$'\t' read -r finding_level finding_message; do
+    [ -n "$finding_level" ] || continue
+    case "$finding_level" in
+      error) fail "$finding_message" ;;
+      sync|warning) warn "$finding_message" ;;
+      *)
+        CURRENT_CATEGORY="framework"
+        fail "消费仓结构检查器返回未知 finding level"
+        CURRENT_CATEGORY="consumer"
+        ;;
+    esac
+  done < <(python3 - "$CONSUMER_AUDIT_FILE" <<'PY'
+import json
+import sys
+
+with open(sys.argv[1], encoding="utf-8") as handle:
+    findings = json.load(handle)["findings"]
+for finding in findings:
+    level = str(finding.get("level") or "").replace("\t", " ").replace("\n", " ")
+    message = str(finding.get("message") or "").replace("\t", " ").replace("\n", " ")
+    print(f"{level}\t{message}")
+PY
+  )
+  if [ "$CONSUMER_TOPOLOGY" = "current" ]; then
+    ok "Consumer structure matches the installed framework contract ($CONSUMER_PHASE)"
+  fi
+}
+
+check_current_project() {
+  local manager opencode_manager git_hook_manager rc candidate
+
+  [ -n "$DOCTOR_START_CWD" ] || return 0
+  PROJECT_ROOT=$(git -C "$DOCTOR_START_CWD" rev-parse --show-toplevel 2>/dev/null || true)
+  if [ -z "$PROJECT_ROOT" ]; then
+    candidate=$(find_non_git_consumer_root "$DOCTOR_START_CWD" || true)
+    [ -n "$candidate" ] || return 0
+    PROJECT_ROOT="$candidate"
+  fi
+  PROJECT_ROOT=$(cd "$PROJECT_ROOT" 2>/dev/null && pwd -P) || {
+    PROJECT_ROOT=""
+    return 0
+  }
+
+  if [ -f "$PROJECT_ROOT/RUNTIME.md" ] \
+    && [ -f "$PROJECT_ROOT/skills/init-project/SKILL.md" ] \
+    && [ -f "$PROJECT_ROOT/CLAUDE.md" ]; then
+    PROJECT_KIND="generator"
+    PROJECT_HOOKS="not_applicable"
+    PROJECT_OPENCODE="not_applicable"
+    PROJECT_GIT_HOOK="not_applicable"
+    ok "Current repository is the PMAI generator; consumer checks skipped"
+    return 0
+  fi
+  if ! project_has_consumer_marker "$PROJECT_ROOT"; then
+    PROJECT_KIND="other"
+    PROJECT_HOOKS="not_applicable"
+    PROJECT_OPENCODE="not_applicable"
+    PROJECT_GIT_HOOK="not_applicable"
+    ok "Current repository is not a PMAI consumer; consumer checks skipped"
+    return 0
+  fi
+
+  PROJECT_KIND="consumer"
+  if project_has_legacy_copy "$PROJECT_ROOT"; then
+    LEGACY_LOCAL_COPY="true"
+    warn "Current consumer has legacy project-local PMAI copies; remove them with pmai uninstall --local"
+  else
+    ok "No legacy project-local PMAI copies detected"
+  fi
+
+  manager="$PMAI_HOME/scripts/install-project-hooks.sh"
+  if [ ! -f "$manager" ]; then
+    PROJECT_HOOKS="checker_missing"
+    warn "Project hook checker is missing; upgrade PMAI before checking this consumer"
+  else
+    (cd "$PROJECT_ROOT" && PMAI_HOME="$PMAI_HOME" bash "$manager" --check) >/dev/null 2>&1
+    rc=$?
+    case "$rc" in
+      0)
+        PROJECT_HOOKS="current"
+        ok "Current consumer project hooks match the installed framework"
+        ;;
+      1)
+        PROJECT_HOOKS="drifted"
+        warn "Current consumer project hooks need refresh"
+        ;;
+      *)
+        PROJECT_HOOKS="invalid"
+        warn "Current consumer project hooks are invalid or unreadable"
+        ;;
+    esac
+  fi
+
+  opencode_manager="$PMAI_HOME/scripts/install-opencode-commands.sh"
+  if [ ! -f "$opencode_manager" ]; then
+    PROJECT_OPENCODE="checker_missing"
+    warn "OpenCode project checker is missing; upgrade PMAI before checking this consumer"
+  elif PMAI_HOME="$PMAI_HOME" bash "$opencode_manager" \
+    --project "$PROJECT_ROOT" --check >/dev/null 2>&1; then
+    PROJECT_OPENCODE="current"
+    ok "Current consumer OpenCode entries match the installed framework"
+  else
+    rc=$?
+    if [ "$rc" = "1" ]; then
+      PROJECT_OPENCODE="drifted"
+      warn "Current consumer OpenCode entries need refresh"
+    else
+      PROJECT_OPENCODE="invalid"
+      warn "Current consumer OpenCode entries are invalid or unreadable"
+    fi
+  fi
+
+  git_hook_manager="$PMAI_HOME/scripts/install-hooks.sh"
+  if [ ! -f "$git_hook_manager" ]; then
+    PROJECT_GIT_HOOK="checker_missing"
+    warn "Git hook checker is missing; upgrade PMAI before checking this consumer"
+  elif (cd "$PROJECT_ROOT" && PMAI_HOME="$PMAI_HOME" bash "$git_hook_manager" --check) >/dev/null 2>&1; then
+    PROJECT_GIT_HOOK="current"
+    ok "Current consumer Git hook matches the installed framework"
+  else
+    rc=$?
+    if [ "$rc" = "1" ]; then
+      PROJECT_GIT_HOOK="drifted"
+      warn "Current consumer Git hook needs refresh"
+    else
+      PROJECT_GIT_HOOK="invalid"
+      warn "Current consumer Git hook is invalid or unreadable"
+    fi
+  fi
+
+  run_consumer_topology_check
+}
+
+CURRENT_CATEGORY="consumer"
+echo ""
+echo "─── 7. Current repository ───"
+check_current_project
+
+# 8. Claude Code Bash 工具子进程 PATH
+CURRENT_CATEGORY="runtime"
 #
 # Claude Code 的 Bash 工具开 bash 子进程（不读 zsh 的 .zshrc），macOS 上
 # login bash 读 .bash_profile。zsh 用户在 terminal 加完 PATH 之后，chat 里
 # 跑 pmai 仍可能 not found —— 这个检测把盲点暴露出来。
 echo ""
-echo "─── 7. Claude Code Bash 工具子进程 PATH ───"
+echo "─── 8. Claude Code Bash 工具子进程 PATH ───"
 if bash -lc 'command -v pmai >/dev/null 2>&1'; then
   ok "bash -lc 能调到 pmai（Claude Code 内 AI 可调）"
 else
@@ -521,9 +1069,10 @@ else
   echo "      修复：echo 'export PATH=\"\$HOME/.pmai/bin:\$PATH\"' >> $FIX_RC"
 fi
 
-# 8. gstack readiness
+# 9. gstack readiness
+CURRENT_CATEGORY="browser"
 echo ""
-echo "─── 8. gstack prerequisite ───"
+echo "─── 9. gstack prerequisite ───"
 GSTACK_BIN=$(command -v gstack 2>/dev/null || true)
 if [ -n "$GSTACK_BIN" ]; then
   ok "gstack command found: $GSTACK_BIN"
@@ -537,9 +1086,9 @@ else
   warn "gstack 未检测到 — 初始化和非 Web build 不受影响；Web 验收需使用 gstack 或其它主动浏览器适配器；参考：https://github.com/garrytan/gstack"
 fi
 
-# 9. gstack browser/design diagnostics
+# 10. gstack browser/design diagnostics
 echo ""
-echo "─── 9. gstack browser/design diagnostics ───"
+echo "─── 10. gstack browser/design diagnostics ───"
 GSTACK_BROWSER_CHECK="$PMAI_HOME/scripts/check-gstack-browser.sh"
 if [ -f "$GSTACK_BROWSER_CHECK" ]; then
   if [ "$BROWSER_SMOKE" = "1" ]; then
@@ -568,4 +1117,4 @@ else
 fi
 echo "════════════════════════════════════════════════════════════"
 
-exit $EXIT_CODE
+finish_doctor "$EXIT_CODE"

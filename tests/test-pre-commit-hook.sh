@@ -78,6 +78,45 @@ test_install_idempotent() {
   fixture_teardown
 }
 
+test_check_is_read_only_and_detects_drift() {
+  start_test "I-PCH3b install-hooks --check 只读检测缺失、内容和权限漂移"
+  fixture_setup
+  _install_hook
+
+  hook="$FIXTURE_DIR/.git/hooks/pre-commit"
+  before=$(shasum -a 256 "$hook")
+  if ! (cd "$FIXTURE_DIR" && bash "$INSTALL_HOOKS" --check) >/dev/null 2>&1; then
+    _fail "current pre-commit hook should pass --check"
+    fixture_teardown
+    return
+  fi
+  after=$(shasum -a 256 "$hook")
+  if [ "$before" != "$after" ]; then
+    _fail "install-hooks --check modified the hook"
+    fixture_teardown
+    return
+  fi
+
+  chmod -x "$hook"
+  (cd "$FIXTURE_DIR" && bash "$INSTALL_HOOKS" --check) >/dev/null 2>&1
+  rc=$?
+  chmod +x "$hook"
+  if [ "$rc" != "1" ]; then
+    _fail "non-executable hook should return drift rc=1, got $rc"
+    fixture_teardown
+    return
+  fi
+  printf '\nlocal drift\n' >> "$hook"
+  (cd "$FIXTURE_DIR" && bash "$INSTALL_HOOKS" --check) >/dev/null 2>&1
+  rc=$?
+  if [ "$rc" = "1" ]; then
+    pass_test
+  else
+    _fail "modified hook should return drift rc=1, got $rc"
+  fi
+  fixture_teardown
+}
+
 # -----------------------------------------------------------------
 # T4: 已存在不同 hook 时备份
 # -----------------------------------------------------------------
@@ -191,6 +230,7 @@ test_engineering_doc_requires_index_entry() {
 test_install_creates_executable_hook
 test_unrelated_commit_passes
 test_install_idempotent
+test_check_is_read_only_and_detects_drift
 test_install_backs_up_existing
 test_attachments_small_file_no_silent_fail
 test_attachments_big_file_warn_but_pass

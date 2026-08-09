@@ -11,13 +11,13 @@
 #   T3: pmai-doctor --help 只打印帮助，不执行自检
 #   T4: pmai-doctor 检测 host skill dir 的 stale 暴露入口
 #   T5: pmai-status --help 只打印帮助，不执行状态扫描
-#   T6: pmai-status 报告 stale 暴露入口，提示 upgrade 重同步
+#   T6: pmai-status 作为 doctor check 兼容包装报告 stale 暴露入口
 #   T7: pmai-doctor 缺 Codex 暴露入口时失败
 #   T8: install / upgrade / uninstall 覆盖 Codex/Kimi skill dir + legacy prompt cleanup + OpenCode commands
-#   T9: pmai-doctor 可自愈 Codex 首次空暴露目录（兼容旧 upgrader）
+#   T9: pmai-doctor 默认只读，--repair 才自愈 Codex 首次空暴露目录
 #   T10: pmai-doctor 不再生成 Codex slash prompts
-#   T11: pmai-doctor 可自愈 OpenCode slash commands
-#   T12: pmai-doctor 可自愈 Kimi 原生 Skill 暴露和 managed hooks
+#   T11: pmai-doctor --repair 可自愈 OpenCode slash commands
+#   T12: pmai-doctor --repair 可自愈 Kimi 原生 Skill 暴露和 managed hooks
 #   T15: 旧 updater 升级后保留公开入口；后续失败回滚恢复旧暴露策略
 #   T16: 当前 updater 可降级到不含策略函数的旧版本
 #   T17: upgrade doctor 日志默认唯一安全，同时保留测试 override
@@ -128,6 +128,13 @@ setup_fake_global_install() {
   ln -s "$SKILLS_DIR" "$pmai_home/skills"
   cp "$REPO_ROOT/scripts/_lib/global-install-lock.sh" "$pmai_home/scripts/_lib/global-install-lock.sh"
   cp "$REPO_ROOT/scripts/_lib/global_install_lock.py" "$pmai_home/scripts/_lib/global_install_lock.py"
+  cp "$REPO_ROOT/scripts/_lib/atomic_file.py" "$pmai_home/scripts/_lib/atomic_file.py"
+  cp "$REPO_ROOT/scripts/_lib/project_definition.py" "$pmai_home/scripts/_lib/project_definition.py"
+  cp "$REPO_ROOT/scripts/consumer-doctor.py" "$pmai_home/scripts/consumer-doctor.py"
+  cp "$REPO_ROOT/scripts/gen-mock-board.py" "$pmai_home/scripts/gen-mock-board.py"
+  cp "$REPO_ROOT/scripts/install-project-hooks.sh" "$pmai_home/scripts/install-project-hooks.sh"
+  cp "$REPO_ROOT/scripts/install-hooks.sh" "$pmai_home/scripts/install-hooks.sh"
+  ln -s "$REPO_ROOT/templates" "$pmai_home/templates"
   ln -s "$REPO_ROOT/scripts/install-opencode-commands.sh" "$pmai_home/scripts/install-opencode-commands.sh"
   ln -s "$REPO_ROOT/scripts/manage-kimi-hooks.py" "$pmai_home/scripts/manage-kimi-hooks.py"
   ln -s "$REPO_ROOT/scripts/kimi-hook-dispatch.sh" "$pmai_home/scripts/kimi-hook-dispatch.sh"
@@ -147,6 +154,13 @@ setup_fake_global_install() {
   ln -s "$pmai_home/skills/_shared" "$fake_home/.claude/skills/_shared"
   ln -s "$pmai_home/skills/_shared" "$fake_home/.codex/skills/_shared"
   ln -s "$pmai_home/skills/_shared" "$fake_home/.kimi-code/skills/_shared"
+
+  mkdir -p "$fake_home/.config/opencode/commands"
+  if ! PMAI_HOME="$pmai_home" OPENCODE_CONFIG_DIR="$fake_home/.config/opencode" \
+    bash "$pmai_home/scripts/install-opencode-commands.sh" --global >/dev/null 2>&1; then
+    rm -rf "$tmp"
+    return 1
+  fi
 
   echo "$tmp|$pmai_home|$fake_home"
 }
@@ -181,9 +195,9 @@ test_manual_workflows_are_host_entries() {
       return
     fi
   done
-  if ! grep -q "target_skill_is_host_exposed" "$STATUS" \
-    || grep -qE 'source .*TARGET|source .*skill-links' "$STATUS"; then
-    _fail "pmai-status should read the target policy without executing it"
+  if ! grep -q 'pmai-doctor' "$STATUS" || ! grep -q -- '--check' "$STATUS" \
+    || grep -qE 'CODEX_SKILLS|KIMI_SKILLS|OPENCODE_CONFIG_DIR|skill-links' "$STATUS"; then
+    _fail "pmai-status should be a thin compatibility wrapper around doctor --check"
     return
   fi
 
@@ -306,7 +320,7 @@ test_status_help_is_help_only() {
 }
 
 test_status_reports_stale_exposed_skill() {
-  start_test "T6: pmai-status 报告 stale pmai-* 暴露入口"
+  start_test "T6: pmai-status 兼容包装委托 doctor 报告 stale 入口"
   local setup tmp pmai_home fake_home out
 
   setup=$(setup_fake_global_install)
@@ -316,13 +330,13 @@ test_status_reports_stale_exposed_skill() {
   out=$(PMAI_HOME="$pmai_home" HOME="$fake_home" bash "$STATUS" 2>&1)
   rm -rf "$tmp"
 
-  if ! echo "$out" | grep -q "Codex drift:"; then
-    _fail "status 未输出 Codex drift"
+  if ! echo "$out" | grep -q "pmai status 已并入 pmai doctor --check"; then
+    _fail "status 未提示兼容入口已并入 doctor check"
     echo "$out" >&2
     return
   fi
-  if ! echo "$out" | grep -q "stale:.*pmai-new-req"; then
-    _fail "status 未列出 stale pmai-new-req"
+  if ! echo "$out" | grep -q "Codex stale exposed skill entry(s): .*pmai-new-req"; then
+    _fail "status 包装后的 doctor 未列出 stale pmai-new-req"
     echo "$out" >&2
     return
   fi
@@ -383,7 +397,19 @@ test_doctor_rejects_wrong_target_and_real_directory_entries() {
   elif [ ! -f "$marker" ]; then
     _fail "doctor 不得覆盖不属于 PMAI 的实体 _shared 目录"
   else
-    pass_test
+    out=$(PMAI_HOME="$pmai_home" HOME="$fake_home" \
+      CODEX_HOME="$fake_home/.codex" KIMI_CODE_HOME="$fake_home/.kimi-code" \
+      OPENCODE_CONFIG_DIR="$fake_home/.config/opencode" bash "$DOCTOR" --repair 2>&1)
+    rc=$?
+    if [ "$rc" = "0" ]; then
+      _fail "doctor --repair 不得把外来入口当成 PMAI 自有入口覆盖"
+      echo "$out" >&2
+    elif [ "$(readlink "$fake_home/.codex/skills/pmai-design")" != "$SKILLS_DIR/design" ] \
+      || [ ! -f "$marker" ]; then
+      _fail "doctor --repair 改写了外来 symlink 或实体 _shared 目录"
+    else
+      pass_test
+    fi
   fi
 
   rm -rf "$tmp"
@@ -393,7 +419,7 @@ test_lifecycle_scripts_cover_codex_skills() {
   start_test "T8: install / upgrade / uninstall 覆盖 Codex/Kimi skill dir + legacy prompt cleanup + OpenCode commands"
   local file
 
-  for file in "$INSTALL" "$UPGRADE" "$UNINSTALL" "$DOCTOR" "$STATUS"; do
+  for file in "$INSTALL" "$UPGRADE" "$UNINSTALL" "$DOCTOR"; do
     if ! grep -q "CODEX_SKILLS" "$file"; then
       _fail "$(basename "$file") 未声明 CODEX_SKILLS，Codex skill 暴露会漂移"
       return
@@ -409,7 +435,7 @@ test_lifecycle_scripts_cover_codex_skills() {
       return
     fi
   done
-  for file in "$DOCTOR" "$STATUS"; do
+  for file in "$DOCTOR"; do
     if grep -q "CODEX_PROMPTS" "$file"; then
       _fail "$(basename "$file") 不应继续把 legacy Codex prompts 当成当前 host surface"
       return
@@ -419,7 +445,7 @@ test_lifecycle_scripts_cover_codex_skills() {
     _fail "install / upgrade 应清理 legacy Codex prompts"
     return
   fi
-  for file in "$INSTALL" "$UPGRADE" "$UNINSTALL" "$DOCTOR" "$STATUS"; do
+  for file in "$INSTALL" "$UPGRADE" "$UNINSTALL" "$DOCTOR"; do
     if ! grep -q "OPENCODE_CONFIG_DIR" "$file"; then
       _fail "$(basename "$file") 未声明 OPENCODE_CONFIG_DIR，OpenCode command 暴露会漂移"
       return
@@ -429,11 +455,15 @@ test_lifecycle_scripts_cover_codex_skills() {
     _fail "install / upgrade 应调用 install-opencode-commands.sh"
     return
   fi
+  if ! grep -q 'pmai-doctor' "$STATUS" || ! grep -q -- '--check' "$STATUS"; then
+    _fail "pmai-status 应只委托 doctor --check"
+    return
+  fi
   pass_test
 }
 
 test_doctor_repairs_empty_codex_exposure() {
-  start_test "T9: pmai-doctor 自愈 Codex 首次空暴露目录"
+  start_test "T9: doctor 默认只读，--repair 才自愈空 Codex 暴露目录"
   local setup tmp pmai_home fake_home out rc
 
   setup=$(setup_fake_global_install)
@@ -444,13 +474,29 @@ test_doctor_repairs_empty_codex_exposure() {
   out=$(PMAI_HOME="$pmai_home" HOME="$fake_home" bash "$DOCTOR" 2>&1)
   rc=$?
 
-  if [ "$rc" != "0" ]; then
-    _fail "Codex 暴露目录为空时 doctor 应自愈并通过"
+  if [ "$rc" = "0" ]; then
+    _fail "Codex 暴露目录为空时只读 doctor 应失败"
     echo "$out" >&2
     rm -rf "$tmp"
     return
   fi
-  if ! echo "$out" | grep -q "Codex initial skill exposure repaired"; then
+  if [ -e "$fake_home/.codex/skills/pmai-design" ] \
+    || [ -L "$fake_home/.codex/skills/pmai-design" ]; then
+    _fail "默认 doctor 不得写入空 Codex 暴露目录"
+    rm -rf "$tmp"
+    return
+  fi
+
+  out=$(PMAI_HOME="$pmai_home" HOME="$fake_home" bash "$DOCTOR" --repair 2>&1)
+  rc=$?
+
+  if [ "$rc" != "0" ]; then
+    _fail "Codex 暴露目录为空时 doctor --repair 应自愈并通过"
+    echo "$out" >&2
+    rm -rf "$tmp"
+    return
+  fi
+  if ! echo "$out" | grep -q "Codex skill exposure repaired"; then
     _fail "doctor 未报告 Codex 初始暴露自愈"
     echo "$out" >&2
     rm -rf "$tmp"
@@ -469,6 +515,16 @@ test_doctor_repairs_empty_codex_exposure() {
     return
   fi
 
+  rm -f "$fake_home/.codex/skills/pmai-design"
+  out=$(PMAI_HOME="$pmai_home" HOME="$fake_home" bash "$DOCTOR" --repair 2>&1)
+  rc=$?
+  if [ "$rc" != "0" ] || [ ! -L "$fake_home/.codex/skills/pmai-design" ]; then
+    _fail "doctor --repair 应补回单个缺失的 PMAI skill 入口"
+    echo "$out" >&2
+    rm -rf "$tmp"
+    return
+  fi
+
   rm -rf "$tmp"
   pass_test
 }
@@ -482,7 +538,7 @@ test_doctor_does_not_generate_codex_prompts() {
   rm -rf "$fake_home/.codex/prompts"
   mkdir -p "$fake_home/.codex/prompts"
 
-  out=$(PMAI_HOME="$pmai_home" HOME="$fake_home" bash "$DOCTOR" 2>&1)
+  out=$(PMAI_HOME="$pmai_home" HOME="$fake_home" bash "$DOCTOR" --repair 2>&1)
   rc=$?
 
   if [ "$rc" != "0" ]; then
@@ -516,11 +572,11 @@ test_doctor_repairs_opencode_commands() {
   rm -rf "$fake_home/.config/opencode/commands"
   mkdir -p "$fake_home/.config/opencode/commands"
 
-  out=$(PMAI_HOME="$pmai_home" HOME="$fake_home" bash "$DOCTOR" 2>&1)
+  out=$(PMAI_HOME="$pmai_home" HOME="$fake_home" bash "$DOCTOR" --repair 2>&1)
   rc=$?
 
   if [ "$rc" != "0" ]; then
-    _fail "OpenCode command 目录为空时 doctor 应自愈并通过"
+    _fail "OpenCode command 目录为空时 doctor --repair 应自愈并通过"
     echo "$out" >&2
     rm -rf "$tmp"
     return
@@ -574,11 +630,11 @@ test_doctor_repairs_modified_opencode_command_content() {
 
   out=$(PMAI_HOME="$pmai_home" HOME="$fake_home" \
     CODEX_HOME="$fake_home/.codex" KIMI_CODE_HOME="$fake_home/.kimi-code" \
-    OPENCODE_CONFIG_DIR="$fake_home/.config/opencode" bash "$DOCTOR" 2>&1)
+    OPENCODE_CONFIG_DIR="$fake_home/.config/opencode" bash "$DOCTOR" --repair 2>&1)
   rc=$?
 
   if [ "$rc" != "0" ]; then
-    _fail "OpenCode command 内容漂移时 doctor 应修复并通过"
+    _fail "OpenCode command 内容漂移时 doctor --repair 应修复并通过"
     echo "$out" >&2
   elif ! echo "$out" | grep -q 'OpenCode slash commands repaired and verified'; then
     _fail "doctor 未报告 OpenCode 内容漂移已修复并复验"
@@ -606,7 +662,7 @@ test_doctor_repairs_kimi_native_surface() {
   config="$fake_home/.kimi-code/config.toml"
   printf '%s\n' 'default_model = "demo"' > "$config"
 
-  out=$(PMAI_HOME="$pmai_home" HOME="$fake_home" KIMI_CODE_HOME="$fake_home/.kimi-code" bash "$DOCTOR" 2>&1)
+  out=$(PMAI_HOME="$pmai_home" HOME="$fake_home" KIMI_CODE_HOME="$fake_home/.kimi-code" bash "$DOCTOR" --repair 2>&1)
   rc=$?
 
   if [ "$rc" != "0" ]; then
@@ -615,7 +671,7 @@ test_doctor_repairs_kimi_native_surface() {
     rm -rf "$tmp"
     return
   fi
-  if ! echo "$out" | grep -q "Kimi Code initial skill exposure repaired"; then
+  if ! echo "$out" | grep -q "Kimi Code skill exposure repaired"; then
     _fail "doctor 未报告 Kimi 原生 Skill 暴露自愈"
     echo "$out" >&2
     rm -rf "$tmp"
@@ -664,7 +720,7 @@ PY
   printf '%s\n' 'default_model = "demo"' > "$config"
 
   out=$(PMAI_HOME="$pmai_home" HOME="$fake_home" \
-    KIMI_CODE_HOME="$fake_home/.kimi-code" bash "$DOCTOR" 2>&1)
+    KIMI_CODE_HOME="$fake_home/.kimi-code" bash "$DOCTOR" --repair 2>&1)
   rc=$?
   if [ "$rc" = "0" ]; then
     _fail "manager install 返回 0 但复验仍 drift 时 doctor 不得通过"
@@ -676,6 +732,219 @@ PY
     pass_test
   fi
   rm -rf "$tmp"
+}
+
+test_doctor_json_contract_and_status_alias() {
+  start_test "T12c: doctor JSON 合同稳定，status JSON 与 check 等价"
+  local setup tmp pmai_home fake_home doctor_json status_json broken_json rc real_python
+
+  setup=$(setup_fake_global_install)
+  IFS='|' read -r tmp pmai_home fake_home <<< "$setup"
+
+  doctor_json=$(PMAI_HOME="$pmai_home" HOME="$fake_home" \
+    CODEX_HOME="$fake_home/.codex" KIMI_CODE_HOME="$fake_home/.kimi-code" \
+    OPENCODE_CONFIG_DIR="$fake_home/.config/opencode" \
+    bash "$pmai_home/bin/pmai-doctor" --check --json 2>"$tmp/doctor.err")
+  rc=$?
+  if [ "$rc" != "0" ] || ! python3 - "$doctor_json" <<'PY'
+import json
+import sys
+
+payload = json.loads(sys.argv[1])
+assert payload["schema_version"] == 1
+assert payload["mode"] == "check"
+assert payload["conclusion"] == "healthy"
+assert payload["recommended_action"] == "none"
+assert payload["summary"]["fail"] == 0
+assert isinstance(payload["framework"], dict)
+assert isinstance(payload["consumer"], dict)
+assert isinstance(payload["findings"], list)
+PY
+  then
+    _fail "健康 doctor 应只输出合法 schema v1 JSON 并以 0 退出"
+    echo "$doctor_json" >&2
+    rm -rf "$tmp"
+    return
+  fi
+
+  status_json=$(PMAI_HOME="$pmai_home" HOME="$fake_home" \
+    CODEX_HOME="$fake_home/.codex" KIMI_CODE_HOME="$fake_home/.kimi-code" \
+    OPENCODE_CONFIG_DIR="$fake_home/.config/opencode" \
+    bash "$STATUS" --json 2>"$tmp/status.err")
+  rc=$?
+  if [ "$rc" != "0" ] || ! python3 - "$doctor_json" "$status_json" <<'PY'
+import json
+import sys
+
+assert json.loads(sys.argv[1]) == json.loads(sys.argv[2])
+PY
+  then
+    _fail "pmai status --json 应与 pmai doctor --check --json 完全等价"
+    rm -rf "$tmp"
+    return
+  fi
+  if ! grep -q "pmai status 已并入 pmai doctor --check" "$tmp/status.err"; then
+    _fail "status JSON 兼容入口缺弃用提示"
+    rm -rf "$tmp"
+    return
+  fi
+
+  rm -f "$fake_home/.codex/skills/pmai-design"
+  broken_json=$(PMAI_HOME="$pmai_home" HOME="$fake_home" \
+    CODEX_HOME="$fake_home/.codex" KIMI_CODE_HOME="$fake_home/.kimi-code" \
+    OPENCODE_CONFIG_DIR="$fake_home/.config/opencode" \
+    bash "$pmai_home/bin/pmai-doctor" --json 2>"$tmp/broken.err")
+  rc=$?
+  if [ "$rc" = "0" ] || ! python3 - "$broken_json" <<'PY'
+import json
+import sys
+
+payload = json.loads(sys.argv[1])
+assert payload["conclusion"] == "broken"
+assert payload["recommended_action"] == "repair"
+assert payload["summary"]["fail"] > 0
+PY
+  then
+    _fail "broken JSON 结论必须与非零退出码一致"
+    echo "$broken_json" >&2
+    rm -rf "$tmp"
+    return
+  fi
+
+  ln -s "$pmai_home/skills/design" "$fake_home/.codex/skills/pmai-design"
+  real_python=$(command -v python3)
+  mkdir -p "$tmp/fail-json-bin"
+  cat > "$tmp/fail-json-bin/python3" <<SH
+#!/usr/bin/env bash
+if [ "\${1:-}" = "-" ] && [[ "\${2:-}" == */pmai-doctor-results.* ]]; then
+  exit 97
+fi
+exec "$real_python" "\$@"
+SH
+  chmod +x "$tmp/fail-json-bin/python3"
+  doctor_json=$(PMAI_HOME="$pmai_home" HOME="$fake_home" \
+    CODEX_HOME="$fake_home/.codex" KIMI_CODE_HOME="$fake_home/.kimi-code" \
+    OPENCODE_CONFIG_DIR="$fake_home/.config/opencode" \
+    PATH="$tmp/fail-json-bin:$PATH" \
+    bash "$pmai_home/bin/pmai-doctor" --check --json 2>"$tmp/json-emitter.err")
+  rc=$?
+  if [ "$rc" != "2" ] || [ -n "$doctor_json" ]; then
+    _fail "doctor JSON 序列化失败时必须失败关闭且不得输出伪 JSON"
+    echo "rc=$rc stdout=$doctor_json" >&2
+    rm -rf "$tmp"
+    return
+  fi
+
+  rm -rf "$tmp"
+  pass_test
+}
+
+test_doctor_reports_consumer_hook_drift() {
+  start_test "T12d: doctor 把消费仓 hooks 漂移归为 consumer_sync_required"
+  local setup tmp pmai_home fake_home consumer out rc
+
+  setup=$(setup_fake_global_install)
+  IFS='|' read -r tmp pmai_home fake_home <<< "$setup"
+  cat > "$pmai_home/scripts/install-project-hooks.sh" <<'SH'
+#!/usr/bin/env bash
+[ "${1:-}" = "--check" ] || exit 2
+exit 1
+SH
+  consumer="$tmp/consumer"
+  if ! bash "$REPO_ROOT/scripts/init-project.sh" DoctorHookFixture "$consumer" \
+    "doctor hook fixture" >/dev/null 2>&1; then
+    _fail "unable to initialize current consumer fixture"
+    rm -rf "$tmp"
+    return
+  fi
+
+  out=$(cd "$consumer" && PMAI_HOME="$pmai_home" HOME="$fake_home" \
+    CODEX_HOME="$fake_home/.codex" KIMI_CODE_HOME="$fake_home/.kimi-code" \
+    OPENCODE_CONFIG_DIR="$fake_home/.config/opencode" \
+    bash "$pmai_home/bin/pmai-doctor" --check --json 2>"$tmp/consumer.err")
+  rc=$?
+  if [ "$rc" != "0" ] || ! python3 - "$out" "$consumer" <<'PY'
+import json
+import os
+import sys
+
+payload = json.loads(sys.argv[1])
+assert payload["conclusion"] == "consumer_sync_required"
+assert payload["recommended_action"] == "refresh_project_hooks"
+assert payload["consumer"]["kind"] == "consumer"
+assert payload["consumer"]["root"] == os.path.realpath(sys.argv[2])
+assert payload["consumer"]["project_hooks"] == "drifted"
+PY
+  then
+    _fail "消费仓 hooks 漂移应保持只读并返回唯一同步建议"
+    echo "$out" >&2
+    rm -rf "$tmp"
+    return
+  fi
+
+  rm -rf "$tmp"
+  pass_test
+}
+
+test_doctor_reports_invalid_consumer_structure() {
+  start_test "T12f: doctor 把消费仓结构损坏与宿主待同步分开"
+  local setup tmp pmai_home fake_home consumer out rc
+
+  setup=$(setup_fake_global_install)
+  IFS='|' read -r tmp pmai_home fake_home <<< "$setup"
+  consumer="$tmp/consumer-invalid"
+  if ! bash "$REPO_ROOT/scripts/init-project.sh" DoctorInvalidFixture "$consumer" \
+    "doctor invalid fixture" >/dev/null 2>&1; then
+    _fail "unable to initialize invalid consumer fixture"
+    rm -rf "$tmp"
+    return
+  fi
+  rm -f "$consumer/PRODUCT.md"
+
+  out=$(cd "$consumer" && PMAI_HOME="$pmai_home" HOME="$fake_home" \
+    CODEX_HOME="$fake_home/.codex" KIMI_CODE_HOME="$fake_home/.kimi-code" \
+    OPENCODE_CONFIG_DIR="$fake_home/.config/opencode" \
+    bash "$pmai_home/bin/pmai-doctor" --check --json 2>"$tmp/consumer-invalid.err")
+  rc=$?
+  if [ "$rc" = "0" ] || ! python3 - "$out" <<'PY'
+import json
+import sys
+
+payload = json.loads(sys.argv[1])
+assert payload["conclusion"] == "consumer_invalid"
+assert payload["recommended_action"] == "review_consumer_structure"
+assert payload["consumer"]["topology_status"] == "invalid"
+assert payload["consumer"]["phase"] == "initialized"
+assert payload["consumer"]["project_hooks"] == "current"
+assert payload["consumer"]["opencode"] == "current"
+assert payload["consumer"]["git_hook"] == "current"
+assert payload["consumer"]["audit"]["status"] == "invalid"
+assert any(item["code"] == "missing_required_file" for item in payload["consumer"]["audit"]["findings"])
+PY
+  then
+    _fail "invalid consumer structure should return its own nonzero conclusion"
+    echo "$out" >&2
+    rm -rf "$tmp"
+    return
+  fi
+
+  rm -rf "$tmp"
+  pass_test
+}
+
+test_doctor_skill_separates_status_doctor_and_upgrade() {
+  start_test "T12e: Doctor Skill 明确三入口职责和二次确认"
+  local skill="$SKILLS_DIR/doctor/SKILL.md"
+
+  if ! grep -q '/pmai-status.*产品进度' "$skill" \
+    || ! grep -q '/pmai-doctor.*框架是否健康' "$skill" \
+    || ! grep -q '/pmai-upgrade.*执行已经确认' "$skill" \
+    || ! grep -q '修复必须二次确认' "$skill" \
+    || ! grep -q 'doctor --repair --json' "$skill"; then
+    _fail "Doctor Skill 未完整声明 status / doctor / upgrade 边界"
+    return
+  fi
+  pass_test
 }
 
 prepare_install_target_repo() {
@@ -1462,6 +1731,7 @@ test_upgrade_preserves_public_links_and_restores_rollback_policy() {
   fi
   cp "$UPGRADE" "$current_upgrade"
   cp "$DOCTOR" "$source_repo/bin/pmai-doctor"
+  cp -R "$REPO_ROOT/skills/doctor" "$source_repo/skills/doctor"
   cp "$REPO_ROOT/scripts/_lib/skill-links.sh" "$source_repo/scripts/_lib/skill-links.sh"
   cp "$REPO_ROOT/scripts/install-opencode-commands.sh" "$source_repo/scripts/install-opencode-commands.sh"
   copy_global_lock_helpers_to "$source_repo"
@@ -1471,7 +1741,7 @@ test_upgrade_preserves_public_links_and_restores_rollback_policy() {
     -e '/pmai_skill_is_host_exposed "$skill_name" || continue/d' \
     "$current_upgrade" > "$source_repo/bin/pmai-upgrade"
   chmod +x "$source_repo/bin/pmai-upgrade" "$source_repo/bin/pmai-doctor"
-  git -C "$source_repo" add bin/pmai-upgrade bin/pmai-doctor \
+  git -C "$source_repo" add bin/pmai-upgrade bin/pmai-doctor skills/doctor \
     scripts/_lib/skill-links.sh scripts/_lib/global-install-lock.sh \
     scripts/_lib/global_install_lock.py scripts/_lib/kimi-config-transaction.sh \
     scripts/install-opencode-commands.sh
@@ -1692,7 +1962,7 @@ test_upgrade_doctor_log_and_project_hook_notice() {
     _fail "upgrade 应使用唯一 mktemp 日志，并保留显式测试 override"
     return
   fi
-  if ! grep -q 'pmai status' "$UPGRADE" \
+  if ! grep -q '/pmai-doctor' "$UPGRADE" \
     || ! grep -q 'install-project-hooks.sh' "$UPGRADE" \
     || ! grep -q '不会被静默改写' "$UPGRADE"; then
     _fail "upgrade 摘要必须说明已有消费仓项目 hooks 需要单独检查和刷新"
@@ -1795,36 +2065,31 @@ test_upgrade_rolls_back_when_target_doctor_is_not_executable() {
   pass_test
 }
 
-test_repo_local_status_uses_target_exposure_policy() {
-  start_test "T18: repo-local status 只读目标策略且不执行目标代码"
-  local setup tmp pmai_home fake_home executed out
+test_repo_local_status_delegates_to_target_doctor() {
+  start_test "T18: repo-local status 通过 doctor check 委托目标版本"
+  local setup tmp pmai_home fake_home out rc
 
   setup=$(setup_fake_global_install)
   IFS='|' read -r tmp pmai_home fake_home <<< "$setup"
-  rm -f "$pmai_home/scripts/_lib/skill-links.sh"
-  executed="$tmp/target-policy-executed"
-  cat > "$pmai_home/scripts/_lib/skill-links.sh" <<'SH'
+  cat > "$pmai_home/bin/pmai-doctor" <<'SH'
 #!/usr/bin/env bash
-touch "$PMAI_STATUS_MUST_NOT_EXECUTE"
+printf 'TARGET_STATUS_DOCTOR:%s:%s\n' "$PMAI_HOME" "$*"
+exit 23
 SH
-  printf '%s\n' design > "$pmai_home/scripts/_lib/host-hidden-skills.txt"
+  chmod +x "$pmai_home/bin/pmai-doctor"
 
-  out=$(PMAI_HOME="$pmai_home" HOME="$fake_home" PMAI_STATUS_MUST_NOT_EXECUTE="$executed" \
+  out=$(PMAI_HOME="$pmai_home" HOME="$fake_home" \
     CODEX_HOME="$fake_home/.codex" KIMI_CODE_HOME="$fake_home/.kimi-code" \
     OPENCODE_CONFIG_DIR="$fake_home/.config/opencode" bash "$STATUS" 2>&1)
-  if ! echo "$out" | grep -q "stale:.*pmai-design"; then
-    _fail "status used the checkout exposure policy instead of the target version"
-    echo "$out" >&2
-    rm -rf "$tmp"
-    return
-  elif [ -e "$executed" ]; then
-    _fail "status executed the target exposure helper"
-    rm -rf "$tmp"
-    return
+  rc=$?
+  if [ "$rc" != "23" ] \
+    || ! echo "$out" | grep -q "TARGET_STATUS_DOCTOR:$pmai_home:--check"; then
+    _fail "status 未把只读检查完整委托给目标 doctor: rc=$rc out=$out"
+  else
+    pass_test
   fi
 
   rm -rf "$tmp"
-  pass_test
 }
 
 test_repo_local_doctor_delegates_to_target_version() {
@@ -1899,6 +2164,10 @@ test_doctor_repairs_opencode_commands
 test_doctor_repairs_modified_opencode_command_content
 test_doctor_repairs_kimi_native_surface
 test_doctor_rechecks_kimi_repair_result
+test_doctor_json_contract_and_status_alias
+test_doctor_reports_consumer_hook_drift
+test_doctor_reports_invalid_consumer_structure
+test_doctor_skill_separates_status_doctor_and_upgrade
 test_manual_workflows_are_host_entries
 test_skill_frontmatter_does_not_claim_framework_version
 test_install_doctor_failure_restores_every_global_surface
@@ -1917,7 +2186,7 @@ test_upgrade_can_pin_to_legacy_policy_without_function_leak
 test_upgrade_doctor_log_and_project_hook_notice
 test_upgrade_rolls_back_when_target_doctor_is_missing
 test_upgrade_rolls_back_when_target_doctor_is_not_executable
-test_repo_local_status_uses_target_exposure_policy
+test_repo_local_status_delegates_to_target_doctor
 test_repo_local_doctor_delegates_to_target_version
 test_repo_local_doctor_fails_closed_when_target_doctor_missing
 

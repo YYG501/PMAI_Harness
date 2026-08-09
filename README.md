@@ -19,7 +19,7 @@ gh auth status || gh auth login
 rm -rf /tmp/pmai-src
 gh repo clone YYG501/PMAI_Workflow /tmp/pmai-src
 bash /tmp/pmai-src/bin/pmai install
-~/.pmai/bin/pmai doctor
+~/.pmai/bin/pmai doctor --check
 # 需要确认 /browse runtime 真能启动时再跑主动 smoke：
 ~/.pmai/bin/pmai doctor --browser-smoke
 ```
@@ -50,7 +50,7 @@ PMAI 不和 Claude Design、design-html 或 Claude Code 比"谁更快生成第�
 
 定位是 **PM 单人生产力工具**，不是团队 SOP / CI 平台 / 多租户基础设施。完整产品意义、非目标和成功标准见 [`PRODUCT.md`](./PRODUCT.md)。
 
-**分发形态**：全局安装（单人多项目）。框架装到 `~/.pmai/`，当前 skill symlink 到 `~/.claude/skills/pmai-*`、`~/.codex/skills/pmai-*` 和 `${KIMI_CODE_HOME:-$HOME/.kimi-code}/skills/pmai-*`；OpenCode 另生成 `~/.config/opencode/commands/pmai-*.md`。Codex 只使用原生 skills，通过 `$pmai-*` 或自然语言调用；Kimi Code 使用原生 `/skill:pmai-*`，不模拟 `/pmai-*` slash command；两者都不生成重复入口。任意 cwd 可起新业务项目；`pmai upgrade` 一键升级全局 skill、脚本和 hook 源。项目级 `.claude/settings.json` / `.codex/hooks.json` 不会被全局升级静默改写：在消费仓运行 `pmai status` 可检测漂移，运行 `bash ~/.pmai/scripts/install-project-hooks.sh` 可确定性刷新。skill 只装全局一处，项目里只放 host 配置 / 状态资产（`.claude/settings.json` / `.codex/hooks.json` / `.opencode/commands` / `opencode.json` / `.work-meta.json`）——这样每个 PMAI 入口永远唯一，不会和项目副本重复。Kimi 的 hooks 是用户级配置，由 PMAI 分发器先识别仓库类型，普通仓库直接跳过。
+**分发形态**：全局安装（单人多项目）。框架装到 `~/.pmai/`，当前 skill symlink 到 `~/.claude/skills/pmai-*`、`~/.codex/skills/pmai-*` 和 `${KIMI_CODE_HOME:-$HOME/.kimi-code}/skills/pmai-*`；OpenCode 另生成 `~/.config/opencode/commands/pmai-*.md`。Codex 只使用原生 skills，通过 `$pmai-*` 或自然语言调用；Kimi Code 使用原生 `/skill:pmai-*`，不模拟 `/pmai-*` slash command；两者都不生成重复入口。任意 cwd 可起新业务项目；`pmai upgrade` 一键升级全局 skill、脚本和 hook 源。项目级 `.claude/settings.json` / `.codex/hooks.json` 不会被全局升级静默改写：在消费仓使用 `/pmai-doctor` 可只读检查漂移，PM 确认后再运行 `bash ~/.pmai/scripts/install-project-hooks.sh` 确定性刷新。skill 只装全局一处，项目里只放 host 配置 / 状态资产（`.claude/settings.json` / `.codex/hooks.json` / `.opencode/commands` / `opencode.json` / `.work-meta.json`）——这样每个 PMAI 入口永远唯一，不会和项目副本重复。Kimi 的 hooks 是用户级配置，由 PMAI 分发器先识别仓库类型，普通仓库直接跳过。
 
 ---
 
@@ -90,7 +90,7 @@ Kimi Code 中把上述入口原生写成 `/skill:pmai-design`、`/skill:pmai-bui
 | **bash** ≥ 4 | 必需 | scripts 入口语言（macOS 自带 3.x 已知坑见 INVARIANTS） |
 | **codex CLI** | 可选 | `/pmai-build` 外部执行器；Codex 作为当前主控时不重复进入外部候选，但当前主控直接构建始终可选。不装可走 Claude Code / OpenCode / Cursor Agent，或由当前会话直接构建 |
 
-未检测到 gstack 时，`pmai install` / `pmai doctor` 只给 readiness warning，初始化和非 Web build 都不受阻塞。Web final checks 会在 PM 请求定稿后解析可用的主动浏览器适配器；完全没有适配器时 UI 验收阻塞，不能伪装通过。gstack 输出仍必须按 PMAI 规则接回 `DESIGN.md`、`mockups/`、evidence artifacts、`.pm-workflow/mirror/`、`docs/deliverables/` 或 `docs/engineering/`，不能把 `~/.gstack/...` 当长期真相源。
+未检测到 gstack 时，`pmai install` / `pmai doctor --check` 只给 readiness warning，初始化和非 Web build 都不受阻塞。Web final checks 会在 PM 请求定稿后解析可用的主动浏览器适配器；完全没有适配器时 UI 验收阻塞，不能伪装通过。gstack 输出仍必须按 PMAI 规则接回 `DESIGN.md`、`mockups/`、evidence artifacts、`.pm-workflow/mirror/`、`docs/deliverables/` 或 `docs/engineering/`，不能把 `~/.gstack/...` 当长期真相源。
 
 ---
 
@@ -107,7 +107,7 @@ gh auth status || gh auth login
 rm -rf /tmp/pmai-src
 gh repo clone YYG501/PMAI_Workflow /tmp/pmai-src
 bash /tmp/pmai-src/bin/pmai install
-~/.pmai/bin/pmai doctor
+~/.pmai/bin/pmai doctor --check
 ```
 
 或走 SSH：
@@ -116,13 +116,13 @@ bash /tmp/pmai-src/bin/pmai install
 ssh -T git@github.com
 git clone git@github.com:YYG501/PMAI_Workflow.git /tmp/pmai-src
 bash /tmp/pmai-src/bin/pmai install
-~/.pmai/bin/pmai doctor
+~/.pmai/bin/pmai doctor --check
 ```
 
 安装成功后，`pmai install` 末尾会：
 
 - clone 到 `~/.pmai/` + symlink skill 到 `~/.claude/skills/pmai-*` / `~/.codex/skills/pmai-*` / `$KIMI_CODE_HOME/skills/pmai-*` + 生成 OpenCode slash commands 到 `~/.config/opencode/commands/pmai-*.md`；同时清理旧版遗留的 `~/.codex/prompts/pmai-*.md`
-- 在已有的 `$KIMI_CODE_HOME/config.toml` 中只维护 PMAI 标记的原生 hooks 区块；保留模型、凭据和其它用户配置。若 Kimi 尚未生成 config，skill 仍会安装，首次启动 Kimi 后运行 `pmai doctor` 即可补齐 hooks
+- 在已有的 `$KIMI_CODE_HOME/config.toml` 中只维护 PMAI 标记的原生 hooks 区块；保留模型、凭据和其它用户配置。若 Kimi 尚未生成 config，skill 仍会安装；首次启动 Kimi 后先用 `/skill:pmai-doctor` 诊断，确认修复后再运行 `pmai doctor --repair`
 - 自动检测 shell（zsh/bash）+ 给 `~/.pmai/bin` 加 PATH 的 oneshot 命令
 - 提示 gstack readiness；缺 gstack 只 warning，不影响起项。`pmai doctor --browser-smoke` 可主动验证 gstack browse，但 UI build 也可使用其它受支持的主动浏览器适配器。
 
@@ -149,14 +149,14 @@ bash bin/pmai install                       # 全局安装
 # 3. 按 install 末尾的「📌 一步加 PATH」提示加 ~/.pmai/bin 到 PATH
 
 # 4. 校验
-~/.pmai/bin/pmai doctor    # 完整性自检
+~/.pmai/bin/pmai doctor --check    # 只读完整性与消费仓检查
 ```
 
 > 临时 `/tmp/pmai-src` clone 只是 installer 容器，装完可删；真正稳定的副本在 `~/.pmai/`（pmai 自己 clone 的，`pmai upgrade` 拉它）。如果你在本仓 checkout 内直接 `bash bin/pmai install`，`pmai install` 仍会按 `PMAI_REMOTE` / 默认 remote 另 clone 一份到 `~/.pmai/`。
 
 ### 安装模式：仅全局
 
-PMAI 只有全局安装一种形态（`pmai install` → clone `~/.pmai/` + symlink `~/.claude/skills/pmai-*` / `~/.codex/skills/pmai-*` / `$KIMI_CODE_HOME/skills/pmai-*` + 生成 `~/.config/opencode/commands/pmai-*.md`）。消费仓保持干净，skill 不进项目；`pmai upgrade` 后所有项目自动使用新版全局 skill / scripts / hooks 源，但项目级 Claude Code / Codex hook 配置需要在各消费仓由 `pmai status` 检测，并用 `bash ~/.pmai/scripts/install-project-hooks.sh` 刷新。Codex 不再生成 custom prompts；Kimi 直接使用 `/skill:pmai-*`，不生成模拟 slash command。
+PMAI 只有全局安装一种形态（`pmai install` → clone `~/.pmai/` + symlink `~/.claude/skills/pmai-*` / `~/.codex/skills/pmai-*` / `$KIMI_CODE_HOME/skills/pmai-*` + 生成 `~/.config/opencode/commands/pmai-*.md`）。消费仓保持干净，skill 不进项目；`pmai upgrade` 后所有项目自动使用新版全局 skill / scripts / hooks 源，但项目级 Claude Code / Codex hook 配置需要在各消费仓由 `/pmai-doctor` 只读检测，并在 PM 确认后用 `bash ~/.pmai/scripts/install-project-hooks.sh` 刷新。Codex 不再生成 custom prompts；Kimi 直接使用 `/skill:pmai-*`，不生成模拟 slash command。
 
 > 旧的 `--local`（往项目 `.claude/` 拷实体副本）已移除：它和全局并存时会让每个 `/pmai-*` 命令在菜单里重复，且副本不跟随升级而陈旧。消费仓需要的 host 配置（`.claude/settings.json` / `.codex/hooks.json` / `.opencode/commands` / `opencode.json`）仍单独放项目里（不是 skill，不会重复）；hook 脚本本体仍走 `~/.pmai/hooks` / `~/.pmai/scripts`。已有遗留副本用 `pmai uninstall --local <dir>` 清理。
 
@@ -168,9 +168,10 @@ pmai upgrade                          # 拉 main 最新（吃滚动版）
 pmai upgrade --stable                 # 跳到最新 git tag（PM 打过的稳定 baseline）
 pmai upgrade --to v0.1.0              # 锁定指定版本（回滚）
 
-# 其他
-pmai status               # VERSION + main HEAD diff
-pmai doctor               # 完整性自检
+# 其它框架命令
+pmai doctor --check       # 只读检查框架、宿主入口、消费仓文件归位与工作状态
+pmai doctor --repair      # 明确修复全局宿主入口，执行前需确认
+pmai status               # 兼容别名；等价于 pmai doctor --check
 pmai whats-new --from v0.2.0 --max-lines 40
 pmai whats-new --from v0.2.0 --full
 pmai uninstall            # 清掉全局装；--local <dir> 清理遗留项目副本
@@ -303,15 +304,20 @@ PMAI 走纯全局：每台要用的机器各自 `pmai install` 一次（全局�
 
 | 你要确认 | 命令 |
 |---|---|
-| 当前安装状态 / Claude+Codex+Kimi skill 暴露 / Kimi hooks / OpenCode command 是否漂移 | `pmai status` |
-| 全局安装完整性（含 Claude+Codex+Kimi 暴露、Kimi hooks 和 OpenCode commands） | `pmai doctor` |
+| 全局框架、宿主入口和当前消费仓的文件归位、原型/实现入口、活动工作是否健康 | `pmai doctor --check` |
+| 明确修复 PMAI 管理的全局宿主入口 | `pmai doctor --repair` |
 | 测试整个生成器仓 | `bash tests/run-all.sh` |
 | 旧 `requirements/active|closed` 仓库是否还需要人工迁移 | `python3 scripts/migrate-reqs-to-modules.py --dry-run <repo>` |
 
-在本仓里直接跑 `bash bin/pmai status` / `bash bin/pmai doctor` 时，它检查的仍是
-`PMAI_HOME`（默认 `~/.pmai`）这个安装目标；输出顶部会标明 `CLI source` 和
-`Status/Audit target`。如果你想测真实用户入口，直接跑 `~/.pmai/bin/pmai status`
-或 `~/.pmai/bin/pmai doctor`。
+在本仓里直接跑 `bash bin/pmai doctor --check` 时，它检查的仍是 `PMAI_HOME`
+（默认 `~/.pmai`）这个安装目标；输出顶部会标明 `CLI source` 和 `Audit target`。
+如果你想测真实用户入口，直接跑 `~/.pmai/bin/pmai doctor --check`。旧的
+`pmai status` 仅作为同一检查的兼容别名保留，不再维护第二套检测逻辑。
+
+消费仓检查按项目阶段执行：初始化完成时不要求代码、`mockups/` 或
+`.pm-workflow/project.yml`；首个 design 定稿后才检查建造定义，进入 build 后再检查
+真实实现入口、模块状态和恢复证据。探索稿固定在 `mockups/`，正式 prototype / product
+的位置以 `project.yml:implementation` 为准。doctor 只列差异，不自动搬文档、移动代码或改状态。
 
 ### 反馈与问题报告
 
@@ -322,7 +328,7 @@ PMAI 走纯全局：每台要用的机器各自 `pmai install` 一次（全局�
 
 - 你跑的是 repo-local `bash bin/pmai ...` 还是 installed `~/.pmai/bin/pmai ...`
 - 完整命令 / slash skill 名
-- `pmai status` 或 `pmai doctor` 输出
+- `pmai doctor --check` 输出
 - 如果问题发生在生成器仓，附 `bash tests/run-all.sh` 汇总
 
 ---

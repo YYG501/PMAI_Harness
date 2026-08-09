@@ -6,7 +6,7 @@
 
 - 日期：2026-08-09
 - 开发分支：`main`
-- 当前目标：整体安全走查及回归 review 发现的清理恢复、最终化续跑、宿主 hook 失败放行、跨版本入口审计、飞书写回证据、决定与未决问题语义边界已统一修复；复审新增的 status 信任边界、Kimi 并发 CAS、skill eval 假绿、frontmatter 注入和同秒评论游标问题也已收口，并通过 796 项全量回归。下一步继续以真实消费仓验证迭代检查始终沿用当前 build contract，并观察无缺陷正常路径 P95 是否接近 10 分钟。
+- 当前目标：产品现状与框架运维入口已收敛：`/pmai-status` 只看产品进度，`/pmai-doctor` 只读检查框架、宿主和当前消费仓，`/pmai-upgrade` 只执行已确认升级；CLI `pmai status` 降为 doctor check 兼容别名。下一步继续以真实消费仓验证迭代检查始终沿用当前 build contract，并观察无缺陷正常路径 P95 是否接近 10 分钟。
 - gstack 参考基线：`v1.58.5.0`，commit `11de390`；只参考本地 `gstack-clean` checkout，没有升级用户目录中的安装副本。
 
 ## 当前活跃模型
@@ -56,7 +56,7 @@
 - 新增 `evals/cases/*.json`、`evals/touchfiles.json` 和 `scripts/skill-eval.py`；静态案例可作为提交门，session runner / LLM judge 缺失时明确 skip，require 模式明确 fail。
 - Codex 只暴露 `~/.codex/skills/pmai-*` 原生 skills；不再生成会在 Desktop 显示为 `prompts:pmai-*` 的 custom prompts。install / upgrade 清理旧 prompt 文件，doctor / status 不再生成或检查它们；Claude Code skills 与 OpenCode commands 保持原入口。
 - Kimi Code 通过 `$KIMI_CODE_HOME/skills/pmai-*` 暴露原生 `/skill:pmai-*`；用户级 `config.toml` 中只维护 PMAI 标记的 hooks 区块。Kimi 由同一 session cwd 启动 hook 并生成 payload，因此全局分发器先以进程 cwd 路由：普通仓在读取 stdin 前直接 no-op，生成器 / 消费仓才读取并校验 payload；PMAI 路由内的坏 JSON、超限输入和 payload 跨根继续失败关闭。仓库标记只决定路由，hook 代码始终从分发器所属的可信 PMAI 框架读取，仿冒生成器仓不能触发仓内 JavaScript；可信 hook 缺失、运行时不可用或非零退出时分发器失败关闭。write 的相对路径先按 payload cwd 解析为真实绝对目标，`file_path` / `path` 别名必须指向同一文件，再交给分支护栏。install / upgrade / uninstall / doctor / status 已覆盖 Kimi 宿主面。
-- Claude Code / Codex 项目 hooks 由 `install-project-hooks.sh` 统一管理：`--check` 只读比较当前消费仓配置，刷新时只精确替换 PMAI 自有命令并保留其它宿主设置和自定义 hook；命令通过 `${PMAI_HOME:-$HOME/.pmai}` 在宿主运行时解析，自定义安装根不会退回错误的默认路径。安装器预渲染全部 Host 后事务写入，用唯一备份逐次校验内容、权限和 symlink 指向；失败回滚不覆盖通过正式路径提交的并发编辑，并兼容 Bash 3.2。协作锁只串行遵守合同的 PMAI writer：事务子进程必须继承与锁路径相同 device / inode 且实际持有排他锁的 fd，可伪造环境布尔值或无关 fd 不能授权写入；同一 OS 用户的非合作进程仍不在该合同内。目录 fd 在 claim 后发现父目录改向时，会在固定旧目录内按 inode 补偿恢复正式名再失败关闭，不把原件留在隔离名。该 CAS 只保护路径命名空间；其它进程若持有旧文件描述符并在 claim 后继续写入，需要共享写锁或版本保留。全局 upgrade 不静默改写消费仓；repo-local `pmai status` 使用目标 `PMAI_HOME` 的入口策略审计，跨版本 `doctor` 委托目标安装执行，目标 doctor 缺失或不可执行时失败关闭；status 用完整生成器标记排除本仓，在消费仓报告缺失或漂移，且不隐式联网或写 update-check 缓存。旧 `install-codex-hooks.sh` 保留为 Codex-only 兼容包装。
+- Claude Code / Codex 项目 hooks 由 `install-project-hooks.sh` 统一管理：`--check` 只读比较当前消费仓配置，刷新时只精确替换 PMAI 自有命令并保留其它宿主设置和自定义 hook；命令通过 `${PMAI_HOME:-$HOME/.pmai}` 在宿主运行时解析，自定义安装根不会退回错误的默认路径。安装器预渲染全部 Host 后事务写入，用唯一备份逐次校验内容、权限和 symlink 指向；失败回滚不覆盖通过正式路径提交的并发编辑，并兼容 Bash 3.2。协作锁只串行遵守合同的 PMAI writer：事务子进程必须继承与锁路径相同 device / inode 且实际持有排他锁的 fd，可伪造环境布尔值或无关 fd 不能授权写入；同一 OS 用户的非合作进程仍不在该合同内。目录 fd 在 claim 后发现父目录改向时，会在固定旧目录内按 inode 补偿恢复正式名再失败关闭，不把原件留在隔离名。该 CAS 只保护路径命名空间；其它进程若持有旧文件描述符并在 claim 后继续写入，需要共享写锁或版本保留。全局 upgrade 不静默改写消费仓；`/pmai-doctor` 调用目标 `PMAI_HOME` 的 doctor，默认只读检查框架、宿主入口和当前消费仓，跨版本目标 doctor 缺失或不可执行时失败关闭；全局修复只有 `--repair` 才获取安装锁并写入，消费仓 hooks 刷新仍需 PM 单独确认。CLI `pmai status` 只委托 `doctor --check`，不再维护第二套策略审计。旧 `install-codex-hooks.sh` 保留为 Codex-only 兼容包装。
 - design 直接必读 AskUser 共享规则，首题前收敛真实决策并报告总量，用业务结果提问；跨日、模型切换或会话恢复时重读当前 skill 与必读规则。context pack 消费后单独召回个人经验候选，按适用性、去重和独立检查价值自适应选择，不设正常条数上限；高信号纠偏闭合后自动归位。项目事实回项目真相源，跨项目经验进入用户级存储，已有 Skill 规则未执行只留执行失败证据。跨模块设计只留下一个明确 build 入口，相同建造方案重复写入 `project.yml` 保持完整文件不变。
 - context pack 对旧消费仓自动写入 Git 本地 exclude，不再制造未跟踪缓存；build 在创建环境前阻断批准目标路径上的既有脏改动，同时保留无关 WIP。
 - `context-pack.py` 与 `check-open-questions.py` 共用明确无未决问题的声明识别；只有单独一行的肯定声明才表示空问题集，否定、转述、但书、多行后续问题和子串命中都不能放行。空 section、普通说明、空题名、HTML comment-only 以及 `待确认` / `TODO` / `TBD` / `FIXME` 等占位回答仍保持 unresolved。
@@ -72,13 +72,14 @@
 - 不新增 decisions JSONL 或第二套状态机；context pack 只编译现有真相源。
 - 目标规格在 design 定稿时生成；描述已落地现状的文档在 merge 后更新，不因文档失败回滚已落地主线实现。
 - gstack 只是方法参考与可选证据生产工具，不成为 PMAI 的状态、决定或收尾权威。
-- `/pmai-record`、`/pmai-quick-fix`、`/pmai-build-cancel`、`/pmai-status` 继续作为轻量旁路，不分叉完整 build 生命周期。
+- `/pmai-record`、`/pmai-quick-fix`、`/pmai-build-cancel`、`/pmai-status` 继续作为产品侧轻量旁路，不分叉完整 build 生命周期；`/pmai-doctor` 是按需框架诊断旁路，不进入正常产品循环。
 - 当前只有 Codex 的精确当前会话定位链路已经验证；其他宿主没有可验证的精确会话标识或定位适配时，`/pmai-feedback` 必须阻断，不能按文件修改时间或“最近会话”猜测。
 
 ## 当前验证
 
 - Harness 第一阶段安装所有权、初始化冲突、状态权威、ready/build 合同和 cancel 原子性 targeted tests 已通过：`42 passed / 0 failed`。
-- 完整 `tests/run-all.sh` 已通过：`796 passed / 0 failed`；同一次入口另有 skill eval `6 passed / 0 failed / 17 session skipped`（17 项均因外部 session runner 未配置而显式跳过，不计作通过或失败）。新增回归覆盖开放问题与决定状态、代码 / 注释假章节、status 目标版本信任边界、Kimi symlink referent 并发 CAS、skill eval 摘要与退出码一致性、飞书 frontmatter 换行注入与同秒评论游标、Kimi/active-build 宿主边界、prepared/active 清理恢复与 old-OID CAS、finalize 主仓恢复游标、飞书原生结构账本和原子文件补偿；原有 design / spec-writing 分流、quick-fix、浏览器验收、真实 worktree 合入、`/pmai-feedback`、个人经验和其它回归继续通过。测试侧同时完成维护性收敛：原子文件用例统一临时根目录并在 suite 退出时清理，doctor 期望值改由独立公开合同生成，writing routing 改为稳定合同和可执行行为断言。
+- 完整 `tests/run-all.sh` 已通过：`811 passed / 0 failed`；同一次入口另有 skill eval `6 passed / 0 failed / 17 session skipped`（17 项均因外部 session runner 未配置而显式跳过，不计作通过或失败）。新增回归覆盖开放问题与决定状态、代码 / 注释假章节、status / doctor 单一检测合同与目标版本信任边界、doctor 只读 / repair / 消费仓分类、Kimi symlink referent 并发 CAS、skill eval 摘要与退出码一致性、飞书 frontmatter 换行注入与同秒评论游标、Kimi/active-build 宿主边界、prepared/active 清理恢复与 old-OID CAS、finalize 主仓恢复游标、飞书原生结构账本和原子文件补偿；原有 design / spec-writing 分流、quick-fix、浏览器验收、真实 worktree 合入、`/pmai-feedback`、个人经验和其它回归继续通过。测试侧同时完成维护性收敛：原子文件用例统一临时根目录并在 suite 退出时清理，doctor 期望值改由独立公开合同生成，writing routing 改为稳定合同和可执行行为断言。
+- 开发态 `consumer-doctor.py` 已在真实消费仓 `ExampleAgentProject` 只读 dogfood：正确识别 `iterating`、`project.yml` 指向的 `prototype/` 正式实现根和 18 个当前 mockup，同时报告旧版文档骨架、顶层文档归位、历史模块三件套与未跟踪新稿问题；运行前后 Git 状态一致，未修改消费仓或用户级安装。
 
 ## 下一步
 
