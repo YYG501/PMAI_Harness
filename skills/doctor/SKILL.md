@@ -50,6 +50,13 @@ PMAI_HOME="${PMAI_HOME:-$HOME/.pmai}"
 
 JSON 缺失、重复、不可解析或字段不完整时，按诊断不可用处理，不从终端文案猜结论。
 
+消费仓 finding 还必须读取 `kind` 与 `blocking`，不能只看 `level`：
+
+- `framework_managed_sync`：框架入口、托管骨架或忽略规则待刷新；
+- `legacy_compatible`：已明确声明的合法旧产出，不需要补造内容；
+- `compatibility_declaration_required`：旧仓可有边界识别，但仍需 PM 确认兼容关系；
+- `project_content_invalid`：真实内容、状态或恢复证据损坏；只有这类 blocking finding 才能进入 `consumer_invalid`。
+
 ### 2. 只输出一个结论
 
 按 `conclusion` 映射为 PM 语言：
@@ -58,8 +65,8 @@ JSON 缺失、重复、不可解析或字段不完整时，按诊断不可用处
 |---|---|---|
 | `healthy` | 框架和当前消费仓正常 | 无需操作；可补充不阻断的环境提醒 |
 | `upgrade_available` | 框架有新版本 | 建议转 `/pmai-upgrade`；未确认前不升级 |
-| `consumer_sync_required` | 全局框架可用，但当前消费仓的框架入口或旧结构需要同步 | 说明是 hooks、OpenCode、Git hook、忽略规则还是旧版副本；未确认前不写仓库 |
-| `consumer_invalid` | 当前消费仓缺少必需文件、归位错误，或活动工作无法安全恢复 | 按影响列出最小整理清单；不得自动移动文件或修改状态 |
+| `consumer_sync_required` | 全局框架可用，但当前消费仓有框架托管项待同步或旧布局待确认 | 说明是宿主入口、忽略规则、旧版副本还是兼容声明；未确认前不写仓库 |
+| `consumer_invalid` | 当前消费仓存在真实产品内容损坏，或活动工作无法安全恢复 | 按影响列出最小整理清单；不得自动移动文件或修改状态 |
 | `broken` | PMAI 安装或宿主入口损坏 | 给出最小修复动作；未确认前不运行 repair / reinstall |
 
 远程不可达时只能说“暂时无法确认是否为最新版”，不能报告“已经最新”。可选浏览器适配器缺失只作为提醒，不把非 Web 工作误报为框架损坏。
@@ -75,6 +82,16 @@ JSON 缺失、重复、不可解析或字段不完整时，按诊断不可用处
 
 不得把消费仓与模板逐字比较。`PRODUCT.md`、`AGENTS.md`、`CLAUDE.md` 等允许项目持续补充，只检查必需结构、入口锚点和可解析性。
 
+消费仓布局合同复用现有 `.pm-workflow/config.yml:consumer`，不新增平行 manifest：
+
+- 当前标准文档入口始终是 `docs/INDEX.md`，模块入口始终是 `docs/modules/INDEX.md`；
+- 旧项目的 `docs/索引.md` 等文件只有被标准入口明确链接时才视为有意保留，不能反过来替代标准入口；
+- `consumer.layout_version` 标记布局版本，`consumer.paths.archive` 可声明旧项目沿用的归档目录；
+- `consumer.compatibility` 只记录不能按当前三件套解释的 `legacy / retired / split` 模块；未声明模块默认 current；
+- active `.work-meta.json` 始终优先并按 lifecycle 严格校验，兼容声明不能降级绕过；
+- 未标版本旧仓可识别非空 `spec + decisions` 和合并式 spec，但只能返回待声明兼容，不能直接判内容损坏；
+- `.gitkeep` 不是内容合同，目录已有内容时不得要求它存在；空白 `discussion.md / decisions.md / spec.md` 也不能让检查通过。
+
 ### 3. 修复必须二次确认
 
 只有 PM 明确确认对应动作后才能执行：
@@ -85,6 +102,7 @@ JSON 缺失、重复、不可解析或字段不完整时，按诊断不可用处
 - 当前消费仓 OpenCode 入口漂移：运行 `bash "$PMAI_HOME/scripts/install-opencode-commands.sh" --project "<consumer.root>"`，然后复验。
 - 当前消费仓 Git hook 漂移：在消费仓根运行 `bash "$PMAI_HOME/scripts/install-hooks.sh"`，然后复验。
 - 当前消费仓残留旧版项目副本：先列出识别依据；PM 明确确认清理后才运行 `"$PMAI_HOME/bin/pmai" uninstall --local "<consumer.root>"`，然后复验。
+- 当前消费仓需要兼容声明：先展示 doctor 的推断与歧义，逐项让 PM 确认；确认后只更新现有 `.pm-workflow/config.yml:consumer`，不得新建布局文件、移动业务文档或生成空白三件套，然后复验。
 - 当前消费仓文件缺失、文档错位、原型游离或状态损坏：只按严重程度列出 repo-relative 差异与建议归位；移动、补写、删除或改状态前等待 PM 确认。`doctor --repair` 不处理这些项目内容。
 - 安装不存在或损坏到无法 repair：说明需要重新安装；卸载、删除或覆盖前继续遵守相应确认门。
 

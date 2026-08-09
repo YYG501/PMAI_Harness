@@ -1,8 +1,19 @@
 # PM-AI-Workflow 消费仓配置
 #
-# 本文件只保存 AI 构建执行器偏好。
+# 本文件保存消费仓布局合同和 AI 构建执行器偏好。
+# `consumer` 只描述框架识别布局所需的机器信息；产品事实仍在 PRODUCT.md、
+# docs/INDEX.md 和模块文档中，不在这里重复维护。
 # 项目类型、技术栈、代码入口和运行命令由首次 design 定稿后写入
 # `.pm-workflow/project.yml`，不得在这里重复定义。
+
+consumer:
+  schema_version: 1
+  layout_version: 1
+  paths:
+    archive: docs/archive
+  # 旧模块只有在不能按当前三件套解释时才写兼容项。Fresh init 默认为空；
+  # active `.work-meta.json` 始终优先，不能被这里的声明降级。
+  compatibility: {}
 
 builder:
   # /pmai-build 的建造工具推荐档位。框架会先按项目类型和本机可用性给出推荐，

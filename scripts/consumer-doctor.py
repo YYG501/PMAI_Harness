@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import posixpath
 import re
 import subprocess
 import sys
@@ -24,6 +25,7 @@ from _lib.project_definition import (  # noqa: E402
 
 
 SCHEMA_VERSION = 1
+CURRENT_LAYOUT_VERSION = 1
 LIFECYCLE_ORDER = {
     "designing": 1,
     "ready_to_build": 2,
@@ -39,34 +41,42 @@ VALID_BUILD_MODES = {"main", "worktree"}
 VALID_EXECUTORS = {"claude-code", "codex", "cursor-agent", "kimi-code", "opencode", "manual", "native"}
 VALID_DOCS_STATUSES = {"pending", "complete", "failed"}
 TRIO = ("discussion.md", "decisions.md", "spec.md")
-REQUIRED_FILES = (
-    ".gitignore",
-    "AGENTS.md",
-    "CLAUDE.md",
+PROJECT_REQUIRED_FILES = (
     "PRODUCT.md",
     "PRODUCT-STATE.md",
     "DESIGN.md",
     "PRODUCT-RULES.md",
     "TODO.md",
+)
+FRAMEWORK_MANAGED_FILES = (
+    ".gitignore",
+    "AGENTS.md",
+    "CLAUDE.md",
     "docs/INDEX.md",
     "docs/modules/INDEX.md",
     "docs/engineering/INDEX.md",
     "docs/deliverables/INDEX.md",
-    "docs/inputs/.gitkeep",
-    "docs/archive/.gitkeep",
-    "docs/decisions/.gitkeep",
     ".pm-workflow/config.yml",
     "templates/lark-publish.json.tmpl",
 )
-REQUIRED_DIRS = (
+PROJECT_REQUIRED_DIRS = (
     "docs/modules",
+)
+FRAMEWORK_MANAGED_DIRS = (
+    ".pm-workflow",
     "docs/inputs",
     "docs/engineering",
     "docs/deliverables",
-    "docs/archive",
     "docs/decisions",
-    ".pm-workflow",
 )
+DEFAULT_ARCHIVE_DIR = "docs/archive"
+VALID_MODULE_STATES = {"current", "legacy", "retired", "split"}
+VALID_LEGACY_FORMATS = {"spec_decisions", "merged_spec"}
+FINDING_FRAMEWORK_SYNC = "framework_managed_sync"
+FINDING_LEGACY = "legacy_compatible"
+FINDING_COMPATIBILITY = "compatibility_declaration_required"
+FINDING_INVALID = "project_content_invalid"
+FINDING_ADVISORY = "project_advisory"
 HOST_PATHS = (
     ".claude/settings.json",
     ".codex/hooks.json",
@@ -120,10 +130,44 @@ def _is_within(path: Path, parent: Path) -> bool:
         return False
 
 
+def _substantive_markdown(path: Path) -> bool:
+    try:
+        text = path.read_text(encoding="utf-8")
+    except (OSError, UnicodeError):
+        return False
+    text = re.sub(r"<!--.*?-->", "", text, flags=re.DOTALL)
+    return bool(text.strip())
+
+
+def _markdown_repo_links(index_path: Path, root: Path) -> set[str]:
+    try:
+        text = index_path.read_text(encoding="utf-8")
+    except (OSError, UnicodeError):
+        return set()
+    try:
+        base = index_path.relative_to(root).parent.as_posix()
+    except ValueError:
+        return set()
+    links: set[str] = set()
+    for match in re.finditer(r"\[[^\]]*\]\(([^)]+)\)", text):
+        target = match.group(1).strip()
+        if target.startswith("<") and target.endswith(">"):
+            target = target[1:-1].strip()
+        target = target.split("#", 1)[0].strip()
+        if not target or "://" in target or target.startswith(("/", "#")):
+            continue
+        normalized = posixpath.normpath(posixpath.join(base, target))
+        pure = PurePosixPath(normalized)
+        if normalized == "docs" or not _is_pure_within(pure, PurePosixPath("docs")):
+            continue
+        links.add(normalized.rstrip("/"))
+    return links
+
+
 class Audit:
     def __init__(self, root: Path) -> None:
         self.root = root
-        self.findings: list[dict[str, str]] = []
+        self.findings: list[dict[str, Any]] = []
         self._finding_keys: set[tuple[str, str, str]] = set()
         self.tracked: set[str] = set()
         self.modules: list[dict[str, Any]] = []
@@ -135,9 +179,39 @@ class Audit:
             "entrypoints": [],
         }
         self.mockups: dict[str, Any] = {"state": "absent", "variants": 0}
+        self.consumer_contract: dict[str, Any] = {
+            "state": "unversioned",
+            "schema_version": None,
+            "layout_version": None,
+            "archive": None,
+            "modules": {},
+        }
 
-    def add(self, level: str, code: str, message: str, path: str | None = None) -> None:
-        item = {"level": level, "code": code, "message": message}
+    def add(
+        self,
+        level: str,
+        code: str,
+        message: str,
+        path: str | None = None,
+        *,
+        kind: str | None = None,
+        blocking: bool | None = None,
+    ) -> None:
+        if kind is None:
+            kind = {
+                "error": FINDING_INVALID,
+                "sync": FINDING_FRAMEWORK_SYNC,
+                "warning": FINDING_ADVISORY,
+            }.get(level, FINDING_ADVISORY)
+        if blocking is None:
+            blocking = level == "error"
+        item: dict[str, Any] = {
+            "level": level,
+            "code": code,
+            "kind": kind,
+            "blocking": blocking,
+            "message": message,
+        }
         if path:
             item["path"] = path
         key = (level, code, path or "")
@@ -164,6 +238,95 @@ class Audit:
             return None
         return path
 
+    def _load_config(self, config: Path) -> None:
+        try:
+            parsed = parse_yaml_subset(config.read_text(encoding="utf-8"))
+            builder = parsed.get("builder")
+            if not isinstance(builder, dict) or not isinstance(builder.get("profiles"), dict):
+                raise ValueError("builder.profiles 缺失")
+            consumer = parsed.get("consumer")
+            if consumer is None:
+                self.add(
+                    "sync",
+                    "consumer_layout_unversioned",
+                    "消费仓尚未声明当前布局版本；可在确认旧模块关系后只更新 .pm-workflow/config.yml",
+                    ".pm-workflow/config.yml",
+                    kind=FINDING_COMPATIBILITY,
+                )
+                return
+            if not isinstance(consumer, dict):
+                raise ValueError("consumer 必须是 mapping")
+            unknown_consumer = sorted(set(consumer) - {"schema_version", "layout_version", "paths", "compatibility"})
+            if unknown_consumer:
+                raise ValueError("consumer 含未知字段：" + "、".join(unknown_consumer))
+            if consumer.get("schema_version") != 1:
+                raise ValueError("consumer.schema_version 必须是 1")
+            if consumer.get("layout_version") != CURRENT_LAYOUT_VERSION:
+                raise ValueError(f"consumer.layout_version 必须是 {CURRENT_LAYOUT_VERSION}")
+
+            paths = consumer.get("paths", {})
+            if not isinstance(paths, dict) or sorted(set(paths) - {"archive"}):
+                raise ValueError("consumer.paths 只允许声明 archive")
+            archive = paths.get("archive", DEFAULT_ARCHIVE_DIR)
+            archive = _relative_path(archive)
+            if archive is None or not _is_pure_within(PurePosixPath(archive), PurePosixPath("docs")):
+                raise ValueError("consumer.paths.archive 必须是 docs/ 下的仓库相对路径")
+
+            compatibility = consumer.get("compatibility", {})
+            if not isinstance(compatibility, dict):
+                raise ValueError("consumer.compatibility 必须是 mapping")
+            modules: dict[str, dict[str, Any]] = {}
+            for entry_id, declaration in compatibility.items():
+                if not re.fullmatch(r"module_[A-Za-z0-9_-]+", entry_id):
+                    raise ValueError(f"consumer.compatibility 条目名不合法：{entry_id}")
+                if not isinstance(declaration, dict):
+                    raise ValueError(f"consumer.compatibility.{entry_id} 必须是 mapping")
+                unknown = sorted(set(declaration) - {"path", "state", "format", "truth_sources"})
+                if unknown:
+                    raise ValueError(f"consumer.compatibility.{entry_id} 含未知字段：{'、'.join(unknown)}")
+                module_path = _relative_path(declaration.get("path"))
+                if module_path is None or len(PurePosixPath(module_path).parts) != 3 \
+                    or PurePosixPath(module_path).parts[:2] != ("docs", "modules"):
+                    raise ValueError(f"consumer.compatibility.{entry_id}.path 必须指向 docs/modules/<模块>")
+                if module_path in modules:
+                    raise ValueError(f"consumer.compatibility 重复声明模块：{module_path}")
+                state = declaration.get("state")
+                if state not in VALID_MODULE_STATES:
+                    raise ValueError(f"consumer.compatibility.{entry_id}.state 不合法")
+                format_name = declaration.get("format")
+                truth_sources = declaration.get("truth_sources", [])
+                if not isinstance(truth_sources, list) or any(_relative_path(item) is None for item in truth_sources):
+                    raise ValueError(f"consumer.compatibility.{entry_id}.truth_sources 必须是安全路径列表")
+                if state == "legacy":
+                    if format_name not in VALID_LEGACY_FORMATS or truth_sources:
+                        raise ValueError(f"consumer.compatibility.{entry_id} 的 legacy 声明不完整")
+                elif state in {"retired", "split"}:
+                    if format_name is not None or not truth_sources:
+                        raise ValueError(f"consumer.compatibility.{entry_id} 必须声明 truth_sources")
+                elif format_name is not None or truth_sources:
+                    raise ValueError(f"consumer.compatibility.{entry_id} 的 current 声明不能带兼容字段")
+                modules[module_path] = {
+                    "id": entry_id,
+                    "state": state,
+                    "format": format_name,
+                    "truth_sources": truth_sources,
+                }
+            self.consumer_contract = {
+                "state": "current",
+                "schema_version": 1,
+                "layout_version": CURRENT_LAYOUT_VERSION,
+                "archive": archive,
+                "modules": modules,
+            }
+        except (OSError, UnicodeError, ProjectDefinitionError, ValueError) as exc:
+            self.consumer_contract["state"] = "invalid"
+            self.add(
+                "error",
+                "config_invalid",
+                f".pm-workflow/config.yml 无法按当前配置合同读取：{exc}",
+                ".pm-workflow/config.yml",
+            )
+
     def check_git_identity(self) -> bool:
         result = _run_git(self.root, "rev-parse", "--show-toplevel")
         if result.returncode != 0:
@@ -185,7 +348,7 @@ class Audit:
         return True
 
     def check_skeleton(self) -> None:
-        for relative in REQUIRED_FILES:
+        for relative in PROJECT_REQUIRED_FILES:
             path = self._managed_path(relative, kind="文件")
             if path is None:
                 continue
@@ -196,8 +359,27 @@ class Audit:
                     f"必需文件未被 Git 跟踪，换机器后会丢失：{relative}",
                     relative,
                 )
-        for relative in REQUIRED_DIRS:
+        for relative in FRAMEWORK_MANAGED_FILES:
+            path = self._managed_path(relative, kind="文件", level="sync")
+            if path is None:
+                continue
+            if relative not in self.tracked:
+                self.add(
+                    "sync",
+                    "framework_file_untracked",
+                    f"框架托管文件未被 Git 跟踪，需要刷新：{relative}",
+                    relative,
+                )
+        for relative in PROJECT_REQUIRED_DIRS:
             self._managed_path(relative, kind="目录")
+        for relative in FRAMEWORK_MANAGED_DIRS:
+            self._managed_path(relative, kind="目录", level="sync")
+
+        config = self.root / ".pm-workflow/config.yml"
+        if config.is_file() and not config.is_symlink():
+            self._load_config(config)
+        if self.consumer_contract["state"] == "current":
+            self._managed_path(str(self.consumer_contract["archive"]), kind="目录", level="sync")
 
         for relative in ("AGENTS.md", "CLAUDE.md"):
             path = self.root / relative
@@ -209,7 +391,7 @@ class Audit:
                 continue
             if "PMAI" not in text or "pmai-" not in text:
                 self.add(
-                    "error",
+                    "sync",
                     "host_rules_missing",
                     f"{relative} 缺少 PMAI 宿主入口规则",
                     relative,
@@ -220,21 +402,6 @@ class Audit:
                     "template_placeholder",
                     f"{relative} 仍残留初始化模板占位符",
                     relative,
-                )
-
-        config = self.root / ".pm-workflow/config.yml"
-        if config.is_file() and not config.is_symlink():
-            try:
-                parsed = parse_yaml_subset(config.read_text(encoding="utf-8"))
-                builder = parsed.get("builder")
-                if not isinstance(builder, dict) or not isinstance(builder.get("profiles"), dict):
-                    raise ValueError("builder.profiles 缺失")
-            except (OSError, UnicodeError, ProjectDefinitionError, ValueError) as exc:
-                self.add(
-                    "error",
-                    "config_invalid",
-                    f".pm-workflow/config.yml 无法按当前配置合同读取：{exc}",
-                    ".pm-workflow/config.yml",
                 )
 
         for relative in HOST_PATHS:
@@ -284,12 +451,20 @@ class Audit:
 
     def check_indexes_and_misplaced_docs(self) -> None:
         docs_index = self.root / "docs/INDEX.md"
+        registered = set()
+        for index_path in (docs_index, self.root / "docs/modules/INDEX.md"):
+            if index_path.is_file() and not index_path.is_symlink():
+                registered.update(_markdown_repo_links(index_path, self.root))
         if docs_index.is_file() and not docs_index.is_symlink():
             try:
                 text = docs_index.read_text(encoding="utf-8")
             except (OSError, UnicodeError):
                 text = ""
-            for directory in ("modules/", "inputs/", "engineering/", "deliverables/", "decisions/", "archive/"):
+            required_directories = ["modules/", "inputs/"]
+            if self.consumer_contract["state"] == "current":
+                archive = PurePosixPath(str(self.consumer_contract["archive"]))
+                required_directories.extend(("engineering/", "deliverables/", "decisions/", f"{archive.name}/"))
+            for directory in required_directories:
                 if directory not in text:
                     self.add(
                         "warning",
@@ -302,7 +477,9 @@ class Audit:
         if docs_root.is_dir() and not docs_root.is_symlink():
             allowed = {"INDEX.md", "CODEBASE-AUDIT.md"}
             for entry in sorted(docs_root.iterdir(), key=lambda item: item.name):
-                if entry.is_file() and entry.suffix.lower() == ".md" and entry.name not in allowed:
+                relative = f"docs/{entry.name}"
+                if entry.is_file() and entry.suffix.lower() == ".md" \
+                    and entry.name not in allowed and relative not in registered:
                     self.add(
                         "warning",
                         "misplaced_docs_markdown",
@@ -501,11 +678,27 @@ class Audit:
             if not entry.is_dir() or entry.name.startswith("."):
                 continue
 
-            present = {name for name in TRIO if (entry / name).is_file() and not (entry / name).is_symlink()}
+            existing: set[str] = set()
+            present: set[str] = set()
+            for name in TRIO:
+                document = entry / name
+                relative = f"{relative_dir}/{name}"
+                if not os.path.lexists(document):
+                    continue
+                existing.add(name)
+                if document.is_symlink():
+                    self.add("error", "module_document_symlink", f"模块文档不能是 symlink：{relative}", relative)
+                elif not document.is_file():
+                    self.add("error", "module_document_type", f"模块文档不是普通文件：{relative}", relative)
+                elif not _substantive_markdown(document):
+                    self.add("error", "module_document_blank", f"模块文档为空白占位，不能作为有效内容：{relative}", relative)
+                else:
+                    present.add(name)
             meta_path = entry / ".work-meta.json"
             meta: dict[str, Any] | None = None
             lifecycle: str | None = None
-            if os.path.lexists(meta_path):
+            has_meta = os.path.lexists(meta_path)
+            if has_meta:
                 meta = self._read_meta(meta_path, f"{relative_dir}/.work-meta.json")
                 if meta is not None:
                     lifecycle = self._check_meta_shape(meta, f"{relative_dir}/.work-meta.json")
@@ -514,16 +707,96 @@ class Audit:
                         if lifecycle in {"building", "iterating", "final_check"}:
                             active_builds.append(entry.name)
 
-            required_trio = set(TRIO) if lifecycle != "designing" else {"discussion.md", "decisions.md"}
-            if meta is None and present:
-                required_trio = set(TRIO)
-            for name in sorted(required_trio - present):
-                level = "warning" if lifecycle == "designing" else "error"
-                self.add(level, "module_document_missing", f"模块缺少 {name}：{relative_dir}", f"{relative_dir}/{name}")
+            declaration = self.consumer_contract["modules"].get(relative_dir)
+            module_state = "current"
+            module_format: str | None = None
+            truth_sources: list[str] = []
+            required_documents: set[str] = set()
+            if has_meta:
+                required_documents = set(TRIO) if lifecycle != "designing" else {"discussion.md", "decisions.md"}
+                if declaration and declaration["state"] != "current":
+                    self.add(
+                        "warning",
+                        "active_module_compatibility_ignored",
+                        f"active 模块不能降级为 {declaration['state']}，已按当前 lifecycle 校验：{relative_dir}",
+                        ".pm-workflow/config.yml",
+                    )
+            elif self.consumer_contract["state"] == "current":
+                if declaration:
+                    module_state = declaration["state"]
+                    module_format = declaration["format"]
+                    truth_sources = list(declaration["truth_sources"])
+                if module_state == "current":
+                    required_documents = set(TRIO)
+                elif module_state == "legacy":
+                    required_documents = {"spec.md", "decisions.md"} if module_format == "spec_decisions" else {"spec.md"}
+                    self.add(
+                        "warning",
+                        "legacy_module_compatible",
+                        f"模块按已声明的旧格式保留，不要求补造历史文档：{relative_dir}",
+                        relative_dir,
+                        kind=FINDING_LEGACY,
+                    )
+                else:
+                    for truth_source in truth_sources:
+                        target = self.root / truth_source
+                        if not os.path.lexists(target):
+                            self.add("error", "module_truth_source_missing", f"{module_state} 模块声明的现行真相源不存在：{truth_source}", truth_source)
+                        elif target.is_symlink() or not target.is_file():
+                            self.add("error", "module_truth_source_invalid", f"{module_state} 模块声明的真相源不是安全普通文件：{truth_source}", truth_source)
+                        elif not _substantive_markdown(target):
+                            self.add("error", "module_truth_source_blank", f"{module_state} 模块声明的真相源为空白占位：{truth_source}", truth_source)
+                        elif truth_source not in self.tracked:
+                            self.add("error", "module_truth_source_untracked", f"{module_state} 模块声明的真相源未被 Git 跟踪：{truth_source}", truth_source)
+                    self.add(
+                        "warning",
+                        "legacy_module_redirected",
+                        f"模块已声明为 {module_state}，现行真相源由 compatibility 指向：{relative_dir}",
+                        relative_dir,
+                        kind=FINDING_LEGACY,
+                    )
+            else:
+                if present == set(TRIO):
+                    module_state = "unversioned_complete"
+                elif {"spec.md", "decisions.md"}.issubset(present):
+                    module_state = "legacy"
+                    module_format = "spec_decisions"
+                    self.add(
+                        "sync",
+                        "legacy_module_inferred",
+                        f"识别到旧 spec + decisions 模块；确认后只需在 config.yml 记录兼容关系：{relative_dir}",
+                        relative_dir,
+                        kind=FINDING_COMPATIBILITY,
+                    )
+                elif present == {"spec.md"}:
+                    module_state = "legacy"
+                    module_format = "merged_spec"
+                    self.add(
+                        "sync",
+                        "legacy_module_inferred",
+                        f"识别到合并式 spec 旧模块；确认后只需在 config.yml 记录兼容关系：{relative_dir}",
+                        relative_dir,
+                        kind=FINDING_COMPATIBILITY,
+                    )
+                elif present:
+                    module_state = "compatibility_unknown"
+                    self.add(
+                        "sync",
+                        "module_compatibility_ambiguous",
+                        f"历史模块无法可靠判断为拆分、退役或其它旧格式，需要声明现行真相源：{relative_dir}",
+                        relative_dir,
+                        kind=FINDING_COMPATIBILITY,
+                    )
+                elif not existing:
+                    self.add("error", "module_content_missing", f"模块目录没有可识别的有效文档：{relative_dir}", relative_dir)
+
+            for name in sorted(required_documents - present):
+                if name not in existing:
+                    self.add("error", "module_document_missing", f"模块缺少 {name}：{relative_dir}", f"{relative_dir}/{name}")
             for name in present:
                 relative = f"{relative_dir}/{name}"
-                if lifecycle != "designing" and relative not in self.tracked:
-                    self.add("error", "module_document_untracked", f"已定稿模块文档未被 Git 跟踪：{relative}", relative)
+                if relative not in self.tracked:
+                    self.add("error", "module_document_untracked", f"模块有效文档未被 Git 跟踪：{relative}", relative)
             if lifecycle and lifecycle != "designing":
                 meta_relative = f"{relative_dir}/.work-meta.json"
                 if meta_relative not in self.tracked:
@@ -543,7 +816,16 @@ class Audit:
                             "entrypoints": target.get("entrypoints"),
                         }
                     )
-            self.modules.append({"name": entry.name, "lifecycle_state": lifecycle, "documents": sorted(present)})
+            self.modules.append(
+                {
+                    "name": entry.name,
+                    "state": module_state,
+                    "format": module_format,
+                    "truth_sources": truth_sources,
+                    "lifecycle_state": lifecycle,
+                    "documents": sorted(present),
+                }
+            )
 
         if len(active_builds) > 1:
             self.add(
@@ -798,12 +1080,23 @@ class Audit:
 
     def payload(self, states: list[str]) -> dict[str, Any]:
         counts = {level: sum(1 for item in self.findings if item["level"] == level) for level in ("error", "sync", "warning")}
-        status = "invalid" if counts["error"] else "sync_required" if counts["sync"] else "current"
+        kinds = {
+            kind: sum(1 for item in self.findings if item["kind"] == kind)
+            for kind in (FINDING_FRAMEWORK_SYNC, FINDING_LEGACY, FINDING_COMPATIBILITY, FINDING_INVALID, FINDING_ADVISORY)
+        }
+        blocking = any(item["blocking"] for item in self.findings)
+        sync_required = any(
+            item["kind"] in {FINDING_FRAMEWORK_SYNC, FINDING_COMPATIBILITY}
+            for item in self.findings
+        )
+        status = "invalid" if blocking else "sync_required" if sync_required else "current"
         return {
             "schema_version": SCHEMA_VERSION,
             "status": status,
             "phase": self.phase(states),
             "summary": counts,
+            "classification_summary": kinds,
+            "consumer_contract": self.consumer_contract,
             "project_definition": self.project_definition,
             "mockups": self.mockups,
             "modules": self.modules,
@@ -844,7 +1137,49 @@ def main(argv: list[str] | None = None) -> int:
             raise ValueError("消费仓根目录不是目录")
         payload = audit_consumer(root)
     except (OSError, RuntimeError, ValueError) as exc:
-        print(json.dumps({"schema_version": SCHEMA_VERSION, "status": "invalid", "phase": "unknown", "summary": {"error": 1, "sync": 0, "warning": 0}, "project_definition": {"state": "unknown", "type": None, "root": None, "entrypoints": []}, "mockups": {"state": "unknown", "variants": 0}, "modules": [], "findings": [{"level": "error", "code": "consumer_audit_unavailable", "message": str(exc)}]}, ensure_ascii=False, indent=2))
+        print(
+            json.dumps(
+                {
+                    "schema_version": SCHEMA_VERSION,
+                    "status": "invalid",
+                    "phase": "unknown",
+                    "summary": {"error": 1, "sync": 0, "warning": 0},
+                    "classification_summary": {
+                        FINDING_FRAMEWORK_SYNC: 0,
+                        FINDING_LEGACY: 0,
+                        FINDING_COMPATIBILITY: 0,
+                        FINDING_INVALID: 1,
+                        FINDING_ADVISORY: 0,
+                    },
+                    "consumer_contract": {
+                        "state": "unknown",
+                        "schema_version": None,
+                        "layout_version": None,
+                        "archive": None,
+                        "modules": {},
+                    },
+                    "project_definition": {
+                        "state": "unknown",
+                        "type": None,
+                        "root": None,
+                        "entrypoints": [],
+                    },
+                    "mockups": {"state": "unknown", "variants": 0},
+                    "modules": [],
+                    "findings": [
+                        {
+                            "level": "error",
+                            "code": "consumer_audit_unavailable",
+                            "kind": FINDING_INVALID,
+                            "blocking": True,
+                            "message": str(exc),
+                        }
+                    ],
+                },
+                ensure_ascii=False,
+                indent=2,
+            )
+        )
         return 2
     print(json.dumps(payload, ensure_ascii=False, indent=2))
     return 0

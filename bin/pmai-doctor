@@ -122,12 +122,12 @@ emit_json() {
     else
       recommended_action="repair"
     fi
-  elif [ "$UPDATE_AVAILABLE" = "true" ]; then
-    conclusion="upgrade_available"
-    recommended_action="upgrade"
   elif [ "$CONSUMER_TOPOLOGY" = "invalid" ]; then
     conclusion="consumer_invalid"
     recommended_action="review_consumer_structure"
+  elif [ "$UPDATE_AVAILABLE" = "true" ]; then
+    conclusion="upgrade_available"
+    recommended_action="upgrade"
   elif { [ "$PROJECT_HOOKS" != "current" ] && [ "$PROJECT_HOOKS" != "not_applicable" ]; } \
     || { [ "$PROJECT_OPENCODE" != "current" ] && [ "$PROJECT_OPENCODE" != "not_applicable" ]; } \
     || { [ "$PROJECT_GIT_HOOK" != "current" ] && [ "$PROJECT_GIT_HOOK" != "not_applicable" ]; } \
@@ -150,6 +150,21 @@ emit_json() {
     elif [ "$PROJECT_GIT_HOOK" != "current" ] \
       && [ "$PROJECT_GIT_HOOK" != "not_applicable" ]; then
       recommended_action="refresh_git_hook"
+    elif [ "$CONSUMER_TOPOLOGY" = "sync_required" ] \
+      && [ -n "$CONSUMER_AUDIT_FILE" ] \
+      && python3 - "$CONSUMER_AUDIT_FILE" <<'PY' >/dev/null 2>&1
+import json
+import sys
+
+with open(sys.argv[1], encoding="utf-8") as handle:
+    findings = json.load(handle).get("findings", [])
+raise SystemExit(0 if any(
+    item.get("kind") == "compatibility_declaration_required"
+    for item in findings
+) else 1)
+PY
+    then
+      recommended_action="declare_consumer_compatibility"
     else
       recommended_action="review_consumer_structure"
     fi
@@ -262,6 +277,21 @@ if consumer_audit_path:
     if not isinstance(audit, dict) or audit.get("schema_version") != 1:
         raise SystemExit("invalid consumer audit schema")
     payload["consumer"]["audit"] = audit
+    audit_messages = {
+        str(item.get("message") or "")
+        for item in audit.get("findings", [])
+        if isinstance(item, dict)
+    }
+    payload["findings"] = [
+        item for item in payload["findings"]
+        if not (item.get("category") == "consumer" and item.get("message") in audit_messages)
+    ]
+    for item in audit.get("findings", []):
+        if not isinstance(item, dict):
+            continue
+        enriched = dict(item)
+        enriched["category"] = "consumer"
+        payload["findings"].append(enriched)
 print(json.dumps(payload, ensure_ascii=False, indent=2))
 PY
 }
@@ -890,7 +920,34 @@ if not isinstance(payload, dict) or payload.get("schema_version") != 1:
     raise SystemExit(1)
 if payload.get("status") not in {"current", "sync_required", "invalid"}:
     raise SystemExit(1)
-if not isinstance(payload.get("findings"), list):
+findings = payload.get("findings")
+if not isinstance(findings, list):
+    raise SystemExit(1)
+valid_kinds = {
+    "framework_managed_sync",
+    "legacy_compatible",
+    "compatibility_declaration_required",
+    "project_content_invalid",
+    "project_advisory",
+}
+for finding in findings:
+    if not isinstance(finding, dict):
+        raise SystemExit(1)
+    if finding.get("level") not in {"error", "sync", "warning"}:
+        raise SystemExit(1)
+    if finding.get("kind") not in valid_kinds:
+        raise SystemExit(1)
+    if not isinstance(finding.get("blocking"), bool):
+        raise SystemExit(1)
+    if not isinstance(finding.get("message"), str):
+        raise SystemExit(1)
+blocking = any(finding["blocking"] for finding in findings)
+sync_required = any(
+    finding["kind"] in {"framework_managed_sync", "compatibility_declaration_required"}
+    for finding in findings
+)
+expected_status = "invalid" if blocking else "sync_required" if sync_required else "current"
+if payload["status"] != expected_status:
     raise SystemExit(1)
 PY
   then

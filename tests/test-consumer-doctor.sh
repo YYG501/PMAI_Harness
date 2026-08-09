@@ -37,6 +37,13 @@ commit_fixture() {
     && git -C "$repo" commit --no-verify -m "test: update fixture" >/dev/null
 }
 
+make_layout_unversioned() {
+  local repo="$1" replacement
+  replacement="${repo%/}/.pm-workflow/config.yml.unversioned"
+  sed -n '/^builder:/,$p' "$repo/.pm-workflow/config.yml" > "$replacement" \
+    && mv "$replacement" "$repo/.pm-workflow/config.yml"
+}
+
 test_fresh_consumer_is_current_and_read_only() {
   start_test "consumer-doctor: fresh init is current and check is read-only"
   local repo before after out
@@ -366,6 +373,227 @@ PY
   fi
 }
 
+test_unversioned_legacy_module_formats_are_not_invalid() {
+  start_test "consumer-doctor: unversioned spec+decisions and merged spec are compatibility findings"
+  local repo out
+  repo=$(new_consumer) || { _fail "fixture init failed"; return; }
+  make_layout_unversioned "$repo" || { _fail "unable to remove layout contract"; return; }
+  mkdir -p "$repo/docs/modules/legacy-pair" "$repo/docs/modules/merged-spec"
+  printf '# Legacy pair spec\nExisting product rules.\n' > "$repo/docs/modules/legacy-pair/spec.md"
+  printf '# Legacy pair decisions\nDecision history.\n' > "$repo/docs/modules/legacy-pair/decisions.md"
+  printf '# Merged legacy spec\nDiscussion, decisions, and specification are intentionally merged.\n' \
+    > "$repo/docs/modules/merged-spec/spec.md"
+  printf '\n- legacy-pair\n- merged-spec\n' >> "$repo/docs/modules/INDEX.md"
+  commit_fixture "$repo" || { _fail "fixture commit failed"; return; }
+  out=$(audit "$repo") || { _fail "legacy audit failed"; return; }
+  if python3 - "$out" <<'PY'
+import json
+import sys
+
+payload = json.loads(sys.argv[1])
+findings = payload["findings"]
+assert payload["status"] == "sync_required"
+assert payload["classification_summary"]["project_content_invalid"] == 0
+assert sum(item["code"] == "legacy_module_inferred" for item in findings) == 2
+assert not any(item["code"] == "module_document_missing" for item in findings)
+assert all(not item["blocking"] for item in findings)
+PY
+  then
+    pass_test
+  else
+    _fail "bounded legacy inference should request declaration without invalidating content"
+    echo "$out" >&2
+  fi
+}
+
+test_declared_retired_and_split_modules_follow_truth_sources() {
+  start_test "consumer-doctor: declared retired/split modules point to tracked substantive truth sources"
+  local repo current broken out
+  repo=$(new_consumer) || { _fail "fixture init failed"; return; }
+  mkdir -p "$repo/docs/modules/retired-module" "$repo/docs/modules/split-module"
+  printf '# Successor specification\nCurrent product truth.\n' > "$repo/docs/modules/successor.md"
+  printf '\n| [`successor.md`](successor.md) | 功能规格 | successor | current truth |\n' \
+    >> "$repo/docs/modules/INDEX.md"
+  cat > "$repo/.pm-workflow/config.yml" <<'YAML'
+consumer:
+  schema_version: 1
+  layout_version: 1
+  paths:
+    archive: docs/archive
+  compatibility:
+    module_retired:
+      path: docs/modules/retired-module
+      state: retired
+      truth_sources:
+        - docs/modules/successor.md
+    module_split:
+      path: docs/modules/split-module
+      state: split
+      truth_sources:
+        - docs/modules/successor.md
+builder:
+  profiles:
+    fixture:
+      executor: manual
+YAML
+  commit_fixture "$repo" || { _fail "fixture commit failed"; return; }
+  current=$(audit "$repo") || { _fail "declared compatibility audit failed"; return; }
+  printf '   \n<!-- placeholder only -->\n' > "$repo/docs/modules/successor.md"
+  broken=$(audit "$repo") || { _fail "broken successor audit failed"; return; }
+  if python3 - "$current" "$broken" <<'PY'
+import json
+import sys
+
+current, broken = (json.loads(value) for value in sys.argv[1:])
+assert current["status"] == "current"
+assert current["classification_summary"]["legacy_compatible"] == 2
+assert not any(item["blocking"] for item in current["findings"])
+assert broken["status"] == "invalid"
+assert "module_truth_source_blank" in {item["code"] for item in broken["findings"]}
+PY
+  then
+    pass_test
+  else
+    _fail "retired/split truth source validation mismatch"
+    echo "$current" >&2
+    echo "$broken" >&2
+  fi
+}
+
+test_nonempty_inputs_do_not_require_gitkeep() {
+  start_test "consumer-doctor: nonempty inputs do not require .gitkeep"
+  local repo out
+  repo=$(new_consumer) || { _fail "fixture init failed"; return; }
+  rm -f "$repo/docs/inputs/.gitkeep"
+  printf '# Source material\nReal input.\n' > "$repo/docs/inputs/source.md"
+  commit_fixture "$repo" || { _fail "fixture commit failed"; return; }
+  out=$(audit "$repo") || { _fail "inputs audit failed"; return; }
+  if python3 - "$out" <<'PY'
+import json
+import sys
+
+payload = json.loads(sys.argv[1])
+assert payload["status"] == "current"
+assert not any("gitkeep" in str(item.get("path", "")) for item in payload["findings"])
+PY
+  then
+    pass_test
+  else
+    _fail "nonempty inputs should not depend on a sentinel file"
+  fi
+}
+
+test_standard_index_can_register_legacy_index_and_custom_archive() {
+  start_test "consumer-doctor: INDEX.md remains standard while registering legacy index and custom archive"
+  local repo out
+  repo=$(new_consumer) || { _fail "fixture init failed"; return; }
+  git -C "$repo" mv docs/archive docs/_归档
+  sed 's#archive: docs/archive#archive: docs/_归档#' "$repo/.pm-workflow/config.yml" \
+    > "$repo/.pm-workflow/config.yml.tmp" \
+    && mv "$repo/.pm-workflow/config.yml.tmp" "$repo/.pm-workflow/config.yml"
+  sed 's#`archive/`#`_归档/`#' "$repo/docs/INDEX.md" > "$repo/docs/INDEX.md.tmp" \
+    && mv "$repo/docs/INDEX.md.tmp" "$repo/docs/INDEX.md"
+  printf '\n- [`索引.md`](./索引.md) — 历史项目索引，保留既有引用。\n' >> "$repo/docs/INDEX.md"
+  printf '# 历史项目索引\nExisting navigation.\n' > "$repo/docs/索引.md"
+  commit_fixture "$repo" || { _fail "fixture commit failed"; return; }
+  out=$(audit "$repo") || { _fail "custom layout audit failed"; return; }
+  if python3 - "$out" <<'PY'
+import json
+import sys
+
+payload = json.loads(sys.argv[1])
+assert payload["status"] == "current"
+assert payload["consumer_contract"]["archive"] == "docs/_归档"
+assert not any(item.get("path") == "docs/索引.md" for item in payload["findings"])
+assert not any(item.get("path") == "docs/archive" for item in payload["findings"])
+PY
+  then
+    pass_test
+  else
+    _fail "standard index registration or custom archive contract regressed"
+    echo "$out" >&2
+  fi
+}
+
+test_framework_sync_does_not_hide_project_damage() {
+  start_test "consumer-doctor: framework-managed sync does not hide missing product spine"
+  local repo out
+  repo=$(new_consumer) || { _fail "fixture init failed"; return; }
+  rm -f "$repo/PRODUCT.md" "$repo/docs/engineering/INDEX.md"
+  out=$(audit "$repo") || { _fail "mixed finding audit failed"; return; }
+  if python3 - "$out" <<'PY'
+import json
+import sys
+
+payload = json.loads(sys.argv[1])
+kinds = {item["kind"] for item in payload["findings"]}
+assert payload["status"] == "invalid"
+assert "project_content_invalid" in kinds
+assert "framework_managed_sync" in kinds
+assert any(item["blocking"] for item in payload["findings"])
+PY
+  then
+    pass_test
+  else
+    _fail "blocking project damage should win over sync findings"
+  fi
+}
+
+test_active_lifecycle_missing_document_is_invalid() {
+  start_test "consumer-doctor: compatibility cannot downgrade active lifecycle validation"
+  local repo out sentinel
+  repo=$(new_consumer) || { _fail "fixture init failed"; return; }
+  sentinel="${repo%/repo}/unused-active-doc"
+  prepare_ready_project "$repo" "$sentinel" || { _fail "ready fixture failed"; return; }
+  sed 's/^  compatibility: {}$/  compatibility:\n    module_demo:\n      path: docs\/modules\/demo\n      state: legacy\n      format: merged_spec/' \
+    "$repo/.pm-workflow/config.yml" > "$repo/.pm-workflow/config.yml.tmp" \
+    && mv "$repo/.pm-workflow/config.yml.tmp" "$repo/.pm-workflow/config.yml"
+  rm -f "$repo/docs/modules/demo/decisions.md"
+  out=$(audit "$repo") || { _fail "active document audit failed"; return; }
+  if python3 - "$out" <<'PY'
+import json
+import sys
+
+payload = json.loads(sys.argv[1])
+assert payload["status"] == "invalid"
+assert any(item["code"] == "active_module_compatibility_ignored" for item in payload["findings"])
+assert any(
+    item["code"] == "module_document_missing"
+    and item.get("path", "").endswith("decisions.md")
+    and item["blocking"]
+    for item in payload["findings"]
+)
+PY
+  then
+    pass_test
+  else
+    _fail "active lifecycle must keep strict document validation"
+  fi
+}
+
+test_blank_placeholder_document_is_invalid() {
+  start_test "consumer-doctor: blank placeholder documents cannot satisfy current contract"
+  local repo out sentinel
+  repo=$(new_consumer) || { _fail "fixture init failed"; return; }
+  sentinel="${repo%/repo}/unused-placeholder"
+  prepare_ready_project "$repo" "$sentinel" || { _fail "ready fixture failed"; return; }
+  printf '   \n<!-- intentionally blank -->\n' > "$repo/docs/modules/demo/spec.md"
+  out=$(audit "$repo") || { _fail "blank document audit failed"; return; }
+  if python3 - "$out" <<'PY'
+import json
+import sys
+
+payload = json.loads(sys.argv[1])
+assert payload["status"] == "invalid"
+assert "module_document_blank" in {item["code"] for item in payload["findings"]}
+PY
+  then
+    pass_test
+  else
+    _fail "blank placeholder should not make doctor green"
+  fi
+}
+
 test_fresh_consumer_is_current_and_read_only
 test_missing_and_misplaced_documents_are_reported
 test_project_definition_drives_custom_implementation_location
@@ -375,5 +603,12 @@ test_secret_config_is_never_echoed
 test_legacy_layout_requires_sync_not_structural_repair
 test_non_git_and_symlinked_truth_sources_fail_closed
 test_active_build_must_match_project_definition
+test_unversioned_legacy_module_formats_are_not_invalid
+test_declared_retired_and_split_modules_follow_truth_sources
+test_nonempty_inputs_do_not_require_gitkeep
+test_standard_index_can_register_legacy_index_and_custom_archive
+test_framework_sync_does_not_hide_project_damage
+test_active_lifecycle_missing_document_is_invalid
+test_blank_placeholder_document_is_invalid
 
 report_results "consumer-doctor"

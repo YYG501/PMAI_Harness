@@ -899,6 +899,11 @@ test_doctor_reports_invalid_consumer_structure() {
     rm -rf "$tmp"
     return
   fi
+  cat > "$pmai_home/scripts/install-project-hooks.sh" <<'SH'
+#!/usr/bin/env bash
+[ "${1:-}" = "--check" ] || exit 2
+exit 1
+SH
   rm -f "$consumer/PRODUCT.md"
 
   out=$(cd "$consumer" && PMAI_HOME="$pmai_home" HOME="$fake_home" \
@@ -915,14 +920,76 @@ assert payload["conclusion"] == "consumer_invalid"
 assert payload["recommended_action"] == "review_consumer_structure"
 assert payload["consumer"]["topology_status"] == "invalid"
 assert payload["consumer"]["phase"] == "initialized"
-assert payload["consumer"]["project_hooks"] == "current"
+assert payload["consumer"]["project_hooks"] == "drifted"
 assert payload["consumer"]["opencode"] == "current"
 assert payload["consumer"]["git_hook"] == "current"
 assert payload["consumer"]["audit"]["status"] == "invalid"
 assert any(item["code"] == "missing_required_file" for item in payload["consumer"]["audit"]["findings"])
+assert any(
+    item.get("code") == "missing_required_file"
+    and item.get("kind") == "project_content_invalid"
+    and item.get("blocking") is True
+    and item.get("category") == "consumer"
+    for item in payload["findings"]
+)
 PY
   then
     _fail "invalid consumer structure should return its own nonzero conclusion"
+    echo "$out" >&2
+    rm -rf "$tmp"
+    return
+  fi
+
+  rm -rf "$tmp"
+  pass_test
+}
+
+test_doctor_reports_unversioned_legacy_as_compatibility_sync() {
+  start_test "T12g: doctor 把未标版本旧模块归为兼容声明而非内容损坏"
+  local setup tmp pmai_home fake_home consumer out rc replacement
+
+  setup=$(setup_fake_global_install)
+  IFS='|' read -r tmp pmai_home fake_home <<< "$setup"
+  consumer="$tmp/consumer-legacy"
+  if ! bash "$REPO_ROOT/scripts/init-project.sh" DoctorLegacyFixture "$consumer" \
+    "doctor legacy fixture" >/dev/null 2>&1; then
+    _fail "unable to initialize legacy consumer fixture"
+    rm -rf "$tmp"
+    return
+  fi
+  replacement="$consumer/.pm-workflow/config.yml.unversioned"
+  sed -n '/^builder:/,$p' "$consumer/.pm-workflow/config.yml" > "$replacement" \
+    && mv "$replacement" "$consumer/.pm-workflow/config.yml"
+  mkdir -p "$consumer/docs/modules/legacy-pair"
+  printf '# Legacy specification\nExisting rules.\n' > "$consumer/docs/modules/legacy-pair/spec.md"
+  printf '# Legacy decisions\nExisting history.\n' > "$consumer/docs/modules/legacy-pair/decisions.md"
+  printf '\n- legacy-pair\n' >> "$consumer/docs/modules/INDEX.md"
+  git -C "$consumer" add -A >/dev/null \
+    && git -C "$consumer" commit --no-verify -m "test: legacy layout" >/dev/null
+
+  out=$(cd "$consumer" && PMAI_HOME="$pmai_home" HOME="$fake_home" \
+    CODEX_HOME="$fake_home/.codex" KIMI_CODE_HOME="$fake_home/.kimi-code" \
+    OPENCODE_CONFIG_DIR="$fake_home/.config/opencode" \
+    bash "$pmai_home/bin/pmai-doctor" --check --json 2>"$tmp/consumer-legacy.err")
+  rc=$?
+  if [ "$rc" != "0" ] || ! python3 - "$out" <<'PY'
+import json
+import sys
+
+payload = json.loads(sys.argv[1])
+assert payload["conclusion"] == "consumer_sync_required"
+assert payload["recommended_action"] == "declare_consumer_compatibility"
+assert payload["consumer"]["topology_status"] == "sync_required"
+assert payload["consumer"]["audit"]["classification_summary"]["project_content_invalid"] == 0
+assert any(
+    item.get("kind") == "compatibility_declaration_required"
+    and item.get("blocking") is False
+    and item.get("category") == "consumer"
+    for item in payload["findings"]
+)
+PY
+  then
+    _fail "legacy compatibility should remain a nonblocking consumer sync"
     echo "$out" >&2
     rm -rf "$tmp"
     return
@@ -2167,6 +2234,7 @@ test_doctor_rechecks_kimi_repair_result
 test_doctor_json_contract_and_status_alias
 test_doctor_reports_consumer_hook_drift
 test_doctor_reports_invalid_consumer_structure
+test_doctor_reports_unversioned_legacy_as_compatibility_sync
 test_doctor_skill_separates_status_doctor_and_upgrade
 test_manual_workflows_are_host_entries
 test_skill_frontmatter_does_not_claim_framework_version

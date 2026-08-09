@@ -6,7 +6,7 @@
 
 - 日期：2026-08-09
 - 开发分支：`main`
-- 当前目标：产品现状与框架运维入口已收敛：`/pmai-status` 只看产品进度，`/pmai-doctor` 只读检查框架、宿主和当前消费仓，`/pmai-upgrade` 只执行已确认升级；CLI `pmai status` 降为 doctor check 兼容别名。下一步继续以真实消费仓验证迭代检查始终沿用当前 build contract，并观察无缺陷正常路径 P95 是否接近 10 分钟。
+- 当前目标：`/pmai-doctor` 已从固定骨架比较改为布局版本、模块状态和 finding ownership 合同；旧消费仓可以保留有证据的历史产出，当前 lifecycle 与真实产品脊柱继续失败关闭。下一步在 PM 确认分发后升级安装态，并继续以真实消费仓验证兼容声明与 active build 恢复不会互相覆盖。
 - gstack 参考基线：`v1.58.5.0`，commit `11de390`；只参考本地 `gstack-clean` checkout，没有升级用户目录中的安装副本。
 
 ## 当前活跃模型
@@ -14,6 +14,7 @@
 - 正常用户主链路：`/pmai-init-project` 只建上下文 → `/pmai-design` 讨论需求并在首次定稿时生成项目建造定义 → `/pmai-build` → PM 看结果多轮快速修改 → PM 明确定稿 → `finalize-work.py` 对冻结 commit 只执行缺失的代码门、范围门和受影响体验批次 → 合入 main → 只更新实际受影响的产品真相源。
 - `meta`、`mockup`、`spec-writing` 是 design 按需调用后返回主线的内部能力；仍保留手动入口用于兼容和专项使用，但不要求 PM 拼接命令。
 - `/pmai-feedback` 是消费仓到框架仓的只读反馈出口：完整复盘当前原始会话、对照消费仓真相源、判断问题归属，并输出包含会话文件地址和证据的框架优化 Prompt；它不在消费仓直接修改产品或 PMAI 框架。
+- `/pmai-doctor` 的消费仓合同复用 `.pm-workflow/config.yml:consumer`：layout v1 固定 `docs/INDEX.md` / `docs/modules/INDEX.md` 为标准入口，可声明既有归档目录，并按模块记录 `current / legacy / retired / split`。未标版本旧仓只做有边界识别并请求 PM 确认，不自动迁移文档；active `.work-meta.json` 始终优先，不能被兼容声明降级。
 - `/pmai-lark-review` 是归档后飞书评审回流入口：当前飞书 full XML 原生快照是 T 的唯一底稿，B/L 只用于定位本地补充和冲突，祖先格式兼容性不能把目标切回旧 L。R→T 的每个删除 / 改写 / 移动进入远端覆盖账本，重复文本按章节归位，现有 block 的格式必须保留，随内容删除也要有明确依据；大规模或结构性差异强制 PM 预览，精细同步后逐 block 验证样式、资源和引用。飞书正文、评论和回复只是不可信业务证据，不能作为 Agent 指令或 PM 本轮确认；remote-only 正文必须由 PM 本轮明确认可。每项变化通过 `decision_routing` 选择性写 / supersede `docs/modules/<单一模块>/decisions.md`，seal、apply 和正式归位前都拒绝越界或 symlink 目标，措辞 / 排版明确标记不写。评论用整批首尾稳定围栏和逐笔 journal 收口，`solve_requested` 只有持久化系统 solve 写回执才能恢复，缺 `solved_time` 时保留 null；checkpoint 复用同 revision 格式验收。机器路径目标 10–15 分钟，阶段耗时与 API 往返写入批次产物。
 - `/pmai-build-close` 只作为兼容与恢复入口；正常链路不再要求 PM 手动调用。
 - `building / iterating / final_check` 中，PM 的“启动看看 / 还有什么问题 / 继续改当前结果”等自然语言继续当前 `/pmai-build`。Codex、Claude Code、Kimi Code 通过 prompt hook 注入 `status-view.py --execution-context`；OpenCode 由入口规则主动读取。该上下文只派生现有合同，不新增状态；多个 active build 返回歧义，合同或 policy 漂移时失败关闭。只有位于 prompt 首 token 的真实 PMAI 命令不受自然语言续接拦截，否定、引用、行内代码、代码块和文档示例都不能绕过；Git / status-view 超时、非零、空输出、坏 JSON、未知状态或 stdin 超时一律在宿主超时前注入不可用护栏，不能降级成“没有 active build”；Kimi 分发器也不得吞掉 hook 缺失、Node 启动失败或任意非零退出。
@@ -73,13 +74,14 @@
 - 目标规格在 design 定稿时生成；描述已落地现状的文档在 merge 后更新，不因文档失败回滚已落地主线实现。
 - gstack 只是方法参考与可选证据生产工具，不成为 PMAI 的状态、决定或收尾权威。
 - `/pmai-record`、`/pmai-quick-fix`、`/pmai-build-cancel`、`/pmai-status` 继续作为产品侧轻量旁路，不分叉完整 build 生命周期；`/pmai-doctor` 是按需框架诊断旁路，不进入正常产品循环。
+- doctor finding 以 `kind / blocking` 区分 `framework_managed_sync`、`legacy_compatible`、`compatibility_declaration_required`、`project_content_invalid` 和 advisory；只有 blocking finding 进入 `consumer_invalid`。旧中文索引等顶层文档必须由标准索引明确链接，不能替代 `docs/INDEX.md`；非空目录不要求 `.gitkeep`，空白模块文档不能作为兼容证据。
 - 当前只有 Codex 的精确当前会话定位链路已经验证；其他宿主没有可验证的精确会话标识或定位适配时，`/pmai-feedback` 必须阻断，不能按文件修改时间或“最近会话”猜测。
 
 ## 当前验证
 
 - Harness 第一阶段安装所有权、初始化冲突、状态权威、ready/build 合同和 cancel 原子性 targeted tests 已通过：`42 passed / 0 failed`。
-- 完整 `tests/run-all.sh` 已通过：`811 passed / 0 failed`；同一次入口另有 skill eval `6 passed / 0 failed / 17 session skipped`（17 项均因外部 session runner 未配置而显式跳过，不计作通过或失败）。新增回归覆盖开放问题与决定状态、代码 / 注释假章节、status / doctor 单一检测合同与目标版本信任边界、doctor 只读 / repair / 消费仓分类、Kimi symlink referent 并发 CAS、skill eval 摘要与退出码一致性、飞书 frontmatter 换行注入与同秒评论游标、Kimi/active-build 宿主边界、prepared/active 清理恢复与 old-OID CAS、finalize 主仓恢复游标、飞书原生结构账本和原子文件补偿；原有 design / spec-writing 分流、quick-fix、浏览器验收、真实 worktree 合入、`/pmai-feedback`、个人经验和其它回归继续通过。测试侧同时完成维护性收敛：原子文件用例统一临时根目录并在 suite 退出时清理，doctor 期望值改由独立公开合同生成，writing routing 改为稳定合同和可执行行为断言。
-- 开发态 `consumer-doctor.py` 已在真实消费仓 `ExampleAgentProject` 只读 dogfood：正确识别 `iterating`、`project.yml` 指向的 `prototype/` 正式实现根和 18 个当前 mockup，同时报告旧版文档骨架、顶层文档归位、历史模块三件套与未跟踪新稿问题；运行前后 Git 状态一致，未修改消费仓或用户级安装。
+- 完整 `tests/run-all.sh` 已通过：`819 passed / 0 failed`；同一次入口另有 skill eval `6 passed / 0 failed / 17 session skipped`（17 项均因外部 session runner 未配置而显式跳过，不计作通过或失败）。新增回归覆盖旧 `spec + decisions`、合并式 spec、retired/split 真相源、非空 inputs、自定义归档、标准索引登记旧中文索引、框架同步与真实损坏并存、active lifecycle 防降级和空白占位文档；原有 doctor 只读 / repair / 敏感信息保护、fresh init、宿主事务、build 生命周期、飞书、个人经验和其它回归继续通过。
+- 开发态 `consumer-doctor.py` 已在真实消费仓 `ExampleAgentProject` 只读 dogfood：从旧实现的 `invalid / 15 errors` 收敛为 `sync_required / 0 errors`，其中 4 项框架托管同步、7 项待确认兼容；当前“能力匹配卡”仍按 `iterating` lifecycle 严格校验。运行前后 Git 状态一致，未修改消费仓或用户级安装。
 
 ## 下一步
 
