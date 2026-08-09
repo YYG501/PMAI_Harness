@@ -1,0 +1,2 @@
+# One skill directory basename per line. Empty means every public skill is exposed.
+# _internal and _shared are always framework-only and do not need to be listed.

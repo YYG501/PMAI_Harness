@@ -6,11 +6,13 @@ set -euo pipefail
 SKILL_PREFIX="pmai-"
 MODE=""
 PROJECT_DIR=""
+CHECK_MODE=0
 
 usage() {
   cat <<'EOF'
 Usage:
   bash scripts/install-opencode-commands.sh --global
+  bash scripts/install-opencode-commands.sh --global --check
   bash scripts/install-opencode-commands.sh --project <repo-dir>
 
 Env override:
@@ -38,6 +40,10 @@ while [ $# -gt 0 ]; do
       PROJECT_DIR="${1:-}"
       [ -z "$PROJECT_DIR" ] && { echo "❌ --project needs <repo-dir>" >&2; exit 2; }
       MODE="project"
+      shift
+      ;;
+    --check)
+      CHECK_MODE=1
       shift
       ;;
     *)
@@ -81,6 +87,11 @@ write_opencode_command() {
   local skill_name="$2"
   local exposed_name="$3"
   local dst="$command_dir/${exposed_name}.md"
+  local preamble_env=""
+
+  if [ "$exposed_name" = "pmai-status" ]; then
+    preamble_env="PMAI_PREAMBLE_READ_ONLY=1 "
+  fi
 
   cat > "$dst" <<EOF
 ---
@@ -95,7 +106,7 @@ description: Run PMAI /${exposed_name} workflow
 
 1. 定位 PMAI_HOME：优先使用环境变量 \`PMAI_HOME\`；没有则使用 \`~/.pmai\`。
 2. 如果当前项目根目录有 \`AGENTS.md\`，先遵守其中的 PMAI Host Mapping 和 Startup 规则。
-3. 如果当前命令不是 \`/pmai-init-project\` 或 \`/pmai-upgrade\`，先运行 \`bash -lc 'source "\${PMAI_HOME:-\$HOME/.pmai}/scripts/skill-preamble.sh"'\`。如果输出 \`PMAI_PROJECT_INITIALIZED: 0\`，停止当前 skill，只引导 PM 先发 \`/pmai-init-project\`。 \`/pmai-humanize\` 仅在处理粘贴文本或仓外文件、且不写 PMAI 项目产物时可继续；要读取或改写仓内文档时同样停止。
+3. 如果当前命令不是 \`/pmai-init-project\` 或 \`/pmai-upgrade\`，先运行 \`bash -lc '${preamble_env}source "\${PMAI_HOME:-\$HOME/.pmai}/scripts/skill-preamble.sh"'\`。如果输出 \`PMAI_PROJECT_INITIALIZED: 0\`，停止当前 skill，只引导 PM 先发 \`/pmai-init-project\`。 \`/pmai-humanize\` 仅在处理粘贴文本或仓外文件、且不写 PMAI 项目产物时可继续；要读取或改写仓内文档时同样停止。
 4. 完整读取 \`\$PMAI_HOME/skills/${skill_name}/SKILL.md\`。
 5. 如果该 \`SKILL.md\` 引用 \`_shared/...\`、\`references/...\`、\`templates/...\` 或脚本，按文件路径继续读取必要内容。
 6. 严格按 skill workflow 执行；不要只凭本 command 或记忆模拟。
@@ -111,9 +122,10 @@ install_commands_to_dir() {
   local command_dir="$1"
   local skill_dir skill_name exposed_name count old
 
-  mkdir -p "$command_dir"
+  mkdir -p "$command_dir" || return 1
   for old in "$command_dir"/${SKILL_PREFIX}*.md; do
-    [ -e "$old" ] && rm -f "$old" || true
+    [ -e "$old" ] || [ -L "$old" ] || continue
+    rm -f -- "$old" || return 1
   done
 
   count=0
@@ -125,11 +137,53 @@ install_commands_to_dir() {
     esac
     pmai_skill_is_host_exposed "$skill_name" || continue
     exposed_name=$(exposed_name_for_skill "$skill_name")
-    write_opencode_command "$command_dir" "$skill_name" "$exposed_name"
+    write_opencode_command "$command_dir" "$skill_name" "$exposed_name" || return 1
     count=$((count + 1))
   done
 
-  echo "$count"
+  INSTALLED_COMMAND_COUNT="$count"
+}
+
+check_commands_in_dir() {
+  local command_dir="$1"
+  local rendered_dir expected actual expected_names actual_names
+
+  rendered_dir="${TMPDIR:-/tmp}/pmai-opencode-check.$$.$RANDOM"
+  while [ -e "$rendered_dir" ] || [ -L "$rendered_dir" ]; do
+    rendered_dir="${TMPDIR:-/tmp}/pmai-opencode-check.$$.$RANDOM"
+  done
+  mkdir -m 700 "$rendered_dir" || return 2
+  if ! install_commands_to_dir "$rendered_dir"; then
+    rm -rf -- "$rendered_dir"
+    return 2
+  fi
+
+  expected_names=$(
+    for expected in "$rendered_dir"/${SKILL_PREFIX}*.md; do
+      [ -e "$expected" ] || continue
+      basename "$expected"
+    done | sort
+  )
+  actual_names=$(
+    for actual in "$command_dir"/${SKILL_PREFIX}*.md; do
+      [ -e "$actual" ] || [ -L "$actual" ] || continue
+      basename "$actual"
+    done | sort
+  )
+  if [ "$expected_names" != "$actual_names" ]; then
+    rm -rf -- "$rendered_dir"
+    return 1
+  fi
+  for expected in "$rendered_dir"/${SKILL_PREFIX}*.md; do
+    [ -e "$expected" ] || continue
+    actual="$command_dir/$(basename "$expected")"
+    if [ ! -f "$actual" ] || [ -L "$actual" ] || ! cmp -s "$expected" "$actual"; then
+      rm -rf -- "$rendered_dir"
+      return 1
+    fi
+  done
+  rm -rf -- "$rendered_dir"
+  return 0
 }
 
 merge_project_opencode_json() {
@@ -183,16 +237,28 @@ case "$MODE" in
   global)
     OPENCODE_CONFIG_DIR="${OPENCODE_CONFIG_DIR:-$HOME/.config/opencode}"
     COMMAND_DIR="$OPENCODE_CONFIG_DIR/commands"
-    count=$(install_commands_to_dir "$COMMAND_DIR")
-    echo "   installed $count OpenCode command entries → $COMMAND_DIR"
+    if [ "$CHECK_MODE" = "1" ]; then
+      if check_commands_in_dir "$COMMAND_DIR"; then
+        echo "OK: OpenCode commands match current PMAI render"
+        exit 0
+      fi
+      echo "DRIFT: OpenCode commands differ from current PMAI render" >&2
+      exit 1
+    fi
+    install_commands_to_dir "$COMMAND_DIR"
+    echo "   installed $INSTALLED_COMMAND_COUNT OpenCode command entries → $COMMAND_DIR"
     ;;
   project)
+    if [ "$CHECK_MODE" = "1" ]; then
+      echo "❌ --check 目前只支持 --global" >&2
+      exit 2
+    fi
     mkdir -p "$PROJECT_DIR"
     PROJECT_DIR="$(cd "$PROJECT_DIR" && pwd)"
     COMMAND_DIR="$PROJECT_DIR/.opencode/commands"
-    count=$(install_commands_to_dir "$COMMAND_DIR")
+    install_commands_to_dir "$COMMAND_DIR"
     merge_project_opencode_json "$PROJECT_DIR"
-    echo "   installed $count OpenCode project command entries → $COMMAND_DIR"
+    echo "   installed $INSTALLED_COMMAND_COUNT OpenCode project command entries → $COMMAND_DIR"
     echo "   merged OpenCode project config → $PROJECT_DIR/opencode.json"
     ;;
 esac

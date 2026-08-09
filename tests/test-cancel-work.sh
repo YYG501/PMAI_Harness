@@ -341,6 +341,147 @@ test_cancel_restores_meta_when_commit_fails() {
   fixture_teardown
 }
 
+test_cancel_prepare_failure_happens_before_state_commit() {
+  start_test "cancel prepares cleanup before committing state"
+  fixture_setup
+  work_dir=$(_setup_module_on_main "work-010" "prepare-fail" 3)
+  local fake_bin real_python before after
+  fake_bin=$(mktemp -d "${TMPDIR:-/tmp}/pmai-cancel-fakebin.XXXXXX")
+  real_python=$(command -v python3)
+  before=$(git -C "$FIXTURE_DIR" rev-parse HEAD)
+  mkdir -p "$fake_bin"
+  cat > "$fake_bin/python3" <<'SH'
+#!/usr/bin/env bash
+if [[ "${1:-}" == *"pending_cleanup.py" ]] && [ "${2:-}" = "prepare" ]; then
+  echo "simulated prepare failure" >&2
+  exit 1
+fi
+exec "$PMAI_TEST_REAL_PYTHON" "$@"
+SH
+  chmod +x "$fake_bin/python3"
+
+  if (cd "$FIXTURE_DIR" && PATH="$fake_bin:$PATH" \
+    PMAI_TEST_REAL_PYTHON="$real_python" bash "$CANCEL_WORK" "$work_dir") \
+    >/tmp/out.$$ 2>/tmp/err.$$; then
+    _fail "cancel should stop when the durable prepare cannot be written"
+  else
+    after=$(git -C "$FIXTURE_DIR" rev-parse HEAD)
+    if [ "$before" != "$after" ]; then
+      _fail "cancel committed state before its cleanup intent"
+    elif [ ! -f "$work_dir/.work-meta.json" ]; then
+      _fail "prepare failure removed the authoritative work meta"
+    elif [ -f "$FIXTURE_DIR/.runs/pending-cleanup.json" ]; then
+      _fail "failed prepare left a partial queue entry"
+    else
+      pass_test
+    fi
+  fi
+
+  rm -f /tmp/out.$$ /tmp/err.$$
+  rm -rf -- "$fake_bin"
+  fixture_teardown
+}
+
+test_cancel_activation_failure_recovers_from_main_truth() {
+  start_test "cancel activation interruption recovers from committed main truth"
+  fixture_setup
+  work_dir=$(_setup_module_on_main "work-011" "activate-fail" 3)
+  local fake_bin real_python queue worktree branch
+  fake_bin=$(mktemp -d "${TMPDIR:-/tmp}/pmai-cancel-fakebin.XXXXXX")
+  real_python=$(command -v python3)
+  queue="$FIXTURE_DIR/.runs/pending-cleanup.json"
+  branch="build-work-011-activate-fail"
+  worktree="$FIXTURE_DIR/.worktrees/$branch"
+  mkdir -p "$fake_bin"
+  cat > "$fake_bin/python3" <<'SH'
+#!/usr/bin/env bash
+if [[ "${1:-}" == *"pending_cleanup.py" ]] && [ "${2:-}" = "activate" ]; then
+  echo "simulated activation interruption" >&2
+  exit 1
+fi
+exec "$PMAI_TEST_REAL_PYTHON" "$@"
+SH
+  chmod +x "$fake_bin/python3"
+
+  if ! (cd "$FIXTURE_DIR" && PATH="$fake_bin:$PATH" \
+    PMAI_TEST_REAL_PYTHON="$real_python" bash "$CANCEL_WORK" "$work_dir") \
+    >/tmp/out.$$ 2>/tmp/err.$$; then
+    _fail "a persisted prepared record should keep cancel successful"
+    cat /tmp/err.$$ >&2
+  elif [ -f "$work_dir/.work-meta.json" ]; then
+    _fail "cancel state was not committed before the simulated interruption"
+  elif ! python3 - "$queue" <<'PY'
+import json, re, sys
+entries = json.load(open(sys.argv[1], encoding="utf-8"))
+assert len(entries) == 1, entries
+assert entries[0]["phase"] == "prepared", entries
+assert entries[0]["activation"] == "main_meta_absent", entries
+assert re.fullmatch(r"[0-9a-f]{32}", entries[0]["transaction_id"]), entries
+PY
+  then
+    _fail "activation interruption did not retain the prepared recovery record"
+  elif ! (cd "$FIXTURE_DIR" && bash "$CLEANUP_PENDING") \
+    >/tmp/cleanup.$$ 2>/tmp/cleanup.err.$$; then
+    _fail "main cleanup did not auto-promote the committed cancel"
+    cat /tmp/cleanup.$$ /tmp/cleanup.err.$$ >&2
+  elif [ -d "$worktree" ] \
+    || git -C "$FIXTURE_DIR" show-ref --verify --quiet "refs/heads/$branch" \
+    || [ -f "$queue" ]; then
+    _fail "recovered cancel cleanup left its worktree, branch, or queue entry"
+  else
+    pass_test
+  fi
+
+  rm -f /tmp/out.$$ /tmp/err.$$ /tmp/cleanup.$$ /tmp/cleanup.err.$$
+  rm -rf -- "$fake_bin"
+  fixture_teardown
+}
+
+test_cancel_supports_master_only_repository() {
+  start_test "cancel records and cleans against master in a master-only repository"
+  fixture_setup
+  work_dir=$(_setup_module_on_main "work-012" "master-only" 3)
+  local branch queue worktree
+  branch="build-work-012-master-only"
+  queue="$FIXTURE_DIR/.runs/pending-cleanup.json"
+  worktree="$FIXTURE_DIR/.worktrees/$branch"
+  git -C "$FIXTURE_DIR" branch -m main master
+
+  if ! (cd "$FIXTURE_DIR" && bash "$CANCEL_WORK" "$work_dir") \
+    >/tmp/out.$$ 2>/tmp/err.$$; then
+    _fail "cancel failed in a master-only repository"
+    cat /tmp/err.$$ >&2
+  elif [ -f "$work_dir/.work-meta.json" ]; then
+    _fail "cancel did not commit the state removal on master"
+  elif ! python3 - "$queue" <<'PY'
+import json, re, sys
+entries = json.load(open(sys.argv[1], encoding="utf-8"))
+assert len(entries) == 1, entries
+assert entries[0]["phase"] == "active", entries
+assert entries[0]["integration_ref"] == "refs/heads/master", entries
+assert re.fullmatch(r"[0-9a-f]{32}", entries[0]["transaction_id"]), entries
+PY
+  then
+    _fail "cancel did not bind its exact master integration ref and transaction"
+  elif ! git -C "$FIXTURE_DIR" log master --oneline | \
+    grep "cancel: work-012" >/dev/null; then
+    _fail "cancel commit was not written to master"
+  elif ! (cd "$FIXTURE_DIR" && bash "$CLEANUP_PENDING") \
+    >/tmp/cleanup.$$ 2>/tmp/cleanup.err.$$; then
+    _fail "master-bound cleanup did not complete"
+    cat /tmp/cleanup.$$ /tmp/cleanup.err.$$ >&2
+  elif [ -d "$worktree" ] \
+    || git -C "$FIXTURE_DIR" show-ref --verify --quiet "refs/heads/$branch" \
+    || [ -f "$queue" ]; then
+    _fail "master-bound cancel left its worktree, branch, or queue entry"
+  else
+    pass_test
+  fi
+
+  rm -f /tmp/out.$$ /tmp/err.$$ /tmp/cleanup.$$ /tmp/cleanup.err.$$
+  fixture_teardown
+}
+
 # ---------------------------------------------------------------
 # Run all
 # ---------------------------------------------------------------
@@ -354,5 +495,8 @@ test_cancel_rerun_on_already_cleared_does_not_error
 test_cancel_rejects_dirty_main
 test_cancel_rejects_unconfirmed_module_changes
 test_cancel_restores_meta_when_commit_fails
+test_cancel_prepare_failure_happens_before_state_commit
+test_cancel_activation_failure_recovers_from_main_truth
+test_cancel_supports_master_only_repository
 
 report_results "cancel-work"

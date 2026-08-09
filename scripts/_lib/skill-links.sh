@@ -1,13 +1,17 @@
 #!/usr/bin/env bash
 # Ownership guard for the unprefixed host skill resource: skills/_shared.
 
-# 只有具有独立用户意图的能力才注册为宿主入口。恢复和底层执行能力仍保留在
-# PMAI_HOME 中，由公开 skill 按需读取，不要求 PM 记住或手动编排。
+# 所有公开 skill 目录都注册为宿主入口；_internal / _shared 仅供框架内部读取。
+# build-close 的兼容恢复和 publish-to-lark 的明确手动发布都属于可调用用户意图，
+# 是否出现在正常主路径由 PM-facing 文档控制，不通过删除宿主入口实现。
+PMAI_HOST_HIDDEN_SKILLS_FILE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)/host-hidden-skills.txt"
+
 pmai_skill_is_host_exposed() {
   case "$1" in
-    _internal|_shared|build-close|publish-to-lark) return 1 ;;
-    *) return 0 ;;
+    _internal|_shared) return 1 ;;
   esac
+  [ -f "$PMAI_HOST_HIDDEN_SKILLS_FILE" ] || return 0
+  ! grep -Fqx -- "$1" "$PMAI_HOST_HIDDEN_SKILLS_FILE"
 }
 
 # 旧 upgrader 可能在 fast-forward 前已把旧 rebuild_symlinks 载入进程，随后仍会

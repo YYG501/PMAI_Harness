@@ -20,7 +20,8 @@ QUICK_FIX_SKILL="$REPO_ROOT/skills/quick-fix/SKILL.md"
 SPEC_SKILL="$REPO_ROOT/skills/spec-writing/SKILL.md"
 HANDOFF="$REPO_ROOT/skills/lark-review/references/lifecycle-handoff.md"
 
-BASE=$(mktemp -d /tmp/pmai-lark-review-test-XXXXXX)
+BASE_RAW=$(mktemp -d /tmp/pmai-lark-review-test-XXXXXX)
+BASE=$(cd "$BASE_RAW" && pwd -P)
 SHIM="$BASE/bin"
 mkdir -p "$SHIM"
 cp "$SCRIPT_DIR/helpers/fake-lark-review-cli.sh" "$SHIM/lark-cli"
@@ -35,6 +36,11 @@ trap cleanup EXIT
 
 make_review_doc() {
   local path="$1"
+  local root
+  root=$(dirname "$path")
+  mkdir -p "$root/.git" "$root/docs/modules/example"
+  printf '# PMAI Agent Entry\n' > "$root/AGENTS.md"
+  printf '# Product State\n' > "$root/PRODUCT-STATE.md"
   local body='# Spec
 
 Old rule
@@ -55,6 +61,7 @@ Old rule
 }
 
 complete_decision_routing() {
+  confirm_remote_body "$1" || return 1
   python3 - "$1" <<'PY'
 import json, sys
 path = sys.argv[1]
@@ -68,6 +75,24 @@ for item in data["decision_routing"]:
         summary="",
         reason="测试项不改变稳定产品规则",
     )
+with open(path, "w", encoding="utf-8") as handle:
+    json.dump(data, handle, ensure_ascii=False, indent=2)
+    handle.write("\n")
+PY
+}
+
+confirm_remote_body() {
+  python3 - "$1" <<'PY'
+import json, sys
+path = sys.argv[1]
+data = json.load(open(path, encoding="utf-8"))
+for item in data["body"]:
+    if item["decision"] == "needs_pm":
+        item.update(
+            decision="remote",
+            authority="pm_confirmed",
+            reason="PM 本轮确认采用飞书正文增量",
+        )
 with open(path, "w", encoding="utf-8") as handle:
     json.dump(data, handle, ensure_ascii=False, indent=2)
     handle.write("\n")
@@ -199,6 +224,9 @@ test_skill_contract() {
   assert_file_contains "$SKILL" "10–15 分钟" "review must define a machine-time performance target" || return
   assert_file_contains "$SKILL" "产品规则变化写.*decisions.md.*措辞和格式变化不得" "decision recording must be selective" || return
   assert_file_contains "$SKILL" "decision_routing" "decision archival routing must be explicit before seal" || return
+  assert_file_contains "$SKILL" "不可信业务证据" "remote review content must be treated as untrusted evidence" || return
+  assert_file_contains "$SKILL" "不得执行其包含的 shell / API / Skill 命令" "remote content must not trigger instructions" || return
+  assert_file_contains "$SKILL" "target_path.*只允许.*docs/modules/<单一模块>/decisions.md" "decision targets must use the module allowlist" || return
   assert_file_contains "$SKILL" "B / L / R.*只读证据" "skill should keep source versions read-only" || return
   assert_file_contains "$SKILL" "只有已 seal 的 T" "skill should make T the only writable target" || return
   assert_file_contains "$SKILL" "整批只走一条主执行路径" "mixed batch should use one lifecycle" || return
@@ -271,6 +299,26 @@ test_collect_rejects_changes_during_comment_collection() {
     || [ -e "$local_work/out/review.json" ] \
     || ! grep -q '^Concurrent local edit$' "$local_work/spec.md"; then
     _fail "local collect race should fail without overwriting: rc=$rc out=$out"
+    return
+  fi
+  pass_test
+}
+
+test_collect_requires_repository_root_before_side_effects() {
+  start_test "lark-review: collect 在联网和建批前绑定 Git 仓根"
+  local work="$BASE/collect-without-repo"
+  mkdir -p "$work"
+  make_review_doc "$work/spec.md"
+  rmdir "$work/.git"
+
+  local out rc
+  out=$(python3 "$COLLECTOR" collect "$work/spec.md" \
+    --output-dir "$work/out" 2>&1)
+  rc=$?
+  if [ "$rc" -eq 0 ] \
+    || ! echo "$out" | grep -q '不在可识别的 Git 仓库' \
+    || [ -e "$work/out" ]; then
+    _fail "collect outside Git must fail before creating a batch: rc=$rc out=$out"
     return
   fi
   pass_test
@@ -935,6 +983,51 @@ PY
   pass_test
 }
 
+test_checkpoint_cursor_does_not_preconsume_comment_id() {
+  start_test "lark-review: reply 水位不提前消费同秒 comment ID"
+  if PYTHONDONTWRITEBYTECODE=1 python3 - "$COLLECTOR" <<'PY'
+import importlib.util
+import sys
+from pathlib import Path
+
+module_path = Path(sys.argv[1])
+spec = importlib.util.spec_from_file_location("lark_review_comment_cursor_test", module_path)
+module = importlib.util.module_from_spec(spec)
+sys.modules[spec.name] = module
+spec.loader.exec_module(module)
+
+public_snapshot = [{
+    "comment_id": "c1",
+    "comment_event_time": 10,
+    "update_time": 100,
+    "replies": [{"reply_id": "r1", "create_time": 10, "update_time": 100}],
+}]
+checkpoint_time, checkpoint_ids = module._comment_cursor_from_snapshot(public_snapshot)
+assert checkpoint_time == 100
+assert checkpoint_ids == ["reply:r1"], checkpoint_ids
+
+later_raw = [{
+    "comment_id": "c1",
+    "_comment_event_time": 100,
+    "update_time": 100,
+    "replies": [{"reply_id": "r1", "create_time": 10, "update_time": 100}],
+}]
+marked, _, ids = module._with_comment_cursor(
+    later_raw,
+    reviewed_comment_at=checkpoint_time,
+    reviewed_comment_ids=set(checkpoint_ids),
+)
+assert marked[0]["new_since_checkpoint"] is True, marked
+assert marked[0]["comment_event_time"] == 100, marked
+assert ids == ["comment:c1", "reply:r1"], ids
+PY
+  then
+    pass_test
+  else
+    _fail "same-second comment ID was consumed by an earlier reply-only checkpoint"
+  fi
+}
+
 test_baseline_refresh_is_atomic() {
   start_test "lark-review: 精细同步后原子刷新 revision 与正文 hash"
   local work="$BASE/baseline"
@@ -974,9 +1067,10 @@ import json, sys
 plan = json.load(open(sys.argv[1], encoding="utf-8"))
 resolutions = json.load(open(sys.argv[2], encoding="utf-8"))
 assert plan["state"] == "draft", plan
-assert plan["unresolved_count"] == 2, plan
+assert plan["unresolved_count"] == 3, plan
 assert len(resolutions["body"]) == 1
-assert resolutions["body"][0]["decision"] == "remote"
+assert resolutions["body"][0]["decision"] == "needs_pm"
+assert resolutions["body"][0]["authority"] == "pending"
 assert all(item["decision"] == "pending" for item in resolutions["comments"])
 PY
   if [ "$?" -ne 0 ] || ! grep -q '^New rule$' "$work/out/target.md" \
@@ -1038,6 +1132,7 @@ with open(path, "w", encoding="utf-8") as handle:
     json.dump(data, handle, ensure_ascii=False, indent=2)
     handle.write("\n")
 PY
+  confirm_remote_body "$work/out/resolutions.json"
   local out rc
   out=$(python3 "$COLLECTOR" reconcile --manifest "$work/out/review.json" \
     --resolutions "$work/out/resolutions.json" --seal 2>&1)
@@ -1089,7 +1184,390 @@ assert route["decision_id"] == "D-NEW-RULE"
 assert route["supersedes"] == ["D-OLD-RULE"]
 PY
   [ "$?" -eq 0 ] || { _fail "decision routing missing from ready plan"; return; }
+
+  mkdir -p "$work/outside-module"
+  rmdir "$work/docs/modules/example"
+  ln -s "$work/outside-module" "$work/docs/modules/example"
+  out=$(python3 "$COLLECTOR" apply "$work/spec.md" \
+    --plan "$work/out/apply-plan.json" 2>&1)
+  rc=$?
+  if [ "$rc" -eq 0 ] || ! echo "$out" | grep -q 'symlink 组件' \
+    || ! grep -q '^Old rule$' "$work/spec.md"; then
+    _fail "apply must recheck a decision target replaced by symlink: rc=$rc out=$out"
+    return
+  fi
+  rm "$work/docs/modules/example"
+  mkdir -p "$work/docs/modules/example"
+
+  python3 - "$work/out/resolutions.json" <<'PY'
+import json, sys
+path = sys.argv[1]
+data = json.load(open(path, encoding="utf-8"))
+route = next(item for item in data["decision_routing"] if item["outcome"] == "supersede")
+route["target_path"] = "docs/decisions/decisions.md"
+with open(path, "w", encoding="utf-8") as handle:
+    json.dump(data, handle, ensure_ascii=False, indent=2)
+    handle.write("\n")
+PY
+  out=$(python3 "$COLLECTOR" reconcile --manifest "$work/out/review.json" \
+    --resolutions "$work/out/resolutions.json" --seal 2>&1)
+  rc=$?
+  if [ "$rc" -eq 0 ] || ! echo "$out" | grep -q '只允许仓内'; then
+    _fail "decision routing must reject targets outside module decisions: rc=$rc out=$out"
+    return
+  fi
+
+  ln -s "$work/outside-module" "$work/docs/modules/linked"
+  python3 - "$work/out/resolutions.json" <<'PY'
+import json, sys
+path = sys.argv[1]
+data = json.load(open(path, encoding="utf-8"))
+route = next(item for item in data["decision_routing"] if item["outcome"] == "supersede")
+route["target_path"] = "docs/modules/linked/decisions.md"
+with open(path, "w", encoding="utf-8") as handle:
+    json.dump(data, handle, ensure_ascii=False, indent=2)
+    handle.write("\n")
+PY
+  out=$(python3 "$COLLECTOR" reconcile --manifest "$work/out/review.json" \
+    --resolutions "$work/out/resolutions.json" --seal 2>&1)
+  rc=$?
+  if [ "$rc" -eq 0 ] || ! echo "$out" | grep -q 'symlink 组件'; then
+    _fail "decision routing must reject symlink path components: rc=$rc out=$out"
+    return
+  fi
   pass_test
+}
+
+test_nested_git_cannot_change_decision_write_boundary() {
+  start_test "lark-review: 嵌套 .git 不能缩小 decision 写入边界"
+  local work="$BASE/nested-git-boundary"
+  local markdown="$work/docs/modules/current/spec.md"
+  mkdir -p "$work/.git" "$work/docs/modules/current/.git" \
+    "$work/docs/modules/current/docs/modules/other" "$work/outside"
+  printf '# PMAI Agent Entry\n' > "$work/AGENTS.md"
+  printf '# Product State\n' > "$work/PRODUCT-STATE.md"
+  printf '# Spec\n' > "$markdown"
+  ln -s "$work/outside" "$work/docs/modules/other"
+
+  if PYTHONDONTWRITEBYTECODE=1 python3 - "$COLLECTOR" "$markdown" "$work" <<'PY'
+import importlib.util
+import sys
+from pathlib import Path
+
+module_path = Path(sys.argv[1])
+markdown_path = Path(sys.argv[2]).resolve()
+expected_root = Path(sys.argv[3]).resolve()
+spec = importlib.util.spec_from_file_location("lark_review_nested_git_test", module_path)
+module = importlib.util.module_from_spec(spec)
+sys.modules[spec.name] = module
+spec.loader.exec_module(module)
+
+repo_root = module._repository_root(markdown_path)
+assert repo_root == expected_root, (repo_root, expected_root)
+try:
+    module._decision_target_path(repo_root, "docs/modules/other/decisions.md")
+except module.ReviewError as exc:
+    assert "symlink" in str(exc)
+else:
+    raise AssertionError("outer-repo symlink boundary was not enforced")
+PY
+  then
+    pass_test
+  else
+    _fail "nested .git changed the canonical decision target root"
+  fi
+}
+
+test_manifest_markdown_parent_symlink_cannot_rebind_batch() {
+  start_test "lark-review: collect 后父目录 symlink 不能把批次重绑到同仓文件"
+  local work="$BASE/manifest-parent-symlink"
+  mkdir -p "$work/out"
+  make_review_doc "$work/spec.md"
+  mkdir -p "$work/docs/modules/a" "$work/docs/modules/b"
+  mv "$work/spec.md" "$work/docs/modules/a/spec.md"
+  cp "$work/docs/modules/a/spec.md" "$work/docs/modules/b/spec.md"
+
+  python3 "$COLLECTOR" collect "$work/docs/modules/a/spec.md" \
+    --output-dir "$work/out" >/dev/null
+  rm "$work/docs/modules/a/spec.md"
+  rmdir "$work/docs/modules/a"
+  ln -s "$work/docs/modules/b" "$work/docs/modules/a"
+
+  local out rc
+  out=$(python3 "$COLLECTOR" reconcile \
+    --manifest "$work/out/review.json" 2>&1)
+  rc=$?
+  if [ "$rc" -eq 0 ] \
+    || ! echo "$out" | grep -q '路径组件不能是 symlink' \
+    || [ -e "$work/out/resolutions.json" ]; then
+    _fail "manifest markdown must not follow a replaced parent symlink: rc=$rc out=$out"
+    return
+  fi
+  pass_test
+}
+
+test_artifact_io_parent_rebind_never_touches_outside() {
+  start_test "lark-review: 产物读写期间父目录改向时仓外零读写零误删"
+  local work="$BASE/artifact-parent-rebind"
+  mkdir -p "$work/artifacts" "$work/outside"
+  printf 'inside-old\n' > "$work/artifacts/artifact.txt"
+  printf 'outside-secret\n' > "$work/outside/artifact.txt"
+  printf 'outside-sentinel\n' > "$work/outside/sentinel.txt"
+
+  if PYTHONDONTWRITEBYTECODE=1 python3 - "$COLLECTOR" "$work" <<'PY'
+import importlib.util
+import os
+import sys
+from pathlib import Path
+
+module_path = Path(sys.argv[1])
+work = Path(sys.argv[2]).resolve()
+parent = work / "artifacts"
+held_parent = work / "artifacts-held"
+outside = work / "outside"
+
+spec = importlib.util.spec_from_file_location("lark_review_artifact_race_test", module_path)
+module = importlib.util.module_from_spec(spec)
+sys.modules[spec.name] = module
+spec.loader.exec_module(module)
+
+from _lib import atomic_file
+
+outside_before = {
+    path.name: path.read_bytes()
+    for path in outside.iterdir()
+}
+outside_artifact = (outside / "artifact.txt").stat()
+outside_reads = 0
+original_read = atomic_file.os.read
+
+
+def guarded_read(fd: int, size: int) -> bytes:
+    global outside_reads
+    current = os.fstat(fd)
+    if (current.st_dev, current.st_ino) == (
+        outside_artifact.st_dev,
+        outside_artifact.st_ino,
+    ):
+        outside_reads += 1
+    return original_read(fd, size)
+
+
+def restore_parent() -> None:
+    if parent.is_symlink():
+        parent.unlink()
+    if held_parent.exists():
+        held_parent.rename(parent)
+
+
+def expect_rebind_failure(operation) -> None:
+    original_snapshot = atomic_file._snapshot_at
+    race_triggered = False
+
+    def racing_snapshot(*args, **kwargs):
+        nonlocal race_triggered
+        result = original_snapshot(*args, **kwargs)
+        if (
+            Path(kwargs["display_path"]) == parent / "artifact.txt"
+            and not race_triggered
+        ):
+            race_triggered = True
+            parent.rename(held_parent)
+            parent.symlink_to(outside, target_is_directory=True)
+        return result
+
+    atomic_file._snapshot_at = racing_snapshot
+    try:
+        try:
+            operation()
+        except module.ReviewError:
+            pass
+        else:
+            raise AssertionError("parent rebind was accepted")
+    finally:
+        atomic_file._snapshot_at = original_snapshot
+        restore_parent()
+
+
+atomic_file.os.read = guarded_read
+try:
+    expect_rebind_failure(
+        lambda: module._write_text(parent / "artifact.txt", "inside-new\n")
+    )
+    assert {
+        path.name: path.read_bytes()
+        for path in outside.iterdir()
+    } == outside_before
+    assert sorted(path.name for path in parent.iterdir()) == ["artifact.txt"]
+
+    (parent / "artifact.txt").write_text("inside-old\n", encoding="utf-8")
+    expect_rebind_failure(
+        lambda: module._read_regular_text(
+            parent / "artifact.txt",
+            label="竞态产物",
+        )
+    )
+finally:
+    atomic_file.os.read = original_read
+    restore_parent()
+
+assert outside_reads == 0, outside_reads
+assert {
+    path.name: path.read_bytes()
+    for path in outside.iterdir()
+} == outside_before
+assert sorted(path.name for path in parent.iterdir()) == ["artifact.txt"]
+PY
+  then
+    pass_test
+  else
+    _fail "artifact parent rebind reached or modified the outside directory"
+  fi
+}
+
+test_batch_entry_paths_never_pre_resolve_symlinks() {
+  start_test "lark-review: 批次入口不把 symlink 预解析成仓外普通文件"
+  local work="$BASE/batch-entry-symlink"
+  mkdir -p "$work/batch" "$work/outside"
+  printf '{"schema_version":3}\n' > "$work/outside/review.json"
+  printf 'outside\n' > "$work/outside/artifact.txt"
+  ln -s "$work/outside" "$work/linked"
+
+  if PYTHONDONTWRITEBYTECODE=1 python3 - "$COLLECTOR" "$work" <<'PY'
+import importlib.util
+import sys
+from pathlib import Path
+
+module_path = Path(sys.argv[1])
+work = Path(sys.argv[2]).resolve()
+outside = work / "outside"
+linked = work / "linked"
+
+spec = importlib.util.spec_from_file_location("lark_review_entry_symlink_test", module_path)
+module = importlib.util.module_from_spec(spec)
+sys.modules[spec.name] = module
+spec.loader.exec_module(module)
+
+outside_before = {
+    path.name: path.read_bytes()
+    for path in outside.iterdir()
+}
+operations = (
+    lambda: module._manifest_path(str(linked / "review.json")),
+    lambda: module._read_regular_text(
+        linked / "artifact.txt",
+        label="symlink 产物",
+    ),
+    lambda: module._write_text(linked / "new-artifact.txt", "new\n"),
+)
+for operation in operations:
+    try:
+        operation()
+    except module.ReviewError:
+        pass
+    else:
+        raise AssertionError("symlink entry was accepted")
+
+assert {
+    path.name: path.read_bytes()
+    for path in outside.iterdir()
+} == outside_before
+PY
+  then
+    pass_test
+  else
+    _fail "batch entry resolved a symlink into the outside directory"
+  fi
+}
+
+test_repository_root_supports_worktree_git_file_and_requires_binding() {
+  start_test "lark-review: .git 文件式仓根可识别且 reconcile 必须有 repo_root"
+  local work="$BASE/worktree-root-compat"
+  mkdir -p "$work/docs/modules/current"
+  printf 'gitdir: /tmp/example-worktree-gitdir\n' > "$work/.git"
+  printf '# PMAI Agent Entry\n' > "$work/AGENTS.md"
+  printf '# Product State\n' > "$work/PRODUCT-STATE.md"
+  printf '# Spec\n' > "$work/docs/modules/current/spec.md"
+
+  if PYTHONDONTWRITEBYTECODE=1 python3 - "$COLLECTOR" \
+    "$work/docs/modules/current/spec.md" "$work" <<'PY'
+import importlib.util
+import sys
+from pathlib import Path
+
+module_path = Path(sys.argv[1])
+markdown_path = Path(sys.argv[2]).resolve()
+expected_root = Path(sys.argv[3]).resolve()
+spec = importlib.util.spec_from_file_location("lark_review_root_compat_test", module_path)
+module = importlib.util.module_from_spec(spec)
+sys.modules[spec.name] = module
+spec.loader.exec_module(module)
+
+assert module._repository_root(markdown_path) == expected_root
+for schema_version in (2, 3):
+    unbound = {
+        "schema_version": schema_version,
+        "markdown_path": str(markdown_path),
+    }
+    try:
+        module._manifest_repository_root(unbound, markdown_path)
+    except module.ReviewError as exc:
+        assert "缺少 collect 时" in str(exc)
+    else:
+        raise AssertionError(
+            f"schema v{schema_version} manifest without repo_root was accepted"
+        )
+PY
+  then
+    pass_test
+  else
+    _fail "worktree or legacy repository-root compatibility regressed"
+  fi
+}
+
+test_repository_root_prefers_real_nested_worktree() {
+  start_test "lark-review: 内嵌真实 worktree 使用当前 worktree 根而非外层主仓"
+  local work="$BASE/real-nested-worktree"
+  local main="$work/main"
+  local nested="$main/.worktrees/review"
+  mkdir -p "$main/docs/modules/current"
+  git -C "$main" init -q -b main
+  git -C "$main" config user.name "PMAI Test"
+  git -C "$main" config user.email "pmai-test@example.com"
+  printf '# PMAI Agent Entry\n' > "$main/AGENTS.md"
+  printf '# Product State\n' > "$main/PRODUCT-STATE.md"
+  printf '# Spec\n' > "$main/docs/modules/current/spec.md"
+  git -C "$main" add AGENTS.md PRODUCT-STATE.md docs/modules/current/spec.md
+  git -C "$main" commit -qm "fixture"
+  git -C "$main" worktree add -q -b review "$nested"
+
+  if PYTHONDONTWRITEBYTECODE=1 python3 - "$COLLECTOR" \
+    "$nested/docs/modules/current/spec.md" "$nested" <<'PY'
+import importlib.util
+import sys
+from pathlib import Path
+
+module_path = Path(sys.argv[1])
+markdown_path = Path(sys.argv[2]).resolve()
+expected_root = Path(sys.argv[3]).resolve()
+spec = importlib.util.spec_from_file_location("lark_review_real_worktree_test", module_path)
+module = importlib.util.module_from_spec(spec)
+sys.modules[spec.name] = module
+spec.loader.exec_module(module)
+
+assert module._repository_root(markdown_path) == expected_root
+manifest = {
+    "schema_version": 3,
+    "markdown_path": str(markdown_path),
+    "repo_root": str(expected_root),
+}
+assert module._manifest_repository_root(manifest, markdown_path) == expected_root
+PY
+  then
+    pass_test
+  else
+    _fail "real nested worktree was not selected as the canonical repository root"
+  fi
 }
 
 test_applied_comment_requires_changed_lifecycle_target() {
@@ -1332,7 +1810,7 @@ PY
 test_incompatible_remote_only_starts_target_from_native_remote() {
   start_test "lark-review: remote-only 即使祖先格式不兼容也从飞书原生快照初始化 T"
   local work="$BASE/incompatible"
-  mkdir -p "$work/out"
+  mkdir -p "$work/out" "$work/.git"
   local body='# Spec
 
 Old [rule]
@@ -1442,6 +1920,57 @@ PY
   pass_test
 }
 
+test_rewritten_remote_unit_requires_target() {
+  start_test "lark-review: rewritten 必须绑定至少一个有效目标语义单元"
+  PYTHONPATH="$REPO_ROOT/scripts" python3 - <<'PY'
+from _lib.lark_review_semantics import (
+    build_native_snapshot,
+    build_remote_coverage,
+    markdown_semantic_units,
+)
+
+remote = "# Spec\n\nOld rule\n"
+target = "# Spec\n\nNew rule\n"
+remote_rule = next(unit for unit in markdown_semantic_units(remote) if unit.text == "Old rule")
+snapshot = build_native_snapshot({
+    "document_id": "docR",
+    "revision_id": 9,
+    "content": '<h1 id="h-spec">Spec</h1><p id="p-old">Old rule</p>',
+})
+coverage = build_remote_coverage(
+    remote,
+    target,
+    native_snapshot=snapshot,
+    resolutions=[{
+        "remote_unit_id": remote_rule.unit_id,
+        "disposition": "rewritten",
+        "target_unit_ids": [],
+        "format_disposition": "preserved",
+        "evidence": {
+            "kind": "pm_exception",
+            "id": "rewrite-old",
+            "reason": "PM 确认改写旧规则",
+        },
+    }],
+    batch_id="empty-rewrite-target",
+    remote_revision_id=9,
+)
+entry = next(item for item in coverage["entries"] if item["remote"]["unit_id"] == remote_rule.unit_id)
+native = {item["block_id"]: item for item in coverage["native_format_entries"]}
+assert entry["disposition"] == "unassigned", entry
+assert "至少一个" in entry["resolution_error"], entry
+assert coverage["summary"]["rewritten_count"] == 0, coverage
+assert coverage["summary"]["unassigned_count"] == 1, coverage
+assert coverage["summary"]["remote_accounted_ratio"] < 1, coverage
+assert native["p-old"]["format_disposition"] == "unassigned", native
+PY
+  if [ "$?" -ne 0 ]; then
+    _fail "empty rewritten target list was accepted"
+    return
+  fi
+  pass_test
+}
+
 test_duplicate_remote_units_keep_independent_native_format_accounts() {
   start_test "lark-review: 同文重复段落的原生格式账本互不豁免"
   PYTHONPATH="$REPO_ROOT/scripts" python3 - <<'PY'
@@ -1466,6 +1995,7 @@ resolution = {
     "format_disposition": "removed_with_content",
     "evidence": {"kind": "pm_exception", "id": "remove-second", "reason": "PM 删除第二段"},
 }
+
 coverage = build_remote_coverage(
     remote,
     target,
@@ -1510,6 +2040,317 @@ assert semantic_coverage["summary"]["unassigned_count"] == 1, semantic_coverage
 PY
   if [ "$?" -ne 0 ]; then
     _fail "duplicate native format accounting is not independent"
+    return
+  fi
+  pass_test
+}
+
+test_semantic_structure_changes_are_not_preserved() {
+  start_test "lark-review: 标题层级、列表形态和表格角色纳入语义结构"
+  PYTHONPATH="$REPO_ROOT/scripts" python3 - <<'PY'
+from _lib.lark_review_semantics import (
+    build_native_snapshot,
+    build_remote_coverage,
+    markdown_semantic_units,
+)
+
+
+def snapshot(content):
+    return build_native_snapshot({
+        "document_id": "docR",
+        "revision_id": 9,
+        "content": content,
+    })
+
+
+heading_remote = markdown_semantic_units("# Spec\n")
+heading_target = markdown_semantic_units("## Spec\n")
+assert heading_remote[0].unit_id == heading_target[0].unit_id
+assert heading_remote[0].structure_signature == "heading:level=1"
+assert heading_target[0].structure_signature == "heading:level=2"
+heading_coverage = build_remote_coverage(
+    "# Spec\n",
+    "## Spec\n",
+    native_snapshot=snapshot('<h1 id="heading">Spec</h1>'),
+    resolutions=[],
+    batch_id="heading-level",
+    remote_revision_id=9,
+)
+heading_entry = heading_coverage["entries"][0]
+assert heading_entry["disposition"] == "unassigned", heading_entry
+assert heading_entry["structural_change"] is True, heading_entry
+assert heading_coverage["summary"]["preserved_count"] == 0, heading_coverage
+assert heading_coverage["summary"]["high_risk_structural_count"] == 1, heading_coverage
+assert heading_coverage["summary"]["preview_required"] is True, heading_coverage
+
+list_remote = markdown_semantic_units("# Spec\n\n  - Choice\n")
+list_target = markdown_semantic_units("# Spec\n\n  1. Choice\n")
+remote_choice = next(item for item in list_remote if item.kind == "list_item")
+target_choice = next(item for item in list_target if item.kind == "list_item")
+assert remote_choice.unit_id == target_choice.unit_id
+assert remote_choice.structure_signature == "list_item:unordered:indent=2"
+assert target_choice.structure_signature == "list_item:ordered:indent=2"
+list_coverage = build_remote_coverage(
+    "# Spec\n\n  - Choice\n",
+    "# Spec\n\n  1. Choice\n",
+    native_snapshot=snapshot(
+        '<h1 id="list-heading">Spec</h1><p id="choice">Choice</p>'
+    ),
+    resolutions=[],
+    batch_id="list-orderedness",
+    remote_revision_id=9,
+)
+list_entry = next(
+    item for item in list_coverage["entries"] if item["remote"]["kind"] == "list_item"
+)
+assert list_entry["disposition"] == "unassigned", list_entry
+assert list_entry["structural_change"] is True, list_entry
+assert list_coverage["summary"]["high_risk_structural_count"] == 1, list_coverage
+assert list_coverage["summary"]["preview_required"] is True, list_coverage
+
+cross_coverage = build_remote_coverage(
+    "# A\n\n- Choice\n\n# B\n\nKeep\n",
+    "# A\n\n# B\n\n1. Choice\n\nKeep\n",
+    native_snapshot=snapshot(
+        '<h1 id="a">A</h1><p id="cross-choice">Choice</p>'
+        '<h1 id="b">B</h1><p id="keep">Keep</p>'
+    ),
+    resolutions=[],
+    batch_id="cross-section-structure",
+    remote_revision_id=9,
+)
+cross_choice = next(
+    item for item in cross_coverage["entries"] if item["remote"]["text"] == "Choice"
+)
+assert cross_choice["disposition"] == "unassigned", cross_choice
+assert cross_choice["structural_change"] is True, cross_choice
+
+cross_kind_remote = "# Spec\n\nRule\n"
+cross_kind_target = "# Spec\n\n# Rule\n"
+remote_rule = next(
+    item for item in markdown_semantic_units(cross_kind_remote) if item.text == "Rule"
+)
+target_rule = next(
+    item for item in markdown_semantic_units(cross_kind_target) if item.text == "Rule"
+)
+cross_kind_coverage = build_remote_coverage(
+    cross_kind_remote,
+    cross_kind_target,
+    native_snapshot=snapshot(
+        '<h1 id="cross-kind-heading">Spec</h1><p id="cross-kind-rule">Rule</p>'
+    ),
+    resolutions=[{
+        "remote_unit_id": remote_rule.unit_id,
+        "disposition": "rewritten",
+        "target_unit_ids": [target_rule.unit_id],
+        "format_disposition": "preserved",
+        "evidence": {
+            "kind": "pm_exception",
+            "id": "paragraph-to-heading",
+            "reason": "PM 确认将段落改写为标题",
+        },
+    }],
+    batch_id="cross-kind-rewrite",
+    remote_revision_id=9,
+)
+cross_kind_entry = next(
+    item
+    for item in cross_kind_coverage["entries"]
+    if item["remote"]["unit_id"] == remote_rule.unit_id
+)
+assert cross_kind_entry["disposition"] == "rewritten", cross_kind_entry
+assert cross_kind_entry["structural_change"] is True, cross_kind_entry
+assert cross_kind_coverage["summary"]["high_risk_structural_count"] == 1, cross_kind_coverage
+assert cross_kind_coverage["summary"]["preview_required"] is True, cross_kind_coverage
+
+table_units = [
+    item
+    for item in markdown_semantic_units(
+        "| Name |\n| --- |\n| Alice |\n"
+    )
+    if item.kind == "table_row"
+]
+assert [item.structure_signature for item in table_units] == [
+    "table_row:role=header",
+    "table_row:role=data",
+]
+PY
+  if [ "$?" -ne 0 ]; then
+    _fail "semantic matching ignored a Markdown structure change"
+    return
+  fi
+  pass_test
+}
+
+test_cross_section_duplicate_text_cannot_consume_wrong_unit() {
+  start_test "lark-review: 跨章节重复文本按章节位置归位"
+  PYTHONPATH="$REPO_ROOT/scripts" python3 - <<'PY'
+from _lib.lark_review_semantics import (
+    build_native_snapshot,
+    build_remote_coverage,
+    markdown_semantic_units,
+)
+
+remote = "# A\n\nShared rule\n\n# B\n\nShared rule\n"
+target = "# A\n\n# B\n\nShared rule\n"
+remote_units = markdown_semantic_units(remote)
+repeats = [unit for unit in remote_units if unit.text == "Shared rule"]
+remote_a, remote_b = repeats
+assert remote_a.section_path == ["A"]
+assert remote_b.section_path == ["B"]
+snapshot = build_native_snapshot({
+    "document_id": "docR",
+    "revision_id": 9,
+    "content": (
+        '<h1 id="h-a">A</h1><p id="p-a">Shared rule</p>'
+        '<h1 id="h-b">B</h1><p id="p-b">Shared rule</p>'
+    ),
+})
+wrong_removal = {
+    "remote_unit_id": remote_b.unit_id,
+    "disposition": "removed",
+    "target_unit_ids": [],
+    "format_disposition": "removed_with_content",
+    "evidence": {
+        "kind": "pm_exception",
+        "id": "remove-b",
+        "reason": "PM 指定删除 B 章规则",
+    },
+}
+coverage = build_remote_coverage(
+    remote,
+    target,
+    native_snapshot=snapshot,
+    resolutions=[wrong_removal],
+    batch_id="section-bound",
+    remote_revision_id=9,
+)
+entries = {
+    item["remote"]["unit_id"]: item
+    for item in coverage["entries"]
+}
+native = {item["block_id"]: item for item in coverage["native_format_entries"]}
+assert entries[remote_a.unit_id]["disposition"] == "unassigned", entries
+assert entries[remote_b.unit_id]["disposition"] == "preserved", entries
+assert coverage["unknown_resolution_ids"] == [remote_b.unit_id], coverage
+assert coverage["summary"]["unassigned_count"] == 1, coverage
+assert native["p-a"]["format_disposition"] == "unassigned", native
+assert native["p-b"]["format_disposition"] == "preserved", native
+
+ambiguous_remote = "# A\n\nShared rule\n\n# B\n\nShared rule\n"
+ambiguous_target = "# C\n\nShared rule\n\n# D\n\nShared rule\n"
+ambiguous_snapshot = build_native_snapshot({
+    "document_id": "docR",
+    "revision_id": 9,
+    "content": (
+        '<h1 id="ambiguous-h-a">A</h1><p id="ambiguous-p-a">Shared rule</p>'
+        '<h1 id="ambiguous-h-b">B</h1><p id="ambiguous-p-b">Shared rule</p>'
+    ),
+})
+ambiguous_coverage = build_remote_coverage(
+    ambiguous_remote,
+    ambiguous_target,
+    native_snapshot=ambiguous_snapshot,
+    resolutions=[],
+    batch_id="ambiguous-sections",
+    remote_revision_id=9,
+)
+ambiguous_repeats = [
+    item
+    for item in ambiguous_coverage["entries"]
+    if item["remote"]["text"] == "Shared rule"
+]
+assert len(ambiguous_repeats) == 2, ambiguous_repeats
+assert all(item["disposition"] == "unassigned" for item in ambiguous_repeats), ambiguous_repeats
+PY
+  if [ "$?" -ne 0 ]; then
+    _fail "cross-section duplicate text was matched to the wrong chapter"
+    return
+  fi
+  pass_test
+}
+
+test_unique_cross_section_units_are_moved() {
+  start_test "lark-review: 唯一语义跨章节和章节改名正文按 moved 归位"
+  PYTHONPATH="$REPO_ROOT/scripts" python3 - <<'PY'
+from _lib.lark_review_semantics import (
+    build_native_snapshot,
+    build_remote_coverage,
+    markdown_semantic_units,
+)
+
+remote = "# A\n\nUnique rule\n\n# B\n\nKeep B\n"
+target = "# A\n\n# B\n\nKeep B\n\nUnique rule\n"
+remote_rule = next(unit for unit in markdown_semantic_units(remote) if unit.text == "Unique rule")
+snapshot = build_native_snapshot({
+    "document_id": "docR",
+    "revision_id": 9,
+    "content": (
+        '<h1 id="move-h-a">A</h1><p id="move-rule">Unique rule</p>'
+        '<h1 id="move-h-b">B</h1><p id="move-keep">Keep B</p>'
+    ),
+})
+coverage = build_remote_coverage(
+    remote,
+    target,
+    native_snapshot=snapshot,
+    resolutions=[],
+    batch_id="unique-cross-section",
+    remote_revision_id=9,
+)
+entry = next(item for item in coverage["entries"] if item["remote"]["unit_id"] == remote_rule.unit_id)
+target_by_id = {item["unit_id"]: item for item in coverage["target_units"]}
+matched_target = target_by_id[entry["target_unit_ids"][0]]
+assert entry["disposition"] == "moved", entry
+assert matched_target["section_path"] == ["B"], matched_target
+assert coverage["summary"]["moved_count"] == 1, coverage
+assert coverage["summary"]["unassigned_count"] == 0, coverage
+assert coverage["summary"]["high_risk_structural_count"] == 1, coverage
+assert coverage["summary"]["preview_required"] is True, coverage
+
+renamed_remote = "# Old section\n\nStable detail\n"
+renamed_target = "# New section\n\nStable detail\n"
+renamed_remote_units = markdown_semantic_units(renamed_remote)
+renamed_target_units = markdown_semantic_units(renamed_target)
+old_heading = next(unit for unit in renamed_remote_units if unit.kind == "heading")
+new_heading = next(unit for unit in renamed_target_units if unit.kind == "heading")
+stable_detail = next(unit for unit in renamed_remote_units if unit.text == "Stable detail")
+renamed_snapshot = build_native_snapshot({
+    "document_id": "docR",
+    "revision_id": 9,
+    "content": '<h1 id="rename-h">Old section</h1><p id="rename-detail">Stable detail</p>',
+})
+renamed_coverage = build_remote_coverage(
+    renamed_remote,
+    renamed_target,
+    native_snapshot=renamed_snapshot,
+    resolutions=[{
+        "remote_unit_id": old_heading.unit_id,
+        "disposition": "rewritten",
+        "target_unit_ids": [new_heading.unit_id],
+        "format_disposition": "preserved",
+        "evidence": {
+            "kind": "pm_exception",
+            "id": "rename-section",
+            "reason": "PM 确认章节改名",
+        },
+    }],
+    batch_id="renamed-section",
+    remote_revision_id=9,
+)
+renamed_entry = next(
+    item
+    for item in renamed_coverage["entries"]
+    if item["remote"]["unit_id"] == stable_detail.unit_id
+)
+assert renamed_entry["disposition"] == "moved", renamed_entry
+assert renamed_coverage["summary"]["moved_count"] == 1, renamed_coverage
+assert renamed_coverage["summary"]["rewritten_count"] == 1, renamed_coverage
+assert renamed_coverage["summary"]["unassigned_count"] == 0, renamed_coverage
+assert renamed_coverage["summary"]["preview_required"] is True, renamed_coverage
+PY
+  if [ "$?" -ne 0 ]; then
+    _fail "unique cross-section semantic unit was not accounted as moved"
     return
   fi
   pass_test
@@ -1593,6 +2434,132 @@ PY
   pass_test
 }
 
+test_verify_sync_rejects_unsynced_markdown_structure() {
+  start_test "lark-review: verify-sync 拒绝未同步的标题层级和列表形态"
+  local work="$BASE/verify-sync-structure"
+  prepare_controlled_review "$work" || { _fail "failed to prepare review"; return; }
+  PYTHONDONTWRITEBYTECODE=1 python3 - "$COLLECTOR" \
+    "$work/out/review.json" "$work/out/apply-plan.json" <<'PY'
+import importlib.util
+import json
+import sys
+from pathlib import Path
+
+collector_path = Path(sys.argv[1])
+manifest_path = Path(sys.argv[2])
+plan_path = Path(sys.argv[3])
+spec = importlib.util.spec_from_file_location(
+    "lark_review_structure_verification_test",
+    collector_path,
+)
+module = importlib.util.module_from_spec(spec)
+sys.modules[spec.name] = module
+spec.loader.exec_module(module)
+manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+plan = json.loads(plan_path.read_text(encoding="utf-8"))
+
+
+def assert_structure_rejected(target_body, remote_body):
+    module._fetch_current_pair = lambda _doc_id: (
+        {
+            "document_id": "docR",
+            "revision_id": 10,
+            "content": remote_body,
+        },
+        {},
+    )
+    try:
+        module._sync_verification(
+            manifest_path,
+            manifest,
+            plan_path,
+            plan,
+            {
+                "doc_id": "docR",
+                "published_revision_id": 10,
+                "body": target_body,
+            },
+        )
+    except module.ReviewError as exc:
+        assert "稳定语义投影" in str(exc), str(exc)
+    else:
+        raise AssertionError("unsynced Markdown structure passed verify-sync")
+
+
+assert_structure_rejected("## Spec\n\nNew rule\n", "# Spec\n\nNew rule\n")
+assert_structure_rejected("# Spec\n\n1. Choice\n", "# Spec\n\n- Choice\n")
+PY
+  if [ "$?" -ne 0 ]; then
+    _fail "verify-sync accepted an unsynced Markdown structure"
+    return
+  fi
+  pass_test
+}
+
+test_legacy_remote_coverage_schema_is_rejected() {
+  start_test "lark-review: v1 远端覆盖账本不能沿用旧预览结论执行或验收"
+  local work="$BASE/legacy-remote-coverage"
+  prepare_controlled_review "$work" || { _fail "failed to prepare review"; return; }
+  python3 - "$work/out/remote-coverage.json" "$work/out/apply-plan.json" <<'PY'
+import hashlib
+import json
+import sys
+from pathlib import Path
+
+coverage_path = Path(sys.argv[1])
+plan_path = Path(sys.argv[2])
+coverage = json.loads(coverage_path.read_text(encoding="utf-8"))
+assert coverage["schema_version"] == 2, coverage
+coverage["schema_version"] = 1
+coverage["summary"]["preview_required"] = False
+coverage_path.write_text(
+    json.dumps(coverage, ensure_ascii=False, indent=2) + "\n",
+    encoding="utf-8",
+)
+
+plan = json.loads(plan_path.read_text(encoding="utf-8"))
+plan["remote_coverage"]["sha256"] = hashlib.sha256(
+    coverage_path.read_bytes()
+).hexdigest()
+binding = {key: value for key, value in plan.items() if key != "ready_token"}
+encoded = json.dumps(
+    binding,
+    ensure_ascii=False,
+    sort_keys=True,
+    separators=(",", ":"),
+)
+plan["ready_token"] = hashlib.sha256(encoded.encode("utf-8")).hexdigest()
+plan_path.write_text(
+    json.dumps(plan, ensure_ascii=False, indent=2) + "\n",
+    encoding="utf-8",
+)
+PY
+  if [ "$?" -ne 0 ]; then
+    _fail "failed to construct a sealed v1 coverage ledger"
+    return
+  fi
+
+  local out rc
+  out=$(python3 "$COLLECTOR" apply "$work/spec.md" \
+    --plan "$work/out/apply-plan.json" 2>&1)
+  rc=$?
+  if [ "$rc" -eq 0 ] || ! echo "$out" | grep -q '远端覆盖账本不是可执行的完整账本'; then
+    _fail "apply accepted a sealed v1 coverage ledger: rc=$rc out=$out"
+    return
+  fi
+
+  out=$(FAKE_REVIEW_SYNCED_REMOTE=1 \
+    python3 "$COLLECTOR" verify-sync \
+      --manifest "$work/out/review.json" \
+      --plan "$work/out/apply-plan.json" 2>&1)
+  rc=$?
+  if [ "$rc" -eq 0 ] || ! echo "$out" | grep -q '不是完整的远端覆盖账本'; then
+    _fail "verify-sync accepted a sealed v1 coverage ledger: rc=$rc out=$out"
+    return
+  fi
+  pass_test
+}
+
 test_structural_remote_change_requires_pm_preview() {
   start_test "lark-review: 结构性 R 到 T 改写强制 PM 预览"
   local work="$BASE/remote-preview"
@@ -1618,6 +2585,7 @@ data["target"] = {
     "authority": "pm_confirmed",
     "reason": "按 PM 确认更新标题",
 }
+
 for item in data["comments"]:
     item.update(decision="no_spec_change", authority="existing_spec", reason="无需改规格", result_text="Updated and verified")
 data["remote_coverage"] = [{
@@ -1639,7 +2607,8 @@ PY
     --resolutions "$work/out/resolutions.json" --seal 2>&1)
   rc=$?
   if [ "$rc" -eq 0 ] || ! echo "$out" | grep -q '强制预览阈值' \
-    || ! grep -q 'remote-heading-' "$work/out/remote-preview.md"; then
+    || ! grep -q 'remote-heading-' "$work/out/remote-preview.md" \
+    || ! grep -q '处置：moved' "$work/out/remote-preview.md"; then
     _fail "structural rewrite should stop for PM preview: rc=$rc out=$out"
     return
   fi
@@ -1666,8 +2635,66 @@ PY
   pass_test
 }
 
-test_legacy_receipt_recovers_without_solved_time() {
-  start_test "lark-review: v1 solve_requested 缺少 solved_time 时受控升级恢复"
+test_large_reorder_requires_pm_preview() {
+  start_test "lark-review: 20 项纯重排计入结构变化并强制预览"
+  PYTHONPATH="$REPO_ROOT/scripts" python3 - <<'PY'
+from _lib.lark_review_semantics import (
+    build_native_snapshot,
+    build_remote_coverage,
+    render_remote_preview,
+)
+
+items = [f"Item {index}" for index in range(1, 21)]
+remote = "# Spec\n\n" + "\n".join(f"- {item}" for item in items) + "\n"
+target = "# Spec\n\n" + "\n".join(f"- {item}" for item in reversed(items)) + "\n"
+snapshot = build_native_snapshot({
+    "document_id": "docR",
+    "revision_id": 9,
+    "content": '<h1 id="title">Spec</h1>' + "".join(
+        f'<p id="item-{index}">{item}</p>'
+        for index, item in enumerate(items, start=1)
+    ),
+})
+coverage = build_remote_coverage(
+    remote,
+    target,
+    native_snapshot=snapshot,
+    resolutions=[],
+    batch_id="reorder",
+    remote_revision_id=9,
+)
+summary = coverage["summary"]
+assert summary["moved_count"] >= 19, summary
+assert summary["unassigned_count"] == 0, summary
+assert summary["remote_preserved_ratio"] == 1.0, summary
+assert summary["preview_required"] is True, summary
+preview = render_remote_preview(coverage)
+assert "处置：moved" in preview, preview
+assert "移动：" in preview, preview
+
+inserted_target = "# Spec\n\n- Added first\n" + "\n".join(
+    f"- {item}" for item in items
+) + "\n"
+inserted = build_remote_coverage(
+    remote,
+    inserted_target,
+    native_snapshot=snapshot,
+    resolutions=[],
+    batch_id="inserted",
+    remote_revision_id=9,
+)
+assert inserted["summary"]["moved_count"] == 0, inserted
+assert inserted["summary"]["preview_required"] is False, inserted
+PY
+  if [ "$?" -ne 0 ]; then
+    _fail "large semantic reorder did not produce a useful mandatory preview"
+    return
+  fi
+  pass_test
+}
+
+test_legacy_solve_requested_without_write_ack_is_rejected() {
+  start_test "lark-review: solve_requested 缺少 solve 写回执时拒绝冒充受控完成"
   local work="$BASE/legacy-no-solved-time"
   prepare_controlled_review "$work" || { _fail "failed to prepare review"; return; }
   python3 - "$work/out/review.json" "$work/out/apply-plan.json" <<'PY'
@@ -1724,21 +2751,20 @@ PY
       --plan "$work/out/apply-plan.json" \
       --comment-id c1 --result-text 'Updated and verified' 2>&1)
   rc=$?
-  if [ "$rc" -ne 0 ] || ! echo "$out" | grep -q 'legacy_stable_readback'; then
-    _fail "legacy no-time receipt should recover: rc=$rc out=$out"
+  if [ "$rc" -eq 0 ] || ! echo "$out" | grep -q '缺少系统解决写响应'; then
+    _fail "missing solve write acknowledgement should fail closed: rc=$rc out=$out"
     return
   fi
   python3 - "$work/out/comment-actions.json" <<'PY'
 import json, sys
 data = json.load(open(sys.argv[1], encoding="utf-8"))
 action = data["actions"][0]
-assert data["schema_version"] == 2
-assert action["status"] == "completed"
-assert action["solved_time"] is None
-assert action["solve_evidence_mode"] == "legacy_stable_readback"
-assert action["solve_write_ack_sha256"] is None
+assert data["schema_version"] == 1
+assert action["status"] == "solve_requested"
+assert "solve_evidence_mode" not in action
+assert "solve_write_ack_sha256" not in action
 PY
-  [ "$?" -eq 0 ] || { _fail "legacy receipt upgrade is incomplete"; return; }
+  [ "$?" -eq 0 ] || { _fail "ambiguous legacy receipt should remain uncompleted"; return; }
   pass_test
 }
 
@@ -1761,7 +2787,9 @@ test_review_requires_cli_with_versioned_docs_skills() {
 test_legacy_document_degrades_without_claiming_delta() {
   start_test "lark-review: 旧文档无发布基线时降级为 legacy"
   local work="$BASE/legacy"
-  mkdir -p "$work/out"
+  mkdir -p "$work/out" "$work/.git"
+  printf '# PMAI Agent Entry\n' > "$work/AGENTS.md"
+  printf '# Product State\n' > "$work/PRODUCT-STATE.md"
   cat > "$work/spec.md" <<'MD'
 ---
 lark_doc_id: docR
@@ -2060,6 +3088,7 @@ PY
 test_skill_contract
 test_collects_three_way_body_and_paginated_comments
 test_collect_rejects_changes_during_comment_collection
+test_collect_requires_repository_root_before_side_effects
 test_checkpoint_is_separate_and_preserves_body
 test_checkpoint_requires_published_target_and_resolved_comments
 test_checkpoint_rejects_remote_mismatch_and_new_unresolved_comment
@@ -2073,9 +3102,16 @@ test_batch_final_read_failure_can_recover_and_reopen
 test_checkpoint_failure_can_recollect_solved_comment
 test_checkpoint_preserves_deferred_comments
 test_same_second_comment_uses_create_time_and_id_boundary
+test_checkpoint_cursor_does_not_preconsume_comment_id
 test_baseline_refresh_is_atomic
 test_reconcile_seals_target_before_apply
 test_decision_routing_is_explicit_and_selective
+test_nested_git_cannot_change_decision_write_boundary
+test_manifest_markdown_parent_symlink_cannot_rebind_batch
+test_artifact_io_parent_rebind_never_touches_outside
+test_batch_entry_paths_never_pre_resolve_symlinks
+test_repository_root_supports_worktree_git_file_and_requires_binding
+test_repository_root_prefers_real_nested_worktree
 test_applied_comment_requires_changed_lifecycle_target
 test_apply_rejects_local_change_after_collect
 test_apply_rejects_remote_or_comment_change
@@ -2083,11 +3119,18 @@ test_already_applied_rechecks_local_cas
 test_manual_merge_requires_compiled_target
 test_incompatible_remote_only_starts_target_from_native_remote
 test_unassigned_remote_rewrite_blocks_seal
+test_rewritten_remote_unit_requires_target
 test_duplicate_remote_units_keep_independent_native_format_accounts
+test_semantic_structure_changes_are_not_preserved
+test_cross_section_duplicate_text_cannot_consume_wrong_unit
+test_unique_cross_section_units_are_moved
 test_comment_without_solved_time_can_checkpoint
 test_verify_sync_preserves_native_format_and_resources
+test_verify_sync_rejects_unsynced_markdown_structure
+test_legacy_remote_coverage_schema_is_rejected
 test_structural_remote_change_requires_pm_preview
-test_legacy_receipt_recovers_without_solved_time
+test_large_reorder_requires_pm_preview
+test_legacy_solve_requested_without_write_ack_is_rejected
 test_review_requires_cli_with_versioned_docs_skills
 test_legacy_document_degrades_without_claiming_delta
 test_recorded_revision_failure_is_fail_closed

@@ -6,12 +6,12 @@
           {
             "type": "command",
             "command": "node \"./hooks/review-skill-guard.cjs\"",
-            "timeout": 5
+            "timeout": 8
           },
           {
             "type": "command",
             "command": "node \"./hooks/active-build-guard.cjs\"",
-            "timeout": 5
+            "timeout": 8
           }
         ]
       }

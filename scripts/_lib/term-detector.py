@@ -22,11 +22,21 @@ import sys
 from pathlib import Path
 
 
+_SCRIPTS_DIR = str(Path(__file__).resolve().parent.parent)
+if _SCRIPTS_DIR not in sys.path:
+    sys.path.insert(0, _SCRIPTS_DIR)
+
+from _lib.decision_status import (  # noqa: E402
+    decision_is_question,
+    decision_is_superseded,
+    is_state_question,
+)
+
+
 MINIMAL_WHITELIST = {"用户", "产品", "数据", "API", "JSON"}
 TERM_KINDS = {"term"}
 ROLE_KINDS = {"role"}
 EMPTY_VALUES = {"", "-", "/", "无", "暂无", "待定", "待补充", "术语", "术语 / 缩略词", "角色", "角色名"}
-SUPERSEDE_MARKERS = ("supersede", "superseded", "被取代", "已取代", "已废弃", "不再有效")
 
 
 def framework_root() -> Path:
@@ -78,7 +88,7 @@ def split_sections(text: str) -> list[tuple[str, str]]:
     result: list[tuple[str, str]] = []
     for index, match in enumerate(matches):
         end = matches[index + 1].start() if index + 1 < len(matches) else len(text)
-        result.append((strip_markup(match.group(2)), text[match.end() : end].strip()))
+        result.append((match.group(2).strip(), text[match.end() : end].strip()))
     return result
 
 
@@ -101,6 +111,19 @@ def is_separator_row(line: str) -> bool:
     return bool(cells) and all(re.fullmatch(r":?-{3,}:?", cell.replace(" ", "")) for cell in cells)
 
 
+def is_table_data_row(line: str) -> bool:
+    """Accept pipe rows until the next Markdown block starts."""
+    if "|" not in line or not line.strip():
+        return False
+    if line.startswith(("    ", "\t")):
+        return False
+    stripped = line.lstrip()
+    return re.match(
+        r"^(?:#{1,6}(?:\s|$)|>|`{3,}|~{3,}|(?:[-+*]|\d{1,9}[.)])(?:\s|$))",
+        stripped,
+    ) is None
+
+
 def tables(body: str) -> list[tuple[list[str], list[list[str]]]]:
     lines = body.splitlines()
     result: list[tuple[list[str], list[list[str]]]] = []
@@ -112,7 +135,7 @@ def tables(body: str) -> list[tuple[list[str], list[list[str]]]]:
         header = split_table_row(lines[index])
         rows: list[list[str]] = []
         index += 2
-        while index < len(lines) and "|" in lines[index] and lines[index].strip().startswith("|"):
+        while index < len(lines) and is_table_data_row(lines[index]):
             rows.append(split_table_row(lines[index]))
             index += 1
         result.append((header, rows))
@@ -192,8 +215,9 @@ def decision_candidates(path: Path, repo_root: Path) -> list[dict]:
     for title, body in split_sections(path.read_text(encoding="utf-8")):
         if not re.match(r"^D\d+(?:[.、：:\s-]|$)", strip_markup(title), re.IGNORECASE):
             continue
-        lowered = f"{title}\n{body}".lower()
-        if "~~" in title or "~~" in body or any(marker in lowered for marker in SUPERSEDE_MARKERS):
+        if decision_is_question(title, body):
+            continue
+        if decision_is_superseded(title, body):
             continue
         for line in body.splitlines():
             match = pattern.match(line)

@@ -6,6 +6,7 @@ import hashlib
 import json
 import re
 import unicodedata
+from bisect import bisect_left
 from collections import defaultdict, deque
 from dataclasses import asdict, dataclass
 from typing import Any
@@ -13,12 +14,12 @@ from xml.etree import ElementTree
 
 
 REMOTE_COVERAGE_KIND = "pmai_lark_review_remote_coverage"
-REMOTE_COVERAGE_SCHEMA_VERSION = 1
+REMOTE_COVERAGE_SCHEMA_VERSION = 2
 NATIVE_SNAPSHOT_KIND = "pmai_lark_review_remote_native_snapshot"
 NATIVE_SNAPSHOT_SCHEMA_VERSION = 1
 
 _HEADING_RE = re.compile(r"^(#{1,9})\s+(.*)$")
-_LIST_RE = re.compile(r"^\s*(?:[-+*]|\d+[.)])\s+(.*)$")
+_LIST_RE = re.compile(r"^([ \t]*)([-+*]|\d+[.)])\s+(.*)$")
 _TABLE_SEPARATOR_RE = re.compile(r"^\s*\|?(?:\s*:?-{3,}:?\s*\|)+\s*$")
 _INLINE_LINK_RE = re.compile(r"!?\[([^\]]*)\]\([^)]*\)")
 _INLINE_MARK_RE = re.compile(r"(?:\*\*|__|~~|`|\*|_)")
@@ -60,10 +61,61 @@ def _unit_id(kind: str, normalised: str, occurrence: int) -> str:
     return f"remote-{kind}-{digest}-{occurrence}"
 
 
+def _section_signature(section_path: list[str]) -> tuple[str, ...]:
+    return tuple(_normalise_semantic_text(item) for item in section_path)
+
+
+def _structure_signature(
+    kind: str,
+    *,
+    heading_level: int | None = None,
+    list_ordered: bool | None = None,
+    list_indent: int | None = None,
+    table_role: str | None = None,
+) -> str:
+    if kind == "heading":
+        return f"heading:level={heading_level}"
+    if kind == "list_item":
+        ordered = "ordered" if list_ordered else "unordered"
+        return f"list_item:{ordered}:indent={list_indent}"
+    if kind == "table_row":
+        return f"table_row:role={table_role}"
+    return kind
+
+
+def _order_preserved_unit_ids(
+    matches: list[tuple[SemanticUnit, SemanticUnit]],
+) -> set[str]:
+    """Return one longest set of exact matches whose relative order is unchanged."""
+    if not matches:
+        return set()
+    tails: list[int] = []
+    tail_positions: list[int] = []
+    predecessors = [-1] * len(matches)
+    for position, (_, target) in enumerate(matches):
+        insertion = bisect_left(tails, target.index)
+        if insertion > 0:
+            predecessors[position] = tail_positions[insertion - 1]
+        if insertion == len(tails):
+            tails.append(target.index)
+            tail_positions.append(position)
+        else:
+            tails[insertion] = target.index
+            tail_positions[insertion] = position
+
+    preserved: set[str] = set()
+    cursor = tail_positions[-1]
+    while cursor >= 0:
+        preserved.add(matches[cursor][0].unit_id)
+        cursor = predecessors[cursor]
+    return preserved
+
+
 @dataclass(frozen=True)
 class SemanticUnit:
     unit_id: str
     kind: str
+    structure_signature: str
     index: int
     line_start: int
     line_end_exclusive: int
@@ -77,7 +129,7 @@ class SemanticUnit:
 def markdown_semantic_units(markdown: str) -> list[SemanticUnit]:
     """Split PMAI markdown into conservative, stable semantic blocks."""
     lines = markdown.replace("\r\n", "\n").replace("\r", "\n").splitlines()
-    raw_units: list[tuple[str, int, int, list[str], str]] = []
+    raw_units: list[tuple[str, str, int, int, list[str], str]] = []
     headings: list[str] = []
     paragraph: list[str] = []
     paragraph_start = 0
@@ -91,7 +143,16 @@ def markdown_semantic_units(markdown: str) -> list[SemanticUnit]:
             return
         text = "\n".join(paragraph).strip()
         if text:
-            raw_units.append(("paragraph", paragraph_start, end, list(headings), text))
+            raw_units.append(
+                (
+                    "paragraph",
+                    _structure_signature("paragraph"),
+                    paragraph_start,
+                    end,
+                    list(headings),
+                    text,
+                )
+            )
         paragraph = []
 
     for index, line in enumerate(lines):
@@ -103,7 +164,16 @@ def markdown_semantic_units(markdown: str) -> list[SemanticUnit]:
                 fence_lines = [line]
             else:
                 fence_lines.append(line)
-                raw_units.append(("code", fence_start, index + 1, list(headings), "\n".join(fence_lines)))
+                raw_units.append(
+                    (
+                        "code",
+                        _structure_signature("code"),
+                        fence_start,
+                        index + 1,
+                        list(headings),
+                        "\n".join(fence_lines),
+                    )
+                )
                 in_fence = False
                 fence_lines = []
             continue
@@ -117,18 +187,57 @@ def markdown_semantic_units(markdown: str) -> list[SemanticUnit]:
             title = heading.group(2).strip()
             headings = headings[: level - 1]
             headings.append(title)
-            raw_units.append(("heading", index, index + 1, list(headings), title))
+            raw_units.append(
+                (
+                    "heading",
+                    _structure_signature("heading", heading_level=level),
+                    index,
+                    index + 1,
+                    list(headings),
+                    title,
+                )
+            )
             continue
         listed = _LIST_RE.match(line)
         if listed:
             flush_paragraph(index)
-            raw_units.append(("list_item", index, index + 1, list(headings), listed.group(1).strip()))
+            marker = listed.group(2)
+            raw_units.append(
+                (
+                    "list_item",
+                    _structure_signature(
+                        "list_item",
+                        list_ordered=marker[0].isdigit(),
+                        list_indent=len(listed.group(1).expandtabs(4)),
+                    ),
+                    index,
+                    index + 1,
+                    list(headings),
+                    listed.group(3).strip(),
+                )
+            )
             continue
         if line.strip().startswith("|"):
             flush_paragraph(index)
             if not _TABLE_SEPARATOR_RE.match(line):
                 cells = [cell.strip() for cell in line.strip().strip("|").split("|")]
-                raw_units.append(("table_row", index, index + 1, list(headings), " | ".join(cells)))
+                is_header = (
+                    index + 1 < len(lines)
+                    and _TABLE_SEPARATOR_RE.match(lines[index + 1]) is not None
+                )
+                raw_units.append(
+                    (
+                        "table_row",
+                        _structure_signature(
+                            "table_row",
+                            table_role="header" if is_header else "data",
+                        ),
+                        index,
+                        index + 1,
+                        list(headings),
+                        " | ".join(cells),
+                    )
+                )
             continue
         if not line.strip():
             flush_paragraph(index)
@@ -138,12 +247,21 @@ def markdown_semantic_units(markdown: str) -> list[SemanticUnit]:
         paragraph.append(line)
 
     if in_fence:
-        raw_units.append(("code", fence_start, len(lines), list(headings), "\n".join(fence_lines)))
+        raw_units.append(
+            (
+                "code",
+                _structure_signature("code"),
+                fence_start,
+                len(lines),
+                list(headings),
+                "\n".join(fence_lines),
+            )
+        )
     flush_paragraph(len(lines))
 
     occurrences: dict[tuple[str, str], int] = defaultdict(int)
     units: list[SemanticUnit] = []
-    for index, (kind, start, end, section_path, text) in enumerate(raw_units):
+    for index, (kind, structure, start, end, section_path, text) in enumerate(raw_units):
         normalised = _normalise_semantic_text(text)
         if not normalised:
             continue
@@ -153,6 +271,7 @@ def markdown_semantic_units(markdown: str) -> list[SemanticUnit]:
             SemanticUnit(
                 unit_id=_unit_id(kind, normalised, occurrences[key]),
                 kind=kind,
+                structure_signature=structure,
                 index=index,
                 line_start=start + 1,
                 line_end_exclusive=end + 1,
@@ -261,10 +380,94 @@ def build_remote_coverage(
 ) -> dict[str, Any]:
     remote_units = markdown_semantic_units(remote_markdown)
     target_units = markdown_semantic_units(target_markdown)
-    target_by_signature: dict[tuple[str, str], deque[SemanticUnit]] = defaultdict(deque)
+    target_by_section_signature: dict[
+        tuple[str, str, str, tuple[str, ...]], deque[SemanticUnit]
+    ] = defaultdict(deque)
     target_by_id = {unit.unit_id: unit for unit in target_units}
     for unit in target_units:
-        target_by_signature[(unit.kind, unit.normalised_text)].append(unit)
+        target_by_section_signature[
+            (
+                unit.kind,
+                unit.normalised_text,
+                unit.structure_signature,
+                _section_signature(unit.section_path),
+            )
+        ].append(unit)
+
+    target_matches: dict[str, SemanticUnit] = {}
+    matched_target_ids: set[str] = set()
+    unmatched_remote_units: list[SemanticUnit] = []
+    for remote in remote_units:
+        signature = (
+            remote.kind,
+            remote.normalised_text,
+            remote.structure_signature,
+            _section_signature(remote.section_path),
+        )
+        matching = target_by_section_signature.get(signature)
+        target = matching.popleft() if matching else None
+        if target is not None:
+            target_matches[remote.unit_id] = target
+            matched_target_ids.add(target.unit_id)
+        else:
+            unmatched_remote_units.append(remote)
+
+    remaining_remote_by_signature: dict[
+        tuple[str, str, str], list[SemanticUnit]
+    ] = defaultdict(list)
+    remaining_target_by_signature: dict[
+        tuple[str, str, str], list[SemanticUnit]
+    ] = defaultdict(list)
+    for remote in unmatched_remote_units:
+        remaining_remote_by_signature[
+            (remote.kind, remote.normalised_text, remote.structure_signature)
+        ].append(remote)
+    for target in target_units:
+        if target.unit_id not in matched_target_ids:
+            remaining_target_by_signature[
+                (target.kind, target.normalised_text, target.structure_signature)
+            ].append(target)
+
+    cross_section_match_ids: set[str] = set()
+    for signature, remote_candidates in remaining_remote_by_signature.items():
+        target_candidates = remaining_target_by_signature.get(signature, [])
+        if len(remote_candidates) != 1 or len(target_candidates) != 1:
+            continue
+        remote = remote_candidates[0]
+        target = target_candidates[0]
+        if _section_signature(remote.section_path) == _section_signature(target.section_path):
+            continue
+        target_matches[remote.unit_id] = target
+        matched_target_ids.add(target.unit_id)
+        cross_section_match_ids.add(remote.unit_id)
+
+    remaining_targets_by_content: dict[
+        tuple[str, str], list[SemanticUnit]
+    ] = defaultdict(list)
+    for target in target_units:
+        if target.unit_id not in matched_target_ids:
+            remaining_targets_by_content[(target.kind, target.normalised_text)].append(
+                target
+            )
+    structural_change_ids = {
+        remote.unit_id
+        for remote in remote_units
+        if remote.unit_id not in target_matches
+        and any(
+            target.structure_signature != remote.structure_signature
+            for target in remaining_targets_by_content.get(
+                (remote.kind, remote.normalised_text), []
+            )
+        )
+    }
+
+    same_section_matches = [
+        (remote, target_matches[remote.unit_id])
+        for remote in remote_units
+        if remote.unit_id in target_matches
+        and remote.unit_id not in cross_section_match_ids
+    ]
+    order_preserved_ids = _order_preserved_unit_ids(same_section_matches)
 
     resolution_by_id = {
         str(item.get("remote_unit_id") or ""): item
@@ -289,6 +492,7 @@ def build_remote_coverage(
     used_resolution_ids: set[str] = set()
     accounted = 0
     preserved = 0
+    moved = 0
     rewritten = 0
     removed = 0
     unassigned = 0
@@ -296,13 +500,16 @@ def build_remote_coverage(
     native_format_dispositions: dict[str, tuple[str, dict[str, str]]] = {}
 
     for remote in remote_units:
-        signature = (remote.kind, remote.normalised_text)
-        matching = target_by_signature.get(signature)
-        target = matching.popleft() if matching else None
+        target = target_matches.get(remote.unit_id)
         native_candidates = native_by_text.get(remote.native_match_text)
         native_ids = [native_candidates.popleft()] if native_candidates else []
         if target is not None:
-            disposition = "preserved" if target.index == remote.index else "moved"
+            disposition = (
+                "moved"
+                if remote.unit_id in cross_section_match_ids
+                or remote.unit_id not in order_preserved_ids
+                else "preserved"
+            )
             entries.append(
                 {
                     "remote": asdict(remote),
@@ -313,10 +520,19 @@ def build_remote_coverage(
                     "format_disposition": "preserved",
                     "accounted": True,
                     "format_accounted": True,
+                    "structural_change": False,
                 }
             )
             accounted += 1
-            preserved += 1
+            if disposition == "moved":
+                moved += 1
+                if remote.unit_id in cross_section_match_ids or remote.kind in {
+                    "heading",
+                    "table_row",
+                }:
+                    high_risk_count += 1
+            else:
+                preserved += 1
             for block_id in native_ids:
                 native_format_dispositions[block_id] = (
                     "preserved",
@@ -338,6 +554,7 @@ def build_remote_coverage(
             "format_disposition": "unassigned",
             "accounted": False,
             "format_accounted": False,
+            "structural_change": remote.unit_id in structural_change_ids,
         }
         if supplied is not None:
             used_resolution_ids.add(remote.unit_id)
@@ -347,6 +564,7 @@ def build_remote_coverage(
             evidence, evidence_error = _resolution_evidence(supplied.get("evidence"))
             valid_targets = (
                 isinstance(target_ids, list)
+                and bool(target_ids)
                 and all(isinstance(item, str) and item in target_by_id for item in target_ids)
             )
             if disposition == "removed":
@@ -368,6 +586,17 @@ def build_remote_coverage(
                     accounted=True,
                     format_accounted=True,
                 )
+                if disposition == "rewritten":
+                    entry["structural_change"] = bool(
+                        entry["structural_change"]
+                    ) or any(
+                        (
+                            target_by_id[target_id].kind,
+                            target_by_id[target_id].structure_signature,
+                        )
+                        != (remote.kind, remote.structure_signature)
+                        for target_id in target_ids
+                    )
                 accounted += 1
                 if disposition == "removed":
                     removed += 1
@@ -379,14 +608,19 @@ def build_remote_coverage(
                         evidence or {},
                     )
             else:
-                entry["resolution_error"] = evidence_error or (
-                    "改写必须保留原生格式；删除只能随已确认内容一起移除格式"
-                )
+                if disposition == "rewritten" and not valid_targets:
+                    entry["resolution_error"] = "改写必须绑定至少一个当前 T 的有效语义单元"
+                else:
+                    entry["resolution_error"] = evidence_error or (
+                        "改写必须保留原生格式；删除只能随已确认内容一起移除格式"
+                    )
         if not entry["accounted"]:
             unassigned += 1
             for block_id in native_ids:
                 native_format_dispositions[block_id] = ("unassigned", {})
-        if remote.kind in {"heading", "table_row"}:
+        if remote.kind in {"heading", "table_row"} or bool(
+            entry["structural_change"]
+        ):
             high_risk_count += 1
         entries.append(entry)
 
@@ -427,7 +661,7 @@ def build_remote_coverage(
 
     unknown_resolution_ids = sorted(set(resolution_by_id) - used_resolution_ids)
     total = len(remote_units)
-    changed = rewritten + removed + unassigned
+    changed = moved + rewritten + removed + unassigned
     changed_ratio = changed / total if total else 0.0
     preview_required = bool(
         changed >= 10
@@ -448,11 +682,14 @@ def build_remote_coverage(
             "remote_unit_count": total,
             "accounted_count": accounted,
             "preserved_count": preserved,
+            "moved_count": moved,
             "rewritten_count": rewritten,
             "removed_count": removed,
             "unassigned_count": unassigned,
             "remote_accounted_ratio": accounted / total if total else 1.0,
-            "remote_preserved_ratio": preserved / total if total else 1.0,
+            "remote_preserved_ratio": (
+                (preserved + moved) / total if total else 1.0
+            ),
             "format_accounted_count": format_accounted,
             "format_preserved_count": format_preserved,
             "native_block_count": native_total,
@@ -481,28 +718,43 @@ def render_remote_preview(coverage: dict[str, Any]) -> str:
         f"- 格式归位率：{float(summary.get('remote_format_accounted_ratio') or 0):.2%}\n",
         f"- 未归位：{int(summary.get('unassigned_count') or 0)} 项\n",
         "\n",
-        "## 被删除或改写的飞书内容\n",
+        "## 发生位置或内容变化的飞书内容\n",
         "\n",
     ]
     changed = [
         item
         for item in coverage.get("entries") or []
         if isinstance(item, dict)
-        and item.get("disposition") not in {"preserved", "moved"}
+        and item.get("disposition") != "preserved"
     ]
     if not changed:
         lines.append("无。\n")
         return "".join(lines)
+    target_by_id = {
+        str(item.get("unit_id") or ""): item
+        for item in coverage.get("target_units") or []
+        if isinstance(item, dict)
+    }
     for item in changed:
         remote = item.get("remote") or {}
         evidence = item.get("evidence") or {}
         section = " / ".join(remote.get("section_path") or []) or "文档正文"
+        target_ids = item.get("target_unit_ids") or []
+        target = target_by_id.get(str(target_ids[0])) if target_ids else None
+        movement = ""
+        if item.get("disposition") == "moved" and isinstance(target, dict):
+            target_section = " / ".join(target.get("section_path") or []) or "文档正文"
+            movement = (
+                f"- 移动：{section} 第 {int(remote.get('index') or 0) + 1} 项"
+                f" → {target_section} 第 {int(target.get('index') or 0) + 1} 项\n"
+            )
         lines.extend(
             [
                 f"### {remote.get('unit_id')}\n",
                 "\n",
                 f"- 位置：{section}\n",
                 f"- 处置：{item.get('disposition')}\n",
+                movement,
                 f"- 格式：{item.get('format_disposition')}\n",
                 f"- 依据：{evidence.get('kind') or '未归位'} / {evidence.get('id') or '-'} / {evidence.get('reason') or '-'}\n",
                 "\n",

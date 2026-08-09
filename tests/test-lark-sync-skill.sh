@@ -38,6 +38,12 @@ test_safety_rules_are_locked() {
   assert_file_contains "$SKILL" "不能从原型反推规格" "should ban deriving spec from prototype" || return
   assert_file_contains "$VERIFICATION" "lark_revision_id" "verification reference should track lark revision" || return
   assert_file_contains "$VERIFICATION" "lark_synced_at" "verification reference should track sync timestamp" || return
+  assert_file_contains "$SKILL" '--content -' "lark-sync should send document content through stdin" || return
+  assert_file_contains "$REF_DIR/fine-edit-to-lark.md" '--content -' "fine-edit reference should use stdin content" || return
+  if grep -R -q -- '--content @' "$REPO_ROOT/skills/lark-sync"; then
+    _fail "lark-sync must not restore temporary @file document content"
+    return
+  fi
   pass_test
 }
 

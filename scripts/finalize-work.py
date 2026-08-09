@@ -502,7 +502,7 @@ def maybe_land(
         env=land_env,
     )
     main_module = main_root / "docs" / "modules" / module_dir.name
-    if result.returncode == 0 and not module_dir.exists() and main_module.is_dir():
+    if result.returncode == 0 and module_dir != main_module and main_module.is_dir():
         print(f"FINALIZE_RESUME_MODULE={main_module}")
     return result.returncode
 

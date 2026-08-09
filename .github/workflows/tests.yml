@@ -30,3 +30,24 @@ jobs:
 
       - name: Run all test suites
         run: bash tests/run-all.sh
+
+  atomic-file-macos:
+    runs-on: macos-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: Configure test Git identity
+        run: |
+          git config --global user.name "PMAI CI"
+          git config --global user.email "pmai-ci@example.invalid"
+
+      - name: Run atomic file and caller regression suites
+        run: |
+          bash tests/test-atomic-file.sh
+          bash tests/test-lark-adapter.sh
+          bash tests/test-init-project-codex-compat.sh

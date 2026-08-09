@@ -45,6 +45,10 @@ TIMING_FILE="$REPO_ROOT/.pm-workflow/audits/$MODULE_NAME/timing.json"
 TIMING_REL=".pm-workflow/audits/$MODULE_NAME/timing.json"
 CURRENT_TIMING_ID=""
 CURRENT_TIMING_PHASE=""
+PENDING_CLEANUP_FILE="$REPO_ROOT/.runs/pending-cleanup.json"
+CLEANUP_PREPARED=false
+CLEANUP_TRANSACTION_ID=""
+INTEGRATION_REF=""
 
 timing_running_id() {
   local phase="$1"
@@ -141,54 +145,43 @@ PY
   "${command[@]}" >/dev/null
 }
 
-queue_pending_cleanup() {
+prepare_pending_cleanup() {
   local worktree="$1"
   local branch="$2"
-  local pending_file="$REPO_ROOT/.runs/pending-cleanup.json"
   mkdir -p "$REPO_ROOT/.runs"
-  python3 - "$pending_file" "$branch" "$worktree" "$MAIN_MODULE" <<'PY'
-import datetime
-import json
-import os
-import sys
-import tempfile
+  CLEANUP_TRANSACTION_ID=$(python3 "$SCRIPT_DIR/_lib/pending_cleanup.py" prepare \
+    --file "$PENDING_CLEANUP_FILE" \
+    --kind work \
+    --branch "$branch" \
+    --worktree "$worktree" \
+    --work-dir "$MAIN_MODULE" \
+    --integration-ref "$INTEGRATION_REF" \
+    --activation main_meta_landed \
+    --module-meta "docs/modules/$MODULE_NAME/.work-meta.json")
+  CLEANUP_PREPARED=true
+}
 
-pending_file, branch, worktree, work_dir = sys.argv[1:5]
-entries = []
-if os.path.exists(pending_file):
-    try:
-        with open(pending_file, encoding="utf-8") as handle:
-            loaded = json.load(handle)
-    except (OSError, json.JSONDecodeError) as exc:
-        raise SystemExit(f"待清理队列无法读取，拒绝覆盖 {pending_file}: {exc}") from exc
-    if not isinstance(loaded, list) or any(not isinstance(entry, dict) for entry in loaded):
-        raise SystemExit(f"待清理队列格式不合法，拒绝覆盖: {pending_file}")
-    entries = loaded
-entries = [entry for entry in entries if entry.get("branch") != branch]
-entries.append(
-    {
-        "kind": "work",
-        "branch": branch,
-        "worktree": worktree,
-        "work_dir": work_dir,
-        "queued_at": datetime.datetime.now().astimezone().isoformat(timespec="seconds"),
-    }
-)
-directory = os.path.dirname(pending_file)
-fd, temp_path = tempfile.mkstemp(prefix=".pending-cleanup.", dir=directory)
-try:
-    with os.fdopen(fd, "w", encoding="utf-8") as handle:
-        json.dump(entries, handle, indent=2, ensure_ascii=False)
-        handle.write("\n")
-        handle.flush()
-        os.fsync(handle.fileno())
-    os.replace(temp_path, pending_file)
-finally:
-    try:
-        os.remove(temp_path)
-    except FileNotFoundError:
-        pass
-PY
+activate_pending_cleanup() {
+  local branch="$1"
+  if ! python3 "$SCRIPT_DIR/_lib/pending_cleanup.py" activate \
+    --file "$PENDING_CLEANUP_FILE" --branch "$branch" \
+    --transaction-id "$CLEANUP_TRANSACTION_ID"; then
+    return 1
+  fi
+  CLEANUP_PREPARED=false
+  CLEANUP_TRANSACTION_ID=""
+}
+
+discard_prepared_cleanup() {
+  local branch="$1"
+  [ "$CLEANUP_PREPARED" = true ] || return 0
+  if ! python3 "$SCRIPT_DIR/_lib/pending_cleanup.py" remove \
+    --file "$PENDING_CLEANUP_FILE" --branch "$branch" \
+    --transaction-id "$CLEANUP_TRANSACTION_ID"; then
+    return 1
+  fi
+  CLEANUP_PREPARED=false
+  CLEANUP_TRANSACTION_ID=""
 }
 
 current_main_branch() {
@@ -198,6 +191,7 @@ current_main_branch() {
     echo "❌ 自动落地主线必须从主仓 main/master 运行，当前是 ${branch:-<detached>}。" >&2
     exit 1
   fi
+  INTEGRATION_REF="refs/heads/$branch"
 }
 
 preflight_untracked_overlap() {
@@ -255,6 +249,10 @@ rollback_pending_merge() {
   CURRENT_TIMING_PHASE=""
   if ! git -C "$REPO_ROOT" merge --abort 2>/dev/null; then
     echo "❌ main 半合并态无法自动中止；已停止后续操作，请先人工执行 git merge --abort。" >&2
+    return 1
+  fi
+  if ! discard_prepared_cleanup "$BRANCH"; then
+    echo "❌ main 已回滚，但 prepared 清理记录未能撤销；记录不会自动激活，请人工检查队列。" >&2
     return 1
   fi
   if ! record_landing_failure_worktree "$worktree" "$started_at" "$reason"; then
@@ -403,9 +401,17 @@ land_implementation() {
       fi
     fi
 
+    # 最终验收提交后、merge 前先落一条 prepared 意图。后续即使进程在
+    # landing commit 后中断，主仓 cleanup 也能从 Git 真相自动恢复激活。
+    prepare_pending_cleanup "$WORKTREE" "$BRANCH"
+
     if ! git -C "$REPO_ROOT" merge --autostash --no-ff --no-commit "$BRANCH"; then
       if ! git -C "$REPO_ROOT" merge --abort 2>/dev/null; then
         echo "❌ 合并冲突且无法自动中止半合并态；隔离环境保留，请先人工执行 git merge --abort。" >&2
+        exit 1
+      fi
+      if ! discard_prepared_cleanup "$BRANCH"; then
+        echo "❌ 合并已中止，但 prepared 清理记录未能撤销；记录不会自动激活，请人工检查队列。" >&2
         exit 1
       fi
       record_landing_failure_worktree "$WORKTREE" "$landing_started_at" "merge conflict"
@@ -438,15 +444,10 @@ land_implementation() {
       echo "❌ 落地提交未包含 build 分支，停止清理隔离环境，请人工检查 main 历史。" >&2
       exit 1
     fi
-    CLEANUP_PENDING=false
-    if ! git -C "$REPO_ROOT" worktree remove "$WORKTREE"; then
-      CLEANUP_PENDING=true
-    elif ! git -C "$REPO_ROOT" branch -d "$BRANCH" >/dev/null; then
-      CLEANUP_PENDING=true
-    fi
-    if [ "$CLEANUP_PENDING" = "true" ]; then
-      queue_pending_cleanup "$WORKTREE" "$BRANCH"
-      echo "⚠️ 实现已落主线；隔离环境仍被运行进程或缓存占用，已转入安全待清理队列，不阻塞文档同步。" >&2
+    if ! activate_pending_cleanup "$BRANCH"; then
+      echo "⚠️ 实现已落主线；清理记录仍处于 prepared，主仓 cleanup 将按 Git 状态自动恢复。" >&2
+    else
+      echo "🕓 实现已落主线；隔离环境已进入安全待清理队列，不阻塞文档同步。"
     fi
   elif [ "$MODE" = "main" ]; then
     python3 "$SCRIPT_DIR/build-contract.py" landed "$MAIN_MODULE" \

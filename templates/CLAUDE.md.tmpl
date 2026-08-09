@@ -5,8 +5,9 @@
 **会话开始时必须执行：**
 
 1. 读取本文件了解项目上下文。
-2. 运行 `source "${PMAI_HOME:-$HOME/.pmai}/scripts/skill-preamble.sh"` 检测当前工作位置。
-3. 运行当前宿主的 status 入口了解当前模块和下一步：Claude Code / OpenCode 使用 `/pmai-status`，Codex 使用 `$pmai-status`，Kimi Code 使用 `/skill:pmai-status`。
+2. 运行 `PMAI_PREAMBLE_READ_ONLY=1; export PMAI_PREAMBLE_READ_ONLY; source "${PMAI_HOME:-$HOME/.pmai}/scripts/skill-preamble.sh"; unset PMAI_PREAMBLE_READ_ONLY` 只读检测当前工作位置。
+3. Claude Code / Codex 运行 `bash "${PMAI_HOME:-$HOME/.pmai}/scripts/install-project-hooks.sh" --check` 只读检查项目 hooks；缺失或漂移时先向 PM 报告，再运行不带 `--check` 的同一命令刷新，不能只按配置文件存在就声称已更新。
+4. 运行当前宿主的 status 入口了解当前模块和下一步：Claude Code / OpenCode 使用 `/pmai-status`，Codex 使用 `$pmai-status`，Kimi Code 使用 `/skill:pmai-status`。
 
 > Kimi Code 原生入口统一为 `/skill:pmai-*`，例如 `/skill:pmai-design`、`/skill:pmai-build`；本文其余 `/pmai-*` 写法是跨宿主工作流名称，在 Kimi 会话中按此前缀映射执行。
 

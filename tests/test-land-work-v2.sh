@@ -6,6 +6,7 @@ source "$SCRIPT_DIR/helpers/assert.sh"
 FRAMEWORK_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 CONTRACT="$FRAMEWORK_ROOT/scripts/build-contract.py"
 CLOSE="$FRAMEWORK_ROOT/scripts/close-work.sh"
+CLEANUP="$FRAMEWORK_ROOT/scripts/cleanup-pending-worktrees.sh"
 IMPACT="$FRAMEWORK_ROOT/scripts/doc-impact.py"
 CONTEXT_PACK="$FRAMEWORK_ROOT/scripts/context-pack.py"
 PROJECT_DEFINITION="$FRAMEWORK_ROOT/scripts/project-definition.py"
@@ -28,7 +29,7 @@ setup_fixture() {
   cat > "$T/docs/modules/access/.work-meta.json" <<'JSON'
 {"id":"work-access","name":"access","branch":"build-access","stage":1,"status":"active","lifecycle_state":"designing"}
 JSON
-  printf '.worktrees/\n.pm-workflow/context/\n' > "$T/.gitignore"
+  printf '.worktrees/\n.pm-workflow/context/\n.runs/\n' > "$T/.gitignore"
   python3 "$PROJECT_DEFINITION" write "$T" \
     --source docs/modules/access/spec.md --type product \
     --root src --entrypoint src/access \
@@ -101,6 +102,31 @@ test_land_then_document_then_complete() {
   if [ "$state" != "documenting" ]; then
     _fail "state should be documenting after landing"
     teardown_fixture; return
+  elif [ ! -d "$WT" ] \
+    || ! git -C "$T" show-ref --verify --quiet refs/heads/build-access; then
+    _fail "landing should leave the worktree and branch for safe cleanup"
+    teardown_fixture; return
+  elif ! python3 - "$T/.runs/pending-cleanup.json" <<'PY'
+import json, re, sys
+entries = json.load(open(sys.argv[1], encoding="utf-8"))
+assert len(entries) == 1, entries
+assert entries[0]["phase"] == "active", entries
+assert entries[0]["integration_ref"] == "refs/heads/main", entries
+assert re.fullmatch(r"[0-9a-f]{32}", entries[0]["transaction_id"]), entries
+PY
+  then
+    _fail "landing should persist one active cleanup bound to main"
+    teardown_fixture; return
+  elif ! (cd "$T" && bash "$CLEANUP") \
+    >/tmp/land-v2.cleanup.$$ 2>/tmp/land-v2.cleanup.err.$$; then
+    _fail "explicit cleanup should remove the landed isolation environment"
+    cat /tmp/land-v2.cleanup.$$ /tmp/land-v2.cleanup.err.$$ >&2
+    teardown_fixture; return
+  elif [ -d "$WT" ] \
+    || git -C "$T" show-ref --verify --quiet refs/heads/build-access \
+    || [ -f "$T/.runs/pending-cleanup.json" ]; then
+    _fail "cleanup should remove the exact worktree, branch, and queue entry"
+    teardown_fixture; return
   fi
   cover_map "$MAP"
   python3 "$CONTRACT" docs-complete "$MAIN_MODULE" >/dev/null
@@ -127,7 +153,8 @@ PY
   else
     pass_test
   fi
-  rm -f /tmp/land-v2.$$ /tmp/land-v2.err.$$
+  rm -f /tmp/land-v2.$$ /tmp/land-v2.err.$$ \
+    /tmp/land-v2.cleanup.$$ /tmp/land-v2.cleanup.err.$$
   teardown_fixture
 }
 
@@ -223,40 +250,176 @@ PY
   teardown_fixture
 }
 
-test_cleanup_failure_is_queued_without_blocking_docs() {
-  start_test "land v2: worktree cleanup failure is queued and docs still start"
+test_land_queues_cleanup_without_blocking_docs() {
+  start_test "land v2: landing always queues safe cleanup without blocking docs"
   setup_fixture
-  REAL_GIT=$(command -v git)
-  mkdir -p "$T/fakebin"
-  cat > "$T/fakebin/git" <<'SH'
-#!/usr/bin/env bash
-if [ "${3:-}" = "worktree" ] && [ "${4:-}" = "remove" ]; then
-  echo "simulated worktree cleanup failure" >&2
-  exit 1
-fi
-exec "$REAL_GIT_FOR_TEST" "$@"
-SH
-  chmod +x "$T/fakebin/git"
-
-  if ! (cd "$T" && PATH="$T/fakebin:$PATH" REAL_GIT_FOR_TEST="$REAL_GIT" bash "$CLOSE" "$MODULE") >/tmp/land-v2.$$ 2>/tmp/land-v2.err.$$; then
-    _fail "cleanup failure should not block landing or docs start"
+  if ! (cd "$T" && bash "$CLOSE" "$MODULE") \
+    >/tmp/land-v2.$$ 2>/tmp/land-v2.err.$$; then
+    _fail "safe cleanup queueing should not block landing or docs start"
     cat /tmp/land-v2.err.$$ >&2
     teardown_fixture; return
   fi
   MAIN_MODULE="$T/docs/modules/access"
   state=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["build"]["lifecycle_state"])' "$MAIN_MODULE/.work-meta.json")
   if [ "$state" != "documenting" ]; then
-    _fail "cleanup failure should still reach documenting"
-  elif [ ! -f "$T/.runs/pending-cleanup.json" ]; then
-    _fail "cleanup failure should create a pending cleanup entry"
-  elif ! git -C "$T" show-ref --verify --quiet refs/heads/build-access; then
-    _fail "queued cleanup should preserve the merged branch for later cleanup"
+    _fail "queued cleanup should still reach documenting"
+  elif [ ! -d "$WT" ] \
+    || ! git -C "$T" show-ref --verify --quiet refs/heads/build-access; then
+    _fail "landing should not directly delete its worktree or branch"
   elif [ ! -f "$T/src/access/index.ts" ]; then
-    _fail "implementation should already be landed before cleanup is queued"
+    _fail "implementation should be landed before cleanup is queued"
+  elif ! python3 - "$T/.runs/pending-cleanup.json" <<'PY'
+import json, sys
+entries = json.load(open(sys.argv[1], encoding="utf-8"))
+assert len(entries) == 1, entries
+assert entries[0]["kind"] == "work", entries
+assert entries[0]["phase"] == "active", entries
+assert entries[0]["integration_ref"] == "refs/heads/main", entries
+PY
+  then
+    _fail "landing did not persist the active main-bound cleanup intent"
   else
     pass_test
   fi
   rm -f /tmp/land-v2.$$ /tmp/land-v2.err.$$
+  teardown_fixture
+}
+
+test_branch_cleanup_failure_retries_after_worktree_removal() {
+  start_test "land v2: CAS branch failure preserves the original cleanup entry"
+  setup_fixture
+  REAL_GIT=$(command -v git)
+  mkdir -p "$T/fakebin"
+  cat > "$T/fakebin/git" <<'SH'
+#!/usr/bin/env bash
+if [ "${3:-}" = "update-ref" ] && [ "${4:-}" = "--stdin" ]; then
+  echo "simulated branch cleanup failure" >&2
+  exit 1
+fi
+exec "$REAL_GIT_FOR_TEST" "$@"
+SH
+  chmod +x "$T/fakebin/git"
+
+  if ! (cd "$T" && bash "$CLOSE" "$MODULE") \
+      >/tmp/land-v2.$$ 2>/tmp/land-v2.err.$$; then
+    _fail "landing should succeed before the deferred cleanup attempt"
+    cat /tmp/land-v2.err.$$ >&2
+    teardown_fixture; return
+  elif [ ! -d "$WT" ]; then
+    _fail "landing directly removed the worktree instead of deferring cleanup"
+    teardown_fixture; return
+  fi
+
+  if (cd "$T" && PATH="$T/fakebin:$PATH" REAL_GIT_FOR_TEST="$REAL_GIT" \
+      bash "$CLEANUP") >/tmp/land-v2.cleanup.$$ 2>/tmp/land-v2.cleanup.err.$$; then
+    _fail "simulated CAS deletion failure should keep a retry"
+    teardown_fixture; return
+  elif [ -d "$WT" ]; then
+    _fail "cleanup should remove the worktree before the branch CAS failure"
+    teardown_fixture; return
+  elif ! git -C "$T" show-ref --verify --quiet refs/heads/build-access; then
+    _fail "failed branch cleanup should preserve the branch for retry"
+    teardown_fixture; return
+  elif ! python3 - "$T/.runs/pending-cleanup.json" <<'PY'
+import json, sys
+entries = json.load(open(sys.argv[1], encoding="utf-8"))
+assert len(entries) == 1, entries
+assert entries[0]["kind"] == "work", entries
+assert entries[0]["branch"] == "build-access", entries
+assert entries[0]["worktree"], entries
+assert entries[0]["branch_oid"], entries
+assert entries[0]["integration_ref"] == "refs/heads/main", entries
+PY
+  then
+    _fail "branch cleanup failure should preserve the original stable work entry"
+    teardown_fixture; return
+  fi
+
+  if ! (cd "$T" && bash "$CLEANUP") \
+      >/tmp/land-v2.cleanup.$$ 2>/tmp/land-v2.cleanup.err.$$; then
+    _fail "identity-matched branch cleanup should succeed on retry"
+    cat /tmp/land-v2.cleanup.err.$$ >&2
+  elif git -C "$T" show-ref --verify --quiet refs/heads/build-access \
+    || [ -f "$T/.runs/pending-cleanup.json" ]; then
+    _fail "successful retry should remove the merged branch and queue entry"
+  else
+    pass_test
+  fi
+  rm -f /tmp/land-v2.$$ /tmp/land-v2.err.$$ \
+    /tmp/land-v2.cleanup.$$ /tmp/land-v2.cleanup.err.$$
+  teardown_fixture
+}
+
+test_land_from_worktree_cwd_defers_cleanup() {
+  start_test "land v2: invocation from build cwd never leaves a dangling cwd"
+  setup_fixture
+
+  if ! (cd "$WT" && bash "$CLOSE" "$MODULE") \
+    >/tmp/land-v2.$$ 2>/tmp/land-v2.err.$$; then
+    _fail "landing from the build worktree cwd should succeed"
+    cat /tmp/land-v2.err.$$ >&2
+  elif [ ! -d "$WT" ] \
+    || ! git -C "$T" show-ref --verify --quiet refs/heads/build-access; then
+    _fail "landing from build cwd deleted the caller's worktree or branch"
+  elif ! python3 - "$T/.runs/pending-cleanup.json" <<'PY'
+import json, sys
+entries = json.load(open(sys.argv[1], encoding="utf-8"))
+assert len(entries) == 1, entries
+assert entries[0]["phase"] == "active", entries
+assert entries[0]["integration_ref"] == "refs/heads/main", entries
+PY
+  then
+    _fail "landing from build cwd did not leave a safe active cleanup intent"
+  else
+    pass_test
+  fi
+
+  rm -f /tmp/land-v2.$$ /tmp/land-v2.err.$$
+  teardown_fixture
+}
+
+test_landed_cleanup_waits_for_worktree_holder() {
+  start_test "land v2: cleanup waits until another worktree cwd holder exits"
+  setup_fixture
+  local holder
+  (cd "$WT" && exec sleep 30) &
+  holder=$!
+  sleep 1
+
+  if ! (cd "$T" && bash "$CLOSE" "$MODULE") \
+    >/tmp/land-v2.$$ 2>/tmp/land-v2.err.$$; then
+    _fail "an external cwd holder should not block landing"
+    cat /tmp/land-v2.err.$$ >&2
+  elif (cd "$T" && bash "$CLEANUP") \
+    >/tmp/land-v2.cleanup.$$ 2>/tmp/land-v2.cleanup.err.$$; then
+    _fail "cleanup should defer while another process uses the landed worktree"
+  elif [ ! -d "$WT" ] \
+    || ! git -C "$T" show-ref --verify --quiet refs/heads/build-access \
+    || [ ! -f "$T/.runs/pending-cleanup.json" ]; then
+    _fail "busy worktree, branch, and queue entry should all be preserved"
+  else
+    kill "$holder" 2>/dev/null || true
+    wait "$holder" 2>/dev/null || true
+    holder=""
+    if ! (cd "$T" && bash "$CLEANUP") \
+      >/tmp/land-v2.cleanup.$$ 2>/tmp/land-v2.cleanup.err.$$; then
+      _fail "cleanup should recover after the cwd holder exits"
+      cat /tmp/land-v2.cleanup.$$ /tmp/land-v2.cleanup.err.$$ >&2
+    elif [ -d "$WT" ] \
+      || git -C "$T" show-ref --verify --quiet refs/heads/build-access \
+      || [ -f "$T/.runs/pending-cleanup.json" ]; then
+      _fail "recovered cleanup left the worktree, branch, or queue entry"
+    else
+      pass_test
+    fi
+  fi
+
+  if [ -n "${holder:-}" ]; then
+    kill "$holder" 2>/dev/null || true
+    wait "$holder" 2>/dev/null || true
+  fi
+  rm -f /tmp/land-v2.$$ /tmp/land-v2.err.$$ \
+    /tmp/land-v2.cleanup.$$ /tmp/land-v2.cleanup.err.$$
   teardown_fixture
 }
 
@@ -342,10 +505,118 @@ PY
   teardown_fixture
 }
 
+test_cleanup_prepare_failure_stops_before_merge() {
+  start_test "land v2: cleanup prepare failure stops before main merge"
+  setup_fixture
+  local fake_bin real_python before after
+  fake_bin="$T/fakebin"
+  real_python=$(command -v python3)
+  before=$(git -C "$T" rev-parse HEAD)
+  mkdir -p "$fake_bin"
+  cat > "$fake_bin/python3" <<'SH'
+#!/usr/bin/env bash
+if [[ "${1:-}" == *"pending_cleanup.py" ]] && [ "${2:-}" = "prepare" ]; then
+  echo "simulated cleanup prepare failure" >&2
+  exit 1
+fi
+exec "$PMAI_TEST_REAL_PYTHON" "$@"
+SH
+  chmod +x "$fake_bin/python3"
+
+  if (cd "$T" && PATH="$fake_bin:$PATH" PMAI_TEST_REAL_PYTHON="$real_python" \
+    bash "$CLOSE" "$MODULE") >/tmp/land-v2.$$ 2>/tmp/land-v2.err.$$; then
+    _fail "landing should stop when it cannot persist the cleanup intent"
+  else
+    after=$(git -C "$T" rev-parse HEAD)
+    if [ "$before" != "$after" ]; then
+      _fail "main changed before cleanup prepare succeeded"
+    elif [ -f "$T/src/access/index.ts" ]; then
+      _fail "implementation merged despite cleanup prepare failure"
+    elif [ ! -d "$WT" ] \
+      || ! git -C "$T" show-ref --verify --quiet refs/heads/build-access; then
+      _fail "prepare failure did not preserve the accepted worktree and branch"
+    elif [ -f "$T/.runs/pending-cleanup.json" ]; then
+      _fail "failed prepare left a partial cleanup record"
+    elif ! (cd "$T" && bash "$CLOSE" "$MODULE") \
+      >/tmp/land-v2.retry.$$ 2>/tmp/land-v2.retry.err.$$; then
+      _fail "landing did not recover after the prepare writer returned"
+      cat /tmp/land-v2.retry.err.$$ >&2
+    else
+      pass_test
+    fi
+  fi
+
+  rm -f /tmp/land-v2.$$ /tmp/land-v2.err.$$ \
+    /tmp/land-v2.retry.$$ /tmp/land-v2.retry.err.$$
+  teardown_fixture
+}
+
+test_cleanup_activation_interruption_recovers_from_landed_truth() {
+  start_test "land v2: activation interruption recovers from landed main truth"
+  setup_fixture
+  local fake_bin real_python queue
+  fake_bin="$T/fakebin"
+  real_python=$(command -v python3)
+  queue="$T/.runs/pending-cleanup.json"
+  mkdir -p "$fake_bin"
+  cat > "$fake_bin/python3" <<'SH'
+#!/usr/bin/env bash
+if [[ "${1:-}" == *"pending_cleanup.py" ]] && [ "${2:-}" = "activate" ]; then
+  echo "simulated cleanup activation interruption" >&2
+  exit 1
+fi
+exec "$PMAI_TEST_REAL_PYTHON" "$@"
+SH
+  chmod +x "$fake_bin/python3"
+
+  if ! (cd "$T" && PATH="$fake_bin:$PATH" PMAI_TEST_REAL_PYTHON="$real_python" \
+    bash "$CLOSE" "$MODULE") >/tmp/land-v2.$$ 2>/tmp/land-v2.err.$$; then
+    _fail "durable prepared cleanup should not block landed documentation"
+    cat /tmp/land-v2.err.$$ >&2
+  elif [ ! -f "$T/src/access/index.ts" ]; then
+    _fail "implementation was not committed before activation interruption"
+  elif [ ! -d "$WT" ] \
+    || ! git -C "$T" show-ref --verify --quiet refs/heads/build-access; then
+    _fail "activation failure should skip immediate destructive cleanup"
+  elif ! python3 - "$queue" <<'PY'
+import json, re, sys
+entries = json.load(open(sys.argv[1], encoding="utf-8"))
+assert len(entries) == 1, entries
+assert entries[0]["phase"] == "prepared", entries
+assert entries[0]["activation"] == "main_meta_landed", entries
+assert entries[0]["integration_ref"] == "refs/heads/main", entries
+assert re.fullmatch(r"[0-9a-f]{32}", entries[0]["transaction_id"]), entries
+PY
+  then
+    _fail "activation interruption did not preserve the prepared record"
+  elif ! grep -q "仍处于 prepared" /tmp/land-v2.err.$$; then
+    _fail "activation failure was swallowed instead of being reported as recoverable"
+  elif ! (cd "$T" && bash "$FRAMEWORK_ROOT/scripts/cleanup-pending-worktrees.sh") \
+    >/tmp/land-v2.cleanup.$$ 2>/tmp/land-v2.cleanup.err.$$; then
+    _fail "main cleanup did not auto-promote the landed record"
+    cat /tmp/land-v2.cleanup.$$ /tmp/land-v2.cleanup.err.$$ >&2
+  elif [ -d "$WT" ] \
+    || git -C "$T" show-ref --verify --quiet refs/heads/build-access \
+    || [ -f "$queue" ]; then
+    _fail "recovered landed cleanup left its worktree, branch, or queue entry"
+  else
+    pass_test
+  fi
+
+  rm -f /tmp/land-v2.$$ /tmp/land-v2.err.$$ \
+    /tmp/land-v2.cleanup.$$ /tmp/land-v2.cleanup.err.$$
+  teardown_fixture
+}
+
 test_land_then_document_then_complete
 test_merge_conflict_keeps_final_check_and_worktree
 test_landed_docs_collision_preserves_wip_and_skips_remerge
-test_cleanup_failure_is_queued_without_blocking_docs
+test_land_queues_cleanup_without_blocking_docs
+test_branch_cleanup_failure_retries_after_worktree_removal
+test_land_from_worktree_cwd_defers_cleanup
+test_landed_cleanup_waits_for_worktree_holder
 test_landing_commit_failure_rolls_back_and_retries_once
 test_untracked_incoming_path_fails_before_merge
+test_cleanup_prepare_failure_stops_before_merge
+test_cleanup_activation_interruption_recovers_from_landed_truth
 report_results "land-work-v2"

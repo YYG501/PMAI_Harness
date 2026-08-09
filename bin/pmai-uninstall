@@ -25,7 +25,15 @@
 set -uo pipefail  # 注意：no -e，uninstall 必须能跑完
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-source "$SCRIPT_DIR/../scripts/_lib/skill-links.sh"
+if ! source "$SCRIPT_DIR/../scripts/_lib/skill-links.sh"; then
+  echo "❌ 无法载入 skill 入口策略，拒绝卸载。" >&2
+  exit 2
+fi
+if ! source "$SCRIPT_DIR/../scripts/_lib/global-install-lock.sh"; then
+  echo "❌ 无法载入全局安装锁 helper，拒绝卸载。" >&2
+  exit 2
+fi
+ORIGINAL_ARGS=("$@")
 
 PMAI_HOME="${PMAI_HOME:-$HOME/.pmai}"
 PMAI_STATE="${PMAI_STATE:-$HOME/.pmai-state}"
@@ -81,6 +89,12 @@ while [ $# -gt 0 ]; do
     *) echo "❌ unknown flag: $1" >&2; usage >&2; exit 2 ;;
   esac
 done
+
+if [ "$MODE" = "global" ]; then
+  pmai_hold_global_install_lock \
+    "$SCRIPT_DIR/.." "${BASH_SOURCE[0]}" \
+    ${ORIGINAL_ARGS[@]+"${ORIGINAL_ARGS[@]}"} || exit $?
+fi
 
 confirm() {
   [ "$FORCE" = "1" ] && return 0

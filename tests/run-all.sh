@@ -11,6 +11,7 @@ SUITE_TIMEOUT_SECONDS="${PMAI_SUITE_TIMEOUT_SECONDS:-300}"
 SUITES=(
   test-check-branch.sh
   test-check-open-questions.sh
+  test-atomic-file.sh
   test-lark-adapter.sh
   test-lark-cli-lint.sh
   test-lark-sync-skill.sh
@@ -157,18 +158,16 @@ fi
 EVAL_OUTPUT=$(python3 "$REPO_ROOT/scripts/skill-eval.py" "${EVAL_ARGS[@]}" 2>&1)
 EVAL_RC=$?
 printf "%s\n" "$EVAL_OUTPUT"
-EVAL_SUMMARY_COUNT=$(printf "%s\n" "$EVAL_OUTPUT" | awk '/^SUMMARY passed=[0-9]+ failed=[0-9]+ skipped=[0-9]+ judge_skipped=[0-9]+$/ {count++} END {print count+0}')
-if [ "$EVAL_SUMMARY_COUNT" -ne 1 ]; then
-  echo "RUNNER ERROR: skill eval 缺少唯一合法 SUMMARY" >&2
-  TOTAL_FAIL=$((TOTAL_FAIL + 1))
-  FAILED_SUITES+=("skill-eval:all")
-elif [ "$EVAL_RC" -ne 0 ]; then
-  EVAL_FAILED=$(printf "%s\n" "$EVAL_OUTPUT" | sed -nE 's/^SUMMARY passed=[0-9]+ failed=([0-9]+) skipped=[0-9]+ judge_skipped=[0-9]+$/\1/p')
-  if [ "${EVAL_FAILED:-0}" -gt 0 ]; then
+if EVAL_COUNTS=$(printf "%s\n" "$EVAL_OUTPUT" | python3 \
+  "$SCRIPT_DIR/parse-skill-eval-summary.py" --exit-code "$EVAL_RC"); then
+  read -r _ EVAL_FAILED _ _ <<< "$EVAL_COUNTS"
+  if [ "$EVAL_FAILED" -gt 0 ]; then
     TOTAL_FAIL=$((TOTAL_FAIL + EVAL_FAILED))
-  else
-    TOTAL_FAIL=$((TOTAL_FAIL + 1))
+    FAILED_SUITES+=("skill-eval:all")
   fi
+else
+  echo "RUNNER ERROR: skill eval 摘要与退出状态不可信" >&2
+  TOTAL_FAIL=$((TOTAL_FAIL + 1))
   FAILED_SUITES+=("skill-eval:all")
 fi
 

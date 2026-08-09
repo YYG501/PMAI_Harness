@@ -50,7 +50,7 @@ PMAI 不和 Claude Design、design-html 或 Claude Code 比"谁更快生成第�
 
 定位是 **PM 单人生产力工具**，不是团队 SOP / CI 平台 / 多租户基础设施。完整产品意义、非目标和成功标准见 [`PRODUCT.md`](./PRODUCT.md)。
 
-**分发形态**：全局安装（单人多项目）。框架装到 `~/.pmai/`，当前 skill symlink 到 `~/.claude/skills/pmai-*`、`~/.codex/skills/pmai-*` 和 `${KIMI_CODE_HOME:-$HOME/.kimi-code}/skills/pmai-*`；OpenCode 另生成 `~/.config/opencode/commands/pmai-*.md`。Codex 只使用原生 skills，通过 `$pmai-*` 或自然语言调用；Kimi Code 使用原生 `/skill:pmai-*`，不模拟 `/pmai-*` slash command；两者都不生成重复入口。任意 cwd 可起新业务项目；`pmai upgrade` 一键升级，所有项目自动跟随。skill 只装全局一处，项目里只放 host 配置 / 状态资产（`.claude/settings.json` / `.codex/hooks.json` / `.opencode/commands` / `opencode.json` / `.work-meta.json`）——这样每个 PMAI 入口永远唯一，不会和项目副本重复。Kimi 的 hooks 是用户级配置，由 PMAI 分发器先识别仓库类型，普通仓库直接跳过。
+**分发形态**：全局安装（单人多项目）。框架装到 `~/.pmai/`，当前 skill symlink 到 `~/.claude/skills/pmai-*`、`~/.codex/skills/pmai-*` 和 `${KIMI_CODE_HOME:-$HOME/.kimi-code}/skills/pmai-*`；OpenCode 另生成 `~/.config/opencode/commands/pmai-*.md`。Codex 只使用原生 skills，通过 `$pmai-*` 或自然语言调用；Kimi Code 使用原生 `/skill:pmai-*`，不模拟 `/pmai-*` slash command；两者都不生成重复入口。任意 cwd 可起新业务项目；`pmai upgrade` 一键升级全局 skill、脚本和 hook 源。项目级 `.claude/settings.json` / `.codex/hooks.json` 不会被全局升级静默改写：在消费仓运行 `pmai status` 可检测漂移，运行 `bash ~/.pmai/scripts/install-project-hooks.sh` 可确定性刷新。skill 只装全局一处，项目里只放 host 配置 / 状态资产（`.claude/settings.json` / `.codex/hooks.json` / `.opencode/commands` / `opencode.json` / `.work-meta.json`）——这样每个 PMAI 入口永远唯一，不会和项目副本重复。Kimi 的 hooks 是用户级配置，由 PMAI 分发器先识别仓库类型，普通仓库直接跳过。
 
 ---
 
@@ -156,7 +156,7 @@ bash bin/pmai install                       # 全局安装
 
 ### 安装模式：仅全局
 
-PMAI 只有全局安装一种形态（`pmai install` → clone `~/.pmai/` + symlink `~/.claude/skills/pmai-*` / `~/.codex/skills/pmai-*` / `$KIMI_CODE_HOME/skills/pmai-*` + 生成 `~/.config/opencode/commands/pmai-*.md`）。消费仓保持干净，skill 不进项目；升级一处 `pmai upgrade`，所有项目自动跟随。Codex 不再生成 custom prompts；Kimi 直接使用 `/skill:pmai-*`，不生成模拟 slash command。
+PMAI 只有全局安装一种形态（`pmai install` → clone `~/.pmai/` + symlink `~/.claude/skills/pmai-*` / `~/.codex/skills/pmai-*` / `$KIMI_CODE_HOME/skills/pmai-*` + 生成 `~/.config/opencode/commands/pmai-*.md`）。消费仓保持干净，skill 不进项目；`pmai upgrade` 后所有项目自动使用新版全局 skill / scripts / hooks 源，但项目级 Claude Code / Codex hook 配置需要在各消费仓由 `pmai status` 检测，并用 `bash ~/.pmai/scripts/install-project-hooks.sh` 刷新。Codex 不再生成 custom prompts；Kimi 直接使用 `/skill:pmai-*`，不生成模拟 slash command。
 
 > 旧的 `--local`（往项目 `.claude/` 拷实体副本）已移除：它和全局并存时会让每个 `/pmai-*` 命令在菜单里重复，且副本不跟随升级而陈旧。消费仓需要的 host 配置（`.claude/settings.json` / `.codex/hooks.json` / `.opencode/commands` / `opencode.json`）仍单独放项目里（不是 skill，不会重复）；hook 脚本本体仍走 `~/.pmai/hooks` / `~/.pmai/scripts`。已有遗留副本用 `pmai uninstall --local <dir>` 清理。
 

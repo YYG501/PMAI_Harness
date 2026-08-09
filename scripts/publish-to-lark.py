@@ -26,11 +26,13 @@ if _SCRIPTS_DIR not in sys.path:
     sys.path.insert(0, _SCRIPTS_DIR)
 
 from _lib.lark_adapter import (  # noqa: E402
+    BoundMarkdown,
     MIN_LARK_CLI_VERSION,
     LarkAdapterError,
     api_json,
     auth_check,
     auth_status,
+    bind_markdown,
     docs_create_from_markdown,
     docs_fetch,
     docs_update_from_markdown,
@@ -250,7 +252,7 @@ def capture_review_baseline(
     return written_revision, source_hash
 
 
-def clear_review_baseline(markdown_path: Path, *, expected_text: str) -> None:
+def clear_review_baseline(markdown: BoundMarkdown, *, expected_text: str) -> None:
     """远端已可能部分写入时，清除不再可信的旧发布基线。"""
     try:
         frontmatter, body = parse_frontmatter(expected_text)
@@ -258,7 +260,7 @@ def clear_review_baseline(markdown_path: Path, *, expected_text: str) -> None:
         next_frontmatter.pop("lark_published_revision_id", None)
         next_frontmatter.pop("lark_published_source_hash", None)
         write_frontmatter(
-            markdown_path,
+            markdown,
             next_frontmatter,
             body,
             expected_text=expected_text,
@@ -333,11 +335,11 @@ def build_doc_url(doc_id: str) -> str:
     return f"https://{host}/docx/{doc_id}"
 
 
-def publish_first_time(markdown_path: Path, target: dict):
+def publish_first_time(markdown: BoundMarkdown, target: dict):
     info(f"创建飞书文档: title={target['title']!r} kind={target['kind']}")
     try:
         data = docs_create_from_markdown(
-            markdown_path,
+            markdown,
             title=target["title"],
             target={"kind": target["kind"], "token": target["token"]},
         )
@@ -352,7 +354,10 @@ def publish_first_time(markdown_path: Path, target: dict):
         or data.get("document_id")
     )
     if not doc_id:
-        die(f"无法从 lark-cli docs +create 返回提取 doc_id: {data}")
+        die(
+            "无法从 lark-cli docs +create 返回提取 doc_id；"
+            "子进程输出已隐藏，避免发布正文进入错误信息"
+        )
 
     url = inner.get("doc_url") or build_doc_url(doc_id)
     document = (
@@ -366,7 +371,7 @@ def publish_first_time(markdown_path: Path, target: dict):
 
 
 def publish_overwrite(
-    markdown_path: Path,
+    markdown: BoundMarkdown,
     doc_id: str,
     *,
     expected_revision: int | None,
@@ -381,20 +386,16 @@ def publish_overwrite(
             expected_revision = _revision_id(current.get("revision_id"))
             if expected_revision is None:
                 raise LarkAdapterError("validation", "覆盖前无法取得飞书 revision")
-        if markdown_path.read_text(encoding="utf-8") != expected_local_text:
-            raise LarkAdapterError(
-                "concurrent_update",
-                "覆盖前本地 markdown 已变化，拒绝发送混合版本",
-            )
+        markdown.read_text(expected_text=expected_local_text)
         update_result = docs_update_from_markdown(
-            markdown_path,
+            markdown,
             doc_id=doc_id,
             mode="overwrite",
             revision_id=expected_revision,
         )
     except LarkAdapterError as e:
         if e.kind == "incomplete_update":
-            clear_review_baseline(markdown_path, expected_text=expected_local_text)
+            clear_review_baseline(markdown, expected_text=expected_local_text)
         die(f"lark-cli docs +update 失败: {e.detail}")
     update_document = _document_from_fetch(update_result or {})
     written_revision = _revision_id(update_document.get("revision_id"))
@@ -813,25 +814,11 @@ def merge_cells_for_doc(
 
 # ---------- Main ----------
 
-def main() -> None:
-    ap = argparse.ArgumentParser(prog="publish-to-lark",
-                                 description="把本地 markdown 发布到飞书云文档")
-    ap.add_argument("markdown", help="markdown 文件路径")
-    ap.add_argument("--type", help="文档类型 (prd/spec/other)")
-    ap.add_argument("--target-token", help="覆盖目标 token (wiki node 或 folder)")
-    ap.add_argument("--target-kind", choices=["wiki", "folder"], help="目标位置类型")
-    ap.add_argument("--title", help="覆盖标题")
-    ap.add_argument("--no-merge-cells", action="store_true", help="跳过表格合并")
-    args = ap.parse_args()
-
-    md_path = Path(args.markdown).resolve()
-    if not md_path.exists():
-        die(f"markdown 文件不存在: {md_path}")
-
-    text = md_path.read_text(encoding="utf-8")
+def _publish(args: argparse.Namespace, markdown: BoundMarkdown) -> None:
+    md_path = markdown.path
+    text = markdown.initial_text
     fm, body = parse_frontmatter(text)
     warn_if_html_tables(text)
-    filename = md_path.stem
     frontmatter_doc_id = fm.get("lark_doc_id")
     existing_url_token = _docx_token(fm.get("lark_doc_url"))
     if frontmatter_doc_id and existing_url_token and frontmatter_doc_id != existing_url_token:
@@ -856,7 +843,7 @@ def main() -> None:
     if existing_doc_id:
         info(f"检测到 frontmatter 中 lark_doc_id={existing_doc_id}，走覆盖路径")
         doc_id, url, written_revision = publish_overwrite(
-            md_path,
+            markdown,
             existing_doc_id,
             expected_revision=_revision_id(fm.get("lark_published_revision_id")),
             expected_local_text=text,
@@ -864,7 +851,7 @@ def main() -> None:
         first_time = False
     else:
         target = resolve_target(args, fm, md_path)
-        doc_id, url, written_revision = publish_first_time(md_path, target)
+        doc_id, url, written_revision = publish_first_time(markdown, target)
         first_time = True
 
     if args.no_merge_cells:
@@ -884,7 +871,7 @@ def main() -> None:
     )
     fm_written = False
     try:
-        latest_text = md_path.read_text(encoding="utf-8")
+        latest_text = markdown.read_text()
         latest_fm, latest_body = parse_frontmatter(latest_text)
         latest_doc_id = latest_fm.get("lark_doc_id")
         latest_url_token = _docx_token(latest_fm.get("lark_doc_url"))
@@ -915,7 +902,7 @@ def main() -> None:
                 # 新发布已经成功，旧基线不再代表当前发布点；清掉整对字段才能安全降级。
                 new_fm.pop("lark_published_revision_id", None)
                 new_fm.pop("lark_published_source_hash", None)
-            write_frontmatter(md_path, new_fm, latest_body, expected_text=latest_text)
+            write_frontmatter(markdown, new_fm, latest_body, expected_text=latest_text)
             fm_written = True
     except (LarkAdapterError, OSError) as e:
         warn(f"frontmatter 回写失败: {e}；飞书侧文档已发布，URL={url}，请手动回填")
@@ -927,6 +914,24 @@ def main() -> None:
     info(f"本地 frontmatter: {'已回填' if fm_written else '未更新 — 见上方警告'}")
     if baseline_revision is not None:
         info(f"评审基线: revision {baseline_revision} / source hash {baseline_source_hash[:12]}")
+
+
+def main() -> None:
+    ap = argparse.ArgumentParser(prog="publish-to-lark",
+                                 description="把本地 markdown 发布到飞书云文档")
+    ap.add_argument("markdown", help="markdown 文件路径")
+    ap.add_argument("--type", help="文档类型 (prd/spec/other)")
+    ap.add_argument("--target-token", help="覆盖目标 token (wiki node 或 folder)")
+    ap.add_argument("--target-kind", choices=["wiki", "folder"], help="目标位置类型")
+    ap.add_argument("--title", help="覆盖标题")
+    ap.add_argument("--no-merge-cells", action="store_true", help="跳过表格合并")
+    args = ap.parse_args()
+
+    try:
+        with bind_markdown(Path(args.markdown)) as markdown:
+            _publish(args, markdown)
+    except LarkAdapterError as exc:
+        die(f"本地 markdown 不可安全发布: {exc.detail}")
 
 
 if __name__ == "__main__":

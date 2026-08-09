@@ -6,7 +6,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash \"$HOME/.pmai/scripts/check-branch.sh\""
+            "command": "bash \"${PMAI_HOME:-$HOME/.pmai}/scripts/check-branch.sh\""
           }
         ]
       }
@@ -16,13 +16,13 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node \"$HOME/.pmai/hooks/review-skill-guard.cjs\"",
-            "timeout": 5
+            "command": "node \"${PMAI_HOME:-$HOME/.pmai}/hooks/review-skill-guard.cjs\"",
+            "timeout": 8
           },
           {
             "type": "command",
-            "command": "node \"$HOME/.pmai/hooks/active-build-guard.cjs\"",
-            "timeout": 5
+            "command": "node \"${PMAI_HOME:-$HOME/.pmai}/hooks/active-build-guard.cjs\"",
+            "timeout": 8
           }
         ]
       }

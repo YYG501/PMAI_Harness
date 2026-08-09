@@ -23,7 +23,7 @@ make_fake_path() {
   local tool path
 
   mkdir -p "$fake_bin"
-  for tool in awk basename bash cat chmod comm cp cut date dirname find git grep head ln mkdir mktemp mv pwd python3 rm sed sort tail touch tr uname wc xargs; do
+  for tool in awk basename bash cat chmod cmp comm cp cut date dirname find git grep head ln mkdir mktemp mv pwd python3 readlink rm sed sort tail touch tr uname wc xargs; do
     path=$(command -v "$tool" 2>/dev/null || true)
     if [ -n "$path" ] && [ ! -e "$fake_bin/$tool" ]; then
       ln -s "$path" "$fake_bin/$tool"

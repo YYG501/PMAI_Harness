@@ -17,7 +17,27 @@
 set -Eeuo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-source "$SCRIPT_DIR/../scripts/_lib/skill-links.sh"
+source "$SCRIPT_DIR/../scripts/_lib/global-install-lock.sh"
+source "$SCRIPT_DIR/../scripts/_lib/kimi-config-transaction.sh"
+ORIGINAL_ARGS=("$@")
+
+load_skill_link_policy() {
+  local helper="$1"
+
+  # source 不会删除目标版本未定义的函数。先清空当前进程中的策略函数，避免
+  # `--to` 降级时继续沿用新版本策略；旧 helper 没有暴露函数时恢复旧版全公开语义。
+  unset -f pmai_skill_is_host_exposed pmai_prune_managed_hidden_skill_links \
+    2>/dev/null || true
+  if [ -f "$helper" ]; then
+    source "$helper" || return 1
+  fi
+  if ! declare -F pmai_skill_is_host_exposed >/dev/null; then
+    pmai_skill_is_host_exposed() { return 0; }
+  fi
+  return 0
+}
+
+load_skill_link_policy "$SCRIPT_DIR/../scripts/_lib/skill-links.sh"
 
 PMAI_HOME="${PMAI_HOME:-$HOME/.pmai}"
 PMAI_STATE="${PMAI_STATE:-$HOME/.pmai-state}"
@@ -30,8 +50,32 @@ KIMI_CONFIG="$KIMI_CODE_HOME/config.toml"
 OPENCODE_CONFIG_DIR="${OPENCODE_CONFIG_DIR:-$HOME/.config/opencode}"
 SKILL_PREFIX="pmai-"
 REMOTE="${PMAI_REMOTE:-git@github.com:YYG501/PMAI_Workflow.git}"
-DOCTOR_BIN="$(dirname "$0")/pmai-doctor"
-DOCTOR_LOG="${PMAI_UPGRADE_DOCTOR_LOG:-/tmp/pmai-upgrade-doctor.log}"
+DOCTOR_BIN="$PMAI_HOME/bin/pmai-doctor"
+DOCTOR_LOG="${PMAI_UPGRADE_DOCTOR_LOG:-}"
+DOCTOR_LOG_IS_TEMP=0
+
+prepare_doctor_log() {
+  if [ -n "$DOCTOR_LOG" ]; then
+    return 0
+  fi
+  if ! DOCTOR_LOG=$(mktemp "${TMPDIR:-/tmp}/pmai-upgrade-doctor.XXXXXX"); then
+    echo "❌ 无法创建 pmai-doctor 临时日志。" >&2
+    return 1
+  fi
+  DOCTOR_LOG_IS_TEMP=1
+}
+
+remove_successful_doctor_log() {
+  if [ "$DOCTOR_LOG_IS_TEMP" = "1" ] && [ -n "$DOCTOR_LOG" ]; then
+    if rm -f -- "$DOCTOR_LOG"; then
+      DOCTOR_LOG=""
+      DOCTOR_LOG_IS_TEMP=0
+    else
+      echo "⚠️  doctor 已通过，但临时日志未删除：$DOCTOR_LOG" >&2
+    fi
+  fi
+  return 0
+}
 
 # timeout 兜底：stock macOS 无 GNU timeout（仅 Homebrew coreutils 才有）。
 # 缺失时优先用 gtimeout，再退化为直接执行（不加超时），避免 `timeout ... || {...}` 误触失败分支中断升级。
@@ -79,6 +123,10 @@ while [ $# -gt 0 ]; do
   esac
 done
 
+pmai_hold_global_install_lock \
+  "$SCRIPT_DIR/.." "${BASH_SOURCE[0]}" \
+  ${ORIGINAL_ARGS[@]+"${ORIGINAL_ARGS[@]}"}
+
 # ─────────────────────────────────────────────────────────────
 # 共享 helper：把 src_skills 装到 dst_skills（symlink）
 # ─────────────────────────────────────────────────────────────
@@ -86,14 +134,16 @@ rebuild_symlinks() {
   local src_skills="$1"
   local dst_skills="$2"
   local count=0
+  local old skill_dir skill_name dst
   # 清旧
   for old in "$dst_skills"/${SKILL_PREFIX}*; do
-    [ -L "$old" ] && rm "$old" || true
+    if [ -L "$old" ]; then
+      rm "$old" || return 1
+    fi
   done
   # 重建
   for skill_dir in "$src_skills"/*/; do
     [ -d "$skill_dir" ] || continue
-    local skill_name dst
     skill_name=$(basename "$skill_dir")
     case "$skill_name" in
       _internal) continue ;;
@@ -107,14 +157,17 @@ rebuild_symlinks() {
         ;;
     esac
     if [ "$skill_name" = "_shared" ]; then
-      pmai_install_shared_link "${skill_dir%/}" "$dst"
+      pmai_install_shared_link "${skill_dir%/}" "$dst" || return 1
     else
-      [ -e "$dst" ] || [ -L "$dst" ] && rm -rf "$dst" || true
-      ln -s "${skill_dir%/}" "$dst"
+      if [ -e "$dst" ] || [ -L "$dst" ]; then
+        rm -rf "$dst" || return 1
+      fi
+      ln -s "${skill_dir%/}" "$dst" || return 1
     fi
     count=$((count + 1))
   done
-  echo "$count"
+  REBUILD_SYMLINK_COUNT="$count"
+  return 0
 }
 
 remove_managed_codex_prompts() {
@@ -122,55 +175,169 @@ remove_managed_codex_prompts() {
   local count=0
   local old
 
-  [ -d "$prompt_dir" ] || { echo "0"; return 0; }
+  REMOVED_PROMPT_COUNT=0
+  [ -d "$prompt_dir" ] || return 0
   for old in "$prompt_dir"/${SKILL_PREFIX}*.md; do
-    if [ -e "$old" ]; then
-      rm -f "$old"
-      count=$((count + 1))
+    if [ -e "$old" ] || [ -L "$old" ]; then
+      if rm -f "$old"; then
+        count=$((count + 1))
+      else
+        echo "⚠️  升级已提交，但 legacy Codex prompt 未删除：$old" >&2
+      fi
     fi
   done
-  echo "$count"
+  REMOVED_PROMPT_COUNT="$count"
+  return 0
+}
+
+validate_kimi_config_transaction() {
+  local manager_out
+
+  pmai_kimi_config_tx_needs_check || return 0
+  if manager_out=$(KIMI_CODE_HOME="$KIMI_CODE_HOME" \
+    python3 "$PMAI_HOME/scripts/manage-kimi-hooks.py" \
+    check --config "$KIMI_CONFIG" 2>&1); then
+    return 0
+  fi
+  echo "❌ Kimi Code hooks 写入后校验失败：$manager_out" >&2
+  return 1
+}
+
+record_upgrade_notice_state() {
+  local marker="$PMAI_STATE/just-upgraded-from"
+
+  if ! mkdir -p "$PMAI_STATE"; then
+    echo "⚠️  升级已完成，但无法创建提示状态目录：$PMAI_STATE" >&2
+    return 0
+  fi
+  if ! printf '%s\n' "$OLD_VER" > "$marker"; then
+    echo "⚠️  升级已完成，但无法写入 What's New 标记：$marker" >&2
+  fi
+  if ! rm -f "$PMAI_STATE/last-update-check"; then
+    echo "⚠️  升级已完成，但无法清理更新检查缓存：$PMAI_STATE/last-update-check" >&2
+  fi
+  if ! rm -f "$PMAI_STATE/update-snoozed"; then
+    echo "⚠️  升级已完成，但无法清理更新延后状态：$PMAI_STATE/update-snoozed" >&2
+  fi
+  return 0
 }
 
 # ─────────────────────────────────────────────────────────────
 # 回滚状态
 # ─────────────────────────────────────────────────────────────
 ROLLBACK_DONE=0
+UPGRADE_TX_ACTIVE=0
+GIT_ROLLBACK_READY=0
+STASH_ATTEMPTED=0
 STASHED=0
 OLD_HEAD=""
-KIMI_CONFIG_BACKUP=""
+OLD_SYMBOLIC_REF=""
 
 global_rollback() {
+  local exit_code="${1:-1}"
+  local rollback_failed=0
+  local git_restored=0
+  local actual_head actual_ref
+
   [ "$ROLLBACK_DONE" = "1" ] && return
   ROLLBACK_DONE=1
-  trap - ERR EXIT
+  UPGRADE_TX_ACTIVE=0
+  trap - ERR HUP INT TERM EXIT
+  set +e
   echo "" >&2
   echo "❌ 升级失败，回滚到 ${OLD_HEAD:-原状态}..." >&2
-  if [ -n "$OLD_HEAD" ] && [ -d "$PMAI_HOME/.git" ]; then
-    (cd "$PMAI_HOME" && git reset --hard "$OLD_HEAD" >/dev/null 2>&1) || true
-    # reset 后恢复旧版本的暴露策略，不能用升级目标的策略重建旧版入口。
-    if [ -f "$PMAI_HOME/scripts/_lib/skill-links.sh" ]; then
-      source "$PMAI_HOME/scripts/_lib/skill-links.sh"
+  if [ "$GIT_ROLLBACK_READY" = "1" ]; then
+    if [ -n "$OLD_HEAD" ] && [ -d "$PMAI_HOME/.git" ]; then
+      if [ -n "$OLD_SYMBOLIC_REF" ]; then
+        if (cd "$PMAI_HOME" \
+          && git symbolic-ref HEAD "$OLD_SYMBOLIC_REF" \
+          && git reset --hard "$OLD_HEAD" >/dev/null 2>&1); then
+          git_restored=1
+        fi
+      else
+        if (cd "$PMAI_HOME" \
+          && git checkout --detach -q "$OLD_HEAD" \
+          && git reset --hard "$OLD_HEAD" >/dev/null 2>&1); then
+          git_restored=1
+        fi
+      fi
+      actual_head=$(git -C "$PMAI_HOME" rev-parse HEAD 2>/dev/null || true)
+      actual_ref=$(git -C "$PMAI_HOME" symbolic-ref -q HEAD 2>/dev/null || true)
+      if [ "$actual_head" != "$OLD_HEAD" ] \
+        || { [ -n "$OLD_SYMBOLIC_REF" ] && [ "$actual_ref" != "$OLD_SYMBOLIC_REF" ]; } \
+        || { [ -z "$OLD_SYMBOLIC_REF" ] && [ -n "$actual_ref" ]; }; then
+        git_restored=0
+      fi
     fi
-    # symlink 按回退后的 ~/.pmai/skills 重建
-    rebuild_symlinks "$PMAI_HOME/skills" "$CLAUDE_SKILLS" >/dev/null 2>&1 || true
-    rebuild_symlinks "$PMAI_HOME/skills" "$CODEX_SKILLS" >/dev/null 2>&1 || true
-    rebuild_symlinks "$PMAI_HOME/skills" "$KIMI_SKILLS" >/dev/null 2>&1 || true
-    if [ -f "$PMAI_HOME/scripts/install-opencode-commands.sh" ]; then
-      PMAI_HOME="$PMAI_HOME" OPENCODE_CONFIG_DIR="$OPENCODE_CONFIG_DIR" \
-        bash "$PMAI_HOME/scripts/install-opencode-commands.sh" --global >/dev/null 2>&1 || true
+    if [ "$git_restored" != "1" ]; then
+      echo "⚠️  Git 未能恢复到原 HEAD：${OLD_HEAD:-未知}（当前仓：$PMAI_HOME）" >&2
+      rollback_failed=1
+    else
+      # reset 后恢复旧版本的暴露策略，不能用升级目标的策略重建旧版入口。
+      if ! load_skill_link_policy "$PMAI_HOME/scripts/_lib/skill-links.sh"; then
+        echo "⚠️  无法载入回滚版本的 skill 暴露策略。" >&2
+        rollback_failed=1
+      else
+        if ! rebuild_symlinks "$PMAI_HOME/skills" "$CLAUDE_SKILLS" >/dev/null 2>&1; then
+          echo "⚠️  Claude Code skill 入口回滚不完整：$CLAUDE_SKILLS" >&2
+          rollback_failed=1
+        fi
+        if ! rebuild_symlinks "$PMAI_HOME/skills" "$CODEX_SKILLS" >/dev/null 2>&1; then
+          echo "⚠️  Codex skill 入口回滚不完整：$CODEX_SKILLS" >&2
+          rollback_failed=1
+        fi
+        if ! rebuild_symlinks "$PMAI_HOME/skills" "$KIMI_SKILLS" >/dev/null 2>&1; then
+          echo "⚠️  Kimi Code skill 入口回滚不完整：$KIMI_SKILLS" >&2
+          rollback_failed=1
+        fi
+        if [ -f "$PMAI_HOME/scripts/install-opencode-commands.sh" ]; then
+          if ! PMAI_HOME="$PMAI_HOME" OPENCODE_CONFIG_DIR="$OPENCODE_CONFIG_DIR" \
+            bash "$PMAI_HOME/scripts/install-opencode-commands.sh" --global >/dev/null 2>&1; then
+            echo "⚠️  OpenCode command 入口回滚不完整：$OPENCODE_CONFIG_DIR/commands" >&2
+            rollback_failed=1
+          fi
+        else
+          echo "⚠️  回滚版本缺少 OpenCode installer：$PMAI_HOME/scripts/install-opencode-commands.sh" >&2
+          rollback_failed=1
+        fi
+      fi
     fi
-    if [ -n "$KIMI_CONFIG_BACKUP" ] && [ -f "$KIMI_CONFIG_BACKUP" ]; then
-      cp -p "$KIMI_CONFIG_BACKUP" "$KIMI_CONFIG" >/dev/null 2>&1 || true
-    fi
+  elif [ "$STASH_ATTEMPTED" = "1" ]; then
+    echo "⚠️  stash 尚未确认完成；为保护未提交改动，本次未执行 reset --hard。" >&2
   fi
-  [ -n "$KIMI_CONFIG_BACKUP" ] && rm -f "$KIMI_CONFIG_BACKUP"
+  if ! pmai_kimi_config_tx_restore; then
+    rollback_failed=1
+  fi
+  if [ "$rollback_failed" = "1" ]; then
+    echo "⚠️  升级回滚未完整；请按以上 HEAD 和路径核对恢复现场。" >&2
+  fi
   if [ "$STASHED" = "1" ]; then
     echo "" >&2
     echo "💡 你的本地改动还在 stash 里。恢复：" >&2
     echo "   cd $PMAI_HOME && git stash pop" >&2
+  elif [ "$STASH_ATTEMPTED" = "1" ]; then
+    echo "💡 stash 可能已经产生；请运行 git -C \"$PMAI_HOME\" stash list 核对。" >&2
   fi
-  exit 1
+  exit "$exit_code"
+}
+
+global_exit_guard() {
+  local exit_code="$?"
+
+  if [ "$UPGRADE_TX_ACTIVE" = "1" ]; then
+    [ "$exit_code" -ne 0 ] || exit_code=1
+    global_rollback "$exit_code"
+  fi
+}
+
+global_failure_guard() {
+  local exit_code="$1"
+
+  if [ "$UPGRADE_TX_ACTIVE" = "1" ]; then
+    global_rollback "$exit_code"
+  fi
+  trap - ERR HUP INT TERM EXIT
+  exit "$exit_code"
 }
 
 # ─────────────────────────────────────────────────────────────
@@ -189,25 +356,38 @@ done
 cd "$PMAI_HOME"
 OLD_VER=$(cat VERSION 2>/dev/null || echo unknown)
 OLD_HEAD=$(git rev-parse HEAD)          # 全 hash，rollback 用
+OLD_SYMBOLIC_REF=$(git symbolic-ref -q HEAD 2>/dev/null || true)
 OLD_HEAD_SHORT=$(git rev-parse --short HEAD)
 
-# Kimi hooks live in a user config outside ~/.pmai. Keep an exact snapshot so
-# an upgrade rollback cannot leave hooks pointing at a reverted dispatcher.
-if [ -f "$KIMI_CONFIG" ]; then
-  KIMI_CONFIG_BACKUP=$(mktemp)
-  cp -p "$KIMI_CONFIG" "$KIMI_CONFIG_BACKUP"
+# 先确认工作树，再允许任何 reset 型回滚。status 失败或此处收到信号都
+# 没有发生写操作，直接退出即可，不能用 reset --hard 猜测恢复。
+if ! GIT_STATUS=$(git status --porcelain); then
+  echo "❌ 无法确认 ~/.pmai/ 工作树状态，拒绝继续升级。" >&2
+  exit 1
 fi
+
+UPGRADE_TX_ACTIVE=1
+trap 'global_failure_guard 1' ERR
+trap 'global_failure_guard 129' HUP
+trap 'global_failure_guard 130' INT
+trap 'global_failure_guard 143' TERM
+trap 'global_exit_guard' EXIT
 
 # A：dirty 自动 stash
-if [ -n "$(git status --porcelain)" ]; then
+if [ -n "$GIT_STATUS" ]; then
   echo "→ ~/.pmai/ 有本地改动，先 stash 一下保护..."
   STASH_MSG="pmai-upgrade auto-stash $(date -u +%Y-%m-%dT%H:%M:%SZ)"
-  git stash push -u -m "$STASH_MSG" >/dev/null
+  STASH_ATTEMPTED=1
+  if ! git stash push -u -m "$STASH_MSG" >/dev/null; then
+    echo "❌ 无法保护 ~/.pmai/ 的本地改动；未执行 reset --hard。" >&2
+    global_rollback 1
+  fi
   STASHED=1
 fi
+GIT_ROLLBACK_READY=1
 
-# B：装 trap（fetch / checkout / symlink 任意挂掉 → 回滚到 OLD_HEAD）
-trap global_rollback ERR
+# Git dirty 状态已确认安全后，才开始隔离其它用户级宿主配置。
+pmai_kimi_config_tx_snapshot "$KIMI_CONFIG" ".pmai-upgrade-kimi-backup"
 
 # fetch + checkout（保留原逻辑，timeout 兜底）
 case "$MODE" in
@@ -252,13 +432,16 @@ NEW_HEAD=$(git rev-parse --short HEAD)
 
 # 当前进程在 fetch 前已 source 过 helper；升级策略本身可能发生变化，必须重载
 # 刚落盘的版本后再重建宿主入口。
-source "$PMAI_HOME/scripts/_lib/skill-links.sh"
+load_skill_link_policy "$PMAI_HOME/scripts/_lib/skill-links.sh"
 
 # 重建 symlink
 echo "→ Re-syncing skill symlinks to host skill directories"
-claude_count=$(rebuild_symlinks "$PMAI_HOME/skills" "$CLAUDE_SKILLS")
-codex_count=$(rebuild_symlinks "$PMAI_HOME/skills" "$CODEX_SKILLS")
-kimi_count=$(rebuild_symlinks "$PMAI_HOME/skills" "$KIMI_SKILLS")
+rebuild_symlinks "$PMAI_HOME/skills" "$CLAUDE_SKILLS"
+claude_count="$REBUILD_SYMLINK_COUNT"
+rebuild_symlinks "$PMAI_HOME/skills" "$CODEX_SKILLS"
+codex_count="$REBUILD_SYMLINK_COUNT"
+rebuild_symlinks "$PMAI_HOME/skills" "$KIMI_SKILLS"
+kimi_count="$REBUILD_SYMLINK_COUNT"
 count=$((claude_count + codex_count + kimi_count))
 echo "   $CLAUDE_SKILLS: $claude_count"
 echo "   $CODEX_SKILLS: $codex_count"
@@ -268,26 +451,45 @@ PMAI_HOME="$PMAI_HOME" OPENCODE_CONFIG_DIR="$OPENCODE_CONFIG_DIR" \
   bash "$PMAI_HOME/scripts/install-opencode-commands.sh" --global
 echo "→ Re-syncing Kimi Code native hooks"
 if ! KIMI_CODE_HOME="$KIMI_CODE_HOME" python3 "$PMAI_HOME/scripts/manage-kimi-hooks.py" install --config "$KIMI_CONFIG"; then
-  echo "⚠️  Kimi Code hooks 未能同步；skills 已同步，pmai doctor 将报告具体状态。" >&2
+  echo "❌ Kimi Code hooks 未能同步，触发完整升级回滚。" >&2
+  global_rollback 1
 fi
 
-# E：跑 doctor 自检（FAIL → 回滚；WARN 不触发）
-if [ -x "$DOCTOR_BIN" ]; then
-  echo "→ Running pmai-doctor self-check..."
-  if ! KIMI_CODE_HOME="$KIMI_CODE_HOME" "$DOCTOR_BIN" >"$DOCTOR_LOG" 2>&1; then
-    echo "❌ pmai-doctor 自检失败，触发回滚。日志：$DOCTOR_LOG" >&2
-    tail -20 "$DOCTOR_LOG" >&2 || true
-    global_rollback
-  fi
-  echo "  ✅ doctor passed"
+# E：跑升级目标自己的 doctor 自检（FAIL → 回滚；WARN 不触发）。目标版本
+# 缺少可执行 doctor 属于不完整升级，不能静默跳过自检。
+if [ ! -x "$DOCTOR_BIN" ]; then
+  echo "❌ 升级后的 pmai-doctor 缺失或不可执行：$DOCTOR_BIN" >&2
+  global_rollback
+fi
+echo "→ Running pmai-doctor self-check..."
+if ! prepare_doctor_log; then
+  global_rollback
+fi
+if ! KIMI_CODE_HOME="$KIMI_CODE_HOME" "$DOCTOR_BIN" >"$DOCTOR_LOG" 2>&1; then
+  echo "❌ pmai-doctor 自检失败，触发回滚。日志：$DOCTOR_LOG" >&2
+  tail -20 "$DOCTOR_LOG" >&2 || true
+  global_rollback
+fi
+echo "  ✅ doctor passed"
+remove_successful_doctor_log
+
+if ! validate_kimi_config_transaction; then
+  global_rollback 1
+fi
+if ! pmai_kimi_config_tx_finalize; then
+  echo "❌ Kimi config 无法提交，触发完整升级回滚。" >&2
+  global_rollback 1
 fi
 
-# 全部成功，解除 trap
-trap - ERR
-[ -n "$KIMI_CONFIG_BACKUP" ] && rm -f "$KIMI_CONFIG_BACKUP"
+# 代码、宿主入口和 Kimi config 已全部验证并提交。后续只做 best-effort
+# 兼容清理与提示状态，不能把已完成升级误报成事务失败。
+UPGRADE_TX_ACTIVE=0
+trap - ERR HUP INT TERM EXIT
+pmai_kimi_config_tx_cleanup "升级提交后 Kimi config " || true
 
 echo "→ Removing legacy Codex slash prompts"
-legacy_prompt_count=$(remove_managed_codex_prompts "$CODEX_PROMPTS")
+remove_managed_codex_prompts "$CODEX_PROMPTS"
+legacy_prompt_count="$REMOVED_PROMPT_COUNT"
 echo "   $CODEX_PROMPTS: $legacy_prompt_count legacy prompt file(s) removed"
 
 echo ""
@@ -297,10 +499,7 @@ if [ "$OLD_HEAD_SHORT" = "$NEW_HEAD" ]; then
 else
   echo "✅ PMAI 升级：${OLD_VER} (${OLD_HEAD_SHORT}) → ${NEW_VER} (${NEW_HEAD})"
   # 写 JUST_UPGRADED marker + 清 update-check 缓存（下次 skill 跑时显示 What's New）
-  mkdir -p "$PMAI_STATE"
-  echo "$OLD_VER" > "$PMAI_STATE/just-upgraded-from"
-  rm -f "$PMAI_STATE/last-update-check" 2>/dev/null || true
-  rm -f "$PMAI_STATE/update-snoozed" 2>/dev/null || true
+  record_upgrade_notice_state
 fi
 echo "   skill: $count symlinks re-synced"
 echo "   codex native skills: $codex_count symlinks re-synced"
@@ -309,6 +508,12 @@ echo "   legacy codex prompts: $legacy_prompt_count files removed"
 echo "   opencode commands: re-synced"
 echo "   kimi hooks: re-synced when config.toml exists"
 echo "═══════════════════════════════════════"
+
+echo ""
+echo "ℹ️  全局升级只更新框架源和宿主 skill。"
+echo "   已有消费仓的 Claude Code / Codex 项目 hooks 不会被静默改写。"
+echo "   请在各消费仓运行 pmai status 检查；需要刷新时，在仓内运行："
+echo "   bash \"$PMAI_HOME/scripts/install-project-hooks.sh\""
 
 # stash 恢复提示
 if [ "$STASHED" = "1" ]; then

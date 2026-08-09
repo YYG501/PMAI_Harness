@@ -19,8 +19,9 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Iterable
 
+from _lib.decision_status import decision_is_question, decision_is_superseded
 from _lib.project_definition import ProjectDefinitionError, load_project_definition
-from _lib.open_questions import explicitly_no_open_questions
+from _lib.open_questions import parse_current_open_questions
 
 
 ROOT_SOURCES = (
@@ -37,8 +38,6 @@ MODULE_SOURCES = (
     ("spec.md", "module_spec"),
     (".work-meta.json", "work_state"),
 )
-QUESTION_MARKERS = ("待确认", "未决", "待回答", "TODO", "FIXME")
-SUPERSEDE_MARKERS = ("supersede", "superseded", "被取代", "已取代", "已废弃", "不再有效")
 GENERIC_HEADINGS = {
     "已拍板决策",
     "共同理由",
@@ -52,6 +51,7 @@ GENERIC_HEADINGS = {
     "名词解释",
     "讨论记录",
     "未决问题",
+    "待确认问题",
 }
 SUPERSEDED_SECTION_HEADINGS = {"被取代的决定"}
 
@@ -196,10 +196,7 @@ def is_module_decision_heading(title: str) -> bool:
 def decision_status(title: str, body: str, role: str) -> str:
     if role == "frozen_project_decision":
         return "frozen"
-    lowered = f"{title}\n{body}".lower()
-    if any(marker in lowered for marker in SUPERSEDE_MARKERS) or "~~" in title or "~~" in body:
-        return "superseded"
-    return "active"
+    return "superseded" if decision_is_superseded(title, body) else "active"
 
 
 def parse_decisions(repo_root: Path, sources: Iterable[Source]) -> tuple[list[dict], list[dict]]:
@@ -232,7 +229,7 @@ def parse_decisions(repo_root: Path, sources: Iterable[Source]) -> tuple[list[di
                 "summary": re.sub(r"\s+", " ", body)[:500],
                 "normalized_title": cleaned,
             }
-            if title.endswith(("?", "？")) or re.search(r"(^|\n)\s*[-*]?\s*(是否|要不要|怎么|如何).*[?？]", body):
+            if decision_is_question(title, body):
                 item["reason"] = "question_text_is_not_a_decision"
                 question_like.append(item)
                 continue
@@ -266,25 +263,18 @@ def unresolved_questions(repo_root: Path, module_dir: Path | None) -> list[dict]
     path = module_dir / "discussion.md"
     if not path.is_file():
         return []
-    questions = []
-    for number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
-        stripped = line.strip()
-        if not stripped:
-            continue
-        if explicitly_no_open_questions(stripped):
-            continue
-        is_heading = re.match(r"^#{1,6}\s+", stripped) is not None
-        if stripped.endswith(("?", "？")) or (
-            not is_heading and any(marker in stripped for marker in QUESTION_MARKERS)
-        ):
-            questions.append(
-                {
-                    "source": repo_relative(repo_root, path),
-                    "line": number,
-                    "text": stripped[:500],
-                }
-            )
-    return questions
+    section = parse_current_open_questions(path.read_text(encoding="utf-8"))
+    if section is None:
+        return []
+    source = repo_relative(repo_root, path)
+    return [
+        {
+            "source": source,
+            "line": question.question_line,
+            "text": question.text,
+        }
+        for question in section.unresolved
+    ]
 
 
 def extract_keywords(module_dir: Path | None, goal: str | None) -> list[str]:

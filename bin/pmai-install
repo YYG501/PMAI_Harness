@@ -9,10 +9,13 @@
 #     项目里只放 host 配置 / 状态资产（.claude/settings.json / .codex/hooks.json / .opencode/commands / opencode.json / .work-meta.json）。
 #     清理遗留的项目副本：`pmai uninstall --local <dir>`。
 
-set -euo pipefail
+set -Eeuo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/../scripts/_lib/skill-links.sh"
+source "$SCRIPT_DIR/../scripts/_lib/global-install-lock.sh"
+source "$SCRIPT_DIR/../scripts/_lib/kimi-config-transaction.sh"
+ORIGINAL_ARGS=("$@")
 
 REMOTE="${PMAI_REMOTE:-git@github.com:YYG501/PMAI_Workflow.git}"
 PMAI_HOME="${PMAI_HOME:-$HOME/.pmai}"
@@ -50,6 +53,210 @@ case "${1:-}" in
   "") ;;
   *) echo "❌ unknown flag: $1" >&2; usage >&2; exit 2 ;;
 esac
+
+pmai_hold_global_install_lock \
+  "$SCRIPT_DIR/.." "${BASH_SOURCE[0]}" \
+  ${ORIGINAL_ARGS[@]+"${ORIGINAL_ARGS[@]}"}
+
+load_target_skill_link_policy() {
+  local helper="$1"
+
+  unset -f pmai_skill_is_host_exposed pmai_prune_managed_hidden_skill_links \
+    2>/dev/null || true
+  if [ -f "$helper" ]; then
+    source "$helper"
+  fi
+  if ! declare -F pmai_skill_is_host_exposed >/dev/null; then
+    pmai_skill_is_host_exposed() { return 0; }
+  fi
+}
+
+TX_ACTIVE=0
+TX_CLONE_CREATED=0
+TX_PATHS=()
+TX_BACKUPS=()
+INSTALL_DOCTOR_LOG=""
+
+transaction_has_path() {
+  local candidate="$1"
+  local existing
+  for existing in ${TX_PATHS[@]+"${TX_PATHS[@]}"}; do
+    [ "$existing" = "$candidate" ] && return 0
+  done
+  return 1
+}
+
+snapshot_entry() {
+  local path="$1"
+  local backup=""
+  local parent
+
+  transaction_has_path "$path" && return 0
+  if [ -e "$path" ] || [ -L "$path" ]; then
+    parent=$(dirname "$path")
+    backup="$parent/.pmai-install-backup.$$.$RANDOM.${#TX_PATHS[@]}"
+    while [ -e "$backup" ] || [ -L "$backup" ]; do
+      backup="$parent/.pmai-install-backup.$$.$RANDOM.${#TX_PATHS[@]}"
+    done
+  fi
+  # Register both fields before rename. A signal before rename keeps the
+  # original path; a signal after rename can always find its backup.
+  TX_BACKUPS+=("$backup")
+  TX_PATHS+=("$path")
+  if [ -n "$backup" ]; then
+    mv -- "$path" "$backup"
+  fi
+  return 0
+}
+
+snapshot_install_surfaces() {
+  local dst_skills old skill_dir skill_name dst
+
+  for dst_skills in "$CLAUDE_SKILLS" "$CODEX_SKILLS" "$KIMI_SKILLS"; do
+    mkdir -p "$dst_skills"
+    for old in "$dst_skills"/${SKILL_PREFIX}*; do
+      [ -L "$old" ] || continue
+      snapshot_entry "$old"
+    done
+    for skill_dir in "$PMAI_HOME"/skills/*/; do
+      [ -d "$skill_dir" ] || continue
+      skill_name=$(basename "$skill_dir")
+      case "$skill_name" in
+        _internal) continue ;;
+        _shared) dst="$dst_skills/_shared" ;;
+        *)
+          pmai_skill_is_host_exposed "$skill_name" || continue
+          case "$skill_name" in
+            pmai-*) dst="$dst_skills/$skill_name" ;;
+            *) dst="$dst_skills/${SKILL_PREFIX}${skill_name}" ;;
+          esac
+          ;;
+      esac
+      snapshot_entry "$dst"
+    done
+  done
+
+  legacy_prompt_count=0
+  for old in "$CODEX_PROMPTS"/${SKILL_PREFIX}*.md; do
+    [ -e "$old" ] || [ -L "$old" ] || continue
+    snapshot_entry "$old"
+    legacy_prompt_count=$((legacy_prompt_count + 1))
+  done
+  for old in "$OPENCODE_CONFIG_DIR/commands"/${SKILL_PREFIX}*.md; do
+    [ -e "$old" ] || [ -L "$old" ] || continue
+    snapshot_entry "$old"
+  done
+  for skill_dir in "$PMAI_HOME"/skills/*/; do
+    [ -d "$skill_dir" ] || continue
+    skill_name=$(basename "$skill_dir")
+    case "$skill_name" in
+      _internal|_shared) continue ;;
+    esac
+    pmai_skill_is_host_exposed "$skill_name" || continue
+    case "$skill_name" in
+      pmai-*) dst="$OPENCODE_CONFIG_DIR/commands/$skill_name.md" ;;
+      *) dst="$OPENCODE_CONFIG_DIR/commands/${SKILL_PREFIX}${skill_name}.md" ;;
+    esac
+    snapshot_entry "$dst"
+  done
+
+  pmai_kimi_config_tx_snapshot "$KIMI_CONFIG" ".pmai-install-kimi-backup"
+}
+
+install_rollback() {
+  local exit_code="${1:-1}"
+  local index path backup
+  local rollback_failed=0
+
+  TX_ACTIVE=0
+  trap - ERR HUP INT TERM EXIT
+  set +e
+  echo "" >&2
+  echo "❌ PMAI 安装失败，正在恢复安装前状态..." >&2
+  for ((index=${#TX_PATHS[@]} - 1; index >= 0; index--)); do
+    path="${TX_PATHS[$index]}"
+    backup="${TX_BACKUPS[$index]}"
+    if [ -n "$backup" ]; then
+      if [ -e "$backup" ] || [ -L "$backup" ]; then
+        if { [ -e "$path" ] || [ -L "$path" ]; } \
+          && ! rm -rf -- "$path"; then
+          echo "⚠️  无法移除失败安装入口，原备份保留在：$backup" >&2
+          rollback_failed=1
+          continue
+        fi
+        if ! mv -- "$backup" "$path"; then
+          echo "⚠️  无法恢复安装入口，备份保留在：$backup" >&2
+          rollback_failed=1
+        fi
+      else
+        echo "⚠️  安装入口备份缺失，保留当前路径避免二次丢失：$path" >&2
+        rollback_failed=1
+      fi
+    elif { [ -e "$path" ] || [ -L "$path" ]; } \
+      && ! rm -rf -- "$path"; then
+      echo "⚠️  无法移除本轮新建入口：$path" >&2
+      rollback_failed=1
+    fi
+  done
+  if ! pmai_kimi_config_tx_restore; then
+    rollback_failed=1
+  fi
+  if [ "$TX_CLONE_CREATED" = "1" ] \
+    && { [ -e "$PMAI_HOME" ] || [ -L "$PMAI_HOME" ]; } \
+    && ! rm -rf -- "$PMAI_HOME"; then
+    echo "⚠️  无法移除失败安装创建的 framework：$PMAI_HOME" >&2
+    rollback_failed=1
+  fi
+  if [ "$rollback_failed" = "1" ]; then
+    echo "⚠️  安装回滚未完整；请按以上路径保留并核对恢复材料。" >&2
+  fi
+  if [ -n "$INSTALL_DOCTOR_LOG" ] && [ -f "$INSTALL_DOCTOR_LOG" ]; then
+    echo "   doctor 日志保留在：$INSTALL_DOCTOR_LOG" >&2
+  fi
+  exit "$exit_code"
+}
+
+install_exit_guard() {
+  local exit_code="$?"
+
+  if [ "$TX_ACTIVE" = "1" ]; then
+    [ "$exit_code" -ne 0 ] || exit_code=1
+    install_rollback "$exit_code"
+  fi
+}
+
+install_failure_guard() {
+  local exit_code="$1"
+
+  if [ "$TX_ACTIVE" = "1" ]; then
+    install_rollback "$exit_code"
+  fi
+  trap - ERR HUP INT TERM EXIT
+  exit "$exit_code"
+}
+
+commit_install_transaction() {
+  local backup
+
+  TX_ACTIVE=0
+  trap - ERR HUP INT TERM EXIT
+  for backup in ${TX_BACKUPS[@]+"${TX_BACKUPS[@]}"}; do
+    [ -n "$backup" ] || continue
+    if { [ -e "$backup" ] || [ -L "$backup" ]; } \
+      && ! rm -rf -- "$backup"; then
+      echo "⚠️  安装已提交，但旧入口恢复材料未删除：$backup" >&2
+    fi
+  done
+  pmai_kimi_config_tx_cleanup "安装提交后 Kimi config " || true
+  if [ -n "$INSTALL_DOCTOR_LOG" ]; then
+    if rm -f -- "$INSTALL_DOCTOR_LOG"; then
+      INSTALL_DOCTOR_LOG=""
+    else
+      echo "⚠️  安装已提交，但 doctor 临时日志未删除：$INSTALL_DOCTOR_LOG" >&2
+    fi
+  fi
+  return 0
+}
 
 # 子函数：把 src_skills 下的目录 symlink 到 dst_skills，加 pmai- 前缀
 install_skills() {
@@ -137,6 +344,19 @@ remove_managed_codex_prompts() {
   echo "$count"
 }
 
+validate_kimi_config_transaction() {
+  local manager_out
+
+  pmai_kimi_config_tx_needs_check || return 0
+  if manager_out=$(KIMI_CODE_HOME="$KIMI_CODE_HOME" \
+    python3 "$PMAI_HOME/scripts/manage-kimi-hooks.py" \
+    check --config "$KIMI_CONFIG" 2>&1); then
+    return 0
+  fi
+  echo "❌ Kimi Code hooks 写入后校验失败：$manager_out" >&2
+  return 1
+}
+
 echo "→ Installing PMAI globally..."
 for dst_skills in "$CLAUDE_SKILLS" "$CODEX_SKILLS" "$KIMI_SKILLS"; do
   pmai_assert_shared_link_available "$PMAI_HOME/skills/_shared" "$dst_skills/_shared"
@@ -146,27 +366,64 @@ if [ -d "$PMAI_HOME/.git" ]; then
   echo "   或先 pmai uninstall 清理后重装。" >&2
   exit 1
 fi
-if [ -e "$PMAI_HOME" ]; then
+if [ -e "$PMAI_HOME" ] || [ -L "$PMAI_HOME" ]; then
   echo "❌ $PMAI_HOME 存在但不是 git 仓。手动清理后重试。" >&2
   exit 1
 fi
+
+TX_ACTIVE=1
+trap 'install_failure_guard 1' ERR
+trap 'install_failure_guard 129' HUP
+trap 'install_failure_guard 130' INT
+trap 'install_failure_guard 143' TERM
+trap 'install_exit_guard' EXIT
+
 echo "→ git clone $REMOTE → $PMAI_HOME"
+TX_CLONE_CREATED=1
 git clone "$REMOTE" "$PMAI_HOME"
+load_target_skill_link_policy "$PMAI_HOME/scripts/_lib/skill-links.sh"
+snapshot_install_surfaces
+
 echo "→ Symlink skills to host skill directories"
 for dst_skills in "$CLAUDE_SKILLS" "$CODEX_SKILLS" "$KIMI_SKILLS"; do
   remove_managed_skill_symlinks "$dst_skills"
   install_skills "$PMAI_HOME/skills" "$dst_skills"
 done
 echo "→ Remove legacy Codex slash prompts"
-legacy_prompt_count=$(remove_managed_codex_prompts "$CODEX_PROMPTS")
 echo "   $CODEX_PROMPTS: $legacy_prompt_count legacy prompt file(s) removed"
 echo "→ Install OpenCode slash commands"
 PMAI_HOME="$PMAI_HOME" OPENCODE_CONFIG_DIR="$OPENCODE_CONFIG_DIR" \
   bash "$PMAI_HOME/scripts/install-opencode-commands.sh" --global
 echo "→ Install Kimi Code native hooks"
 if ! KIMI_CODE_HOME="$KIMI_CODE_HOME" python3 "$PMAI_HOME/scripts/manage-kimi-hooks.py" install --config "$KIMI_CONFIG"; then
-  echo "⚠️  Kimi Code hooks 安装失败；skills 仍可用，修复 config.toml 后运行 pmai doctor。" >&2
+  echo "❌ Kimi Code hooks 安装失败，不能提交半完整全局安装。" >&2
+  install_rollback 1
 fi
+
+DOCTOR_BIN="$PMAI_HOME/bin/pmai-doctor"
+if [ ! -x "$DOCTOR_BIN" ]; then
+  echo "❌ 安装目标的 pmai-doctor 缺失或不可执行：$DOCTOR_BIN" >&2
+  install_rollback 1
+fi
+INSTALL_DOCTOR_LOG=$(mktemp "${TMPDIR:-/tmp}/pmai-install-doctor.XXXXXX")
+echo "→ Running target pmai-doctor self-check..."
+if ! PMAI_HOME="$PMAI_HOME" CODEX_HOME="${CODEX_HOME:-$HOME/.codex}" \
+  KIMI_CODE_HOME="$KIMI_CODE_HOME" OPENCODE_CONFIG_DIR="$OPENCODE_CONFIG_DIR" \
+  "$DOCTOR_BIN" >"$INSTALL_DOCTOR_LOG" 2>&1; then
+  echo "❌ 安装目标的 pmai-doctor 自检失败。" >&2
+  tail -20 "$INSTALL_DOCTOR_LOG" >&2 || true
+  install_rollback 1
+fi
+echo "  ✅ doctor passed"
+if ! validate_kimi_config_transaction; then
+  install_rollback 1
+fi
+if ! pmai_kimi_config_tx_finalize; then
+  echo "❌ Kimi config 无法提交，不能完成半事务安装。" >&2
+  install_rollback 1
+fi
+commit_install_transaction
+
 VER=$(cat "$PMAI_HOME/VERSION" 2>/dev/null || echo unknown)
 echo ""
 echo "═══════════════════════════════════════"

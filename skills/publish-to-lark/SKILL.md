@@ -103,35 +103,20 @@ source "${PMAI_HOME:-$HOME/.pmai}/scripts/skill-preamble.sh"
 调用 `python3 "$PMAI_HOME/scripts/publish-to-lark.py"` 执行编排。
 
 发送给飞书前，会自动剥掉 markdown 开头的 YAML frontmatter（`---` 包裹的元数据块），
-只发正文 —— 飞书不识别 frontmatter，不剥会把它当一段正文渲染。本地 markdown 文件不动。
+只发正文 —— 飞书不识别 frontmatter，不剥会把它当一段正文渲染。adapter 先把源文件
+绑定为稳定的普通文件快照，再通过受控 stdin（`--content -`）发送正文；不会创建可被并发
+换名或替换的临时 markdown。子进程 cwd 仍绑定源文件目录身份，保留相对资源解析基准。
 覆盖发布尤其必然带 frontmatter（首次发布回填的 `lark_doc_id` 等就在 frontmatter 里）。
 
-**首次发布：**
-
-```bash
-lark-cli docs +create \
-  --title "<title>" \
-  --wiki-node "<token>" \
-  --content "@./<临时正文文件>" \
-  --doc-format markdown
-```
-
-发布到文件夹时把 `--wiki-node` 换成 `--folder-token`。
+**首次发布：** adapter 调用 `docs +create`，传 `--title`、目标 wiki node 或 folder token、
+`--content -` 和 `--doc-format markdown`；剥离后的正文由 adapter 直接写入子进程 stdin。
+用户和调用方不要绕过 `publish-to-lark.py` 自行拼 lark-cli 命令或 shell 管道。
 
 拿到返回的 `document_id`。
 
-**覆盖发布：**
-
-```bash
-lark-cli docs +update \
-  --doc "<existing_doc_id>" \
-  --content "@./<临时正文文件>" \
-  --doc-format markdown \
-  --command overwrite \
-  --revision-id "<写前 revision>"
-```
-
-上述相对内容文件由 adapter 在临时目录生成并剥离 frontmatter；用户入口仍只调用 `publish-to-lark.py`，不要手工制造该文件。
+**覆盖发布：** adapter 调用 `docs +update`，传现有文档 ID、`--content -`、
+`--doc-format markdown`、`--command overwrite` 和写前 revision；正文仍只走同一受控 stdin。
+用户入口始终只调用 `publish-to-lark.py`。
 
 ### 步骤 4：自动合并表格 cell（默认开启）
 
@@ -200,6 +185,7 @@ URL: https://xxx.feishu.cn/docx/doxcnxxxxxx
 - **评审基线刷新**每次成功发布后都尝试执行；只有写入 revision 与回读 revision 一致、且本地正文仍是本次发送版本时才写入，`lark_published_revision_id` 和 `lark_published_source_hash` 必须同时更新或同时清除
 - **覆盖写入带 revision 栅栏**：`docs +update` 必须携带写前 revision；冲突时停止，不用 latest 重试覆盖
 - **发送时剥离 frontmatter**：发给飞书的内容只含正文，开头的 YAML frontmatter 会被剥掉（飞书不识别 frontmatter，不剥会渲染成正文）；剥离只作用于发送内容，本地 markdown 文件不动
+- **正文只走 adapter stdin**：发布命令固定使用 `--content -`，正文由已绑定源文件的内存快照写入 stdin；禁止退回 `@file` 临时文件或由调用方拼裸 shell 管道
 - **不修改正文**：除 frontmatter 外，本 skill 不改 markdown 任何内容
 - **不做 wiki/folder 切换**：首次发布的目标位置一旦定下，覆盖发布只能在同位置；要换位置必须删 frontmatter 中的 `lark_doc_id` 后重新首次发布
 

@@ -56,7 +56,7 @@
 - 每笔写入必须使用明确的 base revision，不能依赖默认 latest。
 - 图片相邻块要保守处理；普通同步至少比较数量，review 路径必须比较原 block ID、token 和格式 hash。
 - 列表项通常是独立块；替换段落不会自动替换后续列表项。
-- 临时内容文件必须放 cwd 下，并用相对路径传给 `--content @file`。
+- 向 `docs +update` 传内容时使用 `--content -` 并通过 stdin 发送；不得创建临时正文文件，也不得把正文拼进 argv。
 
 ## 验收
 

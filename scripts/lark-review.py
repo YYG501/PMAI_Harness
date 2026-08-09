@@ -9,8 +9,9 @@ import hashlib
 import json
 import os
 import re
+import stat
+import subprocess
 import sys
-import tempfile
 import time
 from dataclasses import dataclass
 from datetime import datetime
@@ -36,6 +37,13 @@ from _lib.lark_adapter import (  # noqa: E402
     replace_markdown_body,
     version,
     write_frontmatter,
+)
+from _lib.atomic_file import (  # noqa: E402
+    AtomicFileError,
+    bind_directory_fd,
+    ensure_directory_beneath,
+    read_regular_bytes as atomic_read_regular_bytes,
+    write_text_atomically,
 )
 from _lib.lark_review_semantics import (  # noqa: E402
     NATIVE_SNAPSHOT_KIND,
@@ -475,28 +483,111 @@ def _diff(before: str, after: str, before_name: str, after_name: str) -> str:
     )
 
 
-def _write_text(path: Path, content: str) -> str:
-    if path.is_symlink() or (path.exists() and not path.is_file()):
-        raise ReviewError(f"拒绝覆盖非普通评审产物: {path}")
-    tmp = tempfile.NamedTemporaryFile(
-        mode="w",
-        encoding="utf-8",
-        prefix=f".{path.name}.",
-        dir=path.parent,
-        delete=False,
-    )
-    tmp_path = Path(tmp.name)
+def _absolute_lexical_path(path: Path) -> Path:
+    if not path.is_absolute():
+        path = Path.cwd() / path
+    return Path(os.path.normpath(str(path)))
+
+
+def _read_regular_bytes(path: Path, *, label: str) -> bytes:
+    path = _absolute_lexical_path(path)
     try:
-        tmp.write(content)
-        tmp.flush()
-        os.fsync(tmp.fileno())
-        tmp.close()
-        os.replace(tmp_path, path)
+        return atomic_read_regular_bytes(path, require_canonical_path=True)
+    except AtomicFileError as exc:
+        raise ReviewError(f"{label} 不是可安全读取的普通文件: {path}；{exc}") from exc
+
+
+def _canonical_regular_file(path: Path, *, label: str) -> Path:
+    path = _absolute_lexical_path(path)
+    _read_regular_bytes(path, label=label)
+    return path
+
+
+def _canonical_directory(path: Path, *, label: str) -> Path:
+    path = _absolute_lexical_path(path)
+    flags = (
+        os.O_RDONLY
+        | getattr(os, "O_DIRECTORY", 0)
+        | getattr(os, "O_CLOEXEC", 0)
+        | os.O_NOFOLLOW
+    )
+    directory_fd = -1
+    try:
+        directory_fd = os.open(path, flags)
+        bind_directory_fd(path, directory_fd)
+        return path
+    except (AtomicFileError, OSError) as exc:
+        raise ReviewError(f"{label} 不是无 symlink 的安全目录: {path}；{exc}") from exc
     finally:
-        if not tmp.closed:
-            tmp.close()
-        tmp_path.unlink(missing_ok=True)
-    return str(path.resolve())
+        if directory_fd >= 0:
+            os.close(directory_fd)
+
+
+def _prepare_empty_directory(path: Path, *, label: str) -> Path:
+    path = _absolute_lexical_path(path)
+    try:
+        ensure_directory_beneath(Path(path.anchor), path)
+        flags = (
+            os.O_RDONLY
+            | getattr(os, "O_DIRECTORY", 0)
+            | getattr(os, "O_CLOEXEC", 0)
+            | os.O_NOFOLLOW
+        )
+        directory_fd = os.open(path, flags)
+        try:
+            bind_directory_fd(path, directory_fd)
+            if os.listdir(directory_fd):
+                raise ReviewError(f"{label}必须为空，避免混用其它批次")
+            os.fchmod(directory_fd, 0o700)
+            os.fsync(directory_fd)
+            bind_directory_fd(path, directory_fd)
+        finally:
+            os.close(directory_fd)
+    except ReviewError:
+        raise
+    except (AtomicFileError, OSError) as exc:
+        raise ReviewError(f"无法安全准备{label}: {path}；{exc}") from exc
+    return path
+
+
+def _entry_exists(path: Path, *, label: str) -> bool:
+    path = _absolute_lexical_path(path)
+    flags = (
+        os.O_RDONLY
+        | getattr(os, "O_DIRECTORY", 0)
+        | getattr(os, "O_CLOEXEC", 0)
+        | os.O_NOFOLLOW
+    )
+    directory_fd = -1
+    try:
+        directory_fd = os.open(path.parent, flags)
+        bind_directory_fd(path.parent, directory_fd)
+        try:
+            os.stat(path.name, dir_fd=directory_fd, follow_symlinks=False)
+            exists = True
+        except FileNotFoundError:
+            exists = False
+        bind_directory_fd(path.parent, directory_fd)
+        return exists
+    except (AtomicFileError, OSError) as exc:
+        raise ReviewError(f"无法安全检查{label}: {path}；{exc}") from exc
+    finally:
+        if directory_fd >= 0:
+            os.close(directory_fd)
+
+
+def _write_text(path: Path, content: str) -> str:
+    path = _absolute_lexical_path(path)
+    try:
+        write_text_atomically(
+            path,
+            content,
+            require_canonical_path=True,
+            create_mode=0o600,
+        )
+    except AtomicFileError as exc:
+        raise ReviewError(f"无法安全写入评审产物: {path}；{exc}") from exc
+    return str(path)
 
 
 def _write_json(path: Path, value: dict[str, Any]) -> str:
@@ -504,15 +595,15 @@ def _write_json(path: Path, value: dict[str, Any]) -> str:
 
 
 def _read_regular_text(path: Path, *, label: str) -> str:
-    if path.is_symlink() or not path.is_file():
-        raise ReviewError(f"{label} 不是普通文件: {path}")
-    return path.read_text(encoding="utf-8")
+    raw = _read_regular_bytes(path, label=label)
+    try:
+        return raw.decode("utf-8")
+    except UnicodeDecodeError as exc:
+        raise ReviewError(f"{label} 不是合法 UTF-8 文本: {path}") from exc
 
 
 def _file_digest(path: Path) -> str:
-    if path.is_symlink() or not path.is_file():
-        raise ReviewError(f"无法计算非普通文件摘要: {path}")
-    return hashlib.sha256(path.read_bytes()).hexdigest()
+    return hashlib.sha256(_read_regular_bytes(path, label="摘要目标")).hexdigest()
 
 
 def _load_json_object(path: Path, *, label: str) -> dict[str, Any]:
@@ -523,13 +614,10 @@ def _load_json_object(path: Path, *, label: str) -> dict[str, Any]:
 
 
 def _manifest_path(args_value: str) -> Path:
-    raw_path = Path(args_value)
-    if raw_path.is_symlink() or not raw_path.is_file():
-        raise ReviewError(f"review.json 不是普通文件: {raw_path}")
-    path = raw_path.resolve()
+    path = _absolute_lexical_path(Path(args_value))
     if path.name != "review.json":
         raise ReviewError("评审清单必须使用 collect 生成的 review.json")
-    return path
+    return _canonical_regular_file(path, label="review.json")
 
 
 def _load_manifest(path: Path) -> dict[str, Any]:
@@ -549,12 +637,10 @@ def _artifact_path(
     expected_name: str,
     label: str,
 ) -> Path:
-    raw = Path(str(value or ""))
-    if raw.name != expected_name or raw.parent.resolve() != manifest_path.parent:
+    raw = _absolute_lexical_path(Path(str(value or "")))
+    if raw.name != expected_name or raw.parent != manifest_path.parent:
         raise ReviewError(f"review.json 的 {label} 不在本评审目录或文件名异常")
-    if raw.is_symlink() or not raw.is_file():
-        raise ReviewError(f"review.json 的 {label} 不是普通文件")
-    return raw.resolve()
+    return _canonical_regular_file(raw, label=f"review.json 的 {label}")
 
 
 @dataclass(frozen=True)
@@ -769,6 +855,7 @@ def _validate_decision_routing(
     *,
     body_records: list[dict[str, Any]],
     comment_records: list[dict[str, Any]],
+    repo_root: Path,
 ) -> list[dict[str, Any]]:
     expected = {
         *(
@@ -823,12 +910,8 @@ def _validate_decision_routing(
                     f"{source[0]} {source[1]} 的 not_required 只能填写 reason"
                 )
         elif outcome in {"create", "supersede"}:
-            path = Path(target_path)
             if (
                 not target_path
-                or path.is_absolute()
-                or ".." in path.parts
-                or path.name != "decisions.md"
                 or not decision_id
                 or not summary
                 or not reason
@@ -836,6 +919,7 @@ def _validate_decision_routing(
                 raise ReviewError(
                     f"{source[0]} {source[1]} 的 decision 写入缺少安全目标、ID、摘要或原因"
                 )
+            target_path = _decision_target_path(repo_root, target_path)
             if outcome == "create" and supersedes:
                 raise ReviewError("新建 decision 不能同时填写 supersedes")
             if outcome == "supersede" and not supersedes:
@@ -1019,7 +1103,11 @@ def _with_comment_cursor(
             max_update_ids = set(event_ids)
         elif update_time == max_update_time:
             max_update_ids.update(event_ids)
-        marked = {**item, "new_since_checkpoint": is_new}
+        marked = {
+            **item,
+            "comment_event_time": comment_time,
+            "new_since_checkpoint": is_new,
+        }
         marked.pop("_comment_event_time", None)
         output.append(marked)
     return output, max_update_time, sorted(max_update_ids)
@@ -1034,7 +1122,10 @@ def _comment_cursor_from_snapshot(
     for item in items:
         comment_id = str(item.get("comment_id") or "")
         update_time = _int(item.get("update_time")) or 0
-        event_ids = {f"comment:{comment_id}"} if comment_id else set()
+        event_ids: set[str] = set()
+        comment_time = _int(item.get("comment_event_time")) or 0
+        if comment_id and comment_time == update_time:
+            event_ids.add(f"comment:{comment_id}")
         replies = item.get("replies") if isinstance(item.get("replies"), list) else []
         for reply in replies:
             if isinstance(reply, dict) and _event_time(reply) == update_time:
@@ -1105,30 +1196,44 @@ def _collect_comments(
 
 def collect(args: argparse.Namespace) -> int:
     collect_started = time.monotonic()
-    markdown_input = Path(args.markdown)
-    if markdown_input.is_symlink() or not markdown_input.is_file():
-        raise ReviewError(f"本地 markdown 不是普通文件: {markdown_input}")
-    markdown_path = markdown_input.resolve()
-    output_input = Path(args.output_dir)
-    if output_input.is_symlink():
-        raise ReviewError("评审产物目录不能是符号链接")
-    if output_input.exists():
-        if not output_input.is_dir():
-            raise ReviewError("评审产物路径不是目录")
-        if any(output_input.iterdir()):
-            raise ReviewError("评审产物目录必须为空，避免混用其它批次")
-    else:
-        output_input.mkdir(parents=True)
-    os.chmod(output_input, 0o700)
-    output_dir = output_input.resolve()
-
-    raw = markdown_path.read_text(encoding="utf-8")
+    markdown_path = _canonical_regular_file(
+        Path(args.markdown),
+        label="本地 markdown",
+    )
+    raw = _read_regular_text(markdown_path, label="本地 markdown")
     frontmatter, local_body = parse_frontmatter(raw)
+    frontmatter_doc_id = str(frontmatter.get("lark_doc_id") or "")
+    frontmatter_url = frontmatter.get("lark_doc_url")
+    frontmatter_url_token = _docx_token(frontmatter_url)
+    if frontmatter_url and frontmatter_url_token is None:
+        raise ReviewError(
+            "lark-review 只支持飞书 Docx 链接；本地 lark_doc_url 不是 Docx"
+        )
     doc_ref = args.doc or frontmatter.get("lark_doc_url") or frontmatter.get("lark_doc_id")
     if not doc_ref:
         raise ReviewError("缺少飞书链接/token，且本地 frontmatter 没有 lark_doc_id/lark_doc_url")
     if "://" in str(doc_ref) and _docx_token(doc_ref) is None:
         raise ReviewError("lark-review 只支持飞书 Docx 链接；旧版 /doc/ 或 wiki 链接请先迁移")
+    input_token = _docx_token(args.doc) if args.doc else None
+    if input_token and frontmatter_doc_id and input_token != frontmatter_doc_id:
+        raise ReviewError(
+            f"--doc 指向 {input_token}，但本地 lark_doc_id 是 {frontmatter_doc_id}"
+        )
+    if input_token and frontmatter_url_token and input_token != frontmatter_url_token:
+        raise ReviewError(
+            f"--doc 指向 {input_token}，但本地 lark_doc_url 指向 {frontmatter_url_token}"
+        )
+    if not frontmatter_doc_id and not frontmatter_url_token:
+        raise ReviewError(
+            "本地 markdown 缺少 lark_doc_id 或 Docx lark_doc_url；"
+            "拒绝生成无法绑定回本地规格的评审批次"
+        )
+    repo_root = _repository_root(markdown_path)
+
+    output_dir = _prepare_empty_directory(
+        Path(args.output_dir),
+        label="评审产物目录",
+    )
 
     _preflight()
     fetch_started = time.monotonic()
@@ -1143,22 +1248,14 @@ def collect(args: argparse.Namespace) -> int:
     )
     if not doc_id:
         raise ReviewError("飞书读取结果和本地 frontmatter 都缺少 document_id")
-    frontmatter_doc_id = str(frontmatter.get("lark_doc_id") or "")
     if frontmatter_doc_id and frontmatter_doc_id != doc_id:
         raise ReviewError(
             f"输入飞书文档 {doc_id} 与本地 frontmatter 的 {frontmatter_doc_id} 不一致"
         )
-    frontmatter_url_token = _docx_token(frontmatter.get("lark_doc_url"))
     if frontmatter_url_token and frontmatter_url_token != doc_id:
         raise ReviewError(
             f"飞书读取结果 {doc_id} 与本地 lark_doc_url 的 {frontmatter_url_token} 不一致"
         )
-    if not frontmatter_doc_id and not frontmatter_url_token:
-        raise ReviewError(
-            "本地 markdown 缺少 lark_doc_id 或 Docx lark_doc_url；"
-            "拒绝生成无法绑定回本地规格的评审批次"
-        )
-    input_token = _docx_token(args.doc) if args.doc else None
     if input_token and input_token != doc_id:
         raise ReviewError(f"--doc 指向 {input_token}，但飞书实际返回文档 {doc_id}")
 
@@ -1355,6 +1452,7 @@ def collect(args: argparse.Namespace) -> int:
         "schema_version": SCHEMA_VERSION,
         "batch_id": batch_id,
         "markdown_path": str(markdown_path),
+        "repo_root": str(repo_root),
         "document": {
             "doc_id": doc_id,
             "doc_url": (
@@ -1450,9 +1548,168 @@ def collect(args: argparse.Namespace) -> int:
 
 def _manifest_markdown_path(manifest: dict[str, Any]) -> Path:
     raw_path = Path(str(manifest.get("markdown_path") or ""))
-    if raw_path.is_symlink() or not raw_path.is_file():
-        raise ReviewError("review.json 对应的本地 markdown 不是普通文件")
-    return raw_path.resolve()
+    return _canonical_regular_file(
+        raw_path,
+        label="review.json 对应的本地 markdown",
+    )
+
+
+def _has_git_marker(candidate: Path) -> bool:
+    marker = candidate / ".git"
+    try:
+        mode = marker.lstat().st_mode
+    except OSError:
+        return False
+    return stat.S_ISDIR(mode) or stat.S_ISREG(mode)
+
+
+def _is_pmai_repository(candidate: Path) -> bool:
+    product_state = candidate / "PRODUCT-STATE.md"
+    agent_entries = (candidate / "AGENTS.md", candidate / "CLAUDE.md")
+    try:
+        _read_regular_bytes(product_state, label="PRODUCT-STATE.md")
+    except ReviewError:
+        return False
+    for entry in agent_entries:
+        try:
+            if "PMAI" in _read_regular_text(entry, label=entry.name):
+                return True
+        except ReviewError:
+            continue
+    return False
+
+
+def _git_path(markdown_path: Path, argument: str) -> Path | None:
+    try:
+        result = subprocess.run(
+            ["git", "-C", str(markdown_path.parent), "rev-parse", argument],
+            capture_output=True,
+            text=True,
+            timeout=5,
+            check=False,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return None
+    value = result.stdout.strip()
+    if result.returncode != 0 or not value:
+        return None
+    raw = Path(value)
+    if not raw.is_absolute():
+        raw = markdown_path.parent / raw
+    try:
+        return _canonical_directory(raw, label=f"Git {argument} 目录")
+    except ReviewError:
+        return None
+
+
+def _linked_worktree_main_root(markdown_path: Path, git_root: Path) -> Path | None:
+    marker = git_root / ".git"
+    try:
+        if not stat.S_ISREG(marker.lstat().st_mode):
+            return None
+    except OSError:
+        return None
+    common_dir = _git_path(markdown_path, "--git-common-dir")
+    if common_dir is None or common_dir.name != ".git":
+        return None
+    try:
+        return _canonical_directory(common_dir.parent, label="worktree 主仓根")
+    except ReviewError:
+        return None
+
+
+def _repository_root(markdown_path: Path) -> Path:
+    markdown_path = _canonical_regular_file(
+        markdown_path,
+        label="本地 markdown",
+    )
+    git_candidates = [
+        candidate
+        for candidate in markdown_path.parents
+        if _has_git_marker(candidate)
+    ]
+    pmai_candidates = [
+        candidate for candidate in git_candidates if _is_pmai_repository(candidate)
+    ]
+    git_root = _git_path(markdown_path, "--show-toplevel")
+    if git_root is not None:
+        git_root = _canonical_directory(git_root, label="Git 仓根")
+        try:
+            markdown_path.relative_to(git_root)
+        except ValueError as exc:
+            raise ReviewError("Git 返回的仓根不包含本地 markdown") from exc
+        if git_root in pmai_candidates:
+            if len(pmai_candidates) == 1:
+                return git_root
+            main_root = _linked_worktree_main_root(markdown_path, git_root)
+            if (
+                len(pmai_candidates) == 2
+                and main_root is not None
+                and main_root in pmai_candidates
+            ):
+                return git_root
+            raise ReviewError("本地 markdown 位于多个嵌套的 PMAI 仓库中，无法确定写入边界")
+        if pmai_candidates:
+            raise ReviewError("本地 markdown 位于 PMAI 仓内的独立嵌套 Git 仓库中")
+        return git_root
+
+    if len(pmai_candidates) == 1:
+        return _canonical_directory(pmai_candidates[0], label="PMAI 仓根")
+    if len(pmai_candidates) > 1:
+        raise ReviewError("本地 markdown 位于多个嵌套的 PMAI 仓库中，无法确定写入边界")
+    if len(git_candidates) > 1:
+        raise ReviewError("本地 markdown 位于多个嵌套的 Git 仓库中，无法确定 PMAI 仓根")
+    if len(git_candidates) == 1:
+        # 兼容旧批次和独立工具调用；一旦出现嵌套 .git 就失败关闭。
+        return _canonical_directory(git_candidates[0], label="Git 仓根")
+    raise ReviewError("本地 markdown 不在可识别的 Git 仓库中")
+
+
+def _manifest_repository_root(manifest: dict[str, Any], markdown_path: Path) -> Path:
+    current_root = _repository_root(markdown_path)
+    recorded = manifest.get("repo_root")
+    if recorded is None:
+        raise ReviewError("review.json 缺少 collect 时的 PMAI 仓根绑定")
+    raw = Path(str(recorded))
+    recorded_root = _canonical_directory(raw, label="review.json 记录的仓根")
+    if recorded_root != current_root:
+        raise ReviewError("本地 markdown 的 PMAI 仓根在 collect 后发生变化")
+    try:
+        markdown_path.relative_to(recorded_root)
+    except ValueError as exc:
+        raise ReviewError("本地 markdown 超出 review.json 绑定的 PMAI 仓根") from exc
+    return recorded_root
+
+
+def _decision_target_path(repo_root: Path, value: str) -> str:
+    raw = Path(value)
+    parts = raw.parts
+    if (
+        not value
+        or raw.is_absolute()
+        or ".." in parts
+        or len(parts) != 4
+        or parts[:2] != ("docs", "modules")
+        or not parts[2]
+        or parts[2].startswith(".")
+        or parts[3] != "decisions.md"
+    ):
+        raise ReviewError(
+            "decision_routing.target_path 只允许仓内 "
+            "docs/modules/<模块>/decisions.md"
+        )
+
+    canonical_root = repo_root.resolve()
+    candidate = canonical_root
+    for part in parts:
+        candidate /= part
+        if candidate.is_symlink():
+            raise ReviewError("decision_routing.target_path 不能包含 symlink 组件")
+    try:
+        candidate.resolve(strict=False).relative_to(canonical_root)
+    except ValueError as exc:
+        raise ReviewError("decision_routing.target_path 超出当前仓库") from exc
+    return raw.as_posix()
 
 
 def _source_artifacts(
@@ -1655,12 +1912,26 @@ def _build_body_reconciliation(
         elif sources == {"remote"}:
             kind = "remote_only"
             expected = _resolution_value(
-                None,
-                default_decision="remote",
-                default_authority="rule",
-                default_reason="仅飞书变化，纳入发布后正文增量",
+                resolutions.get(change_id),
+                default_decision="needs_pm",
+                default_authority="pending",
+                default_reason="",
             )
-            chosen = remote_segment
+            if expected["decision"] not in {"local", "remote", "pending", "needs_pm"}:
+                raise ReviewError(f"{change_id} 使用了不支持的飞书正文归位决定")
+            if expected["decision"] in {"pending", "needs_pm"}:
+                unresolved += 1
+                chosen = remote_segment
+            else:
+                if expected["authority"] != "pm_confirmed" or not expected["reason"]:
+                    raise ReviewError(
+                        f"{change_id} 缺少 PM 对飞书正文增量的本轮明确确认"
+                    )
+                chosen = (
+                    remote_segment
+                    if expected["decision"] == "remote"
+                    else local_segment
+                )
         elif local_segment == remote_segment:
             kind = "both_equivalent"
             expected = _resolution_value(
@@ -1851,6 +2122,7 @@ def reconcile(args: argparse.Namespace) -> int:
     sources = _source_artifacts(manifest_path, manifest)
     native_snapshot = _native_snapshot_artifact(manifest_path, manifest)
     markdown_path = _manifest_markdown_path(manifest)
+    repo_root = _manifest_repository_root(manifest, markdown_path)
     current_raw = _read_regular_text(markdown_path, label="本地 markdown")
     _, current_body = parse_frontmatter(current_raw)
     if hashlib.sha256(current_body.encode("utf-8")).hexdigest() != sources["local.md"]["exact_body_sha256"]:
@@ -1862,14 +2134,18 @@ def reconcile(args: argparse.Namespace) -> int:
     coverage_path = manifest_path.parent / "remote-coverage.json"
     preview_path = manifest_path.parent / "remote-preview.md"
     if args.resolutions:
-        provided = Path(args.resolutions)
-        if provided.is_symlink() or provided.resolve() != resolutions_path:
+        provided = _absolute_lexical_path(Path(args.resolutions))
+        if provided != resolutions_path:
             raise ReviewError("--resolutions 必须指向本批次目录中的 resolutions.json")
+        _canonical_regular_file(provided, label="resolutions.json")
     if args.seal:
-        if resolutions_path.is_symlink() or not resolutions_path.is_file():
-            raise ReviewError("seal 前必须完成本批次 resolutions.json")
-        if target_path.is_symlink() or not target_path.is_file():
-            raise ReviewError("seal 前必须完成本批次 target.md")
+        try:
+            _canonical_regular_file(resolutions_path, label="resolutions.json")
+            _canonical_regular_file(target_path, label="target.md")
+        except ReviewError as exc:
+            raise ReviewError(
+                "seal 前必须完成本批次 resolutions.json 与 target.md"
+            ) from exc
         (
             body_resolutions,
             comment_resolutions,
@@ -1885,7 +2161,7 @@ def reconcile(args: argparse.Namespace) -> int:
         if args.resolutions:
             raise ReviewError("首次 reconcile 不接受 --resolutions；先生成批次模板")
         for path in (resolutions_path, target_path, plan_path, coverage_path, preview_path):
-            if path.exists() or path.is_symlink():
+            if _entry_exists(path, label="评审产物"):
                 raise ReviewError("本批次已开始归位；编辑现有产物后使用 reconcile --seal")
         body_resolutions, comment_resolutions = {}, {}
         target_derivation = _default_target_derivation()
@@ -2016,6 +2292,7 @@ def reconcile(args: argparse.Namespace) -> int:
             decision_routing_resolutions,
             body_records=body_records,
             comment_records=comment_records,
+            repo_root=repo_root,
         )
     state = "ready" if args.seal and unresolved == 0 and not has_markers else "draft"
 
@@ -2038,6 +2315,7 @@ def reconcile(args: argparse.Namespace) -> int:
             "sha256": _file_digest(resolutions_path),
         },
         "markdown_path": str(markdown_path),
+        "repo_root": str(repo_root),
         "document": {
             "doc_id": document.get("doc_id"),
             "published_revision_id": document.get("published_revision_id"),
@@ -2151,10 +2429,10 @@ def _validate_local_document_identity(
 
 
 def apply_target(args: argparse.Namespace) -> int:
-    plan_input = Path(args.plan)
-    if plan_input.is_symlink() or not plan_input.is_file():
-        raise ReviewError("apply-plan.json 不是普通文件")
-    plan_path = plan_input.resolve()
+    plan_path = _canonical_regular_file(
+        Path(args.plan),
+        label="apply-plan.json",
+    )
     if plan_path.name != "apply-plan.json":
         raise ReviewError("--plan 必须指向本批次的 apply-plan.json")
     plan = _load_json_object(plan_path, label="apply-plan.json")
@@ -2173,11 +2451,14 @@ def apply_target(args: argparse.Namespace) -> int:
         (resolutions_path, "resolutions.json"),
         (target_path, "target.md"),
     ):
-        if path.is_symlink() or not path.is_file():
-            raise ReviewError(f"{label} 不是本批次普通文件")
+        _canonical_regular_file(path, label=f"本批次 {label}")
     manifest = _load_manifest(manifest_path)
     if manifest.get("batch_id") != plan.get("batch_id"):
         raise ReviewError("apply-plan.json 与 review.json 批次不匹配")
+    manifest_markdown_path = _manifest_markdown_path(manifest)
+    repo_root = _manifest_repository_root(manifest, manifest_markdown_path)
+    if str(plan.get("repo_root") or "") != str(repo_root):
+        raise ReviewError("apply-plan.json 与 review.json 绑定的 PMAI 仓根不一致")
     if _file_digest(manifest_path) != str((plan.get("manifest") or {}).get("sha256") or ""):
         raise ReviewError("review.json 在 seal 后发生变化")
     if _file_digest(resolutions_path) != str((plan.get("resolutions") or {}).get("sha256") or ""):
@@ -2208,13 +2489,19 @@ def apply_target(args: argparse.Namespace) -> int:
         if key in {"approved", "authority", "reason"}
     }:
         raise ReviewError("PM 预览确认与 seal 结果不一致")
-    if decision_routing_resolutions != plan.get("decision_routing"):
-        raise ReviewError("decision 归档路由与 seal 结果不一致")
     required = plan.get("required_items") or {}
     body_items = required.get("body") if isinstance(required, dict) else None
     comment_items = required.get("comments") if isinstance(required, dict) else None
     if not isinstance(body_items, list) or not isinstance(comment_items, list):
         raise ReviewError("apply-plan.json 缺少 required_items")
+    decision_routing_resolutions = _validate_decision_routing(
+        decision_routing_resolutions,
+        body_records=body_items,
+        comment_records=comment_items,
+        repo_root=repo_root,
+    )
+    if decision_routing_resolutions != plan.get("decision_routing"):
+        raise ReviewError("decision 归档路由与 seal 结果不一致")
     if {str(item.get("change_id") or "") for item in body_items if isinstance(item, dict)} != set(body_resolutions):
         raise ReviewError("正文归位项与 seal 结果不一致")
     if {str(item.get("comment_id") or "") for item in comment_items if isinstance(item, dict)} != set(comment_resolutions):
@@ -2267,11 +2554,7 @@ def apply_target(args: argparse.Namespace) -> int:
     coverage_path = plan_path.parent / "remote-coverage.json"
     preview_path = plan_path.parent / "remote-preview.md"
     if (
-        coverage_path.is_symlink()
-        or preview_path.is_symlink()
-        or not coverage_path.is_file()
-        or not preview_path.is_file()
-        or _file_digest(coverage_path)
+        _file_digest(coverage_path)
         != str((plan.get("remote_coverage") or {}).get("sha256") or "")
         or _file_digest(preview_path)
         != str((plan.get("preview") or {}).get("sha256") or "")
@@ -2288,10 +2571,10 @@ def apply_target(args: argparse.Namespace) -> int:
     ):
         raise ReviewError("远端覆盖账本不是可执行的完整账本")
 
-    markdown_input = Path(args.markdown)
-    if markdown_input.is_symlink() or not markdown_input.is_file():
-        raise ReviewError("apply 目标 markdown 不是普通文件")
-    markdown_path = markdown_input.resolve()
+    markdown_path = _canonical_regular_file(
+        Path(args.markdown),
+        label="apply 目标 markdown",
+    )
     if markdown_path != _manifest_markdown_path(manifest) or str(markdown_path) != str(plan.get("markdown_path") or ""):
         raise ReviewError("apply 目标不是本批次绑定的本地规格")
     current_raw = _read_regular_text(markdown_path, label="apply 目标")
@@ -2380,7 +2663,12 @@ def apply_target(args: argparse.Namespace) -> int:
         )
         return 0
 
-    replace_markdown_body(markdown_path, target_body, expected_text=current_raw)
+    replace_markdown_body(
+        markdown_path,
+        target_body,
+        expected_text=current_raw,
+        require_canonical_path=True,
+    )
     written_raw = _read_regular_text(markdown_path, label="已写入 markdown")
     _, written_body = parse_frontmatter(written_raw)
     if hashlib.sha256(written_body.encode("utf-8")).hexdigest() != target_exact_hash:
@@ -2437,14 +2725,10 @@ def _load_ready_batch(
     manifest_path = _manifest_path(manifest_arg)
     manifest = _load_manifest(manifest_path)
     expected_plan_path = manifest_path.parent / "apply-plan.json"
-    plan_input = Path(plan_arg)
-    if (
-        plan_input.is_symlink()
-        or not plan_input.is_file()
-        or plan_input.resolve() != expected_plan_path
-    ):
+    plan_path = _absolute_lexical_path(Path(plan_arg))
+    if plan_path != expected_plan_path:
         raise ReviewError(f"{label} 必须使用本批次的 apply-plan.json")
-    plan_path = plan_input.resolve()
+    _canonical_regular_file(plan_path, label="apply-plan.json")
     plan = _load_json_object(plan_path, label="apply-plan.json")
     schema_pair = (
         _int(manifest.get("schema_version")),
@@ -2469,11 +2753,7 @@ def _load_ready_batch(
     resolutions_path = manifest_path.parent / "resolutions.json"
     target_path = manifest_path.parent / "target.md"
     if (
-        resolutions_path.is_symlink()
-        or target_path.is_symlink()
-        or not resolutions_path.is_file()
-        or not target_path.is_file()
-        or _file_digest(resolutions_path)
+        _file_digest(resolutions_path)
         != str((plan.get("resolutions") or {}).get("sha256") or "")
         or _file_digest(target_path)
         != str((plan.get("target") or {}).get("sha256") or "")
@@ -2596,9 +2876,7 @@ def _remote_coverage_artifact(
     coverage_path = manifest_path.parent / "remote-coverage.json"
     binding = plan.get("remote_coverage")
     if (
-        coverage_path.is_symlink()
-        or not coverage_path.is_file()
-        or not isinstance(binding, dict)
+        not isinstance(binding, dict)
         or binding.get("name") != "remote-coverage.json"
         or _file_digest(coverage_path) != str(binding.get("sha256") or "")
     ):
@@ -2650,11 +2928,11 @@ def _sync_verification(
         raise ReviewError("飞书当前 revision 与本地发布基线不一致，不能完成格式验收")
 
     target_units = [
-        (unit.kind, unit.normalised_text)
+        (unit.kind, unit.normalised_text, unit.structure_signature)
         for unit in markdown_semantic_units(str(context.get("body") or ""))
     ]
     remote_units = [
-        (unit.kind, unit.normalised_text)
+        (unit.kind, unit.normalised_text, unit.structure_signature)
         for unit in markdown_semantic_units(str(remote_markdown.get("content") or ""))
     ]
     if remote_units != target_units:
@@ -2767,9 +3045,12 @@ def _remote_verification_artifact(
     published_revision: int,
 ) -> dict[str, Any]:
     path = manifest_path.parent / "remote-verification.json"
-    if path.is_symlink() or not path.is_file():
-        raise ReviewError("缺少本批 remote-verification.json；请先运行 verify-sync")
-    value = _load_json_object(path, label="remote-verification.json")
+    try:
+        value = _load_json_object(path, label="remote-verification.json")
+    except ReviewError as exc:
+        raise ReviewError(
+            "缺少安全可读的本批 remote-verification.json；请先运行 verify-sync"
+        ) from exc
     document = value.get("document")
     markdown_hash = str(value.get("remote_markdown_exact_sha256") or "")
     if (
@@ -3200,9 +3481,7 @@ def _load_comment_actions(
     required: bool,
 ) -> tuple[Path, dict[str, Any] | None]:
     path = _comment_actions_path(manifest_path)
-    if path.is_symlink() or (path.exists() and not path.is_file()):
-        raise ReviewError("comment-actions.json 不是本批次普通文件")
-    if not path.exists():
+    if not _entry_exists(path, label="comment-actions.json"):
         if required:
             raise ReviewError("缺少本批次 comment-actions.json 完成回执")
         return path, None
@@ -3432,6 +3711,16 @@ def _record_completed_action(
     action["status"] = "completed"
 
 
+def _require_solve_write_ack_for_recovery(action: dict[str, Any]) -> None:
+    solve_write_ack = action.get("solve_write_ack_sha256")
+    if solve_write_ack is None:
+        raise ReviewError(
+            "solve_requested 回执缺少系统解决写响应，"
+            "不能把外部手工解决记录为受控完成"
+        )
+    _require_sha256(solve_write_ack, label="solve_requested solve_write_ack_sha256")
+
+
 def _recover_solve_requested_for_reopen(
     action: dict[str, Any],
     current: dict[str, Any],
@@ -3442,8 +3731,7 @@ def _recover_solve_requested_for_reopen(
     """Promote a proven solve write when the batch's final readback was interrupted."""
     if action.get("status") != "solve_requested":
         return
-    if action.get("solve_write_ack_sha256") is None:
-        raise ReviewError("solve_requested 回执缺少系统解决写响应，不能由 reopen 接管")
+    _require_solve_write_ack_for_recovery(action)
     if not bool(current.get("is_solved")):
         raise ReviewError("solve_requested 评论当前未解决，请先重跑 complete-comments")
 
@@ -3773,6 +4061,7 @@ def complete_comment(args: argparse.Namespace) -> int:
         ):
             raise ReviewError("解决操作恢复时批次外评论发生变化，请重新 collect")
         if bool(current.get("is_solved")):
+            _require_solve_write_ack_for_recovery(action)
             _verify_action_comment(action, current, expect_solved=True)
             _record_completed_action(
                 action,
@@ -3957,6 +4246,7 @@ def _recover_batch_action(
         return
     if status == "solve_requested":
         if bool(current.get("is_solved")):
+            _require_solve_write_ack_for_recovery(action)
             _verify_action_comment(action, current, expect_solved=True)
             _record_completed_action(
                 action,
@@ -4339,10 +4629,11 @@ def reopen(args: argparse.Namespace) -> int:
     )
     context = _published_target_context(manifest, plan, label="reopen")
     markdown_path = Path(context["markdown_path"])
-    requested_markdown = Path(args.markdown)
-    if requested_markdown.is_symlink() or not requested_markdown.is_file():
-        raise ReviewError("reopen 目标 markdown 不是普通文件")
-    if requested_markdown.resolve() != markdown_path:
+    requested_markdown = _canonical_regular_file(
+        Path(args.markdown),
+        label="reopen 目标 markdown",
+    )
+    if requested_markdown != markdown_path:
         raise ReviewError("review.json 与 reopen 目标 markdown 不匹配")
     requested_ids = [str(value or "").strip() for value in args.comment_id]
     if any(not value for value in requested_ids):
@@ -4551,10 +4842,11 @@ def checkpoint(args: argparse.Namespace) -> int:
     )
     context = _published_target_context(manifest, plan, label="checkpoint")
     markdown_path = Path(context["markdown_path"])
-    markdown_input = Path(args.markdown)
-    if markdown_input.is_symlink() or not markdown_input.is_file():
-        raise ReviewError("checkpoint 目标 markdown 不是普通文件")
-    if markdown_input.resolve() != markdown_path:
+    markdown_input = _canonical_regular_file(
+        Path(args.markdown),
+        label="checkpoint 目标 markdown",
+    )
+    if markdown_input != markdown_path:
         raise ReviewError("review.json 与 checkpoint 目标 markdown 不匹配")
     raw = str(context["raw"])
     frontmatter = context["frontmatter"]
@@ -4696,7 +4988,13 @@ def checkpoint(args: argparse.Namespace) -> int:
         sorted(comment_ids), ensure_ascii=False, separators=(",", ":")
     )
     updated["lark_reviewed_at"] = reviewed_at
-    write_frontmatter(markdown_path, updated, body, expected_text=raw)
+    write_frontmatter(
+        markdown_path,
+        updated,
+        body,
+        expected_text=raw,
+        require_canonical_path=True,
+    )
     print(json.dumps({
         "markdown_path": str(markdown_path),
         "lark_reviewed_revision_id": revision,
@@ -4717,14 +5015,14 @@ def checkpoint(args: argparse.Namespace) -> int:
 
 
 def baseline(args: argparse.Namespace) -> int:
-    markdown_input = Path(args.markdown)
-    if markdown_input.is_symlink() or not markdown_input.is_file():
-        raise ReviewError(f"baseline 目标 markdown 不是普通文件: {markdown_input}")
-    markdown_path = markdown_input.resolve()
+    markdown_path = _canonical_regular_file(
+        Path(args.markdown),
+        label="baseline 目标 markdown",
+    )
     revision = _int(args.revision_id)
     if revision is None or revision < 0:
         raise ReviewError("baseline 需要非负 revision-id")
-    raw = markdown_path.read_text(encoding="utf-8")
+    raw = _read_regular_text(markdown_path, label="baseline 目标 markdown")
     frontmatter, body = parse_frontmatter(raw)
     source_hash = _body_hash(body)
     if source_hash != str(args.expected_source_hash or ""):
@@ -4755,7 +5053,13 @@ def baseline(args: argparse.Namespace) -> int:
     updated["lark_doc_id"] = doc_id
     updated["lark_published_revision_id"] = revision
     updated["lark_published_source_hash"] = source_hash
-    write_frontmatter(markdown_path, updated, body, expected_text=raw)
+    write_frontmatter(
+        markdown_path,
+        updated,
+        body,
+        expected_text=raw,
+        require_canonical_path=True,
+    )
     print(json.dumps({
         "markdown_path": str(markdown_path),
         "lark_published_revision_id": revision,

@@ -18,12 +18,14 @@ make_fake_pmai_home() {
   local home="$base/pmai"
 
   mkdir -p "$home/skills/build" "$home/skills/init-project" "$home/skills/pmai-upgrade" \
-    "$home/skills/build-close" "$home/skills/publish-to-lark" "$home/skills/_shared"
+    "$home/skills/build-close" "$home/skills/publish-to-lark" "$home/skills/status" \
+    "$home/skills/_shared"
   printf "# Build\n" > "$home/skills/build/SKILL.md"
   printf "# Init\n" > "$home/skills/init-project/SKILL.md"
   printf "# Upgrade\n" > "$home/skills/pmai-upgrade/SKILL.md"
   printf "# Close\n" > "$home/skills/build-close/SKILL.md"
   printf "# Publish\n" > "$home/skills/publish-to-lark/SKILL.md"
+  printf "# Status\n" > "$home/skills/status/SKILL.md"
   printf "%s\n" "$home"
 }
 
@@ -71,9 +73,31 @@ test_global_opencode_commands_are_thin_routes() {
     rm -rf "$base"
     return
   fi
-  if [ -e "$opencode_dir/commands/pmai-build-close.md" ] \
-     || [ -e "$opencode_dir/commands/pmai-publish-to-lark.md" ]; then
-    _fail "internal recovery/execution workflows should not become OpenCode commands"
+  local close_cmd publish_cmd status_cmd
+  close_cmd="$opencode_dir/commands/pmai-build-close.md"
+  publish_cmd="$opencode_dir/commands/pmai-publish-to-lark.md"
+  status_cmd="$opencode_dir/commands/pmai-status.md"
+  assert_file_exists "$close_cmd" "build-close compatibility entry should remain invocable" || { rm -rf "$base"; return; }
+  assert_file_exists "$publish_cmd" "publish-to-lark manual entry should remain invocable" || { rm -rf "$base"; return; }
+  assert_file_contains "$close_cmd" '$PMAI_HOME/skills/build-close/SKILL.md' "build-close command should route to its skill" || { rm -rf "$base"; return; }
+  assert_file_contains "$publish_cmd" '$PMAI_HOME/skills/publish-to-lark/SKILL.md' "publish command should route to its skill" || { rm -rf "$base"; return; }
+  assert_file_contains "$status_cmd" 'PMAI_PREAMBLE_READ_ONLY=1' "status preamble must stay read-only" || { rm -rf "$base"; return; }
+  if grep -q 'PMAI_PREAMBLE_READ_ONLY=1' "$cmd"; then
+    _fail "non-status OpenCode commands should keep the existing preamble mode"
+    rm -rf "$base"
+    return
+  fi
+  if ! python3 - "$close_cmd" "$publish_cmd" "$status_cmd" <<'PY'
+import sys
+from pathlib import Path
+
+for value in sys.argv[1:]:
+    text = Path(value).read_text(encoding="utf-8")
+    parts = text.split("---", 2)
+    assert len(parts) == 3 and "description:" in parts[1], value
+PY
+  then
+    _fail "manual/status OpenCode command frontmatter should be parseable"
     rm -rf "$base"
     return
   fi
@@ -87,8 +111,109 @@ test_global_opencode_commands_are_thin_routes() {
   pass_test
 }
 
+test_global_opencode_check_detects_and_repairs_drift() {
+  start_test "T3: 全局 OpenCode command 漂移可检查并由重装逐字修复"
+
+  local base pmai_home opencode_dir cmd expected
+  base=$(mktemp -d)
+  pmai_home=$(make_fake_pmai_home "$base")
+  opencode_dir="$base/opencode"
+  cmd="$opencode_dir/commands/pmai-build.md"
+  expected="$base/pmai-build.expected.md"
+
+  if ! PMAI_HOME="$pmai_home" OPENCODE_CONFIG_DIR="$opencode_dir" bash "$INSTALL_OPENCODE" --global \
+       >"$base/install.out" 2>&1; then
+    _fail "drift fixture 的全局 OpenCode command 安装失败"
+    cat "$base/install.out" >&2
+    rm -rf "$base"
+    return
+  fi
+  cp "$cmd" "$expected" || {
+    _fail "无法保存未篡改的 OpenCode command 基线"
+    rm -rf "$base"
+    return
+  }
+  printf "\n篡改内容\n" >> "$cmd"
+
+  if PMAI_HOME="$pmai_home" OPENCODE_CONFIG_DIR="$opencode_dir" bash "$INSTALL_OPENCODE" --global --check \
+       >"$base/check-drift.out" 2>&1; then
+    _fail "被篡改的全局 OpenCode command 应使 --check 非零"
+    rm -rf "$base"
+    return
+  fi
+
+  if ! PMAI_HOME="$pmai_home" OPENCODE_CONFIG_DIR="$opencode_dir" bash "$INSTALL_OPENCODE" --global \
+       >"$base/reinstall.out" 2>&1; then
+    _fail "重装全局 OpenCode command 应修复漂移"
+    cat "$base/reinstall.out" >&2
+    rm -rf "$base"
+    return
+  fi
+  if ! cmp -s "$expected" "$cmd"; then
+    _fail "重装后全局 OpenCode command 必须与渲染基线逐字一致"
+    rm -rf "$base"
+    return
+  fi
+  if ! PMAI_HOME="$pmai_home" OPENCODE_CONFIG_DIR="$opencode_dir" bash "$INSTALL_OPENCODE" --global --check \
+       >"$base/check-restored.out" 2>&1; then
+    _fail "重装修复后全局 OpenCode command 应通过 --check"
+    cat "$base/check-restored.out" >&2
+    rm -rf "$base"
+    return
+  fi
+
+  rm -rf "$base"
+  pass_test
+}
+
+test_global_opencode_install_rejects_file_paths() {
+  start_test "T4: 全局 OpenCode 目录或 commands 为普通文件时安装失败且不报成功"
+
+  local base pmai_home config_file commands_root output rc
+  base=$(mktemp -d)
+  pmai_home=$(make_fake_pmai_home "$base")
+
+  config_file="$base/.opencode"
+  printf "not a directory\n" > "$config_file"
+  output="$base/config-file.out"
+  PMAI_HOME="$pmai_home" OPENCODE_CONFIG_DIR="$config_file" bash "$INSTALL_OPENCODE" --global \
+    >"$output" 2>&1
+  rc=$?
+  if [ "$rc" -eq 0 ]; then
+    _fail "OPENCODE_CONFIG_DIR 是普通文件时安装必须失败"
+    rm -rf "$base"
+    return
+  fi
+  if grep -Fq "installed " "$output"; then
+    _fail "OPENCODE_CONFIG_DIR 是普通文件时不能报告安装成功"
+    rm -rf "$base"
+    return
+  fi
+
+  commands_root="$base/opencode"
+  mkdir -p "$commands_root"
+  printf "not a directory\n" > "$commands_root/commands"
+  output="$base/commands-file.out"
+  PMAI_HOME="$pmai_home" OPENCODE_CONFIG_DIR="$commands_root" bash "$INSTALL_OPENCODE" --global \
+    >"$output" 2>&1
+  rc=$?
+  if [ "$rc" -eq 0 ]; then
+    _fail "commands 是普通文件时安装必须失败"
+    rm -rf "$base"
+    return
+  fi
+  if grep -Fq "installed " "$output"; then
+    _fail "commands 是普通文件时不能报告安装成功"
+    rm -rf "$base"
+    return
+  fi
+
+  rm -rf "$base"
+  pass_test
+}
+
 test_project_opencode_config_is_lightweight() {
-  start_test "T3: 项目级 OpenCode 配置轻量且不复制 framework 源资产"
+  start_test "T5: 项目级 OpenCode 配置轻量且不复制 framework 源资产"
 
   local base pmai_home project cmd
   base=$(mktemp -d)
@@ -133,7 +258,7 @@ test_project_opencode_config_is_lightweight() {
 }
 
 test_cli_scripts_reference_opencode_commands() {
-  start_test "T4: CLI install/upgrade/uninstall/status/doctor 接入 OpenCode commands"
+  start_test "T6: CLI install/upgrade/uninstall/status/doctor 接入 OpenCode commands"
 
   assert_file_contains "$REPO_ROOT/bin/pmai-install" "install-opencode-commands.sh" "install should generate OpenCode commands" || return
   assert_file_contains "$REPO_ROOT/bin/pmai-upgrade" "install-opencode-commands.sh" "upgrade should refresh OpenCode commands" || return
@@ -145,7 +270,7 @@ test_cli_scripts_reference_opencode_commands() {
 }
 
 test_template_and_scripts_do_not_add_cursor() {
-  start_test "T5: 本轮不生成 Cursor 配置"
+  start_test "T7: 本轮不生成 Cursor 配置"
 
   if grep -q -- ".cursor" "$INSTALL_OPENCODE" "$INIT_PROJECT_SH" "$AGENTS_TMPL"; then
     _fail "OpenCode-only implementation should not generate Cursor config"
@@ -156,6 +281,8 @@ test_template_and_scripts_do_not_add_cursor() {
 
 test_template_declares_opencode_entry
 test_global_opencode_commands_are_thin_routes
+test_global_opencode_check_detects_and_repairs_drift
+test_global_opencode_install_rejects_file_paths
 test_project_opencode_config_is_lightweight
 test_cli_scripts_reference_opencode_commands
 test_template_and_scripts_do_not_add_cursor

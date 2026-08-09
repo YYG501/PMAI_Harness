@@ -39,12 +39,12 @@ timeout = 10
 [[hooks]]
 event = "UserPromptSubmit"
 command = "bash \\"${{PMAI_HOME:-$HOME/.pmai}}/scripts/kimi-hook-dispatch.sh\\" prompt-review"
-timeout = 5
+timeout = 8
 
 [[hooks]]
 event = "UserPromptSubmit"
 command = "bash \\"${{PMAI_HOME:-$HOME/.pmai}}/scripts/kimi-hook-dispatch.sh\\" prompt-build"
-timeout = 5
+timeout = 8
 {END_MARKER}
 '''
 

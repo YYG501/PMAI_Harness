@@ -11,7 +11,9 @@ description: |
 执行本 skill 前先运行：
 
 ```bash
+PMAI_PREAMBLE_READ_ONLY=1
 source "${PMAI_HOME:-$HOME/.pmai}/scripts/skill-preamble.sh"
+unset PMAI_PREAMBLE_READ_ONLY
 ```
 
 如果输出 `PMAI_PROJECT_INITIALIZED: 0`，本 skill 只报告未初始化并引导 PM 先发 `/pmai-init-project`，不要继续读取不存在的 PMAI 项目文档。
@@ -27,7 +29,9 @@ source "${PMAI_HOME:-$HOME/.pmai}/scripts/skill-preamble.sh"
 ## Preamble
 
 ```bash
+PMAI_PREAMBLE_READ_ONLY=1
 source "${PMAI_HOME:-$HOME/.pmai}/scripts/skill-preamble.sh"
+unset PMAI_PREAMBLE_READ_ONLY
 echo "SKILL: status"
 ```
 

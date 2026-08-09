@@ -4,6 +4,7 @@ set -uo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 source "$SCRIPT_DIR/helpers/assert.sh"
 RUNNER="$SCRIPT_DIR/run-suite.py"
+EVAL_SUMMARY="$SCRIPT_DIR/parse-skill-eval-summary.py"
 
 run_fixture() {
   local body="$1"
@@ -90,6 +91,29 @@ test_rejects_inconsistent_exit_code() {
   cleanup_fixture
 }
 
+test_skill_eval_summary_rejects_fake_green() {
+  start_test "run-all: skill eval reported failures cannot exit zero"
+  if printf '%s\n' 'SUMMARY passed=5 failed=1 skipped=0 judge_skipped=0' \
+    | python3 "$EVAL_SUMMARY" --exit-code 0 >/tmp/run-suite.$$ 2>/tmp/run-suite.err.$$; then
+    _fail "skill eval fake green should fail"
+  elif grep -q "SUMMARY 与退出码矛盾" /tmp/run-suite.err.$$; then
+    pass_test
+  else
+    _fail "skill eval fake-green guidance mismatch"
+  fi
+  cleanup_fixture
+}
+
+test_skill_eval_summary_accepts_reported_failure() {
+  start_test "run-all: skill eval failure summary matches non-zero exit"
+  if [ "$(printf '%s\n' 'SUMMARY passed=5 failed=1 skipped=2 judge_skipped=0' \
+    | python3 "$EVAL_SUMMARY" --exit-code 1)" = "5 1 2 0" ]; then
+    pass_test
+  else
+    _fail "consistent skill eval failure should parse"
+  fi
+}
+
 test_times_out_process_group() {
   start_test "run-suite: suite timeout is explicit"
   if run_fixture $'sleep 2\necho "Passed: 1"\necho "Failed: 0"' 0.1; then
@@ -114,5 +138,7 @@ test_rejects_missing_summary
 test_rejects_duplicate_summary
 test_rejects_zero_cases
 test_rejects_inconsistent_exit_code
+test_skill_eval_summary_rejects_fake_green
+test_skill_eval_summary_accepts_reported_failure
 test_times_out_process_group
 report_results "run-suite"

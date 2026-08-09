@@ -26,7 +26,7 @@ OPENCODE_COMMANDS="$OPENCODE_CONFIG_DIR/commands"
 SKILL_PREFIX="pmai-"
 BIN_DIR="$(cd "$(dirname "$0")" && pwd)"
 CLI_ROOT="$(cd "$BIN_DIR/.." && pwd)"
-source "$CLI_ROOT/scripts/_lib/skill-links.sh"
+ORIGINAL_ARGS=("$@")
 
 EXIT_CODE=0
 PASS_COUNT=0
@@ -55,21 +55,70 @@ ok()   { echo "  ✅ $*"; PASS_COUNT=$((PASS_COUNT + 1)); }
 warn() { echo "  ⚠️  $*"; WARN_COUNT=$((WARN_COUNT + 1)); }
 fail() { echo "  ❌ $*"; FAIL_COUNT=$((FAIL_COUNT + 1)); EXIT_CODE=1; }
 
+# Help belongs to the CLI source the PM invoked and must remain available even
+# when the configured install is absent or incomplete. All other arguments are
+# owned by the target doctor when repo-local and installed versions differ.
+for arg in "$@"; do
+  case "$arg" in
+    --help|-h|help) usage; exit 0 ;;
+  esac
+done
+
+if ! source "$CLI_ROOT/scripts/_lib/global-install-lock.sh"; then
+  echo "❌ 无法载入全局安装锁 helper，拒绝执行可能自愈的 doctor。" >&2
+  exit 2
+fi
+pmai_hold_global_install_lock \
+  "$CLI_ROOT" "${BASH_SOURCE[0]}" \
+  ${ORIGINAL_ARGS[@]+"${ORIGINAL_ARGS[@]}"} || exit $?
+
+PMAI_HOME_REAL="$PMAI_HOME"
+CLI_ROOT_REAL="$(cd "$CLI_ROOT" && pwd -P)"
+if [ -d "$PMAI_HOME" ]; then
+  PMAI_HOME_REAL="$(cd "$PMAI_HOME" && pwd -P)"
+fi
+TARGET_DOCTOR="$PMAI_HOME/bin/pmai-doctor"
+if [ "$CLI_ROOT_REAL" != "$PMAI_HOME_REAL" ] && [ -d "$PMAI_HOME" ]; then
+  if [ ! -f "$TARGET_DOCTOR" ] || [ ! -x "$TARGET_DOCTOR" ]; then
+    echo "❌ 目标 PMAI doctor 缺失或不可执行：$TARGET_DOCTOR" >&2
+    exit 2
+  fi
+  # Doctor can repair host exposure. Cross-version repair must be owned by the
+  # installed target so a newer checkout cannot delete entries that are valid
+  # under the installed version (and vice versa).
+  export PMAI_HOME
+  exec "$TARGET_DOCTOR" "$@"
+fi
+
 while [ $# -gt 0 ]; do
   case "$1" in
-    --help|-h|help) usage; exit 0 ;;
     --browser-smoke) BROWSER_SMOKE=1 ;;
     *) echo "❌ unknown flag: $1" >&2; usage >&2; exit 2 ;;
   esac
   shift
 done
 
+if ! source "$CLI_ROOT/scripts/_lib/skill-links.sh"; then
+  echo "❌ 无法载入 skill 入口策略，拒绝继续 doctor。" >&2
+  exit 2
+fi
+
+# stock macOS 没有 GNU timeout。优先使用 Homebrew 的 gtimeout；两者都
+# 不存在时直接执行，与 upgrader 的兼容语义保持一致。
+if ! command -v timeout >/dev/null 2>&1; then
+  if command -v gtimeout >/dev/null 2>&1; then
+    timeout() { gtimeout "$@"; }
+  else
+    timeout() { shift; "$@"; }
+  fi
+fi
+
 echo "════════════════════════════════════════════════════════════"
 echo "  PMAI Doctor — integrity self-check"
 echo "════════════════════════════════════════════════════════════"
 echo "  CLI source:   $CLI_ROOT"
 echo "  Audit target: $PMAI_HOME"
-if [ "$CLI_ROOT" != "$PMAI_HOME" ] && [ -x "$PMAI_HOME/bin/pmai" ]; then
+if [ "$CLI_ROOT_REAL" != "$PMAI_HOME_REAL" ] && [ -x "$PMAI_HOME/bin/pmai" ]; then
   echo "  Note: repo-local CLI is validating the installed PMAI_HOME."
   echo "        To test the installed user-facing CLI, run: $PMAI_HOME/bin/pmai doctor"
 fi
@@ -136,6 +185,20 @@ expected_exposed_skill_names() {
   done | sort -u
 }
 
+expected_skill_link_entries() {
+  local sk exposed_name
+
+  for sk in "${EXPECTED_SKILLS[@]}"; do
+    pmai_skill_is_host_exposed "$sk" || continue
+    case "$sk" in
+      pmai-*) exposed_name="$sk" ;;
+      *) exposed_name="${SKILL_PREFIX}${sk}" ;;
+    esac
+    printf '%s\t%s\n' "$exposed_name" "$PMAI_HOME/skills/$sk"
+  done
+  printf '_shared\t%s\n' "$PMAI_HOME/skills/_shared"
+}
+
 actual_exposed_skill_names() {
   local exposure_dir="$1"
   local s
@@ -177,11 +240,16 @@ repair_opencode_commands() {
 
   if PMAI_HOME="$PMAI_HOME" OPENCODE_CONFIG_DIR="$OPENCODE_CONFIG_DIR" \
     bash "$PMAI_HOME/scripts/install-opencode-commands.sh" --global >/dev/null 2>&1; then
-    ok "OpenCode slash commands repaired"
     return 0
   fi
 
   return 1
+}
+
+opencode_commands_match() {
+  PMAI_HOME="$PMAI_HOME" OPENCODE_CONFIG_DIR="$OPENCODE_CONFIG_DIR" \
+    bash "$PMAI_HOME/scripts/install-opencode-commands.sh" \
+      --global --check >/dev/null 2>&1
 }
 
 repair_empty_exposure_dir() {
@@ -225,8 +293,9 @@ check_skill_exposure_dir() {
   local label="$1"
   local exposure_dir="$2"
   local display_path="$3"
-  local s count stale_exposed missing_exposed retired_count
-  local dangling=()
+  local s count stale_exposed retired_count entry_count
+  local expected_name expected_target path actual_target
+  local invalid=()
 
   echo ""
   echo "─── 4. Skill symlinks ($label: ${display_path}/${SKILL_PREFIX}*) ───"
@@ -237,83 +306,73 @@ check_skill_exposure_dir() {
   else
     fail "$label could not remove retired PMAI-managed hidden skill links"
   fi
-  count=0
+  entry_count=0
   for s in "$exposure_dir"/${SKILL_PREFIX}* "$exposure_dir/_shared"; do
     [ -e "$s" ] || [ -L "$s" ] || continue
-    if [ -L "$s" ]; then
-      if [ ! -e "$s" ]; then
-        dangling+=("$s")
-      fi
-      count=$((count + 1))
-    fi
+    entry_count=$((entry_count + 1))
   done
-  if [ "$count" = "0" ]; then
+  if [ "$entry_count" = "0" ]; then
     if repair_empty_exposure_dir "$label" "$exposure_dir"; then
-      dangling=()
-      count=0
-      for s in "$exposure_dir"/${SKILL_PREFIX}* "$exposure_dir/_shared"; do
-        [ -e "$s" ] || [ -L "$s" ] || continue
-        if [ -L "$s" ]; then
-          if [ ! -e "$s" ]; then
-            dangling+=("$s")
-          fi
-          count=$((count + 1))
-        fi
-      done
+      entry_count=1
     fi
   fi
-  if [ "$count" = "0" ]; then
+  if [ "$entry_count" = "0" ]; then
     fail "No skill symlinks found (${display_path}/${SKILL_PREFIX}*). 跑 pmai install 或 pmai upgrade。"
-  elif [ ${#dangling[@]} -gt 0 ]; then
-    fail "Dangling symlinks: ${dangling[*]} (~/.pmai/ 可能被损坏；建议 pmai uninstall && pmai install)"
-  else
-    ok "$count skill symlink(s) all resolve"
+    return
   fi
 
-  if [ "$count" != "0" ]; then
-    stale_exposed=$(comm -23 <(actual_exposed_skill_names "$exposure_dir") <(expected_exposed_skill_names) || true)
-    missing_exposed=$(comm -13 <(actual_exposed_skill_names "$exposure_dir") <(expected_exposed_skill_names) || true)
-    if [ -n "$stale_exposed" ]; then
-      fail "$label stale exposed skill symlink(s): $(echo "$stale_exposed" | tr '\n' ' ') — run pmai upgrade to resync"
+  count=0
+  while IFS=$'\t' read -r expected_name expected_target; do
+    path="$exposure_dir/$expected_name"
+    if [ ! -L "$path" ]; then
+      if [ -e "$path" ]; then
+        invalid+=("$expected_name:not-symlink")
+      else
+        invalid+=("$expected_name:missing")
+      fi
+      continue
     fi
-    if [ -n "$missing_exposed" ]; then
-      fail "$label missing exposed skill symlink(s): $(echo "$missing_exposed" | tr '\n' ' ') — run pmai upgrade to resync"
+    actual_target=$(readlink "$path")
+    if [ "$actual_target" != "$expected_target" ]; then
+      invalid+=("$expected_name:wrong-target")
+    elif [ ! -e "$path" ]; then
+      invalid+=("$expected_name:dangling")
+    else
+      count=$((count + 1))
     fi
-    if [ -z "$stale_exposed" ] && [ -z "$missing_exposed" ] && [ ${#dangling[@]} -eq 0 ]; then
-      ok "$label $(expected_exposed_skill_names | wc -l | tr -d ' ') exposed skill name(s) match current skills"
-    fi
+  done < <(expected_skill_link_entries)
+
+  stale_exposed=$(comm -23 <(actual_exposed_skill_names "$exposure_dir") <(expected_exposed_skill_names) || true)
+  if [ -n "$stale_exposed" ]; then
+    fail "$label stale exposed skill entry(s): $(echo "$stale_exposed" | tr '\n' ' ') — run pmai upgrade to resync"
+  fi
+  if [ ${#invalid[@]} -gt 0 ]; then
+    fail "$label invalid skill entry(s): ${invalid[*]} — expected exact symlinks into $PMAI_HOME/skills"
+  fi
+  if [ -z "$stale_exposed" ] && [ ${#invalid[@]} -eq 0 ]; then
+    ok "$label $count skill symlink(s) exactly match current PMAI sources"
   fi
 }
 
 check_opencode_command_dir() {
   local command_dir="$1"
   local display_path="$2"
-  local count stale_commands missing_commands
+  local count
 
   echo ""
   echo "─── 4b. OpenCode slash commands (${display_path}/${SKILL_PREFIX}*.md) ───"
   count=$(count_opencode_commands "$command_dir")
 
-  stale_commands=$(comm -23 <(actual_opencode_command_names "$command_dir") <(expected_opencode_command_names) || true)
-  missing_commands=$(comm -13 <(actual_opencode_command_names "$command_dir") <(expected_opencode_command_names) || true)
-
-  if [ "$count" = "0" ] || [ -n "$missing_commands" ]; then
-    if repair_opencode_commands; then
-      count=$(count_opencode_commands "$command_dir")
-      stale_commands=$(comm -23 <(actual_opencode_command_names "$command_dir") <(expected_opencode_command_names) || true)
-      missing_commands=$(comm -13 <(actual_opencode_command_names "$command_dir") <(expected_opencode_command_names) || true)
-    fi
+  if opencode_commands_match; then
+    ok "OpenCode $count slash command file(s) exactly match current PMAI render"
+    return
   fi
-
-  if [ "$count" = "0" ]; then
-    fail "No OpenCode slash commands found (${display_path}/${SKILL_PREFIX}*.md). 跑 pmai install 或 pmai upgrade。"
-  elif [ -n "$stale_commands" ]; then
-    fail "OpenCode stale slash command file(s): $(echo "$stale_commands" | tr '\n' ' ') — run pmai upgrade to resync"
-  elif [ -n "$missing_commands" ]; then
-    fail "OpenCode missing slash command file(s): $(echo "$missing_commands" | tr '\n' ' ') — run pmai upgrade to resync"
-  else
-    ok "OpenCode $(expected_opencode_command_names | wc -l | tr -d ' ') slash command file(s) match current skills"
+  if repair_opencode_commands && opencode_commands_match; then
+    count=$(count_opencode_commands "$command_dir")
+    ok "OpenCode slash commands repaired and verified ($count file(s))"
+    return
   fi
+  fail "OpenCode slash commands are missing, stale, modified, or unreadable (${display_path}/${SKILL_PREFIX}*.md)"
 }
 
 check_opencode_cli() {
@@ -375,10 +434,21 @@ check_kimi_host() {
     ok "Kimi Code PMAI-managed hooks match current framework"
     return
   fi
-  if [ "$manager_rc" = "1" ] && \
-    KIMI_CODE_HOME="$KIMI_CODE_HOME" python3 "$PMAI_HOME/scripts/manage-kimi-hooks.py" install --config "$KIMI_CONFIG" >/dev/null 2>&1; then
-    ok "Kimi Code PMAI-managed hooks repaired"
-    return
+  if [ "$manager_rc" = "1" ]; then
+    if KIMI_CODE_HOME="$KIMI_CODE_HOME" \
+      python3 "$PMAI_HOME/scripts/manage-kimi-hooks.py" \
+      install --config "$KIMI_CONFIG" >/dev/null 2>&1; then
+      manager_out=$(KIMI_CODE_HOME="$KIMI_CODE_HOME" \
+        python3 "$PMAI_HOME/scripts/manage-kimi-hooks.py" \
+        check --config "$KIMI_CONFIG" 2>&1)
+      manager_rc=$?
+      if [ "$manager_rc" = "0" ]; then
+        ok "Kimi Code PMAI-managed hooks repaired"
+        return
+      fi
+      fail "Kimi Code hooks 修复后校验仍未通过：$manager_out"
+      return
+    fi
   fi
   fail "Kimi Code hooks 未就绪：$manager_out"
 }

@@ -46,7 +46,11 @@ EOF
 EOF
   cat > "$T/docs/modules/access/discussion.md" <<'EOF'
 # 讨论
-- 待确认：用户详情页是否展示授权记录？
+## 历史讨论
+- 待确认：历史版本是否展示授权记录？
+## 未决问题
+### Q1: 用户详情页是否展示授权记录？
+**PM 回答：**
 EOF
   echo '# 当前规格' > "$T/docs/modules/access/spec.md"
   python3 "$PROJECT_DEFINITION" write "$T" \
@@ -80,7 +84,9 @@ assert data["target"]["kind"] == "prototype"
 assert any(item["title"].startswith("D1") for item in data["decisions"]["active"])
 assert any(item["title"].startswith("D2") for item in data["decisions"]["question_like_rejected"])
 assert any(item["status"] == "superseded" for item in data["decisions"]["superseded"])
-assert data["unresolved_questions"]
+assert [(item["line"], item["text"]) for item in data["unresolved_questions"]] == [
+    (5, "### Q1: 用户详情页是否展示授权记录？")
+]
 assert "prototype/src/pages/access-role.tsx" in data["relevant_implementation_paths"]
 assert data["source_hash"]
 PY
@@ -155,6 +161,293 @@ EOF
   teardown_fixture
 }
 
+test_context_pack_rejects_quoted_or_qualified_no_open_claims() {
+  start_test "context-pack: 否定、转述和附带未决项不冒充无未决声明"
+  setup_fixture
+  cat > "$T/docs/modules/access/discussion.md" <<'EOF'
+# 讨论
+
+## 未决问题
+
+- 并非本轮工作无未决问题。
+- 会议纪要写着“本轮工作无未决问题”。
+- 本轮工作无未决问题，但退款规则仍待确认。
+EOF
+  local out
+  out=$(python3 "$CONTEXT_PACK" --repo-root "$T" --module access 2>&1) || {
+    _fail "context pack should compile qualified statements"
+    teardown_fixture
+    return
+  }
+  if python3 -c '
+import json, sys
+data = json.load(sys.stdin)
+actual = [(item["line"], item["text"]) for item in data["unresolved_questions"]]
+assert actual == [
+    (5, "- 并非本轮工作无未决问题。"),
+    (6, "- 会议纪要写着“本轮工作无未决问题”。"),
+    (7, "- 本轮工作无未决问题，但退款规则仍待确认。"),
+], actual
+' <<<"$out"; then
+    pass_test
+  else
+    _fail "qualified statements were incorrectly suppressed: $out"
+  fi
+  teardown_fixture
+}
+
+test_context_pack_only_reports_unanswered_current_questions() {
+  start_test "context-pack: 只报告当前 section 内未回答的结构化问题"
+  setup_fixture
+  cat > "$T/docs/modules/access/discussion.md" <<'EOF'
+# 讨论
+
+## 未决问题
+
+### Q0: 历史遗留问题
+
+**PM 回答：**
+
+## 历史讨论
+
+- 待确认：这段历史内容不应回流。
+
+## 待确认问题
+
+### Q1: 已回答问题
+
+题干里仍可能写待确认和问号？
+
+**PM 回答：** 采用 A 方案。
+
+### Q2: 缺回答标记
+
+仅有背景说明。
+
+### Q3: 空回答
+
+**PM 回答：**
+EOF
+  local out
+  out=$(python3 "$CONTEXT_PACK" --repo-root "$T" --module access 2>&1) || {
+    _fail "context pack should compile structured open questions"
+    teardown_fixture
+    return
+  }
+  if python3 -c '
+import json, sys
+data = json.load(sys.stdin)
+actual = [(item["line"], item["text"]) for item in data["unresolved_questions"]]
+assert actual == [
+    (21, "### Q2: 缺回答标记"),
+    (25, "### Q3: 空回答"),
+], actual
+' <<<"$out"; then
+    pass_test
+  else
+    _fail "historical or answered questions leaked into unresolved list: $out"
+  fi
+  teardown_fixture
+}
+
+test_context_pack_reports_invalid_open_question_section() {
+  start_test "context-pack: 空壳开放问题 section 保持 unresolved"
+  setup_fixture
+  cat > "$T/docs/modules/access/discussion.md" <<'EOF'
+# 讨论
+
+## 未决问题
+
+这里稍后整理。
+EOF
+  local out
+  out=$(python3 "$CONTEXT_PACK" --repo-root "$T" --module access 2>&1) || {
+    _fail "context pack should compile invalid open-question evidence"
+    teardown_fixture
+    return
+  }
+  if python3 -c '
+import json, sys
+items = json.load(sys.stdin)["unresolved_questions"]
+assert len(items) == 1, items
+assert items[0]["line"] == 3, items
+assert "缺少可验证的问题" in items[0]["text"], items
+' <<<"$out"; then
+    pass_test
+  else
+    _fail "invalid section disappeared from unresolved questions: $out"
+  fi
+  teardown_fixture
+}
+
+test_context_pack_uses_shared_decision_status_semantics() {
+  start_test "context-pack: 与术语检测共用决定状态和分句主语语义"
+  setup_fixture
+  cat > "$T/docs/modules/access/decisions.md" <<'EOF'
+# 决策
+
+## D1 本决定作废但旧版本有效
+本决定已作废，但旧版本仍有效。
+
+## D2 本决定有效但旧版本作废
+本决定仍有效，但旧版本已作废。
+
+## D3 新定名 supersedes D2
+新决定保留。
+
+## D4 当前定名已取代旧决定
+新决定保留。
+
+## D5 旧决定已作废
+旧决定停用。
+
+## D6 当前决定已被取代
+本决定已由 D3 取代。
+
+## D7 已废弃入口的迁移策略
+迁移期保留旧链接跳转。
+
+## D8 已作废订单的审计保留规则
+作废订单继续保留审计记录。
+
+## ~~D9 Current decision~~
+Status: this decision is still valid
+
+## D10 当前决定是否被取代
+尚未确认状态。
+
+## D11 被新规则取代时的迁移流程
+迁移期保留旧链接跳转。
+
+## D12 当前决定
+状态：被 D3 取代时保留审计记录。
+
+## D13 Migration when decision is superseded
+Keep the audit record during migration.
+
+## D14 不再有效入口的迁移策略
+迁移期保留旧链接跳转。
+
+## D15 登录入口继续有效
+为什么还要保留旧入口？
+结论：继续保留登录入口。
+
+## D16 是否统一采用邮箱登录？
+结论：统一采用邮箱登录。
+
+## D17 当前决定是否继续有效？
+状态：仍有效
+
+## D18 当前决定是否继续有效？
+尚未确认。
+
+## D19 当前决定是否继续有效？
+状态：已作废
+
+## D20 登录入口方案
+是否保留旧入口？
+
+## D21 当前决定
+状态：尚未正式作废
+
+## D22 当前决定
+状态：并未真正废弃
+
+## D23 是否继续保留手机号登录
+后续继续讨论。
+
+## D24 登录入口方案
+为什么继续保留旧入口。
+
+## D25 当前决定是否继续有效
+仍需讨论。
+
+## D26 当前决定是否恢复生效
+需要产品和法务进一步讨论。
+
+## D27 是否保留密码登录
+候选方案：
+- 继续保留密码登录
+- 关闭密码登录
+尚未确认。
+
+## D28 是否保留企业登录
+继续保留企业登录。
+不确定。
+
+## D29 是否保留扫码登录
+仍需讨论。
+结论：关闭扫码登录。
+
+## D30 当前决定不得作废
+该规则继续执行。
+
+## ~~D31 旧决定~~
+状态：禁止作废
+EOF
+  local out
+  out=$(python3 "$CONTEXT_PACK" --repo-root "$T" --module access 2>&1) || {
+    _fail "context pack should compile shared decision statuses"
+    teardown_fixture
+    return
+  }
+  if python3 -c '
+import json, sys
+data = json.load(sys.stdin)
+statuses = {
+    item["title"].split(maxsplit=1)[0].strip("~"): item["status"]
+    for group in ("active", "superseded")
+    for item in data["decisions"][group]
+}
+assert statuses["D1"] == "superseded", statuses
+assert statuses["D2"] == "active", statuses
+assert statuses["D3"] == "active", statuses
+assert statuses["D4"] == "active", statuses
+assert statuses["D5"] == "superseded", statuses
+assert statuses["D6"] == "superseded", statuses
+assert statuses["D7"] == "active", statuses
+assert statuses["D8"] == "active", statuses
+assert statuses["D9"] == "active", statuses
+assert statuses["D11"] == "active", statuses
+assert statuses["D12"] == "active", statuses
+assert statuses["D13"] == "active", statuses
+assert statuses["D14"] == "active", statuses
+assert statuses["D15"] == "active", statuses
+assert statuses["D16"] == "active", statuses
+assert statuses["D17"] == "active", statuses
+assert statuses["D19"] == "superseded", statuses
+assert statuses["D21"] == "active", statuses
+assert statuses["D22"] == "active", statuses
+assert statuses["D29"] == "active", statuses
+assert statuses["D30"] == "active", statuses
+assert statuses["D31"] == "superseded", statuses
+rejected = {item["title"].split(maxsplit=1)[0]: item for item in data["decisions"]["question_like_rejected"]}
+assert "D10" in rejected, rejected
+assert "D18" in rejected, rejected
+assert "D20" in rejected, rejected
+assert "D23" in rejected, rejected
+assert "D24" in rejected, rejected
+assert "D25" in rejected, rejected
+assert "D26" in rejected, rejected
+assert "D27" in rejected, rejected
+assert "D28" in rejected, rejected
+assert "D10" not in statuses, statuses
+assert "D18" not in statuses, statuses
+assert "D20" not in statuses, statuses
+assert "D23" not in statuses, statuses
+assert "D24" not in statuses, statuses
+assert "D25" not in statuses, statuses
+assert "D26" not in statuses, statuses
+assert "D27" not in statuses, statuses
+assert "D28" not in statuses, statuses
+' <<<"$out"; then
+    pass_test
+  else
+    _fail "context pack decision statuses diverged: $out"
+  fi
+  teardown_fixture
+}
+
 test_context_pack_lifecycle_state_does_not_drift_approved_source() {
   start_test "context-pack: lifecycle metadata hash is tracked but excluded from approved source hash"
   setup_fixture
@@ -212,6 +505,10 @@ test_context_pack_compiles_authority_and_rejects_questions
 test_context_pack_hash_changes_with_authority_source
 test_context_pack_ignores_resolved_headings_and_non_decision_sections
 test_context_pack_recognizes_current_round_has_no_open_questions
+test_context_pack_rejects_quoted_or_qualified_no_open_claims
+test_context_pack_only_reports_unanswered_current_questions
+test_context_pack_reports_invalid_open_question_section
+test_context_pack_uses_shared_decision_status_semantics
 test_context_pack_lifecycle_state_does_not_drift_approved_source
 test_context_pack_includes_registered_input_evidence
 report_results "context-pack"

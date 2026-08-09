@@ -111,11 +111,13 @@ fi
 
 # --- 3b. 在安全 cwd 后台消费待清理工作环境 ---
 # cancel/land 可能从即将删除的 worktree 发起，因此只排队。后续任意 Skill 从
-# main 启动时在扫描 active work 之前静默清理；失败保留队列，不能中断被 source 的调用方。
+# main/master 启动时在扫描 active work 之前静默清理；失败保留队列，不能中断被 source 的调用方。
+# status / startup 等只读调用设置 PMAI_PREAMBLE_READ_ONLY=1，禁止消费队列或确认标记。
 _PENDING_CLEANUP_FILE="$MAIN_REPO_ROOT/.runs/pending-cleanup.json"
 _PENDING_CLEANUP_SCRIPT="$PMAI_HOME/scripts/cleanup-pending-worktrees.sh"
-if [ "$WORKTREE_TYPE" = "main" ] \
-  && [ "$BRANCH" = "main" ] \
+if [ "${PMAI_PREAMBLE_READ_ONLY:-0}" != "1" ] \
+  && [ "$WORKTREE_TYPE" = "main" ] \
+  && [[ "$BRANCH" = "main" || "$BRANCH" = "master" ]] \
   && [ -f "$_PENDING_CLEANUP_FILE" ] \
   && [ -f "$_PENDING_CLEANUP_SCRIPT" ]; then
   if ! (cd "$MAIN_REPO_ROOT" && bash "$_PENDING_CLEANUP_SCRIPT") >/dev/null 2>&1; then
@@ -219,27 +221,56 @@ if [ -d "$_PENDING_DIR" ]; then
     case "$(basename "$_pf")" in
       .pending-manual-*) continue ;;
     esac
-    _skill_name=$(python3 -c "import json; print(json.load(open('$_pf')).get('skill','unknown'))" 2>/dev/null || echo "unknown")
-    _started=$(python3 -c "import json; print(json.load(open('$_pf')).get('started_at',''))" 2>/dev/null || echo "")
+    # pending 文件属于消费仓输入。路径和值都只通过 argv / JSON 解析，不能拼进
+    # Python 源码；skill 名同时收敛为单行安全标签，避免污染终端输出。
+    _pending_fields=$(python3 - "$_pf" <<'PY' 2>/dev/null || printf 'unknown\n0\n'
+from datetime import datetime, timezone
+import json
+import re
+import sys
+
+try:
+    with open(sys.argv[1], encoding="utf-8") as handle:
+        value = json.load(handle)
+    if not isinstance(value, dict):
+        raise ValueError("pending marker must be an object")
+except (OSError, ValueError, json.JSONDecodeError):
+    value = {}
+
+raw_skill = value.get("skill")
+skill = raw_skill if isinstance(raw_skill, str) else "unknown"
+skill = re.sub(r"[^A-Za-z0-9._-]+", "-", skill).strip("-")[:80] or "unknown"
+
+age = 0
+started_value = value.get("started_at")
+if isinstance(started_value, str) and started_value.strip():
+    try:
+        started = datetime.fromisoformat(started_value.strip().replace("Z", "+00:00"))
+        if started.tzinfo is None:
+            started = started.replace(tzinfo=timezone.utc)
+        age = int((datetime.now(timezone.utc) - started.astimezone(timezone.utc)).total_seconds())
+    except (TypeError, ValueError, OverflowError):
+        age = 0
+
+print(skill)
+print(age)
+PY
+)
+    _skill_name=$(printf '%s\n' "$_pending_fields" | sed -n '1p')
+    _age=$(printf '%s\n' "$_pending_fields" | sed -n '2p')
 
     # 检查是否超过 24 小时
-    if [ -n "$_started" ]; then
-      _age=$(python3 -c "
-from datetime import datetime, timezone
-try:
-    started = datetime.fromisoformat('$_started')
-    age = (datetime.now(timezone.utc) - started.replace(tzinfo=timezone.utc)).total_seconds()
-    print(int(age))
-except: print(0)
-" 2>/dev/null || echo "0")
-      if [ "$_age" -gt 86400 ] 2>/dev/null; then
+    if [ "${_age:-0}" -gt 86400 ] 2>/dev/null; then
+      if [ "${PMAI_PREAMBLE_READ_ONLY:-0}" != "1" ]; then
         rm -f "$_pf"
-        continue
       fi
+      continue
     fi
 
     echo "⚠️ 检测到上次 /$_skill_name 执行中断。运行 /pmai-status 查看当前状态。"
-    rm -f "$_pf"
+    if [ "${PMAI_PREAMBLE_READ_ONLY:-0}" != "1" ]; then
+      rm -f "$_pf"
+    fi
   done
 fi
 

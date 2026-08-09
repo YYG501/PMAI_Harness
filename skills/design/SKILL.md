@@ -260,7 +260,8 @@ python3 "$PMAI_HOME/scripts/project-definition.py" write "$REPO_ROOT" \
 参考命令：
 
 ```bash
-python3 "$PMAI_HOME/scripts/check-open-questions.py" "$MODULE_DIR/discussion.md"
+python3 "$PMAI_HOME/scripts/check-open-questions.py" \
+  "$MODULE_DIR/discussion.md" --require-section
 
 python3 "$PMAI_HOME/scripts/context-pack.py" \
   --repo-root "$REPO_ROOT" --module "$MODULE_DIR" \

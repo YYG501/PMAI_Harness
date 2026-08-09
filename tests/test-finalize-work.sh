@@ -11,6 +11,7 @@ PROJECT="$FRAMEWORK_ROOT/scripts/project-definition.py"
 TIMING="$FRAMEWORK_ROOT/scripts/build-timing.py"
 DOC_IMPACT="$FRAMEWORK_ROOT/scripts/doc-impact.py"
 FINAL_VALIDATION="$FRAMEWORK_ROOT/scripts/final-validation.py"
+CLEANUP="$FRAMEWORK_ROOT/scripts/cleanup-pending-worktrees.sh"
 
 setup_fixture() {
   local build_command="$1"
@@ -68,6 +69,32 @@ JSON
 
 teardown_fixture() { rm -rf "$T"; }
 
+assert_active_cleanup_queue() {
+  local queue="$1"
+  local expected_worktree="$2"
+  local branch_oid
+  branch_oid=$(git -C "$T" rev-parse refs/heads/build-demo) || return 1
+  git -C "$T" merge-base --is-ancestor "$branch_oid" refs/heads/main || return 1
+  python3 - "$queue" "$expected_worktree" "$branch_oid" <<'PY'
+import json
+import os
+import sys
+
+queue, expected_worktree, branch_oid = sys.argv[1:]
+entries = json.load(open(queue, encoding="utf-8"))
+assert len(entries) == 1, entries
+entry = entries[0]
+assert entry["kind"] == "work", entry
+assert entry["branch"] == "build-demo", entry
+assert entry["phase"] == "active", entry
+assert entry["worktree"] == os.path.realpath(expected_worktree), entry
+assert entry["integration_ref"] == "refs/heads/main", entry
+assert entry["branch_oid"] == branch_oid, entry
+assert entry["activation"] == "main_meta_landed", entry
+assert entry["module_meta"] == "docs/modules/demo/.work-meta.json", entry
+PY
+}
+
 setup_worktree_fixture() {
   T=$(mktemp -d "${TMPDIR:-/tmp}/pmai-finalize-worktree.XXXXXX")
   MAIN_MODULE="$T/docs/modules/demo"
@@ -83,7 +110,7 @@ setup_worktree_fixture() {
   printf '# Discussion\n' > "$MAIN_MODULE/discussion.md"
   printf '{}\n' > "$T/prototypes/package.json"
   printf 'export const demo = true\n' > "$T/prototypes/src/index.ts"
-  printf '.worktrees/\n.pm-workflow/context/\n' > "$T/.gitignore"
+  printf '.worktrees/\n.pm-workflow/context/\n.runs/\n' > "$T/.gitignore"
   cat > "$MAIN_MODULE/.work-meta.json" <<'JSON'
 {"id":"work-demo","name":"demo","status":"active","lifecycle_state":"designing"}
 JSON
@@ -372,11 +399,28 @@ test_worktree_finalize_lands_and_resumes_docs_to_complete() {
     teardown_fixture; return
   fi
   MAP="$T/.pm-workflow/audits/demo/doc-impact.json"
-  if [ -d "$WT" ] || [ ! -f "$MAIN_MODULE/.work-meta.json" ] || [ ! -f "$MAP" ]; then
-    _fail "landing should remove the worktree and preserve documenting state on main"
+  QUEUE="$T/.runs/pending-cleanup.json"
+  if [ ! -d "$WT" ] \
+    || ! git -C "$T" show-ref --verify --quiet refs/heads/build-demo \
+    || [ ! -f "$MAIN_MODULE/.work-meta.json" ] \
+    || [ ! -f "$MAP" ]; then
+    _fail "landing should preserve the queued isolation environment and documenting state"
+    teardown_fixture; return
+  elif ! assert_active_cleanup_queue "$QUEUE" "$WT"; then
+    _fail "landing should persist one active cleanup record bound to main and the branch OID"
     teardown_fixture; return
   elif ! grep -Eq '^FINALIZE_RESUME_MODULE=.*/docs/modules/demo$' /tmp/finalize-work.$$; then
     _fail "runner should publish the deterministic main-module resume cursor"
+    teardown_fixture; return
+  elif ! (cd "$T" && bash "$CLEANUP") \
+    >/tmp/finalize-cleanup.$$ 2>/tmp/finalize-cleanup.err.$$; then
+    _fail "queued isolation cleanup should succeed from the main repository"
+    cat /tmp/finalize-cleanup.$$ /tmp/finalize-cleanup.err.$$ >&2
+    teardown_fixture; return
+  elif [ -d "$WT" ] \
+    || git -C "$T" show-ref --verify --quiet refs/heads/build-demo \
+    || [ -f "$QUEUE" ]; then
+    _fail "safe cleanup should remove the exact worktree, branch, and queue entry"
     teardown_fixture; return
   fi
   ITEM=$(python3 - "$MAP" <<'PY'
@@ -413,7 +457,8 @@ PY
   else
     pass_test
   fi
-  rm -f /tmp/finalize-work.$$ /tmp/finalize-work.err.$$
+  rm -f /tmp/finalize-work.$$ /tmp/finalize-work.err.$$ \
+    /tmp/finalize-cleanup.$$ /tmp/finalize-cleanup.err.$$
   teardown_fixture
 }
 
@@ -434,8 +479,12 @@ test_legacy_v4_final_check_without_runner_audit_lands() {
     >/tmp/finalize-work.$$ 2>/tmp/finalize-work.err.$$; then
     _fail "legacy final_check should land without a runner-state migration"
     cat /tmp/finalize-work.err.$$ >&2
-  elif [ -d "$WT" ] || [ ! -f "$MAIN_MODULE/.work-meta.json" ]; then
-    _fail "legacy final_check should merge once and resume on the main module"
+  elif [ ! -d "$WT" ] \
+    || ! git -C "$T" show-ref --verify --quiet refs/heads/build-demo \
+    || [ ! -f "$MAIN_MODULE/.work-meta.json" ]; then
+    _fail "legacy final_check should merge once and queue its isolation environment"
+  elif ! assert_active_cleanup_queue "$T/.runs/pending-cleanup.json" "$WT"; then
+    _fail "legacy landing should persist one active cleanup record with stable identity"
   elif [ -f "$T/.pm-workflow/audits/demo/finalize-run.json" ]; then
     _fail "legacy recovery must not synthesize a new runner marker"
   elif ! python3 - "$MAIN_MODULE/.work-meta.json" \
@@ -451,10 +500,19 @@ assert any(item["phase"] == "landing" and item["status"] == "pass" for item in e
 PY
   then
     _fail "legacy recovery should preserve v4 fields and skip new timing requirements"
+  elif ! (cd "$T" && bash "$CLEANUP") \
+    >/tmp/finalize-cleanup.$$ 2>/tmp/finalize-cleanup.err.$$; then
+    _fail "legacy queued cleanup should succeed from the main repository"
+    cat /tmp/finalize-cleanup.$$ /tmp/finalize-cleanup.err.$$ >&2
+  elif [ -d "$WT" ] \
+    || git -C "$T" show-ref --verify --quiet refs/heads/build-demo \
+    || [ -f "$T/.runs/pending-cleanup.json" ]; then
+    _fail "legacy cleanup should remove the exact worktree, branch, and queue entry"
   else
     pass_test
   fi
-  rm -f /tmp/finalize-work.$$ /tmp/finalize-work.err.$$
+  rm -f /tmp/finalize-work.$$ /tmp/finalize-work.err.$$ \
+    /tmp/finalize-cleanup.$$ /tmp/finalize-cleanup.err.$$
   teardown_fixture
 }
 

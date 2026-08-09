@@ -20,7 +20,7 @@ runner 按 v4 lifecycle 续跑并自动完成 currentness、隔离命令验证�
 
 返回码 `3` 表示机械项已完成，但仍缺当前主控必须语义判断的检查，例如 `prototype-boundary / coverage / scope-coverage / migration / security`。runner 会保持一个 running `semantic-validation` 计时；按现有专用脚本或规格对账完成并 `record-evidence` 后，原命令重跑即可从准确位置继续且不重复 currentness。实现/source 变化或 PM 新反馈会把该次语义阶段记为失败并重置正常路径。不得把语义检查伪造成 runner 自动通过。
 
-runner 在 `final_check` 只提交当前模块 `.work-meta.json` 和对应 audit 目录，再进入 landing，其他 staged 路径会立即阻断。worktree 成功合入并删除后会输出 `FINALIZE_RESUME_MODULE=<main 模块路径>`；完成文档地图后用该 main 路径重跑，不能继续引用已经删除的 worktree 路径。
+runner 在 `final_check` 只提交当前模块 `.work-meta.json` 和对应 audit 目录，再进入 landing，其他 staged 路径会立即阻断。worktree 成功合入后会进入安全待清理队列，并立即输出 `FINALIZE_RESUME_MODULE=<main 模块路径>`；完成文档地图后用该 main 路径重跑，不能继续引用等待后台清理的 worktree 路径。
 
 旧 v4 若已经进入 `final_check` 且没有 `finalize-run.json`，直接按原状态落地，不补造 runner 游标，也不要求迁移 timing 字段。只有本轮 runner 已创建且绑定当前 commit/source hash 的游标，landing 才启用完整阶段账本硬门。
 

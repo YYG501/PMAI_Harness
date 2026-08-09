@@ -1,11 +1,12 @@
 #!/usr/bin/env bash
-# Regressions for writing skill routing and product-direction doc writing.
+# Stable contracts for writing-skill routing. Keep wording assertions out of this suite.
 set -uo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 source "$SCRIPT_DIR/helpers/assert.sh"
 
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+DESIGN="$REPO_ROOT/skills/design/SKILL.md"
 HUMANIZE="$REPO_ROOT/skills/humanize/SKILL.md"
 HUMANIZE_PATTERNS="$REPO_ROOT/skills/humanize/references/patterns.md"
 SPEC="$REPO_ROOT/skills/spec-writing/SKILL.md"
@@ -14,7 +15,6 @@ SPEC_RULES="$REPO_ROOT/skills/spec-writing/references/writing-rules.md"
 SPEC_FEWSHOTS="$REPO_ROOT/skills/spec-writing/references/few-shots.md"
 PMVIEW="$REPO_ROOT/skills/_shared/PM-VIEW-RULES.md"
 PMVIEW_CHECKLIST="$REPO_ROOT/skills/_shared/pm-view/checklist.md"
-PMVIEW_WRITING="$REPO_ROOT/skills/_shared/pm-view/writing-rules.md"
 CHECK_PRD="$REPO_ROOT/scripts/check-prd-hierarchy.py"
 DOC="$REPO_ROOT/skills/doc-writing/SKILL.md"
 DOC_REF="$REPO_ROOT/skills/doc-writing/references/product-direction.md"
@@ -22,257 +22,126 @@ PUBLISH="$REPO_ROOT/skills/publish-to-lark/SKILL.md"
 OLD_WRITING_DIR="$REPO_ROOT/skills/prd""-writing"
 OLD_WRITING_COMMAND="/pmai-prd""-writing"
 
-test_humanize_remains_entry_but_expression_only() {
-  start_test "humanize: 保留入口，但只负责表达层"
-
-  assert_file_contains "$HUMANIZE" "入口保留" "humanize should remain a standalone entry" || return
-  assert_file_contains "$HUMANIZE" "只动表达，不动信息" "humanize should be expression-only" || return
-  assert_file_contains "$HUMANIZE" "整体优化结构、内容、文风" "humanize should route whole-document optimization away" || return
-  assert_file_contains "$HUMANIZE" "/pmai-doc-writing" "humanize should route product docs to doc-writing" || return
-  pass_test
+frontmatter_name() {
+  sed -n '1,/^---$/p' "$1" | sed -n 's/^name:[[:space:]]*//p' | head -n 1
 }
 
-test_spec_writing_replaces_prd_writing_entry() {
-  start_test "spec-writing: 公开入口替换旧写作入口"
+assert_route() {
+  local source="$1"
+  local target="$2"
+  local reason="$3"
+  if ! grep -Fq -- "$target" "$source"; then
+    _fail "$reason"
+    return 1
+  fi
+}
 
-  assert_file_contains "$SPEC" "name: pmai-spec-writing" "spec-writing should expose the new command name" || return
+test_public_entries_and_retired_alias() {
+  start_test "writing routes: public entries are stable and old alias stays retired"
+
+  if [ "$(frontmatter_name "$HUMANIZE")" != "pmai-humanize" ] \
+    || [ "$(frontmatter_name "$SPEC")" != "pmai-spec-writing" ] \
+    || [ "$(frontmatter_name "$DOC")" != "pmai-doc-writing" ]; then
+    _fail "writing skill frontmatter names drifted"
+    return
+  fi
   assert_file_missing "$OLD_WRITING_DIR" "old writing skill directory should not exist" || return
-  if grep -q -- "$OLD_WRITING_COMMAND" "$SPEC"; then
-    _fail "spec-writing should not keep old command fallback text"
+  if grep -Fq -- "$OLD_WRITING_COMMAND" "$SPEC"; then
+    _fail "spec-writing should not restore the retired command alias"
     return
   fi
   pass_test
 }
 
-test_design_spec_trigger_boundary() {
-  start_test "design/spec-writing: 按产品决定是否闭合分流"
-  local design="$REPO_ROOT/skills/design/SKILL.md"
+test_routing_graph_is_connected() {
+  start_test "writing routes: each capability links to its owning workflow"
 
-  assert_file_contains "$design" "产品决定尚未闭合" "design description should own unresolved spec requests" || return
-  assert_file_contains "$design" "改卡片 / 改页面" "design should qualify broad page-change triggers" || return
-  assert_file_contains "$SPEC" "已确认产品内容的规格成文器" "spec-writing should declare confirmed-input boundary" || return
-  assert_file_contains "$SPEC" "入口归属只看产品决定是否闭合" "spec-writing should route by decision closure" || return
-  assert_file_contains "$SPEC" "无法证明决定已经闭合" "unknown closure should default to design" || return
-  assert_file_contains "$SPEC" "补需求 / 把需求补完整" "spec-writing should distinguish requirement gaps from document gaps" || return
-  assert_file_contains "$SPEC" "不得先让 PM 选文档类型、路径和输入" "closure check should happen before document setup questions" || return
-  assert_file_contains "$SPEC" "不用 \`TODO / 待 PM 确认\` 把产品缺口留在正式规格里" "product gaps should return to design instead of lingering in the document" || return
-  if sed -n '1,8p' "$SPEC" | grep -q '写需求文档 / 写规格'; then
-    _fail "spec-writing description should not claim ambiguous raw spec triggers"
+  assert_route "$DESIGN" "/pmai-spec-writing" "design must hand confirmed specifications to spec-writing" || return
+  assert_route "$HUMANIZE" "/pmai-spec-writing" "humanize must route functional document work to spec-writing" || return
+  assert_route "$HUMANIZE" "/pmai-doc-writing" "humanize must route product-direction documents to doc-writing" || return
+  assert_route "$SPEC" "/pmai-design" "spec-writing must return unresolved product decisions to design" || return
+  assert_route "$SPEC" "/pmai-humanize" "spec-writing must retain the expression-only finishing route" || return
+  assert_route "$DOC" "/pmai-spec-writing" "doc-writing must route functional specifications to spec-writing" || return
+  assert_route "$DOC" "/pmai-humanize" "doc-writing must retain the expression-only finishing route" || return
+  pass_test
+}
+
+test_canonical_assets_are_linked() {
+  start_test "writing routes: canonical rules, examples, templates, and playbook are linked"
+  local asset
+
+  for asset in "$SPEC_TMPL" "$SPEC_RULES" "$SPEC_FEWSHOTS" "$PMVIEW" \
+    "$PMVIEW_CHECKLIST" "$DOC_REF" "$HUMANIZE_PATTERNS"; do
+    assert_file_exists "$asset" "missing writing asset: $asset" || return
+    if [ ! -s "$asset" ]; then
+      _fail "writing asset is empty: $asset"
+      return
+    fi
+  done
+  assert_route "$SPEC" "references/writing-rules.md" "spec-writing must link its canonical writing rules" || return
+  assert_route "$SPEC" "references/few-shots.md" "spec-writing must link its canonical examples" || return
+  assert_route "$DOC" "references/product-direction.md" "doc-writing must link its product-direction playbook" || return
+  pass_test
+}
+
+test_retired_forced_formats_stay_absent() {
+  start_test "writing routes: retired universal formats and implementation inventories stay absent"
+
+  if grep -Fq -- "## 五、功能清单格式（强制）" "$PMVIEW" \
+    || grep -Fq -- '适用：模块 `spec.md` / `prd` 中描述具体功能时' "$PMVIEW" \
+    || grep -Fq -- "原型覆盖范围表" "$SPEC" "$SPEC_TMPL" "$SPEC_FEWSHOTS" \
+    || grep -Fq -- "§六 原型节 ASCII 示例" "$SPEC_FEWSHOTS" \
+    || grep -Fq -- "必须用「\*\*X。\*\* 段落说明」结构" "$SPEC_RULES" \
+    || grep -Fq -- "给出反例 + 反例后果" "$SPEC_RULES"; then
+    _fail "a retired forced writing format was restored"
     return
   fi
   pass_test
 }
 
-test_spec_writing_owns_functional_doc_optimization() {
-  start_test "spec-writing: 功能型规格文档整体优化覆盖结构/内容/文风"
+test_precision_terms_are_not_blanket_banned() {
+  start_test "writing routes: plain language rules preserve precise product contracts"
 
-  assert_file_contains "$SPEC" "既有规格补差" "spec-writing should expose existing-spec gap-filling target" || return
-  assert_file_contains "$SPEC" "整体优化结构、内容、文风" "spec-writing should match PM wording" || return
-  assert_file_contains "$SPEC" "结构 / 内容 / 文风" "spec-writing should split optimization layers" || return
-  assert_file_contains "$SPEC" "/pmai-humanize" "spec-writing should use humanize as final wording pass" || return
-  pass_test
-}
-
-test_spec_writing_keeps_change_notes_brief() {
-  start_test "spec-writing: 变更说明必须简要"
-
-  assert_file_contains "$SPEC" "变更说明必须简要" "spec-writing should constrain change notes" || return
-  assert_file_contains "$SPEC" "最多不超过 30 字" "spec-writing should make the briefness constraint measurable" || return
-  assert_file_contains "$SPEC" "不写原因、过程、背景" "spec-writing should keep rationale out of change notes" || return
-  assert_file_contains "$SPEC_TMPL" "主要变更内容必须简要" "PRD template should carry the same change-log constraint" || return
-  assert_file_contains "$SPEC_RULES" "变更说明必须简要" "writing rules should carry the change-log constraint" || return
-  pass_test
-}
-
-test_spec_writing_uses_presets_not_prd_default() {
-  start_test "spec-writing: PRD 是 preset，功能需求先选写法"
-
-  assert_file_contains "$SPEC" "功能需求写法选择器" "spec-writing should expose the requirement writing selector" || return
-  assert_file_contains "$SPEC" "PRD 体例 preset" "spec-writing should keep PRD as a named preset" || return
-  assert_file_contains "$SPEC" "4 列功能表只是特定写法" "spec-writing should not treat 4-column tables as the default world view" || return
-  assert_file_contains "$SPEC" "规则收口 / 口径统一" "spec-writing should route rule consolidation away from PRD tables" || return
-  assert_file_contains "$SPEC" "状态 / 分类 / 卡片" "spec-writing should cover card/status style specs" || return
-  assert_file_contains "$SPEC" "多步流程" "spec-writing should route flows to prose instead of table cells" || return
-  pass_test
-}
-
-test_pm_view_does_not_force_four_column_tables() {
-  start_test "PM-VIEW: 4 列功能表只是表格 preset"
-
-  if grep -q -- "## 五、功能清单格式（强制）" "$PMVIEW"; then
-    _fail "PM-VIEW should not keep universal forced feature-list heading"
-    return
-  fi
-  if grep -q -- '适用：模块 `spec.md` / `prd` 中描述具体功能时' "$PMVIEW"; then
-    _fail "PM-VIEW should not say module spec/prd always use the same forced format"
-    return
-  fi
-  assert_file_contains "$PMVIEW" "4 列功能表不是所有规格的默认格式" "PM-VIEW should scope 4-column tables as a preset" || return
-  assert_file_contains "$PMVIEW" "先选写法，再写功能需求" "PM-VIEW should require writing-style selection first" || return
-  assert_file_contains "$PMVIEW_CHECKLIST" "只有选择 4 列功能表 preset 时" "checklist should make table checks conditional" || return
-  assert_file_contains "$PMVIEW_CHECKLIST" "不要为满足表格检查" "checklist should reject forced table fitting" || return
-  pass_test
-}
-
-test_prd_lint_is_scoped_to_prd_preset() {
-  start_test "lint: check-prd-hierarchy 只绑定 PRD / 4 列功能表"
-
-  assert_file_contains "$SPEC" "不跑本 lint" "spec-writing should not run PRD lint for all specs" || return
-  assert_file_contains "$CHECK_PRD" "本脚本不作为模块 spec.md" "check-prd-hierarchy should document its scoped use" || return
-  assert_file_contains "$CHECK_PRD" "PRD 体例或 4 列功能表文档路径" "check-prd-hierarchy usage should name the scoped target" || return
-  pass_test
-}
-
-test_spec_is_final_target_contract_not_implementation_inventory() {
-  start_test "spec-writing: 规格是最终目标合同，不按实现覆盖裁剪"
-
-  assert_file_contains "$SPEC" "最终目标合同" "spec-writing should define the normative document contract" || return
-  assert_file_contains "$SPEC" "规范性来源" "spec-writing should distinguish normative sources" || return
-  assert_file_contains "$SPEC" "设计与实现证据" "spec-writing should treat prototypes and code as evidence" || return
-  assert_file_contains "$SPEC" "漏实现" "spec-writing should keep requirements when implementation misses them" || return
-  assert_file_contains "$SPEC" "无依据实现" "spec-writing should not promote undocumented code behavior" || return
-  assert_file_contains "$SPEC_TMPL" "指导研发实现和验收的最终目标合同" "PRD template should carry the normative contract" || return
-  assert_file_contains "$SPEC_TMPL" "不按原型或当前代码的实现覆盖状态删减" "PRD template should preserve confirmed requirements" || return
-  if grep -q -- "原型覆盖范围表" "$SPEC" "$SPEC_TMPL" "$SPEC_FEWSHOTS"; then
-    _fail "spec-writing should not require a prototype coverage table"
-    return
-  fi
-  if grep -q -- "§六 原型节 ASCII 示例" "$SPEC_FEWSHOTS"; then
-    _fail "few-shots should not teach mandatory ASCII prototype sections"
+  if grep -Fq '死锁 / 互锁 / 悬挂引用 / 鉴权 / 三件套——改成业务语言。' "$SPEC_RULES" \
+    || grep -Fq '| 鉴权 | 权限判断 |' "$HUMANIZE_PATTERNS" \
+    || grep -qE '[89] 类禁用' "$SPEC" "$SPEC_RULES" "$HUMANIZE"; then
+    _fail "writing rules restored a blanket ban on precise contract language"
     return
   fi
   pass_test
 }
 
-test_l1_l5_remain_optional_writing_tools() {
-  start_test "spec-writing: L1-L5 不恢复成重型硬约束"
+test_paths_do_not_require_machine_specific_input() {
+  start_test "writing routes: document inputs do not require machine-specific paths"
 
-  assert_file_contains "$SPEC_RULES" "需要时才用，不强加" "L1-L5 should stay optional in the overview" || return
-  assert_file_contains "$SPEC_RULES" "不要为了套 L1，把每条都展开成重型论证" "L1 should reject heavy mandatory expansion" || return
-  if grep -q -- "必须用「\\*\\*X。\\*\\* 段落说明」结构" "$SPEC_RULES"; then
-    _fail "L1 should not require bold-sentence paragraph structure for every item"
-    return
-  fi
-  if grep -q -- "给出反例 + 反例后果" "$SPEC_RULES"; then
-    _fail "L1 should not require counterexample plus consequence as a hard rule"
+  if grep -Fq -- "贴绝对路径" "$SPEC" \
+    || grep -Fq -- "markdown 文件绝对路径" "$PUBLISH" \
+    || grep -Eq '/Users/[^<[:space:]]+/' "$SPEC" "$DOC" "$PUBLISH"; then
+    _fail "writing workflow requires a machine-specific absolute path"
     return
   fi
   pass_test
 }
 
-test_pm_view_section_references_follow_new_numbering() {
-  start_test "PM-VIEW: §五重排后的引用不指错小节"
-
-  assert_file_contains "$PMVIEW_WRITING" "PM-VIEW-RULES.md §5.2 的「续行 rowspan」" "rowspan reference should point to table preset section" || return
-  assert_file_contains "$PMVIEW_CHECKLIST" "§5.3「换 UI 还成立」判别" "checklist should point to the current business-rule section" || return
-  if grep -q -- "§5.1 的「续行 rowspan」" "$PMVIEW_WRITING"; then
-    _fail "rowspan reference should not point at §5.1 after §五 was reorganized"
-    return
-  fi
-  if grep -q -- "§5.2「换 UI 还成立」判别" "$PMVIEW_CHECKLIST"; then
-    _fail "business-rule reference should not point at old §5.2"
-    return
-  fi
-  pass_test
-}
-
-test_few_shots_anchor_spec_before_prd_examples() {
-  start_test "few-shots: 先锚定规格写法，再看 PRD 示例"
-
-  assert_file_contains "$SPEC_FEWSHOTS" "# Few-shots：规格写法示例" "few-shots should not be titled as PRD-only examples" || return
-  assert_file_contains "$SPEC_FEWSHOTS" "同一主题按不同写法组织" "few-shots should include pattern selection examples" || return
-  assert_file_contains "$SPEC_FEWSHOTS" "待办事项卡里的文件确认规则收口" "few-shots should cover the card-rule regression topic" || return
-  assert_file_contains "$SPEC_FEWSHOTS" "只有 PRD 体例或动作清单场景才用二级 / 三级功能表" "few-shots should prevent table defaulting" || return
-  pass_test
-}
-
-test_doc_writing_supports_product_direction_docs() {
-  start_test "doc-writing: 支持高质量产品方向文档"
-
-  assert_file_contains "$DOC" "产品方向 memo" "doc-writing should produce product direction memos" || return
-  assert_file_contains "$DOC" "高质量标准" "doc-writing should define quality bar" || return
-  assert_file_contains "$DOC" "一句主张" "doc-writing should require a clear thesis" || return
-  assert_file_contains "$DOC" "关键取舍" "doc-writing should require tradeoffs" || return
-  assert_file_contains "$DOC" "产品方向六问" "doc-writing should require product direction questions" || return
-  assert_file_contains "$DOC" "每个关键判断都要能对应一个证据来源" "doc-writing should require evidence mapping" || return
-  assert_file_contains "$DOC" "异议处理" "doc-writing should handle objections" || return
-  assert_file_contains "$DOC" "优化已有介绍型 / 产品方向文档" "doc-writing should optimize existing docs" || return
-  assert_file_contains "$DOC" "/pmai-spec-writing" "doc-writing should route functional docs away" || return
-  assert_file_contains "$DOC" "/pmai-humanize" "doc-writing should use humanize as final wording pass" || return
-  pass_test
-}
-
-test_doc_writing_has_product_direction_reference() {
-  start_test "doc-writing reference: 吸收社区方法并形成产品方向 playbook"
-
-  assert_file_exists "$DOC_REF" "product direction reference should exist" || return
-  assert_file_contains "$DOC_REF" "content-strategy" "reference should cite community content strategy skill" || return
-  assert_file_contains "$DOC_REF" "copywriting" "reference should cite community copywriting skill" || return
-  assert_file_contains "$DOC_REF" "market-research" "reference should cite community market research skill" || return
-  assert_file_contains "$DOC_REF" "产品方向六问" "reference should include six direction questions" || return
-  assert_file_contains "$DOC_REF" "证据地图" "reference should include evidence map" || return
-  assert_file_contains "$DOC_REF" "高管一页纸" "reference should include executive one-pager template" || return
-  assert_file_contains "$DOC_REF" "异议处理清单" "reference should include objection handling checklist" || return
-  pass_test
-}
-
-test_humanize_not_primary_for_whole_doc_rewrite() {
-  start_test "routing: 整体优化不直接降级成 humanize"
-
-  assert_file_contains "$SPEC" "不要把它降级成 \`/pmai-humanize\` 纯润色" "spec-writing should not downgrade whole-doc work" || return
-  assert_file_contains "$DOC" "不要让 humanize 改产品判断" "doc-writing should keep product judgment ownership" || return
-  pass_test
-}
-
-test_path_guidance_prefers_repo_relative_paths() {
-  start_test "path guidance: 文档路径优先仓内相对路径"
-
-  assert_file_contains "$SPEC" "优先贴仓内相对路径" "spec-writing custom output path should prefer repo-relative paths" || return
-  assert_file_contains "$PUBLISH" "优先用仓内相对路径" "publish-to-lark markdown path should prefer repo-relative paths" || return
-  if grep -q -- "贴绝对路径" "$SPEC"; then
-    _fail "spec-writing should not ask PM to paste an absolute path by default"
-    return
-  fi
-  if grep -q -- "markdown 文件绝对路径" "$PUBLISH"; then
-    _fail "publish-to-lark should not require absolute markdown paths by default"
-    return
-  fi
-  pass_test
-}
-
-test_writing_rules_keep_precise_contract_language() {
-  start_test "writing rules: plain product language does not erase precise contracts"
-
-  assert_file_contains "$SPEC_RULES" "UI 行业词的使用边界" "writing rules should scope UI terms by use" || return
-  assert_file_contains "$SPEC_RULES" "安全、权限、性能和可用性合同" "writing rules should preserve precise contracts" || return
-  assert_file_contains "$SPEC_RULES" "服务端鉴权（由服务端校验当前用户身份和权限）" "authentication should be explained, not banned" || return
-  assert_file_contains "$SPEC_RULES" "RBAC（按角色分配操作权限）" "RBAC should carry a business explanation" || return
-  assert_file_contains "$SPEC_RULES" "SLA（服务可用性目标）" "SLA should carry a business explanation" || return
-  assert_file_contains "$SPEC_RULES" "IDOR（通过篡改资源编号访问无权资源）" "IDOR should carry a business explanation" || return
-  assert_file_contains "$SPEC_FEWSHOTS" "服务端鉴权（校验当前用户身份和权限）" "few-shots should model the scoped rule" || return
-  assert_file_contains "$HUMANIZE_PATTERNS" "精确合同例外" "humanize must not undo precise contract language" || return
-  if grep -qF '死锁 / 互锁 / 悬挂引用 / 鉴权 / 三件套——改成业务语言。' "$SPEC_RULES"; then
-    _fail "writing rules should not blanket-ban authentication terminology"
-    return
-  fi
-  if grep -qF '| 鉴权 | 权限判断 |' "$HUMANIZE_PATTERNS"; then
-    _fail "humanize should not mark every authentication term as mandatory replacement"
-    return
-  fi
-  if grep -qE '[89] 类禁用' "$SPEC" "$SPEC_RULES" "$PMVIEW_WRITING" "$HUMANIZE"; then
-    _fail "active writing rules should not maintain drifting numeric ban counts"
-    return
-  fi
-  pass_test
-}
-
-test_prd_lint_scopes_ui_terms_to_real_misuse() {
-  start_test "lint: referenced UI terms pass while hierarchy and visual misuse fail"
-  local tmp pass_doc hierarchy_doc visual_doc
+test_prd_lint_observable_behavior() {
+  start_test "writing routes: PRD lint accepts explained terms and rejects UI hierarchy/style misuse"
+  local tmp plain_doc pass_doc hierarchy_doc visual_doc
   tmp=$(mktemp -d "${TMPDIR:-/tmp}/pmai-writing-boundary.XXXXXX")
+  plain_doc="$tmp/plain.md"
   pass_doc="$tmp/pass.md"
   hierarchy_doc="$tmp/hierarchy.md"
   visual_doc="$tmp/visual.md"
+
+  cat > "$plain_doc" <<'MARKDOWN'
+# 文件确认规则
+
+文件未确认时保留待处理状态；确认后才进入下一步。
+MARKDOWN
+  if ! python3 "$CHECK_PRD" "$plain_doc" >"$tmp/plain.out" 2>&1; then
+    _fail "plain module prose should not be forced into a four-column table"
+    rm -rf "$tmp"
+    return
+  fi
 
   cat > "$pass_doc" <<'MARKDOWN'
 # 权限规格
@@ -290,54 +159,24 @@ test_prd_lint_scopes_ui_terms_to_real_misuse() {
 - 阻止 IDOR（通过篡改资源编号访问无权资源）。
 MARKDOWN
   if ! python3 "$CHECK_PRD" "$pass_doc" >"$tmp/pass.out" 2>&1; then
-    _fail "fully referenced UI terms and explained contract terms should pass lint"
-    cat "$tmp/pass.out" >&2
+    _fail "explained UI and contract terms should pass lint"
     rm -rf "$tmp"
     return
   fi
 
-  cat > "$hierarchy_doc" <<'MARKDOWN'
-# 权限规格
-
-## 六、功能需求
-
-| 二级功能 | 三级功能 | 使用角色 | 需求描述 |
-| --- | --- | --- | --- |
-| 权限 Tab | 查看详情 | 管理员 | 展示权限详情。 |
-
-## 七、验收标准
-MARKDOWN
-  if python3 "$CHECK_PRD" "$hierarchy_doc" >"$tmp/hierarchy.out" 2>&1; then
-    _fail "UI components used as feature hierarchy should fail lint"
-    rm -rf "$tmp"
-    return
-  fi
-  if ! grep -q "权限 Tab" "$tmp/hierarchy.out"; then
-    _fail "hierarchy lint should identify the misused UI component"
-    cat "$tmp/hierarchy.out" >&2
+  sed 's/| 配置 |/| 权限 Tab |/' "$pass_doc" > "$hierarchy_doc"
+  if python3 "$CHECK_PRD" "$hierarchy_doc" >"$tmp/hierarchy.out" 2>&1 \
+    || ! grep -Fq "权限 Tab" "$tmp/hierarchy.out"; then
+    _fail "UI components used as feature hierarchy should fail with a useful reason"
     rm -rf "$tmp"
     return
   fi
 
-  cat > "$visual_doc" <<'MARKDOWN'
-# 权限规格
-
-## 六、功能需求
-
-| 二级功能 | 三级功能 | 使用角色 | 需求描述 |
-| --- | --- | --- | --- |
-| 配置 | 查看详情 | 管理员 | 许可证状态使用 Badge 红色展示。 |
-
-## 七、验收标准
-MARKDOWN
-  if python3 "$CHECK_PRD" "$visual_doc" >"$tmp/visual.out" 2>&1; then
-    _fail "Badge color styling should still fail lint"
-    rm -rf "$tmp"
-    return
-  fi
-  if ! grep -q "Badge 视觉样式" "$tmp/visual.out"; then
-    _fail "visual lint should explain the Badge style violation"
-    cat "$tmp/visual.out" >&2
+  sed 's/"许可证状态 Badge"展示当前状态/许可证状态使用 Badge 红色展示/' \
+    "$pass_doc" > "$visual_doc"
+  if python3 "$CHECK_PRD" "$visual_doc" >"$tmp/visual.out" 2>&1 \
+    || ! grep -Fq "Badge 视觉样式" "$tmp/visual.out"; then
+    _fail "visual styling in product behavior should fail with a useful reason"
     rm -rf "$tmp"
     return
   fi
@@ -346,23 +185,12 @@ MARKDOWN
   pass_test
 }
 
-test_humanize_remains_entry_but_expression_only
-test_spec_writing_replaces_prd_writing_entry
-test_design_spec_trigger_boundary
-test_spec_writing_owns_functional_doc_optimization
-test_spec_writing_keeps_change_notes_brief
-test_spec_writing_uses_presets_not_prd_default
-test_pm_view_does_not_force_four_column_tables
-test_prd_lint_is_scoped_to_prd_preset
-test_spec_is_final_target_contract_not_implementation_inventory
-test_l1_l5_remain_optional_writing_tools
-test_pm_view_section_references_follow_new_numbering
-test_few_shots_anchor_spec_before_prd_examples
-test_doc_writing_supports_product_direction_docs
-test_doc_writing_has_product_direction_reference
-test_humanize_not_primary_for_whole_doc_rewrite
-test_path_guidance_prefers_repo_relative_paths
-test_writing_rules_keep_precise_contract_language
-test_prd_lint_scopes_ui_terms_to_real_misuse
+test_public_entries_and_retired_alias
+test_routing_graph_is_connected
+test_canonical_assets_are_linked
+test_retired_forced_formats_stay_absent
+test_precision_terms_are_not_blanket_banned
+test_paths_do_not_require_machine_specific_input
+test_prd_lint_observable_behavior
 
 report_results "writing-skill-routing"

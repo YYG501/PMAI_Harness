@@ -99,7 +99,7 @@ MISSING=""
 [ -f "$FRAMEWORK_DIR/templates/AGENTS.md.tmpl" ] || MISSING="$MISSING templates/AGENTS.md.tmpl"
 [ -f "$FRAMEWORK_DIR/templates/codex-hooks.json.tmpl" ] || MISSING="$MISSING templates/codex-hooks.json.tmpl"
 [ -d "$FRAMEWORK_DIR/skills/init-project" ] || MISSING="$MISSING skills/init-project/"
-[ -f "$FRAMEWORK_DIR/scripts/install-codex-hooks.sh" ] || MISSING="$MISSING scripts/install-codex-hooks.sh"
+[ -f "$FRAMEWORK_DIR/scripts/install-project-hooks.sh" ] || MISSING="$MISSING scripts/install-project-hooks.sh"
 [ -f "$FRAMEWORK_DIR/scripts/install-opencode-commands.sh" ] || MISSING="$MISSING scripts/install-opencode-commands.sh"
 if [ -n "$MISSING" ]; then
   echo "❌ 框架源缺标志文件：$MISSING" >&2
@@ -148,7 +148,7 @@ _pmai_target_has_project_marker() {
 if [ -d "$TARGET_DIR" ] && _pmai_target_has_project_marker; then
   echo "❌ 目标目录已经接入 PMAI: $TARGET_DIR" >&2
   echo "   已阻止重复初始化，避免覆盖 PRODUCT.md / AGENTS.md / host 配置。" >&2
-  echo "   下一步：在该目录使用 /pmai-status；需要重整方向走 /pmai-direction；需要刷新框架配置走 pmai upgrade。" >&2
+  echo "   下一步：在该目录使用 /pmai-status；需要重整方向走 /pmai-direction；框架升级后用 install-project-hooks.sh 刷新项目宿主配置。" >&2
   exit 1
 fi
 
@@ -220,8 +220,8 @@ for TMPL in "$FRAMEWORK_DIR/templates/"*.tmpl; do
       continue ;;
     settings.json)          DEST="$TARGET_DIR/.claude/settings.json" ;;
     codex-hooks.json)
-      # Codex hooks need merge semantics when --allow-existing reuses a repo.
-      # They are installed after git init by install-codex-hooks.sh.
+      # Host hooks need merge semantics when --allow-existing reuses a repo.
+      # They are installed after git init by install-project-hooks.sh.
       continue ;;
     gitignore)              DEST="$TARGET_DIR/.gitignore" ;;
     pm-workflow.config.yml) DEST="$TARGET_DIR/.pm-workflow/config.yml" ;;
@@ -291,10 +291,10 @@ PROJECT_PATH=$(pwd)
 # --- k1. Host hooks（I-mini：消费仓不放 hooks/ 源目录，配置指向 $HOME/.pmai/...）---
 # 旧版方案 A 把 hooks/ symlink 到 framework，settings.json 用 $CLAUDE_PROJECT_DIR/hooks/...
 # I-mini：消费仓 0 hook 源目录；settings.json / .codex/hooks.json 指向 $HOME/.pmai/hooks/...
-if PMAI_HOME="$FRAMEWORK_DIR" bash "$FRAMEWORK_DIR/scripts/install-codex-hooks.sh" 2>&1 | sed 's/^/   /'; then
-  echo "🪝 Codex hooks 已安装"
+if PMAI_HOME="$FRAMEWORK_DIR" bash "$FRAMEWORK_DIR/scripts/install-project-hooks.sh" 2>&1 | sed 's/^/   /'; then
+  echo "🪝 Claude Code / Codex hooks 已安装"
 else
-  echo "⚠️  Codex hooks 安装失败（项目仍可用，PM 后续可手动跑 $HOME/.pmai/scripts/install-codex-hooks.sh）" >&2
+  echo "⚠️  项目 hooks 安装失败（项目仍可用，PM 后续可手动跑 $HOME/.pmai/scripts/install-project-hooks.sh）" >&2
 fi
 
 # OpenCode 主控入口：只安装 command 路由和 opencode.json，不复制 framework 源资产。

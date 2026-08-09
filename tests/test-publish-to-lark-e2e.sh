@@ -130,33 +130,141 @@ MD
   pass_test
 }
 
-test_partial_update_clears_stale_review_baseline() {
-  start_test "publish-to-lark overwrite: partial_success 失败关闭并清除旧基线"
-  cat > "$WORK/partial.md" <<'MD'
+test_incomplete_updates_clear_stale_review_baseline() {
+  start_test "publish-to-lark overwrite: 已发起 update 后所有不可验证结果都清除旧基线"
+  local names=(
+    nonzero empty non_json non_object ok_false success_false nonzero_code partial failed_result missing_result
+  )
+  local payloads=(
+    ''
+    ''
+    'private-update-output'
+    '["private-update-output"]'
+    '{"ok":false,"message":"private-update-output","data":{"result":"success"}}'
+    '{"success":false,"message":"private-update-output","data":{"result":"success"}}'
+    '{"code":90001,"message":"private-update-output","data":{"result":"success"}}'
+    '{"ok":true,"data":{"document":{"document_id":"docIncomplete","revision_id":6},"result":"partial_success"}}'
+    '{"ok":true,"data":{"document":{"document_id":"docIncomplete","revision_id":6},"result":"failed"}}'
+    '{"ok":true,"data":{}}'
+  )
+  local return_codes=(2 0 0 0 0 0 0 0 0 0)
+  local empty_flags=(0 1 0 0 0 0 0 0 0 0)
+  local index
+
+  for index in "${!names[@]}"; do
+    local name="${names[$index]}"
+    local markdown="$WORK/incomplete-$name.md"
+    local log="$WORK/incomplete-$name.log"
+    cat > "$markdown" <<MD
 ---
-lark_doc_id: docPartial
-lark_doc_url: https://tenant.feishu.cn/docx/docPartial
+lark_doc_id: docIncomplete
+lark_doc_url: https://tenant.feishu.cn/docx/docIncomplete
 lark_published_revision_id: 5
 lark_published_source_hash: old-source-hash
 ---
 
-# Partial
+# Incomplete $name
 
 正文。
 MD
-  export FAKE_LARK_DOCS_UPDATE_OUT='{"ok":true,"data":{"document":{"document_id":"docPartial","revision_id":6},"result":"partial_success","updated_blocks_count":1,"warnings":["one block failed"]}}'
+    : > "$log"
+    export FAKE_LARK_LOG="$log"
+    export FAKE_LARK_DOCS_UPDATE_RC="${return_codes[$index]}"
+    export FAKE_LARK_DOCS_UPDATE_EMPTY="${empty_flags[$index]}"
+    if [ -n "${payloads[$index]}" ]; then
+      export FAKE_LARK_DOCS_UPDATE_OUT="${payloads[$index]}"
+    else
+      unset FAKE_LARK_DOCS_UPDATE_OUT
+    fi
+
+    pushd "$WORK" >/dev/null
+    local out rc
+    out=$(python3 "$FRAMEWORK_ROOT/scripts/publish-to-lark.py" \
+      --type prd --no-merge-cells "$(basename "$markdown")" 2>&1)
+    rc=$?
+    popd >/dev/null
+    unset FAKE_LARK_LOG FAKE_LARK_DOCS_UPDATE_RC FAKE_LARK_DOCS_UPDATE_EMPTY \
+      FAKE_LARK_DOCS_UPDATE_OUT
+
+    if [ "$rc" -eq 0 ] \
+      || ! grep -q '^ARGV: docs +update ' "$log" \
+      || grep -q '^lark_published_revision_id:' "$markdown" \
+      || grep -q '^lark_published_source_hash:' "$markdown" \
+      || ! grep -q '^lark_doc_id: docIncomplete$' "$markdown" \
+      || echo "$out" | grep -q 'private-update-output'; then
+      _fail "incomplete update did not clear stale baseline: case=$name rc=$rc out=$out log=$(cat "$log")"
+      return
+    fi
+  done
+  pass_test
+}
+
+test_pre_update_failures_keep_stale_review_baseline() {
+  start_test "publish-to-lark overwrite: update 调用前失败不清除旧基线"
+  local markdown="$WORK/pre-update-failure.md"
+  local original="$WORK/pre-update-failure.original"
+  local log="$WORK/pre-update-failure.log"
+  cat > "$markdown" <<'MD'
+---
+lark_doc_id: docBeforeUpdate
+lark_doc_url: https://tenant.feishu.cn/docx/docBeforeUpdate
+lark_published_revision_id: invalid-revision
+lark_published_source_hash: old-source-hash
+---
+
+# Before update
+
+正文。
+MD
+  cp "$markdown" "$original"
+  : > "$log"
+  export FAKE_LARK_LOG="$log"
+  export FAKE_LARK_DOCS_FETCH_OUT='{"success":false,"message":"cannot fetch revision"}'
   pushd "$WORK" >/dev/null
   local out rc
   out=$(python3 "$FRAMEWORK_ROOT/scripts/publish-to-lark.py" \
-    --type prd --no-merge-cells partial.md 2>&1)
+    --type prd --no-merge-cells "$(basename "$markdown")" 2>&1)
   rc=$?
   popd >/dev/null
-  unset FAKE_LARK_DOCS_UPDATE_OUT
-  if [ "$rc" -eq 0 ] || ! echo "$out" | grep -q '未完整成功' \
-    || grep -q '^lark_published_revision_id:' "$WORK/partial.md" \
-    || grep -q '^lark_published_source_hash:' "$WORK/partial.md" \
-    || ! grep -q '^lark_doc_id: docPartial$' "$WORK/partial.md"; then
-    _fail "partial update should fail without a stale baseline; rc=$rc out=$out"
+  unset FAKE_LARK_LOG FAKE_LARK_DOCS_FETCH_OUT
+
+  if [ "$rc" -eq 0 ] \
+    || grep -q '^ARGV: docs +update ' "$log" \
+    || ! cmp -s "$markdown" "$original"; then
+    _fail "pre-update validation/fetch failure changed baseline: rc=$rc out=$out log=$(cat "$log")"
+    return
+  fi
+
+  local invalid="$WORK/pre-update-validation.md"
+  local invalid_original="$WORK/pre-update-validation.original"
+  cat > "$invalid" <<'MD'
+---
+lark_doc_id: docBeforeUpdate
+lark_doc_url: https://tenant.feishu.cn/docx/otherDocument
+lark_published_revision_id: 5
+lark_published_source_hash: old-source-hash
+---
+
+# Invalid binding
+MD
+  cp "$invalid" "$invalid_original"
+  out=$(python3 "$FRAMEWORK_ROOT/scripts/publish-to-lark.py" \
+    --type prd --no-merge-cells "$invalid" 2>&1)
+  rc=$?
+  if [ "$rc" -eq 0 ] \
+    || ! echo "$out" | grep -q '指向不同文档' \
+    || ! cmp -s "$invalid" "$invalid_original"; then
+    _fail "validation before update changed baseline: rc=$rc out=$out"
+    return
+  fi
+
+  out=$(PATH="/usr/bin:/bin" python3 "$FRAMEWORK_ROOT/scripts/publish-to-lark.py" \
+    --type prd --no-merge-cells "$markdown" 2>&1)
+  rc=$?
+  if [ "$rc" -eq 0 ] \
+    || ! echo "$out" | grep -q 'lark-cli 未安装或不可用' \
+    || ! cmp -s "$markdown" "$original"; then
+    _fail "missing CLI before update changed baseline: rc=$rc out=$out"
     return
   fi
   pass_test
@@ -287,14 +395,14 @@ test_overwrite_strips_frontmatter() {
         --type prd --no-merge-cells doc.md >/dev/null 2>&1
   popd >/dev/null
   unset FAKE_LARK_LOG
-  # --no-merge-cells 下只有 docs +update 一次带 @./ 的调用 → 唯一 MARKDOWN_HEAD
+  # --no-merge-cells 下 docs +update 的正文通过 stdin 发送。
   local head_line
-  head_line=$(grep "^MARKDOWN_HEAD:" "$WORK/fm-calls.log")
+  head_line=$(grep "^STDIN_HEAD:" "$WORK/fm-calls.log")
   if [ -z "$head_line" ]; then
-    _fail "未捕获 docs +update 的 MARKDOWN_HEAD; log: $(cat "$WORK/fm-calls.log")"
+    _fail "未捕获 docs +update 的 STDIN_HEAD; log: $(cat "$WORK/fm-calls.log")"
     return
   fi
-  if echo "$head_line" | grep -q -- "MARKDOWN_HEAD: ---" \
+  if echo "$head_line" | grep -q -- "STDIN_HEAD: ---" \
      || echo "$head_line" | grep -q "lark_doc_id"; then
     _fail "覆盖发布把 frontmatter 当正文发了; got: $head_line"
     return
@@ -334,7 +442,8 @@ MD
 }
 
 test_cwd_workaround_present_in_real_invocation() {
-  start_test "publish-to-lark 真实入口下 cwd workaround 生效"
+  start_test "publish-to-lark 真实入口固定 cwd 并通过 stdin 发送"
+  : > "$WORK/calls.log"
   export FAKE_LARK_LOG="$WORK/calls.log"
   cat > "$WORK/cwd.md" <<'MD'
 # cwd workaround test
@@ -347,16 +456,119 @@ MD
         --type prd --no-merge-cells cwd.md >/dev/null 2>&1
   popd >/dev/null
   unset FAKE_LARK_LOG
-  # 校验：docs +create 那次调用的 CWD = md_dir，--markdown 是 @./cwd.md
+  # 校验：docs +create 那次调用的 CWD = md_dir，正文从 stdin 输入。
   if ! awk '/^ARGV: docs \+create/{flag=1} /^---/{flag=0} flag' "$WORK/calls.log" \
-       | grep -q "@./cwd.md"; then
-    _fail "docs +create 没用 @./cwd.md"
+       | grep -q -- "--content -"; then
+    _fail "docs +create 没用 --content -"
     cat "$WORK/calls.log" >&2
     return
   fi
   if ! awk '/^ARGV: docs \+create/{flag=1} /^---/{flag=0} flag' "$WORK/calls.log" \
        | grep -q "CWD: $md_dir"; then
     _fail "docs +create 没切到 $md_dir; got: $(awk '/^ARGV: docs \+create/{flag=1} /^---/{flag=0} flag' "$WORK/calls.log" | grep CWD:)"
+    return
+  fi
+  if ! awk '/^ARGV: docs \+create/{flag=1} /^---/{flag=0} flag' "$WORK/calls.log" \
+       | grep -q "STDIN_HEAD: # cwd workaround test"; then
+    _fail "docs +create 没收到绑定文件正文: $(cat "$WORK/calls.log")"
+    return
+  fi
+  pass_test
+}
+
+test_publish_rejects_symlink_and_fifo_without_blocking() {
+  start_test "publish-to-lark 入口拒绝 symlink 和 FIFO 且不阻塞"
+  local unsafe_root="$WORK/unsafe-inputs"
+  mkdir -p "$unsafe_root"
+  printf '%s\n' '# Safe target' > "$unsafe_root/target.md"
+  ln -s "$unsafe_root/target.md" "$unsafe_root/link.md"
+  mkfifo "$unsafe_root/pipe.md"
+
+  local out rc
+  out=$(python3 - "$FRAMEWORK_ROOT" "$unsafe_root" <<'PY' 2>&1
+import os
+import subprocess
+import sys
+from pathlib import Path
+
+framework = Path(sys.argv[1])
+root = Path(sys.argv[2])
+command = framework / "scripts" / "publish-to-lark.py"
+
+for name in ("link.md", "pipe.md"):
+    try:
+        result = subprocess.run(
+            [sys.executable, str(command), str(root / name), "--type", "prd", "--no-merge-cells"],
+            capture_output=True,
+            text=True,
+            timeout=2,
+            env=os.environ.copy(),
+        )
+    except subprocess.TimeoutExpired as exc:
+        raise AssertionError(f"publish entry blocked on {name}") from exc
+    assert result.returncode != 0, (name, result.stdout, result.stderr)
+    assert "本地 markdown 不可安全发布" in result.stderr, (name, result.stderr)
+
+assert (root / "target.md").read_text(encoding="utf-8") == "# Safe target\n"
+assert (root / "link.md").is_symlink()
+assert (root / "pipe.md").exists()
+print("OK")
+PY
+  )
+  rc=$?
+  if [ "$rc" -ne 0 ] || [ "$out" != "OK" ]; then
+    _fail "不安全 publish 输入未快速失败: rc=$rc out=$out"
+    return
+  fi
+  pass_test
+}
+
+test_publish_parent_rebind_does_not_write_outside() {
+  start_test "publish-to-lark 远端等待期父目录改向时本地写回失败关闭"
+  local race_root="$WORK/publish-rebind"
+  local parent="$race_root/docs"
+  local held="$race_root/docs-held"
+  local outside="$race_root/outside"
+  mkdir -p "$parent" "$outside"
+  cat > "$parent/spec.md" <<'MD'
+---
+lark_doc_id: docRebind
+lark_doc_url: https://tenant.feishu.cn/docx/docRebind
+lark_published_revision_id: 7
+lark_published_source_hash: old-hash
+---
+# Bound publish
+
+inside body
+MD
+  cp "$parent/spec.md" "$race_root/original.md"
+  printf '%s\n' '# Outside must stay' > "$outside/spec.md"
+  printf '%s\n' 'outside-sentinel' > "$outside/sentinel.txt"
+  : > "$race_root/calls.log"
+
+  export FAKE_LARK_LOG="$race_root/calls.log"
+  export FAKE_LARK_REBIND_PARENT="$parent"
+  export FAKE_LARK_REBIND_HELD="$held"
+  export FAKE_LARK_REBIND_TARGET="$outside"
+  export FAKE_LARK_DOCS_UPDATE_OUT='{"ok":true,"data":{"document":{"document_id":"docRebind","revision_id":8},"result":"success","updated_blocks_count":1,"warnings":[]}}'
+  export FAKE_LARK_DOCS_FETCH_OUT='{"ok":true,"data":{"document":{"document_id":"docRebind","revision_id":8,"content":"# Bound publish\n\ninside body\n"}}}'
+  local out rc
+  out=$(python3 "$FRAMEWORK_ROOT/scripts/publish-to-lark.py" \
+    --type prd --no-merge-cells "$parent/spec.md" 2>&1)
+  rc=$?
+  unset FAKE_LARK_LOG FAKE_LARK_REBIND_PARENT FAKE_LARK_REBIND_HELD \
+    FAKE_LARK_REBIND_TARGET FAKE_LARK_DOCS_UPDATE_OUT FAKE_LARK_DOCS_FETCH_OUT
+
+  if [ "$rc" -ne 0 ] \
+    || ! echo "$out" | grep -q 'frontmatter 回写失败' \
+    || [ ! -L "$parent" ] \
+    || ! cmp -s "$held/spec.md" "$race_root/original.md" \
+    || ! grep -q '^# Outside must stay$' "$outside/spec.md" \
+    || ! grep -q '^outside-sentinel$' "$outside/sentinel.txt" \
+    || ! grep -q -- '--content -' "$race_root/calls.log" \
+    || ! grep -q 'STDIN_HEAD: # Bound publish' "$race_root/calls.log" \
+    || find "$held" -maxdepth 1 -name '.*.lark-*.md' | grep -q .; then
+    _fail "父目录改向跨过本地边界: rc=$rc out=$out log=$(cat "$race_root/calls.log")"
     return
   fi
   pass_test
@@ -574,7 +786,8 @@ test_no_merge_marker_parsing
 test_table_writes_chain_document_revision
 test_overwrite_uses_existing_doc_id
 test_overwrite_uses_docx_url_without_doc_id
-test_partial_update_clears_stale_review_baseline
+test_incomplete_updates_clear_stale_review_baseline
+test_pre_update_failures_keep_stale_review_baseline
 test_overwrite_refreshes_review_baseline
 test_remote_edit_during_publish_does_not_become_baseline
 test_frontmatter_refresh_preserves_concurrent_local_edit
@@ -582,6 +795,8 @@ test_overwrite_clears_stale_baseline_when_revision_fetch_fails
 test_overwrite_strips_frontmatter
 test_first_time_create_legacy_nested_shape
 test_cwd_workaround_present_in_real_invocation
+test_publish_rejects_symlink_and_fifo_without_blocking
+test_publish_parent_rebind_does_not_write_outside
 test_preflight_blocks_old_lark_cli
 test_preflight_blocks_unlogged_in
 
