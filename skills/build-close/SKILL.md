@@ -70,7 +70,7 @@ python3 "$PMAI_HOME/scripts/build-contract.py" commit \
 
 python3 "$PMAI_HOME/scripts/finalize-work.py" \
   --module-dir "<build worktree>/docs/modules/<模块>" \
-  <Web 项目追加 --browser-manifest "<build worktree>/.pm-workflow/audits/<模块>/browser-manifest.json">
+  <Web 项目追加 --browser-manifest "<build worktree>/<build.audit_dir>/browser-manifest.json">
 ```
 
 runner 返回 `3` 时，按 `skills/build/references/finalization.md` 完成当前主控负责的语义检查并记录 evidence，再重跑同一命令。v2/v3 没有统一 runner 状态时继续按旧合同证据恢复，不迁移。build 验收证据是落地主线硬门，不能因为使用兼容入口而跳过。任何检查发现规格漏项、实现缺口或业务代码需要修改，都保持/退回 `iterating` 并交还 `/pmai-build`；本 close 不补业务代码、不一边收尾一边重新验收。
@@ -109,7 +109,7 @@ bash "$PMAI_HOME/scripts/close-work.sh" \
 实现已经在 main 时，禁止再次 merge 或重新跑实现落地。只做：
 
 1. 在 main 重新编译 context pack；
-2. 读取 `.pm-workflow/audits/<模块>/doc-impact.json`；
+2. 读取 `<build.audit_dir>/doc-impact.json`；
 3. impact map 只在 landed 后按 implementation diff 和 accepted deltas 生成，不在 build 阶段提前准备；
 4. 调用 spec-writing 的“落地主线后的目标对账”模式；
 5. 只更新影响地图实际列出的 pending 真相源；landed diff 已改文档由脚本自动记为 covered；
@@ -119,7 +119,7 @@ bash "$PMAI_HOME/scripts/close-work.sh" \
 
 ```bash
 python3 "$PMAI_HOME/scripts/doc-impact.py" validate \
-  ".pm-workflow/audits/<模块>/doc-impact.json"
+  "<build.audit_dir>/doc-impact.json"
 python3 "$PMAI_HOME/scripts/build-contract.py" docs-complete \
   "docs/modules/<模块>"
 bash "$PMAI_HOME/scripts/close-work.sh" "docs/modules/<模块>"

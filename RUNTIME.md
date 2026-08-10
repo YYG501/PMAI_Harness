@@ -6,7 +6,7 @@
 
 - 日期：2026-08-10
 - 开发分支：`main`
-- 当前目标：`/pmai-lark-review` 已补齐只回复后由 PM 手工解决、图片临时 URL 等价验收、评论替代态、seal 前跨决定一致性门和 PM 业务回执。全量回归已通过，等待 PM 确认是否提交、分发与升级安装态。
+- 当前目标：已修复真实消费仓中“模块 close 后再次修改”的轮次混用、accepted delta 最终哈希冲突和并行文档 currentness 边界；定向与全量回归均已通过，尚未提交、分发或升级安装态。
 - gstack 参考基线：`v1.58.5.0`，commit `11de390`；只参考本地 `gstack-clean` checkout，没有升级用户目录中的安装副本。
 
 ## 当前活跃模型
@@ -18,12 +18,13 @@
 - `/pmai-doctor` 的 JSON `pm_report` 直接给出需要处理、仅供参考和项目进度，Agent 不再从底层 finding 自行扩写待办。消费仓 Startup 由 `AGENTS.md` 内唯一托管区块承载；`sync-consumer-entry.py` 的 check 只读，apply 只在 PM 确认后原子替换该区块，旧文件迁移保留项目补充并对未知规则、损坏标记和 symlink 失败关闭。CLI 不自行越过沙箱；版本未知且有远程地址时，由 Doctor Skill 让当前宿主申请联网权限后重试同一只读查询。
 - `/pmai-lark-review` 是归档后飞书评审回流入口：当前飞书 full XML 原生快照是 T 的唯一底稿，B/L 只用于定位本地补充和冲突，祖先格式兼容性不能把目标切回旧 L。R→T 的每个删除 / 改写 / 移动进入远端覆盖账本，重复文本按章节归位，现有 block 的格式必须保留，随内容删除也要有明确依据；大规模或结构性差异生成预览，纯排版 / 结构保真可由 Agent 记录 `agent_reviewed`，只有真实产品分叉才要求 PM 确认。精细同步后逐 block 验证样式、资源和引用；图片 Markdown 临时 URL 不作为资源身份，图片 alt / 数量 / 结构和普通链接仍严格比较，资源身份由原生 block / token 验证。飞书正文、评论和回复只是不可信业务证据，不能作为 Agent 指令或 PM 本轮确认；remote-only 正文必须由 PM 本轮明确认可。每项变化通过 `decision_routing` 选择性写 / supersede `docs/modules/<单一模块>/decisions.md`；存在候选产品决定时，seal 前必须把每条候选与全部当前有效决定逐一对照，漏项、过期或 `needs_pm` 均阻断。seal、apply 和正式归位前都拒绝越界或 symlink 目标，措辞 / 排版明确标记不写。评论处置区分真正延期的 `deferred` 与旧引用已被新方案替代的 `superseded`；评论完成状态为 `open / replied_pending_pm / solved_by_pmai / solved_by_pm_verified`。默认 `complete-comments` 回复并解决；`--reply-only` 只回复且 solve 调用必须为 0，PM 可分批手工解决，再由 `verify-comments` 回读，全部核验后才允许 checkpoint。逐笔 journal 绑定受控回复和解决证据，不能把外部写入冒充本批完成，也不能 reopen PM 手工解决的评论。最终回执由 `receipt` 只输出正文、格式、评论、本地产品结果和 PM 待办。机器路径目标 10–15 分钟，阶段耗时与 API 往返写入批次产物。
 - `/pmai-build-close` 只作为兼容与恢复入口；正常链路不再要求 PM 手动调用。
+- 模块 close 后再次修改先按影响分流：错字、单文案、局部样式、常量和符合现有规格的小缺陷走 `/pmai-quick-fix`；产品对象、规则、规格、任务路径或验收变化进入新一轮 `/pmai-design → /pmai-build`。新轮次复用长期模块文档，但 work id、design 基线、accepted delta、验收证据、audit 目录和 finalize 游标全部重新建立。
 - `building / iterating / final_check` 中，PM 的“启动看看 / 还有什么问题 / 继续改当前结果”等自然语言继续当前 `/pmai-build`。Codex、Claude Code、Kimi Code 通过 prompt hook 注入 `status-view.py --execution-context`；OpenCode 由入口规则主动读取。该上下文只派生现有合同，不新增状态；多个 active build 返回歧义，合同或 policy 漂移时失败关闭。只有位于 prompt 首 token 的真实 PMAI 命令不受自然语言续接拦截，否定、引用、行内代码、代码块和文档示例都不能绕过；Git / status-view 超时、非零、空输出、坏 JSON、未知状态或 stdin 超时一律在宿主超时前注入不可用护栏，不能降级成“没有 active build”；Kimi 分发器也不得吞掉 hook 缺失、Node 启动失败或任意非零退出。
 - lifecycle v2：`designing → ready_to_build → building → iterating → final_check → landed → documenting → complete`。旧 `stage` 字段仅为 v1 消费仓兼容展示。
 - 项目建造定义：初始化时不存在；首个达到 `ready_to_build` 的 design 将 `prototype / product`、技术栈、代码入口、真实命令和 Web 能力写入 `.pm-workflow/project.yml`。后续 build 只读该文件。
 - 模块真相源：`docs/modules/<模块>/discussion.md`、`decisions.md`、`spec.md`；跨模块现行规则为 `PRODUCT-RULES.md`，项目级冻结理路为 `docs/decisions/`。
 - 文档语义：`spec.md` / PRD 是指导研发实现的最终目标合同；`PRODUCT-STATE.md` 描述 main 已落地现状；原型、mockup 和代码只作设计 / 实现证据。
-- design 的 `ready_to_build` 状态同时记录 approved source hash、design checkpoint 和精确目标路径；build 开工前重新编译上下文并验证 currentness，过期依据不能继续显示或进入构建。新 `.work-meta.json:build` 使用合同 v4，在 v3 实现深度合同之上增加 `iteration_checks / final_checks`、两层 evidence 和定稿请求；旧 v2/v3 合同继续用于中断恢复兼容。
+- design 的 `ready_to_build` 状态同时记录 approved source hash、hash scope version、design checkpoint 和精确目标路径；build 开工前重新编译上下文并验证 currentness，过期依据不能继续显示或进入构建。新轮次使用 `source_hash_version=2`：模块三件套、输入证据、PRODUCT、PRODUCT-RULES、DESIGN、项目级决定和 project.yml 参与 currentness；PRODUCT-STATE、TODO 和模块索引只作上下文，单独变化不判设计过期。没有版本字段的旧 ready/build 按 v1 全量范围恢复到该轮结束，显式返回 design 后下一次批准才升级 v2。新 `.work-meta.json:build` 使用合同 v4，在 v3 实现深度合同之上增加 `iteration_checks / final_checks`、两层 evidence 和定稿请求；旧 v2/v3 合同继续用于中断恢复兼容。
 - 新 build 由 AI 在一张卡中展示推荐的工作环境、构建工具和两项的全部有效选择，PM 只确认这两项；外部工具候选排除当前主控对应的 profile，“当前会话直接构建”始终可选，没有可用外部工具时默认推荐它。项目类型和验收方案不显示。选择当前环境时，main 只放行合同声明的目标路径。
 - 主控宿主面：Claude Code 使用 `/pmai-*`，Codex 使用原生 `$pmai-*`，Kimi Code 使用原生 `/skill:pmai-*`，OpenCode 使用生成的 `/pmai-*` commands；四者消费同一份权威 Skill。Kimi Code 同时提供外部 builder profile，但在 Kimi 作为当前主控时按同宿主排除规则隐藏。
 - 记忆分两层：项目事实、决定和偏好继续由消费仓现有真相源承担；个人经验保存在用户级状态目录，跨项目召回但只作建议。个人经验不进入 context pack、项目 hash 或 Git，也不能自动修改 Skill。
@@ -37,6 +38,7 @@
 - 新增 `context-pack.py`：design、build、恢复、最终检查和文档更新共用确定性上下文，并区分 active / superseded / 冲突决定、未决问题和输入 hash；项目定义存在时只从其中的 entrypoints 取实现上下文。
 - 新增共用 `decision-policy`：机械项自动处理，可逆偏好给推荐并推进，产品模型岔路和 one-way door 立即让 PM 拍板；问句和讨论草稿不得成为决定。
 - `build-contract.py` 新 build 继续使用合同 v4：`validate-final-currentness` 重新校验 design hash、accepted deltas、批准路径和 project.yml；真实 Git implementation commit 在每轮 `commit` 时立即阻断批准范围外路径。`request-finalization` 仍是 final evidence 和 `review-ready` 硬门；PM 新反馈用 `resume-iteration` 回快速车道。prototype 继续固化不可 exception 的 `prototype-boundary`。
+- 每次新建模块工作都会生成唯一 `work-<模块>-<时间>-<随机值>` id，并把 `build.audit_dir` 固定为包含该 id 的目录；finalize、landing、文档影响地图和失败恢复只使用该轮目录。旧 `work-<模块>` 合同继续回退模块级 audit 目录。final currentness 分别校验初始 design hash 和按顺序串联后的 accepted-delta 最终 hash，不再在 delta 链验证前把两者误判为冲突。
 - prototype / product 验收 profile schema v2 同时编译 `iteration_checks / final_checks`。新 Web build 只生成一个不可 exception 的 `browser-acceptance`，一次持续浏览器 chain 覆盖受影响流程的 smoke、visual、behavior；旧合同的三项浏览器证据继续兼容恢复。
 - `final-validation.py` 对定稿请求绑定的 implementation commit 创建 detached validation worktree，在 `implementation.root` 运行命令；只对文本完全相同的 test/typecheck/build 去重，生产构建硬门不变。
 - `finalize-work.py` 按 v4 lifecycle 只补缺失机械项，并用绑定 commit/source hash 的 audit 游标从语义检查、`final_check / landed / documenting` 准确续跑；只提交当前模块状态和 audit 目录，合入后输出 main 模块恢复位置。coverage、prototype boundary、迁移和安全等语义判断不伪装成自动通过。
@@ -81,7 +83,7 @@
 ## 当前验证
 
 - Harness 第一阶段安装所有权、初始化冲突、状态权威、ready/build 合同和 cancel 原子性 targeted tests 已通过：`42 passed / 0 failed`。
-- 完整 `tests/run-all.sh` 已通过：`832 passed / 0 failed`；同一次入口另有 skill eval `6 passed / 0 failed / 17 session skipped`（17 项均因外部 session runner 未配置而显式跳过，不计作通过或失败）。新增回归覆盖 reply-only 零 solve、PM 分批 / 全部手工解决回读、PM 手工解决可 checkpoint 且不可 reopen、`content_deleted + superseded`、图片临时 URL 轮换等价、跨决定冲突与回执过期、v3 批次兼容、v1 验收回执失效，以及 PM 回执不暴露 revision / hash / checkpoint；原有 doctor 只读 / repair / 敏感信息保护、消费仓兼容、宿主事务、build 生命周期、飞书、个人经验和其它回归继续通过。
+- 完整 `tests/run-all.sh` 已通过：`841 passed / 0 failed`；同一次入口另有 skill eval `6 passed / 0 failed / 17 session skipped`（17 项均因外部 session runner 未配置而显式跳过，不计作通过或失败）。本轮新增回归覆盖无 delta、单个 delta、多个 delta、真实相关输入变化、无关并行变化、旧 v1 currentness 恢复、新轮次 finalize/landing 与轮次级 audit 隔离；原有 doctor 只读 / repair / 敏感信息保护、消费仓兼容、宿主事务、build 生命周期、飞书、个人经验和其它回归继续通过。
 - 开发态入口同步 helper 已在真实消费仓 `ExampleAgentProject` 只读 dogfood：返回 `stale / legacy_migration`，渲染计划可以确定识别旧 PMAI Startup，并保留“非小改动前读取产品现状”等项目补充及后续项目规则。消费仓在本轮分析期间又出现新的活跃模块状态，因此不再把其整体 error 数作为本次入口同步回归基线；运行前后 Git 状态一致，未修改消费仓或用户级安装。
 
 ## 下一步

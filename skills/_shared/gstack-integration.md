@@ -29,7 +29,7 @@ gstack 在项目初始化阶段不是依赖。是否需要页面验收由 design
 适用：gstack / browser 产出检查证据，PMAI 决定能不能收口。
 
 - acceptance profile 选中 `browser-smoke / visual / behavior` 时，AI 先解析当前 runtime 的主动浏览器适配器：优先 gstack `/browse`，也可使用可实际操作页面的 browser 或 Playwright 能力，不把工具选择交给 PM。
-- 使用 gstack 时可运行 `check-gstack-browser.sh --browser-smoke --json-out .pm-workflow/audits/<模块>/browser-smoke.json`；其它适配器必须产出同一 PMAI evidence contract。
+- 使用 gstack 时可运行 `check-gstack-browser.sh --browser-smoke --json-out <build.audit_dir>/browser-smoke.json`；其它适配器必须产出同一 PMAI evidence contract。新工作轮次不得把证据写回旧的模块级 audit 目录。
 - `browser-smoke` 只有 `status=pass` 且 artifact 含 `active_browser_smoke=true` 才有效。不能用 exception 跳过主动浏览器能力；没有任何适配器时 UI final_check 直接阻塞。
 - `/design-review` 或等价视觉能力产出 visual evidence；`/browse`、browser 或 Playwright 产出 behavior evidence。PM 请求定稿后，每项都由 final-lane `record-evidence` 绑定 source hash 和 implementation commit。
 - 非 Web product build 不生成浏览器检查；工具是否必需由 acceptance profile 决定，不由初始化是否安装 gstack 决定。

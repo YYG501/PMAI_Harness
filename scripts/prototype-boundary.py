@@ -195,7 +195,7 @@ def build_report(args: argparse.Namespace) -> dict[str, Any]:
     target_paths = [normalize_path(str(path)) for path in build["target"].get("paths", [])]
     module_rel = module_dir.relative_to(repo_root).as_posix()
     framework_managed = {f"{module_rel}/.work-meta.json"}
-    audit_root = f".pm-workflow/audits/{module_dir.name}"
+    audit_root = str(build.get("audit_dir") or f".pm-workflow/audits/{module_dir.name}")
     outside_target_paths = [
         path
         for path in changed_paths

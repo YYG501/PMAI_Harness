@@ -106,6 +106,39 @@ test_context_pack_hash_changes_with_authority_source() {
   teardown_fixture
 }
 
+test_context_pack_parallel_coordination_changes_do_not_expire_design() {
+  start_test "context-pack: parallel coordination updates stay readable without expiring design"
+  setup_fixture
+  mkdir -p "$T/docs/modules/billing"
+  printf '# Modules\n' > "$T/docs/modules/INDEX.md"
+  printf '# Billing v1\n' > "$T/docs/modules/billing/spec.md"
+  OUT1="$T/context-parallel-1.json"
+  OUT2="$T/context-parallel-2.json"
+  python3 "$CONTEXT_PACK" --repo-root "$T" --module access --output "$OUT1" >/dev/null
+  printf '\nBilling landed.\n' >> "$T/PRODUCT-STATE.md"
+  printf '\n- Billing follow-up\n' >> "$T/TODO.md"
+  printf '\n- billing\n' >> "$T/docs/modules/INDEX.md"
+  printf '# Billing v2\n' > "$T/docs/modules/billing/spec.md"
+  python3 "$CONTEXT_PACK" --repo-root "$T" --module access --output "$OUT2" >/dev/null
+  python3 - "$OUT1" "$OUT2" <<'PY' || {
+import json, sys
+before = json.load(open(sys.argv[1]))
+after = json.load(open(sys.argv[2]))
+context_only = {"PRODUCT-STATE.md", "TODO.md", "docs/modules/INDEX.md"}
+assert before["source_hash_version"] == 2
+assert before["source_hash"] == after["source_hash"]
+assert context_only.isdisjoint(before["source_hash_scope"])
+assert all(before["input_hashes"][path] != after["input_hashes"][path] for path in context_only)
+assert "docs/modules/billing/spec.md" not in before["input_hashes"]
+assert "docs/modules/billing/spec.md" not in after["input_hashes"]
+PY
+    _fail "parallel coordination-only changes should not alter module currentness"
+    teardown_fixture; return
+  }
+  pass_test
+  teardown_fixture
+}
+
 test_context_pack_ignores_resolved_headings_and_non_decision_sections() {
   start_test "context-pack: resolved heading and decision metadata are not product decisions"
   setup_fixture
@@ -503,6 +536,7 @@ PY
 
 test_context_pack_compiles_authority_and_rejects_questions
 test_context_pack_hash_changes_with_authority_source
+test_context_pack_parallel_coordination_changes_do_not_expire_design
 test_context_pack_ignores_resolved_headings_and_non_decision_sections
 test_context_pack_recognizes_current_round_has_no_open_questions
 test_context_pack_rejects_quoted_or_qualified_no_open_claims

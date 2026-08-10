@@ -56,7 +56,7 @@ echo "SKILL: status"
    <一句话产品现状>
 
    建议下一步：
-   发 /pmai-design 起一个模块工作。
+   小修现有结果可发 /pmai-quick-fix；新功能或产品规则变化发 /pmai-design。
    ```
 
    **无进行中工作、但工作区有未提交改动**：
@@ -117,7 +117,7 @@ echo "SKILL: status"
 
 ## Rules
 
-- 只读视图，绝不写文件 / 改状态（区别于会改状态的 `/pmai-design` / `/pmai-build` / `/pmai-build-close`）。
+- 只读视图，绝不写文件 / 改状态（区别于会改状态的 `/pmai-quick-fix` / `/pmai-design` / `/pmai-build` / `/pmai-build-close`）。
 - PM 话术不出内部词（`.work-meta` / 真相源 / 派生 等不直接念给 PM）。
 - 不把脚本诊断讲给 PM：禁止输出“PMAI 状态脚本显示”“记录层没有挂起模块”“可以理解为”“PRODUCT-RULES.md 不存在所以没有决策”这类话。只说 PM 要行动的事实。
 - 如果脚本状态和工作区状态不一致，优先给 PM 一个行动结论：有未提交改动就说“有一轮改动还没收口”，不要展开内部原因。

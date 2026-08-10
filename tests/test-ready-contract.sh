@@ -153,6 +153,61 @@ PY
   teardown_fixture
 }
 
+test_legacy_ready_keeps_v1_hash_scope() {
+  start_test "ready-contract: legacy ready keeps v1 full-document currentness"
+  setup_fixture
+  python3 - "$MODULE/.work-meta.json" <<'PY'
+import json, sys
+path = sys.argv[1]
+meta = json.load(open(path))
+meta.pop("source_hash_version", None)
+json.dump(meta, open(path, "w"), ensure_ascii=False, indent=2)
+PY
+  LEGACY="$T/.pm-workflow/context/access-legacy.json"
+  python3 "$CONTEXT_PACK" --repo-root "$T" --module "$MODULE" --output "$LEGACY" >/dev/null
+  LEGACY_HASH=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["source_hash"])' "$LEGACY")
+  python3 - "$MODULE/.work-meta.json" "$LEGACY_HASH" <<'PY'
+import json, sys
+path, approved = sys.argv[1:]
+meta = json.load(open(path))
+meta["approved_source_hash"] = approved
+json.dump(meta, open(path, "w"), ensure_ascii=False, indent=2)
+PY
+  python3 "$CONTEXT_PACK" --repo-root "$T" --module "$MODULE" --output "$LEGACY" >/dev/null
+  if ! python3 "$BUILD_CONTRACT" validate-ready "$MODULE" --context-pack "$LEGACY" \
+    >/tmp/ready-contract.$$ 2>/tmp/ready-contract.err.$$; then
+    _fail "legacy ready should validate with its original hash scope"
+    cat /tmp/ready-contract.err.$$ >&2
+  elif ! python3 - "$LEGACY" <<'PY'
+import json, sys
+pack = json.load(open(sys.argv[1]))
+assert pack["source_hash_version"] == 1
+assert "PRODUCT-STATE.md" in pack["source_hash_scope"]
+assert "TODO.md" in pack["source_hash_scope"]
+PY
+  then
+    _fail "legacy ready should preserve v1 context scope"
+  elif ! python3 "$BUILD_CONTRACT" designing "$MODULE" >/dev/null; then
+    _fail "legacy ready should be able to return to design"
+  elif ! python3 "$CONTEXT_PACK" --repo-root "$T" --module "$MODULE" \
+    --output "$LEGACY" >/dev/null; then
+    _fail "redesign should compile a current context pack"
+  elif ! python3 - "$LEGACY" <<'PY'
+import json, sys
+pack = json.load(open(sys.argv[1]))
+assert pack["source_hash_version"] == 2
+assert "PRODUCT-STATE.md" not in pack["source_hash_scope"]
+assert "TODO.md" not in pack["source_hash_scope"]
+PY
+  then
+    _fail "explicit redesign should upgrade the next approval to v2 scope"
+  else
+    pass_test
+  fi
+  rm -f /tmp/ready-contract.$$ /tmp/ready-contract.err.$$
+  teardown_fixture
+}
+
 test_ready_scope_and_dirty_preflight() {
   start_test "ready-contract: build reuses approved paths and blocks overlapping dirty work"
   setup_fixture
@@ -304,6 +359,7 @@ PY
 
 test_ready_to_build_starts_building
 test_ready_currentness_and_legacy_cache_ignore
+test_legacy_ready_keeps_v1_hash_scope
 test_ready_scope_and_dirty_preflight
 test_build_start_rejects_paths_outside_project_contract
 test_build_start_requires_project_definition

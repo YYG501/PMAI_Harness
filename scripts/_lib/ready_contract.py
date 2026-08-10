@@ -79,6 +79,7 @@ def validate_ready_pack(
     pack: dict[str, Any],
     *,
     allowed_states: set[str] | None = None,
+    expected_pack_approved_hash: str | None = None,
 ) -> dict[str, Any]:
     accepted_states = allowed_states or {"ready_to_build"}
     current_lifecycle = lifecycle_state(meta)
@@ -94,6 +95,16 @@ def validate_ready_pack(
     current_hash = str(pack.get("source_hash") or "").strip()
     if not current_hash:
         raise ReadyContractError("最新 context pack 缺少 source_hash，不能确认设计是否仍有效。")
+    build = meta.get("build") if isinstance(meta.get("build"), dict) else {}
+    try:
+        expected_hash_version = int(
+            build.get("source_hash_version") or meta.get("source_hash_version") or 1
+        )
+        pack_hash_version = int(pack.get("source_hash_version") or 1)
+    except (TypeError, ValueError) as exc:
+        raise ReadyContractError("当前工作或 context pack 的 source_hash_version 不合法。") from exc
+    if pack_hash_version != expected_hash_version:
+        raise ReadyContractError("context pack 与当前工作使用的 source hash 版本不一致。")
 
     expected_module = _module_relative(repo_root, module_dir)
     if pack.get("module") != expected_module:
@@ -104,7 +115,12 @@ def validate_ready_pack(
         raise ReadyContractError("设计依据在批准后发生变化；请回到 /pmai-design 重新核对并固定建造起点。")
 
     pack_approved = str(pack.get("approved_source_hash") or "").strip()
-    if pack_approved and pack_approved != approved_hash:
+    expected_pack_hash = (
+        str(expected_pack_approved_hash).strip()
+        if expected_pack_approved_hash is not None
+        else approved_hash
+    )
+    if pack_approved and pack_approved != expected_pack_hash:
         raise ReadyContractError("context pack 与模块状态记录的 approved_source_hash 不一致。")
 
     target_paths = approved_target_paths(meta)
@@ -118,6 +134,7 @@ def validate_ready_pack(
         "state": "current",
         "approved_source_hash": approved_hash,
         "current_source_hash": current_hash,
+        "source_hash_version": expected_hash_version,
         "design_revision": int(meta.get("design_revision") or 1),
         "target_paths": target_paths,
     }

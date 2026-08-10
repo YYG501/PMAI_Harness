@@ -32,6 +32,13 @@ ROOT_SOURCES = (
     ("TODO.md", "open_product_work"),
     ("docs/modules/INDEX.md", "module_index"),
 )
+CURRENT_SOURCE_HASH_VERSION = 2
+CONTEXT_ONLY_HASH_ROLES = {
+    "current_product_state",
+    "open_product_work",
+    "module_index",
+    "work_state",
+}
 MODULE_SOURCES = (
     ("discussion.md", "discussion"),
     ("decisions.md", "module_decisions"),
@@ -317,8 +324,26 @@ def relevant_implementation_paths(repo_root: Path, keywords: list[str], meta: di
     return sorted(paths)
 
 
+def source_hash_version(meta: dict) -> int:
+    build = meta.get("build") if isinstance(meta.get("build"), dict) else {}
+    raw = build.get("source_hash_version") or meta.get("source_hash_version")
+    if raw is not None:
+        try:
+            version = int(raw)
+        except (TypeError, ValueError) as exc:
+            raise SystemExit(f"source_hash_version 必须是整数: {raw}") from exc
+        if version not in {1, CURRENT_SOURCE_HASH_VERSION}:
+            raise SystemExit(f"不支持的 source_hash_version: {version}")
+        return version
+    # Existing approved work predates scoped currentness and must continue to
+    # compile with the original full-document hash until that round closes.
+    if build.get("approved_source_hash") or meta.get("approved_source_hash"):
+        return 1
+    return CURRENT_SOURCE_HASH_VERSION
+
+
 def source_records(
-    repo_root: Path, sources: list[Source]
+    repo_root: Path, sources: list[Source], hash_version: int
 ) -> tuple[list[dict], dict[str, str], str, list[str]]:
     records = []
     hashes: dict[str, str] = {}
@@ -329,10 +354,10 @@ def source_records(
         data = read_bytes(source.path)
         file_hash = sha256_bytes(data)
         hashes[rel] = file_hash
-        # .work-meta.json is lifecycle state, not approved product/design truth.
-        # Keep its individual input hash in the pack, but do not let routine
-        # state transitions silently change the approved source hash.
-        if source.role != "work_state":
+        excluded_roles = {"work_state"} if hash_version == 1 else CONTEXT_ONLY_HASH_ROLES
+        # Context-only sources remain readable and individually hashed in the
+        # pack, but do not invalidate a v2 design on coordination-only changes.
+        if source.role not in excluded_roles:
             hash_scope.append(rel)
             digest.update(rel.encode("utf-8"))
             digest.update(b"\0")
@@ -374,11 +399,15 @@ def build_pack(args: argparse.Namespace) -> dict:
         target_kind = target.get("kind")
         target_entrypoints = target.get("entrypoints", [])
     sources = collect_sources(repo_root, module_dir, meta)
-    records, input_hashes, source_hash, hash_scope = source_records(repo_root, sources)
+    hash_version = source_hash_version(meta)
+    records, input_hashes, source_hash, hash_scope = source_records(
+        repo_root, sources, hash_version
+    )
     decisions, question_like = parse_decisions(repo_root, sources)
     keywords = extract_keywords(module_dir, args.goal)
     return {
         "schema_version": 1,
+        "source_hash_version": hash_version,
         "compiled_at": now_iso(),
         "repo": {
             "head": git_output(repo_root, "rev-parse", "HEAD"),

@@ -39,10 +39,17 @@ IMPLEMENTATION_COMMIT=$(printf '%s' "$BUILD_JSON" | python3 -c 'import json,sys;
 SOURCE_HASH=$(printf '%s' "$BUILD_JSON" | python3 -c 'import json,sys; print(json.load(sys.stdin).get("approved_source_hash","") or "")')
 MODULE_NAME=$(basename "$WORK_DIR")
 MAIN_MODULE="$REPO_ROOT/docs/modules/$MODULE_NAME"
-IMPACT_MAP="$REPO_ROOT/.pm-workflow/audits/$MODULE_NAME/doc-impact.json"
-IMPACT_MAP_REL=".pm-workflow/audits/$MODULE_NAME/doc-impact.json"
-TIMING_FILE="$REPO_ROOT/.pm-workflow/audits/$MODULE_NAME/timing.json"
-TIMING_REL=".pm-workflow/audits/$MODULE_NAME/timing.json"
+AUDIT_DIR_REL=$(printf '%s' "$BUILD_JSON" | python3 -c 'import json,sys; print(json.load(sys.stdin).get("audit_dir","") or "")')
+if [ -z "$AUDIT_DIR_REL" ]; then
+  AUDIT_DIR_REL=".pm-workflow/audits/$MODULE_NAME"
+fi
+case "$AUDIT_DIR_REL" in
+  /*|../*|*/../*|*/..) echo "❌ build.audit_dir 必须是仓内相对路径: $AUDIT_DIR_REL" >&2; exit 1 ;;
+esac
+IMPACT_MAP="$REPO_ROOT/$AUDIT_DIR_REL/doc-impact.json"
+IMPACT_MAP_REL="$AUDIT_DIR_REL/doc-impact.json"
+TIMING_FILE="$REPO_ROOT/$AUDIT_DIR_REL/timing.json"
+TIMING_REL="$AUDIT_DIR_REL/timing.json"
 CURRENT_TIMING_ID=""
 CURRENT_TIMING_PHASE=""
 PENDING_CLEANUP_FILE="$REPO_ROOT/.runs/pending-cleanup.json"
@@ -113,7 +120,7 @@ trap timing_on_exit EXIT
 
 validate_final_timing() {
   [ "${PMAI_REQUIRE_FINAL_TIMING:-0}" = "1" ] || return 0
-  local marker="$REPO_ROOT/.pm-workflow/audits/$MODULE_NAME/finalize-run.json"
+  local marker="$REPO_ROOT/$AUDIT_DIR_REL/finalize-run.json"
   [ -f "$marker" ] || return 0
   local required=()
   local phases_output
@@ -227,8 +234,8 @@ record_landing_failure_worktree() {
   local worktree="$1"
   local started_at="$2"
   local reason="$3"
-  local audit_file="$worktree/.pm-workflow/audits/$MODULE_NAME/timing.json"
-  local audit_rel=".pm-workflow/audits/$MODULE_NAME/timing.json"
+  local audit_file="$worktree/$AUDIT_DIR_REL/timing.json"
+  local audit_rel="$AUDIT_DIR_REL/timing.json"
   local output entry_id
   output=$(python3 "$SCRIPT_DIR/build-timing.py" start \
     --audit-file "$audit_file" --phase landing --kind final \

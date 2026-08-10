@@ -129,6 +129,19 @@ def build_state(module_dir: Path) -> tuple[dict, dict]:
     return meta, build
 
 
+def audit_dir_for(build_root: Path, module_dir: Path, build: dict) -> Path:
+    raw = str(build.get("audit_dir") or "").strip()
+    if not raw:
+        return build_root / ".pm-workflow" / "audits" / module_dir.name
+    path = Path(raw)
+    resolved = (path if path.is_absolute() else build_root / path).resolve()
+    try:
+        resolved.relative_to(build_root.resolve())
+    except ValueError as exc:
+        raise SystemExit("build.audit_dir 必须位于当前仓库内。") from exc
+    return resolved
+
+
 def evidence_names(build: dict) -> set[str]:
     acceptance = build.get("acceptance")
     if not isinstance(acceptance, dict):
@@ -512,9 +525,9 @@ def finalize(args: argparse.Namespace) -> int:
     module_dir = Path(args.module_dir).expanduser().resolve()
     build_root = git_root(module_dir)
     main_root = main_repo_root(build_root)
-    audit_dir = build_root / ".pm-workflow" / "audits" / module_dir.name
-    audit_dir.mkdir(parents=True, exist_ok=True)
     _, build = build_state(module_dir)
+    audit_dir = audit_dir_for(build_root, module_dir, build)
+    audit_dir.mkdir(parents=True, exist_ok=True)
     state = str(build.get("lifecycle_state") or "")
 
     if state == "iterating":

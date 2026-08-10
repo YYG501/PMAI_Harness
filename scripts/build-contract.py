@@ -12,10 +12,11 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import secrets
+import subprocess
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
-import subprocess
 
 from _lib.delivery_policy import (
     delivery_policy_for,
@@ -58,6 +59,7 @@ VALID_LIFECYCLE_STATES = {
 }
 VALID_DOCS_STATUSES = {"pending", "complete", "failed"}
 CURRENT_CONTRACT_VERSION = 4
+CURRENT_SOURCE_HASH_VERSION = 2
 PASSING_EVIDENCE_STATUSES = {"pass", "passed", "clean", "built"}
 LIMITED_EVIDENCE_STATUSES = {"limited", "skipped", "blocked", "needs-review"}
 VALID_EVIDENCE_STATUSES = {
@@ -95,6 +97,11 @@ def now_iso() -> str:
     return datetime.now(timezone.utc).astimezone().isoformat(timespec="seconds")
 
 
+def new_work_id(module_name: str) -> str:
+    timestamp = datetime.now(timezone.utc).astimezone().strftime("%Y%m%d%H%M%S")
+    return f"work-{module_name}-{timestamp}-{secrets.token_hex(4)}"
+
+
 def meta_path(module_dir: Path) -> Path:
     return module_dir / ".work-meta.json"
 
@@ -103,12 +110,13 @@ def default_meta(module_dir: Path, branch: str | None = None) -> dict:
     module_name = module_dir.name
     branch_value = branch.strip() if branch else ""
     return {
-        "id": f"work-{module_name}",
+        "id": new_work_id(module_name),
         "name": module_name,
         "branch": branch_value,
         "stage": 1,
         "status": "active",
         "created_at": now_iso(),
+        "source_hash_version": CURRENT_SOURCE_HASH_VERSION,
     }
 
 
@@ -826,6 +834,24 @@ def cmd_start(args: argparse.Namespace) -> None:
     if target_kind == "prototype" and "prototype-boundary" not in final_checks:
         raise SystemExit("prototype build 必须由 acceptance profile 生成 prototype-boundary 检查。")
 
+    work_id = optional(meta.get("id"))
+    if not work_id or Path(work_id).name != work_id or work_id in {".", ".."}:
+        raise SystemExit("当前工作缺少可用的唯一 id，不能建立独立验收目录。")
+    audit_root = f".pm-workflow/audits/{module_dir.name}"
+    new_id_prefix = f"work-{module_dir.name}-"
+    expected_audit_dir = (
+        f"{audit_root}/{work_id}" if work_id.startswith(new_id_prefix) else audit_root
+    )
+    audit_dir = optional(args.audit_dir) or expected_audit_dir
+    try:
+        audit_dir = normalize_paths([audit_dir], "build.audit_dir")[0]
+    except ReadyContractError as exc:
+        raise SystemExit(str(exc)) from exc
+    if audit_dir != expected_audit_dir:
+        if work_id.startswith(new_id_prefix):
+            raise SystemExit("新工作轮次的 build.audit_dir 必须包含当前唯一 work id。")
+        raise SystemExit("旧 build 合同的 audit 目录必须保持模块级兼容路径。")
+
     build = {
         "contract_version": CURRENT_CONTRACT_VERSION,
         "anchor": anchor,
@@ -835,6 +861,7 @@ def cmd_start(args: argparse.Namespace) -> None:
             "entrypoints": entrypoints,
         },
         "approved_source_hash": source_hash,
+        "source_hash_version": int(ready_result["source_hash_version"]),
         "design_revision": design_revision,
         "delivery_policy": delivery_policy,
         "delivery_policy_hash": delivery_policy_hash(delivery_policy),
@@ -845,7 +872,7 @@ def cmd_start(args: argparse.Namespace) -> None:
         "branch": branch,
         "worktree": worktree,
         "baseline_sha": optional(args.baseline_sha),
-        "audit_dir": optional(args.audit_dir),
+        "audit_dir": audit_dir,
         "started_at": now_iso(),
         "implementation_commit": None,
         "pm_accepted_at": None,
@@ -901,6 +928,10 @@ def cmd_designing(args: argparse.Namespace) -> None:
     meta["status"] = "active"
     meta["stage"] = 1
     meta["lifecycle_state"] = "designing"
+    if not isinstance(meta.get("build"), dict):
+        # Returning an old ready contract to design is the explicit point at
+        # which its next approval adopts the current hash scope.
+        meta["source_hash_version"] = CURRENT_SOURCE_HASH_VERSION
     write_meta(module_dir, meta)
     print(json.dumps(meta, ensure_ascii=False))
 
@@ -920,12 +951,21 @@ def cmd_ready(args: argparse.Namespace) -> None:
         raise SystemExit("ready 使用的 context pack 不属于当前模块。")
     if str(pack.get("source_hash") or "") != source_hash:
         raise SystemExit("ready 的 approved_source_hash 与最新 context pack 不一致。")
+    try:
+        source_hash_version = int(pack.get("source_hash_version") or 1)
+    except (TypeError, ValueError) as exc:
+        raise SystemExit("ready context pack 的 source_hash_version 不合法。") from exc
+    if source_hash_version != CURRENT_SOURCE_HASH_VERSION:
+        raise SystemExit(
+            f"新的 ready 合同必须使用 source_hash_version={CURRENT_SOURCE_HASH_VERSION}。"
+        )
     target_paths = validate_target_paths(repo_root, args.target_path)
     meta["status"] = "active"
     meta["stage"] = 1
     meta["lifecycle_state"] = "ready_to_build"
     meta["design_revision"] = args.design_revision
     meta["approved_source_hash"] = source_hash
+    meta["source_hash_version"] = source_hash_version
     meta["design_checkpoint_commit"] = checkpoint
     meta["approved_target"] = {"paths": target_paths}
     write_meta(module_dir, meta)
@@ -965,6 +1005,7 @@ def cmd_validate_final_currentness(args: argparse.Namespace) -> None:
             meta,
             compile_current_context_pack(repo_root, module_dir),
             allowed_states={"iterating", "final_check"},
+            expected_pack_approved_hash=str(build.get("approved_source_hash") or ""),
         )
     except ReadyContractError as exc:
         raise SystemExit(str(exc)) from exc

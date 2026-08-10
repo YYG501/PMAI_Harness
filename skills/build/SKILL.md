@@ -109,7 +109,11 @@ done < <(python3 -c 'import json,sys; print(*json.load(sys.stdin)["implementatio
 根据项目类型、本轮目标路径、项目入口和风险后台生成默认验收档案：
 
 ```bash
-PROFILE="$REPO_ROOT/.pm-workflow/audits/<模块>/acceptance-profile.json"
+WORK_ID=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["id"])' \
+  "$REPO_ROOT/docs/modules/<模块>/.work-meta.json")
+AUDIT_DIR_REL=".pm-workflow/audits/<模块>/$WORK_ID"
+PROFILE="$REPO_ROOT/$AUDIT_DIR_REL/acceptance-profile.json"
+mkdir -p "$(dirname "$PROFILE")"
 PROFILE_ARGS=(
   --repo-root "$REPO_ROOT"
   --project-definition "$REPO_ROOT/.pm-workflow/project.yml"
@@ -209,6 +213,7 @@ START_ARGS=(
   --builder-json "<PM 已确认的 builder snapshot>"
   --branch "$BUILD_BRANCH"
   --baseline-sha "$(git -C "$BUILD_DIR" rev-parse HEAD)"
+  --audit-dir "$AUDIT_DIR_REL"
   --target-kind "$PROJECT_TYPE"
   --approved-source-hash "<ready 记录的 hash>"
   --design-revision "<ready 记录的 revision>"
@@ -294,10 +299,10 @@ git -C "$BUILD_DIR" commit -m "build(<模块>): record iteration"
 8. 用 `record-evidence --lane iteration` 绑定该 commit 记录快检，不得把 iteration evidence 冒充 final evidence；
 9. 立即告诉 PM“已修改，可刷新查看”，继续复用同一个页面与浏览器连接；定稿请求前不准备 `review-ready`，也不在后台偷跑完整 `final_checks`。
 
-每轮同时把阶段耗时写入 `$BUILD_DIR/.pm-workflow/audits/<模块>/timing.json`。阶段至少覆盖 `prepare / implement / fast-check / preview`；反馈收到到 preview ready 的 time-to-preview 按改动标记为 `minor` 或 `interaction`：
+每轮同时把阶段耗时写入合同固定的本轮验收目录。阶段至少覆盖 `prepare / implement / fast-check / preview`；反馈收到到 preview ready 的 time-to-preview 按改动标记为 `minor` 或 `interaction`：
 
 ```bash
-TIMING_FILE="$BUILD_DIR/.pm-workflow/audits/<模块>/timing.json"
+TIMING_FILE="$BUILD_DIR/$AUDIT_DIR_REL/timing.json"
 TIMING_JSON=$(python3 "$PMAI_HOME/scripts/build-timing.py" start \
   --audit-file "$TIMING_FILE" --phase preview --kind "<minor|interaction>" \
   --feedback-at "<收到本轮反馈的 ISO 时间>")
@@ -346,7 +351,7 @@ runner 返回仍缺语义检查时，由当前主控完成规格覆盖、prototy
 先生成边界检查 artifact。第一次不带确认参数运行，用它列出候选 diff、批准范围外改动和生产建设信号；AI 对照 `delivery_policy` 与 active decisions 完成语义复核后，确认没有越界才重跑并写 `pass`：
 
 ```bash
-BOUNDARY="$BUILD_DIR/.pm-workflow/audits/<模块>/prototype-boundary.json"
+BOUNDARY="$BUILD_DIR/$AUDIT_DIR_REL/prototype-boundary.json"
 python3 "$PMAI_HOME/scripts/prototype-boundary.py" \
   "$BUILD_DIR/docs/modules/<模块>" \
   --output "$BOUNDARY"

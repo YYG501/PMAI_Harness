@@ -56,9 +56,22 @@ test_consumer_template_landing_rules() {
   pass_test
 }
 
+test_closed_module_reentry_routes_by_change_kind() {
+  start_test "workflow: close 后按改动性质分流，不恢复旧轮次"
+
+  assert_file_contains "$DESIGN_SKILL" "已 close 结果上做轻量修补" "design should recognize closed-module reentry" || return
+  assert_file_contains "$DESIGN_SKILL" '直接转 `/pmai-quick-fix`' "small closed-module changes should route to quick-fix" || return
+  assert_file_contains "$DESIGN_SKILL" "新的工作轮次" "product changes should create a new work round" || return
+  assert_file_contains "$DESIGN_SKILL" "不能恢复上一轮的 delta、证据或收尾游标" "new rounds must not inherit old transient state" || return
+  assert_file_contains "$AGENTS_TEMPLATE" "已 close 模块再次修改" "consumer rules should explain closed-module reentry" || return
+  assert_file_contains "$AGENTS_TEMPLATE" "新一轮 design → build" "consumer rules should route product changes through a new lifecycle" || return
+  pass_test
+}
+
 test_design_landing_gate
 test_build_small_change_tightened
 test_build_close_mixed_delivery_authority
 test_consumer_template_landing_rules
+test_closed_module_reentry_routes_by_change_kind
 
 report_results "build-close-hard-gates"

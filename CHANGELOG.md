@@ -18,6 +18,8 @@ PM-AI-Workflow 生成器仓的演进记录。本文件**只记影响下游业务
 
 ## 未发布
 
+- `fix(workflow)`: **close 后修改按影响重新分流，并把每次完整改造隔离成独立工作轮次。** 已 close 模块的错字、单文案、局部样式、常量和规格内小缺陷可直接走 `/pmai-quick-fix`；产品行为、规格或验收变化重新进入 `/pmai-design → /pmai-build`。新轮次生成唯一 work id，验收、finalize、landing 和文档影响地图固定到包含该 id 的 `build.audit_dir`，不再复用上一轮 delta、证据或游标；旧确定性 work id 和模块级 audit 目录继续用于原合同恢复。final currentness 现在分别校验初始 design hash 与 accepted-delta 最终 hash，合法的单个或多个 delta 不再提前撞上错误比较。新 `source_hash_version=2` 让 PRODUCT-STATE、TODO 和模块索引继续进入上下文但不单独使设计过期；模块规格、输入证据、PRODUCT、PRODUCT-RULES、DESIGN、项目级决定和 project.yml 仍保持严格 currentness。没有版本字段的进行中 ready/build 保留 v1 全量范围，只有重新回到 design 后的下一次批准才升级。
+
 - `fix(lark-review)`: **评审评论、图片和决定一致性改为可恢复的机器合同。** `complete-comments --reply-only` 只写结果回复并记录 `replied_pending_pm`，solve 调用固定为 0；PM 手工解决后由 `verify-comments` 分批回读为 `solved_by_pm_verified`，checkpoint 接受该证据且 reopen 永不接管 PM 的解决动作。评论处置新增 `superseded`，将“旧引用已被当前方案替代”与真正延期的 `deferred` 分开。`verify-sync` 的 Markdown 投影忽略会轮换的图片临时 URL，资源身份仍由原生 block/token 严格验证，图片 alt/数量/结构和普通链接 URL 继续参与验收。存在候选产品决定时，seal 要求绑定当前 T 与全部决定源的逐决定一致性回执，任一 `needs_pm`、漏项或过期都阻断；纯排版结构预览可由 Agent 验收，不再强制推给 PM。新增机器 `receipt` 只输出正文、格式、评论完成/等待数量、产品结果和 PM 待办。旧 v3 ready 批次可继续原流程，reply-only 等新能力要求 v4，旧 remote-verification v1 必须重跑验收。
 
 - `fix(doctor)`: **消费仓诊断改为一个结论、七项完整检查和可直接渲染的 PM 摘要。** Doctor 现在固定报告 PMAI 安装、AI 工具接入、项目必需资料、文档与历史资料、原型和产品文件、正在进行的工作、项目安全七项结果，正常项也不省略；JSON `pm_report` 只把 `attention / problem` 检查展开为需要处理，把远程版本未知、可选浏览器能力和合法旧模块留在仅供参考，模块开工准备继续独立作为项目进度。消费仓 `AGENTS.md` 的 Startup 新增 PMAI 托管标记，`framework_managed_sync` 可返回固定的结构化修复动作；确认后的同步 helper 只替换托管区块，旧入口仅在历史规则可确定识别时迁移并保留项目补充，损坏标记、未知 PMAI 旧规则和 symlink 一律拒绝写入。版本未知且存在远程地址时，Doctor Skill 通过当前宿主申请联网权限后在沙箱外重跑只读 `ls-remote`；未授权或仍失败才报告暂时无法确认。

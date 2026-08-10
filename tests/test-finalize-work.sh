@@ -15,6 +15,7 @@ CLEANUP="$FRAMEWORK_ROOT/scripts/cleanup-pending-worktrees.sh"
 
 setup_fixture() {
   local build_command="$1"
+  local work_id="${WORK_ID_OVERRIDE:-work-demo}"
   shift
   T=$(mktemp -d "${TMPDIR:-/tmp}/pmai-finalize-work.XXXXXX")
   MODULE="$T/docs/modules/demo"
@@ -31,9 +32,8 @@ setup_fixture() {
   printf '{}\n' > "$T/prototypes/package.json"
   printf 'export const demo = true\n' > "$T/prototypes/src/index.ts"
   printf '.pm-workflow/context/\n' > "$T/.gitignore"
-  cat > "$MODULE/.work-meta.json" <<'JSON'
-{"id":"work-demo","name":"demo","status":"active","lifecycle_state":"designing"}
-JSON
+  printf '{"id":"%s","name":"demo","status":"active","lifecycle_state":"designing"}\n' \
+    "$work_id" > "$MODULE/.work-meta.json"
   git -C "$T" init -q -b main
   git -C "$T" config user.email test@example.com
   git -C "$T" config user.name Test
@@ -183,6 +183,49 @@ assert phases.count("final-validation") == 1
 PY
   then
     _fail "finalize state, dedupe, or resume cursor mismatch"
+  else
+    pass_test
+  fi
+  rm -f /tmp/finalize-work.$$ /tmp/finalize-work.err.$$
+  teardown_fixture
+}
+
+test_new_round_deltas_finalize_in_isolated_audit_dir() {
+  start_test "finalize-work: new round validates accepted deltas in its isolated audit directory"
+  WORK_ID_OVERRIDE="work-demo-20260810120000-a1b2c3d4" setup_fixture \
+    "test -f package.json" tests typecheck build
+  AUDIT="$T/.pm-workflow/audits/demo/work-demo-20260810120000-a1b2c3d4"
+  python3 "$CONTRACT" add-delta "$MODULE" --kind product-behavior \
+    --summary "支持批量处理" --affected-surface "列表页" \
+    --accepted-at "2026-08-10T12:00:00+08:00" >/dev/null
+  python3 "$CONTRACT" add-delta "$MODULE" --kind product-behavior \
+    --summary "失败项可重试" --affected-surface "结果页" \
+    --accepted-at "2026-08-10T12:05:00+08:00" >/dev/null
+  python3 "$CONTRACT" commit "$MODULE" \
+    --implementation-commit "$IMPLEMENTATION" >/dev/null
+  if ! python3 "$FINALIZE" --module-dir "$MODULE" --no-land \
+    >/tmp/finalize-work.$$ 2>/tmp/finalize-work.err.$$; then
+    _fail "accepted delta chain should finalize"
+    cat /tmp/finalize-work.err.$$ >&2
+  elif [ ! -f "$AUDIT/finalize-run.json" ] \
+    || [ ! -f "$AUDIT/final-validation.json" ] \
+    || [ ! -f "$AUDIT/timing.json" ]; then
+    _fail "new round finalization artifacts should stay in the work-specific audit directory"
+  elif [ -e "$T/.pm-workflow/audits/demo/finalize-run.json" ] \
+    || [ -e "$T/.pm-workflow/audits/demo/final-validation.json" ] \
+    || [ -e "$T/.pm-workflow/audits/demo/timing.json" ]; then
+    _fail "new round finalization must not reuse the legacy module-level audit directory"
+  elif ! python3 - "$MODULE/.work-meta.json" "$AUDIT/final-validation.json" <<'PY'
+import json, sys
+meta = json.load(open(sys.argv[1]))
+artifact = json.load(open(sys.argv[2]))
+build = meta["build"]
+assert build["lifecycle_state"] == "final_check"
+assert len(build["accepted_deltas"]) == 2
+assert artifact["source_hash"] == build["approved_source_hash"]
+PY
+  then
+    _fail "new round final state or accepted delta hash mismatch"
   else
     pass_test
   fi
@@ -517,6 +560,7 @@ PY
 }
 
 test_finalize_runs_missing_mechanical_checks_once_and_resumes
+test_new_round_deltas_finalize_in_isolated_audit_dir
 test_partial_command_artifact_is_extended_without_losing_proof
 test_real_build_failure_exits_normal_path
 test_semantic_gap_resumes_without_repeating_currentness

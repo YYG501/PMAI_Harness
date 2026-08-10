@@ -47,11 +47,12 @@
 ## Consumer Workflow
 
 - 本仓已经初始化完成，不能在这里再跑 `/pmai-init-project`。
-- 起新模块或讨论新功能：读 `/pmai-design`。它先编译 context pack、浮现相关旧决定，再按真实未知项讨论；`meta`、`mockup`、`spec-writing` 是 design 按需调用后返回主线的内部能力，不让 PM 手动拼接。
+- 没有 active work 时先按影响分流：已 close 结果上的错字、单文案、局部样式、常量或符合现有规格的小缺陷走 `/pmai-quick-fix`；新功能、产品规则、规格或验收路径变化走 `/pmai-design`。design 先编译 context pack、浮现相关旧决定，再按真实未知项讨论；`meta`、`mockup`、`spec-writing` 是 design 按需调用后返回主线的内部能力，不让 PM 手动拼接。
 - 首个可建造 design 定稿时，由 PM 一次确认建造对象与技术方案，生成 `.pm-workflow/project.yml`；后续默认复用。design 自动提交定义与本模块建造依据并进入 `ready_to_build`。
 - 推进实现：读 `/pmai-build`。框架校验 `.pm-workflow/project.yml`，把项目类型编译成实现深度合同并后台生成默认验收；AI 用一张卡向 PM 展示推荐的工作环境、构建工具及全部有效选项，PM 一次确认或直接改选后开工。工具列表必须排除当前主控；开工卡不得重复展示项目类型或验收方案。
 - PM 看结果后直接说哪里要改；active build 内的文案、布局、按钮和局部交互由当前会话直接处理，每轮只跑热更新、typecheck 和当前页面走查，保留同一个 dev server 与浏览器连接，完成后立即回“已修改，可刷新查看”。PM 说“可以提交 / 定稿 / 可以合并”即授权打开定稿车道：对冻结 commit 在 validation worktree 统一运行一次 production build 和完整路径验收；通过后先合入 main，再基于 landed diff 生成文档影响地图并同步文档。
 - `/pmai-build-close` 保留为兼容与恢复入口，用于中断续跑、merge 冲突后重试或 `landed/docs_pending` 文档恢复。
+- 已 close 模块再次修改时，若变化涉及产品定义就进入新一轮 design → build：复用长期模块文档，但不得复用上一轮的 delta、验收证据或收尾游标。
 - 迷路或续跑：读 `/pmai-status` 对应 skill，先报告当前状态再行动。
 - 已有 `building / iterating / final_check` 时，PM 说“启动看看”“还有什么问题”“继续改当前结果”等自然语言就是续接当前 `/pmai-build`。Codex / Claude Code / Kimi Code 由 prompt hook 注入 `status-view.py --execution-context`；OpenCode 没有同等 hook 时由当前主控主动读取该只读上下文。除非 PM 明确开启无关新工作，否则不得转成无范围约束的通用 QA；多个 active build 只问模块，不猜。
 - PM 要复盘本次 PMAI 协作、反馈流程卡点或把问题交给框架仓时：当前只有 Codex 的精确当前会话定位已经验证，可读 `/pmai-feedback` 完整复盘并生成带会话 ID 与文件地址的框架交接 Prompt；其它宿主没有经过验证的定位适配时直接说明暂不支持，不按“最近会话”猜测，也不在消费仓直接改框架。

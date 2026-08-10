@@ -12,6 +12,7 @@ CONTEXT_PACK="$FRAMEWORK_ROOT/scripts/context-pack.py"
 PROJECT_DEFINITION="$FRAMEWORK_ROOT/scripts/project-definition.py"
 
 setup_fixture() {
+  local work_id="${WORK_ID_OVERRIDE:-work-access}"
   T=$(mktemp -d "${TMPDIR:-/tmp}/pmai-land-v2.XXXXXX")
   git -C "$T" init -q -b main
   git -C "$T" config user.email test@example.com
@@ -26,9 +27,8 @@ setup_fixture() {
   echo '# access spec' > "$T/docs/modules/access/spec.md"
   echo '# discussion' > "$T/docs/modules/access/discussion.md"
   echo '# decisions' > "$T/docs/modules/access/decisions.md"
-  cat > "$T/docs/modules/access/.work-meta.json" <<'JSON'
-{"id":"work-access","name":"access","branch":"build-access","stage":1,"status":"active","lifecycle_state":"designing"}
-JSON
+  printf '{"id":"%s","name":"access","branch":"build-access","stage":1,"status":"active","lifecycle_state":"designing"}\n' \
+    "$work_id" > "$T/docs/modules/access/.work-meta.json"
   printf '.worktrees/\n.pm-workflow/context/\n.runs/\n' > "$T/.gitignore"
   python3 "$PROJECT_DEFINITION" write "$T" \
     --source docs/modules/access/spec.md --type product \
@@ -155,6 +155,53 @@ PY
   fi
   rm -f /tmp/land-v2.$$ /tmp/land-v2.err.$$ \
     /tmp/land-v2.cleanup.$$ /tmp/land-v2.cleanup.err.$$
+  teardown_fixture
+}
+
+test_new_round_lands_and_documents_in_isolated_audit_dir() {
+  start_test "land v2: new round keeps landing and documentation artifacts isolated"
+  WORK_ID_OVERRIDE="work-access-20260810120000-a1b2c3d4" setup_fixture
+  AUDIT_REL=".pm-workflow/audits/access/work-access-20260810120000-a1b2c3d4"
+  AUDIT="$T/$AUDIT_REL"
+  if ! (cd "$T" && bash "$CLOSE" "$MODULE") \
+    >/tmp/land-v2.$$ 2>/tmp/land-v2.err.$$; then
+    _fail "new round landing should succeed"
+    cat /tmp/land-v2.err.$$ >&2
+    teardown_fixture; return
+  fi
+  MAIN_MODULE="$T/docs/modules/access"
+  if [ ! -f "$AUDIT/doc-impact.json" ] || [ ! -f "$AUDIT/timing.json" ]; then
+    _fail "new round landing artifacts should use the work-specific audit directory"
+    teardown_fixture; return
+  elif [ -e "$T/.pm-workflow/audits/access/doc-impact.json" ] \
+    || [ -e "$T/.pm-workflow/audits/access/timing.json" ]; then
+    _fail "new round landing must not reuse the legacy module-level audit directory"
+    teardown_fixture; return
+  elif ! python3 - "$MAIN_MODULE/.work-meta.json" "$AUDIT/timing.json" <<'PY'
+import json, sys
+build = json.load(open(sys.argv[1]))["build"]
+entries = json.load(open(sys.argv[2]))["entries"]
+assert build["audit_dir"] == ".pm-workflow/audits/access/work-access-20260810120000-a1b2c3d4"
+assert any(item["phase"] == "landing" and item["status"] == "pass" for item in entries)
+PY
+  then
+    _fail "landed state should retain the current round audit identity"
+    teardown_fixture; return
+  fi
+  cover_map "$AUDIT/doc-impact.json"
+  python3 "$CONTRACT" docs-complete "$MAIN_MODULE" >/dev/null
+  if ! (cd "$T" && bash "$CLOSE" "$MAIN_MODULE") \
+    >/tmp/land-v2.$$ 2>/tmp/land-v2.err.$$; then
+    _fail "new round documentation completion should succeed"
+    cat /tmp/land-v2.err.$$ >&2
+  elif [ -f "$MAIN_MODULE/.work-meta.json" ]; then
+    _fail "new round completion should remove transient work meta"
+  elif ! git -C "$T" show "HEAD:$AUDIT_REL/doc-impact.json" >/dev/null 2>&1; then
+    _fail "new round documentation commit should include its isolated impact map"
+  else
+    pass_test
+  fi
+  rm -f /tmp/land-v2.$$ /tmp/land-v2.err.$$
   teardown_fixture
 }
 
@@ -609,6 +656,7 @@ PY
 }
 
 test_land_then_document_then_complete
+test_new_round_lands_and_documents_in_isolated_audit_dir
 test_merge_conflict_keeps_final_check_and_worktree
 test_landed_docs_collision_preserves_wip_and_skips_remerge
 test_land_queues_cleanup_without_blocking_docs

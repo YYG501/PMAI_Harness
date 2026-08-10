@@ -361,7 +361,7 @@ test_contract_designing_creates_new_module_directory() {
   python3 - "$MODULE_DIR/.work-meta.json" <<'PY' || {
 import json, sys
 meta = json.load(open(sys.argv[1]))
-assert meta["id"] == "work-new-access-flow"
+assert meta["id"].startswith("work-new-access-flow-")
 assert meta["name"] == "new-access-flow"
 assert meta["status"] == "active"
 assert meta["lifecycle_state"] == "designing"
@@ -369,7 +369,91 @@ PY
     _fail "designing meta fields mismatch"
     rm -f /tmp/build-contract.$$ /tmp/build-contract.err.$$; teardown_contract_fixture; return
   }
-  pass_test
+  FIRST_ID=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["id"])' \
+    "$MODULE_DIR/.work-meta.json")
+  rm -f "$MODULE_DIR/.work-meta.json"
+  python3 "$BUILD_CONTRACT" designing "$MODULE_DIR" >/dev/null
+  if ! python3 - "$MODULE_DIR/.work-meta.json" "$FIRST_ID" <<'PY'
+import json, sys
+meta = json.load(open(sys.argv[1]))
+assert meta["id"] != sys.argv[2]
+assert meta["id"].startswith("work-new-access-flow-")
+PY
+  then
+    _fail "reopening a closed module should create a distinct work round"
+  else
+    pass_test
+  fi
+  rm -f /tmp/build-contract.$$ /tmp/build-contract.err.$$
+  teardown_contract_fixture
+}
+
+test_contract_new_round_gets_isolated_audit_dir() {
+  start_test "build-contract: new work round gets an isolated audit directory"
+  setup_contract_fixture product
+  python3 - "$MODULE_DIR/.work-meta.json" <<'PY'
+import json, sys
+path = sys.argv[1]
+meta = json.load(open(path))
+meta["id"] = "work-pet-import-20260810120000-a1b2c3d4"
+json.dump(meta, open(path, "w"), ensure_ascii=False, indent=2)
+PY
+  python3 "$BUILD_CONTRACT" start "$MODULE_DIR" \
+    --anchor "docs/modules/pet-import/spec.md" --mode main --executor native \
+    --branch main --baseline-sha abc123 --target-kind product \
+    --target-path src/pets --entrypoint src/pets --final-check tests >/dev/null || {
+      _fail "new work round should start"; teardown_contract_fixture; return;
+    }
+  if python3 - "$MODULE_DIR/.work-meta.json" <<'PY'
+import json, sys
+build = json.load(open(sys.argv[1]))["build"]
+assert build["audit_dir"] == ".pm-workflow/audits/pet-import/work-pet-import-20260810120000-a1b2c3d4"
+PY
+  then
+    pass_test
+  else
+    _fail "new work round audit directory should be bound to its work id"
+  fi
+  teardown_contract_fixture
+}
+
+test_contract_final_currentness_accepts_ordered_deltas() {
+  start_test "build-contract: final currentness validates one and multiple accepted deltas"
+  setup_contract_fixture product
+  python3 "$BUILD_CONTRACT" start "$MODULE_DIR" \
+    --anchor "docs/modules/pet-import/spec.md" --mode main --executor native \
+    --branch main --baseline-sha abc123 --target-kind product \
+    --target-path src/pets --entrypoint src/pets --final-check tests >/dev/null
+  python3 "$BUILD_CONTRACT" add-delta "$MODULE_DIR" --kind product-behavior \
+    --summary "支持批量导入" --affected-surface "导入页" \
+    --accepted-at "2026-08-10T12:00:00+08:00" >/dev/null
+  if ! python3 "$BUILD_CONTRACT" validate-final-currentness "$MODULE_DIR" >/dev/null; then
+    _fail "single accepted delta should pass final currentness"
+    teardown_contract_fixture; return
+  fi
+  python3 "$BUILD_CONTRACT" add-delta "$MODULE_DIR" --kind product-behavior \
+    --summary "失败项可重试" --affected-surface "结果页" \
+    --accepted-at "2026-08-10T12:05:00+08:00" >/dev/null
+  if ! python3 "$BUILD_CONTRACT" validate-final-currentness "$MODULE_DIR" >/dev/null; then
+    _fail "multiple ordered accepted deltas should pass final currentness"
+    teardown_contract_fixture; return
+  fi
+  python3 - "$MODULE_DIR/.work-meta.json" <<'PY'
+import json, sys
+path = sys.argv[1]
+meta = json.load(open(path))
+meta["build"]["accepted_deltas"].reverse()
+json.dump(meta, open(path, "w"), ensure_ascii=False, indent=2)
+PY
+  if python3 "$BUILD_CONTRACT" validate-final-currentness "$MODULE_DIR" \
+    >/tmp/build-contract.$$ 2>/tmp/build-contract.err.$$; then
+    _fail "reordered accepted deltas must fail final currentness"
+  elif ! grep -q "design 依据 + accepted deltas 不一致" /tmp/build-contract.err.$$; then
+    _fail "reordered delta guidance mismatch"
+    cat /tmp/build-contract.err.$$ >&2
+  else
+    pass_test
+  fi
   rm -f /tmp/build-contract.$$ /tmp/build-contract.err.$$
   teardown_contract_fixture
 }
@@ -970,6 +1054,8 @@ test_contract_rejects_missing_build
 test_contract_start_requires_adaptive_inputs
 test_contract_start_rejects_missing_ready_meta
 test_contract_designing_creates_new_module_directory
+test_contract_new_round_gets_isolated_audit_dir
+test_contract_final_currentness_accepts_ordered_deltas
 test_contract_complete_accepts_only_ready_candidate
 test_contract_limited_browser_cannot_be_excepted
 test_contract_missing_browser_smoke_blocks_clean_audits

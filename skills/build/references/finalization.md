@@ -13,14 +13,18 @@ PM 明确定稿后调用：
 ```bash
 python3 "$PMAI_HOME/scripts/finalize-work.py" \
   --module-dir "$BUILD_DIR/docs/modules/<模块>" \
-  <Web 项目追加 --browser-manifest "$BUILD_DIR/.pm-workflow/audits/<模块>/browser-manifest.json">
+  <Web 项目追加 --browser-manifest "$BUILD_DIR/<build.audit_dir>/browser-manifest.json">
 ```
 
 runner 按 v4 lifecycle 续跑并自动完成 currentness、隔离命令验证、浏览器批次、evidence 记录、review-ready、accept 和 landing。已经通过且仍绑定同一 commit/source hash 的机械项不重复执行。
 
+新轮次的 currentness 使用 `source_hash_version=2`：模块规格/决定/讨论、输入证据、`PRODUCT.md`、`PRODUCT-RULES.md`、`DESIGN.md`、项目级冻结决定和 `project.yml` 是会使设计过期的依据；`PRODUCT-STATE.md`、`TODO.md`、模块索引仍进入 context pack 供理解，但单独变化不判本模块过期。没有版本字段的旧 ready/build 继续按 v1 全量范围恢复到本轮结束，不在升级时静默换 hash。
+
 返回码 `3` 表示机械项已完成，但仍缺当前主控必须语义判断的检查，例如 `prototype-boundary / coverage / scope-coverage / migration / security`。runner 会保持一个 running `semantic-validation` 计时；按现有专用脚本或规格对账完成并 `record-evidence` 后，原命令重跑即可从准确位置继续且不重复 currentness。实现/source 变化或 PM 新反馈会把该次语义阶段记为失败并重置正常路径。不得把语义检查伪造成 runner 自动通过。
 
 runner 在 `final_check` 只提交当前模块 `.work-meta.json` 和对应 audit 目录，再进入 landing，其他 staged 路径会立即阻断。worktree 成功合入后会进入安全待清理队列，并立即输出 `FINALIZE_RESUME_MODULE=<main 模块路径>`；完成文档地图后用该 main 路径重跑，不能继续引用等待后台清理的 worktree 路径。
+
+新工作轮次的 audit 目录由 `build.audit_dir` 固定并包含唯一 work id；所有 artifact、timing、landing 和文档影响地图都只读写该目录。缺少该字段的旧合同继续回退 `.pm-workflow/audits/<模块>`，只作恢复兼容。
 
 旧 v4 若已经进入 `final_check` 且没有 `finalize-run.json`，直接按原状态落地，不补造 runner 游标，也不要求迁移 timing 字段。只有本轮 runner 已创建且绑定当前 commit/source hash 的游标，landing 才启用完整阶段账本硬门。
 
