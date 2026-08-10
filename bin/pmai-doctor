@@ -341,7 +341,7 @@ def finding_area(item):
     if code.startswith(("work_meta_", "lifecycle_", "build_", "active_", "audit_")) \
       or code in {"unexpected_build_contract", "active_module_compatibility_ignored"}:
         return "active_work"
-    if code.startswith(("docs_", "module_", "modules_", "legacy_")) \
+    if code.startswith(("docs_", "misplaced_docs_", "module_", "modules_", "legacy_")) \
       or item.get("kind") in {"legacy_compatible", "compatibility_declaration_required"}:
         return "documents_and_history"
     return "required_materials"

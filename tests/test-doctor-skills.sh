@@ -1010,6 +1010,7 @@ test_doctor_reports_invalid_consumer_structure() {
 exit 1
 SH
   rm -f "$consumer/PRODUCT.md"
+  printf '# Roadmap\n' > "$consumer/docs/ROADMAP.md"
 
   out=$(cd "$consumer" && PMAI_HOME="$pmai_home" HOME="$fake_home" \
     CODEX_HOME="$fake_home/.codex" KIMI_CODE_HOME="$fake_home/.kimi-code" \
@@ -1032,6 +1033,10 @@ assert payload["consumer"]["audit"]["status"] == "invalid"
 checks = {item["id"]: item for item in payload["checks"]}
 assert checks["ai_tool_entry"]["status"] == "attention"
 assert checks["required_materials"]["status"] == "problem"
+assert checks["documents_and_history"]["status"] == "attention"
+assert checks["documents_and_history"]["problems"] == [
+    "docs/ 顶层文档没有归入当前分类目录：docs/ROADMAP.md"
+]
 assert any(item["code"] == "missing_required_file" for item in payload["consumer"]["audit"]["findings"])
 assert any(
     item.get("code") == "missing_required_file"
