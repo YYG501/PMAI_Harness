@@ -423,6 +423,62 @@ payload["product_progress"] = {
     "phase": consumer_phase if project_kind == "consumer" else "not_applicable",
     "notes": progress_notes,
 }
+
+repair_actions_by_message = {}
+for item in payload["findings"]:
+    if not isinstance(item, dict) or not isinstance(item.get("repair_action"), dict):
+        continue
+    message = str(item.get("message") or "")
+    if message:
+        repair_actions_by_message.setdefault(message, []).append(item["repair_action"])
+
+action_items = []
+for check in payload["checks"]:
+    if check["status"] not in {"attention", "problem"}:
+        continue
+    repair_actions = []
+    for problem in check["problems"]:
+        for action in repair_actions_by_message.get(problem, []):
+            if action not in repair_actions:
+                repair_actions.append(action)
+    action_items.append({
+        "check_id": check["id"],
+        "label": check["label"],
+        "status": check["status"],
+        "problems": list(check["problems"]),
+        "repair_actions": repair_actions,
+    })
+
+notices = []
+
+
+def add_notice(category, message):
+    item = {"category": category, "message": message}
+    if item not in notices:
+        notices.append(item)
+
+
+if payload["framework"]["update_available"] is None:
+    add_notice("framework_currentness", "暂时无法确认 PMAI 是否为最新版")
+if any(
+    isinstance(item, dict)
+    and item.get("category") == "browser"
+    and item.get("level") == "warning"
+    for item in payload["findings"]
+):
+    add_notice("browser_adapter", "可选浏览器能力未就绪；不影响非 Web 工作")
+for item in payload["findings"]:
+    if not isinstance(item, dict) or item.get("kind") != "legacy_compatible":
+        continue
+    message = str(item.get("message") or "")
+    if message:
+        add_notice("legacy_compatible", message)
+
+payload["pm_report"] = {
+    "action_items": action_items,
+    "notices": notices,
+    "progress": dict(payload["product_progress"]),
+}
 print(json.dumps(payload, ensure_ascii=False, indent=2))
 PY
 }

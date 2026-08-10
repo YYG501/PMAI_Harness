@@ -22,6 +22,10 @@ from _lib.project_definition import (  # noqa: E402
     load_project_definition,
     parse_yaml_subset,
 )
+from _lib.consumer_entry import (  # noqa: E402
+    ConsumerEntryError,
+    plan_consumer_entry,
+)
 
 
 SCHEMA_VERSION = 1
@@ -99,12 +103,6 @@ MOCKUP_REQUIRED_KEYS = {
     "round": str,
     "featured": bool,
 }
-CURRENT_ENTRY_REQUIREMENTS = (
-    "install-project-hooks.sh",
-    "--check",
-)
-
-
 def _run_git(root: Path, *args: str, input_text: str | None = None) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
         ["git", "-C", str(root), *args],
@@ -144,17 +142,11 @@ def _substantive_markdown(path: Path) -> bool:
 
 
 def consumer_entry_contract(root: Path) -> dict[str, Any]:
-    path = root / "AGENTS.md"
-    if not path.is_file() or path.is_symlink():
-        return {"status": "missing", "path": "AGENTS.md"}
     try:
-        text = path.read_text(encoding="utf-8")
-    except (OSError, UnicodeError):
-        return {"status": "unreadable", "path": "AGENTS.md"}
-    missing = [requirement for requirement in CURRENT_ENTRY_REQUIREMENTS if requirement not in text]
-    if missing:
-        return {"status": "stale", "path": "AGENTS.md", "missing_capabilities": missing}
-    return {"status": "current", "path": "AGENTS.md", "missing_capabilities": []}
+        plan = plan_consumer_entry(root, SCRIPT_DIR.parent / "templates" / "AGENTS.md.tmpl")
+    except (ConsumerEntryError, OSError, RuntimeError, ValueError) as exc:
+        return {"status": "unknown", "path": "AGENTS.md", "reason": str(exc)}
+    return plan.contract()
 
 
 def _markdown_repo_links(index_path: Path, root: Path) -> set[str]:
@@ -215,6 +207,7 @@ class Audit:
         *,
         kind: str | None = None,
         blocking: bool | None = None,
+        repair_action: dict[str, Any] | None = None,
     ) -> None:
         if kind is None:
             kind = {
@@ -233,6 +226,8 @@ class Audit:
         }
         if path:
             item["path"] = path
+        if repair_action is not None:
+            item["repair_action"] = repair_action
         key = (level, code, path or "")
         if key in self._finding_keys:
             return
@@ -428,6 +423,19 @@ class Audit:
                 "sync",
                 "host_rules_stale",
                 "当前项目的 PMAI 启动规则是旧版本，需要更新",
+                "AGENTS.md",
+                repair_action={
+                    "id": "sync_consumer_entry",
+                    "target": "AGENTS.md",
+                    "availability": "automatic",
+                    "confirmation_required": True,
+                },
+            )
+        elif self.entry_contract["status"] == "unsafe":
+            self.add(
+                "sync",
+                "host_rules_manual_review",
+                "当前项目的 PMAI 启动规则无法安全自动更新，需要人工确认",
                 "AGENTS.md",
             )
 

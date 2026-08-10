@@ -130,7 +130,9 @@ setup_fake_global_install() {
   cp "$REPO_ROOT/scripts/_lib/global_install_lock.py" "$pmai_home/scripts/_lib/global_install_lock.py"
   cp "$REPO_ROOT/scripts/_lib/atomic_file.py" "$pmai_home/scripts/_lib/atomic_file.py"
   cp "$REPO_ROOT/scripts/_lib/project_definition.py" "$pmai_home/scripts/_lib/project_definition.py"
+  cp "$REPO_ROOT/scripts/_lib/consumer_entry.py" "$pmai_home/scripts/_lib/consumer_entry.py"
   cp "$REPO_ROOT/scripts/consumer-doctor.py" "$pmai_home/scripts/consumer-doctor.py"
+  cp "$REPO_ROOT/scripts/sync-consumer-entry.py" "$pmai_home/scripts/sync-consumer-entry.py"
   cp "$REPO_ROOT/scripts/gen-mock-board.py" "$pmai_home/scripts/gen-mock-board.py"
   cp "$REPO_ROOT/scripts/install-project-hooks.sh" "$pmai_home/scripts/install-project-hooks.sh"
   cp "$REPO_ROOT/scripts/install-hooks.sh" "$pmai_home/scripts/install-hooks.sh"
@@ -772,6 +774,11 @@ assert payload["checks"][0]["status"] == "normal"
 assert payload["checks"][1]["status"] == "normal"
 assert all(item["status"] == "not_applicable" for item in payload["checks"][2:])
 assert payload["product_progress"] == {"phase": "not_applicable", "notes": []}
+assert payload["pm_report"]["action_items"] == []
+notice_categories = {item["category"] for item in payload["pm_report"]["notices"]}
+assert "framework_currentness" in notice_categories
+assert "browser_adapter" in notice_categories
+assert payload["pm_report"]["progress"] == payload["product_progress"]
 PY
   then
     _fail "健康 doctor 应只输出合法 schema v1 JSON 并以 0 退出"
@@ -819,6 +826,7 @@ assert payload["summary"]["fail"] > 0
 checks = {item["id"]: item for item in payload["checks"]}
 assert checks["framework_install"]["status"] == "normal"
 assert checks["ai_tool_entry"]["status"] == "problem"
+assert [item["check_id"] for item in payload["pm_report"]["action_items"]] == ["ai_tool_entry"]
 PY
   then
     _fail "broken JSON 结论必须与非零退出码一致"
@@ -873,6 +881,9 @@ SH
     rm -rf "$tmp"
     return
   fi
+  sed 's/install-project-hooks\.sh/install-codex-hooks.sh/g; s/ --check//g' \
+    "$consumer/AGENTS.md" > "$consumer/AGENTS.md.old" \
+    && mv "$consumer/AGENTS.md.old" "$consumer/AGENTS.md"
 
   out=$(cd "$consumer" && PMAI_HOME="$pmai_home" HOME="$fake_home" \
     CODEX_HOME="$fake_home/.codex" KIMI_CODE_HOME="$fake_home/.kimi-code" \
@@ -898,6 +909,17 @@ assert checks["documents_and_history"]["status"] == "normal"
 assert checks["product_files"]["status"] == "normal"
 assert checks["active_work"]["status"] == "normal"
 assert checks["project_safety"]["status"] == "normal"
+assert [item["check_id"] for item in payload["pm_report"]["action_items"]] == ["ai_tool_entry"]
+assert all(
+    item["status"] in {"attention", "problem"}
+    for item in payload["pm_report"]["action_items"]
+)
+assert payload["pm_report"]["action_items"][0]["repair_actions"] == [{
+    "id": "sync_consumer_entry",
+    "target": "AGENTS.md",
+    "availability": "automatic",
+    "confirmation_required": True,
+}]
 PY
   then
     _fail "消费仓 hooks 漂移应保持只读并返回唯一同步建议"
@@ -1059,7 +1081,7 @@ PY
 
 test_doctor_reports_unversioned_legacy_as_compatibility_sync() {
   start_test "T12g: doctor 把未标版本旧模块归为兼容声明而非内容损坏"
-  local setup tmp pmai_home fake_home consumer out rc replacement
+  local setup tmp pmai_home fake_home consumer out current_out rc replacement
 
   setup=$(setup_fake_global_install)
   IFS='|' read -r tmp pmai_home fake_home <<< "$setup"
@@ -1100,10 +1122,56 @@ assert any(
     and item.get("category") == "consumer"
     for item in payload["findings"]
 )
+assert all(
+    item["check_id"] == "documents_and_history"
+    for item in payload["pm_report"]["action_items"]
+)
 PY
   then
     _fail "legacy compatibility should remain a nonblocking consumer sync"
     echo "$out" >&2
+    rm -rf "$tmp"
+    return
+  fi
+
+  cat > "$consumer/.pm-workflow/config.yml" <<'YAML'
+consumer:
+  schema_version: 1
+  layout_version: 1
+  paths:
+    archive: docs/archive
+  compatibility:
+    module_legacy_pair:
+      path: docs/modules/legacy-pair
+      state: legacy
+      format: spec_decisions
+builder:
+  profiles:
+    fixture:
+      executor: manual
+YAML
+  current_out=$(cd "$consumer" && PMAI_HOME="$pmai_home" HOME="$fake_home" \
+    CODEX_HOME="$fake_home/.codex" KIMI_CODE_HOME="$fake_home/.kimi-code" \
+    OPENCODE_CONFIG_DIR="$fake_home/.config/opencode" \
+    bash "$pmai_home/bin/pmai-doctor" --check --json 2>"$tmp/consumer-legacy-current.err")
+  rc=$?
+  if [ "$rc" != "0" ] || ! python3 - "$current_out" <<'PY'
+import json
+import sys
+
+payload = json.loads(sys.argv[1])
+assert payload["conclusion"] == "healthy"
+assert payload["pm_report"]["action_items"] == []
+legacy_notices = [
+    item for item in payload["pm_report"]["notices"]
+    if item["category"] == "legacy_compatible"
+]
+assert len(legacy_notices) == 1
+assert "legacy-pair" in legacy_notices[0]["message"]
+PY
+  then
+    _fail "declared legacy modules should be reference notices, not action items"
+    echo "$current_out" >&2
     rm -rf "$tmp"
     return
   fi
@@ -1113,7 +1181,7 @@ PY
 }
 
 test_doctor_skill_separates_status_doctor_and_upgrade() {
-  start_test "T12e: Doctor Skill 明确三入口职责、完整检查结果和进度边界"
+  start_test "T12e: Doctor Skill 使用 PM 摘要、结构化入口修复和联网版本复查"
   local skill="$SKILLS_DIR/doctor/SKILL.md"
 
   if ! grep -q '/pmai-status.*产品进度' "$skill" \
@@ -1130,7 +1198,13 @@ test_doctor_skill_separates_status_doctor_and_upgrade() {
     || ! grep -q '正在进行的工作' "$skill" \
     || ! grep -q '项目安全' "$skill" \
     || ! grep -q '项目进度提示' "$skill" \
-    || ! grep -q '不参与总结论' "$skill"; then
+    || ! grep -q '不参与总结论' "$skill" \
+    || ! grep -q 'pm_report.action_items' "$skill" \
+    || ! grep -q 'pm_report.notices' "$skill" \
+    || ! grep -q 'sync_consumer_entry' "$skill" \
+    || ! grep -q 'sync-consumer-entry.py' "$skill" \
+    || ! grep -q '宿主.*联网' "$skill" \
+    || ! grep -q 'ls-remote --heads origin refs/heads/main' "$skill"; then
     _fail "Doctor Skill 未完整声明 status / doctor / upgrade 和用户输出边界"
     return
   fi

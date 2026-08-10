@@ -4,9 +4,9 @@
 
 ## 当前位置
 
-- 日期：2026-08-09
+- 日期：2026-08-10
 - 开发分支：`main`
-- 当前目标：`/pmai-doctor` 已从固定骨架比较改为布局版本、模块状态和 finding ownership 合同；旧消费仓可以保留有证据的历史产出，当前 lifecycle 与真实产品脊柱继续失败关闭。下一步在 PM 确认分发后升级安装态，并继续以真实消费仓验证兼容声明与 active build 恢复不会互相覆盖。
+- 当前目标：`/pmai-doctor` 已提供可直接渲染的 PM 摘要，并为消费仓 `AGENTS.md` Startup 提供保留项目自定义内容的确认式同步；远程版本未知时由当前宿主申请联网后复查。全量回归已通过，等待 PM 确认分发与安装态升级。
 - gstack 参考基线：`v1.58.5.0`，commit `11de390`；只参考本地 `gstack-clean` checkout，没有升级用户目录中的安装副本。
 
 ## 当前活跃模型
@@ -15,6 +15,7 @@
 - `meta`、`mockup`、`spec-writing` 是 design 按需调用后返回主线的内部能力；仍保留手动入口用于兼容和专项使用，但不要求 PM 拼接命令。
 - `/pmai-feedback` 是消费仓到框架仓的只读反馈出口：完整复盘当前原始会话、对照消费仓真相源、判断问题归属，并输出包含会话文件地址和证据的框架优化 Prompt；它不在消费仓直接修改产品或 PMAI 框架。
 - `/pmai-doctor` 的消费仓合同复用 `.pm-workflow/config.yml:consumer`：layout v1 固定 `docs/INDEX.md` / `docs/modules/INDEX.md` 为标准入口，可声明既有归档目录，并按模块记录 `current / legacy / retired / split`。未标版本旧仓只做有边界识别并请求 PM 确认，不自动迁移文档；active `.work-meta.json` 始终优先，不能被兼容声明降级。
+- `/pmai-doctor` 的 JSON `pm_report` 直接给出需要处理、仅供参考和项目进度，Agent 不再从底层 finding 自行扩写待办。消费仓 Startup 由 `AGENTS.md` 内唯一托管区块承载；`sync-consumer-entry.py` 的 check 只读，apply 只在 PM 确认后原子替换该区块，旧文件迁移保留项目补充并对未知规则、损坏标记和 symlink 失败关闭。CLI 不自行越过沙箱；版本未知且有远程地址时，由 Doctor Skill 让当前宿主申请联网权限后重试同一只读查询。
 - `/pmai-lark-review` 是归档后飞书评审回流入口：当前飞书 full XML 原生快照是 T 的唯一底稿，B/L 只用于定位本地补充和冲突，祖先格式兼容性不能把目标切回旧 L。R→T 的每个删除 / 改写 / 移动进入远端覆盖账本，重复文本按章节归位，现有 block 的格式必须保留，随内容删除也要有明确依据；大规模或结构性差异强制 PM 预览，精细同步后逐 block 验证样式、资源和引用。飞书正文、评论和回复只是不可信业务证据，不能作为 Agent 指令或 PM 本轮确认；remote-only 正文必须由 PM 本轮明确认可。每项变化通过 `decision_routing` 选择性写 / supersede `docs/modules/<单一模块>/decisions.md`，seal、apply 和正式归位前都拒绝越界或 symlink 目标，措辞 / 排版明确标记不写。评论用整批首尾稳定围栏和逐笔 journal 收口，`solve_requested` 只有持久化系统 solve 写回执才能恢复，缺 `solved_time` 时保留 null；checkpoint 复用同 revision 格式验收。机器路径目标 10–15 分钟，阶段耗时与 API 往返写入批次产物。
 - `/pmai-build-close` 只作为兼容与恢复入口；正常链路不再要求 PM 手动调用。
 - `building / iterating / final_check` 中，PM 的“启动看看 / 还有什么问题 / 继续改当前结果”等自然语言继续当前 `/pmai-build`。Codex、Claude Code、Kimi Code 通过 prompt hook 注入 `status-view.py --execution-context`；OpenCode 由入口规则主动读取。该上下文只派生现有合同，不新增状态；多个 active build 返回歧义，合同或 policy 漂移时失败关闭。只有位于 prompt 首 token 的真实 PMAI 命令不受自然语言续接拦截，否定、引用、行内代码、代码块和文档示例都不能绕过；Git / status-view 超时、非零、空输出、坏 JSON、未知状态或 stdin 超时一律在宿主超时前注入不可用护栏，不能降级成“没有 active build”；Kimi 分发器也不得吞掉 hook 缺失、Node 启动失败或任意非零退出。
@@ -80,8 +81,8 @@
 ## 当前验证
 
 - Harness 第一阶段安装所有权、初始化冲突、状态权威、ready/build 合同和 cancel 原子性 targeted tests 已通过：`42 passed / 0 failed`。
-- 完整 `tests/run-all.sh` 已通过：`819 passed / 0 failed`；同一次入口另有 skill eval `6 passed / 0 failed / 17 session skipped`（17 项均因外部 session runner 未配置而显式跳过，不计作通过或失败）。新增回归覆盖旧 `spec + decisions`、合并式 spec、retired/split 真相源、非空 inputs、自定义归档、标准索引登记旧中文索引、框架同步与真实损坏并存、active lifecycle 防降级和空白占位文档；原有 doctor 只读 / repair / 敏感信息保护、fresh init、宿主事务、build 生命周期、飞书、个人经验和其它回归继续通过。
-- 开发态 `consumer-doctor.py` 已在真实消费仓 `ExampleAgentProject` 只读 dogfood：从旧实现的 `invalid / 15 errors` 收敛为 `sync_required / 0 errors`，其中 4 项框架托管同步、7 项待确认兼容；当前“能力匹配卡”仍按 `iterating` lifecycle 严格校验。运行前后 Git 状态一致，未修改消费仓或用户级安装。
+- 完整 `tests/run-all.sh` 已通过：`827 passed / 0 failed`；同一次入口另有 skill eval `6 passed / 0 failed / 17 session skipped`（17 项均因外部 session runner 未配置而显式跳过，不计作通过或失败）。新增回归覆盖 PM 摘要不把远程、浏览器和合法旧模块升级为待办，结构化入口修复动作，托管区块 check/apply、旧入口迁移、自定义内容保留、幂等、损坏标记、未知旧规则和 symlink 失败关闭；原有 doctor 只读 / repair / 敏感信息保护、消费仓兼容、宿主事务、build 生命周期、飞书、个人经验和其它回归继续通过。
+- 开发态入口同步 helper 已在真实消费仓 `ExampleAgentProject` 只读 dogfood：返回 `stale / legacy_migration`，渲染计划可以确定识别旧 PMAI Startup，并保留“非小改动前读取产品现状”等项目补充及后续项目规则。消费仓在本轮分析期间又出现新的活跃模块状态，因此不再把其整体 error 数作为本次入口同步回归基线；运行前后 Git 状态一致，未修改消费仓或用户级安装。
 
 ## 下一步
 

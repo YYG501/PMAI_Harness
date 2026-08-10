@@ -7,6 +7,7 @@ source "$SCRIPT_DIR/helpers/assert.sh"
 
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 CHECKER="$REPO_ROOT/scripts/consumer-doctor.py"
+ENTRY_SYNC="$REPO_ROOT/scripts/sync-consumer-entry.py"
 INIT="$REPO_ROOT/scripts/init-project.sh"
 PROJECT_DEFINITION="$REPO_ROOT/scripts/project-definition.py"
 MOCK_BOARD="$REPO_ROOT/scripts/gen-mock-board.py"
@@ -60,6 +61,7 @@ assert payload["status"] == "current"
 assert payload["phase"] == "initialized"
 assert payload["summary"] == {"error": 0, "sync": 0, "warning": 0}
 assert payload["project_definition"]["state"] == "absent"
+assert payload["entry_contract"]["status"] == "current"
 PY
   then
     _fail "fresh consumer should be current and unchanged"
@@ -235,7 +237,13 @@ payload = json.loads(sys.argv[1])
 entry = json.loads(sys.argv[2])
 assert payload["status"] == "sync_required"
 assert entry["status"] == "stale"
-assert "host_rules_stale" in {item["code"] for item in payload["findings"]}
+finding = next(item for item in payload["findings"] if item["code"] == "host_rules_stale")
+assert finding["repair_action"] == {
+    "id": "sync_consumer_entry",
+    "target": "AGENTS.md",
+    "availability": "automatic",
+    "confirmation_required": True,
+}
 PY
   then
     _fail "old startup rules should be reported by the shared read-only check"
@@ -255,6 +263,171 @@ PY
   then
     _fail "missing AGENTS.md should be distinct from an outdated startup rule"
     echo "$missing_out" >&2
+    return
+  fi
+  pass_test
+}
+
+test_consumer_entry_sync_is_read_only_scoped_and_idempotent() {
+  start_test "consumer entry sync: check is read-only and apply only replaces the managed block"
+  local repo before after check_out apply_out first_hash second_hash rc
+  repo=$(new_consumer) || { _fail "fixture init failed"; return; }
+  printf '\n## Project Custom Rules\n\nPRESERVE_PROJECT_SENTINEL\n' >> "$repo/AGENTS.md"
+  sed 's/install-project-hooks\.sh/install-codex-hooks.sh/g; s/ --check//g' \
+    "$repo/AGENTS.md" > "$repo/AGENTS.md.old" \
+    && mv "$repo/AGENTS.md.old" "$repo/AGENTS.md"
+
+  before=$(shasum -a 256 "$repo/AGENTS.md" | awk '{print $1}')
+  check_out=$(python3 "$ENTRY_SYNC" --repo-root "$repo" --check)
+  rc=$?
+  after=$(shasum -a 256 "$repo/AGENTS.md" | awk '{print $1}')
+  if [ "$rc" != "1" ] || [ "$before" != "$after" ] || ! python3 - "$check_out" <<'PY'
+import json
+import sys
+
+payload = json.loads(sys.argv[1])
+assert payload["status"] == "stale"
+assert payload["strategy"] == "managed_block"
+assert payload["changed"] is False
+PY
+  then
+    _fail "--check should report stale managed content without writing"
+    echo "$check_out" >&2
+    return
+  fi
+
+  apply_out=$(python3 "$ENTRY_SYNC" --repo-root "$repo" --apply)
+  rc=$?
+  first_hash=$(shasum -a 256 "$repo/AGENTS.md" | awk '{print $1}')
+  if [ "$rc" != "0" ] \
+    || ! grep -q 'PRESERVE_PROJECT_SENTINEL' "$repo/AGENTS.md" \
+    || ! grep -q '<!-- PMAI:BEGIN consumer-startup -->' "$repo/AGENTS.md" \
+    || ! grep -q 'install-project-hooks.sh' "$repo/AGENTS.md" \
+    || ! grep -q -- '--check' "$repo/AGENTS.md" \
+    || ! python3 - "$apply_out" <<'PY'
+import json
+import sys
+
+payload = json.loads(sys.argv[1])
+assert payload["status"] == "updated"
+assert payload["strategy"] == "managed_block"
+assert payload["changed"] is True
+PY
+  then
+    _fail "--apply should update only the managed block and preserve project content"
+    echo "$apply_out" >&2
+    return
+  fi
+
+  apply_out=$(python3 "$ENTRY_SYNC" --repo-root "$repo" --apply)
+  rc=$?
+  second_hash=$(shasum -a 256 "$repo/AGENTS.md" | awk '{print $1}')
+  if [ "$rc" != "0" ] || [ "$first_hash" != "$second_hash" ]; then
+    _fail "repeated --apply should be idempotent"
+    echo "$apply_out" >&2
+    return
+  fi
+  pass_test
+}
+
+test_consumer_entry_sync_migrates_known_legacy_rules_and_keeps_custom_items() {
+  start_test "consumer entry sync: known unmarked startup rules migrate without dropping project additions"
+  local repo replacement out rc
+  repo=$(new_consumer) || { _fail "fixture init failed"; return; }
+  replacement="$repo/AGENTS.md.legacy"
+  awk '
+    /<!-- PMAI:BEGIN consumer-startup -->/ {next}
+    /<!-- PMAI:END consumer-startup -->/ {
+      print "7. PRESERVE_LEGACY_PROJECT_STARTUP"
+      next
+    }
+    {print}
+  ' "$repo/AGENTS.md" > "$replacement" && mv "$replacement" "$repo/AGENTS.md"
+
+  out=$(python3 "$ENTRY_SYNC" --repo-root "$repo" --check)
+  rc=$?
+  if [ "$rc" != "1" ] || ! python3 - "$out" <<'PY'
+import json
+import sys
+
+payload = json.loads(sys.argv[1])
+assert payload["status"] == "stale"
+assert payload["strategy"] == "legacy_migration"
+PY
+  then
+    _fail "known unmarked startup rules should be safely migratable"
+    echo "$out" >&2
+    return
+  fi
+
+  out=$(python3 "$ENTRY_SYNC" --repo-root "$repo" --apply)
+  rc=$?
+  if [ "$rc" != "0" ] \
+    || ! grep -q 'PRESERVE_LEGACY_PROJECT_STARTUP' "$repo/AGENTS.md" \
+    || ! grep -q '<!-- PMAI:BEGIN consumer-startup -->' "$repo/AGENTS.md" \
+    || ! grep -q '### 项目启动补充' "$repo/AGENTS.md"; then
+    _fail "legacy migration should preserve project-specific startup content outside the managed block"
+    echo "$out" >&2
+    return
+  fi
+  pass_test
+}
+
+test_consumer_entry_sync_rejects_unsafe_shapes() {
+  start_test "consumer entry sync: malformed markers, unknown legacy PMAI rules, and symlinks fail closed"
+  local malformed misplaced unknown linked replacement before after out rc
+  malformed=$(new_consumer) || { _fail "malformed fixture init failed"; return; }
+  printf '\n<!-- PMAI:BEGIN consumer-startup -->\n' >> "$malformed/AGENTS.md"
+  before=$(shasum -a 256 "$malformed/AGENTS.md" | awk '{print $1}')
+  out=$(python3 "$ENTRY_SYNC" --repo-root "$malformed" --apply 2>/dev/null)
+  rc=$?
+  after=$(shasum -a 256 "$malformed/AGENTS.md" | awk '{print $1}')
+  if [ "$rc" != "2" ] || [ "$before" != "$after" ]; then
+    _fail "malformed managed markers must be rejected without writing"
+    return
+  fi
+
+  misplaced=$(new_consumer) || { _fail "misplaced fixture init failed"; return; }
+  replacement="$misplaced/AGENTS.md.misplaced"
+  sed '/<!-- PMAI:BEGIN consumer-startup -->/d; /<!-- PMAI:END consumer-startup -->/d' \
+    "$misplaced/AGENTS.md" > "$replacement" && mv "$replacement" "$misplaced/AGENTS.md"
+  printf '\n<!-- PMAI:BEGIN consumer-startup -->\nmisplaced\n<!-- PMAI:END consumer-startup -->\n' \
+    >> "$misplaced/AGENTS.md"
+  before=$(shasum -a 256 "$misplaced/AGENTS.md" | awk '{print $1}')
+  out=$(python3 "$ENTRY_SYNC" --repo-root "$misplaced" --apply 2>/dev/null)
+  rc=$?
+  after=$(shasum -a 256 "$misplaced/AGENTS.md" | awk '{print $1}')
+  if [ "$rc" != "2" ] || [ "$before" != "$after" ]; then
+    _fail "managed markers outside the Startup section must be rejected without writing"
+    return
+  fi
+
+  unknown=$(new_consumer) || { _fail "unknown fixture init failed"; return; }
+  replacement="$unknown/AGENTS.md.legacy"
+  awk '
+    /<!-- PMAI:BEGIN consumer-startup -->/ {next}
+    /<!-- PMAI:END consumer-startup -->/ {
+      print "7. 执行未知的 /pmai-mystery 旧入口规则。"
+      next
+    }
+    {print}
+  ' "$unknown/AGENTS.md" > "$replacement" && mv "$replacement" "$unknown/AGENTS.md"
+  before=$(shasum -a 256 "$unknown/AGENTS.md" | awk '{print $1}')
+  out=$(python3 "$ENTRY_SYNC" --repo-root "$unknown" --apply 2>/dev/null)
+  rc=$?
+  after=$(shasum -a 256 "$unknown/AGENTS.md" | awk '{print $1}')
+  if [ "$rc" != "2" ] || [ "$before" != "$after" ]; then
+    _fail "unknown PMAI legacy rules must require manual review"
+    return
+  fi
+
+  linked=$(new_consumer) || { _fail "symlink fixture init failed"; return; }
+  mv "$linked/AGENTS.md" "$linked/AGENTS.real.md"
+  ln -s AGENTS.real.md "$linked/AGENTS.md"
+  out=$(python3 "$ENTRY_SYNC" --repo-root "$linked" --apply 2>/dev/null)
+  rc=$?
+  if [ "$rc" != "2" ] || [ ! -L "$linked/AGENTS.md" ]; then
+    _fail "AGENTS.md symlink must be rejected without replacing it"
     return
   fi
   pass_test
@@ -705,6 +878,9 @@ test_project_definition_drives_custom_implementation_location
 test_ready_contract_gap_is_progress_only
 test_unknown_module_file_is_not_mislabeled_as_a_spec
 test_stale_consumer_entry_is_machine_detectable
+test_consumer_entry_sync_is_read_only_scoped_and_idempotent
+test_consumer_entry_sync_migrates_known_legacy_rules_and_keeps_custom_items
+test_consumer_entry_sync_rejects_unsafe_shapes
 test_missing_implementation_entrypoint_blocks_build_recovery
 test_mockup_manifest_assets_and_board_are_checked
 test_secret_config_is_never_echoed

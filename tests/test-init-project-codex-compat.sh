@@ -43,6 +43,8 @@ test_agents_template_exists_and_maps_codex() {
   assert_file_contains "$AGENTS_TMPL" "不能在这里再跑" "AGENTS.md.tmpl should prevent re-init inside consumer repo" || return
   assert_file_contains "$AGENTS_TMPL" "install-project-hooks.sh" "AGENTS.md.tmpl should check current Claude/Codex hooks" || return
   assert_file_contains "$AGENTS_TMPL" "--check" "AGENTS.md.tmpl should use a read-only hook drift check" || return
+  assert_file_contains "$AGENTS_TMPL" "<!-- PMAI:BEGIN consumer-startup -->" "AGENTS.md.tmpl should mark the managed startup block" || return
+  assert_file_contains "$AGENTS_TMPL" "<!-- PMAI:END consumer-startup -->" "AGENTS.md.tmpl should close the managed startup block" || return
   assert_file_contains "$AGENTS_TMPL" "install-opencode-commands.sh" "AGENTS.md.tmpl should tell OpenCode how to repair missing commands" || return
   assert_file_contains "$AGENTS_TMPL" "不写死机器绑定路径" "AGENTS.md.tmpl should carry portable path principle" || return
   assert_file_contains "$AGENTS_TMPL" "/Users/<某人>/..." "AGENTS.md.tmpl should forbid user-specific local paths" || return
@@ -118,6 +120,12 @@ test_e2e_generates_agents_md_without_framework_assets() {
 
   if ! grep -q "PMAI Agent Entry" "$proj/AGENTS.md"; then
     _fail "生成的 AGENTS.md 缺通用主控入口标题"
+    rm -rf "$base"
+    return
+  fi
+  if ! grep -q '<!-- PMAI:BEGIN consumer-startup -->' "$proj/AGENTS.md" \
+    || ! grep -q '<!-- PMAI:END consumer-startup -->' "$proj/AGENTS.md"; then
+    _fail "生成的 AGENTS.md 缺 PMAI 托管启动区块标记"
     rm -rf "$base"
     return
   fi

@@ -24,6 +24,7 @@
 
 会话开始时按顺序做：
 
+<!-- PMAI:BEGIN consumer-startup -->
 1. 读 `CLAUDE.md`，把其中的 Claude host 名称按上面的 Host Mapping 映射到当前主控。
 2. 运行 `bash -lc 'PMAI_PREAMBLE_READ_ONLY=1; export PMAI_PREAMBLE_READ_ONLY; source "${PMAI_HOME:-$HOME/.pmai}/scripts/skill-preamble.sh"; unset PMAI_PREAMBLE_READ_ONLY'` 只读检测 PMAI_HOME、当前 worktree、active work 和项目初始化状态；如果文件不存在，先提示 PM 运行 `pmai install` 或检查 `PMAI_HOME`。
    如果 preamble 提示当前目录还没有 PMAI 初始化，停止当前非 init skill，引导 PM 先发 `/pmai-init-project`。它会自动判断全新项目 / 资料目录 / 已有代码库，不需要 PM 手动改跑其它 skill。
@@ -31,6 +32,7 @@
 4. 如果当前主控是 Kimi Code，确认 `${KIMI_CODE_HOME:-$HOME/.kimi-code}/skills/pmai-status` 可解析，并运行 `python3 "${PMAI_HOME:-$HOME/.pmai}/scripts/manage-kimi-hooks.py" check` 检查原生 hooks；缺失或漂移时提示使用 `/skill:pmai-doctor` 诊断，只有 PM 确认后才运行 `pmai doctor --repair`。Kimi 不读取 `.codex/hooks.json`。
 5. 如果当前主控是 OpenCode，运行 `bash "${PMAI_HOME:-$HOME/.pmai}/scripts/install-opencode-commands.sh" --project "$PWD" --check` 只读比较 `.opencode/commands/` 与 `opencode.json`；漂移时先报告，PM 确认后才去掉 `--check` 刷新。OpenCode 不使用 Codex hooks，不能声称 Codex hooks 已在 OpenCode 中生效。
 6. 按 `/pmai-status` 等价流程判断当前下一步；Kimi Code 对应 `/skill:pmai-status`。已初始化且没有 active work时，引导 PM 进入 design。
+<!-- PMAI:END consumer-startup -->
 
 ## Command Resolution
 
