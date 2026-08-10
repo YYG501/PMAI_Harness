@@ -18,6 +18,8 @@ PM-AI-Workflow 生成器仓的演进记录。本文件**只记影响下游业务
 
 ## 未发布
 
+- `fix(doctor)`: **消费仓诊断改为一个结论、七项完整检查和独立项目进度提示。** Doctor 现在固定报告 PMAI 安装、AI 工具接入、项目必需资料、文档与历史资料、原型和产品文件、正在进行的工作、项目安全七项结果，正常项也不省略，并列出全部需要处理的问题。模块尚未确定制作范围等开工准备只作为项目进度提示，不再把整个消费仓判为不可用，也不会压住项目 hooks 等宿主维护提醒。已安装框架通过共享只读入口检查识别旧消费仓 `AGENTS.md` 的启动规则是否过期；检查只提示，不覆盖项目自定义内容。
+
 - `fix(doctor)`: **消费仓诊断改为按布局版本、模块状态和 finding ownership 判断，不再把旧文档组合等同于内容损坏。** 机器合同复用现有 `.pm-workflow/config.yml:consumer`，不新增平行 manifest；fresh init 声明 layout v1，标准索引仍固定为 `docs/INDEX.md` 与 `docs/modules/INDEX.md`。未标版本旧仓的非空 `spec + decisions`、合并式 `spec` 会进入待确认兼容项，`legacy / retired / split` 可在 PM 确认后只记录格式或现行真相源；active `.work-meta.json` 始终按 lifecycle 严格校验，空白三件套、缺失产品脊柱和不可恢复 active work 仍阻断。项目声明的归档目录生效，标准索引明确链接的旧顶层文档可保留，非空目录不依赖 `.gitkeep`。JSON finding 新增 `kind / blocking`，区分框架托管同步、合法旧产出、待确认兼容和真实内容损坏；CLI 保留完整分类并让 `consumer_invalid` 优先于升级或宿主同步。升级或同步不能迁移、补写或生成空白业务文档，兼容关系只能在 PM 逐项确认后写入现有配置。
 
 - `refactor(status+doctor)`: **产品进度与框架运维入口彻底拆开。** `/pmai-status` 只回答产品进度、当前模块和下一步；新增 `/pmai-doctor`，默认只读检查全局框架、Claude / Codex / Kimi / OpenCode 宿主入口和当前消费仓，并以稳定 JSON 返回 `healthy / upgrade_available / consumer_sync_required / consumer_invalid / broken`。消费仓诊断按阶段检查根目录产品脊柱、`docs/` 归位与索引、模块三件套、`project.yml` 声明的真实实现根和入口、`mockups/manifest.json` 与看板、active build 恢复资产、Git 可携带性、旧结构和敏感配置跟踪风险；不执行项目命令、不读取 token、不逐字比较可编辑文档。OpenCode 项目入口与 Git pre-commit hook 新增只读 `--check`。全局入口修复必须显式使用 `pmai doctor --repair`，消费仓刷新、文件迁移、legacy 清理和升级仍需 PM 二次确认。`/pmai-upgrade` 只执行已确认升级。CLI `pmai status` 降为 `pmai doctor --check` 的弃用兼容包装，不再维护第二套检测；跨版本 doctor 继续把参数和行为完整交给目标安装版本。

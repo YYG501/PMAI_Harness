@@ -155,6 +155,111 @@ PY
   pass_test
 }
 
+test_ready_contract_gap_is_progress_only() {
+  start_test "consumer-doctor: incomplete ready scope is progress guidance, not repository damage"
+  local repo out sentinel
+  repo=$(new_consumer) || { _fail "fixture init failed"; return; }
+  sentinel="${repo%/repo}/unused-ready-gap"
+  prepare_ready_project "$repo" "$sentinel" || { _fail "ready fixture failed"; return; }
+  python3 - "$repo/docs/modules/demo/.work-meta.json" <<'PY'
+import json
+import sys
+
+path = sys.argv[1]
+with open(path, encoding="utf-8") as handle:
+    payload = json.load(handle)
+payload.pop("approved_target", None)
+with open(path, "w", encoding="utf-8") as handle:
+    json.dump(payload, handle, ensure_ascii=False, indent=2)
+    handle.write("\n")
+PY
+  out=$(audit "$repo") || { _fail "ready gap audit failed"; return; }
+  if python3 - "$out" <<'PY'
+import json
+import sys
+
+payload = json.loads(sys.argv[1])
+finding = next(item for item in payload["findings"] if item["code"] == "ready_target_missing")
+assert payload["status"] == "current"
+assert finding["level"] == "warning"
+assert finding["kind"] == "project_advisory"
+assert finding["blocking"] is False
+PY
+  then
+    pass_test
+  else
+    _fail "an incomplete ready scope should only block that module from starting"
+    echo "$out" >&2
+  fi
+}
+
+test_unknown_module_file_is_not_mislabeled_as_a_spec() {
+  start_test "consumer-doctor: unknown module files are reported once without calling them specs"
+  local repo out
+  repo=$(new_consumer) || { _fail "fixture init failed"; return; }
+  printf 'finder metadata\n' > "$repo/docs/modules/.DS_Store"
+  out=$(audit "$repo") || { _fail "unknown module file audit failed"; return; }
+  if python3 - "$out" <<'PY'
+import json
+import sys
+
+payload = json.loads(sys.argv[1])
+findings = [item for item in payload["findings"] if item.get("path") == "docs/modules/.DS_Store"]
+assert [item["code"] for item in findings] == ["modules_unknown_file"]
+PY
+  then
+    pass_test
+  else
+    _fail "an unknown file should not also be called an untracked functional spec"
+    echo "$out" >&2
+  fi
+}
+
+test_stale_consumer_entry_is_machine_detectable() {
+  start_test "consumer-doctor: old AGENTS startup rule is detected without rewriting it"
+  local repo before after out entry_out missing_out rc
+  repo=$(new_consumer) || { _fail "fixture init failed"; return; }
+  sed 's/install-project-hooks\.sh/install-codex-hooks.sh/g; s/ --check//g' \
+    "$repo/AGENTS.md" > "$repo/AGENTS.md.old" \
+    && mv "$repo/AGENTS.md.old" "$repo/AGENTS.md"
+  before=$(git -C "$repo" status --porcelain=v1 --untracked-files=all)
+  out=$(audit "$repo") || { _fail "stale entry audit failed"; return; }
+  entry_out=$(python3 "$CHECKER" --repo-root "$repo" --entry-only)
+  rc=$?
+  after=$(git -C "$repo" status --porcelain=v1 --untracked-files=all)
+  if [ "$rc" != "1" ] || [ "$before" != "$after" ] || ! python3 - "$out" "$entry_out" <<'PY'
+import json
+import sys
+
+payload = json.loads(sys.argv[1])
+entry = json.loads(sys.argv[2])
+assert payload["status"] == "sync_required"
+assert entry["status"] == "stale"
+assert "host_rules_stale" in {item["code"] for item in payload["findings"]}
+PY
+  then
+    _fail "old startup rules should be reported by the shared read-only check"
+    echo "$out" >&2
+    echo "$entry_out" >&2
+    return
+  fi
+  rm "$repo/AGENTS.md"
+  missing_out=$(python3 "$CHECKER" --repo-root "$repo" --entry-only)
+  rc=$?
+  if [ "$rc" != "2" ] || ! python3 - "$missing_out" <<'PY'
+import json
+import sys
+
+assert json.loads(sys.argv[1])["status"] == "missing"
+PY
+  then
+    _fail "missing AGENTS.md should be distinct from an outdated startup rule"
+    echo "$missing_out" >&2
+    return
+  fi
+  pass_test
+}
+
 test_missing_implementation_entrypoint_blocks_build_recovery() {
   start_test "consumer-doctor: missing implementation entrypoint invalidates active build"
   local repo out sentinel
@@ -597,6 +702,9 @@ PY
 test_fresh_consumer_is_current_and_read_only
 test_missing_and_misplaced_documents_are_reported
 test_project_definition_drives_custom_implementation_location
+test_ready_contract_gap_is_progress_only
+test_unknown_module_file_is_not_mislabeled_as_a_spec
+test_stale_consumer_entry_is_machine_detectable
 test_missing_implementation_entrypoint_blocks_build_recovery
 test_mockup_manifest_assets_and_board_are_checked
 test_secret_config_is_never_echoed

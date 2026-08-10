@@ -292,6 +292,137 @@ if consumer_audit_path:
         enriched = dict(item)
         enriched["category"] = "consumer"
         payload["findings"].append(enriched)
+
+check_definitions = (
+    ("framework_install", "PMAI 安装"),
+    ("ai_tool_entry", "AI 工具接入"),
+    ("required_materials", "项目必需资料"),
+    ("documents_and_history", "文档与历史资料"),
+    ("product_files", "原型和产品文件"),
+    ("active_work", "正在进行的工作"),
+    ("project_safety", "项目安全"),
+)
+progress_codes = {
+    "ready_design_revision",
+    "ready_contract_incomplete",
+    "ready_target_missing",
+    "ready_target_invalid",
+}
+
+
+def finding_area(item):
+    code = str(item.get("code") or "")
+    path = str(item.get("path") or "")
+    if code in progress_codes:
+        return None
+    if code in {
+        "host_rules_missing",
+        "host_rules_stale",
+        "host_surface_missing",
+        "host_surface_untracked",
+        "legacy_local_skills",
+    }:
+        return "ai_tool_entry"
+    if path in {"AGENTS.md", "CLAUDE.md"} and code in {
+        "missing_required_file",
+        "managed_path_symlink",
+        "managed_path_type",
+        "managed_path_unreadable",
+        "framework_file_untracked",
+    }:
+        return "ai_tool_entry"
+    if code.startswith(("secret_", "gitignore_")) \
+      or code in {"not_git_repository", "git_root_unreadable", "wrong_repository_root", "git_index_unreadable"} \
+      or code.endswith("_symlink"):
+        return "project_safety"
+    if code.startswith(("project_definition_", "project_source_", "implementation_", "entrypoint_", "mockup_", "mockups_")) \
+      or code in {"build_project_type_mismatch", "build_entrypoints_mismatch", "build_target_outside_root", "build_target_outside_entrypoints"}:
+        return "product_files"
+    if code.startswith(("work_meta_", "lifecycle_", "build_", "active_", "audit_")) \
+      or code in {"unexpected_build_contract", "active_module_compatibility_ignored"}:
+        return "active_work"
+    if code.startswith(("docs_", "module_", "modules_", "legacy_")) \
+      or item.get("kind") in {"legacy_compatible", "compatibility_declaration_required"}:
+        return "documents_and_history"
+    return "required_materials"
+
+
+def add_problem(check, message, status):
+    ranks = {"normal": 0, "attention": 1, "problem": 2}
+    if ranks[status] > ranks.get(check["status"], -1):
+        check["status"] = status
+    if message and message not in check["problems"]:
+        check["problems"].append(message)
+
+
+checks = {
+    check_id: {"id": check_id, "label": label, "status": "normal", "problems": []}
+    for check_id, label in check_definitions
+}
+recorded_failure_areas = {
+    "framework": "framework_install",
+    "skills": "framework_install",
+    "upgrade": "framework_install",
+    "claude": "ai_tool_entry",
+    "codex": "ai_tool_entry",
+    "kimi": "ai_tool_entry",
+    "opencode": "ai_tool_entry",
+    "runtime": "ai_tool_entry",
+    "browser": "ai_tool_entry",
+}
+framework_failure_recorded = False
+for item in payload["findings"]:
+    if not isinstance(item, dict) or item.get("level") != "fail":
+        continue
+    area = recorded_failure_areas.get(str(item.get("category") or ""))
+    if area is None:
+        continue
+    add_problem(checks[area], str(item.get("message") or ""), "problem")
+    if area == "framework_install":
+        framework_failure_recorded = True
+
+if not payload["framework"]["installed"] and not framework_failure_recorded:
+    add_problem(checks["framework_install"], "PMAI 安装不完整或无法正常运行", "problem")
+elif payload["framework"]["update_available"] is True:
+    add_problem(checks["framework_install"], "PMAI 有新版本可以更新", "attention")
+
+if project_kind != "consumer":
+    for check_id, _label in check_definitions[2:]:
+        checks[check_id]["status"] = "not_applicable"
+else:
+    host_states = (project_hooks, project_opencode, project_git_hook)
+    if any(state in {"checker_missing", "invalid"} for state in host_states):
+        add_problem(checks["ai_tool_entry"], "当前项目的 AI 工具接入无法完整检查", "problem")
+    elif any(state == "drifted" for state in host_states):
+        add_problem(checks["ai_tool_entry"], "当前项目的 AI 工具接入需要更新", "attention")
+    if legacy_local_copy == "true":
+        add_problem(checks["ai_tool_entry"], "当前项目里还有旧版 PMAI 文件", "attention")
+
+    audit_findings = []
+    if isinstance(payload["consumer"].get("audit"), dict):
+        audit_findings = payload["consumer"]["audit"].get("findings", [])
+    for item in audit_findings:
+        if not isinstance(item, dict) or item.get("kind") == "legacy_compatible":
+            continue
+        area = finding_area(item)
+        if area is None:
+            continue
+        status = "problem" if item.get("blocking") else "attention"
+        add_problem(checks[area], str(item.get("message") or ""), status)
+
+progress_notes = []
+if isinstance(payload["consumer"].get("audit"), dict):
+    for item in payload["consumer"]["audit"].get("findings", []):
+        if isinstance(item, dict) and item.get("code") in progress_codes:
+            message = str(item.get("message") or "")
+            if message and message not in progress_notes:
+                progress_notes.append(message)
+
+payload["checks"] = [checks[check_id] for check_id, _label in check_definitions]
+payload["product_progress"] = {
+    "phase": consumer_phase if project_kind == "consumer" else "not_applicable",
+    "notes": progress_notes,
+}
 print(json.dumps(payload, ensure_ascii=False, indent=2))
 PY
 }

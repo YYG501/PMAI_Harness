@@ -101,6 +101,31 @@ if ! _pmai_is_generator_repo && ! _pmai_has_project_marker; then
   PMAI_PROJECT_INITIALIZED=0
 fi
 
+# 已安装框架提供入口规则检查，因此旧消费仓即使仍使用旧 AGENTS.md，
+# 也能在启动时发现规则过期。这里只读提示，不修改项目文件。
+PMAI_PROJECT_ENTRY_STATUS="not_applicable"
+if [ "$PMAI_PROJECT_INITIALIZED" = "1" ] \
+  && ! _pmai_is_generator_repo \
+  && [ -f "$PMAI_HOME/scripts/consumer-doctor.py" ]; then
+  if python3 "$PMAI_HOME/scripts/consumer-doctor.py" \
+    --repo-root "$REPO_ROOT" --entry-only >/dev/null 2>&1; then
+    PMAI_PROJECT_ENTRY_STATUS="current"
+  else
+    _PMAI_ENTRY_RC=$?
+    if [ "$_PMAI_ENTRY_RC" = "1" ]; then
+      PMAI_PROJECT_ENTRY_STATUS="stale"
+      echo "当前项目的 PMAI 启动规则是旧版本；运行 pmai doctor 查看需要更新的内容。" >&2
+    elif [ "$_PMAI_ENTRY_RC" = "2" ]; then
+      PMAI_PROJECT_ENTRY_STATUS="missing"
+      echo "当前项目缺少可用的 AGENTS.md；运行 pmai doctor 查看需要补齐的入口。" >&2
+    else
+      PMAI_PROJECT_ENTRY_STATUS="unknown"
+      echo "暂时无法检查当前项目的 PMAI 启动规则；运行 pmai doctor 查看详情。" >&2
+    fi
+  fi
+fi
+export PMAI_PROJECT_ENTRY_STATUS
+
 # --- 3. 检测 worktree 类型 ---
 WORKTREE_TYPE="main"
 if [[ "$BRANCH" == build-* ]]; then

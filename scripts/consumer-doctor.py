@@ -99,6 +99,10 @@ MOCKUP_REQUIRED_KEYS = {
     "round": str,
     "featured": bool,
 }
+CURRENT_ENTRY_REQUIREMENTS = (
+    "install-project-hooks.sh",
+    "--check",
+)
 
 
 def _run_git(root: Path, *args: str, input_text: str | None = None) -> subprocess.CompletedProcess[str]:
@@ -137,6 +141,20 @@ def _substantive_markdown(path: Path) -> bool:
         return False
     text = re.sub(r"<!--.*?-->", "", text, flags=re.DOTALL)
     return bool(text.strip())
+
+
+def consumer_entry_contract(root: Path) -> dict[str, Any]:
+    path = root / "AGENTS.md"
+    if not path.is_file() or path.is_symlink():
+        return {"status": "missing", "path": "AGENTS.md"}
+    try:
+        text = path.read_text(encoding="utf-8")
+    except (OSError, UnicodeError):
+        return {"status": "unreadable", "path": "AGENTS.md"}
+    missing = [requirement for requirement in CURRENT_ENTRY_REQUIREMENTS if requirement not in text]
+    if missing:
+        return {"status": "stale", "path": "AGENTS.md", "missing_capabilities": missing}
+    return {"status": "current", "path": "AGENTS.md", "missing_capabilities": []}
 
 
 def _markdown_repo_links(index_path: Path, root: Path) -> set[str]:
@@ -186,6 +204,7 @@ class Audit:
             "archive": None,
             "modules": {},
         }
+        self.entry_contract = consumer_entry_contract(root)
 
     def add(
         self,
@@ -404,6 +423,14 @@ class Audit:
                     relative,
                 )
 
+        if self.entry_contract["status"] == "stale":
+            self.add(
+                "sync",
+                "host_rules_stale",
+                "当前项目的 PMAI 启动规则是旧版本，需要更新",
+                "AGENTS.md",
+            )
+
         for relative in HOST_PATHS:
             path = self.root / relative
             if not os.path.lexists(path):
@@ -548,18 +575,18 @@ class Audit:
             return None
         if lifecycle == "ready_to_build":
             if not isinstance(meta.get("design_revision"), int) or meta.get("design_revision", 0) < 1:
-                self.add("error", "ready_design_revision", "ready_to_build 缺少合法 design_revision", relative)
+                self.add("warning", "ready_design_revision", "模块还没有完整保存已确认的设计版本，暂不能开始制作", relative)
             for key in ("approved_source_hash", "design_checkpoint_commit"):
                 if not isinstance(meta.get(key), str) or not meta.get(key, "").strip():
-                    self.add("error", "ready_contract_incomplete", f"ready_to_build 缺少 {key}", relative)
+                    self.add("warning", "ready_contract_incomplete", "模块还没有完整保存已确认的设计内容，暂不能开始制作", relative)
             target = meta.get("approved_target")
             paths = target.get("paths") if isinstance(target, dict) else None
             if not isinstance(paths, list) or not paths:
-                self.add("error", "ready_target_missing", "ready_to_build 缺少 approved_target.paths", relative)
+                self.add("warning", "ready_target_missing", "模块还没有确定这次要修改的页面或文件，暂不能开始制作", relative)
             else:
                 for value in paths:
                     if _relative_path(value) is None:
-                        self.add("error", "ready_target_invalid", "ready_to_build 含不安全的批准目标路径", relative)
+                        self.add("warning", "ready_target_invalid", "模块记录的制作范围不正确，暂不能开始制作", relative)
                         break
         if lifecycle in BUILD_STATES:
             if not isinstance(build, dict):
@@ -670,7 +697,8 @@ class Audit:
             if entry.is_file():
                 if entry.name != "INDEX.md" and entry.suffix.lower() != ".md":
                     self.add("warning", "modules_unknown_file", f"模块目录顶层存在未归类文件：{relative_dir}", relative_dir)
-                elif entry.name != "INDEX.md" and entry.name not in index_text:
+                    continue
+                if entry.name != "INDEX.md" and entry.name not in index_text:
                     self.add("warning", "module_index_missing_document", f"功能型规格未登记到模块索引：{entry.name}", "docs/modules/INDEX.md")
                 if entry.name != "INDEX.md" and relative_dir not in self.tracked:
                     self.add("warning", "module_document_untracked", f"功能型规格未被 Git 跟踪：{relative_dir}", relative_dir)
@@ -1096,6 +1124,7 @@ class Audit:
             "phase": self.phase(states),
             "summary": counts,
             "classification_summary": kinds,
+            "entry_contract": self.entry_contract,
             "consumer_contract": self.consumer_contract,
             "project_definition": self.project_definition,
             "mockups": self.mockups,
@@ -1130,11 +1159,20 @@ def audit_consumer(root: Path) -> dict[str, Any]:
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--repo-root", required=True)
+    parser.add_argument("--entry-only", action="store_true")
     args = parser.parse_args(argv)
     try:
         root = Path(args.repo_root).expanduser().resolve(strict=True)
         if not root.is_dir():
             raise ValueError("消费仓根目录不是目录")
+        if args.entry_only:
+            entry = consumer_entry_contract(root)
+            print(json.dumps(entry, ensure_ascii=False, indent=2))
+            if entry["status"] == "current":
+                return 0
+            if entry["status"] == "stale":
+                return 1
+            return 2
         payload = audit_consumer(root)
     except (OSError, RuntimeError, ValueError) as exc:
         print(
@@ -1151,6 +1189,7 @@ def main(argv: list[str] | None = None) -> int:
                         FINDING_INVALID: 1,
                         FINDING_ADVISORY: 0,
                     },
+                    "entry_contract": {"status": "unknown", "path": "AGENTS.md"},
                     "consumer_contract": {
                         "state": "unknown",
                         "schema_version": None,

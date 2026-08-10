@@ -177,6 +177,59 @@ test_e2e_generates_agents_md_without_framework_assets() {
   pass_test
 }
 
+test_shared_preamble_reports_stale_consumer_entry() {
+  start_test "T4b: shared preamble reports old consumer startup rules without rewriting them"
+
+  local base proj current_out stale_out missing_out before after
+  base=$(mktemp -d)
+  proj="$base/preamble-entry-proj"
+  if ! PMAI_HOME="$REPO_ROOT" bash "$INIT_PROJECT_SH" "preamble-entry-proj" "$proj" \
+       "consumer entry check" >/dev/null 2>&1; then
+    _fail "unable to initialize preamble entry fixture"
+    rm -rf "$base"
+    return
+  fi
+
+  current_out=$(cd "$proj" && PMAI_HOME="$REPO_ROOT" PMAI_PREAMBLE_READ_ONLY=1 \
+    bash -c 'source "$PMAI_HOME/scripts/skill-preamble.sh"; printf "ENTRY:%s\n" "$PMAI_PROJECT_ENTRY_STATUS"' 2>&1)
+  if [[ "$current_out" != *"ENTRY:current"* ]] || [[ "$current_out" == *"启动规则是旧版本"* ]]; then
+    _fail "current consumer entry should pass the shared startup check quietly"
+    echo "$current_out" >&2
+    rm -rf "$base"
+    return
+  fi
+
+  sed 's/install-project-hooks\.sh/install-codex-hooks.sh/g; s/ --check//g' \
+    "$proj/AGENTS.md" > "$proj/AGENTS.md.old" \
+    && mv "$proj/AGENTS.md.old" "$proj/AGENTS.md"
+  before=$(git -C "$proj" status --porcelain=v1 --untracked-files=all)
+  stale_out=$(cd "$proj" && PMAI_HOME="$REPO_ROOT" PMAI_PREAMBLE_READ_ONLY=1 \
+    bash -c 'source "$PMAI_HOME/scripts/skill-preamble.sh"; printf "ENTRY:%s\n" "$PMAI_PROJECT_ENTRY_STATUS"' 2>&1)
+  after=$(git -C "$proj" status --porcelain=v1 --untracked-files=all)
+  if [ "$before" != "$after" ] \
+    || [[ "$stale_out" != *"ENTRY:stale"* ]] \
+    || [[ "$stale_out" != *"启动规则是旧版本"* ]]; then
+    _fail "old consumer entry should be reported without changing project files"
+    echo "$stale_out" >&2
+    rm -rf "$base"
+    return
+  fi
+
+  rm "$proj/AGENTS.md"
+  missing_out=$(cd "$proj" && PMAI_HOME="$REPO_ROOT" PMAI_PREAMBLE_READ_ONLY=1 \
+    bash -c 'source "$PMAI_HOME/scripts/skill-preamble.sh"; printf "ENTRY:%s\n" "$PMAI_PROJECT_ENTRY_STATUS"' 2>&1)
+  if [[ "$missing_out" != *"ENTRY:missing"* ]] \
+    || [[ "$missing_out" != *"缺少可用的 AGENTS.md"* ]]; then
+    _fail "missing consumer entry should be reported directly"
+    echo "$missing_out" >&2
+    rm -rf "$base"
+    return
+  fi
+
+  rm -rf "$base"
+  pass_test
+}
+
 test_install_codex_hooks_merges_existing_hooks() {
   start_test "T5: install-codex-hooks.sh merge 既有 hook 且幂等"
 
@@ -1419,6 +1472,7 @@ test_agents_template_exists_and_maps_codex
 test_init_project_knows_agents_template
 test_codex_hooks_template_shape
 test_e2e_generates_agents_md_without_framework_assets
+test_shared_preamble_reports_stale_consumer_entry
 test_install_codex_hooks_merges_existing_hooks
 test_project_hook_installer_checks_and_refreshes_both_hosts
 test_project_hook_installer_requires_verified_lock_fd

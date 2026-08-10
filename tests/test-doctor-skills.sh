@@ -759,6 +759,19 @@ assert payload["summary"]["fail"] == 0
 assert isinstance(payload["framework"], dict)
 assert isinstance(payload["consumer"], dict)
 assert isinstance(payload["findings"], list)
+assert [item["id"] for item in payload["checks"]] == [
+    "framework_install",
+    "ai_tool_entry",
+    "required_materials",
+    "documents_and_history",
+    "product_files",
+    "active_work",
+    "project_safety",
+]
+assert payload["checks"][0]["status"] == "normal"
+assert payload["checks"][1]["status"] == "normal"
+assert all(item["status"] == "not_applicable" for item in payload["checks"][2:])
+assert payload["product_progress"] == {"phase": "not_applicable", "notes": []}
 PY
   then
     _fail "健康 doctor 应只输出合法 schema v1 JSON 并以 0 退出"
@@ -803,6 +816,9 @@ payload = json.loads(sys.argv[1])
 assert payload["conclusion"] == "broken"
 assert payload["recommended_action"] == "repair"
 assert payload["summary"]["fail"] > 0
+checks = {item["id"]: item for item in payload["checks"]}
+assert checks["framework_install"]["status"] == "normal"
+assert checks["ai_tool_entry"]["status"] == "problem"
 PY
   then
     _fail "broken JSON 结论必须与非零退出码一致"
@@ -874,9 +890,98 @@ assert payload["recommended_action"] == "refresh_project_hooks"
 assert payload["consumer"]["kind"] == "consumer"
 assert payload["consumer"]["root"] == os.path.realpath(sys.argv[2])
 assert payload["consumer"]["project_hooks"] == "drifted"
+checks = {item["id"]: item for item in payload["checks"]}
+assert len(checks) == 7
+assert checks["ai_tool_entry"]["status"] == "attention"
+assert checks["required_materials"]["status"] == "normal"
+assert checks["documents_and_history"]["status"] == "normal"
+assert checks["product_files"]["status"] == "normal"
+assert checks["active_work"]["status"] == "normal"
+assert checks["project_safety"]["status"] == "normal"
 PY
   then
     _fail "消费仓 hooks 漂移应保持只读并返回唯一同步建议"
+    echo "$out" >&2
+    rm -rf "$tmp"
+    return
+  fi
+
+  rm -rf "$tmp"
+  pass_test
+}
+
+test_doctor_keeps_product_progress_out_of_health() {
+  start_test "T12h: refreshed project entry stays healthy while unfinished module scope is only progress"
+  local setup tmp pmai_home fake_home consumer out rc
+
+  setup=$(setup_fake_global_install)
+  IFS='|' read -r tmp pmai_home fake_home <<< "$setup"
+  consumer="$tmp/consumer-progress"
+  if ! bash "$REPO_ROOT/scripts/init-project.sh" DoctorProgressFixture "$consumer" \
+    "doctor progress fixture" >/dev/null 2>&1; then
+    _fail "unable to initialize progress fixture"
+    rm -rf "$tmp"
+    return
+  fi
+  mkdir -p "$consumer/docs/modules/demo" "$consumer/apps/web"
+  printf '# Discussion\n' > "$consumer/docs/modules/demo/discussion.md"
+  printf '# Decisions\n' > "$consumer/docs/modules/demo/decisions.md"
+  printf '# Spec\n' > "$consumer/docs/modules/demo/spec.md"
+  printf 'export const demo = true;\n' > "$consumer/apps/web/index.ts"
+  printf '\n- [demo](demo/spec.md)\n' >> "$consumer/docs/modules/INDEX.md"
+  python3 "$REPO_ROOT/scripts/project-definition.py" write "$consumer" \
+    --source docs/modules/demo/spec.md \
+    --type prototype \
+    --root apps/web \
+    --entrypoint apps/web \
+    --language typescript \
+    --runtime node \
+    --framework nextjs \
+    --package-manager pnpm \
+    --test-command "echo ok" >/dev/null || {
+      _fail "unable to write progress project definition"
+      rm -rf "$tmp"
+      return
+    }
+  cat > "$consumer/docs/modules/demo/.work-meta.json" <<'JSON'
+{
+  "id": "work-demo",
+  "name": "demo",
+  "status": "active",
+  "stage": 1,
+  "lifecycle_state": "ready_to_build",
+  "design_revision": 1,
+  "approved_source_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "design_checkpoint_commit": "fixture"
+}
+JSON
+  git -C "$consumer" add -A >/dev/null \
+    && git -C "$consumer" commit --no-verify -m "test: progress only" >/dev/null
+
+  out=$(cd "$consumer" && PMAI_HOME="$pmai_home" HOME="$fake_home" \
+    CODEX_HOME="$fake_home/.codex" KIMI_CODE_HOME="$fake_home/.kimi-code" \
+    OPENCODE_CONFIG_DIR="$fake_home/.config/opencode" \
+    bash "$pmai_home/bin/pmai-doctor" --check --json 2>"$tmp/consumer-progress.err")
+  rc=$?
+  if [ "$rc" != "0" ] || ! python3 - "$out" <<'PY'
+import json
+import sys
+
+payload = json.loads(sys.argv[1])
+assert payload["conclusion"] == "healthy"
+assert payload["recommended_action"] == "none"
+assert payload["consumer"]["project_hooks"] == "current"
+assert payload["consumer"]["opencode"] == "current"
+assert payload["consumer"]["git_hook"] == "current"
+assert all(item["status"] == "normal" for item in payload["checks"])
+assert payload["product_progress"]["phase"] == "ready_to_build"
+assert payload["product_progress"]["notes"] == [
+    "模块还没有确定这次要修改的页面或文件，暂不能开始制作"
+]
+assert any(item.get("code") == "ready_target_missing" for item in payload["findings"])
+PY
+  then
+    _fail "product progress should not change the health conclusion after project entry refresh"
     echo "$out" >&2
     rm -rf "$tmp"
     return
@@ -924,6 +1029,9 @@ assert payload["consumer"]["project_hooks"] == "drifted"
 assert payload["consumer"]["opencode"] == "current"
 assert payload["consumer"]["git_hook"] == "current"
 assert payload["consumer"]["audit"]["status"] == "invalid"
+checks = {item["id"]: item for item in payload["checks"]}
+assert checks["ai_tool_entry"]["status"] == "attention"
+assert checks["required_materials"]["status"] == "problem"
 assert any(item["code"] == "missing_required_file" for item in payload["consumer"]["audit"]["findings"])
 assert any(
     item.get("code") == "missing_required_file"
@@ -1000,15 +1108,25 @@ PY
 }
 
 test_doctor_skill_separates_status_doctor_and_upgrade() {
-  start_test "T12e: Doctor Skill 明确三入口职责和二次确认"
+  start_test "T12e: Doctor Skill 明确三入口职责、完整检查结果和进度边界"
   local skill="$SKILLS_DIR/doctor/SKILL.md"
 
   if ! grep -q '/pmai-status.*产品进度' "$skill" \
     || ! grep -q '/pmai-doctor.*框架是否健康' "$skill" \
     || ! grep -q '/pmai-upgrade.*执行已经确认' "$skill" \
     || ! grep -q '修复必须二次确认' "$skill" \
-    || ! grep -q 'doctor --repair --json' "$skill"; then
-    _fail "Doctor Skill 未完整声明 status / doctor / upgrade 边界"
+    || ! grep -q 'doctor --repair --json' "$skill" \
+    || ! grep -q '正常项也不能省略' "$skill" \
+    || ! grep -q 'PMAI 安装' "$skill" \
+    || ! grep -q 'AI 工具接入' "$skill" \
+    || ! grep -q '项目必需资料' "$skill" \
+    || ! grep -q '文档与历史资料' "$skill" \
+    || ! grep -q '原型和产品文件' "$skill" \
+    || ! grep -q '正在进行的工作' "$skill" \
+    || ! grep -q '项目安全' "$skill" \
+    || ! grep -q '项目进度提示' "$skill" \
+    || ! grep -q '不参与总结论' "$skill"; then
+    _fail "Doctor Skill 未完整声明 status / doctor / upgrade 和用户输出边界"
     return
   fi
   pass_test
@@ -2233,6 +2351,7 @@ test_doctor_repairs_kimi_native_surface
 test_doctor_rechecks_kimi_repair_result
 test_doctor_json_contract_and_status_alias
 test_doctor_reports_consumer_hook_drift
+test_doctor_keeps_product_progress_out_of_health
 test_doctor_reports_invalid_consumer_structure
 test_doctor_reports_unversioned_legacy_as_compatibility_sync
 test_doctor_skill_separates_status_doctor_and_upgrade
