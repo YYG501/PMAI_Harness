@@ -10,7 +10,8 @@
 - `discussion.md` / `decisions.md` 和 active build 合同也保持采集前状态。候选决定、预期 supersede 和 accepted delta 只写入 `resolutions.json`；其中 `decision_routing` 必须逐来源区分 `not_required / create / supersede` 并绑定目标、决定 ID 与原因。apply 成功前不得改写任何权威产品状态。
 - spec-writing 把本批正式规格的实际输出改到 `$REVIEW_DIR/target.md`。T 只含正文，不带 frontmatter；所有检查和文字打磨也针对 T。
 - T 若不再等于脚本机械归位结果，必须在 `resolutions.json:target` 记录 `mode=lifecycle_compiled`、非 `rule` 的确认依据和原因。飞书正文变化只有在 PM 本轮明确声明由自己修改 / 已认可，或看过全部差异后一次确认，才能作为该依据；revision 本身不证明作者或认可。
-- `remote-coverage.json` 必须证明 R 的内容与原生格式全部归位；每个删除 / 改写都有规则、评论、决定或 PM 例外，强制预览已由 PM 确认，未归位为 0。
+- `remote-coverage.json` 必须证明 R 的内容与原生格式全部归位；每个删除 / 改写都有规则、评论、决定或 PM 例外，强制预览已完成验收，未归位为 0。纯排版 / 结构保真可记录 `agent_reviewed`，真实产品分叉才使用 `pm_confirmed`。
+- 存在候选产品决定时，`resolutions.json:consistency` 必须将每条候选与仓内全部当前有效决定逐一对照，并绑定当前 T 和决定源摘要。缺项、过期或任一 `needs_pm` 都不能 seal；只有后者按 decision policy 打断 PM。
 - 新 design 在此阶段停在规格编译完成点，不进入 `ready_to_build`；quick-fix 不创建只为修改正式规格的空 worktree。
 
 ### 2. apply：完成唯一一次正式规格写入
@@ -28,6 +29,6 @@
 
 ### 4. 验证后处理评论
 
-只有受影响的决定、规格、prototype / product 和飞书原生格式回读全部验证完成，才调用一次 `lark-review.py complete-comments --manifest --plan`。局部评论结果必须已在 seal 前固化到 resolution；只有全文评论明确无法回复时可做 solve-only。命令在批次首尾各读取一次稳定全量围栏，中间逐笔保存回复 / solve 写响应；最终把绑定 batch / plan / 文档 / comment、结果 reply ID / 作者 / 正文 hash、`solver_user_id`、服务端实际 `solved_time` 和状态的证据写入同批 `comment-actions.json`。缺少 `solved_time` 时保持 null，以写响应 hash + 最终稳定回读收口；中断后重跑整批命令，不重复回复。旧 `complete-comment` 只用于兼容恢复。
+只有受影响的决定、规格、prototype / product 和飞书原生格式回读全部验证完成，才调用一次 `lark-review.py complete-comments --manifest --plan`。局部评论结果必须已在 seal 前固化到 resolution；只有全文评论明确无法回复时可在默认模式做 solve-only。默认模式回复并解决；PM 要求自行核验后解决时增加 `--reply-only`，只回复并记录 `replied_pending_pm`，随后由 `verify-comments` 回读 PM 手工解决，全部核验后记录 `solved_by_pm_verified`。命令在批次首尾各读取一次稳定全量围栏并逐笔保存写响应；中断后按原模式重跑，不重复回复。旧 `complete-comment` 只用于兼容恢复。
 
-checkpoint / reopen 只消费该回执，不接受 Agent 自填 reply、author 或 solver。未绑定的新回复一律视为新反馈，PM / 协作者手工解决的评论不能被 checkpoint 当作系统完成，也不能被 reopen。checkpoint 必须回读证明发布基线已经指向 T、飞书 revision 已与该基线一致，并逐条验证应完成评论的回执与当前状态一致、deferred 评论仍未解决；全量围栏中的任何批次外变化都重新 collect。实现失败不回退已经确认的目标规格，但评论保持未解决，并把实现缺口留在原生命周期。
+checkpoint / reopen 只消费该回执，不接受 Agent 自填 reply、author 或 solver。未绑定的新回复一律视为新反馈；未经 reply-only 受控回复和 `verify-comments` 核验的外部手工解决不能进入 checkpoint，任何 PM 手工解决都不能被 reopen。checkpoint 必须回读证明发布基线已经指向 T、飞书 revision 已与该基线一致，并逐条验证应完成评论的回执与当前状态一致、deferred 评论仍未解决；全量围栏中的任何批次外变化都重新 collect。实现失败不回退已经确认的目标规格，但评论保持未解决，并把实现缺口留在原生命周期。

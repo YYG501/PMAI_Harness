@@ -14,7 +14,7 @@
 - revision 是否更新
 - 本轮没有误伤未计划修改的章节
 
-若由 `/pmai-lark-review` 进入，数量检查不够：必须运行该批次的 `verify-sync`，逐个验证 `remote-coverage.json` 中 preserved 原生 block 的格式 hash、资源 token 和原引用映射，并证明飞书稳定语义投影等于 sealed T。未达到内容覆盖率 100%、格式保真率 100% 或未归位 0 时，不刷新 checkpoint。
+若由 `/pmai-lark-review` 进入，数量检查不够：必须运行该批次的 `verify-sync`，逐个验证 `remote-coverage.json` 中 preserved 原生 block 的格式 hash、资源 token 和原引用映射，并证明飞书稳定语义投影等于 sealed T。Markdown 投影中的图片 destination 只是本地路径或会轮换的临时下载 URL，不作为资源身份；图片的实际身份由原生 XML 中的资源 token 与所在 block 验证。图片 alt、数量、顺序和结构仍参与正文投影，普通链接 URL 也继续严格比较。未达到内容覆盖率 100%、格式保真率 100% 或未归位 0 时，不刷新 checkpoint。
 
 ## 本地 frontmatter 追踪字段
 

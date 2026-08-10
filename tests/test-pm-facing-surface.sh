@@ -13,6 +13,7 @@ LARK_SYNC_VERIFY="$REPO_ROOT/skills/lark-sync/references/verification.md"
 LARK_SYNC_PULL="$REPO_ROOT/skills/lark-sync/references/pull-from-lark.md"
 LARK_SYNC_DIFF="$REPO_ROOT/skills/lark-sync/references/diff-only.md"
 LARK_REVIEW="$REPO_ROOT/skills/lark-review/SKILL.md"
+LARK_REVIEW_SCRIPT="$REPO_ROOT/scripts/lark-review.py"
 BUILD_CANCEL="$REPO_ROOT/skills/build-cancel/SKILL.md"
 FEEDBACK="$REPO_ROOT/skills/feedback/SKILL.md"
 HUMANIZE="$REPO_ROOT/skills/humanize/SKILL.md"
@@ -42,12 +43,38 @@ test_direction_does_not_promise_a_roadmap() {
 test_lark_receipts_hide_internal_protocol() {
   start_test "PM surface: 飞书最终回执只报告结果"
 
-  local sync_receipt sync_verify_receipt sync_pull_receipt sync_diff_receipt review_receipt
+  local sync_receipt sync_verify_receipt sync_pull_receipt sync_diff_receipt review_receipt rendered_review
   sync_receipt=$(awk '/^### 步骤 3：验收与输出/{show=1} /^## Rules/{show=0} show' "$LARK_SYNC")
   sync_verify_receipt=$(awk '/^## 输出摘要/{show=1} show' "$LARK_SYNC_VERIFY")
   sync_pull_receipt=$(awk '/^## 输出$/{show=1} /^## 禁止/{show=0} show' "$LARK_SYNC_PULL")
   sync_diff_receipt=$(awk '/^## 输出格式/{show=1} /^## 规则/{show=0} show' "$LARK_SYNC_DIFF")
   review_receipt=$(awk '/^## 最终回执/{show=1} /^## Rules/{show=0} show' "$LARK_REVIEW")
+  rendered_review=$(PYTHONDONTWRITEBYTECODE=1 PYTHONPATH="$REPO_ROOT/scripts" \
+    python3 - "$LARK_REVIEW_SCRIPT" <<'PY'
+import importlib.util
+import sys
+from pathlib import Path
+
+path = Path(sys.argv[1])
+spec = importlib.util.spec_from_file_location("pmai_lark_review_receipt_test", path)
+module = importlib.util.module_from_spec(spec)
+assert spec.loader is not None
+sys.modules[spec.name] = module
+spec.loader.exec_module(module)
+print(module._render_pm_receipt(
+    document_url="https://example.feishu.cn/docx/example",
+    body_change_count=2,
+    content_verified=True,
+    completed_comment_count=3,
+    waiting_pm_comment_count=1,
+    retained_comment_count=2,
+    decision_write_count=1,
+    implementation_result="updated_verified",
+    implementation_label="prototype",
+    incomplete_reason=None,
+))
+PY
+  )
 
   if printf '%s\n' "$sync_receipt" | grep -qE '同步模式|A/B/C/D|revision|frontmatter'; then
     _fail "lark-sync PM receipt still exposes internal sync protocol"
@@ -65,6 +92,13 @@ test_lark_receipts_hide_internal_protocol() {
   if ! printf '%s\n' "$sync_receipt" | grep -q '需要你处理' \
     || ! printf '%s\n' "$review_receipt" | grep -q '产品结果'; then
     _fail "lark PM receipts should retain actionable results"
+    return
+  fi
+  if ! printf '%s\n' "$rendered_review" | grep -q '产品结果：原型已更新并验证' \
+    || ! printf '%s\n' "$rendered_review" | grep -q '请在飞书手工解决 1 条' \
+    || printf '%s\n' "$rendered_review" \
+      | grep -qE 'revision|hash|checkpoint|DONE_WITH_CONCERNS|批次|目标底稿'; then
+    _fail "real lark-review renderer should expose business results without protocol details"
     return
   fi
   pass_test

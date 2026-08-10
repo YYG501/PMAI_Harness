@@ -18,6 +18,8 @@ PM-AI-Workflow 生成器仓的演进记录。本文件**只记影响下游业务
 
 ## 未发布
 
+- `fix(lark-review)`: **评审评论、图片和决定一致性改为可恢复的机器合同。** `complete-comments --reply-only` 只写结果回复并记录 `replied_pending_pm`，solve 调用固定为 0；PM 手工解决后由 `verify-comments` 分批回读为 `solved_by_pm_verified`，checkpoint 接受该证据且 reopen 永不接管 PM 的解决动作。评论处置新增 `superseded`，将“旧引用已被当前方案替代”与真正延期的 `deferred` 分开。`verify-sync` 的 Markdown 投影忽略会轮换的图片临时 URL，资源身份仍由原生 block/token 严格验证，图片 alt/数量/结构和普通链接 URL 继续参与验收。存在候选产品决定时，seal 要求绑定当前 T 与全部决定源的逐决定一致性回执，任一 `needs_pm`、漏项或过期都阻断；纯排版结构预览可由 Agent 验收，不再强制推给 PM。新增机器 `receipt` 只输出正文、格式、评论完成/等待数量、产品结果和 PM 待办。旧 v3 ready 批次可继续原流程，reply-only 等新能力要求 v4，旧 remote-verification v1 必须重跑验收。
+
 - `fix(doctor)`: **消费仓诊断改为一个结论、七项完整检查和可直接渲染的 PM 摘要。** Doctor 现在固定报告 PMAI 安装、AI 工具接入、项目必需资料、文档与历史资料、原型和产品文件、正在进行的工作、项目安全七项结果，正常项也不省略；JSON `pm_report` 只把 `attention / problem` 检查展开为需要处理，把远程版本未知、可选浏览器能力和合法旧模块留在仅供参考，模块开工准备继续独立作为项目进度。消费仓 `AGENTS.md` 的 Startup 新增 PMAI 托管标记，`framework_managed_sync` 可返回固定的结构化修复动作；确认后的同步 helper 只替换托管区块，旧入口仅在历史规则可确定识别时迁移并保留项目补充，损坏标记、未知 PMAI 旧规则和 symlink 一律拒绝写入。版本未知且存在远程地址时，Doctor Skill 通过当前宿主申请联网权限后在沙箱外重跑只读 `ls-remote`；未授权或仍失败才报告暂时无法确认。
 
 - `fix(doctor)`: **消费仓诊断改为按布局版本、模块状态和 finding ownership 判断，不再把旧文档组合等同于内容损坏。** 机器合同复用现有 `.pm-workflow/config.yml:consumer`，不新增平行 manifest；fresh init 声明 layout v1，标准索引仍固定为 `docs/INDEX.md` 与 `docs/modules/INDEX.md`。未标版本旧仓的非空 `spec + decisions`、合并式 `spec` 会进入待确认兼容项，`legacy / retired / split` 可在 PM 确认后只记录格式或现行真相源；active `.work-meta.json` 始终按 lifecycle 严格校验，空白三件套、缺失产品脊柱和不可恢复 active work 仍阻断。项目声明的归档目录生效，标准索引明确链接的旧顶层文档可保留，非空目录不依赖 `.gitkeep`。JSON finding 新增 `kind / blocking`，区分框架托管同步、合法旧产出、待确认兼容和真实内容损坏；CLI 保留完整分类并让 `consumer_invalid` 优先于升级或宿主同步。升级或同步不能迁移、补写或生成空白业务文档，兼容关系只能在 PM 逐项确认后写入现有配置。

@@ -44,7 +44,7 @@ source "${PMAI_HOME:-$HOME/.pmai}/scripts/skill-preamble.sh"
 
 只有 URL 时，在 `docs/**/*.md` 中按 `lark_doc_id` 或 `lark_doc_url` 查找。零个或多个匹配都停止，只问 PM 本地对应哪一份；不能把飞书内容落成一份新的平行规格。
 
-调用本 skill 即表示 PM 授权完成整条评审回流：读取目标文档，受控更新本地规格并归位决定，精细同步同一篇飞书文档，再更新和验证原型 / 产品，最后回复和解决本批已完成评论。若 PM 明确说“只读 / 先比较 / 不要回写 / 不要处理评论”，则按该限制执行，不把调用本身扩大解释成写入授权。
+调用本 skill 即表示 PM 授权完成整条评审回流：读取目标文档，受控更新本地规格并归位决定，精细同步同一篇飞书文档，再更新和验证原型 / 产品，最后按本轮约定回复或收口已完成评论。若 PM 明确说“只读 / 先比较 / 不要回写 / 不要处理评论”，则按该限制执行，不把调用本身扩大解释成写入授权。
 
 ## Workflow
 
@@ -96,8 +96,8 @@ python3 "${PMAI_HOME:-$HOME/.pmai}/scripts/lark-review.py" reconcile \
 - B 与本地发布源是否同格式，只决定能否机械识别不重叠差异，不影响内容底稿选择；`common_ancestor_compatible=false` 也必须从 R 开始；
 - 本地与飞书修改同一语义时显式归位冲突，但 PM 已认可的飞书内容仍是默认保留项；
 - `remote-coverage.json` 逐项记录 R→T 的保留、移动、改写、删除和格式处置。每一项删除或改写必须绑定格式规则、评论、已确认决定或 PM 明确例外；内容覆盖率和格式归位率必须都是 100%，未归位数量必须为 0；
-- 大规模改写、结构变化或高风险标题 / 表格变化会强制生成 `remote-preview.md`。PM 未确认预览时不能 seal；
-- 每条新评论或新回复都必须在 `resolutions.json` 有处置。`pending` / `needs_pm` 阻断写入；`deferred` 必须写明归属和原因，并在收口时保持评论未解决。
+- 大规模改写、结构变化或高风险标题 / 表格变化会强制生成 `remote-preview.md`。纯排版或结构保真可由 Agent 核对并记录 `agent_reviewed`；只有真实产品模型分叉才要求 PM 确认；未完成预览验收时不能 seal；
+- 每条新评论或新回复都必须在 `resolutions.json` 有处置。`pending` / `needs_pm` 阻断写入；`deferred` 表示仍要以后处理，必须写明归属和原因并保持未解决；原引用内容已被当前确认方案替代时使用 `superseded`，保留结果回复后可以收口。
 - T 经评论、决定或 spec-writing 重新编译后，把 `resolutions.json:target.mode` 改为 `lifecycle_compiled`，并记录确认依据和原因；保持默认 `reconciled` 却修改 T 会被 seal 阻断。
 
 Agent 只能编辑 `$REVIEW_DIR/target.md` 和 `$REVIEW_DIR/resolutions.json`。`remote-native.json`、`remote-coverage.json` 和 `remote-preview.md` 都由脚本生成；正式规格正文保持 L，不得提前修改。未完成批次跨轮保留并优先恢复，目录丢失或任一快照摘要变化时才重新 collect，不凭记忆重建。
@@ -144,6 +144,8 @@ Docx revision 只能证明正文发生变化，不能可靠证明是谁修改的
 4. 飞书正文增量已有本轮明确依据或通过一次整批确认、真实产品分叉全部闭合、批次账本完整、T 已是最终目标正文后再 seal；不能为了先改原型而提前写正式规格，也不能让原型反向缩小 T。
 
 同时完成 `resolutions.json:decision_routing`：每个正文归位项和评论至少有一条来源绑定，结果只能是 `not_required / create / supersede`。只有新增、改变或推翻产品对象、状态、权限、业务规则、真相源、异常处理或成功标准时，才填写安全的仓内 `decisions.md` 目标、决定 ID、摘要、原因和需要替代的旧决定；纯措辞、排版、格式、示例补充和不改变规则的解释标为 `not_required` 并写原因。任何 `pending`、漏来源或不安全目标都阻止 seal。active build 若同时改变实现合同，还要写 accepted delta，不能用 delta 代替稳定产品决定。
+
+只要存在 `create / supersede`，seal 前必须按 `_shared/consistency-scan.md` 将每条候选决定与仓内全部当前有效决定逐一对照，并把结果写入 `resolutions.json:consistency`。回执必须绑定当前 T 摘要、决定源文件摘要、带路径的候选决定 ID、全部有效决定 ID 和每一对的 `compatible / supersedes / needs_pm` 结论；缺项、决定源或 T 变化、声明 supersede 却未对应，都会由 seal 拒绝。`needs_pm` 只用于两个现行规则不能同时成立的真实业务冲突，并按 decision policy 问 PM 一个业务问题；纯排版、命名和实现选择不得借此升级成确认门。
 
 `decision_routing.target_path` 只允许当前仓库内的 `docs/modules/<单一模块>/decisions.md`。seal 与 apply 都必须按 canonical repo root 复核，拒绝绝对路径、`..`、隐藏模块和任一 symlink 组件；正式归位决定前再按同一规则复核，不能跟随批次建立后替换出的链接。
 
@@ -199,14 +201,25 @@ python3 "${PMAI_HOME:-$HOME/.pmai}/scripts/lark-review.py" complete-comments \
   --plan "$REVIEW_DIR/apply-plan.json"
 ```
 
-局部评论必须有非空 `result_text`。只有 `whole_document` 评论且飞书接口明确不支持回复时，才可留空做 solve-only；账本必须明确记录未回复原因，不得把它表述成已回复。
+若 PM 要求“AI 回复，我核验后手工解决”，使用受控 reply-only，不直接调用评论 API：
 
-`complete-comments` 只在批次开始和全部写入结束时各读取一次稳定全量评论围栏，中间按 ready plan 顺序回复、解决，并把每笔写响应立即原子写入 `$REVIEW_DIR/comment-actions.json`。回执绑定 batch、ready plan、文档、comment、结果 reply ID / 作者 / 正文 hash、`solver_user_id`、服务端原样返回的 `solved_time` 和最终状态；中断后重跑同一命令按 journal 恢复，不重复回复。接口不返回 `solved_time` 时保持 `null`，改用 solve 写响应 hash + 最终稳定回读形成 `write_ack_and_stable_readback`。旧批次或单项中断才使用 `complete-comment --comment-id` 兼容恢复；`legacy_stable_readback` 仍可读取，但不作为新批次正常入口。Agent 不直接调用评论写 API。
+```bash
+python3 "${PMAI_HOME:-$HOME/.pmai}/scripts/lark-review.py" complete-comments \
+  --manifest "$REVIEW_DIR/review.json" \
+  --plan "$REVIEW_DIR/apply-plan.json" \
+  --reply-only
+```
+
+此时 journal 状态为 `replied_pending_pm`，solve 写调用必须为 0。PM 手工解决后运行 `verify-comments --manifest ... --plan ...`；它允许分批回读，全部核验后将完成状态记为 `solved_by_pm_verified`，checkpoint 才可继续。未经过受控 reply-only 的外部回复或手工解决仍不能冒充本批完成证据，也绝不能被 PMAI reopen。
+
+局部评论必须有非空 `result_text`。`superseded` 表示评论引用的旧内容已经被当前确认方案替代，仍需回复新落点后按上述任一路径收口；`deferred` 才表示以后处理并保持未解决。只有 `whole_document` 评论且飞书接口明确不支持回复时，才可留空做 solve-only；账本必须明确记录未回复原因，不得把它表述成已回复。reply-only 不接受 solve-only。
+
+`complete-comments` 只在批次开始和全部写入结束时各读取一次稳定全量评论围栏，中间按 ready plan 顺序回复，并在非 reply-only 时解决评论；每笔写响应立即原子写入 `$REVIEW_DIR/comment-actions.json`。回执绑定 batch、ready plan、文档、comment、结果 reply ID / 作者 / 正文 hash、完成状态和对应远端证据；中断后重跑同一命令按 journal 恢复，不重复回复。自动解决时继续记录 `solver_user_id`、服务端原样返回的 `solved_time` 或 solve 写响应 hash；PM 手工解决则由 `verify-comments` 记录稳定回读证据，不伪造系统 solve 响应。旧批次或单项中断才使用 `complete-comment --comment-id` 兼容恢复；`legacy_stable_readback` 仍可读取，但不作为新批次正常入口。Agent 不直接调用评论写 API。
 
 处理范围继续遵守：
 
-- 只对“结论已经落入权威文档，受影响原型 / 产品已验证”的评论回复结果并标记解决；
-- 新回复改变要求、评论仍是未决产品问题、定位内容已删除或结果未验证时，保持未解决；
+- 只对“结论已经落入权威文档，受影响原型 / 产品已验证”的评论回复结果，再按约定由 PMAI 或 PM 解决；
+- 新回复改变要求、评论仍是未决产品问题或结果未验证时，保持未解决；`content_deleted` 若只是旧引用已被当前方案替代，可用 `superseded` 收口，不得一律误记为延期；
 - 全文评论不支持回复时，只能由上述 solve-only 受控路径直接解决；
 - 只处理本批次 comment ID，不批量解决文档里的其它评论。
 
@@ -228,7 +241,7 @@ python3 "${PMAI_HOME:-$HOME/.pmai}/scripts/lark-review.py" checkpoint \
   --plan "$REVIEW_DIR/apply-plan.json"
 ```
 
-`checkpoint` 只读取 manifest / plan 同目录的 `comment-actions.json` 和 `remote-verification.json`，不接受自由填写 reply、author 或 solver 的参数。它再次执行最终门禁，不能只靠 Agent 口头判断：本地正文必须仍为 sealed T；`lark_published_source_hash` 必须等于 T 的正文 hash；飞书当前 revision 必须与原生格式验收回执和本地发布基线相同；`applied / already_satisfied / no_spec_change` 必须有匹配 ready plan 的完成回执且当前已解决，`deferred` 必须仍未解决。当前回复、作者、解决者、服务端实际返回的解决时间与状态都必须和受控回执一致；没有时间时验证证据模式和稳定围栏，不要求虚构时间。PM / 协作者手工回复或解决不能冒充本批完成。任何其它评论的新建、重开、解决、删除、编辑或新回复，即使最终已解决，也停止并重新 collect。
+`checkpoint` 只读取 manifest / plan 同目录的 `comment-actions.json` 和 `remote-verification.json`，不接受自由填写 reply、author 或 solver 的参数。它再次执行最终门禁，不能只靠 Agent 口头判断：本地正文必须仍为 sealed T；`lark_published_source_hash` 必须等于 T 的正文 hash；飞书当前 revision 必须与原生格式验收回执和本地发布基线相同；`applied / already_satisfied / no_spec_change / superseded` 必须有匹配 ready plan 的完成回执且当前已解决，`deferred` 必须仍未解决。自动解决必须匹配系统 solve 证据；reply-only 必须匹配受控结果回复和 `verify-comments` 记录的 PM 手工解决稳定回读。未经 reply-only journal 绑定的外部回复或手工解决不能冒充本批完成。任何其它评论的新建、重开、解决、删除、编辑或新回复，即使最终已解决，也停止并重新 collect。
 
 如果 checkpoint 因新回复或其它评论竞态拒绝，而当前尝试已经由系统解决了本批评论，先对每个本次系统已解决的 comment ID 执行受批次约束的恢复：
 
@@ -254,14 +267,16 @@ checkpoint 只记录本轮覆盖到的 revision、评论更新时间、同秒互
 
 ## 最终回执
 
+正常收口时必须调用 `lark-review.py receipt --manifest ... --plan ... --implementation-result <updated_verified|no_change|incomplete>` 生成回执；实现已更新时再传 `--implementation-label <prototype|product|prototype_and_product>`，尚未完成时传面向 PM 的 `--incomplete-reason`。不要手工拼接内部执行状态。
+
 ```text
 飞书评审已收回：<URL>
 正文：已归入 N 处 / 无正文变化 / 仍有 N 处需要 PM 判断
 内容与格式：已核对通过 / 未完成（原因）
-评论：已完成 N 条，保留 N 条未解决
+评论：已完成 N 条，等待你手工解决 N 条，另保留 N 条未解决
 本地更新：<规格、选择性写入的 decisions、原型或产品>
 产品结果：<原型或产品已更新并验证 / 本轮无需改实现 / 尚未完成及原因>
-需要你处理：<无需处理 / 一个明确的产品决定>
+需要你处理：<无需处理 / 手工解决已回复评论 / 一个明确的产品决定>
 ```
 
 内部证据和恢复信息继续完整保存，但正常回执只呈现 PM 能理解和需要行动的结果。处理中断时，说明已经完成到哪里、哪些产品结果尚未完成；不要让 PM 管理内部文件或恢复步骤。
@@ -292,13 +307,14 @@ checkpoint 只记录本轮覆盖到的 revision、评论更新时间、同秒互
 | 已记录 revision 读取失败 | 停止，保留现场并报告版本 / 权限问题 |
 | 公共祖先格式不兼容 | 禁止 raw Markdown 三方合并，但 T 仍从 R 的原生快照开始；本地增量逐项归位 |
 | 远端内容或格式覆盖率不足 100% | 保留 `remote-coverage.json` / `remote-preview.md`，未归位清零前不 seal |
-| 大规模 R→T 差异未确认预览 | 停在 draft，PM 明确确认 `remote-preview.md` 后再 seal |
+| 大规模 R→T 差异未完成预览验收 | 停在 draft；纯排版 / 结构保真由 Agent 核对，真实产品分叉才问 PM，验收完成后再 seal |
 | 本地与飞书发布后都变化 | 只自动合并不重叠项；同处变化让 PM 拍冲突 |
 | 评论无法精确定位 | 保留 quote 与上下文并标明推断；有歧义时不修改 |
 | 飞书正文作者 / 认可状态无法证明 | 展示整批正文差异，只问一次是否认可；未答前不 seal / apply |
 | seal / apply 发现本地、飞书或评论变化 | 零写入，旧 plan 不再执行但保留批次现场；新建批次重新 collect |
 | 第一次同步前 fetch 的 revision 不等于 apply plan / expected revision | 零写入，保留批次并重新 collect |
-| `complete-comments` 部分写入或回读失败 | 不伪造回执、不写 checkpoint；保留整批 journal，原命令重跑恢复且不重复回复；若 solve 写入已有受控响应且随后出现 PM 新回复，`reopen` 先按稳定回读补齐完成证据再受控重开 |
+| `complete-comments` 部分写入或回读失败 | 不伪造回执、不写 checkpoint；保留整批 journal，原命令按原模式重跑恢复且不重复回复；若 solve 写入已有受控响应且随后出现 PM 新回复，`reopen` 先按稳定回读补齐完成证据再受控重开 |
+| reply-only 后 PM 尚未全部手工解决 | 保留 `replied_pending_pm`，运行 `verify-comments` 可分批回读；全部成为 `solved_by_pm_verified` 前不 checkpoint |
 | 飞书不返回 `solved_time` | 保持时间为空，用写响应 hash + 稳定回读收口；旧回执走 legacy 稳定回读，不伪造时间 |
 | 解决评论后 checkpoint 发现新回复或批次外变化 | 不写 checkpoint；只按本批受控回执 `reopen` 本次完成的评论，再新建持久批次并 `collect --include-solved`，把新回复重新纳入归位 |
 | 下游 quick-fix / build 未完成 | 保持评论未解决，不写 checkpoint |

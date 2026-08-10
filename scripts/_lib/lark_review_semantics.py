@@ -56,6 +56,74 @@ def _normalise_native_match_text(value: str) -> str:
     return _SPACE_RE.sub(" ", value).strip()
 
 
+def _mask_inline_image_destinations(value: str) -> str:
+    """Mask image destinations while preserving alt text and Markdown structure."""
+    output: list[str] = []
+    cursor = 0
+    length = len(value)
+    while cursor < length:
+        start = value.find("![", cursor)
+        if start < 0:
+            output.append(value[cursor:])
+            break
+        output.append(value[cursor:start])
+        alt_end = start + 2
+        escaped = False
+        while alt_end < length:
+            char = value[alt_end]
+            if char == "]" and not escaped:
+                break
+            if char == "\\" and not escaped:
+                escaped = True
+            else:
+                escaped = False
+            alt_end += 1
+        if alt_end >= length or alt_end + 1 >= length or value[alt_end + 1] != "(":
+            output.append(value[start : start + 2])
+            cursor = start + 2
+            continue
+        destination_end = alt_end + 2
+        depth = 1
+        escaped = False
+        while destination_end < length:
+            char = value[destination_end]
+            if escaped:
+                escaped = False
+            elif char == "\\":
+                escaped = True
+            elif char == "(":
+                depth += 1
+            elif char == ")":
+                depth -= 1
+                if depth == 0:
+                    break
+            destination_end += 1
+        if destination_end >= length:
+            output.append(value[start : start + 2])
+            cursor = start + 2
+            continue
+        output.append(f"![{value[start + 2:alt_end]}](pmai:image-resource)")
+        cursor = destination_end + 1
+    return "".join(output)
+
+
+def markdown_verification_projection(markdown: str) -> list[tuple[str, str, str]]:
+    """Return a stable content projection; native XML owns image identity."""
+    projection: list[tuple[str, str, str]] = []
+    for unit in markdown_semantic_units(markdown):
+        text = unit.text
+        if unit.kind != "code":
+            text = _mask_inline_image_destinations(text)
+        projection.append(
+            (
+                unit.kind,
+                _normalise_semantic_text(text),
+                unit.structure_signature,
+            )
+        )
+    return projection
+
+
 def _unit_id(kind: str, normalised: str, occurrence: int) -> str:
     digest = _sha256_text(f"{kind}\0{normalised}")[:16]
     return f"remote-{kind}-{digest}-{occurrence}"
@@ -701,6 +769,7 @@ def build_remote_coverage(
                 format_preserved / native_total if native_total else 1.0
             ),
             "preview_required": preview_required,
+            "pm_confirmation_required": False,
             "high_risk_structural_count": high_risk_count,
         },
         "target_units": [asdict(unit) for unit in target_units],

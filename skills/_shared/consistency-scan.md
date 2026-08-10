@@ -1,5 +1,5 @@
 <!-- 共享方法论 · 一致性扫描（设计依据 / build target / landed truth 对账）。
-     被 /pmai-design 与统一 finalize 调用；/pmai-build-close 仅在兼容恢复时复用同一逻辑。
+     被 /pmai-design、/pmai-lark-review seal 与统一 finalize 调用；/pmai-build-close 仅在兼容恢复时复用同一逻辑。
      目标：不静默吞掉规格，也不把每个机械差异都升级成 PM 问题。 -->
 
 # 共享方法论：一致性扫描
@@ -13,6 +13,7 @@
 ## 什么时候扫
 
 - **design 决定闭合** → 对 `spec.md`、决定、相关页面 / 源码证据和项目底座做轻量对账，再提交建造依据。
+- **lark-review 准备 seal 且要新建 / 替代产品决定** → 将每条候选决定与仓内全部当前有效决定逐一对照；回执绑定当前目标稿和决定源，缺项、过期或真实冲突都阻断 seal。
 - **build 迭代产生已接受变化** → 记入 `accepted_deltas`、递增 `design_revision` 并使旧证据失效；此时不提前改正式文档。
 - **PM 请求定稿** → 在 `iterating` 冻结最终 commit，对 approved source、accepted deltas 做完整目标适配检查；`final_check` 只校验快照 currentness。
 - **实现进入 main** → 基于 landed diff 和文档影响地图更新正式文档；文档失败保留 `landed/docs_pending`，只续跑文档。
@@ -32,6 +33,7 @@
 拿锚点去规范性来源、build target 和文档落点里搜：
 
 - **规格** `docs/modules/<模块>/spec.md` —— 最终目标要求如何定义？
+- **当前有效决定** `PRODUCT-RULES.md`、`docs/decisions/*.md`、`docs/modules/*/decisions.md` —— 新口径能否与现行对象、状态、权限和业务规则同时成立？同号决定必须用“仓内路径 + 决定 ID”区分。
 - **build target**：合同 `target.paths` 与 `project.yml` 入口对应的源码 / 接口 / 数据层 —— 最终 commit 实际实现了什么？
 - **DESIGN.md** —— 涉及视觉 / 组件的，DESIGN 里的约定还对得上吗？
 - **术语表** `PRODUCT.md` 业务术语表 —— 改了某个词，有没有近义词散落各处该统一？
@@ -53,6 +55,8 @@ python3 "$PMAI_HOME/scripts/check-state-index-drift.py" "$REPO_ROOT" || true
 2. **实现偏离已批准依据**：没有 accepted delta 支撑 → final_check 失败，回 `iterating` 补实现或回 design 重新拍板；不得拿实现反改规格掩盖问题。
 3. **已接受变化**：有明确 PM 证据 → 写 `accepted_deltas`，更新 source hash / revision，旧验收证据失效；实现落地主线后再统一编译文档。
 4. **真实产品模型冲突**：两个现行规则无法同时成立，或需要推翻 PM 已确认方向 → 说明冲突依据并立即让 PM 拍板。
+
+`lark-review` 的 seal 额外把这一步机器化为覆盖门禁：每个候选决定 × 每个当前有效决定都必须记录 `compatible / supersedes / needs_pm` 和业务原因；receipt 同时绑定 T 摘要与全部决定源摘要。脚本只验证覆盖、身份、时效和是否仍有 `needs_pm`，不替 Agent 猜语义冲突。没有候选产品决定时状态固定为 `not_required`，纯排版和实现选择不能制造这张确认单。
 
 需要 PM 决策时用业务语言，不出内部状态词。例：
 

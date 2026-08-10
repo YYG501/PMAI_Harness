@@ -138,7 +138,11 @@ case "${1:-}" in
             exit 0
           fi
           c1_solved=false
-          if [ -e "$state_dir/solved-c1" ] && [ ! -e "$state_dir/reopened-c1" ]; then
+          c1_solver="ou-shared"
+          if [ -e "$state_dir/pm-solved-c1" ]; then
+            c1_solved=true
+            c1_solver="ou-pm"
+          elif [ -e "$state_dir/solved-c1" ] && [ ! -e "$state_dir/reopened-c1" ]; then
             c1_solved=true
           fi
           c1_replies='[{"reply_id":"r1","user_id":"ou1","create_time":100,"update_time":200,"content":{"elements":[{"type":"text_run","text_run":{"text":"Use new rule"}}]}}]'
@@ -157,15 +161,19 @@ case "${1:-}" in
           fi
           if [ "$c1_solved" = true ]; then
             if [ "${FAKE_REVIEW_NO_SOLVED_TIME:-0}" = "1" ]; then
-              c1_item="{\"comment_id\":\"c1\",\"user_id\":\"ou1\",\"create_time\":100,\"update_time\":270,\"is_solved\":true,\"solver_user_id\":\"ou-shared\",\"is_whole\":false,\"quote\":\"New rule\",\"has_more\":false,\"relation\":{\"content_deleted\":false,\"relation\":\"{\\\"22-docR\\\":{\\\"positionInfo\\\":{\\\"blockID\\\":\\\"b-rule\\\"}}}\"},\"reply_list\":{\"replies\":$c1_replies}}"
+              c1_item="{\"comment_id\":\"c1\",\"user_id\":\"ou1\",\"create_time\":100,\"update_time\":270,\"is_solved\":true,\"solver_user_id\":\"$c1_solver\",\"is_whole\":false,\"quote\":\"New rule\",\"has_more\":false,\"relation\":{\"content_deleted\":false,\"relation\":\"{\\\"22-docR\\\":{\\\"positionInfo\\\":{\\\"blockID\\\":\\\"b-rule\\\"}}}\"},\"reply_list\":{\"replies\":$c1_replies}}"
             else
-              c1_item="{\"comment_id\":\"c1\",\"user_id\":\"ou1\",\"create_time\":100,\"update_time\":270,\"is_solved\":true,\"solved_time\":270,\"solver_user_id\":\"ou-shared\",\"is_whole\":false,\"quote\":\"New rule\",\"has_more\":false,\"relation\":{\"content_deleted\":false,\"relation\":\"{\\\"22-docR\\\":{\\\"positionInfo\\\":{\\\"blockID\\\":\\\"b-rule\\\"}}}\"},\"reply_list\":{\"replies\":$c1_replies}}"
+              c1_item="{\"comment_id\":\"c1\",\"user_id\":\"ou1\",\"create_time\":100,\"update_time\":270,\"is_solved\":true,\"solved_time\":270,\"solver_user_id\":\"$c1_solver\",\"is_whole\":false,\"quote\":\"New rule\",\"has_more\":false,\"relation\":{\"content_deleted\":false,\"relation\":\"{\\\"22-docR\\\":{\\\"positionInfo\\\":{\\\"blockID\\\":\\\"b-rule\\\"}}}\"},\"reply_list\":{\"replies\":$c1_replies}}"
             fi
           else
             c1_item="{\"comment_id\":\"c1\",\"user_id\":\"ou1\",\"create_time\":100,\"update_time\":$c1_update,\"is_solved\":false,\"is_whole\":false,\"quote\":\"New rule\",\"has_more\":false,\"relation\":{\"content_deleted\":false,\"relation\":\"{\\\"22-docR\\\":{\\\"positionInfo\\\":{\\\"blockID\\\":\\\"b-rule\\\"}}}\"},\"reply_list\":{\"replies\":$c1_replies}}"
           fi
           c2_solved=false
-          if [ -e "$state_dir/solved-c2" ]; then
+          c2_solver="ou-shared"
+          if [ -e "$state_dir/pm-solved-c2" ]; then
+            c2_solved=true
+            c2_solver="ou-pm"
+          elif [ -e "$state_dir/solved-c2" ]; then
             c2_solved=true
           fi
           c2_replies='[{"reply_id":"r2","user_id":"ou2","create_time":120,"update_time":210,"content":{"elements":[{"type":"text_run","text_run":{"text":"Question"}}]}},{"reply_id":"r3","user_id":"ou3","create_time":130,"update_time":230,"content":{"elements":[{"type":"text_run","text_run":{"text":"Second reply"}}]}}]'
@@ -176,9 +184,9 @@ case "${1:-}" in
           fi
           c2_item="{\"comment_id\":\"c2\",\"user_id\":\"ou2\",\"create_time\":120,\"update_time\":$c2_update,\"is_solved\":false,\"is_whole\":false,\"quote\":\"Repeat\",\"has_more\":false,\"reply_list\":{\"replies\":$c2_replies}}"
           if [ "${FAKE_REVIEW_NO_SOLVED_TIME:-0}" = "1" ]; then
-            c2_solved_item="{\"comment_id\":\"c2\",\"user_id\":\"ou2\",\"create_time\":120,\"update_time\":280,\"is_solved\":true,\"solver_user_id\":\"ou-shared\",\"is_whole\":false,\"quote\":\"Repeat\",\"has_more\":false,\"reply_list\":{\"replies\":$c2_replies}}"
+            c2_solved_item="{\"comment_id\":\"c2\",\"user_id\":\"ou2\",\"create_time\":120,\"update_time\":280,\"is_solved\":true,\"solver_user_id\":\"$c2_solver\",\"is_whole\":false,\"quote\":\"Repeat\",\"has_more\":false,\"reply_list\":{\"replies\":$c2_replies}}"
           else
-            c2_solved_item="{\"comment_id\":\"c2\",\"user_id\":\"ou2\",\"create_time\":120,\"update_time\":280,\"is_solved\":true,\"solved_time\":280,\"solver_user_id\":\"ou-shared\",\"is_whole\":false,\"quote\":\"Repeat\",\"has_more\":false,\"reply_list\":{\"replies\":$c2_replies}}"
+            c2_solved_item="{\"comment_id\":\"c2\",\"user_id\":\"ou2\",\"create_time\":120,\"update_time\":280,\"is_solved\":true,\"solved_time\":280,\"solver_user_id\":\"$c2_solver\",\"is_whole\":false,\"quote\":\"Repeat\",\"has_more\":false,\"reply_list\":{\"replies\":$c2_replies}}"
           fi
           if [ "$solved_filter" = true ]; then
             if [ "$c1_solved" = true ] && [ "$c2_solved" = true ]; then

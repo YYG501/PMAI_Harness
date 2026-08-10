@@ -24,7 +24,7 @@
 | `quote_inferred` | 只能称为推断；确认上下文唯一后才能修改 |
 | `quote_ambiguous` / `unlocated` | 不猜落点；先扩大读取范围或问 PM |
 
-`content_deleted=true` 时，评论原位置已经不存在。只能根据完整回复和当前规格重新判断，不得把旧 quote 强塞回正文。
+`content_deleted=true` 时，评论原位置已经不存在。只能根据完整回复和当前规格重新判断，不得把旧 quote 强塞回正文。若意见仍未处理且明确留到以后，标记 `deferred` 并保持未解决；若旧内容已经被当前确认方案替代，标记 `superseded`，回复当前落点后可正常收口。定位消失本身不能自动推出任何一种状态。
 
 ## 3. 版本归位
 
@@ -118,6 +118,6 @@
 4. 飞书最终正文已精细同步并回读；
 5. 重新读取评论后没有改变要求的新回复。
 
-满足条件后正常路径只能用 `lark-review.py complete-comments` 整批完成评论：局部评论的结果文本在 seal 前固化到 resolution，命令只做一次批次初始稳定围栏和一次最终稳定围栏，中间逐笔保存回复 / solve 写回执。仅当 `whole_document` 评论明确无法回复时，才允许 solve-only；旧 `complete-comment` 只用于旧批次或单项中断恢复。PM / 协作者手工回复或解决不构成本批受控完成证据，手工解决的评论也不能被本批 reopen；若评论由受控命令解决后 PM 新增回复，checkpoint 必须失败，但在原结果 reply、`solver_user_id` 与服务端实际 `solved_time` 仍匹配回执时可受控 reopen。
+满足条件后正常路径只能用 `lark-review.py complete-comments` 整批处理评论：局部评论的结果文本在 seal 前固化到 resolution，命令只做一次批次初始稳定围栏和一次最终稳定围栏，中间逐笔保存写回执。默认模式由 PMAI 回复并解决；PM 明确要自己核验后解决时使用 `--reply-only`，该模式只创建受控结果回复并记录 `replied_pending_pm`，solve 调用必须为 0。PM 手工解决后用 `verify-comments` 分批回读，全部形成 `solved_by_pm_verified` 才能 checkpoint。未经受控 reply-only 绑定的外部回复或手工解决不构成本批完成证据；任何 PM 手工解决都不能被本批 reopen。仅当 `whole_document` 评论明确无法回复时，才允许默认模式 solve-only；旧 `complete-comment` 只用于旧批次或单项中断恢复。若评论由 PMAI 受控解决后出现新回复，checkpoint 必须失败，但在原结果 reply、`solver_user_id` 与服务端实际 `solved_time` 仍匹配回执时可受控 reopen。
 
 回复只写结果和落点，例如“已按该意见更新权限规则，并同步修改成员详情页；本轮验证通过”。不要回复内部 worktree、hash、合同或测试编排细节。
