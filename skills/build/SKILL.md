@@ -15,7 +15,7 @@ python3 "$PMAI_HOME/scripts/status-view.py" --banner-only --skill BUILD || true
 
 如果输出 `PMAI_PROJECT_INITIALIZED: 0`，停止并引导 PM 先发 `/pmai-init-project`。
 
-若由 `/pmai-lark-review` 进入，先完整读取 `skills/lark-review/references/lifecycle-handoff.md`。新 build 只能在 T 已 seal/apply、候选决定正式归位、飞书精细同步、design 重新生成 context pack 并提交建造依据后启动；已有 active build 也不得在 apply 前写 accepted delta，只把候选 delta 留在评审批次账本。apply 成功后先调用一次 `add-delta`，再同步飞书并继续实现。这样 build 仍只读取正式规格和当前 source hash，不读取仓外临时快照，也不会在旧批次失效时残留半套决定。
+若由 `/pmai-lark-review` 进入，先完整读取 `skills/lark-review/references/lifecycle-handoff.md`。新 build 只能在 T 已 seal/apply、候选决定正式归位、飞书精细同步、design 重新生成 context pack 并提交建造依据后启动。已有 active build 在 seal/apply 前完成 §5 的决定层级分流并把执行路径固化到评审批次：产品级或模块模型变化退出当前 active-build 批次，分别回 `/pmai-proposal` / `/pmai-design`；实现纠偏直接修实现、不写 delta；只有已固化的 accepted-delta 路径才继续 apply。apply 后不得重新分类；该路径先精细同步飞书、verify 并稳定发布 frontmatter，再重新编译当前模块 context pack、调用 `add-delta --applied-context-pack <pack>`、提交精确 authority checkpoint，最后继续实现。
 
 执行前完整读取：
 
@@ -45,7 +45,33 @@ PM 的主体验是：开工前只确认一次工作环境和构建工具 → 看
 
 当已有 `building / iterating / final_check`，PM 不必重复输入命令。“启动起来看看”“检查当前结果”“还有什么没有解决”“按刚才结果继续改”等都沿用当前 `/pmai-build`。只有 PM 明确开启无关的新工作时才转其它入口；多个可续接 build 时只问本轮模块，不静默猜测。
 
-续接时先读取 `status-view.py --execution-context`，再按 §1 重新编译并消费 context pack。该输出只派生现有 `spec + decisions + build contract + project.yml`，不写状态。合同无效或 policy 漂移时停止无范围检查并按 build 恢复；不得绕过当前 `target + delivery_policy + acceptance lane` 转成通用 QA。
+续接时先读取 `status-view.py --execution-context`，再按 §1 重新编译并消费 context pack。该输出会重新校验当前 Product Proposal / 等价产品基线、`PRODUCT.md`、模块规格、决定、build contract 与 `project.yml`，只读不写状态。任一权威来源在批准后变化、Proposal 无效、合同无效或 policy 漂移时立即停止续接；产品方向缺口回 `/pmai-proposal`，其余建造依据变化回 `/pmai-design`，不得继续修改或记录 implementation commit，也不得绕过当前 `target + delivery_policy + acceptance lane` 转成通用 QA。
+
+### 上游重规划留下的候选
+
+design 若交来 `replan-work.py` 返回的精确 `candidate_manifest`，先只读查看旧实现差异。跨会话或变量丢失时，先从 main 读取全部候选，再按当前模块和 design 交接的 route 精确匹配；禁止按 mtime 或“最近一次”猜测：
+
+```bash
+REPLAN_CANDIDATES_JSON=$(python3 "$PMAI_HOME/scripts/replan-work.py" \
+  list "$MAIN_REPO_ROOT")
+python3 "$PMAI_HOME/scripts/replan-work.py" inspect "$CANDIDATE_MANIFEST"
+```
+
+`list` 必须读取全部结果；没有精确匹配就不消费，出现多个匹配就停止厘清，不能静默选一个。`inspect` 的 diff 固定为“原 baseline 到旧冻结候选”，后续 main 提交不会混入。
+
+按候选模式处理：
+
+- `worktree`：该 diff 只是参考，不是新 build 的 baseline 或默认实现。仍需要的内容在新环境重新实现并验证，已被替代或放弃的内容明确排除；禁止整分支 merge、整包复制或自动 cherry-pick。
+- `main`：该 diff 中的实现已经位于当前 main。新 build 从当前 main 正常起步，逐项验证应保留的行为，并用新的提交前向调整或显式撤销不再成立的部分；不得把同一实现盲目重做，也不得由 replan/retire 回滚它。
+
+只有上述差异都已逐项采用、替代或明确放弃，才显式退役旧候选。worktree 候选要求对应结果已经进入当前新 build 的实现提交；main 候选若原实现继续成立，可在当前 build 已按新依据验证后保留，不强制造一次无意义重写，前向调整或撤销则必须进入新的实现提交：
+
+```bash
+python3 "$PMAI_HOME/scripts/replan-work.py" retire \
+  "$CANDIDATE_MANIFEST" --reconciled
+```
+
+worktree 候选 retire 后把旧 worktree/branch 送入现有 pending cleanup 并清除 manifest；main 候选 retire 只清除 manifest，不建清理任务、不改 main 实现。两者都不改变新 build 合同。未完成逐项核对时保留 manifest；路径丢失、候选漂移或队列身份冲突时停止。
 
 纯错字、单文案、局部样式或不改变产品行为的极小修补走 `/pmai-quick-fix`。把 mockup / spec 做进最终 build target、改变信息结构或同时涉及实现和正式文档，不得伪装成小改；只要进入本 skill，就按完整 build 执行，并在开工前确认工作环境。
 
@@ -181,7 +207,18 @@ python3 "$PMAI_HOME/scripts/acceptance-profile.py" "${PROFILE_ARGS[@]}" > "$PROF
 if [ "$BUILD_MODE" = "worktree" ]; then
   BUILD_BRANCH="build-<模块>-<时间戳>"
   BUILD_DIR="$MAIN_REPO_ROOT/.worktrees/$BUILD_BRANCH"
-  git -C "$MAIN_REPO_ROOT" worktree add -b "$BUILD_BRANCH" "$BUILD_DIR" main
+  BUILD_BASE_BRANCH="$(git -C "$MAIN_REPO_ROOT" branch --show-current)"
+  if [ "$BUILD_BASE_BRANCH" != "main" ] && [ "$BUILD_BASE_BRANCH" != "master" ]; then
+    if git -C "$MAIN_REPO_ROOT" show-ref --verify --quiet refs/heads/main; then
+      BUILD_BASE_BRANCH="main"
+    elif git -C "$MAIN_REPO_ROOT" show-ref --verify --quiet refs/heads/master; then
+      BUILD_BASE_BRANCH="master"
+    else
+      echo "主仓缺少 main/master，不能建立独立构建环境。" >&2
+      exit 1
+    fi
+  fi
+  git -C "$MAIN_REPO_ROOT" worktree add -b "$BUILD_BRANCH" "$BUILD_DIR" "$BUILD_BASE_BRANCH"
 else
   BUILD_BRANCH="$(git -C "$REPO_ROOT" branch --show-current)"
   BUILD_DIR="$REPO_ROOT"
@@ -289,13 +326,17 @@ git -C "$BUILD_DIR" commit -m "build(<模块>): record iteration"
 
 先给 PM 看结果，不把定稿验收挡在“能刷新看到页面/功能”之前。PM 每轮反馈后进入快速迭代车道：
 
-1. 重新读取当前 build 合同的 `target + delivery_policy`，并把实现深度放在本轮修改指令首部；
-2. 判断是实现修正、新的产品决定，还是要求原型接入真实底层能力；
-3. 原型反馈若要求真实数据库、鉴权、外部写入、生产基础设施等，停止实现并回 design：由 PM 明确批准一个 prototype real edge，或把项目建造对象改为 product；不得在迭代中静默升级；
+1. 先运行 `status-view.py --execution-context` 重新校验 currentness，再读取当前 build 合同的 `target + delivery_policy`；校验失败时不得修改、提交或写 accepted delta；
+2. 先按决定层级分流 PM 新反馈，不能只因反馈发生在 build 中就记成 delta：
+   - 改变产品定位、目标用户、核心问题与价值、产品职责边界、MVP 证明目标或关键成立前提 → 停止 build，转 `/pmai-proposal`；不得写 accepted delta；
+   - 改变模块对象、关系、动作、状态、权限、真相源、业务规则、信息结构、任务路径、关键交互，或要求原型接入真实数据库、鉴权、外部写入、生产基础设施 → 停止 build，转 `/pmai-design`；不得写 accepted delta；
+   - 不改变产品基线和模块模型，只在已批准模块、任务与目标路径内形成 PM 明确接受的小范围行为或体验调整 → 可以记录 `kind=scoped-adjustment` 的 accepted delta；这里的“小范围”明确表示不改变对象、关系、业务规则、权限模型或关键任务路径；
+   - 只是让实现重新符合当前 spec / active decisions，或修复 bug、样式、文案和局部交互偏差 → 直接修正实现，不写 delta；
+3. 原型真实边缘能力由 design 明确批准，或由 design 把项目建造对象改为 product；不得在迭代中静默升级；
 4. “还有什么问题”的检查只对账当前 spec、active decisions、accepted deltas 和批准路径，并应用当前实现深度合同；原型默认模拟的底层能力不算缺口，规格已经明确的行为也不得重新包装成 PM 开放问题；
 5. 文案、布局、按钮和局部交互由当前会话直接修改；只有跨模块大型重构才重新确认并调用外部 builder；
 6. 只跑 profile 的 `iteration_checks`：热更新、typecheck 和当前页面/受影响交互走查；不得运行 production build、全路径浏览器验收或重启仍健康的 dev server；
-7. 提交该轮修改并用 `build-contract.py commit` 记录新实现 commit；
+7. 提交该轮修改并用 `build-contract.py commit` 记录新实现 commit；`commit` 会再次校验 currentness，过期时失败关闭，不得绕过；
 8. 用 `record-evidence --lane iteration` 绑定该 commit 记录快检，不得把 iteration evidence 冒充 final evidence；
 9. 立即告诉 PM“已修改，可刷新查看”，继续复用同一个页面与浏览器连接；定稿请求前不准备 `review-ready`，也不在后台偷跑完整 `final_checks`。
 
@@ -315,16 +356,22 @@ python3 "$PMAI_HOME/scripts/build-timing.py" finish \
 
 `minor` 的 2–5 分钟、`interaction` 的 5–10 分钟是目标与超时预警，不是质量硬门。预警出现时先让 PM 刷新查看，再定位慢在准备、实现、快检还是 preview；不能为了补齐完整验收继续阻塞 PM。
 
-如果反馈改变对象、动作、状态、权限、真相源、页面任务或产品规则，记录 accepted delta：
+只有反馈已经通过上述分流，被确认是“已批准模块内、不改变产品基线与模块模型的小范围行为或体验调整”时，才记录 accepted delta：
 
 ```bash
 python3 "$PMAI_HOME/scripts/build-contract.py" add-delta \
   "$BUILD_DIR/docs/modules/<模块>" \
-  --summary "<PM 接受的新产品决定>" \
-  --affected-surface "<受影响文档/页面>"
+  --kind scoped-adjustment \
+  --summary "<PM 接受的模块内小范围调整>" \
+  --affected-surface "<受影响文档/页面>" \
+  --scope-attestation approved-module-task-no-model-change \
+  --approval-kind pm-confirmation \
+  --approval-reference "<本轮 PM 明确接受该调整的原话或可定位会话证据>"
 ```
 
-这会递增 `design_revision`、更新 source hash、清空旧证据和已有定稿请求，并回到 `iterating`。正式文档仍等实现落到 main 后统一更新。
+这会递增 `design_revision`、更新 source hash、清空旧证据和已有定稿请求，并回到 `iterating`。CLI 只允许新写入 `kind=scoped-adjustment`，且同时要求固定 scope attestation 和 PM / sealed 评审批次证据；裸调用或旧的宽泛 kind 会失败。对象、关系、权限、真相源、业务规则、关键任务路径等模块模型变化不走这里，必须先回 design；产品级变化必须先回 Proposal。正式文档仍等实现落到 main 后统一更新。
+
+普通 build 反馈在规格尚未改变时使用上面的 PM 证据参数，CLI 会先校验 currentness。若本次调整沿用已经批准的术语或角色名称，可重复传 `--affects "term:<准确名称>"` / `--affects "role:<准确名称>"` 供 landed 后术语对账；这不是新增角色模型的通道。若 delta 来自 `/pmai-lark-review`，严格执行 lifecycle handoff 的同步、pack、checkpoint 顺序，并把审批证据改为 `--approval-kind lark-review-batch --approval-reference "<sealed batch ID>" --approval-artifact "<同批 remote-verification.json>"`；CLI 先核对验证产物、sealed plan、T 与当前 `spec.md` 的内容绑定，再从已验证 pack 写入 authority before/after、当前模块 `spec.md` 的精确 `authority_paths`、文件 SHA-256、Git blob 和当前 HEAD 绑定，禁止手填或扩大文档范围。checkpoint 必须承接上一权威提交并直接接在该 HEAD 后，且其中的 spec blob 与 `.work-meta.json` 必须分别等于绑定版本和当前合同。
 
 实现修正不改变产品决定时，不递增 revision；但实现 commit 变化后，绑定旧 commit 的证据不能复用。
 
@@ -471,7 +518,7 @@ python3 "$PMAI_HOME/scripts/build-contract.py" docs-fail \
 - active build 内的文案、布局、按钮和局部交互由当前会话直接处理；外部 builder 只用于首次实现或大型重构。
 - dev server 与浏览器连接跨轮保留；production build 只在冻结 commit 的 validation worktree 运行，不污染 active worktree 的构建缓存。
 - `timing.json` 记录阶段耗时与 time-to-preview；2–5 / 5–10 分钟只作预警，不阻断“已修改，可刷新查看”。
-- 新产品决定进入 accepted deltas 并使旧证据失效；实现 commit 变化也使旧证据失效。
+- 只有已批准模块内、不改变产品基线与模块模型的小范围调整进入 accepted deltas 并使旧证据失效；产品级变化回 Proposal，模块模型变化回 design；实现 commit 变化也使旧证据失效。
 - PM 明确说“可以提交 / 定稿 / 可以合并”就是打开一次性 final checks 并落地主线的授权，不二次确认。
 - final_check 只校验同一 source hash + implementation commit 的验收就绪快照，不首次跑完整验收、不修改业务代码；失败回 iterating。
 - merge 冲突保留 final_check 和 worktree；纯清理失败进入待清理队列，不阻塞 landed 后文档同步。

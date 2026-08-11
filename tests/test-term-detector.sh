@@ -185,7 +185,15 @@ MARKDOWN
     "anchor": "docs/modules/download-policy.md",
     "accepted_deltas": [
       {"kind": "term", "summary": "服务周期"},
-      {"kind": "role", "summary": "渠道运营员"}
+      {"kind": "role", "summary": "渠道运营员"},
+      {
+        "kind": "scoped-adjustment",
+        "summary": "沿用已批准命名优化筛选提示",
+        "affects": [
+          {"kind": "term", "name": "服务窗口"},
+          {"kind": "role", "name": "结算观察员"}
+        ]
+      }
     ]
   }
 }
@@ -227,8 +235,9 @@ assert data["new_terms"] == [
     "已拍板问题标题规则",
     "明确有效的问题标题规则",
     "服务周期",
+    "服务窗口",
 ]
-assert data["new_roles"] == ["平台审核员", "财务复核员", "渠道运营员"]
+assert data["new_roles"] == ["平台审核员", "财务复核员", "渠道运营员", "结算观察员"]
 assert data["registered"] == ["商品池", "租户管理员"]
 assert data["whitelisted"] == ["用户"]
 assert data["skipped"] == ["退款窗口"]

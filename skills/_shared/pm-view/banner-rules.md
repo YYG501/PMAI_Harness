@@ -1,7 +1,7 @@
 # banner-rules：视觉锚点与 Decision gate label 规范
 
 > **职责**：banner 格式 + Next Up 块格式 + Decision gate label 3 硬规则。
-> **调用方**：init-project / design / build / build-close / build-cancel（所有用户面 skill）。
+> **调用方**：proposal / init-project / design / build / build-close / build-cancel 等所有用户面 skill。
 > **设计来源**：gstack / gsd 的 banner + Next Up + "Ready?" Decision gate pattern。
 
 ---
@@ -14,13 +14,14 @@
 ━━━ PMAI ► <SKILL> ▸ <Name> ━━━
 ```
 
-- `<SKILL>`：当前 skill 名，大写，如 `INIT-PROJECT` / `DESIGN` / `BUILD` / `BUILD-CLOSE`
-- `<Name>`：给 PM 看的当前动作名，如 `项目初始化` / `需求探索` / `开始 build` / `收尾沉淀`
+- `<SKILL>`：当前 skill 名，大写，如 `PROPOSAL` / `INIT-PROJECT` / `DESIGN` / `BUILD`
+- `<Name>`：给 PM 看的当前动作名，如 `产品方向澄清` / `项目初始化` / `需求探索` / `开始 build`
 - **不展示内部阶段号**：PM 只需要知道现在在做什么，不需要知道内部状态字段
 
 ### §1.2 例子
 
 ```
+━━━ PMAI ► PROPOSAL ▸ 产品方向澄清 ━━━
 ━━━ PMAI ► INIT-PROJECT ▸ 项目初始化 ━━━
 ━━━ PMAI ► DESIGN ▸ 需求探索 ━━━
 ━━━ PMAI ► BUILD ▸ 开始 build ━━━

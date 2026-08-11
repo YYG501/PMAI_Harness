@@ -14,7 +14,7 @@
 
 - **design 决定闭合** → 对 `spec.md`、决定、相关页面 / 源码证据和项目底座做轻量对账，再提交建造依据。
 - **lark-review 准备 seal 且要新建 / 替代产品决定** → 将每条候选决定与仓内全部当前有效决定逐一对照；回执绑定当前目标稿和决定源，缺项、过期或真实冲突都阻断 seal。
-- **build 迭代产生已接受变化** → 记入 `accepted_deltas`、递增 `design_revision` 并使旧证据失效；此时不提前改正式文档。
+- **build 迭代产生已接受的小范围调整** → 仅当仍在当前批准模块与任务内、且不改变产品基线或模块模型时，记入 `accepted_deltas`、递增 `design_revision` 并使旧证据失效；产品级变化回 Proposal，模块模型变化回 design。
 - **PM 请求定稿** → 在 `iterating` 冻结最终 commit，对 approved source、accepted deltas 做完整目标适配检查；`final_check` 只校验快照 currentness。
 - **实现进入 main** → 基于 landed diff 和文档影响地图更新正式文档；文档失败保留 `landed/docs_pending`，只续跑文档。
 
@@ -53,7 +53,7 @@ python3 "$PMAI_HOME/scripts/check-state-index-drift.py" "$REPO_ROOT" || true
 
 1. **机械缺口**：索引漏挂、术语漏同步、已落地页面缺文档落点 → 自动修并在影响地图标记 covered。
 2. **实现偏离已批准依据**：没有 accepted delta 支撑 → final_check 失败，回 `iterating` 补实现或回 design 重新拍板；不得拿实现反改规格掩盖问题。
-3. **已接受变化**：有明确 PM 证据 → 写 `accepted_deltas`，更新 source hash / revision，旧验收证据失效；实现落地主线后再统一编译文档。
+3. **已接受的小范围调整**：有明确 PM 证据，且仍在当前批准模块与任务内、不改变产品基线或模块模型 → 写 `accepted_deltas`，更新 source hash / revision，旧验收证据失效；实现落地主线后再统一编译文档。超出该边界时分别回 Proposal 或 design。
 4. **真实产品模型冲突**：两个现行规则无法同时成立，或需要推翻 PM 已确认方向 → 说明冲突依据并立即让 PM 拍板。
 
 `lark-review` 的 seal 额外把这一步机器化为覆盖门禁：每个候选决定 × 每个当前有效决定都必须记录 `compatible / supersedes / needs_pm` 和业务原因；receipt 同时绑定 T 摘要与全部决定源摘要。脚本只验证覆盖、身份、时效和是否仍有 `needs_pm`，不替 Agent 猜语义冲突。没有候选产品决定时状态固定为 `not_required`，纯排版和实现选择不能制造这张确认单。

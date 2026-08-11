@@ -2,7 +2,7 @@
 # test-shared-currentness.sh
 #
 # 验证 _shared 规则不再回流旧流程语义：
-#   T1: project-questioning 不再声明 greenfield init-project 阶段 C 完整问卷
+#   T1: project-questioning 只服务成熟资料 / 已有代码接入，不再声明完整问卷
 #   T2: banner-rules 不再使用旧 NEXT / stage 转换语义
 #   T3: attachments-upload 的前缀映射与 helper 当前 allowlist 对齐
 #   T4: PM-VIEW-RULES 不引用不存在的历史样例
@@ -17,14 +17,20 @@ source "$SCRIPT_DIR/helpers/assert.sh"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
 test_project_questioning_current_callers() {
-  start_test "T1: project-questioning 不再绑定 greenfield init-project 阶段 C"
+  start_test "T1: project-questioning 只核验成熟项目等价产品基线"
   local file="$REPO_ROOT/skills/_shared/project-questioning.md"
-  if grep -qE "阶段 C|全新项目首次起步|module-questioning" "$file"; then
-    _fail "project-questioning.md 仍含旧 init/design-only 语义"
+  if grep -qE "阶段 C|全新项目首次起步|module-questioning|/pmai-direction|skills/direction" "$file"; then
+    _fail "project-questioning.md 仍含旧 init/design/direction 语义"
     return
   fi
-  if grep -q "新项目走同一套" "$REPO_ROOT/skills/_internal/codebase-audit/SKILL.md"; then
-    _fail "codebase-audit 仍声称新项目和 brownfield 方向讨论同一套"
+  if ! grep -q '调用方.*资料目录分支.*codebase-audit step 4' "$file" \
+     || ! grep -q '六项完整性标准' "$file" \
+     || ! grep -q '/pmai-proposal' "$file"; then
+    _fail "project-questioning.md 应只承担等价产品基线核验并把缺口转 Proposal"
+    return
+  fi
+  if grep -qE "新项目走同一套|内联方向讨论|完整 5 节方向问卷" "$REPO_ROOT/skills/_internal/codebase-audit/SKILL.md"; then
+    _fail "codebase-audit 不得用初始化问卷补产品方向"
     return
   fi
   pass_test
@@ -115,7 +121,7 @@ test_skill_preambles_respect_pmai_home() {
   local -a callers=(
     "$REPO_ROOT/skills/build-cancel/SKILL.md"
     "$REPO_ROOT/skills/quick-fix/SKILL.md"
-    "$REPO_ROOT/skills/direction/SKILL.md"
+    "$REPO_ROOT/skills/proposal/SKILL.md"
     "$REPO_ROOT/skills/record/SKILL.md"
     "$REPO_ROOT/skills/status/SKILL.md"
     "$REPO_ROOT/skills/_internal/codebase-audit/SKILL.md"

@@ -17,8 +17,7 @@ setup_fixture() {
   TARGET="prototype/src/access"
   mkdir -p "$MODULE" "$T/$TARGET" "$T/.pm-workflow"
 
-  printf '# Product\n' > "$T/PRODUCT.md"
-  printf '# State\n' > "$T/PRODUCT-STATE.md"
+  write_equivalent_product_baseline "$T"
   printf '# Rules\n' > "$T/PRODUCT-RULES.md"
   printf '# Design\n' > "$T/DESIGN.md"
   printf '# Todo\n' > "$T/TODO.md"
@@ -140,7 +139,7 @@ PY
     cat /tmp/ready-contract.err.$$ >&2
   else
     NARRATIVE=$(python3 "$STATUS_VIEW" "$T" --narrative)
-    if [[ "$NARRATIVE" != *"设计依据有变化，需要重新确认后才能构建"* ]] \
+    if [[ "$NARRATIVE" != *"建造依据有变化，需要重新确认后才能继续"* ]] \
        || [[ "$NARRATIVE" != *"继续 /pmai-design"* ]]; then
       _fail "status should not present stale ready state as buildable"
       echo "$NARRATIVE" >&2

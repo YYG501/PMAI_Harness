@@ -62,7 +62,7 @@ test_meta_distinguishes_multi_agent() {
 test_consumer_template_carries_runtime_rules() {
   start_test "template: consumer AGENTS carries new boundaries"
 
-  assert_file_contains "$AGENTS_TEMPLATE" '新功能、产品规则、规格或验收路径变化走 `/pmai-design`' "template should name design entry role" || return
+  assert_file_contains "$AGENTS_TEMPLATE" '模块对象、规则、规格或验收路径变化走 `/pmai-design`' "template should name the module-level design entry role" || return
   assert_file_contains "$AGENTS_TEMPLATE" 'mockup 只出探索稿' "template should keep mockup out of prototype" || return
   assert_file_contains "$AGENTS_TEMPLATE" "单主控多视角退化执行" "template should require meta degradation statement" || return
   assert_file_contains "$AGENTS_TEMPLATE" 'localhost `EPERM`' "template should explain sandbox restriction" || return

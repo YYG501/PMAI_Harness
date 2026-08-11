@@ -1,6 +1,6 @@
 # {{PROJECT_NAME}} · 文档索引
 
-> 这是消费仓的资料入口。要找模块、输入材料、交付物和归档先看这里；项目主上下文在仓库根目录。
+> 这是消费仓的资料入口。要找产品方案、模块、输入材料、交付物和归档先看这里；项目主上下文在仓库根目录。
 
 ## 根目录项目脊柱
 
@@ -20,11 +20,17 @@
 - `modules/<模块>/spec.md` — 本模块长期规格，供 build、close 和后续设计继承。
 - `modules/<按内容命名>.md` — 功能型成稿：PRD、功能需求、功能描述、功能规格、功能评审稿。
 
+## 产品方案
+
+- [`proposals/INDEX.md`](proposals/INDEX.md) — Product Proposal 当前版本与历史取代关系。
+- `proposals/<slug>-vN.md` — 产品级用户、问题、价值、边界、MVP 与演进条件的完整论证。
+
 ## 材料与产物
 
 | 目录 | 放什么 |
 |---|---|
 | `inputs/` | PM 上传材料、调研、竞品、旧文档等输入 evidence |
+| `proposals/` | 完整 Product Proposal 与历史版本；不放普通介绍稿或模块规格 |
 | `engineering/` | README、API、CLI、架构说明、how-to、tutorial、reference；gstack 文档旁路采用后接回这里 |
 | `deliverables/` | 介绍型 / 表达型材料，如产品介绍、产品功能清单、产品优势说明、一页纸 |
 | `decisions/` | 重大项目级决策 / 理路冻结档，默认不写 |

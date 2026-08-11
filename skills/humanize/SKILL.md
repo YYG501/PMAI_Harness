@@ -147,4 +147,4 @@ fi
   - PRD、功能需求、功能描述、功能规格、功能评审稿、模块 `spec.md` → `/pmai-spec-writing`
   - 产品方向、产品介绍、功能清单、优势说明、一页纸、汇报材料 → `/pmai-doc-writing`
 - `/pmai-spec-writing` 和 `/pmai-doc-writing` 负责结构重组、内容补差和文档类型判断；它们在最后一遍文字收口时可调用本 skill 的规则。
-- pattern 目录与 spec-writing 的禁用清单 / 风格卡同源：`references/patterns.md` 引用 `skills/spec-writing/references/writing-rules.md`（禁用表达 / 禁用术语规则 + 简要易懂语体）和 `skills/_shared/pm-view/writing-rules.md`（§3.12 工程黑话词典）为权威，不另立矛盾的一套。
+- pattern 目录与通用 PM 文风同源：`references/patterns.md` 以 `skills/_shared/pm-view/writing-rules.md` 为禁用表达、术语和简要易懂语体的唯一正本，不另立一套规则。

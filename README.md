@@ -46,7 +46,7 @@ python3 ~/.pmai/scripts/status-view.py "$tmp/Demo" --narrative
 
 PMAI 是面向 PM 的**产品上下文统一层**：它把产品文档、原型、反馈、决策和后续实现上下文接起来，让 AI 在每次协作时都知道这个产品是什么、已有原型长什么样、哪些规则和取舍已经确认。
 
-PMAI 不和 Claude Design、design-html 或 Claude Code 比"谁更快生成第一版原型"。它负责把方向讨论、prototype / product 构建、PM 看结果多轮修改、最终验收、合入 main 和正式文档对齐接成同一条链路。新需求从已有产品上下文继续生长，PM 只处理产品判断、看结果和明确定稿。
+PMAI 不和 Claude Design、design-html 或 Claude Code 比"谁更快生成第一版原型"。它负责把 Product Proposal 的产品澄清、模块设计、规格成文、prototype / product 构建、PM 看结果多轮修改、最终验收、合入 main 和正式文档对齐接成同一条链路。新需求从已有产品上下文继续生长，PM 只处理产品判断、看结果和明确定稿。
 
 定位是 **PM 单人生产力工具**，不是团队 SOP / CI 平台 / 多租户基础设施。完整产品意义、非目标和成功标准见 [`PRODUCT.md`](./PRODUCT.md)。
 
@@ -62,16 +62,18 @@ PMAI 不和 Claude Design、design-html 或 Claude Code 比"谁更快生成第�
 # 起项目（只跑一次，整个产品的根基）
 
 /pmai-init-project    项目初始化统一入口（AI 自动判断全新项目 / 资料目录 / 已有代码；全新项目搭底座，已有代码直接盘点现状）
+/pmai-proposal        新项目默认完成产品澄清，形成完整 Product Proposal
 
-# 正常循环（design 讨论，build 看结果）
+# 正常循环（design 讨论，spec-writing 成文，build 看结果）
 
 /pmai-design "批量审核"    恢复旧上下文，讨论清楚并自动形成建造依据
+/pmai-spec-writing          决定闭合后由 design 自动调用，编译已确认规格
 /pmai-build 批量审核       后台读取项目定义和默认验收；PM 只确认工作环境与构建工具，然后看结果、多轮修改、说“可以提交”后自动收尾
 ```
 
-PM 全程**只做产品决策、确认首个建造方案、开工时确认工作环境与构建工具、看结果和明确定稿**；meta / mockup / spec-writing 分流、默认验收、合同、证据和文档同步由框架兜。忘了当前停在哪里时再用 `/pmai-status` 恢复现状，它不是日常循环的一步。
+新项目默认按 `init → proposal → design → spec-writing → build` 推进；成熟项目只有在已有资料完整覆盖产品定位、用户、核心问题与价值、边界和 MVP / 当前产品结果，并在 `PRODUCT.md` 记录真实仓内依据与 PM 确认日期、`PRODUCT.md` 与依据均已提交且无漂移、通过机器门后才可跳过 Proposal。一旦进入 Proposal 就会完成整份文档，不提供简版退出。PM 全程**只做产品决策、确认首个建造方案、开工时确认工作环境与构建工具、看结果和明确定稿**；meta / mockup / spec-writing 分流、默认验收、合同、证据和文档同步由框架兜。忘了当前停在哪里时再用 `/pmai-status` 恢复现状，它不是日常循环的一步。
 
-Kimi Code 中把上述入口原生写成 `/skill:pmai-design`、`/skill:pmai-build`、`/skill:pmai-status`；工作流语义不变。
+Kimi Code 中把上述入口原生写成 `/skill:pmai-proposal`、`/skill:pmai-design`、`/skill:pmai-build`、`/skill:pmai-status`；工作流语义不变。
 
 ---
 
@@ -191,7 +193,7 @@ skill 跑全局升级命令；升级完读 CHANGELOG diff + 用自然语言 5-7 
 
 > **TTHW 口径拆分**：
 > - **骨架 smoke**：`init-project.sh` 从空目录建出业务仓骨架，目标 ≤ 10 秒，可自动量。
-> - **第一个模块规格草稿**：从 `/pmai-init-project` 到 `/pmai-design` 落出 `spec.md`，目标 ≤ 30 分钟；这一步包含 PM 决策，只能通过 dogfood 记录，不适合作无交互脚本硬测。
+> - **产品基线 + 第一个模块规格草稿**：新项目从 `/pmai-init-project` 经完整 `/pmai-proposal`，再由 `/pmai-design` 调用 spec-writing 落出 `spec.md`；这段包含产品级和模块级 PM 决策，只能通过 dogfood 分段记录，不适合作无交互脚本硬测。
 > - install 自身通常约 5 秒（git clone + symlink），剩余时间主要是 PM 思考第一个需求。
 
 ### 1. 初始化新业务项目
@@ -207,11 +209,11 @@ Kimi Code:               /skill:pmai-init-project
 agent 内部先判断项目情况，再进入对应分支：
 
 - **阶段 A · 参数收集 + 项目情况判断** —— 只拿项目名、落地路径和一句话背景，再判断全新项目、资料目录、已有代码库或已接入项目；不询问类型和技术栈。
-- **全新项目 / 资料目录分支** —— 用 `init-project.sh` 只建上下文脊柱和 host 配置，不创建代码、prototype、mockup 看板或 `project.yml`。
+- **全新项目 / 资料目录分支** —— 用 `init-project.sh` 只建上下文脊柱和 host 配置，不创建代码、prototype、mockup 看板或 `project.yml`；资料目录随后继续核验接入前材料，不能把骨架完成当成产品基线已通过。
 - **已有代码库分支** —— 自动整理真实代码现状并补产品脊柱；现有技术事实进入 `docs/CODEBASE-AUDIT.md`，不在接入阶段提前冻结新的建造方案。
-- **已接入过 PMAI 的项目** —— 不重跑 init；先看 `/pmai-status`，PM 明确要重定方向再走 `/pmai-direction`。
+- **已接入过 PMAI 的项目** —— 不重跑 init；先看 `/pmai-status`。产品定位、目标用户、核心价值、职责边界或 MVP 证明目标需要纠正时走 `/pmai-proposal` 生成完整新版本；模块行为变化走 `/pmai-design`。
 
-两类初始化完成后都只进入 `/pmai-design`。首个可建造 design 定稿时，PM 一次确认 `prototype / product`、技术栈、代码入口和运行命令，框架生成 `.pm-workflow/project.yml`。
+全新项目初始化完成后只进入 `/pmai-proposal`；成熟资料目录或已有代码库若已经有完整等价产品基线，且接入流程已经在 `PRODUCT.md` 记录依据路径和 PM 确认日期、产品基线与依据均已提交且无漂移、机器核验通过，才直接进入 `/pmai-design`，缺任一产品级关键判断则先补 Proposal。Proposal 定稿后由 design 收敛第一个模块，决定闭合时自动调用 spec-writing；首个可建造 design 定稿时，PM 一次确认 `prototype / product`、技术栈、代码入口和运行命令，框架生成 `.pm-workflow/project.yml`。
 
 > `/pmai-init-project` 是跨宿主工作流名；Kimi Code 的实际输入是 `/skill:pmai-init-project`。装好 pmai 后可在任意 cwd 使用，无需先进入本仓。
 
@@ -222,7 +224,7 @@ agent 内部先判断项目情况，再进入对应分支：
 - 在本生成器仓协同改框架：Codex 先读根目录 `AGENTS.md`，按 repo-local `skills/` / `scripts/` 工作。
 - 在本生成器仓初始化消费仓：让 Codex 执行 `/pmai-init-project` 等价流程，内部读取 `skills/init-project/SKILL.md`，最后调用 `bash scripts/init-project.sh ...`。
 - 在消费仓继续使用：`init-project.sh` 会生成消费仓根目录 `AGENTS.md` 和项目级 `.codex/hooks.json`；Codex 进入消费仓后先读 `AGENTS.md`。`pmai install/upgrade` 会把 `pmai-*` 暴露到 `~/.codex/skills/`，通过 `$pmai-*`、skill 选择器或自然语言调用，并清理旧版遗留的 `~/.codex/prompts/pmai-*.md`。Codex 首次启用项目 hooks 时可能要求信任确认，这是 Codex 自身的安全机制。
-- Kimi Code 在生成器仓和消费仓都先读根目录 `AGENTS.md`。`pmai install/upgrade` 把同一批 `pmai-*` Skill 暴露到 `$KIMI_CODE_HOME/skills/`，原生输入 `/skill:pmai-init-project`、`/skill:pmai-design`、`/skill:pmai-build`；Kimi 不读取 `.codex/hooks.json`，写保护和 review guard 由用户级原生 hooks 分发器按仓库类型路由。生成器仓优先读取当前 checkout，消费仓使用 `~/.pmai` 安装态。
+- Kimi Code 在生成器仓和消费仓都先读根目录 `AGENTS.md`。`pmai install/upgrade` 把同一批 `pmai-*` Skill 暴露到 `$KIMI_CODE_HOME/skills/`，原生输入 `/skill:pmai-init-project`、`/skill:pmai-proposal`、`/skill:pmai-design`、`/skill:pmai-build`；Kimi 不读取 `.codex/hooks.json`，写保护和 review guard 由用户级原生 hooks 分发器按仓库类型路由。生成器仓优先读取当前 checkout，消费仓使用 `~/.pmai` 安装态。
 - OpenCode 进入消费仓后同样先读 `AGENTS.md`。`pmai install/upgrade` 会生成全局 `~/.config/opencode/commands/pmai-*.md`；`init-project.sh` 会生成项目级 `.opencode/commands/pmai-*.md` 和 `opencode.json`，命令同样只路由回 `PMAI_HOME` / `~/.pmai` 下的已安装 `SKILL.md`。OpenCode 第一版不做 PMAI 专属 plugin hooks，也不假装 Codex hooks 生效。
 
 **非交互参数化 CLI**（smoke / 批量自动化依赖）：
@@ -254,7 +256,7 @@ bash ~/.pmai/scripts/measure-tthw.sh smoke
 # 本仓调试时也可：bash scripts/measure-tthw.sh smoke
 ```
 
-首个模块规格草稿的 TTHW 只能在真实 dogfood 后记录。跑完 `/pmai-init-project` → `/pmai-design` 并落出 `spec.md` 后，在业务仓外用框架脚本写一条记录：
+首个模块规格草稿的 TTHW 只能在真实 dogfood 后记录。新项目跑完 `/pmai-init-project` → `/pmai-proposal` → `/pmai-design`，并由 design 调用 spec-writing 落出 `spec.md` 后，在业务仓外用框架脚本写一条记录：
 
 ```bash
 bash ~/.pmai/scripts/measure-tthw.sh record /path/to/project \
@@ -270,12 +272,18 @@ bash ~/.pmai/scripts/measure-tthw.sh record /path/to/project \
 ```
 /pmai-init-project           → 每个项目只在首次初始化或首次接入已有代码时使用
   ↓
+/pmai-proposal               → 新项目默认完成；澄清产品为何成立、为谁解决什么、先证明什么，并生成完整 Product Proposal
+  ↓
 /pmai-design "<一句话>"      → 恢复上下文、探索真问题，内部按需完成产品判断、界面探索和规格成文
+  ↓
+/pmai-spec-writing           → 决定闭合后由 design 自动调用；用通用内容模块和领域 Profile 编译规格，完整 PRD 按 Preset 编排
   ↓
 /pmai-build <模块或文档>     → 构建 prototype 或 product；PM 看结果多轮修改，定稿后自动检查、合入 main 并更新文档
 ```
 
-这是正常协作的完整主路径，不需要再从 Skill 菜单里挑下一步。忘了当前停在哪里时，用 `/pmai-status` 只读恢复现状；它不是主流程的固定一步。简单改动、轻量记录、方向重定、文档成文、飞书文档同步或评审回收等专项场景，PM 直接说明想做什么即可，AI 负责选择对应能力并接回当前产品上下文。完整需求进入 `/pmai-build` 后，AI 会在 PM 看结果期间持续修改；PM 说“定稿 / 可以提交 / 可以合并”即触发最终检查、自动落地主线和文档同步。
+这是正常协作的完整主路径，不需要再从 Skill 菜单里挑下一步。成熟项目只有在完整等价产品基线经过接入核验、显式记录依据与 PM 确认日期、相关文件已提交且无漂移并通过机器门时，才可从 design 开始；一旦走 Proposal 就必须完成完整文档。Profile 负责补充领域内容，可叠加企业平台与 AI 两份；Preset 只决定文档形态，完整 PRD 使用唯一 Preset。忘了当前停在哪里时，用 `/pmai-status` 只读恢复现状；它不是主流程的固定一步。
+
+产品方向纠正回 `/pmai-proposal`，并用完整新版本取代旧版；模块对象、规则、任务路径、权限或关键交互变化回 `/pmai-design`；没有 active work 时，已经确认的待办、术语、跨模块规则或历史理路才用 `/pmai-record` 补录。record 和其它下游 Skill 都不能修改 Proposal。简单改动、介绍型文档、飞书文档同步或评审回收等专项场景，PM 直接说明想做什么即可，AI 负责选择对应能力并接回当前产品上下文。完整需求进入 `/pmai-build` 后，AI 会在 PM 看结果期间持续修改；PM 说“定稿 / 可以提交 / 可以合并”即触发最终检查、自动落地主线和文档同步。
 
 ### 3. 多机 / 团队仓
 
@@ -315,7 +323,7 @@ PMAI 走纯全局：每台要用的机器各自 `pmai install` 一次（全局�
 `pmai status` 仅作为同一检查的兼容别名保留，不再维护第二套检测逻辑。
 
 消费仓检查按项目阶段执行：初始化完成时不要求代码、`mockups/` 或
-`.pm-workflow/project.yml`；首个 design 定稿后才检查建造定义，进入 build 后再检查
+`.pm-workflow/project.yml`，但新项目要求继续完成 Proposal；当前 Proposal 定稿或完整等价产品基线成立后才可进入 design，首个 design 定稿后才检查建造定义，进入 build 后再检查
 真实实现入口、模块状态和恢复证据。探索稿固定在 `mockups/`，正式 prototype / product
 的位置以 `project.yml:implementation` 为准。doctor 只列差异，不自动搬文档、移动代码或改状态。
 

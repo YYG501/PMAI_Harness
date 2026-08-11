@@ -31,7 +31,7 @@
 3. 如果当前主控是 Claude Code 或 Codex，运行 `bash "${PMAI_HOME:-$HOME/.pmai}/scripts/install-project-hooks.sh" --check` 只读检查 `.claude/settings.json` 与 `.codex/hooks.json` 是否匹配当前框架；缺失或漂移时先报告，PM 确认后才在项目根运行不带 `--check` 的同一命令确定性刷新。不能只按文件存在就声称 hooks 已更新。Codex 首次启用项目 hooks 时可能要求信任确认。
 4. 如果当前主控是 Kimi Code，确认 `${KIMI_CODE_HOME:-$HOME/.kimi-code}/skills/pmai-status` 可解析，并运行 `python3 "${PMAI_HOME:-$HOME/.pmai}/scripts/manage-kimi-hooks.py" check` 检查原生 hooks；缺失或漂移时提示使用 `/skill:pmai-doctor` 诊断，只有 PM 确认后才运行 `pmai doctor --repair`。Kimi 不读取 `.codex/hooks.json`。
 5. 如果当前主控是 OpenCode，运行 `bash "${PMAI_HOME:-$HOME/.pmai}/scripts/install-opencode-commands.sh" --project "$PWD" --check` 只读比较 `.opencode/commands/` 与 `opencode.json`；漂移时先报告，PM 确认后才去掉 `--check` 刷新。OpenCode 不使用 Codex hooks，不能声称 Codex hooks 已在 OpenCode 中生效。
-6. 按 `/pmai-status` 等价流程判断当前下一步；Kimi Code 对应 `/skill:pmai-status`。已初始化且没有 active work时，引导 PM 进入 design。
+6. 按 `/pmai-status` 等价流程判断当前下一步；Kimi Code 对应 `/skill:pmai-status`。先用全局只读扫描恢复普通未完成飞书评审批次；再检查 main 中 pending handoff。handoff 的 route 只作来源记录，当前入口由机器 phase 唯一决定：`proposal → /pmai-proposal`、`design → /pmai-design`、`lark_review → /pmai-lark-review`，fresh checkpoint 后 `closed`。没有 pending 评审时，新项目产品方向尚未完成才引导 `/pmai-proposal`；只有当前 Proposal 已生效，或接入流程已记录依据与 PM 确认日期、`PRODUCT.md` 与依据均已提交且无漂移、机器状态为 `equivalent_baseline`，才进入 design。
 <!-- PMAI:END consumer-startup -->
 
 ## Command Resolution
@@ -47,7 +47,8 @@
 ## Consumer Workflow
 
 - 本仓已经初始化完成，不能在这里再跑 `/pmai-init-project`。
-- 没有 active work 时先按影响分流：已 close 结果上的错字、单文案、局部样式、常量或符合现有规格的小缺陷走 `/pmai-quick-fix`；新功能、产品规则、规格或验收路径变化走 `/pmai-design`。design 先编译 context pack、浮现相关旧决定，再按真实未知项讨论；`meta`、`mockup`、`spec-writing` 是 design 按需调用后返回主线的内部能力，不让 PM 手动拼接。
+- 没有 active work 时先按影响分流：产品定位、目标用户、核心问题与价值、产品边界或 MVP 证明目标变化走 `/pmai-proposal`；已 close 结果上的错字、单文案、局部样式、常量或符合现有规格的小缺陷走 `/pmai-quick-fix`；模块对象、规则、规格或验收路径变化走 `/pmai-design`。design 先校验当前 Proposal、编译 context pack、浮现上游约束和相关旧决定，再按真实未知项讨论；`meta`、`mockup`、`spec-writing` 是 design 按需调用后返回主线的内部能力，不让 PM 手动拼接。
+- design 过程中发现需要纠正产品方向时，暂停模块收敛并进入完整 `/pmai-proposal` 修订；确认后回到同一 design。`record` 只在无 active work 时补录已经确认的 TODO、术语、跨模块规则或项目级理路，不修改 Proposal、模块规格或业务代码。
 - 首个可建造 design 定稿时，由 PM 一次确认建造对象与技术方案，生成 `.pm-workflow/project.yml`；后续默认复用。design 自动提交定义与本模块建造依据并进入 `ready_to_build`。
 - 推进实现：读 `/pmai-build`。框架校验 `.pm-workflow/project.yml`，把项目类型编译成实现深度合同并后台生成默认验收；AI 用一张卡向 PM 展示推荐的工作环境、构建工具及全部有效选项，PM 一次确认或直接改选后开工。工具列表必须排除当前主控；开工卡不得重复展示项目类型或验收方案。
 - PM 看结果后直接说哪里要改；active build 内的文案、布局、按钮和局部交互由当前会话直接处理，每轮只跑热更新、typecheck 和当前页面走查，保留同一个 dev server 与浏览器连接，完成后立即回“已修改，可刷新查看”。PM 说“可以提交 / 定稿 / 可以合并”即授权打开定稿车道：对冻结 commit 在 validation worktree 统一运行一次 production build 和完整路径验收；通过后先合入 main，再基于 landed diff 生成文档影响地图并同步文档。
@@ -56,19 +57,19 @@
 - 迷路或续跑：读 `/pmai-status` 对应 skill，先报告当前状态再行动。
 - 已有 `building / iterating / final_check` 时，PM 说“启动看看”“还有什么问题”“继续改当前结果”等自然语言就是续接当前 `/pmai-build`。Codex / Claude Code / Kimi Code 由 prompt hook 注入 `status-view.py --execution-context`；OpenCode 没有同等 hook 时由当前主控主动读取该只读上下文。除非 PM 明确开启无关新工作，否则不得转成无范围约束的通用 QA；多个 active build 只问模块，不猜。
 - PM 要复盘本次 PMAI 协作、反馈流程卡点或把问题交给框架仓时：当前只有 Codex 的精确当前会话定位已经验证，可读 `/pmai-feedback` 完整复盘并生成带会话 ID 与文件地址的框架交接 Prompt；其它宿主没有经过验证的定位适配时直接说明暂不支持，不按“最近会话”猜测，也不在消费仓直接改框架。
-- PM 在已发布飞书规格中 review、修改正文或添加批注，并要求反向更新规格 / 决定 / 原型时：读 `/pmai-lark-review`。它先把发布基线、本地和飞书固定为只读证据，归位独立目标版本后再按最高影响接回 quick-fix、active build 或 design/build；不得用任一证据版直接覆盖正式规格。普通单向 / 双向正文同步仍走 `/pmai-lark-sync`。
+- PM 在已发布飞书规格中 review、修改正文或添加批注，并要求反向更新规格 / 决定 / 原型时：读 `/pmai-lark-review`。它先恢复未完成批次，再把发布基线、本地和飞书固定为只读证据；产品级和模块级变化把旧批次转为 main handoff，按 Proposal/design/lark-review 的机器 phase 接力，fresh checkpoint 后关闭。不得用任一证据版直接覆盖正式规格。普通单向 / 双向正文同步仍走 `/pmai-lark-sync`。
 
 ## gstack Side Paths
 
 - gstack `/document-generate` / `/document-release` 只能作为工程文档旁路。Codex 看到这类输出时，不能只引用 `~/.gstack/...`、下载目录或临时路径。
 - 采用后的工程文档必须按 `CLAUDE.md` 和 `$PMAI_HOME/templates/文档地图.md` 接回 `docs/engineering/`，同步更新 `docs/engineering/INDEX.md`，再向 PM 回执接回路径。
-- 产品介绍、PM 汇报材料、PRD、模块规格和功能型规格不走 gstack 文档旁路；分别转 `/pmai-doc-writing`、`/pmai-spec-writing` 或 `/pmai-design`。
+- Product Proposal、产品介绍、PM 汇报材料、PRD、模块规格和功能型规格不走 gstack 文档旁路；分别转 `/pmai-proposal`、`/pmai-doc-writing`、`/pmai-spec-writing` 或 `/pmai-design`。
 
 ## Runtime Fallback
 
 - AskUserQuestion 不可用时，只对真实产品模型岔路、不可逆动作、改变 PM 已明确方向的问题，以及 build 开工前的“工作环境 + 构建工具”确认输出编号列表并等待；机械项和其它可逆偏好由 AI 按推荐推进。
 - PM 已说“可以提交 / 定稿 / 可以合并”时，该表达就是合入主线授权，不得二次确认。
-- 小改走 `/pmai-quick-fix`，完整需求走 design → build；不得以“小改”为由让 design/mockup 在 main 直接修改业务代码。
+- 产品方向澄清走 proposal，模块需求走 design → build，小改走 `/pmai-quick-fix`；不得以“小改”为由让 proposal/design/mockup 在 main 直接修改业务代码。
 - `/pmai-build` 按项目定义后台确定构建对象和默认验收。新 build 由 AI 推荐工作环境与构建工具，并在同一张卡列出全部有效选项，PM 只确认这两项；卡片不得显示项目类型、验收方案、worktree、合同或证据数据。
 - `project.type=prototype` 时，每次首次构建、反馈修改和中断恢复都必须重新读取实现深度合同：用户可见路径与交互做真，数据库、鉴权、外部集成、异步任务等底层默认模拟；未经 active decision 批准，不得静默建设真实系统。候选定稿前必须通过不可 exception 的 `prototype-boundary` 检查。
 - active build 的查看与问题检查只复用现有 spec、active decisions、accepted deltas、批准路径和当前 acceptance lane。原型合同默认模拟的底层能力不列为缺口；规格已有要求直接核对覆盖，不重新包装成 PM 未决问题。product 继续按 production implementation 检查。
@@ -87,6 +88,7 @@
 - 不要改 `CLAUDE.md` 的框架规则区，除非 PM 明确要求更新项目规则。
 - 不要把 `~/.pmai/skills`、`~/.pmai/scripts` 或其他 framework 源资产复制进消费仓；`.codex/hooks.json`、`.opencode/commands`、`opencode.json` 是允许存在的项目级 host 配置。Kimi skills 与 hooks 留在 `$KIMI_CODE_HOME` 的用户级宿主面，命令必须指向 `~/.pmai`。
 - `/pmai-design` 和 `/pmai-mockup` 不修改业务实现；design 先定对象和规格，mockup 只出探索稿，任何代码改动走 `/pmai-build` 或 `/pmai-quick-fix`。
+- `/pmai-proposal` 维护 `docs/proposals/`、`.pm-workflow/proposal.json` 与 `PRODUCT.md` 精简基线；其它 Skill 只读当前 Proposal。已确认版本不原地改写，方向变化必须生成完整新版本并 supersede 旧版。
 - “落地”不是绕过 build 的许可；小改走 quick-fix，完整交付走 `/pmai-build` 并自动 finalize。
 - 不要绕过 `check-branch.sh` 在 main 上直接改业务代码；只有 PM 已确认“当前环境”且 v2 合同为 `mode=main` 时，才允许修改合同声明的目标路径。
 - 派发外部执行器前，PM 已确认的工作环境必须干净；dirty 时先区分本轮改动与无关改动，能机械拆分就后台处理，无法安全拆分才说明具体冲突。

@@ -4,27 +4,29 @@
 
 ## 当前位置
 
-- 日期：2026-08-10
+- 日期：2026-08-11
 - 开发分支：`main`
-- 当前目标：已修复真实消费仓中“模块 close 后再次修改”的轮次混用、accepted delta 最终哈希冲突和并行文档 currentness 边界；定向与全量回归均已通过，尚未提交、分发或升级安装态。
+- 当前目标：正在统一收口 Product Proposal 主链、spec-writing 的“通用内容模块 + Profile + Preset”、Record 边界和飞书评审跨会话闭环；实现与定向回归已完成，正在建立新的全量基线，尚未提交、分发或升级安装态。
 - gstack 参考基线：`v1.58.5.0`，commit `11de390`；只参考本地 `gstack-clean` checkout，没有升级用户目录中的安装副本。
 
 ## 当前活跃模型
 
-- 正常用户主链路：`/pmai-init-project` 只建上下文 → `/pmai-design` 讨论需求并在首次定稿时生成项目建造定义 → `/pmai-build` → PM 看结果多轮快速修改 → PM 明确定稿 → `finalize-work.py` 对冻结 commit 只执行缺失的代码门、范围门和受影响体验批次 → 合入 main → 只更新实际受影响的产品真相源。
-- `meta`、`mockup`、`spec-writing` 是 design 按需调用后返回主线的内部能力；仍保留手动入口用于兼容和专项使用，但不要求 PM 拼接命令。
+- 正常用户主链路：`/pmai-init-project` 只建上下文骨架 → `/pmai-proposal` 完成产品级澄清 → `/pmai-design` 收敛模块决定并在首次定稿时生成项目建造定义 → `/pmai-spec-writing` 编译已确认规格 → `/pmai-build` → PM 看结果多轮快速修改 → PM 明确定稿 → `finalize-work.py` 对冻结 commit 只执行缺失的代码门、范围门和受影响体验批次 → 合入 main → 只更新实际受影响的产品真相源。spec-writing 通常由 design 自动调用，不要求 PM 手工拼接命令。
+- 新项目默认必须完成完整 Product Proposal；成熟项目只有在定位、用户、核心问题与价值、产品边界、MVP / 当前产品结果已经构成完整等价基线，且 `PRODUCT.md` 显式记录真实仓内依据与 PM 确认日期、`PRODUCT.md` 与依据文件均已提交且无漂移、机器状态为 `equivalent_baseline` 时才可跳过。一旦进入 Proposal 就必须完整产出；当前版本通过 `docs/proposals/`、`PRODUCT.md` 与 `.pm-workflow/proposal.json` 原子绑定，下游只读消费。
+- `meta`、`mockup` 是 design 按需调用后返回主线的内部能力；spec-writing 是主链中的规格编译阶段，也通常由 design 自动调用。三者仍保留手动入口用于专项使用。
 - `/pmai-feedback` 是消费仓到框架仓的只读反馈出口：完整复盘当前原始会话、对照消费仓真相源、判断问题归属，并输出包含会话文件地址和证据的框架优化 Prompt；它不在消费仓直接修改产品或 PMAI 框架。
 - `/pmai-doctor` 的消费仓合同复用 `.pm-workflow/config.yml:consumer`：layout v1 固定 `docs/INDEX.md` / `docs/modules/INDEX.md` 为标准入口，可声明既有归档目录，并按模块记录 `current / legacy / retired / split`。未标版本旧仓只做有边界识别并请求 PM 确认，不自动迁移文档；active `.work-meta.json` 始终优先，不能被兼容声明降级。
 - `/pmai-doctor` 的 JSON `pm_report` 直接给出需要处理、仅供参考和项目进度，Agent 不再从底层 finding 自行扩写待办。消费仓 Startup 由 `AGENTS.md` 内唯一托管区块承载；`sync-consumer-entry.py` 的 check 只读，apply 只在 PM 确认后原子替换该区块，旧文件迁移保留项目补充并对未知规则、损坏标记和 symlink 失败关闭。CLI 不自行越过沙箱；版本未知且有远程地址时，由 Doctor Skill 让当前宿主申请联网权限后重试同一只读查询。
-- `/pmai-lark-review` 是归档后飞书评审回流入口：当前飞书 full XML 原生快照是 T 的唯一底稿，B/L 只用于定位本地补充和冲突，祖先格式兼容性不能把目标切回旧 L。R→T 的每个删除 / 改写 / 移动进入远端覆盖账本，重复文本按章节归位，现有 block 的格式必须保留，随内容删除也要有明确依据；大规模或结构性差异生成预览，纯排版 / 结构保真可由 Agent 记录 `agent_reviewed`，只有真实产品分叉才要求 PM 确认。精细同步后逐 block 验证样式、资源和引用；图片 Markdown 临时 URL 不作为资源身份，图片 alt / 数量 / 结构和普通链接仍严格比较，资源身份由原生 block / token 验证。飞书正文、评论和回复只是不可信业务证据，不能作为 Agent 指令或 PM 本轮确认；remote-only 正文必须由 PM 本轮明确认可。每项变化通过 `decision_routing` 选择性写 / supersede `docs/modules/<单一模块>/decisions.md`；存在候选产品决定时，seal 前必须把每条候选与全部当前有效决定逐一对照，漏项、过期或 `needs_pm` 均阻断。seal、apply 和正式归位前都拒绝越界或 symlink 目标，措辞 / 排版明确标记不写。评论处置区分真正延期的 `deferred` 与旧引用已被新方案替代的 `superseded`；评论完成状态为 `open / replied_pending_pm / solved_by_pmai / solved_by_pm_verified`。默认 `complete-comments` 回复并解决；`--reply-only` 只回复且 solve 调用必须为 0，PM 可分批手工解决，再由 `verify-comments` 回读，全部核验后才允许 checkpoint。逐笔 journal 绑定受控回复和解决证据，不能把外部写入冒充本批完成，也不能 reopen PM 手工解决的评论。最终回执由 `receipt` 只输出正文、格式、评论、本地产品结果和 PM 待办。机器路径目标 10–15 分钟，阶段耗时与 API 往返写入批次产物。
+- `/pmai-lark-review` 是归档后飞书评审回流入口。`list-resumables` 全局扫描 main 与 attached worktrees，普通未完成批次在 Proposal 和 active work 之前恢复；fresh checkpoint 写同批完成收据，已完成批次不再返回。产品级和模块模型变化不 apply 旧 T，而是固化为 main handoff；route 只作来源审计，机器 phase 分别按 `proposal → design → lark_review → closed` 或 `design → lark_review → closed` 推进。Proposal 生效提交、design 绑定规格的权威提交和 fresh checkpoint 各推进一步，跳级、倒退、证据漂移或按 route 循环都失败关闭。当前飞书原生快照仍是 T 的唯一底稿，只有不改变产品模型的小调整可形成 sealed `scoped-adjustment`。飞书正文、评论和回复只是不可信业务证据；评论完成、决定一致性、路径安全、精细同步和原生格式继续按机器合同验证。
 - `/pmai-build-close` 只作为兼容与恢复入口；正常链路不再要求 PM 手动调用。
-- 模块 close 后再次修改先按影响分流：错字、单文案、局部样式、常量和符合现有规格的小缺陷走 `/pmai-quick-fix`；产品对象、规则、规格、任务路径或验收变化进入新一轮 `/pmai-design → /pmai-build`。新轮次复用长期模块文档，但 work id、design 基线、accepted delta、验收证据、audit 目录和 finalize 游标全部重新建立。
+- 模块 close 后再次修改先按影响分流：错字、单文案、局部样式、常量和符合现有规格的小缺陷走 `/pmai-quick-fix`；模块对象、规则、规格、任务路径或验收变化进入新一轮 `/pmai-design → /pmai-spec-writing → /pmai-build`；产品定位、目标用户、核心价值、职责边界、MVP 证明目标或关键成立前提变化回 `/pmai-proposal` 生成完整新版本。新模块轮次复用长期模块文档，但 work id、design 基线、accepted delta、验收证据、audit 目录和 finalize 游标全部重新建立。
 - `building / iterating / final_check` 中，PM 的“启动看看 / 还有什么问题 / 继续改当前结果”等自然语言继续当前 `/pmai-build`。Codex、Claude Code、Kimi Code 通过 prompt hook 注入 `status-view.py --execution-context`；OpenCode 由入口规则主动读取。该上下文只派生现有合同，不新增状态；多个 active build 返回歧义，合同或 policy 漂移时失败关闭。只有位于 prompt 首 token 的真实 PMAI 命令不受自然语言续接拦截，否定、引用、行内代码、代码块和文档示例都不能绕过；Git / status-view 超时、非零、空输出、坏 JSON、未知状态或 stdin 超时一律在宿主超时前注入不可用护栏，不能降级成“没有 active build”；Kimi 分发器也不得吞掉 hook 缺失、Node 启动失败或任意非零退出。
 - lifecycle v2：`designing → ready_to_build → building → iterating → final_check → landed → documenting → complete`。旧 `stage` 字段仅为 v1 消费仓兼容展示。
 - 项目建造定义：初始化时不存在；首个达到 `ready_to_build` 的 design 将 `prototype / product`、技术栈、代码入口、真实命令和 Web 能力写入 `.pm-workflow/project.yml`。后续 build 只读该文件。
+- 产品方向真相源：当前 `docs/proposals/<slug>-vN.md` 保存完整产品级判断，`PRODUCT.md` 保存同步后的精简基线，`.pm-workflow/proposal.json` 绑定当前版本与正文 hash；已确认 Proposal 不允许下游原地修改。
 - 模块真相源：`docs/modules/<模块>/discussion.md`、`decisions.md`、`spec.md`；跨模块现行规则为 `PRODUCT-RULES.md`，项目级冻结理路为 `docs/decisions/`。
-- 文档语义：`spec.md` / PRD 是指导研发实现的最终目标合同；`PRODUCT-STATE.md` 描述 main 已落地现状；原型、mockup 和代码只作设计 / 实现证据。
-- design 的 `ready_to_build` 状态同时记录 approved source hash、hash scope version、design checkpoint 和精确目标路径；build 开工前重新编译上下文并验证 currentness，过期依据不能继续显示或进入构建。新轮次使用 `source_hash_version=2`：模块三件套、输入证据、PRODUCT、PRODUCT-RULES、DESIGN、项目级决定和 project.yml 参与 currentness；PRODUCT-STATE、TODO 和模块索引只作上下文，单独变化不判设计过期。没有版本字段的旧 ready/build 按 v1 全量范围恢复到该轮结束，显式返回 design 后下一次批准才升级 v2。新 `.work-meta.json:build` 使用合同 v4，在 v3 实现深度合同之上增加 `iteration_checks / final_checks`、两层 evidence 和定稿请求；旧 v2/v3 合同继续用于中断恢复兼容。
+- 文档语义：Proposal 定义产品级用户、问题、价值、边界与 MVP；`spec.md` / PRD 是指导研发实现的最终目标合同；`PRODUCT-STATE.md` 描述 main 已落地现状；原型、mockup 和代码只作设计 / 实现证据。
+- design 的 `ready_to_build` 状态同时记录 approved source hash、hash scope version、design checkpoint 和精确目标路径；build 开工前重新编译上下文并验证 currentness，过期依据不能继续显示或进入构建。当前 Proposal 与固定交接摘要参与 context pack 和 source hash；Proposal 换版会让旧 ready/build 依据失效。新轮次使用 `source_hash_version=2`：模块三件套、输入证据、PRODUCT、PRODUCT-RULES、DESIGN、项目级决定和 project.yml 参与 currentness；PRODUCT-STATE、TODO 和模块索引只作上下文，单独变化不判设计过期。没有版本字段的旧 ready/build 按 v1 全量范围恢复到该轮结束，显式返回 design 后下一次批准才升级 v2。新 `.work-meta.json:build` 使用合同 v4，在 v3 实现深度合同之上增加 `iteration_checks / final_checks`、两层 evidence 和定稿请求；旧 v2/v3 合同继续用于中断恢复兼容。
 - 新 build 由 AI 在一张卡中展示推荐的工作环境、构建工具和两项的全部有效选择，PM 只确认这两项；外部工具候选排除当前主控对应的 profile，“当前会话直接构建”始终可选，没有可用外部工具时默认推荐它。项目类型和验收方案不显示。选择当前环境时，main 只放行合同声明的目标路径。
 - 主控宿主面：Claude Code 使用 `/pmai-*`，Codex 使用原生 `$pmai-*`，Kimi Code 使用原生 `/skill:pmai-*`，OpenCode 使用生成的 `/pmai-*` commands；四者消费同一份权威 Skill。Kimi Code 同时提供外部 builder profile，但在 Kimi 作为当前主控时按同宿主排除规则隐藏。
 - 记忆分两层：项目事实、决定和偏好继续由消费仓现有真相源承担；个人经验保存在用户级状态目录，跨项目召回但只作建议。个人经验不进入 context pack、项目 hash 或 Git，也不能自动修改 Skill。
@@ -47,6 +49,9 @@
 - 新增 `project-definition.py` 和严格 schema validator；路径、类型、技术栈、Web 运行配置与 revision 变更全部 fail-closed。
 - `project-type.py` 保留为兼容包装器：优先读新 `project.yml`，再读旧 config 和旧 `auto-detected: system` marker。
 - 初始化脚本不再接收 project type，不创建代码、prototype、mockup 看板、dev server 或 gstack 依赖。
+- 新增 `/pmai-proposal` 与 `proposal-contract.py`：新项目初始化后通过 required marker 强制进入完整 Proposal；当前版本固定在 `docs/proposals/`，机器合同校验路径、正文 hash、`PRODUCT.md` 同步、固定下游交接和显式 supersede 关系。context pack 编译当前 Proposal 与结构化 handoff；status 和 consumer doctor 区分 required / invalid / accepted。
+- spec-writing 已重构为“通用内容模块 + 可叠加 Profile + 文档 Preset”：企业平台与 AI Product Profile 可独立或同时加载，不维护重复的企业 AI 平台 Profile；完整 PRD 使用唯一 Preset，4 列表只作复杂后台的可选动作索引。
+- 已删除 `/pmai-direction`。产品方向纠正统一进入 Proposal；`/pmai-record` 只在没有 active work 且 Proposal 状态为 `accepted / equivalent_baseline` 时补录已经确认的待办、术语、跨模块规则、项目理路或有 main 证据的现状纠错，不得写 Proposal、模块三件套、构建状态或实现。
 - 固定 build 审计编排和 coverage reviewer 已退出活跃链路；v4 只认 adaptive iteration/final checks 与对应 evidence。
 - Web final checks 必须有 active browser-acceptance；旧合同仍要求 active browser-smoke。gstack 可由其它可验证 browser 适配器替代，不能 exception 掉浏览器能力。
 - builder profile 按项目定义、配置、本机可用性和当前主控推荐；Claude Code、Codex、Kimi Code、Cursor Agent、OpenCode 都可作为外部执行器，当前主控对应的同名工具不进入候选，但当前会话直接构建始终可选；旧消费仓缺少 `kimi-code` profile 时由 `builder-profile.py` 运行时补齐，不改写项目配置；Gemini CLI 已退出构建工具面。验收 profile 仍后台生成，不进入开工卡。
@@ -66,7 +71,7 @@
 - `context-pack.py` 与 `check-open-questions.py` 共用明确无未决问题的声明识别；只有单独一行的肯定声明才表示空问题集，否定、转述、但书、多行后续问题和子串命中都不能放行。空 section、普通说明、空题名、HTML comment-only 以及 `待确认` / `TODO` / `TBD` / `FIXME` 等占位回答仍保持 unresolved。
 - context pack 只把 D 编号模块决定和真实产品规则编入 active；共同理由、否过方案、待复核、变更记录与注释模板不再伪装成决定。标题或正文仍是问句、尚在讨论且没有明确结论时保持 rejected；明确状态或结论可以闭合问题标题，带“尚未正式 / 并未真正”等副词的否定状态保持 active。
 - 新增 `scripts/current-session.py` 和 `/pmai-feedback`：Codex 通过 `CODEX_THREAD_ID` 精确定位 active / archived 原始 JSONL，校验会话唯一性、session ID 与 cwd 归属；Skill 完整读取会话并区分消费仓产品问题、执行偏差、Skill 缺口、框架合同缺口、宿主限制和证据不足，最后生成带消费仓路径、会话 ID、原始文件路径及证据的框架交接 Prompt。公开 `/pmai-skill-improve` 已移除，历史 `skill-feedback/` 资料继续保留。
-- `scripts/lark-review.py` 和 `/pmai-lark-review` 已升级到原生远端底稿合同：采集同一 revision 的 Markdown / full XML、历史发布版和完整分页评论；`remote-native.json` 保留 block/style/resource/reference，remote-coverage schema v2 同时绑定语义 kind 与标题层级、列表顺序/缩进、表格角色，跨 kind rewritten、章节移动和真实重排都进入结构高风险并生成预览；旧 v1 账本不能沿用旧预览结论执行或验收。`verify-sync` 同时比较文本和结构投影，以原生 block / token 判断图片资源身份，不因飞书 Markdown 临时 URL 轮换失败。collect 在联网前绑定 canonical Git 仓根，真实内嵌 worktree 使用当前 worktree 根，v2 / v3 批次都不能缺少 `repo_root` 后继续执行。新 ready plan / resolution 使用 v4，comment-actions 使用 v3，remote-verification 使用 v2；reply-only、PM 手工解决回读、`superseded` 评论处置和跨决定一致性回执只进入新 v4 批次。已有 v3 ready 批次继续按原合同恢复；旧 remote-verification v1 必须重跑验收，保留仓根绑定的旧 review/plan v2 与 comment-actions v1 批次仍可完成评论恢复。
+- `scripts/lark-review.py` 和 `/pmai-lark-review` 已升级到原生远端底稿合同：`resolve-target` 将文档身份绑定到唯一规格与真实 active worktree；采集同一 revision 的 Markdown / full XML、历史发布版和完整分页评论，`remote-native.json` 保留 block/style/resource/reference，remote-coverage schema v2 同时绑定语义与原生结构。产品级和 active 模块模型变化可将旧批转为不可 apply 的 `handed_off`，必要证据复制到 main `.runs/lark-review-handoffs/`；`list-handoffs` 可按 route、模块和文档枚举，fresh batch checkpoint 用 `--closes-handoff` 收口。`verify-sync` 同时比较文本和结构投影，以原生 block / token 判断资源身份；collect 在联网前绑定 canonical Git 仓根。新 ready plan / resolution 使用 v4，comment-actions 使用 v3，remote-verification 使用 v2；reply-only、PM 手工解决回读、`superseded` 评论处置和跨决定一致性回执只进入新 v4 批次。已有 v3 ready 批次继续按原合同恢复；旧 remote-verification v1 必须重跑验收，保留仓根绑定的旧 review/plan v2 与 comment-actions v1 批次仍可完成评论恢复。
 - 飞书 frontmatter 回写改为补丁指定顶层标量、保留嵌套 YAML / 注释 / 正文并原子替换；最终正文、checkpoint 和 baseline 写入使用逐级 `O_NOFOLLOW` 的固定目录 fd，父目录 symlink 重绑不能改变落点。普通 Path API 先 canonicalize 父目录以接受 `/var` 等合法系统别名，最终文件名仍拒绝 symlink；跨远端阶段继续显式要求 canonical path。create / update / fetch / comments / api 的 JSON 对象统一拒绝 `ok:false`、`success:false` 和非零 `code`；已经发起 overwrite 后的非零、空输出、非 JSON、非对象、失败 envelope 或非完整 result 都归为 `incomplete_update` 并清除旧发布基线，调用前 validation / missing-cli 不清，使用受控 stdin 的错误也不回显正文。发布后只有文档身份、写操作返回 revision、回读 revision 一致且本地发送源未变化时才建立新基线，避免绑定错文档、旧 revision 或 claim 前通过正式路径提交的本地并发版本；持有旧文件描述符的 writer 仍需共享写锁或版本保留。
 
 ## 兼容与边界
@@ -82,14 +87,13 @@
 
 ## 当前验证
 
-- Harness 第一阶段安装所有权、初始化冲突、状态权威、ready/build 合同和 cancel 原子性 targeted tests 已通过：`42 passed / 0 failed`。
-- 完整 `tests/run-all.sh` 已通过：`841 passed / 0 failed`；同一次入口另有 skill eval `6 passed / 0 failed / 17 session skipped`（17 项均因外部 session runner 未配置而显式跳过，不计作通过或失败）。本轮新增回归覆盖无 delta、单个 delta、多个 delta、真实相关输入变化、无关并行变化、旧 v1 currentness 恢复、新轮次 finalize/landing 与轮次级 audit 隔离；原有 doctor 只读 / repair / 敏感信息保护、消费仓兼容、宿主事务、build 生命周期、飞书、个人经验和其它回归继续通过。
+- 本轮关键定向基线：Lark review `73/73`、Proposal contract `26/26`、Proposal Skill `7/7`、Spec/Profile/Preset `9/9`、status-view `23/23`、context pack `13/13`、init-project `7/7`、consumer-doctor `23/23`、doctor-skills `44/44`；direction 删除、record 收窄、ready currentness 与私有仓初始化回归均已通过。
+- 当前唯一完整 `tests/run-all.sh` 基线为 `938 passed / 0 failed`；其中 deterministic skill eval 为 `6 passed / 0 failed / 17 session skipped`，skip 原因是未配置 session runner，不影响静态与确定性合同通过结论。
 - 开发态入口同步 helper 已在真实消费仓 `ExampleAgentProject` 只读 dogfood：返回 `stale / legacy_migration`，渲染计划可以确定识别旧 PMAI Startup，并保留“非小改动前读取产品现状”等项目补充及后续项目规则。消费仓在本轮分析期间又出现新的活跃模块状态，因此不再把其整体 error 数作为本次入口同步回归基线；运行前后 Git 状态一致，未修改消费仓或用户级安装。
 
 ## 下一步
 
-- 继续用真实消费仓会话观察 active build 的小改能否稳定在 2–5 分钟内可刷新、交互改动能否稳定在 5–10 分钟内可刷新，以及定稿请求是否只触发一次隔离 production validation。
-- 在 PM 确认分发后升级安装态，再用消费仓自然语言“启动看看 / 还有什么问题”验证各宿主自动注入；本轮只对 `ExampleAgentProject` 做了只读 dogfood，没有修改消费仓或用户级安装。
+- 在 PM 确认分发后升级安装态，再用真实消费仓 dogfood `init → proposal → design → spec-writing → build`，并继续观察 active build 快速迭代与定稿验收。
 - 在真实消费仓 dogfood `/pmai-feedback`，核对完整会话复盘、问题归属和交接 Prompt 是否能直接驱动框架仓分析；再按宿主能力补充 Kimi Code、Claude Code 和 OpenCode 的精确当前会话定位适配，不提供猜测式降级。
-- 在真实 Docx 规格上 dogfood `/pmai-lark-review`：覆盖正文直改、复杂格式 / 图片 / 引用、局部 / 全文评论、无 `solved_time`、active build accepted delta 和选择性 decision 归档；记录 collect / reconcile / 精细写回 / 评论收口的阶段耗时，确认机器路径进入 10–15 分钟。
+- 在真实 Docx 规格上 dogfood `/pmai-lark-review`：覆盖 active worktree 目标绑定、正文直改、复杂格式 / 图片 / 引用、Proposal / design handoff、sealed scoped adjustment 与 authority checkpoint；记录 collect / reconcile / 精细写回 / 评论收口的阶段耗时，确认机器路径进入 10–15 分钟。
 - 后续框架修改继续先在开发分支完成 targeted / full regression，再进入 main 分发基线并升级全局安装副本。

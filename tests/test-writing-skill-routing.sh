@@ -14,6 +14,7 @@ SPEC_TMPL="$REPO_ROOT/skills/spec-writing/templates/prd.md.tmpl"
 SPEC_RULES="$REPO_ROOT/skills/spec-writing/references/writing-rules.md"
 SPEC_FEWSHOTS="$REPO_ROOT/skills/spec-writing/references/few-shots.md"
 PMVIEW="$REPO_ROOT/skills/_shared/PM-VIEW-RULES.md"
+PMVIEW_WRITING="$REPO_ROOT/skills/_shared/pm-view/writing-rules.md"
 PMVIEW_CHECKLIST="$REPO_ROOT/skills/_shared/pm-view/checklist.md"
 CHECK_PRD="$REPO_ROOT/scripts/check-prd-hierarchy.py"
 DOC="$REPO_ROOT/skills/doc-writing/SKILL.md"
@@ -70,7 +71,7 @@ test_canonical_assets_are_linked() {
   start_test "writing routes: canonical rules, examples, templates, and playbook are linked"
   local asset
 
-  for asset in "$SPEC_TMPL" "$SPEC_RULES" "$SPEC_FEWSHOTS" "$PMVIEW" \
+  for asset in "$SPEC_TMPL" "$SPEC_RULES" "$SPEC_FEWSHOTS" "$PMVIEW" "$PMVIEW_WRITING" \
     "$PMVIEW_CHECKLIST" "$DOC_REF" "$HUMANIZE_PATTERNS"; do
     assert_file_exists "$asset" "missing writing asset: $asset" || return
     if [ ! -s "$asset" ]; then
@@ -78,7 +79,9 @@ test_canonical_assets_are_linked() {
       return
     fi
   done
-  assert_route "$SPEC" "references/writing-rules.md" "spec-writing must link its canonical writing rules" || return
+  assert_route "$SPEC" "_shared/pm-view/writing-rules.md" "spec-writing must link the shared PM writing rules" || return
+  assert_route "$SPEC" "references/writing-rules.md" "spec-writing must link its specification-specific checks" || return
+  assert_route "$SPEC_RULES" "../../_shared/pm-view/writing-rules.md" "specification-specific checks must defer common style to the shared rules" || return
   assert_route "$SPEC" "references/few-shots.md" "spec-writing must link its canonical examples" || return
   assert_route "$DOC" "references/product-direction.md" "doc-writing must link its product-direction playbook" || return
   pass_test

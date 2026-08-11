@@ -8,8 +8,17 @@
 - **I-INIT2**：初始化不得询问或写入 `prototype / product`，不得决定技术栈和框架。
 - **I-INIT3**：初始化不得创建 `.pm-workflow/project.yml`、代码、`prototype/`、mockup 看板、dev server 或端口配置。
 - **I-INIT4**：gstack/browser 不是初始化依赖；缺失不能阻塞项目建立。
-- **I-INIT5**：初始化完成后的正常入口只有 `/pmai-design`。
-- **I-INIT6**：`--allow-existing` 只接住无同名目标的资料目录；任何模板或配置冲突必须在首次写入前停止。
+- **I-INIT5**：全新项目初始化完成后的唯一下一步是 `/pmai-proposal`；不得在 Proposal 完成前创建模块工作。
+- **I-INIT6**：`--allow-existing` 只接住无同名目标的资料目录；任何模板或配置冲突必须在首次写入前停止。骨架完成后必须继续核验接入前资料，不能由脚本提前宣布 Proposal 或 design。
+
+## I-PROP：产品方向基线
+
+- **I-PROP1**：正常主链是 `init → proposal → design → spec-writing → build`；spec-writing 可由 design 自动调用，但不得省略规格编译。
+- **I-PROP2**：新项目默认必须完成 Proposal；成熟项目只有在定位、用户、核心问题与价值、产品边界、MVP / 当前产品结果都完整，且 `PRODUCT.md` 显式记录至少一个真实仓内依据路径和 PM 确认日期、`PRODUCT.md` 与全部依据均已提交且无漂移、机器状态为 `equivalent_baseline` 时，才可跳过。
+- **I-PROP3**：一旦进入 Proposal，必须产出可独立评审的完整版本，不得以 brief、摘要、大纲或普通介绍稿代替。
+- **I-PROP4**：已确认 Proposal 正文及 `PRODUCT.md` 的当前版本、定位、核心问题与价值、用户、边界和 MVP 基线不可独立漂移；产品方向变化必须新建完整版本并显式 supersede 当前版本，正文 hash、产品基线 hash、版本关系与机器合同原子同步。术语等非产品基线章节仍可由其 owner 正常更新。
+- **I-PROP5**：design、spec-writing、build、doc-writing 和 record 只读消费 Proposal；产品定位、目标用户、核心价值、职责边界、MVP 证明目标或关键成立前提变化时必须回 Proposal。
+- **I-PROP6**：当前 Proposal 及其交接摘要参与下游 currentness；Proposal 变化后，旧 design/build 依据不得继续有效。
 
 ## I-PD：项目建造定义
 
@@ -82,7 +91,8 @@
 - **I-DOC1**：`PRODUCT-RULES.md` 只保存跨模块当前有效的产品行为规则。
 - **I-DOC2**：单模块决定进入模块 `decisions.md`；奠基理路进入 `docs/decisions/`。
 - **I-DOC3**：`PRODUCT-STATE.md` 只保存当前产品事实，不兼职历史索引。
-- **I-DOC4**：自动 finalize 与 `/pmai-record` 共用六类归位模型，不得维护平行分类。
+- **I-DOC4**：`/pmai-record` 只在 `ACTIVE_WORK_COUNT=0` 时补录已经确认的待办、术语、跨模块规则、项目级理路或有 main 证据的现状纠错；不得写模块三件套、Proposal、构建状态或实现。
+- **I-DOC5**：spec-writing 的内容由通用模块与可叠加 Profile 组成，文档形态由 Preset 决定；企业平台与 AI Profile 可以叠加，完整 PRD Preset 不构成第二套产品真相源。
 
 ## I-TEST：验证可信度
 

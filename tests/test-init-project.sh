@@ -34,23 +34,36 @@ test_context_only_e2e_without_gstack() {
     return
   fi
 
-  for file in PRODUCT.md PRODUCT-STATE.md DESIGN.md PRODUCT-RULES.md TODO.md AGENTS.md CLAUDE.md .pm-workflow/config.yml; do
+  for file in PRODUCT.md PRODUCT-STATE.md DESIGN.md PRODUCT-RULES.md TODO.md AGENTS.md CLAUDE.md .pm-workflow/config.yml docs/proposals/INDEX.md; do
     [ -f "$proj/$file" ] || leaked="$leaked missing:$file"
   done
-  for path in .pm-workflow/project.yml prototype mockups .dev-port .pm-workflow/audits; do
+  for path in .pm-workflow/project.yml .pm-workflow/intake-manifest.json prototype mockups .dev-port .pm-workflow/audits; do
     [ ! -e "$proj/$path" ] || leaked="$leaked unexpected:$path"
   done
   if grep -qE '^project:|dev_server:|screenshot_tool:' "$proj/.pm-workflow/config.yml"; then
     leaked="$leaked config-has-project-or-stack-defaults"
   fi
-  if ! grep -q '/pmai-design' "$output"; then
-    leaked="$leaked missing-design-next-up"
+  if ! grep -q '/pmai-proposal' "$output"; then
+    leaked="$leaked missing-proposal-next-up"
+  fi
+  if grep -q 'Next Up:.*pmai-design' "$output"; then
+    leaked="$leaked stale-design-next-up"
+  fi
+  if ! grep -q 'PMAI_PROPOSAL_REQUIRED' "$proj/PRODUCT.md"; then
+    leaked="$leaked missing-proposal-required-marker"
   fi
   if grep -qE 'Next Up.*(mockup|build)|直接.*prototype' "$output"; then
     leaked="$leaked stale-next-up-menu"
   fi
   if [ -d "$proj/.claude/skills" ] || [ -d "$proj/scripts" ] || [ -d "$proj/skills" ]; then
     leaked="$leaked framework-source-assets"
+  fi
+  if python3 "$REPO_ROOT/scripts/proposal-contract.py" \
+    capture-intake "$proj" >/dev/null 2>&1; then
+    leaked="$leaked post-pmai-capture-was-allowed"
+  fi
+  if [ -e "$proj/.pm-workflow/intake-manifest.json" ]; then
+    leaked="$leaked post-pmai-manifest-created"
   fi
 
   rm -rf "$base"
@@ -97,14 +110,18 @@ test_special_chars_in_background() {
 
 test_allow_existing_rejects_template_conflicts_before_writing() {
   start_test "init-project: --allow-existing preserves conflicting source material"
-  local base proj out rc original
+  local base proj out rc original state_original
   base=$(mktemp -d)
   proj="$base/existing-materials"
   mkdir -p "$proj"
   original="# Existing product notes
 
 Do not overwrite this file."
+  state_original="# Existing product state
+
+This is a generic brownfield project document."
   printf '%s\n' "$original" > "$proj/PRODUCT.md"
+  printf '%s\n' "$state_original" > "$proj/PRODUCT-STATE.md"
 
   out=$(PMAI_HOME="$REPO_ROOT" bash "$INIT_PROJECT_SH" \
     "test-proj" "$proj" "资料目录接入" --allow-existing 2>&1)
@@ -112,14 +129,79 @@ Do not overwrite this file."
 
   if [ "$rc" = "0" ]; then
     _fail "conflicting PRODUCT.md should block initialization"
-  elif [ "$(cat "$proj/PRODUCT.md")" != "$original" ]; then
-    _fail "existing PRODUCT.md was modified"
+  elif [ "$(cat "$proj/PRODUCT.md")" != "$original" ] \
+    || [ "$(cat "$proj/PRODUCT-STATE.md")" != "$state_original" ]; then
+    _fail "existing product documents were modified"
   elif [ -e "$proj/AGENTS.md" ] || [ -e "$proj/.pm-workflow/config.yml" ]; then
     _fail "initialization wrote files before reporting conflicts"
-  elif ! echo "$out" | grep -q "PRODUCT.md"; then
-    _fail "conflict output should identify PRODUCT.md: $out"
+  elif ! echo "$out" | grep -q "现有资料与 PMAI 初始化目标同名" \
+    || ! echo "$out" | grep -q "PRODUCT.md" \
+    || ! echo "$out" | grep -q "PRODUCT-STATE.md"; then
+    _fail "generic same-name files should be reported as source conflicts: $out"
   else
     pass_test
+  fi
+  rm -rf "$base"
+}
+
+test_allow_existing_writes_pre_pmai_manifest_in_initial_commit() {
+  start_test "init-project: --allow-existing fixes source paths and hashes before PMAI writes"
+  local base proj output
+  base=$(mktemp -d)
+  proj="$base/existing-materials"
+  output="$base/init.out"
+  mkdir -p "$proj/research" "$proj/node_modules/pkg" "$proj/.cache" "$proj/dist"
+  printf '# Existing brief\n\nConfirmed product context.\n' > "$proj/research/brief.md"
+  printf 'dependency\n' > "$proj/node_modules/pkg/index.js"
+  printf 'cache\n' > "$proj/.cache/result.bin"
+  printf 'bundle\n' > "$proj/dist/app.js"
+
+  if ! PMAI_HOME="$REPO_ROOT" bash "$INIT_PROJECT_SH" \
+    "test-proj" "$proj" "资料目录接入" --allow-existing >"$output" 2>&1; then
+    _fail "allow-existing initialization failed"
+    tail -30 "$output" >&2
+    rm -rf "$base"
+    return
+  fi
+  if python3 "$REPO_ROOT/scripts/proposal-contract.py" \
+    capture-intake "$proj" >/dev/null 2>&1; then
+    _fail "intake manifest must not be recaptured after PMAI initialization"
+    rm -rf "$base"
+    return
+  fi
+  if python3 - "$proj" <<'PY'
+import hashlib
+import json
+import subprocess
+import sys
+from pathlib import Path
+
+root = Path(sys.argv[1])
+manifest_path = root / ".pm-workflow/intake-manifest.json"
+manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+assert manifest["schema_version"] == 1
+assert manifest["files"] == [{
+    "path": "research/brief.md",
+    "sha256": hashlib.sha256((root / "research/brief.md").read_bytes()).hexdigest(),
+}]
+tracked = subprocess.run(
+    ["git", "-C", str(root), "ls-files", "--error-unmatch", ".pm-workflow/intake-manifest.json"],
+    check=False,
+    capture_output=True,
+    text=True,
+)
+assert tracked.returncode == 0
+assert not subprocess.run(
+    ["git", "-C", str(root), "status", "--porcelain=v1", "--", ".pm-workflow/intake-manifest.json"],
+    check=False,
+    capture_output=True,
+    text=True,
+).stdout
+PY
+  then
+    pass_test
+  else
+    _fail "intake manifest did not preserve the bounded pre-PMAI file set"
   fi
   rm -rf "$base"
 }
@@ -164,6 +246,7 @@ test_context_only_e2e_without_gstack
 test_legacy_fourth_type_fails_with_migration
 test_special_chars_in_background
 test_allow_existing_rejects_template_conflicts_before_writing
+test_allow_existing_writes_pre_pmai_manifest_in_initial_commit
 test_missing_git_identity_fails_before_writing
 
 report_results "init-project"

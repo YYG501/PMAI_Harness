@@ -1,0 +1,4 @@
+interface:
+  display_name: "Product Proposal"
+  short_description: "澄清产品方向并形成完整 Product Proposal"
+  default_prompt: "使用 $pmai-proposal 澄清产品方向，并生成一份完整、可评审的 Product Proposal。"

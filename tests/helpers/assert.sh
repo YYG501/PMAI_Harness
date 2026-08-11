@@ -7,6 +7,79 @@ FAILURES=()
 
 _current_test=""
 
+write_equivalent_product_baseline() {
+  local repo_root="$1"
+  mkdir -p "$repo_root/docs" "$repo_root/.pm-workflow"
+  cat > "$repo_root/docs/existing-product-baseline.md" <<'EOF'
+# Existing Product Baseline
+
+接入 PMAI 前已经确认的产品立项与范围依据。
+EOF
+  cat > "$repo_root/PRODUCT.md" <<'EOF'
+# Fixture Product
+
+## 当前 Product Proposal
+
+接入前已有等价产品基线。
+
+- 主要依据：`docs/existing-product-baseline.md`
+- PM 确认日期：2025-01-01
+
+## 产品定位
+
+帮助业务负责人基于可信信息完成关键判断。
+
+## 核心问题与价值
+
+减少人工查找遗漏，让负责人更快作出可验证的业务行动。
+
+## 用户画像
+
+| 角色 | 描述 | 关键诉求 |
+|---|---|---|
+| 业务负责人 | 对任务结果负责 | 获得完整依据并完成判断 |
+
+## 产品边界
+
+产品提供信息和建议，最终业务决定由负责人确认。
+
+## MVP Case
+
+负责人收到任务后核对依据、确认建议并提交结果。
+EOF
+  cat > "$repo_root/PRODUCT-STATE.md" <<'EOF'
+# Fixture Product State
+
+## 当前功能 / 能力
+
+| 功能 / 能力 | 状态 | 备注 |
+|---|---|---|
+| 核心任务闭环 | 已存在 | 测试等价产品基线 |
+EOF
+  python3 - "$repo_root" <<'PY'
+import hashlib
+import json
+import sys
+from pathlib import Path
+
+root = Path(sys.argv[1])
+relative = "docs/existing-product-baseline.md"
+payload = {
+    "schema_version": 1,
+    "files": [
+        {
+            "path": relative,
+            "sha256": hashlib.sha256((root / relative).read_bytes()).hexdigest(),
+        }
+    ],
+}
+(root / ".pm-workflow/intake-manifest.json").write_text(
+    json.dumps(payload, ensure_ascii=False, indent=2) + "\n",
+    encoding="utf-8",
+)
+PY
+}
+
 start_test() {
   _current_test="$1"
   echo "  RUN  $_current_test"

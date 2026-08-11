@@ -6,6 +6,7 @@ source "$SCRIPT_DIR/helpers/assert.sh"
 FRAMEWORK_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 CONTEXT_PACK="$FRAMEWORK_ROOT/scripts/context-pack.py"
 PROJECT_DEFINITION="$FRAMEWORK_ROOT/scripts/project-definition.py"
+PROPOSAL_CONTRACT="$FRAMEWORK_ROOT/scripts/proposal-contract.py"
 
 setup_fixture() {
   T=$(mktemp -d "${TMPDIR:-/tmp}/pmai-context-pack.XXXXXX")
@@ -13,8 +14,7 @@ setup_fixture() {
   git -C "$T" config user.email test@example.com
   git -C "$T" config user.name Test
   mkdir -p "$T/docs/modules/access" "$T/docs/decisions" "$T/prototype/src/pages"
-  echo '# 产品' > "$T/PRODUCT.md"
-  echo '# 现状' > "$T/PRODUCT-STATE.md"
+  write_equivalent_product_baseline "$T"
   cat > "$T/PRODUCT-RULES.md" <<'EOF'
 # 产品规则
 ## 规则清单
@@ -534,6 +534,186 @@ PY
   teardown_fixture
 }
 
+test_context_pack_compiles_verified_product_proposal() {
+  start_test "context-pack: verified Product Proposal and handoff enter design basis"
+  setup_fixture
+  local before_hash
+  before_hash=$(python3 "$CONTEXT_PACK" --repo-root "$T" --module access \
+    | python3 -c 'import json,sys; print(json.load(sys.stdin)["source_hash"])')
+  mkdir -p "$T/docs/proposals"
+  cat > "$T/docs/proposals/access-v1.md" <<'EOF'
+# Access Product Proposal
+
+> 版本：v1
+> Proposal ID：access-v1
+> 状态：当前
+> 日期：2026-08-10
+> 取代：无
+> 支持的决定：是否投入一次可验证的授权闭环
+> 证据截至：2026-08-10
+
+## 0. 决策摘要与产品主张
+
+让权限负责人基于证据完成授权判断。
+
+## 1. 产品成立的核心判断
+
+权限负责人需要在授权前获得完整且可追溯的依据。
+
+## 2. 用户、场景、问题与现状替代
+
+权限负责人当前依靠人工检索材料完成授权判断。
+
+## 3. 产品回答与职责边界
+
+产品聚合证据并给建议，最终授权仍由负责人确认。
+
+## 4. 必要能力与 AI 角色
+
+AI 分析非结构化材料，确定性系统负责权限门禁。
+
+## 5. 替代方案、竞争判断与产品机会
+
+现状替代是人工检索，机会在于减少遗漏且保持可追溯。
+
+## 6. 端到端产品体验与关键能力
+
+从收到申请到核对证据、确认建议并提交授权形成闭环。
+
+## 7. 产品价值、因果链与指标
+
+更完整的依据促成更可靠的授权行动和结果。
+
+## 8. MVP 范围、完整案例与决策门
+
+先验证一个授权案例，不能促成正确行动时停止扩大投入。
+
+## 9. 演进条件与长期方向
+
+只有主案例成立后才扩展更多权限场景。
+
+## 10. 下游交接摘要
+
+- **第一个 design 目标**：完成一次授权闭环
+- **主用户与触发时刻**：权限负责人收到授权申请时
+- **要闭合的核心任务**：判断并提交授权结果
+- **必须保持的产品回答**：先聚合证据再建议权限
+- **必须保持的产品边界**：最终授权由负责人确认
+- **MVP 必须证明**：建议促成正确授权行动
+- **仍待验证的假设**：负责人愿意查看证据
+- **design 需要收敛**：对象、动作、状态、权限和异常路径
+EOF
+  cat > "$T/PRODUCT.md" <<'EOF'
+# 产品
+
+## 当前 Product Proposal
+
+[access-v1](docs/proposals/access-v1.md)
+
+## 产品定位
+
+为权限负责人提供可追溯授权建议的产品。
+
+## 核心问题与价值
+
+减少人工检索遗漏，帮助负责人作出更可靠的授权行动。
+
+## 用户画像
+
+权限负责人，需要对授权结果负责。
+
+## 产品边界
+
+产品给出建议，最终授权由负责人确认。
+
+## MVP Case
+
+负责人收到申请后核对证据、确认建议并提交授权结果。
+EOF
+  cat > "$T/docs/proposals/INDEX.md" <<'EOF'
+# Product Proposal 索引
+
+| 文档 | 版本 | 状态 | 取代 | 决策日期 | 下游起点 |
+|---|---|---|---|---|---|
+| [`access-v1.md`](access-v1.md) | v1 | 当前 | 无 | 2026-08-10 | 授权闭环 |
+EOF
+  python3 "$PROPOSAL_CONTRACT" accept "$T" \
+    --proposal docs/proposals/access-v1.md --id access-v1 >/dev/null || {
+      _fail "proposal contract fixture should be accepted"
+      teardown_fixture
+      return
+    }
+  local pending pending_rc
+  pending=$(python3 "$CONTEXT_PACK" --repo-root "$T" --module access 2>&1)
+  pending_rc=$?
+  if [ "$pending_rc" = "0" ] \
+     || ! echo "$pending" | grep -Eq "未提交|尚未全部进入 Git"; then
+    _fail "uncommitted proposal should not enter context pack: rc=$pending_rc out=$pending"
+    teardown_fixture
+    return
+  fi
+  git -C "$T" add -- \
+    docs/proposals/access-v1.md docs/proposals/INDEX.md PRODUCT.md \
+    .pm-workflow/proposal.json
+  git -C "$T" commit -qm "docs: approve access proposal" || {
+    _fail "proposal fixture commit should succeed"
+    teardown_fixture
+    return
+  }
+  OUT="$T/context-proposal.json"
+  python3 "$CONTEXT_PACK" --repo-root "$T" --module access --output "$OUT" >/dev/null || {
+    _fail "context pack should compile accepted proposal"
+    teardown_fixture
+    return
+  }
+  if ! python3 - "$OUT" "$before_hash" <<'PY'
+import json, sys
+pack = json.load(open(sys.argv[1]))
+assert pack["source_hash"] != sys.argv[2]
+proposal = pack["product_proposal"]
+assert proposal["id"] == "access-v1"
+assert proposal["path"] == "docs/proposals/access-v1.md"
+assert proposal["handoff"]["first_design_goal"] == "完成一次授权闭环"
+assert proposal["handoff"]["product_boundary"] == "最终授权由负责人确认"
+roles = {(item["path"], item["role"]) for item in pack["sources"]}
+assert (".pm-workflow/proposal.json", "proposal_contract") in roles
+assert ("docs/proposals/access-v1.md", "product_proposal") in roles
+assert ".pm-workflow/proposal.json" in pack["source_hash_scope"]
+assert "docs/proposals/access-v1.md" in pack["source_hash_scope"]
+PY
+  then
+    _fail "accepted proposal metadata or handoff was not compiled"
+    teardown_fixture
+    return
+  fi
+
+  printf '\n未经确认的正文变化。\n' >> "$T/docs/proposals/access-v1.md"
+  local out rc
+  out=$(python3 "$CONTEXT_PACK" --repo-root "$T" --module access 2>&1)
+  rc=$?
+  if [ "$rc" != "0" ] && echo "$out" | grep -q "确认后发生正文漂移"; then
+    pass_test
+  else
+    _fail "proposal drift should invalidate the design basis: rc=$rc out=$out"
+  fi
+  teardown_fixture
+}
+
+test_context_pack_blocks_new_project_without_proposal() {
+  start_test "context-pack: newly initialized project cannot bypass required Proposal"
+  setup_fixture
+  printf '\n<!-- PMAI_PROPOSAL_REQUIRED -->\n' >> "$T/PRODUCT.md"
+  local out rc
+  out=$(python3 "$CONTEXT_PACK" --repo-root "$T" --module access 2>&1)
+  rc=$?
+  if [ "$rc" != "0" ] && echo "$out" | grep -q "/pmai-proposal"; then
+    pass_test
+  else
+    _fail "required Proposal should block design context compilation: rc=$rc out=$out"
+  fi
+  teardown_fixture
+}
+
 test_context_pack_compiles_authority_and_rejects_questions
 test_context_pack_hash_changes_with_authority_source
 test_context_pack_parallel_coordination_changes_do_not_expire_design
@@ -545,4 +725,6 @@ test_context_pack_reports_invalid_open_question_section
 test_context_pack_uses_shared_decision_status_semantics
 test_context_pack_lifecycle_state_does_not_drift_approved_source
 test_context_pack_includes_registered_input_evidence
+test_context_pack_compiles_verified_product_proposal
+test_context_pack_blocks_new_project_without_proposal
 report_results "context-pack"

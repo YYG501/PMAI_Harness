@@ -1,119 +1,146 @@
 ---
 name: pmai-record
 description: |
-  轻量记录：将 PM 在主线上完成、或 design 后暂不进入 build 的稳定结论，按共享六类模型归位至产品现状、规则、决定、待办、探索稿和术语，单独提交。
+  补录已确认的项目知识：仅在产品基线有效、主仓没有 active work 时，把 PM 已明确确认的待办、稳定术语、跨模块规则、项目级理路，或有 main 现存事实依据的现状纠错，写回既有真相源并单独提交。不用于产品方向重判、模块设计、进行中工作的同步或 Proposal 修改。
+  触发词：记一下 / 补录一下 / 这个已经定了，别丢 / 把这条待办、术语、规则或理路记进项目。
 ---
 
 # /pmai-record
 
+## 定位
+
+> **这是什么**：工作流之外的项目知识补录入口。它回答的是「这件事已经定了，帮我记住，后面别丢」。
+
+`record` 只负责把**已经确认**的知识放到后续会读取的真相源，不负责重新判断产品方向、补做模块设计、替实现流程收尾，或把讨论中的想法包装成现状。
+
+正常的 Proposal、design、quick-fix、build 都由各自流程保存和同步，不把 `/pmai-record` 作为固定下一步。
+
 ## 入口护栏
 
-执行本 skill 前先运行：
-
-```bash
-source "${PMAI_HOME:-$HOME/.pmai}/scripts/skill-preamble.sh"
-```
-
-如果输出 `PMAI_PROJECT_INITIALIZED: 0`，停止本 skill，只引导 PM 先发 `/pmai-init-project`。初始化或已有代码接入完成前，不要沉淀记录或更新项目文档。
-
-> **这是什么**：分档运行里**最轻那一档**（main 上的文档记录 / 聊定直落、设计讨论后暂不 build）的记录入口。让轻档产出也有一个地方归位，不再"飘着没进库 / 真相源乱 / 决策不进库 / mock 找不回"。
-> **和自动 finalize 的关系**：同一套六类归位模型（@读 `_shared/record-routing.md`），但完整 build 在落地主线后自动编译文档，本 skill 是 main 上或 design 后暂不 build 时的轻量同构（重量随产出缩放）。
-> **和 quick-fix 的关系**：quick-fix 管"在 main 上改一处"，本 skill 管"把改完的成果沉淀进底座"——两件事，可前后脚发生。
-
-## When To Use
-
-- PM 在 main 上聊定一个方向 / 顺手改了点东西（小到不值得起完整设计-build 流程），想把"产品现在变成什么样 / 为什么这么定 / 还差什么 / 探了哪些视觉"收一下。
-- PM 显式说「沉淀一下」「记一下」「归位」。
-- AI 在回 PM 的某一轮里识别到收敛点（聊定 / 改完）且真有耐久产出时，**主动提议**记录；PM 点头后走本流程。
-- **不适用**：要完整设计 / 建造 → `/pmai-design` / `/pmai-build`；只是在 main 改一处文件 → `/pmai-quick-fix`；已经在完整工作里推进 → 回原 `/pmai-build` 或用 `/pmai-status` 恢复。
-
-## Preamble
+先运行：
 
 ```bash
 source "${PMAI_HOME:-$HOME/.pmai}/scripts/skill-preamble.sh"
 echo "SKILL: record"
 ```
 
-本 skill 从**主仓 main** 触发（cwd 在主仓根、分支 = main）。若当前在隔离工作区内 → 告诉 PM「这轮仍在完整 build 里，回原 build 会话继续；迷路时发 /pmai-status」，退出。
+按以下顺序判断，任何一项不满足都停止，不落盘：
+
+1. preamble 输出 `PMAI_PROJECT_INITIALIZED: 0`：引导 PM 先发 `/pmai-init-project`。
+2. 在选择补录类型或目标文件前运行一次产品基线门：
+
+   ```bash
+   PROPOSAL_STATUS_JSON=$(python3 "$PMAI_HOME/scripts/proposal-contract.py" status "$REPO_ROOT")
+   PROPOSAL_STATE=$(python3 -c \
+     'import json,sys; print(json.load(sys.stdin)["state"])' \
+     <<<"$PROPOSAL_STATUS_JSON")
+   ```
+
+   - `accepted` / `equivalent_baseline`：继续 record；
+   - `required`：初始化后的唯一下一步仍是 `/pmai-proposal`，停止，不选落点、不写文件、不提交；
+   - `invalid`：当前 Proposal 或产品基线已漂移，停止，只返回 `/pmai-proposal` 生成完整新版本；record 不修合同；
+   - 其它未知结果：失败关闭，不猜测产品基线。
+
+3. `WORKTREE_TYPE != main`：当前仍在隔离工作中，先发 `/pmai-status` 回到原工作。
+4. `ACTIVE_WORK_COUNT != 0`：当前有进行中的模块工作，知识应由该工作的 design / build / finalize 收口；先发 `/pmai-status`，不得用 record 绕开原流程。
+5. 本次目标真相源缺失、路径异常或不符合当前文档布局：引导 `/pmai-doctor` 做只读诊断；未经 PM 确认不得由 record 重建底座。
+6. `git diff --cached --quiet` 不通过：已有 staged WIP，停止并说明冲突；不得提交、unstage、stash 或卷入已有暂存内容。
+
+## When To Use
+
+- PM 明确说「记一下」「补录一下」「这个已经定了，别丢」，当前产品基线有效，且内容不属于任何 active work。
+- 一次独立讨论已经明确形成稳定术语、跨模块规则或项目级理路，PM 要求写回项目上下文。
+- `TODO.md` 漏了 PM 已明确提出的后续事项。
+- `PRODUCT-STATE.md` 与 main 已经存在的事实不一致，需要按可核验事实纠错。
+
+以下情况不适用：
+
+| PM 的真实意图 | 去哪里 |
+|---|---|
+| 产品定位、目标用户、价值、边界或 MVP 需要新判断 / 重判 | `/pmai-proposal` |
+| 模块对象、动作、状态、权限、页面、异常路径或验收规则发生变化 | `/pmai-design` |
+| 只是查看当前进度或不知道原工作在哪 | `/pmai-status` |
+| 项目底座文件缺失或归位异常 | `/pmai-doctor` |
+| quick-fix / build / Proposal / design 正在执行或刚完成 | 回原流程，由原流程自行同步 |
+
+## 可写边界
+
+完整读取 `skills/_shared/record-routing.md` 的“`/pmai-record` 专用边界”，并以该节作为**允许内容、落点、证据和禁写范围的唯一正本**。本 skill 不再复制第二张落点表。
+
+从正本中只能选择一个或多个已明确允许的落点；无法唯一归类时停止并按其上游分流处理。无论如何都不得写 `docs/modules/**`、`docs/proposals/**`、mockup、工作流状态或实现文件。新增项目级理路时再完整读取 `_shared/decision-record.md`。
 
 ## Workflow
 
-### 步骤 1：识别沉淀什么（两道闸）
+### 步骤 1：固定这次要记住的原话
 
-从最近这段工作 / 讨论里，按共享六类模型盘一下有没有耐久产出。**两道判断都要过才提**：
+从 PM 的明确表达中提取一条或几条已确认结论，并为每条标出：
 
-- **闸①·收敛点**：只在「聊定了 / 改完了」这种收敛时刻沉淀，不逐条沉淀（PM 还在来回讨论时不打断）。
-- **闸②·有耐久产出**：只在真有新事实 / 新决策理路 / 新变体时沉淀；纯文字微调、还没定的方向、临时想法 → **不沉淀**。
+- 要记什么；
+- 为什么能确定它已经确认；
+- 对应哪个允许落点。
 
-两道闸有一道不过 → 不动，告诉 PM 一句「这次没有需要归位的耐久产出，继续就好」，退出（不空跑、不编）。
+只能从 PM 明确确认、既有有效决定或 main 可核验事实取材。讨论草稿、AI 建议、问句、未选择方案和未提交实现都不是已确认知识。
 
-> 判断准度做不到 100%（人在环，不追全自动）。AI 拿不准"算不算耐久产出"时，宁可问 PM 一句，不擅自沉淀也不擅自跳。
+如果内容仍需比较方向或补产品判断，停止 record，按上表转 `/pmai-proposal` 或 `/pmai-design`；不要在本 skill 内补做讨论。
 
-### 步骤 2：按六类归位（@读共享参考）
+### 步骤 2：核验现状和写入冲突
 
-**@读 `skills/_shared/record-routing.md`**，按六类把本次产出归位，**重量随产出缩放**——多数轻档只动 ①：
+读取相关真相源及 `git status --short`：
 
-| 类 | 这次有没有 | 落点 |
-|---|---|---|
-| ① 耐久事实（现状 / 规则 / 稳定结构）| 多数轻档有 | `PRODUCT-STATE.md`（+ 按需 `PRODUCT-RULES.md` / `docs/modules/`）|
-| ② 理路（为什么这么拼）| 真有跨文件整体意图才有 | `docs/decisions/<日期>-<slug>.md`（@读 `_shared/decision-record.md` 判门槛 + 写法）|
-| ③ 遗留（想做没做的）| 有就记 | `TODO.md` 加一条**自包含**（建议目标 + 涉及文件）|
-| ④ 探索变体（mock）| 这次探过视觉草图才有 | `mockups/manifest.json` 加一条 → 重生成看版 |
-| ⑤ 跨工作决定 | 后续模块需要继承的决定 | 按 ② 的三类落点归位，不另建决定账本 |
-| ⑥ 稳定术语 | 本次明确了新业务概念 | `PRODUCT.md` 业务术语表 |
+1. 确认目标文件存在且当前结构可识别；否则转 `/pmai-doctor`。
+2. 确认目标文件没有本轮开始前的未提交改动；有重叠改动时停止，让 PM 先处理，不覆盖。
+3. 写 `PRODUCT-STATE.md` 前，读取 main 已提交实现或已提交产品事实。没有可指认依据时，不得写「已支持 / 已上线 / 已完成」。
+4. 去重：已有同义 TODO、术语、规则或理路时，只修正必要内容，不重复追加。
 
-**顺手补索引**：本次新建了 `docs/decisions/<…>.md` / 新 mock 等 → 确认 `docs/INDEX.md` 或对应索引里能找到它；`PRODUCT-STATE.md` 只写当前产品现状，不再兼职总索引。
+### 步骤 3：最小补录
 
-### 步骤 3：落盘（main 文档白名单内）
+只 patch 真正需要变化的行：
 
-轻记录直接写 main 上的底座文件。当前 `check-branch.sh` 允许 main 直接写 `docs/**` 与 `mockups/**`，业务代码仍必须走 build worktree；本 skill 不需要 marker 门控。
+- TODO 保持无序，条目写清目标和涉及模块 / 文件。
+- 术语只补稳定定义，不顺手改 PRODUCT 其它章节。
+- 跨模块规则写清 scope；单模块规则退出本 skill，转 design。
+- 项目级理路按 decision-record 模板新建冻结记录，不回改旧历史记录。
+- PRODUCT-STATE 只把文档纠正到 main 已存在事实，不从讨论、mock 或 WIP 推导现状。
 
-用 **Edit / Write** 写各落点：
+本次新建项目决策记录时，机械确认 `docs/INDEX.md` 能找到它；除此以外不扩写索引。
 
-- ① `PRODUCT-STATE.md`：patch 真正变了的行（当前功能 / 主原型现状 / mock→真）。**PRODUCT-STATE 是唯一现状写入点**——轻记录是它的轻量同构原子写，不是"随手改活文档"。
-- ② 真有理路 → 按 `$PMAI_HOME/templates/decision-record.md.tmpl` 写 `docs/decisions/<日期>-<slug>.md`。
-- ③ 有遗留 → 往 `TODO.md` 加一行（带一句话自包含）。
-- ④ 探了变体 → 往 `mockups/manifest.json` 的 `variants` 加一条，然后重生成看版：
-  ```bash
-  python3 "$PMAI_HOME/scripts/gen-mock-board.py" "$REPO_ROOT"
-  ```
-- ⑤ 跨工作决定 → 和 ② 合流：奠基理路进 `docs/decisions/`，跨模块现行规则进 `PRODUCT-RULES.md`，单模块决定进模块 `decisions.md`。
-- ⑥ 稳定术语 → patch `PRODUCT.md` 业务术语表；仍在讨论中的临时叫法不写。
+### 步骤 4：复核与提交
 
-### 步骤 4：切两挡 commit（F3：纯静默档 vs 需审档）
+若只补 TODO、术语或有证据的 PRODUCT-STATE 纠错，PM 本次「记一下」已构成写入授权，可直接进入精确提交。
 
-按这次实际动了什么，分两挡：
+若修改 `PRODUCT-RULES.md` 或新增项目决策记录，先向 PM 展示路径和简短 diff，确认表述无误后再提交。PM 打回时只改本次补录内容。
 
-**(a) 纯静默档**——只 ①（PRODUCT-STATE 补一句 / docs/INDEX.md 补指针 / 纯文字订正），无理路、无新变体、无规则变化：AI **静默写 + 单独 commit**，回执一行，**不强制总审**（套确认门只给路径的惯例）。
-
-**(b) 需审档**——碰了 ② 决策记录 / ④ 新变体 / 改了 `PRODUCT-RULES` / `docs/modules`：写完**呈 PM 总审 diff**（`git -C "$REPO_ROOT" diff` 给 PM 看动了哪些），PM `通过 / 改`。打回 → 按反馈改后重审。
-
-通过（或静默档直接）后 commit —— **只 add 沉淀动过的文档，不卷入 PM 其它 WIP**：
+提交前必须再次检查：
 
 ```bash
-# 只 add 本次记录实际动的文件（逐个列，不用 git add -A）
-git -C "$REPO_ROOT" add PRODUCT-STATE.md   # + 本次实际动的其它落点
-git -C "$REPO_ROOT" commit -m "记录: <一句话本次归位了什么>"
-
+git -C "$REPO_ROOT" diff --cached --quiet
+git -C "$REPO_ROOT" status --short
 ```
+
+然后只逐个暂存本次实际修改的允许文件，禁止 `git add -A`。暂存后用 `git diff --cached --name-only` 核对集合与计划完全一致；出现任何额外路径立即停止，不得替 PM 清理暂存区。
+
+```bash
+git -C "$REPO_ROOT" add -- <本次实际修改的文件...>
+git -C "$REPO_ROOT" commit -m "记录: <一句话说明补录内容>"
+```
+
+commit 失败时保留现场并说明原因，不 reset、不 stash、不改写历史。
 
 ### 步骤 5：回执
 
-给 PM 一行回执（**PM 视图语言，不出内部词**，见 record-routing §PM 话术纪律）：
+只用 PM 语言说明记住了什么和落在哪里：
 
-```
-✅ 已归位（<short-hash>）：现状补了 <一句>{；遗留进待办；探的几版视觉留看版了}。
+```text
+已记录（<short-hash>）：<一句话结论>，放在 <待办 / 术语 / 项目规则 / 项目决策 / 产品现状>。
 ```
 
-需审档若 PM 打回则不 commit、按反馈改。
+不要输出「分类模型、manifest、冻结档、索引展开层、hash 对账」等内部实现词。
 
 ## Rules
 
-- 从主仓 main 触发（cwd 主仓根、分支 main）；在 build worktree 内 → 引导走对应收尾流程，不在此处理。
-- **两道闸**：只在收敛点 + 只在有耐久产出时记录；一道不过 → 不动 + 告诉 PM 一句，不空跑不编造。
-- 六类归位 @读 `_shared/record-routing.md`（单一真相源）；理路冻结 @读 `_shared/decision-record.md`；**重量随产出缩放**，多数轻档只动 PRODUCT-STATE。
-- **写入边界**：只写 `docs/**`、`mockups/**` 等记录落点；不借 record 修改业务代码。
-- **单独 commit、不卷 WIP**：`git add` 逐个列本次记录动的文件，禁 `git add -A`；commit message 一律 `记录: <一句话>`。
-- **F3 切两挡**：纯静默档（补一句 / 挂索引 / 纯订正）静默写 + 回执一行不强制总审；需审档（决策记录 / 新变体 / 改规则·模块）才总审 diff。
-- **PM 话术纪律**（F-G4）：回执 / 提议只用 PM 视图语言，不出现"六类归位 / manifest / featured / 冻结档 / 索引展开层"等内部词。
-- **防腐铁律不破**：轻记录是 PRODUCT-STATE 的合法原子写入口之一（与 landed 后自动文档编译并列），不是退回"随手改活文档"；写入仍是收敛点触发的原子动作。
+- 只在产品基线状态为 `accepted / equivalent_baseline`、主仓且 `ACTIVE_WORK_COUNT=0` 时运行；Proposal required / invalid 只回 Proposal，active work 永远回原流程收口。
+- 只补录已确认知识，不在 record 内探索、设计、实现或替 PM 作决定。
+- 不把 record 作为 Proposal、design、quick-fix 或 build 的后续步骤。
+- PRODUCT-STATE 只允许依据 main 已存在事实纠错；新能力只能由 landed 后自动文档编译写入。
+- 只写允许路径，逐个暂存，单独提交；任何已有 staged WIP 都先停止。
+- 项目底座缺失或异常时只转 doctor 诊断，未经确认不修复。

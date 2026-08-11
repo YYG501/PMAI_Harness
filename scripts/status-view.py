@@ -31,6 +31,7 @@ from _lib.state import (  # noqa: E402
     get_timeline_state,
 )
 from _lib.project_definition import ProjectDefinitionError, load_project_definition  # noqa: E402
+from _lib.proposal import proposal_state  # noqa: E402
 from _lib.delivery_policy import (  # noqa: E402
     delivery_policy_for,
     delivery_policy_hash,
@@ -164,6 +165,95 @@ def _git_status_lines(repo_root: Path) -> list[str]:
     return [line for line in result.stdout.splitlines() if line.strip()]
 
 
+def _pending_lark_handoffs(repo_root: Path) -> tuple[list[dict], str | None]:
+    helper = Path(__file__).resolve().with_name("lark-review.py")
+    try:
+        result = subprocess.run(
+            [sys.executable, str(helper), "list-handoffs", str(repo_root)],
+            check=False,
+            text=True,
+            capture_output=True,
+        )
+    except Exception as exc:  # noqa: BLE001
+        return [], str(exc)
+    if result.returncode != 0:
+        return [], (result.stderr or result.stdout or "handoff helper failed").strip()
+    try:
+        payload = json.loads(result.stdout)
+    except json.JSONDecodeError as exc:
+        return [], f"handoff helper 返回无效 JSON: {exc}"
+    handoffs = payload.get("handoffs") if isinstance(payload, dict) else None
+    if (
+        not isinstance(payload, dict)
+        or payload.get("status") != "handoff_list"
+        or not isinstance(handoffs, list)
+        or any(not isinstance(item, dict) for item in handoffs)
+    ):
+        return [], "handoff helper 返回结构不完整"
+    return handoffs, None
+
+
+def _pending_lark_resumables(repo_root: Path) -> tuple[list[dict], str | None]:
+    helper = Path(__file__).resolve().with_name("lark-review.py")
+    try:
+        result = subprocess.run(
+            [sys.executable, str(helper), "list-resumables", str(repo_root)],
+            check=False,
+            text=True,
+            capture_output=True,
+        )
+    except Exception as exc:  # noqa: BLE001
+        return [], str(exc)
+    if result.returncode != 0:
+        return [], (result.stderr or result.stdout or "resumable helper failed").strip()
+    try:
+        payload = json.loads(result.stdout)
+    except json.JSONDecodeError as exc:
+        return [], f"resumable helper 返回无效 JSON: {exc}"
+    batches = payload.get("batches") if isinstance(payload, dict) else None
+    if (
+        not isinstance(payload, dict)
+        or payload.get("status") != "resumable_list"
+        or not isinstance(batches, list)
+        or any(not isinstance(item, dict) for item in batches)
+    ):
+        return [], "resumable helper 返回结构不完整"
+    return batches, None
+
+
+def _render_pending_lark_resumables(batches: list[dict]) -> None:
+    print(f"飞书评审：有 {len(batches)} 个已经开始的批次还没有收口。")
+    print()
+    print("建议下一步：先恢复这些评审：")
+    for item in batches:
+        target = str(item.get("markdown_relative") or item.get("markdown_path") or "")
+        print(f'- 发 /pmai-lark-review "{target}"')
+
+
+def _render_pending_lark_handoffs(handoffs: list[dict]) -> None:
+    proposal_count = sum(1 for item in handoffs if item.get("phase") == "proposal")
+    design_modules = sorted(
+        {
+            str(item.get("module") or "").removeprefix("docs/modules/")
+            for item in handoffs
+            if item.get("phase") == "design" and item.get("module")
+        }
+    )
+    lark_review_count = sum(1 for item in handoffs if item.get("phase") == "lark_review")
+    print(f"飞书评审：有 {len(handoffs)} 个上游交接还未完成闭环。")
+    print()
+    if proposal_count:
+        print("建议下一步：发 /pmai-proposal 继续产品方向修订。")
+    elif design_modules:
+        print("建议下一步：按模块逐个继续方案：")
+        for module in design_modules:
+            print(f'- 发 /pmai-design "{module}"')
+    elif lark_review_count:
+        print("建议下一步：发 /pmai-lark-review 恢复同篇飞书的同步与评论收口。")
+    else:
+        print("建议下一步：发 /pmai-lark-review 恢复未完成的飞书评审交接。")
+
+
 def _dirty_module_names(status_lines: list[str]) -> list[str]:
     names: list[str] = []
     seen: set[str] = set()
@@ -190,11 +280,15 @@ def _work_display_name(work_view: dict) -> str:
 
 
 def _stage_status_text(stage: int, lifecycle: str = "", currentness: dict | None = None) -> str:
+    if (
+        lifecycle in {"ready_to_build", "building", "iterating", "final_check"}
+        and currentness
+        and currentness.get("state") != "current"
+    ):
+        return "建造依据有变化，需要重新确认后才能继续。"
     if lifecycle == "designing":
         return "正在讨论并收敛建造依据。"
     if lifecycle == "ready_to_build":
-        if currentness and currentness.get("state") != "current":
-            return "设计依据有变化，需要重新确认后才能构建。"
         return "设计已定，可以开始构建。"
     if lifecycle == "building":
         return "正在构建指定对象。"
@@ -302,6 +396,16 @@ def render_narrative(state: dict, repo_root: Path) -> None:
     无进行中工作 → 输出"没有进行中的工作"；若工作区有未提交改动，
     优先提示"有一轮改动还没收口"，**不编造**（review R7 防幻觉）。
     """
+    resumables, resumable_error = _pending_lark_resumables(repo_root)
+    if resumable_error:
+        print("飞书评审：未完成批次无法安全读取。")
+        print()
+        print("建议下一步：发 /pmai-lark-review 检查评审现场。")
+        return
+    if resumables:
+        _render_pending_lark_resumables(resumables)
+        return
+
     active = sorted(state["active_work"], key=_work_priority)
     dirty_lines = [] if _is_generator_repo(repo_root) else _git_status_lines(repo_root)
     if not active:
@@ -317,7 +421,26 @@ def render_narrative(state: dict, repo_root: Path) -> None:
         else:
             print("当前状态：没有进行中的工作")
             print()
-            print("建议下一步：发 /pmai-design 起一个模块工作。")
+            handoffs, handoff_error = _pending_lark_handoffs(repo_root)
+            if handoff_error:
+                print("飞书评审：上游交接状态无法安全读取。")
+                print()
+                print("建议下一步：发 /pmai-lark-review 检查并恢复评审交接。")
+                return
+            if handoffs:
+                _render_pending_lark_handoffs(handoffs)
+                return
+            proposal = proposal_state(repo_root)
+            if proposal["state"] == "required":
+                print("产品方向：还需要先把目标用户、核心问题、价值、边界和 MVP 讲清楚。")
+                print()
+                print("建议下一步：发 /pmai-proposal。")
+            elif proposal["state"] == "invalid":
+                print("产品方向：当前 Product Proposal 与产品基线不一致，需要重新确认。")
+                print()
+                print("建议下一步：发 /pmai-proposal 生成并确认完整新版本。")
+            else:
+                print("建议下一步：发 /pmai-design 起一个模块工作。")
         return
 
     # 单个工作场景：直接念
@@ -368,7 +491,7 @@ def render_narrative(state: dict, repo_root: Path) -> None:
         print("需要注意：主线工作区有未提交改动，先处理这部分，再继续其它 build。")
 
 
-def render_health_check(repo_root: Path) -> None:
+def render_health_check(repo_root: Path, *, proposal_hint: bool = True) -> None:
     """项目级产品文档体检：缺则输出 1 段 hint，齐全则静默。
 
     背景：sync 框架后老项目可能缺 GSD §8 /  新增的产品级文档
@@ -396,6 +519,16 @@ def render_health_check(repo_root: Path) -> None:
             print("需要注意：项目建造定义无效。继续 build 前请回到 /pmai-design 修复并重新确认。")
             print()
 
+    if proposal_hint:
+        proposal = proposal_state(repo_root)
+        if proposal["state"] == "required":
+            print("需要注意：产品方向尚未完成；下一步先发 /pmai-proposal。")
+            print()
+        elif proposal["state"] == "invalid":
+            print("需要注意：当前 Product Proposal 与 PRODUCT.md 不一致或正文已变化。")
+            print("下一步：发 /pmai-proposal 生成并确认完整新版本。")
+            print()
+
     docs_dir = repo_root / "docs"
     if not docs_dir.exists():
         return
@@ -410,7 +543,7 @@ def render_health_check(repo_root: Path) -> None:
         elif (docs_dir / "PRODUCT.md").exists():
             missing.append(("PRODUCT.md", "旧布局里还在 docs/PRODUCT.md；新布局应放仓库根目录"))
         else:
-            missing.append(("PRODUCT.md", "项目级文档主真相源；未初始化跑 /pmai-init-project，已初始化重定方向跑 /pmai-direction"))
+            missing.append(("PRODUCT.md", "项目级产品基线；未初始化跑 /pmai-init-project，已初始化后通过 /pmai-proposal 重建"))
 
     for filename, hint in (
         ("PRODUCT-STATE.md", "产品现状 hub"),
@@ -432,7 +565,7 @@ def render_health_check(repo_root: Path) -> None:
     print("💡 项目体检：缺以下产品级文档")
     for path, hint in missing:
         print(f"  - {path}（{hint}）")
-    print("  补法：未初始化发 /pmai-init-project；已初始化项目发 /pmai-direction 校准方向")
+    print("  补法：未初始化发 /pmai-init-project；产品基线问题发 /pmai-proposal，其它文件归位问题发 /pmai-doctor")
 
 
 def suggest_next_action(work_view: dict) -> str:
@@ -442,9 +575,12 @@ def suggest_next_action(work_view: dict) -> str:
     stage = meta.get("stage", 0)
     lifecycle = _lifecycle(meta)
 
-    if lifecycle == "ready_to_build":
+    if lifecycle in {"ready_to_build", "building", "iterating", "final_check"}:
         currentness = work_view.get("ready_currentness")
         if currentness and currentness.get("state") != "current":
+            reason = str(currentness.get("reason") or "")
+            if "/pmai-proposal" in reason or "Product Proposal" in reason:
+                return "暂停当前构建，先用 /pmai-proposal 重新确认产品方向"
             return "继续 /pmai-design，重新核对变化并固定本轮建造范围"
 
     lifecycle_actions = {
@@ -481,17 +617,37 @@ def suggest_next_action(work_view: dict) -> str:
     return "运行 /pmai-status 查看详情"
 
 
+def _active_build_currentness(work_dir: Path) -> dict:
+    script = Path(_SCRIPTS_DIR) / "build-contract.py"
+    result = subprocess.run(
+        [sys.executable, str(script), "validate-currentness", str(work_dir)],
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    if result.returncode == 0:
+        return {"state": "current"}
+    reason = result.stderr.strip() or result.stdout.strip() or "无法校验当前建造依据。"
+    if reason.startswith("❌ "):
+        reason = reason[2:]
+    return {"state": "stale", "reason": reason}
+
+
 def annotate_ready_currentness(state: dict, repo_root: Path) -> None:
-    """Attach one shared ready verdict without changing persisted state."""
+    """Attach shared authority currentness without changing persisted state."""
     for work_view in state.get("active_work", []):
         meta = work_view.get("meta") or {}
-        if _lifecycle(meta) != "ready_to_build":
-            continue
-        work_view["ready_currentness"] = ready_currentness(
-            repo_root,
-            Path(work_view["work_dir"]),
-            meta,
-        )
+        lifecycle = _lifecycle(meta)
+        if lifecycle == "ready_to_build":
+            work_view["ready_currentness"] = ready_currentness(
+                repo_root,
+                Path(work_view["work_dir"]),
+                meta,
+            )
+        elif lifecycle in ACTIVE_BUILD_LIFECYCLES:
+            work_view["ready_currentness"] = _active_build_currentness(
+                Path(work_view["work_dir"])
+            )
 
 
 ACTIVE_BUILD_LIFECYCLES = {"building", "iterating", "final_check"}
@@ -575,6 +731,12 @@ def _build_execution_context(work_view: dict) -> dict:
         raise ValueError("build.contract_version 必须是整数。") from exc
     if contract_version < 2:
         raise ValueError("active build contract 过旧；请通过 /pmai-build 恢复后再继续检查。")
+
+    currentness = _active_build_currentness(work_dir)
+    if currentness.get("state") != "current":
+        raise ValueError(
+            str(currentness.get("reason") or "当前建造依据已经过期；请先重新确认。")
+        )
 
     target = build.get("target")
     if not isinstance(target, dict):
@@ -799,10 +961,33 @@ def _render_single_work(work_view: dict) -> None:
 
 
 def render_status(state: dict, repo_root: Path) -> None:
+    resumables, resumable_error = _pending_lark_resumables(repo_root)
+    if resumable_error:
+        print("飞书评审：未完成批次无法安全读取。先运行 /pmai-lark-review。")
+        return
+    if resumables:
+        _render_pending_lark_resumables(resumables)
+        return
+
     active = state["active_work"]
 
     if not active:
-        print("📭 没有活跃工作。运行 /pmai-design 设计新功能。")
+        handoffs, handoff_error = _pending_lark_handoffs(repo_root)
+        if handoff_error:
+            print("📭 没有活跃工作，但飞书评审交接状态无法验证。先运行 /pmai-lark-review。")
+            render_quickfix_section(repo_root)
+            return
+        if handoffs:
+            _render_pending_lark_handoffs(handoffs)
+            render_quickfix_section(repo_root)
+            return
+        proposal = proposal_state(repo_root)
+        if proposal["state"] == "required":
+            print("📭 没有活跃工作。先运行 /pmai-proposal 澄清产品方向。")
+        elif proposal["state"] == "invalid":
+            print("📭 没有活跃工作。先运行 /pmai-proposal 重新确认产品方向。")
+        else:
+            print("📭 没有活跃工作。运行 /pmai-design 设计新功能。")
         render_quickfix_section(repo_root)
         return
 
@@ -955,7 +1140,9 @@ def main() -> None:
     args = parser.parse_args()
 
     if args.repo_root:
-        repo_root = Path(args.repo_root)
+        # status 是只读入口；先解析 macOS /tmp -> /private/tmp 等合法路径别名，
+        # 再把仓根交给拒绝 symlink 的评审扫描器。
+        repo_root = Path(args.repo_root).expanduser().resolve()
     else:
         repo_root = find_repo_root()
 
@@ -1023,7 +1210,7 @@ def main() -> None:
 
     if args.narrative:
         render_narrative(state, repo_root)
-        render_health_check(repo_root)
+        render_health_check(repo_root, proposal_hint=bool(state["active_work"]))
         return
 
 
@@ -1033,7 +1220,7 @@ def main() -> None:
         return
 
     render_status(state, repo_root)
-    render_health_check(repo_root)
+    render_health_check(repo_root, proposal_hint=bool(state["active_work"]))
 
 
 if __name__ == "__main__":

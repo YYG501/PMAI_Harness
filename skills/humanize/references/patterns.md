@@ -2,7 +2,7 @@
 
 > 本目录是 `/pmai-humanize` 的扫描清单，按 PM 关心的四类病组织：啰嗦 / AI 味 / 黑话 / 不说人话。
 > 中文 pattern 为主，并入了社区英文 skill（blader/humanizer、conorbronsdon/avoid-ai-writing）里**中文也通用**的几条。
-> 权威同源：禁用表达边界 + 简要易懂语体以 `skills/spec-writing/references/writing-rules.md` 为准；工程黑话词典以 `skills/_shared/pm-view/writing-rules.md` §3.12 为准。本目录不另立矛盾规则，只做面向"任意文档打磨文字"的汇总。
+> 权威同源：禁用表达、术语、简要易懂语体和工程黑话词典均以 `skills/_shared/pm-view/writing-rules.md` 为唯一正本。本目录只做面向“任意文档打磨文字”的扫描汇总。
 
 ---
 

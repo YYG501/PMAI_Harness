@@ -79,9 +79,12 @@ def main() -> int:
     print("")
     print("Recommended path:")
     print("  1. Keep requirements/ as archive evidence.")
-    print("  2. Open each live item with /pmai-design or /pmai-direction and write the")
-    print("     current truth into docs/modules/<module>/discussion.md, decisions.md, spec.md.")
-    print("  3. Continue with /pmai-build; PM acceptance automatically lands the result and records durable product state.")
+    print("  2. If an item changes product positioning, users, core value, boundaries, or MVP,")
+    print("     first use /pmai-proposal to confirm the current product direction.")
+    print("  3. Open each live module item with /pmai-design; it will write the confirmed")
+    print("     module truth into docs/modules/<module>/discussion.md, decisions.md, spec.md.")
+    print("  4. Use /pmai-record only for already-confirmed facts outside active work.")
+    print("  5. Continue with /pmai-build; PM acceptance lands the result and records durable product state.")
 
     if args.apply:
         print("")

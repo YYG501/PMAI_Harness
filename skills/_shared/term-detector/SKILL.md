@@ -21,7 +21,9 @@ description: |
 1. 当前模块 `spec.md`、build 合同明确记录的规格锚点，以及本轮 landed diff 直接改动的模块 `spec.md` / 功能型规格中“名词解释 / 业务术语”表的术语列；
 2. 上述规格中“用户角色 / 角色清单”表的角色列；
 3. 当前模块 `decisions.md` 的有效 `D<number>` 决定中，单独一行声明的 `术语：<名称>` 或 `角色：<名称>`；
-4. `accepted_deltas` 中 `kind=term` / `kind=role` 的条目。沿用现有 `add-delta` 合同，此时 `summary` 写准确名称。
+4. 新 `accepted_deltas` 中结构化的 `affects: [{kind: term|role, name: <准确名称>}]`；旧合同继续兼容读取 `kind=term` / `kind=role`，并把 `summary` 作为名称。
+
+`scoped-adjustment` 只能给已经批准的术语或角色名称补充对账信号，不能借 `affects` 新增产品对象、角色模型、权限或规则；这些变化必须回 design。
 
 不要扫描引号、加粗、普通正文或代码来猜术语。它们无法区分正式命名和修辞强调，也与规格统一使用 ASCII 引号的规则冲突。
 

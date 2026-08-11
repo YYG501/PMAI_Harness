@@ -59,6 +59,11 @@ from _lib.lark_review_semantics import (  # noqa: E402
     markdown_verification_projection,
     render_remote_preview,
 )
+from _lib.state import StateReadError, list_active_work  # noqa: E402
+from _lib.proposal import (  # noqa: E402
+    ProposalContractError,
+    validate_current_proposal,
+)
 
 
 SCHEMA_VERSION = 3
@@ -75,6 +80,42 @@ MAX_COMMENT_STABILITY_SCANS = 4
 COMMENT_ACTIONS_KIND = "pmai_lark_review_comment_actions"
 REMOTE_VERIFICATION_KIND = "pmai_lark_review_remote_verification"
 REMOTE_VERIFICATION_SCHEMA_VERSION = 2
+HANDOFF_KIND = "pmai_lark_review_read_only_handoff"
+LEGACY_HANDOFF_SCHEMA_VERSION = 1
+HANDOFF_SCHEMA_VERSION = 2
+HANDOFF_ROUTES = {"proposal", "design"}
+HANDOFF_BUNDLE_KIND = "pmai_lark_review_upstream_handoff_bundle"
+HANDOFF_BUNDLE_SCHEMA_VERSION = 2
+HANDOFF_BUNDLE_STATES = {"pending", "closed"}
+HANDOFF_PHASES = {"proposal", "design", "lark_review", "closed"}
+HANDOFF_PHASE_SEQUENCES = {
+    "proposal": ("proposal", "design", "lark_review", "closed"),
+    "design": ("design", "lark_review", "closed"),
+}
+HANDOFF_BUNDLE_REQUIRED_FILES = (
+    "review.json",
+    "apply-plan.json",
+    "handoff.json",
+    "resolutions.json",
+    "target.md",
+    "local.md",
+    "remote.md",
+    "remote-native.json",
+    "local-vs-remote.diff",
+    "remote-coverage.json",
+    "remote-preview.md",
+)
+HANDOFF_BUNDLE_OPTIONAL_FILES = (
+    "baseline.md",
+    "remote-vs-baseline.diff",
+    "local-vs-baseline.diff",
+)
+REPLAN_CANDIDATE_SCHEMA_VERSION = 1
+ACTIVE_BUILD_DELTA_KIND = "scoped-adjustment"
+ACTIVE_BUILD_SCOPE_ATTESTATION = "approved-module-task-no-model-change"
+ACTIVE_BUILD_STATES = {"building", "iterating", "final_check"}
+CHECKPOINT_KIND = "pmai_lark_review_checkpoint"
+CHECKPOINT_SCHEMA_VERSION = 1
 COMPLETED_COMMENT_DECISIONS = {
     "applied",
     "already_satisfied",
@@ -591,6 +632,159 @@ def _entry_exists(path: Path, *, label: str) -> bool:
             os.close(directory_fd)
 
 
+def _sha256_value(value: object, *, label: str) -> str:
+    text = str(value or "")
+    if not re.fullmatch(r"[0-9a-f]{64}", text):
+        raise ReviewError(f"{label} 不是合法 SHA-256")
+    return text
+
+
+def _handoff_path(manifest_path: Path) -> Path:
+    return manifest_path.parent / "handoff.json"
+
+
+def _load_handoff_marker(
+    manifest_path: Path,
+    manifest: dict[str, Any],
+    *,
+    plan_path: Path | None = None,
+    plan: dict[str, Any] | None = None,
+) -> dict[str, Any] | None:
+    marker_path = _handoff_path(manifest_path)
+    marker_exists = _entry_exists(marker_path, label="handoff.json")
+    if not marker_exists:
+        if isinstance(plan, dict) and plan.get("state") == "handed_off":
+            raise ReviewError("apply-plan.json 已标记 handed_off，但缺少 handoff.json 证据")
+        return None
+
+    if plan is None:
+        plan_path = _canonical_regular_file(
+            manifest_path.parent / "apply-plan.json",
+            label="handoff 批次 apply-plan.json",
+        )
+        plan = _load_json_object(plan_path, label="apply-plan.json")
+
+    marker_path = _canonical_regular_file(marker_path, label="handoff.json")
+    marker = _load_json_object(marker_path, label="handoff.json")
+    review_binding = marker.get("review")
+    draft_binding = marker.get("draft_plan")
+    resolutions_binding = marker.get("resolutions")
+    target_binding = marker.get("target")
+    candidate_binding = marker.get("candidate_manifest")
+    product_baseline_binding = marker.get("product_baseline")
+    handoff_mode = str(marker.get("handoff_mode") or "")
+    route = str(marker.get("route") or "")
+    schema_version = _int(marker.get("schema_version"))
+    if (
+        marker.get("kind") != HANDOFF_KIND
+        or schema_version
+        not in {LEGACY_HANDOFF_SCHEMA_VERSION, HANDOFF_SCHEMA_VERSION}
+        or marker.get("state") != "read_only"
+        or marker.get("batch_id") != manifest.get("batch_id")
+        or route not in HANDOFF_ROUTES
+        or not isinstance(review_binding, dict)
+        or review_binding.get("name") != "review.json"
+        or not isinstance(draft_binding, dict)
+        or draft_binding.get("name") != "apply-plan.json"
+        or not isinstance(resolutions_binding, dict)
+        or resolutions_binding.get("name") != "resolutions.json"
+        or not isinstance(target_binding, dict)
+        or target_binding.get("name") != "target.md"
+    ):
+        raise ReviewError("handoff.json 不是当前批次的完整只读交接证据")
+    if schema_version == LEGACY_HANDOFF_SCHEMA_VERSION:
+        if not isinstance(candidate_binding, dict):
+            raise ReviewError("旧版 handoff.json 缺少 replan candidate 绑定")
+    elif handoff_mode == "active_replan":
+        if not isinstance(candidate_binding, dict) or product_baseline_binding is not None:
+            raise ReviewError("active replan handoff 缺少唯一 candidate manifest 绑定")
+    elif handoff_mode == "direct_product_change":
+        if (
+            route != "proposal"
+            or candidate_binding is not None
+            or not isinstance(product_baseline_binding, dict)
+            or product_baseline_binding.get("route") != "proposal"
+            or product_baseline_binding.get("branch") not in {"main", "master"}
+            or product_baseline_binding.get("active_build_count") != 0
+            or not re.fullmatch(
+                r"[0-9a-f]{40,64}",
+                str(product_baseline_binding.get("repo_head") or ""),
+            )
+        ):
+            raise ReviewError("无 active build 的产品级 handoff 基线绑定不完整")
+    else:
+        raise ReviewError("handoff.json 缺少可识别的交接模式")
+    if _sha256_value(review_binding.get("sha256"), label="handoff review.sha256") != _file_digest(
+        manifest_path
+    ):
+        raise ReviewError("handoff.json 绑定的 review.json 已变化")
+    draft_sha = _sha256_value(
+        draft_binding.get("sha256"), label="handoff draft_plan.sha256"
+    )
+    for binding, name in (
+        (resolutions_binding, "resolutions.json"),
+        (target_binding, "target.md"),
+    ):
+        expected_sha = _sha256_value(
+            binding.get("sha256"), label=f"handoff {name}.sha256"
+        )
+        if expected_sha != _file_digest(manifest_path.parent / name):
+            raise ReviewError(f"handoff.json 绑定的 {name} 已变化")
+    if isinstance(candidate_binding, dict):
+        _sha256_value(
+            candidate_binding.get("sha256"),
+            label="handoff candidate_manifest.sha256",
+        )
+        if candidate_binding.get("route") != route:
+            raise ReviewError("handoff.json 的 route 与 candidate manifest 绑定不一致")
+
+    if plan is not None:
+        if plan_path is None:
+            raise ReviewError("内部错误：校验 handoff plan 时缺少路径")
+        if plan.get("batch_id") != manifest.get("batch_id"):
+            raise ReviewError("handoff 批次与 apply-plan.json 不匹配")
+        if plan.get("state") == "draft":
+            if _file_digest(plan_path) != draft_sha:
+                raise ReviewError("handoff 前的 draft apply-plan.json 已变化")
+        elif plan.get("state") == "handed_off":
+            handoff_binding = plan.get("handoff")
+            if (
+                not isinstance(handoff_binding, dict)
+                or handoff_binding.get("name") != "handoff.json"
+                or handoff_binding.get("route") != route
+                or _sha256_value(
+                    handoff_binding.get("sha256"),
+                    label="apply-plan handoff.sha256",
+                )
+                != _file_digest(marker_path)
+                or handoff_binding.get("draft_plan_sha256") != draft_sha
+            ):
+                raise ReviewError("apply-plan.json 的 handed_off 绑定不完整或已变化")
+        else:
+            raise ReviewError("handoff 批次的 apply-plan.json 状态不合法")
+    return marker
+
+
+def _reject_read_only_handoff(
+    manifest_path: Path,
+    manifest: dict[str, Any],
+    *,
+    plan_path: Path | None = None,
+    plan: dict[str, Any] | None = None,
+) -> None:
+    marker = _load_handoff_marker(
+        manifest_path,
+        manifest,
+        plan_path=plan_path,
+        plan=plan,
+    )
+    if marker is not None:
+        raise ReviewError(
+            "当前评审批次已经转为只读 handoff；旧批只作上游交接证据，"
+            "禁止 reconcile/seal/apply，请在 main 完成上游归位并同步同篇飞书后 fresh collect"
+        )
+
+
 def _write_text(path: Path, content: str) -> str:
     path = _absolute_lexical_path(path)
     try:
@@ -786,6 +980,7 @@ def _resolution_maps(
     dict[str, Any],
     list[dict[str, Any]],
     dict[str, Any],
+    dict[str, Any] | None,
 ]:
     if path is None:
         return (
@@ -796,6 +991,7 @@ def _resolution_maps(
             _default_preview_resolution(),
             [],
             _default_consistency_receipt(),
+            None,
         )
     value = _load_json_object(path, label="resolutions.json")
     schema_version = _int(value.get("schema_version"))
@@ -838,6 +1034,9 @@ def _resolution_maps(
     consistency = value.get("consistency", _default_consistency_receipt())
     if not isinstance(consistency, dict):
         raise ReviewError("resolutions.json 的 consistency 必须是对象")
+    active_build_delta = value.get("active_build_delta")
+    if active_build_delta is not None and not isinstance(active_build_delta, dict):
+        raise ReviewError("resolutions.json 的 active_build_delta 必须是对象或 null")
     return (
         index(value.get("body"), "change_id", "body"),
         index(value.get("comments"), "comment_id", "comments"),
@@ -846,6 +1045,7 @@ def _resolution_maps(
         preview,
         decision_routing,
         consistency,
+        active_build_delta,
     )
 
 
@@ -1868,6 +2068,161 @@ def _manifest_repository_root(manifest: dict[str, Any], markdown_path: Path) -> 
     return recorded_root
 
 
+def _git_toplevel(path: Path, *, label: str) -> Path:
+    try:
+        result = subprocess.run(
+            ["git", "-C", str(path), "rev-parse", "--show-toplevel"],
+            capture_output=True,
+            text=True,
+            timeout=5,
+            check=False,
+        )
+    except (OSError, subprocess.SubprocessError) as exc:
+        raise ReviewError(f"无法读取{label}的 Git 仓根：{exc}") from exc
+    value = result.stdout.strip()
+    if result.returncode != 0 or not value:
+        raise ReviewError(f"无法读取{label}的 Git 仓根")
+    return _canonical_directory(Path(value), label=f"{label} Git 仓根")
+
+
+def _review_target_scope(relative: Path) -> Path | None:
+    """Return the module scope for a supported authoritative specification."""
+
+    parts = relative.parts
+    if (
+        relative.is_absolute()
+        or ".." in parts
+        or parts[:2] != ("docs", "modules")
+    ):
+        return None
+    if (
+        len(parts) == 3
+        and parts[2].endswith(".md")
+        and not parts[2].startswith(".")
+    ):
+        return relative
+    if len(parts) >= 4 and parts[2] and not parts[2].startswith("."):
+        return Path(*parts[:3])
+    return None
+
+
+def _build_anchor_relative(build: dict[str, Any], *, label: str) -> Path | None:
+    raw = build.get("anchor")
+    if raw is None or raw == "":
+        return None
+    if not isinstance(raw, str):
+        raise ReviewError(f"{label} build.anchor 不是合法仓内规格路径")
+    relative = Path(raw)
+    if relative.as_posix() != raw or _review_target_scope(relative) is None:
+        raise ReviewError(
+            f"{label} build.anchor 必须是 docs/modules/<模块>/... "
+            "或 docs/modules/<功能>.md"
+        )
+    return relative
+
+
+def resolve_target(args: argparse.Namespace) -> int:
+    """Bind a review target to the authoritative active-build worktree, if any."""
+    input_path = _canonical_regular_file(
+        Path(args.markdown), label="待评审本地 markdown"
+    )
+    input_root = _repository_root(input_path)
+    main_root = _linked_worktree_main_root(input_path, input_root) or input_root
+    try:
+        relative = input_path.relative_to(input_root)
+    except ValueError as exc:
+        raise ReviewError("待评审 markdown 不在识别出的仓根内") from exc
+
+    target_scope = _review_target_scope(relative)
+
+    try:
+        active_result = list_active_work(
+            main_root,
+            cwd=input_root,
+            strict=True,
+        )
+    except StateReadError as exc:
+        raise ReviewError(f"无法安全读取 active work：{exc}") from exc
+
+    matches: list[dict[str, Any]] = []
+    if target_scope is not None:
+        for item in active_result["items"]:
+            meta = item.get("meta") if isinstance(item, dict) else None
+            if not isinstance(meta, dict):
+                continue
+            build = meta.get("build") if isinstance(meta.get("build"), dict) else {}
+            lifecycle = str(
+                build.get("lifecycle_state") or meta.get("lifecycle_state") or ""
+            )
+            if lifecycle not in ACTIVE_BUILD_STATES:
+                continue
+            work_dir = _canonical_directory(
+                Path(item["work_dir"]), label="active work 模块目录"
+            )
+            active_root = _git_toplevel(work_dir, label="active work")
+            try:
+                active_module_relative = work_dir.relative_to(active_root)
+            except ValueError as exc:
+                raise ReviewError("active work 模块目录超出其 Git 仓根") from exc
+            anchor_relative = _build_anchor_relative(
+                build,
+                label=f"active work {meta.get('id') or work_dir.name}",
+            )
+            if anchor_relative is not None:
+                target_matches = anchor_relative == relative
+            else:
+                # 旧 active work 没有 anchor 时，继续按模块目录绑定模块内规格。
+                target_matches = active_module_relative == target_scope
+            if not target_matches:
+                continue
+            candidate = _canonical_regular_file(
+                active_root / relative,
+                label="active build 中的待评审 markdown",
+            )
+            matches.append(
+                {
+                    "markdown_path": candidate,
+                    "repo_root": active_root,
+                    "work_dir": work_dir,
+                    "work_id": str(meta.get("id") or ""),
+                    "lifecycle_state": lifecycle,
+                }
+            )
+
+    if len(matches) > 1:
+        identities = "、".join(
+            f"{item['work_id'] or '<missing-id>'}@{item['work_dir']}"
+            for item in matches
+        )
+        raise ReviewError(
+            "同一评审目标命中多个 active build，拒绝猜测权威副本：" + identities
+        )
+
+    selected = matches[0] if matches else None
+    markdown_path = selected["markdown_path"] if selected else input_path
+    repo_root = selected["repo_root"] if selected else input_root
+    print(
+        json.dumps(
+            {
+                "markdown_path": str(markdown_path),
+                "repo_root": str(repo_root),
+                "main_repo_root": str(main_root),
+                "active_work_dir": (
+                    str(selected["work_dir"]) if selected is not None else None
+                ),
+                "active_work_id": (
+                    selected["work_id"] if selected is not None else None
+                ),
+                "lifecycle_state": (
+                    selected["lifecycle_state"] if selected is not None else None
+                ),
+            },
+            ensure_ascii=False,
+        )
+    )
+    return 0
+
+
 def _decision_target_path(repo_root: Path, value: str) -> str:
     raw = Path(value)
     parts = raw.parts
@@ -1972,6 +2327,1333 @@ def _native_snapshot_artifact(
     ):
         raise ReviewError("remote-native.json 与 review.json 文档基准不一致")
     return {"path": path, "sha256": _file_digest(path), "value": value}
+
+
+def _git_provenance_result(
+    root: Path,
+    *arguments: str,
+) -> subprocess.CompletedProcess[bytes]:
+    try:
+        return subprocess.run(
+            ["git", "-C", str(root), *arguments],
+            capture_output=True,
+            timeout=5,
+            check=False,
+        )
+    except (OSError, subprocess.SubprocessError) as exc:
+        raise ReviewError(
+            f"无法核验 replan candidate 的 Git 来源（{' '.join(arguments)}）：{exc}"
+        ) from exc
+
+
+def _git_worktree_bindings(main_root: Path) -> list[dict[str, str]]:
+    result = _git_provenance_result(
+        main_root,
+        "worktree",
+        "list",
+        "--porcelain",
+        "-z",
+    )
+    if result.returncode != 0 or (result.stdout and not result.stdout.endswith(b"\0")):
+        raise ReviewError("无法读取完整的 Git worktree 清单，拒绝 handoff")
+
+    fields = result.stdout[:-1].split(b"\0") if result.stdout else []
+    entries: list[dict[str, str]] = []
+    current: dict[str, str] = {}
+    for field in [*fields, b""]:
+        if not field:
+            if current:
+                entries.append(current)
+                current = {}
+            continue
+        key_raw, separator, value_raw = field.partition(b" ")
+        try:
+            key = key_raw.decode("ascii")
+        except UnicodeDecodeError as exc:
+            raise ReviewError("Git worktree 清单包含不可识别字段") from exc
+        current[key] = os.fsdecode(value_raw) if separator else ""
+    return entries
+
+
+def _verify_replan_candidate_git_provenance(
+    *,
+    main_root: Path,
+    worktree: Path,
+    branch: str,
+    candidate_head: str,
+    baseline: str,
+) -> None:
+    branch_ref = f"refs/heads/{branch}"
+    ref_check = _git_provenance_result(main_root, "check-ref-format", branch_ref)
+    if ref_check.returncode != 0:
+        raise ReviewError("candidate manifest 的 branch 不是合法 Git branch")
+
+    for oid, label in ((candidate_head, "candidate HEAD"), (baseline, "baseline")):
+        exists = _git_provenance_result(main_root, "cat-file", "-e", f"{oid}^{{commit}}")
+        if exists.returncode != 0:
+            raise ReviewError(f"candidate manifest 的 {label} 不是当前仓可读取的 commit")
+
+    ancestor = _git_provenance_result(
+        main_root,
+        "merge-base",
+        "--is-ancestor",
+        baseline,
+        candidate_head,
+    )
+    if ancestor.returncode != 0:
+        raise ReviewError("candidate manifest 的 baseline 不是 candidate HEAD 的祖先")
+
+    expected_worktree = str(worktree)
+    matches = [
+        entry
+        for entry in _git_worktree_bindings(main_root)
+        if os.path.normpath(entry.get("worktree", "")) == expected_worktree
+    ]
+    if len(matches) != 1 or matches[0].get("branch") != branch_ref:
+        raise ReviewError("candidate manifest 对应的 worktree/branch 已不存在或身份不一致")
+
+    branch_tip_result = _git_provenance_result(
+        main_root,
+        "rev-parse",
+        "--verify",
+        f"{branch_ref}^{{commit}}",
+    )
+    branch_tip = os.fsdecode(branch_tip_result.stdout).strip().lower()
+    worktree_head = str(matches[0].get("HEAD") or "").lower()
+    oid_pattern = r"[0-9a-f]{40,64}"
+    if (
+        branch_tip_result.returncode != 0
+        or not re.fullmatch(oid_pattern, branch_tip)
+        or worktree_head != branch_tip
+    ):
+        raise ReviewError("candidate manifest 对应的 branch/worktree HEAD 已漂移")
+
+    retained = _git_provenance_result(
+        main_root,
+        "merge-base",
+        "--is-ancestor",
+        candidate_head,
+        branch_tip,
+    )
+    if retained.returncode != 0:
+        raise ReviewError("candidate manifest 对应分支已不再包含 candidate HEAD")
+
+
+def _replan_candidate_binding(
+    candidate_arg: str,
+    *,
+    repo_root: Path,
+    markdown_path: Path,
+    route: str,
+) -> dict[str, Any]:
+    candidate_path = _canonical_regular_file(
+        Path(candidate_arg), label="replan candidate manifest"
+    )
+    if (
+        candidate_path.parent.name != "replan-candidates"
+        or candidate_path.parent.parent.name != ".runs"
+    ):
+        raise ReviewError("candidate manifest 必须位于 main 的 .runs/replan-candidates/")
+    main_root = _canonical_directory(
+        candidate_path.parent.parent.parent,
+        label="candidate manifest 所属 main 仓根",
+    )
+    candidate = _load_json_object(candidate_path, label="replan candidate manifest")
+    mode = str(candidate.get("mode") or "")
+    work_id = str(candidate.get("work_id") or "")
+    candidate_route = str(candidate.get("route") or "")
+    module = str(candidate.get("module") or "")
+    main_branch = str(candidate.get("main_branch") or "")
+    branch = str(candidate.get("branch") or "")
+    if (
+        _int(candidate.get("schema_version")) != REPLAN_CANDIDATE_SCHEMA_VERSION
+        or mode not in {"main", "worktree"}
+        or candidate_route != route
+        or route not in HANDOFF_ROUTES
+        or not work_id
+        or Path(work_id).name != work_id
+        or candidate_path.name != f"{work_id}.json"
+        or main_branch not in {"main", "master"}
+        or not branch
+    ):
+        raise ReviewError("candidate manifest 的 schema、身份或 route 不合法")
+    module_path = Path(module)
+    module_parts = module_path.parts
+    if len(module_parts) != 3 or module_parts[:2] != ("docs", "modules"):
+        raise ReviewError("candidate manifest 的 module 必须是 docs/modules/<模块>")
+    try:
+        markdown_relative = markdown_path.relative_to(repo_root)
+    except ValueError as exc:
+        raise ReviewError("评审 markdown 不在旧批次仓根内") from exc
+    target_scope = _review_target_scope(markdown_relative)
+    if target_scope is None:
+        raise ReviewError(
+            "评审 markdown 必须是 docs/modules/<模块>/... "
+            "或 docs/modules/<功能>.md"
+        )
+    if target_scope != module_path:
+        work_meta_path = _canonical_regular_file(
+            repo_root / module_path / ".work-meta.json",
+            label="candidate manifest 对应 active work .work-meta.json",
+        )
+        work_meta = _load_json_object(
+            work_meta_path,
+            label="candidate manifest 对应 active work .work-meta.json",
+        )
+        build = work_meta.get("build")
+        if (
+            work_meta.get("id") != work_id
+            or not isinstance(build, dict)
+            or _build_anchor_relative(build, label="candidate active work")
+            != markdown_relative
+        ):
+            raise ReviewError(
+                "candidate manifest 的 module/build.anchor 与评审 markdown 不匹配"
+            )
+
+    worktree = _canonical_directory(
+        Path(str(candidate.get("worktree") or "")),
+        label="candidate manifest worktree",
+    )
+    if worktree != repo_root:
+        raise ReviewError("candidate manifest 未绑定当前旧批次所在 worktree")
+    if mode == "main":
+        expected_main_root = repo_root
+        if branch != main_branch:
+            raise ReviewError("main candidate 的 branch 与 main_branch 不一致")
+    else:
+        expected_main_root = _linked_worktree_main_root(markdown_path, repo_root)
+        if expected_main_root is None:
+            raise ReviewError("无法确认 worktree candidate 所属 main 仓根")
+    if main_root != expected_main_root:
+        raise ReviewError("candidate manifest 不在当前 Git 仓的 main 受控目录")
+
+    oid_pattern = r"[0-9a-f]{40,64}"
+    candidate_head = str(candidate.get("candidate_head") or "")
+    baseline = str(candidate.get("original_baseline_sha") or "")
+    if not re.fullmatch(oid_pattern, candidate_head) or not re.fullmatch(
+        oid_pattern, baseline
+    ):
+        raise ReviewError("candidate manifest 缺少合法 candidate/baseline commit")
+    _verify_replan_candidate_git_provenance(
+        main_root=main_root,
+        worktree=worktree,
+        branch=branch,
+        candidate_head=candidate_head,
+        baseline=baseline,
+    )
+    binding = {
+        "path": candidate_path.relative_to(main_root).as_posix(),
+        "sha256": _file_digest(candidate_path),
+        "schema_version": REPLAN_CANDIDATE_SCHEMA_VERSION,
+        "work_id": work_id,
+        "mode": mode,
+        "route": route,
+        "candidate_head": candidate_head,
+        "original_baseline_sha": baseline,
+        "branch": branch,
+        "worktree": str(worktree),
+        "module": module,
+        "main_branch": main_branch,
+    }
+    if target_scope != module_path:
+        binding["markdown_relative"] = markdown_relative.as_posix()
+    return binding
+
+
+def _direct_product_handoff_binding(
+    *,
+    repo_root: Path,
+    markdown_path: Path,
+    route: str,
+) -> dict[str, Any]:
+    if route != "proposal":
+        raise ReviewError("没有 replan candidate 时只允许产品级 proposal handoff")
+    if _linked_worktree_main_root(markdown_path, repo_root) is not None:
+        raise ReviewError("worktree 评审批次必须先 replan，并绑定 candidate manifest")
+
+    branch_result = _git_provenance_result(repo_root, "branch", "--show-current")
+    branch = os.fsdecode(branch_result.stdout).strip()
+    if branch_result.returncode != 0 or branch not in {"main", "master"}:
+        raise ReviewError("无 active build 的产品级 handoff 只能从 main/master 建立")
+
+    try:
+        active_result = list_active_work(repo_root, cwd=repo_root, strict=True)
+    except StateReadError as exc:
+        raise ReviewError(f"无法安全核验 active build：{exc}") from exc
+    active_builds: list[str] = []
+    for item in active_result["items"]:
+        meta = item.get("meta") if isinstance(item, dict) else None
+        if not isinstance(meta, dict):
+            continue
+        build = meta.get("build") if isinstance(meta.get("build"), dict) else {}
+        lifecycle = str(
+            build.get("lifecycle_state") or meta.get("lifecycle_state") or ""
+        )
+        if lifecycle in ACTIVE_BUILD_STATES:
+            active_builds.append(str(meta.get("id") or item.get("work_dir") or ""))
+    if active_builds:
+        raise ReviewError(
+            "检测到 active build，产品级 handoff 必须先 replan 并绑定 candidate manifest："
+            + "、".join(active_builds)
+        )
+
+    head_result = _git_provenance_result(repo_root, "rev-parse", "HEAD^{commit}")
+    head = os.fsdecode(head_result.stdout).strip().lower()
+    if head_result.returncode != 0 or not re.fullmatch(r"[0-9a-f]{40,64}", head):
+        raise ReviewError("无法绑定产品级 handoff 建立时的 main HEAD")
+    return {
+        "route": "proposal",
+        "branch": branch,
+        "repo_head": head,
+        "active_build_count": 0,
+    }
+
+
+def _verified_main_repository_root(raw_root: Path) -> Path:
+    root = _canonical_directory(raw_root, label="handoff main 仓根")
+    top_result = _git_provenance_result(root, "rev-parse", "--show-toplevel")
+    top_raw = os.fsdecode(top_result.stdout).strip()
+    if top_result.returncode != 0 or not top_raw:
+        raise ReviewError("无法确认 handoff bundle 所属 main Git 仓根")
+    top = _canonical_directory(Path(top_raw), label="Git 返回的 main 仓根")
+    if top != root:
+        raise ReviewError("handoff bundle 必须位于唯一 main Git 仓根")
+    branch_result = _git_provenance_result(root, "branch", "--show-current")
+    branch = os.fsdecode(branch_result.stdout).strip()
+    if branch_result.returncode != 0 or branch not in {"main", "master"}:
+        raise ReviewError("handoff bundle 只能从 main/master 枚举或更新")
+    return root
+
+
+def _handoff_bundle_root(main_root: Path, *, create: bool) -> Path | None:
+    main_root = _verified_main_repository_root(main_root)
+    root = main_root / ".runs" / "lark-review-handoffs"
+    if create:
+        try:
+            ensure_directory_beneath(main_root, root)
+        except AtomicFileError as exc:
+            raise ReviewError(f"无法安全创建 handoff bundle 目录：{exc}") from exc
+    else:
+        try:
+            info = root.lstat()
+        except FileNotFoundError:
+            return None
+        if stat.S_ISLNK(info.st_mode) or not stat.S_ISDIR(info.st_mode):
+            raise ReviewError("handoff bundle 根目录必须是 main 内的真实目录")
+    root = _canonical_directory(root, label="handoff bundle 根目录")
+    for entry in root.iterdir():
+        info = entry.lstat()
+        if stat.S_ISLNK(info.st_mode) or not stat.S_ISDIR(info.st_mode):
+            raise ReviewError(f"handoff bundle 根目录包含非法条目：{entry.name}")
+    return root
+
+
+def _handoff_bundle_dir(main_root: Path, batch_id: str, *, create: bool) -> Path:
+    if not re.fullmatch(r"[0-9a-f]{24}", batch_id):
+        raise ReviewError("handoff batch_id 不是安全的 24 位十六进制标识")
+    root = _handoff_bundle_root(main_root, create=create)
+    if root is None:
+        raise ReviewError("handoff bundle 根目录不存在")
+    bundle_dir = root / batch_id
+    if create:
+        try:
+            ensure_directory_beneath(main_root, bundle_dir)
+        except AtomicFileError as exc:
+            raise ReviewError(f"无法安全创建 handoff bundle：{exc}") from exc
+    bundle_dir = _canonical_directory(bundle_dir, label="handoff bundle 目录")
+    allowed = {
+        *HANDOFF_BUNDLE_REQUIRED_FILES,
+        *HANDOFF_BUNDLE_OPTIONAL_FILES,
+        "candidate-manifest.json",
+        "bundle.json",
+    }
+    for entry in bundle_dir.iterdir():
+        info = entry.lstat()
+        if (
+            entry.name not in allowed
+            or stat.S_ISLNK(info.st_mode)
+            or not stat.S_ISREG(info.st_mode)
+        ):
+            raise ReviewError(f"handoff bundle 包含非法条目：{entry.name}")
+    return bundle_dir
+
+
+def _validate_handoff_phase_history(
+    *,
+    route: str,
+    phase: str,
+    history: object,
+    closure: object,
+) -> None:
+    sequence = HANDOFF_PHASE_SEQUENCES.get(route)
+    if sequence is None or phase not in sequence or not isinstance(history, list):
+        raise ReviewError("handoff bundle 的 phase 或 phase_history 不合法")
+    expected_count = sequence.index(phase)
+    if len(history) != expected_count:
+        raise ReviewError("handoff bundle 的 phase_history 与当前 phase 不一致")
+    for index, item in enumerate(history):
+        if not isinstance(item, dict):
+            raise ReviewError("handoff bundle 的阶段证据必须是对象")
+        expected_from = sequence[index]
+        expected_to = sequence[index + 1]
+        evidence = item.get("evidence")
+        if (
+            item.get("from") != expected_from
+            or item.get("to") != expected_to
+            or not str(item.get("advanced_at") or "")
+            or not isinstance(evidence, dict)
+        ):
+            raise ReviewError("handoff bundle 的阶段顺序或证据不完整")
+        if expected_from == "proposal":
+            if (
+                evidence.get("kind") != "accepted_proposal"
+                or not re.fullmatch(r"[0-9a-f]{40,64}", str(evidence.get("commit") or ""))
+                or not str(evidence.get("proposal_id") or "")
+                or not str(evidence.get("proposal_path") or "")
+            ):
+                raise ReviewError("handoff bundle 缺少有效的 Proposal 生效证据")
+            _sha256_value(
+                evidence.get("proposal_sha256"),
+                label="handoff Proposal proposal_sha256",
+            )
+        elif expected_from == "design":
+            if (
+                evidence.get("kind") != "authority_commit"
+                or not re.fullmatch(r"[0-9a-f]{40,64}", str(evidence.get("commit") or ""))
+                or not str(evidence.get("markdown_relative") or "")
+            ):
+                raise ReviewError("handoff bundle 缺少有效的 design 权威提交证据")
+            _sha256_value(
+                evidence.get("blob_sha256"),
+                label="handoff design blob_sha256",
+            )
+        elif expected_from == "lark_review":
+            if (
+                evidence.get("kind") != "fresh_checkpoint"
+                or not isinstance(closure, dict)
+                or evidence.get("batch_id") != closure.get("batch_id")
+                or evidence.get("review_sha256") != closure.get("review_sha256")
+                or evidence.get("plan_sha256") != closure.get("plan_sha256")
+            ):
+                raise ReviewError("handoff bundle 缺少与 closure 一致的 fresh checkpoint 证据")
+
+
+def _load_handoff_bundle(bundle_path: Path) -> tuple[Path, dict[str, Any]]:
+    bundle_path = _canonical_regular_file(bundle_path, label="handoff bundle.json")
+    if (
+        bundle_path.name != "bundle.json"
+        or bundle_path.parent.parent.name != "lark-review-handoffs"
+        or bundle_path.parent.parent.parent.name != ".runs"
+    ):
+        raise ReviewError("handoff bundle 必须位于 main 的 .runs/lark-review-handoffs/<batch>/")
+    batch_id = bundle_path.parent.name
+    if not re.fullmatch(r"[0-9a-f]{24}", batch_id):
+        raise ReviewError("handoff bundle 目录名不是安全 batch_id")
+    value = _load_json_object(bundle_path, label="handoff bundle.json")
+    route = str(value.get("route") or "")
+    state = str(value.get("state") or "")
+    phase = str(value.get("phase") or "")
+    phase_history = value.get("phase_history")
+    handoff_mode = str(value.get("handoff_mode") or "")
+    module = str(value.get("module") or "")
+    module_path = Path(module)
+    module_parts = module_path.parts
+    markdown_relative = str(value.get("markdown_relative") or "")
+    markdown_path = Path(markdown_relative)
+    target_scope = _review_target_scope(markdown_path)
+    document = value.get("document")
+    artifacts = value.get("artifacts")
+    source_handoff = value.get("source_handoff")
+    candidate = value.get("candidate_manifest")
+    product_baseline = value.get("product_baseline")
+    if (
+        value.get("kind") != HANDOFF_BUNDLE_KIND
+        or _int(value.get("schema_version")) != HANDOFF_BUNDLE_SCHEMA_VERSION
+        or value.get("batch_id") != batch_id
+        or route not in HANDOFF_ROUTES
+        or state not in HANDOFF_BUNDLE_STATES
+        or phase not in HANDOFF_PHASES
+        or not isinstance(phase_history, list)
+        or (state == "pending" and phase == "closed")
+        or (state == "closed" and phase != "closed")
+        or not re.fullmatch(
+            r"[0-9a-f]{40,64}", str(value.get("main_repo_head_at_handoff") or "")
+        )
+        or len(module_parts) != 3
+        or module_parts[:2] != ("docs", "modules")
+        or target_scope is None
+        or markdown_path.as_posix() != markdown_relative
+        or not isinstance(document, dict)
+        or not str(document.get("doc_id") or "")
+        or not isinstance(artifacts, dict)
+        or not isinstance(source_handoff, dict)
+        or source_handoff.get("name") != "handoff.json"
+    ):
+        raise ReviewError("handoff bundle.json 的身份、路由或文档绑定不完整")
+    required = set(HANDOFF_BUNDLE_REQUIRED_FILES)
+    if not required.issubset(artifacts):
+        missing = sorted(required - set(artifacts))
+        raise ReviewError(f"handoff bundle 缺少必要证据：{missing}")
+    allowed = required | set(HANDOFF_BUNDLE_OPTIONAL_FILES) | {"candidate-manifest.json"}
+    if not set(artifacts).issubset(allowed):
+        raise ReviewError("handoff bundle 声明了未知证据文件")
+    for name, binding in artifacts.items():
+        if not isinstance(binding, dict) or binding.get("name") != name:
+            raise ReviewError(f"handoff bundle 的 {name} 绑定不完整")
+        expected = _sha256_value(
+            binding.get("sha256"), label=f"handoff bundle {name}.sha256"
+        )
+        artifact_path = _canonical_regular_file(
+            bundle_path.parent / name,
+            label=f"handoff bundle {name}",
+        )
+        if _file_digest(artifact_path) != expected:
+            raise ReviewError(f"handoff bundle 的 {name} 已变化")
+    if _sha256_value(
+        source_handoff.get("sha256"), label="handoff bundle source_handoff.sha256"
+    ) != str(artifacts["handoff.json"].get("sha256") or ""):
+        raise ReviewError("handoff bundle 的 marker 摘要绑定不一致")
+    if handoff_mode == "active_replan":
+        if (
+            not isinstance(candidate, dict)
+            or product_baseline is not None
+            or candidate.get("route") != route
+            or candidate.get("module") != module
+            or (
+                target_scope != module_path
+                and candidate.get("markdown_relative") != markdown_relative
+            )
+        ):
+            raise ReviewError("active handoff bundle 缺少唯一 candidate 绑定")
+        if "candidate-manifest.json" not in artifacts:
+            raise ReviewError("active handoff bundle 缺少 candidate manifest 快照")
+        if candidate.get("sha256") != artifacts["candidate-manifest.json"].get("sha256"):
+            raise ReviewError("active handoff bundle 的 candidate 摘要不一致")
+    elif handoff_mode == "direct_product_change":
+        if (
+            route != "proposal"
+            or candidate is not None
+            or not isinstance(product_baseline, dict)
+            or product_baseline.get("route") != "proposal"
+            or product_baseline.get("active_build_count") != 0
+            or target_scope != module_path
+        ):
+            raise ReviewError("直接产品 handoff bundle 的基线绑定不完整")
+        if "candidate-manifest.json" in artifacts:
+            raise ReviewError("直接产品 handoff bundle 不应包含 candidate manifest")
+    else:
+        raise ReviewError("handoff bundle 缺少可识别的交接模式")
+    closure = value.get("closure")
+    if state == "closed":
+        if (
+            not isinstance(closure, dict)
+            or not re.fullmatch(r"[0-9a-f]{24}", str(closure.get("batch_id") or ""))
+            or closure.get("batch_id") == batch_id
+        ):
+            raise ReviewError("已关闭 handoff bundle 缺少 fresh batch 绑定")
+        _sha256_value(closure.get("review_sha256"), label="handoff closure review_sha256")
+        _sha256_value(closure.get("plan_sha256"), label="handoff closure plan_sha256")
+    elif closure is not None:
+        raise ReviewError("pending handoff bundle 不得提前写 closure")
+    _validate_handoff_phase_history(
+        route=route,
+        phase=phase,
+        history=phase_history,
+        closure=closure,
+    )
+    return bundle_path, value
+
+
+def _handoff_bundle_summary(bundle_path: Path, value: dict[str, Any]) -> dict[str, Any]:
+    evidence_files = {
+        name: str(bundle_path.parent / name)
+        for name in sorted(value["artifacts"])
+    }
+    return {
+        "state": value["state"],
+        "batch_id": value["batch_id"],
+        "route": value["route"],
+        "phase": value["phase"],
+        "handoff_mode": value["handoff_mode"],
+        "module": value["module"],
+        "markdown_relative": value["markdown_relative"],
+        "document": value["document"],
+        "candidate_manifest": value.get("candidate_manifest"),
+        "product_baseline": value.get("product_baseline"),
+        "handoff_bundle": str(bundle_path),
+        "evidence_dir": str(bundle_path.parent),
+        "evidence_files": evidence_files,
+        "created_at": value.get("created_at"),
+        "main_repo_head_at_handoff": value.get("main_repo_head_at_handoff"),
+        "closure": value.get("closure"),
+        "phase_history": value.get("phase_history"),
+    }
+
+
+def _create_or_load_handoff_bundle(
+    *,
+    main_root: Path,
+    repo_root: Path,
+    manifest_path: Path,
+    manifest: dict[str, Any],
+    marker_path: Path,
+    marker: dict[str, Any],
+    candidate_source: Path | None,
+) -> tuple[Path, dict[str, Any], bool]:
+    main_root = _verified_main_repository_root(main_root)
+    batch_id = str(manifest.get("batch_id") or "")
+    bundle_dir = _handoff_bundle_dir(main_root, batch_id, create=True)
+    bundle_path = bundle_dir / "bundle.json"
+    if _entry_exists(bundle_path, label="handoff bundle.json"):
+        loaded_path, loaded = _load_handoff_bundle(bundle_path)
+        if (
+            loaded.get("route") != marker.get("route")
+            or loaded.get("handoff_mode") != marker.get("handoff_mode")
+            or loaded.get("candidate_manifest") != marker.get("candidate_manifest")
+            or loaded.get("product_baseline") != marker.get("product_baseline")
+            or str((loaded.get("source_handoff") or {}).get("sha256") or "")
+            != _file_digest(marker_path)
+        ):
+            raise ReviewError("已有 main handoff bundle 与当前只读批次不一致")
+        return loaded_path, loaded, True
+
+    source_dir = manifest_path.parent
+    artifacts: dict[str, dict[str, str]] = {}
+    for name in HANDOFF_BUNDLE_REQUIRED_FILES:
+        source = _canonical_regular_file(source_dir / name, label=f"handoff 源证据 {name}")
+        destination = bundle_dir / name
+        _write_text(destination, _read_regular_text(source, label=f"handoff 源证据 {name}"))
+        artifacts[name] = {"name": name, "sha256": _file_digest(destination)}
+    for name in HANDOFF_BUNDLE_OPTIONAL_FILES:
+        source = source_dir / name
+        if not _entry_exists(source, label=f"可选 handoff 源证据 {name}"):
+            continue
+        source = _canonical_regular_file(source, label=f"可选 handoff 源证据 {name}")
+        destination = bundle_dir / name
+        _write_text(destination, _read_regular_text(source, label=f"可选 handoff 源证据 {name}"))
+        artifacts[name] = {"name": name, "sha256": _file_digest(destination)}
+
+    candidate_binding = marker.get("candidate_manifest")
+    if isinstance(candidate_binding, dict):
+        if candidate_source is None:
+            raise ReviewError("active handoff 缺少 candidate manifest 源文件")
+        candidate_source = _canonical_regular_file(
+            candidate_source, label="handoff candidate manifest"
+        )
+        if _file_digest(candidate_source) != candidate_binding.get("sha256"):
+            raise ReviewError("candidate manifest 在 handoff bundle 固化前已变化")
+        destination = bundle_dir / "candidate-manifest.json"
+        _write_text(
+            destination,
+            _read_regular_text(candidate_source, label="handoff candidate manifest"),
+        )
+        artifacts["candidate-manifest.json"] = {
+            "name": "candidate-manifest.json",
+            "sha256": _file_digest(destination),
+        }
+
+    markdown_path = _manifest_markdown_path(manifest)
+    try:
+        markdown_relative = markdown_path.relative_to(repo_root).as_posix()
+    except ValueError as exc:
+        raise ReviewError("handoff markdown 不在旧批次仓根内") from exc
+    target_scope = _review_target_scope(Path(markdown_relative))
+    if target_scope is None:
+        raise ReviewError(
+            "handoff markdown 必须是 docs/modules/<模块>/... "
+            "或 docs/modules/<功能>.md"
+        )
+    candidate_binding = marker.get("candidate_manifest")
+    module = (
+        str(candidate_binding.get("module") or "")
+        if isinstance(candidate_binding, dict)
+        else target_scope.as_posix()
+    )
+    head_result = _git_provenance_result(main_root, "rev-parse", "HEAD^{commit}")
+    main_head = os.fsdecode(head_result.stdout).strip().lower()
+    if head_result.returncode != 0 or not re.fullmatch(r"[0-9a-f]{40,64}", main_head):
+        raise ReviewError("无法绑定 handoff bundle 建立时的 main HEAD")
+    value: dict[str, Any] = {
+        "kind": HANDOFF_BUNDLE_KIND,
+        "schema_version": HANDOFF_BUNDLE_SCHEMA_VERSION,
+        "state": "pending",
+        "batch_id": batch_id,
+        "route": marker["route"],
+        "phase": marker["route"],
+        "phase_history": [],
+        "handoff_mode": marker["handoff_mode"],
+        "created_at": marker.get("created_at"),
+        "main_repo_head_at_handoff": main_head,
+        "module": module,
+        "markdown_relative": markdown_relative,
+        "document": manifest.get("document"),
+        "source_repo_root": str(repo_root),
+        "source_markdown_path": str(markdown_path),
+        "source_handoff": {
+            "name": "handoff.json",
+            "sha256": _file_digest(marker_path),
+        },
+        "candidate_manifest": candidate_binding,
+        "product_baseline": marker.get("product_baseline"),
+        "artifacts": artifacts,
+        "closure": None,
+    }
+    _write_json(bundle_path, value)
+    loaded_path, loaded = _load_handoff_bundle(bundle_path)
+    return loaded_path, loaded, False
+
+
+def list_handoffs(args: argparse.Namespace) -> int:
+    main_root = _verified_main_repository_root(Path(args.main_root))
+    root = _handoff_bundle_root(main_root, create=False)
+    handoffs: list[dict[str, Any]] = []
+    if root is not None:
+        for bundle_dir in sorted(root.iterdir(), key=lambda value: os.fsencode(value.name)):
+            bundle_path, value = _load_handoff_bundle(bundle_dir / "bundle.json")
+            if not args.include_closed and value.get("state") != "pending":
+                continue
+            if args.route and value.get("route") != args.route:
+                continue
+            if args.phase and value.get("phase") != args.phase:
+                continue
+            if args.module and value.get("module") != args.module:
+                continue
+            document = value.get("document")
+            if args.doc_id and (
+                not isinstance(document, dict) or document.get("doc_id") != args.doc_id
+            ):
+                continue
+            handoffs.append(_handoff_bundle_summary(bundle_path, value))
+    print(
+        json.dumps(
+            {
+                "status": "handoff_list",
+                "main_repo_root": str(main_root),
+                "count": len(handoffs),
+                "handoffs": handoffs,
+                "read_only": True,
+            },
+            ensure_ascii=False,
+        )
+    )
+    return 0
+
+
+def _require_commit_ancestry(
+    main_root: Path,
+    *,
+    ancestor: str,
+    descendant: str,
+    label: str,
+) -> None:
+    result = _git_provenance_result(
+        main_root,
+        "merge-base",
+        "--is-ancestor",
+        ancestor,
+        descendant,
+    )
+    if result.returncode != 0:
+        raise ReviewError(f"{label}未承接 handoff 的已记录基线")
+
+
+def _proposal_phase_evidence(
+    main_root: Path,
+    bundle: dict[str, Any],
+) -> dict[str, Any]:
+    try:
+        proposal = validate_current_proposal(main_root)
+    except ProposalContractError as exc:
+        raise ReviewError(f"当前 Product Proposal 尚未形成有效生效版本：{exc}") from exc
+    commit_result = _git_provenance_result(
+        main_root,
+        "log",
+        "-1",
+        "--format=%H",
+        "--",
+        ":(literal).pm-workflow/proposal.json",
+    )
+    commit = os.fsdecode(commit_result.stdout).strip().lower()
+    baseline = str(bundle.get("main_repo_head_at_handoff") or "")
+    if commit_result.returncode != 0 or not re.fullmatch(r"[0-9a-f]{40,64}", commit):
+        raise ReviewError("无法读取当前 Proposal 的生效提交")
+    if commit == baseline:
+        raise ReviewError("当前 Proposal 仍是 handoff 建立时的旧产品基线")
+    _require_commit_ancestry(
+        main_root,
+        ancestor=baseline,
+        descendant=commit,
+        label="Proposal 生效提交",
+    )
+    head_result = _git_provenance_result(main_root, "rev-parse", "HEAD^{commit}")
+    head = os.fsdecode(head_result.stdout).strip().lower()
+    if head_result.returncode != 0 or not re.fullmatch(r"[0-9a-f]{40,64}", head):
+        raise ReviewError("无法读取 main 当前提交")
+    _require_commit_ancestry(
+        main_root,
+        ancestor=commit,
+        descendant=head,
+        label="Proposal 生效提交",
+    )
+    return {
+        "kind": "accepted_proposal",
+        "commit": commit,
+        "proposal_id": proposal["id"],
+        "proposal_path": proposal["path"],
+        "proposal_sha256": proposal["hash"],
+    }
+
+
+def _authority_commit_evidence(
+    main_root: Path,
+    bundle: dict[str, Any],
+    raw_commit: str | None,
+) -> dict[str, Any]:
+    commit = str(raw_commit or "").lower()
+    if not re.fullmatch(r"[0-9a-f]{40,64}", commit):
+        raise ReviewError("design → lark_review 必须提供完整的权威规格提交 SHA")
+    commit_result = _git_provenance_result(
+        main_root,
+        "rev-parse",
+        "--verify",
+        f"{commit}^{{commit}}",
+    )
+    resolved = os.fsdecode(commit_result.stdout).strip().lower()
+    if commit_result.returncode != 0 or resolved != commit:
+        raise ReviewError("权威规格提交不是当前仓可读取的 commit")
+    history = bundle.get("phase_history") or []
+    baseline = str(bundle.get("main_repo_head_at_handoff") or "")
+    if history and isinstance(history[-1], dict):
+        prior_evidence = history[-1].get("evidence")
+        if isinstance(prior_evidence, dict) and prior_evidence.get("kind") == "accepted_proposal":
+            baseline = str(prior_evidence.get("commit") or baseline)
+    if commit == baseline:
+        raise ReviewError("权威规格提交必须晚于 handoff 当前阶段的基线")
+    _require_commit_ancestry(
+        main_root,
+        ancestor=baseline,
+        descendant=commit,
+        label="权威规格提交",
+    )
+    head_result = _git_provenance_result(main_root, "rev-parse", "HEAD^{commit}")
+    head = os.fsdecode(head_result.stdout).strip().lower()
+    if head_result.returncode != 0 or not re.fullmatch(r"[0-9a-f]{40,64}", head):
+        raise ReviewError("无法读取 main 当前提交")
+    _require_commit_ancestry(
+        main_root,
+        ancestor=commit,
+        descendant=head,
+        label="权威规格提交",
+    )
+
+    relative = str(bundle.get("markdown_relative") or "")
+    changed_result = _git_provenance_result(
+        main_root,
+        "diff-tree",
+        "--root",
+        "--no-commit-id",
+        "--name-only",
+        "-r",
+        "-z",
+        commit,
+        "--",
+        f":(literal){relative}",
+    )
+    changed = [os.fsdecode(item) for item in changed_result.stdout.split(b"\0") if item]
+    if changed_result.returncode != 0 or changed != [relative]:
+        raise ReviewError("权威规格提交没有修改当前 handoff 绑定的规格")
+    tree_result = _git_provenance_result(
+        main_root,
+        "ls-tree",
+        "-z",
+        commit,
+        "--",
+        f":(literal){relative}",
+    )
+    entries = [item for item in tree_result.stdout.split(b"\0") if item]
+    if tree_result.returncode != 0 or len(entries) != 1 or b"\t" not in entries[0]:
+        raise ReviewError("权威规格提交中缺少 handoff 绑定的规格")
+    metadata, encoded_path = entries[0].split(b"\t", 1)
+    fields = metadata.split()
+    if (
+        len(fields) != 3
+        or fields[0] not in {b"100644", b"100755"}
+        or fields[1] != b"blob"
+        or os.fsdecode(encoded_path) != relative
+    ):
+        raise ReviewError("权威规格提交中的目标不是普通规格文件")
+    blob_result = _git_provenance_result(main_root, "cat-file", "blob", os.fsdecode(fields[2]))
+    if blob_result.returncode != 0:
+        raise ReviewError("无法读取权威规格提交中的规格正文")
+    current_path = _canonical_regular_file(
+        main_root / relative,
+        label="handoff 当前权威规格",
+    )
+    if current_path.read_bytes() != blob_result.stdout:
+        raise ReviewError("当前权威规格与提供的 design 提交不一致")
+    return {
+        "kind": "authority_commit",
+        "commit": commit,
+        "markdown_relative": relative,
+        "blob_sha256": hashlib.sha256(blob_result.stdout).hexdigest(),
+    }
+
+
+def advance_handoff(args: argparse.Namespace) -> int:
+    bundle_path, bundle = _load_handoff_bundle(Path(args.bundle))
+    if bundle.get("state") != "pending":
+        raise ReviewError("已关闭的 handoff bundle 不能继续推进阶段")
+    target = "lark_review" if args.to == "lark-review" else args.to
+    current = str(bundle.get("phase") or "")
+    if current == target:
+        print(json.dumps({
+            "status": "handoff_phase",
+            "handoff_bundle": str(bundle_path),
+            "route": bundle["route"],
+            "phase": current,
+            "recovered": True,
+        }, ensure_ascii=False))
+        return 0
+    sequence = HANDOFF_PHASE_SEQUENCES[str(bundle.get("route") or "")]
+    if current not in sequence or sequence.index(current) + 1 >= len(sequence):
+        raise ReviewError("handoff bundle 当前 phase 不能继续推进")
+    if sequence[sequence.index(current) + 1] != target or target == "closed":
+        raise ReviewError(f"handoff phase 只能按顺序推进，当前是 {current}")
+    main_root = _verified_main_repository_root(bundle_path.parents[3])
+    if current == "proposal":
+        evidence = _proposal_phase_evidence(main_root, bundle)
+    elif current == "design":
+        evidence = _authority_commit_evidence(main_root, bundle, args.evidence_commit)
+    else:
+        raise ReviewError("lark_review → closed 只能由 fresh checkpoint 完成")
+    updated = dict(bundle)
+    updated["phase"] = target
+    updated["phase_history"] = [
+        *bundle["phase_history"],
+        {
+            "from": current,
+            "to": target,
+            "advanced_at": datetime.now().astimezone().isoformat(timespec="seconds"),
+            "evidence": evidence,
+        },
+    ]
+    _write_json(bundle_path, updated)
+    _, verified = _load_handoff_bundle(bundle_path)
+    print(json.dumps({
+        "status": "handoff_phase",
+        "handoff_bundle": str(bundle_path),
+        "route": verified["route"],
+        "phase": verified["phase"],
+        "evidence": evidence,
+        "recovered": False,
+    }, ensure_ascii=False))
+    return 0
+
+
+def _validate_resumable_plan(
+    manifest_path: Path,
+    manifest: dict[str, Any],
+    plan_path: Path,
+    plan: dict[str, Any],
+) -> None:
+    schema_pair = (
+        _int(manifest.get("schema_version")),
+        _int(plan.get("schema_version")),
+    )
+    if (
+        plan.get("kind") != "pmai_lark_review_apply_plan"
+        or schema_pair
+        not in {
+            (SCHEMA_VERSION, PLAN_SCHEMA_VERSION),
+            (SCHEMA_VERSION, PREVIOUS_PLAN_SCHEMA_VERSION),
+            (LEGACY_REVIEW_SCHEMA_VERSION, LEGACY_PLAN_SCHEMA_VERSION),
+        }
+        or plan.get("state") not in {"draft", "ready"}
+        or plan.get("batch_id") != manifest.get("batch_id")
+    ):
+        raise ReviewError("未完成批次的 apply-plan.json 结构或状态不合法")
+    if _file_digest(manifest_path) != str(
+        (plan.get("manifest") or {}).get("sha256") or ""
+    ):
+        raise ReviewError("未完成批次的 review.json 已变化")
+    resolutions_path = manifest_path.parent / "resolutions.json"
+    target_path = manifest_path.parent / "target.md"
+    if (
+        _file_digest(resolutions_path)
+        != str((plan.get("resolutions") or {}).get("sha256") or "")
+        or _file_digest(target_path)
+        != str((plan.get("target") or {}).get("sha256") or "")
+    ):
+        raise ReviewError("未完成批次的 target/resolutions 已变化")
+    if plan.get("state") == "ready" and plan.get("ready_token") != _ready_token(plan):
+        raise ReviewError("未完成批次的 ready plan 绑定不完整")
+
+
+def handoff(args: argparse.Namespace) -> int:
+    manifest_path = _manifest_path(args.manifest)
+    manifest = _load_manifest(manifest_path)
+    if _int(manifest.get("schema_version")) != SCHEMA_VERSION:
+        raise ReviewError("只读 handoff 只接受当前 schema 的新评审批次")
+    markdown_path = _manifest_markdown_path(manifest)
+    repo_root = _manifest_repository_root(manifest, markdown_path)
+    plan_path = _canonical_regular_file(
+        manifest_path.parent / "apply-plan.json",
+        label="apply-plan.json",
+    )
+    plan = _load_json_object(plan_path, label="apply-plan.json")
+    candidate_source: Path | None = None
+    if args.candidate_manifest:
+        handoff_mode = "active_replan"
+        candidate_source = _canonical_regular_file(
+            Path(args.candidate_manifest), label="replan candidate manifest"
+        )
+        candidate_binding = _replan_candidate_binding(
+            str(candidate_source),
+            repo_root=repo_root,
+            markdown_path=markdown_path,
+            route=str(args.route),
+        )
+        main_root = candidate_source.parent.parent.parent
+        product_baseline_binding = None
+    else:
+        handoff_mode = "direct_product_change"
+        candidate_binding = None
+        main_root = repo_root
+        product_baseline_binding = _direct_product_handoff_binding(
+            repo_root=repo_root,
+            markdown_path=markdown_path,
+            route=str(args.route),
+        )
+
+    marker_path = _handoff_path(manifest_path)
+    if _entry_exists(marker_path, label="handoff.json"):
+        marker = _load_handoff_marker(
+            manifest_path,
+            manifest,
+            plan_path=plan_path,
+            plan=plan,
+        )
+        if (
+            marker is None
+            or marker.get("route") != args.route
+            or marker.get("candidate_manifest") != candidate_binding
+            or marker.get("product_baseline") != product_baseline_binding
+            or marker.get("handoff_mode") != handoff_mode
+        ):
+            raise ReviewError("已有 handoff 与本次 route 或上游交接基线不一致")
+        recovered = True
+    else:
+        if (
+            plan.get("kind") != "pmai_lark_review_apply_plan"
+            or _int(plan.get("schema_version")) != PLAN_SCHEMA_VERSION
+            or plan.get("batch_id") != manifest.get("batch_id")
+            or plan.get("state") != "draft"
+            or plan.get("ready_token")
+        ):
+            raise ReviewError("只有尚未 seal/apply 的当前 draft 批次可以转为只读 handoff")
+        _validate_resumable_plan(manifest_path, manifest, plan_path, plan)
+        sources = _source_artifacts(manifest_path, manifest)
+        current_raw = _read_regular_text(markdown_path, label="handoff 目标 markdown")
+        _, current_body = parse_frontmatter(current_raw)
+        if hashlib.sha256(current_body.encode("utf-8")).hexdigest() != sources[
+            "local.md"
+        ]["exact_body_sha256"]:
+            raise ReviewError("正式规格已在 collect 后变化，不能把旧批次标成 unapplied handoff")
+        draft_plan_sha = _file_digest(plan_path)
+        resolutions_path = manifest_path.parent / "resolutions.json"
+        target_path = manifest_path.parent / "target.md"
+        marker = {
+            "kind": HANDOFF_KIND,
+            "schema_version": HANDOFF_SCHEMA_VERSION,
+            "state": "read_only",
+            "batch_id": manifest.get("batch_id"),
+            "route": args.route,
+            "handoff_mode": handoff_mode,
+            "created_at": datetime.now().astimezone().isoformat(timespec="seconds"),
+            "review": {"name": "review.json", "sha256": _file_digest(manifest_path)},
+            "draft_plan": {"name": "apply-plan.json", "sha256": draft_plan_sha},
+            "resolutions": {
+                "name": "resolutions.json",
+                "sha256": _file_digest(resolutions_path),
+            },
+            "target": {"name": "target.md", "sha256": _file_digest(target_path)},
+            "candidate_manifest": candidate_binding,
+            "product_baseline": product_baseline_binding,
+        }
+        _write_json(marker_path, marker)
+        recovered = False
+
+    if plan.get("state") == "draft":
+        transitioned = dict(plan)
+        transitioned["state"] = "handed_off"
+        transitioned.pop("ready_token", None)
+        transitioned["handoff"] = {
+            "name": "handoff.json",
+            "sha256": _file_digest(marker_path),
+            "draft_plan_sha256": marker["draft_plan"]["sha256"],
+            "route": args.route,
+        }
+        _write_json(plan_path, transitioned)
+        plan = transitioned
+    _load_handoff_marker(
+        manifest_path,
+        manifest,
+        plan_path=plan_path,
+        plan=plan,
+    )
+    bundle_path, bundle, bundle_recovered = _create_or_load_handoff_bundle(
+        main_root=main_root,
+        repo_root=repo_root,
+        manifest_path=manifest_path,
+        manifest=manifest,
+        marker_path=marker_path,
+        marker=marker,
+        candidate_source=candidate_source,
+    )
+    output = {
+        "status": "handed_off",
+        "state": "read_only",
+        "batch_id": manifest.get("batch_id"),
+        "route": args.route,
+        "handoff_mode": handoff_mode,
+        "candidate_manifest": (
+            candidate_binding["path"] if candidate_binding is not None else None
+        ),
+        "candidate_manifest_sha256": (
+            candidate_binding["sha256"] if candidate_binding is not None else None
+        ),
+        "product_baseline": product_baseline_binding,
+        "handoff": str(marker_path),
+        "handoff_bundle": str(bundle_path),
+        "handoff_bundle_state": bundle.get("state"),
+        "bundle_recovered": bundle_recovered,
+        "recovered": recovered,
+    }
+    print(json.dumps(output, ensure_ascii=False))
+    return 0
+
+
+def _checkpoint_receipt_path(manifest_path: Path) -> Path:
+    return manifest_path.parent / "checkpoint.json"
+
+
+def _load_checkpoint_receipt(
+    manifest_path: Path,
+    manifest: dict[str, Any],
+    plan_path: Path | None,
+    plan: dict[str, Any] | None,
+) -> dict[str, Any] | None:
+    receipt_path = _checkpoint_receipt_path(manifest_path)
+    if not _entry_exists(receipt_path, label="checkpoint.json"):
+        return None
+    if plan_path is None or plan is None:
+        raise ReviewError("checkpoint.json 存在但缺少对应 apply-plan.json")
+    receipt_path = _canonical_regular_file(receipt_path, label="checkpoint.json")
+    receipt = _load_json_object(receipt_path, label="checkpoint.json")
+    document = receipt.get("document")
+    if (
+        receipt.get("kind") != CHECKPOINT_KIND
+        or _int(receipt.get("schema_version")) != CHECKPOINT_SCHEMA_VERSION
+        or receipt.get("batch_id") != manifest.get("batch_id")
+        or receipt.get("review_sha256") != _file_digest(manifest_path)
+        or receipt.get("plan_sha256") != _file_digest(plan_path)
+        or receipt.get("markdown_path") != str(_manifest_markdown_path(manifest))
+        or not str(receipt.get("reviewed_at") or "")
+        or not isinstance(document, dict)
+        or document.get("doc_id") != (manifest.get("document") or {}).get("doc_id")
+        or _int(document.get("published_revision_id")) is None
+        or plan.get("state") != "ready"
+    ):
+        raise ReviewError("checkpoint.json 与评审批次绑定不完整或已漂移")
+    return receipt
+
+
+def _scan_resumable_review_root(
+    review_root: Path,
+    *,
+    markdown_filter: Path | None = None,
+    expected_repo_root: Path | None = None,
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]]]:
+    resumable: list[dict[str, Any]] = []
+    skipped_handoffs: list[dict[str, Any]] = []
+    skipped_checkpoints: list[dict[str, Any]] = []
+    for entry in sorted(review_root.iterdir(), key=lambda value: os.fsencode(value.name)):
+        if not entry.name.startswith("batch."):
+            continue
+        batch_dir = _canonical_directory(entry, label="lark-review 批次目录")
+        manifest_path = batch_dir / "review.json"
+        if not _entry_exists(manifest_path, label="review.json"):
+            continue
+        manifest_path = _canonical_regular_file(manifest_path, label="review.json")
+        manifest = _load_manifest(manifest_path)
+        markdown_path = _manifest_markdown_path(manifest)
+        if markdown_filter is not None and markdown_path != markdown_filter:
+            continue
+        repo_root = _manifest_repository_root(manifest, markdown_path)
+        if expected_repo_root is not None and repo_root != expected_repo_root:
+            raise ReviewError("评审批次声明的仓根与所在 worktree 不一致")
+        plan_path = batch_dir / "apply-plan.json"
+        plan: dict[str, Any] | None = None
+        if _entry_exists(plan_path, label="apply-plan.json"):
+            plan_path = _canonical_regular_file(plan_path, label="apply-plan.json")
+            plan = _load_json_object(plan_path, label="apply-plan.json")
+        marker = _load_handoff_marker(
+            manifest_path,
+            manifest,
+            plan_path=plan_path if plan is not None else None,
+            plan=plan,
+        )
+        if marker is not None:
+            skipped_handoffs.append(
+                {
+                    "batch_id": manifest.get("batch_id"),
+                    "batch_dir": str(batch_dir),
+                    "route": marker.get("route"),
+                    "reason": "read_only_handoff",
+                }
+            )
+            continue
+        checkpoint = _load_checkpoint_receipt(
+            manifest_path,
+            manifest,
+            plan_path if plan is not None else None,
+            plan,
+        )
+        if checkpoint is not None:
+            skipped_checkpoints.append(
+                {
+                    "batch_id": manifest.get("batch_id"),
+                    "batch_dir": str(batch_dir),
+                    "reason": "checkpointed",
+                }
+            )
+            continue
+        sources = _source_artifacts(manifest_path, manifest)
+        _, current_body = parse_frontmatter(
+            _read_regular_text(markdown_path, label="恢复扫描目标 markdown")
+        )
+        current_exact = hashlib.sha256(current_body.encode("utf-8")).hexdigest()
+        valid_current_hashes = {sources["local.md"]["exact_body_sha256"]}
+        state = "collected"
+        if plan is not None:
+            _validate_resumable_plan(manifest_path, manifest, plan_path, plan)
+            state = str(plan.get("state") or "")
+            if state == "ready":
+                valid_current_hashes.add(
+                    str((plan.get("target") or {}).get("exact_body_sha256") or "")
+                )
+        if current_exact not in valid_current_hashes:
+            raise ReviewError("未完成批次绑定的本地正文已变化，请先归位现场")
+        resumable.append(
+            {
+                "batch_id": manifest.get("batch_id"),
+                "batch_dir": str(batch_dir),
+                "manifest": str(manifest_path),
+                "state": state,
+                "repo_root": str(repo_root),
+                "markdown_path": str(markdown_path),
+                "markdown_relative": str(markdown_path.relative_to(repo_root)),
+                "module": (
+                    _review_target_scope(markdown_path.relative_to(repo_root)).as_posix()
+                    if _review_target_scope(markdown_path.relative_to(repo_root)) is not None
+                    else None
+                ),
+                "document": manifest.get("document"),
+            }
+        )
+    return resumable, skipped_handoffs, skipped_checkpoints
+
+
+def find_resumable(args: argparse.Namespace) -> int:
+    markdown_path = _canonical_regular_file(
+        Path(args.markdown), label="恢复扫描目标 markdown"
+    )
+    review_root = _canonical_directory(
+        Path(args.review_root), label="lark-review 批次根目录"
+    )
+    resumable, skipped_handoffs, skipped_checkpoints = _scan_resumable_review_root(
+        review_root,
+        markdown_filter=markdown_path,
+    )
+    if len(resumable) > 1:
+        raise ReviewError("同一目标存在多个可恢复批次，不能靠最新目录猜测")
+    result: dict[str, Any] = {
+        "status": "resumable" if resumable else "none",
+        "markdown_path": str(markdown_path),
+        "resumable_count": len(resumable),
+        "skipped_handoff_count": len(skipped_handoffs),
+        "skipped_handoffs": skipped_handoffs,
+        "skipped_checkpoint_count": len(skipped_checkpoints),
+        "skipped_checkpoints": skipped_checkpoints,
+    }
+    if resumable:
+        result["batch"] = resumable[0]
+    print(json.dumps(result, ensure_ascii=False))
+    return 0
+
+
+def list_resumables(args: argparse.Namespace) -> int:
+    main_root = _verified_main_repository_root(Path(args.main_root))
+    roots: list[Path] = []
+    for binding in _git_worktree_bindings(main_root):
+        raw = binding.get("worktree")
+        if not raw:
+            raise ReviewError("Git worktree 清单缺少 worktree 路径")
+        root = _canonical_directory(Path(raw), label="评审恢复 worktree")
+        if _git_toplevel(root, label="评审恢复 worktree") != root:
+            raise ReviewError("评审恢复扫描只接受 Git worktree 根目录")
+        if root not in roots:
+            roots.append(root)
+
+    resumable: list[dict[str, Any]] = []
+    skipped_handoffs: list[dict[str, Any]] = []
+    skipped_checkpoints: list[dict[str, Any]] = []
+    for root in roots:
+        review_root = root / ".pm-workflow" / "context" / "lark-review"
+        try:
+            info = review_root.lstat()
+        except FileNotFoundError:
+            continue
+        if stat.S_ISLNK(info.st_mode) or not stat.S_ISDIR(info.st_mode):
+            raise ReviewError("lark-review 批次根目录必须是 worktree 内真实目录")
+        canonical_review_root = _canonical_directory(
+            review_root,
+            label="lark-review 批次根目录",
+        )
+        found, handed_off, checkpointed = _scan_resumable_review_root(
+            canonical_review_root,
+            expected_repo_root=root,
+        )
+        resumable.extend(found)
+        skipped_handoffs.extend(handed_off)
+        skipped_checkpoints.extend(checkpointed)
+
+    identities: dict[tuple[str, str], list[dict[str, Any]]] = {}
+    for item in resumable:
+        document = item.get("document")
+        doc_id = str(document.get("doc_id") or "") if isinstance(document, dict) else ""
+        key = (doc_id, str(item.get("markdown_relative") or ""))
+        identities.setdefault(key, []).append(item)
+    duplicates = [items for items in identities.values() if len(items) > 1]
+    if duplicates:
+        raise ReviewError("同一飞书文档与规格存在多个可恢复批次，不能靠 worktree 或时间猜测")
+    resumable.sort(
+        key=lambda item: (
+            str(item.get("markdown_relative") or ""),
+            str(item.get("batch_id") or ""),
+        )
+    )
+    print(json.dumps({
+        "status": "resumable_list",
+        "main_repo_root": str(main_root),
+        "count": len(resumable),
+        "batches": resumable,
+        "skipped_handoff_count": len(skipped_handoffs),
+        "skipped_checkpoint_count": len(skipped_checkpoints),
+        "read_only": True,
+    }, ensure_ascii=False))
+    return 0
 
 
 def _segment_hash(lines: list[str]) -> str:
@@ -2303,10 +3985,209 @@ def _validate_target_derivation(
     return {"mode": mode, "authority": authority, "reason": reason}
 
 
+def _validate_active_build_delta(
+    value: dict[str, Any] | None,
+    *,
+    repo_root: Path,
+    markdown_path: Path,
+    body_records: list[dict[str, Any]],
+    comment_records: list[dict[str, Any]],
+    decision_routes: list[dict[str, Any]],
+    target_body: str,
+) -> dict[str, Any] | None:
+    """Bind a scoped review route to the exact active build before seal."""
+
+    if value is None:
+        return None
+    expected_keys = {
+        "kind",
+        "scope_attestation",
+        "module",
+        "work_id",
+        "approved_source_hash_before",
+        "design_revision_before",
+        "summary",
+        "affected_surfaces",
+        "affects",
+        "source_items",
+        "authority",
+        "reason",
+    }
+    if set(value) != expected_keys:
+        raise ReviewError(
+            "active_build_delta 字段不完整；必须在 seal 前固化当前 build、"
+            "scoped-adjustment 口径、影响面和来源"
+        )
+    if (
+        value.get("kind") != ACTIVE_BUILD_DELTA_KIND
+        or value.get("scope_attestation") != ACTIVE_BUILD_SCOPE_ATTESTATION
+        or value.get("authority") != "pm_confirmed"
+    ):
+        raise ReviewError(
+            "active_build_delta 只接受 PM 已确认且不改变产品基线或模块模型的 "
+            "scoped-adjustment"
+        )
+
+    try:
+        module_relative = markdown_path.parent.relative_to(repo_root).as_posix()
+    except ValueError as exc:
+        raise ReviewError("active_build_delta 对应规格不在当前 PMAI 仓内") from exc
+    module_parts = Path(module_relative).parts
+    if (
+        markdown_path.name != "spec.md"
+        or len(module_parts) != 3
+        or module_parts[:2] != ("docs", "modules")
+        or not module_parts[2]
+        or module_parts[2].startswith(".")
+        or value.get("module") != module_relative
+    ):
+        raise ReviewError("active_build_delta 未绑定当前 docs/modules/<模块>/spec.md")
+
+    work_meta_path = _canonical_regular_file(
+        markdown_path.parent / ".work-meta.json",
+        label="active build .work-meta.json",
+    )
+    work_meta = _load_json_object(work_meta_path, label="active build .work-meta.json")
+    build = work_meta.get("build")
+    lifecycle_state = str(
+        (build.get("lifecycle_state") if isinstance(build, dict) else None)
+        or work_meta.get("lifecycle_state")
+        or ""
+    )
+    if (
+        work_meta.get("status") != "active"
+        or not isinstance(build, dict)
+        or lifecycle_state not in ACTIVE_BUILD_STATES
+        or value.get("work_id") != work_meta.get("id")
+        or value.get("approved_source_hash_before")
+        != build.get("approved_source_hash")
+        or isinstance(value.get("design_revision_before"), bool)
+        or not isinstance(value.get("design_revision_before"), int)
+        or value.get("design_revision_before") != build.get("design_revision")
+    ):
+        raise ReviewError(
+            "active_build_delta 未绑定当前 active build 的 work ID、设计版本和批准依据"
+        )
+
+    checkpoint_commit = str(
+        build.get("authority_checkpoint_commit")
+        or work_meta.get("design_checkpoint_commit")
+        or ""
+    )
+    if not re.fullmatch(r"[0-9a-f]{40,64}", checkpoint_commit):
+        raise ReviewError("active_build_delta 缺少上一份权威规格的 Git checkpoint")
+    try:
+        previous_spec = subprocess.run(
+            [
+                "git",
+                "-C",
+                str(repo_root),
+                "show",
+                f"{checkpoint_commit}:{module_relative}/spec.md",
+            ],
+            capture_output=True,
+            text=True,
+            timeout=10,
+            check=False,
+        )
+    except (OSError, subprocess.SubprocessError) as exc:
+        raise ReviewError(f"无法读取上一份权威规格：{exc}") from exc
+    if previous_spec.returncode != 0:
+        raise ReviewError("上一份 authority checkpoint 不包含当前模块 spec.md")
+    _, previous_body = parse_frontmatter(previous_spec.stdout)
+    previous_body_sha256 = hashlib.sha256(previous_body.encode("utf-8")).hexdigest()
+    target_body_sha256 = hashlib.sha256(target_body.encode("utf-8")).hexdigest()
+    if previous_body_sha256 == target_body_sha256:
+        raise ReviewError(
+            "active_build_delta 没有形成真实规格正文变化；仅发布 frontmatter 变化不能写 delta"
+        )
+
+    summary = str(value.get("summary") or "").strip()
+    reason = str(value.get("reason") or "").strip()
+    surfaces = value.get("affected_surfaces")
+    affects = value.get("affects")
+    if (
+        not summary
+        or not reason
+        or not isinstance(surfaces, list)
+        or not surfaces
+        or any(not isinstance(item, str) or not item.strip() for item in surfaces)
+        or len(set(surfaces)) != len(surfaces)
+        or not isinstance(affects, list)
+    ):
+        raise ReviewError("active_build_delta 缺少明确的新口径、影响面或确认原因")
+    normalised_affects: list[dict[str, str]] = []
+    seen_affects: set[tuple[str, str]] = set()
+    for item in affects:
+        if not isinstance(item, dict) or set(item) != {"kind", "name"}:
+            raise ReviewError("active_build_delta.affects 只能记录 term / role 的准确名称")
+        key = (str(item.get("kind") or ""), str(item.get("name") or "").strip())
+        if key[0] not in {"term", "role"} or not key[1] or key in seen_affects:
+            raise ReviewError("active_build_delta.affects 包含非法或重复的 term / role")
+        seen_affects.add(key)
+        normalised_affects.append({"kind": key[0], "name": key[1]})
+
+    if any(
+        isinstance(item, dict) and item.get("outcome") in {"create", "supersede"}
+        for item in decision_routes
+    ):
+        raise ReviewError(
+            "active_build_delta 不能与 create / supersede 稳定模块决定同时 seal；"
+            "模块模型变化必须回 design"
+        )
+
+    expected_sources = [
+        f"body:{str(item.get('change_id') or '')}"
+        for item in body_records
+        if isinstance(item, dict) and str(item.get("change_id") or "")
+    ]
+    expected_sources.extend(
+        f"comment:{str(item.get('comment_id') or '')}"
+        for item in comment_records
+        if isinstance(item, dict)
+        and item.get("decision") == "applied"
+        and str(item.get("comment_id") or "")
+    )
+    source_items = value.get("source_items")
+    if not expected_sources or source_items != expected_sources:
+        raise ReviewError(
+            "active_build_delta.source_items 必须按批次顺序完整绑定全部正文归位项"
+            "和 applied 评论"
+        )
+    return {
+        "kind": ACTIVE_BUILD_DELTA_KIND,
+        "scope_attestation": ACTIVE_BUILD_SCOPE_ATTESTATION,
+        "module": module_relative,
+        "work_id": str(value["work_id"]),
+        "approved_source_hash_before": str(value["approved_source_hash_before"]),
+        "design_revision_before": int(value["design_revision_before"]),
+        "summary": summary,
+        "affected_surfaces": [str(item) for item in surfaces],
+        "affects": normalised_affects,
+        "source_items": [str(item) for item in source_items],
+        "authority": "pm_confirmed",
+        "reason": reason,
+        "authority_checkpoint_commit": checkpoint_commit,
+        "previous_spec_body_sha256": previous_body_sha256,
+        "target_body_sha256": target_body_sha256,
+    }
+
+
 def reconcile(args: argparse.Namespace) -> int:
     reconcile_started = time.monotonic()
     manifest_path = _manifest_path(args.manifest)
     manifest = _load_manifest(manifest_path)
+    plan_path = manifest_path.parent / "apply-plan.json"
+    existing_plan: dict[str, Any] | None = None
+    if _entry_exists(plan_path, label="apply-plan.json"):
+        plan_path = _canonical_regular_file(plan_path, label="apply-plan.json")
+        existing_plan = _load_json_object(plan_path, label="apply-plan.json")
+    _reject_read_only_handoff(
+        manifest_path,
+        manifest,
+        plan_path=plan_path if existing_plan is not None else None,
+        plan=existing_plan,
+    )
     sources = _source_artifacts(manifest_path, manifest)
     native_snapshot = _native_snapshot_artifact(manifest_path, manifest)
     markdown_path = _manifest_markdown_path(manifest)
@@ -2318,7 +4199,6 @@ def reconcile(args: argparse.Namespace) -> int:
 
     resolutions_path = manifest_path.parent / "resolutions.json"
     target_path = manifest_path.parent / "target.md"
-    plan_path = manifest_path.parent / "apply-plan.json"
     coverage_path = manifest_path.parent / "remote-coverage.json"
     preview_path = manifest_path.parent / "remote-preview.md"
     if args.resolutions:
@@ -2342,6 +4222,7 @@ def reconcile(args: argparse.Namespace) -> int:
             preview_resolution,
             decision_routing_resolutions,
             consistency_receipt,
+            active_build_delta,
         ) = _resolution_maps(
             resolutions_path,
             expected_batch_id=str(manifest.get("batch_id") or ""),
@@ -2358,6 +4239,7 @@ def reconcile(args: argparse.Namespace) -> int:
         preview_resolution = _default_preview_resolution()
         decision_routing_resolutions = []
         consistency_receipt = _default_consistency_receipt()
+        active_build_delta = None
 
     body_meta = manifest.get("body") or {}
     baseline_body = sources.get("baseline.md", {}).get("text")
@@ -2394,6 +4276,7 @@ def reconcile(args: argparse.Namespace) -> int:
                 "preview": preview_resolution,
                 "decision_routing": decision_routing_resolutions,
                 "consistency": consistency_receipt,
+                "active_build_delta": active_build_delta,
             },
         )
     target_body = _read_regular_text(target_path, label="target.md")
@@ -2492,6 +4375,15 @@ def reconcile(args: argparse.Namespace) -> int:
             repo_root=repo_root,
             target_body=target_body,
         )
+        active_build_delta = _validate_active_build_delta(
+            active_build_delta,
+            repo_root=repo_root,
+            markdown_path=markdown_path,
+            body_records=body_records,
+            comment_records=comment_records,
+            decision_routes=decision_routing_resolutions,
+            target_body=target_body,
+        )
     state = "ready" if args.seal and unresolved == 0 and not has_markers else "draft"
 
     artifacts_for_plan = {
@@ -2563,6 +4455,7 @@ def reconcile(args: argparse.Namespace) -> int:
         "target_derivation": target_derivation,
         "decision_routing": decision_routing_resolutions,
         "consistency": consistency_receipt,
+        "active_build_delta": active_build_delta,
         "decision_write_count": sum(
             1
             for item in decision_routing_resolutions
@@ -2630,6 +4523,275 @@ def _validate_local_document_identity(
         raise ReviewError(f"{label} 与评审批次的飞书文档身份不匹配")
 
 
+def _validate_sealed_batch_contract(
+    manifest_path: Path,
+    manifest: dict[str, Any],
+    plan_path: Path,
+    plan: dict[str, Any],
+    *,
+    require_current_schema: bool = False,
+) -> dict[str, Any]:
+    """Replay the complete read-only seal contract shared by apply and build."""
+
+    _reject_read_only_handoff(
+        manifest_path,
+        manifest,
+        plan_path=plan_path,
+        plan=plan,
+    )
+    schema_pair = (
+        _int(manifest.get("schema_version")),
+        _int(plan.get("schema_version")),
+    )
+    allowed_pairs = {
+        (SCHEMA_VERSION, PLAN_SCHEMA_VERSION),
+        (SCHEMA_VERSION, PREVIOUS_PLAN_SCHEMA_VERSION),
+        (LEGACY_REVIEW_SCHEMA_VERSION, LEGACY_PLAN_SCHEMA_VERSION),
+    }
+    if (
+        plan.get("kind") != "pmai_lark_review_apply_plan"
+        or schema_pair not in allowed_pairs
+        or plan.get("state") != "ready"
+        or (require_current_schema and schema_pair != (SCHEMA_VERSION, PLAN_SCHEMA_VERSION))
+    ):
+        raise ReviewError("只接受 schema 匹配且已 seal 的 ready plan")
+
+    manifest_path = _canonical_regular_file(manifest_path, label="review.json")
+    plan_path = _canonical_regular_file(plan_path, label="apply-plan.json")
+    batch_dir = _canonical_directory(plan_path.parent, label="lark-review 批次目录")
+    resolutions_path = _canonical_regular_file(
+        batch_dir / "resolutions.json", label="resolutions.json"
+    )
+    target_path = _canonical_regular_file(batch_dir / "target.md", label="target.md")
+    coverage_path = _canonical_regular_file(
+        batch_dir / "remote-coverage.json", label="remote-coverage.json"
+    )
+    preview_path = _canonical_regular_file(
+        batch_dir / "remote-preview.md", label="remote-preview.md"
+    )
+    if manifest.get("batch_id") != plan.get("batch_id"):
+        raise ReviewError("apply-plan.json 与 review.json 批次不匹配")
+    markdown_path = _manifest_markdown_path(manifest)
+    repo_root = _manifest_repository_root(manifest, markdown_path)
+    if (
+        str(plan.get("repo_root") or "") != str(repo_root)
+        or str(plan.get("markdown_path") or "") != str(markdown_path)
+    ):
+        raise ReviewError("apply-plan.json 未绑定 review.json 的仓根与本地规格")
+    if (
+        _file_digest(manifest_path)
+        != str((plan.get("manifest") or {}).get("sha256") or "")
+        or _file_digest(resolutions_path)
+        != str((plan.get("resolutions") or {}).get("sha256") or "")
+        or _file_digest(target_path)
+        != str((plan.get("target") or {}).get("sha256") or "")
+        or plan.get("ready_token") != _ready_token(plan)
+    ):
+        raise ReviewError("sealed ready plan 的 review / resolutions / T 绑定已失效")
+    unresolved_count = plan.get("unresolved_count")
+    if isinstance(unresolved_count, bool) or not isinstance(unresolved_count, int) or unresolved_count != 0:
+        raise ReviewError("sealed ready plan 仍包含待决项")
+
+    sources = _source_artifacts(manifest_path, manifest)
+    current_sources = {
+        name: {
+            "sha256": value["sha256"],
+            "exact_body_sha256": value["exact_body_sha256"],
+            "body_sha256": value["body_sha256"],
+        }
+        for name, value in sources.items()
+    }
+    if current_sources != plan.get("sources"):
+        raise ReviewError("B/L/R 快照与 sealed ready plan 不一致")
+    native_snapshot = _native_snapshot_artifact(manifest_path, manifest)
+    remote_revision = _int((manifest.get("document") or {}).get("current_revision_id"))
+    if (
+        plan.get("target_base") != "remote_native_snapshot"
+        or _int(plan.get("target_base_revision")) != remote_revision
+        or (plan.get("remote_native") or {}).get("sha256") != native_snapshot["sha256"]
+    ):
+        raise ReviewError("sealed ready plan 未绑定采集时飞书原生底稿")
+
+    (
+        body_resolutions,
+        comment_resolutions,
+        target_derivation,
+        coverage_resolutions,
+        preview_resolution,
+        decision_routes,
+        consistency_receipt,
+        active_build_delta,
+    ) = _resolution_maps(
+        resolutions_path,
+        expected_batch_id=str(manifest.get("batch_id") or ""),
+    )
+    body_meta = manifest.get("body") or {}
+    baseline_body = sources.get("baseline.md", {}).get("text")
+    reconciled_body, body_records, _, body_unresolved = _build_body_reconciliation(
+        baseline_body if isinstance(baseline_body, str) else None,
+        str(sources["local.md"]["text"]),
+        str(sources["remote.md"]["text"]),
+        body_status=str(body_meta.get("status") or ""),
+        common_ancestor_compatible=bool(body_meta.get("common_ancestor_compatible")),
+        resolutions=body_resolutions,
+        sealing=True,
+    )
+    comment_records, _, comment_unresolved = _comment_reconciliation(
+        manifest,
+        comment_resolutions,
+        sealing=True,
+    )
+    target_body = _read_regular_text(target_path, label="target.md")
+    target_frontmatter, _ = parse_frontmatter(target_body)
+    if target_frontmatter:
+        raise ReviewError("target.md 只能包含正文，不能带 frontmatter")
+    if body_unresolved or comment_unresolved or any(
+        marker in target_body
+        for marker in ("<<<<<<< LOCAL ", "||||||| BASELINE ", ">>>>>>> REMOTE ")
+    ):
+        raise ReviewError("sealed ready plan 的归位结果仍有待决项或冲突标记")
+
+    required = plan.get("required_items")
+    if not isinstance(required, dict) or required.get("body") != body_records or required.get(
+        "comments"
+    ) != comment_records:
+        raise ReviewError("resolutions.json 与 sealed ready plan 的 required_items 不一致")
+    target_derivation = _validate_target_derivation(
+        target_derivation,
+        target_body=target_body,
+        reconciled_body=reconciled_body,
+    )
+    if target_derivation != plan.get("target_derivation"):
+        raise ReviewError("T 的派生说明与 sealed ready plan 不一致")
+    if any(item.get("decision") == "applied" for item in comment_records) and (
+        target_derivation["mode"] != "lifecycle_compiled"
+        or _normalise(target_body) == _normalise(reconciled_body)
+    ):
+        raise ReviewError("applied 评论没有被生命周期真实编译进独立 T")
+
+    decision_routes = _validate_decision_routing(
+        decision_routes,
+        body_records=body_records,
+        comment_records=comment_records,
+        repo_root=repo_root,
+    )
+    if decision_routes != plan.get("decision_routing"):
+        raise ReviewError("decision 归档路由与 sealed ready plan 不一致")
+    if schema_pair == (SCHEMA_VERSION, PLAN_SCHEMA_VERSION):
+        consistency_receipt = _validate_consistency_receipt(
+            consistency_receipt,
+            routes=decision_routes,
+            repo_root=repo_root,
+            target_body=target_body,
+        )
+        if consistency_receipt != plan.get("consistency"):
+            raise ReviewError("跨决定一致性回执与 sealed ready plan 不一致")
+        active_build_delta = _validate_active_build_delta(
+            active_build_delta,
+            repo_root=repo_root,
+            markdown_path=markdown_path,
+            body_records=body_records,
+            comment_records=comment_records,
+            decision_routes=decision_routes,
+            target_body=target_body,
+        )
+        if active_build_delta != plan.get("active_build_delta"):
+            raise ReviewError("active build scoped-adjustment 路由与 seal 结果不一致")
+
+    expected_coverage = build_remote_coverage(
+        str(sources["remote.md"]["text"]),
+        target_body,
+        native_snapshot=native_snapshot["value"],
+        resolutions=coverage_resolutions,
+        batch_id=str(manifest.get("batch_id") or ""),
+        remote_revision_id=int(remote_revision or 0),
+    )
+    coverage = _load_json_object(coverage_path, label="remote-coverage.json")
+    if coverage != expected_coverage:
+        raise ReviewError(
+            "远端覆盖账本不是可执行的完整账本："
+            "不能由 sealed resolutions 与 T 重放得到"
+        )
+    coverage_summary = coverage.get("summary")
+    if not isinstance(coverage_summary, dict) or any(
+        (
+            int(coverage_summary.get("unassigned_count") or 0) != 0,
+            int(coverage_summary.get("format_unassigned_count") or 0) != 0,
+            coverage_summary.get("remote_accounted_ratio") != 1.0,
+            coverage_summary.get("remote_format_accounted_ratio") != 1.0,
+        )
+    ):
+        raise ReviewError("remote-coverage.json 仍有未归位的内容或原生格式")
+    plan_coverage = plan.get("remote_coverage")
+    if not isinstance(plan_coverage, dict) or any(
+        (
+            plan_coverage.get("name") != "remote-coverage.json",
+            plan_coverage.get("sha256") != _file_digest(coverage_path),
+            plan_coverage.get("remote_accounted_ratio")
+            != coverage_summary.get("remote_accounted_ratio"),
+            plan_coverage.get("remote_format_accounted_ratio")
+            != coverage_summary.get("remote_format_accounted_ratio"),
+            plan_coverage.get("unassigned_count") != coverage_summary.get("unassigned_count"),
+            plan_coverage.get("format_unassigned_count")
+            != coverage_summary.get("format_unassigned_count"),
+        )
+    ):
+        raise ReviewError("sealed ready plan 的远端覆盖绑定不完整")
+
+    expected_preview = render_remote_preview(coverage)
+    if _read_regular_text(preview_path, label="remote-preview.md") != expected_preview:
+        raise ReviewError("remote-preview.md 不能由远端覆盖账本重放得到")
+    plan_preview = plan.get("preview")
+    sealed_preview = {
+        key: value
+        for key, value in (plan_preview if isinstance(plan_preview, dict) else {}).items()
+        if key in {"approved", "authority", "reason"}
+    }
+    if (
+        not isinstance(plan_preview, dict)
+        or plan_preview.get("name") != "remote-preview.md"
+        or plan_preview.get("sha256") != _file_digest(preview_path)
+        or plan_preview.get("required") != bool(coverage_summary.get("preview_required"))
+        or plan_preview.get("pm_confirmation_required")
+        != bool(coverage_summary.get("pm_confirmation_required"))
+        or preview_resolution != sealed_preview
+    ):
+        raise ReviewError("PM 预览确认与 sealed ready plan 不一致")
+    if bool(coverage_summary.get("preview_required")) and (
+        preview_resolution.get("approved") is not True
+        or preview_resolution.get("authority")
+        not in {"agent_reviewed", "pm_confirmed", "rule"}
+        or not str(preview_resolution.get("reason") or "").strip()
+    ):
+        raise ReviewError("强制远端预览尚未形成有效确认")
+
+    target_binding = plan.get("target")
+    target_exact_hash = hashlib.sha256(target_body.encode("utf-8")).hexdigest()
+    if (
+        not isinstance(target_binding, dict)
+        or target_binding.get("name") != "target.md"
+        or target_binding.get("sha256") != _file_digest(target_path)
+        or target_binding.get("exact_body_sha256") != target_exact_hash
+        or target_binding.get("body_sha256") != _body_hash(target_body)
+        or plan.get("comments_canonical_sha256")
+        != (manifest.get("comments") or {}).get("canonical_sha256")
+    ):
+        raise ReviewError("sealed ready plan 的 T 或评论快照绑定不完整")
+    return {
+        "repo_root": repo_root,
+        "markdown_path": markdown_path,
+        "resolutions_path": resolutions_path,
+        "target_path": target_path,
+        "target_body": target_body,
+        "target_exact_hash": target_exact_hash,
+        "sources": sources,
+        "native_snapshot": native_snapshot,
+        "coverage": coverage,
+        "coverage_summary": coverage_summary,
+        "active_build_delta": active_build_delta,
+    }
+
+
 def apply_target(args: argparse.Namespace) -> int:
     plan_path = _canonical_regular_file(
         Path(args.plan),
@@ -2638,6 +4800,27 @@ def apply_target(args: argparse.Namespace) -> int:
     if plan_path.name != "apply-plan.json":
         raise ReviewError("--plan 必须指向本批次的 apply-plan.json")
     plan = _load_json_object(plan_path, label="apply-plan.json")
+    manifest_path = plan_path.parent / "review.json"
+    manifest = _load_manifest(
+        _canonical_regular_file(manifest_path, label="本批次 review.json")
+    )
+    if (
+        _int(manifest.get("schema_version")) == SCHEMA_VERSION
+        and _int(plan.get("schema_version")) == PLAN_SCHEMA_VERSION
+    ):
+        _validate_sealed_batch_contract(
+            manifest_path,
+            manifest,
+            plan_path,
+            plan,
+            require_current_schema=True,
+        )
+    _reject_read_only_handoff(
+        manifest_path,
+        manifest,
+        plan_path=plan_path,
+        plan=plan,
+    )
     if (
         plan.get("kind") != "pmai_lark_review_apply_plan"
         or _int(plan.get("schema_version"))
@@ -2646,7 +4829,6 @@ def apply_target(args: argparse.Namespace) -> int:
     ):
         raise ReviewError("apply-plan.json 尚未 seal 为 ready")
 
-    manifest_path = plan_path.parent / "review.json"
     resolutions_path = plan_path.parent / "resolutions.json"
     target_path = plan_path.parent / "target.md"
     for path, label in (
@@ -2655,7 +4837,6 @@ def apply_target(args: argparse.Namespace) -> int:
         (target_path, "target.md"),
     ):
         _canonical_regular_file(path, label=f"本批次 {label}")
-    manifest = _load_manifest(manifest_path)
     if manifest.get("batch_id") != plan.get("batch_id"):
         raise ReviewError("apply-plan.json 与 review.json 批次不匹配")
     manifest_markdown_path = _manifest_markdown_path(manifest)
@@ -2681,6 +4862,7 @@ def apply_target(args: argparse.Namespace) -> int:
         preview_resolution,
         decision_routing_resolutions,
         consistency_receipt,
+        active_build_delta,
     ) = _resolution_maps(
         resolutions_path,
         expected_batch_id=str(manifest.get("batch_id") or ""),
@@ -2715,6 +4897,17 @@ def apply_target(args: argparse.Namespace) -> int:
         )
         if consistency_receipt != plan.get("consistency"):
             raise ReviewError("跨决定一致性回执与 seal 结果不一致")
+        active_build_delta = _validate_active_build_delta(
+            active_build_delta,
+            repo_root=repo_root,
+            markdown_path=manifest_markdown_path,
+            body_records=body_items,
+            comment_records=comment_items,
+            decision_routes=decision_routing_resolutions,
+            target_body=_read_regular_text(target_path, label="target.md"),
+        )
+        if active_build_delta != plan.get("active_build_delta"):
+            raise ReviewError("active build scoped-adjustment 路由与 seal 结果不一致")
     if {str(item.get("change_id") or "") for item in body_items if isinstance(item, dict)} != set(body_resolutions):
         raise ReviewError("正文归位项与 seal 结果不一致")
     if {str(item.get("comment_id") or "") for item in comment_items if isinstance(item, dict)} != set(comment_resolutions):
@@ -2943,6 +5136,12 @@ def _load_ready_batch(
         raise ReviewError(f"{label} 必须使用本批次的 apply-plan.json")
     _canonical_regular_file(plan_path, label="apply-plan.json")
     plan = _load_json_object(plan_path, label="apply-plan.json")
+    _reject_read_only_handoff(
+        manifest_path,
+        manifest,
+        plan_path=plan_path,
+        plan=plan,
+    )
     schema_pair = (
         _int(manifest.get("schema_version")),
         _int(plan.get("schema_version")),
@@ -3265,6 +5464,8 @@ def _remote_verification_artifact(
     *,
     doc_id: str,
     published_revision: int,
+    expected_projection_sha256: str | None = None,
+    expected_coverage: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     path = manifest_path.parent / "remote-verification.json"
     try:
@@ -3275,6 +5476,16 @@ def _remote_verification_artifact(
         ) from exc
     document = value.get("document")
     markdown_hash = str(value.get("remote_markdown_projection_sha256") or "")
+    remote_exact_hash = str(value.get("remote_markdown_exact_sha256") or "")
+    native_hash = str(value.get("current_native_content_sha256") or "")
+    coverage_matches = True
+    if expected_coverage is not None:
+        coverage_matches = (
+            value.get("remote_accounted_ratio")
+            == expected_coverage.get("remote_accounted_ratio")
+            and value.get("remote_format_accounted_ratio")
+            == expected_coverage.get("remote_format_accounted_ratio")
+        )
     if (
         value.get("kind") != REMOTE_VERIFICATION_KIND
         or value.get("schema_version") != REMOTE_VERIFICATION_SCHEMA_VERSION
@@ -3282,16 +5493,167 @@ def _remote_verification_artifact(
         or value.get("plan_ready_token") != plan.get("ready_token")
         or value.get("target_base") != "remote_native_snapshot"
         or value.get("content_projection_match") is not True
-        or float(value.get("remote_accounted_ratio") or 0) != 1.0
-        or float(value.get("remote_format_accounted_ratio") or 0) != 1.0
+        or value.get("remote_accounted_ratio") != 1.0
+        or value.get("remote_format_accounted_ratio") != 1.0
+        or not coverage_matches
         or value.get("original_references_preserved") is not True
         or not isinstance(document, dict)
         or str(document.get("doc_id") or "") != doc_id
         or _int(document.get("verified_revision_id")) != published_revision
+        or _int(document.get("target_base_revision"))
+        != _int(plan.get("target_base_revision"))
         or not re.fullmatch(r"[0-9a-f]{64}", markdown_hash)
+        or (expected_projection_sha256 is not None and markdown_hash != expected_projection_sha256)
+        or not re.fullmatch(r"[0-9a-f]{64}", remote_exact_hash)
+        or not re.fullmatch(r"[0-9a-f]{64}", native_hash)
+        or not isinstance(value.get("preserved_native_block_count"), int)
+        or int(value.get("preserved_native_block_count") or 0) < 0
+        or not isinstance(value.get("original_reference_count"), int)
+        or int(value.get("original_reference_count") or 0) < 0
+        or not isinstance(value.get("document_fetch_api_calls"), int)
+        or int(value.get("document_fetch_api_calls") or 0) < 2
     ):
         raise ReviewError("remote-verification.json 与当前 ready plan / 发布 revision 不一致")
     return value
+
+
+def validate_approval(args: argparse.Namespace) -> int:
+    """Validate the complete local receipt consumed by build accepted-delta."""
+
+    repo_root = _canonical_directory(Path(args.repo_root), label="审批证据仓根")
+    markdown_input = _canonical_regular_file(
+        Path(args.markdown), label="审批证据对应模块规格"
+    )
+    review_root = _canonical_directory(
+        repo_root / ".pm-workflow" / "context" / "lark-review",
+        label="lark-review 批次根目录",
+    )
+    artifact_candidate = _absolute_lexical_path(Path(args.artifact))
+    if artifact_candidate.name != "remote-verification.json":
+        raise ReviewError("审批证据必须指向本批 remote-verification.json")
+    artifact_path = _canonical_regular_file(
+        artifact_candidate,
+        label="remote-verification.json",
+    )
+    batch_dir = _canonical_directory(artifact_path.parent, label="lark-review 批次目录")
+    try:
+        batch_relative = batch_dir.relative_to(review_root)
+    except ValueError as exc:
+        raise ReviewError(
+            "审批证据必须位于当前仓 .pm-workflow/context/lark-review/"
+        ) from exc
+    if len(batch_relative.parts) != 1 or not batch_relative.name.startswith("batch."):
+        raise ReviewError("审批证据必须位于单一安全的 batch.* 评审目录")
+
+    manifest_path, manifest, plan_path, plan = _load_ready_batch(
+        str(batch_dir / "review.json"),
+        str(batch_dir / "apply-plan.json"),
+        label="build approval",
+    )
+    if (
+        _int(manifest.get("schema_version")) != SCHEMA_VERSION
+        or _int(plan.get("schema_version")) != PLAN_SCHEMA_VERSION
+        or str(manifest.get("batch_id") or "") != str(args.batch_id)
+    ):
+        raise ReviewError(
+            "审批证据不是该 batch ID 的当前 sealed Lark 评审批次"
+        )
+    sealed = _validate_sealed_batch_contract(
+        manifest_path,
+        manifest,
+        plan_path,
+        plan,
+        require_current_schema=True,
+    )
+    manifest_markdown = _manifest_markdown_path(manifest)
+    manifest_root = _manifest_repository_root(manifest, manifest_markdown)
+    if manifest_root != repo_root or manifest_markdown != markdown_input:
+        raise ReviewError("审批证据未绑定当前仓库与当前模块 spec.md")
+
+    _source_artifacts(manifest_path, manifest)
+    _native_snapshot_artifact(manifest_path, manifest)
+    resolutions_path = _canonical_regular_file(
+        batch_dir / "resolutions.json",
+        label="resolutions.json",
+    )
+    (
+        _,
+        _,
+        target_derivation,
+        _,
+        preview_resolution,
+        decision_routing,
+        consistency,
+        active_build_delta,
+    ) = _resolution_maps(
+        resolutions_path,
+        expected_batch_id=str(manifest.get("batch_id") or ""),
+    )
+    required = plan.get("required_items")
+    body_items = required.get("body") if isinstance(required, dict) else None
+    comment_items = required.get("comments") if isinstance(required, dict) else None
+    if not isinstance(body_items, list) or not isinstance(comment_items, list):
+        raise ReviewError("sealed ready plan 缺少完整 required_items")
+    active_build_delta = sealed["active_build_delta"]
+    if active_build_delta is None or any(
+        current != sealed
+        for current, sealed in (
+            (target_derivation, plan.get("target_derivation")),
+            (decision_routing, plan.get("decision_routing")),
+            (consistency, plan.get("consistency")),
+            (active_build_delta, plan.get("active_build_delta")),
+        )
+    ):
+        raise ReviewError(
+            "sealed ready plan 未固化可进入当前 build 的 scoped-adjustment 路由"
+        )
+    expected_preview = {
+        key: value
+        for key, value in (plan.get("preview") or {}).items()
+        if key in {"approved", "authority", "reason"}
+    }
+    if preview_resolution != expected_preview:
+        raise ReviewError("sealed ready plan 的预览确认与 resolutions.json 不一致")
+
+    coverage_artifact = _remote_coverage_artifact(
+        manifest_path,
+        manifest,
+        plan_path,
+        plan,
+    )
+    coverage_summary = coverage_artifact["value"]["summary"]
+    context = _published_target_context(manifest, plan, label="build approval")
+    verification = _remote_verification_artifact(
+        manifest_path,
+        manifest,
+        plan,
+        doc_id=str(context["doc_id"]),
+        published_revision=int(context["published_revision_id"]),
+        expected_projection_sha256=_markdown_verification_sha256(str(context["body"])),
+        expected_coverage=coverage_summary,
+    )
+    if artifact_path != batch_dir / "remote-verification.json":
+        raise ReviewError("审批证据路径与已验证批次不一致")
+
+    target_path = _canonical_regular_file(batch_dir / "target.md", label="target.md")
+    result = {
+        "batch_id": str(manifest["batch_id"]),
+        "path": artifact_path.relative_to(repo_root).as_posix(),
+        "sha256": _file_digest(artifact_path),
+        "plan_path": plan_path.relative_to(repo_root).as_posix(),
+        "plan_sha256": _file_digest(plan_path),
+        "target_sha256": _file_digest(target_path),
+        "doc_id": str(verification["document"]["doc_id"]),
+        "verified_revision_id": int(
+            verification["document"]["verified_revision_id"]
+        ),
+        "remote_markdown_projection_sha256": str(
+            verification["remote_markdown_projection_sha256"]
+        ),
+        "active_build_delta": active_build_delta,
+    }
+    print(json.dumps(result, ensure_ascii=False))
+    return 0
 
 
 def _comment_actions_path(manifest_path: Path) -> Path:
@@ -5181,6 +7543,9 @@ def receipt(args: argparse.Namespace) -> int:
             plan,
             doc_id=doc_id,
             published_revision=published_revision,
+            expected_projection_sha256=_markdown_verification_sha256(
+                str(context["body"])
+            ),
         )
         content_verified = True
     except ReviewError:
@@ -5429,6 +7794,131 @@ def reopen(args: argparse.Namespace) -> int:
     return 0
 
 
+def _checkpoint_handoff_closures(
+    raw_bundle_paths: list[str] | None,
+    *,
+    manifest_path: Path,
+    manifest: dict[str, Any],
+    plan_path: Path,
+    plan: dict[str, Any],
+    markdown_path: Path,
+    doc_id: str,
+    published_revision: int,
+) -> list[tuple[Path, dict[str, Any], dict[str, Any]]]:
+    if not raw_bundle_paths:
+        return []
+    main_root = _verified_main_repository_root(_repository_root(markdown_path))
+    try:
+        markdown_relative = markdown_path.relative_to(main_root).as_posix()
+    except ValueError as exc:
+        raise ReviewError("fresh checkpoint markdown 不在 main 仓根内") from exc
+    current_batch_id = str(manifest.get("batch_id") or "")
+    expected_closure = {
+        "batch_id": current_batch_id,
+        "review_sha256": _file_digest(manifest_path),
+        "plan_sha256": _file_digest(plan_path),
+        "doc_id": doc_id,
+        "published_revision_id": published_revision,
+        "markdown_relative": markdown_relative,
+    }
+    closures: list[tuple[Path, dict[str, Any], dict[str, Any]]] = []
+    seen: set[Path] = set()
+    for raw in raw_bundle_paths:
+        bundle_path, bundle = _load_handoff_bundle(Path(raw))
+        if bundle_path in seen:
+            raise ReviewError("--closes-handoff 不能重复指定同一 bundle")
+        seen.add(bundle_path)
+        bundle_main_root = _verified_main_repository_root(bundle_path.parents[3])
+        source_document = bundle.get("document")
+        source_revision = _int(
+            source_document.get("current_revision_id")
+            if isinstance(source_document, dict)
+            else None
+        )
+        if (
+            bundle_main_root != main_root
+            or bundle.get("batch_id") == current_batch_id
+            or bundle.get("markdown_relative") != markdown_relative
+            or not isinstance(source_document, dict)
+            or source_document.get("doc_id") != doc_id
+            or (source_revision is not None and published_revision < source_revision)
+        ):
+            raise ReviewError("fresh checkpoint 与待关闭 handoff bundle 的仓、模块或飞书文档不匹配")
+        if bundle.get("state") == "pending" and bundle.get("phase") != "lark_review":
+            raise ReviewError(
+                "handoff bundle 尚未推进到 lark_review；必须先完成 Proposal/design 阶段证据"
+            )
+        if bundle.get("state") == "closed" and bundle.get("closure") != expected_closure:
+            raise ReviewError("handoff bundle 已由另一 fresh batch 收口")
+        closures.append((bundle_path, bundle, expected_closure))
+    return closures
+
+
+def _close_handoff_bundles(
+    closures: list[tuple[Path, dict[str, Any], dict[str, Any]]],
+    *,
+    reviewed_at: str,
+) -> None:
+    for bundle_path, bundle, expected_closure in closures:
+        if bundle.get("state") == "closed":
+            continue
+        updated = dict(bundle)
+        updated["state"] = "closed"
+        updated["phase"] = "closed"
+        updated["closed_at"] = reviewed_at
+        updated["closure"] = expected_closure
+        updated["phase_history"] = [
+            *bundle["phase_history"],
+            {
+                "from": "lark_review",
+                "to": "closed",
+                "advanced_at": reviewed_at,
+                "evidence": {"kind": "fresh_checkpoint", **expected_closure},
+            },
+        ]
+        _write_json(bundle_path, updated)
+        _, verified = _load_handoff_bundle(bundle_path)
+        if verified.get("state") != "closed" or verified.get("closure") != expected_closure:
+            raise ReviewError("handoff bundle 收口回读不一致")
+
+
+def _write_checkpoint_receipt(
+    *,
+    manifest_path: Path,
+    manifest: dict[str, Any],
+    plan_path: Path,
+    plan: dict[str, Any],
+    markdown_path: Path,
+    doc_id: str,
+    published_revision: int,
+    reviewed_at: str,
+) -> Path:
+    receipt_path = _checkpoint_receipt_path(manifest_path)
+    value = {
+        "kind": CHECKPOINT_KIND,
+        "schema_version": CHECKPOINT_SCHEMA_VERSION,
+        "batch_id": manifest.get("batch_id"),
+        "review_sha256": _file_digest(manifest_path),
+        "plan_sha256": _file_digest(plan_path),
+        "markdown_path": str(markdown_path),
+        "document": {
+            "doc_id": doc_id,
+            "published_revision_id": published_revision,
+        },
+        "reviewed_at": reviewed_at,
+    }
+    if _entry_exists(receipt_path, label="checkpoint.json"):
+        existing = _load_checkpoint_receipt(manifest_path, manifest, plan_path, plan)
+        if existing != value:
+            raise ReviewError("当前批次已有另一份 checkpoint 收据")
+        return _canonical_regular_file(receipt_path, label="checkpoint.json")
+    _write_json(receipt_path, value)
+    verified = _load_checkpoint_receipt(manifest_path, manifest, plan_path, plan)
+    if verified != value:
+        raise ReviewError("checkpoint.json 写入后回读不一致")
+    return _canonical_regular_file(receipt_path, label="checkpoint.json")
+
+
 def checkpoint(args: argparse.Namespace) -> int:
     checkpoint_started = time.monotonic()
     checkpoint_scan_counters = _comment_scan_counters()
@@ -5450,6 +7940,16 @@ def checkpoint(args: argparse.Namespace) -> int:
     body = str(context["body"])
     manifest_doc_id = str(context["doc_id"])
     published_revision = int(context["published_revision_id"])
+    handoff_closures = _checkpoint_handoff_closures(
+        args.closes_handoff,
+        manifest_path=manifest_path,
+        manifest=manifest,
+        plan_path=plan_path,
+        plan=plan,
+        markdown_path=markdown_path,
+        doc_id=manifest_doc_id,
+        published_revision=published_revision,
+    )
     _, decisions, _ = _batch_comment_contracts(manifest, plan)
     completed_comment_ids = {
         comment_id
@@ -5519,6 +8019,7 @@ def checkpoint(args: argparse.Namespace) -> int:
             plan,
             doc_id=manifest_doc_id,
             published_revision=published_revision,
+            expected_projection_sha256=_markdown_verification_sha256(body),
         )
         expected_remote_hash = str(verification["remote_markdown_projection_sha256"])
         checkpoint_document_fetches = 1
@@ -5598,13 +8099,26 @@ def checkpoint(args: argparse.Namespace) -> int:
         expected_text=raw,
         require_canonical_path=True,
     )
+    _close_handoff_bundles(handoff_closures, reviewed_at=reviewed_at)
+    checkpoint_receipt = _write_checkpoint_receipt(
+        manifest_path=manifest_path,
+        manifest=manifest,
+        plan_path=plan_path,
+        plan=plan,
+        markdown_path=markdown_path,
+        doc_id=manifest_doc_id,
+        published_revision=revision,
+        reviewed_at=reviewed_at,
+    )
     print(json.dumps({
         "markdown_path": str(markdown_path),
         "lark_reviewed_revision_id": revision,
         "lark_reviewed_comment_at": comment_time,
         "lark_reviewed_comment_ids": sorted(comment_ids),
         "lark_reviewed_at": reviewed_at,
+        "checkpoint": str(checkpoint_receipt),
         "comment_actions": str(actions_path) if actions_value is not None else None,
+        "closed_handoffs": [str(item[0]) for item in handoff_closures],
         "performance": {
             "elapsed_seconds": round(time.monotonic() - checkpoint_started, 6),
             "document_fetch_api_calls": checkpoint_document_fetches,
@@ -5677,6 +8191,68 @@ def build_parser() -> argparse.ArgumentParser:
         description="收集、归位并受控应用飞书评审，或在验证完成后记录 checkpoint",
     )
     subparsers = parser.add_subparsers(dest="command", required=True)
+
+    target_parser = subparsers.add_parser(
+        "resolve-target",
+        help="把本地 markdown 绑定到同模块 active build 的权威 worktree 副本",
+    )
+    target_parser.add_argument("markdown", help="已唯一定位的本地 markdown")
+    target_parser.set_defaults(handler=resolve_target)
+
+    resumable_parser = subparsers.add_parser(
+        "find-resumable",
+        help="只读查找同一 markdown 的唯一可恢复批次，并跳过只读 handoff",
+    )
+    resumable_parser.add_argument("markdown", help="待恢复评审对应的本地 markdown")
+    resumable_parser.add_argument(
+        "--review-root",
+        required=True,
+        help="当前仓 .pm-workflow/context/lark-review 目录",
+    )
+    resumable_parser.set_defaults(handler=find_resumable)
+
+    resumable_list_parser = subparsers.add_parser(
+        "list-resumables",
+        help="只读列出 main 与 attached worktrees 中全部未完成评审批次",
+    )
+    resumable_list_parser.add_argument("main_root", help="唯一 main/master worktree 根目录")
+    resumable_list_parser.set_defaults(handler=list_resumables)
+
+    handoff_list_parser = subparsers.add_parser(
+        "list-handoffs",
+        help="只读列出 main 中待 Proposal/design 消费的持久评审 handoff bundle",
+    )
+    handoff_list_parser.add_argument("main_root", help="唯一 main/master worktree 根目录")
+    handoff_list_parser.add_argument(
+        "--route", choices=tuple(sorted(HANDOFF_ROUTES)), help="只返回指定上游路由"
+    )
+    handoff_list_parser.add_argument(
+        "--phase", choices=tuple(sorted(HANDOFF_PHASES)), help="只返回指定当前阶段"
+    )
+    handoff_list_parser.add_argument("--module", help="只返回 docs/modules/<模块> 的交接")
+    handoff_list_parser.add_argument("--doc-id", help="只返回同一飞书 Docx 文档的交接")
+    handoff_list_parser.add_argument(
+        "--include-closed", action="store_true", help="同时返回已由 fresh batch checkpoint 收口的交接"
+    )
+    handoff_list_parser.set_defaults(handler=list_handoffs)
+
+    handoff_advance_parser = subparsers.add_parser(
+        "advance-handoff",
+        help="凭 Proposal 或权威规格提交证据顺序推进 handoff 阶段",
+    )
+    handoff_advance_parser.add_argument("bundle", help="main 中的 handoff bundle.json")
+    handoff_advance_parser.add_argument(
+        "--to",
+        required=True,
+        choices=("design", "lark-review"),
+        help="下一个阶段；closed 只能由 fresh checkpoint 完成",
+    )
+    handoff_advance_parser.add_argument(
+        "--evidence-commit",
+        help="推进到 lark-review 时绑定的完整权威规格 commit SHA",
+    )
+    handoff_advance_parser.set_defaults(handler=advance_handoff)
+
     collect_parser = subparsers.add_parser("collect", help="只读收集评审增量")
     collect_parser.add_argument("markdown", help="已发布的本地 markdown")
     collect_parser.add_argument("--doc", help="飞书 URL 或 token；默认读 frontmatter")
@@ -5704,6 +8280,26 @@ def build_parser() -> argparse.ArgumentParser:
     )
     reconcile_parser.set_defaults(handler=reconcile)
 
+    handoff_parser = subparsers.add_parser(
+        "handoff",
+        help="把上游重规划的 draft 批次固化为不可 seal/apply 的只读证据",
+    )
+    handoff_parser.add_argument("--manifest", required=True, help="旧批次 review.json")
+    handoff_parser.add_argument(
+        "--route",
+        required=True,
+        choices=tuple(sorted(HANDOFF_ROUTES)),
+        help="replan 的上游路由",
+    )
+    handoff_parser.add_argument(
+        "--candidate-manifest",
+        help=(
+            "active build 经 replan-work.py 返回的精确 candidate manifest；"
+            "无 active build 的 proposal handoff 省略"
+        ),
+    )
+    handoff_parser.set_defaults(handler=handoff)
+
     apply_parser = subparsers.add_parser("apply", help="按 ready plan 原子写入目标正文")
     apply_parser.add_argument("markdown", help="必须与批次绑定一致的本地 markdown")
     apply_parser.add_argument("--plan", required=True, help="seal 生成的 apply-plan.json")
@@ -5716,6 +8312,18 @@ def build_parser() -> argparse.ArgumentParser:
     verify_parser.add_argument("--manifest", required=True, help="collect 生成的 review.json")
     verify_parser.add_argument("--plan", required=True, help="已应用的 ready apply-plan.json")
     verify_parser.set_defaults(handler=verify_sync)
+
+    approval_parser = subparsers.add_parser(
+        "validate-approval",
+        help="只读验证 build accepted-delta 消费的完整评审批次证据",
+    )
+    approval_parser.add_argument(
+        "--artifact", required=True, help="verify-sync 生成的 remote-verification.json"
+    )
+    approval_parser.add_argument("--repo-root", required=True, help="当前 PMAI 仓根")
+    approval_parser.add_argument("--markdown", required=True, help="当前模块 spec.md")
+    approval_parser.add_argument("--batch-id", required=True, help="sealed review batch ID")
+    approval_parser.set_defaults(handler=validate_approval)
 
     complete_parser = subparsers.add_parser(
         "complete-comment",
@@ -5806,6 +8414,12 @@ def build_parser() -> argparse.ArgumentParser:
     checkpoint_parser.add_argument("--manifest", required=True, help="collect 生成的 review.json")
     checkpoint_parser.add_argument("--plan", required=True, help="已应用的 ready apply-plan.json")
     checkpoint_parser.add_argument("--reviewed-at", help="覆盖 checkpoint 时间，供测试或恢复使用")
+    checkpoint_parser.add_argument(
+        "--closes-handoff",
+        action="append",
+        default=[],
+        help="本次 fresh batch 成功 checkpoint 后关闭的 main handoff bundle.json；可重复",
+    )
     checkpoint_parser.set_defaults(handler=checkpoint)
 
     baseline_parser = subparsers.add_parser("baseline", help="同步成功后刷新正文/revision 基线")

@@ -99,7 +99,9 @@ PMAI 更适合在方向逐渐明确后接管上下文、边界、文档和可持
 
 ```text
 加载现有产品上下文
+  -> proposal 澄清产品为什么成立、值得先投什么
   -> design 讨论并形成建造依据
+  -> spec-writing 编译已确认规格
   -> build prototype 或真实 product
   -> PM 看结果并多轮修改
   -> PM 明确定稿
@@ -112,7 +114,7 @@ PMAI 更适合在方向逐渐明确后接管上下文、边界、文档和可持
 
 - 不做通用设计工作台。
 - 不追求首版原型生成速度超过专门设计工具。
-- 不把完整 PRD 放在探索之前当重门，也不在 merge 前把目标要求写成已经落地。
+- 不用完整 PRD 替代产品方向与模块探索，也不在 merge 前把目标要求写成已经落地。
 - 不为团队 SOP、CI 平台、多租户基础设施设计。
 - 不让 PM 管理 worktree、build 执行合同、执行器细节。
 
@@ -149,16 +151,22 @@ CLI `pmai status` 只作为 `pmai doctor --check` 的兼容别名，不再承载
 
 ### 1. 项目初始化
 
-初始化不是开始做功能，而是建立产品基线：
+初始化不是开始做功能，而是搭好产品上下文骨架：
 
 - `PRODUCT.md`：产品定位、用户、术语、核心对象。
 - `DESIGN.md`：设计基线、页面模式、组件和交互约定。
 - `PRODUCT-RULES.md`：跨模块都要遵守的产品规则。
 - `TODO.md`：后续模块工作候选队列。
 
-初始化完成后，AI 应能主动复述当前产品上下文，并把 PM 带到第一个 `/pmai-design`。初始化不创建代码、prototype、mockup 看板或 dev server，也不要求 PM 在没有需求方案时先选项目类型和技术栈。
+初始化完成后，新项目唯一下一步是 `/pmai-proposal`。初始化不创建代码、prototype、mockup 看板或 dev server，也不要求 PM 在没有产品方案时先选项目类型和技术栈。
 
-### 2. 新需求开始
+### 2. Product Proposal 澄清产品方向
+
+Proposal 位于 design 上游，回答“这个产品为什么成立、值得先投什么”，形成产品级用户、问题、产品回答、价值、职责边界和 MVP 证明目标。新项目默认完成 Proposal；成熟资料目录或已有代码库只有在接入流程核验这些内容已经完整，在 `PRODUCT.md` 记录真实仓内依据与 PM 确认日期，并且产品基线与依据均已提交且无漂移、机器状态为 `equivalent_baseline` 时才可跳过。
+
+一旦进入 Proposal，就必须形成一份可独立评审的完整 Product Proposal，不能用 brief、方向摘要、竞品报告或普通介绍稿代替。Proposal 定稿后同步精简基线到 `PRODUCT.md`，下游 design、spec-writing、build、doc-writing 和 record 只读消费；方向变化时创建完整新版本并明确取代旧版，不能原地改写历史版本。
+
+### 3. 新需求开始
 
 新需求不是从空白问题开始，而是先加载已有上下文：
 
@@ -173,9 +181,9 @@ CLI `pmai status` 只作为 `pmai doctor --check` 的兼容别名，不再承载
 哪些不能 mock，因为会误导决策？
 ```
 
-前置文档只做轻量 brief。完整 PRD 不应该过早冻结探索。
+Proposal 提供产品级判断，模块 brief 只界定本轮目标；两者都不替代具体模块探索。完整 PRD 在模块决定闭合后由 spec-writing 编译，不提前冻结未知项。
 
-### 3. design 讨论和内部能力编排
+### 4. design 讨论和内部能力编排
 
 `/pmai-design` 是需求讨论前台。它先恢复旧决定和相关实现，再按真实未知项理清真问题、对象关系、动作、状态、权限、页面和异常路径。
 
@@ -183,9 +191,11 @@ CLI `pmai status` 只作为 `pmai doctor --check` 的兼容别名，不再承载
 - 存在真实信息结构、任务路径或交互岔路时，内部调用 `mockup`；没有真实岔路只给一套推荐稿。
 - 决定闭合后，内部调用 `spec-writing` 把已确认决定编译为规格。
 
-这三项能力完成后都返回 design 主线，不让 PM 手动拼接命令。首个可建造 design 定稿时，AI 基于需求和已有代码推荐 `prototype / product`、技术栈、代码入口和真实运行命令；PM 一次确认后写入 `.pm-workflow/project.yml`。后续 design 默认复用，只有定义确实无法承载新需求时才重新校准。
+这三项能力完成后都返回 design 主线，不让 PM 手动拼接命令。若讨论触及产品定位、目标用户、核心价值、职责边界或 MVP 证明目标，design 暂停并返回 Proposal；Proposal 确认后重新检查模块决定。首个可建造 design 定稿时，AI 基于需求和已有代码推荐 `prototype / product`、技术栈、代码入口和真实运行命令；PM 一次确认后写入 `.pm-workflow/project.yml`。后续 design 默认复用，只有定义确实无法承载新需求时才重新校准。
 
-### 4. 统一 build 和看结果修改
+规格内容采用“通用内容模块 + 可叠加 Profile”，文档形态由 Preset 决定。企业平台加载企业平台 Profile，AI 产品加载 AI Profile，企业 AI 平台叠加两份；完整 PRD 使用唯一完整 PRD Preset。Profile 增强领域内容，不创造新的文档类型；Preset 只决定章节编排，不创造第二套产品真相源。
+
+### 5. 统一 build 和看结果修改
 
 一次 build 只有一个主要对象：`prototype` 或 `product`，由 design 已提交的 `.pm-workflow/project.yml` 决定。两者走同一条生命周期，只切换验收工具与方法：
 
@@ -204,7 +214,7 @@ PM 看结果期间走快速迭代车道：复用同一个 dev server 和浏览�
 
 worktree 的具体实现、build contract、source hash 和证据 JSON 都是后台基础设施，不形成第二条用户流程；PM 只看到可理解的“工作环境”和“构建工具”。
 
-### 5. 自动落地主线和文档编译
+### 6. 自动落地主线和文档编译
 
 PM 明确定稿后，合同冻结 PM 最后看到的 implementation commit，并只运行一次完整 final checks：project.yml 声明的 test/typecheck/production build 在 detached validation worktree 执行，不改写 active dev worktree 的构建缓存；完整浏览器验收继续复用现有 dev server 与浏览器连接。通过后形成验收就绪快照，再由同一个 finalize 确定性落地：
 
@@ -217,15 +227,19 @@ PM 明确定稿后，合同冻结 PM 最后看到的 implementation commit，并
 
 模块 `spec.md` 和 PRD 描述已确认的最终产品目标，是研发实现和验收合同；`PRODUCT-STATE.md` 等现状文档才只描述 main 已经存在的事实。原型、mockup 和代码是证据，不得反向缩小规格。merge 冲突保留可恢复的 `final_check`；文档失败保留 `landed/docs_pending`，修复时不重复 merge。`/pmai-build-close` 只作为兼容与恢复入口。
 
-正式规格发布到飞书后发生的二次评审，不是脱离主链路的文档搬运：PMAI 应读取发布后的正文增量、批注和回复，区分 PM 已直接确认的修改与仍待决的问题。发布基线 B、采集时本地 L、采集时飞书 R 始终是只读证据，系统必须先生成独立目标版 T，且只有已完成归位的 T 能写回正式规格；这个版本门禁发生在 quick-fix / design / build 分流之前。T 写回后先把决定正式归位，再精细同步同一篇文档并继续原型 / 产品实现；验证完成后只解决已完成评论。不能整篇回拉后让飞书成为另一套产品真相源。
+正式规格发布到飞书后发生的二次评审，不是脱离主链路的文档搬运：PMAI 先全局恢复 main 与 attached worktree 中未 checkpoint 的普通批次，再按文档身份绑定当前权威规格。发布基线 B、采集时本地 L、采集时飞书 R 始终是只读证据，系统先生成独立目标版 T，再按最高影响分流。普通文字修正和已批准范围内的小调整只有完成归位的 T 能写回正式规格；产品方向或模块模型变化则把旧批冻结成 main handoff，旧 T 永不写回。handoff 的 route 只记录来源，机器 phase 决定唯一入口：产品级按 `proposal → design → lark_review → closed`，模块级按 `design → lark_review → closed`；Proposal 生效提交、design 权威规格提交和 fresh checkpoint 分别推进一段，不能靠文字判断跳级。这样跨会话或旧工作环境退役后仍能恢复原评审，也不会循环回 Proposal 或把方向变化降级成 accepted delta。验证完成后只解决已完成评论，不能让飞书成为另一套产品真相源。
 
 ---
 
 ## 核心能力目标
 
-PMAI 应形成 5 个核心能力。
+PMAI 应形成 6 个核心能力。
 
-### 1. Product Context Spine
+### 1. Versioned Product Proposal
+
+新项目在模块设计前形成完整产品级判断；成熟项目复用完整等价基线。当前 Proposal 通过版本、正文 hash、`PRODUCT.md` 产品基线 hash 和取代关系保持不可漂移，并把固定交接摘要编进下游上下文。产品方向纠正生成完整新版本，让旧 design/build 依据失效，而不是把方向变化伪装成模块决定或轻量补录；术语等非产品基线章节仍可由各自 owner 正常更新。
+
+### 2. Product Context Spine
 
 项目持续维护一套可被每次工作读取的产品脊柱：
 
@@ -237,19 +251,19 @@ PMAI 应形成 5 个核心能力。
 - 最近确认的决策。
 - 本次需求可能影响范围。
 
-### 2. Deterministic Context Pack
+### 3. Deterministic Context Pack
 
-design、build、恢复、最终检查和文档更新共用同一份编译上下文：当前目标与 build 对象、权威事实、相关源码 / 原型证据、active / superseded 决定、未决问题、输入 hash、design revision 和实现 commit。它只编译现有真相源，不另建决定账本。
+design、build、恢复、最终检查和文档更新共用同一份编译上下文：当前 Proposal 及交接摘要、当前目标与 build 对象、权威事实、相关源码 / 原型证据、active / superseded 决定、未决问题、输入 hash、design revision 和实现 commit。它只编译现有真相源，不另建决定账本。
 
-### 3. Unified Build Loop
+### 4. Unified Build Loop
 
 prototype 和 product 共用 `designing → ready_to_build → building → iterating → final_check → landed → documenting → complete`。快速迭代和定稿验收是 `iterating` 内部的两条执行车道，不新增 PM 可见状态：PM 看结果多轮修改时不跑完整验收，PM 请求定稿后才冻结 commit、生成验收就绪快照；框架处理证据失效和恢复。
 
-### 4. Adaptive Acceptance And Post-Land Docs
+### 5. Adaptive Acceptance And Post-Land Docs
 
 验收随 build 对象和风险自适应，快速与最终证据分层，final evidence 绑定定稿请求、当前 source hash 与 implementation commit；工具受限只能记 exception，不能伪装 pass。实现进入 main 后对账目标规格与实现，更新已落地现状，并要求每个对象、动作、状态、权限、页面和术语都有正确文档落点。
 
-### 5. Continuity Across Modules
+### 6. Continuity Across Modules
 
 多个模块工作之间要连续：
 
@@ -265,6 +279,7 @@ prototype 和 product 共用 `designing → ready_to_build → building → iter
 PMAI 成功时，PM 的体验应该是：
 
 - "我不用每次重新解释产品。"
+- "新项目先把为什么做、为谁做、先证明什么讲清楚，再讨论具体模块。"
 - "AI 知道已有文档和已有原型。"
 - "我给一个新需求，AI 会先基于上下文讨论，而不是从零猜。"
 - "不管这次建的是原型还是真实产品，我都能看着结果改。"
@@ -282,15 +297,19 @@ PMAI 成功时，PM 的体验应该是：
 
 后续改造应以本文为准：
 
-- design 是需求讨论主入口；meta、mockup、spec-writing 按需后台调用并返回主线。
+- 正常主链是 `init → proposal → design → spec-writing → build`；Proposal 负责产品级澄清，design 负责模块决定，spec-writing 负责把闭合决定编译成规格。
+- 新项目默认完成完整 Proposal；成熟项目只有显式记录依据与 PM 确认日期、相关文件已提交且无漂移、通过机器门的完整等价产品基线才可跳过。一旦进入就必须完整产出，已确认版本仅供下游读取；方向纠正必须回 Proposal 新建版本并 supersede 旧版。
+- design 是模块需求讨论主入口；meta、mockup、spec-writing 按需后台调用并返回主线。spec-writing 也保留明确专项意图下的手动入口。
+- spec-writing 复用通用内容模块，按领域叠加企业平台 / AI Product Profile，并按文档需要选择 Preset；完整 PRD 是唯一 Preset，不是通用默认形态或第二套真相源。
 - 一个 Skill 只有在承接独立用户意图时才注册为宿主入口；恢复和底层执行能力保留在框架内，由前台 Skill 自动调用，不要求 PM 记住或编排。meta、mockup、spec-writing 默认后台调用，但保留明确专项意图下的手动入口。
-- 面向 PM 的上手文档只讲初始化、design → build 和迷路时的 status，不把全部 Skill 铺成命令导航。
+- 面向 PM 的上手文档只讲初始化、Proposal、design → build 和迷路时的 status，不把全部 Skill 铺成命令导航。
 - 产品现状、框架诊断和升级分别由 `/pmai-status`、`/pmai-doctor`、`/pmai-upgrade` 承担，不允许重新混成两个 status。
-- 初始化只建立上下文；首个可建造 design 生成唯一 `.pm-workflow/project.yml`，其中分开记录建造对象与技术栈。
+- 初始化只建立上下文骨架；Proposal 建立产品级基线；首个可建造 design 生成唯一 `.pm-workflow/project.yml`，其中分开记录建造对象与技术栈。
 - prototype 与 product 共用同一构建、迭代、定稿和收尾链路，只切换验收适配器。
 - build contract、worktree 细节和验收证据后台化；工作环境与构建工具由 AI 推荐、PM 一次确认。
 - active build 默认走当前会话快速迭代；定稿请求前不跑 production build，定稿后在隔离 validation worktree 对冻结提交统一验收一次。
 - 模块规格在 design 定稿时形成最终目标合同；landed 后只有 accepted delta 能修改目标，漏实现不得反向删需求。
 - `PRODUCT-STATE.md` 等现状文档只在实现落入 main 后更新；过程和历史进入 Git 与 decisions。
+- `/pmai-record` 只在没有 active work 且 Proposal 状态为 `accepted / equivalent_baseline` 时补录已经确认的知识，不承担产品方向纠正、模块同步或 Proposal 修改。
 - `/pmai-build-close` 不再是正常用户必经命令，只保留兼容与恢复。
 - Claude Design / design-html / Claude Code 等仍可作为原型或构建能力来源，PMAI 负责统一上下文、验收和后续事实沉淀。

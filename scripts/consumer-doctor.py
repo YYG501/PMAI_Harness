@@ -26,6 +26,7 @@ from _lib.consumer_entry import (  # noqa: E402
     ConsumerEntryError,
     plan_consumer_entry,
 )
+from _lib.proposal import proposal_state  # noqa: E402
 
 
 SCHEMA_VERSION = 1
@@ -60,6 +61,7 @@ FRAMEWORK_MANAGED_FILES = (
     "docs/modules/INDEX.md",
     "docs/engineering/INDEX.md",
     "docs/deliverables/INDEX.md",
+    "docs/proposals/INDEX.md",
     ".pm-workflow/config.yml",
     "templates/lark-publish.json.tmpl",
 )
@@ -71,6 +73,7 @@ FRAMEWORK_MANAGED_DIRS = (
     "docs/inputs",
     "docs/engineering",
     "docs/deliverables",
+    "docs/proposals",
     "docs/decisions",
 )
 DEFAULT_ARCHIVE_DIR = "docs/archive"
@@ -189,6 +192,7 @@ class Audit:
             "entrypoints": [],
         }
         self.mockups: dict[str, Any] = {"state": "absent", "variants": 0}
+        self.proposal: dict[str, Any] = {"state": "equivalent_baseline"}
         self.consumer_contract: dict[str, Any] = {
             "state": "unversioned",
             "schema_version": None,
@@ -498,7 +502,7 @@ class Audit:
             required_directories = ["modules/", "inputs/"]
             if self.consumer_contract["state"] == "current":
                 archive = PurePosixPath(str(self.consumer_contract["archive"]))
-                required_directories.extend(("engineering/", "deliverables/", "decisions/", f"{archive.name}/"))
+                required_directories.extend(("engineering/", "deliverables/", "proposals/", "decisions/", f"{archive.name}/"))
             for directory in required_directories:
                 if directory not in text:
                     self.add(
@@ -996,6 +1000,49 @@ class Audit:
                 conventional,
             )
 
+    def check_proposal(self) -> None:
+        state = proposal_state(self.root)
+        name = str(state.get("state") or "invalid")
+        if name == "accepted":
+            current = state.get("proposal")
+            if not isinstance(current, dict):
+                self.proposal = {"state": "invalid"}
+                self.add(
+                    "error",
+                    "proposal_contract_invalid",
+                    "当前 Product Proposal 合同缺少可读取版本。",
+                    ".pm-workflow/proposal.json",
+                )
+                return
+            path = str(current["path"])
+            self.proposal = {
+                "state": "accepted",
+                "id": current["id"],
+                "path": path,
+                "supersedes": current["supersedes"],
+            }
+            for relative in (".pm-workflow/proposal.json", path):
+                if relative not in self.tracked:
+                    self.add(
+                        "error",
+                        "proposal_source_untracked",
+                        f"当前 Product Proposal 依据未被 Git 跟踪：{relative}",
+                        relative,
+                    )
+            return
+        self.proposal = {"state": name}
+        if name == "required":
+            self.proposal["reason"] = str(state.get("reason") or "product_direction_required")
+            self.proposal["gaps"] = [str(item) for item in state.get("gaps") or []]
+        if name == "invalid":
+            self.proposal["reason"] = str(state.get("reason") or "未知错误")
+            self.add(
+                "error",
+                "proposal_contract_invalid",
+                "当前 Product Proposal 与产品基线不一致：" + self.proposal["reason"],
+                ".pm-workflow/proposal.json",
+            )
+
     def check_mockups(self) -> None:
         mockups = self.root / "mockups"
         if not os.path.lexists(mockups):
@@ -1135,6 +1182,7 @@ class Audit:
             "entry_contract": self.entry_contract,
             "consumer_contract": self.consumer_contract,
             "project_definition": self.project_definition,
+            "proposal": self.proposal,
             "mockups": self.mockups,
             "modules": self.modules,
             "findings": self.findings,
@@ -1155,6 +1203,7 @@ def audit_consumer(root: Path) -> dict[str, Any]:
         audit.check_skeleton()
         audit.check_gitignore_and_secrets()
         audit.check_indexes_and_misplaced_docs()
+        audit.check_proposal()
         states = audit.check_modules()
         audit.check_project_definition(states)
         audit.check_mockups()
@@ -1211,6 +1260,7 @@ def main(argv: list[str] | None = None) -> int:
                         "root": None,
                         "entrypoints": [],
                     },
+                    "proposal": {"state": "unknown"},
                     "mockups": {"state": "unknown", "variants": 0},
                     "modules": [],
                     "findings": [

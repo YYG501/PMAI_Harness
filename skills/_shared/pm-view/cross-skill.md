@@ -16,6 +16,6 @@
 
 5. **`PM-VIEW-RULES.md` 每会话读 1 次**：后续步骤引用拆分文件即可，不反复整份塞 context。
 
-6. **PM 反馈只在收敛点进入长期基线**：build / review 期间的 PM 反馈先用于修改 build 结果并记录 accepted delta；落地主线后由自动文档编译按视觉、术语、跨功能规则、模块规格归位；未 build 但要写长期基线时走 record。
+6. **PM 反馈只在收敛点进入长期基线**：build / review 期间，只有当前批准模块与任务内、且不改变产品基线或模块模型的小范围调整可修改结果并记录 accepted delta；产品级变化回 Proposal，模块模型变化回 design。落地主线后由自动文档编译按视觉、术语、跨功能规则、模块规格归位；没有 active work 且只是补录已确认的 TODO、术语、跨模块规则、项目理路或 main 现状纠错时才走 record。
 
 7. **历史 task 只作归档证据**：如果迁移或考古必须读取 `requirements/**/tasks/*.md`，只读 PM 反馈或验收结论，不把其字段布局、状态名、任务编号带回活跃流程。

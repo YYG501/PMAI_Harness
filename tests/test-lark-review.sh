@@ -8,6 +8,7 @@ REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 SKILL="$REPO_ROOT/skills/lark-review/SKILL.md"
 ROUTING="$REPO_ROOT/skills/lark-review/references/review-routing.md"
 COLLECTOR="$REPO_ROOT/scripts/lark-review.py"
+PROPOSAL_CONTRACT="$REPO_ROOT/scripts/proposal-contract.py"
 DOCTOR="$REPO_ROOT/bin/pmai-doctor"
 README="$REPO_ROOT/README.md"
 AGENTS_TEMPLATE="$REPO_ROOT/templates/AGENTS.md.tmpl"
@@ -15,10 +16,12 @@ CLAUDE_TEMPLATE="$REPO_ROOT/templates/CLAUDE.md.tmpl"
 PUBLISH_SKILL="$REPO_ROOT/skills/publish-to-lark/SKILL.md"
 SYNC_SKILL="$REPO_ROOT/skills/lark-sync/SKILL.md"
 DESIGN_SKILL="$REPO_ROOT/skills/design/SKILL.md"
+PROPOSAL_SKILL="$REPO_ROOT/skills/proposal/SKILL.md"
 BUILD_SKILL="$REPO_ROOT/skills/build/SKILL.md"
 QUICK_FIX_SKILL="$REPO_ROOT/skills/quick-fix/SKILL.md"
 SPEC_SKILL="$REPO_ROOT/skills/spec-writing/SKILL.md"
 HANDOFF="$REPO_ROOT/skills/lark-review/references/lifecycle-handoff.md"
+AGENT="$REPO_ROOT/skills/lark-review/agents/openai.yaml"
 
 BASE_RAW=$(mktemp -d /tmp/pmai-lark-review-test-XXXXXX)
 BASE=$(cd "$BASE_RAW" && pwd -P)
@@ -58,6 +61,306 @@ Old rule
     echo
     printf '%s' "$body"
   } > "$path"
+}
+
+make_git_module_review_repo() {
+  local root="$1"
+  mkdir -p "$root"
+  git -C "$root" init -q -b main
+  git -C "$root" config user.email test@example.com
+  git -C "$root" config user.name "PMAI Test"
+  mkdir -p "$root/docs/modules/example"
+  printf '# PMAI Agent Entry\n' > "$root/AGENTS.md"
+  printf '# Product State\n' > "$root/PRODUCT-STATE.md"
+  local body='# Spec
+
+Old rule
+'
+  local hash
+  hash=$(printf '%s' "$body" | PYTHONPATH="$REPO_ROOT/scripts" python3 -c 'import sys; from _lib.lark_adapter import markdown_body_hash; print(markdown_body_hash(sys.stdin.read()))')
+  {
+    echo '---'
+    echo 'lark_doc_id: docR'
+    echo 'lark_doc_url: https://example.feishu.cn/docx/docR'
+    echo 'lark_published_revision_id: 7'
+    echo "lark_published_source_hash: $hash"
+    echo 'lark_reviewed_comment_at: 150'
+    echo '---'
+    echo
+    printf '%s' "$body"
+  } > "$root/docs/modules/example/spec.md"
+  git -C "$root" add -- AGENTS.md PRODUCT-STATE.md docs/modules/example/spec.md
+  git -C "$root" commit -q -m "review fixture"
+}
+
+accept_test_proposal() {
+  local root="$1"
+  mkdir -p "$root/docs/proposals" "$root/.pm-workflow"
+  cat > "$root/docs/proposals/review-v1.md" <<'MD'
+# Review Product Proposal
+
+> 版本：v1
+> Proposal ID：review-v1
+> 状态：当前
+> 日期：2026-08-11
+> 取代：无
+> 支持的决定：是否投入可验证的规格评审闭环
+> 证据截至：2026-08-11
+
+## 0. 决策摘要与产品主张
+
+为产品负责人提供可验证的规格评审闭环。
+
+## 1. 产品成立的核心判断
+
+负责人需要让在线评审与本地产品依据保持一致。
+
+## 2. 用户、场景、问题与现状替代
+
+产品负责人在飞书评审规格后需要可靠回收到产品主线。
+
+## 3. 产品回答与职责边界
+
+产品归位评审证据并保留人工最终决策。
+
+## 4. 必要能力与 AI 角色
+
+AI 负责归位证据，确定性脚本负责版本门禁。
+
+## 5. 替代方案、竞争判断与产品机会
+
+人工复制容易丢失上下文，机会在于可追溯闭环。
+
+## 6. 端到端产品体验与关键能力
+
+从在线评审、方向修订、规格更新到评论收口形成闭环。
+
+## 7. 产品价值、因果链与指标
+
+一致的依据减少遗漏并提高评审结论可执行性。
+
+## 8. MVP 范围、完整案例与决策门
+
+先验证一个规格从飞书回收到产品主线的完整案例。
+
+## 9. 演进条件与长期方向
+
+主案例成立后再扩展更多文档类型。
+
+## 10. 下游交接摘要
+
+- **第一个 design 目标**：完成评审闭环
+- **主用户与触发时刻**：产品负责人完成飞书评审时
+- **要闭合的核心任务**：更新规格并收口评论
+- **必须保持的产品回答**：归位证据后再更新产品依据
+- **必须保持的产品边界**：最终产品方向由人确认
+- **MVP 必须证明**：评审结论能够完整回到产品主线
+- **仍待验证的假设**：负责人愿意按闭环处理评审
+- **design 需要收敛**：对象、状态、权限和异常路径
+MD
+  cat > "$root/docs/proposals/INDEX.md" <<'MD'
+# Product Proposal 索引
+
+| 文档 | 版本 | 状态 | 取代 | 决策日期 | 下游起点 |
+|---|---|---|---|---|---|
+| [`review-v1.md`](review-v1.md) | v1 | 当前 | 无 | 2026-08-11 | 评审闭环 |
+MD
+  cat > "$root/PRODUCT.md" <<'MD'
+# Product
+
+## 当前 Product Proposal
+
+[review-v1.md](docs/proposals/review-v1.md)
+
+## 产品定位
+
+为产品负责人提供可验证规格评审闭环的产品。
+
+## 核心问题与价值
+
+减少在线评审回收时的上下文遗漏。
+
+## 用户画像
+
+需要对产品规格负责的产品负责人。
+
+## 产品边界
+
+产品归位证据，最终方向仍由人确认。
+
+## MVP Case
+
+负责人完成飞书评审后更新规格并收口评论。
+MD
+  python3 "$PROPOSAL_CONTRACT" accept "$root" \
+    --proposal docs/proposals/review-v1.md --id review-v1 \
+    --accepted-at '2026-08-11T10:00:00+08:00' >/dev/null || return 1
+  git -C "$root" add -- PRODUCT.md docs/proposals/review-v1.md \
+    docs/proposals/INDEX.md .pm-workflow/proposal.json || return 1
+  git -C "$root" commit -q -m "docs: accept review proposal" || return 1
+  python3 "$PROPOSAL_CONTRACT" validate "$root" >/dev/null
+}
+
+write_replan_candidate_manifest() {
+  local path="$1"
+  local mode="$2"
+  local route="$3"
+  local work_id="$4"
+  local worktree="$5"
+  local branch="$6"
+  local candidate_head="$7"
+  local baseline="$8"
+  mkdir -p "$(dirname "$path")"
+  python3 - "$path" "$mode" "$route" "$work_id" "$worktree" "$branch" \
+    "$candidate_head" "$baseline" <<'PY'
+import json
+import sys
+from pathlib import Path
+
+path = Path(sys.argv[1])
+mode, route, work_id, worktree, branch, candidate_head, baseline = sys.argv[2:]
+path.write_text(json.dumps({
+    "schema_version": 1,
+    "work_id": work_id,
+    "mode": mode,
+    "route": route,
+    "candidate_head": candidate_head,
+    "original_baseline_sha": baseline,
+    "branch": branch,
+    "worktree": worktree,
+    "module": "docs/modules/example",
+    "main_branch": "main",
+    "created_at": "2026-08-10T12:00:00+08:00",
+}, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+PY
+}
+
+assert_pending_handoff_bundle() {
+  local main_root="$1"
+  local route="$2"
+  local handoff_output="$3"
+  local manifest="$4"
+  local include_candidate="${5:-0}"
+  local batch_id bundle list_output filtered_output
+  batch_id=$(python3 -c \
+    'import json,sys; print(json.load(open(sys.argv[1], encoding="utf-8"))["batch_id"])' \
+    "$manifest") || return 1
+  bundle="$main_root/.runs/lark-review-handoffs/$batch_id/bundle.json"
+
+  if ! python3 - "$handoff_output" "$bundle" "$batch_id" "$route" \
+    "$include_candidate" <<'PY'
+import json
+import sys
+from pathlib import Path
+
+result = json.loads(sys.argv[1])
+bundle_path = Path(sys.argv[2])
+batch_id, route = sys.argv[3:5]
+include_candidate = sys.argv[5] == "1"
+assert result["handoff_bundle"] == str(bundle_path)
+bundle = json.loads(bundle_path.read_text(encoding="utf-8"))
+assert bundle["batch_id"] == batch_id
+assert bundle["route"] == route
+assert bundle["phase"] == route
+assert bundle["phase_history"] == []
+assert bundle["state"] == "pending"
+required = {
+    "handoff": "handoff.json",
+    "review": "review.json",
+    "draft_plan": "apply-plan.json",
+    "resolutions": "resolutions.json",
+    "target": "target.md",
+    "local": "local.md",
+    "remote": "remote.md",
+    "remote_native": "remote-native.json",
+    "local_remote_diff": "local-vs-remote.diff",
+    "remote_coverage": "remote-coverage.json",
+    "remote_preview": "remote-preview.md",
+}
+if include_candidate:
+    required["candidate_manifest"] = "candidate-manifest.json"
+for filename in required.values():
+    evidence_path = bundle_path.parent / filename
+    assert evidence_path.is_file(), evidence_path
+    assert not evidence_path.is_symlink(), evidence_path
+PY
+  then
+    _fail "handoff did not create a self-contained pending bundle: $handoff_output"
+    return 1
+  fi
+
+  if ! list_output=$(python3 "$COLLECTOR" list-handoffs "$main_root" \
+    --route "$route" 2>&1); then
+    _fail "pending handoff list failed: $list_output"
+    return 1
+  elif ! python3 - "$list_output" "$bundle" "$batch_id" "$route" \
+    "$include_candidate" <<'PY'
+import json
+import sys
+from pathlib import Path
+
+result = json.loads(sys.argv[1])
+bundle_path = Path(sys.argv[2])
+batch_id, route = sys.argv[3:5]
+include_candidate = sys.argv[5] == "1"
+assert result["status"] == "handoff_list"
+assert result["count"] == 1
+entry = result["handoffs"][0]
+assert entry["batch_id"] == batch_id
+assert entry["route"] == route
+assert entry["phase"] == route
+assert entry["state"] == "pending"
+assert entry["handoff_bundle"] == str(bundle_path)
+expected = {
+    "handoff": "handoff.json",
+    "review": "review.json",
+    "draft_plan": "apply-plan.json",
+    "resolutions": "resolutions.json",
+    "target": "target.md",
+    "local": "local.md",
+    "remote": "remote.md",
+    "remote_native": "remote-native.json",
+    "local_remote_diff": "local-vs-remote.diff",
+    "remote_coverage": "remote-coverage.json",
+    "remote_preview": "remote-preview.md",
+}
+if include_candidate:
+    expected["candidate_manifest"] = "candidate-manifest.json"
+evidence_files = entry["evidence_files"]
+assert isinstance(evidence_files, dict)
+returned_paths = {Path(path) for path in evidence_files.values()}
+for filename in expected.values():
+    expected_path = bundle_path.parent / filename
+    assert expected_path in returned_paths, (filename, evidence_files)
+for evidence_path in returned_paths:
+    assert evidence_path.parent == bundle_path.parent, evidence_path
+    assert evidence_path.is_file(), evidence_path
+    assert not evidence_path.is_symlink(), evidence_path
+PY
+  then
+    _fail "list-handoffs did not return the pending bundle and sibling evidence: $list_output"
+    return 1
+  fi
+
+  local other_route="proposal"
+  [ "$route" = "proposal" ] && other_route="design"
+  if ! filtered_output=$(python3 "$COLLECTOR" list-handoffs "$main_root" \
+    --route "$other_route" 2>&1); then
+    _fail "handoff route filter failed: $filtered_output"
+    return 1
+  elif ! python3 - "$filtered_output" <<'PY'
+import json
+import sys
+
+result = json.loads(sys.argv[1])
+assert result["status"] == "handoff_list"
+assert result["count"] == 0
+assert result["handoffs"] == []
+PY
+  then
+    _fail "list-handoffs returned a bundle from the wrong route: $filtered_output"
+    return 1
+  fi
 }
 
 complete_decision_routing() {
@@ -215,6 +518,14 @@ test_skill_contract() {
   start_test "lark-review: Skill 暴露、基线和分流合同完整"
   assert_file_contains "$SKILL" "name: pmai-lark-review" "frontmatter should expose pmai-lark-review" || return
   assert_file_contains "$SKILL" "lark-review.py.*collect" "skill should call deterministic collector" || return
+  assert_file_contains "$SKILL" "lark-review.py" "skill should use the authoritative review helper" || return
+  assert_file_contains "$SKILL" "resolve-target" "skill should bind the authoritative markdown before collect" || return
+  assert_file_contains "$SKILL" "不得从当前 cwd 猜仓根" "review target must not inherit a stale main cwd" || return
+  assert_file_contains "$SKILL" "REVIEW_ACTIVE_WORK_DIR" "active review routing should use the target-bound work directory" || return
+  if grep -Fq 'REPO_ROOT=$(git rev-parse --show-toplevel)' "$SKILL"; then
+    _fail "lark-review must not derive the review repository from the controller cwd"
+    return
+  fi
   assert_file_contains "$SKILL" "lark-review.py.*reconcile" "skill should require deterministic reconciliation" || return
   assert_file_contains "$SKILL" "lark-review.py.*apply" "skill should require guarded target apply" || return
   assert_file_contains "$SKILL" "remote_native_snapshot" "review target must be based on the native remote snapshot" || return
@@ -230,6 +541,13 @@ test_skill_contract() {
   assert_file_contains "$SKILL" "B / L / R.*只读证据" "skill should keep source versions read-only" || return
   assert_file_contains "$SKILL" "只有已 seal 的 T" "skill should make T the only writable target" || return
   assert_file_contains "$SKILL" "整批只走一条主执行路径" "mixed batch should use one lifecycle" || return
+  assert_file_contains "$AGENT" "Proposal" "Lark review agent prompt should expose product-level routing" || return
+  assert_file_contains "$AGENT" "design" "Lark review agent prompt should expose module-level routing" || return
+  assert_file_contains "$AGENT" "build" "Lark review agent prompt should expose active-build routing" || return
+  if grep -q "更新、验证原型" "$AGENT"; then
+    _fail "Lark review agent prompt still assumes every review updates a prototype"
+    return
+  fi
   assert_file_contains "$SKILL" "未验证完成前不解决评论" "comments must remain open before verification" || return
   assert_file_contains "$SKILL" "全量评论围栏" "checkpoint should bind all comments, including solved comments" || return
   assert_file_contains "$SKILL" "is_solved=false.*is_solved=true" "full comment fence must query both solved states explicitly" || return
@@ -242,18 +560,77 @@ test_skill_contract() {
   assert_file_contains "$SKILL" "不接受自由填写.*reply.*author.*solver" "comment recovery must not trust caller-supplied identities" || return
   assert_file_contains "$SKILL" "\.pm-workflow/context/lark-review" "review batches should survive across turns outside Git" || return
   assert_file_contains "$SKILL" "连续两轮.*围栏" "full comment scans should require consecutive stable fences" || return
-  assert_file_contains "$SKILL" "决定.*归位.*同步.*飞书" "authority promotion must precede remote synchronization" || return
+  assert_file_contains "$SKILL" "apply 成功后只执行 seal 前固化的路由" "apply must not reclassify the sealed route" || return
   assert_file_contains "$SKILL" "checkpoint 不替代" "checkpoint should keep lifecycle evidence in downstream gates" || return
   assert_file_contains "$HANDOFF" "apply 成功前不得改写任何权威产品状态" "authority writes must wait for apply" || return
   assert_file_contains "$ROUTING" "revision 不能可靠证明.*PM 已认可" "remote revision must not impersonate PM approval" || return
   assert_file_contains "$ROUTING" "只问一次是否全部认可" "unattributed body edits should use one batch confirmation" || return
-  assert_file_contains "$ROUTING" "产品变化" "routing should distinguish product changes" || return
+  assert_file_contains "$ROUTING" "产品级变化" "routing should distinguish product-level changes" || return
+  assert_file_contains "$SKILL" "产品定位、目标用户、核心问题与价值、产品职责边界、MVP 证明目标或关键成立前提变化" "product-level review changes must return to Proposal" || return
+  assert_file_contains "$SKILL" "模块对象、关系、动作、状态、权限、真相源、信息结构、任务路径或关键交互变化" "module-level review changes must return to design" || return
+  assert_file_contains "$SKILL" "已批准模块与当前任务内形成 PM 已接受的小范围行为或体验调整" "only scoped active-build adjustments may use accepted delta" || return
+  assert_file_contains "$ROUTING" "下列任一变化都必须回完整.*pmai-proposal" "routing must send product-level changes back to Proposal" || return
+  assert_file_contains "$ROUTING" "同模块已有 active build 也必须先回.*pmai-design.*不得写 accepted delta" "routing must not turn module changes into active-build deltas" || return
+  assert_file_contains "$ROUTING" "只有同时满足以下条件才可回原 build 写 accepted delta" "routing must limit active-build deltas to scoped adjustments" || return
+  assert_file_contains "$ROUTING" "规格已经唯一说明正确行为.*直接纠正实现，不写 accepted delta" "active implementation corrections must not create deltas" || return
+  assert_file_contains "$ROUTING" "当前评审批次一律先转为只读 handoff.*旧 T 永不 apply" "product-level review changes must always hand off before Proposal" || return
+  if grep -q "产品变化默认写 accepted delta\|有 active build 时整批回原 build 形成 accepted delta" "$SKILL" "$ROUTING"; then
+    _fail "lark review still defaults active-build product changes to accepted delta"
+    return
+  fi
   assert_file_contains "$DOCTOR" "lark-review" "doctor should expose lark-review" || return
   assert_file_contains "$AGENTS_TEMPLATE" "/pmai-lark-review" "consumer AGENTS should route lark review" || return
   assert_file_contains "$CLAUDE_TEMPLATE" "/pmai-lark-review" "consumer CLAUDE should list lark-review" || return
   assert_file_contains "$PUBLISH_SKILL" "lark_published_revision_id" "publisher should record review revision" || return
   assert_file_contains "$SYNC_SKILL" "/pmai-lark-review" "plain sync should route review intent" || return
-  assert_file_contains "$HANDOFF" "apply 前：只收敛候选决定并编译 T" "handoff should apply T before implementation" || return
+  assert_file_contains "$HANDOFF" "apply 前：只收敛候选决定并编译 T" "ordinary review batches should apply T before implementation" || return
+  assert_file_contains "$HANDOFF" "无 active build 时用.*handoff --route proposal" "product-level reviews without a build need a direct read-only handoff" || return
+  assert_file_contains "$SKILL" "--applied-context-pack.*APPLIED_CONTEXT_PACK" "active build review should bind the applied context pack" || return
+  assert_file_contains "$SKILL" "--approval-artifact.*remote-verification.json" "active build review should bind the verified sealed batch" || return
+  assert_file_contains "$SKILL" "只读.*handoff.*不 seal / apply" "high-impact active reviews must leave the old batch read-only" || return
+  assert_file_contains "$SKILL" "find-resumable" "batch recovery must use the machine scanner" || return
+  assert_file_contains "$SKILL" "lark-review.py.*handoff" "upstream replan must persist a machine handoff" || return
+  assert_file_contains "$SKILL" "list-handoffs" "review recovery must enumerate durable handoff bundles from main" || return
+  assert_file_contains "$PROPOSAL_SKILL" "list-handoffs" "Proposal must recover pending product-review handoffs" || return
+  assert_file_contains "$PROPOSAL_SKILL" "--route proposal" "Proposal must only consume product-level handoff bundles" || return
+  assert_file_contains "$DESIGN_SKILL" "list-handoffs" "design must recover pending module-review handoffs" || return
+  assert_file_contains "$DESIGN_SKILL" "--route design" "design must only consume module-level handoff bundles" || return
+  assert_file_contains "$SKILL" "--closes-handoff" "fresh lark-review checkpoint must close the consumed handoff bundle" || return
+  if ! python3 "$COLLECTOR" checkpoint --help 2>&1 \
+    | grep -q -- '--closes-handoff'; then
+    _fail "checkpoint CLI must expose --closes-handoff for durable handoff closure"
+    return
+  fi
+  assert_file_contains "$SKILL" "plan 状态改成.*handed_off" "handoff must make the old plan non-resumable" || return
+  assert_file_contains "$SKILL" "route、review / draft plan / T / resolutions 摘要.*candidate manifest" "handoff must bind route, batch artifacts, and the exact candidate" || return
+  assert_file_contains "$SKILL" "main 与 worktree build 使用同一合同" "handoff must support both build modes" || return
+  assert_file_contains "$SKILL" "\[有 active 时先 replan\] → handoff → Proposal → design / spec-writing" "product handoff must precede Proposal authority changes" || return
+  assert_file_contains "$SKILL" "旧 manifest、markdown path 和.*REVIEW_DIR.*禁止复用" "replanned reviews must not apply from an old worktree batch" || return
+  assert_file_contains "$SKILL" "fresh collect.*闭合原评论" "replanned reviews must collect a fresh main-bound batch" || return
+  assert_file_contains "$HANDOFF" "不改变对象、关系、业务规则、权限模型或关键任务路径" "scoped review deltas must exclude module-model changes" || return
+  assert_file_contains "$SKILL" "--scope-attestation approved-module-task-no-model-change" "review deltas must carry scope attestation" || return
+  assert_file_contains "$SKILL" "--approval-kind lark-review-batch" "review deltas must bind sealed batch evidence" || return
+  assert_file_contains "$SKILL" "authority_paths" "applied review must bind exact authority paths" || return
+  assert_file_contains "$SKILL" "spec.md + \.work-meta.json" "review flow must create an exact authority checkpoint" || return
+  if ! python3 - "$SKILL" <<'PY'
+from pathlib import Path
+import sys
+
+text = Path(sys.argv[1]).read_text(encoding="utf-8")
+section = text.split("### 7. 按已固化路由精细同步", 1)[1]
+positions = [
+    section.index("先调用 `/pmai-lark-sync`"),
+    section.index("verify-sync"),
+    section.index("APPLIED_CONTEXT_PACK"),
+    section.index('build-contract.py" add-delta'),
+    section.index("checkpoint reviewed spec authority"),
+]
+assert positions == sorted(positions), positions
+PY
+  then
+    _fail "active-build review order must be sync/verify -> pack -> delta -> authority checkpoint"
+    return
+  fi
   assert_file_contains "$SKILL" "lark_published_source_hash.*T" "checkpoint should verify the final published target" || return
   assert_file_contains "$DESIGN_SKILL" "lifecycle-handoff.md" "design should honor review handoff" || return
   assert_file_contains "$BUILD_SKILL" "lifecycle-handoff.md" "build should honor review handoff" || return
@@ -266,6 +643,90 @@ test_skill_contract() {
   assert_file_contains "$SKILL" "没有.*--force" "skill should explicitly forbid force bypasses" || return
   if grep -E -n 'add_argument\([^)]*--force' "$COLLECTOR" >/dev/null; then
     _fail "lark-review CLI must not expose a force option"
+    return
+  fi
+  pass_test
+}
+
+test_review_target_binds_the_active_worktree() {
+  start_test "lark-review: 目标模块绑定 active build 的真实 worktree"
+  local main="$BASE/resolve-target-main"
+  local worktree="$BASE/resolve-target-active"
+  local second="$BASE/resolve-target-second"
+  local out
+
+  make_git_module_review_repo "$main"
+  git -C "$main" worktree add -q -b build-review-active "$worktree" main
+  python3 - "$worktree/docs/modules/example/.work-meta.json" \
+    work-review-active build-review-active <<'PY'
+import json
+import sys
+from pathlib import Path
+
+Path(sys.argv[1]).write_text(json.dumps({
+    "id": sys.argv[2],
+    "name": "example review",
+    "branch": sys.argv[3],
+    "stage": 2,
+    "status": "active",
+    "lifecycle_state": "iterating",
+    "build": {
+        "branch": sys.argv[3],
+        "lifecycle_state": "iterating",
+    },
+}, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+PY
+
+  if ! out=$(python3 "$COLLECTOR" resolve-target \
+    "$main/docs/modules/example/spec.md" 2>&1); then
+    _fail "active worktree target resolution failed: $out"
+    return
+  elif ! python3 - "$out" "$main" "$worktree" <<'PY'
+import json
+import sys
+from pathlib import Path
+
+result = json.loads(sys.argv[1])
+main = str(Path(sys.argv[2]).resolve())
+worktree = Path(sys.argv[3]).resolve()
+assert result["markdown_path"] == str(worktree / "docs/modules/example/spec.md")
+assert result["repo_root"] == str(worktree)
+assert result["main_repo_root"] == main
+assert result["active_work_dir"] == str(worktree / "docs/modules/example")
+assert result["active_work_id"] == "work-review-active"
+assert result["lifecycle_state"] == "iterating"
+PY
+  then
+    _fail "resolved target did not bind the active worktree: $out"
+    return
+  fi
+
+  git -C "$main" worktree add -q -b build-review-second "$second" main
+  python3 - "$second/docs/modules/example/.work-meta.json" \
+    work-review-second build-review-second <<'PY'
+import json
+import sys
+from pathlib import Path
+
+Path(sys.argv[1]).write_text(json.dumps({
+    "id": sys.argv[2],
+    "name": "duplicate example review",
+    "branch": sys.argv[3],
+    "stage": 2,
+    "status": "active",
+    "lifecycle_state": "building",
+    "build": {
+        "branch": sys.argv[3],
+        "lifecycle_state": "building",
+    },
+}, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+PY
+  if out=$(python3 "$COLLECTOR" resolve-target \
+    "$main/docs/modules/example/spec.md" 2>&1); then
+    _fail "resolver must reject two active builds for one review target"
+    return
+  elif ! echo "$out" | grep -q "命中多个 active build"; then
+    _fail "ambiguous active target should fail explicitly: $out"
     return
   fi
   pass_test
@@ -406,8 +867,87 @@ test_checkpoint_is_separate_and_preserves_body() {
     || ! grep -q '^lark_reviewed_comment_ids: \["comment:c1"\]$' "$work/spec.md" \
     || ! grep -q '^lark_reviewed_at: 2026-08-04T12:00:00+08:00$' "$work/spec.md" \
     || ! grep -q '^lark_published_revision_id: 10$' "$work/spec.md" \
-    || ! grep -q '^New rule$' "$work/spec.md"; then
+    || ! grep -q '^New rule$' "$work/spec.md" \
+    || [ ! -f "$work/out/checkpoint.json" ]; then
     _fail "checkpoint fields/body incorrect: $(cat "$work/spec.md")"
+    return
+  fi
+  local review_root="$work/.pm-workflow/context/lark-review"
+  local scan_out
+  mkdir -p "$review_root"
+  mv "$work/out" "$review_root/batch.done"
+  scan_out=$(python3 "$COLLECTOR" find-resumable "$work/spec.md" \
+    --review-root "$review_root" 2>&1) || {
+    _fail "checkpointed batch recovery scan failed: $scan_out"; return;
+  }
+  if ! python3 - "$scan_out" <<'PY'
+import json, sys
+value = json.loads(sys.argv[1])
+assert value["status"] == "none"
+assert value["skipped_checkpoint_count"] == 1
+assert value["skipped_checkpoints"][0]["reason"] == "checkpointed"
+PY
+  then
+    _fail "checkpointed batch was still reported as resumable: $scan_out"
+    return
+  fi
+  pass_test
+}
+
+test_list_resumables_scans_main_and_attached_worktrees() {
+  start_test "lark-review: 全局恢复扫描 attached worktree 并排除 handoff"
+  local main="$BASE/list-resumables-main"
+  local worktree="$BASE/list-resumables-linked"
+  local main_batch="$main/.pm-workflow/context/lark-review/batch.handoff"
+  local linked_batch="$worktree/.pm-workflow/context/lark-review/batch.active"
+  local main_spec="$main/docs/modules/example/spec.md"
+  local linked_spec="$worktree/docs/modules/example/spec.md"
+  local out
+
+  make_git_module_review_repo "$main"
+  mkdir -p "$main_batch"
+  python3 "$COLLECTOR" collect "$main_spec" --output-dir "$main_batch" >/dev/null || {
+    _fail "failed to collect main handoff batch"; return;
+  }
+  python3 "$COLLECTOR" reconcile --manifest "$main_batch/review.json" >/dev/null || {
+    _fail "failed to draft main handoff batch"; return;
+  }
+  python3 "$COLLECTOR" handoff --manifest "$main_batch/review.json" \
+    --route proposal >/dev/null || {
+    _fail "failed to mark main batch as handoff"; return;
+  }
+
+  git -C "$main" worktree add -q -b build-resumable "$worktree" main
+  mkdir -p "$linked_batch"
+  python3 "$COLLECTOR" collect "$linked_spec" --output-dir "$linked_batch" >/dev/null || {
+    _fail "failed to collect linked worktree batch"; return;
+  }
+  python3 "$COLLECTOR" reconcile --manifest "$linked_batch/review.json" >/dev/null || {
+    _fail "failed to draft linked worktree batch"; return;
+  }
+
+  out=$(python3 "$COLLECTOR" list-resumables "$main" 2>&1) || {
+    _fail "global resumable scan failed: $out"; return;
+  }
+  if ! python3 - "$out" "$worktree" "$linked_batch" <<'PY'
+import json, sys
+from pathlib import Path
+
+value = json.loads(sys.argv[1])
+worktree = str(Path(sys.argv[2]).resolve())
+batch = str(Path(sys.argv[3]).resolve())
+assert value["status"] == "resumable_list"
+assert value["read_only"] is True
+assert value["count"] == 1
+assert value["skipped_handoff_count"] == 1
+item = value["batches"][0]
+assert item["repo_root"] == worktree
+assert item["batch_dir"] == batch
+assert item["markdown_relative"] == "docs/modules/example/spec.md"
+assert item["state"] == "draft"
+PY
+  then
+    _fail "global resumable list did not preserve worktree identity: $out"
     return
   fi
   pass_test
@@ -3509,6 +4049,656 @@ test_torn_solved_state_scan_retries_to_stability() {
   pass_test
 }
 
+test_product_handoff_without_active_build_is_read_only() {
+  start_test "lark-review: 产品级变化无 active build 也先只读 handoff"
+  local work="$BASE/product-handoff-main"
+  local review_root="$work/.pm-workflow/context/lark-review"
+  local batch="$review_root/batch.product"
+  local blocked="$review_root/batch.product-blocked"
+  local spec="$work/docs/modules/example/spec.md"
+  local out blocked_out
+
+  make_git_module_review_repo "$work"
+  mkdir -p "$batch"
+  python3 "$COLLECTOR" collect "$spec" --output-dir "$batch" >/dev/null || {
+    _fail "failed to collect direct product handoff fixture"; return;
+  }
+  python3 "$COLLECTOR" reconcile --manifest "$batch/review.json" >/dev/null || {
+    _fail "failed to draft direct product handoff fixture"; return;
+  }
+  if ! out=$(python3 "$COLLECTOR" handoff \
+    --manifest "$batch/review.json" --route proposal 2>&1); then
+    _fail "direct product handoff failed: $out"
+    return
+  elif ! python3 - "$batch/handoff.json" "$batch/apply-plan.json" "$out" <<'PY'
+import json
+import sys
+from pathlib import Path
+
+handoff = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
+plan = json.loads(Path(sys.argv[2]).read_text(encoding="utf-8"))
+result = json.loads(sys.argv[3])
+assert handoff["schema_version"] == 2
+assert handoff["handoff_mode"] == "direct_product_change"
+assert handoff["route"] == "proposal"
+assert handoff["candidate_manifest"] is None
+assert handoff["product_baseline"]["active_build_count"] == 0
+assert handoff["product_baseline"]["branch"] == "main"
+assert plan["state"] == "handed_off"
+assert result["handoff_mode"] == "direct_product_change"
+assert result["candidate_manifest"] is None
+PY
+  then
+    _fail "direct product handoff binding mismatch: $out"
+    return
+  fi
+  assert_pending_handoff_bundle \
+    "$work" proposal "$out" "$batch/review.json" || return
+
+  mkdir -p "$blocked"
+  python3 "$COLLECTOR" collect "$spec" --output-dir "$blocked" >/dev/null || {
+    _fail "failed to collect active product handoff fixture"; return;
+  }
+  python3 "$COLLECTOR" reconcile --manifest "$blocked/review.json" >/dev/null || {
+    _fail "failed to draft active product handoff fixture"; return;
+  }
+  python3 - "$work/docs/modules/example/.work-meta.json" <<'PY'
+import json
+import sys
+from pathlib import Path
+
+Path(sys.argv[1]).write_text(json.dumps({
+    "id": "work-product-active",
+    "name": "active product review",
+    "branch": "main",
+    "stage": 2,
+    "status": "active",
+    "lifecycle_state": "building",
+    "build": {"branch": "main", "lifecycle_state": "building"},
+}, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+PY
+  if blocked_out=$(python3 "$COLLECTOR" handoff \
+    --manifest "$blocked/review.json" --route proposal 2>&1); then
+    _fail "active product handoff must require a replan candidate"
+    return
+  elif ! echo "$blocked_out" | grep -q "必须先 replan.*candidate manifest"; then
+    _fail "active product handoff should fail with replan guidance: $blocked_out"
+    return
+  elif [ -e "$blocked/handoff.json" ]; then
+    _fail "failed direct handoff must not create a marker"
+    return
+  fi
+  pass_test
+}
+
+test_fresh_checkpoint_closes_product_handoff_bundle() {
+  start_test "lark-review: 扁平功能规格的 handoff bundle 可由 fresh checkpoint 关闭"
+  local work="$BASE/product-handoff-checkpoint"
+  local review_root="$work/.pm-workflow/context/lark-review"
+  local handoff_batch="$review_root/batch.product-handoff"
+  local fresh_batch="$work/out"
+  local spec="$work/docs/modules/account-policy.md"
+  local bundle handoff_out checkpoint_out list_out closed_list_out target_hash
+  local proposal_commit authority_commit advance_out blocked_out
+
+  make_git_module_review_repo "$work"
+  cp "$work/docs/modules/example/spec.md" "$spec"
+  git -C "$work" add -- docs/modules/account-policy.md
+  git -C "$work" commit -q -m "add flat functional specification"
+  mkdir -p "$handoff_batch"
+  python3 "$COLLECTOR" collect "$spec" --output-dir "$handoff_batch" >/dev/null || {
+    _fail "failed to collect product handoff closure fixture"; return;
+  }
+  python3 "$COLLECTOR" reconcile \
+    --manifest "$handoff_batch/review.json" >/dev/null || {
+    _fail "failed to draft product handoff closure fixture"; return;
+  }
+  handoff_out=$(python3 "$COLLECTOR" handoff \
+    --manifest "$handoff_batch/review.json" --route proposal 2>&1) || {
+    _fail "failed to create product handoff for checkpoint: $handoff_out"; return;
+  }
+  bundle=$(python3 -c \
+    'import json,sys; print(json.load(sys.stdin)["handoff_bundle"])' \
+    <<<"$handoff_out") || {
+    _fail "handoff output did not expose its durable bundle: $handoff_out"; return;
+  }
+  if blocked_out=$(python3 "$COLLECTOR" advance-handoff "$bundle" \
+    --to design 2>&1); then
+    _fail "proposal handoff advanced without a new accepted Proposal"
+    return
+  elif ! echo "$blocked_out" | grep -q "Product Proposal"; then
+    _fail "missing Proposal evidence should fail explicitly: $blocked_out"
+    return
+  fi
+  accept_test_proposal "$work" || {
+    _fail "failed to establish the post-handoff Proposal"; return;
+  }
+  proposal_commit=$(git -C "$work" rev-parse HEAD)
+  advance_out=$(python3 "$COLLECTOR" advance-handoff "$bundle" \
+    --to design 2>&1) || {
+    _fail "accepted Proposal did not advance handoff to design: $advance_out"; return;
+  }
+  if ! echo "$advance_out" | grep -q '"phase": "design"'; then
+    _fail "Proposal advancement did not report design phase: $advance_out"
+    return
+  fi
+  if blocked_out=$(python3 "$COLLECTOR" advance-handoff "$bundle" \
+    --to lark-review --evidence-commit "$proposal_commit" 2>&1); then
+    _fail "handoff advanced without a committed authority spec change"
+    return
+  elif ! echo "$blocked_out" | grep -Eq "必须晚于|没有修改当前 handoff 绑定的规格"; then
+    _fail "missing authority change should fail explicitly: $blocked_out"
+    return
+  fi
+
+  PYTHONPATH="$REPO_ROOT/scripts" python3 - \
+    "$spec" "$handoff_batch/target.md" <<'PY'
+import sys
+from pathlib import Path
+from _lib.lark_adapter import replace_markdown_body
+
+markdown = Path(sys.argv[1])
+target = Path(sys.argv[2]).read_text(encoding="utf-8")
+replace_markdown_body(markdown, target, require_canonical_path=True)
+PY
+  if [ "$?" -ne 0 ]; then
+    _fail "failed to simulate the upstream Proposal/design authority update"
+    return
+  fi
+  git -C "$work" add -- docs/modules/account-policy.md
+  git -C "$work" commit -q -m "docs: update reviewed authority spec"
+  authority_commit=$(git -C "$work" rev-parse HEAD)
+  advance_out=$(python3 "$COLLECTOR" advance-handoff "$bundle" \
+    --to lark-review --evidence-commit "$authority_commit" 2>&1) || {
+    _fail "authority spec commit did not advance handoff to lark_review: $advance_out"; return;
+  }
+  if ! echo "$advance_out" | grep -q '"phase": "lark_review"'; then
+    _fail "authority advancement did not report lark_review phase: $advance_out"
+    return
+  fi
+  if blocked_out=$(python3 "$COLLECTOR" advance-handoff "$bundle" \
+    --to design 2>&1); then
+    _fail "handoff phase accepted a backward transition"
+    return
+  elif ! echo "$blocked_out" | grep -q "只能按顺序推进"; then
+    _fail "backward transition should fail explicitly: $blocked_out"
+    return
+  fi
+  target_hash=$(PYTHONPATH="$REPO_ROOT/scripts" python3 - "$spec" <<'PY'
+import sys
+from pathlib import Path
+from _lib.lark_adapter import markdown_body_hash, parse_frontmatter
+
+_, body = parse_frontmatter(Path(sys.argv[1]).read_text(encoding="utf-8"))
+print(markdown_body_hash(body))
+PY
+  ) || return
+  python3 "$COLLECTOR" baseline "$spec" --revision-id 9 \
+    --expected-source-hash "$target_hash" >/dev/null || {
+    _fail "failed to establish the post-handoff main publishing baseline"; return;
+  }
+
+  mkdir -p "$fresh_batch" "$work/remote-state"
+  python3 "$COLLECTOR" collect "$spec" --output-dir "$fresh_batch" >/dev/null || {
+    _fail "failed to collect the fresh post-handoff batch"; return;
+  }
+  seal_simple_review "$work" || {
+    _fail "failed to seal the fresh post-handoff batch"; return;
+  }
+  python3 "$COLLECTOR" apply "$spec" \
+    --plan "$fresh_batch/apply-plan.json" >/dev/null || {
+    _fail "failed to apply the fresh post-handoff batch"; return;
+  }
+  target_hash=$(python3 -c \
+    'import json,sys; print(json.load(open(sys.argv[1], encoding="utf-8"))["target"]["body_sha256"])' \
+    "$fresh_batch/apply-plan.json") || return
+  FAKE_REVIEW_SYNCED_REMOTE=1 python3 "$COLLECTOR" baseline "$spec" \
+    --revision-id 10 --expected-source-hash "$target_hash" >/dev/null || {
+    _fail "failed to refresh the fresh batch publishing baseline"; return;
+  }
+  FAKE_REVIEW_SYNCED_REMOTE=1 python3 "$COLLECTOR" verify-sync \
+    --manifest "$fresh_batch/review.json" \
+    --plan "$fresh_batch/apply-plan.json" >/dev/null || {
+    _fail "failed to verify the fresh batch remote projection"; return;
+  }
+  FAKE_REVIEW_SYNCED_REMOTE=1 \
+  FAKE_REVIEW_CONTROLLED_ACTIONS=1 \
+  FAKE_REVIEW_STATE_DIR="$work/remote-state" \
+    python3 "$COLLECTOR" complete-comments \
+      --manifest "$fresh_batch/review.json" \
+      --plan "$fresh_batch/apply-plan.json" >/dev/null || {
+    _fail "failed to complete the fresh batch comments"; return;
+  }
+  checkpoint_out=$(FAKE_REVIEW_SYNCED_REMOTE=1 \
+    FAKE_REVIEW_CONTROLLED_ACTIONS=1 \
+    FAKE_REVIEW_STATE_DIR="$work/remote-state" \
+    python3 "$COLLECTOR" checkpoint "$spec" \
+      --manifest "$fresh_batch/review.json" \
+      --plan "$fresh_batch/apply-plan.json" \
+      --closes-handoff "$bundle" \
+      --reviewed-at '2026-08-11T12:00:00+08:00' 2>&1) || {
+    _fail "fresh checkpoint failed to close its consumed handoff: $checkpoint_out"; return;
+  }
+  list_out=$(python3 "$COLLECTOR" list-handoffs "$work" \
+    --route proposal 2>&1) || {
+    _fail "failed to list pending handoffs after checkpoint: $list_out"; return;
+  }
+  closed_list_out=$(python3 "$COLLECTOR" list-handoffs "$work" \
+    --route proposal --include-closed 2>&1) || {
+    _fail "failed to audit closed handoffs after checkpoint: $closed_list_out"; return;
+  }
+  if ! python3 - "$bundle" "$fresh_batch/review.json" "$checkpoint_out" \
+    "$list_out" "$closed_list_out" <<'PY'
+import json
+import sys
+from pathlib import Path
+
+bundle_path = Path(sys.argv[1])
+fresh_review = json.loads(Path(sys.argv[2]).read_text(encoding="utf-8"))
+checkpoint = json.loads(sys.argv[3])
+pending_list = json.loads(sys.argv[4])
+closed_list = json.loads(sys.argv[5])
+bundle = json.loads(bundle_path.read_text(encoding="utf-8"))
+assert checkpoint["closed_handoffs"] == [str(bundle_path)]
+assert Path(checkpoint["checkpoint"]).name == "checkpoint.json"
+assert bundle["state"] == "closed"
+assert bundle["phase"] == "closed"
+assert [item["to"] for item in bundle["phase_history"]] == [
+    "design", "lark_review", "closed",
+]
+assert bundle["module"] == "docs/modules/account-policy.md"
+assert bundle["markdown_relative"] == "docs/modules/account-policy.md"
+assert bundle["closure"]["batch_id"] == fresh_review["batch_id"]
+assert pending_list["count"] == 0
+assert pending_list["handoffs"] == []
+assert closed_list["count"] == 1
+assert closed_list["handoffs"][0]["state"] == "closed"
+assert closed_list["handoffs"][0]["phase"] == "closed"
+assert closed_list["handoffs"][0]["handoff_bundle"] == str(bundle_path)
+assert closed_list["handoffs"][0]["closure"]["batch_id"] == fresh_review["batch_id"]
+PY
+  then
+    _fail "handoff bundle did not transition from pending to closed"
+    return
+  fi
+  pass_test
+}
+
+test_replan_handoff_blocks_old_batch_and_recovery_skips_it() {
+  start_test "lark-review: replanned main batch becomes read-only and is skipped"
+  local work="$BASE/replan-handoff-main"
+  local review_root="$work/.pm-workflow/context/lark-review"
+  local batch="$review_root/batch.main"
+  local spec="$work/docs/modules/example/spec.md"
+  local candidate="$work/.runs/replan-candidates/work-main-review.json"
+  local head handoff_out scan_out seal_out apply_out target_scan_out resolutions_scan_out
+  make_git_module_review_repo "$work"
+  mkdir -p "$batch"
+  python3 "$COLLECTOR" collect "$spec" --output-dir "$batch" >/dev/null || {
+    _fail "failed to collect main handoff fixture"; return;
+  }
+  python3 "$COLLECTOR" reconcile --manifest "$batch/review.json" >/dev/null || {
+    _fail "failed to draft main handoff fixture"; return;
+  }
+  head=$(git -C "$work" rev-parse HEAD)
+  write_replan_candidate_manifest "$candidate" main proposal work-main-review \
+    "$work" main "$head" "$head"
+
+  if ! handoff_out=$(python3 "$COLLECTOR" handoff \
+    --manifest "$batch/review.json" \
+    --route proposal \
+    --candidate-manifest "$candidate" 2>&1); then
+    _fail "main handoff failed: $handoff_out"
+    return
+  fi
+  if ! python3 - "$batch/handoff.json" "$batch/apply-plan.json" "$candidate" "$handoff_out" <<'PY'
+import hashlib
+import json
+import sys
+from pathlib import Path
+
+handoff = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
+plan = json.loads(Path(sys.argv[2]).read_text(encoding="utf-8"))
+candidate_hash = hashlib.sha256(Path(sys.argv[3]).read_bytes()).hexdigest()
+result = json.loads(sys.argv[4])
+assert handoff["state"] == "read_only"
+assert handoff["route"] == "proposal"
+assert handoff["candidate_manifest"]["mode"] == "main"
+assert handoff["candidate_manifest"]["sha256"] == candidate_hash
+assert plan["state"] == "handed_off"
+assert plan["handoff"]["sha256"] == hashlib.sha256(Path(sys.argv[1]).read_bytes()).hexdigest()
+assert result["status"] == "handed_off"
+assert result["candidate_manifest_sha256"] == candidate_hash
+PY
+  then
+    _fail "main handoff did not bind the exact candidate manifest"
+    return
+  fi
+
+  if ! scan_out=$(python3 "$COLLECTOR" find-resumable "$spec" \
+    --review-root "$review_root" 2>&1); then
+    _fail "handoff recovery scan failed: $scan_out"
+    return
+  elif ! python3 - "$scan_out" <<'PY'
+import json
+import sys
+
+result = json.loads(sys.argv[1])
+assert result["status"] == "none"
+assert result["resumable_count"] == 0
+assert result["skipped_handoff_count"] == 1
+assert result["skipped_handoffs"][0]["route"] == "proposal"
+PY
+  then
+    _fail "recovery scan returned the read-only handoff as resumable: $scan_out"
+    return
+  fi
+
+  seal_out=$(python3 "$COLLECTOR" reconcile \
+    --manifest "$batch/review.json" \
+    --resolutions "$batch/resolutions.json" --seal 2>&1)
+  if [ "$?" -eq 0 ] || ! echo "$seal_out" | grep -q "只读 handoff"; then
+    _fail "handed-off batch must reject seal: $seal_out"
+    return
+  fi
+  apply_out=$(python3 "$COLLECTOR" apply "$spec" \
+    --plan "$batch/apply-plan.json" 2>&1)
+  if [ "$?" -eq 0 ] || ! echo "$apply_out" | grep -q "只读 handoff"; then
+    _fail "handed-off batch must reject apply: $apply_out"
+    return
+  fi
+
+  cp "$batch/target.md" "$work/target.saved"
+  printf '\nforged handoff target\n' >> "$batch/target.md"
+  target_scan_out=$(python3 "$COLLECTOR" find-resumable "$spec" \
+    --review-root "$review_root" 2>&1)
+  if [ "$?" -eq 0 ] || ! echo "$target_scan_out" | grep -q "target.md 已变化"; then
+    _fail "handoff target must remain immutable: $target_scan_out"
+    return
+  fi
+  cp "$work/target.saved" "$batch/target.md"
+  python3 - "$batch/resolutions.json" <<'PY'
+import json
+import sys
+from pathlib import Path
+
+path = Path(sys.argv[1])
+payload = json.loads(path.read_text(encoding="utf-8"))
+payload["forged_after_handoff"] = True
+path.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+PY
+  resolutions_scan_out=$(python3 "$COLLECTOR" find-resumable "$spec" \
+    --review-root "$review_root" 2>&1)
+  if [ "$?" -eq 0 ] || ! echo "$resolutions_scan_out" | grep -q "resolutions.json 已变化"; then
+    _fail "handoff resolutions must remain immutable: $resolutions_scan_out"
+    return
+  fi
+  pass_test
+}
+
+test_replan_handoff_supports_linked_worktree_batches() {
+  start_test "lark-review: 扁平功能规格绑定 active worktree 并生成持久 handoff"
+  local main="$BASE/replan-handoff-worktree-main"
+  local worktree="$BASE/replan-handoff-linked"
+  local review_root="$worktree/.pm-workflow/context/lark-review"
+  local batch="$review_root/batch.worktree"
+  local moved_batch="$BASE/replan-handoff-linked-batch-moved"
+  local main_spec="$main/docs/modules/account-policy.md"
+  local spec="$worktree/docs/modules/account-policy.md"
+  local candidate="$main/.runs/replan-candidates/work-linked-review.json"
+  local head out resolve_out scan_out
+  make_git_module_review_repo "$main"
+  cp "$main/docs/modules/example/spec.md" "$main_spec"
+  git -C "$main" add -- docs/modules/account-policy.md
+  git -C "$main" commit -q -m "add flat functional specification"
+  git -C "$main" worktree add -q -b build-handoff "$worktree" main
+  python3 - "$worktree/docs/modules/example/.work-meta.json" <<'PY'
+import json
+import sys
+from pathlib import Path
+
+Path(sys.argv[1]).write_text(json.dumps({
+    "id": "work-linked-review",
+    "name": "flat functional review",
+    "branch": "build-handoff",
+    "stage": 2,
+    "status": "active",
+    "lifecycle_state": "iterating",
+    "build": {
+        "anchor": "docs/modules/account-policy.md",
+        "branch": "build-handoff",
+        "lifecycle_state": "iterating",
+    },
+}, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+PY
+  git -C "$worktree" add -- docs/modules/example/.work-meta.json
+  git -C "$worktree" commit -q -m "bind flat specification to active work"
+
+  if ! resolve_out=$(python3 "$COLLECTOR" resolve-target "$main_spec" 2>&1); then
+    _fail "flat functional target resolution failed: $resolve_out"
+    return
+  elif ! python3 - "$resolve_out" "$main" "$worktree" <<'PY'
+import json
+import sys
+from pathlib import Path
+
+result = json.loads(sys.argv[1])
+main = str(Path(sys.argv[2]).resolve())
+worktree = Path(sys.argv[3]).resolve()
+assert result["markdown_path"] == str(worktree / "docs/modules/account-policy.md")
+assert result["repo_root"] == str(worktree)
+assert result["main_repo_root"] == main
+assert result["active_work_dir"] == str(worktree / "docs/modules/example")
+assert result["active_work_id"] == "work-linked-review"
+PY
+  then
+    _fail "flat functional target did not bind the active worktree: $resolve_out"
+    return
+  fi
+
+  mkdir -p "$batch"
+  python3 "$COLLECTOR" collect "$spec" --output-dir "$batch" >/dev/null || {
+    _fail "failed to collect worktree handoff fixture"; return;
+  }
+  python3 "$COLLECTOR" reconcile --manifest "$batch/review.json" >/dev/null || {
+    _fail "failed to draft worktree handoff fixture"; return;
+  }
+  head=$(git -C "$worktree" rev-parse HEAD)
+  write_replan_candidate_manifest "$candidate" worktree design work-linked-review \
+    "$worktree" build-handoff "$head" "$head"
+
+  if ! out=$(python3 "$COLLECTOR" handoff \
+    --manifest "$batch/review.json" \
+    --route design \
+    --candidate-manifest "$candidate" 2>&1); then
+    _fail "worktree handoff failed: $out"
+    return
+  elif ! python3 - "$batch/handoff.json" "$out" "$worktree" <<'PY'
+import json
+import sys
+from pathlib import Path
+
+handoff = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
+result = json.loads(sys.argv[2])
+assert handoff["candidate_manifest"]["mode"] == "worktree"
+assert handoff["candidate_manifest"]["worktree"] == sys.argv[3]
+assert handoff["candidate_manifest"]["route"] == "design"
+assert result["route"] == "design"
+PY
+  then
+    _fail "worktree handoff identity mismatch: $out"
+    return
+  fi
+  if ! scan_out=$(python3 "$COLLECTOR" find-resumable "$spec" \
+    --review-root "$review_root" 2>&1); then
+    _fail "worktree recovery scan failed: $scan_out"
+    return
+  elif ! python3 - "$scan_out" <<'PY'
+import json
+import sys
+result = json.loads(sys.argv[1])
+assert result["status"] == "none"
+assert result["skipped_handoff_count"] == 1
+assert result["skipped_handoffs"][0]["route"] == "design"
+PY
+  then
+    _fail "worktree handoff was not skipped by recovery: $scan_out"
+    return
+  fi
+  mv "$batch" "$moved_batch"
+  if [ -e "$batch" ]; then
+    _fail "worktree handoff fixture was not moved away from its original batch path"
+    return
+  fi
+  assert_pending_handoff_bundle \
+    "$main" design "$out" "$moved_batch/review.json" 1 || return
+  if ! python3 - "$main" "$moved_batch" <<'PY'
+import json
+import sys
+from pathlib import Path
+
+main = Path(sys.argv[1])
+old_batch = Path(sys.argv[2])
+review = json.loads((old_batch / "review.json").read_text(encoding="utf-8"))
+bundle_dir = main / ".runs" / "lark-review-handoffs" / review["batch_id"]
+bundle = json.loads((bundle_dir / "bundle.json").read_text(encoding="utf-8"))
+copied_review = json.loads((bundle_dir / "review.json").read_text(encoding="utf-8"))
+copied_handoff = json.loads((bundle_dir / "handoff.json").read_text(encoding="utf-8"))
+copied_resolutions = json.loads(
+    (bundle_dir / "resolutions.json").read_text(encoding="utf-8")
+)
+assert copied_review["batch_id"] == review["batch_id"]
+assert copied_handoff["batch_id"] == review["batch_id"]
+assert copied_handoff["route"] == "design"
+assert copied_handoff["candidate_manifest"]["markdown_relative"] == "docs/modules/account-policy.md"
+assert bundle["module"] == "docs/modules/example"
+assert bundle["markdown_relative"] == "docs/modules/account-policy.md"
+assert copied_resolutions["batch_id"] == review["batch_id"]
+assert (bundle_dir / "target.md").read_text(encoding="utf-8").strip()
+assert (bundle_dir / "remote.md").read_text(encoding="utf-8").strip()
+PY
+  then
+    _fail "main handoff bundle could not be read after the worktree batch moved"
+    return
+  fi
+  pass_test
+}
+
+test_replan_handoff_rejects_unverifiable_git_provenance() {
+  start_test "lark-review: handoff rejects fake, unrelated, and unretained candidate commits"
+  local work="$BASE/replan-handoff-invalid-git"
+  local batch="$work/.pm-workflow/context/lark-review/batch.invalid-git"
+  local spec="$work/docs/modules/example/spec.md"
+  local candidate="$work/.runs/replan-candidates/work-invalid-review.json"
+  local head tree unrelated descendant out plan_state
+  make_git_module_review_repo "$work"
+  mkdir -p "$batch"
+  python3 "$COLLECTOR" collect "$spec" --output-dir "$batch" >/dev/null || {
+    _fail "failed to collect invalid provenance fixture"; return;
+  }
+  python3 "$COLLECTOR" reconcile --manifest "$batch/review.json" >/dev/null || {
+    _fail "failed to draft invalid provenance fixture"; return;
+  }
+  head=$(git -C "$work" rev-parse HEAD)
+  tree=$(git -C "$work" rev-parse 'HEAD^{tree}')
+
+  write_replan_candidate_manifest "$candidate" main proposal work-invalid-review \
+    "$work" main ffffffffffffffffffffffffffffffffffffffff "$head"
+  if out=$(python3 "$COLLECTOR" handoff \
+    --manifest "$batch/review.json" --route proposal \
+    --candidate-manifest "$candidate" 2>&1); then
+    _fail "handoff accepted a nonexistent candidate commit"
+    return
+  elif ! echo "$out" | grep -q "candidate HEAD.*可读取的 commit"; then
+    _fail "missing candidate commit should fail explicitly: $out"
+    return
+  fi
+
+  write_replan_candidate_manifest "$candidate" main proposal work-invalid-review \
+    "$work" main "$head" eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee
+  if out=$(python3 "$COLLECTOR" handoff \
+    --manifest "$batch/review.json" --route proposal \
+    --candidate-manifest "$candidate" 2>&1); then
+    _fail "handoff accepted a nonexistent baseline commit"
+    return
+  elif ! echo "$out" | grep -q "baseline.*可读取的 commit"; then
+    _fail "missing baseline commit should fail explicitly: $out"
+    return
+  fi
+
+  unrelated=$(printf 'unrelated candidate\n' | git -C "$work" commit-tree "$tree")
+  write_replan_candidate_manifest "$candidate" main proposal work-invalid-review \
+    "$work" main "$unrelated" "$head"
+  if out=$(python3 "$COLLECTOR" handoff \
+    --manifest "$batch/review.json" --route proposal \
+    --candidate-manifest "$candidate" 2>&1); then
+    _fail "handoff accepted a baseline outside candidate ancestry"
+    return
+  elif ! echo "$out" | grep -q "baseline 不是 candidate HEAD 的祖先"; then
+    _fail "non-ancestor baseline should fail explicitly: $out"
+    return
+  fi
+
+  descendant=$(printf 'detached candidate\n' | git -C "$work" commit-tree "$tree" -p "$head")
+  write_replan_candidate_manifest "$candidate" main proposal work-invalid-review \
+    "$work" main "$descendant" "$head"
+  if out=$(python3 "$COLLECTOR" handoff \
+    --manifest "$batch/review.json" --route proposal \
+    --candidate-manifest "$candidate" 2>&1); then
+    _fail "handoff accepted a candidate no longer retained by main"
+    return
+  elif ! echo "$out" | grep -q "不再包含 candidate HEAD"; then
+    _fail "unretained candidate should fail explicitly: $out"
+    return
+  fi
+
+  plan_state=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["state"])' \
+    "$batch/apply-plan.json")
+  if [ "$plan_state" != "draft" ] || [ -e "$batch/handoff.json" ]; then
+    _fail "failed provenance checks must not transition or mark the draft batch"
+    return
+  fi
+  pass_test
+}
+
+test_replan_handoff_rejects_worktree_branch_drift() {
+  start_test "lark-review: handoff requires the registered candidate worktree and branch"
+  local main="$BASE/replan-handoff-drift-main"
+  local worktree="$BASE/replan-handoff-drift-linked"
+  local batch="$worktree/.pm-workflow/context/lark-review/batch.drift"
+  local spec="$worktree/docs/modules/example/spec.md"
+  local candidate="$main/.runs/replan-candidates/work-drift-review.json"
+  local head out
+  make_git_module_review_repo "$main"
+  git -C "$main" worktree add -q -b build-drift "$worktree" main
+  mkdir -p "$batch"
+  python3 "$COLLECTOR" collect "$spec" --output-dir "$batch" >/dev/null || {
+    _fail "failed to collect worktree drift fixture"; return;
+  }
+  python3 "$COLLECTOR" reconcile --manifest "$batch/review.json" >/dev/null || {
+    _fail "failed to draft worktree drift fixture"; return;
+  }
+  head=$(git -C "$worktree" rev-parse HEAD)
+  write_replan_candidate_manifest "$candidate" worktree design work-drift-review \
+    "$worktree" build-drift "$head" "$head"
+  git -C "$worktree" switch -q -c moved-drift
+
+  if out=$(python3 "$COLLECTOR" handoff \
+    --manifest "$batch/review.json" --route design \
+    --candidate-manifest "$candidate" 2>&1); then
+    _fail "handoff accepted a candidate after its worktree changed branches"
+    return
+  elif ! echo "$out" | grep -q "worktree/branch 已不存在或身份不一致"; then
+    _fail "worktree branch drift should fail explicitly: $out"
+    return
+  fi
+  if [ -e "$batch/handoff.json" ]; then
+    _fail "worktree provenance failure must not create handoff.json"
+    return
+  fi
+  pass_test
+}
+
 test_resolutions_are_bound_to_review_batch() {
   start_test "lark-review: resolutions 账本不能跨批次复用"
   local work="$BASE/foreign-resolution-batch"
@@ -3539,10 +4729,12 @@ PY
 }
 
 test_skill_contract
+test_review_target_binds_the_active_worktree
 test_collects_three_way_body_and_paginated_comments
 test_collect_rejects_changes_during_comment_collection
 test_collect_requires_repository_root_before_side_effects
 test_checkpoint_is_separate_and_preserves_body
+test_list_resumables_scans_main_and_attached_worktrees
 test_checkpoint_requires_published_target_and_resolved_comments
 test_checkpoint_rejects_remote_mismatch_and_new_unresolved_comment
 test_checkpoint_rejects_reopened_out_of_batch_comment
@@ -3602,6 +4794,12 @@ test_legacy_doc_url_is_rejected_before_comment_collection
 test_invalid_pagination_is_fail_closed
 test_malformed_comment_pages_are_fail_closed
 test_torn_solved_state_scan_retries_to_stability
+test_product_handoff_without_active_build_is_read_only
+test_fresh_checkpoint_closes_product_handoff_bundle
+test_replan_handoff_blocks_old_batch_and_recovery_skips_it
+test_replan_handoff_supports_linked_worktree_batches
+test_replan_handoff_rejects_unverifiable_git_provenance
+test_replan_handoff_rejects_worktree_branch_drift
 test_resolutions_are_bound_to_review_batch
 
 report_results "lark-review"

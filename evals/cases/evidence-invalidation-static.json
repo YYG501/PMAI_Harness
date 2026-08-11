@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "id": "evidence-invalidation-static",
-  "title": "设计变化和实现提交使旧证据失效",
+  "title": "受控调整和实现提交使旧证据失效",
   "layer": "static",
   "skills": ["build"],
   "input": {
@@ -9,7 +9,7 @@
     "context": []
   },
   "expected": {
-    "behaviors": ["证据同时绑定 source hash 与 implementation commit", "accepted delta 使旧证据失效"],
+    "behaviors": ["证据同时绑定 source hash 与 implementation commit", "有证据的模块内调整使旧证据失效"],
     "observations": [],
     "lifecycle_order": []
   },
@@ -20,6 +20,6 @@
   "assertions": [
     {"type": "file_contains", "path": "scripts/build-contract.py", "value": "source_hash 与当前 approved_source_hash 不一致"},
     {"type": "file_contains", "path": "scripts/build-contract.py", "value": "commit 与当前 implementation_commit 不一致"},
-    {"type": "file_contains", "path": "scripts/build-contract.py", "value": "record a PM-accepted product change and invalidate evidence"}
+    {"type": "file_contains", "path": "scripts/build-contract.py", "value": "record one evidenced, module-scoped adjustment and invalidate evidence"}
   ]
 }

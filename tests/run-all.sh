@@ -19,6 +19,9 @@ SUITES=(
   test-publish-to-lark-e2e.sh
   test-measure-tthw.sh
   test-init-project.sh
+  test-proposal-contract.sh
+  test-proposal-skill.sh
+  test-spec-profile-preset.sh
   test-project-definition.sh
   test-consumer-doctor.sh
   test-project-type.sh
@@ -75,6 +78,7 @@ SUITES=(
   test-run-suite.sh
   test-cleanup-pending.sh
   test-cancel-work.sh
+  test-replan-work.sh
   test-status-view.sh
   test-active-build-guard.sh
   test-todo-guidance.sh

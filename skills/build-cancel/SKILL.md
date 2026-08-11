@@ -1,7 +1,7 @@
 ---
 name: pmai-build-cancel
 description: |
-  放弃已经进入 build 的模块工作：确认后不让本轮候选进入主线，清除进行中状态，相关工作环境由系统在安全时机自动清理。
+  放弃仍在独立 worktree 中、尚未进入主线的 build 候选：确认后清除进行中状态，相关工作环境由系统在安全时机自动清理。main 模式不适用，必须通过 proposal/design 重规划并前向处理已经在主线的实现。
 ---
 
 # /pmai-build-cancel
@@ -23,7 +23,8 @@ source "${PMAI_HOME:-$HOME/.pmai}/scripts/skill-preamble.sh"
 ## When To Use
 
 - PM 明确说当前 build 不要继续、废弃、取消、放弃。
-- 当前模块已有 `.work-meta.json` 活跃状态，且已经进入 build / 隔离实现，需要清掉。
+- 当前模块已有 `.work-meta.json` 活跃状态，且 `build.mode=worktree`，需要放弃尚未进入主线的隔离实现。
+- 不适用于 `build.mode=main`：实现已经位于主线，不能宣称“候选未进入主线”，也不能用 cancel 隐式回滚。产品方向变化回 `/pmai-proposal`，模块行为变化回 `/pmai-design`，两者都通过 `replan-work.py` 冻结旧范围后前向处理。
 - 不用于完成收尾；PM 已验收时应回原 `/pmai-build` 续跑自动 finalize，只有兼容或恢复场景才用 `/pmai-build-close`；轻量记录走 `/pmai-record`。
 - 不用于“设计讨论完先不实现”；这种情况不用取消 build，停住即可，若有稳定基线再走 `/pmai-record`。
 
@@ -38,7 +39,11 @@ python3 "$PMAI_HOME/scripts/status-view.py" --banner-only --skill BUILD-CANCEL |
 
 ## Workflow
 
-### 步骤 1：确认放弃
+### 步骤 0：机械确认适用模式
+
+读取当前 `.work-meta.json:build.mode`。只有 `worktree` 才继续下面的确认；`main` 立即停止本 skill，转 `/pmai-proposal` 或 `/pmai-design`。`cancel-work.sh` 会在切分支、提交或写待清理队列前再次机械拒绝 main 模式。
+
+### 步骤 1：确认放弃 worktree 候选
 
 先向 PM 确认：
 
@@ -63,7 +68,7 @@ PM 确认后：
 bash "$PMAI_HOME/scripts/cancel-work.sh" "$ACTIVE_WORK_DIR"
 ```
 
-脚本真实行为：
+脚本对 worktree 候选的真实行为：
 
 1. 切回 main，并拒绝 main 上任何未提交改动，包括当前模块里未确认的 discussion / spec 修改。
 2. 只暂存并提交当前模块 `.work-meta.json` 的删除（如果存在），清掉“正在做”的状态。
@@ -82,6 +87,7 @@ bash "$PMAI_HOME/scripts/cancel-work.sh" "$ACTIVE_WORK_DIR"
 ## Rules
 
 - 必须先问 PM 确认，不能静默放弃。
+- 只适用于 `build.mode=worktree`；main 模式必须在任何 checkout、commit 或清理入队前失败关闭。
 - 放弃不 merge 当前工作分支。
 - cancel commit 只允许包含 `.work-meta.json` 删除，不顺带提交模块文档或其它 WIP。
 - 不写 `status=cancelled`；新模型的语义是清掉活跃状态。

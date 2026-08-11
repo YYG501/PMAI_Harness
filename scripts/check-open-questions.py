@@ -26,8 +26,8 @@
 
 --require-section 模式：
   默认模式下「缺开放问题 section」静默退出 0 —— 对大多数 stage 文档是对的
-  （它们没这 section）。但 direction 把未决问题写进专用暂存文件后对它跑闸门，
-  缺 section = 闸门形同虚设。该模式下缺 section 必须 fail（exit 1），不静默放行。
+  （它们没这 section）。但要求文档显式声明未决问题时，缺 section = 闸门形同虚设。
+  该模式下缺 section 必须 fail（exit 1），不静默放行。
 
 退出码:
   0  全部已答（或 section 不存在且未加 --require-section / section 内显式声明无未决问题）
@@ -49,7 +49,7 @@ def main():
     parser.add_argument(
         "--require-section",
         action="store_true",
-        help="缺 `## 未决问题` / `## 待确认问题` section 时 fail——direction 暂存文件用",
+        help="缺 `## 未决问题` / `## 待确认问题` section 时 fail",
     )
     args = parser.parse_args()
 

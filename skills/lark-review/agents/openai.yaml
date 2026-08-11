@@ -1,4 +1,4 @@
 interface:
   display_name: "PMAI Lark Review"
-  short_description: "归位飞书评审版本，受控更新本地规格、产品决定与原型"
-  default_prompt: "使用 $pmai-lark-review 读取这篇飞书规格的修改与批注，先归位目标版本和决定，再同步同一篇飞书并更新、验证原型。"
+  short_description: "回收飞书规格正文与批注，按影响接回 Proposal、design 或 build 主线"
+  default_prompt: "使用 $pmai-lark-review 读取这篇飞书规格的正文修改与批注，按产品级、模块级或当前构建内调整接回 Proposal、design 或当前 build，更新权威规格后同步同一篇飞书，并验证受影响的产品结果。"

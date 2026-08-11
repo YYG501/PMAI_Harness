@@ -24,7 +24,7 @@ unset PMAI_PREAMBLE_READ_ONLY
 
 - PM 想看：当前产品现状 / 在做哪个模块 / 最近的重要决策。
 - 开新窗口、隔天回来，想一眼知道"我在哪、上次做到哪、下一步建议"。
-- 不适用：没有 active work 时要推进新工作 → `/pmai-design`。已有 `building / iterating / final_check` 时，继续查看、检查或修改当前结果属于原 `/pmai-build`，不是新 design。
+- 不适用：没有 active work 时要推进新工作 → 新项目方向未完成先 `/pmai-proposal`，否则 `/pmai-design`。已有 `building / iterating / final_check` 时，继续查看、检查或修改当前结果属于原 `/pmai-build`，不是新 design。
 
 ## Preamble
 
@@ -45,7 +45,22 @@ echo "SKILL: status"
    python3 "$PMAI_HOME/scripts/status-view.py" --narrative 2>/dev/null || true
    ```
 
-   若状态是 `building / iterating / final_check`，PM 随后说“启动看看”“还有什么问题”“改一下当前结果”等自然语言时，按当前 `/pmai-build` 续接：先读取 `status-view.py --execution-context` 的只读合同，再重新编译 context pack。不要把它路由成通用 QA，也不要重新发明 PM 未决问题。
+   status-view 会先调用 `list-resumables` 扫描 main 与 attached worktrees。若有普通未完成飞书批次，唯一下一步是 `/pmai-lark-review <对应规格>`；它优先于 Proposal、handoff 和普通 active work。已 checkpoint 或已转只读 handoff 的批次不进入该列表。
+
+   没有普通未完成批次且状态是 `building / iterating / final_check` 时，PM 随后说“启动看看”“还有什么问题”“改一下当前结果”等自然语言，按当前 `/pmai-build` 续接：先读取 `status-view.py --execution-context` 的只读合同，再重新编译 context pack。
+
+   若没有 active work，再只读恢复方向调整前留下的全部候选：
+
+   ```bash
+   REPLAN_CANDIDATES_JSON=$(python3 "$PMAI_HOME/scripts/replan-work.py" \
+     list "${MAIN_REPO_ROOT:-$REPO_ROOT}")
+   LARK_RESUMABLES_JSON=$(python3 "$PMAI_HOME/scripts/lark-review.py" \
+     list-resumables "${MAIN_REPO_ROOT:-$REPO_ROOT}")
+   LARK_HANDOFFS_JSON=$(python3 "$PMAI_HOME/scripts/lark-review.py" \
+     list-handoffs "${MAIN_REPO_ROOT:-$REPO_ROOT}")
+   ```
+
+   三个命令都只读，不创建目录，不按 mtime 选择。handoff 的 `route` 只作来源审计，按当前 `phase` 给唯一入口：`proposal` → `/pmai-proposal`，`design` → 对应 `/pmai-design`，`lark_review` → `/pmai-lark-review`，`closed` 不返回。不得暴露 bundle、manifest、提交区间、分支或工作环境。
 
 3. @读 `PRODUCT-STATE.md`（现状）+ `PRODUCT-RULES.md`（跨模块规则与最近重要决策；不存在就跳过，不把“不存在”当成近期决策汇报）+ 当前涉及模块的 `discussion.md` / `decisions.md` / `spec.md`，必要时看 `git status --short --untracked-files=all` 判断是否有未提交改动。用 PM 视图大白话报一段，按下面合同输出：
 
@@ -56,7 +71,19 @@ echo "SKILL: status"
    <一句话产品现状>
 
    建议下一步：
-   小修现有结果可发 /pmai-quick-fix；新功能或产品规则变化发 /pmai-design。
+   如果 status-view 显示产品方向尚未完成或当前 Proposal 已漂移，发 /pmai-proposal；否则小修现有结果发 /pmai-quick-fix，模块功能或规则变化发 /pmai-design。
+   ```
+
+   若候选列表非空，在产品现状后、建议下一步前追加：
+
+   ```text
+   方向调整前保留的旧结果还没有逐项核对。继续产品方向调整时回 /pmai-proposal；方向已确认时回 /pmai-design <模块>，后续构建会处理保留、替换或撤销。
+   ```
+
+   若 pending Lark handoff 非空，按当前 phase 改为优先追加一个可执行入口：
+
+   ```text
+   飞书评审还有一轮没有闭环。继续 /pmai-proposal、/pmai-design <模块> 或 /pmai-lark-review（只显示机器 phase 对应的一个入口）。
    ```
 
    **无进行中工作、但工作区有未提交改动**：
@@ -113,7 +140,7 @@ echo "SKILL: status"
 
    排序规则：已进入主线待更新文档的排最前，其次是最终检查、看结果并修改、构建中、设计已定、需求讨论。
 
-4. **纯只读**：不写、不改任何文件或状态。无数据时直说"目前没有在做的模块，可发 `/pmai-design` 起新工作"，不编造。
+4. **纯只读**：不写、不改任何文件或状态。无数据时按 `proposal-contract.py status` 的结果给唯一下一步：`required / invalid` 指向 `/pmai-proposal`，`accepted / equivalent_baseline` 才指向 `/pmai-design`；不编造。
 
 ## Rules
 
@@ -121,3 +148,4 @@ echo "SKILL: status"
 - PM 话术不出内部词（`.work-meta` / 真相源 / 派生 等不直接念给 PM）。
 - 不把脚本诊断讲给 PM：禁止输出“PMAI 状态脚本显示”“记录层没有挂起模块”“可以理解为”“PRODUCT-RULES.md 不存在所以没有决策”这类话。只说 PM 要行动的事实。
 - 如果脚本状态和工作区状态不一致，优先给 PM 一个行动结论：有未提交改动就说“有一轮改动还没收口”，不要展开内部原因。
+- 必须读取完整普通批次与候选列表；多项全部纳入现状，不按时间挑一个，也不向 PM 暴露内部存储细节。

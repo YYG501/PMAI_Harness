@@ -20,8 +20,7 @@ setup_fixture() {
   T=$(mktemp -d "${TMPDIR:-/tmp}/pmai-finalize-work.XXXXXX")
   MODULE="$T/docs/modules/demo"
   mkdir -p "$MODULE" "$T/prototypes/src"
-  printf '# Product\n' > "$T/PRODUCT.md"
-  printf '# State\n' > "$T/PRODUCT-STATE.md"
+  write_equivalent_product_baseline "$T"
   printf '# Rules\n' > "$T/PRODUCT-RULES.md"
   printf '# Design\n' > "$T/DESIGN.md"
   printf '# Todo\n' > "$T/TODO.md"
@@ -99,8 +98,7 @@ setup_worktree_fixture() {
   T=$(mktemp -d "${TMPDIR:-/tmp}/pmai-finalize-worktree.XXXXXX")
   MAIN_MODULE="$T/docs/modules/demo"
   mkdir -p "$MAIN_MODULE" "$T/prototypes/src"
-  printf '# Product\n' > "$T/PRODUCT.md"
-  printf '# State\n' > "$T/PRODUCT-STATE.md"
+  write_equivalent_product_baseline "$T"
   printf '# Rules\n' > "$T/PRODUCT-RULES.md"
   printf '# Design\n' > "$T/DESIGN.md"
   printf '# Todo\n' > "$T/TODO.md"
@@ -195,11 +193,15 @@ test_new_round_deltas_finalize_in_isolated_audit_dir() {
   WORK_ID_OVERRIDE="work-demo-20260810120000-a1b2c3d4" setup_fixture \
     "test -f package.json" tests typecheck build
   AUDIT="$T/.pm-workflow/audits/demo/work-demo-20260810120000-a1b2c3d4"
-  python3 "$CONTRACT" add-delta "$MODULE" --kind product-behavior \
+  python3 "$CONTRACT" add-delta "$MODULE" --kind scoped-adjustment \
     --summary "支持批量处理" --affected-surface "列表页" \
+    --scope-attestation approved-module-task-no-model-change \
+    --approval-kind pm-confirmation --approval-reference "test:PM accepted batch handling" \
     --accepted-at "2026-08-10T12:00:00+08:00" >/dev/null
-  python3 "$CONTRACT" add-delta "$MODULE" --kind product-behavior \
+  python3 "$CONTRACT" add-delta "$MODULE" --kind scoped-adjustment \
     --summary "失败项可重试" --affected-surface "结果页" \
+    --scope-attestation approved-module-task-no-model-change \
+    --approval-kind pm-confirmation --approval-reference "test:PM accepted retry behavior" \
     --accepted-at "2026-08-10T12:05:00+08:00" >/dev/null
   python3 "$CONTRACT" commit "$MODULE" \
     --implementation-commit "$IMPLEMENTATION" >/dev/null

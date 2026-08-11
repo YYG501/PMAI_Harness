@@ -80,6 +80,7 @@ def validate_ready_pack(
     *,
     allowed_states: set[str] | None = None,
     expected_pack_approved_hash: str | None = None,
+    expected_current_source_hash: str | None = None,
 ) -> dict[str, Any]:
     accepted_states = allowed_states or {"ready_to_build"}
     current_lifecycle = lifecycle_state(meta)
@@ -111,7 +112,12 @@ def validate_ready_pack(
         raise ReadyContractError(
             f"context pack 绑定模块不一致：期望 {expected_module}，实际 {pack.get('module') or '<empty>'}。"
         )
-    if current_hash != approved_hash:
+    expected_current_hash = (
+        str(expected_current_source_hash).strip()
+        if expected_current_source_hash is not None
+        else approved_hash
+    )
+    if current_hash != expected_current_hash:
         raise ReadyContractError("设计依据在批准后发生变化；请回到 /pmai-design 重新核对并固定建造起点。")
 
     pack_approved = str(pack.get("approved_source_hash") or "").strip()

@@ -482,6 +482,54 @@ PY
   fixture_teardown
 }
 
+test_cancel_rejects_main_mode_without_side_effects() {
+  start_test "cancel rejects main mode before changing main or queuing cleanup"
+  fixture_setup
+  local work_dir implementation before_head before_branch before_meta before_implementation after_head
+  cd "$FIXTURE_DIR"
+  work_dir=$(fixture_create_main_work "work-013" "main-mode" 3)
+  implementation="$FIXTURE_DIR/main-implementation.txt"
+  printf 'main implementation must remain\n' > "$implementation"
+  git -C "$FIXTURE_DIR" add -- "main-implementation.txt"
+  git -C "$FIXTURE_DIR" commit -q -m "add main implementation"
+  git -C "$FIXTURE_DIR" switch -q -c cancel-main-guard-caller
+
+  before_head=$(git -C "$FIXTURE_DIR" rev-parse HEAD)
+  before_branch=$(git -C "$FIXTURE_DIR" branch --show-current)
+  before_meta=$(git hash-object "$work_dir/.work-meta.json")
+  before_implementation=$(git hash-object "$implementation")
+
+  if (cd "$FIXTURE_DIR" && bash "$CANCEL_WORK" "$work_dir") \
+    >/tmp/out.$$ 2>/tmp/err.$$; then
+    _fail "cancel should reject build.mode=main"
+  elif ! grep -q "replan-work.py" /tmp/err.$$ \
+    || ! grep -qE "proposal.*design|design.*proposal" /tmp/err.$$; then
+    _fail "main-mode refusal should route through replan-work.py to proposal/design"
+    cat /tmp/err.$$ >&2
+  else
+    after_head=$(git -C "$FIXTURE_DIR" rev-parse HEAD)
+    if [ "$before_head" != "$after_head" ]; then
+      _fail "main-mode refusal changed HEAD"
+    elif [ "$before_branch" != "$(git -C "$FIXTURE_DIR" branch --show-current)" ]; then
+      _fail "main-mode refusal checked out another branch"
+    elif [ ! -f "$work_dir/.work-meta.json" ] \
+      || [ "$before_meta" != "$(git hash-object "$work_dir/.work-meta.json")" ]; then
+      _fail "main-mode refusal changed or removed .work-meta.json"
+    elif [ ! -f "$implementation" ] \
+      || [ "$before_implementation" != "$(git hash-object "$implementation")" ]; then
+      _fail "main-mode refusal changed or removed the implementation"
+    elif [ -f "$FIXTURE_DIR/.runs/pending-cleanup.json" ]; then
+      _fail "main-mode refusal queued cleanup"
+    else
+      pass_test
+    fi
+  fi
+
+  rm -f /tmp/out.$$ /tmp/err.$$
+  cd "$FRAMEWORK_ROOT"
+  fixture_teardown
+}
+
 # ---------------------------------------------------------------
 # Run all
 # ---------------------------------------------------------------
@@ -498,5 +546,6 @@ test_cancel_restores_meta_when_commit_fails
 test_cancel_prepare_failure_happens_before_state_commit
 test_cancel_activation_failure_recovers_from_main_truth
 test_cancel_supports_master_only_repository
+test_cancel_rejects_main_mode_without_side_effects
 
 report_results "cancel-work"

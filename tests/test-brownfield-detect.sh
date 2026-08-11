@@ -17,7 +17,6 @@ source "$SCRIPT_DIR/helpers/assert.sh"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 INIT_PROJECT_SH="$REPO_ROOT/scripts/init-project.sh"
 INIT_PROJECT_SKILL="$REPO_ROOT/skills/init-project/SKILL.md"
-DIRECTION_SKILL="$REPO_ROOT/skills/direction/SKILL.md"
 CODEBASE_AUDIT_SKILL="$REPO_ROOT/skills/_internal/codebase-audit/SKILL.md"
 CODEBASE_AUDIT_TMPL="$REPO_ROOT/skills/_internal/codebase-audit/templates/codebase-audit.md.tmpl"
 CODEBASE_MODULE_TMPL="$REPO_ROOT/skills/_internal/codebase-audit/templates/module.md.tmpl"
@@ -108,6 +107,14 @@ test_skill_describes_brownfield_gate() {
     _fail "SKILL.md 缺 --allow-existing flag 描述（PM 拍方案接住通路）"
     return
   fi
+  if ! grep -q '_shared/project-questioning.md' "$INIT_PROJECT_SKILL" \
+     || ! grep -q '资料目录核验后分流' "$INIT_PROJECT_SKILL" \
+     || ! grep -q 'equivalent_baseline' "$INIT_PROJECT_SKILL" \
+     || ! grep -q 'capture-intake' "$INIT_PROJECT_SKILL" \
+     || ! grep -q 'intake-manifest.json' "$INIT_PROJECT_SKILL"; then
+    _fail "资料目录接住后应复用等价产品基线核验，再按机器状态分流"
+    return
+  fi
   pass_test
 }
 
@@ -170,32 +177,44 @@ test_allow_existing_with_assets() {
     rm -rf "$base"
     return
   fi
+  if ! python3 - "$existing" <<'PY'
+import hashlib
+import json
+import sys
+from pathlib import Path
+
+root = Path(sys.argv[1])
+manifest = json.loads((root / ".pm-workflow/intake-manifest.json").read_text(encoding="utf-8"))
+actual = {item["path"]: item["sha256"] for item in manifest["files"]}
+expected = {
+    relative: hashlib.sha256((root / relative).read_bytes()).hexdigest()
+    for relative in ("chatgpt-export.json", "notes.md")
+}
+assert actual == expected
+PY
+  then
+    _fail "接入前 manifest 未固定原始资料路径与 hash"
+    rm -rf "$base"
+    return
+  fi
+  if ! grep -q '继续当前初始化.*核验接入前资料' /tmp/test-brownfield-T5.out \
+     || grep -q 'Next Up:.*pmai-proposal' /tmp/test-brownfield-T5.out; then
+    _fail "资料目录脚本不应在核验前提前宣布 Proposal — /tmp/test-brownfield-T5.out"
+    rm -rf "$base"
+    return
+  fi
   rm -rf "$base"
   pass_test
 }
 
 # -----------------------------------------------------------------
-# T6: 周边入口不把已有代码首次接入重新写成手动 codebase-audit 或 direction 分类
+# T6: 周边入口不把已有代码首次接入写成手动 codebase-audit，direction 公开入口保持移除
 # -----------------------------------------------------------------
 test_brownfield_routing_consistent_across_docs() {
-  start_test "T6: direction/docs/templates 不把首次接入指向手动 codebase-audit"
+  start_test "T6: 首次接入保持 init 内联，direction 入口已移除"
 
-  if ! grep -q "首次起步 / 首次接入统一走 /pmai-init-project" "$DIRECTION_SKILL" \
-     && ! grep -q '首次起步 / 首次接入 → 走 `/pmai-init-project`' "$DIRECTION_SKILL"; then
-    _fail "direction 应说明首次接入统一走 /pmai-init-project"
-    return
-  fi
-  if grep -qE "首次.*(/pmai-codebase-audit)" "$DIRECTION_SKILL" \
-     || grep -q 'brownfield 首次接入定方向 → 走 `/pmai-codebase-audit`' "$DIRECTION_SKILL"; then
-    _fail "direction 仍把已有代码首次接入指向手动 /pmai-codebase-audit"
-    return
-  fi
-  if grep -qE "接入方向恢复|D brownfield|4 场景" "$DIRECTION_SKILL"; then
-    _fail "direction 仍暴露接入恢复 / D brownfield / 四场景分类"
-    return
-  fi
-  if ! grep -q "方向重定" "$DIRECTION_SKILL" || ! grep -q "待办整理" "$DIRECTION_SKILL"; then
-    _fail "direction 应只保留方向重定 / 待办整理两类意图"
+  if [ -e "$REPO_ROOT/skills/direction" ]; then
+    _fail "direction 不应保留公开 Skill 或兼容路由目录"
     return
   fi
   if ! grep -q "/pmai-init-project" "$DOCS_INDEX" || grep -q "里的 \`/pmai-codebase-audit\`" "$DOCS_INDEX"; then
@@ -218,8 +237,25 @@ test_brownfield_routing_consistent_across_docs() {
     _fail "codebase-audit 应明确未初始化 preamble 下的 init 子流程例外"
     return
   fi
-  if ! grep -q 'pmai-init-project` 已有代码分支触发的 codebase-audit step 4' "$PROJECT_QUESTIONING"; then
-    _fail "_shared/project-questioning 应把 brownfield 调用方挂到 init-project 已有代码分支"
+  if ! grep -q '调用方.*资料目录分支.*codebase-audit step 4' "$PROJECT_QUESTIONING"; then
+    _fail "_shared/project-questioning 应由 init-project 的资料与已有代码分支共同调用"
+    return
+  fi
+  if grep -qE '/pmai-direction|skills/direction' "$PROJECT_QUESTIONING" "$CODEBASE_AUDIT_SKILL"; then
+    _fail "已有代码首次接入仍保留 direction 死路"
+    return
+  fi
+  if ! grep -q '核心问题与价值' "$PROJECT_QUESTIONING" \
+     || ! grep -q 'MVP / 当前产品结果' "$PROJECT_QUESTIONING" \
+     || ! grep -q '真实存在的仓内相对路径' "$PROJECT_QUESTIONING" \
+     || ! grep -q 'PM 确认日期' "$PROJECT_QUESTIONING" \
+     || ! grep -q 'proposal-contract.py' "$CODEBASE_AUDIT_SKILL" \
+     || ! grep -q 'capture-intake' "$CODEBASE_AUDIT_SKILL" \
+     || ! grep -q 'intake-manifest.json' "$PROJECT_QUESTIONING" \
+     || ! grep -q 'equivalent_baseline' "$CODEBASE_AUDIT_SKILL" \
+     || ! grep -q '/pmai-proposal' "$PROJECT_QUESTIONING" \
+     || ! grep -q 'PMAI_PROPOSAL_REQUIRED' "$PROJECT_QUESTIONING"; then
+    _fail "等价产品基线核验应覆盖完整性标准、Proposal 分流和 marker 处理"
     return
   fi
   pass_test

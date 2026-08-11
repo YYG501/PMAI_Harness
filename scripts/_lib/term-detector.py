@@ -5,7 +5,8 @@ Candidates only come from durable, structured product evidence:
 
 - terminology and user-role tables in the active module/spec documents;
 - explicit ``术语：...`` / ``角色：...`` declarations in ``decisions.md``;
-- accepted deltas whose kind is ``term`` or ``role``.
+- legacy accepted deltas whose kind is ``term`` or ``role``;
+- scoped accepted deltas with explicit ``affects`` term / role names.
 
 The detector deliberately does not infer terminology from quotes, bold text, or
 implementation files. Its output feeds the post-land documentation impact map;
@@ -239,6 +240,18 @@ def accepted_delta_candidates(build: dict, source: str) -> list[dict]:
     for delta in deltas:
         if not isinstance(delta, dict):
             continue
+        affects = delta.get("affects", [])
+        if isinstance(affects, list):
+            for affect in affects:
+                if not isinstance(affect, dict):
+                    continue
+                kind = str(affect.get("kind") or "").strip().lower()
+                name = affect.get("name")
+                if kind not in {"term", "role"} or not isinstance(name, str):
+                    continue
+                item = candidate(kind, name.strip(), "", source)
+                if item:
+                    result.append(item)
         raw_kind = str(delta.get("kind", "")).strip().lower()
         if raw_kind in TERM_KINDS:
             kind = "term"

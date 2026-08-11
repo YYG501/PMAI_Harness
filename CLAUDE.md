@@ -59,6 +59,16 @@
 
 ---
 
+## 产品主链与文档边界
+
+- 正常主链是 `init → proposal → design → spec-writing → build`。`spec-writing` 通常由 design 在决定闭合后自动调用，不要求 PM 手工编排。
+- 新项目初始化后默认进入完整 Product Proposal；成熟项目只有在定位、用户、核心问题与价值、产品边界、MVP / 当前产品结果已经构成完整等价基线，且 `PRODUCT.md` 显式记录真实仓内依据与 PM 确认日期、`PRODUCT.md` 与依据均已提交且无漂移、机器状态为 `equivalent_baseline` 时才可跳过。
+- 一旦进入 Proposal，必须生成可独立评审的完整版本。已确认 Proposal 只供下游读取；产品方向变化由 `/pmai-proposal` 新建完整版本并 supersede 旧版，design、spec-writing、build、doc-writing 和 record 都不得原地修改。
+- 产品方向变化回 Proposal；模块对象、规则、任务路径、权限或关键交互变化回 design；`/pmai-record` 只在没有 active work 时补录已经确认的待办、术语、跨模块规则、项目理路或有 main 证据的现状纠错。
+- spec-writing 的内容模型是“通用内容模块 + 可叠加 Profile”，文档形态由 Preset 决定。企业平台与 AI 产品分别加载对应 Profile，企业 AI 平台叠加两者；完整 PRD 使用唯一完整 PRD Preset，不另造企业 AI 平台专用 Profile 或第二套真相源。
+
+---
+
 ## Session 起始播报（M5 / D-iv M1 vp-11）
 
 **PM 第一条 message 后（任何内容），AI 必须先跑** `python3 "$HOME/.pmai/scripts/status-view.py" --narrative` **输出播报**，再回应 PM 的具体请求。
@@ -66,7 +76,7 @@
 - **触发**：每个新 chat session 的 PM 第一条 user message。**AI 不会在 PM 没说话前自动播报**（LLM chat 模型固有限制；codex C-3 校准）。
 - **目的**：PM 切窗口 / 隔天回来时不用主动问"我在哪"，AI 主动结构化报告当前 active work / 当前模块 / 下一步建议。
 - **数据源**：`status-view.py --narrative` 内部走 `.work-meta.json` + `_lib.state.get_overall_state()`，严格基于现有字段；不写小节级、commit hash 全文或相对时间这种伪精确内容。
-- **失败兜底**：未初始化目录由 `status-view.py` 先提示 `/pmai-init-project`；已初始化但无 active work 时，直接输出"目前没有 active work。可以发 /pmai-design 起一个模块工作"，**不编造**。
+- **失败兜底**：未初始化目录由 `status-view.py` 先提示 `/pmai-init-project`；已初始化但无 active work 时，按 Proposal 合同给唯一下一步：新项目方向待澄清则提示 `/pmai-proposal`，已有当前 Proposal 或完整等价产品基线才提示 `/pmai-design`，**不编造**。
 
 **生成器仓 vs 业务仓**：本规则只在业务仓有 `.work-meta.json` 时生效；生成器仓自己开发跑无意义（没有 PM 视图 active work），跳过即可。
 
@@ -74,7 +84,7 @@
 
 ```
 当前没有 active work。
-下一步：发 /pmai-design 起一个模块工作，或发 /pmai-status 查看产品现状。
+下一步：先按当前 Proposal 状态继续 /pmai-proposal 或 /pmai-design；需要只读恢复产品现状时发 /pmai-status。
 ```
 
 PM 视图规则约束：见 `_shared/PM-VIEW-RULES.md` + `_shared/pm-view/banner-rules.md`（M2 banner / Decision gate label）+ `_shared/pm-view/askuser-rules.md`（M4 AskUser 答题规则）。

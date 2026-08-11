@@ -20,12 +20,11 @@ _print_help() {
                       仅当 PM 在 /pmai-init-project skill 阶段 A
                       step 3b 明确选了「资料档接住」分流时由 skill 加入；脚本本身不判断目录
                       内容是否真是非 codebase（那是 skill 层的 step 3a 代码标志扫描的责任）。
-                      无同名冲突时，git init 后 git add -A 会把现有资料一起 add 进首 commit。
+                      无同名冲突时，会先固定接入前文件路径与 hash，再由首 commit 一并保存。
 
 期望时间:
   init-project 自身 ~10 秒（拷贝 + git init + commit）。
-  跑通后到落第一个模块 spec.md ~10-30 分钟（取决于 PM 思考速度）。
-  完整 TTHW（init → 第一个模块 spec.md 落档）<= 30 分钟。
+  跑通后先进入 Product Proposal，再由 design 形成第一个模块 spec.md。
 
 例子:
   bash scripts/init-project.sh \\
@@ -35,7 +34,7 @@ _print_help() {
 
 说明:
   本脚本是 /pmai-init-project skill 阶段 B 的骨架构建器（agent 用 Bash 调）。
-  PM 主动入口走 /pmai-init-project（一气呵成 4 阶段：参数 → 骨架 → 方向讨论 → Next Up）。
+  PM 主动入口走 /pmai-init-project（一气呵成 4 阶段：参数 → 骨架 → 初始背景 → Next Up）。
   本脚本也保留作非交互参数化 CLI（measure-tthw / smoke / 批量自动化依赖）。
 HELP
 }
@@ -134,13 +133,14 @@ _pmai_file_mentions_pmai() {
 }
 
 _pmai_target_has_project_marker() {
-  [ -f "$TARGET_DIR/PRODUCT-STATE.md" ] && return 0
-  [ -f "$TARGET_DIR/docs/CONTEXT.md" ] && return 0
-  [ -f "$TARGET_DIR/.pm-workflow/config.yml" ] && return 0
-  [ -f "$TARGET_DIR/.codex/hooks.json" ] && return 0
+  [ -f "$TARGET_DIR/.pm-workflow/intake-manifest.json" ] && return 0
   [ -f "$TARGET_DIR/.opencode/commands/pmai-build.md" ] && return 0
   _pmai_file_mentions_pmai "$TARGET_DIR/AGENTS.md" && return 0
   _pmai_file_mentions_pmai "$TARGET_DIR/CLAUDE.md" && return 0
+  _pmai_file_mentions_pmai "$TARGET_DIR/PRODUCT-STATE.md" && return 0
+  _pmai_file_mentions_pmai "$TARGET_DIR/docs/CONTEXT.md" && return 0
+  _pmai_file_mentions_pmai "$TARGET_DIR/.pm-workflow/config.yml" && return 0
+  _pmai_file_mentions_pmai "$TARGET_DIR/.codex/hooks.json" && return 0
   _pmai_file_mentions_pmai "$TARGET_DIR/opencode.json" && return 0
   return 1
 }
@@ -148,7 +148,7 @@ _pmai_target_has_project_marker() {
 if [ -d "$TARGET_DIR" ] && _pmai_target_has_project_marker; then
   echo "❌ 目标目录已经接入 PMAI: $TARGET_DIR" >&2
   echo "   已阻止重复初始化，避免覆盖 PRODUCT.md / AGENTS.md / host 配置。" >&2
-  echo "   下一步：在该目录使用 /pmai-status；需要重整方向走 /pmai-direction；框架与消费仓健康检查使用 /pmai-doctor。" >&2
+  echo "   下一步：在该目录使用 /pmai-status；需要纠正产品方向走 /pmai-proposal；框架与消费仓健康检查使用 /pmai-doctor。" >&2
   exit 1
 fi
 
@@ -158,6 +158,10 @@ if [ -d "$TARGET_DIR" ]; then
     # 资料目录可以保留原文件，但 PMAI 不接管任何同名目标。必须在第一次写入前
     # 一次列全冲突，避免初始化到一半才发现资料已被模板覆盖。
     _PMAI_INIT_CONFLICTS=()
+    if [ -e "$TARGET_DIR/.pm-workflow/intake-manifest.json" ] \
+      || [ -L "$TARGET_DIR/.pm-workflow/intake-manifest.json" ]; then
+      _PMAI_INIT_CONFLICTS+=(".pm-workflow/intake-manifest.json")
+    fi
     for _tmpl in "$FRAMEWORK_DIR/templates/"*.tmpl; do
       _basename=$(basename "$_tmpl" .tmpl)
       case "$_basename" in
@@ -167,6 +171,7 @@ if [ -d "$TARGET_DIR" ]; then
         modules-INDEX.md)      _dest="$TARGET_DIR/docs/modules/INDEX.md" ;;
         engineering-INDEX.md)  _dest="$TARGET_DIR/docs/engineering/INDEX.md" ;;
         deliverables-INDEX.md) _dest="$TARGET_DIR/docs/deliverables/INDEX.md" ;;
+        proposals-INDEX.md)    _dest="$TARGET_DIR/docs/proposals/INDEX.md" ;;
         settings.json)         _dest="$TARGET_DIR/.claude/settings.json" ;;
         gitignore)             _dest="$TARGET_DIR/.gitignore" ;;
         pm-workflow.config.yml) _dest="$TARGET_DIR/.pm-workflow/config.yml" ;;
@@ -186,6 +191,12 @@ if [ -d "$TARGET_DIR" ]; then
       exit 1
     fi
     _require_git_identity
+    if ! python3 "$FRAMEWORK_DIR/scripts/proposal-contract.py" \
+      capture-intake "$TARGET_DIR" >/dev/null; then
+      echo "❌ 无法在 PMAI 首次写入前固定接入前资料 manifest。" >&2
+      echo "   初始化已停止；请处理上方不安全路径或不可读文件后重试。" >&2
+      exit 1
+    fi
     echo "📁 复用已存在目录: ${TARGET_DIR}（--allow-existing：资料档接住模式）"
   else
     echo "❌ 目标目录已存在: $TARGET_DIR" >&2
@@ -214,6 +225,7 @@ for TMPL in "$FRAMEWORK_DIR/templates/"*.tmpl; do
     modules-INDEX.md)       DEST="$TARGET_DIR/docs/modules/INDEX.md" ;;
     engineering-INDEX.md)   DEST="$TARGET_DIR/docs/engineering/INDEX.md" ;;
     deliverables-INDEX.md)   DEST="$TARGET_DIR/docs/deliverables/INDEX.md" ;;
+    proposals-INDEX.md)      DEST="$TARGET_DIR/docs/proposals/INDEX.md" ;;
     lark-publish.json)
       # lark-publish.json: 业务实例配置，下方 f3 段独立 cp（不走主 loop 占位符替换）
   # 注：当前流程的功能型规格文档/审计模板由对应 skill 自带，不在本 loop。
@@ -271,6 +283,7 @@ mkdir -p "$TARGET_DIR/docs/inputs"
 touch "$TARGET_DIR/docs/inputs/.gitkeep"
 mkdir -p "$TARGET_DIR/docs/engineering"
 mkdir -p "$TARGET_DIR/docs/deliverables"
+mkdir -p "$TARGET_DIR/docs/proposals"
 mkdir -p "$TARGET_DIR/docs/archive"   # 扁平：过程档案 / 一次性 review / 被取代旧文件全装这里，文件名说明为啥归档
 touch "$TARGET_DIR/docs/archive/.gitkeep"
 mkdir -p "$TARGET_DIR/docs/decisions"   # 项目决策档案：重大项目级"为什么这么定"，沉淀时按需冻
@@ -328,5 +341,11 @@ echo ""
 echo "═══════════════════════════════════════"
 echo "✅ 项目初始化完成: $PROJECT_NAME"
 echo "📁 位置: $TARGET_DIR"
-echo "▶ Next Up: cd \"$TARGET_DIR\" && /pmai-design \"<第一个需求>\""
+if [ "$ALLOW_EXISTING" = "1" ]; then
+  echo "▶ 继续当前初始化：核验接入前资料能否作为产品基线"
+  echo "   回到 /pmai-init-project；核验完成前不要进入 design 或 build。"
+else
+  echo "▶ Next Up: cd \"$TARGET_DIR\" && /pmai-proposal"
+  echo "   先把产品用户、问题、价值、边界和 MVP 讲清楚，再进入 design。"
+fi
 echo "═══════════════════════════════════════"

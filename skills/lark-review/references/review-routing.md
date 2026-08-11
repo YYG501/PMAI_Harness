@@ -1,5 +1,16 @@
 # 飞书评审归类与分流
 
+## 目录
+
+- [1. 证据语义](#1-证据语义)
+- [2. 定位准确度](#2-定位准确度)
+- [3. 版本归位](#3-版本归位)
+- [4. 影响分类](#4-影响分类)
+- [5. 批次升级规则](#5-批次升级规则)
+- [6. 决定归档](#6-决定归档)
+- [7. Legacy 基线](#7-legacy-基线)
+- [8. 评论完成条件](#8-评论完成条件)
+
 ## 1. 证据语义
 
 按下面顺序理解同一处反馈：
@@ -50,11 +61,20 @@
 - 现有规格已经唯一说明正确行为，原型 / 产品只是局部做错；
 - 不改变对象、动作、状态、权限、规则、页面任务或验收含义。
 
-无 active build 时可走 quick-fix；有 active build 时回原 build 迭代。
+无 active build 时可走 quick-fix；有 active build 时回原 build 迭代。若规格已经唯一说明正确行为，只是实现、文案、样式或局部交互做错，直接纠正实现，不写 accepted delta。
 
-### B. 产品变化
+### B. 产品级变化
 
-没有 active build 时，任何一项发生变化都进入 design，影响实现时随后进入 build：
+下列任一变化都必须回完整 `/pmai-proposal` 生成并确认新版本，不因已有 active build 而降级为 accepted delta。当前评审批次一律先转为只读 handoff，旧 T 永不 apply 并从恢复扫描排除：无 active build 时直接用 `lark-review.py handoff --route proposal` 绑定当前 main 产品基线；命中 `building / iterating / final_check` 的 main 或 worktree build 时，先运行 `replan-work.py ... --route proposal`，再用返回的精确 candidate manifest 调用 handoff。两条路径都必须生成 main `handoff_bundle`；bundle 初始 `phase=proposal`，后续会话由 Proposal 按该 phase 恢复正文、评论和候选结论，`route` 只保留最初分流来源。
+
+- 产品定位、目标用户、核心问题与价值；
+- 产品职责边界、MVP 证明目标或关键成立前提。
+
+Proposal 确认后重新检查本批模块结论；与新产品基线冲突的旧决定必须明确 supersede。
+
+### C. 模块级变化
+
+下列任一变化都进入 design，影响实现时随后进入 build；同模块已有 active build 也必须先回 `/pmai-design`，不得写 accepted delta。命中 `building / iterating / final_check` 的 main 或 worktree build 时，先运行 `replan-work.py ... --route design`，再用返回的精确 candidate manifest 调用 `lark-review.py handoff`；旧批次不得 seal / apply。main `handoff_bundle` 初始 `phase=design`，后续会话由对应 design 按该 phase 和模块精确恢复，`route` 只保留最初分流来源：
 
 - 产品对象、对象关系或责任归属；
 - 用户可执行动作、状态流转、权限或可见范围；
@@ -62,11 +82,19 @@
 - 页面任务、信息结构、关键交互或跨模块合同；
 - 规格和原型 / 产品需要同时改变。
 
-已经由本轮明确声明或整批确认接受的正文修改触发 B 时，把它记录为 PM 已接受的新决定；评论触发 B 但仍是问句时，先按 decision policy 收敛真实岔路。
+已经由本轮明确声明或整批确认接受的正文修改触发本类时，把它记录为 PM 已接受的新决定；评论触发本类但仍是问句时，先按 decision policy 收敛真实岔路。
 
-同模块已有 active build 时，产品变化默认写 accepted delta 并回原 build；只有需要重定义项目建造方案、批准新的 prototype real edge，或形成独立跨模块建造结果时才退回 design。
+### D. Active build 内的小范围调整
 
-### C. 冲突或未知
+同模块已有 active build 时，只有同时满足以下条件才可回原 build 写 accepted delta：
+
+- 调整位于已批准模块与当前任务内；
+- 不改变产品定位、用户、价值、边界、MVP 或关键成立前提；
+- 不改变对象、关系、动作、状态、权限、真相源、信息结构、任务路径或关键交互。
+
+这类调整只可改变已批准范围内的小范围行为或体验。无法唯一归入本类时，按 B/C 的更高影响路径处理。
+
+### E. 冲突或未知
 
 - 本地与飞书从同一发布基线分别修改了同一语义；
 - 正文修改与评论要求互相冲突；
@@ -79,12 +107,14 @@
 
 ## 5. 批次升级规则
 
-整批影响级别取最高项：`冲突待决 > 产品变化 > 轻微修正`。
+整批影响级别取最高项：`冲突待决 > 产品级变化 > 模块级变化 > active build 小范围调整 > 轻微修正`。
 
 - 有冲突：先解决冲突，再重新判断整批路径。
-- 有任一产品变化：无 active build 时进入同一 design/build；有 active build 时整批回原 build 形成 accepted delta。
-- 全部是轻微修正：才允许 quick-fix。
-- 同模块已有 active build：优先复用该 build，不另开 quick-fix 或第二个 build。
+- 有任一产品级变化：整批先 handoff，再回 Proposal；确认后重新判断模块结论，旧批不 apply。
+- 有任一模块级变化：整批回 design/build；不得因 active build 写 accepted delta。
+- 只有 active build 小范围调整：整批回原 build 形成 accepted delta。
+- 全部是轻微修正且没有 active build：才允许 quick-fix。
+- 同模块已有 active build：优先复用该 build，不另开 quick-fix 或第二个 build；纯实现纠偏不写 delta。
 
 这样同一轮评审只产生一版规格、一组决定和一个可验收结果。
 
@@ -92,7 +122,7 @@
 
 飞书变化不等于都要写 `decisions.md`。只在变化新增、改变或推翻产品对象、状态、权限、业务规则、真相源、异常处理或成功标准时，写一条新决定或 supersede 旧决定；记录 batch ID、飞书 URL 和相关 comment ID。
 
-错字、措辞、排版、格式、示例补充，以及不改变既有产品规则的解释，只更新 T / spec，不写 decision。active build 若产品规则和实现合同同时变化，`decisions.md` 与 accepted delta 都写，各自承担稳定产品口径和本轮实现范围，不能二选一。
+错字、措辞、排版、格式、示例补充，以及不改变既有产品规则的解释，只更新 T / spec，不写 decision。active build 只有小范围调整才写 accepted delta；模块规则变化必须回 design 并归位 `decisions.md`，产品级变化必须回 Proposal，三者不能互相替代。
 
 上述判断必须逐正文归位项 / 评论写进 `resolutions.json:decision_routing`。`not_required` 也必须说明为什么不构成产品决定；`create / supersede` 必须绑定仓内 `decisions.md`、决定 ID、摘要和原因，supersede 还要列旧决定 ID。不得用空路由把“选择性归档”退化成口头判断。
 

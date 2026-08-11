@@ -10,6 +10,7 @@ CHECKER="$REPO_ROOT/scripts/consumer-doctor.py"
 ENTRY_SYNC="$REPO_ROOT/scripts/sync-consumer-entry.py"
 INIT="$REPO_ROOT/scripts/init-project.sh"
 PROJECT_DEFINITION="$REPO_ROOT/scripts/project-definition.py"
+PROPOSAL_CONTRACT="$REPO_ROOT/scripts/proposal-contract.py"
 MOCK_BOARD="$REPO_ROOT/scripts/gen-mock-board.py"
 CLEANUP_ROOT=$(mktemp -d /tmp/pmai-consumer-doctor-suite.XXXXXX)
 
@@ -61,6 +62,7 @@ assert payload["status"] == "current"
 assert payload["phase"] == "initialized"
 assert payload["summary"] == {"error": 0, "sync": 0, "warning": 0}
 assert payload["project_definition"]["state"] == "absent"
+assert payload["proposal"]["state"] == "required"
 assert payload["entry_contract"]["status"] == "current"
 PY
   then
@@ -69,6 +71,138 @@ PY
     return
   fi
   pass_test
+}
+
+test_current_proposal_is_verified_and_drift_is_invalid() {
+  start_test "consumer-doctor: accepted Proposal is verified and body drift is invalid"
+  local repo current drifted
+  repo=$(new_consumer) || { _fail "fixture init failed"; return; }
+  cat > "$repo/docs/proposals/demo-v1.md" <<'EOF'
+# Demo Product Proposal
+
+> 版本：v1
+> Proposal ID：demo-v1
+> 状态：当前
+> 日期：2026-08-10
+> 取代：无
+> 支持的决定：是否投入一次可验证的审核闭环
+> 证据截至：2026-08-10
+
+## 0. 决策摘要与产品主张
+
+为负责人提供可追溯的审核建议。
+
+## 1. 产品成立的核心判断
+
+负责人需要在提交前获得可追溯证据。
+
+## 2. 用户、场景、问题与现状替代
+
+负责人当前依靠人工搜索材料完成审核。
+
+## 3. 产品回答与职责边界
+
+产品聚合证据并给建议，最终结论仍由人确认。
+
+## 4. 必要能力与 AI 角色
+
+AI 分析材料，确定性系统执行门禁。
+
+## 5. 替代方案、竞争判断与产品机会
+
+现状替代是人工检索，机会在于减少遗漏。
+
+## 6. 端到端产品体验与关键能力
+
+从收到任务到核对证据并提交结论形成闭环。
+
+## 7. 产品价值、因果链与指标
+
+更完整的证据促成更可靠的审核行动。
+
+## 8. MVP 范围、完整案例与决策门
+
+先验证一个审核案例，不能改善结果时停止扩大投入。
+
+## 9. 演进条件与长期方向
+
+只有主案例成立后才扩展更多场景。
+
+## 10. 下游交接摘要
+
+- **第一个 design 目标**：完成审核闭环
+- **主用户与触发时刻**：负责人收到审核任务时
+- **要闭合的核心任务**：提交审核结论
+- **必须保持的产品回答**：先聚合证据再给建议
+- **必须保持的产品边界**：最终结论由人确认
+- **MVP 必须证明**：建议促成有效行动
+- **仍待验证的假设**：负责人愿意查看建议
+- **design 需要收敛**：对象、动作、状态、权限和异常路径
+EOF
+  cat > "$repo/PRODUCT.md" <<'EOF'
+# Product
+
+## 当前 Product Proposal
+
+[demo-v1](docs/proposals/demo-v1.md)
+
+## 产品定位
+
+为负责人提供可追溯审核建议的产品。
+
+## 核心问题与价值
+
+减少人工检索遗漏，帮助负责人作出可靠审核行动。
+
+## 用户画像
+
+对审核结果负责的业务负责人。
+
+## 产品边界
+
+产品给出建议，最终结论由人确认。
+
+## MVP Case
+
+负责人收到任务后核对证据、确认建议并提交结论。
+EOF
+  cat > "$repo/docs/proposals/INDEX.md" <<'EOF'
+# Product Proposal 索引
+
+| 文档 | 版本 | 状态 | 取代 | 决策日期 | 下游起点 |
+|---|---|---|---|---|---|
+| [`demo-v1.md`](demo-v1.md) | v1 | 当前 | 无 | 2026-08-10 | 审核闭环 |
+EOF
+  python3 "$PROPOSAL_CONTRACT" accept "$repo" \
+    --proposal docs/proposals/demo-v1.md --id demo-v1 >/dev/null || {
+      _fail "proposal fixture should be accepted"
+      return
+    }
+  commit_fixture "$repo" || { _fail "proposal fixture commit failed"; return; }
+  current=$(audit "$repo") || { _fail "accepted proposal audit failed"; return; }
+  printf '\n未经确认的变化。\n' >> "$repo/docs/proposals/demo-v1.md"
+  drifted=$(audit "$repo") || { _fail "drifted proposal audit failed"; return; }
+  if python3 - "$current" "$drifted" <<'PY'
+import json, sys
+current, drifted = (json.loads(value) for value in sys.argv[1:])
+assert current["status"] == "current"
+assert current["proposal"] == {
+    "state": "accepted",
+    "id": "demo-v1",
+    "path": "docs/proposals/demo-v1.md",
+    "supersedes": None,
+}
+assert drifted["status"] == "invalid"
+assert drifted["proposal"]["state"] == "invalid"
+assert "proposal_contract_invalid" in {item["code"] for item in drifted["findings"]}
+PY
+  then
+    pass_test
+  else
+    _fail "doctor did not enforce current Proposal integrity"
+    echo "$current" >&2
+    echo "$drifted" >&2
+  fi
 }
 
 test_missing_and_misplaced_documents_are_reported() {
@@ -873,6 +1007,7 @@ PY
 }
 
 test_fresh_consumer_is_current_and_read_only
+test_current_proposal_is_verified_and_drift_is_invalid
 test_missing_and_misplaced_documents_are_reported
 test_project_definition_drives_custom_implementation_location
 test_ready_contract_gap_is_progress_only

@@ -39,10 +39,17 @@ fi
 WORK_META_JSON=$(python3 -m _lib.state read_work_meta "$WORK_DIR" 2>/dev/null || echo "{}")
 WORK_BRANCH=$(printf '%s' "$WORK_META_JSON" | python3 -c "import sys,json; print(json.load(sys.stdin).get('branch',''))")
 WORK_ID=$(printf '%s' "$WORK_META_JSON" | python3 -c "import sys,json; print(json.load(sys.stdin).get('id',''))")
+BUILD_MODE=$(printf '%s' "$WORK_META_JSON" | python3 -c "import sys,json; print(json.load(sys.stdin).get('build',{}).get('mode',''))")
 MODULE_BASENAME=$(basename "$WORK_DIR")
 
 if [ -z "$WORK_BRANCH" ] || [ -z "$WORK_ID" ]; then
   echo "❌ 无法从模块元数据读取 branch/id 字段。" >&2
+  exit 1
+fi
+
+if [ "$BUILD_MODE" = "main" ]; then
+  echo "❌ 当前工作使用 main 模式，/pmai-build-cancel 不适用；已停止且未改动主线。" >&2
+  echo "请回 /pmai-proposal（产品方向）或 /pmai-design（模块行为）；对应流程会通过 replan-work.py 安全冻结旧范围并前向处理。" >&2
   exit 1
 fi
 

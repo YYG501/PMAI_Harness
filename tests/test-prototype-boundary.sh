@@ -16,6 +16,7 @@ setup_fixture() {
   git -C "$T" config user.name "Test"
   MODULE="$T/docs/modules/demo"
   mkdir -p "$MODULE" "$T/prototype"
+  write_equivalent_product_baseline "$T"
   echo '# Demo' > "$MODULE/spec.md"
   echo '# Discussion' > "$MODULE/discussion.md"
   echo '# Decisions' > "$MODULE/decisions.md"

@@ -18,8 +18,7 @@ setup_fixture() {
   git -C "$T" config user.email test@example.com
   git -C "$T" config user.name Test
   mkdir -p "$T/docs/modules/access" "$T/src" "$T/.worktrees" "$T/.pm-workflow"
-  echo '# product' > "$T/PRODUCT.md"
-  echo '# state' > "$T/PRODUCT-STATE.md"
+  write_equivalent_product_baseline "$T"
   echo '# rules' > "$T/PRODUCT-RULES.md"
   echo '# design' > "$T/DESIGN.md"
   echo '# todo' > "$T/TODO.md"

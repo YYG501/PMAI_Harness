@@ -6,8 +6,14 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 source "$SCRIPT_DIR/helpers/assert.sh"
 
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
-DIRECTION="$REPO_ROOT/skills/direction/SKILL.md"
+DIRECTION_DIR="$REPO_ROOT/skills/direction"
+RECORD="$REPO_ROOT/skills/record/SKILL.md"
 QUESTIONING="$REPO_ROOT/skills/_shared/project-questioning.md"
+CODEBASE_AUDIT="$REPO_ROOT/skills/_internal/codebase-audit/SKILL.md"
+MIGRATE_REQS="$REPO_ROOT/scripts/migrate-reqs-to-modules.py"
+DECISION_TEMPLATE="$REPO_ROOT/templates/decision-record.md.tmpl"
+ASKUSER_RULES="$REPO_ROOT/skills/_shared/pm-view/askuser-rules.md"
+BANNER_RULES="$REPO_ROOT/skills/_shared/pm-view/banner-rules.md"
 LARK_SYNC="$REPO_ROOT/skills/lark-sync/SKILL.md"
 LARK_SYNC_VERIFY="$REPO_ROOT/skills/lark-sync/references/verification.md"
 LARK_SYNC_PULL="$REPO_ROOT/skills/lark-sync/references/pull-from-lark.md"
@@ -21,22 +27,72 @@ README="$REPO_ROOT/README.md"
 CLAUDE_TEMPLATE="$REPO_ROOT/templates/CLAUDE.md.tmpl"
 AGENTS_TEMPLATE="$REPO_ROOT/templates/AGENTS.md.tmpl"
 
-test_direction_does_not_promise_a_roadmap() {
-  start_test "PM surface: direction 只承诺方向校准和无序待办整理"
+test_direction_is_retired_and_record_is_bounded() {
+  start_test "PM surface: direction 退出，record 只补录已确认知识"
+  local medium_tier
 
-  assert_file_contains "$DIRECTION" "方向重定" "direction should retain direction recalibration" || return
-  assert_file_contains "$DIRECTION" "待办整理" "direction should expose todo organization" || return
-  assert_file_contains "$DIRECTION" "不替 PM 排优先级或阶段" "direction should keep TODO unordered" || return
-  assert_file_contains "$DIRECTION" "内部调用 \`/pmai-meta\`" "direction should orchestrate meta without sending PM to another entry" || return
-  if grep -qE '建议 PM 跑 `/pmai-meta`|PM 自跑第二视角' "$DIRECTION"; then
-    _fail "direction still asks PM to orchestrate meta manually"
+  if [ -e "$DIRECTION_DIR" ]; then
+    _fail "direction should be removed instead of retained as a compatibility router"
+    return
+  fi
+  assert_file_contains "$RECORD" "这件事已经定了，帮我记住" "record should represent a distinct PM intent" || return
+  assert_file_contains "$RECORD" "产品定位、目标用户、价值、边界或 MVP" "record should route product-level reframing to proposal" || return
+  assert_file_contains "$RECORD" "/pmai-proposal" "record should route product-level reframing to proposal" || return
+  assert_file_contains "$RECORD" "不把 record 作为 Proposal、design、quick-fix 或 build 的后续步骤" "record should stay out of normal workflow completion" || return
+  if grep -qE '/pmai-direction|skills/direction|direction skill|direction 方向' \
+    "$QUESTIONING" "$CODEBASE_AUDIT" "$MIGRATE_REQS" "$DECISION_TEMPLATE" \
+    "$ASKUSER_RULES" "$BANNER_RULES"; then
+    _fail "retired direction remains on an active PM-facing route"
+    return
+  fi
+  assert_file_contains "$QUESTIONING" "/pmai-proposal" "product-level gaps should route to proposal" || return
+  assert_file_contains "$QUESTIONING" "/pmai-design" "module-level gaps should route to design" || return
+  assert_file_contains "$QUESTIONING" "/pmai-record" "confirmed facts should route to record" || return
+  assert_file_contains "$MIGRATE_REQS" "/pmai-proposal" "legacy migration guidance should route product changes to proposal" || return
+  assert_file_contains "$MIGRATE_REQS" "/pmai-design" "legacy migration guidance should route module work to design" || return
+  assert_file_contains "$MIGRATE_REQS" "/pmai-record" "legacy migration guidance should reserve record for confirmed facts" || return
+  medium_tier=$(grep '^| 中 |' "$CLAUDE_TEMPLATE")
+  if [ -z "$medium_tier" ] || printf '%s\n' "$medium_tier" | grep -q '/pmai-record'; then
+    _fail "active design guidance must not route medium work to record"
+    return
+  fi
+  if ! printf '%s\n' "$medium_tier" | grep -q '继续 `/pmai-design`' \
+    || ! printf '%s\n' "$medium_tier" | grep -q '/pmai-status.*只读恢复'; then
+    _fail "active design guidance should continue design and use status only for recovery"
     return
   fi
   if grep -qE '路线规划|季度规划|半年规划' \
-    "$DIRECTION" "$QUESTIONING" "$README" "$CLAUDE_TEMPLATE"; then
-    _fail "direction surface still promises unsupported roadmap planning"
+    "$RECORD" "$QUESTIONING" "$README" "$CLAUDE_TEMPLATE"; then
+    _fail "PM surface still promises unsupported roadmap planning"
     return
   fi
+  pass_test
+}
+
+test_record_requires_a_valid_product_baseline() {
+  start_test "PM surface: record 不能绕过初始化后的 Proposal"
+
+  local gate_count gate_line worktree_line workflow_line
+  gate_count=$(grep -Fc 'proposal-contract.py" status "$REPO_ROOT"' "$RECORD")
+  gate_line=$(grep -n 'proposal-contract.py" status "$REPO_ROOT"' "$RECORD" | head -1 | cut -d: -f1)
+  worktree_line=$(grep -n '`WORKTREE_TYPE != main`' "$RECORD" | head -1 | cut -d: -f1)
+  workflow_line=$(grep -n '^## Workflow' "$RECORD" | head -1 | cut -d: -f1)
+  if [ "$gate_count" -ne 1 ] || [ -z "$gate_line" ] || [ -z "$worktree_line" ] \
+    || [ -z "$workflow_line" ] || [ "$gate_line" -ge "$worktree_line" ] \
+    || [ "$gate_line" -ge "$workflow_line" ]; then
+    _fail "record Proposal gate must run exactly once before routing or writes"
+    return
+  fi
+  assert_file_contains "$RECORD" '`accepted` / `equivalent_baseline`：继续 record' \
+    "record should proceed only from a valid product baseline" || return
+  assert_file_contains "$RECORD" '`required`：初始化后的唯一下一步仍是 `/pmai-proposal`' \
+    "new projects must return to Proposal before record" || return
+  assert_file_contains "$RECORD" '`invalid`：当前 Proposal 或产品基线已漂移.*只返回 `/pmai-proposal`' \
+    "invalid Proposal state must fail closed before record" || return
+  assert_file_contains "$RECORD" '不选落点、不写文件、不提交' \
+    "required Proposal state must remain mutation-free" || return
+  assert_file_contains "$RECORD" '`docs/proposals/\*\*`' \
+    "record must continue to forbid Proposal writes" || return
   pass_test
 }
 
@@ -155,10 +211,11 @@ test_docs_do_not_turn_inventory_into_navigation() {
     _fail "README should not retain a full command inventory or make status a normal workflow step"
     return
   fi
-  local main_path
+  local main_path main_chain
   main_path=$(awk '/^### 2\. PM 在业务仓里的主路径/{show=1} /^### 3\./{show=0} show' "$README")
-  if printf '%s\n' "$main_path" | grep -qE '/pmai-(meta|mockup|spec-writing|quick-fix|record|direction|lark-review|lark-sync|build-close|build-cancel)'; then
-    _fail "README normal path should only expose init, design, build and recovery-only status"
+  main_chain=$(printf '%s\n' "$main_path" | awk '/^```/{fence++; next} fence==1')
+  if printf '%s\n' "$main_chain" | grep -qE '/pmai-(meta|mockup|quick-fix|record|direction|lark-review|lark-sync|build-close|build-cancel)'; then
+    _fail "README normal path should expose the approved proposal, design, spec-writing and build chain only"
     return
   fi
 
@@ -189,7 +246,8 @@ test_docs_do_not_turn_inventory_into_navigation() {
   pass_test
 }
 
-test_direction_does_not_promise_a_roadmap
+test_direction_is_retired_and_record_is_bounded
+test_record_requires_a_valid_product_baseline
 test_lark_receipts_hide_internal_protocol
 test_cancel_receipt_never_delegates_cleanup_to_pm
 test_capability_claims_are_bounded

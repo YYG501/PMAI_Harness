@@ -95,15 +95,25 @@ test_user_flow_has_no_main_prototype_exception() {
 }
 
 test_adaptive_browser_and_record_contracts_are_current() {
-  start_test "currentness: active browser hard gate and six-class record model are exposed"
+  start_test "currentness: active browser hard gate and bounded record contract are exposed"
+  local record="$REPO_ROOT/skills/record/SKILL.md"
+  local record_routing="$REPO_ROOT/skills/_shared/record-routing.md"
   if ! grep -q 'browser-smoke.*不接受 exception' "$REPO_ROOT/skills/build/SKILL.md" \
      || ! grep -q '不能用 exception 跳过' "$REPO_ROOT/skills/_shared/gstack-integration.md"; then
     _fail "UI active-browser hard gate is missing from active skills"
     return
   fi
-  if ! grep -q '六类归位' "$REPO_ROOT/skills/record/SKILL.md" \
-     || ! grep -q '⑥ 稳定术语' "$REPO_ROOT/skills/record/SKILL.md"; then
-    _fail "record skill does not expose shared six-class model"
+  if ! grep -q 'ACTIVE_WORK_COUNT != 0' "$record" \
+     || ! grep -q '已确认的项目知识' "$record" \
+     || ! grep -q 'PRODUCT-STATE 只允许依据 main 已存在事实纠错' "$record" \
+     || ! grep -q 'record-routing.md' "$record" \
+     || ! grep -q '唯一正本' "$record" \
+     || ! grep -q '`docs/modules/\*\*`、`mockups/\*\*`、`docs/proposals/\*\*`' "$record_routing"; then
+    _fail "record skill should require no active work and expose its narrow write boundary"
+    return
+  fi
+  if grep -qE '六类归位|轻量同构|design 后暂不|gen-mock-board|往 .*manifest.*加一条' "$record"; then
+    _fail "record skill still behaves like a lightweight finalize path"
     return
   fi
   pass_test

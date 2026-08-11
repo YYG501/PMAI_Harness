@@ -1,7 +1,7 @@
 ---
 name: pmai-doc-writing
 description: |
-  产品方向与介绍型文档成文器：负责产品方向 memo、产品定位说明、产品介绍、产品功能清单、产品优势说明、一页纸、对外汇报材料等表达型材料，默认生成 Markdown 到 docs/deliverables/。PRD、功能需求、功能描述、功能规格、功能评审稿不走本 skill，改走 /pmai-spec-writing。
+  已确认产品方向与介绍型文档的通用成文器：负责把既有产品判断写成方向 memo、定位说明、产品介绍、功能清单、优势说明、一页纸或对外汇报材料，默认生成 Markdown 到 docs/deliverables/。需要重新判断用户、问题、价值、边界或 MVP 时走 /pmai-proposal；PRD、功能需求、功能描述、功能规格、功能评审稿走 /pmai-spec-writing。
   触发词：产品方向 / 产品定位 / 产品介绍 / 产品功能清单 / 产品优势说明 / 一页纸 / 对外材料 / 汇报材料 / 介绍文档。
 ---
 
@@ -19,7 +19,7 @@ source "${PMAI_HOME:-$HOME/.pmai}/scripts/skill-preamble.sh"
 
 > **这是什么**：写产品方向 / 产品叙事 / 介绍型材料的入口。它面向"把产品判断讲清楚"，不是"把功能规格定下来"。
 >
-> **边界**：PM 要 PRD、功能需求、功能描述、功能规格、功能评审稿时，直接转 `/pmai-spec-writing`。这些是功能型规格文档，落 `docs/modules/<按内容命名>.md`，不放 `docs/deliverables/`。
+> **边界**：本 skill 只表达已经确认的产品判断，不负责判断产品是否成立。定位、目标用户、核心问题与价值、产品边界或 MVP 需要新判断 / 重判时转 `/pmai-proposal`。PM 要 PRD、功能需求、功能描述、功能规格、功能评审稿时，直接转 `/pmai-spec-writing`。
 
 ## 产物
 
@@ -57,6 +57,7 @@ source "${PMAI_HOME:-$HOME/.pmai}/scripts/skill-preamble.sh"
 
 写作前按材料用途读取，不整仓乱读：
 
+- 先运行 `proposal-contract.py status "$REPO_ROOT"`。状态为 `accepted` 时读取合同指向的当前 Proposal，并把其中的产品主张、用户、问题、价值、边界、证据等级和 MVP 作为方向材料的首要上游；状态为 `invalid` 时停止并转 `/pmai-proposal`，不得基于漂移版本继续成文。没有 Proposal 时只使用已经完整确认的等价产品基线；材料仍缺产品级判断时先转 Proposal。
 - `docs/INDEX.md`：先确认文档入口和相关材料位置。
 - `PRODUCT-STATE.md`：当前产品现状，只取"现在做到哪、哪些是真系统哪些是 mock"。
 - `PRODUCT.md`：定位、用户画像、业务术语表。
@@ -68,6 +69,7 @@ source "${PMAI_HOME:-$HOME/.pmai}/scripts/skill-preamble.sh"
 - PM 提供的外部材料：访谈、竞品、会议纪要、汇报要求；没有提供就不编市场事实。
 
 禁止把全部模块历史全文塞进上下文；需要补某模块细节时再按索引点读。
+本 skill 只生成派生表达材料，不修改 `docs/proposals/**`、`.pm-workflow/proposal.json` 或当前 Proposal 的版本关系。
 
 ## Workflow
 

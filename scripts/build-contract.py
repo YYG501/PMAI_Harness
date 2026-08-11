@@ -23,10 +23,12 @@ from _lib.delivery_policy import (
     delivery_policy_hash,
     validate_delivery_policy,
 )
+from _lib.lark_adapter import parse_frontmatter
 from _lib.project_definition import ProjectDefinitionError, load_project_definition
 from _lib.ready_contract import (
     ReadyContractError,
     approved_target_paths,
+    changed_paths,
     classify_dirty_paths,
     compile_current_context_pack,
     load_context_pack,
@@ -58,6 +60,10 @@ VALID_LIFECYCLE_STATES = {
     "complete",
 }
 VALID_DOCS_STATUSES = {"pending", "complete", "failed"}
+NEW_DELTA_KIND = "scoped-adjustment"
+DELTA_SCOPE_ATTESTATION = "approved-module-task-no-model-change"
+VALID_DELTA_APPROVAL_KINDS = {"pm-confirmation", "lark-review-batch"}
+VALID_DELTA_AFFECT_KINDS = {"term", "role"}
 CURRENT_CONTRACT_VERSION = 4
 CURRENT_SOURCE_HASH_VERSION = 2
 PASSING_EVIDENCE_STATUSES = {"pass", "passed", "clean", "built"}
@@ -163,6 +169,197 @@ def normalize_string_list(values: list[str] | None) -> list[str]:
             seen.add(item)
             result.append(item)
     return result
+
+
+def parse_delta_affects(values: list[str] | None) -> list[dict[str, str]]:
+    result: list[dict[str, str]] = []
+    seen: set[tuple[str, str]] = set()
+    for raw in values or []:
+        kind, separator, name = raw.partition(":")
+        kind = kind.strip().lower()
+        name = name.strip()
+        if separator != ":" or kind not in VALID_DELTA_AFFECT_KINDS or not name:
+            raise SystemExit("--affects 必须是 term:<准确名称> 或 role:<准确名称>。")
+        key = (kind, name)
+        if key not in seen:
+            seen.add(key)
+            result.append({"kind": kind, "name": name})
+    return result
+
+
+def validate_lark_review_approval(
+    module_dir: Path,
+    batch_id: str,
+    artifact_arg: str | None,
+) -> dict[str, object]:
+    """Delegate Lark evidence validation to the collector's authoritative contract."""
+
+    artifact_raw = optional(artifact_arg)
+    if not artifact_raw:
+        raise SystemExit(
+            "lark-review-batch accepted delta 必须提供 --approval-artifact "
+            "指向本批 remote-verification.json。"
+        )
+    repo_root = repo_root_for(module_dir)
+    validator = Path(__file__).resolve().with_name("lark-review.py")
+    command = [
+        sys.executable,
+        str(validator),
+        "validate-approval",
+        "--artifact",
+        artifact_raw,
+        "--repo-root",
+        str(repo_root),
+        "--markdown",
+        str(module_dir.expanduser().resolve() / "spec.md"),
+        "--batch-id",
+        batch_id,
+    ]
+    try:
+        result = subprocess.run(
+            command,
+            capture_output=True,
+            text=True,
+            timeout=30,
+            check=False,
+        )
+    except (OSError, subprocess.SubprocessError) as exc:
+        raise SystemExit(f"无法运行 Lark 审批证据验证器：{exc}") from exc
+    if result.returncode != 0:
+        detail = result.stderr.strip()
+        if detail.startswith("ERROR: "):
+            detail = detail[7:]
+        raise SystemExit(f"Lark 审批证据无效：{detail or '完整批次校验失败'}")
+    try:
+        artifact = json.loads(result.stdout)
+    except json.JSONDecodeError as exc:
+        raise SystemExit("Lark 审批证据验证器没有返回合法 JSON。") from exc
+    if not isinstance(artifact, dict) or artifact.get("batch_id") != batch_id:
+        raise SystemExit("Lark 审批证据验证器返回了不匹配的批次。")
+    return artifact
+
+
+def validate_scoped_delta_shape(delta: dict, index: int) -> None:
+    """Validate new scoped-delta fields without rejecting historical entries."""
+
+    new_fields = {
+        "scope_attestation",
+        "approval_evidence",
+        "affects",
+        "authority_paths",
+        "authority_file_hashes",
+        "authority_git_blobs",
+        "authority_parent_commit",
+        "authority_source_hash_before",
+        "authority_source_hash_after",
+    }
+    kind = delta.get("kind")
+    if kind != NEW_DELTA_KIND:
+        if not new_fields.intersection(delta):
+            return
+        raise SystemExit(
+            f"accepted delta[{index}] 使用新证据字段时 kind 必须是 {NEW_DELTA_KIND}。"
+        )
+    if delta.get("scope_attestation") != DELTA_SCOPE_ATTESTATION:
+        raise SystemExit(f"accepted delta[{index}] 的 scope_attestation 不合法。")
+    evidence = delta.get("approval_evidence")
+    if not isinstance(evidence, dict):
+        raise SystemExit(f"accepted delta[{index}] 缺少 approval_evidence。")
+    evidence_kind = evidence.get("kind")
+    evidence_reference = evidence.get("reference")
+    if evidence_kind not in VALID_DELTA_APPROVAL_KINDS or not isinstance(
+        evidence_reference, str
+    ) or not evidence_reference.strip():
+        raise SystemExit(f"accepted delta[{index}] 的 approval_evidence 不合法。")
+    approval_artifact = evidence.get("artifact")
+    if evidence_kind == "lark-review-batch":
+        if (
+            not isinstance(approval_artifact, dict)
+            or approval_artifact.get("batch_id") != evidence_reference
+            or any(
+                not isinstance(approval_artifact.get(field), str)
+                or not approval_artifact[field].strip()
+                for field in (
+                    "path",
+                    "sha256",
+                    "plan_path",
+                    "plan_sha256",
+                    "target_sha256",
+                )
+            )
+        ):
+            raise SystemExit(
+                f"accepted delta[{index}] 缺少绑定 sealed Lark 批次的 approval artifact。"
+            )
+    elif approval_artifact is not None:
+        raise SystemExit(
+            f"accepted delta[{index}] 只有 lark-review-batch 可以携带 approval artifact。"
+        )
+    affects = delta.get("affects")
+    if not isinstance(affects, list):
+        raise SystemExit(f"accepted delta[{index}] 的 affects 必须是数组。")
+    for affect in affects:
+        if (
+            not isinstance(affect, dict)
+            or affect.get("kind") not in VALID_DELTA_AFFECT_KINDS
+            or not isinstance(affect.get("name"), str)
+            or not affect["name"].strip()
+        ):
+            raise SystemExit(f"accepted delta[{index}] 的 affects 条目不合法。")
+    for field in ("authority_source_hash_before", "authority_source_hash_after"):
+        value = delta.get(field)
+        if not isinstance(value, str) or not value.strip():
+            raise SystemExit(
+                f"accepted delta[{index}] 缺少完整 authority source hash transition。"
+            )
+    authority_paths = delta.get("authority_paths")
+    authority_hashes = delta.get("authority_file_hashes")
+    authority_blobs = delta.get("authority_git_blobs")
+    authority_parent = delta.get("authority_parent_commit")
+    if authority_paths is None:
+        if (
+            authority_hashes is not None
+            or authority_blobs is not None
+            or authority_parent is not None
+        ):
+            raise SystemExit(
+                f"accepted delta[{index}] 没有 authority_paths，不能单独提供 authority 内容绑定。"
+            )
+        return
+    if not isinstance(authority_paths, list) or any(
+        not isinstance(path, str) or not path.strip() for path in authority_paths
+    ):
+        raise SystemExit(f"accepted delta[{index}] 的 authority_paths 不合法。")
+    if not isinstance(authority_hashes, dict) or set(authority_hashes) != set(authority_paths):
+        raise SystemExit(
+            f"accepted delta[{index}] 的 authority_file_hashes 必须精确覆盖 authority_paths。"
+        )
+    for path, digest in authority_hashes.items():
+        if (
+            not isinstance(path, str)
+            or not isinstance(digest, str)
+            or len(digest) != 64
+            or any(char not in "0123456789abcdef" for char in digest)
+        ):
+            raise SystemExit(f"accepted delta[{index}] 的 authority_file_hashes 不合法。")
+    if not isinstance(authority_blobs, dict) or set(authority_blobs) != set(authority_paths):
+        raise SystemExit(
+            f"accepted delta[{index}] 的 authority_git_blobs 必须精确覆盖 authority_paths。"
+        )
+    for path, oid in authority_blobs.items():
+        if (
+            not isinstance(path, str)
+            or not isinstance(oid, str)
+            or len(oid) not in {40, 64}
+            or any(char not in "0123456789abcdef" for char in oid)
+        ):
+            raise SystemExit(f"accepted delta[{index}] 的 authority_git_blobs 不合法。")
+    if (
+        not isinstance(authority_parent, str)
+        or len(authority_parent) not in {40, 64}
+        or any(char not in "0123456789abcdef" for char in authority_parent)
+    ):
+        raise SystemExit(f"accepted delta[{index}] 的 authority_parent_commit 不合法。")
 
 
 def contract_version(build: dict) -> int:
@@ -664,10 +861,268 @@ def current_source_hash(build: dict, delta: dict | None = None) -> str:
     return sha256_value({"previous": previous, "delta": delta})
 
 
+def replay_accepted_delta_hashes(meta: dict, build: dict) -> tuple[str, str, list[dict]]:
+    initial_hash = str(meta.get("approved_source_hash") or "").strip()
+    if not initial_hash:
+        raise SystemExit("build 缺少初始 design approved_source_hash。")
+    accepted_deltas = build.get("accepted_deltas", [])
+    if not isinstance(accepted_deltas, list) or any(
+        not isinstance(delta, dict) for delta in accepted_deltas
+    ):
+        raise SystemExit("build.accepted_deltas 必须是对象数组。")
+
+    contract_hash = initial_hash
+    authority_hash = initial_hash
+    for index, delta in enumerate(accepted_deltas):
+        validate_scoped_delta_shape(delta, index)
+        before_value = delta.get("authority_source_hash_before")
+        after_value = delta.get("authority_source_hash_after")
+        if before_value is None and after_value is None:
+            before_hash = authority_hash
+            after_hash = authority_hash
+        elif not isinstance(before_value, str) or not isinstance(after_value, str):
+            raise SystemExit(
+                f"accepted delta[{index}] 的 authority source hash transition 必须同时提供 before/after。"
+            )
+        else:
+            before_hash = before_value.strip()
+            after_hash = after_value.strip()
+            if not before_hash or not after_hash:
+                raise SystemExit(
+                    f"accepted delta[{index}] 的 authority source hash transition 不能为空。"
+                )
+        if before_hash != authority_hash:
+            raise SystemExit(
+                f"accepted delta[{index}] 的 authority source hash before 与上一轮不一致。"
+            )
+        authority_hash = after_hash
+        contract_hash = sha256_value({"previous": contract_hash, "delta": delta})
+    return contract_hash, authority_hash, accepted_deltas
+
+
 def _path_within(path: str, parent: str) -> bool:
     if parent == ".":
         return True
     return path == parent or path.startswith(parent.rstrip("/") + "/")
+
+
+def module_spec_path(repo_root: Path, module_dir: Path) -> str:
+    module_rel = module_dir.expanduser().resolve().relative_to(repo_root.resolve()).as_posix()
+    return f"{module_rel}/spec.md"
+
+
+def bound_authority_paths(module_dir: Path, build: dict) -> list[str]:
+    """Return only authority paths explicitly bound by new scoped deltas.
+
+    Historical deltas did not carry authority_paths and remain readable.  Once
+    the field exists, it is deliberately narrower than a general document
+    allowlist: an active-build review may bind only this module's spec.
+    """
+
+    repo_root = repo_root_for(module_dir)
+    expected_spec = module_spec_path(repo_root, module_dir)
+    result: list[str] = []
+    for index, delta in enumerate(build.get("accepted_deltas", [])):
+        if not isinstance(delta, dict) or "authority_paths" not in delta:
+            continue
+        try:
+            paths = normalize_paths(
+                delta.get("authority_paths"),
+                f"build.accepted_deltas[{index}].authority_paths",
+            )
+        except ReadyContractError as exc:
+            raise SystemExit(str(exc)) from exc
+        if paths != [expected_spec]:
+            raise SystemExit(
+                f"accepted delta[{index}] 的 authority_paths 只能是当前模块规格："
+                f"{expected_spec}。"
+            )
+        if expected_spec not in result:
+            result.append(expected_spec)
+    return result
+
+
+def bound_authority_file_hashes(module_dir: Path, build: dict) -> dict[str, str]:
+    """Return the latest content hash bound for each scoped authority path."""
+
+    expected_paths = bound_authority_paths(module_dir, build)
+    result: dict[str, str] = {}
+    for index, delta in enumerate(build.get("accepted_deltas", [])):
+        if not isinstance(delta, dict) or "authority_paths" not in delta:
+            continue
+        validate_scoped_delta_shape(delta, index)
+        hashes = delta.get("authority_file_hashes")
+        if not isinstance(hashes, dict):
+            raise SystemExit(
+                f"accepted delta[{index}] 缺少 authority_file_hashes，不能建立 checkpoint。"
+            )
+        for path, digest in hashes.items():
+            result[str(path)] = str(digest)
+    if sorted(result) != sorted(expected_paths):
+        raise SystemExit("authority checkpoint 的路径与文件摘要绑定不一致。")
+    return result
+
+
+def bound_authority_git_blobs(module_dir: Path, build: dict) -> dict[str, str]:
+    """Return the latest Git blob binding for each scoped authority path."""
+
+    expected_paths = bound_authority_paths(module_dir, build)
+    result: dict[str, str] = {}
+    for index, delta in enumerate(build.get("accepted_deltas", [])):
+        if not isinstance(delta, dict) or "authority_paths" not in delta:
+            continue
+        validate_scoped_delta_shape(delta, index)
+        blobs = delta.get("authority_git_blobs")
+        if not isinstance(blobs, dict):
+            raise SystemExit(
+                f"accepted delta[{index}] 缺少 authority_git_blobs，不能建立 checkpoint。"
+            )
+        for path, oid in blobs.items():
+            result[str(path)] = str(oid)
+    if sorted(result) != sorted(expected_paths):
+        raise SystemExit("authority checkpoint 的路径与 Git blob 绑定不一致。")
+    return result
+
+
+def bound_authority_parent_commit(build: dict) -> str:
+    result = ""
+    for index, delta in enumerate(build.get("accepted_deltas", [])):
+        if not isinstance(delta, dict) or "authority_paths" not in delta:
+            continue
+        validate_scoped_delta_shape(delta, index)
+        result = str(delta.get("authority_parent_commit") or "")
+    if not result:
+        raise SystemExit("authority checkpoint 缺少绑定的父提交。")
+    return result
+
+
+def working_tree_blob_oid(repo_root: Path, path: str) -> str:
+    result = subprocess.run(
+        [
+            "git",
+            "-C",
+            str(repo_root),
+            "hash-object",
+            f"--path={path}",
+            "--filters",
+            "--",
+            path,
+        ],
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        check=False,
+    )
+    if result.returncode != 0:
+        raise SystemExit(result.stderr.strip() or f"无法计算 {path} 的 Git blob。")
+    oid = result.stdout.strip()
+    if len(oid) not in {40, 64} or any(char not in "0123456789abcdef" for char in oid):
+        raise SystemExit(f"{path} 的 Git blob OID 不合法。")
+    return oid
+
+
+def commit_file_oid(repo_root: Path, commit: str, path: str) -> str:
+    result = subprocess.run(
+        ["git", "-C", str(repo_root), "rev-parse", f"{commit}:{path}"],
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        check=False,
+    )
+    if result.returncode != 0:
+        raise SystemExit(result.stderr.strip() or f"authority checkpoint commit 缺少 {path}。")
+    return result.stdout.strip()
+
+
+def validate_authority_checkpoint_commit(
+    module_dir: Path,
+    meta: dict,
+    build: dict,
+    commit: str,
+) -> None:
+    """Require one exact spec + contract checkpoint after an applied review."""
+
+    if build.get("authority_checkpoint_required") is not True:
+        return
+    repo_root = repo_root_for(module_dir)
+    authority_paths = bound_authority_paths(module_dir, build)
+    if not authority_paths:
+        raise SystemExit("authority checkpoint 待提交，但合同没有已绑定的 authority_paths。")
+    previous_checkpoint = optional(build.get("authority_checkpoint_commit")) or optional(
+        meta.get("design_checkpoint_commit")
+    )
+    if not previous_checkpoint:
+        raise SystemExit("authority checkpoint 缺少上一轮权威提交，不能验证承接关系。")
+    expected_parent = bound_authority_parent_commit(build)
+    parents = subprocess.run(
+        ["git", "-C", str(repo_root), "rev-list", "--parents", "-n", "1", commit],
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        check=False,
+    )
+    if parents.returncode != 0:
+        raise SystemExit(parents.stderr.strip() or "无法读取 authority checkpoint 父提交。")
+    lineage = parents.stdout.split()
+    if len(lineage) != 2 or lineage[1] != expected_parent:
+        raise SystemExit("authority checkpoint commit 未直接承接 add-delta 时的当前提交。")
+    ancestry = subprocess.run(
+        [
+            "git",
+            "-C",
+            str(repo_root),
+            "merge-base",
+            "--is-ancestor",
+            previous_checkpoint,
+            commit,
+        ],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.PIPE,
+        check=False,
+    )
+    if ancestry.returncode == 1:
+        raise SystemExit("authority checkpoint commit 未承接上一轮权威提交。")
+    if ancestry.returncode != 0:
+        detail = ancestry.stderr.decode("utf-8", errors="replace").strip()
+        raise SystemExit(detail or "无法验证 authority checkpoint commit 的承接关系。")
+    result = subprocess.run(
+        [
+            "git",
+            "-C",
+            str(repo_root),
+            "diff-tree",
+            "--root",
+            "--no-commit-id",
+            "--name-only",
+            "-r",
+            commit,
+        ],
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        check=False,
+    )
+    if result.returncode != 0:
+        raise SystemExit(result.stderr.strip() or "无法读取 authority checkpoint commit。")
+    module_rel = module_dir.resolve().relative_to(repo_root.resolve()).as_posix()
+    expected = sorted([*authority_paths, f"{module_rel}/.work-meta.json"])
+    actual = sorted(path for path in result.stdout.splitlines() if path)
+    if actual != expected:
+        raise SystemExit(
+            "authority checkpoint commit 必须只包含当前模块 spec.md 和 .work-meta.json；"
+            f"期望 {expected}，实际 {actual}。"
+        )
+    bound_authority_file_hashes(module_dir, build)
+    for path, expected_oid in bound_authority_git_blobs(module_dir, build).items():
+        if commit_file_oid(repo_root, commit, path) != expected_oid:
+            raise SystemExit(
+                f"authority checkpoint commit 中的 {path} 不是 applied authority 绑定版本。"
+            )
+    meta_path = f"{module_rel}/.work-meta.json"
+    if commit_file_oid(repo_root, commit, meta_path) != working_tree_blob_oid(
+        repo_root, meta_path
+    ):
+        raise SystemExit("authority checkpoint commit 中的 .work-meta.json 不是当前合同版本。")
 
 
 def validate_target_paths(repo_root: Path, values: list[str]) -> list[str]:
@@ -722,7 +1177,10 @@ def validate_implementation_commit_scope(module_dir: Path, build: dict, commit: 
     target_paths = validate_target_paths(repo_root, target.get("paths", []))
     module_rel = module_dir.resolve().relative_to(repo_root.resolve()).as_posix()
     audit_dir = optional(build.get("audit_dir")) or f".pm-workflow/audits/{module_dir.name}"
-    allowed_exact = {f"{module_rel}/.work-meta.json"}
+    allowed_exact = {
+        f"{module_rel}/.work-meta.json",
+        *bound_authority_paths(module_dir, build),
+    }
     outside = [
         path
         for path in result.stdout.splitlines()
@@ -866,6 +1324,9 @@ def cmd_start(args: argparse.Namespace) -> None:
         "delivery_policy": delivery_policy,
         "delivery_policy_hash": delivery_policy_hash(delivery_policy),
         "accepted_deltas": [],
+        "authority_checkpoint_required": False,
+        "authority_checkpoint_commit": optional(meta.get("design_checkpoint_commit")),
+        "authority_checkpoint_source_hash": source_hash,
         "lifecycle_state": "building",
         "mode": mode,
         "executor": executor,
@@ -925,6 +1386,17 @@ def cmd_designing(args: argparse.Namespace) -> None:
     module_dir.mkdir(parents=True, exist_ok=True)
     path = meta_path(module_dir)
     meta = read_meta(module_dir) if path.exists() else default_meta(module_dir)
+    existing_build = meta.get("build")
+    existing_lifecycle = (
+        str(existing_build.get("lifecycle_state") or meta.get("lifecycle_state") or "")
+        if isinstance(existing_build, dict)
+        else str(meta.get("lifecycle_state") or "")
+    )
+    if existing_lifecycle in {"building", "iterating", "final_check"}:
+        raise SystemExit(
+            "当前模块仍有 active build，不能直接覆盖为 designing；"
+            "请先通过 replan-work.py 安全保留候选并从 main 重新进入 design。"
+        )
     meta["status"] = "active"
     meta["stage"] = 1
     meta["lifecycle_state"] = "designing"
@@ -993,39 +1465,23 @@ def cmd_validate_ready(args: argparse.Namespace) -> None:
     print(json.dumps(result, ensure_ascii=False))
 
 
-def cmd_validate_final_currentness(args: argparse.Namespace) -> None:
-    module_dir = Path(args.module_dir)
-    meta = read_meta(module_dir)
-    build = require_build(meta)
-    repo_root = repo_root_for(module_dir)
+def validate_build_target_contract(
+    repo_root: Path,
+    meta: dict,
+    build: dict,
+    target_paths: list[str],
+) -> dict:
     try:
-        result = validate_ready_pack(
-            repo_root,
-            module_dir,
-            meta,
-            compile_current_context_pack(repo_root, module_dir),
-            allowed_states={"iterating", "final_check"},
-            expected_pack_approved_hash=str(build.get("approved_source_hash") or ""),
-        )
+        approved_paths = approved_target_paths(meta)
     except ReadyContractError as exc:
         raise SystemExit(str(exc)) from exc
-
-    expected_hash = str(result["approved_source_hash"])
-    accepted_deltas = build.get("accepted_deltas", [])
-    if not isinstance(accepted_deltas, list) or any(
-        not isinstance(delta, dict) for delta in accepted_deltas
-    ):
-        raise SystemExit("build.accepted_deltas 必须是对象数组。")
-    for delta in accepted_deltas:
-        expected_hash = sha256_value({"previous": expected_hash, "delta": delta})
-    if expected_hash != str(build.get("approved_source_hash") or ""):
-        raise SystemExit("build approved_source_hash 与 design 依据 + accepted deltas 不一致。")
-
+    if target_paths != approved_paths:
+        raise SystemExit("final target paths 与 design 批准范围不一致。")
     target = build.get("target")
     if not isinstance(target, dict):
         raise SystemExit("build.target 必须是对象。")
-    target_paths = validate_target_paths(repo_root, target.get("paths", []))
-    if target_paths != result["target_paths"]:
+    build_target_paths = validate_target_paths(repo_root, target.get("paths", []))
+    if build_target_paths != target_paths:
         raise SystemExit("final target paths 与 design 批准范围不一致。")
     try:
         definition = load_project_definition(repo_root / ".pm-workflow" / "project.yml")
@@ -1037,9 +1493,256 @@ def cmd_validate_final_currentness(args: argparse.Namespace) -> None:
         "entrypoints"
     ]:
         raise SystemExit("final entrypoints 与 project.yml 不一致。")
+    return definition
+
+
+def validate_applied_context_pack(
+    module_dir: Path,
+    meta: dict,
+    build: dict,
+    context_pack_path: Path,
+    authority_before: str,
+) -> dict:
+    repo_root = repo_root_for(module_dir)
+    try:
+        supplied_pack = load_context_pack(context_pack_path)
+        current_pack = compile_current_context_pack(repo_root, module_dir)
+    except ReadyContractError as exc:
+        raise SystemExit(str(exc)) from exc
+
+    expected_module = module_dir.expanduser().resolve().relative_to(repo_root.resolve()).as_posix()
+    if supplied_pack.get("module") != expected_module:
+        raise SystemExit("applied context pack 不属于当前模块。")
+    if current_pack.get("module") != expected_module:
+        raise SystemExit("现场重新编译的 context pack 不属于当前模块。")
+    try:
+        expected_version = int(build.get("source_hash_version") or meta.get("source_hash_version") or 1)
+        supplied_version = int(supplied_pack.get("source_hash_version") or 1)
+        current_version = int(current_pack.get("source_hash_version") or 1)
+    except (TypeError, ValueError) as exc:
+        raise SystemExit("applied context pack 的 source_hash_version 不合法。") from exc
+    if supplied_version != expected_version or current_version != expected_version:
+        raise SystemExit("applied context pack 与当前 build contract 的 source hash 版本不一致。")
+
+    expected_contract_hash = str(build.get("approved_source_hash") or "").strip()
+    if (
+        str(supplied_pack.get("approved_source_hash") or "").strip()
+        != expected_contract_hash
+        or str(current_pack.get("approved_source_hash") or "").strip()
+        != expected_contract_hash
+    ):
+        raise SystemExit("applied context pack 未绑定当前 build contract。")
+    for field in ("source_hash", "input_hashes", "source_hash_scope", "target"):
+        if supplied_pack.get(field) != current_pack.get(field):
+            raise SystemExit("applied context pack 与现场重新编译结果不一致。")
+
+    current_hash = str(current_pack.get("source_hash") or "").strip()
+    if not current_hash:
+        raise SystemExit("applied context pack 缺少 source_hash。")
+    if current_hash == authority_before:
+        raise SystemExit("applied context pack 没有形成新的规格 authority，不能记录 delta。")
+
+    expected_spec = module_spec_path(repo_root, module_dir)
+    source_scope = current_pack.get("source_hash_scope")
+    if not isinstance(source_scope, list) or any(
+        not isinstance(path, str) or not path.strip() for path in source_scope
+    ):
+        raise SystemExit("applied context pack 的 source_hash_scope 不合法。")
+    if expected_spec not in source_scope:
+        raise SystemExit("applied context pack 没有把当前模块 spec.md 纳入 authority scope。")
+    authority_base_commit = optional(build.get("authority_checkpoint_commit")) or optional(
+        meta.get("design_checkpoint_commit")
+    )
+    if not authority_base_commit:
+        raise SystemExit("active build 缺少上一轮 authority checkpoint commit。")
+    previous_spec = subprocess.run(
+        [
+            "git",
+            "-C",
+            str(repo_root),
+            "show",
+            f"{authority_base_commit}:{expected_spec}",
+        ],
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        check=False,
+    )
+    if previous_spec.returncode != 0:
+        raise SystemExit(
+            previous_spec.stderr.strip()
+            or "上一轮 authority checkpoint 不包含当前模块 spec.md。"
+        )
+    try:
+        _, previous_spec_body = parse_frontmatter(previous_spec.stdout)
+        _, current_spec_body = parse_frontmatter(
+            (repo_root / expected_spec).read_text(encoding="utf-8")
+        )
+    except (OSError, UnicodeDecodeError, ValueError) as exc:
+        raise SystemExit(f"无法比较 applied authority 的规格正文：{exc}") from exc
+    if previous_spec_body == current_spec_body:
+        raise SystemExit(
+            "当前模块 spec.md 正文没有变化；仅飞书发布 frontmatter 变化不能记录 delta。"
+        )
+    changed = subprocess.run(
+        [
+            "git",
+            "-C",
+            str(repo_root),
+            "diff",
+            "--name-only",
+            "-z",
+            authority_base_commit,
+            "--",
+        ],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        check=False,
+    )
+    if changed.returncode != 0:
+        detail = changed.stderr.decode("utf-8", errors="replace").strip()
+        raise SystemExit(detail or "无法核对 applied authority 的 Git 变化范围。")
+    changed_since_checkpoint = {
+        item.decode("utf-8", errors="surrogateescape")
+        for item in changed.stdout.split(b"\0")
+        if item
+    }
+    try:
+        changed_since_checkpoint.update(changed_paths(repo_root))
+    except ReadyContractError as exc:
+        raise SystemExit(str(exc)) from exc
+    changed_authority = sorted(set(source_scope) & changed_since_checkpoint)
+    if changed_authority != [expected_spec]:
+        raise SystemExit(
+            "applied authority 只能改变当前模块 spec.md；"
+            f"实际 authority paths：{changed_authority or ['<none>']}。"
+        )
+    input_hashes = current_pack.get("input_hashes")
+    expected_spec_hash = input_hashes.get(expected_spec) if isinstance(input_hashes, dict) else None
+    if (
+        not isinstance(expected_spec_hash, str)
+        or len(expected_spec_hash) != 64
+        or any(char not in "0123456789abcdef" for char in expected_spec_hash)
+    ):
+        raise SystemExit("applied context pack 缺少当前模块 spec.md 的文件摘要。")
+    expected_spec_blob = working_tree_blob_oid(repo_root, expected_spec)
+    pack_repo = current_pack.get("repo")
+    authority_parent_commit = (
+        str(pack_repo.get("head") or "").strip() if isinstance(pack_repo, dict) else ""
+    )
+    head = subprocess.run(
+        ["git", "-C", str(repo_root), "rev-parse", "HEAD"],
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        check=False,
+    )
+    if head.returncode != 0:
+        raise SystemExit(head.stderr.strip() or "无法读取 applied authority 的当前提交。")
+    if authority_parent_commit != head.stdout.strip():
+        raise SystemExit("applied context pack 没有绑定当前 Git HEAD。")
+    parent_ancestry = subprocess.run(
+        [
+            "git",
+            "-C",
+            str(repo_root),
+            "merge-base",
+            "--is-ancestor",
+            authority_base_commit,
+            authority_parent_commit,
+        ],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.PIPE,
+        check=False,
+    )
+    if parent_ancestry.returncode == 1:
+        raise SystemExit("当前 Git HEAD 未承接上一轮 authority checkpoint。")
+    if parent_ancestry.returncode != 0:
+        detail = parent_ancestry.stderr.decode("utf-8", errors="replace").strip()
+        raise SystemExit(detail or "无法验证 applied authority 的 Git 承接关系。")
+    pack_target = current_pack.get("target")
+    if not isinstance(pack_target, dict):
+        raise SystemExit("applied context pack 缺少 target。")
+    try:
+        target_paths = normalize_paths(pack_target.get("paths"), "context_pack.target.paths")
+    except ReadyContractError as exc:
+        raise SystemExit(str(exc)) from exc
+    definition = validate_build_target_contract(repo_root, meta, build, target_paths)
+    return {
+        "source_hash": current_hash,
+        "source_hash_version": current_version,
+        "authority_paths": [expected_spec],
+        "authority_file_hashes": {expected_spec: expected_spec_hash},
+        "authority_git_blobs": {expected_spec: expected_spec_blob},
+        "authority_parent_commit": authority_parent_commit,
+        "project_definition": definition,
+    }
+
+
+def validate_build_currentness(
+    module_dir: Path,
+    meta: dict,
+    build: dict,
+    *,
+    allowed_states: set[str],
+) -> dict:
+    """Verify that an active build still matches its approved authority sources."""
+
+    expected_hash, expected_authority_hash, accepted_deltas = replay_accepted_delta_hashes(
+        meta, build
+    )
+    if expected_hash != str(build.get("approved_source_hash") or ""):
+        raise SystemExit("build approved_source_hash 与 design 依据 + accepted deltas 不一致。")
+    checkpoint_required = build.get("authority_checkpoint_required")
+    if checkpoint_required is not None and not isinstance(checkpoint_required, bool):
+        raise SystemExit("build.authority_checkpoint_required 必须是布尔值。")
+    bound_authority_paths(module_dir, build)
+
+    repo_root = repo_root_for(module_dir)
+    try:
+        result = validate_ready_pack(
+            repo_root,
+            module_dir,
+            meta,
+            compile_current_context_pack(repo_root, module_dir),
+            allowed_states=allowed_states,
+            expected_pack_approved_hash=str(build.get("approved_source_hash") or ""),
+            expected_current_source_hash=expected_authority_hash,
+        )
+    except ReadyContractError as exc:
+        raise SystemExit(str(exc)) from exc
+
+    definition = validate_build_target_contract(repo_root, meta, build, result["target_paths"])
     result["approved_source_hash"] = expected_hash
+    result["authority_source_hash"] = expected_authority_hash
     result["accepted_deltas"] = len(accepted_deltas)
     result["project_definition"] = definition
+    return result
+
+
+def cmd_validate_currentness(args: argparse.Namespace) -> None:
+    module_dir = Path(args.module_dir)
+    meta = read_meta(module_dir)
+    build = require_build(meta)
+    result = validate_build_currentness(
+        module_dir,
+        meta,
+        build,
+        allowed_states={"building", "iterating", "final_check"},
+    )
+    print(json.dumps(result, ensure_ascii=False))
+
+
+def cmd_validate_final_currentness(args: argparse.Namespace) -> None:
+    module_dir = Path(args.module_dir)
+    meta = read_meta(module_dir)
+    build = require_build(meta)
+    result = validate_build_currentness(
+        module_dir,
+        meta,
+        build,
+        allowed_states={"iterating", "final_check"},
+    )
     print(json.dumps(result, ensure_ascii=False))
 
 
@@ -1062,26 +1765,33 @@ def cmd_commit(args: argparse.Namespace) -> None:
     commit = optional(args.implementation_commit)
     if not commit:
         raise SystemExit("必须提供 implementation_commit")
-    if contract_version(build) >= 2 and build.get("lifecycle_state") not in {
-        "building",
-        "iterating",
-    }:
-        raise SystemExit("只有 building / iterating 状态可以记录新的实现提交。")
-    if contract_version(build) >= 4:
+    version = contract_version(build)
+    currentness: dict | None = None
+    if version >= 2:
+        if build.get("lifecycle_state") not in {"building", "iterating"}:
+            raise SystemExit("只有 building / iterating 状态可以记录新的实现提交。")
+        currentness = validate_build_currentness(
+            module_dir,
+            meta,
+            build,
+            allowed_states={"building", "iterating"},
+        )
+    if version >= 4:
         validate_implementation_commit_scope(module_dir, build, commit)
+        validate_authority_checkpoint_commit(module_dir, meta, build, commit)
     previous_commit = optional(build.get("implementation_commit"))
-    if contract_version(build) >= 2 and previous_commit != commit:
+    if version >= 2 and previous_commit != commit:
         acceptance = build.setdefault("acceptance", {"required_checks": [], "evidence": []})
         if not isinstance(acceptance, dict):
             raise SystemExit("build.acceptance 必须是对象。")
         acceptance["evidence"] = []
-        if contract_version(build) >= 4:
+        if version >= 4:
             acceptance["iteration_evidence"] = []
         clear_review_ready(build)
         build["pm_accepted_at"] = None
         finalization = build.get("finalization")
         if (
-            contract_version(build) >= 4
+            version >= 4
             and isinstance(finalization, dict)
             and optional(finalization.get("requested_at"))
         ):
@@ -1089,7 +1799,13 @@ def cmd_commit(args: argparse.Namespace) -> None:
             finalization["rebound_at"] = now_iso()
     build["implementation_commit"] = commit
     build["implementation_committed_at"] = now_iso()
-    if contract_version(build) >= 2:
+    if build.get("authority_checkpoint_required") is True:
+        if not isinstance(currentness, dict):
+            raise SystemExit("authority checkpoint 缺少已验证的 authority source hash。")
+        build["authority_checkpoint_required"] = False
+        build["authority_checkpoint_commit"] = commit
+        build["authority_checkpoint_source_hash"] = currentness["authority_source_hash"]
+    if version >= 2:
         build["lifecycle_state"] = "iterating"
         meta["lifecycle_state"] = "iterating"
     meta["build"] = build
@@ -1191,15 +1907,117 @@ def cmd_add_delta(args: argparse.Namespace) -> None:
     build = require_build(meta)
     if contract_version(build) < 2:
         raise SystemExit("accepted delta 只适用于 build contract v2+。")
+    if build.get("lifecycle_state") not in {"building", "iterating", "final_check"}:
+        raise SystemExit("accepted delta 只适用于 building / iterating / final_check。")
+    if build.get("authority_checkpoint_required") is True:
+        raise SystemExit("上一笔 applied delta 尚未完成 authority checkpoint，不能继续追加 delta。")
+    kind = optional(args.kind) or NEW_DELTA_KIND
+    if kind != NEW_DELTA_KIND:
+        raise SystemExit(
+            f"新 accepted delta 的 kind 只能是 {NEW_DELTA_KIND}；"
+            "产品级或模块模型变化必须回 Proposal / design。"
+        )
+    scope_attestation = optional(args.scope_attestation)
+    if scope_attestation != DELTA_SCOPE_ATTESTATION:
+        raise SystemExit(
+            "add-delta 必须用 --scope-attestation "
+            f"{DELTA_SCOPE_ATTESTATION} 声明本次不改变产品基线或模块模型。"
+        )
+    approval_kind = optional(args.approval_kind)
+    if approval_kind not in VALID_DELTA_APPROVAL_KINDS:
+        raise SystemExit(
+            "add-delta 必须用 --approval-kind pm-confirmation 或 lark-review-batch 绑定确认来源。"
+        )
+    approval_reference = optional(args.approval_reference)
+    if not approval_reference:
+        raise SystemExit("add-delta 必须用 --approval-reference 记录 PM 确认或 sealed 评审批次证据。")
     summary = optional(args.summary)
     if not summary:
         raise SystemExit("必须提供 delta summary。")
+    affected_surfaces = normalize_string_list(args.affected_surface)
+    affects = parse_delta_affects(args.affects)
+    if args.applied_context_pack and approval_kind != "lark-review-batch":
+        raise SystemExit("--applied-context-pack 必须绑定 lark-review-batch 评审批次证据。")
+    if approval_kind == "lark-review-batch" and not args.applied_context_pack:
+        raise SystemExit(
+            "lark-review-batch accepted delta 必须提供 --applied-context-pack，"
+            "绑定已应用且复验通过的当前模块规格。"
+        )
+    if approval_kind == "lark-review-batch":
+        approval_artifact = validate_lark_review_approval(
+            module_dir,
+            approval_reference,
+            args.approval_artifact,
+        )
+        sealed_delta = approval_artifact.get("active_build_delta")
+        if not isinstance(sealed_delta, dict) or any(
+            sealed_delta.get(key) != expected
+            for key, expected in (
+                ("kind", kind),
+                ("scope_attestation", scope_attestation),
+                ("summary", summary),
+                ("affected_surfaces", affected_surfaces),
+                ("affects", affects),
+            )
+        ):
+            raise SystemExit(
+                "add-delta 的口径、影响面或 scope 与 seal 前固化的 "
+                "active_build_delta 不一致。"
+            )
+    elif args.approval_artifact:
+        raise SystemExit("--approval-artifact 只适用于 lark-review-batch 审批证据。")
+    else:
+        approval_artifact = None
+    expected_contract_hash, authority_before, _ = replay_accepted_delta_hashes(meta, build)
+    if expected_contract_hash != str(build.get("approved_source_hash") or ""):
+        raise SystemExit("build approved_source_hash 与 design 依据 + accepted deltas 不一致。")
+    if args.applied_context_pack:
+        applied_pack = validate_applied_context_pack(
+            module_dir,
+            meta,
+            build,
+            Path(args.applied_context_pack),
+            authority_before,
+        )
+        authority_after = str(applied_pack["source_hash"])
+        authority_paths = list(applied_pack["authority_paths"])
+        authority_file_hashes = dict(applied_pack["authority_file_hashes"])
+        authority_git_blobs = dict(applied_pack["authority_git_blobs"])
+        authority_parent_commit = str(applied_pack["authority_parent_commit"])
+    else:
+        currentness = validate_build_currentness(
+            module_dir,
+            meta,
+            build,
+            allowed_states={"building", "iterating", "final_check"},
+        )
+        authority_after = str(currentness["authority_source_hash"])
+        authority_paths = []
+        authority_file_hashes = {}
+        authority_git_blobs = {}
+        authority_parent_commit = ""
+    accepted_at = optional(args.accepted_at) or now_iso()
     delta = {
-        "kind": optional(args.kind) or "product-behavior",
+        "kind": kind,
         "summary": summary,
-        "affected_surfaces": normalize_string_list(args.affected_surface),
-        "accepted_at": optional(args.accepted_at) or now_iso(),
+        "affected_surfaces": affected_surfaces,
+        "affects": affects,
+        "accepted_at": accepted_at,
+        "scope_attestation": scope_attestation,
+        "approval_evidence": {
+            "kind": approval_kind,
+            "reference": approval_reference,
+        },
+        "authority_source_hash_before": authority_before,
+        "authority_source_hash_after": authority_after,
     }
+    if approval_artifact is not None:
+        delta["approval_evidence"]["artifact"] = approval_artifact
+    if authority_paths:
+        delta["authority_paths"] = authority_paths
+        delta["authority_file_hashes"] = authority_file_hashes
+        delta["authority_git_blobs"] = authority_git_blobs
+        delta["authority_parent_commit"] = authority_parent_commit
     deltas = build.setdefault("accepted_deltas", [])
     if not isinstance(deltas, list):
         raise SystemExit("build.accepted_deltas 必须是数组。")
@@ -1215,6 +2033,8 @@ def cmd_add_delta(args: argparse.Namespace) -> None:
     clear_review_ready(build)
     clear_finalization(build)
     build["implementation_commit"] = None
+    if authority_paths:
+        build["authority_checkpoint_required"] = True
     build["pm_accepted_at"] = None
     build["lifecycle_state"] = "iterating"
     meta["lifecycle_state"] = "iterating"
@@ -1550,6 +2370,13 @@ def build_parser() -> argparse.ArgumentParser:
     validate_ready.add_argument("--context-pack")
     validate_ready.set_defaults(func=cmd_validate_ready)
 
+    validate_current = sub.add_parser(
+        "validate-currentness",
+        help="verify that an active build still matches current authority sources",
+    )
+    validate_current.add_argument("module_dir")
+    validate_current.set_defaults(func=cmd_validate_currentness)
+
     validate_final = sub.add_parser(
         "validate-final-currentness",
         help="verify final design hash, accepted deltas, target paths, and project definition",
@@ -1618,12 +2445,32 @@ def build_parser() -> argparse.ArgumentParser:
     audit_exception.add_argument("--check", action="append", default=[])
     audit_exception.set_defaults(func=cmd_audit_exception)
 
-    delta = sub.add_parser("add-delta", help="record a PM-accepted product change and invalidate evidence")
+    delta = sub.add_parser(
+        "add-delta",
+        help="record one evidenced, module-scoped adjustment and invalidate evidence",
+    )
     delta.add_argument("module_dir")
-    delta.add_argument("--kind", default="product-behavior")
+    delta.add_argument("--kind", default=NEW_DELTA_KIND)
     delta.add_argument("--summary", required=True)
     delta.add_argument("--affected-surface", action="append", default=[])
+    delta.add_argument(
+        "--affects",
+        action="append",
+        default=[],
+        help="optional structured terminology signal: term:<name> or role:<name>",
+    )
     delta.add_argument("--accepted-at")
+    delta.add_argument("--scope-attestation")
+    delta.add_argument("--approval-kind")
+    delta.add_argument("--approval-reference")
+    delta.add_argument(
+        "--approval-artifact",
+        help="bind lark-review-batch evidence to its verified remote-verification.json",
+    )
+    delta.add_argument(
+        "--applied-context-pack",
+        help="bind one already-applied authority update to a current, verified context pack",
+    )
     delta.set_defaults(func=cmd_add_delta)
 
     evidence = sub.add_parser("record-evidence", help="record one check bound to source hash and commit")

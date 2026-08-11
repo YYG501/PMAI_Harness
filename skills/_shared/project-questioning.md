@@ -1,254 +1,151 @@
-# project-questioning：项目方向讨论的共享真相源
+# project-questioning：接入前已有资料的等价产品基线核验
 
-> **职责**：项目方向讨论的**提问纪律 / 问题库 / 写作规则 / Decision gate / 5 节检查**的**单一真相源**。
-> **调用方**：`/pmai-init-project` 已有代码分支触发的 codebase-audit step 4（已有代码首次接入定方向，内联）+ `/pmai-direction`（事后方向校准：方向重定 / 待办整理）。
-> **§2.5 抽取边界**：本文件含**写作规则 + 话术问题库 + 收敛条件 + Decision gate 模板 + 检查清单**（跨场景共享）；调用方各自判断输入态和问题顺序：codebase-audit 管已有代码首次接入，`/pmai-direction` 管已接入项目的方向重定 / 待办整理。
-> **复用 pattern**：跟 `skills/_shared/PM-VIEW-RULES.md` 同款 shared reference 机制。
-
----
-
-## §1 调用方约定
-
-调用方应当：
-
-1. **判断场景**（调用方自己做）：
-   - `/pmai-init-project` 已有代码分支触发的 codebase-audit step 4 → 已有代码首次接入（输入 = 刚产出的 `docs/CODEBASE-AUDIT.md` 现状档）
-   - `/pmai-direction` → 已接入项目的事后方向校准（方向重定 / 待办整理）
-2. **决定问题顺序**（调用方自己排）：
-   - 已有代码首次接入：先读 `docs/CODEBASE-AUDIT.md` 作实况语境，再问产品定位 → 用户画像 → 产品边界 → 业务术语表 → TODO 待办池；现有技术只作首个 design 的证据
-   - 方向重定：按 PM 提的变化切入，必要时重写产品定位 / 用户画像 / 产品边界 / 业务术语表 / TODO
-   - 待办整理：跳过产品定位 / 用户画像 / 产品边界（除非 PM 明确说这些也变了），只把 PM 已经提过、讨论过想做的事整理进无序 TODO 待办池，并按需补业务术语
-3. **跑提问 + 闸门 + 写作 + 确认门**（按 §2-§7 走）
-4. **PM 定稿后**：调用方按自己语境继续（codebase-audit 首次接入给 ▶ Next Up 引到 `/pmai-design`；direction skill 退出）
+> **职责**：成熟项目首次接入时，判断接入前已有的产品资料是否已经形成可替代 Product Proposal 的等价产品基线。
+> **调用方**：`/pmai-init-project` 的资料目录分支，以及已有代码分支触发的 codebase-audit step 4。
+> **边界**：本文件只核验已有判断，不在初始化里重新讨论或补齐产品方向。产品级缺口或方向纠正统一进入 `/pmai-proposal`。
 
 ---
 
-## §2 提问纪律
+## §1 为什么需要这道核验
 
-沿用模块探索里沉淀下来的提问纪律，但不依赖任何 design-only 方法文件：
+成熟项目可能在接入 PMAI 前已经有立项材料、产品说明、正式 PRD 或长期运行形成的稳定共识。若这些材料已经完整回答产品级问题，没有必要为了框架形式重复生成 Proposal。
 
-- **分批提问**：一次问一组相关问题，不一口气甩全部
-- **追问**：PM 答得模糊就追问到能落笔，不拿模糊回答硬写
-- **收敛**：问到够写 5 节 + 初始队列即停，不无限发散
-- **编号作答**：每批问题编号，引导 PM 用 `1A 2C` 或自由文本回答
+但代码、菜单、接口和当前功能只能证明“现在做成了什么”，不能单独证明“为什么值得做、为谁做、边界是什么”。因此：
 
-**禁止**：① 拿 PM 模糊回答硬写 ② 一气呵成把 30 题甩出来 ③ 自由话术不编号导致 PM 答案丢失定位
+- **已有完整产品判断**可以作为等价产品基线；
+- **只有代码现状或零散功能说明**不算等价产品基线；
+- **缺一项、互相冲突或 PM 要重判**，都进入 `/pmai-proposal`，不得在 codebase-audit 里现场补问后绕过 Proposal。
 
----
+## §2 核验输入
 
-## §3 问题库（按 5 节组织）
+调用方按接入类型确定证据范围：
 
-| PRODUCT 节 | 要问出 | 典型话术 |
+- **资料目录**：只读取 `.pm-workflow/intake-manifest.json` 中固定、且当前 SHA-256 仍一致的接入前产品材料；PMAI 刚生成的 `PRODUCT.md`、`PRODUCT-STATE.md` 等骨架不能反过来充当依据。
+- **已有代码库**：先全文读取 `docs/CODEBASE-AUDIT.md` 了解现状，再只从 intake manifest 中固定、且当前 SHA-256 仍一致的接入前产品材料提取产品判断。
+
+可作为产品判断依据的材料例如：
+
+- 产品立项、产品说明或正式 PRD；
+- 已确认的用户研究、业务方案或范围说明；
+- 已生效的项目级决定；
+- 现有 `PRODUCT.md`、`PRODUCT-RULES.md`、`PRODUCT-STATE.md`。
+
+每条判断必须记录来源路径或 PM 本轮明确确认。作为 `主要依据` 的路径必须命中 intake manifest，当前文件仍是仓内普通文件且 hash 未变；manifest 自身、`CODEBASE-AUDIT.md`、初始化过程中生成的模板、索引、host 配置及其它 PMAI 后生成文件都不能冒充接入前依据。代码扫描只可作为当前产品形态证据，不得单独补出目标用户、价值、产品边界或 MVP。
+
+依赖 / 缓存 / 构建产物目录和单文件超过 64 MiB 的大文件不会进入 manifest，因此也不能直接写成等价基线 `主要依据`；若关键判断只存在于这类材料中，保留材料并转 `/pmai-proposal`，不要事后改 manifest。
+
+## §3 六项完整性标准
+
+只有以下六项都明确、互相一致且仍然有效，才算等价产品基线：
+
+| 必须明确的判断 | 通过标准 | 不能替代它的内容 |
 |---|---|---|
-| 产品定位 | 是什么产品 / 解决什么问题 / 给谁用 / 有无长期硬约束 | 「这个项目要解决什么核心问题？目标用户是谁？有没有不能动的边界（合规 / 集成 / 性能）？」|
-| 用户画像 | 主角色是谁 / 关键诉求（起手 1 个主角色即可） | 「最主要的用户是哪种人？他们最大的诉求是什么？」|
-| 产品边界 | 明确解决 / 不解决的场景、长期合规 / 集成 / 数据边界 | 「哪些问题明确属于这个产品？哪些场景确定不做？有没有长期不能破坏的合规、集成或数据边界？」|
-| 业务术语表 | 项目里有没有需要统一口径的业务专名 | 「业务里有什么术语容易跟同行混的？比如『订单』vs『工单』？」|
-| —（TODO）| PM 提过 / 讨论过想做的事 | 「列出你现在想到要做的事，不用排顺序。」|
+| 产品定位 | 能用 1–3 句话说明是什么产品、服务什么场景 | 技术栈、页面清单 |
+| 主用户 | 至少一个主角色及其关键诉求明确 | API 角色、权限枚举 |
+| 核心问题与价值 | 说明用户为何受阻、产品通过什么机制带来什么可观察结果 | 功能列表、愿景口号 |
+| 产品边界 | 明确负责与不负责的范围，以及长期不能破坏的边界 | 当前尚未实现的功能清单 |
+| MVP 或当前产品结果 | 说明主用户在什么触发下完成什么关键任务，并看到什么结果 | “已有很多页面”“系统已上线” |
+| 当前有效性 | PM 明确确认上述判断仍适用于接下来的产品推进 | 历史材料曾经获批 |
 
-> **项目名称节**通常 `/pmai-init-project` 已填（参数 1），调用方确认即可。
+以下任一情况都判为**不完整**：
 
-**调用方挑用**：调用方按场景挑 5 节里的子集 + 顺序（codebase-audit 首次接入按 5 节顺序；direction 按方向重定 / 待办整理挑用）。**叙事性里程碑不另开节** —— TODO 是 PM 的待办池，只记 PM 提过 / 讨论过想做的，AI 不从代码 / 竞品 / 已收尾历史反推填充。
+- 某项只能从代码或 AI 推断；
+- 不同材料对用户、价值或边界给出冲突答案；
+- 只有目标口号，没有可观察的用户结果；
+- PM 表示定位、用户、价值、边界或 MVP 需要纠正；
+- 需要新增产品判断才能把六项补齐。
 
----
+## §4 核验方式
 
-## §4 未决问题闸门（收敛前硬规则）
+### §4.1 先给证据卡，不先发产品问卷
 
-讨论收敛、动手写 `PRODUCT.md` 之前 —— 如果还有需要 PM 拍板才能定的项目级问题（如「先做单人版还是直接做协作版」），**不能带着模糊往下写**。
+调用方用一张简短卡片展示六项结论、来源与缺口：
 
-**步骤**：
+```text
+现有产品基线核验：
 
-1. 把未决问题写进**暂存文件** `docs/.project-solution-open-questions.md`（注：文件名沿用历史 prefix，不要重命名）：
-
-```markdown
-## 未决问题
-
-### Q1: <问题标题>
-
-<题干，描述清楚问题边界与影响>
-
-候选答案（如有）：
-- A) ...
-- B) ...
-
-**PM 回答：**
+- 产品定位：<结论或缺失>（来源：<路径 / PM 本轮确认>）
+- 主用户：<结论或缺失>（来源：...）
+- 核心问题与价值：<结论或缺失>（来源：...）
+- 产品边界：<结论或缺失>（来源：...）
+- MVP / 当前产品结果：<结论或缺失>（来源：...）
+- 当前有效性：<待 PM 确认>
 ```
 
-`**PM 回答：**` 后留空作占位。没有未决项时，section 下显式写一行 `（本项目无未决问题）`——**不能省略 section**。
+不要用一套新问题把缺失项补齐。PM 若指出另一份已有材料能回答缺口，读取材料后重新核验；如果需要讨论出新答案，直接进入 `/pmai-proposal`。
 
-2. 跑闸门脚本：
+### §4.2 只有六项齐全时才给确认门
 
-```bash
-python3 "$PMAI_HOME/scripts/check-open-questions.py" \
-  "$REPO_ROOT/docs/.project-solution-open-questions.md" --require-section
-```
+六项已有内容齐全且一致时，按 `_shared/pm-view/askuser-rules.md` 与 `banner-rules.md` 给单题确认门：
 
-- 退出 0 → 全部已答（或显式声明无未决项），进 §5
-- 退出 1 → 有未答项 / 缺 section → 把未答题逐条贴给 PM 让其作答，PM 答完回写暂存文件，重跑脚本
-
-3. `--require-section` 必带：暂存文件必须真有 `## 未决问题` section，否则闸门形同虚设。
-
-**禁逃生舱**：没有「暂跳过」「以后再说」「带假设前进」选项。PM 真不知道某题答案 → AI 给一个精简默认值让 PM 微调或接受，但答案必须落到暂存文件里、闸门必须过。
-
----
-
-## §5 写作规则
-
-### §5.1 PRODUCT.md 5 节（模板见 `$PMAI_HOME/templates/PRODUCT.md.tmpl`）
-
-| 节 | 写什么 |
-|---|---|
-| 项目名称 | 通常 `/pmai-init-project` 参数 1 已填，确认即可 |
-| 产品定位 | 1-3 句话；最简版「工具型应用，给单人 PM 用」也接受 |
-| 用户画像 | 起手 1 个主角色 + 关键诉求；最简版 1 句话 |
-| 产品边界 | 明确包含 / 排除的场景，以及长期合规 / 集成 / 数据边界 |
-| 业务术语表 | 至少 1 条；无业务专名时可空表 |
-
-### §5.2 TODO.md（模板见 `$PMAI_HOME/templates/TODO.md.tmpl`）
-
-**TODO 是 PM 的待办池**——只记 PM 提过 / 讨论过想做的事，无序、不排顺序。三态简单：
-
-| 状态 | 含义 |
-|---|---|
-| `todo` | 讨论过 / 提过想做，还没开始 |
-| `doing` | 正在做（已进入 `/pmai-design` 或 `/pmai-build`） |
-| `done` | 做完了（对应工作已 close） |
-
-字段：来源工作（进入 `/pmai-design` / `/pmai-build` 后回填，可空）/ 标题 / 状态。**没有「排序」列**——待办池不排顺序。
-
-**写 TODO 的硬规则**：
-1. **只记 PM 主动提过 / 讨论过想做的事**——AI 不从代码、竞品、历史收尾记录反推填充，池子里只有 PM 真说过想做的。
-2. **不替 PM 排顺序**——条目无序，PM 要做时自己挑。
-3. PM 没给具体待办 → TODO 留空（一行占位即可），不替 PM 脑补队列。
-
-### §5.3 TODO.md 是 PM 待办池（不是规划真相源）
-
-TODO 不是项目方向真相源——**方向真相源是 `PRODUCT.md`**。TODO 只是 PM 自己维护的待办清单：想到要做的记一笔、不想做了划掉。
-
-PM 要起新需求时，调用方应**提醒 PM「待办池里有这些」让 PM 挑一个**，不替 PM 判断「下一个该做 X」。
-
-### §5.4 PM 视图规则
-
-- 正向描述、名词带指代、不写工程黑话（reducer / props / schema）
-- 项目级方向用 PM 语言
-
----
-
-## §6 Decision gate 确认门（gsd Decision gate pattern）
-
-> Decision gate 是 PM 答完 5 节 + TODO 后的**收敛闸门**，3 条硬规则照搬 gsd `new-project.md:368-380` "Ready?" pattern。
-
-### §6.1 3 条硬规则
-
-| # | 规则 |
-|---|---|
-| 1 | **label = 动作描述**（例："创建 PRODUCT.md" / "继续探索"），禁用 "OK" / "Proceed" / "Continue" 模糊词 |
-| 2 | **description = 一句话解释**（例："我会开始写 PRODUCT.md，进入下一步" / "你还想补充行业 / 客户 / 流程"），不是文档化长说明 |
-| 3 | **留守选项有 Loop 回路**：选了「继续探索」自动回到讨论态，不退出 skill |
-
-### §6.2 Decision gate 模板（AskUserQuestion）
-
-```
-header: "Ready?"
-question: "我想我大致明白你想做什么了。准备好写 PRODUCT.md 了吗？"
+```yaml
+header: "产品基线"
+question: "上面这套产品定位、用户、价值、边界和产品结果，是否仍是接下来推进的依据？"
 options:
-  - label: "创建 PRODUCT.md"
-    description: "我会开始写 PRODUCT.md，进入后续配置和需求流程。"
-  - label: "继续探索"
-    description: "你还想补充行业、客户类型、典型流程、Demo 形态或内部协作方式。"
+  - label: "确认现有产品基线"
+    description: "我会把它整理进 PRODUCT.md，随后进入第一个模块 design。"
+  - label: "重新讨论产品方向"
+    description: "我会保留现状盘点，下一步通过 Product Proposal 重判产品方向。"
 ```
 
-PM 选「继续探索」→ 回 §2 提问；Loop 直到 PM 选「创建 PRODUCT.md」。
+- PM 确认现有基线：进入 §5。
+- PM 选择重新讨论，或确认时指出任一产品级判断已变：进入 §6。
+- PM 空答：停止等待；不得默认确认。
 
----
+## §5 等价基线通过后的写入
 
-## §7 写作前 5 节齐不齐检查
+只把接入前已有材料中已经确认的稳定结论同步到 `PRODUCT.md`：
 
-写完 `PRODUCT.md` 后跑：
+- 「当前 Product Proposal」按下面的固定字段写明等价基线。`主要依据` 至少列一个真实存在的仓内相对路径；该路径还必须在 manifest 中固定且 hash 未变，并用反引号包住。日期使用 `YYYY-MM-DD`。仅移除 required marker 或补齐几个章节，机器仍会要求 Proposal：
+
+  ```markdown
+  接入前已有等价产品基线。
+
+  - 主要依据：`docs/<接入前材料>.md`
+  - PM 确认日期：YYYY-MM-DD
+  ```
+- 同步产品定位、核心问题与价值、主用户、产品边界、MVP / 当前产品结果；
+- 只同步已有稳定术语，不从代码命名猜术语；
+- 移除 `<!-- PMAI_PROPOSAL_REQUIRED -->` 标记。
+
+把 `PRODUCT.md`、`.pm-workflow/intake-manifest.json`、作为主要依据的原始材料，以及本分支实际更新的现状文件精确提交。随后运行：
 
 ```bash
-PROJECT_STATE=$(python3 "$PMAI_HOME/scripts/check-project-sections.py" "$REPO_ROOT")
-ALL_FILLED=$(echo "$PROJECT_STATE" | python3 -c "import sys, json; print(json.load(sys.stdin)['all_filled'])")
-EMPTY=$(echo "$PROJECT_STATE" | python3 -c "import sys, json; print(','.join(json.load(sys.stdin)['empty_sections']))")
+python3 "$PMAI_HOME/scripts/proposal-contract.py" status "$REPO_ROOT"
 ```
 
-- `all_filled` 为 True → 5 节都有实质内容，进 §8 PM 定稿
-- 有空节 → 把空节（`$EMPTY`）逐节引导 PM 填，填完重跑脚本
+只有 manifest 本身、`PRODUCT.md` 和全部主要依据均已被当前仓库 Git 跟踪、没有未提交变化，依据路径与 hash 均命中 manifest，且机器状态明确返回 `equivalent_baseline`，才算通过。若 `PRODUCT-STATE.md` 实际承担“MVP / 当前产品结果”证据，它也必须是仓内普通文件、已提交且无漂移。仅凭 PM 口头确认、仅移除 marker，或先给 design 再补提交都不算通过。
 
-**禁逃生舱**：不给「暂跳过」「这节不重要」选项。PM 真不知道某节写啥 → AI 给精简模式默认值（例：产品定位「工具型应用，给单人 PM 用，无长期硬约束」），PM 微调或直接接受。
+`PRODUCT-STATE.md` 只保留代码和现有材料能证明的 main 现状；不得把目标或未来能力写成已落地。`TODO.md` 只记录 PM 已经明确提出的后续事项，不从代码、缺口或竞品反推。
+
+向 PM 给出唯一下一步：
+
+```text
+现有产品基线已确认并接入。
+
+## ▶ Next Up — /pmai-design "<第一个要讨论的模块结果>"
+```
+
+## §6 不通过时的出口
+
+保留接入前原始资料、已有 codebase audit（如有）和已经建立的上下文骨架，不把缺口硬写进 `PRODUCT.md`；`PMAI_PROPOSAL_REQUIRED` 标记必须保留。向 PM 说明缺少或冲突的是哪一项，然后只给：
+
+```text
+现有资料还不足以作为产品方向依据：<缺口或冲突摘要>。
+
+## ▶ Next Up — /pmai-proposal
+```
+
+Proposal 会完整重判产品定位、主用户、核心问题与价值、产品边界及 MVP。不得改用 `/pmai-design` 补产品级缺口，也不得用 `/pmai-record` 把未确认方向写成事实。
+
+## §7 后续问题路由
+
+| 后续发现 | 入口 |
+|---|---|
+| 产品定位、主用户、核心问题与价值、边界、MVP / 产品结果不清或需要纠正 | `/pmai-proposal` |
+| 产品基线有效，但模块对象、规则、流程、权限、页面或关键交互未定 | `/pmai-design` |
+| 没有 active work，且只是补录 PM 已确认的待办、术语、跨模块规则或历史理路 | `/pmai-record` |
 
 ---
 
-## §8 PM 定稿展示模板
-
-向 PM 展示两个文件的路径 + 一句话摘要，让 PM 定稿：
-
-```
-项目方向已写好：
-
-📋 PRODUCT.md
-   <绝对路径>
-   产品定位 / 用户画像 / 产品边界 / 业务术语表 已填
-
-🗒 TODO.md
-   <绝对路径>
-   <N> 条待办已记入待办池
-
-这样定吗？想改的说哪里；OK 的话项目方向就定下来了。
-```
-
-- PM 说「OK / 定了 / 没问题」→ 调用方继续（codebase-audit 首次接入进入收尾提示；direction skill 退出）
-- PM 提具体修改 → 改对应文件，回 §8 重新确认
-
----
-
-## §9 atomic commit（调用方按需）
-
-写完 PRODUCT.md + TODO.md + PM 定稿后，调用方 atomic commit（gsd new-project Step 4 pattern）：
-
-```bash
-cd <target-dir>  # 业务仓
-git add PRODUCT.md TODO.md
-git commit -m "docs: project direction settled"
-```
-
-> 单文件 commit，不产工程孪生 `solution.engineering.md` —— 项目级方向只用 PM 视角写。
-
----
-
-## §10 调用方实现指南
-
-### §10.1 codebase-audit step 4（已有代码首次接入）
-
-1. agent @读 本文件
-2. 全文读 `docs/CODEBASE-AUDIT.md`，把现状档作为问题语境
-3. 按已有代码接入顺序问 PM：产品定位 → 用户画像 → 产品边界 → 业务术语表 → TODO 待办池；技术现状从 audit 读取，不在 PRODUCT.md 再建真相源
-4. §4 未决问题闸门
-5. §6 Decision gate
-6. §5 写 PRODUCT.md + TODO.md
-7. §7 5 节齐不齐检查
-8. §8 PM 定稿
-9. §9 atomic commit
-10. 返回 codebase-audit 收尾提示，并给 ▶ Next Up 引到第一个 `/pmai-design`
-
-### §10.2 `/pmai-direction`（方向重定 / 待办整理）
-
-1. agent 按 SKILL.md 步骤 1 读已有输入（CLAUDE.md / `PRODUCT.md` / `TODO.md`，存在 `docs/CODEBASE-AUDIT.md` 时只作为背景材料）
-2. **判断意图**（方向重定 / 待办整理）—— 调用方 `/pmai-direction` SKILL.md 的“意图判断”表给出触发条件 + 输入态 + 提问顺序
-3. agent @读 本文件
-4. 按 `/pmai-direction` SKILL.md 的“提问顺序”列问 PM：
-   - 方向重定：变化来源 / 旧方向哪里不成立 → 产品定位 → 用户画像 → 产品边界 → 业务术语 → 刷新 TODO 待办池
-   - 待办整理：把 PM 已经提过、讨论过想做的事记进 TODO 待办池（**AI 不扫 `requirements/pmai-closed/` 反推历史、不排序**）→ 业务术语增量（默认跳过产品定位 / 用户画像 / 产品边界）
-5. §4 未决问题闸门
-6. §6 Decision gate
-7. §5 写 / 改 PRODUCT.md + TODO.md
-8. §7 5 节齐不齐检查
-9. §8 PM 定稿
-10. §9 atomic commit
-11. skill 退出（不像 init-project 还有阶段 D）
-
-> 注：`/pmai-direction` 的**完整提问顺序表 + 输入态 + 触发条件**留在 `skills/direction/SKILL.md`；本节 §10.2 只给"调用方实现指南"的步骤骨架，避免双份维护漂移。
-
----
-
-**End of `_shared/project-questioning.md`**（项目方向讨论共享内核；方向重定 / 待办整理顺序细化已落 `direction/SKILL.md`）
+**End of `_shared/project-questioning.md`**（成熟资料 / 已有代码首次接入的等价产品基线核验；不承担产品方向讨论）

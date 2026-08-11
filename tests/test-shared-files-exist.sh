@@ -2,7 +2,7 @@
 # test-shared-files-exist.sh
 #
 # 验证被 @读 的 _shared 文件存在 + 内容完整（D-iv M1 vp-5a；review C-5 / 防 R10 _shared 缺失）：
-#   T1: skills/_shared/project-questioning.md 存在 + 含 §6 Decision gate
+#   T1: skills/_shared/project-questioning.md 存在 + 含等价产品基线核验与 Proposal 出口
 #   T2: skills/_shared/PM-VIEW-RULES.md 存在（7 个 skill 引用）
 #   T3: skills/_shared/pm-view/ 目录存在 + 含子文件
 #   T4: SKILL.md 里所有 @读 _shared/* 引用 → 对应文件必须存在（前向链接完整）
@@ -15,20 +15,21 @@ REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 SHARED_DIR="$REPO_ROOT/skills/_shared"
 
 # -----------------------------------------------------------------
-# T1: project-questioning.md 存在 + 含 §6 Decision gate
+# T1: project-questioning.md 存在 + 含等价产品基线核验与 Proposal 出口
 # -----------------------------------------------------------------
 test_project_questioning_exists() {
-  start_test "T1: skills/_shared/project-questioning.md 存在 + 含 §6 Decision gate"
+  start_test "T1: project-questioning.md 存在 + 含基线核验与 Proposal 出口"
   if [ ! -f "$SHARED_DIR/project-questioning.md" ]; then
     _fail "skills/_shared/project-questioning.md 不存在"
     return
   fi
-  if ! grep -q "§6 Decision gate" "$SHARED_DIR/project-questioning.md"; then
-    _fail "project-questioning.md 缺 §6 Decision gate 章节"
+  if ! grep -q "§3 六项完整性标准" "$SHARED_DIR/project-questioning.md"; then
+    _fail "project-questioning.md 缺六项完整性标准"
     return
   fi
-  if ! grep -q "§5 写作规则" "$SHARED_DIR/project-questioning.md"; then
-    _fail "project-questioning.md 缺 §5 写作规则章节"
+  if ! grep -q "§6 不通过时的出口" "$SHARED_DIR/project-questioning.md" \
+     || ! grep -q '/pmai-proposal' "$SHARED_DIR/project-questioning.md"; then
+    _fail "project-questioning.md 缺 Proposal 出口"
     return
   fi
   pass_test

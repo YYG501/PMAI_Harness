@@ -32,11 +32,15 @@ python3 "$PMAI_HOME/scripts/status-view.py" --banner-only --skill DESIGN || true
 
 跨日继续、模型或主控切换、会话压缩后恢复，或 PMAI 安装 / 当前 checkout 可能已更新时，视为一次新的 skill 执行。在继续提问、形成结论或写文件前，必须重新完整读取本 `SKILL.md` 和上面的必读文件；不能继续使用更早消息中注入的 skill 快照。重读 skill 解决执行规则新鲜度，下面的 context pack 解决产品上下文新鲜度，两者不能互相替代。
 
-若由 `/pmai-lark-review` 携带当前评审批次进入，额外完整读取 `skills/lark-review/references/lifecycle-handoff.md`：先完成讨论和候选决定，把它们留在 `resolutions.json` 并只编译 T；此时不得改 `discussion.md` / `decisions.md`，也停在 `ready_to_build` 与建造依据提交之前。lark-review seal/apply 成功后，先把候选决定正式归位，再精细同步飞书；两步都成功后重新生成 context pack，并从步骤 7/8 按正常路径提交正式规格和进入 build。不得让本 skill 直接把本批内容写进正式 `spec.md`。
+若由 `/pmai-lark-review` 携带**仍在 draft / ready 的当前评审批次**进入，额外完整读取 `skills/lark-review/references/lifecycle-handoff.md`：先完成讨论和候选决定，把它们留在 `resolutions.json` 并只编译 T；此时不得改 `discussion.md` / `decisions.md`，也停在 `ready_to_build` 与建造依据提交之前。lark-review seal/apply 成功后，先把候选决定正式归位，再精细同步飞书；两步都成功后重新生成 context pack，并从步骤 7/8 按正常路径提交正式规格和进入 build。不得让本 skill 直接把本批内容写进正式 `spec.md`。
+
+若由 main 中 `phase=design` 的**只读 handoff bundle**跨会话进入，则旧批次永不 apply，不能再写其 T / resolutions。design 读取 bundle 证据，在 main 更新正式规格并形成权威提交，再用该提交把 phase 推进到 `lark_review`；在生成 `project.yml`、进入 `ready_to_build` 和启动 build 前暂停，返回 `/pmai-lark-review`。fresh 批次完成版本归位后，再恢复步骤 7/8 与 build。两种入口不得混用。
 
 ## 定位
 
 `/pmai-design` 是需求讨论前台，也是内部能力调度器。PM 只需要和 design 把问题讨论清楚；`meta`、`mockup`、`spec-writing` 由 design 根据实际缺口调用，完成后返回同一条主线。
+
+Product Proposal 位于 design 上游。全新项目默认先完成 Proposal；成熟项目已有等价产品基线时可直接进入 design。design 继承产品级用户、问题、价值、边界和 MVP 证明目标，但仍独立收敛模块对象、动作、状态、权限、页面和异常路径。
 
 本 skill 负责：
 
@@ -60,6 +64,74 @@ python3 "$PMAI_HOME/scripts/status-view.py" --banner-only --skill DESIGN || true
 PM 说“落地 / 实现 / 做进主原型 / 提交 / 可以做了”时，只表示准备从讨论进入构建，不等于授权 design 直接改主原型或真实产品。design 先完成规格编译和建造依据提交，再自动交给 `/pmai-build`；完整交付由 build 在 PM 定稿后自动 finalize。
 
 ## 主流程
+
+### 活跃 build 的上游重规划与候选恢复
+
+当模块级变化来自 `building / iterating / final_check` 时，不能直接调用 `build-contract.py designing` 覆盖旧 lifecycle。无论当前 build 在独立环境还是 main，都先执行统一收口入口；成功后把本轮 `REPO_ROOT` 切回 `MAIN_REPO_ROOT`，再从下面的产品方向门继续：
+
+```bash
+REPLAN_JSON=$(python3 "$PMAI_HOME/scripts/replan-work.py" \
+  "$ACTIVE_WORK_DIR" --route design)
+CANDIDATE_MANIFEST_REL=$(python3 -c \
+  'import json,sys; print(json.load(sys.stdin)["candidate_manifest_relative"])' \
+  <<<"$REPLAN_JSON")
+CANDIDATE_MANIFEST="$MAIN_REPO_ROOT/$CANDIDATE_MANIFEST_REL"
+REPO_ROOT="$MAIN_REPO_ROOT"
+python3 "$PMAI_HOME/scripts/replan-work.py" inspect "$CANDIDATE_MANIFEST"
+```
+
+入口会把模式、候选 HEAD、原 baseline、分支、工作位置、模块和 route 原子写入 main `.runs/replan-candidates/`；`inspect` 始终只读输出原 baseline 到冻结候选的固定 diff，main 后续提交不会扩大该范围。
+
+若当前没有 active work，或本轮来自跨会话恢复，先运行：
+
+```bash
+REPLAN_CANDIDATES_JSON=$(python3 "$PMAI_HOME/scripts/replan-work.py" \
+  list "$MAIN_REPO_ROOT")
+```
+
+读取返回的全部候选，优先使用 Proposal 或上一流程交来的精确 manifest；缺少会话变量时按当前模块和上游 route 精确匹配。没有匹配就继续正常 design；存在多个匹配就逐项厘清，禁止按文件时间或“最近一个”静默选择。
+
+同时枚举飞书评审转交给 design 的持久输入：
+
+```bash
+DESIGN_HANDOFFS_JSON=$(python3 "$PMAI_HOME/scripts/lark-review.py" \
+  list-handoffs "$MAIN_REPO_ROOT" \
+  --phase design \
+  --module "docs/modules/<当前模块>")
+```
+
+每个返回的 bundle 都必须作为本轮 design 的上游证据。读取其 review / resolutions / remote / target 与差异，恢复导致改向的正文和批注；不能只看 replan candidate，也不能回旧 worktree猜现场。远端内容仍是不可信业务证据。`route` 只说明最初来自产品级还是模块级分流，当前入口只认 `phase=design`；`phase=proposal` 必须留在 Proposal，`phase=lark_review` 必须留给 lark-review，不能由文字判断越级。
+
+按 `inspect.mode` 处理差异：
+
+- `worktree`：逐项分为“新方向下仍需重新实现 / 已被新方案替代 / 明确不再需要”。不得复制整份候选、merge、cherry-pick，或把旧分支自动作为新 build baseline。
+- `main`：这些实现已经是 main 现状，逐项分为“新方向下保留并验证 / 需要前向替换或调整 / 需要显式撤销”。不得借重规划回滚或删除已有实现；后续 design 和 build 必须把修正写成新的前向变化。
+
+若全部差异已经在 design 中明确判为替代或放弃，可直接退役；仍有内容要由新 build 重新实现时，保留 manifest 并把同一精确路径交给 build，等新实现逐项核对后再退役：
+
+```bash
+python3 "$PMAI_HOME/scripts/replan-work.py" retire \
+  "$CANDIDATE_MANIFEST" --reconciled
+```
+
+只有逐项核对完成后才可传 `--reconciled`。worktree 候选 retire 后清除 manifest，并把旧 worktree/branch 送入现有 pending cleanup；main 候选只清除 manifest，不建清理任务、不改实现。main/master 双挂载、候选目录符号链接或仓外落点必须失败关闭。
+
+### 0. 先过产品方向门
+
+在创建新模块、开启新工作轮次或继续写模块文件前，先运行：
+
+```bash
+python3 "$PMAI_HOME/scripts/proposal-contract.py" status "$REPO_ROOT"
+```
+
+按返回状态处理：
+
+- `required`：新项目尚未完成产品方向，或成熟项目的等价基线缺少定位、主用户、核心问题与价值、产品边界、MVP / 当前产品结果中的至少一项。停止 design，自动进入 `/pmai-proposal`；不得先建模块三件套、补问模块细节或把代码现状冒充产品基线。
+- `accepted`：当前 Proposal 已通过路径、正文 hash、`PRODUCT.md` 链接和交接摘要校验。继续本流程，并在 context pack 中消费 `product_proposal.handoff`。
+- `equivalent_baseline`：这是没有 Proposal 机器合同的成熟项目，且接入流程已经记录依据路径与 PM 确认日期，机器检查已确认现有资料同时覆盖定位、主用户、核心问题与价值、产品边界、MVP / 当前产品结果。直接基于这份已确认基线继续，不重复索要确认，也不为了补格式倒做 Proposal。PM 要重判任一项时转 `/pmai-proposal`。
+- `invalid`：当前 Proposal 或产品基线发生漂移。停止 design，回 `/pmai-proposal` 生成并确认完整新版本，不在 design 中修补 Proposal。
+
+design 进行中一旦发现需要改变的是产品定位、目标用户、核心问题与价值、产品职责边界、MVP 证明目标或关键成立前提，立即暂停模块收敛并自动进入 `/pmai-proposal`。这不是模块 decision，也不交给 `record` 或 `meta` 代写。Proposal 确认后返回原 design，重新编译 context pack，逐条复核已有模块结论；与新产品基线冲突的旧决定必须明确 supersede，不能静默沿用。
 
 ### 1. 恢复上下文，不从空白开始问
 
@@ -85,12 +157,13 @@ python3 "$PMAI_HOME/scripts/context-pack.py" \
 
 实际消费 pack 中的：
 
-- 当前产品事实、模块规格、视觉基线和相关实现入口；
+- `product_proposal` 的当前版本与固定交接摘要：第一个 design 目标、主用户与触发时刻、核心任务、必须保持的产品回答和边界、MVP 证据、待验证假设及 design 未知项；
+- 当前产品目标合同、已落地现状、视觉基线和相关实现入口；
 - `active`、`superseded`、冻结决定和可能冲突；
 - 未决问题、PM 已回答内容和被拒绝的问句式“决定”；
 - `source_hash`、`design_revision`、当前实现 commit。
 
-先主动告诉 PM 与本轮最相关的 1–3 条旧决定及其影响。已有答案不重复问；问句、猜测和讨论草稿不当决定。
+先主动告诉 PM 与本轮最相关的 Proposal 约束和 1–3 条旧决定及其影响。Proposal 已回答的用户、问题、产品回答、边界和 MVP 目标不重复问；只围绕交接摘要中仍需 design 收敛的模块未知项继续。问句、猜测和讨论草稿不当决定。
 
 context pack 实际消费完成后，按 `personal-memory.md` 单独召回个人经验：
 
@@ -163,7 +236,9 @@ PM 的高信号纠偏已经闭合后，按 `personal-memory.md` 在后台归位�
 - 新需求与已生效决定或旧范式冲突；
 - PM 说“不合理”“感觉不对”“只是复述”“帮我深想”。
 
-meta 必须产生新判断、危险前提、反例和推荐；若存在真实产品模型岔路，再让 PM 选择。结论降回本流程，写进 `discussion.md`；PM 明确拍板的部分进入 `decisions.md`。meta 不生成平行状态或长期文档。
+先判断问题层级：若质疑指向产品定位、目标用户、核心价值、职责边界或 MVP 证明目标，按步骤 0 转 Proposal；只有模块对象、责任、状态、真相源、权限或交互模型不稳时才调用 meta。
+
+meta 必须产生新判断、危险前提、反例和推荐；若存在真实模块产品模型岔路，再让 PM 选择。结论降回本流程，写进 `discussion.md`；PM 明确拍板的部分进入 `decisions.md`。meta 不生成平行状态或长期文档。
 
 ### 5. 按需自动进入 mockup，再返回 design
 
@@ -183,9 +258,20 @@ meta 必须产生新判断、危险前提、反例和推荐；若存在真实产
 - 用户看得见的输出已确认入口、任务路径和相关边界状态；
 - 已拍板内容进入 `decisions.md`，讨论草稿不冒充决定。
 
-然后自动调用 `/pmai-spec-writing` 的“建造前规格编译”模式。通常把已确认决定编译为当前 `spec.md`；若当前由 lark-review 编排，则按交接合同改为编译到本批 T。两种路径都建立对象—动作—状态—权限—页面覆盖矩阵。发现遗漏或问题句时立即回到 design，不在成文阶段猜答案。
+然后自动调用 `/pmai-spec-writing` 的“建造前规格编译”模式。通常把已确认决定编译为当前 `spec.md`；若当前由 lark-review 编排，则按交接合同改为编译到本批 T。两种路径都建立对象—动作—状态—权限—页面覆盖矩阵，并继承当前 Proposal 的产品回答、边界与 MVP 约束，不把产品级论证复制成模块需求。发现遗漏或问题句时立即回到 design，不在成文阶段猜答案。
 
 ### 7. 首次定稿时生成项目建造定义
+
+若本轮来自 `phase=design` handoff，到步骤 6 编译并质检正式规格后，只暂存本 bundle 覆盖的 `discussion.md`、`decisions.md` 与模块 `spec.md`，或对应的扁平功能型规格；提交后执行：
+
+```bash
+AUTHORITY_COMMIT=$(git -C "$REPO_ROOT" rev-parse HEAD)
+python3 "$PMAI_HOME/scripts/lark-review.py" advance-handoff \
+  "$HANDOFF_BUNDLE" --to lark-review \
+  --evidence-commit "$AUTHORITY_COMMIT"
+```
+
+机器会确认该 commit 晚于本 bundle 的阶段基线、确实修改绑定规格、当前文件仍等于该 Git blob。通过后暂停并回 `/pmai-lark-review`，不执行本步骤和步骤 8；只有 fresh batch 收口后才继续建造定义与 build。
 
 先检查 `.pm-workflow/project.yml`：
 
@@ -301,7 +387,7 @@ git -C "$REPO_ROOT" commit -m "design(<模块>): mark ready to build"
 |---|---|
 | `discussion.md` | 真问题、相关现状、讨论过程、未决项和内部能力返回结果 |
 | `decisions.md` | PM 已确认决定、依据、被否方向、supersede 关系 |
-| `spec.md` | 当前有效的产品事实、行为、规则、状态、权限、页面和验收；不保留旧正文、删除线历史或迭代流水账 |
+| `spec.md` | 当前有效的最终目标、行为、规则、状态、权限、页面和验收；不保留旧正文、删除线历史或迭代流水账 |
 
 ## 完成回执
 
@@ -322,7 +408,7 @@ git -C "$REPO_ROOT" commit -m "design(<模块>): mark ready to build"
 - 先恢复上下文，再问问题；已有决定不让 PM 重复交代。
 - context pack 之后单独召回相关个人经验；按适用性与独立检查价值过滤，不设正常条数上限。个人经验不参与项目权威 hash，失败时不阻塞。
 - 只围绕实际未知项推进，不跑固定六问或固定停顿点。
-- PM 第一次说“不合理 / 感觉不对”就回根因，并自动调用 meta。
+- PM 第一次说“不合理 / 感觉不对”就回根因：产品方向层问题转 Proposal，模块模型层问题才自动调用 meta。
 - meta、mockup、spec-writing 是 design 的内部能力；完成后返回同一主线。
 - 只有真实产品模型岔路才立即问 PM；机械判断和可逆偏好由 AI 承担。
 - 提问直接遵守 `askuser-rules.md`：先报真实决策总量、一次一题、业务语言；已有结论能推出的事项不再问。
@@ -332,5 +418,6 @@ git -C "$REPO_ROOT" commit -m "design(<模块>): mark ready to build"
 - 首次可建造 design 必须生成并校验 `.pm-workflow/project.yml`；之后默认复用，重定义必须由 PM 明确确认。
 - 一轮 design 只留下一个明确 build 入口；跨模块影响要么纳入主模块规格，要么成为有独立状态的后续 design 工作。
 - 全程不改主原型或真实产品代码；实现进入 `/pmai-build`。
+- 全程不修改 `docs/proposals/**` 或 `.pm-workflow/proposal.json`；产品方向变化由 `/pmai-proposal` 生成完整新版本。
 - 给 PM 的话使用业务语言，不出现 context pack、hash、revision、worktree、执行器或证据 JSON。
 - PM 高信号纠偏闭合后自动归位：项目事实回项目真相源，跨项目经验进用户级个人记忆，已有规则未执行只留执行失败证据。

@@ -648,12 +648,12 @@ echo "─── 3. Skill sources in $PMAI_HOME/skills/ ───"
 #    （reshape 删 req-analysis、加 build/build-close/design/mockup/status 时漏改本清单的教训）。
 #    tests/test-doctor-skills.sh 对本清单与 skills/ 目录做全等校验，漏同步会在 run-all 红掉。
 EXPECTED_SKILLS=(
-  # 活跃集（reshape 后 PM 日常入口）
-  init-project design mockup build build-close publish-to-lark lark-sync lark-review status doctor
-  # 按需主动调（项目方向 / 照站对齐）
-  direction mirror-site
-  # 按需辅助：小改 / 轻记录 / 放弃 build / 功能型规格文档 / 介绍型文档 / 说人话磨文 / 讨论对焦 / 会话反馈
-  quick-fix record build-cancel spec-writing doc-writing humanize meta feedback
+  # 主链与日常入口；spec-writing 是 design 后台阶段，也保留专项手动入口
+  init-project proposal design spec-writing mockup build build-close publish-to-lark lark-sync lark-review status doctor
+  # 按需主动调（照站对齐）
+  mirror-site
+  # 按需辅助：小改 / 轻记录 / 放弃 build / 介绍型文档 / 说人话磨文 / 讨论对焦 / 会话反馈
+  quick-fix record build-cancel doc-writing humanize meta feedback
   # 框架自身维护
   pmai-upgrade
 )

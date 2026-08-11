@@ -31,7 +31,7 @@ fixture_setup() {
   ln -s "$FRAMEWORK_ROOT/scripts" "$FIXTURE_DIR/.claude/scripts"
 
   # Minimal docs skeleton
-  touch "$FIXTURE_DIR/PRODUCT.md"
+  write_equivalent_product_baseline "$FIXTURE_DIR"
   touch "$FIXTURE_DIR/DESIGN.md"
   echo "# Fixture Project" > "$FIXTURE_DIR/CLAUDE.md"
   echo ".runs/" > "$FIXTURE_DIR/.gitignore"

@@ -22,6 +22,11 @@ from typing import Iterable
 from _lib.decision_status import decision_is_question, decision_is_superseded
 from _lib.project_definition import ProjectDefinitionError, load_project_definition
 from _lib.open_questions import parse_current_open_questions
+from _lib.proposal import (
+    contract_path as proposal_contract_path,
+    proposal_state,
+    resolve_proposal_path,
+)
 
 
 ROOT_SOURCES = (
@@ -138,7 +143,12 @@ class Source:
     role: str
 
 
-def collect_sources(repo_root: Path, module_dir: Path | None, meta: dict) -> list[Source]:
+def collect_sources(
+    repo_root: Path,
+    module_dir: Path | None,
+    meta: dict,
+    current_proposal: dict | None,
+) -> list[Source]:
     sources: list[Source] = []
     for rel, role in ROOT_SOURCES:
         path = repo_root / rel
@@ -147,6 +157,14 @@ def collect_sources(repo_root: Path, module_dir: Path | None, meta: dict) -> lis
     project_definition = repo_root / ".pm-workflow" / "project.yml"
     if project_definition.is_file():
         sources.append(Source(project_definition, "project_definition"))
+    if current_proposal is not None:
+        sources.append(Source(proposal_contract_path(repo_root), "proposal_contract"))
+        sources.append(
+            Source(
+                resolve_proposal_path(repo_root, current_proposal["path"]),
+                "product_proposal",
+            )
+        )
     if module_dir is not None:
         for name, role in MODULE_SOURCES:
             path = module_dir / name
@@ -398,7 +416,20 @@ def build_pack(args: argparse.Namespace) -> dict:
     else:
         target_kind = target.get("kind")
         target_entrypoints = target.get("entrypoints", [])
-    sources = collect_sources(repo_root, module_dir, meta)
+    current_proposal = None
+    proposal_gate = proposal_state(repo_root)
+    if proposal_gate["state"] == "accepted":
+        current_proposal = proposal_gate["proposal"]
+    elif proposal_gate["state"] == "invalid":
+        raise SystemExit(str(proposal_gate.get("reason") or "当前 Product Proposal 无效。"))
+    elif proposal_gate["state"] == "required":
+        gaps = proposal_gate.get("gaps") or []
+        gap_text = "缺少：" + "、".join(str(item) for item in gaps) + "。" if gaps else ""
+        raise SystemExit(
+            "当前项目还没有完整 Product Proposal 或等价产品基线；"
+            f"{gap_text}请先运行 /pmai-proposal，确认产品方向后再进入 design。"
+        )
+    sources = collect_sources(repo_root, module_dir, meta, current_proposal)
     hash_version = source_hash_version(meta)
     records, input_hashes, source_hash, hash_scope = source_records(
         repo_root, sources, hash_version
@@ -425,6 +456,7 @@ def build_pack(args: argparse.Namespace) -> dict:
         "approved_source_hash": build.get("approved_source_hash") or meta.get("approved_source_hash"),
         "source_hash": source_hash,
         "source_hash_scope": hash_scope,
+        "product_proposal": current_proposal,
         "implementation_commit": build.get("implementation_commit") or git_output(repo_root, "rev-parse", "HEAD"),
         "sources": records,
         "input_hashes": input_hashes,

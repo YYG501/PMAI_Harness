@@ -10,7 +10,7 @@
 含 UI 容器词（弹窗 / 面板 / 视图 / 视角 / 入口 / 字段 / 段 / 区块 / 菜单 / 顶部 /
 行级 / 池行 / Tab / Drawer / 紧凑形态）的命名是违规。
 
-类 2 — 描述风格（按 references/writing-rules.md「描述风格规则」全篇扫描）：
+类 2 — 描述风格（按 skills/_shared/pm-view/writing-rules.md「描述风格规则」全篇扫描）：
 - 视觉细节越界（颜色 hex / Badge 颜色与样式 / 视觉弱化 / destructive / warning ...）
 - URL 路由 / 技术细节（?view= / <licenseId> / ▾▸↔）
 - 排版分隔符（「」中文方角引号 / 中点 ·）
