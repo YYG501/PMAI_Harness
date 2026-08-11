@@ -7,6 +7,14 @@ set -euo pipefail
 # 脚本所在目录（用于找 sibling python3 helpers，全局安装模式）
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
+deny() {
+  local reason="$1"
+  echo "$reason" >&2
+  reason=$(printf '%s' "$reason" | python3 -c "import sys,json; print(json.dumps(sys.stdin.read())[1:-1])")
+  printf '{"decision": "deny", "reason": "%s"}\n' "$reason"
+  exit 2
+}
+
 # --- Read JSON from stdin (one-shot) ---
 INPUT=$(cat)
 
@@ -14,36 +22,51 @@ INPUT=$(cat)
 TMPFILE=$(mktemp)
 trap 'rm -f "$TMPFILE"' EXIT
 
-echo "$INPUT" | python3 -c "
+if ! printf '%s' "$INPUT" | python3 -c "
 import sys, json
 
 try:
     data = json.load(sys.stdin)
+    if not isinstance(data, dict):
+        raise ValueError('hook payload must be an object')
     ti = data.get('tool_input', data)
-    fp = ti.get('file_path', '') or ti.get('path', '')
+    if not isinstance(ti, dict):
+        raise ValueError('tool_input must be an object')
+    file_path = ti.get('file_path')
+    path_alias = ti.get('path')
+    for label, value in (('file_path', file_path), ('path', path_alias)):
+        if value is not None and not isinstance(value, str):
+            raise ValueError(f'{label} must be a string')
+    if file_path and path_alias and file_path != path_alias:
+        raise ValueError('file_path and path disagree')
+    fp = file_path or path_alias or ''
+    if not fp or any(char in fp for char in ('\\x00', '\\r', '\\n')):
+        raise ValueError('write path is missing or unsafe')
     old = ti.get('old_string', '')
     new = ti.get('new_string', '')
     content = ti.get('content', '')  # Write tool
 except Exception:
-    fp, old, new, content = '', '', '', ''
+    raise SystemExit(2)
 
 with open(sys.argv[1], 'w') as f:
     json.dump({'file_path': fp, 'old_string': old, 'new_string': new, 'content': content}, f)
-" "$TMPFILE" 2>/dev/null || echo '{"file_path":"","old_string":"","new_string":"","content":""}' > "$TMPFILE"
+" "$TMPFILE" 2>/dev/null; then
+  deny "写入护栏无法解析宿主载荷或取得唯一文件路径；为保护项目，已拒绝本次写入。"
+fi
 
-FILE_PATH=$(python3 -c "import json,sys; print(json.load(open(sys.argv[1]))['file_path'])" "$TMPFILE" 2>/dev/null || echo "")
+if ! FILE_PATH=$(python3 -c "import json,sys; print(json.load(open(sys.argv[1]))['file_path'])" "$TMPFILE" 2>/dev/null); then
+  deny "写入护栏无法读取已校验的文件路径；为保护项目，已拒绝本次写入。"
+fi
 
-# No file path → allow
+# No file path after successful parsing is an invalid hook contract.
 if [ -z "$FILE_PATH" ]; then
-  echo '{}'
-  exit 0
+  deny "写入护栏没有取得文件路径；为保护项目，已拒绝本次写入。"
 fi
 
 # --- Determine main repo root and current worktree root ---
 CURRENT_WORKTREE_ROOT=$(git rev-parse --show-toplevel 2>/dev/null || echo "")
 if [ -z "$CURRENT_WORKTREE_ROOT" ]; then
-  echo '{}'
-  exit 0
+  deny "写入护栏无法定位当前 Git 工作区；为保护项目，已拒绝本次写入。"
 fi
 
 # MAIN_REPO_ROOT: 主仓根（通过 git-common-dir 推导）
@@ -144,8 +167,7 @@ fi
 # --- Get current branch ---
 CURRENT_BRANCH=$(git branch --show-current 2>/dev/null || true)
 if [ -z "$CURRENT_BRANCH" ]; then
-  echo '{}'
-  exit 0
+  deny "写入护栏无法确认当前分支（可能处于 detached HEAD）；为保护项目，已拒绝本次写入。"
 fi
 
 # BRANCH 用于 gate 检查：取目标文件所在 worktree 的分支
@@ -155,15 +177,6 @@ if [ -n "$EFFECTIVE_BRANCH" ]; then
 else
   BRANCH="$CURRENT_BRANCH"
 fi
-
-# --- Helper: deny with reason ---
-deny() {
-  local reason="$1"
-  echo "$reason" >&2
-  reason=$(echo "$reason" | python3 -c "import sys,json; print(json.dumps(sys.stdin.read().strip())[1:-1])")
-  printf '{"decision": "deny", "reason": "%s"}\n' "$reason"
-  exit 2
-}
 
 # A full build may run in the current main environment only after /pmai-build
 # has shown the PM confirmation card and written a versioned contract with mode=main.

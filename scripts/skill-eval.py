@@ -16,6 +16,7 @@ import re
 import shlex
 import subprocess
 import sys
+import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -26,12 +27,24 @@ VALID_LAYERS = {"static", "session"}
 VALID_ASSERTIONS = {"path_exists", "file_contains", "file_not_contains"}
 CASE_ID_RE = re.compile(r"^[a-z0-9][a-z0-9-]*$")
 REQUIRED_RESULT_FIELDS = {
+    "case_id",
+    "evaluation_id",
+    "provenance",
     "transcript",
     "tool_calls",
     "file_diff",
     "lifecycle",
     "stopping_point",
     "elapsed_ms",
+    "observations",
+}
+REQUIRED_PROVENANCE_FIELDS = {"host", "model", "run_id"}
+REQUIRED_JUDGE_EVIDENCE = {
+    "transcript",
+    "tool_calls",
+    "file_diff",
+    "lifecycle",
+    "stopping_point",
     "observations",
 }
 
@@ -249,12 +262,29 @@ def run_external(command: str, payload: dict[str, Any], timeout: int, label: str
     return value
 
 
-def validate_runner_result(case: dict[str, Any], result: dict[str, Any]) -> list[str]:
+def validate_provenance(value: Any, label: str) -> list[str]:
+    if not isinstance(value, dict):
+        return [f"{label} 必须是对象"]
+    problems = []
+    for field in sorted(REQUIRED_PROVENANCE_FIELDS):
+        if not isinstance(value.get(field), str) or not value[field].strip():
+            problems.append(f"{label}.{field} 必须是非空字符串")
+    return problems
+
+
+def validate_runner_result(
+    case: dict[str, Any], result: dict[str, Any], evaluation_id: str
+) -> list[str]:
     problems: list[str] = []
     missing = sorted(REQUIRED_RESULT_FIELDS - set(result))
     if missing:
         problems.append(f"runner 结果缺字段: {missing}")
         return problems
+    if result["case_id"] != case["id"]:
+        problems.append("runner case_id 与当前案例不一致")
+    if result["evaluation_id"] != evaluation_id:
+        problems.append("runner evaluation_id 与当前执行不一致")
+    problems.extend(validate_provenance(result["provenance"], "runner provenance"))
     if not isinstance(result["transcript"], (str, list)) or not result["transcript"]:
         problems.append("transcript 必须非空")
     if not isinstance(result["tool_calls"], list):
@@ -290,6 +320,41 @@ def validate_runner_result(case: dict[str, Any], result: dict[str, Any]) -> list
         problems.append(
             f"stopping_point 不匹配: expected={stopping_point}, actual={result['stopping_point']}"
         )
+    return problems
+
+
+def validate_judge_result(
+    case: dict[str, Any],
+    result: dict[str, Any],
+    judge: dict[str, Any],
+    evaluation_id: str,
+) -> list[str]:
+    problems: list[str] = []
+    if judge.get("case_id") != case["id"]:
+        problems.append("judge case_id 与当前案例不一致")
+    if judge.get("evaluation_id") != evaluation_id:
+        problems.append("judge evaluation_id 与当前执行不一致")
+    if not isinstance(judge.get("pass"), bool):
+        problems.append("judge pass 必须是布尔值")
+    if not isinstance(judge.get("reason"), str) or not judge["reason"].strip():
+        problems.append("judge reason 必须是非空字符串")
+    problems.extend(validate_provenance(judge.get("provenance"), "judge provenance"))
+
+    reviewed = judge.get("reviewed_evidence")
+    if not isinstance(reviewed, list) or any(not isinstance(item, str) for item in reviewed):
+        problems.append("judge reviewed_evidence 必须是字符串数组")
+    else:
+        missing = sorted(REQUIRED_JUDGE_EVIDENCE - set(reviewed))
+        if missing:
+            problems.append(f"judge 未声明检查完整 runner 证据: {missing}")
+
+    runner_provenance = result.get("provenance")
+    judge_provenance = judge.get("provenance")
+    if isinstance(runner_provenance, dict) and isinstance(judge_provenance, dict):
+        if runner_provenance.get("run_id") == judge_provenance.get("run_id"):
+            problems.append("judge 必须使用独立于 runner 的 run_id")
+    if judge.get("pass") is False:
+        problems.append(f"judge 未通过: {judge.get('reason', 'no reason')}")
     return problems
 
 
@@ -383,11 +448,16 @@ def main() -> int:
                 print(f"SKIP {case_id}: session runner 未配置")
             continue
 
-        runner_payload = {"schema_version": SCHEMA_VERSION, "case": case}
-        runner_payload["case"].pop("_path", None)
+        evaluation_id = uuid.uuid4().hex
+        case_payload = {key: value for key, value in case.items() if key != "_path"}
+        runner_payload = {
+            "schema_version": SCHEMA_VERSION,
+            "evaluation_id": evaluation_id,
+            "case": case_payload,
+        }
         try:
             result = run_external(args.runner_command, runner_payload, args.timeout, f"runner {case_id}")
-            problems = validate_runner_result(case, result)
+            problems = validate_runner_result(case, result, evaluation_id)
         except EvalError as exc:
             problems = [str(exc)]
             result = {}
@@ -398,12 +468,18 @@ def main() -> int:
                 try:
                     judge_result = run_external(
                         args.judge_command,
-                        {"schema_version": SCHEMA_VERSION, "case": case, "result": result},
+                        {
+                            "schema_version": SCHEMA_VERSION,
+                            "evaluation_id": evaluation_id,
+                            "case": case_payload,
+                            "result": result,
+                        },
                         args.timeout,
                         f"judge {case_id}",
                     )
-                    if judge_result.get("pass") is not True:
-                        problems.append(f"judge 未通过: {judge_result.get('reason', 'no reason')}")
+                    problems.extend(
+                        validate_judge_result(case, result, judge_result, evaluation_id)
+                    )
                 except EvalError as exc:
                     problems.append(str(exc))
             elif args.require_judge:
@@ -411,6 +487,10 @@ def main() -> int:
             else:
                 judge_skipped += 1
                 print(f"SKIP judge {case_id}: LLM judge 未配置")
+                if result:
+                    persist_result(results_dir, case, result, None)
+                skipped += 1
+                continue
 
         if result:
             persist_result(results_dir, case, result, judge_result)
@@ -419,7 +499,7 @@ def main() -> int:
             print(f"FAIL {case_id}: {'; '.join(problems)}")
         else:
             passed += 1
-            print(f"PASS {case_id}: runner result + deterministic contract")
+            print(f"PASS {case_id}: runner result + independent judge")
 
     print(
         f"SUMMARY passed={passed} failed={failed} skipped={skipped} judge_skipped={judge_skipped}"

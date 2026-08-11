@@ -458,7 +458,7 @@ payload = json.load(open(sys.argv[1], encoding="utf-8"))
 assert payload["tool_input"]["file_path"] == str(
     (Path(sys.argv[2]) / "src/app.ts").resolve(strict=False)
 )
-assert payload["tool_input"]["path"].endswith("/src/app.ts")
+assert "path" not in payload["tool_input"]
 PY
   if [ "$?" -ne 0 ]; then
     _fail "canonical alias mapping changed the accepted write payload"

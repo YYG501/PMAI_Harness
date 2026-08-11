@@ -6,7 +6,7 @@
 
 - 日期：2026-08-11
 - 开发分支：`main`
-- 当前目标：正在统一收口 Product Proposal 主链、spec-writing 的“通用内容模块 + Profile + Preset”、Record 边界和飞书评审跨会话闭环；实现与定向回归已完成，正在建立新的全量基线，尚未提交、分发或升级安装态。
+- 当前目标：已完成 Harness P1 失败关闭修复，并建立 `945 passed / 0 failed` 的新完整回归基线；尚未提交、分发或升级安装态。
 - gstack 参考基线：`v1.58.5.0`，commit `11de390`；只参考本地 `gstack-clean` checkout，没有升级用户目录中的安装副本。
 
 ## 当前活跃模型
@@ -34,7 +34,7 @@
 ## 已实现
 
 - Harness 第一阶段五项 P1 已下沉为运行时硬门：host `_shared` 只按明确所有权替换；brownfield 初始化写入前列全同名冲突；attached build worktree 的所属分支副本压住 main 旧状态；build 必须消费 current `ready_to_build + project.yml` 且拒绝路径、类型、入口和 revision 漂移；cancel 要求 main 干净、只提交状态删除，并在提交失败时恢复原状态。
-- Harness 验证入口已失败关闭：每个 suite 有独立进程组超时，缺失 / 重复摘要、零用例、摘要与退出码矛盾都会计为失败；全量入口实际运行静态 skill eval，并明确显示 session runner / judge 的 pass、fail、skip。`PMAI_REQUIRE_SESSION_EVALS=1` 可将外部评测能力缺失升级为硬门。
+- Harness 验证入口已失败关闭：每个 suite 有独立进程组超时，缺失 / 重复摘要、零用例、摘要与退出码矛盾都会计为失败；写入 hook 无法解析输入、定位唯一路径、确认 Git 工作区或分支时拒绝写入。普通回归实际运行静态 skill eval 并明确显示 session skip；稳定版本发布门要求真实 runner 与独立 judge，以 evaluation ID、来源和完整证据复核绑定每次 session，缺能力、skip、自报通过或 judge 复用 runner run ID 都阻断发布。
 - 初始化与 CI 不再借用开发机隐含环境：`init-project.sh` 在写目标目录前预检 Git author / committer 身份，初始 commit 失败保留 Git 原始错误和恢复命令；GitHub Actions 显式配置测试身份，负向内容断言只依赖系统自带 `grep`，runner 缺少 `rg` 不会假绿。
 - 生命周期恢复已补齐：`ready_to_build` 正向进入 `building`；landing 状态、计时、暂存或主线 commit 失败时 abort 半合并态并保留隔离环境；legacy close commit 失败恢复 `.work-meta.json`。cancel / land 先持久化 prepared 清理意图，主线状态提交后只激活队列，不在落地进程内直接删除 worktree / branch；中断后 cleanup 以 Git 真相自动恢复。每项记录固定自己的 `refs/heads/main` 或 `refs/heads/master`，landed 激活和 active 删除都用入队时的 branch OID 重新验证该主线，分支名改向、主线 reset 或 main/master 并存不能误删；最终分支删除使用 old-OID `git update-ref` CAS。待清理队列加进程锁并原子更新，损坏时失败关闭，事务 stage 不占用 `.pending-*` 中断标记命名空间；main/master preamble 均可消费，status 与会话 startup 使用只读 preamble。cleanup 只让 Git 删除已确认没有 tracked、untracked、ignored 内容且无人占用的注册 worktree，Git 拒绝时保留现场，不再用文件系统递归强删。
 - 新增 `context-pack.py`：design、build、恢复、最终检查和文档更新共用确定性上下文，并区分 active / superseded / 冲突决定、未决问题和输入 hash；项目定义存在时只从其中的 entrypoints 取实现上下文。
@@ -87,8 +87,8 @@
 
 ## 当前验证
 
-- 本轮关键定向基线：Lark review `73/73`、Proposal contract `26/26`、Proposal Skill `7/7`、Spec/Profile/Preset `9/9`、status-view `23/23`、context pack `13/13`、init-project `7/7`、consumer-doctor `23/23`、doctor-skills `44/44`；direction 删除、record 收窄、ready currentness 与私有仓初始化回归均已通过。
-- 当前唯一完整 `tests/run-all.sh` 基线为 `938 passed / 0 failed`；其中 deterministic skill eval 为 `6 passed / 0 failed / 17 session skipped`，skip 原因是未配置 session runner，不影响静态与确定性合同通过结论。
+- 本轮关键定向基线：check-branch `21/21`、skill-eval 合同 `6/6`、Kimi host `23/23`、doctor-skills `44/44`；发布门在 runner / judge 均缺失时返回 2 并明确列出两项缺失能力，schema `23` 个案例与 static eval `6/6` 通过。
+- 当前唯一完整 `tests/run-all.sh` 基线为 `945 passed / 0 failed`。普通开发回归中的 skill eval 为 `6 passed / 0 failed / 17 session skipped`，只形成静态与确定性合同基线，不构成稳定版本证据；`v*` tag 或手动稳定发布仍必须通过配置真实 runner 与独立 judge 的 `tests/run-release-gate.sh`，任何 session skip 都会阻断。
 - 开发态入口同步 helper 已在真实消费仓 `ExampleAgentProject` 只读 dogfood：返回 `stale / legacy_migration`，渲染计划可以确定识别旧 PMAI Startup，并保留“非小改动前读取产品现状”等项目补充及后续项目规则。消费仓在本轮分析期间又出现新的活跃模块状态，因此不再把其整体 error 数作为本次入口同步回归基线；运行前后 Git 状态一致，未修改消费仓或用户级安装。
 
 ## 下一步

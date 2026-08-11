@@ -99,3 +99,4 @@
 - **I-TEST1**：全量测试中的每个 suite 必须有独立超时；超时后终止该 suite 的进程组并记为失败。
 - **I-TEST2**：suite 缺失唯一 `Passed / Failed` 摘要、摘要与退出码矛盾或报告零用例时必须失败关闭，不得静默按 0 计数。
 - **I-TEST3**：全量入口必须实际运行静态 skill eval，并明确报告 session runner / judge 的通过、失败与跳过数量；要求 session gate 时，缺少外部 runner / judge 必须失败。
+- **I-TEST4**：稳定版本发布门必须设置真实 session runner 与独立 judge，全部 session case 只有绑定当前 evaluation ID、带 runner 来源且经不同 run ID 的 judge 完整复核后才能计为通过；缺能力、skip、自报结果或复用同一 run ID 都必须阻断发布。

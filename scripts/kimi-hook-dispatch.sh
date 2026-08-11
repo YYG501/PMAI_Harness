@@ -539,6 +539,7 @@ elif file_path is None:
         raise ValueError("write input requires file_path or path")
     canonical_file_path = canonical_path
 tool_input["file_path"] = str(canonical_file_path)
+tool_input.pop("path", None)
 json.dump(payload, sys.stdout, ensure_ascii=False)
 PY
     then

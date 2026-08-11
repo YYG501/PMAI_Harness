@@ -1,0 +1,29 @@
+name: harness-release-gate
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+jobs:
+  verify-harness:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      PMAI_SKILL_EVAL_RUNNER: ${{ vars.PMAI_SKILL_EVAL_RUNNER }}
+      PMAI_SKILL_EVAL_JUDGE: ${{ vars.PMAI_SKILL_EVAL_JUDGE }}
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: Configure test Git identity
+        run: |
+          git config --global user.name "PMAI Release Gate"
+          git config --global user.email "pmai-release@example.invalid"
+
+      - name: Run deterministic and real-session release gate
+        run: bash tests/run-release-gate.sh

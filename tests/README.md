@@ -8,6 +8,11 @@
 # 跑所有测试
 bash tests/run-all.sh
 
+# 稳定版本发布门：除全量测试外，必须配置真实 runner 和独立 judge
+PMAI_SKILL_EVAL_RUNNER='<runner command>' \
+PMAI_SKILL_EVAL_JUDGE='<judge command>' \
+bash tests/run-release-gate.sh
+
 # 跑单个脚本的测试
 bash tests/test-close-work.sh
 bash tests/test-check-branch.sh
@@ -37,6 +42,8 @@ tests/
 - 断言失败立即 `exit 1` 并打印失败原因
 - 成功测试打印 `✅ <test-name>`
 - 失败测试打印 `❌ <test-name>: <reason>`
+- 普通 PR 可以明确显示 session eval skip；`v*` tag 和手动发布检查必须通过
+  `run-release-gate.sh`，缺 runner、缺 judge 或任一 session skip 都不能形成稳定版本证据
 
 ## 不变式覆盖矩阵
 

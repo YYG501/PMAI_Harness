@@ -40,6 +40,69 @@ capture_check() {
   RC=$?
 }
 
+capture_raw() {
+  local payload="$1"
+  OUT=$(printf '%s' "$payload" | bash "$CHECK_BRANCH" 2>&1)
+  RC=$?
+}
+
+# ---------------------------------------------------------------
+# I-CB4: 护栏无法判断时失败关闭
+# ---------------------------------------------------------------
+
+test_malformed_payload_denied() {
+  start_test "I-CB4 malformed hook payload is denied"
+  capture_raw '{bad'
+  if [ "$RC" = "2" ] && echo "$OUT" | grep -q '"deny"'; then
+    pass_test
+  else
+    _fail "malformed hook payload should fail closed (rc=$RC, out=$OUT)"
+  fi
+}
+
+test_missing_or_ambiguous_path_denied() {
+  start_test "I-CB4 missing or conflicting write path is denied"
+  capture_raw '{"tool_name":"Write","tool_input":{}}'
+  local missing_rc="$RC" missing_out="$OUT"
+  capture_raw '{"tool_name":"Write","tool_input":{"file_path":"src/a.ts","path":"src/b.ts"}}'
+  if [ "$missing_rc" = "2" ] && echo "$missing_out" | grep -q '"deny"' \
+     && [ "$RC" = "2" ] && echo "$OUT" | grep -q '"deny"'; then
+    pass_test
+  else
+    _fail "missing/conflicting path should fail closed (missing rc=$missing_rc out=$missing_out; conflict rc=$RC out=$OUT)"
+  fi
+}
+
+test_non_git_context_denied() {
+  start_test "I-CB4 non-Git execution context is denied"
+  local scratch old_pwd
+  scratch=$(mktemp -d "${TMPDIR:-/tmp}/pmai-check-branch-nongit.XXXXXX")
+  old_pwd="$PWD"
+  cd "$scratch" || return
+  capture_check "Write" "src/foo.ts" "" "" "hello"
+  cd "$old_pwd" || return
+  rm -rf "$scratch"
+  if [ "$RC" = "2" ] && echo "$OUT" | grep -q '"deny"'; then
+    pass_test
+  else
+    _fail "non-Git context should fail closed (rc=$RC, out=$OUT)"
+  fi
+}
+
+test_detached_head_denied() {
+  start_test "I-CB4 detached HEAD is denied"
+  fixture_setup
+  cd "$FIXTURE_DIR" || return
+  git checkout --detach -q
+  capture_check "Write" "src/foo.ts" "" "" "hello"
+  if [ "$RC" = "2" ] && echo "$OUT" | grep -q '"deny"'; then
+    pass_test
+  else
+    _fail "detached HEAD should fail closed (rc=$RC, out=$OUT)"
+  fi
+  fixture_teardown
+}
+
 # ---------------------------------------------------------------
 # I-CB3: main 白名单
 # ---------------------------------------------------------------
@@ -326,6 +389,10 @@ test_main_still_rejects_prototype_code() {
   fixture_teardown
 }
 
+test_malformed_payload_denied
+test_missing_or_ambiguous_path_denied
+test_non_git_context_denied
+test_detached_head_denied
 test_main_rejects_src_write
 test_main_allows_confirmed_current_environment_target_only
 test_main_allows_claude_settings

@@ -18,6 +18,8 @@ PM-AI-Workflow 生成器仓的演进记录。本文件**只记影响下游业务
 
 ## 未发布
 
+- `fix(harness)`: **写入护栏与稳定版本证据改为全面失败关闭。** 分支写入 hook 遇到坏 JSON、缺失或冲突路径、非 Git 环境和 detached HEAD 时直接拒绝，不再因无法判断而放行；Kimi 映射层先核验两个路径别名指向同一目标，再只向通用护栏传递唯一的规范化绝对路径。真实 session eval 为每次执行绑定唯一 evaluation ID，并要求 runner 提供来源、独立 judge 以不同 run ID 复核完整证据；runner 自报结果、缺 judge、证据不全或身份不匹配都不能计为通过。新增稳定版本发布门，`v*` tag 和手动发布在缺少真实 runner / judge、存在 session skip 或完整回归失败时阻断发布。
+
 - `feat(proposal)`: **产品主链升级为 `init → proposal → design → spec-writing → build`。** 新项目初始化后默认进入 `/pmai-proposal`，用一份可独立评审的完整 Product Proposal 澄清目标用户、核心问题、产品回答、价值、边界和 MVP 证明目标；成熟项目只有在已有资料构成完整等价产品基线时才可跳过。一旦进入就必须完整产出，不提供 brief / 摘要替代。当前版本写入 `docs/proposals/`，同步精简基线到 `PRODUCT.md`，并由 `.pm-workflow/proposal.json` 绑定路径、正文 hash 与 supersede 关系；context pack、status 和 doctor 共同校验。design、spec-writing、build、doc-writing 和 record 只读消费；产品方向变化回 Proposal 生成完整新版本，旧 design/build 依据随之失效。active build 回上游时统一冻结固定 `baseline..candidate`：worktree 候选保留在旧环境待逐项重做或舍弃，main 候选只清工作状态并保留已经进入主线的实现；跨会话由只读候选列表恢复，新 design/build 不按时间猜测或自动继承，逐项 reconcile 后才显式退役，且只有 worktree 候选进入现有安全清理队列。
 
 - `refactor(spec-writing+skills)`: **规格内容改为通用模块、可叠加 Profile 与独立 Preset，并删除 direction、收窄 record。** `/pmai-spec-writing` 先按通用内容模块组织必须讲清的内容，再按领域加载企业平台和 / 或 AI Product Profile；企业 AI 平台直接叠加两份，不维护重复专项 Profile。完整 PRD 是唯一文档形态 Preset，4 列表只作复杂管理后台的可选动作索引。通用 PM 文风、禁用表达、UI 指代、抽象动词、术语和版本语言统一由 `_shared/pm-view/writing-rules.md` 维护，spec-writing 本地规则只保留规格正文职责、来源对账和规格 4 问。`/pmai-direction` 已删除：产品方向纠正统一回 Proposal，模块变化回 design；`/pmai-record` 仅在没有 active work 且 Proposal 状态为 `accepted / equivalent_baseline` 时补录已确认的待办、术语、跨模块规则、项目理路或有 main 证据的现状纠错，不再修改 Proposal、模块三件套、构建状态或实现。

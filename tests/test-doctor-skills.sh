@@ -2218,6 +2218,17 @@ test_upgrade_can_pin_to_legacy_policy_without_function_leak() {
   mv "$tmp/skill-links.legacy" "$source_repo/scripts/_lib/skill-links.sh"
   sed '/pmai_skill_is_host_exposed "$skill_name" || continue/d' \
     "$REPO_ROOT/scripts/install-opencode-commands.sh" > "$source_repo/scripts/install-opencode-commands.sh"
+  mkdir -p "$source_repo/skills/direction"
+  cat > "$source_repo/skills/direction/SKILL.md" <<'EOF'
+---
+name: pmai-direction
+description: Legacy direction workflow fixture.
+---
+
+# Legacy Direction
+
+This fixture exists only in the simulated legacy release.
+EOF
   cat > "$source_repo/bin/pmai-doctor" <<'EOF'
 #!/usr/bin/env bash
 set -uo pipefail
@@ -2235,6 +2246,7 @@ EOF
   chmod +x "$source_repo/bin/pmai-upgrade" "$source_repo/bin/pmai-doctor" \
     "$source_repo/scripts/install-opencode-commands.sh"
   git -C "$source_repo" add bin/pmai-upgrade bin/pmai-doctor \
+    skills/direction/SKILL.md \
     scripts/_lib/skill-links.sh scripts/_lib/global-install-lock.sh \
     scripts/_lib/global_install_lock.py scripts/_lib/kimi-config-transaction.sh \
     scripts/install-opencode-commands.sh
