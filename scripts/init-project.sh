@@ -99,7 +99,6 @@ MISSING=""
 [ -f "$FRAMEWORK_DIR/templates/codex-hooks.json.tmpl" ] || MISSING="$MISSING templates/codex-hooks.json.tmpl"
 [ -d "$FRAMEWORK_DIR/skills/init-project" ] || MISSING="$MISSING skills/init-project/"
 [ -f "$FRAMEWORK_DIR/scripts/install-project-hooks.sh" ] || MISSING="$MISSING scripts/install-project-hooks.sh"
-[ -f "$FRAMEWORK_DIR/scripts/install-opencode-commands.sh" ] || MISSING="$MISSING scripts/install-opencode-commands.sh"
 if [ -n "$MISSING" ]; then
   echo "❌ 框架源缺标志文件：$MISSING" >&2
   echo "   FRAMEWORK_DIR=$FRAMEWORK_DIR" >&2
@@ -256,7 +255,7 @@ echo "📋 模板已复制并替换占位符"
 # --- e/f/f2/templates/hooks. I-mini 模式：消费仓 0 framework 源资产 ---
 # 旧版方案 A symlink 5 块到 framework（绝对路径硬编码，跨机器 dangling）。
 # I-mini：消费仓内**不放任何** framework 源资产（scripts/skills/agents/hooks）。
-# 但 host 配置文件需要留在项目里：.claude/settings.json / .codex/hooks.json / .opencode/commands / opencode.json。
+# 但 Claude Code / Codex host 配置文件需要留在项目里：.claude/settings.json / .codex/hooks.json。
 # skill 内部所有调用走 $PMAI_HOME/scripts/... 全局绝对路径（skill-preamble.sh 解析 PMAI_HOME）。
 # pre-commit hook 内部自己 fallback PMAI_HOME=$HOME/.pmai。
 # 跨机器 clone 消费仓后只需在新机器跑 pmai install → 立即可用，0 setup。
@@ -299,8 +298,6 @@ cd "$TARGET_DIR"
 git init -b main >/dev/null 2>&1
 echo "🔀 Git 仓库已初始化（main 分支）"
 
-PROJECT_PATH=$(pwd)
-
 # --- k1. Host hooks（I-mini：消费仓不放 hooks/ 源目录，配置指向 $HOME/.pmai/...）---
 # 旧版方案 A 把 hooks/ symlink 到 framework，settings.json 用 $CLAUDE_PROJECT_DIR/hooks/...
 # I-mini：消费仓 0 hook 源目录；settings.json / .codex/hooks.json 指向 $HOME/.pmai/hooks/...
@@ -308,13 +305,6 @@ if PMAI_HOME="$FRAMEWORK_DIR" bash "$FRAMEWORK_DIR/scripts/install-project-hooks
   echo "🪝 Claude Code / Codex hooks 已安装"
 else
   echo "⚠️  项目 hooks 安装失败（项目仍可用，PM 后续可手动跑 $HOME/.pmai/scripts/install-project-hooks.sh）" >&2
-fi
-
-# OpenCode 主控入口：只安装 command 路由和 opencode.json，不复制 framework 源资产。
-if PMAI_HOME="$FRAMEWORK_DIR" bash "$FRAMEWORK_DIR/scripts/install-opencode-commands.sh" --project "$PROJECT_PATH" 2>&1 | sed 's/^/   /'; then
-  echo "🧭 OpenCode commands 已安装"
-else
-  echo "⚠️  OpenCode commands 安装失败（项目仍可用，PM 后续可手动跑 $HOME/.pmai/scripts/install-opencode-commands.sh --project \"$PROJECT_PATH\"）" >&2
 fi
 
 # --- k2. git-hooks 模板：消费仓不放，install-hooks.sh 直接从 framework 读 ---

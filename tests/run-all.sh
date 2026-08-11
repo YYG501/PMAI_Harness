@@ -14,7 +14,7 @@ SUITES=(
   test-atomic-file.sh
   test-lark-adapter.sh
   test-lark-cli-lint.sh
-  test-lark-sync-skill.sh
+  test-lark-entry-routing.sh
   test-lark-review.sh
   test-publish-to-lark-e2e.sh
   test-measure-tthw.sh
@@ -34,6 +34,7 @@ SUITES=(
   test-brownfield-detect.sh
   test-no-duplicate-questioning.sh
   test-shared-files-exist.sh
+  test-project-design-system-contract.sh
   test-shared-currentness.sh
   test-term-detector.sh
   test-v2-currentness.sh
@@ -55,6 +56,7 @@ SUITES=(
   test-migrate-reqs-to-modules-compat.sh
   test-banner-label.sh
   test-narrative-mode.sh
+  test-repo-kind.sh
   test-checks-diff.sh
   test-context-pack.sh
   test-personal-memory.sh

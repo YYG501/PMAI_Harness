@@ -22,6 +22,7 @@ python3 "$PMAI_HOME/scripts/status-view.py" --banner-only --skill BUILD || true
 - `skills/_shared/context-reconstruction.md`
 - `skills/_shared/decision-policy.md`
 - `skills/_shared/gstack-integration.md`
+- `skills/_shared/project-design-system.md`
 - `skills/_shared/PM-VIEW-RULES.md` 及其引用的 PM 视图规则
 - `skills/_shared/pm-view/banner-rules.md`
 - `skills/build/references/finalization.md`
@@ -274,15 +275,18 @@ git -C "$BUILD_DIR" commit -m "build(<模块>): start adaptive build"
 
 ## 4. 构建指定对象
 
-每次调用构建工具——包括首次实现、每轮反馈修改和中断恢复——都先从当前 `.work-meta.json:build` 重新读取 `target + delivery_policy`，不能依赖首轮 prompt 记忆。把下面内容一次性交给 PM 已确认的构建工具，且**实现深度合同必须放在规格全文之前**：
+每次调用构建工具——包括首次实现、每轮反馈修改和中断恢复——都先从当前 `.work-meta.json:build` 重新读取 `target + delivery_policy`，并在 UI 相关时重新读取 `DESIGN.md`、按 `project-design-system.md` 解析与执行当前项目设计系统声明，不能依赖首轮 prompt 记忆。把下面内容一次性交给 PM 已确认的构建工具，且**实现深度合同必须放在规格全文之前**：
 
 - 当前 `target.kind`、`delivery_policy` 全文及其不可违反的实现深度；
 - 建造锚点全文；
 - context pack 中相关 active 决定和 accepted deltas；
 - build target、目标路径和入口；
 - 完整任务、相关页面、边界状态和验收标准；
-- UI 相关时的 `DESIGN.md` 与已有组件/页面；
+- UI 相关时的 `DESIGN.md` 全文与已有组件/页面；
+- `DESIGN.md` 声明的设计系统名称、使用范围、项目级 Skill 名称和 Skill 仓内路径；明确要求“当前宿主能原生调用时调用；不能原生调用时，完整读取该 `SKILL.md` 及其 required references 后执行”；
 - 只改目标对象，不改正式产品文档；禁止自行 commit。
+
+已声明的项目级 Skill 缺失、不可读、未被 Git 跟踪，或构建工具无法访问其仓内路径时，在实现前停止；不得删除这段上下文后继续构建，也不得声称已经接入设计系统。未声明项目级 Skill 时，仍按 `DESIGN.md`、共享组件 inventory、已有组件和现有页面实现。
 
 ### prototype 适配器
 
@@ -326,7 +330,7 @@ git -C "$BUILD_DIR" commit -m "build(<模块>): record iteration"
 
 先给 PM 看结果，不把定稿验收挡在“能刷新看到页面/功能”之前。PM 每轮反馈后进入快速迭代车道：
 
-1. 先运行 `status-view.py --execution-context` 重新校验 currentness，再读取当前 build 合同的 `target + delivery_policy`；校验失败时不得修改、提交或写 accepted delta；
+1. 先运行 `status-view.py --execution-context` 重新校验 currentness，再读取当前 build 合同的 `target + delivery_policy`；UI 相关时同时重新读取 `DESIGN.md` 并执行当前声明的项目级设计系统 Skill；校验或 Skill 访问失败时不得修改、提交或写 accepted delta；
 2. 先按决定层级分流 PM 新反馈，不能只因反馈发生在 build 中就记成 delta：
    - 改变产品定位、目标用户、核心问题与价值、产品职责边界、MVP 证明目标或关键成立前提 → 停止 build，转 `/pmai-proposal`；不得写 accepted delta；
    - 改变模块对象、关系、动作、状态、权限、真相源、业务规则、信息结构、任务路径、关键交互，或要求原型接入真实数据库、鉴权、外部写入、生产基础设施 → 停止 build，转 `/pmai-design`；不得写 accepted delta；
@@ -420,7 +424,7 @@ python3 "$PMAI_HOME/scripts/build-contract.py" record-evidence \
 
 优先使用已可用的主动 browser 适配器生成证据；工具选择不展示给 PM。
 
-若 `DESIGN.md` 的视觉基线段未建，先以现有产品页面和组件为事实基线，并在可用时自动调用 gstack `/design-consultation` 补充检查依据；仍不足时视觉检查只能记为 `limited`，不能输出“视觉一致性通过”。这不是让 PM 选择工具或补工程配置的菜单。
+最终视觉验收前重新读取 `DESIGN.md` 并执行当前声明的项目级设计系统 Skill；其专属检查作为附加证据，不能替代 build 合同要求的浏览器验收。若 `DESIGN.md` 的视觉基线段未建，先以现有产品页面和组件为事实基线，并在可用时自动调用 gstack `/design-consultation` 补充检查依据；仍不足时视觉检查只能记为 `limited`，不能输出“视觉一致性通过”。这不是让 PM 选择工具或补工程配置的菜单。
 
 ### product 完整检查
 

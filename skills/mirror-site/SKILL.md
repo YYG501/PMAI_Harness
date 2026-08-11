@@ -17,6 +17,8 @@ source "${PMAI_HOME:-$HOME/.pmai}/scripts/skill-preamble.sh"
 
 如果输出 `PMAI_PROJECT_INITIALIZED: 0`，停止本 skill，只引导 PM 先发 `/pmai-init-project`。初始化或已有代码接入完成前，不要读取/改写业务代码、`mockups/` 或 mirror 产物。
 
+执行前完整读取 `skills/_shared/project-design-system.md`。参考站只提供对照证据；当前项目的 UI 仍必须先读 `DESIGN.md`，并执行其中已声明的项目级设计系统 Skill。
+
 先校验 `.pm-workflow/project.yml`；缺失时返回 `/pmai-design`，不在本 skill 临时决定代码根、框架或启动方式。仅 `web.enabled=true` 时继续，代码根、入口和启动合同全部从该文件读取。
 
 > **PM 视图**：入口 banner（`status-view.py --banner-only --skill MIRROR-SITE`，无 active work 时用字面值）；Plan 阶段只确认参考范围，代码改动仍由 `/pmai-build` 执行；产物只给路径 + 一句话，按 `_shared/PM-VIEW-RULES.md`。
@@ -58,7 +60,7 @@ source "${PMAI_HOME:-$HOME/.pmai}/scripts/skill-preamble.sh"
 
 ### 步骤 0：banner + @读项目底座
 
-入口 echo banner。**先读项目底座**（`PRODUCT-STATE.md`、`DESIGN.md`、模块规格、`.pm-workflow/project.yml` 和相关 Web 入口），判断参照站有而本地缺的是 delta 还是本就不做。
+入口 echo banner。**先读项目底座**（`PRODUCT-STATE.md`、`DESIGN.md`、模块规格、`.pm-workflow/project.yml` 和相关 Web 入口），再按 `project-design-system.md` 执行当前项目设计系统声明，判断参照站有而本地缺的是 delta 还是本就不做。不能用参考站的组件或视觉语言覆盖当前项目已经声明的设计系统与采用范围。
 
 ### 步骤 1：Plan —— 爬参照站派生 checks-spec（产出，不改代码）
 
@@ -101,6 +103,6 @@ python3 "$PMAI_HOME/scripts/checks-diff.py" \
 - Plan 只产 checks、不动业务代码；checks 由 AI 派生，不让 PM 写 JSON
 - 单窗口：dev server / browse / 建改 显式带目录，不 cd 会话、不切窗口
 - 引擎只查结构 / 文案 / 按钮态；视觉和行为进入 acceptance profile 选中的检查
-- rebuild 重建是 build：强制读 DESIGN、复用已有组件、可派独立执行器；抓真实数据填 mock 用 `/scrape`
+- rebuild 重建是 build：强制读 DESIGN、执行已声明的项目级设计系统 Skill、复用已有组件、可派独立执行器；抓真实数据填 mock 用 `/scrape`
 - 参照站登录后页面才用 `/setup-browser-cookies`（无人值守会被 Keychain 弹窗打断，仅必要时）
 - 主动浏览器优先用可用的 gstack `/browse`，也可用当前 runtime browser / Playwright 适配器；不把底层工具选择交给 PM

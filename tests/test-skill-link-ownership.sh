@@ -179,7 +179,11 @@ EOF
     2) _fail "doctor did not reach the held git section" ;;
     3) _fail "uninstall contender did not start" ;;
     4) _fail "uninstall entered before doctor released the shared lock" ;;
-    5) _fail "uninstall did not enter after doctor released the shared lock" ;;
+    5)
+      _fail "uninstall did not enter after doctor released the shared lock"
+      [ -f "$t/doctor.out" ] && sed 's/^/    doctor: /' "$t/doctor.out" >&2
+      [ -f "$t/uninstall.out" ] && sed 's/^/    uninstall: /' "$t/uninstall.out" >&2
+      ;;
     *) _fail "global lock serialization fixture failed with rc=$rc" ;;
   esac
   rm -rf "$t"

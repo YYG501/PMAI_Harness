@@ -6,7 +6,7 @@
 #   2. VERSION file is valid semver
 #   3. All expected skills present (~/.pmai/skills/*)
 #   4. All symlinks under host skill dirs resolve (no dangling)
-#   5. OpenCode slash commands and Kimi Code native host surface aligned
+#   5. Kimi Code / OpenCode Builder readiness and legacy controller cleanup
 #   6. ~/.pmai/ working tree clean (or warn if dirty — affects consumers)
 #   7. Remote reachable (short network check, non-fatal)
 #   8. Claude Code Bash 工具子进程 PATH 能调到 pmai（zsh 用户常踩盲点）
@@ -47,7 +47,7 @@ FRAMEWORK_REMOTE_URL=""
 FRAMEWORK_REMOTE_HEAD=""
 FRAMEWORK_WORKTREE="unknown"
 UPDATE_AVAILABLE="unknown"
-PROJECT_KIND="none"
+PROJECT_KIND="uninitialized"
 PROJECT_ROOT=""
 PROJECT_HOOKS="not_applicable"
 PROJECT_OPENCODE="not_applicable"
@@ -67,8 +67,8 @@ Usage:
 Checks global PMAI install integrity and the current consumer repository:
   - ~/.pmai source, VERSION, expected skills
   - ~/.claude/skills/pmai-* and ~/.codex/skills/pmai-* exposure drift and dangling symlinks
-  - $KIMI_CODE_HOME/skills/pmai-* native /skill:pmai-* exposure and PMAI-managed hooks
-  - ~/.config/opencode/commands/pmai-*.md OpenCode slash command exposure
+  - Kimi Code / OpenCode external Builder command readiness
+  - legacy Kimi/OpenCode controller entries (reported only; never repaired)
   - working tree, remote reachability, Claude Code bash PATH
   - optional gstack/browser readiness
   - passive gstack browser/design diagnostics for /pmai-mockup
@@ -468,6 +468,12 @@ if any(
 ):
     add_notice("browser_adapter", "可选浏览器能力未就绪；不影响非 Web 工作")
 for item in payload["findings"]:
+    if not isinstance(item, dict) or item.get("category") != "legacy":
+        continue
+    message = str(item.get("message") or "")
+    if message:
+        add_notice("legacy_controller_cleanup", message)
+for item in payload["findings"]:
     if not isinstance(item, dict) or item.get("kind") != "legacy_compatible":
         continue
     message = str(item.get("message") or "")
@@ -649,7 +655,7 @@ echo "─── 3. Skill sources in $PMAI_HOME/skills/ ───"
 #    tests/test-doctor-skills.sh 对本清单与 skills/ 目录做全等校验，漏同步会在 run-all 红掉。
 EXPECTED_SKILLS=(
   # 主链与日常入口；spec-writing 是 design 后台阶段，也保留专项手动入口
-  init-project proposal design spec-writing mockup build build-close publish-to-lark lark-sync lark-review status doctor
+  init-project proposal design spec-writing mockup build build-close publish-to-lark sync-from-lark lark-review status doctor
   # 按需主动调（照站对齐）
   mirror-site
   # 按需辅助：小改 / 轻记录 / 放弃 build / 介绍型文档 / 说人话磨文 / 讨论对焦 / 会话反馈
@@ -692,19 +698,6 @@ actual_exposed_skill_names() {
   done | sort -u
 }
 
-expected_opencode_command_names() {
-  expected_exposed_skill_names | sed 's/$/.md/' | sort -u
-}
-
-actual_opencode_command_names() {
-  local command_dir="$1"
-  local s
-  for s in "$command_dir"/${SKILL_PREFIX}*.md; do
-    [ -e "$s" ] || continue
-    basename "$s"
-  done | sort -u
-}
-
 count_opencode_commands() {
   local command_dir="$1"
   local s count
@@ -715,25 +708,6 @@ count_opencode_commands() {
     count=$((count + 1))
   done
   echo "$count"
-}
-
-repair_opencode_commands() {
-  if [ ! -f "$PMAI_HOME/scripts/install-opencode-commands.sh" ]; then
-    return 1
-  fi
-
-  if PMAI_HOME="$PMAI_HOME" OPENCODE_CONFIG_DIR="$OPENCODE_CONFIG_DIR" \
-    bash "$PMAI_HOME/scripts/install-opencode-commands.sh" --global >/dev/null 2>&1; then
-    return 0
-  fi
-
-  return 1
-}
-
-opencode_commands_match() {
-  PMAI_HOME="$PMAI_HOME" OPENCODE_CONFIG_DIR="$OPENCODE_CONFIG_DIR" \
-    bash "$PMAI_HOME/scripts/install-opencode-commands.sh" \
-      --global --check >/dev/null 2>&1
 }
 
 repair_skill_exposure_dir() {
@@ -859,37 +833,22 @@ check_skill_exposure_dir() {
   fi
 }
 
-check_opencode_command_dir() {
-  local command_dir="$1"
-  local display_path="$2"
-  local count
-
-  echo ""
-  echo "─── 4b. OpenCode slash commands (${display_path}/${SKILL_PREFIX}*.md) ───"
-  count=$(count_opencode_commands "$command_dir")
-
-  if opencode_commands_match; then
-    ok "OpenCode $count slash command file(s) exactly match current PMAI render"
-    return
-  fi
-  if [ "$MODE" = "repair" ] && repair_opencode_commands && opencode_commands_match; then
-    count=$(count_opencode_commands "$command_dir")
-    ok "OpenCode slash commands repaired and verified ($count file(s))"
-    return
-  fi
-  fail "OpenCode slash commands are missing, stale, modified, or unreadable (${display_path}/${SKILL_PREFIX}*.md); run pmai doctor --repair"
-}
-
 check_opencode_cli() {
-  local opencode_bin
+  local opencode_bin legacy_count
 
   echo ""
-  echo "─── 4c. OpenCode CLI ───"
+  echo "─── 4b. OpenCode Builder ───"
   opencode_bin=$(command -v opencode 2>/dev/null || true)
   if [ -n "$opencode_bin" ]; then
-    ok "opencode command found: $opencode_bin"
+    ok "OpenCode Builder command found: $opencode_bin"
   else
-    warn "opencode command not found — OpenCode 主控入口已可安装，但本机还不能直接运行 OpenCode CLI"
+    warn "OpenCode Builder command not found; OpenCode 不能作为外部 Builder"
+  fi
+  legacy_count=$(count_opencode_commands "$OPENCODE_COMMANDS")
+  if [ "$legacy_count" -gt 0 ]; then
+    CURRENT_CATEGORY="legacy"
+    warn "发现 $legacy_count 个旧 OpenCode PMAI 主控 command；当前版本不再使用或刷新它们，可运行 pmai uninstall 清理"
+    CURRENT_CATEGORY="opencode"
   fi
 }
 
@@ -903,59 +862,29 @@ find_kimi_bin() {
 }
 
 check_kimi_host() {
-  local kimi_bin manager_out manager_rc
+  local kimi_bin legacy_skill_count
 
   echo ""
-  echo "─── 4d. Kimi Code native host ───"
+  echo "─── 4c. Kimi Code Builder ───"
   kimi_bin=$(find_kimi_bin)
   if [ -n "$kimi_bin" ]; then
-    ok "Kimi Code command found: $kimi_bin"
+    ok "Kimi Code Builder command found: $kimi_bin"
   else
-    warn "Kimi Code command not found — native /skill:pmai-* exposure 已安装，但本机还不能直接运行 Kimi Code"
+    warn "Kimi Code Builder command not found; Kimi Code 不能作为外部 Builder"
   fi
 
-  if [ ! -f "$KIMI_CONFIG" ]; then
-    warn "Kimi config 不存在：${KIMI_CONFIG}；先启动一次 Kimi Code，再运行 pmai doctor --repair 安装原生 hooks"
-    return
+  legacy_skill_count=$(actual_exposed_skill_names "$KIMI_SKILLS" | wc -l | tr -d ' ')
+  if [ "$legacy_skill_count" -gt 0 ] || [ -L "$KIMI_SKILLS/_shared" ]; then
+    CURRENT_CATEGORY="legacy"
+    warn "发现旧 Kimi Code PMAI Skill 入口；当前版本不再使用或刷新它们，可运行 pmai uninstall 清理"
+    CURRENT_CATEGORY="kimi"
   fi
-
-  if [ -n "$kimi_bin" ]; then
-    if "$kimi_bin" doctor config "$KIMI_CONFIG" >/dev/null 2>&1; then
-      ok "Kimi config.toml is valid"
-    else
-      warn "Kimi config.toml 无法通过 kimi doctor；未自动改写 hooks"
-      return
-    fi
+  if [ -f "$KIMI_CONFIG" ] \
+    && grep -q '^# >>> PMAI managed Kimi Code hooks >>>$' "$KIMI_CONFIG" 2>/dev/null; then
+    CURRENT_CATEGORY="legacy"
+    warn "发现旧 Kimi Code PMAI managed hooks；当前版本不再使用或刷新它们，可运行 pmai uninstall 清理"
+    CURRENT_CATEGORY="kimi"
   fi
-
-  if [ ! -f "$PMAI_HOME/scripts/manage-kimi-hooks.py" ]; then
-    fail "Kimi hook manager 缺失：$PMAI_HOME/scripts/manage-kimi-hooks.py"
-    return
-  fi
-
-  manager_out=$(KIMI_CODE_HOME="$KIMI_CODE_HOME" python3 "$PMAI_HOME/scripts/manage-kimi-hooks.py" check --config "$KIMI_CONFIG" 2>&1)
-  manager_rc=$?
-  if [ "$manager_rc" = "0" ]; then
-    ok "Kimi Code PMAI-managed hooks match current framework"
-    return
-  fi
-  if [ "$manager_rc" = "1" ]; then
-    if [ "$MODE" = "repair" ] && KIMI_CODE_HOME="$KIMI_CODE_HOME" \
-      python3 "$PMAI_HOME/scripts/manage-kimi-hooks.py" \
-      install --config "$KIMI_CONFIG" >/dev/null 2>&1; then
-      manager_out=$(KIMI_CODE_HOME="$KIMI_CODE_HOME" \
-        python3 "$PMAI_HOME/scripts/manage-kimi-hooks.py" \
-        check --config "$KIMI_CONFIG" 2>&1)
-      manager_rc=$?
-      if [ "$manager_rc" = "0" ]; then
-        ok "Kimi Code PMAI-managed hooks repaired"
-        return
-      fi
-      fail "Kimi Code hooks 修复后校验仍未通过：$manager_out"
-      return
-    fi
-  fi
-  fail "Kimi Code hooks 未就绪：$manager_out"
 }
 
 MISSING=()
@@ -975,10 +904,7 @@ CURRENT_CATEGORY="claude"
 check_skill_exposure_dir "Claude Code" "$CLAUDE_SKILLS" "~/.claude/skills"
 CURRENT_CATEGORY="codex"
 check_skill_exposure_dir "Codex" "$CODEX_SKILLS" "~/.codex/skills"
-CURRENT_CATEGORY="kimi"
-check_skill_exposure_dir "Kimi Code" "$KIMI_SKILLS" "\$KIMI_CODE_HOME/skills"
 CURRENT_CATEGORY="opencode"
-check_opencode_command_dir "$OPENCODE_COMMANDS" "~/.config/opencode/commands"
 check_opencode_cli
 CURRENT_CATEGORY="kimi"
 check_kimi_host
@@ -1047,30 +973,15 @@ project_has_legacy_copy() {
   return 1
 }
 
-project_has_consumer_marker() {
-  local root="$1"
-
-  [ -f "$root/PRODUCT-STATE.md" ] && return 0
-  [ -f "$root/docs/CONTEXT.md" ] && return 0
-  [ -f "$root/.pm-workflow/config.yml" ] && return 0
-  [ -f "$root/.codex/hooks.json" ] && return 0
-  [ -f "$root/.opencode/commands/pmai-build.md" ] && return 0
-  if [ -f "$root/AGENTS.md" ] \
-    && grep -qE 'PMAI|/pmai-' "$root/AGENTS.md" 2>/dev/null; then
-    return 0
-  fi
-  if [ -f "$root/CLAUDE.md" ] \
-    && grep -qE 'PMAI|/pmai-' "$root/CLAUDE.md" 2>/dev/null; then
-    return 0
-  fi
-  return 1
+resolve_repo_kind() {
+  python3 "$PMAI_HOME/scripts/repo-kind.py" --repo-root "$1" 2>/dev/null
 }
 
 find_non_git_consumer_root() {
   local candidate="$1"
 
   while [ -n "$candidate" ] && [ "$candidate" != "/" ]; do
-    if project_has_consumer_marker "$candidate"; then
+    if [ "$(resolve_repo_kind "$candidate" || true)" = "consumer" ]; then
       printf '%s\n' "$candidate"
       return 0
     fi
@@ -1181,7 +1092,7 @@ PY
 }
 
 check_current_project() {
-  local manager opencode_manager git_hook_manager rc candidate
+  local manager git_hook_manager rc candidate repo_kind
 
   [ -n "$DOCTOR_START_CWD" ] || return 0
   PROJECT_ROOT=$(git -C "$DOCTOR_START_CWD" rev-parse --show-toplevel 2>/dev/null || true)
@@ -1195,9 +1106,14 @@ check_current_project() {
     return 0
   }
 
-  if [ -f "$PROJECT_ROOT/RUNTIME.md" ] \
-    && [ -f "$PROJECT_ROOT/skills/init-project/SKILL.md" ] \
-    && [ -f "$PROJECT_ROOT/CLAUDE.md" ]; then
+  repo_kind=$(resolve_repo_kind "$PROJECT_ROOT" || true)
+  if [ -z "$repo_kind" ]; then
+    PROJECT_KIND="uninitialized"
+    fail "Current repository identity could not be resolved safely"
+    return 0
+  fi
+  PROJECT_KIND="$repo_kind"
+  if [ "$PROJECT_KIND" = "generator" ]; then
     PROJECT_KIND="generator"
     PROJECT_HOOKS="not_applicable"
     PROJECT_OPENCODE="not_applicable"
@@ -1205,8 +1121,7 @@ check_current_project() {
     ok "Current repository is the PMAI generator; consumer checks skipped"
     return 0
   fi
-  if ! project_has_consumer_marker "$PROJECT_ROOT"; then
-    PROJECT_KIND="other"
+  if [ "$PROJECT_KIND" = "uninitialized" ]; then
     PROJECT_HOOKS="not_applicable"
     PROJECT_OPENCODE="not_applicable"
     PROJECT_GIT_HOOK="not_applicable"
@@ -1214,7 +1129,6 @@ check_current_project() {
     return 0
   fi
 
-  PROJECT_KIND="consumer"
   if project_has_legacy_copy "$PROJECT_ROOT"; then
     LEGACY_LOCAL_COPY="true"
     warn "Current consumer has legacy project-local PMAI copies; remove them with pmai uninstall --local"
@@ -1243,25 +1157,6 @@ check_current_project() {
         warn "Current consumer project hooks are invalid or unreadable"
         ;;
     esac
-  fi
-
-  opencode_manager="$PMAI_HOME/scripts/install-opencode-commands.sh"
-  if [ ! -f "$opencode_manager" ]; then
-    PROJECT_OPENCODE="checker_missing"
-    warn "OpenCode project checker is missing; upgrade PMAI before checking this consumer"
-  elif PMAI_HOME="$PMAI_HOME" bash "$opencode_manager" \
-    --project "$PROJECT_ROOT" --check >/dev/null 2>&1; then
-    PROJECT_OPENCODE="current"
-    ok "Current consumer OpenCode entries match the installed framework"
-  else
-    rc=$?
-    if [ "$rc" = "1" ]; then
-      PROJECT_OPENCODE="drifted"
-      warn "Current consumer OpenCode entries need refresh"
-    else
-      PROJECT_OPENCODE="invalid"
-      warn "Current consumer OpenCode entries are invalid or unreadable"
-    fi
   fi
 
   git_hook_manager="$PMAI_HOME/scripts/install-hooks.sh"

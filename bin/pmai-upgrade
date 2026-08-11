@@ -18,7 +18,6 @@ set -Eeuo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/../scripts/_lib/global-install-lock.sh"
-source "$SCRIPT_DIR/../scripts/_lib/kimi-config-transaction.sh"
 ORIGINAL_ARGS=("$@")
 
 load_skill_link_policy() {
@@ -45,10 +44,6 @@ PMAI_STATE="${PMAI_STATE:-$HOME/.pmai-state}"
 CLAUDE_SKILLS="$HOME/.claude/skills"
 CODEX_SKILLS="${CODEX_HOME:-$HOME/.codex}/skills"
 CODEX_PROMPTS="${CODEX_HOME:-$HOME/.codex}/prompts"
-KIMI_CODE_HOME="${KIMI_CODE_HOME:-$HOME/.kimi-code}"
-KIMI_SKILLS="$KIMI_CODE_HOME/skills"
-KIMI_CONFIG="$KIMI_CODE_HOME/config.toml"
-OPENCODE_CONFIG_DIR="${OPENCODE_CONFIG_DIR:-$HOME/.config/opencode}"
 SKILL_PREFIX="pmai-"
 REMOTE="${PMAI_REMOTE:-git@github.com:YYG501/PMAI_Workflow.git}"
 DOCTOR_BIN="$PMAI_HOME/bin/pmai-doctor"
@@ -98,8 +93,6 @@ Usage:
 
 Env override:
   PMAI_REMOTE=<git-url>               # Override default github remote
-  KIMI_CODE_HOME=<path>               # Override default ~/.kimi-code
-  OPENCODE_CONFIG_DIR=<path>          # Override default ~/.config/opencode
 EOF
 }
 
@@ -191,19 +184,6 @@ remove_managed_codex_prompts() {
   return 0
 }
 
-validate_kimi_config_transaction() {
-  local manager_out
-
-  pmai_kimi_config_tx_needs_check || return 0
-  if manager_out=$(KIMI_CODE_HOME="$KIMI_CODE_HOME" \
-    python3 "$PMAI_HOME/scripts/manage-kimi-hooks.py" \
-    check --config "$KIMI_CONFIG" 2>&1); then
-    return 0
-  fi
-  echo "❌ Kimi Code hooks 写入后校验失败：$manager_out" >&2
-  return 1
-}
-
 record_upgrade_notice_state() {
   local marker="$PMAI_STATE/just-upgraded-from"
 
@@ -287,27 +267,10 @@ global_rollback() {
           echo "⚠️  Codex skill 入口回滚不完整：$CODEX_SKILLS" >&2
           rollback_failed=1
         fi
-        if ! rebuild_symlinks "$PMAI_HOME/skills" "$KIMI_SKILLS" >/dev/null 2>&1; then
-          echo "⚠️  Kimi Code skill 入口回滚不完整：$KIMI_SKILLS" >&2
-          rollback_failed=1
-        fi
-        if [ -f "$PMAI_HOME/scripts/install-opencode-commands.sh" ]; then
-          if ! PMAI_HOME="$PMAI_HOME" OPENCODE_CONFIG_DIR="$OPENCODE_CONFIG_DIR" \
-            bash "$PMAI_HOME/scripts/install-opencode-commands.sh" --global >/dev/null 2>&1; then
-            echo "⚠️  OpenCode command 入口回滚不完整：$OPENCODE_CONFIG_DIR/commands" >&2
-            rollback_failed=1
-          fi
-        else
-          echo "⚠️  回滚版本缺少 OpenCode installer：$PMAI_HOME/scripts/install-opencode-commands.sh" >&2
-          rollback_failed=1
-        fi
       fi
     fi
   elif [ "$STASH_ATTEMPTED" = "1" ]; then
     echo "⚠️  stash 尚未确认完成；为保护未提交改动，本次未执行 reset --hard。" >&2
-  fi
-  if ! pmai_kimi_config_tx_restore; then
-    rollback_failed=1
   fi
   if [ "$rollback_failed" = "1" ]; then
     echo "⚠️  升级回滚未完整；请按以上 HEAD 和路径核对恢复现场。" >&2
@@ -350,7 +313,7 @@ if [ ! -d "$PMAI_HOME/.git" ]; then
   exit 1
 fi
 
-for dst_skills in "$CLAUDE_SKILLS" "$CODEX_SKILLS" "$KIMI_SKILLS"; do
+for dst_skills in "$CLAUDE_SKILLS" "$CODEX_SKILLS"; do
   pmai_assert_shared_link_available "$PMAI_HOME/skills/_shared" "$dst_skills/_shared"
 done
 
@@ -386,9 +349,6 @@ if [ -n "$GIT_STATUS" ]; then
   STASHED=1
 fi
 GIT_ROLLBACK_READY=1
-
-# Git dirty 状态已确认安全后，才开始隔离其它用户级宿主配置。
-pmai_kimi_config_tx_snapshot "$KIMI_CONFIG" ".pmai-upgrade-kimi-backup"
 
 # fetch + checkout（保留原逻辑，timeout 兜底）
 case "$MODE" in
@@ -441,20 +401,9 @@ rebuild_symlinks "$PMAI_HOME/skills" "$CLAUDE_SKILLS"
 claude_count="$REBUILD_SYMLINK_COUNT"
 rebuild_symlinks "$PMAI_HOME/skills" "$CODEX_SKILLS"
 codex_count="$REBUILD_SYMLINK_COUNT"
-rebuild_symlinks "$PMAI_HOME/skills" "$KIMI_SKILLS"
-kimi_count="$REBUILD_SYMLINK_COUNT"
-count=$((claude_count + codex_count + kimi_count))
+count=$((claude_count + codex_count))
 echo "   $CLAUDE_SKILLS: $claude_count"
 echo "   $CODEX_SKILLS: $codex_count"
-echo "   $KIMI_SKILLS: $kimi_count"
-echo "→ Re-syncing OpenCode slash commands"
-PMAI_HOME="$PMAI_HOME" OPENCODE_CONFIG_DIR="$OPENCODE_CONFIG_DIR" \
-  bash "$PMAI_HOME/scripts/install-opencode-commands.sh" --global
-echo "→ Re-syncing Kimi Code native hooks"
-if ! KIMI_CODE_HOME="$KIMI_CODE_HOME" python3 "$PMAI_HOME/scripts/manage-kimi-hooks.py" install --config "$KIMI_CONFIG"; then
-  echo "❌ Kimi Code hooks 未能同步，触发完整升级回滚。" >&2
-  global_rollback 1
-fi
 
 # E：跑升级目标自己的 doctor 自检（FAIL → 回滚；WARN 不触发）。目标版本
 # 缺少可执行 doctor 属于不完整升级，不能静默跳过自检。
@@ -466,7 +415,7 @@ echo "→ Running pmai-doctor self-check..."
 if ! prepare_doctor_log; then
   global_rollback
 fi
-if ! KIMI_CODE_HOME="$KIMI_CODE_HOME" "$DOCTOR_BIN" >"$DOCTOR_LOG" 2>&1; then
+if ! "$DOCTOR_BIN" >"$DOCTOR_LOG" 2>&1; then
   echo "❌ pmai-doctor 自检失败，触发回滚。日志：$DOCTOR_LOG" >&2
   tail -20 "$DOCTOR_LOG" >&2 || true
   global_rollback
@@ -474,19 +423,10 @@ fi
 echo "  ✅ doctor passed"
 remove_successful_doctor_log
 
-if ! validate_kimi_config_transaction; then
-  global_rollback 1
-fi
-if ! pmai_kimi_config_tx_finalize; then
-  echo "❌ Kimi config 无法提交，触发完整升级回滚。" >&2
-  global_rollback 1
-fi
-
-# 代码、宿主入口和 Kimi config 已全部验证并提交。后续只做 best-effort
+# 代码与 Claude/Codex 主控入口已全部验证并提交。后续只做 best-effort
 # 兼容清理与提示状态，不能把已完成升级误报成事务失败。
 UPGRADE_TX_ACTIVE=0
 trap - ERR HUP INT TERM EXIT
-pmai_kimi_config_tx_cleanup "升级提交后 Kimi config " || true
 
 echo "→ Removing legacy Codex slash prompts"
 remove_managed_codex_prompts "$CODEX_PROMPTS"
@@ -504,16 +444,14 @@ else
 fi
 echo "   skill: $count symlinks re-synced"
 echo "   codex native skills: $codex_count symlinks re-synced"
-echo "   kimi native skills: $kimi_count symlinks re-synced"
 echo "   legacy codex prompts: $legacy_prompt_count files removed"
-echo "   opencode commands: re-synced"
-echo "   kimi hooks: re-synced when config.toml exists"
+echo "   kimi/opencode controller entries: preserved as legacy assets"
 echo "═══════════════════════════════════════"
 
 echo ""
 echo "ℹ️  全局升级只更新框架源和宿主 skill。"
 echo "   已有消费仓的 Claude Code / Codex 项目 hooks 不会被静默改写。"
-echo "   请在各消费仓使用 /pmai-doctor（Codex: \$pmai-doctor；Kimi: /skill:pmai-doctor）检查。"
+echo "   请在各消费仓使用 /pmai-doctor（Codex: \$pmai-doctor）检查。"
 echo "   确认需要刷新后，在仓内运行："
 echo "   bash \"$PMAI_HOME/scripts/install-project-hooks.sh\""
 

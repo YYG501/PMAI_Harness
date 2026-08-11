@@ -38,6 +38,7 @@ from _lib.delivery_policy import (  # noqa: E402
     validate_delivery_policy,
 )
 from _lib.ready_contract import ready_currentness  # noqa: E402
+from _lib.repo_identity import RepoKind, classify_repo  # noqa: E402
 from _lib.stages import LIFECYCLE_NAMES, STAGE_NAMES, MAX_STAGE  # noqa: E402  ( F13 单一真相源)
 
 
@@ -337,46 +338,9 @@ def _work_priority(work_view: dict) -> tuple[int, str]:
     return priority, _work_display_name(work_view)
 
 
-def _is_generator_repo(repo_root: Path) -> bool:
-    """The PMAI framework repo is not a consumer project."""
-    return (repo_root / "scripts" / "init-project.sh").exists()
-
-
-def _file_mentions_pmai(path: Path) -> bool:
-    try:
-        text = path.read_text(encoding="utf-8", errors="ignore")
-    except OSError:
-        return False
-    return "PMAI" in text or "/pmai-" in text
-
-
-def _has_pmai_project_marker(repo_root: Path) -> bool:
-    """Detect whether a directory is already a PMAI consumer project.
-
-    This is intentionally marker-based rather than "does docs/ exist": existing
-    codebases often have their own docs directory, and those still need the
-    init-project entry to choose the brownfield path.
-    """
-    docs_dir = repo_root / "docs"
-    marker_paths = [
-        repo_root / "PRODUCT.md",
-        repo_root / "PRODUCT-STATE.md",
-        docs_dir / "PRODUCT.md",
-        docs_dir / "PRODUCT-STATE.md",
-        docs_dir / "CONTEXT.md",
-        repo_root / ".pm-workflow" / "config.yml",
-        repo_root / ".codex" / "hooks.json",
-    ]
-    if any(path.exists() for path in marker_paths):
-        return True
-    return _file_mentions_pmai(repo_root / "AGENTS.md") or _file_mentions_pmai(
-        repo_root / "CLAUDE.md"
-    )
-
-
 def is_uninitialized_project(repo_root: Path) -> bool:
     """True when a non-framework repo has no PMAI project markers yet."""
-    return not _is_generator_repo(repo_root) and not _has_pmai_project_marker(repo_root)
+    return classify_repo(repo_root) is RepoKind.UNINITIALIZED
 
 
 def render_uninitialized_project_hint(repo_root: Path) -> None:
@@ -407,7 +371,7 @@ def render_narrative(state: dict, repo_root: Path) -> None:
         return
 
     active = sorted(state["active_work"], key=_work_priority)
-    dirty_lines = [] if _is_generator_repo(repo_root) else _git_status_lines(repo_root)
+    dirty_lines = [] if classify_repo(repo_root) is RepoKind.GENERATOR else _git_status_lines(repo_root)
     if not active:
         if dirty_lines:
             dirty_modules = _dirty_module_names(dirty_lines)
@@ -504,7 +468,7 @@ def render_health_check(repo_root: Path, *, proposal_hint: bool = True) -> None:
     生成器仓自身（根有 `scripts/init-project.sh`，framework 资产在根而非 `.claude/`）
     不是业务仓，跳过；只在业务仓里跑。
     """
-    if _is_generator_repo(repo_root):
+    if classify_repo(repo_root) is RepoKind.GENERATOR:
         return
 
     if is_uninitialized_project(repo_root):

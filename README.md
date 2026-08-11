@@ -27,10 +27,11 @@ bash /tmp/pmai-src/bin/pmai install
 装好后，在任意业务项目目录里使用当前宿主的原生入口：
 
 ```text
-Claude Code / OpenCode: /pmai-init-project
-Codex:                   $pmai-init-project
-Kimi Code:               /skill:pmai-init-project
+Claude Code: /pmai-init-project
+Codex:       $pmai-init-project
 ```
+
+Kimi Code、OpenCode 和 Cursor Agent 不作为 PMAI 主控；它们只会在 `/pmai-build` 中被完整主控选作外部 Builder。
 
 如果只是要验证骨架脚本，不走完整 PM 交互：
 
@@ -50,7 +51,7 @@ PMAI 不和 Claude Design、design-html 或 Claude Code 比"谁更快生成第�
 
 定位是 **PM 单人生产力工具**，不是团队 SOP / CI 平台 / 多租户基础设施。完整产品意义、非目标和成功标准见 [`PRODUCT.md`](./PRODUCT.md)。
 
-**分发形态**：全局安装（单人多项目）。框架装到 `~/.pmai/`，当前 skill symlink 到 `~/.claude/skills/pmai-*`、`~/.codex/skills/pmai-*` 和 `${KIMI_CODE_HOME:-$HOME/.kimi-code}/skills/pmai-*`；OpenCode 另生成 `~/.config/opencode/commands/pmai-*.md`。Codex 只使用原生 skills，通过 `$pmai-*` 或自然语言调用；Kimi Code 使用原生 `/skill:pmai-*`，不模拟 `/pmai-*` slash command；两者都不生成重复入口。任意 cwd 可起新业务项目；`pmai upgrade` 一键升级全局 skill、脚本和 hook 源。项目级 `.claude/settings.json` / `.codex/hooks.json` 不会被全局升级静默改写：在消费仓使用 `/pmai-doctor` 可只读检查漂移，PM 确认后再运行 `bash ~/.pmai/scripts/install-project-hooks.sh` 确定性刷新。skill 只装全局一处，项目里只放 host 配置 / 状态资产（`.claude/settings.json` / `.codex/hooks.json` / `.opencode/commands` / `opencode.json` / `.work-meta.json`）——这样每个 PMAI 入口永远唯一，不会和项目副本重复。Kimi 的 hooks 是用户级配置，由 PMAI 分发器先识别仓库类型，普通仓库直接跳过。
+**分发形态**：全局安装（单人多项目）。框架装到 `~/.pmai/`，公开 Skill 只链接到 `~/.claude/skills/pmai-*` 和 `~/.codex/skills/pmai-*`；Codex 通过 `$pmai-*`、Skill 选择器或自然语言调用，不生成 custom prompts。任意 cwd 可由 Claude Code 或 Codex 起新业务项目；`pmai upgrade` 一键升级全局 Skill、脚本和 Hook 源。项目级 `.claude/settings.json` / `.codex/hooks.json` 不会被全局升级静默改写：在消费仓使用 `/pmai-doctor` 只读检查漂移，PM 确认后再运行 `bash ~/.pmai/scripts/install-project-hooks.sh` 确定性刷新。Kimi Code、OpenCode 和 Cursor Agent 只保留 Builder adapter/profile；新安装、新升级和新消费仓不再创建它们的 PMAI 主控入口。已有 Kimi Skill/managed hooks 与 OpenCode commands 只由 Doctor 报告，并可在 PM 确认后通过 uninstall 清理。
 
 ---
 
@@ -73,7 +74,7 @@ PMAI 不和 Claude Design、design-html 或 Claude Code 比"谁更快生成第�
 
 新项目默认按 `init → proposal → design → spec-writing → build` 推进；成熟项目只有在已有资料完整覆盖产品定位、用户、核心问题与价值、边界和 MVP / 当前产品结果，并在 `PRODUCT.md` 记录真实仓内依据与 PM 确认日期、`PRODUCT.md` 与依据均已提交且无漂移、通过机器门后才可跳过 Proposal。一旦进入 Proposal 就会完成整份文档，不提供简版退出。PM 全程**只做产品决策、确认首个建造方案、开工时确认工作环境与构建工具、看结果和明确定稿**；meta / mockup / spec-writing 分流、默认验收、合同、证据和文档同步由框架兜。忘了当前停在哪里时再用 `/pmai-status` 恢复现状，它不是日常循环的一步。
 
-Kimi Code 中把上述入口原生写成 `/skill:pmai-proposal`、`/skill:pmai-design`、`/skill:pmai-build`、`/skill:pmai-status`；工作流语义不变。
+上述主链只由 Claude Code 或 Codex 主控推进；外部 Builder 只接收已确认的实现任务，不能推进 lifecycle、写验收通过或触发 landing。
 
 ---
 
@@ -83,9 +84,9 @@ Kimi Code 中把上述入口原生写成 `/skill:pmai-proposal`、`/skill:pmai-d
 |---|---|---|
 | **Claude Code** | 推荐 | 一等主控入口（slash skill 原生在这里跑）；当前主控不是 Claude Code 时，也可作为 `/pmai-build` 执行器 |
 | **Codex** | 支持 | 原生 skill 暴露到 `~/.codex/skills/pmai-*`，通过 `$pmai-*`、skill 选择器或自然语言调用；不生成 custom prompts；读生成器仓 / 消费仓 `AGENTS.md` 作为主控入口；消费仓生成项目级 `.codex/hooks.json`；当前主控不是 Codex 时，也可作为 build 执行器 |
-| **Kimi Code** | 支持 | 一等主控入口；原生 skill 暴露到 `$KIMI_CODE_HOME/skills/pmai-*`，使用 `/skill:pmai-*`；读生成器仓 / 消费仓 `AGENTS.md`，用户级 hooks 通过仓库识别分发器接入 PMAI 护栏；当前主控不是 Kimi Code 时，也可作为 build 执行器，旧消费仓缺少该 profile 时由当前框架运行时补齐 |
+| **Kimi Code** | 可选 | 仅 `/pmai-build` 外部 Builder；通过 `kimi --prompt` 执行冻结任务，不安装 PMAI Skill 或 managed hooks；旧主控资产只诊断、清理 |
 | **Cursor Agent** | 可选 | `/pmai-build` 外部执行器；当前主控不是 Cursor Agent 时可选 |
-| **OpenCode CLI** | 支持 | OpenCode commands 暴露到 `~/.config/opencode/commands/pmai-*.md`，可直接打开消费仓输入 `/pmai-*`；读 `AGENTS.md` 作为主控入口；消费仓生成 `.opencode/commands` 和 `opencode.json`；当前主控不是 OpenCode 时，也可作为 build 执行器。第一版不复刻 Codex hooks，保护依赖 OpenCode permission、git hooks、build contract 和 changed-path review |
+| **OpenCode CLI** | 可选 | 仅 `/pmai-build` 外部 Builder；通过 `opencode run` 执行冻结任务，不生成全局或项目级 PMAI commands；旧 command 资产只诊断、清理 |
 | **gstack** | 可选能力层 | 可辅助视觉基线、mockup、browser/visual evidence、抓站和文档导出；初始化不依赖它。UI 验收需要主动浏览器能力，但可以由 gstack、runtime browser 或 Playwright 任一适配器提供 |
 | **git** ≥ 2.30 | 必需 | worktree 是核心隔离机制 |
 | **python3** ≥ 3.10 | 必需 | scripts 大多用 python（zero-dep stdlib） |
@@ -123,8 +124,8 @@ bash /tmp/pmai-src/bin/pmai install
 
 安装成功后，`pmai install` 末尾会：
 
-- clone 到 `~/.pmai/` + symlink skill 到 `~/.claude/skills/pmai-*` / `~/.codex/skills/pmai-*` / `$KIMI_CODE_HOME/skills/pmai-*` + 生成 OpenCode slash commands 到 `~/.config/opencode/commands/pmai-*.md`；同时清理旧版遗留的 `~/.codex/prompts/pmai-*.md`
-- 在已有的 `$KIMI_CODE_HOME/config.toml` 中只维护 PMAI 标记的原生 hooks 区块；保留模型、凭据和其它用户配置。若 Kimi 尚未生成 config，skill 仍会安装；首次启动 Kimi 后先用 `/skill:pmai-doctor` 诊断，确认修复后再运行 `pmai doctor --repair`
+- clone 到 `~/.pmai/`，只把公开 Skill 链接到 `~/.claude/skills/pmai-*` 和 `~/.codex/skills/pmai-*`，同时清理旧版遗留的 `~/.codex/prompts/pmai-*.md`
+- 不创建或刷新 Kimi Skill、Kimi managed hooks、OpenCode commands；Doctor 只报告这些遗留主控资产，不自动删除
 - 自动检测 shell（zsh/bash）+ 给 `~/.pmai/bin` 加 PATH 的 oneshot 命令
 - 提示 gstack readiness；缺 gstack 只 warning，不影响起项。`pmai doctor --browser-smoke` 可主动验证 gstack browse，但 UI build 也可使用其它受支持的主动浏览器适配器。
 
@@ -158,9 +159,9 @@ bash bin/pmai install                       # 全局安装
 
 ### 安装模式：仅全局
 
-PMAI 只有全局安装一种形态（`pmai install` → clone `~/.pmai/` + symlink `~/.claude/skills/pmai-*` / `~/.codex/skills/pmai-*` / `$KIMI_CODE_HOME/skills/pmai-*` + 生成 `~/.config/opencode/commands/pmai-*.md`）。消费仓保持干净，skill 不进项目；`pmai upgrade` 后所有项目自动使用新版全局 skill / scripts / hooks 源，但项目级 Claude Code / Codex hook 配置需要在各消费仓由 `/pmai-doctor` 只读检测，并在 PM 确认后用 `bash ~/.pmai/scripts/install-project-hooks.sh` 刷新。Codex 不再生成 custom prompts；Kimi 直接使用 `/skill:pmai-*`，不生成模拟 slash command。
+PMAI 只有全局安装一种形态（`pmai install` → clone `~/.pmai/` + symlink `~/.claude/skills/pmai-*` / `~/.codex/skills/pmai-*`）。消费仓保持干净，Skill 不进项目；`pmai upgrade` 后所有项目自动使用新版全局 Skill / scripts / hooks 源，但项目级 Claude Code / Codex hook 配置需要在各消费仓由 `/pmai-doctor` 只读检测，并在 PM 确认后用 `bash ~/.pmai/scripts/install-project-hooks.sh` 刷新。Codex 不生成 custom prompts；Kimi/OpenCode 不注册 PMAI 主控入口。
 
-> 旧的 `--local`（往项目 `.claude/` 拷实体副本）已移除：它和全局并存时会让每个 `/pmai-*` 命令在菜单里重复，且副本不跟随升级而陈旧。消费仓需要的 host 配置（`.claude/settings.json` / `.codex/hooks.json` / `.opencode/commands` / `opencode.json`）仍单独放项目里（不是 skill，不会重复）；hook 脚本本体仍走 `~/.pmai/hooks` / `~/.pmai/scripts`。已有遗留副本用 `pmai uninstall --local <dir>` 清理。
+> 旧的 `--local`（往项目 `.claude/` 拷实体副本）已移除：它和全局并存时会让每个 `/pmai-*` 命令在菜单里重复，且副本不跟随升级而陈旧。新消费仓只保留 `.claude/settings.json`、`.codex/hooks.json` 和工作流状态；已有项目级 Skill 副本、`.opencode/commands`、`opencode.json`、Kimi Skill 或 managed hooks 都是兼容清理对象。已有遗留副本用 `pmai uninstall --local <dir>` 清理。
 
 **升级 / 卸载 / 状态**：
 
@@ -198,12 +199,11 @@ skill 跑全局升级命令；升级完读 CHANGELOG diff + 用自然语言 5-7 
 
 ### 1. 初始化新业务项目
 
-**PM 主动入口**：装好 pmai 后，**在任意 cwd**（不要求在本仓）的 Claude Code、Codex、Kimi Code 或 OpenCode 窗口里使用对应原生入口：
+**PM 主动入口**：装好 pmai 后，**在任意 cwd**（不要求在本仓）的 Claude Code 或 Codex 窗口里使用对应原生入口：
 
 ```
-Claude Code / OpenCode: /pmai-init-project
-Codex:                   $pmai-init-project
-Kimi Code:               /skill:pmai-init-project
+Claude Code: /pmai-init-project
+Codex:       $pmai-init-project
 ```
 
 agent 内部先判断项目情况，再进入对应分支：
@@ -215,17 +215,18 @@ agent 内部先判断项目情况，再进入对应分支：
 
 全新项目初始化完成后只进入 `/pmai-proposal`；成熟资料目录或已有代码库若已经有完整等价产品基线，且接入流程已经在 `PRODUCT.md` 记录依据路径和 PM 确认日期、产品基线与依据均已提交且无漂移、机器核验通过，才直接进入 `/pmai-design`，缺任一产品级关键判断则先补 Proposal。Proposal 定稿后由 design 收敛第一个模块，决定闭合时自动调用 spec-writing；首个可建造 design 定稿时，PM 一次确认 `prototype / product`、技术栈、代码入口和运行命令，框架生成 `.pm-workflow/project.yml`。
 
-> `/pmai-init-project` 是跨宿主工作流名；Kimi Code 的实际输入是 `/skill:pmai-init-project`。装好 pmai 后可在任意 cwd 使用，无需先进入本仓。
+> `/pmai-init-project` 是跨主控工作流名；Claude Code 使用 slash skill，Codex 使用 `$pmai-init-project`。装好 pmai 后可在任意 cwd 使用，无需先进入本仓。
 
 如果一个目录还没有 PMAI 初始化，任何其它 `/pmai-*` skill 被调用时都应先引导 PM 回到 `/pmai-init-project`；该入口会自动判断全新项目、资料目录或已有代码库，不要求 PM 手动选择另一个接入口。
 
-**Codex / Kimi Code / OpenCode 主控入口**：
+**Claude Code / Codex 主控与外部 Builder**：
 
 - 在本生成器仓协同改框架：Codex 先读根目录 `AGENTS.md`，按 repo-local `skills/` / `scripts/` 工作。
 - 在本生成器仓初始化消费仓：让 Codex 执行 `/pmai-init-project` 等价流程，内部读取 `skills/init-project/SKILL.md`，最后调用 `bash scripts/init-project.sh ...`。
 - 在消费仓继续使用：`init-project.sh` 会生成消费仓根目录 `AGENTS.md` 和项目级 `.codex/hooks.json`；Codex 进入消费仓后先读 `AGENTS.md`。`pmai install/upgrade` 会把 `pmai-*` 暴露到 `~/.codex/skills/`，通过 `$pmai-*`、skill 选择器或自然语言调用，并清理旧版遗留的 `~/.codex/prompts/pmai-*.md`。Codex 首次启用项目 hooks 时可能要求信任确认，这是 Codex 自身的安全机制。
-- Kimi Code 在生成器仓和消费仓都先读根目录 `AGENTS.md`。`pmai install/upgrade` 把同一批 `pmai-*` Skill 暴露到 `$KIMI_CODE_HOME/skills/`，原生输入 `/skill:pmai-init-project`、`/skill:pmai-proposal`、`/skill:pmai-design`、`/skill:pmai-build`；Kimi 不读取 `.codex/hooks.json`，写保护和 review guard 由用户级原生 hooks 分发器按仓库类型路由。生成器仓优先读取当前 checkout，消费仓使用 `~/.pmai` 安装态。
-- OpenCode 进入消费仓后同样先读 `AGENTS.md`。`pmai install/upgrade` 会生成全局 `~/.config/opencode/commands/pmai-*.md`；`init-project.sh` 会生成项目级 `.opencode/commands/pmai-*.md` 和 `opencode.json`，命令同样只路由回 `PMAI_HOME` / `~/.pmai` 下的已安装 `SKILL.md`。OpenCode 第一版不做 PMAI 专属 plugin hooks，也不假装 Codex hooks 生效。
+- Claude Code 和 Codex 负责读取产品真相源、执行完整 Skill、采集证据并推进 lifecycle；项目级 Hook 只为这两个主控生成和维护。
+- Kimi Code、OpenCode 和 Cursor Agent 只能由 `/pmai-build` 通过 adapter/profile 启动，在已确认的 `BUILD_DIR` 中产出候选 diff。它们不能调用 PMAI Skill、修改产品权威文档、写验收通过或处理 landing。
+- 旧 Kimi/OpenCode 主控资产不会被 install、upgrade 或 Doctor repair 刷新；Doctor 将其列为非阻断遗留项，清理由 PM 单独确认。
 
 **非交互参数化 CLI**（smoke / 批量自动化依赖）：
 
@@ -267,7 +268,7 @@ bash ~/.pmai/scripts/measure-tthw.sh record /path/to/project \
 
 ### 2. PM 在业务仓里的主路径
 
-> **注意**：装好 pmai 后，所有 Skill 都以 `pmai-` 前缀注册（防与其它框架命名冲突）。下面用 `/pmai-*` 表示跨宿主工作流名；Kimi Code 对应原生 `/skill:pmai-*`，Codex 对应 `$pmai-*`。
+> **注意**：装好 pmai 后，所有 Skill 都以 `pmai-` 前缀注册（防与其它框架命名冲突）。下面用 `/pmai-*` 表示跨主控工作流名；Claude Code 使用 slash skill，Codex 对应 `$pmai-*`。
 
 ```
 /pmai-init-project           → 每个项目只在首次初始化或首次接入已有代码时使用
@@ -283,13 +284,13 @@ bash ~/.pmai/scripts/measure-tthw.sh record /path/to/project \
 
 这是正常协作的完整主路径，不需要再从 Skill 菜单里挑下一步。成熟项目只有在完整等价产品基线经过接入核验、显式记录依据与 PM 确认日期、相关文件已提交且无漂移并通过机器门时，才可从 design 开始；一旦走 Proposal 就必须完成完整文档。Profile 负责补充领域内容，可叠加企业平台与 AI 两份；Preset 只决定文档形态，完整 PRD 使用唯一 Preset。忘了当前停在哪里时，用 `/pmai-status` 只读恢复现状；它不是主流程的固定一步。
 
-产品方向纠正回 `/pmai-proposal`，并用完整新版本取代旧版；模块对象、规则、任务路径、权限或关键交互变化回 `/pmai-design`；没有 active work 时，已经确认的待办、术语、跨模块规则或历史理路才用 `/pmai-record` 补录。record 和其它下游 Skill 都不能修改 Proposal。简单改动、介绍型文档、飞书文档同步或评审回收等专项场景，PM 直接说明想做什么即可，AI 负责选择对应能力并接回当前产品上下文。完整需求进入 `/pmai-build` 后，AI 会在 PM 看结果期间持续修改；PM 说“定稿 / 可以提交 / 可以合并”即触发最终检查、自动落地主线和文档同步。
+产品方向纠正回 `/pmai-proposal`，并用完整新版本取代旧版；模块对象、规则、任务路径、权限或关键交互变化回 `/pmai-design`；没有 active work 时，已经确认的待办、术语、跨模块规则或历史理路才用 `/pmai-record` 补录。record 和其它下游 Skill 都不能修改 Proposal。简单改动、介绍型文档、飞书文档同步或评审回收等专项场景，PM 直接说明想做什么即可，AI 负责选择对应能力并接回当前产品上下文。飞书入口只按意图区分：本地内容发布或更新到飞书用 `/pmai-publish-to-lark`；明确以飞书为准、不需要判断时用 `/pmai-sync-from-lark`；需要理解正文或批注对产品的影响时用 `/pmai-lark-review`。完整需求进入 `/pmai-build` 后，AI 会在 PM 看结果期间持续修改；PM 说“定稿 / 可以提交 / 可以合并”即触发最终检查、自动落地主线和文档同步。
 
 ### 3. 多机 / 团队仓
 
-PMAI 走纯全局：每台要用的机器各自 `pmai install` 一次（全局），消费仓里不放 skill 副本。换机器 clone 业务仓后，在该机跑一次全局安装即可使用同一批 Skill：Claude Code / OpenCode 输入 `/pmai-*`，Codex 使用 `$pmai-*`，Kimi Code 使用 `/skill:pmai-*`。
+PMAI 走纯全局：每台要用的机器各自 `pmai install` 一次（全局），消费仓里不放 Skill 副本。换机器 clone 业务仓后，在该机跑一次全局安装即可由 Claude Code 使用 `/pmai-*`，或由 Codex 使用 `$pmai-*`。Builder CLI 只需在准备把它选作构建工具的机器上安装。
 
-> 旧的 `--local`（把框架副本 commit 进业务仓 `.claude/`）已移除——它和全局并存会让命令重复、副本陈旧。若仓里还有遗留副本，清理：`pmai uninstall --local <仓目录>`（只删项目内副本，不动全局）。需要的 `.claude/settings.json` + `.codex/hooks.json` + `.opencode/commands` + `opencode.json` 保留（那些不是 skill，不会重复）。
+> 旧的 `--local`（把框架副本 commit 进业务仓 `.claude/`）已移除——它和全局并存会让命令重复、副本陈旧。若仓里还有遗留副本，清理：`pmai uninstall --local <仓目录>`（只删项目内副本，不动全局）。`.claude/settings.json` 与 `.codex/hooks.json` 保留；旧 `.opencode/commands` 和 `opencode.json` 不再属于当前消费仓配置。
 
 ---
 

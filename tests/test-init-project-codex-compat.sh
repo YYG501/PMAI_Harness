@@ -2,7 +2,8 @@
 # Codex 主控入口兼容性测试：
 # - framework 提供 AGENTS.md.tmpl
 # - init-project 会把 AGENTS.md 和 .codex/hooks.json 生成到消费仓根目录
-# - AGENTS.md 是通用薄入口，hooks / OpenCode commands 是 host 配置，引用 CLAUDE.md / PMAI_HOME，不复制 framework 源资产
+# - AGENTS.md 是通用薄入口，Claude/Codex hooks 引用 PMAI_HOME，不复制 framework 源资产
+# - Kimi/OpenCode 只作为 Builder，新消费仓不生成它们的主控配置
 set -uo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -34,7 +35,8 @@ test_agents_template_exists_and_maps_codex() {
   assert_file_contains "$AGENTS_TMPL" "CLAUDE.md" "AGENTS.md.tmpl should reference CLAUDE.md truth source" || return
   assert_file_contains "$AGENTS_TMPL" "当前主控 agent" "AGENTS.md.tmpl should map driver role to current host" || return
   assert_file_contains "$AGENTS_TMPL" "Codex" "AGENTS.md.tmpl should still mention Codex" || return
-  assert_file_contains "$AGENTS_TMPL" "OpenCode" "AGENTS.md.tmpl should mention OpenCode" || return
+  assert_file_contains "$AGENTS_TMPL" "Kimi Code、OpenCode 和 Cursor Agent" "AGENTS.md.tmpl should define builder-only hosts" || return
+  assert_file_contains "$AGENTS_TMPL" '只可由 `/pmai-build` 选作外部 Builder' "AGENTS.md.tmpl should limit Kimi/OpenCode to Builder" || return
   assert_file_contains "$AGENTS_TMPL" "skill-preamble.sh" "AGENTS.md.tmpl should use neutral PMAI preamble" || return
   assert_file_contains "$AGENTS_TMPL" "AskUserQuestion 不可用" "AGENTS.md.tmpl should define AskUser fallback" || return
   assert_file_contains "$AGENTS_TMPL" "默认用中文" "AGENTS.md.tmpl should preserve Chinese default" || return
@@ -45,7 +47,10 @@ test_agents_template_exists_and_maps_codex() {
   assert_file_contains "$AGENTS_TMPL" "--check" "AGENTS.md.tmpl should use a read-only hook drift check" || return
   assert_file_contains "$AGENTS_TMPL" "<!-- PMAI:BEGIN consumer-startup -->" "AGENTS.md.tmpl should mark the managed startup block" || return
   assert_file_contains "$AGENTS_TMPL" "<!-- PMAI:END consumer-startup -->" "AGENTS.md.tmpl should close the managed startup block" || return
-  assert_file_contains "$AGENTS_TMPL" "install-opencode-commands.sh" "AGENTS.md.tmpl should tell OpenCode how to repair missing commands" || return
+  if grep -q "install-opencode-commands.sh" "$AGENTS_TMPL"; then
+    _fail "consumer template must not refresh legacy OpenCode controller commands"
+    return
+  fi
   assert_file_contains "$AGENTS_TMPL" "不写死机器绑定路径" "AGENTS.md.tmpl should carry portable path principle" || return
   assert_file_contains "$AGENTS_TMPL" "/Users/<某人>/..." "AGENTS.md.tmpl should forbid user-specific local paths" || return
   pass_test
@@ -56,7 +61,10 @@ test_init_project_knows_agents_template() {
 
   assert_file_contains "$INIT_PROJECT_SH" "templates/AGENTS.md.tmpl" "init-project should require AGENTS template" || return
   assert_file_contains "$INIT_PROJECT_SH" "templates/codex-hooks.json.tmpl" "init-project should require Codex hooks template" || return
-  assert_file_contains "$INIT_PROJECT_SH" "install-opencode-commands.sh" "init-project should require OpenCode command installer" || return
+  if grep -q 'install-opencode-commands.sh.*--project' "$INIT_PROJECT_SH"; then
+    _fail "init-project must not install OpenCode controller commands"
+    return
+  fi
   assert_file_contains "$INIT_PROJECT_SH" "已阻止重复初始化" "init-project should hard-stop already initialized PMAI projects" || return
   assert_file_contains "$INIT_PROJECT_SH" 'AGENTS.md)' "init-project should route AGENTS.md template" || return
   assert_file_contains "$INIT_PROJECT_SH" 'DEST="$TARGET_DIR/AGENTS.md"' "init-project should write root AGENTS.md" || return
@@ -107,13 +115,14 @@ test_e2e_generates_agents_md_without_framework_assets() {
     rm -rf "$base"
     return
   fi
-  if [ ! -f "$proj/.opencode/commands/pmai-build.md" ]; then
-    _fail "消费仓根目录未生成 .opencode/commands/pmai-build.md"
+  if [ -e "$proj/.opencode/commands/pmai-build.md" ] \
+    || [ -L "$proj/.opencode/commands/pmai-build.md" ]; then
+    _fail "新消费仓不应生成 .opencode/commands/pmai-build.md"
     rm -rf "$base"
     return
   fi
-  if [ ! -f "$proj/opencode.json" ]; then
-    _fail "消费仓根目录未生成 opencode.json"
+  if [ -e "$proj/opencode.json" ] || [ -L "$proj/opencode.json" ]; then
+    _fail "新消费仓不应生成 opencode.json"
     rm -rf "$base"
     return
   fi
@@ -130,8 +139,9 @@ test_e2e_generates_agents_md_without_framework_assets() {
     return
   fi
 
-  if ! grep -q "OpenCode" "$proj/AGENTS.md"; then
-    _fail "生成的 AGENTS.md 缺 OpenCode 主控说明"
+  if ! grep -q "Kimi Code、OpenCode 和 Cursor Agent" "$proj/AGENTS.md" \
+    || ! grep -q "外部 Builder" "$proj/AGENTS.md"; then
+    _fail "生成的 AGENTS.md 缺 Kimi/OpenCode Builder 边界"
     rm -rf "$base"
     return
   fi
@@ -164,12 +174,6 @@ test_e2e_generates_agents_md_without_framework_assets() {
     rm -rf "$base"
     return
   }
-  python3 -m json.tool "$proj/opencode.json" >/dev/null || {
-    _fail "生成的 opencode.json 不是合法 JSON"
-    rm -rf "$base"
-    return
-  }
-
   if [ -d "$proj/.claude/skills" ] || [ -d "$proj/.claude/scripts" ] || [ -d "$proj/.claude/agents" ]; then
     _fail "消费仓 .claude/ 泄漏 framework 资产"
     rm -rf "$base"

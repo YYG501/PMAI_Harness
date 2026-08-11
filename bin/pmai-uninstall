@@ -194,11 +194,20 @@ done
 [ -L "$KIMI_SKILLS/_shared" ] \
   && pmai_shared_link_is_managed "$PMAI_HOME/skills/_shared" "$KIMI_SKILLS/_shared" \
   && KIMI_SYMLINKS+=("$KIMI_SKILLS/_shared")
-SYMLINKS=("${CLAUDE_SYMLINKS[@]}" "${CODEX_SYMLINKS[@]}" "${KIMI_SYMLINKS[@]}")
-SYMLINK_COUNT=${#SYMLINKS[@]}
 CLAUDE_SYMLINK_COUNT=${#CLAUDE_SYMLINKS[@]}
 CODEX_SYMLINK_COUNT=${#CODEX_SYMLINKS[@]}
 KIMI_SYMLINK_COUNT=${#KIMI_SYMLINKS[@]}
+SYMLINKS=()
+if [ "$CLAUDE_SYMLINK_COUNT" -gt 0 ]; then
+  SYMLINKS+=("${CLAUDE_SYMLINKS[@]}")
+fi
+if [ "$CODEX_SYMLINK_COUNT" -gt 0 ]; then
+  SYMLINKS+=("${CODEX_SYMLINKS[@]}")
+fi
+if [ "$KIMI_SYMLINK_COUNT" -gt 0 ]; then
+  SYMLINKS+=("${KIMI_SYMLINKS[@]}")
+fi
+SYMLINK_COUNT=${#SYMLINKS[@]}
 CODEX_PROMPT_FILES=()
 for s in "$CODEX_PROMPTS"/${SKILL_PREFIX}*.md; do
   [ -e "$s" ] && CODEX_PROMPT_FILES+=("$s")
@@ -295,17 +304,23 @@ echo ""
 REMOVED_COUNT=0
 
 # 清 skill symlink
-for s in "${SYMLINKS[@]}"; do
-  rm -f "$s" && REMOVED_COUNT=$((REMOVED_COUNT + 1))
-done
+if [ "$SYMLINK_COUNT" -gt 0 ]; then
+  for s in "${SYMLINKS[@]}"; do
+    rm -f "$s" && REMOVED_COUNT=$((REMOVED_COUNT + 1))
+  done
+fi
 REMOVED_PROMPT_COUNT=0
-for s in "${CODEX_PROMPT_FILES[@]}"; do
-  rm -f "$s" && REMOVED_PROMPT_COUNT=$((REMOVED_PROMPT_COUNT + 1))
-done
+if [ "$CODEX_PROMPT_COUNT" -gt 0 ]; then
+  for s in "${CODEX_PROMPT_FILES[@]}"; do
+    rm -f "$s" && REMOVED_PROMPT_COUNT=$((REMOVED_PROMPT_COUNT + 1))
+  done
+fi
 REMOVED_OPENCODE_COMMAND_COUNT=0
-for s in "${OPENCODE_COMMAND_FILES[@]}"; do
-  rm -f "$s" && REMOVED_OPENCODE_COMMAND_COUNT=$((REMOVED_OPENCODE_COMMAND_COUNT + 1))
-done
+if [ "$OPENCODE_COMMAND_COUNT" -gt 0 ]; then
+  for s in "${OPENCODE_COMMAND_FILES[@]}"; do
+    rm -f "$s" && REMOVED_OPENCODE_COMMAND_COUNT=$((REMOVED_OPENCODE_COMMAND_COUNT + 1))
+  done
+fi
 REMOVED_KIMI_HOOKS=0
 KIMI_HOOK_MANAGER="$PMAI_HOME/scripts/manage-kimi-hooks.py"
 if [ ! -f "$KIMI_HOOK_MANAGER" ]; then

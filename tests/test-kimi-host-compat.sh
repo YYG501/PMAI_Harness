@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Kimi Code first-class host and external builder regression: native skills,
-# managed hooks, entry templates, lifecycle coverage, and current-host mapping.
+# Kimi Code Builder and legacy-controller regression: adapter/profile remain,
+# new lifecycle entry generation stops, and explicit compatibility tools stay safe.
 
 set -uo pipefail
 
@@ -11,13 +11,27 @@ REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 MANAGER="$REPO_ROOT/scripts/manage-kimi-hooks.py"
 DISPATCH="$REPO_ROOT/scripts/kimi-hook-dispatch.sh"
 
-test_kimi_native_entry_is_documented() {
-  start_test "K1: 生成器和消费仓声明 Kimi 原生 /skill:pmai-* 入口"
+copy_dispatch_fixture() {
+  local trusted="$1"
 
-  assert_file_contains "$REPO_ROOT/AGENTS.md" "/skill:pmai-build" "generator entry should document Kimi native command" || return
-  assert_file_contains "$REPO_ROOT/templates/AGENTS.md.tmpl" "/skill:pmai-build" "consumer entry should document Kimi native command" || return
-  assert_file_contains "$REPO_ROOT/templates/CLAUDE.md.tmpl" "/skill:pmai-status" "consumer charter should map status for Kimi" || return
-  assert_file_contains "$REPO_ROOT/AGENTS.md" "重新完整读取本 checkout" "generator Kimi entry should prefer checkout sources" || return
+  mkdir -p "$trusted/scripts/_lib"
+  cp "$DISPATCH" "$trusted/scripts/kimi-hook-dispatch.sh"
+  cp "$REPO_ROOT/scripts/repo-kind.py" "$trusted/scripts/repo-kind.py"
+  cp "$REPO_ROOT/scripts/_lib/repo_identity.py" \
+    "$trusted/scripts/_lib/repo_identity.py"
+  chmod +x "$trusted/scripts/kimi-hook-dispatch.sh"
+}
+
+test_kimi_builder_boundary_is_documented() {
+  start_test "K1: 生成器和消费仓只声明 Kimi Builder 边界"
+
+  assert_file_contains "$REPO_ROOT/AGENTS.md" "Kimi Code、OpenCode 和 Cursor Agent" "generator entry should name builder-only hosts" || return
+  assert_file_contains "$REPO_ROOT/templates/AGENTS.md.tmpl" '只可由 `/pmai-build` 选作外部 Builder' "consumer entry should limit Kimi to Builder" || return
+  assert_file_contains "$REPO_ROOT/templates/CLAUDE.md.tmpl" "不推进 lifecycle、验收或 landing" "consumer charter should forbid controller behavior" || return
+  if grep -q '/skill:pmai-' "$REPO_ROOT/AGENTS.md" "$REPO_ROOT/templates/AGENTS.md.tmpl" "$REPO_ROOT/templates/CLAUDE.md.tmpl"; then
+    _fail "current generator/consumer entries must not advertise Kimi PMAI skills"
+    return
+  fi
   pass_test
 }
 
@@ -116,18 +130,17 @@ test_kimi_dispatch_is_scoped_and_maps_write_path() {
   pass_test
 }
 
-test_kimi_lifecycle_surface_is_complete() {
-  start_test "K4: 生命周期与 doctor 覆盖 Kimi，status 只作兼容包装"
-  local file
+test_kimi_lifecycle_only_diagnoses_and_cleans_legacy_entries() {
+  start_test "K4: install/upgrade 不再生成 Kimi 主控，doctor/uninstall 只诊断清理"
 
-  for file in pmai-install pmai-upgrade pmai-uninstall pmai-doctor; do
-    assert_file_contains "$REPO_ROOT/bin/$file" "KIMI_CODE_HOME" "$file should honor KIMI_CODE_HOME" || return
-    assert_file_contains "$REPO_ROOT/bin/$file" "KIMI_SKILLS" "$file should manage Kimi skills" || return
-  done
-  assert_file_contains "$REPO_ROOT/bin/pmai-install" "manage-kimi-hooks.py" "install should manage Kimi hooks" || return
-  assert_file_contains "$REPO_ROOT/bin/pmai-upgrade" "manage-kimi-hooks.py" "upgrade should refresh Kimi hooks" || return
+  if grep -qE 'KIMI_CODE_HOME|KIMI_SKILLS|manage-kimi-hooks.py' "$REPO_ROOT/bin/pmai-install" \
+    || grep -qE 'KIMI_CODE_HOME|KIMI_SKILLS|manage-kimi-hooks.py' "$REPO_ROOT/bin/pmai-upgrade"; then
+    _fail "install/upgrade must not create or refresh Kimi controller entries"
+    return
+  fi
   assert_file_contains "$REPO_ROOT/bin/pmai-uninstall" "manage-kimi-hooks.py" "uninstall should remove only managed Kimi hooks" || return
-  assert_file_contains "$REPO_ROOT/bin/pmai-doctor" "Kimi Code PMAI-managed hooks" "doctor should validate Kimi hooks" || return
+  assert_file_contains "$REPO_ROOT/bin/pmai-doctor" "旧 Kimi Code PMAI Skill 入口" "doctor should report legacy Kimi skills" || return
+  assert_file_contains "$REPO_ROOT/bin/pmai-doctor" "旧 Kimi Code PMAI managed hooks" "doctor should report legacy Kimi hooks" || return
   assert_file_contains "$REPO_ROOT/bin/pmai-status" "pmai-doctor" "status should delegate Kimi health to doctor" || return
   assert_file_contains "$REPO_ROOT/bin/pmai-status" "--check" "status should use read-only doctor mode" || return
   pass_test
@@ -264,8 +277,7 @@ test_kimi_dispatch_fails_closed_when_trusted_prompt_hook_breaks() {
   fake_bin="$tmp/fake-bin"
   mkdir -p "$trusted/scripts" "$trusted/hooks" \
     "$generator/skills/init-project" "$fake_bin"
-  cp "$DISPATCH" "$trusted/scripts/kimi-hook-dispatch.sh"
-  chmod +x "$trusted/scripts/kimi-hook-dispatch.sh"
+  copy_dispatch_fixture "$trusted"
   git -C "$generator" init -q -b main
   printf '# runtime\n' > "$generator/RUNTIME.md"
   printf '# claude\n' > "$generator/CLAUDE.md"
@@ -325,8 +337,7 @@ test_kimi_write_dispatch_fails_closed_when_trusted_guard_breaks() {
   consumer="$tmp/consumer"
   generator="$tmp/generator-checkout"
   mkdir -p "$trusted/scripts" "$consumer" "$generator/skills/init-project"
-  cp "$DISPATCH" "$trusted/scripts/kimi-hook-dispatch.sh"
-  chmod +x "$trusted/scripts/kimi-hook-dispatch.sh"
+  copy_dispatch_fixture "$trusted"
 
   git -C "$consumer" init -q -b main
   printf '# PMAI consumer\n' > "$consumer/AGENTS.md"
@@ -411,8 +422,7 @@ test_kimi_write_rejects_conflicting_path_aliases() {
   consumer="$tmp/consumer"
   capture="$tmp/mapped-input.json"
   mkdir -p "$trusted/scripts" "$consumer/src" "$consumer/packages/foo/docs"
-  cp "$DISPATCH" "$trusted/scripts/kimi-hook-dispatch.sh"
-  chmod +x "$trusted/scripts/kimi-hook-dispatch.sh"
+  copy_dispatch_fixture "$trusted"
   cat > "$trusted/scripts/check-branch.sh" <<'SH'
 #!/usr/bin/env bash
 cat > "$PMAI_TEST_CAPTURE"
@@ -1026,6 +1036,10 @@ if [ ! -e "$PMAI_TEST_PYTHON_MARKER" ]; then
   : > "$PMAI_TEST_PYTHON_MARKER"
   exec "$PMAI_TEST_REAL_PYTHON" "$@"
 fi
+if [ ! -e "$PMAI_TEST_PYTHON_MARKER.reader" ]; then
+  : > "$PMAI_TEST_PYTHON_MARKER.reader"
+  exec "$PMAI_TEST_REAL_PYTHON" "$@"
+fi
 exit 9
 SH
   chmod +x "$fake_bin/python3"
@@ -1098,7 +1112,7 @@ test_kimi_prompt_build_shares_remaining_total_budget() {
 exec "$real_mktemp" "$runtime_tmp/pmai.XXXXXX"
 SH
   chmod +x "$fake_bin/mktemp"
-  cp "$DISPATCH" "$trusted/scripts/kimi-hook-dispatch.sh"
+  copy_dispatch_fixture "$trusted"
   cat > "$trusted/hooks/active-build-guard.cjs" <<'JS'
 const fs = require('fs');
 fs.readFileSync(0);
@@ -1239,10 +1253,10 @@ PY
   pass_test
 }
 
-test_kimi_native_entry_is_documented
+test_kimi_builder_boundary_is_documented
 test_kimi_hook_manager_preserves_user_config
 test_kimi_dispatch_is_scoped_and_maps_write_path
-test_kimi_lifecycle_surface_is_complete
+test_kimi_lifecycle_only_diagnoses_and_cleans_legacy_entries
 test_builder_supports_kimi_with_current_host_exclusion
 test_public_skill_names_match_kimi_native_commands
 test_no_machine_bound_kimi_paths

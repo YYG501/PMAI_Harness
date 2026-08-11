@@ -14,7 +14,8 @@ README="$REPO_ROOT/README.md"
 AGENTS_TEMPLATE="$REPO_ROOT/templates/AGENTS.md.tmpl"
 CLAUDE_TEMPLATE="$REPO_ROOT/templates/CLAUDE.md.tmpl"
 PUBLISH_SKILL="$REPO_ROOT/skills/publish-to-lark/SKILL.md"
-SYNC_SKILL="$REPO_ROOT/skills/lark-sync/SKILL.md"
+SYNC_SKILL="$REPO_ROOT/skills/sync-from-lark/SKILL.md"
+WRITEBACK_CONTRACT="$REPO_ROOT/skills/_shared/lark-writeback.md"
 DESIGN_SKILL="$REPO_ROOT/skills/design/SKILL.md"
 PROPOSAL_SKILL="$REPO_ROOT/skills/proposal/SKILL.md"
 BUILD_SKILL="$REPO_ROOT/skills/build/SKILL.md"
@@ -582,7 +583,8 @@ test_skill_contract() {
   assert_file_contains "$AGENTS_TEMPLATE" "/pmai-lark-review" "consumer AGENTS should route lark review" || return
   assert_file_contains "$CLAUDE_TEMPLATE" "/pmai-lark-review" "consumer CLAUDE should list lark-review" || return
   assert_file_contains "$PUBLISH_SKILL" "lark_published_revision_id" "publisher should record review revision" || return
-  assert_file_contains "$SYNC_SKILL" "/pmai-lark-review" "plain sync should route review intent" || return
+  assert_file_contains "$SYNC_SKILL" "/pmai-lark-review" "mechanical pull should route review intent" || return
+  assert_file_contains "$WRITEBACK_CONTRACT" "评审回流写回" "review should share the internal writeback contract" || return
   assert_file_contains "$HANDOFF" "apply 前：只收敛候选决定并编译 T" "ordinary review batches should apply T before implementation" || return
   assert_file_contains "$HANDOFF" "无 active build 时用.*handoff --route proposal" "product-level reviews without a build need a direct read-only handoff" || return
   assert_file_contains "$SKILL" "--applied-context-pack.*APPLIED_CONTEXT_PACK" "active build review should bind the applied context pack" || return
@@ -619,7 +621,7 @@ import sys
 text = Path(sys.argv[1]).read_text(encoding="utf-8")
 section = text.split("### 7. 按已固化路由精细同步", 1)[1]
 positions = [
-    section.index("先调用 `/pmai-lark-sync`"),
+    section.index("先按 `skills/_shared/lark-writeback.md`"),
     section.index("verify-sync"),
     section.index("APPLIED_CONTEXT_PACK"),
     section.index('build-contract.py" add-delta'),

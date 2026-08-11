@@ -87,9 +87,8 @@ FINDING_ADVISORY = "project_advisory"
 HOST_PATHS = (
     ".claude/settings.json",
     ".codex/hooks.json",
-    ".opencode/commands",
-    "opencode.json",
 )
+LEGACY_HOST_PATHS = (".opencode/commands", "opencode.json")
 IGNORE_PROBES = (
     ".runs/doctor-probe",
     ".worktrees/doctor-probe",
@@ -452,12 +451,22 @@ class Audit:
                     f"项目宿主入口缺失，需要按当前框架刷新：{relative}",
                     relative,
                 )
-            elif relative != ".opencode/commands" and relative not in self.tracked:
+            elif relative not in self.tracked:
                 self.add(
                     "sync",
                     "host_surface_untracked",
                     f"项目宿主入口未被 Git 跟踪，换机器后会丢失：{relative}",
                     relative,
+                )
+        for relative in LEGACY_HOST_PATHS:
+            if os.path.lexists(self.root / relative):
+                self.add(
+                    "warning",
+                    "legacy_host_surface",
+                    f"发现旧 OpenCode 主控入口；当前版本不再使用或刷新：{relative}",
+                    relative,
+                    kind=FINDING_LEGACY,
+                    blocking=False,
                 )
 
     def check_gitignore_and_secrets(self) -> None:

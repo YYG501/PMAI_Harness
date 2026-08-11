@@ -10,7 +10,7 @@ source "$(dirname "$0")/_gate.sh"
 adapter_precheck
 
 BUILD_DIR_RESOLVED="$(adapter_build_dir)"
-PROMPT="$(cat "$PROMPT_FILE")"
+PROMPT="$(adapter_prompt)"
 STATUS_DIR="${EXECUTOR_STATUS_DIR:-}"
 TIMEOUT_SECONDS="${EXECUTOR_TIMEOUT_SECONDS:-0}"
 

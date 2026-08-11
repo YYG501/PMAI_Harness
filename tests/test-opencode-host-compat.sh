@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# OpenCode 主控入口兼容性测试：
-# - install/upgrade 能生成全局 OpenCode slash commands
-# - init-project 能生成项目级 .opencode/commands + opencode.json
-# - command 文件只路由到 PMAI_HOME，不复制 framework 源资产，不生成 Cursor 配置
+# OpenCode Builder 与遗留主控资产兼容性测试：
+# - 新 install/upgrade/init 不再生成 OpenCode 主控入口
+# - OpenCode adapter/profile 继续作为外部 Builder
+# - 旧 command renderer 只保留为显式兼容工具，便于诊断和受控清理
 set -uo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -29,15 +29,18 @@ make_fake_pmai_home() {
   printf "%s\n" "$home"
 }
 
-test_template_declares_opencode_entry() {
-  start_test "T1: AGENTS.md.tmpl 声明 OpenCode 主控入口"
+test_template_declares_opencode_builder_boundary() {
+  start_test "T1: AGENTS.md.tmpl 只声明 OpenCode Builder 边界"
 
   assert_file_exists "$INSTALL_OPENCODE" "install-opencode-commands.sh should exist" || return
   assert_file_contains "$AGENTS_TMPL" "PMAI Agent Entry" "AGENTS.md.tmpl should be generic agent entry" || return
-  assert_file_contains "$AGENTS_TMPL" "OpenCode" "AGENTS.md.tmpl should mention OpenCode" || return
-  assert_file_contains "$AGENTS_TMPL" ".opencode/commands" "AGENTS.md.tmpl should mention project OpenCode commands" || return
-  assert_file_contains "$AGENTS_TMPL" "opencode.json" "AGENTS.md.tmpl should mention opencode.json" || return
-  assert_file_contains "$AGENTS_TMPL" "install-opencode-commands.sh" "AGENTS.md.tmpl should tell how to repair OpenCode commands" || return
+  assert_file_contains "$AGENTS_TMPL" "Kimi Code、OpenCode 和 Cursor Agent" "AGENTS.md.tmpl should mention OpenCode among Builders" || return
+  assert_file_contains "$AGENTS_TMPL" '只可由 `/pmai-build` 选作外部 Builder' "AGENTS.md.tmpl should limit OpenCode to Builder" || return
+  assert_file_contains "$AGENTS_TMPL" "新消费仓不得生成 Kimi/OpenCode 主控入口" "AGENTS.md.tmpl should reject new controller assets" || return
+  if grep -q "install-opencode-commands.sh" "$AGENTS_TMPL"; then
+    _fail "AGENTS.md.tmpl must not route PMAI commands through OpenCode"
+    return
+  fi
   if grep -q -- ".cursor" "$AGENTS_TMPL"; then
     _fail "AGENTS.md.tmpl should not generate Cursor guidance in this round"
     return
@@ -46,7 +49,7 @@ test_template_declares_opencode_entry() {
 }
 
 test_global_opencode_commands_are_thin_routes() {
-  start_test "T2: 全局 OpenCode commands 只路由到 PMAI_HOME skill"
+  start_test "T2: 遗留 OpenCode renderer 仍可确定性还原旧 command"
 
   local base pmai_home opencode_dir cmd
   base=$(mktemp -d)
@@ -304,16 +307,24 @@ test_project_opencode_check_is_read_only_and_detects_drift() {
   rm -rf "$base"
 }
 
-test_cli_scripts_reference_opencode_commands() {
-  start_test "T6: CLI 生命周期与 doctor 接入 OpenCode，status 只作兼容包装"
+test_cli_scripts_limit_opencode_to_builder_and_cleanup() {
+  start_test "T6: 新生命周期不生成 OpenCode 主控，仍保留 Builder 与清理"
 
-  assert_file_contains "$REPO_ROOT/bin/pmai-install" "install-opencode-commands.sh" "install should generate OpenCode commands" || return
-  assert_file_contains "$REPO_ROOT/bin/pmai-upgrade" "install-opencode-commands.sh" "upgrade should refresh OpenCode commands" || return
+  if grep -q "install-opencode-commands.sh" "$REPO_ROOT/bin/pmai-install" \
+    || grep -q "install-opencode-commands.sh" "$REPO_ROOT/bin/pmai-upgrade" \
+    || grep -q 'install-opencode-commands.sh.*--project' "$INIT_PROJECT_SH"; then
+    _fail "install/upgrade/init must not create or refresh OpenCode controllers"
+    return
+  fi
   assert_file_contains "$REPO_ROOT/bin/pmai-uninstall" "OpenCode slash commands removed" "uninstall should clean OpenCode commands" || return
-  assert_file_contains "$REPO_ROOT/bin/pmai-doctor" "OpenCode slash commands" "doctor should check OpenCode commands" || return
+  assert_file_contains "$REPO_ROOT/bin/pmai-doctor" "旧 OpenCode PMAI 主控 command" "doctor should report legacy OpenCode commands" || return
   assert_file_contains "$REPO_ROOT/bin/pmai-status" "pmai-doctor" "status should delegate health checks to doctor" || return
   assert_file_contains "$REPO_ROOT/bin/pmai-status" "--check" "status should use the read-only doctor mode" || return
-  assert_file_contains "$INIT_PROJECT_SH" "install-opencode-commands.sh" "init-project should install project OpenCode commands" || return
+  assert_file_contains "$REPO_ROOT/templates/pm-workflow.config.yml.tmpl" "executor: opencode" "OpenCode builder profile should remain" || return
+  if [ ! -x "$REPO_ROOT/scripts/exec-adapters/opencode.sh" ]; then
+    _fail "OpenCode Builder adapter should remain executable"
+    return
+  fi
   pass_test
 }
 
@@ -327,13 +338,13 @@ test_template_and_scripts_do_not_add_cursor() {
   pass_test
 }
 
-test_template_declares_opencode_entry
+test_template_declares_opencode_builder_boundary
 test_global_opencode_commands_are_thin_routes
 test_global_opencode_check_detects_and_repairs_drift
 test_global_opencode_install_rejects_file_paths
 test_project_opencode_config_is_lightweight
 test_project_opencode_check_is_read_only_and_detects_drift
-test_cli_scripts_reference_opencode_commands
+test_cli_scripts_limit_opencode_to_builder_and_cleanup
 test_template_and_scripts_do_not_add_cursor
 
 report_results "opencode-host-compat"

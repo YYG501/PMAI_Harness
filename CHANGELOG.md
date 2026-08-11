@@ -18,6 +18,12 @@ PM-AI-Workflow 生成器仓的演进记录。本文件**只记影响下游业务
 
 ## 未发布
 
+- `refactor(hosts)`: **复杂度收口批次二统一仓库身份，并把完整主控收缩为 Claude Code / Codex。** 新增唯一 `generator / consumer / uninitialized` 解析器，preamble、status、Doctor 和 Kimi 遗留 dispatcher 共用同一三态；严格生成器 marker、路径边界和普通目录反例防止把生成器仓、消费仓或未初始化仓混淆。`pmai install/upgrade` 只管理 Claude/Codex Skill，`init-project.sh` 只生成两者的项目配置；Kimi Code、OpenCode 和 Cursor Agent 只保留外部 Builder adapter/profile，统一 prompt 明确禁止调用 PMAI Skill、推进 lifecycle、写验收通过或处理 landing。Doctor 分开检查完整主控和 Builder CLI；旧 Kimi Skill/managed hooks、OpenCode commands/config 只作为非阻断遗留项报告，不 repair、不自动删除。卸载器兼容没有任何 Kimi/OpenCode 遗留资产的新安装，在 macOS Bash 3.2 的空集合路径也能完成清理。README、生成器/消费仓入口模板和过渡回归同步收口；本批不迁移真实消费仓或用户级安装态。
+
+- `refactor(lark)`: **飞书公开入口改为按 PM 意图和数据方向命名。** `/pmai-publish-to-lark` 统一承接本地到飞书：首次创建、已有文档默认精细更新、PM 明确授权后的整篇覆盖只是内部策略；新增 `/pmai-sync-from-lark`，只在 PM 已明确“以飞书为准、不需要判断”时机械回拉正文；`/pmai-lark-review` 继续处理正文与批注对 Proposal、模块规格、原型和实现的影响。移除旧四模式 `/pmai-lark-sync`，精细写回与验收下沉为 publish / review 共用的内部合同，公开 Skill 不再互相调用。
+
+- `feat(design-system)`: **消费仓新增通用项目级设计系统 Skill 插槽，不绑定任何具体厂商。** `DESIGN.md` 始终保留为产品体验、采用范围和共享组件基线；新声明段只记录设计系统名称、范围、宿主调用名和唯一仓内 Skill 路径。design、mockup、build、quick-fix、mirror-site 在 UI 工作中统一执行共享合同：未声明时沿用现有 `DESIGN.md + 组件 inventory` 流程，已声明时优先原生调用、否则完整读取同一仓内 `SKILL.md` 及 required references，缺失或不可访问时失败关闭。外部 builder prompt 必须携带完整 `DESIGN.md` 与 Skill 身份；PMAI 不新增设计系统安装器、版本管理器或平行状态机。
+
 - `fix(harness)`: **写入护栏与稳定版本证据改为全面失败关闭。** 分支写入 hook 遇到坏 JSON、缺失或冲突路径、非 Git 环境和 detached HEAD 时直接拒绝，不再因无法判断而放行；Kimi 映射层先核验两个路径别名指向同一目标，再只向通用护栏传递唯一的规范化绝对路径。真实 session eval 为每次执行绑定唯一 evaluation ID，并要求 runner 提供来源、独立 judge 以不同 run ID 复核完整证据；runner 自报结果、缺 judge、证据不全或身份不匹配都不能计为通过。新增稳定版本发布门，`v*` tag 和手动发布在缺少真实 runner / judge、存在 session skip 或完整回归失败时阻断发布。
 
 - `feat(proposal)`: **产品主链升级为 `init → proposal → design → spec-writing → build`。** 新项目初始化后默认进入 `/pmai-proposal`，用一份可独立评审的完整 Product Proposal 澄清目标用户、核心问题、产品回答、价值、边界和 MVP 证明目标；成熟项目只有在已有资料构成完整等价产品基线时才可跳过。一旦进入就必须完整产出，不提供 brief / 摘要替代。当前版本写入 `docs/proposals/`，同步精简基线到 `PRODUCT.md`，并由 `.pm-workflow/proposal.json` 绑定路径、正文 hash 与 supersede 关系；context pack、status 和 doctor 共同校验。design、spec-writing、build、doc-writing 和 record 只读消费；产品方向变化回 Proposal 生成完整新版本，旧 design/build 依据随之失效。active build 回上游时统一冻结固定 `baseline..candidate`：worktree 候选保留在旧环境待逐项重做或舍弃，main 候选只清工作状态并保留已经进入主线的实现；跨会话由只读候选列表恢复，新 design/build 不按时间猜测或自动继承，逐项 reconcile 后才显式退役，且只有 worktree 候选进入现有安全清理队列。

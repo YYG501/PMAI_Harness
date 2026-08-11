@@ -1,7 +1,7 @@
 ---
 name: pmai-lark-review
 description: |
-  回收 PM 在已发布飞书 Docx 规格中的正文修改、未解决批注和完整回复，先把发布基线、当前本地与当前飞书归位为独立目标版本，再按影响分流到 Proposal、design、quick-fix 或当前 build，受控更新权威规格并精细同步同一篇文档，最后在产品结果验证后处理已完成批注。用于“我在飞书 review/改过/批注了”“按飞书评审更新规格和产品”“把飞书意见收回来”等归档后评审回流场景；普通双向文档同步仍用 pmai-lark-sync。
+  回收 PM 在已发布飞书 Docx 规格中的正文修改、未解决批注和完整回复，先把发布基线、当前本地与当前飞书归位为独立目标版本，再按影响分流到 Proposal、design、quick-fix 或当前 build，受控更新权威规格并精细同步同一篇文档，最后在产品结果验证后处理已完成批注。用于“我在飞书 review/改过/批注了”“按飞书评审更新规格和产品”“把飞书意见收回来”等需要产品影响判断的评审回流场景；明确不需要判断、只以飞书为准同步本地时使用 pmai-sync-from-lark。
 ---
 
 # /pmai-lark-review · 飞书评审回收
@@ -25,7 +25,7 @@ Proposal authority gate 按步骤 1 执行：先只读定位目标、恢复已�
 - `references/review-routing.md`
 - `references/lifecycle-handoff.md`
 
-两份 reference 分别是**影响分类**与**跨 Skill 交接顺序**的唯一正本。本文件只保留执行阶段、命令和关键失败关闭点；出现真实产品分叉时再读取 `skills/_shared/decision-policy.md`，进入飞书精细同步前再读取 `skills/lark-sync/references/verification.md`。
+两份 reference 分别是**影响分类**与**跨 Skill 交接顺序**的唯一正本。本文件只保留执行阶段、命令和关键失败关闭点；出现真实产品分叉时再读取 `skills/_shared/decision-policy.md`，进入飞书精细写回前再读取 `skills/_shared/lark-writeback.md` 与 `skills/_shared/lark-document-verification.md`。
 
 需要回复或解决飞书评论前，再读取当前 `lark-cli` 随附的 `lark-shared`、`lark-drive` 和评论规范；使用原生 API 前先运行对应 `lark-cli schema`，不要凭旧参数写评论。新批次评论写操作统一交给 `lark-review.py complete-comments`；`complete-comment` 只用于兼容恢复。Agent 不直接拼 API 或解决评论；恢复命令不接受自由填写 reply ID、author 或 solver 身份，也不向 checkpoint / reopen 自报作者或解决者。
 
@@ -275,7 +275,7 @@ python3 "${PMAI_HOME:-$HOME/.pmai}/scripts/lark-review.py" apply \
 
 apply 成功后只执行 seal 前固化的路由，记录同一批次 ID、飞书 URL 和 comment ID，不能重新解释 T。新 design 路径按候选路由选择性写入 / supersede `decisions.md`；纯措辞和格式变化不制造 decision。active build 的 `scoped-adjustment` 不新增稳定模块决定，也不能承接产品级或模块模型变化。
 
-先调用 `/pmai-lark-sync` 模式 A，把最终本地口径精细同步回**同一篇**飞书文档并回读验证。同步必须消费 apply plan 的 `target_base=remote_native_snapshot` 和 `remote-coverage.json`，只用 XML `str_replace` / `block_*` 修补已归位差异；所有标记为 preserved 的原生 block ID、样式属性、图片 / 附件 token 和引用映射都不得重建。第一笔写入前必须重新 fetch：文档身份不变，且最新 revision 必须同时等于 apply plan 的 `remote_revision_id` 和本次同步首笔采用的 expected revision；不一致时零写入，保留批次并重新 collect。确认通过后，第一笔 `lark-cli docs +update` 携带该 expected revision，后续每笔都携带上一笔写操作返回的 `--revision-id`；revision 冲突时停止。禁止 Markdown overwrite 或整段重建来省事。
+先按 `skills/_shared/lark-writeback.md` 执行内部精细写回，把最终本地口径同步回**同一篇**飞书文档并回读验证；不要调用 `/pmai-publish-to-lark` 或其它公开 Skill。写回必须消费 apply plan 的 `target_base=remote_native_snapshot` 和 `remote-coverage.json`，只用 XML `str_replace` / `block_*` 修补已归位差异；所有标记为 preserved 的原生 block ID、样式属性、图片 / 附件 token 和引用映射都不得重建。第一笔写入前必须重新 fetch：文档身份不变，且最新 revision 必须同时等于 apply plan 的 `remote_revision_id` 和本次写回首笔采用的 expected revision；不一致时零写入，保留批次并重新 collect。确认通过后，第一笔 `lark-cli docs +update` 携带该 expected revision，后续每笔都携带上一笔写操作返回的 `--revision-id`；revision 冲突时停止。禁止 Markdown overwrite 或整段重建来省事。
 
 基线刷新后立即做机器验收：
 
@@ -376,7 +376,7 @@ python3 "${PMAI_HOME:-$HOME/.pmai}/scripts/lark-review.py" complete-comments \
 - 全文评论不支持回复时，只能由上述 solve-only 受控路径直接解决；
 - 只处理本批次 comment ID，不批量解决文档里的其它评论。
 
-`/pmai-lark-sync` 模式 A 已负责把回读确认后的 revision 与本地正文 hash 刷新为下一轮发布基线。先检查目标 markdown 的两项字段与本次回读一致；只有同步被中断、旧版本未执行基线步骤或恢复时，才补跑：
+共享精细写回合同已负责把回读确认后的 revision 与本地正文 hash 刷新为下一轮发布基线。先检查目标 markdown 的两项字段与本次回读一致；只有写回被中断、旧版本未执行基线步骤或恢复时，才补跑：
 
 ```bash
 python3 "${PMAI_HOME:-$HOME/.pmai}/scripts/lark-review.py" baseline \
@@ -438,7 +438,7 @@ checkpoint 只记录本轮覆盖到的 revision、评论更新时间、同秒互
 
 - 飞书正文直接修改默认只是内容证据；只有 PM 本轮明确声明由自己修改 / 已认可，或看过整批差异后一次确认，才成为已确认口径。批注问句默认未确认。
 - 调用本 skill 是对本批完整回流的写入意图；PM 明确限制为只读或不处理评论时，以该限制为准。
-- 不把 `lark-sync` 的整篇回拉模式用于评审回收。
+- 不把 `/pmai-sync-from-lark` 的机械回拉用于评审回收。
 - 当前飞书原生版本是唯一目标底稿；`common_ancestor_compatible` 只影响差异对齐，不得把 T 切回旧 L。
 - B / L / R 都是只读证据；只有已 seal 的 T 可以通过 apply 修改正式规格正文。
 - 只有产品规则变化写 `decisions.md`；措辞和格式变化不得制造 decision。

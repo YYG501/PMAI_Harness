@@ -5,6 +5,7 @@
 #   PMAI_HOME            - 框架代码根目录（~/.pmai/ 或 env 覆盖），I-mini 后 skill 内部用此路径调脚本
 #   MAIN_REPO_ROOT       - 主仓根目录（共享元数据：.runs/、.worktrees/）
 #   REPO_ROOT            - 当前 worktree 根目录（业务数据：docs/ 与 project.yml 声明的实现入口）
+#   PMAI_REPO_KIND       - generator / consumer / uninitialized
 #   BRANCH               - 当前分支
 #   WORKTREE_TYPE        - main / work / legacy-task
 #   ACTIVE_WORK          - 活跃工作 ID（cwd 唯一确定工作时设值；main + 多 active 时留空）
@@ -73,39 +74,30 @@ CURRENT_WORKTREE_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
 
 REPO_ROOT="$CURRENT_WORKTREE_ROOT"
 
-# --- 2b. 检测当前业务仓是否已接入 PMAI ---
-# 用 marker 判断，不用 "docs/ 是否存在"：已有代码库常自带 docs/，但仍未初始化 PMAI。
-_pmai_is_generator_repo() {
-  [ -f "$REPO_ROOT/scripts/init-project.sh" ]
-}
-
-_pmai_file_mentions_pmai() {
-  local file="$1"
-  [ -f "$file" ] || return 1
-  grep -qE 'PMAI|/pmai-' "$file" 2>/dev/null
-}
-
-_pmai_has_project_marker() {
-  [ -f "$REPO_ROOT/PRODUCT.md" ] && return 0
-  [ -f "$REPO_ROOT/PRODUCT-STATE.md" ] && return 0
-  [ -f "$REPO_ROOT/docs/CONTEXT.md" ] && return 0
-  [ -f "$REPO_ROOT/.pm-workflow/config.yml" ] && return 0
-  [ -f "$REPO_ROOT/.codex/hooks.json" ] && return 0
-  _pmai_file_mentions_pmai "$REPO_ROOT/AGENTS.md" && return 0
-  _pmai_file_mentions_pmai "$REPO_ROOT/CLAUDE.md" && return 0
-  return 1
-}
-
-PMAI_PROJECT_INITIALIZED=1
-if ! _pmai_is_generator_repo && ! _pmai_has_project_marker; then
-  PMAI_PROJECT_INITIALIZED=0
+# --- 2b. 解析唯一仓库身份 ---
+_PMAI_REPO_KIND_SCRIPT="$PMAI_HOME/scripts/repo-kind.py"
+if [ ! -f "$_PMAI_REPO_KIND_SCRIPT" ]; then
+  echo "❌ 仓库身份解析器缺失：$_PMAI_REPO_KIND_SCRIPT" >&2
+  return 1 2>/dev/null || exit 1
 fi
+if ! PMAI_REPO_KIND=$(python3 "$_PMAI_REPO_KIND_SCRIPT" --repo-root "$REPO_ROOT"); then
+  echo "❌ 无法安全判断当前仓库类型：$REPO_ROOT" >&2
+  return 1 2>/dev/null || exit 1
+fi
+case "$PMAI_REPO_KIND" in
+  generator|consumer) PMAI_PROJECT_INITIALIZED=1 ;;
+  uninitialized) PMAI_PROJECT_INITIALIZED=0 ;;
+  *)
+    echo "❌ 仓库身份解析器返回未知类型：$PMAI_REPO_KIND" >&2
+    return 1 2>/dev/null || exit 1
+    ;;
+esac
+export PMAI_REPO_KIND
 
 # 已安装框架提供入口规则检查，因此旧消费仓即使仍使用旧 AGENTS.md，
 # 也能在启动时发现规则过期。这里只读提示，不修改项目文件。
 PMAI_PROJECT_ENTRY_STATUS="not_applicable"
-if [ "$PMAI_PROJECT_INITIALIZED" = "1" ] \
-  && ! _pmai_is_generator_repo \
+if [ "$PMAI_REPO_KIND" = "consumer" ] \
   && [ -f "$PMAI_HOME/scripts/consumer-doctor.py" ]; then
   if python3 "$PMAI_HOME/scripts/consumer-doctor.py" \
     --repo-root "$REPO_ROOT" --entry-only >/dev/null 2>&1; then
@@ -322,6 +314,7 @@ echo "REPO_ROOT: $REPO_ROOT"
 echo "BRANCH: $BRANCH"
 echo "WORKTREE_TYPE: $WORKTREE_TYPE"
 echo "PMAI_PROJECT_INITIALIZED: $PMAI_PROJECT_INITIALIZED"
+echo "PMAI_REPO_KIND: $PMAI_REPO_KIND"
 if [ "$PMAI_PROJECT_INITIALIZED" = "0" ]; then
   echo "⚠️ 当前目录还没有 PMAI 初始化。"
   echo "下一步：先发 /pmai-init-project；它会自动判断全新项目 / 已有代码库。"

@@ -81,7 +81,7 @@ workflow 决策常见危险前提：
 - 模块结构、信息模型、状态、动作 → `/pmai-design`。
 - 文档成文 → `/pmai-doc-writing` 或 `/pmai-spec-writing`。
 - 构建实现 → `/pmai-build`。
-- 飞书同步执行 → `/pmai-lark-sync` 或对应底层 lark skill。
+- 本地发布到飞书 → `/pmai-publish-to-lark`；明确以飞书为准机械回拉 → `/pmai-sync-from-lark`；需要理解正文或批注影响 → `/pmai-lark-review`。
 - PM 未拍方向 → 停住，不写最终方案。
 
 禁止把 skill / workflow 改造问题交给 `/pmai-design`。design 只负责产品模块结构，不负责 PMAI 框架入口决策。

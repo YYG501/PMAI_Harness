@@ -14,10 +14,11 @@ MIGRATE_REQS="$REPO_ROOT/scripts/migrate-reqs-to-modules.py"
 DECISION_TEMPLATE="$REPO_ROOT/templates/decision-record.md.tmpl"
 ASKUSER_RULES="$REPO_ROOT/skills/_shared/pm-view/askuser-rules.md"
 BANNER_RULES="$REPO_ROOT/skills/_shared/pm-view/banner-rules.md"
-LARK_SYNC="$REPO_ROOT/skills/lark-sync/SKILL.md"
-LARK_SYNC_VERIFY="$REPO_ROOT/skills/lark-sync/references/verification.md"
-LARK_SYNC_PULL="$REPO_ROOT/skills/lark-sync/references/pull-from-lark.md"
-LARK_SYNC_DIFF="$REPO_ROOT/skills/lark-sync/references/diff-only.md"
+LARK_PUBLISH="$REPO_ROOT/skills/publish-to-lark/SKILL.md"
+LARK_SYNC="$REPO_ROOT/skills/sync-from-lark/SKILL.md"
+LARK_VERIFY="$REPO_ROOT/skills/_shared/lark-document-verification.md"
+LARK_SYNC_PULL="$REPO_ROOT/skills/sync-from-lark/references/pull-from-lark.md"
+LARK_SYNC_DIFF="$REPO_ROOT/skills/sync-from-lark/references/diff-only.md"
 LARK_REVIEW="$REPO_ROOT/skills/lark-review/SKILL.md"
 LARK_REVIEW_SCRIPT="$REPO_ROOT/scripts/lark-review.py"
 BUILD_CANCEL="$REPO_ROOT/skills/build-cancel/SKILL.md"
@@ -99,11 +100,12 @@ test_record_requires_a_valid_product_baseline() {
 test_lark_receipts_hide_internal_protocol() {
   start_test "PM surface: 飞书最终回执只报告结果"
 
-  local sync_receipt sync_verify_receipt sync_pull_receipt sync_diff_receipt review_receipt rendered_review
-  sync_receipt=$(awk '/^### 步骤 3：验收与输出/{show=1} /^## Rules/{show=0} show' "$LARK_SYNC")
-  sync_verify_receipt=$(awk '/^## 输出摘要/{show=1} show' "$LARK_SYNC_VERIFY")
-  sync_pull_receipt=$(awk '/^## 输出$/{show=1} /^## 禁止/{show=0} show' "$LARK_SYNC_PULL")
-  sync_diff_receipt=$(awk '/^## 输出格式/{show=1} /^## 规则/{show=0} show' "$LARK_SYNC_DIFF")
+  local publish_receipt sync_receipt verify_receipt sync_pull_receipt sync_diff_receipt review_receipt rendered_review
+  publish_receipt=$(awk '/^### 步骤 6：完成/{show=1} /^## Rules/{show=0} show' "$LARK_PUBLISH")
+  sync_receipt=$(awk '/^### 步骤 3：回执/{show=1} /^## Rules/{show=0} show' "$LARK_SYNC")
+  verify_receipt=$(awk '/^## PM 回执/{show=1} show' "$LARK_VERIFY")
+  sync_pull_receipt=$(awk '/^## 禁止/{show=1} show' "$LARK_SYNC_PULL")
+  sync_diff_receipt=$(awk '/^## 输出/{show=1} /^## 规则/{show=0} show' "$LARK_SYNC_DIFF")
   review_receipt=$(awk '/^## 最终回执/{show=1} /^## Rules/{show=0} show' "$LARK_REVIEW")
   rendered_review=$(PYTHONDONTWRITEBYTECODE=1 PYTHONPATH="$REPO_ROOT/scripts" \
     python3 - "$LARK_REVIEW_SCRIPT" <<'PY'
@@ -132,20 +134,21 @@ print(module._render_pm_receipt(
 PY
   )
 
-  if printf '%s\n' "$sync_receipt" | grep -qE '同步模式|A/B/C/D|revision|frontmatter'; then
-    _fail "lark-sync PM receipt still exposes internal sync protocol"
+  if printf '%s\n%s\n' "$publish_receipt" "$sync_receipt" \
+    | grep -qE '同步模式|A/B/C/D|revision|frontmatter'; then
+    _fail "Lark publish/sync PM receipts still expose internal protocol"
     return
   fi
-  if printf '%s\n%s\n%s\n' "$sync_verify_receipt" "$sync_pull_receipt" "$sync_diff_receipt" \
+  if printf '%s\n%s\n%s\n' "$verify_receipt" "$sync_pull_receipt" "$sync_diff_receipt" \
     | grep -qE '模式：|模式 A/B/C|飞书 revision：|frontmatter：'; then
-    _fail "lark-sync reference receipts still expose internal sync protocol"
+    _fail "Lark reference receipts still expose internal sync protocol"
     return
   fi
   if printf '%s\n' "$review_receipt" | grep -qE '批次现场|目标底稿|remote_native_snapshot|revision|执行路径|checkpoint|机器耗时'; then
     _fail "lark-review PM receipt still exposes batch or recovery internals"
     return
   fi
-  if ! printf '%s\n' "$sync_receipt" | grep -q '需要你处理' \
+  if ! printf '%s\n%s\n' "$publish_receipt" "$sync_receipt" | grep -q '需要你处理' \
     || ! printf '%s\n' "$review_receipt" | grep -q '产品结果'; then
     _fail "lark PM receipts should retain actionable results"
     return
@@ -214,7 +217,7 @@ test_docs_do_not_turn_inventory_into_navigation() {
   local main_path main_chain
   main_path=$(awk '/^### 2\. PM 在业务仓里的主路径/{show=1} /^### 3\./{show=0} show' "$README")
   main_chain=$(printf '%s\n' "$main_path" | awk '/^```/{fence++; next} fence==1')
-  if printf '%s\n' "$main_chain" | grep -qE '/pmai-(meta|mockup|quick-fix|record|direction|lark-review|lark-sync|build-close|build-cancel)'; then
+  if printf '%s\n' "$main_chain" | grep -qE '/pmai-(meta|mockup|quick-fix|record|direction|lark-review|publish-to-lark|sync-from-lark|build-close|build-cancel)'; then
     _fail "README normal path should expose the approved proposal, design, spec-writing and build chain only"
     return
   fi

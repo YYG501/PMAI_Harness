@@ -13,11 +13,10 @@
 #   T5: pmai-status --help 只打印帮助，不执行状态扫描
 #   T6: pmai-status 作为 doctor check 兼容包装报告 stale 暴露入口
 #   T7: pmai-doctor 缺 Codex 暴露入口时失败
-#   T8: install / upgrade / uninstall 覆盖 Codex/Kimi skill dir + legacy prompt cleanup + OpenCode commands
+#   T8: install / upgrade 只管理 Claude/Codex；Kimi/OpenCode 只保留 Builder 与 legacy cleanup
 #   T9: pmai-doctor 默认只读，--repair 才自愈 Codex 首次空暴露目录
 #   T10: pmai-doctor 不再生成 Codex slash prompts
-#   T11: pmai-doctor --repair 可自愈 OpenCode slash commands
-#   T12: pmai-doctor --repair 可自愈 Kimi 原生 Skill 暴露和 managed hooks
+#   T11/T12: pmai-doctor 只报告 Kimi/OpenCode legacy controller，不自愈
 #   T15: 旧 updater 升级后保留公开入口；后续失败回滚恢复旧暴露策略
 #   T16: 当前 updater 可降级到不含策略函数的旧版本
 #   T17: upgrade doctor 日志默认唯一安全，同时保留测试 override
@@ -133,6 +132,8 @@ setup_fake_global_install() {
   cp "$REPO_ROOT/scripts/_lib/project_definition.py" "$pmai_home/scripts/_lib/project_definition.py"
   cp "$REPO_ROOT/scripts/_lib/consumer_entry.py" "$pmai_home/scripts/_lib/consumer_entry.py"
   cp "$REPO_ROOT/scripts/_lib/proposal.py" "$pmai_home/scripts/_lib/proposal.py"
+  cp "$REPO_ROOT/scripts/_lib/repo_identity.py" "$pmai_home/scripts/_lib/repo_identity.py"
+  cp "$REPO_ROOT/scripts/repo-kind.py" "$pmai_home/scripts/repo-kind.py"
   cp "$REPO_ROOT/scripts/consumer-doctor.py" "$pmai_home/scripts/consumer-doctor.py"
   cp "$REPO_ROOT/scripts/sync-consumer-entry.py" "$pmai_home/scripts/sync-consumer-entry.py"
   cp "$REPO_ROOT/scripts/gen-mock-board.py" "$pmai_home/scripts/gen-mock-board.py"
@@ -153,18 +154,10 @@ setup_fake_global_install() {
     exposed=$(exposed_name_for_skill "$name")
     ln -s "$pmai_home/skills/$name" "$fake_home/.claude/skills/$exposed"
     ln -s "$pmai_home/skills/$name" "$fake_home/.codex/skills/$exposed"
-    ln -s "$pmai_home/skills/$name" "$fake_home/.kimi-code/skills/$exposed"
   done < <(find "$SKILLS_DIR" -mindepth 1 -maxdepth 1 -type d ! -name _shared ! -name _internal | sort)
   ln -s "$pmai_home/skills/_shared" "$fake_home/.claude/skills/_shared"
   ln -s "$pmai_home/skills/_shared" "$fake_home/.codex/skills/_shared"
-  ln -s "$pmai_home/skills/_shared" "$fake_home/.kimi-code/skills/_shared"
-
   mkdir -p "$fake_home/.config/opencode/commands"
-  if ! PMAI_HOME="$pmai_home" OPENCODE_CONFIG_DIR="$fake_home/.config/opencode" \
-    bash "$pmai_home/scripts/install-opencode-commands.sh" --global >/dev/null 2>&1; then
-    rm -rf "$tmp"
-    return 1
-  fi
 
   echo "$tmp|$pmai_home|$fake_home"
 }
@@ -186,9 +179,18 @@ copy_global_lock_helpers_to() {
 sync_current_skill_catalog_to_fixture() {
   local framework_root="$1"
 
-  rm -rf "$framework_root/skills/direction" "$framework_root/skills/proposal"
+  mkdir -p "$framework_root/scripts/_lib"
+  rm -rf "$framework_root/skills/direction" "$framework_root/skills/proposal" \
+    "$framework_root/skills/lark-sync" "$framework_root/skills/sync-from-lark" \
+    "$framework_root/skills/publish-to-lark"
   cp -R "$SKILLS_DIR/proposal" "$framework_root/skills/proposal"
-  git -C "$framework_root" add -A -- skills/direction skills/proposal
+  cp -R "$SKILLS_DIR/sync-from-lark" "$framework_root/skills/sync-from-lark"
+  cp -R "$SKILLS_DIR/publish-to-lark" "$framework_root/skills/publish-to-lark"
+  cp "$REPO_ROOT/scripts/repo-kind.py" "$framework_root/scripts/repo-kind.py"
+  cp "$REPO_ROOT/scripts/_lib/repo_identity.py" \
+    "$framework_root/scripts/_lib/repo_identity.py"
+  git -C "$framework_root" add -A -- skills scripts/repo-kind.py \
+    scripts/_lib/repo_identity.py
 }
 
 seed_retired_direction_entries() {
@@ -198,26 +200,39 @@ seed_retired_direction_entries() {
 
   for host_dir in "$fake_home/.claude/skills" "$fake_home/.codex/skills" \
     "$fake_home/.kimi-code/skills"; do
-    ln -s "$pmai_home/skills/direction" "$host_dir/pmai-direction"
+    if [ ! -e "$host_dir/pmai-direction" ] \
+      && [ ! -L "$host_dir/pmai-direction" ]; then
+      ln -s "$pmai_home/skills/direction" "$host_dir/pmai-direction"
+    fi
   done
   printf '%s\n' 'legacy direction command' \
     > "$fake_home/.config/opencode/commands/pmai-direction.md"
 }
 
-assert_retired_direction_entries_absent() {
+assert_controller_direction_entries_absent() {
   local fake_home="$1"
   local host_dir
 
-  for host_dir in "$fake_home/.claude/skills" "$fake_home/.codex/skills" \
-    "$fake_home/.kimi-code/skills"; do
+  for host_dir in "$fake_home/.claude/skills" "$fake_home/.codex/skills"; do
     if [ -e "$host_dir/pmai-direction" ] || [ -L "$host_dir/pmai-direction" ]; then
       _fail "已移除的 pmai-direction 入口仍残留：$host_dir"
       return 1
     fi
   done
-  if [ -e "$fake_home/.config/opencode/commands/pmai-direction.md" ] \
-    || [ -L "$fake_home/.config/opencode/commands/pmai-direction.md" ]; then
-    _fail "已移除的 OpenCode pmai-direction.md 仍残留"
+  return 0
+}
+
+assert_legacy_direction_entries_preserved() {
+  local fake_home="$1"
+
+  if [ ! -L "$fake_home/.kimi-code/skills/pmai-direction" ]; then
+    _fail "Kimi 遗留 pmai-direction 入口被当前安装流程改写或删除"
+    return 1
+  fi
+  if [ ! -f "$fake_home/.config/opencode/commands/pmai-direction.md" ] \
+    || [ "$(cat "$fake_home/.config/opencode/commands/pmai-direction.md")" \
+      != "legacy direction command" ]; then
+    _fail "OpenCode 遗留 pmai-direction command 被当前安装流程改写或删除"
     return 1
   fi
   return 0
@@ -227,8 +242,11 @@ test_manual_workflows_are_host_entries() {
   start_test "T13: 兼容恢复和明确手动能力保留宿主入口"
   local setup tmp pmai_home fake_home host_dir skill expected actual
 
-  if ! expected_skill_is_host_exposed build-close || ! expected_skill_is_host_exposed publish-to-lark; then
-    _fail "build-close / publish-to-lark should remain explicitly invocable"
+  if ! expected_skill_is_host_exposed build-close \
+    || ! expected_skill_is_host_exposed publish-to-lark \
+    || ! expected_skill_is_host_exposed sync-from-lark \
+    || ! expected_skill_is_host_exposed lark-review; then
+    _fail "build-close and the three Lark intents should remain explicitly invocable"
     return
   fi
   if ! expected_skill_is_host_exposed design || ! expected_skill_is_host_exposed spec-writing; then
@@ -239,7 +257,7 @@ test_manual_workflows_are_host_entries() {
     _fail "independently useful proposal/record skills should stay exposed"
     return
   fi
-  for file in "$INSTALL" "$UPGRADE" "$DOCTOR" "$REPO_ROOT/scripts/install-opencode-commands.sh"; do
+  for file in "$INSTALL" "$UPGRADE" "$DOCTOR"; do
     if ! grep -q "pmai_skill_is_host_exposed" "$file"; then
       _fail "$(basename "$file") should use the shared exposure policy"
       return
@@ -253,8 +271,8 @@ test_manual_workflows_are_host_entries() {
 
   setup=$(setup_fake_global_install)
   IFS='|' read -r tmp pmai_home fake_home <<< "$setup"
-  for host_dir in "$fake_home/.claude/skills" "$fake_home/.codex/skills" "$fake_home/.kimi-code/skills"; do
-    for skill in build-close publish-to-lark proposal record; do
+  for host_dir in "$fake_home/.claude/skills" "$fake_home/.codex/skills"; do
+    for skill in build-close publish-to-lark sync-from-lark lark-review proposal record; do
       expected="pmai-$skill"
       if [ ! -L "$host_dir/$expected" ]; then
         _fail "$expected should be installed for $(basename "$(dirname "$host_dir")")"
@@ -478,8 +496,8 @@ test_doctor_rejects_wrong_target_and_real_directory_entries() {
   rm -rf "$tmp"
 }
 
-test_lifecycle_scripts_cover_codex_skills() {
-  start_test "T8: install / upgrade / uninstall 覆盖 Codex/Kimi skill dir + legacy prompt cleanup + OpenCode commands"
+test_lifecycle_scripts_cover_controller_and_builder_boundaries() {
+  start_test "T8: install/upgrade 只管理 Claude/Codex，遗留入口仍可清理"
   local file
 
   for file in "$INSTALL" "$UPGRADE" "$UNINSTALL" "$DOCTOR"; do
@@ -487,11 +505,17 @@ test_lifecycle_scripts_cover_codex_skills() {
       _fail "$(basename "$file") 未声明 CODEX_SKILLS，Codex skill 暴露会漂移"
       return
     fi
-    if ! grep -q "KIMI_CODE_HOME" "$file" || ! grep -q "KIMI_SKILLS" "$file"; then
-      _fail "$(basename "$file") 未声明 Kimi 宿主面，原生 Skill 暴露会漂移"
-      return
-    fi
   done
+  if grep -qE 'KIMI_CODE_HOME|KIMI_SKILLS|manage-kimi-hooks.py|OPENCODE_CONFIG_DIR|install-opencode-commands.sh' "$INSTALL" \
+    || grep -qE 'KIMI_CODE_HOME|KIMI_SKILLS|manage-kimi-hooks.py|OPENCODE_CONFIG_DIR|install-opencode-commands.sh' "$UPGRADE"; then
+    _fail "install/upgrade must not create or refresh Kimi/OpenCode controller entries"
+    return
+  fi
+  if ! grep -q 'KIMI_SKILLS' "$DOCTOR" || ! grep -q 'OPENCODE_CONFIG_DIR' "$DOCTOR" \
+    || ! grep -q 'KIMI_SKILLS' "$UNINSTALL" || ! grep -q 'OPENCODE_CONFIG_DIR' "$UNINSTALL"; then
+    _fail "doctor/uninstall should retain legacy diagnosis and cleanup coverage"
+    return
+  fi
   for file in "$INSTALL" "$UPGRADE" "$UNINSTALL"; do
     if ! grep -q "CODEX_PROMPTS" "$file"; then
       _fail "$(basename "$file") 未声明 CODEX_PROMPTS，无法清理 legacy Codex prompts"
@@ -508,14 +532,9 @@ test_lifecycle_scripts_cover_codex_skills() {
     _fail "install / upgrade 应清理 legacy Codex prompts"
     return
   fi
-  for file in "$INSTALL" "$UPGRADE" "$UNINSTALL" "$DOCTOR"; do
-    if ! grep -q "OPENCODE_CONFIG_DIR" "$file"; then
-      _fail "$(basename "$file") 未声明 OPENCODE_CONFIG_DIR，OpenCode command 暴露会漂移"
-      return
-    fi
-  done
-  if ! grep -q "install-opencode-commands.sh" "$INSTALL" || ! grep -q "install-opencode-commands.sh" "$UPGRADE"; then
-    _fail "install / upgrade 应调用 install-opencode-commands.sh"
+  if ! grep -q 'executor: kimi-code' "$REPO_ROOT/templates/pm-workflow.config.yml.tmpl" \
+    || ! grep -q 'executor: opencode' "$REPO_ROOT/templates/pm-workflow.config.yml.tmpl"; then
+    _fail "Kimi/OpenCode Builder profiles should remain"
     return
   fi
   if ! grep -q 'pmai-doctor' "$STATUS" || ! grep -q -- '--check' "$STATUS"; then
@@ -627,7 +646,7 @@ test_doctor_does_not_generate_codex_prompts() {
 }
 
 test_doctor_repairs_opencode_commands() {
-  start_test "T11: pmai-doctor 自愈 OpenCode slash commands"
+  start_test "T11: pmai-doctor 不创建缺失的 OpenCode 主控入口"
   local setup tmp pmai_home fake_home out rc
 
   setup=$(setup_fake_global_install)
@@ -639,38 +658,13 @@ test_doctor_repairs_opencode_commands() {
   rc=$?
 
   if [ "$rc" != "0" ]; then
-    _fail "OpenCode command 目录为空时 doctor --repair 应自愈并通过"
+    _fail "OpenCode command 目录为空不应破坏 Doctor 健康结论"
     echo "$out" >&2
     rm -rf "$tmp"
     return
   fi
-  if ! echo "$out" | grep -q "OpenCode slash commands repaired"; then
-    _fail "doctor 未报告 OpenCode command 自愈"
-    echo "$out" >&2
-    rm -rf "$tmp"
-    return
-  fi
-  if [ ! -f "$fake_home/.config/opencode/commands/pmai-design.md" ]; then
-    _fail "doctor 未创建 OpenCode /pmai-design command"
-    echo "$out" >&2
-    rm -rf "$tmp"
-    return
-  fi
-  if ! grep -q '$PMAI_HOME/skills/design/SKILL.md' "$fake_home/.config/opencode/commands/pmai-design.md"; then
-    _fail "生成的 /pmai-design OpenCode command 未路由到 PMAI skill"
-    cat "$fake_home/.config/opencode/commands/pmai-design.md" >&2
-    rm -rf "$tmp"
-    return
-  fi
-  if ! grep -q "skill-preamble.sh" "$fake_home/.config/opencode/commands/pmai-design.md" \
-     || ! grep -q "PMAI_PROJECT_INITIALIZED: 0" "$fake_home/.config/opencode/commands/pmai-design.md"; then
-    _fail "生成的 /pmai-design OpenCode command 缺未初始化项目护栏"
-    cat "$fake_home/.config/opencode/commands/pmai-design.md" >&2
-    rm -rf "$tmp"
-    return
-  fi
-  if [ -e "$fake_home/.config/opencode/commands/pmai-_internal.md" ]; then
-    _fail "doctor 不应把 skills/_internal 暴露成 OpenCode command"
+  if find "$fake_home/.config/opencode/commands" -name 'pmai-*.md' -print -quit | grep -q .; then
+    _fail "doctor --repair must not create OpenCode controller commands"
     rm -rf "$tmp"
     return
   fi
@@ -680,33 +674,30 @@ test_doctor_repairs_opencode_commands() {
 }
 
 test_doctor_repairs_modified_opencode_command_content() {
-  start_test "T11b: doctor 检测并逐字修复被修改的 OpenCode command"
-  local setup tmp pmai_home fake_home command out rc
+  start_test "T11b: doctor 报告但不改写遗留 OpenCode command"
+  local setup tmp pmai_home fake_home command out rc before after
 
   setup=$(setup_fake_global_install)
   IFS='|' read -r tmp pmai_home fake_home <<< "$setup"
   mkdir -p "$fake_home/.config/opencode/commands"
-  PMAI_HOME="$pmai_home" OPENCODE_CONFIG_DIR="$fake_home/.config/opencode" \
-    bash "$pmai_home/scripts/install-opencode-commands.sh" --global >/dev/null 2>&1
   command="$fake_home/.config/opencode/commands/pmai-design.md"
-  printf '%s\n' 'tampered-by-user' >> "$command"
+  printf '%s\n' 'legacy-opencode-controller' > "$command"
+  before=$(shasum -a 256 "$command" | awk '{print $1}')
 
   out=$(PMAI_HOME="$pmai_home" HOME="$fake_home" \
     CODEX_HOME="$fake_home/.codex" KIMI_CODE_HOME="$fake_home/.kimi-code" \
     OPENCODE_CONFIG_DIR="$fake_home/.config/opencode" bash "$DOCTOR" --repair 2>&1)
   rc=$?
 
+  after=$(shasum -a 256 "$command" | awk '{print $1}')
   if [ "$rc" != "0" ]; then
-    _fail "OpenCode command 内容漂移时 doctor --repair 应修复并通过"
+    _fail "legacy OpenCode commands should be non-blocking"
     echo "$out" >&2
-  elif ! echo "$out" | grep -q 'OpenCode slash commands repaired and verified'; then
-    _fail "doctor 未报告 OpenCode 内容漂移已修复并复验"
+  elif ! echo "$out" | grep -q '旧 OpenCode PMAI 主控 command'; then
+    _fail "doctor should identify legacy OpenCode controllers"
     echo "$out" >&2
-  elif grep -q 'tampered-by-user' "$command"; then
-    _fail "doctor 修复后仍残留被篡改内容"
-  elif ! PMAI_HOME="$pmai_home" OPENCODE_CONFIG_DIR="$fake_home/.config/opencode" \
-    bash "$pmai_home/scripts/install-opencode-commands.sh" --global --check >/dev/null 2>&1; then
-    _fail "doctor 报告修复后，确定性 renderer 复验仍失败"
+  elif [ "$before" != "$after" ]; then
+    _fail "doctor --repair must preserve legacy OpenCode commands"
   else
     pass_test
   fi
@@ -715,44 +706,39 @@ test_doctor_repairs_modified_opencode_command_content() {
 }
 
 test_doctor_repairs_kimi_native_surface() {
-  start_test "T12: pmai-doctor 自愈 Kimi 原生 Skill 暴露和 managed hooks"
-  local setup tmp pmai_home fake_home out rc config
+  start_test "T12: pmai-doctor 报告但不改写 Kimi 遗留主控入口"
+  local setup tmp pmai_home fake_home out rc config before after
 
   setup=$(setup_fake_global_install)
   IFS='|' read -r tmp pmai_home fake_home <<< "$setup"
-  rm -rf "$fake_home/.kimi-code/skills"
   mkdir -p "$fake_home/.kimi-code/skills"
+  ln -s "$pmai_home/skills/build" "$fake_home/.kimi-code/skills/pmai-build"
   config="$fake_home/.kimi-code/config.toml"
-  printf '%s\n' 'default_model = "demo"' > "$config"
+  printf '%s\n' 'default_model = "demo"' \
+    '# >>> PMAI managed Kimi Code hooks >>>' \
+    '# legacy hook body' \
+    '# <<< PMAI managed Kimi Code hooks <<<' > "$config"
+  before=$(shasum -a 256 "$config" | awk '{print $1}')
 
   out=$(PMAI_HOME="$pmai_home" HOME="$fake_home" KIMI_CODE_HOME="$fake_home/.kimi-code" bash "$DOCTOR" --repair 2>&1)
   rc=$?
 
+  after=$(shasum -a 256 "$config" | awk '{print $1}')
   if [ "$rc" != "0" ]; then
-    _fail "Kimi 宿主面为空时 doctor 应自愈并通过"
+    _fail "legacy Kimi entries should be non-blocking"
     echo "$out" >&2
     rm -rf "$tmp"
     return
   fi
-  if ! echo "$out" | grep -q "Kimi Code skill exposure repaired"; then
-    _fail "doctor 未报告 Kimi 原生 Skill 暴露自愈"
+  if ! echo "$out" | grep -q "旧 Kimi Code PMAI Skill 入口" \
+    || ! echo "$out" | grep -q "旧 Kimi Code PMAI managed hooks"; then
+    _fail "doctor should report both Kimi legacy surfaces"
     echo "$out" >&2
     rm -rf "$tmp"
     return
   fi
-  if ! echo "$out" | grep -q "Kimi Code PMAI-managed hooks repaired"; then
-    _fail "doctor 未报告 Kimi managed hooks 自愈"
-    echo "$out" >&2
-    rm -rf "$tmp"
-    return
-  fi
-  if [ ! -L "$fake_home/.kimi-code/skills/pmai-build" ]; then
-    _fail "doctor 未创建 Kimi pmai-build symlink"
-    rm -rf "$tmp"
-    return
-  fi
-  if ! grep -q '^# >>> PMAI managed Kimi Code hooks >>>$' "$config"; then
-    _fail "doctor 未在 Kimi config 中安装 PMAI managed hooks"
+  if [ "$before" != "$after" ] || [ ! -L "$fake_home/.kimi-code/skills/pmai-build" ]; then
+    _fail "doctor --repair must preserve legacy Kimi entries"
     rm -rf "$tmp"
     return
   fi
@@ -762,35 +748,29 @@ test_doctor_repairs_kimi_native_surface() {
 }
 
 test_doctor_rechecks_kimi_repair_result() {
-  start_test "T12b: Kimi manager 假修复成功时 doctor 失败关闭"
-  local setup tmp pmai_home fake_home manager config out rc
+  start_test "T12b: Kimi controller manager 不再被 doctor 调用"
+  local setup tmp pmai_home fake_home manager sentinel out rc
 
   setup=$(setup_fake_global_install)
   IFS='|' read -r tmp pmai_home fake_home <<< "$setup"
   manager="$pmai_home/scripts/manage-kimi-hooks.py"
-  config="$fake_home/.kimi-code/config.toml"
+  sentinel="$tmp/manager-called"
   rm -f "$manager"
-  cat > "$manager" <<'PY'
+  cat > "$manager" <<PY
 #!/usr/bin/env python3
-import sys
-
-if sys.argv[1] == "check":
-    print("DRIFT: fixture remains unrepaired")
-    raise SystemExit(1)
-raise SystemExit(0)
+from pathlib import Path
+Path("$sentinel").write_text("called", encoding="utf-8")
 PY
   chmod +x "$manager"
-  printf '%s\n' 'default_model = "demo"' > "$config"
 
   out=$(PMAI_HOME="$pmai_home" HOME="$fake_home" \
     KIMI_CODE_HOME="$fake_home/.kimi-code" bash "$DOCTOR" --repair 2>&1)
   rc=$?
-  if [ "$rc" = "0" ]; then
-    _fail "manager install 返回 0 但复验仍 drift 时 doctor 不得通过"
+  if [ "$rc" != "0" ]; then
+    _fail "doctor should stay healthy without Kimi controller entries"
     echo "$out" >&2
-  elif ! echo "$out" | grep -q "修复后校验仍未通过"; then
-    _fail "doctor 未报告 Kimi repair 复验失败"
-    echo "$out" >&2
+  elif [ -e "$sentinel" ]; then
+    _fail "doctor must not invoke the retired Kimi controller manager"
   else
     pass_test
   fi
@@ -1054,7 +1034,7 @@ payload = json.loads(sys.argv[1])
 assert payload["conclusion"] == "healthy"
 assert payload["recommended_action"] == "none"
 assert payload["consumer"]["project_hooks"] == "current"
-assert payload["consumer"]["opencode"] == "current"
+assert payload["consumer"]["opencode"] == "not_applicable"
 assert payload["consumer"]["git_hook"] == "current"
 assert all(item["status"] == "normal" for item in payload["checks"])
 assert payload["product_progress"]["phase"] == "ready_to_build"
@@ -1110,7 +1090,7 @@ assert payload["recommended_action"] == "review_consumer_structure"
 assert payload["consumer"]["topology_status"] == "invalid"
 assert payload["consumer"]["phase"] == "initialized"
 assert payload["consumer"]["project_hooks"] == "drifted"
-assert payload["consumer"]["opencode"] == "current"
+assert payload["consumer"]["opencode"] == "not_applicable"
 assert payload["consumer"]["git_hook"] == "current"
 assert payload["consumer"]["audit"]["status"] == "invalid"
 checks = {item["id"]: item for item in payload["checks"]}
@@ -1305,17 +1285,13 @@ SH
       cat > "$source_repo/bin/pmai-doctor" <<'SH'
 #!/usr/bin/env bash
 set -uo pipefail
-for host_dir in "$HOME/.claude/skills" "${CODEX_HOME:-$HOME/.codex}/skills" "${KIMI_CODE_HOME:-$HOME/.kimi-code}/skills"; do
+for host_dir in "$HOME/.claude/skills" "${CODEX_HOME:-$HOME/.codex}/skills"; do
   [ -L "$host_dir/pmai-build" ] || { echo "missing target pmai-build: $host_dir" >&2; exit 1; }
   [ "$(readlink "$host_dir/pmai-build")" = "$PMAI_HOME/skills/build" ] \
     || { echo "wrong target pmai-build: $host_dir" >&2; exit 1; }
   [ ! -e "$host_dir/pmai-design" ] && [ ! -L "$host_dir/pmai-design" ] \
     || { echo "target policy leaked pmai-design: $host_dir" >&2; exit 1; }
 done
-[ -f "${OPENCODE_CONFIG_DIR:-$HOME/.config/opencode}/commands/pmai-build.md" ] \
-  || { echo "missing target OpenCode pmai-build" >&2; exit 1; }
-[ ! -e "${OPENCODE_CONFIG_DIR:-$HOME/.config/opencode}/commands/pmai-design.md" ] \
-  || { echo "target policy leaked OpenCode pmai-design" >&2; exit 1; }
 exit 0
 SH
       ;;
@@ -1425,7 +1401,7 @@ test_install_doctor_failure_restores_every_global_surface() {
 }
 
 test_install_uses_cloned_target_exposure_policy() {
-  start_test "T24/T33: install 按目标版本生成入口并清理已移除的 direction"
+  start_test "T24/T33: install 按目标策略管理主控入口并保留 Builder 遗留资产"
   local tmp source_repo pmai_home fake_home kimi_target out rc host_dir
 
   tmp=$(mktemp -d /tmp/pmai-install-policy-XXXXXX)
@@ -1440,7 +1416,7 @@ test_install_uses_cloned_target_exposure_policy() {
     return
   fi
   rm -rf "$source_repo/skills/direction"
-  git -C "$source_repo" add -A -- skills/direction
+  git -C "$source_repo" add -A -- skills
   if ! git -C "$source_repo" -c user.name=PMAI-Test -c user.email=pmai-test@example.invalid \
     commit -q --allow-empty -m "remove retired direction skill"; then
     _fail "无法创建不含 direction 的 install 目标 fixture"
@@ -1464,12 +1440,13 @@ test_install_uses_cloned_target_exposure_policy() {
     rm -rf "$tmp"
     return
   fi
-  if ! assert_retired_direction_entries_absent "$fake_home"; then
+  if ! assert_controller_direction_entries_absent "$fake_home" \
+    || ! assert_legacy_direction_entries_preserved "$fake_home"; then
     echo "$out" >&2
     rm -rf "$tmp"
     return
   fi
-  for host_dir in "$fake_home/.claude/skills" "$fake_home/.codex/skills" "$fake_home/.kimi-code/skills"; do
+  for host_dir in "$fake_home/.claude/skills" "$fake_home/.codex/skills"; do
     if [ ! -L "$host_dir/pmai-build" ] \
       || [ "$(readlink "$host_dir/pmai-build")" != "$pmai_home/skills/build" ]; then
       _fail "目标 policy 未安装公开 skill：$host_dir/pmai-build"
@@ -1482,13 +1459,15 @@ test_install_uses_cloned_target_exposure_policy() {
       return
     fi
   done
-  if [ ! -f "$fake_home/.config/opencode/commands/pmai-build.md" ] \
-    || [ -e "$fake_home/.config/opencode/commands/pmai-design.md" ]; then
-    _fail "OpenCode commands 未遵守 clone 后目标版本策略"
+  if [ -e "$fake_home/.config/opencode/commands/pmai-build.md" ] \
+    || [ -L "$fake_home/.config/opencode/commands/pmai-build.md" ] \
+    || [ -e "$fake_home/.config/opencode/commands/pmai-design.md" ] \
+    || [ -L "$fake_home/.config/opencode/commands/pmai-design.md" ]; then
+    _fail "install 不应生成或刷新 OpenCode 主控 command"
   elif [ ! -L "$fake_home/.kimi-code/config.toml" ] \
     || [ "$(readlink "$fake_home/.kimi-code/config.toml")" != "$kimi_target" ] \
-    || ! grep -q '^# >>> PMAI managed Kimi Code hooks >>>$' "$kimi_target"; then
-    _fail "成功安装未保持 Kimi config symlink 并更新其目标内容"
+    || [ "$(cat "$kimi_target")" != 'default_model = "legacy"' ]; then
+    _fail "install 应保持 Kimi config symlink 及其内容不变"
   else
     pass_test
   fi
@@ -1535,7 +1514,7 @@ test_doctor_preserves_logical_pmai_home_targets() {
   logical_home="$tmp/logical-pmai-home"
   ln -s "$pmai_home" "$logical_home"
 
-  for host_dir in "$fake_home/.claude/skills" "$fake_home/.codex/skills" "$fake_home/.kimi-code/skills"; do
+  for host_dir in "$fake_home/.claude/skills" "$fake_home/.codex/skills"; do
     rm -rf "$host_dir"
     mkdir -p "$host_dir"
     while IFS= read -r sk; do
@@ -1664,18 +1643,23 @@ assert_upgrade_rollback_state() {
     _fail "升级前不存在的 Kimi config 在回滚后仍然残留"
     return 1
   fi
-  for host_dir in "$fake_home/.claude/skills" "$fake_home/.codex/skills" "$fake_home/.kimi-code/skills"; do
+  for host_dir in "$fake_home/.claude/skills" "$fake_home/.codex/skills"; do
     if [ ! -L "$host_dir/pmai-design" ] \
       || [ "$(readlink "$host_dir/pmai-design")" != "$install/skills/design" ]; then
       _fail "旧版缺 helper 时未按全公开 fallback 恢复 pmai-design：$host_dir"
       return 1
     fi
   done
+  if find "$fake_home/.kimi-code/skills" -name 'pmai-*' -print -quit | grep -q . \
+    || find "$fake_home/.config/opencode/commands" -name 'pmai-*.md' -print -quit | grep -q .; then
+    _fail "upgrade rollback 不应创建 Kimi/OpenCode 主控入口"
+    return 1
+  fi
   return 0
 }
 
 test_upgrade_to_doctor_failure_restores_branch_kimi_and_legacy_policy() {
-  start_test "T25: --to doctor 失败恢复 main、空 Kimi 状态和旧版 fallback"
+  start_test "T25: --to doctor 失败恢复 main、主控入口和未触碰的 Builder 状态"
   local tmp install fake_home state out rc
 
   tmp=$(mktemp -d /tmp/pmai-upgrade-rollback-fixture-XXXXXX)
@@ -2050,7 +2034,7 @@ test_upgrade_signals_restore_symbolic_and_detached_head() {
 }
 
 test_upgrade_preserves_public_links_and_restores_rollback_policy() {
-  start_test "T15/T33: upgrade 清理 direction，失败回滚恢复旧策略和入口集合"
+  start_test "T15/T33: upgrade 收缩主控入口，失败回滚且保留 Builder 遗留资产"
   local tmp source_repo remote install fake_home state doctor_log current_upgrade
   local out rc candidate_head rollback_out rollback_rc final_head host_dir skill
 
@@ -2126,8 +2110,8 @@ test_upgrade_preserves_public_links_and_restores_rollback_policy() {
     rm -rf "$tmp"
     return
   fi
-  for host_dir in "$fake_home/.claude/skills" "$fake_home/.codex/skills" "$fake_home/.kimi-code/skills"; do
-    for skill in build-close publish-to-lark; do
+  for host_dir in "$fake_home/.claude/skills" "$fake_home/.codex/skills"; do
+    for skill in build-close publish-to-lark sync-from-lark lark-review; do
       if [ ! -L "$host_dir/pmai-$skill" ]; then
         _fail "旧 updater 升级后缺少公开兼容入口 pmai-$skill: $host_dir"
         rm -rf "$tmp"
@@ -2135,7 +2119,8 @@ test_upgrade_preserves_public_links_and_restores_rollback_policy() {
       fi
     done
   done
-  if ! assert_retired_direction_entries_absent "$fake_home"; then
+  if ! assert_controller_direction_entries_absent "$fake_home" \
+    || ! assert_legacy_direction_entries_preserved "$fake_home"; then
     echo "$out" >&2
     rm -rf "$tmp"
     return
@@ -2173,7 +2158,7 @@ test_upgrade_preserves_public_links_and_restores_rollback_policy() {
     rm -rf "$tmp"
     return
   fi
-  for host_dir in "$fake_home/.claude/skills" "$fake_home/.codex/skills" "$fake_home/.kimi-code/skills"; do
+  for host_dir in "$fake_home/.claude/skills" "$fake_home/.codex/skills"; do
     if [ ! -L "$host_dir/pmai-design" ] \
       || [ "$(readlink "$host_dir/pmai-design")" != "$install/skills/design" ]; then
       _fail "回滚未按旧策略恢复 pmai-design: $host_dir"
@@ -2182,7 +2167,8 @@ test_upgrade_preserves_public_links_and_restores_rollback_policy() {
       return
     fi
   done
-  if ! assert_retired_direction_entries_absent "$fake_home"; then
+  if ! assert_controller_direction_entries_absent "$fake_home" \
+    || ! assert_legacy_direction_entries_preserved "$fake_home"; then
     echo "$rollback_out" >&2
     rm -rf "$tmp"
     return
@@ -2193,7 +2179,7 @@ test_upgrade_preserves_public_links_and_restores_rollback_policy() {
 }
 
 test_upgrade_can_pin_to_legacy_policy_without_function_leak() {
-  start_test "T16: --to 旧策略会清除 Bash 残留函数并完成降级"
+  start_test "T16: --to 旧策略只恢复主控入口并保留 Builder 遗留资产"
   local tmp source_repo remote install fake_home state doctor_log legacy_head out rc host_dir skill
 
   tmp=$(mktemp -d /tmp/pmai-upgrade-downgrade-XXXXXX)
@@ -2232,14 +2218,10 @@ EOF
   cat > "$source_repo/bin/pmai-doctor" <<'EOF'
 #!/usr/bin/env bash
 set -uo pipefail
-for host_dir in "$HOME/.claude/skills" "${CODEX_HOME:-$HOME/.codex}/skills" "${KIMI_CODE_HOME:-$HOME/.kimi-code}/skills"; do
+for host_dir in "$HOME/.claude/skills" "${CODEX_HOME:-$HOME/.codex}/skills"; do
   for skill in pmai-design pmai-build-close pmai-publish-to-lark pmai-direction; do
     [ -L "$host_dir/$skill" ] || { echo "legacy doctor missing $host_dir/$skill" >&2; exit 1; }
   done
-done
-for command in pmai-design.md pmai-build-close.md pmai-publish-to-lark.md pmai-direction.md; do
-  [ -f "${OPENCODE_CONFIG_DIR:-$HOME/.config/opencode}/commands/$command" ] \
-    || { echo "legacy doctor missing OpenCode $command" >&2; exit 1; }
 done
 echo "legacy doctor passed"
 EOF
@@ -2286,6 +2268,10 @@ EOF
   for host_dir in "$fake_home/.claude/skills" "$fake_home/.codex/skills" "$fake_home/.kimi-code/skills"; do
     ln -s "$install/skills/_shared" "$host_dir/_shared"
   done
+  ln -s "$install/skills/direction" \
+    "$fake_home/.kimi-code/skills/pmai-direction"
+  printf '%s\n' 'legacy direction command' \
+    > "$fake_home/.config/opencode/commands/pmai-direction.md"
 
   out=$(HOME="$fake_home" PMAI_HOME="$install" PMAI_STATE="$state" \
     CODEX_HOME="$fake_home/.codex" KIMI_CODE_HOME="$fake_home/.kimi-code" \
@@ -2305,7 +2291,7 @@ EOF
     rm -rf "$tmp"
     return
   fi
-  for host_dir in "$fake_home/.claude/skills" "$fake_home/.codex/skills" "$fake_home/.kimi-code/skills"; do
+  for host_dir in "$fake_home/.claude/skills" "$fake_home/.codex/skills"; do
     for skill in design build-close publish-to-lark direction; do
       if [ ! -L "$host_dir/pmai-$skill" ]; then
         _fail "旧策略入口未恢复: $host_dir/pmai-$skill"
@@ -2314,8 +2300,7 @@ EOF
       fi
     done
   done
-  if [ ! -f "$fake_home/.config/opencode/commands/pmai-direction.md" ]; then
-    _fail "降级到仍包含 direction 的旧版本时应恢复 OpenCode 入口"
+  if ! assert_legacy_direction_entries_preserved "$fake_home"; then
     rm -rf "$tmp"
     return
   fi
@@ -2529,7 +2514,7 @@ test_status_help_is_help_only
 test_status_reports_stale_exposed_skill
 test_doctor_requires_codex_exposure
 test_doctor_rejects_wrong_target_and_real_directory_entries
-test_lifecycle_scripts_cover_codex_skills
+test_lifecycle_scripts_cover_controller_and_builder_boundaries
 test_doctor_repairs_empty_codex_exposure
 test_doctor_does_not_generate_codex_prompts
 test_doctor_repairs_opencode_commands

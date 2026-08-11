@@ -110,6 +110,7 @@ PM 真要拿去研发评审时才生成，可覆盖一个或多个模块：
 | `build-cancel` | 仅当前 build 元数据 |
 | `status` | 当前工作 / 当前步 + 最后事件（走 `_lib/state.py`）|
 | `publish-to-lark` | 参数指定的目标文档 |
+| `sync-from-lark` | 参数指定的目标文档及其绑定飞书 Docx |
 | `quick-fix` | 🟢 参数指定文档 / ⚪ 关联文档 |
 
 ## 9.1.1 "按章节匹配" 操作语义（强约束）

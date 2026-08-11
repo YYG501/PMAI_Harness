@@ -7,11 +7,11 @@
 1. 读取本文件了解项目上下文。
 2. 运行 `PMAI_PREAMBLE_READ_ONLY=1; export PMAI_PREAMBLE_READ_ONLY; source "${PMAI_HOME:-$HOME/.pmai}/scripts/skill-preamble.sh"; unset PMAI_PREAMBLE_READ_ONLY` 只读检测当前工作位置。
 3. Claude Code / Codex 运行 `bash "${PMAI_HOME:-$HOME/.pmai}/scripts/install-project-hooks.sh" --check` 只读检查项目 hooks；缺失或漂移时先向 PM 报告，得到确认后才运行不带 `--check` 的同一命令刷新，不能只按配置文件存在就声称已更新。
-4. 运行当前宿主的 status 入口了解当前模块和下一步：Claude Code / OpenCode 使用 `/pmai-status`，Codex 使用 `$pmai-status`，Kimi Code 使用 `/skill:pmai-status`。
+4. 运行当前主控的 status 入口了解当前模块和下一步：Claude Code 使用 `/pmai-status`，Codex 使用 `$pmai-status`。
 
-框架、宿主入口或当前消费仓的文件归位、原型/实现入口与活动工作是否健康，只在 PM 要求诊断时使用 `/pmai-doctor`（Codex：`$pmai-doctor`；Kimi Code：`/skill:pmai-doctor`）。它不属于正常产品推进循环，默认只读；升级、修复和文件迁移必须另行确认。
+框架、宿主入口或当前消费仓的文件归位、原型/实现入口与活动工作是否健康，只在 PM 要求诊断时使用 `/pmai-doctor`（Codex：`$pmai-doctor`）。它不属于正常产品推进循环，默认只读；升级、修复和文件迁移必须另行确认。
 
-> Kimi Code 原生入口统一为 `/skill:pmai-*`，例如 `/skill:pmai-design`、`/skill:pmai-build`；本文其余 `/pmai-*` 写法是跨宿主工作流名称，在 Kimi 会话中按此前缀映射执行。
+> Claude Code 与 Codex 是完整主控。Kimi Code、OpenCode 和 Cursor Agent 只由 `/pmai-build` 作为外部 Builder 调用，不解析本文的 PMAI Skill，也不推进 lifecycle、验收或 landing。
 
 ---
 
@@ -71,7 +71,8 @@
 - `/pmai-record` — 无 active work 时补录 PM 已确认的 TODO、稳定术语、跨模块规则或项目级理路；不改 Proposal、模块规格、mockup 或代码。
 - `/pmai-feedback` — 只读复盘当前完整会话，识别设计不一致与使用卡点，生成带原始会话文件地址的 PMAI 框架优化 Prompt；当前只有 Codex 的精确会话定位已验证，其它宿主不得猜测定位。
 - `/pmai-lark-review` — 回收已发布飞书规格的正文修改和批注；普通未完成批次可跨 worktree 恢复，高影响变化生成 main handoff 并按 Proposal/design/lark-review 的机器 phase 接力，fresh checkpoint 后关闭。
-- `/pmai-lark-sync` — 本地 markdown 与飞书正文的普通同步 / 回拉 / diff；涉及评审批注和规格原型联动时转 lark-review。
+- `/pmai-publish-to-lark` — 把本地 Markdown 发布或更新到飞书；首次创建，已有文档默认精细更新，只有明确要求时才整篇覆盖。
+- `/pmai-sync-from-lark` — PM 已明确以飞书为准且不需要产品判断时，把飞书正文机械同步回本地。
 
 ### 确认门
 

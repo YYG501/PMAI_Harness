@@ -50,7 +50,7 @@ make_source_snapshot() {
 }
 
 test_private_repo_install_surfaces_prereqs() {
-  start_test "T1: 私有仓式 clone install 会安装并提示 gstack readiness"
+  start_test "T1: 私有仓式 clone install 只安装完整主控入口并提示 gstack readiness"
   local out rc
 
   mkdir -p "$FAKE_CODEX_HOME/prompts"
@@ -96,8 +96,8 @@ test_private_repo_install_surfaces_prereqs() {
     _fail "install 不应清理非 PMAI 的 Codex prompt"
     return
   fi
-  if [ ! -f "$FAKE_HOME/.config/opencode/commands/pmai-init-project.md" ]; then
-    _fail "OpenCode command 暴露缺 pmai-init-project"
+  if [ -e "$FAKE_HOME/.config/opencode/commands/pmai-init-project.md" ]; then
+    _fail "install 不应创建 OpenCode PMAI 主控 command"
     return
   fi
   if [ ! -f "$PMAI_HOME/scripts/project-definition.py" ] \
@@ -141,8 +141,8 @@ test_doctor_reports_private_onboarding_state() {
     echo "$out" >&2
     return
   fi
-  if ! echo "$out" | grep -q "OpenCode slash commands"; then
-    _fail "doctor 应检查 OpenCode slash commands"
+  if ! echo "$out" | grep -q "OpenCode Builder"; then
+    _fail "doctor 应报告 OpenCode Builder readiness"
     echo "$out" >&2
     return
   fi
@@ -198,12 +198,12 @@ test_init_project_output_is_same_with_gstack_skill() {
     _fail "消费仓缺 .codex/hooks.json"
     return
   fi
-  if [ ! -f "$target/.opencode/commands/pmai-build.md" ]; then
-    _fail "消费仓缺 .opencode/commands/pmai-build.md"
+  if [ ! -f "$target/.claude/settings.json" ]; then
+    _fail "消费仓缺 .claude/settings.json"
     return
   fi
-  if [ ! -f "$target/opencode.json" ]; then
-    _fail "消费仓缺 opencode.json"
+  if [ -e "$target/.opencode/commands/pmai-build.md" ] || [ -e "$target/opencode.json" ]; then
+    _fail "消费仓不应生成 OpenCode PMAI 主控配置"
     return
   fi
   if [ ! -f "$target/PRODUCT.md" ]; then

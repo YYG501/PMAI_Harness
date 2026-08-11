@@ -91,6 +91,8 @@ def _managed_rule_kind(block: str) -> str | None:
         kinds.append("opencode")
     if "/pmai-status" in block and "下一步" in block:
         kinds.append("status")
+    if "project-design-system.md" in block and "DESIGN.md" in block:
+        kinds.append("project_design_system")
     if len(kinds) > 1:
         raise ConsumerEntryError("旧 Startup 中有一条规则混合了多个 PMAI 托管职责")
     return kinds[0] if kinds else None

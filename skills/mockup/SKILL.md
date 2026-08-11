@@ -19,6 +19,7 @@ source "${PMAI_HOME:-$HOME/.pmai}/scripts/skill-preamble.sh"
 - `skills/_shared/context-reconstruction.md`
 - `skills/_shared/decision-policy.md`
 - `skills/_shared/gstack-integration.md`
+- `skills/_shared/project-design-system.md`
 - `skills/_shared/PM-VIEW-RULES.md` 及其引用的 PM 视图规则
 
 ## 定位与边界
@@ -35,13 +36,14 @@ mockup 负责把已经讲清的产品问题变成可看的交互方向，帮助 
 生成前必须拿齐下面的最小上下文；缺的是产品模型时返回 design，不靠画图猜：
 
 1. 根目录 `DESIGN.md`；
-2. 与本轮相关的现有产品页面、组件和样式；
-3. 本次**完整任务**：触发、入口、主路径、完成结果；
-4. 上游入口页和下游详情/关联页；
-5. context pack 中的 active 决定、已选方向和被否方向；
-6. 角色、权限、数据范围；
-7. 相关边界状态：空态、加载、错误、长内容、权限不足、无数据、冲突、移动/窄屏（适用时）；
-8. 本轮不做什么，以及哪些内容只是 mock。
+2. 按 `skills/_shared/project-design-system.md` 解析并执行的项目设计系统声明（已接入时）；
+3. 与本轮相关的现有产品页面、组件和样式；
+4. 本次**完整任务**：触发、入口、主路径、完成结果；
+5. 上游入口页和下游详情/关联页；
+6. context pack 中的 active 决定、已选方向和被否方向；
+7. 角色、权限、数据范围；
+8. 相关边界状态：空态、加载、错误、长内容、权限不足、无数据、冲突、移动/窄屏（适用时）；
+9. 本轮不做什么，以及哪些内容只是 mock。
 
 “只画当前卡片”不算完整输入。若这张卡的动作会进入用户详情、部门详情、抽屉、弹窗或其它页面，候选稿必须把这段任务走完。
 
@@ -52,6 +54,7 @@ mockup 负责把已经讲清的产品问题变成可看的交互方向，帮助 
 默认贴合当前产品，不重新发明一套视觉语言：
 
 - 读 `DESIGN.md` 的导航、页面模式、组件、层级、密度和交互约定；
+- 若已声明项目级设计系统 Skill，按共享合同调用或完整读取，并把 `使用范围` 和 Skill 规则一起作为本轮约束；
 - 读 `project.yml` 声明的相关实现入口（若尚未生成则只读现有产品页面），只取本轮 slice；
 - 读 `mockups/manifest.json` 中已选、待合并和已退役方向；
 - 读本模块 discussion / decisions / spec 的界面约束。
@@ -161,4 +164,5 @@ python3 "$PMAI_HOME/scripts/gen-mock-board.py" "$REPO_ROOT"
 - 多稿必须在交互模型、信息层级或任务路径上真不同，不允许视觉换皮。
 - 覆盖主路径、关联页面和相关边界状态；工具受限不伪装成已覆盖。
 - 只写 `mockups/` 与清单，不改 build target；选定后返回 design。
+- HTML、图片或静态稿只应用了设计规则时，不声称已经安装或使用真实设计系统 Core / 组件。
 - PM 视图不出现 manifest、variant、worktree、context pack 等内部词。

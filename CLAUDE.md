@@ -16,8 +16,8 @@
 **框架分发与全局安装**（2026-05-26 v1.1 落地）：
 
 - 本仓现已通过 GitHub remote `git@github.com:YYG501/PMAI_Workflow.git` 分发
-- `pmai install` 一次全局安装到 `~/.pmai/` + symlink 当前 skill 到 `~/.claude/skills/pmai-*` / `~/.codex/skills/pmai-*` / `$KIMI_CODE_HOME/skills/pmai-*` + 生成 OpenCode slash commands 到 `~/.config/opencode/commands/pmai-*.md`。Kimi Code 使用原生 `/skill:pmai-*`，Codex 使用原生 skills；两者都不生成模拟 slash command 或重复 custom prompts
-- **仅全局安装**：skill 只装 host skill dirs / slash command dirs，不往项目里拷副本；项目里只放 host 配置 / 状态资产（`.claude/settings.json` / `.codex/hooks.json` / `.opencode/commands` / `opencode.json` / `.work-meta.json`）。旧 `--local`（项目实体副本）已移除——和全局并存会让 `/pmai-*` 命令重复且副本陈旧；遗留副本用 `pmai uninstall --local <dir>` 清理
+- `pmai install` 一次全局安装到 `~/.pmai/`，并把全部公开 Skill 链接到 `~/.claude/skills/pmai-*` 与 `~/.codex/skills/pmai-*`。Codex 不生成重复 custom prompts。
+- **仅全局安装**：主控 Skill 只装 Claude Code / Codex host skill dirs，不往项目里拷副本；项目里只放主控配置 / 状态资产（`.claude/settings.json` / `.codex/hooks.json` / `.work-meta.json`）。Kimi Code、OpenCode 和 Cursor Agent 仅作为外部 Builder，不安装 PMAI 主控入口。旧 `--local`（项目实体副本）已移除；遗留副本用 `pmai uninstall --local <dir>` 清理。
 - 升级 `pmai upgrade`（main）/ `pmai upgrade --stable`（tag）/ `pmai upgrade --to v0.x.0`（pin）
 - 安装和升级以 `README.md`、`bin/pmai`、`bin/pmai-doctor` 为当前真相源。
 - 老的手动同步 SOP：[`框架同步-SOP.md`](./docs/归档/废弃/框架同步-SOP.md) **DEPRECATED + 已归档**（pmai install/upgrade 承接；`pmai sync` 落地后彻底退役）
@@ -39,9 +39,9 @@
 5. **禁把 BLOCKER finding 降级 WARNING** 避免显得苛刻 —— 保留原 severity
 6. 真有 section 不适用 → 默认跑完整版，跑完在完整度标记里写原因；PM 觉得多余事后会让你砍
 
-每次触发上述 skill 时，[`hooks/review-skill-guard.cjs`](./hooks/review-skill-guard.cjs) 自动注入完整约束清单。Claude Code / Codex 的 hook 配置跟项目走（`.claude/settings.json` / `.codex/hooks.json`，git 跟踪）；Kimi Code 当前只有用户级 `config.toml` hooks，因此由 PMAI 标记区注册全局分发器，先识别 PMAI 生成器仓 / 消费仓，普通仓库直接跳过。脚本本体来自本仓或已安装的 `~/.pmai/`。OpenCode 第一版只生成 `.opencode/commands` / `opencode.json` 主控配置，不伪装成其它宿主 hooks。
+每次触发上述 skill 时，[`hooks/review-skill-guard.cjs`](./hooks/review-skill-guard.cjs) 自动注入完整约束清单。Claude Code / Codex 的 hook 配置跟项目走（`.claude/settings.json` / `.codex/hooks.json`，git 跟踪）。Kimi/OpenCode 旧主控入口只保留诊断与清理兼容，不再安装、升级或用于新消费仓。
 
-消费仓由 `scripts/init-project.sh` 自动生成 `.claude/settings.json`、`.codex/hooks.json`、`.opencode/commands` 和 `opencode.json`。Kimi 不生成项目级配置，`pmai install/upgrade/doctor` 管理 `$KIMI_CODE_HOME/skills` 和用户级 PMAI hooks 标记区。项目级配置不会被全局升级静默改写：在消费仓运行 `pmai doctor --check` 做统一只读诊断；也可分别用 `install-project-hooks.sh --check`、`install-opencode-commands.sh --project "$PWD" --check` 和 `install-hooks.sh --check` 定位 Claude / Codex、OpenCode 与 Git hook 漂移。PM 确认后才运行对应安装器的不带 `--check` 模式刷新。Codex 首次看到新增 hook 时可能要求信任确认。
+消费仓由 `scripts/init-project.sh` 自动生成 `.claude/settings.json` 与 `.codex/hooks.json`。项目级配置不会被全局升级静默改写：在消费仓运行 `pmai doctor --check` 做统一只读诊断；也可分别用 `install-project-hooks.sh --check` 和 `install-hooks.sh --check` 定位 Claude / Codex 与 Git hook 漂移。PM 确认后才运行对应安装器的不带 `--check` 模式刷新。Codex 首次看到新增 hook 时可能要求信任确认。
 
 ---
 

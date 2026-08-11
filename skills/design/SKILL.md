@@ -22,6 +22,7 @@ python3 "$PMAI_HOME/scripts/status-view.py" --banner-only --skill DESIGN || true
 
 - `references/design-method.md`
 - `skills/_shared/context-reconstruction.md`
+- `skills/_shared/project-design-system.md`
 - `skills/_shared/personal-memory.md`
 - `skills/_shared/decision-policy.md`
 - `skills/_shared/consistency-scan.md`
@@ -246,7 +247,7 @@ meta 必须产生新判断、危险前提、反例和推荐；若存在真实模
 
 - 不先问“要不要出 mockup”或“画几版”；
 - 有真实岔路才发散 2–3 个方向；没有真实岔路只出一套推荐稿；
-- 输入必须带当前 `DESIGN.md`、现有页面、完整任务、上下游页面、已选决定和边界状态；
+- 输入必须带当前 `DESIGN.md`、现有页面、完整任务、上下游页面、已选决定和边界状态；若 `DESIGN.md` 声明项目级设计系统 Skill，先按 `project-design-system.md` 调用或完整读取后再出稿；
 - PM 选定方向后返回 design，把选择变成产品决定，不让 mockup 替代规格。
 
 ### 6. 决定闭合后自动调用 spec-writing

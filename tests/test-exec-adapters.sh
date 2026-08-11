@@ -321,7 +321,8 @@ test_claude_code_adapter_invokes_print_mode() {
   assert_file_contains "$FAKE_LOG" "<--output-format><text>" "should request text output" || { _teardown_fake_executor; return; }
   assert_file_contains "$FAKE_LOG" "<--no-session-persistence>" "should avoid persisting adapter sessions" || { _teardown_fake_executor; return; }
   assert_file_contains "$FAKE_LOG" "<--model><sonnet>" "should pass EXECUTOR_MODEL" || { _teardown_fake_executor; return; }
-  assert_file_contains "$FAKE_LOG" "<Build the module from spec and design.>" "should pass prompt body" || { _teardown_fake_executor; return; }
+  assert_file_contains "$FAKE_LOG" "你是 PMAI 调用的外部 Builder" "should prepend builder-only contract" || { _teardown_fake_executor; return; }
+  assert_file_contains "$FAKE_LOG" "Build the module from spec and design." "should pass prompt body" || { _teardown_fake_executor; return; }
   assert_file_contains "$status_dir/status.json" '"state": "completed"' "should write completed adapter status" || { _teardown_fake_executor; return; }
   assert_file_contains "$status_dir/exit" "0" "should write adapter exit code" || { _teardown_fake_executor; return; }
   _teardown_fake_executor
@@ -351,7 +352,8 @@ test_opencode_adapter_invokes_run_with_profile_args() {
   assert_file_contains "$FAKE_LOG" "<--model><opencode-go/deepseek-v4-flash>" "should pass EXECUTOR_MODEL" || { _teardown_fake_executor; return; }
   assert_file_contains "$FAKE_LOG" "<--variant><max>" "should map thinking to variant" || { _teardown_fake_executor; return; }
   assert_file_contains "$FAKE_LOG" "<--auto>" "should pass auto approval when configured" || { _teardown_fake_executor; return; }
-  assert_file_contains "$FAKE_LOG" "<Build the module from spec and design.>" "should pass prompt body" || { _teardown_fake_executor; return; }
+  assert_file_contains "$FAKE_LOG" "你是 PMAI 调用的外部 Builder" "should prepend builder-only contract" || { _teardown_fake_executor; return; }
+  assert_file_contains "$FAKE_LOG" "Build the module from spec and design." "should pass prompt body" || { _teardown_fake_executor; return; }
   _teardown_fake_executor
   pass_test
 }
@@ -375,7 +377,8 @@ test_kimi_code_adapter_invokes_prompt_mode() {
 
   assert_file_contains "$FAKE_LOG" "cmd=kimi" "should invoke kimi binary" || { _teardown_fake_executor; return; }
   assert_file_contains "$FAKE_LOG" "cwd=$BUILD_DIR" "should run in BUILD_DIR" || { _teardown_fake_executor; return; }
-  assert_file_contains "$FAKE_LOG" "<--prompt><Build the module from spec and design.>" "should pass prompt body" || { _teardown_fake_executor; return; }
+  assert_file_contains "$FAKE_LOG" "<--prompt><你是 PMAI 调用的外部 Builder" "should prepend builder-only contract" || { _teardown_fake_executor; return; }
+  assert_file_contains "$FAKE_LOG" "Build the module from spec and design." "should pass prompt body" || { _teardown_fake_executor; return; }
   assert_file_contains "$FAKE_LOG" "<--output-format><text>" "should request text output" || { _teardown_fake_executor; return; }
   assert_file_contains "$FAKE_LOG" "<--model><kimi-code/k3>" "should pass EXECUTOR_MODEL" || { _teardown_fake_executor; return; }
   assert_file_contains "$FAKE_LOG" "<--auto>" "should enable unattended execution" || { _teardown_fake_executor; return; }
@@ -452,7 +455,7 @@ test_readme_lists_build_executors() {
   assert_file_contains "$README" '也可作为 `/pmai-build` 执行器' "README should state Claude Code build role" || return
   assert_file_contains "$README" "Cursor Agent" "README should list Cursor Agent" || return
   assert_file_contains "$README" "OpenCode CLI" "README should list OpenCode CLI" || return
-  assert_file_contains "$README" "当前主控不是 Kimi Code 时，也可作为 build 执行器" "README should document Kimi external builder role" || return
+  assert_file_contains "$README" '仅 `/pmai-build` 外部 Builder' "README should document Kimi external builder role" || return
   assert_file_contains "$README" "Codex 作为当前主控时不重复进入外部候选" "README should document current-host profile exclusion" || return
   if grep -q "Gemini CLI" "$README"; then
     _fail "README should not expose the removed Gemini CLI"

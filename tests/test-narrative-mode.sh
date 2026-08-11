@@ -119,9 +119,10 @@ test_health_check_skips_generator_repo() {
 test_health_check_reports_missing_docs() {
   start_test "T8: 业务仓 fixture 缺 PRODUCT-RULES.md / TODO.md 时输出体检"
   local tmp; tmp=$(mktemp -d)
-  # 模拟业务仓：根无 scripts/init-project.sh，docs/ 只有 PRODUCT.md
+  # 模拟旧业务仓：根无 generator marker，只有最小产品脊柱
   mkdir -p "$tmp/docs"
   echo "# PRODUCT" > "$tmp/PRODUCT.md"
+  echo "# PRODUCT-STATE" > "$tmp/PRODUCT-STATE.md"
   local out
   out=$(python3 "$STATUS_VIEW" --narrative "$tmp" 2>&1)
   if ! echo "$out" | grep -q "项目体检"; then

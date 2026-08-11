@@ -6,7 +6,7 @@
 #
 # 注：旧的 `--local <dir>`（往项目 .claude/ 拷实体副本）已移除——它和全局安装并存时
 #     会让每个 /pmai-* 命令在菜单里重复，且副本不跟随升级而变陈旧。skill 一律走全局，
-#     项目里只放 host 配置 / 状态资产（.claude/settings.json / .codex/hooks.json / .opencode/commands / opencode.json / .work-meta.json）。
+#     项目里只放主控 host 配置 / 状态资产（.claude/settings.json / .codex/hooks.json / .work-meta.json）。
 #     清理遗留的项目副本：`pmai uninstall --local <dir>`。
 
 set -Eeuo pipefail
@@ -14,7 +14,6 @@ set -Eeuo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/../scripts/_lib/skill-links.sh"
 source "$SCRIPT_DIR/../scripts/_lib/global-install-lock.sh"
-source "$SCRIPT_DIR/../scripts/_lib/kimi-config-transaction.sh"
 ORIGINAL_ARGS=("$@")
 
 REMOTE="${PMAI_REMOTE:-git@github.com:YYG501/PMAI_Workflow.git}"
@@ -22,10 +21,6 @@ PMAI_HOME="${PMAI_HOME:-$HOME/.pmai}"
 CLAUDE_SKILLS="$HOME/.claude/skills"
 CODEX_SKILLS="${CODEX_HOME:-$HOME/.codex}/skills"
 CODEX_PROMPTS="${CODEX_HOME:-$HOME/.codex}/prompts"
-KIMI_CODE_HOME="${KIMI_CODE_HOME:-$HOME/.kimi-code}"
-KIMI_SKILLS="$KIMI_CODE_HOME/skills"
-KIMI_CONFIG="$KIMI_CODE_HOME/config.toml"
-OPENCODE_CONFIG_DIR="${OPENCODE_CONFIG_DIR:-$HOME/.config/opencode}"
 SKILL_PREFIX="pmai-"
 
 usage() {
@@ -37,9 +32,6 @@ Env override:
   PMAI_REMOTE=<git-url>       # Override default github remote
   PMAI_HOME=<path>            # Override default ~/.pmai/
   CODEX_HOME=<path>           # Override default ~/.codex
-  KIMI_CODE_HOME=<path>       # Override default ~/.kimi-code
-  OPENCODE_CONFIG_DIR=<path>  # Override default ~/.config/opencode
-
 Notes:
   - Skills get 'pmai-' prefix at registration (e.g., /pmai-init-project).
   - skills/_shared/ is a shared resource (not a skill); skipped from prefix routing
@@ -113,7 +105,7 @@ snapshot_entry() {
 snapshot_install_surfaces() {
   local dst_skills old skill_dir skill_name dst
 
-  for dst_skills in "$CLAUDE_SKILLS" "$CODEX_SKILLS" "$KIMI_SKILLS"; do
+  for dst_skills in "$CLAUDE_SKILLS" "$CODEX_SKILLS"; do
     mkdir -p "$dst_skills"
     for old in "$dst_skills"/${SKILL_PREFIX}*; do
       [ -L "$old" ] || continue
@@ -143,25 +135,6 @@ snapshot_install_surfaces() {
     snapshot_entry "$old"
     legacy_prompt_count=$((legacy_prompt_count + 1))
   done
-  for old in "$OPENCODE_CONFIG_DIR/commands"/${SKILL_PREFIX}*.md; do
-    [ -e "$old" ] || [ -L "$old" ] || continue
-    snapshot_entry "$old"
-  done
-  for skill_dir in "$PMAI_HOME"/skills/*/; do
-    [ -d "$skill_dir" ] || continue
-    skill_name=$(basename "$skill_dir")
-    case "$skill_name" in
-      _internal|_shared) continue ;;
-    esac
-    pmai_skill_is_host_exposed "$skill_name" || continue
-    case "$skill_name" in
-      pmai-*) dst="$OPENCODE_CONFIG_DIR/commands/$skill_name.md" ;;
-      *) dst="$OPENCODE_CONFIG_DIR/commands/${SKILL_PREFIX}${skill_name}.md" ;;
-    esac
-    snapshot_entry "$dst"
-  done
-
-  pmai_kimi_config_tx_snapshot "$KIMI_CONFIG" ".pmai-install-kimi-backup"
 }
 
 install_rollback() {
@@ -199,9 +172,6 @@ install_rollback() {
       rollback_failed=1
     fi
   done
-  if ! pmai_kimi_config_tx_restore; then
-    rollback_failed=1
-  fi
   if [ "$TX_CLONE_CREATED" = "1" ] \
     && { [ -e "$PMAI_HOME" ] || [ -L "$PMAI_HOME" ]; } \
     && ! rm -rf -- "$PMAI_HOME"; then
@@ -248,7 +218,6 @@ commit_install_transaction() {
       echo "⚠️  安装已提交，但旧入口恢复材料未删除：$backup" >&2
     fi
   done
-  pmai_kimi_config_tx_cleanup "安装提交后 Kimi config " || true
   if [ -n "$INSTALL_DOCTOR_LOG" ]; then
     if rm -f -- "$INSTALL_DOCTOR_LOG"; then
       INSTALL_DOCTOR_LOG=""
@@ -345,21 +314,8 @@ remove_managed_codex_prompts() {
   echo "$count"
 }
 
-validate_kimi_config_transaction() {
-  local manager_out
-
-  pmai_kimi_config_tx_needs_check || return 0
-  if manager_out=$(KIMI_CODE_HOME="$KIMI_CODE_HOME" \
-    python3 "$PMAI_HOME/scripts/manage-kimi-hooks.py" \
-    check --config "$KIMI_CONFIG" 2>&1); then
-    return 0
-  fi
-  echo "❌ Kimi Code hooks 写入后校验失败：$manager_out" >&2
-  return 1
-}
-
 echo "→ Installing PMAI globally..."
-for dst_skills in "$CLAUDE_SKILLS" "$CODEX_SKILLS" "$KIMI_SKILLS"; do
+for dst_skills in "$CLAUDE_SKILLS" "$CODEX_SKILLS"; do
   pmai_assert_shared_link_available "$PMAI_HOME/skills/_shared" "$dst_skills/_shared"
 done
 if [ -d "$PMAI_HOME/.git" ]; then
@@ -386,21 +342,12 @@ load_target_skill_link_policy "$PMAI_HOME/scripts/_lib/skill-links.sh"
 snapshot_install_surfaces
 
 echo "→ Symlink skills to host skill directories"
-for dst_skills in "$CLAUDE_SKILLS" "$CODEX_SKILLS" "$KIMI_SKILLS"; do
+for dst_skills in "$CLAUDE_SKILLS" "$CODEX_SKILLS"; do
   remove_managed_skill_symlinks "$dst_skills"
   install_skills "$PMAI_HOME/skills" "$dst_skills"
 done
 echo "→ Remove legacy Codex slash prompts"
 echo "   $CODEX_PROMPTS: $legacy_prompt_count legacy prompt file(s) removed"
-echo "→ Install OpenCode slash commands"
-PMAI_HOME="$PMAI_HOME" OPENCODE_CONFIG_DIR="$OPENCODE_CONFIG_DIR" \
-  bash "$PMAI_HOME/scripts/install-opencode-commands.sh" --global
-echo "→ Install Kimi Code native hooks"
-if ! KIMI_CODE_HOME="$KIMI_CODE_HOME" python3 "$PMAI_HOME/scripts/manage-kimi-hooks.py" install --config "$KIMI_CONFIG"; then
-  echo "❌ Kimi Code hooks 安装失败，不能提交半完整全局安装。" >&2
-  install_rollback 1
-fi
-
 DOCTOR_BIN="$PMAI_HOME/bin/pmai-doctor"
 if [ ! -x "$DOCTOR_BIN" ]; then
   echo "❌ 安装目标的 pmai-doctor 缺失或不可执行：$DOCTOR_BIN" >&2
@@ -409,20 +356,12 @@ fi
 INSTALL_DOCTOR_LOG=$(mktemp "${TMPDIR:-/tmp}/pmai-install-doctor.XXXXXX")
 echo "→ Running target pmai-doctor self-check..."
 if ! PMAI_HOME="$PMAI_HOME" CODEX_HOME="${CODEX_HOME:-$HOME/.codex}" \
-  KIMI_CODE_HOME="$KIMI_CODE_HOME" OPENCODE_CONFIG_DIR="$OPENCODE_CONFIG_DIR" \
   "$DOCTOR_BIN" >"$INSTALL_DOCTOR_LOG" 2>&1; then
   echo "❌ 安装目标的 pmai-doctor 自检失败。" >&2
   tail -20 "$INSTALL_DOCTOR_LOG" >&2 || true
   install_rollback 1
 fi
 echo "  ✅ doctor passed"
-if ! validate_kimi_config_transaction; then
-  install_rollback 1
-fi
-if ! pmai_kimi_config_tx_finalize; then
-  echo "❌ Kimi config 无法提交，不能完成半事务安装。" >&2
-  install_rollback 1
-fi
 commit_install_transaction
 
 VER=$(cat "$PMAI_HOME/VERSION" 2>/dev/null || echo unknown)
@@ -432,8 +371,7 @@ echo "✅ PMAI v$VER installed globally"
 echo "   ~/.pmai/         framework source"
 echo "   ~/.claude/skills/pmai-*   skill exposure"
 echo "   ~/.codex/skills/pmai-*    Codex native skill exposure"
-echo "   $KIMI_SKILLS/pmai-*       Kimi Code native /skill:pmai-* exposure"
-echo "   $OPENCODE_CONFIG_DIR/commands/pmai-*.md OpenCode slash commands"
+echo "   Kimi Code / OpenCode      optional external Builders (no controller entries installed)"
 echo "═══════════════════════════════════════"
 
 # PATH 检测：~/.pmai/bin 不在 PATH 就提示 oneshot（不自动改用户 rc 文件，避免破坏配置）

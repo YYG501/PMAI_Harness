@@ -27,6 +27,17 @@ adapter_precheck() {
   adapter_build_dir >/dev/null
 }
 
+adapter_prompt() {
+  cat <<'EOF'
+你是 PMAI 调用的外部 Builder，只负责按已确认范围实现代码并报告结果。
+不要调用 PMAI Skill，不要推进 lifecycle，不要写验收通过、landing 或文档完成状态，
+不要修改 .pm-workflow、.runs 或 docs/modules/*/.work-meta.json。所有验收、状态推进和合入由主控完成。
+
+以下是本轮实现任务：
+EOF
+  cat "$PROMPT_FILE"
+}
+
 adapter_postcheck() {
   local executor_exit="${1:-0}"
   return "$executor_exit"

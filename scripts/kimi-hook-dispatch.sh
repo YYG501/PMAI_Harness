@@ -32,19 +32,38 @@ canonical_git_root() {
 
 repo_kind() {
   local root="${1:-}"
-  if [ -z "$root" ]; then
-    echo "none"
-  elif [ -f "$root/RUNTIME.md" ] \
-    && [ -f "$root/skills/init-project/SKILL.md" ] \
-    && [ -f "$root/CLAUDE.md" ]; then
-    echo "generator"
-  elif [ -f "$root/AGENTS.md" ] \
-    && [ -f "$root/PRODUCT-STATE.md" ] \
-    && grep -q "PMAI" "$root/AGENTS.md" 2>/dev/null; then
-    echo "consumer"
-  else
-    echo "ordinary"
+  [ -n "$root" ] || { echo "uninitialized"; return 0; }
+  python3 "$TRUSTED_PMAI_HOME/scripts/repo-kind.py" --repo-root "$root" 2>/dev/null
+}
+
+# Identity classification remains centralized in repo-kind.py. This fallback
+# only decides whether resolver failure is safe to ignore: a repository with a
+# strong PMAI marker must fail closed when Python or the resolver is unavailable.
+has_possible_pmai_marker() {
+  local root="${1:-}"
+  local marker legacy_count=0
+  [ -n "$root" ] && [ -d "$root" ] || return 1
+
+  for marker in \
+    .pm-workflow/config.yml .opencode/commands/pmai-build.md docs/CONTEXT.md; do
+    [ -f "$root/$marker" ] && return 0
+  done
+  if [ -f "$root/RUNTIME.md" ] \
+    && [ -f "$root/CLAUDE.md" ] \
+    && [ -f "$root/skills/init-project/SKILL.md" ]; then
+    return 0
   fi
+  for marker in AGENTS.md CLAUDE.md .codex/hooks.json opencode.json; do
+    if [ -f "$root/$marker" ] \
+      && grep -Eq 'PMAI|/pmai-|\$pmai-|/skill:pmai-' "$root/$marker" 2>/dev/null; then
+      return 0
+    fi
+  done
+  for marker in \
+    PRODUCT.md PRODUCT-STATE.md docs/PRODUCT.md docs/PRODUCT-STATE.md; do
+    [ -f "$root/$marker" ] && legacy_count=$((legacy_count + 1))
+  done
+  [ "$legacy_count" -ge 2 ]
 }
 
 node_payload_cwd() {
@@ -182,7 +201,20 @@ if [ -z "$PROCESS_REPO_ROOT" ]; then
       "当前目录命中 PMAI 仓标记，但 Git 不可用或仓库定位失败：$PROCESS_MARKER_ROOT"
   fi
 fi
-PROCESS_REPO_KIND=$(repo_kind "$PROCESS_REPO_ROOT")
+if command -v python3 >/dev/null 2>&1; then
+  if ! PROCESS_REPO_KIND=$(repo_kind "$PROCESS_REPO_ROOT"); then
+    if has_possible_pmai_marker "$PROCESS_REPO_ROOT"; then
+      block_for_hook_failure \
+        "PMAI hook 需要 python3 和可信仓库身份解析器，但当前无法可靠运行。"
+    fi
+    PROCESS_REPO_KIND="uninitialized"
+  fi
+else
+  if has_possible_pmai_marker "$PROCESS_REPO_ROOT"; then
+    block_for_hook_failure "PMAI hook 需要 python3，但当前宿主无法运行 python3。"
+  fi
+  PROCESS_REPO_KIND="uninitialized"
+fi
 
 # Kimi runs managed hooks with the session cwd and emits that same cwd in the
 # payload. The process cwd is therefore the routing boundary available before
