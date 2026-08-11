@@ -27,6 +27,7 @@ from _lib.proposal import (
     proposal_state,
     resolve_proposal_path,
 )
+from _lib.work_contract import normalize_work_state
 
 
 ROOT_SOURCES = (
@@ -451,7 +452,9 @@ def build_pack(args: argparse.Namespace) -> dict:
             "paths": target.get("paths", []),
             "entrypoints": target_entrypoints,
         },
-        "lifecycle_state": build.get("lifecycle_state") or meta.get("lifecycle_state") or "designing",
+        "lifecycle_state": (
+            normalize_work_state(meta).lifecycle_state if meta else "designing"
+        ),
         "design_revision": int(build.get("design_revision") or meta.get("design_revision") or 1),
         "approved_source_hash": build.get("approved_source_hash") or meta.get("approved_source_hash"),
         "source_hash": source_hash,

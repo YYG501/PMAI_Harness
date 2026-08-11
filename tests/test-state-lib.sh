@@ -18,6 +18,14 @@ else
   cat /tmp/state_lib_test.out >&2
 fi
 
+start_test "work contract normalization 单元测试"
+if PYTHONPATH="$FRAMEWORK_ROOT/scripts" python3 -m unittest _lib.work_contract_test > /tmp/work_contract_test.out 2>&1; then
+  pass_test "work contract normalization 单元测试"
+else
+  _fail "work contract normalization 单元测试失败"
+  cat /tmp/work_contract_test.out >&2
+fi
+
 start_test "skill-preamble prefers the owning build worktree over stale main state"
 t=$(mktemp -d "${TMPDIR:-/tmp}/pmai-preamble-state.XXXXXX")
 t_real=$(cd "$t" && pwd -P)

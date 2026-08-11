@@ -133,6 +133,7 @@ setup_fake_global_install() {
   cp "$REPO_ROOT/scripts/_lib/consumer_entry.py" "$pmai_home/scripts/_lib/consumer_entry.py"
   cp "$REPO_ROOT/scripts/_lib/proposal.py" "$pmai_home/scripts/_lib/proposal.py"
   cp "$REPO_ROOT/scripts/_lib/repo_identity.py" "$pmai_home/scripts/_lib/repo_identity.py"
+  cp "$REPO_ROOT/scripts/_lib/work_contract.py" "$pmai_home/scripts/_lib/work_contract.py"
   cp "$REPO_ROOT/scripts/repo-kind.py" "$pmai_home/scripts/repo-kind.py"
   cp "$REPO_ROOT/scripts/consumer-doctor.py" "$pmai_home/scripts/consumer-doctor.py"
   cp "$REPO_ROOT/scripts/sync-consumer-entry.py" "$pmai_home/scripts/sync-consumer-entry.py"

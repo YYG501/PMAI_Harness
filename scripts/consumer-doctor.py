@@ -27,6 +27,10 @@ from _lib.consumer_entry import (  # noqa: E402
     plan_consumer_entry,
 )
 from _lib.proposal import proposal_state  # noqa: E402
+from _lib.work_contract import (  # noqa: E402
+    WorkContractError,
+    normalize_work_contract,
+)
 
 
 SCHEMA_VERSION = 1
@@ -574,26 +578,18 @@ class Audit:
                 f"当前模型只保留 active .work-meta.json；发现旧状态：{status!r}",
                 relative,
             )
-        lifecycle = meta.get("lifecycle_state")
         build = meta.get("build")
-        if isinstance(build, dict):
-            build_lifecycle = build.get("lifecycle_state")
-            if lifecycle and build_lifecycle and lifecycle != build_lifecycle:
-                self.add(
-                    "error",
-                    "lifecycle_mismatch",
-                    "模块顶层 lifecycle_state 与 build 合同不一致",
-                    relative,
-                )
-            lifecycle = build_lifecycle or lifecycle
-        if lifecycle not in LIFECYCLE_ORDER:
+        try:
+            contract = normalize_work_contract(meta)
+        except WorkContractError as exc:
             self.add(
                 "error",
-                "lifecycle_invalid",
-                f"模块 lifecycle_state 不合法：{lifecycle!r}",
+                "work_contract_invalid",
+                f"模块工作合同不合法：{exc}",
                 relative,
             )
             return None
+        lifecycle = contract.lifecycle_state
         if lifecycle == "ready_to_build":
             if not isinstance(meta.get("design_revision"), int) or meta.get("design_revision", 0) < 1:
                 self.add("warning", "ready_design_revision", "模块还没有完整保存已确认的设计版本，暂不能开始制作", relative)
@@ -613,17 +609,8 @@ class Audit:
             if not isinstance(build, dict):
                 self.add("error", "build_contract_missing", f"{lifecycle} 状态缺少 build 合同", relative)
                 return lifecycle
-            try:
-                version = int(build.get("contract_version", 1))
-            except (TypeError, ValueError):
-                version = 0
-            if version < 1 or version > 4:
-                self.add(
-                    "error",
-                    "build_contract_version",
-                    f"build.contract_version 不受当前框架支持：{build.get('contract_version')!r}",
-                    relative,
-                )
+            version = contract.contract_version
+            assert version is not None
             mode = build.get("mode")
             executor = build.get("executor")
             if mode not in VALID_BUILD_MODES:
@@ -651,14 +638,8 @@ class Audit:
                 acceptance = build.get("acceptance")
                 if not isinstance(acceptance, dict):
                     self.add("error", "build_acceptance_invalid", "build.acceptance 必须是 object", relative)
-                else:
-                    required_checks = acceptance.get("required_checks")
-                    if not isinstance(required_checks, list) or not required_checks or any(
-                        not isinstance(item, str) or not item.strip() for item in required_checks
-                    ):
-                        self.add("error", "build_acceptance_invalid", "acceptance.required_checks 必须是非空字符串数组", relative)
-                    if not isinstance(acceptance.get("evidence"), list):
-                        self.add("error", "build_acceptance_invalid", "acceptance.evidence 必须是数组", relative)
+                elif not isinstance(acceptance.get("evidence"), list):
+                    self.add("error", "build_acceptance_invalid", "acceptance.evidence 必须是数组", relative)
                 if build.get("docs_status") not in VALID_DOCS_STATUSES:
                     self.add("error", "build_docs_status", "build.docs_status 不符合当前合同", relative)
             if version >= 3:
@@ -669,17 +650,10 @@ class Audit:
             if version >= 4:
                 acceptance = build.get("acceptance")
                 if isinstance(acceptance, dict):
-                    iteration_checks = acceptance.get("iteration_checks")
-                    final_checks = acceptance.get("final_checks")
-                    required_checks = acceptance.get("required_checks")
-                    if not isinstance(iteration_checks, list) or not isinstance(final_checks, list):
-                        self.add("error", "build_acceptance_v4", "v4 acceptance 缺少 iteration_checks / final_checks", relative)
-                    elif not final_checks or final_checks != required_checks:
-                        self.add("error", "build_acceptance_v4", "v4 final_checks 必须与 required_checks 一致", relative)
                     if not isinstance(acceptance.get("iteration_evidence"), list):
-                        self.add("error", "build_acceptance_v4", "v4 iteration_evidence 必须是数组", relative)
+                        self.add("error", "build_acceptance_v4", "v4+ iteration_evidence 必须是数组", relative)
                 if not isinstance(build.get("finalization"), dict):
-                    self.add("error", "build_finalization_v4", "v4 build 缺少 finalization object", relative)
+                    self.add("error", "build_finalization_v4", "v4+ build 缺少 finalization object", relative)
             if lifecycle in {"building", "iterating", "final_check"} and build.get("mode") == "worktree":
                 worktree = build.get("worktree") or meta.get("worktree")
                 worktree_path = None

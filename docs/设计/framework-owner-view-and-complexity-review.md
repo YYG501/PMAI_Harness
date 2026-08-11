@@ -288,8 +288,8 @@ PMAI 当前不是一个循环，而是四个相互约束的循环：
 |---|---|---|
 | 旧 `stage` | 读取 v1 消费仓和展示旧状态 | 当前模型只用 lifecycle；统计已知消费仓后设退出条件 |
 | 顶层与 `build.lifecycle_state` | 支持不同代状态位置 | 在读取边界归一化，主逻辑只接收 canonical state |
-| build contract v1-v3 | 恢复历史 active build | 只读或恢复，不允许新写；按已知 active 合同清零后退休 |
-| `required_checks` | 旧宿主兼容别名 | 当前模型只使用 `final_checks`，序列化边界再映射 |
+| build contract v1-v4 | 恢复历史 active build | 只读或恢复，不允许新写；按已知 active 合同清零后退休 |
+| `required_checks` | 旧合同兼容别名 | 只在 normalization 边界映射为 `final_checks`，新写不再生成 |
 | `/pmai-build-close` / `close-work.sh` | 旧调用习惯与中断恢复 | 恢复能力保留，公开入口是否保留需单独决定 |
 | `project-type.py` | 读取旧 config 和 marker | 新写只走 `project.yml`，完成消费仓升级后退休 |
 | 旧迁移脚本 | 帮助历史目录或文档结构升级 | 建立支持版本表，超过窗口转为只读诊断或归档 |
@@ -314,7 +314,7 @@ PMAI 当前不是一个循环，而是四个相互约束的循环：
 
 ### 7.2 同一状态跨代并存
 
-事实：当前权威是 lifecycle，但代码继续读取或写入旧 `stage`；lifecycle 同时可能出现在 `.work-meta.json` 顶层和 `build` 内；`required_checks` 与 `final_checks` 同时保留；build contract v1-v4 继续参与不同恢复路径。
+批次三前的事实：权威虽是 lifecycle，但代码仍分散读取或写入旧 `stage`；lifecycle 同时出现在 `.work-meta.json` 顶层和 `build` 内；`required_checks` 与 `final_checks` 同时保留；build contract v1-v4 参与不同恢复路径。当前已由唯一 normalization 边界统一读取，新写收敛为 v5，历史形态只保留恢复兼容。
 
 影响：
 
@@ -457,7 +457,7 @@ PM 已确认并已落地新写等级：Codex、Claude Code 作为完整主控，
 
 ## 10. 建议的收口顺序
 
-执行时一次只推进一个批次。每批先完成清单与验收标准，再改实现；前一批没有形成可验证结果前，不并行启动后续大型重构。批次一、二已经完成，下一步从批次三开始。
+执行时一次只推进一个批次。每批先完成清单与验收标准，再改实现；前一批没有形成可验证结果前，不并行启动后续大型重构。批次一至三已经完成，下一步从批次四开始。
 
 ### 批次一：只降低认知成本，不改变用户行为（已完成）
 
@@ -473,12 +473,12 @@ PM 已确认并已落地新写等级：Codex、Claude Code 作为完整主控，
 3. 停止为 Kimi、OpenCode 新增或刷新主控入口；现有入口已进入兼容清单，只诊断、不自动删除。
 4. 让 status 和自然语言路由继续承接恢复与专项意图；只有出现明确隐藏候选时才补定向使用证据。
 
-### 批次三：归一化内部模型（下一步）
+### 批次三：归一化内部模型（已完成）
 
-1. 建立旧合同到 canonical model 的单一读取边界。
-2. 主逻辑停止直接分支处理 stage、旧 lifecycle 位置和旧 checks 名称。
-3. 新写只产生当前 contract；恢复适配器独立处理旧 active build。
-4. 按 ADR-003 建立兼容退出测试和退休条件；已知消费仓升级完成后再删除旧读取路径。
+1. `_lib/work_contract.py` 成为旧合同到 canonical model 的单一读取边界，统一输出 lifecycle、display stage、contract version、iteration checks、final checks 和兼容来源。
+2. status、state/preamble、Doctor、ready、replan、context pack、Lark active-build 路由、finalize、landing、cleanup 和主分支写入门禁不再自行回退旧字段。
+3. 新 build contract 升为 v5：build 前只写顶层 lifecycle；build 开始后只写 `build.lifecycle_state`，不再写 `stage`、顶层 lifecycle 或 `required_checks`。acceptance profile v3 同样停止输出别名。
+4. 旧 v1-v4 继续由兼容边界读取；冲突 lifecycle、别名不一致、非法版本和非法类型失败关闭。真实消费仓未迁移，兼容删除仍须满足 ADR-003 退出门并由 PM 单独确认。
 
 ### 批次四：降低维护热点
 

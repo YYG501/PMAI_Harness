@@ -11,6 +11,8 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
+from _lib.work_contract import WorkContractError, normalize_work_contract
+
 
 COMMAND_CHECKS = {"tests": "test", "typecheck": "typecheck", "build": "build"}
 
@@ -124,8 +126,12 @@ def build_state(module_dir: Path) -> tuple[dict, dict]:
     build = meta.get("build")
     if not isinstance(build, dict):
         raise SystemExit(".work-meta.json 缺少 build 合同。")
-    if int(build.get("contract_version", 1)) < 4:
-        raise SystemExit("统一 finalize runner 只处理 v4；v2/v3 继续走 /pmai-build-close 恢复。")
+    try:
+        contract = normalize_work_contract(meta)
+    except WorkContractError as exc:
+        raise SystemExit(str(exc)) from exc
+    if (contract.contract_version or 0) < 4:
+        raise SystemExit("统一 finalize runner 只处理 v4+；v2/v3 继续走 /pmai-build-close 恢复。")
     return meta, build
 
 
@@ -157,13 +163,10 @@ def evidence_names(build: dict) -> set[str]:
 
 
 def final_checks(build: dict) -> list[str]:
-    acceptance = build.get("acceptance")
-    if not isinstance(acceptance, dict):
-        raise SystemExit("build.acceptance 必须是对象。")
-    checks = acceptance.get("final_checks") or acceptance.get("required_checks")
-    if not isinstance(checks, list) or not checks:
-        raise SystemExit("build.acceptance.final_checks 为空。")
-    return [str(value) for value in checks]
+    try:
+        return list(normalize_work_contract({"build": build}).final_checks)
+    except WorkContractError as exc:
+        raise SystemExit(str(exc)) from exc
 
 
 def finalization_marker_path(audit_dir: Path) -> Path:
@@ -525,10 +528,13 @@ def finalize(args: argparse.Namespace) -> int:
     module_dir = Path(args.module_dir).expanduser().resolve()
     build_root = git_root(module_dir)
     main_root = main_repo_root(build_root)
-    _, build = build_state(module_dir)
+    meta, build = build_state(module_dir)
     audit_dir = audit_dir_for(build_root, module_dir, build)
     audit_dir.mkdir(parents=True, exist_ok=True)
-    state = str(build.get("lifecycle_state") or "")
+    try:
+        state = normalize_work_contract(meta).lifecycle_state
+    except WorkContractError as exc:
+        raise SystemExit(str(exc)) from exc
 
     if state == "iterating":
         checks = final_checks(build)

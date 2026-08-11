@@ -64,6 +64,7 @@ from _lib.proposal import (  # noqa: E402
     ProposalContractError,
     validate_current_proposal,
 )
+from _lib.work_contract import WorkContractError, normalize_work_state  # noqa: E402
 
 
 SCHEMA_VERSION = 3
@@ -2151,9 +2152,10 @@ def resolve_target(args: argparse.Namespace) -> int:
             if not isinstance(meta, dict):
                 continue
             build = meta.get("build") if isinstance(meta.get("build"), dict) else {}
-            lifecycle = str(
-                build.get("lifecycle_state") or meta.get("lifecycle_state") or ""
-            )
+            try:
+                lifecycle = normalize_work_state(meta).lifecycle_state
+            except WorkContractError as exc:
+                raise ReviewError(f"active work 合同不合法：{exc}") from exc
             if lifecycle not in ACTIVE_BUILD_STATES:
                 continue
             work_dir = _canonical_directory(
@@ -2587,9 +2589,10 @@ def _direct_product_handoff_binding(
         if not isinstance(meta, dict):
             continue
         build = meta.get("build") if isinstance(meta.get("build"), dict) else {}
-        lifecycle = str(
-            build.get("lifecycle_state") or meta.get("lifecycle_state") or ""
-        )
+        try:
+            lifecycle = normalize_work_state(meta).lifecycle_state
+        except WorkContractError as exc:
+            raise ReviewError(f"active work 合同不合法：{exc}") from exc
         if lifecycle in ACTIVE_BUILD_STATES:
             active_builds.append(str(meta.get("id") or item.get("work_dir") or ""))
     if active_builds:
@@ -4049,11 +4052,10 @@ def _validate_active_build_delta(
     )
     work_meta = _load_json_object(work_meta_path, label="active build .work-meta.json")
     build = work_meta.get("build")
-    lifecycle_state = str(
-        (build.get("lifecycle_state") if isinstance(build, dict) else None)
-        or work_meta.get("lifecycle_state")
-        or ""
-    )
+    try:
+        lifecycle_state = normalize_work_state(work_meta).lifecycle_state
+    except WorkContractError as exc:
+        raise ReviewError(f"active build 合同不合法：{exc}") from exc
     if (
         work_meta.get("status") != "active"
         or not isinstance(build, dict)

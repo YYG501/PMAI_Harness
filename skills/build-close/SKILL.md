@@ -46,7 +46,7 @@ python3 "$PMAI_HOME/scripts/status-view.py" --banner-only --skill BUILD-CLOSE ||
 
 - `contract_version=1`：调用 `close-work.sh` 的旧兼容路径；
 - `building`：实现尚未形成可查看的提交，返回 `/pmai-build` 继续构建；
-- `iterating`：PM 主动调用本入口表示希望定稿；v4 先记录 `request-finalization`，再在冻结 commit 的 validation worktree 完成一次 `final_checks`，全部通过后才生成验收就绪快照并进入 `final_check`；
+- `iterating`：PM 主动调用本入口表示希望定稿；v4+ 先记录 `request-finalization`，再在冻结 commit 的 validation worktree 完成一次 `final_checks`，全部通过后才生成验收就绪快照并进入 `final_check`；
 - `final_check`：验证最新证据后落地主线；
 - `landed + docs_status=pending|failed`：只恢复文档编译，不重复 merge；
 - `documenting + docs_status=complete`：提交文档并完成清理；
@@ -60,7 +60,7 @@ bash "$PMAI_HOME/scripts/close-work.sh" "docs/modules/<模块>"
 
 `close-work.sh` 根据同一合同自动转 `land-work.sh`，不靠 cwd、分支名字或碰巧存在的 worktree 猜流程。
 
-若从 `iterating` 进入，不能先写 `pm_accepted_at` 再临时跑完整验收。先记录候选实现 commit；v4 直接调用统一 runner，它会从 currentness 开始只执行缺失的机械项：
+若从 `iterating` 进入，不能先写 `pm_accepted_at` 再临时跑完整验收。先记录候选实现 commit；v4+ 直接调用统一 runner，它会从 currentness 开始只执行缺失的机械项：
 
 ```bash
 IMPLEMENTATION_COMMIT=$(git -C "<build worktree>" rev-parse HEAD)
@@ -168,7 +168,7 @@ PM 窗口只报阶段结果，不直播 context pack、合同 JSON、git 命令�
 - 正常链路由 build 自动 finalize；本 skill 只兼容和恢复。
 - 只按 build contract 和 lifecycle state 续跑，不从 cwd / 分支形态猜。
 - `final_check` 只接受绑定最终 source hash 与 implementation commit 的新鲜证据。
-- v4 `iterating` 必须先有 PM 定稿请求，再运行一次 final checks 并通过 `review-ready`；`final_check` 不首次跑完整验收、不修改业务代码。
+- v4+ `iterating` 必须先有 PM 定稿请求，再运行一次 final checks 并通过 `review-ready`；`final_check` 不首次跑完整验收、不修改业务代码。
 - merge 冲突不清理 worktree；文档失败不重复 merge。
 - 运行进程或缓存导致的 worktree 清理失败进入待清理队列，不阻塞文档阶段。
 - 正式文档在实现落 main 后更新，单独提交。

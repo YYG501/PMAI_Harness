@@ -165,13 +165,16 @@ _collect_work_in() {
     local meta="$work_dir/.work-meta.json"
     [ -f "$meta" ] || continue
     local fields status id stage meta_branch build_branch
-    fields=$(python3 - "$meta" <<'PY' 2>/dev/null || true
+    fields=$(python3 - "$meta" "$PMAI_HOME/scripts" <<'PY' 2>/dev/null || true
 import json, sys
+sys.path.insert(0, sys.argv[2])
+from _lib.work_contract import normalize_work_state
 meta = json.load(open(sys.argv[1]))
 build = meta.get("build") if isinstance(meta.get("build"), dict) else {}
+contract = normalize_work_state(meta)
 print(meta.get("status", ""))
 print(meta.get("id", ""))
-print(meta.get("stage", ""))
+print(contract.display_stage)
 print(meta.get("branch", ""))
 print(build.get("branch", ""))
 PY

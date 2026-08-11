@@ -77,14 +77,17 @@ test_ready_to_build_starts_building() {
 import json, sys
 meta = json.load(open(sys.argv[1]))
 build = meta["build"]
-assert meta["lifecycle_state"] == "building"
+assert "lifecycle_state" not in meta
+assert "stage" not in meta
 assert build["lifecycle_state"] == "building"
+assert build["contract_version"] == 5
 assert build["mode"] == "main"
 assert build["executor"] == "native"
 assert build["approved_source_hash"] == sys.argv[2]
 assert build["target"]["paths"] == ["prototype/src/access"]
 assert build["acceptance"]["iteration_checks"] == ["current-page"]
 assert build["acceptance"]["final_checks"] == ["prototype-boundary"]
+assert "required_checks" not in build["acceptance"]
 PY
   then
     _fail "build start should preserve the approved design contract"

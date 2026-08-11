@@ -21,6 +21,7 @@ from _lib.pending_cleanup import (
     prepare_pending_cleanup,
     read_pending_entries,
 )
+from _lib.work_contract import WorkContractError, normalize_work_state
 
 
 ALLOWED_LIFECYCLES = {"building", "iterating", "final_check"}
@@ -305,7 +306,10 @@ def build_fields(meta: dict[str, Any]) -> tuple[str, str, str, str]:
     if not isinstance(build, dict):
         raise ReplanError("活动工作缺少 build 合同。")
     mode = str(build.get("mode") or "")
-    lifecycle = str(build.get("lifecycle_state") or meta.get("lifecycle_state") or "")
+    try:
+        lifecycle = normalize_work_state(meta).lifecycle_state
+    except WorkContractError as exc:
+        raise ReplanError(str(exc)) from exc
     branch = str(build.get("branch") or meta.get("branch") or "")
     baseline = str(build.get("baseline_sha") or "")
     if mode not in {"worktree", "main"}:

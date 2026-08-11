@@ -14,16 +14,18 @@ import sys
 from pathlib import Path
 from typing import Any
 
+from .work_contract import WorkContractError, normalize_work_state
+
 
 class ReadyContractError(ValueError):
     """Raised when a ready-to-build handoff is missing, stale, or ambiguous."""
 
 
 def lifecycle_state(meta: dict[str, Any]) -> str:
-    build = meta.get("build")
-    if isinstance(build, dict) and build.get("lifecycle_state"):
-        return str(build["lifecycle_state"])
-    return str(meta.get("lifecycle_state") or "")
+    try:
+        return normalize_work_state(meta).lifecycle_state
+    except WorkContractError as exc:
+        raise ReadyContractError(str(exc)) from exc
 
 
 def normalize_paths(values: object, label: str = "approved_target.paths") -> list[str]:

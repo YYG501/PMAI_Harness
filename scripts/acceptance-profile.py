@@ -119,14 +119,12 @@ def compile_profile(args: argparse.Namespace) -> dict:
     iteration_checks = dedupe(iteration_checks)
     final_checks = dedupe(final_checks)
     return {
-        "schema_version": 2,
+        "schema_version": 3,
         "target": {"kind": target, "paths": paths},
         "delivery_policy": delivery_policy,
         "delivery_policy_hash": delivery_policy_hash(delivery_policy),
         "iteration_checks": iteration_checks,
         "final_checks": final_checks,
-        # Compatibility alias for older build hosts. New hosts consume final_checks.
-        "required_checks": final_checks,
     }
 
 

@@ -393,9 +393,10 @@ test_contract_lifecycle() {
 import json, sys
 meta = json.load(open(sys.argv[1]))
 build = meta["build"]
-assert meta["stage"] == 2
+assert "stage" not in meta
+assert "lifecycle_state" not in meta
 assert build["mode"] == "worktree"
-assert build["contract_version"] == 4
+assert build["contract_version"] == 5
 assert build["target"]["kind"] == "prototype"
 assert build["delivery_policy"]["implementation_mode"] == "interactive-simulation"
 assert build["delivery_policy"]["required_check"] == "prototype-boundary"
@@ -413,6 +414,7 @@ assert build["implementation_commit"] == "def456"
 assert build["pm_accepted_at"] == "2026-06-28T10:00:00+08:00"
 assert build["acceptance"]["ready_commit"] == "def456"
 assert build["acceptance"]["ready_source_hash"] == build["approved_source_hash"]
+assert "required_checks" not in build["acceptance"]
 assert build["finalization"]["requested_commit"] == "def456"
 PY
     _fail "written build contract fields mismatch"
@@ -978,7 +980,6 @@ for kind in ("term", "role", "product-behavior"):
 build["accepted_deltas"] = deltas
 build["approved_source_hash"] = previous
 build["lifecycle_state"] = "iterating"
-meta["lifecycle_state"] = "iterating"
 json.dump(meta, open(path, "w"), ensure_ascii=False, indent=2)
 PY
   if python3 "$BUILD_CONTRACT" validate-currentness "$MODULE_DIR" \
@@ -2072,7 +2073,7 @@ test_contract_v2_rejects_illegal_lifecycle_jumps() {
 }
 
 test_contract_v4_finalization_gate_and_iteration_lane() {
-  start_test "build-contract v4: final checks require PM request; validation fixes rebind; PM feedback resumes iteration"
+  start_test "build-contract v5: final checks require PM request; validation fixes rebind; PM feedback resumes iteration"
   setup_contract_fixture product
   python3 "$BUILD_CONTRACT" start "$MODULE_DIR" \
     --anchor "docs/modules/pet-import/spec.md" --mode worktree --executor codex \
@@ -2143,7 +2144,7 @@ PY
 }
 
 test_contract_v4_requires_and_validates_prototype_boundary() {
-  start_test "build-contract v4: prototype boundary is required, current, and non-exceptable"
+  start_test "build-contract v5: prototype boundary is required, current, and non-exceptable"
   setup_contract_fixture
   if python3 "$BUILD_CONTRACT" start "$MODULE_DIR" \
     --anchor "docs/modules/pet-import/spec.md" --mode worktree --executor codex \
@@ -2182,7 +2183,7 @@ test_contract_v4_requires_and_validates_prototype_boundary() {
 }
 
 test_contract_v4_accepts_one_hard_browser_batch() {
-  start_test "build-contract v4: one browser batch replaces three separate UI checks"
+  start_test "build-contract v5: one browser batch replaces three separate UI checks"
   setup_contract_fixture product
   python3 "$BUILD_CONTRACT" start "$MODULE_DIR" \
     --anchor "docs/modules/pet-import/spec.md" --mode worktree --executor codex \

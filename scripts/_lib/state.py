@@ -39,6 +39,8 @@ from pathlib import Path
 from typing import Literal, Optional, TypedDict
 import re
 
+from .work_contract import WorkContractError, normalize_work_state
+
 
 # ============================================================================
 # Errors
@@ -366,22 +368,17 @@ def get_current_stage_banner(work_dir: Path, skill: str = "WORK") -> str:
     """
     meta = read_work_meta(work_dir, strict=True)
     assert meta is not None
-    lifecycle = meta.get("lifecycle_state")
-    build = meta.get("build")
-    if isinstance(build, dict):
-        lifecycle = build.get("lifecycle_state") or lifecycle
-    if lifecycle:
+    try:
+        contract = normalize_work_state(meta)
+    except WorkContractError as exc:
+        raise StateReadError(work_dir / ".work-meta.json", str(exc)) from exc
+    if "stage_lifecycle" in contract.compatibility:
+        from .stages import STAGE_NAMES
+        progress_name = STAGE_NAMES.get(contract.display_stage, "未知")
+    else:
         from .stages import LIFECYCLE_NAMES
-        lifecycle_name = LIFECYCLE_NAMES.get(str(lifecycle))
-        if lifecycle_name:
-            return f"━━━ PMAI ► {skill} ▸ {lifecycle_name} ━━━"
-
-    stage = meta.get("stage")
-    if stage is None:
-        raise StateReadError(work_dir / ".work-meta.json", "缺 stage 字段")
-    from .stages import STAGE_NAMES
-    stage_name = STAGE_NAMES[int(stage)]
-    return f"━━━ PMAI ► {skill} ▸ {stage_name} ━━━"
+        progress_name = LIFECYCLE_NAMES[contract.lifecycle_state]
+    return f"━━━ PMAI ► {skill} ▸ {progress_name} ━━━"
 
 
 def read_task_meta(pm_view: Path, strict: bool = True) -> Optional[TaskMeta]:
@@ -801,8 +798,12 @@ def _print_doctor(repo_root: Path, work_arg: Optional[str]) -> int:
     for item in state["active_work"]:
         meta = item["meta"]
         rd = item["work_dir"]
+        try:
+            display_stage: int | str = normalize_work_state(meta).display_stage
+        except WorkContractError:
+            display_stage = "?"
         print(f"  - {meta.get('id', '?')} ({meta.get('name', '?')})"
-              f"  stage={meta.get('stage', '?')}  status={meta.get('status', '?')}")
+              f"  stage={display_stage}  status={meta.get('status', '?')}")
         print(f"    dir={rd}")
 
     if state["warnings"]:

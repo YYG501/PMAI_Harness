@@ -184,10 +184,12 @@ fi
 # framework metadata continue to use the ordinary whitelist below.
 active_main_build_allows_path() {
   local rel_path="$1"
-  python3 - "$MAIN_REPO_ROOT" "$rel_path" <<'PY'
+  python3 - "$MAIN_REPO_ROOT" "$rel_path" "$SCRIPT_DIR" <<'PY'
 import json
 import sys
 from pathlib import Path, PurePosixPath
+sys.path.insert(0, sys.argv[3])
+from _lib.work_contract import normalize_work_state
 
 repo = Path(sys.argv[1])
 
@@ -202,7 +204,9 @@ allowed_states = {"building", "iterating", "final_check"}
 
 for meta_path in (repo / "docs" / "modules").glob("*/.work-meta.json"):
     try:
-        build = json.loads(meta_path.read_text(encoding="utf-8")).get("build", {})
+        meta = json.loads(meta_path.read_text(encoding="utf-8"))
+        contract = normalize_work_state(meta)
+        build = meta.get("build", {})
     except Exception:
         continue
     try:
@@ -211,7 +215,7 @@ for meta_path in (repo / "docs" / "modules").glob("*/.work-meta.json"):
         continue
     if version < 2 or build.get("mode") != "main":
         continue
-    if build.get("lifecycle_state") not in allowed_states:
+    if contract.lifecycle_state not in allowed_states:
         continue
     target = build.get("target", {})
     paths = target.get("paths", []) if isinstance(target, dict) else []

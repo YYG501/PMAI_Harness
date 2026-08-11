@@ -510,6 +510,17 @@ PY
 test_legacy_v4_final_check_without_runner_audit_lands() {
   start_test "finalize-work: legacy v4 final_check without runner audit lands without migration"
   setup_worktree_fixture
+  python3 - "$MODULE/.work-meta.json" <<'PY'
+import json, sys
+path = sys.argv[1]
+meta = json.load(open(path))
+build = meta["build"]
+build["contract_version"] = 4
+build["acceptance"]["required_checks"] = list(build["acceptance"]["final_checks"])
+meta["stage"] = 2
+meta["lifecycle_state"] = build["lifecycle_state"]
+json.dump(meta, open(path, "w"), ensure_ascii=False, indent=2)
+PY
   python3 "$CONTRACT" request-finalization "$MODULE" >/dev/null
   python3 "$CONTRACT" record-evidence "$MODULE" --name tests --status pass \
     --source-hash "$SOURCE_HASH" --commit "$IMPLEMENTATION" >/dev/null

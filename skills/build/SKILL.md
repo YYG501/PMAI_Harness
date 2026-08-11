@@ -230,7 +230,7 @@ fi
 
 执行器使用 `EXECUTOR_STATUS_DIR`、heartbeat、退出码和日志文件回报进度；PM 窗口只报阶段摘要，不直播命令、日志和进程排障。可确认的外部构建工具包括 Claude Code、Codex、Kimi Code、Cursor Agent 和 OpenCode，但必须排除当前主控对应的外部 profile；“当前会话直接构建”始终与这些外部工具一起列为有效选项。没有外部工具可用时，推荐当前会话直接构建。
 
-从 acceptance profile 分别取快速迭代和定稿验收两组检查，写版本化合同。当前新合同为 v4：`iteration_checks` 只服务 PM 看结果期间的快循环，`final_checks` 只有 PM 明确请求定稿后才允许运行；同时由 `target.kind` 自动固化 `delivery_policy + delivery_policy_hash`。旧 v2/v3 合同只作中断恢复兼容：
+从 acceptance profile 分别取快速迭代和定稿验收两组检查，写版本化合同。当前新合同为 v5：`iteration_checks` 只服务 PM 看结果期间的快循环，`final_checks` 只有 PM 明确请求定稿后才允许运行；build 开始后 lifecycle 只写入 `build.lifecycle_state`，不再同时写顶层 lifecycle、旧 `stage` 或 `required_checks`。同时由 `target.kind` 自动固化 `delivery_policy + delivery_policy_hash`。旧 v2/v3/v4 合同只作中断恢复兼容：
 
 ```bash
 ITERATION_CHECKS=()
@@ -270,7 +270,7 @@ git -C "$BUILD_DIR" add -- "docs/modules/<模块>/.work-meta.json"
 git -C "$BUILD_DIR" commit -m "build(<模块>): start adaptive build"
 ```
 
-两组检查都按后台档案逐项重复传入。`required_checks` 只保留为 `final_checks` 的旧 host 兼容别名。合同只扩展现有 `.work-meta.json:build`，不新增平行状态系统，也不把合同内容展示给 PM。
+两组检查都按后台档案逐项重复传入。合同只扩展现有 `.work-meta.json:build`，不新增平行状态系统，也不把合同内容展示给 PM；旧合同字段只由统一兼容读取层解释，新工作不再生成。
 `start` 自身会再次强制校验 current `ready_to_build`、`project.yml`、批准目标与仓内路径；缺任一前置时只能返回 design，不能由 build 补造状态或临时合同。
 
 ## 4. 构建指定对象
@@ -437,7 +437,7 @@ python3 "$PMAI_HOME/scripts/build-contract.py" record-evidence \
 
 非浏览器检查受限时如实写 `limited / skipped / blocked`，只有合同允许的具名检查才可记录 exception；`browser-acceptance` 必须是 active pass，旧合同的 `browser-smoke` 和行为 `fail` 也不能例外放行。
 
-完整检查失败时保持 `iterating`。若只是验收发现实现缺口，用当前会话修复并记录新 implementation commit；v4 会保留原定稿意图并把 `requested_commit` 自动重绑到修复提交，无需让 PM 再说一次“定稿”，但所有 final evidence 必须重跑。若 PM 在这期间又提出新的产品/体验反馈，则先运行 `resume-iteration` 清掉定稿请求，回到快速迭代车道；不得带着失败进入 close。
+完整检查失败时保持 `iterating`。若只是验收发现实现缺口，用当前会话修复并记录新 implementation commit；v4+ 会保留原定稿意图并把 `requested_commit` 自动重绑到修复提交，无需让 PM 再说一次“定稿”，但所有 final evidence 必须重跑。若 PM 在这期间又提出新的产品/体验反馈，则先运行 `resume-iteration` 清掉定稿请求，回到快速迭代车道；不得带着失败进入 close。
 
 完整检查通过后重跑统一 runner；它自动形成 review-ready、记录 accept 并继续 landing。实现 commit、accepted delta 或任一 final evidence 变化都会使快照失效；runner 只补失效项，不在 build 阶段生成 doc impact 草案。
 
@@ -518,7 +518,7 @@ python3 "$PMAI_HOME/scripts/build-contract.py" docs-fail \
 - 验收方案按项目类型和风险后台生成默认值；不让 PM 选择，也不在开工确认卡展示。
 - 新 build 开工前，AI 推荐工作环境和构建工具，PM 只确认这两项；调整后必须重显同一张确认卡。
 - PM 不需要理解 worktree、合同、hash、证据 JSON 或手动 close；构建工具只以名称、模型和思考档展示。
-- v4 验收档案分 `iteration_checks / final_checks`：迭代修改只跑快检并尽快给 PM 看；PM 请求定稿前不得写 final evidence 或形成验收就绪快照。
+- v5 验收档案分 `iteration_checks / final_checks`：迭代修改只跑快检并尽快给 PM 看；PM 请求定稿前不得写 final evidence 或形成验收就绪快照。
 - active build 内的文案、布局、按钮和局部交互由当前会话直接处理；外部 builder 只用于首次实现或大型重构。
 - dev server 与浏览器连接跨轮保留；production build 只在冻结 commit 的 validation worktree 运行，不污染 active worktree 的构建缓存。
 - `timing.json` 记录阶段耗时与 time-to-preview；2–5 / 5–10 分钟只作预警，不阻断“已修改，可刷新查看”。
@@ -529,5 +529,5 @@ python3 "$PMAI_HOME/scripts/build-contract.py" docs-fail \
 - 实现先落 main，正式文档后更新；文档失败不重复 merge。
 - skipped / limited / blocked 不能伪装 pass；证据必须绑定 source hash 和 implementation commit。
 - UI final checks 缺主动浏览器能力时必须阻塞；`browser-smoke` 不接受 exception。
-- v4 prototype 的 `prototype-boundary` 必须有绑定当前 source hash 和 implementation commit 的 active pass artifact，不接受 exception。
+- v3+ prototype 的 `prototype-boundary` 必须有绑定当前 source hash 和 implementation commit 的 active pass artifact，不接受 exception。
 - 正式文档无迭代流水账，历史只在 Git 与 decisions 中。

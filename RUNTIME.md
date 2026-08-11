@@ -4,9 +4,9 @@
 
 ## 当前位置
 
-- 日期：2026-08-11
+- 日期：2026-08-12
 - 开发分支：`main`
-- 当前目标：Harness P1 失败关闭修复已经提交；飞书公开入口、通用项目级设计系统 Skill 插槽、复杂度收口批次一和批次二已在工作区实现，但尚未提交、分发或升级安装态。批次二统一 `generator / consumer / uninitialized` 仓库身份，并把新安装、新升级和新消费仓的完整主控收缩为 Claude Code / Codex；Kimi Code、OpenCode、Cursor Agent 只作 Builder，遗留主控资产只诊断、不自动清理。
+- 当前目标：Harness P1 与复杂度收口批次一、二已经提交；批次三内部状态归一化已在工作区实现、待完整回归与提交，尚未分发或升级安装态。新 build contract 为 v5；Kimi Code、OpenCode、Cursor Agent 只作 Builder，遗留主控资产只诊断、不自动清理。
 - gstack 参考基线：`v1.58.5.0`，commit `11de390`；只参考本地 `gstack-clean` checkout，没有升级用户目录中的安装副本。
 
 ## 当前活跃模型
@@ -23,12 +23,12 @@
 - `/pmai-build-close` 只作为兼容与恢复入口；正常链路不再要求 PM 手动调用。
 - 模块 close 后再次修改先按影响分流：错字、单文案、局部样式、常量和符合现有规格的小缺陷走 `/pmai-quick-fix`；模块对象、规则、规格、任务路径或验收变化进入新一轮 `/pmai-design → /pmai-spec-writing → /pmai-build`；产品定位、目标用户、核心价值、职责边界、MVP 证明目标或关键成立前提变化回 `/pmai-proposal` 生成完整新版本。新模块轮次复用长期模块文档，但 work id、design 基线、accepted delta、验收证据、audit 目录和 finalize 游标全部重新建立。
 - `building / iterating / final_check` 中，PM 的“启动看看 / 还有什么问题 / 继续改当前结果”等自然语言继续当前 `/pmai-build`。Codex、Claude Code 通过 prompt hook 注入 `status-view.py --execution-context`。该上下文只派生现有合同，不新增状态；多个 active build 返回歧义，合同或 policy 漂移时失败关闭。只有位于 prompt 首 token 的真实 PMAI 命令不受自然语言续接拦截，否定、引用、行内代码、代码块和文档示例都不能绕过；Git / status-view 超时、非零、空输出、坏 JSON、未知状态或 stdin 超时一律在宿主超时前注入不可用护栏，不能降级成“没有 active build”。旧 Kimi managed hook 若尚未清理，分发器仍保持相同失败关闭语义，但这不构成当前主控承诺。
-- lifecycle v2：`designing → ready_to_build → building → iterating → final_check → landed → documenting → complete`。旧 `stage` 字段仅为 v1 消费仓兼容展示。
+- canonical lifecycle：`designing → ready_to_build → building → iterating → final_check → landed → documenting → complete`。旧 `stage` 仅由 normalization 边界投影为兼容展示，新写不再生成。
 - 项目建造定义：初始化时不存在；首个达到 `ready_to_build` 的 design 将 `prototype / product`、技术栈、代码入口、真实命令和 Web 能力写入 `.pm-workflow/project.yml`。后续 build 只读该文件。
 - 产品方向真相源：当前 `docs/proposals/<slug>-vN.md` 保存完整产品级判断，`PRODUCT.md` 保存同步后的精简基线，`.pm-workflow/proposal.json` 绑定当前版本与正文 hash；已确认 Proposal 不允许下游原地修改。
 - 模块真相源：`docs/modules/<模块>/discussion.md`、`decisions.md`、`spec.md`；跨模块现行规则为 `PRODUCT-RULES.md`，项目级冻结理路为 `docs/decisions/`。
 - 文档语义：Proposal 定义产品级用户、问题、价值、边界与 MVP；`spec.md` / PRD 是指导研发实现的最终目标合同；`PRODUCT-STATE.md` 描述 main 已落地现状；原型、mockup 和代码只作设计 / 实现证据。
-- design 的 `ready_to_build` 状态同时记录 approved source hash、hash scope version、design checkpoint 和精确目标路径；build 开工前重新编译上下文并验证 currentness，过期依据不能继续显示或进入构建。当前 Proposal 与固定交接摘要参与 context pack 和 source hash；Proposal 换版会让旧 ready/build 依据失效。新轮次使用 `source_hash_version=2`：模块三件套、输入证据、PRODUCT、PRODUCT-RULES、DESIGN、项目级决定和 project.yml 参与 currentness；PRODUCT-STATE、TODO 和模块索引只作上下文，单独变化不判设计过期。没有版本字段的旧 ready/build 按 v1 全量范围恢复到该轮结束，显式返回 design 后下一次批准才升级 v2。新 `.work-meta.json:build` 使用合同 v4，在 v3 实现深度合同之上增加 `iteration_checks / final_checks`、两层 evidence 和定稿请求；旧 v2/v3 合同继续用于中断恢复兼容。
+- design 的 `ready_to_build` 状态同时记录 approved source hash、hash scope version、design checkpoint 和精确目标路径；build 开工前重新编译上下文并验证 currentness，过期依据不能继续显示或进入构建。当前 Proposal 与固定交接摘要参与 context pack 和 source hash；Proposal 换版会让旧 ready/build 依据失效。新轮次使用 `source_hash_version=2`：模块三件套、输入证据、PRODUCT、PRODUCT-RULES、DESIGN、项目级决定和 project.yml 参与 currentness；PRODUCT-STATE、TODO 和模块索引只作上下文，单独变化不判设计过期。没有版本字段的旧 ready/build 按 v1 全量范围恢复到该轮结束，显式返回 design 后下一次批准才升级 v2。新 `.work-meta.json:build` 使用合同 v5：保留 v4 的双车道验收语义，但 lifecycle 和 checks 都只写一个 canonical 位置；旧 v1-v4 继续用于中断恢复兼容。
 - 新 build 由 AI 在一张卡中展示推荐的工作环境、构建工具和两项的全部有效选择，PM 只确认这两项；外部工具候选排除当前主控对应的 profile，“当前会话直接构建”始终可选，没有可用外部工具时默认推荐它。项目类型和验收方案不显示。选择当前环境时，main 只放行合同声明的目标路径。
 - 宿主面分为两级：Claude Code 使用 `/pmai-*`、Codex 使用原生 `$pmai-*`，两者保留完整 Skill、项目 Hook、lifecycle、恢复、证据和 landing 主控能力；Kimi Code、OpenCode、Cursor Agent 只由 `/pmai-build` 选作外部 Builder。Builder prompt 明确禁止调用 PMAI Skill、推进 lifecycle、写验收通过或处理 landing；主控重新采集 Git diff、检查路径并决定后续状态。新 install / upgrade / init 不再生成 Kimi Skill/managed hooks 或 OpenCode commands/config；Doctor 只报告遗留资产并保留显式清理入口。
 - 记忆分两层：项目事实、决定和偏好继续由消费仓现有真相源承担；个人经验保存在用户级状态目录，跨项目召回但只作建议。个人经验不进入 context pack、项目 hash 或 Git，也不能自动修改 Skill。
@@ -43,11 +43,11 @@
 - 生命周期恢复已补齐：`ready_to_build` 正向进入 `building`；landing 状态、计时、暂存或主线 commit 失败时 abort 半合并态并保留隔离环境；legacy close commit 失败恢复 `.work-meta.json`。cancel / land 先持久化 prepared 清理意图，主线状态提交后只激活队列，不在落地进程内直接删除 worktree / branch；中断后 cleanup 以 Git 真相自动恢复。每项记录固定自己的 `refs/heads/main` 或 `refs/heads/master`，landed 激活和 active 删除都用入队时的 branch OID 重新验证该主线，分支名改向、主线 reset 或 main/master 并存不能误删；最终分支删除使用 old-OID `git update-ref` CAS。待清理队列加进程锁并原子更新，损坏时失败关闭，事务 stage 不占用 `.pending-*` 中断标记命名空间；main/master preamble 均可消费，status 与会话 startup 使用只读 preamble。cleanup 只让 Git 删除已确认没有 tracked、untracked、ignored 内容且无人占用的注册 worktree，Git 拒绝时保留现场，不再用文件系统递归强删。
 - 新增 `context-pack.py`：design、build、恢复、最终检查和文档更新共用确定性上下文，并区分 active / superseded / 冲突决定、未决问题和输入 hash；项目定义存在时只从其中的 entrypoints 取实现上下文。
 - 新增共用 `decision-policy`：机械项自动处理，可逆偏好给推荐并推进，产品模型岔路和 one-way door 立即让 PM 拍板；问句和讨论草稿不得成为决定。
-- `build-contract.py` 新 build 继续使用合同 v4：`validate-final-currentness` 重新校验 design hash、accepted deltas、批准路径和 project.yml；真实 Git implementation commit 在每轮 `commit` 时立即阻断批准范围外路径。`request-finalization` 仍是 final evidence 和 `review-ready` 硬门；PM 新反馈用 `resume-iteration` 回快速车道。prototype 继续固化不可 exception 的 `prototype-boundary`。
+- `_lib/work_contract.py` 已成为唯一工作合同读取边界；`build-contract.py` 新 build 使用合同 v5。`validate-final-currentness` 重新校验 design hash、accepted deltas、批准路径和 project.yml；真实 Git implementation commit 在每轮 `commit` 时立即阻断批准范围外路径。`request-finalization` 仍是 final evidence 和 `review-ready` 硬门；PM 新反馈用 `resume-iteration` 回快速车道。prototype 继续固化不可 exception 的 `prototype-boundary`。
 - 每次新建模块工作都会生成唯一 `work-<模块>-<时间>-<随机值>` id，并把 `build.audit_dir` 固定为包含该 id 的目录；finalize、landing、文档影响地图和失败恢复只使用该轮目录。旧 `work-<模块>` 合同继续回退模块级 audit 目录。final currentness 分别校验初始 design hash 和按顺序串联后的 accepted-delta 最终 hash，不再在 delta 链验证前把两者误判为冲突。
-- prototype / product 验收 profile schema v2 同时编译 `iteration_checks / final_checks`。新 Web build 只生成一个不可 exception 的 `browser-acceptance`，一次持续浏览器 chain 覆盖受影响流程的 smoke、visual、behavior；旧合同的三项浏览器证据继续兼容恢复。
+- prototype / product 验收 profile schema v3 同时编译 `iteration_checks / final_checks`，不再输出 `required_checks` 别名。新 Web build 只生成一个不可 exception 的 `browser-acceptance`，一次持续浏览器 chain 覆盖受影响流程的 smoke、visual、behavior；旧合同的三项浏览器证据继续兼容恢复。
 - `final-validation.py` 对定稿请求绑定的 implementation commit 创建 detached validation worktree，在 `implementation.root` 运行命令；只对文本完全相同的 test/typecheck/build 去重，生产构建硬门不变。
-- `finalize-work.py` 按 v4 lifecycle 只补缺失机械项，并用绑定 commit/source hash 的 audit 游标从语义检查、`final_check / landed / documenting` 准确续跑；只提交当前模块状态和 audit 目录，合入后输出 main 模块恢复位置。coverage、prototype boundary、迁移和安全等语义判断不伪装成自动通过。
+- `finalize-work.py` 按 v4+ lifecycle 只补缺失机械项，并用绑定 commit/source hash 的 audit 游标从语义检查、`final_check / landed / documenting` 准确续跑；只提交当前模块状态和 audit 目录，合入后输出 main 模块恢复位置。coverage、prototype boundary、迁移和安全等语义判断不伪装成自动通过。
 - `build-timing.py` 自动记录 currentness、final-validation、browser-acceptance、semantic-validation、landing、documentation；统一 runner 完成前校验适用阶段都有 pass 且没有 running。真实 build/browser 缺陷、PM 新反馈、merge 冲突、未跟踪路径碰撞和文档碰撞把旧尝试标为 `exited` 或启动新尝试，不显示成 10 分钟成功。
 - 新增 `prototype-boundary.py`：从 baseline 到候选实现扫描批准范围外改动、数据库 migration、生产基础设施、密钥配置、真实鉴权和外部副作用信号；静态信号无缺口后仍要求 AI 明确完成语义复核，artifact 才能写 `pass`。
 - 新增 `project-definition.py` 和严格 schema validator；路径、类型、技术栈、Web 运行配置与 revision 变更全部 fail-closed。
@@ -56,7 +56,7 @@
 - 新增 `/pmai-proposal` 与 `proposal-contract.py`：新项目初始化后通过 required marker 强制进入完整 Proposal；当前版本固定在 `docs/proposals/`，机器合同校验路径、正文 hash、`PRODUCT.md` 同步、固定下游交接和显式 supersede 关系。context pack 编译当前 Proposal 与结构化 handoff；status 和 consumer doctor 区分 required / invalid / accepted。
 - spec-writing 已重构为“通用内容模块 + 可叠加 Profile + 文档 Preset”：企业平台与 AI Product Profile 可独立或同时加载，不维护重复的企业 AI 平台 Profile；完整 PRD 使用唯一 Preset，4 列表只作复杂后台的可选动作索引。
 - 已删除 `/pmai-direction`。产品方向纠正统一进入 Proposal；`/pmai-record` 只在没有 active work 且 Proposal 状态为 `accepted / equivalent_baseline` 时补录已经确认的待办、术语、跨模块规则、项目理路或有 main 证据的现状纠错，不得写 Proposal、模块三件套、构建状态或实现。
-- 固定 build 审计编排和 coverage reviewer 已退出活跃链路；v4 只认 adaptive iteration/final checks 与对应 evidence。
+- 固定 build 审计编排和 coverage reviewer 已退出活跃链路；v5 只认 adaptive iteration/final checks 与对应 evidence，v1-v4 由兼容层恢复。
 - Web final checks 必须有 active browser-acceptance；旧合同仍要求 active browser-smoke。gstack 可由其它可验证 browser 适配器替代，不能 exception 掉浏览器能力。
 - builder profile 按项目定义、配置、本机可用性和当前主控推荐；Claude Code、Codex、Kimi Code、Cursor Agent、OpenCode 都可作为外部执行器，当前主控对应的同名工具不进入候选，但当前会话直接构建始终可选；旧消费仓缺少 `kimi-code` profile 时由 `builder-profile.py` 运行时补齐，不改写项目配置；Gemini CLI 已退出构建工具面。验收 profile 仍后台生成，不进入开工卡。
 - 自动 landing 在 merge 前检查 incoming path 与 main 未跟踪文件交集；merge 冲突保留 `final_check`，文档失败保留 `landed/docs_pending`，续跑不重复 merge。清理失败或其它会话仍以待清理 worktree 为 cwd 时保留队列，后续从 main 自动重试。
@@ -81,7 +81,7 @@
 ## 兼容与边界
 
 - 合同 v1 继续可读；已有消费仓不批量重写，下次 design 定稿时生成 `project.yml`。
-- build contract 仍为 v4，project.yml schema 仍为 v1；旧 v2/v3/v4 的 browser-smoke / visual / behavior evidence 和恢复状态无需迁移，新 build 才采用 browser-acceptance 与统一 runner。旧 v4 已在 `final_check` 且没有 runner audit 时按原状态直接落地，不倒灌 timing 字段。
+- build contract 当前为 v5，project.yml schema 仍为 v1；新 build 只在 build 内写 lifecycle，只写 `final_checks`，不再生成旧 `stage`、顶层 build lifecycle 或 `required_checks`。旧 v1-v4 由统一 normalization 边界只读兼容，既有 browser-smoke / visual / behavior evidence 和恢复状态无需迁移；旧 v4 已在 `final_check` 且没有 runner audit 时按原状态直接落地，不倒灌 timing 字段。
 - 不新增 decisions JSONL 或第二套状态机；context pack 只编译现有真相源。
 - 目标规格在 design 定稿时生成；描述已落地现状的文档在 merge 后更新，不因文档失败回滚已落地主线实现。
 - gstack 只是方法参考与可选证据生产工具，不成为 PMAI 的状态、决定或收尾权威。
@@ -92,13 +92,13 @@
 ## 当前验证
 
 - 本轮关键定向基线：lark-entry-routing `6/6`、lark-review `73/73`、publish-to-lark-e2e `20/20`、lark-adapter `40/40`、project-design-system `7/7`、consumer-doctor `23/23`、private-onboarding `4/4`、init-project-codex-compat `24/24`、check-branch `21/21`、repo-kind `6/6`、exec-adapters `16/16`、skill-link-ownership `8/8`、skill-eval 合同 `6/6`、Kimi host `23/23`、doctor-skills `44/44`；发布门在 runner / judge 均缺失时返回 2 并明确列出两项缺失能力，schema `23` 个案例与 static eval `6/6` 通过。
-- 当前唯一完整 `tests/run-all.sh` 基线为 `958 passed / 0 failed`。普通开发回归中的 skill eval 为 `6 passed / 0 failed / 17 session skipped`，只形成静态与确定性合同基线，不构成稳定版本证据；`v*` tag 或手动稳定发布仍必须通过配置真实 runner 与独立 judge 的 `tests/run-release-gate.sh`，任何 session skip 都会阻断。
+- 当前唯一完整 `tests/run-all.sh` 基线为 `959 passed / 0 failed`。普通开发回归中的 skill eval 为 `6 passed / 0 failed / 17 session skipped`，只形成静态与确定性合同基线，不构成稳定版本证据；`v*` tag 或手动稳定发布仍必须通过配置真实 runner 与独立 judge 的 `tests/run-release-gate.sh`，任何 session skip 都会阻断。
 - 开发态入口同步 helper 已在真实消费仓 `ExampleAgentProject` 只读 dogfood：返回 `stale / legacy_migration`，渲染计划可以确定识别旧 PMAI Startup，并保留“非小改动前读取产品现状”等项目补充及后续项目规则。消费仓在本轮分析期间又出现新的活跃模块状态，因此不再把其整体 error 数作为本次入口同步回归基线；运行前后 Git 状态一致，未修改消费仓或用户级安装。
 
 ## 下一步
 
 - 在本工作区改动完成提交和分发确认后，再升级安装态；本批不修改三个已知消费仓，也不清理真实 Kimi/OpenCode 用户目录。
-- 复杂度收口下一批进入内部状态归一化：先建立旧 `stage`、多位置 lifecycle、`required_checks` 和旧 build contract 到 canonical model 的单一读取边界；主逻辑停止直接理解旧字段，新写只产生当前合同。逐仓迁移和兼容删除仍需 PM 单独确认。
+- 内部状态归一化已完成：旧 `stage`、多位置 lifecycle、`required_checks` 和 v1-v4 build contract 统一投影到 canonical model，新写只产生 v5。下一批按所有者视图进入维护热点拆分，先拆 `build-contract.py` 的 schema / transition / evidence / CLI 职责；逐仓迁移和兼容删除仍需 PM 单独确认。
 - 在 PM 确认分发后升级安装态，再用真实消费仓 dogfood `init → proposal → design → spec-writing → build`，并继续观察 active build 快速迭代与定稿验收。
 - 在真实消费仓 dogfood `/pmai-feedback`，核对完整会话复盘、问题归属和交接 Prompt 是否能直接驱动框架仓分析；再按完整主控支持范围评估 Claude Code 的精确当前会话定位，不为仅 Builder 的 Kimi Code、OpenCode 建设主控 session locator，也不提供猜测式降级。
 - 在真实 Docx 规格上 dogfood `/pmai-lark-review`：覆盖 active worktree 目标绑定、正文直改、复杂格式 / 图片 / 引用、Proposal / design handoff、sealed scoped adjustment 与 authority checkpoint；记录 collect / reconcile / 精细写回 / 评论收口的阶段耗时，确认机器路径进入 10–15 分钟。

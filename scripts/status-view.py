@@ -40,13 +40,28 @@ from _lib.delivery_policy import (  # noqa: E402
 from _lib.ready_contract import ready_currentness  # noqa: E402
 from _lib.repo_identity import RepoKind, classify_repo  # noqa: E402
 from _lib.stages import LIFECYCLE_NAMES, STAGE_NAMES, MAX_STAGE  # noqa: E402  ( F13 单一真相源)
+from _lib.work_contract import (  # noqa: E402
+    WorkContractError,
+    normalize_work_contract,
+    normalize_work_state,
+)
 
 
 def _lifecycle(meta: dict) -> str:
-    build = meta.get("build")
-    if isinstance(build, dict) and build.get("lifecycle_state"):
-        return str(build["lifecycle_state"])
-    return str(meta.get("lifecycle_state") or "")
+    try:
+        contract = normalize_work_state(meta)
+        if "stage_lifecycle" in contract.compatibility:
+            return ""
+        return contract.lifecycle_state
+    except WorkContractError:
+        return ""
+
+
+def _display_stage(meta: dict) -> int:
+    try:
+        return normalize_work_state(meta).display_stage
+    except WorkContractError:
+        return 0
 
 
 def _docs_status(meta: dict) -> str:
@@ -60,7 +75,7 @@ def _progress_name(meta: dict) -> str:
     lifecycle = _lifecycle(meta)
     if lifecycle in LIFECYCLE_NAMES:
         return LIFECYCLE_NAMES[lifecycle]
-    return STAGE_NAMES.get(int(meta.get("stage", 0) or 0), "未知")
+    return STAGE_NAMES.get(_display_stage(meta), "未知")
 
 
 def find_repo_root() -> Path:
@@ -326,7 +341,7 @@ def _work_priority(work_view: dict) -> tuple[int, str]:
     }
     if lifecycle in lifecycle_priority:
         return lifecycle_priority[lifecycle], _work_display_name(work_view)
-    stage = int(meta.get("stage", 0) or 0)
+    stage = _display_stage(meta)
     if stage >= 4:
         priority = 0
     elif stage == 3:
@@ -411,7 +426,7 @@ def render_narrative(state: dict, repo_root: Path) -> None:
     if len(active) == 1:
         work = active[0]
         meta = work["meta"] or {}
-        stage = meta.get("stage", 0)
+        stage = _display_stage(meta)
         lifecycle = _lifecycle(meta)
         stage_name = _progress_name(meta)
         # 不写 commit hash / 时间细节；只点 stage 状态
@@ -440,7 +455,7 @@ def render_narrative(state: dict, repo_root: Path) -> None:
     print("进行中的工作：")
     for idx, work in enumerate(active, 1):
         meta = work["meta"] or {}
-        stage = meta.get("stage", 0)
+        stage = _display_stage(meta)
         lifecycle = _lifecycle(meta)
         stage_name = _progress_name(meta)
         print()
@@ -536,7 +551,7 @@ def suggest_next_action(work_view: dict) -> str:
     """Suggest what PM should do next. work_view 是 state['active_work'][i].
     四步：1 设计 / 2 build / 3 复审 / 4 沉淀（MAX_STAGE=4）。"""
     meta = work_view["meta"]
-    stage = meta.get("stage", 0)
+    stage = _display_stage(meta)
     lifecycle = _lifecycle(meta)
 
     if lifecycle in {"ready_to_build", "building", "iterating", "final_check"}:
@@ -685,14 +700,16 @@ def _build_execution_context(work_view: dict) -> dict:
     if not isinstance(build, dict):
         raise ValueError("active work 缺少 build contract。")
 
-    lifecycle = str(build.get("lifecycle_state") or meta.get("lifecycle_state") or "")
+    try:
+        contract = normalize_work_contract(meta)
+    except WorkContractError as exc:
+        raise ValueError(str(exc)) from exc
+    lifecycle = contract.lifecycle_state
     if lifecycle not in ACTIVE_BUILD_LIFECYCLES:
         raise ValueError(f"active build lifecycle 不可续接：{lifecycle or 'missing'}")
 
-    try:
-        contract_version = int(build.get("contract_version", 1))
-    except (TypeError, ValueError) as exc:
-        raise ValueError("build.contract_version 必须是整数。") from exc
+    contract_version = contract.contract_version
+    assert contract_version is not None
     if contract_version < 2:
         raise ValueError("active build contract 过旧；请通过 /pmai-build 恢复后再继续检查。")
 
@@ -768,27 +785,8 @@ def _build_execution_context(work_view: dict) -> dict:
     acceptance = build.get("acceptance")
     if not isinstance(acceptance, dict):
         raise ValueError("build.acceptance 必须是对象。")
-    final_checks = _string_list(
-        acceptance.get("final_checks", acceptance.get("required_checks")),
-        "build.acceptance.final_checks",
-        required=True,
-    )
-    if contract_version >= 4:
-        iteration_checks = _string_list(
-            acceptance.get("iteration_checks"),
-            "build.acceptance.iteration_checks",
-        )
-        required_checks = _string_list(
-            acceptance.get("required_checks"),
-            "build.acceptance.required_checks",
-            required=True,
-        )
-        if required_checks != final_checks:
-            raise ValueError(
-                "build.acceptance.final_checks 与兼容字段 required_checks 不一致。"
-            )
-    else:
-        iteration_checks = []
+    final_checks = list(contract.final_checks)
+    iteration_checks = list(contract.iteration_checks)
     if (
         contract_version >= 3
         and target_kind == "prototype"
@@ -915,7 +913,7 @@ def _render_single_work(work_view: dict) -> None:
     meta = work_view["meta"]
     work_id = meta.get("id", "?")
     work_name = meta.get("name", "?")
-    stage = meta.get("stage", 0)
+    stage = _display_stage(meta)
     stage_name = _progress_name(meta)
     print(f"当前工作：{work_id}（{work_name}）")
     print(f"当前进度：{stage_name}")
@@ -960,7 +958,7 @@ def render_status(state: dict, repo_root: Path) -> None:
         meta = work_view["meta"]
         work_id = meta.get("id", "?")
         work_name = meta.get("name", "?")
-        stage = meta.get("stage", 0)
+        stage = _display_stage(meta)
         stage_name = _progress_name(meta)
         print(f"当前工作：{work_id}（{work_name}）")
         print(f"当前进度：{stage_name}")
@@ -1004,7 +1002,7 @@ def render_timeline(timeline_state: dict, repo_root: Path) -> None:
             meta = item["meta"]
             work_id = meta.get("id", item["work_dir"].name)
             work_name = meta.get("name", "")
-            stage = meta.get("stage", 0)
+            stage = _display_stage(meta)
             stage_name = STAGE_NAMES.get(stage, "?")
             print(f"🔄 {work_id} · {work_name}（{stage_name}）")
 

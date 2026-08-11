@@ -352,18 +352,9 @@ test_status_skill_blocks_internal_diagnostics() {
 }
 
 test_execution_context_reuses_prototype_contract() {
-  start_test "execution-context: build lifecycle 优先并输出 prototype 合同"
+  start_test "execution-context: canonical lifecycle 输出 prototype 合同"
   active_build_fixture_setup prototype iterating
   prepare_active_build_currentness
-  python3 - "$ACTIVE_BUILD_FIXTURE/docs/modules/demo/.work-meta.json" <<'PY'
-import json
-import sys
-from pathlib import Path
-path = Path(sys.argv[1])
-meta = json.loads(path.read_text(encoding="utf-8"))
-meta["lifecycle_state"] = "designing"
-path.write_text(json.dumps(meta, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-PY
   local out
   out=$(cd "$ACTIVE_BUILD_FIXTURE" && python3 "$STATUS_VIEW" --execution-context 2>&1)
   if python3 -c '

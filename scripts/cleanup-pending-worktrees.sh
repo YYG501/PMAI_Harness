@@ -67,6 +67,7 @@ from _lib.pending_cleanup import (  # noqa: E402
     read_pending_entries,
     replace_pending_entries,
 )
+from _lib.work_contract import WorkContractError, normalize_work_state
 
 try:
     lock_fd = acquire_queue_lock(Path(pending_file))
@@ -349,8 +350,10 @@ def prepared_activation_ready(entry, integration_ref, integration_oid):
         return False, f"等待原始分支提交 {recorded_oid} 合入 {integration_ref}"
     if meta is None:
         return True, ""
-    build = meta.get("build")
-    state = build.get("lifecycle_state", "") if isinstance(build, dict) else ""
+    try:
+        state = normalize_work_state(meta).lifecycle_state
+    except WorkContractError as exc:
+        raise PendingCleanupError(f"主线工作合同不合法: {exc}") from exc
     if state in {"landed", "documenting"}:
         return True, ""
     return False, f"等待 {integration_ref}:{module_meta} 进入 landed"

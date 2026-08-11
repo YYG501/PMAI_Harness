@@ -18,6 +18,8 @@ PM-AI-Workflow 生成器仓的演进记录。本文件**只记影响下游业务
 
 ## 未发布
 
+- `refactor(state)`: **复杂度收口批次三建立唯一工作合同归一化边界。** 新增 canonical work contract reader，统一解释旧 `stage`、顶层/build 双 lifecycle、`required_checks` 与 v1-v4 build contract，并对 lifecycle 冲突、checks 别名不一致、非法版本和非法类型失败关闭；status、preamble、Doctor、ready、replan、context pack、Lark active-build 路由、finalize、landing、cleanup 与主分支写入门禁改读同一边界。新 build contract 升为 v5：design/ready 只写顶层 lifecycle，build 开始后只写 `build.lifecycle_state`，验收只写 `final_checks`；acceptance profile v3 同步停止输出别名。旧 v1-v4 恢复保持原 shape，不迁移真实消费仓，也不删除兼容路径。
+
 - `refactor(hosts)`: **复杂度收口批次二统一仓库身份，并把完整主控收缩为 Claude Code / Codex。** 新增唯一 `generator / consumer / uninitialized` 解析器，preamble、status、Doctor 和 Kimi 遗留 dispatcher 共用同一三态；严格生成器 marker、路径边界和普通目录反例防止把生成器仓、消费仓或未初始化仓混淆。`pmai install/upgrade` 只管理 Claude/Codex Skill，`init-project.sh` 只生成两者的项目配置；Kimi Code、OpenCode 和 Cursor Agent 只保留外部 Builder adapter/profile，统一 prompt 明确禁止调用 PMAI Skill、推进 lifecycle、写验收通过或处理 landing。Doctor 分开检查完整主控和 Builder CLI；旧 Kimi Skill/managed hooks、OpenCode commands/config 只作为非阻断遗留项报告，不 repair、不自动删除。卸载器兼容没有任何 Kimi/OpenCode 遗留资产的新安装，在 macOS Bash 3.2 的空集合路径也能完成清理。README、生成器/消费仓入口模板和过渡回归同步收口；本批不迁移真实消费仓或用户级安装态。
 
 - `refactor(lark)`: **飞书公开入口改为按 PM 意图和数据方向命名。** `/pmai-publish-to-lark` 统一承接本地到飞书：首次创建、已有文档默认精细更新、PM 明确授权后的整篇覆盖只是内部策略；新增 `/pmai-sync-from-lark`，只在 PM 已明确“以飞书为准、不需要判断”时机械回拉正文；`/pmai-lark-review` 继续处理正文与批注对 Proposal、模块规格、原型和实现的影响。移除旧四模式 `/pmai-lark-sync`，精细写回与验收下沉为 publish / review 共用的内部合同，公开 Skill 不再互相调用。

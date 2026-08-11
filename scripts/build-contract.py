@@ -36,6 +36,12 @@ from _lib.ready_contract import (
     ready_currentness,
     validate_ready_pack,
 )
+from _lib.work_contract import (
+    CURRENT_BUILD_CONTRACT_VERSION,
+    WorkContractError,
+    normalize_work_contract,
+    normalize_work_state,
+)
 
 
 VALID_MODES = {"worktree", "main"}
@@ -64,7 +70,7 @@ NEW_DELTA_KIND = "scoped-adjustment"
 DELTA_SCOPE_ATTESTATION = "approved-module-task-no-model-change"
 VALID_DELTA_APPROVAL_KINDS = {"pm-confirmation", "lark-review-batch"}
 VALID_DELTA_AFFECT_KINDS = {"term", "role"}
-CURRENT_CONTRACT_VERSION = 4
+CURRENT_CONTRACT_VERSION = CURRENT_BUILD_CONTRACT_VERSION
 CURRENT_SOURCE_HASH_VERSION = 2
 PASSING_EVIDENCE_STATUSES = {"pass", "passed", "clean", "built"}
 LIMITED_EVIDENCE_STATUSES = {"limited", "skipped", "blocked", "needs-review"}
@@ -119,8 +125,8 @@ def default_meta(module_dir: Path, branch: str | None = None) -> dict:
         "id": new_work_id(module_name),
         "name": module_name,
         "branch": branch_value,
-        "stage": 1,
         "status": "active",
+        "lifecycle_state": "designing",
         "created_at": now_iso(),
         "source_hash_version": CURRENT_SOURCE_HASH_VERSION,
     }
@@ -370,9 +376,42 @@ def contract_version(build: dict) -> int:
         raise SystemExit(f"build.contract_version 必须是整数: {value}")
 
 
+def canonical_contract(meta: dict):
+    try:
+        return normalize_work_contract(meta)
+    except WorkContractError as exc:
+        raise SystemExit(str(exc)) from exc
+
+
+def canonical_state(meta: dict):
+    try:
+        return normalize_work_state(meta)
+    except WorkContractError as exc:
+        raise SystemExit(str(exc)) from exc
+
+
+def canonical_final_checks(meta: dict) -> list[str]:
+    return list(canonical_contract(meta).final_checks)
+
+
+def set_build_lifecycle(meta: dict, build: dict, state: str) -> None:
+    """Write current contracts once while preserving resumable legacy shapes."""
+
+    build["lifecycle_state"] = state
+    if contract_version(build) >= CURRENT_CONTRACT_VERSION:
+        meta.pop("lifecycle_state", None)
+        meta.pop("stage", None)
+    else:
+        meta["lifecycle_state"] = state
+
+
 def ensure_v2_shape(build: dict) -> None:
     if contract_version(build) < 2:
         return
+    try:
+        normalized = normalize_work_contract({"build": build})
+    except WorkContractError as exc:
+        raise SystemExit(str(exc)) from exc
     target = build.get("target")
     if not isinstance(target, dict) or target.get("kind") not in VALID_TARGET_KINDS:
         raise SystemExit("build.target.kind 必须是 prototype 或 product。")
@@ -380,12 +419,6 @@ def ensure_v2_shape(build: dict) -> None:
         target.get("entrypoints", []), list
     ):
         raise SystemExit("build.target.paths / entrypoints 必须是数组。")
-    state = build.get("lifecycle_state")
-    if state not in VALID_LIFECYCLE_STATES:
-        raise SystemExit(
-            "build.lifecycle_state 不合法："
-            f"{state}（允许 {', '.join(sorted(VALID_LIFECYCLE_STATES))}）。"
-        )
     if not isinstance(build.get("design_revision"), int) or build["design_revision"] < 1:
         raise SystemExit("build.design_revision 必须是正整数。")
     if not optional(build.get("approved_source_hash")):
@@ -393,15 +426,7 @@ def ensure_v2_shape(build: dict) -> None:
     acceptance = build.get("acceptance")
     if not isinstance(acceptance, dict):
         raise SystemExit("build.acceptance 必须是对象。")
-    required_checks = acceptance.get("required_checks", [])
-    if (
-        not isinstance(required_checks, list)
-        or not required_checks
-        or any(not isinstance(item, str) or not item.strip() for item in required_checks)
-    ):
-        raise SystemExit("build.acceptance.required_checks 必须是非空字符串数组。")
-    if len(set(required_checks)) != len(required_checks):
-        raise SystemExit("build.acceptance.required_checks 不能包含重复检查。")
+    final_checks = list(normalized.final_checks)
     if not isinstance(acceptance.get("evidence", []), list):
         raise SystemExit("build.acceptance.evidence 必须是数组。")
     if contract_version(build) >= 3:
@@ -411,25 +436,9 @@ def ensure_v2_shape(build: dict) -> None:
             raise SystemExit(str(exc)) from exc
         if build.get("delivery_policy_hash") != delivery_policy_hash(policy):
             raise SystemExit("build.delivery_policy_hash 与实现深度合同不一致。")
-        if target["kind"] == "prototype" and "prototype-boundary" not in required_checks:
+        if target["kind"] == "prototype" and "prototype-boundary" not in final_checks:
             raise SystemExit("prototype build 必须把 prototype-boundary 作为不可跳过的检查。")
     if contract_version(build) >= 4:
-        iteration_checks = acceptance.get("iteration_checks")
-        final_checks = acceptance.get("final_checks")
-        for label, checks in (
-            ("iteration_checks", iteration_checks),
-            ("final_checks", final_checks),
-        ):
-            if not isinstance(checks, list) or any(
-                not isinstance(item, str) or not item.strip() for item in checks
-            ):
-                raise SystemExit(f"build.acceptance.{label} 必须是字符串数组。")
-            if len(set(checks)) != len(checks):
-                raise SystemExit(f"build.acceptance.{label} 不能包含重复检查。")
-        if not final_checks or final_checks != required_checks:
-            raise SystemExit(
-                "build.acceptance.final_checks 必须是非空数组，且与兼容字段 required_checks 一致。"
-            )
         if not isinstance(acceptance.get("iteration_evidence", []), list):
             raise SystemExit("build.acceptance.iteration_evidence 必须是数组。")
         finalization = build.get("finalization")
@@ -627,7 +636,7 @@ def evidence_exception_for(build: dict, check_name: str) -> bool:
 def clear_review_ready(build: dict) -> None:
     """Invalidate the pre-acceptance readiness snapshot without deleting evidence."""
 
-    acceptance = build.setdefault("acceptance", {"required_checks": [], "evidence": []})
+    acceptance = build.setdefault("acceptance", {})
     if not isinstance(acceptance, dict):
         raise SystemExit("build.acceptance 必须是对象。")
     acceptance["ready_at"] = None
@@ -636,7 +645,7 @@ def clear_review_ready(build: dict) -> None:
 
 
 def clear_finalization(build: dict) -> None:
-    """Return a v4 contract to the PM-facing rapid-iteration lane."""
+    """Return a v4+ contract to the PM-facing rapid-iteration lane."""
 
     if contract_version(build) < 4:
         return
@@ -693,7 +702,7 @@ def validate_fresh_evidence(module_dir: Path, build: dict) -> None:
 
     acceptance = build.get("acceptance")
     assert isinstance(acceptance, dict)
-    required = [str(value) for value in acceptance.get("required_checks", [])]
+    required = canonical_final_checks({"build": build})
     evidence = acceptance.get("evidence", [])
     if not isinstance(evidence, list) or any(not isinstance(item, dict) for item in evidence):
         raise SystemExit("build.acceptance.evidence 必须是对象数组。")
@@ -1197,7 +1206,7 @@ def validate_implementation_commit_scope(module_dir: Path, build: dict, commit: 
 
 
 def _validate_ready_for_start(module_dir: Path, meta: dict) -> dict:
-    if str(meta.get("lifecycle_state") or "") != "ready_to_build":
+    if canonical_state(meta).lifecycle_state != "ready_to_build":
         raise SystemExit("当前模块不是 ready_to_build；请先完成 /pmai-design 并固定建造依据。")
     repo_root = repo_root_for(module_dir)
     try:
@@ -1345,7 +1354,6 @@ def cmd_start(args: argparse.Namespace) -> None:
         "acceptance": {
             "iteration_checks": iteration_checks,
             "final_checks": final_checks,
-            "required_checks": final_checks,
             "iteration_evidence": [],
             "evidence": [],
             "ready_at": None,
@@ -1361,8 +1369,6 @@ def cmd_start(args: argparse.Namespace) -> None:
         build["builder"] = builder
 
     meta["status"] = "active"
-    meta["stage"] = 2
-    meta["lifecycle_state"] = "building"
     meta["design_revision"] = build["design_revision"]
     meta["branch"] = branch or meta.get("branch", "")
     if worktree is not None:
@@ -1370,6 +1376,7 @@ def cmd_start(args: argparse.Namespace) -> None:
     elif mode == "main":
         meta["worktree"] = None
     meta["build"] = build
+    set_build_lifecycle(meta, build, "building")
     write_meta(module_dir, meta)
     print(json.dumps(build, ensure_ascii=False))
 
@@ -1386,20 +1393,15 @@ def cmd_designing(args: argparse.Namespace) -> None:
     module_dir.mkdir(parents=True, exist_ok=True)
     path = meta_path(module_dir)
     meta = read_meta(module_dir) if path.exists() else default_meta(module_dir)
-    existing_build = meta.get("build")
-    existing_lifecycle = (
-        str(existing_build.get("lifecycle_state") or meta.get("lifecycle_state") or "")
-        if isinstance(existing_build, dict)
-        else str(meta.get("lifecycle_state") or "")
-    )
+    existing_lifecycle = canonical_state(meta).lifecycle_state
     if existing_lifecycle in {"building", "iterating", "final_check"}:
         raise SystemExit(
             "当前模块仍有 active build，不能直接覆盖为 designing；"
             "请先通过 replan-work.py 安全保留候选并从 main 重新进入 design。"
         )
     meta["status"] = "active"
-    meta["stage"] = 1
     meta["lifecycle_state"] = "designing"
+    meta.pop("stage", None)
     if not isinstance(meta.get("build"), dict):
         # Returning an old ready contract to design is the explicit point at
         # which its next approval adopts the current hash scope.
@@ -1433,8 +1435,8 @@ def cmd_ready(args: argparse.Namespace) -> None:
         )
     target_paths = validate_target_paths(repo_root, args.target_path)
     meta["status"] = "active"
-    meta["stage"] = 1
     meta["lifecycle_state"] = "ready_to_build"
+    meta.pop("stage", None)
     meta["design_revision"] = args.design_revision
     meta["approved_source_hash"] = source_hash
     meta["source_hash_version"] = source_hash_version
@@ -1768,7 +1770,7 @@ def cmd_commit(args: argparse.Namespace) -> None:
     version = contract_version(build)
     currentness: dict | None = None
     if version >= 2:
-        if build.get("lifecycle_state") not in {"building", "iterating"}:
+        if canonical_state(meta).lifecycle_state not in {"building", "iterating"}:
             raise SystemExit("只有 building / iterating 状态可以记录新的实现提交。")
         currentness = validate_build_currentness(
             module_dir,
@@ -1781,7 +1783,7 @@ def cmd_commit(args: argparse.Namespace) -> None:
         validate_authority_checkpoint_commit(module_dir, meta, build, commit)
     previous_commit = optional(build.get("implementation_commit"))
     if version >= 2 and previous_commit != commit:
-        acceptance = build.setdefault("acceptance", {"required_checks": [], "evidence": []})
+        acceptance = build.setdefault("acceptance", {})
         if not isinstance(acceptance, dict):
             raise SystemExit("build.acceptance 必须是对象。")
         acceptance["evidence"] = []
@@ -1806,8 +1808,7 @@ def cmd_commit(args: argparse.Namespace) -> None:
         build["authority_checkpoint_commit"] = commit
         build["authority_checkpoint_source_hash"] = currentness["authority_source_hash"]
     if version >= 2:
-        build["lifecycle_state"] = "iterating"
-        meta["lifecycle_state"] = "iterating"
+        set_build_lifecycle(meta, build, "iterating")
     meta["build"] = build
     write_meta(module_dir, meta)
     print(json.dumps(build, ensure_ascii=False))
@@ -1817,7 +1818,7 @@ def cmd_accept(args: argparse.Namespace) -> None:
     module_dir = Path(args.module_dir)
     meta = read_meta(module_dir)
     build = require_build(meta)
-    if contract_version(build) >= 2 and build.get("lifecycle_state") not in {
+    if contract_version(build) >= 2 and canonical_state(meta).lifecycle_state not in {
         "iterating",
         "final_check",
     }:
@@ -1829,8 +1830,7 @@ def cmd_accept(args: argparse.Namespace) -> None:
     accepted_at = optional(args.accepted_at) or now_iso()
     build["pm_accepted_at"] = accepted_at
     if contract_version(build) >= 2:
-        build["lifecycle_state"] = "final_check"
-        meta["lifecycle_state"] = "final_check"
+        set_build_lifecycle(meta, build, "final_check")
     meta["build"] = build
     write_meta(module_dir, meta)
     print(json.dumps(build, ensure_ascii=False))
@@ -1843,7 +1843,7 @@ def cmd_complete(args: argparse.Namespace) -> None:
     commit = optional(args.implementation_commit)
     if not commit:
         raise SystemExit("必须提供 implementation_commit")
-    if contract_version(build) >= 2 and build.get("lifecycle_state") not in {
+    if contract_version(build) >= 2 and canonical_state(meta).lifecycle_state not in {
         "iterating",
         "final_check",
     }:
@@ -1863,8 +1863,7 @@ def cmd_complete(args: argparse.Namespace) -> None:
     build["implementation_committed_at"] = now_iso()
     build["pm_accepted_at"] = accepted_at
     if contract_version(build) >= 2:
-        build["lifecycle_state"] = "final_check"
-        meta["lifecycle_state"] = "final_check"
+        set_build_lifecycle(meta, build, "final_check")
     meta["build"] = build
     write_meta(module_dir, meta)
     print(json.dumps(build, ensure_ascii=False))
@@ -1907,7 +1906,7 @@ def cmd_add_delta(args: argparse.Namespace) -> None:
     build = require_build(meta)
     if contract_version(build) < 2:
         raise SystemExit("accepted delta 只适用于 build contract v2+。")
-    if build.get("lifecycle_state") not in {"building", "iterating", "final_check"}:
+    if canonical_state(meta).lifecycle_state not in {"building", "iterating", "final_check"}:
         raise SystemExit("accepted delta 只适用于 building / iterating / final_check。")
     if build.get("authority_checkpoint_required") is True:
         raise SystemExit("上一笔 applied delta 尚未完成 authority checkpoint，不能继续追加 delta。")
@@ -2024,7 +2023,7 @@ def cmd_add_delta(args: argparse.Namespace) -> None:
     deltas.append(delta)
     build["design_revision"] = int(build.get("design_revision", 1)) + 1
     build["approved_source_hash"] = current_source_hash(build, delta)
-    acceptance = build.setdefault("acceptance", {"required_checks": [], "evidence": []})
+    acceptance = build.setdefault("acceptance", {})
     if not isinstance(acceptance, dict):
         raise SystemExit("build.acceptance 必须是对象。")
     acceptance["evidence"] = []
@@ -2036,8 +2035,7 @@ def cmd_add_delta(args: argparse.Namespace) -> None:
     if authority_paths:
         build["authority_checkpoint_required"] = True
     build["pm_accepted_at"] = None
-    build["lifecycle_state"] = "iterating"
-    meta["lifecycle_state"] = "iterating"
+    set_build_lifecycle(meta, build, "iterating")
     meta["design_revision"] = build["design_revision"]
     meta["build"] = build
     write_meta(module_dir, meta)
@@ -2062,7 +2060,7 @@ def cmd_record_evidence(args: argparse.Namespace) -> None:
             f"{status}（允许 {', '.join(sorted(VALID_EVIDENCE_STATUSES))}）。"
         )
     lane = args.lane
-    acceptance = build.setdefault("acceptance", {"required_checks": [], "evidence": []})
+    acceptance = build.setdefault("acceptance", {})
     if not isinstance(acceptance, dict):
         raise SystemExit("build.acceptance 必须是对象。")
     if contract_version(build) >= 4:
@@ -2102,7 +2100,7 @@ def cmd_request_finalization(args: argparse.Namespace) -> None:
     build = require_build(meta)
     if contract_version(build) < 4:
         raise SystemExit("request-finalization 只适用于 build contract v4+。")
-    if build.get("lifecycle_state") != "iterating":
+    if canonical_state(meta).lifecycle_state != "iterating":
         raise SystemExit("只有 iterating 状态可以请求定稿。")
     commit = optional(build.get("implementation_commit"))
     if not commit:
@@ -2139,9 +2137,9 @@ def cmd_resume_iteration(args: argparse.Namespace) -> None:
     build = require_build(meta)
     if contract_version(build) < 4:
         raise SystemExit("resume-iteration 只适用于 build contract v4+。")
-    if build.get("lifecycle_state") not in {"iterating", "final_check"}:
+    if canonical_state(meta).lifecycle_state not in {"iterating", "final_check"}:
         raise SystemExit("只有 iterating / final_check 可以恢复快速迭代。")
-    build["lifecycle_state"] = "iterating"
+    set_build_lifecycle(meta, build, "iterating")
     build["pm_accepted_at"] = None
     acceptance = build.get("acceptance")
     if not isinstance(acceptance, dict):
@@ -2149,7 +2147,6 @@ def cmd_resume_iteration(args: argparse.Namespace) -> None:
     acceptance["evidence"] = []
     clear_review_ready(build)
     clear_finalization(build)
-    meta["lifecycle_state"] = "iterating"
     meta["build"] = build
     write_meta(module_dir, meta)
     print(json.dumps(build, ensure_ascii=False))
@@ -2163,7 +2160,7 @@ def cmd_review_ready(args: argparse.Namespace) -> None:
     build = require_build(meta)
     if contract_version(build) < 2:
         raise SystemExit("review-ready 只适用于 build contract v2+。")
-    if build.get("lifecycle_state") not in {"iterating", "final_check"}:
+    if canonical_state(meta).lifecycle_state not in {"iterating", "final_check"}:
         raise SystemExit("只有 iterating / final_check 的候选实现可以标记为验收就绪。")
     if not optional(build.get("implementation_commit")):
         raise SystemExit("候选实现尚未记录 implementation_commit，不能标记为验收就绪。")
@@ -2192,14 +2189,13 @@ def transition(
     build = require_build(meta)
     if contract_version(build) < 2:
         raise SystemExit("显式 lifecycle transition 只适用于 build contract v2+。")
-    current = str(build.get("lifecycle_state") or "")
+    current = canonical_state(meta).lifecycle_state
     if allowed_from is not None and current not in allowed_from:
         raise SystemExit(
             f"lifecycle 不能从 {current or '<empty>'} 进入 {state}；"
             f"允许来源：{', '.join(sorted(allowed_from))}。"
         )
-    build["lifecycle_state"] = state
-    meta["lifecycle_state"] = state
+    set_build_lifecycle(meta, build, state)
     if docs_status is not None:
         if docs_status not in VALID_DOCS_STATUSES:
             raise SystemExit(f"未知 docs status: {docs_status}")
@@ -2220,16 +2216,15 @@ def cmd_iterating(args: argparse.Namespace) -> None:
     build = require_build(meta)
     if contract_version(build) < 2:
         raise SystemExit("显式 lifecycle transition 只适用于 build contract v2+。")
-    current = str(build.get("lifecycle_state") or "")
+    current = canonical_state(meta).lifecycle_state
     if current not in {"iterating", "final_check"}:
         raise SystemExit(
             f"lifecycle 不能从 {current or '<empty>'} 进入 iterating；"
             "允许来源：final_check、iterating。"
         )
-    build["lifecycle_state"] = "iterating"
+    set_build_lifecycle(meta, build, "iterating")
     build["pm_accepted_at"] = None
     clear_review_ready(build)
-    meta["lifecycle_state"] = "iterating"
     meta["build"] = build
     write_meta(module_dir, meta)
     print(json.dumps(build, ensure_ascii=False))
@@ -2302,7 +2297,7 @@ def cmd_validate_docs(args: argparse.Namespace) -> None:
     build = require_build(meta)
     if contract_version(build) < 2:
         raise SystemExit("validate-docs 只适用于 build contract v2+。")
-    if build.get("lifecycle_state") not in {"landed", "documenting"}:
+    if canonical_state(meta).lifecycle_state not in {"landed", "documenting"}:
         raise SystemExit("实现尚未落到 main，不能完成正式文档更新。")
     if build.get("docs_status") != "complete":
         raise SystemExit("正式文档尚未通过覆盖与一致性检查。")
@@ -2326,7 +2321,7 @@ def cmd_validate_close(args: argparse.Namespace) -> None:
         raise SystemExit("build 合同缺少 implementation_commit：实现提交尚未记录，不能收尾。")
     if not build.get("pm_accepted_at"):
         raise SystemExit("build 合同缺少 pm_accepted_at：PM 验收未记录，不能收尾。")
-    if version >= 2 and build.get("lifecycle_state") != "final_check":
+    if version >= 2 and canonical_state(meta).lifecycle_state != "final_check":
         raise SystemExit(
             "build 尚未进入 final_check：只有 PM 明确定稿并完成最终检查后才能落地主线。"
         )
