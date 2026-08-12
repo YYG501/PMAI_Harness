@@ -174,7 +174,6 @@ pmai upgrade --to v0.1.0              # 锁定指定版本（回滚）
 # 其它框架命令
 pmai doctor --check       # 只读检查框架、宿主入口、消费仓文件归位与工作状态
 pmai doctor --repair      # 明确修复全局宿主入口，执行前需确认
-pmai status               # 兼容别名；等价于 pmai doctor --check
 pmai whats-new --from v0.2.0 --max-lines 40
 pmai whats-new --from v0.2.0 --full
 pmai uninstall            # 清掉全局装；--local <dir> 清理遗留项目副本
@@ -320,8 +319,8 @@ PMAI 走纯全局：每台要用的机器各自 `pmai install` 一次（全局�
 
 在本仓里直接跑 `bash bin/pmai doctor --check` 时，它检查的仍是 `PMAI_HOME`
 （默认 `~/.pmai`）这个安装目标；输出顶部会标明 `CLI source` 和 `Audit target`。
-如果你想测真实用户入口，直接跑 `~/.pmai/bin/pmai doctor --check`。旧的
-`pmai status` 仅作为同一检查的兼容别名保留，不再维护第二套检测逻辑。
+如果你想测真实用户入口，直接跑 `~/.pmai/bin/pmai doctor --check`。CLI 不再提供
+`pmai status`；对话中的 `/pmai-status` 只查看产品进度。
 
 消费仓检查按项目阶段执行：初始化完成时不要求代码、`mockups/` 或
 `.pm-workflow/project.yml`，但新项目要求继续完成 Proposal；当前 Proposal 定稿或完整等价产品基线成立后才可进入 design，首个 design 定稿后才检查建造定义，进入 build 后再检查

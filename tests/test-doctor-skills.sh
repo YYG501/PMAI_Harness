@@ -10,8 +10,7 @@
 #   T2: skills/ 目录 ⊆ EXPECTED_SKILLS（防新加 skill 漏纳入 → doctor 检测不到丢失）
 #   T3: pmai-doctor --help 只打印帮助，不执行自检
 #   T4: pmai-doctor 检测 host skill dir 的 stale 暴露入口
-#   T5: pmai-status --help 只打印帮助，不执行状态扫描
-#   T6: pmai-status 作为 doctor check 兼容包装报告 stale 暴露入口
+#   T5: CLI 不再暴露 pmai status
 #   T7: pmai-doctor 缺 Codex 暴露入口时失败
 #   T8: install / upgrade 只管理 Claude/Codex；Kimi/OpenCode 只保留 Builder 与 legacy cleanup
 #   T9: pmai-doctor 默认只读，--repair 才自愈 Codex 首次空暴露目录
@@ -40,7 +39,7 @@ source "$SCRIPT_DIR/helpers/assert.sh"
 
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 DOCTOR="$REPO_ROOT/bin/pmai-doctor"
-STATUS="$REPO_ROOT/bin/pmai-status"
+PMAI_CLI="$REPO_ROOT/bin/pmai"
 SKILLS_DIR="$REPO_ROOT/skills"
 VERSION_FILE="$REPO_ROOT/VERSION"
 INSTALL="$REPO_ROOT/bin/pmai-install"
@@ -264,12 +263,6 @@ test_manual_workflows_are_host_entries() {
       return
     fi
   done
-  if ! grep -q 'pmai-doctor' "$STATUS" || ! grep -q -- '--check' "$STATUS" \
-    || grep -qE 'CODEX_SKILLS|KIMI_SKILLS|OPENCODE_CONFIG_DIR|skill-links' "$STATUS"; then
-    _fail "pmai-status should be a thin compatibility wrapper around doctor --check"
-    return
-  fi
-
   setup=$(setup_fake_global_install)
   IFS='|' read -r tmp pmai_home fake_home <<< "$setup"
   for host_dir in "$fake_home/.claude/skills" "$fake_home/.codex/skills"; do
@@ -386,43 +379,18 @@ test_doctor_detects_stale_exposed_skill() {
   pass_test
 }
 
-test_status_help_is_help_only() {
-  start_test "T5: pmai-status --help 只打印帮助，不执行状态扫描"
-  local out
-  out=$(bash "$STATUS" --help 2>&1)
-  if ! echo "$out" | grep -q "Usage:"; then
-    _fail "--help 未打印 Usage"
-    return
+test_cli_rejects_removed_status() {
+  start_test "T5: CLI 不再暴露 pmai status"
+  local out rc
+  out=$(bash "$PMAI_CLI" status 2>&1)
+  rc=$?
+  if [ "$rc" = "2" ] \
+    && echo "$out" | grep -q "unknown subcommand: status" \
+    && [ ! -e "$REPO_ROOT/bin/pmai-status" ]; then
+    pass_test
+  else
+    _fail "removed status command should fail as unknown: rc=$rc out=$out"
   fi
-  if echo "$out" | grep -q "PMAI Status"; then
-    _fail "--help 不应执行 status 扫描"
-    return
-  fi
-  pass_test
-}
-
-test_status_reports_stale_exposed_skill() {
-  start_test "T6: pmai-status 兼容包装委托 doctor 报告 stale 入口"
-  local setup tmp pmai_home fake_home out
-
-  setup=$(setup_fake_global_install)
-  IFS='|' read -r tmp pmai_home fake_home <<< "$setup"
-  ln -s "$SKILLS_DIR/design" "$fake_home/.codex/skills/pmai-new-req"
-
-  out=$(PMAI_HOME="$pmai_home" HOME="$fake_home" bash "$STATUS" 2>&1)
-  rm -rf "$tmp"
-
-  if ! echo "$out" | grep -q "pmai status 已并入 pmai doctor --check"; then
-    _fail "status 未提示兼容入口已并入 doctor check"
-    echo "$out" >&2
-    return
-  fi
-  if ! echo "$out" | grep -q "Codex stale exposed skill entry(s): .*pmai-new-req"; then
-    _fail "status 包装后的 doctor 未列出 stale pmai-new-req"
-    echo "$out" >&2
-    return
-  fi
-  pass_test
 }
 
 test_doctor_requires_codex_exposure() {
@@ -536,10 +504,6 @@ test_lifecycle_scripts_cover_controller_and_builder_boundaries() {
   if ! grep -q 'executor: kimi-code' "$REPO_ROOT/templates/pm-workflow.config.yml.tmpl" \
     || ! grep -q 'executor: opencode' "$REPO_ROOT/templates/pm-workflow.config.yml.tmpl"; then
     _fail "Kimi/OpenCode Builder profiles should remain"
-    return
-  fi
-  if ! grep -q 'pmai-doctor' "$STATUS" || ! grep -q -- '--check' "$STATUS"; then
-    _fail "pmai-status 应只委托 doctor --check"
     return
   fi
   pass_test
@@ -778,9 +742,9 @@ PY
   rm -rf "$tmp"
 }
 
-test_doctor_json_contract_and_status_alias() {
-  start_test "T12c: doctor JSON 合同稳定，status JSON 与 check 等价"
-  local setup tmp pmai_home fake_home doctor_json status_json broken_json rc real_python
+test_doctor_json_contract() {
+  start_test "T12c: doctor JSON 合同稳定"
+  local setup tmp pmai_home fake_home doctor_json broken_json rc real_python
 
   setup=$(setup_fake_global_install)
   IFS='|' read -r tmp pmai_home fake_home <<< "$setup"
@@ -825,28 +789,6 @@ PY
   then
     _fail "健康 doctor 应只输出合法 schema v1 JSON 并以 0 退出"
     echo "$doctor_json" >&2
-    rm -rf "$tmp"
-    return
-  fi
-
-  status_json=$(PMAI_HOME="$pmai_home" HOME="$fake_home" \
-    CODEX_HOME="$fake_home/.codex" KIMI_CODE_HOME="$fake_home/.kimi-code" \
-    OPENCODE_CONFIG_DIR="$fake_home/.config/opencode" \
-    bash "$STATUS" --json 2>"$tmp/status.err")
-  rc=$?
-  if [ "$rc" != "0" ] || ! python3 - "$doctor_json" "$status_json" <<'PY'
-import json
-import sys
-
-assert json.loads(sys.argv[1]) == json.loads(sys.argv[2])
-PY
-  then
-    _fail "pmai status --json 应与 pmai doctor --check --json 完全等价"
-    rm -rf "$tmp"
-    return
-  fi
-  if ! grep -q "pmai status 已并入 pmai doctor --check" "$tmp/status.err"; then
-    _fail "status JSON 兼容入口缺弃用提示"
     rm -rf "$tmp"
     return
   fi
@@ -2423,33 +2365,6 @@ test_upgrade_rolls_back_when_target_doctor_is_not_executable() {
   pass_test
 }
 
-test_repo_local_status_delegates_to_target_doctor() {
-  start_test "T18: repo-local status 通过 doctor check 委托目标版本"
-  local setup tmp pmai_home fake_home out rc
-
-  setup=$(setup_fake_global_install)
-  IFS='|' read -r tmp pmai_home fake_home <<< "$setup"
-  cat > "$pmai_home/bin/pmai-doctor" <<'SH'
-#!/usr/bin/env bash
-printf 'TARGET_STATUS_DOCTOR:%s:%s\n' "$PMAI_HOME" "$*"
-exit 23
-SH
-  chmod +x "$pmai_home/bin/pmai-doctor"
-
-  out=$(PMAI_HOME="$pmai_home" HOME="$fake_home" \
-    CODEX_HOME="$fake_home/.codex" KIMI_CODE_HOME="$fake_home/.kimi-code" \
-    OPENCODE_CONFIG_DIR="$fake_home/.config/opencode" bash "$STATUS" 2>&1)
-  rc=$?
-  if [ "$rc" != "23" ] \
-    || ! echo "$out" | grep -q "TARGET_STATUS_DOCTOR:$pmai_home:--check"; then
-    _fail "status 未把只读检查完整委托给目标 doctor: rc=$rc out=$out"
-  else
-    pass_test
-  fi
-
-  rm -rf "$tmp"
-}
-
 test_repo_local_doctor_delegates_to_target_version() {
   start_test "T19: repo-local doctor 把跨版本审计与自愈委托给 PMAI_HOME"
   local tmp pmai_home fake_home out rc
@@ -2511,8 +2426,7 @@ test_no_stale_in_expected
 test_no_missing_in_expected
 test_doctor_help_is_help_only
 test_doctor_detects_stale_exposed_skill
-test_status_help_is_help_only
-test_status_reports_stale_exposed_skill
+test_cli_rejects_removed_status
 test_doctor_requires_codex_exposure
 test_doctor_rejects_wrong_target_and_real_directory_entries
 test_lifecycle_scripts_cover_controller_and_builder_boundaries
@@ -2522,7 +2436,7 @@ test_doctor_repairs_opencode_commands
 test_doctor_repairs_modified_opencode_command_content
 test_doctor_repairs_kimi_native_surface
 test_doctor_rechecks_kimi_repair_result
-test_doctor_json_contract_and_status_alias
+test_doctor_json_contract
 test_doctor_reports_consumer_hook_drift
 test_doctor_keeps_product_progress_out_of_health
 test_doctor_reports_invalid_consumer_structure
@@ -2546,7 +2460,6 @@ test_upgrade_can_pin_to_legacy_policy_without_function_leak
 test_upgrade_doctor_log_and_project_hook_notice
 test_upgrade_rolls_back_when_target_doctor_is_missing
 test_upgrade_rolls_back_when_target_doctor_is_not_executable
-test_repo_local_status_delegates_to_target_doctor
 test_repo_local_doctor_delegates_to_target_version
 test_repo_local_doctor_fails_closed_when_target_doctor_missing
 

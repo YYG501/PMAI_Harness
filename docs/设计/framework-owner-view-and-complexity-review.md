@@ -293,7 +293,7 @@ PMAI 当前不是一个循环，而是四个相互约束的循环：
 | `/pmai-build-close` / `close-work.sh` | 旧调用习惯与中断恢复 | 恢复能力保留，公开入口是否保留需单独决定 |
 | `project-type.py` | 读取旧 config 和 marker | 新写只走 `project.yml`，完成消费仓升级后退休 |
 | 旧迁移脚本 | 帮助历史目录或文档结构升级 | 建立支持版本表，超过窗口转为只读诊断或归档 |
-| `pmai status` CLI 别名、Codex hook wrapper | 兼容旧入口 | 记录真实调用后决定移除版本 |
+| Codex hook wrapper | 兼容旧入口 | 记录真实调用后决定移除版本；CLI `pmai status` 已删除，健康检查统一走 `pmai doctor --check` |
 
 当前 [`TODOS.md`](../../TODOS.md) 只有 dogfood 验证，没有兼容清单、消费仓使用情况或退休时间。因此兼容代码会自然累积，而不会自动退出。
 

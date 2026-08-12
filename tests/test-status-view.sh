@@ -10,7 +10,6 @@ source "$SCRIPT_DIR/helpers/active-build-fixture.sh"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 STATUS_VIEW="$REPO_ROOT/scripts/status-view.py"
 STATUS_SKILL="$REPO_ROOT/skills/status/SKILL.md"
-CONTEXT_PACK="$REPO_ROOT/scripts/context-pack.py"
 
 render_pending_handoff_view() {
   local view="$1" handoffs_json="$2"
@@ -33,30 +32,6 @@ elif view == "status":
     module.render_status(state, Path(repo_root))
 else:
     raise SystemExit(f"unknown view: {view}")
-PY
-}
-
-prepare_active_build_currentness() {
-  local module_dir="$ACTIVE_BUILD_FIXTURE/docs/modules/demo"
-  local pack="$ACTIVE_BUILD_FIXTURE/.pm-workflow/context-current.json"
-  mkdir -p "$ACTIVE_BUILD_FIXTURE/.pm-workflow"
-  python3 "$CONTEXT_PACK" --repo-root "$ACTIVE_BUILD_FIXTURE" \
-    --module "$module_dir" --output "$pack" >/dev/null
-  python3 - "$module_dir/.work-meta.json" "$pack" <<'PY'
-import json
-import sys
-from pathlib import Path
-
-meta_path = Path(sys.argv[1])
-pack = json.loads(Path(sys.argv[2]).read_text(encoding="utf-8"))
-meta = json.loads(meta_path.read_text(encoding="utf-8"))
-source_hash = pack["source_hash"]
-meta["approved_source_hash"] = source_hash
-meta["source_hash_version"] = pack["source_hash_version"]
-meta["approved_target"] = {"paths": list(meta["build"]["target"]["paths"])}
-meta["build"]["approved_source_hash"] = source_hash
-meta["build"]["source_hash_version"] = pack["source_hash_version"]
-meta_path.write_text(json.dumps(meta, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 PY
 }
 
@@ -348,157 +323,37 @@ test_status_skill_blocks_internal_diagnostics() {
   assert_file_contains "$STATUS_SKILL" "当前状态：有 <N> 个进行中的工作" "status skill should define multi-work PM output" || return
   assert_file_contains "$STATUS_SKILL" "禁止输出“PMAI 状态脚本显示”" "status skill should ban script-diagnostic phrasing" || return
   assert_file_contains "$STATUS_SKILL" "有未提交改动就说“有一轮改动还没收口”" "status skill should collapse dirty-state conflict into PM action" || return
+  assert_file_contains "$STATUS_SKILL" '统一交给 `/pmai-doctor`' "status skill should route health checks to doctor" || return
   pass_test
 }
 
-test_execution_context_reuses_prototype_contract() {
-  start_test "execution-context: canonical lifecycle 输出 prototype 合同"
-  active_build_fixture_setup prototype iterating
-  prepare_active_build_currentness
-  local out
-  out=$(cd "$ACTIVE_BUILD_FIXTURE" && python3 "$STATUS_VIEW" --execution-context 2>&1)
-  if python3 -c '
-import json, sys
-data = json.load(sys.stdin)
-work = data["active_builds"][0]
-assert data["status"] == "active"
-assert work["target"]["kind"] == "prototype"
-assert work["delivery_policy"]["implementation_mode"] == "interactive-simulation"
-assert work["approved_paths"] == ["src/index.ts"]
-assert work["acceptance_lane"]["name"] == "iteration"
-assert work["acceptance_lane"]["checks"] == ["typecheck"]
-assert work["project"]["commands"]["build"] == "npm run build"
-' <<<"$out"; then
-    pass_test
-  else
-    _fail "prototype execution context mismatch: $out"
-  fi
-  active_build_fixture_teardown
-}
-
-test_execution_context_keeps_product_depth() {
-  start_test "execution-context: product 保持 production implementation"
-  active_build_fixture_setup product final_check
-  prepare_active_build_currentness
-  local out
-  out=$(cd "$ACTIVE_BUILD_FIXTURE" && python3 "$STATUS_VIEW" --execution-context 2>&1)
-  if python3 -c '
-import json, sys
-work = json.load(sys.stdin)["active_builds"][0]
-assert work["delivery_policy"]["implementation_mode"] == "production-implementation"
-assert work["acceptance_lane"]["name"] == "final"
-assert "scope-coverage" in work["acceptance_lane"]["checks"]
-' <<<"$out"; then
-    pass_test
-  else
-    _fail "product execution context mismatch: $out"
-  fi
-  active_build_fixture_teardown
-}
-
-test_execution_context_fails_closed_on_policy_drift() {
-  start_test "execution-context: delivery policy 漂移时失败关闭"
-  active_build_fixture_setup prototype iterating
-  prepare_active_build_currentness
-  python3 - "$ACTIVE_BUILD_FIXTURE/docs/modules/demo/.work-meta.json" <<'PY'
-import json
-import sys
-from pathlib import Path
-path = Path(sys.argv[1])
-meta = json.loads(path.read_text(encoding="utf-8"))
-meta["build"]["delivery_policy"]["implementation_mode"] = "production-implementation"
-path.write_text(json.dumps(meta, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-PY
+test_status_view_has_no_execution_context_mode() {
+  start_test "status: 不再承载 build execution context"
   local out rc
-  out=$(cd "$ACTIVE_BUILD_FIXTURE" && python3 "$STATUS_VIEW" --execution-context 2>&1)
+  out=$(python3 "$STATUS_VIEW" --execution-context 2>&1)
   rc=$?
   if [ "$rc" = "2" ] \
-     && echo "$out" | grep -q '"status": "invalid"' \
-     && echo "$out" | grep -q "delivery_policy 与当前 target"; then
+     && echo "$out" | grep -q "unrecognized arguments" \
+     && ! grep -q -- "--execution-context" "$STATUS_VIEW"; then
     pass_test
   else
-    _fail "policy drift should fail closed rc=$rc out=$out"
+    _fail "status-view should reject the removed execution mode: rc=$rc out=$out"
   fi
-  active_build_fixture_teardown
 }
 
-test_execution_context_does_not_guess_multiple_builds() {
-  start_test "execution-context: 多个 active build 返回歧义"
+test_status_reports_stale_active_build_as_product_route() {
+  start_test "status: 建造依据变化时仍给出产品流程下一步"
   active_build_fixture_setup prototype iterating
-  prepare_active_build_currentness
-  active_build_fixture_add_second
-  local out
-  out=$(cd "$ACTIVE_BUILD_FIXTURE" && python3 "$STATUS_VIEW" --execution-context 2>&1)
-  if python3 -c '
-import json, sys
-data = json.load(sys.stdin)
-assert data["status"] == "ambiguous"
-assert len(data["active_builds"]) == 2
-assert {item["name"] for item in data["active_builds"]} == {"demo", "second"}
-' <<<"$out"; then
-    pass_test
-  else
-    _fail "multiple builds should be ambiguous: $out"
-  fi
-  active_build_fixture_teardown
-}
-
-test_execution_context_supports_legacy_v2_recovery() {
-  start_test "execution-context: legacy v2 从 project type 派生保守恢复策略"
-  active_build_fixture_setup prototype iterating
-  prepare_active_build_currentness
-  python3 - "$ACTIVE_BUILD_FIXTURE/docs/modules/demo/.work-meta.json" <<'PY'
-import json
-import sys
-from pathlib import Path
-path = Path(sys.argv[1])
-meta = json.loads(path.read_text(encoding="utf-8"))
-build = meta["build"]
-build["contract_version"] = 2
-build.pop("delivery_policy")
-build.pop("delivery_policy_hash")
-build["acceptance"] = {
-    "required_checks": ["typecheck", "browser-smoke"],
-    "evidence": [],
-}
-path.write_text(json.dumps(meta, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-PY
-  local out
-  out=$(cd "$ACTIVE_BUILD_FIXTURE" && python3 "$STATUS_VIEW" --execution-context 2>&1)
-  if python3 -c '
-import json, sys
-work = json.load(sys.stdin)["active_builds"][0]
-assert work["contract_version"] == 2
-assert work["delivery_policy_source"] == "legacy-v2-derived"
-assert work["delivery_policy"]["implementation_mode"] == "interactive-simulation"
-assert work["acceptance_lane"]["checks"] == []
-' <<<"$out"; then
-    pass_test
-  else
-    _fail "legacy v2 recovery context mismatch: $out"
-  fi
-  active_build_fixture_teardown
-}
-
-test_active_build_currentness_blocks_status_resume() {
-  start_test "status: stale active build cannot be resumed"
-  active_build_fixture_setup prototype iterating
-  prepare_active_build_currentness
   printf '\n跨模块产品规则在 build 开始后发生变化。\n' >> "$ACTIVE_BUILD_FIXTURE/PRODUCT-RULES.md"
 
-  local execution narrative execution_rc
-  execution=$(cd "$ACTIVE_BUILD_FIXTURE" && python3 "$STATUS_VIEW" --execution-context 2>&1)
-  execution_rc=$?
-  narrative=$(cd "$ACTIVE_BUILD_FIXTURE" && python3 "$STATUS_VIEW" --narrative 2>&1)
-  if [ "$execution_rc" = "2" ] \
-     && echo "$execution" | grep -q '"status": "invalid"' \
-     && echo "$execution" | grep -q "设计依据在批准后发生变化" \
-     && echo "$narrative" | grep -q "建造依据有变化，需要重新确认后才能继续" \
-     && echo "$narrative" | grep -q "继续 /pmai-design，重新核对变化" \
-     && ! echo "$narrative" | grep -q "继续看构建结果并直接说要改哪里"; then
+  local out
+  out=$(cd "$ACTIVE_BUILD_FIXTURE" && python3 "$STATUS_VIEW" --narrative 2>&1)
+  if echo "$out" | grep -q "建造依据有变化，需要重新确认后才能继续" \
+     && echo "$out" | grep -q "继续 /pmai-design，重新核对变化" \
+     && ! echo "$out" | grep -q "项目体检"; then
     pass_test
   else
-    _fail "stale active build should fail closed rc=$execution_rc execution=$execution narrative=$narrative"
+    _fail "stale active build should remain visible as a product route: $out"
   fi
   active_build_fixture_teardown
 }
@@ -520,11 +375,6 @@ test_narrative_multiple_active_work_pm_view
 test_default_multi_work_hides_worktree_instructions
 test_landed_docs_failure_resumes_without_merge
 test_status_skill_blocks_internal_diagnostics
-test_execution_context_reuses_prototype_contract
-test_execution_context_keeps_product_depth
-test_execution_context_fails_closed_on_policy_drift
-test_execution_context_does_not_guess_multiple_builds
-test_execution_context_supports_legacy_v2_recovery
-test_active_build_currentness_blocks_status_resume
-
+test_status_view_has_no_execution_context_mode
+test_status_reports_stale_active_build_as_product_route
 report_results "status-view"

@@ -33,7 +33,7 @@ Paste the relevant terminal or chat output:
 ## Environment
 
 - PMAI command source: repo-local `bash bin/pmai ...` / installed `~/.pmai/bin/pmai ...`
-- `pmai status` output:
+- `pmai doctor --check` output:
 
 ```text
 

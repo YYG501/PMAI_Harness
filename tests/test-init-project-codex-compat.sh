@@ -635,8 +635,8 @@ PY
   pass_test
 }
 
-test_status_reports_current_project_hook_drift() {
-  start_test "T7: status 兼容包装只读委托 doctor 检查消费仓 hooks"
+test_doctor_reports_current_project_hook_drift() {
+  start_test "T7: doctor --check 只读检查消费仓 hooks"
 
   local base repo out
   base=$(mktemp -d)
@@ -650,16 +650,15 @@ test_status_reports_current_project_hook_drift() {
   out=$(cd "$repo" && PMAI_HOME="$REPO_ROOT" \
     PMAI_STATE="$base/status-state" \
     CODEX_HOME="$base/codex-home" KIMI_CODE_HOME="$base/kimi-home" \
-    OPENCODE_CONFIG_DIR="$base/opencode" bash "$REPO_ROOT/bin/pmai-status" 2>&1)
-  if ! echo "$out" | grep -q "pmai status 已并入 pmai doctor --check" \
-    || ! echo "$out" | grep -q "Current consumer project hooks need refresh"; then
-    _fail "status compatibility wrapper should report consumer hook drift through doctor: $out"
+    OPENCODE_CONFIG_DIR="$base/opencode" bash "$REPO_ROOT/bin/pmai-doctor" --check 2>&1)
+  if ! echo "$out" | grep -q "Current consumer project hooks need refresh"; then
+    _fail "doctor should report consumer hook drift: $out"
     rm -rf "$base"
     return
   fi
   if [ -e "$base/status-state" ] \
     || [ -e "$repo/.git/.pmai-install-project-hooks.lock" ]; then
-    _fail "status must not create update-check state or the installer lock"
+    _fail "doctor check must not create update-check state or the installer lock"
     rm -rf "$base"
     return
   fi
@@ -672,14 +671,14 @@ test_status_reports_current_project_hook_drift() {
   out=$(cd "$repo" && PMAI_HOME="$REPO_ROOT" \
     PMAI_STATE="$base/status-state" \
     CODEX_HOME="$base/codex-home" KIMI_CODE_HOME="$base/kimi-home" \
-    OPENCODE_CONFIG_DIR="$base/opencode" bash "$REPO_ROOT/bin/pmai-status" 2>&1)
+    OPENCODE_CONFIG_DIR="$base/opencode" bash "$REPO_ROOT/bin/pmai-doctor" --check 2>&1)
   if ! echo "$out" | grep -q "Current consumer project hooks match the installed framework"; then
-    _fail "status compatibility wrapper should report refreshed hooks as current: $out"
+    _fail "doctor should report refreshed hooks as current: $out"
     rm -rf "$base"
     return
   fi
   if [ -e "$base/status-state" ]; then
-    _fail "status refresh check must remain read-only"
+    _fail "doctor refresh check must remain read-only"
     rm -rf "$base"
     return
   fi
@@ -961,8 +960,8 @@ test_codex_hook_wrapper_rejects_host_override() {
   pass_test
 }
 
-test_status_delegates_relative_target_to_its_doctor() {
-  start_test "T11: pmai status 把相对 PMAI_HOME 交给目标 doctor"
+test_doctor_delegates_relative_target_to_its_doctor() {
+  start_test "T11: repo-local doctor 把相对 PMAI_HOME 交给目标 doctor"
 
   local base fake_home install out rc
   base=$(mktemp -d)
@@ -979,10 +978,10 @@ SH
   out=$(cd "$base" && HOME="$fake_home" PMAI_HOME=install \
     PMAI_STATE="$base/status-state" \
     CODEX_HOME=codex-home KIMI_CODE_HOME=kimi-home \
-    OPENCODE_CONFIG_DIR=opencode bash "$REPO_ROOT/bin/pmai-status" 2>&1)
+    OPENCODE_CONFIG_DIR=opencode bash "$REPO_ROOT/bin/pmai-doctor" --check 2>&1)
   rc=$?
   if [ "$rc" != "23" ] || ! echo "$out" | grep -q 'TARGET_RELATIVE:install:--check'; then
-    _fail "status 应保留 logical PMAI_HOME 并委托目标 doctor: rc=$rc out=$out"
+    _fail "doctor 应保留 logical PMAI_HOME 并委托目标 doctor: rc=$rc out=$out"
     rm -rf "$base"
     return
   fi
@@ -991,8 +990,8 @@ SH
   pass_test
 }
 
-test_status_rejects_unreadable_host_root() {
-  start_test "T12: pmai status 对不可用目标 doctor 失败关闭"
+test_doctor_rejects_unreadable_host_root() {
+  start_test "T12: repo-local doctor 对不可用目标 doctor 失败关闭"
 
   local base install out rc
   base=$(mktemp -d)
@@ -1002,7 +1001,7 @@ test_status_rejects_unreadable_host_root() {
 
   out=$(HOME="$base/home" PMAI_HOME="$install" \
     CODEX_HOME="$base/codex" KIMI_CODE_HOME="$base/kimi" \
-    OPENCODE_CONFIG_DIR="$base/opencode" bash "$REPO_ROOT/bin/pmai-status" 2>&1)
+    OPENCODE_CONFIG_DIR="$base/opencode" bash "$REPO_ROOT/bin/pmai-doctor" --check 2>&1)
   rc=$?
   chmod 0700 "$install"
   if [ "$rc" = "0" ]; then
@@ -1490,12 +1489,12 @@ test_project_hook_installer_checks_and_refreshes_both_hosts
 test_project_hook_installer_requires_verified_lock_fd
 test_project_hook_installer_reports_recovery_even_when_current
 test_project_hook_installer_rejects_special_config_without_blocking
-test_status_reports_current_project_hook_drift
+test_doctor_reports_current_project_hook_drift
 test_project_hook_installer_rejects_invalid_event_atomically
 test_project_hook_installer_rolls_back_write_failure_and_preserves_modes
 test_codex_hook_wrapper_rejects_host_override
-test_status_delegates_relative_target_to_its_doctor
-test_status_rejects_unreadable_host_root
+test_doctor_delegates_relative_target_to_its_doctor
+test_doctor_rejects_unreadable_host_root
 test_project_hook_installer_preserves_concurrent_second_host_edit
 test_project_hook_installer_rolls_back_symlink_retarget
 test_project_hook_installer_rejects_parent_directory_rebind

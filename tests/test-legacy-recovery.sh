@@ -9,7 +9,7 @@ FRAMEWORK_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 RECOVERY="$FRAMEWORK_ROOT/scripts/legacy-work-recovery.py"
 CONTEXT_PACK="$FRAMEWORK_ROOT/scripts/context-pack.py"
 BUILD_CONTRACT="$FRAMEWORK_ROOT/scripts/build-contract.py"
-STATUS_VIEW="$FRAMEWORK_ROOT/scripts/status-view.py"
+ACTIVE_BUILD_CONTEXT="$FRAMEWORK_ROOT/scripts/active-build-context.py"
 
 setup_legacy_fixture() {
   T=$(mktemp -d "${TMPDIR:-/tmp}/pmai-legacy-recovery.XXXXXX")
@@ -160,7 +160,7 @@ test_legacy_build_requires_explicit_recovery() {
   start_test "legacy recovery: old build without checkpoint remains blocked by Proposal"
   setup_legacy_fixture
   local out rc
-  out=$(cd "$T" && python3 "$STATUS_VIEW" --execution-context 2>&1)
+  out=$(cd "$T" && python3 "$ACTIVE_BUILD_CONTEXT" 2>&1)
   rc=$?
   if [ "$rc" = "2" ] && echo "$out" | grep -q "Product Proposal"; then pass_test; else _fail "legacy build should remain blocked before recovery rc=$rc out=$out"; fi
   teardown
@@ -171,7 +171,7 @@ test_legacy_build_recovers_and_binds_authority() {
   setup_legacy_fixture
   python3 "$RECOVERY" accept "$T/docs/modules/demo" --confirmed-by PM --confirmed-at 2026-08-12T12:00:00+08:00 --reason "当前规格仍是本轮有效建造依据" >/dev/null || { _fail "recovery command failed"; teardown; return; }
   local out
-  out=$(cd "$T" && python3 "$STATUS_VIEW" --execution-context 2>&1)
+  out=$(cd "$T" && python3 "$ACTIVE_BUILD_CONTEXT" 2>&1)
   if python3 -c 'import json,sys; d=json.load(sys.stdin); b=d["active_builds"][0]; r=b["legacy_recovery"]; assert d["status"]=="active"; assert b["contract_version"]==4; assert r["status"]=="accepted"; assert r["original_hash_chain_state"]=="consistent"; assert r["original_design_approved_source_hash"]==r["original_build_approved_source_hash"]==r["original_replayed_build_approved_source_hash"]' <<<"$out"; then pass_test; else _fail "recovered build context mismatch: $out"; fi
   teardown
 }
@@ -217,7 +217,7 @@ test_legacy_recovery_fails_on_bound_file_change() {
   python3 "$RECOVERY" accept "$T/docs/modules/demo" --confirmed-by PM --confirmed-at 2026-08-12T12:00:00+08:00 --reason "当前规格仍是本轮有效建造依据" >/dev/null || { _fail "recovery command failed"; teardown; return; }
   printf '\n变化\n' >> "$T/docs/modules/demo/spec.md"
   local out rc
-  out=$(cd "$T" && python3 "$STATUS_VIEW" --execution-context 2>&1); rc=$?
+  out=$(cd "$T" && python3 "$ACTIVE_BUILD_CONTEXT" 2>&1); rc=$?
   if [ "$rc" = "2" ] && echo "$out" | grep -q "authority 文件发生变化"; then pass_test; else _fail "bound authority drift should fail closed rc=$rc out=$out"; fi
   teardown
 }
@@ -233,7 +233,7 @@ test_legacy_build_accepts_new_scoped_delta() {
     --scope-attestation approved-module-task-no-model-change \
     --approval-kind pm-confirmation \
     --approval-reference "session:legacy-recovery-test" 2>&1) || { _fail "recovered build should accept scoped delta: $out"; teardown; return; }
-  out=$(cd "$T" && python3 "$STATUS_VIEW" --execution-context 2>&1) || { _fail "recovered build should remain resumable: $out"; teardown; return; }
+  out=$(cd "$T" && python3 "$ACTIVE_BUILD_CONTEXT" 2>&1) || { _fail "recovered build should remain resumable: $out"; teardown; return; }
   if python3 -c 'import json,sys; d=json.load(sys.stdin); b=d["active_builds"][0]; assert len(b["accepted_deltas"]) == 1; assert b["legacy_recovery"]["original_accepted_delta_count"] == 0' <<<"$out"; then pass_test; else _fail "recovered delta context mismatch: $out"; fi
   teardown
 }

@@ -47,7 +47,7 @@ echo "SKILL: status"
 
    status-view 会先调用 `list-resumables` 扫描 main 与 attached worktrees。若有普通未完成飞书批次，唯一下一步是 `/pmai-lark-review <对应规格>`；它优先于 Proposal、handoff 和普通 active work。已 checkpoint 或已转只读 handoff 的批次不进入该列表。
 
-   没有普通未完成批次且状态是 `building / iterating / final_check` 时，PM 随后说“启动看看”“还有什么问题”“改一下当前结果”等自然语言，按当前 `/pmai-build` 续接：先读取 `status-view.py --execution-context` 的只读合同，再重新编译 context pack。
+   没有普通未完成批次且状态是 `building / iterating / final_check` 时，PM 随后说“启动看看”“还有什么问题”“改一下当前结果”等自然语言，按当前 `/pmai-build` 续接：先读取 `active-build-context.py` 的只读合同，再重新编译 context pack。
 
    若没有 active work，再只读恢复方向调整前留下的全部候选：
 
@@ -145,6 +145,7 @@ echo "SKILL: status"
 ## Rules
 
 - 只读视图，绝不写文件 / 改状态（区别于会改状态的 `/pmai-quick-fix` / `/pmai-design` / `/pmai-build` / `/pmai-build-close`）。
+- 只报告产品进度、当前模块与唯一下一步；缺失文档、旧布局、宿主入口和项目结构健康度统一交给 `/pmai-doctor`，不得在 status 输出中顺带体检。
 - PM 话术不出内部词（`.work-meta` / 真相源 / 派生 等不直接念给 PM）。
 - 不把脚本诊断讲给 PM：禁止输出“PMAI 状态脚本显示”“记录层没有挂起模块”“可以理解为”“PRODUCT-RULES.md 不存在所以没有决策”这类话。只说 PM 要行动的事实。
 - 如果脚本状态和工作区状态不一致，优先给 PM 一个行动结论：有未提交改动就说“有一轮改动还没收口”，不要展开内部原因。

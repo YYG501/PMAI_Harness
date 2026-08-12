@@ -63,7 +63,7 @@
 - `/pmai-build-close` 保留为兼容与恢复入口，用于中断续跑、merge 冲突后重试或 `landed/docs_pending` 文档恢复。
 - 已 close 模块再次修改时，若变化涉及产品定义就进入新一轮 design → build：复用长期模块文档，但不得复用上一轮的 delta、验收证据或收尾游标。
 - 迷路或续跑：读 `/pmai-status` 对应 skill，先报告当前状态再行动。
-- 已有 `building / iterating / final_check` 时，PM 说“启动看看”“还有什么问题”“继续改当前结果”等自然语言就是续接当前 `/pmai-build`。Codex / Claude Code 由 prompt hook 注入 `status-view.py --execution-context`。除非 PM 明确开启无关新工作，否则不得转成无范围约束的通用 QA；多个 active build 只问模块，不猜。
+- 已有 `building / iterating / final_check` 时，PM 说“启动看看”“还有什么问题”“继续改当前结果”等自然语言就是续接当前 `/pmai-build`。Codex / Claude Code 由 prompt hook 注入 `active-build-context.py` 的只读合同。除非 PM 明确开启无关新工作，否则不得转成无范围约束的通用 QA；多个 active build 只问模块，不猜。
 - PM 要复盘本次 PMAI 协作、反馈流程卡点或把问题交给框架仓时：当前只有 Codex 的精确当前会话定位已经验证，可读 `/pmai-feedback` 完整复盘并生成带会话 ID 与文件地址的框架交接 Prompt；其它宿主没有经过验证的定位适配时直接说明暂不支持，不按“最近会话”猜测，也不在消费仓直接改框架。
 - 飞书入口按方向和判断责任固定：本地 Markdown 发布或更新到飞书读 `/pmai-publish-to-lark`，已有文档默认精细更新；PM 明确以飞书为准且不需要判断时读 `/pmai-sync-from-lark`，只机械同步正文回本地；PM 在已发布规格中 review、修改正文或添加批注，并要求反向更新规格 / 决定 / 原型时读 `/pmai-lark-review`。review 先恢复未完成批次，再把发布基线、本地和飞书固定为只读证据；产品级和模块级变化把旧批次转为 main handoff，按 Proposal/design/lark-review 的机器 phase 接力，fresh checkpoint 后关闭。不得用任一证据版直接覆盖正式规格。
 

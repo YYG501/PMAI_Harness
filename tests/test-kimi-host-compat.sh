@@ -141,8 +141,10 @@ test_kimi_lifecycle_only_diagnoses_and_cleans_legacy_entries() {
   assert_file_contains "$REPO_ROOT/bin/pmai-uninstall" "manage-kimi-hooks.py" "uninstall should remove only managed Kimi hooks" || return
   assert_file_contains "$REPO_ROOT/bin/pmai-doctor" "旧 Kimi Code PMAI Skill 入口" "doctor should report legacy Kimi skills" || return
   assert_file_contains "$REPO_ROOT/bin/pmai-doctor" "旧 Kimi Code PMAI managed hooks" "doctor should report legacy Kimi hooks" || return
-  assert_file_contains "$REPO_ROOT/bin/pmai-status" "pmai-doctor" "status should delegate Kimi health to doctor" || return
-  assert_file_contains "$REPO_ROOT/bin/pmai-status" "--check" "status should use read-only doctor mode" || return
+  if [ -e "$REPO_ROOT/bin/pmai-status" ]; then
+    _fail "removed CLI status wrapper should not remain"
+    return
+  fi
   pass_test
 }
 

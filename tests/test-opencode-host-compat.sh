@@ -318,8 +318,10 @@ test_cli_scripts_limit_opencode_to_builder_and_cleanup() {
   fi
   assert_file_contains "$REPO_ROOT/bin/pmai-uninstall" "OpenCode slash commands removed" "uninstall should clean OpenCode commands" || return
   assert_file_contains "$REPO_ROOT/bin/pmai-doctor" "旧 OpenCode PMAI 主控 command" "doctor should report legacy OpenCode commands" || return
-  assert_file_contains "$REPO_ROOT/bin/pmai-status" "pmai-doctor" "status should delegate health checks to doctor" || return
-  assert_file_contains "$REPO_ROOT/bin/pmai-status" "--check" "status should use the read-only doctor mode" || return
+  if [ -e "$REPO_ROOT/bin/pmai-status" ]; then
+    _fail "removed CLI status wrapper should not remain"
+    return
+  fi
   assert_file_contains "$REPO_ROOT/templates/pm-workflow.config.yml.tmpl" "executor: opencode" "OpenCode builder profile should remain" || return
   if [ ! -x "$REPO_ROOT/scripts/exec-adapters/opencode.sh" ]; then
     _fail "OpenCode Builder adapter should remain executable"

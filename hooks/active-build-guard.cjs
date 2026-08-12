@@ -52,11 +52,11 @@ function repoRootFor(cwd) {
 
 function readExecutionContext(repoRoot) {
   const pmaiHome = path.resolve(__dirname, '..');
-  const script = path.join(pmaiHome, 'scripts', 'status-view.py');
-  const result = spawnSync('python3', [script, repoRoot, '--execution-context'], {
+  const script = path.join(pmaiHome, 'scripts', 'active-build-context.py');
+  const result = spawnSync('python3', [script, repoRoot], {
     encoding: 'utf8',
     cwd: repoRoot,
-    timeout: configuredTimeout('PMAI_ACTIVE_BUILD_STATUS_TIMEOUT_MS', 4500, 5000),
+    timeout: configuredTimeout('PMAI_ACTIVE_BUILD_CONTEXT_TIMEOUT_MS', 4500, 5000),
   });
   const stdout = (result.stdout || '').trim();
   let context = null;

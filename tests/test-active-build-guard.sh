@@ -62,7 +62,7 @@ SH
   (
     export PATH="$tmp:$PATH"
     export PMAI_TEST_STATUS_MODE="$mode"
-    export PMAI_ACTIVE_BUILD_STATUS_TIMEOUT_MS=30
+    export PMAI_ACTIVE_BUILD_CONTEXT_TIMEOUT_MS=30
     run_guard "$prompt"
   )
   rm -rf "$tmp"
@@ -193,7 +193,7 @@ test_explicit_entry_bypasses_repository_lookup() {
 }
 
 test_context_reader_failures_are_not_silent() {
-  start_test "active-build guard: status 超时/非零/空输出/坏 JSON 全部失败关闭"
+  start_test "active-build guard: build context 超时/非零/空输出/坏 JSON 全部失败关闭"
   active_build_fixture_setup prototype iterating
   local mode out
 
@@ -351,7 +351,7 @@ SH
     export PATH="$tmp:$PATH"
     export PMAI_TEST_REAL_GIT="$real_git"
     export PMAI_ACTIVE_BUILD_GIT_TIMEOUT_MS=2000
-    export PMAI_ACTIVE_BUILD_STATUS_TIMEOUT_MS=5000
+    export PMAI_ACTIVE_BUILD_CONTEXT_TIMEOUT_MS=5000
     export PMAI_ACTIVE_BUILD_TOTAL_BUDGET_MS=1200
     run_guard "看看还有什么问题"
   )
@@ -412,7 +412,7 @@ for mode in ("frozen", "rollback"):
             "PMAI_TEST_DATE_MODE": mode,
             "PMAI_TEST_REAL_GIT": real_git,
             "PMAI_ACTIVE_BUILD_GIT_TIMEOUT_MS": "1500",
-            "PMAI_ACTIVE_BUILD_STATUS_TIMEOUT_MS": "5000",
+            "PMAI_ACTIVE_BUILD_CONTEXT_TIMEOUT_MS": "5000",
             "PMAI_ACTIVE_BUILD_TOTAL_BUDGET_MS": "800",
         }
     )

@@ -53,7 +53,7 @@ PM 的主体验是：开工前只确认一次工作环境和构建工具 → 看
 
 当已有 `building / iterating / final_check`，PM 不必重复输入命令。“启动起来看看”“检查当前结果”“还有什么没有解决”“按刚才结果继续改”等都沿用当前 `/pmai-build`。只有 PM 明确开启无关的新工作时才转其它入口；多个可续接 build 时只问本轮模块，不静默猜测。
 
-续接时先读取 `status-view.py --execution-context`，再按 §1 重新编译并消费 context pack。该输出会重新校验当前 Product Proposal / 等价产品基线、`PRODUCT.md`、模块规格、决定、build contract 与 `project.yml`，只读不写状态。任一权威来源在批准后变化、Proposal 无效、合同无效或 policy 漂移时立即停止续接；产品方向缺口回 `/pmai-proposal`，其余建造依据变化回 `/pmai-design`，不得继续修改或记录 implementation commit，也不得绕过当前 `target + delivery_policy + acceptance lane` 转成通用 QA。
+续接时先读取 `active-build-context.py`，再按 §1 重新编译并消费 context pack。该输出会重新校验当前 Product Proposal / 等价产品基线、`PRODUCT.md`、模块规格、决定、build contract 与 `project.yml`，只读不写状态。任一权威来源在批准后变化、Proposal 无效、合同无效或 policy 漂移时立即停止续接；产品方向缺口回 `/pmai-proposal`，其余建造依据变化回 `/pmai-design`，不得继续修改或记录 implementation commit，也不得绕过当前 `target + delivery_policy + acceptance lane` 转成通用 QA。
 
 仅当 v1-v4 active build 早于 Proposal 合同、且 PM 明确确认当前规格与产品依据仍是该轮有效起点时，才可运行 `legacy-work-recovery.py accept` 建立一次性恢复 checkpoint。该命令保留旧 delta/hash 审计记录，以当前 authority 内容 hash 重建后续链，不升级合同版本、不生成 Proposal、不修改模块文档；恢复后的任一绑定内容再次变化仍立即停止。新工作、v5 build 和没有 PM 明确确认的旧工作不得使用此入口。
 
@@ -339,7 +339,7 @@ git -C "$BUILD_DIR" commit -m "build(<模块>): record iteration"
 
 先给 PM 看结果，不把定稿验收挡在“能刷新看到页面/功能”之前。PM 每轮反馈后进入快速迭代车道：
 
-1. 先运行 `status-view.py --execution-context` 重新校验 currentness，再读取当前 build 合同的 `target + delivery_policy`；UI 相关时同时重新读取 `DESIGN.md` 并执行当前声明的项目级设计系统 Skill；校验或 Skill 访问失败时不得修改、提交或写 accepted delta；
+1. 先运行 `active-build-context.py` 重新校验 currentness，再读取当前 build 合同的 `target + delivery_policy`；UI 相关时同时重新读取 `DESIGN.md` 并执行当前声明的项目级设计系统 Skill；校验或 Skill 访问失败时不得修改、提交或写 accepted delta；
 2. 先按决定层级分流 PM 新反馈，不能只因反馈发生在 build 中就记成 delta：
    - 改变产品定位、目标用户、核心问题与价值、产品职责边界、MVP 证明目标或关键成立前提 → 停止 build，转 `/pmai-proposal`；不得写 accepted delta；
    - 改变模块对象、关系、动作、状态、权限、真相源、业务规则、信息结构、任务路径、关键交互，或要求原型接入真实数据库、鉴权、外部写入、生产基础设施 → 停止 build，转 `/pmai-design`；不得写 accepted delta；

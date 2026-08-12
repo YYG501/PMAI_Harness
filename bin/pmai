@@ -19,8 +19,6 @@ Subcommands:
                        Flags: --stable | --to <tag>
   uninstall            Remove PMAI install
                        Flags: --force | --local <dir> (清理遗留项目副本)
-  status               Deprecated alias for doctor --check
-                       Flags: [--json]
   doctor               Check or repair framework and current consumer repo
                        Flags: [--check] | --repair | [--json] | [--browser-smoke]
   update-check         Check if newer stable tag available (silent if up-to-date)
@@ -69,7 +67,7 @@ case "${1:-}" in
     echo "pmai $(find_version)"
     exit 0
     ;;
-  install|upgrade|uninstall|status|doctor|update-check|whats-new|migrate|memory)
+  install|upgrade|uninstall|doctor|update-check|whats-new|migrate|memory)
     SUB="$1"
     shift
     SUB_BIN="$BIN_DIR/pmai-$SUB"

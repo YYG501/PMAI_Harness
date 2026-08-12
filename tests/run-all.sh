@@ -81,6 +81,7 @@ CORE_SUITES=(
   test-cancel-work.sh
   test-replan-work.sh
   test-status-view.sh
+  test-active-build-context.sh
   test-active-build-guard.sh
   test-todo-guidance.sh
   test-docs-archive-convention.sh

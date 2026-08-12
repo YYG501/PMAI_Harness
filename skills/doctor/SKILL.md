@@ -173,7 +173,7 @@ git -C "$PMAI_HOME" ls-remote --heads origin refs/heads/main
 
 - 默认只读。不得把 `pmai doctor --repair` 当检查命令。
 - 不调用 `/pmai-status` 或 `status-view.py` 诊断框架；它们属于产品进度。
-- 不把兼容命令 `pmai status` 当正式入口；底层统一使用 `pmai doctor --check`。
+- CLI 不再提供 `pmai status`；底层统一使用 `pmai doctor --check`。
 - 不自动运行升级、项目 hooks 刷新、文件迁移、legacy 清理、卸载或重装。
 - 不执行 `project.yml` 中声明的 install / build / test / typecheck / start 命令。
 - 不读取或回显 `.claude/lark-publish.json` 等敏感配置内容；只检查是否被 Git 跟踪或是否为危险 symlink。
