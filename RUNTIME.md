@@ -6,7 +6,7 @@
 
 - 日期：2026-08-12
 - 开发分支：`main`
-- 当前目标：Harness P1 与复杂度收口五个批次已经完成；批次五 Loop Engineering 已回归并完成实现，尚未分发或升级安装态。新 build contract 为 v5；Kimi Code、OpenCode、Cursor Agent 只作 Builder，遗留主控资产只诊断、不自动清理。
+- 当前目标：Harness P1 与复杂度收口五个批次已经完成并分发到 `main`，全局安装态已升级并通过 Doctor。新 build contract 为 v5；Kimi Code、OpenCode、Cursor Agent 只作 Builder，遗留主控资产只诊断、不自动清理。
 - gstack 参考基线：`v1.58.5.0`，commit `11de390`；只参考本地 `gstack-clean` checkout，没有升级用户目录中的安装副本。
 
 ## 当前活跃模型
@@ -99,9 +99,9 @@
 
 ## 下一步
 
-- 在本工作区改动完成提交和分发确认后，再升级安装态；本批不修改三个已知消费仓，也不清理真实 Kimi/OpenCode 用户目录。
-- 五个复杂度收口批次已完成：仓库身份、宿主等级、内部状态、Build 维护边界和主链 Loop Contract 都已有唯一来源。后续不再按收口批次新增架构层；下一步由 PM 单独确认是否分发、升级安装态和进入真实消费仓 dogfood。逐仓迁移、兼容删除、Session Eval、多 Agent 或动态工作流仍是独立决定。
-- 在 PM 确认分发后升级安装态，再用真实消费仓 dogfood `init → proposal → design → spec-writing → build`，并继续观察 active build 快速迭代与定稿验收。
+- 本轮已完成框架仓提交、`main` 分发和全局安装态升级；没有修改三个已知消费仓，也没有清理真实 Kimi/OpenCode 遗留目录。
+- 五个复杂度收口批次已完成：仓库身份、宿主等级、内部状态、Build 维护边界和主链 Loop Contract 都已有唯一来源。后续不再按收口批次新增架构层；下一步是单独确认进入哪个真实消费仓 dogfood。逐仓迁移、兼容删除、Session Eval、多 Agent 或动态工作流仍是独立决定。
+- 在真实消费仓 dogfood `init → proposal → design → spec-writing → build`，并继续观察 active build 快速迭代与定稿验收。
 - 在真实消费仓 dogfood `/pmai-feedback`，核对完整会话复盘、问题归属和交接 Prompt 是否能直接驱动框架仓分析；再按完整主控支持范围评估 Claude Code 的精确当前会话定位，不为仅 Builder 的 Kimi Code、OpenCode 建设主控 session locator，也不提供猜测式降级。
 - 在真实 Docx 规格上 dogfood `/pmai-lark-review`：覆盖 active worktree 目标绑定、正文直改、复杂格式 / 图片 / 引用、Proposal / design handoff、sealed scoped adjustment 与 authority checkpoint；记录 collect / reconcile / 精细写回 / 评论收口的阶段耗时，确认机器路径进入 10–15 分钟。
 - 后续框架修改继续先在开发分支完成 targeted / full regression，再进入 main 分发基线并升级全局安装副本。
