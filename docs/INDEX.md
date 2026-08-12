@@ -38,4 +38,3 @@
 | [`../CLAUDE.md`](../CLAUDE.md) | 生成器仓工作章程 |
 | [`../RUNTIME.md`](../RUNTIME.md) | 当前状态和下一步 |
 | [`../INVARIANTS.md`](../INVARIANTS.md) | 当前架构不变式 |
-| [`../TODOS.md`](../TODOS.md) | 开放项 |

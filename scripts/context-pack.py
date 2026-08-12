@@ -28,6 +28,8 @@ from _lib.proposal import (
     resolve_proposal_path,
 )
 from _lib.legacy_recovery import validate_legacy_recovery
+from _lib.ready_contract import ReadyContractError, validate_ready_pack
+from _lib.stages import LIFECYCLE_ROUTES
 from _lib.work_contract import normalize_work_state
 
 
@@ -68,6 +70,13 @@ GENERIC_HEADINGS = {
     "待确认问题",
 }
 SUPERSEDED_SECTION_HEADINGS = {"被取代的决定"}
+
+
+class ContextRouteError(RuntimeError):
+    def __init__(self, route: str, reason: str) -> None:
+        super().__init__(reason)
+        self.route = route
+        self.reason = reason
 
 
 def now_iso() -> str:
@@ -415,6 +424,46 @@ def validate_design_recovery_checkpoint(repo_root: Path, recovery: dict) -> None
         raise SystemExit(detail or "无法验证 legacy recovery checkpoint。")
 
 
+def resolve_proposal_gate(repo_root: Path, meta: dict) -> tuple[dict, dict | None, dict | None]:
+    """Resolve the project Proposal axis and the narrow legacy recovery exception."""
+
+    proposal_gate = proposal_state(repo_root)
+    try:
+        legacy_recovery = validate_legacy_recovery(meta)
+    except ValueError as exc:
+        if proposal_gate["state"] in {"required", "invalid"}:
+            raise ContextRouteError(
+                "pmai-proposal",
+                f"legacy recovery 记录无效，不能绕过 Product Proposal：{exc}",
+            ) from exc
+        raise SystemExit(str(exc)) from exc
+
+    current_proposal = None
+    if proposal_gate["state"] == "accepted":
+        current_proposal = proposal_gate["proposal"]
+    elif proposal_gate["state"] in {"required", "invalid"}:
+        if legacy_recovery:
+            proposal_gate = {
+                **proposal_gate,
+                "execution_state": "legacy_recovered",
+                "legacy_recovery_kind": legacy_recovery["kind"],
+            }
+        elif proposal_gate["state"] == "invalid":
+            raise ContextRouteError(
+                "pmai-proposal",
+                str(proposal_gate.get("reason") or "当前 Product Proposal 无效。"),
+            )
+        else:
+            gaps = proposal_gate.get("gaps") or []
+            gap_text = "缺少：" + "、".join(str(item) for item in gaps) + "。" if gaps else ""
+            raise ContextRouteError(
+                "pmai-proposal",
+                "当前项目还没有完整 Product Proposal 或等价产品基线；"
+                f"{gap_text}请先运行 /pmai-proposal，确认产品方向后再进入 design。",
+            )
+    return proposal_gate, current_proposal, legacy_recovery
+
+
 def build_pack(args: argparse.Namespace) -> dict:
     repo_root = Path(args.repo_root).expanduser().resolve()
     if not repo_root.is_dir():
@@ -437,30 +486,9 @@ def build_pack(args: argparse.Namespace) -> dict:
     else:
         target_kind = target.get("kind")
         target_entrypoints = target.get("entrypoints", [])
-    current_proposal = None
-    try:
-        legacy_recovery = validate_legacy_recovery(meta)
-    except ValueError as exc:
-        raise SystemExit(str(exc)) from exc
-    proposal_gate = proposal_state(repo_root)
-    if proposal_gate["state"] == "accepted":
-        current_proposal = proposal_gate["proposal"]
-    elif proposal_gate["state"] == "invalid":
-        raise SystemExit(str(proposal_gate.get("reason") or "当前 Product Proposal 无效。"))
-    elif proposal_gate["state"] == "required":
-        # A previously accepted v1-v4 active build may carry an explicit PM
-        # recovery checkpoint.  That checkpoint is the narrow compatibility
-        # boundary; new work and v5 work still require the current Proposal
-        # gate exactly as before.
-        if legacy_recovery:
-            proposal_gate = {"state": "legacy_recovered"}
-        else:
-            gaps = proposal_gate.get("gaps") or []
-            gap_text = "缺少：" + "、".join(str(item) for item in gaps) + "。" if gaps else ""
-            raise SystemExit(
-                "当前项目还没有完整 Product Proposal 或等价产品基线；"
-                f"{gap_text}请先运行 /pmai-proposal，确认产品方向后再进入 design。"
-            )
+    proposal_gate, current_proposal, legacy_recovery = resolve_proposal_gate(
+        repo_root, meta
+    )
     sources = collect_sources(repo_root, module_dir, meta, current_proposal)
     hash_version = source_hash_version(meta)
     records, input_hashes, source_hash, hash_scope = source_records(
@@ -470,8 +498,10 @@ def build_pack(args: argparse.Namespace) -> dict:
         validate_design_recovery_checkpoint(repo_root, legacy_recovery)
     decisions, question_like = parse_decisions(repo_root, sources)
     keywords = extract_keywords(module_dir, args.goal)
+    lifecycle = normalize_work_state(meta).lifecycle_state if meta else "designing"
     return {
         "schema_version": 1,
+        "route": LIFECYCLE_ROUTES.get(lifecycle, "pmai-design"),
         "source_hash_version": hash_version,
         "compiled_at": now_iso(),
         "repo": {
@@ -485,14 +515,13 @@ def build_pack(args: argparse.Namespace) -> dict:
             "paths": target.get("paths", []),
             "entrypoints": target_entrypoints,
         },
-        "lifecycle_state": (
-            normalize_work_state(meta).lifecycle_state if meta else "designing"
-        ),
+        "lifecycle_state": lifecycle,
         "design_revision": int(build.get("design_revision") or meta.get("design_revision") or 1),
         "approved_source_hash": build.get("approved_source_hash") or meta.get("approved_source_hash"),
         "source_hash": source_hash,
         "source_hash_scope": hash_scope,
         "product_proposal": current_proposal,
+        "product_proposal_state": proposal_gate["state"],
         "legacy_recovery": legacy_recovery,
         "implementation_commit": build.get("implementation_commit") or git_output(repo_root, "rev-parse", "HEAD"),
         "sources": records,
@@ -568,12 +597,82 @@ def parser() -> argparse.ArgumentParser:
     result.add_argument("--module", help="模块名或 docs/modules/<模块> 路径；省略时自动选择唯一 active work")
     result.add_argument("--goal")
     result.add_argument("--output", help="内部 JSON 输出路径；省略时写 stdout")
+    result.add_argument(
+        "--route-only",
+        action="store_true",
+        help="只读返回 design/context 路由；阻断时也输出结构化 JSON",
+    )
     return result
 
 
 def main(argv: list[str] | None = None) -> int:
     args = parser().parse_args(argv)
-    payload = build_pack(args)
+    try:
+        payload = build_pack(args)
+    except ContextRouteError as exc:
+        if not args.route_only:
+            raise SystemExit(exc.reason) from exc
+        print(
+            json.dumps(
+                {
+                    "schema_version": 1,
+                    "status": "blocked",
+                    "route": exc.route,
+                    "reason": exc.reason,
+                },
+                ensure_ascii=False,
+                indent=2,
+            )
+        )
+        return 2
+    except SystemExit as exc:
+        if not args.route_only:
+            raise
+        reason = str(exc)
+        print(
+            json.dumps(
+                {
+                    "schema_version": 1,
+                    "status": "blocked",
+                    "route": "pmai-design",
+                    "reason": reason,
+                },
+                ensure_ascii=False,
+                indent=2,
+            )
+        )
+        return 2
+    if args.route_only:
+        route = payload["route"]
+        status = "ready"
+        reason = None
+        if payload["lifecycle_state"] == "ready_to_build":
+            repo_root = Path(args.repo_root).expanduser().resolve()
+            module_dir = resolve_module(repo_root, args.module)
+            meta = load_work_meta(module_dir)
+            try:
+                if module_dir is None:
+                    raise ReadyContractError("无法确定 ready_to_build 对应的模块。")
+                validate_ready_pack(repo_root, module_dir, meta, payload)
+            except ReadyContractError as exc:
+                status = "blocked"
+                route = "pmai-design"
+                reason = str(exc)
+        print(
+            json.dumps(
+                {
+                    "schema_version": 1,
+                    "status": status,
+                    "route": route,
+                    "lifecycle_state": payload["lifecycle_state"],
+                    "legacy_recovery": payload.get("legacy_recovery"),
+                    **({"reason": reason} if reason else {}),
+                },
+                ensure_ascii=False,
+                indent=2,
+            )
+        )
+        return 0 if status == "ready" else 2
     if args.output:
         repo_root = Path(args.repo_root).expanduser().resolve()
         output_path = Path(args.output).expanduser()

@@ -76,7 +76,7 @@
 - context pack 对旧消费仓自动写入 Git 本地 exclude，不再制造未跟踪缓存；build 在创建环境前阻断批准目标路径上的既有脏改动，同时保留无关 WIP。
 - `context-pack.py` 与 `check-open-questions.py` 共用明确无未决问题的声明识别；只有单独一行的肯定声明才表示空问题集，否定、转述、但书、多行后续问题和子串命中都不能放行。空 section、普通说明、空题名、HTML comment-only 以及 `待确认` / `TODO` / `TBD` / `FIXME` 等占位回答仍保持 unresolved。
 - context pack 只把 D 编号模块决定和真实产品规则编入 active；共同理由、否过方案、待复核、变更记录与注释模板不再伪装成决定。标题或正文仍是问句、尚在讨论且没有明确结论时保持 rejected；明确状态或结论可以闭合问题标题，带“尚未正式 / 并未真正”等副词的否定状态保持 active。
-- 新增 `scripts/current-session.py` 和 `/pmai-feedback`：Codex 通过 `CODEX_THREAD_ID` 精确定位 active / archived 原始 JSONL，校验会话唯一性、session ID 与 cwd 归属；Skill 完整读取会话并区分消费仓产品问题、执行偏差、Skill 缺口、框架合同缺口、宿主限制和证据不足，最后生成带消费仓路径、会话 ID、原始文件路径及证据的框架交接 Prompt。公开 `/pmai-skill-improve` 已移除，历史 `skill-feedback/` 资料继续保留。
+- 新增 `scripts/current-session.py` 和 `/pmai-feedback`：Codex 通过 `CODEX_THREAD_ID` 精确定位 active / archived 原始 JSONL，校验会话唯一性、session ID 与 cwd 归属；Skill 完整读取会话并区分消费仓产品问题、执行偏差、Skill 缺口、框架合同缺口、宿主限制和证据不足，最后生成带消费仓路径、会话 ID、原始文件路径及证据的框架交接 Prompt。公开 `/pmai-skill-improve` 已移除，历史资料统一保存在 `docs/归档/完成/skill-feedback/`。
 - `scripts/lark-review.py` 和 `/pmai-lark-review` 已升级到原生远端底稿合同：`resolve-target` 将文档身份绑定到唯一规格与真实 active worktree；采集同一 revision 的 Markdown / full XML、历史发布版和完整分页评论，`remote-native.json` 保留 block/style/resource/reference，remote-coverage schema v2 同时绑定语义与原生结构。产品级和 active 模块模型变化可将旧批转为不可 apply 的 `handed_off`，必要证据复制到 main `.runs/lark-review-handoffs/`；`list-handoffs` 可按 route、模块和文档枚举，fresh batch checkpoint 用 `--closes-handoff` 收口。`verify-sync` 同时比较文本和结构投影，以原生 block / token 判断资源身份；collect 在联网前绑定 canonical Git 仓根。新 ready plan / resolution 使用 v4，comment-actions 使用 v3，remote-verification 使用 v2；reply-only、PM 手工解决回读、`superseded` 评论处置和跨决定一致性回执只进入新 v4 批次。已有 v3 ready 批次继续按原合同恢复；旧 remote-verification v1 必须重跑验收，保留仓根绑定的旧 review/plan v2 与 comment-actions v1 批次仍可完成评论恢复。
 - 飞书 frontmatter 回写改为补丁指定顶层标量、保留嵌套 YAML / 注释 / 正文并原子替换；最终正文、checkpoint 和 baseline 写入使用逐级 `O_NOFOLLOW` 的固定目录 fd，父目录 symlink 重绑不能改变落点。普通 Path API 先 canonicalize 父目录以接受 `/var` 等合法系统别名，最终文件名仍拒绝 symlink；跨远端阶段继续显式要求 canonical path。create / update / fetch / comments / api 的 JSON 对象统一拒绝 `ok:false`、`success:false` 和非零 `code`；已经发起 overwrite 后的非零、空输出、非 JSON、非对象、失败 envelope 或非完整 result 都归为 `incomplete_update` 并清除旧发布基线，调用前 validation / missing-cli 不清，使用受控 stdin 的错误也不回显正文。发布后只有文档身份、写操作返回 revision、回读 revision 一致且本地发送源未变化时才建立新基线，避免绑定错文档、旧 revision 或 claim 前通过正式路径提交的本地并发版本；持有旧文件描述符的 writer 仍需共享写锁或版本保留。
 
@@ -93,15 +93,16 @@
 
 ## 当前验证
 
-- 本轮关键定向基线：status-view `19/19`、active-build-context `6/6`、active-build-guard `18/18`、narrative-mode `9/9`、legacy-recovery `9/9`、doctor-skills `42/42`、init-project-codex-compat `24/24`、Kimi host `23/23`、OpenCode host `8/8`、lark-entry-routing `6/6`、lark-review `73/73`、publish-to-lark-e2e `20/20`、lark-adapter `40/40`、project-design-system `7/7`、consumer-doctor `23/23`、private-onboarding `4/4`、check-branch `21/21`、repo-kind `6/6`、exec-adapters `16/16`、skill-link-ownership `8/8`、skill-eval 合同 `6/6`、Loop Contract `4/4`；发布门在 runner / judge 均缺失时返回 2 并明确列出两项缺失能力，schema `24` 个案例与 static eval `7/7` 通过。
-- 当前完整 `tests/run-all.sh` 基线为 `972 passed / 0 failed`。普通开发回归中的 skill eval 为 `7 passed / 0 failed / 17 session skipped`，只形成静态与确定性合同基线，不构成稳定版本证据；`v*` tag 或手动稳定发布仍必须通过配置真实 runner 与独立 judge 的 `tests/run-release-gate.sh`，任何 session skip 都会阻断。稳定核心发布门默认跳过可选 Lark 假环境套件，但日常全量回归仍保留这些套件。
+- 本轮关键定向基线：status-view `19/19`、active-build-context `7/7`、active-build-guard `18/18`、narrative-mode `9/9`、context-pack `15/15`、legacy-recovery `14/14`、ready-contract `7/7`、doctor-skills `42/42`、init-project-codex-compat `24/24`、Kimi host `23/23`、OpenCode host `8/8`、lark-entry-routing `6/6`、lark-review `73/73`、publish-to-lark-e2e `20/20`、lark-adapter `40/40`、project-design-system `7/7`、consumer-doctor `23/23`、private-onboarding `4/4`、check-branch `21/21`、repo-kind `6/6`、exec-adapters `16/16`、skill-link-ownership `8/8`、skill-eval 合同 `6/6`、Loop Contract `4/4`；发布门在 runner / judge 均缺失时返回 2 并明确列出两项缺失能力，schema `24` 个案例与 static eval `7/7` 通过。
+- 当前完整 `tests/run-all.sh` 基线为 `980 passed / 0 failed`。普通开发回归中的 skill eval 为 `7 passed / 0 failed / 17 session skipped`，只形成静态与确定性合同基线，不构成稳定版本证据；`v*` tag 或手动稳定发布仍必须通过配置真实 runner 与独立 judge 的 `tests/run-release-gate.sh`，任何 session skip 都会阻断。稳定核心发布门默认跳过可选 Lark 假环境套件，但日常全量回归仍保留这些套件。
 - 早于 Proposal 合同的既有 active work 已有显式恢复合同：v1-v4 active build 绑定 PM 确认、Git checkpoint、authority 内容 hash，并分别保存旧 design 起点、合同保存终点、历史 delta 重放终点与一致性结论，再从当前确认点续接；旧 active design 保留原轮身份，历史 `ready_to_build` 退回 `designing` 重新确认目标。新工作和 v5 build 仍不能借此绕过 Proposal。
 - 开发态入口同步 helper 已在真实消费仓 `ExampleAgentProject` 只读 dogfood：返回 `stale / legacy_migration`，渲染计划可以确定识别旧 PMAI Startup，并保留“非小改动前读取产品现状”等项目补充及后续项目规则。消费仓在本轮分析期间又出现新的活跃模块状态，因此不再把其整体 error 数作为本次入口同步回归基线；运行前后 Git 状态一致，未修改消费仓或用户级安装。
 
 ## 下一步
 
 - 五个复杂度收口批次已完成：仓库身份、宿主等级、内部状态、Build 维护边界和主链 Loop Contract 都已有唯一来源。后续不再按收口批次新增架构层；当前已确认迁移 `ExampleAgentProject` 与 `ExampleConsumerApp`，保留各自既有 WIP，并只清理遗留 Kimi/OpenCode 主控资产。Session Eval、多 Agent 或动态工作流仍是独立决定。
-- 在真实消费仓 dogfood `init → proposal → design → spec-writing → build`，并继续观察 active build 快速迭代与定稿验收。
+- 在一个全新消费仓真实跑完 `init → proposal → design → spec-writing → build → finalize → main → 文档编译`，核对产品基线、规格编译、`project.yml`、隔离环境、自适应验收和落地闭环。
+- 分别 dogfood 一次 Web product 与非 Web product：前者验证主动浏览器硬门，后者验证没有 prototype、dev port 或 browser 时仍可合法完成。
 - 在真实消费仓 dogfood `/pmai-feedback`，核对完整会话复盘、问题归属和交接 Prompt 是否能直接驱动框架仓分析；再按完整主控支持范围评估 Claude Code 的精确当前会话定位，不为仅 Builder 的 Kimi Code、OpenCode 建设主控 session locator，也不提供猜测式降级。
 - 在真实 Docx 规格上 dogfood `/pmai-lark-review`：覆盖 active worktree 目标绑定、正文直改、复杂格式 / 图片 / 引用、Proposal / design handoff、sealed scoped adjustment 与 authority checkpoint；记录 collect / reconcile / 精细写回 / 评论收口的阶段耗时，确认机器路径进入 10–15 分钟。
 - 后续框架修改继续先在开发分支完成 targeted / full regression，再进入 main 分发基线并升级全局安装副本。

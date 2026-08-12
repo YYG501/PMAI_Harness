@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 // check-doc-currency — PreToolUse(Bash) hook
 //
-// 触发：git commit 命令，且本次提交动了框架资产（scripts/ skills/ templates/
-//       agents/），但 CHANGELOG.md 不在本次提交里。
+// 触发：git commit 命令，且本次提交动了全局安装框架资产（scripts/ skills/
+//       templates/ hooks/），但 CHANGELOG.md 不在本次提交里。
 // 行为：deny 拦下这一次 commit，把"先更新文档再提交"的提醒喂回模型。
 //       逃生舱：commit message 含 [skip-doc-check] → 直接放行。
 //
@@ -15,8 +15,8 @@
 const { execSync } = require('child_process');
 const fs = require('fs');
 
-// 会同步到业务仓、改动通常需要进 CHANGELOG 的目录
-const FRAMEWORK_DIRS = ['scripts/', 'skills/', 'templates/', 'agents/'];
+// 会进入全局安装并影响消费仓生成入口或运行行为的目录
+const FRAMEWORK_DIRS = ['scripts/', 'skills/', 'templates/', 'hooks/'];
 
 function git(args) {
   try {
@@ -61,10 +61,10 @@ process.stdin.on('end', () => {
 
     const reason = `⚠️ 文档新鲜度检查（check-doc-currency hook）
 
-本次 commit 动了框架资产（scripts/ skills/ templates/ agents/ 之一 —— 会同步到业务仓），但 CHANGELOG.md 不在本次提交里。
+本次 commit 动了框架资产（scripts/ skills/ templates/ hooks/ 之一，会进入全局安装并可能影响消费仓生成入口或运行行为），但 CHANGELOG.md 不在本次提交里。
 
 提交前确认：
-1. CHANGELOG.md「未发布」段加了对应条目吗？（业务仓靠它决定是否跑同步）
+1. CHANGELOG.md「未发布」段加了对应条目吗？（发布与升级靠它判断影响范围）
 2. RUNTIME.md「当前位置 / 下一步」需要更新吗？
 
 → 补完文档，重新 git add + commit。

@@ -47,9 +47,9 @@
 
 ## 框架改动的文档同步
 
-改动 `scripts/` / `skills/` / `templates/` / `agents/`（会同步到业务仓的内容）时，**同一个 commit** 里要一并：
+改动 `scripts/` / `skills/` / `templates/` / `hooks/`（会进入全局安装，并可能改变生成的消费仓入口或运行行为）时，**同一个 commit** 里要一并：
 
-1. `CHANGELOG.md`「未发布」段加条目 —— 业务仓靠它决定是否跑同步流程
+1. `CHANGELOG.md`「未发布」段加条目 —— 发布和升级时靠它判断影响范围
 2. 视情况更新 `RUNTIME.md`「当前位置 / 下一步」（设计 / 实现进度有推进时）
 3. 设计文档状态变「已落地」→ `git mv` 到 `docs/归档/完成/` 并更新 `docs/INDEX.md`
 

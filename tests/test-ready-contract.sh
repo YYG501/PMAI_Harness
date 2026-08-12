@@ -141,11 +141,21 @@ PY
     _fail "stale ready guidance missing"
     cat /tmp/ready-contract.err.$$ >&2
   else
+    local route_out route_rc
+    route_out=$(python3 "$CONTEXT_PACK" --repo-root "$T" --module "$MODULE" --route-only 2>&1)
+    route_rc=$?
     NARRATIVE=$(python3 "$STATUS_VIEW" "$T" --narrative)
     if [[ "$NARRATIVE" != *"建造依据有变化，需要重新确认后才能继续"* ]] \
-       || [[ "$NARRATIVE" != *"继续 /pmai-design"* ]]; then
-      _fail "status should not present stale ready state as buildable"
+       || [[ "$NARRATIVE" != *"当前阶段：设计已定"* ]] \
+       || [[ "$NARRATIVE" != *"下一阶段：构建中"* ]] \
+       || [[ "$NARRATIVE" != *"当前可执行入口：/pmai-design"* ]] \
+       || [[ "$NARRATIVE" != *"需要退回：设计依据在批准后发生变化"* ]] \
+       || [[ "$NARRATIVE" == *"当前可执行入口：/pmai-build"* ]] \
+       || [[ "$route_rc" != "2" ]] \
+       || ! python3 -c 'import json,sys; d=json.load(sys.stdin); assert d["status"] == "blocked"; assert d["route"] == "pmai-design"; assert "设计依据在批准后发生变化" in d["reason"]' <<<"$route_out"; then
+      _fail "status and context route should both send stale ready work back to design"
       echo "$NARRATIVE" >&2
+      echo "$route_out" >&2
     else
       pass_test
     fi
@@ -359,11 +369,48 @@ PY
   teardown_fixture
 }
 
+test_status_uses_attached_worktree_root_for_ready_currentness() {
+  start_test "ready-contract: status 在 attached worktree 使用该工作环境的 currentness"
+  setup_fixture
+  local worktree="$T/.worktrees/build-access-ready"
+  git -C "$T" worktree add -q -b build-access-ready "$worktree" main
+  mkdir -p "$worktree/docs/modules/access"
+  cp "$MODULE/discussion.md" "$worktree/docs/modules/access/discussion.md"
+  cp "$MODULE/decisions.md" "$worktree/docs/modules/access/decisions.md"
+  cp "$MODULE/spec.md" "$worktree/docs/modules/access/spec.md"
+  cp "$MODULE/.work-meta.json" "$worktree/docs/modules/access/.work-meta.json"
+  python3 - "$worktree/docs/modules/access/.work-meta.json" <<'PY'
+import json, sys
+from pathlib import Path
+path = Path(sys.argv[1])
+meta = json.loads(path.read_text(encoding="utf-8"))
+meta["branch"] = "build-access-ready"
+meta["worktree"] = ".worktrees/build-access-ready"
+path.write_text(json.dumps(meta, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+PY
+  git -C "$worktree" add -- docs/modules/access
+  git -C "$worktree" commit -qm "attach ready work"
+
+  local out
+  out=$(python3 "$STATUS_VIEW" "$T" --narrative 2>&1)
+  if echo "$out" | grep -q "当前阶段：设计已定" \
+     && echo "$out" | grep -q "下一阶段：构建中" \
+     && echo "$out" | grep -q "当前可执行入口：/pmai-build" \
+     && ! echo "$out" | grep -q "需要退回："; then
+    pass_test
+  else
+    _fail "attached ready work should use its own repository root: $out"
+  fi
+  git -C "$T" worktree remove "$worktree" --force >/dev/null 2>&1 || true
+  teardown_fixture
+}
+
 test_ready_to_build_starts_building
 test_ready_currentness_and_legacy_cache_ignore
 test_legacy_ready_keeps_v1_hash_scope
 test_ready_scope_and_dirty_preflight
 test_build_start_rejects_paths_outside_project_contract
 test_build_start_requires_project_definition
+test_status_uses_attached_worktree_root_for_ready_currentness
 
 report_results "ready-contract"

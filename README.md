@@ -299,13 +299,12 @@ PMAI 走纯全局：每台要用的机器各自 `pmai install` 一次（全局�
 |---|---|
 | [`CLAUDE.md`](./CLAUDE.md) | 项目章程（生成器的） |
 | [`RUNTIME.md`](./RUNTIME.md) | 项目运行时状态（当前进度 / 已知坑 / 新窗口续接入口）|
-| [`CHANGELOG.md`](./CHANGELOG.md) | 影响业务仓的改动记录（按 commit 时间倒序；业务仓 sync 前看顶部）|
+| [`CHANGELOG.md`](./CHANGELOG.md) | 影响已安装框架或消费仓生成行为的改动记录（按时间倒序；发布或升级前看顶部）|
 | [`docs/归档/完成/DX-AUDIT-2026-05-08.md`](./docs/归档/完成/DX-AUDIT-2026-05-08.md) | 2026-05-08 DX 审计档案（已收尾，保留作历史）|
 | [`INVARIANTS.md`](./INVARIANTS.md) | 框架当前不变量（初始化、project definition、生命周期、验收、分支与文档边界） |
-| [`TODOS.md`](./TODOS.md) | 待决项 / 延迟决策（v2/v4/UP/DX/Eng/TD-1~4） |
 | [`docs/归档/废弃/框架同步-SOP.md`](./docs/归档/废弃/框架同步-SOP.md) | 生成器 → 业务仓 hotfix 同步流程（**DEPRECATED + 已归档**；pmai install/upgrade 承接）|
 | [`docs/归档/完成/v0/`](./docs/归档/完成/v0/) | v0 原始档案（需求.md / 设计.md / 需求-v0-原始草稿.md；不再活跃，归档保留作历史）|
-| [`docs/归档/完成/`](./docs/归档/完成/) | 历史设计文档（21 份，2026-04~05 阶段决策档案；v3.5 收口后归档） |
+| [`docs/归档/完成/`](./docs/归档/完成/) | 已落地设计、历史反馈与阶段决策档案 |
 | [`CONTRIBUTING.md`](./CONTRIBUTING.md) | 贡献者入口：改代码前读什么、跑什么验证、怎么报 bug |
 
 ### 开发者自检入口

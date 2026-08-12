@@ -28,10 +28,10 @@ gstack 在项目初始化阶段不是依赖。是否需要页面验收由 design
 
 适用：gstack / browser 产出检查证据，PMAI 决定能不能收口。
 
-- acceptance profile 选中 `browser-smoke / visual / behavior` 时，AI 先解析当前 runtime 的主动浏览器适配器：优先 gstack `/browse`，也可使用可实际操作页面的 browser 或 Playwright 能力，不把工具选择交给 PM。
-- 使用 gstack 时可运行 `check-gstack-browser.sh --browser-smoke --json-out <build.audit_dir>/browser-smoke.json`；其它适配器必须产出同一 PMAI evidence contract。新工作轮次不得把证据写回旧的模块级 audit 目录。
-- `browser-smoke` 只有 `status=pass` 且 artifact 含 `active_browser_smoke=true` 才有效。不能用 exception 跳过主动浏览器能力；没有任何适配器时 UI final_check 直接阻塞。
-- `/design-review` 或等价视觉能力产出 visual evidence；`/browse`、browser 或 Playwright 产出 behavior evidence。PM 请求定稿后，每项都由 final-lane `record-evidence` 绑定 source hash 和 implementation commit。
+- 新 Web build 的 acceptance profile 只生成一个 `browser-acceptance` final check。AI 解析当前 runtime 的主动浏览器适配器：优先 gstack `/browse`，也可使用能持续操作真实页面并产出同一 evidence contract 的 browser 或 Playwright 能力，不把工具选择交给 PM。
+- PM 请求定稿后，按冻结 diff、批准目标和最终规格生成 browser manifest；一次持续浏览器 chain 覆盖受影响的独特流程，并在同一 `browser-acceptance` artifact 中证明 smoke / visual / behavior、真实截图和交互后的主动断言。新工作轮次不得把证据写回旧的模块级 audit 目录。
+- `browser-acceptance` 只有 `status=pass`、`active_browser_smoke=true` 且完整覆盖三类检查时才有效，并由 final-lane evidence 绑定 source hash 和 implementation commit。它不能用 exception 跳过；没有任何主动浏览器适配器时 Web final_check 直接阻塞。
+- 旧 v2/v3/v4 合同若已有 `browser-smoke / visual / behavior`，继续按原三项证据恢复：可用 `check-gstack-browser.sh --browser-smoke` 生产旧 smoke artifact，visual / behavior 仍分别绑定原合同；不得把旧合同静默迁移成新批次。
 - 非 Web product build 不生成浏览器检查；工具是否必需由 acceptance profile 决定，不由初始化是否安装 gstack 决定。
 - 统一 final_check 只认 PMAI build contract。`/pmai-build-close` 兼容恢复复用同一合同。
 

@@ -1,12 +1,8 @@
 # CHANGELOG
 
-PM-AI-Workflow 生成器仓的演进记录。本文件**只记影响下游业务仓的改动**——
-`scripts/` / `skills/` / `templates/` / `agents/` / `hooks/` 等同步到业务仓的内容；
-不记 `tests/` / `docs/归档/` / `RUNTIME.md` / `TODOS.md` / `INVARIANTS.md`
-等仅生成器仓内部用的文件。
+PM-AI-Workflow 生成器仓的演进记录。本文件**只记影响已安装框架或消费仓生成入口 / 运行行为的改动**，主要包括 `scripts/` / `skills/` / `templates/` / `hooks/`；框架源码不会复制进消费仓。`tests/` / `docs/归档/` / `RUNTIME.md` / `INVARIANTS.md` 等仅生成器仓内部使用的文件不单独记。
 
-> **入口**：业务仓续 active req 或起新 req 前，先看顶部"已发布版本"段确认是否需要
-> 跑同步流程（`框架同步-SOP.md`）。
+> **入口**：准备发布或判断 `pmai upgrade` 的影响时，先看顶部「未发布」和「已发布版本」。
 >
 > **写作约定**：
 > - 时间倒序；最新在顶部
@@ -17,6 +13,10 @@ PM-AI-Workflow 生成器仓的演进记录。本文件**只记影响下游业务
 ---
 
 ## 未发布
+
+- `chore(maintenance)`: **清理已经退出运行链路的历史资产，并统一当前分发与验收口径。** 历史 `skill-feedback/` 移入生成器归档；删除无引用的旧 review Agent、design legacy references、废弃脚本及其测试入口，消费仓继续只使用全局安装的权威框架资产。新 Web build 的共享说明统一只生成一个不可 exception 的 `browser-acceptance`，由同一持续浏览器会话覆盖 smoke / visual / behavior；旧 v2/v3/v4 合同仍按原三项证据恢复。
+
+- `fix(status)`: **状态视图按同一恢复合同拆开项目级产品方向与模块级生命周期。** `/pmai-status` 现在固定展示“需求讨论 → 设计已定 → 构建中 → 看结果并修改 → 最终检查 → 进入主线 → 更新正式文档 → 完成”全链路，并为每个 active work 输出当前阶段、下一阶段、当前可执行入口和必要的退回原因。Proposal `required / invalid` 继续阻断新工作和无合法恢复记录的工作；已由 PM 确认的 legacy active-design / active-build 分别复用 `context-pack.py` 与 `active-build-context.py` 的 Proposal、checkpoint、currentness 和 route 结果续接，项目级 Proposal 缺口只作独立提醒，不再覆盖模块路由。
 
 - `refactor(status)`: **彻底拆开产品现状、框架健康和 build 续接三种语义。** `/pmai-status` 与 `status-view.py` 只恢复产品进度、当前模块和唯一下一步，不再顺带检查缺失文档、旧布局或项目结构；这些健康诊断统一由 `/pmai-doctor` / `pmai doctor --check` 承担。active build 的只读续接合同迁到独立 `active-build-context.py`，宿主 hook 与 build Skill 改读新入口；它继续保留唯一 active build 发现、currentness、delivery policy、验收 lane 和旧合同恢复校验。CLI `pmai status` 及 `bin/pmai-status` 直接删除，不保留兼容别名。
 

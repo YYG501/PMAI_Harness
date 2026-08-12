@@ -1,8 +1,9 @@
 # Contributing
 
 PMAI is a small framework generator. Keep changes tight, because files under
-`scripts/`, `skills/`, `templates/`, `agents/`, and `hooks/` ship into consumer
-repos.
+`scripts/`, `skills/`, `templates/`, and `hooks/` are part of the
+global installation and can affect generated consumer entry points or runtime
+behavior. Framework source assets are not copied into consumer repositories.
 
 ## Before You Change Code
 

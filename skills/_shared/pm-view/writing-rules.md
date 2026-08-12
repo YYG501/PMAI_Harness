@@ -15,7 +15,7 @@
 1. **加规则**：到本文件对应子段（§3.1-§3.13）的 ❌/✅ 对照表，加一行违规词 + 正确写法。
 2. **加 lint pattern**：如果违规适合机械检查，到 `scripts/check-prd-hierarchy.py` 对应 PATTERN 列表（VISUAL/URL/PUNCT/NEG/JARGON_PATTERNS）。该脚本只绑定 PRD 体例 / 4 列功能表 preset；模块 `spec.md` 的自由写法不因为这个脚本存在而改成 PRD 表格。pattern 用 `(regex, reason_with_hint)` tuple，让 lint 输出能给具体改写建议。
 3. **（可选）加 few-shots 反例对照**：到 `skills/spec-writing/references/few-shots.md` §描述风格修订对照 对应子段，加反例 → 正例 pair（LLM 风格学习用，不机械抓）。
-4. **跑回归测试**：`scripts/tests/run-tests.sh` 确保旧规则不破坏。
+4. **跑回归测试**：`bash tests/test-prd-hierarchy-lint.sh` 确保旧规则不破坏。
 5. **跑回测**：用本次发现违规的真实 PRD 跑新 lint，验证抓得到；抓到的处数写到 commit message。
 
 跨 skill 复用：本文件改动自动覆盖所有 PM 视图 skill（design / spec-writing / publish-to-lark 等），无需逐个改。

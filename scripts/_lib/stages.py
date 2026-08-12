@@ -34,10 +34,36 @@ LIFECYCLE_NAMES: dict[str, str] = {
     "building": "构建中",
     "iterating": "看结果并修改",
     "final_check": "最终检查",
-    "landed": "已进入主线，待更新文档",
+    "landed": "进入主线",
     "documenting": "更新正式文档",
     "complete": "完成",
 }
+
+LIFECYCLE_ORDER: tuple[str, ...] = tuple(LIFECYCLE_NAMES)
+LIFECYCLE_CHAIN: str = " → ".join(LIFECYCLE_NAMES[state] for state in LIFECYCLE_ORDER)
+
+LIFECYCLE_ROUTES: dict[str, str | None] = {
+    "designing": "pmai-design",
+    "ready_to_build": "pmai-build",
+    "building": "pmai-build",
+    "iterating": "pmai-build",
+    "final_check": "pmai-build",
+    "landed": "pmai-build",
+    "documenting": "pmai-build",
+    "complete": None,
+}
+
+
+def lifecycle_next(lifecycle: str) -> str | None:
+    """Return the next canonical lifecycle state, if one exists."""
+
+    try:
+        index = LIFECYCLE_ORDER.index(lifecycle)
+    except ValueError:
+        return None
+    if index + 1 >= len(LIFECYCLE_ORDER):
+        return None
+    return LIFECYCLE_ORDER[index + 1]
 
 # Stage N 的默认文档产物映射，仅供展示/提示代码引用。
 # 当前只有「设计」有法定文档产物（spec.md）；build / 复审 / 沉淀不靠

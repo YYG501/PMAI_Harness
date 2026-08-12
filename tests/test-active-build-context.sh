@@ -97,6 +97,7 @@ PY
   rc=$?
   if [ "$rc" = "2" ] \
      && echo "$out" | grep -q '"status": "invalid"' \
+     && echo "$out" | grep -q '"route": "pmai-design"' \
      && echo "$out" | grep -q "delivery_policy 与当前 target"; then
     pass_test
   else
@@ -122,6 +123,29 @@ assert {item["name"] for item in data["active_builds"]} == {"demo", "second"}
     pass_test
   else
     _fail "multiple builds should be ambiguous: $out"
+  fi
+  active_build_fixture_teardown
+}
+
+test_execution_context_selects_requested_build() {
+  start_test "active build context: --module 精确选择一个 active build"
+  active_build_fixture_setup prototype iterating
+  prepare_active_build_currentness
+  active_build_fixture_add_second
+  local out
+  out=$(cd "$ACTIVE_BUILD_FIXTURE" && python3 "$ACTIVE_BUILD_CONTEXT" \
+    "$ACTIVE_BUILD_FIXTURE" --module "$ACTIVE_BUILD_FIXTURE/docs/modules/demo" 2>&1)
+  if python3 -c '
+import json, sys
+data = json.load(sys.stdin)
+assert data["status"] == "active"
+assert data["route"] == "pmai-build"
+assert len(data["active_builds"]) == 1
+assert data["active_builds"][0]["name"] == "demo"
+' <<<"$out"; then
+    pass_test
+  else
+    _fail "module-selected build context mismatch: $out"
   fi
   active_build_fixture_teardown
 }
@@ -174,6 +198,7 @@ test_execution_context_fails_closed_on_authority_drift() {
   rc=$?
   if [ "$rc" = "2" ] \
      && echo "$out" | grep -q '"status": "invalid"' \
+     && echo "$out" | grep -q '"route": "pmai-design"' \
      && echo "$out" | grep -q "设计依据在批准后发生变化"; then
     pass_test
   else
@@ -186,6 +211,7 @@ test_execution_context_reuses_prototype_contract
 test_execution_context_keeps_product_depth
 test_execution_context_fails_closed_on_policy_drift
 test_execution_context_does_not_guess_multiple_builds
+test_execution_context_selects_requested_build
 test_execution_context_supports_legacy_v2_recovery
 test_execution_context_fails_closed_on_authority_drift
 

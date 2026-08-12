@@ -80,6 +80,12 @@ test_generator_codex_hooks_exist() {
   assert_file_contains "$CODEX_HOOKS" "check-doc-currency.cjs" "generator Codex hooks should wire doc currency guard" || return
   assert_file_contains "$CODEX_HOOKS" "check-sync-asset-jargon.cjs" "generator Codex hooks should wire sync jargon guard" || return
   assert_file_contains "$CODEX_HOOKS" "check-stage-number-jargon.cjs" "generator Codex hooks should wire stage jargon guard" || return
+  assert_file_contains "$REPO_ROOT/hooks/check-doc-currency.cjs" "'hooks/'" "doc currency guard should cover installed hooks" || return
+  assert_file_contains "$REPO_ROOT/hooks/check-sync-asset-jargon.cjs" "'hooks/'" "jargon guard should cover installed hooks" || return
+  if grep -q "'agents/'" "$REPO_ROOT/hooks/check-doc-currency.cjs" "$REPO_ROOT/hooks/check-sync-asset-jargon.cjs"; then
+    _fail "生成器提交护栏不应继续扫描已退出的根 agents/ 资产类别"
+    return
+  fi
   if grep -q "check-branch.sh" "$CODEX_HOOKS"; then
     _fail "生成器仓 Codex hooks 不应套消费仓 check-branch 写保护"
     return

@@ -20,7 +20,6 @@ CORE_SUITES=(
   test-project-definition.sh
   test-consumer-doctor.sh
   test-project-type.sh
-  test-project-sections-root.sh
   test-private-onboarding.sh
   test-generator-codex-entry.sh
   test-init-project-codex-compat.sh

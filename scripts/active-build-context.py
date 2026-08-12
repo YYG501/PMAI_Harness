@@ -30,6 +30,36 @@ from _lib.work_contract import (  # noqa: E402
 ACTIVE_BUILD_LIFECYCLES = {"building", "iterating", "final_check"}
 
 
+def _blocking_route(work_view: dict) -> str:
+    work_dir = Path(work_view.get("work_dir") or ".").resolve()
+    try:
+        work_root = _work_repo_root(work_dir)
+    except ValueError:
+        return "pmai-design"
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(Path(_SCRIPTS_DIR) / "context-pack.py"),
+            "--repo-root",
+            str(work_root),
+            "--module",
+            str(work_dir),
+            "--route-only",
+        ],
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    try:
+        payload = json.loads(result.stdout)
+    except json.JSONDecodeError:
+        return "pmai-design"
+    route = payload.get("route") if isinstance(payload, dict) else None
+    if route == "pmai-proposal":
+        return "pmai-proposal"
+    return "pmai-design"
+
+
 def find_repo_root() -> Path:
     try:
         common = subprocess.check_output(
@@ -295,12 +325,35 @@ def _build_execution_context(work_view: dict) -> dict:
     }
 
 
-def execution_context_payload(state: dict) -> tuple[dict, int]:
+def _matches_selector(work_view: dict, selector: str) -> bool:
+    meta = work_view.get("meta") or {}
+    work_dir = Path(work_view.get("work_dir") or ".").resolve()
+    normalized = selector.strip()
+    if not normalized:
+        return True
+    resolved_selector = str(Path(normalized).expanduser().resolve())
+    candidates = {
+        str(meta.get("id") or ""),
+        str(meta.get("name") or ""),
+        str(work_view.get("work_dir") or ""),
+        str(work_dir),
+        work_dir.name,
+    }
+    return normalized in candidates or resolved_selector in candidates
+
+
+def execution_context_payload(
+    state: dict, *, module_selector: str | None = None
+) -> tuple[dict, int]:
     candidates = []
     for work_view in state.get("active_work", []):
         meta = work_view.get("meta") or {}
         build = meta.get("build")
-        if isinstance(build, dict) and _lifecycle(meta) in ACTIVE_BUILD_LIFECYCLES:
+        if (
+            isinstance(build, dict)
+            and _lifecycle(meta) in ACTIVE_BUILD_LIFECYCLES
+            and (module_selector is None or _matches_selector(work_view, module_selector))
+        ):
             candidates.append(work_view)
 
     base = {"schema_version": 1, "route": "pmai-build"}
@@ -325,10 +378,12 @@ def execution_context_payload(state: dict) -> tuple[dict, int]:
         context = _build_execution_context(candidates[0])
     except ValueError as exc:
         meta = candidates[0].get("meta") or {}
+        reason = str(exc)
         return {
             **base,
+            "route": _blocking_route(candidates[0]),
             "status": "invalid",
-            "reason": str(exc),
+            "reason": reason,
             "active_builds": [
                 {
                     "id": str(meta.get("id") or ""),
@@ -347,6 +402,10 @@ def main() -> None:
         nargs="?",
         default=None,
         help="Repository root (auto-detected if omitted)",
+    )
+    parser.add_argument(
+        "--module",
+        help="按模块目录、模块名或 work id 精确读取一个 active build",
     )
     args = parser.parse_args()
     repo_root = (
@@ -372,7 +431,7 @@ def main() -> None:
         )
         raise SystemExit(2) from exc
 
-    payload, exit_code = execution_context_payload(state)
+    payload, exit_code = execution_context_payload(state, module_selector=args.module)
     print(json.dumps(payload, ensure_ascii=False, indent=2))
     if exit_code:
         raise SystemExit(exit_code)

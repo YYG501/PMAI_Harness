@@ -48,14 +48,14 @@
 
 ## I-ACC：自适应验收
 
-- **I-ACC1**：唯一活跃验收链是 `acceptance-profile.py → build.acceptance.iteration_checks/final_checks → 两层 evidence`；`required_checks` 只作 final checks 的旧 host 兼容别名。
+- **I-ACC1**：唯一活跃验收链是 `acceptance-profile.py → build.acceptance.iteration_checks/final_checks → 两层 evidence`；新 v5 合同不写 `required_checks`，旧 v1-v4 只在统一读取边界将它归一化为 final checks。
 - **I-ACC2**：iteration/final checks 按 project definition、目标入口和风险生成，不存在适用于所有 build 的固定检查组合。
 - **I-ACC3**：iteration evidence 与 final evidence 分开；final evidence 必须绑定定稿请求、当前 approved source hash 与 implementation commit。
-- **I-ACC4**：Web final checks 必须有 `status=pass` 且 `active_browser_smoke=true` 的主动浏览器证据。
-- **I-ACC5**：v2 不允许用 exception 跳过 browser-smoke；行为检查 fail 也不能放行。
+- **I-ACC4**：新 Web build 的 final checks 只生成一个 `browser-acceptance`；其 pass artifact 必须来自一次持续主动浏览器 chain，同时覆盖 smoke / visual / behavior、保留真实截图并包含交互后的断言。
+- **I-ACC5**：`browser-acceptance` 不允许用 exception 跳过；旧 v2/v3/v4 合同继续按已有 `browser-smoke / visual / behavior` 证据恢复，其中 browser-smoke 和行为 fail 也不能例外放行。
 - **I-ACC6**：非 Web product build 不要求 prototype、dev port 或浏览器。
 - **I-ACC7**：contract v1 validator 只承担历史 close 兼容，不得被新流程调用或展示。
-- **I-ACC8**：v4 在 PM `request-finalization` 前拒绝 final evidence 和 `review-ready`；完整 final evidence 通过后才能记录 PM 定稿，`final_check` 不首次跑完整验收或修改业务代码。
+- **I-ACC8**：v4+ 在 PM `request-finalization` 前拒绝 final evidence 和 `review-ready`；完整 final evidence 通过后才能记录 PM 定稿，`final_check` 不首次跑完整验收或修改业务代码。
 - **I-ACC9**：project.yml 声明的定稿 test/typecheck/build 在冻结 commit 的 detached validation worktree 执行，不停止 active dev server，不改写其构建缓存。
 
 ## I-BR / I-CB：分支与写入边界

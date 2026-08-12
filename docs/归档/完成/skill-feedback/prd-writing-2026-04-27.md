@@ -25,7 +25,7 @@
 > | 八 §八 禁文档级元约束 | ✅ | `skills/prd-writing/SKILL.md` §八（2026-05-09 补） |
 > | 九 PRD 质检 prompt 补充 | ✅（超出）| `skills/prd-writing/SKILL.md` 末尾质检 prompt（19 项 vs 反馈建议 12 项）|
 >
-> **使用方式：** 本档作历史档案保留；后续如再有 prd-writing skill 反馈，按 `skills/skill-improve/SKILL.md` 流程新建 `skill-feedback/prd-writing-<新日期>.md` 记录。
+> **使用方式：** 本档只作历史档案保留，不再作为新反馈入口。后续真实使用反馈统一通过 `/pmai-feedback` 形成带原始会话和证据位置的框架交接 Prompt；本目录不继续新增运行中的反馈单。
 
 ---
 

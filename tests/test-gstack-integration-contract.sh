@@ -92,6 +92,22 @@ test_contract_preserves_public_interface_choices() {
   pass_test
 }
 
+test_browser_evidence_contract_uses_one_current_batch() {
+  start_test "gstack contract: 新 Web build 单批验收、旧合同原样恢复"
+
+  assert_file_contains "$CONTRACT" "新 Web build.*只生成一个.*browser-acceptance" \
+    "current Web builds should expose one browser-acceptance check" || return
+  assert_file_contains "$CONTRACT" "一次持续浏览器 chain" \
+    "current browser acceptance should use one persistent chain" || return
+  assert_file_contains "$CONTRACT" "smoke / visual / behavior" \
+    "browser batch should cover all three observation classes" || return
+  assert_file_contains "$CONTRACT" "不能用 exception 跳过" \
+    "browser acceptance should remain a hard gate" || return
+  assert_file_contains "$CONTRACT" "旧 v2/v3/v4.*browser-smoke / visual / behavior" \
+    "legacy contracts should keep their original evidence shape" || return
+  pass_test
+}
+
 test_contract_exists_and_classifies_integration
 test_pdf_and_document_generate_boundaries
 test_side_path_docs_return_protocol
@@ -99,5 +115,6 @@ test_doc_writing_names_make_pdf
 test_key_skills_reference_or_encode_contract
 test_readme_dependency_is_not_unconditional
 test_contract_preserves_public_interface_choices
+test_browser_evidence_contract_uses_one_current_batch
 
 report_results "gstack-integration-contract"

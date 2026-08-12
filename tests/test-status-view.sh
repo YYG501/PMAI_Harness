@@ -59,7 +59,10 @@ test_status_suggests_build_not_task() {
 
   local out
   out=$(cd "$FIXTURE_DIR" && python3 "$STATUS_VIEW" 2>&1)
-  if echo "$out" | grep -q "当前进度：build" \
+  if echo "$out" | grep -q "完整阶段：需求讨论 → 设计已定 → 构建中 → 看结果并修改 → 最终检查 → 进入主线 → 更新正式文档 → 完成" \
+     && echo "$out" | grep -q "当前阶段：构建中" \
+     && echo "$out" | grep -q "下一阶段：看结果并修改" \
+     && echo "$out" | grep -q "当前可执行入口：/pmai-build" \
      && echo "$out" | grep -q "/pmai-build" \
      && ! echo "$out" | grep -q "/pmai-task" \
      && ! echo "$out" | grep -q "Stage："; then
@@ -324,6 +327,9 @@ test_status_skill_blocks_internal_diagnostics() {
   assert_file_contains "$STATUS_SKILL" "禁止输出“PMAI 状态脚本显示”" "status skill should ban script-diagnostic phrasing" || return
   assert_file_contains "$STATUS_SKILL" "有未提交改动就说“有一轮改动还没收口”" "status skill should collapse dirty-state conflict into PM action" || return
   assert_file_contains "$STATUS_SKILL" '统一交给 `/pmai-doctor`' "status skill should route health checks to doctor" || return
+  assert_file_contains "$STATUS_SKILL" "需求讨论 → 设计已定 → 构建中 → 看结果并修改 → 最终检查 → 进入主线 → 更新正式文档 → 完成" "status skill should define the complete lifecycle" || return
+  assert_file_contains "$STATUS_SKILL" "项目级产品方向" "status skill should separate project proposal from module progress" || return
+  assert_file_contains "$STATUS_SKILL" "当前可执行入口" "status skill should expose the executable module route" || return
   pass_test
 }
 
@@ -349,7 +355,8 @@ test_status_reports_stale_active_build_as_product_route() {
   local out
   out=$(cd "$ACTIVE_BUILD_FIXTURE" && python3 "$STATUS_VIEW" --narrative 2>&1)
   if echo "$out" | grep -q "建造依据有变化，需要重新确认后才能继续" \
-     && echo "$out" | grep -q "继续 /pmai-design，重新核对变化" \
+     && echo "$out" | grep -q "当前可执行入口：/pmai-design" \
+     && echo "$out" | grep -q "需要退回：设计依据在批准后发生变化" \
      && ! echo "$out" | grep -q "项目体检"; then
     pass_test
   else

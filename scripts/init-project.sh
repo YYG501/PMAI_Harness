@@ -254,7 +254,7 @@ echo "📋 模板已复制并替换占位符"
 
 # --- e/f/f2/templates/hooks. I-mini 模式：消费仓 0 framework 源资产 ---
 # 旧版方案 A symlink 5 块到 framework（绝对路径硬编码，跨机器 dangling）。
-# I-mini：消费仓内**不放任何** framework 源资产（scripts/skills/agents/hooks）。
+# I-mini：消费仓内**不放任何** framework 源资产（scripts/skills/hooks）。
 # 但 Claude Code / Codex host 配置文件需要留在项目里：.claude/settings.json / .codex/hooks.json。
 # skill 内部所有调用走 $PMAI_HOME/scripts/... 全局绝对路径（skill-preamble.sh 解析 PMAI_HOME）。
 # pre-commit hook 内部自己 fallback PMAI_HOME=$HOME/.pmai。

@@ -47,7 +47,22 @@ echo "SKILL: status"
 
    status-view 会先调用 `list-resumables` 扫描 main 与 attached worktrees。若有普通未完成飞书批次，唯一下一步是 `/pmai-lark-review <对应规格>`；它优先于 Proposal、handoff 和普通 active work。已 checkpoint 或已转只读 handoff 的批次不进入该列表。
 
-   没有普通未完成批次且状态是 `building / iterating / final_check` 时，PM 随后说“启动看看”“还有什么问题”“改一下当前结果”等自然语言，按当前 `/pmai-build` 续接：先读取 `active-build-context.py` 的只读合同，再重新编译 context pack。
+   没有普通未完成批次时，status-view 必须分开报告两条轴：
+
+   - 项目级产品方向：Product Proposal / 等价产品基线是 `required / invalid / accepted / equivalent_baseline` 中哪一种。
+   - 模块级进度：每个 active work 在完整生命周期中的当前位置、下一阶段和当前可执行入口。
+
+   完整模块生命周期固定为：
+
+   ```text
+   需求讨论 → 设计已定 → 构建中 → 看结果并修改 → 最终检查 → 进入主线 → 更新正式文档 → 完成
+   ```
+
+   status-view 不独立判断 legacy recovery、ready currentness 或根据错误文案猜入口。`designing / ready_to_build` 复用 `context-pack.py --route-only` 的结构化 Proposal / recovery / checkpoint / currentness 结果；`building / iterating / final_check` 复用 `active-build-context.py` 的 route 与 currentness 结果。只有合同返回可续接时，才显示原 `/pmai-design` 或 `/pmai-build`；合同要求退回前置阶段时，必须同时显示入口和具体原因。
+
+   Proposal 为 `required / invalid` 时，只阻断新工作和没有合法恢复合同的工作。存在有效 `active-design / active-build` recovery 的存量工作继续按模块 lifecycle 路由；项目级另行提醒产品方向基线仍需补齐，不得覆盖模块入口。
+
+   状态是 `building / iterating / final_check` 且 route 为 `pmai-build` 时，PM 随后说“启动看看”“还有什么问题”“改一下当前结果”等自然语言，按当前 `/pmai-build` 续接：先读取 `active-build-context.py` 的只读合同，再重新编译 context pack。
 
    若没有 active work，再只读恢复方向调整前留下的全部候选：
 
@@ -109,11 +124,17 @@ echo "SKILL: status"
    ```markdown
    当前状态：有 1 个进行中的工作
 
+   项目级产品方向：<Proposal / 等价基线状态>。
+   完整阶段：需求讨论 → 设计已定 → 构建中 → 看结果并修改 → 最终检查 → 进入主线 → 更新正式文档 → 完成
+
    <一句话产品现状>
 
    正在处理的是「<模块名>」。
 
-   状态：<需求讨论 / 设计已定 / 构建中 / 看结果并修改 / 最终检查 / 已进入主线待更新文档>。
+   当前阶段：<生命周期阶段>。
+   下一阶段：<生命周期的下一阶段；已完成则说明无>。
+   当前可执行入口：<合同返回的 /pmai-design / /pmai-build / /pmai-proposal；已完成则说明无>。
+   需要退回：<仅合同要求退回时显示原因>。
    已定方向：<1–3 条；没有就省略，不写“未见”>
 
    建议下一步：
@@ -124,12 +145,18 @@ echo "SKILL: status"
    ```markdown
    当前状态：有 <N> 个进行中的工作
 
+   项目级产品方向：<Proposal / 等价基线状态>。
+   完整阶段：需求讨论 → 设计已定 → 构建中 → 看结果并修改 → 最终检查 → 进入主线 → 更新正式文档 → 完成
+
    <一句话产品现状>
 
    进行中的工作：
 
    1. <模块名>
-      状态：<设计讨论 / 等待实现或正在实现 / 正在复审 / 等待收尾>。
+      当前阶段：<生命周期阶段>。
+      下一阶段：<生命周期的下一阶段>。
+      当前可执行入口：<合同返回的唯一入口>。
+      需要退回：<仅合同要求退回时显示原因>。
       已定方向：<一句；没有就省略>
       下一步：<一句明确动作>
 

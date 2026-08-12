@@ -19,7 +19,7 @@ test_fixed_audit_chain_is_not_exposed() {
   stale=$(grep -R -nE 'build-audits|coverage-reviewer|三道审|docs/DESIGN\.md' \
     "$REPO_ROOT/skills" "$REPO_ROOT/templates" "$REPO_ROOT/agents" \
     "$REPO_ROOT/README.md" "$REPO_ROOT/AGENTS.md" "$REPO_ROOT/PRODUCT.md" \
-    "$REPO_ROOT/RUNTIME.md" "$REPO_ROOT/INVARIANTS.md" "$REPO_ROOT/TODOS.md" 2>/dev/null || true)
+    "$REPO_ROOT/RUNTIME.md" "$REPO_ROOT/INVARIANTS.md" 2>/dev/null || true)
   if [ -n "$stale" ]; then
     _fail "active user-facing asset still exposes retired audit language"
     echo "$stale" >&2
@@ -98,8 +98,9 @@ test_adaptive_browser_and_record_contracts_are_current() {
   start_test "currentness: active browser hard gate and bounded record contract are exposed"
   local record="$REPO_ROOT/skills/record/SKILL.md"
   local record_routing="$REPO_ROOT/skills/_shared/record-routing.md"
-  if ! grep -q 'browser-smoke.*不接受 exception' "$REPO_ROOT/skills/build/SKILL.md" \
-     || ! grep -q '不能用 exception 跳过' "$REPO_ROOT/skills/_shared/gstack-integration.md"; then
+  if ! grep -q 'browser-acceptance.*不可 exception' "$REPO_ROOT/skills/build/SKILL.md" \
+     || ! grep -q '新 Web build.*browser-acceptance' "$REPO_ROOT/skills/_shared/gstack-integration.md" \
+     || ! grep -q '旧 v2/v3/v4.*browser-smoke' "$REPO_ROOT/skills/_shared/gstack-integration.md"; then
     _fail "UI active-browser hard gate is missing from active skills"
     return
   fi

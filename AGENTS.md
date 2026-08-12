@@ -39,7 +39,7 @@ Claude Code / Codex 在本仓工作时，按普通软件项目方式协同：
 
 1. 先确认 `git status --short --branch`，保护用户已有改动。
 2. 读相关真相源：产品取舍读 `PRODUCT.md`，当前进度读 `RUNTIME.md`，框架开发规则读 `CLAUDE.md`。
-3. 改 `skills/` / `scripts/` / `templates/` / `agents/` / `hooks/` 时，同步评估 `CHANGELOG.md` 未发布段。
+3. 改 `skills/` / `scripts/` / `templates/` / `hooks/` 时，同步评估 `CHANGELOG.md` 未发布段；这些资产会进入全局安装，并可能改变生成的消费仓入口或运行行为。
 4. 优先跑 targeted test；改测试编排、共享脚本或跨入口行为时再跑 `bash tests/run-all.sh`。
 
 ### 2. 从本 checkout 初始化消费仓
@@ -73,7 +73,7 @@ PM 在本生成器仓里让 Codex 起新业务项目时，等价执行 `/pmai-in
 
 1. 开始改动前先确认 `git status --short --branch`，不要覆盖用户未提交改动。
 2. 需要了解框架现状时，先读 `CLAUDE.md`、`RUNTIME.md` 和相关 `skills/*/SKILL.md`，再改代码。
-3. 改 `scripts/` / `skills/` / `templates/` / `agents/` / `hooks/` 这类会影响消费仓的资产时，同步评估是否需要更新 `CHANGELOG.md` 未发布段。
+3. 改 `scripts/` / `skills/` / `templates/` / `hooks/` 这类会影响全局安装或消费仓生成入口 / 运行行为的资产时，同步评估是否需要更新 `CHANGELOG.md` 未发布段。
 4. 手工编辑用 `apply_patch`，保持改动聚焦，不做无关重构。
 5. 优先运行 targeted test，再按风险运行 `bash tests/run-all.sh`。
 

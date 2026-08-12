@@ -10,6 +10,7 @@ RECOVERY="$FRAMEWORK_ROOT/scripts/legacy-work-recovery.py"
 CONTEXT_PACK="$FRAMEWORK_ROOT/scripts/context-pack.py"
 BUILD_CONTRACT="$FRAMEWORK_ROOT/scripts/build-contract.py"
 ACTIVE_BUILD_CONTEXT="$FRAMEWORK_ROOT/scripts/active-build-context.py"
+STATUS_VIEW="$FRAMEWORK_ROOT/scripts/status-view.py"
 
 setup_legacy_fixture() {
   T=$(mktemp -d "${TMPDIR:-/tmp}/pmai-legacy-recovery.XXXXXX")
@@ -250,9 +251,21 @@ meta = json.loads(path.read_text(encoding="utf-8"))
 meta["legacy_recovery"]["authority_source_hash"] = "bad"
 path.write_text(json.dumps(meta, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 PY
-  local out rc
+  local out rc context_out context_rc status_out
   out=$(python3 "$BUILD_CONTRACT" validate-currentness "$T/docs/modules/demo" 2>&1); rc=$?
-  if [ "$rc" = "1" ] && echo "$out" | grep -q "64 位小写 SHA-256" && ! echo "$out" | grep -q "Traceback"; then pass_test; else _fail "tampered recovery should fail cleanly rc=$rc out=$out"; fi
+  context_out=$(cd "$T" && python3 "$ACTIVE_BUILD_CONTEXT" "$T" \
+    --module "$T/docs/modules/demo" 2>&1); context_rc=$?
+  status_out=$(cd "$T" && python3 "$STATUS_VIEW" --narrative 2>&1)
+  if [ "$rc" = "1" ] \
+     && echo "$out" | grep -q "64 位小写 SHA-256" \
+     && ! echo "$out" | grep -q "Traceback" \
+     && [ "$context_rc" = "2" ] \
+     && echo "$context_out" | grep -q '"route": "pmai-proposal"' \
+     && echo "$status_out" | grep -q "当前可执行入口：/pmai-proposal"; then
+    pass_test
+  else
+    _fail "tampered recovery should fail cleanly and return to Proposal: rc=$rc out=$out context=$context_out status=$status_out"
+  fi
   teardown
 }
 
@@ -304,6 +317,174 @@ test_legacy_design_rejects_build_state() {
   teardown
 }
 
+set_work_name() {
+  local module_dir="$1" name="$2"
+  python3 - "$module_dir/.work-meta.json" "$name" <<'PY'
+import json, sys
+from pathlib import Path
+path = Path(sys.argv[1])
+meta = json.loads(path.read_text(encoding="utf-8"))
+meta["name"] = sys.argv[2]
+path.write_text(json.dumps(meta, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+PY
+}
+
+test_status_reuses_recovered_build_route_when_proposal_required() {
+  start_test "legacy recovery: Proposal required 时 status 复用 active build route"
+  setup_legacy_fixture
+  set_work_name "$T/docs/modules/demo" "能力匹配卡"
+  git -C "$T" add -- docs/modules/demo/.work-meta.json
+  git -C "$T" commit -qm "name recovered build"
+  python3 "$RECOVERY" accept "$T/docs/modules/demo" \
+    --confirmed-by PM --confirmed-at 2026-08-12T12:00:00+08:00 \
+    --reason "当前规格仍是本轮有效建造依据" >/dev/null || {
+      _fail "recovery command failed"; teardown; return;
+    }
+  local status_out context_out route
+  status_out=$(cd "$T" && python3 "$STATUS_VIEW" --narrative 2>&1)
+  context_out=$(cd "$T" && python3 "$ACTIVE_BUILD_CONTEXT" "$T" --module "$T/docs/modules/demo" 2>&1)
+  route=$(python3 -c 'import json,sys; print(json.load(sys.stdin)["route"])' <<<"$context_out")
+  if echo "$status_out" | grep -q "项目级产品方向：Product Proposal 尚未完成" \
+     && echo "$status_out" | grep -q "项目级提醒：.*新工作或没有合法恢复记录" \
+     && echo "$status_out" | grep -q "正在处理：能力匹配卡" \
+     && echo "$status_out" | grep -q "当前阶段：看结果并修改" \
+     && echo "$status_out" | grep -q "下一阶段：最终检查" \
+     && echo "$status_out" | grep -q "当前可执行入口：/$route" \
+     && [ "$route" = "pmai-build" ]; then
+    pass_test
+  else
+    _fail "recovered build status route mismatch: route=$route status=$status_out context=$context_out"
+  fi
+  teardown
+}
+
+test_status_reuses_recovered_design_route_when_proposal_required() {
+  start_test "legacy recovery: Proposal required 时 status 复用 active design route"
+  setup_legacy_design_fixture
+  set_work_name "$T/docs/modules/demo" "成本与定价"
+  git -C "$T" add -- docs/modules/demo/.work-meta.json
+  git -C "$T" commit -qm "name recovered design"
+  python3 "$RECOVERY" accept-design "$T/docs/modules/demo" \
+    --confirmed-by PM --confirmed-at 2026-08-12T12:00:00+08:00 \
+    --reason "继续该模块，但重新确认设计目标" >/dev/null || {
+      _fail "design recovery command failed"; teardown; return;
+    }
+  local status_out pack_out route
+  status_out=$(cd "$T" && python3 "$STATUS_VIEW" --narrative 2>&1)
+  pack_out=$(python3 "$CONTEXT_PACK" --repo-root "$T" --module "$T/docs/modules/demo" 2>&1)
+  route=$(python3 -c 'import json,sys; print(json.load(sys.stdin)["route"])' <<<"$pack_out")
+  if echo "$status_out" | grep -q "项目级产品方向：Product Proposal 尚未完成" \
+     && echo "$status_out" | grep -q "正在处理：成本与定价" \
+     && echo "$status_out" | grep -q "当前阶段：需求讨论" \
+     && echo "$status_out" | grep -q "下一阶段：设计已定" \
+     && echo "$status_out" | grep -q "当前可执行入口：/$route" \
+     && [ "$route" = "pmai-design" ]; then
+    pass_test
+  else
+    _fail "recovered design status route mismatch: route=$route status=$status_out pack=$pack_out"
+  fi
+  teardown
+}
+
+test_status_blocks_unrecovered_work_when_proposal_required() {
+  start_test "legacy recovery: Proposal required 且无 recovery 时 status 继续阻断"
+  setup_legacy_fixture
+  local status_out context_out rc
+  status_out=$(cd "$T" && python3 "$STATUS_VIEW" --narrative 2>&1)
+  context_out=$(cd "$T" && python3 "$ACTIVE_BUILD_CONTEXT" "$T" --module "$T/docs/modules/demo" 2>&1)
+  rc=$?
+  if [ "$rc" = "2" ] \
+     && echo "$context_out" | grep -q '"route": "pmai-proposal"' \
+     && echo "$status_out" | grep -q "当前可执行入口：/pmai-proposal" \
+     && echo "$status_out" | grep -q "需要退回：.*Product Proposal" \
+     && ! echo "$status_out" | grep -q "当前可执行入口：/pmai-build"; then
+    pass_test
+  else
+    _fail "unrecovered work should remain blocked: rc=$rc status=$status_out context=$context_out"
+  fi
+  teardown
+}
+
+test_status_reuses_recovery_when_proposal_invalid() {
+  start_test "legacy recovery: Proposal invalid 时合法存量工作仍按模块 route 续接"
+  setup_legacy_fixture
+  python3 "$RECOVERY" accept "$T/docs/modules/demo" \
+    --confirmed-by PM --confirmed-at 2026-08-12T12:00:00+08:00 \
+    --reason "当前规格仍是本轮有效建造依据" >/dev/null || {
+      _fail "recovery command failed"; teardown; return;
+    }
+  printf '{}\n' > "$T/.pm-workflow/proposal.json"
+  local status_out context_out
+  status_out=$(cd "$T" && python3 "$STATUS_VIEW" --narrative 2>&1)
+  context_out=$(cd "$T" && python3 "$ACTIVE_BUILD_CONTEXT" "$T" \
+    --module "$T/docs/modules/demo" 2>&1)
+  if echo "$status_out" | grep -q "项目级产品方向：Product Proposal 已失效" \
+     && echo "$status_out" | grep -q "项目级提醒：.*没有合法恢复记录" \
+     && echo "$status_out" | grep -q "当前可执行入口：/pmai-build" \
+     && echo "$context_out" | grep -q '"route": "pmai-build"' \
+     && echo "$context_out" | grep -q '"status": "active"'; then
+    pass_test
+  else
+    _fail "invalid Proposal should not override valid recovery: status=$status_out context=$context_out"
+  fi
+  teardown
+}
+
+test_status_renders_expected_multi_recovery_routes() {
+  start_test "legacy recovery: 双模块展示完整阶段与各自真实入口"
+  setup_legacy_fixture
+  set_work_name "$T/docs/modules/demo" "能力匹配卡"
+  mkdir -p "$T/docs/modules/pricing"
+  printf '# Discussion\n\n继续讨论。\n' > "$T/docs/modules/pricing/discussion.md"
+  printf '# Decisions\n' > "$T/docs/modules/pricing/decisions.md"
+  local head
+  head=$(git -C "$T" rev-parse HEAD)
+  python3 - "$T/docs/modules/pricing/.work-meta.json" "$head" <<'PY'
+import json, sys
+from pathlib import Path
+path = Path(sys.argv[1])
+meta = {
+    "id": "work-pricing-design",
+    "name": "成本与定价",
+    "status": "active",
+    "lifecycle_state": "ready_to_build",
+    "approved_source_hash": "a" * 64,
+    "source_hash_version": 1,
+    "design_revision": 1,
+    "design_checkpoint_commit": sys.argv[2],
+    "approved_target": {"paths": ["prototype/index.html"]},
+}
+path.write_text(json.dumps(meta, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+PY
+  git -C "$T" add -- docs/modules/demo/.work-meta.json docs/modules/pricing
+  git -C "$T" commit -qm "add two legacy works"
+  python3 "$RECOVERY" accept "$T/docs/modules/demo" \
+    --confirmed-by PM --confirmed-at 2026-08-12T12:00:00+08:00 \
+    --reason "当前规格仍是本轮有效建造依据" >/dev/null || {
+      _fail "build recovery command failed"; teardown; return;
+    }
+  git -C "$T" add -- docs/modules/demo/.work-meta.json
+  git -C "$T" commit -qm "recover capability build"
+  python3 "$RECOVERY" accept-design "$T/docs/modules/pricing" \
+    --confirmed-by PM --confirmed-at 2026-08-12T12:05:00+08:00 \
+    --reason "继续该模块，但重新确认设计目标" >/dev/null || {
+      _fail "design recovery command failed"; teardown; return;
+    }
+  local status_out
+  status_out=$(cd "$T" && python3 "$STATUS_VIEW" --narrative 2>&1)
+  if echo "$status_out" | grep -q "当前状态：有 2 个进行中的工作" \
+     && echo "$status_out" | grep -q "完整阶段：需求讨论 → 设计已定 → 构建中 → 看结果并修改 → 最终检查 → 进入主线 → 更新正式文档 → 完成" \
+     && echo "$status_out" | grep -A6 "1. 能力匹配卡" | grep -q "当前可执行入口：/pmai-build" \
+     && echo "$status_out" | grep -A6 "1. 能力匹配卡" | grep -q "下一阶段：最终检查" \
+     && echo "$status_out" | grep -A6 "2. 成本与定价" | grep -q "当前可执行入口：/pmai-design" \
+     && echo "$status_out" | grep -A6 "2. 成本与定价" | grep -q "下一阶段：设计已定"; then
+    pass_test
+  else
+    _fail "multi recovery status mismatch: $status_out"
+  fi
+  teardown
+}
+
 test_legacy_build_requires_explicit_recovery
 test_legacy_build_recovers_and_binds_authority
 test_legacy_build_records_mismatched_original_chain
@@ -313,4 +494,9 @@ test_legacy_recovery_rejects_tampered_record_cleanly
 test_legacy_design_returns_to_designing
 test_legacy_design_allows_normal_design_edits
 test_legacy_design_rejects_build_state
+test_status_reuses_recovered_build_route_when_proposal_required
+test_status_reuses_recovered_design_route_when_proposal_required
+test_status_blocks_unrecovered_work_when_proposal_required
+test_status_reuses_recovery_when_proposal_invalid
+test_status_renders_expected_multi_recovery_routes
 report_results "legacy-recovery"

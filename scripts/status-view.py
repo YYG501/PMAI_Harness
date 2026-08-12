@@ -26,9 +26,14 @@ if _SCRIPTS_DIR not in sys.path:
 
 from _lib.state import get_current_stage_banner, get_overall_state, get_timeline_state  # noqa: E402
 from _lib.proposal import proposal_state  # noqa: E402
-from _lib.ready_contract import ready_currentness  # noqa: E402
 from _lib.repo_identity import RepoKind, classify_repo  # noqa: E402
-from _lib.stages import LIFECYCLE_NAMES, STAGE_NAMES, MAX_STAGE  # noqa: E402  ( F13 单一真相源)
+from _lib.stages import (  # noqa: E402
+    LIFECYCLE_CHAIN,
+    LIFECYCLE_NAMES,
+    LIFECYCLE_ROUTES,
+    STAGE_NAMES,
+    lifecycle_next,
+)
 from _lib.work_contract import (  # noqa: E402
     WorkContractError,
     normalize_work_state,
@@ -36,6 +41,12 @@ from _lib.work_contract import (  # noqa: E402
 
 
 ACTIVE_BUILD_LIFECYCLES = {"building", "iterating", "final_check"}
+LEGACY_DISPLAY_LIFECYCLES = {
+    1: "designing",
+    2: "building",
+    3: "iterating",
+    4: "documenting",
+}
 
 
 def _lifecycle(meta: dict) -> str:
@@ -63,10 +74,20 @@ def _docs_status(meta: dict) -> str:
 
 
 def _progress_name(meta: dict) -> str:
+    lifecycle = _display_lifecycle(meta)
+    return LIFECYCLE_NAMES.get(lifecycle, "未知")
+
+
+def _display_lifecycle(meta: dict) -> str:
     lifecycle = _lifecycle(meta)
     if lifecycle in LIFECYCLE_NAMES:
-        return LIFECYCLE_NAMES[lifecycle]
-    return STAGE_NAMES.get(_display_stage(meta), "未知")
+        return lifecycle
+    return LEGACY_DISPLAY_LIFECYCLES.get(_display_stage(meta), "")
+
+
+def _next_progress_name(meta: dict) -> str:
+    next_lifecycle = lifecycle_next(_display_lifecycle(meta))
+    return LIFECYCLE_NAMES.get(next_lifecycle or "", "无，本轮已完成")
 
 
 def find_repo_root() -> Path:
@@ -318,6 +339,55 @@ def _stage_status_text(stage: int, lifecycle: str = "", currentness: dict | None
     return "状态不明确。"
 
 
+def _route_command(route: str | None) -> str | None:
+    return f"/{route}" if route else None
+
+
+def _proposal_notice(proposal: dict) -> str | None:
+    state = proposal.get("state")
+    if state == "required":
+        return "项目级产品方向基线仍需补齐；新工作或没有合法恢复记录的工作仍需先走 /pmai-proposal。"
+    if state == "invalid":
+        return "项目级 Product Proposal 已失效；新工作或没有合法恢复记录的工作仍需先走 /pmai-proposal 重新确认。"
+    return None
+
+
+def _proposal_axis_text(proposal: dict) -> str:
+    state = proposal.get("state")
+    if state == "required":
+        return "Product Proposal 尚未完成。"
+    if state == "invalid":
+        return "Product Proposal 已失效，需要重新确认。"
+    if state == "accepted":
+        return "Product Proposal 已确认。"
+    if state == "equivalent_baseline":
+        return "已有完整等价产品基线。"
+    return "产品方向基线状态不明确。"
+
+
+def _render_lifecycle_chain() -> None:
+    print(f"完整阶段：{LIFECYCLE_CHAIN}")
+
+
+def _render_work_progress(work: dict, proposal: dict) -> None:
+    meta = work["meta"] or {}
+    route = work.get("route")
+    route_status = work.get("route_status")
+    command = _route_command(route)
+    print(f"   当前阶段：{_progress_name(meta)}")
+    print(f"   下一阶段：{_next_progress_name(meta)}")
+    if route_status == "ready" and command:
+        print(f"   当前可执行入口：{command}")
+    elif route_status == "complete":
+        print("   当前可执行入口：无，本轮已完成")
+    else:
+        print(f"   当前可执行入口：{command or '/pmai-proposal'}")
+    print(f"   下一步：{suggest_next_action(work, proposal)}")
+    rollback_reason = work.get("rollback_reason")
+    if rollback_reason:
+        print(f"   需要退回：{rollback_reason}")
+
+
 def _work_priority(work_view: dict) -> tuple[int, str]:
     meta = work_view["meta"] or {}
     lifecycle = _lifecycle(meta)
@@ -413,24 +483,32 @@ def render_narrative(state: dict, repo_root: Path) -> None:
                 print("建议下一步：发 /pmai-design 起一个模块工作。")
         return
 
+    print(f"项目级产品方向：{_proposal_axis_text(proposal)}")
+    print()
+    _render_lifecycle_chain()
+    notice = _proposal_notice(proposal)
+    if notice:
+        print()
+        print(f"项目级提醒：{notice}")
+
     # 单个工作场景：直接念
     if len(active) == 1:
         work = active[0]
         meta = work["meta"] or {}
         stage = _display_stage(meta)
         lifecycle = _lifecycle(meta)
-        stage_name = _progress_name(meta)
         # 不写 commit hash / 时间细节；只点 stage 状态
         prod = _product_oneliner(repo_root)
         prod_line = f"你的产品：{prod}\n" if prod else ""
         dirty_suffix = "，且主线工作区有未提交改动" if dirty_lines else ""
-        print(
-            f"当前状态：有 1 个进行中的工作{dirty_suffix}\n\n"
-            f"{prod_line}正在处理：{_work_display_name(work)}。\n"
-            f"状态：{_stage_status_text(int(stage or 0), lifecycle, work.get('ready_currentness'))}\n"
-            f"当前步骤：{stage_name}。\n"
-            f"下一步：{suggest_next_action(work, proposal)}"
-        )
+        print()
+        print(f"当前状态：有 1 个进行中的工作{dirty_suffix}")
+        print()
+        if prod_line:
+            print(prod_line, end="")
+        print(f"正在处理：{_work_display_name(work)}。")
+        print(f"状态：{_stage_status_text(int(stage or 0), lifecycle, work.get('ready_currentness'))}")
+        _render_work_progress(work, proposal)
         if dirty_lines:
             print("\n需要注意：主线工作区有未提交改动，先确认这些改动是否属于当前工作。")
         return
@@ -438,6 +516,7 @@ def render_narrative(state: dict, repo_root: Path) -> None:
     # 多个工作场景：产品轴 lead + 列各工作概况
     prod = _product_oneliner(repo_root)
     dirty_suffix = "，且主线工作区有未提交改动" if dirty_lines else ""
+    print()
     print(f"当前状态：有 {len(active)} 个进行中的工作{dirty_suffix}")
     if prod:
         print()
@@ -448,36 +527,34 @@ def render_narrative(state: dict, repo_root: Path) -> None:
         meta = work["meta"] or {}
         stage = _display_stage(meta)
         lifecycle = _lifecycle(meta)
-        stage_name = _progress_name(meta)
         print()
         print(f"{idx}. {_work_display_name(work)}")
         print(
             f"   状态：{_stage_status_text(int(stage or 0), lifecycle, work.get('ready_currentness'))}"
         )
-        print(f"   当前步骤：{stage_name}。")
-        print(f"   下一步：{suggest_next_action(work, proposal)}")
+        _render_work_progress(work, proposal)
     if dirty_lines:
         print()
         print("需要注意：主线工作区有未提交改动，先处理这部分，再继续其它 build。")
 
 
 def suggest_next_action(work_view: dict, proposal: dict | None = None) -> str:
-    """Suggest what PM should do next. work_view 是 state['active_work'][i].
-    四步：1 设计 / 2 build / 3 复审 / 4 沉淀（MAX_STAGE=4）。"""
+    """Suggest the action from the route already resolved by execution contracts."""
     meta = work_view["meta"]
     stage = _display_stage(meta)
     lifecycle = _lifecycle(meta)
+    route = work_view.get("route")
+    route_status = work_view.get("route_status")
+    reason = str(work_view.get("rollback_reason") or "")
 
-    if proposal and proposal.get("state") in {"required", "invalid"}:
-        return "暂停当前工作，先用 /pmai-proposal 重新确认产品方向"
-
-    if lifecycle in {"ready_to_build", "building", "iterating", "final_check"}:
-        currentness = work_view.get("ready_currentness")
-        if currentness and currentness.get("state") != "current":
-            reason = str(currentness.get("reason") or "")
-            if "/pmai-proposal" in reason or "Product Proposal" in reason:
-                return "暂停当前构建，先用 /pmai-proposal 重新确认产品方向"
-            return "继续 /pmai-design，重新核对变化并固定本轮建造范围"
+    if route_status == "blocked":
+        if route == "pmai-proposal":
+            return "先用 /pmai-proposal 补齐或重新确认产品方向，再继续该模块"
+        if route == "pmai-design":
+            return "回到 /pmai-design 重新确认该模块的建造依据"
+        return reason or "当前工作无法安全续接，需要先重新确认"
+    if route_status == "complete":
+        return "本轮已完成，可以开始下一个模块"
 
     lifecycle_actions = {
         "designing": "继续 /pmai-design，把产品问题讨论清楚",
@@ -493,6 +570,9 @@ def suggest_next_action(work_view: dict, proposal: dict | None = None) -> str:
         return "实现已经在主线；从上次失败处继续正式文档更新，不重复合并"
     if lifecycle in lifecycle_actions:
         return lifecycle_actions[lifecycle]
+
+    if route:
+        return f"继续 /{route}"
 
     # 设计（≤1）：定 / 细化模块规格
     if stage <= 1:
@@ -513,44 +593,123 @@ def suggest_next_action(work_view: dict, proposal: dict | None = None) -> str:
     return "运行 /pmai-status 查看详情"
 
 
-def _active_build_currentness(work_dir: Path) -> dict:
-    script = Path(_SCRIPTS_DIR) / "build-contract.py"
+def _run_json_contract(command: list[str]) -> tuple[dict | None, str | None]:
     result = subprocess.run(
-        [sys.executable, str(script), "validate-currentness", str(work_dir)],
+        command,
         text=True,
         capture_output=True,
         check=False,
     )
-    if result.returncode == 0:
-        try:
-            payload = json.loads(result.stdout)
-        except json.JSONDecodeError:
-            payload = {}
+    try:
+        payload = json.loads(result.stdout) if result.stdout.strip() else None
+    except json.JSONDecodeError:
+        payload = None
+    if isinstance(payload, dict):
+        return payload, None
+    reason = result.stderr.strip() or result.stdout.strip() or "无法读取当前工作路由。"
+    return None, reason.removeprefix("❌ ")
+
+
+def _work_repo_root(work_dir: Path, fallback: Path) -> Path:
+    result = subprocess.run(
+        ["git", "-C", str(work_dir), "rev-parse", "--show-toplevel"],
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    return (
+        Path(result.stdout.strip()).resolve()
+        if result.returncode == 0 and result.stdout.strip()
+        else fallback
+    )
+
+
+def _resolve_context_route(repo_root: Path, work_dir: Path) -> dict:
+    script = Path(_SCRIPTS_DIR) / "context-pack.py"
+    work_repo_root = _work_repo_root(work_dir, repo_root)
+    payload, error = _run_json_contract(
+        [
+            sys.executable,
+            str(script),
+            "--repo-root",
+            str(work_repo_root),
+            "--module",
+            str(work_dir),
+            "--route-only",
+        ]
+    )
+    if payload and payload.get("status") == "ready":
         return {
-            "state": "current",
-            **({"legacy_recovery": payload["legacy_recovery"]} if isinstance(payload, dict) and payload.get("legacy_recovery") else {}),
+            "route": str(payload.get("route") or "pmai-design"),
+            "route_status": "ready",
+            "legacy_recovery": payload.get("legacy_recovery"),
         }
-    reason = result.stderr.strip() or result.stdout.strip() or "无法校验当前建造依据。"
-    if reason.startswith("❌ "):
-        reason = reason[2:]
-    return {"state": "stale", "reason": reason}
+    reason = str(
+        (payload or {}).get("reason")
+        or error
+        or "当前设计上下文无法安全恢复。"
+    )
+    route = str((payload or {}).get("route") or "pmai-design")
+    return {"route": route, "route_status": "blocked", "rollback_reason": reason}
 
 
-def annotate_ready_currentness(state: dict, repo_root: Path) -> None:
-    """Attach shared authority currentness without changing persisted state."""
+def _resolve_build_route(repo_root: Path, work_dir: Path) -> dict:
+    script = Path(_SCRIPTS_DIR) / "active-build-context.py"
+    payload, error = _run_json_contract(
+        [
+            sys.executable,
+            str(script),
+            str(repo_root),
+            "--module",
+            str(work_dir),
+        ]
+    )
+    if payload and payload.get("status") == "active":
+        return {
+            "route": str(payload.get("route") or "pmai-build"),
+            "route_status": "ready",
+            "legacy_recovery": (payload.get("active_builds") or [{}])[0].get(
+                "legacy_recovery"
+            ),
+        }
+    reason = str((payload or {}).get("reason") or error or "当前 build 无法安全恢复。")
+    route = str((payload or {}).get("route") or "pmai-design")
+    return {"route": route, "route_status": "blocked", "rollback_reason": reason}
+
+
+def annotate_work_routes(state: dict, repo_root: Path) -> None:
+    """Attach routes resolved by the same read-only contracts as execution entries."""
     for work_view in state.get("active_work", []):
         meta = work_view.get("meta") or {}
         lifecycle = _lifecycle(meta)
-        if lifecycle == "ready_to_build":
-            work_view["ready_currentness"] = ready_currentness(
+        if lifecycle in {"designing", "ready_to_build"}:
+            result = _resolve_context_route(
                 repo_root,
                 Path(work_view["work_dir"]),
-                meta,
             )
         elif lifecycle in ACTIVE_BUILD_LIFECYCLES:
-            work_view["ready_currentness"] = _active_build_currentness(
-                Path(work_view["work_dir"])
+            result = _resolve_build_route(repo_root, Path(work_view["work_dir"]))
+        elif lifecycle in {"landed", "documenting"}:
+            result = {
+                "route": LIFECYCLE_ROUTES[lifecycle],
+                "route_status": "ready",
+            }
+        elif lifecycle == "complete":
+            result = {
+                "route": LIFECYCLE_ROUTES[lifecycle],
+                "route_status": "complete",
+            }
+        else:
+            result = _resolve_context_route(
+                repo_root,
+                Path(work_view["work_dir"]),
             )
+        work_view.update(result)
+        work_view["ready_currentness"] = (
+            {"state": "current"}
+            if result["route_status"] in {"ready", "complete"}
+            else {"state": "stale", "reason": result.get("rollback_reason")}
+        )
 
 
 def render_quickfix_section(repo_root: Path) -> None:
@@ -587,10 +746,15 @@ def _render_single_work(work_view: dict) -> None:
     meta = work_view["meta"]
     work_id = meta.get("id", "?")
     work_name = meta.get("name", "?")
-    stage = _display_stage(meta)
     stage_name = _progress_name(meta)
     print(f"当前工作：{work_id}（{work_name}）")
-    print(f"当前进度：{stage_name}")
+    print(f"完整阶段：{LIFECYCLE_CHAIN}")
+    print(f"当前阶段：{stage_name}")
+    print(f"下一阶段：{_next_progress_name(meta)}")
+    command = _route_command(work_view.get("route"))
+    print(f"当前可执行入口：{command or '无，本轮已完成'}")
+    if work_view.get("rollback_reason"):
+        print(f"需要退回：{work_view['rollback_reason']}")
     print()
 
     print(f"下一步：{suggest_next_action(work_view)}")
@@ -627,15 +791,27 @@ def render_status(state: dict, repo_root: Path) -> None:
         render_quickfix_section(repo_root)
         return
 
+    proposal = proposal_state(repo_root)
+    print(f"项目级产品方向：{_proposal_axis_text(proposal)}")
+    notice = _proposal_notice(proposal)
+    if notice:
+        print(f"项目级提醒：{notice}")
+    print()
+
     if len(active) == 1:
         work_view = active[0]
         meta = work_view["meta"]
         work_id = meta.get("id", "?")
         work_name = meta.get("name", "?")
-        stage = _display_stage(meta)
         stage_name = _progress_name(meta)
         print(f"当前工作：{work_id}（{work_name}）")
-        print(f"当前进度：{stage_name}")
+        print(f"完整阶段：{LIFECYCLE_CHAIN}")
+        print(f"当前阶段：{stage_name}")
+        print(f"下一阶段：{_next_progress_name(meta)}")
+        command = _route_command(work_view.get("route"))
+        print(f"当前可执行入口：{command or '无，本轮已完成'}")
+        if work_view.get("rollback_reason"):
+            print(f"需要退回：{work_view['rollback_reason']}")
         print()
 
         render_quickfix_section(repo_root)
@@ -798,7 +974,7 @@ def main() -> None:
         render_banner_only(state, repo_root, args.skill)
         return
 
-    annotate_ready_currentness(state, repo_root)
+    annotate_work_routes(state, repo_root)
 
     if args.narrative:
         render_narrative(state, repo_root)

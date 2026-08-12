@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 // check-sync-asset-jargon — PreToolUse(Bash) hook
 //
-// 触发：git commit，且本次新增（"+" 开头的 diff 行）落在同步资产里
-//       （scripts/ skills/ templates/ agents/），并引入了下列任一 pattern：
+// 触发：git commit，且本次新增（"+" 开头的 diff 行）落在全局安装资产里
+//       （scripts/ skills/ templates/ hooks/），并引入了下列任一 pattern：
 //
 //   - 生成器内部设计任务编号：D13 / D-iii vN / D-i vN / D-iv MN / DN-N 等
 //   - 管线小批次编号：delta-N / vp-N / polish-N / RN-CN/HN/MN
@@ -12,14 +12,14 @@
 // 行为：deny 拦下 commit，告诉模型「同步资产里禁出现生成器内部编号」+ 列具体行。
 //       逃生舱：commit message 含 [skip-jargon-check] → 放行。
 //
-// 为什么挡：消费仓 PM 看到这些编号完全不懂；归档路径在消费仓不存在变死链。
-//   INVARIANTS I-* 编号是 anchor（消费仓也分发 INVARIANTS.md），不在范围内。
+// 为什么挡：消费仓 PM 看到这些编号完全不懂；生成器归档路径对消费仓是死链。
+//   INVARIANTS I-* 编号是已安装框架内的稳定 anchor，不在范围内。
 //
 // 失败开放：异常 / 拿不到 diff → 放行（hook bug 不该挡住 commit）。
 
 const { execSync } = require('child_process');
 
-const SYNC_DIRS = ['scripts/', 'skills/', 'templates/', 'agents/'];
+const SYNC_DIRS = ['scripts/', 'skills/', 'templates/', 'hooks/'];
 
 // 同步资产里禁出现的 pattern；每条 { re, name }
 // 注意：只扫新增的「+」行（PR diff 视角），避免老内容被反复拦
@@ -105,7 +105,7 @@ process.stdin.on('end', () => {
 
     const reason = `⚠️ 同步资产编号检查（check-sync-asset-jargon hook）
 
-本次 commit 在同步资产（scripts/ skills/ templates/ agents/）里引入了生成器内部编号 / 归档路径死链 / commit hash 短引用 —— 这些到消费仓后 PM 看不懂、路径不存在、git log 对不上。
+本次 commit 在全局安装资产（scripts/ skills/ templates/ hooks/）里引入了生成器内部编号 / 归档路径死链 / commit hash 短引用 —— 这些经 Skill 或运行提示暴露给消费仓后，PM 看不懂、路径不存在、git log 也对不上。
 
 命中（前 10 条）：
 ${sample}${more}
@@ -115,10 +115,10 @@ ${sample}${more}
   - docs/归档/完成/ → 改成"设计文档（生成器仓归档）"或彻底删
   - commit <短 hash> 同类 bug → 改成"同类 bug 防回归"
 
-保留：INVARIANTS I-AD1 / I-CT7 等稳定 anchor（消费仓也分发 INVARIANTS.md）+ 同 SKILL 内部 §章节引用。
+保留：INVARIANTS I-AD1 / I-CT7 等已安装框架内的稳定 anchor + 同 SKILL 内部 §章节引用。
 
 → 修完重新 git add + commit。
-→ 若确认这次确实是内部测试 / 设计草稿 / 不进消费仓的实验，commit message 加 [skip-jargon-check] 跳过。
+→ 若确认这次确实是内部测试 / 设计草稿 / 不进入全局安装影响面的实验，commit message 加 [skip-jargon-check] 跳过。
 
 (hook 来源: 项目级 .claude/settings.json / .codex/hooks.json；禁用方式: 删除对应 PreToolUse 条目)`;
 

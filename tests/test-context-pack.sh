@@ -699,6 +699,26 @@ PY
   teardown_fixture
 }
 
+test_context_pack_exposes_design_route() {
+  start_test "context-pack: 输出与 design 执行入口一致的 route"
+  setup_fixture
+  local out
+  out=$(python3 "$CONTEXT_PACK" --repo-root "$T" --module access 2>&1) || {
+    _fail "context pack should compile: $out"; teardown_fixture; return
+  }
+  if python3 -c '
+import json, sys
+data = json.load(sys.stdin)
+assert data["lifecycle_state"] == "designing"
+assert data["route"] == "pmai-design"
+' <<<"$out"; then
+    pass_test
+  else
+    _fail "context pack route mismatch: $out"
+  fi
+  teardown_fixture
+}
+
 test_context_pack_blocks_new_project_without_proposal() {
   start_test "context-pack: newly initialized project cannot bypass required Proposal"
   setup_fixture
@@ -710,6 +730,27 @@ test_context_pack_blocks_new_project_without_proposal() {
     pass_test
   else
     _fail "required Proposal should block design context compilation: rc=$rc out=$out"
+  fi
+  teardown_fixture
+}
+
+test_context_pack_route_only_reports_blocking_route() {
+  start_test "context-pack: route-only 对 Proposal 阻断返回结构化 route"
+  setup_fixture
+  printf '\n<!-- PMAI_PROPOSAL_REQUIRED -->\n' >> "$T/PRODUCT.md"
+  local out rc
+  out=$(python3 "$CONTEXT_PACK" --repo-root "$T" --module access --route-only 2>&1)
+  rc=$?
+  if [ "$rc" = "2" ] && python3 -c '
+import json, sys
+data = json.load(sys.stdin)
+assert data["status"] == "blocked"
+assert data["route"] == "pmai-proposal"
+assert "/pmai-proposal" in data["reason"]
+' <<<"$out"; then
+    pass_test
+  else
+    _fail "route-only blocking contract mismatch: rc=$rc out=$out"
   fi
   teardown_fixture
 }
@@ -726,5 +767,7 @@ test_context_pack_uses_shared_decision_status_semantics
 test_context_pack_lifecycle_state_does_not_drift_approved_source
 test_context_pack_includes_registered_input_evidence
 test_context_pack_compiles_verified_product_proposal
+test_context_pack_exposes_design_route
 test_context_pack_blocks_new_project_without_proposal
+test_context_pack_route_only_reports_blocking_route
 report_results "context-pack"
