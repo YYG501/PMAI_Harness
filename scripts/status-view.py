@@ -605,7 +605,14 @@ def _active_build_currentness(work_dir: Path) -> dict:
         check=False,
     )
     if result.returncode == 0:
-        return {"state": "current"}
+        try:
+            payload = json.loads(result.stdout)
+        except json.JSONDecodeError:
+            payload = {}
+        return {
+            "state": "current",
+            **({"legacy_recovery": payload["legacy_recovery"]} if isinstance(payload, dict) and payload.get("legacy_recovery") else {}),
+        }
     reason = result.stderr.strip() or result.stdout.strip() or "无法校验当前建造依据。"
     if reason.startswith("❌ "):
         reason = reason[2:]
@@ -819,6 +826,7 @@ def _build_execution_context(work_view: dict) -> dict:
         "delivery_policy": policy,
         "delivery_policy_source": policy_source,
         "accepted_deltas": accepted_deltas,
+        "legacy_recovery": currentness.get("legacy_recovery") if isinstance(currentness, dict) else None,
         "acceptance_lane": {
             "name": lane_name,
             "checks": lane_checks,

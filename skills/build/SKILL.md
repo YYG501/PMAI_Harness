@@ -55,6 +55,8 @@ PM 的主体验是：开工前只确认一次工作环境和构建工具 → 看
 
 续接时先读取 `status-view.py --execution-context`，再按 §1 重新编译并消费 context pack。该输出会重新校验当前 Product Proposal / 等价产品基线、`PRODUCT.md`、模块规格、决定、build contract 与 `project.yml`，只读不写状态。任一权威来源在批准后变化、Proposal 无效、合同无效或 policy 漂移时立即停止续接；产品方向缺口回 `/pmai-proposal`，其余建造依据变化回 `/pmai-design`，不得继续修改或记录 implementation commit，也不得绕过当前 `target + delivery_policy + acceptance lane` 转成通用 QA。
 
+仅当 v1-v4 active build 早于 Proposal 合同、且 PM 明确确认当前规格与产品依据仍是该轮有效起点时，才可运行 `legacy-work-recovery.py accept` 建立一次性恢复 checkpoint。该命令保留旧 delta/hash 审计记录，以当前 authority 内容 hash 重建后续链，不升级合同版本、不生成 Proposal、不修改模块文档；恢复后的任一绑定内容再次变化仍立即停止。新工作、v5 build 和没有 PM 明确确认的旧工作不得使用此入口。
+
 ### 上游重规划留下的候选
 
 design 若交来 `replan-work.py` 返回的精确 `candidate_manifest`，先只读查看旧实现差异。跨会话或变量丢失时，先从 main 读取全部候选，再按当前模块和 design 交接的 route 精确匹配；禁止按 mtime 或“最近一次”猜测：

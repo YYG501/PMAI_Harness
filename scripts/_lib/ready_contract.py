@@ -145,6 +145,7 @@ def validate_ready_pack(
         "source_hash_version": expected_hash_version,
         "design_revision": int(meta.get("design_revision") or 1),
         "target_paths": target_paths,
+        "input_hashes": dict(pack.get("input_hashes") or {}),
     }
 
 

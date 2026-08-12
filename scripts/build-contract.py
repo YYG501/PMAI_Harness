@@ -71,6 +71,7 @@ from _lib.ready_contract import (
     ready_currentness,
     validate_ready_pack,
 )
+from _lib.legacy_recovery import validate_legacy_recovery
 from _lib.review_evidence import validate_review_approval
 
 # Executor vocabulary, including the external Builder profile "kimi-code", is
@@ -168,6 +169,19 @@ def repo_root_for(module_dir: Path) -> Path:
     if resolved.parent.name == "modules" and resolved.parent.parent.name == "docs":
         return resolved.parent.parent.parent
     return resolved.parent
+
+
+def git_head(repo_root: Path) -> str:
+    result = subprocess.run(
+        ["git", "-C", str(repo_root), "rev-parse", "HEAD"],
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        check=False,
+    )
+    if result.returncode != 0:
+        raise SystemExit(result.stderr.strip() or "无法读取当前 Git HEAD。")
+    return result.stdout.strip()
 
 
 def current_source_hash(build: dict, delta: dict | None = None) -> str:
@@ -997,6 +1011,11 @@ def validate_build_currentness(
 ) -> dict:
     """Verify that an active build still matches its approved authority sources."""
 
+    try:
+        recovery = validate_legacy_recovery(meta)
+    except ValueError as exc:
+        raise SystemExit(str(exc)) from exc
+    build_recovery = recovery if recovery and recovery.get("kind") == "active-build" else None
     expected_hash, expected_authority_hash, accepted_deltas = replay_accepted_delta_hashes(
         meta, build
     )
@@ -1019,12 +1038,49 @@ def validate_build_currentness(
             expected_current_source_hash=expected_authority_hash,
         )
     except ReadyContractError as exc:
+        if build_recovery is not None and "设计依据在批准后发生变化" in str(exc):
+            raise SystemExit("legacy recovery 确认后的 authority 文件发生变化；请重新确认。") from exc
         raise SystemExit(str(exc)) from exc
 
     definition = validate_build_target_contract(repo_root, meta, build, result["target_paths"])
     result["approved_source_hash"] = expected_hash
     result["authority_source_hash"] = expected_authority_hash
     result["accepted_deltas"] = len(accepted_deltas)
+    if build_recovery is not None:
+        ancestry = subprocess.run(
+            [
+                "git",
+                "-C",
+                str(repo_root),
+                "merge-base",
+                "--is-ancestor",
+                build_recovery["checkpoint_commit"],
+                git_head(repo_root),
+            ],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.PIPE,
+            check=False,
+        )
+        if ancestry.returncode == 1:
+            raise SystemExit("legacy recovery checkpoint 不在当前主线历史中；请重新确认。")
+        if ancestry.returncode != 0:
+            raise SystemExit(ancestry.stderr.decode("utf-8", errors="replace").strip() or "无法验证 legacy recovery checkpoint。")
+        if str(meta.get("approved_source_hash") or "") != build_recovery[
+            "authority_source_hash"
+        ]:
+            raise SystemExit("legacy recovery 起点与 build hash 链不一致；请重新确认。")
+        # Once a scoped delta is accepted, normal delta replay and ready-pack
+        # currentness own the new authority.  Before that first delta, keep the
+        # complete recovery snapshot bound byte-for-byte.
+        if not accepted_deltas:
+            if result["authority_source_hash"] != build_recovery["authority_source_hash"]:
+                raise SystemExit("legacy recovery authority hash 与当前建造依据不一致；请重新确认。")
+            expected_files = build_recovery["authority_source_file_hashes"]
+            actual_files = result.get("input_hashes") or {}
+            if any(actual_files.get(path) != digest for path, digest in expected_files.items()):
+                raise SystemExit("legacy recovery 确认后的 authority 文件发生变化；请重新确认。")
+    if recovery is not None:
+        result["legacy_recovery"] = recovery
     result["project_definition"] = definition
     return result
 

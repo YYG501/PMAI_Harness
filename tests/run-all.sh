@@ -55,6 +55,7 @@ CORE_SUITES=(
   test-repo-kind.sh
   test-checks-diff.sh
   test-context-pack.sh
+  test-legacy-recovery.sh
   test-personal-memory.sh
   test-acceptance-profile.sh
   test-browser-acceptance.sh

@@ -94,13 +94,13 @@
 ## 当前验证
 
 - 本轮关键定向基线：lark-entry-routing `6/6`、lark-review `73/73`、publish-to-lark-e2e `20/20`、lark-adapter `40/40`、project-design-system `7/7`、consumer-doctor `23/23`、private-onboarding `4/4`、init-project-codex-compat `24/24`、check-branch `21/21`、repo-kind `6/6`、exec-adapters `16/16`、skill-link-ownership `8/8`、skill-eval 合同 `6/6`、Kimi host `23/23`、doctor-skills `44/44`、Loop Contract `4/4`；发布门在 runner / judge 均缺失时返回 2 并明确列出两项缺失能力，schema `24` 个案例与 static eval `7/7` 通过。
-- 当前完整 `tests/run-all.sh` 基线为 `969 passed / 0 failed`。普通开发回归中的 skill eval 为 `7 passed / 0 failed / 17 session skipped`，只形成静态与确定性合同基线，不构成稳定版本证据；`v*` tag 或手动稳定发布仍必须通过配置真实 runner 与独立 judge 的 `tests/run-release-gate.sh`，任何 session skip 都会阻断。稳定核心发布门默认跳过可选 Lark 假环境套件，但日常全量回归仍保留这些套件。
+- 当前完整 `tests/run-all.sh` 基线为 `977 passed / 0 failed`。普通开发回归中的 skill eval 为 `7 passed / 0 failed / 17 session skipped`，只形成静态与确定性合同基线，不构成稳定版本证据；`v*` tag 或手动稳定发布仍必须通过配置真实 runner 与独立 judge 的 `tests/run-release-gate.sh`，任何 session skip 都会阻断。稳定核心发布门默认跳过可选 Lark 假环境套件，但日常全量回归仍保留这些套件。
+- 早于 Proposal 合同的既有 active work 已有显式恢复合同：v1-v4 active build 绑定 PM 确认、Git checkpoint、authority 内容 hash 和旧 delta 审计后从当前确认点续接；旧 active design 保留原轮身份，历史 `ready_to_build` 退回 `designing` 重新确认目标。专项回归 `8/8`，新工作和 v5 build 仍不能借此绕过 Proposal。
 - 开发态入口同步 helper 已在真实消费仓 `ExampleAgentProject` 只读 dogfood：返回 `stale / legacy_migration`，渲染计划可以确定识别旧 PMAI Startup，并保留“非小改动前读取产品现状”等项目补充及后续项目规则。消费仓在本轮分析期间又出现新的活跃模块状态，因此不再把其整体 error 数作为本次入口同步回归基线；运行前后 Git 状态一致，未修改消费仓或用户级安装。
 
 ## 下一步
 
-- 本轮已完成框架仓提交、`main` 分发和全局安装态升级；没有修改三个已知消费仓，也没有清理真实 Kimi/OpenCode 遗留目录。
-- 五个复杂度收口批次已完成：仓库身份、宿主等级、内部状态、Build 维护边界和主链 Loop Contract 都已有唯一来源。后续不再按收口批次新增架构层；下一步是单独确认进入哪个真实消费仓 dogfood。逐仓迁移、兼容删除、Session Eval、多 Agent 或动态工作流仍是独立决定。
+- 五个复杂度收口批次已完成：仓库身份、宿主等级、内部状态、Build 维护边界和主链 Loop Contract 都已有唯一来源。后续不再按收口批次新增架构层；当前已确认迁移 `ExampleAgentProject` 与 `ExampleConsumerApp`，保留各自既有 WIP，并只清理遗留 Kimi/OpenCode 主控资产。Session Eval、多 Agent 或动态工作流仍是独立决定。
 - 在真实消费仓 dogfood `init → proposal → design → spec-writing → build`，并继续观察 active build 快速迭代与定稿验收。
 - 在真实消费仓 dogfood `/pmai-feedback`，核对完整会话复盘、问题归属和交接 Prompt 是否能直接驱动框架仓分析；再按完整主控支持范围评估 Claude Code 的精确当前会话定位，不为仅 Builder 的 Kimi Code、OpenCode 建设主控 session locator，也不提供猜测式降级。
 - 在真实 Docx 规格上 dogfood `/pmai-lark-review`：覆盖 active worktree 目标绑定、正文直改、复杂格式 / 图片 / 引用、Proposal / design handoff、sealed scoped adjustment 与 authority checkpoint；记录 collect / reconcile / 精细写回 / 评论收口的阶段耗时，确认机器路径进入 10–15 分钟。

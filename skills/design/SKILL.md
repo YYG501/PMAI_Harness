@@ -126,6 +126,8 @@ python3 "$PMAI_HOME/scripts/replan-work.py" retire \
 
 ### 0. 先过产品方向门
 
+若当前模块是早于 Proposal 合同的既有 active design，只有 PM 明确确认继续该轮工作后，才可先运行 `legacy-work-recovery.py accept-design` 建立恢复记录。旧 `ready_to_build` 必须退回 `designing` 重新确认目标；该入口不生成 Proposal、不修改三件套正文，也不允许创建新模块。之后继续执行本 skill，直到本轮关闭；新的产品级方向变化仍必须回 Proposal。
+
 在创建新模块、开启新工作轮次或继续写模块文件前，先运行：
 
 ```bash
