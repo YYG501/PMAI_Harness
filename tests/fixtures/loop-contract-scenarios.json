@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "scenarios": [
+    {"id": "SCN-P01", "phase": "proposal", "trigger": "当前完整 Proposal 校验通过且产品判断未变化", "action": "complete", "destination": "proposal", "checkpoint": "read_only_no_new_version"},
+    {"id": "SCN-P02", "phase": "proposal", "trigger": "PM 修改待确认完整草案但产品层级不变", "action": "retry_current", "destination": "proposal", "checkpoint": "revise_full_draft"},
+    {"id": "SCN-P03", "phase": "proposal", "trigger": "产品用户价值边界或 MVP 存在真实分叉", "action": "await_pm_decision", "destination": "proposal", "checkpoint": "no_write_before_answer"},
+    {"id": "SCN-P04", "phase": "proposal", "trigger": "原子提交与提交后 validate 均通过", "action": "advance", "destination": "design", "checkpoint": "validated_product_baseline"},
+    {"id": "SCN-D01", "phase": "design", "trigger": "权限或关键任务路径仍有真实岔路", "action": "await_pm_decision", "destination": "design", "checkpoint": "no_ready_before_answer"},
+    {"id": "SCN-D02", "phase": "design", "trigger": "产品定位目标用户价值边界或 MVP 前提变化", "action": "route_proposal", "destination": "proposal", "checkpoint": "revalidate_design_after_proposal"},
+    {"id": "SCN-D03", "phase": "design", "trigger": "规格编译发现模块覆盖遗漏", "action": "retry_current", "destination": "design", "checkpoint": "return_to_open_module_question"},
+    {"id": "SCN-D04", "phase": "design", "trigger": "决定规格项目定义和 ready currentness 全部通过", "action": "advance", "destination": "build", "checkpoint": "validated_ready_to_build"},
+    {"id": "SCN-B01", "phase": "build", "trigger": "实现与当前规格不一致或存在普通 bug", "action": "retry_current", "destination": "build", "checkpoint": "keep_current_build"},
+    {"id": "SCN-B02", "phase": "build", "trigger": "模块对象权限规则关键路径或验收目标变化", "action": "route_design", "destination": "design", "checkpoint": "freeze_candidate_before_replan"},
+    {"id": "SCN-B03", "phase": "build", "trigger": "产品用户价值边界或 MVP 前提变化", "action": "route_proposal", "destination": "proposal", "checkpoint": "freeze_candidate_before_replan"},
+    {"id": "SCN-B04", "phase": "build", "trigger": "PM 接受批准范围内且不改模型的小调整", "action": "retry_current", "destination": "build", "checkpoint": "record_scoped_adjustment"},
+    {"id": "SCN-B05", "phase": "build", "trigger": "PM 明确定稿且当前候选可冻结", "action": "advance", "destination": "final_check", "checkpoint": "finalize_current_candidate"},
+    {"id": "SCN-B06", "phase": "build", "trigger": "final checks 只发现实现缺口", "action": "retry_current", "destination": "build", "checkpoint": "preserve_finalization_intent"},
+    {"id": "SCN-B07", "phase": "build", "trigger": "final checks 期间 PM 提出新的产品或体验反馈", "action": "retry_current", "destination": "build", "checkpoint": "clear_finalization_and_reclassify"},
+    {"id": "SCN-R01", "phase": "recovery", "trigger": "final_check 中断且已有部分新鲜证据", "action": "resume_checkpoint", "destination": "final_check", "checkpoint": "run_missing_final_steps_only"},
+    {"id": "SCN-R02", "phase": "recovery", "trigger": "实现已 landed 但文档 pending 或 failed", "action": "resume_checkpoint", "destination": "documenting", "checkpoint": "docs_only_no_remerge"},
+    {"id": "SCN-R03", "phase": "recovery", "trigger": "多个 active build 都可能匹配当前请求", "action": "await_pm_decision", "destination": "recovery", "checkpoint": "no_mtime_guess"}
+  ]
+}

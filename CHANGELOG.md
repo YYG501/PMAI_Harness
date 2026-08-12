@@ -18,6 +18,8 @@ PM-AI-Workflow 生成器仓的演进记录。本文件**只记影响下游业务
 
 ## 未发布
 
+- `refactor(loop)`: **复杂度收口批次五统一 Proposal、Design、Build 的 Loop Contract。** 新增 `_shared/loop-contract.md`，固定每轮“恢复 → 确认目标 → 确认边界 → 执行最小完整动作 → 验证 → 路由”的顺序，并统一 `retry_current / await_pm_decision / route_proposal / route_design / advance / resume_checkpoint / complete` 七种动作。三条主链分别映射自己的输入、允许动作、验证、重试、升级和停止条件；`build-close` 只保留 checkpoint 恢复职责。新增 18 个固定消费仓合同场景和静态 eval，锁定“走对、停对、恢复对”；不新增 loop 状态、动态工作流、多 Agent 或 Session Eval，也不迁移真实消费仓或用户级安装态。
+
 - `refactor(core)`: **复杂度收口批次四降低 Build 维护热点，并隔离官方可选飞书能力。** `build-contract.py` 的合同 schema、状态迁移、验收证据和评审适配分别下沉到 `_lib/build_schema.py`、`build_transition.py`、`build_evidence.py` 和 `review_evidence.py`；核心 Build CLI 不再直接依赖 Lark，稳定核心发布门不要求飞书 CLI 或账号，日常全量回归仍保留 Lark fake suites。新增 `finalize-candidate.py` 统一绑定当前 Git HEAD、记录实现提交并启动可恢复 finalization runner，Build Skill 不再手工编排稳定命令。`atomic_file.py` 明确 ADR-004 支持与不支持的威胁边界，保留既有路径安全、合作 writer 和失败恢复保护。新增维护边界与候选收尾回归；不迁移真实消费仓或用户级安装态。
 
 - `refactor(state)`: **复杂度收口批次三建立唯一工作合同归一化边界。** 新增 canonical work contract reader，统一解释旧 `stage`、顶层/build 双 lifecycle、`required_checks` 与 v1-v4 build contract，并对 lifecycle 冲突、checks 别名不一致、非法版本和非法类型失败关闭；status、preamble、Doctor、ready、replan、context pack、Lark active-build 路由、finalize、landing、cleanup 与主分支写入门禁改读同一边界。新 build contract 升为 v5：design/ready 只写顶层 lifecycle，build 开始后只写 `build.lifecycle_state`，验收只写 `final_checks`；acceptance profile v3 同步停止输出别名。旧 v1-v4 恢复保持原 shape，不迁移真实消费仓，也不删除兼容路径。

@@ -19,6 +19,7 @@ python3 "$PMAI_HOME/scripts/status-view.py" --banner-only --skill BUILD-CLOSE ||
 
 - `skills/_shared/context-reconstruction.md`
 - `skills/_shared/decision-policy.md`
+- `skills/_shared/loop-contract.md`
 - `skills/_shared/gstack-integration.md`
 - `skills/_shared/consistency-scan.md`
 - `skills/_shared/PM-VIEW-RULES.md` 及其引用的 PM 视图规则
@@ -39,6 +40,10 @@ python3 "$PMAI_HOME/scripts/status-view.py" --banner-only --skill BUILD-CLOSE ||
 - 合同 v1 的旧兼容收尾。
 
 它不新建第二套 close 状态，不重新询问 worktree、执行器、文档类型或是否保存决定。
+
+## Recovery Loop Mapping
+
+本入口只实现共享 Loop Contract 的 `resume_checkpoint`，不拥有新的阶段判断：从 canonical lifecycle 和证据定位唯一 checkpoint，只补该 checkpoint 缺失的机械或语义项。`final_check` 不重放已经通过且仍新鲜的 final evidence；`landed + docs_pending` 不重复 merge；多个候选、合同漂移或 checkpoint 无法验证时停止，不按 cwd、分支名或文件时间猜测。任何新产品反馈都交回 Build 重新分类，任何上游模型变化都由 Build 按共享合同路由到 Design 或 Proposal。
 
 ## 1. 先判恢复位置
 
@@ -171,3 +176,4 @@ PM 窗口只报阶段结果，不直播 context pack、合同 JSON、git 命令�
 - 正式文档在实现落 main 后更新，单独提交。
 - 不向 PM 再问 worktree、执行器、手动 close 或逐条“要不要保存”菜单。
 - gstack/browser/Playwright 只是证据生产者，PMAI contract 才是落地主线判断入口；新 build 的 browser-acceptance 与旧合同的 active browser-smoke 都不能用 exception 跳过。
+- 本 Skill 只执行 `skills/_shared/loop-contract.md` 的 `resume_checkpoint`；不创建 close 专属 loop state，也不重放已完成 checkpoint。

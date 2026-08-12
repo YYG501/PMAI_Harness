@@ -31,6 +31,7 @@ CORE_SUITES=(
   test-shared-files-exist.sh
   test-project-design-system-contract.sh
   test-shared-currentness.sh
+  test-loop-contract.sh
   test-term-detector.sh
   test-v2-currentness.sh
   test-design-shared-boundary.sh

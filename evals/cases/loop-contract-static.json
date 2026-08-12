@@ -1,0 +1,29 @@
+{
+  "schema_version": 1,
+  "id": "loop-contract-static",
+  "title": "Proposal、Design、Build 共用 Loop Contract",
+  "layer": "static",
+  "skills": ["proposal", "design", "build", "build-close"],
+  "input": {
+    "prompt": "检查主链是否共用恢复、执行、验证和路由协议，且没有新增第二套状态机。",
+    "context": []
+  },
+  "expected": {
+    "behaviors": ["三条主链共用唯一 Loop Contract", "产品方向变化优先返回 Proposal", "模块模型变化返回 Design", "恢复只补 checkpoint 缺失项"],
+    "observations": [],
+    "lifecycle_order": []
+  },
+  "forbidden": {
+    "behaviors": ["新增 loop state", "把模块模型变化降级为 accepted delta", "landing 后重复 merge"],
+    "observations": []
+  },
+  "assertions": [
+    {"type": "path_exists", "path": "skills/_shared/loop-contract.md"},
+    {"type": "file_contains", "path": "skills/_shared/loop-contract.md", "value": "lifecycle` 继续是唯一持久状态"},
+    {"type": "file_contains", "path": "skills/_shared/loop-contract.md", "value": "产品方向高于模块设计"},
+    {"type": "file_contains", "path": "skills/_shared/loop-contract.md", "value": "模块模型高于实现调整"},
+    {"type": "file_contains", "path": "skills/_shared/loop-contract.md", "value": "landing 已完成就不重复 merge"},
+    {"type": "file_contains", "path": "skills/build/SKILL.md", "value": "route_proposal / route_design / retry_current(scoped adjustment) / retry_current(implementation correction)"},
+    {"type": "file_contains", "path": "skills/build-close/SKILL.md", "value": "只执行 `skills/_shared/loop-contract.md` 的 `resume_checkpoint`"}
+  ]
+}

@@ -21,6 +21,7 @@ python3 "$PMAI_HOME/scripts/status-view.py" --banner-only --skill BUILD || true
 
 - `skills/_shared/context-reconstruction.md`
 - `skills/_shared/decision-policy.md`
+- `skills/_shared/loop-contract.md`
 - `skills/_shared/gstack-integration.md`
 - `skills/_shared/project-design-system.md`
 - `skills/_shared/PM-VIEW-RULES.md` 及其引用的 PM 视图规则
@@ -39,6 +40,12 @@ ready_to_build → building → iterating → final_check
 ```
 
 它们只切换 build 对象和验收适配器，不分叉成两套工作流。
+
+## Build Loop Mapping
+
+本阶段按 `loop-contract.md` 的 Build 映射执行：current `ready_to_build`、项目建造定义、build contract、目标与实现深度、当前 implementation commit、证据和 PM 新反馈是输入；批准路径内实现、当前车道检查与有证据的小范围调整是允许动作；currentness、路径、实现结果和绑定 commit/source hash 的证据是验证。
+
+实现偏差与普通缺陷执行 `retry_current`；模块对象、规则、权限、关键路径、验收目标或 prototype real edge 变化执行 `route_design`；产品用户、价值、边界、MVP 或关键成立前提变化执行 `route_proposal`；新 build 的环境/工具、不可逆动作或多个 active build 无法唯一定位时执行 `await_pm_decision`。PM 明确定稿且冻结候选的 final evidence 全部通过后，才执行 `advance → final_check/landing`。恢复时严格使用 `resume_checkpoint`：`final_check` 只补缺失的验收/landing，`landed + docs_pending` 只补文档，已经完成的动作不重放。
 
 PM 的主体验是：开工前只确认一次工作环境和构建工具 → 看构建结果 → 提修改 → 再看 → 明确定稿。项目类型和验收方案不出现在开工确认卡；worktree、合同、hash、证据和文档影响地图等内部实现也不向 PM 展示。
 
@@ -336,6 +343,7 @@ git -C "$BUILD_DIR" commit -m "build(<模块>): record iteration"
    - 改变模块对象、关系、动作、状态、权限、真相源、业务规则、信息结构、任务路径、关键交互，或要求原型接入真实数据库、鉴权、外部写入、生产基础设施 → 停止 build，转 `/pmai-design`；不得写 accepted delta；
    - 不改变产品基线和模块模型，只在已批准模块、任务与目标路径内形成 PM 明确接受的小范围行为或体验调整 → 可以记录 `kind=scoped-adjustment` 的 accepted delta；这里的“小范围”明确表示不改变对象、关系、业务规则、权限模型或关键任务路径；
    - 只是让实现重新符合当前 spec / active decisions，或修复 bug、样式、文案和局部交互偏差 → 直接修正实现，不写 delta；
+   这四类依次映射为共享 Loop Contract 的 `route_proposal / route_design / retry_current(scoped adjustment) / retry_current(implementation correction)`；同一反馈同时命中多层时按共享路由优先级处理，不能选择更低层的方便路径；
 3. 原型真实边缘能力由 design 明确批准，或由 design 把项目建造对象改为 product；不得在迭代中静默升级；
 4. “还有什么问题”的检查只对账当前 spec、active decisions、accepted deltas 和批准路径，并应用当前实现深度合同；原型默认模拟的底层能力不算缺口，规格已经明确的行为也不得重新包装成 PM 开放问题；
 5. 文案、布局、按钮和局部交互由当前会话直接修改；只有跨模块大型重构才重新确认并调用外部 builder；
@@ -388,6 +396,8 @@ PM 明确说“定稿 / 可以提交 / 可以合并 / 这版可以了”之前�
 Web 新 build 用一个 `browser-acceptance` 批次覆盖受影响流程的 smoke、visual 和 behavior；一次 gstack `chain`、一个持续会话，不按三个检查或多个复用页面串行重跑。旧合同的 `browser-smoke / visual / behavior` 只用于兼容恢复。
 
 runner 返回仍缺语义检查时，由当前主控完成规格覆盖、prototype boundary、迁移或安全判断并记录 evidence，再重跑同一入口。实现缺陷仍回 `iterating` 修复；PM 新反馈执行 `resume-iteration`。final-validation 或 browser 真实失败会在 `timing.json` 标记正常路径退出，不得继续报 10 分钟成功。
+
+这里区分两种 `retry_current`：final checks 自己发现的实现缺口保留原定稿意图，修复后只重跑失效证据；PM 在 final checks 期间提出新的产品或体验反馈时先清除定稿请求，按共享合同重新分类。二者不得混成“都继续收尾”。
 
 ### prototype 完整检查
 

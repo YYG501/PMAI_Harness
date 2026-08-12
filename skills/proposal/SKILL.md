@@ -17,6 +17,8 @@ python3 "$PMAI_HOME/scripts/status-view.py" --banner-only --skill PROPOSAL || tr
 
 如果输出 `PMAI_PROJECT_INITIALIZED: 0`，停止并引导 PM 先发 `/pmai-init-project`。
 
+执行任何只读复核、方向修订或恢复前，先完整读取 `skills/_shared/loop-contract.md`。本 Skill 只补 Proposal 的业务输入、允许动作和完成条件；每次进入、收到新证据、PM 反馈、验证失败或跨会话恢复时，都按共享合同重新执行“恢复 → 目标 → 边界 → 最小完整动作 → 验证 → 路由”，不新增 Proposal 专属循环状态。
+
 ## 定位
 
 Proposal 位于模块 design 之前，回答“这个产品为什么成立、值得先投什么”。全新项目默认先完成 Proposal；成熟项目只有接入流程已核验完整资料、`PRODUCT.md` 显式记录真实仓内依据和 PM 确认日期、机器状态为 `equivalent_baseline` 时才可直接 design。无论由初始化、方向纠正还是 PM 主动触发，一旦进入本 skill 就必须完成完整 Proposal。
@@ -24,6 +26,12 @@ Proposal 位于模块 design 之前，回答“这个产品为什么成立、值
 一旦进入本 skill，就必须完成一份可独立评审的完整 Product Proposal。不得用 brief、方向摘要、问题清单、竞品报告或普通介绍稿代替；篇幅可以随产品复杂度缩放，但固定判断必须有明确结论、证据等级或验证方式。
 
 Proposal 不替代 design：它定义产品级用户、问题、产品回答、价值、边界和 MVP 证明目标；对象关系、动作、状态、权限、页面、异常路径和建造规格仍由 `/pmai-design` 收敛。
+
+## Proposal Loop Mapping
+
+本阶段按 `loop-contract.md` 的 Proposal 映射执行：当前 Proposal/等价基线、产品证据、版本关系和冻结候选是输入；完整产品判断、版本草案与原子产品基线同步是允许动作；固定判断完整性、机器合同、Git currentness 和精确提交范围是验证。草案内部缺口执行 `retry_current`，真实产品分叉执行 `await_pm_decision`，提交并复验通过后执行 `advance → Design`。完整性复核通过时执行 `complete`：只读返回，不创建新版本或空提交。
+
+产品级判断是本阶段最高业务层级；若循环中只剩模块对象、规则、页面或交互问题，不在 Proposal 内继续展开，完成产品基线后交给 Design。若权威版本漂移、active build 未收口、写入边界重叠或 PM 尚未授权定稿，则在正式写入或提交前停止，并保留可验证的现有版本/候选作为恢复点。
 
 ## 触发与分流
 
@@ -292,3 +300,4 @@ Product Proposal 已定稿：docs/proposals/<slug>-vN.md
 - `PRODUCT.md`、Proposal 版本关系和 `.pm-workflow/proposal.json` 同一提交原子同步；本 skill 不改 `PRODUCT-STATE.md`、模块三件套、`project.yml`、代码或 mockup。
 - doc-writing 可以读取 Proposal 生成派生材料；design、record、doc-writing、spec-writing 都不得修改 Proposal。
 - PM-facing 输出使用业务语言，不展示 hash、工作区、状态机或内部编排术语。
+- 每次进入、反馈和恢复都遵守 `skills/_shared/loop-contract.md`；本 Skill 不复制一套 Proposal 专属 loop state。

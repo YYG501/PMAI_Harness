@@ -25,6 +25,7 @@ python3 "$PMAI_HOME/scripts/status-view.py" --banner-only --skill DESIGN || true
 - `skills/_shared/project-design-system.md`
 - `skills/_shared/personal-memory.md`
 - `skills/_shared/decision-policy.md`
+- `skills/_shared/loop-contract.md`
 - `skills/_shared/consistency-scan.md`
 - `skills/_shared/pm-view/attachments-upload.md`
 - `skills/_shared/PM-VIEW-RULES.md` 及其引用的 PM 视图规则
@@ -42,6 +43,12 @@ python3 "$PMAI_HOME/scripts/status-view.py" --banner-only --skill DESIGN || true
 `/pmai-design` 是需求讨论前台，也是内部能力调度器。PM 只需要和 design 把问题讨论清楚；`meta`、`mockup`、`spec-writing` 由 design 根据实际缺口调用，完成后返回同一条主线。
 
 Product Proposal 位于 design 上游。全新项目默认先完成 Proposal；成熟项目已有等价产品基线时可直接进入 design。design 继承产品级用户、问题、价值、边界和 MVP 证明目标，但仍独立收敛模块对象、动作、状态、权限、页面和异常路径。
+
+## Design Loop Mapping
+
+本阶段按 `loop-contract.md` 的 Design 映射执行：当前产品基线、模块三件套、context pack、相关现状/实现、冻结候选和 PM 新反馈是输入；模块模型收敛、内部 meta/mockup/spec-writing 和唯一 build 入口固定是允许动作；决定闭合、规格覆盖、项目建造定义、ready currentness 与批准路径是验证。
+
+模块未知项、规格遗漏或 mockup 暴露的新模块问题执行 `retry_current`；真实模块分叉、项目建造定义重定义或主模块不唯一时执行 `await_pm_decision`；产品定位、目标用户、核心价值、职责边界、MVP 或关键成立前提变化时执行 `route_proposal`。Proposal 生效后必须重新恢复上下文并逐条复核旧结论。只有建造依据和批准范围均通过验证，才执行 `advance → Build`。
 
 本 skill 负责：
 
@@ -422,3 +429,4 @@ git -C "$REPO_ROOT" commit -m "design(<模块>): mark ready to build"
 - 全程不修改 `docs/proposals/**` 或 `.pm-workflow/proposal.json`；产品方向变化由 `/pmai-proposal` 生成完整新版本。
 - 给 PM 的话使用业务语言，不出现 context pack、hash、revision、worktree、执行器或证据 JSON。
 - PM 高信号纠偏闭合后自动归位：项目事实回项目真相源，跨项目经验进用户级个人记忆，已有规则未执行只留执行失败证据。
+- 每次进入、反馈、权威依据变化和恢复都遵守 `skills/_shared/loop-contract.md`；路由后重新恢复上下文，不沿用路由前判断。
