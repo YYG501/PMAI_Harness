@@ -1,1 +1,0 @@
-../../agents/coverage-reviewer.md

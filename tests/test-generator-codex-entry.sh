@@ -82,6 +82,11 @@ test_generator_codex_hooks_exist() {
   assert_file_contains "$CODEX_HOOKS" "check-stage-number-jargon.cjs" "generator Codex hooks should wire stage jargon guard" || return
   assert_file_contains "$REPO_ROOT/hooks/check-doc-currency.cjs" "'hooks/'" "doc currency guard should cover installed hooks" || return
   assert_file_contains "$REPO_ROOT/hooks/check-sync-asset-jargon.cjs" "'hooks/'" "jargon guard should cover installed hooks" || return
+  if [ -e "$REPO_ROOT/agents" ] || [ -L "$REPO_ROOT/agents" ] \
+     || [ -e "$REPO_ROOT/.claude/agents" ] || [ -L "$REPO_ROOT/.claude/agents" ]; then
+    _fail "生成器仓不应保留已退出的根 agents/ 或 .claude/agents 资产"
+    return
+  fi
   if grep -q "'agents/'" "$REPO_ROOT/hooks/check-doc-currency.cjs" "$REPO_ROOT/hooks/check-sync-asset-jargon.cjs"; then
     _fail "生成器提交护栏不应继续扫描已退出的根 agents/ 资产类别"
     return
