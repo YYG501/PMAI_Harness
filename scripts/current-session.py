@@ -13,6 +13,7 @@ import json
 import os
 import re
 import sys
+from datetime import datetime, timezone
 from pathlib import Path
 
 
@@ -108,6 +109,35 @@ def is_within_repo(session_cwd: Path, repo_root: Path) -> bool:
     return session_cwd == repo_root or repo_root in session_cwd.parents
 
 
+def capture_snapshot(path: Path) -> tuple[int, int, str]:
+    """Capture the immutable prefix that feedback may inspect."""
+    try:
+        with path.open("rb") as handle:
+            captured_size = os.fstat(handle.fileno()).st_size
+            remaining = captured_size
+            scanned_bytes = 0
+            seen_lines = 0
+            line_count = 0
+            byte_count = 0
+            while remaining > 0:
+                chunk = handle.read(min(1024 * 1024, remaining))
+                if not chunk:
+                    break
+                remaining -= len(chunk)
+                last_newline = chunk.rfind(b"\n")
+                seen_lines += chunk.count(b"\n")
+                if last_newline >= 0:
+                    line_count = seen_lines
+                    byte_count = scanned_bytes + last_newline + 1
+                scanned_bytes += len(chunk)
+    except OSError as exc:
+        raise LocateError(f"无法固定会话快照边界：{path}: {exc}") from exc
+    if line_count < 1:
+        raise LocateError(f"会话文件没有完整 JSONL 记录，无法固定快照边界：{path}")
+    captured_at = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+    return line_count, byte_count, captured_at
+
+
 def locate_codex_transcript(
     codex_home: Path, session_id: str, repo_root: Path
 ) -> tuple[Path, dict[str, object], str]:
@@ -183,8 +213,9 @@ def main() -> int:
             session_id=session_id,
             repo_root=repo_root,
         )
+        snapshot_end_line, snapshot_end_bytes, snapshot_captured_at = capture_snapshot(path)
         result = {
-            "schema_version": 1,
+            "schema_version": 2,
             "status": "ok",
             "exact": True,
             "host": host,
@@ -197,6 +228,9 @@ def main() -> int:
             "repo_root": str(repo_root),
             "originator": meta.get("originator"),
             "started_at": meta.get("timestamp"),
+            "snapshot_end_line": snapshot_end_line,
+            "snapshot_end_bytes": snapshot_end_bytes,
+            "snapshot_captured_at": snapshot_captured_at,
         }
         print(json.dumps(result, ensure_ascii=False, indent=2))
         return 0

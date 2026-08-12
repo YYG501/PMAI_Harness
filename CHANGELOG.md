@@ -14,6 +14,8 @@ PM-AI-Workflow 生成器仓的演进记录。本文件**只记影响已安装框
 
 ## 未发布
 
+- `fix(feedback)`: **`/pmai-feedback` 从无条件全文审计改为“默认聚焦、条件升级”，并固定 active 会话证据快照。** `current-session.py` 在精确定位后返回行号、字节数和捕获时间边界；feedback 只分析该边界内与 PM 当前反馈直接相关的对话、工具证据和真相源，不再追读自己持续写入的 active 尾部。只有证据冲突、不可逆动作 / 真相源覆盖、跨阶段漂移无法归因、关键证据缺口或 PM 明确要求时才升级完整审计，并记录原因。框架仓交接默认复核 findings 指向的范围，证据不足时才读取完整固定快照，避免消费仓与框架仓重复全文冷读。
+
 - `chore(maintenance)`: **清理已经退出运行链路的历史资产，并统一当前分发与验收口径。** 历史 `skill-feedback/` 移入生成器归档；删除无引用的旧 review Agent 及其 `.claude/agents/` 宿主断链、design legacy references、废弃脚本及其测试入口，消费仓继续只使用全局安装的权威框架资产。新 Web build 的共享说明统一只生成一个不可 exception 的 `browser-acceptance`，由同一持续浏览器会话覆盖 smoke / visual / behavior；旧 v2/v3/v4 合同仍按原三项证据恢复。
 
 - `fix(status)`: **状态视图按同一恢复合同拆开项目级产品方向与模块级生命周期。** `/pmai-status` 现在固定展示“需求讨论 → 设计已定 → 构建中 → 看结果并修改 → 最终检查 → 进入主线 → 更新正式文档 → 完成”全链路，并为每个 active work 输出当前阶段、下一阶段、当前可执行入口和必要的退回原因。Proposal `required / invalid` 继续阻断新工作和无合法恢复记录的工作；已由 PM 确认的 legacy active-design / active-build 分别复用 `context-pack.py` 与 `active-build-context.py` 的 Proposal、checkpoint、currentness 和 route 结果续接，项目级 Proposal 缺口只作独立提醒，不再覆盖模块路由。

@@ -37,7 +37,14 @@ test_public_contract() {
   assert_file_contains "$SKILL" "不得创建反馈文件" "skill should not write feedback artifacts" || return
   assert_file_contains "$SKILL" "current-session.py" "skill should use exact locator" || return
   assert_file_contains "$SKILL" "按 mtime" "skill should ban recent-file guessing" || return
+  assert_file_contains "$SKILL" "snapshot_end_line" "skill should bind analysis to a fixed snapshot" || return
+  assert_file_contains "$SKILL" "不得读取这个边界之后" "active feedback should not chase its own tail" || return
+  assert_file_contains "$SKILL" "分析范围：<聚焦复盘 / 完整审计>" "PM output should disclose analysis scope" || return
   assert_file_contains "$SKILL" "原始会话文件绝对路径" "handoff must include transcript path" || return
+  if grep -q "会话仍为 active 时.*重新读取新增尾部" "$SKILL"; then
+    _fail "skill should not restore active-tail rereads"
+    return
+  fi
   pass_test
 }
 
@@ -49,11 +56,25 @@ test_analysis_and_handoff_contracts() {
   assert_file_contains "$ANALYSIS_REF" "execution_gap" "analysis should distinguish execution gaps" || return
   assert_file_contains "$ANALYSIS_REF" "framework_contract_gap" "analysis should distinguish contract gaps" || return
   assert_file_contains "$ANALYSIS_REF" "consumer_project" "analysis should keep project issues local" || return
-  assert_file_contains "$ANALYSIS_REF" "从第一条记录连续读到 EOF" "analysis should require full coverage" || return
+  assert_file_contains "$ANALYSIS_REF" "默认模式：聚焦复盘" "focused analysis should be the default" || return
+  assert_file_contains "$ANALYSIS_REF" "完整审计升级条件" "full audit should require explicit escalation" || return
+  assert_file_contains "$ANALYSIS_REF" "停止条件" "focused analysis should have a stopping rule" || return
+  assert_file_contains "$ANALYSIS_REF" "active 会话不补读尾部" "active analysis should use a fixed snapshot" || return
+  if grep -q "从第一条记录连续读到 EOF" "$ANALYSIS_REF"; then
+    _fail "analysis should not require full transcript coverage by default"
+    return
+  fi
   assert_file_contains "$HANDOFF_REF" "会话 ID" "handoff should include session id" || return
   assert_file_contains "$HANDOFF_REF" "原始会话文件" "handoff should include transcript path" || return
+  assert_file_contains "$HANDOFF_REF" "固定快照" "handoff should preserve snapshot boundary" || return
+  assert_file_contains "$HANDOFF_REF" "先复核 findings 指向" "framework should verify focused evidence first" || return
+  assert_file_contains "$HANDOFF_REF" "不要默认重复全文冷读" "framework should not duplicate full analysis" || return
   assert_file_contains "$HANDOFF_REF" "待分析证据" "handoff should treat transcript as evidence" || return
   assert_file_contains "$HANDOFF_REF" "不修改文件" "handoff should wait for PM before edits" || return
+  if grep -q "从第一条记录到 EOF 完整读取" "$HANDOFF_REF"; then
+    _fail "framework handoff should not require a duplicate full cold read"
+    return
+  fi
   pass_test
 }
 
@@ -80,12 +101,47 @@ test_codex_active_session_is_exact() {
   if ! LOCATOR_OUT="$out" EXPECTED_PATH="$transcript" python3 -c '
 import json, os
 data = json.loads(os.environ["LOCATOR_OUT"])
+assert data["schema_version"] == 2
 assert data["exact"] is True
 assert data["host"] == "codex"
 assert data["transcript_state"] == "active"
+assert data["snapshot_end_line"] == 2
+assert data["snapshot_end_bytes"] > 0
+assert data["snapshot_captured_at"].endswith("Z")
 assert os.path.realpath(data["transcript_path"]) == os.path.realpath(os.environ["EXPECTED_PATH"])
 '; then
     _fail "active lookup JSON contract mismatch: $out"
+    rm -rf "$tmp"
+    return
+  fi
+  rm -rf "$tmp"
+  pass_test
+}
+
+test_active_snapshot_does_not_follow_feedback_tail() {
+  start_test "current-session: active 快照边界不追随后续流水"
+
+  local tmp repo codex session_id transcript out current_lines
+  tmp=$(mktemp -d)
+  repo="$tmp/consumer"
+  codex="$tmp/codex"
+  session_id="019f-test-snapshot"
+  transcript="$codex/sessions/2026/07/22/rollout-$session_id.jsonl"
+  mkdir -p "$repo"
+  write_session "$transcript" "$session_id" "$repo"
+
+  out=$(CODEX_THREAD_ID="$session_id" CODEX_HOME="$codex" \
+    python3 "$LOCATOR" --repo-root "$repo" 2>&1)
+  printf '%s\n' '{"type":"response_item","payload":{"type":"function_call","name":"feedback-read"}}' >> "$transcript"
+  current_lines=$(wc -l < "$transcript" | tr -d ' ')
+
+  if ! LOCATOR_OUT="$out" CURRENT_LINES="$current_lines" python3 -c '
+import json, os
+data = json.loads(os.environ["LOCATOR_OUT"])
+assert data["snapshot_end_line"] == 2
+assert int(os.environ["CURRENT_LINES"]) == 3
+'; then
+    _fail "captured snapshot should remain fixed after active tail growth: $out"
     rm -rf "$tmp"
     return
   fi
@@ -210,6 +266,7 @@ test_no_machine_bound_paths() {
 test_public_contract
 test_analysis_and_handoff_contracts
 test_codex_active_session_is_exact
+test_active_snapshot_does_not_follow_feedback_tail
 test_codex_archived_session_is_exact
 test_locator_fails_closed
 test_public_surface_replaces_skill_improve
