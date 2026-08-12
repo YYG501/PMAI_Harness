@@ -94,8 +94,8 @@
 ## 当前验证
 
 - 本轮关键定向基线：lark-entry-routing `6/6`、lark-review `73/73`、publish-to-lark-e2e `20/20`、lark-adapter `40/40`、project-design-system `7/7`、consumer-doctor `23/23`、private-onboarding `4/4`、init-project-codex-compat `24/24`、check-branch `21/21`、repo-kind `6/6`、exec-adapters `16/16`、skill-link-ownership `8/8`、skill-eval 合同 `6/6`、Kimi host `23/23`、doctor-skills `44/44`、Loop Contract `4/4`；发布门在 runner / judge 均缺失时返回 2 并明确列出两项缺失能力，schema `24` 个案例与 static eval `7/7` 通过。
-- 当前完整 `tests/run-all.sh` 基线为 `977 passed / 0 failed`。普通开发回归中的 skill eval 为 `7 passed / 0 failed / 17 session skipped`，只形成静态与确定性合同基线，不构成稳定版本证据；`v*` tag 或手动稳定发布仍必须通过配置真实 runner 与独立 judge 的 `tests/run-release-gate.sh`，任何 session skip 都会阻断。稳定核心发布门默认跳过可选 Lark 假环境套件，但日常全量回归仍保留这些套件。
-- 早于 Proposal 合同的既有 active work 已有显式恢复合同：v1-v4 active build 绑定 PM 确认、Git checkpoint、authority 内容 hash 和旧 delta 审计后从当前确认点续接；旧 active design 保留原轮身份，历史 `ready_to_build` 退回 `designing` 重新确认目标。专项回归 `8/8`，新工作和 v5 build 仍不能借此绕过 Proposal。
+- 当前完整 `tests/run-all.sh` 基线为 `978 passed / 0 failed`。普通开发回归中的 skill eval 为 `7 passed / 0 failed / 17 session skipped`，只形成静态与确定性合同基线，不构成稳定版本证据；`v*` tag 或手动稳定发布仍必须通过配置真实 runner 与独立 judge 的 `tests/run-release-gate.sh`，任何 session skip 都会阻断。稳定核心发布门默认跳过可选 Lark 假环境套件，但日常全量回归仍保留这些套件。
+- 早于 Proposal 合同的既有 active work 已有显式恢复合同：v1-v4 active build 绑定 PM 确认、Git checkpoint、authority 内容 hash，并分别保存旧 design 起点、合同保存终点、历史 delta 重放终点与一致性结论，再从当前确认点续接；旧 active design 保留原轮身份，历史 `ready_to_build` 退回 `designing` 重新确认目标。新工作和 v5 build 仍不能借此绕过 Proposal。
 - 开发态入口同步 helper 已在真实消费仓 `ExampleAgentProject` 只读 dogfood：返回 `stale / legacy_migration`，渲染计划可以确定识别旧 PMAI Startup，并保留“非小改动前读取产品现状”等项目补充及后续项目规则。消费仓在本轮分析期间又出现新的活跃模块状态，因此不再把其整体 error 数作为本次入口同步回归基线；运行前后 Git 状态一致，未修改消费仓或用户级安装。
 
 ## 下一步

@@ -23,6 +23,7 @@ sys.path.insert(0, str(SCRIPTS_DIR))
 from _lib.legacy_recovery import (  # noqa: E402
     ACTIVE_DESIGN_STATES,
     RECOVERY_SCHEMA_VERSION,
+    replay_original_build_hash,
     validate_legacy_recovery,
 )
 
@@ -126,9 +127,16 @@ def accept(args: argparse.Namespace) -> int:
 
     pack = _working_source_pack(repo_root, module_dir, meta)
     checkpoint = _git(repo_root, "rev-parse", "HEAD")
+    original_design_hash = str(meta.get("approved_source_hash") or "").strip()
     original_hash = str(build.get("approved_source_hash") or "").strip()
-    if len(original_hash) != 64:
+    if len(original_design_hash) != 64 or len(original_hash) != 64:
         raise SystemExit("旧 build 缺少合法 approved_source_hash，不能安全恢复。")
+    original_deltas = build.get("accepted_deltas") or []
+    if not isinstance(original_deltas, list) or any(
+        not isinstance(delta, dict) for delta in original_deltas
+    ):
+        raise SystemExit("旧 build 的 accepted_deltas 不是合法对象数组，不能安全恢复。")
+    replayed_hash = replay_original_build_hash(original_design_hash, original_deltas)
 
     # Validate the legacy record shape before writing, while allowing the
     # current v1-v4 contract to be the source of truth for lifecycle/version.
@@ -143,11 +151,16 @@ def accept(args: argparse.Namespace) -> int:
         "authority_source_hash": pack["source_hash"],
         "authority_source_scope": pack["source_scope"],
         "authority_source_file_hashes": pack["source_file_hashes"],
+        "original_design_approved_source_hash": original_design_hash,
         "original_build_approved_source_hash": original_hash,
+        "original_replayed_build_approved_source_hash": replayed_hash,
+        "original_hash_chain_state": (
+            "consistent" if replayed_hash == original_hash else "mismatch"
+        ),
         "reconciled_build_approved_source_hash": pack["source_hash"],
         "original_contract_version": version,
-        "original_accepted_delta_count": len(build.get("accepted_deltas") or []),
-        "original_accepted_deltas": build.get("accepted_deltas") or [],
+        "original_accepted_delta_count": len(original_deltas),
+        "original_accepted_deltas": original_deltas,
     }
     try:
         validate_legacy_recovery({**meta, "legacy_recovery": recovery})
@@ -167,7 +180,10 @@ def accept(args: argparse.Namespace) -> int:
                 "module": module_dir.relative_to(repo_root).as_posix(),
                 "checkpoint_commit": checkpoint,
                 "authority_source_hash": pack["source_hash"],
+                "original_design_approved_source_hash": original_design_hash,
                 "original_build_approved_source_hash": original_hash,
+                "original_replayed_build_approved_source_hash": replayed_hash,
+                "original_hash_chain_state": recovery["original_hash_chain_state"],
                 "reconciled_build_approved_source_hash": pack["source_hash"],
                 "original_contract_version": version,
             },

@@ -18,7 +18,7 @@ PM-AI-Workflow 生成器仓的演进记录。本文件**只记影响下游业务
 
 ## 未发布
 
-- `fix(legacy-recovery)`: 为早于 Proposal 合同的既有 active work 增加显式恢复 checkpoint。v1-v4 active build 恢复必须由 PM 确认当前规格和产品依据仍有效，记录当前 Git / authority 内容 hash 与旧合同审计信息，并从确认点重建后续 delta/hash 链；旧 active design 只能在 PM 确认后原轮续接，历史 `ready_to_build` 必须退回 `designing` 重新确认目标。两类恢复都不生成 Proposal、不创建新模块、不升级旧 build 合同；恢复后的 build authority 再次发生未批准变化时继续失败关闭。
+- `fix(legacy-recovery)`: 为早于 Proposal 合同的既有 active work 增加显式恢复 checkpoint。v1-v4 active build 恢复必须由 PM 确认当前规格和产品依据仍有效，记录当前 Git / authority 内容 hash、旧 design 起点、保存终点、历史 delta 重放终点与一致性结论，并从确认点重建后续 delta/hash 链；旧 active design 只能在 PM 确认后原轮续接，历史 `ready_to_build` 必须退回 `designing` 重新确认目标。两类恢复都不生成 Proposal、不创建新模块、不升级旧 build 合同；恢复后的 build authority 再次发生未批准变化时继续失败关闭。
 
 - `refactor(loop)`: **复杂度收口批次五统一 Proposal、Design、Build 的 Loop Contract。** 新增 `_shared/loop-contract.md`，固定每轮“恢复 → 确认目标 → 确认边界 → 执行最小完整动作 → 验证 → 路由”的顺序，并统一 `retry_current / await_pm_decision / route_proposal / route_design / advance / resume_checkpoint / complete` 七种动作。三条主链分别映射自己的输入、允许动作、验证、重试、升级和停止条件；`build-close` 只保留 checkpoint 恢复职责。新增 18 个固定消费仓合同场景和静态 eval，锁定“走对、停对、恢复对”；不新增 loop 状态、动态工作流、多 Agent 或 Session Eval，也不迁移真实消费仓或用户级安装态。
 

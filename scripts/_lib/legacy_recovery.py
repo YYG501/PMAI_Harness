@@ -7,6 +7,8 @@ new work without a Product Proposal.
 
 from __future__ import annotations
 
+import hashlib
+import json
 import re
 from typing import Any, Mapping
 
@@ -20,6 +22,21 @@ def _sha256(value: object, label: str) -> str:
     if not isinstance(value, str) or not re.fullmatch(r"[0-9a-f]{64}", value):
         raise ValueError(f"legacy_recovery.{label} 必须是 64 位小写 SHA-256。")
     return value
+
+
+def replay_original_build_hash(initial_hash: str, deltas: list[Mapping[str, Any]]) -> str:
+    """Replay the historical contract hash without interpreting old delta semantics."""
+
+    current = initial_hash
+    for delta in deltas:
+        payload = json.dumps(
+            {"previous": current, "delta": delta},
+            ensure_ascii=False,
+            sort_keys=True,
+            separators=(",", ":"),
+        ).encode("utf-8")
+        current = hashlib.sha256(payload).hexdigest()
+    return current
 
 
 def validate_legacy_recovery(
@@ -59,9 +76,17 @@ def validate_legacy_recovery(
     original_hash = None
     reconciled_hash = None
     if kind == "active-build":
+        initial_hash = _sha256(
+            raw.get("original_design_approved_source_hash"),
+            "original_design_approved_source_hash",
+        )
         original_hash = _sha256(
             raw.get("original_build_approved_source_hash"),
             "original_build_approved_source_hash",
+        )
+        replayed_hash = _sha256(
+            raw.get("original_replayed_build_approved_source_hash"),
+            "original_replayed_build_approved_source_hash",
         )
         reconciled_hash = _sha256(
             raw.get("reconciled_build_approved_source_hash"),
@@ -85,6 +110,11 @@ def validate_legacy_recovery(
             raise ValueError("legacy_recovery.original_accepted_delta_count 必须是整数。")
         if original_count != len(original_deltas):
             raise ValueError("legacy_recovery 的原 accepted delta 数量不一致。")
+        if replay_original_build_hash(initial_hash, original_deltas) != replayed_hash:
+            raise ValueError("legacy_recovery 的原 build hash 重放结果不一致。")
+        expected_chain_state = "consistent" if replayed_hash == original_hash else "mismatch"
+        if raw.get("original_hash_chain_state") != expected_chain_state:
+            raise ValueError("legacy_recovery.original_hash_chain_state 与重放结果不一致。")
     else:
         if raw.get("original_lifecycle_state") not in ACTIVE_DESIGN_STATES:
             raise ValueError("legacy_recovery.original_lifecycle_state 不是可恢复的 design 状态。")
@@ -117,7 +147,9 @@ def validate_legacy_recovery(
         }
     )
     if kind == "active-build":
+        result["original_design_approved_source_hash"] = initial_hash
         result["original_build_approved_source_hash"] = original_hash
+        result["original_replayed_build_approved_source_hash"] = replayed_hash
         result["reconciled_build_approved_source_hash"] = reconciled_hash
     if require_active:
         status = meta.get("status")

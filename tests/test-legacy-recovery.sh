@@ -172,7 +172,42 @@ test_legacy_build_recovers_and_binds_authority() {
   python3 "$RECOVERY" accept "$T/docs/modules/demo" --confirmed-by PM --confirmed-at 2026-08-12T12:00:00+08:00 --reason "当前规格仍是本轮有效建造依据" >/dev/null || { _fail "recovery command failed"; teardown; return; }
   local out
   out=$(cd "$T" && python3 "$STATUS_VIEW" --execution-context 2>&1)
-  if python3 -c 'import json,sys; d=json.load(sys.stdin); assert d["status"]=="active"; assert d["active_builds"][0]["contract_version"]==4; assert d["active_builds"][0]["legacy_recovery"]["status"]=="accepted"' <<<"$out"; then pass_test; else _fail "recovered build context mismatch: $out"; fi
+  if python3 -c 'import json,sys; d=json.load(sys.stdin); b=d["active_builds"][0]; r=b["legacy_recovery"]; assert d["status"]=="active"; assert b["contract_version"]==4; assert r["status"]=="accepted"; assert r["original_hash_chain_state"]=="consistent"; assert r["original_design_approved_source_hash"]==r["original_build_approved_source_hash"]==r["original_replayed_build_approved_source_hash"]' <<<"$out"; then pass_test; else _fail "recovered build context mismatch: $out"; fi
+  teardown
+}
+
+test_legacy_build_records_mismatched_original_chain() {
+  start_test "legacy recovery: historical hash mismatch remains explicit and auditable"
+  setup_legacy_fixture
+  python3 - "$T/docs/modules/demo/.work-meta.json" <<'PY'
+import json, sys
+from pathlib import Path
+path = Path(sys.argv[1])
+meta = json.loads(path.read_text(encoding="utf-8"))
+meta["build"]["accepted_deltas"] = [{
+    "kind": "product-behavior",
+    "summary": "历史调整",
+    "affected_surfaces": ["demo"],
+    "accepted_at": "2026-08-01T01:00:00+08:00",
+}]
+meta["build"]["approved_source_hash"] = "b" * 64
+path.write_text(json.dumps(meta, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+PY
+  local out
+  out=$(python3 "$RECOVERY" accept "$T/docs/modules/demo" --confirmed-by PM --confirmed-at 2026-08-12T12:00:00+08:00 --reason "确认当前 authority 并保留历史损坏证据" 2>&1) || { _fail "mismatched legacy chain should be recoverable: $out"; teardown; return; }
+  if python3 - "$T/docs/modules/demo/.work-meta.json" <<'PY'
+import json, sys
+meta = json.load(open(sys.argv[1], encoding="utf-8"))
+recovery = meta["legacy_recovery"]
+assert recovery["original_hash_chain_state"] == "mismatch"
+assert recovery["original_build_approved_source_hash"] == "b" * 64
+assert recovery["original_replayed_build_approved_source_hash"] != "b" * 64
+assert recovery["original_design_approved_source_hash"] != "b" * 64
+assert recovery["original_accepted_delta_count"] == 1
+assert len(recovery["original_accepted_deltas"]) == 1
+assert meta["build"]["accepted_deltas"] == []
+PY
+  then pass_test; else _fail "historical mismatch audit record is incomplete"; fi
   teardown
 }
 
@@ -271,6 +306,7 @@ test_legacy_design_rejects_build_state() {
 
 test_legacy_build_requires_explicit_recovery
 test_legacy_build_recovers_and_binds_authority
+test_legacy_build_records_mismatched_original_chain
 test_legacy_recovery_fails_on_bound_file_change
 test_legacy_build_accepts_new_scoped_delta
 test_legacy_recovery_rejects_tampered_record_cleanly
