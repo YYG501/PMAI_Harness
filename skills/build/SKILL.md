@@ -381,7 +381,7 @@ python3 "$PMAI_HOME/scripts/build-contract.py" add-delta \
 
 ## 6. PM 请求定稿后，统一 runner 只执行缺失项
 
-PM 明确说“定稿 / 可以提交 / 可以合并 / 这版可以了”之前，本节不得执行。收到后不二次询问，也不准备 candidate evidence；完整执行 `skills/build/references/finalization.md`。
+PM 明确说“定稿 / 可以提交 / 可以合并 / 这版可以了”之前，本节不得执行。收到后不二次询问，也不准备 candidate evidence；完整执行 `skills/build/references/finalization.md`，从 `iterating` 统一调用 `finalize-candidate.py` 绑定当前候选并启动可恢复 runner，不在 Skill 内手工拼接 Git HEAD、合同 commit 和 finalize 命令。
 
 统一入口先用 `validate-final-currentness` 校验当前 design、accepted delta、批准路径和 project.yml，再只补缺失的机械项。完全相同的 test/typecheck/build 命令只执行一次并在 artifact 中列出所覆盖检查；命令不同或无法证明相同就分别执行。所有命令在 detached validation worktree 的 `implementation.root` 下运行，production build 保持硬门。
 

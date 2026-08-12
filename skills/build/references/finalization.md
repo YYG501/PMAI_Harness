@@ -16,6 +16,16 @@ python3 "$PMAI_HOME/scripts/finalize-work.py" \
   <Web 项目追加 --browser-manifest "$BUILD_DIR/<build.audit_dir>/browser-manifest.json">
 ```
 
+正常从 `iterating` 冻结当前候选时统一调用下面的入口；它读取当前 Git HEAD、写入 implementation commit，再调用同一个可恢复 runner。Skill 不手工拼接这两个动作：
+
+```bash
+python3 "$PMAI_HOME/scripts/finalize-candidate.py" \
+  --module-dir "$BUILD_DIR/docs/modules/<模块>" \
+  <Web 项目追加 --browser-manifest "$BUILD_DIR/<build.audit_dir>/browser-manifest.json">
+```
+
+已经进入 `final_check / landed / documenting` 的中断恢复继续直接调用 `finalize-work.py`，避免把恢复状态重新写回 `iterating`。
+
 runner 按 v4+ lifecycle 续跑并自动完成 currentness、隔离命令验证、浏览器批次、evidence 记录、review-ready、accept 和 landing。已经通过且仍绑定同一 commit/source hash 的机械项不重复执行。
 
 新轮次的 currentness 使用 `source_hash_version=2`：模块规格/决定/讨论、输入证据、`PRODUCT.md`、`PRODUCT-RULES.md`、`DESIGN.md`、项目级冻结决定和 `project.yml` 是会使设计过期的依据；`PRODUCT-STATE.md`、`TODO.md`、模块索引仍进入 context pack 供理解，但单独变化不判本模块过期。没有版本字段的旧 ready/build 继续按 v1 全量范围恢复到本轮结束，不在升级时静默换 hash。

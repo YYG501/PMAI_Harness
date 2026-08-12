@@ -48,6 +48,11 @@ from _lib.atomic_file import (
     replace_text_if_unchanged,
     replace_text_if_unchanged_at,
 )
+from _lib.markdown_frontmatter import (
+    FRONTMATTER_KEY_RE as _FRONTMATTER_KEY_RE,
+    FRONTMATTER_RE as _FRONTMATTER_RE,
+    parse_frontmatter,
+)
 
 
 MIN_LARK_CLI_VERSION = (1, 0, 27)
@@ -433,32 +438,8 @@ def _parse_version(s: str) -> Optional[tuple[int, int, int]]:
 # Frontmatter
 # ============================================================================
 
-# markdown 开头的 YAML frontmatter：`---\n ... \n---`。
-# 此正则是 frontmatter 拆分的单一定义 —— publish-to-lark 的回写逻辑也 import
-# parse_frontmatter 复用，避免两份正则各自漂移。
-_FRONTMATTER_RE = re.compile(r"\A---\n(.*?)\n---\n?(.*)\Z", re.DOTALL)
-_FRONTMATTER_KEY_RE = re.compile(r"^([A-Za-z_][A-Za-z0-9_.-]*):(.*)$")
 _FRONTMATTER_KEY_NAME_RE = re.compile(r"[A-Za-z_][A-Za-z0-9_.-]*")
 _LINE_BREAK_RE = re.compile(r"[\r\n\v\f\x1c-\x1e\x85\u2028\u2029]")
-
-
-def parse_frontmatter(text: str) -> tuple[dict[str, str], str]:
-    """拆分 markdown 的 YAML frontmatter，返回 (frontmatter dict, 正文)。
-
-    无 frontmatter → 返回 ({}, 原文本对象)。frontmatter 行按 `key: value` 浅解析：
-    注释行（`#` 开头）/ 无冒号行跳过。值不做类型转换，统一当字符串。
-    """
-    m = _FRONTMATTER_RE.match(text)
-    if not m:
-        return {}, text
-    fm: dict[str, str] = {}
-    for line in m.group(1).splitlines():
-        line = line.rstrip()
-        match = _FRONTMATTER_KEY_RE.match(line)
-        if not match:
-            continue
-        fm[match.group(1)] = match.group(2).strip()
-    return fm, m.group(2)
 
 
 def _atomic_replace(

@@ -60,15 +60,12 @@ bash "$PMAI_HOME/scripts/close-work.sh" "docs/modules/<模块>"
 
 `close-work.sh` 根据同一合同自动转 `land-work.sh`，不靠 cwd、分支名字或碰巧存在的 worktree 猜流程。
 
-若从 `iterating` 进入，不能先写 `pm_accepted_at` 再临时跑完整验收。先记录候选实现 commit；v4+ 直接调用统一 runner，它会从 currentness 开始只执行缺失的机械项：
+`finalize-work.py` 是统一的可恢复收尾 runner；本 Skill 只负责恢复位置判断和失败路由，不复制 runner 实现。
+
+若从 `iterating` 进入，不能先写 `pm_accepted_at` 再临时跑完整验收。v4+ 直接调用统一候选入口；它自动绑定当前 Git HEAD，再让 runner 从 currentness 开始只执行缺失的机械项：
 
 ```bash
-IMPLEMENTATION_COMMIT=$(git -C "<build worktree>" rev-parse HEAD)
-python3 "$PMAI_HOME/scripts/build-contract.py" commit \
-  "<build worktree>/docs/modules/<模块>" \
-  --implementation-commit "$IMPLEMENTATION_COMMIT"
-
-python3 "$PMAI_HOME/scripts/finalize-work.py" \
+python3 "$PMAI_HOME/scripts/finalize-candidate.py" \
   --module-dir "<build worktree>/docs/modules/<模块>" \
   <Web 项目追加 --browser-manifest "<build worktree>/<build.audit_dir>/browser-manifest.json">
 ```

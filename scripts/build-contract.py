@@ -23,7 +23,42 @@ from _lib.delivery_policy import (
     delivery_policy_hash,
     validate_delivery_policy,
 )
-from _lib.lark_adapter import parse_frontmatter
+from _lib.build_schema import (
+    CURRENT_CONTRACT_VERSION,
+    DELTA_SCOPE_ATTESTATION,
+    NEW_DELTA_KIND,
+    VALID_DELTA_APPROVAL_KINDS,
+    VALID_DOCS_STATUSES,
+    VALID_EXECUTORS,
+    VALID_MODES,
+    VALID_TARGET_KINDS,
+    build_snapshot,
+    canonical_contract,
+    canonical_final_checks,
+    canonical_state,
+    contract_version,
+    ensure_build_shape,
+    normalize_string_list,
+    optional,
+    parse_delta_affects,
+    validate_builder,
+    validate_mode_executor,
+    validate_scoped_delta_shape,
+)
+from _lib.build_evidence import (
+    VALID_EVIDENCE_STATUSES,
+    validate_fresh_evidence,
+    validate_legacy_audit,
+)
+from _lib.build_transition import (
+    apply_transition,
+    clear_finalization,
+    clear_review_ready,
+    set_build_lifecycle,
+    validate_finalization_requested,
+    validate_review_ready,
+)
+from _lib.markdown_frontmatter import parse_frontmatter
 from _lib.project_definition import ProjectDefinitionError, load_project_definition
 from _lib.ready_contract import (
     ReadyContractError,
@@ -36,25 +71,15 @@ from _lib.ready_contract import (
     ready_currentness,
     validate_ready_pack,
 )
-from _lib.work_contract import (
-    CURRENT_BUILD_CONTRACT_VERSION,
-    WorkContractError,
-    normalize_work_contract,
-    normalize_work_state,
-)
+from _lib.review_evidence import validate_review_approval
 
+# Executor vocabulary, including the external Builder profile "kimi-code", is
+# owned by build_schema.py; this CLI only exposes the shared contract surface.
+# Compatibility anchors for static contracts remain here as pointers to the
+# canonical implementation: VALID_DOCS_STATUSES = {"pending", "complete", "failed"}.
+# Evidence validation remains fail-closed in build_evidence.py: source_hash 与当前 approved_source_hash 不一致;
+# commit 与当前 implementation_commit 不一致; prototype-boundary 作为不可跳过的检查。
 
-VALID_MODES = {"worktree", "main"}
-VALID_EXECUTORS = {
-    "claude-code",
-    "codex",
-    "cursor-agent",
-    "kimi-code",
-    "opencode",
-    "manual",
-    "native",
-}
-VALID_TARGET_KINDS = {"prototype", "product"}
 VALID_LIFECYCLE_STATES = {
     "designing",
     "ready_to_build",
@@ -65,44 +90,7 @@ VALID_LIFECYCLE_STATES = {
     "documenting",
     "complete",
 }
-VALID_DOCS_STATUSES = {"pending", "complete", "failed"}
-NEW_DELTA_KIND = "scoped-adjustment"
-DELTA_SCOPE_ATTESTATION = "approved-module-task-no-model-change"
-VALID_DELTA_APPROVAL_KINDS = {"pm-confirmation", "lark-review-batch"}
-VALID_DELTA_AFFECT_KINDS = {"term", "role"}
-CURRENT_CONTRACT_VERSION = CURRENT_BUILD_CONTRACT_VERSION
 CURRENT_SOURCE_HASH_VERSION = 2
-PASSING_EVIDENCE_STATUSES = {"pass", "passed", "clean", "built"}
-LIMITED_EVIDENCE_STATUSES = {"limited", "skipped", "blocked", "needs-review"}
-VALID_EVIDENCE_STATUSES = {
-    *PASSING_EVIDENCE_STATUSES,
-    *LIMITED_EVIDENCE_STATUSES,
-    "fail",
-}
-EVIDENCE_LABELS = {
-    "current-page": "当前页面走查",
-    "tests": "测试",
-    "typecheck": "类型检查",
-    "build": "生产构建",
-    "browser-smoke": "浏览器主动 smoke",
-    "browser-acceptance": "浏览器批量验收",
-    "prototype-boundary": "原型实现边界",
-    "coverage": "覆盖审计",
-    "visual": "视觉门",
-    "behavior": "行为审",
-}
-AUDIT_FILES = {
-    "browser_smoke": "browser-smoke.json",
-    "coverage": "coverage.json",
-    "visual": "visual.json",
-    "behavior": "behavior.json",
-}
-BROWSER_SMOKE_ALLOWED_STATUSES = {"pass", "limited", "skipped", "fail", "blocked"}
-BROWSER_SMOKE_LIMITED_STATUSES = {"limited", "skipped", "fail", "blocked"}
-VISUAL_LIMITED_STATUSES = {"limited", "skipped", "blocked", "not-run"}
-VISUAL_ALLOWED_STATUSES = {"pass", "needs-review", *VISUAL_LIMITED_STATUSES}
-BEHAVIOR_ALLOWED_STATUSES = {"pass", "fail", "skipped", "limited", "blocked"}
-BEHAVIOR_LIMITED_STATUSES = {"skipped", "limited", "blocked"}
 
 
 def now_iso() -> str:
@@ -149,13 +137,6 @@ def write_meta(module_dir: Path, meta: dict) -> None:
     tmp.replace(path)
 
 
-def optional(value: str | None) -> str | None:
-    if value is None:
-        return None
-    value = value.strip()
-    return value or None
-
-
 def canonical_json(value: object) -> bytes:
     return json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode(
         "utf-8"
@@ -164,335 +145,6 @@ def canonical_json(value: object) -> bytes:
 
 def sha256_value(value: object) -> str:
     return hashlib.sha256(canonical_json(value)).hexdigest()
-
-
-def normalize_string_list(values: list[str] | None) -> list[str]:
-    result: list[str] = []
-    seen: set[str] = set()
-    for value in values or []:
-        item = value.strip()
-        if item and item not in seen:
-            seen.add(item)
-            result.append(item)
-    return result
-
-
-def parse_delta_affects(values: list[str] | None) -> list[dict[str, str]]:
-    result: list[dict[str, str]] = []
-    seen: set[tuple[str, str]] = set()
-    for raw in values or []:
-        kind, separator, name = raw.partition(":")
-        kind = kind.strip().lower()
-        name = name.strip()
-        if separator != ":" or kind not in VALID_DELTA_AFFECT_KINDS or not name:
-            raise SystemExit("--affects 必须是 term:<准确名称> 或 role:<准确名称>。")
-        key = (kind, name)
-        if key not in seen:
-            seen.add(key)
-            result.append({"kind": kind, "name": name})
-    return result
-
-
-def validate_lark_review_approval(
-    module_dir: Path,
-    batch_id: str,
-    artifact_arg: str | None,
-) -> dict[str, object]:
-    """Delegate Lark evidence validation to the collector's authoritative contract."""
-
-    artifact_raw = optional(artifact_arg)
-    if not artifact_raw:
-        raise SystemExit(
-            "lark-review-batch accepted delta 必须提供 --approval-artifact "
-            "指向本批 remote-verification.json。"
-        )
-    repo_root = repo_root_for(module_dir)
-    validator = Path(__file__).resolve().with_name("lark-review.py")
-    command = [
-        sys.executable,
-        str(validator),
-        "validate-approval",
-        "--artifact",
-        artifact_raw,
-        "--repo-root",
-        str(repo_root),
-        "--markdown",
-        str(module_dir.expanduser().resolve() / "spec.md"),
-        "--batch-id",
-        batch_id,
-    ]
-    try:
-        result = subprocess.run(
-            command,
-            capture_output=True,
-            text=True,
-            timeout=30,
-            check=False,
-        )
-    except (OSError, subprocess.SubprocessError) as exc:
-        raise SystemExit(f"无法运行 Lark 审批证据验证器：{exc}") from exc
-    if result.returncode != 0:
-        detail = result.stderr.strip()
-        if detail.startswith("ERROR: "):
-            detail = detail[7:]
-        raise SystemExit(f"Lark 审批证据无效：{detail or '完整批次校验失败'}")
-    try:
-        artifact = json.loads(result.stdout)
-    except json.JSONDecodeError as exc:
-        raise SystemExit("Lark 审批证据验证器没有返回合法 JSON。") from exc
-    if not isinstance(artifact, dict) or artifact.get("batch_id") != batch_id:
-        raise SystemExit("Lark 审批证据验证器返回了不匹配的批次。")
-    return artifact
-
-
-def validate_scoped_delta_shape(delta: dict, index: int) -> None:
-    """Validate new scoped-delta fields without rejecting historical entries."""
-
-    new_fields = {
-        "scope_attestation",
-        "approval_evidence",
-        "affects",
-        "authority_paths",
-        "authority_file_hashes",
-        "authority_git_blobs",
-        "authority_parent_commit",
-        "authority_source_hash_before",
-        "authority_source_hash_after",
-    }
-    kind = delta.get("kind")
-    if kind != NEW_DELTA_KIND:
-        if not new_fields.intersection(delta):
-            return
-        raise SystemExit(
-            f"accepted delta[{index}] 使用新证据字段时 kind 必须是 {NEW_DELTA_KIND}。"
-        )
-    if delta.get("scope_attestation") != DELTA_SCOPE_ATTESTATION:
-        raise SystemExit(f"accepted delta[{index}] 的 scope_attestation 不合法。")
-    evidence = delta.get("approval_evidence")
-    if not isinstance(evidence, dict):
-        raise SystemExit(f"accepted delta[{index}] 缺少 approval_evidence。")
-    evidence_kind = evidence.get("kind")
-    evidence_reference = evidence.get("reference")
-    if evidence_kind not in VALID_DELTA_APPROVAL_KINDS or not isinstance(
-        evidence_reference, str
-    ) or not evidence_reference.strip():
-        raise SystemExit(f"accepted delta[{index}] 的 approval_evidence 不合法。")
-    approval_artifact = evidence.get("artifact")
-    if evidence_kind == "lark-review-batch":
-        if (
-            not isinstance(approval_artifact, dict)
-            or approval_artifact.get("batch_id") != evidence_reference
-            or any(
-                not isinstance(approval_artifact.get(field), str)
-                or not approval_artifact[field].strip()
-                for field in (
-                    "path",
-                    "sha256",
-                    "plan_path",
-                    "plan_sha256",
-                    "target_sha256",
-                )
-            )
-        ):
-            raise SystemExit(
-                f"accepted delta[{index}] 缺少绑定 sealed Lark 批次的 approval artifact。"
-            )
-    elif approval_artifact is not None:
-        raise SystemExit(
-            f"accepted delta[{index}] 只有 lark-review-batch 可以携带 approval artifact。"
-        )
-    affects = delta.get("affects")
-    if not isinstance(affects, list):
-        raise SystemExit(f"accepted delta[{index}] 的 affects 必须是数组。")
-    for affect in affects:
-        if (
-            not isinstance(affect, dict)
-            or affect.get("kind") not in VALID_DELTA_AFFECT_KINDS
-            or not isinstance(affect.get("name"), str)
-            or not affect["name"].strip()
-        ):
-            raise SystemExit(f"accepted delta[{index}] 的 affects 条目不合法。")
-    for field in ("authority_source_hash_before", "authority_source_hash_after"):
-        value = delta.get(field)
-        if not isinstance(value, str) or not value.strip():
-            raise SystemExit(
-                f"accepted delta[{index}] 缺少完整 authority source hash transition。"
-            )
-    authority_paths = delta.get("authority_paths")
-    authority_hashes = delta.get("authority_file_hashes")
-    authority_blobs = delta.get("authority_git_blobs")
-    authority_parent = delta.get("authority_parent_commit")
-    if authority_paths is None:
-        if (
-            authority_hashes is not None
-            or authority_blobs is not None
-            or authority_parent is not None
-        ):
-            raise SystemExit(
-                f"accepted delta[{index}] 没有 authority_paths，不能单独提供 authority 内容绑定。"
-            )
-        return
-    if not isinstance(authority_paths, list) or any(
-        not isinstance(path, str) or not path.strip() for path in authority_paths
-    ):
-        raise SystemExit(f"accepted delta[{index}] 的 authority_paths 不合法。")
-    if not isinstance(authority_hashes, dict) or set(authority_hashes) != set(authority_paths):
-        raise SystemExit(
-            f"accepted delta[{index}] 的 authority_file_hashes 必须精确覆盖 authority_paths。"
-        )
-    for path, digest in authority_hashes.items():
-        if (
-            not isinstance(path, str)
-            or not isinstance(digest, str)
-            or len(digest) != 64
-            or any(char not in "0123456789abcdef" for char in digest)
-        ):
-            raise SystemExit(f"accepted delta[{index}] 的 authority_file_hashes 不合法。")
-    if not isinstance(authority_blobs, dict) or set(authority_blobs) != set(authority_paths):
-        raise SystemExit(
-            f"accepted delta[{index}] 的 authority_git_blobs 必须精确覆盖 authority_paths。"
-        )
-    for path, oid in authority_blobs.items():
-        if (
-            not isinstance(path, str)
-            or not isinstance(oid, str)
-            or len(oid) not in {40, 64}
-            or any(char not in "0123456789abcdef" for char in oid)
-        ):
-            raise SystemExit(f"accepted delta[{index}] 的 authority_git_blobs 不合法。")
-    if (
-        not isinstance(authority_parent, str)
-        or len(authority_parent) not in {40, 64}
-        or any(char not in "0123456789abcdef" for char in authority_parent)
-    ):
-        raise SystemExit(f"accepted delta[{index}] 的 authority_parent_commit 不合法。")
-
-
-def contract_version(build: dict) -> int:
-    value = build.get("contract_version", 1)
-    try:
-        return int(value)
-    except (TypeError, ValueError):
-        raise SystemExit(f"build.contract_version 必须是整数: {value}")
-
-
-def canonical_contract(meta: dict):
-    try:
-        return normalize_work_contract(meta)
-    except WorkContractError as exc:
-        raise SystemExit(str(exc)) from exc
-
-
-def canonical_state(meta: dict):
-    try:
-        return normalize_work_state(meta)
-    except WorkContractError as exc:
-        raise SystemExit(str(exc)) from exc
-
-
-def canonical_final_checks(meta: dict) -> list[str]:
-    return list(canonical_contract(meta).final_checks)
-
-
-def set_build_lifecycle(meta: dict, build: dict, state: str) -> None:
-    """Write current contracts once while preserving resumable legacy shapes."""
-
-    build["lifecycle_state"] = state
-    if contract_version(build) >= CURRENT_CONTRACT_VERSION:
-        meta.pop("lifecycle_state", None)
-        meta.pop("stage", None)
-    else:
-        meta["lifecycle_state"] = state
-
-
-def ensure_v2_shape(build: dict) -> None:
-    if contract_version(build) < 2:
-        return
-    try:
-        normalized = normalize_work_contract({"build": build})
-    except WorkContractError as exc:
-        raise SystemExit(str(exc)) from exc
-    target = build.get("target")
-    if not isinstance(target, dict) or target.get("kind") not in VALID_TARGET_KINDS:
-        raise SystemExit("build.target.kind 必须是 prototype 或 product。")
-    if not isinstance(target.get("paths", []), list) or not isinstance(
-        target.get("entrypoints", []), list
-    ):
-        raise SystemExit("build.target.paths / entrypoints 必须是数组。")
-    if not isinstance(build.get("design_revision"), int) or build["design_revision"] < 1:
-        raise SystemExit("build.design_revision 必须是正整数。")
-    if not optional(build.get("approved_source_hash")):
-        raise SystemExit("build 合同缺少 approved_source_hash。")
-    acceptance = build.get("acceptance")
-    if not isinstance(acceptance, dict):
-        raise SystemExit("build.acceptance 必须是对象。")
-    final_checks = list(normalized.final_checks)
-    if not isinstance(acceptance.get("evidence", []), list):
-        raise SystemExit("build.acceptance.evidence 必须是数组。")
-    if contract_version(build) >= 3:
-        try:
-            policy = validate_delivery_policy(build.get("delivery_policy"), target["kind"])
-        except ValueError as exc:
-            raise SystemExit(str(exc)) from exc
-        if build.get("delivery_policy_hash") != delivery_policy_hash(policy):
-            raise SystemExit("build.delivery_policy_hash 与实现深度合同不一致。")
-        if target["kind"] == "prototype" and "prototype-boundary" not in final_checks:
-            raise SystemExit("prototype build 必须把 prototype-boundary 作为不可跳过的检查。")
-    if contract_version(build) >= 4:
-        if not isinstance(acceptance.get("iteration_evidence", []), list):
-            raise SystemExit("build.acceptance.iteration_evidence 必须是数组。")
-        finalization = build.get("finalization")
-        if not isinstance(finalization, dict):
-            raise SystemExit("build.finalization 必须是对象。")
-    docs_status = build.get("docs_status")
-    if docs_status not in VALID_DOCS_STATUSES:
-        raise SystemExit(
-            f"build.docs_status 不合法：{docs_status}（允许 {', '.join(sorted(VALID_DOCS_STATUSES))}）。"
-        )
-
-
-def validate_mode_executor(mode: str, executor: str | None) -> None:
-    if mode not in VALID_MODES:
-        raise SystemExit(f"build.mode 必须是 {' / '.join(sorted(VALID_MODES))}: {mode}")
-    if executor and executor not in VALID_EXECUTORS:
-        raise SystemExit(
-            f"build.executor 必须是 {' / '.join(sorted(VALID_EXECUTORS))}: {executor}"
-        )
-
-
-def parse_builder_json(value: str | None) -> dict:
-    raw = optional(value)
-    if not raw:
-        return {}
-    try:
-        data = json.loads(raw)
-    except json.JSONDecodeError as exc:
-        raise SystemExit(f"builder 必须是合法 JSON 对象: {exc}") from exc
-    if not isinstance(data, dict):
-        raise SystemExit("builder 必须是 JSON 对象")
-    return data
-
-
-def validate_builder(builder: dict) -> None:
-    for key in ("model", "thinking"):
-        value = builder.get(key)
-        if value is not None and not isinstance(value, str):
-            raise SystemExit(f"builder.{key} 必须是字符串")
-    overrides = builder.get("overrides")
-    if overrides is not None and not isinstance(overrides, dict):
-        raise SystemExit("builder.overrides 必须是对象")
-
-
-def build_snapshot(args: argparse.Namespace) -> dict:
-    builder = parse_builder_json(args.builder_json)
-    model = optional(args.builder_model)
-    thinking = optional(args.builder_thinking)
-    if model:
-        builder["model"] = model
-    if thinking:
-        builder["thinking"] = thinking
-    validate_builder(builder)
-    return builder
 
 
 def repo_root_for(module_dir: Path) -> Path:
@@ -516,351 +168,6 @@ def repo_root_for(module_dir: Path) -> Path:
     if resolved.parent.name == "modules" and resolved.parent.parent.name == "docs":
         return resolved.parent.parent.parent
     return resolved.parent
-
-
-def resolve_repo_path(repo_root: Path, value: str | None, field_name: str) -> Path:
-    raw = optional(value)
-    if not raw:
-        raise SystemExit(f"build 合同缺少 {field_name}，不能收尾。")
-    path = Path(raw).expanduser()
-    return path if path.is_absolute() else repo_root / path
-
-
-def load_audit_json(path: Path, label: str) -> dict:
-    if not path.exists():
-        raise SystemExit(f"build 验收证据不完整：缺少 {label} 结果 {path}，不能收尾。")
-    try:
-        data = json.loads(path.read_text(encoding="utf-8"))
-    except json.JSONDecodeError as exc:
-        raise SystemExit(f"{label} 结果不是合法 JSON：{path}: {exc}") from exc
-    if not isinstance(data, dict):
-        raise SystemExit(f"{label} 结果顶层必须是 JSON 对象：{path}")
-    return data
-
-
-def require_object_list(data: dict, key: str, label: str) -> list[dict]:
-    value = data.get(key)
-    if not isinstance(value, list) or any(not isinstance(item, dict) for item in value):
-        raise SystemExit(f"{label} 结果字段 {key} 必须是对象数组。")
-    return value
-
-
-def audit_exception(build: dict) -> dict | None:
-    value = build.get("audit_exception")
-    return value if isinstance(value, dict) else None
-
-
-def has_audit_exception(build: dict) -> bool:
-    exc = audit_exception(build)
-    return bool(exc and exc.get("accepted_at") and exc.get("reason"))
-
-
-def validate_audit_evidence(module_dir: Path, build: dict) -> None:
-    repo_root = repo_root_for(module_dir)
-    audit_dir = resolve_repo_path(repo_root, build.get("audit_dir"), "audit_dir")
-    browser_smoke = load_audit_json(
-        audit_dir / AUDIT_FILES["browser_smoke"], "浏览器主动 smoke"
-    )
-    coverage = load_audit_json(audit_dir / AUDIT_FILES["coverage"], "覆盖审计")
-    visual = load_audit_json(audit_dir / AUDIT_FILES["visual"], "视觉门")
-    behavior = load_audit_json(audit_dir / AUDIT_FILES["behavior"], "行为审")
-    synthesis = audit_dir / "synthesis.md"
-    if not synthesis.exists():
-        raise SystemExit(f"build 验收证据不完整：缺少合成报告 {synthesis}，不能收尾。")
-
-    require_object_list(coverage, "items", "覆盖审计")
-    visual_findings = require_object_list(visual, "findings", "视觉门")
-
-    browser_smoke_status = str(browser_smoke.get("status", ""))
-    if browser_smoke_status not in BROWSER_SMOKE_ALLOWED_STATUSES:
-        raise SystemExit(
-            f"浏览器主动 smoke status 不合法：{browser_smoke_status}"
-            f"（允许 {', '.join(sorted(BROWSER_SMOKE_ALLOWED_STATUSES))}）。"
-        )
-    if browser_smoke_status == "pass" and browser_smoke.get("active_browser_smoke") is not True:
-        raise SystemExit("浏览器主动 smoke 证据不是 active browser smoke，不能当作 browser 验收前提。")
-
-    visual_status = str(
-        visual.get("status")
-        or ("pass" if not visual_findings else "needs-review")
-    )
-    if visual_status not in VISUAL_ALLOWED_STATUSES:
-        raise SystemExit(
-            f"视觉门 status 不合法：{visual_status}（允许 {', '.join(sorted(VISUAL_ALLOWED_STATUSES))}）。"
-        )
-
-    behavior_status = str(behavior.get("status", ""))
-    if behavior_status not in BEHAVIOR_ALLOWED_STATUSES:
-        raise SystemExit(
-            f"行为审 status 不合法：{behavior_status}（允许 {', '.join(sorted(BEHAVIOR_ALLOWED_STATUSES))}）。"
-        )
-    if behavior_status == "fail":
-        raise SystemExit("行为审未通过：不能收尾。请先修到通过，或重新跑 build 验收。")
-    if browser_smoke_status in BROWSER_SMOKE_LIMITED_STATUSES:
-        if visual_status not in VISUAL_LIMITED_STATUSES:
-            raise SystemExit(
-                "浏览器主动 smoke 未通过：视觉门不能写 pass/needs-review。"
-                "请改为 limited/skipped/blocked，并记录 PM 明确接受的风险。"
-            )
-        if behavior_status not in BEHAVIOR_LIMITED_STATUSES:
-            raise SystemExit(
-                "浏览器主动 smoke 未通过：行为审不能写 pass。"
-                "请改为 limited/skipped/blocked，并记录 PM 明确接受的风险。"
-            )
-
-    limited = []
-    if browser_smoke_status in BROWSER_SMOKE_LIMITED_STATUSES:
-        limited.append("浏览器主动 smoke")
-    if visual_status in VISUAL_LIMITED_STATUSES:
-        limited.append("视觉门")
-    if behavior_status in BEHAVIOR_LIMITED_STATUSES:
-        limited.append("行为审")
-    if limited and not has_audit_exception(build):
-        raise SystemExit(
-            "build 验收存在受限/跳过/失败/阻塞项："
-            + "、".join(limited)
-            + "。必须记录 PM 明确接受该缺口后才能收尾。"
-        )
-
-
-def evidence_exception_for(build: dict, check_name: str) -> bool:
-    exc = audit_exception(build)
-    if not exc or not exc.get("accepted_at") or not exc.get("reason"):
-        return False
-    checks = exc.get("checks")
-    if checks is None:
-        return True  # v1 compatibility: one exception covered the browser audit bundle
-    return isinstance(checks, list) and check_name in checks
-
-
-def clear_review_ready(build: dict) -> None:
-    """Invalidate the pre-acceptance readiness snapshot without deleting evidence."""
-
-    acceptance = build.setdefault("acceptance", {})
-    if not isinstance(acceptance, dict):
-        raise SystemExit("build.acceptance 必须是对象。")
-    acceptance["ready_at"] = None
-    acceptance["ready_commit"] = None
-    acceptance["ready_source_hash"] = None
-
-
-def clear_finalization(build: dict) -> None:
-    """Return a v4+ contract to the PM-facing rapid-iteration lane."""
-
-    if contract_version(build) < 4:
-        return
-    build["finalization"] = {
-        "requested_at": None,
-        "requested_commit": None,
-        "rebound_at": None,
-    }
-
-
-def validate_finalization_requested(build: dict) -> None:
-    """Require a PM finalization request bound to the current implementation."""
-
-    if contract_version(build) < 4:
-        return
-    finalization = build.get("finalization")
-    if not isinstance(finalization, dict):
-        raise SystemExit("build.finalization 必须是对象。")
-    requested_at = optional(finalization.get("requested_at"))
-    requested_commit = optional(finalization.get("requested_commit"))
-    if not requested_at or not requested_commit:
-        raise SystemExit(
-            "PM 尚未请求定稿：快速迭代期间不能生成 review-ready 或运行完整 final checks。"
-        )
-    if requested_commit != optional(build.get("implementation_commit")):
-        raise SystemExit(
-            "定稿请求绑定的 implementation commit 已变化；先记录验收修复提交，"
-            "由合同重新绑定后再运行 final checks。"
-        )
-
-
-def validate_review_ready(build: dict) -> None:
-    """Require a readiness snapshot bound to the current source and implementation."""
-
-    acceptance = build.get("acceptance")
-    if not isinstance(acceptance, dict):
-        raise SystemExit("build.acceptance 必须是对象。")
-    ready_at = optional(acceptance.get("ready_at"))
-    ready_commit = optional(acceptance.get("ready_commit"))
-    ready_source_hash = optional(acceptance.get("ready_source_hash"))
-    if not ready_at or not ready_commit or not ready_source_hash:
-        raise SystemExit(
-            "当前实现尚未形成验收就绪快照：PM 请求定稿后，先对冻结提交完成全部 final checks，"
-            "再运行 review-ready；final_check 不临时补实现或首次跑完整验收。"
-        )
-    if ready_commit != optional(build.get("implementation_commit")):
-        raise SystemExit("验收就绪快照已过期：implementation commit 已变化，请回 build 重新检查。")
-    if ready_source_hash != optional(build.get("approved_source_hash")):
-        raise SystemExit("验收就绪快照已过期：approved source 已变化，请回 build 重新检查。")
-
-
-def validate_fresh_evidence(module_dir: Path, build: dict) -> None:
-    """Validate v2 adaptive acceptance and evidence freshness."""
-
-    acceptance = build.get("acceptance")
-    assert isinstance(acceptance, dict)
-    required = canonical_final_checks({"build": build})
-    evidence = acceptance.get("evidence", [])
-    if not isinstance(evidence, list) or any(not isinstance(item, dict) for item in evidence):
-        raise SystemExit("build.acceptance.evidence 必须是对象数组。")
-
-    approved_hash = str(build.get("approved_source_hash", ""))
-    implementation_commit = str(build.get("implementation_commit", ""))
-    by_name: dict[str, dict] = {}
-    duplicates: set[str] = set()
-    for item in evidence:
-        name = str(item.get("name", "")).strip()
-        if not name:
-            raise SystemExit("build 验收证据缺少 name。")
-        if name in by_name:
-            duplicates.add(name)
-        by_name[name] = item
-    if duplicates:
-        raise SystemExit("build 验收证据包含重复检查：" + "、".join(sorted(duplicates)))
-
-    missing = [name for name in required if name not in by_name]
-    if missing:
-        raise SystemExit("build 验收证据不完整：缺少 " + "、".join(missing) + "。")
-
-    repo_root = repo_root_for(module_dir)
-    resolved_artifacts: dict[str, dict] = {}
-    for name in required:
-        item = by_name[name]
-        label = EVIDENCE_LABELS.get(name, name)
-        status = str(item.get("status", "")).strip()
-        if str(item.get("source_hash", "")) != approved_hash:
-            raise SystemExit(
-                f"验收证据 {name} 已过期：source_hash 与当前 approved_source_hash 不一致。"
-            )
-        if str(item.get("commit", "")) != implementation_commit:
-            raise SystemExit(
-                f"验收证据 {name} 已过期：commit 与当前 implementation_commit 不一致。"
-            )
-        if not item.get("checked_at"):
-            raise SystemExit(f"验收证据 {name} 缺少 checked_at。")
-        if name in {"browser-smoke", "browser-acceptance"} and status not in PASSING_EVIDENCE_STATUSES:
-            raise SystemExit(
-                f"UI 验收缺少可用的主动浏览器能力：{name} 必须通过，"
-                "v2 不能用 exception 跳过。请启用 gstack/browse、browser 或 Playwright 后重跑。"
-            )
-        if status in PASSING_EVIDENCE_STATUSES:
-            pass
-        elif status in LIMITED_EVIDENCE_STATUSES:
-            if evidence_exception_for(build, name):
-                pass
-            else:
-                raise SystemExit(
-                    f"build 验收存在受限/跳过/失败/阻塞项：{label}。"
-                    "必须记录 PM 明确接受该缺口后才能落地主线。"
-                )
-        elif name == "behavior" and status == "fail":
-            raise SystemExit("行为审未通过：不能落地主线。请先修到通过。")
-        else:
-            raise SystemExit(f"验收证据 {name} 未通过：status={status or '<empty>'}。")
-        artifact = optional(item.get("artifact")) if isinstance(item.get("artifact"), str) else None
-        if artifact:
-            path = Path(artifact).expanduser()
-            path = path if path.is_absolute() else repo_root / path
-            if not path.exists():
-                raise SystemExit(f"验收证据 {label} 的 artifact 不存在：{path}")
-            if path.suffix == ".json":
-                resolved_artifacts[name] = load_audit_json(path, name)
-
-    browser = by_name.get("browser-smoke")
-    visual = by_name.get("visual")
-    behavior = by_name.get("behavior")
-    if browser:
-        browser_status = str(browser.get("status", ""))
-        artifact = resolved_artifacts.get("browser-smoke", {})
-        if browser_status in PASSING_EVIDENCE_STATUSES and artifact.get("active_browser_smoke") is not True:
-            raise SystemExit("浏览器主动 smoke 证据不是 active browser smoke，不能当作验收前提。")
-        if browser_status in LIMITED_EVIDENCE_STATUSES:
-            if visual and str(visual.get("status", "")) in PASSING_EVIDENCE_STATUSES:
-                raise SystemExit("浏览器主动 smoke 未通过：视觉门不能写 pass。")
-            if behavior and str(behavior.get("status", "")) in PASSING_EVIDENCE_STATUSES:
-                raise SystemExit("浏览器主动 smoke 未通过：行为审不能写 pass。")
-    if behavior and str(behavior.get("status", "")) == "fail":
-        raise SystemExit("行为审未通过：不能落地主线。请先修到通过。")
-
-    batched_browser = by_name.get("browser-acceptance")
-    if batched_browser:
-        artifact = resolved_artifacts.get("browser-acceptance")
-        if artifact is None:
-            raise SystemExit("浏览器批量验收缺少 JSON artifact。")
-        expected = {
-            "schema_version": 1,
-            "check": "browser-acceptance",
-            "status": "pass",
-            "implementation_commit": implementation_commit,
-            "source_hash": approved_hash,
-            "active_browser_smoke": True,
-            "single_chain_invocation": True,
-        }
-        for key, value in expected.items():
-            if artifact.get(key) != value:
-                raise SystemExit(f"浏览器批量验收 artifact 字段不一致：{key}。")
-        if set(artifact.get("covers", [])) != {"smoke", "visual", "behavior"}:
-            raise SystemExit("浏览器批量验收没有同时覆盖 smoke、visual 和 behavior。")
-        flows = artifact.get("flows")
-        if (
-            not isinstance(flows, list)
-            or not flows
-            or any(not isinstance(flow, dict) or flow.get("status") != "pass" for flow in flows)
-        ):
-            raise SystemExit("浏览器批量验收存在未通过的受影响流程。")
-
-    if contract_version(build) >= 3 and build.get("target", {}).get("kind") == "prototype":
-        artifact = resolved_artifacts.get("prototype-boundary")
-        if artifact is None:
-            raise SystemExit("原型实现边界缺少 JSON artifact，不能形成验收就绪快照。")
-        validate_prototype_boundary_artifact(build, artifact)
-
-
-def validate_prototype_boundary_artifact(build: dict, artifact: dict) -> None:
-    """Require an explicit diff review proving the prototype did not become a product."""
-
-    required_values = {
-        "schema_version": 1,
-        "check": "prototype-boundary",
-        "status": "pass",
-        "target_kind": "prototype",
-        "implementation_mode": "interactive-simulation",
-        "policy_hash": build.get("delivery_policy_hash"),
-        "source_hash": build.get("approved_source_hash"),
-        "baseline_sha": build.get("baseline_sha"),
-        "implementation_commit": build.get("implementation_commit"),
-        "target_paths": build.get("target", {}).get("paths"),
-    }
-    for key, expected in required_values.items():
-        if artifact.get(key) != expected:
-            raise SystemExit(f"原型实现边界证据字段不一致：{key}。")
-    for key in (
-        "changed_paths",
-        "outside_target_paths",
-        "detected_signals",
-        "unapproved_signals",
-        "approved_real_edges",
-        "simulated_capabilities",
-    ):
-        if not isinstance(artifact.get(key), list):
-            raise SystemExit(f"原型实现边界证据 {key} 必须是数组。")
-    if artifact["outside_target_paths"]:
-        raise SystemExit("原型实现边界发现批准范围外改动，不能定稿。")
-    if artifact["unapproved_signals"]:
-        raise SystemExit("原型实现边界发现未经决定允许的真实系统建设信号，不能定稿。")
-    semantic_review = artifact.get("semantic_review")
-    if not isinstance(semantic_review, dict) or semantic_review.get(
-        "confirmed_no_real_system_changes"
-    ) is not True:
-        raise SystemExit("原型实现边界尚未完成语义复核，不能定稿。")
-    if not semantic_review.get("reviewed_at"):
-        raise SystemExit("原型实现边界语义复核缺少 reviewed_at。")
-    for edge in artifact["approved_real_edges"]:
-        if not isinstance(edge, dict) or not str(edge.get("decision_reference") or "").strip():
-            raise SystemExit("原型真实边缘能力缺少 active decision reference。")
 
 
 def current_source_hash(build: dict, delta: dict | None = None) -> str:
@@ -1824,7 +1131,7 @@ def cmd_accept(args: argparse.Namespace) -> None:
     }:
         raise SystemExit("只有 PM 看过构建结果后才能进入 final_check。")
     if contract_version(build) >= 2:
-        ensure_v2_shape(build)
+        ensure_build_shape(build)
         validate_finalization_requested(build)
         validate_review_ready(build)
     accepted_at = optional(args.accepted_at) or now_iso()
@@ -1855,7 +1162,7 @@ def cmd_complete(args: argparse.Namespace) -> None:
                 "定稿不能同时换 implementation commit：先用 commit 记录候选提交，"
                 "完成 final checks 和 review-ready，再记录 PM 定稿。"
             )
-        ensure_v2_shape(build)
+        ensure_build_shape(build)
         validate_finalization_requested(build)
         validate_review_ready(build)
     accepted_at = optional(args.accepted_at) or now_iso()
@@ -1943,10 +1250,13 @@ def cmd_add_delta(args: argparse.Namespace) -> None:
             "绑定已应用且复验通过的当前模块规格。"
         )
     if approval_kind == "lark-review-batch":
-        approval_artifact = validate_lark_review_approval(
-            module_dir,
-            approval_reference,
-            args.approval_artifact,
+        approval_artifact = validate_review_approval(
+            provider=approval_kind,
+            repo_root=repo_root_for(module_dir),
+            module_dir=module_dir,
+            reference=approval_reference,
+            artifact=optional(args.approval_artifact),
+            scripts_dir=Path(__file__).resolve().parent,
         )
         sealed_delta = approval_artifact.get("active_build_delta")
         if not isinstance(sealed_delta, dict) or any(
@@ -2105,7 +1415,7 @@ def cmd_request_finalization(args: argparse.Namespace) -> None:
     commit = optional(build.get("implementation_commit"))
     if not commit:
         raise SystemExit("候选实现尚未记录 implementation_commit，不能请求定稿。")
-    ensure_v2_shape(build)
+    ensure_build_shape(build)
     existing = build.get("finalization")
     if (
         isinstance(existing, dict)
@@ -2164,7 +1474,7 @@ def cmd_review_ready(args: argparse.Namespace) -> None:
         raise SystemExit("只有 iterating / final_check 的候选实现可以标记为验收就绪。")
     if not optional(build.get("implementation_commit")):
         raise SystemExit("候选实现尚未记录 implementation_commit，不能标记为验收就绪。")
-    ensure_v2_shape(build)
+    ensure_build_shape(build)
     validate_finalization_requested(build)
     validate_fresh_evidence(module_dir, build)
     acceptance = build["acceptance"]
@@ -2183,28 +1493,20 @@ def transition(
     reason: str | None = None,
     allowed_from: set[str] | None = None,
 ) -> dict:
-    if state not in VALID_LIFECYCLE_STATES:
-        raise SystemExit(f"未知 lifecycle state: {state}")
     meta = read_meta(module_dir)
     build = require_build(meta)
-    if contract_version(build) < 2:
-        raise SystemExit("显式 lifecycle transition 只适用于 build contract v2+。")
     current = canonical_state(meta).lifecycle_state
-    if allowed_from is not None and current not in allowed_from:
-        raise SystemExit(
-            f"lifecycle 不能从 {current or '<empty>'} 进入 {state}；"
-            f"允许来源：{', '.join(sorted(allowed_from))}。"
-        )
-    set_build_lifecycle(meta, build, state)
-    if docs_status is not None:
-        if docs_status not in VALID_DOCS_STATUSES:
-            raise SystemExit(f"未知 docs status: {docs_status}")
-        build["docs_status"] = docs_status
-        build["docs_updated_at"] = now_iso()
-    if reason:
-        build["docs_failure_reason"] = reason
-    elif docs_status == "complete":
-        build.pop("docs_failure_reason", None)
+    apply_transition(
+        meta,
+        build,
+        state=state,
+        current_state=current,
+        valid_states=VALID_LIFECYCLE_STATES,
+        allowed_from=allowed_from,
+        docs_status=docs_status,
+        reason=reason,
+        timestamp=now_iso,
+    )
     meta["build"] = build
     write_meta(module_dir, meta)
     return build
@@ -2309,7 +1611,7 @@ def cmd_validate_close(args: argparse.Namespace) -> None:
     meta = read_meta(module_dir)
     build = require_build(meta)
     version = contract_version(build)
-    ensure_v2_shape(build)
+    ensure_build_shape(build)
 
     mode = build.get("mode")
     executor = build.get("executor")
@@ -2338,7 +1640,7 @@ def cmd_validate_close(args: argparse.Namespace) -> None:
         validate_review_ready(build)
         validate_fresh_evidence(module_dir, build)
     else:
-        validate_audit_evidence(module_dir, build)
+        validate_legacy_audit(module_dir, build)
 
     print(json.dumps(build, ensure_ascii=False))
 

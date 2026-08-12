@@ -7,6 +7,14 @@ linearization covers pathname create, unlink, rename, and writes completed
 before claim. POSIX writes through an already-open fd after claim target the
 retired inode and require a shared writer lock or version retention if callers
 also need to preserve them.
+
+Supported threat model (ADR-004): preserve normal single-user work, detect
+cooperative writers that use the shared contract, reject traversal and unsafe
+symlinks, and leave recoverable evidence after interruption. This module does
+not claim to resist a malicious same-user process, a non-cooperative writer
+that continuously races the destination, a hostile filesystem, or a replaced
+Git executable. New synchronization belongs here only when it protects the
+supported operational model.
 """
 
 from __future__ import annotations

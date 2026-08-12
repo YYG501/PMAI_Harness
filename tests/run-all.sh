@@ -8,15 +8,10 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 SUITE_RUNNER="$SCRIPT_DIR/run-suite.py"
 SUITE_TIMEOUT_SECONDS="${PMAI_SUITE_TIMEOUT_SECONDS:-300}"
-SUITES=(
+CORE_SUITES=(
   test-check-branch.sh
   test-check-open-questions.sh
   test-atomic-file.sh
-  test-lark-adapter.sh
-  test-lark-cli-lint.sh
-  test-lark-entry-routing.sh
-  test-lark-review.sh
-  test-publish-to-lark-e2e.sh
   test-measure-tthw.sh
   test-init-project.sh
   test-proposal-contract.sh
@@ -64,7 +59,9 @@ SUITES=(
   test-browser-acceptance.sh
   test-build-timing.sh
   test-final-validation.sh
+  test-finalize-candidate.sh
   test-finalize-work.sh
+  test-build-maintenance-boundaries.sh
   test-prototype-boundary.sh
   test-doc-impact.sh
   test-build-contract.sh
@@ -91,7 +88,6 @@ SUITES=(
   test-pre-commit-hook.sh
   test-mixed-delivery-guard.sh
   test-prd-hierarchy-lint.sh
-  test-publish-to-lark-rowspan-merge.sh
   test-quick-fix-skill.sh
   quick-fix/test-happy-path.sh
   quick-fix/test-tsc-gate.sh
@@ -101,6 +97,18 @@ SUITES=(
   quick-fix/test-cleanup.sh
   quick-fix/test-sanitize.sh
 )
+OPTIONAL_LARK_SUITES=(
+  test-lark-adapter.sh
+  test-lark-cli-lint.sh
+  test-lark-entry-routing.sh
+  test-lark-review.sh
+  test-publish-to-lark-e2e.sh
+  test-publish-to-lark-rowspan-merge.sh
+)
+SUITES=("${CORE_SUITES[@]}")
+if [ "${PMAI_SKIP_OPTIONAL_LARK_TESTS:-0}" != "1" ]; then
+  SUITES+=("${OPTIONAL_LARK_SUITES[@]}")
+fi
 
 TOTAL_PASS=0
 TOTAL_FAIL=0

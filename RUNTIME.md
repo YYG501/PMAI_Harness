@@ -6,7 +6,7 @@
 
 - 日期：2026-08-12
 - 开发分支：`main`
-- 当前目标：Harness P1 与复杂度收口批次一、二已经提交；批次三内部状态归一化已在工作区实现、待完整回归与提交，尚未分发或升级安装态。新 build contract 为 v5；Kimi Code、OpenCode、Cursor Agent 只作 Builder，遗留主控资产只诊断、不自动清理。
+- 当前目标：Harness P1 与复杂度收口批次一至四已经完成并提交；当前只剩批次五 Loop Engineering，尚未分发或升级安装态。新 build contract 为 v5；Kimi Code、OpenCode、Cursor Agent 只作 Builder，遗留主控资产只诊断、不自动清理。
 - gstack 参考基线：`v1.58.5.0`，commit `11de390`；只参考本地 `gstack-clean` checkout，没有升级用户目录中的安装副本。
 
 ## 当前活跃模型
@@ -48,6 +48,7 @@
 - prototype / product 验收 profile schema v3 同时编译 `iteration_checks / final_checks`，不再输出 `required_checks` 别名。新 Web build 只生成一个不可 exception 的 `browser-acceptance`，一次持续浏览器 chain 覆盖受影响流程的 smoke、visual、behavior；旧合同的三项浏览器证据继续兼容恢复。
 - `final-validation.py` 对定稿请求绑定的 implementation commit 创建 detached validation worktree，在 `implementation.root` 运行命令；只对文本完全相同的 test/typecheck/build 去重，生产构建硬门不变。
 - `finalize-work.py` 按 v4+ lifecycle 只补缺失机械项，并用绑定 commit/source hash 的 audit 游标从语义检查、`final_check / landed / documenting` 准确续跑；只提交当前模块状态和 audit 目录，合入后输出 main 模块恢复位置。coverage、prototype boundary、迁移和安全等语义判断不伪装成自动通过。
+- 复杂度收口批次四已完成：`build-contract.py` 的 schema、transition、evidence 和可选 review adapter 已按职责拆到 `_lib`；核心 Build CLI 不直接依赖 Lark，Lark 只由 `review_evidence.py` 适配；原子写入实现明确遵守 ADR-004 威胁模型；`finalize-candidate.py` 统一读取当前 HEAD、绑定实现提交并启动可恢复 finalize runner，Skill 只保留意图、决策门和失败路由。
 - `build-timing.py` 自动记录 currentness、final-validation、browser-acceptance、semantic-validation、landing、documentation；统一 runner 完成前校验适用阶段都有 pass 且没有 running。真实 build/browser 缺陷、PM 新反馈、merge 冲突、未跟踪路径碰撞和文档碰撞把旧尝试标为 `exited` 或启动新尝试，不显示成 10 分钟成功。
 - 新增 `prototype-boundary.py`：从 baseline 到候选实现扫描批准范围外改动、数据库 migration、生产基础设施、密钥配置、真实鉴权和外部副作用信号；静态信号无缺口后仍要求 AI 明确完成语义复核，artifact 才能写 `pass`。
 - 新增 `project-definition.py` 和严格 schema validator；路径、类型、技术栈、Web 运行配置与 revision 变更全部 fail-closed。
@@ -92,13 +93,13 @@
 ## 当前验证
 
 - 本轮关键定向基线：lark-entry-routing `6/6`、lark-review `73/73`、publish-to-lark-e2e `20/20`、lark-adapter `40/40`、project-design-system `7/7`、consumer-doctor `23/23`、private-onboarding `4/4`、init-project-codex-compat `24/24`、check-branch `21/21`、repo-kind `6/6`、exec-adapters `16/16`、skill-link-ownership `8/8`、skill-eval 合同 `6/6`、Kimi host `23/23`、doctor-skills `44/44`；发布门在 runner / judge 均缺失时返回 2 并明确列出两项缺失能力，schema `23` 个案例与 static eval `6/6` 通过。
-- 当前唯一完整 `tests/run-all.sh` 基线为 `959 passed / 0 failed`。普通开发回归中的 skill eval 为 `6 passed / 0 failed / 17 session skipped`，只形成静态与确定性合同基线，不构成稳定版本证据；`v*` tag 或手动稳定发布仍必须通过配置真实 runner 与独立 judge 的 `tests/run-release-gate.sh`，任何 session skip 都会阻断。
+- 当前完整 `tests/run-all.sh` 基线为 `965 passed / 0 failed`。普通开发回归中的 skill eval 为 `6 passed / 0 failed / 17 session skipped`，只形成静态与确定性合同基线，不构成稳定版本证据；`v*` tag 或手动稳定发布仍必须通过配置真实 runner 与独立 judge 的 `tests/run-release-gate.sh`，任何 session skip 都会阻断。稳定核心发布门默认跳过可选 Lark 假环境套件，但日常全量回归仍保留这些套件。
 - 开发态入口同步 helper 已在真实消费仓 `ExampleAgentProject` 只读 dogfood：返回 `stale / legacy_migration`，渲染计划可以确定识别旧 PMAI Startup，并保留“非小改动前读取产品现状”等项目补充及后续项目规则。消费仓在本轮分析期间又出现新的活跃模块状态，因此不再把其整体 error 数作为本次入口同步回归基线；运行前后 Git 状态一致，未修改消费仓或用户级安装。
 
 ## 下一步
 
 - 在本工作区改动完成提交和分发确认后，再升级安装态；本批不修改三个已知消费仓，也不清理真实 Kimi/OpenCode 用户目录。
-- 内部状态归一化已完成：旧 `stage`、多位置 lifecycle、`required_checks` 和 v1-v4 build contract 统一投影到 canonical model，新写只产生 v5。下一批按所有者视图进入维护热点拆分，先拆 `build-contract.py` 的 schema / transition / evidence / CLI 职责；逐仓迁移和兼容删除仍需 PM 单独确认。
+- 内部状态归一化与维护热点收口已完成：旧 `stage`、多位置 lifecycle、`required_checks` 和 v1-v4 build contract 统一投影到 canonical model，新写只产生 v5；Build 核心与 Lark 可选能力已隔离，稳定收尾编排已下沉到脚本。下一批进入批次五，统一 Build、Proposal、Design 的 Loop Contract；逐仓迁移和兼容删除仍需 PM 单独确认。
 - 在 PM 确认分发后升级安装态，再用真实消费仓 dogfood `init → proposal → design → spec-writing → build`，并继续观察 active build 快速迭代与定稿验收。
 - 在真实消费仓 dogfood `/pmai-feedback`，核对完整会话复盘、问题归属和交接 Prompt 是否能直接驱动框架仓分析；再按完整主控支持范围评估 Claude Code 的精确当前会话定位，不为仅 Builder 的 Kimi Code、OpenCode 建设主控 session locator，也不提供猜测式降级。
 - 在真实 Docx 规格上 dogfood `/pmai-lark-review`：覆盖 active worktree 目标绑定、正文直改、复杂格式 / 图片 / 引用、Proposal / design handoff、sealed scoped adjustment 与 authority checkpoint；记录 collect / reconcile / 精细写回 / 评论收口的阶段耗时，确认机器路径进入 10–15 分钟。

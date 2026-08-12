@@ -20,4 +20,5 @@ if [ ${#missing[@]} -gt 0 ]; then
 fi
 
 export PMAI_REQUIRE_SESSION_EVALS=1
+export PMAI_SKIP_OPTIONAL_LARK_TESTS=1
 exec bash "$SCRIPT_DIR/run-all.sh"

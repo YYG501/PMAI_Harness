@@ -1,6 +1,6 @@
 # PMAI 框架所有者视图与复杂度收口分析
 
-> 状态：架构边界已由 PM 确认；飞书公开入口和复杂度收口批次二已经落地。后续从批次三继续，不把未迁移的兼容资产写成已经清理。
+> 状态：架构边界已由 PM 确认；复杂度收口批次一至四已经落地。后续只剩批次五，不把未迁移的兼容资产写成已经清理。
 >
 > 基线日期：2026-08-11。当前提交和完整测试数字只在 [`RUNTIME.md`](../../RUNTIME.md) 维护。本文不包含 Session Eval 的实现设计；评测方法另见 [`agent-harness-evaluation-methodology.md`](./agent-harness-evaluation-methodology.md)。
 
@@ -457,7 +457,7 @@ PM 已确认并已落地新写等级：Codex、Claude Code 作为完整主控，
 
 ## 10. 建议的收口顺序
 
-执行时一次只推进一个批次。每批先完成清单与验收标准，再改实现；前一批没有形成可验证结果前，不并行启动后续大型重构。批次一至三已经完成，下一步从批次四开始。
+执行时一次只推进一个批次。每批先完成清单与验收标准，再改实现；前一批没有形成可验证结果前，不并行启动后续大型重构。批次一至四已经完成，下一步从批次五开始。
 
 ### 批次一：只降低认知成本，不改变用户行为（已完成）
 
@@ -482,12 +482,17 @@ PM 已确认并已落地新写等级：Codex、Claude Code 作为完整主控，
 
 ### 批次四：降低维护热点
 
-1. 按职责拆分 `build-contract.py`，先分 schema / normalization / transition / evidence / CLI。
-2. 将 Lark 子系统作为官方可选能力，通过 adapter 与核心合同隔离；核心发布不依赖飞书环境。
-3. 按 ADR-004 审查原子写入，保留承诺范围内的保护，停止无边界加固。
-4. 将 Skill 中可机械执行的步骤下沉到脚本，Skill 保留意图、决策门、入口和失败路由。
+**状态：已完成（2026-08-12）**
+
+1. 按职责拆分 `build-contract.py`，由 `_lib/build_schema.py`、`build_transition.py`、`build_evidence.py`、`review_evidence.py` 分别承接合同结构、状态迁移、验收证据和可选评审适配；主 CLI 保留命令入口与组合逻辑。
+2. 将 Lark 子系统作为官方可选能力，通过 `review_evidence.py` adapter 与核心合同隔离；核心 Build CLI 不 import Lark adapter，稳定核心发布门不要求飞书 CLI 或账号。
+3. 按 ADR-004 审查原子写入，保留路径安全、合作 writer、失败恢复和 worktree/branch 身份保护；在 `atomic_file.py` 明确不承诺同用户恶意进程、非合作 writer、恶意文件系统或被替换 Git。
+4. 新增 `finalize-candidate.py` 统一读取当前 Git HEAD、记录实现提交并启动 `finalize-work.py`；Skill 只保留 PM 定稿意图、决策门、入口和失败路由。
+5. 新增维护边界与收尾编排回归；默认全量保留 Lark fake regression，稳定核心 release gate 可显式跳过可选 Lark suites。
 
 ### 批次五：统一 Loop Engineering
+
+**状态：待开始，也是所有者视图中剩余的唯一批次。**
 
 1. 先对 Build Loop 定义统一输入、允许动作、验证、重试、升级和停止条件。
 2. 再将 Proposal 和 Design 映射到同一 Loop Contract。
