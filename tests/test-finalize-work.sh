@@ -15,6 +15,8 @@ CLEANUP="$FRAMEWORK_ROOT/scripts/cleanup-pending-worktrees.sh"
 
 setup_fixture() {
   local build_command="$1"
+  local test_command="${TEST_COMMAND_OVERRIDE:-$build_command}"
+  local typecheck_command="${TYPECHECK_COMMAND_OVERRIDE:-$build_command}"
   local work_id="${WORK_ID_OVERRIDE:-work-demo}"
   shift
   T=$(mktemp -d "${TMPDIR:-/tmp}/pmai-finalize-work.XXXXXX")
@@ -38,8 +40,8 @@ setup_fixture() {
   git -C "$T" config user.name Test
   python3 "$PROJECT" write "$T" --source docs/modules/demo/spec.md --type product \
     --root prototypes --entrypoint prototypes/src --language typescript --runtime node \
-    --framework nextjs --package-manager pnpm --test-command "$build_command" \
-    --typecheck-command "$build_command" --build-command "$build_command" >/dev/null
+    --framework nextjs --package-manager pnpm --test-command "$test_command" \
+    --typecheck-command "$typecheck_command" --build-command "$build_command" >/dev/null
   git -C "$T" add -A
   git -C "$T" commit -qm design
   PACK="$T/.pm-workflow/context/demo.json"
@@ -286,6 +288,63 @@ PY
     else
       _fail "failed build should remain iterating and mark SLA exited"
     fi
+  fi
+  rm -f /tmp/finalize-work.$$ /tmp/finalize-work.err.$$
+  teardown_fixture
+}
+
+test_pm_bound_limited_checks_resume_without_manual_evidence() {
+  start_test "finalize-work: PM-bound test/typecheck limitations resume from one artifact"
+  TEST_COMMAND_OVERRIDE="bash -c 'exit 2'" \
+    TYPECHECK_COMMAND_OVERRIDE="bash -c 'exit 3'" \
+    setup_fixture "test -f package.json" tests typecheck build
+  AUDIT="$T/.pm-workflow/audits/demo/final-validation.json"
+  if python3 "$FINALIZE" --module-dir "$MODULE" --no-land \
+    >/tmp/finalize-work.$$ 2>/tmp/finalize-work.err.$$; then
+    _fail "raw test/typecheck failures must stop before PM acceptance"
+    teardown_fixture; return
+  fi
+  if ! python3 "$CONTRACT" audit-exception "$MODULE" \
+    --reason "PM 接受已绑定的既有 tests/typecheck 风险" \
+    --check tests --check typecheck --artifact "$AUDIT" \
+    >/tmp/finalize-work.$$ 2>/tmp/finalize-work.err.$$; then
+    _fail "PM exception should bind the current validation artifact"
+    cat /tmp/finalize-work.err.$$ >&2
+    teardown_fixture; return
+  fi
+  if ! python3 "$FINALIZE" --module-dir "$MODULE" --no-land \
+    >/tmp/finalize-work.$$ 2>/tmp/finalize-work.err.$$; then
+    _fail "bound limited checks should resume without manual record-evidence"
+    cat /tmp/finalize-work.err.$$ >&2
+  elif ! python3 - "$MODULE/.work-meta.json" "$AUDIT" \
+    "$T/.pm-workflow/audits/demo/timing.json" \
+    "$T/.pm-workflow/audits/demo/finalize-run.json" <<'PY'
+import json, sys
+meta = json.load(open(sys.argv[1]))
+artifact = json.load(open(sys.argv[2]))
+timing = json.load(open(sys.argv[3]))
+marker = json.load(open(sys.argv[4]))
+build = meta["build"]
+evidence = {item["name"]: item for item in build["acceptance"]["evidence"]}
+commands = {item["name"]: item for item in artifact["commands"]}
+assert build["lifecycle_state"] == "final_check"
+assert evidence["tests"]["status"] == "limited"
+assert evidence["typecheck"]["status"] == "limited"
+assert evidence["build"]["status"] == "pass"
+assert commands["test"]["status"] == "fail" and commands["test"]["exit_code"] == 2
+assert commands["typecheck"]["status"] == "fail" and commands["typecheck"]["exit_code"] == 3
+assert commands["build"]["status"] == "pass"
+assert artifact["status"] == "limited"
+assert artifact["pm_assessment"]["accepted_checks"] == ["tests", "typecheck"]
+final = [item for item in timing["entries"] if item["phase"] == "final-validation"]
+assert any(item["status"] == "fail" for item in final)
+assert any(item["status"] == "limited" for item in final)
+assert marker["allowed_limited_timing_phases"] == ["final-validation"]
+PY
+  then
+    _fail "limited evidence or raw-result preservation mismatch"
+  else
+    pass_test
   fi
   rm -f /tmp/finalize-work.$$ /tmp/finalize-work.err.$$
   teardown_fixture
@@ -576,6 +635,7 @@ test_finalize_runs_missing_mechanical_checks_once_and_resumes
 test_new_round_deltas_finalize_in_isolated_audit_dir
 test_partial_command_artifact_is_extended_without_losing_proof
 test_real_build_failure_exits_normal_path
+test_pm_bound_limited_checks_resume_without_manual_evidence
 test_semantic_gap_resumes_without_repeating_currentness
 test_pm_feedback_resets_semantic_timing_attempt
 test_pm_feedback_after_semantic_pass_starts_new_phase

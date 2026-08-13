@@ -67,15 +67,16 @@ bash "$PMAI_HOME/scripts/close-work.sh" "docs/modules/<模块>"
 
 `finalize-work.py` 是统一的可恢复收尾 runner；本 Skill 只负责恢复位置判断和失败路由，不复制 runner 实现。
 
-若从 `iterating` 进入，不能先写 `pm_accepted_at` 再临时跑完整验收。v4+ 直接调用统一候选入口；它自动绑定当前 Git HEAD，再让 runner 从 currentness 开始只执行缺失的机械项：
+若从 `iterating` 进入，不能先写 `pm_accepted_at` 再临时跑完整验收。v4+ 直接调用统一候选入口；它按批准目标树和 recovery checkpoint 绑定正确候选，而不是固定绑定当前 Git HEAD，再让 runner 从 currentness 开始只执行缺失的机械项：
 
 ```bash
 python3 "$PMAI_HOME/scripts/finalize-candidate.py" \
   --module-dir "<build worktree>/docs/modules/<模块>" \
-  <Web 项目追加 --browser-manifest "<build worktree>/<build.audit_dir>/browser-manifest.json">
+  <Web 项目追加 --browser-manifest "<build worktree>/<build.audit_dir>/browser-manifest.json"> \
+  <有结构化 coverage 时追加 --coverage-plan "<checks-spec.json>" --coverage-artifacts "<页面抓取目录>"，并逐项追加 --coverage-confirm-state "<check id>">
 ```
 
-runner 返回 `3` 时，按 `skills/build/references/finalization.md` 完成当前主控负责的语义检查并记录 evidence，再重跑同一命令。v2/v3 没有统一 runner 状态时继续按旧合同证据恢复，不迁移。build 验收证据是落地主线硬门，不能因为使用兼容入口而跳过。任何检查发现规格漏项、实现缺口或业务代码需要修改，都保持/退回 `iterating` 并交还 `/pmai-build`；本 close 不补业务代码、不一边收尾一边重新验收。
+候选绑定会记录 source/base commit、批准路径树摘要、source hash、明确来源与 diff mode；legacy recovery 优先使用经确认 checkpoint，后续无关 HEAD 不会替换候选，也不要求人工改 baseline。runner 返回 `3` 时，按 `skills/build/references/finalization.md` 完成当前主控负责的语义检查并记录 evidence，再重跑同一命令。v1-v4 继续按运行时 adapter 恢复，不升级合同版本。build 验收证据是落地主线硬门，不能因为使用兼容入口而跳过。任何检查发现规格漏项、实现缺口或业务代码需要修改，都保持/退回 `iterating` 并交还 `/pmai-build`；本 close 不补业务代码、不一边收尾一边重新验收。
 
 ## 2. final_check 恢复
 
@@ -86,7 +87,7 @@ runner 返回 `3` 时，按 `skills/build/references/finalization.md` 完成当�
 - 验收就绪快照与当前 implementation commit、source hash 一致；
 - 所有 final checks 都已有新鲜证据，不重复跑同一 commit 的完整验收；
 - 每份证据的 `source_hash` 和 `commit` 与合同一致；
-- `limited / skipped / blocked` 有 PM 明确接受记录；
+- final-validation 中只有 tests/typecheck 可在 PM 明确绑定当前 artifact 后登记 limited；其它 `limited / skipped / blocked` 只按旧合同允许范围处理；
 - 行为检查不是 `fail`。
 
 然后运行：
@@ -111,8 +112,8 @@ bash "$PMAI_HOME/scripts/close-work.sh" \
 实现已经在 main 时，禁止再次 merge 或重新跑实现落地。只做：
 
 1. 在 main 重新编译 context pack；
-2. 读取 `<build.audit_dir>/doc-impact.json`；
-3. impact map 只在 landed 后按 implementation diff 和 accepted deltas 生成，不在 build 阶段提前准备；
+2. 对 `<build.audit_dir>/doc-impact.json` 执行 `doc-impact.py ensure-current`，不能因文件已经存在就直接复用；
+3. impact map 只在 landed 后按当前候选绑定、implementation diff 和 accepted deltas 生成，不在 build 阶段提前准备；旧 schema 或 commit/source/tree/delta 绑定不一致时自动重建；
 4. 调用 spec-writing 的“落地主线后的目标对账”模式；
 5. 只更新影响地图实际列出的 pending 真相源；landed diff 已改文档由脚本自动记为 covered；
 6. 未受影响的 PRODUCT、RULES、DESIGN、TODO、mockup 和索引不进入清单，不逐份打开、不写 no-change；

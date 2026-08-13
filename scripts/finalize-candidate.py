@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Bind the current Git candidate to the Build contract, then resume finalization.
+"""Bind the correct Git candidate to the Build contract, then resume finalization.
 
 This is the stable mechanical entry used after the PM requests finalization. It
 does not decide whether the candidate is acceptable; Build still owns that
@@ -32,35 +32,16 @@ def git_root(module_dir: Path) -> Path:
     return Path(result.stdout.strip()).resolve()
 
 
-def git_head(repo_root: Path) -> str:
-    result = subprocess.run(
-        ["git", "rev-parse", "HEAD"],
-        cwd=repo_root,
-        text=True,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        check=False,
-    )
-    if result.returncode != 0 or not result.stdout.strip():
-        detail = result.stderr.strip()
-        raise SystemExit("无法读取候选提交" + (f"：{detail}" if detail else "。"))
-    return result.stdout.strip()
-
-
 def finalize_candidate(args: argparse.Namespace) -> int:
     script_dir = Path(__file__).resolve().parent
     module_dir = Path(args.module_dir).expanduser().resolve()
     repo_root = git_root(module_dir)
-    implementation_commit = git_head(repo_root)
-
     recorded = run(
         [
             sys.executable,
             str(script_dir / "build-contract.py"),
-            "commit",
+            "bind-candidate",
             str(module_dir),
-            "--implementation-commit",
-            implementation_commit,
         ],
         cwd=repo_root,
     )
@@ -77,6 +58,12 @@ def finalize_candidate(args: argparse.Namespace) -> int:
         command.extend(["--browser-manifest", args.browser_manifest])
     if args.browse_bin:
         command.extend(["--browse-bin", args.browse_bin])
+    if args.coverage_plan:
+        command.extend(["--coverage-plan", args.coverage_plan])
+    if args.coverage_artifacts:
+        command.extend(["--coverage-artifacts", args.coverage_artifacts])
+    for check_id in args.coverage_confirm_state:
+        command.extend(["--coverage-confirm-state", check_id])
     if args.retry_failed:
         command.append("--retry-failed")
     if args.no_land:
@@ -89,6 +76,9 @@ def parser() -> argparse.ArgumentParser:
     result.add_argument("--module-dir", required=True)
     result.add_argument("--browser-manifest")
     result.add_argument("--browse-bin")
+    result.add_argument("--coverage-plan")
+    result.add_argument("--coverage-artifacts")
+    result.add_argument("--coverage-confirm-state", action="append", default=[])
     result.add_argument("--retry-failed", action="store_true")
     result.add_argument("--no-land", action="store_true")
     return result

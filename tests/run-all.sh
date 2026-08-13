@@ -57,7 +57,9 @@ CORE_SUITES=(
   test-legacy-recovery.sh
   test-personal-memory.sh
   test-acceptance-profile.sh
+  test-candidate-binding.sh
   test-browser-acceptance.sh
+  test-coverage-evidence.sh
   test-build-timing.sh
   test-final-validation.sh
   test-finalize-candidate.sh

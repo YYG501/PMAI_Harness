@@ -1725,7 +1725,7 @@ test_contract_limited_browser_cannot_be_excepted() {
 
   if ! python3 "$BUILD_CONTRACT" audit-exception "$MODULE_DIR" \
     --reason "PM 确认本轮浏览器工具受限，先接受页面返回检查风险" \
-    --check visual --check behavior \
+    --check visual \
     --accepted-at "2026-06-28T10:05:00+08:00" >/tmp/build-contract.$$ 2>/tmp/build-contract.err.$$; then
     _fail "audit-exception should record PM acceptance"
     cat /tmp/build-contract.err.$$ >&2
@@ -1810,7 +1810,7 @@ JSON
     --artifact ".pm-workflow/audits/pet-import/browser-smoke.json" >/dev/null
   python3 "$BUILD_CONTRACT" audit-exception "$MODULE_DIR" \
     --reason "PM 确认本轮浏览器工具受限，先接受风险" \
-    --check visual --check behavior \
+    --check visual \
     --accepted-at "2026-06-28T10:05:00+08:00" >/tmp/build-contract.$$ 2>/tmp/build-contract.err.$$ || {
       _fail "audit-exception should record PM acceptance"
       cat /tmp/build-contract.err.$$ >&2
@@ -1858,12 +1858,19 @@ JSON
     --artifact ".pm-workflow/audits/pet-import/behavior.json" >/dev/null
 
   if python3 "$BUILD_CONTRACT" audit-exception "$MODULE_DIR" \
-    --reason "PM 接受行为检查缺口" --check behavior >/tmp/build-contract.$$ 2>/tmp/build-contract.err.$$ \
-    && python3 "$BUILD_CONTRACT" review-ready "$MODULE_DIR" >/tmp/build-contract.$$ 2>/tmp/build-contract.err.$$; then
-    _fail "review-ready should reject behavior fail even with audit exception"
+    --reason "PM 接受行为检查缺口" --check behavior >/tmp/build-contract.$$ 2>/tmp/build-contract.err.$$; then
+    _fail "behavior fail must not accept an audit exception"
     rm -f /tmp/build-contract.$$ /tmp/build-contract.err.$$; teardown_contract_fixture; return
   fi
-  if grep -q "行为审未通过" /tmp/build-contract.err.$$; then
+  if ! grep -q "behavior 不允许 exception" /tmp/build-contract.err.$$; then
+    _fail "stderr should explain that behavior is a hard gate"
+    cat /tmp/build-contract.err.$$ >&2
+    rm -f /tmp/build-contract.$$ /tmp/build-contract.err.$$; teardown_contract_fixture; return
+  fi
+  if python3 "$BUILD_CONTRACT" review-ready "$MODULE_DIR" >/tmp/build-contract.$$ 2>/tmp/build-contract.err.$$; then
+    _fail "review-ready should reject behavior fail"
+    rm -f /tmp/build-contract.$$ /tmp/build-contract.err.$$; teardown_contract_fixture; return
+  elif grep -q "行为审未通过" /tmp/build-contract.err.$$; then
     pass_test
   else
     _fail "stderr should explain behavior fail block"

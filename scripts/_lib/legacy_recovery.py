@@ -115,6 +115,16 @@ def validate_legacy_recovery(
         expected_chain_state = "consistent" if replayed_hash == original_hash else "mismatch"
         if raw.get("original_hash_chain_state") != expected_chain_state:
             raise ValueError("legacy_recovery.original_hash_chain_state 与重放结果不一致。")
+        candidate_paths = raw.get("candidate_target_paths")
+        candidate_digest = raw.get("candidate_target_tree_digest")
+        if candidate_paths is not None or candidate_digest is not None:
+            if (
+                not isinstance(candidate_paths, list)
+                or not candidate_paths
+                or any(not isinstance(item, str) or not item.strip() for item in candidate_paths)
+            ):
+                raise ValueError("legacy_recovery.candidate_target_paths 必须是非空字符串数组。")
+            _sha256(candidate_digest, "candidate_target_tree_digest")
     else:
         if raw.get("original_lifecycle_state") not in ACTIVE_DESIGN_STATES:
             raise ValueError("legacy_recovery.original_lifecycle_state 不是可恢复的 design 状态。")

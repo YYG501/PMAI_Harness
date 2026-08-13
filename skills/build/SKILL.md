@@ -318,7 +318,7 @@ git -C "$BUILD_DIR" commit -m "build(<模块>): start adaptive build"
 
 构建工具失败时默认保留半成品，先检查已落改动与日志；若要换工具，给出新的推荐并重新展示只含工作环境和构建工具的确认卡，不能静默替换 PM 已确认的工具。只有丢弃会破坏可用改动时才让 PM 授权；禁止自动 `git restore .` / `git clean -fd`。
 
-启动页面时只读取 `.pm-workflow/project.yml:web.start` 并替换 `{port}`；ready path 和端口候选同样来自 `project.yml`。不得从 builder config 猜 Next.js、`--hostname`、`--port` 或其它框架参数。
+启动页面时只读取 `.pm-workflow/project.yml:web.start` 并替换 `{port}`，从 `implementation.root` 执行；ready path 和端口候选同样来自 `project.yml`。不得从 builder config 猜 Next.js、`--hostname`、`--port` 或其它框架参数，也不得让命令再次 `--dir / --prefix / --cwd / cd` 到同一个 implementation root。
 
 ## 5. 进入 PM 看结果的迭代循环
 
@@ -393,11 +393,11 @@ python3 "$PMAI_HOME/scripts/build-contract.py" add-delta \
 
 PM 明确说“定稿 / 可以提交 / 可以合并 / 这版可以了”之前，本节不得执行。收到后不二次询问，也不准备 candidate evidence；完整执行 `skills/build/references/finalization.md`，从 `iterating` 统一调用 `finalize-candidate.py` 绑定当前候选并启动可恢复 runner，不在 Skill 内手工拼接 Git HEAD、合同 commit 和 finalize 命令。
 
-统一入口先用 `validate-final-currentness` 校验当前 design、accepted delta、批准路径和 project.yml，再只补缺失的机械项。完全相同的 test/typecheck/build 命令只执行一次并在 artifact 中列出所覆盖检查；命令不同或无法证明相同就分别执行。所有命令在 detached validation worktree 的 `implementation.root` 下运行，production build 保持硬门。
+统一入口先按批准目标树、source hash 与 legacy recovery checkpoint 绑定正确候选，再用 `validate-final-currentness` 校验当前 design、accepted delta、批准路径和 project.yml。后续无关 HEAD 不得替换批准目标相同的已记录实现，也不要求人工修改 baseline。完全相同的 test/typecheck/build 命令只执行一次并在 artifact 中列出所覆盖检查；命令不同或无法证明相同就分别执行。所有命令在 detached validation worktree 的 `implementation.root` 下运行，production build 保持硬门。
 
-Web 新 build 用一个 `browser-acceptance` 批次覆盖受影响流程的 smoke、visual 和 behavior；一次 gstack `chain`、一个持续会话，不按三个检查或多个复用页面串行重跑。旧合同的 `browser-smoke / visual / behavior` 只用于兼容恢复。
+Web 新 build 用一个 `browser-acceptance` 批次覆盖受影响流程的 smoke、visual 和 behavior；一次 gstack `chain`、一个持续会话，不按三个检查或多个复用页面串行重跑。旧 v1-v4 合同不升级版本：缺失的 `browser-smoke / visual / behavior` 由同一批次按合同实际要求的旧名称确定性派生，绑定同一 batch digest；coverage 仍单独证明，不从浏览器动作猜测。
 
-runner 返回仍缺语义检查时，由当前主控完成规格覆盖、prototype boundary、迁移或安全判断并记录 evidence，再重跑同一入口。实现缺陷仍回 `iterating` 修复；PM 新反馈执行 `resume-iteration`。final-validation 或 browser 真实失败会在 `timing.json` 标记正常路径退出，不得继续报 10 分钟成功。
+final-validation 分项执行并保留每项 exit code/log；test/typecheck 失败后仍继续跑 build，production build 失败始终阻断。只有 tests/typecheck 可以由 PM 绑定当前 commit/source/results digest 的 artifact 明确接受为 limited，原始失败不得改写成 pass。runner 返回仍缺语义检查时，由当前主控完成规格覆盖、prototype boundary、迁移或安全判断并记录 evidence；有 checks-spec 和页面抓取时用统一 coverage 参数，机器 P0/P1 必须为零，`must_cover_states` 必须逐 check 确认。随后重跑同一入口。实现缺陷仍回 `iterating` 修复；PM 新反馈执行 `resume-iteration`。final-validation 或 browser 真实失败会在 `timing.json` 标记正常路径退出，不得继续报 10 分钟成功。
 
 这里区分两种 `retry_current`：final checks 自己发现的实现缺口保留原定稿意图，修复后只重跑失效证据；PM 在 final checks 期间提出新的产品或体验反馈时先清除定稿请求，按共享合同重新分类。二者不得混成“都继续收尾”。
 
@@ -479,7 +479,7 @@ python3 "$PMAI_HOME/scripts/build-contract.py" record-evidence \
 
 ## 9. 基于 main 对账规格目标与产品现状
 
-实现 landed 后，`land-work.sh` 才按准确 implementation diff 生成最小 doc impact map。随后在 main 上完成：
+实现 landed 后，`land-work.sh` 才按准确 implementation diff 生成最小 doc impact map；每次恢复先 `ensure-current` 校验 work/module、implementation/landed commit、base/head、source hash、accepted deltas 与 candidate tree/binding digest，旧 schema 或任一绑定漂移就重建，不能因旧文件存在而复用。随后在 main 上完成：
 
 1. 重新生成 context pack；
 2. 读取 landed diff、build contract、accepted deltas 和 doc impact map；

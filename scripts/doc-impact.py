@@ -11,9 +11,12 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path, PurePosixPath
 
+from _lib.candidate_binding import validate_candidate_binding
+
 
 VALID_KINDS = {"object", "action", "state", "permission", "page", "term", "rule", "fact", "index", "mockup"}
 VALID_STATUSES = {"pending", "covered", "no-change"}
+SCHEMA_VERSION = 2
 
 
 def now_iso() -> str:
@@ -119,12 +122,145 @@ def output_path(repo_root: Path, module_dir: Path, override: str | None) -> Path
     return repo_root / ".pm-workflow" / "audits" / module_dir.name / "doc-impact.json"
 
 
-def load_build(module_dir: Path) -> dict:
+def load_work(module_dir: Path) -> tuple[dict, dict]:
     meta = read_json(module_dir / ".work-meta.json")
     build = meta.get("build")
     if not isinstance(build, dict):
         raise SystemExit(".work-meta.json 缺少 build 合同。")
-    return build
+    return meta, build
+
+
+def canonical_digest(value: object) -> str:
+    return hashlib.sha256(
+        json.dumps(
+            value,
+            ensure_ascii=False,
+            sort_keys=True,
+            separators=(",", ":"),
+        ).encode("utf-8")
+    ).hexdigest()
+
+
+def resolve_commit(repo_root: Path, value: object, label: str) -> str:
+    ref = str(value or "").strip()
+    if not ref:
+        raise SystemExit(f"{label} 不能为空。")
+    result = subprocess.run(
+        ["git", "-C", str(repo_root), "rev-parse", "--verify", f"{ref}^{{commit}}"],
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        check=False,
+    )
+    if result.returncode != 0:
+        raise SystemExit(result.stderr.strip() or f"{label} 不是当前仓库提交：{ref}")
+    return result.stdout.strip()
+
+
+def map_binding(
+    repo_root: Path,
+    module_dir: Path,
+    meta: dict,
+    build: dict,
+    *,
+    base: object | None = None,
+    head: object | None = None,
+) -> dict:
+    candidate_binding = build.get("candidate_binding")
+    if candidate_binding is not None:
+        try:
+            candidate = validate_candidate_binding(repo_root, build)
+        except ValueError as exc:
+            raise SystemExit(str(exc)) from exc
+        expected_base = str(candidate["base_commit"])
+        expected_head = str(candidate["source_commit"])
+        diff_mode = str(candidate["diff_mode"])
+        target_paths = list(candidate["target_paths"])
+        candidate_digest = candidate.get("target_tree_digest")
+        candidate_binding_digest = candidate.get("binding_digest")
+    else:
+        expected_base = resolve_commit(
+            repo_root, build.get("baseline_sha"), "build.baseline_sha"
+        )
+        expected_head = resolve_commit(
+            repo_root,
+            build.get("landed_commit") or build.get("implementation_commit"),
+            "build landed/implementation commit",
+        )
+        diff_mode = "commit-range"
+        target = build.get("target")
+        target_paths = (
+            [str(value) for value in target.get("paths", [])]
+            if isinstance(target, dict) and isinstance(target.get("paths"), list)
+            else []
+        )
+        candidate_digest = None
+        candidate_binding_digest = None
+    base_commit = resolve_commit(repo_root, base or expected_base, "doc impact base")
+    head_commit = resolve_commit(repo_root, head or expected_head, "doc impact head")
+    if base_commit != expected_base:
+        raise SystemExit("doc impact base 与当前 candidate binding 不一致。")
+    if head_commit != expected_head:
+        raise SystemExit("doc impact head 与当前 candidate binding 不一致。")
+    accepted_deltas = build.get("accepted_deltas", [])
+    if not isinstance(accepted_deltas, list) or any(
+        not isinstance(delta, dict) for delta in accepted_deltas
+    ):
+        raise SystemExit("build.accepted_deltas 必须是对象数组。")
+    binding = {
+        "work_id": str(meta.get("id") or ""),
+        "module": rel(repo_root, module_dir),
+        "implementation_commit": str(build.get("implementation_commit") or ""),
+        "landed_commit": str(build.get("landed_commit") or ""),
+        "base": base_commit,
+        "head": head_commit,
+        "approved_source_hash": str(build.get("approved_source_hash") or ""),
+        "accepted_deltas_digest": canonical_digest(accepted_deltas),
+        "candidate_tree_digest": candidate_digest,
+        "candidate_binding_digest": candidate_binding_digest,
+        "candidate_diff_mode": diff_mode,
+        "candidate_target_paths": target_paths,
+    }
+    binding["binding_digest"] = canonical_digest(binding)
+    return binding
+
+
+def current_binding_for_map(path: Path, payload: dict) -> tuple[Path, Path, dict]:
+    result = subprocess.run(
+        ["git", "-C", str(path.parent), "rev-parse", "--show-toplevel"],
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        check=False,
+    )
+    if result.returncode != 0 or not result.stdout.strip():
+        raise SystemExit(result.stderr.strip() or "无法定位 doc impact 所属仓库。")
+    repo_root = Path(result.stdout.strip()).resolve()
+    module_value = payload.get("module")
+    if not isinstance(module_value, str) or not module_value.strip():
+        raise SystemExit("doc impact 缺少 module 绑定。")
+    module_path = PurePosixPath(module_value)
+    if module_path.is_absolute() or ".." in module_path.parts:
+        raise SystemExit("doc impact module 不是安全仓内路径。")
+    module_dir = (repo_root / module_value).resolve()
+    try:
+        module_dir.relative_to(repo_root)
+    except ValueError as exc:
+        raise SystemExit("doc impact module 逃逸仓库。") from exc
+    meta, build = load_work(module_dir)
+    return repo_root, module_dir, map_binding(repo_root, module_dir, meta, build)
+
+
+def validate_current_binding(path: Path, payload: dict) -> dict:
+    if payload.get("schema_version") != SCHEMA_VERSION:
+        raise SystemExit("doc impact schema 已过期；请先 ensure-current 重建。")
+    actual = payload.get("binding")
+    if not isinstance(actual, dict):
+        raise SystemExit("doc impact 缺少 currentness binding；请先 ensure-current 重建。")
+    _, _, expected = current_binding_for_map(path, payload)
+    if actual != expected:
+        raise SystemExit("doc impact 已过期；当前 work/commit/source/delta 绑定不一致，请先重建。")
+    return expected
 
 
 def delta_signals(build: dict) -> tuple[set[str], set[str]]:
@@ -185,10 +321,26 @@ def reconcile_terms(repo_root: Path, module_dir: Path, changed_files: list[str])
 def cmd_init(args: argparse.Namespace) -> None:
     module_dir = Path(args.module_dir).expanduser().resolve()
     repo_root = repo_root_for(module_dir, args.repo_root)
-    build = load_build(module_dir)
-    base = args.base or build.get("baseline_sha")
-    head = args.head or build.get("landed_commit") or "HEAD"
-    changed_files = git_lines(repo_root, "diff", "--name-only", str(base), str(head)) if base else []
+    meta, build = load_work(module_dir)
+    binding = map_binding(
+        repo_root, module_dir, meta, build, base=args.base, head=args.head
+    )
+    base = binding["base"]
+    head = binding["head"]
+    if binding["candidate_diff_mode"] == "approved-target-snapshot":
+        changed_files = sorted(
+            {
+                path
+                for target in binding["candidate_target_paths"]
+                for path in git_lines(
+                    repo_root, "ls-tree", "-r", "--name-only", str(head), "--", target
+                )
+            }
+        )
+    else:
+        changed_files = git_lines(
+            repo_root, "diff", "--name-only", str(base), str(head)
+        )
     term_reconciliation = reconcile_terms(repo_root, module_dir, changed_files)
     module_rel = rel(repo_root, module_dir)
     changed_set = set(changed_files)
@@ -302,20 +454,45 @@ def cmd_init(args: argparse.Namespace) -> None:
     items = list(items_by_destination.values())
 
     payload = {
-        "schema_version": 1,
+        "schema_version": SCHEMA_VERSION,
         "created_at": now_iso(),
         "module": module_rel,
         "implementation_commit": build.get("implementation_commit"),
         "landed_commit": build.get("landed_commit"),
         "base": base,
         "head": head,
+        "binding": binding,
         "changed_files": changed_files,
         "term_reconciliation": term_reconciliation,
         "items": items,
     }
     path = output_path(repo_root, module_dir, args.output)
     write_json(path, payload)
-    print(path)
+    if not getattr(args, "quiet", False):
+        print(path)
+
+
+def cmd_ensure_current(args: argparse.Namespace) -> None:
+    module_dir = Path(args.module_dir).expanduser().resolve()
+    repo_root = repo_root_for(module_dir, args.repo_root)
+    path = output_path(repo_root, module_dir, args.output)
+    meta, build = load_work(module_dir)
+    expected = map_binding(
+        repo_root,
+        module_dir,
+        meta,
+        build,
+        base=args.base,
+        head=args.head,
+    )
+    if path.is_file():
+        payload = read_json(path)
+        if payload.get("schema_version") == SCHEMA_VERSION and payload.get("binding") == expected:
+            print(json.dumps({"status": "current", "path": str(path)}, ensure_ascii=False))
+            return
+    args.quiet = True
+    cmd_init(args)
+    print(json.dumps({"status": "rebuilt", "path": str(path)}, ensure_ascii=False))
 
 
 def find_item(payload: dict, item_id_value: str) -> dict:
@@ -331,6 +508,7 @@ def find_item(payload: dict, item_id_value: str) -> dict:
 def cmd_add(args: argparse.Namespace) -> None:
     path = Path(args.map).expanduser()
     payload = read_json(path)
+    validate_current_binding(path, payload)
     if args.kind not in VALID_KINDS:
         raise SystemExit(f"未知影响类型: {args.kind}")
     item = coverage_item(args.kind, args.name, args.destination, args.reason or "最终差异影响该产品事实")
@@ -346,6 +524,7 @@ def cmd_add(args: argparse.Namespace) -> None:
 def cmd_cover(args: argparse.Namespace) -> None:
     path = Path(args.map).expanduser()
     payload = read_json(path)
+    validate_current_binding(path, payload)
     item = find_item(payload, args.item)
     if args.status not in {"covered", "no-change"}:
         raise SystemExit("cover status 只能是 covered 或 no-change。")
@@ -363,6 +542,7 @@ def cmd_cover(args: argparse.Namespace) -> None:
 def cmd_validate(args: argparse.Namespace) -> None:
     path = Path(args.map).expanduser()
     payload = read_json(path)
+    validate_current_binding(path, payload)
     items = payload.get("items")
     if not isinstance(items, list) or not items:
         raise SystemExit("文档影响地图为空，不能完成文档收尾。")
@@ -393,6 +573,14 @@ def parser() -> argparse.ArgumentParser:
     init.add_argument("--head")
     init.add_argument("--output")
     init.set_defaults(func=cmd_init)
+
+    ensure = sub.add_parser("ensure-current")
+    ensure.add_argument("module_dir")
+    ensure.add_argument("--repo-root")
+    ensure.add_argument("--base")
+    ensure.add_argument("--head")
+    ensure.add_argument("--output")
+    ensure.set_defaults(func=cmd_ensure_current)
 
     add = sub.add_parser("add")
     add.add_argument("map")

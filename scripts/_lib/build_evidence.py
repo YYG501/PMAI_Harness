@@ -6,7 +6,10 @@ import json
 import subprocess
 from pathlib import Path
 
+from .browser_evidence import LEGACY_BROWSER_CHECK_COVERAGE, browser_batch_digest
 from .build_schema import canonical_final_checks, contract_version, optional
+from .candidate_binding import validate_candidate_binding
+from .final_validation import LIMITABLE_CHECKS, exception_allows
 
 
 PASSING_EVIDENCE_STATUSES = {"pass", "passed", "clean", "built"}
@@ -169,6 +172,7 @@ def validate_legacy_audit(module_dir: Path, build: dict) -> None:
 
 
 def validate_prototype_boundary_artifact(build: dict, artifact: dict) -> None:
+    binding = build.get("candidate_binding") if isinstance(build.get("candidate_binding"), dict) else {}
     required_values = {
         "schema_version": 1,
         "check": "prototype-boundary",
@@ -177,10 +181,13 @@ def validate_prototype_boundary_artifact(build: dict, artifact: dict) -> None:
         "implementation_mode": "interactive-simulation",
         "policy_hash": build.get("delivery_policy_hash"),
         "source_hash": build.get("approved_source_hash"),
-        "baseline_sha": build.get("baseline_sha"),
+        "baseline_sha": binding.get("base_commit", build.get("baseline_sha")),
         "implementation_commit": build.get("implementation_commit"),
         "target_paths": build.get("target", {}).get("paths"),
     }
+    if binding:
+        required_values["candidate_tree_digest"] = binding.get("target_tree_digest")
+        required_values["candidate_diff_mode"] = binding.get("diff_mode")
     for key, expected in required_values.items():
         if artifact.get(key) != expected:
             raise SystemExit(f"原型实现边界证据字段不一致：{key}。")
@@ -210,6 +217,42 @@ def validate_prototype_boundary_artifact(build: dict, artifact: dict) -> None:
             raise SystemExit("原型真实边缘能力缺少 active decision reference。")
 
 
+def validate_structured_coverage_artifact(
+    artifact: dict, implementation_commit: str, approved_hash: str
+) -> None:
+    expected = {
+        "schema_version": 1,
+        "check": "coverage",
+        "status": "pass",
+        "implementation_commit": implementation_commit,
+        "source_hash": approved_hash,
+    }
+    for key, value in expected.items():
+        if artifact.get(key) != value:
+            raise SystemExit(f"结构化 coverage artifact 字段不一致：{key}。")
+    items = require_object_list(artifact, "items", "结构化 coverage")
+    issues = require_object_list(artifact, "issues", "结构化 coverage")
+    if not items:
+        raise SystemExit("结构化 coverage artifact 的 items 不能为空。")
+    if any(item.get("status") != "pass" for item in items):
+        raise SystemExit("结构化 coverage artifact 存在未通过的检查项。")
+    if any(item.get("states_confirmed") is not True for item in items):
+        raise SystemExit("结构化 coverage artifact 存在未确认的 must_cover_states。")
+    if any(str(issue.get("severity") or "").upper() in {"P0", "P1"} for issue in issues):
+        raise SystemExit("结构化 coverage artifact 仍有 P0/P1 覆盖缺口。")
+    for item in items:
+        machine_issues = item.get("machine_issues")
+        if not isinstance(machine_issues, list) or any(
+            not isinstance(issue, dict) for issue in machine_issues
+        ):
+            raise SystemExit("结构化 coverage item.machine_issues 必须是对象数组。")
+        if any(
+            str(issue.get("severity") or "").upper() in {"P0", "P1"}
+            for issue in machine_issues
+        ):
+            raise SystemExit("结构化 coverage item 仍有 P0/P1 覆盖缺口。")
+
+
 def validate_fresh_evidence(module_dir: Path, build: dict) -> None:
     acceptance = build.get("acceptance")
     if not isinstance(acceptance, dict):
@@ -235,7 +278,13 @@ def validate_fresh_evidence(module_dir: Path, build: dict) -> None:
     if missing:
         raise SystemExit("build 验收证据不完整：缺少 " + "、".join(missing) + "。")
     repo_root = repo_root_for(module_dir)
+    if build.get("candidate_binding") is not None:
+        try:
+            validate_candidate_binding(repo_root, build)
+        except ValueError as exc:
+            raise SystemExit(str(exc)) from exc
     resolved_artifacts: dict[str, dict] = {}
+    resolved_artifact_paths: dict[str, Path] = {}
     for name in required:
         item = by_name[name]
         label = EVIDENCE_LABELS.get(name, name)
@@ -258,7 +307,21 @@ def validate_fresh_evidence(module_dir: Path, build: dict) -> None:
         if status in PASSING_EVIDENCE_STATUSES:
             pass
         elif status in LIMITED_EVIDENCE_STATUSES:
-            if not evidence_exception_for(build, name):
+            bound_exception = False
+            if name in LIMITABLE_CHECKS:
+                artifact_value = item.get("artifact")
+                if isinstance(artifact_value, str) and artifact_value.strip():
+                    bound_path = Path(artifact_value).expanduser()
+                    bound_path = (
+                        bound_path if bound_path.is_absolute() else repo_root / bound_path
+                    )
+                    if bound_path.suffix == ".json" and bound_path.is_file():
+                        bound_exception = exception_allows(
+                            build, name, load_audit_json(bound_path, name)
+                        )
+            else:
+                bound_exception = evidence_exception_for(build, name)
+            if not bound_exception:
                 raise SystemExit(
                     f"build 验收存在受限/跳过/失败/阻塞项：{label}。"
                     "必须记录 PM 明确接受该缺口后才能落地主线。"
@@ -276,6 +339,7 @@ def validate_fresh_evidence(module_dir: Path, build: dict) -> None:
                 raise SystemExit(f"验收证据 {label} 的 artifact 不存在：{path}")
             if path.suffix == ".json":
                 resolved_artifacts[name] = load_audit_json(path, name)
+                resolved_artifact_paths[name] = path.resolve()
     browser = by_name.get("browser-smoke")
     visual = by_name.get("visual")
     behavior = by_name.get("behavior")
@@ -291,6 +355,63 @@ def validate_fresh_evidence(module_dir: Path, build: dict) -> None:
                 raise SystemExit("浏览器主动 smoke 未通过：行为审不能写 pass。")
     if behavior and str(behavior.get("status", "")) == "fail":
         raise SystemExit("行为审未通过：不能落地主线。请先修到通过。")
+    coverage_artifact = resolved_artifacts.get("coverage")
+    if isinstance(coverage_artifact, dict) and coverage_artifact.get("check") == "coverage":
+        validate_structured_coverage_artifact(
+            coverage_artifact, implementation_commit, approved_hash
+        )
+    expected_legacy_checks = set(required) & set(LEGACY_BROWSER_CHECK_COVERAGE)
+    legacy_derived = {
+        name: resolved_artifacts[name]
+        for name in expected_legacy_checks
+        if isinstance(resolved_artifacts.get(name), dict)
+        and resolved_artifacts[name].get("derived_from")
+    }
+    if legacy_derived:
+        if set(legacy_derived) != expected_legacy_checks:
+            raise SystemExit("legacy browser adapter 的派生证据未精确覆盖合同要求。")
+        source_names = {str(item.get("derived_from")) for item in legacy_derived.values()}
+        digests = {str(item.get("browser_batch_digest")) for item in legacy_derived.values()}
+        if len(source_names) != 1 or len(digests) != 1:
+            raise SystemExit("legacy browser adapter 没有绑定同一批次摘要。")
+        source_name = next(iter(source_names))
+        if not source_name or Path(source_name).name != source_name or source_name in {".", ".."}:
+            raise SystemExit("legacy browser adapter 的 derived_from 必须是安全文件名。")
+        parents = {resolved_artifact_paths[name].parent for name in legacy_derived}
+        if len(parents) != 1:
+            raise SystemExit("legacy browser adapter 的派生证据必须位于同一 audit 目录。")
+        batch_path = next(iter(parents)) / source_name
+        batch = load_audit_json(batch_path, "legacy browser batch")
+        expected_batch = {
+            "schema_version": 1,
+            "check": "browser-acceptance",
+            "status": "pass",
+            "implementation_commit": implementation_commit,
+            "source_hash": approved_hash,
+            "active_browser_smoke": True,
+            "single_chain_invocation": True,
+        }
+        for key, value in expected_batch.items():
+            if batch.get(key) != value:
+                raise SystemExit(f"legacy browser batch 字段不一致：{key}。")
+        adapter = batch.get("legacy_adapter")
+        if not isinstance(adapter, dict) or set(adapter.get("checks", [])) != expected_legacy_checks:
+            raise SystemExit("legacy browser batch 映射的检查与当前合同不一致。")
+        actual_digest = browser_batch_digest(batch)
+        if batch.get("batch_digest") != actual_digest or digests != {actual_digest}:
+            raise SystemExit("legacy browser 派生证据与主批次摘要不一致。")
+        for name, artifact in legacy_derived.items():
+            expected_coverage = LEGACY_BROWSER_CHECK_COVERAGE[name]
+            if artifact.get("check") != name or artifact.get("status") != "pass":
+                raise SystemExit(f"legacy browser 派生证据字段不一致：{name}。")
+            if artifact.get("implementation_commit") != implementation_commit or artifact.get(
+                "source_hash"
+            ) != approved_hash:
+                raise SystemExit(f"legacy browser 派生证据已过期：{name}。")
+            if artifact.get("single_chain_invocation") is not True or artifact.get(
+                "covers"
+            ) != [expected_coverage]:
+                raise SystemExit(f"legacy browser 派生证据覆盖范围不一致：{name}。")
     batched_browser = by_name.get("browser-acceptance")
     if batched_browser:
         artifact = resolved_artifacts.get("browser-acceptance")

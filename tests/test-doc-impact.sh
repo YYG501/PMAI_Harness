@@ -38,6 +38,16 @@ open(p,"w").write(json.dumps(d,ensure_ascii=False,indent=2)+"\n")
 PY
   echo 'code' > "$T/prototype/access.tsx"
   git -C "$T" add -A && git -C "$T" commit -q -m implementation
+  IMPLEMENTATION=$(git -C "$T" rev-parse HEAD)
+  python3 - "$T/docs/modules/access/.work-meta.json" "$IMPLEMENTATION" <<'PY'
+import json, sys
+path, implementation = sys.argv[1:]
+data = json.load(open(path))
+data["build"]["implementation_commit"] = implementation
+data["build"]["landed_commit"] = implementation
+data["build"]["approved_source_hash"] = "a" * 64
+json.dump(data, open(path, "w"), ensure_ascii=False, indent=2)
+PY
 }
 
 teardown_fixture() { rm -rf "$T"; }
@@ -175,6 +185,15 @@ MARKDOWN
   printf '\n补充无关项目背景。\n' >> "$T/PRODUCT.md"
   git -C "$T" add docs/modules/access/discussion.md docs/modules/access/spec.md PRODUCT.md
   git -C "$T" commit -q -m "land docs"
+  IMPLEMENTATION=$(git -C "$T" rev-parse HEAD)
+  python3 - "$T/docs/modules/access/.work-meta.json" "$IMPLEMENTATION" <<'PY'
+import json, sys
+path, implementation = sys.argv[1:]
+data = json.load(open(path))
+data["build"]["implementation_commit"] = implementation
+data["build"]["landed_commit"] = implementation
+json.dump(data, open(path, "w"), ensure_ascii=False, indent=2)
+PY
 
   MAP="$T/.pm-workflow/audits/access/doc-impact.json"
   python3 "$DOC_IMPACT" init "$T/docs/modules/access" --repo-root "$T" --head HEAD --output "$MAP" >/dev/null
@@ -194,8 +213,128 @@ PY
   teardown_fixture
 }
 
+test_doc_impact_rebuilds_stale_schema_and_binding() {
+  start_test "doc-impact: ensure-current rebuilds stale schema or source binding"
+  setup_fixture
+  MAP="$T/.pm-workflow/audits/access/doc-impact.json"
+  printf '{"schema_version":1,"items":[{"status":"covered"}]}\n' > "$MAP"
+  python3 "$DOC_IMPACT" ensure-current "$T/docs/modules/access" \
+    --repo-root "$T" --output "$MAP" >/dev/null || {
+      _fail "old schema should rebuild"; teardown_fixture; return;
+    }
+  if ! python3 - "$MAP" <<'PY'
+import json, sys
+data = json.load(open(sys.argv[1]))
+assert data["schema_version"] == 2
+assert data["binding"]["approved_source_hash"] == "a" * 64
+assert data["binding"]["implementation_commit"] == data["binding"]["head"]
+assert any(item["status"] == "pending" for item in data["items"])
+PY
+  then
+    _fail "rebuilt map binding mismatch"; teardown_fixture; return
+  fi
+  python3 - "$T/docs/modules/access/.work-meta.json" <<'PY'
+import json, sys
+path = sys.argv[1]
+data = json.load(open(path))
+data["build"]["approved_source_hash"] = "b" * 64
+json.dump(data, open(path, "w"), ensure_ascii=False, indent=2)
+PY
+  if python3 "$DOC_IMPACT" validate "$MAP" >/tmp/doc-impact.$$ 2>&1; then
+    _fail "stale source-bound map must not validate"
+  elif grep -q "已过期" /tmp/doc-impact.$$; then
+    pass_test
+  else
+    _fail "stale binding guidance mismatch"
+    cat /tmp/doc-impact.$$ >&2
+  fi
+  rm -f /tmp/doc-impact.$$
+  teardown_fixture
+}
+
+test_doc_impact_preserves_coverage_only_when_binding_is_current() {
+  start_test "doc-impact: ensure-current preserves coverage only for identical binding"
+  setup_fixture
+  MAP="$T/.pm-workflow/audits/access/doc-impact.json"
+  python3 "$DOC_IMPACT" ensure-current "$T/docs/modules/access" \
+    --repo-root "$T" --output "$MAP" >/dev/null
+  ITEM=$(python3 - "$MAP" <<'PY'
+import json, sys
+print(json.load(open(sys.argv[1]))["items"][0]["id"])
+PY
+  )
+  python3 "$DOC_IMPACT" cover "$MAP" --item "$ITEM" --status covered >/dev/null
+  BEFORE=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["items"][0]["checked_at"])' "$MAP")
+  OUT=$(python3 "$DOC_IMPACT" ensure-current "$T/docs/modules/access" \
+    --repo-root "$T" --output "$MAP")
+  if python3 -c 'import json,sys; assert json.load(sys.stdin)["status"]=="current"' <<<"$OUT" \
+    && [ "$BEFORE" = "$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["items"][0]["checked_at"])' "$MAP")" ]; then
+    pass_test
+  else
+    _fail "current map coverage should remain untouched"
+  fi
+  teardown_fixture
+}
+
+test_doc_impact_uses_legacy_candidate_snapshot_instead_of_old_baseline() {
+  start_test "doc-impact: legacy candidate snapshot replaces stale baseline range"
+  setup_fixture
+  python3 - "$FRAMEWORK_ROOT" "$T" "$T/docs/modules/access/.work-meta.json" <<'PY'
+import json
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(sys.argv[1]) / "scripts"))
+from _lib.candidate_binding import candidate_binding_digest, target_tree
+
+root = Path(sys.argv[2])
+path = Path(sys.argv[3])
+data = json.loads(path.read_text(encoding="utf-8"))
+build = data["build"]
+source = build["implementation_commit"]
+tree = target_tree(root, source, build["target"]["paths"])
+binding = {
+    "schema_version": 1,
+    "source_kind": "legacy-recovery-checkpoint",
+    "source_commit": source,
+    "base_commit": source,
+    "diff_mode": "approved-target-snapshot",
+    "target_paths": tree["target_paths"],
+    "target_tree_digest": tree["digest"],
+    "approved_source_hash": build["approved_source_hash"],
+    "bound_at": "2026-08-13T10:00:00+08:00",
+}
+binding["binding_digest"] = candidate_binding_digest(binding)
+build["candidate_binding"] = binding
+path.write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+PY
+  MAP="$T/.pm-workflow/audits/access/doc-impact.json"
+  if ! python3 "$DOC_IMPACT" ensure-current "$T/docs/modules/access" \
+    --repo-root "$T" --output "$MAP" >/dev/null; then
+    _fail "legacy candidate snapshot should build a current doc map"
+  elif python3 - "$MAP" "$BASE" "$IMPLEMENTATION" <<'PY'
+import json, sys
+data = json.load(open(sys.argv[1]))
+binding = data["binding"]
+assert binding["base"] == binding["head"] == sys.argv[3]
+assert binding["base"] != sys.argv[2]
+assert binding["candidate_diff_mode"] == "approved-target-snapshot"
+assert binding["candidate_binding_digest"]
+assert data["changed_files"] == ["prototype/access.tsx"]
+PY
+  then
+    pass_test
+  else
+    _fail "legacy doc impact reused baseline or lost approved target snapshot"
+  fi
+  teardown_fixture
+}
+
 test_doc_impact_only_requires_affected_truth_sources
 test_doc_impact_without_delta_only_updates_product_state
 test_doc_impact_adds_structured_term_coverage
 test_doc_impact_does_not_promote_discussion_terms_or_auto_cover_missing_terms
+test_doc_impact_rebuilds_stale_schema_and_binding
+test_doc_impact_preserves_coverage_only_when_binding_is_current
+test_doc_impact_uses_legacy_candidate_snapshot_instead_of_old_baseline
 report_results "doc-impact"

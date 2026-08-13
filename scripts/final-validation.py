@@ -16,7 +16,14 @@ import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
 
-from _lib.project_definition import ProjectDefinitionError, load_project_definition
+from _lib.final_validation import results_digest
+from _lib.legacy_recovery import validate_legacy_recovery
+from _lib.project_definition import (
+    ProjectDefinitionError,
+    adapt_legacy_root_command,
+    load_project_definition,
+    validate_execution_semantics,
+)
 
 
 VALID_CHECKS = ("test", "typecheck", "build")
@@ -33,7 +40,7 @@ def write_json(path: Path, value: dict) -> None:
     tmp.replace(path)
 
 
-def read_build(module_dir: Path) -> dict:
+def read_build(module_dir: Path) -> tuple[dict, dict | None]:
     meta_path = module_dir / ".work-meta.json"
     if not meta_path.is_file():
         raise SystemExit(f"缺少 build 合同：{meta_path}")
@@ -52,7 +59,14 @@ def read_build(module_dir: Path) -> dict:
         raise SystemExit("PM 尚未请求定稿，不能运行隔离的完整验证。")
     if str(finalization.get("requested_commit") or "") != commit:
         raise SystemExit("定稿请求与 implementation_commit 不一致。")
-    return build
+    try:
+        recovery = validate_legacy_recovery(meta)
+    except ValueError as exc:
+        raise SystemExit(str(exc)) from exc
+    active_build_recovery = (
+        recovery if recovery is not None and recovery.get("kind") == "active-build" else None
+    )
+    return build, active_build_recovery
 
 
 def git(repo_root: Path, *args: str) -> subprocess.CompletedProcess[str]:
@@ -148,7 +162,7 @@ def run_validation(args: argparse.Namespace) -> int:
     module_dir = module_dir.resolve() if module_dir.is_absolute() else (repo_root / module_dir).resolve()
     audit_path = Path(args.audit).expanduser()
     audit_path = audit_path if audit_path.is_absolute() else repo_root / audit_path
-    build = read_build(module_dir)
+    build, legacy_recovery = read_build(module_dir)
     commit = str(build["implementation_commit"])
     if git(repo_root, "cat-file", "-e", f"{commit}^{{commit}}").returncode != 0:
         raise SystemExit(f"implementation_commit 不存在：{commit}")
@@ -156,7 +170,7 @@ def run_validation(args: argparse.Namespace) -> int:
     worktree = Path(tempfile.mkdtemp(prefix="pmai-final-validation-"))
     worktree.rmdir()
     artifact = {
-        "schema_version": 1,
+        "schema_version": 2,
         "check": "final-validation",
         "status": "running",
         "implementation_commit": commit,
@@ -207,7 +221,39 @@ def run_validation(args: argparse.Namespace) -> int:
             return 1
         artifact["implementation_root"] = implementation_root
         artifact["execution_root"] = str(execution_root)
-        configured = definition["commands"]
+        configured = dict(definition["commands"])
+        try:
+            validate_execution_semantics(definition)
+        except ProjectDefinitionError as exc:
+            if legacy_recovery is None:
+                artifact["status"] = "fail"
+                artifact["error"] = str(exc)
+                return 1
+            adapted_commands: list[dict[str, str]] = []
+            for command_name, command_value in configured.items():
+                adapted, changed = adapt_legacy_root_command(
+                    str(command_value), implementation_root
+                )
+                configured[command_name] = adapted
+                if changed:
+                    adapted_commands.append(
+                        {
+                            "name": command_name,
+                            "original": str(command_value),
+                            "adapted": adapted,
+                        }
+                    )
+            if not adapted_commands:
+                artifact["status"] = "fail"
+                artifact["error"] = str(exc)
+                return 1
+            artifact["compatibility"] = {
+                "legacy_root_command_adapter": True,
+                "original_contract_version": legacy_recovery.get(
+                    "original_contract_version"
+                ),
+                "adapted_commands": adapted_commands,
+            }
         selected = list(dict.fromkeys(args.check or VALID_CHECKS))
         commands: list[dict[str, object]] = []
         if configured.get("install"):
@@ -243,20 +289,34 @@ def run_validation(args: argparse.Namespace) -> int:
 
         log_dir = audit_path.parent / "final-validation-logs"
         artifact["requested_checks"] = selected
+        install_failed = False
         for item in commands:
             name = str(item["name"])
             command = str(item["command"])
-            result = run_command(command, execution_root, log_dir / f"{name}.log")
+            if install_failed:
+                result = {
+                    "command": command,
+                    "status": "blocked",
+                    "exit_code": None,
+                    "started_at": None,
+                    "ended_at": None,
+                    "duration_seconds": 0,
+                    "log": None,
+                    "blocked_by": "install",
+                }
+            else:
+                result = run_command(command, execution_root, log_dir / f"{name}.log")
             result["name"] = name
             result["satisfies"] = item["satisfies"]
             artifact["commands"].append(result)
             write_json(audit_path, artifact)
-            if result["status"] != "pass":
-                artifact["status"] = "fail"
-                return 1
-        artifact["status"] = "pass"
-        checks_passed = True
-        return 0
+            if name == "install" and result["status"] != "pass":
+                install_failed = True
+        failed = [item for item in artifact["commands"] if item["status"] != "pass"]
+        artifact["results_digest"] = results_digest(artifact)
+        artifact["status"] = "fail" if failed else "pass"
+        checks_passed = not failed
+        return 0 if checks_passed else 1
     finally:
         cleanup_error = None
         if added:
@@ -279,8 +339,10 @@ def run_validation(args: argparse.Namespace) -> int:
         artifact["ended_at"] = now_iso()
         if artifact["status"] == "running":
             artifact["status"] = "pass" if checks_passed else "fail"
+        if artifact.get("commands") and not artifact.get("results_digest"):
+            artifact["results_digest"] = results_digest(artifact)
         failed_command = next(
-            (item for item in artifact["commands"] if item.get("status") == "fail"),
+            (item for item in artifact["commands"] if item.get("status") in {"fail", "blocked"}),
             None,
         )
         reason = str(artifact.get("error") or "") or (

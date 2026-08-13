@@ -11,6 +11,7 @@ from __future__ import annotations
 import hashlib
 import json
 import re
+import shlex
 from datetime import datetime
 from pathlib import Path, PurePosixPath
 from typing import Any
@@ -153,7 +154,80 @@ def _relative_path(value: Any, label: str, *, allow_dot: bool = False) -> str:
     return text
 
 
-def validate_project_definition(data: dict[str, Any]) -> dict[str, Any]:
+def _path_within(path: str, parent: str) -> bool:
+    return parent == "." or path == parent or path.startswith(parent.rstrip("/") + "/")
+
+
+def duplicate_root_prefix(command: str, root: str) -> tuple[int, int] | None:
+    """Return the token slice that redundantly selects implementation.root."""
+
+    if root == ".":
+        return None
+    try:
+        tokens = shlex.split(command, posix=True)
+    except ValueError as exc:
+        raise ProjectDefinitionError(f"命令 shell quoting 不合法：{command}: {exc}") from exc
+    if not tokens:
+        return None
+    executable = PurePosixPath(tokens[0]).name
+    option_names = {
+        "npm": {"--prefix"},
+        "pnpm": {"--dir", "-C"},
+        "yarn": {"--cwd"},
+    }.get(executable, set())
+    for index, token in enumerate(tokens[1:], 1):
+        if token in {"&&", ";", "||", "|"}:
+            break
+        if token in option_names and index + 1 < len(tokens):
+            if tokens[index + 1].rstrip("/") == root.rstrip("/"):
+                return index, index + 2
+        for option in option_names:
+            prefix = option + "="
+            if token.startswith(prefix) and token[len(prefix) :].rstrip("/") == root.rstrip("/"):
+                return index, index + 1
+    if len(tokens) >= 3 and tokens[0] == "cd" and tokens[1].rstrip("/") == root.rstrip("/"):
+        if tokens[2] in {"&&", ";"}:
+            return 0, 3
+    return None
+
+
+def adapt_legacy_root_command(command: str, root: str) -> tuple[str, bool]:
+    """Strip one exact duplicate cwd selector for an explicitly recovered legacy build."""
+
+    match = duplicate_root_prefix(command, root)
+    if match is None:
+        return command, False
+    tokens = shlex.split(command, posix=True)
+    start, end = match
+    adapted = tokens[:start] + tokens[end:]
+    if not adapted:
+        raise ProjectDefinitionError("legacy cwd adapter 移除重复 root 后命令为空。")
+    return shlex.join(adapted), True
+
+
+def validate_execution_semantics(data: dict[str, Any]) -> None:
+    implementation = data["implementation"]
+    root = str(implementation["root"])
+    for index, entrypoint in enumerate(implementation["entrypoints"]):
+        if not _path_within(str(entrypoint).rstrip("/"), root.rstrip("/")):
+            raise ProjectDefinitionError(
+                f"implementation.entrypoints[{index}] 必须位于 implementation.root 内："
+                f"root={root} entrypoint={entrypoint}"
+            )
+    executable_commands = {
+        **data["commands"],
+        **({"web.start": data["web"]["start"]} if data["web"]["enabled"] else {}),
+    }
+    for name, command in executable_commands.items():
+        if duplicate_root_prefix(str(command), root) is not None:
+            raise ProjectDefinitionError(
+                f"{name} 会从 implementation.root 执行，不能再次指定同一目录：{root}。"
+            )
+
+
+def validate_project_definition(
+    data: dict[str, Any], *, strict_execution: bool = False
+) -> dict[str, Any]:
     allowed_top = {"schema_version", "definition", "project", "implementation", "commands", "web"}
     unknown_top = sorted(set(data) - allowed_top)
     if unknown_top:
@@ -247,7 +321,7 @@ def validate_project_definition(data: dict[str, Any]) -> dict[str, Any]:
                 "web.enabled=false 时不能保留 Web 运行字段：" + "、".join(unknown_web)
             )
 
-    return {
+    result = {
         "schema_version": SCHEMA_VERSION,
         "definition": {
             "source": source,
@@ -264,9 +338,12 @@ def validate_project_definition(data: dict[str, Any]) -> dict[str, Any]:
         "commands": normalized_commands,
         "web": normalized_web,
     }
+    if strict_execution:
+        validate_execution_semantics(result)
+    return result
 
 
-def load_project_definition(path: Path) -> dict[str, Any]:
+def load_project_definition(path: Path, *, strict_execution: bool = False) -> dict[str, Any]:
     if not path.is_file():
         raise ProjectDefinitionError(
             f"缺少项目建造定义：{path}。请先完成 /pmai-design，让定稿的需求生成 project.yml。"
@@ -275,7 +352,7 @@ def load_project_definition(path: Path) -> dict[str, Any]:
         data = parse_yaml_subset(path.read_text(encoding="utf-8"))
     except OSError as exc:
         raise ProjectDefinitionError(f"无法读取 {path}: {exc}") from exc
-    return validate_project_definition(data)
+    return validate_project_definition(data, strict_execution=strict_execution)
 
 
 def source_sha256(path: Path) -> str:
@@ -289,7 +366,7 @@ def _yaml_text(value: str) -> str:
 
 
 def render_project_definition(data: dict[str, Any]) -> str:
-    data = validate_project_definition(data)
+    data = validate_project_definition(data, strict_execution=True)
     definition = data["definition"]
     implementation = data["implementation"]
     stack = implementation["stack"]

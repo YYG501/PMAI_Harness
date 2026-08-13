@@ -175,9 +175,11 @@ def cmd_validate_finalization(args: argparse.Namespace) -> int:
     data = read_audit(path)
     missing = []
     running = []
+    allowed_limited = set(args.allow_limited_phase)
     for phase in dict.fromkeys(args.required_phase):
         entries = [item for item in data["entries"] if item.get("phase") == phase]
-        if not any(item.get("status") == "pass" for item in entries):
+        accepted_statuses = {"pass", "limited"} if phase in allowed_limited else {"pass"}
+        if not any(item.get("status") in accepted_statuses for item in entries):
             missing.append(phase)
         if any(item.get("status") == "running" for item in entries):
             running.append(phase)
@@ -229,6 +231,12 @@ def parser() -> argparse.ArgumentParser:
         "--required-phase",
         action="append",
         required=True,
+        choices=sorted(VALID_PHASES),
+    )
+    validate.add_argument(
+        "--allow-limited-phase",
+        action="append",
+        default=[],
         choices=sorted(VALID_PHASES),
     )
     validate.set_defaults(func=cmd_validate_finalization)

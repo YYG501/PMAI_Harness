@@ -34,7 +34,9 @@ def build_plan(data: dict[str, object]) -> dict[str, object]:
 
 
 def cmd_validate(args: argparse.Namespace) -> int:
-    data = load_project_definition(definition_path(Path(args.repo_root)))
+    data = load_project_definition(
+        definition_path(Path(args.repo_root)), strict_execution=True
+    )
     print(json.dumps(data, ensure_ascii=False, indent=2))
     return 0
 
@@ -103,7 +105,8 @@ def cmd_write(args: argparse.Namespace) -> int:
             },
             "commands": commands,
             "web": web,
-        }
+        },
+        strict_execution=True,
     )
 
     if existing and build_plan(existing) == build_plan(data):
@@ -126,7 +129,7 @@ def cmd_write(args: argparse.Namespace) -> int:
             "decided_at": args.decided_at
             or datetime.now(timezone.utc).astimezone().isoformat(timespec="seconds"),
         }
-        data = validate_project_definition(data)
+        data = validate_project_definition(data, strict_execution=True)
 
     output.parent.mkdir(parents=True, exist_ok=True)
     temporary = output.with_name(f".{output.name}.tmp")

@@ -14,6 +14,8 @@ PM-AI-Workflow 生成器仓的演进记录。本文件**只记影响已安装框
 
 ## 未发布
 
+- `fix(finalization)`: **最终验收统一绑定一个不可变候选，并把旧 v1-v4 恢复收进同一机械通道。** `finalize-candidate.py` 不再固定取 HEAD，而是按批准目标树、已记录实现和 legacy recovery checkpoint 生成带 source/base commit、目标路径树摘要、source hash、来源与防篡改 digest 的 candidate binding；后续 prototype boundary、分项 final validation、浏览器批次和文档影响图共同消费该身份。`project.yml` 的 commands 与 `web.start` 统一从 `implementation.root` 执行，新定义机械拒绝重复 `--dir/--prefix/--cwd/cd`，合法 legacy recovery 只在运行时精确适配并留痕。final validation 不再 fail-fast，tests/typecheck 可由 PM 绑定当前 artifact 明确接受为 limited，build/browser/behavior/prototype boundary 仍是硬门；旧浏览器检查由一次 active batch 确定性派生并绑定同一摘要，coverage 通过 checks-spec + 页面抓取单独证明。`doc-impact` schema v2 绑定 implementation/landed commit、base/head、source hash、accepted deltas 和 candidate tree，每次恢复先校验 currentness，旧图或漂移图原子重建。旧合同不升级版本，已有新鲜证据继续可读；不自动迁移消费仓或用户级安装态。
+
 - `fix(feedback)`: **`/pmai-feedback` 从无条件全文审计改为“默认聚焦、条件升级”，并固定 active 会话证据快照。** `current-session.py` 在精确定位后返回行号、字节数和捕获时间边界；feedback 只分析该边界内与 PM 当前反馈直接相关的对话、工具证据和真相源，不再追读自己持续写入的 active 尾部。只有证据冲突、不可逆动作 / 真相源覆盖、跨阶段漂移无法归因、关键证据缺口或 PM 明确要求时才升级完整审计，并记录原因。框架仓交接默认复核 findings 指向的范围，证据不足时才读取完整固定快照，避免消费仓与框架仓重复全文冷读。
 
 - `chore(maintenance)`: **清理已经退出运行链路的历史资产，并统一当前分发与验收口径。** 历史 `skill-feedback/` 移入生成器归档；删除无引用的旧 review Agent 及其 `.claude/agents/` 宿主断链、design legacy references、废弃脚本及其测试入口，消费仓继续只使用全局安装的权威框架资产。新 Web build 的共享说明统一只生成一个不可 exception 的 `browser-acceptance`，由同一持续浏览器会话覆盖 smoke / visual / behavior；旧 v2/v3/v4 合同仍按原三项证据恢复。
@@ -26,7 +28,7 @@ PM-AI-Workflow 生成器仓的演进记录。本文件**只记影响已安装框
 
 - `refactor(loop)`: **复杂度收口批次五统一 Proposal、Design、Build 的 Loop Contract。** 新增 `_shared/loop-contract.md`，固定每轮“恢复 → 确认目标 → 确认边界 → 执行最小完整动作 → 验证 → 路由”的顺序，并统一 `retry_current / await_pm_decision / route_proposal / route_design / advance / resume_checkpoint / complete` 七种动作。三条主链分别映射自己的输入、允许动作、验证、重试、升级和停止条件；`build-close` 只保留 checkpoint 恢复职责。新增 18 个固定消费仓合同场景和静态 eval，锁定“走对、停对、恢复对”；不新增 loop 状态、动态工作流、多 Agent 或 Session Eval，也不迁移真实消费仓或用户级安装态。
 
-- `refactor(core)`: **复杂度收口批次四降低 Build 维护热点，并隔离官方可选飞书能力。** `build-contract.py` 的合同 schema、状态迁移、验收证据和评审适配分别下沉到 `_lib/build_schema.py`、`build_transition.py`、`build_evidence.py` 和 `review_evidence.py`；核心 Build CLI 不再直接依赖 Lark，稳定核心发布门不要求飞书 CLI 或账号，日常全量回归仍保留 Lark fake suites。新增 `finalize-candidate.py` 统一绑定当前 Git HEAD、记录实现提交并启动可恢复 finalization runner，Build Skill 不再手工编排稳定命令。`atomic_file.py` 明确 ADR-004 支持与不支持的威胁边界，保留既有路径安全、合作 writer 和失败恢复保护。新增维护边界与候选收尾回归；不迁移真实消费仓或用户级安装态。
+- `refactor(core)`: **复杂度收口批次四降低 Build 维护热点，并隔离官方可选飞书能力。** `build-contract.py` 的合同 schema、状态迁移、验收证据和评审适配分别下沉到 `_lib/build_schema.py`、`build_transition.py`、`build_evidence.py` 和 `review_evidence.py`；核心 Build CLI 不再直接依赖 Lark，稳定核心发布门不要求飞书 CLI 或账号，日常全量回归仍保留 Lark fake suites。新增 `finalize-candidate.py` 作为候选绑定与可恢复 finalization runner 的统一入口，Build Skill 不再手工编排稳定命令；具体候选选择已由本未发布段后续 `fix(finalization)` 收紧为批准目标树与 recovery checkpoint 绑定。`atomic_file.py` 明确 ADR-004 支持与不支持的威胁边界，保留既有路径安全、合作 writer 和失败恢复保护。新增维护边界与候选收尾回归；不迁移真实消费仓或用户级安装态。
 
 - `refactor(state)`: **复杂度收口批次三建立唯一工作合同归一化边界。** 新增 canonical work contract reader，统一解释旧 `stage`、顶层/build 双 lifecycle、`required_checks` 与 v1-v4 build contract，并对 lifecycle 冲突、checks 别名不一致、非法版本和非法类型失败关闭；status、preamble、Doctor、ready、replan、context pack、Lark active-build 路由、finalize、landing、cleanup 与主分支写入门禁改读同一边界。新 build contract 升为 v5：design/ready 只写顶层 lifecycle，build 开始后只写 `build.lifecycle_state`，验收只写 `final_checks`；acceptance profile v3 同步停止输出别名。旧 v1-v4 恢复保持原 shape，不迁移真实消费仓，也不删除兼容路径。
 

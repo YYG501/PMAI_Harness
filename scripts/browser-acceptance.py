@@ -15,6 +15,11 @@ from datetime import datetime, timezone
 from pathlib import Path
 from urllib.parse import urlsplit
 
+from _lib.browser_evidence import (
+    LEGACY_BROWSER_CHECK_COVERAGE,
+    browser_batch_digest,
+)
+
 
 REQUIRED_COVERAGE = {"smoke", "visual", "behavior"}
 ALLOWED_COMMANDS = {
@@ -69,6 +74,50 @@ def write_json(path: Path, value: dict) -> None:
     temporary = path.with_name(f".{path.name}.tmp")
     temporary.write_text(json.dumps(value, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     temporary.replace(path)
+
+
+def write_legacy_artifacts(
+    audit_path: Path, artifact: dict, checks: list[str]
+) -> dict[str, str]:
+    digest = browser_batch_digest(artifact)
+    artifact["batch_digest"] = digest
+    written: dict[str, str] = {}
+    for check in checks:
+        coverage = LEGACY_BROWSER_CHECK_COVERAGE[check]
+        path = audit_path.parent / f"{check}.json"
+        value = {
+            "schema_version": 1,
+            "check": check,
+            "status": artifact["status"],
+            "implementation_commit": artifact["implementation_commit"],
+            "source_hash": artifact.get("source_hash"),
+            "derived_from": audit_path.name,
+            "browser_batch_digest": digest,
+            "single_chain_invocation": True,
+            "covers": [coverage],
+            "flows": [
+                {
+                    "id": flow["id"],
+                    "route": flow["route"],
+                    "status": flow["status"],
+                }
+                for flow in artifact["flows"]
+                if coverage in flow.get("covers", [])
+            ],
+        }
+        if check == "browser-smoke":
+            value["active_browser_smoke"] = artifact["active_browser_smoke"]
+        if check == "visual":
+            value["visual_artifacts"] = artifact.get("visual_artifacts", [])
+            value["missing_visual_artifacts"] = artifact.get(
+                "missing_visual_artifacts", []
+            )
+            value["findings"] = [] if artifact["status"] == "pass" else [
+                {"reason": "browser batch failed"}
+            ]
+        write_json(path, value)
+        written[check] = str(path)
+    return written
 
 
 def resolve_path(value: str, repo_root: Path) -> Path:
@@ -330,6 +379,12 @@ def run(args: argparse.Namespace) -> int:
     artifact["missing_visual_artifacts"] = missing_visuals
     for flow in artifact["flows"]:
         flow["status"] = artifact["status"]
+    legacy_checks = list(dict.fromkeys(args.legacy_check))
+    if legacy_checks:
+        artifact["legacy_adapter"] = {
+            "checks": legacy_checks,
+            "artifacts": write_legacy_artifacts(audit_path, artifact, legacy_checks),
+        }
     timing_error = finish_timing(
         audit_path,
         timing_id,
@@ -353,6 +408,12 @@ def parser() -> argparse.ArgumentParser:
     result.add_argument("--manifest", required=True)
     result.add_argument("--audit", required=True)
     result.add_argument("--browse-bin")
+    result.add_argument(
+        "--legacy-check",
+        action="append",
+        default=[],
+        choices=sorted(LEGACY_BROWSER_CHECK_COVERAGE),
+    )
     return result
 
 

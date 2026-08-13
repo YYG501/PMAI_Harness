@@ -38,20 +38,22 @@ PY
 
 teardown_fixture() { rm -rf "$T"; }
 
-test_records_head_before_runner() {
-  start_test "finalize-candidate: binds HEAD before forwarding runner options"
+test_binds_candidate_before_runner() {
+  start_test "finalize-candidate: resolves contract candidate before forwarding runner options"
   setup_fixture
   if ! PMAI_TEST_LOG="$LOG" python3 "$RUNNER_DIR/finalize-candidate.py" \
     --module-dir "$MODULE" --browser-manifest manifest.json --browse-bin browse \
+    --coverage-plan checks.json --coverage-artifacts captures \
+    --coverage-confirm-state detail \
     --retry-failed --no-land; then
     _fail "candidate entry should succeed"
   elif ! python3 - "$LOG" "$MODULE" "$HEAD_SHA" <<'PY'
 import sys
 lines = open(sys.argv[1], encoding="utf-8").read().splitlines()
-module, head = sys.argv[2:]
+module, _head = sys.argv[2:]
 assert lines == [
-    f"contract commit {module} --implementation-commit {head}",
-    f"runner --module-dir {module} --browser-manifest manifest.json --browse-bin browse --retry-failed --no-land",
+    f"contract bind-candidate {module}",
+    f"runner --module-dir {module} --browser-manifest manifest.json --browse-bin browse --coverage-plan checks.json --coverage-artifacts captures --coverage-confirm-state detail --retry-failed --no-land",
 ], lines
 PY
   then
@@ -92,7 +94,7 @@ test_runner_status_passes_through() {
   teardown_fixture
 }
 
-test_records_head_before_runner
+test_binds_candidate_before_runner
 test_contract_failure_stops_runner
 test_runner_status_passes_through
 report_results "finalize-candidate"

@@ -222,6 +222,37 @@ test_missing_definition_points_to_design() {
   fi
 }
 
+test_execution_root_semantics_fail_closed() {
+  start_test "project-definition: commands run from root and reject duplicate cwd or outside entrypoint"
+  local t duplicate outside valid
+  t=$(mktemp -d)
+  write_spec "$t"
+  python3 "$PROJECT_DEFINITION" write "$t" \
+    --source docs/modules/demo/spec.md --type prototype \
+    --root prototype --entrypoint prototype/app \
+    --language typescript --runtime node --framework nextjs --package-manager pnpm \
+    --build-command "pnpm --dir prototype build" >/dev/null 2>&1
+  duplicate=$?
+  python3 "$PROJECT_DEFINITION" write "$t" \
+    --source docs/modules/demo/spec.md --type prototype \
+    --root prototype --entrypoint app \
+    --language typescript --runtime node --framework nextjs --package-manager pnpm \
+    --build-command "pnpm build" >/dev/null 2>&1
+  outside=$?
+  python3 "$PROJECT_DEFINITION" write "$t" \
+    --source docs/modules/demo/spec.md --type prototype \
+    --root prototype --entrypoint prototype/app \
+    --language typescript --runtime node --framework nextjs --package-manager pnpm \
+    --build-command "pnpm build" >/dev/null 2>&1
+  valid=$?
+  rm -rf "$t"
+  if [ "$duplicate" != "0" ] && [ "$outside" != "0" ] && [ "$valid" = "0" ]; then
+    pass_test
+  else
+    _fail "execution root validation mismatch: duplicate=$duplicate outside=$outside valid=$valid"
+  fi
+}
+
 test_valid_prototype_and_product
 test_paths_and_web_fail_closed
 test_redefinition_requires_explicit_flag_and_revision
@@ -230,5 +261,6 @@ test_any_plan_change_requires_explicit_redefinition
 test_commands_can_be_explicitly_empty
 test_project_type_precedence_and_legacy
 test_missing_definition_points_to_design
+test_execution_root_semantics_fail_closed
 
 report_results "project-definition"

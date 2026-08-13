@@ -13,6 +13,7 @@ from pathlib import Path, PurePosixPath
 from typing import Any
 
 from _lib.delivery_policy import delivery_policy_hash, validate_delivery_policy
+from _lib.candidate_binding import validate_candidate_binding
 
 
 PATH_SIGNAL_RULES = (
@@ -119,6 +120,18 @@ def added_lines(repo_root: Path, base: str, head: str, path: str) -> str:
     )
 
 
+def committed_content(repo_root: Path, head: str, path: str) -> str:
+    result = subprocess.run(
+        ["git", "-C", str(repo_root), "show", f"{head}:{path}"],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.DEVNULL,
+        text=True,
+        errors="replace",
+        check=False,
+    )
+    return result.stdout if result.returncode == 0 else ""
+
+
 def parse_approvals(values: list[str]) -> dict[str, str]:
     approvals: dict[str, str] = {}
     for value in values:
@@ -131,7 +144,14 @@ def parse_approvals(values: list[str]) -> dict[str, str]:
     return approvals
 
 
-def detect_signals(repo_root: Path, base: str, head: str, paths: list[str]) -> list[dict[str, str]]:
+def detect_signals(
+    repo_root: Path,
+    base: str,
+    head: str,
+    paths: list[str],
+    *,
+    full_snapshot: bool = False,
+) -> list[dict[str, str]]:
     signals: list[dict[str, str]] = []
     seen: set[tuple[str, str, str]] = set()
     for path in paths:
@@ -143,7 +163,11 @@ def detect_signals(repo_root: Path, base: str, head: str, paths: list[str]) -> l
                     signals.append({"category": category, "path": path, "reason": reason})
         if is_mock_support_path(path):
             continue
-        content = added_lines(repo_root, base, head, path)
+        content = (
+            committed_content(repo_root, head, path)
+            if full_snapshot
+            else added_lines(repo_root, base, head, path)
+        )
         for category, pattern, reason in CONTENT_SIGNAL_RULES:
             if pattern.search(content):
                 key = (category, path, reason)
@@ -182,17 +206,46 @@ def build_report(args: argparse.Namespace) -> dict[str, Any]:
     module_dir = Path(args.module_dir).expanduser().resolve()
     repo_root = Path(git(module_dir, "rev-parse", "--show-toplevel").strip()).resolve()
     build = load_build(module_dir)
-    base = str(build.get("baseline_sha") or "").strip()
-    head = str(build.get("implementation_commit") or "").strip()
+    try:
+        binding = validate_candidate_binding(repo_root, build)
+    except ValueError as exc:
+        # Older callers remain readable until finalize-candidate establishes the
+        # shared binding; new finalization always takes the bound path.
+        if build.get("candidate_binding") is not None:
+            raise SystemExit(str(exc)) from exc
+        binding = {
+            "base_commit": str(build.get("baseline_sha") or "").strip(),
+            "source_commit": str(build.get("implementation_commit") or "").strip(),
+            "target_paths": build.get("target", {}).get("paths", []),
+            "target_tree_digest": None,
+            "diff_mode": "commit-range",
+        }
+    base = str(binding.get("base_commit") or "").strip()
+    head = str(binding.get("source_commit") or "").strip()
     if not base or not head:
-        raise SystemExit("build 合同缺少 baseline_sha 或 implementation_commit。")
+        raise SystemExit("build 合同缺少 candidate base/source commit。")
 
-    changed_paths = [
-        normalize_path(path)
-        for path in git(repo_root, "diff", "--name-only", "--no-renames", base, head).splitlines()
-        if normalize_path(path)
-    ]
+    full_snapshot = binding.get("diff_mode") == "approved-target-snapshot"
     target_paths = [normalize_path(str(path)) for path in build["target"].get("paths", [])]
+    if full_snapshot:
+        changed_paths = sorted(
+            {
+                normalize_path(line.split("\t", 1)[-1])
+                for target in target_paths
+                for line in git(
+                    repo_root, "ls-tree", "-r", "--name-only", head, "--", target
+                ).splitlines()
+                if normalize_path(line.split("\t", 1)[-1])
+            }
+        )
+    else:
+        changed_paths = [
+            normalize_path(path)
+            for path in git(
+                repo_root, "diff", "--name-only", "--no-renames", base, head
+            ).splitlines()
+            if normalize_path(path)
+        ]
     module_rel = module_dir.relative_to(repo_root).as_posix()
     framework_managed = {f"{module_rel}/.work-meta.json"}
     audit_root = str(build.get("audit_dir") or f".pm-workflow/audits/{module_dir.name}")
@@ -206,7 +259,13 @@ def build_report(args: argparse.Namespace) -> dict[str, Any]:
     target_changed_paths = [
         path for path in changed_paths if any(path_within(path, target) for target in target_paths)
     ]
-    detected_signals = detect_signals(repo_root, base, head, target_changed_paths)
+    detected_signals = detect_signals(
+        repo_root,
+        base,
+        head,
+        target_changed_paths,
+        full_snapshot=full_snapshot,
+    )
     approvals = parse_approvals(args.approved_real_edge)
     approved_real_edges: list[dict[str, Any]] = []
     unapproved_signals: list[dict[str, str]] = []
@@ -236,6 +295,8 @@ def build_report(args: argparse.Namespace) -> dict[str, Any]:
         "source_hash": build.get("approved_source_hash"),
         "baseline_sha": base,
         "implementation_commit": head,
+        "candidate_tree_digest": binding.get("target_tree_digest"),
+        "candidate_diff_mode": binding.get("diff_mode"),
         "target_paths": target_paths,
         "changed_paths": changed_paths,
         "outside_target_paths": outside_target_paths,

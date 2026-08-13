@@ -72,6 +72,15 @@ from _lib.ready_contract import (
     validate_ready_pack,
 )
 from _lib.legacy_recovery import validate_legacy_recovery
+from _lib.candidate_binding import select_candidate, validate_candidate_binding
+from _lib.final_validation import (
+    CHECK_TO_COMMAND,
+    LIMITABLE_CHECKS,
+    command_statuses,
+    exception_allows,
+    load_json_object,
+    validate_artifact_binding,
+)
 from _lib.review_evidence import validate_review_approval
 
 # Executor vocabulary, including the external Builder profile "kimi-code", is
@@ -461,7 +470,9 @@ def validate_target_paths(repo_root: Path, values: list[str]) -> list[str]:
     except ReadyContractError as exc:
         raise SystemExit(str(exc)) from exc
     try:
-        definition = load_project_definition(repo_root / ".pm-workflow" / "project.yml")
+        definition = load_project_definition(
+            repo_root / ".pm-workflow" / "project.yml", strict_execution=True
+        )
     except ProjectDefinitionError as exc:
         raise SystemExit(str(exc)) from exc
     root = str(definition["implementation"]["root"])
@@ -532,7 +543,7 @@ def _validate_ready_for_start(module_dir: Path, meta: dict) -> dict:
     repo_root = repo_root_for(module_dir)
     try:
         project_definition = load_project_definition(
-            repo_root / ".pm-workflow" / "project.yml"
+            repo_root / ".pm-workflow" / "project.yml", strict_execution=True
         )
     except ProjectDefinitionError as exc:
         raise SystemExit(str(exc)) from exc
@@ -1177,6 +1188,78 @@ def cmd_commit(args: argparse.Namespace) -> None:
     print(json.dumps(build, ensure_ascii=False))
 
 
+def cmd_bind_candidate(args: argparse.Namespace) -> None:
+    """Select and freeze the approved implementation tree used by all final checks."""
+
+    module_dir = Path(args.module_dir)
+    meta = read_meta(module_dir)
+    build = require_build(meta)
+    version = contract_version(build)
+    if version < 2:
+        raise SystemExit("candidate binding 只适用于 build contract v2+。")
+    if canonical_state(meta).lifecycle_state not in {"building", "iterating"}:
+        raise SystemExit("只有 building / iterating 状态可以绑定验收候选。")
+    currentness = validate_build_currentness(
+        module_dir,
+        meta,
+        build,
+        allowed_states={"building", "iterating"},
+    )
+    try:
+        recovery = validate_legacy_recovery(meta)
+        binding = select_candidate(repo_root_for(module_dir), build, recovery)
+    except ValueError as exc:
+        raise SystemExit(str(exc)) from exc
+    commit = str(binding["source_commit"])
+    if binding["source_kind"] == "current-head" and version >= 4:
+        validate_implementation_commit_scope(module_dir, build, commit)
+        validate_authority_checkpoint_commit(module_dir, meta, build, commit)
+
+    previous_commit = optional(build.get("implementation_commit"))
+    previous_binding = build.get("candidate_binding")
+    changed = previous_commit != commit or not isinstance(previous_binding, dict) or any(
+        previous_binding.get(key) != binding.get(key)
+        for key in (
+            "source_kind",
+            "source_commit",
+            "base_commit",
+            "diff_mode",
+            "target_paths",
+            "target_tree_digest",
+            "approved_source_hash",
+        )
+    )
+    if changed:
+        acceptance = build.setdefault("acceptance", {})
+        if not isinstance(acceptance, dict):
+            raise SystemExit("build.acceptance 必须是对象。")
+        acceptance["evidence"] = []
+        if version >= 4:
+            acceptance["iteration_evidence"] = []
+        clear_review_ready(build)
+        build["pm_accepted_at"] = None
+        finalization = build.get("finalization")
+        if isinstance(finalization, dict) and optional(finalization.get("requested_at")):
+            finalization["requested_commit"] = commit
+            finalization["rebound_at"] = now_iso()
+
+    build["implementation_commit"] = commit
+    build["implementation_committed_at"] = now_iso()
+    build["candidate_binding"] = binding
+    if build.get("authority_checkpoint_required") is True:
+        build["authority_checkpoint_required"] = False
+        build["authority_checkpoint_commit"] = commit
+        build["authority_checkpoint_source_hash"] = currentness["authority_source_hash"]
+    set_build_lifecycle(meta, build, "iterating")
+    meta["build"] = build
+    write_meta(module_dir, meta)
+    try:
+        validated = validate_candidate_binding(repo_root_for(module_dir), build)
+    except ValueError as exc:
+        raise SystemExit(str(exc)) from exc
+    print(json.dumps(validated, ensure_ascii=False))
+
+
 def cmd_accept(args: argparse.Namespace) -> None:
     module_dir = Path(args.module_dir)
     meta = read_meta(module_dir)
@@ -1244,18 +1327,67 @@ def cmd_audit_exception(args: argparse.Namespace) -> None:
         if not checks:
             raise SystemExit("v2 audit-exception 必须用 --check 点名受限检查。")
         protected = sorted(
-            {"browser-smoke", "browser-acceptance", "prototype-boundary"} & set(checks)
+            {
+                "build",
+                "browser-smoke",
+                "browser-acceptance",
+                "prototype-boundary",
+                "behavior",
+            }
+            & set(checks)
         )
         if protected:
             raise SystemExit(
                 "v2+ 验收不能跳过硬检查：" + "、".join(protected) + " 不允许 exception。"
             )
-    build["audit_exception"] = {
+    exception = {
         "accepted_at": optional(args.accepted_at) or now_iso(),
         "reason": reason,
     }
     if checks:
-        build["audit_exception"]["checks"] = checks
+        exception["checks"] = checks
+    limitable = sorted(set(checks) & LIMITABLE_CHECKS)
+    if limitable:
+        artifact_value = optional(args.artifact)
+        if not artifact_value:
+            raise SystemExit(
+                "tests/typecheck 的 limited 接受必须用 --artifact 绑定当前 final-validation 结果。"
+            )
+        repo_root = repo_root_for(module_dir)
+        artifact_path = Path(artifact_value).expanduser()
+        artifact_path = (
+            artifact_path if artifact_path.is_absolute() else repo_root / artifact_path
+        ).resolve()
+        try:
+            artifact = load_json_object(artifact_path, "final-validation artifact")
+            digest = validate_artifact_binding(build, artifact)
+        except ValueError as exc:
+            raise SystemExit(str(exc)) from exc
+        statuses = command_statuses(artifact)
+        invalid = [
+            check
+            for check in limitable
+            if statuses.get(CHECK_TO_COMMAND[check]) not in {"fail", "blocked"}
+        ]
+        if invalid:
+            raise SystemExit(
+                "audit exception 只能绑定 artifact 中真实失败/阻塞的检查："
+                + "、".join(invalid)
+            )
+        try:
+            stored_path = artifact_path.relative_to(repo_root.resolve()).as_posix()
+        except ValueError:
+            stored_path = str(artifact_path)
+        exception["bindings"] = {
+            check: {
+                "artifact": stored_path,
+                "results_digest": digest,
+                "implementation_commit": build.get("implementation_commit"),
+                "source_hash": build.get("approved_source_hash"),
+            }
+            for check in limitable
+        }
+    build["audit_exception"] = exception
     if contract_version(build) >= 2:
         clear_review_ready(build)
     meta["build"] = build
@@ -1436,6 +1568,29 @@ def cmd_record_evidence(args: argparse.Namespace) -> None:
             raise SystemExit(f"{name} 不在 acceptance.{checks_key} 中。")
         if lane == "final":
             validate_finalization_requested(build)
+    if (
+        lane == "final"
+        and status in {"limited", "blocked", "skipped"}
+        and name in LIMITABLE_CHECKS
+    ):
+        artifact_value = optional(args.artifact)
+        if not artifact_value:
+            raise SystemExit(
+                f"{name} 的 limited evidence 必须绑定 final-validation artifact。"
+            )
+        repo_root = repo_root_for(module_dir)
+        artifact_path = Path(artifact_value).expanduser()
+        artifact_path = (
+            artifact_path if artifact_path.is_absolute() else repo_root / artifact_path
+        ).resolve()
+        try:
+            artifact_data = load_json_object(artifact_path, "final-validation artifact")
+        except ValueError as exc:
+            raise SystemExit(str(exc)) from exc
+        if not exception_allows(build, name, artifact_data):
+            raise SystemExit(
+                f"{name} 的 limited evidence 缺少绑定当前 commit/source/artifact 的 PM 接受。"
+            )
     item = {
         "name": name,
         "lane": lane,
@@ -1774,6 +1929,13 @@ def build_parser() -> argparse.ArgumentParser:
     commit.add_argument("--implementation-commit", required=True)
     commit.set_defaults(func=cmd_commit)
 
+    bind_candidate = sub.add_parser(
+        "bind-candidate",
+        help="select and bind the approved implementation tree used by final validation",
+    )
+    bind_candidate.add_argument("module_dir")
+    bind_candidate.set_defaults(func=cmd_bind_candidate)
+
     accept = sub.add_parser("accept", help="record PM acceptance before automatic final_check")
     accept.add_argument("module_dir")
     accept.add_argument("--accepted-at")
@@ -1796,6 +1958,7 @@ def build_parser() -> argparse.ArgumentParser:
     audit_exception.add_argument("--reason", required=True)
     audit_exception.add_argument("--accepted-at")
     audit_exception.add_argument("--check", action="append", default=[])
+    audit_exception.add_argument("--artifact")
     audit_exception.set_defaults(func=cmd_audit_exception)
 
     delta = sub.add_parser(

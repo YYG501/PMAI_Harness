@@ -35,7 +35,7 @@ STATE=$(printf '%s' "$CONTRACT_JSON" | python3 -c 'import json,sys; print(json.l
 DOCS_STATUS=$(printf '%s' "$BUILD_JSON" | python3 -c 'import json,sys; print(json.load(sys.stdin).get("docs_status","pending"))')
 MODE=$(printf '%s' "$BUILD_JSON" | python3 -c 'import json,sys; print(json.load(sys.stdin).get("mode",""))')
 BRANCH=$(printf '%s' "$BUILD_JSON" | python3 -c 'import json,sys; print(json.load(sys.stdin).get("branch",""))')
-BASELINE=$(printf '%s' "$BUILD_JSON" | python3 -c 'import json,sys; print(json.load(sys.stdin).get("baseline_sha","") or "")')
+BASELINE=$(printf '%s' "$BUILD_JSON" | python3 -c 'import json,sys; b=json.load(sys.stdin); print((b.get("candidate_binding") or {}).get("base_commit") or b.get("baseline_sha","") or "")')
 IMPLEMENTATION_COMMIT=$(printf '%s' "$BUILD_JSON" | python3 -c 'import json,sys; print(json.load(sys.stdin).get("implementation_commit","") or "")')
 SOURCE_HASH=$(printf '%s' "$BUILD_JSON" | python3 -c 'import json,sys; print(json.load(sys.stdin).get("approved_source_hash","") or "")')
 MODULE_NAME=$(basename "$WORK_DIR")
@@ -136,19 +136,33 @@ if marker.get("implementation_commit") != commit or marker.get("source_hash") !=
 phases = marker.get("required_timing_phases")
 if not isinstance(phases, list) or not phases:
     raise SystemExit("finalize timing 游标缺少 required_timing_phases。")
+allowed_limited = marker.get("allowed_limited_timing_phases", [])
+if not isinstance(allowed_limited, list) or any(phase not in phases for phase in allowed_limited):
+    raise SystemExit("finalize timing 游标的 limited phase 不合法。")
 for phase in phases:
-    print(phase)
+    print(("limited:" if phase in allowed_limited else "required:") + phase)
 PY
   ); then
     return 1
   fi
+  # macOS system Bash treats a truly empty array as unbound under set -u.
+  local allowed_limited=("")
   while IFS= read -r phase; do
-    [ -n "$phase" ] && required[${#required[@]}]="$phase"
+    case "$phase" in
+      required:*) required[${#required[@]}]="${phase#required:}" ;;
+      limited:*)
+        required[${#required[@]}]="${phase#limited:}"
+        allowed_limited[${#allowed_limited[@]}]="${phase#limited:}"
+        ;;
+    esac
   done <<< "$phases_output"
   local command=(python3 "$SCRIPT_DIR/build-timing.py" validate-finalization --audit-file "$TIMING_FILE")
   local phase
   for phase in "${required[@]}"; do
     command+=(--required-phase "$phase")
+  done
+  for phase in "${allowed_limited[@]}"; do
+    [ -n "$phase" ] && command+=(--allow-limited-phase "$phase")
   done
   "${command[@]}" >/dev/null
 }
@@ -322,13 +336,11 @@ start_docs() {
     echo "❌ main 上找不到 landed 状态: $MAIN_MODULE/.work-meta.json" >&2
     exit 1
   fi
-  if [ ! -f "$IMPACT_MAP" ]; then
-    python3 "$SCRIPT_DIR/doc-impact.py" init "$MAIN_MODULE" \
-      --repo-root "$REPO_ROOT" \
-      ${BASELINE:+--base "$BASELINE"} \
-      --head "$IMPLEMENTATION_COMMIT" \
-      --output "$IMPACT_MAP" >/dev/null
-  fi
+  python3 "$SCRIPT_DIR/doc-impact.py" ensure-current "$MAIN_MODULE" \
+    --repo-root "$REPO_ROOT" \
+    ${BASELINE:+--base "$BASELINE"} \
+    --head "$IMPLEMENTATION_COMMIT" \
+    --output "$IMPACT_MAP" >/dev/null
   timing_begin documentation
   DOC_DESTINATIONS=()
   while IFS= read -r path; do

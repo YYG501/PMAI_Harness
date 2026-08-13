@@ -26,6 +26,7 @@ from _lib.legacy_recovery import (  # noqa: E402
     replay_original_build_hash,
     validate_legacy_recovery,
 )
+from _lib.candidate_binding import target_tree  # noqa: E402
 
 
 CURRENT_SOURCE_HASH_VERSION = 2
@@ -162,6 +163,9 @@ def accept(args: argparse.Namespace) -> int:
         "original_accepted_delta_count": len(original_deltas),
         "original_accepted_deltas": original_deltas,
     }
+    tree = target_tree(repo_root, checkpoint, build.get("target", {}).get("paths"))
+    recovery["candidate_target_paths"] = tree["target_paths"]
+    recovery["candidate_target_tree_digest"] = tree["digest"]
     try:
         validate_legacy_recovery({**meta, "legacy_recovery": recovery})
     except ValueError as exc:

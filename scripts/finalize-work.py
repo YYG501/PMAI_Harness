@@ -12,9 +12,11 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from _lib.work_contract import WorkContractError, normalize_work_contract
+from _lib.final_validation import LIMITABLE_CHECKS, command_statuses, exception_allows
 
 
 COMMAND_CHECKS = {"tests": "test", "typecheck": "typecheck", "build": "build"}
+LEGACY_BROWSER_CHECKS = {"browser-smoke", "visual", "behavior"}
 
 
 def now_iso() -> str:
@@ -253,12 +255,14 @@ def write_finalization_marker(audit_dir: Path, build: dict, checks: list[str]) -
     semantic_checks = [
         name
         for name in checks
-        if name not in COMMAND_CHECKS and name != "browser-acceptance"
+        if name not in COMMAND_CHECKS
+        and name != "browser-acceptance"
+        and name not in LEGACY_BROWSER_CHECKS
     ]
     required_phases = ["currentness"]
     if any(name in COMMAND_CHECKS for name in checks):
         required_phases.append("final-validation")
-    if "browser-acceptance" in checks:
+    if "browser-acceptance" in checks or LEGACY_BROWSER_CHECKS & set(checks):
         required_phases.append("browser-acceptance")
     if semantic_checks:
         required_phases.append("semantic-validation")
@@ -271,10 +275,22 @@ def write_finalization_marker(audit_dir: Path, build: dict, checks: list[str]) -
             "implementation_commit": build.get("implementation_commit"),
             "source_hash": build.get("approved_source_hash"),
             "required_timing_phases": required_phases,
+            "allowed_limited_timing_phases": [],
             "semantic_checks": semantic_checks,
             "updated_at": now_iso(),
         },
     )
+
+
+def allow_limited_timing_phase(audit_dir: Path, phase: str) -> None:
+    path = finalization_marker_path(audit_dir)
+    marker = read_json(path)
+    phases = marker.setdefault("allowed_limited_timing_phases", [])
+    if not isinstance(phases, list):
+        raise SystemExit("finalize marker 的 allowed_limited_timing_phases 必须是数组。")
+    if phase not in phases:
+        phases.append(phase)
+    write_json(path, marker)
 
 
 def artifact_is_current(path: Path, build: dict) -> bool:
@@ -293,6 +309,8 @@ def record_evidence(
     module_dir: Path,
     name: str,
     artifact: Path,
+    *,
+    status: str = "pass",
 ) -> None:
     result = run(
         [
@@ -303,7 +321,7 @@ def record_evidence(
             "--name",
             name,
             "--status",
-            "pass",
+            status,
             "--artifact",
             str(artifact),
         ],
@@ -323,27 +341,14 @@ def run_command_validation(
     needed: list[str],
 ) -> None:
     artifact_path = audit_dir / "final-validation.json"
-    if artifact_is_current(artifact_path, build):
+    current_artifact = artifact_is_current(artifact_path, build)
+    if current_artifact:
         artifact = read_json(artifact_path)
-        if artifact.get("status") == "fail" and not args.retry_failed:
-            raise SystemExit(
-                "当前 implementation commit 已有失败的 final-validation；"
-                "先修真实缺陷并记录新 commit，或明确传 --retry-failed 重试瞬时故障。"
-            )
     else:
         artifact = {}
-    satisfied = {
-        str(value)
-        for item in artifact.get("commands", [])
-        if isinstance(item, dict) and item.get("status") == "pass"
-        for value in item.get("satisfies", [])
-    }
     needed_commands = [COMMAND_CHECKS[name] for name in needed]
-    if (
-        artifact.get("status") != "pass"
-        or args.retry_failed
-        or not set(needed_commands) <= satisfied
-    ):
+    statuses = command_statuses(artifact)
+    if args.retry_failed or not current_artifact or not set(needed_commands) <= set(statuses):
         selected_checks = list(
             dict.fromkeys(
                 [
@@ -353,7 +358,7 @@ def run_command_validation(
                 ]
                 + [
                     value
-                    for value in sorted(satisfied)
+                    for value in sorted(statuses)
                     if value in COMMAND_CHECKS.values()
                 ]
                 + needed_commands
@@ -372,19 +377,74 @@ def run_command_validation(
         for check in selected_checks:
             command.extend(["--check", check])
         result = run(command, cwd=build_root)
-        if result.returncode != 0:
-            raise SystemExit("final-validation 发现真实失败，已退出 10 分钟正常路径。")
         artifact = read_json(artifact_path)
-    satisfied = {
-        str(value)
-        for item in artifact.get("commands", [])
-        if isinstance(item, dict) and item.get("status") == "pass"
-        for value in item.get("satisfies", [])
-    }
+        if result.returncode not in {0, 1}:
+            raise SystemExit("final-validation runner 异常退出。")
+    statuses = command_statuses(artifact)
+    unresolved: list[str] = []
+    limited: list[str] = []
     for name in needed:
-        if COMMAND_CHECKS[name] not in satisfied:
+        command_name = COMMAND_CHECKS[name]
+        status = statuses.get(command_name)
+        if status == "pass":
+            record_evidence(script_dir, build_root, module_dir, name, artifact_path)
+        elif (
+            status in {"fail", "blocked"}
+            and name in LIMITABLE_CHECKS
+            and exception_allows(build, name, artifact)
+        ):
+            record_evidence(
+                script_dir,
+                build_root,
+                module_dir,
+                name,
+                artifact_path,
+                status="limited",
+            )
+            limited.append(name)
+        elif status in {"fail", "blocked"}:
+            unresolved.append(name)
+        else:
             raise SystemExit(f"final-validation artifact 没有证明 {name} 已执行。")
-        record_evidence(script_dir, build_root, module_dir, name, artifact_path)
+    if limited and not unresolved:
+        artifact["status"] = "limited"
+        exception = build.get("audit_exception")
+        artifact["pm_assessment"] = {
+            "status": "limited",
+            "accepted_checks": limited,
+            "accepted_at": exception.get("accepted_at") if isinstance(exception, dict) else None,
+            "reason": exception.get("reason") if isinstance(exception, dict) else None,
+        }
+        write_json(artifact_path, artifact)
+        started = json.loads(
+            timing(
+                script_dir,
+                audit_dir,
+                "start",
+                "--phase",
+                "final-validation",
+                "--kind",
+                "final",
+            )
+        )
+        timing(
+            script_dir,
+            audit_dir,
+            "finish",
+            "--id",
+            started["id"],
+            "--status",
+            "limited",
+            "--reason",
+            "PM accepted bound test/typecheck limitations: " + ",".join(limited),
+        )
+        allow_limited_timing_phase(audit_dir, "final-validation")
+    if unresolved:
+        raise SystemExit(
+            "final-validation 保留了真实失败："
+            + "、".join(unresolved)
+            + "。先修缺陷；若仅 tests/typecheck 属已知风险，由 PM 绑定当前 artifact 明确接受。"
+        )
 
 
 def run_browser_validation(
@@ -394,6 +454,7 @@ def run_browser_validation(
     module_dir: Path,
     audit_dir: Path,
     build: dict,
+    needed: list[str],
 ) -> None:
     if not args.browser_manifest:
         raise SystemExit("本次需要 browser-acceptance，请提供 --browser-manifest。")
@@ -409,7 +470,9 @@ def run_browser_validation(
             )
     else:
         artifact = {}
-    if artifact.get("status") != "pass" or args.retry_failed:
+    legacy = [name for name in needed if name in LEGACY_BROWSER_CHECKS]
+    derived_missing = any(not (audit_dir / f"{name}.json").is_file() for name in legacy)
+    if artifact.get("status") != "pass" or args.retry_failed or derived_missing:
         command = [
             sys.executable,
             str(script_dir / "browser-acceptance.py"),
@@ -424,10 +487,60 @@ def run_browser_validation(
         ]
         if args.browse_bin:
             command.extend(["--browse-bin", args.browse_bin])
+        for name in legacy:
+            command.extend(["--legacy-check", name])
         result = run(command, cwd=build_root)
         if result.returncode != 0:
             raise SystemExit("browser-acceptance 发现真实失败，已退出 10 分钟正常路径。")
-    record_evidence(script_dir, build_root, module_dir, "browser-acceptance", artifact_path)
+    if legacy:
+        # Old v4 contracts keep their check names; all derivatives are produced
+        # by the same active browser chain and bind the same batch digest.
+        for name in legacy:
+            record_evidence(
+                script_dir,
+                build_root,
+                module_dir,
+                name,
+                audit_dir / f"{name}.json",
+            )
+    else:
+        record_evidence(
+            script_dir, build_root, module_dir, "browser-acceptance", artifact_path
+        )
+
+
+def run_coverage_validation(
+    args: argparse.Namespace,
+    script_dir: Path,
+    build_root: Path,
+    module_dir: Path,
+    audit_dir: Path,
+) -> None:
+    if not args.coverage_plan or not args.coverage_artifacts:
+        return
+    artifact_path = audit_dir / "coverage.json"
+    command = [
+        sys.executable,
+        str(script_dir / "coverage-evidence.py"),
+        "--repo-root",
+        str(build_root),
+        "--module-dir",
+        str(module_dir),
+        "--plan",
+        args.coverage_plan,
+        "--artifacts",
+        args.coverage_artifacts,
+        "--output",
+        str(artifact_path),
+    ]
+    for check_id in args.coverage_confirm_state:
+        command.extend(["--confirm-state", check_id])
+    result = run(command, cwd=build_root)
+    if result.returncode != 0:
+        raise SystemExit("coverage 仍有机器差异或未确认状态，不能登记为通过。")
+    record_evidence(
+        script_dir, build_root, module_dir, "coverage", artifact_path
+    )
 
 
 def commit_finalization_state(
@@ -576,7 +689,9 @@ def finalize(args: argparse.Namespace) -> int:
         semantic_checks = [
             name
             for name in checks
-            if name not in COMMAND_CHECKS and name != "browser-acceptance"
+            if name not in COMMAND_CHECKS
+            and name != "browser-acceptance"
+            and name not in LEGACY_BROWSER_CHECKS
         ]
         present = evidence_names(build)
         commands_needed = [name for name in checks if name in COMMAND_CHECKS and name not in present]
@@ -588,7 +703,37 @@ def finalize(args: argparse.Namespace) -> int:
         present = evidence_names(build)
         if "browser-acceptance" in checks and "browser-acceptance" not in present:
             run_browser_validation(
-                args, script_dir, build_root, module_dir, audit_dir, build
+                args,
+                script_dir,
+                build_root,
+                module_dir,
+                audit_dir,
+                build,
+                ["browser-acceptance"],
+            )
+        _, build = build_state(module_dir)
+        present = evidence_names(build)
+        legacy_browser_needed = [
+            name for name in checks if name in LEGACY_BROWSER_CHECKS and name not in present
+        ]
+        if legacy_browser_needed:
+            legacy_browser_batch = [
+                name for name in checks if name in LEGACY_BROWSER_CHECKS
+            ]
+            run_browser_validation(
+                args,
+                script_dir,
+                build_root,
+                module_dir,
+                audit_dir,
+                build,
+                legacy_browser_batch,
+            )
+        _, build = build_state(module_dir)
+        present = evidence_names(build)
+        if "coverage" in checks and "coverage" not in present:
+            run_coverage_validation(
+                args, script_dir, build_root, module_dir, audit_dir
             )
         _, build = build_state(module_dir)
         missing = [name for name in checks if name not in evidence_names(build)]
@@ -652,6 +797,9 @@ def parser() -> argparse.ArgumentParser:
     result.add_argument("--module-dir", required=True)
     result.add_argument("--browser-manifest")
     result.add_argument("--browse-bin")
+    result.add_argument("--coverage-plan")
+    result.add_argument("--coverage-artifacts")
+    result.add_argument("--coverage-confirm-state", action="append", default=[])
     result.add_argument("--retry-failed", action="store_true")
     result.add_argument("--no-land", action="store_true")
     return result
