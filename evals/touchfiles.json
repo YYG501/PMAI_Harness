@@ -17,7 +17,7 @@
     "loop-contract-static": ["skills/_shared/loop-contract.md", "skills/proposal/SKILL.md", "skills/design/SKILL.md", "skills/build/SKILL.md", "skills/build-close/SKILL.md", "tests/fixtures/loop-contract-scenarios.json", "tests/test-loop-contract.sh"],
     "merge-conflict-recovery-static": ["scripts/land-work.sh", "tests/test-land-work-v2.sh"],
     "meta-judgment-model-static": ["skills/meta/SKILL.md", "skills/meta/references/problem-framing.md"],
-    "mockup-covers-full-task": ["skills/mockup/SKILL.md", "skills/design/SKILL.md"],
+    "mockup-covers-full-task": ["skills/mockup/SKILL.md", "skills/design/SKILL.md", "scripts/mockup-quality.py", "scripts/import-mockup-variants.py", "scripts/consumer-doctor.py", "tests/test-mockup-quality.sh"],
     "natural-language-finalize": ["skills/build/SKILL.md", "scripts/land-work.sh", "scripts/doc-impact.py"],
     "no-internal-menus": ["skills/design/SKILL.md", "skills/build/SKILL.md", "scripts/builder-profile.py"],
     "patch-smell-routes-meta": ["skills/design/SKILL.md", "skills/meta/SKILL.md"],

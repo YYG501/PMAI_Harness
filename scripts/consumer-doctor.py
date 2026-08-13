@@ -11,6 +11,7 @@ import re
 import subprocess
 import sys
 import tempfile
+from datetime import datetime
 from pathlib import Path, PurePosixPath
 from typing import Any
 
@@ -109,6 +110,31 @@ MOCKUP_REQUIRED_KEYS = {
     "round": str,
     "featured": bool,
 }
+MOCKUP_CURRENT_KEYS = {
+    "approach": str,
+    "best_for": str,
+    "tradeoffs": str,
+    "round_goal": str,
+    "created_at": str,
+    "updated_at": str,
+}
+MOCKUP_QUALITY_SCHEMA_VERSION = 2
+MOCKUP_QUALITY_KEYS = {
+    "design_basis": str,
+    "visual_audit": str,
+}
+
+
+def _valid_mockup_timestamp(value: object) -> bool:
+    if not isinstance(value, str) or not value.strip():
+        return False
+    try:
+        datetime.fromisoformat(value.strip().replace("Z", "+00:00"))
+    except ValueError:
+        return False
+    return True
+
+
 def _run_git(root: Path, *args: str, input_text: str | None = None) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
         ["git", "-C", str(root), *args],
@@ -1054,6 +1080,7 @@ class Audit:
 
         self.mockups = {"state": "current", "variants": len(data["variants"])}
         seen: set[str] = set()
+        quality_pairs: dict[tuple[str, str], set[str]] = {}
         for index, variant in enumerate(data["variants"]):
             label = f"mockups/manifest.json#variants[{index}]"
             if not isinstance(variant, dict):
@@ -1067,6 +1094,79 @@ class Audit:
             ]
             if invalid_fields:
                 self.add("error", "mockup_variant_fields", f"{label} 缺少或写错字段：{', '.join(invalid_fields)}", "mockups/manifest.json")
+            uses_current_schema = any(key in variant for key in MOCKUP_CURRENT_KEYS)
+            if uses_current_schema:
+                invalid_current_fields = [
+                    key
+                    for key, expected in MOCKUP_CURRENT_KEYS.items()
+                    if not isinstance(variant.get(key), expected)
+                    or not str(variant.get(key)).strip()
+                ]
+                if invalid_current_fields:
+                    self.add(
+                        "error",
+                        "mockup_variant_current_fields",
+                        f"{label} 使用新版看版字段时必须补齐：{', '.join(invalid_current_fields)}",
+                        "mockups/manifest.json",
+                    )
+                elif not _valid_mockup_timestamp(variant.get("created_at")) \
+                        or not _valid_mockup_timestamp(variant.get("updated_at")):
+                    self.add(
+                        "error",
+                        "mockup_variant_timestamp",
+                        f"{label} 的 created_at / updated_at 必须是带日期时间的 ISO 8601",
+                        "mockups/manifest.json",
+                    )
+            quality_schema = variant.get("schema_version")
+            quality_binding: tuple[str, str] | None = None
+            if quality_schema is not None and quality_schema != MOCKUP_QUALITY_SCHEMA_VERSION:
+                self.add(
+                    "error",
+                    "mockup_variant_schema_version",
+                    f"{label} 的 schema_version 不受支持",
+                    "mockups/manifest.json",
+                )
+            if quality_schema == MOCKUP_QUALITY_SCHEMA_VERSION:
+                invalid_current_fields = [
+                    key
+                    for key, expected in MOCKUP_CURRENT_KEYS.items()
+                    if not isinstance(variant.get(key), expected)
+                    or not str(variant.get(key)).strip()
+                ]
+                if invalid_current_fields:
+                    self.add(
+                        "error",
+                        "mockup_variant_current_fields",
+                        f"{label} 的新版比较字段缺少：{', '.join(invalid_current_fields)}",
+                        "mockups/manifest.json",
+                    )
+                invalid_quality_fields = [
+                    key
+                    for key, expected in MOCKUP_QUALITY_KEYS.items()
+                    if not isinstance(variant.get(key), expected)
+                    or not str(variant.get(key)).strip()
+                ]
+                if invalid_quality_fields:
+                    self.add(
+                        "error",
+                        "mockup_quality_fields",
+                        f"{label} 的新版质量证据缺少：{', '.join(invalid_quality_fields)}",
+                        "mockups/manifest.json",
+                    )
+                else:
+                    basis = _relative_path(variant.get("design_basis"))
+                    audit = _relative_path(variant.get("visual_audit"))
+                    if basis is None or audit is None \
+                            or not basis.startswith("audits/") \
+                            or not audit.startswith("audits/"):
+                        self.add(
+                            "error",
+                            "mockup_quality_paths",
+                            f"{label} 的 design_basis / visual_audit 必须是 mockups/audits/ 内的相对路径",
+                            "mockups/manifest.json",
+                        )
+                    else:
+                        quality_binding = (basis, audit)
             if variant.get("status") not in MOCKUP_STATUSES:
                 self.add("error", "mockup_variant_status", f"{label} 的 status 不符合当前枚举", "mockups/manifest.json")
             relative = _relative_path(variant.get("path"))
@@ -1077,6 +1177,8 @@ class Audit:
                 self.add("error", "mockup_variant_duplicate", f"mockup 变体路径重复：{relative}", "mockups/manifest.json")
                 continue
             seen.add(relative)
+            if quality_binding is not None:
+                quality_pairs.setdefault(quality_binding, set()).add(f"mockups/{relative}")
             asset = mockups / relative
             try:
                 resolved = asset.resolve(strict=True)
@@ -1086,6 +1188,40 @@ class Audit:
                 self.add("error", "mockup_asset_missing", f"mockup 资源不存在、越界或为 symlink：{relative}", f"mockups/{relative}")
             elif f"mockups/{relative}" not in self.tracked:
                 self.add("warning", "mockup_asset_untracked", f"mockup 资源未被 Git 跟踪：{relative}", f"mockups/{relative}")
+
+        quality_checker = SCRIPT_DIR / "mockup-quality.py"
+        for (basis, audit), variants in sorted(quality_pairs.items()):
+            if not quality_checker.is_file():
+                self.add("error", "mockup_quality_checker_missing", "无法验证 mockup 设计质量证据")
+                break
+            command = [
+                    sys.executable,
+                    str(quality_checker),
+                    "verify",
+                    "--repo",
+                    str(self.root),
+                    "--contract",
+                    f"mockups/{basis}",
+                    "--report",
+                    f"mockups/{audit}",
+                ]
+            for variant in sorted(variants):
+                command.extend(["--variant", variant])
+            result = subprocess.run(
+                command,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.PIPE,
+                text=True,
+                check=False,
+            )
+            if result.returncode != 0:
+                reason = (result.stderr or "").strip().removeprefix("MOCKUP_QUALITY: FAIL: ")
+                self.add(
+                    "error",
+                    "mockup_quality_invalid",
+                    f"mockup 设计质量证据无效：{reason or '请重新执行视觉验收'}",
+                    f"mockups/{audit}",
+                )
 
         if data["variants"]:
             board = mockups / "index.html"

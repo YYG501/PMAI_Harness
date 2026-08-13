@@ -72,6 +72,7 @@ CORE_SUITES=(
   test-build-close-hard-gates.sh
   test-exec-adapters.sh
   test-mock-board.sh
+  test-mockup-quality.sh
   test-state-lib.sh
   test-attachments-helper.sh
   test-close-work.sh

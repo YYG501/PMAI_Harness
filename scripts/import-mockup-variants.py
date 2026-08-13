@@ -12,6 +12,7 @@ import hashlib
 import json
 import re
 import shutil
+import subprocess
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
@@ -165,9 +166,12 @@ def main() -> int:
     parser.add_argument("--image", action="append", default=[], help="用户上传图片，可重复")
     parser.add_argument("--requirement", required=True, help="需求 / 模块名")
     parser.add_argument("--round", default="第一轮", help="探索轮次")
+    parser.add_argument("--round-goal", default="", help="本轮要判断的产品问题")
     parser.add_argument("--concepts", help="方向清单 JSON 文件，可选")
     parser.add_argument("--approved", help="approved.json 路径，可选")
     parser.add_argument("--feedback", help="feedback.json 路径，可选")
+    parser.add_argument("--design-basis", help="已通过 mockup-quality.py compile 生成的仓内相对路径")
+    parser.add_argument("--visual-audit", help="已通过 mockup-quality.py verify 的仓内相对路径")
     parser.add_argument("--dest-slug", help="mockups/ 下的目标目录名，可选")
     args = parser.parse_args()
 
@@ -185,6 +189,19 @@ def main() -> int:
     approved = _load_json(approved_path, {})
     feedback = _load_json(feedback_path, {})
     preferred = _preferred_letter(approved, feedback)
+    recorded_at = datetime.now(timezone.utc).astimezone().isoformat(timespec="minutes")
+    design_basis = str(args.design_basis or "").strip()
+    visual_audit = str(args.visual_audit or "").strip()
+    if bool(design_basis) != bool(visual_audit):
+        raise SystemExit("--design-basis 与 --visual-audit 必须同时提供")
+    if source_dir and not design_basis:
+        raise SystemExit("新生成的设计稿必须提供 --design-basis 与 --visual-audit")
+    if design_basis:
+        for label, value in (("--design-basis", design_basis), ("--visual-audit", visual_audit)):
+            relative = Path(value)
+            if relative.is_absolute() or ".." in relative.parts \
+                    or not relative.as_posix().startswith("audits/"):
+                raise SystemExit(f"{label} 必须是 mockups/audits/ 下的相对路径")
 
     mockups_dir = repo / "mockups"
     mockups_dir.mkdir(parents=True, exist_ok=True)
@@ -194,6 +211,7 @@ def main() -> int:
     dest_dir.mkdir(parents=True, exist_ok=True)
 
     imported: list[dict[str, Any]] = []
+    copied_targets: list[Path] = []
     for idx, image in enumerate(images):
         letter = _variant_letter(image, idx)
         ext = image.suffix.lower()
@@ -203,23 +221,79 @@ def main() -> int:
             stamp = datetime.now(timezone.utc).strftime("%H%M%S")
             target = dest_dir / f"variant-{letter}-{stamp}{ext}"
         shutil.copy2(image, target)
+        copied_targets.append(target)
         rel_path = target.relative_to(mockups_dir).as_posix()
         concept = concepts.get(letter, {})
         comment = _comment_for(feedback, letter)
         is_featured = preferred == letter
-        imported.append(
-            {
-                "path": rel_path,
-                "requirement": args.requirement,
-                "title": concept.get("title") or f"方案 {letter}",
-                "explores": concept.get("explores") or concept.get("direction") or f"外部设计稿 {letter}",
-                "good_parts": comment or concept.get("good_parts") or concept.get("good") or "待 PM 比对",
-                "status": "待合并" if is_featured else "活跃",
-                "round": args.round,
-                "featured": is_featured,
-                "retired_note": "",
-            }
+        approach = (
+            concept.get("approach")
+            or concept.get("explores")
+            or concept.get("direction")
+            or f"外部设计稿 {letter}"
         )
+        best_for = (
+            concept.get("best_for")
+            or concept.get("good_parts")
+            or concept.get("good")
+            or comment
+            or "待 PM 比对"
+        )
+        tradeoffs = (
+            concept.get("tradeoffs")
+            or concept.get("tradeoff")
+            or concept.get("sacrifice")
+            or concept.get("cost")
+            or "待 PM 比对"
+        )
+        item = {
+            "path": rel_path,
+            "requirement": args.requirement,
+            "title": concept.get("title") or f"方案 {letter}",
+            "approach": approach,
+            "best_for": best_for,
+            "tradeoffs": tradeoffs,
+            "feedback_note": comment,
+            "explores": approach,
+            "good_parts": best_for,
+            "status": "待合并" if is_featured else "活跃",
+            "round": args.round,
+            "round_goal": args.round_goal or "未记录",
+            "created_at": recorded_at,
+            "updated_at": recorded_at,
+            "design_basis": design_basis,
+            "visual_audit": visual_audit,
+            "featured": is_featured,
+            "retired_note": "",
+        }
+        if design_basis:
+            item["schema_version"] = 2
+        imported.append(item)
+
+    if design_basis:
+        checker = Path(__file__).resolve().with_name("mockup-quality.py")
+        command = [
+            sys.executable,
+            str(checker),
+            "verify",
+            "--repo",
+            str(repo),
+            "--contract",
+            f"mockups/{design_basis}",
+            "--report",
+            f"mockups/{visual_audit}",
+        ]
+        for item in imported:
+            command.extend(["--variant", f"mockups/{item['path']}"])
+        result = subprocess.run(command, capture_output=True, text=True, check=False)
+        if result.returncode != 0:
+            for target in copied_targets:
+                try:
+                    target.unlink()
+                except OSError:
+                    pass
+            reason = (result.stderr or result.stdout).strip()
+            raise SystemExit(reason or "mockup 质量证据未通过")
 
     manifest_path = mockups_dir / "manifest.json"
     manifest = _load_manifest(manifest_path)
@@ -227,6 +301,9 @@ def main() -> int:
     by_path = {str(v.get("path")): i for i, v in enumerate(variants) if isinstance(v, dict)}
     for item in imported:
         if item["path"] in by_path:
+            existing = variants[by_path[item["path"]]]
+            if isinstance(existing, dict) and existing.get("created_at"):
+                item["created_at"] = existing["created_at"]
             variants[by_path[item["path"]]] = item
         else:
             variants.append(item)

@@ -45,6 +45,10 @@ test_mockup_preserves_adaptive_divergence() {
   assert_file_contains "$MOCKUP_SKILL" "check-gstack-browser.sh" "mockup should call gstack diagnostics" || return
   assert_file_contains "$MOCKUP_SKILL" "gstack 受限：走 PMAI 内部 HTML / 静态稿" "mockup should have a local fallback" || return
   assert_file_contains "$MOCKUP_SKILL" "交互模型、信息层级或任务路径" "variants should differ materially" || return
+  assert_file_contains "$MOCKUP_SKILL" "设计依据" "mockup should bind the design baseline before generation" || return
+  assert_file_contains "$MOCKUP_SKILL" "桌面与窄屏视觉验收" "mockup should verify both viewport classes" || return
+  assert_file_contains "$MOCKUP_SKILL" "复用真实应用外壳" "existing products should reuse their real shell" || return
+  assert_file_contains "$MOCKUP_SKILL" "mockup-quality.py" "mockup should use an executable quality contract" || return
   assert_file_contains "$MOCKUP_SKILL" '不修改 `project.yml` 声明的实现入口' "mockup should not touch build target" || return
   pass_test
 }

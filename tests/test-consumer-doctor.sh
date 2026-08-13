@@ -12,6 +12,7 @@ INIT="$REPO_ROOT/scripts/init-project.sh"
 PROJECT_DEFINITION="$REPO_ROOT/scripts/project-definition.py"
 PROPOSAL_CONTRACT="$REPO_ROOT/scripts/proposal-contract.py"
 MOCK_BOARD="$REPO_ROOT/scripts/gen-mock-board.py"
+MOCK_QUALITY="$REPO_ROOT/scripts/mockup-quality.py"
 CLEANUP_ROOT=$(mktemp -d /tmp/pmai-consumer-doctor-suite.XXXXXX)
 
 cleanup() {
@@ -664,6 +665,231 @@ PY
   fi
 }
 
+test_mockup_current_schema_is_complete_and_timestamped() {
+  start_test "consumer-doctor: current mockup schema requires complete comparison fields and timestamps"
+  local repo current incomplete invalid replacement
+  repo=$(new_consumer) || { _fail "fixture init failed"; return; }
+  mkdir -p "$repo/mockups/approach-a"
+  printf '<main>Approach A</main>\n' > "$repo/mockups/approach-a/index.html"
+  cat > "$repo/mockups/manifest.json" <<'JSON'
+{
+  "variants": [
+    {
+      "path": "approach-a/index.html",
+      "requirement": "demo",
+      "title": "Approach A",
+      "approach": "task flow",
+      "best_for": "focused review",
+      "tradeoffs": "longer page",
+      "explores": "task flow",
+      "good_parts": "focused review",
+      "status": "活跃",
+      "round": "第一轮",
+      "round_goal": "choose a review path",
+      "created_at": "2026-08-13T10:00+08:00",
+      "updated_at": "2026-08-13T10:00+08:00",
+      "featured": false
+    }
+  ]
+}
+JSON
+  python3 "$MOCK_BOARD" "$repo" >/dev/null || { _fail "mockup board generation failed"; return; }
+  commit_fixture "$repo"
+  current=$(audit "$repo") || { _fail "current schema audit failed"; return; }
+
+  replacement="$repo/mockups/manifest.json.tmp"
+  sed '/"tradeoffs":/d' "$repo/mockups/manifest.json" > "$replacement" \
+    && mv "$replacement" "$repo/mockups/manifest.json" \
+    || { _fail "incomplete schema update failed"; return; }
+  incomplete=$(audit "$repo") || { _fail "incomplete schema audit failed"; return; }
+
+  git -C "$repo" show HEAD:mockups/manifest.json > "$repo/mockups/manifest.json"
+  sed 's/2026-08-13T10:00+08:00/not-a-time/' "$repo/mockups/manifest.json" > "$replacement" \
+    && mv "$replacement" "$repo/mockups/manifest.json" \
+    || { _fail "invalid timestamp update failed"; return; }
+  invalid=$(audit "$repo") || { _fail "invalid timestamp audit failed"; return; }
+
+  if python3 - "$current" "$incomplete" "$invalid" <<'PY'
+import json
+import sys
+
+current, incomplete, invalid = (json.loads(value) for value in sys.argv[1:])
+assert current["status"] == "current"
+assert "mockup_variant_current_fields" in {item["code"] for item in incomplete["findings"]}
+assert "mockup_variant_timestamp" in {item["code"] for item in invalid["findings"]}
+PY
+  then
+    pass_test
+  else
+    _fail "current mockup schema findings mismatch"
+  fi
+}
+
+test_mockup_quality_schema_requires_evidence_paths() {
+  start_test "consumer-doctor: schema v2 requires design basis and visual audit"
+  local repo out
+  repo=$(new_consumer) || { _fail "fixture init failed"; return; }
+  mkdir -p "$repo/mockups/approach-a"
+  printf '<main>Approach A</main>\n' > "$repo/mockups/approach-a/index.html"
+  cat > "$repo/mockups/manifest.json" <<'JSON'
+{
+  "variants": [{
+    "schema_version": 2,
+    "path": "approach-a/index.html",
+    "requirement": "demo",
+    "title": "Approach A",
+    "approach": "task flow",
+    "best_for": "focused review",
+    "tradeoffs": "longer page",
+    "explores": "task flow",
+    "good_parts": "focused review",
+    "status": "活跃",
+    "round": "第一轮",
+    "round_goal": "choose a review path",
+    "created_at": "2026-08-13T10:00+08:00",
+    "updated_at": "2026-08-13T10:00+08:00",
+    "featured": false
+  }]
+}
+JSON
+  commit_fixture "$repo"
+  out=$(audit "$repo") || { _fail "quality schema audit failed"; return; }
+  if python3 - "$out" <<'PY'
+import json
+import sys
+
+payload = json.loads(sys.argv[1])
+assert payload["status"] == "invalid"
+assert "mockup_quality_fields" in {item["code"] for item in payload["findings"]}
+PY
+  then
+    pass_test
+  else
+    _fail "schema v2 should require quality evidence paths"
+  fi
+}
+
+test_mockup_quality_evidence_is_verified_and_invalidated() {
+  start_test "consumer-doctor: mockup 质量证据通过，DESIGN 漂移后失效"
+  local repo current stale
+  repo=$(new_consumer) || { _fail "fixture init failed"; return; }
+  mkdir -p "$repo/src" "$repo/mockups/demo" "$repo/mockups/audits/demo/round-1"
+  printf '<main>Existing shell</main>\n' > "$repo/src/shell.html"
+  printf '<main>Mockup</main>\n' > "$repo/mockups/demo/index.html"
+  if ! python3 "$MOCK_QUALITY" compile \
+      --repo "$repo" \
+      --requirement "demo" \
+      --round "第一轮" \
+      --round-goal "先看判断结果" \
+      --reference "src/shell.html" \
+      --must-inherit "继承当前体验目标" \
+      --reuse "复用现有应用外壳" \
+      --may-change "允许调整内容区层级" \
+      --guardrail "首屏减少同级信息竞争" \
+      --out "mockups/audits/demo/round-1/design-basis.json" >/dev/null; then
+    _fail "quality contract compile failed"
+    return
+  fi
+  python3 - "$repo" <<'PY'
+import hashlib
+import json
+import struct
+import sys
+import zlib
+from pathlib import Path
+
+root = Path(sys.argv[1])
+audit_dir = root / "mockups/audits/demo/round-1"
+
+def png(path, width, height):
+    raw = b"".join(b"\x00" + b"\xff\xff\xff" * width for _ in range(height))
+    def chunk(name, payload):
+        return struct.pack(">I", len(payload)) + name + payload + struct.pack(">I", zlib.crc32(name + payload) & 0xffffffff)
+    path.write_bytes(
+        b"\x89PNG\r\n\x1a\n"
+        + chunk(b"IHDR", struct.pack(">IIBBBBB", width, height, 8, 2, 0, 0, 0))
+        + chunk(b"IDAT", zlib.compress(raw, 1))
+        + chunk(b"IEND", b"")
+    )
+
+desktop = audit_dir / "desktop.png"
+narrow = audit_dir / "narrow.png"
+png(desktop, 1024, 640)
+png(narrow, 390, 640)
+contract = audit_dir / "design-basis.json"
+checks = {
+    "design-principles",
+    "existing-shell-and-components",
+    "information-hierarchy",
+    "task-path-and-states",
+    "responsive-layout",
+    "text-and-controls",
+}
+constraints = {"must-inherit-1", "reuse-1", "may-change-1", "guardrail-1"}
+report = {
+    "schema_version": 1,
+    "kind": "mockup-visual-audit",
+    "design_basis": "mockups/audits/demo/round-1/design-basis.json",
+    "design_basis_sha256": hashlib.sha256(contract.read_bytes()).hexdigest(),
+    "audited_at": "2026-08-13T18:00:00+08:00",
+    "browser_adapter": "playwright",
+    "variants": [{
+        "path": "mockups/demo/index.html",
+        "screenshots": {
+            "desktop": {"path": "mockups/audits/demo/round-1/desktop.png", "width": 1024, "height": 640, "sha256": hashlib.sha256(desktop.read_bytes()).hexdigest(), "captured_at": "2026-08-13T17:55:00+08:00"},
+            "narrow": {"path": "mockups/audits/demo/round-1/narrow.png", "width": 390, "height": 640, "sha256": hashlib.sha256(narrow.read_bytes()).hexdigest(), "captured_at": "2026-08-13T17:56:00+08:00"},
+        },
+        "checks": [{"id": item, "status": "pass", "evidence": f"checked {item}"} for item in sorted(checks)],
+        "constraint_results": [{"id": item, "status": "pass", "evidence": f"checked {item}"} for item in sorted(constraints)],
+        "observations": ["主任务优先，窄屏没有遮挡。"],
+    }],
+}
+(audit_dir / "visual-audit.json").write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+manifest = {
+    "variants": [{
+        "schema_version": 2,
+        "path": "demo/index.html",
+        "requirement": "demo",
+        "title": "结果优先",
+        "approach": "先展示判断结果",
+        "best_for": "快速处理任务",
+        "tradeoffs": "过程信息需要下钻",
+        "explores": "先展示判断结果",
+        "good_parts": "快速处理任务",
+        "status": "活跃",
+        "round": "第一轮",
+        "round_goal": "先看判断结果",
+        "created_at": "2026-08-13T18:00:00+08:00",
+        "updated_at": "2026-08-13T18:00:00+08:00",
+        "design_basis": "audits/demo/round-1/design-basis.json",
+        "visual_audit": "audits/demo/round-1/visual-audit.json",
+        "featured": False,
+    }]
+}
+(root / "mockups/manifest.json").write_text(json.dumps(manifest, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+PY
+  python3 "$MOCK_BOARD" "$repo" >/dev/null || { _fail "mockup board generation failed"; return; }
+  commit_fixture "$repo" || { _fail "quality fixture commit failed"; return; }
+  current=$(audit "$repo") || { _fail "current quality audit failed"; return; }
+  printf '\n- 设计基线变化\n' >> "$repo/DESIGN.md"
+  stale=$(audit "$repo") || { _fail "stale quality audit failed"; return; }
+
+  if python3 - "$current" "$stale" <<'PY'
+import json
+import sys
+
+current, stale = (json.loads(value) for value in sys.argv[1:])
+assert current["status"] == "current"
+assert stale["status"] == "invalid"
+assert "mockup_quality_invalid" in {item["code"] for item in stale["findings"]}
+PY
+  then
+    pass_test
+  else
+    _fail "mockup quality currentness findings mismatch"
+  fi
+}
+
 test_secret_config_is_never_echoed() {
   start_test "consumer-doctor: tracked secret config is blocked without reading or echoing token"
   local repo out token
@@ -1018,6 +1244,9 @@ test_consumer_entry_sync_migrates_known_legacy_rules_and_keeps_custom_items
 test_consumer_entry_sync_rejects_unsafe_shapes
 test_missing_implementation_entrypoint_blocks_build_recovery
 test_mockup_manifest_assets_and_board_are_checked
+test_mockup_current_schema_is_complete_and_timestamped
+test_mockup_quality_schema_requires_evidence_paths
+test_mockup_quality_evidence_is_verified_and_invalidated
 test_secret_config_is_never_echoed
 test_legacy_layout_requires_sync_not_structural_repair
 test_non_git_and_symlinked_truth_sources_fail_closed

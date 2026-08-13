@@ -14,6 +14,9 @@ PM-AI-Workflow 生成器仓的演进记录。本文件**只记影响已安装框
 
 ## 未发布
 
+- `fix(mockups)`: **设计稿看板改为按需求、轮次、方向组织，并补齐可比较的信息与时间。** 看板现在按最近更新时间把最新需求和最新轮次放在前面，最新轮默认展开、旧轮折叠，同轮已选方向优先；每轮显示“本轮要判断”，每个方向显示“核心做法 / 适合 / 主要取舍”，并保留独立 PM 反馈。导入脚本自动记录创建与更新时间，需求链接改为稳定名称链接，同时兼容旧 `#req-N`；旧清单继续可读，缺失时间或取舍时明确标为未记录，不拿文件时间猜测。Doctor 对历史格式保持兼容，但新版条目一旦出现新字段就要求补齐整组字段与合法时间。
+- `fix(mockups)`: **新生成的设计稿必须绑定设计依据并通过桌面 / 窄屏视觉验收后才能进入看版。** 新增 `mockup-quality.py`，生成前把 `DESIGN.md`、已声明项目设计系统和实际参考页面 / 组件编译为“必须继承 / 必须复用 / 允许改变 / 设计护栏”，生成后绑定真实 PNG 截图、浏览器适配器、截图摘要和逐条检查结果；已有产品要求复用真实应用外壳与组件模式，不再只抄颜色或重画相似外壳。导入脚本与看版生成器在写清单 / 生成页面前主动验证质量证据，Consumer Doctor 复核同一合同；`DESIGN.md`、设计系统 Skill、参考实现或截图变化会让旧证据失效。历史设计稿和 PM 上传的外部方向证据继续兼容读取，不冒充已通过视觉验收。
+
 - `fix(finalization)`: **最终验收统一绑定一个不可变候选，并把旧 v1-v4 恢复收进同一机械通道。** `finalize-candidate.py` 不再固定取 HEAD，而是按批准目标树、已记录实现和 legacy recovery checkpoint 生成带 source/base commit、目标路径树摘要、source hash、来源与防篡改 digest 的 candidate binding；后续 prototype boundary、分项 final validation、浏览器批次和文档影响图共同消费该身份。`project.yml` 的 commands 与 `web.start` 统一从 `implementation.root` 执行，新定义机械拒绝重复 `--dir/--prefix/--cwd/cd`，合法 legacy recovery 只在运行时精确适配并留痕。final validation 不再 fail-fast，tests/typecheck 可由 PM 绑定当前 artifact 明确接受为 limited，build/browser/behavior/prototype boundary 仍是硬门；旧浏览器检查由一次 active batch 确定性派生并绑定同一摘要，coverage 通过 checks-spec + 页面抓取单独证明。`doc-impact` schema v2 绑定 implementation/landed commit、base/head、source hash、accepted deltas 和 candidate tree，每次恢复先校验 currentness，旧图或漂移图原子重建。旧合同不升级版本，已有新鲜证据继续可读；不自动迁移消费仓或用户级安装态。
 
 - `fix(feedback)`: **`/pmai-feedback` 从无条件全文审计改为“默认聚焦、条件升级”，并固定 active 会话证据快照。** `current-session.py` 在精确定位后返回行号、字节数和捕获时间边界；feedback 只分析该边界内与 PM 当前反馈直接相关的对话、工具证据和真相源，不再追读自己持续写入的 active 尾部。只有证据冲突、不可逆动作 / 真相源覆盖、跨阶段漂移无法归因、关键证据缺口或 PM 明确要求时才升级完整审计，并记录原因。框架仓交接默认复核 findings 指向的范围，证据不足时才读取完整固定快照，避免消费仓与框架仓重复全文冷读。

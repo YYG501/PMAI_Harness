@@ -17,17 +17,17 @@
     "context": ["角色管理会影响用户详情、部门详情和产品开通弹窗", "已有产品页面与 DESIGN.md"]
   },
   "expected": {
-    "behaviors": ["读取现有设计和上下游页面", "覆盖完整用户任务和相关边界状态", "只有真实交互岔路才出多稿"],
-    "observations": ["existing_design_read", "related_pages_covered", "boundary_states_covered", "real_interaction_forks_only"],
+    "behaviors": ["把 DESIGN.md 和现有页面编译为本轮设计约束", "覆盖完整用户任务和相关边界状态", "只有真实交互岔路才出多稿", "用桌面和窄屏截图逐条验证设计约束"],
+    "observations": ["existing_design_read", "design_basis_bound", "related_pages_covered", "boundary_states_covered", "real_interaction_forks_only", "desktop_visual_audit_passed", "narrow_visual_audit_passed"],
     "lifecycle_order": ["designing"],
     "stopping_point": "mockup_direction_selection"
   },
   "forbidden": {
-    "behaviors": ["只画当前卡片", "用字体颜色差异凑三套", "直接修改主原型"],
-    "observations": ["current_card_only", "cosmetic_variants_only", "prototype_modified_by_mockup"]
+    "behaviors": ["只画当前卡片", "用字体颜色差异凑三套", "重新绘制一套相似应用外壳", "未完成视觉验收就登记看版", "直接修改主原型"],
+    "observations": ["current_card_only", "cosmetic_variants_only", "existing_shell_reinvented", "visual_audit_missing", "prototype_modified_by_mockup"]
   },
   "judge": {
     "enabled": true,
-    "rubric": ["设计稿覆盖入口页、详情页、关联页与必要状态", "多方向差异位于交互模型、信息层级或任务路径"]
+    "rubric": ["设计稿覆盖入口页、详情页、关联页与必要状态", "多方向差异位于交互模型、信息层级或任务路径", "实际绑定 DESIGN.md 与现有界面依据", "桌面和窄屏均逐条对照设计要求且不通过时先自行修改"]
   }
 }
