@@ -94,6 +94,32 @@ function designArtifactFor(repoRoot, rawPath) {
   };
 }
 
+function projectArtifactFor(repoRoot, rawPath) {
+  if (typeof rawPath !== 'string' || !rawPath.trim()) return false;
+  const unresolved = path.resolve(process.cwd(), rawPath);
+  let absolute;
+  try {
+    absolute = fs.realpathSync.native(unresolved);
+  } catch {
+    try {
+      absolute = path.join(fs.realpathSync.native(path.dirname(unresolved)), path.basename(unresolved));
+    } catch {
+      return false;
+    }
+  }
+  let canonicalRoot;
+  try {
+    canonicalRoot = fs.realpathSync.native(repoRoot);
+  } catch {
+    return false;
+  }
+  const relative = path.relative(canonicalRoot, absolute).split(path.sep).join('/');
+  return relative === 'PRODUCT.md'
+    || relative === '.pm-workflow/proposal.json'
+    || /^docs\/proposals\/[^/]+\.md$/.test(relative)
+    || relative === 'docs/proposals/INDEX.md';
+}
+
 function handlesGitCommit(command) {
   return typeof command === 'string'
     && /\bgit\b(?:\s+-\S+|\s+-C\s+(?:"[^"]+"|'[^']+'|\S+))*\s+commit\b/.test(command);
@@ -148,6 +174,13 @@ function handlePreTool(data, repoRoot) {
   if (toolName === 'Edit' || toolName === 'Write') {
     const filePath = input.file_path || input.path;
     const artifact = designArtifactFor(repoRoot, filePath);
+    if (!artifact && projectArtifactFor(repoRoot, filePath)) {
+      const result = runGate(['guard-project-write', repoRoot], repoRoot);
+      if (result.status !== 0) {
+        deny(`PM 决策授权护栏已拒绝写入 Proposal / 产品基线。\n\n${failureReason(result, '缺少可验证的项目级授权窗口。')}\n请先展示当前问题，并让本轮用户答复依次完成 observe → answer；写入完成后再 consume 到对应项目动作。`);
+      }
+      return;
+    }
     if (!artifact) return;
     const command = artifact.kind === 'decisions'
       ? 'guard-authority-write'

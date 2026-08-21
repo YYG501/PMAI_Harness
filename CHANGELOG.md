@@ -14,6 +14,8 @@ PM-AI-Workflow 生成器仓的演进记录。本文件**只记影响已安装框
 
 ## 未发布
 
+- `fix(decision-gates)`: **为 design → Proposal 阶段路由补上项目级授权收据，阻止“补 Proposal”后无法合并或错误进入 ready。** 新增 `.pm-workflow/context/decision-gates.json` 项目收据与 `decision-gate.py` 的 `open-project / answer-project / consume-project / cancel-project / status-project / guard-project-write` 命令；阶段路由和 Proposal 授权题固定绑定 gate/question ID、展示消息、PM 用户消息与一次性消费状态，一个答复只能消费一个当时已展示且 pending 的问题。压缩摘要里的“建议下一题”不能创建或回答 gate，已消费的旧路由答复不能复用到 design 或授权 Proposal 写入。Proposal 正文、索引、`PRODUCT.md` 和 `.pm-workflow/proposal.json` 的写入、commit、`proposal-contract.py accept` 与 design ready 均校验本轮授权凭据；无凭据的旧 ready 退回 design，已经进入 build 的旧工作保持兼容。同步更新 design / proposal / quick-fix、消费仓入口模板、项目写入 hook、context pack 与压缩恢复回归；不自动改写现有消费仓或全局安装态。
+
 - `fix(decision-gates)`: **产品决定答复改为绑定已展示问题、用户消息和一次性消费的机器授权收据。** 当前模块 `.work-meta.json:decision_gates` 记录 gate/question ID、业务摘要、完整展示消息、选项、UserPromptSubmit 捕获的短答复事件、`pending → answered → consumed/cancelled` 状态、授权 D 编号与 scoped checkpoint；一个用户消息事件不能跨题复用，聊天压缩摘要不能创建、回答或消费 gate。Design 的决定写入 hook、Git pre-commit 和 `build-contract.py ready/validate-ready` 分别阻断未答写入、缺收据提交和无授权 ready；context pack 支持压缩后按机器状态恢复。旧、未开工且缺授权收据的 `ready_to_build` 返回 `authorization_unverifiable` 并退回 Design，已经进入 `building / iterating / final_check` 的旧工作保持原 build 恢复合同。Claude/Codex 消费仓 hooks 只在新初始化或 PM 明确刷新时更新，本次不自动改现有消费仓或全局安装态。
 
 - `fix(mockups)`: **设计稿看板改为按需求、轮次、方向组织，并补齐可比较的信息与时间。** 看板现在按最近更新时间把最新需求和最新轮次放在前面，最新轮默认展开、旧轮折叠，同轮已选方向优先；每轮显示“本轮要判断”，每个方向显示“核心做法 / 适合 / 主要取舍”，并保留独立 PM 反馈。导入脚本自动记录创建与更新时间，需求链接改为稳定名称链接，同时兼容旧 `#req-N`；旧清单继续可读，缺失时间或取舍时明确标为未记录，不拿文件时间猜测。Doctor 对历史格式保持兼容，但新版条目一旦出现新字段就要求补齐整组字段与合法时间。

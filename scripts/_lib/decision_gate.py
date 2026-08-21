@@ -1,9 +1,10 @@
-"""Machine-verifiable PM answer binding for module design decisions.
+"""Machine-verifiable PM answer binding for product and module decisions.
 
-Decision gates live inside the active module's ``.work-meta.json``.  They are
-authorization receipts, not a second product-decision source: ``decisions.md``
-continues to own the decision itself while this module proves which displayed
-question and user message authorized it.
+Module gates live inside the active module's ``.work-meta.json``.  Product and
+stage-routing gates use the ignored project runtime ledger under
+``.pm-workflow/context/``.  Both stores use the same question/event contract:
+the receipt proves which displayed question and user message authorized an
+action, while product documents remain the only business truth.
 """
 
 from __future__ import annotations
@@ -25,6 +26,14 @@ VALID_GATE_KINDS = {"product-model", "project-definition", "one-way-door"}
 DECISION_ID_RE = re.compile(r"^D[0-9]+$", re.IGNORECASE)
 DECISION_HEADING_RE = re.compile(r"^#{2,6}\s+(D[0-9]+)\b.*$", re.IGNORECASE)
 SHORT_ANSWER_LIMIT = 2048
+PROJECT_GATE_RELATIVE = Path(".pm-workflow/context/decision-gates.json")
+PROJECT_GATE_WORK_ID = "project"
+PROJECT_PROPOSAL_PATHS = {
+    ".pm-workflow/proposal.json",
+    "PRODUCT.md",
+    "docs/proposals/INDEX.md",
+}
+PROJECT_PROPOSAL_BODY_RE = re.compile(r"^docs/proposals/[^/]+\.md$")
 
 
 class DecisionGateError(ValueError):
@@ -104,6 +113,44 @@ def write_meta(module_dir: Path, meta: dict[str, Any]) -> None:
     path = meta_path(module_dir)
     tmp = path.with_name(f".{path.name}.decision-gate.tmp")
     tmp.write_text(json.dumps(meta, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    tmp.replace(path)
+
+
+def project_gate_path(repo_root: Path) -> Path:
+    root = repo_root.expanduser().resolve()
+    try:
+        root.relative_to(root)
+    except ValueError as exc:  # pragma: no cover - defensive path guard
+        raise DecisionGateError(f"项目根目录无效：{repo_root}") from exc
+    return root / PROJECT_GATE_RELATIVE
+
+
+def read_project_contract(repo_root: Path, *, create: bool = False) -> dict[str, Any]:
+    path = project_gate_path(repo_root)
+    try:
+        value = json.loads(path.read_text(encoding="utf-8"))
+    except FileNotFoundError:
+        if not create:
+            try:
+                baseline = git_head(repo_root)
+            except DecisionGateError:
+                # Fresh init runs the pre-commit checks before the first HEAD
+                # exists. No project gate can be open in that state.
+                baseline = "unborn"
+            return new_contract(baseline)
+        value = new_contract(git_head(repo_root))
+    except json.JSONDecodeError as exc:
+        raise DecisionGateError(f"项目级 decision gate 不是合法 JSON：{path}: {exc}") from exc
+    if not isinstance(value, dict):
+        raise DecisionGateError("项目级 decision gate 顶层必须是对象。")
+    return validate_contract(value, work_id=PROJECT_GATE_WORK_ID)
+
+
+def write_project_contract(repo_root: Path, contract: dict[str, Any]) -> None:
+    path = project_gate_path(repo_root)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_name(f".{path.name}.tmp")
+    tmp.write_text(json.dumps(contract, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     tmp.replace(path)
 
 
@@ -281,6 +328,15 @@ def validate_contract(value: Any, *, work_id: str = "") -> dict[str, Any]:
             if decision_id not in normalized_ids:
                 normalized_ids.append(decision_id)
 
+        artifacts = raw.get("authorized_artifacts", [])
+        if not isinstance(artifacts, list):
+            raise DecisionGateError(f"{label}.authorized_artifacts 必须是数组。")
+        normalized_artifacts: list[str] = []
+        for raw_artifact in artifacts:
+            artifact = _require_string(raw_artifact, f"{label}.authorized_artifacts")
+            if artifact not in normalized_artifacts:
+                normalized_artifacts.append(artifact)
+
         consumed_by = raw.get("consumed_by")
         if consumed_by is not None:
             if not isinstance(consumed_by, dict):
@@ -310,11 +366,13 @@ def validate_contract(value: Any, *, work_id: str = "") -> dict[str, Any]:
             raise DecisionGateError(f"{label} pending 时不能已有 answer。")
         if status in {"answered", "consumed"} and normalized_answer is None:
             raise DecisionGateError(f"{label} {status} 时必须有 answer。")
-        if status == "consumed" and not normalized_ids:
-            raise DecisionGateError(f"{label} consumed 时必须绑定决定 ID。")
+        if status == "consumed" and not normalized_ids and not normalized_artifacts:
+            raise DecisionGateError(f"{label} consumed 时必须绑定决定 ID 或项目动作。")
         if status == "consumed" and not str(raw.get("consumed_at") or "").strip():
             raise DecisionGateError(f"{label} consumed 时必须记录 consumed_at。")
-        if status != "consumed" and (normalized_ids or consumed_by is not None):
+        if status != "consumed" and (
+            normalized_ids or normalized_artifacts or consumed_by is not None
+        ):
             raise DecisionGateError(f"{label} 未 consumed 时不能绑定决定或 checkpoint。")
 
         normalized_items.append(
@@ -328,6 +386,7 @@ def validate_contract(value: Any, *, work_id: str = "") -> dict[str, Any]:
                 "answer_candidates": candidates,
                 "answer": normalized_answer,
                 "authorized_decision_ids": normalized_ids,
+                "authorized_artifacts": normalized_artifacts,
                 "consumed_at": str(raw.get("consumed_at") or "").strip() or None,
                 "consumed_by": consumed_by,
                 "cancelled_at": str(raw.get("cancelled_at") or "").strip() or None,
@@ -355,6 +414,48 @@ def parse_option(raw: str) -> dict[str, str]:
     return {"id": _require_string(option_id, "option id"), "label": _require_string(label, "option label")}
 
 
+def _new_gate_item(
+    *,
+    work_id: str,
+    kind: str,
+    summary: str,
+    displayed_message: str,
+    options: list[dict[str, str]],
+    allow_free_text: bool,
+    session_id: str | None,
+    display_message_id: str | None,
+) -> dict[str, Any]:
+    if kind not in VALID_GATE_KINDS:
+        raise DecisionGateError(f"不支持的 decision gate kind：{kind}")
+    stamp = now_iso()
+    entropy = sha256_text("\n".join([work_id, summary, displayed_message, stamp]))[:12]
+    return {
+        "gate_id": f"gate-{entropy}",
+        "question_id": f"question-{entropy}",
+        "work_id": _require_string(work_id, "work id"),
+        "kind": kind,
+        "status": "pending",
+        "question": {
+            "summary": _require_string(summary, "question summary"),
+            "displayed_message": _require_string(displayed_message, "displayed message"),
+            "displayed_message_sha256": sha256_text(displayed_message.strip()),
+            "displayed_at": stamp,
+            "display_session_id": (session_id or "").strip() or None,
+            "display_message_id": (display_message_id or "").strip() or None,
+            "options": _validate_options(options, "question.options"),
+            "allow_free_text": bool(allow_free_text),
+        },
+        "answer_candidates": [],
+        "answer": None,
+        "authorized_decision_ids": [],
+        "authorized_artifacts": [],
+        "consumed_at": None,
+        "consumed_by": None,
+        "cancelled_at": None,
+        "cancel_reason": None,
+    }
+
+
 def open_gate(
     module_dir: Path,
     *,
@@ -373,42 +474,52 @@ def open_gate(
     contract = ensure_contract(meta, baseline_commit=git_head(repo_root))
     if any(item["status"] in {"pending", "answered"} for item in contract["items"]):
         raise DecisionGateError("当前工作已有一题等待答复或消费，不能同时打开下一题。")
-    if kind not in VALID_GATE_KINDS:
-        raise DecisionGateError(f"不支持的 decision gate kind：{kind}")
-    stamp = now_iso()
-    entropy = sha256_text(
-        "\n".join([str(meta.get("id") or ""), summary, displayed_message, stamp])
-    )[:12]
-    gate_id = f"gate-{entropy}"
-    question_id = f"question-{entropy}"
-    item = {
-        "gate_id": gate_id,
-        "question_id": question_id,
-        "work_id": _require_string(meta.get("id"), "work id"),
-        "kind": kind,
-        "status": "pending",
-        "question": {
-            "summary": _require_string(summary, "question summary"),
-            "displayed_message": _require_string(displayed_message, "displayed message"),
-            "displayed_message_sha256": sha256_text(displayed_message.strip()),
-            "displayed_at": stamp,
-            "display_session_id": (session_id or "").strip() or None,
-            "display_message_id": (display_message_id or "").strip() or None,
-            "options": _validate_options(options, "question.options"),
-            "allow_free_text": bool(allow_free_text),
-        },
-        "answer_candidates": [],
-        "answer": None,
-        "authorized_decision_ids": [],
-        "consumed_at": None,
-        "consumed_by": None,
-        "cancelled_at": None,
-        "cancel_reason": None,
-    }
+    item = _new_gate_item(
+        work_id=_require_string(meta.get("id"), "work id"),
+        kind=kind,
+        summary=summary,
+        displayed_message=displayed_message,
+        options=options,
+        allow_free_text=allow_free_text,
+        session_id=session_id,
+        display_message_id=display_message_id,
+    )
     contract["items"].append(item)
     contract["ready_authorization"] = None
     meta["decision_gates"] = validate_contract(contract, work_id=item["work_id"])
     write_meta(module_dir, meta)
+    return item
+
+
+def open_project_gate(
+    repo_root: Path,
+    *,
+    kind: str,
+    summary: str,
+    displayed_message: str,
+    options: list[dict[str, str]],
+    allow_free_text: bool,
+    session_id: str | None,
+    display_message_id: str | None,
+) -> dict[str, Any]:
+    root = repo_root.expanduser().resolve()
+    contract = read_project_contract(root, create=True)
+    if any(item["status"] in {"pending", "answered"} for item in contract["items"]):
+        raise DecisionGateError("当前项目已有一题等待答复或消费，不能同时打开下一题。")
+    item = _new_gate_item(
+        work_id=PROJECT_GATE_WORK_ID,
+        kind=kind,
+        summary=summary,
+        displayed_message=displayed_message,
+        options=options,
+        allow_free_text=allow_free_text,
+        session_id=session_id,
+        display_message_id=display_message_id,
+    )
+    contract["items"].append(item)
+    contract["ready_authorization"] = None
+    normalized = validate_contract(contract, work_id=PROJECT_GATE_WORK_ID)
+    write_project_contract(root, normalized)
     return item
 
 
@@ -452,8 +563,18 @@ def observe_answer(
     if not answer_text or len(answer_text) > SHORT_ANSWER_LIMIT:
         return {"status": "none", "reason": "用户消息不是可捕获的短答复。"}
 
-    candidates: list[tuple[Path, dict[str, Any], dict[str, Any], dict[str, Any]]] = []
+    candidates: list[tuple[str, Path, dict[str, Any] | None, dict[str, Any], dict[str, Any]]] = []
     all_events: dict[str, str] = {}
+    project_contract = read_project_contract(repo_root)
+    for item in project_contract["items"]:
+        for event in item["answer_candidates"]:
+            all_events[event["event_id"]] = item["gate_id"]
+        if item["status"] != "pending":
+            continue
+        display_session = item["question"].get("display_session_id")
+        if display_session and display_session != session_id:
+            continue
+        candidates.append(("project", repo_root, None, project_contract, item))
     for path in _active_meta_paths(repo_root):
         module_dir = path.parent
         meta = read_meta(module_dir)
@@ -469,7 +590,7 @@ def observe_answer(
             display_session = item["question"].get("display_session_id")
             if display_session and display_session != session_id:
                 continue
-            candidates.append((module_dir, meta, contract, item))
+            candidates.append(("module", module_dir, meta, contract, item))
 
     if not candidates:
         return {"status": "none", "reason": "当前没有已展示且 pending 的 decision gate。"}
@@ -477,10 +598,10 @@ def observe_answer(
         return {
             "status": "ambiguous",
             "reason": "当前消息可能对应多个 pending decision gate，未绑定任何问题。",
-            "gate_ids": [item[3]["gate_id"] for item in candidates],
+            "gate_ids": [item[4]["gate_id"] for item in candidates],
         }
 
-    module_dir, meta, contract, item = candidates[0]
+    scope, target, meta, contract, item = candidates[0]
     event_id = _event_id(
         session_id=session_id,
         message_id=message_id,
@@ -503,17 +624,24 @@ def observe_answer(
             "observed_at": now_iso(),
             "source": "user_prompt_submit",
         }
-        for target in contract["items"]:
-            if target["gate_id"] == item["gate_id"]:
-                target["answer_candidates"].append(event)
+        for candidate_item in contract["items"]:
+            if candidate_item["gate_id"] == item["gate_id"]:
+                candidate_item["answer_candidates"].append(event)
                 break
-        meta["decision_gates"] = validate_contract(
-            contract, work_id=str(meta.get("id") or "")
+        normalized = validate_contract(
+            contract,
+            work_id=(str(meta.get("id") or "") if meta is not None else PROJECT_GATE_WORK_ID),
         )
-        write_meta(module_dir, meta)
+        if scope == "project":
+            write_project_contract(repo_root, normalized)
+        else:
+            assert meta is not None
+            meta["decision_gates"] = normalized
+            write_meta(target, meta)
     return {
         "status": "observed",
-        "module": module_relative(repo_root, module_dir),
+        "scope": scope,
+        "module": module_relative(repo_root, target) if scope == "module" else None,
         "gate_id": item["gate_id"],
         "question_id": item["question_id"],
         "event_id": event_id,
@@ -528,10 +656,7 @@ def _find_gate(contract: dict[str, Any], gate_id: str) -> dict[str, Any]:
     raise DecisionGateError(f"找不到 decision gate：{gate_id}")
 
 
-def answer_gate(module_dir: Path, *, gate_id: str, event_id: str) -> dict[str, Any]:
-    meta = read_meta(module_dir)
-    contract = validate_contract(meta.get("decision_gates"), work_id=str(meta.get("id") or ""))
-    item = _find_gate(contract, gate_id)
+def _answer_item(contract: dict[str, Any], item: dict[str, Any], *, event_id: str) -> dict[str, Any]:
     if item["status"] != "pending":
         raise DecisionGateError(f"decision gate 当前为 {item['status']}，不能重复回答。")
     event = next(
@@ -557,8 +682,23 @@ def answer_gate(module_dir: Path, *, gate_id: str, event_id: str) -> dict[str, A
         "selected_option_id": selected["id"] if selected else None,
         "answered_at": now_iso(),
     }
+    return item
+
+
+def answer_gate(module_dir: Path, *, gate_id: str, event_id: str) -> dict[str, Any]:
+    meta = read_meta(module_dir)
+    contract = validate_contract(meta.get("decision_gates"), work_id=str(meta.get("id") or ""))
+    item = _answer_item(contract, _find_gate(contract, gate_id), event_id=event_id)
     meta["decision_gates"] = validate_contract(contract, work_id=str(meta.get("id") or ""))
     write_meta(module_dir, meta)
+    return item
+
+
+def answer_project_gate(repo_root: Path, *, gate_id: str, event_id: str) -> dict[str, Any]:
+    root = repo_root.expanduser().resolve()
+    contract = read_project_contract(root)
+    item = _answer_item(contract, _find_gate(contract, gate_id), event_id=event_id)
+    write_project_contract(root, validate_contract(contract, work_id=PROJECT_GATE_WORK_ID))
     return item
 
 
@@ -600,6 +740,35 @@ def consume_gate(
     return item
 
 
+def consume_project_gate(
+    repo_root: Path, *, gate_id: str, artifact: str
+) -> dict[str, Any]:
+    root = repo_root.expanduser().resolve()
+    contract = read_project_contract(root)
+    item = _find_gate(contract, gate_id)
+    if item["status"] != "answered":
+        raise DecisionGateError(f"decision gate 当前为 {item['status']}，不能消费。")
+    artifact_value = _require_string(artifact, "项目动作")
+    if artifact_value not in {"proposal:draft", "proposal:accept"} and not artifact_value.startswith("route:"):
+        raise DecisionGateError(
+            "项目动作必须是 proposal:draft、proposal:accept 或 route:<动作>。"
+        )
+    if artifact_value in {
+        existing
+        for other in contract["items"]
+        if other["status"] == "consumed"
+        for existing in other.get("authorized_artifacts", [])
+    }:
+        raise DecisionGateError(f"项目动作已经由其它答复消费：{artifact_value}")
+    item["status"] = "consumed"
+    item["authorized_decision_ids"] = []
+    item["authorized_artifacts"] = [artifact_value]
+    item["consumed_at"] = now_iso()
+    item["consumed_by"] = None
+    write_project_contract(root, validate_contract(contract, work_id=PROJECT_GATE_WORK_ID))
+    return item
+
+
 def cancel_gate(module_dir: Path, *, gate_id: str, reason: str) -> dict[str, Any]:
     meta = read_meta(module_dir)
     contract = validate_contract(meta.get("decision_gates"), work_id=str(meta.get("id") or ""))
@@ -612,6 +781,20 @@ def cancel_gate(module_dir: Path, *, gate_id: str, reason: str) -> dict[str, Any
     item["answer"] = None
     meta["decision_gates"] = validate_contract(contract, work_id=str(meta.get("id") or ""))
     write_meta(module_dir, meta)
+    return item
+
+
+def cancel_project_gate(repo_root: Path, *, gate_id: str, reason: str) -> dict[str, Any]:
+    root = repo_root.expanduser().resolve()
+    contract = read_project_contract(root)
+    item = _find_gate(contract, gate_id)
+    if item["status"] not in {"pending", "answered"}:
+        raise DecisionGateError(f"decision gate 当前为 {item['status']}，不能取消。")
+    item["status"] = "cancelled"
+    item["cancelled_at"] = now_iso()
+    item["cancel_reason"] = _require_string(reason, "cancel reason")
+    item["answer"] = None
+    write_project_contract(root, validate_contract(contract, work_id=PROJECT_GATE_WORK_ID))
     return item
 
 
@@ -819,6 +1002,21 @@ def guard_pending_write(module_dir: Path) -> dict[str, Any]:
     return {"status": "allowed"}
 
 
+def guard_project_write(repo_root: Path) -> dict[str, Any]:
+    contract = read_project_contract(repo_root)
+    pending = [item for item in contract["items"] if item["status"] == "pending"]
+    if pending:
+        raise DecisionGateError(
+            "当前项目级决策题尚未回答，禁止修改 Proposal 或产品基线。"
+        )
+    windows = [item for item in contract["items"] if item["status"] == "answered"]
+    if len(windows) != 1:
+        raise DecisionGateError(
+            "没有唯一、尚未消费的项目级 PM 授权答复，禁止修改 Proposal 或产品基线。"
+        )
+    return {"status": "allowed", "gate_id": windows[0]["gate_id"]}
+
+
 def _git_index_file(repo_root: Path, relative: str) -> str:
     result = _git(repo_root, "show", f":{relative}", check=False)
     if result.returncode == 0:
@@ -826,8 +1024,36 @@ def _git_index_file(repo_root: Path, relative: str) -> str:
     return ""
 
 
+def _has_git_head(repo_root: Path) -> bool:
+    return _git(repo_root, "rev-parse", "--verify", "HEAD", check=False).returncode == 0
+
+
+def _project_artifact_owners(contract: dict[str, Any]) -> dict[str, list[dict[str, Any]]]:
+    owners: dict[str, list[dict[str, Any]]] = {}
+    for item in contract["items"]:
+        if item["status"] != "consumed":
+            continue
+        for artifact in item.get("authorized_artifacts", []):
+            owners.setdefault(artifact, []).append(item)
+    return owners
+
+
+def _project_proposal_paths(staged: list[str]) -> list[str]:
+    return [
+        relative
+        for relative in staged
+        if relative in PROJECT_PROPOSAL_PATHS or PROJECT_PROPOSAL_BODY_RE.fullmatch(relative)
+    ]
+
+
 def check_staged_authorization(repo_root: Path) -> dict[str, Any]:
     pending: list[str] = []
+    project_contract = read_project_contract(repo_root)
+    pending.extend(
+        f"project:{item['gate_id']}"
+        for item in project_contract["items"]
+        if item["status"] in {"pending", "answered"}
+    )
     for path in _active_meta_paths(repo_root):
         meta = read_meta(path.parent)
         raw = meta.get("decision_gates")
@@ -847,6 +1073,25 @@ def check_staged_authorization(repo_root: Path) -> dict[str, Any]:
     staged = _git(
         repo_root, "diff", "--cached", "--name-only", "--diff-filter=ACMR"
     ).stdout.splitlines()
+    project_paths = _project_proposal_paths(staged)
+    # The initializer's first commit contains the required PRODUCT.md marker
+    # before any project question exists. Once HEAD exists, the same paths
+    # require a fresh project receipt.
+    if project_paths and not project_gate_path(repo_root).exists() and not _has_git_head(repo_root):
+        project_paths = []
+    if project_paths:
+        owners = _project_artifact_owners(project_contract)
+        accept = owners.get("proposal:accept", [])
+        draft = owners.get("proposal:draft", [])
+        if ".pm-workflow/proposal.json" in project_paths or "PRODUCT.md" in project_paths:
+            if not accept:
+                raise DecisionGateError(
+                    "Proposal 原子提交修改了 proposal.json 或 PRODUCT.md，但没有本轮已消费的 proposal:accept 收据。"
+                )
+        elif not (accept or draft):
+            raise DecisionGateError(
+                "Proposal 文件提交缺少本轮已消费的 proposal:draft 或 proposal:accept 收据。"
+            )
     checked: dict[str, list[str]] = {}
     for relative in staged:
         path = Path(relative)
@@ -901,9 +1146,32 @@ def context_summary(meta: dict[str, Any]) -> dict[str, Any] | None:
                 "answer_candidates": deepcopy(item["answer_candidates"]),
                 "answer": deepcopy(item["answer"]),
                 "authorized_decision_ids": list(item["authorized_decision_ids"]),
+                "authorized_artifacts": list(item.get("authorized_artifacts", [])),
                 "consumed_by": deepcopy(item["consumed_by"]),
             }
             for item in contract["items"]
         ],
         "ready_authorization": deepcopy(contract["ready_authorization"]),
+    }
+
+
+def project_context_summary(repo_root: Path) -> dict[str, Any]:
+    contract = read_project_contract(repo_root)
+    return {
+        "schema_version": contract["schema_version"],
+        "design_base_commit": contract["design_base_commit"],
+        "items": [
+            {
+                "gate_id": item["gate_id"],
+                "question_id": item["question_id"],
+                "kind": item["kind"],
+                "status": item["status"],
+                "question_summary": item["question"]["summary"],
+                "displayed_message": item["question"]["displayed_message"],
+                "answer_candidates": deepcopy(item["answer_candidates"]),
+                "answer": deepcopy(item["answer"]),
+                "authorized_artifacts": list(item.get("authorized_artifacts", [])),
+            }
+            for item in contract["items"]
+        ],
     }

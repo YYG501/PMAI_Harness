@@ -20,7 +20,11 @@ from pathlib import Path
 from typing import Iterable
 
 from _lib.decision_status import decision_is_question, decision_is_superseded
-from _lib.decision_gate import DecisionGateError, context_summary as decision_gate_summary
+from _lib.decision_gate import (
+    DecisionGateError,
+    context_summary as decision_gate_summary,
+    project_context_summary,
+)
 from _lib.project_definition import ProjectDefinitionError, load_project_definition
 from _lib.open_questions import parse_current_open_questions
 from _lib.proposal import (
@@ -502,6 +506,7 @@ def build_pack(args: argparse.Namespace) -> dict:
     lifecycle = normalize_work_state(meta).lifecycle_state if meta else "designing"
     try:
         gate_summary = decision_gate_summary(meta) if meta else None
+        project_gate_summary = project_context_summary(repo_root)
     except DecisionGateError as exc:
         raise SystemExit(str(exc)) from exc
     return {
@@ -539,6 +544,7 @@ def build_pack(args: argparse.Namespace) -> dict:
             "possible_conflicts": find_conflicts(decisions),
         },
         "decision_gates": gate_summary,
+        "project_decision_gates": project_gate_summary,
         "unresolved_questions": unresolved_questions(repo_root, module_dir),
         "accepted_deltas": build.get("accepted_deltas", []),
         "relevant_implementation_paths": relevant_implementation_paths(repo_root, keywords, meta),

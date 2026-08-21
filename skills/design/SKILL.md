@@ -227,7 +227,7 @@ AI 在后台依次检查下面八个面，但只询问会改变产品模型的�
 
 新决定必须能回锚到 PM 明确回答或 PM 接受 AI 推荐的证据，并由 `.work-meta.json:decision_gates` 把展示问题、当时用户消息、D 编号和后续 checkpoint 绑定起来。推翻旧决定时在 `decisions.md` 明确写被哪条新决定取代；`spec.md` 只写当前有效的最终目标，不记录讨论过程或实现进度。
 
-每次提出产品模型或项目建造定义问题前，先登记将要原样展示的题目；`open` 返回后才向 PM 展示：
+每次提出产品模型或项目建造定义问题前，先登记将要原样展示的题目；模块题用 `open`，没有模块工作状态的阶段路由题用 `open-project`；命令返回后才向 PM 展示：
 
 ```bash
 GATE_JSON=$(python3 "$PMAI_HOME/scripts/decision-gate.py" open "$MODULE_DIR" \
@@ -253,7 +253,7 @@ python3 "$PMAI_HOME/scripts/decision-gate.py" consume "$MODULE_DIR" \
   --gate-id "$GATE_ID" --decision-id "D<编号>"
 ```
 
-PM 转去别的事项时不把消息强解释成答案；保留 pending 等待，或用 `decision-gate.py cancel --reason ...` 明确取消。跨日、压缩或模型切换后，以 context pack 的 `decision_gates` 为准：旧数字答复只属于旧 gate，摘要里尚未展示的下一题没有授权能力。
+PM 转去别的事项时不把消息强解释成答案；保留 pending 等待，或用对应的 `cancel` / `cancel-project` 明确取消。跨日、压缩或模型切换后，以 context pack 的 `decision_gates` 与 `project_decision_gates` 为准：旧数字答复只属于旧 gate，摘要里尚未展示的下一题没有授权能力。
 
 PM 的高信号纠偏已经闭合后，按 `personal-memory.md` 在后台归位并记录，不新增确认题：
 

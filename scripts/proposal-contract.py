@@ -15,6 +15,7 @@ from _lib.proposal import (
     proposal_state,
     validate_current_proposal,
 )
+from _lib.decision_gate import DecisionGateError, guard_project_write
 
 
 def _print(value: dict[str, object]) -> None:
@@ -22,9 +23,16 @@ def _print(value: dict[str, object]) -> None:
 
 
 def cmd_accept(args: argparse.Namespace) -> int:
+    repo_root = Path(args.repo_root).expanduser().resolve()
+    project_gate_path = repo_root / ".pm-workflow" / "context" / "decision-gates.json"
+    if project_gate_path.exists():
+        try:
+            guard_project_write(repo_root)
+        except DecisionGateError as exc:
+            raise ProposalContractError(str(exc)) from exc
     _print(
         accept_proposal(
-            Path(args.repo_root),
+            repo_root,
             proposal_id=args.proposal_id,
             proposal=args.proposal,
             supersedes=args.supersedes,

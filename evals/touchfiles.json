@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "cases": {
-    "design-answer-binding-after-compaction": ["skills/design/SKILL.md", "skills/_shared/decision-policy.md", "skills/_shared/loop-contract.md", "skills/_shared/pm-view/askuser-rules.md", "scripts/decision-gate.py", "scripts/_lib/decision_gate.py", "scripts/_lib/ready_contract.py", "hooks/decision-gate-guard.cjs", "templates/git-hooks/pre-commit.tmpl", "tests/test-decision-gate.sh"],
+    "design-answer-binding-after-compaction": ["skills/design/SKILL.md", "skills/proposal/SKILL.md", "skills/quick-fix/SKILL.md", "skills/_shared/decision-policy.md", "skills/_shared/loop-contract.md", "skills/_shared/pm-view/askuser-rules.md", "scripts/decision-gate.py", "scripts/_lib/decision_gate.py", "scripts/_lib/ready_contract.py", "scripts/proposal-contract.py", "hooks/decision-gate-guard.cjs", "templates/AGENTS.md.tmpl", "templates/CLAUDE.md.tmpl", "templates/git-hooks/pre-commit.tmpl", "tests/test-decision-gate.sh"],
     "active-build-natural-language-resume": ["hooks/active-build-guard.cjs", "scripts/status-view.py", "skills/build/SKILL.md", "skills/status/SKILL.md", "scripts/context-pack.py", "scripts/_lib/open_questions.py", "templates/AGENTS.md.tmpl", "templates/CLAUDE.md.tmpl", "tests/test-active-build-guard.sh", "tests/test-status-view.sh"],
     "current-facts-only": ["skills/spec-writing/SKILL.md", "skills/_shared/PM-VIEW-RULES.md"],
     "decision-question-not-fact": ["skills/_shared/decision-policy.md", "skills/design/SKILL.md", "skills/spec-writing/SKILL.md"],

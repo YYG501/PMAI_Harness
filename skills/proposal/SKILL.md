@@ -29,7 +29,7 @@ Proposal 不替代 design：它定义产品级用户、问题、产品回答、�
 
 ## Proposal Loop Mapping
 
-本阶段按 `loop-contract.md` 的 Proposal 映射执行：当前 Proposal/等价基线、产品证据、版本关系和冻结候选是输入；完整产品判断、版本草案与原子产品基线同步是允许动作；固定判断完整性、机器合同、Git currentness 和精确提交范围是验证。草案内部缺口执行 `retry_current`，真实产品分叉执行 `await_pm_decision`，提交并复验通过后执行 `advance → Design`。完整性复核通过时执行 `complete`：只读返回，不创建新版本或空提交。
+本阶段按 `loop-contract.md` 的 Proposal 映射执行：当前 Proposal/等价基线、产品证据、版本关系和冻结候选是输入；完整产品判断、版本草案与原子产品基线同步是允许动作；固定判断完整性、机器合同、Git currentness 和精确提交范围是验证。草案内部缺口执行 `retry_current`，真实产品分叉执行 `await_pm_decision`，提交并复验通过后执行 `advance → Design`。完整性复核通过时执行 `complete`：只读返回，不创建新版本或空提交。Proposal 的产品题和阶段路由题没有模块 `.work-meta.json`，统一使用 `decision-gate.py open-project → observe → answer-project → consume-project`；压缩摘要不能替代项目级 gate。
 
 产品级判断是本阶段最高业务层级；若循环中只剩模块对象、规则、页面或交互问题，不在 Proposal 内继续展开，完成产品基线后交给 Design。若权威版本漂移、active build 未收口、写入边界重叠或 PM 尚未授权定稿，则在正式写入或提交前停止，并保留可验证的现有版本/候选作为恢复点。
 
@@ -77,6 +77,8 @@ python3 "$PMAI_HOME/scripts/replan-work.py" inspect "$CANDIDATE_MANIFEST"
 - **main mode**：冻结 main 上的 `baseline..candidate_head`，只提交旧 `.work-meta.json` 的删除；已经进入 main 的实现原样保留，不回滚、不删除，也不让 PM 改走 `/pmai-build-cancel`。
 
 重规划结果只回答“旧方向下已经做过什么”，不自动决定新方向下保留、替换还是撤销。把每个命令返回的精确 `candidate_manifest` 交给后续 design；跨会话恢复时运行 `python3 "$PMAI_HOME/scripts/replan-work.py" list "$MAIN_REPO_ROOT"` 读取全部候选，按模块和本轮 route 精确匹配，禁止按修改时间猜“最近一个”。存在多个 active build 时逐一处理，直到全仓扫描为空。不得改用 `build-contract.py designing` 覆盖旧状态。
+
+如果重规划或 Proposal 定稿前确实需要 PM 在“保留旧候选 / 回到当前工作”等阶段路由上拍板，先登记项目级 gate，再原样展示同一题；只有 `answer-project` 成功后才能执行该动作，完成后立即用 `consume-project --artifact route:<动作>` 消费。没有 pending gate 的旧数字答复，即使语义上看起来像同一选项，也不得用于本轮路由。
 
 无论本轮是否刚执行 replan，都先枚举由飞书评审留下的产品级只读交接：
 
@@ -137,7 +139,7 @@ Proposal 只能在主仓 `main/master` 定稿。旧 active build 尚未按步骤
 
 ### 3. 只让 PM 拍真实产品分叉
 
-按 `decision-policy.md` 过滤问题。机械项自动处理，可逆偏好给推荐并继续；只有会改变产品用户、核心问题、价值、职责边界、成功标准或 MVP 验证路径的真实分叉才停住。
+按 `decision-policy.md` 过滤问题。机械项自动处理，可逆偏好给推荐并继续；只有会改变产品用户、核心问题、价值、职责边界、成功标准或 MVP 验证路径的真实分叉才停住。每次展示 Proposal 问题前必须先调用项目级 `decision-gate.py open-project`，把完整展示消息和选项登记下来；UserPromptSubmit 捕获答复后，先 `answer-project`，再继续本轮。
 
 提问前先报告剩余真实决策数量；一次只问一题，用业务结果描述两个方向，并给推荐和代价。所有确认门遵守 `askuser-rules.md`：空答停止、未回答前不落盘、runtime 无 picker 时退化为编号列表后继续等待。
 
@@ -156,10 +158,36 @@ MVP 只证明：<一句话>
 
 然后使用 Decision gate：
 
+Proposal 题使用项目级收据（不要伪造模块 `.work-meta.json`）：
+
+```bash
+GATE_JSON=$(python3 "$PMAI_HOME/scripts/decision-gate.py" open-project "$REPO_ROOT" \
+  --kind "product-model" \
+  --summary "<这题改变的产品结果>" \
+  --message "<即将原样展示给 PM 的完整问题>" \
+  --option "1=<选项一>" --option "2=<选项二>" \
+  --allow-free-text)
+GATE_ID=$(python3 -c 'import json,sys; print(json.load(sys.stdin)["gate_id"])' <<<"$GATE_JSON")
+```
+
+下一条用户消息由 hook 产生 `answer_event_id`；确认它确实回答当前题后调用：
+
+```bash
+python3 "$PMAI_HOME/scripts/decision-gate.py" answer-project "$REPO_ROOT" \
+  --gate-id "$GATE_ID" --event-id "$ANSWER_EVENT_ID"
+```
+
+完成本题对应的 Proposal 草案、定稿或路由动作后立即消费：
+
+```bash
+python3 "$PMAI_HOME/scripts/decision-gate.py" consume-project "$REPO_ROOT" \
+  --gate-id "$GATE_ID" --artifact "proposal:<draft|accept>|route:<action>"
+```
+
 - `生成完整 Proposal`：按当前结论生成完整版本；
 - `继续讨论产品方向`：留在本 skill 补齐判断。
 
-PM 未选择前不得写 Proposal、索引或 `PRODUCT.md`。
+PM 未选择前不得写 Proposal、索引或 `PRODUCT.md`；没有本轮项目 gate 的 `answer` 收据时，项目级写入护栏必须拒绝。
 
 ### 5. 生成完整 Proposal 草案
 
@@ -220,6 +248,8 @@ PM 定稿后，才把当前 Proposal 中已经确认且长期稳定的内容同�
 - 产品负责 / 不负责的边界；
 - 一段精简 MVP Case：主用户、触发、关键任务和预期结果；
 - 已稳定的业务术语。
+
+完成本次定稿写入前必须确认当前项目 gate 已 `answer-project`；正文、索引、`PRODUCT.md` 和合同校验通过后，立即用 `consume-project --artifact proposal:accept` 消费定稿授权。不要把早先“生成草案”或“继续 Proposal”的答复当成定稿授权。
 
 竞争结论、详细证据、完整价值链、MVP 指标与决策门、阶段计划、开放假设和产品愿景继续留在 Proposal，不塞进 `PRODUCT.md`。保留 `PRODUCT.md` 现有自定义内容，只精确修改受影响段落。
 

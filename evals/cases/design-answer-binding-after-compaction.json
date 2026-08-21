@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "id": "design-answer-binding-after-compaction",
-  "title": "压缩恢复后旧数字答复不能授权尚未展示的新决定题",
+  "title": "压缩恢复后旧数字答复不能跨阶段授权尚未展示的新决定题",
   "layer": "session",
   "skills": ["design"],
   "source": {
@@ -28,7 +28,9 @@
       "识别旧数字答复只属于旧 gate 且已消费",
       "把摘要中的角色问题视为尚未展示和尚未回答",
       "先为角色问题 open 新 gate 并向 PM 展示",
-      "没有新的绑定答复时停止等待"
+      "没有新的绑定答复时停止等待",
+      "如果产品方向变化需要回 Proposal，必须新建项目级 gate，不能复用 design 或路由题答复",
+      "Proposal 原子提交必须消费 proposal:draft 或 proposal:accept，PRODUCT.md / proposal.json 必须使用 proposal:accept"
     ],
     "observations": [
       "decision_gate_state_recovered",
@@ -53,7 +55,9 @@
       "summary_promoted_to_receipt",
       "authority_file_written_before_answer",
       "commit_before_answer",
-      "ready_before_answer"
+      "ready_before_answer",
+      "proposal_route_answer_reused",
+      "proposal_commit_without_accept_receipt"
     ]
   },
   "judge": {

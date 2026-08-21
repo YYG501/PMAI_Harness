@@ -35,7 +35,7 @@ design、meta、mockup、spec-writing、build 和自动收尾共用这一套决�
 
 - `discussion.md` 中的问号、TODO、假设、AI 推荐、未被回答的选项都不能写进 active decisions 或规范性规格。
 - 新决定必须能指向 PM 的明确回答，或 PM 明确接受 AI 推荐的语句。
-- 对 `product-model fork` 和首次 / 重定义项目建造方案，这个指向必须落成当前 `.work-meta.json:decision_gates` 的 consumed 授权收据：展示问题、用户消息、D 编号与 scoped checkpoint 四者一致。聊天摘要、Agent 转述、旧问题答复和未展示的建议问题都不是授权凭据。
+- 对 `product-model fork` 和首次 / 重定义项目建造方案，这个指向必须落成当前 `.work-meta.json:decision_gates` 的 consumed 授权收据：展示问题、用户消息、D 编号与 scoped checkpoint 四者一致。Proposal 与阶段路由题没有模块工作状态时，使用同一 `decision-gate.py` 的项目收据并消费到明确的项目动作。聊天摘要、Agent 转述、旧问题答复和未展示的建议问题都不是授权凭据。
 - 推翻旧决定时在 `decisions.md` 标明 supersede 关系；`spec.md` 只在 PM 已确认新目标或 accepted delta 后改成最终要求，不保留删除线和旧正文。
 - 原型、mockup、代码和 landed diff 只是实现证据，不能自行覆盖已确认规格；实现少做判为缺口，多做但无依据则返回 design 确认。
 
@@ -50,4 +50,4 @@ design、meta、mockup、spec-writing、build 和自动收尾共用这一套决�
 
 不要把每个 finding 拆成一道题，也不要问 PM 是否调用 meta、mockup、spec-writing 或手动 close。首次 project definition 在 design 收口点确认；build 开工只用一张完整卡展示并确认“工作环境 + 构建工具”的推荐与有效选项，不得把 worktree、项目类型或验收适配器再次做成问题。
 
-决定题的机器绑定统一走 `decision-gate.py open → UserPromptSubmit observe → answer → consume`。收据保存在当前模块 `.work-meta.json`，只证明授权链，不替代 `decisions.md`；一个用户消息事件只能绑定一个当时已展示且 pending 的问题。压缩摘要不能调用这些状态迁移，因此不能创建、回答或消费 gate。
+决定题的机器绑定统一走 `decision-gate.py open/open-project → UserPromptSubmit observe → answer/answer-project → consume/consume-project`。模块收据保存在当前模块 `.work-meta.json`，Proposal 与阶段路由收据保存在项目运行目录；它们只证明授权链，不替代 `decisions.md` 或 Proposal。一个用户消息事件只能绑定一个当时已展示且 pending 的问题。压缩摘要不能调用这些状态迁移，因此不能创建、回答或消费 gate。

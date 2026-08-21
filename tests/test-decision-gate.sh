@@ -51,6 +51,14 @@ open_gate() {
     --allow-free-text --session-id "$session"
 }
 
+open_project_gate() {
+  local summary="$1" message="$2" session="$3"
+  python3 "$GATE" open-project "$T" \
+    --kind one-way-door --summary "$summary" --message "$message" \
+    --option '1=保留旧结果' --option '2=回到当前工作' \
+    --session-id "$session"
+}
+
 observe_answer() {
   local message="$1" session="$2" message_id="$3"
   python3 "$GATE" observe --repo-root "$T" --message "$message" \
@@ -108,6 +116,74 @@ test_answer_is_bound_once_across_compaction() {
     pass_test
   fi
 
+  rm -f /tmp/decision-gate.$$ /tmp/decision-gate.err.$$
+  teardown_fixture
+}
+
+test_project_route_answer_cannot_authorize_later_design_question() {
+  start_test "decision gate: Proposal/阶段路由答复消费后不能授权后续 Design 问题"
+  setup_fixture
+
+  local opened gate_id observed event_id
+  opened=$(open_project_gate "旧构建如何收口" "请选择旧构建的处理方式" "project-session")
+  gate_id=$(printf '%s' "$opened" | json_field gate_id)
+  observed=$(observe_answer "1" "project-session" "route-message-1")
+  event_id=$(printf '%s' "$observed" | json_field event_id)
+  python3 "$GATE" answer-project "$T" --gate-id "$gate_id" --event-id "$event_id" >/dev/null
+  python3 "$GATE" consume-project "$T" --gate-id "$gate_id" --artifact route:proposal >/dev/null
+
+  opened=$(open_gate "租户角色来源" "邀请时角色从哪里来" "project-session")
+  local module_gate
+  module_gate=$(printf '%s' "$opened" | json_field gate_id)
+  if python3 "$GATE" answer "$MODULE" --gate-id "$module_gate" --event-id "$event_id" \
+    >/tmp/decision-gate.$$ 2>/tmp/decision-gate.err.$$; then
+    _fail "a consumed project route answer must not answer a later module gate"
+  elif ! grep -q '不是在本题 pending 时捕获' /tmp/decision-gate.err.$$; then
+    _fail "cross-scope answer rejection should name the binding problem"
+  elif python3 "$GATE" guard-project-write "$T" \
+    >/tmp/decision-gate.$$ 2>/tmp/decision-gate.err.$$; then
+    _fail "a consumed route gate must not authorize a later Proposal write"
+  elif ! grep -q '没有唯一、尚未消费' /tmp/decision-gate.err.$$; then
+    _fail "later Proposal writes should require a newly answered project gate"
+  else
+    pass_test
+  fi
+
+  rm -f /tmp/decision-gate.$$ /tmp/decision-gate.err.$$
+  teardown_fixture
+}
+
+test_project_proposal_commit_requires_matching_artifact() {
+  start_test "decision gate: Proposal 原子提交需要对应项目动作收据"
+  setup_fixture
+  mkdir -p "$T/docs/proposals"
+  printf '# Proposal draft\n' > "$T/docs/proposals/demo-v1.md"
+  printf '# Proposal index\n' > "$T/docs/proposals/INDEX.md"
+  git -C "$T" add -- docs/proposals/demo-v1.md docs/proposals/INDEX.md
+
+  local opened gate_id observed event_id
+  opened=$(open_project_gate "生成 Proposal 草案" "是否生成完整 Proposal 草案" "proposal-session")
+  gate_id=$(printf '%s' "$opened" | json_field gate_id)
+  observed=$(observe_answer "1" "proposal-session" "proposal-answer-1")
+  event_id=$(printf '%s' "$observed" | json_field event_id)
+  python3 "$GATE" answer-project "$T" --gate-id "$gate_id" --event-id "$event_id" >/dev/null
+  python3 "$GATE" consume-project "$T" --gate-id "$gate_id" --artifact proposal:draft >/dev/null
+  if ! python3 "$GATE" check-staged --repo-root "$T" >/dev/null 2>&1; then
+    _fail "proposal draft files should accept a consumed proposal:draft receipt"
+    teardown_fixture
+    return
+  fi
+
+  printf '\n同步基线\n' >> "$T/PRODUCT.md"
+  git -C "$T" add -- PRODUCT.md
+  if python3 "$GATE" check-staged --repo-root "$T" \
+    >/tmp/decision-gate.$$ 2>/tmp/decision-gate.err.$$; then
+    _fail "PRODUCT.md must reject a draft-only receipt"
+  elif ! grep -q 'proposal:accept' /tmp/decision-gate.err.$$; then
+    _fail "PRODUCT.md rejection should require proposal:accept"
+  else
+    pass_test
+  fi
   rm -f /tmp/decision-gate.$$ /tmp/decision-gate.err.$$
   teardown_fixture
 }
@@ -312,6 +388,8 @@ PY
 }
 
 test_answer_is_bound_once_across_compaction
+test_project_route_answer_cannot_authorize_later_design_question
+test_project_proposal_commit_requires_matching_artifact
 test_staged_and_ready_reject_missing_receipt
 test_pending_gate_is_unique_and_answer_event_stays_local
 test_equal_text_answers_without_host_message_ids_stay_distinct

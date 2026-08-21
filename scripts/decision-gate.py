@@ -12,15 +12,21 @@ from pathlib import Path
 from _lib.decision_gate import (
     DecisionGateError,
     answer_gate,
+    answer_project_gate,
     cancel_gate,
+    cancel_project_gate,
     check_staged_authorization,
     consume_gate,
+    consume_project_gate,
     context_summary,
     guard_pending_write,
     guard_authority_write,
+    guard_project_write,
     observe_answer,
     open_gate,
+    open_project_gate,
     parse_option,
+    project_context_summary,
     read_meta,
 )
 
@@ -33,6 +39,20 @@ def emit(value: object) -> None:
 def cmd_open(args: argparse.Namespace) -> None:
     item = open_gate(
         Path(args.module_dir),
+        kind=args.kind,
+        summary=args.summary,
+        displayed_message=args.message,
+        options=[parse_option(value) for value in args.option],
+        allow_free_text=args.allow_free_text,
+        session_id=args.session_id or os.environ.get("CODEX_THREAD_ID") or os.environ.get("CLAUDE_SESSION_ID"),
+        display_message_id=args.display_message_id,
+    )
+    emit(item)
+
+
+def cmd_open_project(args: argparse.Namespace) -> None:
+    item = open_project_gate(
+        Path(args.repo_root).expanduser().resolve(),
         kind=args.kind,
         summary=args.summary,
         displayed_message=args.message,
@@ -60,6 +80,16 @@ def cmd_answer(args: argparse.Namespace) -> None:
     emit(answer_gate(Path(args.module_dir), gate_id=args.gate_id, event_id=args.event_id))
 
 
+def cmd_answer_project(args: argparse.Namespace) -> None:
+    emit(
+        answer_project_gate(
+            Path(args.repo_root).expanduser().resolve(),
+            gate_id=args.gate_id,
+            event_id=args.event_id,
+        )
+    )
+
+
 def cmd_consume(args: argparse.Namespace) -> None:
     emit(
         consume_gate(
@@ -68,13 +98,37 @@ def cmd_consume(args: argparse.Namespace) -> None:
     )
 
 
+def cmd_consume_project(args: argparse.Namespace) -> None:
+    emit(
+        consume_project_gate(
+            Path(args.repo_root).expanduser().resolve(),
+            gate_id=args.gate_id,
+            artifact=args.artifact,
+        )
+    )
+
+
 def cmd_cancel(args: argparse.Namespace) -> None:
     emit(cancel_gate(Path(args.module_dir), gate_id=args.gate_id, reason=args.reason))
+
+
+def cmd_cancel_project(args: argparse.Namespace) -> None:
+    emit(
+        cancel_project_gate(
+            Path(args.repo_root).expanduser().resolve(),
+            gate_id=args.gate_id,
+            reason=args.reason,
+        )
+    )
 
 
 def cmd_status(args: argparse.Namespace) -> None:
     meta = read_meta(Path(args.module_dir))
     emit(context_summary(meta) or {"schema_version": 1, "items": [], "ready_authorization": None})
+
+
+def cmd_status_project(args: argparse.Namespace) -> None:
+    emit(project_context_summary(Path(args.repo_root).expanduser().resolve()))
 
 
 def cmd_guard_write(args: argparse.Namespace) -> None:
@@ -83,6 +137,10 @@ def cmd_guard_write(args: argparse.Namespace) -> None:
 
 def cmd_guard_pending_write(args: argparse.Namespace) -> None:
     emit(guard_pending_write(Path(args.module_dir)))
+
+
+def cmd_guard_project_write(args: argparse.Namespace) -> None:
+    emit(guard_project_write(Path(args.repo_root).expanduser().resolve()))
 
 
 def cmd_check_staged(args: argparse.Namespace) -> None:
@@ -104,6 +162,17 @@ def parser() -> argparse.ArgumentParser:
     open_parser.add_argument("--display-message-id")
     open_parser.set_defaults(func=cmd_open)
 
+    open_project = sub.add_parser("open-project", help="record one displayed project/stage question")
+    open_project.add_argument("repo_root")
+    open_project.add_argument("--kind", choices=["product-model", "project-definition", "one-way-door"], required=True)
+    open_project.add_argument("--summary", required=True)
+    open_project.add_argument("--message", required=True)
+    open_project.add_argument("--option", action="append", required=True, help="<id>=<label>")
+    open_project.add_argument("--allow-free-text", action="store_true")
+    open_project.add_argument("--session-id")
+    open_project.add_argument("--display-message-id")
+    open_project.set_defaults(func=cmd_open_project)
+
     observe = sub.add_parser("observe", help="bind a UserPromptSubmit event to the current pending gate")
     observe.add_argument("--repo-root", default=".")
     observe.add_argument("--message", required=True)
@@ -118,11 +187,23 @@ def parser() -> argparse.ArgumentParser:
     answer.add_argument("--event-id", required=True)
     answer.set_defaults(func=cmd_answer)
 
+    answer_project = sub.add_parser("answer-project", help="select a captured user message as a project gate answer")
+    answer_project.add_argument("repo_root")
+    answer_project.add_argument("--gate-id", required=True)
+    answer_project.add_argument("--event-id", required=True)
+    answer_project.set_defaults(func=cmd_answer_project)
+
     consume = sub.add_parser("consume", help="consume one answered gate into named decisions")
     consume.add_argument("module_dir")
     consume.add_argument("--gate-id", required=True)
     consume.add_argument("--decision-id", action="append", required=True)
     consume.set_defaults(func=cmd_consume)
+
+    consume_project = sub.add_parser("consume-project", help="consume a project gate into a named workflow action")
+    consume_project.add_argument("repo_root")
+    consume_project.add_argument("--gate-id", required=True)
+    consume_project.add_argument("--artifact", required=True, help="workflow action or artifact authorization id")
+    consume_project.set_defaults(func=cmd_consume_project)
 
     cancel = sub.add_parser("cancel", help="cancel a pending or answered gate without authorization")
     cancel.add_argument("module_dir")
@@ -130,9 +211,19 @@ def parser() -> argparse.ArgumentParser:
     cancel.add_argument("--reason", required=True)
     cancel.set_defaults(func=cmd_cancel)
 
+    cancel_project = sub.add_parser("cancel-project", help="cancel a project/stage gate")
+    cancel_project.add_argument("repo_root")
+    cancel_project.add_argument("--gate-id", required=True)
+    cancel_project.add_argument("--reason", required=True)
+    cancel_project.set_defaults(func=cmd_cancel_project)
+
     status = sub.add_parser("status", help="show the current module's gate receipts")
     status.add_argument("module_dir")
     status.set_defaults(func=cmd_status)
+
+    status_project = sub.add_parser("status-project", help="show project/stage gate receipts")
+    status_project.add_argument("repo_root")
+    status_project.set_defaults(func=cmd_status_project)
 
     guard = sub.add_parser("guard-authority-write", help="verify a current authorization window before decisions.md writes")
     guard.add_argument("module_dir")
@@ -141,6 +232,10 @@ def parser() -> argparse.ArgumentParser:
     pending_guard = sub.add_parser("guard-pending-write", help="block design artifact writes while a displayed gate is unanswered")
     pending_guard.add_argument("module_dir")
     pending_guard.set_defaults(func=cmd_guard_pending_write)
+
+    project_guard = sub.add_parser("guard-project-write", help="verify an answered project gate before Proposal writes")
+    project_guard.add_argument("repo_root")
+    project_guard.set_defaults(func=cmd_guard_project_write)
 
     staged = sub.add_parser("check-staged", help="verify staged decision changes and all pending gates")
     staged.add_argument("--repo-root", default=".")

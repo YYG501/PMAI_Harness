@@ -20,7 +20,7 @@ source "${PMAI_HOME:-$HOME/.pmai}/scripts/skill-preamble.sh"
 
 若由 `/pmai-lark-review` 进入，先完整读取 `skills/lark-review/references/lifecycle-handoff.md`。本批正式规格先在 T 中完成并由 lark-review apply；apply 前不启动 quick-fix worktree。apply 后本 skill 只处理规格之外的文件，正式规格不得进入 quick-fix diff；本批只有规格文字变化时跳过空 worktree和空提交。
 
-> **PM 答题规则**：所有 AskUserQuestion 调用按 `_shared/pm-view/askuser-rules.md` §1 四条硬规则走（空答 STOP / 没拿到答案禁止合入 / runtime 退化保留 wait / 多决策拆开顺序问）。
+> **PM 答题规则**：所有 AskUserQuestion 调用按 `_shared/pm-view/askuser-rules.md` §1 五条硬规则走（空答 STOP / 没拿到答案禁止合入 / runtime 退化保留 wait / 多决策拆开顺序问 / 每条答复只绑定一题）。尚未创建模块工作时的“改走 Design / Proposal”路由题使用 `decision-gate.py open-project`；进入模块后才使用模块 `.work-meta.json` gate。不能把路由题的数字答复带到后续 Design 题。
 
 ## When To Use
 
