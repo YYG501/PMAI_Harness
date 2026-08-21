@@ -177,6 +177,36 @@ test_legacy_build_recovers_and_binds_authority() {
   teardown
 }
 
+test_legacy_active_build_does_not_require_new_decision_receipts() {
+  start_test "legacy recovery: 已开工旧 build 不倒灌 decision gate 收据"
+  setup_legacy_fixture
+  python3 "$RECOVERY" accept "$T/docs/modules/demo" --confirmed-by PM \
+    --confirmed-at 2026-08-12T12:00:00+08:00 \
+    --reason "当前规格仍是本轮有效建造依据" >/dev/null || {
+      _fail "recovery command failed"; teardown; return;
+    }
+  local out
+  out=$(python3 "$BUILD_CONTRACT" validate-currentness "$T/docs/modules/demo" 2>&1) || {
+    _fail "legacy active build should remain current without new receipts: $out"
+    teardown
+    return
+  }
+  if python3 -c '
+import json, sys
+result = json.load(sys.stdin)
+meta = json.load(open(sys.argv[1], encoding="utf-8"))
+assert result["decision_authorization"]["status"] == "legacy_active_compatible"
+assert "decision_gates" not in meta
+assert "decision_authorization_required" not in meta["build"]
+' "$T/docs/modules/demo/.work-meta.json" <<<"$out"
+  then
+    pass_test
+  else
+    _fail "legacy compatibility must be explicit and must not fabricate receipts"
+  fi
+  teardown
+}
+
 test_legacy_build_records_mismatched_original_chain() {
   start_test "legacy recovery: historical hash mismatch remains explicit and auditable"
   setup_legacy_fixture
@@ -487,6 +517,7 @@ PY
 
 test_legacy_build_requires_explicit_recovery
 test_legacy_build_recovers_and_binds_authority
+test_legacy_active_build_does_not_require_new_decision_receipts
 test_legacy_build_records_mismatched_original_chain
 test_legacy_recovery_fails_on_bound_file_change
 test_legacy_build_accepts_new_scoped_delta

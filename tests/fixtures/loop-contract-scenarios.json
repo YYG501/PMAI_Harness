@@ -5,7 +5,7 @@
     {"id": "SCN-P02", "phase": "proposal", "trigger": "PM 修改待确认完整草案但产品层级不变", "action": "retry_current", "destination": "proposal", "checkpoint": "revise_full_draft"},
     {"id": "SCN-P03", "phase": "proposal", "trigger": "产品用户价值边界或 MVP 存在真实分叉", "action": "await_pm_decision", "destination": "proposal", "checkpoint": "no_write_before_answer"},
     {"id": "SCN-P04", "phase": "proposal", "trigger": "原子提交与提交后 validate 均通过", "action": "advance", "destination": "design", "checkpoint": "validated_product_baseline"},
-    {"id": "SCN-D01", "phase": "design", "trigger": "权限或关键任务路径仍有真实岔路", "action": "await_pm_decision", "destination": "design", "checkpoint": "no_ready_before_answer"},
+    {"id": "SCN-D01", "phase": "design", "trigger": "权限或关键任务路径仍有真实岔路", "action": "await_pm_decision", "destination": "design", "checkpoint": "displayed_pending_gate_no_authority_write"},
     {"id": "SCN-D02", "phase": "design", "trigger": "产品定位目标用户价值边界或 MVP 前提变化", "action": "route_proposal", "destination": "proposal", "checkpoint": "revalidate_design_after_proposal"},
     {"id": "SCN-D03", "phase": "design", "trigger": "规格编译发现模块覆盖遗漏", "action": "retry_current", "destination": "design", "checkpoint": "return_to_open_module_question"},
     {"id": "SCN-D04", "phase": "design", "trigger": "决定规格项目定义和 ready currentness 全部通过", "action": "advance", "destination": "build", "checkpoint": "validated_ready_to_build"},

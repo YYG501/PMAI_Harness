@@ -4,9 +4,9 @@
 
 ## 当前位置
 
-- 日期：2026-08-12
+- 日期：2026-08-20
 - 开发分支：`main`
-- 当前目标：Harness P1 与复杂度收口五个批次已经完成并分发到 `main`，全局安装态已升级并通过 Doctor。新 build contract 为 v5；Kimi Code、OpenCode、Cursor Agent 只作 Builder，遗留主控资产只诊断、不自动清理。
+- 当前目标：Harness P1 与复杂度收口五个批次已经完成并分发到 `main`。本 checkout 正在补强产品决定授权：新 build contract 仍为 v5，`.work-meta.json:decision_gates` 作为 ready 前授权收据；本轮尚未提交、分发或升级全局安装态。Kimi Code、OpenCode、Cursor Agent 只作 Builder，遗留主控资产只诊断、不自动清理。
 - gstack 参考基线：`v1.58.5.0`，commit `11de390`；只参考本地 `gstack-clean` checkout，没有升级用户目录中的安装副本。
 
 ## 当前活跃模型
@@ -29,6 +29,7 @@
 - 模块真相源：`docs/modules/<模块>/discussion.md`、`decisions.md`、`spec.md`；跨模块现行规则为 `PRODUCT-RULES.md`，项目级冻结理路为 `docs/decisions/`。
 - 文档语义：Proposal 定义产品级用户、问题、价值、边界与 MVP；`spec.md` / PRD 是指导研发实现的最终目标合同；`PRODUCT-STATE.md` 描述 main 已落地现状；原型、mockup 和代码只作设计 / 实现证据。
 - design 的 `ready_to_build` 状态同时记录 approved source hash、hash scope version、design checkpoint 和精确目标路径；build 开工前重新编译上下文并验证 currentness，过期依据不能继续显示或进入构建。当前 Proposal 与固定交接摘要参与 context pack 和 source hash；Proposal 换版会让旧 ready/build 依据失效。新轮次使用 `source_hash_version=2`：模块三件套、输入证据、PRODUCT、PRODUCT-RULES、DESIGN、项目级决定和 project.yml 参与 currentness；PRODUCT-STATE、TODO 和模块索引只作上下文，单独变化不判设计过期。没有版本字段的旧 ready/build 按 v1 全量范围恢复到该轮结束，显式返回 design 后下一次批准才升级 v2。新 `.work-meta.json:build` 使用合同 v5：保留 v4 的双车道验收语义，但 lifecycle 和 checks 都只写一个 canonical 位置；旧 v1-v4 继续用于中断恢复兼容。
+- 产品模型决定另由同一 `.work-meta.json:decision_gates` 保存授权收据，不新增决定文件或生命周期：问题先登记并展示，UserPromptSubmit 只捕获当时唯一 pending gate 的短答复，Agent 明确 answer 后才可写决定，随后一次性 consume 到 D 编号；scoped checkpoint 与 ready 再按 Git 实际变化复核。摘要不能迁移 gate 状态。旧、未开工 ready 缺收据时返回 `authorization_unverifiable` 并退回 Design；已进入 build 的旧工作不倒灌新收据。
 - 新 build 由 AI 在一张卡中展示推荐的工作环境、构建工具和两项的全部有效选择，PM 只确认这两项；外部工具候选排除当前主控对应的 profile，“当前会话直接构建”始终可选，没有可用外部工具时默认推荐它。项目类型和验收方案不显示。选择当前环境时，main 只放行合同声明的目标路径。
 - 宿主面分为两级：Claude Code 使用 `/pmai-*`、Codex 使用原生 `$pmai-*`，两者保留完整 Skill、项目 Hook、lifecycle、恢复、证据和 landing 主控能力；Kimi Code、OpenCode、Cursor Agent 只由 `/pmai-build` 选作外部 Builder。Builder prompt 明确禁止调用 PMAI Skill、推进 lifecycle、写验收通过或处理 landing；主控重新采集 Git diff、检查路径并决定后续状态。新 install / upgrade / init 不再生成 Kimi Skill/managed hooks 或 OpenCode commands/config；Doctor 只报告遗留资产并保留显式清理入口。
 - 记忆分两层：项目事实、决定和偏好继续由消费仓现有真相源承担；个人经验保存在用户级状态目录，跨项目召回但只作建议。个人经验不进入 context pack、项目 hash 或 Git，也不能自动修改 Skill。
@@ -73,6 +74,7 @@
 - Kimi Code 不再暴露 PMAI Skill 或安装 managed hooks。遗留用户级分发器仍按进程 cwd 先路由、统一三态识别，并在 PMAI 仓对坏 JSON、超限输入、payload 跨根、Python/Node/可信 hook 缺失或非零退出保持失败关闭；普通仓读取 stdin 前 no-op。该代码只保护尚未清理的历史安装，不提供 Kimi 主控能力；Doctor 不 repair，uninstall 只删除 PMAI 托管资产。
 - Claude Code / Codex 项目 hooks 由 `install-project-hooks.sh` 统一管理：`--check` 只读比较当前消费仓配置，刷新时只精确替换 PMAI 自有命令并保留其它宿主设置和自定义 hook；命令通过 `${PMAI_HOME:-$HOME/.pmai}` 在宿主运行时解析，自定义安装根不会退回错误的默认路径。安装器预渲染全部 Host 后事务写入，用唯一备份逐次校验内容、权限和 symlink 指向；失败回滚不覆盖通过正式路径提交的并发编辑，并兼容 Bash 3.2。协作锁只串行遵守合同的 PMAI writer：事务子进程必须继承与锁路径相同 device / inode 且实际持有排他锁的 fd，可伪造环境布尔值或无关 fd 不能授权写入；同一 OS 用户的非合作进程仍不在该合同内。目录 fd 在 claim 后发现父目录改向时，会在固定旧目录内按 inode 补偿恢复正式名再失败关闭，不把原件留在隔离名。该 CAS 只保护路径命名空间；其它进程若持有旧文件描述符并在 claim 后继续写入，需要共享写锁或版本保留。全局 upgrade 不静默改写消费仓；`/pmai-doctor` 调用目标 `PMAI_HOME` 的 doctor，默认只读检查框架、宿主入口和当前消费仓，跨版本目标 doctor 缺失或不可执行时失败关闭；全局修复只有 `--repair` 才获取安装锁并写入，消费仓 hooks 刷新仍需 PM 单独确认。CLI 只保留 `pmai doctor --check` 作为健康检查，不再提供 `pmai status`。旧 `install-codex-hooks.sh` 保留为 Codex-only 兼容包装。
 - design 直接必读 AskUser 共享规则，首题前收敛真实决策并报告总量，用业务结果提问；跨日、模型切换或会话恢复时重读当前 skill 与必读规则。context pack 消费后单独召回个人经验候选，按适用性、去重和独立检查价值自适应选择，不设正常条数上限；高信号纠偏闭合后自动归位。项目事实回项目真相源，跨项目经验进入用户级存储，已有 Skill 规则未执行只留执行失败证据。跨模块设计只留下一个明确 build 入口，相同建造方案重复写入 `project.yml` 保持完整文件不变。
+- decision gate 授权链已实现：`decision-gate.py` 与共享 library 管理展示题、用户答复候选、answer/consume/cancel 和 checkpoint；Claude/Codex 项目 hook 在 UserPromptSubmit 捕获答复、在权威决定写入和 commit 前阻断越权；Git pre-commit 与 ready 独立按变化 D 编号复核，context pack 编译可恢复摘要。确定性回归覆盖旧答复已消费、摘要建议题未展示、跨 gate 复用、缺收据 staged/ready 和旧 ready 退回；Session Eval 新增 `design-answer-binding-after-compaction`。
 - context pack 对旧消费仓自动写入 Git 本地 exclude，不再制造未跟踪缓存；build 在创建环境前阻断批准目标路径上的既有脏改动，同时保留无关 WIP。
 - `context-pack.py` 与 `check-open-questions.py` 共用明确无未决问题的声明识别；只有单独一行的肯定声明才表示空问题集，否定、转述、但书、多行后续问题和子串命中都不能放行。空 section、普通说明、空题名、HTML comment-only 以及 `待确认` / `TODO` / `TBD` / `FIXME` 等占位回答仍保持 unresolved。
 - context pack 只把 D 编号模块决定和真实产品规则编入 active；共同理由、否过方案、待复核、变更记录与注释模板不再伪装成决定。标题或正文仍是问句、尚在讨论且没有明确结论时保持 rejected；明确状态或结论可以闭合问题标题，带“尚未正式 / 并未真正”等副词的否定状态保持 active。
@@ -93,8 +95,8 @@
 
 ## 当前验证
 
-- 本轮关键定向基线：status-view `19/19`、active-build-context `7/7`、active-build-guard `18/18`、narrative-mode `9/9`、context-pack `15/15`、legacy-recovery `14/14`、ready-contract `7/7`、doctor-skills `42/42`、init-project-codex-compat `24/24`、Kimi host `23/23`、OpenCode host `8/8`、lark-entry-routing `6/6`、lark-review `73/73`、publish-to-lark-e2e `20/20`、lark-adapter `40/40`、project-design-system `7/7`、mockup-quality `3/3`、mock-board `14/14`、consumer-doctor `26/26`、private-onboarding `4/4`、check-branch `21/21`、repo-kind `6/6`、exec-adapters `16/16`、skill-link-ownership `8/8`、skill-eval 合同 `6/6`、Loop Contract `4/4`；发布门在 runner / judge 均缺失时返回 2 并明确列出两项缺失能力，schema `24` 个案例与 static eval `7/7` 通过。
-- 当前完整 `tests/run-all.sh` 基线为 `1005 passed / 0 failed`。本轮新增 mockup 设计依据编译、桌面与窄屏视觉验收、质量证据漂移失效，以及需求 / 轮次 / 方向看版组织与最新优先排序回归，均已纳入全量编排；普通开发回归中的 skill eval 为 `7 passed / 0 failed / 17 session skipped`，只形成静态与确定性合同基线，不构成稳定版本证据；`v*` tag 或手动稳定发布仍必须通过配置真实 runner 与独立 judge 的 `tests/run-release-gate.sh`，任何 session skip 都会阻断。稳定核心发布门默认跳过可选 Lark 假环境套件，但日常全量回归仍保留这些套件。
+- 本轮关键定向基线：decision-gate `7/7`、status-view `19/19`、active-build-context `7/7`、active-build-guard `18/18`、narrative-mode `9/9`、context-pack `15/15`、legacy-recovery `15/15`、ready-contract `7/7`、doctor-skills `42/42`、init-project-codex-compat `24/24`、Kimi host `23/23`、OpenCode host `8/8`、lark-entry-routing `6/6`、lark-review `73/73`、publish-to-lark-e2e `20/20`、lark-adapter `40/40`、project-design-system `7/7`、mockup-quality `3/3`、mock-board `14/14`、consumer-doctor `26/26`、private-onboarding `4/4`、check-branch `21/21`、repo-kind `6/6`、exec-adapters `16/16`、skill-link-ownership `8/8`、skill-eval 合同 `6/6`、Loop Contract `4/4`；发布门在 runner / judge 均缺失时返回 2 并明确列出两项缺失能力，schema `25` 个案例与 static eval `7/7` 通过。
+- 当前完整 `tests/run-all.sh` 基线为 `1013 passed / 0 failed`。本轮新增 PM 决定授权收据、压缩恢复防复用、ready 授权 checkpoint、mockup 设计依据编译、桌面与窄屏视觉验收、质量证据漂移失效，以及需求 / 轮次 / 方向看版组织与最新优先排序回归，均已纳入全量编排；普通开发回归中的 skill eval 为 `7 passed / 0 failed / 18 session skipped`，只形成静态与确定性合同基线，不构成稳定版本证据；`v*` tag 或手动稳定发布仍必须通过配置真实 runner 与独立 judge 的 `tests/run-release-gate.sh`，任何 session skip 都会阻断。稳定核心发布门默认跳过可选 Lark 假环境套件，但日常全量回归仍保留这些套件。
 - 早于 Proposal 合同的既有 active work 已有显式恢复合同：v1-v4 active build 绑定 PM 确认、Git checkpoint、authority 内容 hash，并分别保存旧 design 起点、合同保存终点、历史 delta 重放终点与一致性结论，再从当前确认点续接；旧 active design 保留原轮身份，历史 `ready_to_build` 退回 `designing` 重新确认目标。新工作和 v5 build 仍不能借此绕过 Proposal。
 - 开发态入口同步 helper 已在真实消费仓 `ExampleAgentProject` 只读 dogfood：返回 `stale / legacy_migration`，渲染计划可以确定识别旧 PMAI Startup，并保留“非小改动前读取产品现状”等项目补充及后续项目规则。消费仓在本轮分析期间又出现新的活跃模块状态，因此不再把其整体 error 数作为本次入口同步回归基线；运行前后 Git 状态一致，未修改消费仓或用户级安装。
 

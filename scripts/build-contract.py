@@ -82,6 +82,11 @@ from _lib.final_validation import (
     validate_artifact_binding,
 )
 from _lib.review_evidence import validate_review_approval
+from _lib.decision_gate import (
+    DecisionGateError,
+    bind_ready_authorization,
+    ensure_contract as ensure_decision_gate_contract,
+)
 
 # Executor vocabulary, including the external Builder profile "kimi-code", is
 # owned by build_schema.py; this CLI only exposes the shared contract surface.
@@ -191,6 +196,19 @@ def git_head(repo_root: Path) -> str:
     if result.returncode != 0:
         raise SystemExit(result.stderr.strip() or "无法读取当前 Git HEAD。")
     return result.stdout.strip()
+
+
+def optional_git_head(repo_root: Path) -> str | None:
+    result = subprocess.run(
+        ["git", "-C", str(repo_root), "rev-parse", "HEAD"],
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        check=False,
+    )
+    if result.returncode != 0:
+        return None
+    return result.stdout.strip() or None
 
 
 def current_source_hash(build: dict, delta: dict | None = None) -> str:
@@ -660,6 +678,7 @@ def cmd_start(args: argparse.Namespace) -> None:
             "entrypoints": entrypoints,
         },
         "approved_source_hash": source_hash,
+        "decision_authorization_required": True,
         "source_hash_version": int(ready_result["source_hash_version"]),
         "design_revision": design_revision,
         "delivery_policy": delivery_policy,
@@ -734,6 +753,37 @@ def cmd_designing(args: argparse.Namespace) -> None:
     meta["status"] = "active"
     meta["lifecycle_state"] = "designing"
     meta.pop("stage", None)
+    repo_root = repo_root_for(module_dir)
+    baseline_commit = optional_git_head(repo_root)
+    if baseline_commit is None and "decision_gates" in meta:
+        raise SystemExit("当前模块已有 decision gate，但无法读取 Git HEAD，不能重置授权基线。")
+    if (
+        baseline_commit is not None
+        and existing_lifecycle == "ready_to_build"
+        and "decision_gates" not in meta
+    ):
+        old_checkpoint = optional(meta.get("design_checkpoint_commit"))
+        if old_checkpoint:
+            parent = subprocess.run(
+                ["git", "-C", str(repo_root), "rev-parse", f"{old_checkpoint}^"],
+                text=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                check=False,
+            )
+            if parent.returncode == 0 and parent.stdout.strip():
+                baseline_commit = parent.stdout.strip()
+    if baseline_commit is not None:
+        try:
+            ensure_decision_gate_contract(
+                meta,
+                baseline_commit=baseline_commit,
+                reset_baseline=(
+                    existing_lifecycle != "designing" and "decision_gates" in meta
+                ),
+            )
+        except DecisionGateError as exc:
+            raise SystemExit(str(exc)) from exc
     if not isinstance(meta.get("build"), dict):
         # Returning an old ready contract to design is the explicit point at
         # which its next approval adopts the current hash scope.
@@ -766,6 +816,15 @@ def cmd_ready(args: argparse.Namespace) -> None:
             f"新的 ready 合同必须使用 source_hash_version={CURRENT_SOURCE_HASH_VERSION}。"
         )
     target_paths = validate_target_paths(repo_root, args.target_path)
+    try:
+        bind_ready_authorization(
+            repo_root,
+            module_dir,
+            meta,
+            checkpoint_commit=checkpoint,
+        )
+    except DecisionGateError as exc:
+        raise SystemExit(str(exc)) from exc
     meta["status"] = "active"
     meta["lifecycle_state"] = "ready_to_build"
     meta.pop("stage", None)
@@ -1047,6 +1106,9 @@ def validate_build_currentness(
             allowed_states=allowed_states,
             expected_pack_approved_hash=str(build.get("approved_source_hash") or ""),
             expected_current_source_hash=expected_authority_hash,
+            require_decision_authorization=bool(
+                build.get("decision_authorization_required") is True
+            ),
         )
     except ReadyContractError as exc:
         if build_recovery is not None and "设计依据在批准后发生变化" in str(exc):

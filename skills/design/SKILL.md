@@ -225,7 +225,35 @@ AI 在后台依次检查下面八个面，但只询问会改变产品模型的�
 
 禁止把“是否调 meta / mockup / spec-writing”“是否保存建造依据”变成 PM 问题。
 
-新决定必须能回锚到 PM 明确回答或 PM 接受 AI 推荐的证据。推翻旧决定时在 `decisions.md` 明确写被哪条新决定取代；`spec.md` 只写当前有效的最终目标，不记录讨论过程或实现进度。
+新决定必须能回锚到 PM 明确回答或 PM 接受 AI 推荐的证据，并由 `.work-meta.json:decision_gates` 把展示问题、当时用户消息、D 编号和后续 checkpoint 绑定起来。推翻旧决定时在 `decisions.md` 明确写被哪条新决定取代；`spec.md` 只写当前有效的最终目标，不记录讨论过程或实现进度。
+
+每次提出产品模型或项目建造定义问题前，先登记将要原样展示的题目；`open` 返回后才向 PM 展示：
+
+```bash
+GATE_JSON=$(python3 "$PMAI_HOME/scripts/decision-gate.py" open "$MODULE_DIR" \
+  --kind "<product-model|project-definition>" \
+  --summary "<这题改变的业务结果>" \
+  --message "<即将原样展示给 PM 的完整问题>" \
+  --option "1=<选项一>" --option "2=<选项二>" \
+  --allow-free-text)
+GATE_ID=$(python3 -c 'import json,sys; print(json.load(sys.stdin)["gate_id"])' <<<"$GATE_JSON")
+```
+
+下一条用户消息由项目 `UserPromptSubmit` hook 产生绑定当前 gate 的 `answer_event_id`。只有确认该消息确实回答本题后，才执行：
+
+```bash
+python3 "$PMAI_HOME/scripts/decision-gate.py" answer "$MODULE_DIR" \
+  --gate-id "$GATE_ID" --event-id "$ANSWER_EVENT_ID"
+```
+
+随后才允许写 `decisions.md / spec.md`。写入完成、D 编号已经确定后立即一次性消费：
+
+```bash
+python3 "$PMAI_HOME/scripts/decision-gate.py" consume "$MODULE_DIR" \
+  --gate-id "$GATE_ID" --decision-id "D<编号>"
+```
+
+PM 转去别的事项时不把消息强解释成答案；保留 pending 等待，或用 `decision-gate.py cancel --reason ...` 明确取消。跨日、压缩或模型切换后，以 context pack 的 `decision_gates` 为准：旧数字答复只属于旧 gate，摘要里尚未展示的下一题没有授权能力。
 
 PM 的高信号纠偏已经闭合后，按 `personal-memory.md` 在后台归位并记录，不新增确认题：
 
@@ -348,7 +376,7 @@ python3 "$PMAI_HOME/scripts/project-definition.py" write "$REPO_ROOT" \
 3. 把规格中的业务页面和任务映射到本仓现有实现入口，形成精确 `TARGET_PATHS`；context pack 的 `relevant_implementation_paths` 只作定位线索，不能自动成为批准范围。路径必须位于 `project.yml:implementation.root` 和某个 entrypoint 内；若业务页面本身不明确才让 PM 决定，文件路径映射由 AI 后台完成；
 4. 过跨模块收口门：确认唯一主模块、本次 build 的完整范围和相关模块归类；共同服务同一建造结果的关联影响写入主模块规格，只允许主模块进入 `ready_to_build`；拥有独立建造结果的相关模块保留在独立后续 design 工作中，不得只改完文档却没有工作状态；
 5. 对照进场记录检查 `.pm-workflow/project.yml`：只有本轮首次生成，或 PM 明确确认旧技术方案无法承载需求时才允许 hash 变化；复用既有方案时文件必须完全不变；
-6. 只暂存本模块 `discussion.md`、`decisions.md`、`spec.md`、必要索引、本轮确认的 `mockups/` 记录，以及本轮首次生成或明确重定义的 `.pm-workflow/project.yml`；
+6. 确认每条新/变更 D 编号都已由对应 gate `consume`，只暂存本模块 `discussion.md`、`decisions.md`、`spec.md`、`.work-meta.json` 授权收据、必要索引、本轮确认的 `mockups/` 记录，以及本轮首次生成或明确重定义的 `.pm-workflow/project.yml`；
 7. 保护无关脏改动，不顺手提交其它文件；
 8. 自动提交建造依据，不再弹“是否保存”菜单；
 9. 把 source hash、revision、checkpoint 和批准目标路径一起记录为 `ready_to_build`，再提交状态记录。
@@ -371,7 +399,9 @@ git -C "$REPO_ROOT" add -- \
   "docs/modules/<模块>/discussion.md" \
   "docs/modules/<模块>/decisions.md" \
   "docs/modules/<模块>/spec.md" \
+  "docs/modules/<模块>/.work-meta.json" \
   ".pm-workflow/project.yml"  # 仅本轮创建或重定义时加入
+python3 "$PMAI_HOME/scripts/decision-gate.py" check-staged --repo-root "$REPO_ROOT"
 git -C "$REPO_ROOT" commit -m "design(<模块>): approve build basis"
 CHECKPOINT_COMMIT=$(git -C "$REPO_ROOT" rev-parse HEAD)
 
@@ -422,9 +452,10 @@ git -C "$REPO_ROOT" commit -m "design(<模块>): mark ready to build"
 - meta、mockup、spec-writing 是 design 的内部能力；完成后返回同一主线。
 - 只有真实产品模型岔路才立即问 PM；机械判断和可逆偏好由 AI 承担。
 - 提问直接遵守 `askuser-rules.md`：先报真实决策总量、一次一题、业务语言；已有结论能推出的事项不再问。
+- 产品决定题必须先 open 再展示，用户消息只 answer 当时 pending 的 gate，写完决定后 consume 到 D 编号；摘要不能创建或继承授权。
 - spec 只保留当前有效的最终目标；历史只进 Git 和 `decisions.md`，原型和代码只作证据与缺口检查。
 - design 定稿自动提交建造依据并进入 `ready_to_build`，不要求 PM 理解保存依据、worktree 或合同字段。
-- `ready_to_build` 同时固定设计依据和精确目标路径；build 只能消费这份批准范围，不能临时猜页面或扩大路径。
+- `ready_to_build` 同时固定设计依据、PM 决定授权 checkpoint 和精确目标路径；build 只能消费这份批准范围，不能临时猜页面、复用旧答复或扩大路径。
 - 首次可建造 design 必须生成并校验 `.pm-workflow/project.yml`；之后默认复用，重定义必须由 PM 明确确认。
 - 一轮 design 只留下一个明确 build 入口；跨模块影响要么纳入主模块规格，要么成为有独立状态的后续 design 工作。
 - 全程不改主原型或真实产品代码；实现进入 `/pmai-build`。

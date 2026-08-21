@@ -6,7 +6,7 @@
 
 ---
 
-## §1 4 条硬规则
+## §1 5 条硬规则
 
 ### §1.1 规则 1：空答 / 没答 → STOP wait next message
 
@@ -24,13 +24,14 @@
 - ❌ **禁止**默认走 recommend 选项（PM 没说同意推进，AI 不能假定）
 - ❌ **禁止**默认 No-op 静默继续（让 PM 看不见自己刚跳过了一个决策）
 
-### §1.2 规则 2：没拿到答案前禁止落盘 artifact
+### §1.2 规则 2：没拿到答案前禁止落盘产品 artifact
 
 **适用**：闸门类 AskUserQuestion（Decision gate / 未决问题闸门 / 执行前确认 / 验收呈交 / PM 定稿）。
 
 **AI 行为**：
 
-- ✅ **PM 答完后再写文件 / commit**
+- ✅ `decision-gate.py open` 可只在 `.work-meta.json` 登记一条 pending 授权门；这是绑定下一条用户消息所需的唯一例外，不是产品事实，也不得提交
+- ✅ **PM 答完后再写产品文件 / commit**
 - ❌ PM 没答之前 **不能** ：
   - 写 PRODUCT.md / TODO.md / 功能型规格文档 / 模块 spec 等 PM 视图文件
   - git commit / git push
@@ -112,6 +113,20 @@ B. 改成"管的范围"
 - AskUserQuestion 的 `question` 字段永远 = 1 个具体决策点
 - 写完 question 文本自检：屏幕上的具体例子有吗？工程黑话扫掉了吗？
 
+### §1.5 规则 5：每条答复只绑定一题，压缩摘要没有授权能力
+
+闸门问题必须使用当前模块 `.work-meta.json:decision_gates` 保存授权收据。产品决定仍只写在 `decisions.md`；gate 只证明“问过哪一题、哪条用户消息回答了它、该答复被哪个 D 编号消费”，不形成第二套产品真相源。
+
+固定顺序：
+
+1. 展示问题前先调用 `decision-gate.py open`，记录 `gate_id / question_id`、业务摘要、即将展示的完整消息、选项、当前 session 和展示时间；同一 work 只能有一题处于 `pending / answered`。
+2. 向 PM 原样展示上一步登记的消息。`open` 是未回答前唯一允许的机器状态写入；仍禁止修改产品权威文档、提交、ready、push。
+3. `UserPromptSubmit` hook 只把当前用户消息登记为当时唯一 pending gate 的 answer candidate。Agent 判断它确实回答当前题后，调用 `decision-gate.py answer --gate-id ... --event-id ...`；PM 转去别的事则保留 pending 或显式 cancel。
+4. 只有 gate 已 `answered` 才能把结论写入 `decisions.md / spec.md`；写完后调用 `decision-gate.py consume --decision-id Dxx`。一个 answer event 只能属于一个已经展示且当时 pending 的 gate，不能回填后来问题，也不能消费两次。
+5. scoped checkpoint 必须把变更决定与 `.work-meta.json` 收据放在同一提交；`build-contract.py ready` 再把 consumed gate 绑定到该 checkpoint。pre-commit 与 ready 都按 Git 中实际新增/变化的 D 编号复核，不接受 Agent 自报“没有未决问题”。
+
+会话压缩、跨日或模型切换后，必须先读 context pack 中的 `decision_gates`：旧 gate 的 `consumed` 只证明旧问题已经回答；摘要中“下一题建议问什么”没有 `open` 记录，不是已展示问题，更不可能继承旧数字答复。缺新的 candidate 时只能重新展示当前题并等待，禁止写文件、提交或进入 `ready_to_build`。
+
 ---
 
 ## §2 不在 scope（设计上不解决）
@@ -131,7 +146,7 @@ B. 改成"管的范围"
 每个用 AskUser 的 skill 顶部加：
 
 ```markdown
-> **PM 答题规则（M4）**：本 skill 所有 AskUserQuestion 调用按 `_shared/pm-view/askuser-rules.md` §1 3 硬规则走（空答 STOP / 没拿到答案禁止落盘 / runtime 退化保留 wait）。**禁止默认走 recommend 分支 / 禁止逃生舱**。
+> **PM 答题规则（M4）**：本 skill 所有 AskUserQuestion 调用按 `_shared/pm-view/askuser-rules.md` §1 5 条硬规则走（空答 STOP / 没拿到答案禁止产品权威写入 / runtime 退化保留 wait / 一次一题 / 答复一次性绑定）。**禁止默认走 recommend 分支 / 禁止逃生舱**。
 ```
 
 ### §3.2 闸门类 AskUser 模板（结合 banner-rules.md §3 Decision gate）

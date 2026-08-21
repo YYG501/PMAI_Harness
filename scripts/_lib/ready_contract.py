@@ -15,6 +15,7 @@ from pathlib import Path
 from typing import Any
 
 from .work_contract import WorkContractError, normalize_work_state
+from .decision_gate import DecisionGateError, validate_ready_authorization
 
 
 class ReadyContractError(ValueError):
@@ -83,6 +84,7 @@ def validate_ready_pack(
     allowed_states: set[str] | None = None,
     expected_pack_approved_hash: str | None = None,
     expected_current_source_hash: str | None = None,
+    require_decision_authorization: bool = True,
 ) -> dict[str, Any]:
     accepted_states = allowed_states or {"ready_to_build"}
     current_lifecycle = lifecycle_state(meta)
@@ -138,6 +140,14 @@ def validate_ready_pack(
         if pack_paths != target_paths:
             raise ReadyContractError("context pack 的目标路径与 design 批准范围不一致。")
 
+    if require_decision_authorization:
+        try:
+            authorization = validate_ready_authorization(repo_root, module_dir, meta)
+        except DecisionGateError as exc:
+            raise ReadyContractError(str(exc)) from exc
+    else:
+        authorization = {"status": "legacy_active_compatible"}
+
     return {
         "state": "current",
         "approved_source_hash": approved_hash,
@@ -146,6 +156,7 @@ def validate_ready_pack(
         "design_revision": int(meta.get("design_revision") or 1),
         "target_paths": target_paths,
         "input_hashes": dict(pack.get("input_hashes") or {}),
+        "decision_authorization": authorization,
     }
 
 

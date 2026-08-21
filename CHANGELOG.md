@@ -14,6 +14,8 @@ PM-AI-Workflow 生成器仓的演进记录。本文件**只记影响已安装框
 
 ## 未发布
 
+- `fix(decision-gates)`: **产品决定答复改为绑定已展示问题、用户消息和一次性消费的机器授权收据。** 当前模块 `.work-meta.json:decision_gates` 记录 gate/question ID、业务摘要、完整展示消息、选项、UserPromptSubmit 捕获的短答复事件、`pending → answered → consumed/cancelled` 状态、授权 D 编号与 scoped checkpoint；一个用户消息事件不能跨题复用，聊天压缩摘要不能创建、回答或消费 gate。Design 的决定写入 hook、Git pre-commit 和 `build-contract.py ready/validate-ready` 分别阻断未答写入、缺收据提交和无授权 ready；context pack 支持压缩后按机器状态恢复。旧、未开工且缺授权收据的 `ready_to_build` 返回 `authorization_unverifiable` 并退回 Design，已经进入 `building / iterating / final_check` 的旧工作保持原 build 恢复合同。Claude/Codex 消费仓 hooks 只在新初始化或 PM 明确刷新时更新，本次不自动改现有消费仓或全局安装态。
+
 - `fix(mockups)`: **设计稿看板改为按需求、轮次、方向组织，并补齐可比较的信息与时间。** 看板现在按最近更新时间把最新需求和最新轮次放在前面，最新轮默认展开、旧轮折叠，同轮已选方向优先；每轮显示“本轮要判断”，每个方向显示“核心做法 / 适合 / 主要取舍”，并保留独立 PM 反馈。导入脚本自动记录创建与更新时间，需求链接改为稳定名称链接，同时兼容旧 `#req-N`；旧清单继续可读，缺失时间或取舍时明确标为未记录，不拿文件时间猜测。Doctor 对历史格式保持兼容，但新版条目一旦出现新字段就要求补齐整组字段与合法时间。
 - `fix(mockups)`: **新生成的设计稿必须绑定设计依据并通过桌面 / 窄屏视觉验收后才能进入看版。** 新增 `mockup-quality.py`，生成前把 `DESIGN.md`、已声明项目设计系统和实际参考页面 / 组件编译为“必须继承 / 必须复用 / 允许改变 / 设计护栏”，生成后绑定真实 PNG 截图、浏览器适配器、截图摘要和逐条检查结果；已有产品要求复用真实应用外壳与组件模式，不再只抄颜色或重画相似外壳。导入脚本与看版生成器在写清单 / 生成页面前主动验证质量证据，Consumer Doctor 复核同一合同；`DESIGN.md`、设计系统 Skill、参考实现或截图变化会让旧证据失效。历史设计稿和 PM 上传的外部方向证据继续兼容读取，不冒充已通过视觉验收。
 

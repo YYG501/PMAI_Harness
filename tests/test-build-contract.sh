@@ -509,6 +509,7 @@ assert meta["id"].startswith("work-new-access-flow-")
 assert meta["name"] == "new-access-flow"
 assert meta["status"] == "active"
 assert meta["lifecycle_state"] == "designing"
+assert "decision_gates" not in meta
 PY
     _fail "designing meta fields mismatch"
     rm -f /tmp/build-contract.$$ /tmp/build-contract.err.$$; teardown_contract_fixture; return

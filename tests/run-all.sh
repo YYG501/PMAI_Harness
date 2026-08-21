@@ -11,6 +11,7 @@ SUITE_TIMEOUT_SECONDS="${PMAI_SUITE_TIMEOUT_SECONDS:-300}"
 CORE_SUITES=(
   test-check-branch.sh
   test-check-open-questions.sh
+  test-decision-gate.sh
   test-atomic-file.sh
   test-measure-tthw.sh
   test-init-project.sh

@@ -446,17 +446,30 @@ PY
 
 test_host_timeout_budget_has_headroom() {
   start_test "active-build guard: Claude/Codex/Kimi 外层 prompt hook 统一保留 8 秒余量"
-  local claude_count codex_count kimi_count generator_claude_count generator_codex_count
-  claude_count=$(grep -c '"timeout": 8' "$CLAUDE_HOOK_TEMPLATE")
-  codex_count=$(grep -c '"timeout": 8' "$CODEX_HOOK_TEMPLATE")
+  local kimi_count
   kimi_count=$(grep -c '^timeout = 8$' "$KIMI_HOOK_MANAGER")
-  generator_claude_count=$(grep -c '"timeout": 8' "$GENERATOR_CLAUDE_HOOKS")
-  generator_codex_count=$(grep -c '"timeout": 8' "$GENERATOR_CODEX_HOOKS")
-  if [ "$claude_count" = "2" ] && [ "$codex_count" = "2" ] && [ "$kimi_count" = "2" ] \
-    && [ "$generator_claude_count" = "2" ] && [ "$generator_codex_count" = "2" ]; then
+  if python3 - "$CLAUDE_HOOK_TEMPLATE" "$CODEX_HOOK_TEMPLATE" \
+      "$GENERATOR_CLAUDE_HOOKS" "$GENERATOR_CODEX_HOOKS" <<'PY' \
+    && [ "$kimi_count" = "2" ]; then
+import json, sys
+for path in sys.argv[1:]:
+    data = json.load(open(path, encoding="utf-8"))
+    prompt_guards = [
+        hook
+        for groups in data.get("hooks", {}).values()
+        for group in groups
+        for hook in group.get("hooks", [])
+        if any(
+            name in str(hook.get("command") or "")
+            for name in ("review-skill-guard.cjs", "active-build-guard.cjs")
+        )
+    ]
+    assert len(prompt_guards) == 2, (path, prompt_guards)
+    assert all(hook.get("timeout") == 8 for hook in prompt_guards), (path, prompt_guards)
+PY
     pass_test
   else
-    _fail "prompt hook timeout budget mismatch: template-claude=$claude_count template-codex=$codex_count kimi=$kimi_count generator-claude=$generator_claude_count generator-codex=$generator_codex_count"
+    _fail "prompt hook timeout budget mismatch: every managed timed hook must keep timeout=8; kimi=$kimi_count"
   fi
 }
 

@@ -8,7 +8,7 @@ Proposal、Design、Build 共用这一份循环协议。它规定 Agent 每轮�
 
 每次进入 Skill、收到 PM 新反馈、工具失败、权威文件变化或跨会话恢复时，都执行同一个顺序：
 
-1. **恢复**：读取当前权威文件、机器合同、Git 状态和可恢复 checkpoint；不能靠聊天摘要、cwd、分支名、文件时间或“最近一次”猜现场。
+1. **恢复**：读取当前权威文件、机器合同、Git 状态和可恢复 checkpoint；Design 同时读取 `.work-meta.json:decision_gates` 的 pending / answered / consumed 与 answer event 归属。不能靠聊天摘要、cwd、分支名、文件时间或“最近一次”猜现场。
 2. **确认目标**：用一句话确认本轮要得到的业务结果，以及当前应由 Proposal、Design 还是 Build 负责。
 3. **确认边界**：检查当前依据是否仍有效、允许改哪些内容、哪些动作需要 PM 授权。依据无效或阶段不对时，在写入前分流。
 4. **执行最小完整动作**：只做足以推进当前目标的一组连贯动作，不顺手扩展范围，也不在一次循环里混做两个阶段。
@@ -22,7 +22,7 @@ Proposal、Design、Build 共用这一份循环协议。它规定 Agent 每轮�
 | 动作 | 适用条件 | 下一步 |
 |---|---|---|
 | `retry_current` | 问题仍属于当前阶段，且目标与权威依据没有变化 | 在当前 Skill 修正最小缺口，再重新验证 |
-| `await_pm_decision` | 存在真实产品分叉、one-way door 未授权、用户挑战未闭合或多个候选无法唯一定位 | 明确只问阻塞当前动作的业务决定；未回答前零写入 |
+| `await_pm_decision` | 存在真实产品分叉、one-way door 未授权、用户挑战未闭合或多个候选无法唯一定位 | 明确只问阻塞当前动作的业务决定；除登记 pending gate 外，未回答前不写产品权威文件、不提交、不 ready |
 | `route_proposal` | 产品定位、目标用户、核心问题与价值、职责边界、MVP 证明目标或关键成立前提变化 | 先按现有重规划合同冻结 active candidate，再进入 Proposal |
 | `route_design` | 模块对象、关系、动作、状态、权限、真相源、业务规则、信息结构、任务路径、关键交互或建造定义变化 | 先按现有重规划合同冻结 active candidate，再进入 Design |
 | `advance` | 本阶段完成条件有新鲜证据，且下游输入已经形成 | 只进入固定的下游阶段，不跳级 |
@@ -56,7 +56,7 @@ Proposal、Design、Build 共用这一份循环协议。它规定 Agent 每轮�
 
 - **输入**：当前 Product Proposal/等价基线、模块三件套、context pack、相关现状与实现、replan candidate、评审 handoff 和 PM 新反馈。
 - **允许动作**：恢复模块上下文，收敛对象/动作/状态/权限/页面/异常，按需调用 meta/mockup/spec-writing，并固定唯一 build 入口。
-- **验证**：真实产品分叉已经闭合，对象到页面的覆盖完整，规格没有用猜测补未知项，项目建造定义有效，ready currentness 与批准路径通过。
+- **验证**：真实产品分叉已经闭合，每个新增/变化的模块决定都有绑定展示题、用户消息与 checkpoint 的 consumed gate；对象到页面的覆盖完整，规格没有用猜测补未知项，项目建造定义有效，ready currentness 与批准路径通过。
 - **当前阶段重试**：模块模型仍有缺口、规格编译发现遗漏、mockup 暴露新模块问题时，执行 `retry_current` 并回到对应未知项。
 - **返回上游**：产品定位、用户、价值、边界、MVP 或成立前提变化，执行 `route_proposal`；Proposal 生效后重新编译上下文并逐条复核旧模块结论。
 - **等待 PM**：模块模型存在真实岔路、项目建造定义需要重定义或唯一主模块无法确定时，执行 `await_pm_decision`。
@@ -83,7 +83,7 @@ Proposal、Design、Build 共用这一份循环协议。它规定 Agent 每轮�
 | SCN-P02 | proposal | PM 修改待确认完整草案但产品层级不变 | retry_current | proposal | revise_full_draft |
 | SCN-P03 | proposal | 产品用户价值边界或 MVP 存在真实分叉 | await_pm_decision | proposal | no_write_before_answer |
 | SCN-P04 | proposal | 原子提交与提交后 validate 均通过 | advance | design | validated_product_baseline |
-| SCN-D01 | design | 权限或关键任务路径仍有真实岔路 | await_pm_decision | design | no_ready_before_answer |
+| SCN-D01 | design | 权限或关键任务路径仍有真实岔路 | await_pm_decision | design | displayed_pending_gate_no_authority_write |
 | SCN-D02 | design | 产品定位目标用户价值边界或 MVP 前提变化 | route_proposal | proposal | revalidate_design_after_proposal |
 | SCN-D03 | design | 规格编译发现模块覆盖遗漏 | retry_current | design | return_to_open_module_question |
 | SCN-D04 | design | 决定规格项目定义和 ready currentness 全部通过 | advance | build | validated_ready_to_build |

@@ -81,7 +81,7 @@
 - `/pmai-build` 按项目定义后台确定构建对象和默认验收。新 build 由 AI 推荐工作环境与构建工具，并在同一张卡列出全部有效选项，PM 只确认这两项；卡片不得显示项目类型、验收方案、worktree、合同或证据数据。
 - `project.type=prototype` 时，每次首次构建、反馈修改和中断恢复都必须重新读取实现深度合同：用户可见路径与交互做真，数据库、鉴权、外部集成、异步任务等底层默认模拟；未经 active decision 批准，不得静默建设真实系统。候选定稿前必须通过不可 exception 的 `prototype-boundary` 检查。
 - active build 的查看与问题检查只复用现有 spec、active decisions、accepted deltas、批准路径和当前 acceptance lane。原型合同默认模拟的底层能力不列为缺口；规格已有要求直接核对覆盖，不重新包装成 PM 未决问题。product 继续按 production implementation 检查。
-- 未提交的规格、决定和选定 mockup 由 design 自动做 scoped checkpoint；只能提交本轮相关文件，不能带入无关脏改。
+- 未提交的规格、决定和选定 mockup 由 design 自动做 scoped checkpoint；产品决定必须由 `.work-meta.json:decision_gates` 绑定已展示问题、当时用户消息、D 编号和 checkpoint，一个答复只能消费一次。压缩摘要和旧问题答复不能授权后来问题。只能提交本轮相关文件，不能带入无关脏改。
 - `/pmai-build` 在实现前必须写入版本化 `.work-meta.json:build` 合同；v5 合同把 `iteration_checks / final_checks` 分开，并只在 build 内保存生命周期，PM 请求定稿前禁止 final evidence 与 `review-ready`。旧 v1-v4 只由兼容读取层恢复。`/pmai-build-close` 与自动 finalize 只按定稿请求、合同、验收就绪快照和 lifecycle state 续跑，不能靠当前分支 / worktree 形态猜测，也不能在 final_check 内首次跑完整验收或补业务代码。
 - 混合交付必须走完整 build：本轮同时包含 `project.yml` 声明的实现路径和模块文档/mockups 时，不能普通提交；必须由 `/pmai-build` 在目标适配验收和 PM 定稿后自动 finalize。
 - 外部构建工具候选必须排除当前主控对应的 profile；“当前会话直接构建”始终作为有效选项。外部 builder 只用于首次实现或大型重构，active build 的快速反馈不重新派发。推荐工具不可用时改推其它可用外部 profile，外部工具全部不可用时推荐当前会话直接构建，并重新让 PM 确认。不得静默替换已确认工具。执行器过程写日志和状态文件，PM 窗口只报阶段摘要；失败默认保留半成品，禁止自动清空。

@@ -7,6 +7,21 @@
           {
             "type": "command",
             "command": "bash \"${PMAI_HOME:-$HOME/.pmai}/scripts/check-branch.sh\""
+          },
+          {
+            "type": "command",
+            "command": "node \"${PMAI_HOME:-$HOME/.pmai}/hooks/decision-gate-guard.cjs\"",
+            "timeout": 8
+          }
+        ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${PMAI_HOME:-$HOME/.pmai}/hooks/decision-gate-guard.cjs\"",
+            "timeout": 8
           }
         ]
       }
@@ -14,6 +29,11 @@
     "UserPromptSubmit": [
       {
         "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${PMAI_HOME:-$HOME/.pmai}/hooks/decision-gate-guard.cjs\"",
+            "timeout": 8
+          },
           {
             "type": "command",
             "command": "node \"${PMAI_HOME:-$HOME/.pmai}/hooks/review-skill-guard.cjs\"",

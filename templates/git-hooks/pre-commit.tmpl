@@ -5,7 +5,8 @@
 #   1. 拦截 docs/ 顶层错位文件 (check-docs-toplevel.py，按 CLAUDE.md 「根目录与 docs/ 归位约定」)
 #   2. 拦截 docs/engineering/ 工程文档未登记 INDEX
 #   3. 拦截绕过统一 build/finalize 的 build target + 文档 / mockup 混合提交
-#   4. 对 attachments/ 大文件给出 warning（不阻塞）
+#   4. 拦截未绑定 PM 答复的产品决定提交
+#   5. 对 attachments/ 大文件给出 warning（不阻塞）
 #
 # 绕过：git commit --no-verify（git 内置；hook 不会被调到）。
 #
@@ -48,6 +49,12 @@ MIXED_DELIVERY_CHECKER="$PMAI_HOME/scripts/check-mixed-delivery.py"
 if [ -f "$MIXED_DELIVERY_CHECKER" ]; then
   python3 "$MIXED_DELIVERY_CHECKER"
 fi  # 脚本缺失 fail-open（老消费仓还没 sync 进新 framework 时不应阻塞）
+
+# --- 4. PM 决策授权收据（问题、用户消息、一次性消费与 D 编号必须闭合）---
+DECISION_GATE_CHECKER="$PMAI_HOME/scripts/decision-gate.py"
+if [ -f "$DECISION_GATE_CHECKER" ]; then
+  python3 "$DECISION_GATE_CHECKER" check-staged --repo-root "$REPO_ROOT"
+fi  # 脚本缺失 fail-open；Doctor 会报告旧消费仓 hook/template 漂移
 
 # v5 attachments large file warn (>10MB) — fail-open，仅警告
 # `|| true` 守 set -e：命中 attachments 且文件 ≤10MB 时，while body 末 `[ ] && echo`

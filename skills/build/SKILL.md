@@ -96,6 +96,7 @@ worktree 候选 retire 后把旧 worktree/branch 送入现有 pending cleanup �
 - `design_revision`；
 - `design_checkpoint_commit`；
 - `approved_target.paths`。
+- `decision_gates.ready_authorization`，以及绑定本次 `design_checkpoint_commit` 的 consumed gate。
 
 重新编译 context pack 并实际消费 active 决定、未决问题、相关页面/源码入口：
 
@@ -117,9 +118,9 @@ done < <(python3 -c 'import json,sys; print(*json.load(sys.stdin)["target_paths"
 python3 "$PMAI_HOME/scripts/build-contract.py" check-dirty "$MODULE_DIR"
 ```
 
-`validate-ready` 必须确认当前 source hash 与 design 批准依据一致，并取得 design 已固定的目标路径；不一致时停止 build，返回 design 重新核对。`check-dirty` 只阻断目标路径上已有的未提交改动，防止旧原型改动被默认带入或丢失；其它路径的用户改动继续保护，不要求清空整仓。给 PM 说明时翻译成受影响页面，不展示 hash 或内部文件清单。
+`validate-ready` 必须确认当前 source hash 与 design 批准依据一致，逐项复核本轮变化的 D 编号都有绑定展示题、用户消息、一次性消费和同一 checkpoint 的授权收据，并取得 design 已固定的目标路径；不一致时停止 build，返回 design 重新核对。`authorization_unverifiable` 表示旧、未开工的 `ready_to_build` 没有可证明的 PM 授权，必须退回 Design 重新确认，不能后台补写或从聊天摘要恢复。`check-dirty` 只阻断目标路径上已有的未提交改动，防止旧原型改动被默认带入或丢失；其它路径的用户改动继续保护，不要求清空整仓。给 PM 说明时翻译成受影响页面，不展示 hash 或内部文件清单。
 
-如果还有会改变产品模型的未决问题，停止 build，返回 design。若规格已经闭合但旧项目没有完整 `ready_to_build + approved_target` 记录，后台执行 design 的规格编译、目标路径固定、范围提交和 `build-contract.py ready`，不弹“是否保存建造依据”。
+如果还有会改变产品模型的未决问题，停止 build，返回 design。若规格已经闭合但旧项目没有完整 `ready_to_build + approved_target` 记录，只有当前 Design 已从可验证基线记录新的 decision gate、且变化决定都有有效收据时，才后台执行规格编译、目标路径固定、范围提交和 `build-contract.py ready`；缺授权收据不能自动修复，也不能弹“是否保存建造依据”绕过。
 
 ## 2. 读取 design 已确认的项目建造定义
 
