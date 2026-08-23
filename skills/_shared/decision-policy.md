@@ -50,4 +50,4 @@ design、meta、mockup、spec-writing、build 和自动收尾共用这一套决�
 
 不要把每个 finding 拆成一道题，也不要问 PM 是否调用 meta、mockup、spec-writing 或手动 close。首次 project definition 在 design 收口点确认；build 开工只用一张完整卡展示并确认“工作环境 + 构建工具”的推荐与有效选项，不得把 worktree、项目类型或验收适配器再次做成问题。
 
-决定题的机器绑定统一走 `decision-gate.py open/open-project → UserPromptSubmit observe → answer/answer-project → consume/consume-project`。模块收据保存在当前模块 `.work-meta.json`，Proposal 与阶段路由收据保存在项目运行目录；它们只证明授权链，不替代 `decisions.md` 或 Proposal。一个用户消息事件只能绑定一个当时已展示且 pending 的问题。压缩摘要不能调用这些状态迁移，因此不能创建、回答或消费 gate。
+决定题的机器绑定统一走 `decision-gate.py open/open-project → UserPromptSubmit observe → answer/answer-project → 写入决定 → consume/consume-project`。Design 的 frontier round 使用 `open-round → observe → answer-round`；本轮全部问题回答后，逐题写入 `decisions.md` 并分别 consume，再计算下一轮 frontier。frontier 清空后追加 `open-shared → observe → confirm-shared → consume-shared`，该收据不产生 D 编号，但最终 `spec.md` 与 ready 必须验证它。模块收据保存在当前模块 `.work-meta.json`，Proposal 与阶段路由收据保存在项目运行目录；它们只证明授权链，不替代 `decisions.md` 或 Proposal。一个用户消息事件默认只能绑定一个当时已展示且 pending 的问题，唯一例外是同一 Design frontier round 的多个问题；不能跨轮或跨模块复用。压缩摘要不能调用这些状态迁移，因此不能创建、回答或消费 gate。

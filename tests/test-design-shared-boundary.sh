@@ -6,7 +6,7 @@
 #   T2: 现役入口不再引用 _shared/module-questioning.md 或 _shared/info-design.md
 #   T3: design / spec-writing / build-close 各自引用正确真相源
 #   T4: design 后台驾驶内核包含工作类型、目标绑定、事实底座和顺手动作边界
-#   T5: design 直接读取提问规则并执行决策总量 / 业务转译门
+#   T5: design 直接读取提问规则并执行 frontier round / 业务转译门
 #   T6: 跨模块设计只留下一个明确 build 入口，并复用未变化的 project.yml
 #   T7: ready 同时固定 current source 与目标路径，build 不临时猜范围
 #   T8: 长会话重读当前 skill，个人经验独立召回且不写死 SSO 场景
@@ -76,20 +76,28 @@ test_current_truth_sources_are_wired() {
 }
 
 test_design_question_convergence_is_documented() {
-  start_test "T5: design 提问收敛、总量预览和业务转译已文档化"
+  start_test "T5: design frontier round、依赖树和业务转译已文档化"
   local skill="$REPO_ROOT/skills/design/SKILL.md"
   local method="$REPO_ROOT/skills/design/references/design-method.md"
+  local adapter="$REPO_ROOT/skills/design/references/grill-adapter.md"
 
   if ! grep -q "提问收敛门" "$skill" \
-     || ! grep -q "还剩几个需要决定的问题" "$skill" \
+     || ! grep -q "decision-gate.py open-round" "$skill" \
+     || ! grep -q "open-shared" "$skill" \
      || ! grep -q "每次重新进入、续跑、切换主模块" "$skill"; then
-    _fail "design SKILL 缺提问收敛、剩余量或续跑刷新规则"
+    _fail "design SKILL 缺提问收敛、frontier/shared 确认或续跑刷新规则"
     return
   fi
   if ! grep -q "PM 是否可以不理解实现机制" "$method" \
      || ! grep -q "当前问法立即作废" "$method" \
      || ! grep -q "同一份许可证能不能复制" "$method"; then
     _fail "design-method.md 缺业务问题转译或看不懂重问规则"
+    return
+  fi
+  if ! grep -q "vendor/mattpocock-skills" "$adapter" \
+     || ! grep -q "consume-shared" "$adapter" \
+     || ! grep -q "不产生 D 编号" "$adapter"; then
+    _fail "grill-adapter.md 缺上游来源或 shared-understanding 机器边界"
     return
   fi
   pass_test

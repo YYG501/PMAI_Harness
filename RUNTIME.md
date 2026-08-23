@@ -4,14 +4,15 @@
 
 ## 当前位置
 
-- 日期：2026-08-21
+- 日期：2026-08-23
 - 开发分支：`main`
-- 当前目标：Harness P1 与复杂度收口五个批次已经完成并分发到 `main`。本 checkout 已补强产品决定与阶段路由授权：模块 `.work-meta.json:decision_gates` 和项目 `.pm-workflow/context/decision-gates.json` 分别绑定已展示问题、PM 用户消息、一次性消费状态与授权 checkpoint；Proposal 写入、接受、commit 和 design ready 都必须有对应机器凭据。Kimi Code、OpenCode、Cursor Agent 只作 Builder，遗留主控资产只诊断、不自动清理。
+- 当前目标：Harness P1 与复杂度收口五个批次已经完成并分发到 `main`。本 checkout 已把固定版本的 `mattpocock/skills` Grill 方法落为 Design 访谈内核：以 design tree / frontier rounds 深挖模块未知项，同轮询问互不依赖的问题，依赖问题延后，事实由 Agent 调查；每题仍独立绑定 PM 答复与 D 编号，frontier 清空后必须取得并绑定 shared-understanding 收据。Proposal、三件套、context pack、spec-writing、ready / build 与 Lark 生命周期继续由 PMAI 自己负责，不引入第二套主链。
 - gstack 参考基线：`v1.58.5.0`，commit `11de390`；只参考本地 `gstack-clean` checkout，没有升级用户目录中的安装副本。
 
 ## 当前活跃模型
 
 - 正常用户主链路：`/pmai-init-project` 只建上下文骨架 → `/pmai-proposal` 完成产品级澄清 → `/pmai-design` 收敛模块决定并在首次定稿时生成项目建造定义 → `/pmai-spec-writing` 编译已确认规格 → `/pmai-build` → PM 看结果多轮快速修改 → PM 明确定稿 → `finalize-work.py` 对冻结 commit 只执行缺失的代码门、范围门和受影响体验批次 → 合入 main → 只更新实际受影响的产品真相源。spec-writing 通常由 design 自动调用，不要求 PM 手工拼接命令。
+- `/pmai-design` 的提问推进采用 vendored `mattpocock/skills` Grill 快照：后台建立决定依赖树，每轮展示当前全部 frontier 问题并逐题给推荐；一条用户消息可以显式回答同轮多题，但不能跨 round、跨模块或替后置问题授权。frontier 清空后先向 PM 复述共识并取得独立 shared-understanding 确认，确认前不能写最终 `spec.md` 或进入 `ready_to_build`。这只替换 Design 的访谈内核，不替换 Proposal、文档、授权和 Build 生命周期。
 - 新项目默认必须完成完整 Product Proposal；成熟项目只有在定位、用户、核心问题与价值、产品边界、MVP / 当前产品结果已经构成完整等价基线，且 `PRODUCT.md` 显式记录真实仓内依据与 PM 确认日期、`PRODUCT.md` 与依据文件均已提交且无漂移、机器状态为 `equivalent_baseline` 时才可跳过。一旦进入 Proposal 就必须完整产出；当前版本通过 `docs/proposals/`、`PRODUCT.md` 与 `.pm-workflow/proposal.json` 原子绑定，下游只读消费。
 - `meta`、`mockup` 是 design 按需调用后返回主线的内部能力；spec-writing 是主链中的规格编译阶段，也通常由 design 自动调用。三者仍保留手动入口用于专项使用。
 - UI 工作始终先读消费仓 `DESIGN.md`；它继续拥有产品体验、采用范围和共享组件 inventory。消费仓可在其中声明唯一、Git 跟踪的项目级设计系统 Skill：宿主能原生解析时调用，不能解析时完整读取同一仓内 `SKILL.md` 及 required references；未声明时沿用现有组件流程，声明缺失或不可访问时失败关闭。该插槽不新增设计系统安装器、版本管理器或平行生命周期。
@@ -29,13 +30,14 @@
 - 模块真相源：`docs/modules/<模块>/discussion.md`、`decisions.md`、`spec.md`；跨模块现行规则为 `PRODUCT-RULES.md`，项目级冻结理路为 `docs/decisions/`。
 - 文档语义：Proposal 定义产品级用户、问题、价值、边界与 MVP；`spec.md` / PRD 是指导研发实现的最终目标合同；`PRODUCT-STATE.md` 描述 main 已落地现状；原型、mockup 和代码只作设计 / 实现证据。
 - design 的 `ready_to_build` 状态同时记录 approved source hash、hash scope version、design checkpoint 和精确目标路径；build 开工前重新编译上下文并验证 currentness，过期依据不能继续显示或进入构建。当前 Proposal 与固定交接摘要参与 context pack 和 source hash；Proposal 换版会让旧 ready/build 依据失效。新轮次使用 `source_hash_version=2`：模块三件套、输入证据、PRODUCT、PRODUCT-RULES、DESIGN、项目级决定和 project.yml 参与 currentness；PRODUCT-STATE、TODO 和模块索引只作上下文，单独变化不判设计过期。没有版本字段的旧 ready/build 按 v1 全量范围恢复到该轮结束，显式返回 design 后下一次批准才升级 v2。新 `.work-meta.json:build` 使用合同 v5：保留 v4 的双车道验收语义，但 lifecycle 和 checks 都只写一个 canonical 位置；旧 v1-v4 继续用于中断恢复兼容。
-- 产品模型决定另由同一 `.work-meta.json:decision_gates` 保存授权收据，不新增决定文件或生命周期：问题先登记并展示，UserPromptSubmit 只捕获当时唯一 pending gate 的短答复，Agent 明确 answer 后才可写决定，随后一次性 consume 到 D 编号；scoped checkpoint 与 ready 再按 Git 实际变化复核。摘要不能迁移 gate 状态。旧、未开工 ready 缺收据时返回 `authorization_unverifiable` 并退回 Design；已进入 build 的旧工作不倒灌新收据。
+- 产品模型决定另由同一 `.work-meta.json:decision_gates` 保存授权收据，不新增决定文件或生命周期：默认 sequential 问题仍一次只保留一个 pending gate；Design frontier round 可同时保留同一 `round_id` 的多个独立问题，同一用户消息由 Agent 逐题声明回答范围，每题分别 consume 到 D 编号。frontier 清空后的 shared-understanding 作为不产生 D 编号的独立收据，由最终 `spec.md` 写入门、staged 检查和 ready checkpoint 复核；后来新开的 frontier 会使旧确认失效。摘要不能迁移 gate 状态。旧、未开工 ready 缺收据时返回 `authorization_unverifiable` 并退回 Design；已进入 build 的旧工作不倒灌新收据。
 - 新 build 由 AI 在一张卡中展示推荐的工作环境、构建工具和两项的全部有效选择，PM 只确认这两项；外部工具候选排除当前主控对应的 profile，“当前会话直接构建”始终可选，没有可用外部工具时默认推荐它。项目类型和验收方案不显示。选择当前环境时，main 只放行合同声明的目标路径。
 - 宿主面分为两级：Claude Code 使用 `/pmai-*`、Codex 使用原生 `$pmai-*`，两者保留完整 Skill、项目 Hook、lifecycle、恢复、证据和 landing 主控能力；Kimi Code、OpenCode、Cursor Agent 只由 `/pmai-build` 选作外部 Builder。Builder prompt 明确禁止调用 PMAI Skill、推进 lifecycle、写验收通过或处理 landing；主控重新采集 Git diff、检查路径并决定后续状态。新 install / upgrade / init 不再生成 Kimi Skill/managed hooks 或 OpenCode commands/config；Doctor 只报告遗留资产并保留显式清理入口。
 - 记忆分两层：项目事实、决定和偏好继续由消费仓现有真相源承担；个人经验保存在用户级状态目录，跨项目召回但只作建议。个人经验不进入 context pack、项目 hash 或 Git，也不能自动修改 Skill。
 
 ## 已实现
 
+- Design Grill 适配已落到固定上游快照、方法文档和机器授权链：vendored `mattpocock/skills` 的 `grilling / grill-me / grill-with-docs / domain-modeling / prototype` 与 MIT 授权；`/pmai-design` 按 design tree 计算 frontier，同轮展示互不依赖的问题并把事实调查留给 Agent。`decision-gate.py` 新增 `open-round / answer-round` 和 `open-shared / confirm-shared / consume-shared`；同轮多题共享用户消息但独立保存选项或自由回答、D 编号和消费记录，部分答复继续阻断，旧共识不能覆盖后来 frontier，最终共识绑定 design checkpoint。Proposal 和其它阶段路由保持 sequential，PMAI 的三件套、spec-writing、ready / build 与 Lark 合同保持原边界。
 - 复杂度收口批次二统一了仓库身份和宿主等级：`repo-kind.py` / `_lib/repo_identity.py` 唯一输出 `generator / consumer / uninitialized`，严格生成器 marker、防越界 symlink，普通 `docs/` 不会误判；preamble、status、Doctor 和 Kimi 遗留 dispatcher 复用该解析器，`PMAI_PROJECT_INITIALIZED` 只作兼容投影。install / upgrade 只管理 Claude/Codex Skill，init 只生成 Claude/Codex 项目配置；Doctor 将 Kimi/OpenCode 拆成 Builder readiness 与非阻断遗留报告，不 repair 旧主控资产。五个外部 adapter 统一注入 Builder-only 合同；新模板和生成器入口只承诺 Claude/Codex 完整主控。
 - Harness 第一阶段五项 P1 已下沉为运行时硬门：host `_shared` 只按明确所有权替换；brownfield 初始化写入前列全同名冲突；attached build worktree 的所属分支副本压住 main 旧状态；build 必须消费 current `ready_to_build + project.yml` 且拒绝路径、类型、入口和 revision 漂移；cancel 要求 main 干净、只提交状态删除，并在提交失败时恢复原状态。
 - Harness 验证入口已失败关闭：每个 suite 有独立进程组超时，缺失 / 重复摘要、零用例、摘要与退出码矛盾都会计为失败；写入 hook 无法解析输入、定位唯一路径、确认 Git 工作区或分支时拒绝写入。普通回归实际运行静态 skill eval 并明确显示 session skip；稳定版本发布门要求真实 runner 与独立 judge，以 evaluation ID、来源和完整证据复核绑定每次 session，缺能力、skip、自报通过或 judge 复用 runner run ID 都阻断发布。
@@ -95,8 +97,8 @@
 
 ## 当前验证
 
-- 本轮关键定向基线：decision-gate `7/7`、status-view `19/19`、active-build-context `7/7`、active-build-guard `18/18`、narrative-mode `9/9`、context-pack `15/15`、legacy-recovery `15/15`、ready-contract `7/7`、doctor-skills `42/42`、init-project-codex-compat `24/24`、Kimi host `23/23`、OpenCode host `8/8`、lark-entry-routing `6/6`、lark-review `73/73`、publish-to-lark-e2e `20/20`、lark-adapter `40/40`、project-design-system `7/7`、mockup-quality `3/3`、mock-board `14/14`、consumer-doctor `26/26`、private-onboarding `4/4`、check-branch `21/21`、repo-kind `6/6`、exec-adapters `16/16`、skill-link-ownership `8/8`、skill-eval 合同 `6/6`、Loop Contract `4/4`；发布门在 runner / judge 均缺失时返回 2 并明确列出两项缺失能力，schema `25` 个案例与 static eval `7/7` 通过。
-- 当前完整 `tests/run-all.sh` 基线为 `1015 passed / 0 failed`。本轮新增模块与项目级 PM 决定授权收据、压缩恢复防复用、Proposal 写入 / 接受 / commit / ready 授权 checkpoint、mockup 设计依据编译、桌面与窄屏视觉验收、质量证据漂移失效，以及需求 / 轮次 / 方向看版组织与最新优先排序回归，均已纳入全量编排；普通开发回归中的 skill eval 为 `7 passed / 0 failed / 18 session skipped`，只形成静态与确定性合同基线，不构成稳定版本证据；`v*` tag 或手动稳定发布仍必须通过配置真实 runner 与独立 judge 的 `tests/run-release-gate.sh`，任何 session skip 都会阻断。稳定核心发布门默认跳过可选 Lark 假环境套件，但日常全量回归仍保留这些套件。
+- 本轮关键定向基线：decision-gate `15/15`、status-view `19/19`、active-build-context `7/7`、active-build-guard `18/18`、narrative-mode `9/9`、context-pack `15/15`、legacy-recovery `15/15`、ready-contract `7/7`、doctor-skills `42/42`、init-project-codex-compat `24/24`、Kimi host `23/23`、OpenCode host `8/8`、lark-entry-routing `6/6`、lark-review `73/73`、publish-to-lark-e2e `20/20`、lark-adapter `40/40`、project-design-system `7/7`、mockup-quality `3/3`、mock-board `14/14`、consumer-doctor `26/26`、private-onboarding `4/4`、check-branch `21/21`、repo-kind `6/6`、exec-adapters `16/16`、skill-link-ownership `8/8`、skill-eval 合同 `6/6`、Loop Contract `4/4`；发布门在 runner / judge 均缺失时返回 2 并明确列出两项缺失能力，schema `25` 个案例与 static eval `7/7` 通过。
+- 当前完整 `tests/run-all.sh` 基线为 `1021 passed / 0 failed`。本轮新增 Design frontier round、同轮多题独立授权、部分回答恢复、shared-understanding 收据，以及模块与项目级 PM 决定授权收据、压缩恢复防复用、Proposal 写入 / 接受 / commit / ready 授权 checkpoint、mockup 设计依据编译、桌面与窄屏视觉验收、质量证据漂移失效、需求 / 轮次 / 方向看版组织与最新优先排序回归，均已纳入全量编排；普通开发回归中的 skill eval 为 `7 passed / 0 failed / 18 session skipped`，只形成静态与确定性合同基线，不构成稳定版本证据；`v*` tag 或手动稳定发布仍必须通过配置真实 runner 与独立 judge 的 `tests/run-release-gate.sh`，任何 session skip 都会阻断。稳定核心发布门默认跳过可选 Lark 假环境套件，但日常全量回归仍保留这些套件。
 - 早于 Proposal 合同的既有 active work 已有显式恢复合同：v1-v4 active build 绑定 PM 确认、Git checkpoint、authority 内容 hash，并分别保存旧 design 起点、合同保存终点、历史 delta 重放终点与一致性结论，再从当前确认点续接；旧 active design 保留原轮身份，历史 `ready_to_build` 退回 `designing` 重新确认目标。新工作和 v5 build 仍不能借此绕过 Proposal。
 - 开发态入口同步 helper 已在真实消费仓 `ExampleAgentProject` 只读 dogfood：返回 `stale / legacy_migration`，渲染计划可以确定识别旧 PMAI Startup，并保留“非小改动前读取产品现状”等项目补充及后续项目规则。消费仓在本轮分析期间又出现新的活跃模块状态，因此不再把其整体 error 数作为本次入口同步回归基线；运行前后 Git 状态一致，未修改消费仓或用户级安装。
 

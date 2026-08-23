@@ -79,7 +79,7 @@
 - 按共用 decision policy 处理：机械项后台完成；可逆偏好由 AI 给推荐并推进；只有产品模型岔路、不可逆动作、AI 要改变 PM 已明确方向，以及 build 开工前的工作环境与构建工具需要 PM 拍。
 - 不把是否调用 meta/mockup/spec-writing、项目类型、验收方案、保存依据或手动 close 变成每轮 build 问题。开工卡只显示工作环境和构建工具，但必须一次列出这两项的全部有效选择。
 - PM 在看到构建结果后说“可以提交 / 定稿 / 可以合并”，即是合入 main 的明确授权，不二次确认。
-- design 的模块产品决定题先登记 `.work-meta.json:decision_gates` 再展示；Proposal 与阶段路由题登记 `.pm-workflow/context/decision-gates.json`。UserPromptSubmit 只把用户消息绑定到当时唯一 pending 的题，答复写入决定或项目动作后一次性 consume 到 D 编号、`proposal:draft`、`proposal:accept` 或 `route:<动作>`，并由 scoped checkpoint / ready / Proposal 原子提交复核。聊天摘要、旧答复和未展示的建议题没有授权能力；Proposal 原子提交涉及 `.pm-workflow/proposal.json` 或 `PRODUCT.md` 时必须有本轮 `proposal:accept` 收据。
+- design 的模块产品决定题先登记 `.work-meta.json:decision_gates` 再展示；Design 可以用 `open-round` 登记同一 frontier 的多个独立问题，用户消息只绑定当时同一 round 的 pending 题，并由 `answer-round` 逐题声明回答范围；frontier 清空后必须再登记并消费 `shared-understanding` 确认，最终 `spec.md` 与 ready 会绑定该收据。Proposal 与阶段路由题仍登记 `.pm-workflow/context/decision-gates.json` 并逐题处理。答复写入决定或项目动作后分别 consume 到 D 编号、`proposal:draft`、`proposal:accept` 或 `route:<动作>`，并由 scoped checkpoint / ready / Proposal 原子提交复核。聊天摘要、旧答复和未展示的建议题没有授权能力；Proposal 原子提交涉及 `.pm-workflow/proposal.json` 或 `PRODUCT.md` 时必须有本轮 `proposal:accept` 收据。
 
 ### build 纪律
 

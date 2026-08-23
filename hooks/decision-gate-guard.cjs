@@ -154,7 +154,16 @@ function handlePrompt(data, repoRoot) {
     addContext(`DECISION GATE 答复归属不唯一（decision-gate-guard hook）\n\n${payload.reason}\n不得猜题或复用本答复；先让 PM 指明当前问题。`);
     return;
   }
-  if (payload.status === 'observed') {
+  if (payload.status === 'observed' && payload.kind === 'shared-understanding') {
+    addContext(`DECISION GATE shared-understanding 确认候选（decision-gate-guard hook）
+
+本条用户消息只绑定到已展示的共识摘要：
+- gate_id: ${payload.gate_id}
+- answer_event_id: ${payload.event_id}
+- 摘要: ${payload.question_summary}
+
+只有 PM 明确确认我们理解一致时，才调用 decision-gate.py confirm-shared；随后调用 consume-shared。确认收据不产生 D 编号，但没有它不能写入最终 spec.md、提交建造依据或进入 ready_to_build。`);
+  } else if (payload.status === 'observed') {
     addContext(`DECISION GATE 用户答复候选（decision-gate-guard hook）
 
 本条用户消息只绑定到当时已经展示且仍 pending 的问题：
@@ -164,6 +173,17 @@ function handlePrompt(data, repoRoot) {
 - 问题摘要: ${payload.question_summary}
 
 先判断本消息是否实际回答了该题。若是，必须调用 decision-gate.py answer 选择这个 event；若 PM 转去别的事则保留 pending 或显式 cancel。该 event 不能用于其它问题。没有 answer + consume 收据前，禁止写 decisions.md、提交建造依据或进入 ready_to_build。`);
+  } else if (payload.status === 'observed_round') {
+    const summaries = Array.isArray(payload.question_summaries)
+      ? payload.question_summaries.map((summary, index) => `- ${payload.gate_ids[index]}: ${summary}`).join('\n')
+      : `- ${payload.gate_id}: ${payload.question_summary}`;
+    addContext(`DECISION GATE Design frontier round 答复候选（decision-gate-guard hook）
+
+本条用户消息只绑定到同一轮当时已经展示且仍 pending 的问题：
+${summaries}
+- answer_event_id: ${payload.event_id}
+
+先逐题判断本消息实际回答了哪些问题。必须调用 decision-gate.py answer-round，并为每个已回答问题显式提供 gate-id=option-id；即使本轮只剩一题，也不能改走普通 answer。未明确回答的问题继续 pending。该 event 不能用于其它轮次或模块。没有所有问题的 answer + consume 收据前，禁止写 decisions.md、提交建造依据或进入 ready_to_build。`);
   }
 }
 
@@ -185,7 +205,12 @@ function handlePreTool(data, repoRoot) {
     const command = artifact.kind === 'decisions'
       ? 'guard-authority-write'
       : 'guard-pending-write';
-    const result = runGate([command, artifact.moduleDir], repoRoot);
+    const result = runGate(
+      command === 'guard-pending-write'
+        ? [command, artifact.moduleDir, '--artifact', artifact.kind]
+        : [command, artifact.moduleDir],
+      repoRoot,
+    );
     if (result.status !== 0) {
       deny(`PM 决策授权护栏已拒绝写入 ${artifact.kind}.md。\n\n${failureReason(result, '缺少可验证授权窗口。')}\n请先展示当前问题，并让本轮用户答复依次完成 observe → answer；写好决定后再 consume 到具体 D 编号。`);
     }

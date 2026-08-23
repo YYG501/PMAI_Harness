@@ -68,17 +68,18 @@
 请回复编号（或自由文本说明）：
 ```
 
-### §1.4 规则 4：多决策必须拆开顺序问，禁止一次 AskUser 塞多个问题
+### §1.4 规则 4：默认逐题；Design 允许 frontier round
 
-**适用**：AI 准备问 PM 多个决策点。典型场景 —— review 结论的多条 finding 待拍 / autoplan 多决策点 / stage 闸门同时拍多件事 / 设计方案多个 open question。
+**适用**：AI 准备问 PM 多个决策点。Proposal、Build、Build Close、review 和其它执行闸门默认逐题；只有 `/pmai-design` 使用上游 Grill 方法时，才可将同一 frontier 中互不依赖的问题组成一轮。
 
 **AI 行为**：
 
-- ✅ **一次只问一个决策**：一个 AskUserQuestion 调用只放 1 个 `question` 字段（即使 runtime 允许 1-4 题）
+- ✅ **默认一次只问一个决策**：其它 skill 的一个 AskUserQuestion 调用只放 1 个 `question` 字段（即使 runtime 允许 1-4 题）
+- ✅ **Design frontier round 例外**：一轮可以展示多个互不依赖的问题，但每题必须有独立编号、推荐答案、业务后果和依赖边界；依赖同轮其它问题的题目必须延后。
 - ✅ **业务大白话描述**：先讲屏幕上的真实样子 / 数据真实长相 / 用户路径，再问选项。例：「管理员页面这一列真实值长这样：`全租户 / 技术部 / 北京分公司`。评审觉得"数据范围"这个叫法 PM 不够直观。A. 保持原叫法 B. 改成"管的范围"」
-- ✅ **顺序推进**：PM 答完一条 → AI 再问下一条；多决策之间不并行
-- ✅ **总量预览**：开头一句话给 PM 总量心智模型，例「评审找了 3 件事要拍，逐条过」
-- ❌ **禁止**一个 AskUserQuestion 塞 ≥2 个 `question`（即使 runtime 支持 1-4 题；塞多题 = 批量打包反模式）
+- ✅ **顺序推进**：默认 PM 答完一条 → AI 再问下一条；Design 则在当前 frontier 内并行展示，收到答复后按题确认范围并重新计算下一轮。
+- ✅ **总量预览**：开头说明本轮要收敛的业务范围；Design 不承诺固定总题数，因为后续 frontier 由前置答案决定。
+- ❌ **禁止**把有依赖关系的问题硬塞到同一轮，或把互不相关的 review / build 决定伪装成 Design frontier。
 - ❌ **禁止**术语密集：`combobox / scope / IA / 5/6 模型 / vp-N / I-XX5 / RBAC / ABAC` 等工程黑话直接用进 question 文本（→ 命中 `_shared/term-detector` 黑名单 + `pm-view/writing-rules.md §3.12 禁工程黑话`）
 - ❌ **禁止**把 review/autoplan 整份结论打包成一个 AskUser 问"按你看怎么办"（review 找了 N 条 finding → 要 N 次 sequential 拍板）
 
@@ -91,7 +92,7 @@ question 3:   要不要先做？
 ```
 → PM 反馈"没看明白问题"。原因：术语密集 + 多决策并列 + 无屏幕例子。
 
-**正例**：
+**正例（默认 sequential）**：
 ```
 评审找了 3 件事要拍，逐条过。第 1 件：
 
@@ -104,25 +105,37 @@ B. 改成"管的范围"
 ```
 → PM 答 A，AI 再进入第 2 件。
 
+**正例（Design frontier round）**：
+```text
+❓ Q1：通知对象是所有成员，还是只有管理员？
+➡️ 推荐：所有成员，因为它是工作提醒。
+
+---
+
+❓ Q2：首版只做站内通知，还是同时发送邮件？
+➡️ 推荐：先做站内通知，因为邮件会增加发送失败和退订处理。
+```
+PM 可以在一条消息中回答 Q1、Q2；系统仍为两个问题分别记录授权。
+
 **Why**：PM 不读工程术语；多决策并列让 PM 无法逐个消化；批量打包 = AI 把"消化决策"成本推给 PM。出处：消费仓 memory `pm-plain-language-one-decision-at-a-time.md`（PM 多次驳回术语密集 / 批量 AskUser，明确说"没看明白问题"）。
 
 **How to apply**：
 
 - review / autoplan / 多 finding 结论 → 写完后**按 PM 大白话视角重排成 sequential 列表**，再逐条 AskUser
 - 重的评审结论（如 [[autoplan]]）开头先给关键发现预览（"评审找了 N 件事，逐条过"），让 PM 知道总量
-- AskUserQuestion 的 `question` 字段永远 = 1 个具体决策点
+- 除 Design frontier round 外，AskUserQuestion 的 `question` 字段 = 1 个具体决策点；Design round 的每个问题仍必须是一个独立决策点
 - 写完 question 文本自检：屏幕上的具体例子有吗？工程黑话扫掉了吗？
 
-### §1.5 规则 5：每条答复只绑定一题，压缩摘要没有授权能力
+### §1.5 规则 5：每条答复默认绑定一题；Design 同轮可绑定多题
 
 闸门问题必须使用共享 decision-gate 合同保存授权收据：模块题写入当前模块 `.work-meta.json:decision_gates`，Proposal / 阶段路由题写入项目运行收据。产品决定仍只写在 `decisions.md` 或 Proposal；gate 只证明“问过哪一题、哪条用户消息回答了它、该答复被哪个 D 编号或项目动作消费”，不形成第二套产品真相源。
 
 固定顺序：
 
-1. 展示问题前先调用对应的 `decision-gate.py open` 或 `open-project`，记录 `gate_id / question_id`、业务摘要、即将展示的完整消息、选项、当前 session 和展示时间；同一 work 或项目只能有一题处于 `pending / answered`。
+1. 展示问题前先调用对应的 `decision-gate.py open` / `open-round` / `open-project`，记录 `gate_id / question_id`、业务摘要、即将展示的完整消息、选项、当前 session 和展示时间；默认同一 work 或项目只能有一题处于 `pending / answered`，Design 例外是同一 `round_id` 的 frontier 问题。
 2. 向 PM 原样展示上一步登记的消息。`open` 是未回答前唯一允许的机器状态写入；仍禁止修改产品权威文档、提交、ready、push。
-3. `UserPromptSubmit` hook 只把当前用户消息登记为当时唯一 pending gate 的 answer candidate。Agent 判断它确实回答当前题后，调用 `decision-gate.py answer --gate-id ... --event-id ...`；PM 转去别的事则保留 pending 或显式 cancel。
-4. 只有 gate 已 `answered` 才能把结论写入 `decisions.md / spec.md` 或 Proposal；模块决定写完后调用 `consume --decision-id Dxx`，项目题完成后调用 `consume-project --artifact <动作>`。一个 answer event 只能属于一个已经展示且当时 pending 的 gate，不能回填后来问题，也不能消费两次。
+3. `UserPromptSubmit` hook 把当前用户消息登记为当时 pending gate 的 answer candidate；Design frontier round 会把同一事件登记到本轮所有仍 pending 的问题。Agent 必须调用 `answer-round` 并显式列出确实回答的问题；默认场景继续调用 `answer --gate-id ...`。
+4. 默认单题在 `answered` 后写入对应产品决定，再 consume 到 D 编号或项目动作。Design round 必须等本轮全部问题都 `answered`，再逐题写入 `decisions.md` 并分别 `consume --decision-id Dxx`；随后重新计算 frontier。frontier 为空时，再对完整共识执行 `open-shared → observe → confirm-shared → consume-shared`，之后才允许编译 `spec.md`。一个 answer event 只能属于一个 sequential gate，或同一个 frontier round 的多个问题，不能跨轮、跨模块回填，也不能消费两次。
 5. scoped checkpoint 必须把变更决定与 `.work-meta.json` 收据放在同一提交；`build-contract.py ready` 再把 consumed gate 绑定到该 checkpoint。pre-commit 与 ready 都按 Git 中实际新增/变化的 D 编号复核，不接受 Agent 自报“没有未决问题”。
 
 会话压缩、跨日或模型切换后，必须先读 context pack 中的 `decision_gates` 与 `project_decision_gates`：旧 gate 的 `consumed` 只证明旧问题已经回答；摘要中“下一题建议问什么”没有 `open` 记录，不是已展示问题，更不可能继承旧数字答复。缺新的 candidate 时只能重新展示当前题并等待，禁止写文件、提交或进入 `ready_to_build`。
@@ -146,7 +159,7 @@ B. 改成"管的范围"
 每个用 AskUser 的 skill 顶部加：
 
 ```markdown
-> **PM 答题规则（M4）**：本 skill 所有 AskUserQuestion 调用按 `_shared/pm-view/askuser-rules.md` §1 5 条硬规则走（空答 STOP / 没拿到答案禁止产品权威写入 / runtime 退化保留 wait / 一次一题 / 答复一次性绑定）。**禁止默认走 recommend 分支 / 禁止逃生舱**。
+> **PM 答题规则（M4）**：本 skill 所有 AskUserQuestion 调用按 `_shared/pm-view/askuser-rules.md` §1 5 条硬规则走（空答 STOP / 没拿到答案禁止产品权威写入 / runtime 退化保留 wait / 默认逐题、Design frontier round 例外 / 答复一次性绑定）。**禁止默认走 recommend 分支 / 禁止逃生舱**。
 ```
 
 ### §3.2 闸门类 AskUser 模板（结合 banner-rules.md §3 Decision gate）

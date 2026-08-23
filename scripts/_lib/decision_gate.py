@@ -22,7 +22,13 @@ from typing import Any, Iterable
 
 SCHEMA_VERSION = 1
 VALID_GATE_STATUSES = {"pending", "answered", "consumed", "cancelled"}
-VALID_GATE_KINDS = {"product-model", "project-definition", "one-way-door"}
+VALID_GATE_KINDS = {
+    "product-model",
+    "project-definition",
+    "one-way-door",
+    "shared-understanding",
+}
+VALID_GATE_MODES = {"sequential", "frontier"}
 DECISION_ID_RE = re.compile(r"^D[0-9]+$", re.IGNORECASE)
 DECISION_HEADING_RE = re.compile(r"^#{2,6}\s+(D[0-9]+)\b.*$", re.IGNORECASE)
 SHORT_ANSWER_LIMIT = 2048
@@ -233,8 +239,7 @@ def validate_contract(value: Any, *, work_id: str = "") -> dict[str, Any]:
     normalized_items: list[dict[str, Any]] = []
     gate_ids: set[str] = set()
     question_ids: set[str] = set()
-    answer_event_owners: dict[str, str] = {}
-    unresolved = 0
+    answer_event_owners: dict[str, tuple[str, str, str]] = {}
     for index, raw in enumerate(items):
         label = f"decision_gates.items[{index}]"
         if not isinstance(raw, dict):
@@ -254,8 +259,14 @@ def validate_contract(value: Any, *, work_id: str = "") -> dict[str, Any]:
         status = _require_string(raw.get("status"), f"{label}.status")
         if status not in VALID_GATE_STATUSES:
             raise DecisionGateError(f"{label}.status 不合法：{status}")
-        if status in {"pending", "answered"}:
-            unresolved += 1
+        mode = str(raw.get("mode") or "sequential").strip()
+        if mode not in VALID_GATE_MODES:
+            raise DecisionGateError(f"{label}.mode 不受支持：{mode}")
+        round_id = str(raw.get("round_id") or "").strip()
+        if mode == "frontier" and not round_id:
+            raise DecisionGateError(f"{label}.frontier gate 必须有 round_id。")
+        if mode == "sequential" and not round_id:
+            round_id = gate_id
 
         question = raw.get("question")
         if not isinstance(question, dict):
@@ -278,12 +289,24 @@ def validate_contract(value: Any, *, work_id: str = "") -> dict[str, Any]:
             or None,
             "options": _validate_options(question.get("options"), f"{label}.question.options"),
             "allow_free_text": question.get("allow_free_text") is True,
+            "round_position": question.get("round_position"),
+            "round_summary": str(question.get("round_summary") or "").strip() or None,
         }
         if (
             sha256_text(normalized_question["displayed_message"])
             != normalized_question["displayed_message_sha256"]
         ):
             raise DecisionGateError(f"{label} 的展示消息 hash 不匹配。")
+        if kind == "shared-understanding":
+            if mode != "sequential":
+                raise DecisionGateError(f"{label} shared-understanding 必须使用 sequential mode。")
+            if (
+                len(normalized_question["options"]) != 1
+                or normalized_question["options"][0]["id"] != "confirm"
+            ):
+                raise DecisionGateError(
+                    f"{label} shared-understanding 只能有一个 confirm 选项。"
+                )
 
         raw_candidates = raw.get("answer_candidates", [])
         if not isinstance(raw_candidates, list):
@@ -296,9 +319,9 @@ def validate_contract(value: Any, *, work_id: str = "") -> dict[str, Any]:
         if len(candidate_ids) != len(candidates):
             raise DecisionGateError(f"{label} 存在重复 answer candidate。")
         for event_id in candidate_ids:
-            owner = answer_event_owners.setdefault(event_id, gate_id)
-            if owner != gate_id:
-                raise DecisionGateError("同一用户答复事件被绑定到多个 decision gate。")
+            owner = answer_event_owners.setdefault(event_id, (item_work_id, mode, round_id))
+            if owner != (item_work_id, mode, round_id):
+                raise DecisionGateError("同一用户答复事件不能跨工作、跨轮次绑定。")
 
         answer = raw.get("answer")
         normalized_answer = None
@@ -312,10 +335,22 @@ def validate_contract(value: Any, *, work_id: str = "") -> dict[str, Any]:
                 "event": event,
                 "selected_option_id": str(answer.get("selected_option_id") or "").strip()
                 or None,
+                "free_text": str(answer.get("free_text") or "").strip() or None,
                 "answered_at": _require_string(
                     answer.get("answered_at"), f"{label}.answer.answered_at"
                 ),
             }
+            option_ids = {option["id"] for option in normalized_question["options"]}
+            selected_option_id = normalized_answer["selected_option_id"]
+            free_text = normalized_answer["free_text"]
+            if selected_option_id is not None and selected_option_id not in option_ids:
+                raise DecisionGateError(f"{label}.answer 选择了本题不存在的选项。")
+            if selected_option_id is not None and free_text is not None:
+                raise DecisionGateError(f"{label}.answer 不能同时选择选项和自由回答。")
+            if free_text is not None and not normalized_question["allow_free_text"]:
+                raise DecisionGateError(f"{label}.answer 不允许自由回答。")
+            if mode == "frontier" and selected_option_id is None and free_text is None:
+                raise DecisionGateError(f"{label}.frontier answer 必须明确选择选项或自由回答。")
 
         decision_ids = raw.get("authorized_decision_ids", [])
         if not isinstance(decision_ids, list):
@@ -368,6 +403,17 @@ def validate_contract(value: Any, *, work_id: str = "") -> dict[str, Any]:
             raise DecisionGateError(f"{label} {status} 时必须有 answer。")
         if status == "consumed" and not normalized_ids and not normalized_artifacts:
             raise DecisionGateError(f"{label} consumed 时必须绑定决定 ID 或项目动作。")
+        if kind == "shared-understanding":
+            if normalized_ids:
+                raise DecisionGateError(
+                    f"{label} shared-understanding 不能绑定产品决定 ID。"
+                )
+            if status == "consumed" and normalized_artifacts != ["shared-understanding"]:
+                raise DecisionGateError(
+                    f"{label} shared-understanding 必须绑定 shared-understanding 收据。"
+                )
+        elif normalized_artifacts and item_work_id != PROJECT_GATE_WORK_ID:
+            raise DecisionGateError(f"{label} 普通 decision gate 不能绑定项目动作。")
         if status == "consumed" and not str(raw.get("consumed_at") or "").strip():
             raise DecisionGateError(f"{label} consumed 时必须记录 consumed_at。")
         if status != "consumed" and (
@@ -381,6 +427,8 @@ def validate_contract(value: Any, *, work_id: str = "") -> dict[str, Any]:
                 "question_id": question_id,
                 "work_id": item_work_id,
                 "kind": kind,
+                "mode": mode,
+                "round_id": round_id,
                 "status": status,
                 "question": normalized_question,
                 "answer_candidates": candidates,
@@ -394,8 +442,18 @@ def validate_contract(value: Any, *, work_id: str = "") -> dict[str, Any]:
             }
         )
 
-    if unresolved > 1:
-        raise DecisionGateError("同一工作同时存在多个未消费 decision gate。")
+    unresolved_items = [
+        item for item in normalized_items if item["status"] in {"pending", "answered"}
+    ]
+    if unresolved_items:
+        groups = {
+            (item["work_id"], item["mode"], item["round_id"])
+            for item in unresolved_items
+        }
+        if len(unresolved_items) > 1 and (
+            any(item["mode"] != "frontier" for item in unresolved_items) or len(groups) != 1
+        ):
+            raise DecisionGateError("同一工作只能有一个 sequential gate，或同一 frontier round 的多个问题。")
     ready_authorization = value.get("ready_authorization")
     if ready_authorization is not None and not isinstance(ready_authorization, dict):
         raise DecisionGateError("decision_gates.ready_authorization 必须是对象或 null。")
@@ -424,16 +482,24 @@ def _new_gate_item(
     allow_free_text: bool,
     session_id: str | None,
     display_message_id: str | None,
+    mode: str = "sequential",
+    round_id: str | None = None,
 ) -> dict[str, Any]:
     if kind not in VALID_GATE_KINDS:
         raise DecisionGateError(f"不支持的 decision gate kind：{kind}")
     stamp = now_iso()
     entropy = sha256_text("\n".join([work_id, summary, displayed_message, stamp]))[:12]
+    normalized_mode = _require_string(mode, "gate mode")
+    if normalized_mode not in VALID_GATE_MODES:
+        raise DecisionGateError(f"不支持的 gate mode：{normalized_mode}")
+    normalized_round = (round_id or "").strip() or f"round-{entropy}"
     return {
         "gate_id": f"gate-{entropy}",
         "question_id": f"question-{entropy}",
         "work_id": _require_string(work_id, "work id"),
         "kind": kind,
+        "mode": normalized_mode,
+        "round_id": normalized_round,
         "status": "pending",
         "question": {
             "summary": _require_string(summary, "question summary"),
@@ -484,6 +550,106 @@ def open_gate(
         session_id=session_id,
         display_message_id=display_message_id,
     )
+    contract["items"].append(item)
+    contract["ready_authorization"] = None
+    meta["decision_gates"] = validate_contract(contract, work_id=item["work_id"])
+    write_meta(module_dir, meta)
+    return item
+
+
+def open_round(
+    module_dir: Path,
+    *,
+    kind: str,
+    round_summary: str,
+    questions: list[dict[str, Any]],
+    session_id: str | None,
+    display_message_id: str | None,
+) -> list[dict[str, Any]]:
+    """Open one Design frontier round containing independent questions."""
+    if not questions:
+        raise DecisionGateError("frontier round 至少需要一个问题。")
+    meta = read_meta(module_dir)
+    if str(meta.get("lifecycle_state") or "") != "designing":
+        raise DecisionGateError("只有 designing 工作可以打开 frontier round。")
+    repo_root = repo_root_for(module_dir)
+    contract = ensure_contract(meta, baseline_commit=git_head(repo_root))
+    if any(item["status"] in {"pending", "answered"} for item in contract["items"]):
+        raise DecisionGateError("当前工作已有未完成问题，不能同时打开下一轮。")
+    round_id = f"round-{secrets.token_hex(8)}"
+    created: list[dict[str, Any]] = []
+    for index, question in enumerate(questions, start=1):
+        if not isinstance(question, dict):
+            raise DecisionGateError(f"frontier question[{index}] 必须是对象。")
+        try:
+            summary = _require_string(question.get("summary"), f"question[{index}].summary")
+            message = _require_string(question.get("message"), f"question[{index}].message")
+            options = _validate_options(question.get("options"), f"question[{index}].options")
+        except KeyError as exc:  # pragma: no cover - defensive
+            raise DecisionGateError(f"question[{index}] 缺少字段：{exc}") from exc
+        item = _new_gate_item(
+            work_id=_require_string(meta.get("id"), "work id"),
+            kind=kind,
+            summary=summary,
+            displayed_message=message,
+            options=options,
+            allow_free_text=question.get("allow_free_text") is True,
+            session_id=session_id,
+            display_message_id=display_message_id,
+            mode="frontier",
+            round_id=round_id,
+        )
+        item["question"]["round_position"] = index
+        item["question"]["round_summary"] = _require_string(round_summary, "round summary")
+        created.append(item)
+    contract["items"].extend(created)
+    contract["ready_authorization"] = None
+    meta["decision_gates"] = validate_contract(contract, work_id=created[0]["work_id"])
+    write_meta(module_dir, meta)
+    return created
+
+
+def open_shared_understanding(
+    module_dir: Path,
+    *,
+    summary: str,
+    displayed_message: str,
+    session_id: str | None,
+    display_message_id: str | None,
+) -> dict[str, Any]:
+    """Record Grill's final shared-understanding confirmation question."""
+    meta = read_meta(module_dir)
+    if str(meta.get("lifecycle_state") or "") != "designing":
+        raise DecisionGateError("只有 designing 工作可以请求 shared-understanding 确认。")
+    repo_root = repo_root_for(module_dir)
+    contract = ensure_contract(meta, baseline_commit=git_head(repo_root))
+    frontier = [
+        item
+        for item in contract["items"]
+        if item["mode"] == "frontier" and item["kind"] != "shared-understanding"
+    ]
+    if not frontier:
+        raise DecisionGateError("当前工作没有 frontier round，不能请求 shared-understanding 确认。")
+    if any(item["status"] in {"pending", "answered"} for item in frontier):
+        raise DecisionGateError("frontier 仍有未闭合问题，不能请求 shared-understanding 确认。")
+    if any(
+        item["kind"] == "shared-understanding" and item["status"] in {"pending", "answered"}
+        for item in contract["items"]
+    ):
+        raise DecisionGateError("当前已有 shared-understanding 确认等待处理。")
+    item = _new_gate_item(
+        work_id=_require_string(meta.get("id"), "work id"),
+        kind="shared-understanding",
+        summary=summary,
+        displayed_message=displayed_message,
+        options=[{"id": "confirm", "label": "确认我们理解一致"}],
+        allow_free_text=False,
+        session_id=session_id,
+        display_message_id=display_message_id,
+        mode="sequential",
+        round_id=f"shared-{secrets.token_hex(8)}",
+    )
+    item["question"]["round_summary"] = _require_string(summary, "shared-understanding summary")
     contract["items"].append(item)
     contract["ready_authorization"] = None
     meta["decision_gates"] = validate_contract(contract, work_id=item["work_id"])
@@ -564,11 +730,16 @@ def observe_answer(
         return {"status": "none", "reason": "用户消息不是可捕获的短答复。"}
 
     candidates: list[tuple[str, Path, dict[str, Any] | None, dict[str, Any], dict[str, Any]]] = []
-    all_events: dict[str, str] = {}
+    all_events: dict[str, tuple[str, str, str, str]] = {}
     project_contract = read_project_contract(repo_root)
     for item in project_contract["items"]:
         for event in item["answer_candidates"]:
-            all_events[event["event_id"]] = item["gate_id"]
+            all_events[event["event_id"]] = (
+                "project",
+                PROJECT_GATE_WORK_ID,
+                item["mode"],
+                item["round_id"],
+            )
         if item["status"] != "pending":
             continue
         display_session = item["question"].get("display_session_id")
@@ -584,7 +755,12 @@ def observe_answer(
         contract = validate_contract(raw_contract, work_id=str(meta.get("id") or ""))
         for item in contract["items"]:
             for event in item["answer_candidates"]:
-                all_events[event["event_id"]] = item["gate_id"]
+                all_events[event["event_id"]] = (
+                    "module",
+                    str(meta.get("id") or ""),
+                    item["mode"],
+                    item["round_id"],
+                )
             if item["status"] != "pending":
                 continue
             display_session = item["question"].get("display_session_id")
@@ -594,13 +770,21 @@ def observe_answer(
 
     if not candidates:
         return {"status": "none", "reason": "当前没有已展示且 pending 的 decision gate。"}
-    if len(candidates) != 1:
+    groups = {
+        (
+            scope,
+            str((meta or {}).get("id") if meta is not None else PROJECT_GATE_WORK_ID),
+            item["mode"],
+            item["round_id"],
+        )
+        for scope, _target, meta, _contract, item in candidates
+    }
+    if len(groups) != 1:
         return {
             "status": "ambiguous",
             "reason": "当前消息可能对应多个 pending decision gate，未绑定任何问题。",
             "gate_ids": [item[4]["gate_id"] for item in candidates],
         }
-
     scope, target, meta, contract, item = candidates[0]
     event_id = _event_id(
         session_id=session_id,
@@ -609,13 +793,15 @@ def observe_answer(
         message=answer_text,
     )
     owner = all_events.get(event_id)
-    if owner and owner != item["gate_id"]:
-        raise DecisionGateError("同一用户答复事件已经属于另一个 decision gate。")
-    existing = next(
-        (event for event in item["answer_candidates"] if event["event_id"] == event_id), None
+    group_key = (
+        scope,
+        str(meta.get("id") or "") if meta is not None else PROJECT_GATE_WORK_ID,
+        item["mode"],
+        item["round_id"],
     )
-    if existing is None:
-        event = {
+    if owner and owner != group_key:
+        raise DecisionGateError("同一用户答复事件已经属于另一个 decision gate。")
+    event = {
             "event_id": event_id,
             "session_id": (session_id or "").strip() or None,
             "message_id": (message_id or "").strip() or None,
@@ -624,29 +810,36 @@ def observe_answer(
             "observed_at": now_iso(),
             "source": "user_prompt_submit",
         }
-        for candidate_item in contract["items"]:
-            if candidate_item["gate_id"] == item["gate_id"]:
-                candidate_item["answer_candidates"].append(event)
-                break
-        normalized = validate_contract(
-            contract,
-            work_id=(str(meta.get("id") or "") if meta is not None else PROJECT_GATE_WORK_ID),
-        )
-        if scope == "project":
-            write_project_contract(repo_root, normalized)
-        else:
-            assert meta is not None
-            meta["decision_gates"] = normalized
-            write_meta(target, meta)
-    return {
-        "status": "observed",
+    group_items = [candidate[4] for candidate in candidates]
+    for candidate_item in group_items:
+        if not any(event_id == existing["event_id"] for existing in candidate_item["answer_candidates"]):
+            candidate_item["answer_candidates"].append(event)
+    normalized = validate_contract(
+        contract,
+        work_id=(str(meta.get("id") or "") if meta is not None else PROJECT_GATE_WORK_ID),
+    )
+    if scope == "project":
+        write_project_contract(repo_root, normalized)
+    else:
+        assert meta is not None
+        meta["decision_gates"] = normalized
+        write_meta(target, meta)
+    is_frontier = item["mode"] == "frontier"
+    payload = {
+        "status": "observed_round" if is_frontier else "observed",
         "scope": scope,
         "module": module_relative(repo_root, target) if scope == "module" else None,
+        "event_id": event_id,
         "gate_id": item["gate_id"],
         "question_id": item["question_id"],
-        "event_id": event_id,
+        "kind": item["kind"],
         "question_summary": item["question"]["summary"],
     }
+    if is_frontier:
+        payload["gate_ids"] = [candidate["gate_id"] for candidate in group_items]
+        payload["question_ids"] = [candidate["question_id"] for candidate in group_items]
+        payload["question_summaries"] = [candidate["question"]["summary"] for candidate in group_items]
+    return payload
 
 
 def _find_gate(contract: dict[str, Any], gate_id: str) -> dict[str, Any]:
@@ -656,7 +849,14 @@ def _find_gate(contract: dict[str, Any], gate_id: str) -> dict[str, Any]:
     raise DecisionGateError(f"找不到 decision gate：{gate_id}")
 
 
-def _answer_item(contract: dict[str, Any], item: dict[str, Any], *, event_id: str) -> dict[str, Any]:
+def _answer_item(
+    contract: dict[str, Any],
+    item: dict[str, Any],
+    *,
+    event_id: str,
+    selected_option_id: str | None = None,
+    explicit_free_text: str | None = None,
+) -> dict[str, Any]:
     if item["status"] != "pending":
         raise DecisionGateError(f"decision gate 当前为 {item['status']}，不能重复回答。")
     event = next(
@@ -671,15 +871,29 @@ def _answer_item(contract: dict[str, Any], item: dict[str, Any], *, event_id: st
     answer_text = event["message"].strip()
     option_by_id = {option["id"]: option for option in item["question"]["options"]}
     option_by_label = {option["label"]: option for option in item["question"]["options"]}
-    selected = option_by_id.get(answer_text) or option_by_label.get(answer_text)
-    if selected is None and re.fullmatch(r"[0-9]+", answer_text):
+    if selected_option_id and explicit_free_text is not None:
+        raise DecisionGateError("同一题不能同时选择选项和提交自由回答。")
+    selected = option_by_id.get(selected_option_id) if selected_option_id else None
+    if selected_option_id and selected is None:
+        raise DecisionGateError("frontier round 指定了本题不存在的选项。")
+    free_text = None
+    if explicit_free_text is not None:
+        free_text = _require_string(explicit_free_text, "frontier free-text answer")
+        if not item["question"]["allow_free_text"]:
+            raise DecisionGateError("本题不允许自由回答。")
+    else:
+        selected = selected or option_by_id.get(answer_text) or option_by_label.get(answer_text)
+    if selected is None and free_text is None and re.fullmatch(r"[0-9]+", answer_text):
         raise DecisionGateError("数字答复不属于本题展示的任何选项。")
-    if selected is None and not item["question"]["allow_free_text"]:
+    if selected is None and free_text is None and not item["question"]["allow_free_text"]:
         raise DecisionGateError("答复没有匹配本题选项；请让 PM 重新回答当前问题。")
+    if selected is None and free_text is None:
+        free_text = answer_text
     item["status"] = "answered"
     item["answer"] = {
         "event": event,
         "selected_option_id": selected["id"] if selected else None,
+        "free_text": free_text,
         "answered_at": now_iso(),
     }
     return item
@@ -688,7 +902,62 @@ def _answer_item(contract: dict[str, Any], item: dict[str, Any], *, event_id: st
 def answer_gate(module_dir: Path, *, gate_id: str, event_id: str) -> dict[str, Any]:
     meta = read_meta(module_dir)
     contract = validate_contract(meta.get("decision_gates"), work_id=str(meta.get("id") or ""))
-    item = _answer_item(contract, _find_gate(contract, gate_id), event_id=event_id)
+    item = _find_gate(contract, gate_id)
+    if item["mode"] == "frontier":
+        raise DecisionGateError("frontier 问题必须使用 answer-round 显式绑定回答范围。")
+    item = _answer_item(contract, item, event_id=event_id)
+    meta["decision_gates"] = validate_contract(contract, work_id=str(meta.get("id") or ""))
+    write_meta(module_dir, meta)
+    return item
+
+
+def answer_round(
+    module_dir: Path,
+    *,
+    event_id: str,
+    selections: dict[str, str],
+    free_texts: dict[str, str] | None = None,
+) -> list[dict[str, Any]]:
+    """Answer an explicit subset of questions in one frontier round."""
+    normalized_free_texts = free_texts or {}
+    if not selections and not normalized_free_texts:
+        raise DecisionGateError("answer-round 至少需要一个 selection 或 free-text 回答。")
+    overlap = sorted(set(selections) & set(normalized_free_texts))
+    if overlap:
+        raise DecisionGateError("同一题不能同时 selection 和 free-text：" + "、".join(overlap))
+    meta = read_meta(module_dir)
+    contract = validate_contract(meta.get("decision_gates"), work_id=str(meta.get("id") or ""))
+    answer_ids = list(selections) + list(normalized_free_texts)
+    selected_items = [_find_gate(contract, gate_id) for gate_id in answer_ids]
+    groups = {(item["work_id"], item["mode"], item["round_id"]) for item in selected_items}
+    if len(groups) != 1 or next(iter(groups))[1] != "frontier":
+        raise DecisionGateError("answer-round 只能回答同一 frontier round 的问题。")
+    answered: list[dict[str, Any]] = []
+    for item in selected_items:
+        answered.append(
+            _answer_item(
+                contract,
+                item,
+                event_id=event_id,
+                selected_option_id=selections.get(item["gate_id"]),
+                explicit_free_text=normalized_free_texts.get(item["gate_id"]),
+            )
+        )
+    meta["decision_gates"] = validate_contract(contract, work_id=str(meta.get("id") or ""))
+    write_meta(module_dir, meta)
+    return answered
+
+
+def confirm_shared_understanding(
+    module_dir: Path, *, gate_id: str, event_id: str
+) -> dict[str, Any]:
+    """Confirm the displayed shared-understanding summary without creating a D."""
+    meta = read_meta(module_dir)
+    contract = validate_contract(meta.get("decision_gates"), work_id=str(meta.get("id") or ""))
+    item = _find_gate(contract, gate_id)
+    if item["kind"] != "shared-understanding":
+        raise DecisionGateError("confirm-shared 只能确认 shared-understanding 收据。")
+    _answer_item(contract, item, event_id=event_id, selected_option_id="confirm")
     meta["decision_gates"] = validate_contract(contract, work_id=str(meta.get("id") or ""))
     write_meta(module_dir, meta)
     return item
@@ -732,6 +1001,26 @@ def consume_gate(
         )
     item["status"] = "consumed"
     item["authorized_decision_ids"] = normalized
+    item["consumed_at"] = now_iso()
+    item["consumed_by"] = None
+    contract["ready_authorization"] = None
+    meta["decision_gates"] = validate_contract(contract, work_id=str(meta.get("id") or ""))
+    write_meta(module_dir, meta)
+    return item
+
+
+def consume_shared_understanding(module_dir: Path, *, gate_id: str) -> dict[str, Any]:
+    """Consume the shared-understanding receipt as a non-product artifact."""
+    meta = read_meta(module_dir)
+    contract = validate_contract(meta.get("decision_gates"), work_id=str(meta.get("id") or ""))
+    item = _find_gate(contract, gate_id)
+    if item["kind"] != "shared-understanding":
+        raise DecisionGateError("consume-shared 只能消费 shared-understanding 收据。")
+    if item["status"] != "answered":
+        raise DecisionGateError(f"shared-understanding 当前为 {item['status']}，不能消费。")
+    item["status"] = "consumed"
+    item["authorized_decision_ids"] = []
+    item["authorized_artifacts"] = ["shared-understanding"]
     item["consumed_at"] = now_iso()
     item["consumed_by"] = None
     contract["ready_authorization"] = None
@@ -907,6 +1196,21 @@ def bind_ready_authorization(
         repo_root, before_ref=baseline, after_ref=checkpoint_commit, module_rel=module_rel
     )
     owners = _validate_receipts_for_ids(contract, changed, checkpoint_commit=None)
+    frontier_items = [
+        item
+        for item in contract["items"]
+        if item["mode"] == "frontier" and item["kind"] != "shared-understanding"
+    ]
+    shared_item = _frontier_shared_item(contract)
+    if frontier_items:
+        if shared_item is None or shared_item["status"] != "consumed":
+            raise DecisionGateError(
+                "frontier 已清空但缺少已消费的 shared-understanding 确认，不能进入 ready_to_build。"
+            )
+        if shared_item.get("consumed_by") is not None and shared_item["consumed_by"].get(
+            "checkpoint_commit"
+        ) != checkpoint_commit:
+            raise DecisionGateError("shared-understanding 确认不属于当前 design checkpoint。")
     checkpoint_sections = decision_sections_at(repo_root, checkpoint_commit, module_rel)
     owner_hashes: dict[str, dict[str, str]] = {}
     owner_items: dict[str, dict[str, Any]] = {}
@@ -922,10 +1226,18 @@ def bind_ready_authorization(
             "decision_hashes": owner_hashes[gate_id],
             "bound_at": now_iso(),
         }
+    if shared_item is not None and shared_item["status"] == "consumed":
+        if shared_item.get("consumed_by") is None:
+            shared_item["consumed_by"] = {
+                "checkpoint_commit": checkpoint_commit,
+                "decision_hashes": {},
+                "bound_at": now_iso(),
+            }
     contract["ready_authorization"] = {
         "status": "verified",
         "checkpoint_commit": checkpoint_commit,
         "decision_ids": changed,
+        "shared_understanding_gate_id": shared_item["gate_id"] if shared_item else None,
         "verified_at": now_iso(),
     }
     normalized = validate_contract(contract, work_id=str(meta.get("id") or ""))
@@ -959,6 +1271,25 @@ def validate_ready_authorization(
     recorded = receipt.get("decision_ids")
     if not isinstance(recorded, list) or sorted(recorded) != changed:
         raise DecisionGateError("决定授权收据记录的决定集合与 checkpoint 实际变化不一致。")
+    frontier_items = [
+        item
+        for item in contract["items"]
+        if item["mode"] == "frontier" and item["kind"] != "shared-understanding"
+    ]
+    if frontier_items:
+        shared_item = _frontier_shared_item(contract)
+        expected_shared_id = receipt.get("shared_understanding_gate_id")
+        if (
+            shared_item is None
+            or shared_item["gate_id"] != expected_shared_id
+            or shared_item["status"] != "consumed"
+        ):
+            raise DecisionGateError(
+                "ready 授权缺少当前 frontier 的 shared-understanding 确认。"
+            )
+        bound = shared_item.get("consumed_by")
+        if not isinstance(bound, dict) or bound.get("checkpoint_commit") != checkpoint:
+            raise DecisionGateError("shared-understanding 确认与 design checkpoint 不一致。")
     owners = _validate_receipts_for_ids(contract, changed, checkpoint_commit=checkpoint)
     sections = decision_sections_at(repo_root, checkpoint, module_rel)
     for decision_id, item in owners.items():
@@ -980,15 +1311,21 @@ def guard_authority_write(module_dir: Path) -> dict[str, Any]:
     windows = [
         item
         for item in contract["items"]
+        if item["kind"] != "shared-understanding"
         if item["status"] == "answered"
         or (item["status"] == "consumed" and item.get("consumed_by") is None)
     ]
-    if len(windows) != 1:
+    if not windows:
         raise DecisionGateError("没有唯一、尚未 checkpoint 的 PM 授权答复，禁止写 decisions.md。")
-    return {"status": "allowed", "gate_id": windows[0]["gate_id"]}
+    return {
+        "status": "allowed",
+        "gate_id": windows[0]["gate_id"] if len(windows) == 1 else None,
+        "gate_ids": [item["gate_id"] for item in windows],
+        "round_ids": sorted({item["round_id"] for item in windows}),
+    }
 
 
-def guard_pending_write(module_dir: Path) -> dict[str, Any]:
+def guard_pending_write(module_dir: Path, *, artifact: str | None = None) -> dict[str, Any]:
     meta = read_meta(module_dir)
     raw_contract = meta.get("decision_gates")
     if raw_contract is None:
@@ -999,6 +1336,27 @@ def guard_pending_write(module_dir: Path) -> dict[str, Any]:
         raise DecisionGateError(
             "当前 PM 决策题尚未回答，禁止修改 discussion.md、spec.md 或项目建造定义。"
         )
+    shared_waiting = [
+        item
+        for item in contract["items"]
+        if item["kind"] == "shared-understanding"
+        and item["status"] in {"pending", "answered"}
+    ]
+    if shared_waiting:
+        raise DecisionGateError(
+            "frontier 已清空但 shared-understanding 尚未确认并消费，禁止继续写入最终设计。"
+        )
+    if artifact == "spec":
+        frontier = [
+            item
+            for item in contract["items"]
+            if item["mode"] == "frontier" and item["kind"] != "shared-understanding"
+        ]
+        shared_item = _frontier_shared_item(contract)
+        if frontier and (shared_item is None or shared_item["status"] != "consumed"):
+            raise DecisionGateError(
+                "frontier 已清空但还没有 shared-understanding 确认，禁止写入 spec.md。"
+            )
     return {"status": "allowed"}
 
 
@@ -1046,6 +1404,24 @@ def _project_proposal_paths(staged: list[str]) -> list[str]:
     ]
 
 
+def _frontier_shared_item(contract: dict[str, Any]) -> dict[str, Any] | None:
+    frontier_indexes = [
+        index
+        for index, item in enumerate(contract["items"])
+        if item["mode"] == "frontier" and item["kind"] != "shared-understanding"
+    ]
+    if not frontier_indexes:
+        return None
+    shared_items = [
+        (index, item)
+        for index, item in enumerate(contract["items"])
+        if item["kind"] == "shared-understanding"
+    ]
+    if not shared_items or shared_items[-1][0] < frontier_indexes[-1]:
+        return None
+    return shared_items[-1][1]
+
+
 def check_staged_authorization(repo_root: Path) -> dict[str, Any]:
     pending: list[str] = []
     project_contract = read_project_contract(repo_root)
@@ -1073,6 +1449,31 @@ def check_staged_authorization(repo_root: Path) -> dict[str, Any]:
     staged = _git(
         repo_root, "diff", "--cached", "--name-only", "--diff-filter=ACMR"
     ).stdout.splitlines()
+    for relative in staged:
+        match = re.fullmatch(r"docs/modules/([^/]+)/spec\.md", relative)
+        if not match:
+            continue
+        module_rel = f"docs/modules/{match.group(1)}"
+        staged_meta_text = _git_index_file(repo_root, f"{module_rel}/.work-meta.json")
+        if not staged_meta_text:
+            continue
+        try:
+            staged_meta = json.loads(staged_meta_text)
+        except json.JSONDecodeError as exc:
+            raise DecisionGateError(f"暂存的 {module_rel}/.work-meta.json 不是合法 JSON。") from exc
+        contract = validate_contract(
+            staged_meta.get("decision_gates"), work_id=str(staged_meta.get("id") or "")
+        )
+        frontier = [
+            item
+            for item in contract["items"]
+            if item["mode"] == "frontier" and item["kind"] != "shared-understanding"
+        ]
+        shared_item = _frontier_shared_item(contract)
+        if frontier and (shared_item is None or shared_item["status"] != "consumed"):
+            raise DecisionGateError(
+                f"{relative} 写入前必须完成 frontier 的 shared-understanding 确认。"
+            )
     project_paths = _project_proposal_paths(staged)
     # The initializer's first commit contains the required PRODUCT.md marker
     # before any project question exists. Once HEAD exists, the same paths
@@ -1140,6 +1541,8 @@ def context_summary(meta: dict[str, Any]) -> dict[str, Any] | None:
                 "gate_id": item["gate_id"],
                 "question_id": item["question_id"],
                 "kind": item["kind"],
+                "mode": item["mode"],
+                "round_id": item["round_id"],
                 "status": item["status"],
                 "question_summary": item["question"]["summary"],
                 "displayed_message": item["question"]["displayed_message"],
@@ -1165,6 +1568,8 @@ def project_context_summary(repo_root: Path) -> dict[str, Any]:
                 "gate_id": item["gate_id"],
                 "question_id": item["question_id"],
                 "kind": item["kind"],
+                "mode": item["mode"],
+                "round_id": item["round_id"],
                 "status": item["status"],
                 "question_summary": item["question"]["summary"],
                 "displayed_message": item["question"]["displayed_message"],

@@ -21,6 +21,7 @@ python3 "$PMAI_HOME/scripts/status-view.py" --banner-only --skill DESIGN || true
 执行前完整读取：
 
 - `references/design-method.md`
+- `references/grill-adapter.md`
 - `skills/_shared/context-reconstruction.md`
 - `skills/_shared/project-design-system.md`
 - `skills/_shared/personal-memory.md`
@@ -208,8 +209,9 @@ AI 在后台依次检查下面八个面，但只询问会改变产品模型的�
 1. 在后台列出当前未知项，不新增决策清单文件。
 2. 已有决定或仓库事实能唯一推出的，直接形成结论；机械项后台处理；可逆偏好由 AI 推荐并继续。
 3. 只保留会改变对象、责任、状态、权限、真相源、业务规则、页面任务或成功标准的真实岔路。
-4. 按 `askuser-rules.md` 先告诉 PM 过滤后还剩几个需要决定的问题，再一次只问一个；PM 回答后继续下一题。
-5. 只有新证据让真实岔路增加、合并或消失时才更新剩余数量，并用一句话说明原因；不得让问题在对话中无预告地不断追加。
+4. 把真实岔路画成依赖树，计算当前 frontier：所有前置条件已明确、可以独立回答的问题进入同一轮；依赖本轮其它问题的问题推迟到下一轮。
+5. Design 使用 `decision-gate.py open-round` 登记一轮，按 Grill 格式一次展示整个 frontier；每个问题仍独立绑定自己的 gate、D 编号和消费收据。用户可以一次回答多个问题，也可以只回答部分问题，Agent 必须逐题确认，不得把未明确回答的问题当成同意。
+6. 只有 frontier 为空且 PM 明确确认 shared understanding，才进入规格编译；用 `open-shared → observe → confirm-shared → consume-shared` 留下独立确认收据。新证据让树发生变化时，重新计算并说明哪些问题被打开、关闭或推迟。
 
 不要设置“超过 N 个就强行合并”的固定阈值；问题多说明要重新检查边界和可推导项，不代表可以把不同产品决定硬并成一道题。
 
@@ -227,31 +229,47 @@ AI 在后台依次检查下面八个面，但只询问会改变产品模型的�
 
 新决定必须能回锚到 PM 明确回答或 PM 接受 AI 推荐的证据，并由 `.work-meta.json:decision_gates` 把展示问题、当时用户消息、D 编号和后续 checkpoint 绑定起来。推翻旧决定时在 `decisions.md` 明确写被哪条新决定取代；`spec.md` 只写当前有效的最终目标，不记录讨论过程或实现进度。
 
-每次提出产品模型或项目建造定义问题前，先登记将要原样展示的题目；模块题用 `open`，没有模块工作状态的阶段路由题用 `open-project`；命令返回后才向 PM 展示：
+每次提出产品模型或项目建造定义问题前，先登记将要原样展示的题目；Design 的模块 frontier 用 `open-round`，其它单题或没有模块工作状态的阶段路由题继续用 `open` / `open-project`；命令返回后才向 PM 展示：
 
 ```bash
-GATE_JSON=$(python3 "$PMAI_HOME/scripts/decision-gate.py" open "$MODULE_DIR" \
-  --kind "<product-model|project-definition>" \
-  --summary "<这题改变的业务结果>" \
-  --message "<即将原样展示给 PM 的完整问题>" \
-  --option "1=<选项一>" --option "2=<选项二>" \
-  --allow-free-text)
-GATE_ID=$(python3 -c 'import json,sys; print(json.load(sys.stdin)["gate_id"])' <<<"$GATE_JSON")
+ROUND_JSON=$(python3 "$PMAI_HOME/scripts/decision-gate.py" open-round "$MODULE_DIR" \
+  --kind "product-model" \
+  --round-summary "<这一轮要收敛的业务范围>" \
+  --question '<JSON：summary/message/options/allow_free_text>' \
+  --question '<JSON：summary/message/options/allow_free_text>')
 ```
 
-下一条用户消息由项目 `UserPromptSubmit` hook 产生绑定当前 gate 的 `answer_event_id`。只有确认该消息确实回答本题后，才执行：
+下一条用户消息由项目 `UserPromptSubmit` hook 产生绑定当前 round 的 `answer_event_id`。只有逐题确认该消息确实回答哪些问题后，才执行：
 
 ```bash
-python3 "$PMAI_HOME/scripts/decision-gate.py" answer "$MODULE_DIR" \
-  --gate-id "$GATE_ID" --event-id "$ANSWER_EVENT_ID"
+python3 "$PMAI_HOME/scripts/decision-gate.py" answer-round "$MODULE_DIR" \
+  --event-id "$ANSWER_EVENT_ID" \
+  --selection "<gate-id>=<option-id>" \
+  --selection "<gate-id>=<option-id>" \
+  --free-text "<允许自由回答的 gate-id>=<该题的明确回答>"
 ```
 
-随后才允许写 `decisions.md / spec.md`。写入完成、D 编号已经确定后立即一次性消费：
+当前 round 的所有问题都已回答后，先把每题结论分别写入 `decisions.md`，D 编号确定后立即逐题消费；仍有 pending 题时不能提前写入或消费已答部分：
 
 ```bash
 python3 "$PMAI_HOME/scripts/decision-gate.py" consume "$MODULE_DIR" \
   --gate-id "$GATE_ID" --decision-id "D<编号>"
 ```
+
+然后重新计算 frontier：有新问题就登记并展示下一轮；frontier 为空时，才展示完整共识摘要并登记确认：
+
+```bash
+SHARED_JSON=$(python3 "$PMAI_HOME/scripts/decision-gate.py" open-shared "$MODULE_DIR" \
+  --summary "<当前共识摘要>" --message "<请确认我们对本轮范围和行为理解一致>")
+SHARED_GATE_ID=$(python3 -c 'import json,sys; print(json.load(sys.stdin)["gate_id"])' <<<"$SHARED_JSON")
+# 下一条 PM 消息由 UserPromptSubmit hook 捕获为新的 SHARED_ANSWER_EVENT_ID。
+python3 "$PMAI_HOME/scripts/decision-gate.py" confirm-shared "$MODULE_DIR" \
+  --gate-id "$SHARED_GATE_ID" --event-id "$SHARED_ANSWER_EVENT_ID"
+python3 "$PMAI_HOME/scripts/decision-gate.py" consume-shared "$MODULE_DIR" \
+  --gate-id "$SHARED_GATE_ID"
+```
+
+确认收据完成后才允许把已消费的决定编译进最终 `spec.md`。
 
 PM 转去别的事项时不把消息强解释成答案；保留 pending 等待，或用对应的 `cancel` / `cancel-project` 明确取消。跨日、压缩或模型切换后，以 context pack 的 `decision_gates` 与 `project_decision_gates` 为准：旧数字答复只属于旧 gate，摘要里尚未展示的下一题没有授权能力。
 
@@ -451,8 +469,8 @@ git -C "$REPO_ROOT" commit -m "design(<模块>): mark ready to build"
 - PM 第一次说“不合理 / 感觉不对”就回根因：产品方向层问题转 Proposal，模块模型层问题才自动调用 meta。
 - meta、mockup、spec-writing 是 design 的内部能力；完成后返回同一主线。
 - 只有真实产品模型岔路才立即问 PM；机械判断和可逆偏好由 AI 承担。
-- 提问直接遵守 `askuser-rules.md`：先报真实决策总量、一次一题、业务语言；已有结论能推出的事项不再问。
-- 产品决定题必须先 open 再展示，用户消息只 answer 当时 pending 的 gate，写完决定后 consume 到 D 编号；摘要不能创建或继承授权。
+- 提问直接遵守 `askuser-rules.md`：先说明本轮要收敛的业务范围，按 frontier rounds 一轮展示互不依赖的问题，使用业务语言；已有结论能推出的事项不再问。
+- 产品决定题必须先 open / open-round 再展示，用户消息只 answer 当时同一轮 pending 的 gate，写完每条决定后分别 consume 到 D 编号；frontier 清空后必须完成 shared-understanding 收据；摘要不能创建或继承授权。
 - spec 只保留当前有效的最终目标；历史只进 Git 和 `decisions.md`，原型和代码只作证据与缺口检查。
 - design 定稿自动提交建造依据并进入 `ready_to_build`，不要求 PM 理解保存依据、worktree 或合同字段。
 - `ready_to_build` 同时固定设计依据、PM 决定授权 checkpoint 和精确目标路径；build 只能消费这份批准范围，不能临时猜页面、复用旧答复或扩大路径。

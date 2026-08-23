@@ -6,7 +6,7 @@
     "current-facts-only": ["skills/spec-writing/SKILL.md", "skills/_shared/PM-VIEW-RULES.md"],
     "decision-question-not-fact": ["skills/_shared/decision-policy.md", "skills/design/SKILL.md", "skills/spec-writing/SKILL.md"],
     "design-cross-module-build-entry": ["skills/design/SKILL.md", "skills/design/references/design-method.md"],
-    "design-decision-convergence": ["skills/design/SKILL.md", "skills/design/references/design-method.md", "skills/_shared/pm-view/askuser-rules.md", "skills/_shared/decision-policy.md"],
+    "design-decision-convergence": ["skills/design/SKILL.md", "skills/design/references/design-method.md", "skills/design/references/grill-adapter.md", "skills/_shared/pm-view/askuser-rules.md", "skills/_shared/decision-policy.md", "vendor/mattpocock-skills/UPSTREAM.md", "vendor/mattpocock-skills/LICENSE", "vendor/mattpocock-skills/skills/productivity/grilling/SKILL.md", "vendor/mattpocock-skills/skills/productivity/grill-me/SKILL.md"],
     "design-long-session-operations-recovery": ["skills/design/SKILL.md", "skills/design/references/design-method.md", "skills/_shared/personal-memory.md", "skills/mockup/SKILL.md", "skills/spec-writing/SKILL.md", "scripts/personal-memory.py", "scripts/context-pack.py", "scripts/build-contract.py"],
     "design-personal-memory-cross-project-recall": ["skills/design/SKILL.md", "skills/_shared/personal-memory.md", "scripts/personal-memory.py", "scripts/context-pack.py", "tests/test-personal-memory.sh"],
     "design-ready-handoff-currentness": ["skills/design/SKILL.md", "skills/build/SKILL.md", "scripts/build-contract.py", "scripts/context-pack.py", "scripts/status-view.py", "scripts/_lib/ready_contract.py", "tests/test-ready-contract.sh"],
