@@ -10,6 +10,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import shlex
 import subprocess
 import sys
 import tempfile
@@ -78,6 +79,43 @@ def git(repo_root: Path, *args: str) -> subprocess.CompletedProcess[str]:
         stderr=subprocess.PIPE,
         check=False,
     )
+
+
+def _within(path: Path, parent: Path) -> bool:
+    try:
+        path.relative_to(parent)
+        return True
+    except ValueError:
+        return False
+
+
+def command_working_directory(command: str, repo_root: Path, execution_root: Path) -> Path:
+    """Honor commands written relative to repo root without weakening root isolation.
+
+    New project definitions normally run from implementation.root. A command
+    may still reference a repository-root verification path such as ``tests``;
+    detect only existing relative path arguments that are absent below the
+    implementation root and run that command from the repository root.
+    """
+
+    repo_root = repo_root.resolve()
+    execution_root = execution_root.resolve()
+    try:
+        tokens = shlex.split(command, posix=True)
+    except ValueError:
+        return execution_root
+    for token in tokens:
+        if not token or token.startswith("-") or token in {"&&", ";", "||", "|"}:
+            continue
+        candidate = (repo_root / token).resolve()
+        if (
+            candidate != repo_root
+            and _within(candidate, repo_root)
+            and candidate.exists()
+            and not (execution_root / token).resolve().exists()
+        ):
+            return repo_root
+    return execution_root
 
 
 def run_command(command: str, cwd: Path, log_path: Path) -> dict:
@@ -305,7 +343,9 @@ def run_validation(args: argparse.Namespace) -> int:
                     "blocked_by": "install",
                 }
             else:
-                result = run_command(command, execution_root, log_dir / f"{name}.log")
+                command_cwd = command_working_directory(command, worktree, execution_root)
+                result = run_command(command, command_cwd, log_dir / f"{name}.log")
+                result["working_directory"] = str(command_cwd)
             result["name"] = name
             result["satisfies"] = item["satisfies"]
             artifact["commands"].append(result)

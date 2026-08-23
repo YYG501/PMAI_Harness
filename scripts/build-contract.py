@@ -536,6 +536,10 @@ def validate_implementation_commit_scope(module_dir: Path, build: dict, commit: 
     target_paths = validate_target_paths(repo_root, target.get("paths", []))
     module_rel = module_dir.resolve().relative_to(repo_root.resolve()).as_posix()
     audit_dir = optional(build.get("audit_dir")) or f".pm-workflow/audits/{module_dir.name}"
+    # Tests are verification assets, not product delivery paths. They may be
+    # committed with the implementation while unrelated source and documents
+    # remain outside the approved scope.
+    verification_roots = {"tests", "test"}
     allowed_exact = {
         f"{module_rel}/.work-meta.json",
         *bound_authority_paths(module_dir, build),
@@ -547,6 +551,7 @@ def validate_implementation_commit_scope(module_dir: Path, build: dict, commit: 
         and path not in allowed_exact
         and not _path_within(path, audit_dir)
         and not any(_path_within(path, target_path) for target_path in target_paths)
+        and not any(_path_within(path, root) for root in verification_roots)
     ]
     if outside:
         raise SystemExit(

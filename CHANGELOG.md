@@ -14,6 +14,18 @@ PM-AI-Workflow 生成器仓的演进记录。本文件**只记影响已安装框
 
 ## 未发布
 
+- `fix(build-contract)`: 实现提交范围门允许与业务代码一同提交的 `tests/` / `test/` 验证资产，同时继续阻断未批准的产品文档和源码路径。
+
+- `fix(final-validation)`: 保持实现根隔离的同时识别命令明确引用的仓库根相对验证路径，让根下 `tests/` 等既有消费仓命令能在 detached validation worktree 中真实执行，并把实际工作目录写入证据。
+
+- `feat(finalization)`: **为 finalize 审计补上跨版本绑定与独立 Judge 收据。** 新生成的 `finalize-run.json` 记录框架 revision、消费仓 revision 和 Judge 未附加状态；新增 `finalize-audit-binding.py` 为已有审计生成文件快照摘要、实现 / source 身份和当前绑定 revision，并支持附加独立 Judge 收据；新增只读 `finalize-audit-readonly-judge.py` 校验摘要、timing 完整性和 revision。该能力只用于审计追溯，不把历史消费仓审计伪装成当前重新验收，也不改变正常 PM 主链。
+
+- `fix(harness)`: **兼容真实 Codex CLI JSONL 的运行证据。** Runner 现在解析 `turn.completed.usage`，在缺少 `total_tokens` 时按输入与输出 Token 计算，并继续兼容旧 `event_msg.token_count`；Codex 的非致命 `item.type=error` 作为诊断保存，不再把 skill context 提示误判为失败；非零退出时保留 stderr 作为失败原因。fake CLI 适配器回归覆盖现代 / 旧 Token 格式和 stderr，未改变 Session Eval 案例语义或正常 PM 主链。
+
+- `fix(harness)`: **P0 评测从 runner 自报推进到隔离工作区独立证据。** `INVARIANTS.md` 内嵌 Harness 覆盖索引，并由 `scripts/invariant-coverage.py` 检查核心生命周期、写入边界、收尾恢复和评测不变量是否分别绑定护栏、确定性测试与 Session Eval 状态；`skill-eval.py` 对带 harness 的 session case 创建临时脱敏 fixture，独立采集 Git、文件 hash、预期修改和保护路径，生成绑定 case / runner / 总 digest 的 evidence manifest，Judge 必须复核独立证据并回传同一 digest。`natural-language-finalize` 现在使用具备完整 PMAI 初始化、Proposal、`project.yml` 和 `iterating` build 合同的脱敏消费仓夹具；伪成功 / 越界修改 / digest 篡改仍有反例回归。评测只在 session / 发布门运行，不进入 PM 日常主链。
+
+- `feat(harness)`: **P1 运行证据闭环落地。** `skill-eval.py` 的稳定发布门现在要求 Runner 绑定框架与消费仓 revision，并提供耗时、Token、费用状态和失败原因；新增 `skill-eval-codex-runner.py` 采集 Codex CLI JSONL 事件，新增只读 `skill-eval-readonly-judge.py` 复核冻结 manifest；缺 runtime evidence、fixture runner 或证据 digest 漂移均阻断。Runner 没有隔离 `harness.workspace` 时失败关闭，不再回退到当前目录；稳定发布门默认只运行已有隔离 fixture 的 session case，后续新增可执行 fixture 后再显式加入。适配器协议使用 fake CLI 回归，不把 Runner / Judge 引入 PM 日常主链。
+
 - `refactor(design)`: **引入固定版本的 `mattpocock/skills` Grill 方法作为 Design 访谈内核。** 新增上游 MIT 快照和 PMAI 适配说明；`/pmai-design` 从逐题排队改为 design tree + frontier rounds，同轮可展示互不依赖的问题，依赖问题推迟到下一轮，事实继续由 Agent 调查，frontier 清空并取得 shared-understanding 确认后才编译规格。decision gate 增加 `open-round / answer-round` 以及不产生 D 编号的 `open-shared / confirm-shared / consume-shared` 收据，确认会绑定到 ready checkpoint；同轮同一用户消息可分别授权多个问题，但每题仍独立消费到 D 编号，未回答或未完成共识确认继续阻断文档写入和 ready；Proposal、Build、Build Close 等其它流程保持 sequential。同步更新 hook、消费仓模板、共享答题规则、Design eval 和回归测试。
 
 - `fix(decision-gates)`: **为 design → Proposal 阶段路由补上项目级授权收据，阻止“补 Proposal”后无法合并或错误进入 ready。** 新增 `.pm-workflow/context/decision-gates.json` 项目收据与 `decision-gate.py` 的 `open-project / answer-project / consume-project / cancel-project / status-project / guard-project-write` 命令；阶段路由和 Proposal 授权题固定绑定 gate/question ID、展示消息、PM 用户消息与一次性消费状态，一个答复只能消费一个当时已展示且 pending 的问题。压缩摘要里的“建议下一题”不能创建或回答 gate，已消费的旧路由答复不能复用到 design 或授权 Proposal 写入。Proposal 正文、索引、`PRODUCT.md` 和 `.pm-workflow/proposal.json` 的写入、commit、`proposal-contract.py accept` 与 design ready 均校验本轮授权凭据；无凭据的旧 ready 退回 design，已经进入 build 的旧工作保持兼容。同步更新 design / proposal / quick-fix、消费仓入口模板、项目写入 hook、context pack 与压缩恢复回归；不自动改写现有消费仓或全局安装态。

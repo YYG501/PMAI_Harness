@@ -426,6 +426,40 @@ PY
   teardown_contract_fixture
 }
 
+test_contract_allows_verification_assets() {
+  start_test "build-contract: implementation commits may include tests without widening product scope"
+  setup_contract_fixture product
+  local baseline implementation
+  baseline=$(git -C "$T" rev-parse HEAD)
+  python3 "$BUILD_CONTRACT" start "$MODULE_DIR" \
+    --anchor "docs/modules/pet-import/spec.md" \
+    --mode main \
+    --executor native \
+    --branch main \
+    --baseline-sha "$baseline" \
+    --target-kind product \
+    --target-path src/pets \
+    --entrypoint src/pets \
+    --final-check tests >/dev/null
+  git -C "$T" add -- "$MODULE_DIR/.work-meta.json"
+  git -C "$T" commit -q -m "start product build"
+  mkdir -p "$T/tests"
+  printf 'export const covered = true\n' > "$T/src/pets/covered.ts"
+  printf 'def test_contract():\n    assert True\n' > "$T/tests/test_contract.py"
+  git -C "$T" add -- src/pets/covered.ts tests/test_contract.py
+  git -C "$T" commit -q -m "implement product behavior with tests"
+  implementation=$(git -C "$T" rev-parse HEAD)
+  if python3 "$BUILD_CONTRACT" commit "$MODULE_DIR" \
+    --implementation-commit "$implementation" >/tmp/build-contract.$$ 2>/tmp/build-contract.err.$$; then
+    pass_test
+  else
+    _fail "tests should be accepted as verification assets"
+    cat /tmp/build-contract.err.$$ >&2
+  fi
+  rm -f /tmp/build-contract.$$ /tmp/build-contract.err.$$
+  teardown_contract_fixture
+}
+
 test_contract_rejects_missing_build() {
   start_test "build-contract: validate-close rejects missing build object"
   setup_contract_fixture
@@ -2237,6 +2271,7 @@ PY
 }
 
 test_contract_lifecycle
+test_contract_allows_verification_assets
 test_contract_rejects_missing_build
 test_contract_start_requires_adaptive_inputs
 test_contract_start_rejects_missing_ready_meta

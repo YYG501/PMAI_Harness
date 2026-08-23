@@ -91,6 +91,62 @@ PY
   rm -rf "$t"
 }
 
+test_root_relative_verification_commands_fallback_to_repo_root() {
+  start_test "final-validation: root-relative verification paths run from repository root"
+  local t module audit commit
+  t=$(mktemp -d "${TMPDIR:-/tmp}/pmai-final-validation-root-relative.XXXXXX")
+  module="$t/docs/modules/demo"
+  audit="$t/.pm-workflow/audits/demo/final-validation.json"
+  mkdir -p "$module" "$t/app" "$t/tests"
+  printf '# demo\n' > "$module/spec.md"
+  printf 'value = True\n' > "$t/app/main.py"
+  printf 'def test_root_relative():\n    assert True\n' > "$t/tests/test_root_relative.py"
+  touch "$t/tests/__init__.py"
+  python3 "$PROJECT_DEFINITION" write "$t" \
+    --source docs/modules/demo/spec.md --type product --root app --entrypoint app/main.py \
+    --language python --runtime python3 --framework stdlib --package-manager none \
+    --test-command "python3 -m unittest discover -s tests" \
+    --build-command "python3 -m py_compile app/main.py" >/dev/null
+  cat > "$module/.work-meta.json" <<'JSON'
+{"build":{"contract_version":4,"implementation_commit":"pending","approved_source_hash":"source-v1","finalization":{"requested_at":"2026-07-17T10:00:00+08:00","requested_commit":"pending"}}}
+JSON
+  git -C "$t" init -q
+  git -C "$t" config user.email "pmai@example.com"
+  git -C "$t" config user.name "PMAI Test"
+  git -C "$t" add .
+  git -C "$t" commit -qm "fixture"
+  commit=$(git -C "$t" rev-parse HEAD)
+  python3 - "$module/.work-meta.json" "$commit" <<'PY'
+import json, sys
+path, commit = sys.argv[1:]
+data = json.load(open(path))
+data["build"]["implementation_commit"] = commit
+data["build"]["finalization"]["requested_commit"] = commit
+json.dump(data, open(path, "w"))
+PY
+  if ! PYTHONPYCACHEPREFIX="$t/.pycache" python3 "$VALIDATION" \
+    --repo-root "$t" --module-dir "$module" --audit "$audit" \
+    --check test --check build >/tmp/final-validation.$$ 2>/tmp/final-validation.err.$$; then
+    _fail "root-relative verification commands should pass"
+    cat /tmp/final-validation.err.$$ "$audit" >&2
+  elif python3 - "$audit" "$t" <<'PY'
+import json, sys
+from pathlib import Path
+artifact = json.load(open(sys.argv[1]))
+assert artifact["status"] == "pass"
+validation_root = Path(artifact["validation_worktree"]).resolve()
+assert all(Path(item["working_directory"]).resolve() == validation_root for item in artifact["commands"])
+PY
+  then
+    pass_test
+  else
+    _fail "root-relative command working directory was not recorded"
+    cat "$audit" >&2
+  fi
+  rm -f /tmp/final-validation.$$ /tmp/final-validation.err.$$
+  rm -rf "$t"
+}
+
 test_subdirectory_root_and_identical_command_dedupe() {
   start_test "final-validation: subdirectory root is cwd and identical checks run once"
   local t module audit commit
@@ -287,6 +343,7 @@ PY
 }
 
 test_final_validation_isolated_from_active_worktree
+test_root_relative_verification_commands_fallback_to_repo_root
 test_subdirectory_root_and_identical_command_dedupe
 test_failures_are_itemized_and_build_still_runs
 test_legacy_root_command_adapter_is_explicit

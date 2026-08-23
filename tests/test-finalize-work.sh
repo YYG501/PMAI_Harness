@@ -386,6 +386,10 @@ assert sum(item["phase"] == "semantic-validation" and item["status"] == "pass" f
 assert not [item for item in timing["entries"] if item["status"] == "running"]
 assert marker["semantic_checks"] == ["coverage"]
 assert "semantic-validation" in marker["required_timing_phases"]
+assert marker["framework_revision"]
+assert isinstance(marker["framework_clean"], bool)
+assert marker["consumer_revision"]
+assert marker["judge_binding"]["status"] == "not_attached"
 PY
   then
     _fail "resume cursor should preserve one currentness run and the semantic handoff"

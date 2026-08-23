@@ -8,9 +8,19 @@
 # 跑所有测试
 bash tests/run-all.sh
 
-# 稳定版本发布门：除全量测试外，必须配置真实 runner 和独立 judge
+# 稳定版本发布门：除全量测试外，必须配置真实 runner 和独立 judge；默认执行 natural-language-finalize 隔离 fixture
 PMAI_SKILL_EVAL_RUNNER='<runner command>' \
 PMAI_SKILL_EVAL_JUDGE='<judge command>' \
+bash tests/run-release-gate.sh
+
+# 本地 Codex 适配器（需要可用 Codex 登录态；费用单价可选）
+PMAI_SKILL_EVAL_RUNNER='python3 scripts/skill-eval-codex-runner.py' \
+PMAI_SKILL_EVAL_JUDGE='python3 scripts/skill-eval-readonly-judge.py' \
+PMAI_CODEX_COMMAND='codex' \
+bash tests/run-release-gate.sh
+
+# 发布门要加入其它已有隔离 fixture 时，显式指定 session case（空格分隔）
+PMAI_SESSION_EVAL_CASES='natural-language-finalize another-fixture' \
 bash tests/run-release-gate.sh
 
 # 跑单个脚本的测试
@@ -43,7 +53,7 @@ tests/
 - 成功测试打印 `✅ <test-name>`
 - 失败测试打印 `❌ <test-name>: <reason>`
 - 普通 PR 可以明确显示 session eval skip；`v*` tag 和手动发布检查必须通过
-  `run-release-gate.sh`，缺 runner、缺 judge 或任一 session skip 都不能形成稳定版本证据
+  `run-release-gate.sh`，缺 runner、缺 judge 或发布门纳入的 session case skip 都不能形成稳定版本证据；尚无隔离 fixture 的历史 case 不纳入发布执行
 
 ## 不变式覆盖矩阵
 

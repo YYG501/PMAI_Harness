@@ -2,20 +2,25 @@
 """Validate and run PMAI skill regression cases.
 
 Static cases run without an LLM. Session cases use an optional external runner
-and judge with a JSON-over-stdin/stdout protocol. Missing external capabilities
-are always reported as SKIP, or become failures when the corresponding
---require-* flag is used.
+and judge with a JSON-over-stdin/stdout protocol. Cases with a ``harness`` block
+also run inside a disposable fixture: the Harness independently snapshots Git
+and file hashes, then binds the evidence manifest to a content digest. Missing
+external capabilities are always reported as SKIP, or become failures when the
+corresponding ``--require-*`` flag is used.
 """
 
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import re
 import shlex
+import shutil
 import subprocess
 import sys
+import tempfile
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
@@ -47,6 +52,25 @@ REQUIRED_JUDGE_EVIDENCE = {
     "stopping_point",
     "observations",
 }
+REQUIRED_MANIFEST_FIELDS = {
+    "schema_version",
+    "evaluation_id",
+    "case_id",
+    "case_sha256",
+    "runner_result_sha256",
+    "independent_evidence",
+    "digest",
+}
+REQUIRED_RUNTIME_FIELDS = {
+    "started_at",
+    "ended_at",
+    "duration_ms",
+    "token_usage",
+    "cost",
+    "failure",
+}
+VALID_RUNTIME_STATUSES = {"reported", "unavailable"}
+VALID_FAILURE_STATUSES = {"none", "error"}
 
 
 class EvalError(RuntimeError):
@@ -165,6 +189,30 @@ def validate_case(case: dict[str, Any], path: Path, repo_root: Path) -> str:
         if not isinstance(judge, dict) or judge.get("enabled") is not True:
             raise EvalError(f"{case_id}: session case 必须启用 judge")
         require_string_list(judge.get("rubric"), f"{case_id}: judge.rubric")
+        harness = case.get("harness")
+        if harness is not None:
+            if not isinstance(harness, dict):
+                raise EvalError(f"{case_id}: harness 必须是对象")
+            fixture = safe_repo_path(repo_root, harness.get("fixture"), f"{case_id}: harness.fixture")
+            if not fixture.is_dir():
+                raise EvalError(f"{case_id}: harness.fixture 必须是目录")
+            expected_paths = require_string_list(
+                harness.get("expected_changed_paths"),
+                f"{case_id}: harness.expected_changed_paths",
+            )
+            protected_paths = require_string_list(
+                harness.get("protected_paths", []),
+                f"{case_id}: harness.protected_paths",
+                allow_empty=True,
+            )
+            required_event_kinds = require_string_list(
+                harness.get("required_event_kinds"),
+                f"{case_id}: harness.required_event_kinds",
+            )
+            for index, raw in enumerate(expected_paths, 1):
+                fixture_relative_path(raw, f"{case_id}: expected_changed_paths[{index}]")
+            for index, raw in enumerate(protected_paths, 1):
+                fixture_relative_path(raw, f"{case_id}: protected_paths[{index}]")
 
     return case_id
 
@@ -262,6 +310,267 @@ def run_external(command: str, payload: dict[str, Any], timeout: int, label: str
     return value
 
 
+def canonical_json(value: Any) -> str:
+    return json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+
+
+def sha256_bytes(value: bytes) -> str:
+    return hashlib.sha256(value).hexdigest()
+
+
+def sha256_json(value: Any) -> str:
+    return sha256_bytes(canonical_json(value).encode("utf-8"))
+
+
+def run_git(workspace: Path, args: list[str], label: str) -> str:
+    try:
+        completed = subprocess.run(
+            ["git", "-C", str(workspace), *args],
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+    except OSError as exc:
+        raise EvalError(f"{label} 无法执行 git: {exc}") from exc
+    if completed.returncode != 0:
+        detail = completed.stderr.strip() or completed.stdout.strip()
+        raise EvalError(f"{label} 退出 {completed.returncode}: {detail}")
+    return completed.stdout
+
+
+def fixture_relative_path(raw: Any, label: str) -> str:
+    value = require_string(raw, label)
+    path = Path(value)
+    if path.is_absolute() or ".." in path.parts:
+        raise EvalError(f"{label} 必须是 fixture 内相对路径: {value}")
+    return path.as_posix()
+
+
+def file_hashes(workspace: Path) -> dict[str, str]:
+    values: dict[str, str] = {}
+    for path in sorted(workspace.rglob("*")):
+        if ".git" in path.relative_to(workspace).parts:
+            continue
+        relative = path.relative_to(workspace).as_posix()
+        if path.is_symlink():
+            values[relative] = f"symlink:{path.readlink()}"
+        elif path.is_file():
+            values[relative] = sha256_bytes(path.read_bytes())
+    return values
+
+
+def snapshot_workspace(workspace: Path, baseline_commit: str | None = None) -> dict[str, Any]:
+    status = run_git(workspace, ["status", "--porcelain=v1", "--untracked-files=all"], "workspace status")
+    commit = run_git(workspace, ["rev-parse", "HEAD"], "workspace commit").strip()
+    diff = ""
+    if baseline_commit:
+        diff = run_git(
+            workspace,
+            ["diff", "--no-ext-diff", "--binary", baseline_commit, "--"],
+            "workspace diff",
+        )
+    return {
+        "commit": commit,
+        "status": status,
+        "clean": not bool(status.strip()),
+        "file_hashes": file_hashes(workspace),
+        "git_diff": diff,
+    }
+
+
+def read_event_log(path: Path, label: str) -> dict[str, Any]:
+    try:
+        raw = path.read_bytes()
+    except OSError as exc:
+        raise EvalError(f"{label} 无法读取: {exc}") from exc
+    events: list[dict[str, Any]] = []
+    for line_no, line in enumerate(raw.decode("utf-8").splitlines(), 1):
+        if not line.strip():
+            continue
+        try:
+            value = json.loads(line)
+        except json.JSONDecodeError as exc:
+            raise EvalError(f"{label} 第 {line_no} 行不是合法 JSON: {exc}") from exc
+        if not isinstance(value, dict) or not isinstance(value.get("kind"), str) or not value["kind"].strip():
+            raise EvalError(f"{label} 第 {line_no} 行必须包含非空 kind")
+        events.append(value)
+    if not events:
+        raise EvalError(f"{label} 不能为空")
+    return {
+        "sha256": sha256_bytes(raw),
+        "count": len(events),
+        "kinds": sorted({event["kind"] for event in events}),
+        "events": events,
+    }
+
+
+def prepare_harness(case: dict[str, Any], repo_root: Path, evaluation_id: str) -> dict[str, Any] | None:
+    config = case.get("harness")
+    if config is None:
+        return None
+    if not isinstance(config, dict):
+        raise EvalError(f"{case['id']}: harness 必须是对象")
+    fixture = safe_repo_path(repo_root, config.get("fixture"), f"{case['id']}: harness.fixture")
+    if not fixture.is_dir():
+        raise EvalError(f"{case['id']}: harness.fixture 必须是目录")
+    expected = config.get("expected_changed_paths")
+    protected = config.get("protected_paths")
+    required_event_kinds = config.get("required_event_kinds")
+    if not isinstance(expected, list) or any(not isinstance(item, str) for item in expected):
+        raise EvalError(f"{case['id']}: harness.expected_changed_paths 必须是字符串数组")
+    if not isinstance(protected, list) or any(not isinstance(item, str) for item in protected):
+        raise EvalError(f"{case['id']}: harness.protected_paths 必须是字符串数组")
+    if not isinstance(required_event_kinds, list) or any(
+        not isinstance(item, str) or not item.strip() for item in required_event_kinds
+    ):
+        raise EvalError(f"{case['id']}: harness.required_event_kinds 必须是字符串数组")
+    expected_paths = [fixture_relative_path(item, f"{case['id']}: expected_changed_paths") for item in expected]
+    protected_paths = [fixture_relative_path(item, f"{case['id']}: protected_paths") for item in protected]
+
+    temp_root = Path(tempfile.mkdtemp(prefix=f"pmai-session-eval-{evaluation_id[:8]}-"))
+    workspace = temp_root / "workspace"
+    event_log = temp_root / "events.jsonl"
+    try:
+        shutil.copytree(fixture, workspace)
+        run_git(workspace, ["init", "-q"], "fixture git init")
+        run_git(workspace, ["config", "user.email", "pmai-session-eval@example.invalid"], "fixture git config")
+        run_git(workspace, ["config", "user.name", "PMAI Session Eval"], "fixture git config")
+        run_git(workspace, ["add", "--all"], "fixture git add")
+        run_git(workspace, ["commit", "-q", "-m", "fixture baseline"], "fixture git commit")
+        event_log.write_text("", encoding="utf-8")
+        baseline = snapshot_workspace(workspace)
+        if not baseline["clean"]:
+            raise EvalError(f"{case['id']}: fixture baseline 不干净")
+        return {
+            "temp_root": temp_root,
+            "workspace": workspace,
+            "baseline": baseline,
+            "expected_paths": expected_paths,
+            "protected_paths": protected_paths,
+            "required_event_kinds": required_event_kinds,
+            "event_log": event_log,
+        }
+    except Exception:
+        shutil.rmtree(temp_root, ignore_errors=True)
+        raise
+
+
+def build_evidence_manifest(
+    case: dict[str, Any],
+    case_payload: dict[str, Any],
+    result: dict[str, Any],
+    context: dict[str, Any],
+    evaluation_id: str,
+) -> dict[str, Any]:
+    baseline = context["baseline"]
+    after = snapshot_workspace(context["workspace"], baseline["commit"])
+    event_log = read_event_log(context["event_log"], f"{case['id']}: event log")
+    baseline_files = baseline["file_hashes"]
+    after_files = after["file_hashes"]
+    changed_paths = sorted(
+        path
+        for path in set(baseline_files) | set(after_files)
+        if baseline_files.get(path) != after_files.get(path)
+    )
+    protected = [
+        path
+        for path in changed_paths
+        if any(path == protected_path or path.startswith(f"{protected_path}/") for protected_path in context["protected_paths"])
+    ]
+    missing_expected = sorted(set(context["expected_paths"]) - set(changed_paths))
+    independent = {
+        "baseline_commit": baseline["commit"],
+        "baseline_clean": baseline["clean"],
+        "baseline_file_hashes": baseline_files,
+        "final_commit": after["commit"],
+        "final_clean": after["clean"],
+        "final_file_hashes": after_files,
+        "changed_paths": changed_paths,
+        "expected_changed_paths": context["expected_paths"],
+        "missing_expected_paths": missing_expected,
+        "protected_paths": context["protected_paths"],
+        "protected_violations": protected,
+        "git_diff": after["git_diff"],
+        "event_log": event_log,
+        "framework_revision": run_git(Path(__file__).resolve().parent.parent, ["rev-parse", "HEAD"], "framework revision").strip(),
+        "framework_clean": not bool(run_git(
+            Path(__file__).resolve().parent.parent,
+            ["status", "--porcelain=v1", "--untracked-files=all"],
+            "framework status",
+        ).strip()),
+    }
+    if isinstance(result.get("runtime"), dict):
+        independent["runtime"] = result["runtime"]
+    core = {
+        "schema_version": SCHEMA_VERSION,
+        "evaluation_id": evaluation_id,
+        "case_id": case["id"],
+        "case_sha256": sha256_json(case_payload),
+        "runner_result_sha256": sha256_json(result),
+        "independent_evidence": independent,
+    }
+    return {**core, "digest": sha256_json(core)}
+
+
+def validate_evidence_manifest(
+    case: dict[str, Any],
+    case_payload: dict[str, Any],
+    result: dict[str, Any],
+    manifest: dict[str, Any] | None,
+    evaluation_id: str,
+    require_runtime: bool = False,
+) -> list[str]:
+    if "harness" not in case:
+        return []
+    if not isinstance(manifest, dict):
+        return ["独立证据 manifest 缺失"]
+    problems: list[str] = []
+    missing = sorted(REQUIRED_MANIFEST_FIELDS - set(manifest))
+    if missing:
+        return [f"独立证据 manifest 缺字段: {missing}"]
+    if manifest.get("schema_version") != SCHEMA_VERSION:
+        problems.append("独立证据 manifest schema_version 不匹配")
+    if manifest.get("evaluation_id") != evaluation_id:
+        problems.append("独立证据 evaluation_id 不匹配")
+    if manifest.get("case_id") != case["id"]:
+        problems.append("独立证据 case_id 不匹配")
+    if manifest.get("case_sha256") != sha256_json(case_payload):
+        problems.append("独立证据 case digest 不匹配")
+    if manifest.get("runner_result_sha256") != sha256_json(result):
+        problems.append("独立证据 runner digest 不匹配")
+    evidence = manifest.get("independent_evidence")
+    if not isinstance(evidence, dict):
+        problems.append("独立证据 independent_evidence 必须是对象")
+    else:
+        if evidence.get("baseline_clean") is not True:
+            problems.append("独立证据 baseline 必须干净")
+        if evidence.get("missing_expected_paths"):
+            problems.append(f"独立证据未观察到预期修改: {evidence['missing_expected_paths']}")
+        if evidence.get("protected_violations"):
+            problems.append(f"独立证据发现越界修改: {evidence['protected_violations']}")
+        event_log = evidence.get("event_log")
+        required_kinds = case.get("harness", {}).get("required_event_kinds", [])
+        if not isinstance(event_log, dict) or not isinstance(event_log.get("events"), list):
+            problems.append("独立证据 event_log 缺失或格式不合法")
+        else:
+            observed_kinds = set(event_log.get("kinds", []))
+            missing_kinds = sorted(set(required_kinds) - observed_kinds)
+            if missing_kinds:
+                problems.append(f"独立证据缺少事件类型: {missing_kinds}")
+            if event_log.get("count") != len(event_log["events"]):
+                problems.append("独立证据 event_log count 不匹配")
+        if require_runtime:
+            provenance = result.get("provenance")
+            if evidence.get("framework_revision") != (provenance or {}).get("framework_revision"):
+                problems.append("独立证据 framework_revision 与 runner 不匹配")
+            if evidence.get("runtime") != result.get("runtime"):
+                problems.append("独立证据 runtime 与 runner 不匹配")
+    digest = manifest.get("digest")
+    if not isinstance(digest, str) or digest != sha256_json({key: value for key, value in manifest.items() if key != "digest"}):
+        problems.append("独立证据总 digest 无法复算")
+    return problems
+
+
 def validate_provenance(value: Any, label: str) -> list[str]:
     if not isinstance(value, dict):
         return [f"{label} 必须是对象"]
@@ -272,8 +581,73 @@ def validate_provenance(value: Any, label: str) -> list[str]:
     return problems
 
 
+def validate_runtime_evidence(
+    result: dict[str, Any], label: str, *, required: bool
+) -> list[str]:
+    if not required:
+        return []
+    runtime = result.get("runtime")
+    if not isinstance(runtime, dict):
+        return [f"{label}.runtime 必须是对象"]
+    problems: list[str] = []
+    missing = sorted(REQUIRED_RUNTIME_FIELDS - set(runtime))
+    if missing:
+        return [f"{label}.runtime 缺字段: {missing}"]
+    for field in ("started_at", "ended_at"):
+        if not isinstance(runtime.get(field), str) or not runtime[field].strip():
+            problems.append(f"{label}.runtime.{field} 必须是非空字符串")
+    if not isinstance(runtime.get("duration_ms"), (int, float)) or runtime["duration_ms"] < 0:
+        problems.append(f"{label}.runtime.duration_ms 必须是非负数")
+
+    token_usage = runtime.get("token_usage")
+    if not isinstance(token_usage, dict):
+        problems.append(f"{label}.runtime.token_usage 必须是对象")
+    else:
+        token_status = token_usage.get("status")
+        if token_status not in VALID_RUNTIME_STATUSES:
+            problems.append(f"{label}.runtime.token_usage.status 不支持: {token_status}")
+        if token_status == "reported":
+            for field in ("input_tokens", "output_tokens", "total_tokens"):
+                if not isinstance(token_usage.get(field), int) or token_usage[field] < 0:
+                    problems.append(f"{label}.runtime.token_usage.{field} 必须是非负整数")
+        elif not isinstance(token_usage.get("reason"), str) or not token_usage["reason"].strip():
+            problems.append(f"{label}.runtime.token_usage.reason 必须说明为何不可用")
+
+    cost = runtime.get("cost")
+    if not isinstance(cost, dict):
+        problems.append(f"{label}.runtime.cost 必须是对象")
+    else:
+        cost_status = cost.get("status")
+        if cost_status not in VALID_RUNTIME_STATUSES:
+            problems.append(f"{label}.runtime.cost.status 不支持: {cost_status}")
+        if cost_status == "reported":
+            if cost.get("currency") != "USD":
+                problems.append(f"{label}.runtime.cost.currency 必须为 USD")
+            if not isinstance(cost.get("amount_usd"), (int, float)) or cost["amount_usd"] < 0:
+                problems.append(f"{label}.runtime.cost.amount_usd 必须是非负数")
+        elif not isinstance(cost.get("reason"), str) or not cost["reason"].strip():
+            problems.append(f"{label}.runtime.cost.reason 必须说明为何不可用")
+
+    failure = runtime.get("failure")
+    if not isinstance(failure, dict) or failure.get("status") not in VALID_FAILURE_STATUSES:
+        problems.append(f"{label}.runtime.failure.status 必须为 none 或 error")
+    elif failure["status"] == "error" and (
+        not isinstance(failure.get("reason"), str) or not failure["reason"].strip()
+    ):
+        problems.append(f"{label}.runtime.failure.reason 必须说明失败原因")
+
+    provenance = result.get("provenance")
+    if isinstance(provenance, dict):
+        for field in ("framework_revision", "consumer_revision"):
+            if not isinstance(provenance.get(field), str) or not provenance[field].strip():
+                problems.append(f"{label}.provenance.{field} 必须是非空字符串")
+        if provenance.get("host") in {"fixture", "fake", "test"}:
+            problems.append(f"{label}.provenance.host 不能是 fixture/test runner")
+    return problems
+
+
 def validate_runner_result(
-    case: dict[str, Any], result: dict[str, Any], evaluation_id: str
+    case: dict[str, Any], result: dict[str, Any], evaluation_id: str, *, require_runtime: bool = False
 ) -> list[str]:
     problems: list[str] = []
     missing = sorted(REQUIRED_RESULT_FIELDS - set(result))
@@ -285,6 +659,7 @@ def validate_runner_result(
     if result["evaluation_id"] != evaluation_id:
         problems.append("runner evaluation_id 与当前执行不一致")
     problems.extend(validate_provenance(result["provenance"], "runner provenance"))
+    problems.extend(validate_runtime_evidence(result, "runner", required=require_runtime))
     if not isinstance(result["transcript"], (str, list)) or not result["transcript"]:
         problems.append("transcript 必须非空")
     if not isinstance(result["tool_calls"], list):
@@ -328,6 +703,8 @@ def validate_judge_result(
     result: dict[str, Any],
     judge: dict[str, Any],
     evaluation_id: str,
+    evidence_manifest: dict[str, Any] | None = None,
+    require_runtime: bool = False,
 ) -> list[str]:
     problems: list[str] = []
     if judge.get("case_id") != case["id"]:
@@ -344,9 +721,18 @@ def validate_judge_result(
     if not isinstance(reviewed, list) or any(not isinstance(item, str) for item in reviewed):
         problems.append("judge reviewed_evidence 必须是字符串数组")
     else:
-        missing = sorted(REQUIRED_JUDGE_EVIDENCE - set(reviewed))
+        required_evidence = set(REQUIRED_JUDGE_EVIDENCE)
+        if evidence_manifest is not None:
+            required_evidence.update({"independent_evidence", "manifest", "digest", "event_log"})
+        if require_runtime:
+            required_evidence.update({"runtime", "framework_revision", "consumer_revision"})
+        missing = sorted(required_evidence - set(reviewed))
         if missing:
             problems.append(f"judge 未声明检查完整 runner 证据: {missing}")
+
+    if evidence_manifest is not None:
+        if judge.get("evidence_digest") != evidence_manifest.get("digest"):
+            problems.append("judge evidence_digest 与当前证据 manifest 不匹配")
 
     runner_provenance = result.get("provenance")
     judge_provenance = judge.get("provenance")
@@ -358,7 +744,13 @@ def validate_judge_result(
     return problems
 
 
-def persist_result(results_dir: Path, case: dict[str, Any], result: dict[str, Any], judge: Any) -> None:
+def persist_result(
+    results_dir: Path,
+    case: dict[str, Any],
+    result: dict[str, Any],
+    judge: Any,
+    evidence_manifest: dict[str, Any] | None = None,
+) -> None:
     results_dir.mkdir(parents=True, exist_ok=True)
     payload = {
         "schema_version": SCHEMA_VERSION,
@@ -367,6 +759,8 @@ def persist_result(results_dir: Path, case: dict[str, Any], result: dict[str, An
         "runner_result": result,
         "judge_result": judge,
     }
+    if evidence_manifest is not None:
+        payload["evidence_manifest"] = evidence_manifest
     (results_dir / f"{case['id']}.json").write_text(
         json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
     )
@@ -379,10 +773,22 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--cases-dir", default=str(repo_root / "evals" / "cases"))
     parser.add_argument("--touchfiles", default=str(repo_root / "evals" / "touchfiles.json"))
     parser.add_argument("--case", action="append", dest="case_ids", default=[])
+    parser.add_argument(
+        "--session-case",
+        action="append",
+        dest="session_case_ids",
+        default=[],
+        help="只执行指定的 session case；static case 仍按 --mode 选择",
+    )
     parser.add_argument("--runner-command", default=os.environ.get("PMAI_SKILL_EVAL_RUNNER", ""))
     parser.add_argument("--judge-command", default=os.environ.get("PMAI_SKILL_EVAL_JUDGE", ""))
     parser.add_argument("--require-runner", action="store_true")
     parser.add_argument("--require-judge", action="store_true")
+    parser.add_argument(
+        "--require-runtime-evidence",
+        action="store_true",
+        help="session runner 必须提供 revision、耗时、Token、费用和失败记录",
+    )
     parser.add_argument("--timeout", type=int, default=300)
     parser.add_argument("--results-dir")
     return parser.parse_args()
@@ -407,12 +813,39 @@ def main() -> int:
             return 1
         cases = [case for case in cases if case["id"] in requested]
 
+    if args.session_case_ids:
+        requested_session = set(args.session_case_ids)
+        known = {case["id"] for case in cases}
+        unknown = sorted(requested_session - known)
+        if unknown:
+            print(f"FAIL unknown session cases: {unknown}")
+            return 1
+        non_session = sorted(
+            case["id"]
+            for case in cases
+            if case["id"] in requested_session and case["layer"] != "session"
+        )
+        if non_session:
+            print(f"FAIL --session-case 只能指定 session case: {non_session}")
+            return 1
+
     print(f"PASS schema: {len(cases)} cases + touchfiles")
     if args.mode == "validate":
         return 0
 
     selected_layers = VALID_LAYERS if args.mode == "all" else {args.mode}
-    selected = [case for case in cases if case["layer"] in selected_layers]
+    require_runtime = args.require_runtime_evidence or os.environ.get("PMAI_REQUIRE_RUNTIME_EVIDENCE") == "1"
+    requested_session = set(args.session_case_ids)
+    selected = [
+        case
+        for case in cases
+        if case["layer"] in selected_layers
+        and (
+            case["layer"] != "session"
+            or not requested_session
+            or case["id"] in requested_session
+        )
+    ]
     passed = 0
     failed = 0
     skipped = 0
@@ -450,50 +883,92 @@ def main() -> int:
 
         evaluation_id = uuid.uuid4().hex
         case_payload = {key: value for key, value in case.items() if key != "_path"}
-        runner_payload = {
-            "schema_version": SCHEMA_VERSION,
-            "evaluation_id": evaluation_id,
-            "case": case_payload,
-        }
-        try:
-            result = run_external(args.runner_command, runner_payload, args.timeout, f"runner {case_id}")
-            problems = validate_runner_result(case, result, evaluation_id)
-        except EvalError as exc:
-            problems = [str(exc)]
-            result = {}
-
+        harness_context: dict[str, Any] | None = None
+        evidence_manifest: dict[str, Any] | None = None
         judge_result: dict[str, Any] | None = None
-        if not problems and case.get("judge", {}).get("enabled"):
-            if args.judge_command:
+        try:
+            try:
+                harness_context = prepare_harness(case, repo_root, evaluation_id)
+                runner_case_payload = json.loads(json.dumps(case_payload, ensure_ascii=False))
+                if harness_context is not None:
+                    runner_case_payload["harness"]["workspace"] = str(harness_context["workspace"])
+                    runner_case_payload["harness"]["baseline_commit"] = harness_context["baseline"]["commit"]
+                    runner_case_payload["harness"]["event_log"] = str(harness_context["event_log"])
+                runner_payload = {
+                    "schema_version": SCHEMA_VERSION,
+                    "evaluation_id": evaluation_id,
+                    "case": runner_case_payload,
+                }
+                result = run_external(args.runner_command, runner_payload, args.timeout, f"runner {case_id}")
+                problems = validate_runner_result(
+                    case, result, evaluation_id, require_runtime=require_runtime
+                )
+            except EvalError as exc:
+                problems = [str(exc)]
+                result = {}
+
+            if not problems and harness_context is not None:
                 try:
-                    judge_result = run_external(
-                        args.judge_command,
-                        {
+                    evidence_manifest = build_evidence_manifest(
+                        case, case_payload, result, harness_context, evaluation_id
+                    )
+                    problems.extend(
+                        validate_evidence_manifest(
+                            case,
+                            case_payload,
+                            result,
+                            evidence_manifest,
+                            evaluation_id,
+                            require_runtime=require_runtime,
+                        )
+                    )
+                except EvalError as exc:
+                    problems.append(str(exc))
+
+            if not problems and case.get("judge", {}).get("enabled"):
+                if args.judge_command:
+                    try:
+                        judge_payload = {
                             "schema_version": SCHEMA_VERSION,
                             "evaluation_id": evaluation_id,
                             "case": case_payload,
                             "result": result,
-                        },
-                        args.timeout,
-                        f"judge {case_id}",
-                    )
-                    problems.extend(
-                        validate_judge_result(case, result, judge_result, evaluation_id)
-                    )
-                except EvalError as exc:
-                    problems.append(str(exc))
-            elif args.require_judge:
-                problems.append("LLM judge 未配置")
-            else:
-                judge_skipped += 1
-                print(f"SKIP judge {case_id}: LLM judge 未配置")
-                if result:
-                    persist_result(results_dir, case, result, None)
-                skipped += 1
-                continue
+                        }
+                        if evidence_manifest is not None:
+                            judge_payload["evidence_manifest"] = evidence_manifest
+                        judge_result = run_external(
+                            args.judge_command,
+                            judge_payload,
+                            args.timeout,
+                            f"judge {case_id}",
+                        )
+                        problems.extend(
+                            validate_judge_result(
+                                case,
+                                result,
+                                judge_result,
+                                evaluation_id,
+                                evidence_manifest,
+                                require_runtime=require_runtime,
+                            )
+                        )
+                    except EvalError as exc:
+                        problems.append(str(exc))
+                elif args.require_judge:
+                    problems.append("LLM judge 未配置")
+                else:
+                    judge_skipped += 1
+                    print(f"SKIP judge {case_id}: LLM judge 未配置")
+                    if result:
+                        persist_result(results_dir, case, result, None, evidence_manifest)
+                    skipped += 1
+                    continue
 
-        if result:
-            persist_result(results_dir, case, result, judge_result)
+            if result:
+                persist_result(results_dir, case, result, judge_result, evidence_manifest)
+        finally:
+            if harness_context is not None:
+                shutil.rmtree(harness_context["temp_root"], ignore_errors=True)
         if problems:
             failed += 1
             print(f"FAIL {case_id}: {'; '.join(problems)}")

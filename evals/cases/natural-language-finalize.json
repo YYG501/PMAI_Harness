@@ -15,6 +15,12 @@
     "prompt": "可以提交了。",
     "context": ["当前处于 iterating", "PM 已看过最终 build 结果", "无未决产品问题"]
   },
+  "harness": {
+    "fixture": "evals/fixtures/natural-language-finalize",
+    "expected_changed_paths": ["PRODUCT-STATE.md"],
+    "protected_paths": ["docs/modules/change-confirmation/spec.md", "docs/modules/change-confirmation/decisions.md"],
+    "required_event_kinds": ["lifecycle", "tool", "command"]
+  },
   "expected": {
     "behaviors": ["把定稿语义视为不可逆动作授权", "自动完整验收、合入 main、更新正式文档并做一致性检查"],
     "observations": ["acceptance_phrase_recognized", "full_checks_run", "implementation_landed", "post_land_docs_synced"],

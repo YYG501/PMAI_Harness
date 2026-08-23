@@ -100,3 +100,42 @@
 - **I-TEST2**：suite 缺失唯一 `Passed / Failed` 摘要、摘要与退出码矛盾或报告零用例时必须失败关闭，不得静默按 0 计数。
 - **I-TEST3**：全量入口必须实际运行静态 skill eval，并明确报告 session runner / judge 的通过、失败与跳过数量；要求 session gate 时，缺少外部 runner / judge 必须失败。
 - **I-TEST4**：稳定版本发布门必须设置真实 session runner 与独立 judge，全部 session case 只有绑定当前 evaluation ID、带 runner 来源且经不同 run ID 的 judge 完整复核后才能计为通过；缺能力、skip、自报结果或复用同一 run ID 都必须阻断发布。
+
+## Harness 证据覆盖追踪
+
+这段元数据是本文件的审计索引，不重新定义上面的不变量。`scripts/invariant-coverage.py`
+会检查指定范围内的每条不变量都已登记运行时护栏、确定性测试和 Session Eval 证明状态；
+`session-gap` 表示已有场景合同但还没有真实 Agent 证据，不能当作已验证。
+
+<!-- BEGIN PMAI HARNESS COVERAGE JSON -->
+```json
+{
+  "schema_version": 1,
+  "scope_prefixes": ["I-LC", "I-CB", "I-CR", "I-TEST"],
+  "invariants": {
+    "I-LC1": {"guard": ["scripts/build-contract.py"], "tests": ["tests/test-build-contract.sh"], "session_cases": ["natural-language-finalize"], "status": "session-gap"},
+    "I-LC2": {"guard": ["scripts/build-contract.py"], "tests": ["tests/test-build-contract.sh"], "session_cases": [], "status": "deterministic-only"},
+    "I-LC3": {"guard": ["scripts/finalize-work.py"], "tests": ["tests/test-finalize-work.sh"], "session_cases": ["natural-language-finalize"], "status": "session-gap"},
+    "I-LC4": {"guard": ["scripts/build-contract.py"], "tests": ["tests/test-build-contract.sh"], "session_cases": [], "status": "deterministic-only"},
+    "I-LC5": {"guard": ["scripts/land-work.sh"], "tests": ["tests/test-land-work-v2.sh"], "session_cases": ["natural-language-finalize"], "status": "session-gap"},
+    "I-CB1": {"guard": ["hooks/active-build-guard.cjs"], "tests": ["tests/test-active-build-guard.sh"], "session_cases": [], "status": "deterministic-only"},
+    "I-CB2": {"guard": ["scripts/build-contract.py"], "tests": ["tests/test-build-contract.sh"], "session_cases": [], "status": "deterministic-only"},
+    "I-CB3": {"guard": ["scripts/build-contract.py"], "tests": ["tests/test-build-contract.sh"], "session_cases": [], "status": "deterministic-only"},
+    "I-CB4": {"guard": ["hooks/active-build-guard.cjs"], "tests": ["tests/test-active-build-guard.sh"], "session_cases": [], "status": "deterministic-only"},
+    "I-CB5": {"guard": ["scripts/build-contract.py"], "tests": ["tests/test-build-contract.sh"], "session_cases": [], "status": "deterministic-only"},
+    "I-CB6": {"guard": ["hooks/active-build-guard.cjs"], "tests": ["tests/test-active-build-guard.sh"], "session_cases": [], "status": "deterministic-only"},
+    "I-CR1": {"guard": ["scripts/finalize-work.py"], "tests": ["tests/test-finalize-work.sh"], "session_cases": ["natural-language-finalize"], "status": "session-gap"},
+    "I-CR2": {"guard": ["scripts/land-work.sh"], "tests": ["tests/test-land-work-v2.sh"], "session_cases": [], "status": "deterministic-only"},
+    "I-CR3": {"guard": ["scripts/land-work.sh"], "tests": ["tests/test-land-work-v2.sh"], "session_cases": [], "status": "deterministic-only"},
+    "I-CR4": {"guard": ["scripts/land-work.sh"], "tests": ["tests/test-land-work-v2.sh"], "session_cases": ["natural-language-finalize"], "status": "session-gap"},
+    "I-CR5": {"guard": ["scripts/land-work.sh"], "tests": ["tests/test-land-work-v2.sh"], "session_cases": [], "status": "deterministic-only"},
+    "I-CR6": {"guard": ["skills/build-close/SKILL.md"], "tests": ["tests/test-build-close-hard-gates.sh"], "session_cases": [], "status": "deterministic-only"},
+    "I-CR7": {"guard": ["scripts/cleanup-pending-worktrees.sh"], "tests": ["tests/test-cleanup-pending.sh"], "session_cases": [], "status": "deterministic-only"},
+    "I-TEST1": {"guard": ["tests/run-suite.py"], "tests": ["tests/test-run-suite.sh"], "session_cases": [], "status": "deterministic-only"},
+    "I-TEST2": {"guard": ["tests/run-suite.py"], "tests": ["tests/test-run-suite.sh"], "session_cases": [], "status": "deterministic-only"},
+    "I-TEST3": {"guard": ["tests/run-all.sh"], "tests": ["tests/test-skill-eval.sh"], "session_cases": ["natural-language-finalize"], "status": "session-gap"},
+    "I-TEST4": {"guard": ["tests/run-release-gate.sh"], "tests": ["tests/test-skill-eval.sh"], "session_cases": ["natural-language-finalize"], "status": "session-gap"}
+  }
+}
+```
+<!-- END PMAI HARNESS COVERAGE JSON -->

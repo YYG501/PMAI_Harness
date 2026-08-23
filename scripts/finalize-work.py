@@ -72,6 +72,24 @@ def git_root(path: Path) -> Path:
     return Path(result.stdout.strip()).resolve()
 
 
+def git_revision(path: Path) -> str:
+    result = run(["git", "-C", str(path), "rev-parse", "HEAD"], cwd=path, capture=True)
+    if result.returncode == 0 and result.stdout.strip():
+        return result.stdout.strip()
+    return "unknown"
+
+
+def git_clean(path: Path) -> bool | None:
+    result = run(
+        ["git", "-C", str(path), "status", "--porcelain=v1", "--untracked-files=all"],
+        cwd=path,
+        capture=True,
+    )
+    if result.returncode != 0:
+        return None
+    return not bool(result.stdout.strip())
+
+
 def main_repo_root(build_root: Path) -> Path:
     result = run(
         ["git", "-C", str(build_root), "rev-parse", "--git-common-dir"],
@@ -251,7 +269,9 @@ def finish_running_timing(
     timing(script_dir, audit_dir, "finish", *args)
 
 
-def write_finalization_marker(audit_dir: Path, build: dict, checks: list[str]) -> None:
+def write_finalization_marker(
+    audit_dir: Path, build_root: Path, build: dict, checks: list[str], framework_root: Path
+) -> None:
     semantic_checks = [
         name
         for name in checks
@@ -267,8 +287,14 @@ def write_finalization_marker(audit_dir: Path, build: dict, checks: list[str]) -
     if semantic_checks:
         required_phases.append("semantic-validation")
     required_phases.extend(["landing", "documentation"])
+    existing_judge_binding = None
+    marker_path = finalization_marker_path(audit_dir)
+    if marker_path.is_file():
+        existing = read_json(marker_path)
+        if isinstance(existing.get("judge_binding"), dict):
+            existing_judge_binding = existing["judge_binding"]
     write_json(
-        finalization_marker_path(audit_dir),
+        marker_path,
         {
             "schema_version": 1,
             "runner": "finalize-work",
@@ -277,6 +303,12 @@ def write_finalization_marker(audit_dir: Path, build: dict, checks: list[str]) -
             "required_timing_phases": required_phases,
             "allowed_limited_timing_phases": [],
             "semantic_checks": semantic_checks,
+            "framework_revision": os.environ.get("PMAI_FRAMEWORK_REVISION", "").strip()
+            or git_revision(framework_root),
+            "framework_clean": git_clean(framework_root),
+            "consumer_revision": git_revision(build_root),
+            "judge_binding": existing_judge_binding
+            or {"status": "not_attached", "evidence_digest": None, "run_id": None},
             "updated_at": now_iso(),
         },
     )
@@ -685,7 +717,7 @@ def finalize(args: argparse.Namespace) -> int:
             )
             require_ok(result, "记录 PM 定稿请求")
         _, build = build_state(module_dir)
-        write_finalization_marker(audit_dir, build, checks)
+        write_finalization_marker(audit_dir, build_root, build, checks, script_dir.parent)
         semantic_checks = [
             name
             for name in checks

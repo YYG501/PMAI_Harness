@@ -19,7 +19,7 @@
     "merge-conflict-recovery-static": ["scripts/land-work.sh", "tests/test-land-work-v2.sh"],
     "meta-judgment-model-static": ["skills/meta/SKILL.md", "skills/meta/references/problem-framing.md"],
     "mockup-covers-full-task": ["skills/mockup/SKILL.md", "skills/design/SKILL.md", "scripts/mockup-quality.py", "scripts/import-mockup-variants.py", "scripts/consumer-doctor.py", "tests/test-mockup-quality.sh"],
-    "natural-language-finalize": ["skills/build/SKILL.md", "scripts/land-work.sh", "scripts/doc-impact.py"],
+    "natural-language-finalize": ["skills/build/SKILL.md", "scripts/land-work.sh", "scripts/doc-impact.py", "scripts/skill-eval.py", "evals/fixtures/natural-language-finalize/README.md", "evals/fixtures/natural-language-finalize/AGENTS.md", "evals/fixtures/natural-language-finalize/CLAUDE.md", "evals/fixtures/natural-language-finalize/.pm-workflow/project.yml", "evals/fixtures/natural-language-finalize/.pm-workflow/proposal.json", "evals/fixtures/natural-language-finalize/PRODUCT.md", "evals/fixtures/natural-language-finalize/PRODUCT-STATE.md", "evals/fixtures/natural-language-finalize/docs/modules/change-confirmation/.work-meta.json", "evals/fixtures/natural-language-finalize/docs/modules/change-confirmation/spec.md", "evals/fixtures/natural-language-finalize/docs/modules/change-confirmation/decisions.md", "tests/fixtures/fake-skill-eval.py", "tests/test-skill-eval.sh"],
     "no-internal-menus": ["skills/design/SKILL.md", "skills/build/SKILL.md", "scripts/builder-profile.py"],
     "patch-smell-routes-meta": ["skills/design/SKILL.md", "skills/meta/SKILL.md"],
     "prototype-product-same-lifecycle-static": ["scripts/_lib/project_definition.py", "scripts/build-contract.py", "scripts/acceptance-profile.py"],

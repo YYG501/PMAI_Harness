@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import json
 import sys
+from pathlib import Path
 
 
 payload = json.load(sys.stdin)
@@ -36,12 +37,46 @@ if "result" in payload:
                     "lifecycle",
                     "stopping_point",
                     "observations",
+                    "independent_evidence",
+                    "manifest",
+                    "digest",
+                    "event_log",
                 ],
+                "evidence_digest": (
+                    "tampered-digest"
+                    if "--tamper-digest" in sys.argv
+                    else payload.get("evidence_manifest", {}).get("digest")
+                ),
             }
         )
     )
 else:
     expected = case["expected"]
+    harness = payload.get("case", {}).get("harness", {})
+    workspace = harness.get("workspace")
+    event_log = harness.get("event_log")
+    if event_log:
+        Path(event_log).write_text(
+            "\n".join(
+                json.dumps(event, ensure_ascii=False)
+                for event in [
+                    {"kind": "lifecycle", "value": "iterating"},
+                    {"kind": "tool", "name": "fixture.write"},
+                    {"kind": "command", "name": "git diff"},
+                ]
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+    if workspace and "--no-change" not in sys.argv:
+        if "--touch-protected" in sys.argv:
+            target = harness.get("protected_paths", ["docs/modules/demo/spec.md"])[0]
+        else:
+            target = harness.get("expected_changed_paths", ["PRODUCT-STATE.md"])[0]
+        target_path = Path(workspace) / target
+        target_path.parent.mkdir(parents=True, exist_ok=True)
+        previous = target_path.read_text(encoding="utf-8") if target_path.exists() else ""
+        target_path.write_text(previous + "\n定稿后现状已同步。\n", encoding="utf-8")
     print(
         json.dumps(
             {

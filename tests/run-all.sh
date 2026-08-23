@@ -65,6 +65,7 @@ CORE_SUITES=(
   test-final-validation.sh
   test-finalize-candidate.sh
   test-finalize-work.sh
+  test-finalize-audit-binding.sh
   test-build-maintenance-boundaries.sh
   test-prototype-boundary.sh
   test-doc-impact.sh
@@ -79,6 +80,8 @@ CORE_SUITES=(
   test-close-work.sh
   test-land-work-v2.sh
   test-skill-eval.sh
+  test-session-eval-adapters.sh
+  test-invariant-coverage.sh
   test-run-suite.sh
   test-cleanup-pending.sh
   test-cancel-work.sh
@@ -174,7 +177,11 @@ echo "▶ Running deterministic + session skill evals"
 echo "─────────────────────────────────────────"
 EVAL_ARGS=(--mode all)
 if [ "${PMAI_REQUIRE_SESSION_EVALS:-0}" = "1" ]; then
-  EVAL_ARGS+=(--require-runner --require-judge)
+  EVAL_ARGS+=(--require-runner --require-judge --require-runtime-evidence)
+  session_cases="${PMAI_SESSION_EVAL_CASES:-natural-language-finalize}"
+  for session_case in $session_cases; do
+    EVAL_ARGS+=(--session-case "$session_case")
+  done
 fi
 EVAL_OUTPUT=$(python3 "$REPO_ROOT/scripts/skill-eval.py" "${EVAL_ARGS[@]}" 2>&1)
 EVAL_RC=$?

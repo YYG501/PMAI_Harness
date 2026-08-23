@@ -21,7 +21,8 @@ test_schema_and_static_cases() {
 
 test_missing_runner_is_explicit() {
   start_test "skill-eval: runner 缺失时显式 skip，gate 模式显式 fail"
-  if ! python3 "$EVAL" --mode session --case natural-language-finalize >/tmp/skill-eval-skip.$$ 2>&1; then
+  if ! env -u PMAI_SKILL_EVAL_RUNNER -u PMAI_SKILL_EVAL_JUDGE \
+      python3 "$EVAL" --mode session --case natural-language-finalize >/tmp/skill-eval-skip.$$ 2>&1; then
     _fail "default missing runner should skip without failing"
     return
   fi
@@ -29,7 +30,8 @@ test_missing_runner_is_explicit() {
     _fail "missing runner skip should be visible"
     return
   fi
-  if python3 "$EVAL" --mode session --case natural-language-finalize --require-runner >/tmp/skill-eval-required.$$ 2>&1; then
+  if env -u PMAI_SKILL_EVAL_RUNNER -u PMAI_SKILL_EVAL_JUDGE \
+      python3 "$EVAL" --mode session --case natural-language-finalize --require-runner >/tmp/skill-eval-required.$$ 2>&1; then
     _fail "required missing runner should fail"
     return
   fi
@@ -47,7 +49,25 @@ test_runner_and_judge_protocol() {
       --runner-command "python3 $FAKE" \
       --judge-command "python3 $FAKE" \
       --require-runner --require-judge --results-dir "$T" >/tmp/skill-eval-run.$$ 2>&1 && \
-      [ -f "$T/natural-language-finalize.json" ]; then
+      [ -f "$T/natural-language-finalize.json" ] && \
+      python3 - "$T/natural-language-finalize.json" <<'PY'
+import hashlib
+import json
+import sys
+
+payload = json.load(open(sys.argv[1], encoding="utf-8"))
+manifest = payload["evidence_manifest"]
+assert manifest["independent_evidence"]["changed_paths"] == ["PRODUCT-STATE.md"]
+assert manifest["independent_evidence"]["protected_violations"] == []
+assert manifest["independent_evidence"]["event_log"]["kinds"] == ["command", "lifecycle", "tool"]
+assert manifest["independent_evidence"]["event_log"]["count"] == 3
+core = {key: value for key, value in manifest.items() if key != "digest"}
+expected = hashlib.sha256(
+    json.dumps(core, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")
+).hexdigest()
+assert manifest["digest"] == expected
+PY
+  then
     pass_test
   else
     _fail "runner/judge protocol should pass and persist evidence"
@@ -56,9 +76,54 @@ test_runner_and_judge_protocol() {
   rm -rf "$T"
 }
 
+test_runner_claim_without_workspace_change_fails() {
+  start_test "skill-eval: runner 伪成功但 fixture 无实际修改时失败"
+  if python3 "$EVAL" --mode session --case natural-language-finalize \
+      --runner-command "python3 $FAKE --no-change" \
+      --judge-command "python3 $FAKE" >/tmp/skill-eval-no-change.$$ 2>&1; then
+    _fail "runner claim without workspace change should fail"
+  elif grep -q '未观察到预期修改' /tmp/skill-eval-no-change.$$; then
+    pass_test
+  else
+    _fail "pseudo-success failure should cite independent workspace evidence"
+    cat /tmp/skill-eval-no-change.$$ >&2
+  fi
+  rm -f /tmp/skill-eval-no-change.$$
+}
+
+test_protected_path_change_fails() {
+  start_test "skill-eval: fixture 保护路径被修改时失败"
+  if python3 "$EVAL" --mode session --case natural-language-finalize \
+      --runner-command "python3 $FAKE --touch-protected" \
+      --judge-command "python3 $FAKE" >/tmp/skill-eval-protected.$$ 2>&1; then
+    _fail "protected path change should fail"
+  elif grep -q '越界修改' /tmp/skill-eval-protected.$$; then
+    pass_test
+  else
+    _fail "protected path failure should be explicit"
+    cat /tmp/skill-eval-protected.$$ >&2
+  fi
+  rm -f /tmp/skill-eval-protected.$$
+}
+
+test_tampered_digest_fails() {
+  start_test "skill-eval: judge 回传篡改 digest 时失败"
+  if python3 "$EVAL" --mode session --case natural-language-finalize \
+      --runner-command "python3 $FAKE" \
+      --judge-command "python3 $FAKE --tamper-digest" >/tmp/skill-eval-tampered.$$ 2>&1; then
+    _fail "tampered digest should fail"
+  elif grep -q 'evidence_digest' /tmp/skill-eval-tampered.$$; then
+    pass_test
+  else
+    _fail "tampered digest failure should be explicit"
+    cat /tmp/skill-eval-tampered.$$ >&2
+  fi
+  rm -f /tmp/skill-eval-tampered.$$
+}
+
 test_runner_without_judge_cannot_pass() {
   start_test "skill-eval: runner 自报结果且无 judge 时只能 skip"
-  if ! python3 "$EVAL" --mode session --case natural-language-finalize \
+  if ! env -u PMAI_SKILL_EVAL_JUDGE python3 "$EVAL" --mode session --case natural-language-finalize \
       --runner-command "python3 $FAKE" >/tmp/skill-eval-no-judge.$$ 2>&1; then
     _fail "missing optional judge should skip without failing"
     cat /tmp/skill-eval-no-judge.$$ >&2
@@ -110,6 +175,9 @@ test_release_gate_requires_external_capabilities() {
 test_schema_and_static_cases
 test_missing_runner_is_explicit
 test_runner_and_judge_protocol
+test_runner_claim_without_workspace_change_fails
+test_protected_path_change_fails
+test_tampered_digest_fails
 test_runner_without_judge_cannot_pass
 test_judge_must_be_independent
 test_release_gate_requires_external_capabilities
