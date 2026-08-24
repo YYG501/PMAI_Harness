@@ -9,7 +9,7 @@
     "evidence": [
       {"turn": 1, "excerpt": "本轮已经把 Product Manifest 与本地部署配置拆开，我会同时更新这两个模块的文档。"},
       {"turn": 2, "excerpt": "平台许可证三件套已经完成重写；Product Manifest 三件套也已更新。"},
-      {"turn": 3, "excerpt": "最终只把 Product Manifest 第 3 版重新标记为可建造，并把 /pmai-build product-onboarding-product-manifest 作为 Next Up。"}
+      {"turn": 3, "excerpt": "最终只把 Product Manifest 第 3 版重新标记为可建造，并在同一轮进入 Build 预检。"}
     ]
   },
   "input": {
@@ -17,14 +17,14 @@
     "context": ["两个模块都存在完整三件套", "两者可能共同服务一个建造结果，也可能各有独立建造结果", "仓库中还有其它 active work"]
   },
   "expected": {
-    "behaviors": ["开场绑定一个主模块", "把相关模块归为既有约束、同步规则或独立后续工作", "共同服务同一结果时把关联影响写进主模块规格", "只让一个主模块进入 ready_to_build", "完成回执说明本次包含范围和后续范围"],
+    "behaviors": ["开场绑定一个主模块", "把相关模块归为既有约束、同步规则或独立后续工作", "共同服务同一结果时把关联影响写进主模块规格", "只让一个主模块进入 ready_to_build", "ready 后自动进入 Build 预检并展示确认卡", "完成回执说明本次包含范围和后续范围"],
     "observations": ["primary_module_bound", "related_modules_classified", "single_ready_to_build_entry", "build_scope_receipt_complete"],
-    "lifecycle_order": ["designing", "ready_to_build"],
-    "stopping_point": "ready_to_build"
+    "lifecycle_order": ["designing", "ready_to_build", "building"],
+    "stopping_point": "pm_review"
   },
   "forbidden": {
-    "behaviors": ["两个完整规格改完后只给其中一个模糊状态", "同时留下多个无范围说明的 build 入口", "把仓库其它 active work 当成本轮 build 范围"],
-    "observations": ["orphaned_module_docs", "ambiguous_build_entry", "unrelated_active_work_included"]
+    "behaviors": ["两个完整规格改完后只给其中一个模糊状态", "同时留下多个无范围说明的 build 入口", "把仓库其它 active work 当成本轮 build 范围", "停在设计完成并等待 PM 手工询问下一步"],
+    "observations": ["orphaned_module_docs", "ambiguous_build_entry", "unrelated_active_work_included", "manual_next_step_pause"]
   },
   "judge": {
     "enabled": true,

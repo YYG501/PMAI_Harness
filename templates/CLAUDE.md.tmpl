@@ -54,7 +54,7 @@
 |---|---|---|---|
 | 轻 | typo、链接、格式、很小代码修补 | 代码走 `/pmai-quick-fix`；纯文档记录可在 main 由 `/pmai-record` 归位 | 需要沉淀长期基线时 `/pmai-record` |
 | 中 | 一个模块内的完整讨论 / 规格演进 | 已有 active design 直接继续 `/pmai-design`；上下文不清时先用 `/pmai-status` 只读恢复 | 可先停住；下次仍继续 design，不用 record 收尾 |
-| 重 | 需要实际建原型或真实产品能力 | `/pmai-design` 定稿并自动固定建造依据 → `/pmai-build <模块或文档>` → 看结果多轮修改 | PM 明确定稿后自动最终检查、合入 main、更新正式文档 |
+| 重 | 需要实际建原型或真实产品能力 | `/pmai-design` 定稿并自动固定建造依据 → 同一轮进入 `/pmai-build` 预检 → PM 确认工作环境和构建工具后开工 → 看结果多轮修改 | PM 明确定稿后自动最终检查、合入 main、更新正式文档 |
 | 产品级 | 新产品立项，或定位、用户、价值、边界、MVP 需要重判 | `/pmai-proposal` 完整澄清并同步精简产品基线 | 回到 `/pmai-design` 设计第一个或原来的模块 |
 
 ### 主入口
@@ -64,6 +64,7 @@
 - `/pmai-design "<一句话需求>"` — 起新功能 / 重做模块；按需自动调用 meta、mockup、spec-writing，提交建造依据。
 - `/pmai-design <模块>` — 讨论、收范围、写模块三件套。
 - `/pmai-build <模块或功能文档>` — 静默读取项目级构建类型和默认验收，在一张卡中展示推荐的工作环境、构建工具及全部有效选项；PM 一次确认后构建、迭代、最终检查并自动收尾。
+- Design 定稿后不等待 PM 询问“下一步”：ready currentness 通过后同一轮进入 Build 预检并展示确认卡；普通 `designing` 不得覆盖 `ready_to_build`，需要改变已批准设计时使用 `build-contract.py reopen-ready --reason "..."`，active build 则走 `replan-work.py`。
 - `/pmai-status` — 只读当前现状并建议下一步，不自动改变状态。
 - `/pmai-doctor` — 按需只读检查全局框架、宿主入口，以及当前消费仓的文件归位、mockups、正式实现入口和活动工作；不代替 status，不自动升级、修复或迁移文件。
 - 已有 `building / iterating / final_check` 时，“启动看看”“还有什么问题”“继续改当前结果”等自然语言继续当前 `/pmai-build`。先读取 `active-build-context.py` 并重新编译 context pack；除非 PM 明确开启无关新工作，否则不转成无范围通用 QA。多个 active build 只问模块，不猜。

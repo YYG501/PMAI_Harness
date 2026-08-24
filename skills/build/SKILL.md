@@ -89,6 +89,8 @@ worktree 候选 retire 后把旧 worktree/branch 送入现有 pending cleanup �
 
 ## 1. 恢复建造依据
 
+Design 定稿后的 handoff 不在 ready 状态停住：`ready_to_build` currentness、项目定义和批准目标通过后，本轮立即进入本 skill 的预检，并只展示一次“工作环境 + 构建工具”确认卡。只有等待这张卡的 PM 确认时才暂停；不得让 PM 先询问下一步或手动串联 `/pmai-build`。
+
 定位模块和建造锚点：模块 `docs/modules/<模块>/spec.md` 或 PM 明确给出的功能型规格文档。优先读取 design 留下的：
 
 - `lifecycle_state=ready_to_build`；

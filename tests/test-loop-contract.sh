@@ -106,7 +106,8 @@ test_route_priority_and_recovery_are_explicit() {
     _fail "cross-stage priority is incomplete"
   elif ! grep -q 'landing 已完成就不重复 merge' "$CONTRACT" \
     || ! grep -q 'Proposal 只读复核通过就不创建新版本' "$CONTRACT" \
-    || ! grep -q 'ready_to_build.*不重写设计依据' "$CONTRACT"; then
+    || ! grep -q 'ready_to_build.*不重写设计依据' "$CONTRACT" \
+    || ! grep -q '同一 ready checkpoint.*复用既有授权' "$CONTRACT"; then
     _fail "recovery must not replay completed checkpoints"
   elif ! grep -q '不是 Session Eval' "$CONTRACT" \
     || ! grep -q '以后进入 Session Eval' "$CONTRACT"; then

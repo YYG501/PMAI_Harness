@@ -127,7 +127,7 @@ python3 "$PMAI_HOME/scripts/replan-work.py" retire \
 
 ### 0. 先过产品方向门
 
-若当前模块是早于 Proposal 合同的既有 active design，只有 PM 明确确认继续该轮工作后，才可先运行 `legacy-work-recovery.py accept-design` 建立恢复记录。旧 `ready_to_build` 必须退回 `designing` 重新确认目标；该入口不生成 Proposal、不修改三件套正文，也不允许创建新模块。之后继续执行本 skill，直到本轮关闭；新的产品级方向变化仍必须回 Proposal。
+若当前模块是早于 Proposal 合同的既有 active design，只有 PM 明确确认继续该轮工作后，才可先运行 `legacy-work-recovery.py accept-design` 建立恢复记录。旧 `ready_to_build` 必须通过该显式恢复入口退回 `designing` 重新确认目标；当前版本的 ready 若需要改变设计，则只能运行 `build-contract.py reopen-ready --reason ...`，普通 `designing` 不得覆盖 ready 合同。两类入口都不生成 Proposal、不修改三件套正文，也不允许创建新模块。之后继续执行本 skill，直到本轮关闭；新的产品级方向变化仍必须回 Proposal。
 
 在创建新模块、开启新工作轮次或继续写模块文件前，先运行：
 
@@ -158,6 +158,7 @@ design 进行中一旦发现需要改变的是产品定位、目标用户、核�
 MODULE_DIR="$REPO_ROOT/docs/modules/<模块>"
 CONTEXT_PACK="$REPO_ROOT/.pm-workflow/context/<模块>.json"
 
+# 仅新模块或已经处于 designing 的同轮幂等恢复才运行 designing。
 python3 "$PMAI_HOME/scripts/build-contract.py" designing "$MODULE_DIR"
 python3 "$PMAI_HOME/scripts/context-pack.py" \
   --repo-root "$REPO_ROOT" \
@@ -458,7 +459,7 @@ git -C "$REPO_ROOT" commit -m "design(<模块>): mark ready to build"
 本次 build：<唯一主模块、要建的结果和覆盖的业务页面>。
 关联范围：<本次一并包含的规则同步>；<留作独立后续工作的模块>。
 
-▶ Next Up：可以直接继续 /pmai-build <模块>；构建细节由框架自动选择。
+▶ Next Up：已自动进入 /pmai-build 预检；现在展示工作环境和构建工具确认卡，等待 PM 确认后开工。
 ```
 
 ## Rules
@@ -472,8 +473,9 @@ git -C "$REPO_ROOT" commit -m "design(<模块>): mark ready to build"
 - 提问直接遵守 `askuser-rules.md`：先说明本轮要收敛的业务范围，按 frontier rounds 一轮展示互不依赖的问题，使用业务语言；已有结论能推出的事项不再问。
 - 产品决定题必须先 open / open-round 再展示，用户消息只 answer 当时同一轮 pending 的 gate，写完每条决定后分别 consume 到 D 编号；frontier 清空后必须完成 shared-understanding 收据；摘要不能创建或继承授权。
 - spec 只保留当前有效的最终目标；历史只进 Git 和 `decisions.md`，原型和代码只作证据与缺口检查。
-- design 定稿自动提交建造依据并进入 `ready_to_build`，不要求 PM 理解保存依据、worktree 或合同字段。
+- design 定稿自动提交建造依据并进入 `ready_to_build`，随后在同一轮自动进入 `/pmai-build` 预检并展示工作环境 / 构建工具确认卡；不要求 PM 理解保存依据、worktree 或合同字段，也不把“下一步运行 build”留成手工菜单。
 - `ready_to_build` 同时固定设计依据、PM 决定授权 checkpoint 和精确目标路径；build 只能消费这份批准范围，不能临时猜页面、复用旧答复或扩大路径。
+- 普通 `designing` 是设计状态核对入口，不得撤销有效 `ready_to_build`；PM 明确改变已批准设计时，必须走显式 `reopen-ready`，active build 仍走 `replan-work.py`。
 - 首次可建造 design 必须生成并校验 `.pm-workflow/project.yml`；之后默认复用，重定义必须由 PM 明确确认。
 - 一轮 design 只留下一个明确 build 入口；跨模块影响要么纳入主模块规格，要么成为有独立状态的后续 design 工作。
 - 全程不改主原型或真实产品代码；实现进入 `/pmai-build`。

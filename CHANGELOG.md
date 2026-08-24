@@ -14,6 +14,8 @@ PM-AI-Workflow 生成器仓的演进记录。本文件**只记影响已安装框
 
 ## 未发布
 
+- `fix(design-ready)`: **收紧 Design 到 Build 的 ready 交接与恢复合同。** Design 定稿后在同一轮进入 Build 预检并展示工作环境 / 构建工具确认卡；普通 `designing` 不再覆盖 `ready_to_build`，新增显式 `build-contract.py reopen-ready --reason` 处理 PM 明确要求的设计重开。ready 对同一 checkpoint、source hash、revision 和目标路径幂等重试，复用已绑定授权并自动刷新 context pack；不同批准输入必须显式 reopen。新增旧 baseline、重复授权、缓存 hash 漂移和 ready 状态不变回归，不自动迁移现有消费仓或安装态。
+
 - `fix(build-contract)`: 实现提交范围门允许与业务代码一同提交的 `tests/` / `test/` 验证资产，同时继续阻断未批准的产品文档和源码路径。
 
 - `fix(final-validation)`: 保持实现根隔离的同时识别命令明确引用的仓库根相对验证路径，让根下 `tests/` 等既有消费仓命令能在 detached validation worktree 中真实执行，并把实际工作目录写入证据。

@@ -187,6 +187,38 @@ def compile_current_context_pack(repo_root: Path, module_dir: Path) -> dict[str,
     return payload
 
 
+def refresh_context_pack(
+    repo_root: Path, module_dir: Path, output_path: Path
+) -> dict[str, Any]:
+    """Recompile the derived pack at the caller's path after authoritative state changes."""
+
+    script = Path(__file__).resolve().parents[1] / "context-pack.py"
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(script),
+            "--repo-root",
+            str(repo_root),
+            "--module",
+            str(module_dir),
+            "--output",
+            str(output_path),
+        ],
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    if result.returncode != 0:
+        detail = result.stderr.strip() or result.stdout.strip() or "context pack 刷新失败"
+        raise ReadyContractError(detail)
+    try:
+        return load_context_pack(output_path)
+    except ReadyContractError:
+        raise
+    except OSError as exc:
+        raise ReadyContractError(f"无法读取刷新后的 context pack：{output_path}: {exc}") from exc
+
+
 def ready_currentness(repo_root: Path, module_dir: Path, meta: dict[str, Any]) -> dict[str, Any]:
     try:
         pack = compile_current_context_pack(repo_root, module_dir)

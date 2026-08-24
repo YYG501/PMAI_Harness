@@ -110,7 +110,8 @@ test_answer_is_bound_once_across_compaction() {
   # Compression summary may suggest another question, but summaries have no
   # command path that can create/open/answer/consume a gate. Returning to design
   # starts a fresh authorization baseline and leaves the old answer consumed.
-  python3 "$BUILD_CONTRACT" designing "$MODULE" >/dev/null
+  python3 "$BUILD_CONTRACT" reopen-ready "$MODULE" \
+    --reason "测试：PM 明确要求重新确认设计" >/dev/null
   if python3 "$GATE" answer "$MODULE" --gate-id "$gate_id" --event-id "$event_id" \
     >/tmp/decision-gate.$$ 2>/tmp/decision-gate.err.$$; then
     _fail "one answer event must not be reusable after it was consumed"

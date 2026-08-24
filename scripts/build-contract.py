@@ -68,6 +68,7 @@ from _lib.ready_contract import (
     compile_current_context_pack,
     load_context_pack,
     normalize_paths,
+    refresh_context_pack,
     ready_currentness,
     validate_ready_pack,
 )
@@ -750,6 +751,11 @@ def cmd_designing(args: argparse.Namespace) -> None:
     path = meta_path(module_dir)
     meta = read_meta(module_dir) if path.exists() else default_meta(module_dir)
     existing_lifecycle = canonical_state(meta).lifecycle_state
+    if existing_lifecycle == "ready_to_build":
+        raise SystemExit(
+            "当前模块已经是 ready_to_build；普通 designing 不会撤销已批准建造依据。"
+            "如需重新设计，请先显式运行 reopen-ready 并提供重开理由。"
+        )
     if existing_lifecycle in {"building", "iterating", "final_check"}:
         raise SystemExit(
             "当前模块仍有 active build，不能直接覆盖为 designing；"
@@ -762,22 +768,6 @@ def cmd_designing(args: argparse.Namespace) -> None:
     baseline_commit = optional_git_head(repo_root)
     if baseline_commit is None and "decision_gates" in meta:
         raise SystemExit("当前模块已有 decision gate，但无法读取 Git HEAD，不能重置授权基线。")
-    if (
-        baseline_commit is not None
-        and existing_lifecycle == "ready_to_build"
-        and "decision_gates" not in meta
-    ):
-        old_checkpoint = optional(meta.get("design_checkpoint_commit"))
-        if old_checkpoint:
-            parent = subprocess.run(
-                ["git", "-C", str(repo_root), "rev-parse", f"{old_checkpoint}^"],
-                text=True,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                check=False,
-            )
-            if parent.returncode == 0 and parent.stdout.strip():
-                baseline_commit = parent.stdout.strip()
     if baseline_commit is not None:
         try:
             ensure_decision_gate_contract(
@@ -793,6 +783,67 @@ def cmd_designing(args: argparse.Namespace) -> None:
         # Returning an old ready contract to design is the explicit point at
         # which its next approval adopts the current hash scope.
         meta["source_hash_version"] = CURRENT_SOURCE_HASH_VERSION
+    write_meta(module_dir, meta)
+    print(json.dumps(meta, ensure_ascii=False))
+
+
+def cmd_reopen_ready(args: argparse.Namespace) -> None:
+    """Explicitly return an unstarted ready handoff to design."""
+
+    module_dir = Path(args.module_dir)
+    meta = read_meta(module_dir)
+    existing_lifecycle = canonical_state(meta).lifecycle_state
+    if existing_lifecycle != "ready_to_build":
+        raise SystemExit(
+            f"当前模块 lifecycle={existing_lifecycle or '<empty>'}；"
+            "reopen-ready 只适用于尚未开工的 ready_to_build。"
+        )
+    if isinstance(meta.get("build"), dict):
+        raise SystemExit(
+            "当前模块已有 build contract；active build 必须先通过 replan-work.py 返回 design。"
+        )
+    reason = str(args.reason or "").strip()
+    if not reason:
+        raise SystemExit("reopen-ready 必须提供非空 --reason。")
+
+    repo_root = repo_root_for(module_dir)
+    baseline_commit = optional_git_head(repo_root)
+    if baseline_commit is None:
+        raise SystemExit("无法读取 Git HEAD，不能安全重置 ready 授权基线。")
+    try:
+        ensure_decision_gate_contract(
+            meta,
+            baseline_commit=baseline_commit,
+            reset_baseline=True,
+        )
+    except DecisionGateError as exc:
+        raise SystemExit(str(exc)) from exc
+
+    previous_ready = {
+        key: meta[key]
+        for key in (
+            "approved_source_hash",
+            "design_checkpoint_commit",
+            "approved_target",
+            "design_revision",
+            "source_hash_version",
+        )
+        if key in meta
+    }
+    for key in ("approved_source_hash", "design_checkpoint_commit", "approved_target"):
+        meta.pop(key, None)
+    meta["status"] = "active"
+    meta["lifecycle_state"] = "designing"
+    meta.pop("stage", None)
+    meta["source_hash_version"] = CURRENT_SOURCE_HASH_VERSION
+    meta["ready_reopen"] = {
+        "status": "accepted",
+        "reason": reason,
+        "from_lifecycle": "ready_to_build",
+        "checkpoint_commit": baseline_commit,
+        "previous_ready": previous_ready,
+        "reopened_at": now_iso(),
+    }
     write_meta(module_dir, meta)
     print(json.dumps(meta, ensure_ascii=False))
 
@@ -821,6 +872,27 @@ def cmd_ready(args: argparse.Namespace) -> None:
             f"新的 ready 合同必须使用 source_hash_version={CURRENT_SOURCE_HASH_VERSION}。"
         )
     target_paths = validate_target_paths(repo_root, args.target_path)
+    existing_lifecycle = canonical_state(meta).lifecycle_state
+    if existing_lifecycle not in {"designing", "ready_to_build"}:
+        raise SystemExit(
+            f"当前模块 lifecycle={existing_lifecycle}；ready 只能从 designing 创建，"
+            "或对同一 checkpoint 的 ready_to_build 进行幂等重试；active build 必须沿用现有 build。"
+        )
+    if existing_lifecycle == "ready_to_build":
+        existing_source_hash = optional(meta.get("approved_source_hash"))
+        existing_checkpoint = optional(meta.get("design_checkpoint_commit"))
+        existing_revision = int(meta.get("design_revision") or 1)
+        existing_target = approved_target_paths(meta)
+        if (
+            existing_source_hash != source_hash
+            or existing_checkpoint != checkpoint
+            or existing_revision != args.design_revision
+            or existing_target != target_paths
+        ):
+            raise SystemExit(
+                "当前 ready_to_build 已绑定不同的设计依据、checkpoint、revision 或目标路径；"
+                "如需采用新的设计依据，请先显式运行 reopen-ready。"
+            )
     try:
         bind_ready_authorization(
             repo_root,
@@ -839,6 +911,13 @@ def cmd_ready(args: argparse.Namespace) -> None:
     meta["design_checkpoint_commit"] = checkpoint
     meta["approved_target"] = {"paths": target_paths}
     write_meta(module_dir, meta)
+    try:
+        refreshed_pack = refresh_context_pack(repo_root, module_dir, Path(args.context_pack))
+        validate_ready_pack(repo_root, module_dir, meta, refreshed_pack)
+    except ReadyContractError as exc:
+        # .work-meta.json is authoritative.  A failed cache refresh leaves a
+        # valid ready contract that the same checkpoint can repair on retry.
+        raise SystemExit(f"ready 合同已写入，但 context pack 刷新失败：{exc}") from exc
     print(json.dumps(meta, ensure_ascii=False))
 
 
@@ -1930,6 +2009,13 @@ def build_parser() -> argparse.ArgumentParser:
     designing = sub.add_parser("designing", help="mark the module as being discussed")
     designing.add_argument("module_dir")
     designing.set_defaults(func=cmd_designing)
+
+    reopen_ready = sub.add_parser(
+        "reopen-ready", help="explicitly return an unstarted ready handoff to design"
+    )
+    reopen_ready.add_argument("module_dir")
+    reopen_ready.add_argument("--reason", required=True)
+    reopen_ready.set_defaults(func=cmd_reopen_ready)
 
     ready = sub.add_parser("ready", help="record the approved and committed design checkpoint")
     ready.add_argument("module_dir")

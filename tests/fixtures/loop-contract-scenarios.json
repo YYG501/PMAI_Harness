@@ -8,7 +8,7 @@
     {"id": "SCN-D01", "phase": "design", "trigger": "权限或关键任务路径仍有真实岔路", "action": "await_pm_decision", "destination": "design", "checkpoint": "displayed_pending_gate_no_authority_write"},
     {"id": "SCN-D02", "phase": "design", "trigger": "产品定位目标用户价值边界或 MVP 前提变化", "action": "route_proposal", "destination": "proposal", "checkpoint": "revalidate_design_after_proposal"},
     {"id": "SCN-D03", "phase": "design", "trigger": "规格编译发现模块覆盖遗漏", "action": "retry_current", "destination": "design", "checkpoint": "return_to_open_module_question"},
-    {"id": "SCN-D04", "phase": "design", "trigger": "决定规格项目定义和 ready currentness 全部通过", "action": "advance", "destination": "build", "checkpoint": "validated_ready_to_build"},
+    {"id": "SCN-D04", "phase": "design", "trigger": "决定规格项目定义和 ready currentness 全部通过", "action": "advance", "destination": "build", "checkpoint": "validated_ready_to_build_and_build_preflight"},
     {"id": "SCN-B01", "phase": "build", "trigger": "实现与当前规格不一致或存在普通 bug", "action": "retry_current", "destination": "build", "checkpoint": "keep_current_build"},
     {"id": "SCN-B02", "phase": "build", "trigger": "模块对象权限规则关键路径或验收目标变化", "action": "route_design", "destination": "design", "checkpoint": "freeze_candidate_before_replan"},
     {"id": "SCN-B03", "phase": "build", "trigger": "产品用户价值边界或 MVP 前提变化", "action": "route_proposal", "destination": "proposal", "checkpoint": "freeze_candidate_before_replan"},

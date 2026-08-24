@@ -40,7 +40,7 @@ Proposal、Design、Build 共用这一份循环协议。它规定 Agent 每轮�
 3. **模块模型高于实现调整**：同时触及模块规则和实现细节时，执行 `route_design`；不得把模型变化降级为 accepted delta。
 4. **PM 最新反馈高于旧定稿意图**：final checks 期间收到新的产品或体验反馈，先回快速迭代并重新分流；纯验收发现的实现缺口可以保留原定稿意图。
 5. **阶段证据高于口头进度**：只有验证通过才能 `advance`；“已经做了”“应该没问题”和工具自报成功都不构成完成证据。
-6. **已完成 checkpoint 不重放**：landing 已完成就不重复 merge，Proposal 只读复核通过就不创建新版本，`ready_to_build` 已有效就不重写设计依据。
+6. **已完成 checkpoint 不重放**：landing 已完成就不重复 merge，Proposal 只读复核通过就不创建新版本，`ready_to_build` 已有效就不重写设计依据；同一 ready checkpoint 的重试只修复派生缓存并复用既有授权。
 
 ## 4. Proposal Loop Mapping
 
@@ -86,7 +86,7 @@ Proposal、Design、Build 共用这一份循环协议。它规定 Agent 每轮�
 | SCN-D01 | design | 权限或关键任务路径仍有真实岔路 | await_pm_decision | design | displayed_pending_gate_no_authority_write |
 | SCN-D02 | design | 产品定位目标用户价值边界或 MVP 前提变化 | route_proposal | proposal | revalidate_design_after_proposal |
 | SCN-D03 | design | 规格编译发现模块覆盖遗漏 | retry_current | design | return_to_open_module_question |
-| SCN-D04 | design | 决定规格项目定义和 ready currentness 全部通过 | advance | build | validated_ready_to_build |
+| SCN-D04 | design | 决定规格项目定义和 ready currentness 全部通过 | advance | build | validated_ready_to_build_and_build_preflight |
 | SCN-B01 | build | 实现与当前规格不一致或存在普通 bug | retry_current | build | keep_current_build |
 | SCN-B02 | build | 模块对象权限规则关键路径或验收目标变化 | route_design | design | freeze_candidate_before_replan |
 | SCN-B03 | build | 产品用户价值边界或 MVP 前提变化 | route_proposal | proposal | freeze_candidate_before_replan |

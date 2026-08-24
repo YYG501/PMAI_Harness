@@ -1555,7 +1555,8 @@ PY
 test_contract_lark_frontmatter_only_delta_is_rejected() {
   start_test "build-contract: Lark delta requires a real authority body change"
   setup_contract_fixture product
-  python3 "$BUILD_CONTRACT" designing "$MODULE_DIR" >/dev/null
+  python3 "$BUILD_CONTRACT" reopen-ready "$MODULE_DIR" \
+    --reason "测试需要重新确认规格正文" >/dev/null
   printf '# Spec\n\nNew rule\n' > "$MODULE_DIR/spec.md"
   git -C "$T" add -- docs/modules/pet-import/spec.md docs/modules/pet-import/.work-meta.json
   git -C "$T" commit -q -m "approve target body before review"

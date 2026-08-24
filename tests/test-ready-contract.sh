@@ -199,8 +199,13 @@ assert "TODO.md" in pack["source_hash_scope"]
 PY
   then
     _fail "legacy ready should preserve v1 context scope"
-  elif ! python3 "$BUILD_CONTRACT" designing "$MODULE" >/dev/null; then
-    _fail "legacy ready should be able to return to design"
+  elif python3 "$BUILD_CONTRACT" designing "$MODULE" >/tmp/ready-contract.$$ 2>/tmp/ready-contract.err.$$; then
+    _fail "ordinary designing must not overwrite legacy ready"
+  elif ! grep -q "reopen-ready" /tmp/ready-contract.err.$$; then
+    _fail "ready overwrite rejection should name the explicit reopen entry"
+  elif ! python3 "$BUILD_CONTRACT" reopen-ready "$MODULE" \
+    --reason "PM 明确要求重新确认设计" >/dev/null; then
+    _fail "legacy ready should be able to return to design through reopen-ready"
   elif ! python3 "$CONTEXT_PACK" --repo-root "$T" --module "$MODULE" \
     --output "$LEGACY" >/dev/null; then
     _fail "redesign should compile a current context pack"
@@ -215,6 +220,176 @@ PY
     _fail "explicit redesign should upgrade the next approval to v2 scope"
   else
     pass_test
+  fi
+  rm -f /tmp/ready-contract.$$ /tmp/ready-contract.err.$$
+  teardown_fixture
+}
+
+test_designing_rejects_ready_without_mutation() {
+  start_test "ready-contract: ordinary designing rejects ready and preserves the contract"
+  setup_fixture
+  local before after
+  before=$(cat "$MODULE/.work-meta.json")
+  if python3 "$BUILD_CONTRACT" designing "$MODULE" >/tmp/ready-contract.$$ 2>/tmp/ready-contract.err.$$; then
+    _fail "ordinary designing must reject ready_to_build"
+  else
+    after=$(cat "$MODULE/.work-meta.json")
+    if [ "$before" != "$after" ]; then
+      _fail "rejected designing must not mutate ready metadata"
+    elif ! grep -q "reopen-ready" /tmp/ready-contract.err.$$; then
+      _fail "rejection must provide the explicit reopen entry"
+    else
+      pass_test
+    fi
+  fi
+  rm -f /tmp/ready-contract.$$ /tmp/ready-contract.err.$$
+  teardown_fixture
+}
+
+test_reopen_ready_clears_authorization_and_records_reason() {
+  start_test "ready-contract: explicit reopen clears ready bindings and preserves the reason"
+  setup_fixture
+  local reason="PM 要求重新确认租户接管规则" reopen_baseline
+  reopen_baseline=$(git -C "$T" rev-parse HEAD)
+  if ! python3 "$BUILD_CONTRACT" reopen-ready "$MODULE" --reason "$reason" \
+    >/tmp/ready-contract.$$ 2>/tmp/ready-contract.err.$$; then
+    _fail "explicit reopen-ready should return an unstarted ready module to designing"
+    cat /tmp/ready-contract.err.$$ >&2
+  elif ! python3 - "$MODULE/.work-meta.json" "$reason" "$reopen_baseline" <<'PY'
+import json, sys
+path, reason, checkpoint = sys.argv[1:]
+meta = json.load(open(path))
+assert meta["lifecycle_state"] == "designing"
+assert "approved_source_hash" not in meta
+assert "design_checkpoint_commit" not in meta
+assert "approved_target" not in meta
+assert meta["decision_gates"]["ready_authorization"] is None
+assert meta["decision_gates"]["design_base_commit"] == checkpoint
+reopen = meta["ready_reopen"]
+assert reopen["status"] == "accepted"
+assert reopen["reason"] == reason
+assert reopen["from_lifecycle"] == "ready_to_build"
+assert reopen["previous_ready"]["design_checkpoint_commit"]
+PY
+  then
+    _fail "reopen-ready should clear ready bindings, reset the gate baseline, and retain the reason"
+  else
+    pass_test
+  fi
+  rm -f /tmp/ready-contract.$$ /tmp/ready-contract.err.$$
+  teardown_fixture
+}
+
+test_ready_retry_is_idempotent_and_refreshes_pack() {
+  start_test "ready-contract: same checkpoint retry is idempotent and refreshes context pack"
+  setup_fixture
+  local first_meta first_bound first_verified retry_meta retry_bound retry_verified
+  first_meta=$(python3 - "$MODULE/.work-meta.json" <<'PY'
+import json, sys
+meta = json.load(open(sys.argv[1]))
+contract = meta["decision_gates"]
+items = {
+    item["gate_id"]: item.get("consumed_by")
+    for item in contract["items"]
+    if item.get("consumed_by") is not None
+}
+print(json.dumps({"meta": meta, "items": items}, sort_keys=True))
+PY
+)
+  first_bound=$(python3 -c 'import json,sys; print(json.load(sys.stdin)["items"])' <<<"$first_meta")
+  first_verified=$(python3 -c 'import json,sys; print(json.load(sys.stdin)["meta"]["decision_gates"]["ready_authorization"]["verified_at"])' <<<"$first_meta")
+  if ! python3 "$BUILD_CONTRACT" ready "$MODULE" \
+    --approved-source-hash "$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["source_hash"])' "$PACK")" \
+    --checkpoint-commit "$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["design_checkpoint_commit"])' "$MODULE/.work-meta.json")" \
+    --context-pack "$PACK" --target-path "$TARGET" --design-revision 1 >/dev/null; then
+    _fail "same ready checkpoint should be retryable"
+  else
+    retry_meta=$(python3 - "$MODULE/.work-meta.json" <<'PY'
+import json, sys
+meta = json.load(open(sys.argv[1]))
+contract = meta["decision_gates"]
+items = {
+    item["gate_id"]: item.get("consumed_by")
+    for item in contract["items"]
+    if item.get("consumed_by") is not None
+}
+print(json.dumps({"meta": meta, "items": items}, sort_keys=True))
+PY
+)
+    retry_bound=$(python3 -c 'import json,sys; print(json.load(sys.stdin)["items"])' <<<"$retry_meta")
+    retry_verified=$(python3 -c 'import json,sys; print(json.load(sys.stdin)["meta"]["decision_gates"]["ready_authorization"]["verified_at"])' <<<"$retry_meta")
+    if ! python3 - "$PACK" "$MODULE/.work-meta.json" "$first_bound" "$retry_bound" "$first_verified" "$retry_verified" <<'PY'
+import json, sys
+pack = json.load(open(sys.argv[1]))
+meta = json.load(open(sys.argv[2]))
+assert pack["approved_source_hash"] == meta["approved_source_hash"]
+assert pack["source_hash"] == meta["approved_source_hash"]
+assert sys.argv[3] == sys.argv[4]
+assert sys.argv[5] == sys.argv[6]
+PY
+    then
+      _fail "same-checkpoint retry must preserve receipt bindings and timestamp"
+    else
+      pass_test
+    fi
+  fi
+  rm -f /tmp/ready-contract.$$ /tmp/ready-contract.err.$$
+  teardown_fixture
+}
+
+test_ready_retry_rejects_different_checkpoint() {
+  start_test "ready-contract: different checkpoint retry fails without mutation"
+  setup_fixture
+  local before after current_head approved
+  before=$(cat "$MODULE/.work-meta.json")
+  current_head=$(git -C "$T" rev-parse HEAD)
+  approved=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["approved_source_hash"])' "$MODULE/.work-meta.json")
+  if python3 "$BUILD_CONTRACT" ready "$MODULE" \
+    --approved-source-hash "$approved" --checkpoint-commit "$current_head" \
+    --context-pack "$PACK" --target-path "$TARGET" --design-revision 1 \
+    >/tmp/ready-contract.$$ 2>/tmp/ready-contract.err.$$; then
+    _fail "different ready checkpoint must be rejected"
+  else
+    after=$(cat "$MODULE/.work-meta.json")
+    if [ "$before" != "$after" ]; then
+      _fail "different-checkpoint rejection must not mutate ready metadata"
+    elif ! grep -q "reopen-ready" /tmp/ready-contract.err.$$; then
+      _fail "different-checkpoint rejection should name reopen-ready"
+    else
+      pass_test
+    fi
+  fi
+  rm -f /tmp/ready-contract.$$ /tmp/ready-contract.err.$$
+  teardown_fixture
+}
+
+test_ready_rejects_active_build_without_mutation() {
+  start_test "ready-contract: ready cannot overwrite an active build"
+  setup_fixture
+  if ! python3 "$BUILD_CONTRACT" start "$MODULE" \
+    --anchor docs/modules/access/spec.md \
+    --mode main --executor native \
+    --target-kind prototype --target-path "$TARGET" --entrypoint prototype \
+    --required-check prototype-boundary >/dev/null; then
+    _fail "fixture should enter building before the ready overwrite check"
+  else
+    local before after
+    before=$(cat "$MODULE/.work-meta.json")
+    if python3 "$BUILD_CONTRACT" ready "$MODULE" \
+      --approved-source-hash "$APPROVED" --checkpoint-commit "$CHECKPOINT" \
+      --context-pack "$PACK" --target-path "$TARGET" --design-revision 1 \
+      >/tmp/ready-contract.$$ 2>/tmp/ready-contract.err.$$; then
+      _fail "ready must reject an active build"
+    else
+      after=$(cat "$MODULE/.work-meta.json")
+      if [ "$before" != "$after" ]; then
+        _fail "active-build ready rejection must not mutate the build contract"
+      elif ! grep -q "active build" /tmp/ready-contract.err.$$; then
+        _fail "active-build ready rejection should explain that the existing build must continue"
+      else
+        pass_test
+      fi
+    fi
   fi
   rm -f /tmp/ready-contract.$$ /tmp/ready-contract.err.$$
   teardown_fixture
@@ -408,6 +583,11 @@ PY
 test_ready_to_build_starts_building
 test_ready_currentness_and_legacy_cache_ignore
 test_legacy_ready_keeps_v1_hash_scope
+test_designing_rejects_ready_without_mutation
+test_reopen_ready_clears_authorization_and_records_reason
+test_ready_retry_is_idempotent_and_refreshes_pack
+test_ready_retry_rejects_different_checkpoint
+test_ready_rejects_active_build_without_mutation
 test_ready_scope_and_dirty_preflight
 test_build_start_rejects_paths_outside_project_contract
 test_build_start_requires_project_definition

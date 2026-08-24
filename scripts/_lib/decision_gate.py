@@ -1188,6 +1188,21 @@ def bind_ready_authorization(
         contract = new_contract(checkpoint_commit)
     else:
         contract = validate_contract(raw_contract, work_id=str(meta.get("id") or ""))
+    existing_ready = contract.get("ready_authorization")
+    if isinstance(existing_ready, dict) and existing_ready.get("status") == "verified":
+        existing_checkpoint = existing_ready.get("checkpoint_commit")
+        if existing_checkpoint == checkpoint_commit:
+            # A retry of the same ready checkpoint must validate the existing
+            # receipts without consuming them or changing their timestamps.
+            return validate_ready_authorization(
+                repo_root,
+                module_dir,
+                {**meta, "decision_gates": contract},
+            )
+        raise DecisionGateError(
+            "当前模块已经绑定另一个 ready checkpoint；"
+            "如需采用新的设计依据，请先显式运行 reopen-ready。"
+        )
     baseline = contract["design_base_commit"]
     ancestry = _git(repo_root, "merge-base", "--is-ancestor", baseline, checkpoint_commit, check=False)
     if ancestry.returncode != 0:

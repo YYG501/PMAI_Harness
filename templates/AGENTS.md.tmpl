@@ -57,8 +57,9 @@
 - 本仓已经初始化完成，不能在这里再跑 `/pmai-init-project`。
 - 没有 active work 时先按影响分流：产品定位、目标用户、核心问题与价值、产品边界或 MVP 证明目标变化走 `/pmai-proposal`；已 close 结果上的错字、单文案、局部样式、常量或符合现有规格的小缺陷走 `/pmai-quick-fix`；模块对象、规则、规格或验收路径变化走 `/pmai-design`。design 先校验当前 Proposal、编译 context pack、浮现上游约束和相关旧决定，再按真实未知项讨论；`meta`、`mockup`、`spec-writing` 是 design 按需调用后返回主线的内部能力，不让 PM 手动拼接。
 - design 过程中发现需要纠正产品方向时，暂停模块收敛并进入完整 `/pmai-proposal` 修订；确认后回到同一 design。`record` 只在无 active work 时补录已经确认的 TODO、术语、跨模块规则或项目级理路，不修改 Proposal、模块规格或业务代码。
-- 首个可建造 design 定稿时，由 PM 一次确认建造对象与技术方案，生成 `.pm-workflow/project.yml`；后续默认复用。design 自动提交定义与本模块建造依据并进入 `ready_to_build`。
-- 推进实现：读 `/pmai-build`。框架校验 `.pm-workflow/project.yml`，把项目类型编译成实现深度合同并后台生成默认验收；AI 用一张卡向 PM 展示推荐的工作环境、构建工具及全部有效选项，PM 一次确认或直接改选后开工。工具列表必须排除当前主控；开工卡不得重复展示项目类型或验收方案。
+- 首个可建造 design 定稿时，由 PM 一次确认建造对象与技术方案，生成 `.pm-workflow/project.yml`；后续默认复用。design 自动提交定义与本模块建造依据并进入 `ready_to_build`，随后在同一轮自动进入 `/pmai-build` 预检。
+- 推进实现：ready currentness、项目定义和批准目标通过后，直接展示工作环境与构建工具确认卡；PM 一次确认或直接改选后开工。不得停在“下一步？”等待 PM 手动串联 `/pmai-build`。工具列表必须排除当前主控；开工卡不得重复展示项目类型或验收方案。
+- 普通 `designing` 只用于设计状态核对，不得覆盖有效 `ready_to_build`。PM 明确改变已批准设计时，使用 `build-contract.py reopen-ready --reason "..."`；已经开工的 build 必须通过 `replan-work.py` 返回 design。
 - PM 看结果后直接说哪里要改；active build 内的文案、布局、按钮和局部交互由当前会话直接处理，每轮只跑热更新、typecheck 和当前页面走查，保留同一个 dev server 与浏览器连接，完成后立即回“已修改，可刷新查看”。PM 说“可以提交 / 定稿 / 可以合并”即授权打开定稿车道：对冻结 commit 在 validation worktree 统一运行一次 production build 和完整路径验收；通过后先合入 main，再基于 landed diff 生成文档影响地图并同步文档。
 - `/pmai-build-close` 保留为兼容与恢复入口，用于中断续跑、merge 冲突后重试或 `landed/docs_pending` 文档恢复。
 - 已 close 模块再次修改时，若变化涉及产品定义就进入新一轮 design → build：复用长期模块文档，但不得复用上一轮的 delta、验收证据或收尾游标。
