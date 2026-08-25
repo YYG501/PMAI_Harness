@@ -416,6 +416,8 @@ for root in managed_roots:
     managed_invocations.add(("node", f"{root}/hooks/review-skill-guard.cjs"))
     managed_invocations.add(("node", f"{root}/hooks/active-build-guard.cjs"))
     managed_invocations.add(("node", f"{root}/hooks/decision-gate-guard.cjs"))
+    managed_invocations.add(("node", f"{root}/hooks/finalize-route-guard.cjs"))
+    managed_invocations.add(("node", f"{root}/hooks/ui-impact-guard.cjs"))
 
 # Migrate the former project-local hook form used before I-mini. Only these
 # exact invocations are owned; a user command that merely contains the same
@@ -424,6 +426,8 @@ managed_invocations.update({
     ("node", "$CLAUDE_PROJECT_DIR/hooks/review-skill-guard.cjs"),
     ("node", "$CLAUDE_PROJECT_DIR/hooks/active-build-guard.cjs"),
     ("node", "$CLAUDE_PROJECT_DIR/hooks/decision-gate-guard.cjs"),
+    ("node", "$CLAUDE_PROJECT_DIR/hooks/finalize-route-guard.cjs"),
+    ("node", "$CLAUDE_PROJECT_DIR/hooks/ui-impact-guard.cjs"),
 })
 
 def is_pmai_managed_hook(hook):

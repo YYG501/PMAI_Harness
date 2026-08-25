@@ -115,7 +115,7 @@
   "invariants": {
     "I-LC1": {"guard": ["scripts/build-contract.py"], "tests": ["tests/test-build-contract.sh"], "session_cases": ["natural-language-finalize"], "status": "session-gap"},
     "I-LC2": {"guard": ["scripts/build-contract.py"], "tests": ["tests/test-build-contract.sh"], "session_cases": [], "status": "deterministic-only"},
-    "I-LC3": {"guard": ["scripts/finalize-work.py"], "tests": ["tests/test-finalize-work.sh"], "session_cases": ["natural-language-finalize"], "status": "session-gap"},
+    "I-LC3": {"guard": ["scripts/finalize-work.py", "hooks/finalize-route-guard.cjs"], "tests": ["tests/test-finalize-work.sh", "tests/test-ui-impact.sh"], "session_cases": ["natural-language-finalize"], "status": "session-gap"},
     "I-LC4": {"guard": ["scripts/build-contract.py"], "tests": ["tests/test-build-contract.sh"], "session_cases": [], "status": "deterministic-only"},
     "I-LC5": {"guard": ["scripts/land-work.sh"], "tests": ["tests/test-land-work-v2.sh"], "session_cases": ["natural-language-finalize"], "status": "session-gap"},
     "I-CB1": {"guard": ["hooks/active-build-guard.cjs"], "tests": ["tests/test-active-build-guard.sh"], "session_cases": [], "status": "deterministic-only"},
@@ -124,7 +124,7 @@
     "I-CB4": {"guard": ["hooks/active-build-guard.cjs"], "tests": ["tests/test-active-build-guard.sh"], "session_cases": [], "status": "deterministic-only"},
     "I-CB5": {"guard": ["scripts/build-contract.py"], "tests": ["tests/test-build-contract.sh"], "session_cases": [], "status": "deterministic-only"},
     "I-CB6": {"guard": ["hooks/active-build-guard.cjs"], "tests": ["tests/test-active-build-guard.sh"], "session_cases": [], "status": "deterministic-only"},
-    "I-CR1": {"guard": ["scripts/finalize-work.py"], "tests": ["tests/test-finalize-work.sh"], "session_cases": ["natural-language-finalize"], "status": "session-gap"},
+    "I-CR1": {"guard": ["scripts/finalize-work.py", "hooks/finalize-route-guard.cjs"], "tests": ["tests/test-finalize-work.sh", "tests/test-ui-impact.sh"], "session_cases": ["natural-language-finalize"], "status": "session-gap"},
     "I-CR2": {"guard": ["scripts/land-work.sh"], "tests": ["tests/test-land-work-v2.sh"], "session_cases": [], "status": "deterministic-only"},
     "I-CR3": {"guard": ["scripts/land-work.sh"], "tests": ["tests/test-land-work-v2.sh"], "session_cases": [], "status": "deterministic-only"},
     "I-CR4": {"guard": ["scripts/land-work.sh"], "tests": ["tests/test-land-work-v2.sh"], "session_cases": ["natural-language-finalize"], "status": "session-gap"},

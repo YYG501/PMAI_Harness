@@ -17,6 +17,8 @@ python3 "$PMAI_HOME/scripts/finalize-work.py" \
   <有结构化 coverage 时追加 --coverage-plan "<checks-spec.json>" --coverage-artifacts "<页面抓取目录>"，并逐项追加 --coverage-confirm-state "<check id>">
 ```
 
+宿主 hook 同时把“可以提交 / 可以合并 / 定稿 / 这版可以了”等明确授权绑定到当前会话的短期 finalize intent。意图存在时，PreToolUse(Bash) 禁止先手工跑 test、typecheck、build、browser、commit 或 merge；只允许先进入下面的 candidate / resumable runner，以及 runner 返回后明确要求的 evidence checkpoint。该 intent 不新增 lifecycle 状态，生命周期仍以 `.work-meta.json` 和 runner artifact 为准。
+
 正常从 `iterating` 冻结当前候选时统一调用下面的入口；它先机械绑定正确候选，再调用同一个可恢复 runner。新 build 的批准目标树已经跟随 HEAD 时绑定 HEAD；已记录实现与后续 HEAD 的批准目标树相同时保留已记录实现；legacy recovery 优先绑定经 PM 确认的 checkpoint，只有承接该 checkpoint 的已记录实现确实继续改变批准目标树时才前移。Skill 不手工改 baseline，也不自行拼接 Git commit 与 finalize 命令：
 
 ```bash
@@ -31,6 +33,8 @@ python3 "$PMAI_HOME/scripts/finalize-candidate.py" \
 已经进入 `final_check / landed / documenting` 的中断恢复继续直接调用 `finalize-work.py`，避免把恢复状态重新写回 `iterating`。
 
 runner 按 v4+ lifecycle 续跑并自动完成 currentness、隔离命令验证、浏览器批次、coverage evidence（提供输入时）、evidence 记录、review-ready、accept 和 landing。已经通过且仍绑定同一 commit/source hash 的机械项不重复执行。
+
+统一入口的顺序是机器合同：`PM finalize intent → finalize-candidate.py → finalize-work.py`。任何手工检查、提交或 merge 都不能替代 candidate binding；`build-close` 只作为中断、冲突和 `landed/docs_pending` 的恢复入口。
 
 `.pm-workflow/project.yml` 的所有 `commands.*` 与 `web.start` 都从 `implementation.root` 执行。新定义在写入和新 build 启动时机械校验 entrypoint 必须位于 root 内，并拒绝命令再次使用 `pnpm --dir <root>`、`npm --prefix <root>`、`yarn --cwd <root>` 或 `cd <root> &&` 选择同一目录。合法 legacy recovery 只在 final validation 运行时精确移除一次重复前缀，并把原命令和适配结果写入 artifact；不改写旧 `project.yml`。
 

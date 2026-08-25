@@ -343,6 +343,7 @@ git -C "$BUILD_DIR" commit -m "build(<模块>): record iteration"
 先给 PM 看结果，不把定稿验收挡在“能刷新看到页面/功能”之前。PM 每轮反馈后进入快速迭代车道：
 
 1. 先运行 `active-build-context.py` 重新校验 currentness，再读取当前 build 合同的 `target + delivery_policy`；UI 相关时同时重新读取 `DESIGN.md` 并执行当前声明的项目级设计系统 Skill；校验或 Skill 访问失败时不得修改、提交或写 accepted delta；
+   - 如果本轮改动涉及弹窗、抽屉、共享容器、宽高、响应式 class、grid/flex 或其它布局尺寸，首次编辑前运行 `ui-impact.py inspect`（或由项目 hook 自动运行）。它必须先解析页面引用的共享 primitive 及其尺寸约束；发现 primitive cascade / variant 可能覆盖页面规则时，先修正影响面再编辑。检查结果可写入当前 audit 目录，不新增生命周期状态；新文件或无法解析的外部组件如实记为 `limited`，不能伪造“已检查”。
 2. 先按决定层级分流 PM 新反馈，不能只因反馈发生在 build 中就记成 delta：
    - 改变产品定位、目标用户、核心问题与价值、产品职责边界、MVP 证明目标或关键成立前提 → 停止 build，转 `/pmai-proposal`；不得写 accepted delta；
    - 改变模块对象、关系、动作、状态、权限、真相源、业务规则、信息结构、任务路径、关键交互，或要求原型接入真实数据库、鉴权、外部写入、生产基础设施 → 停止 build，转 `/pmai-design`；不得写 accepted delta；
@@ -353,6 +354,7 @@ git -C "$BUILD_DIR" commit -m "build(<模块>): record iteration"
 4. “还有什么问题”的检查只对账当前 spec、active decisions、accepted deltas 和批准路径，并应用当前实现深度合同；原型默认模拟的底层能力不算缺口，规格已经明确的行为也不得重新包装成 PM 开放问题；
 5. 文案、布局、按钮和局部交互由当前会话直接修改；只有跨模块大型重构才重新确认并调用外部 builder；
 6. 只跑 profile 的 `iteration_checks`：热更新、typecheck 和当前页面/受影响交互走查；不得运行 production build、全路径浏览器验收或重启仍健康的 dev server；
+   - UI 尺寸 / 布局改动必须在受影响 browser flow 中加入 `size` 断言：`["size", "<selector>", "<expected>", "<width|height>", "<tolerance>"]`。该命令读取浏览器实际 `getBoundingClientRect()`，不是根据源码 class 推断；断言失败保持 `iterating`。
 7. 提交该轮修改并用 `build-contract.py commit` 记录新实现 commit；`commit` 会再次校验 currentness，过期时失败关闭，不得绕过；
 8. 用 `record-evidence --lane iteration` 绑定该 commit 记录快检，不得把 iteration evidence 冒充 final evidence；
 9. 立即告诉 PM“已修改，可刷新查看”，继续复用同一个页面与浏览器连接；定稿请求前不准备 `review-ready`，也不在后台偷跑完整 `final_checks`。

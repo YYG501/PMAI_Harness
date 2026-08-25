@@ -24,6 +24,16 @@
             "type": "command",
             "command": "node \"${PMAI_HOME:-$HOME/.pmai}/hooks/decision-gate-guard.cjs\"",
             "timeout": 8
+          },
+          {
+            "type": "command",
+            "command": "node \"${PMAI_HOME:-$HOME/.pmai}/hooks/finalize-route-guard.cjs\"",
+            "timeout": 8
+          },
+          {
+            "type": "command",
+            "command": "node \"${PMAI_HOME:-$HOME/.pmai}/hooks/ui-impact-guard.cjs\"",
+            "timeout": 8
           }
         ]
       },
@@ -33,6 +43,11 @@
           {
             "type": "command",
             "command": "node \"${PMAI_HOME:-$HOME/.pmai}/hooks/decision-gate-guard.cjs\"",
+            "timeout": 8
+          },
+          {
+            "type": "command",
+            "command": "node \"${PMAI_HOME:-$HOME/.pmai}/hooks/finalize-route-guard.cjs\"",
             "timeout": 8
           }
         ]
@@ -55,6 +70,11 @@
           {
             "type": "command",
             "command": "node \"${PMAI_HOME:-$HOME/.pmai}/hooks/active-build-guard.cjs\"",
+            "timeout": 8
+          },
+          {
+            "type": "command",
+            "command": "node \"${PMAI_HOME:-$HOME/.pmai}/hooks/finalize-route-guard.cjs\"",
             "timeout": 8
           }
         ]

@@ -31,6 +31,8 @@ python3 "$PMAI_HOME/scripts/status-view.py" --banner-only --skill BUILD-CLOSE ||
 
 正常用户链路不再要求 PM 额外运行本命令：PM 在 `/pmai-build` 看完结果后说“可以提交 / 定稿 / 可以合并”，build 会自动进入最终检查并调用同一个 finalize。
 
+宿主 finalize-route hook 会把这些自然语言授权直接路由到唯一 runner，并阻止在 runner 前手工拼接检查、提交或 merge；本入口不能绕过该护栏。
+
 本入口只处理：
 
 - 兼容旧的手动 `/pmai-build-close` 习惯；

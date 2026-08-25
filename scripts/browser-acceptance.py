@@ -39,6 +39,7 @@ ALLOWED_COMMANDS = {
     "reload",
     "responsive",
     "screenshot",
+    "size",
     "scroll",
     "select",
     "snapshot",
@@ -166,6 +167,45 @@ def expand(value: str, *, base_url: str, audit_dir: Path) -> str:
     return value.replace("{base_url}", base_url).replace("{audit_dir}", str(audit_dir))
 
 
+def compile_size_command(flow_id: str, command_index: int, command: list[str]) -> list[str]:
+    if len(command) not in {3, 4, 5}:
+        raise SystemExit(
+            f"browser flow {flow_id} command #{command_index} size 必须是 "
+            "[size, selector, expected, dimension?, tolerance?]。"
+        )
+    selector = command[1]
+    expected = command[2]
+    dimension = command[3] if len(command) >= 4 else "width"
+    tolerance = command[4] if len(command) == 5 else "2"
+    if dimension not in {"width", "height"}:
+        raise SystemExit(f"browser flow {flow_id} size dimension 只能是 width 或 height。")
+    try:
+        float(expected)
+        float(tolerance)
+    except ValueError as exc:
+        raise SystemExit(f"browser flow {flow_id} size 的 expected / tolerance 必须是数字。") from exc
+    if float(tolerance) < 0:
+        raise SystemExit(f"browser flow {flow_id} size tolerance 不能为负数。")
+    selector_json = json.dumps(selector, ensure_ascii=False)
+    dimension_json = json.dumps(dimension)
+    return [
+        "js",
+        "(() => {"
+        f"const selector = {selector_json};"
+        f"const expected = {float(expected)};"
+        f"const tolerance = {float(tolerance)};"
+        f"const dimension = {dimension_json};"
+        "const element = document.querySelector(selector);"
+        "if (!element) throw new Error(`UI size selector not found: ${selector}`);"
+        "const rect = element.getBoundingClientRect();"
+        "const actual = rect[dimension];"
+        "if (Math.abs(actual - expected) > tolerance) "
+        "throw new Error(`UI size mismatch: ${selector} ${dimension}=${actual}, expected=${expected}±${tolerance}`);"
+        "return {selector, dimension, expected, actual, tolerance};"
+        "})()",
+    ]
+
+
 def timing_command(audit_path: Path, *args: str) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
         [
@@ -275,6 +315,8 @@ def compile_manifest(
                     raise SystemExit(
                         f"browser flow {flow_id} goto 必须是 manifest.base_url + route。"
                     )
+            if command[0] == "size":
+                command = compile_size_command(flow_id, command_index, command)
             if command[0] == "screenshot":
                 if len(command) != 2:
                     raise SystemExit(

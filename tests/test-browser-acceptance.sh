@@ -40,6 +40,7 @@ JSON
       "commands": [
         ["goto", "{base_url}/ops/licenses"],
         ["wait", "main"],
+        ["size", "[data-testid=dialog]", "960", "width", "2"],
         ["screenshot", "{audit_dir}/license-list.png"],
         ["click", "button[data-testid=filter]"],
         ["is", "visible", "[data-testid=filter-panel]"]
@@ -54,7 +55,8 @@ test "$1" = "chain" || exit 2
 payload="$FAKE_BROWSE_COUNT.payload"
 cat > "$payload"
 python3 -c 'import json,pathlib,sys
-commands=json.load(open(sys.argv[1])); assert len(commands)==5
+commands=json.load(open(sys.argv[1])); assert len(commands)==6
+assert commands[2][0] == "js" and "getBoundingClientRect" in commands[2][1]
 for command in commands:
     if command[0]=="screenshot": pathlib.Path(command[1]).write_bytes(b"png")
 path=pathlib.Path(sys.argv[2]); path.write_text(path.read_text()+"1\n" if path.exists() else "1\n")' \

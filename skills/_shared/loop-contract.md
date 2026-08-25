@@ -67,6 +67,7 @@ Proposal、Design、Build 共用这一份循环协议。它规定 Agent 每轮�
 - **输入**：current `ready_to_build`、项目建造定义、build contract、目标与实现深度、当前 implementation commit、iteration/final evidence、replan candidate 和 PM 新反馈。
 - **允许动作**：只在批准目标内实现，运行当前车道的检查，记录绑定 commit/source hash 的 evidence；仅对不改变产品基线和模块模型的已批准小调整记录 scoped adjustment。
 - **验证**：每轮实现都先校验 currentness 和路径；快速车道只跑 iteration checks；PM 明确定稿后才冻结候选并运行 final checks；landing 与文档阶段分别复用现有 runner/checkpoint。
+- **UI 前置验证**：高风险布局改动在首次编辑前检查共享 primitive / cascade，完成后用 browser 的实际尺寸断言验证 computed result；这是一项附加证据，不新增生命周期状态，也不能替代最终 browser acceptance。
 - **当前阶段重试**：bug、样式、文案、局部交互偏差和验收发现的实现缺口执行 `retry_current`。纯验收缺口保留定稿意图并重跑失效的 final evidence；PM 新反馈先清定稿意图再重新分流。
 - **返回上游**：产品方向变化执行 `route_proposal`；模块模型、关键路径、验收目标或 prototype real edge 变化执行 `route_design`；两者都不得写 accepted delta。
 - **等待 PM**：新 build 的工作环境/构建工具确认、不可逆动作、多个 active build 无法唯一定位时执行 `await_pm_decision`。

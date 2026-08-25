@@ -41,3 +41,9 @@
 - HTML、图片或静态 mockup 只应用了设计规则时，只能说“按该设计系统规则探索”。只有真实实现已经安装并实际导入对应 Core / 组件，且通过该 Skill 要求的检查后，才能声称“使用了该设计系统组件”。
 
 PMAI 的验收继续对照 `DESIGN.md`、模块规格、当前实现和本合同；项目 Skill 的专属检查作为附加证据接入，不取代 production build、浏览器验收或 prototype boundary。
+
+## 5. 高风险 UI 影响面与尺寸证据
+
+涉及弹窗、抽屉、共享容器、宽高、响应式 utility、grid/flex 或布局结构时，首次页面编辑前必须完成一次轻量影响面检查：沿页面的本地 import 找到实际复用的 primitive，列出其可能覆盖页面的尺寸约束（例如 `sm:max-w-*`），并确认本轮改动的 cascade / variant 处理方式。PMAI 提供 `scripts/ui-impact.py inspect` 作为确定性 helper；项目级设计系统可追加检查，但不能跳过该影响面检查。
+
+改动完成后，browser acceptance 对受影响元素使用 `size` 命令读取 `getBoundingClientRect()` 的实际宽度或高度，并绑定期望值与容差。截图用于视觉证据，不能替代实际尺寸断言；没有 selector、实际尺寸或 helper 结果时，不能宣称尺寸已验证。

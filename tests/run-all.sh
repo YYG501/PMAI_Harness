@@ -60,6 +60,7 @@ CORE_SUITES=(
   test-acceptance-profile.sh
   test-candidate-binding.sh
   test-browser-acceptance.sh
+  test-ui-impact.sh
   test-coverage-evidence.sh
   test-build-timing.sh
   test-final-validation.sh

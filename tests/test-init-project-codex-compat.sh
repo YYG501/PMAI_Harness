@@ -82,7 +82,11 @@ test_codex_hooks_template_shape() {
   assert_file_contains "$CODEX_HOOKS_TMPL" "review-skill-guard.cjs" "Codex hooks should wire review guard" || return
   assert_file_contains "$CODEX_HOOKS_TMPL" "active-build-guard.cjs" "Codex hooks should wire active build continuation" || return
   assert_file_contains "$CODEX_HOOKS_TMPL" "decision-gate-guard.cjs" "Codex hooks should bind PM answers and guard decision writes" || return
+  assert_file_contains "$CODEX_HOOKS_TMPL" "finalize-route-guard.cjs" "Codex hooks should route PM finalization to the unified runner" || return
+  assert_file_contains "$CODEX_HOOKS_TMPL" "ui-impact-guard.cjs" "Codex hooks should guard high-risk UI edits" || return
   assert_file_contains "$SETTINGS_TMPL" "decision-gate-guard.cjs" "Claude hooks should bind PM answers and guard decision writes" || return
+  assert_file_contains "$SETTINGS_TMPL" "finalize-route-guard.cjs" "Claude hooks should route PM finalization to the unified runner" || return
+  assert_file_contains "$SETTINGS_TMPL" "ui-impact-guard.cjs" "Claude hooks should guard high-risk UI edits" || return
   assert_file_contains "$CODEX_HOOKS_TMPL" '${PMAI_HOME:-$HOME/.pmai}' "Codex hooks should honor custom PMAI_HOME at runtime" || return
   assert_file_contains "$SETTINGS_TMPL" '${PMAI_HOME:-$HOME/.pmai}' "Claude hooks should honor custom PMAI_HOME at runtime" || return
   python3 -m json.tool "$CODEX_HOOKS_TMPL" >/dev/null || {
