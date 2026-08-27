@@ -14,6 +14,14 @@ PM-AI-Workflow 生成器仓的演进记录。本文件**只记影响已安装框
 
 ## 未发布
 
+- `fix(build+harness)`: **收紧开工确认卡的前台边界并补足个人经验自适应评测证据。** `ready_to_build` 的非阻塞 hooks / 基础设施预检只留在后台，PM 开工前只看到工作环境和构建工具；跨项目个人经验案例增加重复、Skill 已覆盖和条件不适用候选，验证按适用性与独立检查价值过滤而非固定条数截断。
+
+- `fix(spec-writing+build-close)`: **把 landed 后缺口对账的现状写入边界收紧。** 一旦发现漏实现或无依据实现，只记录影响地图与失败证据，保持正式规格、决定和 `PRODUCT-STATE.md` 不变，等待实现或产品决定处理后再恢复文档收尾。
+
+- `fix(design+harness)`: **把跨模块 design 回执和语义证据格式收紧。** 跨模块请求必须逐项记录主模块、关联模块三分类、纳入影响和排除的其它 active work；语义 Judge 只能按 rubric 原文评分，并原样绑定 evidence digest。
+
+- `fix(design+build+harness)`: **把评测中暴露的三类边界收紧。** Design 恢复后重新展示任何未决产品问题都必须先写入新的 `open/open-round` pending gate，不能用聊天编号代替授权；Build 在 PM 只要求继续查看且没有具体修改目标时保持 `iterating`，不得自行发明实现；mockup 遇到未闭合的产品模型分叉先回 Design，不能提前生成看板。同步修正对应 Session Eval 的真实验收边界和回归夹具。
+
 - `fix(harness)`: **对齐真实 Session Eval 的外层超时。** `tests/run-all.sh` 新增可配置的 `PMAI_SESSION_EVAL_TIMEOUT_SECONDS`，默认给外部 runner / judge 900 秒，避免长案例在 runner 自身 600 秒边界前被旧的 300 秒外层套件超时误杀；非法超时配置失败关闭。
 
 - `feat(harness)`: **补齐 18 个隔离 Session Eval fixture 与动态起始状态。** 新增 17 个脱敏消费仓夹具，覆盖 designing / ready_to_build / iterating / landed、已消费决定、目标脏改动、个人经验隔离、跨模块资料和完整 mockup 关联页面；`skill-eval.py` 现在会用当前 checkout 的框架脚本动态构造合法 ready / build 合同，并把 `PMAI_STATE_HOME` 隔离到本次评测。新增预期不变文件校验、真实事件类型要求和触发清单登记；确定性 fake runner 已覆盖 18/18，真实 Codex 结果仍必须由配置好的 runner、独立 judge 和 runtime evidence 单独证明。

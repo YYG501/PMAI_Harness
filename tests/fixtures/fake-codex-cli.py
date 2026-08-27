@@ -24,13 +24,24 @@ if "--skip-git-repo-check" not in sys.argv:
 if "--assert-readonly-prompt" in sys.argv:
     prompt = sys.argv[-1]
     required = (
-        "protected paths are immutable",
-        "expected unchanged paths must remain byte-for-byte unchanged",
-        "This case is read-only from the Harness perspective",
+        "Harness independently checks all changed and protected paths",
+        "Do not modify files outside the PM request",
     )
     if any(fragment not in prompt for fragment in required):
         print("fake runner missing Harness read-only prompt boundary", file=sys.stderr)
         raise SystemExit(18)
+if "--assert-blind-prompt" in sys.argv:
+    prompt = sys.argv[-1]
+    forbidden = (
+        "acceptance_phrase_recognized",
+        "full_checks_run",
+        "required observations:",
+        "forbidden observations:",
+        "stopping_point must be exactly",
+    )
+    if any(fragment in prompt for fragment in forbidden):
+        print("fake runner received evaluator-private criteria", file=sys.stderr)
+        raise SystemExit(19)
 if "--fail-with-stderr" in sys.argv:
     print("fake stderr failure", file=sys.stderr)
     raise SystemExit(7)

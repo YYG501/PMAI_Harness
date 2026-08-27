@@ -165,6 +165,8 @@ python3 "$PMAI_HOME/scripts/mockup-quality.py" verify \
 
 命令返回 `MOCKUP_QUALITY: PASS` 后，才刷新看版呈交。工具受限、没有真实浏览器截图或质量检查未通过时，明确说明尚未完成，不生成伪造的 pass 报告。
 
+mockup 是 design 内部能力，不单独制造生命周期阶段。无浏览器时回执必须同时写明桌面与窄屏验收均为 blocked、阻塞原因和后续补验条件；`designing` 保持不变，不能把 blocked 写成视觉通过。
+
 ### 6. 接回 PMAI 看版
 
 gstack 或用户图片必须通过导入脚本接回本仓；HTML 稿直接写 `mockups/<主题>-<方向>/index.html`。所有候选都登记 `mockups/manifest.json`，再刷新看版：

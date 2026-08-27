@@ -29,7 +29,7 @@
 1. 读 `CLAUDE.md`，把其中的 Claude host 名称按上面的 Host Mapping 映射到当前主控。
 2. 运行 `bash -lc 'PMAI_PREAMBLE_READ_ONLY=1; export PMAI_PREAMBLE_READ_ONLY; source "${PMAI_HOME:-$HOME/.pmai}/scripts/skill-preamble.sh"; unset PMAI_PREAMBLE_READ_ONLY'` 只读检测 PMAI_HOME、当前 worktree、active work 和项目初始化状态；如果文件不存在，先提示 PM 运行 `pmai install` 或检查 `PMAI_HOME`。
    如果 preamble 提示当前目录还没有 PMAI 初始化，停止当前非 init skill，引导 PM 先发 `/pmai-init-project`。它会自动判断全新项目 / 资料目录 / 已有代码库，不需要 PM 手动改跑其它 skill。
-3. 如果当前主控是 Claude Code 或 Codex，运行 `bash "${PMAI_HOME:-$HOME/.pmai}/scripts/install-project-hooks.sh" --check` 只读检查 `.claude/settings.json` 与 `.codex/hooks.json` 是否匹配当前框架；缺失或漂移时先报告，PM 确认后才在项目根运行不带 `--check` 的同一命令确定性刷新。不能只按文件存在就声称 hooks 已更新。Codex 首次启用项目 hooks 时可能要求信任确认。
+3. 如果当前主控是 Claude Code 或 Codex，运行 `bash "${PMAI_HOME:-$HOME/.pmai}/scripts/install-project-hooks.sh" --check` 只读检查 `.claude/settings.json` 与 `.codex/hooks.json` 是否匹配当前框架；缺失或漂移时记录为后台健康状态，只有它阻止当前请求或需要刷新时才向 PM 说明并等待确认。进入 `/pmai-build` 的 `ready_to_build` 开工卡时，非阻塞漂移不得抢占前台，开工前只展示工作环境和构建工具。不能只按文件存在就声称 hooks 已更新。Codex 首次启用项目 hooks 时可能要求信任确认。
 4. 按 `/pmai-status` 等价流程判断当前下一步。先用全局只读扫描恢复普通未完成飞书评审批次；再检查 main 中 pending handoff。handoff 的 route 只作来源记录，当前入口由机器 phase 唯一决定：`proposal → /pmai-proposal`、`design → /pmai-design`、`lark_review → /pmai-lark-review`，fresh checkpoint 后 `closed`。没有 pending 评审时，新项目产品方向尚未完成才引导 `/pmai-proposal`；只有当前 Proposal 已生效，或接入流程已记录依据与 PM 确认日期、`PRODUCT.md` 与依据均已提交且无漂移、机器状态为 `equivalent_baseline`，才进入 design。
 5. 当前请求涉及 UI 时，先读根目录 `DESIGN.md` 和 `$PMAI_HOME/skills/_shared/project-design-system.md`；若 `DESIGN.md` 声明项目级设计系统 Skill，按合同调用或完整读取声明的仓内 `SKILL.md`，不能只读 `DESIGN.md` 后跳过执行规则。
 <!-- PMAI:END consumer-startup -->

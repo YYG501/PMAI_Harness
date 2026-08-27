@@ -85,6 +85,11 @@
       "lifecycle",
       "tool",
       "command"
+    ],
+    "evidence_paths": [
+      "PRODUCT.md",
+      "docs/modules/change-confirmation/discussion.md",
+      "docs/modules/change-confirmation/decisions.md"
     ]
   }
 }

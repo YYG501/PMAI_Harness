@@ -45,21 +45,15 @@
       "恢复后重新读取当前 design skill 与必读规则",
       "提问前重新编译上下文并核对现有页面",
       "在 context pack 之外召回与当前任务相关的个人经验",
-      "依据已召回经验走通首位成员、持续新增、SSO 自动进入和属性变化",
-      "识别逐人开通的重复运营成本并优先检查规则化承接",
-      "页面与菜单存在真实结构分叉时执行 mockup 工作流",
-      "spec-writing 只编译有决定证据的规则",
-      "把初始密码仅展示一次和席位自动释放保留为待确认产品行为"
+      "识别租户开通与当前 Proposal 的产品方向冲突并转入 Proposal",
+      "方向冲突未解决前不写入模块规格、决定或 mockup"
     ],
     "observations": [
       "current_skill_reloaded",
       "context_and_existing_ui_refreshed",
       "personal_memory_recalled_outside_project_authority",
-      "ongoing_operations_walked",
-      "repeated_manual_work_detected",
-      "mockup_workflow_executed",
-      "confirmed_decisions_only_compiled",
-      "unsupported_rules_flagged"
+      "product_scope_conflict_detected",
+      "route_proposal_selected"
     ],
     "lifecycle_order": [
       "designing"
@@ -70,21 +64,14 @@
     "behaviors": [
       "沿用旧消息中的 skill 快照",
       "把个人经验写进 context pack 或当成项目事实",
-      "把 SSO、同步、退出作为所有 design 都必须逐项检查的固定问卷",
-      "把现状取证变成连续二选一",
-      "只验证首位成员建立而忽略后续新增",
-      "默认要求管理员逐人开通产品",
-      "用文字讨论替代需要的 mockup",
+      "绕过 Proposal 直接继续租户开通模块设计",
+      "在产品方向冲突未解决时写入规格、决定或 mockup",
       "把没有决定证据的自动释放或一次展示写进规格"
     ],
     "observations": [
       "stale_skill_rules_used",
       "personal_memory_promoted_to_project_truth",
-      "fixed_sso_checklist_used",
-      "repository_fact_reasked",
-      "first_setup_only",
-      "per_user_manual_activation_defaulted",
-      "mockup_skipped_on_real_fork",
+      "out_of_scope_design_continued",
       "unsupported_behavior_promoted"
     ]
   },
@@ -93,8 +80,8 @@
     "rubric": [
       "跨日恢复同时刷新执行规则和产品上下文",
       "个人经验独立召回且不冒充项目权威或通用 Skill 规则",
-      "方案在相关经验命中时覆盖管理员日常增长而非只覆盖首次建立",
-      "内部能力真实执行并且规格不补造产品行为"
+      "发现租户开通与当前 Proposal 的产品方向冲突并正确转入 Proposal",
+      "方向冲突未解决前不写入模块规格、决定或 mockup"
     ]
   },
   "harness": {
@@ -119,9 +106,7 @@
       ]
     },
     "fixture": "evals/fixtures/design-long-session-operations-recovery",
-    "expected_changed_paths": [
-      "docs/modules/change-confirmation/.work-meta.json"
-    ],
+    "expected_changed_paths": [],
     "expected_unchanged_paths": [
       "PRODUCT.md",
       "PRODUCT-RULES.md",

@@ -159,6 +159,48 @@ PY
   rm -rf "$T"
 }
 
+test_runner_hides_evaluator_private_criteria() {
+  start_test "session-eval adapter: runner 不向模型泄漏 expected/forbidden/rubric"
+  T=$(mktemp -d "${TMPDIR:-/tmp}/pmai-session-blind.XXXXXX")
+  mkdir -p "$T/workspace"
+  printf 'fixture\n' >"$T/workspace/PRODUCT-STATE.md"
+  : >"$T/events.jsonl"
+  if printf '%s\n' "$(python3 - "$T" <<'PY'
+import json
+import sys
+root = sys.argv[1]
+print(json.dumps({
+    "evaluation_id": "eval-blind",
+    "case": {
+        "id": "natural-language-finalize",
+        "title": "private title should not reach runner",
+        "source": {"evidence": [{"excerpt": "private source"}]},
+        "input": {"prompt": "执行用户请求", "context": []},
+        "skills": [],
+        "expected": {"observations": ["acceptance_phrase_recognized"]},
+        "forbidden": {"observations": ["manual_close_requested"]},
+        "judge": {"rubric": ["private rubric"]},
+        "harness": {
+            "workspace": root + "/workspace",
+            "event_log": root + "/events.jsonl",
+            "expected_changed_paths": ["PRODUCT-STATE.md"],
+            "protected_paths": ["PRODUCT-STATE.md"],
+            "expected_unchanged_paths": [],
+            "required_event_kinds": ["lifecycle"],
+        },
+    },
+}))
+PY
+  )" | PMAI_CODEX_COMMAND="python3 $FAKE_CODEX --assert-blind-prompt" \
+    PMAI_FRAMEWORK_ROOT="$REPO_ROOT" python3 "$RUNNER" >"$T/result.json" 2>"$T/runner.stderr"; then
+    pass_test
+  else
+    _fail "runner prompt must hide evaluator-private criteria"
+    cat "$T/result.json" "$T/runner.stderr" >&2
+  fi
+  rm -rf "$T"
+}
+
 test_nonzero_exit_includes_stderr() {
   start_test "session-eval adapter: 非零退出保留 stderr 失败原因"
   T=$(mktemp -d "${TMPDIR:-/tmp}/pmai-session-stderr.XXXXXX")
@@ -245,12 +287,50 @@ PY
   rm -rf "$T" /tmp/session-eval-post-result-transport.$$
 }
 
+test_runner_keeps_redacted_command_output() {
+  start_test "session-eval adapter: 保留受控且脱敏的命令输出证据"
+  if python3 - "$RUNNER" <<'PY'
+import importlib.util
+import json
+import sys
+
+spec = importlib.util.spec_from_file_location("runner", sys.argv[1])
+runner = importlib.util.module_from_spec(spec)
+assert spec.loader is not None
+spec.loader.exec_module(runner)
+raw = json.dumps({
+    "type": "item.completed",
+    "item": {
+        "type": "command_execution",
+        "name": "python",
+        "command": "personal-memory.py recall",
+        "aggregated_output": "api_key=secret-value\n" + ("x" * 4500),
+        "status": "completed",
+        "exit_code": 0,
+    },
+})
+calls = runner.parse_events(raw)["tool_calls"]
+assert len(calls) == 1
+excerpt = calls[0]["output_excerpt"]
+assert "secret-value" not in excerpt
+assert "api_key=[REDACTED]" in excerpt
+assert excerpt.endswith("...[command output truncated]")
+PY
+  then
+    pass_test
+  else
+    _fail "command output evidence should be bounded and redacted"
+  fi
+}
+
 test_real_adapter_protocol
 test_legacy_token_event_compatibility
 test_runtime_requirement_rejects_old_runner
 test_runner_refuses_current_directory_fallback
 test_runner_injects_harness_file_boundaries
+test_runner_hides_evaluator_private_criteria
 test_nonzero_exit_includes_stderr
 test_completed_result_survives_post_result_stream_disconnect
 test_completed_result_survives_transport_turn_failure
+test_runner_keeps_redacted_command_output
 report_results "session-eval-adapters"

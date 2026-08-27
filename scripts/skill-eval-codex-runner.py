@@ -69,12 +69,12 @@ def write_context_pack(case: dict[str, Any], workspace: Path) -> Path:
     lines.extend(["", "## Case context"])
     lines.extend(f"- {item}" for item in context if isinstance(item, str))
     lines.extend(["", "## Harness boundaries"])
-    expected = harness.get("expected_changed_paths", [])
-    protected = harness.get("protected_paths", [])
-    unchanged = harness.get("expected_unchanged_paths", [])
-    lines.append(f"- expected changed paths: {expected}")
-    lines.append(f"- protected paths: {protected}")
-    lines.append(f"- expected unchanged paths: {unchanged}")
+    lines.append(
+        "- The Harness records the actual workspace changes independently; do not fabricate evidence."
+    )
+    lines.append(
+        "- Modify only files required by the PM request. Protected paths and expected outcomes are hidden from the Runner."
+    )
     lines.extend(["", "## Workspace navigation"])
     for relative in (
         "AGENTS.md",
@@ -107,6 +107,24 @@ def text_from_item(item: dict[str, Any]) -> str | None:
         text = "".join(part for part in parts if isinstance(part, str))
         return text.strip() or None
     return None
+
+
+def evidence_output(value: Any, *, limit: int = 4000) -> str:
+    """Keep a small, redacted command result for the independent semantic Judge."""
+    if not isinstance(value, str) or not value.strip():
+        return ""
+    text = value
+    home = str(Path.home())
+    if home and home != "/":
+        text = text.replace(home, "~")
+    text = re.sub(
+        r"(?i)(api[_-]?key|access[_-]?token|secret|password)\s*[:=]\s*([^\s,;]+)",
+        r"\1=[REDACTED]",
+        text,
+    )
+    if len(text) > limit:
+        return text[:limit] + "\n...[command output truncated]"
+    return text
 
 
 def record_provider_line(path: Path | None, line: bytes, elapsed_ms: int) -> None:
@@ -276,7 +294,20 @@ def parse_events(raw: str) -> dict[str, Any]:
         if isinstance(item, dict):
             item_type = item.get("type")
             if item_type in {"function_call", "command_execution", "tool_call"}:
-                tool_calls.append({"type": str(item_type), "name": str(item.get("name") or "unknown")})
+                call = {
+                    "type": str(item_type),
+                    "name": str(item.get("name") or item.get("tool") or "unknown"),
+                }
+                for field in ("command", "arguments", "status", "exit_code"):
+                    value = item.get(field)
+                    if isinstance(value, (str, int, float, bool)):
+                        call[field] = str(value)[:2000] if isinstance(value, str) else value
+                output = evidence_output(item.get("aggregated_output"))
+                if not output:
+                    output = evidence_output(item.get("output"))
+                if output:
+                    call["output_excerpt"] = output
+                tool_calls.append(call)
             if item_type == "agent_message":
                 text = text_from_item(item)
                 if text:
@@ -364,56 +395,24 @@ def prompt_for(case: dict[str, Any], workspace: Path) -> str:
     prompt = str(input_block.get("prompt") or "").strip()
     context = input_block.get("context") if isinstance(input_block.get("context"), list) else []
     context_lines = "\n".join(f"- {item}" for item in context if isinstance(item, str))
-    expected = case.get("expected") if isinstance(case.get("expected"), dict) else {}
-    forbidden = case.get("forbidden") if isinstance(case.get("forbidden"), dict) else {}
     skills = case.get("skills") if isinstance(case.get("skills"), list) else []
     skill_lines = "\n".join(
         f"- $PMAI_HOME/skills/{item}/SKILL.md" for item in skills if isinstance(item, str)
     )
-    observation_vocabulary = sorted(
-        {
-            item
-            for source in (expected.get("observations", []), forbidden.get("observations", []))
-            if isinstance(source, list)
-            for item in source
-            if isinstance(item, str)
-        }
-    )
-    expected_observations = expected.get("observations", [])
-    forbidden_observations = forbidden.get("observations", [])
-    expected_lifecycle = expected.get("lifecycle_order", [])
-    expected_stopping_point = expected.get("stopping_point")
     harness = case.get("harness") if isinstance(case.get("harness"), dict) else {}
-    expected_changed_paths = harness.get("expected_changed_paths", [])
-    protected_paths = harness.get("protected_paths", [])
-    unchanged_paths = harness.get("expected_unchanged_paths", [])
-    if not isinstance(expected_changed_paths, list):
-        expected_changed_paths = []
-    if not isinstance(protected_paths, list):
-        protected_paths = []
-    if not isinstance(unchanged_paths, list):
-        unchanged_paths = []
     context_pack = os.environ.get("PMAI_SESSION_CONTEXT", "").strip()
     boundary_lines = [
         "Harness file boundary:",
-        f"- protected paths are immutable: {protected_paths}",
-        f"- expected unchanged paths must remain byte-for-byte unchanged: {unchanged_paths}",
-        f"- expected changed paths (evidence target, not an instruction to fabricate writes): {expected_changed_paths}",
+        "- The Harness independently checks all changed and protected paths after the run.",
+        "- Do not modify files outside the PM request or claim actions that did not happen.",
     ]
-    if not expected_changed_paths:
-        boundary_lines.append(
-            "- This case is read-only from the Harness perspective: do not edit any workspace file."
-        )
     if context_pack:
         boundary_lines.append(f"- Read the temporary navigation index first: {context_pack}")
     protocol_lines = [
-        "Machine-readable result contract:",
-        "- observations must include every expected observation and must not include forbidden observations.",
-        f"- required observations: {expected_observations}",
-        f"- forbidden observations: {forbidden_observations}",
-        f"- lifecycle must include this ordered sequence: {expected_lifecycle}",
-        f"- stopping_point must be exactly: {expected_stopping_point!r}",
-        "- Do not put a natural-language sentence in stopping_point; use the exact token above.",
+        "Machine-readable run note (untrusted; the evaluator verifies the actual workspace independently):",
+        'PMAI_EVAL_RESULT: {"summary":"...","actions":["..."],"claimed_lifecycle":["..."],"claimed_stopping_point":"..."}',
+        "Use plain-language action labels based only on actions actually performed.",
+        "Do not invent evaluator criteria, expected tokens, or success claims.",
     ]
     return (
         "You are the Runner for a PMAI Session Eval. Work only inside the current Git workspace.\n"
@@ -431,13 +430,8 @@ def prompt_for(case: dict[str, Any], workspace: Path) -> str:
         f"PM intent: {prompt}\n"
         f"Context:\n{context_lines or '- none'}\n\n"
         "After completing the task, briefly report the actions you actually performed.\n"
-        "End your final response with exactly one machine-readable line in this form:\n"
-        'PMAI_EVAL_RESULT: {"observations":["..."],"lifecycle":["..."],"stopping_point":"..."}\n'
-        "Only list observations and lifecycle states you can support from actions actually performed; "
-        "do not infer success from the names below. Use an observation only when the transcript, "
-        "commands, or final workspace supports it.\n"
-        f"Case observation vocabulary (contains both desired and forbidden outcomes): "
-        f"{observation_vocabulary}.\n\n"
+        "End your final response with one machine-readable run note in the form shown below. "
+        "The note is not a pass signal and will not be trusted without independent evidence.\n\n"
         + "\n".join(protocol_lines)
     )
 
@@ -504,6 +498,12 @@ def main() -> int:
             # non-interactive runner.
             "--skip-git-repo-check",
             "--ignore-rules",
+            # Build finalization creates a detached validation worktree. The
+            # workspace is disposable, so explicitly grant the CLI access to
+            # its Git metadata instead of letting the host sandbox reject
+            # `.git/worktrees` while the PMAI contract is being evaluated.
+            "--add-dir",
+            str((workspace / ".git").resolve()),
         ]
         if os.environ.get("PMAI_CODEX_IGNORE_USER_CONFIG") == "1":
             argv.append("--ignore-user-config")
@@ -561,8 +561,6 @@ def main() -> int:
                     failure_reason = ""
             elif parsed["errors"]:
                 failure_reason = parsed["errors"][-1]
-            elif parsed.get("eval_result") is None:
-                failure_reason = "Codex did not emit a valid PMAI_EVAL_RESULT marker"
         except OSError as exc:
             parsed = {"transcript": [], "tool_calls": [], "errors": [], "diagnostics": [], "token_usage": None, "thread_id": "", "model": "", "eval_result": None}
             failure_reason = f"Codex command failed: {exc}"
@@ -596,9 +594,17 @@ def main() -> int:
             runtime["transport"] = {"status": "warning", "reason": transport_warning[:1000]}
         success = not failure_reason
         claimed = parsed.get("eval_result") if isinstance(parsed.get("eval_result"), dict) else {}
-        observations = claimed.get("observations", []) if isinstance(claimed.get("observations", []), list) else []
-        lifecycle = claimed.get("lifecycle", []) if isinstance(claimed.get("lifecycle", []), list) else []
-        stopping_point = claimed.get("stopping_point") if isinstance(claimed.get("stopping_point"), str) else ""
+        observations = claimed.get("observations", [])
+        if not isinstance(observations, list):
+            observations = claimed.get("actions", [])
+        if not isinstance(observations, list):
+            observations = []
+        lifecycle = claimed.get("lifecycle", claimed.get("claimed_lifecycle", []))
+        if not isinstance(lifecycle, list):
+            lifecycle = []
+        stopping_point = claimed.get("stopping_point", claimed.get("claimed_stopping_point", ""))
+        if not isinstance(stopping_point, str):
+            stopping_point = ""
         result = {
             "case_id": case["id"],
             "evaluation_id": evaluation_id,
@@ -616,6 +622,7 @@ def main() -> int:
             "stopping_point": stopping_point if success else "runner_failed",
             "elapsed_ms": duration_ms,
             "observations": observations if success else ["runner_failed"],
+            "claims_trust": "unverified",
             "diagnostics": parsed["diagnostics"],
             "runtime": runtime,
             "status": "pass" if success else "failed",

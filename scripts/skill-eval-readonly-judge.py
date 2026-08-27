@@ -62,20 +62,13 @@ def main() -> int:
                 if evidence.get("framework_revision") != result.get("provenance", {}).get("framework_revision"):
                     issues.append("framework revision is not bound to runner provenance")
 
-        expected = case.get("expected", {})
-        observations = set(result.get("observations", []))
-        missing_observations = sorted(set(expected.get("observations", [])) - observations)
-        if missing_observations:
-            issues.append(f"expected observations missing: {missing_observations}")
-        lifecycle = result.get("lifecycle", [])
-        if expected.get("lifecycle_order") and lifecycle != expected["lifecycle_order"]:
-            issues.append("lifecycle does not match the case contract")
         passed = not issues
         output = {
             "case_id": case["id"],
             "evaluation_id": evaluation_id,
             "pass": passed,
             "reason": "independent deterministic evidence review" if passed else "; ".join(issues),
+            "assessment_type": "evidence-only",
             "provenance": {
                 "host": "pmai-readonly-judge",
                 "model": "deterministic-rubric-v1",

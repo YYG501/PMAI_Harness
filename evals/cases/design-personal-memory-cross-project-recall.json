@@ -108,6 +108,51 @@
           "reason": "避免只验证首次建立",
           "boundaries": "必须逐次承担业务责任时保留人工确认",
           "cues": "规则 对象集合 成员 新增 变化 离开 授权"
+        },
+        {
+          "skill": "design",
+          "signal": "explicit_generalization",
+          "disposition": "personal",
+          "context_summary": "持续变化对象集合的业务规则",
+          "user_feedback": "检查集合成员变化后的结果",
+          "corrected_behavior": "成员新增、属性变化和离开范围后重新检查结果",
+          "outcome": "已确认作为后台检查",
+          "evidence_ref": "session-eval:cross-project-memory-duplicate",
+          "applies_when": "一条规则作用于会持续变化的一组对象",
+          "lesson": "检查集合变化后结果持续正确",
+          "reason": "避免只验证首次建立",
+          "boundaries": "必须逐次承担业务责任时保留人工确认",
+          "cues": "规则 集合 成员 新增 变化 离开"
+        },
+        {
+          "skill": "design",
+          "signal": "audit_finding",
+          "disposition": "personal",
+          "context_summary": "设计开始前重新编译项目上下文",
+          "user_feedback": "每次恢复都先读取当前资料",
+          "corrected_behavior": "在提出问题前重新编译并消费当前上下文",
+          "outcome": "框架已有明确规则",
+          "evidence_ref": "session-eval:cross-project-memory-covered",
+          "applies_when": "进入或恢复 design 会话",
+          "lesson": "先编译并消费 context pack",
+          "reason": "避免沿用旧摘要",
+          "boundaries": "不替代当前项目事实",
+          "cues": "design 恢复 context pack 当前资料"
+        },
+        {
+          "skill": "design",
+          "signal": "explicit_correction",
+          "disposition": "personal",
+          "context_summary": "SSO 与目录同步接入后的成员变化",
+          "user_feedback": "同步来源变化时复核授权",
+          "corrected_behavior": "同步或导入后检查成员范围",
+          "outcome": "当前项目不适用",
+          "evidence_ref": "session-eval:cross-project-memory-inapplicable",
+          "applies_when": "项目存在 SSO、目录同步或批量导入",
+          "lesson": "同步来源变化后检查成员范围",
+          "reason": "避免外部目录变化造成越权",
+          "boundaries": "没有同步来源时不提出该问题",
+          "cues": "SSO 同步 导入 目录 成员"
         }
       ]
     },
@@ -137,6 +182,10 @@
       "lifecycle",
       "tool",
       "command"
+    ],
+    "evidence_paths": [
+      "docs/modules/change-confirmation/discussion.md",
+      "docs/modules/change-confirmation/decisions.md"
     ]
   }
 }

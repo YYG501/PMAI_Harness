@@ -171,6 +171,10 @@ python3 "$PMAI_HOME/scripts/acceptance-profile.py" "${PROFILE_ARGS[@]}" > "$PROF
 
 恢复既有 v2 / v3 / v4 build 时，沿用合同里已确认的工作环境和构建工具，不重复确认。新 build 才执行本节：
 
+### 开工卡前台隔离硬门
+
+从 `ready_to_build` 进入本节时，`§1`、`§2` 以及入口护栏产生的健康检查全部属于后台预检。开工确认卡出现前，不能向 PM 播报或询问 hooks 漂移、工作流核对、建造依据、目标路径、项目类型、验收档案、合同、hash、evidence 或“业务实现尚未修改”等内部状态；也不能要求 PM 为这些机械项提供确认。非阻塞的 hooks / 基础设施问题只写入后台审计，等 PM 确认环境和工具后再按既定恢复路径处理；只有它确实阻止展示有效选项或无法安全开工时，才停止并用业务结果说明阻塞原因。前台在此之前只能说明“正在准备构建”，随后直接展示本节唯一的“工作环境 + 构建工具”确认卡。
+
 1. **推荐工作环境**：默认推荐“独立环境”；若当前已经是本模块有效的 `build-*` 环境，则推荐“继续当前独立环境”。PM 也可以明确改为“当前环境”。
 2. **识别当前主控并推荐构建工具**：把当前 runtime 映射成 `claude-code / codex / kimi-code / opencode / cursor-agent`；无法识别时用 `unknown`。Claude Code、Codex、Kimi Code、Cursor Agent 和 OpenCode 都可以作为外部构建工具，但 profile 必须和当前主控不同，不能让任一主控再次启动自己；“当前会话直接构建”不是外部 profile，始终作为有效选项。按项目级类型、消费仓配置和本机可用性生成推荐与完整可选列表：
 
@@ -340,7 +344,7 @@ git -C "$BUILD_DIR" commit -m "build(<模块>): record iteration"
 
 首次实现只完成能支持 PM 查看结果的必要检查，不在这里运行 production build 或完整浏览器验收。启动并持续保留同一个 dev server 与浏览器连接；不得在每轮修改后重建服务、重开浏览器，或让 production build 与 dev server 共用并改写同一个构建缓存目录。
 
-先给 PM 看结果，不把定稿验收挡在“能刷新看到页面/功能”之前。PM 每轮反馈后进入快速迭代车道：
+先给 PM 看结果，不把定稿验收挡在“能刷新看到页面/功能”之前。PM 每轮反馈后进入快速迭代车道。如果 PM 只说“先看看 / 继续查看 / 继续修改但还没定稿”，却没有明确指出要改的元素、文案、行为或页面，不得从上下文猜测一个改动，不得新增界面、参数、实现或测试；先复用当前预览并停在 `iterating`，等待具体反馈。只有 PM 明确给出修改对象和目标后，才进入下面的编辑步骤：
 
 1. 先运行 `active-build-context.py` 重新校验 currentness，再读取当前 build 合同的 `target + delivery_policy`；UI 相关时同时重新读取 `DESIGN.md` 并执行当前声明的项目级设计系统 Skill；校验或 Skill 访问失败时不得修改、提交或写 accepted delta；
    - 如果本轮改动涉及弹窗、抽屉、共享容器、宽高、响应式 class、grid/flex 或其它布局尺寸，首次编辑前运行 `ui-impact.py inspect`（或由项目 hook 自动运行）。它必须先解析页面引用的共享 primitive 及其尺寸约束；发现 primitive cascade / variant 可能覆盖页面规则时，先修正影响面再编辑。检查结果可写入当前 audit 目录，不新增生命周期状态；新文件或无法解析的外部组件如实记为 `limited`，不能伪造“已检查”。
@@ -496,6 +500,8 @@ python3 "$PMAI_HOME/scripts/build-contract.py" record-evidence \
 8. 再次调用统一 runner，单独提交文档同步、删除临时 `.work-meta.json` 并进入 `complete`。
 
 `spec.md` / PRD 保留最终目标，只有 accepted delta 可以修改；`PRODUCT-STATE.md` 等现状文档只描述 main 已经存在的事实。`target.kind=prototype` 落地后只能记为“原型演示”，模拟的数据库、权限、集成或引擎不得写成“已落地产品能力”。不得在 merge 前把目标要求提前写成“已完成”。
+
+若 landed 后目标对账发现“漏实现”或“无依据实现”，本轮必须停在 `landed + docs_pending|failed`：不得更新 `PRODUCT-STATE.md` 或任何正式规范/决定文档；只保留文档影响地图和失败证据，待实现缺口或产品决定处理后再恢复文档收尾。
 
 文档失败时：
 

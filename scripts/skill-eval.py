@@ -53,6 +53,14 @@ REQUIRED_JUDGE_EVIDENCE = {
     "stopping_point",
     "observations",
 }
+REQUIRED_SEMANTIC_EVIDENCE = {
+    "transcript",
+    "tool_calls",
+    "file_diff",
+    "independent_evidence",
+    "manifest",
+    "digest",
+}
 REQUIRED_MANIFEST_FIELDS = {
     "schema_version",
     "evaluation_id",
@@ -73,6 +81,16 @@ REQUIRED_RUNTIME_FIELDS = {
 VALID_RUNTIME_STATUSES = {"reported", "unavailable"}
 VALID_FAILURE_STATUSES = {"none", "error"}
 VALID_FIXTURE_STATES = {"preserve", "designing", "ready_to_build", "iterating", "landed"}
+RUNNER_HIDDEN_KEYS = {"title", "source", "expected", "forbidden", "judge"}
+RUNNER_HIDDEN_HARNESS_KEYS = {
+    "fixture",
+    "setup",
+    "expected_changed_paths",
+    "expected_unchanged_paths",
+    "protected_paths",
+    "required_event_kinds",
+    "evidence_paths",
+}
 
 
 class EvalError(RuntimeError):
@@ -89,6 +107,37 @@ def read_json(path: Path) -> dict[str, Any]:
     if not isinstance(value, dict):
         raise EvalError(f"JSON 顶层必须是对象: {path}")
     return value
+
+
+def build_runner_case_payload(case_payload: dict[str, Any], harness_context: dict[str, Any]) -> dict[str, Any]:
+    """Build the public case view sent to the model runner.
+
+    Expected outcomes, forbidden outcomes, rubrics, source excerpts and harness
+    assertions are evaluator-private. The runner must act on the PM request and
+    the isolated workspace only; otherwise a session eval can leak its answer.
+    """
+    public = {
+        key: copy.deepcopy(value)
+        for key, value in case_payload.items()
+        if key not in RUNNER_HIDDEN_KEYS
+    }
+    harness = public.get("harness")
+    if not isinstance(harness, dict):
+        harness = {}
+    public["harness"] = {
+        key: value
+        for key, value in harness.items()
+        if key not in RUNNER_HIDDEN_HARNESS_KEYS
+    }
+    public["harness"].update(
+        {
+            "workspace": str(harness_context["workspace"]),
+            "baseline_commit": harness_context["baseline"]["commit"],
+            "event_log": str(harness_context["event_log"]),
+            "state_home": str(harness_context["state_home"]),
+        }
+    )
+    return public
 
 
 def require_string(value: Any, label: str) -> str:
@@ -755,7 +804,35 @@ def file_hashes(workspace: Path) -> dict[str, str]:
     return values
 
 
-def snapshot_workspace(workspace: Path, baseline_commit: str | None = None) -> dict[str, Any]:
+def evidence_file_snapshots(workspace: Path, paths: list[str]) -> dict[str, Any]:
+    snapshots: dict[str, Any] = {}
+    for relative in paths:
+        path = workspace / relative
+        if path.is_symlink():
+            snapshots[relative] = {
+                "kind": "symlink",
+                "target": str(path.readlink()),
+            }
+        elif path.is_file():
+            raw = path.read_bytes()
+            limit = 30_000
+            snapshots[relative] = {
+                "kind": "file",
+                "sha256": sha256_bytes(raw),
+                "size": len(raw),
+                "content": raw[:limit].decode("utf-8", errors="replace"),
+                "truncated": len(raw) > limit,
+            }
+        else:
+            snapshots[relative] = {"kind": "missing"}
+    return snapshots
+
+
+def snapshot_workspace(
+    workspace: Path,
+    baseline_commit: str | None = None,
+    evidence_paths: list[str] | None = None,
+) -> dict[str, Any]:
     status = run_git(workspace, ["status", "--porcelain=v1", "--untracked-files=all"], "workspace status")
     commit = run_git(workspace, ["rev-parse", "HEAD"], "workspace commit").strip()
     diff = ""
@@ -771,6 +848,7 @@ def snapshot_workspace(workspace: Path, baseline_commit: str | None = None) -> d
         "clean": not bool(status.strip()),
         "file_hashes": file_hashes(workspace),
         "git_diff": diff,
+        "evidence_files": evidence_file_snapshots(workspace, evidence_paths or []),
     }
 
 
@@ -813,6 +891,7 @@ def prepare_harness(case: dict[str, Any], repo_root: Path, evaluation_id: str) -
     protected = config.get("protected_paths")
     unchanged = config.get("expected_unchanged_paths", [])
     required_event_kinds = config.get("required_event_kinds")
+    evidence = config.get("evidence_paths", [])
     if not isinstance(expected, list) or any(not isinstance(item, str) for item in expected):
         raise EvalError(f"{case['id']}: harness.expected_changed_paths 必须是字符串数组")
     if not isinstance(protected, list) or any(not isinstance(item, str) for item in protected):
@@ -823,9 +902,12 @@ def prepare_harness(case: dict[str, Any], repo_root: Path, evaluation_id: str) -
         not isinstance(item, str) or not item.strip() for item in required_event_kinds
     ):
         raise EvalError(f"{case['id']}: harness.required_event_kinds 必须是字符串数组")
+    if not isinstance(evidence, list) or any(not isinstance(item, str) for item in evidence):
+        raise EvalError(f"{case['id']}: harness.evidence_paths 必须是字符串数组")
     expected_paths = [fixture_relative_path(item, f"{case['id']}: expected_changed_paths") for item in expected]
     protected_paths = [fixture_relative_path(item, f"{case['id']}: protected_paths") for item in protected]
     unchanged_paths = [fixture_relative_path(item, f"{case['id']}: expected_unchanged_paths") for item in unchanged]
+    evidence_paths = [fixture_relative_path(item, f"{case['id']}: evidence_paths") for item in evidence]
 
     temp_root = Path(tempfile.mkdtemp(prefix=f"pmai-session-eval-{evaluation_id[:8]}-"))
     workspace = temp_root / "workspace"
@@ -835,6 +917,9 @@ def prepare_harness(case: dict[str, Any], repo_root: Path, evaluation_id: str) -
         for path in unchanged_paths:
             if not (workspace / path).is_file():
                 raise EvalError(f"{case['id']}: expected_unchanged_paths 不存在: {path}")
+        for path in evidence_paths:
+            if not (workspace / path).is_file() and not (workspace / path).is_symlink():
+                raise EvalError(f"{case['id']}: evidence_paths 不存在: {path}")
         run_git(workspace, ["init", "-q"], "fixture git init")
         run_git(workspace, ["config", "user.email", "pmai-session-eval@example.invalid"], "fixture git config")
         run_git(workspace, ["config", "user.name", "PMAI Session Eval"], "fixture git config")
@@ -847,7 +932,7 @@ def prepare_harness(case: dict[str, Any], repo_root: Path, evaluation_id: str) -
             temp_root,
         )
         event_log.write_text("", encoding="utf-8")
-        baseline = snapshot_workspace(workspace)
+        baseline = snapshot_workspace(workspace, evidence_paths=evidence_paths)
         if not baseline["clean"] and not allow_initial_dirty:
             raise EvalError(f"{case['id']}: fixture baseline 不干净")
         return {
@@ -858,6 +943,7 @@ def prepare_harness(case: dict[str, Any], repo_root: Path, evaluation_id: str) -
             "protected_paths": protected_paths,
             "unchanged_paths": unchanged_paths,
             "required_event_kinds": required_event_kinds,
+            "evidence_paths": evidence_paths,
             "event_log": event_log,
             "state_home": state_home,
             "allow_initial_dirty": allow_initial_dirty,
@@ -875,7 +961,9 @@ def build_evidence_manifest(
     evaluation_id: str,
 ) -> dict[str, Any]:
     baseline = context["baseline"]
-    after = snapshot_workspace(context["workspace"], baseline["commit"])
+    after = snapshot_workspace(
+        context["workspace"], baseline["commit"], context.get("evidence_paths", [])
+    )
     event_log = read_event_log(context["event_log"], f"{case['id']}: event log")
     baseline_files = baseline["file_hashes"]
     after_files = after["file_hashes"]
@@ -897,6 +985,11 @@ def build_evidence_manifest(
         "baseline_status": baseline["status"],
         "allow_initial_dirty": context["allow_initial_dirty"],
         "baseline_file_hashes": baseline_files,
+        "evidence_files": {
+            "paths": context.get("evidence_paths", []),
+            "baseline": baseline.get("evidence_files", {}),
+            "final": after.get("evidence_files", {}),
+        },
         "final_commit": after["commit"],
         "final_clean": after["clean"],
         "final_file_hashes": after_files,
@@ -967,6 +1060,20 @@ def validate_evidence_manifest(
             problems.append(f"独立证据发现预期不变文件被修改: {evidence['unchanged_violations']}")
         if evidence.get("protected_violations"):
             problems.append(f"独立证据发现越界修改: {evidence['protected_violations']}")
+        configured_evidence = case.get("harness", {}).get("evidence_paths", [])
+        evidence_files = evidence.get("evidence_files")
+        if configured_evidence:
+            if not isinstance(evidence_files, dict):
+                problems.append("独立证据 evidence_files 缺失")
+            elif evidence_files.get("paths") != configured_evidence:
+                problems.append("独立证据 evidence_files 路径与案例配置不一致")
+            else:
+                for phase in ("baseline", "final"):
+                    values = evidence_files.get(phase)
+                    if not isinstance(values, dict) or any(
+                        path not in values for path in configured_evidence
+                    ):
+                        problems.append(f"独立证据 evidence_files.{phase} 缺少配置路径")
         event_log = evidence.get("event_log")
         required_kinds = case.get("harness", {}).get("required_event_kinds", [])
         if not isinstance(event_log, dict) or not isinstance(event_log.get("events"), list):
@@ -1096,24 +1203,11 @@ def validate_runner_result(
         problems.append("observations 必须是字符串数组")
         return problems
 
-    expected = case["expected"]
-    forbidden = case["forbidden"]
-    missing_observations = sorted(set(expected["observations"]) - set(observations))
-    forbidden_observations = sorted(set(forbidden["observations"]) & set(observations))
-    if missing_observations:
-        problems.append(f"缺少预期 observations: {missing_observations}")
-    if forbidden_observations:
-        problems.append(f"命中禁止 observations: {forbidden_observations}")
-    expected_lifecycle = expected.get("lifecycle_order", [])
-    if expected_lifecycle and not lifecycle_contains(result["lifecycle"], expected_lifecycle):
-        problems.append(
-            f"lifecycle 顺序不匹配: expected={expected_lifecycle}, actual={result['lifecycle']}"
-        )
-    stopping_point = expected.get("stopping_point")
-    if stopping_point and result["stopping_point"] != stopping_point:
-        problems.append(
-            f"stopping_point 不匹配: expected={stopping_point}, actual={result['stopping_point']}"
-        )
+    # Runner claims are deliberately untrusted. Expected outcomes are private to
+    # the evaluator and are checked against independent workspace evidence and a
+    # separate semantic Judge, never against the model's own declared fields.
+    if result.get("claims_trust") not in {None, "unverified"}:
+        problems.append("runner claims_trust 必须标记为 unverified")
     return problems
 
 
@@ -1163,12 +1257,90 @@ def validate_judge_result(
     return problems
 
 
+def validate_semantic_judge_result(
+    case: dict[str, Any],
+    result: dict[str, Any],
+    judge: dict[str, Any],
+    evaluation_id: str,
+    evidence_manifest: dict[str, Any] | None = None,
+) -> list[str]:
+    """Validate a semantic Judge without trusting its pass flag blindly."""
+    problems: list[str] = []
+    if judge.get("assessment_type") != "semantic-llm-v1":
+        problems.append("semantic judge assessment_type 必须为 semantic-llm-v1")
+    if judge.get("case_id") != case["id"]:
+        problems.append("semantic judge case_id 与当前案例不一致")
+    if judge.get("evaluation_id") != evaluation_id:
+        problems.append("semantic judge evaluation_id 与当前执行不一致")
+    if not isinstance(judge.get("pass"), bool):
+        problems.append("semantic judge pass 必须是布尔值")
+    elif judge["pass"] is False:
+        problems.append(f"semantic judge 未通过: {judge.get('reason', 'no reason')}")
+    if not isinstance(judge.get("reason"), str) or not judge["reason"].strip():
+        problems.append("semantic judge reason 必须是非空字符串")
+    problems.extend(validate_provenance(judge.get("provenance"), "semantic judge provenance"))
+
+    rubric = case.get("judge", {}).get("rubric", [])
+    scores = judge.get("criterion_scores")
+    if not isinstance(scores, list):
+        problems.append("semantic judge criterion_scores 必须是数组")
+    else:
+        seen: set[str] = set()
+        all_max = True
+        for index, item in enumerate(scores, 1):
+            if not isinstance(item, dict):
+                problems.append(f"semantic judge criterion_scores[{index}] 必须是对象")
+                continue
+            criterion = item.get("criterion")
+            score = item.get("score")
+            explanation = item.get("reason")
+            if not isinstance(criterion, str) or not criterion.strip():
+                problems.append(f"semantic judge criterion_scores[{index}].criterion 非法")
+                continue
+            if criterion in seen:
+                problems.append(f"semantic judge criterion 重复: {criterion}")
+            seen.add(criterion)
+            if not isinstance(score, int) or score not in {0, 1, 2}:
+                problems.append(f"semantic judge criterion_scores[{index}].score 必须为 0/1/2")
+            elif score != 2:
+                all_max = False
+            if not isinstance(explanation, str) or not explanation.strip():
+                problems.append(f"semantic judge criterion_scores[{index}].reason 必须是非空字符串")
+        ordered = [item.get("criterion") for item in scores if isinstance(item, dict)]
+        if ordered != rubric:
+            problems.append("semantic judge criterion_scores 必须按隐藏 rubric 原文、原顺序逐条覆盖且不能多报")
+        if isinstance(judge.get("pass"), bool) and judge["pass"] != all_max:
+            problems.append("semantic judge pass 必须与全部 criterion score=2 的结果一致")
+
+    for field in ("findings", "root_causes"):
+        value = judge.get(field)
+        if not isinstance(value, list) or any(not isinstance(item, str) or not item.strip() for item in value):
+            problems.append(f"semantic judge {field} 必须是非空字符串数组或空数组")
+
+    reviewed = judge.get("reviewed_evidence")
+    if not isinstance(reviewed, list) or any(not isinstance(item, str) for item in reviewed):
+        problems.append("semantic judge reviewed_evidence 必须是字符串数组")
+    elif not REQUIRED_SEMANTIC_EVIDENCE.issubset(set(reviewed)):
+        problems.append(
+            f"semantic judge 未声明检查完整证据: {sorted(REQUIRED_SEMANTIC_EVIDENCE - set(reviewed))}"
+        )
+    if evidence_manifest is not None and judge.get("evidence_digest") != evidence_manifest.get("digest"):
+        problems.append("semantic judge evidence_digest 与当前证据 manifest 不匹配")
+    runner_provenance = result.get("provenance")
+    judge_provenance = judge.get("provenance")
+    if isinstance(runner_provenance, dict) and isinstance(judge_provenance, dict):
+        if runner_provenance.get("run_id") == judge_provenance.get("run_id"):
+            problems.append("semantic judge 必须使用独立于 runner 的 run_id")
+    return problems
+
+
 def persist_result(
     results_dir: Path,
     case: dict[str, Any],
     result: dict[str, Any],
     judge: Any,
     evidence_manifest: dict[str, Any] | None = None,
+    semantic_judge: Any = None,
 ) -> None:
     results_dir.mkdir(parents=True, exist_ok=True)
     payload = {
@@ -1180,6 +1352,8 @@ def persist_result(
     }
     if evidence_manifest is not None:
         payload["evidence_manifest"] = evidence_manifest
+    if semantic_judge is not None:
+        payload["semantic_judge_result"] = semantic_judge
     (results_dir / f"{case['id']}.json").write_text(
         json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
     )
@@ -1201,8 +1375,18 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--runner-command", default=os.environ.get("PMAI_SKILL_EVAL_RUNNER", ""))
     parser.add_argument("--judge-command", default=os.environ.get("PMAI_SKILL_EVAL_JUDGE", ""))
+    parser.add_argument(
+        "--semantic-judge-command",
+        default=os.environ.get("PMAI_SKILL_EVAL_SEMANTIC_JUDGE", ""),
+        help="只读语义能力 Judge 命令；它接收完整案例但不接触 Runner 进程",
+    )
     parser.add_argument("--require-runner", action="store_true")
     parser.add_argument("--require-judge", action="store_true")
+    parser.add_argument(
+        "--require-semantic-judge",
+        action="store_true",
+        help="session case 必须有独立语义 Judge 才能通过",
+    )
     parser.add_argument(
         "--require-runtime-evidence",
         action="store_true",
@@ -1254,6 +1438,7 @@ def main() -> int:
 
     selected_layers = VALID_LAYERS if args.mode == "all" else {args.mode}
     require_runtime = args.require_runtime_evidence or os.environ.get("PMAI_REQUIRE_RUNTIME_EVIDENCE") == "1"
+    require_semantic_judge = args.require_semantic_judge or os.environ.get("PMAI_REQUIRE_SEMANTIC_JUDGE") == "1"
     requested_session = set(args.session_case_ids)
     selected = [
         case
@@ -1305,15 +1490,11 @@ def main() -> int:
         harness_context: dict[str, Any] | None = None
         evidence_manifest: dict[str, Any] | None = None
         judge_result: dict[str, Any] | None = None
+        semantic_judge_result: dict[str, Any] | None = None
         try:
             try:
                 harness_context = prepare_harness(case, repo_root, evaluation_id)
-                runner_case_payload = json.loads(json.dumps(case_payload, ensure_ascii=False))
-                if harness_context is not None:
-                    runner_case_payload["harness"]["workspace"] = str(harness_context["workspace"])
-                    runner_case_payload["harness"]["baseline_commit"] = harness_context["baseline"]["commit"]
-                    runner_case_payload["harness"]["event_log"] = str(harness_context["event_log"])
-                    runner_case_payload["harness"]["state_home"] = str(harness_context["state_home"])
+                runner_case_payload = build_runner_case_payload(case_payload, harness_context)
                 runner_payload = {
                     "schema_version": SCHEMA_VERSION,
                     "evaluation_id": evaluation_id,
@@ -1384,8 +1565,49 @@ def main() -> int:
                     skipped += 1
                     continue
 
+            if not problems and require_semantic_judge and not args.judge_command:
+                problems.append("semantic Judge 依赖确定性证据 Judge，当前未配置 --judge-command")
+
+            if not problems and (args.semantic_judge_command or require_semantic_judge):
+                if args.semantic_judge_command:
+                    try:
+                        semantic_payload = {
+                            "schema_version": SCHEMA_VERSION,
+                            "evaluation_id": evaluation_id,
+                            "case": case_payload,
+                            "result": result,
+                        }
+                        if evidence_manifest is not None:
+                            semantic_payload["evidence_manifest"] = evidence_manifest
+                        semantic_judge_result = run_external(
+                            args.semantic_judge_command,
+                            semantic_payload,
+                            args.timeout,
+                            f"semantic judge {case_id}",
+                        )
+                        problems.extend(
+                            validate_semantic_judge_result(
+                                case,
+                                result,
+                                semantic_judge_result,
+                                evaluation_id,
+                                evidence_manifest,
+                            )
+                        )
+                    except EvalError as exc:
+                        problems.append(str(exc))
+                else:
+                    problems.append("semantic Judge 未配置")
+
             if result:
-                persist_result(results_dir, case, result, judge_result, evidence_manifest)
+                persist_result(
+                    results_dir,
+                    case,
+                    result,
+                    judge_result,
+                    evidence_manifest,
+                    semantic_judge_result,
+                )
         finally:
             if harness_context is not None:
                 shutil.rmtree(harness_context["temp_root"], ignore_errors=True)

@@ -16,33 +16,33 @@
     ]
   },
   "input": {
-    "prompt": "实现已经合入 main，请对账模块规格；其中一项漏实现，另一项是 PM 已接受的变化。",
+    "prompt": "实现已经合入 main，请对账模块规格；其中一项是漏实现，且当前没有可验证的 accepted delta。",
     "context": [
       "landed diff 可用",
-      "accepted delta 有 PM 证据",
+      "当前合同没有可验证的 accepted delta 证据",
       "decisions.md 保留历史理由",
-      "旧 spec 含变更流水账"
+      "现有 spec 只保留当前有效目标",
+      "当前实现存在一项尚未补齐的规格要求"
     ]
   },
   "expected": {
     "behaviors": [
-      "spec 正文只写当前有效的最终目标",
-      "历史保留在 Git 和 decisions.md",
-      "只有 accepted delta 修改规格",
-      "漏实现保留规格并判为实现缺口"
+      "缺少 accepted delta 时保留现有 spec 目标，不把实现缺口写入正文",
+      "历史理由继续留在 Git 和 decisions.md",
+      "缺少 accepted delta 证据时不修改规格",
+      "漏实现保留规格并判为实现缺口",
+      "文档收尾未完成前不更新产品现状"
     ],
     "observations": [
-      "normative_target_compiled",
+      "normative_target_preserved",
       "history_kept_out_of_spec",
-      "accepted_delta_applied",
-      "implementation_gap_preserved"
+      "accepted_delta_evidence_missing",
+      "implementation_gap_preserved",
+      "product_state_update_deferred"
     ],
     "lifecycle_order": [
-      "landed",
-      "documenting",
-      "complete"
-    ],
-    "stopping_point": "complete"
+      "landed"
+    ]
   },
   "forbidden": {
     "behaviors": [
@@ -61,23 +61,24 @@
   "judge": {
     "enabled": true,
     "rubric": [
-      "文档回答最终应实现什么而非原型或代码现在做了什么",
-      "决定历史与规范目标分家",
-      "landed 差异按四分支处理"
+      "缺少 accepted delta 时保留现有规范目标，不把实现缺口写入 spec",
+      "实现差异与规范、决定和产品现状分开处理",
+      "当前 landed 差异判为漏实现并停在 docs_failed"
     ]
   },
   "harness": {
     "setup": {"state": "landed"},
     "fixture": "evals/fixtures/current-facts-only",
     "expected_changed_paths": [
-      "docs/modules/change-confirmation/spec.md"
+      ".pm-workflow/audits/change-confirmation/work-change-confirmation-20260823224957-35547d90/doc-impact.json"
     ],
     "expected_unchanged_paths": [
       "PRODUCT.md",
       "PRODUCT-RULES.md",
       "DESIGN.md",
       ".pm-workflow/project.yml",
-      "docs/modules/change-confirmation/decisions.md",
+      "docs/modules/change-confirmation/spec.md",
+      "PRODUCT-STATE.md",
       "app/confirm_change.py"
     ],
     "protected_paths": [
@@ -85,7 +86,8 @@
       "PRODUCT-RULES.md",
       "DESIGN.md",
       ".pm-workflow/project.yml",
-      "docs/modules/change-confirmation/decisions.md",
+      "docs/modules/change-confirmation/spec.md",
+      "PRODUCT-STATE.md",
       "app/confirm_change.py"
     ],
     "required_event_kinds": [

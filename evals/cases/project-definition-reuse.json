@@ -95,6 +95,11 @@
       "lifecycle",
       "tool",
       "command"
+    ],
+    "evidence_paths": [
+      ".pm-workflow/project.yml",
+      "docs/modules/change-confirmation/spec.md",
+      "docs/modules/change-confirmation/.work-meta.json"
     ]
   }
 }

@@ -143,6 +143,7 @@ python3 "$PMAI_HOME/scripts/build-contract.py" docs-fail \
 
 - `spec.md` / PRD 只描述当前有效的最终目标；landed 后只有 accepted delta 可以修改目标，漏实现保留为实现缺口；
 - `PRODUCT-STATE.md` 等现状文档只描述 main 已存在的事实；
+- 只要对账发现漏实现或无依据实现，就停止正式文档写入并保持 `landed + docs_pending|failed`；不得先改 `PRODUCT-STATE.md` 记录缺口，缺口只进入影响地图/审计证据；
 - `spec.md` 正文不保留删除线旧正文、老版/新版对照或迭代流水账；
 - 历史决定与 supersede 关系留在 `decisions.md`，完整文件演进留在 Git；
 - 单模块决定进模块 `decisions.md`；跨模块现行规则进 `PRODUCT-RULES.md`；项目级冻结理路进 `docs/decisions/`；

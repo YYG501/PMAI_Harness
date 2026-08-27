@@ -51,7 +51,6 @@ if "result" in payload:
         )
     )
 else:
-    expected = case["expected"]
     harness = payload.get("case", {}).get("harness", {})
     workspace = harness.get("workspace")
     event_log = harness.get("event_log")
@@ -70,12 +69,13 @@ else:
         )
     if workspace and "--no-change" not in sys.argv:
         if "--touch-protected" in sys.argv:
-            target = harness.get("protected_paths", ["docs/modules/demo/spec.md"])[0]
+            target = "docs/modules/change-confirmation/spec.md"
         elif "--touch-unchanged" in sys.argv:
-            target = harness.get("expected_unchanged_paths", ["PRODUCT-STATE.md"])[0]
+            target = "PRODUCT-STATE.md"
+        elif case.get("id") == "readonly-session":
+            target = None
         else:
-            expected_paths = harness.get("expected_changed_paths", ["PRODUCT-STATE.md"])
-            target = expected_paths[0] if expected_paths else None
+            target = "PRODUCT-STATE.md"
         if target is not None:
             target_path = Path(workspace) / target
             target_path.parent.mkdir(parents=True, exist_ok=True)
@@ -94,10 +94,11 @@ else:
                 "transcript": ["fixture transcript"],
                 "tool_calls": [],
                 "file_diff": [],
-                "lifecycle": expected.get("lifecycle_order", []),
-                "stopping_point": expected.get("stopping_point", "complete"),
+                "lifecycle": [],
+                "stopping_point": "unreported",
                 "elapsed_ms": 1,
-                "observations": expected.get("observations", []),
+                "observations": [],
+                "claims_trust": "unverified",
             }
         )
     )

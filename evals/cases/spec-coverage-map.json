@@ -30,7 +30,8 @@
     "behaviors": [
       "先建立对象动作状态权限页面覆盖矩阵",
       "所有受影响页面有文档落点",
-      "遗漏或未决项返回 design"
+      "遗漏或未决项返回 design",
+      "规格编译完成后交回 design，不自行推进 ready_to_build"
     ],
     "observations": [
       "coverage_matrix_created",
@@ -38,10 +39,9 @@
       "edge_states_documented"
     ],
     "lifecycle_order": [
-      "designing",
-      "ready_to_build"
+      "designing"
     ],
-    "stopping_point": "ready_to_build"
+    "stopping_point": "spec_written_returned_to_design"
   },
   "forbidden": {
     "behaviors": [
@@ -86,6 +86,10 @@
       "lifecycle",
       "tool",
       "command"
+    ],
+    "evidence_paths": [
+      "docs/modules/change-confirmation/decisions.md",
+      "docs/modules/change-confirmation/spec.md"
     ]
   }
 }

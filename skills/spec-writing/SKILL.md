@@ -302,6 +302,8 @@ python3 "$PMAI_HOME/scripts/check-prd-hierarchy.py" "$PRD_PATH"
 3. **漏实现**：规格已有要求但最终实现缺失、只做 mock、占位或部分能力；保留规格并阻止文档对账完成。
 4. **无依据实现**：代码存在规格和决定都没有的产品行为；不得升格为规格事实，返回 design 让 PM 决定接受、调整或移除。
 
+只要本轮出现“漏实现”或“无依据实现”，立即停止正式文档写入：不修改 `PRODUCT-STATE.md`、`PRODUCT.md`、`PRODUCT-RULES.md`、`DESIGN.md`、模块 `spec.md` 或 `decisions.md`，只允许更新文档影响地图/审计证据并记录 `docs-fail`。现状档只能在所有对账项都有合法落点、文档收尾可以完成时更新；不能把“记录缺口”当作先改现状档的理由。
+
 正文不写“已覆盖 / 未覆盖 / 部分落地 / mock 占位”。这些属于验收证据、影响地图或 `PRODUCT-STATE.md`。
 
 ## 写作与质检
@@ -328,7 +330,7 @@ PRD 质检至少检查：
 
 ## 收尾
 
-- 模块规格：写完、自检通过后交回 design 或自动 finalize。
+- 模块规格：写完、自检通过后交回 design 或自动 finalize；独立调用 spec-writing 不自行把模块推进到 `ready_to_build`，只有 design 在决定闭合、项目建造定义与 ready 授权完成后才能进入该状态。
 - 绑定当前工作的功能型规格：提供产物路径、决策/规则对账落点和任何未决缺口，交回自动 finalize；不自带新的产品确认门。
 - 跨模块功能型规格或既有补差：PM 确认后写入；落在 `docs/modules/` 时更新索引；手动调用不自动 commit。
 
