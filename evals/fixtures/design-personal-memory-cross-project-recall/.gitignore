@@ -1,0 +1,28 @@
+# Runtime
+.runs/
+.worktrees/
+.pm-workflow/context/
+# build / 复审运行时 PID/PORT 元数据
+**/dev-server.info
+**/_dev-server.log
+
+# Project-local credentials
+.claude/lark-publish.json
+
+# Dependencies
+node_modules/
+vendor/bundle/
+
+# Build cache
+.next/
+dist/
+.turbo/
+
+# System
+.DS_Store
+*.log
+.dev-port
+
+# Editor
+.vscode/
+.idea/

@@ -3,33 +3,140 @@
   "id": "design-personal-memory-cross-project-recall",
   "title": "design 跨项目召回个人经验但不把它升级为项目事实",
   "layer": "session",
-  "skills": ["design"],
+  "skills": [
+    "design"
+  ],
   "source": {
     "session_id": "019f609a-4fb9-7760-836c-463690684f59",
     "evidence": [
-      {"turn": 1, "excerpt": "管理类设计增加持续新增、SSO、同步和退出场景检查。这是什么"},
-      {"turn": 2, "excerpt": "不够通用"},
-      {"turn": 3, "excerpt": "没懂，感觉不是一个自动沉淀的过程"},
-      {"turn": 4, "excerpt": "内部经验不再分了，就把个人经验记忆先做了吧。"},
-      {"turn": 5, "excerpt": "3条这个数量怎么定的，看着不太合适"}
+      {
+        "turn": 1,
+        "excerpt": "管理类设计增加持续新增、SSO、同步和退出场景检查。这是什么"
+      },
+      {
+        "turn": 2,
+        "excerpt": "不够通用"
+      },
+      {
+        "turn": 3,
+        "excerpt": "没懂，感觉不是一个自动沉淀的过程"
+      },
+      {
+        "turn": 4,
+        "excerpt": "内部经验不再分了，就把个人经验记忆先做了吧。"
+      },
+      {
+        "turn": 5,
+        "excerpt": "3条这个数量怎么定的，看着不太合适"
+      }
     ]
   },
   "input": {
     "prompt": "设计一条作用于会持续变化对象集合的业务规则。",
-    "context": ["当前项目没有 SSO，也没有同步或导入", "个人经验库已有一条关于对象集合变化后结果保持正确的经验", "项目规格尚未决定自动更新还是逐次人工确认"]
+    "context": [
+      "当前项目没有 SSO，也没有同步或导入",
+      "个人经验库已有一条关于对象集合变化后结果保持正确的经验",
+      "项目规格尚未决定自动更新还是逐次人工确认"
+    ]
   },
   "expected": {
-    "behaviors": ["先编译并消费项目 context pack", "随后单独召回相关个人经验候选", "过滤与项目事实冲突、Skill 已覆盖、条件不适用和内容重复的候选", "使用过滤后所有仍有独立检查价值的经验，不按固定条数裁剪", "把命中的经验转成后台检查而不是项目事实", "检查对象新增、属性变化和离开范围后的结果", "只有自动更新与人工责任构成真实产品岔路时才让 PM 决定"],
-    "observations": ["project_context_loaded_first", "personal_memory_recalled_separately", "adaptive_memory_selection", "no_fixed_recall_count", "memory_used_as_advisory_check", "changing_collection_checked", "real_product_fork_only"],
-    "lifecycle_order": ["designing"],
+    "behaviors": [
+      "先编译并消费项目 context pack",
+      "随后单独召回相关个人经验候选",
+      "过滤与项目事实冲突、Skill 已覆盖、条件不适用和内容重复的候选",
+      "使用过滤后所有仍有独立检查价值的经验，不按固定条数裁剪",
+      "把命中的经验转成后台检查而不是项目事实",
+      "检查对象新增、属性变化和离开范围后的结果",
+      "只有自动更新与人工责任构成真实产品岔路时才让 PM 决定"
+    ],
+    "observations": [
+      "project_context_loaded_first",
+      "personal_memory_recalled_separately",
+      "adaptive_memory_selection",
+      "no_fixed_recall_count",
+      "memory_used_as_advisory_check",
+      "changing_collection_checked",
+      "real_product_fork_only"
+    ],
+    "lifecycle_order": [
+      "designing"
+    ],
     "stopping_point": "awaiting_real_product_fork_or_ready_to_compile"
   },
   "forbidden": {
-    "behaviors": ["因为个人经验存在就直接写入项目规格", "询问当前项目不存在的 SSO、同步、导入或退出场景", "把召回内容计入 source hash", "无相关经验时阻塞 design", "把后台检查拆成固定确认题", "用固定前三条替代适用性和独立价值判断"],
-    "observations": ["memory_promoted_to_project_truth", "irrelevant_sso_questions_asked", "memory_in_authority_hash", "missing_memory_blocked_design", "memory_checklist_exposed_to_pm", "fixed_top_three_truncation"]
+    "behaviors": [
+      "因为个人经验存在就直接写入项目规格",
+      "询问当前项目不存在的 SSO、同步、导入或退出场景",
+      "把召回内容计入 source hash",
+      "无相关经验时阻塞 design",
+      "把后台检查拆成固定确认题",
+      "用固定前三条替代适用性和独立价值判断"
+    ],
+    "observations": [
+      "memory_promoted_to_project_truth",
+      "irrelevant_sso_questions_asked",
+      "memory_in_authority_hash",
+      "missing_memory_blocked_design",
+      "memory_checklist_exposed_to_pm",
+      "fixed_top_three_truncation"
+    ]
   },
   "judge": {
     "enabled": true,
-    "rubric": ["项目事实先于个人经验", "结构相似时能跨项目复用判断经验", "有效经验按适用性和独立检查价值选择而不是按固定条数截断", "经验只影响后台检查而不制造固定场景问卷"]
+    "rubric": [
+      "项目事实先于个人经验",
+      "结构相似时能跨项目复用判断经验",
+      "有效经验按适用性和独立检查价值选择而不是按固定条数截断",
+      "经验只影响后台检查而不制造固定场景问卷"
+    ]
+  },
+  "harness": {
+    "setup": {
+      "state": "designing",
+      "personal_memories": [
+        {
+          "skill": "design",
+          "signal": "explicit_generalization",
+          "disposition": "personal",
+          "context_summary": "持续变化对象集合的业务规则",
+          "user_feedback": "以后都要检查后续新增和属性变化",
+          "corrected_behavior": "检查对象新增、属性变化和离开范围后的结果",
+          "outcome": "已确认作为后台检查",
+          "evidence_ref": "session-eval:cross-project-memory",
+          "applies_when": "一条规则作用于会持续变化的一组对象",
+          "lesson": "检查对象新增、属性变化和离开范围后结果是否持续正确",
+          "reason": "避免只验证首次建立",
+          "boundaries": "必须逐次承担业务责任时保留人工确认",
+          "cues": "规则 对象集合 成员 新增 变化 离开 授权"
+        }
+      ]
+    },
+    "fixture": "evals/fixtures/design-personal-memory-cross-project-recall",
+    "expected_changed_paths": [
+      "docs/modules/change-confirmation/.work-meta.json"
+    ],
+    "expected_unchanged_paths": [
+      "PRODUCT.md",
+      "PRODUCT-RULES.md",
+      "DESIGN.md",
+      ".pm-workflow/project.yml",
+      "docs/modules/change-confirmation/spec.md",
+      "docs/modules/change-confirmation/decisions.md",
+      "app/confirm_change.py"
+    ],
+    "protected_paths": [
+      "PRODUCT.md",
+      "PRODUCT-RULES.md",
+      "DESIGN.md",
+      ".pm-workflow/project.yml",
+      "docs/modules/change-confirmation/spec.md",
+      "docs/modules/change-confirmation/decisions.md",
+      "app/confirm_change.py"
+    ],
+    "required_event_kinds": [
+      "lifecycle",
+      "tool",
+      "command"
+    ]
   }
 }

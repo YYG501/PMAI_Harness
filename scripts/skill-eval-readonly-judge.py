@@ -42,12 +42,17 @@ def main() -> int:
             if not isinstance(evidence, dict):
                 issues.append("independent evidence missing")
             else:
-                if evidence.get("baseline_clean") is not True:
+                if (
+                    evidence.get("baseline_clean") is not True
+                    and evidence.get("allow_initial_dirty") is not True
+                ):
                     issues.append("baseline is not clean")
                 if evidence.get("missing_expected_paths"):
                     issues.append(f"expected changes missing: {evidence['missing_expected_paths']}")
                 if evidence.get("protected_violations"):
                     issues.append(f"protected paths changed: {evidence['protected_violations']}")
+                if evidence.get("unchanged_violations"):
+                    issues.append(f"expected unchanged paths changed: {evidence['unchanged_violations']}")
                 event_log = evidence.get("event_log")
                 required_kinds = case.get("harness", {}).get("required_event_kinds", [])
                 observed_kinds = set(event_log.get("kinds", [])) if isinstance(event_log, dict) else set()

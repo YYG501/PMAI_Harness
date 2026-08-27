@@ -60,7 +60,7 @@ manifest = payload["evidence_manifest"]
 assert manifest["independent_evidence"]["changed_paths"] == ["PRODUCT-STATE.md"]
 assert manifest["independent_evidence"]["protected_violations"] == []
 assert manifest["independent_evidence"]["event_log"]["kinds"] == ["command", "lifecycle", "tool"]
-assert manifest["independent_evidence"]["event_log"]["count"] == 3
+assert manifest["independent_evidence"]["event_log"]["count"] >= 3
 core = {key: value for key, value in manifest.items() if key != "digest"}
 expected = hashlib.sha256(
     json.dumps(core, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")
@@ -89,6 +89,49 @@ test_runner_claim_without_workspace_change_fails() {
     cat /tmp/skill-eval-no-change.$$ >&2
   fi
   rm -f /tmp/skill-eval-no-change.$$
+}
+
+test_readonly_harness_accepts_no_change() {
+  start_test "skill-eval: 只读 session 的零写入结果可被独立证据接受"
+  T=$(mktemp -d "${TMPDIR:-/tmp}/pmai-skill-eval-readonly.XXXXXX")
+  mkdir -p "$T/cases"
+  jq '.id = "readonly-session" | .title = "只读 session" | .harness.expected_changed_paths = [] | .harness.expected_unchanged_paths = ["PRODUCT-STATE.md"]' \
+    "$REPO_ROOT/evals/cases/natural-language-finalize.json" >"$T/cases/readonly-session.json"
+  cat >"$T/touchfiles.json" <<EOF
+{"schema_version":1,"cases":{"readonly-session":["evals/fixtures/natural-language-finalize/README.md"]}}
+EOF
+  if python3 "$EVAL" --mode session --cases-dir "$T/cases" --touchfiles "$T/touchfiles.json" \
+      --case readonly-session --runner-command "python3 $FAKE" --judge-command "python3 $FAKE" \
+      --require-runner --require-judge --results-dir "$T/results" >/tmp/skill-eval-readonly.$$ 2>&1 && \
+      grep -q 'SUMMARY passed=1 failed=0 skipped=0 judge_skipped=0' /tmp/skill-eval-readonly.$$; then
+    pass_test
+  else
+    _fail "readonly session should pass with zero workspace changes"
+    cat /tmp/skill-eval-readonly.$$ >&2
+  fi
+  rm -rf "$T" /tmp/skill-eval-readonly.$$
+}
+
+test_readonly_harness_detects_change() {
+  start_test "skill-eval: 只读 session 修改预期不变文件时失败"
+  T=$(mktemp -d "${TMPDIR:-/tmp}/pmai-skill-eval-readonly-drift.XXXXXX")
+  mkdir -p "$T/cases"
+  jq '.id = "readonly-session" | .title = "只读 session" | .harness.expected_changed_paths = [] | .harness.expected_unchanged_paths = ["PRODUCT-STATE.md"]' \
+    "$REPO_ROOT/evals/cases/natural-language-finalize.json" >"$T/cases/readonly-session.json"
+  cat >"$T/touchfiles.json" <<EOF
+{"schema_version":1,"cases":{"readonly-session":["evals/fixtures/natural-language-finalize/README.md"]}}
+EOF
+  if python3 "$EVAL" --mode session --cases-dir "$T/cases" --touchfiles "$T/touchfiles.json" \
+      --case readonly-session --runner-command "python3 $FAKE --touch-unchanged" --judge-command "python3 $FAKE" \
+      --require-runner --require-judge >/tmp/skill-eval-readonly-drift.$$ 2>&1; then
+    _fail "readonly session should reject changed expected-unchanged paths"
+  elif grep -q '预期不变文件被修改' /tmp/skill-eval-readonly-drift.$$; then
+    pass_test
+  else
+    _fail "readonly violation should be explicit"
+    cat /tmp/skill-eval-readonly-drift.$$ >&2
+  fi
+  rm -rf "$T" /tmp/skill-eval-readonly-drift.$$
 }
 
 test_protected_path_change_fails() {
@@ -176,6 +219,8 @@ test_schema_and_static_cases
 test_missing_runner_is_explicit
 test_runner_and_judge_protocol
 test_runner_claim_without_workspace_change_fails
+test_readonly_harness_accepts_no_change
+test_readonly_harness_detects_change
 test_protected_path_change_fails
 test_tampered_digest_fails
 test_runner_without_judge_cannot_pass

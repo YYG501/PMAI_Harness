@@ -9,6 +9,9 @@ from __future__ import annotations
 
 import json
 import os
+import re
+import selectors
+import signal
 import shlex
 import subprocess
 import sys
@@ -42,6 +45,58 @@ def append_event(path: Path | None, event: dict[str, Any]) -> None:
         handle.write(json.dumps(event, ensure_ascii=False) + "\n")
 
 
+def write_context_pack(case: dict[str, Any], workspace: Path) -> Path:
+    """Write a compact navigation index outside the disposable workspace.
+
+    The index gives the model a bounded starting point without becoming part of
+    the Harness diff. It deliberately contains paths and metadata only; source
+    files remain authoritative and must still be read when relevant.
+    """
+    pack_path = workspace.parent / "session-context-pack.md"
+    input_block = case.get("input") if isinstance(case.get("input"), dict) else {}
+    context = input_block.get("context") if isinstance(input_block.get("context"), list) else []
+    skills = case.get("skills") if isinstance(case.get("skills"), list) else []
+    harness = case.get("harness") if isinstance(case.get("harness"), dict) else {}
+    lines = [
+        "# Session Eval context index",
+        "",
+        "This is a navigation index for the isolated run, not a replacement for source files.",
+        "Read only the listed Skill entrypoints and directly relevant workspace files; do not recursively inventory the repository.",
+        "",
+        "## Required Skill entrypoints",
+    ]
+    lines.extend(f"- $PMAI_HOME/skills/{item}/SKILL.md" for item in skills if isinstance(item, str))
+    lines.extend(["", "## Case context"])
+    lines.extend(f"- {item}" for item in context if isinstance(item, str))
+    lines.extend(["", "## Harness boundaries"])
+    expected = harness.get("expected_changed_paths", [])
+    protected = harness.get("protected_paths", [])
+    unchanged = harness.get("expected_unchanged_paths", [])
+    lines.append(f"- expected changed paths: {expected}")
+    lines.append(f"- protected paths: {protected}")
+    lines.append(f"- expected unchanged paths: {unchanged}")
+    lines.extend(["", "## Workspace navigation"])
+    for relative in (
+        "AGENTS.md",
+        "CLAUDE.md",
+        "PRODUCT.md",
+        "PRODUCT-RULES.md",
+        "DESIGN.md",
+        "PRODUCT-STATE.md",
+        ".pm-workflow/project.yml",
+        ".pm-workflow/context",
+        "docs/modules",
+    ):
+        candidate = workspace / relative
+        if candidate.exists():
+            if candidate.is_file():
+                lines.append(f"- {relative} ({candidate.stat().st_size} bytes)")
+            else:
+                lines.append(f"- {relative}/ (directory; inspect only the relevant module)")
+    pack_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    return pack_path
+
+
 def text_from_item(item: dict[str, Any]) -> str | None:
     value = item.get("text")
     if isinstance(value, str) and value.strip():
@@ -52,6 +107,123 @@ def text_from_item(item: dict[str, Any]) -> str | None:
         text = "".join(part for part in parts if isinstance(part, str))
         return text.strip() or None
     return None
+
+
+def record_provider_line(path: Path | None, line: bytes, elapsed_ms: int) -> None:
+    """Record non-sensitive JSONL event metadata as an incremental heartbeat."""
+    if path is None:
+        return
+    try:
+        event = json.loads(line.decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError):
+        return
+    if not isinstance(event, dict):
+        return
+    item = event.get("item") if isinstance(event.get("item"), dict) else {}
+    append_event(
+        path,
+        {
+            "kind": "provider_event",
+            "event_type": str(event.get("type") or "unknown"),
+            "item_type": str(item.get("type") or "") if item else "",
+            "elapsed_ms": elapsed_ms,
+        },
+    )
+
+
+def terminate_process_group(process: subprocess.Popen[bytes]) -> None:
+    """Stop the CLI and descendants after a bounded timeout."""
+    try:
+        os.killpg(os.getpgid(process.pid), signal.SIGTERM)
+    except (OSError, ProcessLookupError):
+        try:
+            process.terminate()
+        except OSError:
+            pass
+    try:
+        process.wait(timeout=2)
+    except subprocess.TimeoutExpired:
+        try:
+            os.killpg(os.getpgid(process.pid), signal.SIGKILL)
+        except (OSError, ProcessLookupError):
+            try:
+                process.kill()
+            except OSError:
+                pass
+        process.wait()
+
+
+def run_streaming(
+    argv: list[str],
+    *,
+    cwd: Path,
+    env: dict[str, str],
+    timeout_seconds: int,
+    event_log: Path | None,
+) -> dict[str, Any]:
+    """Run Codex while retaining bounded timeout and incremental telemetry."""
+    process = subprocess.Popen(
+        argv,
+        cwd=cwd,
+        env=env,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        start_new_session=True,
+    )
+    assert process.stdout is not None
+    assert process.stderr is not None
+    selector = selectors.DefaultSelector()
+    selector.register(process.stdout, selectors.EVENT_READ, "stdout")
+    selector.register(process.stderr, selectors.EVENT_READ, "stderr")
+    buffers = {"stdout": b"", "stderr": b""}
+    chunks = {"stdout": bytearray(), "stderr": bytearray()}
+    started = time.monotonic()
+    timed_out = False
+    try:
+        while selector.get_map():
+            remaining = timeout_seconds - (time.monotonic() - started)
+            if remaining <= 0:
+                timed_out = True
+                terminate_process_group(process)
+                break
+            ready = selector.select(min(remaining, 1.0))
+            if not ready:
+                continue
+            for key, _ in ready:
+                stream = str(key.data)
+                data = os.read(key.fileobj.fileno(), 65536)
+                if not data:
+                    selector.unregister(key.fileobj)
+                    key.fileobj.close()
+                    continue
+                chunks[stream].extend(data)
+                buffers[stream] += data
+                while b"\n" in buffers[stream]:
+                    line, buffers[stream] = buffers[stream].split(b"\n", 1)
+                    if stream == "stdout":
+                        record_provider_line(event_log, line, int((time.monotonic() - started) * 1000))
+        if not timed_out:
+            process.wait()
+    finally:
+        if timed_out:
+            for stream in ("stdout", "stderr"):
+                buffers[stream] = b""
+        for key in list(selector.get_map().values()):
+            try:
+                selector.unregister(key.fileobj)
+            except (KeyError, ValueError):
+                pass
+            try:
+                key.fileobj.close()
+            except OSError:
+                pass
+        selector.close()
+    return {
+        "stdout": bytes(chunks["stdout"]).decode("utf-8", errors="replace"),
+        "stderr": bytes(chunks["stderr"]).decode("utf-8", errors="replace"),
+        "returncode": process.returncode,
+        "timed_out": timed_out,
+    }
 
 
 def token_usage_from_value(value: Any) -> dict[str, int] | None:
@@ -84,6 +256,7 @@ def parse_events(raw: str) -> dict[str, Any]:
     token_usage: dict[str, int] | None = None
     thread_id = ""
     model = ""
+    eval_result: dict[str, Any] | None = None
 
     for line in raw.splitlines():
         if not line.strip():
@@ -108,6 +281,14 @@ def parse_events(raw: str) -> dict[str, Any]:
                 text = text_from_item(item)
                 if text:
                     transcript.append(text[:4000])
+                    marker = re.search(r"PMAI_EVAL_RESULT:\s*(\{.*\})", text)
+                    if marker:
+                        try:
+                            candidate = json.loads(marker.group(1))
+                        except json.JSONDecodeError:
+                            candidate = None
+                        if isinstance(candidate, dict):
+                            eval_result = candidate
             if item_type == "error":
                 message = str(item.get("message") or "runner item error").strip()
                 if message:
@@ -139,7 +320,43 @@ def parse_events(raw: str) -> dict[str, Any]:
         "token_usage": token_usage,
         "thread_id": thread_id,
         "model": model,
+        "eval_result": eval_result,
     }
+
+
+def is_recoverable_completed_stream_failure(failure_reason: str, parsed: dict[str, Any]) -> bool:
+    """Keep a complete result when the CLI disconnects after emitting its marker.
+
+    The independent Harness/Judge still decides whether the claimed actions really
+    happened. This narrow exception only prevents a post-result provider stream
+    warning from discarding an otherwise complete, machine-readable result.
+    """
+    if "stream disconnected before completion" not in failure_reason.lower():
+        return False
+    transport_fragments = (
+        "reconnecting",
+        "stream disconnected",
+        "transport error",
+        "error decoding response body",
+        "connection failed",
+    )
+    if any(
+        not any(fragment in str(error).lower() for fragment in transport_fragments)
+        for error in parsed.get("errors", [])
+    ):
+        return False
+    claimed = parsed.get("eval_result")
+    if not isinstance(claimed, dict):
+        return False
+    lifecycle = claimed.get("lifecycle")
+    observations = claimed.get("observations")
+    return (
+        claimed.get("stopping_point") == "complete"
+        and isinstance(lifecycle, list)
+        and "complete" in lifecycle
+        and isinstance(observations, list)
+        and bool(observations)
+    )
 
 
 def prompt_for(case: dict[str, Any], workspace: Path) -> str:
@@ -147,13 +364,81 @@ def prompt_for(case: dict[str, Any], workspace: Path) -> str:
     prompt = str(input_block.get("prompt") or "").strip()
     context = input_block.get("context") if isinstance(input_block.get("context"), list) else []
     context_lines = "\n".join(f"- {item}" for item in context if isinstance(item, str))
+    expected = case.get("expected") if isinstance(case.get("expected"), dict) else {}
+    forbidden = case.get("forbidden") if isinstance(case.get("forbidden"), dict) else {}
+    skills = case.get("skills") if isinstance(case.get("skills"), list) else []
+    skill_lines = "\n".join(
+        f"- $PMAI_HOME/skills/{item}/SKILL.md" for item in skills if isinstance(item, str)
+    )
+    observation_vocabulary = sorted(
+        {
+            item
+            for source in (expected.get("observations", []), forbidden.get("observations", []))
+            if isinstance(source, list)
+            for item in source
+            if isinstance(item, str)
+        }
+    )
+    expected_observations = expected.get("observations", [])
+    forbidden_observations = forbidden.get("observations", [])
+    expected_lifecycle = expected.get("lifecycle_order", [])
+    expected_stopping_point = expected.get("stopping_point")
+    harness = case.get("harness") if isinstance(case.get("harness"), dict) else {}
+    expected_changed_paths = harness.get("expected_changed_paths", [])
+    protected_paths = harness.get("protected_paths", [])
+    unchanged_paths = harness.get("expected_unchanged_paths", [])
+    if not isinstance(expected_changed_paths, list):
+        expected_changed_paths = []
+    if not isinstance(protected_paths, list):
+        protected_paths = []
+    if not isinstance(unchanged_paths, list):
+        unchanged_paths = []
+    context_pack = os.environ.get("PMAI_SESSION_CONTEXT", "").strip()
+    boundary_lines = [
+        "Harness file boundary:",
+        f"- protected paths are immutable: {protected_paths}",
+        f"- expected unchanged paths must remain byte-for-byte unchanged: {unchanged_paths}",
+        f"- expected changed paths (evidence target, not an instruction to fabricate writes): {expected_changed_paths}",
+    ]
+    if not expected_changed_paths:
+        boundary_lines.append(
+            "- This case is read-only from the Harness perspective: do not edit any workspace file."
+        )
+    if context_pack:
+        boundary_lines.append(f"- Read the temporary navigation index first: {context_pack}")
+    protocol_lines = [
+        "Machine-readable result contract:",
+        "- observations must include every expected observation and must not include forbidden observations.",
+        f"- required observations: {expected_observations}",
+        f"- forbidden observations: {forbidden_observations}",
+        f"- lifecycle must include this ordered sequence: {expected_lifecycle}",
+        f"- stopping_point must be exactly: {expected_stopping_point!r}",
+        "- Do not put a natural-language sentence in stopping_point; use the exact token above.",
+    ]
     return (
         "You are the Runner for a PMAI Session Eval. Work only inside the current Git workspace.\n"
         "Execute the PM intent below. Do not modify files outside the workspace, do not use network, "
         "and do not claim success unless the requested result is actually present.\n\n"
+        "Use the current framework checkout exposed as PMAI_HOME. Read each listed PMAI skill entrypoint "
+        "before acting, then follow its real workflow. Read referenced material when it is relevant to "
+        "this case, keeping the investigation focused; do not spend the run recursively dumping unrelated "
+        "documents or simulating completion in the final answer. This is a bounded harness run: avoid "
+        "broad repository inventories, generic startup scans, repeated reads of unchanged files, and "
+        "full-file dumps when a focused section is sufficient.\n"
+        f"Required skill entrypoints:\n{skill_lines or '- none'}\n\n"
+        + "\n".join(boundary_lines)
+        + "\n\n"
         f"PM intent: {prompt}\n"
         f"Context:\n{context_lines or '- none'}\n\n"
-        "After completing the task, briefly report the actions you actually performed."
+        "After completing the task, briefly report the actions you actually performed.\n"
+        "End your final response with exactly one machine-readable line in this form:\n"
+        'PMAI_EVAL_RESULT: {"observations":["..."],"lifecycle":["..."],"stopping_point":"..."}\n'
+        "Only list observations and lifecycle states you can support from actions actually performed; "
+        "do not infer success from the names below. Use an observation only when the transcript, "
+        "commands, or final workspace supports it.\n"
+        f"Case observation vocabulary (contains both desired and forbidden outcomes): "
+        f"{observation_vocabulary}.\n\n"
+        + "\n".join(protocol_lines)
     )
 
 
@@ -208,46 +493,78 @@ def main() -> int:
             raise RuntimeError("PMAI_CODEX_COMMAND 为空")
         argv = [
             *command,
-            "--ask-for-approval",
-            "never",
             "exec",
+            "--approve-for-me",
             "--json",
             "--ephemeral",
             "--cd",
             str(workspace),
-            "--sandbox",
-            "workspace-write",
+            # Harness creates a disposable Git workspace outside the user's
+            # trusted roots. Never wait for an interactive trust prompt in the
+            # non-interactive runner.
+            "--skip-git-repo-check",
             "--ignore-rules",
         ]
         if os.environ.get("PMAI_CODEX_IGNORE_USER_CONFIG") == "1":
             argv.append("--ignore-user-config")
+        reasoning_effort = os.environ.get("PMAI_CODEX_REASONING_EFFORT", "medium").strip()
+        if reasoning_effort:
+            # Session Eval must be reproducible instead of inheriting an
+            # interactive user's potentially very expensive xhigh setting.
+            argv.extend(["-c", f"model_reasoning_effort={reasoning_effort}"])
         argv.append(prompt_for(case, workspace))
         append_event(event_log, {"kind": "command", "name": "codex.exec", "argv": [str(value) for value in argv[:4]]})
 
         timeout_seconds = int(os.environ.get("PMAI_CODEX_TIMEOUT_SECONDS", "600"))
+        child_env = os.environ.copy()
+        child_env["PMAI_HOME"] = str(framework_root)
+        case_skills = case.get("skills") if isinstance(case.get("skills"), list) else []
+        if "mockup" in case_skills:
+            # The external CLI has no interactive gstack browser channel. Let the
+            # mockup skill take its documented HTML fallback instead of hanging
+            # inside a daemon-backed design/browse command.
+            path_entries = child_env.get("PATH", "").split(os.pathsep)
+            child_env["PATH"] = os.pathsep.join(
+                entry
+                for entry in path_entries
+                if all(token not in entry.lower() for token in ("/.agents/", "/.codex/", "/.claude/"))
+            )
+            child_env["GSTACK_BROWSE_BIN"] = "/nonexistent/pmai-browse"
+            child_env["GSTACK_DESIGN_BIN"] = "/nonexistent/pmai-design"
+        state_home_raw = harness.get("state_home")
+        if isinstance(state_home_raw, str) and state_home_raw.strip():
+            child_env["PMAI_STATE_HOME"] = str(Path(state_home_raw).expanduser().resolve())
+        context_pack = write_context_pack(case, workspace)
+        child_env["PMAI_SESSION_CONTEXT"] = str(context_pack)
+        # Rebuild the prompt after the pack path is known so the model can use it.
+        argv[-1] = prompt_for(case, workspace)
         failure_reason = ""
+        transport_warning = ""
         try:
-            completed = subprocess.run(
+            completed = run_streaming(
                 argv,
                 cwd=workspace,
-                capture_output=True,
-                text=True,
-                timeout=timeout_seconds,
-                check=False,
+                env=child_env,
+                timeout_seconds=timeout_seconds,
+                event_log=event_log,
             )
-            parsed = parse_events(completed.stdout)
-            if completed.returncode != 0:
-                failure_reason = parsed["errors"][-1] if parsed["errors"] else f"Codex exit {completed.returncode}"
-                stderr = completed.stderr.strip()
+            parsed = parse_events(completed["stdout"])
+            if completed["timed_out"]:
+                failure_reason = f"Codex timeout after {timeout_seconds}s"
+            elif completed["returncode"] != 0:
+                failure_reason = parsed["errors"][-1] if parsed["errors"] else f"Codex exit {completed['returncode']}"
+                stderr = completed["stderr"].strip()
                 if stderr:
                     failure_reason = f"{failure_reason}; stderr: {stderr[-2000:]}"
+                if is_recoverable_completed_stream_failure(failure_reason, parsed):
+                    transport_warning = failure_reason
+                    failure_reason = ""
             elif parsed["errors"]:
                 failure_reason = parsed["errors"][-1]
-        except subprocess.TimeoutExpired:
-            parsed = {"transcript": [], "tool_calls": [], "errors": [], "diagnostics": [], "token_usage": None, "thread_id": "", "model": ""}
-            failure_reason = f"Codex timeout after {timeout_seconds}s"
+            elif parsed.get("eval_result") is None:
+                failure_reason = "Codex did not emit a valid PMAI_EVAL_RESULT marker"
         except OSError as exc:
-            parsed = {"transcript": [], "tool_calls": [], "errors": [], "diagnostics": [], "token_usage": None, "thread_id": "", "model": ""}
+            parsed = {"transcript": [], "tool_calls": [], "errors": [], "diagnostics": [], "token_usage": None, "thread_id": "", "model": "", "eval_result": None}
             failure_reason = f"Codex command failed: {exc}"
 
         ended_at = iso_now()
@@ -256,6 +573,8 @@ def main() -> int:
             append_event(event_log, {"kind": "lifecycle", "value": "failed", "reason": failure_reason[:500]})
         else:
             append_event(event_log, {"kind": "lifecycle", "value": "completed"})
+        if transport_warning:
+            parsed["diagnostics"].append(f"recoverable transport warning: {transport_warning[:1000]}")
 
         runtime = {
             "started_at": started_at,
@@ -273,7 +592,13 @@ def main() -> int:
                 else {"status": "none"}
             ),
         }
+        if transport_warning:
+            runtime["transport"] = {"status": "warning", "reason": transport_warning[:1000]}
         success = not failure_reason
+        claimed = parsed.get("eval_result") if isinstance(parsed.get("eval_result"), dict) else {}
+        observations = claimed.get("observations", []) if isinstance(claimed.get("observations", []), list) else []
+        lifecycle = claimed.get("lifecycle", []) if isinstance(claimed.get("lifecycle", []), list) else []
+        stopping_point = claimed.get("stopping_point") if isinstance(claimed.get("stopping_point"), str) else ""
         result = {
             "case_id": case["id"],
             "evaluation_id": evaluation_id,
@@ -287,10 +612,10 @@ def main() -> int:
             "transcript": parsed["transcript"] or ([failure_reason] if failure_reason else ["Codex returned no assistant message"]),
             "tool_calls": parsed["tool_calls"],
             "file_diff": {},
-            "lifecycle": case.get("expected", {}).get("lifecycle_order", []) if success else [],
-            "stopping_point": case.get("expected", {}).get("stopping_point", "complete") if success else "runner_failed",
+            "lifecycle": lifecycle if success else [],
+            "stopping_point": stopping_point if success else "runner_failed",
             "elapsed_ms": duration_ms,
-            "observations": case.get("expected", {}).get("observations", []) if success else ["runner_failed"],
+            "observations": observations if success else ["runner_failed"],
             "diagnostics": parsed["diagnostics"],
             "runtime": runtime,
             "status": "pass" if success else "failed",

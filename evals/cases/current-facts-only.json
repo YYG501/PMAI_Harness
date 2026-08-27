@@ -3,29 +3,95 @@
   "id": "current-facts-only",
   "title": "规格只保留当前有效的最终目标",
   "layer": "session",
-  "skills": ["spec-writing"],
+  "skills": [
+    "spec-writing"
+  ],
   "source": {
     "session_id": "019f3c20-5bbb-7423-a18f-dab2c1a90fff",
     "evidence": [
-      {"turn": 160, "excerpt": "我们不需要描述去掉了什么，修改了什么，我们只需要维护一个最新的事实状态"}
+      {
+        "turn": 160,
+        "excerpt": "我们不需要描述去掉了什么，修改了什么，我们只需要维护一个最新的事实状态"
+      }
     ]
   },
   "input": {
     "prompt": "实现已经合入 main，请对账模块规格；其中一项漏实现，另一项是 PM 已接受的变化。",
-    "context": ["landed diff 可用", "accepted delta 有 PM 证据", "decisions.md 保留历史理由", "旧 spec 含变更流水账"]
+    "context": [
+      "landed diff 可用",
+      "accepted delta 有 PM 证据",
+      "decisions.md 保留历史理由",
+      "旧 spec 含变更流水账"
+    ]
   },
   "expected": {
-    "behaviors": ["spec 正文只写当前有效的最终目标", "历史保留在 Git 和 decisions.md", "只有 accepted delta 修改规格", "漏实现保留规格并判为实现缺口"],
-    "observations": ["normative_target_compiled", "history_kept_out_of_spec", "accepted_delta_applied", "implementation_gap_preserved"],
-    "lifecycle_order": ["landed", "documenting", "complete"],
+    "behaviors": [
+      "spec 正文只写当前有效的最终目标",
+      "历史保留在 Git 和 decisions.md",
+      "只有 accepted delta 修改规格",
+      "漏实现保留规格并判为实现缺口"
+    ],
+    "observations": [
+      "normative_target_compiled",
+      "history_kept_out_of_spec",
+      "accepted_delta_applied",
+      "implementation_gap_preserved"
+    ],
+    "lifecycle_order": [
+      "landed",
+      "documenting",
+      "complete"
+    ],
     "stopping_point": "complete"
   },
   "forbidden": {
-    "behaviors": ["保留删除线旧正文", "写修改过程流水账", "因漏实现删除已确认需求", "把无依据实现自动升格为规格"],
-    "observations": ["strikethrough_history_in_spec", "change_log_in_normative_body", "implementation_overrode_requirement", "undocumented_behavior_promoted"]
+    "behaviors": [
+      "保留删除线旧正文",
+      "写修改过程流水账",
+      "因漏实现删除已确认需求",
+      "把无依据实现自动升格为规格"
+    ],
+    "observations": [
+      "strikethrough_history_in_spec",
+      "change_log_in_normative_body",
+      "implementation_overrode_requirement",
+      "undocumented_behavior_promoted"
+    ]
   },
   "judge": {
     "enabled": true,
-    "rubric": ["文档回答最终应实现什么而非原型或代码现在做了什么", "决定历史与规范目标分家", "landed 差异按四分支处理"]
+    "rubric": [
+      "文档回答最终应实现什么而非原型或代码现在做了什么",
+      "决定历史与规范目标分家",
+      "landed 差异按四分支处理"
+    ]
+  },
+  "harness": {
+    "setup": {"state": "landed"},
+    "fixture": "evals/fixtures/current-facts-only",
+    "expected_changed_paths": [
+      "docs/modules/change-confirmation/spec.md"
+    ],
+    "expected_unchanged_paths": [
+      "PRODUCT.md",
+      "PRODUCT-RULES.md",
+      "DESIGN.md",
+      ".pm-workflow/project.yml",
+      "docs/modules/change-confirmation/decisions.md",
+      "app/confirm_change.py"
+    ],
+    "protected_paths": [
+      "PRODUCT.md",
+      "PRODUCT-RULES.md",
+      "DESIGN.md",
+      ".pm-workflow/project.yml",
+      "docs/modules/change-confirmation/decisions.md",
+      "app/confirm_change.py"
+    ],
+    "required_event_kinds": [
+      "lifecycle",
+      "tool",
+      "command"
+    ]
   }
 }

@@ -3,32 +3,147 @@
   "id": "design-long-session-operations-recovery",
   "title": "design 跨日恢复后重读规则并召回相关个人经验",
   "layer": "session",
-  "skills": ["design", "mockup", "spec-writing"],
+  "skills": [
+    "design",
+    "mockup",
+    "spec-writing"
+  ],
   "source": {
     "session_id": "019f3fb6-8dec-70d3-945e-ea74b178d843",
     "evidence": [
-      {"turn": 1, "excerpt": "跨日并切换模型后继续旧 design，但没有重新读取当前 skill。"},
-      {"turn": 2, "excerpt": "每次进入都需要做一次手动开通，你这一点都没有想到，看来你没有用户视角。"},
-      {"turn": 3, "excerpt": "已有许可证状态页面和身份源属性映射在多轮提问后才被发现。"},
-      {"turn": 4, "excerpt": "初始密码仅展示一次、离开适用范围后自动释放席位没有对应的明确决定。"}
+      {
+        "turn": 1,
+        "excerpt": "跨日并切换模型后继续旧 design，但没有重新读取当前 skill。"
+      },
+      {
+        "turn": 2,
+        "excerpt": "每次进入都需要做一次手动开通，你这一点都没有想到，看来你没有用户视角。"
+      },
+      {
+        "turn": 3,
+        "excerpt": "已有许可证状态页面和身份源属性映射在多轮提问后才被发现。"
+      },
+      {
+        "turn": 4,
+        "excerpt": "初始密码仅展示一次、离开适用范围后自动释放席位没有对应的明确决定。"
+      }
     ]
   },
   "input": {
     "prompt": "跨日继续租户开通与接管设计，并准备定稿。",
-    "context": ["当前 skill 在上次执行后可能更新", "个人经验库已有一条关于持续变化对象集合的经验", "管理员会持续新增成员", "SSO 会持续带来首次登录成员", "已有许可证状态页和身份源属性映射", "页面与菜单存在信息结构分叉"]
+    "context": [
+      "当前 skill 在上次执行后可能更新",
+      "个人经验库已有一条关于持续变化对象集合的经验",
+      "管理员会持续新增成员",
+      "SSO 会持续带来首次登录成员",
+      "已有许可证状态页和身份源属性映射",
+      "页面与菜单存在信息结构分叉"
+    ]
   },
   "expected": {
-    "behaviors": ["恢复后重新读取当前 design skill 与必读规则", "提问前重新编译上下文并核对现有页面", "在 context pack 之外召回与当前任务相关的个人经验", "依据已召回经验走通首位成员、持续新增、SSO 自动进入和属性变化", "识别逐人开通的重复运营成本并优先检查规则化承接", "页面与菜单存在真实结构分叉时执行 mockup 工作流", "spec-writing 只编译有决定证据的规则", "把初始密码仅展示一次和席位自动释放保留为待确认产品行为"],
-    "observations": ["current_skill_reloaded", "context_and_existing_ui_refreshed", "personal_memory_recalled_outside_project_authority", "ongoing_operations_walked", "repeated_manual_work_detected", "mockup_workflow_executed", "confirmed_decisions_only_compiled", "unsupported_rules_flagged"],
-    "lifecycle_order": ["designing"],
+    "behaviors": [
+      "恢复后重新读取当前 design skill 与必读规则",
+      "提问前重新编译上下文并核对现有页面",
+      "在 context pack 之外召回与当前任务相关的个人经验",
+      "依据已召回经验走通首位成员、持续新增、SSO 自动进入和属性变化",
+      "识别逐人开通的重复运营成本并优先检查规则化承接",
+      "页面与菜单存在真实结构分叉时执行 mockup 工作流",
+      "spec-writing 只编译有决定证据的规则",
+      "把初始密码仅展示一次和席位自动释放保留为待确认产品行为"
+    ],
+    "observations": [
+      "current_skill_reloaded",
+      "context_and_existing_ui_refreshed",
+      "personal_memory_recalled_outside_project_authority",
+      "ongoing_operations_walked",
+      "repeated_manual_work_detected",
+      "mockup_workflow_executed",
+      "confirmed_decisions_only_compiled",
+      "unsupported_rules_flagged"
+    ],
+    "lifecycle_order": [
+      "designing"
+    ],
     "stopping_point": "awaiting_unsupported_rule_decisions"
   },
   "forbidden": {
-    "behaviors": ["沿用旧消息中的 skill 快照", "把个人经验写进 context pack 或当成项目事实", "把 SSO、同步、退出作为所有 design 都必须逐项检查的固定问卷", "把现状取证变成连续二选一", "只验证首位成员建立而忽略后续新增", "默认要求管理员逐人开通产品", "用文字讨论替代需要的 mockup", "把没有决定证据的自动释放或一次展示写进规格"],
-    "observations": ["stale_skill_rules_used", "personal_memory_promoted_to_project_truth", "fixed_sso_checklist_used", "repository_fact_reasked", "first_setup_only", "per_user_manual_activation_defaulted", "mockup_skipped_on_real_fork", "unsupported_behavior_promoted"]
+    "behaviors": [
+      "沿用旧消息中的 skill 快照",
+      "把个人经验写进 context pack 或当成项目事实",
+      "把 SSO、同步、退出作为所有 design 都必须逐项检查的固定问卷",
+      "把现状取证变成连续二选一",
+      "只验证首位成员建立而忽略后续新增",
+      "默认要求管理员逐人开通产品",
+      "用文字讨论替代需要的 mockup",
+      "把没有决定证据的自动释放或一次展示写进规格"
+    ],
+    "observations": [
+      "stale_skill_rules_used",
+      "personal_memory_promoted_to_project_truth",
+      "fixed_sso_checklist_used",
+      "repository_fact_reasked",
+      "first_setup_only",
+      "per_user_manual_activation_defaulted",
+      "mockup_skipped_on_real_fork",
+      "unsupported_behavior_promoted"
+    ]
   },
   "judge": {
     "enabled": true,
-    "rubric": ["跨日恢复同时刷新执行规则和产品上下文", "个人经验独立召回且不冒充项目权威或通用 Skill 规则", "方案在相关经验命中时覆盖管理员日常增长而非只覆盖首次建立", "内部能力真实执行并且规格不补造产品行为"]
+    "rubric": [
+      "跨日恢复同时刷新执行规则和产品上下文",
+      "个人经验独立召回且不冒充项目权威或通用 Skill 规则",
+      "方案在相关经验命中时覆盖管理员日常增长而非只覆盖首次建立",
+      "内部能力真实执行并且规格不补造产品行为"
+    ]
+  },
+  "harness": {
+    "setup": {
+      "state": "designing",
+      "personal_memories": [
+        {
+          "skill": "design",
+          "signal": "explicit_generalization",
+          "disposition": "personal",
+          "context_summary": "持续变化对象集合的业务规则",
+          "user_feedback": "以后都要检查后续新增和属性变化",
+          "corrected_behavior": "检查对象新增、属性变化和离开范围后的结果",
+          "outcome": "已确认作为后台检查",
+          "evidence_ref": "session-eval:changing-collection",
+          "applies_when": "一条规则作用于会持续变化的一组对象",
+          "lesson": "检查对象新增、属性变化和离开范围后结果是否持续正确",
+          "reason": "避免只验证首次建立",
+          "boundaries": "必须逐次承担业务责任时保留人工确认",
+          "cues": "规则 对象集合 成员 新增 变化 离开 授权"
+        }
+      ]
+    },
+    "fixture": "evals/fixtures/design-long-session-operations-recovery",
+    "expected_changed_paths": [
+      "docs/modules/change-confirmation/.work-meta.json"
+    ],
+    "expected_unchanged_paths": [
+      "PRODUCT.md",
+      "PRODUCT-RULES.md",
+      "DESIGN.md",
+      ".pm-workflow/project.yml",
+      "docs/modules/change-confirmation/spec.md",
+      "docs/modules/change-confirmation/decisions.md",
+      "app/confirm_change.py"
+    ],
+    "protected_paths": [
+      "PRODUCT.md",
+      "PRODUCT-RULES.md",
+      "DESIGN.md",
+      ".pm-workflow/project.yml",
+      "docs/modules/change-confirmation/spec.md",
+      "docs/modules/change-confirmation/decisions.md",
+      "app/confirm_change.py"
+    ],
+    "required_event_kinds": [
+      "lifecycle",
+      "tool",
+      "command"
+    ]
   }
 }

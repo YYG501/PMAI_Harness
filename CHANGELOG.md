@@ -14,6 +14,10 @@ PM-AI-Workflow 生成器仓的演进记录。本文件**只记影响已安装框
 
 ## 未发布
 
+- `fix(harness)`: **对齐真实 Session Eval 的外层超时。** `tests/run-all.sh` 新增可配置的 `PMAI_SESSION_EVAL_TIMEOUT_SECONDS`，默认给外部 runner / judge 900 秒，避免长案例在 runner 自身 600 秒边界前被旧的 300 秒外层套件超时误杀；非法超时配置失败关闭。
+
+- `feat(harness)`: **补齐 18 个隔离 Session Eval fixture 与动态起始状态。** 新增 17 个脱敏消费仓夹具，覆盖 designing / ready_to_build / iterating / landed、已消费决定、目标脏改动、个人经验隔离、跨模块资料和完整 mockup 关联页面；`skill-eval.py` 现在会用当前 checkout 的框架脚本动态构造合法 ready / build 合同，并把 `PMAI_STATE_HOME` 隔离到本次评测。新增预期不变文件校验、真实事件类型要求和触发清单登记；确定性 fake runner 已覆盖 18/18，真实 Codex 结果仍必须由配置好的 runner、独立 judge 和 runtime evidence 单独证明。
+
 - `feat(build-guards)`: **把两类真实协作偏差接成机器护栏。** 高风险 UI 的首次尺寸 / 布局编辑现在沿页面 import 检查共享 primitive 的约束与 cascade 风险，browser acceptance 新增 `size` 命令读取元素实际 `getBoundingClientRect()`；PM 说“定稿 / 可以提交 / 可以合并”后由宿主 finalize-route hook 绑定短期会话意图，PreToolUse(Bash) 阻止先手工跑检查、browser、commit 或 merge，统一进入 `finalize-candidate.py → finalize-work.py`。新增 helper、hooks、模板和回归测试；不改变生命周期字段、不自动修改现有消费仓或安装态。
 
 - `fix(design-ready)`: **收紧 Design 到 Build 的 ready 交接与恢复合同。** Design 定稿后在同一轮进入 Build 预检并展示工作环境 / 构建工具确认卡；普通 `designing` 不再覆盖 `ready_to_build`，新增显式 `build-contract.py reopen-ready --reason` 处理 PM 明确要求的设计重开。ready 对同一 checkpoint、source hash、revision 和目标路径幂等重试，复用已绑定授权并自动刷新 context pack；不同批准输入必须显式 reopen。新增旧 baseline、重复授权、缓存 hash 漂移和 ready 状态不变回归，不自动迁移现有消费仓或安装态。

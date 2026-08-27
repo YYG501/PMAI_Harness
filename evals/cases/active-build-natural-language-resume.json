@@ -3,15 +3,33 @@
   "id": "active-build-natural-language-resume",
   "title": "自然语言查看问题继续沿用 active build contract",
   "layer": "session",
-  "skills": ["build", "status"],
+  "skills": [
+    "build",
+    "status"
+  ],
   "source": {
     "session_id": "019fdb65-d295-7450-80eb-62695bdff74d",
     "evidence": [
-      {"turn": 28, "excerpt": "当前是主原型，lifecycle 已处于 iterating"},
-      {"turn": 35, "excerpt": "合同已包含 prototype、interactive-simulation 和 simulate_by_default"},
-      {"turn": 303, "excerpt": "仍把真实能力匹配引擎、窄屏和测试入口混入未解决问题"},
-      {"turn": 330, "excerpt": "重新要求 PM 确认桌面范围和新材料动态演示"},
-      {"turn": 337, "excerpt": "PM 明确两点都不需要"}
+      {
+        "turn": 28,
+        "excerpt": "当前是主原型，lifecycle 已处于 iterating"
+      },
+      {
+        "turn": 35,
+        "excerpt": "合同已包含 prototype、interactive-simulation 和 simulate_by_default"
+      },
+      {
+        "turn": 303,
+        "excerpt": "仍把真实能力匹配引擎、窄屏和测试入口混入未解决问题"
+      },
+      {
+        "turn": 330,
+        "excerpt": "重新要求 PM 确认桌面范围和新材料动态演示"
+      },
+      {
+        "turn": 337,
+        "excerpt": "PM 明确两点都不需要"
+      }
     ]
   },
   "input": {
@@ -36,7 +54,9 @@
       "existing_scope_reused",
       "no_duplicate_pm_questions"
     ],
-    "lifecycle_order": ["iterating"],
+    "lifecycle_order": [
+      "iterating"
+    ],
     "stopping_point": "pm_review"
   },
   "forbidden": {
@@ -59,6 +79,34 @@
       "自然语言续接仍受当前 build contract 约束",
       "prototype 与 product 的实现深度没有混淆",
       "没有制造规格和决定之外的新 PM 问题"
+    ]
+  },
+  "harness": {
+    "setup": {"state": "iterating"},
+    "fixture": "evals/fixtures/active-build-natural-language-resume",
+    "expected_changed_paths": [],
+    "expected_unchanged_paths": [
+      "PRODUCT.md",
+      "PRODUCT-RULES.md",
+      "DESIGN.md",
+      ".pm-workflow/project.yml",
+      "docs/modules/change-confirmation/spec.md",
+      "docs/modules/change-confirmation/decisions.md",
+      "app/confirm_change.py"
+    ],
+    "protected_paths": [
+      "PRODUCT.md",
+      "PRODUCT-RULES.md",
+      "DESIGN.md",
+      ".pm-workflow/project.yml",
+      "docs/modules/change-confirmation/spec.md",
+      "docs/modules/change-confirmation/decisions.md",
+      "app/confirm_change.py"
+    ],
+    "required_event_kinds": [
+      "lifecycle",
+      "tool",
+      "command"
     ]
   }
 }

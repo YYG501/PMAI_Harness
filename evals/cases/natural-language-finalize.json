@@ -16,6 +16,7 @@
     "context": ["当前处于 iterating", "PM 已看过最终 build 结果", "无未决产品问题"]
   },
   "harness": {
+    "setup": {"state": "iterating"},
     "fixture": "evals/fixtures/natural-language-finalize",
     "expected_changed_paths": ["PRODUCT-STATE.md"],
     "protected_paths": ["docs/modules/change-confirmation/spec.md", "docs/modules/change-confirmation/decisions.md"],

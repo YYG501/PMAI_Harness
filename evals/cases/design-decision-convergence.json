@@ -3,31 +3,104 @@
   "id": "design-decision-convergence",
   "title": "design 用 frontier rounds 收敛真实决策并用业务结果提问",
   "layer": "session",
-  "skills": ["design"],
+  "skills": [
+    "design"
+  ],
   "source": {
     "session_id": "019f3fbc-b29d-7e71-8be2-bbfbbb9d8d0f",
     "evidence": [
-      {"turn": 1, "excerpt": "外部部署许可证是否绑定具体实例？绑定实例身份，生成激活标识和激活申请文件。"},
-      {"turn": 2, "excerpt": "看不懂，然后还有多少要确认的"},
-      {"turn": 3, "excerpt": "真正要确认的只有一句：客户购买一份私有化许可证，是否允许复制到两套独立部署中同时使用？这是最后一个必须确认的架构问题。"}
+      {
+        "turn": 1,
+        "excerpt": "外部部署许可证是否绑定具体实例？绑定实例身份，生成激活标识和激活申请文件。"
+      },
+      {
+        "turn": 2,
+        "excerpt": "看不懂，然后还有多少要确认的"
+      },
+      {
+        "turn": 3,
+        "excerpt": "真正要确认的只有一句：客户购买一份私有化许可证，是否允许复制到两套独立部署中同时使用？这是最后一个必须确认的架构问题。"
+      }
     ]
   },
   "input": {
     "prompt": "继续把许可证方案讨论清楚，一个一个确认。",
-    "context": ["已有决定可以推出大部分页面和状态规则", "仍有少量会改变授权边界的真实岔路", "当前为中断后的 design 续跑"]
+    "context": [
+      "已有决定可以推出大部分页面和状态规则",
+      "仍有少量会改变授权边界的真实岔路",
+      "当前为中断后的 design 续跑"
+    ]
   },
   "expected": {
-    "behaviors": ["首轮前刷新并消费 context pack", "过滤已有答案、机械项和可逆偏好", "把真实岔路建立为依赖树并计算 frontier", "同轮展示互不依赖的问题并给推荐", "把技术机制转成业务结果"],
-    "observations": ["context_pack_refreshed_before_question", "known_answers_filtered", "frontier_computed", "independent_questions_in_one_round", "technical_question_translated"],
-    "lifecycle_order": ["designing"],
+    "behaviors": [
+      "首轮前刷新并消费 context pack",
+      "过滤已有答案、机械项和可逆偏好",
+      "把真实岔路建立为依赖树并计算 frontier",
+      "同轮展示互不依赖的问题并给推荐",
+      "把技术机制转成业务结果"
+    ],
+    "observations": [
+      "context_pack_refreshed_before_question",
+      "known_answers_filtered",
+      "frontier_computed",
+      "independent_questions_in_one_round",
+      "technical_question_translated"
+    ],
+    "lifecycle_order": [
+      "designing"
+    ],
     "stopping_point": "awaiting_product_decision"
   },
   "forbidden": {
-    "behaviors": ["依赖问题与前置问题同轮展示", "把可推导事项包装成选择题", "使用实例身份、公钥或激活申请作为 PM 必须理解的题干", "PM 说看不懂后继续解释原技术问法"],
-    "observations": ["round_dependency_violation", "deducible_choice_reasked", "technical_jargon_question", "invalid_question_reused"]
+    "behaviors": [
+      "依赖问题与前置问题同轮展示",
+      "把可推导事项包装成选择题",
+      "使用实例身份、公钥或激活申请作为 PM 必须理解的题干",
+      "PM 说看不懂后继续解释原技术问法"
+    ],
+    "observations": [
+      "round_dependency_violation",
+      "deducible_choice_reasked",
+      "technical_jargon_question",
+      "invalid_question_reused"
+    ]
   },
   "judge": {
     "enabled": true,
-    "rubric": ["PM 在每轮知道本轮要收敛的业务范围", "同轮问题彼此独立且每道题只要求判断实际业务结果", "已有结论能推出的事项不再询问"]
+    "rubric": [
+      "PM 在每轮知道本轮要收敛的业务范围",
+      "同轮问题彼此独立且每道题只要求判断实际业务结果",
+      "已有结论能推出的事项不再询问"
+    ]
+  },
+  "harness": {
+    "setup": {"state": "designing"},
+    "fixture": "evals/fixtures/design-decision-convergence",
+    "expected_changed_paths": [
+      "docs/modules/change-confirmation/.work-meta.json"
+    ],
+    "expected_unchanged_paths": [
+      "PRODUCT.md",
+      "PRODUCT-RULES.md",
+      "DESIGN.md",
+      ".pm-workflow/project.yml",
+      "docs/modules/change-confirmation/spec.md",
+      "docs/modules/change-confirmation/decisions.md",
+      "app/confirm_change.py"
+    ],
+    "protected_paths": [
+      "PRODUCT.md",
+      "PRODUCT-RULES.md",
+      "DESIGN.md",
+      ".pm-workflow/project.yml",
+      "docs/modules/change-confirmation/spec.md",
+      "docs/modules/change-confirmation/decisions.md",
+      "app/confirm_change.py"
+    ],
+    "required_event_kinds": [
+      "lifecycle",
+      "tool",
+      "command"
+    ]
   }
 }

@@ -1,0 +1,42 @@
+# PMAI E2E Fixture · 文档索引
+
+> 这是消费仓的资料入口。要找产品方案、模块、输入材料、交付物和归档先看这里；项目主上下文在仓库根目录。
+
+## 根目录项目脊柱
+
+| 文档 | 用途 |
+|---|---|
+| [`PRODUCT.md`](../PRODUCT.md) | 产品定位、用户画像、产品边界、业务术语表 |
+| [`PRODUCT-STATE.md`](../PRODUCT-STATE.md) | 当前产品长什么样、做到哪、哪些是真系统哪些是 mock |
+| [`PRODUCT-RULES.md`](../PRODUCT-RULES.md) | 跨模块产品行为规则 |
+| [`DESIGN.md`](../DESIGN.md) | 视觉、组件、交互规范 |
+| [`TODO.md`](../TODO.md) | PM 真说过想做但未开工的事项 |
+
+## 模块
+
+- [`modules/INDEX.md`](modules/INDEX.md) — 模块上下文与功能型规格文档索引。
+- `modules/<模块>/discussion.md` — `/pmai-design` 的讨论与探索过程。
+- `modules/<模块>/decisions.md` — 本模块拍板、否过什么、为什么。
+- `modules/<模块>/spec.md` — 本模块长期规格，供 build、close 和后续设计继承。
+- `modules/<按内容命名>.md` — 功能型成稿：PRD、功能需求、功能描述、功能规格、功能评审稿。
+
+## 产品方案
+
+- [`proposals/INDEX.md`](proposals/INDEX.md) — Product Proposal 当前版本与历史取代关系。
+- `proposals/<slug>-vN.md` — 产品级用户、问题、价值、边界、MVP 与演进条件的完整论证。
+
+## 材料与产物
+
+| 目录 | 放什么 |
+|---|---|
+| `inputs/` | PM 上传材料、调研、竞品、旧文档等输入 evidence |
+| `proposals/` | 完整 Product Proposal 与历史版本；不放普通介绍稿或模块规格 |
+| `engineering/` | README、API、CLI、架构说明、how-to、tutorial、reference；gstack 文档旁路采用后接回这里 |
+| `deliverables/` | 介绍型 / 表达型材料，如产品介绍、产品功能清单、产品优势说明、一页纸 |
+| `decisions/` | 重大项目级决策 / 理路冻结档，默认不写 |
+| `archive/` | 一次性 review、临时分析、被取代旧稿、过程档案 |
+
+## 原型与探索
+
+- `.pm-workflow/project.yml` — 首个可建造 design 定稿后生成的建造定义；实际代码根和入口见其中 `implementation`。
+- `mockups/` — 探索期 mock 变体与看版。

@@ -3,30 +3,90 @@
   "id": "iterative-fast-final-full",
   "title": "多轮修改只快检，定稿后完整检查",
   "layer": "session",
-  "skills": ["build"],
+  "skills": [
+    "build"
+  ],
   "source": {
     "session_id": "019f49b7-088b-75c3-a0e4-0c05ca61f3fd",
     "evidence": [
-      {"turn": 1, "excerpt": "PMAI 把 PM 查看原型期间的快速修改和定稿后的完整验收处理得太像了"},
-      {"turn": 2, "excerpt": "小改 2–5 分钟可看，交互改动 5–10 分钟可看，完整生产验证只在定稿时跑一次"}
+      {
+        "turn": 1,
+        "excerpt": "PMAI 把 PM 查看原型期间的快速修改和定稿后的完整验收处理得太像了"
+      },
+      {
+        "turn": 2,
+        "excerpt": "小改 2–5 分钟可看，交互改动 5–10 分钟可看，完整生产验证只在定稿时跑一次"
+      }
     ]
   },
   "input": {
     "prompt": "我先逐页看结果并继续修改，暂时还没有定稿。",
-    "context": ["build target 已有实现提交", "本轮只改一个弹窗布局"]
+    "context": [
+      "build target 已有实现提交",
+      "本轮只改一个弹窗布局"
+    ]
   },
   "expected": {
-    "behaviors": ["保持 iterating", "只运行受影响的 iteration checks", "复用 dev server 和浏览器", "PM 明确定稿后才冻结提交并运行 final checks"],
-    "observations": ["iterating_preserved", "affected_fast_checks_only", "full_checks_deferred"],
-    "lifecycle_order": ["building", "iterating"],
+    "behaviors": [
+      "保持 iterating",
+      "只运行受影响的 iteration checks",
+      "复用 dev server 和浏览器",
+      "PM 明确定稿后才冻结提交并运行 final checks"
+    ],
+    "observations": [
+      "iterating_preserved",
+      "affected_fast_checks_only",
+      "full_checks_deferred"
+    ],
+    "lifecycle_order": [
+      "iterating"
+    ],
     "stopping_point": "pm_review"
   },
   "forbidden": {
-    "behaviors": ["每轮修改都跑 production build 或完整发布门", "未定稿就生成 review-ready", "未定稿就合入 main"],
-    "observations": ["full_checks_each_iteration", "landed_before_acceptance"]
+    "behaviors": [
+      "每轮修改都跑 production build 或完整发布门",
+      "未定稿就生成 review-ready",
+      "未定稿就合入 main"
+    ],
+    "observations": [
+      "full_checks_each_iteration",
+      "landed_before_acceptance"
+    ]
   },
   "judge": {
     "enabled": true,
-    "rubric": ["检查强度与迭代阶段匹配", "PM 可继续看结果而不被收尾流程打断"]
+    "rubric": [
+      "检查强度与迭代阶段匹配",
+      "PM 可继续看结果而不被收尾流程打断"
+    ]
+  },
+  "harness": {
+    "setup": {"state": "iterating"},
+    "fixture": "evals/fixtures/iterative-fast-final-full",
+    "expected_changed_paths": [],
+    "expected_unchanged_paths": [
+      "PRODUCT.md",
+      "PRODUCT-RULES.md",
+      "DESIGN.md",
+      ".pm-workflow/project.yml",
+      "docs/modules/change-confirmation/spec.md",
+      "docs/modules/change-confirmation/decisions.md",
+      "app/confirm_change.py"
+    ],
+    "protected_paths": [
+      "PRODUCT.md",
+      "PRODUCT-RULES.md",
+      "DESIGN.md",
+      ".pm-workflow/project.yml",
+      "docs/modules/change-confirmation/spec.md",
+      "docs/modules/change-confirmation/decisions.md",
+      "app/confirm_change.py"
+    ],
+    "required_event_kinds": [
+      "lifecycle",
+      "tool",
+      "command"
+    ]
   }
 }

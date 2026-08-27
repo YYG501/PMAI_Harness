@@ -1,0 +1,10 @@
+{
+  "schema_version": 3,
+  "id": "release-change-confirmation-v1",
+  "status": "accepted",
+  "path": "docs/proposals/release-change-confirmation-v1.md",
+  "hash": "5bf3c69e2e445e15577183f06437e414fa856c47b488fdff8d767e474b54abd1",
+  "accepted_at": "2026-08-23T22:55:00+08:00",
+  "supersedes": null,
+  "product_hash": "0612c63f4e0df38279528e1b597cf13ca8604345acbe09c01031aa0661cce812"
+}

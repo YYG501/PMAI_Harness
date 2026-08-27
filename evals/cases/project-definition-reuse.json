@@ -3,31 +3,98 @@
   "id": "project-definition-reuse",
   "title": "技术方案未变时复用 project definition",
   "layer": "session",
-  "skills": ["design"],
+  "skills": [
+    "design"
+  ],
   "source": {
     "session_id": "019f3fbc-b29d-7e71-8be2-bbfbbb9d8d0f",
     "evidence": [
-      {"turn": 1, "excerpt": "本轮只修改文档，没有运行前端构建，原型代码也未纳入提交。"},
-      {"turn": 2, "excerpt": "Product Manifest 三件套设计版本升至第 3 版并重新标记为可建造。"},
-      {"turn": 3, "excerpt": "技术栈和建造对象没有变化，却把 project.yml 从 revision 2 更新到 revision 3。"}
+      {
+        "turn": 1,
+        "excerpt": "本轮只修改文档，没有运行前端构建，原型代码也未纳入提交。"
+      },
+      {
+        "turn": 2,
+        "excerpt": "Product Manifest 三件套设计版本升至第 3 版并重新标记为可建造。"
+      },
+      {
+        "turn": 3,
+        "excerpt": "技术栈和建造对象没有变化，却把 project.yml 从 revision 2 更新到 revision 3。"
+      }
     ]
   },
   "input": {
     "prompt": "需求规格改完了，固定建造依据。",
-    "context": [".pm-workflow/project.yml 已存在", "project.type、代码根、入口、技术栈、命令和 Web 运行方式均未变化", "只有模块 spec 内容变化"]
+    "context": [
+      ".pm-workflow/project.yml 已存在",
+      "project.type、代码根、入口、技术栈、命令和 Web 运行方式均未变化",
+      "只有模块 spec 内容变化"
+    ]
   },
   "expected": {
-    "behaviors": ["沿用既有 project.yml", "保持 project.yml 完整文件不变", "不递增项目建造定义 revision", "只更新模块 source hash 和 ready_to_build 状态"],
-    "observations": ["project_definition_reused", "project_definition_no_diff", "project_revision_unchanged", "module_build_basis_updated"],
-    "lifecycle_order": ["designing", "ready_to_build"],
+    "behaviors": [
+      "沿用既有 project.yml",
+      "保持 project.yml 完整文件不变",
+      "不递增项目建造定义 revision",
+      "对同一 source hash、checkpoint、revision 和目标路径执行幂等 ready 校验"
+    ],
+    "observations": [
+      "project_definition_reused",
+      "project_definition_no_diff",
+      "project_revision_unchanged",
+      "module_build_basis_reused"
+    ],
+    "lifecycle_order": [
+      "ready_to_build"
+    ],
     "stopping_point": "ready_to_build"
   },
   "forbidden": {
-    "behaviors": ["因为模块规格变化而重写 project.yml", "在技术方案未变化时传 allow-redefinition", "无意义递增项目建造定义 revision"],
-    "observations": ["project_definition_rewritten", "unnecessary_redefinition", "project_revision_bumped_without_plan_change"]
+    "behaviors": [
+      "因为模块规格变化而重写 project.yml",
+      "在技术方案未变化时传 allow-redefinition",
+      "无意义递增项目建造定义 revision"
+    ],
+    "observations": [
+      "project_definition_rewritten",
+      "unnecessary_redefinition",
+      "project_revision_bumped_without_plan_change"
+    ]
   },
   "judge": {
     "enabled": true,
-    "rubric": ["模块设计版本与项目建造定义 revision 被正确区分", "技术方案相同时 project.yml 没有 diff", "ready_to_build 仍能正常更新"]
+    "rubric": [
+      "模块设计版本与项目建造定义 revision 被正确区分",
+      "技术方案相同时 project.yml 没有 diff",
+      "ready_to_build 仍能正常更新"
+    ]
+  },
+  "harness": {
+    "setup": {"state": "ready_to_build"},
+    "fixture": "evals/fixtures/project-definition-reuse",
+    "expected_changed_paths": [],
+    "expected_unchanged_paths": [
+      "PRODUCT.md",
+      "PRODUCT-RULES.md",
+      "DESIGN.md",
+      ".pm-workflow/project.yml",
+      "docs/modules/change-confirmation/spec.md",
+      "docs/modules/change-confirmation/decisions.md",
+      "app/confirm_change.py"
+    ],
+    "protected_paths": [
+      "PRODUCT.md",
+      "PRODUCT-RULES.md",
+      "DESIGN.md",
+      ".pm-workflow/project.yml",
+      "docs/modules/change-confirmation/spec.md",
+      "docs/modules/change-confirmation/decisions.md",
+      "app/confirm_change.py"
+    ],
+    "required_event_kinds": [
+      "lifecycle",
+      "tool",
+      "command"
+    ]
   }
 }

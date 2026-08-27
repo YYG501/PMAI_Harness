@@ -12,6 +12,7 @@ corresponding ``--require-*`` flag is used.
 from __future__ import annotations
 
 import argparse
+import copy
 import hashlib
 import json
 import os
@@ -71,6 +72,7 @@ REQUIRED_RUNTIME_FIELDS = {
 }
 VALID_RUNTIME_STATUSES = {"reported", "unavailable"}
 VALID_FAILURE_STATUSES = {"none", "error"}
+VALID_FIXTURE_STATES = {"preserve", "designing", "ready_to_build", "iterating", "landed"}
 
 
 class EvalError(RuntimeError):
@@ -199,20 +201,76 @@ def validate_case(case: dict[str, Any], path: Path, repo_root: Path) -> str:
             expected_paths = require_string_list(
                 harness.get("expected_changed_paths"),
                 f"{case_id}: harness.expected_changed_paths",
+                allow_empty=True,
             )
             protected_paths = require_string_list(
                 harness.get("protected_paths", []),
                 f"{case_id}: harness.protected_paths",
                 allow_empty=True,
             )
+            unchanged_paths = require_string_list(
+                harness.get("expected_unchanged_paths", []),
+                f"{case_id}: harness.expected_unchanged_paths",
+                allow_empty=True,
+            )
             required_event_kinds = require_string_list(
                 harness.get("required_event_kinds"),
                 f"{case_id}: harness.required_event_kinds",
             )
+            setup = harness.get("setup", {})
+            if not isinstance(setup, dict):
+                raise EvalError(f"{case_id}: harness.setup 必须是对象")
+            setup_state = setup.get("state", "preserve")
+            if setup_state not in VALID_FIXTURE_STATES:
+                raise EvalError(
+                    f"{case_id}: harness.setup.state 必须是 "
+                    + " / ".join(sorted(VALID_FIXTURE_STATES))
+                )
+            if setup_state != "preserve":
+                fixture_relative_path(
+                    setup.get("module_dir", "docs/modules/change-confirmation"),
+                    f"{case_id}: harness.setup.module_dir",
+                )
+                fixture_relative_path(
+                    setup.get("target_path", "app/confirm_change.py"),
+                    f"{case_id}: harness.setup.target_path",
+                )
+            initial_dirty = setup.get("initial_dirty", [])
+            if not isinstance(initial_dirty, list):
+                raise EvalError(f"{case_id}: harness.setup.initial_dirty 必须是数组")
+            for index, mutation in enumerate(initial_dirty, 1):
+                if not isinstance(mutation, dict):
+                    raise EvalError(
+                        f"{case_id}: harness.setup.initial_dirty[{index}] 必须是对象"
+                    )
+                fixture_relative_path(
+                    mutation.get("path"),
+                    f"{case_id}: harness.setup.initial_dirty[{index}].path",
+                )
+                if set(mutation) - {"path", "append", "content"}:
+                    raise EvalError(
+                        f"{case_id}: harness.setup.initial_dirty[{index}] 仅支持 path / append / content"
+                    )
+                if ("append" in mutation) == ("content" in mutation):
+                    raise EvalError(
+                        f"{case_id}: harness.setup.initial_dirty[{index}] 必须且只能提供 append 或 content"
+                    )
+                value = mutation.get("append", mutation.get("content"))
+                if not isinstance(value, str):
+                    raise EvalError(
+                        f"{case_id}: harness.setup.initial_dirty[{index}] 内容必须是字符串"
+                    )
+            memories = setup.get("personal_memories", [])
+            if not isinstance(memories, list) or any(not isinstance(item, dict) for item in memories):
+                raise EvalError(f"{case_id}: harness.setup.personal_memories 必须是对象数组")
+            if not isinstance(setup.get("consumed_gate", False), bool):
+                raise EvalError(f"{case_id}: harness.setup.consumed_gate 必须是布尔值")
             for index, raw in enumerate(expected_paths, 1):
                 fixture_relative_path(raw, f"{case_id}: expected_changed_paths[{index}]")
             for index, raw in enumerate(protected_paths, 1):
                 fixture_relative_path(raw, f"{case_id}: protected_paths[{index}]")
+            for index, raw in enumerate(unchanged_paths, 1):
+                fixture_relative_path(raw, f"{case_id}: expected_unchanged_paths[{index}]")
 
     return case_id
 
@@ -338,6 +396,344 @@ def run_git(workspace: Path, args: list[str], label: str) -> str:
     return completed.stdout
 
 
+def run_checked(
+    command: list[str],
+    *,
+    cwd: Path,
+    label: str,
+    input_text: str | None = None,
+) -> str:
+    completed = subprocess.run(
+        command,
+        cwd=cwd,
+        input=input_text,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if completed.returncode != 0:
+        detail = completed.stderr.strip() or completed.stdout.strip() or f"exit {completed.returncode}"
+        raise EvalError(f"{label} 失败: {detail}")
+    return completed.stdout
+
+
+def write_json(path: Path, value: dict[str, Any]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(value, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+
+
+def fixture_setup_commit(workspace: Path, message: str) -> None:
+    run_git(workspace, ["add", "--all"], f"fixture setup add ({message})")
+    status = run_git(
+        workspace,
+        ["status", "--porcelain=v1", "--untracked-files=all"],
+        f"fixture setup status ({message})",
+    )
+    if status.strip():
+        run_git(workspace, ["commit", "-q", "-m", message], f"fixture setup commit ({message})")
+
+
+def reset_fixture_to_designing(workspace: Path, module_dir: Path) -> None:
+    path = module_dir / ".work-meta.json"
+    existing = read_json(path) if path.exists() else {}
+    write_json(
+        path,
+        {
+            "id": str(existing.get("id") or f"work-{module_dir.name}-session-eval"),
+            "name": str(existing.get("name") or module_dir.name),
+            "branch": "main",
+            "status": "active",
+            "created_at": str(existing.get("created_at") or "2026-08-01T09:00:00+08:00"),
+            "source_hash_version": 2,
+            "lifecycle_state": "designing",
+        },
+    )
+    fixture_setup_commit(workspace, "fixture: establish designing state")
+
+
+def create_ready_fixture_state(
+    workspace: Path,
+    module_dir: Path,
+    target_path: str,
+    framework_root: Path,
+) -> dict[str, Any]:
+    reset_fixture_to_designing(workspace, module_dir)
+    seed_consumed_gate(workspace, module_dir, framework_root)
+    context_path = workspace / ".pm-workflow" / "context" / f"{module_dir.name}.json"
+    run_checked(
+        [
+            sys.executable,
+            str(framework_root / "scripts" / "context-pack.py"),
+            "--repo-root",
+            str(workspace),
+            "--module",
+            str(module_dir),
+            "--output",
+            str(context_path),
+        ],
+        cwd=workspace,
+        label="fixture context pack",
+    )
+    pack = read_json(context_path)
+    checkpoint = run_git(workspace, ["rev-parse", "HEAD"], "fixture ready checkpoint").strip()
+    run_checked(
+        [
+            sys.executable,
+            str(framework_root / "scripts" / "build-contract.py"),
+            "ready",
+            str(module_dir),
+            "--approved-source-hash",
+            str(pack["source_hash"]),
+            "--checkpoint-commit",
+            checkpoint,
+            "--context-pack",
+            str(context_path),
+            "--target-path",
+            target_path,
+            "--design-revision",
+            "1",
+        ],
+        cwd=workspace,
+        label="fixture ready contract",
+    )
+    fixture_setup_commit(workspace, "fixture: establish ready handoff")
+    return read_json(module_dir / ".work-meta.json")
+
+
+def create_iterating_fixture_state(
+    workspace: Path,
+    module_dir: Path,
+    target_path: str,
+    framework_root: Path,
+) -> dict[str, Any]:
+    ready = create_ready_fixture_state(workspace, module_dir, target_path, framework_root)
+    project = json.loads(
+        run_checked(
+            [
+                sys.executable,
+                str(framework_root / "scripts" / "project-definition.py"),
+                "show",
+                str(workspace),
+            ],
+            cwd=workspace,
+            label="fixture project definition",
+        )
+    )
+    project_type = str((project.get("project") or {}).get("type") or "product")
+    entrypoints = (project.get("implementation") or {}).get("entrypoints") or []
+    if not isinstance(entrypoints, list) or not entrypoints:
+        raise EvalError("fixture setup 的 project.yml 缺 implementation.entrypoints")
+    checkpoint = run_git(workspace, ["rev-parse", "HEAD"], "fixture build baseline").strip()
+    module_spec = module_dir.resolve().relative_to(workspace.resolve()).joinpath("spec.md").as_posix()
+    command = [
+        sys.executable,
+        str(framework_root / "scripts" / "build-contract.py"),
+        "start",
+        str(module_dir),
+        "--anchor",
+        module_spec,
+        "--mode",
+        "main",
+        "--executor",
+        "native",
+        "--baseline-sha",
+        checkpoint,
+        "--target-kind",
+        project_type,
+        "--target-path",
+        target_path,
+        "--approved-source-hash",
+        str(ready["approved_source_hash"]),
+        "--iteration-check",
+        "tests",
+        "--final-check",
+        "tests",
+        "--final-check",
+        "build",
+    ]
+    for entrypoint in entrypoints:
+        command.extend(["--entrypoint", str(entrypoint)])
+    if project_type == "prototype":
+        command.extend(["--final-check", "prototype-boundary"])
+    run_checked(command, cwd=workspace, label="fixture build start")
+    fixture_setup_commit(workspace, "fixture: start build")
+
+    target = workspace / target_path
+    if not target.is_file():
+        raise EvalError(f"fixture setup target 不存在: {target_path}")
+    with target.open("a", encoding="utf-8") as handle:
+        handle.write("\n# Session Eval implementation baseline.\n")
+    fixture_setup_commit(workspace, "fixture: implementation baseline")
+    implementation = run_git(workspace, ["rev-parse", "HEAD"], "fixture implementation commit").strip()
+    run_checked(
+        [
+            sys.executable,
+            str(framework_root / "scripts" / "build-contract.py"),
+            "commit",
+            str(module_dir),
+            "--implementation-commit",
+            implementation,
+        ],
+        cwd=workspace,
+        label="fixture implementation receipt",
+    )
+    fixture_setup_commit(workspace, "fixture: enter iteration")
+    return read_json(module_dir / ".work-meta.json")
+
+
+def deep_merge(base: dict[str, Any], patch: dict[str, Any]) -> dict[str, Any]:
+    result = copy.deepcopy(base)
+    for key, value in patch.items():
+        if isinstance(value, dict) and isinstance(result.get(key), dict):
+            result[key] = deep_merge(result[key], value)
+        else:
+            result[key] = copy.deepcopy(value)
+    return result
+
+
+def seed_consumed_gate(workspace: Path, module_dir: Path, framework_root: Path) -> None:
+    gate_script = framework_root / "scripts" / "decision-gate.py"
+    decisions_path = module_dir / "decisions.md"
+    original_decisions = decisions_path.read_text(encoding="utf-8")
+    decisions_path.write_text("# 决定\n", encoding="utf-8")
+    fixture_setup_commit(workspace, "fixture: establish pre-decision baseline")
+    opened = json.loads(
+        run_checked(
+            [
+                sys.executable,
+                str(gate_script),
+                "open",
+                str(module_dir),
+                "--kind",
+                "product-model",
+                "--summary",
+                "旧问题处理方式",
+                "--message",
+                "旧问题采用哪个已展示方案？",
+                "--option",
+                "1=采用方案一",
+                "--option",
+                "2=采用方案二",
+                "--session-id",
+                "fixture-old-session",
+            ],
+            cwd=workspace,
+            label="fixture consumed gate open",
+        )
+    )
+    observed = json.loads(
+        run_checked(
+            [
+                sys.executable,
+                str(gate_script),
+                "observe",
+                "--repo-root",
+                str(workspace),
+                "--message",
+                "1",
+                "--session-id",
+                "fixture-old-session",
+                "--message-id",
+                "fixture-old-answer",
+            ],
+            cwd=workspace,
+            label="fixture consumed gate observe",
+        )
+    )
+    run_checked(
+        [
+            sys.executable,
+            str(gate_script),
+            "answer",
+            str(module_dir),
+            "--gate-id",
+            str(opened["gate_id"]),
+            "--event-id",
+            str(observed["event_id"]),
+        ],
+        cwd=workspace,
+        label="fixture consumed gate answer",
+    )
+    run_checked(
+        [
+            sys.executable,
+            str(gate_script),
+            "consume",
+            str(module_dir),
+            "--gate-id",
+            str(opened["gate_id"]),
+            "--decision-id",
+            "D1",
+        ],
+        cwd=workspace,
+        label="fixture consumed gate consume",
+    )
+    decisions_path.write_text(original_decisions, encoding="utf-8")
+    fixture_setup_commit(workspace, "fixture: preserve consumed answer receipt")
+
+
+def apply_fixture_setup(
+    workspace: Path,
+    setup: dict[str, Any],
+    framework_root: Path,
+    temp_root: Path,
+) -> tuple[Path, bool]:
+    state = str(setup.get("state") or "preserve")
+    module_rel = str(setup.get("module_dir") or "docs/modules/change-confirmation")
+    target_path = str(setup.get("target_path") or "app/confirm_change.py")
+    module_dir = workspace / module_rel
+    if state == "designing":
+        reset_fixture_to_designing(workspace, module_dir)
+    elif state == "ready_to_build":
+        create_ready_fixture_state(workspace, module_dir, target_path, framework_root)
+    elif state in {"iterating", "landed"}:
+        meta = create_iterating_fixture_state(workspace, module_dir, target_path, framework_root)
+        if state == "landed":
+            build = meta.get("build") if isinstance(meta.get("build"), dict) else {}
+            build["lifecycle_state"] = "landed"
+            build["docs_status"] = "pending"
+            meta.pop("lifecycle_state", None)
+            meta["build"] = build
+            write_json(module_dir / ".work-meta.json", meta)
+            fixture_setup_commit(workspace, "fixture: establish landed state")
+
+    if setup.get("consumed_gate") is True:
+        seed_consumed_gate(workspace, module_dir, framework_root)
+
+    meta_patch = setup.get("meta_patch")
+    if isinstance(meta_patch, dict):
+        meta_path = module_dir / ".work-meta.json"
+        write_json(meta_path, deep_merge(read_json(meta_path), meta_patch))
+        fixture_setup_commit(workspace, "fixture: apply scenario metadata")
+
+    state_home = temp_root / "state-home"
+    for index, memory in enumerate(setup.get("personal_memories", []), 1):
+        run_checked(
+            [
+                sys.executable,
+                str(framework_root / "scripts" / "personal-memory.py"),
+                "--state-home",
+                str(state_home),
+                "capture",
+                "--stdin",
+            ],
+            cwd=workspace,
+            label=f"fixture personal memory {index}",
+            input_text=json.dumps(memory, ensure_ascii=False),
+        )
+
+    initial_dirty = setup.get("initial_dirty", [])
+    for mutation in initial_dirty:
+        target = workspace / str(mutation["path"])
+        target.parent.mkdir(parents=True, exist_ok=True)
+        if "append" in mutation:
+            with target.open("a", encoding="utf-8") as handle:
+                handle.write(str(mutation["append"]))
+        else:
+            target.write_text(str(mutation["content"]), encoding="utf-8")
+    return state_home, bool(initial_dirty)
+
+
 def fixture_relative_path(raw: Any, label: str) -> str:
     value = require_string(raw, label)
     path = Path(value)
@@ -415,31 +811,44 @@ def prepare_harness(case: dict[str, Any], repo_root: Path, evaluation_id: str) -
         raise EvalError(f"{case['id']}: harness.fixture 必须是目录")
     expected = config.get("expected_changed_paths")
     protected = config.get("protected_paths")
+    unchanged = config.get("expected_unchanged_paths", [])
     required_event_kinds = config.get("required_event_kinds")
     if not isinstance(expected, list) or any(not isinstance(item, str) for item in expected):
         raise EvalError(f"{case['id']}: harness.expected_changed_paths 必须是字符串数组")
     if not isinstance(protected, list) or any(not isinstance(item, str) for item in protected):
         raise EvalError(f"{case['id']}: harness.protected_paths 必须是字符串数组")
+    if not isinstance(unchanged, list) or any(not isinstance(item, str) for item in unchanged):
+        raise EvalError(f"{case['id']}: harness.expected_unchanged_paths 必须是字符串数组")
     if not isinstance(required_event_kinds, list) or any(
         not isinstance(item, str) or not item.strip() for item in required_event_kinds
     ):
         raise EvalError(f"{case['id']}: harness.required_event_kinds 必须是字符串数组")
     expected_paths = [fixture_relative_path(item, f"{case['id']}: expected_changed_paths") for item in expected]
     protected_paths = [fixture_relative_path(item, f"{case['id']}: protected_paths") for item in protected]
+    unchanged_paths = [fixture_relative_path(item, f"{case['id']}: expected_unchanged_paths") for item in unchanged]
 
     temp_root = Path(tempfile.mkdtemp(prefix=f"pmai-session-eval-{evaluation_id[:8]}-"))
     workspace = temp_root / "workspace"
     event_log = temp_root / "events.jsonl"
     try:
         shutil.copytree(fixture, workspace)
+        for path in unchanged_paths:
+            if not (workspace / path).is_file():
+                raise EvalError(f"{case['id']}: expected_unchanged_paths 不存在: {path}")
         run_git(workspace, ["init", "-q"], "fixture git init")
         run_git(workspace, ["config", "user.email", "pmai-session-eval@example.invalid"], "fixture git config")
         run_git(workspace, ["config", "user.name", "PMAI Session Eval"], "fixture git config")
         run_git(workspace, ["add", "--all"], "fixture git add")
         run_git(workspace, ["commit", "-q", "-m", "fixture baseline"], "fixture git commit")
+        state_home, allow_initial_dirty = apply_fixture_setup(
+            workspace,
+            config.get("setup", {}),
+            repo_root,
+            temp_root,
+        )
         event_log.write_text("", encoding="utf-8")
         baseline = snapshot_workspace(workspace)
-        if not baseline["clean"]:
+        if not baseline["clean"] and not allow_initial_dirty:
             raise EvalError(f"{case['id']}: fixture baseline 不干净")
         return {
             "temp_root": temp_root,
@@ -447,8 +856,11 @@ def prepare_harness(case: dict[str, Any], repo_root: Path, evaluation_id: str) -
             "baseline": baseline,
             "expected_paths": expected_paths,
             "protected_paths": protected_paths,
+            "unchanged_paths": unchanged_paths,
             "required_event_kinds": required_event_kinds,
             "event_log": event_log,
+            "state_home": state_home,
+            "allow_initial_dirty": allow_initial_dirty,
         }
     except Exception:
         shutil.rmtree(temp_root, ignore_errors=True)
@@ -478,9 +890,12 @@ def build_evidence_manifest(
         if any(path == protected_path or path.startswith(f"{protected_path}/") for protected_path in context["protected_paths"])
     ]
     missing_expected = sorted(set(context["expected_paths"]) - set(changed_paths))
+    unchanged_violations = sorted(set(context["unchanged_paths"]) & set(changed_paths))
     independent = {
         "baseline_commit": baseline["commit"],
         "baseline_clean": baseline["clean"],
+        "baseline_status": baseline["status"],
+        "allow_initial_dirty": context["allow_initial_dirty"],
         "baseline_file_hashes": baseline_files,
         "final_commit": after["commit"],
         "final_clean": after["clean"],
@@ -488,6 +903,8 @@ def build_evidence_manifest(
         "changed_paths": changed_paths,
         "expected_changed_paths": context["expected_paths"],
         "missing_expected_paths": missing_expected,
+        "expected_unchanged_paths": context["unchanged_paths"],
+        "unchanged_violations": unchanged_violations,
         "protected_paths": context["protected_paths"],
         "protected_violations": protected,
         "git_diff": after["git_diff"],
@@ -542,10 +959,12 @@ def validate_evidence_manifest(
     if not isinstance(evidence, dict):
         problems.append("独立证据 independent_evidence 必须是对象")
     else:
-        if evidence.get("baseline_clean") is not True:
+        if evidence.get("baseline_clean") is not True and evidence.get("allow_initial_dirty") is not True:
             problems.append("独立证据 baseline 必须干净")
         if evidence.get("missing_expected_paths"):
             problems.append(f"独立证据未观察到预期修改: {evidence['missing_expected_paths']}")
+        if evidence.get("unchanged_violations"):
+            problems.append(f"独立证据发现预期不变文件被修改: {evidence['unchanged_violations']}")
         if evidence.get("protected_violations"):
             problems.append(f"独立证据发现越界修改: {evidence['protected_violations']}")
         event_log = evidence.get("event_log")
@@ -894,6 +1313,7 @@ def main() -> int:
                     runner_case_payload["harness"]["workspace"] = str(harness_context["workspace"])
                     runner_case_payload["harness"]["baseline_commit"] = harness_context["baseline"]["commit"]
                     runner_case_payload["harness"]["event_log"] = str(harness_context["event_log"])
+                    runner_case_payload["harness"]["state_home"] = str(harness_context["state_home"])
                 runner_payload = {
                     "schema_version": SCHEMA_VERSION,
                     "evaluation_id": evaluation_id,

@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 # Run all invariant test suites. Exit non-zero if any suite fails.
 # PMAI_SUITE_TIMEOUT_SECONDS overrides the default 300s per-suite timeout.
+# PMAI_SESSION_EVAL_TIMEOUT_SECONDS overrides the default 900s external
+# runner/judge timeout used by skill-eval (long real session cases need more
+# than the deterministic suite timeout).
 # PMAI_REQUIRE_SESSION_EVALS=1 makes missing eval runner/judge capabilities fatal.
 set -uo pipefail
 
@@ -8,6 +11,7 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 SUITE_RUNNER="$SCRIPT_DIR/run-suite.py"
 SUITE_TIMEOUT_SECONDS="${PMAI_SUITE_TIMEOUT_SECONDS:-300}"
+SESSION_EVAL_TIMEOUT_SECONDS="${PMAI_SESSION_EVAL_TIMEOUT_SECONDS:-900}"
 CORE_SUITES=(
   test-check-branch.sh
   test-check-open-questions.sh
@@ -136,6 +140,16 @@ then
   exit 2
 fi
 
+if ! [[ "$SESSION_EVAL_TIMEOUT_SECONDS" =~ ^[0-9]+([.][0-9]+)?$ ]] || \
+   ! python3 - "$SESSION_EVAL_TIMEOUT_SECONDS" <<'PY'
+import sys
+raise SystemExit(0 if float(sys.argv[1]) > 0 else 1)
+PY
+then
+  echo "Invalid PMAI_SESSION_EVAL_TIMEOUT_SECONDS: $SESSION_EVAL_TIMEOUT_SECONDS" >&2
+  exit 2
+fi
+
 for s in "${SUITES[@]}"; do
   echo ""
   echo "▶ Running $s"
@@ -184,6 +198,7 @@ if [ "${PMAI_REQUIRE_SESSION_EVALS:-0}" = "1" ]; then
     EVAL_ARGS+=(--session-case "$session_case")
   done
 fi
+EVAL_ARGS+=(--timeout "$SESSION_EVAL_TIMEOUT_SECONDS")
 EVAL_OUTPUT=$(python3 "$REPO_ROOT/scripts/skill-eval.py" "${EVAL_ARGS[@]}" 2>&1)
 EVAL_RC=$?
 printf "%s\n" "$EVAL_OUTPUT"

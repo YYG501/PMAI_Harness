@@ -41,6 +41,7 @@ assert runner["runtime"]["cost"]["status"] == "reported"
 assert runner["runtime"]["failure"]["status"] == "none"
 assert runner["diagnostics"] == ["non-fatal skill context diagnostic"]
 assert manifest["independent_evidence"]["runtime"] == runner["runtime"]
+assert "provider_event" in manifest["independent_evidence"]["event_log"]["kinds"]
 assert payload["judge_result"]["provenance"]["run_id"] != runner["provenance"]["run_id"]
 PY
   then
@@ -120,6 +121,44 @@ test_runner_refuses_current_directory_fallback() {
   rm -rf "$T" /tmp/session-eval-no-harness.$$
 }
 
+test_runner_injects_harness_file_boundaries() {
+  start_test "session-eval adapter: runner 将只读文件边界注入 prompt"
+  T=$(mktemp -d "${TMPDIR:-/tmp}/pmai-session-boundary.XXXXXX")
+  mkdir -p "$T/workspace"
+  printf 'fixture\n' >"$T/workspace/PRODUCT-STATE.md"
+  : >"$T/events.jsonl"
+  if printf '%s\n' "$(python3 - "$T" <<'PY'
+import json
+import sys
+root = sys.argv[1]
+print(json.dumps({
+    "evaluation_id": "eval-boundary",
+    "case": {
+        "id": "readonly-boundary",
+        "input": {"prompt": "只做只读判断", "context": []},
+        "skills": [],
+        "expected": {},
+        "forbidden": {},
+        "harness": {
+            "workspace": root + "/workspace",
+            "event_log": root + "/events.jsonl",
+            "expected_changed_paths": [],
+            "protected_paths": ["PRODUCT-STATE.md"],
+            "expected_unchanged_paths": ["PRODUCT-STATE.md"],
+        },
+    },
+}))
+PY
+)" | PMAI_CODEX_COMMAND="python3 $FAKE_CODEX --assert-readonly-prompt" \
+    PMAI_FRAMEWORK_ROOT="$REPO_ROOT" python3 "$RUNNER" >"$T/result.json" 2>"$T/runner.stderr"; then
+    pass_test
+  else
+    _fail "runner should inject read-only Harness boundaries"
+    cat "$T/result.json" "$T/runner.stderr" >&2
+  fi
+  rm -rf "$T"
+}
+
 test_nonzero_exit_includes_stderr() {
   start_test "session-eval adapter: 非零退出保留 stderr 失败原因"
   T=$(mktemp -d "${TMPDIR:-/tmp}/pmai-session-stderr.XXXXXX")
@@ -147,9 +186,71 @@ PY
   rm -rf "$T"
 }
 
+test_completed_result_survives_post_result_stream_disconnect() {
+  start_test "session-eval adapter: 完整结果后的 stream disconnect 交给独立证据复核"
+  T=$(mktemp -d "${TMPDIR:-/tmp}/pmai-session-post-result-disconnect.XXXXXX")
+  if PMAI_CODEX_COMMAND="python3 $FAKE_CODEX --disconnect-after-result" \
+     PMAI_FRAMEWORK_ROOT="$REPO_ROOT" \
+     python3 "$EVAL" --mode session --case natural-language-finalize \
+       --runner-command "python3 $RUNNER" \
+       --judge-command "python3 $JUDGE" \
+       --require-runner --require-judge --require-runtime-evidence \
+       --results-dir "$T" >/tmp/session-eval-post-result.$$ 2>&1 && \
+     python3 - "$T/natural-language-finalize.json" <<'PY'
+import json
+import sys
+
+payload = json.load(open(sys.argv[1], encoding="utf-8"))
+runner = payload["runner_result"]
+assert runner["status"] == "pass"
+assert runner["runtime"]["failure"]["status"] == "none"
+assert runner["runtime"]["transport"]["status"] == "warning"
+assert any("recoverable transport warning" in item for item in runner["diagnostics"])
+PY
+  then
+    pass_test
+  else
+    _fail "complete result after stream disconnect should reach independent judge"
+    cat /tmp/session-eval-post-result.$$ >&2
+  fi
+  rm -rf "$T" /tmp/session-eval-post-result.$$
+}
+
+test_completed_result_survives_transport_turn_failure() {
+  start_test "session-eval adapter: 完整结果后的 transport turn failure 可恢复"
+  T=$(mktemp -d "${TMPDIR:-/tmp}/pmai-session-post-result-transport.XXXXXX")
+  if PMAI_CODEX_COMMAND="python3 $FAKE_CODEX --disconnect-after-result --turn-failed-transport" \
+     PMAI_FRAMEWORK_ROOT="$REPO_ROOT" \
+     python3 "$EVAL" --mode session --case natural-language-finalize \
+       --runner-command "python3 $RUNNER" \
+       --judge-command "python3 $JUDGE" \
+       --require-runner --require-judge --require-runtime-evidence \
+       --results-dir "$T" >/tmp/session-eval-post-result-transport.$$ 2>&1 && \
+     python3 - "$T/natural-language-finalize.json" <<'PY'
+import json
+import sys
+
+payload = json.load(open(sys.argv[1], encoding="utf-8"))
+runner = payload["runner_result"]
+assert runner["status"] == "pass"
+assert runner["runtime"]["failure"]["status"] == "none"
+assert runner["runtime"]["transport"]["status"] == "warning"
+PY
+  then
+    pass_test
+  else
+    _fail "transport turn failure after complete marker should be recoverable"
+    cat /tmp/session-eval-post-result-transport.$$ >&2
+  fi
+  rm -rf "$T" /tmp/session-eval-post-result-transport.$$
+}
+
 test_real_adapter_protocol
 test_legacy_token_event_compatibility
 test_runtime_requirement_rejects_old_runner
 test_runner_refuses_current_directory_fallback
+test_runner_injects_harness_file_boundaries
 test_nonzero_exit_includes_stderr
+test_completed_result_survives_post_result_stream_disconnect
+test_completed_result_survives_transport_turn_failure
 report_results "session-eval-adapters"

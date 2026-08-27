@@ -1,0 +1,102 @@
+# PMAI E2E Fixture
+
+## PMAI Agent Entry
+
+本文件是 Claude Code / Codex 主控进入项目时的统一入口。PMAI 的完整工作流规则仍以 `CLAUDE.md` 为主真相源；主控进入项目后必须先读本文件，再读 `CLAUDE.md`。
+
+默认用中文和 PM 沟通；只有用户明确要求英文或引用原文时才切换。
+
+本仓是 PMAI 消费仓，不是 PMAI 生成器仓。不要在这里复制或修改 framework 源资产；需要框架能力时走已安装的 `PMAI_HOME` / `~/.pmai`。
+
+## Project Principles
+
+- **不写死机器绑定路径**：项目文档、业务代码、prompt 记录和框架规则里，不得写死 `/Users/<某人>/...` 这类本地路径。需要定位文件时，用 `PMAI_HOME` / `REPO_ROOT` / `MAIN_REPO_ROOT` / `BUILD_DIR` 等运行时变量和仓内相对路径组合；PM 上传本机材料时可临时读取其路径，但不要把源路径全文沉淀进产品文档或代码。
+
+## Host Mapping
+
+- `CLAUDE.md` 里写的“Claude Code”“Claude host”“驱动 Claude”，在 Codex 会话中等价理解为当前主控 agent。
+- `/pmai-*` 是跨主控文档中的 PMAI 命令名。Codex 通过原生 skill 列表调用对应的 `$pmai-*`。PMAI 不生成 Codex custom prompts；runtime 没有对应 UI 时，再按 `~/.pmai/skills/<command-without-pmai-prefix>/SKILL.md` 执行。
+- Claude Code 与 Codex 保留完整主控能力。Kimi Code、OpenCode 和 Cursor Agent 只可由 `/pmai-build` 选作外部 Builder：它们执行已确认的实现任务，但不能推进 PMAI lifecycle、写入验收通过、处理 landing、解释 status 或调用其它 PMAI Skill。
+- 如果 skill 目录名本身带 `pmai-` 前缀，例如 `/pmai-upgrade`，对应 `~/.pmai/skills/pmai-upgrade/SKILL.md`。
+- 运行态只创建并识别 `build-*` 工作分支。
+- 完整 build 的实现改动落在 PM 开工前确认的工作环境；选择独立环境时使用 `build-*` worktree，选择当前环境时只允许合同声明的目标路径。轻量修补走 `/pmai-quick-fix`。
+
+## Startup
+
+会话开始时按顺序做：
+
+<!-- PMAI:BEGIN consumer-startup -->
+1. 读 `CLAUDE.md`，把其中的 Claude host 名称按上面的 Host Mapping 映射到当前主控。
+2. 运行 `bash -lc 'PMAI_PREAMBLE_READ_ONLY=1; export PMAI_PREAMBLE_READ_ONLY; source "${PMAI_HOME:-$HOME/.pmai}/scripts/skill-preamble.sh"; unset PMAI_PREAMBLE_READ_ONLY'` 只读检测 PMAI_HOME、当前 worktree、active work 和项目初始化状态；如果文件不存在，先提示 PM 运行 `pmai install` 或检查 `PMAI_HOME`。
+   如果 preamble 提示当前目录还没有 PMAI 初始化，停止当前非 init skill，引导 PM 先发 `/pmai-init-project`。它会自动判断全新项目 / 资料目录 / 已有代码库，不需要 PM 手动改跑其它 skill。
+3. 如果当前主控是 Claude Code 或 Codex，运行 `bash "${PMAI_HOME:-$HOME/.pmai}/scripts/install-project-hooks.sh" --check` 只读检查 `.claude/settings.json` 与 `.codex/hooks.json` 是否匹配当前框架；缺失或漂移时先报告，PM 确认后才在项目根运行不带 `--check` 的同一命令确定性刷新。不能只按文件存在就声称 hooks 已更新。Codex 首次启用项目 hooks 时可能要求信任确认。
+4. 按 `/pmai-status` 等价流程判断当前下一步。先用全局只读扫描恢复普通未完成飞书评审批次；再检查 main 中 pending handoff。handoff 的 route 只作来源记录，当前入口由机器 phase 唯一决定：`proposal → /pmai-proposal`、`design → /pmai-design`、`lark_review → /pmai-lark-review`，fresh checkpoint 后 `closed`。没有 pending 评审时，新项目产品方向尚未完成才引导 `/pmai-proposal`；只有当前 Proposal 已生效，或接入流程已记录依据与 PM 确认日期、`PRODUCT.md` 与依据均已提交且无漂移、机器状态为 `equivalent_baseline`，才进入 design。
+5. 当前请求涉及 UI 时，先读根目录 `DESIGN.md` 和 `$PMAI_HOME/skills/_shared/project-design-system.md`；若 `DESIGN.md` 声明项目级设计系统 Skill，按合同调用或完整读取声明的仓内 `SKILL.md`，不能只读 `DESIGN.md` 后跳过执行规则。
+<!-- PMAI:END consumer-startup -->
+
+## Command Resolution
+
+当前主控收到 PM 输入的 `/pmai-xxx` 时按下列规则解析：
+
+1. 先设 `PMAI_HOME="${PMAI_HOME:-$HOME/.pmai}"`。
+2. 去掉 `pmai-` 前缀，定位 `$PMAI_HOME/skills/xxx/SKILL.md`；如果该文件不存在，再尝试 `$PMAI_HOME/skills/pmai-xxx/SKILL.md`。
+3. 按该 skill 的步骤执行；遇到引用 `_shared/...` 时，从 `$PMAI_HOME/skills/_shared/...` 读取。
+4. 需要调用脚本时，优先用 `$PMAI_HOME/scripts/...` 或 `$PMAI_HOME/bin/...`。
+5. 如果 skill 要求某个宿主专属工具，而当前 runtime 没有等价工具，按“Runtime Fallback”处理，不要假装已执行。
+
+## Project Design System
+
+- 涉及界面的 design、mockup、build、quick-fix、mirror-site 和视觉验收，始终先读根目录 `DESIGN.md`；它定义产品体验、采用范围和共享组件 inventory，不会因为接入外部设计系统而失效。
+- 完整读取 `$PMAI_HOME/skills/_shared/project-design-system.md`。`DESIGN.md` 没有声明项目级设计系统 Skill 时，继续按其中的产品基线、现有页面和现有组件工作。
+- `DESIGN.md` 声明“已接入”后，必须使用声明的同一个仓内 Skill：当前宿主能原生解析时直接调用；不能原生发现时，完整读取声明的 `SKILL.md` 及其 required references 后执行。Codex 若能解析声明名称则用 `$<skill-name>`；其它宿主使用自身原生入口或文件回退。
+- 项目级 Skill 缺失、不可读、越出仓库或未被 Git 跟踪时停止 UI 工作，不能声称已经遵循设计系统。不要把它复制到不同宿主目录；仓内声明文件是唯一真相源。
+- `DESIGN.md` 管产品体验与采用范围，项目级 Skill 管设计系统内部规则，`.pm-workflow/project.yml` 与当前实现管真实框架和代码入口。三者冲突时说明冲突并返回 design，不静默改框架或扩大采用范围。
+
+## Consumer Workflow
+
+- 本仓已经初始化完成，不能在这里再跑 `/pmai-init-project`。
+- 没有 active work 时先按影响分流：产品定位、目标用户、核心问题与价值、产品边界或 MVP 证明目标变化走 `/pmai-proposal`；已 close 结果上的错字、单文案、局部样式、常量或符合现有规格的小缺陷走 `/pmai-quick-fix`；模块对象、规则、规格或验收路径变化走 `/pmai-design`。design 先校验当前 Proposal、编译 context pack、浮现上游约束和相关旧决定，再按真实未知项讨论；`meta`、`mockup`、`spec-writing` 是 design 按需调用后返回主线的内部能力，不让 PM 手动拼接。
+- design 过程中发现需要纠正产品方向时，暂停模块收敛并进入完整 `/pmai-proposal` 修订；确认后回到同一 design。`record` 只在无 active work 时补录已经确认的 TODO、术语、跨模块规则或项目级理路，不修改 Proposal、模块规格或业务代码。
+- 首个可建造 design 定稿时，由 PM 一次确认建造对象与技术方案，生成 `.pm-workflow/project.yml`；后续默认复用。design 自动提交定义与本模块建造依据并进入 `ready_to_build`。
+- 推进实现：读 `/pmai-build`。框架校验 `.pm-workflow/project.yml`，把项目类型编译成实现深度合同并后台生成默认验收；AI 用一张卡向 PM 展示推荐的工作环境、构建工具及全部有效选项，PM 一次确认或直接改选后开工。工具列表必须排除当前主控；开工卡不得重复展示项目类型或验收方案。
+- PM 看结果后直接说哪里要改；active build 内的文案、布局、按钮和局部交互由当前会话直接处理，每轮只跑热更新、typecheck 和当前页面走查，保留同一个 dev server 与浏览器连接，完成后立即回“已修改，可刷新查看”。PM 说“可以提交 / 定稿 / 可以合并”即授权打开定稿车道：对冻结 commit 在 validation worktree 统一运行一次 production build 和完整路径验收；通过后先合入 main，再基于 landed diff 生成文档影响地图并同步文档。
+- `/pmai-build-close` 保留为兼容与恢复入口，用于中断续跑、merge 冲突后重试或 `landed/docs_pending` 文档恢复。
+- 已 close 模块再次修改时，若变化涉及产品定义就进入新一轮 design → build：复用长期模块文档，但不得复用上一轮的 delta、验收证据或收尾游标。
+- 迷路或续跑：读 `/pmai-status` 对应 skill，先报告当前状态再行动。
+- 已有 `building / iterating / final_check` 时，PM 说“启动看看”“还有什么问题”“继续改当前结果”等自然语言就是续接当前 `/pmai-build`。Codex / Claude Code 由 prompt hook 注入 `active-build-context.py` 的只读合同。除非 PM 明确开启无关新工作，否则不得转成无范围约束的通用 QA；多个 active build 只问模块，不猜。
+- PM 要复盘本次 PMAI 协作、反馈流程卡点或把问题交给框架仓时：当前只有 Codex 的精确当前会话定位已经验证，可读 `/pmai-feedback` 完整复盘并生成带会话 ID 与文件地址的框架交接 Prompt；其它宿主没有经过验证的定位适配时直接说明暂不支持，不按“最近会话”猜测，也不在消费仓直接改框架。
+- 飞书入口按方向和判断责任固定：本地 Markdown 发布或更新到飞书读 `/pmai-publish-to-lark`，已有文档默认精细更新；PM 明确以飞书为准且不需要判断时读 `/pmai-sync-from-lark`，只机械同步正文回本地；PM 在已发布规格中 review、修改正文或添加批注，并要求反向更新规格 / 决定 / 原型时读 `/pmai-lark-review`。review 先恢复未完成批次，再把发布基线、本地和飞书固定为只读证据；产品级和模块级变化把旧批次转为 main handoff，按 Proposal/design/lark-review 的机器 phase 接力，fresh checkpoint 后关闭。不得用任一证据版直接覆盖正式规格。
+
+## gstack Side Paths
+
+- gstack `/document-generate` / `/document-release` 只能作为工程文档旁路。Codex 看到这类输出时，不能只引用 `~/.gstack/...`、下载目录或临时路径。
+- 采用后的工程文档必须按 `CLAUDE.md` 和 `$PMAI_HOME/templates/文档地图.md` 接回 `docs/engineering/`，同步更新 `docs/engineering/INDEX.md`，再向 PM 回执接回路径。
+- Product Proposal、产品介绍、PM 汇报材料、PRD、模块规格和功能型规格不走 gstack 文档旁路；分别转 `/pmai-proposal`、`/pmai-doc-writing`、`/pmai-spec-writing` 或 `/pmai-design`。
+
+## Runtime Fallback
+
+- AskUserQuestion 不可用时，只对真实产品模型岔路、不可逆动作、改变 PM 已明确方向的问题，以及 build 开工前的“工作环境 + 构建工具”确认输出编号列表并等待；机械项和其它可逆偏好由 AI 按推荐推进。
+- PM 已说“可以提交 / 定稿 / 可以合并”时，该表达就是合入主线授权，不得二次确认。
+- 产品方向澄清走 proposal，模块需求走 design → build，小改走 `/pmai-quick-fix`；不得以“小改”为由让 proposal/design/mockup 在 main 直接修改业务代码。
+- `/pmai-build` 按项目定义后台确定构建对象和默认验收。新 build 由 AI 推荐工作环境与构建工具，并在同一张卡列出全部有效选项，PM 只确认这两项；卡片不得显示项目类型、验收方案、worktree、合同或证据数据。
+- `project.type=prototype` 时，每次首次构建、反馈修改和中断恢复都必须重新读取实现深度合同：用户可见路径与交互做真，数据库、鉴权、外部集成、异步任务等底层默认模拟；未经 active decision 批准，不得静默建设真实系统。候选定稿前必须通过不可 exception 的 `prototype-boundary` 检查。
+- active build 的查看与问题检查只复用现有 spec、active decisions、accepted deltas、批准路径和当前 acceptance lane。原型合同默认模拟的底层能力不列为缺口；规格已有要求直接核对覆盖，不重新包装成 PM 未决问题。product 继续按 production implementation 检查。
+- 未提交的规格、决定和选定 mockup 由 design 自动做 scoped checkpoint；模块产品决定必须由 `.work-meta.json:decision_gates` 绑定已展示问题、当时用户消息、D 编号和 checkpoint。Design 的 frontier round 可让同一用户消息明确回答同轮多个问题，但每题仍独立 consume；frontier 清空后还必须完成不产生 D 编号的 shared-understanding 收据，最终 `spec.md` 和 ready 会把它绑定到当前 checkpoint。Proposal 与阶段路由题使用 `.pm-workflow/context/decision-gates.json`，项目动作必须消费为 `proposal:draft`、`proposal:accept` 或 `route:<动作>`。跨 round、跨模块、压缩摘要和旧问题答复不能授权后来问题。只能提交本轮相关文件，不能带入无关脏改。
+- `/pmai-build` 在实现前必须写入版本化 `.work-meta.json:build` 合同；v5 合同把 `iteration_checks / final_checks` 分开，并只在 build 内保存生命周期，PM 请求定稿前禁止 final evidence 与 `review-ready`。旧 v1-v4 只由兼容读取层恢复。`/pmai-build-close` 与自动 finalize 只按定稿请求、合同、验收就绪快照和 lifecycle state 续跑，不能靠当前分支 / worktree 形态猜测，也不能在 final_check 内首次跑完整验收或补业务代码。
+- 混合交付必须走完整 build：本轮同时包含 `project.yml` 声明的实现路径和模块文档/mockups 时，不能普通提交；必须由 `/pmai-build` 在目标适配验收和 PM 定稿后自动 finalize。
+- 外部构建工具候选必须排除当前主控对应的 profile；“当前会话直接构建”始终作为有效选项。外部 builder 只用于首次实现或大型重构，active build 的快速反馈不重新派发。推荐工具不可用时改推其它可用外部 profile，外部工具全部不可用时推荐当前会话直接构建，并重新让 PM 确认。不得静默替换已确认工具。执行器过程写日志和状态文件，PM 窗口只报阶段摘要；失败默认保留半成品，禁止自动清空。
+- build 按 `prepare / implement / fast-check / preview / final-typecheck / production-build / browser-acceptance / documentation` 记录阶段耗时与 time-to-preview；小改 2–5 分钟、交互改动 5–10 分钟只作预警，不得为等完整验收阻塞 PM 刷新查看。
+- `/pmai-meta` 的“多视角”不等于“多 Agent”。PM 明确要求多 AI / 子 Agent / 独立视角时，先尝试可用 multi-agent 工具；不可用时必须声明“单主控多视角退化执行”，不能假装跑过子 Agent。
+- gstack browser 在 Codex 沙箱内可能因 localhost `EPERM` 不可用；这说明 runtime 限制，不等于 gstack 损坏。需要诊断时优先运行 `bash "${PMAI_HOME:-$HOME/.pmai}/scripts/check-gstack-browser.sh"`，不要把 `browse status` 当无副作用检查。
+- 探索式 review / qa 工具仍由 PM 主动触发；build contract 要求的目标适配验收由框架自动执行并记录证据。
+
+## Guardrails
+
+- 不要改 `CLAUDE.md` 的框架规则区，除非 PM 明确要求更新项目规则。
+- 不要把 `~/.pmai/skills`、`~/.pmai/scripts` 或其他 framework 源资产复制进消费仓；`.claude/settings.json` 与 `.codex/hooks.json` 是允许存在的项目级主控配置。新消费仓不得生成 Kimi/OpenCode 主控入口；已有 `.opencode/commands`、`opencode.json`、Kimi Skill 或 managed hooks 只作为待清理遗留资产，不得继续刷新。
+- `DESIGN.md` 声明的项目级设计系统 Skill 是消费仓自己的集成资产，不属于 PMAI framework 副本；它必须只保留一份仓内、Git 跟踪的权威文件。
+- `/pmai-design` 和 `/pmai-mockup` 不修改业务实现；design 先定对象和规格，mockup 只出探索稿，任何代码改动走 `/pmai-build` 或 `/pmai-quick-fix`。
+- `/pmai-proposal` 维护 `docs/proposals/`、`.pm-workflow/proposal.json` 与 `PRODUCT.md` 精简基线；其它 Skill 只读当前 Proposal。已确认版本不原地改写，方向变化必须生成完整新版本并 supersede 旧版。
+- “落地”不是绕过 build 的许可；小改走 quick-fix，完整交付走 `/pmai-build` 并自动 finalize。
+- 不要绕过 `check-branch.sh` 在 main 上直接改业务代码；只有 PM 已确认“当前环境”且 v2 合同为 `mode=main` 时，才允许修改合同声明的目标路径。
+- 派发外部执行器前，PM 已确认的工作环境必须干净；dirty 时先区分本轮改动与无关改动，能机械拆分就后台处理，无法安全拆分才说明具体冲突。

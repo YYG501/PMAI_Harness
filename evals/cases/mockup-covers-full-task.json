@@ -3,31 +3,110 @@
   "id": "mockup-covers-full-task",
   "title": "mockup 覆盖完整任务和关联页面",
   "layer": "session",
-  "skills": ["design", "mockup"],
+  "skills": [
+    "design",
+    "mockup"
+  ],
   "source": {
     "session_id": "019f3c20-5bbb-7423-a18f-dab2c1a90fff",
     "evidence": [
-      {"turn": 69, "excerpt": "给我几个角色管理的界面设计方案"},
-      {"turn": 97, "excerpt": "用户管理中的用户详情是不是也需要修改，请你一起看一下"},
-      {"turn": 162, "excerpt": "我们不是修改了用户详情页和部门详情页来着"}
+      {
+        "turn": 69,
+        "excerpt": "给我几个角色管理的界面设计方案"
+      },
+      {
+        "turn": 97,
+        "excerpt": "用户管理中的用户详情是不是也需要修改，请你一起看一下"
+      },
+      {
+        "turn": 162,
+        "excerpt": "我们不是修改了用户详情页和部门详情页来着"
+      }
     ]
   },
   "input": {
     "prompt": "为角色管理的新逻辑做可比设计稿。",
-    "context": ["角色管理会影响用户详情、部门详情和产品开通弹窗", "已有产品页面与 DESIGN.md"]
+    "context": [
+      "角色管理会影响用户详情、部门详情和产品开通弹窗",
+      "已有产品页面与 DESIGN.md",
+      "现有静态页面可通过 project.yml 声明的本地 Web 服务打开，视觉验收不依赖外部网络",
+      "当前 Session Eval runtime 不提供交互式 gstack/Playwright 通道；按 mockup skill 的 HTML fallback 生成本地稿和可核验质量证据，不安装依赖、不联网"
+    ]
   },
   "expected": {
-    "behaviors": ["把 DESIGN.md 和现有页面编译为本轮设计约束", "覆盖完整用户任务和相关边界状态", "只有真实交互岔路才出多稿", "用桌面和窄屏截图逐条验证设计约束"],
-    "observations": ["existing_design_read", "design_basis_bound", "related_pages_covered", "boundary_states_covered", "real_interaction_forks_only", "desktop_visual_audit_passed", "narrow_visual_audit_passed"],
-    "lifecycle_order": ["designing"],
+    "behaviors": [
+      "把 DESIGN.md 和现有页面编译为本轮设计约束",
+      "覆盖完整用户任务和相关边界状态",
+      "只有真实交互岔路才出多稿",
+      "用桌面和窄屏截图逐条验证设计约束"
+    ],
+    "observations": [
+      "existing_design_read",
+      "design_basis_bound",
+      "related_pages_covered",
+      "boundary_states_covered",
+      "real_interaction_forks_only",
+      "desktop_visual_audit_passed",
+      "narrow_visual_audit_passed"
+    ],
+    "lifecycle_order": [
+      "designing"
+    ],
     "stopping_point": "mockup_direction_selection"
   },
   "forbidden": {
-    "behaviors": ["只画当前卡片", "用字体颜色差异凑三套", "重新绘制一套相似应用外壳", "未完成视觉验收就登记看版", "直接修改主原型"],
-    "observations": ["current_card_only", "cosmetic_variants_only", "existing_shell_reinvented", "visual_audit_missing", "prototype_modified_by_mockup"]
+    "behaviors": [
+      "只画当前卡片",
+      "用字体颜色差异凑三套",
+      "重新绘制一套相似应用外壳",
+      "未完成视觉验收就登记看版",
+      "直接修改主原型"
+    ],
+    "observations": [
+      "current_card_only",
+      "cosmetic_variants_only",
+      "existing_shell_reinvented",
+      "visual_audit_missing",
+      "prototype_modified_by_mockup"
+    ]
   },
   "judge": {
     "enabled": true,
-    "rubric": ["设计稿覆盖入口页、详情页、关联页与必要状态", "多方向差异位于交互模型、信息层级或任务路径", "实际绑定 DESIGN.md 与现有界面依据", "桌面和窄屏均逐条对照设计要求且不通过时先自行修改"]
+    "rubric": [
+      "设计稿覆盖入口页、详情页、关联页与必要状态",
+      "多方向差异位于交互模型、信息层级或任务路径",
+      "实际绑定 DESIGN.md 与现有界面依据",
+      "桌面和窄屏均逐条对照设计要求且不通过时先自行修改"
+    ]
+  },
+  "harness": {
+    "setup": {"state": "designing"},
+    "fixture": "evals/fixtures/mockup-covers-full-task",
+    "expected_changed_paths": [
+      "mockups/manifest.json"
+    ],
+    "expected_unchanged_paths": [
+      "PRODUCT.md",
+      "PRODUCT-RULES.md",
+      "DESIGN.md",
+      ".pm-workflow/project.yml",
+      "docs/modules/change-confirmation/spec.md",
+      "docs/modules/change-confirmation/decisions.md",
+      "app/confirm_change.py"
+    ],
+    "protected_paths": [
+      "PRODUCT.md",
+      "PRODUCT-RULES.md",
+      "DESIGN.md",
+      ".pm-workflow/project.yml",
+      "docs/modules/change-confirmation/spec.md",
+      "docs/modules/change-confirmation/decisions.md",
+      "app/confirm_change.py"
+    ],
+    "required_event_kinds": [
+      "lifecycle",
+      "tool",
+      "command"
+    ]
   }
 }

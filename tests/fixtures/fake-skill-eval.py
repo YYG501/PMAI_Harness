@@ -71,12 +71,16 @@ else:
     if workspace and "--no-change" not in sys.argv:
         if "--touch-protected" in sys.argv:
             target = harness.get("protected_paths", ["docs/modules/demo/spec.md"])[0]
+        elif "--touch-unchanged" in sys.argv:
+            target = harness.get("expected_unchanged_paths", ["PRODUCT-STATE.md"])[0]
         else:
-            target = harness.get("expected_changed_paths", ["PRODUCT-STATE.md"])[0]
-        target_path = Path(workspace) / target
-        target_path.parent.mkdir(parents=True, exist_ok=True)
-        previous = target_path.read_text(encoding="utf-8") if target_path.exists() else ""
-        target_path.write_text(previous + "\n定稿后现状已同步。\n", encoding="utf-8")
+            expected_paths = harness.get("expected_changed_paths", ["PRODUCT-STATE.md"])
+            target = expected_paths[0] if expected_paths else None
+        if target is not None:
+            target_path = Path(workspace) / target
+            target_path.parent.mkdir(parents=True, exist_ok=True)
+            previous = target_path.read_text(encoding="utf-8") if target_path.exists() else ""
+            target_path.write_text(previous + "\n定稿后现状已同步。\n", encoding="utf-8")
     print(
         json.dumps(
             {

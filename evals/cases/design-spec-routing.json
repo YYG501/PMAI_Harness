@@ -3,29 +3,89 @@
   "id": "design-spec-routing",
   "title": "写规格请求按产品决定是否闭合分流",
   "layer": "session",
-  "skills": ["design", "spec-writing"],
+  "skills": [
+    "design",
+    "spec-writing"
+  ],
   "source": {
     "session_id": "019fd6d0-9646-7462-a1a0-99a5c6cb785e",
     "evidence": [
-      {"turn": 0, "excerpt": "design / spec-writing，这个是真实要改，现在的判断原则又过激了"}
+      {
+        "turn": 0,
+        "excerpt": "design / spec-writing，这个是真实要改，现在的判断原则又过激了"
+      }
     ]
   },
   "input": {
     "prompt": "帮我写一下这个功能的规格。",
-    "context": ["目标对象已经明确", "权限规则和异常路径仍未决定", "PM 没有提供已确认的 decisions 或现有规格"]
+    "context": [
+      "目标对象已经明确",
+      "权限规则和异常路径仍未决定",
+      "PM 没有提供已确认的 decisions 或现有规格"
+    ]
   },
   "expected": {
-    "behaviors": ["进入 design 恢复上下文", "只讨论会改变产品模型的未决项", "决定闭合后再自动调用 spec-writing"],
-    "observations": ["design_selected", "open_decisions_preserved", "spec_deferred_until_closed"],
-    "lifecycle_order": ["designing"],
+    "behaviors": [
+      "进入 design 恢复上下文",
+      "只讨论会改变产品模型的未决项",
+      "决定闭合后再自动调用 spec-writing"
+    ],
+    "observations": [
+      "design_selected",
+      "open_decisions_preserved",
+      "spec_deferred_until_closed"
+    ],
+    "lifecycle_order": [
+      "designing"
+    ],
     "stopping_point": "awaiting_product_decision"
   },
   "forbidden": {
-    "behaviors": ["因用户说写规格而直接进入 spec-writing", "用默认值补齐权限或异常规则", "把未决项写成规范性规格"],
-    "observations": ["spec_selected_from_keyword", "unconfirmed_rule_written"]
+    "behaviors": [
+      "因用户说写规格而直接进入 spec-writing",
+      "用默认值补齐权限或异常规则",
+      "把未决项写成规范性规格"
+    ],
+    "observations": [
+      "spec_selected_from_keyword",
+      "unconfirmed_rule_written"
+    ]
   },
   "judge": {
     "enabled": true,
-    "rubric": ["路由依据是产品决定是否闭合而不是文档关键词", "spec-writing 不承担产品决策"]
+    "rubric": [
+      "路由依据是产品决定是否闭合而不是文档关键词",
+      "spec-writing 不承担产品决策"
+    ]
+  },
+  "harness": {
+    "setup": {"state": "designing"},
+    "fixture": "evals/fixtures/design-spec-routing",
+    "expected_changed_paths": [
+      "docs/modules/change-confirmation/.work-meta.json"
+    ],
+    "expected_unchanged_paths": [
+      "PRODUCT.md",
+      "PRODUCT-RULES.md",
+      "DESIGN.md",
+      ".pm-workflow/project.yml",
+      "docs/modules/change-confirmation/spec.md",
+      "docs/modules/change-confirmation/decisions.md",
+      "app/confirm_change.py"
+    ],
+    "protected_paths": [
+      "PRODUCT.md",
+      "PRODUCT-RULES.md",
+      "DESIGN.md",
+      ".pm-workflow/project.yml",
+      "docs/modules/change-confirmation/spec.md",
+      "docs/modules/change-confirmation/decisions.md",
+      "app/confirm_change.py"
+    ],
+    "required_event_kinds": [
+      "lifecycle",
+      "tool",
+      "command"
+    ]
   }
 }

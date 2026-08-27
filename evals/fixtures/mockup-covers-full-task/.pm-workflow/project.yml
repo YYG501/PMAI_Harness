@@ -1,0 +1,32 @@
+schema_version: 1
+
+definition:
+  source: docs/modules/change-confirmation/spec.md
+  source_hash: 0ac701504df4f896ad8327e75cce14e8b9345215187b61813fbb332786311314
+  design_revision: 1
+  decided_at: 2026-08-23T22:52:00+08:00
+
+project:
+  type: product
+
+implementation:
+  root: app
+  entrypoints:
+    - app/confirm_change.py
+
+  stack:
+    language: python
+    runtime: python3
+    framework: stdlib
+    package_manager: none
+
+commands:
+  build: python3 -m py_compile app/confirm_change.py
+  test: python3 -m unittest discover -s tests
+
+web:
+  enabled: true
+  start: python3 -m http.server {port} --directory app
+  ready_path: /
+  ports:
+    - 8000

@@ -1,0 +1,78 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(bash ${PMAI_HOME:-$HOME/.pmai}/scripts/*)",
+      "Bash(python3 ${PMAI_HOME:-$HOME/.pmai}/scripts/*)",
+      "Bash(git *)",
+      "Bash(npm *)",
+      "Bash(bun *)",
+      "Bash(lsof *)",
+      "Bash(kill *)",
+      "Skill(*)"
+    ]
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"${PMAI_HOME:-$HOME/.pmai}/scripts/check-branch.sh\""
+          },
+          {
+            "type": "command",
+            "command": "node \"${PMAI_HOME:-$HOME/.pmai}/hooks/decision-gate-guard.cjs\"",
+            "timeout": 8
+          }
+        ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${PMAI_HOME:-$HOME/.pmai}/hooks/decision-gate-guard.cjs\"",
+            "timeout": 8
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${PMAI_HOME:-$HOME/.pmai}/hooks/decision-gate-guard.cjs\"",
+            "timeout": 8
+          },
+          {
+            "type": "command",
+            "command": "node \"${PMAI_HOME:-$HOME/.pmai}/hooks/review-skill-guard.cjs\"",
+            "timeout": 8
+          },
+          {
+            "type": "command",
+            "command": "node \"${PMAI_HOME:-$HOME/.pmai}/hooks/active-build-guard.cjs\"",
+            "timeout": 8
+          }
+        ]
+      }
+    ]
+  },
+  "executor": {
+    "default": "claude-code",
+    "models": {
+      "codex": "gpt-5.4",
+      "cursor-agent": "gemini-3.1-pro",
+      "kimi-code": "kimi-code/k3",
+      "opencode": "opencode-go/deepseek-v4-flash"
+    },
+    "claude_code_model_allowlist": [
+      "opus",
+      "sonnet",
+      "haiku"
+    ]
+  }
+}

@@ -1,0 +1,242 @@
+{
+  "id": "work-change-confirmation-20260823224957-35547d90",
+  "name": "change-confirmation",
+  "branch": "main",
+  "status": "active",
+  "created_at": "2026-08-23T22:49:57+08:00",
+  "source_hash_version": 2,
+  "decision_gates": {
+    "schema_version": 1,
+    "design_base_commit": "HEAD",
+    "items": [
+      {
+        "gate_id": "gate-861a8f0600ca",
+        "question_id": "question-861a8f0600ca",
+        "work_id": "work-change-confirmation-20260823224957-35547d90",
+        "kind": "product-model",
+        "mode": "frontier",
+        "round_id": "round-60a001d9399ee749",
+        "status": "consumed",
+        "question": {
+          "summary": "确认状态模型",
+          "displayed_message": "首版确认记录是否只需要待处理和已确认两种状态？",
+          "displayed_message_sha256": "e08b2346031d443f75280d7b5ff8dc79dcd465108a16aa1695e8fd1c4dd754d0",
+          "displayed_at": "2026-08-23T22:50:14+08:00",
+          "display_session_id": "pmai-e2e-design",
+          "display_message_id": null,
+          "options": [
+            {
+              "id": "two-state",
+              "label": "待处理 / 已确认"
+            },
+            {
+              "id": "three-state",
+              "label": "待处理 / 已确认 / 已退回"
+            }
+          ],
+          "allow_free_text": false,
+          "round_position": 1,
+          "round_summary": "单条发布前变更的确认状态"
+        },
+        "answer_candidates": [
+          {
+            "event_id": "answer-76dd9246f22ea4ced5b05870",
+            "session_id": "pmai-e2e-design",
+            "message_id": "pmai-e2e-design-answer-1",
+            "message": "测试夹具确认采用两态：待处理 / 已确认。",
+            "message_sha256": "b7e2b9e8565e0dd95affc50f9a575cbdbc5952d271aa854de056cbb0232560e7",
+            "observed_at": "2026-08-23T22:50:15+08:00",
+            "source": "user_prompt_submit"
+          },
+          {
+            "event_id": "answer-cca731a9a1f54adc57a978c8",
+            "session_id": "pmai-e2e-design",
+            "message_id": "pmai-e2e-design-answer-2",
+            "message": "测试夹具确认采用两态：待处理 / 已确认。",
+            "message_sha256": "b7e2b9e8565e0dd95affc50f9a575cbdbc5952d271aa854de056cbb0232560e7",
+            "observed_at": "2026-08-23T22:50:29+08:00",
+            "source": "user_prompt_submit"
+          }
+        ],
+        "answer": {
+          "event": {
+            "event_id": "answer-cca731a9a1f54adc57a978c8",
+            "session_id": "pmai-e2e-design",
+            "message_id": "pmai-e2e-design-answer-2",
+            "message": "测试夹具确认采用两态：待处理 / 已确认。",
+            "message_sha256": "b7e2b9e8565e0dd95affc50f9a575cbdbc5952d271aa854de056cbb0232560e7",
+            "observed_at": "2026-08-23T22:50:29+08:00",
+            "source": "user_prompt_submit"
+          },
+          "selected_option_id": "two-state",
+          "free_text": null,
+          "answered_at": "2026-08-23T22:50:29+08:00"
+        },
+        "authorized_decision_ids": [
+          "D1"
+        ],
+        "authorized_artifacts": [],
+        "consumed_at": "2026-08-23T22:50:29+08:00",
+        "consumed_by": {
+          "checkpoint_commit": "HEAD",
+          "decision_hashes": {
+            "D1": "51d745ca21afa6942af9121ec61a8dfda9b1d1042df41cc3e93a9a33ed03912b"
+          },
+          "bound_at": "2026-08-23T22:55:34+08:00"
+        },
+        "cancelled_at": null,
+        "cancel_reason": null
+      },
+      {
+        "gate_id": "gate-e8aff8f112d5",
+        "question_id": "question-e8aff8f112d5",
+        "work_id": "work-change-confirmation-20260823224957-35547d90",
+        "kind": "shared-understanding",
+        "mode": "sequential",
+        "round_id": "shared-1581ea0d0a5d4fab",
+        "status": "consumed",
+        "question": {
+          "summary": "单条变更确认设计共识",
+          "displayed_message": "请确认：首版展示变更详情，状态只有待处理和已确认，产品经理可以确认或保留待处理，之后能回看结果和时间。",
+          "displayed_message_sha256": "e94229d1bc3af35a7c57e111027d8ad6829a522e683d0e9e0c6edfd239ae0bd2",
+          "displayed_at": "2026-08-23T22:50:44+08:00",
+          "display_session_id": "pmai-e2e-design-shared",
+          "display_message_id": null,
+          "options": [
+            {
+              "id": "confirm",
+              "label": "确认我们理解一致"
+            }
+          ],
+          "allow_free_text": false,
+          "round_position": null,
+          "round_summary": "单条变更确认设计共识"
+        },
+        "answer_candidates": [
+          {
+            "event_id": "answer-8cd3276dcada2dde2a6dd3a0",
+            "session_id": "pmai-e2e-design-shared",
+            "message_id": "pmai-e2e-design-shared-answer-1",
+            "message": "测试夹具确认以上设计共识，进入规格编译。",
+            "message_sha256": "a05f7ffd631ef793ede0a0e39bee9ac6871578023cb125a800910a8db073ce12",
+            "observed_at": "2026-08-23T22:50:44+08:00",
+            "source": "user_prompt_submit"
+          }
+        ],
+        "answer": {
+          "event": {
+            "event_id": "answer-8cd3276dcada2dde2a6dd3a0",
+            "session_id": "pmai-e2e-design-shared",
+            "message_id": "pmai-e2e-design-shared-answer-1",
+            "message": "测试夹具确认以上设计共识，进入规格编译。",
+            "message_sha256": "a05f7ffd631ef793ede0a0e39bee9ac6871578023cb125a800910a8db073ce12",
+            "observed_at": "2026-08-23T22:50:44+08:00",
+            "source": "user_prompt_submit"
+          },
+          "selected_option_id": "confirm",
+          "free_text": null,
+          "answered_at": "2026-08-23T22:50:44+08:00"
+        },
+        "authorized_decision_ids": [],
+        "authorized_artifacts": [
+          "shared-understanding"
+        ],
+        "consumed_at": "2026-08-23T22:50:44+08:00",
+        "consumed_by": {
+          "checkpoint_commit": "HEAD",
+          "decision_hashes": {},
+          "bound_at": "2026-08-23T22:55:34+08:00"
+        },
+        "cancelled_at": null,
+        "cancel_reason": null
+      }
+    ],
+    "ready_authorization": {
+      "status": "verified",
+      "checkpoint_commit": "HEAD",
+      "decision_ids": [
+        "D1"
+      ],
+      "shared_understanding_gate_id": "gate-e8aff8f112d5",
+      "verified_at": "2026-08-23T22:55:34+08:00"
+    }
+  },
+  "design_revision": 1,
+  "approved_source_hash": "c86e7444b4234c9fee59528ea134a284f0975d3b988df0bef9db9db7a340ab8a",
+  "design_checkpoint_commit": "HEAD",
+  "approved_target": {
+    "paths": [
+      "app/confirm_change.py"
+    ]
+  },
+  "worktree": null,
+  "build": {
+    "contract_version": 5,
+    "anchor": "docs/modules/change-confirmation/spec.md",
+    "target": {
+      "kind": "product",
+      "paths": [
+        "app/confirm_change.py"
+      ],
+      "entrypoints": [
+        "app/confirm_change.py"
+      ]
+    },
+    "approved_source_hash": "c86e7444b4234c9fee59528ea134a284f0975d3b988df0bef9db9db7a340ab8a",
+    "decision_authorization_required": true,
+    "source_hash_version": 2,
+    "design_revision": 1,
+    "delivery_policy": {
+      "schema_version": 1,
+      "policy_version": 1,
+      "target_kind": "product",
+      "implementation_mode": "production-implementation",
+      "principle": "规格决定最终产品语义；真实产品必须端到端实现已确认能力。",
+      "must_deliver": [
+        "用户可见行为与真实接口、数据、权限和兼容行为保持一致",
+        "涉及迁移、安全或外部副作用时完成对应生产检查"
+      ],
+      "simulate_by_default": [],
+      "allowed_support": [
+        "仓库既有测试 fixture 和测试替身"
+      ],
+      "forbidden_without_decision": [],
+      "required_check": null
+    },
+    "delivery_policy_hash": "58cc5ab989ae6419302fd9b4b923ba3241dbbcafb89265f4b5014c8d4ea31509",
+    "accepted_deltas": [],
+    "authority_checkpoint_required": false,
+    "authority_checkpoint_commit": "HEAD",
+    "authority_checkpoint_source_hash": "c86e7444b4234c9fee59528ea134a284f0975d3b988df0bef9db9db7a340ab8a",
+    "lifecycle_state": "iterating",
+    "mode": "main",
+    "executor": "native",
+    "branch": "main",
+    "worktree": null,
+    "baseline_sha": "HEAD",
+    "audit_dir": ".pm-workflow/audits/change-confirmation/session-eval",
+    "started_at": "2026-08-23T22:57:59+08:00",
+    "implementation_commit": "HEAD",
+    "pm_accepted_at": null,
+    "finalization": {
+      "requested_at": null,
+      "requested_commit": null,
+      "rebound_at": null
+    },
+    "acceptance": {
+      "iteration_checks": [],
+      "final_checks": [
+        "scope-coverage",
+        "tests",
+        "build"
+      ],
+      "iteration_evidence": [],
+      "evidence": [],
+      "ready_at": null,
+      "ready_commit": null,
+      "ready_source_hash": null
+    },
+    "docs_status": "pending",
+    "implementation_committed_at": "2026-08-23T23:06:03+08:00"
+  }
+}

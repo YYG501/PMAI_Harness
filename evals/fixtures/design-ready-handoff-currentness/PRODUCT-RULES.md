@@ -1,0 +1,46 @@
+# PMAI E2E Fixture — 跨功能产品行为规则
+
+> **这是什么**：项目级**跨功能产品行为规则** —— 全项目级「产品在 X 情况下应 / 不应有 Y 行为」
+> 的规则。与 `DESIGN.md`（设计规范 = 界面长什么样）平级、互补。
+> **为什么有它**：跨功能规则的适用范围超出单个模块，需要在 `/pmai-design`、`/pmai-build` 和 PRD 写作时都能读到。
+> **谁写**：完整 build 落地主线后的自动文档编译；`/pmai-build-close` 兼容恢复复用同一逻辑；`/pmai-spec-writing` 的建造前模式只列候选，不直接改本文件。
+> **谁读**：`/pmai-design` / `/pmai-build` / `spec-writing`。
+> **落盘路径**：`PRODUCT-RULES.md`（固定）。
+
+<!--
+边界（哪些不进本文件）：
+- 用词 / 术语 → PRODUCT.md 业务术语表
+- 模块级规则 / 功能 spec → 该模块 docs/modules/<module>/spec.md
+- 视觉 / 设计 / 交互样式 → DESIGN.md
+- 同模块前瞻反馈 → 该模块 docs/modules/<module>/discussion.md 或 decisions.md
+- 单模块决定与理由 → 该模块 docs/modules/<module>/decisions.md
+- 奠基性、跨文件的项目理路 → docs/decisions/<日期>-<slug>.md
+本文件只装「全项目级、跨功能、产品行为」规则。
+-->
+
+## 规则清单
+
+<!--
+扁平清单（无模块分区 —— 模块级的归 modulespec）。每条格式：
+
+### <一句话标题>
+- 规则：<产品在 X 情况下应 / 不应 Y>
+- scope：全局 | 域限定:<关键词>
+- 来源：<模块或工作名>（YYYY-MM-DD）
+
+scope 字段：
+- 「全局」—— design / build / PRD 写作必读
+- 「域限定:<关键词>」—— 只约束某域；命中模块或关键词时读
+  只有明确只约束某域的规则才标域限定。
+
+无「状态」字段 —— 规则全是常驻，加入即生效，过时由 PM 手动改 / 删。
+-->
+
+<!-- 示例（项目起步时本段为空，规则随 landed 后文档编译累积；spec-writing 建造前模式只给候选）：
+
+### 删除操作一律二次确认
+- 规则：任何不可逆的删除操作，产品必须弹二次确认，不允许一键直删
+- scope：全局
+- 来源：用户管理（2026-05-22）
+
+-->

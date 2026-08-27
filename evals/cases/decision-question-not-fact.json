@@ -3,29 +3,84 @@
   "id": "decision-question-not-fact",
   "title": "用户问句不能进入决定或规格",
   "layer": "session",
-  "skills": ["design", "spec-writing"],
+  "skills": [
+    "design",
+    "spec-writing"
+  ],
   "source": {
     "session_id": "019f3c20-5bbb-7423-a18f-dab2c1a90fff",
     "evidence": [
-      {"turn": 23, "excerpt": "这是一个问句，为什么这么设计"}
+      {
+        "turn": 23,
+        "excerpt": "这是一个问句，为什么这么设计"
+      }
     ]
   },
   "input": {
     "prompt": "为什么部门管理员不能给下级部门成员分配部门管理员？",
-    "context": ["这是探索问题，PM 尚未确认任何规则", "存在相关历史决定但尚未判断是否适用"]
+    "context": [
+      "这是探索问题，PM 尚未确认任何规则",
+      "存在相关历史决定但尚未判断是否适用"
+    ]
   },
   "expected": {
-    "behaviors": ["把输入保留为未决问题", "解释现有依据或返回 design 继续讨论", "只有明确 PM 回答才能落决定"],
-    "observations": ["question_kept_open", "no_decision_written"],
-    "lifecycle_order": ["designing"],
+    "behaviors": [
+      "把输入保留为未决问题",
+      "解释现有依据或返回 design 继续讨论",
+      "只有明确 PM 回答才能落决定"
+    ],
+    "observations": [
+      "question_kept_open",
+      "no_decision_written"
+    ],
+    "lifecycle_order": [
+      "designing"
+    ],
     "stopping_point": "awaiting_product_decision"
   },
   "forbidden": {
-    "behaviors": ["把问句改写成规范性结论", "自动追加 decisions.md"],
-    "observations": ["question_promoted_to_decision", "spec_written_from_question"]
+    "behaviors": [
+      "把问句改写成规范性结论",
+      "自动追加 decisions.md"
+    ],
+    "observations": [
+      "question_promoted_to_decision",
+      "spec_written_from_question"
+    ]
   },
   "judge": {
     "enabled": true,
-    "rubric": ["问句没有被当成 PM 决定", "输出能区分解释、推荐和已确认事实"]
+    "rubric": [
+      "问句没有被当成 PM 决定",
+      "输出能区分解释、推荐和已确认事实"
+    ]
+  },
+  "harness": {
+    "setup": {"state": "designing"},
+    "fixture": "evals/fixtures/decision-question-not-fact",
+    "expected_changed_paths": [],
+    "expected_unchanged_paths": [
+      "PRODUCT.md",
+      "PRODUCT-RULES.md",
+      "DESIGN.md",
+      ".pm-workflow/project.yml",
+      "docs/modules/change-confirmation/spec.md",
+      "docs/modules/change-confirmation/decisions.md",
+      "app/confirm_change.py"
+    ],
+    "protected_paths": [
+      "PRODUCT.md",
+      "PRODUCT-RULES.md",
+      "DESIGN.md",
+      ".pm-workflow/project.yml",
+      "docs/modules/change-confirmation/spec.md",
+      "docs/modules/change-confirmation/decisions.md",
+      "app/confirm_change.py"
+    ],
+    "required_event_kinds": [
+      "lifecycle",
+      "tool",
+      "command"
+    ]
   }
 }
