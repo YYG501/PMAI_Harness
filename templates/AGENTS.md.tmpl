@@ -16,7 +16,7 @@
 
 - `CLAUDE.md` 里写的“Claude Code”“Claude host”“驱动 Claude”，在 Codex 会话中等价理解为当前主控 agent。
 - `/pmai-*` 是跨主控文档中的 PMAI 命令名。Codex 通过原生 skill 列表调用对应的 `$pmai-*`。PMAI 不生成 Codex custom prompts；runtime 没有对应 UI 时，再按 `~/.pmai/skills/<command-without-pmai-prefix>/SKILL.md` 执行。
-- Claude Code 与 Codex 保留完整主控能力。Kimi Code、OpenCode 和 Cursor Agent 只可由 `/pmai-build` 选作外部 Builder：它们执行已确认的实现任务，但不能推进 PMAI lifecycle、写入验收通过、处理 landing、解释 status 或调用其它 PMAI Skill。
+- Claude Code 与 Codex 保留完整主控能力。OpenCode 只可由 `/pmai-build` 选作外部 Builder：它执行已确认的实现任务，但不能推进 PMAI lifecycle、写入验收通过、处理 landing、解释 status 或调用其它 PMAI Skill。新 build 默认由当前会话直接构建。
 - 如果 skill 目录名本身带 `pmai-` 前缀，例如 `/pmai-upgrade`，对应 `~/.pmai/skills/pmai-upgrade/SKILL.md`。
 - 运行态只创建并识别 `build-*` 工作分支。
 - 完整 build 的实现改动落在 PM 开工前确认的工作环境；选择独立环境时使用 `build-*` worktree，选择当前环境时只允许合同声明的目标路径。轻量修补走 `/pmai-quick-fix`。

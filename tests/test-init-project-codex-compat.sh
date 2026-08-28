@@ -35,8 +35,7 @@ test_agents_template_exists_and_maps_codex() {
   assert_file_contains "$AGENTS_TMPL" "CLAUDE.md" "AGENTS.md.tmpl should reference CLAUDE.md truth source" || return
   assert_file_contains "$AGENTS_TMPL" "当前主控 agent" "AGENTS.md.tmpl should map driver role to current host" || return
   assert_file_contains "$AGENTS_TMPL" "Codex" "AGENTS.md.tmpl should still mention Codex" || return
-  assert_file_contains "$AGENTS_TMPL" "Kimi Code、OpenCode 和 Cursor Agent" "AGENTS.md.tmpl should define builder-only hosts" || return
-  assert_file_contains "$AGENTS_TMPL" '只可由 `/pmai-build` 选作外部 Builder' "AGENTS.md.tmpl should limit Kimi/OpenCode to Builder" || return
+  assert_file_contains "$AGENTS_TMPL" 'OpenCode 只可由 `/pmai-build` 选作外部 Builder' "AGENTS.md.tmpl should define the remaining builder-only host" || return
   assert_file_contains "$AGENTS_TMPL" "skill-preamble.sh" "AGENTS.md.tmpl should use neutral PMAI preamble" || return
   assert_file_contains "$AGENTS_TMPL" "AskUserQuestion 不可用" "AGENTS.md.tmpl should define AskUser fallback" || return
   assert_file_contains "$AGENTS_TMPL" "默认用中文" "AGENTS.md.tmpl should preserve Chinese default" || return
@@ -145,9 +144,8 @@ test_e2e_generates_agents_md_without_framework_assets() {
     return
   fi
 
-  if ! grep -q "Kimi Code、OpenCode 和 Cursor Agent" "$proj/AGENTS.md" \
-    || ! grep -q "外部 Builder" "$proj/AGENTS.md"; then
-    _fail "生成的 AGENTS.md 缺 Kimi/OpenCode Builder 边界"
+  if ! grep -q 'OpenCode 只可由 `/pmai-build` 选作外部 Builder' "$proj/AGENTS.md"; then
+    _fail "生成的 AGENTS.md 缺 OpenCode Builder 边界"
     rm -rf "$base"
     return
   fi

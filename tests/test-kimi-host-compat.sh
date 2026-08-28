@@ -23,11 +23,15 @@ copy_dispatch_fixture() {
 }
 
 test_kimi_builder_boundary_is_documented() {
-  start_test "K1: 生成器和消费仓只声明 Kimi Builder 边界"
+  start_test "K1: 生成器和消费仓不把 Kimi/Cursor 暴露为新 Builder"
 
-  assert_file_contains "$REPO_ROOT/AGENTS.md" "Kimi Code、OpenCode 和 Cursor Agent" "generator entry should name builder-only hosts" || return
-  assert_file_contains "$REPO_ROOT/templates/AGENTS.md.tmpl" '只可由 `/pmai-build` 选作外部 Builder' "consumer entry should limit Kimi to Builder" || return
+  assert_file_contains "$REPO_ROOT/AGENTS.md" 'OpenCode 只作为 `/pmai-build` 的外部 Builder' "generator entry should name the remaining builder" || return
+  assert_file_contains "$REPO_ROOT/templates/AGENTS.md.tmpl" 'OpenCode 只可由 `/pmai-build` 选作外部 Builder' "consumer entry should limit OpenCode to Builder" || return
   assert_file_contains "$REPO_ROOT/templates/CLAUDE.md.tmpl" "不推进 lifecycle、验收或 landing" "consumer charter should forbid controller behavior" || return
+  if grep -qE 'Kimi Code|Cursor Agent|kimi-code|cursor-agent' "$REPO_ROOT/templates/AGENTS.md.tmpl" "$REPO_ROOT/templates/CLAUDE.md.tmpl"; then
+    _fail "new consumer templates must not expose Kimi/Cursor build options"
+    return
+  fi
   if grep -q '/skill:pmai-' "$REPO_ROOT/AGENTS.md" "$REPO_ROOT/templates/AGENTS.md.tmpl" "$REPO_ROOT/templates/CLAUDE.md.tmpl"; then
     _fail "current generator/consumer entries must not advertise Kimi PMAI skills"
     return
@@ -148,18 +152,18 @@ test_kimi_lifecycle_only_diagnoses_and_cleans_legacy_entries() {
   pass_test
 }
 
-test_builder_supports_kimi_with_current_host_exclusion() {
-  start_test "K5: Kimi 可作外部 builder，作为当前主控时排除同名 profile"
+test_builder_hides_retired_kimi_profile() {
+  start_test "K5: Kimi 不再进入新 build 候选，旧 adapter 保留兼容"
   local out
 
   out=$(python3 "$REPO_ROOT/scripts/builder-profile.py" list \
     "$REPO_ROOT/templates/pm-workflow.config.yml.tmpl" --current-host codex 2>&1) || {
-    _fail "builder-profile should list Kimi for other hosts"
+    _fail "builder-profile should list active builders"
     echo "$out" >&2
     return
   }
-  if ! echo "$out" | grep -q '"executor": "kimi-code"'; then
-    _fail "Kimi should be available as an external builder for Codex"
+  if echo "$out" | grep -qE '"executor": "kimi-code"|Kimi Code'; then
+    _fail "Kimi should not be available as a new external builder"
     return
   fi
 
@@ -1259,7 +1263,7 @@ test_kimi_builder_boundary_is_documented
 test_kimi_hook_manager_preserves_user_config
 test_kimi_dispatch_is_scoped_and_maps_write_path
 test_kimi_lifecycle_only_diagnoses_and_cleans_legacy_entries
-test_builder_supports_kimi_with_current_host_exclusion
+test_builder_hides_retired_kimi_profile
 test_public_skill_names_match_kimi_native_commands
 test_no_machine_bound_kimi_paths
 test_kimi_dispatch_keeps_prompt_outputs_separate

@@ -175,11 +175,11 @@ python3 "$PMAI_HOME/scripts/acceptance-profile.py" "${PROFILE_ARGS[@]}" > "$PROF
 
 从 `ready_to_build` 进入本节时，`§1`、`§2` 以及入口护栏产生的健康检查全部属于后台预检。开工确认卡出现前，不能向 PM 播报或询问 hooks 漂移、工作流核对、建造依据、目标路径、项目类型、验收档案、合同、hash、evidence 或“业务实现尚未修改”等内部状态；也不能要求 PM 为这些机械项提供确认。非阻塞的 hooks / 基础设施问题只写入后台审计，等 PM 确认环境和工具后再按既定恢复路径处理；只有它确实阻止展示有效选项或无法安全开工时，才停止并用业务结果说明阻塞原因。前台在此之前只能说明“正在准备构建”，随后直接展示本节唯一的“工作环境 + 构建工具”确认卡。
 
-1. **推荐工作环境**：默认推荐“独立环境”；若当前已经是本模块有效的 `build-*` 环境，则推荐“继续当前独立环境”。PM 也可以明确改为“当前环境”。
-2. **识别当前主控并推荐构建工具**：把当前 runtime 映射成 `claude-code / codex / kimi-code / opencode / cursor-agent`；无法识别时用 `unknown`。Claude Code、Codex、Kimi Code、Cursor Agent 和 OpenCode 都可以作为外部构建工具，但 profile 必须和当前主控不同，不能让任一主控再次启动自己；“当前会话直接构建”不是外部 profile，始终作为有效选项。按项目级类型、消费仓配置和本机可用性生成推荐与完整可选列表：
+1. **推荐工作环境**：默认推荐“独立环境”；若当前已经是本模块有效的 `build-*` 环境，则推荐“继续当前独立环境”。PM 也可以明确改为“当前环境”。新 build 的默认组合是“独立环境 + 当前会话直接构建”。
+2. **识别当前主控并推荐构建工具**：把当前 runtime 映射成 `claude-code / codex / opencode`；无法识别时用 `unknown`。Claude Code、Codex 和 OpenCode 可以作为外部构建工具，但 profile 必须和当前主控不同，不能让任一主控再次启动自己；“当前会话直接构建”不是外部 profile，始终作为有效选项且是新 build 默认推荐。按项目级类型、消费仓配置和本机可用性生成推荐与完整可选列表：
 
    ```bash
-   CURRENT_HOST="<claude-code | codex | kimi-code | opencode | cursor-agent | unknown>"
+   CURRENT_HOST="<claude-code | codex | opencode | unknown>"
    RECOMMENDED_BUILDER_JSON=$(python3 "$PMAI_HOME/scripts/builder-profile.py" recommend \
      "$REPO_ROOT/.pm-workflow/config.yml" \
      --project-definition "$REPO_ROOT/.pm-workflow/project.yml" \
@@ -190,7 +190,7 @@ python3 "$PMAI_HOME/scripts/acceptance-profile.py" "${PROFILE_ARGS[@]}" > "$PROF
      --current-host "$CURRENT_HOST")
    ```
 
-   `list` 和 `recommend` 都必须排除当前主控对应的外部 profile。`list` 在其它可用外部工具之外始终包含“当前会话直接构建”；`recommend` 仍优先按项目配置选择可用外部 profile，没有可用外部工具时才推荐当前会话直接构建。
+   `list` 和 `recommend` 都必须排除当前主控对应的外部 profile，并忽略已退出新 build 选择面的 Kimi Code / Cursor Agent。`list` 在其它可用外部工具之外始终包含“当前会话直接构建”；新 build 的 `recommend` 默认返回“当前会话直接构建”，PM 明确改选后才使用其它可用外部 profile。
 
 3. **一次展示推荐结果和全部有效选项**：
 
@@ -244,7 +244,7 @@ fi
 
 所有 git 命令使用 `git -C "$BUILD_DIR"`；必须切目录的非 git 命令只在 subshell 中运行，不把主控 cwd 留在 worktree。
 
-执行器使用 `EXECUTOR_STATUS_DIR`、heartbeat、退出码和日志文件回报进度；PM 窗口只报阶段摘要，不直播命令、日志和进程排障。可确认的外部构建工具包括 Claude Code、Codex、Kimi Code、Cursor Agent 和 OpenCode，但必须排除当前主控对应的外部 profile；“当前会话直接构建”始终与这些外部工具一起列为有效选项。没有外部工具可用时，推荐当前会话直接构建。
+执行器使用 `EXECUTOR_STATUS_DIR`、heartbeat、退出码和日志文件回报进度；PM 窗口只报阶段摘要，不直播命令、日志和进程排障。可确认的外部构建工具包括 Claude Code、Codex 和 OpenCode，但必须排除当前主控对应的外部 profile；“当前会话直接构建”始终是有效选项，也是新 build 的默认工具。没有外部工具可用时仍使用当前会话直接构建。
 
 从 acceptance profile 分别取快速迭代和定稿验收两组检查，写版本化合同。当前新合同为 v5：`iteration_checks` 只服务 PM 看结果期间的快循环，`final_checks` 只有 PM 明确请求定稿后才允许运行；build 开始后 lifecycle 只写入 `build.lifecycle_state`，不再同时写顶层 lifecycle、旧 `stage` 或 `required_checks`。同时由 `target.kind` 自动固化 `delivery_policy + delivery_policy_hash`。旧 v2/v3/v4 合同只作中断恢复兼容：
 

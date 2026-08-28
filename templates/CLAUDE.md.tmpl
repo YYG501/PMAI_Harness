@@ -11,7 +11,7 @@
 
 框架、宿主入口或当前消费仓的文件归位、原型/实现入口与活动工作是否健康，只在 PM 要求诊断时使用 `/pmai-doctor`（Codex：`$pmai-doctor`）。它不属于正常产品推进循环，默认只读；升级、修复和文件迁移必须另行确认。
 
-> Claude Code 与 Codex 是完整主控。Kimi Code、OpenCode 和 Cursor Agent 只由 `/pmai-build` 作为外部 Builder 调用，不解析本文的 PMAI Skill，也不推进 lifecycle、验收或 landing。
+> Claude Code 与 Codex 是完整主控。OpenCode 只由 `/pmai-build` 作为外部 Builder 调用，不解析本文的 PMAI Skill，也不推进 lifecycle、验收或 landing；新 build 默认由当前会话直接构建。
 
 ---
 

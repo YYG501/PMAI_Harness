@@ -14,6 +14,8 @@ PM-AI-Workflow 生成器仓的演进记录。本文件**只记影响已安装框
 
 ## 未发布
 
+- `change(build)`: **收缩 Builder 选择并调整默认开工方案。** 新 build 从候选中移除 Kimi Code 与 Cursor Agent；新消费仓默认使用“独立环境 + 当前会话直接构建”，PM 仍可在确认卡中改选可用的 Claude Code、Codex 或 OpenCode。历史 adapter 与 build 合同枚举保留为中断恢复兼容，不影响新 build 选择面。
+
 - `fix(build+harness)`: **收紧开工确认卡的前台边界并补足个人经验自适应评测证据。** `ready_to_build` 的非阻塞 hooks / 基础设施预检只留在后台，PM 开工前只看到工作环境和构建工具；跨项目个人经验案例增加重复、Skill 已覆盖和条件不适用候选，验证按适用性与独立检查价值过滤而非固定条数截断。
 
 - `fix(spec-writing+build-close)`: **把 landed 后缺口对账的现状写入边界收紧。** 一旦发现漏实现或无依据实现，只记录影响地图与失败证据，保持正式规格、决定和 `PRODUCT-STATE.md` 不变，等待实现或产品决定处理后再恢复文档收尾。

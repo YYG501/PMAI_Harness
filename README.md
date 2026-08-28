@@ -31,7 +31,7 @@ Claude Code: /pmai-init-project
 Codex:       $pmai-init-project
 ```
 
-Kimi Code、OpenCode 和 Cursor Agent 不作为 PMAI 主控；它们只会在 `/pmai-build` 中被完整主控选作外部 Builder。
+OpenCode 不作为 PMAI 主控；它只会在 `/pmai-build` 中被完整主控选作外部 Builder。新 build 默认使用当前会话直接构建，并在独立环境中执行。
 
 如果只是要验证骨架脚本，不走完整 PM 交互：
 
@@ -51,7 +51,7 @@ PMAI 不和 Claude Design、design-html 或 Claude Code 比"谁更快生成第�
 
 定位是 **PM 单人生产力工具**，不是团队 SOP / CI 平台 / 多租户基础设施。完整产品意义、非目标和成功标准见 [`PRODUCT.md`](./PRODUCT.md)。
 
-**分发形态**：全局安装（单人多项目）。框架装到 `~/.pmai/`，公开 Skill 只链接到 `~/.claude/skills/pmai-*` 和 `~/.codex/skills/pmai-*`；Codex 通过 `$pmai-*`、Skill 选择器或自然语言调用，不生成 custom prompts。任意 cwd 可由 Claude Code 或 Codex 起新业务项目；`pmai upgrade` 一键升级全局 Skill、脚本和 Hook 源。项目级 `.claude/settings.json` / `.codex/hooks.json` 不会被全局升级静默改写：在消费仓使用 `/pmai-doctor` 只读检查漂移，PM 确认后再运行 `bash ~/.pmai/scripts/install-project-hooks.sh` 确定性刷新。Kimi Code、OpenCode 和 Cursor Agent 只保留 Builder adapter/profile；新安装、新升级和新消费仓不再创建它们的 PMAI 主控入口。已有 Kimi Skill/managed hooks 与 OpenCode commands 只由 Doctor 报告，并可在 PM 确认后通过 uninstall 清理。
+**分发形态**：全局安装（单人多项目）。框架装到 `~/.pmai/`，公开 Skill 只链接到 `~/.claude/skills/pmai-*` 和 `~/.codex/skills/pmai-*`；Codex 通过 `$pmai-*`、Skill 选择器或自然语言调用，不生成 custom prompts。任意 cwd 可由 Claude Code 或 Codex 起新业务项目；`pmai upgrade` 一键升级全局 Skill、脚本和 Hook 源。项目级 `.claude/settings.json` / `.codex/hooks.json` 不会被全局升级静默改写：在消费仓使用 `/pmai-doctor` 只读检查漂移，PM 确认后再运行 `bash ~/.pmai/scripts/install-project-hooks.sh` 确定性刷新。OpenCode 只保留 Builder adapter/profile；新安装、新升级和新消费仓不再创建 OpenCode 主控入口。已有 OpenCode commands 只由 Doctor 报告，并可在 PM 确认后通过 uninstall 清理。Kimi Code 与 Cursor Agent 已从新 build 选项移除，历史资产按兼容规则处理。
 
 ---
 
@@ -84,14 +84,12 @@ PMAI 不和 Claude Design、design-html 或 Claude Code 比"谁更快生成第�
 |---|---|---|
 | **Claude Code** | 推荐 | 一等主控入口（slash skill 原生在这里跑）；当前主控不是 Claude Code 时，也可作为 `/pmai-build` 执行器 |
 | **Codex** | 支持 | 原生 skill 暴露到 `~/.codex/skills/pmai-*`，通过 `$pmai-*`、skill 选择器或自然语言调用；不生成 custom prompts；读生成器仓 / 消费仓 `AGENTS.md` 作为主控入口；消费仓生成项目级 `.codex/hooks.json`；当前主控不是 Codex 时，也可作为 build 执行器 |
-| **Kimi Code** | 可选 | 仅 `/pmai-build` 外部 Builder；通过 `kimi --prompt` 执行冻结任务，不安装 PMAI Skill 或 managed hooks；旧主控资产只诊断、清理 |
-| **Cursor Agent** | 可选 | `/pmai-build` 外部执行器；当前主控不是 Cursor Agent 时可选 |
 | **OpenCode CLI** | 可选 | 仅 `/pmai-build` 外部 Builder；通过 `opencode run` 执行冻结任务，不生成全局或项目级 PMAI commands；旧 command 资产只诊断、清理 |
 | **gstack** | 可选能力层 | 可辅助视觉基线、mockup、browser/visual evidence、抓站和文档导出；初始化不依赖它。UI 验收需要主动浏览器能力，但可以由 gstack、runtime browser 或 Playwright 任一适配器提供 |
 | **git** ≥ 2.30 | 必需 | worktree 是核心隔离机制 |
 | **python3** ≥ 3.10 | 必需 | scripts 大多用 python（zero-dep stdlib） |
 | **bash** ≥ 4 | 必需 | scripts 入口语言（macOS 自带 3.x 已知坑见 INVARIANTS） |
-| **codex CLI** | 可选 | `/pmai-build` 外部执行器；Codex 作为当前主控时不重复进入外部候选，但当前主控直接构建始终可选。不装可走 Claude Code / OpenCode / Cursor Agent，或由当前会话直接构建 |
+| **codex CLI** | 可选 | `/pmai-build` 外部执行器；Codex 作为当前主控时不重复进入外部候选，但当前会话直接构建始终可选。新 build 默认使用当前会话直接构建 |
 
 未检测到 gstack 时，`pmai install` / `pmai doctor --check` 只给 readiness warning，初始化和非 Web build 都不受阻塞。Web final checks 会在 PM 请求定稿后解析可用的主动浏览器适配器；完全没有适配器时 UI 验收阻塞，不能伪装通过。gstack 输出仍必须按 PMAI 规则接回 `DESIGN.md`、`mockups/`、evidence artifacts、`.pm-workflow/mirror/`、`docs/deliverables/` 或 `docs/engineering/`，不能把 `~/.gstack/...` 当长期真相源。
 
@@ -224,7 +222,7 @@ agent 内部先判断项目情况，再进入对应分支：
 - 在本生成器仓初始化消费仓：让 Codex 执行 `/pmai-init-project` 等价流程，内部读取 `skills/init-project/SKILL.md`，最后调用 `bash scripts/init-project.sh ...`。
 - 在消费仓继续使用：`init-project.sh` 会生成消费仓根目录 `AGENTS.md` 和项目级 `.codex/hooks.json`；Codex 进入消费仓后先读 `AGENTS.md`。`pmai install/upgrade` 会把 `pmai-*` 暴露到 `~/.codex/skills/`，通过 `$pmai-*`、skill 选择器或自然语言调用，并清理旧版遗留的 `~/.codex/prompts/pmai-*.md`。Codex 首次启用项目 hooks 时可能要求信任确认，这是 Codex 自身的安全机制。
 - Claude Code 和 Codex 负责读取产品真相源、执行完整 Skill、采集证据并推进 lifecycle；项目级 Hook 只为这两个主控生成和维护。
-- Kimi Code、OpenCode 和 Cursor Agent 只能由 `/pmai-build` 通过 adapter/profile 启动，在已确认的 `BUILD_DIR` 中产出候选 diff。它们不能调用 PMAI Skill、修改产品权威文档、写验收通过或处理 landing。
+- OpenCode 只能由 `/pmai-build` 通过 adapter/profile 启动，在已确认的 `BUILD_DIR` 中产出候选 diff。它不能调用 PMAI Skill、修改产品权威文档、写验收通过或处理 landing。Kimi Code 与 Cursor Agent 已从新 build 选项移除，历史 adapter/合同仅保留兼容读取。
 - 旧 Kimi/OpenCode 主控资产不会被 install、upgrade 或 Doctor repair 刷新；Doctor 将其列为非阻断遗留项，清理由 PM 单独确认。
 
 **非交互参数化 CLI**（smoke / 批量自动化依赖）：

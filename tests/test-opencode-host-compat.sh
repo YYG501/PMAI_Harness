@@ -34,7 +34,7 @@ test_template_declares_opencode_builder_boundary() {
 
   assert_file_exists "$INSTALL_OPENCODE" "install-opencode-commands.sh should exist" || return
   assert_file_contains "$AGENTS_TMPL" "PMAI Agent Entry" "AGENTS.md.tmpl should be generic agent entry" || return
-  assert_file_contains "$AGENTS_TMPL" "Kimi Code、OpenCode 和 Cursor Agent" "AGENTS.md.tmpl should mention OpenCode among Builders" || return
+  assert_file_contains "$AGENTS_TMPL" 'OpenCode 只可由 `/pmai-build` 选作外部 Builder' "AGENTS.md.tmpl should define the OpenCode Builder boundary" || return
   assert_file_contains "$AGENTS_TMPL" '只可由 `/pmai-build` 选作外部 Builder' "AGENTS.md.tmpl should limit OpenCode to Builder" || return
   assert_file_contains "$AGENTS_TMPL" "新消费仓不得生成 Kimi/OpenCode 主控入口" "AGENTS.md.tmpl should reject new controller assets" || return
   if grep -q "install-opencode-commands.sh" "$AGENTS_TMPL"; then

@@ -501,9 +501,13 @@ test_lifecycle_scripts_cover_controller_and_builder_boundaries() {
     _fail "install / upgrade 应清理 legacy Codex prompts"
     return
   fi
-  if ! grep -q 'executor: kimi-code' "$REPO_ROOT/templates/pm-workflow.config.yml.tmpl" \
-    || ! grep -q 'executor: opencode' "$REPO_ROOT/templates/pm-workflow.config.yml.tmpl"; then
-    _fail "Kimi/OpenCode Builder profiles should remain"
+  if ! grep -q 'executor: opencode' "$REPO_ROOT/templates/pm-workflow.config.yml.tmpl"; then
+    _fail "OpenCode Builder profile should remain available as an external option"
+    return
+  fi
+  if grep -qE 'executor: (kimi-code|cursor-agent)|Kimi Code|Cursor Agent' \
+    "$REPO_ROOT/templates/pm-workflow.config.yml.tmpl"; then
+    _fail "new build config must not expose retired Kimi/Cursor Builder profiles"
     return
   fi
   pass_test

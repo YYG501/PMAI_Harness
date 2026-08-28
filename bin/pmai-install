@@ -371,7 +371,8 @@ echo "✅ PMAI v$VER installed globally"
 echo "   ~/.pmai/         framework source"
 echo "   ~/.claude/skills/pmai-*   skill exposure"
 echo "   ~/.codex/skills/pmai-*    Codex native skill exposure"
-echo "   Kimi Code / OpenCode      optional external Builders (no controller entries installed)"
+echo "   OpenCode                  optional external Builder"
+echo "   Kimi Code / Cursor Agent  retired from new builds (legacy assets preserved)"
 echo "═══════════════════════════════════════"
 
 # PATH 检测：~/.pmai/bin 不在 PATH 就提示 oneshot（不自动改用户 rc 文件，避免破坏配置）

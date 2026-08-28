@@ -4,8 +4,9 @@
 This intentionally parses only the small YAML subset used by
 templates/pm-workflow.config.yml.tmpl: builder.default_profile and
 builder.profiles.<name> scalar fields. Keeping it stdlib-only lets consumer
-repos use the helper without installing PyYAML. Framework-added profiles may
-also be supplied as backward-compatible defaults for existing consumer repos.
+repos use the helper without installing PyYAML. Retired profiles remain
+recognisable to the contract compatibility layer but are not selectable for
+new builds.
 """
 
 from __future__ import annotations
@@ -20,17 +21,7 @@ from typing import Any
 from _lib.project_definition import ProjectDefinitionError, load_project_definition
 
 
-BUILTIN_PROFILES: dict[str, dict[str, Any]] = {
-    "kimi-code": {
-        "label": "Kimi Code",
-        "executor": "kimi-code",
-        "model": "kimi-code/k3",
-        "display_model": "k3",
-        "thinking": "adaptive",
-        "auto": True,
-        "timeout_seconds": 900,
-    }
-}
+RETIRED_BUILDER_EXECUTORS = {"kimi-code", "cursor-agent"}
 
 
 def strip_comment(line: str) -> str:
@@ -115,9 +106,6 @@ def load_builder_config(path: Path) -> dict[str, Any]:
         if indent == 6 and current_profile:
             profiles[current_profile][key] = parse_scalar(value)
 
-    for name, profile in BUILTIN_PROFILES.items():
-        profiles.setdefault(name, dict(profile))
-
     return {
         "default_profile": default_profile,
         "target_profiles": target_profiles,
@@ -147,6 +135,8 @@ def resolve_profile(
         raise SystemExit(f"找不到 builder profile: {profile_name}")
 
     profile = dict(profiles[profile_name])
+    if profile.get("executor") in RETIRED_BUILDER_EXECUTORS:
+        raise SystemExit(f"构建工具已移除，不能用于新 build: {profile_name}")
     overrides: dict[str, bool] = {}
     if model_override:
         profile["model"] = model_override
@@ -190,6 +180,20 @@ def profile_matches_current_host(profile: dict[str, Any], current_host: str) -> 
     return current_host != "unknown" and profile.get("executor") == current_host
 
 
+def profile_is_retired(profile: dict[str, Any]) -> bool:
+    return profile.get("executor") in RETIRED_BUILDER_EXECUTORS
+
+
+def effective_default_profile(config: dict[str, Any]) -> str:
+    default = config["default_profile"]
+    profile = config["profiles"].get(default)
+    if default in RETIRED_BUILDER_EXECUTORS or (
+        profile is not None and profile_is_retired(profile)
+    ):
+        return "native"
+    return default
+
+
 def native_selection(reason: str) -> dict[str, Any]:
     return {
         "builder_profile": "native",
@@ -225,9 +229,10 @@ def cmd_list(args: argparse.Namespace) -> None:
         )
         return
     config = load_builder_config(config_path)
-    rows = [native_list_row()]
+    default_profile = effective_default_profile(config)
+    rows = [dict(native_list_row(), default=default_profile == "native")]
     for name, profile in config["profiles"].items():
-        if profile_matches_current_host(profile, args.current_host):
+        if profile_is_retired(profile) or profile_matches_current_host(profile, args.current_host):
             continue
         available = profile_available(profile)
         if args.available_only and not available:
@@ -244,7 +249,7 @@ def cmd_list(args: argparse.Namespace) -> None:
     print(
         json.dumps(
             {
-                "default_profile": config["default_profile"],
+                "default_profile": default_profile,
                 "current_host": args.current_host,
                 "profiles": rows,
             },
@@ -254,8 +259,7 @@ def cmd_list(args: argparse.Namespace) -> None:
 
 
 def cmd_resolve(args: argparse.Namespace) -> None:
-    profile_name = args.profile
-    if profile_name == "native":
+    def emit_native() -> None:
         builder: dict[str, Any] = {"model": "runtime", "thinking": "adaptive"}
         if args.model:
             builder["model"] = args.model
@@ -272,11 +276,18 @@ def cmd_resolve(args: argparse.Namespace) -> None:
                 ensure_ascii=False,
             )
         )
+
+    profile_name = args.profile
+    if profile_name == "native":
+        emit_native()
         return
     config = load_builder_config(Path(args.config))
-    profile_name = profile_name or config["default_profile"]
+    profile_name = profile_name or effective_default_profile(config)
     if not profile_name:
         raise SystemExit("builder.default_profile 为空，请明确指定 --profile")
+    if profile_name == "native":
+        emit_native()
+        return
     profile = config["profiles"].get(profile_name)
     if profile is not None and profile_matches_current_host(profile, args.current_host):
         raise SystemExit(
@@ -325,6 +336,12 @@ def cmd_recommend(args: argparse.Namespace) -> None:
     config = load_builder_config(config_path)
     profiles = config["profiles"]
     preferred = config.get("target_profiles", {}).get(target) or config["default_profile"]
+    if not preferred or preferred == "native":
+        print(json.dumps(native_selection("当前会话直接构建是新 build 默认工具"), ensure_ascii=False))
+        return
+    if preferred in profiles and profile_is_retired(profiles[preferred]):
+        print(json.dumps(native_selection("配置中的旧构建工具已移除，改用当前会话直接构建"), ensure_ascii=False))
+        return
     candidates = []
     if preferred:
         candidates.append(preferred)
@@ -334,6 +351,7 @@ def cmd_recommend(args: argparse.Namespace) -> None:
             name
             for name in candidates
             if name in profiles
+            and not profile_is_retired(profiles[name])
             and not profile_matches_current_host(profiles[name], args.current_host)
             and profile_available(profiles[name])
         ),
