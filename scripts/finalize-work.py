@@ -13,6 +13,7 @@ from pathlib import Path
 
 from _lib.work_contract import WorkContractError, normalize_work_contract
 from _lib.final_validation import LIMITABLE_CHECKS, command_statuses, exception_allows
+from _lib.agent_roles import build_receipt, new_run_id, validate_backend
 
 
 COMMAND_CHECKS = {"tests": "test", "typecheck": "typecheck", "build": "build"}
@@ -288,11 +289,22 @@ def write_finalization_marker(
         required_phases.append("semantic-validation")
     required_phases.extend(["landing", "documentation"])
     existing_judge_binding = None
+    existing_verifier_binding = None
     marker_path = finalization_marker_path(audit_dir)
     if marker_path.is_file():
         existing = read_json(marker_path)
         if isinstance(existing.get("judge_binding"), dict):
             existing_judge_binding = existing["judge_binding"]
+        if isinstance(existing.get("verifier_binding"), dict):
+            existing_verifier_binding = existing["verifier_binding"]
+    existing_updated_at = None
+    if marker_path.is_file():
+        existing_marker = read_json(marker_path)
+        if (
+            existing_marker.get("implementation_commit") == build.get("implementation_commit")
+            and existing_marker.get("source_hash") == build.get("approved_source_hash")
+        ):
+            existing_updated_at = existing_marker.get("updated_at")
     write_json(
         marker_path,
         {
@@ -309,9 +321,133 @@ def write_finalization_marker(
             "consumer_revision": git_revision(build_root),
             "judge_binding": existing_judge_binding
             or {"status": "not_attached", "evidence_digest": None, "run_id": None},
-            "updated_at": now_iso(),
+            "verifier_binding": existing_verifier_binding
+            or {"status": "not_attached", "run_id": None},
+            "updated_at": existing_updated_at or now_iso(),
         },
     )
+
+
+def update_verifier_binding(
+    audit_dir: Path,
+    build: dict,
+    args: argparse.Namespace,
+) -> dict:
+    marker_path = finalization_marker_path(audit_dir)
+    marker = read_json(marker_path)
+    existing = marker.get("verifier_binding")
+    if (
+        isinstance(existing, dict)
+        and existing.get("status") in {"pass", "degraded"}
+        and existing.get("implementation_commit") == build.get("implementation_commit")
+        and existing.get("source_hash") == build.get("approved_source_hash")
+    ):
+        return existing
+    backend = args.agent_backend or "main-fallback"
+    try:
+        validate_backend(backend)
+    except ValueError as exc:
+        raise SystemExit(str(exc)) from exc
+    host = args.agent_host or "unknown"
+    if backend == "main-fallback" and not args.agent_host:
+        host = "main-controller"
+    fallback_reason = args.agent_reason or "child/external agent unavailable; main controller fallback"
+    receipt = build_receipt(
+        role="verifier",
+        backend=backend,
+        run_id=args.agent_run_id or new_run_id("verifier"),
+        implementation_commit=str(build.get("implementation_commit") or ""),
+        source_hash=str(build.get("approved_source_hash") or ""),
+        host=host,
+        model=args.agent_model or "runtime",
+        status="degraded" if backend == "main-fallback" else "pass",
+        reason=fallback_reason if backend == "main-fallback" else None,
+    )
+    marker["verifier_binding"] = receipt
+    marker["updated_at"] = now_iso()
+    write_json(marker_path, marker)
+    return receipt
+
+
+def ensure_audit_binding(
+    script_dir: Path,
+    build_root: Path,
+    audit_dir: Path,
+    verifier: dict,
+) -> None:
+    binding_path = audit_dir / "audit-binding.json"
+    if binding_path.is_file():
+        binding = read_json(binding_path)
+        finalize = binding.get("finalize") or {}
+        result = run(
+            [
+                sys.executable,
+                str(script_dir / "finalize-audit-binding.py"),
+                "verify",
+                "--binding",
+                str(binding_path),
+                "--consumer-root",
+                str(build_root),
+                "--pre-landing",
+            ],
+            cwd=build_root,
+            capture=True,
+        )
+        if (
+            result.returncode == 0
+            and (binding.get("judge") or {}).get("status") == "pass"
+            and finalize.get("implementation_commit") == verifier.get("implementation_commit")
+            and finalize.get("source_hash") == verifier.get("source_hash")
+        ):
+            return
+    audit_rel = audit_dir.relative_to(build_root).as_posix()
+    command = [
+        sys.executable,
+        str(script_dir / "finalize-audit-binding.py"),
+        "bind",
+        "--consumer-root",
+        str(build_root),
+        "--audit-dir",
+        audit_rel,
+        "--framework-root",
+        str(script_dir.parent),
+        "--runner-run-id",
+        str(verifier["run_id"]),
+        "--runner-role",
+        "verifier",
+        "--runner-backend",
+        str(verifier["backend"]),
+        "--pre-landing",
+        "--replace",
+    ]
+    result = run(command, cwd=build_root, capture=True)
+    require_ok(result, "绑定 Verifier audit evidence")
+
+
+def audit_binding_has_judge(
+    script_dir: Path,
+    build_root: Path,
+    audit_dir: Path,
+) -> bool:
+    binding_path = audit_dir / "audit-binding.json"
+    if not binding_path.is_file():
+        return False
+    result = run(
+        [
+            sys.executable,
+            str(script_dir / "finalize-audit-binding.py"),
+            "verify",
+            "--binding",
+            str(binding_path),
+            "--consumer-root",
+            str(build_root),
+            "--pre-landing",
+            "--require-judge",
+        ],
+        cwd=build_root,
+        capture=True,
+    )
+    return result.returncode == 0
 
 
 def allow_limited_timing_phase(audit_dir: Path, phase: str) -> None:
@@ -769,20 +905,36 @@ def finalize(args: argparse.Namespace) -> int:
             )
         _, build = build_state(module_dir)
         missing = [name for name in checks if name not in evidence_names(build)]
+        if missing and any(name in semantic_checks for name in missing):
+            ensure_timing_running(
+                script_dir,
+                audit_dir,
+                "semantic-validation",
+                reuse_pass=resumable_attempt,
+            )
+        _, build = build_state(module_dir)
+        verifier = update_verifier_binding(audit_dir, build, args)
+        ensure_audit_binding(script_dir, build_root, audit_dir, verifier)
+        missing = [name for name in checks if name not in evidence_names(build)]
         if missing:
-            if any(name in semantic_checks for name in missing):
+            print(
+                "机械验收已完成；仍需 Verifier/Judge 完成并记录：" + "、".join(missing),
+                file=sys.stderr,
+            )
+            return 3
+        if semantic_checks:
+            if not audit_binding_has_judge(script_dir, build_root, audit_dir):
                 ensure_timing_running(
                     script_dir,
                     audit_dir,
                     "semantic-validation",
                     reuse_pass=resumable_attempt,
                 )
-            print(
-                "机械验收已完成；仍需当前主控完成并记录：" + "、".join(missing),
-                file=sys.stderr,
-            )
-            return 3
-        if semantic_checks:
+                print(
+                    "机械与语义证据已生成；仍需独立 Judge 绑定当前 evidence digest。",
+                    file=sys.stderr,
+                )
+                return 3
             ensure_timing_running(
                 script_dir,
                 audit_dir,
@@ -832,6 +984,11 @@ def parser() -> argparse.ArgumentParser:
     result.add_argument("--coverage-plan")
     result.add_argument("--coverage-artifacts")
     result.add_argument("--coverage-confirm-state", action="append", default=[])
+    result.add_argument("--agent-backend", choices=["child", "external", "main-fallback"])
+    result.add_argument("--agent-run-id")
+    result.add_argument("--agent-host")
+    result.add_argument("--agent-model")
+    result.add_argument("--agent-reason")
     result.add_argument("--retry-failed", action="store_true")
     result.add_argument("--no-land", action="store_true")
     return result

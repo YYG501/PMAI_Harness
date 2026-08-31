@@ -190,21 +190,52 @@ def effective_default_profile(config: dict[str, Any]) -> str:
     if default in RETIRED_BUILDER_EXECUTORS or (
         profile is not None and profile_is_retired(profile)
     ):
-        return "native"
+        return "native-child"
+    if default == "native":
+        return "native-child"
     return default
 
 
-def native_selection(reason: str) -> dict[str, Any]:
+def native_child_selection(reason: str) -> dict[str, Any]:
     return {
-        "builder_profile": "native",
+        "builder_profile": "native-child",
         "executor": "native",
-        "display": "当前会话直接构建",
-        "builder": {"model": "runtime", "thinking": "adaptive"},
+        "display": "当前主控后台构建",
+        "builder": {
+            "model": "runtime",
+            "thinking": "adaptive",
+            "execution_mode": "child",
+        },
         "selection_reason": reason,
     }
 
 
-def native_list_row() -> dict[str, Any]:
+def native_fallback_selection(reason: str) -> dict[str, Any]:
+    return {
+        "builder_profile": "native",
+        "executor": "native",
+        "display": "当前会话直接构建",
+        "builder": {
+            "model": "runtime",
+            "thinking": "adaptive",
+            "execution_mode": "main-fallback",
+            "fallback_reason": reason,
+        },
+        "selection_reason": reason,
+    }
+
+
+def native_child_list_row(default: bool = False) -> dict[str, Any]:
+    return {
+        "name": "native-child",
+        "executor": "native",
+        "display": "当前主控后台构建",
+        "default": default,
+        "available": True,
+    }
+
+
+def native_fallback_list_row() -> dict[str, Any]:
     return {
         "name": "native",
         "executor": "native",
@@ -222,7 +253,7 @@ def cmd_list(args: argparse.Namespace) -> None:
                 {
                     "default_profile": "",
                     "current_host": args.current_host,
-                    "profiles": [native_list_row()],
+                    "profiles": [native_child_list_row(True), native_fallback_list_row()],
                 },
                 ensure_ascii=False,
             )
@@ -230,7 +261,10 @@ def cmd_list(args: argparse.Namespace) -> None:
         return
     config = load_builder_config(config_path)
     default_profile = effective_default_profile(config)
-    rows = [dict(native_list_row(), default=default_profile == "native")]
+    rows = [
+        native_child_list_row(default=default_profile == "native-child"),
+        native_fallback_list_row(),
+    ]
     for name, profile in config["profiles"].items():
         if profile_is_retired(profile) or profile_matches_current_host(profile, args.current_host):
             continue
@@ -259,8 +293,12 @@ def cmd_list(args: argparse.Namespace) -> None:
 
 
 def cmd_resolve(args: argparse.Namespace) -> None:
-    def emit_native() -> None:
-        builder: dict[str, Any] = {"model": "runtime", "thinking": "adaptive"}
+    def emit_native_child() -> None:
+        builder: dict[str, Any] = {
+            "model": "runtime",
+            "thinking": "adaptive",
+            "execution_mode": "child",
+        }
         if args.model:
             builder["model"] = args.model
         if args.thinking:
@@ -268,9 +306,9 @@ def cmd_resolve(args: argparse.Namespace) -> None:
         print(
             json.dumps(
                 {
-                    "builder_profile": "native",
+                    "builder_profile": "native-child",
                     "executor": "native",
-                    "display": "当前会话直接构建",
+                    "display": "当前主控后台构建",
                     "builder": builder,
                 },
                 ensure_ascii=False,
@@ -278,15 +316,23 @@ def cmd_resolve(args: argparse.Namespace) -> None:
         )
 
     profile_name = args.profile
+    if profile_name == "native-child":
+        emit_native_child()
+        return
     if profile_name == "native":
-        emit_native()
+        fallback = native_fallback_selection("PM 明确选择当前会话直接构建")
+        if args.model:
+            fallback["builder"]["model"] = args.model
+        if args.thinking:
+            fallback["builder"]["thinking"] = args.thinking
+        print(json.dumps(fallback, ensure_ascii=False))
         return
     config = load_builder_config(Path(args.config))
     profile_name = profile_name or effective_default_profile(config)
     if not profile_name:
         raise SystemExit("builder.default_profile 为空，请明确指定 --profile")
-    if profile_name == "native":
-        emit_native()
+    if profile_name == "native-child":
+        emit_native_child()
         return
     profile = config["profiles"].get(profile_name)
     if profile is not None and profile_matches_current_host(profile, args.current_host):
@@ -294,6 +340,7 @@ def cmd_resolve(args: argparse.Namespace) -> None:
             f"构建工具不能与当前主控相同: {profile_display(profile_name, profile)}"
         )
     resolved = resolve_profile(config, profile_name, args.model, args.thinking)
+    resolved["builder"]["execution_mode"] = "external"
     print(json.dumps(resolved, ensure_ascii=False))
 
 
@@ -328,7 +375,7 @@ def cmd_recommend(args: argparse.Namespace) -> None:
     if not config_path.exists():
         print(
             json.dumps(
-                native_selection("旧消费仓没有 builder 配置，推荐当前会话直接构建"),
+                native_child_selection("旧消费仓没有 builder 配置，推荐当前主控后台构建"),
                 ensure_ascii=False,
             )
         )
@@ -337,10 +384,10 @@ def cmd_recommend(args: argparse.Namespace) -> None:
     profiles = config["profiles"]
     preferred = config.get("target_profiles", {}).get(target) or config["default_profile"]
     if not preferred or preferred == "native":
-        print(json.dumps(native_selection("当前会话直接构建是新 build 默认工具"), ensure_ascii=False))
+        print(json.dumps(native_child_selection("当前主控后台构建是新 build 默认工具"), ensure_ascii=False))
         return
     if preferred in profiles and profile_is_retired(profiles[preferred]):
-        print(json.dumps(native_selection("配置中的旧构建工具已移除，改用当前会话直接构建"), ensure_ascii=False))
+        print(json.dumps(native_child_selection("配置中的旧构建工具已移除，改用当前主控后台构建"), ensure_ascii=False))
         return
     candidates = []
     if preferred:
@@ -370,7 +417,7 @@ def cmd_recommend(args: argparse.Namespace) -> None:
         else:
             resolved["selection_reason"] = f"首选档位不可用，推荐仓库内可用的 {selected}"
     else:
-        resolved = native_selection("没有可用的外部构建工具，推荐当前会话直接构建")
+        resolved = native_child_selection("没有可用的外部构建工具，推荐当前主控后台构建")
     print(json.dumps(resolved, ensure_ascii=False))
 
 

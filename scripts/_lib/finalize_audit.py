@@ -99,10 +99,16 @@ def resolve_audit_dir(consumer_root: Path, raw: str) -> Path:
     return resolved
 
 
-def audit_file_hashes(audit_dir: Path, binding_name: str = "audit-binding.json") -> dict[str, str]:
+def audit_file_hashes(
+    audit_dir: Path,
+    binding_name: str = "audit-binding.json",
+    excluded_names: set[str] | None = None,
+) -> dict[str, str]:
+    excluded = {binding_name, "semantic-judge.json"}
+    excluded.update(excluded_names or set())
     result: dict[str, str] = {}
     for path in sorted(audit_dir.rglob("*")):
-        if not path.is_file() or path.name == binding_name:
+        if not path.is_file() or path.name in excluded:
             continue
         relative = path.relative_to(audit_dir).as_posix()
         result[relative] = file_digest(path)
@@ -119,6 +125,7 @@ def validate_finalize_audit(
     audit_dir: Path,
     *,
     binding_name: str = "audit-binding.json",
+    complete: bool = True,
 ) -> dict[str, Any]:
     marker = read_object(audit_dir / "finalize-run.json", "finalize marker")
     if marker.get("schema_version") != 1 or marker.get("runner") != "finalize-work":
@@ -146,6 +153,12 @@ def validate_finalize_audit(
     required = marker.get("required_timing_phases") or []
     if not isinstance(required, list) or any(not isinstance(item, str) for item in required):
         raise ValueError("finalize marker.required_timing_phases 不合法。")
+    if not complete:
+        required = [
+            phase
+            for phase in required
+            if phase in {"currentness", "final-validation", "browser-acceptance"}
+        ]
     allowed_limited = set(marker.get("allowed_limited_timing_phases") or [])
     missing: list[str] = []
     running: list[str] = []

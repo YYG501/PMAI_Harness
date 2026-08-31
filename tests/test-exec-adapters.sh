@@ -79,7 +79,10 @@ test_builder_profile_helper_resolves_pm_choice() {
   assert_file_contains /tmp/builder-profile.$$ "OpenCode（deepseek-v4-flash, max）" "OpenCode display should use display_model" || {
     rm -f /tmp/builder-profile.$$ /tmp/builder-profile.err.$$; return;
   }
-  assert_file_contains /tmp/builder-profile.$$ "当前会话直接构建" "builder list should always expose native execution" || {
+  assert_file_contains /tmp/builder-profile.$$ "当前主控后台构建" "builder list should expose the native child default" || {
+    rm -f /tmp/builder-profile.$$ /tmp/builder-profile.err.$$; return;
+  }
+  assert_file_contains /tmp/builder-profile.$$ "当前会话直接构建" "builder list should expose the explicit fallback option" || {
     rm -f /tmp/builder-profile.$$ /tmp/builder-profile.err.$$; return;
   }
   if grep -qE 'Kimi Code|Cursor Agent|kimi-code|cursor-agent' /tmp/builder-profile.$$; then
@@ -135,7 +138,7 @@ PY
 }
 
 test_builder_profile_recommends_target_and_handles_legacy_missing_config() {
-  start_test "builder-profile: recommend uses target preference and missing config falls back to native"
+  start_test "builder-profile: recommend uses target preference and missing config falls back to native child"
   _setup_fake_executor
   _install_fake_command codex
   _install_fake_command claude
@@ -184,7 +187,9 @@ PY
 import json, sys
 data = json.load(open(sys.argv[1]))
 assert data["current_host"] == "codex"
-assert [item["executor"] for item in data["profiles"]] == ["native", "claude-code"]
+assert [item["name"] for item in data["profiles"]] == ["native-child", "native", "claude-code"]
+assert data["profiles"][0]["display"] == "当前主控后台构建"
+assert data["profiles"][1]["display"] == "当前会话直接构建"
 PY
     _fail "available list should expose native plus usable external tools except the current host"
     rm -f /tmp/builder-profile.$$ /tmp/builder-profile-list.$$; _teardown_fake_executor; return
@@ -207,10 +212,9 @@ YAML
   python3 - /tmp/builder-profile-list.$$ <<'PY' || {
 import json, sys
 data = json.load(open(sys.argv[1]))
-assert len(data["profiles"]) == 1
-assert data["profiles"][0]["executor"] == "native"
-assert data["profiles"][0]["display"] == "当前会话直接构建"
-assert "fallback" not in data["profiles"][0]
+assert [item["name"] for item in data["profiles"]] == ["native-child", "native"]
+assert data["profiles"][0]["display"] == "当前主控后台构建"
+assert data["profiles"][1]["display"] == "当前会话直接构建"
 PY
     _fail "current-session build should remain available when the current host is the only configured tool"
     rm -f /tmp/builder-profile.$$ /tmp/builder-profile-list.$$; _teardown_fake_executor; return
@@ -227,11 +231,12 @@ PY
   python3 - /tmp/builder-profile.$$ <<'PY' || {
 import json, sys
 data = json.load(open(sys.argv[1]))
-assert data["builder_profile"] == "native"
+assert data["builder_profile"] == "native-child"
 assert data["executor"] == "native"
-assert data["display"] == "当前会话直接构建"
+assert data["display"] == "当前主控后台构建"
+assert data["builder"]["execution_mode"] == "child"
 PY
-    _fail "missing legacy config should fall back to native"
+    _fail "missing legacy config should fall back to native child"
     rm -f /tmp/builder-profile.$$; _teardown_fake_executor; return
   }
   "$python_bin" "$BUILDER_PROFILE" list "$T/missing.yml" \
@@ -240,8 +245,10 @@ PY
 import json, sys
 data = json.load(open(sys.argv[1]))
 assert data["default_profile"] == ""
+assert [item["name"] for item in data["profiles"]] == ["native-child", "native"]
 assert data["profiles"][0]["executor"] == "native"
-assert "fallback" not in data["profiles"][0]
+assert data["profiles"][0]["display"] == "当前主控后台构建"
+assert data["profiles"][1]["display"] == "当前会话直接构建"
 PY
     _fail "missing legacy config should still render a native-only option list"
     rm -f /tmp/builder-profile.$$ /tmp/builder-profile-list.$$; _teardown_fake_executor; return
@@ -253,6 +260,7 @@ import json, sys
 data = json.load(open(sys.argv[1]))
 assert data["builder_profile"] == "native"
 assert data["display"] == "当前会话直接构建"
+assert data["builder"]["execution_mode"] == "main-fallback"
 PY
     _fail "native fallback should resolve without a legacy config file"
     rm -f /tmp/builder-profile.$$ /tmp/builder-profile-list.$$ /tmp/builder-profile-native.$$; _teardown_fake_executor; return
@@ -263,8 +271,8 @@ PY
   pass_test
 }
 
-test_builder_profile_defaults_native_and_rejects_retired_profiles() {
-  start_test "builder-profile: native 是默认推荐，Kimi/Cursor 不再可选"
+test_builder_profile_defaults_native_child_and_rejects_retired_profiles() {
+  start_test "builder-profile: native-child 是默认推荐，Kimi/Cursor 不再可选"
   _setup_fake_executor
   _install_fake_command kimi
   _install_fake_command cursor-agent
@@ -298,9 +306,10 @@ YAML
   python3 - /tmp/builder-profile.$$ <<'PY' || {
 import json, sys
 data = json.load(open(sys.argv[1]))
-assert data["builder_profile"] == "native"
+assert data["builder_profile"] == "native-child"
 assert data["executor"] == "native"
 assert "已移除" in data["selection_reason"]
+assert data["builder"]["execution_mode"] == "child"
 PY
     _fail "retired default profiles should fall back to native"
     rm -f /tmp/builder-profile.$$; _teardown_fake_executor; return
@@ -316,9 +325,10 @@ PY
   python3 - /tmp/builder-profile-resolve-default.$$ <<'PY' || {
 import json, sys
 data = json.load(open(sys.argv[1]))
-assert data["builder_profile"] == "native"
+assert data["builder_profile"] == "native-child"
 assert data["executor"] == "native"
-assert data["display"] == "当前会话直接构建"
+assert data["display"] == "当前主控后台构建"
+assert data["builder"]["execution_mode"] == "child"
 PY
     _fail "resolve without an explicit profile should fall back from a retired default"
     rm -f /tmp/builder-profile.$$ /tmp/builder-profile-list.$$ /tmp/builder-profile-resolve-default.$$; _teardown_fake_executor; return
@@ -463,10 +473,10 @@ test_build_skill_recommends_then_confirms_builder_profile() {
 
   assert_file_contains "$BUILD_SKILL" "builder-profile.py\" recommend" "build should recommend builder profiles" || return
   assert_file_contains "$BUILD_SKILL" "claude-code / codex / opencode" "current host mapping should expose active builders" || return
-  assert_file_contains "$BUILD_SKILL" "Claude Code、Codex 和 OpenCode 可以作为外部构建工具" "build should expose active external builders" || return
-  assert_file_contains "$BUILD_SKILL" "新 build 的默认组合是“独立环境 + 当前会话直接构建”" "build should document the default combination" || return
+  assert_file_contains "$BUILD_SKILL" "Claude Code、Codex 和 OpenCode 仍可作为外部 Builder" "build should expose active external builders" || return
+  assert_file_contains "$BUILD_SKILL" "新 build 的默认组合是“独立环境 + 当前主控后台构建（native-child）”" "build should document the default combination" || return
   assert_file_contains "$BUILD_SKILL" "必须排除当前主控对应的外部 profile" "build should exclude the current host profile" || return
-  assert_file_contains "$BUILD_SKILL" "当前会话直接构建”始终" "build should always expose native execution" || return
+  assert_file_contains "$BUILD_SKILL" "始终展示" "build should document native child and fallback options" || return
   assert_file_contains "$BUILD_SKILL" "本机可用工具" "build should expose available tools in the first card" || return
   assert_file_contains "$BUILD_SKILL" "只有 PM 选择“按这个方案构建”才继续" "build must wait for PM confirmation" || return
   assert_file_contains "$BUILD_SKILL" "不能静默替换 PM 已确认的工具" "builder fallback must be reconfirmed" || return
@@ -480,7 +490,7 @@ test_build_skill_confirms_only_environment_and_tool_before_editing() {
   assert_file_contains "$BUILD_SKILL" "缺授权收据不能自动修复" "legacy design checkpoint must not fabricate PM authorization" || return
   assert_file_contains "$BUILD_SKILL" "工作环境（已选）：<独立环境 | 继续当前独立环境 | 当前环境>" "confirmation card should expose selected environment" || return
   assert_file_contains "$BUILD_SKILL" "可选环境：" "confirmation card should expose environment choices" || return
-  assert_file_contains "$BUILD_SKILL" "构建工具（已选）：<工具名（model, thinking） | 当前会话直接构建>" "confirmation card should expose selected builder" || return
+  assert_file_contains "$BUILD_SKILL" "构建工具（已选）：<当前主控后台构建 | 工具名（model, thinking） | 当前会话直接构建（降级）>" "confirmation card should expose selected builder" || return
   assert_file_contains "$BUILD_SKILL" "本机可用工具：" "confirmation card should expose all usable builders" || return
   assert_file_contains "$BUILD_SKILL" "卡片中禁止出现项目类型、验收方案" "confirmation card should hide project type and acceptance" || return
   assert_file_contains "$BUILD_SKILL" "当前新合同为 v5" "build should write the canonical two-lane implementation contract" || return
@@ -519,7 +529,7 @@ test_consumer_entry_documents_native_option() {
 
   assert_file_contains "$AGENTS_TMPL" "“当前会话直接构建”始终作为有效选项" "AGENTS should always expose native execution" || return
   assert_file_contains "$AGENTS_TMPL" "外部构建工具候选必须排除当前主控对应的 profile" "AGENTS should exclude the current host profile" || return
-  assert_file_contains "$AGENTS_TMPL" "重新让 PM 确认" "AGENTS should require reconfirmation" || return
+  assert_file_contains "$AGENTS_TMPL" "不得静默替换已确认工具" "AGENTS should prohibit silent builder replacement" || return
   pass_test
 }
 
@@ -555,9 +565,9 @@ test_project_definition_owns_port_placeholder() {
 test_config_template_has_builder_profiles() {
   start_test "config template: builder profiles include compact model/thinking choices"
 
-  assert_file_contains "$CONFIG_TMPL" "default_profile: native" "config should default to current-session build" || return
-  assert_file_contains "$CONFIG_TMPL" "prototype_profile: native" "prototype builds should default to current-session build" || return
-  assert_file_contains "$CONFIG_TMPL" "product_profile: native" "product builds should default to current-session build" || return
+  assert_file_contains "$CONFIG_TMPL" "default_profile: native-child" "config should default to native child build" || return
+  assert_file_contains "$CONFIG_TMPL" "prototype_profile: native-child" "prototype builds should default to native child build" || return
+  assert_file_contains "$CONFIG_TMPL" "product_profile: native-child" "product builds should default to native child build" || return
   assert_file_contains "$CONFIG_TMPL" "model: gpt-5.4" "config should define Codex model" || return
   assert_file_contains "$CONFIG_TMPL" "thinking: high" "config should define thinking depth" || return
   assert_file_contains "$CONFIG_TMPL" "model: opencode-go/deepseek-v4-flash" "config should set OpenCode DeepSeek model" || return
@@ -596,7 +606,7 @@ test_build_skill_avoids_machine_bound_absolute_path_rules() {
 test_adapter_files_are_executable
 test_builder_profile_helper_resolves_pm_choice
 test_builder_profile_recommends_target_and_handles_legacy_missing_config
-test_builder_profile_defaults_native_and_rejects_retired_profiles
+test_builder_profile_defaults_native_child_and_rejects_retired_profiles
 test_builder_profile_rejects_removed_executor
 test_claude_code_adapter_invokes_print_mode
 test_opencode_adapter_invokes_run_with_profile_args

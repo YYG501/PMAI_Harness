@@ -26,6 +26,7 @@ VALID_EXECUTORS = {
     "manual",
     "native",
 }
+VALID_BUILDER_EXECUTION_MODES = {"child", "external", "main-fallback"}
 VALID_TARGET_KINDS = {"prototype", "product"}
 VALID_DOCS_STATUSES = {"pending", "complete", "failed"}
 NEW_DELTA_KIND = "scoped-adjustment"
@@ -278,6 +279,15 @@ def validate_builder(builder: dict) -> None:
     overrides = builder.get("overrides")
     if overrides is not None and not isinstance(overrides, dict):
         raise SystemExit("builder.overrides 必须是对象")
+    execution_mode = builder.get("execution_mode")
+    if execution_mode is not None and execution_mode not in VALID_BUILDER_EXECUTION_MODES:
+        raise SystemExit(
+            "builder.execution_mode 不合法："
+            f"{execution_mode}（允许 {' / '.join(sorted(VALID_BUILDER_EXECUTION_MODES))}）"
+        )
+    fallback_reason = builder.get("fallback_reason")
+    if fallback_reason is not None and not isinstance(fallback_reason, str):
+        raise SystemExit("builder.fallback_reason 必须是字符串")
 
 
 def build_snapshot(args: argparse.Namespace) -> dict:

@@ -64,15 +64,17 @@ Proposal、Design、Build 共用这一份循环协议。它规定 Agent 每轮�
 
 ## 6. Build Loop Mapping
 
+Build 的执行角色固定分工：首次实现或大型重构由 Builder 完成；PM 定稿后的机械 final checks 由 Verifier 完成；`semantic_checks` 由默认 child、可外部替换的只读 Judge 完成。当前主控负责派发、回收、绑定证据、路由和 landing，不把自身判断伪装成独立角色。
+
 - **输入**：current `ready_to_build`、项目建造定义、build contract、目标与实现深度、当前 implementation commit、iteration/final evidence、replan candidate 和 PM 新反馈。
 - **允许动作**：只在批准目标内实现，运行当前车道的检查，记录绑定 commit/source hash 的 evidence；仅对不改变产品基线和模块模型的已批准小调整记录 scoped adjustment。
-- **验证**：每轮实现都先校验 currentness 和路径；快速车道只跑 iteration checks；PM 明确定稿后才冻结候选并运行 final checks；landing 与文档阶段分别复用现有 runner/checkpoint。
+- **验证**：每轮实现都先校验 currentness 和路径；快速车道只跑 iteration checks；PM 明确定稿后冻结候选，由 Verifier 运行 final checks；存在 `semantic_checks` 时，Judge 必须使用不同 `run_id`、精确覆盖全部 checks 并绑定同一 `evidence_digest`，通过后才可 `review-ready`；landing 与文档阶段分别复用现有 runner/checkpoint。
 - **UI 前置验证**：高风险布局改动在首次编辑前检查共享 primitive / cascade，完成后用 browser 的实际尺寸断言验证 computed result；这是一项附加证据，不新增生命周期状态，也不能替代最终 browser acceptance。
-- **当前阶段重试**：bug、样式、文案、局部交互偏差和验收发现的实现缺口执行 `retry_current`。纯验收缺口保留定稿意图并重跑失效的 final evidence；PM 新反馈先清定稿意图再重新分流。
+- **当前阶段重试**：bug、样式、文案、局部交互偏差和验收发现的实现缺口执行 `retry_current`。纯验收缺口保留定稿意图并重跑失效的 final evidence，再重新派发 Verifier/Judge；PM 新反馈先清定稿意图再重新分流。
 - **返回上游**：产品方向变化执行 `route_proposal`；模块模型、关键路径、验收目标或 prototype real edge 变化执行 `route_design`；两者都不得写 accepted delta。
 - **等待 PM**：新 build 的工作环境/构建工具确认、不可逆动作、多个 active build 无法唯一定位时执行 `await_pm_decision`。
 - **进入下游**：PM 明确定稿且冻结候选的全部新鲜证据通过后，执行 `advance → final_check/landing`；没有明确授权不得提前进入。
-- **恢复**：`final_check` 只补缺失验收/landing，`landed + docs_pending` 只补文档，`complete` 不再恢复。
+- **恢复**：`final_check` 只补缺失验收、Verifier/Judge 证据或 landing，`landed + docs_pending` 只补文档，`complete` 不再恢复。child/external 不可用时允许主控接管，但必须标记 `main-fallback`、`independent=false` 和 Verifier `degraded`，不得宣称独立验收。
 
 ## 7. 固定场景
 
@@ -115,7 +117,7 @@ Proposal、Design、Build 共用这一份循环协议。它规定 Agent 每轮�
 ## 9. 明确不做
 
 - 不让 Agent 自己发明新阶段、动态拓扑或开放式工作流。
-- 不默认引入多 Agent；Builder 仍只是 Build 的受限执行器，主控负责验证与路由。
+- Build 默认使用当前主控的 `native-child` Builder；Verifier 与 Judge 是定稿验收的独立角色，不改变 lifecycle。主控负责验证编排与路由；child/external 不可用时才允许 `main-fallback` 降级，并显式标记非独立执行。
 - 不把 Goal Engineering 变成另一份目标状态；目标继续来自 Proposal、模块规格和当前 PM 请求。
 - 不把 Prompt 对比、模型成功率或策略优劣伪装成静态合同结论；这些问题以后进入 Session Eval。
 - 不为复用而抹平 Proposal、Design、Build 的业务差异；共享的是循环纪律，不是产物和权限。

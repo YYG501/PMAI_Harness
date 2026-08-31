@@ -52,6 +52,9 @@ def main() -> int:
         "pass": passed,
         "reason": "independent finalize audit review" if passed else "; ".join(issues),
         "provenance": {
+            "role": "judge",
+            "backend": "external",
+            "independent": True,
             "host": "pmai-finalize-readonly-judge",
             "model": "deterministic-finalize-audit-v1",
             "run_id": f"finalize-judge-{evidence_digest_value[:16]}",

@@ -208,7 +208,7 @@ Proposal 提供产品级判断，模块 brief 只界定本轮目标；两者都�
 
 只要本轮包含 Web 页面，主动浏览器能力就是验收硬条件。gstack 可以缺席初始化，也可以由其它 browser/Playwright 适配器替代；但没有任何工具实际打开并操作页面时，UI final check 不能通过。
 
-开工前 AI 根据项目定义、本机能力和当前主控推荐工作环境与构建工具，并在一张确认卡中同时列出两项的全部有效选择。新 build 的默认组合是“独立环境 + 当前会话直接构建”；PM 仍可改选其它可用外部 Builder。外部构建工具候选排除当前主控对应的 profile，避免 Codex 再启动 Codex、Claude Code 再启动 Claude Code 或 OpenCode 再启动 OpenCode；当前会话亲自完成构建不是递归调用，因此始终可选。Kimi Code 与 Cursor Agent 不再进入新 build 候选，历史 adapter/合同仅保留恢复兼容。确认卡不展示项目类型、验收方案或内部合同。外部 builder 只用于首次实现或大型重构；active build 内的文案、布局、按钮和局部交互由当前会话直接处理。
+开工前 AI 根据项目定义、本机能力和当前主控推荐工作环境与构建工具，并在一张确认卡中同时列出两项的全部有效选择。新 build 的默认组合是“独立环境 + 当前主控后台 native-child Builder”；PM 仍可改选其它可用外部 Builder，或在 child 不可用时明确选择当前会话直接构建作为 `main-fallback`。外部构建工具候选排除当前主控对应的 profile，避免 Codex 再启动 Codex、Claude Code 再启动 Claude Code 或 OpenCode 再启动 OpenCode。Kimi Code 与 Cursor Agent 不再进入新 build 候选，历史 adapter/合同仅保留恢复兼容。确认卡不展示项目类型、验收方案或内部合同。外部 Builder 只用于首次实现或大型重构；active build 内的文案、布局、按钮和局部交互由当前主控直接处理。PM 定稿后由 Verifier 执行机械 final checks，有 semantic checks 时再由独立 Judge 只读验收并绑定同一 evidence digest；child / 外部能力不可用时的主控接管必须标记为非独立降级执行。
 
 PM 看结果期间走快速迭代车道：复用同一个 dev server 和浏览器连接，每轮只做热更新、typecheck 与当前页面/受影响交互走查，完成后先回“已修改，可刷新查看”。build contract v5 把验收档案拆成 `iteration_checks / final_checks`，并只保留一个 build lifecycle 写入位置；PM 明确说“定稿 / 可以提交 / 可以合并”前，机器不允许写 final evidence 或生成 `review-ready`。小改 2–5 分钟、交互改动 5–10 分钟是 time-to-preview 目标和超时预警，不是阻断门。
 

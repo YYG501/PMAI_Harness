@@ -6,6 +6,13 @@
 - 正常路径只跑三道门：一次代码验证、一次批准范围/规格覆盖、一次受影响体验批次。
 - 真实构建缺陷、浏览器失败、merge 冲突或 PM 新反馈立即退出/重置 10 分钟目标，不得播报成正常路径成功。
 
+### 角色隔离
+
+- **Verifier** 是 finalization runner 的执行角色：负责 currentness、命令、浏览器、范围和边界等机械检查，并生成绑定当前 `implementation_commit + source_hash` 的 receipt 与 pre-landing audit binding。
+- **Judge** 默认由当前主控派发 child（也可使用外部 backend）作为独立只读语义验收角色：只消费 Verifier 已生成的 evidence，逐项覆盖 `finalize-run.json` 的 `semantic_checks`，以同一 `evidence_digest` attach `semantic-judge.json`。Judge 必须使用不同于 Verifier 的 `run_id`，不得修改实现或机械 evidence。
+- **当前主控** 只负责编排：接收 PM 定稿授权、派发/回收 Verifier 与 Judge、校验 role/backend/run id/digest、处理失败路由、推进 lifecycle、landing 和文档同步。主控不把自己的语义判断标成独立 Judge。
+- 新 build 默认使用 `native-child` backend。若 child 或外部执行能力不可用而由当前主控接管，必须标记 `backend=main-fallback`、`independent=false`；Verifier receipt 为 `status=degraded` 并记录降级原因。该结果属于“非独立降级执行”，不能对外宣称独立验收。
+
 ## 统一入口
 
 PM 明确定稿后调用：
@@ -16,6 +23,8 @@ python3 "$PMAI_HOME/scripts/finalize-work.py" \
   <Web 项目追加 --browser-manifest "$BUILD_DIR/<build.audit_dir>/browser-manifest.json"> \
   <有结构化 coverage 时追加 --coverage-plan "<checks-spec.json>" --coverage-artifacts "<页面抓取目录>"，并逐项追加 --coverage-confirm-state "<check id>">
 ```
+
+该命令在 Verifier 的 child 或外部执行上下文中运行；调用时传入 `--agent-backend child|external` 及该次 `--agent-run-id`（可附 `--agent-host/--agent-model`）。未能派发 child/外部 Verifier 时才省略这些参数，由当前主控自动以 `main-fallback` 接管并写入降级原因。
 
 宿主 hook 同时把“可以提交 / 可以合并 / 定稿 / 这版可以了”等明确授权绑定到当前会话的短期 finalize intent。意图存在时，PreToolUse(Bash) 禁止先手工跑 test、typecheck、build、browser、commit 或 merge；只允许先进入下面的 candidate / resumable runner，以及 runner 返回后明确要求的 evidence checkpoint。该 intent 不新增 lifecycle 状态，生命周期仍以 `.work-meta.json` 和 runner artifact 为准。
 
@@ -32,7 +41,7 @@ python3 "$PMAI_HOME/scripts/finalize-candidate.py" \
 
 已经进入 `final_check / landed / documenting` 的中断恢复继续直接调用 `finalize-work.py`，避免把恢复状态重新写回 `iterating`。
 
-runner 按 v4+ lifecycle 续跑并自动完成 currentness、隔离命令验证、浏览器批次、coverage evidence（提供输入时）、evidence 记录、review-ready、accept 和 landing。已经通过且仍绑定同一 commit/source hash 的机械项不重复执行。
+runner 按 v4+ lifecycle 续跑并自动完成 currentness、隔离命令验证、浏览器批次、coverage evidence（提供输入时）和 Verifier evidence 记录；存在 semantic checks 时，等待独立 Judge attach 后才可进入 review-ready、accept 和 landing。已经通过且仍绑定同一 commit/source hash 的机械项不重复执行。
 
 统一入口的顺序是机器合同：`PM finalize intent → finalize-candidate.py → finalize-work.py`。任何手工检查、提交或 merge 都不能替代 candidate binding；`build-close` 只作为中断、冲突和 `landed/docs_pending` 的恢复入口。
 
@@ -42,7 +51,9 @@ runner 按 v4+ lifecycle 续跑并自动完成 currentness、隔离命令验证�
 
 新轮次的 currentness 使用 `source_hash_version=2`：模块规格/决定/讨论、输入证据、`PRODUCT.md`、`PRODUCT-RULES.md`、`DESIGN.md`、项目级冻结决定和 `project.yml` 是会使设计过期的依据；`PRODUCT-STATE.md`、`TODO.md`、模块索引仍进入 context pack 供理解，但单独变化不判本模块过期。没有版本字段的旧 ready/build 继续按 v1 全量范围恢复到本轮结束，不在升级时静默换 hash。
 
-返回码 `3` 表示机械项已完成，但仍缺当前主控必须语义判断的检查，例如 `prototype-boundary / coverage / scope-coverage / migration / security`。coverage 若有 checks-spec 与页面抓取证据，优先通过统一入口参数生成：机器 P0/P1 必须为零，`must_cover_states` 必须逐 check 显式确认；语义确认不能覆盖机器缺口。其它语义项按现有专用脚本或规格对账完成并 `record-evidence` 后，原命令重跑即可从准确位置继续且不重复 currentness。实现/source 变化或 PM 新反馈会把该次语义阶段记为失败并重置正常路径。不得把语义检查伪造成 runner 自动通过。
+返回码 `3` 表示机械项已完成，但仍缺 semantic checks 的独立 Judge 结果。Judge 读取 Verifier evidence 和规格，对 `prototype-boundary / coverage / scope-coverage / migration / security` 等语义项逐 check 给出结果；有 checks-spec 与页面抓取证据时用统一 coverage 参数，机器 P0/P1 必须为零，`must_cover_states` 必须逐 check 显式确认。Judge 的 `checks` 必须精确覆盖当前 `semantic_checks`，并以同一 evidence digest attach；语义判断不能覆盖机器缺口。实现/source 变化或 PM 新反馈会使该次语义阶段失效并重置正常路径。不得把语义检查伪造成 Verifier 或 runner 自动通过。
+
+主控收到 Judge JSON 后，用 `finalize-audit-binding.py attach-judge` 校验 role、不同 `run_id`、当前 evidence digest 和 semantic checks 的精确覆盖，并把结果保存为 audit 目录内的 `semantic-judge.json`；随后重新调用 `finalize-work.py`，由 runner 从当前 checkpoint 继续，不重复已通过的机械检查。
 
 runner 在 `final_check` 只提交当前模块 `.work-meta.json` 和对应 audit 目录，再进入 landing，其他 staged 路径会立即阻断。worktree 成功合入后会进入安全待清理队列，并立即输出 `FINALIZE_RESUME_MODULE=<main 模块路径>`；完成文档地图后用该 main 路径重跑，不能继续引用等待后台清理的 worktree 路径。
 

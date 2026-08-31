@@ -31,7 +31,7 @@ Claude Code: /pmai-init-project
 Codex:       $pmai-init-project
 ```
 
-OpenCode 不作为 PMAI 主控；它只会在 `/pmai-build` 中被完整主控选作外部 Builder。新 build 默认使用当前会话直接构建，并在独立环境中执行。
+OpenCode 不作为 PMAI 主控；它只会在 `/pmai-build` 中被完整主控选作外部 Builder。新 build 默认由当前主控派发 `native-child` Builder，并在独立环境中执行；当前会话直接构建只作为 child 不可用时的 `main-fallback` 降级。
 
 如果只是要验证骨架脚本，不走完整 PM 交互：
 
@@ -89,7 +89,7 @@ PMAI 不和 Claude Design、design-html 或 Claude Code 比"谁更快生成第�
 | **git** ≥ 2.30 | 必需 | worktree 是核心隔离机制 |
 | **python3** ≥ 3.10 | 必需 | scripts 大多用 python（zero-dep stdlib） |
 | **bash** ≥ 4 | 必需 | scripts 入口语言（macOS 自带 3.x 已知坑见 INVARIANTS） |
-| **codex CLI** | 可选 | `/pmai-build` 外部执行器；Codex 作为当前主控时不重复进入外部候选，但当前会话直接构建始终可选。新 build 默认使用当前会话直接构建 |
+| **codex CLI** | 可选 | `/pmai-build` 外部 Builder；Codex 作为当前主控时不重复进入外部候选。新 build 默认使用当前主控的 `native-child`，当前会话直接构建仅作 `main-fallback` |
 
 未检测到 gstack 时，`pmai install` / `pmai doctor --check` 只给 readiness warning，初始化和非 Web build 都不受阻塞。Web final checks 会在 PM 请求定稿后解析可用的主动浏览器适配器；完全没有适配器时 UI 验收阻塞，不能伪装通过。gstack 输出仍必须按 PMAI 规则接回 `DESIGN.md`、`mockups/`、evidence artifacts、`.pm-workflow/mirror/`、`docs/deliverables/` 或 `docs/engineering/`，不能把 `~/.gstack/...` 当长期真相源。
 

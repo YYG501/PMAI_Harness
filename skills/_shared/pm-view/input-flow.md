@@ -7,8 +7,8 @@
 当前统一链路：
 
 ```
-加载上下文 → design 讨论并编译建造依据 → build 指定对象
-→ PM 看结果、多轮修改 → PM 定稿 → 最终检查
+加载上下文 → design 讨论并编译建造依据 → Builder 执行 build 指定对象
+→ PM 看结果、多轮修改 → PM 定稿 → Verifier 机械检查 → Judge 语义验收
 → 合入 main → 基于 main 更新正式文档 → 一致性检查 → 完成
 ```
 
@@ -68,7 +68,7 @@ PM 上传的外部材料统一按类型归档到 `docs/inputs/<类别>/`，当�
 - 🟢 `project.yml` 的 target entrypoints（实现参考，可全文读小文件，大文件按结构局部读）
 - 🟢 `PRODUCT-RULES.md`（跨功能规则）
 
-build 不拆 task。项目类型、技术栈、入口和真实命令从 design 已提交的 `.pm-workflow/project.yml` 读取，默认验收在后台生成；AI 按项目定义、消费仓 builder 配置和本机可用性推荐工作环境与构建工具，由 PM 一次确认。
+build 不拆 task。项目类型、技术栈、入口和真实命令从 design 已提交的 `.pm-workflow/project.yml` 读取，默认验收在后台生成；新 build 默认由当前主控派发 `native-child` Builder（`execution_mode=child`），AI 按项目定义、消费仓 builder 配置和本机可用性推荐工作环境与构建工具，由 PM 一次确认。外部 Builder 仅用于首次实现或大型重构；小范围反馈由当前主控直接处理。
 
 ### PM 体验迭代与最终检查
 
@@ -78,7 +78,7 @@ build 不拆 task。项目类型、技术栈、入口和真实命令从 design �
 | prototype 视觉/行为 | `DESIGN.md` + 渲染结果 + 关键任务路径 | 目标为 prototype 或 product UI 时 🟢 |
 | product 工程行为 | 仓库已有测试、typecheck/build、接口/数据/迁移/权限检查 | 目标为 product 时 🟢 |
 
-每轮修改由当前会话优先处理，只跑 `iteration_checks` 并尽快给 PM 看，复用同一个 dev server 和浏览器连接，先回“已修改，可刷新查看”。PM 请求定稿前不运行 production build、不写 final evidence、不形成 `review-ready`；请求后才冻结 implementation commit，在 validation worktree 统一运行一次 `final_checks` 并生成验收就绪快照。此时还没有 landed diff，不生成文档影响地图或草案。`final_check` 只校验快照是否仍有效，不首次补实现或重跑同一版本的完整验收。检查只报告业务结果和真正需要 PM 拍的产品问题，不把工程过程写回 PM 视图。
+每轮修改由当前主控优先处理，只跑 `iteration_checks` 并尽快给 PM 看，复用同一个 dev server 和浏览器连接，先回“已修改，可刷新查看”。PM 请求定稿前不运行 production build、不写 final evidence、不形成 `review-ready`；请求后冻结 implementation commit，由 Verifier 在 validation worktree 运行一次 `final_checks` 并生成验收就绪快照。若存在 semantic checks，再由独立只读 Judge 逐项覆盖并绑定同一 evidence digest；Judge 通过前不得进入 `review-ready`。此时还没有 landed diff，不生成文档影响地图或草案。`final_check` 只校验快照和 Verifier/Judge 绑定是否仍有效，不首次补实现或重跑同一版本的完整验收。检查只报告业务结果和真正需要 PM 拍的产品问题，不把工程过程写回 PM 视图。
 
 ### 自动 finalize（实现先落 main，文档后更新）
 
@@ -92,7 +92,11 @@ build 不拆 task。项目类型、技术栈、入口和真实命令从 design �
 - 🟢 `DESIGN.md`（视觉规范类反馈）
 - 🟡 `docs/inputs/*/`（如本次工作引用过）
 
-PM 定稿后的同一 finalize 校验验收就绪快照后把实现合入 main，再根据 landed diff、build contract 和 accepted deltas 生成文档影响地图，只更新地图中的真相源。凡涉及 `spec.md` 的生成或修改，调用 `/pmai-spec-writing` 的“落地主线后的目标对账”模式；实现差异按符合、accepted delta、漏实现、无依据实现分类。文档失败保留 `landed/docs_pending`，纯 worktree 清理失败进入待清理队列，续跑不重复 merge；`/pmai-build-close` 只作为兼容与恢复入口。
+PM 定稿后的同一 finalize 由当前主控编排：先让 Verifier 校验验收就绪快照，再在有 semantic checks 时收集独立 Judge 结果；二者均通过且绑定同一 source hash、implementation commit 和 evidence digest 后才把实现合入 main。随后根据 landed diff、build contract 和 accepted deltas 生成文档影响地图，只更新地图中的真相源。凡涉及 `spec.md` 的生成或修改，调用 `/pmai-spec-writing` 的“落地主线后的目标对账”模式；实现差异按符合、accepted delta、漏实现、无依据实现分类。文档失败保留 `landed/docs_pending`，纯 worktree 清理失败进入待清理队列，续跑不重复 merge；`/pmai-build-close` 只作为兼容与恢复入口。
+
+### 角色与降级记录
+
+角色是执行边界，不是新的 lifecycle：Builder 只实现，Verifier 只做机械验收，Judge 只读做语义验收；Verifier/Judge 默认由当前主控派发 child，也可按确认结果使用外部 backend。当前主控负责 PM 沟通、产品/模块路由、生命周期推进、证据绑定、失败重试、landing 和文档同步。child 与外部能力都不可用时才由主控接管，所有 receipt 必须标记 `backend=main-fallback`、`independent=false`，Verifier 标记 `status=degraded` 并写明原因。该降级结果要在 PM 回执中说明“非独立降级执行”，不能当作独立验收宣传。
 
 **按需档：功能型规格文档（spec-writing）**
 PM 真要拿去研发评审时才生成，可覆盖一个或多个模块：
@@ -185,11 +189,15 @@ prototype 文件 > 500 行 → **禁止**整文件 Read。读法：
     │
     ▼
 build
-  对 spec.md 按项目级类型构建；PM 确认工作环境与构建工具，验收适配器后台确定
+  默认 native-child Builder 执行；PM 确认工作环境与构建工具，验收适配器后台确定
     │
     ▼
 PM 体验迭代
-  看结果、多轮修改；每轮快速检查，定稿后完整检查
+  当前主控直接处理小范围反馈；每轮快速检查
+    │
+    ▼
+定稿验收
+  Verifier 机械检查 → 独立 Judge 语义验收（有 semantic checks 时）
     │
     ▼
 自动 finalize

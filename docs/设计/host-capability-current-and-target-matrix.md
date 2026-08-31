@@ -3,7 +3,7 @@
 > 状态：Living document
 > 最近核对：2026-08-11
 > 已确认目标：Codex、Claude Code 为完整主控；OpenCode 仅作为 Builder；Kimi Code 与 Cursor Agent 不再进入新 build 选项
-> 落地状态：新 build 已默认使用当前会话直接构建 + 独立环境；Kimi/Cursor adapter 与旧合同仅作兼容读取
+> 落地状态：新 build 已默认使用当前主控的 `native-child` Builder + 独立环境；当前会话直接构建仅作 `main-fallback`，Kimi/Cursor adapter 与旧合同仅作兼容读取
 
 ## 1. 为什么要单独维护宿主矩阵
 
@@ -94,16 +94,18 @@ flowchart LR
     PM --> C2["Codex 完整主控"]
     C1 --> H["PMAI lifecycle / path / evidence / landing"]
     C2 --> H
-    H --> N["当前主控直接构建"]
+    H --> N["当前主控 native-child Builder"]
+    H --> F["main-fallback（非独立）"]
     H --> B2["OpenCode Builder"]
     H --> B3["另一完整主控的 Builder adapter"]
     B2 --> R
     B3 --> R
     N --> R
+    F --> R
     R --> H
 ```
 
-关键边界：Builder 只返回候选结果，PMAI 主控重新采集 Git diff、检查批准路径、运行验收并推进生命周期。Builder 的文字回复不能直接成为完成证据。
+关键边界：Builder 只返回候选结果；Verifier 负责机械 final checks，Judge 只读复核语义 checks 并绑定同一 evidence digest。PMAI 主控重新采集 Git diff、检查批准路径、绑定证据并推进生命周期。Builder 或主控的文字回复不能直接成为完成证据；能力不可用时的 `main-fallback` 必须标记 `independent=false`，不能宣传为独立验收。
 
 ## 6. 收缩实施状态
 

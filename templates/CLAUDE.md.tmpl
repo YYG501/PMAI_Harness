@@ -11,7 +11,7 @@
 
 框架、宿主入口或当前消费仓的文件归位、原型/实现入口与活动工作是否健康，只在 PM 要求诊断时使用 `/pmai-doctor`（Codex：`$pmai-doctor`）。它不属于正常产品推进循环，默认只读；升级、修复和文件迁移必须另行确认。
 
-> Claude Code 与 Codex 是完整主控。OpenCode 只由 `/pmai-build` 作为外部 Builder 调用，不解析本文的 PMAI Skill，也不推进 lifecycle、验收或 landing；新 build 默认由当前会话直接构建。
+> Claude Code 与 Codex 是完整主控。OpenCode 只由 `/pmai-build` 作为外部 Builder 调用，不解析本文的 PMAI Skill，也不推进 lifecycle、验收或 landing；新 build 默认由当前主控派发 `native-child` Builder，当前会话直接构建只作 child 不可用时的 `main-fallback` 降级。
 
 ---
 
@@ -20,8 +20,12 @@
 | 角色 | 职责 |
 |---|---|
 | PM | 决策、确认、验收。不写代码。默认一个窗口 |
-| 驱动 AI | PM 这个窗口里的 AI：恢复上下文、推进 design、派发 build、呈交结果、多轮修改并在 PM 定稿后自动收尾 |
-| 构建工具 | `/pmai-build` 根据项目定义、消费仓配置和本机可用性推荐的建造能力；PM 在开工卡中确认或调整 |
+| 驱动 AI（当前主控） | PM 这个窗口里的 AI：恢复上下文、推进 design、派发角色、呈交结果、多轮修改并在 PM 定稿后编排收尾；负责 PM 沟通、产品/模块路由、lifecycle、currentness/evidence 绑定、landing 和文档同步 |
+| Builder | 执行首次实现或已确认的大型重构，只修改批准目标路径，不推进 lifecycle、验收通过、landing 或文档同步；新 build 默认 `native-child`（`execution_mode=child`），外部工具为 `execution_mode=external` |
+| Verifier | PM 定稿后由当前主控默认派发 child（也可使用外部 backend）运行机械 final checks，生成绑定 `implementation_commit + source_hash` 的 receipt 和 pre-landing audit binding |
+| Judge | 默认由当前主控派发 child（也可使用外部 backend）独立只读复核 Verifier evidence，逐项覆盖 `semantic_checks`，以同一 `evidence_digest` attach；必须使用不同于 Verifier 的 `run_id` |
+
+child 或外部能力不可用时，当前主控才可接管并标记 `main-fallback`、`independent=false`；Verifier 标记 `status=degraded` 并记录降级原因，PM 回执必须说明“非独立降级执行”。
 
 ### 状态与文件真相源
 
@@ -86,16 +90,16 @@
 
 - build 的功能锚点是 design 已提交的模块 `spec.md` 或功能型规格文档，不是 task 文件；开工和关键恢复点先编译 context pack。
 - 一次 build 只有一个主要对象：`prototype` 或 `product`，由首个可建造 design 定稿后生成的 `.pm-workflow/project.yml` 定义。技术栈、代码入口和运行命令也只从该文件读取；build 不临时猜。
-- 新 build 由 AI 推荐独立/当前工作环境和构建工具，并在同一张卡列出全部有效选项；外部构建工具排除当前主控对应的 profile，“当前会话直接构建”始终可选，外部工具均不可用时推荐它。PM 一次确认后执行；项目类型和默认验收不展示。选择当前环境时，main 只放行 v2 合同声明的目标路径。小改仍走 `/pmai-quick-fix`。
+- 新 build 默认由当前主控派发 `native-child` Builder；AI 推荐独立/当前工作环境和构建工具，并在同一张卡列出全部有效选项。外部构建工具排除当前主控对应的 profile；`native`（当前会话直接构建）只作为 child 不可用时的 `main-fallback` 降级。PM 一次确认后执行；项目类型和默认验收不展示。选择当前环境时，main 只放行 v2 合同声明的目标路径。小改仍走 `/pmai-quick-fix`。
 - `.work-meta.json:build` 中的 contract v5 记录唯一 build lifecycle、target、source hash、design revision、accepted deltas、implementation commit、`iteration_checks / final_checks`、两层 evidence、定稿请求和 docs status；v1-v4 仅由统一兼容读取层用于旧 build 恢复。
-- 每轮修改由当前会话优先处理，只跑热更新、typecheck 和当前页面走查，保留同一 dev server 与浏览器连接并立即回“已修改，可刷新查看”；外部 builder 只用于首次实现或大型重构。只有当前批准模块与任务内、且不改变产品基线或模块模型的小范围调整可写 accepted delta，并让旧证据和定稿请求失效；产品级变化回 Proposal，模块模型变化回 design。
-- PM 明确请求定稿后，才冻结 commit、在 validation worktree 运行一次 production build 和完整 final checks，再通过 `review-ready`。2–5 / 5–10 分钟是 time-to-preview 预警目标，不是阻断门。
+- 每轮修改由当前主控优先处理，只跑热更新、typecheck 和当前页面走查，保留同一 dev server 与浏览器连接并立即回“已修改，可刷新查看”；Builder 只用于首次实现或大型重构。只有当前批准模块与任务内、且不改变产品基线或模块模型的小范围调整可写 accepted delta，并让旧证据和定稿请求失效；产品级变化回 Proposal，模块模型变化回 design。
+- PM 明确请求定稿后，才冻结 commit，由 Verifier 在 validation worktree 运行一次 production build 和机械 final checks；存在 semantic checks 时再由独立 Judge 只读验收，Judge 结果绑定同一 evidence digest 后才能通过 `review-ready`。2–5 / 5–10 分钟是 time-to-preview 预警目标，不是阻断门。
 - prototype 验收覆盖可启动性、任务路径、页面/弹窗、边界状态、视觉和行为；product 验收覆盖现有测试、typecheck/build、接口数据、迁移兼容，并按需追加 UI、权限与安全检查。
 - active build 的查看和问题检查只对账现有 spec、active decisions、accepted deltas、批准路径与当前 acceptance lane。prototype 的 `simulate_by_default` 不列为缺口，规格已有要求不重新包装成开放问题；product 仍按 production implementation 检查。
-- 证据必须绑定当前 source hash 和 implementation commit；limited/skipped/blocked 不能伪装 pass。
-- PM 定稿后的 final_check 只校验同一 source hash / implementation commit / finalization request 的验收就绪快照，不首次补实现或重跑完整验收；通过后先合入 main，再基于 landed diff 生成文档影响地图并更新正式文档。文档失败保留 `landed/docs_pending`，纯清理失败进入待清理队列，续跑不重复 merge。
+- 证据必须绑定当前 source hash 和 implementation commit；limited/skipped/blocked 不能伪装 pass。Verifier/Judge receipt 还必须绑定各自 role/backend/run_id；Judge run_id 不得复用 Verifier。`main-fallback` 必须标记 `independent=false`、Verifier `status=degraded` 和降级原因。
+- PM 定稿后的 final_check 只校验同一 source hash / implementation commit / finalization request 的验收就绪快照和 Verifier/Judge 绑定，不首次补实现或重跑完整验收；通过后先合入 main，再基于 landed diff 生成文档影响地图并更新正式文档。文档失败保留 `landed/docs_pending`，纯清理失败进入待清理队列，续跑不重复 merge。
 - 只有发生中断续跑、merge 冲突后重试或 `landed/docs_pending` 文档恢复时，AI 才读取 `/pmai-build-close` 兼容入口；正常协作和 PM 定稿后都不要求 PM 手动调用。
-- 使用外部构建工具前，PM 已确认的工作环境必须 clean；失败默认保留半成品，禁止自动 restore/clean，换工具需重新确认。
+- 使用外部构建工具前，PM 已确认的工作环境必须 clean；child 与外部 Builder 都不可用时可由主控直接降级接管，不新增 PM 确认门，但必须记录 `main-fallback`、`independent=false`、Verifier `status=degraded` 和原因，并在回执中说明“非独立降级执行”。失败默认保留半成品，禁止自动 restore/clean，换工具需重新确认。
 
 ### Review 工具
 
@@ -114,7 +118,7 @@ PM 或 AI 调用 gstack `/document-generate` / `/document-release` 后，先判�
 
 ### Subagent 使用边界
 
-Subagent 适合一次性读文件、第二视角评审、独立查询；不适合长期协调、跨 turn 等待、替代 skill 主流程。任何会启动后台长跑执行器的动作，都由驱动 AI 负责收口。
+Subagent 不替代 skill 主流程。Build 中的 `native-child` Builder、定稿 Verifier 和只读 Judge 是有明确输入/输出与证据边界的固定角色，由当前主控派发并收口；其它临时 subagent 仍只适合一次性读文件、第二视角评审或独立查询。任何会启动后台长跑执行器的动作，以及 fallback、landing 和文档同步，都由当前主控负责。
 
 ### 文档位置
 

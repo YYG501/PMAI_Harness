@@ -12,6 +12,7 @@ TIMING="$FRAMEWORK_ROOT/scripts/build-timing.py"
 DOC_IMPACT="$FRAMEWORK_ROOT/scripts/doc-impact.py"
 FINAL_VALIDATION="$FRAMEWORK_ROOT/scripts/final-validation.py"
 CLEANUP="$FRAMEWORK_ROOT/scripts/cleanup-pending-worktrees.sh"
+BINDING="$FRAMEWORK_ROOT/scripts/finalize-audit-binding.py"
 
 setup_fixture() {
   local build_command="$1"
@@ -69,6 +70,39 @@ setup_fixture() {
 }
 
 teardown_fixture() { rm -rf "$T"; }
+
+attach_semantic_judge() {
+  local judge_json="$T/judge.json"
+  local binding_json="$T/.pm-workflow/audits/demo/audit-binding.json"
+  local digest
+  digest=$(python3 - "$binding_json" <<'PY'
+import json, sys
+print(json.load(open(sys.argv[1], encoding="utf-8"))["evidence"]["digest"])
+PY
+  )
+  python3 - "$judge_json" "$digest" <<'PY'
+import json, sys
+path, evidence_digest = sys.argv[1:]
+json.dump({
+    "pass": True,
+    "reason": "test semantic Judge pass",
+    "evidence_digest": evidence_digest,
+    "checks": [{"name": "coverage", "status": "pass", "reason": "covered"}],
+    "provenance": {
+        "role": "judge",
+        "backend": "child",
+        "host": "test-child",
+        "model": "test-model",
+        "run_id": "judge-test-001",
+        "framework_revision": "test-framework",
+        "tool_sha256": "test-tool",
+    },
+}, open(path, "w", encoding="utf-8"), ensure_ascii=False, indent=2)
+PY
+  python3 "$BINDING" attach-judge \
+    --binding "$binding_json" --judge-json "$judge_json" \
+    --module-dir "$MODULE" --consumer-root "$T" >/dev/null
+}
 
 assert_active_cleanup_queue() {
   local queue="$1"
@@ -370,8 +404,19 @@ PY
     _fail "semantic handoff should keep an automatic running timing phase"
     teardown_fixture; return
   fi
-  python3 "$CONTRACT" record-evidence "$MODULE" --name coverage --status pass \
-    --source-hash "$SOURCE_HASH" --commit "$IMPLEMENTATION" >/dev/null
+  if ! python3 - "$T/.pm-workflow/audits/demo/finalize-run.json" <<'PY'
+import json, sys
+receipt = json.load(open(sys.argv[1]))["verifier_binding"]
+assert receipt["backend"] == "main-fallback"
+assert receipt["independent"] is False
+assert receipt["status"] == "degraded"
+assert receipt.get("reason")
+PY
+  then
+    _fail "main fallback must record degraded status and a reason"
+    teardown_fixture; return
+  fi
+  attach_semantic_judge
   if ! python3 "$FINALIZE" --module-dir "$MODULE" --no-land \
     >/tmp/finalize-work.$$ 2>/tmp/finalize-work.err.$$; then
     _fail "semantic evidence completion should resume the same finalize attempt"
@@ -440,8 +485,7 @@ test_pm_feedback_after_semantic_pass_starts_new_phase() {
     _fail "first semantic handoff should return 3"
     teardown_fixture; return
   fi
-  python3 "$CONTRACT" record-evidence "$MODULE" --name coverage --status pass \
-    --source-hash "$SOURCE_HASH" --commit "$IMPLEMENTATION" >/dev/null
+  attach_semantic_judge
   if ! python3 "$FINALIZE" --module-dir "$MODULE" --no-land \
     >/tmp/finalize-work.$$ 2>/tmp/finalize-work.err.$$; then
     _fail "first semantic pass should reach final_check"

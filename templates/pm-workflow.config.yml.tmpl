@@ -16,11 +16,11 @@ consumer:
   compatibility: {}
 
 builder:
-  # 新 build 默认组合：独立环境 + 当前会话直接构建。
-  # PM 仍可在开工确认卡中改选可用的外部 Builder；这里不是每次 build 的最终选择记录。
-  default_profile: native
-  prototype_profile: native
-  product_profile: native
+  # 新 build 默认组合：独立环境 + 当前主控后台 child 构建。
+  # 当前会话直接构建仅作为 PM 明确选择或 child 不可用时的降级后端。
+  default_profile: native-child
+  prototype_profile: native-child
+  product_profile: native-child
 
   profiles:
     claude-code:

@@ -1,7 +1,7 @@
 ---
 name: pmai-build
 description: |
-  统一构建前台：读取 design 已提交的建造依据和项目级构建类型，后台生成默认验收；AI 推荐工作环境和构建工具，PM 一次确认后开工。PM 看结果多轮修改，明确说“定稿 / 可以提交 / 可以合并”后自动完成最终检查、落地主线和主线后的文档同步。
+  统一构建前台：读取 design 已提交的建造依据和项目级构建类型，后台生成默认验收；默认由当前主控派发 native-child Builder，AI 推荐工作环境和构建工具，PM 一次确认后开工。PM 看结果多轮修改，明确说“定稿 / 可以提交 / 可以合并”后由独立 Verifier/Judge 完成最终检查，再落地主线和同步文档。
 ---
 
 # /pmai-build · 统一构建与迭代主线
@@ -40,6 +40,15 @@ ready_to_build → building → iterating → final_check
 ```
 
 它们只切换 build 对象和验收适配器，不分叉成两套工作流。
+
+### 执行角色与职责
+
+- **Builder**：执行首次实现或已确认的大型重构，只修改批准目标路径，不推进 lifecycle、验收通过、landing 或文档同步。新 build 默认使用当前主控的 `native-child`（`execution_mode=child`）；外部 Builder（`execution_mode=external`）只有在开工确认卡中被 PM 确认后才可使用。
+- **Verifier**：在 PM 定稿后运行机械 final checks（currentness、命令、浏览器、范围/边界等），生成绑定当前 `implementation_commit + source_hash` 的 receipt 和 pre-landing audit binding。Verifier 不替代 Judge 的语义判断。
+- **Judge**：默认由当前主控派发 child（也可使用外部 backend）只读复核 Verifier 生成的当前 evidence，逐项判断 `semantic_checks`，必须使用不同于 Verifier 的 `run_id`，并以同一 `evidence_digest` attach 结果。Judge 通过前不得进入 `review-ready`（存在 semantic checks 时）。
+- **当前主控**：负责 PM 沟通、上下文恢复、产品/模块路由、lifecycle、角色派发与回收、currentness 和 evidence 绑定、失败重试、landing 及文档同步；不把主控自己的判断冒充独立 Builder/Verifier/Judge。
+
+若 child 或外部执行能力不可用，当前主控可以接管并把对应 backend 记为 `main-fallback`：receipt 的 `independent=false`、Verifier 状态为 `degraded`，必须记录降级原因；这不是独立验收，PM 回执中要明确“非独立降级执行”。
 
 ## Build Loop Mapping
 
@@ -175,8 +184,8 @@ python3 "$PMAI_HOME/scripts/acceptance-profile.py" "${PROFILE_ARGS[@]}" > "$PROF
 
 从 `ready_to_build` 进入本节时，`§1`、`§2` 以及入口护栏产生的健康检查全部属于后台预检。开工确认卡出现前，不能向 PM 播报或询问 hooks 漂移、工作流核对、建造依据、目标路径、项目类型、验收档案、合同、hash、evidence 或“业务实现尚未修改”等内部状态；也不能要求 PM 为这些机械项提供确认。非阻塞的 hooks / 基础设施问题只写入后台审计，等 PM 确认环境和工具后再按既定恢复路径处理；只有它确实阻止展示有效选项或无法安全开工时，才停止并用业务结果说明阻塞原因。前台在此之前只能说明“正在准备构建”，随后直接展示本节唯一的“工作环境 + 构建工具”确认卡。
 
-1. **推荐工作环境**：默认推荐“独立环境”；若当前已经是本模块有效的 `build-*` 环境，则推荐“继续当前独立环境”。PM 也可以明确改为“当前环境”。新 build 的默认组合是“独立环境 + 当前会话直接构建”。
-2. **识别当前主控并推荐构建工具**：把当前 runtime 映射成 `claude-code / codex / opencode`；无法识别时用 `unknown`。Claude Code、Codex 和 OpenCode 可以作为外部构建工具，但 profile 必须和当前主控不同，不能让任一主控再次启动自己；“当前会话直接构建”不是外部 profile，始终作为有效选项且是新 build 默认推荐。按项目级类型、消费仓配置和本机可用性生成推荐与完整可选列表：
+1. **推荐工作环境**：默认推荐“独立环境”；若当前已经是本模块有效的 `build-*` 环境，则推荐“继续当前独立环境”。PM 也可以明确改为“当前环境”。新 build 的默认组合是“独立环境 + 当前主控后台构建（native-child）”。
+2. **识别当前主控并推荐构建工具**：把当前 runtime 映射成 `claude-code / codex / opencode`；无法识别时用 `unknown`。`native-child` 是当前主控内置 child Builder，默认可用；Claude Code、Codex 和 OpenCode 仍可作为外部 Builder，但 profile 必须和当前主控不同，不能让任一主控再次启动自己。`native`（当前会话直接构建）只作为 child 不可用时的显式降级选项。按项目级类型、消费仓配置和本机可用性生成推荐与完整可选列表：
 
    ```bash
    CURRENT_HOST="<claude-code | codex | opencode | unknown>"
@@ -190,7 +199,7 @@ python3 "$PMAI_HOME/scripts/acceptance-profile.py" "${PROFILE_ARGS[@]}" > "$PROF
      --current-host "$CURRENT_HOST")
    ```
 
-   `list` 和 `recommend` 都必须排除当前主控对应的外部 profile，并忽略已退出新 build 选择面的 Kimi Code / Cursor Agent。`list` 在其它可用外部工具之外始终包含“当前会话直接构建”；新 build 的 `recommend` 默认返回“当前会话直接构建”，PM 明确改选后才使用其它可用外部 profile。
+   `list` 和 `recommend` 都必须排除当前主控对应的外部 profile，并忽略已退出新 build 选择面的 Kimi Code / Cursor Agent。`list` 始终包含 `native-child` 和 `native`；新配置的 `recommend` 默认返回 `native-child`，兼容旧配置可按已声明且可用的外部 profile 推荐，但仍需 PM 在确认卡中确认。`native` 仅在 child 不可用或 PM 明确要求时使用，并写入 `execution_mode=main-fallback`。
 
 3. **一次展示推荐结果和全部有效选项**：
 
@@ -202,9 +211,10 @@ python3 "$PMAI_HOME/scripts/acceptance-profile.py" "${PROFILE_ARGS[@]}" > "$PROF
    - 独立环境：在单独环境构建，不影响当前工作；已有本模块独立环境时继续使用
    - 当前环境：直接在当前目录构建
 
-   构建工具（已选）：<工具名（model, thinking） | 当前会话直接构建>
+   构建工具（已选）：<当前主控后台构建 | 工具名（model, thinking） | 当前会话直接构建（降级）>
    本机可用工具：
-   - 当前会话直接构建
+   - 当前主控后台构建（默认）
+   - 当前会话直接构建（仅 child 不可用时的降级选项）
    - <工具名（model, thinking）>（已选）
    - <其它可用工具（逐项列出）>
 
@@ -212,7 +222,7 @@ python3 "$PMAI_HOME/scripts/acceptance-profile.py" "${PROFILE_ARGS[@]}" > "$PROF
    也可以直接回复“工作环境改为<选项>”或“构建工具改为<工具名>”。
    ```
 
-   “当前环境”只在当前环境有效时列出；若当前环境不是 main/master，也不是本模块已记录的 `build-*` 环境，就不显示这个无效选项。工具列表只取 `AVAILABLE_BUILDERS_JSON`：始终展示“当前会话直接构建”，并逐项展示本机实际可用且非当前主控的外部工具。卡片中禁止出现项目类型、验收方案、检查清单、worktree、build contract、hash、evidence JSON 等内容。`prototype / product` 只在后台参与适配，不作为本轮待确认项。
+   “当前环境”只在当前环境有效时列出；若当前环境不是 main/master，也不是本模块已记录的 `build-*` 环境，就不显示这个无效选项。工具列表只取 `AVAILABLE_BUILDERS_JSON`：始终展示 `native-child`；`native` 仅作为 child 不可用时的降级选项，并逐项展示本机实际可用且非当前主控的外部工具。卡片中禁止出现项目类型、验收方案、检查清单、worktree、build contract、hash、evidence JSON 等内容。`prototype / product` 只在后台参与适配，不作为本轮待确认项。
 
 4. PM 调整工作环境时，只用 PM 语言展示“独立环境 / 当前环境”；选择当前环境代表本轮直接在当前主线工作，写入 `build.mode=main`。选择独立环境写入 `build.mode=worktree`。若当前环境不是 main/master，也不是本模块已记录的 `build-*` 环境，不提供“当前环境”这个无效选项。
 5. PM 调整构建工具时，只接受卡片已经列出的工具；选定后用 `resolve --profile <name> --current-host "$CURRENT_HOST"` 固化 snapshot。`resolve` 再次拒绝与当前主控相同的 profile，不能靠 PM 文本或旧配置绕过。
@@ -244,7 +254,7 @@ fi
 
 所有 git 命令使用 `git -C "$BUILD_DIR"`；必须切目录的非 git 命令只在 subshell 中运行，不把主控 cwd 留在 worktree。
 
-执行器使用 `EXECUTOR_STATUS_DIR`、heartbeat、退出码和日志文件回报进度；PM 窗口只报阶段摘要，不直播命令、日志和进程排障。可确认的外部构建工具包括 Claude Code、Codex 和 OpenCode，但必须排除当前主控对应的外部 profile；“当前会话直接构建”始终是有效选项，也是新 build 的默认工具。没有外部工具可用时仍使用当前会话直接构建。
+Builder 使用 `EXECUTOR_STATUS_DIR`、heartbeat、退出码和日志文件回报进度；PM 窗口只报阶段摘要，不直播命令、日志和进程排障。默认 Builder 为 `native-child`；可确认的外部 Builder 包括 Claude Code、Codex 和 OpenCode，但必须排除当前主控对应的 profile。child 与外部 Builder 均不可用时才由当前主控接管，记录 `main-fallback` 和降级原因。
 
 从 acceptance profile 分别取快速迭代和定稿验收两组检查，写版本化合同。当前新合同为 v5：`iteration_checks` 只服务 PM 看结果期间的快循环，`final_checks` 只有 PM 明确请求定稿后才允许运行；build 开始后 lifecycle 只写入 `build.lifecycle_state`，不再同时写顶层 lifecycle、旧 `stage` 或 `required_checks`。同时由 `target.kind` 自动固化 `delivery_policy + delivery_policy_hash`。旧 v2/v3/v4 合同只作中断恢复兼容：
 
@@ -291,7 +301,7 @@ git -C "$BUILD_DIR" commit -m "build(<模块>): start adaptive build"
 
 ## 4. 构建指定对象
 
-每次调用构建工具——包括首次实现、每轮反馈修改和中断恢复——都先从当前 `.work-meta.json:build` 重新读取 `target + delivery_policy`，并在 UI 相关时重新读取 `DESIGN.md`、按 `project-design-system.md` 解析与执行当前项目设计系统声明，不能依赖首轮 prompt 记忆。把下面内容一次性交给 PM 已确认的构建工具，且**实现深度合同必须放在规格全文之前**：
+每次调用构建工具——包括首次实现、每轮反馈修改和中断恢复——都先从当前 `.work-meta.json:build` 重新读取 `target + delivery_policy`，并在 UI 相关时重新读取 `DESIGN.md`、按 `project-design-system.md` 解析与执行当前项目设计系统声明，不能依赖首轮 prompt 记忆；其中首次实现或大型重构交给 Builder，反馈修改由当前主控直接处理，不重新派发 Builder。把下面内容一次性交给 PM 已确认的 Builder，且**实现深度合同必须放在规格全文之前**：
 
 - 当前 `target.kind`、`delivery_policy` 全文及其不可违反的实现深度；
 - 建造锚点全文；
@@ -321,7 +331,7 @@ git -C "$BUILD_DIR" commit -m "build(<模块>): start adaptive build"
 - 涉及 UI 时复用真实产品组件并准备浏览器验收；
 - 涉及迁移、安全或破坏性数据动作时追加相应检查。
 
-外部构建工具只用于首次实现或 PM 已确认的大型重构。active build 内的文案、间距、布局、按钮命名和局部交互反馈默认由当前会话直接修改，不重新派发外部 builder，也不让外部执行器重新读取整套规格和仓库；只有改动已经扩成跨模块架构重构时，才重新展示构建工具确认卡。
+`native-child` 或外部 Builder 只用于首次实现或 PM 已确认的大型重构。active build 内的文案、间距、布局、按钮命名和局部交互反馈由当前主控直接修改，不重新派发 Builder，也不让 Builder 重新读取整套规格和仓库；只有改动已经扩成跨模块架构重构时，才重新展示构建工具确认卡。
 
 构建工具失败时默认保留半成品，先检查已落改动与日志；若要换工具，给出新的推荐并重新展示只含工作环境和构建工具的确认卡，不能静默替换 PM 已确认的工具。只有丢弃会破坏可用改动时才让 PM 授权；禁止自动 `git restore .` / `git clean -fd`。
 
@@ -356,7 +366,7 @@ git -C "$BUILD_DIR" commit -m "build(<模块>): record iteration"
    这四类依次映射为共享 Loop Contract 的 `route_proposal / route_design / retry_current(scoped adjustment) / retry_current(implementation correction)`；同一反馈同时命中多层时按共享路由优先级处理，不能选择更低层的方便路径；
 3. 原型真实边缘能力由 design 明确批准，或由 design 把项目建造对象改为 product；不得在迭代中静默升级；
 4. “还有什么问题”的检查只对账当前 spec、active decisions、accepted deltas 和批准路径，并应用当前实现深度合同；原型默认模拟的底层能力不算缺口，规格已经明确的行为也不得重新包装成 PM 开放问题；
-5. 文案、布局、按钮和局部交互由当前会话直接修改；只有跨模块大型重构才重新确认并调用外部 builder；
+5. 文案、布局、按钮和局部交互由当前主控直接修改；只有跨模块大型重构才重新确认并调用 Builder；
 6. 只跑 profile 的 `iteration_checks`：热更新、typecheck 和当前页面/受影响交互走查；不得运行 production build、全路径浏览器验收或重启仍健康的 dev server；
    - UI 尺寸 / 布局改动必须在受影响 browser flow 中加入 `size` 断言：`["size", "<selector>", "<expected>", "<width|height>", "<tolerance>"]`。该命令读取浏览器实际 `getBoundingClientRect()`，不是根据源码 class 推断；断言失败保持 `iterating`。
 7. 提交该轮修改并用 `build-contract.py commit` 记录新实现 commit；`commit` 会再次校验 currentness，过期时失败关闭，不得绕过；
@@ -402,11 +412,11 @@ python3 "$PMAI_HOME/scripts/build-contract.py" add-delta \
 
 PM 明确说“定稿 / 可以提交 / 可以合并 / 这版可以了”之前，本节不得执行。收到后不二次询问，也不准备 candidate evidence；完整执行 `skills/build/references/finalization.md`，从 `iterating` 统一调用 `finalize-candidate.py` 绑定当前候选并启动可恢复 runner，不在 Skill 内手工拼接 Git HEAD、合同 commit 和 finalize 命令。
 
-统一入口先按批准目标树、source hash 与 legacy recovery checkpoint 绑定正确候选，再用 `validate-final-currentness` 校验当前 design、accepted delta、批准路径和 project.yml。后续无关 HEAD 不得替换批准目标相同的已记录实现，也不要求人工修改 baseline。完全相同的 test/typecheck/build 命令只执行一次并在 artifact 中列出所覆盖检查；命令不同或无法证明相同就分别执行。所有命令在 detached validation worktree 的 `implementation.root` 下运行，production build 保持硬门。
+统一入口先按批准目标树、source hash 与 legacy recovery checkpoint 绑定正确候选，再用 `validate-final-currentness` 校验当前 design、accepted delta、批准路径和 project.yml。随后由 Verifier（默认 native-child，可选外部 backend）在 detached validation worktree 的 `implementation.root` 下执行机械 final checks 并生成 receipt；后续无关 HEAD 不得替换批准目标相同的已记录实现，也不要求人工修改 baseline。完全相同的 test/typecheck/build 命令只执行一次并在 artifact 中列出所覆盖检查；命令不同或无法证明相同就分别执行。production build 保持硬门。
 
 Web 新 build 用一个 `browser-acceptance` 批次覆盖受影响流程的 smoke、visual 和 behavior；一次 gstack `chain`、一个持续会话，不按三个检查或多个复用页面串行重跑。旧 v1-v4 合同不升级版本：缺失的 `browser-smoke / visual / behavior` 由同一批次按合同实际要求的旧名称确定性派生，绑定同一 batch digest；coverage 仍单独证明，不从浏览器动作猜测。
 
-final-validation 分项执行并保留每项 exit code/log；test/typecheck 失败后仍继续跑 build，production build 失败始终阻断。只有 tests/typecheck 可以由 PM 绑定当前 commit/source/results digest 的 artifact 明确接受为 limited，原始失败不得改写成 pass。runner 返回仍缺语义检查时，由当前主控完成规格覆盖、prototype boundary、迁移或安全判断并记录 evidence；有 checks-spec 和页面抓取时用统一 coverage 参数，机器 P0/P1 必须为零，`must_cover_states` 必须逐 check 确认。随后重跑同一入口。实现缺陷仍回 `iterating` 修复；PM 新反馈执行 `resume-iteration`。final-validation 或 browser 真实失败会在 `timing.json` 标记正常路径退出，不得继续报 10 分钟成功。
+Verifier 的 final-validation 分项执行并保留每项 exit code/log；test/typecheck 失败后仍继续跑 build，production build 失败始终阻断。只有 tests/typecheck 可以由 PM 绑定当前 commit/source/results digest 的 artifact 明确接受为 limited，原始失败不得改写成 pass。Verifier 返回仍缺 semantic checks 时，由独立 Judge 只读完成规格覆盖、prototype boundary、迁移或安全判断并记录结果；Judge 必须使用不同 run_id，且逐项覆盖 marker 中的 `semantic_checks`、绑定同一 evidence digest。Judge 未通过或未 attach 时不得进入 `review-ready`。有 checks-spec 和页面抓取时用统一 coverage 参数，机器 P0/P1 必须为零，`must_cover_states` 必须逐 check 确认。随后重跑同一入口。实现缺陷仍回 `iterating` 修复；PM 新反馈执行 `resume-iteration`。final-validation 或 browser 真实失败会在 `timing.json` 标记正常路径退出，不得继续报 10 分钟成功。
 
 这里区分两种 `retry_current`：final checks 自己发现的实现缺口保留原定稿意图，修复后只重跑失效证据；PM 在 final checks 期间提出新的产品或体验反馈时先清除定稿请求，按共享合同重新分类。二者不得混成“都继续收尾”。
 
@@ -420,7 +430,7 @@ final-validation 分项执行并保留每项 exit code/log；test/typecheck 失�
 - 对照 `DESIGN.md` 的视觉一致性；
 - 实际交互行为。
 
-先生成边界检查 artifact。第一次不带确认参数运行，用它列出候选 diff、批准范围外改动和生产建设信号；AI 对照 `delivery_policy` 与 active decisions 完成语义复核后，确认没有越界才重跑并写 `pass`：
+先生成边界检查 artifact。第一次不带确认参数运行，用它列出候选 diff、批准范围外改动和生产建设信号；由独立 Judge 对照 `delivery_policy` 与 active decisions 完成语义复核，确认没有越界后才重跑并写 `pass`：
 
 ```bash
 BOUNDARY="$BUILD_DIR/$AUDIT_DIR_REL/prototype-boundary.json"
@@ -441,7 +451,7 @@ python3 "$PMAI_HOME/scripts/build-contract.py" record-evidence \
   --name prototype-boundary --status pass --artifact "$BOUNDARY"
 ```
 
-`prototype-boundary` 和新合同的 `browser-acceptance` 都是不可 exception 的硬检查；旧合同的 `browser-smoke` 也继续不接受 exception。artifact 出现批准范围外改动、未经决定允许的 database/auth/external side effect/infrastructure 信号，或 AI 尚未明确完成语义复核时保持 `iterating`；不得把 `blocked / needs-review` 手写成 `pass`。
+`prototype-boundary` 和新合同的 `browser-acceptance` 都是不可 exception 的硬检查；旧合同的 `browser-smoke` 也继续不接受 exception。artifact 出现批准范围外改动、未经决定允许的 database/auth/external side effect/infrastructure 信号，或 Judge 尚未完成并 attach 语义复核时保持 `iterating`；不得把 `blocked / needs-review` 手写成 `pass`。
 
 优先使用已可用的主动 browser 适配器生成证据；工具选择不展示给 PM。
 
@@ -539,18 +549,18 @@ python3 "$PMAI_HOME/scripts/build-contract.py" docs-fail \
 - 项目类型、技术栈、入口和真实运行命令由 `.pm-workflow/project.yml` 定义；build 只读，不按本轮需求猜，也不在开工确认卡重复展示。
 - build 开工前必须确认 design 依据仍有效，并严格复用 design 批准的目标路径；依据过期、范围缺失或目标路径有未提交改动时先停止处理，不创建工作环境。
 - 验收方案按项目类型和风险后台生成默认值；不让 PM 选择，也不在开工确认卡展示。
-- 新 build 开工前，AI 推荐工作环境和构建工具，PM 只确认这两项；调整后必须重显同一张确认卡。
-- PM 不需要理解 worktree、合同、hash、证据 JSON 或手动 close；构建工具只以名称、模型和思考档展示。
+- 新 build 开工前，AI 推荐工作环境和构建工具，默认选择 `native-child`；PM 只确认这两项，调整后必须重显同一张确认卡。
+- PM 不需要理解 worktree、合同、hash、证据 JSON 或手动 close；Builder/Verifier/Judge 的内部角色只在后台审计，构建工具前台只以名称、模型和思考档展示。
 - v5 验收档案分 `iteration_checks / final_checks`：迭代修改只跑快检并尽快给 PM 看；PM 请求定稿前不得写 final evidence 或形成验收就绪快照。
-- active build 内的文案、布局、按钮和局部交互由当前会话直接处理；外部 builder 只用于首次实现或大型重构。
+- active build 内的文案、布局、按钮和局部交互由当前主控直接处理；Builder 只用于首次实现或大型重构，定稿验收由 Verifier/Judge 分工完成。
 - dev server 与浏览器连接跨轮保留；production build 只在冻结 commit 的 validation worktree 运行，不污染 active worktree 的构建缓存。
 - `timing.json` 记录阶段耗时与 time-to-preview；2–5 / 5–10 分钟只作预警，不阻断“已修改，可刷新查看”。
 - 只有已批准模块内、不改变产品基线与模块模型的小范围调整进入 accepted deltas 并使旧证据失效；产品级变化回 Proposal，模块模型变化回 design；实现 commit 变化也使旧证据失效。
-- PM 明确说“可以提交 / 定稿 / 可以合并”就是打开一次性 final checks 并落地主线的授权，不二次确认。
+- PM 明确说“可以提交 / 定稿 / 可以合并”就是打开一次性 final checks 并落地主线的授权，不二次确认；主控负责派发 Verifier、收集独立 Judge 结果并在通过后 landing。
 - final_check 只校验同一 source hash + implementation commit 的验收就绪快照，不首次跑完整验收、不修改业务代码；失败回 iterating。
 - merge 冲突保留 final_check 和 worktree；纯清理失败进入待清理队列，不阻塞 landed 后文档同步。
 - 实现先落 main，正式文档后更新；文档失败不重复 merge。
-- skipped / limited / blocked 不能伪装 pass；证据必须绑定 source hash 和 implementation commit。
+- skipped / limited / blocked 不能伪装 pass；Verifier/Judge receipt 和全部证据必须绑定 source hash 和 implementation commit。`main-fallback` 必须标记 `independent=false`、Verifier `status=degraded` 及降级原因。
 - UI final checks 缺主动浏览器能力时必须阻塞；`browser-smoke` 不接受 exception。
 - v3+ prototype 的 `prototype-boundary` 必须有绑定当前 source hash 和 implementation commit 的 active pass artifact，不接受 exception。
 - 正式文档无迭代流水账，历史只在 Git 与 decisions 中。
