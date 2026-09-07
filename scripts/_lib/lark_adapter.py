@@ -35,7 +35,8 @@ import os
 import re
 import stat
 import subprocess
-from contextlib import contextmanager
+import sys
+from contextlib import contextmanager, ExitStack
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterator, Optional
@@ -342,6 +343,7 @@ def _run(
     - check=False 时非 0 退出码不抛，返回 CompletedProcess 给 caller 判
     - check=True 时非 0 退出码抛 LarkAdapterError("subprocess", ...)
     """
+    directory_leases = ExitStack()
     inherited_fd = -1
     preexec_fn = None
     try:
@@ -365,6 +367,9 @@ def _run(
                     "validation",
                     f"当前系统无法通过目录 fd 固定 lark-cli cwd: {cwd}",
                 )
+            if sys.platform == 'cygwin':
+                from .cygwin_fs import pinned_directory
+                cwd_fd = directory_leases.enter_context(pinned_directory(cwd_fd))
             inherited_fd = os.dup(cwd_fd)
             inherited_stat = os.fstat(inherited_fd)
             if not stat.S_ISDIR(inherited_stat.st_mode):
@@ -415,6 +420,7 @@ def _run(
     finally:
         if inherited_fd >= 0:
             os.close(inherited_fd)
+        directory_leases.close()
     if check and res.returncode != 0:
         failure_detail = (res.stderr or res.stdout).strip()
         if input_text is not None:

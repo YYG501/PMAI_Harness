@@ -495,8 +495,25 @@ def restrict_fd_limit() -> None:
     resource.setrlimit(resource.RLIMIT_NOFILE, (soft_limit, hard_limit))
 
 
+fd_failure_command = base_command
+if sys.platform == 'cygwin':
+    # Cygwin does not retain the reduced RLIMIT_NOFILE across exec. Inject the
+    # same OS error at F_DUPFD so the failure/cleanup contract is still exercised.
+    injector = root / 'fd-failure.py'
+    injector.write_text('''import errno, fcntl, runpy, sys
+original = fcntl.fcntl
+def limited(fd, operation, *args):
+    if operation == fcntl.F_DUPFD:
+        raise OSError(errno.EMFILE, 'fixture fd limit')
+    return original(fd, operation, *args)
+fcntl.fcntl = limited
+sys.argv = sys.argv[1:]
+runpy.run_path(sys.argv[0], run_name='__main__')
+''')
+    fd_failure_command = [sys.executable, str(injector), helper, 'run', '--lock-path']
+
 fd_failure = subprocess.run(
-    base_command
+    fd_failure_command
     + [str(root / "fd-failure.lock"), "--", "bash", "-c", "exit 0"],
     stdout=subprocess.PIPE,
     stderr=subprocess.PIPE,

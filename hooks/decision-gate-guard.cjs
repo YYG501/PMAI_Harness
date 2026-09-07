@@ -7,23 +7,14 @@
 
 const path = require('path');
 const fs = require('fs');
-const { spawnSync } = require('child_process');
+const { runHook, runCommand } = require('./hook-runtime.cjs');
+const { nativePath } = require('./host-process.cjs');
 
-const MAX_STDIN_BYTES = 4 * 1024 * 1024;
 const EXPLICIT_PMAI_ENTRY_PATTERN = /^(?:\/pmai-|\$pmai-|\/skill:pmai-)[a-z0-9][a-z0-9-]*(?=$|\s)/i;
-
-function repoRootFor(cwd) {
-  const result = spawnSync('git', ['-C', cwd, 'rev-parse', '--show-toplevel'], {
-    encoding: 'utf8',
-    timeout: 1200,
-  });
-  if (result.status !== 0) return null;
-  return (result.stdout || '').trim() || null;
-}
 
 function runGate(args, cwd) {
   const script = path.join(path.resolve(__dirname, '..'), 'scripts', 'decision-gate.py');
-  return spawnSync('python3', [script, ...args], {
+  return runCommand('python3', [script, ...args], {
     cwd,
     encoding: 'utf8',
     timeout: 5000,
@@ -55,20 +46,9 @@ function addContext(text) {
   }));
 }
 
-function resolvedRepo(data) {
-  const processCwd = process.cwd();
-  const processRepo = repoRootFor(processCwd);
-  if (!processRepo) return null;
-  if (data.cwd !== undefined && typeof data.cwd !== 'string') return null;
-  const payloadCwd = typeof data.cwd === 'string' && data.cwd.trim() ? data.cwd : processCwd;
-  const payloadRepo = repoRootFor(payloadCwd);
-  if (!payloadRepo || path.resolve(payloadRepo) !== path.resolve(processRepo)) return null;
-  return processRepo;
-}
-
 function designArtifactFor(repoRoot, rawPath) {
   if (typeof rawPath !== 'string' || !rawPath.trim()) return null;
-  const unresolved = path.resolve(process.cwd(), rawPath);
+  const unresolved = path.resolve(process.cwd(), nativePath(rawPath));
   let absolute;
   try {
     absolute = fs.realpathSync.native(unresolved);
@@ -96,7 +76,7 @@ function designArtifactFor(repoRoot, rawPath) {
 
 function projectArtifactFor(repoRoot, rawPath) {
   if (typeof rawPath !== 'string' || !rawPath.trim()) return false;
-  const unresolved = path.resolve(process.cwd(), rawPath);
+  const unresolved = path.resolve(process.cwd(), nativePath(rawPath));
   let absolute;
   try {
     absolute = fs.realpathSync.native(unresolved);
@@ -139,15 +119,16 @@ function handlePrompt(data, repoRoot) {
   }
   const result = runGate(args, repoRoot);
   if (result.status !== 0) {
-    addContext(`DECISION GATE 答复绑定失败（decision-gate-guard hook）\n\n${failureReason(result, '授权收据捕获失败。')}\n在恢复前禁止把本消息解释成产品决定，也不得写决定、提交或进入 ready_to_build。`);
-    return;
+    throw new Error(failureReason(result, '授权收据捕获失败。'));
   }
   let payload;
   try {
     payload = JSON.parse((result.stdout || '').trim());
   } catch {
-    addContext('DECISION GATE 答复绑定失败（decision-gate-guard hook）\n\n授权收据捕获返回非法结果。在恢复前禁止写决定、提交或进入 ready_to_build。');
-    return;
+    throw new Error('授权收据捕获返回非法结果。');
+  }
+  if (!payload || !['none', 'ambiguous', 'observed', 'observed_round'].includes(payload.status)) {
+    throw new Error('授权收据捕获返回未知状态。');
   }
   if (payload.status === 'none') return;
   if (payload.status === 'ambiguous') {
@@ -224,32 +205,4 @@ function handlePreTool(data, repoRoot) {
   }
 }
 
-const chunks = [];
-let bytes = 0;
-const timer = setTimeout(() => process.exit(0), 2000);
-process.stdin.on('data', chunk => {
-  bytes += chunk.length;
-  if (bytes > MAX_STDIN_BYTES) process.exit(0);
-  chunks.push(chunk);
-});
-process.stdin.on('end', () => {
-  clearTimeout(timer);
-  let data;
-  try {
-    data = JSON.parse(Buffer.concat(chunks, bytes).toString('utf8'));
-  } catch {
-    process.exit(0);
-  }
-  if (!data || typeof data !== 'object' || Array.isArray(data)) process.exit(0);
-  const repoRoot = resolvedRepo(data);
-  if (!repoRoot) process.exit(0);
-  if (data.hook_event_name === 'UserPromptSubmit' || data.hookEventName === 'UserPromptSubmit') {
-    handlePrompt(data, repoRoot);
-  } else if (data.hook_event_name === 'PreToolUse' || data.hookEventName === 'PreToolUse') {
-    handlePreTool(data, repoRoot);
-  } else if (data.tool_name) {
-    handlePreTool(data, repoRoot);
-  } else if (typeof data.prompt === 'string') {
-    handlePrompt(data, repoRoot);
-  }
-});
+runHook({ name: 'DECISION GATE', onPrompt: handlePrompt, onPreTool: handlePreTool });

@@ -1,0 +1,10 @@
+{
+  "schema_version": 1,
+  "description": "Core single-session regressions; full user journeys are added only after their independent validation.",
+  "session_cases": [
+    "natural-language-finalize",
+    "active-build-natural-language-resume",
+    "design-answer-binding-after-compaction",
+    "design-ready-handoff-currentness"
+  ]
+}

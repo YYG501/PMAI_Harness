@@ -3,6 +3,8 @@
 > 状态：活跃设计，尚未完整实现。
 >
 > 适用范围：评测「PMAI Harness + Agent + 宿主」在消费仓中的真实任务效果，不替代现有确定性测试，也不默认监控 PM 正在使用的业务仓。
+>
+> 本轮实施顺序和验收条件见 [`harness-hardening-execution-plan.md`](./harness-hardening-execution-plan.md)；实际进度和验证结果统一见 [`RUNTIME.md`](../../RUNTIME.md)。
 
 ## 1. 为什么需要这一层
 

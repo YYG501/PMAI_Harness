@@ -33,6 +33,14 @@ import time
 from dataclasses import dataclass
 from pathlib import Path
 
+if sys.platform == "cygwin":
+    # Also supports the existing direct-file import used by atomic regressions.
+    _scripts_dir = str(Path(__file__).resolve().parents[1])
+    if _scripts_dir not in sys.path:
+        sys.path.insert(0, _scripts_dir)
+    from _lib.cygwin_fs import BoundDirectoryOS, pinned_directory
+    os = BoundDirectoryOS()
+
 
 class AtomicFileError(RuntimeError):
     def __init__(
@@ -640,9 +648,12 @@ def _snapshot_at(
 ) -> _Snapshot:
     file_fd = -1
     try:
+        # FlushFileBuffers, used by Cygwin fsync, requires a writable handle.
+        # Only staged-file durability reads request it; authority reads stay RO.
+        access = os.O_RDWR if fsync_file and sys.platform == "cygwin" else os.O_RDONLY
         file_fd = os.open(
             name,
-            os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK,
+            access | os.O_NOFOLLOW | os.O_NONBLOCK,
             dir_fd=directory_fd,
         )
         file_stat = os.fstat(file_fd)
@@ -1115,14 +1126,23 @@ def prepare_update_at(
 
 
 def _rename_noreplace(directory_fd: int, source: str, destination: str) -> None:
-    libc = ctypes.CDLL(None, use_errno=True)
+    if sys.platform == "cygwin":
+        with pinned_directory(directory_fd) as bound_fd:
+            _rename_noreplace_syscall(bound_fd, source, destination)
+        return
+    _rename_noreplace_syscall(directory_fd, source, destination)
+
+
+def _rename_noreplace_syscall(directory_fd: int, source: str, destination: str) -> None:
+    # Cygwin exports POSIX syscalls from its runtime DLL, not the executable.
+    libc = ctypes.CDLL("cygwin1.dll" if sys.platform == "cygwin" else None, use_errno=True)
     encoded_source = os.fsencode(source)
     encoded_destination = os.fsencode(destination)
 
     if sys.platform == "darwin":
         function = getattr(libc, "renameatx_np", None)
         flag = 0x00000004  # RENAME_EXCL
-    elif sys.platform.startswith("linux"):
+    elif sys.platform.startswith("linux") or sys.platform == "cygwin":
         function = getattr(libc, "renameat2", None)
         flag = 0x00000001  # RENAME_NOREPLACE
     else:

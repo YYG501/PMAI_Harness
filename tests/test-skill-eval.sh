@@ -31,7 +31,7 @@ test_missing_runner_is_explicit() {
     _fail "missing runner skip should be visible"
     return
   fi
-  if env -u PMAI_SKILL_EVAL_RUNNER -u PMAI_SKILL_EVAL_JUDGE \
+  if env -u PMAI_SKILL_EVAL_RUNNER -u PMAI_SKILL_EVAL_JUDGE -u PMAI_SKILL_EVAL_SEMANTIC_JUDGE \
       python3 "$EVAL" --mode session --case natural-language-finalize --require-runner >/tmp/skill-eval-required.$$ 2>&1; then
     _fail "required missing runner should fail"
     return

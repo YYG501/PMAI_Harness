@@ -100,7 +100,7 @@ test_root_relative_verification_commands_fallback_to_repo_root() {
   mkdir -p "$module" "$t/app" "$t/tests"
   printf '# demo\n' > "$module/spec.md"
   printf 'value = True\n' > "$t/app/main.py"
-  printf 'def test_root_relative():\n    assert True\n' > "$t/tests/test_root_relative.py"
+  printf 'import unittest\nclass RootRelative(unittest.TestCase):\n    def test_root_relative(self):\n        self.assertTrue(True)\n' > "$t/tests/test_root_relative.py"
   touch "$t/tests/__init__.py"
   python3 "$PROJECT_DEFINITION" write "$t" \
     --source docs/modules/demo/spec.md --type product --root app --entrypoint app/main.py \

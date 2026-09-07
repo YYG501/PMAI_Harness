@@ -1,0 +1,2 @@
+# Shell scripts and generated contracts use LF on every host, including Windows.
+* text=auto eol=lf

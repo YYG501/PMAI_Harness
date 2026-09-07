@@ -98,6 +98,12 @@ test_finalize_route_blocks_manual_close_after_pm_authorization() {
   intent=$(mktemp -d "${TMPDIR:-/tmp}/pmai-finalize-intent.XXXXXX")
   out=$(printf '%s' '{"hook_event_name":"UserPromptSubmit","cwd":"'"$ACTIVE_BUILD_FIXTURE"'","session_id":"session-1","prompt":"好，可以了，提交合并吧"}' |
     (cd "$ACTIVE_BUILD_FIXTURE" && PMAI_FINALIZE_INTENT_DIR="$intent" node "$FINALIZE_GUARD"))
+  if [ "$(find "$intent" -maxdepth 1 -name '*.json' | wc -l | tr -d ' ')" != "1" ]; then
+    _fail "finalization marker was not written to the configured directory"
+    rm -rf "$intent"
+    active_build_fixture_teardown
+    return
+  fi
   before_semantic=$(printf '%s' '{"hook_event_name":"PreToolUse","tool_name":"Bash","cwd":"'"$ACTIVE_BUILD_FIXTURE"'","session_id":"session-1","tool_input":{"command":"python3 scripts/prototype-boundary.py docs/modules/demo --output .pm-workflow/audits/demo/prototype-boundary.json"}}' |
     (cd "$ACTIVE_BUILD_FIXTURE" && PMAI_FINALIZE_INTENT_DIR="$intent" node "$FINALIZE_GUARD"))
   blocked=$(printf '%s' '{"hook_event_name":"PreToolUse","tool_name":"Bash","cwd":"'"$ACTIVE_BUILD_FIXTURE"'","session_id":"session-1","tool_input":{"command":"npm test"}}' |

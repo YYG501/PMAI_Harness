@@ -3,7 +3,7 @@
 // PMAI build contract instead of falling through to unscoped generic QA.
 
 const path = require('path');
-const { spawnSync } = require('child_process');
+const { spawnSync } = require('./host-process.cjs');
 
 const EXPLICIT_PMAI_ENTRY_PATTERN = /^(?:\/pmai-|\$pmai-|\/skill:pmai-)[a-z0-9][a-z0-9-]*(?=$|\s)/i;
 const EXECUTION_CONTEXT_STATUSES = new Set(['none', 'active', 'ambiguous', 'invalid']);

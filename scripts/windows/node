@@ -1,0 +1,23 @@
+#!/usr/bin/env bash
+# Translate path argv at the Cygwin -> native Node boundary. JSON/tool payloads
+# are interpreted by the owning hook, never rewritten by this launcher.
+set -euo pipefail
+: "${PMAI_WINDOWS_NODE:?Windows Node executable not configured}"
+if [ -n "${NODE_OPTIONS:-}" ]; then
+  NODE_OPTIONS=$(/usr/bin/python3 "$PMAI_WINDOWS_BRIDGE/node-options.py")
+  export NODE_OPTIONS
+fi
+args=()
+literal_next=0
+for argument in "$@"; do
+  if [ "$literal_next" = 1 ]; then
+    args+=("$argument")
+    literal_next=0
+  elif [[ "$argument" = /* ]] && [ -e "$argument" ]; then
+    args+=("$(cygpath -w "$argument")")
+  else
+    args+=("$argument")
+  fi
+  case "$argument" in -e|--eval|-p|--print) literal_next=1;; esac
+done
+exec "$PMAI_WINDOWS_NODE" "${args[@]}"
