@@ -14,6 +14,8 @@ PM-AI-Workflow 生成器仓的演进记录。本文件**只记影响已安装框
 
 ## 未发布
 
+- `feat(release)`: **补齐版本发布闭环。** 新增生成器维护者专用 `pmai release check|prepare|publish|notes`：正式发版时递增 `VERSION`、把「未发布」归档到 `## vX.Y.Z`、生成 release commit，并在 stable gate 通过后推送 main 与 Tag；Tag workflow 复用同一版本 CHANGELOG 创建 GitHub Release。普通 `main` 升级改按 commit 识别，stable 升级继续按版本 Tag 识别，兼容现有消费仓和全局安装路径。
+
 - `fix(harness)`: **收窄审查发现的额外阻断。** 身份解释器不可用时，共用身份标记数据仅证明生成器或无 PMAI 身份标记的普通仓可 no-op，普通项目说明文件本身不算 PMAI 标记；消费仓、可疑入口、损坏路径与非法编码仍阻断。发布 CI 根据所选 Runner / Judge 准备默认 Codex，自定义适配器不强制绑定 Codex 或 OpenAI Key，真实能力与认证仍由发布预检验证。
 
 - `fix(hooks)`: **决策与定稿护栏统一校验真实仓根和宿主输入。** 已确认的普通仓和生成器仓保持不介入消费仓门禁；消费仓的坏 JSON、非法事件、跨仓 cwd、超限输入、读取超时和校验器失败会明确阻断。共享单次执行预算，并保留当前恢复点；不把校验失败当成没有活动工作。

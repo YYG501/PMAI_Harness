@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# pmai-update-check — Check if a newer stable version is available
+# pmai-update-check — Check the active PMAI channel for updates
 #
 # 用法：
 #   pmai-update-check              # 24h 缓存：上次查过且不过期则静默退（不查 GitHub）
@@ -15,6 +15,16 @@ PMAI_STATE="${PMAI_STATE:-$HOME/.pmai-state}"
 CACHE_FILE="$PMAI_STATE/last-update-check"
 SNOOZE_FILE="$PMAI_STATE/update-snoozed"
 CACHE_TTL=86400   # 24 小时
+
+# stock macOS 没有 GNU timeout；缺失时保留原有静默检查语义，避免命令不存在
+# 把更新检查误报成框架故障。
+if ! command -v timeout >/dev/null 2>&1; then
+  if command -v gtimeout >/dev/null 2>&1; then
+    timeout() { gtimeout "$@"; }
+  else
+    timeout() { shift; "$@"; }
+  fi
+fi
 
 FORCE=0
 if [ "${1:-}" = "--force" ]; then
@@ -46,6 +56,23 @@ fi
 
 cd "$PMAI_HOME"
 LOCAL_VER=$(cat VERSION 2>/dev/null || echo "0.0.0")
+
+# main 是滚动开发通道：用 commit 检查更新，不能拿 stable Tag 的版本号冒充。
+LOCAL_BRANCH=$(git symbolic-ref --short -q HEAD 2>/dev/null || true)
+if [ "$LOCAL_BRANCH" = "main" ] || [ "$LOCAL_BRANCH" = "master" ]; then
+  LOCAL_HEAD=$(git rev-parse HEAD 2>/dev/null || true)
+  REMOTE_HEAD=$( { timeout 5 git ls-remote origin "refs/heads/$LOCAL_BRANCH" 2>/dev/null \
+    | awk 'NR == 1 {print $1}'; } 2>/dev/null || true )
+  mkdir -p "$PMAI_STATE"
+  date +%s > "$CACHE_FILE"
+  if [ -n "$REMOTE_HEAD" ] && [ "$LOCAL_HEAD" != "$REMOTE_HEAD" ]; then
+    LOCAL_SHORT=$(git rev-parse --short HEAD 2>/dev/null || echo unknown)
+    REMOTE_SHORT=${REMOTE_HEAD:0:7}
+    echo "UPGRADE_AVAILABLE main@${LOCAL_SHORT} → main@${REMOTE_SHORT}"
+    echo "  Run: pmai upgrade"
+  fi
+  exit 0
+fi
 
 # 短超时 ls-remote 拿远程最新 tag（不阻塞太久；用户离线时静默）
 # 注意：set -o pipefail + grep no-match (远程无 v* tag 时) 会让整条 pipeline exit 1 → set -e 退出。

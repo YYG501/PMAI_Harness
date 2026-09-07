@@ -5,6 +5,9 @@ on:
     tags: ['v*']
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   verify-harness:
     runs-on: ubuntu-latest
@@ -77,6 +80,29 @@ jobs:
           mkdir -p .runs/release-gate
           git rev-parse HEAD > .runs/release-gate/revision.txt
           bash tests/run-release-gate.sh 2>&1 | tee .runs/release-gate/run.log
+
+      - name: Build versioned release notes
+        if: success() && startsWith(github.ref, 'refs/tags/v')
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/release.py notes --version "$GITHUB_REF_NAME" > .runs/release-gate/release-notes.md
+
+      - name: Create GitHub Release
+        if: success() && startsWith(github.ref, 'refs/tags/v')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            echo "GitHub Release $GITHUB_REF_NAME already exists; keeping it."
+          else
+            gh release create "$GITHUB_REF_NAME" \
+              --verify-tag \
+              --title "$GITHUB_REF_NAME" \
+              --notes-file .runs/release-gate/release-notes.md
+          fi
 
       - name: Retain candidate and failure evidence
         if: always()

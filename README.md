@@ -179,6 +179,16 @@ pmai whats-new --from v0.2.0 --full
 pmai uninstall            # 清掉全局装；--local <dir> 清理遗留项目副本
 ```
 
+**生成器维护者发版**（只在本生成器 checkout 的 `main` 上执行）：
+
+```bash
+pmai release check                    # 检查当前 release commit
+pmai release prepare --bump minor     # 归档「未发布」、递增 VERSION、提交候选
+pmai release publish                   # 先跑 stable gate，再推 main 和 vX.Y.Z Tag
+```
+
+`prepare` 只改变正式发版时的 `VERSION` 和版本化 CHANGELOG；普通 `main` 提交继续作为滚动版。`publish` 通过后，Tag workflow 使用同一版本 CHANGELOG 创建 GitHub Release。stable 发布要求真实 Runner、证据 Judge 和语义 Judge 均已配置。
+
 **Claude Code 内升级（推荐 — 带 AI 智能 What's New 摘要）**：
 
 ```

@@ -10,6 +10,7 @@
 - Windows 使用与支持边界见[开发与验证说明](./docs/设计/windows-development-validation.md)。本轮结果与上一批基线分开记录于下方「当前验证」，不把本地脚本通过推导为原生宿主、远端 CI 或模型评测通过。
 - 既有能力基线（早于本轮 Windows 适配）：P0 Harness 可信评测、P1 Runner / Judge / runtime evidence 合同，以及 Build 的 Builder / Verifier / Judge 角色隔离已落地；18 个 Session Eval 案例均有脱敏 fixture、动态生命周期 setup、触发清单和独立只读证据校验。`skill-eval.py` 对带 harness 的 session case 使用隔离 fixture，独立采集 Git / 文件 hash / 保护路径、框架 revision 和 runtime evidence，并生成 digest 绑定的 evidence manifest；没有隔离 workspace 的 session case 不执行写入。此前记录的真实 Codex `medium` 批次与 fake runner 均已通过，具体基线见下方「当前验证」。正常 PM 主链不启用完整观测链。Design、Proposal、三件套、context pack、spec-writing、ready / build 与 Lark 生命周期继续由 PMAI 自己负责，不引入第二套主链。
 - gstack 参考基线：`v1.58.5.0`，commit `11de390`；只参考本地 `gstack-clean` checkout，没有升级用户目录中的安装副本。
+- 版本与发布：普通 `main` 提交保持滚动通道，由 commit 标识具体内容；正式版本只通过生成器仓的 `pmai release prepare --bump patch|minor|major` 递增 `VERSION`、把「未发布」归档为 `## vX.Y.Z` 并生成 release 提交，再由 `pmai release publish` 运行 stable gate、推送 main 和 Tag。Tag gate 通过后由 GitHub Actions 创建同版本 Release；没有真实 Runner / 证据 Judge / 语义 Judge 时不得发布 stable。
 
 ## 当前活跃模型
 

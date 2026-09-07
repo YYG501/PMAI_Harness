@@ -90,6 +90,7 @@ CORE_SUITES=(
   test-session-eval-adapters.sh
   test-invariant-coverage.sh
   test-run-suite.sh
+  test-release.sh
   test-cleanup-pending.sh
   test-cancel-work.sh
   test-replan-work.sh

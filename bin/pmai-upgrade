@@ -121,6 +121,30 @@ pmai_hold_global_install_lock \
   "$SCRIPT_DIR/.." "${BASH_SOURCE[0]}" \
   ${ORIGINAL_ARGS[@]+"${ORIGINAL_ARGS[@]}"}
 
+current_channel() {
+  local branch tag
+  branch=$(git symbolic-ref --short -q HEAD 2>/dev/null || true)
+  case "$branch" in
+    main|master) echo "main"; return 0 ;;
+  esac
+  tag=$(git describe --tags --exact-match 2>/dev/null || true)
+  case "$tag" in
+    v*) echo "stable" ;;
+    *) echo "detached" ;;
+  esac
+}
+
+display_ref() {
+  local channel="$1"
+  local version="$2"
+  local head="$3"
+  case "$channel" in
+    main) echo "main@${head} (v${version})" ;;
+    stable) echo "v${version} (${head})" ;;
+    *) echo "${channel}@${head} (v${version})" ;;
+  esac
+}
+
 # ─────────────────────────────────────────────────────────────
 # 共享 helper：把 src_skills 装到 dst_skills（symlink）
 # ─────────────────────────────────────────────────────────────
@@ -322,6 +346,7 @@ OLD_VER=$(cat VERSION 2>/dev/null || echo unknown)
 OLD_HEAD=$(git rev-parse HEAD)          # 全 hash，rollback 用
 OLD_SYMBOLIC_REF=$(git symbolic-ref -q HEAD 2>/dev/null || true)
 OLD_HEAD_SHORT=$(git rev-parse --short HEAD)
+OLD_CHANNEL=$(current_channel)
 
 # 先确认工作树，再允许任何 reset 型回滚。status 失败或此处收到信号都
 # 没有发生写操作，直接退出即可，不能用 reset --hard 猜测恢复。
@@ -390,6 +415,7 @@ esac
 
 NEW_VER=$(cat VERSION 2>/dev/null || echo unknown)
 NEW_HEAD=$(git rev-parse --short HEAD)
+NEW_CHANNEL=$(current_channel)
 
 # 当前进程在 fetch 前已 source 过 helper；升级策略本身可能发生变化，必须重载
 # 刚落盘的版本后再重建宿主入口。
@@ -436,9 +462,9 @@ echo "   $CODEX_PROMPTS: $legacy_prompt_count legacy prompt file(s) removed"
 echo ""
 echo "═══════════════════════════════════════"
 if [ "$OLD_HEAD_SHORT" = "$NEW_HEAD" ]; then
-  echo "✅ PMAI 已是最新（${NEW_VER} @ ${NEW_HEAD}）"
+  echo "✅ PMAI 已是最新（$(display_ref "$NEW_CHANNEL" "$NEW_VER" "$NEW_HEAD")）"
 else
-  echo "✅ PMAI 升级：${OLD_VER} (${OLD_HEAD_SHORT}) → ${NEW_VER} (${NEW_HEAD})"
+  echo "✅ PMAI 升级：$(display_ref "$OLD_CHANNEL" "$OLD_VER" "$OLD_HEAD_SHORT") → $(display_ref "$NEW_CHANNEL" "$NEW_VER" "$NEW_HEAD")"
   # 写 JUST_UPGRADED marker + 清 update-check 缓存（下次 skill 跑时显示 What's New）
   record_upgrade_notice_state
 fi

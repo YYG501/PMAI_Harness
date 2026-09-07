@@ -17,11 +17,13 @@ Subcommands:
   install              Install PMAI globally (clone → ~/.pmai/ + skill symlinks)
   upgrade              Pull latest framework code
                        Flags: --stable | --to <tag>
+  release              Prepare or publish a generator release (maintainer only)
+                       Commands: prepare | check | publish | notes
   uninstall            Remove PMAI install
                        Flags: --force | --local <dir> (清理遗留项目副本)
   doctor               Check or repair framework and current consumer repo
                        Flags: [--check] | --repair | [--json] | [--browser-smoke]
-  update-check         Check if newer stable tag available (silent if up-to-date)
+  update-check         Check newer main commit or stable tag (silent if up-to-date)
   whats-new            Show CHANGELOG diff since last upgrade
                        Flags: --from <ver> [--to <ver>] [--max-lines N] [--full]
   migrate              Migrate consumer from vendored mode to I-mini mode
@@ -67,7 +69,7 @@ case "${1:-}" in
     echo "pmai $(find_version)"
     exit 0
     ;;
-  install|upgrade|uninstall|doctor|update-check|whats-new|migrate|memory)
+  install|upgrade|release|uninstall|doctor|update-check|whats-new|migrate|memory)
     SUB="$1"
     shift
     SUB_BIN="$BIN_DIR/pmai-$SUB"

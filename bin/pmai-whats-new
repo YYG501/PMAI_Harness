@@ -5,7 +5,7 @@
 #   pmai-whats-new                 # 从 ~/.pmai-state/just-upgraded-from 读老版本（若存在则显示并清 marker）
 #   pmai-whats-new --from v0.1.0 --to v0.2.0   # 显式指定
 #
-# 来源：$PMAI_HOME/CHANGELOG.md 的「未发布」段 + 该范围 tag 段（grep `### YYYY-MM-DD —`）
+# 来源：$PMAI_HOME/CHANGELOG.md 的「未发布」段 + 目标版本段
 
 set -euo pipefail
 
@@ -92,12 +92,22 @@ if [ "$FULL" != "1" ]; then
 fi
 echo ""
 
-# 如果 FROM != TO 而且 CHANGELOG 有「## v$FROM」段 → 列 $FROM 到 $TO 之间的 ### 日期段
-# 当前 PMAI CHANGELOG 没有 tag 分段（全在「未发布」），这步留接口给将来 tag-based release
-TAG_SECTION=$(grep -nE "^## v" "$CHANGELOG" | head -5 || true)
-if [ -n "$TAG_SECTION" ]; then
-  echo "🏷️  按版本号已发布段："
-  echo "$TAG_SECTION"
+# stable 发布会把未发布内容归档到 `## vX.Y.Z`，升级时直接展示目标版本正文。
+VERSIONED_SECTION=""
+case "$TO" in
+  current|unknown) ;;
+  *)
+    TO_VERSION="${TO#v}"
+    VERSIONED_SECTION=$(awk -v target="v$TO_VERSION" '
+      $0 ~ "^## " target "( |$)" {found=1; print; next}
+      found && /^## / {exit}
+      found {print}
+    ' "$CHANGELOG")
+    ;;
+esac
+if [ -n "${VERSIONED_SECTION//[[:space:]]/}" ]; then
+  echo "🏷️  已发布版本段："
+  echo "$VERSIONED_SECTION"
 fi
 
 # 读完清 marker（无论 --from 显式还是 marker 读出，反正 What's New 已展示）
