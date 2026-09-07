@@ -5,7 +5,7 @@
 ## 当前位置
 
 - 日期：2026-09-07
-- 开发分支：`codex/harness-hardening`
+- 当前分支：`main`；H1 实现提交 `ec58abc` 已由 `codex/harness-hardening` 快进合入。
 - Harness 增强：H1 已按原定范围完成，护栏异常正确阻断、发布门配置对齐且缺少 Runner / Judge 不能通过。PM 追加的 Windows 本地开发与回归适配也已完成，采用 PowerShell 入口 + Windows 本地 Cygwin 运行时，完整回归及后续入口专项复测通过。PM 主要使用 Mac，暂停 Windows 原生宿主验证；后续在实际 Mac 使用中核验 H2 并开展 H3，H2–H6 尚未完成。本批成果保留在当前开发分支，提交与远端同步状态以 Git 为准；CI 与发布单独跟踪，未升级用户全局安装。
 - Windows 使用与支持边界见[开发与验证说明](./docs/设计/windows-development-validation.md)。本轮结果与上一批基线分开记录于下方「当前验证」，不把本地脚本通过推导为原生宿主、远端 CI 或模型评测通过。
 - 既有能力基线（早于本轮 Windows 适配）：P0 Harness 可信评测、P1 Runner / Judge / runtime evidence 合同，以及 Build 的 Builder / Verifier / Judge 角色隔离已落地；18 个 Session Eval 案例均有脱敏 fixture、动态生命周期 setup、触发清单和独立只读证据校验。`skill-eval.py` 对带 harness 的 session case 使用隔离 fixture，独立采集 Git / 文件 hash / 保护路径、框架 revision 和 runtime evidence，并生成 digest 绑定的 evidence manifest；没有隔离 workspace 的 session case 不执行写入。此前记录的真实 Codex `medium` 批次与 fake runner 均已通过，具体基线见下方「当前验证」。正常 PM 主链不启用完整观测链。Design、Proposal、三件套、context pack、spec-writing、ready / build 与 Lark 生命周期继续由 PMAI 自己负责，不引入第二套主链。
