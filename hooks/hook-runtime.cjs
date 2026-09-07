@@ -35,6 +35,48 @@ function canonicalRoot(cwd) {
   return fs.realpathSync.native(value);
 }
 
+// Conservative interpreter-failure fallback, using the authority's marker data.
+// It can prove a generator or an ordinary repo without PMAI markers; any consumer hint,
+// unreadable path or dangling link stays unknown and therefore blocked.
+function definitelyNonConsumer(root) {
+  const markers = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'scripts', '_lib', 'repo_identity_markers.json'), 'utf8'));
+  const safeFile = relative => {
+    try {
+      const resolved = fs.realpathSync.native(path.join(root, relative));
+      const inside = path.relative(root, resolved);
+      return inside !== '..' && !inside.startsWith('..' + path.sep)
+        && !path.isAbsolute(inside) && fs.statSync(resolved).isFile();
+    } catch { return false; }
+  };
+  if (markers.generator.every(safeFile)) return true;
+  const inspect = relative => {
+    let current = root;
+    for (const part of relative.split('/')) {
+      current = path.join(current, part);
+      try {
+        if (fs.lstatSync(current).isSymbolicLink()) throw new Error('Ambiguous identity link');
+      } catch (error) {
+        if (error.code === 'ENOENT') return null;
+        throw error;
+      }
+    }
+    if (!fs.statSync(current).isFile()) throw new Error('Ambiguous identity file');
+    return current;
+  };
+  try {
+    if (markers.consumer_strong.some(relative => inspect(relative))) return false;
+    if (markers.consumer_legacy.filter(relative => inspect(relative)).length >= 2) return false;
+    for (const relative of markers.consumer_text_files) {
+      const file = inspect(relative);
+      if (!file) continue;
+      if (fs.statSync(file).size > MAX_STDIN_BYTES) return false;
+      const text = new TextDecoder('utf-8', { fatal: true }).decode(fs.readFileSync(file));
+      if (markers.text_markers.some(marker => text.includes(marker))) return false;
+    }
+    return true;
+  } catch { return false; }
+}
+
 function consumerRoot() {
   // A non-Git directory can still have a PMAI identity; classify it before
   // deciding to ignore this invocation. Git/identity failures stay explicit.
@@ -49,7 +91,9 @@ function consumerRoot() {
     requireSuccess(git, 'Git 仓库定位');
   }
   const script = path.join(__dirname, '..', 'scripts', 'repo-kind.py');
-  const text = requireSuccess(runCommand('python3', [script, '--repo-root', root, '--json']), 'PMAI 仓库身份校验');
+  const result = runCommand('python3', [script, '--repo-root', root, '--json']);
+  if ((result.error || result.status !== 0) && definitelyNonConsumer(root)) return null;
+  const text = requireSuccess(result, 'PMAI 仓库身份校验');
   const identity = JSON.parse(text);
   if (!identity || identity.schema_version !== 1
     || !['generator', 'consumer', 'uninitialized'].includes(identity.repo_kind)

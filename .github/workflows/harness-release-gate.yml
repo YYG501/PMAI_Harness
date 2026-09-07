@@ -13,8 +13,9 @@ jobs:
       PMAI_SKILL_EVAL_RUNNER: ${{ vars.PMAI_SKILL_EVAL_RUNNER }}
       PMAI_SKILL_EVAL_JUDGE: ${{ vars.PMAI_SKILL_EVAL_JUDGE }}
       PMAI_SKILL_EVAL_SEMANTIC_JUDGE: ${{ vars.PMAI_SKILL_EVAL_SEMANTIC_JUDGE }}
-      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
       PMAI_CODEX_VERSION: ${{ vars.PMAI_CODEX_VERSION }}
+      PMAI_CODEX_COMMAND: ${{ vars.PMAI_CODEX_COMMAND || 'codex' }}
+      PMAI_JUDGE_CODEX_COMMAND: ${{ vars.PMAI_JUDGE_CODEX_COMMAND || 'codex' }}
     steps:
       - uses: actions/checkout@v4
 
@@ -26,19 +27,41 @@ jobs:
         with:
           node-version: '24'
 
-      - name: Provision the pinned Codex CLI
+      - name: Determine configured adapter dependencies
+        id: dependencies
         shell: bash
         run: |
           set -euo pipefail
           mkdir -p .runs/release-gate
           git rev-parse HEAD > .runs/release-gate/revision.txt
-          if ! [[ "$PMAI_CODEX_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || [ -z "$OPENAI_API_KEY" ]; then
-            echo 'Release gate blocked: configure PMAI_CODEX_VERSION and OPENAI_API_KEY.' | tee .runs/release-gate/provision.log
+          python3 scripts/release-gate-preflight.py --ci-plan | tee .runs/release-gate/dependencies.log >> "$GITHUB_OUTPUT"
+
+      - name: Provision the pinned default Codex CLI
+        if: steps.dependencies.outputs.needs_codex == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p .runs/release-gate
+          git rev-parse HEAD > .runs/release-gate/revision.txt
+          if ! [[ "$PMAI_CODEX_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo 'Release gate blocked: configure PMAI_CODEX_VERSION for the selected default Codex adapter.' | tee .runs/release-gate/provision.log
             exit 2
           fi
           npm install -g "@openai/codex@$PMAI_CODEX_VERSION" 2>&1 | tee .runs/release-gate/provision.log
-          printenv OPENAI_API_KEY | codex login --with-api-key
           codex --version >> .runs/release-gate/provision.log
+
+      - name: Authenticate default Codex when an API key is supplied
+        if: steps.dependencies.outputs.needs_codex == 'true'
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -n "$OPENAI_API_KEY" ]; then
+            printenv OPENAI_API_KEY | codex login --with-api-key
+          fi
+          # Other configured authentication is allowed; final preflight still
+          # requires the selected executable's login status to succeed.
 
       - name: Configure test Git identity
         run: |
@@ -46,6 +69,8 @@ jobs:
           git config --global user.email "pmai-release@example.invalid"
 
       - name: Run deterministic and real-session release gate
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
         shell: bash
         run: |
           set -o pipefail

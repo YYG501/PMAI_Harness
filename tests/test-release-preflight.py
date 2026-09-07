@@ -16,6 +16,26 @@ spec.loader.exec_module(preflight)
 
 
 class ReleasePreflightTests(unittest.TestCase):
+    def test_custom_adapters_do_not_require_codex_or_openai_key(self):
+        environment = dict.fromkeys(preflight.CAPABILITIES, 'python3 custom-adapter.py')
+        self.assertEqual(preflight.configured_engines(environment), {})
+        self.assertFalse(preflight.needs_default_codex(environment))
+
+    def test_provisioning_checks_runner_and_semantic_judge_independently(self):
+        for capability, adapter in [('PMAI_SKILL_EVAL_RUNNER', 'skill-eval-codex-runner.py'),
+                                    ('PMAI_SKILL_EVAL_SEMANTIC_JUDGE', 'skill-eval-semantic-judge.py')]:
+            environment = dict.fromkeys(preflight.CAPABILITIES, 'python3 custom.py')
+            environment[capability] = 'python3 scripts/' + adapter
+            self.assertTrue(preflight.needs_default_codex(environment))
+            environment.update(PMAI_CODEX_COMMAND='codex --profile ci', PMAI_JUDGE_CODEX_COMMAND='codex --profile judge')
+            self.assertTrue(preflight.needs_default_codex(environment))
+            environment.update(PMAI_CODEX_COMMAND='custom-codex', PMAI_JUDGE_CODEX_COMMAND='custom-judge')
+            self.assertFalse(preflight.needs_default_codex(environment))
+
+    def test_ci_plan_still_rejects_missing_judge(self):
+        with self.assertRaisesRegex(ValueError, 'PMAI_SKILL_EVAL_SEMANTIC_JUDGE'):
+            preflight.needs_default_codex(dict.fromkeys(preflight.CAPABILITIES[:-1], 'python3 custom.py'))
+
     def codex_environment(self):
         python = shlex.quote(sys.executable)
         return {

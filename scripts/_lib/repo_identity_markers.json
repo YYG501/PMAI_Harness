@@ -1,0 +1,7 @@
+{
+  "generator": ["RUNTIME.md", "CLAUDE.md", "skills/init-project/SKILL.md"],
+  "consumer_strong": [".pm-workflow/config.yml", ".opencode/commands/pmai-build.md", "docs/CONTEXT.md"],
+  "consumer_legacy": ["PRODUCT.md", "PRODUCT-STATE.md", "docs/PRODUCT.md", "docs/PRODUCT-STATE.md"],
+  "consumer_text_files": ["AGENTS.md", "CLAUDE.md", ".codex/hooks.json", "opencode.json"],
+  "text_markers": ["PMAI", "/pmai-", "$pmai-", "/skill:pmai-"]
+}

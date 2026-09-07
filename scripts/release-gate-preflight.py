@@ -52,20 +52,31 @@ def command_ready(value, label, root):
     return argv, {'capability': label, 'executable': executable}
 
 
-def check_capabilities(root, environment):
+def configured_engines(environment):
     missing = [key for key in CAPABILITIES if not environment.get(key, '').strip()]
     if missing:
         raise ValueError('missing ' + ' '.join(missing))
-    reports = []
     engines = {}
     for key in CAPABILITIES:
-        argv, report = command_ready(environment[key], key, root)
-        reports.append(report)
+        argv = shlex.split(environment[key])
         names = {Path(item).name for item in argv}
         if 'skill-eval-codex-runner.py' in names:
-            engines['PMAI_CODEX_COMMAND'] = environment.get('PMAI_CODEX_COMMAND', 'codex')
+            engines['PMAI_CODEX_COMMAND'] = environment.get('PMAI_CODEX_COMMAND') or 'codex'
         if 'skill-eval-semantic-judge.py' in names:
-            engines['PMAI_JUDGE_CODEX_COMMAND'] = environment.get('PMAI_JUDGE_CODEX_COMMAND', 'codex')
+            engines['PMAI_JUDGE_CODEX_COMMAND'] = environment.get('PMAI_JUDGE_CODEX_COMMAND') or 'codex'
+    return engines
+
+
+def needs_default_codex(environment):
+    return any(shlex.split(command)[:1] == ['codex'] for command in configured_engines(environment).values())
+
+
+def check_capabilities(root, environment):
+    engines = configured_engines(environment)
+    reports = []
+    for key in CAPABILITIES:
+        _, report = command_ready(environment[key], key, root)
+        reports.append(report)
     for key, value in engines.items():
         argv, report = command_ready(value, key, root)
         version = subprocess.run([*argv, '--version'], cwd=root, capture_output=True, text=True, timeout=10)
@@ -84,11 +95,15 @@ def check_capabilities(root, environment):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--cases-only', action='store_true')
+    parser.add_argument('--ci-plan', action='store_true', help='print required default CLI provisioning without executing adapters')
     args = parser.parse_args()
     try:
         cases = selected_cases(ROOT, os.environ)
         if args.cases_only:
             print(' '.join(cases))
+            return 0
+        if args.ci_plan:
+            print('needs_codex=' + str(needs_default_codex(os.environ)).lower())
             return 0
         capabilities = check_capabilities(ROOT, os.environ)
         revision = subprocess.check_output(['git', '-C', str(ROOT), 'rev-parse', 'HEAD'], text=True).strip()

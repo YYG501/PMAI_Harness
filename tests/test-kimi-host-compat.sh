@@ -19,6 +19,7 @@ copy_dispatch_fixture() {
   cp "$REPO_ROOT/scripts/repo-kind.py" "$trusted/scripts/repo-kind.py"
   cp "$REPO_ROOT/scripts/_lib/repo_identity.py" \
     "$trusted/scripts/_lib/repo_identity.py"
+  cp "$REPO_ROOT/scripts/_lib/repo_identity_markers.json" "$trusted/scripts/_lib/repo_identity_markers.json"
   chmod +x "$trusted/scripts/kimi-hook-dispatch.sh"
 }
 

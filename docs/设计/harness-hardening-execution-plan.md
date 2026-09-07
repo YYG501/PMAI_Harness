@@ -65,19 +65,20 @@
 - CI 先核验确定性合同，再执行明确选中的真实场景；保留失败产物和框架 revision。
 - 明确“候选 revision 通过 gate → 发布相同 revision”的流程。现有 tag 触发检查发生在 tag 创建后，本身不等于发布前门禁；后续 tag 检查可作为复核。
 
-仓内 H1 发布配置使用固定的 `evals/release-suite.json`。GitHub Actions 需要以下仓库变量与 Secret：
+仓内 H1 发布配置使用固定的 `evals/release-suite.json`。以下以仓内 Codex 适配器为例；三个适配器命令均须配置，CLI 与认证依赖按实际选择准备：
 
 | 配置 | 内容 |
 |---|---|
-| `PMAI_CODEX_VERSION` | 经适配器预检验证的固定 CLI 版本（`x.y.z`），不自动使用 latest |
+| `PMAI_CODEX_VERSION` | 仅选择默认 `codex` 执行器时需要的固定 CLI 版本（`x.y.z`），不自动使用 latest |
 | `PMAI_SKILL_EVAL_RUNNER` | `python3 scripts/skill-eval-codex-runner.py` |
 | `PMAI_SKILL_EVAL_JUDGE` | `python3 scripts/skill-eval-readonly-judge.py` |
 | `PMAI_SKILL_EVAL_SEMANTIC_JUDGE` | `python3 scripts/skill-eval-semantic-judge.py` |
-| `OPENAI_API_KEY` Secret | CI 专用凭据，通过 stdin 登录，不写入报告 |
+| `PMAI_CODEX_COMMAND` / `PMAI_JUDGE_CODEX_COMMAND` | 可选的已准备执行器或包装命令；未指定时为 `codex` |
+| `OPENAI_API_KEY` Secret | 使用该认证方式时提供，实际评测步骤按原合同传递；默认 Codex 通过 stdin 登录，不是所有适配器的必填项 |
 
 候选提交先通过 `workflow_dispatch` 在对应分支运行 gate；核对产物中的 revision、必测用例和独立 Judge 结果后，才发布同一提交。当前工作流不自动创建 tag 或 Release，也不把 tag 创建后的补测当作发布前批准。本地可先执行 `python3 scripts/release-gate-preflight.py --cases-only` 检查用例，再配置三个命令并执行完整预检。预检不调用模型；通过预检也不代表真实评测已通过。
 
-CLI 安装与凭据入口分别依据 [官方 CLI 源码说明](https://github.com/openai/codex#installing-and-running-codex-cli) 和 [官方认证文档](https://developers.openai.com/codex/auth/)。CI 使用 npm 安装固定版本后仍检查当前适配器依赖的 CLI flags 和登录状态，版本不兼容时阻断。
+CLI 安装与凭据入口分别依据 [官方 CLI 源码说明](https://github.com/openai/codex#installing-and-running-codex-cli) 和 [官方认证文档](https://developers.openai.com/codex/auth/)。CI 先按配置生成依赖计划：只有所选仓内适配器使用默认 `codex` 时才通过 npm 安装固定版本，并在提供 Key 时登录。自定义适配器或执行器须在工作流中准备其真实依赖及认证，不会借此跳过后续检查；仓内 Codex 适配器仍检查其实际执行器的 CLI flags 和登录状态，不兼容或未认证时阻断。
 
 **H1 验收**：用护栏、skill-eval 和发布编排回归证明异常正确阻断，配置缺少 Runner、证据 Judge 或语义 Judge 时不能通过，并核对 CI 配置与脚本要求一致。真实模型运行和远端 CI 的执行结果分别记录，不追加为 H1 的完成条件；也不能把 H1 回归通过称为真实发布验证通过。
 

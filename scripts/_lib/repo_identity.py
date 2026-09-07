@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from enum import Enum
 from pathlib import Path
+import json
 
 
 class RepoIdentityError(RuntimeError):
@@ -16,31 +17,11 @@ class RepoKind(str, Enum):
     UNINITIALIZED = "uninitialized"
 
 
-_GENERATOR_MARKERS = (
-    "RUNTIME.md",
-    "CLAUDE.md",
-    "skills/init-project/SKILL.md",
-)
-
-_CONSUMER_STRONG_MARKERS = (
-    ".pm-workflow/config.yml",
-    ".opencode/commands/pmai-build.md",
-    "docs/CONTEXT.md",
-)
-
-_LEGACY_CONSUMER_MARKERS = (
-    "PRODUCT.md",
-    "PRODUCT-STATE.md",
-    "docs/PRODUCT.md",
-    "docs/PRODUCT-STATE.md",
-)
-
-_PMAI_TEXT_MARKERS = (
-    "PMAI",
-    "/pmai-",
-    "$pmai-",
-    "/skill:pmai-",
-)
+_MARKERS = json.loads(Path(__file__).with_name("repo_identity_markers.json").read_text(encoding="utf-8"))
+_GENERATOR_MARKERS = _MARKERS["generator"]
+_CONSUMER_STRONG_MARKERS = _MARKERS["consumer_strong"]
+_LEGACY_CONSUMER_MARKERS = _MARKERS["consumer_legacy"]
+_PMAI_TEXT_MARKERS = _MARKERS["text_markers"]
 
 
 def _root(path: Path) -> Path:
@@ -90,7 +71,7 @@ def classify_repo(path: Path) -> RepoKind:
 
     if any(
         _mentions_pmai(root, marker)
-        for marker in ("AGENTS.md", "CLAUDE.md", ".codex/hooks.json", "opencode.json")
+        for marker in _MARKERS["consumer_text_files"]
     ):
         return RepoKind.CONSUMER
 

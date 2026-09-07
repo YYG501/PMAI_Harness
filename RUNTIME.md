@@ -102,6 +102,14 @@
 
 ## 当前验证
 
+推送前审查修正（当前）：
+
+- 已收窄身份解释器不可用时的非消费仓阻断：普通说明文件不会被仅按文件名视为 PMAI 入口；消费仓、旧入口组合、损坏链接与非法编码仍阻断。Python 权威解析与 Hook 降级判断共用身份标记数据。CI 根据实际适配器选择准备默认 Codex，不强制所有适配器提供 OpenAI Key，可选 Key 仍传入真实评测步骤。
+- 完整回归 `106` 套、`1063 passed / 0 failed`，退出码 `0`，日志 `.tmp/review-fix-full.log`；静态评测 `7 passed / 0 failed`，未配置真实 Runner 的 `18` 个会话明确 skip。全量执行期间补充的 Hook 边界另行通过最终专项复测：Hook `17/17`、发布预检 `14/14`，日志 `.tmp/review-fix-hooks-final.log` 与 `.tmp/review-fix-release-final.log`。
+- 已核验工作流条件、可选凭据传递及修改文件语法；另外实测跨仓生成器标记链接仍被识别为消费仓并阻断。源码清单见 `.tmp/review-fix-source.json`，指纹 `b5130d347188b5afa106b196856898b2ae661663537cf2bcea8003f87e43f5d5`。这些是本地确定性证据，不代表远端 CI 或 Mac 原生宿主已验证。
+
+以下保留修正前的 Windows 适配基线：
+
 本轮 Windows（H1 与本地兼容运行时）：
 
 - 环境：PowerShell `7.6.5`、Cygwin Python `3.12.12`，本机无 WSL；运行时位于 checkout 的 `.tmp/cygwin`，没有升级用户全局 PMAI。

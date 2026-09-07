@@ -40,6 +40,7 @@ cp.spawnSync = (command, args, options) => {
   const git = command === 'git' || (/[\\\\/]bash\\.exe$/.test(command) && args[4] === 'pmai-git');
   if ((git && mode === 'git') || (python && mode === 'python'))
     return {status: null, error: Object.assign(new Error('missing'), {code: 'ENOENT'})};
+  if (python && mode === 'python127') return {status: 127, stdout: '', stderr: 'python3: command not found'};
   if (!python) return original(command, args, options);
   if (pythonArgs[0].endsWith('repo-kind.py')) return bridged
     ? original(command, args, options) : original(process.env.PMAI_TEST_PYTHON, args, options);
@@ -95,6 +96,42 @@ if (process.env.PMAI_TEST_FAILURE === 'stdin')
                 payload = json.loads(self.tool())
                 payload['cwd'] = value
                 self.assert_blocked(self.run_hook(hook, json.dumps(payload)))
+
+    def test_missing_python_does_not_block_known_non_consumers(self):
+        for hook in HOOKS:
+            for cwd in [self.ordinary, self.generator]:
+                for failure in ['python', 'python127']:
+                    result = self.run_hook(hook, self.tool(), cwd=cwd, failure=failure)
+                    self.assertEqual((result.returncode, result.stdout, result.stderr), (0, '', ''))
+
+    def test_missing_python_preserves_consumer_and_ambiguous_boundaries(self):
+        hint = self.ordinary / 'CLAUDE.md'
+        hint.write_text('PMAI consumer entry', encoding='utf-8')
+        for hook in HOOKS:
+            for cwd in [self.consumer, self.ordinary]:
+                for failure in ['python', 'python127']:
+                    self.assert_blocked(self.run_hook(hook, self.tool(), cwd=cwd, failure=failure))
+
+    def test_missing_python_allows_unrelated_agent_notes_but_not_legacy_consumer(self):
+        (self.ordinary / 'AGENTS.md').write_text('General project instructions', encoding='utf-8')
+        (self.ordinary / 'CLAUDE.md').write_text('Use existing tests', encoding='utf-8')
+        (self.ordinary / 'PRODUCT.md').write_text('An ordinary product', encoding='utf-8')
+        for hook in HOOKS:
+            result = self.run_hook(hook, self.tool(), cwd=self.ordinary, failure='python')
+            self.assertEqual((result.returncode, result.stdout, result.stderr), (0, '', ''))
+        (self.ordinary / 'PRODUCT-STATE.md').write_text('Legacy identity pair', encoding='utf-8')
+        for hook in HOOKS:
+            self.assert_blocked(self.run_hook(hook, self.tool(), cwd=self.ordinary, failure='python'))
+
+    def test_missing_python_does_not_ignore_dangling_marker_parent(self):
+        (self.ordinary / '.pm-workflow').symlink_to(self.base / 'missing', target_is_directory=True)
+        for hook in HOOKS:
+            self.assert_blocked(self.run_hook(hook, self.tool(), cwd=self.ordinary, failure='python'))
+
+    def test_missing_python_does_not_ignore_invalid_utf8_identity(self):
+        (self.ordinary / 'AGENTS.md').write_bytes(b'PM\xffAI')
+        for hook in HOOKS:
+            self.assert_blocked(self.run_hook(hook, self.tool(), cwd=self.ordinary, failure='python'))
 
     def test_malformed_tool_input_is_blocked(self):
         for hook in HOOKS:
