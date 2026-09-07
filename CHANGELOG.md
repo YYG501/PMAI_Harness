@@ -14,6 +14,8 @@ PM-AI-Workflow 生成器仓的演进记录。本文件**只记影响已安装框
 
 ## 未发布
 
+- `refactor(proposal+design)`: **把 Proposal 从一次性方向文档明确为可被下游持续消费的完整产品主张。** Proposal 现在同时组织端到端产品体验、关键能力和 MVP 价值链；Design 进入模块时说明本轮推进的用户结果、要保留的产品主张和要验证的证据，再继续收敛对象、动作、状态、权限、页面和异常。保留现有 Proposal 交接字段、机器合同和历史文档兼容，不新增状态机或第二套 gate。
+
 - `feat(build+finalization)`: **把实现、机械验收和语义验收拆成可追溯的角色链。** 新 build 默认派发当前主控的 `native-child` Builder；首次实现和大型重构由 Builder 执行，局部反馈仍由主控处理。PM 定稿后由 Verifier 运行机械 final checks 并生成绑定 `implementation_commit + source_hash` 的 receipt，独立 Judge 只读复核 `semantic_checks`，必须使用不同 `run_id` 并绑定同一 `evidence_digest`；Judge 通过前不能进入 `review-ready`。child / 外部能力不可用时主控可以接管，但 receipt 必须标记 `main-fallback`、`independent=false` 和降级原因，PM 回执明确这是非独立降级执行。新增回归覆盖 fallback、digest / run-id / 语义范围隔离，以及机械失败不能被 Judge 覆盖。
 
 - `change(build)`: **收缩 Builder 选择并调整默认开工方案。** 新 build 从候选中移除 Kimi Code 与 Cursor Agent；新消费仓默认使用“独立环境 + 当前主控后台 native-child”，PM 仍可在确认卡中改选可用的 Claude Code、Codex 或 OpenCode，或明确选择当前会话直接构建作为 `main-fallback`。历史 adapter 与 build 合同枚举保留为中断恢复兼容，不影响新 build 选择面。

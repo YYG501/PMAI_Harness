@@ -32,6 +32,8 @@ test_proposal_is_a_complete_product_level_decision() {
   start_test "proposal: complete product-level decision stays above design"
 
   assert_file_contains "$SKILL" 'Proposal 位于模块 design 之前' "proposal should own the product-level decision" || return
+  assert_file_contains "$SKILL" '完整产品主张' "proposal should remain a reusable product claim for downstream work" || return
+  assert_file_contains "$SKILL" '端到端体验、关键能力和 MVP 证明目标' "proposal should connect experience, capabilities, and proof target" || return
   assert_file_contains "$SKILL" '必须完成一份可独立评审的完整 Product Proposal' "proposal should require a complete artifact" || return
   assert_file_contains "$SKILL" '不得用 brief、方向摘要、问题清单、竞品报告或普通介绍稿代替' "partial substitutes should be rejected" || return
   assert_file_contains "$SKILL" '/pmai-doc-writing' "confirmed narrative work should route to doc-writing" || return
@@ -102,6 +104,9 @@ test_downstream_boundary_is_fixed() {
   assert_file_contains "$METHOD" '第一个 design 目标' "handoff should name the first design result" || return
   assert_file_contains "$METHOD" 'MVP 必须证明' "handoff should preserve the MVP proof target" || return
   assert_file_contains "$METHOD" '不提前写信息模型、页面层级、字段、状态机、权限矩阵或验收步骤' "proposal should not preempt design" || return
+  assert_file_contains "$METHOD" 'Proposal 的下游用途' "handoff should explain downstream use" || return
+  assert_file_contains "$METHOD" '取舍依据' "handoff should preserve prioritization rationale" || return
+  assert_file_contains "$METHOD" '验证依据' "handoff should preserve the validation target" || return
   assert_file_contains "$SKILL" 'design、record、doc-writing、spec-writing 都不得修改 Proposal' "downstream skills should treat proposal as read-only" || return
   assert_file_contains "$SKILL" 'Proposal 不得直接跳回 lark-review，因为它本身不修改模块规格' \
     "product-review handoffs must pass through affected module design after Proposal" || return

@@ -162,7 +162,7 @@ CLI 不再提供 `pmai status`。框架与消费仓健康检查统一使用 `pma
 
 ### 2. Product Proposal 澄清产品方向
 
-Proposal 位于 design 上游，回答“这个产品为什么成立、值得先投什么”，形成产品级用户、问题、产品回答、价值、职责边界和 MVP 证明目标。新项目默认完成 Proposal；成熟资料目录或已有代码库只有在接入流程核验这些内容已经完整，在 `PRODUCT.md` 记录真实仓内依据与 PM 确认日期，并且产品基线与依据均已提交且无漂移、机器状态为 `equivalent_baseline` 时才可跳过。
+Proposal 位于 design 上游，回答“这个产品为什么成立、值得先投什么”，并把用户、问题、产品回答、价值、边界、端到端体验、关键能力和 MVP 证明目标连成一条可验证的产品逻辑。新项目默认完成 Proposal；成熟资料目录或已有代码库只有在接入流程核验这些内容已经完整，在 `PRODUCT.md` 记录真实仓内依据与 PM 确认日期，并且产品基线与依据均已提交且无漂移、机器状态为 `equivalent_baseline` 时才可跳过。
 
 一旦进入 Proposal，就必须形成一份可独立评审的完整 Product Proposal，不能用 brief、方向摘要、竞品报告或普通介绍稿代替。Proposal 定稿后同步精简基线到 `PRODUCT.md`，下游 design、spec-writing、build、doc-writing 和 record 只读消费；方向变化时创建完整新版本并明确取代旧版，不能原地改写历史版本。
 
@@ -181,7 +181,7 @@ Proposal 位于 design 上游，回答“这个产品为什么成立、值得先
 哪些不能 mock，因为会误导决策？
 ```
 
-Proposal 提供产品级判断，模块 brief 只界定本轮目标；两者都不替代具体模块探索。完整 PRD 在模块决定闭合后由 spec-writing 编译，不提前冻结未知项。
+Proposal 提供产品主张、完整体验、关键能力和验证目标，模块 brief 只界定本轮目标；Proposal 仍不替代具体模块探索。Design 使用 Proposal 判断本轮模块为何优先、必须保留什么和要验证什么，再收敛对象、动作、状态、权限、页面和异常。完整 PRD 在模块决定闭合后由 spec-writing 编译，不提前冻结未知项。
 
 ### 4. design 讨论和内部能力编排
 
@@ -297,7 +297,7 @@ PMAI 成功时，PM 的体验应该是：
 
 后续改造应以本文为准：
 
-- 正常主链是 `init → proposal → design → spec-writing → build`；Proposal 负责产品级澄清，design 负责模块决定，spec-writing 负责把闭合决定编译成规格。
+- 正常主链是 `init → proposal → design → spec-writing → build`；Proposal 负责形成可被下游持续消费的完整产品主张和 MVP 验证逻辑，design 负责把选定的一段产品体验收敛为模块决定，spec-writing 负责把闭合决定编译成规格。
 - 新项目默认完成完整 Proposal；成熟项目只有显式记录依据与 PM 确认日期、相关文件已提交且无漂移、通过机器门的完整等价产品基线才可跳过。一旦进入就必须完整产出，已确认版本仅供下游读取；方向纠正必须回 Proposal 新建版本并 supersede 旧版。
 - design 是模块需求讨论主入口；meta、mockup、spec-writing 按需后台调用并返回主线。spec-writing 也保留明确专项意图下的手动入口。
 - spec-writing 复用通用内容模块，按领域叠加企业平台 / AI Product Profile，并按文档需要选择 Preset；完整 PRD 是唯一 Preset，不是通用默认形态或第二套真相源。

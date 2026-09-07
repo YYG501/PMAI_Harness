@@ -112,6 +112,9 @@ test_route_priority_and_recovery_are_explicit() {
   elif ! grep -q '不是 Session Eval' "$CONTRACT" \
     || ! grep -q '以后进入 Session Eval' "$CONTRACT"; then
     _fail "static contract checks must not claim session effectiveness"
+  elif ! grep -q '端到端产品体验、关键能力和 MVP 价值链' "$CONTRACT" \
+    || ! grep -q '说明本轮推进的产品体验和用户结果' "$CONTRACT"; then
+    _fail "Proposal and Design mappings must preserve product experience and result linkage"
   else
     pass_test
   fi

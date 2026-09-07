@@ -21,11 +21,11 @@ python3 "$PMAI_HOME/scripts/status-view.py" --banner-only --skill PROPOSAL || tr
 
 ## 定位
 
-Proposal 位于模块 design 之前，回答“这个产品为什么成立、值得先投什么”。全新项目默认先完成 Proposal；成熟项目只有接入流程已核验完整资料、`PRODUCT.md` 显式记录真实仓内依据和 PM 确认日期、机器状态为 `equivalent_baseline` 时才可直接 design。无论由初始化、方向纠正还是 PM 主动触发，一旦进入本 skill 就必须完成完整 Proposal。
+Proposal 位于模块 design 之前，回答“这个产品为什么成立、值得先投什么”，并形成一份后续工作可以持续消费的完整产品主张。它要把目标用户、问题、产品回答、价值、边界、端到端体验、关键能力和 MVP 证明目标连成一条可验证的产品逻辑。全新项目默认先完成 Proposal；成熟项目只有接入流程已核验完整资料、`PRODUCT.md` 显式记录真实仓内依据和 PM 确认日期、机器状态为 `equivalent_baseline` 时才可直接 design。无论由初始化、方向纠正还是 PM 主动触发，一旦进入本 skill 就必须完成完整 Proposal。
 
 一旦进入本 skill，就必须完成一份可独立评审的完整 Product Proposal。不得用 brief、方向摘要、问题清单、竞品报告或普通介绍稿代替；篇幅可以随产品复杂度缩放，但固定判断必须有明确结论、证据等级或验证方式。
 
-Proposal 不替代 design：它定义产品级用户、问题、产品回答、价值、边界和 MVP 证明目标；对象关系、动作、状态、权限、页面、异常路径和建造规格仍由 `/pmai-design` 收敛。
+Proposal 不替代 design：它可以描述用户从问题到结果的完整体验、关键步骤、参与者、输入输出、状态变化和产品边界，用来判断产品价值闭环是否成立；对象字段、详细状态枚举与转换、权限矩阵、页面交互、异常处理和建造规格仍由 `/pmai-design` 收敛。下游不是只读取 Proposal 的结论，而是用它决定本轮模块为何优先、必须保留什么、要验证哪条产品主张。
 
 ## Proposal Loop Mapping
 
@@ -132,6 +132,7 @@ Proposal 只能在主仓 `main/master` 定稿。旧 active build 尚未按步骤
 - 已确认事实、有依据的推断、待验证假设；
 - 最危险前提和会推翻当前方向的反例；
 - 目标用户、现状替代、产品回答与职责边界；
+- 端到端产品体验、关键能力与用户结果之间的关系；
 - 价值因果链与最小可验证 MVP；
 - AI 产品的 AI 必要性、人机分工和运行边界；非 AI 产品明确该项为什么不适用。
 
@@ -222,7 +223,7 @@ PM 未选择前不得写 Proposal、索引或 `PRODUCT.md`；没有本轮项目 
 
 ### 7. 预览、质检和最终确认
 
-按参考方法逐项检查全文一致性，重点确认摘要、用户、产品边界、关键能力、价值链、MVP 和下游交接没有互相矛盾。
+按参考方法逐项检查全文一致性，重点确认摘要、用户、产品体验、关键能力、产品边界、价值链、MVP 和下游交接没有互相矛盾，并确认第一项 design 能说明它推进哪段体验、保留哪条产品主张、验证什么结果。
 
 向 PM 展示：
 
@@ -230,7 +231,7 @@ PM 未选择前不得写 Proposal、索引或 `PRODUCT.md`；没有本轮项目 
 - 新版本路径及被取代版本；
 - 将进入 `PRODUCT.md` 的稳定基线；
 - 仍待 MVP 验证的假设；
-- 交给 design 的第一个结果。
+- 交给 design 的第一个结果，以及它在完整产品体验中承担的用户结果。
 
 最终 Decision gate：
 
@@ -305,7 +306,7 @@ Product Proposal 已定稿：docs/proposals/<slug>-vN.md
 ## ▶ Next Up — /pmai-design "<MVP 第一个可建造结果>"
 ```
 
-`/pmai-design` 必须读取当前 Proposal 的“下游交接摘要”，但不得回写 Proposal。后续方向再次变化时，重新进入本 skill。
+`/pmai-design` 必须读取当前 Proposal 的“下游交接摘要”，并在开始模块讨论时说明本轮如何推进其中的产品体验、关键能力和 MVP 证明目标，但不得回写 Proposal。后续方向再次变化时，重新进入本 skill。
 
 存在 pending 飞书产品级 handoff 时，先按 `handoff_bundle` 中的文档与模块去重形成下游覆盖队列；回执仍只突出第一条可执行动作，其余条目作为后续队列列出，不把多个模块拼成一条命令：
 
@@ -329,5 +330,5 @@ Product Proposal 已定稿：docs/proposals/<slug>-vN.md
 - MVP 必须验证“判断或能力变化 → 用户行动 → 结果变化”，不以功能完成或模型指标单独宣告成功。
 - `PRODUCT.md`、Proposal 版本关系和 `.pm-workflow/proposal.json` 同一提交原子同步；本 skill 不改 `PRODUCT-STATE.md`、模块三件套、`project.yml`、代码或 mockup。
 - doc-writing 可以读取 Proposal 生成派生材料；design、record、doc-writing、spec-writing 都不得修改 Proposal。
-- PM-facing 输出使用业务语言，不展示 hash、工作区、状态机或内部编排术语。
+- PM-facing 输出使用业务语言，不展示 hash、工作区、状态机或内部编排术语；Proposal 的下游回执要让 PM 看见“这轮模块工作服务哪段产品体验、要保留什么、要验证什么”。
 - 每次进入、反馈和恢复都遵守 `skills/_shared/loop-contract.md`；本 Skill 不复制一套 Proposal 专属 loop state。

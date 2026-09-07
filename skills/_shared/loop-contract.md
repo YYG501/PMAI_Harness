@@ -45,8 +45,8 @@ Proposal、Design、Build 共用这一份循环协议。它规定 Agent 每轮�
 ## 4. Proposal Loop Mapping
 
 - **输入**：当前 Proposal/等价产品基线、`PRODUCT.md`、产品证据、被取代关系、产品级 handoff 和冻结候选。
-- **允许动作**：区分事实/推断/假设，收敛产品级判断，询问真实产品分叉，生成或修改完整待确认版本，原子同步产品基线。
-- **验证**：固定判断完整、版本关系唯一、Proposal 与 `PRODUCT.md`/机器合同一致、Git currentness 与精确提交范围通过。
+- **允许动作**：区分事实/推断/假设，收敛产品级判断、端到端产品体验、关键能力和 MVP 价值链，询问真实产品分叉，生成或修改完整待确认版本，原子同步产品基线。
+- **验证**：固定判断、产品体验、关键能力和 MVP 价值链完整，版本关系唯一，Proposal 与 `PRODUCT.md`/机器合同一致、Git currentness 与精确提交范围通过；下游交接能够说明第一个 design 如何推进用户结果。
 - **当前阶段重试**：证据不足、完整版本内部矛盾、PM 对完整草案提出修改时，保持 Proposal 并修正整份判断。
 - **等待 PM**：产品用户、价值、边界、MVP 或 one-way 定稿授权尚未闭合时，执行 `await_pm_decision`，未回答前不写正式基线。
 - **进入下游**：原子提交和提交后 validate 均通过，执行 `advance → Design`。
@@ -54,8 +54,8 @@ Proposal、Design、Build 共用这一份循环协议。它规定 Agent 每轮�
 
 ## 5. Design Loop Mapping
 
-- **输入**：当前 Product Proposal/等价基线、模块三件套、context pack、相关现状与实现、replan candidate、评审 handoff 和 PM 新反馈。
-- **允许动作**：恢复模块上下文，收敛对象/动作/状态/权限/页面/异常，按需调用 meta/mockup/spec-writing，并固定唯一 build 入口。
+- **输入**：当前 Product Proposal/等价基线、其中的产品体验、关键能力和 MVP 证明目标、模块三件套、context pack、相关现状与实现、replan candidate、评审 handoff 和 PM 新反馈。
+- **允许动作**：恢复模块上下文，说明本轮推进的产品体验和用户结果，收敛对象/动作/状态/权限/页面/异常，按需调用 meta/mockup/spec-writing，并固定唯一 build 入口。
 - **验证**：真实产品分叉已经闭合，每个新增/变化的模块决定都有绑定展示题、用户消息与 checkpoint 的 consumed gate；对象到页面的覆盖完整，规格没有用猜测补未知项，项目建造定义有效，ready currentness 与批准路径通过。
 - **当前阶段重试**：模块模型仍有缺口、规格编译发现遗漏、mockup 暴露新模块问题时，执行 `retry_current` 并回到对应未知项。
 - **返回上游**：产品定位、用户、价值、边界、MVP 或成立前提变化，执行 `route_proposal`；Proposal 生效后重新编译上下文并逐条复核旧模块结论。

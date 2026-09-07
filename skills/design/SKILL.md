@@ -43,7 +43,7 @@ python3 "$PMAI_HOME/scripts/status-view.py" --banner-only --skill DESIGN || true
 
 `/pmai-design` 是需求讨论前台，也是内部能力调度器。PM 只需要和 design 把问题讨论清楚；`meta`、`mockup`、`spec-writing` 由 design 根据实际缺口调用，完成后返回同一条主线。
 
-Product Proposal 位于 design 上游。全新项目默认先完成 Proposal；成熟项目已有等价产品基线时可直接进入 design。design 继承产品级用户、问题、价值、边界和 MVP 证明目标，但仍独立收敛模块对象、动作、状态、权限、页面和异常路径。
+Product Proposal 位于 design 上游。全新项目默认先完成 Proposal；成熟项目已有等价产品基线时可直接进入 design。design 继承的不只是产品级用户、问题、价值、边界和 MVP 证明目标，还包括完整产品体验、关键能力及其用户结果；进入本轮时要说明当前模块推进其中哪段体验、保留哪条产品主张、要验证什么结果，同时独立收敛模块对象、动作、状态、权限、页面和异常路径。
 
 ## Design Loop Mapping
 
@@ -173,13 +173,13 @@ python3 "$PMAI_HOME/scripts/context-pack.py" \
 
 实际消费 pack 中的：
 
-- `product_proposal` 的当前版本与固定交接摘要：第一个 design 目标、主用户与触发时刻、核心任务、必须保持的产品回答和边界、MVP 证据、待验证假设及 design 未知项；
+- `product_proposal` 的当前版本与固定交接摘要：第一个 design 目标、主用户与触发时刻、核心任务、必须保持的产品回答和边界、MVP 证据、待验证假设及 design 未知项；同时读取 Proposal 的端到端产品体验和关键能力，明确本轮模块推进的用户结果；
 - 当前产品目标合同、已落地现状、视觉基线和相关实现入口；
 - `active`、`superseded`、冻结决定和可能冲突；
 - 未决问题、PM 已回答内容和被拒绝的问句式“决定”；
 - `source_hash`、`design_revision`、当前实现 commit。
 
-先主动告诉 PM 与本轮最相关的 Proposal 约束和 1–3 条旧决定及其影响。Proposal 已回答的用户、问题、产品回答、边界和 MVP 目标不重复问；只围绕交接摘要中仍需 design 收敛的模块未知项继续。问句、猜测和讨论草稿不当决定。
+先主动告诉 PM 与本轮最相关的 Proposal 产品主张、用户结果、约束和 1–3 条旧决定及其影响。Proposal 已回答的用户、问题、产品回答、边界和 MVP 目标不重复问；只围绕交接摘要中仍需 design 收敛的模块未知项继续。问句、猜测和讨论草稿不当决定。
 
 恢复已有模块时，给 PM 的上下文摘要必须逐项标明相关决定属于 `active`、`superseded` 还是与当前 Proposal/事实冲突；若某一类别没有相关记录也明确写“无”。不能只复述 active 决定或冲突结论而省略已失效的历史方案，否则 PM 无法判断本轮是在沿用、取代还是重新打开旧方向。
 
