@@ -6,8 +6,10 @@
 
 | 文件 | 说明 |
 |---|---|
+| [`设计/windows-development-validation.md`](./设计/windows-development-validation.md) | Windows 本地兼容运行时安装、PowerShell 测试入口与支持边界 |
 | [`设计/framework-owner-view-and-complexity-review.md`](./设计/framework-owner-view-and-complexity-review.md) | PMAI 当前系统全景、所有者权责、已确认架构边界与分批收口顺序 |
 | [`设计/agent-harness-evaluation-methodology.md`](./设计/agent-harness-evaluation-methodology.md) | Agent Harness 在真实消费仓场景中的观测、评测、证据与发布方法论 |
+| [`设计/harness-hardening-execution-plan.md`](./设计/harness-hardening-execution-plan.md) | Harness 护栏、宿主验证、真实旅程、Build 诊断、重复评测与上下文优化的分批交付和验收条件 |
 | [`设计/compatibility-assets-and-consumer-inventory.md`](./设计/compatibility-assets-and-consumer-inventory.md) | 兼容读取、新写版本、已知消费仓依赖、迁移动作与退休条件 |
 | [`设计/host-capability-current-and-target-matrix.md`](./设计/host-capability-current-and-target-matrix.md) | Claude、Codex、Kimi、OpenCode 的当前能力、目标等级与收缩验收标准 |
 

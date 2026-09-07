@@ -51,3 +51,33 @@ jobs:
           bash tests/test-atomic-file.sh
           bash tests/test-lark-adapter.sh
           bash tests/test-init-project-codex-compat.sh
+
+  windows-local-runtime:
+    runs-on: windows-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Prepare verified Windows compatibility runtime
+        shell: pwsh
+        run: |
+          $downloadDir = Join-Path $env:RUNNER_TEMP 'pmai-bootstrap'
+          New-Item -ItemType Directory -Path $downloadDir -Force | Out-Null
+          Invoke-WebRequest https://cygwin.com/setup-x86_64.exe -OutFile (Join-Path $downloadDir 'setup-x86_64.exe')
+          Invoke-WebRequest https://cygwin.com/sha512.sum -OutFile (Join-Path $downloadDir 'sha512.sum')
+          ./scripts/windows/setup.ps1 -Installer (Join-Path $downloadDir 'setup-x86_64.exe') -ChecksumFile (Join-Path $downloadDir 'sha512.sum') -RuntimeRoot (Join-Path $env:RUNNER_TEMP 'pmai-cygwin')
+      - name: Run Windows deterministic regression
+        shell: pwsh
+        run: |
+          ./tests/run-windows.ps1 -RuntimeRoot (Join-Path $env:RUNNER_TEMP 'pmai-cygwin') *> windows-tests.log
+          $suiteExitCode = $LASTEXITCODE
+          Get-Content windows-tests.log -Tail 50
+          exit $suiteExitCode
+      - name: Retain Windows regression evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-regression-${{ github.sha }}
+          path: windows-tests.log

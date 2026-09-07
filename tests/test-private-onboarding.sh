@@ -23,12 +23,19 @@ make_fake_path() {
   local tool path
 
   mkdir -p "$fake_bin"
-  for tool in awk basename bash cat chmod cmp comm cp cut date dirname find git grep head ln mkdir mktemp mv pwd python3 readlink rm sed sort tail touch tr uname wc xargs; do
+  for tool in awk basename bash sh cat chmod cmp comm cp cut date dirname find git git-upload-pack grep head ln mkdir mktemp mv pwd python3 readlink rm sed sort tail touch tr uname wc xargs; do
     path=$(command -v "$tool" 2>/dev/null || true)
     if [ -n "$path" ] && [ ! -e "$fake_bin/$tool" ]; then
       ln -s "$path" "$fake_bin/$tool"
     fi
   done
+  # Git's Cygwin helpers live in libexec, so Windows resolves their DLLs via
+  # PATH. Keep the fixture tool allowlist while making those libraries visible.
+  if [[ "$(uname -s)" == CYGWIN* ]]; then
+    for path in /usr/bin/cyg*.dll; do
+      ln "$path" "$fake_bin/$(basename "$path")"
+    done
+  fi
 }
 
 make_source_snapshot() {

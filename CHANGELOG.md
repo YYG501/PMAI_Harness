@@ -14,6 +14,14 @@ PM-AI-Workflow 生成器仓的演进记录。本文件**只记影响已安装框
 
 ## 未发布
 
+- `fix(harness)`: **收窄审查发现的额外阻断。** 身份解释器不可用时，共用身份标记数据仅证明生成器或无 PMAI 身份标记的普通仓可 no-op，普通项目说明文件本身不算 PMAI 标记；消费仓、可疑入口、损坏路径与非法编码仍阻断。发布 CI 根据所选 Runner / Judge 准备默认 Codex，自定义适配器不强制绑定 Codex 或 OpenAI Key，真实能力与认证仍由发布预检验证。
+
+- `fix(hooks)`: **决策与定稿护栏统一校验真实仓根和宿主输入。** 已确认的普通仓和生成器仓保持不介入消费仓门禁；消费仓的坏 JSON、非法事件、跨仓 cwd、超限输入、读取超时和校验器失败会明确阻断。共享单次执行预算，并保留当前恢复点；不把校验失败当成没有活动工作。
+
+- `feat(windows)`: **增加 PowerShell 入口与 Windows 本地 Cygwin 运行边界。** 入口保留 argv、UTF-8 管道、工作目录与退出码；框架 Python 使用兼容运行时，Hook 通过明确的 Node/Git/Python 路径转换调用。文件事务增加 Windows 目录身份绑定和不可覆盖重命名支持，保留现有并发与恢复合同。Windows 支持范围和实际验证进度见 RUNTIME，不将原生 Windows Python 或未验证宿主视为已支持。
+
+- `fix(release-gate)`: **发布前明确必测清单与执行能力。** 核心 Session 清单由仓内 manifest 维护，空清单、删减必测案例、缺 Runner/证据 Judge/语义 Judge 或 CLI 不兼容均阻断；CI 传入语义 Judge 配置并保留候选版本和失败证据。
+
 - `refactor(proposal+design)`: **把 Proposal 从一次性方向文档明确为可被下游持续消费的完整产品主张。** Proposal 现在同时组织端到端产品体验、关键能力和 MVP 价值链；Design 进入模块时说明本轮推进的用户结果、要保留的产品主张和要验证的证据，再继续收敛对象、动作、状态、权限、页面和异常。保留现有 Proposal 交接字段、机器合同和历史文档兼容，不新增状态机或第二套 gate。
 
 - `feat(build+finalization)`: **把实现、机械验收和语义验收拆成可追溯的角色链。** 新 build 默认派发当前主控的 `native-child` Builder；首次实现和大型重构由 Builder 执行，局部反馈仍由主控处理。PM 定稿后由 Verifier 运行机械 final checks 并生成绑定 `implementation_commit + source_hash` 的 receipt，独立 Judge 只读复核 `semantic_checks`，必须使用不同 `run_id` 并绑定同一 `evidence_digest`；Judge 通过前不能进入 `review-ready`。child / 外部能力不可用时主控可以接管，但 receipt 必须标记 `main-fallback`、`independent=false` 和降级原因，PM 回执明确这是非独立降级执行。新增回归覆盖 fallback、digest / run-id / 语义范围隔离，以及机械失败不能被 Judge 覆盖。

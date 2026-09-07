@@ -5,7 +5,7 @@
 
 const path = require('path');
 const fs = require('fs');
-const { spawnSync } = require('child_process');
+const { spawnSync, nativePath } = require('./host-process.cjs');
 
 const MAX_STDIN_BYTES = 4 * 1024 * 1024;
 const UI_EXTENSIONS = new Set(['.css', '.jsx', '.js', '.scss', '.tsx', '.ts', '.vue']);
@@ -74,7 +74,7 @@ function main(data) {
   if (!input || typeof input !== 'object' || Array.isArray(input)) return;
   const rawTarget = input.file_path || input.path;
   if (typeof rawTarget !== 'string' || !rawTarget.trim()) return;
-  const target = path.resolve(process.cwd(), rawTarget);
+  const target = path.resolve(process.cwd(), nativePath(rawTarget));
   if (!UI_EXTENSIONS.has(path.extname(target).toLowerCase())) return;
   const proposed = typeof input.new_string === 'string'
     ? input.new_string

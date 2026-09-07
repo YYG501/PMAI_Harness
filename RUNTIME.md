@@ -4,9 +4,11 @@
 
 ## 当前位置
 
-- 日期：2026-08-31
-- 开发分支：`main`
-- 当前目标：P0 Harness 可信评测、P1 Runner / Judge / runtime evidence 合同，以及 Build 的 Builder / Verifier / Judge 角色隔离已落地；18 个 Session Eval 案例均有脱敏 fixture、动态生命周期 setup、触发清单和独立只读证据校验。`skill-eval.py` 对带 harness 的 session case 使用隔离 fixture，独立采集 Git / 文件 hash / 保护路径、框架 revision 和 runtime evidence，并生成 digest 绑定的 evidence manifest；没有隔离 workspace 的 session case 不执行写入。真实 Codex `medium` 批次已完成 `18 passed / 0 failed / 0 skipped / 0 judge_skipped`，确定性 fake runner 也保持 `18/18`。正常 PM 主链不启用完整观测链。Design、Proposal、三件套、context pack、spec-writing、ready / build 与 Lark 生命周期继续由 PMAI 自己负责，不引入第二套主链。
+- 日期：2026-09-07
+- 当前分支：`main`；H1 实现提交 `ec58abc` 已由 `codex/harness-hardening` 快进合入。
+- Harness 增强：H1 已按原定范围完成，护栏异常正确阻断、发布门配置对齐且缺少 Runner / Judge 不能通过。PM 追加的 Windows 本地开发与回归适配也已完成，采用 PowerShell 入口 + Windows 本地 Cygwin 运行时，完整回归及后续入口专项复测通过。PM 主要使用 Mac，暂停 Windows 原生宿主验证；后续在实际 Mac 使用中核验 H2 并开展 H3，H2–H6 尚未完成。本批成果保留在当前开发分支，提交与远端同步状态以 Git 为准；CI 与发布单独跟踪，未升级用户全局安装。
+- Windows 使用与支持边界见[开发与验证说明](./docs/设计/windows-development-validation.md)。本轮结果与上一批基线分开记录于下方「当前验证」，不把本地脚本通过推导为原生宿主、远端 CI 或模型评测通过。
+- 既有能力基线（早于本轮 Windows 适配）：P0 Harness 可信评测、P1 Runner / Judge / runtime evidence 合同，以及 Build 的 Builder / Verifier / Judge 角色隔离已落地；18 个 Session Eval 案例均有脱敏 fixture、动态生命周期 setup、触发清单和独立只读证据校验。`skill-eval.py` 对带 harness 的 session case 使用隔离 fixture，独立采集 Git / 文件 hash / 保护路径、框架 revision 和 runtime evidence，并生成 digest 绑定的 evidence manifest；没有隔离 workspace 的 session case 不执行写入。此前记录的真实 Codex `medium` 批次与 fake runner 均已通过，具体基线见下方「当前验证」。正常 PM 主链不启用完整观测链。Design、Proposal、三件套、context pack、spec-writing、ready / build 与 Lark 生命周期继续由 PMAI 自己负责，不引入第二套主链。
 - gstack 参考基线：`v1.58.5.0`，commit `11de390`；只参考本地 `gstack-clean` checkout，没有升级用户目录中的安装副本。
 
 ## 当前活跃模型
@@ -37,6 +39,7 @@
 
 ## 已实现
 
+- H1 本地实现：decision / finalize Hook 共用有时间与输入上限的仓库身份及传输校验，消费仓损坏输入、跨根请求和依赖失败明确阻断；发布门固定核心案例并预检 Runner、证据 Judge、语义 Judge、CLI 参数与认证。Windows 开发入口使用 PowerShell + Cygwin，补齐 UTF-8 管道、argv、Node/Git/Python 路径、工作目录及原子文件的目录绑定。CI 配置已纳入 Windows，但真实宿主和发布运行仍需单独验收。
 - Design Grill 适配已落到固定上游快照、方法文档和机器授权链：vendored `mattpocock/skills` 的 `grilling / grill-me / grill-with-docs / domain-modeling / prototype` 与 MIT 授权；`/pmai-design` 按 design tree 计算 frontier，同轮展示互不依赖的问题并把事实调查留给 Agent。`decision-gate.py` 新增 `open-round / answer-round` 和 `open-shared / confirm-shared / consume-shared`；同轮多题共享用户消息但独立保存选项或自由回答、D 编号和消费记录，部分答复继续阻断，旧共识不能覆盖后来 frontier，最终共识绑定 design checkpoint。Proposal 和其它阶段路由保持 sequential，PMAI 的三件套、spec-writing、ready / build 与 Lark 合同保持原边界。
 - 复杂度收口批次二统一了仓库身份和宿主等级：`repo-kind.py` / `_lib/repo_identity.py` 唯一输出 `generator / consumer / uninitialized`，严格生成器 marker、防越界 symlink，普通 `docs/` 不会误判；preamble、status、Kimi 遗留 dispatcher 复用该解析器，`PMAI_PROJECT_INITIALIZED` 只作兼容投影。install / upgrade 只管理 Claude/Codex Skill，init 只生成 Claude/Codex 项目配置；Doctor 将旧宿主资产拆成 Builder readiness 与非阻断遗留报告，不 repair 旧主控资产。现行外部 adapter 统一注入 Builder-only 合同；新模板和生成器入口只承诺 Claude/Codex 完整主控。
 - Harness 第一阶段五项 P1 已下沉为运行时硬门：host `_shared` 只按明确所有权替换；brownfield 初始化写入前列全同名冲突；attached build worktree 的所属分支副本压住 main 旧状态；build 必须消费 current `ready_to_build + project.yml` 且拒绝路径、类型、入口和 revision 漂移；cancel 要求 main 干净、只提交状态删除，并在提交失败时恢复原状态。
@@ -99,6 +102,26 @@
 
 ## 当前验证
 
+推送前审查修正（当前）：
+
+- 已收窄身份解释器不可用时的非消费仓阻断：普通说明文件不会被仅按文件名视为 PMAI 入口；消费仓、旧入口组合、损坏链接与非法编码仍阻断。Python 权威解析与 Hook 降级判断共用身份标记数据。CI 根据实际适配器选择准备默认 Codex，不强制所有适配器提供 OpenAI Key，可选 Key 仍传入真实评测步骤。
+- 完整回归 `106` 套、`1063 passed / 0 failed`，退出码 `0`，日志 `.tmp/review-fix-full.log`；静态评测 `7 passed / 0 failed`，未配置真实 Runner 的 `18` 个会话明确 skip。全量执行期间补充的 Hook 边界另行通过最终专项复测：Hook `17/17`、发布预检 `14/14`，日志 `.tmp/review-fix-hooks-final.log` 与 `.tmp/review-fix-release-final.log`。
+- 已核验工作流条件、可选凭据传递及修改文件语法；另外实测跨仓生成器标记链接仍被识别为消费仓并阻断。源码清单见 `.tmp/review-fix-source.json`，指纹 `b5130d347188b5afa106b196856898b2ae661663537cf2bcea8003f87e43f5d5`。这些是本地确定性证据，不代表远端 CI 或 Mac 原生宿主已验证。
+
+以下保留修正前的 Windows 适配基线：
+
+本轮 Windows（H1 与本地兼容运行时）：
+
+- 环境：PowerShell `7.6.5`、Cygwin Python `3.12.12`，本机无 WSL；运行时位于 checkout 的 `.tmp/cygwin`，没有升级用户全局 PMAI。
+- 定向验证：原子文件事务 `28/28`、决策授权 `15/15`、Hook 进程级异常 `12/12`、发布预检单元 `11/11`、Windows 运行时边界 `5/5`，以及 PowerShell argv / UTF-8 管道与空行 / 退出码 / 环境恢复检查已通过。调用方复测：active-build-guard `18/18`、consumer-doctor `26/26`、private-onboarding `4/4`、ui-impact `5/5`、final-validation `5/5`、skill-link-ownership `8/8`、skill-eval 合同 `15/15`、lark-adapter `40/40`。
+- 补充实测：checkout 的 `.tmp` 下，中文及空格路径消费仓成功初始化并提交；身份识别正确，合法 JSON 经 PowerShell 管道进入实际 Node Hook、损坏 JSON 被阻断，Git 工作区保持干净。修复管道入口后重新通过 PowerShell 边界与 Hook 异常回归，日志 `.tmp/windows-post-pipeline.log`。此处为脚本进程验证，不代表 Codex Desktop 已加载并执行项目 Hook。
+- 本地真实能力预检通过：当前 Codex CLI `0.153.4` 的版本、适配器所需参数与登录状态可用，三个 adapter 及四个核心案例齐备，日志 `.tmp/windows-release-preflight.log`；没有执行模型。SSH 只读查询确认远端 `main` 与本轮开发起点一致。
+- Windows 完整回归：`106` 套、`1063 passed / 0 failed`，退出码 `0`，约 `55` 分钟；日志 `.tmp/windows-full-v3.log`。附带静态评测为 `7 passed / 0 failed`，未配置 Runner 的 `18` 个模型会话明确 skip，不能计入真实评测通过。此前探索轮失败由本轮重新验证，不沿用探索轮通过片段拼接结论。
+- 证据范围：本轮 source 为框架 checkout，测试 target 为隔离 fixture，起点 `37c8daee`。完整回归启动后只调整了 Windows CI 上下文和 PowerShell 管道入口及其测试 fixture；入口专项、中文路径实测与 Hook 复测另有上述日志。源文件前后清单见 `.tmp/windows-full-v3-source.json` 与 `.tmp/windows-full-v3-final-source.json`，最终指纹 `4dd10fa6edbcebcfe282ce035b2966762232647a18022d2c10d7a4d8accdc6e6`。这不是已提交候选的发布证据。
+- H1 功能验收已完成；Windows CI 与真实 Runner / Judge 发布运行仍未执行，属于单独跟踪的交付与发布验证。原生 Codex Desktop 项目 Skill / Hook 接入尚待 H2 验收，本轮不宣称原生 Windows CPython 或全部宿主已受支持。
+
+上一批已记录基线（不代表本轮 Windows 验证）：
+
 - 本轮关键定向基线：decision-gate `15/15`、status-view `19/19`、active-build-context `7/7`、active-build-guard `18/18`、narrative-mode `9/9`、context-pack `15/15`、legacy-recovery `15/15`、ready-contract `12/12`、build-contract `35/35`、doctor-skills `42/42`、init-project-codex-compat `24/24`、Kimi host `23/23`、OpenCode host `8/8`、browser-acceptance `3/3`、ui-impact `5/5`、lark-entry-routing `6/6`、lark-review `73/73`、publish-to-lark-e2e `20/20`、lark-adapter `40/40`、project-design-system `7/7`、mockup-quality `3/3`、mock-board `14/14`、consumer-doctor `26/26`、private-onboarding `4/4`、check-branch `21/21`、repo-kind `6/6`、exec-adapters `17/17`、skill-link-ownership `8/8`、skill-eval 合同 `15/15`、invariant-coverage `2/2`、session adapter `10/10`、finalize-audit-binding `5/5`、Loop Contract `4/4`；schema `25/25`，fake runner + readonly judge `18/18`。发布门在 runner / judge 均缺失时仍返回 2 并明确列出两项缺失能力。
 - 当前完整 `tests/run-all.sh` 基线为 `1060 passed / 0 failed`，本轮框架修复后已重跑通过。普通回归未注入外部 runner 时仍明确显示 18 个 session skip；真实 Session Eval 的 18 个案例已由同一 `gpt-5.6-sol + medium` 配置、独立 readonly Judge 和隔离 evidence manifest 完成闭环，最终为 `18 passed / 0 failed / 0 skipped / 0 judge_skipped`。本轮针对前次暴露的两个失败案例单独复测：个人经验案例验证多候选按适用性 / 独立价值过滤，`no-internal-menus` 验证开工卡前非阻塞预检不抢占前台，二者均 `runner + independent judge = PASS`。既有批次总耗时约 `2686` 秒，p50 `134` 秒，p95 `251` 秒，输入 `11,237,515` tokens，输出 `98,994` tokens，工具调用 `858` 次，18 个案例均无 transport warning；优化对照采样显示，总耗时约下降 `27.1%`、input tokens 下降 `6.4%`、工具调用下降 `11.3%`，provider 运行时有波动，以上仅作方向性性能基线。`v*` tag 或手动稳定发布仍必须通过配置真实 runner、独立 judge 和 runtime evidence 的 `tests/run-release-gate.sh`，发布门纳入的 session case 不得 skip。稳定核心发布门默认跳过可选 Lark 假环境套件，但日常全量回归仍保留这些套件。
 - 早于 Proposal 合同的既有 active work 已有显式恢复合同：v1-v4 active build 绑定 PM 确认、Git checkpoint、authority 内容 hash，并分别保存旧 design 起点、合同保存终点、历史 delta 重放终点与一致性结论，再从当前确认点续接；旧 active design 保留原轮身份，历史 `ready_to_build` 退回 `designing` 重新确认目标。新工作和 v5 build 仍不能借此绕过 Proposal。
@@ -106,6 +129,7 @@
 
 ## 下一步
 
+- Windows 原生宿主 H2 暂停：PM 主要使用 Mac，后续在实际 Mac 环境结合业务使用核验 Skill 入口、工具拦截、角色隔离与恢复，再推进 H3 用户旅程及后续批次。已完成的 Windows 本地回归能力保留。提交与 CI 属于交付流程，真实发布门是发布要求，不追加为 H1 完成或进入 H2 的条件。以下既有分发、消费仓迁移和专项 dogfood 待办保留，不把本轮本地验证视为全局升级或真实消费仓验收完成。
 - P1 后续工作：真实 `medium` Session Eval、两个失败案例修复复测、transport recovery 和文档改动后的完整回归均已完成；下一步按 PM 要求固定本轮变更，然后提交、push 并执行全局 PMAI upgrade。此前的 `401` 或缺少授权只记为历史环境阻断，不影响本轮 18 项通过证据。在此之前不扩 Proposal / Design 场景，不引入通用 Policy Engine、Capability Registry 或 Decision Trace。
 - 五个复杂度收口批次已完成：仓库身份、宿主等级、内部状态、Build 维护边界和主链 Loop Contract 都已有唯一来源。后续不再按收口批次新增架构层；当前已确认迁移 `ExampleAgentProject` 与 `ExampleConsumerApp`，保留各自既有 WIP，并只清理遗留 Kimi/OpenCode 主控资产。Session Eval、多 Agent 或动态工作流仍是独立决定。
 - 在一个全新消费仓真实跑完 `init → proposal → design → spec-writing → build → finalize → main → 文档编译`，核对产品基线、规格编译、`project.yml`、隔离环境、自适应验收和落地闭环。

@@ -128,10 +128,12 @@ setup_fake_global_install() {
   cp "$REPO_ROOT/scripts/_lib/global-install-lock.sh" "$pmai_home/scripts/_lib/global-install-lock.sh"
   cp "$REPO_ROOT/scripts/_lib/global_install_lock.py" "$pmai_home/scripts/_lib/global_install_lock.py"
   cp "$REPO_ROOT/scripts/_lib/atomic_file.py" "$pmai_home/scripts/_lib/atomic_file.py"
+  cp "$REPO_ROOT/scripts/_lib/cygwin_fs.py" "$pmai_home/scripts/_lib/cygwin_fs.py"
   cp "$REPO_ROOT/scripts/_lib/project_definition.py" "$pmai_home/scripts/_lib/project_definition.py"
   cp "$REPO_ROOT/scripts/_lib/consumer_entry.py" "$pmai_home/scripts/_lib/consumer_entry.py"
   cp "$REPO_ROOT/scripts/_lib/proposal.py" "$pmai_home/scripts/_lib/proposal.py"
   cp "$REPO_ROOT/scripts/_lib/repo_identity.py" "$pmai_home/scripts/_lib/repo_identity.py"
+  cp "$REPO_ROOT/scripts/_lib/repo_identity_markers.json" "$pmai_home/scripts/_lib/repo_identity_markers.json"
   cp "$REPO_ROOT/scripts/_lib/work_contract.py" "$pmai_home/scripts/_lib/work_contract.py"
   cp "$REPO_ROOT/scripts/repo-kind.py" "$pmai_home/scripts/repo-kind.py"
   cp "$REPO_ROOT/scripts/consumer-doctor.py" "$pmai_home/scripts/consumer-doctor.py"
@@ -189,8 +191,9 @@ sync_current_skill_catalog_to_fixture() {
   cp "$REPO_ROOT/scripts/repo-kind.py" "$framework_root/scripts/repo-kind.py"
   cp "$REPO_ROOT/scripts/_lib/repo_identity.py" \
     "$framework_root/scripts/_lib/repo_identity.py"
+  cp "$REPO_ROOT/scripts/_lib/repo_identity_markers.json" "$framework_root/scripts/_lib/repo_identity_markers.json"
   git -C "$framework_root" add -A -- skills scripts/repo-kind.py \
-    scripts/_lib/repo_identity.py
+    scripts/_lib/repo_identity.py scripts/_lib/repo_identity_markers.json
 }
 
 seed_retired_direction_entries() {
@@ -1503,6 +1506,8 @@ prepare_upgrade_rollback_fixture() {
   if ! git clone -q --no-hardlinks "$REPO_ROOT" "$source_repo"; then
     return 1
   fi
+  # The framework checkout may be on a feature branch; this fixture models main.
+  git -C "$source_repo" checkout -q -B main || return 1
 
   # 模拟旧版本还没有 exposure policy helper。repo-local 当前 updater 仍可驱动它，
   # 回滚时必须清空目标策略并回到旧版全公开 fallback。
@@ -1999,6 +2004,7 @@ test_upgrade_preserves_public_links_and_restores_rollback_policy() {
     rm -rf "$tmp"
     return
   fi
+  git -C "$source_repo" checkout -q -B main || return 1
   cp "$UPGRADE" "$current_upgrade"
   cp "$DOCTOR" "$source_repo/bin/pmai-doctor"
   cp -R "$REPO_ROOT/skills/doctor" "$source_repo/skills/doctor"
@@ -2291,6 +2297,7 @@ assert_upgrade_rolls_back_for_unusable_doctor() {
     rm -rf "$tmp"
     return 1
   fi
+  git -C "$source_repo" checkout -q -B main || return 1
   cp "$UPGRADE" "$source_repo/bin/pmai-upgrade"
   cp "$DOCTOR" "$source_repo/bin/pmai-doctor"
   sync_current_skill_catalog_to_fixture "$source_repo"

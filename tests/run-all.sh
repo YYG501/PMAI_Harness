@@ -16,6 +16,7 @@ CORE_SUITES=(
   test-check-branch.sh
   test-check-open-questions.sh
   test-decision-gate.sh
+  test-hook-runtime.sh
   test-atomic-file.sh
   test-measure-tthw.sh
   test-init-project.sh
@@ -85,6 +86,7 @@ CORE_SUITES=(
   test-close-work.sh
   test-land-work-v2.sh
   test-skill-eval.sh
+  test-release-preflight.sh
   test-session-eval-adapters.sh
   test-invariant-coverage.sh
   test-run-suite.sh
@@ -120,6 +122,9 @@ OPTIONAL_LARK_SUITES=(
   test-publish-to-lark-rowspan-merge.sh
 )
 SUITES=("${CORE_SUITES[@]}")
+if [[ "$(uname -s)" == CYGWIN* ]]; then
+  SUITES+=(test-windows-runtime.sh)
+fi
 if [ "${PMAI_SKIP_OPTIONAL_LARK_TESTS:-0}" != "1" ]; then
   SUITES+=("${OPTIONAL_LARK_SUITES[@]}")
 fi

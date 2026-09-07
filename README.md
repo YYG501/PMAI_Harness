@@ -12,6 +12,8 @@ PM AI 工作流框架的**生成器**仓库。
 
 ## 最快路径
 
+Windows 本地开发和回归先使用 [Windows 开发与验证](docs/设计/windows-development-validation.md) 中的 PowerShell 入口；原生宿主适用范围见该文档。
+
 私有仓首次安装走这一条；其它安装方式放在后面作为备选：
 
 ```bash

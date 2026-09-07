@@ -7,6 +7,8 @@
 .idea/
 *.swp
 *~
+__pycache__/
+*.py[cod]
 
 # Claude Code local settings
 .claude/settings.local.json
@@ -17,6 +19,7 @@
 .runs/
 .gstack/
 .tmp/
+/windows-tests.log
 
 # Local skill evaluation transcripts and judge outputs
 evals/results/

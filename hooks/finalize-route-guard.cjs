@@ -7,9 +7,9 @@ const crypto = require('crypto');
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
-const { spawnSync } = require('child_process');
+const { runHook, runCommand, requireSuccess } = require('./hook-runtime.cjs');
+const { nativePath } = require('./host-process.cjs');
 
-const MAX_STDIN_BYTES = 4 * 1024 * 1024;
 const MARKER_TTL_MS = 2 * 60 * 60 * 1000;
 const FINALIZE_LANGUAGE = /(?:可以提交|可以合并|提交吧|合进去吧|合并吧|定稿|这版可以了|可以了[，,\s]*(?:提交|合并))/;
 const NEGATED_FINALIZE_LANGUAGE = /(?:不要|先别|暂不|不能|不.?要).{0,8}(?:提交|合并|定稿)/;
@@ -25,32 +25,14 @@ const READ_COMMAND = /^(?:\s*(?:git\s+(?:status|diff|show|log|branch|rev-parse)|
 const BLOCKED_COMMAND = /(?:\bgit\b[^\n]*\b(?:commit|merge|rebase|cherry-pick|add|reset|restore|clean)\b|(?:pnpm|npm|yarn|bun)\s+(?:run\s+)?(?:test|typecheck|build|lint|dev|start)\b|(?:final-validation|browser-acceptance|prototype-boundary|coverage-evidence)\.py|\b(?:browse|playwright)\b)/;
 const MUTATING_PYTHON = /\bpython3?\b[^\n]*(?:\.py|\s-c\s)/;
 
-function repoRootFor(cwd) {
-  const result = spawnSync('git', ['-C', cwd, 'rev-parse', '--show-toplevel'], {
-    encoding: 'utf8', timeout: 1200,
-  });
-  if (result.status !== 0) return null;
-  return (result.stdout || '').trim() || null;
-}
-
-function resolveRepo(data) {
-  const processCwd = process.cwd();
-  const processRepo = repoRootFor(processCwd);
-  if (!processRepo) return null;
-  if (data.cwd !== undefined && typeof data.cwd !== 'string') return null;
-  const payloadCwd = typeof data.cwd === 'string' && data.cwd.trim() ? data.cwd : processCwd;
-  const payloadRepo = repoRootFor(payloadCwd);
-  if (!payloadRepo || path.resolve(payloadRepo) !== path.resolve(processRepo)) return null;
-  return processRepo;
-}
-
 function sessionId(data) {
   const value = data.session_id || data.sessionId || data.thread_id || data.threadId;
   return typeof value === 'string' && value.trim() ? value.trim() : 'anonymous';
 }
 
 function markerDir() {
-  return process.env.PMAI_FINALIZE_INTENT_DIR || path.join(os.tmpdir(), 'pmai-finalize-intents');
+  return process.env.PMAI_FINALIZE_INTENT_DIR
+    ? nativePath(process.env.PMAI_FINALIZE_INTENT_DIR) : path.join(os.tmpdir(), 'pmai-finalize-intents');
 }
 
 function markerPath(repoRoot, id) {
@@ -116,10 +98,15 @@ function readMarker(repoRoot, id) {
 
 function activeContext(repoRoot) {
   const script = path.join(path.resolve(__dirname, '..'), 'scripts', 'active-build-context.py');
-  const result = spawnSync('python3', [script, repoRoot], {
+  const result = runCommand('python3', [script, repoRoot], {
     cwd: repoRoot, encoding: 'utf8', timeout: 4500,
   });
-  try { return JSON.parse((result.stdout || '').trim()); } catch { return null; }
+  const text = requireSuccess(result, '只读 Build 上下文校验');
+  let context;
+  try { context = JSON.parse(text); } catch { throw new Error('只读 Build 上下文返回非法 JSON。'); }
+  if (!context || !['none', 'active', 'ambiguous'].includes(context.status)
+    || !Array.isArray(context.active_builds)) throw new Error('只读 Build 上下文返回无效状态。');
+  return context;
 }
 
 function deny(reason) {
@@ -253,25 +240,4 @@ function handlePreTool(data, repoRoot) {
   }
 }
 
-let input = '';
-let bytes = 0;
-const timer = setTimeout(() => process.exit(0), 3000);
-process.stdin.on('data', chunk => {
-  bytes += chunk.length;
-  if (bytes > MAX_STDIN_BYTES) process.exit(0);
-  input += chunk.toString('utf8');
-});
-process.stdin.on('end', () => {
-  clearTimeout(timer);
-  try {
-    const data = JSON.parse(input);
-    if (!data || typeof data !== 'object' || Array.isArray(data)) process.exit(0);
-    const repoRoot = resolveRepo(data);
-    if (!repoRoot) process.exit(0);
-    if (data.hook_event_name === 'UserPromptSubmit' || data.hookEventName === 'UserPromptSubmit') {
-      handlePrompt(data, repoRoot);
-    } else if (data.hook_event_name === 'PreToolUse' || data.hookEventName === 'PreToolUse' || data.tool_name) {
-      handlePreTool(data, repoRoot);
-    }
-  } catch { /* fail open for malformed host payloads */ }
-});
+runHook({ name: 'FINALIZE 路由', onPrompt: handlePrompt, onPreTool: handlePreTool });
