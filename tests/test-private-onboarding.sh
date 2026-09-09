@@ -49,7 +49,7 @@ make_source_snapshot() {
     cp "$REPO_ROOT/$file" "$src/$file"
   done < <(git -C "$REPO_ROOT" ls-files -z --cached --others --exclude-standard)
 
-  git -C "$src" init -q
+  git -C "$src" init -q -b main
   git -C "$src" config user.email "pmai-test@example.com"
   git -C "$src" config user.name "PMAI Test"
   git -C "$src" add -A
