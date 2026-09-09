@@ -1,6 +1,6 @@
-# PM-AI-Workflow
+# PM-AI-Harness
 
-PM-AI-Workflow（PMAI）是面向单人 PM 的 LLM 产品协作工作流生成器。
+PM-AI-Harness（PMAI）是面向单人 PM 的 LLM 产品协作工作流生成器。
 
 它把产品定位、模块设计、规格、原型或产品实现、反馈、验收和主线文档接成一条可恢复的协作链。PMAI 负责保存产品上下文和流程边界，PM 负责产品判断、看结果和明确定稿。
 
