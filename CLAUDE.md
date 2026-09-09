@@ -15,7 +15,7 @@
 
 **框架分发与全局安装**（2026-05-26 v1.1 落地）：
 
-- 本仓现已通过 GitHub remote `git@github.com:YYG501/PMAI_Workflow.git` 分发
+- 本仓现已通过 GitHub remote `git@github.com:YYG501/PM-AI-Harness.git` 分发
 - `pmai install` 一次全局安装到 `~/.pmai/`，并把全部公开 Skill 链接到 `~/.claude/skills/pmai-*` 与 `~/.codex/skills/pmai-*`。默认安装远端滚动分支，`--stable` / `--to <tag>` 可锁定首次安装版本；安装器复用 bootstrap checkout 的已认证 `origin`。Codex 不生成重复 custom prompts。
 - **仅全局安装**：主控 Skill 只装 Claude Code / Codex host skill dirs，不往项目里拷副本；项目里只放主控配置 / 状态资产（`.claude/settings.json` / `.codex/hooks.json` / `.work-meta.json`）。OpenCode 仅作为外部 Builder，不安装 PMAI 主控入口；Kimi Code 与 Cursor Agent 已从新 build 选项移除，历史资产按兼容规则处理。旧 `--local`（项目实体副本）已移除；遗留副本用 `pmai uninstall --local <dir>` 清理。
 - 首次安装与升级均支持滚动 main、最新稳定 tag 和指定 tag；成功输出实际 commit，失败恢复原安装与宿主入口。

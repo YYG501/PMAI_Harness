@@ -25,7 +25,7 @@ python3 --version
 ```bash
 gh auth status || gh auth login
 rm -rf /tmp/pmai-src
-gh repo clone YYG501/PMAI_Workflow /tmp/pmai-src
+gh repo clone YYG501/PM-AI-Harness /tmp/pmai-src
 bash /tmp/pmai-src/bin/pmai install
 ~/.pmai/bin/pmai doctor --check
 ```

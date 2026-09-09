@@ -16,7 +16,7 @@ source "$SCRIPT_DIR/../scripts/_lib/skill-links.sh"
 source "$SCRIPT_DIR/../scripts/_lib/global-install-lock.sh"
 ORIGINAL_ARGS=("$@")
 
-DEFAULT_REMOTE="git@github.com:YYG501/PMAI_Workflow.git"
+DEFAULT_REMOTE="git@github.com:YYG501/PM-AI-Harness.git"
 SOURCE_REMOTE=$(git -C "$SCRIPT_DIR/.." remote get-url origin 2>/dev/null || true)
 REMOTE="${PMAI_REMOTE:-${SOURCE_REMOTE:-$DEFAULT_REMOTE}}"
 PMAI_HOME="${PMAI_HOME:-$HOME/.pmai}"

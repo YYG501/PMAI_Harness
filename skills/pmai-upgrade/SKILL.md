@@ -46,7 +46,7 @@ if [ -d "$PMAI_HOME/.git" ]; then
   echo "→ 当前: v${OLD_VER} @ ${OLD_HEAD}"
 else
   echo "❌ PMAI 未安装（~/.pmai/ 不存在）"
-  echo "   全局装：curl -fsSL https://raw.githubusercontent.com/YYG501/PMAI_Workflow/main/install.sh | bash"
+  echo "   全局装：curl -fsSL https://raw.githubusercontent.com/YYG501/PM-AI-Harness/main/install.sh | bash"
   exit 1
 fi
 ```
