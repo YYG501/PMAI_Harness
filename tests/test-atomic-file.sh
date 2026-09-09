@@ -568,7 +568,7 @@ def run_case(*, fail_cleanup: bool) -> None:
             os.fsync(stage_fd)
             stage_stat = os.fstat(stage_fd)
             if owned_entries is not None:
-                owned_entries[name] = (stage_stat.st_dev, stage_stat.st_ino)
+                owned_entries[name] = module._identity_from_stat(stage_stat)
         finally:
             os.close(stage_fd)
         raise module.AtomicFileError(
@@ -1114,13 +1114,19 @@ try:
                 staged_name=stage.name,
                 staged_device=prepared.stage_identity.device,
                 staged_inode=prepared.stage_identity.inode,
+                staged_size=prepared.stage_identity.size,
+                staged_mtime_ns=prepared.stage_identity.mtime_ns,
                 expected_name=backup.name,
                 expected_path=None,
                 expected_mode=0o644,
                 expected_entry_device=prepared.backup_identity.device,
                 expected_entry_inode=prepared.backup_identity.inode,
+                expected_entry_size=prepared.backup_identity.size,
+                expected_entry_mtime_ns=prepared.backup_identity.mtime_ns,
                 destination_device=prepared.original_identity.device,
                 destination_inode=prepared.original_identity.inode,
+                destination_size=prepared.original_identity.size,
+                destination_mtime_ns=prepared.original_identity.mtime_ns,
             )
         except module.AtomicFileError as exc:
             assert exc.kind == "concurrent_update", (exc.kind, str(exc))
@@ -1139,6 +1145,8 @@ try:
             name=stage.name,
             expected_device=prepared.stage_identity.device,
             expected_inode=prepared.stage_identity.inode,
+            expected_size=prepared.stage_identity.size,
+            expected_mtime_ns=prepared.stage_identity.mtime_ns,
         )
     except module.AtomicFileError as exc:
         assert exc.kind == "concurrent_update", (exc.kind, str(exc))
@@ -1158,11 +1166,15 @@ try:
             staged_name=backup.name,
             staged_device=prepared.backup_identity.device,
             staged_inode=prepared.backup_identity.inode,
+            staged_size=prepared.backup_identity.size,
+            staged_mtime_ns=prepared.backup_identity.mtime_ns,
             expected_name=None,
             expected_path=rendered,
             expected_mode=0o644,
             destination_device=prepared.original_identity.device,
             destination_inode=prepared.original_identity.inode,
+            destination_size=prepared.original_identity.size,
+            destination_mtime_ns=prepared.original_identity.mtime_ns,
         )
     except module.AtomicFileError as exc:
         assert exc.kind == "concurrent_update", (exc.kind, str(exc))
@@ -1223,6 +1235,8 @@ try:
             name=entry.name,
             expected_device=identity.st_dev,
             expected_inode=identity.st_ino,
+            expected_size=identity.st_size,
+            expected_mtime_ns=identity.st_mtime_ns,
         )
     except module.AtomicFileError as exc:
         assert exc.kind == "concurrent_update", (exc.kind, str(exc))
@@ -1266,6 +1280,8 @@ try:
             name=entry.name,
             expected_device=identity.st_dev,
             expected_inode=identity.st_ino,
+            expected_size=identity.st_size,
+            expected_mtime_ns=identity.st_mtime_ns,
         )
     except module.AtomicFileError as exc:
         assert exc.kind == "recovery_required", (exc.kind, str(exc))
@@ -1284,6 +1300,85 @@ PY
     pass_test
   else
     _fail "identity cleanup deleted foreign data or hid an indeterminate path"
+  fi
+}
+
+test_generation_identity_rejects_simulated_inode_reuse() {
+  start_test "atomic-file: size and mtime reject simulated inode reuse"
+  if PYTHONDONTWRITEBYTECODE=1 python3 - "$ATOMIC_FILE" <<'PY'
+import importlib.util
+import os
+import sys
+import tempfile
+from pathlib import Path
+
+path = Path(sys.argv[1])
+spec = importlib.util.spec_from_file_location("atomic_file_test", path)
+module = importlib.util.module_from_spec(spec)
+sys.modules[spec.name] = module
+spec.loader.exec_module(module)
+
+root = Path(tempfile.mkdtemp()).resolve()
+entry = root / "hooks.json.pmai-new.test"
+directory_fd = os.open(root, os.O_RDONLY | getattr(os, "O_DIRECTORY", 0))
+try:
+    entry.write_text("owned", encoding="utf-8")
+    old = entry.stat()
+    entry.unlink()
+    entry.write_text("other", encoding="utf-8")
+    os.utime(
+        entry,
+        ns=(entry.stat().st_atime_ns, old.st_mtime_ns + 1),
+    )
+    current = entry.stat()
+    assert current.st_size == old.st_size
+    try:
+        module.unlink_entry_at(
+            directory_fd,
+            parent=root,
+            name=entry.name,
+            expected_device=current.st_dev,
+            expected_inode=current.st_ino,
+            expected_size=old.st_size,
+            expected_mtime_ns=old.st_mtime_ns,
+        )
+    except module.AtomicFileError as exc:
+        assert exc.kind == "concurrent_update", (exc.kind, str(exc))
+    else:
+        raise AssertionError("same-size inode reuse bypassed mtime identity")
+    assert entry.read_text(encoding="utf-8") == "other"
+
+    old = entry.stat()
+    entry.unlink()
+    entry.write_text("foreign-longer", encoding="utf-8")
+    os.utime(
+        entry,
+        ns=(entry.stat().st_atime_ns, old.st_mtime_ns),
+    )
+    current = entry.stat()
+    assert current.st_size != old.st_size
+    try:
+        module.unlink_entry_at(
+            directory_fd,
+            parent=root,
+            name=entry.name,
+            expected_device=current.st_dev,
+            expected_inode=current.st_ino,
+            expected_size=old.st_size,
+            expected_mtime_ns=current.st_mtime_ns,
+        )
+    except module.AtomicFileError as exc:
+        assert exc.kind == "concurrent_update", (exc.kind, str(exc))
+    else:
+        raise AssertionError("different-size inode reuse bypassed size identity")
+    assert entry.read_text(encoding="utf-8") == "foreign-longer"
+finally:
+    os.close(directory_fd)
+PY
+  then
+    pass_test
+  else
+    _fail "file generation identity accepted simulated inode reuse"
   fi
 }
 
@@ -1341,6 +1436,8 @@ try:
             name=entry.name,
             expected_device=identity.st_dev,
             expected_inode=identity.st_ino,
+            expected_size=identity.st_size,
+            expected_mtime_ns=identity.st_mtime_ns,
         )
     except module.AtomicFileError as exc:
         assert exc.kind == "concurrent_update", (exc.kind, str(exc))
@@ -1414,6 +1511,8 @@ try:
             name=entry.name,
             expected_device=identity.st_dev,
             expected_inode=identity.st_ino,
+            expected_size=identity.st_size,
+            expected_mtime_ns=identity.st_mtime_ns,
         )
     except module.AtomicFileError as exc:
         assert exc.kind == "recovery_required", (exc.kind, str(exc))
@@ -1696,6 +1795,8 @@ def run(target_label):
                 staged_identity=module.EntryIdentity(
                     stage_stat.st_dev,
                     stage_stat.st_ino,
+                    stage_stat.st_size,
+                    stage_stat.st_mtime_ns,
                 ),
                 expected=expected,
             )
@@ -1849,8 +1950,8 @@ PY
   fi
 }
 
-test_prepare_cli_uses_fixed_eight_field_identity_protocol() {
-  start_test "atomic-file: prepare-at returns a fixed 8-field identity protocol"
+test_prepare_cli_uses_fixed_fourteen_field_identity_protocol() {
+  start_test "atomic-file: prepare-at returns a fixed 14-field identity protocol"
   if PYTHONDONTWRITEBYTECODE=1 python3 - "$ATOMIC_FILE" <<'PY'
 import contextlib
 import importlib.util
@@ -1914,36 +2015,61 @@ def prepare_case(existed: bool) -> None:
     line = output.getvalue().rstrip("\n")
     assert "\n" not in line, line
     fields = line.split("\t")
-    assert len(fields) == 8, fields
+    assert len(fields) == 14, fields
     assert all(fields), fields
-    original_device, original_inode = fields[:2]
-    backup_name, backup_device, backup_inode = fields[2:5]
-    stage_name, stage_device, stage_inode = fields[5:]
+    original_device, original_inode, original_size, original_mtime_ns = fields[:4]
+    backup_name, backup_device, backup_inode, backup_size, backup_mtime_ns = fields[4:9]
+    stage_name, stage_device, stage_inode, stage_size, stage_mtime_ns = fields[9:]
     assert stage_name != "-"
-    assert stage_device.isdecimal() and stage_inode.isdecimal(), fields
+    assert all(
+        value.isdecimal()
+        for value in (stage_device, stage_inode, stage_size, stage_mtime_ns)
+    ), fields
     stage_stat = os.stat(root / stage_name, follow_symlinks=False)
-    assert (int(stage_device), int(stage_inode)) == (
+    assert tuple(map(int, fields[10:14])) == (
         stage_stat.st_dev,
         stage_stat.st_ino,
+        stage_stat.st_size,
+        stage_stat.st_mtime_ns,
     )
     assert stat.S_ISREG(stage_stat.st_mode)
 
     if existed:
         assert original_stat is not None
-        assert original_device.isdecimal() and original_inode.isdecimal(), fields
-        assert (int(original_device), int(original_inode)) == (
+        assert all(
+            value.isdecimal()
+            for value in (
+                original_device,
+                original_inode,
+                original_size,
+                original_mtime_ns,
+            )
+        ), fields
+        assert tuple(map(int, fields[:4])) == (
             original_stat.st_dev,
             original_stat.st_ino,
+            original_stat.st_size,
+            original_stat.st_mtime_ns,
         )
         assert backup_name != "-"
-        assert backup_device.isdecimal() and backup_inode.isdecimal(), fields
+        assert all(
+            value.isdecimal()
+            for value in (
+                backup_device,
+                backup_inode,
+                backup_size,
+                backup_mtime_ns,
+            )
+        ), fields
         backup_stat = os.stat(root / backup_name, follow_symlinks=False)
-        assert (int(backup_device), int(backup_inode)) == (
+        assert tuple(map(int, fields[5:9])) == (
             backup_stat.st_dev,
             backup_stat.st_ino,
+            backup_stat.st_size,
+            backup_stat.st_mtime_ns,
         )
     else:
-        assert fields[:5] == ["-", "-", "-", "-", "-"], fields
+        assert fields[:9] == ["-"] * 9, fields
 
 
 prepare_case(True)
@@ -1952,7 +2078,7 @@ PY
   then
     pass_test
   else
-    _fail "prepare-at did not preserve its fixed 8-field identity contract"
+    _fail "prepare-at did not preserve its fixed 14-field identity contract"
   fi
 }
 
@@ -2008,8 +2134,12 @@ try:
         expected_mode=0o644,
         expected_entry_device=prepared.backup_identity.device,
         expected_entry_inode=prepared.backup_identity.inode,
+        expected_entry_size=prepared.backup_identity.size,
+        expected_entry_mtime_ns=prepared.backup_identity.mtime_ns,
         destination_device=prepared.original_identity.device,
         destination_inode=prepared.original_identity.inode,
+        destination_size=prepared.original_identity.size,
+        destination_mtime_ns=prepared.original_identity.mtime_ns,
     )
     assert state == "different", state
     try:
@@ -2020,13 +2150,19 @@ try:
             staged_name=prepared.stage_name,
             staged_device=prepared.stage_identity.device,
             staged_inode=prepared.stage_identity.inode,
+            staged_size=prepared.stage_identity.size,
+            staged_mtime_ns=prepared.stage_identity.mtime_ns,
             expected_name=prepared.backup_name,
             expected_path=None,
             expected_mode=0o644,
             expected_entry_device=prepared.backup_identity.device,
             expected_entry_inode=prepared.backup_identity.inode,
+            expected_entry_size=prepared.backup_identity.size,
+            expected_entry_mtime_ns=prepared.backup_identity.mtime_ns,
             destination_device=prepared.original_identity.device,
             destination_inode=prepared.original_identity.inode,
+            destination_size=prepared.original_identity.size,
+            destination_mtime_ns=prepared.original_identity.mtime_ns,
         )
     except module.AtomicFileError as exc:
         assert exc.kind == "concurrent_update", (exc.kind, str(exc))
@@ -2062,6 +2198,8 @@ try:
         staged_name=prepared.stage_name,
         staged_device=prepared.stage_identity.device,
         staged_inode=prepared.stage_identity.inode,
+        staged_size=prepared.stage_identity.size,
+        staged_mtime_ns=prepared.stage_identity.mtime_ns,
     )
     held_stage = create_root / "held-stage.json"
     create_destination.rename(held_stage)
@@ -2077,6 +2215,8 @@ try:
         expected_mode=0o644,
         destination_device=prepared.stage_identity.device,
         destination_inode=prepared.stage_identity.inode,
+        destination_size=prepared.stage_identity.size,
+        destination_mtime_ns=prepared.stage_identity.mtime_ns,
     )
     assert state == "different", state
     expected_snapshot = module._snapshot_path(
@@ -2428,6 +2568,7 @@ test_create_postcheck_reports_existing_paths_only
 test_restore_claim_classifies_failures_and_existing_paths
 test_prepared_entry_identities_block_name_reuse
 test_identity_cleanup_claim_restores_foreign_and_reports_stat_errors
+test_generation_identity_rejects_simulated_inode_reuse
 test_cleanup_unlink_fsyncs_before_parent_rebind_check
 test_cleanup_final_fsync_failure_reports_claim_recovery_path
 test_cleanup_removes_stale_generated_recovery_paths
@@ -2435,7 +2576,7 @@ test_zero_progress_writes_fail_closed
 test_bound_helpers_recheck_parent_after_entry_validation
 test_namespace_mutations_compensate_parent_rebinds
 test_delete_claim_compensates_parent_rebind
-test_prepare_cli_uses_fixed_eight_field_identity_protocol
+test_prepare_cli_uses_fixed_fourteen_field_identity_protocol
 test_destination_identities_reject_same_content_name_reuse
 test_prepare_final_parent_rebind_cleans_owned_entries
 test_run_locked_serializes_cooperative_writers

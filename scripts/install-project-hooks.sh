@@ -125,13 +125,19 @@ TX_PARENT_INODES=()
 TX_STAGES=()
 TX_STAGE_DEVICES=()
 TX_STAGE_INODES=()
+TX_STAGE_SIZES=()
+TX_STAGE_MTIMES_NS=()
 TX_EXISTED=()
 TX_MODES=()
 TX_BACKUPS=()
 TX_BACKUP_DEVICES=()
 TX_BACKUP_INODES=()
+TX_BACKUP_SIZES=()
+TX_BACKUP_MTIMES_NS=()
 TX_ORIGINAL_DEVICES=()
 TX_ORIGINAL_INODES=()
+TX_ORIGINAL_SIZES=()
+TX_ORIGINAL_MTIMES_NS=()
 TX_RENDERED=()
 TX_COUNT=0
 TX_STARTED=0
@@ -223,9 +229,13 @@ rollback_transaction() {
         --destination-name "$dest_name" \
         --destination-device "${TX_ORIGINAL_DEVICES[$index]}" \
         --destination-inode "${TX_ORIGINAL_INODES[$index]}" \
+        --destination-size "${TX_ORIGINAL_SIZES[$index]}" \
+        --destination-mtime-ns "${TX_ORIGINAL_MTIMES_NS[$index]}" \
         --expected-name "$backup" \
         --expected-entry-device "${TX_BACKUP_DEVICES[$index]}" \
         --expected-entry-inode "${TX_BACKUP_INODES[$index]}" \
+        --expected-entry-size "${TX_BACKUP_SIZES[$index]}" \
+        --expected-entry-mtime-ns "${TX_BACKUP_MTIMES_NS[$index]}" \
         --expected-mode "${TX_MODES[$index]}" 2>/dev/null || true)"
       if [ "$state" = "same" ]; then
         # The attempted rename did not replace this destination.
@@ -235,6 +245,8 @@ rollback_transaction() {
           --destination-name "$dest_name" \
           --destination-device "${TX_STAGE_DEVICES[$index]}" \
           --destination-inode "${TX_STAGE_INODES[$index]}" \
+          --destination-size "${TX_STAGE_SIZES[$index]}" \
+          --destination-mtime-ns "${TX_STAGE_MTIMES_NS[$index]}" \
           --expected-path "$rendered" \
           --expected-mode "${TX_MODES[$index]}" 2>/dev/null || true)"
         if [ "$state" = "same" ]; then
@@ -242,9 +254,13 @@ rollback_transaction() {
             --destination-name "$dest_name" \
             --destination-device "${TX_STAGE_DEVICES[$index]}" \
             --destination-inode "${TX_STAGE_INODES[$index]}" \
+            --destination-size "${TX_STAGE_SIZES[$index]}" \
+            --destination-mtime-ns "${TX_STAGE_MTIMES_NS[$index]}" \
             --staged-name "$backup" \
             --staged-device "${TX_BACKUP_DEVICES[$index]}" \
             --staged-inode "${TX_BACKUP_INODES[$index]}" \
+            --staged-size "${TX_BACKUP_SIZES[$index]}" \
+            --staged-mtime-ns "${TX_BACKUP_MTIMES_NS[$index]}" \
             --expected-path "$rendered" \
             --expected-mode "${TX_MODES[$index]}"; then
             echo "❌ 回滚失败，原配置备份保留在：$parent/$backup" >&2
@@ -260,6 +276,8 @@ rollback_transaction() {
         --destination-name "$dest_name" \
         --destination-device "${TX_STAGE_DEVICES[$index]}" \
         --destination-inode "${TX_STAGE_INODES[$index]}" \
+        --destination-size "${TX_STAGE_SIZES[$index]}" \
+        --destination-mtime-ns "${TX_STAGE_MTIMES_NS[$index]}" \
         --expected-path "$rendered" \
         --expected-mode "${TX_MODES[$index]}" 2>/dev/null || true)"
       if [ "$state" = "missing" ]; then
@@ -270,6 +288,8 @@ rollback_transaction() {
           --destination-name "$dest_name" \
           --destination-device "${TX_STAGE_DEVICES[$index]}" \
           --destination-inode "${TX_STAGE_INODES[$index]}" \
+          --destination-size "${TX_STAGE_SIZES[$index]}" \
+          --destination-mtime-ns "${TX_STAGE_MTIMES_NS[$index]}" \
           --expected-path "$rendered" \
           --expected-mode "${TX_MODES[$index]}"; then
           echo "❌ 回滚失败，无法删除本轮新建配置：$parent/$dest_name" >&2
@@ -324,6 +344,8 @@ cleanup() {
         --name "$stage" \
         --entry-device "${TX_STAGE_DEVICES[$index]}" \
         --entry-inode "${TX_STAGE_INODES[$index]}" \
+        --entry-size "${TX_STAGE_SIZES[$index]}" \
+        --entry-mtime-ns "${TX_STAGE_MTIMES_NS[$index]}" \
         --ignore-missing; then
         echo "⚠️  无法清理本轮暂存配置：$parent/$stage" >&2
         rc=1
@@ -333,6 +355,8 @@ cleanup() {
           --name "$backup" \
           --entry-device "${TX_BACKUP_DEVICES[$index]}" \
           --entry-inode "${TX_BACKUP_INODES[$index]}" \
+          --entry-size "${TX_BACKUP_SIZES[$index]}" \
+          --entry-mtime-ns "${TX_BACKUP_MTIMES_NS[$index]}" \
           --ignore-missing; then
         echo "⚠️  无法清理本轮备份：$parent/$backup" >&2
         rc=1
@@ -661,8 +685,9 @@ stage_prepared_host() {
   local existed="${PREPARED_EXISTED[$index]}"
   local mode="${PREPARED_MODES[$index]}"
   local prepared prepared_fields_end extra
-  local original_device original_inode backup backup_device backup_inode
-  local stage stage_device stage_inode rc field
+  local original_device original_inode original_size original_mtime_ns
+  local backup backup_device backup_inode backup_size backup_mtime_ns
+  local stage stage_device stage_inode stage_size stage_mtime_ns rc field
 
   atomic_at "$fd" "$device" "$inode" "$parent" check-recovery-at \
     --destination-name "$dest_name" || {
@@ -695,50 +720,64 @@ stage_prepared_host() {
   prepared_fields_end="__PMAI_PREPARED_FIELDS_END__"
   prepared="$prepared$(printf '\t')$prepared_fields_end"
   IFS="$(printf '\t')" read -r \
-    original_device original_inode \
-    backup backup_device backup_inode \
-    stage stage_device stage_inode extra <<< "$prepared"
+    original_device original_inode original_size original_mtime_ns \
+    backup backup_device backup_inode backup_size backup_mtime_ns \
+    stage stage_device stage_inode stage_size stage_mtime_ns extra <<< "$prepared"
   if [ "$extra" != "$prepared_fields_end" ]; then
-    echo "❌ ${label} 原子事务返回的身份字段数不是 8，已停止：$dest_path" >&2
+    echo "❌ ${label} 原子事务返回的身份字段数不是 14，已停止：$dest_path" >&2
     return 2
   fi
   for field in \
-    "$original_device" "$original_inode" \
-    "$backup" "$backup_device" "$backup_inode" \
-    "$stage" "$stage_device" "$stage_inode"; do
+    "$original_device" "$original_inode" "$original_size" "$original_mtime_ns" \
+    "$backup" "$backup_device" "$backup_inode" "$backup_size" "$backup_mtime_ns" \
+    "$stage" "$stage_device" "$stage_inode" "$stage_size" "$stage_mtime_ns"; do
     if [ -z "$field" ]; then
       echo "❌ ${label} 原子事务返回了空身份字段，已停止：$dest_path" >&2
       return 2
     fi
   done
   if ! is_decimal_identity "$stage_device" \
-    || ! is_decimal_identity "$stage_inode"; then
+    || ! is_decimal_identity "$stage_inode" \
+    || ! is_decimal_identity "$stage_size" \
+    || ! is_decimal_identity "$stage_mtime_ns"; then
     echo "❌ ${label} 原子事务返回了非法 stage 身份，已停止：$dest_path" >&2
     return 2
   fi
   if [ "$existed" = "1" ]; then
     if [ "$original_device" = "-" ] || [ "$original_inode" = "-" ] \
+      || [ "$original_size" = "-" ] || [ "$original_mtime_ns" = "-" ] \
       || [ "$backup" = "-" ] || [ "$backup_device" = "-" ] \
-      || [ "$backup_inode" = "-" ] \
+      || [ "$backup_inode" = "-" ] || [ "$backup_size" = "-" ] \
+      || [ "$backup_mtime_ns" = "-" ] \
       || ! is_decimal_identity "$original_device" \
       || ! is_decimal_identity "$original_inode" \
+      || ! is_decimal_identity "$original_size" \
+      || ! is_decimal_identity "$original_mtime_ns" \
       || ! is_decimal_identity "$backup_device" \
-      || ! is_decimal_identity "$backup_inode"; then
+      || ! is_decimal_identity "$backup_inode" \
+      || ! is_decimal_identity "$backup_size" \
+      || ! is_decimal_identity "$backup_mtime_ns"; then
       echo "❌ ${label} 原子事务返回了非法 replacement 身份组合，已停止：$dest_path" >&2
       return 2
     fi
   elif [ "$existed" = "0" ]; then
     if [ "$original_device" != "-" ] || [ "$original_inode" != "-" ] \
+      || [ "$original_size" != "-" ] || [ "$original_mtime_ns" != "-" ] \
       || [ "$backup" != "-" ] || [ "$backup_device" != "-" ] \
-      || [ "$backup_inode" != "-" ]; then
+      || [ "$backup_inode" != "-" ] || [ "$backup_size" != "-" ] \
+      || [ "$backup_mtime_ns" != "-" ]; then
       echo "❌ ${label} 原子事务返回了非法 creation 占位符组合，已停止：$dest_path" >&2
       return 2
     fi
     original_device=""
     original_inode=""
+    original_size=""
+    original_mtime_ns=""
     backup=""
     backup_device=""
     backup_inode=""
+    backup_size=""
+    backup_mtime_ns=""
   else
     echo "❌ ${label} 原子事务缺少有效的原配置状态，已停止：$dest_path" >&2
     return 2
@@ -755,13 +794,19 @@ stage_prepared_host() {
   TX_STAGES+=("$stage")
   TX_STAGE_DEVICES+=("$stage_device")
   TX_STAGE_INODES+=("$stage_inode")
+  TX_STAGE_SIZES+=("$stage_size")
+  TX_STAGE_MTIMES_NS+=("$stage_mtime_ns")
   TX_EXISTED+=("$existed")
   TX_MODES+=("$mode")
   TX_BACKUPS+=("$backup")
   TX_BACKUP_DEVICES+=("$backup_device")
   TX_BACKUP_INODES+=("$backup_inode")
+  TX_BACKUP_SIZES+=("$backup_size")
+  TX_BACKUP_MTIMES_NS+=("$backup_mtime_ns")
   TX_ORIGINAL_DEVICES+=("$original_device")
   TX_ORIGINAL_INODES+=("$original_inode")
+  TX_ORIGINAL_SIZES+=("$original_size")
+  TX_ORIGINAL_MTIMES_NS+=("$original_mtime_ns")
   TX_RENDERED+=("$rendered")
   TX_COUNT=$((TX_COUNT + 1))
 }
@@ -787,9 +832,13 @@ verify_transaction_input() {
       --destination-name "$dest_name" \
       --destination-device "${TX_ORIGINAL_DEVICES[$index]}" \
       --destination-inode "${TX_ORIGINAL_INODES[$index]}" \
+      --destination-size "${TX_ORIGINAL_SIZES[$index]}" \
+      --destination-mtime-ns "${TX_ORIGINAL_MTIMES_NS[$index]}" \
       --expected-name "$backup" \
       --expected-entry-device "${TX_BACKUP_DEVICES[$index]}" \
       --expected-entry-inode "${TX_BACKUP_INODES[$index]}" \
+      --expected-entry-size "${TX_BACKUP_SIZES[$index]}" \
+      --expected-entry-mtime-ns "${TX_BACKUP_MTIMES_NS[$index]}" \
       --expected-mode "${TX_MODES[$index]}" 2>/dev/null || true)"
     if [ "$state" != "same" ]; then
       echo "❌ Host 配置在刷新期间被其它进程修改，已停止：$display_dest" >&2
@@ -828,6 +877,8 @@ verify_committed_output() {
     --destination-name "$dest_name" \
     --destination-device "${TX_STAGE_DEVICES[$index]}" \
     --destination-inode "${TX_STAGE_INODES[$index]}" \
+    --destination-size "${TX_STAGE_SIZES[$index]}" \
+    --destination-mtime-ns "${TX_STAGE_MTIMES_NS[$index]}" \
     --expected-path "$rendered" \
     --expected-mode "${TX_MODES[$index]}" 2>/dev/null || true)"
   if [ "$state" != "same" ]; then
@@ -870,12 +921,18 @@ commit_transaction() {
         --destination-name "$dest_name" \
         --destination-device "${TX_ORIGINAL_DEVICES[$index]}" \
         --destination-inode "${TX_ORIGINAL_INODES[$index]}" \
+        --destination-size "${TX_ORIGINAL_SIZES[$index]}" \
+        --destination-mtime-ns "${TX_ORIGINAL_MTIMES_NS[$index]}" \
         --staged-name "$stage" \
         --staged-device "${TX_STAGE_DEVICES[$index]}" \
         --staged-inode "${TX_STAGE_INODES[$index]}" \
+        --staged-size "${TX_STAGE_SIZES[$index]}" \
+        --staged-mtime-ns "${TX_STAGE_MTIMES_NS[$index]}" \
         --expected-name "${TX_BACKUPS[$index]}" \
         --expected-entry-device "${TX_BACKUP_DEVICES[$index]}" \
         --expected-entry-inode "${TX_BACKUP_INODES[$index]}" \
+        --expected-entry-size "${TX_BACKUP_SIZES[$index]}" \
+        --expected-entry-mtime-ns "${TX_BACKUP_MTIMES_NS[$index]}" \
         --expected-mode "${TX_MODES[$index]}"; then
         echo "❌ 写入 Host 配置失败：$display_dest" >&2
         return 1
@@ -884,7 +941,9 @@ commit_transaction() {
       --destination-name "$dest_name" \
       --staged-name "$stage" \
       --staged-device "${TX_STAGE_DEVICES[$index]}" \
-      --staged-inode "${TX_STAGE_INODES[$index]}"; then
+      --staged-inode "${TX_STAGE_INODES[$index]}" \
+      --staged-size "${TX_STAGE_SIZES[$index]}" \
+      --staged-mtime-ns "${TX_STAGE_MTIMES_NS[$index]}"; then
       echo "❌ 写入 Host 配置失败：$display_dest" >&2
       return 1
     fi

@@ -1384,7 +1384,7 @@ SH
 }
 
 test_project_hook_installer_rejects_malformed_prepare_protocol() {
-  start_test "T15d: project hook installer 严格拒绝非 8 字段 identity 协议"
+  start_test "T15d: project hook installer 严格拒绝非 14 字段 identity 协议"
 
   local base repo fake_bin out real_python before protocol
   base=$(mktemp -d)
@@ -1409,10 +1409,10 @@ SH
   chmod +x "$fake_bin/python3"
 
   for protocol in \
-    $'1\t2\tbackup\t3\t4\tstage\t5' \
-    $'1\t2\tbackup\t3\t4\tstage\t5\t6\textra' \
-    $'-\t-\t-\t-\t-\tstage\t5\t6' \
-    $'x\t2\tbackup\t3\t4\tstage\t5\t6'; do
+    $'1\t2\t3\t4\tbackup\t5\t6\t7\t8\tstage\t9\t10\t11' \
+    $'1\t2\t3\t4\tbackup\t5\t6\t7\t8\tstage\t9\t10\t11\t12\textra' \
+    $'-\t-\t-\t-\t-\t-\t-\t-\t-\tstage\t9\t10\t11\t12' \
+    $'x\t2\t3\t4\tbackup\t5\t6\t7\t8\tstage\t9\t10\t11\t12'; do
     if (cd "$repo" && PATH="$fake_bin:$PATH" \
       PMAI_BAD_PREPARED_PROTOCOL="$protocol" PMAI_HOME="$REPO_ROOT" \
       bash "$INSTALL_PROJECT_HOOKS" --host claude) >"$out" 2>&1; then
@@ -1420,7 +1420,7 @@ SH
       rm -rf "$base"
       return
     fi
-    if ! grep -Eq '字段数不是 8|非法 replacement 身份组合' "$out"; then
+    if ! grep -Eq '字段数不是 14|非法 replacement 身份组合' "$out"; then
       _fail "malformed prepare protocol did not fail explicitly: $protocol"
       cat "$out" >&2
       rm -rf "$base"

@@ -68,12 +68,16 @@ class _Snapshot:
     mode: int
     device: int
     inode: int
+    size: int
+    mtime_ns: int
 
 
 @dataclass(frozen=True)
 class EntryIdentity:
     device: int
     inode: int
+    size: int | None = None
+    mtime_ns: int | None = None
 
 
 @dataclass(frozen=True)
@@ -250,34 +254,79 @@ def _open_current_bound_directory(
     return current_fd
 
 
-def _entry_identity(device: int, inode: int) -> EntryIdentity:
+def _entry_identity(
+    device: int,
+    inode: int,
+    size: int | None = None,
+    mtime_ns: int | None = None,
+) -> EntryIdentity:
     if device < 0 or inode < 0:
         raise AtomicFileError("validation", "文件身份 device/inode 不能为负数")
-    return EntryIdentity(device=device, inode=inode)
+    if (size is None) != (mtime_ns is None):
+        raise AtomicFileError(
+            "validation",
+            "文件身份 size 与 mtime_ns 必须同时提供或同时省略",
+        )
+    if size is not None and (size < 0 or mtime_ns is None or mtime_ns < 0):
+        raise AtomicFileError(
+            "validation",
+            "文件身份 size/mtime_ns 不能为负数",
+        )
+    return EntryIdentity(
+        device=device,
+        inode=inode,
+        size=size,
+        mtime_ns=mtime_ns,
+    )
 
 
 def _optional_entry_identity(
     device: int | None,
     inode: int | None,
+    size: int | None,
+    mtime_ns: int | None,
     *,
     label: str,
 ) -> EntryIdentity | None:
-    if (device is None) != (inode is None):
+    values = (device, inode, size, mtime_ns)
+    if any(value is None for value in values) and not all(
+        value is None for value in values
+    ):
         raise AtomicFileError(
             "validation",
-            f"{label} device 与 inode 必须同时提供或同时省略",
+            f"{label} device/inode/size/mtime_ns 必须同时提供或同时省略",
         )
-    if device is None or inode is None:
+    if device is None or inode is None or size is None or mtime_ns is None:
         return None
-    return _entry_identity(device, inode)
+    return _entry_identity(device, inode, size, mtime_ns)
 
 
 def _identity_from_stat(entry_stat: os.stat_result) -> EntryIdentity:
-    return EntryIdentity(device=entry_stat.st_dev, inode=entry_stat.st_ino)
+    return EntryIdentity(
+        device=entry_stat.st_dev,
+        inode=entry_stat.st_ino,
+        size=entry_stat.st_size,
+        mtime_ns=entry_stat.st_mtime_ns,
+    )
 
 
 def _identity_from_snapshot(snapshot: _Snapshot) -> EntryIdentity:
-    return EntryIdentity(device=snapshot.device, inode=snapshot.inode)
+    return EntryIdentity(
+        device=snapshot.device,
+        inode=snapshot.inode,
+        size=snapshot.size,
+        mtime_ns=snapshot.mtime_ns,
+    )
+
+
+def _identity_matches(current: EntryIdentity, expected: EntryIdentity) -> bool:
+    if (current.device, current.inode) != (expected.device, expected.inode):
+        return False
+    if expected.size is not None and current.size != expected.size:
+        return False
+    if expected.mtime_ns is not None and current.mtime_ns != expected.mtime_ns:
+        return False
+    return True
 
 
 def _assert_directory_is_current(
@@ -309,7 +358,7 @@ def _assert_identity(
     path: Path,
     label: str,
 ) -> None:
-    if _identity_from_snapshot(snapshot) != expected:
+    if not _identity_matches(_identity_from_snapshot(snapshot), expected):
         raise AtomicFileError(
             "concurrent_update",
             f"{label}身份已变化，拒绝继续: {path}",
@@ -331,7 +380,9 @@ def _assert_lock_path_identity(
             "concurrent_update",
             f"协作锁路径在持锁期间不可访问: {path}",
         ) from exc
-    if not stat.S_ISREG(current.st_mode) or _identity_from_stat(current) != expected:
+    if not stat.S_ISREG(current.st_mode) or not _identity_matches(
+        _identity_from_stat(current), expected
+    ):
         raise AtomicFileError(
             "concurrent_update",
             f"协作锁路径在持锁期间被替换: {path}",
@@ -513,7 +564,9 @@ def verify_inherited_lock(lock_path: Path, inherited_fd: int) -> None:
                 f"无法校验继承的 Host 配置协作锁路径: {lock_path}",
             ) from exc
         if not stat.S_ISREG(lock_path_stat.st_mode) or (
-            _identity_from_stat(lock_path_stat) != inherited_identity
+            not _identity_matches(
+                _identity_from_stat(lock_path_stat), inherited_identity
+            )
         ):
             raise AtomicFileError(
                 "validation",
@@ -681,6 +734,8 @@ def _snapshot_at(
             mode=stat.S_IMODE(file_stat.st_mode),
             device=file_stat.st_dev,
             inode=file_stat.st_ino,
+            size=file_stat.st_size,
+            mtime_ns=file_stat.st_mtime_ns,
         )
     except AtomicFileError:
         raise
@@ -743,6 +798,8 @@ def _same_file(left: _Snapshot, right: _Snapshot) -> bool:
     return (
         left.device == right.device
         and left.inode == right.inode
+        and left.size == right.size
+        and left.mtime_ns == right.mtime_ns
         and left.mode == right.mode
         and left.data == right.data
     )
@@ -832,7 +889,7 @@ def _create_regular_at(
     name: str,
     data: bytes,
     mode: int,
-    owned_entries: dict[str, tuple[int, int]] | None = None,
+    owned_entries: dict[str, EntryIdentity] | None = None,
 ) -> EntryIdentity:
     name = _validate_entry_name(name, label="安全文件名")
     display_path = parent / name
@@ -851,7 +908,7 @@ def _create_regular_at(
         created_stat = os.fstat(file_fd)
         created_identity = _identity_from_stat(created_stat)
         if owned_entries is not None:
-            owned_entries[name] = (created_stat.st_dev, created_stat.st_ino)
+            owned_entries[name] = _identity_from_stat(created_stat)
         os.fchmod(file_fd, mode)
         view = memoryview(data)
         while view:
@@ -860,7 +917,16 @@ def _create_regular_at(
                 raise OSError(errno.EIO, "安全文件写入未取得进展")
             view = view[written:]
         os.fsync(file_fd)
+        created_stat = os.fstat(file_fd)
+        created_identity = _identity_from_stat(created_stat)
+        if owned_entries is not None:
+            owned_entries[name] = created_identity
     except OSError as exc:
+        if file_fd >= 0 and created and owned_entries is not None:
+            try:
+                owned_entries[name] = _identity_from_stat(os.fstat(file_fd))
+            except OSError:
+                pass
         if file_fd >= 0:
             os.close(file_fd)
             file_fd = -1
@@ -883,6 +949,8 @@ def _create_regular_at(
                 name=name,
                 expected_device=created_identity.device,
                 expected_inode=created_identity.inode,
+                expected_size=created_identity.size,
+                expected_mtime_ns=created_identity.mtime_ns,
                 require_current_parent=False,
             )
         except AtomicFileError as cleanup_error:
@@ -910,6 +978,8 @@ def _create_regular_at(
             name=name,
             expected_device=created_identity.device,
             expected_inode=created_identity.inode,
+            expected_size=created_identity.size,
+            expected_mtime_ns=created_identity.mtime_ns,
             require_current_parent=False,
         )
         raise AtomicFileError(
@@ -922,7 +992,7 @@ def _create_regular_at(
 def _owned_paths_at(
     directory_fd: int,
     parent: Path,
-    owned_entries: dict[str, tuple[int, int]],
+    owned_entries: dict[str, EntryIdentity],
 ) -> tuple[Path, ...]:
     paths: list[Path] = []
     for name, expected_identity in owned_entries.items():
@@ -933,7 +1003,7 @@ def _owned_paths_at(
         except OSError:
             paths.append(parent / name)
             continue
-        if (current.st_dev, current.st_ino) == expected_identity:
+        if _identity_matches(_identity_from_stat(current), expected_identity):
             paths.append(parent / name)
     return tuple(paths)
 
@@ -941,7 +1011,7 @@ def _owned_paths_at(
 def _cleanup_owned_entries_at(
     directory_fd: int,
     parent: Path,
-    owned_entries: dict[str, tuple[int, int]],
+    owned_entries: dict[str, EntryIdentity],
 ) -> tuple[bool, list[tuple[str, BaseException]]]:
     removed_any = False
     cleanup_errors: list[tuple[str, BaseException]] = []
@@ -951,8 +1021,10 @@ def _cleanup_owned_entries_at(
                 directory_fd,
                 parent=parent,
                 name=name,
-                expected_device=expected_identity[0],
-                expected_inode=expected_identity[1],
+                expected_device=expected_identity.device,
+                expected_inode=expected_identity.inode,
+                expected_size=expected_identity.size,
+                expected_mtime_ns=expected_identity.mtime_ns,
                 ignore_missing=True,
                 require_current_parent=False,
             )
@@ -1045,7 +1117,7 @@ def prepare_update_at(
     backup_identity: EntryIdentity | None = None
     stage_name: str | None = None
     stage_identity: EntryIdentity | None = None
-    owned_entries: dict[str, tuple[int, int]] = {}
+    owned_entries: dict[str, EntryIdentity] = {}
     try:
         if current is not None:
             timestamp = time.strftime("%Y%m%d-%H%M%S")
@@ -1560,7 +1632,7 @@ def _restore_claim_if_identity(
             f"无法确认待恢复文件身份: {source_path}",
             recovery_paths=(source_path,),
         ) from exc
-    if _identity_from_stat(current) != expected_identity:
+    if not _identity_matches(_identity_from_stat(current), expected_identity):
         raise AtomicFileError(
             "recovery_required",
             f"待恢复文件身份已变化，未移动 foreign 文件: {source_path}",
@@ -1589,12 +1661,19 @@ def _unlink_entry_identity_at(
     name: str,
     expected_device: int,
     expected_inode: int,
+    expected_size: int | None = None,
+    expected_mtime_ns: int | None = None,
     ignore_missing: bool = False,
     require_current_parent: bool = True,
 ) -> bool:
     """Delete exactly one same-directory entry identity without name-based unlink."""
     name = _validate_entry_name(name, label="待清理文件名")
-    expected_identity = _entry_identity(expected_device, expected_inode)
+    expected_identity = _entry_identity(
+        expected_device,
+        expected_inode,
+        expected_size,
+        expected_mtime_ns,
+    )
     display_path = parent / name
     try:
         claim_name = _unique_cleanup_claim_name(directory_fd, name)
@@ -1674,7 +1753,7 @@ def _unlink_entry_identity_at(
             recovery_paths=(display_path,),
         ) from exc
 
-    if _identity_from_stat(claimed_stat) != expected_identity:
+    if not _identity_matches(_identity_from_stat(claimed_stat), expected_identity):
         _restore_claim(
             directory_fd,
             claim_name,
@@ -1721,6 +1800,8 @@ def unlink_entry_at(
     name: str,
     expected_device: int,
     expected_inode: int,
+    expected_size: int | None = None,
+    expected_mtime_ns: int | None = None,
     ignore_missing: bool = False,
 ) -> bool:
     return _unlink_entry_identity_at(
@@ -1729,6 +1810,8 @@ def unlink_entry_at(
         name=name,
         expected_device=expected_device,
         expected_inode=expected_inode,
+        expected_size=expected_size,
+        expected_mtime_ns=expected_mtime_ns,
         ignore_missing=ignore_missing,
         require_current_parent=True,
     )
@@ -1784,7 +1867,7 @@ def _claim_staged_entry_at(
                 dict.fromkeys((*exc.recovery_paths, staged_path, claim_path))
             )
             raise exc from inspect_error
-        if _identity_from_stat(claimed_stat) != staged_identity:
+        if not _identity_matches(_identity_from_stat(claimed_stat), staged_identity):
             raise
         _restore_claim(
             directory_fd,
@@ -2144,6 +2227,8 @@ def _replace_staged_at(
         name=quarantine_name,
         expected_device=claimed.device,
         expected_inode=claimed.inode,
+        expected_size=claimed.size,
+        expected_mtime_ns=claimed.mtime_ns,
     )
     _assert_directory_is_current(directory_fd, parent)
 
@@ -2172,7 +2257,7 @@ def replace_text_if_unchanged_at(
     )
     destination = parent / destination_name
     staged_name: str | None = None
-    owned_entries: dict[str, tuple[int, int]] = {}
+    owned_entries: dict[str, EntryIdentity] = {}
     active_error: BaseException | None = None
     cleanup_error: AtomicFileError | None = None
     cleanup_cause: BaseException | None = None
@@ -2232,7 +2317,7 @@ def replace_text_if_unchanged_at(
                     recovery_paths=(parent / candidate,),
                 ) from exc
             staged_name = candidate
-            owned_entries[candidate] = (staged_stat.st_dev, staged_stat.st_ino)
+            owned_entries[candidate] = _identity_from_stat(staged_stat)
             break
         else:
             raise AtomicFileError("validation", f"无法创建安全暂存文件: {parent}")
@@ -2242,6 +2327,9 @@ def replace_text_if_unchanged_at(
                 handle.write(text.encode("utf-8"))
                 handle.flush()
                 os.fchmod(handle.fileno(), original.mode)
+                owned_entries[candidate] = _identity_from_stat(
+                    os.fstat(handle.fileno())
+                )
                 os.fsync(handle.fileno())
         except OSError as exc:
             raise AtomicFileError(
@@ -2249,7 +2337,7 @@ def replace_text_if_unchanged_at(
                 f"暂存文件写入或持久化失败，正式文件未修改: {destination}",
             ) from exc
         _assert_directory_is_current(directory_fd, parent, label="原子写入目标目录")
-        stage_identity = _entry_identity(*owned_entries[staged_name])
+        stage_identity = owned_entries[staged_name]
         try:
             _replace_staged_at(
                 directory_fd,
@@ -2355,7 +2443,7 @@ def write_text_atomically(
     directory_fd = _open_directory_without_symlinks(normalised.parent)
     commit_fd = -1
     postcheck_fd = -1
-    owned_entries: dict[str, tuple[int, int]] = {}
+    owned_entries: dict[str, EntryIdentity] = {}
     stage_name: str | None = None
     active_error: BaseException | None = None
     cleanup_error: AtomicFileError | None = None
@@ -2444,7 +2532,7 @@ def write_text_atomically(
             label="原子写入目标目录",
         )
         assert stage_name is not None
-        stage_identity = _entry_identity(*owned_entries[stage_name])
+        stage_identity = owned_entries[stage_name]
         try:
             if original is None:
                 _create_from_staged_at(
@@ -2861,6 +2949,8 @@ def _delete_if_unchanged_at(
             name=quarantine_name,
             expected_device=claimed.device,
             expected_inode=claimed.inode,
+            expected_size=claimed.size,
+            expected_mtime_ns=claimed.mtime_ns,
         )
         quarantine_name = None
         _assert_directory_is_current(directory_fd, parent)
@@ -2899,6 +2989,8 @@ def _expected_snapshot_at_or_path(
     expected_path: Path | None,
     expected_entry_device: int | None = None,
     expected_entry_inode: int | None = None,
+    expected_entry_size: int | None = None,
+    expected_entry_mtime_ns: int | None = None,
 ) -> _Snapshot:
     if (expected_name is None) == (expected_path is None):
         raise AtomicFileError(
@@ -2906,10 +2998,17 @@ def _expected_snapshot_at_or_path(
             "必须且只能提供 expected-name 或 expected-path 之一",
         )
     if expected_name is not None:
-        if expected_entry_device is None or expected_entry_inode is None:
+        expected_identity = _optional_entry_identity(
+            expected_entry_device,
+            expected_entry_inode,
+            expected_entry_size,
+            expected_entry_mtime_ns,
+            label="预期文件身份",
+        )
+        if expected_identity is None:
             raise AtomicFileError(
                 "validation",
-                "expected-name 必须同时提供 expected-entry-device 与 expected-entry-inode",
+                "expected-name 必须同时提供完整的 expected-entry identity",
             )
         expected_name = _validate_entry_name(expected_name, label="预期文件名")
         snapshot = _snapshot_bound_at(
@@ -2920,15 +3019,23 @@ def _expected_snapshot_at_or_path(
         )
         _assert_identity(
             snapshot,
-            _entry_identity(expected_entry_device, expected_entry_inode),
+            expected_identity,
             path=parent / expected_name,
             label="预期文件",
         )
         return snapshot
-    if expected_entry_device is not None or expected_entry_inode is not None:
+    if any(
+        value is not None
+        for value in (
+            expected_entry_device,
+            expected_entry_inode,
+            expected_entry_size,
+            expected_entry_mtime_ns,
+        )
+    ):
         raise AtomicFileError(
             "validation",
-            "expected-path 不接受 expected-entry-device/expected-entry-inode",
+            "expected-path 不接受 expected-entry identity",
         )
     assert expected_path is not None
     return _snapshot_path(expected_path, label="预期版本")
@@ -2944,13 +3051,19 @@ def inspect_entry_at(
     expected_mode: int,
     expected_entry_device: int | None = None,
     expected_entry_inode: int | None = None,
+    expected_entry_size: int | None = None,
+    expected_entry_mtime_ns: int | None = None,
     destination_device: int | None = None,
     destination_inode: int | None = None,
+    destination_size: int | None = None,
+    destination_mtime_ns: int | None = None,
 ) -> str:
     destination_name = _validate_entry_name(destination_name, label="Host 配置名")
     destination_identity = _optional_entry_identity(
         destination_device,
         destination_inode,
+        destination_size,
+        destination_mtime_ns,
         label="正式 Host 配置身份",
     )
     expected = _expected_snapshot_at_or_path(
@@ -2960,6 +3073,8 @@ def inspect_entry_at(
         expected_path=expected_path,
         expected_entry_device=expected_entry_device,
         expected_entry_inode=expected_entry_inode,
+        expected_entry_size=expected_entry_size,
+        expected_entry_mtime_ns=expected_entry_mtime_ns,
     )
     try:
         current = _snapshot_bound_at(
@@ -2976,7 +3091,9 @@ def inspect_entry_at(
         raise
     if (
         destination_identity is not None
-        and _identity_from_snapshot(current) != destination_identity
+        and not _identity_matches(
+            _identity_from_snapshot(current), destination_identity
+        )
     ):
         _assert_directory_is_current(directory_fd, parent)
         return "different"
@@ -2995,19 +3112,27 @@ def replace_entry_at(
     staged_name: str,
     staged_device: int,
     staged_inode: int,
+    staged_size: int,
+    staged_mtime_ns: int,
     expected_name: str | None,
     expected_path: Path | None,
     expected_mode: int,
     expected_entry_device: int | None = None,
     expected_entry_inode: int | None = None,
+    expected_entry_size: int | None = None,
+    expected_entry_mtime_ns: int | None = None,
     destination_device: int | None = None,
     destination_inode: int | None = None,
+    destination_size: int | None = None,
+    destination_mtime_ns: int | None = None,
 ) -> None:
     destination_name = _validate_entry_name(destination_name, label="Host 配置名")
     staged_name = _validate_entry_name(staged_name, label="Host 暂存文件名")
     destination_identity = _optional_entry_identity(
         destination_device,
         destination_inode,
+        destination_size,
+        destination_mtime_ns,
         label="正式 Host 配置身份",
     )
     expected = _expected_snapshot_at_or_path(
@@ -3017,6 +3142,8 @@ def replace_entry_at(
         expected_path=expected_path,
         expected_entry_device=expected_entry_device,
         expected_entry_inode=expected_entry_inode,
+        expected_entry_size=expected_entry_size,
+        expected_entry_mtime_ns=expected_entry_mtime_ns,
     )
     current = _snapshot_bound_at(
         directory_fd,
@@ -3042,7 +3169,12 @@ def replace_entry_at(
         parent=parent,
         destination_name=destination_name,
         staged_name=staged_name,
-        staged_identity=_entry_identity(staged_device, staged_inode),
+        staged_identity=_entry_identity(
+            staged_device,
+            staged_inode,
+            staged_size,
+            staged_mtime_ns,
+        ),
         expected=current,
     )
 
@@ -3055,13 +3187,20 @@ def create_entry_at(
     staged_name: str,
     staged_device: int,
     staged_inode: int,
+    staged_size: int,
+    staged_mtime_ns: int,
 ) -> None:
     _create_from_staged_at(
         directory_fd,
         parent=parent,
         destination_name=destination_name,
         staged_name=staged_name,
-        staged_identity=_entry_identity(staged_device, staged_inode),
+        staged_identity=_entry_identity(
+            staged_device,
+            staged_inode,
+            staged_size,
+            staged_mtime_ns,
+        ),
     )
 
 
@@ -3113,16 +3252,22 @@ def _add_expected_source_arguments(parser: argparse.ArgumentParser) -> None:
 def _add_expected_entry_identity_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--expected-entry-device", type=int)
     parser.add_argument("--expected-entry-inode", type=int)
+    parser.add_argument("--expected-entry-size", type=int)
+    parser.add_argument("--expected-entry-mtime-ns", type=int)
 
 
 def _add_destination_identity_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--destination-device", type=int)
     parser.add_argument("--destination-inode", type=int)
+    parser.add_argument("--destination-size", type=int)
+    parser.add_argument("--destination-mtime-ns", type=int)
 
 
 def _add_staged_identity_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--staged-device", type=int, required=True)
     parser.add_argument("--staged-inode", type=int, required=True)
+    parser.add_argument("--staged-size", type=int, required=True)
+    parser.add_argument("--staged-mtime-ns", type=int, required=True)
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -3208,6 +3353,8 @@ def main(argv: list[str] | None = None) -> int:
     unlink_at_parser.add_argument("--name", required=True)
     unlink_at_parser.add_argument("--entry-device", type=int, required=True)
     unlink_at_parser.add_argument("--entry-inode", type=int, required=True)
+    unlink_at_parser.add_argument("--entry-size", type=int, required=True)
+    unlink_at_parser.add_argument("--entry-mtime-ns", type=int, required=True)
     unlink_at_parser.add_argument("--ignore-missing", action="store_true")
 
     run_locked_parser = subparsers.add_parser("run-locked")
@@ -3268,19 +3415,23 @@ def main(argv: list[str] | None = None) -> int:
                 expected_mode=args.expected_mode,
             )
             if prepared.original_identity is None:
-                original_fields = ("-", "-")
+                original_fields = ("-", "-", "-", "-")
             else:
                 original_fields = (
                     str(prepared.original_identity.device),
                     str(prepared.original_identity.inode),
+                    str(prepared.original_identity.size),
+                    str(prepared.original_identity.mtime_ns),
                 )
             if prepared.backup_identity is None:
-                backup_fields = ("-", "-", "-")
+                backup_fields = ("-", "-", "-", "-", "-")
             else:
                 backup_fields = (
                     prepared.backup_name or "-",
                     str(prepared.backup_identity.device),
                     str(prepared.backup_identity.inode),
+                    str(prepared.backup_identity.size),
+                    str(prepared.backup_identity.mtime_ns),
                 )
             print(
                 "\t".join(
@@ -3290,6 +3441,8 @@ def main(argv: list[str] | None = None) -> int:
                         prepared.stage_name,
                         str(prepared.stage_identity.device),
                         str(prepared.stage_identity.inode),
+                        str(prepared.stage_identity.size),
+                        str(prepared.stage_identity.mtime_ns),
                     )
                 )
             )
@@ -3307,8 +3460,12 @@ def main(argv: list[str] | None = None) -> int:
                     expected_mode=args.expected_mode,
                     expected_entry_device=args.expected_entry_device,
                     expected_entry_inode=args.expected_entry_inode,
+                    expected_entry_size=args.expected_entry_size,
+                    expected_entry_mtime_ns=args.expected_entry_mtime_ns,
                     destination_device=args.destination_device,
                     destination_inode=args.destination_inode,
+                    destination_size=args.destination_size,
+                    destination_mtime_ns=args.destination_mtime_ns,
                 )
             )
         elif args.command == "replace-at":
@@ -3320,13 +3477,19 @@ def main(argv: list[str] | None = None) -> int:
                 staged_name=args.staged_name,
                 staged_device=args.staged_device,
                 staged_inode=args.staged_inode,
+                staged_size=args.staged_size,
+                staged_mtime_ns=args.staged_mtime_ns,
                 expected_name=args.expected_name,
                 expected_path=Path(args.expected_path) if args.expected_path else None,
                 expected_mode=args.expected_mode,
                 expected_entry_device=args.expected_entry_device,
                 expected_entry_inode=args.expected_entry_inode,
+                expected_entry_size=args.expected_entry_size,
+                expected_entry_mtime_ns=args.expected_entry_mtime_ns,
                 destination_device=args.destination_device,
                 destination_inode=args.destination_inode,
+                destination_size=args.destination_size,
+                destination_mtime_ns=args.destination_mtime_ns,
             )
         elif args.command == "create-at":
             directory_fd, parent = _directory_fd_from_args(args)
@@ -3337,6 +3500,8 @@ def main(argv: list[str] | None = None) -> int:
                 staged_name=args.staged_name,
                 staged_device=args.staged_device,
                 staged_inode=args.staged_inode,
+                staged_size=args.staged_size,
+                staged_mtime_ns=args.staged_mtime_ns,
             )
         elif args.command == "delete-at":
             directory_fd, parent = _directory_fd_from_args(args)
@@ -3347,6 +3512,8 @@ def main(argv: list[str] | None = None) -> int:
                 expected_path=Path(args.expected_path) if args.expected_path else None,
                 expected_entry_device=args.expected_entry_device,
                 expected_entry_inode=args.expected_entry_inode,
+                expected_entry_size=args.expected_entry_size,
+                expected_entry_mtime_ns=args.expected_entry_mtime_ns,
             )
             _delete_if_unchanged_at(
                 directory_fd,
@@ -3357,6 +3524,8 @@ def main(argv: list[str] | None = None) -> int:
                 destination_identity=_optional_entry_identity(
                     args.destination_device,
                     args.destination_inode,
+                    args.destination_size,
+                    args.destination_mtime_ns,
                     label="正式 Host 配置身份",
                 ),
             )
@@ -3379,6 +3548,8 @@ def main(argv: list[str] | None = None) -> int:
                 name=args.name,
                 expected_device=args.entry_device,
                 expected_inode=args.entry_inode,
+                expected_size=args.entry_size,
+                expected_mtime_ns=args.entry_mtime_ns,
                 ignore_missing=args.ignore_missing,
             )
         elif args.command == "lock-status":

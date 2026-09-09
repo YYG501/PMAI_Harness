@@ -4,7 +4,7 @@
 
 ## 当前位置
 
-- 2026-09-09 安装环境检查收口：环境声明与校验器接入目标版本 doctor、安装/升级既有回滚及发布预检；Node 按 Hook 实际能力检查，Python/Git/Bash 按最低要求检查，不精确锁定日常用户的模型或 CLI。实现及完整回归已通过；本机用户环境已安装并验证 Homebrew Python 3.12，未替换 macOS 系统 Python。远端 CI 持续覆盖最低/推荐运行时与 Windows 兼容环境，原生宿主模型调用仍待验证。
+- 2026-09-09 安装环境检查收口：环境声明与校验器接入目标版本 doctor、安装/升级既有回滚及发布预检；Node 按 Hook 实际能力检查，Python/Git/Bash 按最低要求检查，不精确锁定日常用户的模型或 CLI。实现及完整回归已通过；本机用户环境已安装并验证 Homebrew Python 3.12，旧的用户级 Python 3.9 包目录已删除，未替换 macOS 系统 Python。远端 CI 持续覆盖最低/推荐运行时与 Windows 兼容环境，原生宿主模型调用仍待验证。
 - 日期：2026-09-09
 - 当前分支：`main`；H1 实现提交 `ec58abc` 已由 `codex/harness-hardening` 快进合入。
 - Harness 增强：H1 已按原定范围完成，护栏异常正确阻断、发布门配置对齐且缺少 Runner / Judge 不能通过。PM 追加的 Windows 本地开发与回归适配也已完成，采用 PowerShell 入口 + Windows 本地 Cygwin 运行时，完整回归及后续入口专项复测通过。PM 主要使用 Mac，暂停 Windows 原生宿主验证；后续在实际 Mac 使用中核验 H2 并开展 H3，H2–H6 尚未完成。本批成果保留在当前开发分支，提交与远端同步状态以 Git 为准；CI 与发布单独跟踪，未升级用户全局安装。
@@ -108,7 +108,7 @@
 
 - 环境单元测试 `13/13`、发布预检单元 `15/15`、隔离用户目录下的首次安装/版本通道/缺 Python 或 Node/doctor JSON/远端迁移/升级回滚 `12/12`、doctor `42/42`、全局安装锁与入口所有权 `8/8`，并在 macOS 自带 Bash 3.2 下通过。
 - 本机 Homebrew Python `3.12.14` 已安装，登录 Bash 的 `python3` 已指向该版本；host profile 实测 Python `3.12.14`、Git `2.50.1`、Bash `3.2.57`、Node `25.8.0` 全部通过。macOS `/usr/bin/python3` 保留为 `3.9.6`，没有替换系统运行时；既有 Zsh/Conda Python `3.13.5` 也满足最低要求。
-- 完整回归 `1074 passed / 0 failed`，静态评测 `7 passed / 0 failed`；未配置外部 Runner 的 `18` 个 Session Eval 明确 skip，不计作真实模型验证。CI YAML、shell/Python 语法和差异检查通过；远端 CI 由 main workflow 持续验证，真实宿主模型会话尚未执行。
+- 完整回归 `1076 passed / 0 failed`，静态评测 `7 passed / 0 failed`；未配置外部 Runner 的 `18` 个 Session Eval 明确 skip，不计作真实模型验证。CI YAML、shell/Python 语法和差异检查通过；远端 CI 由 main workflow 持续验证，真实宿主模型会话尚未执行。
 
 上一批推送前审查修正：
 
