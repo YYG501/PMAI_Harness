@@ -14,7 +14,7 @@ PM-AI-Harness 生成器仓的演进记录。本文件**只记影响已安装框�
 
 ## 未发布
 
-- `fix(distribution)`: 仓库迁移至 `YYG501/PM-AI-Harness` 后，同步首次安装、升级、README 与 upgrade skill 的默认分发地址，避免继续依赖 GitHub 对旧仓名的重定向。
+- `fix(distribution)`: 仓库迁移至 `YYG501/PM-AI-Harness` 后，同步首次安装、升级、README 与 upgrade skill 的默认分发地址；既有安装在下次成功升级时自动迁移旧官方 `origin`，失败则随升级事务恢复，避免继续依赖 GitHub 对旧仓名的重定向。
 
 - `feat(runtime)`: 环境检查接入安装前置、目标版本 doctor 与发布预检，检查 Python/Git/Bash 最低版本及 Node Hook 能力；Python 保持 `>=3.10` 兼容下限并推荐 3.12，CI 分别覆盖最低与推荐版本。doctor 在 Python 完全缺失时仍返回稳定 JSON；安装和升级失败复用既有回滚。首次安装复用 bootstrap checkout 的认证来源，新增 `--stable` / `--to <tag>` 和实际 commit 回执，tag 安装可安全切回 rolling main。未知版本、损坏声明和未知 profile 不再放行；gstack/飞书仍按需检查，不新增 Build 合同或自动修改用户系统依赖。
 

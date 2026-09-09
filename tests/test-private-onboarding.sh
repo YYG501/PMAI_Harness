@@ -162,6 +162,29 @@ test_versioned_install_modes() {
   pass_test
 }
 
+test_upgrade_migrates_legacy_origin() {
+  start_test "runtime: 升级迁移旧官方 origin 并保留认证协议"
+  local legacy_remote canonical_remote actual_remote out rc
+
+  legacy_remote="https://github.com/YYG501/PMAI_Workflow.git"
+  canonical_remote="https://github.com/YYG501/PM-AI-Harness.git"
+  git -C "$PMAI_HOME" remote set-url origin "$legacy_remote"
+  out=$(HOME="$FAKE_HOME" CODEX_HOME="$FAKE_CODEX_HOME" PMAI_HOME="$PMAI_HOME" PATH="$FAKE_PATH" \
+    GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0="url.file://$SOURCE_REPO.insteadOf" \
+    GIT_CONFIG_VALUE_0="$canonical_remote" \
+    bash "$PMAI_HOME/bin/pmai" upgrade --no-whats-new 2>&1)
+  rc=$?
+  actual_remote=$(git -C "$PMAI_HOME" config --get remote.origin.url 2>/dev/null || true)
+  git -C "$PMAI_HOME" remote set-url origin "$SOURCE_REPO"
+  if [ "$rc" != "0" ] || [ "$actual_remote" != "$canonical_remote" ] \
+    || ! echo "$out" | grep -q "Updating origin remote"; then
+    _fail "旧官方 origin 应在成功升级时迁移到同协议的新仓地址"
+    echo "$out" >&2
+    return
+  fi
+  pass_test
+}
+
 test_detached_upgrade_failure_restores_channel() {
   start_test "runtime: tag 安装切换 main 失败时恢复 HEAD 和本地 main"
   local exact_home exact_pmai before_head before_main out rc
@@ -296,20 +319,26 @@ test_private_repo_install_surfaces_prereqs() {
 
 test_upgrade_invalid_runtime_restores_previous_install() {
   start_test "runtime: 升级目标声明损坏时恢复旧版本及宿主入口"
-  local before before_ref after_ref out rc
+  local before before_ref after_ref rollback_remote actual_remote out rc
   before=$(git -C "$PMAI_HOME" rev-parse HEAD)
   before_ref=$(git -C "$PMAI_HOME" symbolic-ref -q HEAD)
+  rollback_remote="$TMP_ROOT/rollback-origin.git"
+  git -C "$PMAI_HOME" remote set-url origin "$rollback_remote"
   cp "$PMAI_HOME/config/runtime-manifest.json" "$TMP_ROOT/baseline-runtime.json"
   printf '{}\n' > "$SOURCE_REPO/config/runtime-manifest.json"
   git -C "$SOURCE_REPO" add config/runtime-manifest.json
   git -C "$SOURCE_REPO" commit -qm "invalid runtime regression fixture"
   git -C "$SOURCE_REPO" tag v0.0.0-runtime-fixture
   out=$(HOME="$FAKE_HOME" CODEX_HOME="$FAKE_CODEX_HOME" PMAI_HOME="$PMAI_HOME" PATH="$FAKE_PATH" \
+    PMAI_REMOTE="$SOURCE_REPO" \
     bash "$PMAI_HOME/bin/pmai" upgrade --to v0.0.0-runtime-fixture 2>&1)
   rc=$?
   after_ref=$(git -C "$PMAI_HOME" symbolic-ref -q HEAD)
+  actual_remote=$(git -C "$PMAI_HOME" config --get remote.origin.url 2>/dev/null || true)
+  git -C "$PMAI_HOME" remote set-url origin "$SOURCE_REPO"
   if [ "$rc" = 0 ] || [ "$(git -C "$PMAI_HOME" rev-parse HEAD)" != "$before" ] \
     || [ "$before_ref" != "$after_ref" ] \
+    || [ "$actual_remote" != "$rollback_remote" ] \
     || ! cmp -s "$TMP_ROOT/baseline-runtime.json" "$PMAI_HOME/config/runtime-manifest.json" \
     || [ ! -f "$FAKE_CODEX_HOME/skills/pmai-build/SKILL.md" ] \
     || ! echo "$out" | grep -q "Runtime manifest"; then
@@ -456,6 +485,7 @@ test_install_without_python_does_not_write
 test_install_without_node_rolls_back
 test_versioned_install_modes
 test_private_repo_install_surfaces_prereqs
+test_upgrade_migrates_legacy_origin
 test_doctor_missing_node_json
 test_doctor_missing_python_json
 test_doctor_reports_private_onboarding_state

@@ -45,10 +45,31 @@ CLAUDE_SKILLS="$HOME/.claude/skills"
 CODEX_SKILLS="${CODEX_HOME:-$HOME/.codex}/skills"
 CODEX_PROMPTS="${CODEX_HOME:-$HOME/.codex}/prompts"
 SKILL_PREFIX="pmai-"
-REMOTE="${PMAI_REMOTE:-git@github.com:YYG501/PM-AI-Harness.git}"
+DEFAULT_SSH_REMOTE="git@github.com:YYG501/PM-AI-Harness.git"
+DEFAULT_HTTPS_REMOTE="https://github.com/YYG501/PM-AI-Harness.git"
 DOCTOR_BIN="$PMAI_HOME/bin/pmai-doctor"
 DOCTOR_LOG="${PMAI_UPGRADE_DOCTOR_LOG:-}"
 DOCTOR_LOG_IS_TEMP=0
+
+resolve_upgrade_remote() {
+  local current="$1"
+
+  if [ -n "${PMAI_REMOTE:-}" ]; then
+    printf '%s\n' "$PMAI_REMOTE"
+    return
+  fi
+  case "$current" in
+    git@github.com:YYG501/PMAI_Workflow.git)
+      printf '%s\n' "$DEFAULT_SSH_REMOTE"
+      ;;
+    https://github.com/YYG501/PMAI_Workflow|https://github.com/YYG501/PMAI_Workflow.git)
+      printf '%s\n' "$DEFAULT_HTTPS_REMOTE"
+      ;;
+    *)
+      printf '%s\n' "$current"
+      ;;
+  esac
+}
 
 prepare_doctor_log() {
   if [ -n "$DOCTOR_LOG" ]; then
@@ -238,6 +259,9 @@ STASHED=0
 OLD_HEAD=""
 OLD_SYMBOLIC_REF=""
 OLD_MAIN_HEAD=""
+OLD_REMOTE_URL=""
+TARGET_REMOTE_URL=""
+REMOTE_CHANGED=0
 
 global_rollback() {
   local exit_code="${1:-1}"
@@ -306,6 +330,12 @@ global_rollback() {
   elif [ "$STASH_ATTEMPTED" = "1" ]; then
     echo "⚠️  stash 尚未确认完成；为保护未提交改动，本次未执行 reset --hard。" >&2
   fi
+  if [ "$REMOTE_CHANGED" = "1" ] && [ -n "$OLD_REMOTE_URL" ]; then
+    if ! git -C "$PMAI_HOME" remote set-url origin "$OLD_REMOTE_URL"; then
+      echo "⚠️  origin 未能恢复到升级前地址。" >&2
+      rollback_failed=1
+    fi
+  fi
   if [ "$rollback_failed" = "1" ]; then
     echo "⚠️  升级回滚未完整；请按以上 HEAD 和路径核对恢复现场。" >&2
   fi
@@ -358,6 +388,12 @@ OLD_SYMBOLIC_REF=$(git symbolic-ref -q HEAD 2>/dev/null || true)
 OLD_MAIN_HEAD=$(git rev-parse -q --verify refs/heads/main 2>/dev/null || true)
 OLD_HEAD_SHORT=$(git rev-parse --short HEAD)
 OLD_CHANNEL=$(current_channel)
+OLD_REMOTE_URL=$(git config --get remote.origin.url 2>/dev/null || true)
+if [ -z "$OLD_REMOTE_URL" ]; then
+  echo "❌ ~/.pmai 缺少 origin remote，无法确定升级来源。" >&2
+  exit 1
+fi
+TARGET_REMOTE_URL=$(resolve_upgrade_remote "$OLD_REMOTE_URL")
 
 # 先确认工作树，再允许任何 reset 型回滚。status 失败或此处收到信号都
 # 没有发生写操作，直接退出即可，不能用 reset --hard 猜测恢复。
@@ -385,6 +421,12 @@ if [ -n "$GIT_STATUS" ]; then
   STASHED=1
 fi
 GIT_ROLLBACK_READY=1
+
+if [ "$TARGET_REMOTE_URL" != "$OLD_REMOTE_URL" ]; then
+  echo "→ Updating origin remote..."
+  REMOTE_CHANGED=1
+  git remote set-url origin "$TARGET_REMOTE_URL"
+fi
 
 # fetch + checkout（保留原逻辑，timeout 兜底）
 case "$MODE" in

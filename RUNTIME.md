@@ -106,7 +106,7 @@
 
 安装环境检查（2026-09-09）：
 
-- 环境单元测试 `13/13`、发布预检单元 `15/15`、隔离用户目录下的首次安装/版本通道/缺 Python 或 Node/doctor JSON/升级回滚 `11/11`、doctor `42/42`、全局安装锁与入口所有权 `8/8`，并在 macOS 自带 Bash 3.2 下通过。
+- 环境单元测试 `13/13`、发布预检单元 `15/15`、隔离用户目录下的首次安装/版本通道/缺 Python 或 Node/doctor JSON/远端迁移/升级回滚 `12/12`、doctor `42/42`、全局安装锁与入口所有权 `8/8`，并在 macOS 自带 Bash 3.2 下通过。
 - 本机 Homebrew Python `3.12.14` 已安装，登录 Bash 的 `python3` 已指向该版本；host profile 实测 Python `3.12.14`、Git `2.50.1`、Bash `3.2.57`、Node `25.8.0` 全部通过。macOS `/usr/bin/python3` 保留为 `3.9.6`，没有替换系统运行时；既有 Zsh/Conda Python `3.13.5` 也满足最低要求。
 - 完整回归 `1074 passed / 0 failed`，静态评测 `7 passed / 0 failed`；未配置外部 Runner 的 `18` 个 Session Eval 明确 skip，不计作真实模型验证。CI YAML、shell/Python 语法和差异检查通过；尚未执行远端 CI 或真实宿主模型会话。
 
