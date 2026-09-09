@@ -50,6 +50,10 @@ test_global_install_lock_serializes_doctor_and_uninstall() {
   real_python=$(command -v python3)
   mkdir -p "$framework/bin" "$framework/scripts/_lib" "$framework/.git" "$fake_bin"
   cp "$REPO_ROOT/bin/pmai-doctor" "$framework/bin/pmai-doctor"
+  mkdir -p "$framework/config"
+  cp "$REPO_ROOT/config/runtime-manifest.json" "$framework/config/runtime-manifest.json"
+  cp "$REPO_ROOT/scripts/environment-check.py" "$framework/scripts/environment-check.py"
+  ln -s "$REPO_ROOT/hooks" "$framework/hooks"
   cp "$REPO_ROOT/scripts/_lib/global-install-lock.sh" \
     "$framework/scripts/_lib/global-install-lock.sh"
   cp "$REPO_ROOT/scripts/_lib/global_install_lock.py" \
@@ -64,6 +68,10 @@ test_global_install_lock_serializes_doctor_and_uninstall() {
   cat > "$fake_bin/git" <<'EOF'
 #!/usr/bin/env bash
 set -u
+if [ "${1:-}" = "--version" ]; then
+  echo "git version 2.50.0"
+  exit 0
+fi
 if [ ! -e "$FAKE_GIT_ENTERED" ]; then
   : > "$FAKE_GIT_ENTERED"
   while [ ! -e "$FAKE_GIT_RELEASE" ]; do

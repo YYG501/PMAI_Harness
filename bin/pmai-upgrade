@@ -237,6 +237,7 @@ STASH_ATTEMPTED=0
 STASHED=0
 OLD_HEAD=""
 OLD_SYMBOLIC_REF=""
+OLD_MAIN_HEAD=""
 
 global_rollback() {
   local exit_code="${1:-1}"
@@ -272,6 +273,15 @@ global_rollback() {
         || { [ -n "$OLD_SYMBOLIC_REF" ] && [ "$actual_ref" != "$OLD_SYMBOLIC_REF" ]; } \
         || { [ -z "$OLD_SYMBOLIC_REF" ] && [ -n "$actual_ref" ]; }; then
         git_restored=0
+      fi
+      if [ "$OLD_SYMBOLIC_REF" != "refs/heads/main" ]; then
+        if [ -n "$OLD_MAIN_HEAD" ]; then
+          git -C "$PMAI_HOME" update-ref refs/heads/main "$OLD_MAIN_HEAD" \
+            >/dev/null 2>&1 || git_restored=0
+        else
+          git -C "$PMAI_HOME" update-ref -d refs/heads/main \
+            >/dev/null 2>&1 || git_restored=0
+        fi
       fi
     fi
     if [ "$git_restored" != "1" ]; then
@@ -345,6 +355,7 @@ cd "$PMAI_HOME"
 OLD_VER=$(cat VERSION 2>/dev/null || echo unknown)
 OLD_HEAD=$(git rev-parse HEAD)          # 全 hash，rollback 用
 OLD_SYMBOLIC_REF=$(git symbolic-ref -q HEAD 2>/dev/null || true)
+OLD_MAIN_HEAD=$(git rev-parse -q --verify refs/heads/main 2>/dev/null || true)
 OLD_HEAD_SHORT=$(git rev-parse --short HEAD)
 OLD_CHANNEL=$(current_channel)
 
@@ -383,8 +394,13 @@ case "$MODE" in
       echo "❌ git fetch 超时（30s）或失败。网络 / SSH 不通？" >&2
       global_rollback
     }
-    echo "→ Merging origin/main (ff-only)..."
-    git merge --ff-only origin/main 2>&1 | tail -5
+    if [ "$OLD_SYMBOLIC_REF" = "refs/heads/main" ]; then
+      echo "→ Merging origin/main (ff-only)..."
+      git merge --ff-only origin/main 2>&1 | tail -5
+    else
+      echo "→ Switching to rolling main..."
+      git checkout -B main origin/main 2>&1 | tail -5
+    fi
     ;;
   stable)
     echo "→ Fetching tags from origin..."

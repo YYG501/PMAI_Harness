@@ -4,9 +4,10 @@
 # 用法（公开镜像才适合 raw curl；私有仓优先先 clone 再跑 bin/pmai install）：
 #   curl -fsSL https://raw.githubusercontent.com/YYG501/PMAI_Workflow/main/install.sh | bash
 #   gh repo clone YYG501/PMAI_Workflow /tmp/pmai-src && bash /tmp/pmai-src/bin/pmai install
+#   bash install.sh --stable
 #
 # 做的事：
-#   1. 检查依赖（git / bash / python3）
+#   1. 检查依赖（git / bash / python3 / node）
 #   2. git clone PMAI 到临时目录（SSH 失败 fallback HTTPS）
 #   3. 跑 bash bin/pmai install [透传 args]
 #   4. 清临时目录（成功 / 失败都清）
@@ -33,16 +34,16 @@ echo "  PMAI 一行安装"
 echo "════════════════════════════════════════════════════════════"
 
 # ─── 1. 依赖检查 ──────────────────────────────────────────────
-echo "→ 检查依赖（git / bash / python3）..."
+echo "→ 检查依赖（git / bash / python3 / node）..."
 MISSING=()
-for dep in git bash python3; do
+for dep in git bash python3 node; do
   command -v "$dep" >/dev/null 2>&1 || MISSING+=("$dep")
 done
 if [ ${#MISSING[@]} -gt 0 ]; then
   echo "❌ 缺依赖：${MISSING[*]}" >&2
   echo "   先装齐再跑：" >&2
-  echo "     macOS: brew install git python3" >&2
-  echo "     Linux: apt install git python3" >&2
+  echo "     macOS: brew install git python@3.12 node" >&2
+  echo "     Linux: 安装 Git、Python 3.10+ 和当前 Node.js LTS" >&2
   exit 1
 fi
 echo "   ✓ 依赖齐"

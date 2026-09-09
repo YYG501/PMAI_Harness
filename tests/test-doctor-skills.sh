@@ -123,6 +123,10 @@ setup_fake_global_install() {
     "$fake_home/.claude/skills" "$fake_home/.codex/skills" \
     "$fake_home/.kimi-code/skills"
   cp "$DOCTOR" "$pmai_home/bin/pmai-doctor"
+  mkdir -p "$pmai_home/config"
+  cp "$REPO_ROOT/config/runtime-manifest.json" "$pmai_home/config/runtime-manifest.json"
+  cp "$REPO_ROOT/scripts/environment-check.py" "$pmai_home/scripts/environment-check.py"
+  ln -s "$REPO_ROOT/hooks" "$pmai_home/hooks"
   chmod +x "$pmai_home/bin/pmai-doctor"
   ln -s "$SKILLS_DIR" "$pmai_home/skills"
   cp "$REPO_ROOT/scripts/_lib/global-install-lock.sh" "$pmai_home/scripts/_lib/global-install-lock.sh"
@@ -176,12 +180,23 @@ copy_global_lock_helpers_to() {
     "$framework_root/scripts/_lib/kimi-config-transaction.sh"
 }
 
+sync_current_runtime_contract_to_fixture() {
+  local framework_root="$1"
+
+  mkdir -p "$framework_root/config" "$framework_root/scripts"
+  cp "$REPO_ROOT/config/runtime-manifest.json" \
+    "$framework_root/config/runtime-manifest.json"
+  cp "$REPO_ROOT/scripts/environment-check.py" \
+    "$framework_root/scripts/environment-check.py"
+}
+
 # Transition fixtures start from committed HEAD, while this suite must also validate a
 # newly added or removed public skill before the framework change is committed.
 sync_current_skill_catalog_to_fixture() {
   local framework_root="$1"
 
   mkdir -p "$framework_root/scripts/_lib"
+  sync_current_runtime_contract_to_fixture "$framework_root"
   rm -rf "$framework_root/skills/direction" "$framework_root/skills/proposal" \
     "$framework_root/skills/lark-sync" "$framework_root/skills/sync-from-lark" \
     "$framework_root/skills/publish-to-lark"
@@ -192,7 +207,7 @@ sync_current_skill_catalog_to_fixture() {
   cp "$REPO_ROOT/scripts/_lib/repo_identity.py" \
     "$framework_root/scripts/_lib/repo_identity.py"
   cp "$REPO_ROOT/scripts/_lib/repo_identity_markers.json" "$framework_root/scripts/_lib/repo_identity_markers.json"
-  git -C "$framework_root" add -A -- skills scripts/repo-kind.py \
+  git -C "$framework_root" add -A -- config scripts/environment-check.py skills scripts/repo-kind.py \
     scripts/_lib/repo_identity.py scripts/_lib/repo_identity_markers.json
 }
 
@@ -1213,6 +1228,7 @@ prepare_install_target_repo() {
     "$source_repo/scripts/install-opencode-commands.sh"
   cp "$REPO_ROOT/scripts/manage-kimi-hooks.py" "$source_repo/scripts/manage-kimi-hooks.py"
   copy_global_lock_helpers_to "$source_repo"
+  sync_current_runtime_contract_to_fixture "$source_repo"
 
   if [ "$policy_mode" = "hide-design" ]; then
     cat >> "$source_repo/scripts/_lib/skill-links.sh" <<'SH'
@@ -1252,6 +1268,7 @@ SH
     "$source_repo/scripts/install-opencode-commands.sh" \
     "$source_repo/scripts/manage-kimi-hooks.py"
   git -C "$source_repo" add bin/pmai-doctor scripts/_lib/skill-links.sh \
+    config/runtime-manifest.json scripts/environment-check.py \
     scripts/_lib/global-install-lock.sh scripts/_lib/global_install_lock.py \
     scripts/_lib/kimi-config-transaction.sh \
     scripts/install-opencode-commands.sh scripts/manage-kimi-hooks.py

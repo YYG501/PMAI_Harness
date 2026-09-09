@@ -14,6 +14,8 @@ PM-AI-Workflow 生成器仓的演进记录。本文件**只记影响已安装框
 
 ## 未发布
 
+- `feat(runtime)`: 环境检查接入安装前置、目标版本 doctor 与发布预检，检查 Python/Git/Bash 最低版本及 Node Hook 能力；Python 保持 `>=3.10` 兼容下限并推荐 3.12，CI 分别覆盖最低与推荐版本。doctor 在 Python 完全缺失时仍返回稳定 JSON；安装和升级失败复用既有回滚。首次安装复用 bootstrap checkout 的认证来源，新增 `--stable` / `--to <tag>` 和实际 commit 回执，tag 安装可安全切回 rolling main。未知版本、损坏声明和未知 profile 不再放行；gstack/飞书仍按需检查，不新增 Build 合同或自动修改用户系统依赖。
+
 - `feat(release)`: **补齐版本发布闭环。** 新增生成器维护者专用 `pmai release check|prepare|publish|notes`：正式发版时递增 `VERSION`、把「未发布」归档到 `## vX.Y.Z`、生成 release commit，并在 stable gate 通过后推送 main 与 Tag；Tag workflow 复用同一版本 CHANGELOG 创建 GitHub Release。普通 `main` 升级改按 commit 识别，stable 升级继续按版本 Tag 识别，兼容现有消费仓和全局安装路径。
 
 - `fix(harness)`: **收窄审查发现的额外阻断。** 身份解释器不可用时，共用身份标记数据仅证明生成器或无 PMAI 身份标记的普通仓可 no-op，普通项目说明文件本身不算 PMAI 标记；消费仓、可疑入口、损坏路径与非法编码仍阻断。发布 CI 根据所选 Runner / Judge 准备默认 Codex，自定义适配器不强制绑定 Codex 或 OpenAI Key，真实能力与认证仍由发布预检验证。

@@ -15,6 +15,7 @@ Usage: pmai <subcommand> [args...]
 
 Subcommands:
   install              Install PMAI globally (clone → ~/.pmai/ + skill symlinks)
+                       Flags: --stable | --to <tag>
   upgrade              Pull latest framework code
                        Flags: --stable | --to <tag>
   release              Prepare or publish a generator release (maintainer only)
@@ -36,7 +37,8 @@ Meta:
   --help, -h           This help
 
 Examples:
-  pmai install                              # Global install
+  pmai install                              # Install rolling main
+  pmai install --stable                     # Install latest stable tag
   pmai upgrade                              # Pull main
   pmai upgrade --stable                     # Jump to latest tag
   pmai doctor --check                       # Read-only health check

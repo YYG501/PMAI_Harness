@@ -1,0 +1,25 @@
+{
+  "schema_version": 1,
+  "requirements": {
+    "python": {
+      "version": ">=3.10",
+      "remedy": "Install Python 3.12 (minimum 3.10) and put its python3 on the host PATH; restart the host."
+    },
+    "git": {
+      "version": ">=2.30",
+      "remedy": "Install Git 2.30+ and put git on the host PATH; restart the host."
+    },
+    "bash": {
+      "version": ">=3.2",
+      "remedy": "Install Bash 3.2+; on Windows use the documented Cygwin runtime."
+    },
+    "node": {
+      "version": null,
+      "remedy": "Install a current Node.js LTS on the host PATH; restart the host. Node is required for PMAI hooks."
+    }
+  },
+  "profiles": {
+    "core": ["python", "git", "bash"],
+    "host": ["python", "git", "bash", "node"]
+  }
+}

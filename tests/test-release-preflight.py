@@ -8,6 +8,8 @@ import tempfile
 import unittest
 from unittest.mock import patch
 import subprocess
+import contextlib
+import io
 
 ROOT = Path(__file__).resolve().parents[1]
 spec = importlib.util.spec_from_file_location('preflight', ROOT / 'scripts/release-gate-preflight.py')
@@ -16,6 +18,18 @@ spec.loader.exec_module(preflight)
 
 
 class ReleasePreflightTests(unittest.TestCase):
+    def test_runtime_failure_stops_before_any_agent_capability_probe(self):
+        for response in [subprocess.CompletedProcess([], 1, "", ""),
+                         subprocess.CompletedProcess([], 0, "{}", ""),
+                         subprocess.CompletedProcess([], 0, "not-json", "")]:
+            with self.subTest(response=response), \
+                 patch.object(sys, "argv", ["preflight"]), \
+                 patch.object(preflight.subprocess, "run", return_value=response), \
+                 patch.object(preflight, "check_capabilities") as capabilities, \
+                 contextlib.redirect_stderr(io.StringIO()):
+                self.assertEqual(preflight.main(), 2)
+                capabilities.assert_not_called()
+
     def test_custom_adapters_do_not_require_codex_or_openai_key(self):
         environment = dict.fromkeys(preflight.CAPABILITIES, 'python3 custom-adapter.py')
         self.assertEqual(preflight.configured_engines(environment), {})

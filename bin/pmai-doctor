@@ -57,6 +57,7 @@ CONSUMER_PHASE="not_applicable"
 CONSUMER_AUDIT_FILE=""
 LEGACY_LOCAL_COPY="false"
 FRAMEWORK_BROKEN=0
+RUNTIME_CHECK_FAILED=0
 
 usage() {
   cat <<EOF
@@ -180,7 +181,7 @@ PY
     "$FRAMEWORK_REMOTE_HEAD" "$FRAMEWORK_WORKTREE" "$UPDATE_AVAILABLE" \
     "$PROJECT_KIND" "$PROJECT_ROOT" "$PROJECT_HOOKS" "$PROJECT_OPENCODE" \
     "$PROJECT_GIT_HOOK" "$CONSUMER_TOPOLOGY" "$CONSUMER_PHASE" \
-    "$LEGACY_LOCAL_COPY" "$CONSUMER_AUDIT_FILE" <<'PY'
+    "$LEGACY_LOCAL_COPY" "$CONSUMER_AUDIT_FILE" "$RUNTIME_CHECK_FAILED" <<'PY'
 import json
 import sys
 
@@ -210,6 +211,7 @@ import sys
     consumer_phase,
     legacy_local_copy,
     consumer_audit_path,
+    runtime_check_failed,
 ) = sys.argv[1:]
 
 with open(results_path, "rb") as handle:
@@ -386,7 +388,10 @@ if not payload["framework"]["installed"] and not framework_failure_recorded:
 elif payload["framework"]["update_available"] is True:
     add_problem(checks["framework_install"], "PMAI 有新版本可以更新", "attention")
 
-if project_kind != "consumer":
+if runtime_check_failed == "1":
+    for check_id, _label in check_definitions[1:]:
+        checks[check_id]["status"] = "unknown"
+elif project_kind != "consumer":
     for check_id, _label in check_definitions[2:]:
         checks[check_id]["status"] = "not_applicable"
 else:
@@ -489,11 +494,22 @@ print(json.dumps(payload, ensure_ascii=False, indent=2))
 PY
 }
 
+emit_missing_python_json() {
+  # Keep --json machine-readable even when the dependency normally used to
+  # build the full report is itself unavailable. Values are static because
+  # arbitrary paths cannot be safely JSON-escaped without a runtime helper.
+  printf '%s\n' "{\"schema_version\":1,\"mode\":\"$MODE\",\"conclusion\":\"broken\",\"recommended_action\":\"install_runtime\",\"summary\":{\"pass\":0,\"warning\":0,\"fail\":1},\"framework\":{\"home\":null,\"installed\":null,\"version\":null,\"head\":null,\"branch\":null,\"remote_url\":null,\"remote_head\":null,\"working_tree\":\"unknown\",\"update_available\":null},\"consumer\":{\"kind\":\"unknown\",\"root\":null,\"project_hooks\":\"unknown\",\"opencode\":\"unknown\",\"git_hook\":\"unknown\",\"topology_status\":\"unknown\",\"phase\":\"unknown\",\"legacy_local_copy\":false,\"audit\":null},\"findings\":[{\"level\":\"fail\",\"category\":\"runtime\",\"message\":\"缺少 python3；请安装 Python 3.12（最低 3.10）并加入宿主 PATH，重启宿主后重试。\"}],\"checks\":[{\"id\":\"framework_install\",\"label\":\"PMAI 安装\",\"status\":\"problem\",\"problems\":[\"缺少 python3；请安装 Python 3.12（最低 3.10）并加入宿主 PATH，重启宿主后重试。\"]},{\"id\":\"ai_tool_entry\",\"label\":\"AI 工具接入\",\"status\":\"unknown\",\"problems\":[]},{\"id\":\"required_materials\",\"label\":\"项目必需资料\",\"status\":\"unknown\",\"problems\":[]},{\"id\":\"documents_and_history\",\"label\":\"文档与历史资料\",\"status\":\"unknown\",\"problems\":[]},{\"id\":\"product_files\",\"label\":\"原型和产品文件\",\"status\":\"unknown\",\"problems\":[]},{\"id\":\"active_work\",\"label\":\"正在进行的工作\",\"status\":\"unknown\",\"problems\":[]},{\"id\":\"project_safety\",\"label\":\"项目安全\",\"status\":\"unknown\",\"problems\":[]}],\"product_progress\":{\"phase\":\"unknown\",\"notes\":[]},\"pm_report\":{\"action_items\":[{\"check_id\":\"framework_install\",\"label\":\"PMAI 安装\",\"status\":\"problem\",\"problems\":[\"缺少 python3；请安装 Python 3.12（最低 3.10）并加入宿主 PATH，重启宿主后重试。\"],\"repair_actions\":[]}],\"notices\":[],\"progress\":{\"phase\":\"unknown\",\"notes\":[]}}}"
+}
+
 finish_doctor() {
   local exit_code="$1"
 
   if [ "$OUTPUT_FORMAT" = "json" ]; then
-    if ! emit_json >&3; then
+    if ! command -v python3 >/dev/null 2>&1; then
+      if ! emit_missing_python_json >&3; then
+        exit_code=2
+      fi
+    elif ! emit_json >&3; then
       exit_code=2
     fi
   fi
@@ -560,6 +576,13 @@ while [ $# -gt 0 ]; do
   shift
 done
 
+# --json must keep its contract even when Python is entirely absent. Handle
+# this before --repair tries to acquire the Python-backed installation lock.
+if [ "$OUTPUT_FORMAT" = "json" ] && ! command -v python3 >/dev/null 2>&1; then
+  emit_missing_python_json
+  exit 1
+fi
+
 if [ "$MODE" = "repair" ]; then
   if ! source "$CLI_ROOT/scripts/_lib/global-install-lock.sh"; then
     echo "❌ 无法载入全局安装锁 helper，拒绝执行 doctor 修复。" >&2
@@ -621,6 +644,29 @@ if [ ! -d "$PMAI_HOME" ]; then
 fi
 FRAMEWORK_INSTALLED=1
 ok "$PMAI_HOME exists"
+
+# The target checkout owns the checker and requirements. Install and upgrade
+# already roll back when this doctor's required checks fail.
+if ! command -v python3 >/dev/null 2>&1; then
+  RUNTIME_CHECK_FAILED=1
+  fail "缺少 python3；请安装 Python 3.12（最低 3.10）并加入宿主 PATH，重启宿主后重试。"
+  finish_doctor 1
+elif [ ! -f "$PMAI_HOME/scripts/environment-check.py" ]; then
+  RUNTIME_CHECK_FAILED=1
+  fail "环境检查器缺失；请恢复完整的 PMAI 安装。"
+  finish_doctor 1
+else
+  RUNTIME_REPORT=$(python3 "$PMAI_HOME/scripts/environment-check.py" check \
+    --profile host --root "$PMAI_HOME" 2>&1)
+  RUNTIME_RC=$?
+  if [ "$RUNTIME_RC" = "0" ]; then
+    ok "运行环境检查通过：$RUNTIME_REPORT"
+  else
+    RUNTIME_CHECK_FAILED=1
+    fail "运行环境检查失败：$RUNTIME_REPORT"
+    finish_doctor 1
+  fi
+fi
 
 if [ ! -d "$PMAI_HOME/.git" ]; then
   fail "$PMAI_HOME 不是 git 仓（损坏 / 半完整；建议重装：pmai uninstall && pmai install）"

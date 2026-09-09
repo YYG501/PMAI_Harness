@@ -105,11 +105,17 @@ def main():
         if args.ci_plan:
             print('needs_codex=' + str(needs_default_codex(os.environ)).lower())
             return 0
+        env_check = subprocess.run([sys.executable, str(ROOT / 'scripts/environment-check.py'), 'check', '--profile', 'host', '--root', str(ROOT), '--json'], cwd=ROOT, capture_output=True, text=True, timeout=30)
+        if env_check.returncode:
+            raise ValueError('runtime requirements failed; run scripts/environment-check.py check --profile host')
+        runtime = json.loads(env_check.stdout)
+        if not isinstance(runtime, dict) or runtime.get('status') != 'pass' or not runtime.get('checks'):
+            raise ValueError('runtime checker returned no passing evidence')
         capabilities = check_capabilities(ROOT, os.environ)
         revision = subprocess.check_output(['git', '-C', str(ROOT), 'rev-parse', 'HEAD'], text=True).strip()
         dirty = bool(subprocess.check_output(['git', '-C', str(ROOT), 'status', '--porcelain'], text=True))
         print(json.dumps({'schema_version': 1, 'framework_revision': revision, 'dirty': dirty,
-                          'session_cases': cases, 'capabilities': capabilities}, ensure_ascii=False))
+                          'session_cases': cases, 'capabilities': capabilities, 'environment': runtime}, ensure_ascii=False))
         return 0
     except (ValueError, OSError, subprocess.SubprocessError) as exc:
         print(f'Release gate blocked: {exc}', file=sys.stderr)

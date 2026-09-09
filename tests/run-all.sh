@@ -13,6 +13,7 @@ SUITE_RUNNER="$SCRIPT_DIR/run-suite.py"
 SUITE_TIMEOUT_SECONDS="${PMAI_SUITE_TIMEOUT_SECONDS:-300}"
 SESSION_EVAL_TIMEOUT_SECONDS="${PMAI_SESSION_EVAL_TIMEOUT_SECONDS:-900}"
 CORE_SUITES=(
+  test-environment-check.sh
   test-check-branch.sh
   test-check-open-questions.sh
   test-decision-gate.sh

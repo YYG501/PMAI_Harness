@@ -16,7 +16,9 @@ source "$SCRIPT_DIR/../scripts/_lib/skill-links.sh"
 source "$SCRIPT_DIR/../scripts/_lib/global-install-lock.sh"
 ORIGINAL_ARGS=("$@")
 
-REMOTE="${PMAI_REMOTE:-git@github.com:YYG501/PMAI_Workflow.git}"
+DEFAULT_REMOTE="git@github.com:YYG501/PMAI_Workflow.git"
+SOURCE_REMOTE=$(git -C "$SCRIPT_DIR/.." remote get-url origin 2>/dev/null || true)
+REMOTE="${PMAI_REMOTE:-${SOURCE_REMOTE:-$DEFAULT_REMOTE}}"
 PMAI_HOME="${PMAI_HOME:-$HOME/.pmai}"
 CLAUDE_SKILLS="$HOME/.claude/skills"
 CODEX_SKILLS="${CODEX_HOME:-$HOME/.codex}/skills"
@@ -26,7 +28,9 @@ SKILL_PREFIX="pmai-"
 usage() {
   cat <<EOF
 Usage:
-  pmai install                # Global: clone → ~/.pmai/ + symlink host skills
+  pmai install                     # Install the remote default branch (rolling)
+  pmai install --stable            # Install the latest v* tag
+  pmai install --to v0.1.0         # Install one exact tag
 
 Env override:
   PMAI_REMOTE=<git-url>       # Override default github remote
@@ -40,11 +44,57 @@ Notes:
 EOF
 }
 
-case "${1:-}" in
-  --help|-h) usage; exit 0 ;;
-  "") ;;
-  *) echo "❌ unknown flag: $1" >&2; usage >&2; exit 2 ;;
-esac
+MODE="main"
+MODE_EXPLICIT=0
+TARGET_TAG=""
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --help|-h) usage; exit 0 ;;
+    --stable)
+      if [ "$MODE_EXPLICIT" = "1" ]; then
+        echo "❌ --stable 与其它安装版本参数不能同时使用。" >&2
+        exit 2
+      fi
+      MODE="stable"
+      MODE_EXPLICIT=1
+      shift
+      ;;
+    --to)
+      if [ "$MODE_EXPLICIT" = "1" ]; then
+        echo "❌ --to 与其它安装版本参数不能同时使用。" >&2
+        exit 2
+      fi
+      shift
+      TARGET_TAG="${1:-}"
+      if [ -z "$TARGET_TAG" ]; then
+        echo "❌ --to needs <tag>" >&2
+        usage >&2
+        exit 2
+      fi
+      MODE="to"
+      MODE_EXPLICIT=1
+      shift
+      ;;
+    *) echo "❌ unknown flag: $1" >&2; usage >&2; exit 2 ;;
+  esac
+done
+
+BOOTSTRAP_CHECKER="$SCRIPT_DIR/../scripts/environment-check.py"
+if ! command -v python3 >/dev/null 2>&1; then
+  echo "❌ 缺少 python3；请安装 Python 3.12（最低 3.10）并加入宿主 PATH，重启宿主后重试。安装状态未修改。" >&2
+  exit 2
+fi
+if [ ! -f "$BOOTSTRAP_CHECKER" ]; then
+  echo "❌ 安装源缺少环境检查器：$BOOTSTRAP_CHECKER" >&2
+  exit 2
+fi
+if ! BOOTSTRAP_REPORT=$(python3 "$BOOTSTRAP_CHECKER" check \
+  --profile host --root "$SCRIPT_DIR/.." 2>&1); then
+  echo "❌ 当前安装环境不满足 PMAI 要求：" >&2
+  printf '%s\n' "$BOOTSTRAP_REPORT" >&2
+  echo "   安装状态未修改。" >&2
+  exit 2
+fi
 
 pmai_hold_global_install_lock \
   "$SCRIPT_DIR/.." "${BASH_SOURCE[0]}" \
@@ -338,6 +388,52 @@ trap 'install_exit_guard' EXIT
 echo "→ git clone $REMOTE → $PMAI_HOME"
 TX_CLONE_CREATED=1
 git clone "$REMOTE" "$PMAI_HOME"
+
+INSTALL_REF_LABEL=""
+case "$MODE" in
+  main)
+    INSTALL_REF_LABEL=$(git -C "$PMAI_HOME" symbolic-ref --short -q HEAD 2>/dev/null || echo main)
+    ;;
+  stable)
+    LATEST_TAG=$(git -C "$PMAI_HOME" tag -l 'v*' | sort -V | tail -1)
+    if [ -z "$LATEST_TAG" ]; then
+      echo "❌ 远程没有 v* tag，暂时不能使用 --stable；请安装滚动版或等待首个稳定版发布。" >&2
+      install_rollback 1
+    fi
+    echo "→ Checking out latest stable tag: $LATEST_TAG"
+    git -C "$PMAI_HOME" checkout --detach "refs/tags/$LATEST_TAG"
+    INSTALL_REF_LABEL="$LATEST_TAG"
+    ;;
+  to)
+    if ! git -C "$PMAI_HOME" show-ref --verify --quiet "refs/tags/$TARGET_TAG"; then
+      echo "❌ tag $TARGET_TAG 不存在。可用 tag：" >&2
+      git -C "$PMAI_HOME" tag -l 'v*' | sort -V | tail -10 >&2
+      install_rollback 1
+    fi
+    echo "→ Checking out tag: $TARGET_TAG"
+    git -C "$PMAI_HOME" checkout --detach "refs/tags/$TARGET_TAG"
+    INSTALL_REF_LABEL="$TARGET_TAG"
+    ;;
+esac
+
+TARGET_CHECKER="$PMAI_HOME/scripts/environment-check.py"
+DOCTOR_BIN="$PMAI_HOME/bin/pmai-doctor"
+if [ ! -f "$TARGET_CHECKER" ]; then
+  echo "❌ 安装目标缺少环境检查器：$TARGET_CHECKER" >&2
+  install_rollback 1
+fi
+if [ ! -x "$DOCTOR_BIN" ]; then
+  echo "❌ 安装目标的 pmai-doctor 缺失或不可执行：$DOCTOR_BIN" >&2
+  install_rollback 1
+fi
+echo "→ Checking target runtime requirements..."
+if ! TARGET_RUNTIME_REPORT=$(python3 "$TARGET_CHECKER" check \
+  --profile host --root "$PMAI_HOME" 2>&1); then
+  echo "❌ 安装目标的运行环境检查失败：" >&2
+  printf '%s\n' "$TARGET_RUNTIME_REPORT" >&2
+  install_rollback 1
+fi
+
 load_target_skill_link_policy "$PMAI_HOME/scripts/_lib/skill-links.sh"
 snapshot_install_surfaces
 
@@ -348,11 +444,6 @@ for dst_skills in "$CLAUDE_SKILLS" "$CODEX_SKILLS"; do
 done
 echo "→ Remove legacy Codex slash prompts"
 echo "   $CODEX_PROMPTS: $legacy_prompt_count legacy prompt file(s) removed"
-DOCTOR_BIN="$PMAI_HOME/bin/pmai-doctor"
-if [ ! -x "$DOCTOR_BIN" ]; then
-  echo "❌ 安装目标的 pmai-doctor 缺失或不可执行：$DOCTOR_BIN" >&2
-  install_rollback 1
-fi
 INSTALL_DOCTOR_LOG=$(mktemp "${TMPDIR:-/tmp}/pmai-install-doctor.XXXXXX")
 echo "→ Running target pmai-doctor self-check..."
 if ! PMAI_HOME="$PMAI_HOME" CODEX_HOME="${CODEX_HOME:-$HOME/.codex}" \
@@ -365,9 +456,11 @@ echo "  ✅ doctor passed"
 commit_install_transaction
 
 VER=$(cat "$PMAI_HOME/VERSION" 2>/dev/null || echo unknown)
+INSTALLED_HEAD=$(git -C "$PMAI_HOME" rev-parse --short=12 HEAD 2>/dev/null || echo unknown)
 echo ""
 echo "═══════════════════════════════════════"
 echo "✅ PMAI v$VER installed globally"
+echo "   source: $INSTALL_REF_LABEL@$INSTALLED_HEAD"
 echo "   ~/.pmai/         framework source"
 echo "   ~/.claude/skills/pmai-*   skill exposure"
 echo "   ~/.codex/skills/pmai-*    Codex native skill exposure"

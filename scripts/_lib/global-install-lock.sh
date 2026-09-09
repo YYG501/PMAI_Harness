@@ -15,6 +15,11 @@ pmai_hold_global_install_lock() {
     return 2
   fi
 
+  if ! command -v python3 >/dev/null 2>&1; then
+    echo "缺少 python3；请安装 Python 并加入宿主 PATH，重启宿主后重试。安装状态未修改。" >&2
+    return 2
+  fi
+
   if [ -z "$lock_fd" ]; then
     exec python3 "$helper" run --lock-path "$lock_path" -- \
       bash "$script_path" "$@"
